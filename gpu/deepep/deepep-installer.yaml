@@ -140,17 +140,15 @@ spec:
                   cat /etc/modprobe.d/nvidia-graphics-drivers-kms.conf
                 fi
               fi
-              sleep infinity
 
               # Load nvpeermem
               if [ "$USE_NVPEERMEM" == "1" ]; then
                 echo "USE_NVPEERMEM=1, loading nvidia_peermem..."
-                modprobe nvidia_peermem
+                modprobe nvidia_peermem || echo "Warning: Failed to load nvidia_peermem module, continuing anyway..."
                 if lsmod | grep -q nvidia_peermem; then
-                    echo "nvidia_peermem loaded"
+                    echo "nvidia_peermem loaded successfully"
                 else
-                    echo "Failed to load nvidia_peermem module, exiting..."
-                    exit 1
+                    echo "Warning: nvidia_peermem module not loaded, but continuing installation..."
                 fi
               fi
               
@@ -174,7 +172,7 @@ spec:
 
               if [ "$REBOOT_NEEDED" == "true" ]; then
                   echo "Rebooting the node to load driver and modules..."
-                  #reboot
+                  reboot
               else
                   echo "Modules are loaded correctly"
               fi
