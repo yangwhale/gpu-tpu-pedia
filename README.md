@@ -17,8 +17,8 @@ GPU 和 TPU 学习和实践知识库
 - 完整的节点内和节点间测试支持
 
 **快速开始：**
-- [完整安装指南](gpu/deepep/readme.md)
-- [节点池创建配置](gpu/deepep/readme.md#创建-gke-ubuntu-节点池)
+- [完整安装指南](gpu/deepep/README.md)
+- [节点池创建配置](gpu/deepep/README.md#创建-gke-ubuntu-节点池)
 - [DeepEP 安装程序](gpu/deepep/deepep-installer.yaml)
 - [节点内测试](gpu/deepep/deepep-intranode.yaml)
 - [节点间测试](gpu/deepep/deepep-internode.yaml)
