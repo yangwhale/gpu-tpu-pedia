@@ -1,367 +1,278 @@
-# DeepEP 在 GKE Ubuntu 节点上的安装指南
+# DeepEP 在 GKE B200 GPU 节点上的安装指南
 
-本文档记录了在 Google Kubernetes Engine (GKE) 的 Ubuntu 节点上安装 DeepEP（Deep Efficient Parallelism）的完整步骤。
+本文档记录了在 Google Kubernetes Engine (GKE) 的 Ubuntu 节点上安装和测试 DeepEP（Deep Efficient Parallelism）的完整步骤。
 
 ## 目录
 
 1. [前提条件](#前提条件)
-2. [安装时间估算](#安装时间估算)
-3. [安装步骤](#安装步骤)
-4. [监控安装进度](#监控安装进度)
-5. [验证安装](#验证安装)
-6. [故障排查](#故障排查)
-7. [配置说明](#配置说明)
+2. [创建 GKE Ubuntu 节点池](#创建-gke-ubuntu-节点池)
+3. [部署 DeepEP 安装程序](#部署-deepep-安装程序)
+4. [运行测试](#运行测试)
+5. [配置说明](#配置说明)
 
 ## 前提条件
 
-- GKE 集群已创建，包含 Ubuntu 节点
-- 节点配置了 NVIDIA B200 或 H200 GPU
-- 节点池名称：`a4-highgpu-ubuntu-02`（需要根据实际环境修改）
+- GKE 集群已创建
+- 配置了必要的 VPC 网络和子网（用于 RDMA）
 - kubectl 已配置并可访问集群
-- 集群具有互联网访问权限（用于下载依赖包）
-- **预留足够时间**：完整安装需要约 **20-25 分钟**
+- gcloud CLI 已安装并配置
 
-## 安装时间估算
+## 创建 GKE Ubuntu 节点池
 
-完整的 DeepEP 安装过程需要约 **20-25 分钟**，包括以下主要阶段：
-
-| 阶段 | 预计时间 | 说明 |
-|-----|---------|------|
-| DOCA OFED 下载和安装 | 3-5 分钟 | 下载约 580MB |
-| GPU 驱动编译和安装 | 2-3 分钟 | 包括 DKMS 模块编译 |
-| **节点重启** | 1-2 分钟 | ⚠️ **系统会自动重启以加载驱动** |
-| CUDA Toolkit 12.8 安装 | 5-8 分钟 | 下载约 3.6GB |
-| gdrcopy 编译安装 | 2-3 分钟 | 从源码编译 |
-| NVSHMEM 编译安装 | 3-5 分钟 | 从源码编译 |
-| PyTorch 和 DeepEP 安装 | 3-5 分钟 | 包括 Python 包和编译 |
-| 二进制文件复制 | 1-2 分钟 | 复制到 GKE 路径 |
-
-**重要提示：**
-- 安装过程中**系统会自动重启一次**（在 GPU 驱动和 gdrcopy 安装后）
-- 重启后安装会自动继续，无需人工干预
-- Pod 会保持在 `Init:0/1` 状态直到所有组件安装完成
-- 可以通过日志实时监控安装进度
-
-## 安装步骤
-
-### 1. 修改 YAML 配置（重要）
-
-**在部署前，您必须修改 [`deepep-installer-standard.yaml`](deepep-installer-standard.yaml:34-37) 中的节点池名称以匹配您的实际环境：**
-
-```yaml
-- key: cloud.google.com/gke-nodepool
-  operator: In
-  values:
-    - a4-highgpu-ubuntu-02  # ⚠️ 请修改为您实际的 nodepool 名称
-```
-
-**如何查找您的 nodepool 名称：**
+使用以下命令创建配置了 NVIDIA B200 GPU 的 Ubuntu 节点池：
 
 ```bash
-# 方法1: 查看所有节点的标签
-kubectl get nodes --show-labels | grep gke-nodepool
-
-# 方法2: 查看特定节点的详细信息
-kubectl describe node <your-node-name> | grep nodepool
-
-# 方法3: 使用 gcloud 命令查看节点池列表
-gcloud container node-pools list --cluster=<your-cluster-name>
+gcloud beta container --project "gpu-launchpad-playground" node-pools create "a4-highgpu-ubuntu-02" \
+  --cluster "chrisya-gke-a4" \
+  --region "asia-southeast1" \
+  --node-version "1.33.5-gke.1162000" \
+  --machine-type "a4-highgpu-8g" \
+  --accelerator "type=nvidia-b200,count=8,gpu-driver-version=disabled" \
+  --image-type "UBUNTU_CONTAINERD" \
+  --disk-type "hyperdisk-balanced" \
+  --disk-size "1000" \
+  --ephemeral-storage-local-ssd count=32 \
+  --metadata disable-legacy-endpoints=true \
+  --scopes "https://www.googleapis.com/auth/cloud-platform" \
+  --node-locations "asia-southeast1-b" \
+  --spot \
+  --num-nodes "2" \
+  --enable-private-nodes \
+  --enable-autoupgrade \
+  --enable-autorepair \
+  --max-surge-upgrade 1 \
+  --max-unavailable-upgrade 0 \
+  --shielded-integrity-monitoring \
+  --no-shielded-secure-boot \
+  --placement-type=COMPACT \
+  --additional-node-network network=chrisya-gke-a4-net-1,subnetwork=chrisya-gke-a4-sub-1 \
+  --additional-node-network network=chrisya-gke-a4-rdma-net,subnetwork=chrisya-gke-a4-rdma-sub-0 \
+  --additional-node-network network=chrisya-gke-a4-rdma-net,subnetwork=chrisya-gke-a4-rdma-sub-1 \
+  --additional-node-network network=chrisya-gke-a4-rdma-net,subnetwork=chrisya-gke-a4-rdma-sub-2 \
+  --additional-node-network network=chrisya-gke-a4-rdma-net,subnetwork=chrisya-gke-a4-rdma-sub-3 \
+  --additional-node-network network=chrisya-gke-a4-rdma-net,subnetwork=chrisya-gke-a4-rdma-sub-4 \
+  --additional-node-network network=chrisya-gke-a4-rdma-net,subnetwork=chrisya-gke-a4-rdma-sub-5 \
+  --additional-node-network network=chrisya-gke-a4-rdma-net,subnetwork=chrisya-gke-a4-rdma-sub-6 \
+  --additional-node-network network=chrisya-gke-a4-rdma-net,subnetwork=chrisya-gke-a4-rdma-sub-7
 ```
 
-### 2. 部署 DeepEP Installer DaemonSet
+**关键配置说明：**
+- **机器类型**: `a4-highgpu-8g` - 配备 8 个 NVIDIA B200 GPU
+- **GPU 驱动**: `gpu-driver-version=disabled` - 使用自定义驱动安装
+- **镜像类型**: `UBUNTU_CONTAINERD` - Ubuntu 操作系统
+- **存储**: 
+  - 持久磁盘: 1000GB Hyperdisk Balanced
+  - 本地 SSD: 32 个临时存储
+- **网络**: 1 个主网络 + 8 个 RDMA 网络（用于 GPU 间高速通信）
+- **节点放置**: `COMPACT` - 确保节点物理位置接近，降低延迟
 
-修改配置后，使用准备好的 YAML 配置文件部署安装程序：
+## 部署 DeepEP 安装程序
+
+### 1. 部署 DaemonSet
+
+使用 [`deepep-installer.yaml`](deepep-installer.yaml) 部署安装程序：
 
 ```bash
-kubectl apply -f deepep-installer-standard.yaml
+kubectl apply -f deepep-installer.yaml
 ```
 
-**预期输出：**
-```
-daemonset.apps/deepep-installer-ubuntu created
-```
+### 2. 验证部署状态
 
-### 2. 验证 DaemonSet 创建状态
-
-检查 DaemonSet 是否成功创建：
+检查 DaemonSet 创建状态：
 
 ```bash
 kubectl get daemonset deepep-installer-ubuntu -n kube-system
 ```
 
-**预期输出：**
+预期输出：
 ```
-NAME                      DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE   NODE SELECTOR   AGE
-deepep-installer-ubuntu   1         1         0       1            0           <none>          32s
+NAME                      DESIRED   CURRENT   READY   UP-TO-DATE   AVAILABLE
+deepep-installer-ubuntu   2         2         0       2            0
 ```
-
-**字段说明：**
-- `DESIRED`: 期望的 Pod 数量（匹配节点数）
-- `CURRENT`: 当前运行的 Pod 数量
-- `READY`: 就绪的 Pod 数量
-- `UP-TO-DATE`: 已更新的 Pod 数量
-- `AVAILABLE`: 可用的 Pod 数量
 
 ### 3. 查看 Pod 状态
-
-查看具体的 Pod 部署情况：
 
 ```bash
 kubectl get pods -n kube-system -l k8s-app=deepep-installer-ubuntu -o wide
 ```
 
-**预期输出：**
+预期输出：
 ```
-NAME                            READY   STATUS     RESTARTS   AGE   IP             NODE                                                  NOMINATED NODE   READINESS GATES
-deepep-installer-ubuntu-b7s2q   0/1     Init:0/1   0          47s   192.168.0.28   gke-chrisya-gke-a4-a4-highgpu-ubuntu--752c886b-2b0z   <none>           <none>
+NAME                            READY   STATUS     RESTARTS   AGE
+deepep-installer-ubuntu-xxxxx   0/1     Init:0/1   0          2m
 ```
 
-**状态说明：**
-- `Init:0/1`: 表示 initContainer 正在运行（0/1 表示 1 个 initContainer 中的第 0 个正在执行）
-- 安装过程在 initContainer 中进行，完成后 Pod 才会变为 Ready 状态
+### 4. 监控安装进度
 
-## 监控安装进度
-
-### 查看实时安装日志
-
-使用以下命令查看安装日志（实时跟踪）：
+查看实时安装日志：
 
 ```bash
-kubectl logs -n kube-system deepep-installer-ubuntu-b7s2q -c deepep-installer -f
+# 获取 Pod 名称
+POD_NAME=$(kubectl get pods -n kube-system -l k8s-app=deepep-installer-ubuntu -o jsonpath='{.items[0].metadata.name}')
+
+# 查看安装日志
+kubectl logs -n kube-system $POD_NAME -c deepep-installer -f
 ```
 
-或查看最近的 100 行日志：
+### 5. 等待安装完成
 
-```bash
-kubectl logs -n kube-system deepep-installer-ubuntu-b7s2q -c deepep-installer --tail=100 -f
-```
+安装过程包括以下阶段（总计约 20-25 分钟）：
 
-**参数说明：**
-- `-n kube-system`: 指定命名空间
-- `-c deepep-installer`: 指定容器名称（initContainer）
-- `--tail=100`: 显示最后 100 行日志
-- `-f`: 实时跟踪日志输出
+1. **DOCA OFED 安装** (3-5 分钟)
+   - 下载和安装 Mellanox OFED 驱动
+   
+2. **GPU 驱动和 CUDA 安装** (5-8 分钟)
+   - 安装 NVIDIA 开源驱动 575
+   - 安装 CUDA Toolkit 12.9
 
-### 安装阶段说明
+3. **gdrcopy 编译安装** (2-3 分钟)
+   - 从源码编译 gdrcopy v2.5.1
+   
+4. **NVSHMEM 编译安装** (3-5 分钟)
+   - 从源码编译 NVSHMEM 3.2.5
+   - **关键**: 指定 CUDA 架构 100 (sm_100) 支持 B200 GPU
 
-安装过程包含以下主要阶段：
+5. **DeepEP 编译安装** (3-5 分钟)
+   - 安装 PyTorch
+   - 编译 DeepEP C++ 扩展
 
-1. **DOCA OFED 安装**
-   - 下载 DOCA 主机包（约 580MB）
-   - 安装 OFED（OpenFabrics Enterprise Distribution）
-   - 验证安装：`ofed_info -s`
+6. **二进制文件复制** (1-2 分钟)
+   - 复制库到 GKE GPU 驱动路径
 
-2. **GPU 驱动和 CUDA 安装**
-   - 安装 NVIDIA 开源驱动
-   - 安装 CUDA Toolkit 12.8
-   - 验证：`nvidia-smi`
-
-3. **gdrcopy 安装**（如果 `NVSHMEM_USE_GDRCOPY=1`）
-   - 从 GitHub 克隆源代码
-   - 编译并安装 gdrcopy v2.5
-   - 安装到 `/opt/deepep/gdrcopy`
-
-4. **系统重启**（⚠️ 自动进行）
-   - **触发条件**：在以下任一条件满足时自动重启
-     - NVIDIA 驱动模块未加载
-     - gdrcopy 驱动模块未加载（如果 `NVSHMEM_USE_GDRCOPY=1`）
-     - 驱动配置参数未生效
-   - **重启过程**：
-     - 系统执行 `reboot` 命令
-     - Pod 会短暂断开连接（1-2分钟）
-     - 节点重启后，Pod 自动继续执行后续安装步骤
-   - **监控提示**：日志输出会显示 "Rebooting the node to load driver and modules..."
-   - **无需干预**：重启完全自动化，无需人工操作
-
-5. **NVSHMEM 安装**
-   - 下载 NVSHMEM 源代码
-   - 使用 CMake 和 Ninja 编译
-   - 安装到 `/opt/deepep/nvshmem`
-   - 启用 IBGDA 支持
-
-6. **DeepEP 安装**
-   - 安装 PyTorch（CUDA 12.8 版本）
-   - 克隆 DeepEP 仓库
-   - 编译 C++ 扩展
-   - 验证 Python 导入
-
-7. **二进制文件复制**
-   - 复制所有必要的库到 GKE GPU 驱动路径
-   - 目标路径：`/home/kubernetes/bin/nvidia/`
-
-## 验证安装
-
-### 1. 检查 Pod 最终状态
-
-安装完成后，Pod 应该处于 Running 状态：
+安装完成后，Pod 状态变为 `Running`：
 
 ```bash
 kubectl get pods -n kube-system -l k8s-app=deepep-installer-ubuntu
 ```
 
-**预期输出（安装完成后）：**
+预期输出：
 ```
 NAME                            READY   STATUS    RESTARTS   AGE
-deepep-installer-ubuntu-b7s2q   1/1     Running   0          15m
+deepep-installer-ubuntu-xxxxx   1/1     Running   0          25m
 ```
 
-### 2. 验证安装日志
+## 运行测试
 
-查看完整的安装日志，确认所有步骤都成功：
+### 部署测试 Pod
+
+使用 [`deepep-intranode.yaml`](deepep-intranode.yaml) 部署测试 Pod：
 
 ```bash
-kubectl logs -n kube-system deepep-installer-ubuntu-b7s2q -c deepep-installer | grep -E "(complete|success|installed)"
+kubectl apply -f deepep-intranode.yaml
 ```
 
-### 3. 检查 NVSHMEM 配置
-
-验证 NVSHMEM IBGDA 支持是否正确启用：
+### 进入 Pod 并运行测试
 
 ```bash
-kubectl logs -n kube-system deepep-installer-ubuntu-b7s2q -c deepep-installer | grep "NVSHMEM_IBGDA_SUPPORT"
+# 获取 Pod 名称
+kubectl get pods
+
+# 进入 Pod
+kubectl exec -it privileged-sleeping-pod -- /bin/bash
 ```
 
-应该看到：
-```
-NVSHMEM_IBGDA_SUPPORT is enabled correctly.
-```
+### 配置环境变量
 
-### 4. 检查 DeepEP 导入
-
-验证 DeepEP Python 模块是否可以正常导入：
+在 Pod 内执行：
 
 ```bash
-kubectl logs -n kube-system deepep-installer-ubuntu-b7s2q -c deepep-installer | grep "DeepEP installation complete"
+export DEBIAN_FRONTEND=noninteractive
+export PYTHONPATH=/usr/local/nvidia/deepep:$PYTHONPATH
+export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
 ```
 
-## 故障排查
+### 安装 DeepEP（在 Pod 内）
 
-### Pod 一直处于 Init 状态
-
-**可能原因：**
-1. 下载速度慢（DOCA OFED 包约 580MB，CUDA 约 3.6GB）
-2. 编译时间长（NVSHMEM、gdrcopy 需要编译）
-3. **节点正在重启**（这是正常现象，加载驱动需要重启）
-4. PyTorch 和 DeepEP 编译需要时间
-
-**解决方法：**
-- 查看日志确定当前阶段：
-  ```bash
-  kubectl logs -n kube-system <pod-name> -c deepep-installer --tail=50
-  ```
-- 等待足够的时间（**完整安装需要 20-25 分钟**）
-- 如果看到 "Rebooting the node to load driver and modules..."，这是正常的自动重启过程
-- 重启后等待 1-2 分钟，日志会自动恢复
-
-### 节点重启后日志中断
-
-**现象：**
-- 执行 `kubectl logs -f` 时连接断开
-- Pod 状态仍为 `Init:0/1`
-
-**原因：**
-- 这是正常现象，节点重启会导致日志流中断
-
-**解决方法：**
 ```bash
-# 重新连接日志查看
-kubectl logs -n kube-system <pod-name> -c deepep-installer --tail=100 -f
+# 更新软件包
+apt-get update -y && apt install git python3-pip -y -qq 
+
+# 安装构建依赖
+apt install python3.12-dev python3.12 ninja-build cmake build-essential devscripts debhelper dkms -y -qq
+
+# 安装 PyTorch
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129 --break-system-packages
+
+# 克隆并测试 DeepEP
+git clone https://github.com/deepseek-ai/DeepEP.git && cd ./DeepEP
 ```
 
-### 安装失败
+### 运行低延迟测试
 
-**排查步骤：**
-
-1. 查看详细错误日志：
 ```bash
-kubectl logs -n kube-system deepep-installer-ubuntu-<pod-name> -c deepep-installer
+python3 tests/test_low_latency.py
 ```
 
-2. 检查节点标签是否正确：
-```bash
-kubectl get nodes --show-labels | grep nvidia-b200
+预期输出：
+```
+Allocating buffer size: 2146.961792 MB ...
+[rank 0] Dispatch + combine bandwidth: 256.81 GB/s, avg_t=85.85 us, min_t=76.42 us, max_t=106.50 us
+[rank 1] Dispatch + combine bandwidth: 257.06 GB/s, avg_t=85.77 us, min_t=74.02 us, max_t=99.62 us
+[rank 2] Dispatch + combine bandwidth: 256.49 GB/s, avg_t=85.96 us, min_t=78.24 us, max_t=105.57 us
+...
+[rank 7] Dispatch send/recv time: 27.25 + 7.71 us | Combine send/recv time: 32.48 + 9.45 us
 ```
 
-3. 验证节点是否有足够的资源：
+**性能指标说明：**
+- **Dispatch + Combine 带宽**: ~256 GB/s
+- **Dispatch 带宽**: ~236 GB/s  
+- **Combine 带宽**: ~356 GB/s
+- **延迟**: ~7-9 微秒
+
+### 运行节点内测试（可选）
+
 ```bash
-kubectl describe node <node-name>
-```
-
-### 重启安装
-
-如果需要重新安装，可以删除并重新创建 DaemonSet：
-
-```bash
-# 删除 DaemonSet
-kubectl delete daemonset deepep-installer-ubuntu -n kube-system
-
-# 重新部署
-kubectl apply -f deepep-installer-standard.yaml
+python3 tests/test_intranode.py
 ```
 
 ## 配置说明
 
-### 环境变量
+### 安装程序环境变量
 
-[`deepep-installer-standard.yaml`](deepep-installer-standard.yaml:62-77) 中配置的关键环境变量：
+[`deepep-installer.yaml`](deepep-installer.yaml:62-76) 中的关键配置：
 
 | 环境变量 | 值 | 说明 |
 |---------|-----|------|
-| `NVSHMEM_IBGDA_SUPPORT` | `1` | 启用 NVSHMEM InfiniBand GPU Direct Async 支持 |
-| `NVSHMEM_USE_GDRCOPY` | `1` | 启用 GPUDirect RDMA Copy 支持 |
+| `NVSHMEM_IBGDA_SUPPORT` | `1` | 启用 InfiniBand GPU Direct Async |
+| `NVSHMEM_USE_GDRCOPY` | `1` | 启用 GPUDirect RDMA Copy |
 | `GDRCOPY_HOME` | `/opt/deepep/gdrcopy` | gdrcopy 安装路径 |
 | `NVSHMEM_HOME` | `/opt/deepep/nvshmem` | NVSHMEM 安装路径 |
-| `USE_NVPEERMEM` | `0` | 不使用 nvpeermem 模块 |
 | `CUDA_HOME` | `/usr/local/cuda` | CUDA 安装路径 |
-| `TORCH_CUDA_ARCH_LIST_B200` | `10.0` | B200 GPU 的 CUDA 架构版本 |
-| `TORCH_CUDA_ARCH_LIST_H200` | `9.0` | H200 GPU 的 CUDA 架构版本 |
+| `TORCH_CUDA_ARCH_LIST_B200` | `10.0` | B200 GPU CUDA 架构版本 |
 
-### 节点选择器
+### 软件版本
 
-DaemonSet 仅在满足以下条件的节点上运行：
+- **DOCA OFED**: v3.0.0-058000
+- **NVIDIA 驱动**: 575 (开源版本)
+- **CUDA Toolkit**: 12.9
+- **gdrcopy**: v2.5.1
+- **NVSHMEM**: 3.2.5 (源码编译，架构 sm_100)
+- **PyTorch**: CUDA 12.9 版本
+- **DeepEP**: 最新版本
 
-- GPU 类型：`nvidia-b200`
-- OS 分发：`ubuntu`
-- 节点池：`a4-highgpu-ubuntu-02` ⚠️ **需要根据实际环境修改**
+### 关键技术点
 
-**重要提示：**
-在部署前，您必须在 [`deepep-installer-standard.yaml`](deepep-installer-standard.yaml:34-37) 中修改 `cloud.google.com/gke-nodepool` 的值以匹配您的实际节点池名称。这是确保 DaemonSet 正确部署到目标节点的关键配置。
+1. **NVSHMEM 架构匹配**
+   - B200 GPU 需要 CUDA compute capability 10.0 (sm_100)
+   - 必须在编译时指定 `-DCMAKE_CUDA_ARCHITECTURES=100`
+   - DeepEP 编译时使用 `TORCH_CUDA_ARCH_LIST=10.0`
 
-### 安装的软件包版本
+2. **库路径配置**
+   - NVSHMEM 库: `/opt/deepep/nvshmem/lib`
+   - gdrcopy 库: `/opt/deepep/gdrcopy/lib`
+   - 系统动态链接器配置: `/etc/ld.so.conf.d/nvshmem.conf`
 
-- **DOCA OFED**: v3.0.0-058000 (Ubuntu 24.04)
-- **CUDA Toolkit**: 12.8
-- **gdrcopy**: v2.5
-- **NVSHMEM**: CUDA 12 版本
-- **PyTorch**: 最新版本（CUDA 12.8）
-- **DeepEP**: 最新版本（从 GitHub）
-
-### 安装路径
-
-- **gdrcopy**: `/opt/deepep/gdrcopy`
-- **NVSHMEM**: `/opt/deepep/nvshmem`
-- **GKE GPU 驱动路径**: `/home/kubernetes/bin/nvidia/`
-  - 库文件: `lib64/`
-  - 可执行文件: `bin/`
-  - DeepEP 模块: `deepep/`
-  - 驱动模块: `drivers/`
-  - 固件: `firmware/`
-
-## 后续步骤
-
-安装完成后，您可以：
-
-1. 使用 DeepEP 进行多 GPU 训练
-2. 配置应用程序 Pod 使用安装的库
-3. 验证 NVSHMEM 和 GPUDirect 功能
+3. **GKE GPU 驱动路径**
+   - 所有库和驱动复制到: `/home/kubernetes/bin/nvidia/`
+   - Pod 通过 hostPath 挂载使用
 
 ## 参考资源
 
-- [DeepEP GitHub 仓库](https://github.com/deepseek-ai/DeepEP)
+- [DeepEP GitHub](https://github.com/deepseek-ai/DeepEP)
 - [NVIDIA NVSHMEM 文档](https://docs.nvidia.com/nvshmem/)
 - [gdrcopy GitHub](https://github.com/NVIDIA/gdrcopy)
-- [DOCA 下载页面](https://www.mellanox.com/downloads/DOCA/)
+- [GKE GPU 文档](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus)
 
 ## 更新记录
 
-- 2025-10-26: 初始版本，记录基于 [`deepep-installer-standard.yaml`](deepep-installer-standard.yaml) 的安装流程
+- 2025-10-26: 初始版本，支持 B200 GPU 的 DeepEP 安装和测试
