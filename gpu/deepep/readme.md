@@ -225,6 +225,57 @@ Allocating buffer size: 2146.961792 MB ...
 python3 tests/test_intranode.py
 ```
 
+### 运行节点间测试
+
+节点间测试用于验证跨节点的 GPU 通信性能。使用 [`deepep-internode.yaml`](deepep-internode.yaml) 部署多节点测试任务：
+
+```bash
+kubectl apply -f deepep-internode.yaml
+```
+
+**配置说明：**
+- 部署一个 Kubernetes Job，包含 2 个并行 Pod
+- 每个 Pod 运行在不同的 GKE 节点上
+- 使用 `hostNetwork: true` 启用主机网络模式
+- 通过 Headless Service 进行 Pod 间通信
+- 自动配置分布式训练环境变量（RANK、WORLD_SIZE、MASTER_ADDR）
+
+**查看 Pod 状态：**
+
+```bash
+kubectl get pods -l job-name=deepep-job -o wide
+```
+
+**查看日志：**
+
+```bash
+# 查看 rank 0 的日志
+kubectl logs deepep-job-0-xxxxx
+
+# 查看 rank 1 的日志
+kubectl logs deepep-job-1-xxxxx
+```
+
+**进入 Pod 运行测试：**
+
+```bash
+# 进入任一 Pod
+kubectl exec -it deepep-job-0-xxxxx -- /bin/bash
+
+# 在 Pod 内配置环境并运行测试
+export PYTHONPATH=/usr/local/nvidia/deepep:$PYTHONPATH
+export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+
+cd DeepEP
+python3 tests/test_internode.py
+```
+
+**清理测试任务：**
+
+```bash
+kubectl delete -f deepep-internode.yaml
+```
+
 ## 配置说明
 
 ### 安装程序环境变量
