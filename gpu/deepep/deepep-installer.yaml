@@ -201,13 +201,15 @@ spec:
                 NVSHMEM_IBGDA_SUPPORT="$NVSHMEM_IBGDA_SUPPORT" \
                 cmake -GNinja -S . -B build/ \
                     -DCMAKE_INSTALL_PREFIX="$NVSHMEM_HOME" \
-                    -DCMAKE_CUDA_ARCHITECTURES=100
+                    -DCMAKE_CUDA_ARCHITECTURES=100 \
+                    -DNVSHMEM_BUILD_EXAMPLES=OFF \
+                    -DNVSHMEM_BUILD_PERFTEST=OFF
                 cmake --build build/ --target install
                 echo "NVSHMEM installation complete."
 
                 # cleanup
                 pushd ~
-                #rm -rf "$BUILD_DIR"
+                rm -rf "$BUILD_DIR"
                else
                 echo "NVSHMEM is already installed"
               fi
