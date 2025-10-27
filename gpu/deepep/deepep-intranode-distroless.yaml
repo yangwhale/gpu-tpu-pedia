@@ -1,0 +1,88 @@
+apiVersion: v1
+kind: Pod
+metadata:
+  name: deepep-intranode-distroless
+spec:
+  restartPolicy: Never
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+            - key: cloud.google.com/gke-accelerator
+              operator: Exists
+            - key: cloud.google.com/gke-nodepool
+              operator: In
+              values:
+                - a4-highgpu-ubuntu
+            - key: cloud.google.com/gke-os-distribution
+              operator: In
+              values:
+                - ubuntu
+            # - key: kubernetes.io/hostname
+            #   operator: In
+            #   values:
+            #     - "gke-chrisya-gke-a4-a4-highgpu-ubuntu--752c886b-kkgn"
+  tolerations:
+  - operator: "Exists"
+  hostNetwork: true
+  hostPID: true
+  volumes:
+    - name: root
+      hostPath:
+        path: /
+    - name: shared-memory
+      emptyDir:
+        medium: "Memory"
+        sizeLimit: 250Gi
+  containers:
+  - name: deepep-testbed
+    image: gke.gcr.io/gke-distroless/bash:latest
+    resources:
+      limits:
+        nvidia.com/gpu: "8"
+      requests:
+        cpu: 150m
+    volumeMounts:
+      - name: root
+        mountPath: /
+      - name: shared-memory
+        mountPath: /dev/shm
+    env:
+      - name: NVSHMEM_IBGDA_SUPPORT
+        value: "1"
+      - name: NVSHMEM_USE_GDRCOPY
+        value: "1"
+      - name: GDRCOPY_HOME
+        value: /opt/deepep/gdrcopy
+      - name: NVSHMEM_HOME
+        value: /opt/deepep/nvshmem
+      - name: USE_NVPEERMEM
+        value: "1"
+      - name: CUDA_HOME
+        value: /usr/local/cuda
+      - name: TORCH_CUDA_ARCH_LIST_B200
+        value: "10.0"
+    command:
+      - '/bin/bash'
+      - '-c'
+      - |
+        set -ex
+        # export DEBIAN_FRONTEND=noninteractive
+        # export PYTHONPATH=/usr/local/nvidia/deepep:$PYTHONPATH
+        # export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
+
+        # apt-get update -y && apt install git python3-pip -y -qq 
+        # apt install python3.12-dev python3.12 ninja-build cmake build-essential devscripts debhelper dkms -y -qq
+        # pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129  --break-system-packages
+
+        # Clone or use existing DeepEP
+        if [ ! -d "/tmp/deepep_build" ]; then
+          git clone https://github.com/deepseek-ai/DeepEP.git /tmp/deepep_build
+        fi
+        cd /tmp/deepep_build
+        
+        echo "Starting intranode test"
+        python3 tests/test_intranode.py
+    securityContext:
+      privileged: true
