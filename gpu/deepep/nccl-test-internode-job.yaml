@@ -1,0 +1,300 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: nccl-test-service
+spec:
+  clusterIP: None
+  selector:
+    job-name: nccl-test-job
+
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: nccl-test-job
+spec:
+  completions: 2
+  parallelism: 2
+  completionMode: Indexed
+  template:
+    metadata:
+      labels:
+        k8s-app: nccl-test
+      annotations:
+        networking.gke.io/default-interface: 'eth0'
+        networking.gke.io/interfaces: |
+          [
+            {"interfaceName":"eth0","network":"default"},
+            {"interfaceName":"eth2","network":"rdma-0"},
+            {"interfaceName":"eth3","network":"rdma-1"},
+            {"interfaceName":"eth4","network":"rdma-2"},
+            {"interfaceName":"eth5","network":"rdma-3"},
+            {"interfaceName":"eth6","network":"rdma-4"},
+            {"interfaceName":"eth7","network":"rdma-5"},
+            {"interfaceName":"eth8","network":"rdma-6"},
+            {"interfaceName":"eth9","network":"rdma-7"}
+          ]
+        kueue.x-k8s.io/podset-preferred-topology: "kubernetes.io/hostname"
+        gke-gcsfuse/volumes: "true"
+        gke-gcsfuse/cpu-limit: "0"
+        gke-gcsfuse/memory-limit: "0"
+        gke-gcsfuse/ephemeral-storage-limit: "0"
+    spec:
+      restartPolicy: Never
+      subdomain: nccl-test-service
+      dnsPolicy: ClusterFirstWithHostNet
+      hostNetwork: true
+      hostPID: true
+      serviceAccount: workload-identity-k8s-sa
+      nodeSelector:
+        cloud.google.com/gke-nodepool: a4-highgpu-ubuntu
+      volumes:
+        - name: local-ssd
+          hostPath:
+            path: /mnt/stateful_partition/kube-ephemeral-ssd
+        - name: library-dir-host
+          hostPath:
+            path: /home/kubernetes/bin/nvidia
+        - name: gib
+          hostPath:
+            path: /home/kubernetes/bin/gib
+        - name: shared-memory
+          emptyDir:
+            medium: "Memory"
+            sizeLimit: 250Gi
+        - name: ssh-key
+          secret:
+            secretName: nccl-ssh-key
+            defaultMode: 0600
+      containers:
+        - image: us-central1-docker.pkg.dev/gpu-launchpad-playground/hzchen-poc/wxg-poc:0.2
+          name: ngc-25-04
+          resources:
+            requests:
+              nvidia.com/gpu: "8"
+            limits:
+              nvidia.com/gpu: "8"
+          securityContext:
+           privileged: true
+          volumeMounts:
+            - name: local-ssd
+              mountPath: /scratch-data
+            - name: library-dir-host
+              mountPath: /usr/local/nvidia
+            - name: gib
+              mountPath: /usr/local/gib
+            - name: shared-memory
+              mountPath: /dev/shm
+            - name: ssh-key
+              mountPath: /etc/ssh-keys
+              readOnly: true
+          env:
+            - name: RDMAV_DRIVERS
+              value: /usr/local/nvidia/lib64/libibverbs
+            - name: LD_LIBRARY_PATH
+              value: /usr/local/nvidia/lib64:/usr/local/nvidia/lib:/usr/local/gib/lib64
+            - name: PYTHONPATH
+              value: /usr/local/nvidia/deepep
+            - name: N_NODES
+              value: "2"
+            - name: NCCL_NET
+              value: gIB
+            - name: NCCL_CROSS_NIC
+              value: "0"
+            - name: NCCL_NET_GDR_LEVEL
+              value: PIX
+            - name: NCCL_P2P_NET_CHUNKSIZE
+              value: "131072"
+            - name: NCCL_NVLS_CHUNKSIZE
+              value: "524288"
+            - name: NCCL_IB_ADAPTIVE_ROUTING
+              value: "1"
+            - name: NCCL_IB_QPS_PER_CONNECTION
+              value: "4"
+            - name: NCCL_IB_TC
+              value: "52"
+            - name: NCCL_IB_FIFO_TC
+              value: "84"
+            - name: NCCL_TUNER_CONFIG_PATH
+              value: /usr/local/gib/configs/tuner_config_a4.txtpb
+            - name: NVSHMEM_IBGDA_SUPPORT
+              value: "1"
+            - name: NVSHMEM_USE_GDRCOPY
+              value: "1"
+            - name: GDRCOPY_HOME
+              value: /usr/local/nvidia
+            - name: NVSHMEM_HOME
+              value: /usr/local/nvidia
+            - name: USE_NVPEERMEM
+              value: "1"
+            - name: CUDA_HOME
+              value: /usr/local/cuda
+            - name: TORCH_CUDA_ARCH_LIST_B200
+              value: "10.0"
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              cp -R /dev/shm/scripts /
+              cp -R /dev/shm/diagnostic /
+              cp -R /dev/shm/third_party /
+
+              # Fix RDMA driver for rdmav57 - copy to system default path
+              cp /usr/local/nvidia/lib64/libmlx5.so.1.25.56.0 /usr/lib/x86_64-linux-gnu/libibverbs/libmlx5-rdmav57.so
+              chmod +x /usr/lib/x86_64-linux-gnu/libibverbs/libmlx5-rdmav57.so
+              
+              # Also create in nvidia lib64 path for consistency
+              mkdir -p /usr/local/nvidia/lib64/libibverbs
+              cp /usr/local/nvidia/lib64/libmlx5.so.1.25.56.0 /usr/local/nvidia/lib64/libibverbs/libmlx5-rdmav57.so
+              chmod +x /usr/local/nvidia/lib64/libibverbs/libmlx5-rdmav57.so
+              
+              # Unset TORCH_NCCL_USE_COMM_NONBLOCKING for GIB compatibility
+              unset TORCH_NCCL_USE_COMM_NONBLOCKING
+
+              export N_NODES=${N_NODES}
+
+              # Job-specific environment variables
+              export RANK=${JOB_COMPLETION_INDEX}
+              export WORLD_SIZE=2
+              export MASTER_ADDR=nccl-test-job-0.nccl-test-service
+
+              # Load all the cuda libs
+              /sbin/ldconfig
+
+              # Install required tools
+              apt update -y
+              apt install -y iputils-ping openssh-server iproute2 pciutils curl git
+
+              # Install gcloud sdk
+              echo "deb [signed-by=/usr/share/keyrings/cloud.google.gpg] https://packages.cloud.google.com/apt cloud-sdk main" | \
+                tee -a /etc/apt/sources.list.d/google-cloud-sdk.list && \
+                curl https://packages.cloud.google.com/apt/doc/apt-key.gpg | \
+                gpg --dearmor -o /usr/share/keyrings/cloud.google.gpg && \
+                apt-get update -y && \
+                apt-get install google-cloud-cli -y
+
+              # Enable persistence
+              for i in $(seq 0 7)
+              do
+                nvidia-smi -i $i -pm ENABLED
+              done
+
+              # Setup variables
+              echo "unset NCCL_NVLS_ENABLE TORCH_NCCL_USE_COMM_NONBLOCKING" | tee -a /root/.bashrc > /dev/null
+              echo "export LD_LIBRARY_PATH=/usr/local/gib/lib64:${LD_LIBRARY_PATH}" | tee -a /root/.bashrc > /dev/null
+              echo "source /usr/local/gib/scripts/set_nccl_env.sh" | tee -a /root/.bashrc > /dev/null
+
+              echo "Pod ${RANK} started with RANK=${RANK}, WORLD_SIZE=${WORLD_SIZE}, MASTER_ADDR=${MASTER_ADDR}"
+              
+              # Source GIB environment setup
+              source /usr/local/gib/scripts/set_nccl_env.sh
+              
+              # Initialize SSH for multi-node communication
+              if [ "${RANK}" = "0" ]; then
+                echo "Rank 0: Initializing SSH and running NCCL tests..."
+                
+                # Copy SSH keys from Secret to writable location
+                rm -rf /root/.ssh
+                mkdir -p /root/.ssh
+                cp /etc/ssh-keys/* /root/.ssh/
+                chmod 700 /root/.ssh
+                chmod 400 /root/.ssh/id_rsa
+                chmod 644 /root/.ssh/id_rsa.pub
+                chmod 600 /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/config
+                
+                # Configure sshd to use port 2222
+                echo "Port 2222" >> /etc/ssh/sshd_config
+                echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+                echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
+                
+                # Start SSH service on port 2222
+                service ssh restart
+                
+                # Wait for all nodes to be ready
+                sleep 15
+                
+                # Get pod IPs dynamically
+                POD0_IP=$(getent hosts nccl-test-job-0.nccl-test-service | awk '{print $1}')
+                POD1_IP=$(getent hosts nccl-test-job-1.nccl-test-service | awk '{print $1}')
+                
+                echo "Pod IPs: POD0=$POD0_IP, POD1=$POD1_IP"
+                
+                # Test SSH connectivity using port 2222
+                echo "Testing SSH to both nodes on port 2222..."
+                ssh -o StrictHostKeyChecking=no -p 2222 nccl-test-job-0.nccl-test-service "hostname" || echo "SSH to pod 0 failed"
+                ssh -o StrictHostKeyChecking=no -p 2222 nccl-test-job-1.nccl-test-service "hostname" || echo "SSH to pod 1 failed"
+                
+                # Run NCCL all_reduce_perf tests
+                echo "Starting NCCL all_reduce_perf tests (intranode first)..."
+                source /usr/local/gib/scripts/set_nccl_env.sh
+                /third_party/nccl-tests/build/all_reduce_perf -b 8M -e 16G -f 2 -g 8
+                
+                echo ""
+                echo "Starting NCCL all_reduce_perf tests (internode)..."
+                mpirun -np 16 \
+                  -H nccl-test-job-0.nccl-test-service:8,nccl-test-job-1.nccl-test-service:8 \
+                  --allow-run-as-root \
+                  --mca plm_rsh_args "-p 2222" \
+                  --mca orte_keep_fqdn_hostnames 1 \
+                  --mca btl_tcp_if_include eth0 \
+                  -x LD_LIBRARY_PATH \
+                  -x NCCL_NET \
+                  -x NCCL_CROSS_NIC \
+                  -x NCCL_NET_GDR_LEVEL \
+                  -x NCCL_P2P_NET_CHUNKSIZE \
+                  -x NCCL_NVLS_CHUNKSIZE \
+                  -x NCCL_IB_ADAPTIVE_ROUTING \
+                  -x NCCL_IB_QPS_PER_CONNECTION \
+                  -x NCCL_IB_TC \
+                  -x NCCL_IB_FIFO_TC \
+                  -x NCCL_TUNER_CONFIG_PATH \
+                  /third_party/nccl-tests/build/all_reduce_perf \
+                  -b 8M -e 16G -f 2 -g 1
+                
+                echo "NCCL tests completed successfully!"
+              else
+                echo "Rank ${RANK}: Starting SSH service and waiting..."
+                
+                # Copy SSH keys from Secret to writable location
+                rm -rf /root/.ssh
+                mkdir -p /root/.ssh
+                cp /etc/ssh-keys/* /root/.ssh/
+                chmod 700 /root/.ssh
+                chmod 400 /root/.ssh/id_rsa
+                chmod 644 /root/.ssh/id_rsa.pub
+                chmod 600 /root/.ssh/authorized_keys
+                chmod 600 /root/.ssh/config
+                
+                # Configure sshd to use port 2222
+                echo "Port 2222" >> /etc/ssh/sshd_config
+                echo "PermitRootLogin yes" >> /etc/ssh/sshd_config
+                echo "PubkeyAuthentication yes" >> /etc/ssh/sshd_config
+                
+                # Start SSH service on port 2222
+                service ssh restart
+                
+                echo "Rank ${RANK}: SSH service started, waiting for rank 0..."
+              fi
+              
+              sleep infinity
+      initContainers:
+        - name: nccl-plugin-installer
+          image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic:v1.1.0
+          imagePullPolicy: Always
+          args:
+          - |
+            set -ex
+            /scripts/container_entry.sh install --install-nccl
+            cp -R /var/lib/gib/lib64/. /target/usr/local/gib/lib64
+            cp -R /var/lib/gib/. /target/usr/local/gib
+            cp -R /scripts /target/dev/shm
+            cp -R /diagnostic /target/dev/shm
+            cp -R /third_party /target/dev/shm
+          command:
+          - /bin/sh
+          - -c
+          volumeMounts:
+          - mountPath: /target/usr/local/gib
+            name: gib
+          - mountPath: /target/dev/shm
+            name: shared-memory
