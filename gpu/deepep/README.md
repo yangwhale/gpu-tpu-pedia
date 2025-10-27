@@ -494,6 +494,213 @@ kubectl delete -f deepep-intranode-ngc-25.06.yaml
 
 详细的故障排查步骤请参阅 [故障排查指南](TROUBLESHOOTING.md)。
 
+### NCCL 跨节点性能测试
+
+[`nccl-test-internode-job.yaml`](nccl-test-internode-job.yaml) 提供了一个完整的 NCCL 跨节点性能测试方案，使用 SSH 进行节点间通信，测试 RDMA over InfiniBand 的性能。
+
+#### 前置条件：创建 SSH Secret
+
+NCCL 跨节点测试需要 SSH 互信，首先需要创建 SSH 密钥对并存储为 Kubernetes Secret。
+
+**1. 生成 SSH 密钥对：**
+
+```bash
+# 在本地临时目录生成密钥对
+mkdir -p /tmp/nccl_ssh_key
+ssh-keygen -t rsa -b 4096 -f /tmp/nccl_ssh_key/id_rsa -N "" -C "nccl-test"
+
+# 创建 authorized_keys
+cat /tmp/nccl_ssh_key/id_rsa.pub > /tmp/nccl_ssh_key/authorized_keys
+
+# 创建 SSH config
+cat > /tmp/nccl_ssh_key/config <<EOF
+Host *
+    StrictHostKeyChecking no
+    UserKnownHostsFile /dev/null
+    Port 2222
+EOF
+```
+
+**2. 创建 Kubernetes Secret：**
+
+```bash
+# 创建 Secret（包含私钥、公钥、authorized_keys 和 config）
+kubectl create secret generic nccl-ssh-key \
+  --from-file=id_rsa=/tmp/nccl_ssh_key/id_rsa \
+  --from-file=id_rsa.pub=/tmp/nccl_ssh_key/id_rsa.pub \
+  --from-file=authorized_keys=/tmp/nccl_ssh_key/authorized_keys \
+  --from-file=config=/tmp/nccl_ssh_key/config
+
+# 验证 Secret 创建成功
+kubectl get secret nccl-ssh-key
+
+# （可选）查看 Secret 内容
+kubectl describe secret nccl-ssh-key
+```
+
+**3. （可选）清理本地密钥文件：**
+
+```bash
+# Secret 创建后，可以删除本地临时文件
+rm -rf /tmp/nccl_ssh_key
+```
+
+#### 部署测试
+
+**1. 部署 NCCL 测试 Job：**
+
+```bash
+kubectl apply -f nccl-test-internode-job.yaml
+```
+
+**2. 查看 Pod 状态：**
+
+```bash
+kubectl get pods -l job-name=nccl-test-job -o wide
+```
+
+预期输出：
+```
+NAME                    READY   STATUS    RESTARTS   AGE   IP             NODE
+nccl-test-job-0-xxxxx   2/2     Running   0          60s   192.168.0.43   gke-...-6slr
+nccl-test-job-1-xxxxx   2/2     Running   0          60s   192.168.0.42   gke-...-vbl5
+```
+
+**3. 监控测试进度：**
+
+```bash
+# 查看 rank 0（主节点）的实时日志
+POD_NAME=$(kubectl get pods -l job-name=nccl-test-job -o jsonpath='{.items[0].metadata.name}')
+kubectl logs -f $POD_NAME -c ngc-25-04
+```
+
+#### 测试结果示例
+
+**SSH 连接验证：**
+```
+Testing SSH to both nodes on port 2222...
+Warning: Permanently added '[nccl-test-job-0.nccl-test-service]:2222' (ED25519) to the list of known hosts.
+gke-chrisya-gke-a4-a4-highgpu-ubuntu--752c886b-6slr
+Warning: Permanently added '[nccl-test-job-1.nccl-test-service]:2222' (ED25519) to the list of known hosts.
+gke-chrisya-gke-a4-a4-highgpu-ubuntu--752c886b-vbl5
+```
+
+**单节点 NCCL 性能测试（8 GPUs）：**
+```
+# nThread 1 nGpus 8 minBytes 8388608 maxBytes 17179869184 step: 2(factor)
+#
+# Using devices
+#  Rank  0 Group  0 Pid 221599 device  0 [0000:8f:00] NVIDIA B200
+#  Rank  1 Group  0 Pid 221599 device  1 [0000:90:00] NVIDIA B200
+#  Rank  2 Group  0 Pid 221599 device  2 [0000:96:00] NVIDIA B200
+#  Rank  3 Group  0 Pid 221599 device  3 [0000:97:00] NVIDIA B200
+#  Rank  4 Group  0 Pid 221599 device  4 [0000:c4:00] NVIDIA B200
+#  Rank  5 Group  0 Pid 221599 device  5 [0000:c5:00] NVIDIA B200
+#  Rank  6 Group  0 Pid 221599 device  6 [0000:cb:00] NVIDIA B200
+#  Rank  7 Group  0 Pid 221599 device  7 [0000:cc:00] NVIDIA B200
+#
+#       size         count      type   redop    root     time   algbw   busbw
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)
+     8388608       2097152     float     sum      -1    80.32  104.44  182.77
+    16777216       4194304     float     sum      -1    110.5  151.81  265.67
+    33554432       8388608     float     sum      -1    172.6  194.36  340.13
+    67108864      16777216     float     sum      -1    280.0  239.71  419.49
+   134217728      33554432     float     sum      -1    396.9  338.18  591.81
+   268435456      67108864     float     sum      -1    714.7  375.58  657.26
+   536870912     134217728     float     sum      -1   1335.6  401.96  703.44
+  1073741824     268435456     float     sum      -1   2576.7  416.72  729.25
+  2147483648     536870912     float     sum      -1   5102.4  420.87  736.53
+  4294967296    1073741824     float     sum      -1    10171  422.27  738.97
+  8589934592    2147483648     float     sum      -1    17899  479.90  839.82
+ 17179869184    4294967296     float     sum      -1    35561  483.11  845.44
+# Out of bounds values : 0 OK
+# Avg bus bandwidth    : 587.371 GB/s
+```
+
+**跨节点 NCCL 性能测试（16 GPUs，2 nodes）：**
+```
+# nThread 1 nGpus 1 minBytes 8388608 maxBytes 17179869184 step: 2(factor)
+#
+# Using devices (across 2 nodes)
+#  Rank  0 Group  0 device  0 [0000:8f:00] NVIDIA B200 (node 0)
+#  Rank  1 Group  0 device  1 [0000:90:00] NVIDIA B200 (node 0)
+#  ...
+#  Rank  8 Group  0 device  0 [0000:8f:00] NVIDIA B200 (node 1)
+#  Rank  9 Group  0 device  1 [0000:90:00] NVIDIA B200 (node 1)
+#  ...
+#  Rank 15 Group  0 device  7 [0000:cc:00] NVIDIA B200 (node 1)
+#
+#       size         count      type   redop    root     time   algbw   busbw
+#        (B)    (elements)                               (us)  (GB/s)  (GB/s)
+     8388608       2097152     float     sum      -1    158.8   52.83   99.06
+    16777216       4194304     float     sum      -1    193.2   86.83  162.81
+    33554432       8388608     float     sum      -1    291.0  115.32  216.22
+    67108864      16777216     float     sum      -1    483.3  138.85  260.35
+   134217728      33554432     float     sum      -1    714.1  187.94  352.39
+   268435456      67108864     float     sum      -1   1114.8  240.79  451.48
+   536870912     134217728     float     sum      -1   1808.9  296.79  556.48
+  1073741824     268435456     float     sum      -1   3328.7  322.57  604.82
+  2147483648     536870912     float     sum      -1   6171.1  347.99  652.48
+  4294967296    1073741824     float     sum      -1    12219  351.51  659.09
+  8589934592    2147483648     float     sum      -1    23842  360.29  675.54
+ 17179869184    4294967296     float     sum      -1    47062  365.05  684.46
+# Out of bounds values : 0 OK
+# Avg bus bandwidth    : 448.13 GB/s
+```
+
+#### 性能指标对比
+
+| 测试配置 | GPU 数量 | 平均带宽 | 最大带宽 | 特点 |
+|---------|---------|---------|---------|------|
+| **单节点** | 8 GPUs | **587.4 GB/s** | 845.4 GB/s | NVLink 节点内通信 |
+| **跨节点** | 16 GPUs (2×8) | **448.1 GB/s** | 684.5 GB/s | RDMA over InfiniBand |
+
+**关键特性：**
+- ✅ **SSH 互信成功** - 通过 Kubernetes Secret 实现跨节点 SSH 通信
+- ✅ **单节点高性能** - 587.4 GB/s 平均带宽（NVLink）
+- ✅ **跨节点 RDMA** - 448.1 GB/s 平均带宽（InfiniBand）
+- ✅ **16 GPU 全部识别** - 两个节点共 16 个 NVIDIA B200
+- ✅ **MPI 协调成功** - 使用 Open MPI 进行多进程协调
+
+#### 清理测试任务
+
+```bash
+# 删除 Job（会自动清理所有 Pod）
+kubectl delete job nccl-test-job
+
+# 删除 Service
+kubectl delete service nccl-test-service
+
+# （可选）删除 SSH Secret
+kubectl delete secret nccl-ssh-key
+```
+
+#### 配置说明
+
+该测试配置的关键特性：
+
+1. **SSH 配置**:
+   - 使用端口 2222（避免与主机 SSH 冲突）
+   - Secret 挂载到 `/etc/ssh-keys`（只读）
+   - 复制到 `/root/.ssh/`（可写，设置正确权限）
+
+2. **MPI 配置**:
+   - `--mca orte_keep_fqdn_hostnames 1` - 强制使用 FQDN
+   - `--mca plm_rsh_args "-p 2222"` - SSH 端口 2222
+   - Hostfile: `nccl-test-job-{0,1}.nccl-test-service`
+
+3. **NCCL 环境变量**:
+   - `NCCL_NET=gIB` - Google InfiniBand 插件
+   - `NCCL_CROSS_NIC=0` - 禁用跨网卡通信
+   - `NCCL_IB_HCA` - 指定 8 个 InfiniBand 适配器
+
+4. **Job 模式**:
+   - `completions: 2, parallelism: 2` - 两个并行节点
+   - `completionMode: Indexed` - 提供唯一的 rank ID
+   - `subdomain: nccl-test-service` - 稳定的 DNS 名称
+
+详细的故障排查步骤请参阅 [故障排查指南](TROUBLESHOOTING.md)。
+
 ---
 
 英文版本请参阅 [`readme_en.md`](readme_en.md)。
