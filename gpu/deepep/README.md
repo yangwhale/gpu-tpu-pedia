@@ -345,13 +345,6 @@ kubectl logs -f deepep-job-0-xxxxx
   - With/without top-k configurations
   - Async and sync modes
   - With/without previous parameter
-[testing] Running with BF16, with top-k (async=True, previous=True) ... passed
-[testing] Running with BF16, without top-k (async=True, previous=True) ... passed
-[testing] Running with BF16, with top-k (async=True, previous=True) ... passed
-[testing] Running with FP8, without top-k (async=True, previous=True) ... passed
-[testing] Running with FP8, with top-k (async=True, previous=True) ... passed
-[testing] Running with FP8, without top-k (async=True, previous=True) ... passed
-[testing] Running with FP8, with top-k (async=True, previous=True) ... passed
 
 [tuning] SMs 24, NVL chunk 4, RDMA chunk 4: 867 + 2008 us, 30.04 GB/s (RDMA), 98.10 GB/s (NVL) 
 [tuning] SMs 24, NVL chunk 4, RDMA chunk 8: 134 + 1915 us, 31.50 GB/s (RDMA), 102.86 GB/s (NVL) 
