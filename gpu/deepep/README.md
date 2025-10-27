@@ -327,3 +327,117 @@ kubectl delete -f deepep-internode.yaml
 ## 更新记录
 
 - 2025-10-26: 初始版本，支持 B200 GPU 的 DeepEP 安装和测试
+### 使用 distroless 镜像进行节点间测试
+
+[`deepep-internode-distroless.yaml`](deepep-internode-distroless.yaml) 提供了一个简化的测试方案，使用轻量级 distroless 镜像自动运行跨节点测试。
+
+**部署测试：**
+
+```bash
+kubectl apply -f deepep-internode-distroless.yaml
+```
+
+**查看 Pod 状态：**
+
+```bash
+kubectl get pods -l job-name=deepep-job -o wide
+```
+
+预期输出：
+```
+NAME                 READY   STATUS    RESTARTS   AGE   IP             NODE
+deepep-job-0-xxxxx   1/1     Running   0          10s   192.168.0.42   gke-...-vbl5
+deepep-job-1-xxxxx   1/1     Running   0          10s   192.168.0.43   gke-...-6slr
+```
+
+**查看测试日志：**
+
+```bash
+# 查看 rank 0 的日志
+kubectl logs deepep-job-0-xxxxx
+
+# 查看 rank 1 的日志  
+kubectl logs deepep-job-1-xxxxx
+
+# 实时跟踪日志
+kubectl logs -f deepep-job-0-xxxxx
+```
+
+**测试结果示例：**
+
+```
++ export RANK=0
++ RANK=0
++ export WORLD_SIZE=2
++ WORLD_SIZE=2
++ export MASTER_ADDR=deepep-job-0.deepep-service
++ MASTER_ADDR=deepep-job-0.deepep-service
++ '[' '!' -d /tmp/deepep_build ']'
++ cd /tmp/deepep_build
+Starting test with RANK=0, WORLD_SIZE=2, MASTER_ADDR=deepep-job-0.deepep-service
++ echo 'Starting test with RANK=0, WORLD_SIZE=2, MASTER_ADDR=deepep-job-0.deepep-service'
++ python3 tests/test_internode.py
+Testing with seed 0 ...
+[config] num_tokens=4096, hidden=7168, num_topk_groups=2, num_topk=8
+[layout] Kernel performance: 0.042 ms
+
+[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
+[testing] Running with FP8, without top-k (async=False, previous=False) ... passed
+[testing] Running with FP8, with top-k (async=False, previous=False) ... passed
+[testing] Running with FP8, without top-k (async=False, previous=False) ... passed
+[testing] Running with FP8, with top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, without top-k (async=True, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=True, previous=False) ... passed
+[testing] Running with BF16, without top-k (async=True, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=True, previous=False) ... passed
+[testing] Running with FP8, without top-k (async=True, previous=False) ... passed
+[testing] Running with FP8, with top-k (async=True, previous=False) ... passed
+[testing] Running with FP8, without top-k (async=True, previous=False) ... passed
+[testing] Running with FP8, with top-k (async=True, previous=False) ... passed
+[testing] Running with BF16, without top-k (async=False, previous=True) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=True) ... passed
+[testing] Running with BF16, without top-k (async=False, previous=True) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=True) ... passed
+[testing] Running with FP8, without top-k (async=False, previous=True) ... passed
+[testing] Running with FP8, with top-k (async=False, previous=True) ... passed
+[testing] Running with FP8, without top-k (async=False, previous=True) ... passed
+[testing] Running with FP8, with top-k (async=False, previous=True) ... passed
+[testing] Running with BF16, without top-k (async=True, previous=True) ... passed
+[testing] Running with BF16, with top-k (async=True, previous=True) ... passed
+[testing] Running with BF16, without top-k (async=True, previous=True) ... passed
+[testing] Running with BF16, with top-k (async=True, previous=True) ... passed
+[testing] Running with FP8, without top-k (async=True, previous=True) ... passed
+[testing] Running with FP8, with top-k (async=True, previous=True) ... passed
+[testing] Running with FP8, without top-k (async=True, previous=True) ... passed
+[testing] Running with FP8, with top-k (async=True, previous=True) ... passed
+
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 4: 867 + 2008 us, 30.04 GB/s (RDMA), 98.10 GB/s (NVL) 
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 8: 134 + 1915 us, 31.50 GB/s (RDMA), 102.86 GB/s (NVL) 
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 12: 93 + 1924 us, 31.35 GB/s (RDMA), 102.38 GB/s (NVL) 
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 16: 134 + 1907 us, 31.63 GB/s (RDMA), 103.29 GB/s (NVL) 
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 20: 293 + 1944 us, 31.03 GB/s (RDMA), 101.33 GB/s (NVL) 
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 24: 130 + 2010 us, 30.01 GB/s (RDMA), 98.00 GB/s (NVL) 
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 28: 241 + 1963 us, 30.73 GB/s (RDMA), 100.35 GB/s (NVL) 
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 32: 159 + 1969 us, 30.63 GB/s (RDMA), 100.04 GB/s (NVL) 
+
+... (中间省略性能调优过程) ...
+
+[tuning] Best dispatch (FP8): SMs 24, NVL chunk 40, RDMA chunk 16: 229 + 1391 us, 43.36 GB/s (RDMA), 141.61 GB/s (NVL)
+[tuning] Best dispatch (BF16): SMs 24, NVL chunk 32, RDMA chunk 16: 135 + 2606 us, 44.89 GB/s (RDMA), 146.59 GB/s (NVL)
+[tuning] Best combine: SMs 24, NVL chunk 4, RDMA chunk 20, 778.64 + 2681.00 us, 43.63 GB/s (RDMA), 142.49 GB/s (NVL)
+```
+
+**性能指标说明：**
+- **FP8 最佳性能**: 43.36 GB/s (RDMA), 141.61 GB/s (NVL)
+- **BF16 最佳性能**: 44.89 GB/s (RDMA), 146.59 GB/s (NVL)
+- **组合最佳性能**: 43.63 GB/s (RDMA), 142.49 GB/s (NVL)
+- **所有 32 个功能测试**: 全部通过 ✅
+
+**清理测试任务：**
+
+```bash
+kubectl delete -f deepep-internode-distroless.yaml
+```
