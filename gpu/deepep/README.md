@@ -9,6 +9,7 @@
 3. [部署 DeepEP 安装程序](#部署-deepep-安装程序)
 4. [运行测试](#运行测试)
 5. [配置说明](#配置说明)
+6. [故障排查](#故障排查)
 
 ## 前提条件
 
@@ -283,12 +284,22 @@ kubectl delete pod deepep-intranode-distroless
    - 所有库和驱动复制到: `/home/kubernetes/bin/nvidia/`
    - Pod 通过 hostPath 挂载使用
 
+## 故障排查
+
+如果在部署或测试过程中遇到问题，请参阅 [**故障排查指南**](TROUBLESHOOTING.md)，其中包含：
+
+- 常见问题的根本原因分析
+- RDMA/NCCL 配置问题的解决方案
+- libibverbs 驱动加载问题的修复步骤
+- 完整的验证和调试流程
+
 ## 参考资源
 
 - [DeepEP GitHub](https://github.com/deepseek-ai/DeepEP)
 - [NVIDIA NVSHMEM 文档](https://docs.nvidia.com/nvshmem/)
 - [gdrcopy GitHub](https://github.com/NVIDIA/gdrcopy)
 - [GKE GPU 文档](https://cloud.google.com/kubernetes-engine/docs/how-to/gpus)
+- [故障排查指南](TROUBLESHOOTING.md) - DeepEP 在 GKE 上的常见问题和解决方案
 
 ## 更新记录
 
@@ -373,3 +384,116 @@ kubectl logs -f deepep-job-0-xxxxx
 ```bash
 kubectl delete -f deepep-internode-distroless.yaml
 ```
+
+### 使用 NGC 容器镜像进行节点内测试（完整端到端）
+
+[`deepep-intranode-ngc-25.06.yaml`](deepep-intranode-ngc-25.06.yaml) 提供了一个基于 NGC PyTorch 容器的完整测试方案，使用 hostNetwork 模式进行单节点内 GPU 间通信测试。
+
+#### 部署步骤
+
+**1. 部署 Job：**
+
+```bash
+kubectl apply -f deepep-intranode-ngc-25.06.yaml
+```
+
+**2. 查看 Pod 状态：**
+
+```bash
+kubectl get pods -l job-name=gpu-runtime-wxg-job -o wide
+```
+
+预期输出（Pod 使用 hostNetwork，IP 为节点 IP）：
+```
+NAME                          READY   STATUS    RESTARTS   AGE   IP             NODE
+gpu-runtime-wxg-job-0-xxxxx   2/2     Running   0          60s   192.168.0.42   gke-...-vbl5
+gpu-runtime-wxg-job-1-xxxxx   2/2     Running   0          60s   192.168.0.43   gke-...-6slr
+```
+
+**3. 查看测试日志：**
+
+```bash
+# 查看 rank 0 的日志（主节点）
+POD_NAME=$(kubectl get pods -l job-name=gpu-runtime-wxg-job -o jsonpath='{.items[0].metadata.name}')
+kubectl logs $POD_NAME -c ngc-25-04 -f
+```
+
+#### 测试结果示例
+
+```
+Pod 0 started with RANK=0, WORLD_SIZE=2, MASTER_ADDR=gpu-runtime-wxg-job-0.gpu-runtime-wxg-service
+Starting DeepEP intranode test...
+
+Testing with seed 0 ...
+[config] num_tokens=4096, hidden=7168, num_topk_groups=2, num_topk=8
+[layout] Kernel performance: 0.048 ms
+
+[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
+[testing] Running with FP8, without top-k (async=False, previous=False) ... passed
+[testing] Running with FP8, with top-k (async=False, previous=False) ... passed
+
+... (所有 32 个功能测试) ...
+
+[testing] All 32 functional tests passed ✅
+  - BF16 and FP8 precision tests
+  - With/without top-k configurations
+  - Async and sync modes
+  - With/without previous parameter
+
+[tuning] SMs 24, NVL chunk 4, RDMA chunk 4: 652 + 2113 us, 28.55 GB/s (RDMA), 93.22 GB/s (NVL)
+[tuning] SMs 24, NVL chunk 8, RDMA chunk 8: 500 + 1616 us, 37.33 GB/s (RDMA), 121.89 GB/s (NVL)
+[tuning] SMs 24, NVL chunk 12, RDMA chunk 16: 268 + 1601 us, 37.68 GB/s (RDMA), 123.04 GB/s (NVL)
+[tuning] SMs 24, NVL chunk 28, RDMA chunk 16: 609 + 1458 us, 41.37 GB/s (RDMA), 135.10 GB/s (NVL)
+
+... (中间省略性能调优过程) ...
+
+[tuning] Best dispatch (FP8): SMs 24, NVL chunk 28, RDMA chunk 16: 609 + 1458 us, 41.37 GB/s (RDMA), 135.10 GB/s (NVL)
+[tuning] Best dispatch (BF16): SMs 24, NVL chunk 12, RDMA chunk 32: 330 + 2807 us, 41.68 GB/s (RDMA), 136.10 GB/s (NVL)
+[tuning] Best combine: SMs 24, NVL chunk 6, RDMA chunk 20, 918.76 + 2763.00 us, 42.34 GB/s (RDMA), 138.26 GB/s (NVL)
+
+Test completed successfully!
+```
+
+#### 性能指标说明
+
+| 测试类型 | RDMA 带宽 | NVL 带宽 | 延迟 |
+|---------|-----------|----------|------|
+| **FP8 最佳** | 41.37 GB/s | 135.10 GB/s | 609 + 1458 us |
+| **BF16 最佳** | 41.68 GB/s | 136.10 GB/s | 330 + 2807 us |
+| **Combine 最佳** | 42.34 GB/s | 138.26 GB/s | 918 + 2763 us |
+
+**关键特性：**
+- ✅ **所有 32 个功能测试通过** - 涵盖 BF16 和 FP8 精度的各种配置
+- ✅ **RDMA 通信正常** - 跨节点 GPU 间高速通信
+- ✅ **NVL 通信正常** - 节点内 GPU 间 NVLink 通信
+- ✅ **性能调优完成** - 自动找到最佳参数组合
+
+#### 清理测试任务
+
+```bash
+kubectl delete -f deepep-intranode-ngc-25.06.yaml
+```
+
+#### 配置说明
+
+该配置文件的关键特性：
+
+1. **hostNetwork 模式**: 使用 `hostNetwork: true` 和 `hostPID: true`，直接使用节点网络，避免 Pod 间 SSH 配置复杂性
+
+2. **RDMA 驱动修复**: 自动复制 `libmlx5-rdmav57.so` 到系统默认路径，解决 libibverbs 驱动加载问题
+
+3. **环境变量配置**:
+   - `NCCL_NET=gIB` - 使用 Google InfiniBand 插件
+   - `GDRCOPY_HOME=/usr/local/nvidia` - GPUDirect RDMA Copy 路径
+   - `NVSHMEM_HOME=/usr/local/nvidia` - NVSHMEM 库路径
+
+4. **自动化测试**: 容器启动后自动克隆 DeepEP 仓库并运行 `test_intranode.py`
+
+5. **Job 模式**: 使用 Kubernetes Job 的 Indexed completion 模式，支持多节点并行部署
+
+详细的故障排查步骤请参阅 [故障排查指南](TROUBLESHOOTING.md)。
+
+---
+
+英文版本请参阅 [`readme_en.md`](readme_en.md)。
