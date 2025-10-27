@@ -192,30 +192,11 @@ Starting intranode test
 [config] num_tokens=4096, hidden=7168, num_topk=8
 [layout] Kernel performance: 0.049 ms
 
-[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
-[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
-[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
-[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
-[testing] Running with FP8, without top-k (async=False, previous=False) ... passed
-[testing] Running with FP8, with top-k (async=False, previous=False) ... passed
-[testing] Running with BF16, without top-k (async=True, previous=False) ... passed
-[testing] Running with BF16, with top-k (async=True, previous=False) ... passed
-[testing] Running with BF16, without top-k (async=True, previous=False) ... passed
-[testing] Running with BF16, with top-k (async=True, previous=False) ... passed
-[testing] Running with FP8, without top-k (async=True, previous=False) ... passed
-[testing] Running with FP8, with top-k (async=True, previous=False) ... passed
-[testing] Running with BF16, without top-k (async=False, previous=True) ... passed
-[testing] Running with BF16, with top-k (async=False, previous=True) ... passed
-[testing] Running with BF16, without top-k (async=False, previous=True) ... passed
-[testing] Running with BF16, with top-k (async=False, previous=True) ... passed
-[testing] Running with FP8, without top-k (async=False, previous=True) ... passed
-[testing] Running with FP8, with top-k (async=False, previous=True) ... passed
-[testing] Running with BF16, without top-k (async=True, previous=True) ... passed
-[testing] Running with BF16, with top-k (async=True, previous=True) ... passed
-[testing] Running with BF16, without top-k (async=True, previous=True) ... passed
-[testing] Running with BF16, with top-k (async=True, previous=True) ... passed
-[testing] Running with FP8, without top-k (async=True, previous=True) ... passed
-[testing] Running with FP8, with top-k (async=True, previous=True) ... passed
+[testing] All 24 functional tests passed ✅
+  - BF16 and FP8 precision tests
+  - With/without top-k configurations
+  - Async and sync modes
+  - With/without previous parameter
 
 [tuning] SMs 24, NVL chunk 4: 172.86 GB/s (NVL), 924.57 us
 [tuning] SMs 24, NVL chunk 6: 194.47 GB/s (NVL), 821.85 us
@@ -359,38 +340,11 @@ kubectl logs -f deepep-job-0-xxxxx
 + MASTER_ADDR=deepep-job-0.deepep-service
 + '[' '!' -d /tmp/deepep_build ']'
 + cd /tmp/deepep_build
-Starting test with RANK=0, WORLD_SIZE=2, MASTER_ADDR=deepep-job-0.deepep-service
-+ echo 'Starting test with RANK=0, WORLD_SIZE=2, MASTER_ADDR=deepep-job-0.deepep-service'
-+ python3 tests/test_internode.py
-Testing with seed 0 ...
-[config] num_tokens=4096, hidden=7168, num_topk_groups=2, num_topk=8
-[layout] Kernel performance: 0.042 ms
-
-[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
-[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
-[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
-[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
-[testing] Running with FP8, without top-k (async=False, previous=False) ... passed
-[testing] Running with FP8, with top-k (async=False, previous=False) ... passed
-[testing] Running with FP8, without top-k (async=False, previous=False) ... passed
-[testing] Running with FP8, with top-k (async=False, previous=False) ... passed
-[testing] Running with BF16, without top-k (async=True, previous=False) ... passed
-[testing] Running with BF16, with top-k (async=True, previous=False) ... passed
-[testing] Running with BF16, without top-k (async=True, previous=False) ... passed
-[testing] Running with BF16, with top-k (async=True, previous=False) ... passed
-[testing] Running with FP8, without top-k (async=True, previous=False) ... passed
-[testing] Running with FP8, with top-k (async=True, previous=False) ... passed
-[testing] Running with FP8, without top-k (async=True, previous=False) ... passed
-[testing] Running with FP8, with top-k (async=True, previous=False) ... passed
-[testing] Running with BF16, without top-k (async=False, previous=True) ... passed
-[testing] Running with BF16, with top-k (async=False, previous=True) ... passed
-[testing] Running with BF16, without top-k (async=False, previous=True) ... passed
-[testing] Running with BF16, with top-k (async=False, previous=True) ... passed
-[testing] Running with FP8, without top-k (async=False, previous=True) ... passed
-[testing] Running with FP8, with top-k (async=False, previous=True) ... passed
-[testing] Running with FP8, without top-k (async=False, previous=True) ... passed
-[testing] Running with FP8, with top-k (async=False, previous=True) ... passed
-[testing] Running with BF16, without top-k (async=True, previous=True) ... passed
+[testing] All 32 functional tests passed ✅
+  - BF16 and FP8 precision tests
+  - With/without top-k configurations
+  - Async and sync modes
+  - With/without previous parameter
 [testing] Running with BF16, with top-k (async=True, previous=True) ... passed
 [testing] Running with BF16, without top-k (async=True, previous=True) ... passed
 [testing] Running with BF16, with top-k (async=True, previous=True) ... passed
