@@ -20,8 +20,8 @@ GPU 和 TPU 学习和实践知识库
 - [完整安装指南](gpu/deepep/README.md)
 - [节点池创建配置](gpu/deepep/README.md#创建-gke-ubuntu-节点池)
 - [DeepEP 安装程序](gpu/deepep/deepep-installer.yaml)
-- [节点内测试](gpu/deepep/deepep-intranode.yaml)
-- [节点间测试](gpu/deepep/deepep-internode.yaml)
+- [节点内测试 (Distroless)](gpu/deepep/deepep-intranode-distroless.yaml)
+- [节点间测试 (Distroless)](gpu/deepep/deepep-internode-distroless.yaml)
 
 **技术栈：**
 - NVIDIA B200 GPU (8x per node)
