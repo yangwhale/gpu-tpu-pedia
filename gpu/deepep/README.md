@@ -153,127 +153,112 @@ deepep-installer-ubuntu-xxxxx   1/1     Running   0          25m
 
 ## 运行测试
 
-### 部署测试 Pod
+### 使用 distroless 镜像进行节点内测试
 
-使用 [`deepep-intranode.yaml`](deepep-intranode.yaml) 部署测试 Pod：
+[`deepep-intranode-distroless.yaml`](deepep-intranode-distroless.yaml) 提供了一个简化的单节点测试方案，使用轻量级 distroless 镜像自动运行节点内测试。
 
-```bash
-kubectl apply -f deepep-intranode.yaml
-```
-
-### 进入 Pod 并运行测试
+**部署测试：**
 
 ```bash
-# 获取 Pod 名称
-kubectl get pods
-
-# 进入 Pod
-kubectl exec -it privileged-sleeping-pod -- /bin/bash
+kubectl apply -f deepep-intranode-distroless.yaml
 ```
-
-### 配置环境变量
-
-在 Pod 内执行：
-
-```bash
-export DEBIAN_FRONTEND=noninteractive
-export PYTHONPATH=/usr/local/nvidia/deepep:$PYTHONPATH
-export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
-```
-
-### 安装 DeepEP（在 Pod 内）
-
-```bash
-# 更新软件包
-apt-get update -y && apt install git python3-pip -y -qq 
-
-# 安装构建依赖
-apt install python3.12-dev python3.12 ninja-build cmake build-essential devscripts debhelper dkms -y -qq
-
-# 安装 PyTorch
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129 --break-system-packages
-
-# 克隆并测试 DeepEP
-git clone https://github.com/deepseek-ai/DeepEP.git && cd ./DeepEP
-```
-
-### 运行低延迟测试
-
-```bash
-python3 tests/test_low_latency.py
-```
-
-预期输出：
-```
-Allocating buffer size: 2146.961792 MB ...
-[rank 0] Dispatch + combine bandwidth: 256.81 GB/s, avg_t=85.85 us, min_t=76.42 us, max_t=106.50 us
-[rank 1] Dispatch + combine bandwidth: 257.06 GB/s, avg_t=85.77 us, min_t=74.02 us, max_t=99.62 us
-[rank 2] Dispatch + combine bandwidth: 256.49 GB/s, avg_t=85.96 us, min_t=78.24 us, max_t=105.57 us
-...
-[rank 7] Dispatch send/recv time: 27.25 + 7.71 us | Combine send/recv time: 32.48 + 9.45 us
-```
-
-**性能指标说明：**
-- **Dispatch + Combine 带宽**: ~256 GB/s
-- **Dispatch 带宽**: ~236 GB/s  
-- **Combine 带宽**: ~356 GB/s
-- **延迟**: ~7-9 微秒
-
-### 运行节点内测试（可选）
-
-```bash
-python3 tests/test_intranode.py
-```
-
-### 运行节点间测试
-
-节点间测试用于验证跨节点的 GPU 通信性能。使用 [`deepep-internode.yaml`](deepep-internode.yaml) 部署多节点测试任务：
-
-```bash
-kubectl apply -f deepep-internode.yaml
-```
-
-**配置说明：**
-- 部署一个 Kubernetes Job，包含 2 个并行 Pod
-- 每个 Pod 运行在不同的 GKE 节点上
-- 使用 `hostNetwork: true` 启用主机网络模式
-- 通过 Headless Service 进行 Pod 间通信
-- 自动配置分布式训练环境变量（RANK、WORLD_SIZE、MASTER_ADDR）
 
 **查看 Pod 状态：**
 
 ```bash
-kubectl get pods -l job-name=deepep-job -o wide
+kubectl get pod deepep-intranode-distroless
 ```
 
-**查看日志：**
+预期输出：
+```
+NAME                          READY   STATUS      RESTARTS   AGE
+deepep-intranode-distroless   0/1     Completed   0          1m
+```
+
+**查看测试日志：**
 
 ```bash
-# 查看 rank 0 的日志
-kubectl logs deepep-job-0-xxxxx
-
-# 查看 rank 1 的日志
-kubectl logs deepep-job-1-xxxxx
+kubectl logs deepep-intranode-distroless
 ```
 
-**进入 Pod 运行测试：**
+**测试结果示例：**
 
-```bash
-# 进入任一 Pod
-kubectl exec -it deepep-job-0-xxxxx -- /bin/bash
-
-# 在 Pod 内配置环境并运行测试
-export PYTHONPATH=/usr/local/nvidia/deepep:$PYTHONPATH
-export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:$LD_LIBRARY_PATH
-
-cd DeepEP
-python3 tests/test_internode.py
 ```
++ '[' '!' -d /tmp/deepep_build ']'
++ cd /tmp/deepep_build
++ echo 'Starting intranode test'
+Starting intranode test
++ python3 tests/test_intranode.py
+[config] num_tokens=4096, hidden=7168, num_topk=8
+[layout] Kernel performance: 0.049 ms
+
+[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, without top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=False) ... passed
+[testing] Running with FP8, without top-k (async=False, previous=False) ... passed
+[testing] Running with FP8, with top-k (async=False, previous=False) ... passed
+[testing] Running with BF16, without top-k (async=True, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=True, previous=False) ... passed
+[testing] Running with BF16, without top-k (async=True, previous=False) ... passed
+[testing] Running with BF16, with top-k (async=True, previous=False) ... passed
+[testing] Running with FP8, without top-k (async=True, previous=False) ... passed
+[testing] Running with FP8, with top-k (async=True, previous=False) ... passed
+[testing] Running with BF16, without top-k (async=False, previous=True) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=True) ... passed
+[testing] Running with BF16, without top-k (async=False, previous=True) ... passed
+[testing] Running with BF16, with top-k (async=False, previous=True) ... passed
+[testing] Running with FP8, without top-k (async=False, previous=True) ... passed
+[testing] Running with FP8, with top-k (async=False, previous=True) ... passed
+[testing] Running with BF16, without top-k (async=True, previous=True) ... passed
+[testing] Running with BF16, with top-k (async=True, previous=True) ... passed
+[testing] Running with BF16, without top-k (async=True, previous=True) ... passed
+[testing] Running with BF16, with top-k (async=True, previous=True) ... passed
+[testing] Running with FP8, without top-k (async=True, previous=True) ... passed
+[testing] Running with FP8, with top-k (async=True, previous=True) ... passed
+
+[tuning] SMs 24, NVL chunk 4: 172.86 GB/s (NVL), 924.57 us
+[tuning] SMs 24, NVL chunk 6: 194.47 GB/s (NVL), 821.85 us
+[tuning] SMs 24, NVL chunk 8: 245.96 GB/s (NVL), 649.78 us
+[tuning] SMs 24, NVL chunk 10: 284.17 GB/s (NVL), 562.43 us
+[tuning] SMs 24, NVL chunk 12: 289.30 GB/s (NVL), 552.44 us
+[tuning] SMs 24, NVL chunk 14: 310.92 GB/s (NVL), 514.03 us
+[tuning] SMs 24, NVL chunk 16: 322.86 GB/s (NVL), 495.02 us
+[tuning] SMs 24, NVL chunk 18: 330.79 GB/s (NVL), 483.16 us
+[tuning] SMs 24, NVL chunk 20: 336.69 GB/s (NVL), 474.68 us
+[tuning] SMs 24, NVL chunk 22: 341.20 GB/s (NVL), 468.42 us
+[tuning] SMs 24, NVL chunk 24: 346.49 GB/s (NVL), 461.26 us
+[tuning] SMs 24, NVL chunk 26: 347.37 GB/s (NVL), 460.09 us
+[tuning] SMs 24, NVL chunk 28: 348.50 GB/s (NVL), 458.60 us
+[tuning] SMs 24, NVL chunk 30: 352.43 GB/s (NVL), 453.49 us
+[tuning] SMs 24, NVL chunk 32: 351.81 GB/s (NVL), 454.28 us
+[tuning] SMs 24, NVL chunk default: 194.60 GB/s (NVL), 821.28 us
+[tuning] Best dispatch (FP8): SMs 24, NVL chunk 30, 352.43 GB/s (NVL), t: 453.49 us
+
+[tuning] SMs 24, NVL chunk 4: 306.74 GB/s (NVL), 1010.48 us
+[tuning] SMs 24, NVL chunk 6: 357.41 GB/s (NVL), 867.22 us
+[tuning] SMs 24, NVL chunk 8: 437.01 GB/s (NVL), 709.27 us
+[tuning] SMs 24, NVL chunk 10: 451.98 GB/s (NVL), 685.78 us
+
+... (中间省略性能调优过程) ...
+
+[tuning] SMs 24, NVL chunk 14: 391.25 GB/s (NVL), 792.23 us
+[tuning] SMs 24, NVL chunk 15: 399.63 GB/s (NVL), 775.61 us
+[tuning] SMs 24, NVL chunk 16: 391.17 GB/s (NVL), 792.39 us
+[tuning] SMs 24, NVL chunk default: 239.64 GB/s (NVL), 1293.42 us
+[tuning] Best combine: SMs 24, NVL chunk 15: 399.63 GB/s (NVL), t: 775.61 us
+```
+
+**性能指标说明：**
+- **FP8 最佳性能**: 352.43 GB/s (NVL), 延迟 453.49 us
+- **BF16 最佳性能**: 483.86 GB/s (NVL), 延迟 640.59 us
+- **Combine 最佳性能**: 399.63 GB/s (NVL), 延迟 775.61 us
+- **所有 24 个功能测试**: 全部通过 ✅
 
 **清理测试任务：**
 
 ```bash
-kubectl delete -f deepep-internode.yaml
+kubectl delete pod deepep-intranode-distroless
 ```
 
 ## 配置说明
