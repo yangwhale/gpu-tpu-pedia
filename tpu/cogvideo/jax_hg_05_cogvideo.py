@@ -588,13 +588,25 @@ def setup_pipeline_for_jax(pipe, model_id=MODEL_NAME):
         # 确保所有权重已分片完成
         torchax.interop.call_jax(jax.block_until_ready, text_encoder_weights)
         
-        # 对 Text Encoder 进行处理：先移到 XLA，再分片
-        print("- 将Text Encoder移到XLA并进行分片...")
+        # 对 VAE 进行处理：先移到 XLA，再分片
+        print("- 将VAE移到XLA并进行分片...")
         _move_module_to_xla(pipe.vae)
         vae_weights = shard_weights_vae(mesh, pipe.vae.state_dict())
         pipe.vae.load_state_dict(vae_weights, assign=True, strict=False)
         # 确保所有权重已分片完成
         torchax.interop.call_jax(jax.block_until_ready, vae_weights)
+        
+        # 启用 VAE Tiling 以节省显存
+        print("- 配置 VAE Tiling...")
+        pipe.vae.enable_tiling(
+            tile_sample_min_height=192,  # 默认 480//2
+            tile_sample_min_width=340,   # 默认 720//2
+            tile_overlap_factor_height=1/6,  # 16.7% 垂直重叠
+            tile_overlap_factor_width=1/5,   # 20% 水平重叠
+        )
+        print(f"  - Tile 最小尺寸: {pipe.vae.tile_sample_min_height}x{pipe.vae.tile_sample_min_width}")
+        print(f"  - 重叠因子: 垂直={pipe.vae.tile_overlap_factor_height:.2%}, 水平={pipe.vae.tile_overlap_factor_width:.2%}")
+        print("  Tiling 配置完成")
         
         # 编译transformer（DiT的核心网络）
         pipe.transformer = torchax.compile(
@@ -604,13 +616,27 @@ def setup_pipeline_for_jax(pipe, model_id=MODEL_NAME):
             )
         )
         
-        # 编译vae
-        pipe.vae = torchax.compile(
-            pipe.vae,
+        # 编译VAE - 优化版本：只编译核心计算，tiling循环在Python执行
+        # 优势：编译快（~2分钟 vs ~10分钟）
+        # 代价：推理慢（~3.5秒 vs ~1毫秒）
+        # 适合：开发调试阶段
+        print("- 编译 VAE Decoder (只编译核心计算，tiling循环在Python执行)...")
+        pipe.vae.decoder = torchax.compile(
+            pipe.vae.decoder,
             torchax.CompileOptions(
-                jax_jit_kwargs={'static_argnames': ('return_dict', )}
+                methods_to_compile=['forward'],
+                jax_jit_kwargs={'static_argnames': ('temb',)}
             )
         )
+        
+        # 如需生产环境的极速推理（1毫秒），改用以下配置：
+        # pipe.vae = torchax.compile(
+        #     pipe.vae,
+        #     torchax.CompileOptions(
+        #         methods_to_compile=['decode'],
+        #         jax_jit_kwargs={'static_argnames': ('return_dict',)}
+        #     )
+        # )
         
         # 编译文本编码器
         pipe.text_encoder = torchax.compile(pipe.text_encoder)
@@ -704,16 +730,17 @@ def main():
     print("\n 配置Pipeline以使用JAX、Splash Attention 和 JAX 原生 VAE...")
     pipe, env, mesh = setup_pipeline_for_jax(pipe)
     
-    prompt = "A cat walks on the grass, realistic style."
+    # prompt = "A cat walks on the grass, realistic style."
+    prompt = "A dog cooking cake in the kithen, realistic style."
     
     with mesh, nn_partitioning.axis_rules(LOGICAL_AXIS_RULES), env:
         frames, times = run_generation_benchmark(
             pipe,
             prompt,
-            num_inference_steps=20,
-            num_frames=17,
-            height = 288,
-            width = 512,
+            num_inference_steps=50,
+            num_frames=32,
+            height = 768,
+            width = 1360,
             num_iterations=2
         )
     
