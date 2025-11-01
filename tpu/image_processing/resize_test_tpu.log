@@ -1,0 +1,148 @@
+============================================================
+TPU版本resize测试 - 运行5次以观察tracing和缓存效果
+============================================================
+JAX配置完成
+检测到 8 个TPU设备
+
+目的：比较torchvision的resize和opencv的resize之间的精度差异
+所有计算在TPU上执行
+第1次运行包含代码tracing时间，后续运行使用缓存
+
+
+============================================================
+第 1 次运行
+============================================================
+
+使用PIL在CPU上加载图片...
+将数据移动到TPU设备...
+-------------跳过torchvision.io.decode_image测试（与torchax不兼容）-------------
+直接使用PIL加载的图片进行后续测试...
+
+Opencv resize: 1 frames time: 0.0114 秒
+
+在TPU上执行torch resize...
+TPU resize: 1 frames time: 0.2809 秒
+-------------比较解码使用pil，resize使用torch与opencv之间的差异-------------
+Maximum difference across all images: 0.007843255996704102
+Minimum difference across all images: 0.0
+Median difference: 0.0007997151114977896
+Number of pixels with non-zero difference: 955588
+Number of pixels with zero difference: 1118012
+Number of pixels with lt_mean difference: 211424
+
+(第1次运行包含代码tracing和编译缓存扫描时间)
+
+============================================================
+第 2 次运行
+============================================================
+
+使用PIL在CPU上加载图片...
+将数据移动到TPU设备...
+-------------跳过torchvision.io.decode_image测试（与torchax不兼容）-------------
+直接使用PIL加载的图片进行后续测试...
+
+Opencv resize: 1 frames time: 0.0004 秒
+
+在TPU上执行torch resize...
+TPU resize: 1 frames time: 0.0301 秒
+-------------比较解码使用pil，resize使用torch与opencv之间的差异-------------
+Maximum difference across all images: 0.007843255996704102
+Minimum difference across all images: 0.0
+Median difference: 0.0007997151114977896
+Number of pixels with non-zero difference: 955588
+Number of pixels with zero difference: 1118012
+Number of pixels with lt_mean difference: 211424
+
+(使用缓存，无需重新tracing)
+
+============================================================
+第 3 次运行
+============================================================
+
+使用PIL在CPU上加载图片...
+将数据移动到TPU设备...
+-------------跳过torchvision.io.decode_image测试（与torchax不兼容）-------------
+直接使用PIL加载的图片进行后续测试...
+
+Opencv resize: 1 frames time: 0.0003 秒
+
+在TPU上执行torch resize...
+TPU resize: 1 frames time: 0.0294 秒
+-------------比较解码使用pil，resize使用torch与opencv之间的差异-------------
+Maximum difference across all images: 0.007843255996704102
+Minimum difference across all images: 0.0
+Median difference: 0.0007997151114977896
+Number of pixels with non-zero difference: 955588
+Number of pixels with zero difference: 1118012
+Number of pixels with lt_mean difference: 211424
+
+(使用缓存，无需重新tracing)
+
+============================================================
+第 4 次运行
+============================================================
+
+使用PIL在CPU上加载图片...
+将数据移动到TPU设备...
+-------------跳过torchvision.io.decode_image测试（与torchax不兼容）-------------
+直接使用PIL加载的图片进行后续测试...
+
+Opencv resize: 1 frames time: 0.0009 秒
+
+在TPU上执行torch resize...
+TPU resize: 1 frames time: 0.0283 秒
+-------------比较解码使用pil，resize使用torch与opencv之间的差异-------------
+Maximum difference across all images: 0.007843255996704102
+Minimum difference across all images: 0.0
+Median difference: 0.0007997151114977896
+Number of pixels with non-zero difference: 955588
+Number of pixels with zero difference: 1118012
+Number of pixels with lt_mean difference: 211424
+
+(使用缓存，无需重新tracing)
+
+============================================================
+第 5 次运行
+============================================================
+
+使用PIL在CPU上加载图片...
+将数据移动到TPU设备...
+-------------跳过torchvision.io.decode_image测试（与torchax不兼容）-------------
+直接使用PIL加载的图片进行后续测试...
+
+Opencv resize: 1 frames time: 0.0003 秒
+
+在TPU上执行torch resize...
+TPU resize: 1 frames time: 0.0294 秒
+-------------比较解码使用pil，resize使用torch与opencv之间的差异-------------
+Maximum difference across all images: 0.007843255996704102
+Minimum difference across all images: 0.0
+Median difference: 0.0007997151114977896
+Number of pixels with non-zero difference: 955588
+Number of pixels with zero difference: 1118012
+Number of pixels with lt_mean difference: 211424
+
+(使用缓存，无需重新tracing)
+
+============================================================
+性能总结 - TPU Resize时间
+============================================================
+
+各次运行的resize时间：
+  第 1 次: 0.2809 秒
+  第 2 次: 0.0301 秒
+  第 3 次: 0.0294 秒
+  第 4 次: 0.0283 秒
+  第 5 次: 0.0294 秒
+
+第1次运行（含tracing）: 0.2809 秒
+后续运行平均时间: 0.0293 秒
+加速比: 9.59x
+
+说明：
+- 第1次运行包含PyTorch代码tracing和编译缓存扫描
+- 后续运行直接使用缓存的编译结果，速度更快
+
+============================================================
+测试完成
+============================================================
