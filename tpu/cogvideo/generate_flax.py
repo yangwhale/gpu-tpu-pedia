@@ -593,6 +593,11 @@ def setup_pipeline_for_jax(pipe, model_id=MODEL_NAME):
         torchax.interop.call_jax(jax.block_until_ready, text_encoder_weights)
         
         # 替换 PyTorch VAE 为 Flax VAE
+        # 重要：VAE 不需要 JIT 编译！
+        # - VAE.decode() 内部包含 Python for 循环进行逐帧处理
+        # - 如果对整个 decode() 进行 JIT，会导致循环展开 → 243GB OOM
+        # - 正确做法：内层计算使用 @nnx.jit（已在 VAE 内部实现），外层循环保持 Python
+        # 参考：diffusers-tpu-chris/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py
         print("- 加载 Flax VAE (原生 JAX 实现)...")
         flax_vae = FlaxAutoencoderKLCogVideoX.from_pretrained(
             model_id,
@@ -610,8 +615,9 @@ def setup_pipeline_for_jax(pipe, model_id=MODEL_NAME):
         # )
         
         # 使用 FlaxVAEProxy 包装并替换 pipeline 的 VAE
+        # 注意：FlaxVAEProxy.decode() 也不进行 JIT（这是正确的）
         pipe.vae = FlaxVAEProxy(flax_vae)
-        print("  ✓ Flax VAE 已替换 Pipeline 的 VAE")
+        print("  ✓ Flax VAE 已替换 Pipeline 的 VAE（无不当 JIT）")
         
         # 编译transformer（DiT的核心网络）
         pipe.transformer = torchax.compile(
