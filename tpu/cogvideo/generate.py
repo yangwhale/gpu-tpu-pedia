@@ -17,7 +17,8 @@ from jax.experimental.pallas.ops.tpu import splash_attention
 from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
 from transformers.modeling_outputs import BaseModelOutputWithPooling, BaseModelOutputWithPastAndCrossAttentions
-
+import warnings
+import logging
 from flax.linen import partitioning as nn_partitioning
 
 MODEL_NAME = "zai-org/CogVideoX1.5-5B"
@@ -721,6 +722,9 @@ def main():
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
     jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
+
+    warnings.filterwarnings('ignore', message='.*dtype.*int64.*truncated to dtype int32.*')
+    logging.getLogger().setLevel(logging.ERROR)
 
     torch.set_default_dtype(torch.bfloat16)
  
