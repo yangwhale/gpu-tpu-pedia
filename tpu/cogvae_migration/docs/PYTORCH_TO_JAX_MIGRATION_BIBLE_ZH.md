@@ -904,8 +904,8 @@ def tiled_decode_optimized(self, z, zq, deterministic=True):
     @jax.jit
     def decode_single_tile(tile_z, tile_zq, cache):
         return self.decoder(
-            tile_z, tile_zq, 
-            conv_cache=cache, 
+            tile_z, tile_zq,
+            conv_cache=cache,
             deterministic=True
         )
     
@@ -926,6 +926,153 @@ def tiled_decode_optimized(self, z, zq, deterministic=True):
 **效果对比**：
 - 完整 JIT：编译 1 小时，运行 2 秒
 - Tile-Level JIT：编译 <1 分钟，运行 ~60 秒
+
+#### 🚨 关键陷阱：JIT 导致循环展开引发 OOM ⚠️
+
+**问题描述**：
+
+在 TPU v6e (32GB HBM) 上运行 CogVideoX VAE decode 时遇到严重 OOM：
+- **初始内存需求**：243.63GB（远超硬件限制）
+- **任务**：decode 8 帧 768×1360 视频
+- **硬件限制**：32GB HBM
+
+**根本原因**：
+
+测试代码错误地对包含 Python for 循环的函数使用了 `@jax.jit`：
+
+```python
+# ❌ 错误做法 - 导致 OOM
+@jax.jit
+def decode_fn(latents):
+    return vae.decode(latents, deterministic=True)
+
+# vae.decode 内部包含逐帧处理循环：
+def _decode(self, z):
+    for frame_idx in range(num_frames):  # 例如 8 帧
+        decoded_frame = self.decoder(z[:, frame_idx:frame_idx+1, ...])
+        frames.append(decoded_frame)
+    return jnp.concatenate(frames, axis=1)
+```
+
+**XLA 的循环展开行为**：
+
+当 JIT 编译包含 Python for 循环的函数时，XLA 会**展开整个循环**，为每次迭代分配独立的内存：
+
+```python
+# JIT 编译后 XLA 将循环展开为：
+frame_0 = decoder(z_0)  # 分配 ~510MB
+frame_1 = decoder(z_1)  # 再分配 ~510MB
+frame_2 = decoder(z_2)  # 再分配 ~510MB
+...
+frame_7 = decoder(z_7)  # 再分配 ~510MB
+
+# 总内存：8 帧 × 510MB × ~30 (中间激活重复) ≈ 120GB+
+# 加上其他操作 → 243GB！
+```
+
+**正确解决方案**：
+
+**方案1：移除外层 JIT，让 Python 循环运行时执行** ✅
+
+```python
+# ✅ 正确做法
+def decode_fn(latents):
+    return vae.decode(latents, deterministic=True)
+
+# 内存使用：每帧顺序处理，内存可复用
+# 实际内存：~510MB × 1 (单帧) ≈ <2GB
+```
+
+**方案2：选择性 JIT - 只编译内层计算** ✅
+
+```python
+class VAE(nnx.Module):
+    def _decode(self, z):
+        frames = []
+        for i in range(num_frames):
+            # 只 JIT 单帧的 decoder 调用
+            frame = self._decode_frame_jit(z[:, i:i+1, ...])
+            frames.append(frame)
+        return jnp.concatenate(frames, axis=1)
+    
+    @nnx.jit  # 只编译单帧处理
+    def _decode_frame_jit(self, z_frame):
+        return self.decoder(z_frame)
+```
+
+**参考实现：MaxDiffusion WAN Pipeline**
+
+MaxDiffusion 也采用了相同的模式：
+
+```python
+# maxdiffusion/src/maxdiffusion/pipelines/wan/wan_pipeline.py:442
+# 直接调用 vae.decode，不对其 JIT
+video = self.vae.decode(latents, self.vae_cache)[0]
+
+# vae.decode 内部逐帧处理（autoencoder_kl_wan.py:1120-1148）
+def _decode(self, z, feat_cache):
+    for i in range(iter_):  # Python 循环不被 JIT
+        feat_cache._conv_idx = [0]
+        if i == 0:
+            out = self.decoder(x[:, i:i+1, ...], ...)  # 单帧处理
+        else:
+            out_ = self.decoder(x[:, i:i+1, ...], ...)
+            out = jnp.concatenate([out, out_], axis=1)
+    return out
+```
+
+**内存优化效果**：
+
+| 方法 | 内存需求 | 结果 |
+|------|---------|------|
+| ❌ 完整 JIT | 243.63GB | OOM |
+| ❌ 逐帧 + 减小 batch | 56.49GB | 仍 OOM |
+| ✅ 移除外层 JIT | <32GB | **成功！** |
+
+**性能影响**：
+
+虽然移除了外层 JIT，但由于内层计算已优化，性能仍然可接受：
+
+```
+平均耗时：~2000ms (8帧 768×1360)
+相比完全 Eager 模式：提速 10x+
+相比盲目 JIT（会 OOM）：实际可用
+```
+
+**核心教训**：
+
+1. **不要盲目 JIT**：并非所有函数都应该 JIT
+2. **理解编译行为**：JIT 会展开循环以优化性能，但会增加内存消耗
+3. **选择性优化**：
+   - ✅ JIT 单步计算（transformer step, decoder frame）
+   - ❌ 不要 JIT 包含动态循环的高层函数
+4. **参考成功案例**：MaxDiffusion、Diffusers 等成熟库的实现模式
+5. **逐帧处理 + conv_cache**：这是处理长视频序列的标准模式
+
+**最佳实践**：
+
+```python
+# ❌ 不要这样做
+@jax.jit
+def process_video(vae, latents):
+    return vae.decode(latents)  # 内部有循环
+
+# ✅ 应该这样做
+def process_video(vae, latents):
+    return vae.decode(latents)  # vae.decode 内部已优化
+
+# ✅ 或者这样（选择性 JIT）
+def process_video(vae, latents):
+    frames = []
+    for i in range(num_frames):
+        frame = decode_frame_jit(vae, latents[:, i:i+1, ...])
+        frames.append(frame)
+    return jnp.concatenate(frames, axis=1)
+
+@jax.jit
+def decode_frame_jit(vae, latent_frame):
+    return vae.decoder(latent_frame)
+```
 
 ### 6.3 并行化策略
 
@@ -1327,17 +1474,26 @@ jax_weight = pytorch_weight.transpose(1, 0)
    - 永远不要一次性迁移整个模型
    - 每层都要数值对比
 
-3. **JIT 是性能的关键**
-   - 不仅快 100x+，还能解决 OOM
-   - 但要注意编译时间
+3. **JIT 编译需要谨慎使用** ⭐ **最关键教训**
+   - ✅ JIT 可以带来 100x+ 性能提升
+   - 🚨 **不要 JIT 包含 Python for 循环的函数！**
+   - ⚠️ **JIT 会展开循环，导致内存爆炸（243GB OOM）**
+   - ✅ 选择性 JIT：只编译内层计算，外层循环保持 Python
+   - 📚 参考成功案例：MaxDiffusion WAN Pipeline
 
 4. **时序模型的特殊性**
    - CausalConv 不能时间分片
    - 必须保持时序完整性
+   - 逐帧处理 + conv_cache 是标准模式
 
 5. **Tiling 是大视频的救星**
    - 但要注意 JIT 编译策略
    - Tile-Level JIT 是最优解
+
+6. **内存优化有明确优先级**
+   - 第一步：避免循环展开（移除不当 JIT）
+   - 第二步：使用逐帧/分块处理
+   - 第三步：考虑 Tiling 和量化
 
 ### 致谢
 
