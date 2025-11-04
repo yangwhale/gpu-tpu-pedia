@@ -785,7 +785,7 @@ def main():
             pipe,
             prompt,
             num_inference_steps=50,  # 增加推理步数
-            num_frames=16,           # 16 帧（测试 Tiling）
+            num_frames=64,           # 16 帧（测试 Tiling）
             height=768,              # 480x720 标准分辨率
             width=1360,
             num_iterations=2
