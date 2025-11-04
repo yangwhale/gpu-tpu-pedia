@@ -777,8 +777,8 @@ def main():
     print("\n配置Pipeline以使用JAX、Splash Attention 和 Flax VAE...")
     pipe, env, mesh = setup_pipeline_for_jax(pipe)
     
-    prompt = "A cat walks on the grass, realistic style."
-    # prompt = "A dog cooking cake in the kithen, realistic style."
+    # prompt = "A cat walks on the grass, realistic style."
+    prompt = "A domestic cat, with sleek fur and bright eyes, gracefully walks through a field of vibrant green grass under natural daylight. The grass blades gently sway as the cat moves. Realistic cinematography."
     
     with mesh, nn_partitioning.axis_rules(LOGICAL_AXIS_RULES), env:
         frames, times = run_generation_benchmark(
@@ -788,7 +788,7 @@ def main():
             num_frames=64,           # 16 帧（测试 Tiling）
             height=768,              # 480x720 标准分辨率
             width=1360,
-            num_iterations=2
+            num_iterations=1
         )
     
     print("\n保存生成的视频...")
