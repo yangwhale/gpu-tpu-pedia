@@ -1,3 +1,6 @@
+import os
+os.environ.setdefault('JAX_MEMORY_DEBUG', '0')  # 默认关闭内存调试，如需开启设为 '1'
+
 import time
 import re
 import math
@@ -735,6 +738,12 @@ def run_generation_benchmark(pipe, prompt, num_inference_steps=20, num_frames=49
         
         # 显式删除中间结果以释放内存
         del result
+        
+        # 清理 JAX 编译缓存（关键！防止下次迭代 OOM）
+        # 第一次运行会产生约 3.74GB 的 JIT 缓存残留
+        # 必须清理才能进行第二次运行
+        print(f"  清理 JAX 编译缓存...")
+        jax.clear_caches()
     
     return frames, times
 
@@ -788,7 +797,7 @@ def main():
             num_frames=64,           # 16 帧（测试 Tiling）
             height=768,              # 480x720 标准分辨率
             width=1360,
-            num_iterations=1
+            num_iterations=2
         )
     
     print("\n保存生成的视频...")

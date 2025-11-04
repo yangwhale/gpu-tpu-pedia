@@ -21,6 +21,7 @@
 8. [调试技巧](#8-调试技巧)
 9. [性能基准与最佳实践](#9-性能基准与最佳实践)
 10. [案例研究](#10-案例研究)
+11. [📖 专题：JAX TPU 内存调试指南](#11-专题jax-tpu-内存调试指南) ⭐ **新增**
 
 ---
 
@@ -1501,6 +1502,77 @@ jax_weight = pytorch_weight.transpose(1, 0)
 本文档基于 CogVideoX VAE 迁移项目的实战经验总结，感谢：
 - **HuggingFace Diffusers** 团队的原始 PyTorch 实现
 - **JAX/Flax** 团队的优秀框架
+
+---
+
+## 11. 专题：JAX TPU 内存调试指南 ⭐
+
+**完整文档**：[JAX TPU 内存调试指南](./JAX_MEMORY_DEBUGGING_GUIDE.md)
+
+本专题详细介绍如何定位和解决 TPU 上的 OOM 问题，包括：
+
+### 核心技术
+
+1. **内存监控工具**：使用 `device.memory_stats()` 实时追踪显存
+2. **环境变量开关**：`JAX_MEMORY_DEBUG=1` 零性能开销的调试模式
+3. **JAX 缓存清理**：`jax.clear_caches()` 解决编译缓存泄漏
+
+### 关键发现
+
+第二次运行 OOM 的根本原因：
+```
+第一次运行清理后: 12.12GB (残留 3.74GB JIT 缓存)
+第二次运行峰值: 23.51GB + 3.74GB = 27.25GB → 接近 32GB 限制
+```
+
+### 解决方案
+
+```python
+# 在每次迭代后清理 JAX 编译缓存
+for i in range(num_iterations):
+    result = pipe(prompt, ...)
+    del result
+    jax.clear_caches()  # ⭐ 关键修复
+```
+
+**效果**：
+- ✅ 第一次运行：成功
+- ✅ 第二次运行：成功（内存使用与第一次一致）
+
+### 可复用工具
+
+**内存监控模板**：
+```python
+import os
+
+enable_debug = os.getenv('JAX_MEMORY_DEBUG', '0') == '1'
+
+def log_memory(msg):
+    if not enable_debug:
+        return
+    stats = jax.devices()[0].memory_stats()
+    used = stats.get('bytes_in_use', 0) / 1e9
+    limit = stats.get('bytes_limit', 0) / 1e9
+    print(f"[内存] {msg}: {used:.2f}GB / {limit:.2f}GB")
+```
+
+**使用方法**：
+```bash
+# 开启调试
+export JAX_MEMORY_DEBUG=1
+python your_script.py
+
+# 生产环境（默认关闭）
+python your_script.py
+```
+
+### 最佳实践
+
+| 场景 | 策略 |
+|------|------|
+| 开发调试 | 每个关键步骤监控内存 |
+| 性能测试 | 迭代前后监控 |
+| 生产环境 | 关闭监控，定期清理缓存 |
 
 ---
 
