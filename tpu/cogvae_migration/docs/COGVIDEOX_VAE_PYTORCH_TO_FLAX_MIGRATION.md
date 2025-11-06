@@ -254,6 +254,83 @@ def __call__(x, sample_posterior=False, rng=None):
 - PyTorch 的 `DiagonalGaussianDistribution.sample()` 等价于 Flax 的重参数化技巧
 - Flax 解码时需要同时传入 `z` 和 `zq`（空间条件），PyTorch 在内部处理
 
+#### 🔍 什么是 `zq` (Spatial Conditioning)？
+
+`zq` 是 **Spatial Conditioning**（空间条件）的缩写，在 CogVideoX VAE 解码器中扮演重要角色：
+
+**1. 基本概念**
+- `zq` 代表潜在表示 (latent representation)，用于 **Spatially Adaptive Normalization**
+- 在 CogVideoX 中，`zq` 实际上就是 `z` 本身（即编码得到的潜在向量）
+- 它通过 SpatialNorm3D 层为解码器提供空间自适应的归一化
+
+**2. 工作原理**（参考 [SpatialNorm3D](#41-spatialnorm3d-空间归一化)）
+```python
+# 在 SpatialNorm3D 中的使用
+def forward(f, zq):
+    # 1. 将 zq 上采样到特征图 f 的空间尺寸
+    zq_upsampled = resize(zq, size=f.shape)
+    
+    # 2. 通过两个 1x1x1 卷积生成归一化参数
+    gamma = conv_y(zq_upsampled)  # 缩放因子
+    beta = conv_b(zq_upsampled)   # 偏移
+    
+    # 3. 应用空间自适应归一化
+    normalized_f = GroupNorm(f)
+    output = normalized_f * gamma + beta  # 每个空间位置有不同的 gamma 和 beta
+```
+
+**3. 为什么需要 `zq`？**
+- **传统 GroupNorm**：所有空间位置共享相同的归一化参数（gamma 和 beta）
+- **SpatialNorm3D**：每个空间位置有不同的参数，这些参数由 `zq` 生成
+- **优势**：解码器可以根据潜在表示的内容，为不同区域生成不同的归一化策略
+
+**4. PyTorch vs Flax 的差异**
+
+| 方面 | PyTorch | Flax |
+|------|---------|------|
+| 参数传递 | `decode(z)` - 内部自动使用 `z` 作为 `zq` | `decode(z, zq=z)` - 显式传入 |
+| 实现位置 | `decoder.forward(sample, ...)` 内部处理 | 调用者需要显式传入 |
+| 原因 | API 设计隐藏实现细节 | Flax 更倾向于显式参数传递 |
+
+**5. 实际代码示例**
+
+PyTorch:
+```python
+# autoencoder_kl_cogvideox.py
+def decode(self, z):
+    return self._decode(z)
+
+def _decode(self, z):
+    # 内部自动使用 z 作为 spatial conditioning
+    z_intermediate, conv_cache = self.decoder(z_intermediate, conv_cache=conv_cache)
+    # decoder 内部会将 z_intermediate 作为 zq 使用
+```
+
+Flax:
+```python
+# autoencoder_kl_cogvideox_flax.py
+def decode(self, z, zq=None):
+    if zq is None:
+        zq = z  # 默认使用 z 作为 zq
+    return self._decode(z, zq)
+
+def _decode(self, z, zq):
+    # 显式传递 z 和 zq 给 decoder
+    decoded_frame, _ = self.decoder(z_frame, zq_frame, ...)
+```
+
+**6. 使用场景**
+```python
+# 标准用法：zq = z（最常见）
+decoded = vae.decode(z, zq=z)
+
+# 理论上可以用不同的条件（实验性）
+# decoded = vae.decode(z, zq=other_conditioning)
+# 但在 CogVideoX 中，始终使用 z 本身作为条件
+```
+
+**总结**：`zq` 是解码器中 SpatialNorm3D 层的空间条件信号，它使解码器能够为不同空间位置生成自适应的归一化参数，从而提高重建质量。在实践中，`zq` 总是等于 `z`。
+
 ---
 
 ## 3. 基础组件迁移
