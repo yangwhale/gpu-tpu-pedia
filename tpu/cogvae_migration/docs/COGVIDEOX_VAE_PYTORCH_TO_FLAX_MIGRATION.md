@@ -4,7 +4,27 @@
 
 ---
 
-## 目录
+## 📚 相关文档
+
+本文档是 CogVideoX VAE 迁移系列文档之一，建议配合以下文档阅读：
+
+### 🎯 迁移指南系列
+- **[PyTorch 到 JAX 迁移圣经](./PYTORCH_TO_JAX_MIGRATION_BIBLE_ZH.md)** - 完整的 PyTorch → JAX 迁移指南
+- **[PyTorch 到 JAX 范式转换](./PYTORCH_TO_JAX_PARADIGM_SHIFT_ZH.md)** - 理解两个框架的思维方式差异
+- **[PyTorch-JAX 实现对比](./PYTORCH_JAX_IMPLEMENTATION_COMPARISON.md)** - 常见模式的对比实现
+
+### 🔧 技术专题
+- **[JAX 内存调试指南](./JAX_MEMORY_DEBUGGING_GUIDE.md)** - TPU 内存问题的诊断和解决
+- **[JAX 并行编程详解](./JAX_PARALLEL_PROGRAMMING_GUIDE.md)** - JAX 的并行化策略和最佳实践
+
+### 📖 案例研究
+- **[CogVideoX VAE OOM 修复案例](./CASE_STUDY_COGVIDEOX_VAE_OOM_FIX.md)** - 逐帧解码方案的详细设计
+- **[BF16 优化尝试记录](./BF16_OPTIMIZATION_ATTEMPTS.md)** - 混合精度训练的实践经验
+- **[CogVideoX VAE Flax 说明](./COGVIDEOX_VAE_FLAX_README.md)** - Flax 实现的快速上手指南
+
+---
+
+## 📑 目录
 
 1. [整体架构概述](#1-整体架构概述)
 2. [调用流程详解](#2-调用流程详解)
