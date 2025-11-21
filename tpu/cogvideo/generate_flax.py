@@ -692,7 +692,7 @@ class FlaxVAEProxy:
         return frames_torch
 
 
-def run_generation_benchmark(pipe, prompt, num_inference_steps=20, num_frames=49, height=56, width=104, num_iterations=2):
+def run_generation_benchmark(pipe, prompt, num_inference_steps=20, num_frames=49, height=56, width=104, guidance_scale=6.0, num_iterations=2):
     """
     运行视频生成基准测试
     
@@ -703,6 +703,7 @@ def run_generation_benchmark(pipe, prompt, num_inference_steps=20, num_frames=49
         num_frames: 视频帧数
         height: 视频高度
         width: 视频宽度
+        guidance_scale: 引导尺度
         num_iterations: 迭代次数
         
     Returns:
@@ -714,6 +715,7 @@ def run_generation_benchmark(pipe, prompt, num_inference_steps=20, num_frames=49
     print(f"推理步数: {num_inference_steps}")
     print(f"视频帧数: {num_frames}")
     print(f"分辨率: {height}x{width}")
+    print(f"引导尺度: {guidance_scale}")
     
     times = []
     frames = None
@@ -725,7 +727,7 @@ def run_generation_benchmark(pipe, prompt, num_inference_steps=20, num_frames=49
             print(f"\n迭代 {i} (使用已编译代码):")
         
         start = time.perf_counter()
-        result = pipe(prompt, num_inference_steps=num_inference_steps, num_frames=num_frames, height=height, width=width)
+        result = pipe(prompt, num_inference_steps=num_inference_steps, num_frames=num_frames, height=height, width=width, guidance_scale=guidance_scale)
         frames = result.frames[0]  # CogVideoX 返回 frames 而不是 images
         end = time.perf_counter()
         elapsed = end - start
@@ -742,8 +744,8 @@ def run_generation_benchmark(pipe, prompt, num_inference_steps=20, num_frames=49
         # 清理 JAX 编译缓存（关键！防止下次迭代 OOM）
         # 第一次运行会产生约 3.74GB 的 JIT 缓存残留
         # 必须清理才能进行第二次运行
-        print(f"  清理 JAX 编译缓存...")
-        jax.clear_caches()
+        # print(f"  清理 JAX 编译缓存...")
+        # jax.clear_caches()
     
     return frames, times
 
@@ -778,6 +780,13 @@ def main():
     warnings.filterwarnings('ignore', message='.*dtype.*int64.*truncated to dtype int32.*')
     logging.getLogger().setLevel(logging.ERROR)
 
+    # 设置随机数种子以确保可重复性
+    import random
+    seed = 42
+    random.seed(seed)
+    np.random.seed(seed)
+    torch.manual_seed(seed)
+    
     torch.set_default_dtype(torch.bfloat16)
  
     setup_pytree_registrations()
@@ -786,17 +795,18 @@ def main():
     print("\n配置Pipeline以使用JAX、Splash Attention 和 Flax VAE...")
     pipe, env, mesh = setup_pipeline_for_jax(pipe)
     
-    # prompt = "A cat walks on the grass, realistic style."
-    prompt = "A domestic cat, with sleek fur and bright eyes, gracefully walks through a field of vibrant green grass under natural daylight. The grass blades gently sway as the cat moves. Realistic cinematography."
+    prompt = "A panda, dressed in a small, red jacket and a tiny hat, sits on a wooden stool in a serene bamboo forest. The panda's fluffy paws strum a miniature acoustic guitar, producing soft, melodic tunes. Nearby, a few other pandas gather, watching curiously and some clapping in rhythm. Sunlight filters through the tall bamboo, casting a gentle glow on the scene. The panda's face is expressive, showing concentration and joy as it plays. The background includes a small, flowing stream and vibrant green foliage, enhancing the peaceful and magical atmosphere of this unique musical performance."
+    # prompt = "A domestic cat, with sleek fur and bright eyes, gracefully walks through a field of vibrant green grass under natural daylight. The grass blades gently sway as the cat moves. Realistic cinematography."
     
     with mesh, nn_partitioning.axis_rules(LOGICAL_AXIS_RULES), env:
         frames, times = run_generation_benchmark(
             pipe,
             prompt,
-            num_inference_steps=50,  # 增加推理步数
-            num_frames=64,           # 16 帧（测试 Tiling）
-            height=768,              # 480x720 标准分辨率
-            width=1360,
+            num_inference_steps=10,  # 增加推理步数
+            num_frames=61,           # 16 帧（测试 Tiling）
+            height=640,              # 480x720 标准分辨率
+            width=1280,
+            guidance_scale=6.0,
             num_iterations=2
         )
     

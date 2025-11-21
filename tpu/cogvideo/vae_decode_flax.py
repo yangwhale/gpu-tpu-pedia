@@ -87,10 +87,16 @@ def create_decode_fn(vae, mesh):
     """
     print("\n准备 VAE decode 函数...")
     
+    # 获取 scaling_factor（与 CogVideoX 默认值一致）
+    scaling_factor = getattr(vae.config, 'scaling_factor', 1.15258426)
+    print(f"  Scaling factor: {scaling_factor}")
+    
     # 不使用 JIT！让 Python for 循环在运行时逐帧执行
     # 这样 XLA 不会展开循环
     def decode_fn(latents):
-        return vae.decode(latents, deterministic=True)
+        # ⚠️ 关键：应用 scaling_factor 对 latents 进行缩放
+        scaled_latents = latents / scaling_factor
+        return vae.decode(scaled_latents, deterministic=True)
     
     print("✓ Decode 函数准备完成（无JIT，避免循环展开）")
     
