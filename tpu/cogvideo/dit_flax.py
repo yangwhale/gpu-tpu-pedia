@@ -315,10 +315,16 @@ def record_time_tpu(call_method):
     output = call_method()
     
     # 确保JAX计算完成
+    # 注意：torchax返回的是包装后的Tensor，需要访问底层的JAX array (_elem)
+    # 或者依赖 torchax 的自动解包机制，但显式访问更安全
+    target = output
     if hasattr(output, 'sample'):
-        jax.block_until_ready(output.sample)
+        target = output.sample
+
+    if hasattr(target, '_elem'):
+        jax.block_until_ready(target._elem)
     else:
-        jax.block_until_ready(output)
+        jax.block_until_ready(target)
     
     end = time.time()
     return output, (end - start) * 1000  # s -> ms
@@ -637,4 +643,4 @@ if __name__ == "__main__":
     warnings.filterwarnings('ignore', message='.*dtype.*int64.*truncated to dtype int32.*')
     logging.getLogger().setLevel(logging.ERROR)
     # 执行 DiT 的TPU性能测试
-    dit(num_runs=10)
+    dit(num_runs=20)
