@@ -419,7 +419,7 @@ def dit_test(transformer, frames=64, num_runs=1, warmup_runs=1, profiler_context
         embedding = torch.nn.Embedding(10, 4096).to(dtype=torch.bfloat16, device='jax')
         text_guide_ids = torch.arange(10, dtype=torch.int64, device='jax')
         text_guide_embd = embedding(text_guide_ids)
-        input_embd = text_guide_embd.unsqueeze(0)  # shape: [1, 10, 4096]
+        input_embd = text_guide_embd.unsqueeze(0).expand(batch, -1, -1)  # shape: [batch, 10, 4096]
 
         # 3. 创建时间步 (timestep)
         timestep = torch.full((batch,), 999, dtype=torch.int64, device='jax')
@@ -662,4 +662,4 @@ if __name__ == "__main__":
     warnings.filterwarnings('ignore', message='.*dtype.*int64.*truncated to dtype int32.*')
     logging.getLogger().setLevel(logging.ERROR)
     # 执行 DiT 的TPU性能测试
-    dit()
+    dit(num_runs=3)
