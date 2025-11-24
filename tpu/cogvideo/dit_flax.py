@@ -23,6 +23,7 @@ from diffusers.models.modeling_outputs import Transformer2DModelOutput
 from tqdm import tqdm
 import warnings
 import logging
+from contextlib import nullcontext
 
 # --- 全局配置 ---
 MODEL_NAME = "zai-org/CogVideoX1.5-5B"
@@ -30,8 +31,8 @@ MODEL_NAME = "zai-org/CogVideoX1.5-5B"
 #### Splash Attention 配置参数 ####
 # Splash attention 块大小配置
 BQSIZE = 2048           # Query 块大小
-BKVSIZE = 1024          # Key/Value 块大小
-BKVCOMPUTESIZE = 512    # Key/Value 计算块大小
+BKVSIZE = 2048          # Key/Value 块大小
+BKVCOMPUTESIZE = 1024    # Key/Value 计算块大小
 
 # 窗口大小（None 表示使用完整注意力）
 WINDOW_SIZE = None
@@ -386,7 +387,7 @@ def print_results(results, frames):
 
 # --- DiT 模型性能测试核心函数 ---
 
-def dit_test(transformer, frames=64, num_runs=1, warmup_runs=1):
+def dit_test(transformer, frames=64, num_runs=1, warmup_runs=1, profiler_context=None):
     """
     测试 DiT (Diffusion Transformer) 模型在TPU上的性能。
     先进行预热运行，然后对指定帧数重复运行多次以获取稳定的性能数据。
@@ -396,6 +397,7 @@ def dit_test(transformer, frames=64, num_runs=1, warmup_runs=1):
     frames (int): 测试的视频帧数，默认64帧（必须能被4整除）。
     num_runs (int): 重复运行的次数，默认10次。
     warmup_runs (int): 预热运行次数，默认3次（不计入统计）。
+    profiler_context: Profiler上下文管理器，可选。
     """
     # DiT 模型期望的输入维度
     batch = 1  # 使用 batch=1 模拟 guidance_scale=1.0 的情况（不做 CFG）
@@ -457,21 +459,24 @@ def dit_test(transformer, frames=64, num_runs=1, warmup_runs=1):
     results = []
     print(f"\n开始正式测试 DiT TPU 性能 (帧数: {frames}, 运行次数: {num_runs})")
     
-    for run in tqdm(range(num_runs), desc="Testing DiT on TPU"):
-        try:
-            peak_memory_mb, time_cost = run_single_test()
-            
-            results.append({
-                'run': run + 1,
-                'peak_memory_mb': peak_memory_mb,
-                'time': time_cost
-            })
+    context = profiler_context if profiler_context else nullcontext()
+    
+    with context:
+        for run in tqdm(range(num_runs), desc="Testing DiT on TPU"):
+            try:
+                peak_memory_mb, time_cost = run_single_test()
+                
+                results.append({
+                    'run': run + 1,
+                    'peak_memory_mb': peak_memory_mb,
+                    'time': time_cost
+                })
 
-        except Exception as e:
-            print(f"第 {run + 1} 次运行出错: {str(e)}")
-            import traceback
-            traceback.print_exc()
-            break
+            except Exception as e:
+                print(f"第 {run + 1} 次运行出错: {str(e)}")
+                import traceback
+                traceback.print_exc()
+                break
 
     return results
 
@@ -623,10 +628,24 @@ def dit(frames=64, num_runs=10):
     # 设置Transformer在TPU上运行
     transformer, env, mesh = setup_transformer_for_tpu(transformer)
     
+    # Profiler 配置（可选）
+    profiler_context = None
+    if False:  # 设为 True 启用 profiling
+        print("\n启用 JAX Profiler...")
+        profiler_context = jax.profiler.trace(
+            "/dev/shm/jax-trace",
+            create_perfetto_link=False
+        )
+    
     # 在mesh和env上下文中执行测试
     with mesh, env:
         # 执行 DiT 测试
-        results = dit_test(transformer, frames=frames, num_runs=num_runs)
+        results = dit_test(
+            transformer,
+            frames=frames,
+            num_runs=num_runs,
+            profiler_context=profiler_context,
+        )
     
     # 打印统计结果
     print_results(results, frames)
@@ -643,4 +662,4 @@ if __name__ == "__main__":
     warnings.filterwarnings('ignore', message='.*dtype.*int64.*truncated to dtype int32.*')
     logging.getLogger().setLevel(logging.ERROR)
     # 执行 DiT 的TPU性能测试
-    dit(num_runs=20)
+    dit()
