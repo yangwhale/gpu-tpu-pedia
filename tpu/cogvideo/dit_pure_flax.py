@@ -14,6 +14,10 @@ from flax import nnx
 from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
 from jax.experimental.pallas.ops.tpu import splash_attention
 from jax.experimental.shard_map import shard_map
+try:
+    from jax import shard_map
+except ImportError:
+    from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
 from tqdm import tqdm
 import warnings
@@ -376,13 +380,13 @@ def print_results(results, frames):
 
 # --- DiT 模型性能测试核心函数 ---
 
-def dit_test(transformer, frames=64, num_runs=1, warmup_runs=1, profiler_context=None):
+def dit_test(transformer_fn, frames=64, num_runs=1, warmup_runs=1, profiler_context=None):
     """
     测试 DiT (Diffusion Transformer) 模型在TPU上的性能（纯Flax版本）。
     先进行预热运行，然后对指定帧数重复运行多次以获取稳定的性能数据。
     
     参数:
-    transformer: FlaxCogVideoXTransformer3DModel 实例
+    transformer_fn: JIT编译后的模型函数
     frames (int): 测试的视频帧数，默认64帧（必须能被4整除）。
     num_runs (int): 重复运行的次数，默认10次。
     warmup_runs (int): 预热运行次数，默认3次（不计入统计）。
@@ -429,13 +433,11 @@ def dit_test(transformer, frames=64, num_runs=1, warmup_runs=1, profiler_context
         
         # 定义调用 Transformer 模型的函数
         def dit_call():
-            return transformer(
-                hidden_states=input_tensor,
-                encoder_hidden_states=input_embd,
-                timestep=timestep,
-                image_rotary_emb=image_rotary_emb,
-                deterministic=True,
-                return_dict=False,
+            return transformer_fn(
+                input_tensor,
+                input_embd,
+                timestep,
+                image_rotary_emb
             )
         
         # 记录执行时间
@@ -539,7 +541,7 @@ def load_transformer(model_name=MODEL_NAME, dtype=jnp.bfloat16, use_pretrained=T
 
 def compile_transformer(transformer):
     """
-    使用 JAX JIT 编译 Transformer
+    使用 nnx.jit 编译 Transformer
     
     Args:
         transformer: FlaxCogVideoXTransformer3DModel 实例
@@ -549,9 +551,11 @@ def compile_transformer(transformer):
     """
     print("\n编译 Transformer...")
     
-    # 创建一个包装函数用于 JIT
-    def forward_fn(hidden_states, encoder_hidden_states, timestep, image_rotary_emb):
-        return transformer(
+    # 使用 nnx.jit 装饰器为 NNX 模型创建 JIT 编译函数
+    # 这样可以正确处理模型状态，并支持编译缓存
+    @nnx.jit
+    def forward_fn(model, hidden_states, encoder_hidden_states, timestep, image_rotary_emb):
+        return model(
             hidden_states=hidden_states,
             encoder_hidden_states=encoder_hidden_states,
             timestep=timestep,
@@ -560,8 +564,9 @@ def compile_transformer(transformer):
             return_dict=False,
         )
     
-    # JIT 编译
-    compiled_fn = jax.jit(forward_fn)
+    # 返回一个包装函数，将 transformer 作为第一个参数传入
+    def compiled_fn(hidden_states, encoder_hidden_states, timestep, image_rotary_emb):
+        return forward_fn(transformer, hidden_states, encoder_hidden_states, timestep, image_rotary_emb)
     
     print("编译完成")
     return compiled_fn
@@ -638,9 +643,12 @@ def dit(frames=64, num_runs=10):
     
     # 在 mesh 上下文中执行测试
     with mesh:
+        # 编译 Transformer (启用 GSPMD)
+        transformer_fn = compile_transformer(transformer)
+
         # 执行 DiT 测试
         results = dit_test(
-            transformer,
+            transformer_fn,
             frames=frames,
             num_runs=num_runs,
             profiler_context=profiler_context,
@@ -661,4 +669,4 @@ if __name__ == "__main__":
     logging.getLogger().setLevel(logging.ERROR)
     
     # 执行 DiT 的TPU性能测试
-    dit(frames=64, num_runs=3)
+    dit(frames=64, num_runs=2)
