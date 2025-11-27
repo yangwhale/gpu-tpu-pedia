@@ -51,7 +51,7 @@ USE_K_SMOOTH = True
 # Mesh 分片配置
 USE_DP = False          # 是否使用 data parallelism
 SP_NUM = 1              # Spatial parallelism 数量
-USE_FSDP = True         # 是否使用 FSDP 模式（vs Tensor Parallel）
+USE_TP = True           # 是否使用 Tensor Parallel 模式（Megatron Column-Row风格）
 
 
 # --- Splash Attention 实现 ---
@@ -181,10 +181,10 @@ def splash_attention_fn(query, key, value, mesh, scale=None, is_causal=False, wi
 
 # --- Transformer 权重分片策略 ---
 
-# Transformer sharding策略 - FSDP模式（默认）
+# Transformer sharding策略 - Tensor Parallel模式（默认，Megatron Column-Row风格）
 # Flax NNX 路径格式: transformer_blocks.0.attn1.to_q.kernel
-transformer_shardings_fsdp = {
-    # Attention layers - 在输出维度分片
+transformer_shardings_tp = {
+    # Attention layers - 在输出维度分片（按heads切分）
     r'.*\.to_q\.kernel$': (None, ('tp', 'sp')),
     r'.*\.to_k\.kernel$': (None, ('tp', 'sp')),
     r'.*\.to_v\.kernel$': (None, ('tp', 'sp')),
@@ -194,8 +194,8 @@ transformer_shardings_fsdp = {
     r'.*\.ff\.linear2\.kernel$': (('tp', 'sp'), None),
 }
 
-# Transformer sharding策略 - Tensor Parallel模式
-transformer_shardings_tp = {
+# Transformer sharding策略 - FSDP模式（在输入维度均匀分片）
+transformer_shardings_fsdp = {
     # Attention layers - 在输入维度分片
     r'.*\.to_q\.kernel$': (('tp', 'sp'), None),
     r'.*\.to_k\.kernel$': (('tp', 'sp'), None),
@@ -207,20 +207,20 @@ transformer_shardings_tp = {
 }
 
 
-def shard_weights_transformer(mesh, model, use_fsdp=True):
+def shard_weights_transformer(mesh, model, use_tp=True):
     """
     对纯 Flax Transformer 模型的权重进行分片
     
     Args:
         mesh: JAX设备网格
         model: Flax NNX 模型
-        use_fsdp: 是否使用FSDP模式（默认True），否则使用Tensor Parallel模式
+        use_tp: 是否使用Tensor Parallel模式（默认True），否则使用FSDP模式
         
     Returns:
         分片后的模型
     """
     # 选择分片策略
-    sharding_dict = transformer_shardings_fsdp if use_fsdp else transformer_shardings_tp
+    sharding_dict = transformer_shardings_tp if use_tp else transformer_shardings_fsdp
     
     # 提取模型状态
     graphdef, state = nnx.split(model)
@@ -412,7 +412,7 @@ def dit_test(transformer_fn, frames=64, num_runs=1, warmup_runs=1, profiler_cont
         input_tensor = jax.random.normal(key, (batch, latent_frames, height, width, channel), dtype=jnp.bfloat16)
         
         # 2. 创建文本嵌入 (encoder_hidden_states) - (B, text_seq_len, text_embed_dim)
-        text_seq_len = 226  # max_text_seq_length from config
+        text_seq_len = 10  # max_text_seq_length from config
         text_embed_dim = 4096
         key, subkey = jax.random.split(key)
         input_embd = jax.random.normal(subkey, (batch, text_seq_len, text_embed_dim), dtype=jnp.bfloat16)
@@ -590,8 +590,8 @@ def setup_transformer_for_tpu(transformer, mesh):
     set_global_mesh(mesh)
     
     # 对权重进行分片
-    print(f"- 对 Transformer 权重进行分片 (FSDP={USE_FSDP})...")
-    transformer = shard_weights_transformer(mesh, transformer, use_fsdp=USE_FSDP)
+    print(f"- 对 Transformer 权重进行分片 (TP={USE_TP})...")
+    transformer = shard_weights_transformer(mesh, transformer, use_tp=USE_TP)
     
     # 确保所有权重已分片完成
     graphdef, state = nnx.split(transformer)
@@ -669,4 +669,4 @@ if __name__ == "__main__":
     logging.getLogger().setLevel(logging.ERROR)
     
     # 执行 DiT 的TPU性能测试
-    dit(frames=64, num_runs=2)
+    dit(frames=64, num_runs=10)
