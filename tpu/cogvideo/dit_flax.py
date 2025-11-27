@@ -43,7 +43,7 @@ USE_K_SMOOTH = True
 # Mesh 分片配置
 USE_DP = False          # 是否使用 data parallelism
 SP_NUM = 1             # Spatial parallelism 数量
-USE_FSDP = True        # 是否使用 FSDP 模式（vs Tensor Parallel）
+USE_TP = True          # 是否使用 Tensor Parallel 模式（Megatron Column-Row风格）
 
 
 # --- PyTree 注册 ---
@@ -240,9 +240,9 @@ def scaled_dot_product_attention(
 
 # --- Transformer 权重分片策略 ---
 
-# Transformer sharding策略 - FSDP模式（默认）
-transformer_shardings_fsdp = {
-    # Attention layers - 在输出维度分片
+# Transformer sharding策略 - Tensor Parallel模式（默认，Megatron Column-Row风格）
+transformer_shardings_tp = {
+    # Attention layers - 在输出维度分片（按heads切分）
     r'.*\.to_q\.weight$': (None, ('tp', 'sp')),
     r'.*\.to_k\.weight$': (None, ('tp', 'sp')),
     r'.*\.to_v\.weight$': (None, ('tp', 'sp')),
@@ -252,8 +252,8 @@ transformer_shardings_fsdp = {
     r'.*\.ff\.net\.2\.weight$': (('tp', 'sp'), None),
 }
 
-# Transformer sharding策略 - Tensor Parallel模式
-transformer_shardings_tp = {
+# Transformer sharding策略 - FSDP模式（在输入维度均匀分片）
+transformer_shardings_fsdp = {
     # Attention layers - 在输入维度分片
     r'.*\.to_q\.weight$': (('tp', 'sp'), None),
     r'.*\.to_k\.weight$': (('tp', 'sp'), None),
@@ -265,20 +265,20 @@ transformer_shardings_tp = {
 }
 
 
-def shard_weights_transformer(mesh, weights, use_fsdp=True):
+def shard_weights_transformer(mesh, weights, use_tp=True):
     """
     对CogVideoX Transformer模型的权重进行分片
     
     Args:
         mesh: JAX设备网格
         weights: 模型权重字典
-        use_fsdp: 是否使用FSDP模式（默认True），否则使用Tensor Parallel模式
+        use_tp: 是否使用Tensor Parallel模式（默认True），否则使用FSDP模式
         
     Returns:
         分片后的权重字典
     """
     # 选择分片策略
-    sharding_dict = transformer_shardings_fsdp if use_fsdp else transformer_shardings_tp
+    sharding_dict = transformer_shardings_tp if use_tp else transformer_shardings_fsdp
     
     result = {}
     for k, v in weights.items():
@@ -571,7 +571,7 @@ def setup_transformer_for_tpu(transformer):
         # 对 Transformer 进行处理：先移到 XLA，再分片
         print("- 将Transformer移到XLA并进行分片...")
         _move_module_to_xla(transformer)
-        transformer_weights = shard_weights_transformer(mesh, transformer.state_dict(), use_fsdp=USE_FSDP)
+        transformer_weights = shard_weights_transformer(mesh, transformer.state_dict(), use_tp=USE_TP)
         transformer.load_state_dict(transformer_weights, assign=True, strict=False)
         
         # 确保所有权重已分片完成
