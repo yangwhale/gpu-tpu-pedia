@@ -5,6 +5,14 @@ from tqdm import tqdm  # 用于显示进度条
 import sys
 import os
 
+# SageAttention 支持（可选）
+try:
+    from sageattention import sageattn
+    SAGE_ATTN_AVAILABLE = True
+except ImportError:
+    SAGE_ATTN_AVAILABLE = False
+    sageattn = None
+
 # 添加 HunyuanVideo-1.5-TPU 到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..', 'HunyuanVideo-1.5-TPU'))
 
@@ -271,7 +279,7 @@ def dit_test(transformer, frames=129, resolution='720p', num_runs=10, enable_cfg
 # --- 主测试流程 ---
 
 @torch.inference_mode()
-def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=False):
+def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=False, use_sage_attn=False):
     """
     执行 DiT 模型的性能测试。
     
@@ -281,9 +289,23 @@ def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=
     num_runs (int): 重复运行的次数，默认10次。
     model_path (str): 模型路径（可选，如果提供则从该路径加载权重）。
     enable_cfg (bool): 是否启用 CFG（默认False，对应 guidance_scale=1.0）。
+    use_sage_attn (bool): 是否使用 SageAttention 优化（默认False）。
     """
     if RANK == 0:
         print("--- 开始 DiT 性能测试 ---")
+        
+    # 检查并启用 SageAttention
+    if use_sage_attn:
+        if SAGE_ATTN_AVAILABLE:
+            if RANK == 0:
+                print("✓ SageAttention 已启用")
+        else:
+            if RANK == 0:
+                print("✗ SageAttention 未安装，将使用标准 Flash Attention")
+            use_sage_attn = False
+    
+    # 确定使用的 Attention 模式
+    attn_mode = "sageattn" if use_sage_attn else "flash"
     
     # 使用 from_pretrained 加载模型，这会自动从 config.json 加载正确的配置
     if model_path is not None:
@@ -295,15 +317,18 @@ def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=
         
         if RANK == 0:
             print(f"从 {model_dir} 加载模型（使用 from_pretrained）...")
+            print(f"Attention 模式: {attn_mode}")
         transformer = HunyuanVideo_1_5_DiffusionTransformer.from_pretrained(
             model_dir,
             torch_dtype=torch.bfloat16,
             low_cpu_mem_usage=True,
+            attn_mode=attn_mode,
         ).to(DEVICE)
     else:
         # 如果没有提供路径，使用默认配置创建模型（仅用于测试形状）
         if RANK == 0:
             print("警告: 未提供模型路径，使用随机权重初始化模型")
+            print(f"Attention 模式: {attn_mode}")
         if resolution == '720p':
             transformer = HunyuanVideo_1_5_DiffusionTransformer(
                 patch_size=[1, 1, 1],
@@ -324,7 +349,7 @@ def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=
                 use_attention_mask=True,
                 text_states_dim=3584,
                 text_states_dim_2=None,
-                attn_mode="flash",
+                attn_mode=attn_mode,
                 concat_condition=True,
             )
         else:  # 480p
@@ -347,7 +372,7 @@ def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=
                 use_attention_mask=True,
                 text_states_dim=3584,
                 text_states_dim_2=None,
-                attn_mode="flash",
+                attn_mode=attn_mode,
                 concat_condition=True,
             )
         transformer = transformer.to(dtype=torch.bfloat16, device=DEVICE)
@@ -380,6 +405,8 @@ if __name__ == "__main__":
                        help='Path to model checkpoints directory (default: /dev/shm/HunyuanVideo-1.5/ckpts)')
     parser.add_argument('--enable_cfg', action='store_true',
                        help='Enable Classifier-Free Guidance (default: False, equivalent to guidance_scale=1.0)')
+    parser.add_argument('--use_sage_attn', action='store_true',
+                       help='Use SageAttention for ~1.2x speedup (requires installation)')
     
     args = parser.parse_args()
     
@@ -394,5 +421,6 @@ if __name__ == "__main__":
         resolution=args.resolution,
         num_runs=args.num_runs,
         model_path=args.model_path,
-        enable_cfg=args.enable_cfg
+        enable_cfg=args.enable_cfg,
+        use_sage_attn=args.use_sage_attn
     )
