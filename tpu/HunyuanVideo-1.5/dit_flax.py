@@ -26,7 +26,99 @@ import sys
 # 添加 HunyuanVideo-1.5-TPU 到路径
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..', 'HunyuanVideo-1.5-TPU'))
 
+# --- TPU 专用: Mock 并行状态以禁用 CUDA 初始化 ---
+# 在导入 HunyuanVideo 模型之前，需要设置一个 TPU 兼容的并行状态
+from dataclasses import dataclass
+
+@dataclass
+class TPUParallelDims:
+    """TPU 环境的并行状态 Mock，禁用 CUDA mesh 初始化"""
+    sp: int = 1
+    world_size: int = 1
+    
+    def __post_init__(self):
+        # TPU 环境不需要 CUDA mesh
+        pass
+    
+    @property
+    def sp_enabled(self):
+        return False
+    
+    @property
+    def sp_group(self):
+        return None
+    
+    @property
+    def sp_mesh(self):
+        return None
+    
+    @property
+    def sp_rank(self):
+        return 0
+    
+    @property
+    def dp_enabled(self):
+        return False
+
+# 预先设置 mock 并行状态，阻止 CUDA 初始化
+import hyvideo.commons.parallel_states as parallel_states_module
+parallel_states_module.__parallel_dims = TPUParallelDims()
+# 重写 initialize_parallel_state 和 get_parallel_state 函数
+parallel_states_module.initialize_parallel_state = lambda sp=1: TPUParallelDims(sp=sp)
+parallel_states_module.get_parallel_state = lambda: parallel_states_module.__parallel_dims
+
 from hyvideo.models.transformers.hunyuanvideo_1_5_transformer import HunyuanVideo_1_5_DiffusionTransformer
+
+# --- TPU 专用: 替换 sequence_parallel_attention 以使用标准 SDPA ---
+# HunyuanVideo-1.5 的 torch 模式使用 flex_attention，不支持 JAX
+# 我们需要替换为标准的 F.scaled_dot_product_attention
+import hyvideo.models.transformers.modules.attention as attention_module
+
+def _tpu_sequence_parallel_attention(q, k, v,
+                                     img_q_len, img_kv_len,
+                                     attn_mode=None, text_mask=None,
+                                     attn_param=None,
+                                     block_idx=None):
+    """
+    TPU 兼容版本的 sequence_parallel_attention
+    使用标准 F.scaled_dot_product_attention 替代 flex_attention
+    """
+    assert attn_mode is not None
+    query, encoder_query = q
+    key, encoder_key = k
+    value, encoder_value = v
+    
+    # 不使用 SP (sequence parallel)
+    sequence_length = query.size(1)
+    encoder_sequence_length = encoder_query.size(1)
+    
+    # 拼接 image 和 text tokens
+    query = torch.cat([query, encoder_query], dim=1)
+    key = torch.cat([key, encoder_key], dim=1)
+    value = torch.cat([value, encoder_value], dim=1)
+    
+    # 转置为 (B, H, L, D) 格式
+    query = query.transpose(1, 2)
+    key = key.transpose(1, 2)
+    value = value.transpose(1, 2)
+    
+    # 使用标准 SDPA (会被我们注册的 Splash Attention 替换)
+    hidden_states = torch.nn.functional.scaled_dot_product_attention(
+        query, key, value, attn_mask=None, dropout_p=0.0, is_causal=False
+    )
+    
+    # 转置回 (B, L, H, D)
+    hidden_states = hidden_states.transpose(1, 2)
+    
+    b, s, a, d = hidden_states.shape
+    hidden_states = hidden_states.reshape(b, s, -1)
+    
+    return hidden_states
+
+# 替换原始函数
+attention_module.sequence_parallel_attention = _tpu_sequence_parallel_attention
+attention_module.parallel_attention = lambda q, k, v, img_q_len, img_kv_len, attn_mode=None, text_mask=None, attn_param=None, block_idx=None: _tpu_sequence_parallel_attention(q, k, v, img_q_len, img_kv_len, attn_mode, text_mask, attn_param, block_idx)
+print("已替换 sequence_parallel_attention 为 TPU 兼容版本")
 
 # --- 全局配置 ---
 MODEL_NAME = "tencent/HunyuanVideo-1.5"
@@ -528,17 +620,19 @@ def dit_test(transformer, frames=121, resolution='720p', num_runs=1, warmup_runs
         text_states_2 = None
 
         # 9. 创建注意力掩码 (encoder_attention_mask)
+        # 使用 bool 类型避免 parallel_attention 中的 assert attn_mask.max() 检查
         encoder_attention_mask = torch.ones((batch, text_seq_len),
-                                           dtype=torch.int64, device='jax')
+                                           dtype=torch.bool, device='jax')
         
-        # 10. 创建 extra_kwargs（用于 glyph_byT5_v2）
-        byt5_max_length = 256
-        extra_kwargs = {
-            "byt5_text_states": torch.zeros((batch, byt5_max_length, 1472),
-                                           dtype=torch.bfloat16, device='jax'),
-            "byt5_text_mask": torch.zeros((batch, byt5_max_length),
-                                         dtype=torch.int64, device='jax')
-        }
+        # 10. extra_kwargs - glyph_byT5_v2 已禁用，不需要传递
+        extra_kwargs = None
+        
+        # 11. 创建旋转位置编码 (freqs_cos, freqs_sin)
+        # 类似于 cogvideo 的方式，预先生成随机 rotary embedding 避免混合 Tensor 问题
+        # head_dim = hidden_size / heads_num = 2048 / 16 = 128
+        head_dim = 128
+        freqs_cos = torch.randn((total_tokens, head_dim), dtype=torch.float32).to('jax')
+        freqs_sin = torch.randn((total_tokens, head_dim), dtype=torch.float32).to('jax')
 
         # 定义调用 Transformer 模型的函数
         dit_call = lambda: transformer(
@@ -547,8 +641,8 @@ def dit_test(transformer, frames=121, resolution='720p', num_runs=1, warmup_runs
             text_states=text_states,
             text_states_2=text_states_2,
             encoder_attention_mask=encoder_attention_mask,
-            freqs_cos=None,  # 让模型自己生成
-            freqs_sin=None,
+            freqs_cos=freqs_cos,
+            freqs_sin=freqs_sin,
             return_dict=False,
             extra_kwargs=extra_kwargs,
         )
@@ -627,6 +721,17 @@ def load_transformer(model_path, resolution='720p'):
     
     print("模型加载完成")
     print(f"模型参数量: {sum(p.numel() for p in transformer.parameters()) / 1e9:.2f}B")
+    
+    # 禁用 glyph_byT5_v2，因为 reorder_txt_token 使用布尔索引，torchax 不支持
+    # 对于纯 DiT 性能测试，不需要 ByT5 功能
+    if hasattr(transformer, 'glyph_byT5_v2') and transformer.glyph_byT5_v2:
+        print("注意: 禁用 glyph_byT5_v2 (DiT 性能测试不需要)")
+        transformer.glyph_byT5_v2 = False
+    
+    # 禁用 cond_type_embedding，避免依赖 text_mask.device
+    if hasattr(transformer, 'cond_type_embedding') and transformer.cond_type_embedding is not None:
+        print("注意: 禁用 cond_type_embedding (避免 TPU 兼容性问题)")
+        transformer.cond_type_embedding = None
     
     return transformer
 
