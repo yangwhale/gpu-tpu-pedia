@@ -6,7 +6,7 @@
 #   8卡:  N_GPU=8 bash run_dit_gpu.sh
 
 # 配置参数
-N_GPU=${N_GPU:-1}  # GPU数量，默认1，可通过环境变量设置
+N_GPU=${N_GPU:-8}  # GPU数量，默认1，可通过环境变量设置
 FRAMES=${FRAMES:-121}  # 帧数，默认121
 RESOLUTION=${RESOLUTION:-720p}  # 分辨率，默认720p
 NUM_RUNS=${NUM_RUNS:-3}  # 测试次数，默认3
