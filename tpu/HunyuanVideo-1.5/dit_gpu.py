@@ -100,6 +100,10 @@ def print_results(results, frames):
     results (list of dict): 测试结果的列表。
     frames (int): 测试的帧数。
     """
+    # 只在 rank 0 打印结果
+    if RANK != 0:
+        return
+        
     if not results:
         print("没有测试结果")
         return
