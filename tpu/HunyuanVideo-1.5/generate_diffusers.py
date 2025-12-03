@@ -37,7 +37,11 @@ def main():
     )
     parser.add_argument(
         '--guidance_scale', type=float, default=6.0,
-        help='Guidance scale for classifier-free guidance (default: 6.0)'
+        help='Guidance scale for classifier-free guidance (default: 6.0, set to 1.0 to disable CFG)'
+    )
+    parser.add_argument(
+        '--no_cfg', action='store_true',
+        help='Disable CFG (Classifier-Free Guidance) for performance testing'
     )
     parser.add_argument(
         '--seed', type=int, default=42,
@@ -100,6 +104,11 @@ def main():
         args.device = 'cpu'
         dtype = torch.float32  # CPU doesn't support bf16/fp16
     
+    # Override guidance_scale if no_cfg is set
+    if args.no_cfg:
+        args.guidance_scale = 1.0
+        print("CFG disabled (guidance_scale=1.0)")
+    
     print(f"Loading model: {args.model_id}")
     print(f"Device: {args.device}, dtype: {args.dtype}")
     
@@ -108,6 +117,15 @@ def main():
         args.model_id,
         torch_dtype=dtype,
     )
+    
+    # Disable CFG in guider if requested
+    if args.no_cfg:
+        print("Disabling CFG in pipeline guider...")
+        pipe.guider._enabled = False
+    
+    # Note: Diffusers pipeline uses optimized attention by default
+    # Manual attention processor override may cause compatibility issues
+    print("Using default attention processor (optimized)...")
     
     # Apply memory optimizations
     if args.enable_sequential_cpu_offload:
@@ -132,9 +150,11 @@ def main():
         'prompt': args.prompt,
         'num_frames': args.num_frames,
         'num_inference_steps': args.num_inference_steps,
-        'guidance_scale': args.guidance_scale,
         'generator': generator,
     }
+    
+    # Note: HunyuanVideo15Pipeline doesn't support guidance_scale parameter
+    # CFG is controlled by the model configuration instead
     
     # Add optional parameters
     if args.height is not None:
@@ -144,7 +164,8 @@ def main():
     
     # Generate video
     print(f"\nGenerating video with prompt: '{args.prompt}'")
-    print(f"Parameters: {args.num_frames} frames, {args.num_inference_steps} steps, guidance_scale={args.guidance_scale}, seed={args.seed}")
+    cfg_status = "disabled" if args.no_cfg else f"enabled (scale={args.guidance_scale})"
+    print(f"Parameters: {args.num_frames} frames, {args.num_inference_steps} steps, CFG {cfg_status}, seed={args.seed}")
     
     output = pipe(**gen_kwargs)
     video = output.frames[0]

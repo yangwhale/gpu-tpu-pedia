@@ -30,6 +30,9 @@ ENABLE_CPU_OFFLOAD=false  # 启用CPU卸载以节省GPU显存（会降低速度�
 ENABLE_VAE_TILING=false  # 启用VAE分块，减少显存占用
 ENABLE_SEQUENTIAL_OFFLOAD=false  # 启用顺序CPU卸载（最省显存但最慢）
 
+# 性能测试选项
+NO_CFG=true  # 禁用CFG进行性能测试（设置为true）
+
 echo "================================================"
 echo "HunyuanVideo-1.5 Diffusers 视频生成"
 echo "================================================"
@@ -45,36 +48,26 @@ echo "设备: $DEVICE"
 echo "CPU卸载: $ENABLE_CPU_OFFLOAD"
 echo "VAE分块: $ENABLE_VAE_TILING"
 echo "顺序卸载: $ENABLE_SEQUENTIAL_OFFLOAD"
+echo "禁用CFG: $NO_CFG"
 echo "================================================"
 echo ""
 
-# 构建参数
-ARGS="--prompt \"$PROMPT\" \
-  --model_id $MODEL_ID \
+# 运行生成
+python generate_diffusers.py \
+  --prompt "$PROMPT" \
+  --model_id "$MODEL_ID" \
   --num_frames $VIDEO_LENGTH \
   --num_inference_steps $NUM_STEPS \
   --guidance_scale $GUIDANCE_SCALE \
   --seed $SEED \
-  --output_path $OUTPUT_PATH \
+  --output_path "$OUTPUT_PATH" \
   --fps $FPS \
   --dtype $DTYPE \
-  --device $DEVICE"
-
-# 添加优化选项
-if [ "$ENABLE_CPU_OFFLOAD" = "true" ]; then
-    ARGS="$ARGS --enable_cpu_offload"
-fi
-
-if [ "$ENABLE_VAE_TILING" = "true" ]; then
-    ARGS="$ARGS --enable_vae_tiling"
-fi
-
-if [ "$ENABLE_SEQUENTIAL_OFFLOAD" = "true" ]; then
-    ARGS="$ARGS --enable_sequential_cpu_offload"
-fi
-
-# 运行生成
-eval python generate_diffusers.py $ARGS
+  --device $DEVICE \
+  $([ "$ENABLE_CPU_OFFLOAD" = "true" ] && echo "--enable_cpu_offload") \
+  $([ "$ENABLE_VAE_TILING" = "true" ] && echo "--enable_vae_tiling") \
+  $([ "$ENABLE_SEQUENTIAL_OFFLOAD" = "true" ] && echo "--enable_sequential_cpu_offload") \
+  $([ "$NO_CFG" = "true" ] && echo "--no_cfg")
 
 echo ""
 echo "================================================"
