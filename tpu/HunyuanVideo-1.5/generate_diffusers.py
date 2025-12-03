@@ -66,8 +66,8 @@ def main():
         help='Enable CPU offload to save GPU memory'
     )
     parser.add_argument(
-        '--enable_vae_tiling', action='store_true', default=True,
-        help='Enable VAE tiling to reduce memory usage (default: True)'
+        '--enable_vae_tiling', action='store_true', default=False,
+        help='Enable VAE tiling to reduce memory usage (default: False)'
     )
     parser.add_argument(
         '--enable_sequential_cpu_offload', action='store_true',

@@ -27,7 +27,7 @@ DEVICE=cuda  # 计算设备：cuda / cpu
 
 # 内存优化选项
 ENABLE_CPU_OFFLOAD=false  # 启用CPU卸载以节省GPU显存（会降低速度）
-#ENABLE_VAE_TILING=true  # 启用VAE分块，减少显存占用（推荐开启）
+ENABLE_VAE_TILING=false  # 启用VAE分块，减少显存占用
 ENABLE_SEQUENTIAL_OFFLOAD=false  # 启用顺序CPU卸载（最省显存但最慢）
 
 echo "================================================"
