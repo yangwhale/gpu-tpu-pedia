@@ -9,10 +9,20 @@ import os
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), '../../..', 'HunyuanVideo-1.5-TPU'))
 
 from hyvideo.models.transformers.hunyuanvideo_1_5_transformer import HunyuanVideo_1_5_DiffusionTransformer
+from hyvideo.commons.parallel_states import initialize_parallel_state
+
+# --- 分布式初始化 ---
+# 初始化分布式环境（支持多卡并行）
+# WORLD_SIZE: 总GPU数，LOCAL_RANK: 当前GPU编号
+parallel_dims = initialize_parallel_state(sp=int(os.environ.get('WORLD_SIZE', '1')))
+local_rank = int(os.environ.get('LOCAL_RANK', '0'))
+torch.cuda.set_device(local_rank)
 
 # --- 全局配置 ---
-# 设置默认的计算设备为第一个 CUDA 设备 (GPU)
-DEVICE = 'cuda:0'
+# 设置默认的计算设备
+DEVICE = f'cuda:{local_rank}'
+WORLD_SIZE = int(os.environ.get('WORLD_SIZE', '1'))
+RANK = int(os.environ.get('RANK', '0'))
 
 # --- 性能评测工具函数 ---
 
@@ -161,11 +171,12 @@ def dit_test(transformer, frames=129, resolution='720p', num_runs=10, enable_cfg
     
     results = []
     cfg_status = "启用" if enable_cfg else "禁用 (guidance_scale=1.0)"
-    print(f"开始测试 DiT 性能 (帧数: {frames}, 分辨率: {resolution}, 运行次数: {num_runs})")
-    print(f"CFG 状态: {cfg_status}")
-    print(f"Latent shape (单个): [{batch}, {channel}, {latent_frames}, {height}, {width}]")
-    print(f"Input shape (拼接后): [{batch}, {total_input_channels}, {latent_frames}, {height}, {width}]")
-    print(f"Token shape (after patch [{patch_t},{patch_h},{patch_w}]): {token_t} x {token_h} x {token_w} = {total_tokens} tokens")
+    if RANK == 0:
+        print(f"开始测试 DiT 性能 (帧数: {frames}, 分辨率: {resolution}, 运行次数: {num_runs}, GPU数: {WORLD_SIZE})")
+        print(f"CFG 状态: {cfg_status}")
+        print(f"Latent shape (单个): [{batch}, {channel}, {latent_frames}, {height}, {width}]")
+        print(f"Input shape (拼接后): [{batch}, {total_input_channels}, {latent_frames}, {height}, {width}]")
+        print(f"Token shape (after patch [{patch_t},{patch_h},{patch_w}]): {token_t} x {token_h} x {token_w} = {total_tokens} tokens")
     
     for run in tqdm(range(num_runs), desc="Testing DiT"):
         try:
@@ -244,9 +255,10 @@ def dit_test(transformer, frames=129, resolution='720p', num_runs=10, enable_cfg
             })
 
         except Exception as e:
-            print(f"第 {run + 1} 次运行出错: {str(e)}")
-            import traceback
-            traceback.print_exc()
+            if RANK == 0:
+                print(f"第 {run + 1} 次运行出错: {str(e)}")
+                import traceback
+                traceback.print_exc()
             break
 
     return results
@@ -266,7 +278,8 @@ def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=
     model_path (str): 模型路径（可选，如果提供则从该路径加载权重）。
     enable_cfg (bool): 是否启用 CFG（默认False，对应 guidance_scale=1.0）。
     """
-    print("--- 开始 DiT 性能测试 ---")
+    if RANK == 0:
+        print("--- 开始 DiT 性能测试 ---")
     
     # 使用 from_pretrained 加载模型，这会自动从 config.json 加载正确的配置
     if model_path is not None:
@@ -276,7 +289,8 @@ def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=
         else:  # 480p
             model_dir = os.path.join(model_path, 'transformer', '480p_i2v')
         
-        print(f"从 {model_dir} 加载模型（使用 from_pretrained）...")
+        if RANK == 0:
+            print(f"从 {model_dir} 加载模型（使用 from_pretrained）...")
         transformer = HunyuanVideo_1_5_DiffusionTransformer.from_pretrained(
             model_dir,
             torch_dtype=torch.bfloat16,
@@ -284,7 +298,8 @@ def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=
         ).to(DEVICE)
     else:
         # 如果没有提供路径，使用默认配置创建模型（仅用于测试形状）
-        print("警告: 未提供模型路径，使用随机权重初始化模型")
+        if RANK == 0:
+            print("警告: 未提供模型路径，使用随机权重初始化模型")
         if resolution == '720p':
             transformer = HunyuanVideo_1_5_DiffusionTransformer(
                 patch_size=[1, 1, 1],
@@ -335,7 +350,8 @@ def dit(frames=121, resolution='720p', num_runs=10, model_path=None, enable_cfg=
     
     transformer.eval()
     
-    print(f"模型参数量: {sum(p.numel() for p in transformer.parameters()) / 1e9:.2f}B")
+    if RANK == 0:
+        print(f"模型参数量: {sum(p.numel() for p in transformer.parameters()) / 1e9:.2f}B")
     
     # 执行 DiT 测试
     results = dit_test(transformer, frames=frames, resolution=resolution, num_runs=num_runs, enable_cfg=enable_cfg)
