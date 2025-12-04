@@ -2,7 +2,12 @@
 """
 HunyuanVideo-1.5 Generation using Diffusers with TPU/JAX (torchax)
 基于 generate_flax.py 的模式，使用 Splash Attention 在 TPU 上运行
+
+VAE 使用纯 Flax 版本，Transformer 使用 torchax + Splash Attention
 """
+
+import sys
+sys.path.insert(0, "/home/chrisya/diffusers-tpu/src")
 
 import os
 import time
@@ -24,9 +29,14 @@ from jax.experimental import mesh_utils
 from diffusers import HunyuanVideo15Pipeline
 from diffusers.utils import export_to_video
 from diffusers.models.autoencoders.vae import DecoderOutput
+from diffusers.models.autoencoders.autoencoder_kl_hunyuanvideo15_flax import (
+    FlaxAutoencoderKLHunyuanVideo15,
+    FlaxAutoencoderKLHunyuanVideo15Config,
+)
 from transformers.modeling_outputs import BaseModelOutputWithPooling, BaseModelOutputWithPastAndCrossAttentions
 import warnings
 import logging
+from flax import nnx
 
 
 # === 模型配置 ===
@@ -498,8 +508,128 @@ def shard_weights_vae(mesh, weights):
 
 # === VAE 代理 ===
 
+class FlaxVAEProxy:
+    """Flax VAE 的代理类，包装纯 Flax VAE 使其与 diffusers Pipeline 兼容
+    
+    主要功能：
+    1. 将 torchax tensor 转换为 JAX array 进行解码
+    2. 将 JAX array 输出转换回 torchax tensor
+    3. 保持与原始 VAE 相同的接口（config, scaling_factor 等）
+    
+    注意：scaling_factor 由 Pipeline 处理，这里不再重复处理
+    """
+    def __init__(self, flax_vae, original_config, env):
+        self._vae = flax_vae
+        self.config = original_config  # 保持原始 PyTorch VAE 的 config
+        self._env = env
+        self.dtype = torch.bfloat16
+        
+        # 复制 tiling 相关属性
+        self.use_tiling = False
+        self.tile_sample_min_height = 256
+        self.tile_sample_min_width = 256
+        self.tile_latent_min_height = 16
+        self.tile_latent_min_width = 16
+        self.tile_overlap_factor = 0.25
+    
+    def decode(self, latents, return_dict=True):
+        """解码 latents 到视频帧
+        
+        Args:
+            latents: torchax tensor [B, C, T, H, W] 或 [B, T, H, W, C]
+            return_dict: 是否返回 DecoderOutput
+            
+        Returns:
+            DecoderOutput 或 tensor
+        """
+        # 将 torchax tensor 转换为 JAX array
+        if hasattr(latents, '_elem'):
+            # torchax tensor -> JAX array
+            jax_latents = latents._elem
+        else:
+            # 普通 torch tensor -> JAX array
+            jax_latents = jnp.array(latents.detach().cpu().numpy())
+        
+        # HunyuanVideo 的 latents 是 BCTHW 格式，需要转换为 BTHWC
+        # PyTorch VAE 使用 BCTHW，Flax VAE 使用 BTHWC
+        if jax_latents.ndim == 5 and jax_latents.shape[1] == 32:
+            # [B, C, T, H, W] -> [B, T, H, W, C]
+            jax_latents = jnp.transpose(jax_latents, (0, 2, 3, 4, 1))
+        
+        # 调用 Flax VAE 解码
+        # 注意：Flax VAE 的 decode 输出已经是 [B, T, H, W, C] 格式
+        output = self._vae.decode(jax_latents)
+        
+        # 输出从 BTHWC 转换为 BCTHW（diffusers Pipeline 期望的格式）
+        # [B, T, H, W, C] -> [B, C, T, H, W]
+        output = jnp.transpose(output, (0, 4, 1, 2, 3))
+        
+        # 将 JAX array 转换回 torchax tensor
+        output_tensor = self._env.j2t_iso(output)
+        
+        if return_dict:
+            return DecoderOutput(sample=output_tensor)
+        return output_tensor
+    
+    def enable_tiling(self, tile_sample_min_height=256, tile_sample_min_width=256, tile_overlap_factor=0.25):
+        """启用 VAE tiling 以减少内存使用"""
+        self.use_tiling = True
+        self.tile_sample_min_height = tile_sample_min_height
+        self.tile_sample_min_width = tile_sample_min_width
+        self.tile_overlap_factor = tile_overlap_factor
+        # 计算 latent tile 尺寸（16x 空间压缩）
+        self.tile_latent_min_height = tile_sample_min_height // 16
+        self.tile_latent_min_width = tile_sample_min_width // 16
+        # 同时在 Flax VAE 上启用
+        self._vae.enable_tiling(tile_sample_min_height, tile_sample_min_width, tile_overlap_factor)
+        return self
+    
+    def disable_tiling(self):
+        """禁用 VAE tiling"""
+        self.use_tiling = False
+        self._vae.disable_tiling()
+        return self
+
+
+def load_flax_vae(mesh, original_vae_config, dtype=jnp.bfloat16):
+    """加载 Flax VAE 模型
+    
+    Args:
+        mesh: JAX device mesh
+        original_vae_config: 原始 PyTorch VAE 的 config
+        dtype: 数据类型
+        
+    Returns:
+        Flax VAE 模型实例
+    """
+    print("\n加载 Flax VAE 模型...")
+    
+    # 创建 Flax VAE config
+    config = FlaxAutoencoderKLHunyuanVideo15Config()
+    
+    # 创建随机数生成器
+    key = jax.random.key(0)
+    rngs = nnx.Rngs(key)
+    
+    # 创建 Flax VAE
+    flax_vae = FlaxAutoencoderKLHunyuanVideo15(
+        config=config,
+        rngs=rngs,
+        dtype=dtype,
+    )
+    
+    print(f"  Flax VAE 已创建（使用随机初始化权重）")
+    print(f"  数据类型: {dtype}")
+    
+    # TODO: 从 PyTorch 权重加载（需要实现权重转换）
+    # 目前使用随机初始化，可以后续添加 from_pretrained 支持
+    
+    return flax_vae
+
+
+# 保留旧的 VAEProxy 以便兼容（但不再使用）
 class VAEProxy:
-    """VAE 的 torchax 兼容代理
+    """VAE 的 torchax 兼容代理（已废弃，使用 FlaxVAEProxy）
     
     注意：不要在这里处理 scaling_factor，因为 Pipeline 内部已经处理了。
     这个代理主要用于确保 VAE 与 torchax 环境兼容。
@@ -622,16 +752,16 @@ def setup_pipeline_for_jax(pipe, model_id=MODEL_NAME):
         print("- Text Encoder (Qwen2.5-VL) 保持在 CPU 上（SDPA 自动回退）")
         print("- Text Encoder 2 (T5) 保持在 CPU 上（SDPA 自动回退）")
         
-        # 对 VAE 进行处理
-        _move_module_to_xla(pipe.vae, "VAE")
-        print("- 对 VAE 进行权重分片...")
-        vae_weights = shard_weights_vae(mesh, pipe.vae.state_dict())
-        pipe.vae.load_state_dict(vae_weights, assign=True, strict=False)
-        torchax.interop.call_jax(jax.block_until_ready, vae_weights)
+        # 对 VAE 进行处理 - 使用纯 Flax VAE 替代 PyTorch VAE
+        print("- 创建 Flax VAE 替代 PyTorch VAE...")
+        original_vae_config = pipe.vae.config  # 保存原始 config
         
-        # 使用 VAEProxy 包装
-        pipe.vae = VAEProxy(pipe.vae, env)
-        print("  ✓ VAE 已包装为 VAEProxy")
+        # 加载 Flax VAE
+        flax_vae = load_flax_vae(mesh, original_vae_config, dtype=jnp.bfloat16)
+        
+        # 使用 FlaxVAEProxy 包装
+        pipe.vae = FlaxVAEProxy(flax_vae, original_vae_config, env)
+        print("  ✓ VAE 已替换为 Flax VAE（包装在 FlaxVAEProxy 中）")
         
         # 编译 Transformer（is_t2v 必须是静态参数）
         print("- 编译 Transformer...")
