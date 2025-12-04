@@ -442,8 +442,209 @@ HunyuanVideo-1.5/
 ├── generate_diffusers.py      # GPU 版本（原始）
 ├── generate_diffusers_flax.py # TPU 版本（改造后）
 ├── dit_flax.py                # DiT 性能测试（TPU）
+├── vae_decode_flax.py         # VAE Flax 版本测试
 └── README.md                  # 本文档
 ```
+
+---
+
+## VAE Flax 改造详解
+
+本节详细讲解如何将 HunyuanVideo-1.5 的 VAE 从 PyTorch 版本改造成纯 Flax/JAX 版本。
+
+### 改造背景
+
+HunyuanVideo-1.5 使用的 VAE 与 CogVideoX 的 VAE 有显著差异：
+
+| 特性 | CogVideoX VAE | HunyuanVideo-1.5 VAE |
+|------|---------------|----------------------|
+| 时间上采样方式 | `jax.image.resize` 插值 | DCAE 通道重排 |
+| 时间压缩比 | 4x | 4x |
+| 空间压缩比 | 8x | 16x |
+| 帧数公式 | `4T+1` | `4T-3` |
+| Latent 通道数 | 16 | 32 |
+
+### DCAE 时间上采样机制
+
+DCAE (Denoising Channel-wise Autoencoder) 使用通道重排而非插值进行时间上采样：
+
+```
+时间上采样公式: L latent 帧 → 4L-3 video 帧
+
+示例：16 latent 帧 → 4×16-3 = 61 video 帧
+```
+
+**关键原理：**
+- 第一帧：只进行空间上采样（1→1 帧）
+- 后续帧：通道重排为时间+空间（1→2 帧）
+
+```python
+def _dcae_upsample_rearrange(self, x, r1, r2, r3):
+    """DCAE 风格的通道重排上采样
+    
+    Args:
+        x: 输入张量 [B, C*r1*r2*r3, T, H, W]
+        r1: 时间上采样因子
+        r2: 高度上采样因子
+        r3: 宽度上采样因子
+    
+    Returns:
+        输出张量 [B, C, T*r1, H*r2, W*r3]
+    """
+    b, c, t, h, w = x.shape
+    new_c = c // (r1 * r2 * r3)
+    # 重排通道维度到时间和空间维度
+    x = jnp.reshape(x, (b, new_c, r1, r2, r3, t, h, w))
+    x = jnp.transpose(x, (0, 1, 5, 2, 6, 3, 7, 4))  # [B, C, T, r1, H, r2, W, r3]
+    x = jnp.reshape(x, (b, new_c, t * r1, h * r2, w * r3))
+    return x
+```
+
+### is_first_frame 参数
+
+为支持逐帧解码，需要区分首帧和后续帧的不同上采样行为：
+
+```python
+class FlaxHunyuanVideo15Upsample(nnx.Module):
+    def __call__(self, x, feat_cache=None, feat_idx=None, is_first_frame=None):
+        if is_first_frame is not None:
+            if is_first_frame:
+                # 首帧：只空间上采样，时间维度不变
+                h = self._dcae_upsample_rearrange(h, r1=1, r2=2, r3=2)
+                # 截取前一半（因为通道数是 4x，首帧只用空间部分）
+                h = h[:, :, :, :, :h.shape[-1] // 2]
+            else:
+                # 后续帧：时间+空间上采样，1帧→2帧
+                h = self._dcae_upsample_rearrange(h, r1=r1, r2=2, r3=2)
+        else:
+            # 批量解码模式
+            h = self._dcae_upsample_rearrange(h, r1=r1, r2=2, r3=2)
+```
+
+### feat_cache 因果卷积缓存
+
+CausalConv3d 需要缓存前一帧的特征以保证因果性：
+
+```python
+def _call_with_feat_cache(self, hidden_states, feat_cache, feat_idx, conv_fn):
+    """执行带缓存的因果卷积"""
+    kernel_t = self.kernel_size[0]
+    
+    if kernel_t == 1:
+        # 无时间卷积，直接计算
+        return conv_fn(hidden_states), feat_cache, feat_idx
+    
+    # 从缓存获取前一帧
+    cache_key = feat_idx[0]
+    if cache_key in feat_cache:
+        cached = feat_cache[cache_key]
+        # 拼接缓存和当前帧
+        hidden_states = jnp.concatenate([cached, hidden_states], axis=2)
+    else:
+        # 首帧：复制自身作为填充
+        hidden_states = jnp.concatenate(
+            [hidden_states] * kernel_t, axis=2
+        )
+    
+    # 更新缓存（存储最后 kernel_t-1 帧）
+    feat_cache[cache_key] = hidden_states[:, :, -(kernel_t - 1):, :, :]
+    feat_idx[0] += 1
+    
+    return conv_fn(hidden_states), feat_cache, feat_idx
+```
+
+**重要：** 缓存必须存储空间填充后的张量，否则会导致形状不匹配：
+
+```python
+# 正确：先空间填充，再存入缓存
+hidden_states = jnp.pad(hidden_states, spatial_padding)  # 空间填充
+feat_cache[cache_key] = hidden_states[:, :, -(kernel_t - 1):, :, :]  # 存储填充后的
+
+# 错误：存储填充前的张量
+feat_cache[cache_key] = hidden_states[:, :, -(kernel_t - 1):, :, :]  # ❌
+hidden_states = jnp.pad(hidden_states, spatial_padding)  # 太晚了
+```
+
+### Flax NNX 0.12.0 兼容性
+
+Flax NNX 0.12.0 要求使用 `nnx.List` 而非 Python list 包装模块：
+
+```python
+class FlaxHunyuanVideo15MidBlock(nnx.Module):
+    def __init__(self, ...):
+        # 错误：Python list
+        # self.attentions = [attention1, attention2]  # ❌
+        
+        # 正确：nnx.List
+        self.attentions = nnx.List([attention1, attention2])  # ✓
+        
+        # 或者单个 attention 时直接赋值
+        if num_attentions == 1:
+            self.attentions = attention1
+        else:
+            self.attentions = nnx.List([attention1, attention2])
+```
+
+### 完整改造文件
+
+改造后的文件位置：
+```
+diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_hunyuanvideo15_flax.py
+```
+
+主要类结构：
+```python
+# 基础层
+class FlaxHunyuanVideo15CausalConv3d(nnx.Module)     # 因果 3D 卷积
+class FlaxHunyuanVideo15Upsample(nnx.Module)         # DCAE 上采样
+class FlaxHunyuanVideo15Downsample(nnx.Module)       # DCAE 下采样
+
+# 中间层
+class FlaxHunyuanVideo15ResnetBlock3D(nnx.Module)    # 3D 残差块
+class FlaxHunyuanVideo15Attention(nnx.Module)        # 3D 注意力
+class FlaxHunyuanVideo15MidBlock(nnx.Module)         # 中间块
+
+# 编解码器
+class FlaxHunyuanVideo15Encoder3D(nnx.Module)        # 3D 编码器
+class FlaxHunyuanVideo15Decoder3D(nnx.Module)        # 3D 解码器
+
+# 主模型
+class FlaxAutoencoderKLHunyuanVideo15(nnx.Module)    # VAE 主类
+```
+
+### 测试验证
+
+测试文件：
+```bash
+cd gpu-tpu-pedia/tpu/HunyuanVideo-1.5
+python vae_decode_flax.py
+```
+
+测试结果：
+```
+输入 latents: (1, 16, 34, 60, 32)
+输出 video:   (1, 61, 544, 960, 3)
+
+时间上采样验证:
+  16 latent 帧 → 61 video 帧
+  公式验证: 4×16-3 = 61 ✓
+
+空间上采样验证:
+  34 → 544 (×16) ✓
+  60 → 960 (×16) ✓
+
+性能: ~37 秒/batch (8 TPU v6e)
+```
+
+### 与 CogVideoX VAE 对比
+
+| 改造步骤 | CogVideoX | HunyuanVideo-1.5 |
+|----------|-----------|------------------|
+| 时间上采样 | `jax.image.resize` | DCAE 通道重排 |
+| 逐帧解码 | 直接插值到 2 帧 | 需要 `is_first_frame` 参数 |
+| 缓存机制 | 相同 | 相同 |
+| Attention | 无 | 有（需要 nnx.List） |
+| 空间压缩 | 8x | 16x |
 
 ---
 
