@@ -6,9 +6,6 @@ HunyuanVideo-1.5 Generation using Diffusers with TPU/JAX (torchax)
 VAE 使用纯 Flax 版本，Transformer 使用 torchax + Splash Attention
 """
 
-import sys
-sys.path.insert(0, "/home/chrisya/diffusers-tpu/src")
-
 import os
 import time
 import re
@@ -540,7 +537,10 @@ class FlaxVAEProxy:
             return_dict: 是否返回 DecoderOutput
             
         Returns:
-            DecoderOutput 或 tensor
+            DecoderOutput 或 tuple(tensor,)
+            
+        注意：return_dict=False 时返回 tuple(tensor,) 而非直接返回 tensor，
+        因为 Pipeline 使用 decode(...)[0] 来获取输出。
         """
         # 将 torchax tensor 转换为 JAX array
         if hasattr(latents, '_elem'):
@@ -569,7 +569,9 @@ class FlaxVAEProxy:
         
         if return_dict:
             return DecoderOutput(sample=output_tensor)
-        return output_tensor
+        # 返回 tuple，与 PyTorch VAE 行为一致
+        # Pipeline 使用 decode(..., return_dict=False)[0] 获取 sample
+        return (output_tensor,)
     
     def enable_tiling(self, tile_sample_min_height=256, tile_sample_min_width=256, tile_overlap_factor=0.25):
         """启用 VAE tiling 以减少内存使用"""
@@ -580,8 +582,14 @@ class FlaxVAEProxy:
         # 计算 latent tile 尺寸（16x 空间压缩）
         self.tile_latent_min_height = tile_sample_min_height // 16
         self.tile_latent_min_width = tile_sample_min_width // 16
-        # 同时在 Flax VAE 上启用
-        self._vae.enable_tiling(tile_sample_min_height, tile_sample_min_width, tile_overlap_factor)
+        # 同时在 Flax VAE 上启用（使用关键字参数）
+        self._vae.enable_tiling(
+            tile_sample_min_height=tile_sample_min_height,
+            tile_sample_min_width=tile_sample_min_width,
+            tile_latent_min_height=self.tile_latent_min_height,
+            tile_latent_min_width=self.tile_latent_min_width,
+            tile_overlap_factor=tile_overlap_factor,
+        )
         return self
     
     def disable_tiling(self):
@@ -591,38 +599,29 @@ class FlaxVAEProxy:
         return self
 
 
-def load_flax_vae(mesh, original_vae_config, dtype=jnp.bfloat16):
-    """加载 Flax VAE 模型
+def load_flax_vae(mesh, original_vae_config, dtype=jnp.bfloat16, model_id=MODEL_NAME):
+    """加载 Flax VAE 模型，从 HuggingFace 加载预训练权重
     
     Args:
         mesh: JAX device mesh
         original_vae_config: 原始 PyTorch VAE 的 config
         dtype: 数据类型
+        model_id: HuggingFace 模型 ID
         
     Returns:
-        Flax VAE 模型实例
+        Flax VAE 模型实例（带预训练权重）
     """
-    print("\n加载 Flax VAE 模型...")
+    print("\n加载 Flax VAE 模型（从 HuggingFace 加载预训练权重）...")
     
-    # 创建 Flax VAE config
-    config = FlaxAutoencoderKLHunyuanVideo15Config()
-    
-    # 创建随机数生成器
-    key = jax.random.key(0)
-    rngs = nnx.Rngs(key)
-    
-    # 创建 Flax VAE
-    flax_vae = FlaxAutoencoderKLHunyuanVideo15(
-        config=config,
-        rngs=rngs,
+    # 使用 from_pretrained 加载预训练权重
+    flax_vae = FlaxAutoencoderKLHunyuanVideo15.from_pretrained(
+        model_id,
+        subfolder="vae",
         dtype=dtype,
     )
     
-    print(f"  Flax VAE 已创建（使用随机初始化权重）")
+    print(f"  ✓ Flax VAE 已加载预训练权重")
     print(f"  数据类型: {dtype}")
-    
-    # TODO: 从 PyTorch 权重加载（需要实现权重转换）
-    # 目前使用随机初始化，可以后续添加 from_pretrained 支持
     
     return flax_vae
 
@@ -754,13 +753,30 @@ def setup_pipeline_for_jax(pipe, model_id=MODEL_NAME):
         
         # 对 VAE 进行处理 - 使用纯 Flax VAE 替代 PyTorch VAE
         print("- 创建 Flax VAE 替代 PyTorch VAE...")
+        
+        # 保存必要的配置（在释放 VAE 之前）
         original_vae_config = pipe.vae.config  # 保存原始 config
+        tiling_enabled = getattr(pipe.vae, 'use_tiling', False)
+        tile_sample_min_height = getattr(pipe.vae, 'tile_sample_min_height', 256)
+        tile_sample_min_width = getattr(pipe.vae, 'tile_sample_min_width', 256)
+        tile_overlap_factor = getattr(pipe.vae, 'tile_overlap_factor', 0.25)
+        
+        # 删除原始 PyTorch VAE 以释放内存
+        print("  释放原始 PyTorch VAE 内存...")
+        del pipe.vae
         
         # 加载 Flax VAE
         flax_vae = load_flax_vae(mesh, original_vae_config, dtype=jnp.bfloat16)
         
         # 使用 FlaxVAEProxy 包装
-        pipe.vae = FlaxVAEProxy(flax_vae, original_vae_config, env)
+        flax_vae_proxy = FlaxVAEProxy(flax_vae, original_vae_config, env)
+        
+        # 如果原始 VAE 启用了 tiling，在新的 Flax VAE 上也启用
+        if tiling_enabled:
+            print(f"  重新启用 VAE Tiling（继承自原始 VAE 设置）...")
+            flax_vae_proxy.enable_tiling(tile_sample_min_height, tile_sample_min_width, tile_overlap_factor)
+        
+        pipe.vae = flax_vae_proxy
         print("  ✓ VAE 已替换为 Flax VAE（包装在 FlaxVAEProxy 中）")
         
         # 编译 Transformer（is_t2v 必须是静态参数）

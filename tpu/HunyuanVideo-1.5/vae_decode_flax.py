@@ -17,9 +17,6 @@ Reference: gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_diffusers_flax.py
 - VAE Tiling: enabled by default for memory efficiency
 - scaling_factor: 1.03682 (handled by Pipeline, not VAE directly)
 """
-import sys
-sys.path.insert(0, "/home/chrisya/diffusers-tpu/src")
-
 import time
 import numpy as np
 import jax
