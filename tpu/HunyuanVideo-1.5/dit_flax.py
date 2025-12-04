@@ -157,6 +157,75 @@ def setup_pytree_registrations():
 
 # --- Splash Attention 实现 ---
 
+# 保存原始的 SDPA 实现，用于非 XLA tensor 的情况
+_ORIGINAL_SDPA = None
+
+
+def _is_xla_tensor(tensor):
+    """检测 tensor 是否是 XLA/torchax tensor"""
+    if tensor is None:
+        return False
+    # 检查 torchax tensor 的特征
+    if hasattr(tensor, '_elem'):
+        return True
+    # 检查设备类型
+    if hasattr(tensor, 'device'):
+        device_str = str(tensor.device)
+        if 'jax' in device_str or 'xla' in device_str:
+            return True
+    return False
+
+
+def _sdpa_reference(
+    query,
+    key,
+    value,
+    attn_mask=None,
+    dropout_p=0.0,
+    is_causal=False,
+    scale=None,
+    enable_gqa=False,
+) -> torch.Tensor:
+    """
+    Scaled Dot-Product Attention 参考实现（用于有 mask 的情况）
+    
+    关键修复：当 attention mask 导致某行全为 -inf 时，softmax 会产生 NaN。
+    使用 masked_fill 将 NaN 替换为 0（这些 padding 位置的输出不会被使用）。
+    """
+    L, S = query.size(-2), key.size(-2)
+    scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
+    
+    # 处理 GQA
+    if enable_gqa:
+        key = key.repeat_interleave(query.size(-3) // key.size(-3), -3)
+        value = value.repeat_interleave(query.size(-3) // value.size(-3), -3)
+    
+    # 计算 attention weights
+    attn_weight = query @ key.transpose(-2, -1) * scale_factor
+    
+    # 应用 mask
+    if is_causal:
+        assert attn_mask is None
+        causal_mask = torch.ones(L, S, dtype=torch.bool, device=query.device).tril(diagonal=0)
+        attn_weight = attn_weight.masked_fill(causal_mask.logical_not(), float("-inf"))
+    
+    if attn_mask is not None:
+        if attn_mask.dtype == torch.bool:
+            attn_weight = attn_weight.masked_fill(attn_mask.logical_not(), float("-inf"))
+        else:
+            attn_weight = attn_weight + attn_mask
+    
+    # Softmax + NaN 修复
+    # 当一行全是 -inf 时，softmax 产生 NaN，用 0 替换（padding 位置的输出不会被使用）
+    attn_weight = torch.softmax(attn_weight, dim=-1)
+    attn_weight = attn_weight.masked_fill(torch.isnan(attn_weight), 0.0)
+    
+    if dropout_p > 0:
+        attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
+    
+    return attn_weight @ value
+
+
 def _tpu_splash_attention(query, key, value, mesh, scale=None, is_causal=False, window_size=None):
     """
     TPU Splash Attention 实现（纯 JAX 版本）
@@ -294,21 +363,32 @@ def scaled_dot_product_attention(
     window_size=None,
 ) -> torch.Tensor:
     """
-    Scaled Dot-Product Attention 封装函数（torchax 兼容版本）
-    将 PyTorch 张量转换为 JAX，执行 Splash Attention，再转回
+    Scaled Dot-Product Attention 封装函数
+    
+    路由策略：
+    - 普通 torch.Tensor（text encoder）-> 原始 SDPA
+    - XLA tensor + attn_mask（VAE causal attention）-> 参考实现
+    - XLA tensor + 无 mask -> TPU Splash Attention
     """
+    global _ORIGINAL_SDPA
+    
+    # 非 XLA tensor 使用原始 SDPA（text encoder 等）
+    if not _is_xla_tensor(query):
+        if _ORIGINAL_SDPA is not None:
+            return _ORIGINAL_SDPA(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
+        return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
+    
+    # 有 attn_mask 时使用参考实现（Splash Attention 不支持任意 mask）
+    if attn_mask is not None:
+        return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
+    
+    # 使用 TPU Splash Attention
     if env is not None and hasattr(env.config, 'use_tpu_splash_attention') and env.config.use_tpu_splash_attention:
-        # 使用 TPU Splash Attention
         jquery, jkey, jvalue = env.t2j_iso((query, key, value))
-        
         res = splash_attention_fn(jquery, jkey, jvalue, env._mesh, scale=scale, is_causal=is_causal, window_size=window_size)
         return env.j2t_iso(res)
     
-    # 回退到标准 PyTorch SDPA
-    return torch.nn.functional.scaled_dot_product_attention(
-        query, key, value, attn_mask=attn_mask, dropout_p=dropout_p,
-        is_causal=is_causal, scale=scale
-    )
+    return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
 
 
 # --- HunyuanVideo-1.5 Transformer 权重分片策略 ---
@@ -774,8 +854,14 @@ def setup_transformer_for_tpu(transformer):
     env._mesh = mesh
     env.config.use_tpu_splash_attention = True
 
+    # 保存原始 SDPA 实现
+    global _ORIGINAL_SDPA
+    _ORIGINAL_SDPA = torch.nn.functional.scaled_dot_product_attention
+    print(f"- 保存原始 SDPA 实现: {_ORIGINAL_SDPA}")
+    
     # 注册自定义的 Scaled Dot-Product Attention
     print(f"- 注册 Splash Attention（窗口大小: {WINDOW_SIZE}）...")
+    print(f"  注意：非 XLA tensor 会自动回退到原始 SDPA")
     custom_attention = functools.partial(
         scaled_dot_product_attention,
         env=env,
