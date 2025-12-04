@@ -5,8 +5,6 @@ HunyuanVideo-1.5 Generation using Diffusers with TPU/JAX (torchax)
 """
 
 import os
-os.environ.setdefault('JAX_MEMORY_DEBUG', '0')  # 默认关闭内存调试
-
 import time
 import re
 import math
@@ -35,21 +33,15 @@ import logging
 MODEL_NAME = "hunyuanvideo-community/HunyuanVideo-1.5-Diffusers-720p_t2v"
 
 # === Splash Attention 配置参数 ===
-# HunyuanVideo-1.5 序列长度较大（720p: ~108000 tokens），需要较大的块大小
 BQSIZE = 2048           # Query 块大小
 BKVSIZE = 2048          # Key/Value 块大小
 BKVCOMPUTESIZE = 1024   # Key/Value 计算块大小
-
-# 窗口大小（None 表示使用完整注意力）
-WINDOW_SIZE = None
-
-# 是否使用 K-smooth（对 key 进行平滑处理）
-USE_K_SMOOTH = True
+WINDOW_SIZE = None      # 窗口大小（None 表示使用完整注意力）
 
 # === Mesh 分片配置 ===
 USE_DP = False          # 是否使用 data parallelism
 SP_NUM = 1              # Spatial parallelism 数量
-USE_TP = True           # 是否使用 Tensor Parallel 模式（Megatron Column-Row风格）
+USE_TP = True           # 是否使用 Tensor Parallel 模式
 
 
 # === 工具函数 ===
@@ -147,30 +139,42 @@ def _sdpa_reference(
     enable_gqa=False,
 ) -> torch.Tensor:
     """
-    Scaled Dot-Product Attention 参考实现（回退方案）
+    Scaled Dot-Product Attention 参考实现（用于有 mask 的情况）
+    
+    关键修复：当 attention mask 导致某行全为 -inf 时，softmax 会产生 NaN。
+    使用 masked_fill 将 NaN 替换为 0（这些 padding 位置的输出不会被使用）。
     """
     L, S = query.size(-2), key.size(-2)
     scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
-    attn_bias = torch.zeros(L, S, dtype=query.dtype, device=query.device)
-    if is_causal:
-        assert attn_mask is None
-        temp_mask = torch.ones(L, S, dtype=torch.bool, device=query.device).tril(diagonal=0)
-        attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
-        attn_bias.to(query.dtype)
-    if attn_mask is not None:
-        if attn_mask.dtype == torch.bool:
-            attn_bias.masked_fill_(attn_mask.logical_not(), float("-inf"))
-        else:
-            attn_bias += attn_mask
+    
+    # 处理 GQA
     if enable_gqa:
         key = key.repeat_interleave(query.size(-3) // key.size(-3), -3)
         value = value.repeat_interleave(query.size(-3) // value.size(-3), -3)
-
+    
+    # 计算 attention weights
     attn_weight = query @ key.transpose(-2, -1) * scale_factor
-    attn_weight += attn_bias
+    
+    # 应用 mask
+    if is_causal:
+        assert attn_mask is None
+        causal_mask = torch.ones(L, S, dtype=torch.bool, device=query.device).tril(diagonal=0)
+        attn_weight = attn_weight.masked_fill(causal_mask.logical_not(), float("-inf"))
+    
+    if attn_mask is not None:
+        if attn_mask.dtype == torch.bool:
+            attn_weight = attn_weight.masked_fill(attn_mask.logical_not(), float("-inf"))
+        else:
+            attn_weight = attn_weight + attn_mask
+    
+    # Softmax + NaN 修复
+    # 当一行全是 -inf 时，softmax 产生 NaN，用 0 替换（padding 位置的输出不会被使用）
     attn_weight = torch.softmax(attn_weight, dim=-1)
+    attn_weight = attn_weight.masked_fill(torch.isnan(attn_weight), 0.0)
+    
     if dropout_p > 0:
         attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
+    
     return attn_weight @ value
 
 
@@ -268,43 +272,29 @@ def scaled_dot_product_attention(
     """
     Scaled Dot-Product Attention 封装函数
     
-    使用 TPU Splash Attention 在 TPU 上高效计算注意力
-    参考 CogVideo 的 generate_flax.py 实现
-    
-    重要：此函数会检测输入 tensor 类型和参数：
-    - 如果是普通 torch.Tensor（如 text encoder 内部调用），使用原始 SDPA
-    - 如果有 attn_mask（如 VAE 的 causal attention），回退到参考实现（Splash 不支持任意 mask）
-    - 如果是 XLA tensor 且无 mask，使用 Splash Attention
+    路由策略：
+    - 普通 torch.Tensor（text encoder）-> 原始 SDPA
+    - XLA tensor + attn_mask（VAE causal attention）-> 参考实现
+    - XLA tensor + 无 mask -> TPU Splash Attention
     """
     global _ORIGINAL_SDPA
     
-    # 检测输入是否是 XLA tensor
+    # 非 XLA tensor 使用原始 SDPA（text encoder 等）
     if not _is_xla_tensor(query):
-        # 这是普通 torch.Tensor（例如 text encoder 内部的 attention）
-        # 使用原始 SDPA 或参考实现
         if _ORIGINAL_SDPA is not None:
             return _ORIGINAL_SDPA(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
-        else:
-            return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
+        return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
     
-    # 如果有 attn_mask，回退到参考实现（Splash Attention 不支持任意 mask）
-    # 这包括 VAE 的 causal attention mask
+    # 有 attn_mask 时使用参考实现（Splash Attention 不支持任意 mask）
     if attn_mask is not None:
         return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
     
+    # 使用 TPU Splash Attention
     if env is not None and hasattr(env.config, 'use_tpu_splash_attention') and env.config.use_tpu_splash_attention:
-        # 使用 TPU Splash Attention
         jquery, jkey, jvalue = env.t2j_iso((query, key, value))
-        
-        # 可选的 K-smooth 处理
-        if USE_K_SMOOTH:
-            key_mean = jnp.mean(jkey, axis=2, keepdims=True)
-            jkey = jkey - key_mean
-        
         res = _tpu_splash_attention(jquery, jkey, jvalue, env._mesh, scale=scale, is_causal=is_causal, window_size=window_size)
         return env.j2t_iso(res)
     
-    # 回退到参考实现
     return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
 
 
@@ -643,8 +633,7 @@ def setup_pipeline_for_jax(pipe, model_id=MODEL_NAME):
         pipe.vae = VAEProxy(pipe.vae, env)
         print("  ✓ VAE 已包装为 VAEProxy")
         
-        # 编译 Transformer
-        # 注意：is_t2v 必须是静态参数，因为它用于条件分支
+        # 编译 Transformer（is_t2v 必须是静态参数）
         print("- 编译 Transformer...")
         pipe.transformer = torchax.compile(
             pipe.transformer,
@@ -737,6 +726,7 @@ def run_generation_benchmark(pipe, prompt_embeds_dict, num_inference_steps=50, n
         guidance_scale: 引导尺度
         seed: 随机种子
         num_iterations: 迭代次数
+        debug: 是否启用调试输出
         
     Returns:
         frames: 最后生成的视频帧
@@ -753,14 +743,6 @@ def run_generation_benchmark(pipe, prompt_embeds_dict, num_inference_steps=50, n
     times = []
     frames = None
     
-    # 验证 prompt_embeds
-    print(f"\n验证 prompt_embeds:")
-    for key, value in prompt_embeds_dict.items():
-        if hasattr(value, 'shape'):
-            print(f"  {key}: shape={value.shape}, is_xla={_is_xla_tensor(value)}")
-        else:
-            print(f"  {key}: {type(value)}")
-    
     # 准备生成参数
     # 注意：传入所有预计算的 embeddings（正面和负面），pipeline 会跳过 text encoder
     gen_kwargs = {
@@ -776,6 +758,7 @@ def run_generation_benchmark(pipe, prompt_embeds_dict, num_inference_steps=50, n
         'negative_prompt_embeds_mask_2': prompt_embeds_dict['negative_prompt_embeds_mask_2'],
         'num_frames': num_frames,
         'num_inference_steps': num_inference_steps,
+        'output_type': 'pil',  # 始终输出 PIL 以避免格式问题
     }
     
     if height is not None:
@@ -792,32 +775,20 @@ def run_generation_benchmark(pipe, prompt_embeds_dict, num_inference_steps=50, n
         pass  # 可能没有设置默认设备
     
     torch.set_default_device('jax')
-    print(f"  设置默认设备为 'jax'")
     
     for i in range(num_iterations):
-        if i == 0:
-            print(f"\n迭代 {i} (包含 JIT 编译，会比较慢):")
-        else:
-            print(f"\n迭代 {i} (使用已编译代码):")
+        print(f"\n迭代 {i}:")
         
-        # 每次迭代使用相同的种子以确保结果可比较
-        # 注意：使用 'jax' 设备创建 generator，保持一致性
-        # generator 需要在 CPU 上创建，因为 JAX 没有对应的 generator 概念
         generator = torch.Generator(device='cpu').manual_seed(seed)
         gen_kwargs['generator'] = generator
         
         start = time.perf_counter()
         result = pipe(**gen_kwargs)
         frames = result.frames[0]
-        end = time.perf_counter()
-        elapsed = end - start
+        elapsed = time.perf_counter() - start
         times.append(elapsed)
         
-        if i == 0:
-            print(f"  完成时间: {elapsed:.2f} 秒 (包含 JIT 编译)")
-        else:
-            print(f"  完成时间: {elapsed:.2f} 秒")
-        
+        print(f"  完成时间: {elapsed:.2f} 秒" + (" (包含 JIT 编译)" if i == 0 else ""))
         del result
     
     # 恢复原始默认设备
@@ -854,7 +825,7 @@ def main():
     # 必需参数
     parser.add_argument(
         '--prompt', type=str, 
-        default="A cat walks on the grass, realistic style.",
+        default='A girl holding a paper with words "Hello, world!"',
         help='Text prompt for video generation'
     )
     
