@@ -183,6 +183,476 @@ HunyuanVideo-1.5 使用"三阶段"架构来生成视频：
 │ │                                                                         │ │
 │ └─────────────────────────────────────────────────────────────────────────┘ │
 │                                                                             │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│ 【关键澄清：parallel_attention() 不是"分开做"！】                           │
+│ ═══════════════════════════════════════════════════════════════════════════ │
+│                                                                             │
+│   ⚠️ 名字容易误导！parallel 不是指 img 和 txt 分开并行做 attention          │
+│                                                                             │
+│   【parallel_attention() 的真实含义】（源码 attention.py 第 112-117 行）    │
+│                                                                             │
+│   ```python                                                                 │
+│   def parallel_attention(q, k, v, img_q_len, img_kv_len, ...):              │
+│       return sequence_parallel_attention(q, k, v, ...)                      │
+│   ```                                                                       │
+│                                                                             │
+│   "Parallel" 指的是:                                                        │
+│   1. Sequence Parallelism (SP) - 多 GPU 序列并行                            │
+│   2. 不是指 img/txt 分开并行！                                               │
+│                                                                             │
+│   【实际执行过程】（源码 attention.py 第 162-164 行）                        │
+│                                                                             │
+│   ```python                                                                 │
+│   # 输入是分开的                                                            │
+│   query, encoder_query = q  # (img_q, txt_q)                                │
+│   key, encoder_key = k      # (img_k, txt_k)                                │
+│   value, encoder_value = v  # (img_v, txt_v)                                │
+│                                                                             │
+│   # ★ 关键：在计算前拼接成一个序列！                                        │
+│   query = torch.cat([query, encoder_query], dim=1)  # [img + txt]           │
+│   key = torch.cat([key, encoder_key], dim=1)                                │
+│   value = torch.cat([value, encoder_value], dim=1)                          │
+│                                                                             │
+│   # 然后做一次 attention（不是分开做两次！）                                 │
+│   hidden_states = flash_attn_no_pad(...)  # 一次 joint attention           │
+│   ```                                                                       │
+│                                                                             │
+│   【图解：拼接后的 Joint Attention】                                         │
+│                                                                             │
+│   ┌──────────────────────────────────────────────────────────────────────┐  │
+│   │  拼接前（输入）           拼接后（计算时）                            │  │
+│   │  ─────────────            ──────────────                              │  │
+│   │  img_q: (B, 46800, H, D)                                              │  │
+│   │  txt_q: (B, 1256, H, D)  → query: (B, 48056, H, D)                    │  │
+│   │                             ├─────────────────────┤                    │  │
+│   │                             │ 拼接成一个大序列    │                    │  │
+│   │                             └─────────────────────┘                    │  │
+│   └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   ┌──────────────────────────────────────────────────────────────────────┐  │
+│   │                    Attention 矩阵结构                                 │  │
+│   │                                                                       │  │
+│   │                        Key (48056)                                    │  │
+│   │                    ┌──────────────────────┐                           │  │
+│   │                    │   img_k   │  txt_k   │                           │  │
+│   │                    │  (46800)  │ (1256)   │                           │  │
+│   │   ┌────────────────┼──────────────────────┤                           │  │
+│   │   │   img_q        │           │          │                           │  │
+│   │   │  (46800)       │  img↔img  │  img↔txt │ ← img 可以 attend 到所有   │  │
+│   │ Q │                │           │          │                           │  │
+│   │ u ├────────────────┼──────────────────────┤                           │  │
+│   │ e │   txt_q        │           │          │                           │  │
+│   │ r │  (1256)        │  txt↔img  │  txt↔txt │ ← txt 也可以 attend 到所有 │  │
+│   │ y │                │           │          │                           │  │
+│   │   └────────────────┴──────────────────────┘                           │  │
+│   │                                                                       │  │
+│   │   整个矩阵在一次 attention 计算中完成                                 │  │
+│   │   不是分开计算 img-img, img-txt, txt-img, txt-txt                    │  │
+│   └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   【为什么名字叫 parallel_attention？】                                     │
+│                                                                             │
+│   1. Sequence Parallelism (SP) 支持:                                        │
+│      当启用多 GPU SP 时，会做 all-to-all 通信                               │
+│      ```python                                                              │
+│      if enable_sp:                                                          │
+│          query = all_to_all_4D(query, sp_group, ...)                        │
+│      ```                                                                    │
+│                                                                             │
+│   2. 双向并行交互:                                                          │
+│      img ↔ txt 可以互相 attend（不是单向的 cross-attention）               │
+│                                                                             │
+│   3. 历史命名:                                                              │
+│      可能来自 MM-DiT (Multimodal DiT) 架构的命名习惯                        │
+│                                                                             │
+│   【对比：真正的 Cross-Attention vs Joint Attention】                       │
+│                                                                             │
+│   Cross-Attention（如 Stable Diffusion）:                                   │
+│   ```                                                                       │
+│   Q = img                                                                   │
+│   K, V = text                                                               │
+│   output = softmax(Q @ K.T) @ V  ← 单向：img attend to text                 │
+│   ```                                                                       │
+│                                                                             │
+│   Joint Attention（HunyuanVideo 使用的）:                                   │
+│   ```                                                                       │
+│   Q = [img_q, txt_q]                                                        │
+│   K = [img_k, txt_k]                                                        │
+│   V = [img_v, txt_v]                                                        │
+│   output = softmax(Q @ K.T) @ V  ← 双向：img ↔ txt 互相 attend             │
+│   ```                                                                       │
+│                                                                             │
+│   HunyuanVideo 选择 Joint Attention 的原因:                                │
+│   - 文本可以"看到"视频，调整自己的表示                                      │
+│   - 视频可以"看到"文本，获取语义信息                                        │
+│   - 双向交互比单向更强大                                                    │
+│                                                                             │
+│   【做完 parallel_attention() 后如何分开 img_attn 和 txt_attn？】           │
+│                                                                             │
+│   答案：通过位置切片！因为知道拼接时的分界点。                               │
+│                                                                             │
+│   源码 hunyuanvideo_1_5_transformer.py 第 188 行:                           │
+│   ```python                                                                 │
+│   # parallel_attention 返回拼接的结果                                       │
+│   attn = parallel_attention(                                                │
+│       (img_q, txt_q),     # 输入是元组                                      │
+│       (img_k, txt_k),                                                       │
+│       (img_v, txt_v),                                                       │
+│       img_q_len=img_q.shape[1],  # ★ 关键：传入 img 的长度                 │
+│       img_kv_len=img_k.shape[1],                                            │
+│       ...                                                                   │
+│   )                                                                         │
+│   # attn shape: (B, img_len + txt_len, H, D)                                │
+│   #             (B, 46800 + 1256, H, D) = (B, 48056, H, D)                   │
+│                                                                             │
+│   # ★ 关键：通过切片分开！                                                  │
+│   img_attn = attn[:, :img_q.shape[1]].contiguous()   # 前 46800 个          │
+│   txt_attn = attn[:, img_q.shape[1]:].contiguous()   # 后 1256 个           │
+│   ```                                                                       │
+│                                                                             │
+│   图解:                                                                      │
+│   ┌──────────────────────────────────────────────────────────────────────┐  │
+│   │                                                                       │  │
+│   │  parallel_attention 输出:                                             │  │
+│   │  ┌────────────────────────────────────────────────────────────────┐   │  │
+│   │  │     img_attn (46800 tokens)     │   txt_attn (1256 tokens)    │   │  │
+│   │  │    经过 attention 后的视频表示   │  经过 attention 后的文本表示 │   │  │
+│   │  └────────────────────────────────────────────────────────────────┘   │  │
+│   │                      ↑                           ↑                    │  │
+│   │                      │                           │                    │  │
+│   │              [:, :img_q.shape[1]]       [:, img_q.shape[1]:]         │  │
+│   │                      │                           │                    │  │
+│   │                      ▼                           ▼                    │  │
+│   │  ┌─────────────────────────┐   ┌─────────────────────────┐           │  │
+│   │  │ img = img + img_attn    │   │ txt = txt + txt_attn    │           │  │
+│   │  │      (残差连接)          │   │      (残差连接)          │           │  │
+│   │  └─────────────────────────┘   └─────────────────────────┘           │  │
+│   │                      │                           │                    │  │
+│   │                      ▼                           ▼                    │  │
+│   │  ┌─────────────────────────┐   ┌─────────────────────────┐           │  │
+│   │  │ img = img + FFN(img)    │   │ txt = txt + FFN(txt)    │           │  │
+│   │  │      (前馈网络)          │   │      (前馈网络)          │           │  │
+│   │  └─────────────────────────┘   └─────────────────────────┘           │  │
+│   │                                                                       │  │
+│   └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   为什么分开后还要各自处理？                                                 │
+│   ─────────────────────────                                                 │
+│   虽然 attention 是联合计算的，但后续的：                                   │
+│   1. Attention 输出投影 (img_attn_proj / txt_attn_proj)                    │
+│   2. FFN (img_mlp / txt_mlp)                                               │
+│   3. Modulation (img_mod / txt_mod)                                        │
+│   4. 残差连接                                                               │
+│                                                                             │
+│   都是分开的！这是 "Double Stream" 的含义：                                 │
+│   - 两个"流"（img 和 txt）在 attention 时交汇                              │
+│   - 交汇后又分开，各自做后续处理                                            │
+│   - 每个流有自己的权重（不共享）                                            │
+│                                                                             │
+│   源码 hunyuanvideo_1_5_transformer.py 第 190-202 行:                       │
+│   ```python                                                                 │
+│   # 分别投影和残差连接                                                      │
+│   img = img + apply_gate(self.img_attn_proj(img_attn), gate=img_mod1_gate)  │
+│   img = img + apply_gate(self.img_mlp(...), gate=img_mod2_gate)             │
+│                                                                             │
+│   txt = txt + apply_gate(self.txt_attn_proj(txt_attn), gate=txt_mod1_gate)  │
+│   txt = txt + apply_gate(self.txt_mlp(...), gate=txt_mod2_gate)             │
+│   ```                                                                       │
+│                                                                             │
+│   【Double Stream vs Single Stream】                                        │
+│                                                                             │
+│   HunyuanVideo 有两种 block:                                                │
+│                                                                             │
+│   1. MMDoubleStreamBlock (前 20 层):                                        │
+│      - img 和 txt 各有独立的 FFN                                            │
+│      - attention 联合，其他分开                                             │
+│      - 更强的表达能力                                                       │
+│                                                                             │
+│   2. MMSingleStreamBlock (后 40 层):                                        │
+│      - img 和 txt 合并成一个序列                                            │
+│      - 共享 FFN                                                             │
+│      - 更高效                                                               │
+│                                                                             │
+│   源码第 821-825 行:                                                        │
+│   ```python                                                                 │
+│   # Single stream: 合并后不再分开                                           │
+│   txt_seq_len = txt.shape[1]                                                │
+│   x = torch.cat((img, txt), 1)  # 合并                                      │
+│   for block in self.single_blocks:                                          │
+│       x = block(x, vec, txt_len=txt_seq_len, ...)                           │
+│   img = x[:, :img_seq_len, ...]  # 最后才分开                               │
+│   ```                                                                       │
+│                                                                             │
+│   【.contiguous() 是干什么的？】                                            │
+│   ─────────────────────────────                                             │
+│                                                                             │
+│   PyTorch 中，tensor 的数据在内存中可能是"非连续"的。                       │
+│   .contiguous() 确保数据在内存中是连续存储的。                              │
+│                                                                             │
+│   为什么会不连续？                                                          │
+│   ────────────────                                                          │
+│   ```python                                                                 │
+│   # 原始 tensor 是连续的                                                    │
+│   attn = torch.randn(2, 48056, 24, 128)  # [B, seq, H, D]                   │
+│   # 内存布局: [a0, a1, a2, ..., a48055] 连续存储                            │
+│                                                                             │
+│   # 切片操作只改变"视图"，不复制数据                                        │
+│   img_attn = attn[:, :46800]                                                │
+│   # img_attn "看"的是原始内存的前 46800 个位置                              │
+│   # 但它自己的 stride 和原始 tensor 不同                                    │
+│   # 实际数据仍在原位置，只是"跳着看"                                        │
+│                                                                             │
+│   # 这时 img_attn.is_contiguous() == False                                  │
+│   ```                                                                       │
+│                                                                             │
+│   图解内存布局:                                                              │
+│   ┌──────────────────────────────────────────────────────────────────────┐  │
+│   │  原始 tensor attn 在内存中的布局 (连续的):                            │  │
+│   │  ┌───┬───┬───┬───┬───┬───┬─────┬───┬───┬───┬───┬───┬───┐              │  │
+│   │  │ 0 │ 1 │ 2 │...│46799│46800│...│48055│                │              │  │
+│   │  └───┴───┴───┴───┴─────┴─────┴───┴─────┘                │              │  │
+│   │  │← ─ ─ ─ img_attn ─ ─ ─→│←txt_attn→│                   │              │  │
+│   │                                                                       │  │
+│   │  切片后，img_attn 是 attn 的"视图"：                                  │  │
+│   │  - 不复制数据                                                         │  │
+│   │  - 只是记录"从哪开始，步长多少"                                       │  │
+│   │  - is_contiguous() == False（因为后面还有 txt_attn 的数据）           │  │
+│   └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   为什么需要 .contiguous()？                                                │
+│   ─────────────────────────                                                 │
+│   1. 某些操作需要连续内存:                                                  │
+│      - view(), reshape() 等形状变换                                        │
+│      - 一些 CUDA kernel                                                    │
+│      - Flash Attention 等高效实现                                          │
+│                                                                             │
+│   2. 性能优化:                                                              │
+│      - 连续内存访问更快（缓存友好）                                        │
+│      - 避免后续操作报错                                                    │
+│                                                                             │
+│   .contiguous() 做了什么？                                                  │
+│   ─────────────────────────                                                 │
+│   ```python                                                                 │
+│   img_attn = attn[:, :46800].contiguous()                                   │
+│   # 1. 分配新的内存空间                                                     │
+│   # 2. 复制数据到新空间，使其连续                                           │
+│   # 3. 返回新的 tensor                                                      │
+│                                                                             │
+│   # 现在 img_attn.is_contiguous() == True                                   │
+│   # 可以安全地 view, reshape 等                                             │
+│   ```                                                                       │
+│                                                                             │
+│   什么时候可以不用？                                                        │
+│   ─────────────────                                                         │
+│   如果后续操作不需要连续内存（如简单的加法、乘法），可以省略。              │
+│   但为了安全，通常在切片后加上 .contiguous() 是好习惯。                     │
+│                                                                             │
+│   性能权衡:                                                                  │
+│   ─────────                                                                 │
+│   - 不用 .contiguous(): 省内存、省时间（不复制）                            │
+│   - 用 .contiguous(): 复制数据，但后续操作更快、更安全                      │
+│                                                                             │
+│   在 HunyuanVideo 中，因为后续有 attention 投影和 FFN：                     │
+│   ```python                                                                 │
+│   img = img + self.img_attn_proj(img_attn)  # 线性层需要特定形状           │
+│   ```                                                                       │
+│   所以需要确保内存连续。                                                    │
+│                                                                             │
+│   【txt_mod1_gate vs txt_mod2_gate 是什么区别？】                           │
+│   ──────────────────────────────────────────────                            │
+│                                                                             │
+│   这是 DiT (Diffusion Transformer) 的 AdaLN（自适应层归一化）机制。         │
+│                                                                             │
+│   源码第 127-143 行，从时间步 embedding 生成 6 个调制参数：                  │
+│   ```python                                                                 │
+│   # vec 是时间步 embedding (来自 self.time_in(t))                          │
+│   (                                                                         │
+│       txt_mod1_shift,    # 第一子层 (attention) 的偏移                     │
+│       txt_mod1_scale,    # 第一子层 (attention) 的缩放                     │
+│       txt_mod1_gate,     # 第一子层 (attention) 的门控                     │
+│       txt_mod2_shift,    # 第二子层 (FFN) 的偏移                           │
+│       txt_mod2_scale,    # 第二子层 (FFN) 的缩放                           │
+│       txt_mod2_gate,     # 第二子层 (FFN) 的门控                           │
+│   ) = self.txt_mod(vec).chunk(6, dim=-1)                                    │
+│   ```                                                                       │
+│                                                                             │
+│   mod1 vs mod2 的区别:                                                      │
+│   ─────────────────────                                                     │
+│   ┌──────────────────────────────────────────────────────────────────────┐  │
+│   │                                                                       │  │
+│   │  Transformer Block 的两个子层:                                        │  │
+│   │                                                                       │  │
+│   │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│   │  │ 子层 1: Attention                                               │  │  │
+│   │  │ ─────────────────                                               │  │  │
+│   │  │ 使用 mod1 系列参数:                                             │  │  │
+│   │  │   • txt_mod1_shift, txt_mod1_scale: 调制 LayerNorm              │  │  │
+│   │  │   • txt_mod1_gate: 控制残差连接的强度                           │  │  │
+│   │  │                                                                 │  │  │
+│   │  │ x = LayerNorm(x)                                                │  │  │
+│   │  │ x = x * (1 + scale) + shift   ← modulate                        │  │  │
+│   │  │ attn_out = Attention(x)                                         │  │  │
+│   │  │ x = x + gate * attn_out       ← apply_gate                      │  │  │
+│   │  └─────────────────────────────────────────────────────────────────┘  │  │
+│   │                               ↓                                       │  │
+│   │  ┌─────────────────────────────────────────────────────────────────┐  │  │
+│   │  │ 子层 2: FFN (Feed-Forward Network)                              │  │  │
+│   │  │ ─────────────────────────────────                               │  │  │
+│   │  │ 使用 mod2 系列参数:                                             │  │  │
+│   │  │   • txt_mod2_shift, txt_mod2_scale: 调制 LayerNorm              │  │  │
+│   │  │   • txt_mod2_gate: 控制残差连接的强度                           │  │  │
+│   │  │                                                                 │  │  │
+│   │  │ x = LayerNorm(x)                                                │  │  │
+│   │  │ x = x * (1 + scale) + shift   ← modulate                        │  │  │
+│   │  │ ffn_out = FFN(x)                                                │  │  │
+│   │  │ x = x + gate * ffn_out        ← apply_gate                      │  │  │
+│   │  └─────────────────────────────────────────────────────────────────┘  │  │
+│   │                                                                       │  │
+│   └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   shift, scale, gate 各自的作用:                                            │
+│   ────────────────────────────────                                          │
+│   ```python                                                                 │
+│   # modulate 函数: 自适应调整特征                                           │
+│   def modulate(x, shift, scale):                                            │
+│       return x * (1 + scale) + shift                                        │
+│       #          ↑ 缩放       ↑ 偏移                                        │
+│                                                                             │
+│   # apply_gate 函数: 控制残差连接强度                                       │
+│   def apply_gate(x, gate):                                                  │
+│       return gate * x                                                       │
+│       #      ↑ 门控值（0~1 之间）                                           │
+│   ```                                                                       │
+│                                                                             │
+│   为什么需要这些调制参数？                                                  │
+│   ────────────────────────                                                  │
+│   1. 时间步条件注入:                                                        │
+│      不同的 t（噪声程度）需要不同的处理方式                                 │
+│      - t 大（噪声多）: 可能需要更激进的去噪                                 │
+│      - t 小（噪声少）: 需要更精细的调整                                     │
+│                                                                             │
+│   2. 两个子层需要不同的调制:                                                │
+│      - Attention: 负责全局信息交换                                         │
+│      - FFN: 负责局部特征变换                                               │
+│      - 它们对时间步的响应方式不同                                          │
+│                                                                             │
+│   3. Gate 的作用:                                                           │
+│      - 允许模型学习"跳过"某些子层                                          │
+│      - 在某些时间步，可能 attention 更重要，FFN 可以弱化                   │
+│      - 提供更灵活的信息流控制                                              │
+│                                                                             │
+│   源码使用示例（第 190-202 行）:                                            │
+│   ```python                                                                 │
+│   # 子层 1: Attention + mod1                                                │
+│   txt = txt + apply_gate(                                                   │
+│       self.txt_attn_proj(txt_attn),                                         │
+│       gate=txt_mod1_gate   # ← 控制 attention 输出的强度                   │
+│   )                                                                         │
+│                                                                             │
+│   # 子层 2: FFN + mod2                                                      │
+│   txt = txt + apply_gate(                                                   │
+│       self.txt_mlp(                                                         │
+│           modulate(self.txt_norm2(txt),                                     │
+│                    shift=txt_mod2_shift, scale=txt_mod2_scale)              │
+│       ),                                                                    │
+│       gate=txt_mod2_gate   # ← 控制 FFN 输出的强度                         │
+│   )                                                                         │
+│   ```                                                                       │
+│                                                                             │
+│   这种设计来自 DiT 论文:                                                    │
+│   "Scalable Diffusion Models with Transformers" (Peebles & Xie, 2023)       │
+│   是将时间步信息高效注入 Transformer 的标准方法。                           │
+│                                                                             │
+│   【self.txt_mod / self.img_mod 是什么？】                                  │
+│   ────────────────────────────────────────                                  │
+│                                                                             │
+│   `mod` = Modulate，调制层。是一个简单的神经网络模块。                      │
+│                                                                             │
+│   源码 modulate_layers.py 第 23-43 行:                                      │
+│   ```python                                                                 │
+│   class ModulateDiT(nn.Module):                                             │
+│       # Modulation layer for DiT                                            │
+│                                                                             │
+│       def __init__(self, hidden_size, factor, act_layer, ...):              │
+│           self.act = act_layer()          # 激活函数 (SiLU)                 │
+│           self.linear = nn.Linear(                                          │
+│               hidden_size,                # 输入维度                        │
+│               factor * hidden_size,       # 输出维度 (6 倍)                 │
+│               bias=True                                                     │
+│           )                                                                 │
+│           # 关键：零初始化！                                                │
+│           nn.init.zeros_(self.linear.weight)                                │
+│           nn.init.zeros_(self.linear.bias)                                  │
+│                                                                             │
+│       def forward(self, x):                                                 │
+│           return self.linear(self.act(x))                                   │
+│   ```                                                                       │
+│                                                                             │
+│   图解:                                                                      │
+│   ┌──────────────────────────────────────────────────────────────────────┐  │
+│   │                                                                       │  │
+│   │  时间步 embedding (vec)                                               │  │
+│   │  shape: (B, hidden_size)   例如 (2, 3072)                             │  │
+│   │             │                                                         │  │
+│   │             ▼                                                         │  │
+│   │  ┌─────────────────────────┐                                          │  │
+│   │  │       SiLU 激活         │                                          │  │
+│   │  └───────────┬─────────────┘                                          │  │
+│   │              │                                                         │  │
+│   │              ▼                                                         │  │
+│   │  ┌─────────────────────────┐                                          │  │
+│   │  │   Linear (3072 → 18432) │  factor=6, 所以 6×3072=18432             │  │
+│   │  └───────────┬─────────────┘                                          │  │
+│   │              │                                                         │  │
+│   │              ▼                                                         │  │
+│   │  output shape: (B, 6 × hidden_size)                                   │  │
+│   │  例如 (2, 18432)                                                      │  │
+│   │              │                                                         │  │
+│   │              ▼                                                         │  │
+│   │  .chunk(6, dim=-1)  ← 沿最后一维分成 6 份                              │  │
+│   │              │                                                         │  │
+│   │  ┌───┬───┬───┬───┬───┬───┐                                            │  │
+│   │  │s1 │s2 │g1 │s3 │s4 │g2 │  各 (B, 3072)                              │  │
+│   │  └───┴───┴───┴───┴───┴───┘                                            │  │
+│   │  shift1 scale1 gate1 shift2 scale2 gate2                              │  │
+│   │  (mod1 系列)        (mod2 系列)                                        │  │
+│   │                                                                       │  │
+│   └──────────────────────────────────────────────────────────────────────┘  │
+│                                                                             │
+│   为什么零初始化？                                                          │
+│   ─────────────────                                                         │
+│   ```python                                                                 │
+│   nn.init.zeros_(self.linear.weight)                                        │
+│   nn.init.zeros_(self.linear.bias)                                          │
+│   ```                                                                       │
+│                                                                             │
+│   这是一个重要的训练技巧：                                                  │
+│                                                                             │
+│   1. 初始时 shift=0, scale=0, gate=0:                                       │
+│      modulate(x, shift=0, scale=0) = x * (1 + 0) + 0 = x                   │
+│      apply_gate(out, gate=0) = 0 * out = 0                                 │
+│                                                                             │
+│   2. 这意味着训练开始时：                                                   │
+│      - modulate 不改变输入（恒等变换）                                     │
+│      - gate 完全关闭残差连接                                               │
+│                                                                             │
+│   3. 好处：                                                                  │
+│      - 模型可以从"无调制"状态逐渐学习                                      │
+│      - 避免初始化不当导致训练不稳定                                        │
+│      - 让模型自己决定需要多少调制                                          │
+│                                                                             │
+│   总结：                                                                     │
+│   ─────                                                                     │
+│   `mod` = ModulateDiT = 一个简单的 SiLU + Linear 模块                       │
+│   输入：时间步 embedding (3072 维)                                          │
+│   输出：6 个调制参数 (各 3072 维)                                           │
+│                                                                             │
+│   每个 Block 有两个 mod:                                                    │
+│   - self.img_mod: 为 img (视频) 生成调制参数                               │
+│   - self.txt_mod: 为 txt (文本) 生成调制参数                               │
+│   它们不共享权重，分别学习！                                                │
+│                                                                             │
+│                                                                             │
 │ 【关键源码片段 - hunyuanvideo_1_5_transformer.py】                          │
 │                                                                             │
 │   第 751-762 行 - ByT5 处理与拼接:                                          │
@@ -293,430 +763,6 @@ HunyuanVideo-1.5 使用"三阶段"架构来生成视频：
 │      GPU 内存访问是连续的更高效：                                            │
 │      - 有效 tokens 连续 → 缓存命中率高                                      │
 │      - padding 在末尾 → 可能整个不加载                                      │
-│                                                                             │
-│   【源码实现 - reorder_txt_token() 第 630-664 行】                          │
-│                                                                             │
-│   ```python                                                                 │
-│   def reorder_txt_token(self, byt5_txt, txt, byt5_text_mask, text_mask):   │
-│       for i in range(text_mask.shape[0]):                                   │
-│           # 用 mask 筛选有效和 padding tokens                               │
-│           byt5_text_mask_i = byt5_text_mask[i].bool()                       │
-│           text_mask_i = text_mask[i].bool()                                 │
-│                                                                             │
-│           # 拼接顺序: 有效优先，padding 在后                                │
-│           reorder_txt_i = torch.cat([                                       │
-│               byt5_txt_i[byt5_text_mask_i],    # ByT5 有效                  │
-│               txt_i[text_mask_i],              # LLaVA 有效                 │
-│               byt5_txt_i[~byt5_text_mask_i],   # ByT5 padding               │
-│               txt_i[~text_mask_i]              # LLaVA padding              │
-│           ], dim=0)                                                         │
-│   ```                                                                       │
-│                                                                             │
-│   【PyTorch 布尔索引（Boolean Indexing）语法详解】                           │
-│                                                                             │
-│   这种 tensor[mask] 的写法叫做"布尔索引"，是 NumPy/PyTorch 的核心特性：     │
-│                                                                             │
-│   基本概念:                                                                  │
-│   ─────────                                                                 │
-│   ```python                                                                 │
-│   # 假设有一个 2D tensor，shape: (5, 768)                                   │
-│   txt = torch.tensor([                                                      │
-│       [0.1, 0.2, ...],  # token 0 - "hello"                                 │
-│       [0.3, 0.4, ...],  # token 1 - "world"                                 │
-│       [0.0, 0.0, ...],  # token 2 - [PAD]                                   │
-│       [0.0, 0.0, ...],  # token 3 - [PAD]                                   │
-│       [0.0, 0.0, ...],  # token 4 - [PAD]                                   │
-│   ])                                                                        │
-│                                                                             │
-│   # mask 是一个布尔向量，长度与 txt 的第一维相同                             │
-│   mask = torch.tensor([True, True, False, False, False])                    │
-│                                                                             │
-│   # 布尔索引：只选择 mask 为 True 的行                                       │
-│   valid_tokens = txt[mask]                                                  │
-│   # 结果: shape (2, 768) - 只有 "hello" 和 "world"                          │
-│                                                                             │
-│   # 取反：选择 mask 为 False 的行                                            │
-│   padding_tokens = txt[~mask]                                               │
-│   # 结果: shape (3, 768) - 三个 [PAD] tokens                                │
-│   ```                                                                       │
-│                                                                             │
-│   原理解析:                                                                  │
-│   ─────────                                                                 │
-│   tensor[bool_mask] 会：                                                     │
-│   1. 遍历 bool_mask 中每个位置                                               │
-│   2. 如果该位置是 True，则保留对应的 tensor 行                               │
-│   3. 如果是 False，则跳过该行                                                │
-│   4. 返回一个新的 tensor，只包含被选中的行                                   │
-│                                                                             │
-│   实际例子:                                                                  │
-│   ─────────                                                                 │
-│   ```python                                                                 │
-│   # 假设 prompt = "a cat"                                                   │
-│   # LLaVA tokenize 后: ["a", "cat", PAD, PAD, ..., PAD] (长度 1000)         │
-│                                                                             │
-│   text_mask = torch.tensor([1, 1, 0, 0, ..., 0])  # 前两个是有效的          │
-│   text_mask_bool = text_mask.bool()                                         │
-│   # → [True, True, False, False, ..., False]                                │
-│                                                                             │
-│   txt_embeddings = torch.randn(1000, 3072)  # 1000 个 token embeddings      │
-│                                                                             │
-│   # 只取有效 tokens                                                          │
-│   valid = txt_embeddings[text_mask_bool]                                    │
-│   # → shape: (2, 3072) 只有 "a" 和 "cat"                                    │
-│                                                                             │
-│   # 取 padding tokens                                                        │
-│   padding = txt_embeddings[~text_mask_bool]                                 │
-│   # → shape: (998, 3072) 所有 PAD                                           │
-│   ```                                                                       │
-│                                                                             │
-│   为什么这么写？                                                             │
-│   ───────────────                                                           │
-│   1. 简洁：一行代码完成筛选，不需要循环                                      │
-│   2. 高效：PyTorch 内部优化，比 Python 循环快得多                            │
-│   3. 内存友好：返回连续的新 tensor，适合 GPU 计算                            │
-│   4. 广播兼容：可以和其他操作无缝结合                                        │
-│                                                                             │
-│   常见用法:                                                                  │
-│   ─────────                                                                 │
-│   ```python                                                                 │
-│   # 1. 筛选满足条件的元素                                                    │
-│   x = torch.tensor([1, 5, 3, 8, 2])                                         │
-│   big = x[x > 3]  # → tensor([5, 8])                                        │
-│                                                                             │
-│   # 2. 用 mask 筛选                                                          │
-│   mask = torch.tensor([True, False, True, False, True])                     │
-│   selected = x[mask]  # → tensor([1, 3, 2])                                 │
-│                                                                             │
-│   # 3. 多维情况                                                              │
-│   y = torch.randn(100, 768)  # 100 个 tokens                                │
-│   valid_mask = torch.zeros(100, dtype=torch.bool)                           │
-│   valid_mask[:20] = True  # 前 20 个有效                                    │
-│   y_valid = y[valid_mask]  # → shape (20, 768)                              │
-│                                                                             │
-│   # 4. 取反                                                                  │
-│   y_padding = y[~valid_mask]  # → shape (80, 768)                           │
-│   ```                                                                       │
-│                                                                             │
-│ 【⚠️ TPU 上的兼容性问题】                                                    │
-│                                                                             │
-│   布尔索引在 TPU 上确实不太友好！原因：                                       │
-│                                                                             │
-│   1. 动态形状问题                                                            │
-│      ───────────────                                                        │
-│      ```python                                                              │
-│      # GPU 上没问题                                                          │
-│      mask = torch.tensor([True, True, False, False, False])                 │
-│      result = tensor[mask]  # → shape (2, ...) 动态确定                     │
-│                                                                             │
-│      # TPU/XLA 问题：编译时不知道有多少个 True！                             │
-│      # XLA 需要静态形状来优化计算图                                          │
-│      ```                                                                    │
-│                                                                             │
-│   2. TPU 处理方式:                                                           │
-│      ───────────────                                                        │
-│      a) 使用 torch.where() + 预分配                                         │
-│      ```python                                                              │
-│      # 不用布尔索引，用 where + gather                                       │
-│      indices = torch.where(mask)[0]  # 获取 True 的索引                     │
-│      # 如果知道最大数量，可以 pad 到固定长度                                 │
-│      max_valid = 100                                                        │
-│      indices_padded = F.pad(indices, (0, max_valid - len(indices)))         │
-│      result = torch.index_select(tensor, 0, indices_padded)                 │
-│      ```                                                                    │
-│                                                                             │
-│      b) 使用乘法 mask（保持形状不变）                                        │
-│      ```python                                                              │
-│      # 不改变形状，用乘法"屏蔽"                                              │
-│      masked_tensor = tensor * mask.unsqueeze(-1).float()                    │
-│      # shape 不变，但 mask=False 的位置变成 0                               │
-│      ```                                                                    │
-│                                                                             │
-│      c) 预计算索引（在 CPU 上）                                              │
-│      ```python                                                              │
-│      # CPU 上预计算重排索引                                                  │
-│      reorder_indices = torch.cat([                                          │
-│          torch.where(mask)[0],                                              │
-│          torch.where(~mask)[0]                                              │
-│      ])                                                                     │
-│      # TPU 上用固定索引 gather                                              │
-│      reordered = tensor[reorder_indices]  # 索引是固定的，可以编译          │
-│      ```                                                                    │
-│                                                                             │
-│   3. HunyuanVideo TPU 版本的处理:                                            │
-│      ─────────────────────────────                                          │
-│      在 TPU 版本中，可能需要：                                               │
-│      - 在 Stage 1 (CPU/GPU) 预计算重排索引                                  │
-│      - 将固定的索引序列保存并传递给 Stage 2                                  │
-│      - 或者直接在 CPU 上完成 reorder，再传给 TPU                             │
-│                                                                             │
-│      示例修改:                                                               │
-│      ```python                                                              │
-│      # 原始 GPU 代码                                                         │
-│      txt, text_mask = self.reorder_txt_token(byt5_txt, txt, ...)            │
-│                                                                             │
-│      # TPU 友好版本                                                          │
-│      def reorder_txt_token_tpu_friendly(byt5_txt, txt, byt5_mask, text_mask):│
-│          # 方案1: 在 CPU 上预计算索引                                        │
-│          byt5_txt_cpu = byt5_txt.cpu()                                      │
-│          txt_cpu = txt.cpu()                                                │
-│          # ... 在 CPU 上做布尔索引 ...                                       │
-│          result = result.to(device)  # 移回 TPU                             │
-│                                                                             │
-│          # 方案2: 使用乘法 mask 代替索引                                     │
-│          # 不改变顺序，而是用 attention mask 屏蔽 padding                    │
-│          combined_txt = torch.cat([byt5_txt, txt], dim=1)                   │
-│          combined_mask = torch.cat([byt5_mask, text_mask], dim=1)           │
-│          # attention 计算时用 mask 过滤                                      │
-│          return combined_txt, combined_mask                                 │
-│      ```                                                                    │
-│                                                                             │
-│   4. 最佳实践:                                                               │
-│      ─────────                                                              │
-│      ┌────────────────────────────────────────────────────────────┐        │
-│      │ 操作类型          │ GPU     │ TPU                         │        │
-│      ├────────────────────────────────────────────────────────────┤        │
-│      │ 布尔索引 [mask]   │ ✅ 快   │ ❌ 可能失败或回退到 CPU     │        │
-│      │ torch.where()     │ ✅      │ ⚠️ 返回动态形状，需小心     │        │
-│      │ 乘法 mask         │ ✅      │ ✅ 推荐，形状不变          │        │
-│      │ gather 固定索引   │ ✅      │ ✅ 索引预计算后可用        │        │
-│      │ attention mask    │ ✅      │ ✅ 最佳方案                │        │
-│      └────────────────────────────────────────────────────────────┘        │
-│                                                                             │
-│   5. 为什么 GPU 上可以直接用？                                               │
-│      ──────────────────────                                                 │
-│      - CUDA 支持动态形状                                                     │
-│      - GPU kernel 可以即时处理变长输出                                       │
-│      - 没有像 XLA 那样的静态编译要求                                         │
-│                                                                             │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ 【深入分析：方案3（直接拼接 + attention mask）的优缺点】                       │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                             │
-│   ✅ 你的直觉很对！方案3 是 TPU 上最优雅的解决方案。                         │
-│                                                                             │
-│   【方案3 回顾】                                                             │
-│   ```python                                                                 │
-│   # 不做复杂重排，直接简单拼接                                               │
-│   combined_txt = torch.cat([byt5_txt, txt], dim=1)                          │
-│   combined_mask = torch.cat([byt5_mask, text_mask], dim=1)                  │
-│   # 让 attention 计算时用 mask 过滤 padding                                 │
-│   ```                                                                       │
-│                                                                             │
-│   【优点】                                                                   │
-│   ─────────                                                                 │
-│   1. ✅ TPU 完全兼容                                                        │
-│      - 所有操作都是静态形状（cat 不改变总长度）                              │
-│      - 无需动态索引                                                          │
-│      - XLA 可以完美编译                                                      │
-│                                                                             │
-│   2. ✅ 代码简单清晰                                                        │
-│      - 只需要 torch.cat，没有复杂的索引操作                                  │
-│      - 更容易理解和维护                                                      │
-│                                                                             │
-│   3. ✅ 数学上等价                                                          │
-│      - attention mask 会屏蔽 padding 位置                                   │
-│      - 最终注意力结果相同（padding 位置贡献为 0）                            │
-│                                                                             │
-│   4. ✅ 避免数据移动开销                                                    │
-│      - 不需要根据 mask 重排数据                                              │
-│      - 减少内存拷贝                                                          │
-│                                                                             │
-│   【潜在副作用】                                                             │
-│   ─────────────                                                             │
-│                                                                             │
-│   1. ⚠️ 稀疏注意力优化效率降低                                              │
-│      ────────────────────────                                               │
-│      HunyuanVideo 使用 SSTA (Sparse Spatial-Temporal Attention)：           │
-│                                                                             │
-│      原始重排后的布局:                                                       │
-│        [有效, 有效, 有效, ..., padding, padding, padding]                   │
-│         ├───── 密集区域 ─────┤├───── 可跳过 ─────────┤                      │
-│         → SSTA topk 采样高效，后面整块跳过                                   │
-│                                                                             │
-│      直接拼接的布局:                                                         │
-│        [byt5有效, byt5 pad, llava有效, llava pad]                           │
-│         → SSTA 采样可能采到中间的 padding                                   │
-│         → 需要 mask 过滤，稍微增加计算                                       │
-│                                                                             │
-│      影响程度: ⭐☆☆ (轻微)                                                   │
-│      - 因为最终 mask 会过滤，只是效率略低                                    │
-│      - 现代 TPU 的并行能力可以弥补                                           │
-│                                                                             │
-│   2. ⚠️ Block Attention 近似误差可能略增                                    │
-│      ──────────────────────────────                                         │
-│      源码注释:                                                               │
-│      ```python                                                              │
-│      # When using block mask with approximate computation,                  │
-│      # set pad to zero to reduce error                                      │
-│      ```                                                                    │
-│                                                                             │
-│      Block attention 工作方式:                                               │
-│        序列分成固定大小的块（如 64 tokens 一块）                             │
-│        块内做精确注意力，块间用近似                                          │
-│                                                                             │
-│      重排后:                                                                 │
-│        Block 1: [有效, 有效, ..., 有效]  ← 纯有效块                         │
-│        Block N: [pad, pad, ..., pad]     ← 纯 padding 块（整块跳过）        │
-│                                                                             │
-│      直接拼接:                                                               │
-│        Block 1: [byt5有效, byt5 pad, ...]  ← 混合块                         │
-│        Block 2: [byt5 pad, llava有效, ...]  ← 混合块                        │
-│        → 混合块内的近似计算误差可能略大                                      │
-│                                                                             │
-│      影响程度: ⭐☆☆ (通常可忽略)                                             │
-│      - 只要 padding 值设为 0，误差很小                                       │
-│      - 对最终生成质量几乎没有可见影响                                        │
-│                                                                             │
-│   3. ⚠️ 内存访问局部性略差                                                  │
-│      ──────────────────────                                                 │
-│      连续访问有效 tokens 时:                                                 │
-│      - 重排后: 有效 tokens 连续，缓存命中率高                                │
-│      - 直接拼接: 可能跨越 padding 区域                                       │
-│                                                                             │
-│      影响程度: ⭐☆☆ (现代硬件影响很小)                                       │
-│      - TPU 的 HBM 带宽很高                                                   │
-│      - Transformer 主要瓶颈在计算不是内存                                    │
-│                                                                             │
-│   【结论：方案3 是 TPU 最佳选择】                                            │
-│   ─────────────────────────────                                             │
-│                                                                             │
-│   权衡对比:                                                                  │
-│   ┌──────────────────────────────────────────────────────────────┐         │
-│   │ 方案         │ TPU 兼容性 │ 效率损失  │ 实现复杂度 │ 推荐  │         │
-│   ├──────────────────────────────────────────────────────────────┤         │
-│   │ 原始重排     │ ❌ 不兼容   │ 无        │ 复杂      │       │         │
-│   │ CPU 预计算   │ ⚠️ 需同步   │ 同步开销  │ 中等      │       │         │
-│   │ 方案3 直接拼接│ ✅ 完美    │ 极小      │ 简单      │ ✅    │         │
-│   └──────────────────────────────────────────────────────────────┘         │
-│                                                                             │
-│   实际影响:                                                                  │
-│   - 生成质量: 几乎无差异（数学上等价）                                       │
-│   - 推理速度: 可能慢 1-5%（取决于 SSTA 配置）                                │
-│   - 代码维护: 显著更简单                                                     │
-│                                                                             │
-│   建议:                                                                      │
-│   ```python                                                                 │
-│   # TPU 版本的 reorder_txt_token                                            │
-│   def reorder_txt_token_tpu(byt5_txt, txt, byt5_mask, text_mask):           │
-│       # 简单拼接，不重排                                                     │
-│       combined_txt = torch.cat([byt5_txt, txt], dim=1)                      │
-│       combined_mask = torch.cat([byt5_mask, text_mask], dim=1)              │
-│                                                                             │
-│       # 确保 padding 位置的值为 0（减少 block attention 误差）              │
-│       combined_txt = combined_txt * combined_mask.unsqueeze(-1)             │
-│                                                                             │
-│       return combined_txt, combined_mask                                    │
-│   ```                                                                       │
-│                                                                             │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│ 【好问题：拼接后如何区分 ByT5 和 LLaVA？+ 为什么 ByT5 放前面？】              │
-│ ═══════════════════════════════════════════════════════════════════════════ │
-│                                                                             │
-│ 【Q1: 拼接后怎么知道哪个是 ByT5，哪个是 LLaVA？】                            │
-│                                                                             │
-│   答案：通过 cond_type_embedding 区分！                                      │
-│                                                                             │
-│   源码第 551-559 行定义：                                                   │
-│   ```python                                                                 │
-│   if use_cond_type_embedding:                                               │
-│       self.cond_type_embedding = nn.Embedding(3, self.hidden_size)          │
-│       self.cond_type_embedding.weight.data.fill_(0)                         │
-│       # 0: text_encoder feature (LLaVA)                                     │
-│       # 1: byt5 feature                                                     │
-│       # 2: vision_encoder feature                                           │
-│   ```                                                                       │
-│                                                                             │
-│   实际使用（源码第 745-759 行）：                                           │
-│   ```python                                                                 │
-│   # 给 LLaVA tokens 添加 type=0 的 embedding                                │
-│   if self.cond_type_embedding is not None:                                  │
-│       cond_emb = self.cond_type_embedding(                                  │
-│           torch.zeros_like(txt[:, :, 0], dtype=torch.long)  # type=0       │
-│       )                                                                     │
-│       txt = txt + cond_emb                                                  │
-│                                                                             │
-│   # 给 ByT5 tokens 添加 type=1 的 embedding                                 │
-│   if self.glyph_byT5_v2:                                                    │
-│       byt5_txt = self.byt5_in(byt5_text_states)                             │
-│       if self.cond_type_embedding is not None:                              │
-│           cond_emb = self.cond_type_embedding(                              │
-│               torch.ones_like(byt5_txt[:, :, 0], dtype=torch.long)  # type=1│
-│           )                                                                 │
-│           byt5_txt = byt5_txt + cond_emb                                    │
-│   ```                                                                       │
-│                                                                             │
-│   工作原理：                                                                 │
-│   ┌──────────────────────────────────────────────────────────────────────┐  │
-│   │  原始                                                                 │  │
-│   │  ByT5 tokens: [b1, b2, b3, ...]     shape: (256, 3072)               │  │
-│   │  LLaVA tokens: [l1, l2, l3, ...]    shape: (1000, 3072)              │  │
-│   ├──────────────────────────────────────────────────────────────────────┤  │
-│   │  添加 type embedding 后                                               │  │
-│   │  ByT5 tokens: [b1+E1, b2+E1, b3+E1, ...]   (E1 = type 1 embedding)   │  │
-│   │  LLaVA tokens: [l1+E0, l2+E0, l3+E0, ...]  (E0 = type 0 embedding)   │  │
-│   ├──────────────────────────────────────────────────────────────────────┤  │
-│   │  拼接后                                                               │  │
-│   │  [b1+E1, b2+E1, ..., l1+E0, l2+E0, ...]                              │  │
-│   │   ↑ 隐式携带了类型信息，Transformer 可以学习区分                      │  │
-│   └──────────────────────────────────────────────────────────────────────┘  │
-│                                                                             │
-│   这样 Transformer 就能通过学习到的 type embedding 差异来区分不同来源！     │
-│                                                                             │
-│ 【Q2: 为什么 ByT5 放在前面？】                                               │
-│                                                                             │
-│   原因 1: 注意力效率优化                                                     │
-│   ────────────────────────                                                  │
-│   ByT5 tokens 通常更短（256 vs 1000）但更"密集"（字符级特征）               │
-│                                                                             │
-│   对于 SSTA (Sparse Attention) 的 importance sampling：                     │
-│   - 短且密集的特征放前面 → topk 采样更容易命中                              │
-│   - 如果放后面，被稀疏采样跳过的概率更高                                    │
-│                                                                             │
-│   原因 2: Block Attention 的边界对齐                                         │
-│   ──────────────────────────────────                                        │
-│   假设 block_size = 64：                                                    │
-│                                                                             │
-│   ByT5 在前（256 tokens）：                                                  │
-│     Block 0-3: 纯 ByT5 (64×4 = 256)                                         │
-│     Block 4+:  LLaVA                                                        │
-│     → 类型边界正好在 block 边界！                                           │
-│                                                                             │
-│   ByT5 在后：                                                                │
-│     Block 15: [...llava尾部, byt5开头...]                                   │
-│     → 类型边界在 block 内部，可能增加误差                                   │
-│                                                                             │
-│   原因 3: 缓存友好性                                                         │
-│   ─────────────────                                                         │
-│   短序列放前面 → 更快被加载到缓存                                           │
-│   字符级特征可能更常被 attention 访问                                       │
-│                                                                             │
-│   原因 4: 也可能只是设计选择                                                 │
-│   ────────────────────────                                                  │
-│   对于 self-attention，理论上顺序不影响结果：                               │
-│   - 位置信息通过 RoPE (Rotary Position Embedding) 编码                      │
-│   - RoPE 只应用于视频 tokens，文本 tokens 不带位置编码                      │
-│   - 所以 [ByT5, LLaVA] 和 [LLaVA, ByT5] 数学上等价                         │
-│                                                                             │
-│   但一旦选定顺序，就需要保持一致（因为模型是这样训练的）                     │
-│                                                                             │
-│ 【补充：如果没有 cond_type_embedding 会怎样？】                              │
-│                                                                             │
-│   查看配置：                                                                 │
-│   ```python                                                                 │
-│   use_cond_type_embedding: bool = False,  # 默认是关闭的！                  │
-│   ```                                                                       │
-│                                                                             │
-│   如果关闭，Transformer 仍然可以工作，因为：                                 │
-│   1. ByT5 和 LLaVA 使用不同的投影层：                                       │
-│      - LLaVA → self.txt_in (SingleTokenRefiner)                             │
-│      - ByT5 → self.byt5_in (ByT5Mapper)                                     │
-│   2. 投影后的特征空间分布不同，Transformer 可以隐式学习区分                  │
-│   3. 但效果可能不如显式 type embedding                                      │
-│                                                                             │
-│   在实践中，type embedding 对于 i2v (Image-to-Video) 更重要：               │
-│   - 需要区分 text tokens 和 vision tokens                                   │
-│   - vision tokens 用 type=2                                                 │
-│                                                                             │
 │                                                                             │
 │ 【具体代码流程】                                                             │
 │                                                                             │
@@ -1258,17 +1304,120 @@ def prepare_latents(batch_size, num_channels, latent_height, latent_width, video
 # ============================================================================
 # 🎯 辅助函数：准备条件 Latents
 # ============================================================================
-# 
+#
 # 【什么是条件 Latents？】
-# 
+#
 # 在 HunyuanVideo 中，条件 latents 用于：
 # 1. i2v 任务：提供第一帧的图像信息
 # 2. 提供额外的结构信息给 Transformer
-# 
+#
 # 条件 latents 会和主 latents 在通道维度拼接：
 #   - 主 latents: (B, 16, T, H, W)
 #   - 条件 latents: (B, 17, T, H, W)  # 16 通道 + 1 通道 mask
 #   - 拼接后: (B, 33, T, H, W)
+#
+# ============================================================================
+# 【i2v 模式的 latents_concat 构造详解】
+# ============================================================================
+#
+# 问题：为什么先 repeat 再清零，而不是直接构造？
+#
+# ┌─────────────────────────────────────────────────────────────────────────┐
+# │ 输入：image_cond - 第一帧图像经过 VAE 编码后的 latent                      │
+# │       shape: (B, 16, 1, H, W)   ← 注意时间维度是 1（单帧）                │
+# │                                                                          │
+# │ 目标：构造一个 shape 为 (B, 16, T, H, W) 的条件张量                        │
+# │       其中只有第一帧 [:, :, 0, :, :] 有图像信息                           │
+# │       其他帧 [:, :, 1:, :, :] 都是 0                                      │
+# └─────────────────────────────────────────────────────────────────────────┘
+#
+# 【方法 1：先 repeat 再清零（代码使用的方法）】
+#
+#   步骤 1: image_cond.repeat(1, 1, latents.shape[2], 1, 1)
+#   ─────────────────────────────────────────────────────────
+#
+#   repeat 参数: (1, 1, T, 1, 1)
+#     - 第 1 维 (B): 不重复
+#     - 第 2 维 (C): 不重复
+#     - 第 3 维 (T): 重复 T 次（如 13 次）
+#     - 第 4 维 (H): 不重复
+#     - 第 5 维 (W): 不重复
+#
+#   ┌─────────────────────────────────────────────────────────────────────┐
+#   │ 原始: image_cond                                                     │
+#   │       ┌─────┐                                                        │
+#   │       │帧 0 │   shape: (B, 16, 1, H, W)                              │
+#   │       └─────┘                                                        │
+#   │                                                                      │
+#   │ repeat 后:                                                           │
+#   │       ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬───────┐            │
+#   │       │帧 0 │帧 0 │帧 0 │帧 0 │帧 0 │帧 0 │帧 0 │ ... T │            │
+#   │       │复制 │复制 │复制 │复制 │复制 │复制 │复制 │       │            │
+#   │       └─────┴─────┴─────┴─────┴─────┴─────┴─────┴───────┘            │
+#   │       shape: (B, 16, T, H, W)                                        │
+#   │       所有帧都是第一帧的复制！                                         │
+#   └─────────────────────────────────────────────────────────────────────┘
+#
+#   步骤 2: latents_concat[:, :, 1:, :, :] = 0.0
+#   ─────────────────────────────────────────────
+#
+#   把第 1 帧到最后一帧（索引 1 到 T-1）都清零
+#
+#   ┌─────────────────────────────────────────────────────────────────────┐
+#   │ 清零后:                                                              │
+#   │       ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬───────┐            │
+#   │       │帧 0 │ 0.0 │ 0.0 │ 0.0 │ 0.0 │ 0.0 │ 0.0 │ 0.0   │            │
+#   │       │真实 │     │     │     │     │     │     │       │            │
+#   │       │图像 │     │     │     │     │     │     │       │            │
+#   │       └─────┴─────┴─────┴─────┴─────┴─────┴─────┴───────┘            │
+#   │       ↑                                                              │
+#   │       只有这一帧有条件信息                                             │
+#   └─────────────────────────────────────────────────────────────────────┘
+#
+# 【为什么这样设计？语义含义】
+# ─────────────────────────────
+#
+#   i2v (Image-to-Video) 的任务是：
+#     给定第一帧图像，生成后续的视频帧
+#
+#   条件 latents 告诉模型：
+#     - 第一帧（索引 0）是"已知的"，有真实的图像信息
+#     - 其他帧（索引 1 到 T-1）是"未知的"，需要生成
+#
+#   0.0 的含义：
+#     - 在扩散模型中，0.0 表示"没有条件信息"
+#     - 模型看到 0.0 就知道这一帧需要自己生成
+#     - 配合 mask 通道一起工作（mask=1 表示条件帧，mask=0 表示生成帧）
+#
+# 【方法 2：更直观的写法（等价但效率略低）】
+# ─────────────────────────────────────────────
+#
+#   # 先创建全零张量
+#   latents_concat = torch.zeros(
+#       latents.shape[0], 16, latents.shape[2],
+#       latents.shape[3], latents.shape[4],
+#       device=latents.device, dtype=latents.dtype
+#   )
+#   # 只填充第一帧
+#   latents_concat[:, :, 0:1, :, :] = image_cond
+#
+#   为什么官方用 repeat + 清零？
+#   - repeat 是 PyTorch 高度优化的操作
+#   - 避免手动管理设备和数据类型
+#   - 代码更简洁（虽然不那么直观）
+#
+# 【对比 t2v 模式】
+# ─────────────────
+#
+#   t2v (Text-to-Video)：没有输入图像
+#
+#   latents_concat = torch.zeros_like(latents)
+#
+#   ┌─────┬─────┬─────┬─────┬─────┬─────┬─────┬───────┐
+#   │ 0.0 │ 0.0 │ 0.0 │ 0.0 │ 0.0 │ 0.0 │ 0.0 │ 0.0   │
+#   └─────┴─────┴─────┴─────┴─────┴─────┴─────┴───────┘
+#   所有帧都是 0，模型需要从纯文本生成整个视频
+#
 # ============================================================================
 
 def prepare_cond_latents(task_type, image_cond, latents, multitask_mask):
@@ -1278,7 +1427,8 @@ def prepare_cond_latents(task_type, image_cond, latents, multitask_mask):
     Args:
         task_type: 任务类型 ("t2v" 或 "i2v")
         image_cond: 图像条件 latent (i2v 时为图像的 VAE 编码，t2v 时为 None)
-        latents: 主 latents
+                    shape: (B, 16, 1, H, W) - 单帧图像的 latent 表示
+        latents: 主 latents，shape: (B, 16, T, H, W)
         multitask_mask: 任务 mask，指示哪些帧是条件帧
     
     Returns:
@@ -1296,26 +1446,202 @@ def prepare_cond_latents(task_type, image_cond, latents, multitask_mask):
         - mask 指示第一帧是条件帧
     """
     if image_cond is not None and task_type == 'i2v':
-        # i2v: 用图像条件填充第一帧，其他帧为 0
+        # ====================================================================
+        # i2v 模式：构造条件 latents
+        # ====================================================================
+        #
+        # 步骤 1: 将单帧图像 latent 扩展到所有时间步
+        # image_cond shape: (B, 16, 1, H, W)
+        # 扩展后 shape: (B, 16, T, H, W)  其中每一帧都是 image_cond 的复制
         latents_concat = image_cond.repeat(1, 1, latents.shape[2], 1, 1)
-        latents_concat[:, :, 1:, :, :] = 0.0  # 除第一帧外都清零
+        
+        # 步骤 2: 将除第一帧外的所有帧清零
+        # 为什么？因为只有第一帧是"已知"的条件图像
+        # 其他帧需要模型生成，所以用 0.0 表示"无条件信息"
+        # [:, :, 1:, :, :] 选择所有 batch、所有通道、第 1 帧到最后一帧、所有空间位置
+        latents_concat[:, :, 1:, :, :] = 0.0
     else:
         # t2v: 没有图像条件，全为 0
         latents_concat = torch.zeros_like(latents)
     
-    # 创建 mask 通道
-    # mask_zeros: 全 0 (需要生成的帧)
-    # mask_ones: 全 1 (条件帧)
+    # ========================================================================
+    # 构造 mask 通道 - 告诉模型哪些帧是"已知"的条件帧
+    # ========================================================================
+    #
+    # 【目标】
+    # 构造一个 shape 为 (B, 1, T, H, W) 的 mask 张量
+    # - 条件帧位置（如 i2v 的第一帧）：值为 1.0
+    # - 生成帧位置（需要模型生成）：值为 0.0
+    #
+    # 【为什么需要这个 mask？】
+    # 这个 mask 会作为条件 latents 的一部分传给 Transformer：
+    # - 条件 latents 有 17 个通道：16 通道图像信息 + 1 通道 mask
+    # - mask 通道告诉模型"这一帧是已知的还是要生成的"
+    # - 模型会对 mask=1 的帧保持更接近条件，对 mask=0 的帧自由生成
+    #
+    # ========================================================================
+    # 【为什么 mask 是 5D (B,1,T,H,W) 而不是简单的 1D (T,)？】
+    # ========================================================================
+    #
+    # 你可能会问：既然条件帧的最小单位是"帧"，为什么不用一个简单的
+    # 1D tensor [1, 0, 0, ..., 0] 就够了？为什么要弄成 (B, 1, T, H, W)？
+    #
+    # 原因有三：
+    #
+    # 1. 【拼接需要维度匹配】
+    #    ─────────────────────
+    #    mask_concat 最终要和 latents_concat 在通道维度拼接：
+    #
+    #    latents_concat: (B, 16, T, H, W)  ← 16 通道的条件图像 latent
+    #    mask_concat:    (B, 1,  T, H, W)  ← 1 通道的 mask
+    #    ────────────────────────────────
+    #    拼接结果:       (B, 17, T, H, W)
+    #
+    #    如果 mask 是 1D 的 (T,)，就没法直接拼接，需要先扩展维度。
+    #    官方选择在外部就构造好 5D 张量，接口更统一。
+    #
+    # 2. 【Transformer 的输入格式】
+    #    ─────────────────────────
+    #    Transformer 期望的条件 latents 格式是 (B, C, T, H, W)
+    #    所有通道（包括 mask）都应该是这个格式。
+    #    这样 Transformer 内部可以统一处理，不需要特殊逻辑。
+    #
+    # 3. 【为未来扩展预留】
+    #    ────────────────
+    #    虽然当前 mask 在整帧内都是同一个值（要么全 0，要么全 1），
+    #    但这种设计允许未来支持更精细的控制：
+    #
+    #    - 空间级别的 mask：某些区域是条件，某些需要生成（类似 inpainting）
+    #    - 与其他条件信号（深度图、边缘图等）保持一致的接口
+    #
+    # 【实际上每帧内的值是相同的】
+    #
+    #    mask_concat[:, :, 0, :, :] = 1.0  ← 第 0 帧所有 H×W 位置都是 1
+    #    mask_concat[:, :, 1, :, :] = 0.0  ← 第 1 帧所有 H×W 位置都是 0
+    #    ...
+    #
+    #    虽然浪费了一些存储空间，但换来了接口的统一性和扩展性。
+    #
+    # ========================================================================
+    
+    # 步骤 1: 创建两个"素材"张量
+    # mask_zeros: 全 0，表示"需要生成"
+    # mask_ones: 全 1，表示"这是条件帧"
+    # shape 都是 (B, 1, T, H, W) - 1 个通道，T 帧，H×W 空间
     mask_zeros = torch.zeros(latents.shape[0], 1, latents.shape[2], latents.shape[3], latents.shape[4])
     mask_ones = torch.ones(latents.shape[0], 1, latents.shape[2], latents.shape[3], latents.shape[4])
     
-    # 根据 multitask_mask 合并：在条件帧位置使用 mask_ones
+    # ========================================================================
+    # 步骤 2: 使用 merge_tensor_by_mask 根据 multitask_mask 选择性合并
+    # ========================================================================
+    #
+    # 【merge_tensor_by_mask 函数解析】
+    #
+    # 函数签名:
+    #   merge_tensor_by_mask(tensor1, tensor2, mask, dim)
+    #
+    # 功能:
+    #   根据 mask 的值，从 tensor1 或 tensor2 中选择对应位置的值
+    #   - mask[i] = 0 → 选择 tensor1 的第 i 帧
+    #   - mask[i] = 1 → 选择 tensor2 的第 i 帧
+    #
+    # 参数:
+    #   - tensor1: mask=0 时使用的张量 (mask_zeros，全 0)
+    #   - tensor2: mask=1 时使用的张量 (mask_ones，全 1)
+    #   - mask: 控制选择的 mask (multitask_mask)
+    #   - dim: 在哪个维度上操作 (dim=2 表示时间维度 T)
+    #
+    # ┌─────────────────────────────────────────────────────────────────────┐
+    # │ 【具体例子】                                                         │
+    # │                                                                      │
+    # │ 假设 T=13 (13 个 latent 帧)                                          │
+    # │                                                                      │
+    # │ t2v 模式:                                                            │
+    # │   multitask_mask = [0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]           │
+    # │                    ↓                                                 │
+    # │   结果 mask_concat:                                                   │
+    # │   帧索引:    0    1    2    3    4   ...   12                        │
+    # │   值:      [0.0, 0.0, 0.0, 0.0, 0.0, ..., 0.0]                       │
+    # │            ↑ 全部是 0，所有帧都需要生成                               │
+    # │                                                                      │
+    # │ i2v 模式:                                                            │
+    # │   multitask_mask = [1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0]           │
+    # │                    ↓                                                 │
+    # │   结果 mask_concat:                                                   │
+    # │   帧索引:    0    1    2    3    4   ...   12                        │
+    # │   值:      [1.0, 0.0, 0.0, 0.0, 0.0, ..., 0.0]                       │
+    # │            ↑ 第一帧是 1（条件帧），其余是 0（生成帧）                  │
+    # │                                                                      │
+    # └─────────────────────────────────────────────────────────────────────┘
+    #
+    # 【为什么用 merge_tensor_by_mask 而不是简单的索引操作？】
+    #
+    # 1. 灵活性：支持任意复杂的 mask 模式
+    #    - 不只是"第一帧是条件帧"
+    #    - 可以是任意帧的组合，如 [1, 0, 0, 1, 0, ...]（首尾都是条件帧）
+    #
+    # 2. 一致性：与 HunyuanVideo 的其他多任务功能保持一致
+    #    - 支持 FVS (First-Video-Segment) 等更复杂的任务
+    #    - 统一的接口处理各种条件帧模式
+    #
+    # 3. 批处理友好：可以处理 batch 中不同样本有不同 mask 的情况
+    #
+    # ========================================================================
+    
+    # ========================================================================
+    # 【为什么这里用 .cpu()？】
+    # ========================================================================
+    #
+    # 短答案：这是官方代码的写法，可能是历史遗留或过度谨慎。
+    #
+    # 详细分析：
+    #
+    # 1. 【官方代码就是这么写的】
+    #    这段代码是从 HunyuanVideo 官方 pipeline 移植过来的。
+    #    官方在处理 merge_tensor_by_mask 时就用了 .cpu()。
+    #
+    # 2. 【merge_tensor_by_mask 内部实现】
+    #    查看 hyvideo/utils/multitask_utils.py，这个函数内部可能使用：
+    #    - Python 循环遍历 batch
+    #    - 列表操作
+    #    - torch.stack() 等操作
+    #
+    #    这些操作在 GPU tensor 上也能工作，但官方选择在 CPU 上做。
+    #
+    # 3. 【可能的原因】
+    #    a) 历史原因：早期开发时可能遇到某些 GPU 兼容性问题
+    #    b) 安全起见：确保小张量操作不占用 GPU 资源
+    #    c) 调试方便：CPU 上更容易调试
+    #    d) 原始实现就在 CPU 上
+    #
+    # 4. 【实际影响】
+    #    - mask_zeros/mask_ones 很小：(1, 1, 13, 45, 80) ≈ 0.2MB
+    #    - CPU ↔ GPU 传输开销很小
+    #    - 对整体性能影响可忽略（相比 Transformer 的计算量）
+    #
+    # 5. 【能去掉 .cpu() 吗？】
+    #    理论上可以尝试：
+    #    ```python
+    #    mask_concat = merge_tensor_by_mask(
+    #        mask_zeros,  # 已经在正确设备上
+    #        mask_ones,
+    #        mask=multitask_mask.to(latents.device),
+    #        dim=2
+    #    )
+    #    ```
+    #    但没必要冒险改动，因为：
+    #    - 性能收益微乎其微
+    #    - 可能引入未知 bug
+    #    - 与官方代码保持一致更安全
+    #
+    # ========================================================================
+    
     mask_concat = merge_tensor_by_mask(
-        mask_zeros.cpu(), 
-        mask_ones.cpu(), 
-        mask=multitask_mask.cpu(), 
-        dim=2  # 在时间维度合并
-    ).to(device=latents.device)
+        mask_zeros.cpu(),           # tensor1: mask=0 时选这个（全 0）→ 移到 CPU
+        mask_ones.cpu(),            # tensor2: mask=1 时选这个（全 1）→ 移到 CPU
+        mask=multitask_mask.cpu(),  # 控制选择的 mask → 移到 CPU
+        dim=2                       # 在时间维度 (T) 上操作
+    ).to(device=latents.device)     # 最后把结果移回 GPU
     
     # 拼接：[条件 latents (16 通道), mask (1 通道)]
     return torch.concat([latents_concat, mask_concat], dim=1)
@@ -2181,23 +2507,233 @@ def main():
 #   - 确保视频的时间一致性
 #
 #
-# 【D. Sequence Parallelism (SP) 详解】
-# ─────────────────────────────────────
+# 【D. Sequence Parallelism (SP) vs Tensor Parallelism (TP)】
+# ───────────────────────────────────────────────────────────
 #
-# 当视频太长/分辨率太高时，单卡放不下。SP 解决方案：
+# 问题：视频太长/分辨率太高，单卡放不下。怎么办？
 #
-#   视频序列: [帧1, 帧2, 帧3, 帧4, 帧5, 帧6, 帧7, 帧8]
-#              ├────GPU 0────┤  ├────GPU 1────┤
+# ═══════════════════════════════════════════════════════════════════════════
+# 首先承认：TP 和 SP 在理论上的效率差不多！
+# ═══════════════════════════════════════════════════════════════════════════
 #
-# 工作流程：
-# 1. 每个 GPU 只处理部分帧
-# 2. 自注意力计算时，通过通信共享 KV
-# 3. 最后收集结果
+# 你问得很好：
+# - Attention: TP 分 head，SP 分 token → 都是 1/8
+# - FFN: TP 可以按 feature 维度分，SP 按 token 分 → 也都是 1/8
+# - LayerNorm: 确实有差异，但占比很小
 #
-# 好处：
-# - 可以生成更长的视频
-# - 可以使用更高的分辨率
-# - 多卡并行加速
+# 所以从纯粹的内存/计算效率角度，TP 和 SP 确实差不多！
+#
+# 那为什么 HunyuanVideo 还是选 SP？这里有几个更实际的考虑：
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# 原因 1: Attention 的 head 数量限制了 TP 的扩展性
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   HunyuanVideo: 24 heads
+#   - TP: 最多 24 GPU（每个 GPU 至少 1 个 head）
+#   - 实际上需要能被整除：8, 12, 24 GPU
+#
+#   SP: 只受序列长度限制
+#   - 46,800 tokens → 理论上可以分到很多 GPU
+#   - 更灵活的扩展性
+#
+#   虽然 FFN 的 TP 不受 head 数量限制，但整个模型的 TP 度要一致
+#   不能 attention 用 8 路，FFN 用 64 路
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# 原因 2: 视频的时空结构天然适合 SP
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   视频 latent: (B, C, T, H, W) = (1, 16, 13, 45, 80)
+#
+#   SP 按时间维度分割非常自然：
+#   ┌─────────────────────────────────────────────────────────────────────┐
+#   │ GPU 0: 帧 0-1   (包含所有空间位置)                                  │
+#   │ GPU 1: 帧 2-3                                                        │
+#   │ ...                                                                  │
+#   │                                                                      │
+#   │ 优势:                                                                │
+#   │   - 相邻帧在同一 GPU，时间局部性好                                  │
+#   │   - 便于视频特有的时间处理（如 Meanflow）                           │
+#   │   - 逻辑清晰：每个 GPU 负责一段连续的视频                           │
+#   └─────────────────────────────────────────────────────────────────────┘
+#
+#   TP 分割的是 feature/head 维度：
+#   - 每个 GPU 看到所有帧，但只有部分特征
+#   - 对视频的时间结构没有特殊优势
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# 原因 3: Ring Attention / SP 是专门为长序列设计的
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   TP (Tensor Parallelism):
+#   - 来自 Megatron-LM，主要为 LLM 训练设计
+#   - 针对"模型大、序列短"的场景
+#   - 侧重于分割模型参数
+#
+#   SP / Ring Attention:
+#   - 专门为"序列长"场景设计
+#   - 论文: "Ring Attention with Blockwise Transformers for Near-Infinite Context"
+#   - 可以处理极长序列（理论上无限长）
+#   - 侧重于分割数据/激活
+#
+#   视频生成恰好是"模型不算特别大、但序列超长"的场景
+#   → SP/Ring Attention 更合适
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# 原因 4: 通信模式的区别
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   TP 通信模式: AllReduce
+#   ┌─────────────────────────────────────────────────────────────────────┐
+#   │ 每层需要:                                                            │
+#   │   - Attention 后: AllReduce (合并各 head 的结果)                    │
+#   │   - FFN 后: AllReduce (合并各 feature 的结果)                       │
+#   │                                                                      │
+#   │ AllReduce 特点:                                                      │
+#   │   - 需要等待所有 GPU 完成                                           │
+#   │   - 同步操作，难以与计算重叠                                        │
+#   │   - 通信量: O(n × h)                                                │
+#   └─────────────────────────────────────────────────────────────────────┘
+#
+#   SP/Ring Attention 通信模式: AllGather + ReduceScatter (或 Ring 传递)
+#   ┌─────────────────────────────────────────────────────────────────────┐
+#   │                                                                      │
+#   │ 【注意】这不是 MoE 那种 AllToAll！                                   │
+#   │                                                                      │
+#   │ MoE 的 AllToAll:                                                    │
+#   │   每个 GPU 发送不同数据到不同 GPU，像"洗牌/置换"                    │
+#   │   GPU0 → GPU1: data_01                                              │
+#   │   GPU0 → GPU2: data_02                                              │
+#   │   GPU1 → GPU0: data_10                                              │
+#   │   ...                                                                │
+#   │                                                                      │
+#   │ SP 的通信更像 AllGather + Scatter:                                  │
+#   │   收集阶段: 每个 GPU 收集所有 GPU 的 KV                             │
+#   │   分发阶段: 把结果 scatter 回各自的 token 位置                      │
+#   │                                                                      │
+#   └─────────────────────────────────────────────────────────────────────┘
+#
+#   Ring Attention 的具体实现:
+#   ┌─────────────────────────────────────────────────────────────────────┐
+#   │                                                                      │
+#   │ 把 GPU 排成环: GPU0 → GPU1 → GPU2 → ... → GPU7 → GPU0               │
+#   │                                                                      │
+#   │ 每个 GPU 持有:                                                      │
+#   │   - 本地 Q: Q_i (只有自己的)                                        │
+#   │   - 本地 KV: KV_i (初始只有自己的)                                  │
+#   │                                                                      │
+#   │ Step 0:                                                              │
+#   │   GPU_i 计算: Q_i @ KV_i  (本地 attention)                          │
+#   │   同时: 把 KV_i 发送给 GPU_{i+1}                                    │
+#   │                                                                      │
+#   │ Step 1:                                                              │
+#   │   GPU_i 收到 KV_{i-1}                                               │
+#   │   GPU_i 计算: Q_i @ KV_{i-1}  (与前一个 GPU 的 KV)                  │
+#   │   同时: 把 KV_{i-1} 继续传给 GPU_{i+1}                              │
+#   │                                                                      │
+#   │ ... 重复 P-1 轮 ...                                                  │
+#   │                                                                      │
+#   │ 最终: 每个 GPU 已经看过了所有 KV，累加得到完整 attention 结果       │
+#   │                                                                      │
+#   │ ┌─────────────────────────────────────────────────────────────────┐ │
+#   │ │           Ring Attention 流水线示意图                          │ │
+#   │ ├─────────────────────────────────────────────────────────────────┤ │
+#   │ │                                                                 │ │
+#   │ │   GPU0    GPU1    GPU2    GPU3    ...                          │ │
+#   │ │    │       │       │       │                                    │ │
+#   │ │ t0:计算    计算    计算    计算     (Q_i @ KV_i)                │ │
+#   │ │    │──KV_0─→│──KV_1─→│──KV_2─→│      (传递 KV)                 │ │
+#   │ │ t1:计算    计算    计算    计算     (Q_i @ KV_{i-1})           │ │
+#   │ │    │──KV_7─→│──KV_0─→│──KV_1─→│      (继续传递)                │ │
+#   │ │ t2:...                                                          │ │
+#   │ │                                                                 │ │
+#   │ │ 关键: 计算和通信完美重叠！                                     │ │
+#   │ │       当 GPU_i 计算 Q_i @ KV_j 时，                            │ │
+#   │ │       同时在接收 KV_{j-1} 和发送 KV_j                          │ │
+#   │ └─────────────────────────────────────────────────────────────────┘ │
+#   │                                                                      │
+#   └─────────────────────────────────────────────────────────────────────┘
+#
+#   Ring Attention 的优势:
+#   ┌─────────────────────────────────────────────────────────────────────┐
+#   │                                                                      │
+#   │ 1. 通信完全隐藏在计算中                                             │
+#   │    - 只要计算时间 ≥ 通信时间，通信开销 = 0                          │
+#   │    - 对于大矩阵乘法（attention），这个条件通常满足                  │
+#   │                                                                      │
+#   │ 2. 只需要 P2P 通信                                                  │
+#   │    - 每个 GPU 只和相邻两个 GPU 通信                                 │
+#   │    - 不需要全局同步                                                 │
+#   │    - 对网络带宽要求低                                               │
+#   │                                                                      │
+#   │ 3. 内存占用恒定                                                     │
+#   │    - 任何时刻只持有 2 份 KV（本地 + 正在接收的）                    │
+#   │    - 不需要一次性 AllGather 所有 KV                                 │
+#   │                                                                      │
+#   │ 4. 支持任意长度序列                                                 │
+#   │    - 只要能分到更多 GPU，就能处理更长序列                           │
+#   │    - 理论上无限长（论文标题: "Near-Infinite Context"）              │
+#   │                                                                      │
+#   └─────────────────────────────────────────────────────────────────────┘
+#
+#   对于长序列视频，Ring Attention 式的 SP 效率很高
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# 原因 5: 变长序列支持
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   视频生成可能有不同长度：
+#   - 49 帧 → 13 latent 帧
+#   - 97 帧 → 25 latent 帧
+#   - 145 帧 → 37 latent 帧
+#
+#   SP 天然支持变长：
+#   - 直接按 token 数分配
+#   - 不同 GPU 可以有略微不同的负载
+#
+#   TP 对变长支持较差：
+#   - head 数量固定
+#   - FFN 维度固定
+#   - 变长时需要 padding
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# 原因 6: 实现复杂度和生态
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   TP 实现:
+#   - 需要修改每一层的实现
+#   - Linear, LayerNorm, Attention 都要特殊处理
+#   - Megatron-LM 风格的代码侵入性强
+#
+#   SP 实现:
+#   - 主要修改 Attention 层
+#   - 其他层保持不变（只是处理更少的 token）
+#   - 更容易集成到现有代码
+#
+#   HunyuanVideo 可能继承自使用 SP 的代码库，改动成本更低
+#
+# ═══════════════════════════════════════════════════════════════════════════
+# 总结
+# ═══════════════════════════════════════════════════════════════════════════
+#
+#   从纯粹效率角度，TP 和 SP 确实差不多（你的直觉是对的！）
+#
+#   HunyuanVideo 选择 SP 的原因更多是：
+#   1. Head 数量 (24) 限制了 TP 的扩展性
+#   2. 视频的时空结构适合按时间分割
+#   3. SP/Ring Attention 专门为长序列设计
+#   4. 通信模式更容易与计算重叠
+#   5. 变长序列支持更好
+#   6. 实现更简单，与现有代码兼容
+#
+#   本质上：
+#   - TP: 为"模型大"设计，分割参数
+#   - SP: 为"序列长"设计，分割数据
+#
+#   视频生成是"序列长"问题 → SP 是更自然的选择
+#
+# ═══════════════════════════════════════════════════════════════════════════
 #
 #
 # 【E. 为什么 Latent 是 5D 张量？】
@@ -2236,6 +2772,7 @@ def main():
 #
 # 两者结合可以更好地理解和执行复杂的提示词。
 #
+# ============================================================================
 # ============================================================================
 
 if __name__ == "__main__":
