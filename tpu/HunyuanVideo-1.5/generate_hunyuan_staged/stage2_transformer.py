@@ -42,6 +42,7 @@ from types import SimpleNamespace
 import numpy as np
 from PIL import Image
 from torch import distributed as dist
+from tqdm import tqdm
 
 # 直接导入需要的组件，不使用 create_pipeline
 from hyvideo.models.transformers.hunyuanvideo_1_5_transformer import HunyuanVideo_1_5_DiffusionTransformer
@@ -406,13 +407,25 @@ def main():
     start_time = time.perf_counter()
     num_inference_steps = len(timesteps)
     
+    # 只在 rank 0 显示进度条，其他 rank 用 disable=True 禁用
+    is_main_process = get_rank() == 0
+    
     with torch.no_grad():
-        for i, t in enumerate(timesteps):
-            if i % 10 == 0 or i == 0:
-                print_rank0(f"  步骤 {i+1}/{num_inference_steps}")
-                if torch.cuda.is_available():
-                    allocated = torch.cuda.memory_allocated() / (1024**3)
-                    print_rank0(f"    GPU allocated: {allocated:.2f}GB")
+        # 使用 tqdm 包装 timesteps
+        progress_bar = tqdm(
+            enumerate(timesteps),
+            total=num_inference_steps,
+            desc="Denoising",
+            disable=not is_main_process,  # 只在 rank 0 显示
+            ncols=100,  # 固定宽度
+            bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
+        )
+        
+        for i, t in progress_bar:
+            # 更新进度条描述（显示当前 GPU 内存）
+            if is_main_process and torch.cuda.is_available() and i % 10 == 0:
+                allocated = torch.cuda.memory_allocated() / (1024**3)
+                progress_bar.set_postfix({'GPU': f'{allocated:.1f}GB'})
             
             # 准备输入
             latents_concat = torch.concat([latents, cond_latents], dim=1)
