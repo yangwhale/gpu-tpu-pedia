@@ -249,6 +249,83 @@ torchrun --nproc_per_node=8 stage3_vae_decoder.py ...
 | Stage 3 | ~4 秒 | 8 | VAE with Tile Parallelism |
 | **总计** | **~89 秒** | | |
 
+## Attention 模式性能对比
+
+Stage 2 支持多种 Attention 实现模式，可通过 `--attn_mode` 参数切换：
+
+### 可用模式
+
+| 模式 | 说明 | 硬件要求 |
+|------|------|----------|
+| `flash` / `flash2` | Flash Attention 2（默认） | Ampere+ GPU |
+| `flash3` | Flash Attention 3 | Hopper GPU (H100) |
+| `sageattn` | SageAttention (INT8 量化) | Ampere+ GPU |
+| `flex-block-attn` | Sparse Attention (SSTA) | Hopper GPU (H100) |
+| `torch` | PyTorch 原生 SDPA | 所有 GPU |
+
+### SageAttention vs Flash Attention 2 实测对比
+
+**测试条件**：
+- 硬件：NVIDIA H100 × 8
+- 分辨率：720p (1280×720)
+- 帧数：121 帧（约 5 秒 @24fps）
+- 推理步数：50 步
+- CFG Scale：6.0
+- Prompt："A young woman with beautiful clear eyes and blonde hair in a suit is sitting in a high-end restaurant, looking at a book"
+
+**性能结果**：
+
+| 指标 | Flash Attention 2 | SageAttention | 变化 |
+|------|-------------------|---------------|------|
+| 每步耗时 | ~5.2 秒 | ~3.25 秒 | -37.5% |
+| 总耗时 (50步) | ~260 秒 | ~162 秒 | -37.7% |
+| 加速比 | 1.0x | **1.6x** | |
+| 显存占用 | ~35GB/GPU | ~33GB/GPU | -5.7% |
+
+**质量对比**：
+
+| 维度 | Flash Attention 2 | SageAttention |
+|------|-------------------|---------------|
+| 整体画质 | ✅ 优秀 | ⚠️ 有损 |
+| 细节保留 | ✅ 丰富细节 | ❌ 细节丢失 |
+| 背景复杂度 | ✅ 复杂彩色书架 | ❌ 简单木栅栏 |
+| 人物一致性 | ✅ 一致 | ✅ 一致 |
+| 运动流畅度 | ✅ 流畅 | ✅ 流畅 |
+
+**质量下降原因**：
+- SageAttention 使用 INT8 量化 Q/K 矩阵以加速计算
+- HunyuanVideo 1.5 有 53 层 Transformer，每层都会引入量化误差
+- 长序列（111,600 video tokens + 1,256 text tokens = 112,856 tokens）放大误差累积
+- 最终表现为：复杂背景细节丢失、色彩单一化、纹理简化
+
+**使用建议**：
+
+| 场景 | 推荐模式 | 原因 |
+|------|----------|------|
+| 生产环境/最终输出 | `flash` / `flash2` | 质量最优 |
+| 快速迭代/预览 | `sageattn` | 1.6x 加速，可接受质量损失 |
+| H100 + 超长视频 | `flex-block-attn` | Sparse Attention 适合长序列 |
+| 调试/兼容模式 | `torch` | 最大兼容性 |
+
+### 使用方法
+
+```bash
+# 使用 Flash Attention 2（默认，推荐生产环境）
+bash run_stage2.sh
+
+# 使用 SageAttention（快速预览）
+bash run_stage2.sh --use_sageattn
+
+# 使用 Flash Attention 3（H100 专属）
+bash run_stage2.sh --attn_mode flash3
+
+# 使用 Sparse Attention（H100 + 超长视频）
+bash run_stage2.sh --sparse_attn
+
+# 指定任意 attention 模式
+bash run_stage2.sh --attn_mode sageattn
+```
+
 ## 与完整版对比
 
 三阶段分离版本与 `generate.py` 完整版本功能等价，主要区别：

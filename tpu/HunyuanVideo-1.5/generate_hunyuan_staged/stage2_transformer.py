@@ -48,7 +48,7 @@ from tqdm import tqdm
 from hyvideo.models.transformers.hunyuanvideo_1_5_transformer import HunyuanVideo_1_5_DiffusionTransformer
 from hyvideo.schedulers.scheduling_flow_match_discrete import FlowMatchDiscreteScheduler
 from hyvideo.commons.infer_state import initialize_infer_state
-from hyvideo.commons import auto_offload_model, PIPELINE_CONFIGS
+from hyvideo.commons import auto_offload_model, PIPELINE_CONFIGS, is_sparse_attn_available
 from hyvideo.commons.parallel_states import get_parallel_state
 from hyvideo.utils.multitask_utils import merge_tensor_by_mask
 
@@ -149,6 +149,18 @@ def get_closest_resolution(aspect_ratio, target_resolution):
     return closest_size[0], closest_size[1]  # height, width
 
 
+def str_to_bool(v):
+    """将字符串转换为布尔值（用于命令行参数）"""
+    if isinstance(v, bool):
+        return v
+    if v.lower() in ('yes', 'true', 't', 'y', '1'):
+        return True
+    elif v.lower() in ('no', 'false', 'f', 'n', '0'):
+        return False
+    else:
+        raise argparse.ArgumentTypeError('Boolean value expected.')
+
+
 def main():
     parser = argparse.ArgumentParser(description='HunyuanVideo-1.5 Stage 2: Transformer')
     
@@ -162,7 +174,42 @@ def main():
     parser.add_argument('--guidance_scale', type=float, default=6.0)
     parser.add_argument('--seed', type=int, default=42)
     
+    # ========================================================================
+    # Attention 模式参数
+    # ========================================================================
+    parser.add_argument(
+        '--attn_mode', type=str, default='flash',
+        choices=['flash', 'flash2', 'flash3', 'torch', 'sageattn', 'flex-block-attn'],
+        help='Attention 实现模式:\n'
+             '  flash: 自动选择 flash2/flash3 (默认)\n'
+             '  flash2: Flash Attention 2\n'
+             '  flash3: Flash Attention 3 (Hopper GPU)\n'
+             '  torch: PyTorch 原生 SDPA\n'
+             '  sageattn: SageAttention (需要安装)\n'
+             '  flex-block-attn: Sparse Attention (SSTA, 仅 H100)'
+    )
+    parser.add_argument(
+        '--sparse_attn', type=str_to_bool, nargs='?', const=True, default=False,
+        help='启用 Sparse Attention (SSTA)。等效于 --attn_mode flex-block-attn\n'
+             '注意: 需要 distilled 版本的模型权重'
+    )
+    parser.add_argument(
+        '--use_sageattn', type=str_to_bool, nargs='?', const=True, default=False,
+        help='使用 SageAttention 加速 (~1.2x)。等效于 --attn_mode sageattn\n'
+             '注意: 需要安装 sageattention 包'
+    )
+    
     args = parser.parse_args()
+    
+    # 检查互斥参数
+    if args.sparse_attn and args.use_sageattn:
+        raise ValueError("sparse_attn 和 use_sageattn 不能同时启用，请只选择一个")
+    
+    # 根据便捷参数设置 attn_mode
+    if args.sparse_attn:
+        args.attn_mode = 'flex-block-attn'
+    elif args.use_sageattn:
+        args.attn_mode = 'sageattn'
     
     # 初始化 infer_state（和 generate.py 一致）
     infer_args = SimpleNamespace(
@@ -207,6 +254,28 @@ def main():
     resolution = config.get('resolution', '720p')
     task_type = config.get('task_type', 't2v')
     
+    # ========================================================================
+    # 处理 Sparse Attention 的 transformer_version
+    # ========================================================================
+    # Sparse Attention 需要使用 distilled_sparse 版本的模型权重
+    # 例如: 720p_t2v -> 720p_t2v_distilled_sparse
+    if args.sparse_attn:
+        if '_distilled_sparse' not in transformer_version:
+            # 检查是否需要添加 _distilled 前缀
+            if '_distilled' not in transformer_version:
+                transformer_version = f"{transformer_version}_distilled_sparse"
+            else:
+                transformer_version = f"{transformer_version}_sparse"
+            print_rank0(f"  [Sparse Attention] 切换到 distilled_sparse 版本: {transformer_version}")
+        
+        # 检查 sparse attention 是否可用
+        if not is_sparse_attn_available():
+            raise RuntimeError(
+                f"Sparse Attention (flex-block-attn) 在当前 GPU 上不可用。\n"
+                f"该功能仅支持 NVIDIA H100 GPU。\n"
+                f"当前 GPU: {torch.cuda.get_device_properties(0).name}"
+            )
+    
     print_rank0(f"\n配置:")
     print_rank0(f"  model_path: {model_path}")
     print_rank0(f"  transformer_version: {transformer_version}")
@@ -217,6 +286,7 @@ def main():
     print_rank0(f"  num_inference_steps: {args.num_inference_steps}")
     print_rank0(f"  guidance_scale: {args.guidance_scale}")
     print_rank0(f"  seed: {args.seed}")
+    print_rank0(f"  attn_mode: {args.attn_mode}")
     
     # ========================================================================
     # 直接加载 Transformer（不使用 create_pipeline，避免加载 text encoder）
@@ -237,6 +307,7 @@ def main():
         transformer_path,
         torch_dtype=transformer_dtype,
         low_cpu_mem_usage=True,
+        attn_mode=args.attn_mode,  # 传入 attention 模式
     )
     
     # 移动到 GPU
@@ -244,8 +315,13 @@ def main():
     transformer = transformer.to(device)
     transformer.eval()
     
+    # 设置 attention 模式（确保所有 block 都使用相同的模式）
+    transformer.set_attn_mode(args.attn_mode)
+    
     print_rank0(f"  ✓ Transformer 加载完成")
     print_rank0(f"  attn_mode: {transformer.attn_mode}")
+    if args.attn_mode == 'flex-block-attn':
+        print_rank0(f"  attn_param: {transformer.attn_param}")
     print_rank0(f"  use_meanflow: {transformer.config.use_meanflow}")
     print_rank0(f"  dtype: {transformer.dtype}")
     
