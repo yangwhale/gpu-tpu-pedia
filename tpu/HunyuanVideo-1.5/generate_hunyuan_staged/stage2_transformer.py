@@ -47,10 +47,18 @@ from tqdm import tqdm
 # 直接导入需要的组件，不使用 create_pipeline
 from hyvideo.models.transformers.hunyuanvideo_1_5_transformer import HunyuanVideo_1_5_DiffusionTransformer
 from hyvideo.schedulers.scheduling_flow_match_discrete import FlowMatchDiscreteScheduler
-from hyvideo.commons.infer_state import initialize_infer_state
+from hyvideo.commons.infer_state import initialize_infer_state, get_infer_state
 from hyvideo.commons import auto_offload_model, PIPELINE_CONFIGS, is_sparse_attn_available
 from hyvideo.commons.parallel_states import get_parallel_state
 from hyvideo.utils.multitask_utils import merge_tensor_by_mask
+
+# 检查 angelslim 是否可用（用于 cache 加速）
+def is_angelslim_available():
+    try:
+        import angelslim
+        return True
+    except ImportError:
+        return False
 
 from utils import (
     load_embeddings_from_safetensors,
@@ -199,6 +207,39 @@ def main():
              '注意: 需要安装 sageattention 包'
     )
     
+    # ========================================================================
+    # Cache 加速参数 (DeepCache / TeaCache)
+    # ========================================================================
+    parser.add_argument(
+        '--enable_cache', type=str_to_bool, nargs='?', const=True, default=False,
+        help='启用 Cache 加速 (DeepCache/TeaCache)。\n'
+             '原理: 在某些步骤跳过部分 transformer block 的计算，复用之前的输出。\n'
+             '效果: 可加速 1.3x-2x，但可能略微影响质量。'
+    )
+    parser.add_argument(
+        '--cache_type', type=str, default='deepcache',
+        choices=['deepcache', 'teacache'],
+        help='Cache 类型:\n'
+             '  deepcache: DeepCache 策略 (默认)\n'
+             '  teacache: TeaCache 策略'
+    )
+    parser.add_argument(
+        '--no_cache_block_id', type=str, default='53',
+        help='不使用 cache 的 block ID (默认: 53, 即最后一层不 cache)'
+    )
+    parser.add_argument(
+        '--cache_start_step', type=int, default=11,
+        help='开始使用 cache 的步数 (默认: 11, 前期不 cache 保证质量)'
+    )
+    parser.add_argument(
+        '--cache_end_step', type=int, default=45,
+        help='停止使用 cache 的步数 (默认: 45, 后期不 cache 保证收敛)'
+    )
+    parser.add_argument(
+        '--cache_step_interval', type=int, default=4,
+        help='Cache 步长间隔 (默认: 4, 每4步复用一次缓存)'
+    )
+    
     args = parser.parse_args()
     
     # 检查互斥参数
@@ -212,19 +253,31 @@ def main():
         args.attn_mode = 'sageattn'
     
     # 初始化 infer_state（和 generate.py 一致）
+    # 根据参数决定是否启用 SageAttention 和 Cache
+    use_sageattn_for_infer = (args.attn_mode == 'sageattn')
+    
     infer_args = SimpleNamespace(
-        use_sageattn=False,
+        use_sageattn=use_sageattn_for_infer,
         sage_blocks_range="0-53",
         enable_torch_compile=False,
-        enable_cache=False,
-        cache_type="deepcache",
-        no_cache_block_id="53",
-        cache_start_step=11,
-        cache_end_step=45,
+        enable_cache=args.enable_cache,
+        cache_type=args.cache_type,
+        no_cache_block_id=args.no_cache_block_id,
+        cache_start_step=args.cache_start_step,
+        cache_end_step=args.cache_end_step,
         total_steps=args.num_inference_steps,
-        cache_step_interval=4,
+        cache_step_interval=args.cache_step_interval,
     )
     initialize_infer_state(infer_args)
+    
+    # 打印 cache 配置
+    if args.enable_cache:
+        print_rank0(f"\n[Cache 配置]")
+        print_rank0(f"  cache_type: {args.cache_type}")
+        print_rank0(f"  no_cache_block_id: {args.no_cache_block_id}")
+        print_rank0(f"  cache_start_step: {args.cache_start_step}")
+        print_rank0(f"  cache_end_step: {args.cache_end_step}")
+        print_rank0(f"  cache_step_interval: {args.cache_step_interval}")
     
     output_dir = args.output_dir or args.input_dir
     input_paths = get_default_paths(args.input_dir)
@@ -287,6 +340,9 @@ def main():
     print_rank0(f"  guidance_scale: {args.guidance_scale}")
     print_rank0(f"  seed: {args.seed}")
     print_rank0(f"  attn_mode: {args.attn_mode}")
+    print_rank0(f"  enable_cache: {args.enable_cache}")
+    if args.enable_cache:
+        print_rank0(f"  cache_type: {args.cache_type}")
     
     # ========================================================================
     # 直接加载 Transformer（不使用 create_pipeline，避免加载 text encoder）
@@ -317,6 +373,58 @@ def main():
     
     # 设置 attention 模式（确保所有 block 都使用相同的模式）
     transformer.set_attn_mode(args.attn_mode)
+    
+    # ========================================================================
+    # 设置 Cache Helper（如果启用）
+    # Cache 机制通过 angelslim 库实现，hook transformer 的 double_blocks
+    # ========================================================================
+    cache_helper = None
+    if args.enable_cache:
+        if not is_angelslim_available():
+            raise RuntimeError(
+                "请安装 angelslim==0.2.1 以启用 cache 加速:\n"
+                "  pip install angelslim==0.2.1"
+            )
+        
+        from angelslim.compressor.diffusion import DeepCacheHelper, TeaCacheHelper
+        
+        infer_state = get_infer_state()
+        
+        # 计算不使用 cache 的步骤列表
+        # - 前期 (0 ~ cache_start_step): 不 cache，保证质量
+        # - 中期 (cache_start_step ~ cache_end_step): 每隔 cache_step_interval 步 cache
+        # - 后期 (cache_end_step ~ total_steps): 不 cache，保证收敛
+        no_cache_steps = (
+            list(range(0, infer_state.cache_start_step)) +  # 前期不 cache
+            list(range(infer_state.cache_start_step, infer_state.cache_end_step, infer_state.cache_step_interval)) +  # 中期间隔 cache
+            list(range(infer_state.cache_end_step, infer_state.total_steps))  # 后期不 cache
+        )
+        
+        print_rank0(f"\n[Cache Helper 初始化]")
+        print_rank0(f"  cache_type: {args.cache_type}")
+        print_rank0(f"  no_cache_steps 数量: {len(no_cache_steps)} / {infer_state.total_steps}")
+        print_rank0(f"  实际 cache 步数: {infer_state.total_steps - len(no_cache_steps)}")
+        
+        if args.cache_type == 'deepcache':
+            # DeepCache: 指定不 cache 的 block ID
+            no_cache_block_id = {"double_blocks": infer_state.no_cache_block_id}
+            cache_helper = DeepCacheHelper(
+                double_blocks=transformer.double_blocks,
+                no_cache_steps=no_cache_steps,
+                no_cache_block_id=no_cache_block_id,
+            )
+            print_rank0(f"  no_cache_block_id: {infer_state.no_cache_block_id}")
+        elif args.cache_type == 'teacache':
+            cache_helper = TeaCacheHelper(
+                double_blocks=transformer.double_blocks,
+                no_cache_steps=no_cache_steps,
+            )
+        else:
+            raise ValueError(f"未知的 cache 类型: {args.cache_type}")
+        
+        # 启用 cache helper（注册 hooks）
+        cache_helper.enable()
+        print_rank0(f"  ✓ Cache Helper 已启用")
     
     print_rank0(f"  ✓ Transformer 加载完成")
     print_rank0(f"  attn_mode: {transformer.attn_mode}")
@@ -486,6 +594,11 @@ def main():
     # 只在 rank 0 显示进度条，其他 rank 用 disable=True 禁用
     is_main_process = get_rank() == 0
     
+    # 如果启用 cache，在 denoising 开始前清除缓存状态
+    if cache_helper is not None:
+        cache_helper.clear_states()
+        print_rank0(f"  ✓ Cache 状态已清除")
+    
     with torch.no_grad():
         # 使用 tqdm 包装 timesteps
         progress_bar = tqdm(
@@ -498,6 +611,12 @@ def main():
         )
         
         for i, t in progress_bar:
+            # ============================================================
+            # 关键：设置 cache helper 的当前 timestep
+            # cache helper 根据 cur_timestep 决定是否跳过某些 block 的计算
+            # ============================================================
+            if cache_helper is not None:
+                cache_helper.cur_timestep = i
             # 更新进度条描述（显示当前 GPU 内存）
             if is_main_process and torch.cuda.is_available() and i % 10 == 0:
                 allocated = torch.cuda.memory_allocated() / (1024**3)
@@ -547,6 +666,11 @@ def main():
             
             # Scheduler step
             latents = scheduler.step(noise_pred, t, latents, generator=generator, return_dict=False)[0]
+    
+    # 禁用 cache helper（清理 hooks）
+    if cache_helper is not None:
+        cache_helper.disable()
+        print_rank0(f"\n✓ Cache Helper 已禁用")
     
     elapsed = time.perf_counter() - start_time
     print_rank0(f"\n✓ Transformer 推理完成，耗时: {elapsed:.2f} 秒")

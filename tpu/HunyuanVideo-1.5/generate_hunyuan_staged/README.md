@@ -326,6 +326,82 @@ bash run_stage2.sh --sparse_attn
 bash run_stage2.sh --attn_mode sageattn
 ```
 
+## DeepCache 加速测试
+
+### 原理
+
+DeepCache 通过在推理过程中复用 Transformer 中间层的缓存输出来加速生成，核心思想是：
+- 相邻 timestep 之间，某些 transformer block 的输出变化较小
+- 可以跳过这些 block 的计算，直接复用上一步的输出
+- 通过 `angelslim` 库的 `DeepCacheHelper` 实现
+
+### 参数说明
+
+| 参数 | 默认值 | 说明 |
+|------|--------|------|
+| `--enable_cache` | false | 启用 DeepCache |
+| `--cache_type` | deepcache | Cache 类型 (deepcache/teacache) |
+| `--cache_start_step` | 11 | 开始使用 cache 的步数 (前期不 cache 保证质量) |
+| `--cache_end_step` | 45 | 停止使用 cache 的步数 (后期不 cache 保证收敛) |
+| `--cache_step_interval` | 4 | Cache 步长间隔 (每 N 步复用一次缓存) |
+| `--no_cache_block_id` | 53 | 不使用 cache 的 block ID (最后一层不 cache) |
+
+### DeepCache vs Flash Attention 2 实测对比
+
+**测试条件**：
+- 硬件：NVIDIA H100 × 8
+- 分辨率：720p (1280×720)
+- 帧数：121 帧（约 5 秒 @24fps）
+- 推理步数：50 步
+- CFG Scale：6.0
+- Prompt："A young woman with beautiful clear eyes and blonde hair in a suit is sitting in a high-end restaurant, looking at a book"
+- Cache 配置：start_step=11, end_step=45, interval=4
+
+**性能结果**：
+
+| 指标 | Flash Attention 2 | DeepCache | 变化 |
+|------|-------------------|-----------|------|
+| 每步耗时 | ~5.2 秒 | ~2.84 秒 | -45.4% |
+| 总耗时 (50步) | ~260 秒 | ~142 秒 | -45.4% |
+| 加速比 | 1.0x | **1.83x** | |
+| 显存占用 | ~35GB/GPU | ~35GB/GPU | ≈ |
+
+**质量对比**：
+
+| 维度 | Flash Attention 2 | DeepCache |
+|------|-------------------|-----------|
+| 整体画质 | ✅ 优秀 | ✅ 优秀 |
+| 细节保留 | ✅ 丰富细节 | ✅ 细节良好 |
+| 背景复杂度 | ✅ 正常 | ✅ 正常 |
+| 人物一致性 | ✅ 一致 | ✅ 一致 |
+| 运动流畅度 | ✅ 流畅 | ✅ 流畅 |
+
+**结论**：DeepCache 质量损失极小，加速效果显著（1.83x），推荐用于日常使用。
+
+### 使用方法
+
+```bash
+# 使用 DeepCache 加速（推荐日常使用）
+bash run_stage2.sh --enable_cache
+
+# 自定义 cache 参数
+bash run_stage2.sh --enable_cache --cache_start_step 15 --cache_end_step 40 --cache_step_interval 3
+
+# 组合使用：DeepCache + SageAttention（极限加速，质量有损）
+bash run_stage2.sh --enable_cache --use_sageattn
+```
+
+## 加速方案对比总结
+
+| 方案 | 加速比 | 质量 | 推荐场景 |
+|------|--------|------|----------|
+| Flash Attention 2 (默认) | 1.0x | ✅ 最优 | 最终输出/生产环境 |
+| **DeepCache** | **1.83x** | ✅ 良好 | **日常使用（推荐）** |
+| SageAttention | 1.6x | ⚠️ 有损 | 快速预览/迭代 |
+| DeepCache + SageAttention | ~2.5x* | ⚠️ 有损 | 极限加速 |
+
+> \* 理论值，实际加速效果取决于 cache 命中率
+
 ## 与完整版对比
 
 三阶段分离版本与 `generate.py` 完整版本功能等价，主要区别：

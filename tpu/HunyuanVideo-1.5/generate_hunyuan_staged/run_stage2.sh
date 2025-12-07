@@ -6,6 +6,7 @@
 #   ./run_stage2.sh --use_sageattn     # 使用 SageAttention (快但质量略差)
 #   ./run_stage2.sh --sparse_attn      # 使用 Sparse Attention (仅 H100)
 #   ./run_stage2.sh --attn_mode torch  # 使用 PyTorch SDPA
+#   ./run_stage2.sh --enable_cache     # 启用 DeepCache 加速
 
 # === Stage 2 参数 ===
 ASPECT_RATIO=16:9
@@ -18,6 +19,13 @@ N_INFERENCE_GPU=8
 # Attention 模式参数
 # 可选: flash (默认), flash2, flash3, torch, sageattn, flex-block-attn
 ATTN_MODE=flash
+
+# Cache 加速参数
+ENABLE_CACHE=false
+CACHE_TYPE=deepcache
+CACHE_START_STEP=11
+CACHE_END_STEP=45
+CACHE_STEP_INTERVAL=4
 
 # I/O 目录
 INPUT_DIR=./stage_outputs
@@ -74,6 +82,28 @@ while [[ $# -gt 0 ]]; do
             N_INFERENCE_GPU=$2
             shift 2
             ;;
+        --enable_cache)
+            ENABLE_CACHE=true
+            EXTRA_ARGS="$EXTRA_ARGS --enable_cache"
+            echo "⚡ 启用 Cache 加速 (DeepCache)"
+            shift
+            ;;
+        --cache_type)
+            CACHE_TYPE=$2
+            shift 2
+            ;;
+        --cache_start_step)
+            CACHE_START_STEP=$2
+            shift 2
+            ;;
+        --cache_end_step)
+            CACHE_END_STEP=$2
+            shift 2
+            ;;
+        --cache_step_interval)
+            CACHE_STEP_INTERVAL=$2
+            shift 2
+            ;;
         -h|--help)
             echo "用法: $0 [选项]"
             echo ""
@@ -88,6 +118,13 @@ while [[ $# -gt 0 ]]; do
             echo "  --seed N            随机种子 (默认: 42)"
             echo "  --guidance_scale N  CFG 强度 (默认: 6.0)"
             echo "  --aspect_ratio R    宽高比 (默认: 16:9)"
+            echo ""
+            echo "Cache 加速选项:"
+            echo "  --enable_cache          启用 Cache 加速 (DeepCache/TeaCache)"
+            echo "  --cache_type TYPE       Cache 类型 (deepcache/teacache, 默认: deepcache)"
+            echo "  --cache_start_step N    开始使用 cache 的步数 (默认: 11)"
+            echo "  --cache_end_step N      停止使用 cache 的步数 (默认: 45)"
+            echo "  --cache_step_interval N Cache 步长间隔 (默认: 4)"
             echo ""
             echo "其他选项:"
             echo "  --input_dir DIR     输入目录 (默认: ./stage_outputs)"
@@ -113,7 +150,16 @@ echo "  推理步数: $NUM_STEPS"
 echo "  Attention 模式: $ATTN_MODE"
 echo "  CFG 强度: $GUIDANCE_SCALE"
 echo "  随机种子: $SEED"
+if [ "$ENABLE_CACHE" = true ]; then
+    echo "  Cache: $CACHE_TYPE (步骤 $CACHE_START_STEP-$CACHE_END_STEP, 间隔 $CACHE_STEP_INTERVAL)"
+fi
 echo "=============================================="
+
+# 构建 cache 参数
+CACHE_ARGS=""
+if [ "$ENABLE_CACHE" = true ]; then
+    CACHE_ARGS="--cache_type $CACHE_TYPE --cache_start_step $CACHE_START_STEP --cache_end_step $CACHE_END_STEP --cache_step_interval $CACHE_STEP_INTERVAL"
+fi
 
 ~/.local/bin/torchrun --nproc_per_node=$N_INFERENCE_GPU stage2_transformer.py \
     --input_dir $INPUT_DIR \
@@ -124,6 +170,7 @@ echo "=============================================="
     --guidance_scale $GUIDANCE_SCALE \
     --seed $SEED \
     --attn_mode $ATTN_MODE \
+    $CACHE_ARGS \
     $EXTRA_ARGS
 
 if [ $? -ne 0 ]; then
