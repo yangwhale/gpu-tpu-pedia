@@ -13,7 +13,8 @@
 5. [完整迁移流程](#5-完整迁移流程)
 6. [代码模板](#6-代码模板)
 7. [性能优化](#7-性能优化)
-8. [调试技巧](#8-调试技巧)
+8. [生产环境优化](#8-生产环境优化)
+9. [调试技巧](#9-调试技巧)
 
 ---
 
@@ -111,54 +112,9 @@ flowchart TB
 
 在将 HunyuanVideo-1.5 迁移到 TPU 时，遇到了多个导致生成质量问题的关键差异。以下是详细分析和修复过程。
 
-### 3.1 修复 #1: ByT5 Embeddings 精度问题
+### 3.1 修复 #1: Attention Mask 问题（根本原因）
 
-#### 问题分析
-
-```mermaid
-flowchart LR
-    subgraph GPU["GPU: ByT5 处理"]
-        G1[ByT5 Output<br/>float32] --> G2[保持 float32]
-        G2 --> G3[Transformer<br/>混合精度]
-    end
-    
-    subgraph TPU_BAD["TPU (错误): ByT5 处理"]
-        T1[ByT5 Output<br/>float32] --> T2[转换为 bf16]
-        T2 --> T3[精度损失!]
-        T3 --> T4[生成质量下降]
-    end
-    
-    subgraph TPU_GOOD["TPU (修复): ByT5 处理"]
-        F1[ByT5 Output<br/>float32] --> F2[保持 float32]
-        F2 --> F3[质量正常]
-    end
-    
-    style GPU fill:#ccffcc
-    style TPU_BAD fill:#ffcccc
-    style TPU_GOOD fill:#ccffcc
-```
-
-#### 错误代码
-
-```python
-# ❌ 错误：使用 bf16 导致精度损失
-prompt_embeds_2 = prompt_embeds_2.to(dtype=target_dtype).to('jax')  # bf16
-```
-
-#### 修复代码
-
-```python
-# ✅ 正确：保持 float32
-prompt_embeds_2 = prompt_embeds_2.to(dtype=torch.float32).to('jax')
-```
-
-#### 为什么 ByT5 需要 float32？
-
-ByT5 是字节级别的文本编码器，其输出用于细粒度的文本条件控制。bf16 的精度不足以保留细微的文本语义差异，导致生成视频无法准确跟随提示词。
-
----
-
-### 3.2 修复 #2: Attention Mask 处理
+> ⚠️ **重要更新**：经过进一步调试，我们发现视频质量问题的**根本原因**是 Attention Mask 处理，而非 ByT5 精度问题。ByT5 可以安全使用 bf16。
 
 #### 问题分析
 
@@ -250,9 +206,36 @@ flowchart LR
 
 近似方案足够有效，因为 padding tokens 的影响被大幅降低。
 
----
+### 3.2 ByT5 Embeddings 精度（最终结论：bf16 可用）
 
-### 3.3 修复 #3: vision_states 处理
+#### 调试历程
+
+最初我们认为 ByT5 需要 float32 精度，但后来发现这是误判。真正的问题是 Attention Mask。
+
+```mermaid
+flowchart TB
+    subgraph 调试过程
+        A["视频质量差"] --> B["假设：ByT5 精度问题"]
+        B --> C["修复1：ByT5 改 float32"]
+        C --> D["仍有问题"]
+        D --> E["真正原因：Attention Mask"]
+        E --> F["修复2：K/V 置零"]
+        F --> G["问题解决！"]
+        G --> H["验证：ByT5 改回 bf16"]
+        H --> I["质量正常 ✓"]
+    end
+```
+
+#### 最终结论
+
+```python
+# ✅ 正确：ByT5 使用 bf16（TPU 原生优化，累加器为 float32）
+prompt_embeds_2 = prompt_embeds_2.to(dtype=torch.bfloat16).to('jax')
+```
+
+> **TPU bf16 特性**：TPU 的 MXU（矩阵乘法单元）原生支持 bf16，并使用 float32 累加器。这意味着计算过程中精度已经得到保护，无需显式使用 float32。
+
+### 3.3 vision_states 处理
 
 #### 问题分析
 
@@ -282,6 +265,118 @@ if mask_type == "t2v" and torch.all(vision_states == 0):
 ```
 
 `torch.all()` 在 JIT 编译时会导致 ConcretizationTypeError，因为它需要具体的布尔值。使用 `None` 可以完全跳过这个分支，避免问题。
+
+### 3.4 修复 #4: reorder_txt_token 布尔索引问题
+
+#### 问题分析
+
+GPU 版本使用布尔索引来重排 tokens，这在 torchax 中不支持。
+
+```python
+# GPU 代码：使用布尔索引
+valid_tokens = tensor[mask.bool()]  # ❌ torchax 不支持
+```
+
+#### 解决方案：argsort + gather
+
+```python
+def _reorder_txt_token_tpu_compatible(self, byt5_txt, txt, byt5_text_mask, text_mask, ...):
+    """
+    使用 argsort + gather 替代布尔索引
+    
+    排序逻辑：
+    - priority = 2*(1-mask) + group
+    - 有效 byt5: 0, 有效 text: 1, padding byt5: 2, padding text: 3
+    """
+    # 创建分组标识
+    group = torch.cat([
+        torch.zeros(B, byt5_len, ...),  # byt5 = 0
+        torch.ones(B, text_len, ...)    # text = 1
+    ], dim=1)
+    
+    # 计算排序优先级
+    priority = 2 * (1 - combined_mask) + group
+    
+    # 使用 argsort 获取排序索引
+    sort_indices = torch.argsort(priority, dim=1, stable=True)
+    
+    # 使用 gather 重排
+    sort_indices_expanded = sort_indices.unsqueeze(-1).expand_as(combined_txt).to(torch.int32)
+    reorder_txt = torch.gather(combined_txt, dim=1, index=sort_indices_expanded)
+    reorder_mask = torch.gather(combined_mask, dim=1, index=sort_indices.to(torch.int32))
+    
+    return reorder_txt, reorder_mask
+```
+
+### 3.5 修复 #5: Splash Attention segment_ids 机制（实验性）
+
+> ⚠️ **性能警告**：segment_ids 方案虽然正确，但会增加约 30% 的开销。推荐使用 K/V 置零方案。
+
+#### segment_ids 机制原理
+
+Splash Attention 支持 `segment_ids` 参数，用于区分不同序列的 tokens：
+- 只有相同 segment_id 的 tokens 才能互相 attend
+- 可用于处理 packed sequences 和 padding mask
+
+```mermaid
+flowchart TB
+    subgraph SegmentIds["Segment IDs 机制"]
+        S1["img tokens: segment_id = 0"]
+        S2["valid txt tokens: segment_id = 0"]
+        S3["padding txt tokens: segment_id = 1"]
+        S4["只有 segment_id 相同才能 attend"]
+    end
+```
+
+#### 关键问题：batch 维度
+
+CFG 模式下 batch_size=2（negative + positive prompt），它们可能有不同的 padding pattern。**segment_ids 必须有 batch 维度！**
+
+```python
+# ❌ 错误：1D segment_ids（所有 batch 共享）
+txt_segment = (1 - text_mask[0]).to(torch.int32)  # 只用了 batch[0]
+segment_ids = torch.cat([img_segment, txt_segment], dim=0)  # [total_len]
+
+# ✅ 正确：2D segment_ids（per-batch）
+img_segment = torch.zeros(batch_size, img_q_len, ...)  # [B, img_len]
+txt_segment = (1 - text_mask).to(torch.int32)          # [B, txt_len]
+segment_ids = torch.cat([img_segment, txt_segment], dim=1)  # [B, total_len]
+```
+
+#### vmap 适配
+
+segment_ids 从 1D 改为 2D 后，需要在 vmap 中正确处理：
+
+```python
+# 1D segment_ids：在 vmap 外部传入（作为常量广播）
+vmapped_kernel = jax.vmap(
+    lambda q, k, v: kernel_3d(q, k, v, seg_ids),  # seg_ids 是常量
+    in_axes=(0, 0, 0), out_axes=0
+)
+
+# 2D segment_ids：在 vmap 内部按 batch 索引
+vmapped_kernel = jax.vmap(
+    kernel_3d,
+    in_axes=(0, 0, 0, 0), out_axes=0  # seg_ids 也按 batch 分
+)
+```
+
+#### 性能对比
+
+| 方案 | 121帧 50步 | 每步时间 | 开销 |
+|------|-----------|---------|------|
+| K/V 置零 | ~350s | ~7.0s | 基准 |
+| segment_ids (2D) | ~435s | ~8.7s | +24% |
+
+**开销原因**：
+1. Splash Attention 内核级别的额外检查（每个 block 检查 segment_id）
+2. 2D segment_ids 的 vmap 开销（每个 batch 独立处理）
+
+#### 结论
+
+- **推荐**：K/V 置零方案（性能更好，代码更简单）
+- **备选**：segment_ids 方案（语义更清晰，但性能差）
+- **实验版本**：保存在 `stage2_transformer_flax_experimental_segmented.py`
 
 ---
 
@@ -547,9 +642,11 @@ with mesh, env:
 # 保存结果
 save_results(latents.cpu())
 
-# 显式退出
-sys.exit(0)
+# 强制退出（避免 torchax/JAX 后台线程阻塞）
+os._exit(0)  # 不要用 sys.exit(0)
 ```
+
+> ⚠️ **重要**：使用 `os._exit(0)` 而非 `sys.exit(0)`。torchax/JAX 有后台线程可能导致 `sys.exit(0)` 阻塞。
 
 ---
 
@@ -679,7 +776,78 @@ def shard_weights(mesh, weights, rules):
 
 ## 7. 性能优化
 
-### 7.1 JIT 编译缓存
+### 7.1 Warmup（预热）策略
+
+XLA 编译是两阶段的：首先 trace 计算图，然后编译到 TPU 内核。前 1-2 步会比较慢。
+
+```mermaid
+flowchart LR
+    subgraph 第一步
+        A1["Trace 计算图"] --> B1["XLA 编译"]
+        B1 --> C1["执行"]
+    end
+    
+    subgraph 第二步
+        A2["重用已编译内核"] --> B2["执行"]
+        style A2 fill:#ccffcc
+    end
+    
+    subgraph 后续步骤
+        A3["稳定执行"] --> B3["~8s/step"]
+        style A3 fill:#ccffcc
+    end
+```
+
+#### 推荐：2 步预热
+
+```python
+parser.add_argument('--warmup_steps', type=int, default=2,
+                    help='预热步数（0=不预热，2=推荐，触发 JIT 编译）')
+
+if args.warmup_steps > 0:
+    _, warmup_times, warmup_elapsed = run_denoising_loop(
+        latents_input=latents,
+        timesteps_input=timesteps,
+        num_steps=args.warmup_steps,
+        desc="Warmup (JIT)",
+        is_warmup=True,
+    )
+    print(f"预热完成，耗时: {warmup_elapsed:.2f}秒")
+```
+
+#### 统一 Warmup 和推理代码
+
+推荐将 warmup 和推理使用同一个函数，避免代码重复：
+
+```python
+def run_denoising_loop(
+    latents_input,
+    timesteps_input,
+    num_steps,
+    desc="Denoising",
+    is_warmup=False,
+):
+    """统一的 Denoising 循环，预热和正式推理共用同一套代码。"""
+    step_times = []
+    start_time = time.perf_counter()
+    
+    with mesh, env:
+        # clone 必须在 torchax 环境内执行
+        loop_latents = latents_input.clone() if is_warmup else latents_input
+        with torch.no_grad():
+            for i in tqdm(range(num_steps), desc=desc):
+                # ... forward pass ...
+                
+                # 等待计算完成（准确计时）
+                torchax.interop.call_jax(jax.block_until_ready, loop_latents._elem)
+                
+                step_time = time.perf_counter() - step_start
+                step_times.append(step_time)
+    
+    return loop_latents, step_times, time.perf_counter() - start_time
+```
+
+### 7.2 JIT 编译缓存
 
 ```python
 # 启用持久化缓存
@@ -690,9 +858,9 @@ jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 
 **效果：**
 - 首次运行：~60s 编译
-- 后续运行：~5s 加载缓存
+- 后续运行：~5s 加载缓存（需要相同的模型和输入形状）
 
-### 7.2 dtype 优化
+### 7.3 dtype 优化
 
 ```mermaid
 flowchart LR
@@ -704,25 +872,107 @@ flowchart LR
     E --> E2["Scheduler: float32<br/>累加精度"]
 ```
 
-### 7.3 性能基准
+### 7.4 准确计时
+
+JAX/XLA 是惰性执行的，必须使用 `block_until_ready` 才能获得准确的计时：
+
+```python
+# ❌ 错误：不准确的计时
+step_start = time.perf_counter()
+output = model(input)
+step_time = time.perf_counter() - step_start  # 可能只测量了 dispatch 时间
+
+# ✅ 正确：准确计时
+step_start = time.perf_counter()
+output = model(input)
+torchax.interop.call_jax(jax.block_until_ready, output._elem)  # 等待计算完成
+step_time = time.perf_counter() - step_start  # 包含实际计算时间
+```
+
+### 7.5 性能基准
 
 | 配置 | Token 数 | 总时间 | 每步时间 |
 |------|----------|--------|----------|
-| 25帧, 720p | 25,200 | 114s | 2.3s |
-| 49帧, 720p | 46,800 | 216s | 4.3s |
-| 121帧, 720p | 111,600 | 512s | 10.3s |
+| 25帧, 720p | 25,200 | ~115s | ~2.3s |
+| 49帧, 720p | 46,800 | ~215s | ~4.3s |
+| 121帧, 720p | 111,600 | ~406s | ~8.1s |
+
+> 测试环境：TPU v4-8，50 步推理，2 步预热
 
 ---
 
-## 8. 调试技巧
+## 8. 生产环境优化
 
-### 8.1 查看完整 traceback
+### 8.1 警告过滤
+
+torchax/JAX 会产生许多无害警告，建议在生产环境中过滤：
+
+```python
+import warnings
+
+# 过滤掉各种无害警告
+warnings.filterwarnings('ignore', message='.*jax.experimental.shard_map is deprecated.*')
+warnings.filterwarnings('ignore', message='.*NumPy array is not writable.*')
+# int64 截断警告来自 HunyuanVideo-1.5-TPU 库代码，无法修改
+warnings.filterwarnings('ignore', message='.*int64.*is not available.*')
+# 过滤 flash attention fallback 警告（我们用 Splash Attention 替代）
+warnings.filterwarnings('ignore', message='.*Falling back from.*')
+```
+
+### 8.2 进程退出
+
+torchax/JAX 有后台线程，`sys.exit(0)` 可能会阻塞。推荐使用强制退出：
+
+```python
+import os
+
+# ❌ 可能阻塞
+sys.exit(0)
+
+# ✅ 强制退出
+os._exit(0)
+```
+
+### 8.3 进度条优化
+
+显示每步时间和 ETA：
+
+```python
+from tqdm import tqdm
+
+progress_bar = tqdm(range(num_steps), desc="Denoising", ncols=130)
+
+for i in progress_bar:
+    step_start = time.perf_counter()
+    
+    # ... forward pass ...
+    
+    # 等待计算完成
+    torchax.interop.call_jax(jax.block_until_ready, latents._elem)
+    
+    step_time = time.perf_counter() - step_start
+    step_times.append(step_time)
+    avg_time = sum(step_times) / len(step_times)
+    remaining = num_steps - i - 1
+    
+    progress_bar.set_postfix({
+        'step': f'{step_time:.2f}s',
+        'avg': f'{avg_time:.2f}s',
+        'eta': f'{avg_time * remaining:.1f}s'
+    })
+```
+
+---
+
+## 9. 调试技巧
+
+### 9.1 查看完整 traceback
 
 ```bash
 JAX_TRACEBACK_FILTERING=off python script.py
 ```
 
-### 8.2 逐步测试
+### 9.2 逐步测试
 
 ```python
 # 先用 1 步测试
@@ -730,7 +980,7 @@ args.num_inference_steps = 1
 # 成功后再增加
 ```
 
-### 8.3 检测 XLA tensor
+### 9.3 检测 XLA tensor
 
 ```python
 def is_xla_tensor(tensor):
@@ -743,7 +993,7 @@ def is_xla_tensor(tensor):
     return False
 ```
 
-### 8.4 调试打印
+### 9.4 调试打印
 
 ```python
 def debug_tensor(name, t):
@@ -784,9 +1034,27 @@ def debug_tensor(name, t):
 
 ---
 
+## 📋 问题排查速查表
+
+| 症状 | 可能原因 | 解决方案 |
+|------|----------|----------|
+| 视频有竖条纹/噪点 | Attention Mask 未处理 | 使用 K/V 置零方案 |
+| 视频不跟随提示词 | Attention Mask 未处理 | 使用 K/V 置零方案 |
+| 视频花屏（使用 segment_ids） | segment_ids 缺少 batch 维度 | 改为 [B, total_len] 形状 |
+| 程序不退出 | JAX 后台线程 | 使用 `os._exit(0)` |
+| 第一步很慢（60s+） | XLA 编译 | 正常现象，使用 warmup |
+| 第二步仍慢 | XLA 异步编译 | 正常现象，第三步开始稳定 |
+| 单步时间从 7s 变 8.7s | segment_ids 内核开销 | 改用 K/V 置零方案 |
+| OOM | 完整 attention mask | 使用 Splash Attention + K/V 置零 |
+| ConcretizationTypeError | 动态条件/断言 | Monkey-patch 移除或预计算 |
+| 布尔索引报错 | torchax 不支持 `tensor[mask]` | 使用 argsort + gather |
+
+---
+
 ## 📚 参考资源
 
 - [torchax GitHub](https://github.com/pytorch/xla)
 - [JAX Splash Attention](https://github.com/jax-ml/jax/blob/main/jax/experimental/pallas/ops/tpu/splash_attention)
 - [JAX shard_map](https://jax.readthedocs.io/en/latest/notebooks/shard_map.html)
 - [HunyuanVideo-1.5](https://github.com/Tencent/HunyuanVideo)
+- [TPU bf16 精度说明](https://cloud.google.com/tpu/docs/bfloat16)
