@@ -19,8 +19,13 @@ import warnings
 import numpy as np
 from types import SimpleNamespace
 
-# 过滤掉 JAX 的 deprecation warning
+# 过滤掉各种无害警告
 warnings.filterwarnings('ignore', message='.*jax.experimental.shard_map is deprecated.*')
+warnings.filterwarnings('ignore', message='.*NumPy array is not writable.*')
+# int64 截断警告来自 HunyuanVideo-1.5-TPU 库代码，无法修改
+warnings.filterwarnings('ignore', message='.*int64.*is not available.*')
+# 过滤 flash attention fallback 警告（我们用 Splash Attention 替代）
+warnings.filterwarnings('ignore', message='.*Falling back from.*')
 
 # JAX 和 torchax 导入
 import jax
@@ -72,7 +77,8 @@ def _reorder_txt_token_tpu_compatible(self, byt5_txt, txt, byt5_text_mask, text_
     """
     # 强制使用简化逻辑（不使用布尔索引）
     reorder_txt = torch.concat([byt5_txt, txt], dim=1)
-    reorder_mask = torch.concat([byt5_text_mask, text_mask], dim=1).to(dtype=torch.int64)
+    # 使用 int32 而非 int64，因为 JAX 默认不启用 x64
+    reorder_mask = torch.concat([byt5_text_mask, text_mask], dim=1).to(dtype=torch.int32)
     return reorder_txt, reorder_mask
 
 # 替换原始方法
@@ -587,6 +593,8 @@ def main():
     parser.add_argument('--num_inference_steps', type=int, default=50)
     parser.add_argument('--guidance_scale', type=float, default=6.0)
     parser.add_argument('--seed', type=int, default=42)
+    parser.add_argument('--warmup_steps', type=int, default=2,
+                        help='预热步数（0=不预热，1=一次，2=两次，用于触发 JIT 编译）')
     
     args = parser.parse_args()
     
@@ -664,8 +672,8 @@ def main():
     global _ORIGINAL_SDPA
     _ORIGINAL_SDPA = torch.nn.functional.scaled_dot_product_attention
     
-    # 注册自定义的 Scaled Dot-Product Attention
-    print_rank0(f"- 注册 Splash Attention（窗口大小: {WINDOW_SIZE}）...")
+    # 注册自定义的 Scaled Dot-Product Attention（替代 flash/torch SDPA）
+    print_rank0(f"- 注册 TPU Splash Attention（替代 flash/torch，窗口大小: {'全局' if WINDOW_SIZE is None else WINDOW_SIZE}）...")
     custom_attention = functools.partial(
         scaled_dot_product_attention,
         env=env,
@@ -818,13 +826,14 @@ def main():
             prompt_mask = torch.cat([negative_prompt_mask, prompt_mask])
         
         # 准备 byt5 embeddings（合并 CFG）
-        # 修复：与 GPU 版本一致，使用 float32 保持精度
+        # 使用 bf16 以获得最佳 TPU 性能（TPU bf16 原生优化，累加器为 float32）
+        # 之前的质量问题是由 attention mask 导致的，现在已通过 K/V 置零方案修复
         extra_kwargs = {}
         if prompt_embeds_2 is not None:
-            prompt_embeds_2 = prompt_embeds_2.to(dtype=torch.float32).to('jax')
+            prompt_embeds_2 = prompt_embeds_2.to(dtype=transformer_dtype).to('jax')
             prompt_embeds_mask_2 = prompt_embeds_mask_2.to('jax')
             if do_classifier_free_guidance:
-                negative_prompt_embeds_2 = negative_prompt_embeds_2.to(dtype=torch.float32).to('jax')
+                negative_prompt_embeds_2 = negative_prompt_embeds_2.to(dtype=transformer_dtype).to('jax')
                 negative_prompt_embeds_mask_2 = negative_prompt_embeds_mask_2.to('jax')
                 byt5_text_states = torch.cat([negative_prompt_embeds_2, prompt_embeds_2])
                 byt5_text_mask = torch.cat([negative_prompt_embeds_mask_2, prompt_embeds_mask_2])
@@ -899,73 +908,144 @@ def main():
         scheduler.set_timesteps(args.num_inference_steps, device='cpu', n_tokens=n_tokens)
         timesteps = scheduler.timesteps.to('jax')
     
+    # === 定义统一的 Denoising 循环函数 ===
+    def run_denoising_loop(
+        latents_input,
+        timesteps_input,
+        num_steps,
+        desc="Denoising",
+        is_warmup=False,
+    ):
+        """
+        统一的 Denoising 循环，预热和正式推理共用同一套代码。
+        
+        Args:
+            latents_input: 输入 latents
+            timesteps_input: timesteps 列表
+            num_steps: 运行步数
+            desc: 进度条描述
+            is_warmup: 是否是预热模式（影响进度条显示）
+        
+        Returns:
+            (latents, step_times, elapsed_time)
+        """
+        step_times = []
+        start_time = time.perf_counter()
+        
+        with mesh, env:
+            # clone 必须在 torchax 环境内执行
+            loop_latents = latents_input.clone() if is_warmup else latents_input
+            with torch.no_grad():
+                progress_bar = tqdm(
+                    range(num_steps),
+                    total=num_steps,
+                    desc=desc,
+                    ncols=130,
+                )
+                
+                for i in progress_bar:
+                    step_start = time.perf_counter()
+                    
+                    # 获取当前 timestep
+                    t = timesteps_input[i % len(timesteps_input)]
+                    
+                    # 准备输入
+                    latents_concat = torch.concat([loop_latents, cond_latents], dim=1)
+                    latent_model_input = torch.cat([latents_concat] * 2) if do_classifier_free_guidance else latents_concat
+                    latent_model_input = scheduler.scale_model_input(latent_model_input, t)
+                    
+                    t_expand = t.repeat(latent_model_input.shape[0])
+                    
+                    # Meanflow timestep_r
+                    if use_meanflow:
+                        if i == len(timesteps_input) - 1:
+                            timesteps_r = torch.tensor([0.0], device='jax')
+                        else:
+                            next_idx = (i + 1) % len(timesteps_input)
+                            timesteps_r = timesteps_input[next_idx]
+                        timesteps_r = timesteps_r.repeat(latent_model_input.shape[0])
+                    else:
+                        timesteps_r = None
+                    
+                    # guidance（embedded guidance scale 为 None）
+                    guidance_expand = None
+                    
+                    # Transformer forward
+                    output = transformer(
+                        latent_model_input,
+                        t_expand,
+                        prompt_embeds,
+                        prompt_embeds_2_for_transformer,
+                        prompt_mask,
+                        timestep_r=timesteps_r,
+                        vision_states=vision_states,
+                        mask_type=task_type,
+                        guidance=guidance_expand,
+                        return_dict=False,
+                        extra_kwargs=extra_kwargs,
+                    )
+                    noise_pred = output[0]
+                    
+                    # CFG
+                    if do_classifier_free_guidance:
+                        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                        noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                    
+                    # Scheduler step
+                    loop_latents = scheduler.step(noise_pred, t, loop_latents, generator=generator, return_dict=False)[0]
+                    loop_latents = loop_latents.to(target_dtype)
+                    
+                    # 等待计算完成（JAX/XLA 是惰性执行的，必须显式等待才能准确计时）
+                    torchax.interop.call_jax(jax.block_until_ready, loop_latents._elem)
+                    
+                    # 更新进度条
+                    step_time = time.perf_counter() - step_start
+                    step_times.append(step_time)
+                    avg_time = sum(step_times) / len(step_times)
+                    
+                    if is_warmup:
+                        progress_bar.set_postfix({
+                            'step': f'{step_time:.2f}s',
+                        })
+                    else:
+                        remaining_steps = num_steps - i - 1
+                        progress_bar.set_postfix({
+                            'step': f'{step_time:.2f}s',
+                            'avg': f'{avg_time:.2f}s',
+                            'eta': f'{avg_time * remaining_steps:.1f}s'
+                        })
+        
+        elapsed = time.perf_counter() - start_time
+        return loop_latents, step_times, elapsed
+    
+    # === Warmup (可选) ===
+    num_inference_steps = len(timesteps)
+    
+    if args.warmup_steps > 0:
+        print_rank0(f"\n预热中（{args.warmup_steps}步，触发 JIT 编译）...")
+        
+        _, warmup_times, warmup_elapsed = run_denoising_loop(
+            latents_input=latents,
+            timesteps_input=timesteps,
+            num_steps=args.warmup_steps,
+            desc="Warmup (JIT)",
+            is_warmup=True,
+        )
+        
+        print_rank0(f"  ✓ 预热完成，耗时: {warmup_elapsed:.2f}秒")
+    
     # === Denoising Loop ===
     print_rank0(f"\n开始 Transformer 推理...")
     print_rank0(f"  使用 Meanflow: {use_meanflow}")
     print_rank0(f"  使用 CFG: {do_classifier_free_guidance}")
     
-    start_time = time.perf_counter()
-    num_inference_steps = len(timesteps)
-    
-    with mesh, env:
-        with torch.no_grad():
-            progress_bar = tqdm(
-                enumerate(timesteps),
-                total=num_inference_steps,
-                desc="Denoising (TPU)",
-                ncols=100,
-                bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}]'
-            )
-            
-            for i, t in progress_bar:
-                # 准备输入
-                latents_concat = torch.concat([latents, cond_latents], dim=1)
-                latent_model_input = torch.cat([latents_concat] * 2) if do_classifier_free_guidance else latents_concat
-                latent_model_input = scheduler.scale_model_input(latent_model_input, t)
-                
-                t_expand = t.repeat(latent_model_input.shape[0])
-                
-                # Meanflow timestep_r
-                if use_meanflow:
-                    if i == len(timesteps) - 1:
-                        timesteps_r = torch.tensor([0.0], device='jax')
-                    else:
-                        timesteps_r = timesteps[i + 1]
-                    timesteps_r = timesteps_r.repeat(latent_model_input.shape[0])
-                else:
-                    timesteps_r = None
-                
-                # guidance（embedded guidance scale 为 None）
-                guidance_expand = None
-                
-                # Transformer forward
-                output = transformer(
-                    latent_model_input,
-                    t_expand,
-                    prompt_embeds,
-                    prompt_embeds_2_for_transformer,
-                    prompt_mask,
-                    timestep_r=timesteps_r,
-                    vision_states=vision_states,
-                    mask_type=task_type,
-                    guidance=guidance_expand,
-                    return_dict=False,
-                    extra_kwargs=extra_kwargs,
-                )
-                noise_pred = output[0]
-                
-                # CFG
-                if do_classifier_free_guidance:
-                    noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                    noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-                
-                # Scheduler step
-                # 注意：scheduler.step 内部会转成 float32 做累加（diffusers 的标准做法）
-                # 但对于 TPU，bf16 原生支持，需要转回 bf16
-                latents = scheduler.step(noise_pred, t, latents, generator=generator, return_dict=False)[0]
-                latents = latents.to(target_dtype)  # 转回 bf16
-    
-    elapsed = time.perf_counter() - start_time
+    latents, step_times, elapsed = run_denoising_loop(
+        latents_input=latents,
+        timesteps_input=timesteps,
+        num_steps=num_inference_steps,
+        desc="Denoising (TPU)",
+        is_warmup=False,
+    )
     
     print_rank0(f"\n✓ Transformer 推理完成，耗时: {elapsed:.2f} 秒")
     print_rank0(f"  Latents shape: {latents.shape}")
@@ -1003,8 +1083,9 @@ def main():
     
     print_rank0("\n✓ Stage 2 执行完成")
     
-    # 显式退出（避免 torchax/JAX 后台线程阻塞）
-    sys.exit(0)
+    # 强制退出（避免 torchax/JAX 后台线程阻塞）
+    # sys.exit(0) 可能会被阻塞，使用 os._exit(0) 强制退出
+    os._exit(0)
 
 
 if __name__ == "__main__":
