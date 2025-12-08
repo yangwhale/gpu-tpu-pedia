@@ -1,199 +1,351 @@
-# PyTorch to torchax TPU Migration Guide
+# PyTorch GPU → torchax TPU 完整迁移指南
 
-本文档记录了将 HunyuanVideo-1.5 Transformer 从 GPU PyTorch 改造为 TPU torchax 版本的完整过程，包括所有遇到的问题和解决方案。
+本文档记录了将 HunyuanVideo-1.5 Transformer 从 GPU PyTorch 迁移到 TPU torchax 的完整过程，包括问题分析、解决方案和最佳实践。
 
-## 目录
+---
 
-1. [前置知识](#1-前置知识)
-2. [环境准备](#2-环境准备)
-3. [改造步骤](#3-改造步骤)
-4. [常见问题与解决方案](#4-常见问题与解决方案)
-5. [代码模板](#5-代码模板)
-6. [调试技巧](#6-调试技巧)
+## 📚 目录
+
+1. [迁移概览](#1-迁移概览)
+2. [架构对比](#2-架构对比)
+3. [核心修复详解](#3-核心修复详解)
+4. [常见陷阱与解决方案](#4-常见陷阱与解决方案)
+5. [完整迁移流程](#5-完整迁移流程)
+6. [代码模板](#6-代码模板)
 7. [性能优化](#7-性能优化)
+8. [调试技巧](#8-调试技巧)
 
 ---
 
-## 1. 前置知识
+## 1. 迁移概览
 
-### 1.1 torchax 是什么
+### 1.1 整体迁移流程
 
-torchax 是一个让 PyTorch 模型在 JAX/TPU 上运行的桥接库。它通过以下方式工作：
-- 将 PyTorch tensor 包装为 JAX array
-- 拦截 PyTorch 操作并转换为 JAX 操作
-- 提供 JIT 编译支持
-
-### 1.2 关键概念
-
-| 概念 | 说明 |
-|------|------|
-| `torchax.default_env()` | 获取 torchax 环境，用于设备管理和操作注册 |
-| `env.to_xla(tensor)` | 将 PyTorch tensor 转换为 torchax tensor |
-| `torchax.compile(model)` | JIT 编译 PyTorch 模型 |
-| `tensor.to('jax')` | 将 tensor 移动到 JAX 设备 |
-| Splash Attention | TPU 优化的分块注意力实现 |
-| shard_map | JAX 的分布式计算原语 |
-
-### 1.3 TPU vs GPU 的关键差异
-
-| 特性 | GPU | TPU |
-|------|-----|-----|
-| 原生 dtype | fp16/fp32 | bf16 |
-| Attention | Flash Attention | Splash Attention |
-| 分布式 | NCCL/手动 SP | GSPMD (自动) |
-| JIT | torch.compile | XLA JIT |
-
----
-
-## 2. 环境准备
-
-### 2.1 依赖安装
-
-```bash
-# torchax (PyTorch-JAX 桥接)
-pip install torchax
-
-# JAX TPU 版本
-pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-
-# 其他依赖
-pip install einops loguru safetensors tqdm
-```
-
-### 2.2 JAX 配置
-
-```python
-import jax
-
-# 启用编译缓存（加速后续运行）
-jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
-jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
-jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
-```
-
-### 2.3 过滤 Warning
-
-```python
-import warnings
-# 过滤 shard_map 的 deprecation warning
-warnings.filterwarnings('ignore', message='.*jax.experimental.shard_map is deprecated.*')
-```
-
----
-
-## 3. 改造步骤
-
-### 步骤 1: 创建 JAX Mesh
-
-Mesh 定义了设备的拓扑结构，用于权重分片和分布式计算。
-
-```python
-from jax.sharding import Mesh
-from jax.experimental import mesh_utils
-
-# 创建设备网格
-tp_dim = jax.device_count()  # Tensor Parallel 维度
-dp_dim = 1                    # Data Parallel 维度
-sp_dim = 1                    # Sequence Parallel 维度
-
-mesh_devices = mesh_utils.create_device_mesh(
-    (tp_dim, dp_dim, sp_dim), 
-    allow_split_physical_axes=True
-)
-mesh = Mesh(mesh_devices, ('tp', 'dp', 'sp'))
-```
-
-### 步骤 2: 创建 torchax 环境
-
-```python
-import torchax
-from torchax.ops import ops_registry
-import functools
-
-env = torchax.default_env()
-env._mesh = mesh
-env.config.use_tpu_splash_attention = True
-
-# 设置默认 dtype 为 bf16
-torch.set_default_dtype(torch.bfloat16)
-```
-
-### 步骤 3: 注册自定义 Attention
-
-**关键：必须在加载模型之前注册！**
-
-```python
-# 保存原始 SDPA
-_ORIGINAL_SDPA = torch.nn.functional.scaled_dot_product_attention
-
-# 创建自定义 attention
-custom_attention = functools.partial(
-    scaled_dot_product_attention,  # 你的实现
-    env=env,
-    window_size=None  # None = full attention
-)
-
-# 注册到 torchax
-op_to_override = torch.nn.functional.scaled_dot_product_attention
-env._ops[op_to_override] = ops_registry.Operator(
-    op_to_override,
-    custom_attention,
-    is_jax_function=False,
-    is_user_defined=True,
-    needs_env=False,
-    is_view_op=False,
-)
-```
-
-### 步骤 4: 处理不兼容的代码（Monkey Patching）
-
-**在导入模型之前进行 patching！**
-
-```python
-# 示例：Mock GPU 分布式状态
-import hyvideo.commons.parallel_states as parallel_states_module
-from types import SimpleNamespace
-
-_mock_parallel_state = SimpleNamespace(
-    sp=1,
-    sp_enabled=False,
-    sp_group=None,
-)
-parallel_states_module.get_parallel_state = lambda: _mock_parallel_state
-
-# 现在才导入模型
-from hyvideo.models.transformers.xxx import Model
-```
-
-### 步骤 5: 加载模型并转换权重
-
-```python
-# 加载模型
-model = Model.from_pretrained(
-    model_path,
-    torch_dtype=torch.bfloat16,
-    low_cpu_mem_usage=True,
-    attn_mode='torch',  # 使用 torch SDPA
-)
-
-# 转换权重到 XLA
-with env:
-    with jax.default_device('cpu'):
-        state_dict = model.state_dict()
-        state_dict = env.to_xla(state_dict)
-        model.load_state_dict(state_dict, assign=True)
+```mermaid
+flowchart TB
+    subgraph GPU["🎮 GPU 版本"]
+        G1[PyTorch 模型] --> G2[Flash Attention]
+        G2 --> G3[CUDA Kernels]
+        G3 --> G4[NCCL 分布式]
+    end
     
-    # 权重分片
-    weights = shard_weights(mesh, model.state_dict())
-    model.load_state_dict(weights, assign=True, strict=False)
-    torchax.interop.call_jax(jax.block_until_ready, weights)
-
-model.eval()
+    subgraph TPU["☁️ TPU 版本"]
+        T1[PyTorch 模型] --> T2[torchax 桥接]
+        T2 --> T3[Splash Attention]
+        T3 --> T4[XLA 编译]
+        T4 --> T5[GSPMD 分布式]
+    end
+    
+    GPU --> |迁移| TPU
+    
+    style GPU fill:#ffcccc
+    style TPU fill:#ccffcc
 ```
 
-### 步骤 6: 预计算动态创建的 Tensors
+### 1.2 关键技术栈对比
 
-**JIT 不支持动态 tensor 创建（如 torch.arange）！**
+| 技术层 | GPU 版本 | TPU 版本 |
+|--------|----------|----------|
+| 运行框架 | PyTorch | torchax (PyTorch → JAX) |
+| Attention | Flash Attention 2/3 | Splash Attention (Pallas) |
+| JIT 编译 | torch.compile | XLA JIT |
+| 分布式 | NCCL + 手动 SP/TP | GSPMD (自动分片) |
+| 数据类型 | fp16 / fp32 | bf16 (原生支持) |
+| 设备管理 | CUDA | JAX Device Mesh |
+
+---
+
+## 2. 架构对比
+
+### 2.1 数据流对比
+
+```mermaid
+flowchart LR
+    subgraph GPU["GPU 数据流"]
+        direction TB
+        GA[CPU Tensor] --> GB[.cuda]
+        GB --> GC[GPU Tensor]
+        GC --> GD[Model Forward]
+        GD --> GE[Output Tensor]
+    end
+    
+    subgraph TPU["TPU 数据流"]
+        direction TB
+        TA[CPU Tensor] --> TB[.to jax]
+        TB --> TC[env.to_xla]
+        TC --> TD[XLA Tensor]
+        TD --> TE[JIT Compiled Model]
+        TE --> TF[Output Tensor]
+    end
+    
+    style GPU fill:#f9f
+    style TPU fill:#9ff
+```
+
+### 2.2 Attention 实现对比
+
+```mermaid
+flowchart TB
+    subgraph Flash["Flash Attention (GPU)"]
+        F1[Q, K, V] --> F2[Variable Length<br/>Packed Sequences]
+        F2 --> F3[flash_attn_no_pad]
+        F3 --> F4[CUDA Kernel<br/>分块计算]
+        F4 --> F5[Output]
+    end
+    
+    subgraph Splash["Splash Attention (TPU)"]
+        S1[Q, K, V] --> S2[Pad to Block Size]
+        S2 --> S3[shard_map 分片]
+        S3 --> S4[Pallas Kernel<br/>分块计算]
+        S4 --> S5[Trim Padding]
+        S5 --> S6[Output]
+    end
+    
+    style Flash fill:#ffcccc
+    style Splash fill:#ccffcc
+```
+
+---
+
+## 3. 核心修复详解
+
+在将 HunyuanVideo-1.5 迁移到 TPU 时，遇到了多个导致生成质量问题的关键差异。以下是详细分析和修复过程。
+
+### 3.1 修复 #1: ByT5 Embeddings 精度问题
+
+#### 问题分析
+
+```mermaid
+flowchart LR
+    subgraph GPU["GPU: ByT5 处理"]
+        G1[ByT5 Output<br/>float32] --> G2[保持 float32]
+        G2 --> G3[Transformer<br/>混合精度]
+    end
+    
+    subgraph TPU_BAD["TPU (错误): ByT5 处理"]
+        T1[ByT5 Output<br/>float32] --> T2[转换为 bf16]
+        T2 --> T3[精度损失!]
+        T3 --> T4[生成质量下降]
+    end
+    
+    subgraph TPU_GOOD["TPU (修复): ByT5 处理"]
+        F1[ByT5 Output<br/>float32] --> F2[保持 float32]
+        F2 --> F3[质量正常]
+    end
+    
+    style GPU fill:#ccffcc
+    style TPU_BAD fill:#ffcccc
+    style TPU_GOOD fill:#ccffcc
+```
+
+#### 错误代码
+
+```python
+# ❌ 错误：使用 bf16 导致精度损失
+prompt_embeds_2 = prompt_embeds_2.to(dtype=target_dtype).to('jax')  # bf16
+```
+
+#### 修复代码
+
+```python
+# ✅ 正确：保持 float32
+prompt_embeds_2 = prompt_embeds_2.to(dtype=torch.float32).to('jax')
+```
+
+#### 为什么 ByT5 需要 float32？
+
+ByT5 是字节级别的文本编码器，其输出用于细粒度的文本条件控制。bf16 的精度不足以保留细微的文本语义差异，导致生成视频无法准确跟随提示词。
+
+---
+
+### 3.2 修复 #2: Attention Mask 处理
+
+#### 问题分析
+
+这是最关键的修复。GPU 版本使用 `flex_attention` 配合 `score_mod` 函数来屏蔽 padding tokens，而我们的初始 TPU 版本完全忽略了这个 mask。
+
+```mermaid
+flowchart TB
+    subgraph GPU["GPU: Attention Mask 处理"]
+        G1[text_mask] --> G2[F.pad 扩展到完整序列]
+        G2 --> G3[flex_attention<br/>score_mod 函数]
+        G3 --> G4[Padding 位置 → -inf]
+        G4 --> G5[Softmax 后权重 = 0]
+    end
+    
+    subgraph TPU_BAD["TPU (错误): 无 Mask"]
+        T1[text_mask] --> T2[忽略!]
+        T2 --> T3[Splash Attention<br/>无 mask]
+        T3 --> T4[Padding 参与计算]
+        T4 --> T5[注意力污染]
+    end
+    
+    subgraph TPU_GOOD["TPU (修复): K/V 置零近似"]
+        F1[text_mask] --> F2[扩展 mask 维度]
+        F2 --> F3[K *= mask<br/>V *= mask]
+        F3 --> F4[Padding 位置 K/V = 0]
+        F4 --> F5[QK^T 对应位置 ≈ 0]
+        F5 --> F6[Softmax 后权重很低]
+    end
+    
+    style GPU fill:#ccffcc
+    style TPU_BAD fill:#ffcccc
+    style TPU_GOOD fill:#ccffcc
+```
+
+#### 原始 GPU 代码 (attention.py)
+
+```python
+# GPU 使用 flex_attention + score_mod
+if text_mask is not None:
+    attn_mask = F.pad(text_mask, (sequence_length, 0), value=True)
+
+def score_mod(score, b, h, q_idx, kv_idx):
+    return torch.where(attn_mask[b, q_idx] & attn_mask[b, kv_idx], score, float('-inf'))
+
+hidden_states = flex_attention(query, key, value, score_mod=score_mod)
+```
+
+#### 错误的 TPU 代码
+
+```python
+# ❌ 错误：完全忽略 text_mask
+attn_mask = None  # 强制使用 Splash Attention，但没有 mask！
+hidden_states = F.scaled_dot_product_attention(query, key, value, attn_mask=attn_mask)
+```
+
+#### 修复后的 TPU 代码
+
+```python
+# ✅ 正确：将 padding 位置的 K/V 设为零
+if text_mask is not None:
+    # text_mask: [B, text_len], 1=有效, 0=padding
+    text_mask_expanded = text_mask.unsqueeze(-1).unsqueeze(-1).to(encoder_key.dtype)
+    encoder_key = encoder_key * text_mask_expanded    # Padding 位置 → 0
+    encoder_value = encoder_value * text_mask_expanded  # Padding 位置 → 0
+
+# 合并 image 和 text tokens
+query = torch.cat([query, encoder_query], dim=1)
+key = torch.cat([key, encoder_key], dim=1)     # text padding 部分是 0
+value = torch.cat([value, encoder_value], dim=1)  # text padding 部分是 0
+
+# Splash Attention（无需显式 mask）
+hidden_states = F.scaled_dot_product_attention(query, key, value, attn_mask=None)
+```
+
+#### 为什么 K/V 置零有效？
+
+```mermaid
+flowchart LR
+    subgraph 数学原理
+        A["Q @ K^T"] --> B["当 K[i]=0 时<br/>score[i] ≈ 0"]
+        B --> C["Softmax 后<br/>weight[i] 很小"]
+        C --> D["V[i] 贡献<br/>接近于 0"]
+    end
+```
+
+这是一个近似方案：
+- 精确方案：将 score 设为 `-inf`，softmax 后权重 = 0
+- 近似方案：将 K/V 设为 0，score ≈ 0，softmax 后权重很小
+
+近似方案足够有效，因为 padding tokens 的影响被大幅降低。
+
+---
+
+### 3.3 修复 #3: vision_states 处理
+
+#### 问题分析
+
+```mermaid
+flowchart LR
+    subgraph GPU["GPU: t2v 模式"]
+        G1["vision_states = zeros(...)"] --> G2["torch.all(x==0) 检查"]
+        G2 --> G3["extra_attention_mask = 0"]
+    end
+    
+    subgraph TPU["TPU: t2v 模式"]
+        T1["vision_states = None"] --> T2["跳过 vision_in 分支"]
+        T2 --> T3["等效效果"]
+    end
+    
+    style GPU fill:#ccffcc
+    style TPU fill:#ccffcc
+```
+
+#### 为什么使用 None 而非零向量？
+
+Transformer 代码中有这样的检查：
+
+```python
+if mask_type == "t2v" and torch.all(vision_states == 0):
+    ...
+```
+
+`torch.all()` 在 JIT 编译时会导致 ConcretizationTypeError，因为它需要具体的布尔值。使用 `None` 可以完全跳过这个分支，避免问题。
+
+---
+
+## 4. 常见陷阱与解决方案
+
+### 4.1 ConcretizationTypeError
+
+```mermaid
+flowchart TB
+    A["JIT 编译模型"] --> B{"遇到条件判断?"}
+    B -->|"if tensor.max() > 1"| C["ConcretizationTypeError!"]
+    B -->|"if static_arg == 'value'"| D["正常编译"]
+    C --> E["解决方案"]
+    E --> E1["1. 预计算移到 JIT 外"]
+    E --> E2["2. Monkey-patch 移除检查"]
+    E --> E3["3. 使用 static_argnames"]
+```
+
+**常见触发场景：**
+
+| 代码模式 | 问题 | 解决方案 |
+|----------|------|----------|
+| `if tensor.max() > 1:` | 需要具体值 | 移到 JIT 外或移除 |
+| `assert tensor.min() >= 0` | 断言需要具体值 | Monkey-patch 移除 |
+| `torch.all(x == 0)` | 需要具体布尔值 | 传入 None 跳过分支 |
+| `tensor.item()` | 需要标量值 | 使用 tensor 运算代替 |
+
+### 4.2 布尔索引不支持
+
+```mermaid
+flowchart LR
+    A["tensor[bool_mask]"] --> B["torchax 不支持!"]
+    B --> C["解决方案"]
+    C --> C1["torch.where()"]
+    C --> C2["* mask 乘法"]
+    C --> C3["简化逻辑避免"]
+```
+
+**示例修复：**
+
+```python
+# ❌ 错误
+selected = tensor[~mask]
+
+# ✅ 方案 1: torch.where
+selected = torch.where(mask.unsqueeze(-1), tensor, torch.zeros_like(tensor))
+
+# ✅ 方案 2: 乘法
+selected = tensor * mask.unsqueeze(-1).float()
+```
+
+### 4.3 动态 Tensor 创建
+
+```mermaid
+flowchart TB
+    A["JIT 内部调用<br/>torch.arange()"] --> B["每次重新编译!"]
+    B --> C["性能极差"]
+    C --> D["解决方案：预计算"]
+    D --> E["在 JIT 外计算一次"]
+    E --> F["缓存到模型属性"]
+    F --> G["JIT 内使用缓存"]
+```
+
+**示例：Rotary Position Embeddings**
 
 ```python
 # 在 JIT 编译前预计算
@@ -204,115 +356,131 @@ with torch.no_grad():
         model._cached_freqs_sin = freqs_sin.to('jax')
 
 # Monkey-patch 使用缓存
-import types
 def cached_get_rotary_pos_embed(self, latent_size):
-    if hasattr(self, '_cached_freqs_cos'):
-        return self._cached_freqs_cos, self._cached_freqs_sin
-    return original_func(latent_size)
+    return self._cached_freqs_cos, self._cached_freqs_sin
 model.get_rotary_pos_embed = types.MethodType(cached_get_rotary_pos_embed, model)
 ```
 
-### 步骤 7: JIT 编译模型
+### 4.4 Scheduler dtype 问题
 
-```python
-with env:
-    model = torchax.compile(
-        model,
-        torchax.CompileOptions(
-            jax_jit_kwargs={'static_argnames': ('return_dict', 'mask_type')}
-        )
-    )
+```mermaid
+flowchart LR
+    A["latents<br/>bf16"] --> B["scheduler.step()"]
+    B --> C["内部转 fp32<br/>精度保护"]
+    C --> D["输出 fp32"]
+    D --> E["需要转回 bf16!"]
+    E --> F["latents.to(bf16)"]
 ```
 
-### 步骤 8: 运行推理
-
 ```python
-with mesh, env:
-    with torch.no_grad():
-        for i, t in enumerate(timesteps):
-            output = model(inputs)
-            # 处理 scheduler 返回的 float32
-            latents = scheduler.step(...)[0].to(target_dtype)
+# 每次 scheduler.step 后转回 bf16
+latents = scheduler.step(noise_pred, t, latents)[0]
+latents = latents.to(target_dtype)  # 转回 bf16
 ```
 
-### 步骤 9: 显式退出
+### 4.5 OOM 问题
 
-**torchax/JAX 后台线程可能阻塞程序退出！**
-
-```python
-print("完成")
-sys.exit(0)  # 或 os._exit(0)
+```mermaid
+flowchart TB
+    A["创建 attention mask<br/>[B, H, S, S]"] --> B{"S = 26456?"}
+    B -->|Yes| C["矩阵太大<br/>26456 x 26456 x 2 x 64"]
+    C --> D["OOM!"]
+    B -->|No| E["正常"]
+    
+    D --> F["解决方案"]
+    F --> F1["使用 Splash Attention<br/>分块计算"]
+    F --> F2["不创建完整 mask<br/>K/V 置零近似"]
 ```
 
 ---
 
-## 4. 常见问题与解决方案
+## 5. 完整迁移流程
 
-### 问题 1: ConcretizationTypeError
-
-**错误信息：**
+```mermaid
+flowchart TB
+    subgraph PREP["📋 准备阶段"]
+        P1[分析 GPU 代码] --> P2[识别不兼容模式]
+        P2 --> P3[设计解决方案]
+    end
+    
+    subgraph SETUP["⚙️ 环境设置"]
+        S1[创建 JAX Mesh] --> S2[创建 torchax 环境]
+        S2 --> S3[注册 Splash Attention]
+    end
+    
+    subgraph PATCH["🔧 代码适配"]
+        M1[Mock GPU 分布式状态] --> M2[Patch 不兼容函数]
+        M2 --> M3[导入模型]
+    end
+    
+    subgraph LOAD["📦 模型加载"]
+        L1[加载模型] --> L2[转换权重到 XLA]
+        L2 --> L3[权重分片]
+        L3 --> L4[预计算动态 Tensor]
+    end
+    
+    subgraph COMPILE["🚀 编译运行"]
+        C1[JIT 编译] --> C2[推理循环]
+        C2 --> C3[保存结果]
+        C3 --> C4[显式退出]
+    end
+    
+    PREP --> SETUP --> PATCH --> LOAD --> COMPILE
 ```
-jax.errors.ConcretizationTypeError: Abstract tracer value encountered where concrete value is expected
-```
 
-**原因：** JIT 编译时尝试将 traced tensor 转换为 Python 值
+### 步骤 1: 创建 JAX Mesh
 
-**常见触发场景：**
-- `if tensor.max() > 1:` - 条件判断
-- `assert tensor.max() <= 1` - 断言检查
-- `torch.all(tensor == 0)` - 运行时检查
-- `tensor.item()` - 提取标量
-
-**解决方案：**
 ```python
-# 方案1: 在 JIT 外部进行检查
-# 方案2: 使用 static_argnames
-# 方案3: Monkey-patch 移除检查
+from jax.sharding import Mesh
+from jax.experimental import mesh_utils
 
-# 示例：patch 掉有问题的函数
-def patched_function(...):
-    # 移除断言和运行时检查
-    # 直接执行核心逻辑
-    pass
-original_module.function = patched_function
+tp_dim = jax.device_count()  # 8 个 TPU cores
+dp_dim = 1
+sp_dim = 1
+
+mesh_devices = mesh_utils.create_device_mesh(
+    (tp_dim, dp_dim, sp_dim),
+    allow_split_physical_axes=True
+)
+mesh = Mesh(mesh_devices, ('tp', 'dp', 'sp'))
 ```
 
-### 问题 2: 布尔索引不支持
+### 步骤 2: 创建 torchax 环境
 
-**错误信息：**
-```
-AttributeError: 'View' object has no attribute '_elem'
-```
-
-**原因：** torchax 不支持 `tensor[bool_mask]` 形式的布尔索引
-
-**解决方案：**
 ```python
-# 原代码
-selected = tensor[mask]
+import torchax
 
-# 修改为
-# 方案1: 使用 torch.where
-selected = torch.where(mask.unsqueeze(-1), tensor, torch.zeros_like(tensor))
+env = torchax.default_env()
+env._mesh = mesh
+env.config.use_tpu_splash_attention = True
 
-# 方案2: 禁用相关功能
-def simplified_function(...):
-    # 使用不需要布尔索引的简化逻辑
-    return torch.cat([a, b], dim=1)
+torch.set_default_dtype(torch.bfloat16)
 ```
 
-### 问题 3: GPU 分布式状态初始化
+### 步骤 3: 注册 Splash Attention
 
-**错误信息：**
-```
-RuntimeError: CUDA not available
-```
-
-**原因：** 代码尝试初始化 CUDA 设备网格
-
-**解决方案：**
 ```python
-# 在导入模型前 mock
+# 保存原始 SDPA
+_ORIGINAL_SDPA = torch.nn.functional.scaled_dot_product_attention
+
+# 注册自定义 attention
+custom_attention = functools.partial(scaled_dot_product_attention, env=env)
+env._ops[torch.nn.functional.scaled_dot_product_attention] = ops_registry.Operator(
+    torch.nn.functional.scaled_dot_product_attention,
+    custom_attention,
+    is_jax_function=False,
+    is_user_defined=True,
+    needs_env=False,
+    is_view_op=False,
+)
+```
+
+### 步骤 4: Monkey-Patch 不兼容代码
+
+**必须在导入模型之前！**
+
+```python
+# Mock GPU 分布式状态
 import module.parallel_states as ps
 from types import SimpleNamespace
 
@@ -321,65 +489,73 @@ ps.get_parallel_state = lambda: SimpleNamespace(
     sp_enabled=False,
     sp_group=None,
 )
+
+# Patch 有问题的函数
+def patched_function(...):
+    # 移除运行时检查，简化逻辑
+    pass
+module.original_function = patched_function
+
+# 现在才导入模型
+from module.model import Model
 ```
 
-### 问题 4: dtype 不匹配
+### 步骤 5: 加载和转换模型
 
-**错误信息：**
-```
-RuntimeError: Input type (float) and bias type (c10::BFloat16) should be the same
-```
-
-**原因：** 某些操作返回 float32（如 scheduler.step 的精度保护）
-
-**解决方案：**
 ```python
-# 在每个可能改变 dtype 的操作后转回 bf16
-latents = scheduler.step(...)[0]
-latents = latents.to(torch.bfloat16)
+model = Model.from_pretrained(path, torch_dtype=torch.bfloat16)
+
+with env:
+    with jax.default_device('cpu'):
+        state_dict = model.state_dict()
+        state_dict = env.to_xla(state_dict)
+        model.load_state_dict(state_dict, assign=True)
+    
+    weights = shard_weights(mesh, model.state_dict())
+    model.load_state_dict(weights, assign=True, strict=False)
+    torchax.interop.call_jax(jax.block_until_ready, weights)
+
+model.eval()
 ```
 
-### 问题 5: OOM (显存不足)
+### 步骤 6: 预计算并 JIT 编译
 
-**错误信息：**
-```
-jax.errors.JaxRuntimeError: RESOURCE_EXHAUSTED
-```
-
-**原因：** 创建了过大的中间张量（如完整的 attention 矩阵）
-
-**解决方案：**
 ```python
-# 使用 Splash Attention（分块计算）
-# 不使用 attention mask（避免创建完整矩阵）
-attn_mask = None  # 强制使用 Splash Attention
+# 预计算动态 tensor
+with torch.no_grad():
+    freqs = model.get_rotary_pos_embed(size)
+    with env:
+        model._cached_freqs = freqs.to('jax')
+
+# JIT 编译
+with env:
+    model = torchax.compile(model, torchax.CompileOptions(
+        jax_jit_kwargs={'static_argnames': ('return_dict',)}
+    ))
 ```
 
-### 问题 6: 程序执行完成后挂起
+### 步骤 7: 推理循环
 
-**原因：** torchax/JAX 后台线程未正常退出
-
-**解决方案：**
 ```python
-# 在程序末尾显式退出
-import sys
+with mesh, env:
+    with torch.no_grad():
+        for i, t in enumerate(timesteps):
+            output = model(inputs)
+            latents = scheduler.step(output, t, latents)[0]
+            latents = latents.to(target_dtype)  # 转回 bf16
+
+# 保存结果
+save_results(latents.cpu())
+
+# 显式退出
 sys.exit(0)
 ```
 
-### 问题 7: flash attention 警告
-
-**警告信息：**
-```
-UserWarning: Falling back from `flash` to `torch`
-```
-
-**说明：** 这是正常的，因为 TPU 没有 Flash Attention，会回退到 torch SDPA（然后被我们的 Splash Attention 拦截）
-
 ---
 
-## 5. 代码模板
+## 6. 代码模板
 
-### 5.1 Splash Attention 实现
+### 6.1 Splash Attention 完整实现
 
 ```python
 from jax.experimental.pallas.ops.tpu import splash_attention
@@ -390,6 +566,17 @@ BKVSIZE = 2048
 BKVCOMPUTESIZE = 1024
 
 def _tpu_splash_attention(query, key, value, mesh, scale=None, window_size=None):
+    """
+    TPU Splash Attention 实现
+    
+    Args:
+        query: [B, H, Sq, D]
+        key: [B, H, Skv, D]
+        value: [B, H, Skv, D]
+        mesh: JAX 设备 mesh
+        scale: 缩放因子，默认 1/sqrt(D)
+        window_size: 局部注意力窗口大小，None 表示全局注意力
+    """
     num_heads = query.shape[1]
 
     def _attention_on_slices(q, k, v):
@@ -407,21 +594,23 @@ def _tpu_splash_attention(query, key, value, mesh, scale=None, window_size=None)
 
         def kernel_3d(q_3d, k_3d, v_3d):
             num_heads_on_device = q_3d.shape[0]
+            
             q_3d_padded, q_orig_len = pad_to_multiple(q_3d, BQSIZE, axis=1)
             k_3d_padded, _ = pad_to_multiple(k_3d, BKVSIZE, axis=1)
             v_3d_padded, _ = pad_to_multiple(v_3d, BKVSIZE, axis=1)
 
             if window_size is not None:
                 mask_class = functools.partial(
-                    splash_attention.LocalMask, window_size=window_size
+                    splash_attention.LocalMask, 
+                    window_size=window_size
                 )
             else:
                 mask_class = splash_attention.FullMask
 
-            mask = splash_attention.MultiHeadMask(
-                [mask_class((q_3d_padded.shape[1], k_3d_padded.shape[1])) 
-                 for _ in range(num_heads_on_device)]
-            )
+            mask = splash_attention.MultiHeadMask([
+                mask_class((q_3d_padded.shape[1], k_3d_padded.shape[1]))
+                for _ in range(num_heads_on_device)
+            ])
 
             block_sizes = splash_attention.BlockSizes(
                 block_q=min(BQSIZE, q_3d_padded.shape[1]),
@@ -451,7 +640,7 @@ def _tpu_splash_attention(query, key, value, mesh, scale=None, window_size=None)
     return sharded_fn(query, key, value)
 ```
 
-### 5.2 权重分片模板
+### 6.2 权重分片模板
 
 ```python
 from jax.sharding import PartitionSpec as P, NamedSharding
@@ -459,91 +648,89 @@ import re
 
 # Tensor Parallel: Column-Row 模式
 sharding_rules = {
-    # Column Parallel (Q/K/V, FF1)
+    # Column Parallel: 在 output 维度分片
     r'.*\.q_proj\.weight$': (('tp', 'sp'), None),
     r'.*\.k_proj\.weight$': (('tp', 'sp'), None),
     r'.*\.v_proj\.weight$': (('tp', 'sp'), None),
     r'.*\.fc1\.weight$': (('tp', 'sp'), None),
     
-    # Row Parallel (Output, FF2)
+    # Row Parallel: 在 input 维度分片
     r'.*\.o_proj\.weight$': (None, ('tp', 'sp')),
     r'.*\.fc2\.weight$': (None, ('tp', 'sp')),
 }
 
 def shard_weights(mesh, weights, rules):
+    matched = 0
     for name, tensor in weights.items():
-        matched = False
         for pattern, spec in rules.items():
             if re.fullmatch(pattern, name):
-                tensor.apply_jax_(
-                    jax.device_put, 
-                    NamedSharding(mesh, P(*spec))
-                )
-                matched = True
+                tensor.apply_jax_(jax.device_put, NamedSharding(mesh, P(*spec)))
+                matched += 1
                 break
-        if not matched:
-            # 未匹配的权重复制到所有设备
+        else:
+            # 未匹配：复制到所有设备
             tensor.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
+    
+    print(f"分片完成: {matched} 个匹配, {len(weights)-matched} 个复制")
     return weights
-```
-
-### 5.3 完整推理循环模板
-
-```python
-def main():
-    # 1. 设置 JAX 配置
-    jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
-    torch.set_default_dtype(torch.bfloat16)
-    
-    # 2. 创建 Mesh
-    mesh = create_mesh()
-    
-    # 3. 创建 torchax 环境
-    env = torchax.default_env()
-    env._mesh = mesh
-    
-    # 4. Monkey-patch 不兼容的代码（在导入模型前！）
-    patch_incompatible_code()
-    
-    # 5. 注册自定义 attention
-    register_splash_attention(env)
-    
-    # 6. 加载和转换模型
-    model = load_model()
-    model = convert_to_xla(model, env, mesh)
-    
-    # 7. 预计算动态 tensors
-    precompute_dynamic_tensors(model, env)
-    
-    # 8. JIT 编译
-    with env:
-        model = torchax.compile(model)
-    
-    # 9. 推理
-    with mesh, env:
-        with torch.no_grad():
-            for step in range(num_steps):
-                output = model(inputs)
-                latents = scheduler.step(...)[0].to(torch.bfloat16)
-    
-    # 10. 保存结果
-    save_results(latents)
-    
-    # 11. 显式退出
-    sys.exit(0)
 ```
 
 ---
 
-## 6. 调试技巧
+## 7. 性能优化
 
-### 6.1 查看完整 traceback
+### 7.1 JIT 编译缓存
+
+```python
+# 启用持久化缓存
+jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
+jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
+```
+
+**效果：**
+- 首次运行：~60s 编译
+- 后续运行：~5s 加载缓存
+
+### 7.2 dtype 优化
+
+```mermaid
+flowchart LR
+    A["模型权重<br/>bf16"] --> B["中间计算<br/>bf16"]
+    B --> C["注意力<br/>bf16"]
+    C --> D["输出<br/>bf16"]
+    
+    E["特殊情况"] --> E1["ByT5: float32<br/>精度敏感"]
+    E --> E2["Scheduler: float32<br/>累加精度"]
+```
+
+### 7.3 性能基准
+
+| 配置 | Token 数 | 总时间 | 每步时间 |
+|------|----------|--------|----------|
+| 25帧, 720p | 25,200 | 114s | 2.3s |
+| 49帧, 720p | 46,800 | 216s | 4.3s |
+| 121帧, 720p | 111,600 | 512s | 10.3s |
+
+---
+
+## 8. 调试技巧
+
+### 8.1 查看完整 traceback
 
 ```bash
 JAX_TRACEBACK_FILTERING=off python script.py
 ```
 
-### 6.2 检测 XLA tensor
+### 8.2 逐步测试
+
+```python
+# 先用 1 步测试
+args.num_inference_steps = 1
+# 成功后再增加
+```
+
+### 8.3 检测 XLA tensor
 
 ```python
 def is_xla_tensor(tensor):
@@ -552,89 +739,54 @@ def is_xla_tensor(tensor):
     if hasattr(tensor, '_elem'):
         return True
     if hasattr(tensor, 'device'):
-        device_str = str(tensor.device)
-        if 'jax' in device_str or 'xla' in device_str:
-            return True
+        return 'jax' in str(tensor.device) or 'xla' in str(tensor.device)
     return False
 ```
 
-### 6.3 逐步测试
-
-1. 先用 1 个 inference step 测试
-2. 确认基本流程通过后再增加步数
-3. 出错时检查最后一个成功的操作
-
-### 6.4 打印 tensor 信息
+### 8.4 调试打印
 
 ```python
 def debug_tensor(name, t):
     if t is None:
         print(f"{name}: None")
     else:
-        print(f"{name}: shape={t.shape}, dtype={t.dtype}, device={t.device}")
+        print(f"{name}: shape={t.shape}, dtype={t.dtype}, "
+              f"mean={t.float().mean().item():.4f}")
 ```
 
 ---
 
-## 7. 性能优化
+## 📋 迁移 Checklist
 
-### 7.1 编译缓存
+### 开始前
 
-```python
-jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
-```
-
-首次运行需要编译（约 1 分钟），后续运行使用缓存。
-
-### 7.2 bf16 全程使用
-
-TPU 对 bf16 有原生硬件支持，避免使用 fp32：
-- 模型权重: bf16
-- 激活值: bf16
-- 中间计算: bf16
-
-### 7.3 避免不必要的 device 传输
-
-```python
-# 不好：多次传输
-tensor = tensor.cpu()
-tensor = tensor.to('jax')
-
-# 好：一次传输
-tensor = tensor.to('jax')
-```
-
-### 7.4 权重分片策略
-
-根据模型大小选择分片策略：
-- 小模型: 复制到所有设备
-- 大模型: Tensor Parallel (Column-Row)
-
----
-
-## 8. Checklist
-
-在开始改造前，确认以下事项：
-
-- [ ] 识别所有 GPU 特定代码（CUDA, Flash Attention, NCCL）
-- [ ] 识别所有运行时检查（assert, if tensor.max()）
-- [ ] 识别所有动态 tensor 创建（torch.arange, torch.zeros）
+- [ ] 识别所有 CUDA 特定代码
+- [ ] 识别所有运行时检查 (assert, if tensor.max())
+- [ ] 识别所有动态 tensor 创建 (torch.arange, torch.zeros)
 - [ ] 识别所有布尔索引
-- [ ] 确认模型输入输出的 dtype
-- [ ] 准备 Splash Attention 实现
-- [ ] 准备权重分片规则
+- [ ] 确认 dtype 要求
 
-改造完成后，验证：
+### 迁移中
 
-- [ ] 程序能正常退出
-- [ ] 输出 dtype 正确（bf16）
-- [ ] 多步推理无 OOM
-- [ ] 性能符合预期
+- [ ] 创建 JAX Mesh
+- [ ] 注册 Splash Attention
+- [ ] Monkey-patch 不兼容代码
+- [ ] 加载并分片权重
+- [ ] 预计算动态 tensor
+- [ ] JIT 编译模型
+
+### 完成后
+
+- [ ] 程序正常退出
+- [ ] 输出 dtype 正确 (bf16)
+- [ ] 无 OOM 问题
+- [ ] 生成质量正确
 
 ---
 
-## 附录：参考资源
+## 📚 参考资源
 
-- [torchax 官方文档](https://github.com/pytorch/xla)
+- [torchax GitHub](https://github.com/pytorch/xla)
 - [JAX Splash Attention](https://github.com/jax-ml/jax/blob/main/jax/experimental/pallas/ops/tpu/splash_attention)
 - [JAX shard_map](https://jax.readthedocs.io/en/latest/notebooks/shard_map.html)
+- [HunyuanVideo-1.5](https://github.com/Tencent/HunyuanVideo)

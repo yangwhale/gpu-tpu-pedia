@@ -86,18 +86,27 @@ def _parallel_attention_tpu(q, k, v, img_q_len, img_kv_len,
                              block_idx=None):
     """
     TPU 兼容版本的 parallel_attention
-    - 强制使用 Splash Attention（不使用 mask，避免 OOM）
+    - 使用 Splash Attention 提高效率
+    - 对 padding tokens 进行 mask 处理（将 K/V 设为零）
     - 移除断言检查（避免 JIT concretization 问题）
-    - Splash Attention 使用分块计算，内存效率高
     
-    注意：忽略 text_mask，使用完整注意力。
-    对于 t2v 任务，这是可接受的近似。
+    修复：通过将 padding 位置的 K/V 设为零来近似 attention mask 效果。
+    虽然不如使用 -inf mask 精确，但可以显著降低 padding tokens 的影响。
     """
     import torch.nn.functional as F
     
     query, encoder_query = q
     key, encoder_key = k
     value, encoder_value = v
+    
+    # 如果有 text_mask，将 padding 位置的 K/V 设为零
+    # 这样 padding tokens 的 attention score 会更低
+    if text_mask is not None:
+        # text_mask shape: [B, text_len]，1 表示有效，0 表示 padding
+        # encoder_key/value shape: [B, text_len, H, D]
+        text_mask_expanded = text_mask.unsqueeze(-1).unsqueeze(-1).to(encoder_key.dtype)  # [B, text_len, 1, 1]
+        encoder_key = encoder_key * text_mask_expanded
+        encoder_value = encoder_value * text_mask_expanded
     
     # 合并 image 和 text tokens
     query = torch.cat([query, encoder_query], dim=1)
@@ -110,9 +119,8 @@ def _parallel_attention_tpu(q, k, v, img_q_len, img_kv_len,
     key = key.transpose(1, 2)      # B * Head_num * length * dim
     value = value.transpose(1, 2)  # B * Head_num * length * dim
     
-    # 强制不使用 mask，让 Splash Attention 处理
-    # Splash Attention 使用分块计算，不需要创建完整的 attention 矩阵
-    # 这避免了 OOM 问题（26456x26456 的矩阵太大）
+    # 不使用 attn_mask，让 Splash Attention 处理
+    # Splash Attention 使用分块计算，内存效率高
     attn_mask = None
     
     # 调用 SDPA（会被我们的 Splash Attention 拦截）
@@ -810,13 +818,13 @@ def main():
             prompt_mask = torch.cat([negative_prompt_mask, prompt_mask])
         
         # 准备 byt5 embeddings（合并 CFG）
-        # TPU 是 bf16 友好的芯片，所有 tensor 都使用 bfloat16
+        # 修复：与 GPU 版本一致，使用 float32 保持精度
         extra_kwargs = {}
         if prompt_embeds_2 is not None:
-            prompt_embeds_2 = prompt_embeds_2.to(dtype=target_dtype).to('jax')
+            prompt_embeds_2 = prompt_embeds_2.to(dtype=torch.float32).to('jax')
             prompt_embeds_mask_2 = prompt_embeds_mask_2.to('jax')
             if do_classifier_free_guidance:
-                negative_prompt_embeds_2 = negative_prompt_embeds_2.to(dtype=target_dtype).to('jax')
+                negative_prompt_embeds_2 = negative_prompt_embeds_2.to(dtype=torch.float32).to('jax')
                 negative_prompt_embeds_mask_2 = negative_prompt_embeds_mask_2.to('jax')
                 byt5_text_states = torch.cat([negative_prompt_embeds_2, prompt_embeds_2])
                 byt5_text_mask = torch.cat([negative_prompt_embeds_mask_2, prompt_embeds_mask_2])
@@ -857,7 +865,12 @@ def main():
         
         # 准备 vision_states
         # t2v 模式：设为 None 以跳过 vision_in 处理
-        # 这也避免了 torch.all(vision_states == 0) 在 JIT 中的 concretization 问题
+        # 这避免了 torch.all(vision_states == 0) 在 JIT 中的 concretization 问题
+        #
+        # 注意：从 transformer 代码看，两种情况效果相同：
+        # - vision_states = None → 跳过 vision_in 分支
+        # - vision_states = 零向量 → extra_encoder_hidden_states *= 0，extra_attention_mask = 0
+        # 两者都导致 vision tokens 不参与注意力计算
         if task_type == 't2v':
             vision_states = None
         else:
