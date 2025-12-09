@@ -84,7 +84,7 @@ def str_to_bool(v):
 
 # ============================================================================
 # TPU 友好的 DeepCache 实现
-# 不使用 hook，而是直接在 forward 级别实现条件分支
+# 使用分离模块模式：分别编译 full_forward 和 cached_forward
 # ============================================================================
 
 class TPUDeepCache:
@@ -348,7 +348,8 @@ class FullForwardModule(torch.nn.Module):
         img = transformer.unpatchify(img, tt, th, tw)
         
         # 返回 tuple（比 list 更 JIT 友好）
-        return (img, img_after_double, txt_after_double, vec, text_mask, freqs_cos, freqs_sin)
+        # 注意：不返回 freqs_cos/sin，因为它们是固定值，从外部获取避免 tracer 泄漏
+        return (img, img_after_double, txt_after_double, vec, text_mask)
 
 
 class CachedForwardModule(torch.nn.Module):
@@ -1359,6 +1360,10 @@ def main():
         # === 创建和编译 DeepCache forward 模块（如果启用）===
         # 必须在 embeddings 准备后创建，因为需要捕获 mask_type 和 extra_kwargs
         if args.enable_cache:
+            # ============================================================
+            # 使用分离模块模式
+            # 分别编译 full_forward 和 cached_forward
+            # ============================================================
             print_rank0(f"\n创建 DeepCache forward 模块...")
             full_forward_module, cached_forward_module = create_cached_transformer_modules(
                 transformer, task_type, extra_kwargs
@@ -1415,19 +1420,19 @@ def main():
             print_rank0("- 预热 cached_forward（跳过 double_blocks）...")
             warmup_start = time.perf_counter()
             with torch.no_grad():
+                # result_warmup = (img, img_after_double, txt_after_double, vec, text_mask)
+                # 注意：freqs_cos/sin 直接使用 transformer._cached_*，不从返回值获取
                 cached_img_warmup = result_warmup[1]
                 cached_txt_warmup = result_warmup[2]
                 vec_warmup = result_warmup[3]
                 text_mask_warmup = result_warmup[4]
-                freqs_cos_warmup = result_warmup[5]
-                freqs_sin_warmup = result_warmup[6]
                 
                 cached_result_warmup = cached_forward_fn(
                     cached_img_warmup,
                     cached_txt_warmup,
                     vec_warmup,
-                    freqs_cos_warmup,
-                    freqs_sin_warmup,
+                    transformer._cached_freqs_cos,
+                    transformer._cached_freqs_sin,
                     text_mask_warmup,
                 )
                 # 等待编译完成
@@ -1511,21 +1516,26 @@ def main():
                     # Transformer forward（根据 DeepCache 状态选择不同路径）
                     # ============================================================
                     if deep_cache is not None and deep_cache.should_use_cache(i):
-                        # 使用缓存：跳过 double_blocks，只执行 single_blocks + final_layer
+                        # ========================================================
+                        # 原始模式：使用缓存
+                        # ========================================================
                         cache_hits += 1
                         cached_img, cached_txt = deep_cache.get_cache()
                         
                         # cached_forward 参数：cached_img, cached_txt, vec, freqs_cos, freqs_sin, text_mask
+                        # 注意：freqs_cos/sin 直接使用 transformer._cached_*，避免 tracer 泄漏
                         noise_pred = cached_forward_fn(
                             cached_img,
                             cached_txt,
                             deep_cache._cached_vec,
-                            deep_cache._cached_freqs_cos,
-                            deep_cache._cached_freqs_sin,
+                            transformer._cached_freqs_cos,
+                            transformer._cached_freqs_sin,
                             deep_cache._cached_text_mask,
                         )
                     elif deep_cache is not None:
-                        # 填充缓存：完整执行 transformer，保存中间状态
+                        # ========================================================
+                        # 原始模式：填充缓存
+                        # ========================================================
                         cache_misses += 1
                         
                         # full_forward 参数：hidden_states, timestep, text_states, text_states_2,
@@ -1545,22 +1555,20 @@ def main():
                         )
                         
                         # 解包结果 tuple
-                        # (img, img_after_double, txt_after_double, vec, text_mask, freqs_cos, freqs_sin)
+                        # (img, img_after_double, txt_after_double, vec, text_mask)
+                        # 注意：不从返回值获取 freqs_cos/sin，直接使用 transformer._cached_freqs_cos/sin
                         noise_pred = result[0]
                         img_after_double = result[1]
                         txt_after_double = result[2]
                         vec = result[3]
                         text_mask = result[4]
-                        freqs_cos = result[5]
-                        freqs_sin = result[6]
                         
                         # 更新缓存
                         deep_cache.update_cache(img_after_double, txt_after_double)
                         # 缓存其他需要的参数
+                        # 注意：freqs_cos/sin 不需要缓存，每次从 transformer._cached_* 获取
                         deep_cache._cached_vec = vec
                         deep_cache._cached_text_mask = text_mask
-                        deep_cache._cached_freqs_cos = freqs_cos
-                        deep_cache._cached_freqs_sin = freqs_sin
                     else:
                         # 不使用 DeepCache，正常执行 transformer
                         output = transformer(
