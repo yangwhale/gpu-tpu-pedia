@@ -802,6 +802,62 @@ transformer_shardings_tp = {
     r'.*\.byt5_in\.fc4\.weight$': (None, ('tp', 'sp')),
 }
 
+# TP + MLP fc2/proj Replicated 模式（默认，最优，减少 all-reduce）
+#
+# 策略：将 MLP fc2 和 attention proj 完全复制到所有设备
+# 这样这些层不需要 all-reduce，代价是增加 HBM 使用
+#
+# 性能对比（121帧 720p）：
+#   - 标准 TP (Row Parallel): 8.12s/step
+#   - TP + fc2/proj Replicated: 7.29s/step (+10.2% faster)
+#
+# 内存增量（~12 GB 额外 HBM）:
+#   fc2: 14336 × 3584 × 2 bytes ≈ 102 MB × 2 (img+txt) × 54 blocks × (7/8) ≈ 9.6 GB
+#   proj: 3584 × 3584 × 2 bytes ≈ 25 MB × 2 (img+txt) × 54 blocks × (7/8) ≈ 2.4 GB
+
+transformer_shardings_tp_fc2_replicated = {
+    # === MMDoubleStreamBlock 层 ===
+    # Image attention - Column Parallel
+    r'.*\.img_attn_q\.weight$': (('tp', 'sp'), None),
+    r'.*\.img_attn_k\.weight$': (('tp', 'sp'), None),
+    r'.*\.img_attn_v\.weight$': (('tp', 'sp'), None),
+    # Image attention proj - REPLICATED (无 all-reduce)
+    r'.*\.img_attn_proj\.weight$': (None, None),
+    
+    # Text attention - Column Parallel
+    r'.*\.txt_attn_q\.weight$': (('tp', 'sp'), None),
+    r'.*\.txt_attn_k\.weight$': (('tp', 'sp'), None),
+    r'.*\.txt_attn_v\.weight$': (('tp', 'sp'), None),
+    # Text attention proj - REPLICATED (无 all-reduce)
+    r'.*\.txt_attn_proj\.weight$': (None, None),
+    
+    # Image MLP - fc1 Column Parallel, fc2 REPLICATED
+    r'.*\.img_mlp\.fc1\.weight$': (('tp', 'sp'), None),
+    r'.*\.img_mlp\.fc2\.weight$': (None, None),  # REPLICATED: 无 all-reduce
+    
+    # Text MLP - fc1 Column Parallel, fc2 REPLICATED
+    r'.*\.txt_mlp\.fc1\.weight$': (('tp', 'sp'), None),
+    r'.*\.txt_mlp\.fc2\.weight$': (None, None),  # REPLICATED: 无 all-reduce
+    
+    # === MMSingleStreamBlock 层 ===
+    r'.*\.linear1_q\.weight$': (('tp', 'sp'), None),
+    r'.*\.linear1_k\.weight$': (('tp', 'sp'), None),
+    r'.*\.linear1_v\.weight$': (('tp', 'sp'), None),
+    r'.*\.linear1_mlp\.weight$': (('tp', 'sp'), None),
+    r'.*\.linear2\.linear\.weight$': (None, None),  # REPLICATED: 无 all-reduce
+    
+    # === 其他层保持 TP（不在热路径上）===
+    r'.*\.txt_in\..*\.to_q\.weight$': (('tp', 'sp'), None),
+    r'.*\.txt_in\..*\.to_k\.weight$': (('tp', 'sp'), None),
+    r'.*\.txt_in\..*\.to_v\.weight$': (('tp', 'sp'), None),
+    r'.*\.txt_in\..*\.to_out\.0\.weight$': (None, ('tp', 'sp')),
+    
+    r'.*\.byt5_in\.fc1\.weight$': (('tp', 'sp'), None),
+    r'.*\.byt5_in\.fc3\.weight$': (('tp', 'sp'), None),
+    r'.*\.byt5_in\.fc2\.weight$': (None, ('tp', 'sp')),
+    r'.*\.byt5_in\.fc4\.weight$': (None, ('tp', 'sp')),
+}
+
 # FSDP 模式（均匀分片，与 TP 相反）
 transformer_shardings_fsdp = {
     # === MMDoubleStreamBlock 层 ===
@@ -878,8 +934,16 @@ def shard_weights(mesh, weights, sharding_dict):
 
 
 def shard_weights_transformer(mesh, weights, use_tp=True):
-    """对 Transformer 模型的权重进行分片"""
-    sharding_dict = transformer_shardings_tp if use_tp else transformer_shardings_fsdp
+    """
+    对 Transformer 模型的权重进行分片
+    
+    默认使用 TP + fc2/proj Replicated 模式（~12 GB 额外 HBM，10.2% 加速）
+    """
+    # 默认使用 fc2 replicated 模式（最优）
+    if use_tp:
+        sharding_dict = transformer_shardings_tp_fc2_replicated
+    else:
+        sharding_dict = transformer_shardings_fsdp
     return shard_weights(mesh, weights, sharding_dict)
 
 
