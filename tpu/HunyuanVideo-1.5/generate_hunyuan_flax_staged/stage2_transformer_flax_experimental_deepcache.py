@@ -21,6 +21,7 @@ import argparse
 import warnings
 import numpy as np
 from types import SimpleNamespace
+from contextlib import nullcontext
 
 # 过滤掉各种无害警告
 warnings.filterwarnings('ignore', message='.*jax.experimental.shard_map is deprecated.*')
@@ -990,6 +991,12 @@ def main():
     parser.add_argument('--cache_step_interval', type=int, default=4,
                         help='缓存刷新间隔')
     
+    # Profiler 参数
+    parser.add_argument('--enable_profiler', type=str_to_bool, nargs='?', const=True, default=False,
+                        help='启用 JAX Profiler')
+    parser.add_argument('--profiler_output_dir', type=str, default='/dev/shm/jax-trace',
+                        help='Profiler 输出目录')
+    
     args = parser.parse_args()
     
     # [DeepCache] 打印配置
@@ -1341,6 +1348,15 @@ def main():
             cached_forward_fn = torchax.compile(cached_forward_fn)
             print_rank0("  ✓ DeepCache 模块编译完成")
     
+    # === Profiler 配置 ===
+    profiler_context = None
+    if args.enable_profiler:
+        print_rank0(f"\n[Profiler] 启用 JAX Profiler，输出目录: {args.profiler_output_dir}")
+        profiler_context = jax.profiler.trace(
+            args.profiler_output_dir,
+            create_perfetto_link=False
+        )
+    
     # === 定义统一的 Denoising 循环函数 ===
     def run_denoising_loop(
         latents_input,
@@ -1348,6 +1364,7 @@ def main():
         num_steps,
         desc="Denoising",
         is_warmup=False,
+        profiler_ctx=None,
     ):
         """
         统一的 Denoising 循环，预热和正式推理共用同一套代码。
@@ -1365,143 +1382,147 @@ def main():
         step_times = []
         start_time = time.perf_counter()
         
-        with mesh, env:
-            # clone 必须在 torchax 环境内执行
-            loop_latents = latents_input.clone() if is_warmup else latents_input
-            with torch.no_grad():
-                progress_bar = tqdm(
-                    range(num_steps),
-                    total=num_steps,
-                    desc=desc,
-                    ncols=130,
-                )
-                
-                for i in progress_bar:
-                    step_start = time.perf_counter()
+        # 使用 profiler context（如果提供）
+        ctx = profiler_ctx if profiler_ctx else nullcontext()
+        
+        with ctx:
+            with mesh, env:
+                # clone 必须在 torchax 环境内执行
+                loop_latents = latents_input.clone() if is_warmup else latents_input
+                with torch.no_grad():
+                    progress_bar = tqdm(
+                        range(num_steps),
+                        total=num_steps,
+                        desc=desc,
+                        ncols=130,
+                    )
                     
-                    # 获取当前 timestep
-                    t = timesteps_input[i % len(timesteps_input)]
-                    
-                    # 准备输入
-                    latents_concat = torch.concat([loop_latents, cond_latents], dim=1)
-                    latent_model_input = torch.cat([latents_concat] * 2) if do_classifier_free_guidance else latents_concat
-                    latent_model_input = scheduler.scale_model_input(latent_model_input, t)
-                    
-                    t_expand = t.repeat(latent_model_input.shape[0])
-                    
-                    # Meanflow timestep_r
-                    if use_meanflow:
-                        if i == len(timesteps_input) - 1:
-                            timesteps_r = torch.tensor([0.0], device='jax')
+                    for i in progress_bar:
+                        step_start = time.perf_counter()
+                        
+                        # 获取当前 timestep
+                        t = timesteps_input[i % len(timesteps_input)]
+                        
+                        # 准备输入
+                        latents_concat = torch.concat([loop_latents, cond_latents], dim=1)
+                        latent_model_input = torch.cat([latents_concat] * 2) if do_classifier_free_guidance else latents_concat
+                        latent_model_input = scheduler.scale_model_input(latent_model_input, t)
+                        
+                        t_expand = t.repeat(latent_model_input.shape[0])
+                        
+                        # Meanflow timestep_r
+                        if use_meanflow:
+                            if i == len(timesteps_input) - 1:
+                                timesteps_r = torch.tensor([0.0], device='jax')
+                            else:
+                                next_idx = (i + 1) % len(timesteps_input)
+                                timesteps_r = timesteps_input[next_idx]
+                            timesteps_r = timesteps_r.repeat(latent_model_input.shape[0])
                         else:
-                            next_idx = (i + 1) % len(timesteps_input)
-                            timesteps_r = timesteps_input[next_idx]
-                        timesteps_r = timesteps_r.repeat(latent_model_input.shape[0])
-                    else:
-                        timesteps_r = None
-                    
-                    # guidance（embedded guidance scale 为 None）
-                    guidance_expand = None
-                    
-                    # [DeepCache] 分支：根据是否使用缓存选择不同路径
-                    if args.enable_cache and deep_cache is not None:
-                        if deep_cache.should_use_cache(i):
-                            # 使用缓存路径
-                            cached_img, cached_txt, _, cached_text_mask, cached_freqs_cis = deep_cache.get_cache()
-                            
-                            # 调用 cached_forward_fn（需要传入当前 timestep 用于重新计算 vec）
-                            noise_pred = cached_forward_fn(
-                                latent_model_input,  # hidden_states
-                                t_expand,            # timestep
-                                prompt_embeds,       # text_states
-                                prompt_embeds_2_for_transformer,  # text_states_2
-                                prompt_mask,         # encoder_attention_mask
-                                timesteps_r,         # timestep_r
-                                vision_states,       # vision_states
-                                guidance_expand,     # guidance
-                                cached_img,          # cached_img
-                                cached_txt,          # cached_txt
-                                transformer._cached_freqs_cos,  # freqs_cos
-                                transformer._cached_freqs_sin,  # freqs_sin
-                                cached_text_mask,    # cached_text_mask
-                                cached_freqs_cis,    # cached_freqs_cis
-                            )
-                            
-                            # [DEBUG] 强制等待 cached_forward_fn 完成，验证计算是否真正执行
-                            torchax.interop.call_jax(jax.block_until_ready, noise_pred._elem)
+                            timesteps_r = None
+                        
+                        # guidance（embedded guidance scale 为 None）
+                        guidance_expand = None
+                        
+                        # [DeepCache] 分支：根据是否使用缓存选择不同路径
+                        if args.enable_cache and deep_cache is not None:
+                            if deep_cache.should_use_cache(i):
+                                # 使用缓存路径
+                                cached_img, cached_txt, _, cached_text_mask, cached_freqs_cis = deep_cache.get_cache()
+                                
+                                # 调用 cached_forward_fn（需要传入当前 timestep 用于重新计算 vec）
+                                noise_pred = cached_forward_fn(
+                                    latent_model_input,  # hidden_states
+                                    t_expand,            # timestep
+                                    prompt_embeds,       # text_states
+                                    prompt_embeds_2_for_transformer,  # text_states_2
+                                    prompt_mask,         # encoder_attention_mask
+                                    timesteps_r,         # timestep_r
+                                    vision_states,       # vision_states
+                                    guidance_expand,     # guidance
+                                    cached_img,          # cached_img
+                                    cached_txt,          # cached_txt
+                                    transformer._cached_freqs_cos,  # freqs_cos
+                                    transformer._cached_freqs_sin,  # freqs_sin
+                                    cached_text_mask,    # cached_text_mask
+                                    cached_freqs_cis,    # cached_freqs_cis
+                                )
+                                
+                                # [DEBUG] 强制等待 cached_forward_fn 完成，验证计算是否真正执行
+                                torchax.interop.call_jax(jax.block_until_ready, noise_pred._elem)
+                            else:
+                                # 完整 forward 路径（同时更新缓存）
+                                output = full_forward_fn(
+                                    latent_model_input,
+                                    t_expand,
+                                    prompt_embeds,
+                                    prompt_embeds_2_for_transformer,
+                                    prompt_mask,
+                                    timesteps_r,
+                                    vision_states,
+                                    guidance_expand,
+                                    transformer._cached_freqs_cos,
+                                    transformer._cached_freqs_sin,
+                                )
+                                noise_pred, img_before_last, txt_before_last, vec, text_mask, freqs_cis = output
+                                
+                                # 更新缓存（保存 block 52 之后、block 53 之前的状态）
+                                deep_cache.update_cache(img_before_last, txt_before_last, vec, text_mask, freqs_cis)
                         else:
-                            # 完整 forward 路径（同时更新缓存）
-                            output = full_forward_fn(
+                            # 标准 Transformer forward（无 DeepCache）
+                            output = transformer(
                                 latent_model_input,
                                 t_expand,
                                 prompt_embeds,
                                 prompt_embeds_2_for_transformer,
                                 prompt_mask,
-                                timesteps_r,
-                                vision_states,
-                                guidance_expand,
-                                transformer._cached_freqs_cos,
-                                transformer._cached_freqs_sin,
+                                timestep_r=timesteps_r,
+                                vision_states=vision_states,
+                                mask_type=task_type,
+                                guidance=guidance_expand,
+                                return_dict=False,
+                                extra_kwargs=extra_kwargs,
                             )
-                            noise_pred, img_before_last, txt_before_last, vec, text_mask, freqs_cis = output
-                            
-                            # 更新缓存（保存 block 52 之后、block 53 之前的状态）
-                            deep_cache.update_cache(img_before_last, txt_before_last, vec, text_mask, freqs_cis)
-                    else:
-                        # 标准 Transformer forward（无 DeepCache）
-                        output = transformer(
-                            latent_model_input,
-                            t_expand,
-                            prompt_embeds,
-                            prompt_embeds_2_for_transformer,
-                            prompt_mask,
-                            timestep_r=timesteps_r,
-                            vision_states=vision_states,
-                            mask_type=task_type,
-                            guidance=guidance_expand,
-                            return_dict=False,
-                            extra_kwargs=extra_kwargs,
-                        )
-                        noise_pred = output[0]
-                    
-                    # CFG
-                    if do_classifier_free_guidance:
-                        noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
-                        noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
-                    
-                    # Scheduler step
-                    loop_latents = scheduler.step(noise_pred, t, loop_latents, generator=generator, return_dict=False)[0]
-                    loop_latents = loop_latents.to(target_dtype)
-                    
-                    # 等待计算完成（JAX/XLA 是惰性执行的，必须显式等待才能准确计时）
-                    torchax.interop.call_jax(jax.block_until_ready, loop_latents._elem)
-                    
-                    # 更新进度条
-                    step_time = time.perf_counter() - step_start
-                    step_times.append(step_time)
-                    avg_time = sum(step_times) / len(step_times)
-                    
-                    if is_warmup:
-                        progress_bar.set_postfix({
-                            'step': f'{step_time:.2f}s',
-                        })
-                    else:
-                        remaining_steps = num_steps - i - 1
-                        # [DeepCache] 显示缓存状态
-                        if args.enable_cache and deep_cache is not None:
-                            cache_status = 'HIT' if deep_cache.should_use_cache(i) else 'MISS'
+                            noise_pred = output[0]
+                        
+                        # CFG
+                        if do_classifier_free_guidance:
+                            noise_pred_uncond, noise_pred_text = noise_pred.chunk(2)
+                            noise_pred = noise_pred_uncond + guidance_scale * (noise_pred_text - noise_pred_uncond)
+                        
+                        # Scheduler step
+                        loop_latents = scheduler.step(noise_pred, t, loop_latents, generator=generator, return_dict=False)[0]
+                        loop_latents = loop_latents.to(target_dtype)
+                        
+                        # 等待计算完成（JAX/XLA 是惰性执行的，必须显式等待才能准确计时）
+                        torchax.interop.call_jax(jax.block_until_ready, loop_latents._elem)
+                        
+                        # 更新进度条
+                        step_time = time.perf_counter() - step_start
+                        step_times.append(step_time)
+                        avg_time = sum(step_times) / len(step_times)
+                        
+                        if is_warmup:
                             progress_bar.set_postfix({
                                 'step': f'{step_time:.2f}s',
-                                'avg': f'{avg_time:.2f}s',
-                                'eta': f'{avg_time * remaining_steps:.1f}s',
-                                'cache': cache_status,
                             })
                         else:
-                            progress_bar.set_postfix({
-                                'step': f'{step_time:.2f}s',
-                                'avg': f'{avg_time:.2f}s',
-                                'eta': f'{avg_time * remaining_steps:.1f}s'
-                            })
+                            remaining_steps = num_steps - i - 1
+                            # [DeepCache] 显示缓存状态
+                            if args.enable_cache and deep_cache is not None:
+                                cache_status = 'HIT' if deep_cache.should_use_cache(i) else 'MISS'
+                                progress_bar.set_postfix({
+                                    'step': f'{step_time:.2f}s',
+                                    'avg': f'{avg_time:.2f}s',
+                                    'eta': f'{avg_time * remaining_steps:.1f}s',
+                                    'cache': cache_status,
+                                })
+                            else:
+                                progress_bar.set_postfix({
+                                    'step': f'{step_time:.2f}s',
+                                    'avg': f'{avg_time:.2f}s',
+                                    'eta': f'{avg_time * remaining_steps:.1f}s'
+                                })
         
         elapsed = time.perf_counter() - start_time
         return loop_latents, step_times, elapsed
@@ -1539,6 +1560,7 @@ def main():
         num_steps=num_inference_steps,
         desc="Denoising (TPU)" if not args.enable_cache else "Denoising (TPU+DeepCache)",
         is_warmup=False,
+        profiler_ctx=profiler_context,
     )
     
     print_rank0(f"\n✓ Transformer 推理完成，耗时: {elapsed:.2f} 秒")
