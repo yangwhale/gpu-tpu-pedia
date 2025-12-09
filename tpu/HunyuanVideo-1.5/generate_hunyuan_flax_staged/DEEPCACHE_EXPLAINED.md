@@ -96,73 +96,175 @@ flowchart TB
 
 ## 2. 原理与设计理念
 
-### 2.1 HunyuanVideo Transformer 结构
+### 2.1 HunyuanVideo-1.5 720p_t2v Transformer 结构
+
+> ⚠️ **重要**：HunyuanVideo-1.5 720p_t2v 的实际架构如下。
 
 ```mermaid
 flowchart TB
-    subgraph HunyuanVideo["HunyuanVideo Transformer"]
+    subgraph HunyuanVideo["HunyuanVideo-1.5 720p_t2v Transformer"]
         direction TB
         
         Input[Hidden States] --> DB1
         
-        subgraph DoubleBlocks["Double Blocks (20层)"]
+        subgraph DoubleBlocks["Double Blocks (54层)"]
             DB1[Double Block 1] --> DB2[Double Block 2]
             DB2 --> DB3[...]
-            DB3 --> DB20[Double Block 20]
+            DB3 --> DB54[Double Block 54]
         end
         
-        DB20 --> SB1
-        
-        subgraph SingleBlocks["Single Blocks (40层)"]
-            SB1[Single Block 1] --> SB2[Single Block 2]
-            SB2 --> SB3[...]
-            SB3 --> SB40[Single Block 40]
-        end
-        
-        SB40 --> FL[Final Layer]
+        DB54 --> FL[Final Layer]
         FL --> Output[Noise Prediction]
     end
     
     style DoubleBlocks fill:#ffcccc
-    style SingleBlocks fill:#ccffcc
 ```
 
-### 2.2 缓存策略
+**实际层数统计**：
+- **double_blocks**: 54 层
+- **single_blocks**: 0 层
+- **final_layer**: 1 层
+- **总计**: 55 层
 
-**缓存点选择**：Double Blocks 之后、Single Blocks 之前
+### 2.2 Double Block vs Single Block
+
+**Double Block（MMDoubleStreamBlock）**：
+- 处理两个分离的流：img（视频特征）和 txt（文本特征）
+- 每个流有独立的 Attention 和 MLP
+- 两个流之间通过 Cross-Attention 交互
+- 输入: (img, txt)，输出: (img, txt)
+
+**Single Block（MMSingleStreamBlock）**：
+- 将 img 和 txt 合并为单一序列 x = concat(img, txt)
+- 统一处理后再分离
+- 更轻量，适合后期处理
+- 720p_t2v 配置中不使用
+
+### 2.3 缓存策略
+
+**缓存点选择**：Block 52 之后、Block 53 之前
+
+> ⚠️ **重要**：DeepCache 的正确设计是跳过 block 0-52（共 53 层），但必须计算最后一个 block 53。
+> 这是因为最后一个 block 对细节生成非常关键，不能完全跳过。
 
 ```mermaid
 flowchart LR
     subgraph 完整Forward
-        A[Input] --> B[Double Blocks<br/>20层]
-        B --> C["缓存点<br/>(img, txt)"]
-        C --> D[Single Blocks<br/>40层]
-        D --> E[Final Layer]
+        A[Input] --> B1[Block 0-52<br/>53层]
+        B1 --> C["缓存点<br/>(img, txt)"]
+        C --> B2[Block 53<br/>1层]
+        B2 --> E[Final Layer]
         E --> F[Output]
     end
     
     subgraph 缓存Forward
         A2[Input] --> C2["使用缓存<br/>(img, txt)"]
-        C2 --> D2[Single Blocks<br/>40层]
-        D2 --> E2[Final Layer]
+        C2 --> B3[Block 53<br/>1层]
+        B3 --> E2[Final Layer]
         E2 --> F2[Output]
     end
     
-    style B fill:#ffcccc
+    style B1 fill:#ffcccc
     style C fill:#ffffcc
     style C2 fill:#ffffcc
+    style B2 fill:#ccffcc
+    style B3 fill:#ccffcc
 ```
 
-### 2.3 理论加速比
+### 2.4 理论加速比
 
 | 路径 | 计算层数 | 占比 |
 |------|----------|------|
-| 完整 Forward | 20 + 40 + 1 = 61 | 100% |
-| 缓存 Forward | 0 + 40 + 1 = 41 | 67% |
+| 完整 Forward | 54 + 1 = 55 | 100% |
+| 缓存 Forward | 1 + 1 = 2 | 3.6% |
 
-**理论加速比**：61/41 ≈ **1.49x**
+**理论加速比**：当 cache hit 率为 50% 时：
+- 完整步骤：25 × 55 = 1375 层
+- 缓存步骤：25 × 2 = 50 层
+- 总计：1425 层 vs 2750 层
+- **理论加速比**：2750/1425 ≈ **1.93x**
 
-### 2.4 缓存刷新策略
+### 2.5 缓存工作流程详解
+
+以下是 DeepCache 的详细工作流程，以 `cache_step_interval = 4` 为例：
+
+```
+┌─────────────────────────────────────────────────────────────────────────────┐
+│                        DeepCache 缓存工作流程                                 │
+├─────────────────────────────────────────────────────────────────────────────┤
+│                                                                             │
+│  Step 11 (cache_start_step):                                                │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │ Block 0 → Block 1 → ... → Block 52 → [保存缓存] → Block 53 → FL  │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
+│                                    ↓                                        │
+│                              缓存 = (img, txt)  ← Block 52 的输出            │
+│                                                                             │
+│  Step 12 (cache hit):                                                       │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │ [读取缓存] ──────────────────────────────→ Block 53 → Final Layer │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
+│                                                                             │
+│  Step 13 (cache hit):                                                       │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │ [读取缓存] ──────────────────────────────→ Block 53 → Final Layer │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
+│                                                                             │
+│  Step 14 (cache hit):                                                       │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │ [读取缓存] ──────────────────────────────→ Block 53 → Final Layer │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
+│                                                                             │
+│  Step 15 (cache refresh = cache_start_step + interval):                     │
+│  ┌──────────────────────────────────────────────────────────────────┐       │
+│  │ Block 0 → Block 1 → ... → Block 52 → [刷新缓存] → Block 53 → FL  │       │
+│  └──────────────────────────────────────────────────────────────────┘       │
+│                                    ↓                                        │
+│                              缓存 = (img, txt)  ← 新的 Block 52 输出         │
+│                                                                             │
+│  Step 16-17-18 (cache hit): 使用 Step 15 的缓存...                          │
+│                                                                             │
+│  ... 循环直到 cache_end_step ...                                            │
+│                                                                             │
+└─────────────────────────────────────────────────────────────────────────────┘
+```
+
+**关键理解**：
+1. **缓存内容**：Block 52 的输出 `(img, txt)`，这是进入最后一个 block 之前的状态
+2. **缓存 forward 执行什么**：Block 53 + Single Blocks（如果有）+ Final Layer
+3. **为什么保留 Block 53**：最后一个 block 对输出质量至关重要，它负责整合所有信息
+4. **1:3 模式**：默认 `interval=4` 意味着每 4 步刷新一次，即 1 次完整计算 + 3 次缓存计算
+
+```mermaid
+sequenceDiagram
+    participant Step11 as Step 11
+    participant Step12 as Step 12
+    participant Step13 as Step 13
+    participant Step14 as Step 14
+    participant Step15 as Step 15
+    
+    Note over Step11: 完整计算 54 层
+    Step11->>Step11: Block 0-52
+    Step11->>Step11: 保存缓存
+    Step11->>Step11: Block 53 + FL
+    
+    Note over Step12,Step14: 缓存计算 2 层
+    Step12->>Step12: 使用缓存
+    Step12->>Step12: Block 53 + FL
+    
+    Step13->>Step13: 使用缓存
+    Step13->>Step13: Block 53 + FL
+    
+    Step14->>Step14: 使用缓存
+    Step14->>Step14: Block 53 + FL
+    
+    Note over Step15: 刷新缓存 54 层
+    Step15->>Step15: Block 0-52
+    Step15->>Step15: 刷新缓存
+    Step15->>Step15: Block 53 + FL
+```
+
+### 2.6 缓存刷新策略
 
 不能永远使用旧缓存，需要周期性刷新：
 
@@ -424,7 +526,10 @@ flowchart TB
 
 ```python
 class FullForwardModule(torch.nn.Module):
-    """封装完整 transformer forward"""
+    """封装完整 transformer forward（执行所有 54 层 double_blocks）
+    
+    缓存点：在 block 52 之后、block 53 之前保存中间状态
+    """
     
     def __init__(self, transformer, mask_type, extra_kwargs):
         super().__init__()
@@ -434,58 +539,76 @@ class FullForwardModule(torch.nn.Module):
     
     def forward(self, hidden_states, timestep, text_states, ...):
         transformer = self.transformer
+        num_double_blocks = len(transformer.double_blocks)
         
         # === 输入处理 ===
         img = transformer.img_in(hidden_states)
         vec = transformer.time_in(timestep)
         txt = transformer.txt_in(text_states)
         
-        # === Double Blocks ===
-        for block in transformer.double_blocks:
+        # === Double Blocks (54层) ===
+        img_before_last_block = None
+        txt_before_last_block = None
+        
+        for index, block in enumerate(transformer.double_blocks):
+            # 🔑 在最后一个 block 之前保存缓存
+            if index == num_double_blocks - 1:
+                img_before_last_block = img
+                txt_before_last_block = txt
+            
             img, txt = block(img=img, txt=txt, vec=vec, ...)
         
-        # 🔑 缓存点：保存中间状态
-        img_after_double = img
-        txt_after_double = txt
-        
-        # === Single Blocks ===
-        x = torch.cat((img, txt), 1)
-        for block in transformer.single_blocks:
-            x = block(x=x, vec=vec, ...)
-        
         # === Final Layer ===
-        img = x[:, :img_seq_len, ...]
+        img_seq_len = img.shape[1]
         output = transformer.final_layer(img, vec)
+        output = transformer.unpatchify(output, ...)
         
-        # 返回 output + 缓存数据
-        return (output, img_after_double, txt_after_double, vec, text_mask)
+        # 返回 output + 缓存数据（block 52 之后的状态）
+        return (output, img_before_last_block, txt_before_last_block, vec, text_mask, freqs_cis)
 ```
 
 ### 6.3 CachedForwardModule 实现
 
 ```python
 class CachedForwardModule(torch.nn.Module):
-    """封装使用缓存的 forward，跳过 double_blocks"""
+    """封装使用缓存的 forward
     
-    def __init__(self, transformer):
+    跳过 block 0-52，只执行：
+    1. block 53（最后一个 double_block）
+    2. single_blocks（如果有）
+    3. final_layer
+    """
+    
+    def __init__(self, transformer, extra_kwargs):
         super().__init__()
         self.transformer = transformer
+        self.extra_kwargs = extra_kwargs
     
-    def forward(self, cached_img, cached_txt, vec, freqs_cos, freqs_sin, text_mask):
+    def forward(self, hidden_states, timestep, ..., cached_img, cached_txt, cached_freqs_cis, ...):
         transformer = self.transformer
         
-        # 🔑 直接使用缓存，跳过 double_blocks
+        # 🔑 重新计算 vec（依赖当前 timestep）
+        vec = transformer.time_in(timestep)
+        if transformer.guidance_embed:
+            vec = vec + transformer.guidance_in(guidance)
+        ...
+        
+        # 🔑 使用缓存（block 52 之后的状态）
         img = cached_img
         txt = cached_txt
         
-        # === Single Blocks ===
-        x = torch.cat((img, txt), 1)
-        for block in transformer.single_blocks:
-            x = block(x=x, vec=vec, ...)
+        # === 执行最后一个 double_block (block 53) ===
+        num_double_blocks = len(transformer.double_blocks)
+        last_block_index = num_double_blocks - 1
+        last_block = transformer.double_blocks[last_block_index]
+        
+        img, txt = last_block(
+            img=img, txt=txt, vec=vec, freqs_cis=cached_freqs_cis, ...
+        )
         
         # === Final Layer ===
-        img = x[:, :img_seq_len, ...]
         output = transformer.final_layer(img, vec)
+        output = transformer.unpatchify(output, ...)
         
         return output
 ```
@@ -494,7 +617,10 @@ class CachedForwardModule(torch.nn.Module):
 
 ```python
 class TPUDeepCache:
-    """TPU 友好的缓存管理器"""
+    """TPU 友好的缓存管理器
+    
+    缓存 block 52 之后的状态，用于跳过 block 0-52
+    """
     
     def __init__(self, cache_start_step, cache_end_step, cache_step_interval, total_steps):
         # 计算需要完整计算的步骤
@@ -504,26 +630,28 @@ class TPUDeepCache:
             list(range(cache_end_step, total_steps))                  # 后期
         )
         
-        # 缓存存储
+        # 缓存存储（block 52 之后的状态）
         self.cached_img = None
         self.cached_txt = None
         self._cached_vec = None
         self._cached_text_mask = None
+        self._cached_freqs_cis = None  # 用于 block 53
     
     def should_use_cache(self, step):
         """判断是否应该使用缓存"""
         return step not in self.no_cache_steps and self.cached_img is not None
     
-    def update_cache(self, img, txt, vec, text_mask):
-        """更新缓存"""
+    def update_cache(self, img, txt, vec, text_mask, freqs_cis):
+        """更新缓存（保存 block 52 之后的状态）"""
         self.cached_img = img
         self.cached_txt = txt
         self._cached_vec = vec
         self._cached_text_mask = text_mask
+        self._cached_freqs_cis = freqs_cis
     
     def get_cache(self):
         """获取缓存"""
-        return self.cached_img, self.cached_txt, self._cached_vec, self._cached_text_mask
+        return self.cached_img, self.cached_txt, self._cached_vec, self._cached_text_mask, self._cached_freqs_cis
 ```
 
 ### 6.5 推理循环集成
@@ -553,19 +681,22 @@ flowchart TB
 # 推理循环
 for i in range(num_steps):
     if deep_cache.should_use_cache(i):
-        # 🚀 使用缓存路径
-        cached_img, cached_txt, vec, text_mask = deep_cache.get_cache()
+        # 🚀 使用缓存路径（跳过 block 0-52，只执行 block 53 + final_layer）
+        cached_img, cached_txt, vec, text_mask, cached_freqs_cis = deep_cache.get_cache()
         noise_pred = cached_forward_fn(
-            cached_img, cached_txt, vec,
+            latent_model_input, timestep,  # 需要重新计算 vec
+            cached_img, cached_txt,
             transformer._cached_freqs_cos,
             transformer._cached_freqs_sin,
             text_mask,
+            cached_freqs_cis,
         )
     else:
         # 📦 完整 forward + 更新缓存
         output = full_forward_fn(latent_model_input, timestep, ...)
-        noise_pred, img_cache, txt_cache, vec, text_mask = output
-        deep_cache.update_cache(img_cache, txt_cache, vec, text_mask)
+        noise_pred, img_before_last, txt_before_last, vec, text_mask, freqs_cis = output
+        # 保存 block 52 之后的状态（用于跳过 block 0-52）
+        deep_cache.update_cache(img_before_last, txt_before_last, vec, text_mask, freqs_cis)
     
     # Scheduler step
     latents = scheduler.step(noise_pred, t, latents)[0]
@@ -609,12 +740,13 @@ pie title 50步推理时间分布 (DeepCache)
     "预热编译" : 17
 ```
 
-### 7.3 超越理论加速比
+### 7.3 加速原理分析
 
-实测加速 1.72x > 理论 1.49x，可能原因：
-- 缓存 Forward 避免了部分 XLA 编译开销
-- 内存访问模式更友好
-- TPU 矩阵运算效率差异
+实测加速 **1.72x**，接近理论 1.93x，原因：
+- 缓存步骤跳过 block 0-52（53层），只执行 block 53 + final_layer（2层 vs 55层）
+- 跳过了 53 层 double_blocks 的计算
+- 每个 double_block 包含多个 attention + MLP 操作
+- 保留最后一个 block 确保输出质量
 
 ### 7.4 使用方法
 

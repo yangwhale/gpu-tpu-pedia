@@ -93,14 +93,15 @@ class TPUDeepCache:
     TPU 友好的 DeepCache 实现
     
     核心思想：
-    1. 缓存 double_blocks 的输出（img, txt），进入 single_blocks 前的状态
-    2. 在 "填充缓存" 步骤：正常执行完整 transformer，保存 (img, txt)
-    3. 在 "使用缓存" 步骤：跳过 double_blocks，用缓存的 (img, txt) 执行 single_blocks + final_layer
+    1. 缓存 block 52 之后的中间状态（img, txt）
+    2. 在 "填充缓存" 步骤：正常执行完整 transformer，在 block 52 后保存 (img, txt)
+    3. 在 "使用缓存" 步骤：跳过 block 0-52，用缓存的 (img, txt) 执行 block 53 + single_blocks + final_layer
     
-    加速原理：
-    - HunyuanVideo 有 20 个 double_blocks + 40 个 single_blocks
-    - 跳过 20 层，只计算 40 + 1 = 41 层
-    - 理论加速比: 61/41 ≈ 1.49x
+    加速原理（720p_t2v 架构: 54 double_blocks + 0 single_blocks）：
+    - 完整 forward: 54 double_blocks + final_layer = 55 层
+    - 缓存 forward: 1 double_block (block 53) + final_layer = 2 层
+    - 跳过 53 层，只计算 2 层
+    - 理论加速比（50% cache hit）: 2750 / 1400 ≈ 1.96x
     """
     
     def __init__(self, cache_start_step, cache_end_step, cache_step_interval, total_steps):
@@ -121,6 +122,7 @@ class TPUDeepCache:
         self.cached_txt = None
         self._cached_vec = None
         self._cached_text_mask = None
+        self._cached_freqs_cis = None
         
         # 统计信息
         self.cache_hit_count = 0
@@ -130,18 +132,19 @@ class TPUDeepCache:
         """判断当前步骤是否应该使用缓存"""
         return step not in self.no_cache_steps and self.cached_img is not None
     
-    def update_cache(self, img, txt, vec, text_mask):
+    def update_cache(self, img, txt, vec, text_mask, freqs_cis):
         """更新缓存"""
         self.cached_img = img
         self.cached_txt = txt
         self._cached_vec = vec
         self._cached_text_mask = text_mask
+        self._cached_freqs_cis = freqs_cis
         self.cache_miss_count += 1
     
     def get_cache(self):
         """获取缓存"""
         self.cache_hit_count += 1
-        return self.cached_img, self.cached_txt, self._cached_vec, self._cached_text_mask
+        return self.cached_img, self.cached_txt, self._cached_vec, self._cached_text_mask, self._cached_freqs_cis
     
     def clear(self):
         """清除缓存"""
@@ -149,6 +152,7 @@ class TPUDeepCache:
         self.cached_txt = None
         self._cached_vec = None
         self._cached_text_mask = None
+        self._cached_freqs_cis = None
         self.cache_hit_count = 0
         self.cache_miss_count = 0
     
@@ -165,7 +169,10 @@ class TPUDeepCache:
 class FullForwardModule(torch.nn.Module):
     """
     [DeepCache] 封装完整 transformer forward 的 Module
-    返回: (output, img_after_double, txt_after_double, vec, text_mask)
+    
+    返回: (output, img_before_last_block, txt_before_last_block, vec, text_mask, freqs_cis)
+    
+    缓存点：在 block 52 之后、block 53 之前保存中间状态
     """
     def __init__(self, transformer, mask_type, extra_kwargs):
         super().__init__()
@@ -265,14 +272,23 @@ class FullForwardModule(torch.nn.Module):
         freqs_cis = (freqs_cos, freqs_sin) if freqs_cos is not None else None
         
         # === Pass through double-stream blocks ===
+        num_double_blocks = len(transformer.double_blocks)
+        img_before_last_block = None
+        txt_before_last_block = None
+        
         for index, block in enumerate(transformer.double_blocks):
+            # 在最后一个 block (block 53) 之前保存缓存（即 block 52 之后）
+            if index == num_double_blocks - 1:
+                img_before_last_block = img
+                txt_before_last_block = txt
+            
             force_full_attn = (
                 transformer.attn_mode in ["flex-block-attn"]
                 and transformer.attn_param["win_type"] == "hybrid"
                 and transformer.attn_param["win_ratio"] > 0
                 and (
                     (index + 1) % transformer.attn_param["win_ratio"] == 0
-                    or (index + 1) == len(transformer.double_blocks)
+                    or (index + 1) == num_double_blocks
                 )
             )
             transformer.attn_param["layer-name"] = f"double_block_{index+1}"
@@ -281,10 +297,6 @@ class FullForwardModule(torch.nn.Module):
                 text_mask=text_mask, attn_param=transformer.attn_param,
                 is_flash=force_full_attn, block_idx=index,
             )
-        
-        # 保存 double_blocks 后的中间状态（缓存点）
-        img_after_double = img
-        txt_after_double = txt
         
         # === 继续执行 single_blocks + final_layer ===
         txt_seq_len = txt.shape[1]
@@ -314,29 +326,93 @@ class FullForwardModule(torch.nn.Module):
         img = transformer.final_layer(img, vec)
         img = transformer.unpatchify(img, tt, th, tw)
         
-        return (img, img_after_double, txt_after_double, vec, text_mask)
+        # 返回缓存点状态：block 52 之后、block 53 之前的状态
+        return (img, img_before_last_block, txt_before_last_block, vec, text_mask, freqs_cis)
 
 
 class CachedForwardModule(torch.nn.Module):
     """
     [DeepCache] 封装使用缓存的 forward 的 Module
-    跳过 double_blocks，只执行 single_blocks + final_layer
+    
+    跳过 block 0-52，只执行：
+    1. block 53（最后一个 double_block）
+    2. single_blocks（如果有）
+    3. final_layer
+    
+    重要：这个模块必须重新计算 vec（timestep embedding），因为 vec 依赖于当前 timestep。
     """
-    def __init__(self, transformer):
+    def __init__(self, transformer, extra_kwargs):
         super().__init__()
         self.transformer = transformer
+        self.extra_kwargs = extra_kwargs
     
-    def forward(self, cached_img, cached_txt, vec, freqs_cos, freqs_sin, text_mask):
-        transformer = self.transformer
+    def forward(self, hidden_states, timestep, text_states, text_states_2,
+                encoder_attention_mask, timestep_r, vision_states, guidance,
+                cached_img, cached_txt, freqs_cos, freqs_sin, cached_text_mask, cached_freqs_cis):
+        """
+        使用缓存的 forward，执行 block 53 + single_blocks + final_layer。
         
+        Args:
+            hidden_states: 当前步骤的 latent（用于计算新的 vec）
+            timestep: 当前时间步
+            cached_img: 缓存的 img（block 52 之后的状态）
+            cached_txt: 缓存的 txt（block 52 之后的状态）
+            cached_freqs_cis: 缓存的 freqs_cis
+            其他参数与 FullForwardModule 相同
+        """
+        transformer = self.transformer
+        extra_kwargs = self.extra_kwargs
+        
+        if guidance is None:
+            guidance = torch.tensor([6016.0], device=hidden_states.device, dtype=torch.bfloat16)
+        
+        # 使用当前 timestep 重新计算 vec（这是关键！）
+        t = timestep
+        text_mask = cached_text_mask
+        
+        # 重新计算 vec（timestep embedding）
+        vec = transformer.time_in(t)
+        if text_states_2 is not None:
+            vec_2 = transformer.vector_in(text_states_2)
+            vec = vec + vec_2
+        if transformer.guidance_embed:
+            if guidance is None:
+                raise ValueError("Didn't get guidance strength for guidance distilled model.")
+            vec = vec + transformer.guidance_in(guidance)
+        if timestep_r is not None:
+            vec = vec + transformer.time_r_in(timestep_r)
+        
+        # 使用缓存的 img 和 txt（block 52 之后的状态）
         img = cached_img
         txt = cached_txt
         
+        tt, th, tw = transformer.attn_param['thw']
+        
+        # === 执行最后一个 double_block (block 53) ===
+        num_double_blocks = len(transformer.double_blocks)
+        last_block_index = num_double_blocks - 1
+        last_block = transformer.double_blocks[last_block_index]
+        
+        force_full_attn = (
+            transformer.attn_mode in ["flex-block-attn"]
+            and transformer.attn_param["win_type"] == "hybrid"
+            and transformer.attn_param["win_ratio"] > 0
+            and (
+                (last_block_index + 1) % transformer.attn_param["win_ratio"] == 0
+                or (last_block_index + 1) == num_double_blocks
+            )
+        )
+        transformer.attn_param["layer-name"] = f"double_block_{last_block_index+1}"
+        img, txt = last_block(
+            img=img, txt=txt, vec=vec, freqs_cis=cached_freqs_cis,
+            text_mask=text_mask, attn_param=transformer.attn_param,
+            is_flash=force_full_attn, block_idx=last_block_index,
+        )
+        
+        # === 执行 single_blocks ===
         txt_seq_len = txt.shape[1]
         img_seq_len = img.shape[1]
         x = torch.cat((img, txt), 1)
-        
-        tt, th, tw = transformer.attn_param['thw']
         
         if len(transformer.single_blocks) > 0:
             for index, block in enumerate(transformer.single_blocks):
@@ -357,6 +433,7 @@ class CachedForwardModule(torch.nn.Module):
                     is_flash=force_full_attn,
                 )
         
+        # === 执行 final_layer ===
         img = x[:, :img_seq_len, ...]
         img = transformer.final_layer(img, vec)
         img = transformer.unpatchify(img, tt, th, tw)
@@ -367,7 +444,7 @@ class CachedForwardModule(torch.nn.Module):
 def create_deepcache_modules(transformer, mask_type, extra_kwargs):
     """[DeepCache] 创建 DeepCache 所需的两个模块"""
     full_module = FullForwardModule(transformer, mask_type, extra_kwargs)
-    cached_module = CachedForwardModule(transformer)
+    cached_module = CachedForwardModule(transformer, extra_kwargs)
     return full_module, cached_module
 
 
@@ -1330,15 +1407,28 @@ def main():
                     if args.enable_cache and deep_cache is not None:
                         if deep_cache.should_use_cache(i):
                             # 使用缓存路径
-                            cached_img, cached_txt, cached_vec, cached_text_mask = deep_cache.get_cache()
+                            cached_img, cached_txt, _, cached_text_mask, cached_freqs_cis = deep_cache.get_cache()
                             
-                            # 调用 cached_forward_fn
+                            # 调用 cached_forward_fn（需要传入当前 timestep 用于重新计算 vec）
                             noise_pred = cached_forward_fn(
-                                cached_img, cached_txt, cached_vec,
-                                transformer._cached_freqs_cos,
-                                transformer._cached_freqs_sin,
-                                cached_text_mask,
+                                latent_model_input,  # hidden_states
+                                t_expand,            # timestep
+                                prompt_embeds,       # text_states
+                                prompt_embeds_2_for_transformer,  # text_states_2
+                                prompt_mask,         # encoder_attention_mask
+                                timesteps_r,         # timestep_r
+                                vision_states,       # vision_states
+                                guidance_expand,     # guidance
+                                cached_img,          # cached_img
+                                cached_txt,          # cached_txt
+                                transformer._cached_freqs_cos,  # freqs_cos
+                                transformer._cached_freqs_sin,  # freqs_sin
+                                cached_text_mask,    # cached_text_mask
+                                cached_freqs_cis,    # cached_freqs_cis
                             )
+                            
+                            # [DEBUG] 强制等待 cached_forward_fn 完成，验证计算是否真正执行
+                            torchax.interop.call_jax(jax.block_until_ready, noise_pred._elem)
                         else:
                             # 完整 forward 路径（同时更新缓存）
                             output = full_forward_fn(
@@ -1353,10 +1443,10 @@ def main():
                                 transformer._cached_freqs_cos,
                                 transformer._cached_freqs_sin,
                             )
-                            noise_pred, img_after_double, txt_after_double, vec, text_mask = output
+                            noise_pred, img_before_last, txt_before_last, vec, text_mask, freqs_cis = output
                             
-                            # 更新缓存
-                            deep_cache.update_cache(img_after_double, txt_after_double, vec, text_mask)
+                            # 更新缓存（保存 block 52 之后、block 53 之前的状态）
+                            deep_cache.update_cache(img_before_last, txt_before_last, vec, text_mask, freqs_cis)
                     else:
                         # 标准 Transformer forward（无 DeepCache）
                         output = transformer(
