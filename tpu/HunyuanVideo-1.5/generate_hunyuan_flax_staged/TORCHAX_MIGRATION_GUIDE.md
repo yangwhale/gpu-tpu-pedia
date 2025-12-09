@@ -317,7 +317,71 @@ python stage2_transformer_flax_experimental_deepcache.py \
 
 ## 6. 性能优化
 
-### 6.1 Warmup 策略
+### 6.1 权重分片策略
+
+#### 6.1.1 TP + fc2/proj Replicated（默认，推荐）
+
+将 MLP fc2 和 attention proj 权重完全复制到所有设备，消除 all-reduce 开销。
+
+```python
+# 分片策略定义
+transformer_shardings_tp_fc2_replicated = {
+    # Column Parallel（Q/K/V, fc1）- 输出维度分片
+    r'.*\.img_attn_q\.weight$': (('tp', 'sp'), None),
+    r'.*\.img_mlp\.fc1\.weight$': (('tp', 'sp'), None),
+    
+    # REPLICATED（fc2, proj）- 无 all-reduce
+    r'.*\.img_attn_proj\.weight$': (None, None),
+    r'.*\.img_mlp\.fc2\.weight$': (None, None),
+}
+```
+
+**性能对比（121帧 720p, 8× TPU v6e）**：
+
+| 分片模式 | Step Time | 相对性能 | HBM 增量 |
+|----------|-----------|----------|----------|
+| 标准 TP | 8.12s | baseline | 0 GB |
+| **TP + fc2 Replicated** | **7.29s** | **+10.2%** | ~12 GB |
+| TP + 全 MLP Replicated | 8.18s | -0.7% | ~21 GB |
+
+**关键发现**：
+- 只复制 Row Parallel 层（fc2, proj）是最优策略
+- 复制 Column Parallel 层（Q/K/V, fc1）没有收益，反而增加 HBM 带宽压力
+- 原因：Column Parallel 层本来就不需要 all-reduce
+
+#### 6.1.2 标准 TP（Megatron Column-Row）
+
+每个 block 有 2 次 all-reduce：
+
+```
+Attention: Q/K/V (Column) → proj (Row) → all-reduce
+MLP: fc1 (Column) → fc2 (Row) → all-reduce
+```
+
+```python
+transformer_shardings_tp = {
+    r'.*\.img_attn_q\.weight$': (('tp', 'sp'), None),   # Column
+    r'.*\.img_attn_proj\.weight$': (None, ('tp', 'sp')),  # Row (all-reduce)
+    r'.*\.img_mlp\.fc1\.weight$': (('tp', 'sp'), None),   # Column
+    r'.*\.img_mlp\.fc2\.weight$': (None, ('tp', 'sp')),   # Row (all-reduce)
+}
+```
+
+#### 6.1.3 Profiler 分析
+
+使用 JAX Profiler 可以观察 all-reduce 操作：
+
+```bash
+python stage2_transformer_flax.py --enable_profiler --num_inference_steps 3
+```
+
+典型时间分布（单个 block）：
+- Splash Attention: ~35ms（主导）
+- Linear + all-reduce: ~45ms
+
+即使复制了 fc2/proj 权重，仍会有部分 all-reduce，因为激活值仍是 sharded 的。
+
+### 6.2 Warmup 策略
 
 XLA 编译是惰性的，前 1-2 步会触发编译。
 
@@ -327,7 +391,7 @@ if args.warmup_steps > 0:
     run_denoising_loop(latents, timesteps, args.warmup_steps, is_warmup=True)
 ```
 
-### 6.2 JIT 缓存
+### 6.3 JIT 缓存
 
 ```python
 jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
@@ -337,7 +401,7 @@ jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 
 效果：首次 ~60s 编译 → 后续 ~5s 加载缓存
 
-### 6.3 准确计时
+### 6.4 准确计时
 
 ```python
 output = model(input)
@@ -345,15 +409,16 @@ torchax.interop.call_jax(jax.block_until_ready, output._elem)
 step_time = time.perf_counter() - start  # 准确时间
 ```
 
-### 6.4 性能基准
+### 6.5 性能基准
 
 | 配置 | Token 数 | 总时间 | 每步时间 |
 |------|----------|--------|----------|
 | 49帧, 720p | 46,800 | ~215s | ~4.3s |
-| 121帧, 720p | 111,600 | ~350s | ~7.0s |
+| 121帧, 720p (标准 TP) | 111,600 | ~406s | ~8.1s |
+| 121帧, 720p (TP + fc2 Replicated) | 111,600 | ~365s | ~7.3s |
 | 121帧 + DeepCache | 111,600 | ~203s | ~4.1s |
 
-环境：TPU v4-8，50 步推理
+环境：TPU v6e-8，50 步推理
 
 ---
 
