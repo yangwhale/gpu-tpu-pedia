@@ -239,10 +239,160 @@ mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
 
 ---
 
+## 文件改动清单
+
+本次迁移涉及两个仓库的文件改动：
+
+### 1. diffusers-tpu 仓库
+
+| 文件 | 操作 | 说明 |
+|-----|------|-----|
+| `src/diffusers/models/transformers/transformer_wan_flax.py` | 新增 | JAX/Flax 实现的 WanTransformer3DModel |
+| `src/diffusers/pipelines/wan/pipeline_wan_flax.py` | 新增 | JAX/Flax 实现的 WanPipeline |
+| `src/diffusers/schedulers/scheduling_unipc_multistep.py` | 修改 | 修复 TPU 精度问题 |
+
+#### transformer_wan_flax.py
+
+Wan Transformer 的 Flax 实现，包含：
+- `WanTransformer3DModel`: 主 Transformer 模型
+- `WanTransformerBlock`: Transformer 块，支持 self-attention 和 cross-attention
+- `WanTimeTextImageEmbedding`: 时间和文本/图像嵌入处理
+- `WanRotaryPosEmbed`: 3D 旋转位置编码 (RoPE)
+- TPU 优化的 Splash Attention 集成
+- 序列并行 (SP) 和张量并行 (TP) 分片策略
+- 4D timestep embedding 支持 (ti2v 兼容)
+
+#### pipeline_wan_flax.py
+
+Wan 视频生成 Pipeline 的 Flax 实现，包含：
+- `WanPipeline`: 完整的文本到视频生成管线
+- `WanPipelineOutput`: Pipeline 输出数据类
+- Flow matching scheduler 支持
+- CFG (Classifier-Free Guidance) 实现
+- 支持 T5 和 CLIP 文本编码器
+- 优化的 TPU 推理策略
+
+#### scheduling_unipc_multistep.py 修改
+
+```diff
+# 第 977-978 行
+if order == 1:
+    rhos_c = torch.tensor([0.5], dtype=x.dtype, device=device)
+else:
++   R = R.to(torch.float32)
++   b = b.to(torch.float32)
+    rhos_c = torch.linalg.solve(R, b).to(device).to(x.dtype)
+```
+
+**原因**: `torch.linalg.solve` 在 bfloat16 精度下可能出现数值不稳定，转换为 float32 后再求解。
+
+### 2. gpu-tpu-pedia 仓库
+
+| 文件 | 操作 | 说明 |
+|-----|------|-----|
+| `tpu/Wan2.1/generate_flax.py` | 修改 | 更新主推理脚本，集成 diffusers-tpu |
+| `tpu/Wan2.1/custom_splash_attention.py` | 新增 | TPU 优化的 Splash Attention 实现 |
+| `tpu/Wan2.1/MIGRATION_GUIDE.md` | 新增 | 本文档 |
+
+#### generate_flax.py 主要改动
+
+1. **导入 diffusers-tpu 组件**:
+```python
+from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline
+from diffusers.models.transformers.transformer_wan_flax import WanTransformer3DModel
+```
+
+2. **Splash Attention 注册**:
+```python
+from custom_splash_attention import register_custom_attention
+register_custom_attention(
+    pipeline.transformer,
+    bqsize=args.bqsize,
+    bkvsize=args.bkvsize,
+    bkvcomputesize=args.bkvcomputesize,
+    use_k_smooth=args.use_k_smooth
+)
+```
+
+3. **Mesh 配置优化**:
+```python
+mesh_devices = mesh_utils.create_device_mesh(
+    (dp_dim, sp_dim, tp_dim),  # 推荐顺序
+    allow_split_physical_axes=True
+)
+mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
+```
+
+4. **模型分片**:
+```python
+# Text Encoder (T5) 分片
+text_encoder_sharding = NamedSharding(mesh, PartitionSpec('tp'))
+
+# Transformer 分片
+transformer_sharding = NamedSharding(mesh, PartitionSpec('tp'))
+```
+
+#### custom_splash_attention.py
+
+TPU 优化的 Splash Attention 实现，关键特性：
+
+1. **exp2 优化**: 使用 TPU 原生 `exp2` 指令替代 `exp`
+2. **细粒度块处理**: `bkv_compute_in` 参数控制内层循环块大小
+3. **编译器调度优化**: `XLA_TPU_FORCE_LP_LLO_SCHEDULER` 标志
+4. **动态分片策略**: 根据 KV 序列长度自动选择最优分片
+
+---
+
+## 迁移步骤
+
+### 1. 克隆仓库
+
+```bash
+# 克隆 diffusers-tpu
+git clone https://github.com/yangwhale/diffusers-tpu.git
+cd diffusers-tpu
+pip install -e .
+
+# 克隆 gpu-tpu-pedia
+git clone https://github.com/yangwhale/gpu-tpu-pedia.git
+```
+
+### 2. 运行推理
+
+```bash
+cd gpu-tpu-pedia/tpu/Wan2.1
+python generate_flax.py \
+    --model_id Wan-AI/Wan2.1-T2V-14B-Diffusers \
+    --num_inference_steps 50 \
+    --use_custom_attention \
+    --bqsize 3328 \
+    --bkvsize 2816 \
+    --bkvcomputesize 256
+```
+
+### 3. 参数说明
+
+| 参数 | 默认值 | 说明 |
+|-----|-------|-----|
+| `--model_id` | `Wan-AI/Wan2.1-T2V-14B-Diffusers` | HuggingFace 模型 ID |
+| `--num_inference_steps` | 50 | 推理步数 |
+| `--width` | 1280 | 视频宽度 |
+| `--height` | 720 | 视频高度 |
+| `--frames` | 81 | 视频帧数 |
+| `--use_custom_attention` | True | 是否使用 Custom Attention |
+| `--bqsize` | 3328 | Query 块大小 |
+| `--bkvsize` | 2816 | KV 块大小 |
+| `--bkvcomputesize` | 256 | KV 计算块大小 |
+| `--use_dp` | True | 是否使用数据并行 |
+| `--sp_num` | 1 | 序列并行数量 |
+| `--use_fsdp` | True | 是否使用 FSDP |
+
+---
+
 ## 待补充内容
 
-- [ ] 完整迁移步骤
-- [ ] VAE 分片配置
-- [ ] Text Encoder 配置
+- [ ] VAE 分片配置详解
+- [ ] Text Encoder 配置详解
 - [ ] Transformer 分片策略详解
 - [ ] 多 host 配置
+- [ ] 内存优化指南
