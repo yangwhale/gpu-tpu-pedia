@@ -125,6 +125,8 @@ python stage2_transformer.py \
 
 ## 📊 性能数据
 
+### TPU 性能（本项目）
+
 **环境**：TPU v6e-8，121帧 720p，50步
 
 | 模式 | 每步时间 | 总时间 | 加速比 |
@@ -132,6 +134,28 @@ python stage2_transformer.py \
 | 标准 TP | 8.12s | 6.8 分钟 | 1.0x |
 | **TP + fc2 Replicated (默认)** | **7.29s** | **6.1 分钟** | **1.11x** |
 | TP + DeepCache | ~4s | ~3.5 分钟 | ~2x |
+
+### GPU 性能对比（Baseline）
+
+**环境**：NVIDIA H100 × 8，121帧 720p，50步
+
+| 日期 | 分辨率 | 帧数 | Step Time | CFG_DISTILLED | SAGE_ATTN | ENABLE_CACHE | 备注 |
+|------|--------|------|-----------|---------------|-----------|--------------|------|
+| 2025-12-03 | 720p | 121 | 5.10-5.11s | false | false | false | 基础配置 |
+| 2025-12-03 | 720p | 121 | 5.14-5.15s | false | false | true | ENABLE_CACHE 开启 |
+| 2025-12-03 | 480p | 121 | 1.47-1.48s | false | false | false | 480p 基础配置 |
+| 2025-12-03 | 480p | 121 | 0.877-0.878s | true | false | false | CFG_DISTILLED 开启 |
+| 2025-12-03 | 720p | 121 | ~2.74s | false | false | false | guidance_scale=1.0 |
+| 2025-12-03 | 720p | 121 | **1.67s** | false | true | false | **SageAttention，1.31x 加速** ⚡ |
+
+### TPU vs GPU 对比
+
+| 平台 | 配置 | 720p 121帧 Step Time | 备注 |
+|------|------|---------------------|------|
+| GPU H100 × 8 | Flash Attention 2 | 5.10s | GPU 基线 |
+| GPU H100 × 8 | SageAttention | 1.67s | GPU 最快（有损） |
+| **TPU v6e-8** | **TP + fc2 Replicated** | **7.29s** | TPU 默认配置 |
+| TPU v6e-8 | TP + DeepCache | ~4s | TPU + 缓存加速 |
 
 ## 📁 文件说明
 
