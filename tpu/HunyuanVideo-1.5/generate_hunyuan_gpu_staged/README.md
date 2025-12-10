@@ -25,7 +25,7 @@
 ### 使用 Shell 脚本运行（推荐）
 
 ```bash
-cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_staged
+cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_gpu_staged
 
 # 运行完整 pipeline（三个阶段顺序执行）
 bash run_staged.sh
@@ -39,7 +39,7 @@ bash run_stage3.sh  # VAE Decoder（8 GPU）
 ### 直接使用 Python
 
 ```bash
-cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_staged
+cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_gpu_staged
 
 # 阶段1：Text Encoder（单 GPU）
 python stage1_text_encoder.py \
@@ -434,7 +434,7 @@ python -c "import torch; print(torch.version.cuda)"
 ## 文件结构
 
 ```
-generate_hunyuan_staged/
+generate_hunyuan_gpu_staged/
 ├── README.md              # 本文档
 ├── utils.py               # 共享工具函数
 ├── stage1_text_encoder.py # 阶段1：文本编码

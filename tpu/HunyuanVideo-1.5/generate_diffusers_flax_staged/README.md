@@ -13,7 +13,7 @@
 ## 快速开始
 
 ```bash
-cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_diffusers_flax_sperated
+cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_diffusers_flax_staged
 
 # 默认配置: 49帧, 720p, 50步
 python stage1_text_encoder.py
