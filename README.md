@@ -72,9 +72,9 @@ GPU 和 TPU 学习与实践知识库
 4. **时序模型特殊性**：CausalConv 不能时间分片
 
 **文档：**
-- [项目 README](tpu/cogvae_migration/README.md)
-- [PyTorch→JAX 迁移圣经](tpu/cogvae_migration/docs/PYTORCH_TO_JAX_MIGRATION_BIBLE_ZH.md)
-- [范式转换指南](tpu/cogvae_migration/docs/PYTORCH_TO_JAX_PARADIGM_SHIFT_ZH.md)
+- [项目 README](tpu/cogvideo/cogvae_migration/README.md)
+- [PyTorch→JAX 迁移圣经](tpu/cogvideo/cogvae_migration/docs/PYTORCH_TO_JAX_MIGRATION_BIBLE_ZH.md)
+- [范式转换指南](tpu/cogvideo/cogvae_migration/docs/PYTORCH_TO_JAX_PARADIGM_SHIFT_ZH.md)
 
 ---
 
@@ -100,7 +100,7 @@ GPU 和 TPU 学习与实践知识库
 - bfloat16 精度下降 218 倍，需谨慎使用
 
 **文档：**
-- [图像处理 README](tpu/image_processing/README.md)
+- [图像处理 README](tpu/cogvideo/image_processing/README.md)
 
 ---
 
