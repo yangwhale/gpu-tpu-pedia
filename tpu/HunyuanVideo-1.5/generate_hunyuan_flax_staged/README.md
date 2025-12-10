@@ -11,35 +11,44 @@
 │                        完整 Pipeline 流程                            │
 ├─────────────────────────────────────────────────────────────────────┤
 │                                                                     │
-│  Stage 1: Text Encoder (CPU/GPU)                                    │
-│  ├─ 目录: ../generate_diffusers_flax_staged/                        │
-│  ├─ 脚本: stage1_text_encoder.py                                    │
-│  └─ 输出: stage_outputs/stage1_embeddings.safetensors               │
-│           stage_outputs/generation_config.json                      │
+│  ┌─────────────────── TPU 机器 ───────────────────┐                 │
+│  │                                                │                 │
+│  │  Stage 1: Text Encoder (CPU)                   │                 │
+│  │  ├─ 目录: ../generate_diffusers_flax_staged/   │                 │
+│  │  ├─ 脚本: stage1_text_encoder.py               │                 │
+│  │  └─ 输出: stage_outputs/                       │                 │
+│  │           ├─ stage1_embeddings.safetensors     │                 │
+│  │           └─ generation_config.json            │                 │
+│  │                         ↓                      │                 │
+│  │            复制到本目录（同一机器）              │                 │
+│  │                         ↓                      │                 │
+│  │  Stage 2: Transformer (TPU) ← 本目录           │                 │
+│  │  ├─ 目录: ./generate_hunyuan_flax_staged/      │                 │
+│  │  ├─ 脚本: stage2_transformer.py                │                 │
+│  │  └─ 输出: stage_outputs/stage2_latents.safetensors               │
+│  │                                                │                 │
+│  └────────────────────────────────────────────────┘                 │
 │                              ↓                                      │
-│                     复制到 TPU 机器                                  │
+│                     传输到 GPU 机器                                  │
 │                              ↓                                      │
-│  Stage 2: Transformer (TPU) ← 本目录                                │
-│  ├─ 目录: ./generate_hunyuan_flax_staged/                           │
-│  ├─ 脚本: stage2_transformer.py                                     │
-│  └─ 输出: stage_outputs/stage2_latents.safetensors                  │
-│                              ↓                                      │
-│                     复制到 GPU 机器                                  │
-│                              ↓                                      │
-│  Stage 3: VAE Decoder (GPU)                                         │
-│  ├─ 目录: ../generate_hunyuan_gpu_staged/                           │
-│  ├─ 脚本: run_stage3.sh                                             │
-│  └─ 输出: stage_outputs/output_video.mp4                            │
+│  ┌─────────────────── GPU 机器 ───────────────────┐                 │
+│  │                                                │                 │
+│  │  Stage 3: VAE Decoder (GPU)                    │                 │
+│  │  ├─ 目录: ../generate_hunyuan_gpu_staged/      │                 │
+│  │  ├─ 脚本: run_stage3.sh                        │                 │
+│  │  └─ 输出: stage_outputs/output_video.mp4       │                 │
+│  │                                                │                 │
+│  └────────────────────────────────────────────────┘                 │
 │                                                                     │
 └─────────────────────────────────────────────────────────────────────┘
 ```
 
 ### 完整操作步骤
 
-**1. 在 CPU/GPU 机器上运行 Stage 1**
+**1. 在 TPU 机器上运行 Stage 1（CPU 执行）**
 
 ```bash
-# GPU 机器上
+# TPU 机器上（使用 CPU 运行 Text Encoder）
 cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_diffusers_flax_staged
 
 # 运行 Text Encoder
@@ -50,14 +59,15 @@ ls stage_outputs/
 # → stage1_embeddings.safetensors, generation_config.json
 ```
 
-**2. 将 Stage 1 输出传到 TPU 机器**
+**2. 复制 Stage 1 输出到本目录（同一机器）**
 
 ```bash
-# 从 GPU 机器传输到 TPU 机器
-scp -r stage_outputs/ tpu-machine:~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_flax_staged/
+# 在 TPU 机器上
+cp -r ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_diffusers_flax_staged/stage_outputs \
+      ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_flax_staged/
 ```
 
-**3. 在 TPU 机器上运行 Stage 2**
+**3. 在 TPU 机器上运行 Stage 2（TPU 执行）**
 
 ```bash
 # TPU 机器上
@@ -75,11 +85,14 @@ ls stage_outputs/
 # → stage2_latents.safetensors
 ```
 
-**4. 将 Stage 2 输出传回 GPU 机器**
+**4. 将 Stage 2 输出传到 GPU 机器**
 
 ```bash
 # 从 TPU 机器传输到 GPU 机器
 scp stage_outputs/stage2_latents.safetensors gpu-machine:~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_gpu_staged/stage_outputs/
+
+# 同时传输 generation_config.json（Stage 3 需要）
+scp stage_outputs/generation_config.json gpu-machine:~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_gpu_staged/stage_outputs/
 ```
 
 **5. 在 GPU 机器上运行 Stage 3**
