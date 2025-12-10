@@ -44,19 +44,24 @@ pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_relea
 pip install torch torchvision
 pip install torchax
 
-# 4. 安装 transformers 和 diffusers
+# 4. 安装 transformers
 pip install transformers accelerate
-pip install diffusers
 
-# 5. 安装 ffmpeg（视频编码）
+# 5. 安装 diffusers-tpu（TPU 优化版本，必需）
+git clone https://github.com/yangwhale/diffusers-tpu.git ~/diffusers-tpu
+cd ~/diffusers-tpu && pip install -e . && cd -
+
+# 6. 安装 ffmpeg（视频编码）
 sudo apt update && sudo apt install -y ffmpeg
 
-# 6. 克隆 HunyuanVideo-1.5-TPU 代码库（包含模型定义）
+# 7. 克隆 HunyuanVideo-1.5-TPU 代码库（包含模型定义）
 git clone https://github.com/yangwhale/HunyuanVideo-1.5-TPU.git ~/HunyuanVideo-1.5-TPU
 
-# 7. 克隆本项目
+# 8. 克隆本项目
 git clone https://github.com/yangwhale/gpu-tpu-pedia.git ~/gpu-tpu-pedia
 ```
+
+> ⚠️ **重要**：`generate_diffusers_flax_staged/` 目录必须使用 [diffusers-tpu](https://github.com/yangwhale/diffusers-tpu)，不能使用官方 diffusers。
 
 ---
 

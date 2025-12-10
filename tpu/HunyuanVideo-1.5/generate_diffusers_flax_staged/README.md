@@ -1,6 +1,21 @@
-# HunyuanVideo-1.5 三阶段分离生成
+# HunyuanVideo-1.5 三阶段分离生成（Diffusers 版本）
 
 将 HunyuanVideo-1.5 文本到视频生成 Pipeline 拆分为三个独立阶段执行，便于调试、分析和优化。
+
+> ⚠️ **依赖要求**：本目录必须使用 [diffusers-tpu](https://github.com/yangwhale/diffusers-tpu)，不能使用官方 diffusers。
+
+## 环境安装
+
+```bash
+# 安装 diffusers-tpu（必需）
+git clone https://github.com/yangwhale/diffusers-tpu.git ~/diffusers-tpu
+cd ~/diffusers-tpu && pip install -e . && cd -
+
+# 其他依赖
+pip install transformers accelerate safetensors
+pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+pip install torch torchvision torchax
+```
 
 ## 概述
 
@@ -134,9 +149,11 @@ python stage3_vae_decoder.py --output_video my_video.mp4
 
 - JAX (TPU)
 - torchax
-- diffusers (with Flax VAE support)
+- **diffusers-tpu**（必需，[github.com/yangwhale/diffusers-tpu](https://github.com/yangwhale/diffusers-tpu)）
 - safetensors
 - transformers
+
+> ⚠️ 不能使用官方 `pip install diffusers`，必须从源码安装 diffusers-tpu。
 
 ## 工具模块
 
