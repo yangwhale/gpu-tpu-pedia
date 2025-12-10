@@ -2,13 +2,107 @@
 
 在 TPU v6e-8 上使用原生 HunyuanVideo-1.5-TPU 代码库运行视频生成。
 
-## 🚀 快速开始
+## 🔄 完整工作流（TPU + GPU 协作）
+
+本目录只包含 **Stage 2: Transformer 推理**，需要与其他阶段配合使用：
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        完整 Pipeline 流程                            │
+├─────────────────────────────────────────────────────────────────────┤
+│                                                                     │
+│  Stage 1: Text Encoder (CPU/GPU)                                    │
+│  ├─ 目录: ../generate_diffusers_flax_staged/                        │
+│  ├─ 脚本: stage1_text_encoder.py                                    │
+│  └─ 输出: stage_outputs/stage1_embeddings.safetensors               │
+│           stage_outputs/generation_config.json                      │
+│                              ↓                                      │
+│                     复制到 TPU 机器                                  │
+│                              ↓                                      │
+│  Stage 2: Transformer (TPU) ← 本目录                                │
+│  ├─ 目录: ./generate_hunyuan_flax_staged/                           │
+│  ├─ 脚本: stage2_transformer.py                                     │
+│  └─ 输出: stage_outputs/stage2_latents.safetensors                  │
+│                              ↓                                      │
+│                     复制到 GPU 机器                                  │
+│                              ↓                                      │
+│  Stage 3: VAE Decoder (GPU)                                         │
+│  ├─ 目录: ../generate_hunyuan_gpu_staged/                           │
+│  ├─ 脚本: run_stage3.sh                                             │
+│  └─ 输出: stage_outputs/output_video.mp4                            │
+│                                                                     │
+└─────────────────────────────────────────────────────────────────────┘
+```
+
+### 完整操作步骤
+
+**1. 在 CPU/GPU 机器上运行 Stage 1**
 
 ```bash
-# 1. 确保已运行 Stage 1 生成 embeddings
-#    使用 ../generate_diffusers_flax_staged/stage1_text_encoder.py
+# GPU 机器上
+cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_diffusers_flax_staged
 
-# 2. 运行 Transformer 推理
+# 运行 Text Encoder
+python stage1_text_encoder.py --prompt "A beautiful sunset over the ocean"
+
+# 检查输出
+ls stage_outputs/
+# → stage1_embeddings.safetensors, generation_config.json
+```
+
+**2. 将 Stage 1 输出传到 TPU 机器**
+
+```bash
+# 从 GPU 机器传输到 TPU 机器
+scp -r stage_outputs/ tpu-machine:~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_flax_staged/
+```
+
+**3. 在 TPU 机器上运行 Stage 2**
+
+```bash
+# TPU 机器上
+cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_flax_staged
+
+# 运行 Transformer 推理
+python stage2_transformer.py \
+    --input_dir ./stage_outputs \
+    --video_length 121 \
+    --num_inference_steps 50 \
+    --warmup_steps 2
+
+# 检查输出
+ls stage_outputs/
+# → stage2_latents.safetensors
+```
+
+**4. 将 Stage 2 输出传回 GPU 机器**
+
+```bash
+# 从 TPU 机器传输到 GPU 机器
+scp stage_outputs/stage2_latents.safetensors gpu-machine:~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_gpu_staged/stage_outputs/
+```
+
+**5. 在 GPU 机器上运行 Stage 3**
+
+```bash
+# GPU 机器上
+cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_gpu_staged
+
+# 运行 VAE Decoder
+bash run_stage3.sh
+
+# 查看生成的视频
+ls stage_outputs/output_video.mp4
+```
+
+---
+
+## 🚀 快速开始（本目录 Stage 2）
+
+```bash
+# 前提：stage_outputs/ 目录已包含 Stage 1 的输出文件
+
+# 运行 Transformer 推理
 python stage2_transformer.py \
     --input_dir ./stage_outputs \
     --video_length 121 \
