@@ -2,27 +2,166 @@
 
 在 TPU v6e-8 或 GPU H100 上运行 HunyuanVideo-1.5 文本到视频生成。
 
-## 📦 目录结构
+---
+
+## 🛠 环境配置（必读）
+
+### 前置条件
+
+1. **Hugging Face Token**：从 [Hugging Face Settings](https://huggingface.co/settings/tokens) 获取 Access Token
+
+2. **设置环境变量**：
+   ```bash
+   # 设置 Hugging Face Token（必需）
+   export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+   
+   # 设置 Hugging Face 缓存目录（推荐使用 /dev/shm 加速）
+   export HF_HOME=/dev/shm
+   ```
+
+3. **将环境变量添加到 ~/.bashrc（持久化）**：
+   ```bash
+   echo 'export HF_TOKEN="hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"' >> ~/.bashrc
+   echo 'export HF_HOME=/dev/shm' >> ~/.bashrc
+   source ~/.bashrc
+   ```
+
+---
+
+### TPU 环境安装
+
+在 Google Cloud TPU v6e-8 上运行：
+
+```bash
+# 1. 安装基础依赖
+pip install --upgrade pip
+pip install numpy scipy pillow imageio loguru einops safetensors
+
+# 2. 安装 JAX（TPU 版本）
+pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+
+# 3. 安装 PyTorch + torchax
+pip install torch torchvision
+pip install torchax
+
+# 4. 安装 transformers 和 diffusers
+pip install transformers accelerate
+pip install diffusers
+
+# 5. 安装 ffmpeg（视频编码）
+sudo apt update && sudo apt install -y ffmpeg
+
+# 6. 克隆 HunyuanVideo-1.5-TPU 代码库（包含模型定义）
+git clone https://github.com/yangwhale/HunyuanVideo-1.5-TPU.git ~/HunyuanVideo-1.5-TPU
+
+# 7. 克隆本项目
+git clone https://github.com/yangwhale/gpu-tpu-pedia.git ~/gpu-tpu-pedia
+```
+
+---
+
+### 下载模型权重
+
+HunyuanVideo-1.5 权重约 25GB，推荐下载到 `/dev/shm`（内存文件系统，读取更快）。
+
+**方法 1：使用 huggingface-cli（推荐）**
+
+```bash
+# 安装 huggingface_hub
+pip install huggingface_hub
+
+# 登录 Hugging Face（使用之前设置的 HF_TOKEN）
+huggingface-cli login --token $HF_TOKEN
+
+# 创建目标目录
+mkdir -p /dev/shm/HunyuanVideo1.5
+
+# 下载完整模型（约 25GB）
+huggingface-cli download tencent/HunyuanVideo-1.5 \
+    --local-dir /dev/shm/HunyuanVideo1.5 \
+    --local-dir-use-symlinks False
+```
+
+**方法 2：使用 Python 脚本**
+
+```python
+from huggingface_hub import snapshot_download
+import os
+
+# 确保设置了 HF_TOKEN
+os.environ["HF_TOKEN"] = "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
+
+# 下载模型
+snapshot_download(
+    repo_id="tencent/HunyuanVideo-1.5",
+    local_dir="/dev/shm/HunyuanVideo1.5",
+    local_dir_use_symlinks=False,
+    token=os.environ["HF_TOKEN"]
+)
+```
+
+**下载完成后的目录结构**：
 
 ```
-HunyuanVideo-1.5/
-├── 📁 generate_hunyuan_flax_staged/   # ⭐ TPU 推荐版本
-├── 📁 generate_hunyuan_gpu_staged/    # GPU H100 版本
-├── 📁 generate_diffusers_flax_staged/ # TPU + Diffusers 版本
-├── 📁 docs/                           # 技术文档
-├── generate_diffusers_flax.py         # TPU 单文件版本
-├── generate_diffusers_gpu.py          # GPU 单文件版本
-└── run_diffusers_gpu.sh               # GPU 运行脚本
+/dev/shm/HunyuanVideo1.5/
+├── ckpt/                              # 模型权重
+│   ├── hunyuan-video-t2v-720p/
+│   │   └── transformers/
+│   │       ├── mp_rank_00_model_states.pt
+│   │       └── ...
+│   └── llava-llama-3-8b-v1_1-transformers/
+│       └── ...
+├── text_encoder/                      # LLM Text Encoder
+├── text_encoder_2/                    # T5 Text Encoder
+├── vae/                               # VAE Decoder
+└── transformer/                       # Transformer 权重
 ```
 
-### 各目录说明
+**验证下载**：
 
-| 目录 | 平台 | 说明 | 推荐度 |
-|------|------|------|--------|
-| `generate_hunyuan_flax_staged/` | TPU | 使用原生 HunyuanVideo-1.5-TPU，Splash Attention | ⭐⭐⭐ |
-| `generate_hunyuan_gpu_staged/` | GPU | 使用原生 HunyuanVideo-1.5-TPU，Flash Attention | ⭐⭐⭐ |
-| `generate_diffusers_flax_staged/` | TPU | 使用 diffusers-tpu 库 | ⭐⭐ |
-| `docs/` | - | 技术分析文档 | - |
+```bash
+# 检查权重文件
+ls -la /dev/shm/HunyuanVideo1.5/ckpt/hunyuan-video-t2v-720p/transformers/
+
+# 应该看到 mp_rank_00_model_states.pt 等文件
+```
+
+---
+
+### GPU 环境安装
+
+在 NVIDIA H100 8卡上运行：
+
+```bash
+# 1. 安装基础依赖
+pip install --upgrade pip
+pip install numpy scipy pillow imageio loguru einops safetensors
+
+# 2. 安装 PyTorch + CUDA
+pip install torch torchvision --index-url https://download.pytorch.org/whl/cu121
+
+# 3. 安装 Flash Attention 2（H100 推荐）
+pip install flash-attn --no-build-isolation
+
+# 4. 安装 transformers 和 diffusers
+pip install transformers accelerate
+pip install diffusers
+
+# 5. 安装 ffmpeg
+sudo apt update && sudo apt install -y ffmpeg
+
+# 6. 克隆 HunyuanVideo-1.5-TPU 代码库
+git clone https://github.com/yangwhale/HunyuanVideo-1.5-TPU.git ~/HunyuanVideo-1.5-TPU
+
+# 7. 克隆本项目
+git clone https://github.com/yangwhale/gpu-tpu-pedia.git ~/gpu-tpu-pedia
+
+# 8. 下载模型权重（同 TPU 环境）
+mkdir -p /dev/shm/HunyuanVideo1.5
+huggingface-cli download tencent/HunyuanVideo-1.5 \
+    --local-dir /dev/shm/HunyuanVideo1.5 \
+    --local-dir-use-symlinks False
+```
 
 ---
 
@@ -46,10 +185,34 @@ python stage2_transformer.py \
 cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_gpu_staged
 
 # 三阶段运行
-bash run_stage1.sh  # Text Encoder
-bash run_stage2.sh  # Transformer
-bash run_stage3.sh  # VAE Decoder
+bash run_stage1.sh  # Text Encoder（单卡）
+bash run_stage2.sh  # Transformer（8卡）
+bash run_stage3.sh  # VAE Decoder（8卡）
 ```
+
+---
+
+## 📦 目录结构
+
+```
+HunyuanVideo-1.5/
+├── 📁 generate_hunyuan_flax_staged/   # ⭐ TPU 推荐版本
+├── 📁 generate_hunyuan_gpu_staged/    # GPU H100 版本
+├── 📁 generate_diffusers_flax_staged/ # TPU + Diffusers 版本
+├── 📁 docs/                           # 技术文档
+├── generate_diffusers_flax.py         # TPU 单文件版本
+├── generate_diffusers_gpu.py          # GPU 单文件版本
+└── run_diffusers_gpu.sh               # GPU 运行脚本
+```
+
+### 各目录说明
+
+| 目录 | 平台 | 说明 | 推荐度 |
+|------|------|------|--------|
+| `generate_hunyuan_flax_staged/` | TPU | 使用原生 HunyuanVideo-1.5-TPU，Splash Attention | ⭐⭐⭐ |
+| `generate_hunyuan_gpu_staged/` | GPU | 使用原生 HunyuanVideo-1.5-TPU，Flash Attention | ⭐⭐⭐ |
+| `generate_diffusers_flax_staged/` | TPU | 使用 diffusers-tpu 库 | ⭐⭐ |
+| `docs/` | - | 技术分析文档 | - |
 
 ---
 
@@ -135,7 +298,7 @@ bash run_stage2.sh  # 8卡运行 Transformer
 bash run_stage3.sh  # 8卡运行 VAE Decoder
 
 # 或直接运行
-python stage1_text_encoder.py --model_path /path/to/model --prompt "Your prompt"
+python stage1_text_encoder.py --model_path /dev/shm/HunyuanVideo1.5 --prompt "Your prompt"
 torchrun --nproc_per_node=8 stage2_transformer.py --input_dir ./stage_outputs
 torchrun --nproc_per_node=8 stage3_vae_decoder.py --input_dir ./stage_outputs
 ```
@@ -196,42 +359,6 @@ python stage3_vae_decoder.py   # TPU 运行
 
 ---
 
-## 🛠 环境配置
-
-### TPU 环境
-
-```bash
-# 1. 安装 JAX（TPU 版本）
-pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
-
-# 2. 安装 torchax
-pip install torchax
-
-# 3. 克隆 HunyuanVideo-1.5-TPU（原生代码库）
-git clone https://github.com/yangwhale/HunyuanVideo-1.5-TPU.git ~/HunyuanVideo-1.5-TPU
-
-# 4. 下载模型权重到 /dev/shm（推荐，更快读取）
-# 从 Hugging Face 下载 HunyuanVideo-1.5 权重
-```
-
-### GPU 环境
-
-```bash
-# 1. 安装 PyTorch + CUDA
-pip install torch torchvision
-
-# 2. 安装 Flash Attention
-pip install flash-attn --no-build-isolation
-
-# 3. 克隆 HunyuanVideo-1.5-TPU
-git clone https://github.com/yangwhale/HunyuanVideo-1.5-TPU.git ~/HunyuanVideo-1.5-TPU
-
-# 4. 安装依赖
-pip install safetensors einops imageio loguru transformers accelerate
-```
-
----
-
 ## 📊 性能对比
 
 ### TPU vs GPU
@@ -254,7 +381,21 @@ pip install safetensors einops imageio loguru transformers accelerate
 
 ## ❓ 常见问题
 
-### 1. OOM（内存不足）
+### 1. 权重下载失败
+
+```bash
+# 检查 HF_TOKEN 是否设置
+echo $HF_TOKEN
+
+# 手动登录
+huggingface-cli login
+
+# 使用代理（如需）
+export HTTP_PROXY=http://your-proxy:port
+export HTTPS_PROXY=http://your-proxy:port
+```
+
+### 2. OOM（内存不足）
 
 **TPU**：
 - 使用 `--video_length 49` 减少帧数
@@ -264,7 +405,7 @@ pip install safetensors einops imageio loguru transformers accelerate
 - Stage 2：不要使用 `create_pipeline()`，直接加载 Transformer
 - Stage 3：必须使用 `torch.no_grad()`
 
-### 2. 首次运行很慢
+### 3. 首次运行很慢
 
 这是 XLA/JAX 编译造成的，正常现象。后续运行会使用缓存。
 
@@ -273,11 +414,21 @@ pip install safetensors einops imageio loguru transformers accelerate
 rm -rf /dev/shm/jax_cache
 ```
 
-### 3. 视频质量问题
+### 4. 视频质量问题
 
 - 确保使用 bf16 精度
 - 检查 Attention Mask 是否正确处理（K/V 置零方案）
 - 参考 `TORCHAX_MIGRATION_GUIDE.md` 的修复说明
+
+### 5. 找不到模型文件
+
+```bash
+# 检查模型路径
+ls -la /dev/shm/HunyuanVideo1.5/
+
+# 检查 transformer 权重
+ls -la /dev/shm/HunyuanVideo1.5/ckpt/hunyuan-video-t2v-720p/transformers/
+```
 
 ---
 
