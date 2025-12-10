@@ -62,69 +62,91 @@ git clone https://github.com/yangwhale/gpu-tpu-pedia.git ~/gpu-tpu-pedia
 
 ### 下载模型权重
 
-HunyuanVideo-1.5 权重约 25GB，推荐下载到 `/dev/shm`（内存文件系统，读取更快）。
+> 📖 **官方文档**：[checkpoints-download.md](https://github.com/Tencent-Hunyuan/HunyuanVideo-1.5/blob/main/checkpoints-download.md)
 
-**方法 1：使用 huggingface-cli（推荐）**
+推荐下载到 `/dev/shm`（内存文件系统，读取更快）。
+
+#### 1. 安装下载工具
 
 ```bash
-# 安装 huggingface_hub
-pip install huggingface_hub
+pip install -U "huggingface_hub[cli]"
+pip install modelscope
+```
 
-# 登录 Hugging Face（使用之前设置的 HF_TOKEN）
-huggingface-cli login --token $HF_TOKEN
+#### 2. 下载 DiT + VAE 权重（约 25GB）
 
+```bash
 # 创建目标目录
-mkdir -p /dev/shm/HunyuanVideo1.5
+mkdir -p /dev/shm/ckpts
 
-# 下载完整模型（约 25GB）
-huggingface-cli download tencent/HunyuanVideo-1.5 \
-    --local-dir /dev/shm/HunyuanVideo1.5 \
-    --local-dir-use-symlinks False
+# 下载 DiT 和 VAE
+hf download tencent/HunyuanVideo-1.5 --local-dir /dev/shm/ckpts
+
+# 中国用户使用镜像加速
+HF_ENDPOINT=https://hf-mirror.com hf download tencent/HunyuanVideo-1.5 --local-dir /dev/shm/ckpts
 ```
 
-**方法 2：使用 Python 脚本**
+#### 3. 下载 Text Encoder
 
-```python
-from huggingface_hub import snapshot_download
-import os
-
-# 确保设置了 HF_TOKEN
-os.environ["HF_TOKEN"] = "hf_xxxxxxxxxxxxxxxxxxxxxxxxxxxxxx"
-
-# 下载模型
-snapshot_download(
-    repo_id="tencent/HunyuanVideo-1.5",
-    local_dir="/dev/shm/HunyuanVideo1.5",
-    local_dir_use_symlinks=False,
-    token=os.environ["HF_TOKEN"]
-)
+**MLLM（推荐使用 Qwen2.5-VL-7B）**：
+```bash
+hf download Qwen/Qwen2.5-VL-7B-Instruct --local-dir /dev/shm/ckpts/text_encoder/llm
 ```
 
-**下载完成后的目录结构**：
+**ByT5 Encoder**：
+```bash
+# 下载 byt5-small
+hf download google/byt5-small --local-dir /dev/shm/ckpts/text_encoder/byt5-small
 
-```
-/dev/shm/HunyuanVideo1.5/
-├── ckpt/                              # 模型权重
-│   ├── hunyuan-video-t2v-720p/
-│   │   └── transformers/
-│   │       ├── mp_rank_00_model_states.pt
-│   │       └── ...
-│   └── llava-llama-3-8b-v1_1-transformers/
-│       └── ...
-├── text_encoder/                      # LLM Text Encoder
-├── text_encoder_2/                    # T5 Text Encoder
-├── vae/                               # VAE Decoder
-└── transformer/                       # Transformer 权重
+# 下载 Glyph-SDXL-v2（从 ModelScope）
+modelscope download --model AI-ModelScope/Glyph-SDXL-v2 --local_dir /dev/shm/ckpts/text_encoder/Glyph-SDXL-v2
 ```
 
-**验证下载**：
+#### 4. 下载 Vision Encoder（可选，用于 I2V）
+
+需要先在 [Hugging Face FLUX.1-Redux-dev](https://huggingface.co/black-forest-labs/FLUX.1-Redux-dev) 申请访问权限，获批后：
 
 ```bash
-# 检查权重文件
-ls -la /dev/shm/HunyuanVideo1.5/ckpt/hunyuan-video-t2v-720p/transformers/
-
-# 应该看到 mp_rank_00_model_states.pt 等文件
+hf download black-forest-labs/FLUX.1-Redux-dev \
+    --local-dir /dev/shm/ckpts/vision_encoder/siglip \
+    --token $HF_TOKEN
 ```
+
+#### 5. 最终目录结构
+
+```
+/dev/shm/ckpts/
+├── hunyuan-video-t2v-720p/            # Transformer 权重
+│   └── transformers/
+│       ├── mp_rank_00_model_states.pt
+│       └── ...
+├── vae/                               # VAE 权重
+├── text_encoder/                      # Text Encoder
+│   ├── llm/                           # Qwen2.5-VL-7B
+│   ├── byt5-small/                    # ByT5
+│   └── Glyph-SDXL-v2/                 # Glyph 模型
+│       ├── assets/
+│       │   ├── color_idx.json
+│       │   └── ...
+│       └── checkpoints/
+│           └── byt5_model.pt
+└── vision_encoder/                    # Vision Encoder（可选）
+    └── siglip/
+```
+
+#### 6. 验证下载
+
+```bash
+# 检查 Transformer 权重
+ls -la /dev/shm/ckpts/hunyuan-video-t2v-720p/transformers/
+# 应看到 mp_rank_00_model_states.pt
+
+# 检查 Text Encoder
+ls -la /dev/shm/ckpts/text_encoder/llm/
+ls -la /dev/shm/ckpts/text_encoder/Glyph-SDXL-v2/checkpoints/
+```
+
+> 💡 **断点续传**：如果下载中断，直接重新运行下载命令即可自动续传。
 
 ---
 
