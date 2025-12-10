@@ -249,6 +249,27 @@ torchrun --nproc_per_node=8 stage3_vae_decoder.py ...
 | Stage 3 | ~4 秒 | 8 | VAE with Tile Parallelism |
 | **总计** | **~89 秒** | | |
 
+### 性能测试记录表
+
+以下表格记录了不同配置参数下的性能测试结果，方便对比和调优。
+
+**测试环境**：NVIDIA H100 × 8，HunyuanVideo-1.5
+
+| 日期 | 分辨率 | 帧数 | Step Time | CFG_DISTILLED | SAGE_ATTN | ENABLE_CACHE | 备注 |
+|------|--------|------|-----------|---------------|-----------|--------------|------|
+| 2025-12-03 | 720p | 121 | 5.10-5.11s | false | false | false | 基础配置 |
+| 2025-12-03 | 720p | 121 | 5.14-5.15s | false | false | true | ENABLE_CACHE 开启 |
+| 2025-12-03 | 480p | 121 | 1.47-1.48s | false | false | false | 480p 基础配置 |
+| 2025-12-03 | 480p | 121 | 0.877-0.878s | true | false | false | CFG_DISTILLED 开启 |
+| 2025-12-03 | 720p | 121 | ~2.74s | false | false | false | guidance_scale=1.0 |
+| 2025-12-03 | 720p | 121 | **1.67s** | false | true | false | **SageAttention，1.31x 加速** ⚡ |
+
+**表格说明**：
+- **Step Time**：单步推理时间（稳定后）
+- **CFG_DISTILLED**：是否使用蒸馏 CFG（可跳过负向推理）
+- **SAGE_ATTN**：是否启用 SageAttention（INT8 量化加速）
+- **ENABLE_CACHE**：是否启用 DeepCache（层级缓存加速）
+
 ## Attention 模式性能对比
 
 Stage 2 支持多种 Attention 实现模式，可通过 `--attn_mode` 参数切换：
