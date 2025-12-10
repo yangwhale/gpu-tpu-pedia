@@ -53,7 +53,7 @@ echo "================================================"
 echo ""
 
 # 运行生成
-python generate_diffusers.py \
+python generate_diffusers_gpu.py \
   --prompt "$PROMPT" \
   --model_id "$MODEL_ID" \
   --num_frames $VIDEO_LENGTH \
