@@ -58,68 +58,135 @@ Wan2.1/
 
 ### 硬件
 
-- **TPU**: v4-8 或更高（8 chips 最小配置）
+- **TPU**: v4-8 或 v6e-8（8 chips 最小配置）
 - **内存**: 建议 64GB+ 系统内存
 - **存储**: 约 50GB 用于模型权重缓存
 
 ### 软件
 
 - Python 3.10+
-- JAX 0.4.20+（TPU 版本）
-- PyTorch 2.0+
-- CUDA（仅用于 PyTorch 初始化，实际计算在 TPU）
+- JAX 0.4.35+（TPU 版本）
+- PyTorch 2.5+（CPU 版本即可）
+- torchax 0.0.11+
 
 ---
 
 ## 安装步骤
 
-### 1. 创建虚拟环境
+### 快速安装（推荐）
+
+在 TPU VM 上运行以下命令：
+
+```bash
+# 1. 安装 PyTorch（CPU 版本，TPU 上不需要 CUDA）
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# 2. 安装 JAX TPU 版本
+pip install -U jax[tpu]
+
+# 3. 安装 torchax（PyTorch-JAX 桥接）
+pip install torchax
+
+# 4. 安装其他依赖
+pip install transformers accelerate safetensors
+pip install opencv-python imageio imageio-ffmpeg
+pip install flax optax
+
+# 5. 克隆并安装修改版 diffusers
+git clone https://github.com/yangwhale/diffusers-tpu.git
+cd diffusers-tpu && pip install -e . && cd ..
+
+# 6. 克隆并安装 MaxDiffusion（用于 VAE）
+git clone https://github.com/AI-Hypercomputer/maxdiffusion.git
+cd maxdiffusion && pip install -e . && cd ..
+
+# 7. 克隆项目代码
+git clone https://github.com/yangwhale/gpu-tpu-pedia.git
+cd gpu-tpu-pedia/tpu/Wan2.1
+```
+
+### 验证安装
+
+```bash
+# 检查 JAX 设备
+python -c "import jax; print(f'JAX devices: {jax.devices()}')"
+# 预期输出: [TpuDevice(id=0, ...), TpuDevice(id=1, ...), ...]
+
+# 检查 torchax 版本
+python -c "import torchax; print(f'torchax version: {torchax.__version__}')"
+# 预期输出: torchax version: 0.0.11
+
+# 检查 Pipeline 导入
+python -c "from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline; print('Pipeline OK')"
+```
+
+### 分步安装说明
+
+如果快速安装遇到问题，可以按以下步骤逐一安装：
+
+#### 1. 创建虚拟环境（可选）
 
 ```bash
 python -m venv wan-venv
 source wan-venv/bin/activate
 ```
 
-### 2. 安装 JAX（TPU 版本）
+#### 2. 安装 PyTorch（CPU 版本）
 
 ```bash
-pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+# Linux
+pip install torch --index-url https://download.pytorch.org/whl/cpu
+
+# Mac (M1/M2)
+pip install torch
 ```
 
-### 3. 安装核心依赖
+**注意**: TPU 计算不需要 CUDA，安装 CPU 版本的 PyTorch 即可。torchax 会将 PyTorch 操作转换为 JAX 执行。
+
+#### 3. 安装 JAX（TPU 版本）
 
 ```bash
-pip install torch torchvision  # PyTorch（不需要 CUDA）
-pip install transformers accelerate safetensors
-pip install opencv-python imageio imageio-ffmpeg
-pip install flax optax
+pip install -U jax[tpu]
 ```
 
-### 4. 安装修改版 Diffusers
-
-```bash
-# 从本地安装修改后的 diffusers
-cd diffusers-tpu
-pip install -e .
-```
-
-### 5. 安装 MaxDiffusion（用于 VAE）
-
-```bash
-pip install maxdiffusion
-```
-
-### 6. 安装 torchax（PyTorch-JAX 桥接）
+#### 4. 安装 torchax
 
 ```bash
 pip install torchax
 ```
 
-### 7. 验证安装
+torchax 是 PyTorch 到 JAX 的桥接库，允许在 TPU 上运行 PyTorch 模型。
+
+#### 5. 安装修改版 Diffusers
 
 ```bash
-python -c "import jax; print(f'JAX devices: {jax.devices()}')"
-python -c "from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline; print('Pipeline OK')"
+git clone https://github.com/yangwhale/diffusers-tpu.git
+cd diffusers-tpu
+pip install -e .
+cd ..
+```
+
+这个修改版包含：
+- `pipeline_wan_flax.py`: 支持 TPU 分片的 Wan Pipeline
+- `scheduling_unipc_multistep.py`: 修复 bfloat16 精度问题
+
+#### 6. 安装 MaxDiffusion（用于 VAE）
+
+```bash
+git clone https://github.com/AI-Hypercomputer/maxdiffusion.git
+cd maxdiffusion
+pip install -e .
+cd ..
+```
+
+MaxDiffusion 提供 Flax 实现的 Wan VAE。
+
+#### 7. 安装其他依赖
+
+```bash
+pip install transformers accelerate safetensors
+pip install opencv-python imageio imageio-ffmpeg
+pip install flax optax
 ```
 
 ---

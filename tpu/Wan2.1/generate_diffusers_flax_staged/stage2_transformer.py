@@ -96,7 +96,7 @@ def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False,
                            window_size=None, bqsize=BQSIZE, bkvsize=BKVSIZE,
                            bkvcomputesize=BKVCOMPUTESIZE):
     """TPU Splash Attention implementation with sharding support."""
-    mesh = env._mesh
+    mesh = getattr(env, '_mesh', None) or env.param.mesh
     num_heads = query.shape[1]
 
     def _attention_on_slices(q, k, v):
@@ -200,7 +200,7 @@ def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
                            window_size=None, bqsize=BQSIZE, bkvsize=BKVSIZE,
                            bkvcomputesize=BKVCOMPUTESIZE, bkvcomputeinsize=BKVCOMPUTEINSIZE):
     """TPU Custom Splash Attention with exp2 optimization."""
-    mesh = env._mesh
+    mesh = getattr(env, '_mesh', None) or env.param.mesh
     num_heads = query.shape[1]
 
     def _attention_on_slices(q, k, v):
@@ -275,7 +275,10 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
                                   env=None, window_size=None, use_k_smooth=USE_K_SMOOTH,
                                   use_custom_attention=USE_CUSTOM_ATTENTION):
     """Wrapper for scaled dot-product attention with TPU Splash support."""
-    if env.config.use_tpu_splash_attention:
+    # Support both old and new torchax config names
+    use_splash = getattr(env.config, 'use_tpu_splash_attention', False) or \
+                 getattr(env.config, 'use_tpu_flash_attention', False)
+    if use_splash:
         jquery, jkey, jvalue = env.t2j_iso((query, key, value))
         
         if use_k_smooth:
@@ -643,9 +646,16 @@ def main():
     mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
 
     # 配置 env
-    env.default_device_or_sharding = NamedSharding(mesh, P())
+    # Note: default_device_or_sharding was removed in torchax 0.0.11
+    # We set _mesh as a custom attribute for backward compatibility
     env._mesh = mesh
-    env.config.use_tpu_splash_attention = True
+    # Also set in param for new torchax
+    env._initial_content.mesh = mesh
+    # Support both old and new config names
+    if hasattr(env.config, 'use_tpu_splash_attention'):
+        env.config.use_tpu_splash_attention = True
+    if hasattr(env.config, 'use_tpu_flash_attention'):
+        env.config.use_tpu_flash_attention = True
 
     # 加载 Pipeline（仅 Transformer）
     model_id = config.get('model_id', MODEL_NAME)

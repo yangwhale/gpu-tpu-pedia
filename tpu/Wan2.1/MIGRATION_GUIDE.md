@@ -4,9 +4,122 @@
 
 ## 目录
 
-1. [Custom Attention 优化](#custom-attention-优化)
-2. [Mesh 设备布局优化](#mesh-设备布局优化)
-3. [性能基准测试](#性能基准测试)
+1. [torchax 0.0.11 升级指南](#torchax-0011-升级指南)
+2. [Custom Attention 优化](#custom-attention-优化)
+3. [Mesh 设备布局优化](#mesh-设备布局优化)
+4. [性能基准测试](#性能基准测试)
+
+---
+
+## torchax 0.0.11 升级指南
+
+### 背景
+
+从 torchax 0.0.4 (`hanq_wan_changes` 分支) 升级到 0.0.11 (官方主线) 后，可能会遇到严重的性能退化问题（从 ~5.3 秒/步 退化到 ~54 秒/步）。
+
+### 根本原因
+
+`hanq_wan_changes` 分支包含一个关键的 sharding 优化：
+
+```python
+# hanq_wan_changes 分支中的 tensor.py
+class Environment:
+    def __init__(self, ...):
+        self.default_device_or_sharding = jax.local_devices()[0]  # 可以是 Sharding 对象
+```
+
+这个 `default_device_or_sharding` 属性允许：
+- 所有新创建的张量自动获得正确的 sharding
+- 避免计算后的 resharding 开销
+
+而 torchax 0.0.11 移除了这个机制，需要**手动**对输入数据应用 sharding。
+
+### 解决方案
+
+在 `pipeline_wan_flax.py` 中添加 `apply_input_sharding()` 函数：
+
+```python
+from jax.sharding import NamedSharding, PartitionSpec as P
+
+def apply_input_sharding(tensor, env, use_dp=False):
+    """Apply sharding to input tensors based on mesh configuration."""
+    mesh = getattr(env, '_mesh', None) or getattr(env.param, 'mesh', None)
+    if mesh is None:
+        return tensor
+    
+    # 根据张量维度确定 sharding
+    ndim = tensor.ndim if not hasattr(tensor, '_elem') else tensor._elem.ndim
+    
+    if ndim == 5:  # latents: (batch, channels, frames, height, width)
+        pspec = P('dp', None, None, None, None) if use_dp else P()
+    elif ndim == 3:  # prompt_embeds: (batch, seq, hidden)
+        pspec = P('dp', None, None) if use_dp else P()
+    elif ndim == 2:  # timesteps
+        pspec = P('dp', None) if use_dp else P()
+    else:
+        pspec = P()
+    
+    sharding = NamedSharding(mesh, pspec)
+    
+    if hasattr(tensor, 'apply_jax_'):
+        tensor.apply_jax_(jax.device_put, sharding)
+        return tensor
+    elif isinstance(tensor, jax.Array):
+        return jax.device_put(tensor, sharding)
+    return tensor
+```
+
+### 使用方式
+
+在 denoising loop 中应用 sharding：
+
+```python
+# 在 pipeline_wan_flax.py 的 __call__ 方法中
+if use_dp:
+    latent_model_input = torch.cat([latents, latents]).to(transformer_dtype)
+    # ... 转换为 JAX ...
+    
+    # 关键：对输入张量应用 sharding
+    latent_model_input = apply_input_sharding(latent_model_input, env, use_dp=True)
+    timestep = apply_input_sharding(timestep, env, use_dp=True)
+    encoder_hidden_state = apply_input_sharding(encoder_hidden_state, env, use_dp=True)
+    
+    # Transformer 推理
+    noise_pred = current_model(...)
+    
+    # scheduler step 后重新应用 sharding
+    latents = self.scheduler.step(...)
+    latents = apply_input_sharding(latents, env, use_dp=False)
+```
+
+### Mesh 配置
+
+```python
+# 正确的 mesh 配置方式
+env = torchax.default_env()
+env._mesh = mesh  # 关键：设置 _mesh 属性
+env._initial_content.mesh = mesh  # 兼容新版 torchax
+
+# 支持两种 config 名称
+if hasattr(env.config, 'use_tpu_splash_attention'):
+    env.config.use_tpu_splash_attention = True
+if hasattr(env.config, 'use_tpu_flash_attention'):
+    env.config.use_tpu_flash_attention = True
+```
+
+### 性能对比
+
+| torchax 版本 | Sharding 方式 | 每步时间 |
+|-------------|--------------|---------|
+| 0.0.4 (hanq_wan_changes) | 自动 (default_device_or_sharding) | ~5.3s |
+| 0.0.11 (无优化) | 无 | ~54s |
+| **0.0.11 (手动 sharding)** | **apply_input_sharding()** | **~5.9s** |
+
+### 参考资料
+
+官方 sharding 使用示例：
+- `torchax/examples/train_llama_torchtitan/train_llama.py`
+- `torchax/docs/docs/tutorials/distributed_array.py`
 
 ---
 
