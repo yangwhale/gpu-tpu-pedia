@@ -42,6 +42,9 @@ from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
 from tqdm import tqdm
 
+# Import custom splash attention (with exp2 optimization)
+import custom_splash_attention
+
 # 添加 diffusers-tpu 到路径（editable 安装可能在不同 Python 版本下）
 DIFFUSERS_TPU_ROOT = os.path.expanduser("~/diffusers-tpu")
 if os.path.exists(DIFFUSERS_TPU_ROOT) and DIFFUSERS_TPU_ROOT not in sys.path:
@@ -540,10 +543,12 @@ from utils import (
 
 
 # === Splash Attention 配置参数 ===
-BQSIZE = 2048           # Query 块大小
+BQSIZE = 3072           # Query 块大小
 BKVSIZE = 2048          # Key/Value 块大小
 BKVCOMPUTESIZE = 1024   # Key/Value 计算块大小
+BKVCOMPUTEINSIZE = 256  # Key/Value 内层计算块大小（用于 custom attention）
 WINDOW_SIZE = None      # 窗口大小（None 表示使用完整注意力）
+USE_CUSTOM_ATTENTION = True  # 是否使用 custom splash attention（exp2 优化）
 
 # === Mesh 分片配置 ===
 USE_DP = False          # 是否使用 data parallelism
@@ -703,6 +708,85 @@ def _tpu_splash_attention(query, key, value, mesh, scale=None, is_causal=False, 
     return out
 
 
+def _tpu_custom_attention(query, key, value, mesh, scale=None, is_causal=False, window_size=None,
+                           bqsize=BQSIZE, bkvsize=BKVSIZE, bkvcomputesize=BKVCOMPUTESIZE,
+                           bkvcomputeinsize=BKVCOMPUTEINSIZE):
+    """
+    TPU Custom Splash Attention 实现（exp2 优化版本）
+    
+    使用 exp2 代替 exp，利用 TPU VPU 硬件加速。
+    关键优化：query 预乘 LOG2_E = 1.44269504，允许直接使用 exp2 指令。
+    """
+    num_heads = query.shape[1]
+
+    def _attention_on_slices(q, k, v):
+        scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
+        # Fuse the ops of exp in softmax - multiply by log2(e)
+        _LOG2_E = 1.44269504
+        q = q * scale_factor * _LOG2_E
+
+        def pad_to_multiple(x, multiple, axis):
+            seq_len = x.shape[axis]
+            pad_len = (multiple - seq_len % multiple) % multiple
+            if pad_len == 0:
+                return x, seq_len
+            pad_width = [(0, 0)] * x.ndim
+            pad_width[axis] = (0, pad_len)
+            return jnp.pad(x, pad_width), seq_len
+
+        def kernel_3d(q_3d, k_3d, v_3d):
+            # Always pad for custom attention
+            q_3d_padded, q_orig_len = pad_to_multiple(q_3d, bqsize, axis=1)
+            k_3d_padded, k_orig_len = pad_to_multiple(k_3d, bkvsize, axis=1)
+            v_3d_padded, v_orig_len = pad_to_multiple(v_3d, bkvsize, axis=1)
+
+            padded_q_seq_len = q_3d_padded.shape[1]
+            padded_kv_seq_len = k_3d_padded.shape[1]
+
+            block_sizes = splash_attention.BlockSizes(
+                block_q=min(bqsize, padded_q_seq_len),
+                block_kv=min(bkvsize, padded_kv_seq_len),
+                block_kv_compute=min(bkvcomputesize, padded_kv_seq_len),
+            )
+            
+            splash_kernel = custom_splash_attention.make_splash_mha(
+                block_sizes=block_sizes, bkv_compute_in=bkvcomputeinsize
+            )
+            out = splash_kernel(
+                q_3d_padded.astype(jnp.float32),
+                k_3d_padded.astype(jnp.float32),
+                v_3d_padded.astype(jnp.float32)
+            ).astype(q_3d_padded.dtype)
+            
+            # Swap axes for output format
+            out = jnp.swapaxes(out, 1, 2)
+            return out[:, :q_orig_len, ...]
+
+        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
+        return vmapped_kernel(q, k, v)
+
+    # 根据设备数量和头数确定分片策略
+    if num_heads < mesh.size:
+        q_partition_spec = P()
+        kv_partition_spec = P()
+    else:
+        # Always use self attention sharding for custom attention
+        q_partition_spec = P('dp', 'tp', 'sp', None)
+        kv_partition_spec = P('dp', 'tp', None, None)
+
+    sharded_fn = shard_map(
+        _attention_on_slices,
+        mesh=mesh,
+        in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
+        out_specs=q_partition_spec,
+        check_rep=False,
+    )
+    out = sharded_fn(query, key, value)
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    
+    return out
+
+
 def scaled_dot_product_attention(
     query,
     key,
@@ -714,6 +798,7 @@ def scaled_dot_product_attention(
     enable_gqa=False,
     env=None,
     window_size=None,
+    use_custom_attention=USE_CUSTOM_ATTENTION,
 ) -> torch.Tensor:
     """
     Scaled Dot-Product Attention 封装函数
@@ -721,6 +806,7 @@ def scaled_dot_product_attention(
     路由策略：
     - 普通 torch.Tensor -> 原始 SDPA
     - XLA tensor + attn_mask -> 参考实现
+    - XLA tensor + 无 mask + use_custom_attention -> TPU Custom Attention (exp2 优化)
     - XLA tensor + 无 mask -> TPU Splash Attention
     """
     global _ORIGINAL_SDPA
@@ -735,10 +821,21 @@ def scaled_dot_product_attention(
     if attn_mask is not None:
         return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
     
-    # 使用 TPU Splash Attention
+    # 使用 TPU Splash/Custom Attention
     if env is not None and hasattr(env.config, 'use_tpu_splash_attention') and env.config.use_tpu_splash_attention:
         jquery, jkey, jvalue = env.t2j_iso((query, key, value))
-        res = _tpu_splash_attention(jquery, jkey, jvalue, env._mesh, scale=scale, is_causal=is_causal, window_size=window_size)
+        
+        # 使用 custom attention（exp2 优化）
+        if use_custom_attention:
+            res = _tpu_custom_attention(
+                jquery, jkey, jvalue, env._mesh,
+                scale=scale, is_causal=is_causal, window_size=window_size
+            )
+        else:
+            res = _tpu_splash_attention(
+                jquery, jkey, jvalue, env._mesh,
+                scale=scale, is_causal=is_causal, window_size=window_size
+            )
         return env.j2t_iso(res)
     
     return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
@@ -1144,11 +1241,13 @@ def main():
     _ORIGINAL_SDPA = torch.nn.functional.scaled_dot_product_attention
     
     # 注册自定义的 Scaled Dot-Product Attention（替代 flash/torch SDPA）
-    print_rank0(f"- 注册 TPU Splash Attention（替代 flash/torch，窗口大小: {'全局' if WINDOW_SIZE is None else WINDOW_SIZE}）...")
+    attention_type = "Custom Splash Attention (exp2)" if USE_CUSTOM_ATTENTION else "Splash Attention"
+    print_rank0(f"- 注册 TPU {attention_type}（替代 flash/torch，窗口大小: {'全局' if WINDOW_SIZE is None else WINDOW_SIZE}）...")
     custom_attention = functools.partial(
         scaled_dot_product_attention,
         env=env,
-        window_size=WINDOW_SIZE
+        window_size=WINDOW_SIZE,
+        use_custom_attention=USE_CUSTOM_ATTENTION
     )
     
     op_to_override = torch.nn.functional.scaled_dot_product_attention
