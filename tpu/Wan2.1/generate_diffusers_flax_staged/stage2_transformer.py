@@ -27,6 +27,7 @@ import argparse
 import warnings
 import logging
 import numpy as np
+from contextlib import nullcontext
 import jax
 import jax.numpy as jnp
 import torch
@@ -36,6 +37,7 @@ from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
 from jax.experimental.pallas.ops.tpu import splash_attention
 from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
+from tqdm import tqdm
 
 # Add parent directory to path for custom_splash_attention
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
@@ -450,22 +452,45 @@ def setup_pipeline_for_transformer_only(pipe, mesh, env, window_size=None,
     return pipe
 
 
-def run_transformer_inference(pipe, prompt_embeds_dict, config, mesh, env):
+def run_denoising_loop(
+    pipe,
+    prompt_embeds_dict,
+    config,
+    mesh,
+    env,
+    num_steps,
+    desc="Denoising",
+    is_warmup=False,
+    profiler_ctx=None,
+):
     """
-    运行 Transformer 推理生成 latents
+    统一的 Denoising 循环，预热和正式推理共用同一套代码。
     
-    使用 output_type='latent' 让 pipeline 跳过 VAE 解码
+    参照 HunyuanVideo-1.5 的 run_denoising_loop 实现，使用 tqdm 显示时间信息。
+    
+    Args:
+        pipe: WanPipeline 实例
+        prompt_embeds_dict: prompt embeddings 字典
+        config: 生成配置
+        mesh: JAX mesh
+        env: torchax 环境
+        num_steps: 运行步数
+        desc: 进度条描述
+        is_warmup: 是否是预热模式（影响进度条显示）
+        profiler_ctx: Profiler context（可选）
+    
+    Returns:
+        (latents, step_times, elapsed_time)
     """
-    print(f"\n=== 阶段2：Transformer 推理 ===")
-    print(f"推理步数: {config['num_inference_steps']}")
-    print(f"帧数: {config['frames']}")
-    print(f"引导尺度: {config['guidance_scale']}")
-    print(f"随机种子: {config['seed']}")
-    print(f"分辨率: {config['height']}x{config['width']}")
-
+    step_times = []
+    start_time = time.perf_counter()
+    
+    # 使用 profiler context（如果提供）
+    ctx = profiler_ctx if profiler_ctx else nullcontext()
+    
     generator = torch.Generator()
     generator.manual_seed(config['seed'])
-
+    
     gen_kwargs = {
         'prompt': None,  # Already encoded
         'negative_prompt': None,  # Already encoded
@@ -474,23 +499,161 @@ def run_transformer_inference(pipe, prompt_embeds_dict, config, mesh, env):
         'height': config['height'],
         'width': config['width'],
         'num_frames': config['frames'],
-        'num_inference_steps': config['num_inference_steps'],
+        'num_inference_steps': num_steps,
         'guidance_scale': config['guidance_scale'],
         'generator': generator,
         'output_type': 'latent',  # 关键：只返回 latents，不解码
         'use_dp': config.get('use_dp', USE_DP),
     }
-
-    print("\n开始 Transformer 推理...")
-    start_time = time.perf_counter()
-
-    with mesh:
-        result = pipe(**gen_kwargs)
-        jax.effects_barrier()
-        latents = result.frames  # output_type='latent' 时，frames 就是 latents
-
+    
+    with ctx:
+        with mesh:
+            # 使用自定义的 callback 来追踪每一步的时间
+            step_start_time = [None]  # 用列表包装以在闭包中修改
+            current_step = [0]
+            
+            # tqdm 进度条
+            progress_bar = tqdm(
+                total=num_steps,
+                desc=desc,
+                ncols=130,
+            )
+            
+            def step_callback(pipe, step_index, timestep, callback_kwargs):
+                """每一步结束后的回调，用于更新进度条"""
+                nonlocal step_times
+                
+                # 等待计算完成（JAX/XLA 是惰性执行的）
+                jax.effects_barrier()
+                
+                if step_start_time[0] is not None:
+                    step_time = time.perf_counter() - step_start_time[0]
+                    step_times.append(step_time)
+                    avg_time = sum(step_times) / len(step_times)
+                    
+                    if is_warmup:
+                        progress_bar.set_postfix({
+                            'step': f'{step_time:.2f}s',
+                        })
+                    else:
+                        remaining_steps = num_steps - step_index - 1
+                        progress_bar.set_postfix({
+                            'step': f'{step_time:.2f}s',
+                            'avg': f'{avg_time:.2f}s',
+                            'eta': f'{avg_time * remaining_steps:.1f}s',
+                        })
+                    
+                    progress_bar.update(1)
+                
+                # 记录下一步的开始时间
+                step_start_time[0] = time.perf_counter()
+                current_step[0] = step_index + 1
+                
+                return callback_kwargs
+            
+            # 记录第一步的开始时间
+            step_start_time[0] = time.perf_counter()
+            
+            # 添加 callback
+            gen_kwargs['callback_on_step_end'] = step_callback
+            
+            result = pipe(**gen_kwargs)
+            jax.effects_barrier()
+            latents = result.frames  # output_type='latent' 时，frames 就是 latents
+            
+            # 处理最后一步
+            if step_start_time[0] is not None:
+                step_time = time.perf_counter() - step_start_time[0]
+                step_times.append(step_time)
+                avg_time = sum(step_times) / len(step_times)
+                
+                if is_warmup:
+                    progress_bar.set_postfix({
+                        'step': f'{step_time:.2f}s',
+                    })
+                else:
+                    progress_bar.set_postfix({
+                        'step': f'{step_time:.2f}s',
+                        'avg': f'{avg_time:.2f}s',
+                        'eta': '0.0s',
+                    })
+                progress_bar.update(1)
+            
+            progress_bar.close()
+    
     elapsed = time.perf_counter() - start_time
-    print(f"✓ Transformer 推理完成，耗时: {elapsed:.2f} 秒")
+    return latents, step_times, elapsed
+
+
+def run_transformer_inference(pipe, prompt_embeds_dict, config, mesh, env,
+                               warmup_steps=0):
+    """
+    运行 Transformer 推理生成 latents
+    
+    使用 output_type='latent' 让 pipeline 跳过 VAE 解码
+    
+    参照 HunyuanVideo-1.5 的实现，支持 warmup 预热和正式推理分离。
+    
+    Args:
+        pipe: WanPipeline 实例
+        prompt_embeds_dict: prompt embeddings 字典
+        config: 生成配置
+        mesh: JAX mesh
+        env: torchax 环境
+        warmup_steps: 预热步数（0=不预热）
+    
+    Returns:
+        (torch_latents, elapsed_time)
+    """
+    print(f"\n=== 阶段2：Transformer 推理 ===")
+    print(f"推理步数: {config['num_inference_steps']}")
+    print(f"帧数: {config['frames']}")
+    print(f"引导尺度: {config['guidance_scale']}")
+    print(f"随机种子: {config['seed']}")
+    print(f"分辨率: {config['height']}x{config['width']}")
+    if warmup_steps > 0:
+        print(f"预热步数: {warmup_steps}")
+
+    # === Warmup (可选) ===
+    if warmup_steps > 0:
+        print(f"\n预热中（{warmup_steps}步，触发 JIT 编译）...")
+        
+        _, warmup_times, warmup_elapsed = run_denoising_loop(
+            pipe=pipe,
+            prompt_embeds_dict=prompt_embeds_dict,
+            config=config,
+            mesh=mesh,
+            env=env,
+            num_steps=warmup_steps,
+            desc="Warmup (JIT)",
+            is_warmup=True,
+        )
+        
+        print(f"  ✓ 预热完成，耗时: {warmup_elapsed:.2f}秒")
+
+    # === 正式推理 ===
+    print("\n开始 Transformer 推理...")
+    
+    latents, step_times, elapsed = run_denoising_loop(
+        pipe=pipe,
+        prompt_embeds_dict=prompt_embeds_dict,
+        config=config,
+        mesh=mesh,
+        env=env,
+        num_steps=config['num_inference_steps'],
+        desc="Denoising (TPU)",
+        is_warmup=False,
+    )
+    
+    print(f"\n✓ Transformer 推理完成，耗时: {elapsed:.2f} 秒")
+    
+    # 打印性能统计
+    if len(step_times) > 1:
+        avg_time = sum(step_times) / len(step_times)
+        print(f"  平均每步时间: {avg_time:.2f}s")
+        # 排除第一步（可能包含额外编译时间）
+        avg_time_ex_first = sum(step_times[1:]) / len(step_times[1:])
+        print(f"  平均每步时间（排除首步）: {avg_time_ex_first:.2f}s")
 
     # 转换为可保存的格式
     if hasattr(latents, '_elem'):
@@ -540,12 +703,14 @@ def main():
     )
 
     # 可覆盖的配置参数
-    parser.add_argument('--num_inference_steps', type=int, default=None, help='Override inference steps')
+    parser.add_argument('--num_inference_steps', type=int, default=50, help='推理步数（默认50）')
     parser.add_argument('--guidance_scale', type=float, default=None, help='Override guidance scale')
     parser.add_argument('--seed', type=int, default=None, help='Override random seed')
     parser.add_argument('--height', type=int, default=None, help='Override height')
     parser.add_argument('--width', type=int, default=None, help='Override width')
     parser.add_argument('--frames', type=int, default=None, help='Override frames')
+    parser.add_argument('--warmup_steps', type=int, default=2,
+                        help='预热步数（0=不预热，1=一次，2=两次，用于触发 JIT 编译）')
 
     # Attention 参数
     parser.add_argument('--window_size', type=int, nargs=2, default=None, help='Attention window size')
@@ -564,6 +729,8 @@ def main():
     parser.add_argument('--model_id', type=str, default=None, help='Override model ID from stage1')
     parser.add_argument('--num_iterations', type=int, default=1, help='Number of benchmark iterations')
     parser.add_argument('--profile', action='store_true', default=False, help='Run profiler')
+    parser.add_argument('--profiler_output_dir', type=str, default='/dev/shm/jax-trace',
+                        help='Profiler 输出目录')
 
     args = parser.parse_args()
 
@@ -591,9 +758,8 @@ def main():
     print(f"\n加载阶段1配置: {input_paths['config']}")
     config = load_generation_config(input_paths['config'])
 
-    # 应用命令行覆盖
-    if args.num_inference_steps is not None:
-        config['num_inference_steps'] = args.num_inference_steps
+    # 应用命令行覆盖（num_inference_steps 总是使用命令行参数，默认50）
+    config['num_inference_steps'] = args.num_inference_steps
     if args.guidance_scale is not None:
         config['guidance_scale'] = args.guidance_scale
     if args.seed is not None:
@@ -696,15 +862,42 @@ def main():
             prompt_embeds_dict[key] = prompt_embeds_dict[key].to('jax')
     print("  ✓ 所有 embeddings 已转换")
 
-    # 运行推理
+    # 运行推理（profiler 包裹整个正式运行阶段，不包括预热）
     times = []
     latents = None
 
-    for i in range(args.num_iterations):
-        print(f"\n--- 迭代 {i+1}/{args.num_iterations} ---")
-        latents, elapsed = run_transformer_inference(pipe, prompt_embeds_dict, config, mesh, env)
+    # 第一次迭代（包含预热）
+    if args.num_iterations >= 1:
+        print(f"\n--- 迭代 1/{args.num_iterations} ---")
+        latents, elapsed = run_transformer_inference(
+            pipe, prompt_embeds_dict, config, mesh, env,
+            warmup_steps=args.warmup_steps
+        )
         times.append(elapsed)
-        print(f"  耗时: {elapsed:.2f} 秒" + (" (包含 JIT 编译)" if i == 0 else ""))
+        print(f"  耗时: {elapsed:.2f} 秒" + (" (不含预热)" if args.warmup_steps > 0 else ""))
+
+    # 后续迭代（可选的 profiler 包裹）
+    if args.num_iterations > 1:
+        # 创建 profiler context（仅包裹正式推理，不包括预热）
+        if args.profile:
+            print(f"\n[Profiler] 启用 JAX Profiler，输出目录: {args.profiler_output_dir}")
+            print(f"[Profiler] 将 profile 后续 {args.num_iterations - 1} 次迭代")
+            profiler_context = jax.profiler.trace(
+                args.profiler_output_dir,
+                create_perfetto_link=False
+            )
+        else:
+            profiler_context = nullcontext()
+        
+        with profiler_context:
+            for i in range(1, args.num_iterations):
+                print(f"\n--- 迭代 {i+1}/{args.num_iterations} ---")
+                latents, elapsed = run_transformer_inference(
+                    pipe, prompt_embeds_dict, config, mesh, env,
+                    warmup_steps=0  # 后续迭代不需要预热
+                )
+                times.append(elapsed)
+                print(f"  耗时: {elapsed:.2f} 秒")
 
     # 保存 latents
     print(f"\n保存 latents 到: {output_paths['latents']}")
