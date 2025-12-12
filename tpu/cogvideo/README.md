@@ -70,10 +70,10 @@ python generate_flax.py
 ```
 cogvideo/
 ├── README.md                    # 本文档
-├── generate_flax.py             # 主程序：完整的 TPU 视频生成流程
-├── generate.py                  # 原始 PyTorch 版本（参考）
+├── generate_flax.py             # ⭐ 主程序：完整的 TPU 视频生成流程
+├── generate_gpu.py              # GPU PyTorch 版本（参考）
 ├── vae_decode_flax.py           # Flax VAE 解码测试
-├── vae_decode.py                # PyTorch VAE 解码测试（参考）
+├── vae_decode_gpu.py            # GPU PyTorch VAE 解码测试（参考）
 └── output_video_flax_vae.mp4    # 生成的视频示例
 ```
 
