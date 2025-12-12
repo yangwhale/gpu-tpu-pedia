@@ -49,7 +49,7 @@ USE_CUSTOM_ATTENTION = True
 LOG2_E = 1.44269504
 
 # === Mesh 分片配置 ===
-USE_DP = True           # 是否使用 data parallelism（默认开启，性能提升 35%）
+USE_DP = True           # 是否使用 data parallelism（需要 batch_size >= 2）
 SP_NUM = 1              # Spatial parallelism 数量
 USE_FSDP = True         # 是否使用 FSDP 模式（vs Tensor Parallel）
 
