@@ -147,7 +147,8 @@ output_video.mp4
 ## 性能基准测试
 
 ### 测试环境
-- **硬件**: TPU v6e-8 (8 chips) / TPU v6e-4 (4 chips)
+- **TPU**: v6e-8 / v6e-4 / v6e-1
+- **GPU**: NVIDIA H200
 - **模型**: CogVideoX1.5-5B
 - **推理步数**: 10
 - **测试日期**: 2024-12-12
@@ -180,6 +181,27 @@ output_video.mp4
 - 8 卡 vs 4 卡: 1.49x 加速（理论 2x，效率 75%）
 
 > Scaling 效率低于理论值是预期的，因为 Transformer 是 memory-bound 工作负载，通信开销随芯片数增加。
+
+### 单芯片 Baseline 对比（640×1280×61, No-CFG）
+
+| 硬件 | Attention 实现 | 每步时间 | 相对速度 | 相对价格* | 性价比* |
+|------|---------------|----------|----------|----------|---------|
+| **H200** | CUDA FlashAttention | **2.024s** | 1.00x | 2.00x | 1.00x |
+| v6e-1 | 原始 Splash Attention | 3.38s | 0.60x | 1.00x | 0.60x |
+| v6e-1 | Custom Splash (exp2) | 2.73s | 0.74x | 1.00x | **1.48x** |
+
+*\*价格假设：H200 = 2 × v6e-1（仅供参考）*
+
+**TPU vs GPU 分析:**
+- v6e-1 (exp2 优化) vs H200: 2.73s vs 2.024s，TPU 慢 35%
+- v6e-1 (原始 Splash) vs H200: 3.38s vs 2.024s，TPU 慢 67%
+- Custom Splash Attention (exp2) 对 TPU 性能至关重要，提升 **19%** (3.38s → 2.73s)
+
+**性价比分析（假设 H200 价格 = 2 × v6e-1）:**
+- v6e-1 性价比 = 速度/价格 = 0.74 / 1.0 = 0.74
+- H200 性价比 = 速度/价格 = 1.0 / 2.0 = 0.50
+- **v6e-1 性价比比 H200 高 48%**（0.74 / 0.50 = 1.48x）
+- 即使 TPU 绝对性能较慢，但在同等成本下能处理更多任务
 
 > **Block Size 配置对比**:
 > - 原始: BQSIZE=2048, BKVSIZE=1024, BKVCOMPUTESIZE=512
