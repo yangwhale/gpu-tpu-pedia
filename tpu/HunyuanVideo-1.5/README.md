@@ -251,7 +251,7 @@ HunyuanVideo-1.5/
 
 **技术特点**：
 - 使用原生 HunyuanVideo-1.5-TPU 代码库
-- Splash Attention（TPU 优化）
+- **Custom Splash Attention (exp2 优化)** — +20.3% 性能提升
 - TP + fc2/proj Replicated 分片策略（+10.2% 性能）
 - 支持 DeepCache 加速
 
@@ -259,8 +259,9 @@ HunyuanVideo-1.5/
 ```
 generate_hunyuan_flax_staged/
 ├── stage2_transformer.py              # 主推理脚本
+├── custom_splash_attention.py         # ⭐ exp2 优化的 Attention 内核
 ├── utils.py                           # 工具函数
-├── TORCHAX_MIGRATION_GUIDE.md         # ⭐ GPU→TPU 迁移完整指南
+├── TORCHAX_MIGRATION_GUIDE.md         # GPU→TPU 迁移完整指南
 ├── GPU_TPU_COMPARISON.md              # GPU/TPU 代码对比
 └── DEEPCACHE_EXPLAINED.md             # DeepCache 原理说明
 ```
@@ -286,10 +287,11 @@ python stage2_transformer.py \
 ```
 
 **性能数据（TPU v6e-8）**：
-| 配置 | 每步时间 | 50步总时间 |
-|------|----------|------------|
-| 121帧 720p | 7.29s | 6.1 分钟 |
-| 121帧 720p + DeepCache | ~4s | 3.5 分钟 |
+| 配置 | 每步时间 | 50步总时间 | 性能提升 |
+|------|----------|------------|----------|
+| 121帧 720p (标准 Splash) | 7.29s | 6.1 分钟 | baseline |
+| 121帧 720p (**Custom exp2**) | **5.81s** | **4.8 分钟** | **+20.3%** |
+| 121帧 720p + DeepCache | ~4s | 3.5 分钟 | +45% |
 
 ---
 
@@ -383,6 +385,7 @@ python stage3_vae_decoder.py   # TPU 运行
 | `dit_implementation_analysis.md` | DiT Transformer 架构分析 |
 | `scheduler_explained.md` | Flow Matching Scheduler 详解 |
 | `splash_attention_kernel_analysis.md` | Splash Attention Kernel 分析 |
+| `custom_splash_attention.py` | ⭐ exp2 优化的 Attention 内核 |
 
 ---
 
@@ -390,19 +393,45 @@ python stage3_vae_decoder.py   # TPU 运行
 
 ### TPU vs GPU
 
-| 平台 | 配置 | 121帧 720p 50步 | 每步时间 |
-|------|------|-----------------|----------|
-| TPU v6e-8 | TP + fc2 Replicated | 6.1 分钟 | 7.29s |
-| GPU H100 8卡 | Flash Attention 2 | 4.3 分钟 | 5.2s |
-| GPU H100 8卡 | DeepCache | 2.4 分钟 | 2.84s |
+| 平台 | 配置 | 121帧 720p 50步 | 每步时间 | 说明 |
+|------|------|-----------------|----------|------|
+| TPU v6e-8 | Custom Splash Attention (exp2) | **4.8 分钟** | **5.81s** | ⭐ 推荐 |
+| TPU v6e-8 | 标准 Splash Attention | 6.1 分钟 | 7.29s | baseline |
+| GPU H100 8卡 | Flash Attention 2 | 4.3 分钟 | 5.2s | - |
+| GPU H100 8卡 | DeepCache | 2.4 分钟 | 2.84s | - |
 
-### 加速方案对比
+### TPU 优化方案对比
+
+| 方案 | 加速比 | 质量 | 说明 |
+|------|--------|------|------|
+| Custom Splash Attention (exp2) | **+20.3%** | ✅ 最优 | 使用 exp2 硬件指令优化 |
+| TP + fc2/proj Replicated | +10.2% | ✅ 最优 | 减少 all-reduce 通信 |
+| DeepCache | +45% | ✅ 良好 | 缓存中间层输出 |
+
+### GPU 加速方案对比
 
 | 方案 | 加速比 | 质量 | 推荐场景 |
 |------|--------|------|----------|
-| 标准（无加速） | 1.0x | ✅ 最优 | 生产环境 |
+| Flash Attention 2 | 1.0x | ✅ 最优 | 生产环境 |
 | DeepCache | 1.8x | ✅ 良好 | 日常使用 |
 | SageAttention | 1.6x | ⚠️ 有损 | 快速预览 |
+
+### Custom Splash Attention 原理
+
+Custom Splash Attention 通过以下优化实现 20.3% 性能提升：
+
+1. **exp2 替代 exp**：TPU VPU 原生支持 `exp2` 指令，比通用 `exp` 更快
+2. **Query 预乘 LOG2_E**：将 softmax 中的 `exp(x)` 转换为 `exp2(x * 1.44269504)`
+3. **分块计算优化**：使用 `BKVCOMPUTEINSIZE` 控制内层循环粒度
+
+```python
+# 配置参数（stage2_transformer.py）
+BQSIZE = 3072           # Query 块大小
+BKVSIZE = 2048          # Key/Value 块大小
+BKVCOMPUTESIZE = 1024   # KV 计算块大小
+BKVCOMPUTEINSIZE = 256  # KV 内层计算块大小
+USE_CUSTOM_ATTENTION = True  # 启用 exp2 优化
+```
 
 ---
 
