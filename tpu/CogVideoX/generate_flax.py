@@ -35,12 +35,20 @@ MODEL_NAME = "zai-org/CogVideoX1.5-5B"
 BQSIZE = 2048           # Query 块大小（从 3024 减小）
 BKVSIZE = 1024          # Key/Value 块大小（从 2048 减小）
 BKVCOMPUTESIZE = 512    # Key/Value 计算块大小（从 1024 减小）
+BKVCOMPUTEINSIZE = 256  # Key/Value 内层计算块大小（用于 custom attention）
 
 # 窗口大小（None 表示使用完整注意力，否则使用局部窗口注意力）
 WINDOW_SIZE = None
 
 # 是否使用 K-smooth（对 key 进行平滑处理）
 USE_K_SMOOTH = True
+
+# 是否使用 custom splash attention (exp2 优化)
+USE_CUSTOM_ATTENTION = True
+
+# LOG2_E 常量，用于 exp2 优化
+# exp(x) = exp2(x * LOG2_E)
+LOG2_E = 1.44269504
 
 # Mesh 分片配置
 USE_DP = False          # 是否使用 data parallelism
@@ -128,6 +136,8 @@ def setup_pytree_registrations():
         print(f"  - {cls.__name__} 已注册")
 
 #### Splash Attention 实现 ####
+# 导入 custom splash attention 模块
+from custom_splash_attention import make_splash_mha as custom_make_splash_mha, _BlockSizes as CustomBlockSizes
 
 def _sdpa_reference(
     query,
@@ -289,6 +299,109 @@ def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False, w
     return out
 
 
+def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False, window_size=None):
+    """
+    TPU Custom Splash Attention 实现（使用 exp2 优化）
+    
+    使用自定义的 Pallas kernel，用 exp2 替代 exp 以获得更好的 TPU VPU 硬件利用率。
+    关键优化：Query 预乘 LOG2_E，使 exp(x) 变为 exp2(x * LOG2_E)
+    
+    Args:
+        query: Query 张量 [batch, num_heads, seq_len, head_dim]
+        key: Key 张量 [batch, num_heads, seq_len, head_dim]
+        value: Value 张量 [batch, num_heads, seq_len, head_dim]
+        env: torchax 环境
+        scale: 缩放因子（默认为 1/sqrt(head_dim)）
+        is_causal: 是否使用因果掩码（当前未实现）
+        window_size: 局部窗口大小（当前未实现）
+        
+    Returns:
+        注意力输出张量
+    """
+    mesh = env._mesh
+    num_heads = query.shape[1]
+
+    # 在设备切片上执行的注意力函数
+    def _attention_on_slices(q, k, v):
+        # 计算缩放因子并应用 LOG2_E 预乘
+        # 这样 exp(q @ k^T * scale) 变为 exp2(q @ k^T * scale * LOG2_E)
+        scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
+        q = q * (scale_factor * LOG2_E)  # 关键优化：预乘 LOG2_E
+
+        # 辅助函数：填充到指定倍数
+        def pad_to_multiple(x, multiple, axis):
+            seq_len = x.shape[axis]
+            pad_len = (multiple - seq_len % multiple) % multiple
+            if pad_len == 0:
+                return x, seq_len
+            pad_width = [(0, 0)] * x.ndim
+            pad_width[axis] = (0, pad_len)
+            return jnp.pad(x, pad_width), seq_len
+
+        # 在批次维度上操作的核函数
+        def kernel_3d(q_3d, k_3d, v_3d):
+            q_orig_len = q_3d.shape[1]
+            num_heads_on_device = q_3d.shape[0]
+
+            # 填充到块大小的倍数
+            q_3d_padded, _ = pad_to_multiple(q_3d, BQSIZE, axis=1)
+            k_3d_padded, _ = pad_to_multiple(k_3d, BKVSIZE, axis=1)
+            v_3d_padded, _ = pad_to_multiple(v_3d, BKVSIZE, axis=1)
+
+            padded_q_seq_len = q_3d_padded.shape[1]
+            padded_kv_seq_len = k_3d_padded.shape[1]
+
+            # 配置块大小
+            block_sizes = CustomBlockSizes(
+                block_q=min(BQSIZE, padded_q_seq_len),
+                block_kv=min(BKVSIZE, padded_kv_seq_len),
+                block_kv_compute=min(BKVCOMPUTESIZE, padded_kv_seq_len),
+            )
+            
+            # 创建并执行 custom splash attention kernel
+            splash_kernel = custom_make_splash_mha(
+                block_sizes=block_sizes,
+                bkv_compute_in=BKVCOMPUTEINSIZE
+            )
+            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded)
+            
+            # 调整输出维度：(heads, head_dim, seq) -> (heads, seq, head_dim)
+            out = jnp.swapaxes(out, 1, 2)
+            
+            # 移除填充
+            return out[:, :q_orig_len, ...]
+
+        # 在批次维度上映射 kernel
+        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
+        return vmapped_kernel(q, k, v)
+
+    # 根据设备数量和头数确定分片策略
+    if num_heads < mesh.size:
+        # 头数太少，复制到所有设备
+        q_partition_spec = P()
+        kv_partition_spec = P()
+    else:
+        # 根据 query 和 key 的序列长度判断是自注意力还是交叉注意力
+        if query.shape[2] == key.shape[2]:  # 自注意力
+            q_partition_spec = P('dp', 'tp', 'sp', None)
+            kv_partition_spec = P('dp', 'tp', None, None)
+        else:  # 交叉注意力
+            q_partition_spec = P('dp', None, ('tp', 'sp'), None)
+            kv_partition_spec = P('dp', None, None, None)
+
+    # 使用 shard_map 在设备间分片执行
+    sharded_fn = shard_map(
+        _attention_on_slices,
+        mesh=mesh,
+        in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
+        out_specs=q_partition_spec,
+        check_rep=False,
+    )
+    out = sharded_fn(query, key, value)
+    
+    return out
+
+
 def scaled_dot_product_attention(
     query,
     key,
@@ -330,7 +443,11 @@ def scaled_dot_product_attention(
             key_mean = jnp.mean(jkey, axis=2, keepdims=True)
             jkey = jkey - key_mean
         
-        res = _tpu_splash_attention(jquery, jkey, jvalue, env, scale=scale, is_causal=is_causal, window_size=window_size)
+        # 选择使用标准 splash attention 还是 custom splash attention (exp2 优化)
+        if USE_CUSTOM_ATTENTION:
+            res = _tpu_custom_attention(jquery, jkey, jvalue, env, scale=scale, is_causal=is_causal, window_size=window_size)
+        else:
+            res = _tpu_splash_attention(jquery, jkey, jvalue, env, scale=scale, is_causal=is_causal, window_size=window_size)
         return env.j2t_iso(res)
     
     # 回退到参考实现
@@ -543,7 +660,8 @@ def setup_pipeline_for_jax(pipe, model_id=MODEL_NAME):
     env.config.use_tpu_splash_attention = True
 
     # 注册自定义的 Scaled Dot-Product Attention
-    print(f"- 注册 Splash Attention（窗口大小: {WINDOW_SIZE}）...")
+    attention_type = "Custom Splash Attention (exp2)" if USE_CUSTOM_ATTENTION else "Standard Splash Attention"
+    print(f"- 注册 {attention_type}（窗口大小: {WINDOW_SIZE}）...")
     custom_attention = functools.partial(
         scaled_dot_product_attention,
         env=env,
@@ -803,9 +921,9 @@ def main():
             pipe,
             prompt,
             num_inference_steps=10,  # 增加推理步数
-            num_frames=61,           # 16 帧（测试 Tiling）
-            height=640,              # 480x720 标准分辨率
-            width=1280,
+            num_frames=81,           # 81 帧
+            height=768,              # 768x1360 分辨率
+            width=1360,
             guidance_scale=6.0,
             num_iterations=2
         )
