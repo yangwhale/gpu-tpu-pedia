@@ -1,0 +1,111 @@
+/home/chrisya/.local/lib/python3.12/site-packages/torch/amp/autocast_mode.py:270: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
+  warnings.warn(
+Flax classes are deprecated and will be removed in Diffusers v1.0.0. We recommend migrating to PyTorch classes or pinning your version of Diffusers.
+Flax classes are deprecated and will be removed in Diffusers v1.0.0. We recommend migrating to PyTorch classes or pinning your version of Diffusers.
+/home/chrisya/gpu-tpu-pedia/tpu/CogVideoX/generate_flax.py:20: DeprecationWarning: jax.experimental.shard_map is deprecated in v0.8.0. Used jax.shard_map instead.
+  from jax.experimental.shard_map import shard_map
+注册PyTree节点...
+  - BaseModelOutputWithPooling 已注册
+  - BaseModelOutputWithPastAndCrossAttentions 已注册
+  - DecoderOutput 已注册
+Loading pipeline components...:   0%|          | 0/5 [00:00<?, ?it/s]
+Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s][ALoading checkpoint shards: 100%|██████████| 3/3 [00:00<00:00, 83.81it/s]
+
+Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s][A
+Loading checkpoint shards:  25%|██▌       | 1/4 [00:00<00:01,  2.27it/s][A
+Loading checkpoint shards:  50%|█████     | 2/4 [00:00<00:00,  3.28it/s][A
+Loading checkpoint shards:  75%|███████▌  | 3/4 [00:00<00:00,  3.77it/s][A
+Loading checkpoint shards: 100%|██████████| 4/4 [00:01<00:00,  4.26it/s][ALoading checkpoint shards: 100%|██████████| 4/4 [00:01<00:00,  3.79it/s]
+Loading pipeline components...:  60%|██████    | 3/5 [00:01<00:00,  2.60it/s]Loading pipeline components...: 100%|██████████| 5/5 [00:01<00:00,  4.14it/s]Loading pipeline components...: 100%|██████████| 5/5 [00:01<00:00,  3.74it/s]
+`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
+
+配置Pipeline以使用JAX、Splash Attention 和 Flax VAE...
+
+配置Pipeline以使用JAX...
+  Mesh 维度: tp_dim=8, dp_dim=1, sp_dim=1
+- 注册 Custom Splash Attention (exp2)（窗口大小: None）...
+将scheduler参数移动到JAX设备...
+- 将Text Encoder移到XLA并进行分片...
+- 加载 Flax VAE (原生 JAX 实现)...
+[1/4] 加载配置: zai-org/CogVideoX1.5-5B
+[2/4] 下载 PyTorch 权重...
+[3/4] 转换权重到 JAX 格式...
+  ✓ 加载了 436 个 PyTorch 权重张量
+  ✓ 转换了 436 个权重到 JAX 格式
+[4/4] 初始化模型并加载权重...
+✓ 模型加载完成!
+  配置: FlaxAutoencoderKLCogVideoXConfig(config_name='config.json', in_channels=3, out_channels=3, down_block_types=['CogVideoXDownBlock3D', 'CogVideoXDownBlock3D', 'CogVideoXDownBlock3D', 'CogVideoXDownBlock3D'], up_block_types=['CogVideoXUpBlock3D', 'CogVideoXUpBlock3D', 'CogVideoXUpBlock3D', 'CogVideoXUpBlock3D'], block_out_channels=[128, 256, 256, 512], latent_channels=16, layers_per_block=3, act_fn='silu', norm_eps=1e-06, norm_num_groups=32, temporal_compression_ratio=4, sample_height=480, sample_width=720, scaling_factor=0.7, shift_factor=None, latents_mean=None, latents_std=None, force_upcast=True, use_quant_conv=False, use_post_quant_conv=False, pad_mode='first')
+- 跳过 VAE Tiling 配置（测试完整解码）...
+  ✓ Flax VAE 已替换 Pipeline 的 VAE（无不当 JIT）
+Pipeline配置完成
+
+运行2次视频生成基准测试...
+提示词: 'A panda, dressed in a small, red jacket and a tiny hat, sits on a wooden stool in a serene bamboo forest. The panda's fluffy paws strum a miniature acoustic guitar, producing soft, melodic tunes. Nearby, a few other pandas gather, watching curiously and some clapping in rhythm. Sunlight filters through the tall bamboo, casting a gentle glow on the scene. The panda's face is expressive, showing concentration and joy as it plays. The background includes a small, flowing stream and vibrant green foliage, enhancing the peaceful and magical atmosphere of this unique musical performance.'
+推理步数: 10
+视频帧数: 81
+分辨率: 768x1360
+引导尺度: 6.0
+
+迭代 0 (包含 JIT 编译，会比较慢):
+  0%|          | 0/10 [00:00<?, ?it/s] 10%|█         | 1/10 [01:06<09:59, 66.57s/it] 20%|██        | 2/10 [02:16<09:07, 68.38s/it] 30%|███       | 3/10 [02:20<04:32, 38.94s/it] 40%|████      | 4/10 [02:24<02:30, 25.10s/it] 50%|█████     | 5/10 [02:27<01:27, 17.45s/it] 60%|██████    | 6/10 [02:31<00:51, 12.84s/it] 70%|███████   | 7/10 [02:35<00:29,  9.92s/it] 80%|████████  | 8/10 [02:39<00:16,  8.00s/it] 90%|█████████ | 9/10 [02:43<00:06,  6.72s/it]100%|██████████| 10/10 [02:47<00:00,  5.86s/it]100%|██████████| 10/10 [02:47<00:00, 16.74s/it]
+/home/chrisya/torchax/torchax/ops/mappings.py:84: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:206.)
+  res = torch.from_numpy(numpy.asarray(x))
+  完成时间: 196.38 秒 (包含 Transformer + Text Encoder 的真正 JIT 编译)
+
+迭代 1 (使用已编译代码):
+  0%|          | 0/10 [00:00<?, ?it/s] 10%|█         | 1/10 [00:04<00:41,  4.66s/it] 20%|██        | 2/10 [00:08<00:33,  4.21s/it] 30%|███       | 3/10 [00:12<00:28,  4.07s/it] 40%|████      | 4/10 [00:16<00:23,  4.00s/it] 50%|█████     | 5/10 [00:20<00:19,  3.96s/it] 60%|██████    | 6/10 [00:24<00:15,  3.94s/it] 70%|███████   | 7/10 [00:28<00:11,  3.93s/it] 80%|████████  | 8/10 [00:31<00:07,  3.92s/it] 90%|█████████ | 9/10 [00:35<00:03,  3.91s/it]100%|██████████| 10/10 [00:39<00:00,  3.91s/it]100%|██████████| 10/10 [00:39<00:00,  3.97s/it]
+Traceback (most recent call last):
+  File "/home/chrisya/gpu-tpu-pedia/tpu/CogVideoX/generate_flax.py", line 947, in <module>
+    main()
+  File "/home/chrisya/gpu-tpu-pedia/tpu/CogVideoX/generate_flax.py", line 923, in main
+    frames, times = run_generation_benchmark(
+                    ^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/gpu-tpu-pedia/tpu/CogVideoX/generate_flax.py", line 851, in run_generation_benchmark
+    result = pipe(prompt, num_inference_steps=num_inference_steps, num_frames=num_frames, height=height, width=width, guidance_scale=guidance_scale)
+             ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/.local/lib/python3.12/site-packages/torch/utils/_contextlib.py", line 120, in decorate_context
+    return func(*args, **kwargs)
+           ^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/pipelines/cogvideo/pipeline_cogvideox.py", line 778, in __call__
+    video = self.decode_latents(latents)
+            ^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/pipelines/cogvideo/pipeline_cogvideox.py", line 355, in decode_latents
+    frames = self.vae.decode(latents).sample
+             ^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/gpu-tpu-pedia/tpu/CogVideoX/generate_flax.py", line 795, in decode
+    frames_jax = self._flax_vae.decode(latents_jax)
+                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 2021, in decode
+    decoded = self._decode(z, zq, deterministic=deterministic)
+              ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 1966, in _decode
+    decoded_frame, _ = self.decoder(
+                       ^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 1592, in __call__
+    hidden_states, _ = up_block(
+                       ^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 1195, in __call__
+    hidden_states, _ = resnet(
+                       ^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 797, in __call__
+    return self._call_with_feat_cache(inputs, temb, zq, feat_cache, feat_idx, deterministic)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 816, in _call_with_feat_cache
+    hidden_states, _ = self.norm1(hidden_states, zq, feat_cache=feat_cache, feat_idx=feat_idx)
+                       ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 584, in __call__
+    return self._call_with_feat_cache(f, zq, feat_cache, feat_idx)
+           ^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 621, in _call_with_feat_cache
+    norm_f = self.norm_layer(f)
+             ^^^^^^^^^^^^^^^^^^
+  File "/home/chrisya/diffusers-tpu/src/diffusers/models/autoencoders/autoencoder_kl_cogvideox_flax.py", line 495, in __call__
+    x_out = x_norm * self.scale.value.reshape(1, 1, 1, 1, C) + self.bias.value.reshape(1, 1, 1, 1, C)
+            ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~^~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+  File "/home/chrisya/.local/lib/python3.12/site-packages/jax/_src/numpy/array_methods.py", line 608, in deferring_binary_op
+    return binary_op(*args)
+           ^^^^^^^^^^^^^^^^
+  File "/home/chrisya/.local/lib/python3.12/site-packages/jax/_src/numpy/ufunc_api.py", line 182, in __call__
+    return call(*args)
+           ^^^^^^^^^^^
+ValueError: RESOURCE_EXHAUSTED: Error allocating device buffer: Attempting to allocate 1.99G. That was not possible. There are 1.03G free.; (0x0x0_HBM0)
