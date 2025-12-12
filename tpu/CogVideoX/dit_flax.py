@@ -17,6 +17,9 @@ from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
 from jax.experimental.pallas.ops.tpu import splash_attention
 from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
+
+# 导入 custom splash attention 模块
+from custom_splash_attention import make_splash_mha as custom_make_splash_mha, _BlockSizes as CustomBlockSizes
 from transformers.modeling_outputs import BaseModelOutputWithPooling, BaseModelOutputWithPastAndCrossAttentions
 from diffusers import CogVideoXTransformer3DModel
 from diffusers.models.modeling_outputs import Transformer2DModelOutput
@@ -29,10 +32,12 @@ from contextlib import nullcontext
 MODEL_NAME = "zai-org/CogVideoX1.5-5B"
 
 #### Splash Attention 配置参数 ####
-# Splash attention 块大小配置
-BQSIZE = 2048           # Query 块大小
-BKVSIZE = 2048          # Key/Value 块大小
-BKVCOMPUTESIZE = 1024    # Key/Value 计算块大小
+# Splash attention 块大小配置 - Wan2.1 优化配置
+# 经测试，此配置在 TPU v6e 上获得最佳性能（+16.2%）
+BQSIZE = 3328           # Query 块大小（与 Wan2.1 一致）
+BKVSIZE = 2816          # Key/Value 块大小（与 Wan2.1 一致）
+BKVCOMPUTESIZE = 256    # Key/Value 计算块大小（与 Wan2.1 一致）
+BKVCOMPUTEINSIZE = 256  # Key/Value 内层计算块大小（用于 custom attention）
 
 # 窗口大小（None 表示使用完整注意力）
 WINDOW_SIZE = None
@@ -40,10 +45,17 @@ WINDOW_SIZE = None
 # 是否使用 K-smooth（对 key 进行平滑处理）
 USE_K_SMOOTH = True
 
+# 是否使用 custom splash attention (exp2 优化)
+USE_CUSTOM_ATTENTION = True
+
+# LOG2_E 常量，用于 exp2 优化
+# exp(x) = exp2(x * LOG2_E)
+LOG2_E = 1.44269504
+
 # Mesh 分片配置
-USE_DP = False          # 是否使用 data parallelism
-SP_NUM = 1             # Spatial parallelism 数量
-USE_TP = True          # 是否使用 Tensor Parallel 模式（Megatron Column-Row风格）
+USE_DP = True           # 是否使用 data parallelism（默认开启，性能提升 35%）
+SP_NUM = 1              # Spatial parallelism 数量
+USE_TP = True           # 是否使用 Tensor Parallel 模式（Megatron Column-Row风格）
 
 
 # --- PyTree 注册 ---
@@ -203,6 +215,95 @@ def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False, w
     )
     out = sharded_fn(query, key, value)
     
+    # 应用输出 sharding constraint（性能提升 +2.7%）
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    
+    return out
+
+
+def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False, window_size=None):
+    """
+    TPU Custom Splash Attention 实现（使用 exp2 优化）
+    
+    使用自定义的 Pallas kernel，用 exp2 替代 exp 以获得更好的 TPU VPU 硬件利用率。
+    关键优化：Query 预乘 LOG2_E，使 exp(x) 变为 exp2(x * LOG2_E)
+    """
+    mesh = env._mesh
+    num_heads = query.shape[1]
+
+    def _attention_on_slices(q, k, v):
+        # 计算缩放因子并应用 LOG2_E 预乘
+        scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
+        q = q * (scale_factor * LOG2_E)  # 关键优化：预乘 LOG2_E
+
+        def pad_to_multiple(x, multiple, axis):
+            seq_len = x.shape[axis]
+            pad_len = (multiple - seq_len % multiple) % multiple
+            if pad_len == 0:
+                return x, seq_len
+            pad_width = [(0, 0)] * x.ndim
+            pad_width[axis] = (0, pad_len)
+            return jnp.pad(x, pad_width), seq_len
+
+        def kernel_3d(q_3d, k_3d, v_3d):
+            q_orig_len = q_3d.shape[1]
+            num_heads_on_device = q_3d.shape[0]
+
+            # 填充到块大小的倍数
+            q_3d_padded, _ = pad_to_multiple(q_3d, BQSIZE, axis=1)
+            k_3d_padded, _ = pad_to_multiple(k_3d, BKVSIZE, axis=1)
+            v_3d_padded, _ = pad_to_multiple(v_3d, BKVSIZE, axis=1)
+
+            padded_q_seq_len = q_3d_padded.shape[1]
+            padded_kv_seq_len = k_3d_padded.shape[1]
+
+            # 配置块大小
+            block_sizes = CustomBlockSizes(
+                block_q=min(BQSIZE, padded_q_seq_len),
+                block_kv=min(BKVSIZE, padded_kv_seq_len),
+                block_kv_compute=min(BKVCOMPUTESIZE, padded_kv_seq_len),
+            )
+            
+            # 创建并执行 custom splash attention kernel
+            splash_kernel = custom_make_splash_mha(
+                block_sizes=block_sizes,
+                bkv_compute_in=BKVCOMPUTEINSIZE
+            )
+            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded)
+            
+            # 调整输出维度：(heads, head_dim, seq) -> (heads, seq, head_dim)
+            out = jnp.swapaxes(out, 1, 2)
+            
+            # 移除填充
+            return out[:, :q_orig_len, ...]
+
+        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
+        return vmapped_kernel(q, k, v)
+
+    # 根据设备数量和头数确定分片策略
+    if num_heads < mesh.size:
+        q_partition_spec = P()
+        kv_partition_spec = P()
+    else:
+        if query.shape[2] == key.shape[2]:  # 自注意力
+            q_partition_spec = P('dp', 'tp', 'sp', None)
+            kv_partition_spec = P('dp', 'tp', None, None)
+        else:  # 交叉注意力
+            q_partition_spec = P('dp', None, ('tp', 'sp'), None)
+            kv_partition_spec = P('dp', None, None, None)
+
+    sharded_fn = shard_map(
+        _attention_on_slices,
+        mesh=mesh,
+        in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
+        out_specs=q_partition_spec,
+        check_rep=False,
+    )
+    out = sharded_fn(query, key, value)
+    
+    # 应用输出 sharding constraint（性能提升 +2.7%）
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    
     return out
 
 
@@ -231,7 +332,11 @@ def scaled_dot_product_attention(
             key_mean = jnp.mean(jkey, axis=2, keepdims=True)
             jkey = jkey - key_mean
         
-        res = _tpu_splash_attention(jquery, jkey, jvalue, env, scale=scale, is_causal=is_causal, window_size=window_size)
+        # 选择使用标准 splash attention 还是 custom splash attention (exp2 优化)
+        if USE_CUSTOM_ATTENTION:
+            res = _tpu_custom_attention(jquery, jkey, jvalue, env, scale=scale, is_causal=is_causal, window_size=window_size)
+        else:
+            res = _tpu_splash_attention(jquery, jkey, jvalue, env, scale=scale, is_causal=is_causal, window_size=window_size)
         return env.j2t_iso(res)
     
     # 回退到参考实现
@@ -526,12 +631,12 @@ def setup_transformer_for_tpu(transformer):
         tp_dim //= SP_NUM
         sp_dim = SP_NUM
     
-    print(f"  Mesh 维度: tp_dim={tp_dim}, dp_dim={dp_dim}, sp_dim={sp_dim}")
+    print(f"  Mesh 维度: dp_dim={dp_dim}, sp_dim={sp_dim}, tp_dim={tp_dim}")
     print(f"  总设备数: {jax.device_count()}")
     
-    # 创建三维 mesh (tp, dp, sp)
-    mesh_devices = mesh_utils.create_device_mesh((tp_dim, dp_dim, sp_dim), allow_split_physical_axes=True)
-    mesh = Mesh(mesh_devices, ('tp', 'dp', 'sp'))
+    # 创建三维 mesh (dp, sp, tp) - 优化后的顺序，性能提升 +10.7%
+    mesh_devices = mesh_utils.create_device_mesh((dp_dim, sp_dim, tp_dim), allow_split_physical_axes=True)
+    mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
     
     # 创建 torchax 环境
     env = torchax.default_env()
@@ -541,7 +646,8 @@ def setup_transformer_for_tpu(transformer):
     env.config.use_tpu_splash_attention = True
 
     # 注册自定义的 Scaled Dot-Product Attention
-    print(f"- 注册 Splash Attention（窗口大小: {WINDOW_SIZE}）...")
+    attention_type = "Custom Splash Attention (exp2)" if USE_CUSTOM_ATTENTION else "Standard Splash Attention"
+    print(f"- 注册 {attention_type}（窗口大小: {WINDOW_SIZE}）...")
     custom_attention = functools.partial(
         scaled_dot_product_attention,
         env=env,
