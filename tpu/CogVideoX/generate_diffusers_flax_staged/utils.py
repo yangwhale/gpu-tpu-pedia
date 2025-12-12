@@ -29,11 +29,10 @@ NUM_STEPS = 10
 GUIDANCE_SCALE = 6.0
 
 # === Splash Attention 配置参数 ===
-# 注意：这些值需要根据 TPU vmem 限制调整
-# 减小块大小以避免 vmem 超限（当前 vmem 限制约 32MB）
-BQSIZE = 2048           # Query 块大小
-BKVSIZE = 1024          # Key/Value 块大小
-BKVCOMPUTESIZE = 512    # Key/Value 计算块大小
+# 与 Wan2.1 保持一致的 block size 配置
+BQSIZE = 3328           # Query 块大小（与 Wan2.1 一致）
+BKVSIZE = 2816          # Key/Value 块大小（与 Wan2.1 一致）
+BKVCOMPUTESIZE = 256    # Key/Value 计算块大小（与 Wan2.1 一致）
 BKVCOMPUTEINSIZE = 256  # Key/Value 内层计算块大小
 
 # 窗口大小（None 表示使用完整注意力，否则使用局部窗口注意力）
@@ -50,7 +49,7 @@ USE_CUSTOM_ATTENTION = True
 LOG2_E = 1.44269504
 
 # === Mesh 分片配置 ===
-USE_DP = False          # 是否使用 data parallelism
+USE_DP = True           # 是否使用 data parallelism（默认开启，性能提升 35%）
 SP_NUM = 1              # Spatial parallelism 数量
 USE_FSDP = True         # 是否使用 FSDP 模式（vs Tensor Parallel）
 

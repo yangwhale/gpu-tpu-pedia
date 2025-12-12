@@ -184,6 +184,10 @@ def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False,
         check_rep=False,
     )
     out = sharded_fn(query, key, value)
+    
+    # 添加输出 sharding constraint（与 Wan2.1 一致）
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    
     return out
 
 
@@ -267,6 +271,10 @@ def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
         check_rep=False,
     )
     out = sharded_fn(query, key, value)
+    
+    # 添加输出 sharding constraint（与 Wan2.1 一致）
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    
     return out
 
 
@@ -481,7 +489,7 @@ def run_denoising_loop(
     }
     
     with ctx:
-        with mesh:
+        with mesh, env:
             # 使用自定义的 callback 来追踪每一步的时间
             step_start_time = [None]
             
@@ -684,7 +692,6 @@ def main():
 
     # 其他参数
     parser.add_argument('--model_id', type=str, default=None, help='Override model ID from stage1')
-    parser.add_argument('--num_iterations', type=int, default=1, help='Number of benchmark iterations')
     parser.add_argument('--profile', action='store_true', default=False, help='Run profiler')
     parser.add_argument('--profiler_output_dir', type=str, default='/dev/shm/jax-trace',
                         help='Profiler 输出目录')
@@ -755,21 +762,21 @@ def main():
         tp_dim //= args.sp_num
         sp_dim = args.sp_num
 
-    print(f"\nMesh 维度: tp_dim={tp_dim}, dp_dim={dp_dim}, sp_dim={sp_dim}")
+    print(f"\nMesh 维度: dp_dim={dp_dim}, sp_dim={sp_dim}, tp_dim={tp_dim}")
     print(f"总设备数: {len(jax.devices())}")
 
+    # mesh 顺序：('dp', 'sp', 'tp') - 与 Wan2.1 一致
     mesh_devices = mesh_utils.create_device_mesh(
-        (tp_dim, dp_dim, sp_dim), allow_split_physical_axes=True
+        (dp_dim, sp_dim, tp_dim), allow_split_physical_axes=True
     )
-    mesh = Mesh(mesh_devices, ('tp', 'dp', 'sp'))
+    mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
 
-    # 配置 env
+    # 配置 env - 直接设置属性（不使用 hasattr 检查，因为属性可能不存在需要创建）
     env._mesh = mesh
     env._initial_content.mesh = mesh
-    if hasattr(env.config, 'use_tpu_splash_attention'):
-        env.config.use_tpu_splash_attention = True
-    if hasattr(env.config, 'use_tpu_flash_attention'):
-        env.config.use_tpu_flash_attention = True
+    env.config.use_tpu_splash_attention = True
+    
+    print(f"✓ env.config.use_tpu_splash_attention = {env.config.use_tpu_splash_attention}")
 
     # 加载 Pipeline（仅 Transformer）
     model_id = config.get('model_id', MODEL_NAME)
@@ -803,40 +810,20 @@ def main():
     print("  ✓ 所有 embeddings 已转换")
 
     # 运行推理
-    times = []
-    latents = None
-
-    # 第一次迭代（包含预热）
-    if args.num_iterations >= 1:
-        print(f"\n--- 迭代 1/{args.num_iterations} ---")
+    if args.profile:
+        print(f"\n[Profiler] 启用 JAX Profiler，输出目录: {args.profiler_output_dir}")
+        profiler_context = jax.profiler.trace(
+            args.profiler_output_dir,
+            create_perfetto_link=False
+        )
+    else:
+        profiler_context = nullcontext()
+    
+    with profiler_context:
         latents, elapsed = run_transformer_inference(
             pipe, prompt_embeds_dict, config, mesh, env,
             warmup_steps=args.warmup_steps
         )
-        times.append(elapsed)
-        print(f"  耗时: {elapsed:.2f} 秒" + (" (不含预热)" if args.warmup_steps > 0 else ""))
-
-    # 后续迭代
-    if args.num_iterations > 1:
-        if args.profile:
-            print(f"\n[Profiler] 启用 JAX Profiler，输出目录: {args.profiler_output_dir}")
-            print(f"[Profiler] 将 profile 后续 {args.num_iterations - 1} 次迭代")
-            profiler_context = jax.profiler.trace(
-                args.profiler_output_dir,
-                create_perfetto_link=False
-            )
-        else:
-            profiler_context = nullcontext()
-        
-        with profiler_context:
-            for i in range(1, args.num_iterations):
-                print(f"\n--- 迭代 {i+1}/{args.num_iterations} ---")
-                latents, elapsed = run_transformer_inference(
-                    pipe, prompt_embeds_dict, config, mesh, env,
-                    warmup_steps=0
-                )
-                times.append(elapsed)
-                print(f"  耗时: {elapsed:.2f} 秒")
 
     # 保存 latents
     print(f"\n保存 latents 到: {output_paths['latents']}")
@@ -858,11 +845,7 @@ def main():
 
     # 打印性能统计
     print(f"\n=== 性能统计 ===")
-    print(f"总迭代次数: {len(times)}")
-    print(f"第一次运行（含编译）: {times[0]:.4f} 秒")
-    if len(times) > 1:
-        avg_time = sum(times[1:]) / len(times[1:])
-        print(f"后续运行平均时间: {avg_time:.4f} 秒")
+    print(f"推理时间: {elapsed:.4f} 秒")
     print(f"Block sizes: BQSIZE={args.bqsize}, BKVSIZE={args.bkvsize}, BKVCOMPUTESIZE={args.bkvcomputesize}")
 
     print(f"\n{'='*60}")

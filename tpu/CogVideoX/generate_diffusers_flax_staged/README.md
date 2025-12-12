@@ -92,9 +92,9 @@ python stage3_vae_decoder.py \
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| BQSIZE | 2048 | Query 块大小 |
-| BKVSIZE | 1024 | Key/Value 块大小 |
-| BKVCOMPUTESIZE | 512 | KV 计算块大小 |
+| BQSIZE | 3328 | Query 块大小（与 Wan2.1 一致） |
+| BKVSIZE | 2816 | Key/Value 块大小（与 Wan2.1 一致） |
+| BKVCOMPUTESIZE | 256 | KV 计算块大小（与 Wan2.1 一致） |
 | BKVCOMPUTEINSIZE | 256 | KV 内层计算块大小 |
 | USE_K_SMOOTH | True | 是否使用 K 平滑 |
 | USE_CUSTOM_ATTENTION | True | 是否使用 exp2 优化版 |
@@ -103,7 +103,7 @@ python stage3_vae_decoder.py \
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| USE_DP | False | 是否使用数据并行 |
+| USE_DP | True | 是否使用数据并行（默认开启，性能提升 35%） |
 | SP_NUM | 1 | 序列并行数量 |
 | USE_FSDP | True | 是否使用 FSDP 模式 |
 
@@ -143,6 +143,74 @@ output_video.mp4
 | 调试便利性 | 困难 | 可单独调试各阶段 |
 | 中间结果 | 不保存 | 保存为 SafeTensors |
 | 重试灵活性 | 需从头开始 | 可从任意阶段重试 |
+
+## 性能基准测试
+
+### 测试环境
+- **硬件**: TPU v4-8 (8 chips)
+- **模型**: CogVideoX1.5-5B
+- **分辨率**: 768 × 1360
+- **帧数**: 81
+- **推理步数**: 10
+- **测试日期**: 2024-12-12
+
+### Stage 2 优化总表
+
+| # | 优化项 | DP | Mesh 顺序 | Block Size | sharding constraint | 每步时间 | 10步总时间 | 相对基线 |
+|---|--------|-----|-----------|------------|---------------------|----------|-----------|---------|
+| 1 | 基线版本 | ✗ | `('tp', 'dp', 'sp')` | 原始 | ✗ | 4.04s | 40.54s | - |
+| 2 | +sharding constraint | ✗ | `('tp', 'dp', 'sp')` | 原始 | ✓ | 3.93s | 39.43s | +2.7% |
+| 3 | +DP | ✓ | `('tp', 'sp', 'dp')` | 原始 | ✓ | 3.08s | 33.90s | +16.4% |
+| 4 | +DP + mesh优化 | ✓ | `('dp', 'sp', 'tp')` | 原始 | ✓ | 2.75s | 30.26s | +25.4% |
+| 5 | **最优配置** | ✓ | `('dp', 'sp', 'tp')` | Wan2.1 | ✓ | **2.31s** | **25.36s** | **+37.4%** |
+
+> **Block Size 配置对比**:
+> - 原始: BQSIZE=2048, BKVSIZE=1024, BKVCOMPUTESIZE=512
+> - Wan2.1: BQSIZE=3328, BKVSIZE=2816, BKVCOMPUTESIZE=256
+
+### 各优化项增量效果
+
+| 优化项 | 效果 | 说明 |
+|--------|------|------|
+| sharding constraint | +2.7% | 在 attention 输出后添加 `jax.lax.with_sharding_constraint()` |
+| Data Parallelism (DP) | +14.0% | 使用 `--use_dp` 参数，dp_dim=2, tp_dim=4 |
+| Mesh 顺序优化 | +10.7% | 从 `('tp', 'sp', 'dp')` 改为 `('dp', 'sp', 'tp')` |
+| Wan2.1 Block Size | +16.2% | 更大的 Q/KV 块 + 更小的计算块 |
+| **累计优化** | **+37.4%** | 从 40.54s 降至 25.36s |
+
+### 技术要点
+
+1. **sharding constraint**
+   ```python
+   out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+   ```
+
+2. **env.config 配置**
+   - 必须直接设置 `env.config.use_tpu_splash_attention = True`
+   - 使用 `hasattr` 检查会导致 Splash Attention 不生效
+
+3. **Block Size 选择原则**
+   - 更大的 BQSIZE/BKVSIZE 提高并行度
+   - 更小的 BKVCOMPUTESIZE 优化内存访问
+
+### 预热与推理时间
+
+| 配置 | Warmup (2步) | 每步时间 |
+|------|-------------|---------|
+| 无 DP | ~120s | ~3.5-4.0s |
+| 有 DP（原始 block size） | ~130s | ~2.7-3.1s |
+| 有 DP（Wan2.1 block size） | ~137s | ~2.3-2.7s |
+
+### 全流程时间参考
+
+| 阶段 | 基线配置 | 最优配置 | 说明 |
+|------|---------|---------|------|
+| Stage 1 (Text Encoder) | ~2s | ~2s | CPU 上运行 |
+| Stage 2 (Transformer) | ~40s | **~25s** | 不含预热，10步 |
+| Stage 2 预热 | ~120s | ~137s | 含 JIT 编译 |
+| Stage 3 (VAE Decoder) | ~90s | ~90s | Flax VAE |
+| **总计（首次运行）** | ~252s | ~254s | 含编译 |
+| **总计（后续运行）** | ~132s | **~117s** | 无需编译 |
 
 ## 注意事项
 
