@@ -1,76 +1,0 @@
-/home/chrisya/.local/lib/python3.12/site-packages/torch/amp/autocast_mode.py:270: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
-  warnings.warn(
-Flax classes are deprecated and will be removed in Diffusers v1.0.0. We recommend migrating to PyTorch classes or pinning your version of Diffusers.
-Flax classes are deprecated and will be removed in Diffusers v1.0.0. We recommend migrating to PyTorch classes or pinning your version of Diffusers.
-/home/chrisya/gpu-tpu-pedia/tpu/CogVideoX/generate_flax.py:20: DeprecationWarning: jax.experimental.shard_map is deprecated in v0.8.0. Used jax.shard_map instead.
-  from jax.experimental.shard_map import shard_map
-注册PyTree节点...
-  - BaseModelOutputWithPooling 已注册
-  - BaseModelOutputWithPastAndCrossAttentions 已注册
-  - DecoderOutput 已注册
-Loading pipeline components...:   0%|          | 0/5 [00:00<?, ?it/s]
-Loading checkpoint shards:   0%|          | 0/4 [00:00<?, ?it/s][A
-Loading checkpoint shards:  25%|██▌       | 1/4 [00:00<00:01,  1.83it/s][A
-Loading checkpoint shards:  50%|█████     | 2/4 [00:01<00:01,  1.91it/s][A
-Loading checkpoint shards:  75%|███████▌  | 3/4 [00:01<00:00,  1.99it/s][A
-Loading checkpoint shards: 100%|██████████| 4/4 [00:01<00:00,  2.61it/s][ALoading checkpoint shards: 100%|██████████| 4/4 [00:01<00:00,  2.31it/s]
-Loading pipeline components...:  20%|██        | 1/5 [00:01<00:07,  1.76s/it]Loading pipeline components...:  60%|██████    | 3/5 [00:01<00:00,  2.03it/s]
-Loading checkpoint shards:   0%|          | 0/3 [00:00<?, ?it/s][ALoading checkpoint shards: 100%|██████████| 3/3 [00:00<00:00, 81.04it/s]
-Loading pipeline components...: 100%|██████████| 5/5 [00:02<00:00,  3.58it/s]Loading pipeline components...: 100%|██████████| 5/5 [00:02<00:00,  2.48it/s]
-`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
-
-配置Pipeline以使用JAX、Splash Attention 和 Flax VAE...
-
-配置Pipeline以使用JAX...
-  Mesh 维度: tp_dim=8, dp_dim=1, sp_dim=1
-- 注册 Custom Splash Attention (exp2)（窗口大小: None）...
-将scheduler参数移动到JAX设备...
-- 将Text Encoder移到XLA并进行分片...
-- 加载 Flax VAE (原生 JAX 实现)...
-[1/4] 加载配置: zai-org/CogVideoX1.5-5B
-[2/4] 下载 PyTorch 权重...
-[3/4] 转换权重到 JAX 格式...
-  ✓ 加载了 436 个 PyTorch 权重张量
-  ✓ 转换了 436 个权重到 JAX 格式
-[4/4] 初始化模型并加载权重...
-✓ 模型加载完成!
-  配置: FlaxAutoencoderKLCogVideoXConfig(config_name='config.json', in_channels=3, out_channels=3, down_block_types=['CogVideoXDownBlock3D', 'CogVideoXDownBlock3D', 'CogVideoXDownBlock3D', 'CogVideoXDownBlock3D'], up_block_types=['CogVideoXUpBlock3D', 'CogVideoXUpBlock3D', 'CogVideoXUpBlock3D', 'CogVideoXUpBlock3D'], block_out_channels=[128, 256, 256, 512], latent_channels=16, layers_per_block=3, act_fn='silu', norm_eps=1e-06, norm_num_groups=32, temporal_compression_ratio=4, sample_height=480, sample_width=720, scaling_factor=0.7, shift_factor=None, latents_mean=None, latents_std=None, force_upcast=True, use_quant_conv=False, use_post_quant_conv=False, pad_mode='first')
-- 跳过 VAE Tiling 配置（测试完整解码）...
-  ✓ Flax VAE 已替换 Pipeline 的 VAE（无不当 JIT）
-Pipeline配置完成
-
-运行2次视频生成基准测试...
-提示词: 'A panda, dressed in a small, red jacket and a tiny hat, sits on a wooden stool in a serene bamboo forest. The panda's fluffy paws strum a miniature acoustic guitar, producing soft, melodic tunes. Nearby, a few other pandas gather, watching curiously and some clapping in rhythm. Sunlight filters through the tall bamboo, casting a gentle glow on the scene. The panda's face is expressive, showing concentration and joy as it plays. The background includes a small, flowing stream and vibrant green foliage, enhancing the peaceful and magical atmosphere of this unique musical performance.'
-推理步数: 10
-视频帧数: 81
-分辨率: 768x1360
-引导尺度: 6.0
-
-迭代 0 (包含 JIT 编译，会比较慢):
-  0%|          | 0/10 [00:00<?, ?it/s] 10%|█         | 1/10 [00:13<01:58, 13.21s/it] 20%|██        | 2/10 [00:26<01:44, 13.01s/it] 30%|███       | 3/10 [00:30<01:02,  8.90s/it] 40%|████      | 4/10 [00:34<00:41,  6.97s/it] 50%|█████     | 5/10 [00:38<00:29,  5.90s/it] 60%|██████    | 6/10 [00:42<00:21,  5.26s/it] 70%|███████   | 7/10 [00:46<00:14,  4.85s/it] 80%|████████  | 8/10 [00:50<00:09,  4.58s/it] 90%|█████████ | 9/10 [00:54<00:04,  4.40s/it]100%|██████████| 10/10 [00:58<00:00,  4.29s/it]100%|██████████| 10/10 [00:58<00:00,  5.82s/it]
-/home/chrisya/torchax/torchax/ops/mappings.py:84: UserWarning: The given NumPy array is not writable, and PyTorch does not support non-writable tensors. This means writing to this tensor will result in undefined behavior. You may want to copy the array to protect its data or make it writable before converting it to a tensor. This type of warning will be suppressed for the rest of this program. (Triggered internally at /pytorch/torch/csrc/utils/tensor_numpy.cpp:206.)
-  res = torch.from_numpy(numpy.asarray(x))
-  完成时间: 86.83 秒 (包含 Transformer + Text Encoder 的真正 JIT 编译)
-
-迭代 1 (使用已编译代码):
-  0%|          | 0/10 [00:00<?, ?it/s] 10%|█         | 1/10 [00:04<00:40,  4.51s/it] 20%|██        | 2/10 [00:08<00:33,  4.22s/it] 30%|███       | 3/10 [00:12<00:28,  4.12s/it] 40%|████      | 4/10 [00:16<00:24,  4.08s/it] 50%|█████     | 5/10 [00:20<00:20,  4.05s/it] 60%|██████    | 6/10 [00:24<00:16,  4.04s/it] 70%|███████   | 7/10 [00:28<00:12,  4.03s/it] 80%|████████  | 8/10 [00:32<00:08,  4.02s/it] 90%|█████████ | 9/10 [00:36<00:04,  4.02s/it]100%|██████████| 10/10 [00:40<00:00,  4.01s/it]100%|██████████| 10/10 [00:40<00:00,  4.06s/it]
-/usr/lib/python3.12/subprocess.py:1885: RuntimeWarning: os.fork() was called. os.fork() is incompatible with multithreaded code, and JAX is multithreaded, so this will likely lead to a deadlock.
-  self.pid = _fork_exec(
-  完成时间: 66.63 秒
-
-保存生成的视频...
-视频已保存到: output_video_flax_vae.mp4
-总迭代次数: 2
-第一次运行（含编译）: 86.8335 秒
-后续运行平均时间: 66.6309 秒
-加速比: 1.30x
-
-说明:
-- 第一次运行包含JIT编译时间, 因此较慢
-- 后续运行使用编译后的代码, 速度显著提升
-
-各次迭代详细时间:
-  迭代 0: 86.8335 秒
-  迭代 1: 66.6309 秒
-
-✓ 测试完成，程序退出
