@@ -633,9 +633,33 @@ def run_transformer_inference(pipe, prompt_embeds_dict, config, mesh, env,
     else:
         torch_latents = latents.cpu()
 
-    print(f"  Latents shape: {torch_latents.shape}")
+    print(f"  原始 Latents shape: {torch_latents.shape} (格式: [B, T, C, H, W])")
+    
+    # Pipeline output_type='latent' 返回的格式是 [B, T, C, H, W]
+    # 需要 permute 成标准格式 [B, C, T, H, W]（与 decode_latents 期望一致）
+    # 参考: CogVideoXPipeline.decode_latents 第 352 行的 permute(0, 2, 1, 3, 4)
+    torch_latents = torch_latents.permute(0, 2, 1, 3, 4)
+    print(f"  Permute 后 Latents shape: {torch_latents.shape} (格式: [B, C, T, H, W])")
+    
+    # 裁剪 CogVideoX-1.5 的 additional_frames（填充帧）
+    # 参考: CogVideoXPipeline.__call__ 第 676-678 行和第 776 行
+    # latents 现在是 [B, C, T, H, W] 格式
+    num_frames = config['frames']
+    vae_scale_factor_temporal = 4  # CogVideoX VAE 的时间压缩比
+    patch_size_t = 2  # CogVideoX-1.5 的 patch_size_t
+    
+    latent_frames = (num_frames - 1) // vae_scale_factor_temporal + 1
+    additional_frames = 0
+    if latent_frames % patch_size_t != 0:
+        additional_frames = patch_size_t - latent_frames % patch_size_t
+    
+    if additional_frames > 0:
+        print(f"  裁剪 additional_frames: {additional_frames}（CogVideoX-1.5 填充帧）")
+        torch_latents = torch_latents[:, :, additional_frames:, :, :]
+        print(f"  裁剪后 Latents shape: {torch_latents.shape}")
+    
     print(f"  Latents dtype: {torch_latents.dtype}")
-    print(f"  Latents range: [{torch_latents.min():.4f}, {torch_latents.max():.4f}]")
+    print(f"  Latents range: [{torch_latents.float().min():.4f}, {torch_latents.float().max():.4f}]")
 
     return torch_latents, elapsed
 

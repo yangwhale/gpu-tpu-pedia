@@ -254,8 +254,29 @@ output_video.mp4
 | **总计（首次运行）** | ~252s | ~254s | 含编译 |
 | **总计（后续运行）** | ~132s | **~117s** | 无需编译 |
 
+## 技术细节
+
+### Latents 维度格式
+
+| 阶段 | 格式 | 说明 |
+|------|------|------|
+| Pipeline 输出 | `[B, T, C, H, W]` | `output_type='latent'` 返回的原始格式 |
+| **stage2 保存** | `[B, C, T, H, W]` | **PyTorch 标准格式** |
+| Flax VAE 输入 | `[B, T, H, W, C]` | JAX channel-last 格式 |
+
+stage2 在保存前会：
+1. `permute(0, 2, 1, 3, 4)` - 转换为标准格式
+2. 裁剪 `additional_frames` - CogVideoX-1.5 的 patch_size_t 填充
+
+### prepare_video_for_export 输出格式
+
+- 返回 `List[np.ndarray]`，每帧为 `float32` 数组，范围 `[0, 1]`
+- 与 `diffusers.utils.export_to_video` 兼容
+- `export_to_video` 会自动 `* 255` 并转换为 `uint8`
+
 ## 注意事项
 
 1. **阶段2 依赖 custom_splash_attention.py**：确保父目录中存在此文件
 2. **阶段3 依赖 FlaxAutoencoderKLCogVideoX**：需要安装修改版 diffusers
 3. **TPU 内存**：各阶段分开运行可降低峰值内存使用
+4. **视频导出**：使用 `export_to_video` 而非 `imageio.mimsave`，配合 `prepare_video_for_export` 使用

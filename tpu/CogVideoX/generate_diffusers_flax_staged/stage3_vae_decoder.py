@@ -63,11 +63,12 @@ class FlaxVAEProxy:
     def decode(self, latents, return_dict=True):
         """解码：PyTorch -> JAX -> 解码 -> PyTorch
         
+        完全复制原始 generate_flax.py 的 FlaxVAEProxy.decode() 实现。
         关键优化：全程使用 BF16，避免 FP32 中间数组占用 2倍内存
         
         Args:
-            latents: PyTorch tensor - CogVideoX 格式为 (B, T, C, H, W)
-                     其中 T=latent_frames, C=16(latent_channels)
+            latents: PyTorch tensor [B, C, T, H, W]
+                     其中 C=16(latent_channels)
             return_dict: 是否返回 DecoderOutput
             
         Returns:
@@ -77,18 +78,19 @@ class FlaxVAEProxy:
         scaling_factor = self.config.scaling_factor if hasattr(self.config, 'scaling_factor') else 1.15258426
         latents = latents / scaling_factor
         
-        # 转换 latents: PyTorch (B, T, C, H, W) -> numpy (B, T, H, W, C)
-        # CogVideoX latents 格式: [B, T_latent, C=16, H, W]
+        # 转换 latents: PyTorch (B, C, T, H, W) -> numpy (B, T, H, W, C)
+        # 关键：保持 BF16 dtype 以节省内存
         if latents.dtype == torch.bfloat16:
             # BF16: 通过 FP32 中转（JAX 的 bfloat16 限制）
             latents_np = latents.to(torch.float32).cpu().numpy()
         else:
             latents_np = latents.cpu().numpy()
         
-        # Transpose: (B, T, C, H, W) -> (B, T, H, W, C)
-        # 注意：CogVideoX latents 是 [B, T, C, H, W]，不是 [B, C, T, H, W]
+        # Transpose 并**直接创建 BF16 数组**（避免 FP32 中间数组）
+        # 关键修复：使用 (0, 2, 3, 4, 1) 而不是 (0, 1, 3, 4, 2)
+        # (B, C, T, H, W) -> (B, T, H, W, C)
         latents_jax = jnp.array(
-            np.transpose(latents_np, (0, 1, 3, 4, 2)),  # (B, T, C, H, W) -> (B, T, H, W, C)
+            np.transpose(latents_np, (0, 2, 3, 4, 1)),
             dtype=jnp.bfloat16
         )
         
@@ -142,9 +144,11 @@ def decode_latents_to_video(vae_proxy, latents, config):
     """
     使用 VAE 解码 latents 为视频帧
     
+    注意：stage2 已经裁剪了 additional_frames，这里直接解码即可
+    
     Args:
         vae_proxy: FlaxVAEProxy 实例
-        latents: latents tensor [B, C, T, H, W]
+        latents: latents tensor [B, C, T, H, W]（已裁剪 additional_frames）
         config: 生成配置
         
     Returns:
@@ -170,6 +174,11 @@ def decode_latents_to_video(vae_proxy, latents, config):
     
     print(f"输出 frames shape: {frames.shape}")
     print(f"输出 frames dtype: {frames.dtype}")
+    
+    # 调试输出：VAE 输出范围
+    if isinstance(frames, torch.Tensor):
+        frames_float = frames.float()
+        print(f"输出 frames 范围: min={frames_float.min().item():.4f}, max={frames_float.max().item():.4f}")
     
     return frames, elapsed
 
@@ -263,13 +272,7 @@ def main():
     # 准备视频导出
     print(f"\n准备视频导出...")
     frames = prepare_video_for_export(video, target_frames)
-    
-    if isinstance(frames, list):
-        print(f"后处理后帧数: {len(frames)}")
-        if len(frames) > 0:
-            print(f"每帧 shape: {frames[0].shape}")
-    else:
-        print(f"后处理后 video shape: {frames.shape}")
+    print(f"帧数: {len(frames)}, 每帧 shape: {frames[0].shape if frames else 'N/A'}")
     
     # 导出视频
     print(f"\n导出视频到: {output_video}")

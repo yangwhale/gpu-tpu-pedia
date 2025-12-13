@@ -21,11 +21,11 @@ from diffusers.models.autoencoders.vae import DecoderOutput
 MODEL_NAME = "zai-org/CogVideoX1.5-5B"
 
 # === Video Generation Settings ===
-WIDTH = 1360
-HEIGHT = 768
-FRAMES = 81
+WIDTH = 1280
+HEIGHT = 640
+FRAMES = 61
 FPS = 8
-NUM_STEPS = 10
+NUM_STEPS = 50
 GUIDANCE_SCALE = 6.0
 
 # === Splash Attention 配置参数 ===
@@ -175,7 +175,7 @@ def prepare_video_for_export(video, target_frames):
         target_frames: 目标帧数（用于验证）
         
     Returns:
-        list: PIL Image 或 numpy array 列表，适用于 imageio.mimsave
+        list: float32 numpy array 列表 (0-1 范围)，适用于 export_to_video
     """
     if isinstance(video, (list, tuple)):
         return [prepare_video_for_export(v, target_frames) for v in video]
@@ -210,13 +210,13 @@ def prepare_video_for_export(video, target_frames):
         # Convert to [T, H, W, C] for video export
         batch_vid = batch_vid.permute(0, 2, 3, 1)
         
-        # Convert to numpy and scale to [0, 255]
-        video = (batch_vid.float().numpy() * 255).astype(np.uint8)
+        # Convert to float32 numpy (0-1 范围，供 export_to_video 使用)
+        video = batch_vid.float().numpy()
         
         if video.shape[-1] == 1:
             video = np.repeat(video, 3, axis=-1)
             
-        # Return as list of frames (for imageio.mimsave)
+        # Return as list of frames
         return [video[i] for i in range(video.shape[0])]
     
     if isinstance(video, np.ndarray):
@@ -245,8 +245,8 @@ def prepare_video_for_export(video, target_frames):
         # [T, C, H, W] -> [T, H, W, C]
         batch_vid = np.transpose(batch_vid, (0, 2, 3, 1))
         
-        # Scale to [0, 255]
-        video = (batch_vid * 255).astype(np.uint8)
+        # 保持 float32 (0-1 范围)
+        video = batch_vid.astype(np.float32)
         
         if video.shape[-1] == 1:
             video = np.repeat(video, 3, axis=-1)
