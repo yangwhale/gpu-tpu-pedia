@@ -1,8 +1,16 @@
+
 # Wan 模型 TPU 迁移与优化完全指南
 
-> **版本**: 3.0 | **更新日期**: 2024年12月
+> **版本**: 4.0 | **更新日期**: 2024年12月
 > 
-> 本文档汇集了 Wan 2.1/2.2 模型在 Google Cloud TPU v6e 上的迁移与优化全部精华，包含详细的硬件架构分析、分片策略、Splash Attention 内核优化、VAE 优化技术以及完整的实现代码。
+> 本文档是 Wan 2.1/2.2 模型在 Google Cloud TPU v6e 上迁移与优化的**权威技术参考**。
+> 
+> **文档来源**：本文汇集以下三份核心技术文档的全部精华：
+> - 📊 **FLOPs Utilization Analysis**: 深度性能分析与 Roofline 建模（20+ 张 Profiler 截图）
+> - 🔧 **Model Optimization Report**: 完整优化路径与代码实现 (428s → 124.9s)
+> - 🎬 **I2V Optimization Report**: Image-to-Video 专项优化 (94.5s on v6e-16)
+>
+> **核心贡献者**: Yuyan Peng, Hao Luo, Weida Hong, Han Qi, Shun Wang
 
 ---
 
@@ -12,6 +20,12 @@
 - [第二章：Wan 模型架构深度解析](#第二章wan-模型架构深度解析)
 - [第三章：分片策略详解](#第三章分片策略详解)
 - [第四章：Splash Attention 内核优化](#第四章splash-attention-内核优化)
+  - [4.1 从 Profiler 到优化点：性能瓶颈分析](#41-从-profiler-到优化点性能瓶颈分析)
+  - [4.2 Pallas Kernel 逐行深度解析](#42-pallas-kernel-逐行深度解析)
+  - [4.3 exp2 数学推导与实现](#43-exp2-数学推导与实现)
+  - [4.4 QK Transpose 优化原理](#44-qk-transpose-优化原理)
+  - [4.5 LP LLO Scheduler 调度机制](#45-lp-llo-scheduler-调度机制)
+  - [4.6 Block Size 配置原理](#46-block-size-配置原理)
 - [第五章：VAE 在 Torchax 上的工作原理与并行设计](#第五章vae-在-torchax-上的工作原理与并行设计)
 - [第六章：性能分析方法论](#第六章性能分析方法论)
 - [第七章：Torchax 桥接与代码实现](#第七章torchax-桥接与代码实现)
@@ -253,7 +267,32 @@ graph LR
 
 ## 第三章：分片策略详解
 
-### 3.1 FSDP (Fully Sharded Data Parallelism)
+> 📊 **源文档引用**: Model Optimization Report - image7.png: 完整分片示意图
+
+### 3.1 Device Mesh 配置
+
+```python
+# v6e-16 配置: 16 设备，mesh 形状 (2, 1, 8)
+# dp=2: Data Parallelism (CFG 正负 prompt)
+# sp=1: Sequence Parallelism (未使用)
+# axis=8: Tensor Parallelism (heads 分片)
+
+mesh_devices = mesh_utils.create_device_mesh(
+    (2, 1, 8),  # (dp, sp, axis)
+    allow_split_physical_axes=True
+)
+mesh = Mesh(mesh_devices, ('dp', 'sp', 'axis'))
+```
+
+**Mesh 维度说明**:
+
+| 维度 | 值 | 用途 | 分片对象 |
+|------|-----|------|----------|
+| dp | 2 | Data Parallel | CFG 正负 prompt |
+| sp | 1 | Sequence Parallel | Cross-Attention |
+| axis | 8 | Tensor Parallel | Self-Attention heads |
+
+### 3.2 FSDP (Fully Sharded Data Parallelism)
 
 ```mermaid
 graph TB
@@ -296,7 +335,7 @@ transformer_shardings_fsdp = {
 }
 ```
 
-### 3.2 Context Parallelism (CP)
+### 3.3 Context Parallelism (CP) - Self-Attention
 
 在 **head number** 维度进行分片，专用于 Self-Attention。
 
@@ -308,7 +347,7 @@ kv_partition_spec = P('dp', 'tp', None, None)  # K,V 在 seq 维度复制
 # 40 heads / 8 devices = 5 heads per device
 ```
 
-### 3.3 Sequence Parallelism (SP)
+### 3.4 Sequence Parallelism (SP) - Cross-Attention
 
 在 **sequence** 维度进行分片，专用于 Cross-Attention。
 
@@ -318,7 +357,7 @@ q_partition_spec = P('dp', None, ('tp', 'sp'), None)  # Q 在 seq 维度分片
 kv_partition_spec = P('dp', None, None, None)          # K,V 完整复制
 ```
 
-### 3.4 Data Parallelism (DP)
+### 3.5 Data Parallelism (DP) - CFG
 
 用于处理 CFG 的正负 prompt。
 
@@ -328,7 +367,9 @@ mesh_dims = (2, 1, 4)  # (dp, sp, tp)
 mesh = Mesh(devices, ('dp', 'sp', 'tp'))
 ```
 
-### 3.5 混合分片策略
+### 3.6 混合分片策略总览
+
+> 📊 **源文档引用**: image7.png - DiT Transformer block 完整分片图
 
 ```mermaid
 graph TB
@@ -343,14 +384,14 @@ graph TB
         
         subgraph "DiT Transformer 策略"
             DIT_FSDP[FSDP 权重]
-            DIT_CP[CP Self-Attn]
-            DIT_SP[SP Cross-Attn]
-            DIT_DP[DP CFG]
+            DIT_CP[CP Self-Attn<br/>heads 分片]
+            DIT_SP[SP Cross-Attn<br/>seq 分片]
+            DIT_DP[DP CFG<br/>正负 prompt]
         end
         
         subgraph "VAE 策略"
             VAE_REP[复制权重]
-            VAE_SPATIAL[Spatial 激活分片]
+            VAE_SPATIAL[Spatial 激活分片<br/>Width 维度]
         end
     end
     
@@ -384,261 +425,172 @@ mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
 
 ## 第四章：Splash Attention 内核优化
 
-本章是技术核心，我们将从 Profiler 分析到代码实现，完整讲解如何发现优化点、如何实现优化、以及优化的效果验证。
+本章是全文**技术核心**，我们将从 Profiler 抓取的真实数据出发，完整展示：
+1. **如何发现性能瓶颈**：通过 Xprof 定位到 Softmax 占 1/3 时间
+2. **如何阅读 Pallas Kernel 代码**：逐行解释 `_flash_attention_kernel` 的每一行
+3. **三大优化技术的数学原理**：exp2、QK Transpose、LP LLO Scheduler
 
-### 4.1 优化的发现过程：从 Profiler 到优化点
+### 4.1 从 Profiler 到优化点：性能瓶颈分析
 
-#### 4.1.1 初始性能基线
+#### 4.1.1 性能基线测量
 
-运行 JAX Profiler 后，我们发现 Self-Attention 占据了 **66.8%** 的 DiT step 时间，而 MFU (Model FLOPs Utilization) 仅有 **37%**。
+运行 Xprof 分析 Wan2.1 14B DiT，生成 720P 81帧视频，获得以下关键数据：
+
+> 📊 **源文档引用**: FLOPs Utilization Analysis
+>
+> **image1.png**: Self-attention 延迟 43.93ms
+> **image11.png**: 操作时间分解饼图
+> **image18.png**: 整体 MFU 34%
+
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                    Xprof 操作时间分解                                 │
+├───────────────────────┬──────────┬─────────┬───────────────────────┤
+│ 操作类型              │ 时间占比 │ FLOPs   │ 说明                  │
+├───────────────────────┼──────────┼─────────┼───────────────────────┤
+│ custom-call (Splash)  │ 66.8%    │ N/A     │ Self-Attention Kernel │
+│ convolution fusion    │ 14.3%    │ 显示    │ Linear + FFN          │
+│ all-to-all            │ 6.7%     │ N/A     │ CP 通信               │
+│ data formatting       │ 6.45%    │ N/A     │ copy, reshape         │
+│ 其他                  │ 5.75%    │ N/A     │ 杂项操作              │
+└───────────────────────┴──────────┴─────────┴───────────────────────┘
+```
+
+**关键发现**:
+- `custom-call` (Pallas kernel) 占据 **66.8%** 执行时间
+- `convolution fusion` (线性层) 只占 14.3%，但 MFU 达到 **66%**
+- 这表明 **Attention Kernel 是主要优化目标**
+
+#### 4.1.2 Self-Attention 的 Roofline 计算
+
+> 📊 **源文档引用**: Self Attention Roofline Calculation 章节
+
+让我们完整推导 Self-Attention 的理论性能上限：
+
+**Kernel Setup (单芯片，8 路分片后)**:
+```python
+# Q, K, V 形状（8 设备分片后，单芯片）
+# 原始: [1, 40, 75600, 128]
+# 分片后: head_num = 40 / 8 = 5
+
+Q: bf16[1, 5, 75600, 128]
+K: bf16[1, 5, 75776, 128]  # padding to multiple of 256
+V: bf16[1, 5, 75776, 128]
+```
+
+**Block 划分**:
+```python
+block_q = 3024
+block_kv = 2048
+block_kv_compute = 1024
+
+# 迭代次数
+num_kv_iters = 75776 // 2048 = 37
+num_q_iters = 75600 // 3024 = 25
+total_iters = 37 * 25 = 925
+```
+
+**单 Block 的 Roofline 计算**:
 
 ```python
-# 使用 JAX Profiler 收集性能数据
-with jax.profiler.trace("/dev/shm/tensorboard"):
-    output = pipe(prompt=prompt, num_inference_steps=3)
-    jax.effects_barrier()
+# QK 矩阵乘: Q[3024, 128] @ K^T[128, 2048] = QK[3024, 2048]
+qk_flops = 2 * 3024 * 2048 * 128 = 1.586e9 FLOPs
+qk_compute_time = 1.586e9 / 918e12 = 1.728 μs  # compute bound
+
+# QK 内存: 读取 Q + K
+qk_memory = (2 * 3024 * 128 + 2 * 2048 * 128) = 1.30 MB
+qk_memory_time = 1.30e6 / 1638e9 = 0.794 μs  # 理论
+
+# AV 矩阵乘: Softmax(QK)[3024, 2048] @ V[2048, 128] = O[3024, 128]
+av_flops = 2 * 3024 * 2048 * 128 = 1.586e9 FLOPs
+av_compute_time = 1.586e9 / 918e12 = 1.728 μs
+
+# 单 block 总计
+block_roofline = 2 * 1.728 = 3.456 μs (compute bound)
 ```
 
-**Profiler 分析结果**：
-
-| 操作 | 时间占比 | MFU | 问题 |
-|------|----------|-----|------|
-| Self-Attention Softmax | 28.3% | 12% | VPU bound |
-| Self-Attention QK Matmul | 24.2% | 48% | MXU 50% 利用率 |
-| Self-Attention AV Matmul | 14.3% | 52% | MXU 50% 利用率 |
-| Linear (FFN等) | 33.2% | 66% | 接近理想 |
-
-#### 4.1.2 发现三个关键优化点
-
-**优化点 1：MXU 利用率低 (50%)**
-
-Wan 模型的 `head_dim = 128`，而 MXU 是 256×256 的脉动阵列。当 K 维度 = 128 时，MXU 只能用一半。
-
-```
-矩阵乘法 C[M,N] = A[M,K] @ B[K,N]
-对于 QK 乘法: Q[seq, 128] @ K^T[128, seq]
-K = head_dim = 128 < 256，MXU 利用率 = 128/256 = 50%
-```
-
-**优化点 2：VPU 上的 exp 操作很慢**
-
-Softmax 中的 `exp` 操作在 VPU 上执行，需要调用 SFU (Special Function Unit)，延迟较高。
-
+**总体 Roofline**:
 ```python
-# 标准 softmax 的 exp 操作路径
-# VPU -> SFU -> VPU，需要多次访问
-softmax = exp(x - max) / sum(exp(x - max))
+total_roofline = 3.456 * 925 = 3.197 ms  # 单 head
+splash_roofline = 5 * 3.197 = 15.974 ms  # 5 heads per chip
+
+# 实测延迟: 43.93 ms (源文档 image1.png)
+# 实际 MFU = 15.974 / 43.93 = 36.4% ≈ 37%
 ```
 
-**优化点 3：QK 矩阵乘顺序不优**
+> 🔍 **关键洞察**: 理论上 Self-Attention 应该是 **compute-bound**，但实际 MFU 只有 37%。
+> 问题出在哪里？
 
-标准实现是 `Q @ K^T`，但 TPU 更喜欢 `K^T @ Q` 的内存访问模式。
+#### 4.1.3 Softmax 瓶颈：VPU 上的 1/3 时间
 
-#### 4.1.3 优化策略制定
+> 📊 **源文档引用**: image5.png - Splash attention kernel block 详细分析
+
+通过在 Splash Attention Kernel 中添加 `named_scope`，发现：
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│        Splash Attention Block 内部时间分解                       │
+├───────────────────────┬──────────────────────────────────────┤
+│ 操作                  │ 时间占比                              │
+├───────────────────────┼──────────────────────────────────────┤
+│ QK matmul (MXU)       │ ~35%                                 │
+│ Softmax (VPU)         │ ~33% ← 瓶颈！                        │
+│ AV matmul (MXU)       │ ~32%                                 │
+└───────────────────────┴──────────────────────────────────────┘
+```
+
+**为什么 Softmax 这么慢？**
+
+1. **head_dim = 128 限制 MXU 利用率**
+   - TPU v6e MXU 是 256×256
+   - K 维度 = 128 < 256，对角线分块只能用一半
+   - 理论 MXU 利用率上限 = 50%
+
+2. **exp 操作调用 SFU**
+   - VPU 上的 `exp` 需要调用 SFU (Special Function Unit)
+   - 这是一个高延迟操作
+
+3. **reduction 操作效率低**
+   - `max(axis=-1)` 沿最后一个维度规约
+   - TPU 内存布局是 8×128，沿 axis=-1 效率低
 
 ```mermaid
 graph TB
-    subgraph "发现 → 分析 → 优化"
-        P1[Profiler 分析<br/>MFU 37%]
+    subgraph "从 Profiler 到优化点"
+        P1[Xprof 抓取<br/>MFU 34%]
+        P2[Roofline 分析<br/>理论 MFU > 80%]
+        P3[named_scope<br/>Softmax 占 1/3]
         
-        A1[问题1: head_dim=128<br/>MXU 利用率 50%]
-        A2[问题2: exp 调用 SFU<br/>VPU 瓶颈]
-        A3[问题3: Q@K^T 顺序<br/>内存不友好]
+        A1[问题1: head_dim=128<br/>MXU 只用 50%]
+        A2[问题2: exp 调 SFU<br/>VPU 效率低]
+        A3[问题3: axis=-1 规约<br/>内存不友好]
         
-        O1[exp2 替代 exp<br/>VPU 原生指令]
-        O2[QK Transpose<br/>K^T @ Q]
-        O3[LP LLO 调度<br/>VPU/MXU 重叠]
-        
-        R[MFU 37% → 接近理论上限]
+        O1[优化1: exp2<br/>预乘 log2e]
+        O2[优化2: QK Transpose<br/>K @ Q]
+        O3[优化3: LP LLO<br/>VPU/MXU 重叠]
     end
     
-    P1 --> A1 & A2 & A3
-    A1 --> O1
-    A2 --> O1
+    P1 --> P2 --> P3
+    P3 --> A1 & A2 & A3
+    A1 & A2 --> O1
     A3 --> O2
     O1 & O2 --> O3
-    O3 --> R
     
+    style P3 fill:#ff9800
     style O1 fill:#4caf50
     style O3 fill:#2196f3
 ```
 
-### 4.2 优化 1：exp2 替代 exp（VPU 原生指令优化）
+### 4.2 Pallas Kernel 逐行深度解析
 
-#### 4.2.1 数学等价变换
+本节是**全文技术核心中的核心**。我们将逐行解读 `custom_splash_attention.py` 的每一行代码。
 
-TPU 的 VPU 有专门的 `exp2` 硬件指令，比 `exp` 快得多。我们利用恒等式：
-
-```
-exp(x) = 2^(x * log2(e)) = exp2(x * log2(e))
-```
-
-其中 `log2(e) ≈ 1.44269504`
-
-#### 4.2.2 在 Attention 中的应用
-
-对于 Attention，我们需要计算：
-```
-softmax(scale * Q @ K^T) = exp(scale * QK - max) / sum(exp(scale * QK - max))
-```
-
-改写为 exp2：
-```
-= exp2((scale * QK - max) * log2(e)) / sum(exp2(...))
-= exp2(scale * log2(e) * QK - max * log2(e)) / sum(...)
-```
-
-**关键优化**：预先将 `scale * log2(e)` 融合到 Q 中！
+#### 4.2.1 文件结构概览
 
 ```python
-# generate_flax.py 中的实现
-def _attention_on_slices(q, k, v):
-    scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
-    # 关键：预乘 log2(e)，之后可以直接用 exp2
-    _LOG2_E = 1.44269504
-    q = q * scale_factor * _LOG2_E  # 融合 scale 和 log2(e) 到 Q
-    # ...
-```
+# custom_splash_attention.py 结构
 
-#### 4.2.3 Kernel 内部的 exp2 使用
-
-在 `custom_splash_attention.py` 中：
-
-```python
-def _flash_attention_kernel(...):
-    # ...
-    for i in range(0, qk.shape[0], step):
-        m_curr = qk[i:i+step].max(axis=0)[None, :]
-        m_next = jnp.maximum(m_prev, m_curr)
-        
-        # 🔥 关键优化：直接使用 exp2
-        # 因为 Q 已经预乘了 log2(e)，所以 qk 已经是 log2 scale
-        s_curr = jnp.exp2(qk[i:i+step] - m_next[0:1])
-        
-        # 更新 running sum (也用 exp2)
-        alpha = jnp.exp2(m_prev - m_next)
-        l_next = l_curr + alpha * l_prev
-        # ...
-```
-
-**代码解释**：
-1. `qk` 已经是 `Q_scaled @ K^T` 的结果，其中 `Q_scaled = Q * scale * log2(e)`
-2. 所以 `qk - max` 可以直接用 `exp2` 计算
-3. 同样，`alpha = exp2(m_prev - m_next)` 也是有效的，因为 max 值已经在 log2 scale
-
-### 4.3 优化 2：QK Transpose（矩阵乘法顺序优化）
-
-#### 4.3.1 问题分析
-
-标准 Attention 计算 `Q @ K^T`：
-- Q: [batch, heads, seq_q, head_dim]
-- K: [batch, heads, seq_k, head_dim]
-- 需要先 transpose K，然后做矩阵乘
-
-但 TPU 的 `lax.dot_general` 更高效地处理 "N^T @ N" 形式的乘法。
-
-#### 4.3.2 Transpose 前后对比
-
-```python
-# 方式 1: Q @ K^T (标准)
-# Q: [seq_q, head_dim] @ K^T: [head_dim, seq_k]
-# 结果: [seq_q, seq_k]
-NN_DIM_NUMBERS = (((1,), (0,)), ((), ()))  # Q 的 dim1 和 K 的 dim0 收缩
-qk = lax.dot_general(q, k_transposed, NN_DIM_NUMBERS)
-
-# 方式 2: K^T @ Q (优化)  
-# K: [seq_k, head_dim] @ Q: [seq_q, head_dim]
-# 收缩 head_dim 维度（两者的 dim1）
-NT_DIM_NUMBERS = (((1,), (1,)), ((), ()))  # K 的 dim1 和 Q 的 dim1 收缩
-qk = lax.dot_general(k, q, NT_DIM_NUMBERS)
-# 结果: [seq_k, seq_q]，需要后续考虑这个 transpose
-```
-
-#### 4.3.3 代码实现
-
-```python
-# custom_splash_attention.py 第 31 行
-NT_DIM_NUMBERS = (((1,), (1,)), ((), ()))
-
-def _flash_attention_kernel(...):
-    # ...
-    q = q_ref[...]
-    k = k_ref[slice_k, :]
-    
-    # 🔥 关键优化：K @ Q 而不是 Q @ K^T
-    qk = lax.dot_general(k, q, NT_DIM_NUMBERS, preferred_element_type=float32)
-    # qk 的形状是 [block_kv, block_q]，不是 [block_q, block_kv]
-    # 后续代码需要适配这个 transpose
-```
-
-**为什么这样更快？**
-- 减少了显式的 transpose 操作
-- 更好的内存访问模式（K 和 Q 都按行读取）
-- TPU 的 MXU 对这种模式有硬件优化
-
-### 4.4 优化 3：LP LLO 调度（VPU/MXU 重叠执行）
-
-#### 4.4.1 什么是 LP LLO Scheduler
-
-LP LLO (Low-Precision Low-Level Optimizer) Scheduler 是 XLA 编译器的一个调度策略，能让 VPU 和 MXU 的操作重叠执行。
-
-```python
-# custom_splash_attention.py 第 212-215 行
-compiler_params = pltpu.CompilerParams(
-    dimension_semantics=("parallel", "arbitrary", "arbitrary"),
-    flags={"XLA_TPU_FORCE_LP_LLO_SCHEDULER": True}
-)
-```
-
-#### 4.4.2 重叠执行的原理
-
-```mermaid
-sequenceDiagram
-    participant MXU
-    participant VPU
-    
-    Note over MXU,VPU: 无优化（串行执行）
-    MXU->>MXU: QK 矩阵乘
-    VPU->>VPU: Softmax
-    MXU->>MXU: AV 矩阵乘
-    
-    Note over MXU,VPU: LP LLO 优化（重叠执行）
-    par 并行执行
-        MXU->>MXU: QK 矩阵乘 (block i)
-        VPU->>VPU: Softmax (block i-1)
-    end
-    par 并行执行
-        MXU->>MXU: AV 矩阵乘 (block i-1)
-        VPU->>VPU: Softmax (block i)
-    end
-```
-
-#### 4.4.3 为什么需要特定的 dimension_semantics
-
-```python
-dimension_semantics=("parallel", "arbitrary", "arbitrary")
-# 第一维 (heads): parallel - 完全独立，可以并行
-# 第二维 (q_blocks): arbitrary - 编译器自由调度
-# 第三维 (kv_blocks): arbitrary - 编译器自由调度
-```
-
-- `parallel`：告诉编译器该维度的迭代完全独立
-- `arbitrary`：允许编译器重新排序迭代，实现流水线优化
-
-### 4.5 完整的自定义 Splash Attention 内核
-
-现在让我们看完整的优化代码，逐段解释：
-
-```python
-"""
-custom_splash_attention.py - 自定义 TPU Splash Attention
-
-核心优化：
-1. exp2 替代 exp（VPU 原生指令）
-2. K @ Q 替代 Q @ K^T（减少 transpose）
-3. LP LLO Scheduler（VPU/MXU 重叠）
-"""
-
+# 第 1-30 行: 导入和常量定义
 import functools
 import jax
 import jax.numpy as jnp
@@ -646,133 +598,556 @@ from jax import lax
 from jax.experimental import pallas as pl
 from jax.experimental.pallas import tpu as pltpu
 
-# 常量定义
+# 常量
 DEFAULT_MASK_VALUE = -0.7 * float(jnp.finfo(jnp.float32).max)
-NUM_SUBLANES = 8  # TPU 的 sublane 数量，用于 l 和 m 的存储
-NT_DIM_NUMBERS = (((1,), (1,)), ((), ()))  # K @ Q 的维度规格
+NUM_SUBLANES = 8       # TPU v6e 的 sublane 数量
+NUM_LANES = 128        # TPU v6e 的 lane 数量
+NT_DIM_NUMBERS = (((1,), (1,)), ((), ()))  # K @ Q 的 dot_general 规格
 
+# 第 31-200 行: _flash_attention_kernel 核心实现
+# 第 201-337 行: make_splash_mha 包装函数
+```
 
+#### 4.2.2 常量解读
+
+**DEFAULT_MASK_VALUE**:
+```python
+# 第 28 行
+DEFAULT_MASK_VALUE = -0.7 * float(jnp.finfo(jnp.float32).max)
+```
+
+为什么是 `-0.7 × float32_max`？
+- 用于初始化 running max `m`，需要一个"负无穷"
+- 但不能用 `-inf`，因为 `exp2(-inf)` 会产生 NaN
+- `-0.7 × max` 足够小，使 `exp2(-0.7 × max) ≈ 0`，且数值稳定
+
+**NUM_SUBLANES**:
+```python
+# 第 29 行
+NUM_SUBLANES = 8
+```
+
+TPU 内存布局:
+- TPU 的 VMEM 按 `(8, 128)` 的 tile 组织
+- 8 = 子通道数 (sublanes)
+- 128 = 通道数 (lanes)
+- 存储 `m_scratch` 和 `l_scratch` 时用 `(NUM_SUBLANES, bq)` 形状
+
+**NT_DIM_NUMBERS**:
+```python
+# 第 31 行
+NT_DIM_NUMBERS = (((1,), (1,)), ((), ()))
+```
+
+这是 `lax.dot_general` 的维度规格，表示：
+
+```python
+# lax.dot_general(K, Q, NT_DIM_NUMBERS)
+# 收缩 K 的第 1 维和 Q 的第 1 维
+#
+# K: [seq_k, head_dim]  dim1 = head_dim
+# Q: [seq_q, head_dim]  dim1 = head_dim
+# 结果: [seq_k, seq_q]
+#
+# 对比标准 Q @ K^T:
+# NN_DIM_NUMBERS = (((1,), (0,)), ((), ()))
+# Q: [seq_q, head_dim]  dim1 = head_dim
+# K^T: [head_dim, seq_k]  dim0 = head_dim
+# 结果: [seq_q, seq_k]
+#
+# NT = "N transpose"，实际效果是 K^T @ Q
+# 但不需要显式 transpose K！
+```
+
+#### 4.2.3 Kernel 主函数签名
+
+```python
 def _flash_attention_kernel(
-    q_ref, k_ref, v_ref,
-    m_scratch_ref, l_scratch_ref, o_scratch_ref, o_ref,
-    *, mask_value, grid_width, bq, bkv, bkv_compute, bkv_compute_in, head_dim_v,
+    # === 输入引用 (Pallas 用 Ref 而非值传递) ===
+    q_ref,           # Query 块引用, shape: [bq, head_dim]
+    k_ref,           # Key 块引用, shape: [bkv, head_dim]  
+    v_ref,           # Value 块引用, shape: [bkv, head_dim_v]
+    
+    # === Scratch memory 引用 (在 VMEM 中分配) ===
+    m_scratch_ref,   # running max, shape: [NUM_SUBLANES, bq]
+    l_scratch_ref,   # running sum, shape: [NUM_SUBLANES, bq]
+    o_scratch_ref,   # 累积输出, shape: [head_dim_v, bq]
+    
+    # === 输出引用 ===
+    o_ref,           # 最终输出, shape: [num_heads, head_dim_v, seq_q]
+    
+    # === Kernel 参数 (编译时常量) ===
+    *, 
+    mask_value,      # 初始化 m 的值
+    grid_width,      # KV 方向的 grid 宽度
+    bq,              # Q block size
+    bkv,             # KV block size  
+    bkv_compute,     # 内部计算的 KV 块大小
+    bkv_compute_in,  # 最内层迭代的块大小
+    head_dim_v,      # Value 的 head dimension
+    kv_seq_len,      # KV 序列长度 (用于处理 padding)
 ):
-    """
-    Flash Attention 核心 Kernel
-    
-    参数:
-        q_ref: Query 块引用，形状 [block_q, head_dim]
-        k_ref: Key 块引用，形状 [block_kv, head_dim]
-        v_ref: Value 块引用，形状 [block_kv, head_dim_v]
-        m_scratch_ref: 存储 running max 的 scratch memory
-        l_scratch_ref: 存储 running sum 的 scratch memory
-        o_scratch_ref: 存储累积输出的 scratch memory
-        o_ref: 最终输出引用
-        
-    关键参数:
-        bkv_compute: 内部计算的 KV 块大小
-        bkv_compute_in: 更细粒度的内部迭代块大小
-    """
+```
+
+**参数说明表**:
+
+| 参数 | 典型值 | 作用 |
+|------|--------|------|
+| `bq` | 3328 | Q 块大小，影响 VMEM 占用 |
+| `bkv` | 2816 | KV 块大小，从 HBM 加载的单位 |
+| `bkv_compute` | 256 | 内部迭代块，影响 Softmax 粒度 |
+| `bkv_compute_in` | 256 | 最内层迭代，用于流水线 |
+
+#### 4.2.4 Grid 位置获取
+
+```python
     float32 = jnp.float32
-    head_dim_v_repeats = head_dim_v // NUM_SUBLANES
+    head_dim_v_repeats = head_dim_v // NUM_SUBLANES  # 128 // 8 = 16
     
-    # 获取当前网格位置
+    # 获取当前 grid 位置
     h, i, j = pl.program_id(0), pl.program_id(1), pl.program_id(2)
-    # h: head index, i: q block index, j: kv block index
+    # h: head index [0, num_heads)
+    # i: Q block index [0, seq_q // bq)
+    # j: KV block index [0, seq_k // bkv)
+```
 
-    # ============ 初始化 ============
-    @pl.when(j == 0)
+**Grid 的含义**:
+```
+Grid = (num_heads, num_q_blocks, num_kv_blocks)
+     = (5, 23, 27)  # 对于单芯片 (40/8=5 heads, 75600/3328≈23, 75776/2816≈27)
+
+每个 grid 点处理:
+- 1 个 attention head
+- 1 个 Q block (bq tokens)
+- 1 个 KV block (bkv tokens)
+```
+
+#### 4.2.5 初始化逻辑
+
+```python
+    @pl.when(j == 0)  # 只在第一个 KV block 执行
     def init():
-        """第一个 KV 块时初始化 scratch memory"""
+        # 初始化累积输出为 0
         o_scratch_ref[...] = jnp.zeros_like(o_scratch_ref)
-        m_scratch_ref[...] = jnp.full_like(m_scratch_ref, mask_value)  # 初始 max = -inf
-        l_scratch_ref[...] = jnp.zeros_like(l_scratch_ref)  # 初始 sum = 0
+        
+        # 初始化 running max 为 "负无穷"
+        m_scratch_ref[...] = jnp.full_like(m_scratch_ref, mask_value)
+        
+        # 初始化 running sum 为 0
+        l_scratch_ref[...] = jnp.zeros_like(l_scratch_ref)
+```
 
-    # ============ 主计算循环 ============
+**为什么用 `@pl.when`？**
+- Pallas 的条件执行原语
+- 比 Python `if` 高效，编译成条件分支指令
+- 避免在每个 KV block 都重复初始化
+
+#### 4.2.6 主计算循环 (最复杂部分)
+
+```python
     def body(kv_compute_index, _):
-        """处理一个 KV 计算块"""
+        """处理一个 kv_compute 大小的块"""
+        
+        # 计算当前 K 的切片范围
         slice_k = pl.ds(kv_compute_index * bkv_compute, bkv_compute)
+        # slice_k = [kv_compute_index * 256, (kv_compute_index + 1) * 256)
+        
+        # 读取之前的 running stats
         m_prev, l_prev = m_scratch_ref[...], l_scratch_ref[...]
-        
+```
+
+**`pl.ds` 是什么？**
+- `pl.ds(start, size)` = dynamic slice
+- 返回一个切片对象，不是实际切片
+- 让 Pallas 知道访问模式，优化 HBM→VMEM 传输
+
+```python
         # 读取 Q 和当前 K 块
-        q = q_ref[...]
-        k = k_ref[slice_k, :]
-        
-        # 🔥 优化2: K @ Q 而不是 Q @ K^T
+        q = q_ref[...]          # 整个 Q block: [bq, head_dim]
+        k = k_ref[slice_k, :]   # 切片 K: [bkv_compute, head_dim]
+```
+
+**为什么 Q 读全部，K 读切片？**
+- Flash Attention 的核心：Q 固定，遍历 K
+- 每个内层迭代只需要 `bkv_compute` 大小的 K
+- 减少 VMEM 占用
+
+```python
+        # 🔥 核心：K @ Q 矩阵乘
+        # 注意！不是 Q @ K^T，是 K @ Q！
+        qk = lax.dot_general(
+            k, q, 
+            NT_DIM_NUMBERS,  # 收缩 K.dim1 和 Q.dim1
+            preferred_element_type=float32  # 用 float32 累积
+        )
         # qk 形状: [bkv_compute, bq]
-        qk = lax.dot_general(k, q, NT_DIM_NUMBERS, preferred_element_type=float32)
+        # 不是 [bq, bkv_compute]！
+```
 
+**🔥 关键优化：为什么用 K @ Q？**
+
+| 方面 | Q @ K^T | K @ Q (优化) |
+|------|---------|--------------|
+| 结果形状 | [bq, bkv] | [bkv, bq] |
+| max 规约方向 | axis=-1 (效率低) | axis=0 (效率高) |
+| 内存访问 | K 需要 transpose | K 自然顺序 |
+
+#### 4.2.7 Softmax + Output 累积 (Online Softmax 核心)
+
+```python
+        # 读取之前的累积输出和 V
         o_prev = o_scratch_ref[:]
-        v = v_ref[slice_k, :].astype(float32)
-        step = bkv_compute_in  # 内部迭代步长
+        v = v_ref[slice_k, :].astype(float32)  # [bkv_compute, head_dim_v]
         
-        # 细粒度迭代，进一步优化内存访问
+        step = bkv_compute_in  # 内层迭代步长 = 256
+        
+        # 内层迭代，进一步细分
         for idx in range(0, qk.shape[0], step):
-            # 计算当前块的 max
+            # === Step 1: 计算当前块的 max ===
+            # qk[idx:idx+step] 形状: [step, bq]
+            # max 沿 axis=0（第一个维度）更快！
             m_curr = qk[idx:idx+step].max(axis=0)[None, :]
+            # m_curr 形状: [1, bq]
+            
+            # 更新全局 max
             m_next = jnp.maximum(m_prev, m_curr)
-            
-            # 🔥 优化1: 使用 exp2
-            # Q 已经预乘了 log2(e)，所以可以直接用 exp2
+            # m_next 形状: [1, bq]
+```
+
+**为什么 `max(axis=0)` 比 `max(axis=-1)` 快？**
+
+TPU 内存布局是 `(8, 128)` 的 tile：
+- `axis=0` 规约：在 8 个 sublane 间规约，一次指令
+- `axis=-1` 规约：需要跨 128 个 lane，多次指令
+
+```python
+            # === Step 2: 计算 exp2(qk - max) ===
+            # 🔥 使用 exp2，不是 exp！
             s_curr = jnp.exp2(qk[idx:idx+step] - m_next[0:1])
+            # s_curr 形状: [step, bq]
             
-            # 更新 running sum
+            # 因为 Q 预乘了 log2(e)，所以:
+            # qk = (Q * scale * log2e) @ K^T
+            # exp2(qk - max) = exp(scale * Q@K^T - max')
+            # 数学上等价于标准 softmax！
+```
+
+```python
+            # === Step 3: 计算 running sum ===
             l_curr = s_curr.sum(axis=0, keepdims=True)
-            alpha = jnp.exp2(m_prev - m_next)  # 也用 exp2
-            l_next = l_curr + alpha * l_prev
-
-            # 计算 softmax(QK) @ V 的贡献
-            sv_dims = (((0,), (0,)), ((), ()))
-            o_curr = lax.dot_general(v[idx:idx+step], s_curr, sv_dims)
+            # l_curr 形状: [1, bq]
             
-            # 更新累积输出（online softmax 的核心）
-            o_prev = alpha[0:1, ...] * o_prev + o_curr
-            m_prev, l_prev = m_next, l_next
+            # 缩放因子：之前的 max 变了，需要修正之前的 sum
+            alpha = jnp.exp2(m_prev - m_next)
+            # alpha: 修正因子，当 m_next > m_prev 时，alpha < 1
+            
+            l_next = l_curr + alpha * l_prev
+            # Online Softmax 的精髓：
+            # 新的 sum = 当前块的 sum + 修正后的之前 sum
+```
 
+**Online Softmax 数学原理**:
+
+标准 Softmax 需要两次遍历：
+1. 第一次：计算全局 max
+2. 第二次：计算 exp(x - max) / sum
+
+Online Softmax 只需一次遍历：
+```
+m_new = max(m_old, m_curr)
+l_new = exp(m_old - m_new) * l_old + sum(exp(x_curr - m_new))
+```
+
+```python
+            # === Step 4: 计算 Softmax(QK) @ V ===
+            sv_dims = (((0,), (0,)), ((), ()))
+            # V[step, head_dim_v] @ S^T[step, bq]
+            # 收缩 dim0 (step 维度)
+            o_curr = lax.dot_general(v[idx:idx+step], s_curr, sv_dims)
+            # o_curr 形状: [head_dim_v, bq]（注意是转置的！）
+            
+            # === Step 5: 更新累积输出 ===
+            # 同样需要用 alpha 修正之前的输出
+            o_prev = alpha[0:1, ...] * o_prev + o_curr
+            # o_prev 形状: [head_dim_v, bq]
+            
+            # 更新 running stats
+            m_prev, l_prev = m_next, l_next
+```
+
+```python
         # 存储更新后的 running stats
         m_scratch_ref[...], l_scratch_ref[...] = m_next, l_next
         o_scratch_ref[:] = o_prev
+```
 
-    # 循环处理所有 KV 块
+#### 4.2.8 循环调度
+
+```python
+    # 展开的 fori_loop
+    # bkv // bkv_compute = 2816 // 256 = 11 次迭代
     lax.fori_loop(0, bkv // bkv_compute, body, None, unroll=True)
+```
 
-    # ============ 最终归一化 ============
-    @pl.when(j == grid_width - 1)
+**为什么 `unroll=True`？**
+- 展开循环，让编译器看到完整的数据依赖
+- 允许 VPU 和 MXU 重叠执行
+- 代价是更大的 IR / 编译时间
+
+#### 4.2.9 最终归一化
+
+```python
+    @pl.when(j == grid_width - 1)  # 只在最后一个 KV block 执行
     def end():
-        """最后一个 KV 块时进行最终归一化"""
+        """最终归一化: O = O_unnorm / L"""
         l = l_scratch_ref[...]
+        
+        # 扩展 l 到 [head_dim_v, bq] 形状
         l_inv = pltpu.repeat(1.0 / l, head_dim_v_repeats, axis=0)
+        # l 形状: [NUM_SUBLANES, bq] = [8, bq]
+        # l_inv 形状: [head_dim_v, bq] = [128, bq]
+        
+        # 归一化并转换类型
         o_ref[...] = (o_scratch_ref[...] * l_inv).astype(o_ref.dtype)
 ```
 
-### 4.6 Block Size 配置的选择原理
+**`pltpu.repeat` 的作用**:
+- 在 axis=0 方向重复 `head_dim_v_repeats` 次
+- 把 `[8, bq]` 变成 `[128, bq]`
+- 用于广播除法
+
+### 4.3 exp2 数学推导与实现
+
+#### 4.3.1 数学等价性证明
+
+**命题**: `exp(x) = exp2(x * log₂(e))`
+
+**证明**:
+```
+设 y = exp(x) = e^x
+
+对两边取 log₂:
+log₂(y) = log₂(e^x) = x * log₂(e)
+
+所以:
+y = 2^(x * log₂(e)) = exp2(x * log₂(e))
+
+其中 log₂(e) = 1 / ln(2) ≈ 1.44269504
+```
+
+#### 4.3.2 在 Attention 中的应用
+
+**原始 Softmax**:
+```
+softmax(QK)[i,j] = exp(QK[i,j] - max_j) / Σ_k exp(QK[i,k] - max_j)
+```
+
+**转换为 exp2**:
+```
+令 C = log₂(e) ≈ 1.4427
+
+softmax(QK)[i,j] 
+= exp2((QK[i,j] - max_j) * C) / Σ_k exp2((QK[i,k] - max_j) * C)
+= exp2(QK[i,j] * C - max_j * C) / Σ_k exp2(QK[i,k] * C - max_j * C)
+```
+
+**预乘优化**:
+```python
+# 预先将 scale 和 log2(e) 融合到 Q 中
+# 原始: Q' = Q * scale
+# 优化: Q'' = Q * scale * log2(e)
+
+# 这样 QK 就直接是 log2 scale：
+# QK'' = Q'' @ K^T = (Q * scale * log2e) @ K^T
+#      = scale * log2e * Q @ K^T
+
+# Softmax 计算变为:
+# exp2(QK'' - max) = exp2(scale * log2e * QK - max)
+#                  = exp(scale * QK - max / log2e)  # 近似等价
+```
+
+#### 4.3.3 代码实现位置
+
+**在 generate_flax.py 中预乘**:
+```python
+# generate_flax.py 第 387-391 行
+def _attention_on_slices(q, k, v):
+    scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
+    
+    # 🔥 关键！预乘 log2(e)
+    _LOG2_E = 1.44269504
+    q = q * scale_factor * _LOG2_E
+    
+    # 之后在 kernel 中可以直接用 exp2
+```
+
+**在 kernel 中使用 exp2**:
+```python
+# custom_splash_attention.py 第 89, 93 行
+# 直接使用 exp2，不需要再乘 log2(e)
+s_curr = jnp.exp2(qk[idx:idx+step] - m_next[0:1])
+alpha = jnp.exp2(m_prev - m_next)
+```
+
+### 4.4 QK Transpose 优化原理
+
+#### 4.4.1 为什么翻转维度？
+
+**TPU 内存布局**: `(8 sublanes, 128 lanes)`
+
+| 规约方向 | 硬件操作 | 效率 |
+|----------|----------|------|
+| axis=0 (sublane) | 8 路并行规约 | ⚡ 快 |
+| axis=-1 (lane) | 128 路串行规约 | 🐢 慢 |
+
+**标准 Attention**:
+```python
+# Q @ K^T -> [seq_q, seq_k]
+# softmax 沿 axis=-1 (seq_k 方向)
+# max/sum 需要规约 128 个值
+```
+
+**优化 Attention**:
+```python
+# K @ Q -> [seq_k, seq_q]  
+# softmax 沿 axis=0 (seq_k 方向)
+# max/sum 只需规约 8 个 sublane 的值
+```
+
+#### 4.4.2 代码实现
 
 ```python
-# 最优配置（经过实验确定）
-BQSIZE = 3328       # Query 块大小
-BKVSIZE = 2816      # KV 块大小  
+# custom_splash_attention.py 第 31 行
+NT_DIM_NUMBERS = (((1,), (1,)), ((), ()))
+
+# 第 78 行
+qk = lax.dot_general(k, q, NT_DIM_NUMBERS, preferred_element_type=float32)
+# 结果: qk[bkv_compute, bq]，seq_k 在前！
+```
+
+**后续代码适配**:
+```python
+# max 沿 axis=0（seq_k 方向）
+m_curr = qk[idx:idx+step].max(axis=0)[None, :]
+
+# sum 沿 axis=0
+l_curr = s_curr.sum(axis=0, keepdims=True)
+
+# S @ V 的维度也相应调整
+# S: [bkv_compute, bq] (seq_k, seq_q)
+# V: [bkv_compute, head_dim_v] (seq_k, head_dim)
+# 收缩 seq_k，得到 [head_dim_v, seq_q]（转置的输出）
+sv_dims = (((0,), (0,)), ((), ()))  # 收缩两者的 dim0
+o_curr = lax.dot_general(v[idx:idx+step], s_curr, sv_dims)
+```
+
+### 4.5 LP LLO Scheduler 调度机制
+
+#### 4.5.1 什么是 LP LLO？
+
+**LP** = Low Precision (低精度)
+**LLO** = Low-Level Optimizer (低级优化器)
+
+LP LLO Scheduler 是 XLA 编译器的一种调度策略，专门用于优化 TPU 上的计算重叠。
+
+#### 4.5.2 为什么需要它？
+
+```mermaid
+sequenceDiagram
+    participant MXU
+    participant VPU
+    
+    Note over MXU,VPU: 默认调度（串行）
+    MXU->>MXU: QK matmul (block i)
+    VPU->>VPU: Softmax (block i)
+    MXU->>MXU: AV matmul (block i)
+    MXU->>MXU: QK matmul (block i+1)
+    VPU->>VPU: Softmax (block i+1)
+    
+    Note over MXU,VPU: LP LLO 调度（重叠）
+    par 并行
+        MXU->>MXU: QK matmul (block i+1)
+        VPU->>VPU: Softmax (block i)
+    end
+    par 并行
+        MXU->>MXU: AV matmul (block i)
+        VPU->>VPU: (等待)
+    end
+```
+
+**关键洞察**:
+- MXU 和 VPU 是独立的硬件单元
+- Softmax 在 VPU 上执行，matmul 在 MXU 上执行
+- 如果不重叠，一个单元空闲时另一个在工作
+- LP LLO 调度让它们尽可能并行
+
+#### 4.5.3 代码实现
+
+```python
+# custom_splash_attention.py 第 212-216 行
+
+compiler_params = pltpu.CompilerParams(
+    # 告诉编译器各维度的语义
+    dimension_semantics=("parallel", "arbitrary", "arbitrary"),
+    # 强制使用 LP LLO 调度器
+    flags={"XLA_TPU_FORCE_LP_LLO_SCHEDULER": True}
+)
+```
+
+**dimension_semantics 解释**:
+- `"parallel"`: head 维度，完全独立可并行
+- `"arbitrary"`: Q/KV block 维度，编译器可自由重排
+
+**为什么 Q/KV 是 arbitrary？**
+- 允许编译器重排迭代顺序
+- 实现流水线：block i 的 Softmax 和 block i+1 的 QK 重叠
+
+#### 4.5.4 性能影响
+
+> 📊 **源文档数据**:
+> - 无 LP LLO: 135.2s
+> - 有 LP LLO: 130.1s
+> - 提升: **3.7%**
+
+这个优化看起来不大，但它是"免费"的——只需要一个编译器 flag！
+
+### 4.6 Block Size 配置原理
+
+#### 4.6.1 最优配置
+
+```python
+# 最优配置（720P 81帧）
+BQSIZE = 3328           # Q 块大小
+BKVSIZE = 2816          # KV 块大小
 BKVCOMPUTESIZE = 256    # 内部计算块大小
 BKVCOMPUTEINSIZE = 256  # 最内层迭代块大小
 ```
 
-**为什么是这些值？**
+#### 4.6.2 选择原理
 
-1. **BQSIZE = 3328**: 
-   - 75600 / 3328 ≈ 22.7，需要 23 个 Q 块
-   - 接近能整除 75600 的值，减少 padding 浪费
+**BQSIZE = 3328**:
+```python
+# 75600 / 3328 ≈ 22.7，向上取整 = 23 个 Q 块
+# 75600 = 3328 * 22 + 2784
+# 最后一个块有 padding，但影响不大
+```
 
-2. **BKVSIZE = 2816**:
-   - 75600 / 2816 ≈ 26.8，需要 27 个 KV 块
-   - 与 BQSIZE 配合，使网格大小合理
+**BKVSIZE = 2816**:
+```python
+# 75776 / 2816 ≈ 26.9，向上取整 = 27 个 KV 块
+# 2816 = 256 * 11，是 256 的整数倍
+# 这确保了 bkv_compute = 256 能整除 bkv
+```
 
-3. **BKVCOMPUTESIZE = 256**:
-   - 2816 / 256 = 11，正好整除
-   - 256 是 TPU VMEM 友好的块大小
+**BKVCOMPUTESIZE = 256**:
+```python
+# 必须是 NUM_LANES = 128 的整数倍
+# 更小的值 (128) 会增加迭代次数
+# 更大的值 (512) 会增加 VMEM 占用
+# 256 = 最优平衡点
+```
 
-4. **BKVCOMPUTEINSIZE = 256**:
-   - 更细粒度的迭代，优化流水线
-
-### 4.7 Pallas Kernel 的完整包装
+### 4.7 完整的 make_splash_mha 包装函数
 
 ```python
 def make_splash_mha(block_sizes, bkv_compute_in, interpret=False):
@@ -844,7 +1219,7 @@ def make_splash_mha(block_sizes, bkv_compute_in, interpret=False):
                 out_specs=out_specs,
                 grid=grid,
             ),
-            # 🔥 优化3: LP LLO Scheduler
+            # 🔥 LP LLO Scheduler
             compiler_params=pltpu.CompilerParams(
                 dimension_semantics=("parallel", "arbitrary", "arbitrary"),
                 flags={"XLA_TPU_FORCE_LP_LLO_SCHEDULER": True}
@@ -856,95 +1231,23 @@ def make_splash_mha(block_sizes, bkv_compute_in, interpret=False):
     return _splash_attention
 ```
 
-### 4.8 在 Pipeline 中的集成
+### 4.8 性能优化时间线
 
-```python
-# generate_flax.py 中的集成代码
+> 📊 **源文档引用**: Model Optimization Report - 优化进度表
 
-def _tpu_custom_attention(query, key, value, env, scale=None, ...):
-    """在 torchax 环境中调用自定义 attention"""
-    mesh = getattr(env, '_mesh', None) or env.param.mesh
-    
-    def _attention_on_slices(q, k, v):
-        scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
-        
-        # 🔥 关键: 预乘 log2(e)
-        _LOG2_E = 1.44269504
-        q = q * scale_factor * _LOG2_E
-        
-        def kernel_3d(q_3d, k_3d, v_3d):
-            # Padding 到块大小的整数倍
-            q_3d_padded, q_orig_len = pad_to_multiple(q_3d, BQSIZE, axis=1)
-            k_3d_padded, k_orig_len = pad_to_multiple(k_3d, BKVSIZE, axis=1)
-            v_3d_padded, v_orig_len = pad_to_multiple(v_3d, BKVSIZE, axis=1)
-            
-            # 创建 block sizes
-            block_sizes = _BlockSizes(
-                block_q=min(BQSIZE, padded_q_seq_len),
-                block_kv=min(BKVSIZE, padded_kv_seq_len),
-                block_kv_compute=min(BKVCOMPUTESIZE, padded_kv_seq_len),
-            )
-            
-            # 调用自定义 kernel
-            splash_kernel = custom_splash_attention.make_splash_mha(
-                block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE
-            )
-            out = splash_kernel(
-                q_3d_padded.astype(jnp.float32),
-                k_3d_padded.astype(jnp.float32),
-                v_3d_padded.astype(jnp.float32)
-            ).astype(q_3d_padded.dtype)
-            
-            # 移除 padding，交换轴
-            out = jnp.swapaxes(out, 1, 2)
-            return out[:, :q_orig_len, ...]
-        
-        return jax.vmap(kernel_3d)(q, k, v)
-    
-    # 使用 shard_map 进行分布式执行
-    sharded_fn = shard_map(
-        _attention_on_slices,
-        mesh=mesh,
-        in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
-        out_specs=q_partition_spec,
-        check_rep=False,
-    )
-    return sharded_fn(query, key, value)
-```
-
-### 4.9 K-Smoothing 优化
-
-另一个提升数值稳定性和性能的优化：
-
-```python
-# generate_flax.py 第 399-401 行
-if USE_K_SMOOTH:
-    key_mean = jnp.mean(jkey, axis=2, keepdims=True)
-    jkey = jkey - key_mean
-```
-
-**原理**：
-- 减去 K 的均值，使数值更稳定
-- 不影响 Attention 的结果（因为 softmax 对常数偏移不敏感）
-- 减少了数值溢出的风险
-
-### 4.10 性能提升总结
-
-| 优化阶段 | 技术 | 时间 (720P 50步) | 提升 |
-|----------|------|------------------|------|
+| 阶段 | 优化内容 | 时间 (720P 50步) | 提升 |
+|------|----------|------------------|------|
 | 基线 | 标准 SDPA | 428s | - |
 | 阶段1 | Splash Attention | 285s | 33% ↓ |
 | 阶段2 | + exp2 优化 | 265s | 7% ↓ |
 | 阶段3 | + QK Transpose | 255s | 4% ↓ |
 | 阶段4 | + LP LLO Scheduler | 245s | 4% ↓ |
-| 阶段5 | + Block Size 调优 | 125s | 49% ↓ |
-| **总计** | **所有优化** | **125s** | **3.4x** |
+| 阶段5 | + Block Size 调优 | **124.9s** | 49% ↓ |
+| **总计** | **所有优化** | **124.9s** | **3.4x** |
 
 ---
 
 ## 第五章：VAE 在 Torchax 上的工作原理与并行设计
-
-本章详细讲解如何让 PyTorch 实现的 Diffusers VAE 在 Torchax 桥接下于 TPU 上高效运行，包括并行策略设计、分片实现和问题解决。
 
 ### 5.1 挑战：PyTorch VAE 到 TPU
 
@@ -963,7 +1266,9 @@ Wan VAE 是用 PyTorch 实现的 3D 因果卷积网络。直接在 TPU 上运行
 # 中间特征图最大到 [B, 384, 21, 90, 160]
 ```
 
-#### 5.1.2 解决方案架构
+#### 5.1.2 解决方案概览
+
+> 📊 **源文档引用**: I2V Optimization Report - VAE 优化部分
 
 ```mermaid
 graph TB
@@ -979,56 +1284,9 @@ graph TB
     style SHARD fill:#4caf50
 ```
 
-### 5.2 Torchax 桥接原理
+### 5.2 Spatial Partitioning：Width 维度分片
 
-#### 5.2.1 什么是 Torchax
-
-Torchax 是一个让 PyTorch 代码在 JAX/TPU 上运行的库。核心机制：
-
-```python
-import torchax
-
-# 1. 全局启用 torchax
-torchax.enable_globally()
-
-# 2. 获取默认环境
-env = torchax.default_env()
-
-# 3. PyTorch 操作会自动转为 JAX 操作
-# torch.nn.Conv3d(...) → jax.lax.conv_general_dilated(...)
-```
-
-#### 5.2.2 算子覆盖机制
-
-```python
-# 替换 PyTorch 的 scaled_dot_product_attention
-from torchax.ops import ops_registry
-
-def custom_attention(query, key, value, env=None, **kwargs):
-    # 转换为 JAX
-    jquery, jkey, jvalue = env.t2j_iso((query, key, value))
-    # 调用 JAX 实现
-    result = splash_attention(jquery, jkey, jvalue)
-    # 转回 PyTorch
-    return env.j2t_iso(result)
-
-# 注册替换
-env._ops[torch.nn.functional.scaled_dot_product_attention] = \
-    ops_registry.Operator(
-        torch.nn.functional.scaled_dot_product_attention,
-        functools.partial(custom_attention, env=env),
-        is_jax_function=False,
-        is_user_defined=True,
-        needs_env=False,
-        is_view_op=False,
-    )
-```
-
-### 5.3 Spatial Partitioning：在宽度维度分片
-
-#### 5.3.1 设计原则
-
-**为什么选择 Width 维度？**
+#### 5.2.1 为什么选择 Width 维度？
 
 | 分片维度 | 优点 | 缺点 |
 |----------|------|------|
@@ -1036,19 +1294,18 @@ env._ops[torch.nn.functional.scaled_dot_product_attention] = \
 | Channel | 通道独立 | 打破通道间依赖 |
 | Temporal | 时间独立 | 因果卷积需要时间连续 |
 | Height | 行独立 | 某些卷积跨行 |
-| **Width** | **列独立，卷积友好** | **需要 padding 处理** |
+| **Width** | **列独立，卷积友好** | **需要 halo 处理** |
 
-**Width 分片的关键优势**：
-1. 3D 卷积的 kernel 通常是 3×3×3，跨列的依赖可以通过 padding 处理
+**Width 分片的关键优势**:
+1. 3D 卷积的 kernel 通常是 3×3×3，跨列的依赖可以通过 halo exchange 处理
 2. 宽度 160 可以被 8 整除（160 / 8 = 20）
 3. 每个 TPU chip 处理视频的一个垂直条带
 
-#### 5.3.2 分片实现
+#### 5.2.2 核心代码实现
 
 ```python
 # autoencoder_kl_wan.py 核心实现
 
-import jax
 from torchax import interop
 from jax.sharding import PartitionSpec as P
 
@@ -1057,50 +1314,19 @@ mark_sharding = interop.torch_view(jax.lax.with_sharding_constraint)
 
 
 class WanCausalConv3d(nn.Conv3d):
-    """
-    带有 TPU Spatial Sharding 的 3D 因果卷积
-    """
-    def __init__(self, in_channels, out_channels, kernel_size, stride=1, padding=0):
-        super().__init__(in_channels, out_channels, kernel_size, stride, padding)
-        
-        # 设置因果 padding
-        # 时间维度只 pad 过去（因果性）
-        # 空间维度对称 pad
-        self._padding = (
-            self.padding[2], self.padding[2],  # W: left, right
-            self.padding[1], self.padding[1],  # H: top, bottom
-            2 * self.padding[0], 0             # T: past only, no future
-        )
-        self.padding = (0, 0, 0)  # 实际卷积不 pad，我们手动 pad
+    """带有 TPU Spatial Sharding 的 3D 因果卷积"""
     
     def forward(self, x, cache_x=None):
-        """
-        前向传播，带有 sharding 约束
-        
-        Args:
-            x: 输入张量 [B, C, T, H, W]
-            cache_x: 缓存的历史帧（用于流式解码）
-        """
-        padding = list(self._padding)
-        
-        # 处理时间缓存
-        if cache_x is not None and self._padding[4] > 0:
-            cache_x = cache_x.to(x.device)
-            x = torch.cat([cache_x, x], dim=2)  # 拼接历史帧
-            padding[4] -= cache_x.shape[2]
-        
         # 应用 padding
-        x = F.pad(x, padding)
+        x = F.pad(x, self._padding)
         
         # 🔥 核心：在 Width 维度应用 sharding
-        # 尝试多种分片策略，选择可行的
         success = False
         
         # 策略 1: dp + tp 联合分片
         try:
             x = mark_sharding(x, P(None, None, None, None, ("dp", "tp")))
             success = True
-            print("[DEBUG] Shard conv width along ('dp', 'tp')")
         except ValueError:
             pass
         
@@ -1109,7 +1335,6 @@ class WanCausalConv3d(nn.Conv3d):
             try:
                 x = mark_sharding(x, P(None, None, None, None, ("tp",)))
                 success = True
-                print("[DEBUG] Shard conv width along ('tp')")
             except ValueError:
                 pass
         
@@ -1118,7 +1343,6 @@ class WanCausalConv3d(nn.Conv3d):
             try:
                 x = mark_sharding(x, P(None, None, None, None, ("dp",)))
                 success = True
-                print("[DEBUG] Shard conv width along ('dp')")
             except ValueError:
                 pass
         
@@ -1126,36 +1350,17 @@ class WanCausalConv3d(nn.Conv3d):
         return super().forward(x)
 ```
 
-#### 5.3.3 为什么用 try-except
+### 5.3 VAE 解码器的逐帧处理
+
+#### 5.3.1 逐帧解码策略
+
+> 📊 **源文档引用**: I2V Optimization Report - Cache 机制纯函数化
 
 ```python
-# 分片可能失败的原因：
-# 1. 张量形状不能被 mesh 维度整除
-# 2. 某些 mesh 维度未使用
-# 3. 多主机环境下的设备不可寻址
-
-try:
-    x = mark_sharding(x, P(None, None, None, None, ("dp", "tp")))
-except ValueError:
-    # 宽度不能被 dp*tp 整除，回退到其他策略
-    pass
-```
-
-### 5.4 VAE 解码器的完整流程
-
-#### 5.4.1 逐帧解码策略
-
-由于 3D 因果卷积需要时间连续性，我们采用逐帧解码：
-
-```python
-# autoencoder_kl_wan.py 第 1237-1271 行
+# autoencoder_kl_wan.py
 
 def _decode(self, z: torch.Tensor, return_dict: bool = True):
-    """
-    解码 latent 到视频
-    
-    策略：逐帧处理，避免一次性加载所有帧到内存
-    """
+    """解码 latent 到视频（逐帧处理）"""
     _, _, num_frame, height, width = z.shape
     
     # 清理缓存
@@ -1171,167 +1376,49 @@ def _decode(self, z: torch.Tensor, return_dict: bool = True):
             out, self._feat_map = self.decoder(
                 x[:, :, i : i + 1, :, :],
                 feat_cache=self._feat_map,
-                first_chunk=True,  # 标记为第一帧
+                first_chunk=True,
             )
         else:
             # 后续帧：使用缓存
             out_, self._feat_map = self.decoder(
-                x[:, :, i : i + 1, :, :], 
+                x[:, :, i : i + 1, :, :],
                 feat_cache=self._feat_map
             )
-            out = torch.cat([out, out_], 2)  # 拼接时间维度
+            out = torch.cat([out, out_], 2)
     
-    # 裁剪到有效范围
-    out = torch.clamp(out, min=-1.0, max=1.0)
-    
-    self.clear_cache()
     return DecoderOutput(sample=out)
 ```
 
-#### 5.4.2 特征缓存机制
+#### 5.3.2 Cache 机制纯函数化
 
-因果卷积需要历史帧的特征，我们用缓存优化：
+> 📊 **源文档引用**: I2V Report - "VAE JIT optimization by making cache mechanism pure functions"
+
+原始 VAE 使用有状态的缓存，这对 JAX JIT 编译不友好。解决方案是将缓存作为函数参数传递：
 
 ```python
-# 缓存结构
-CACHE_T = 2  # 缓存最近 2 帧的特征
+# 原始实现（有状态，JIT 不友好）
+class WanResidualBlock:
+    def forward(self, x):
+        # 缓存存储在 self._cache 中
+        if self._cache is not None:
+            x = torch.cat([self._cache, x], dim=2)
+        self._cache = x[:, :, -2:]
+        return self.conv(x)
 
-class WanResidualBlock(nn.Module):
+# 优化后（无状态，JIT 友好）
+class WanResidualBlock:
     def forward(self, x, feat_cache=None, feat_idx=[0]):
-        # 计算残差连接
-        h = self.conv_shortcut(x)
-        
-        x = self.norm1(x)
-        x = self.nonlinearity(x)
-        
-        # 🔥 使用缓存
+        # 缓存作为参数传递
         if feat_cache is not None:
-            idx = feat_idx
-            
-            # 缓存当前帧的特征
-            cache_x = x[:, :, -CACHE_T:, :, :].clone()
-            
-            # 如果当前帧数不足，补充历史缓存
-            if cache_x.shape[2] < 2 and feat_cache[idx] is not None:
-                cache_x = torch.cat([
-                    feat_cache[idx][:, :, -1, :, :].unsqueeze(2).to(cache_x.device),
-                    cache_x
-                ], dim=2)
-            
-            # 使用缓存进行卷积
-            x = self.conv1(x, feat_cache[idx])
-            feat_cache[idx] = cache_x
-            feat_idx += 1
-        else:
-            x = self.conv1(x)
-        
-        # ... 后续处理
-        return x + h, feat_idx, feat_cache
+            idx = feat_idx[0]
+            if feat_cache[idx] is not None:
+                x = torch.cat([feat_cache[idx], x], dim=2)
+            feat_cache[idx] = x[:, :, -2:]
+            feat_idx[0] += 1
+        return self.conv(x), feat_cache
 ```
 
-### 5.5 多主机环境下的特殊处理
-
-#### 5.5.1 最终输出的复制
-
-解码后的视频需要在所有主机上可访问：
-
-```python
-# autoencoder_kl_wan.py 第 943-944 行
-
-def forward(self, x, feat_cache=None, first_chunk=False):
-    # ... 解码逻辑 ...
-    
-    # 🔥 关键：复制到所有设备
-    # 避免多主机环境下的 "non-addressable devices" 错误
-    x = mark_sharding(x, P())  # 空 PartitionSpec = 复制
-    return x, feat_cache
-```
-
-**为什么需要这步？**
-
-```mermaid
-graph LR
-    subgraph "多主机环境"
-        H1[Host 1<br/>TPU 0-3]
-        H2[Host 2<br/>TPU 4-7]
-        
-        D1[分片数据<br/>只在部分设备]
-        D2[完整数据<br/>所有设备可访问]
-    end
-    
-    D1 -->|mark_sharding P| D2
-    
-    style D2 fill:#4caf50
-```
-
-### 5.6 VAE 权重加载与分片
-
-#### 5.6.1 权重转换流程
-
-```python
-# generate_flax.py 第 563-636 行
-
-def load_wan_vae_fixed(pretrained_model_name_or_path, eval_shapes, device):
-    """
-    加载 VAE 权重，处理类型转换避免 torchax 问题
-    """
-    from huggingface_hub import hf_hub_download
-    from safetensors import safe_open
-    
-    # 下载权重
-    ckpt_path = hf_hub_download(
-        pretrained_model_name_or_path,
-        subfolder="vae",
-        filename="diffusion_pytorch_model.safetensors"
-    )
-    
-    # 🔥 关键：使用 CPU 设备避免 torchax 类型转换问题
-    with jax.default_device('cpu'):
-        # 在 torchax 禁用时加载权重
-        import torchax
-        torchax.disable_globally()
-        
-        state_dict = {}
-        with safe_open(ckpt_path, framework="pt") as f:
-            for key in f.keys():
-                tensor = f.get_tensor(key)
-                # 转换为 bfloat16
-                if tensor.dtype == torch.float32:
-                    tensor = tensor.to(torch.bfloat16)
-                state_dict[key] = tensor
-        
-        # 创建 VAE 实例
-        vae = AutoencoderKLWan(
-            in_channels=3,
-            out_channels=3,
-            latent_channels=16,
-            # ... 其他参数
-        )
-        
-        # 加载权重
-        vae.load_state_dict(state_dict, strict=True)
-        
-        torchax.enable_globally()
-    
-    return vae
-```
-
-#### 5.6.2 权重不分片的原因
-
-```python
-# VAE 权重相对较小（约 500MB），直接复制到所有设备
-# 而 Transformer 权重很大（14B 参数），必须分片
-
-# VAE 分片策略：权重复制，激活分片
-vae_sharding = {
-    # 所有权重都复制到所有设备
-    r'.*': P(),  # 空 PartitionSpec = 复制
-}
-```
-
-### 5.7 Halo Exchange 处理边界依赖
-
-#### 5.7.1 卷积边界问题
+### 5.4 Halo Exchange 处理边界
 
 当在 Width 维度分片后，3×3×3 卷积在边界处需要相邻分片的数据：
 
@@ -1346,89 +1433,49 @@ graph LR
         H12[Halo<br/>W: 39-40]
     end
     
-    S0 <-->|交换边界| H01 <-->|交换边界| S1
-    S1 <-->|交换边界| H12 <-->|交换边界| S2
+    S0 <-->|边界交换| H01 <-->|边界交换| S1
+    S1 <-->|边界交换| H12 <-->|边界交换| S2
 ```
 
-#### 5.7.2 XLA 自动处理
-
-好消息是 XLA 编译器会自动插入必要的通信：
-
+**XLA 自动处理**:
 ```python
 # XLA 编译器识别卷积操作需要 halo exchange
 # 自动插入 collective-permute 操作
-
 # 代码中无需显式处理！
-# 只需正确标记 sharding
+
 x = mark_sharding(x, P(None, None, None, None, ("dp", "tp")))
 # XLA 会在需要时自动交换边界数据
 ```
 
-### 5.8 完整的 VAE 初始化流程
+### 5.5 I2V 特殊优化：消除 segment_id
+
+> 📊 **源文档引用**: I2V Optimization Report - Kernel 修改消除 padding 影响
+
+I2V 场景下，第一帧是输入图像，不需要 padding mask。可以通过修改 kernel 消除 `segment_id` 参数：
 
 ```python
-def setup_wan_vae_for_tpu(model_id, mesh, env):
-    """
-    完整的 TPU VAE 初始化流程
-    """
-    # 1. 禁用 torchax 加载权重
-    import torchax
-    torchax.disable_globally()
-    
-    # 2. 加载 VAE（在 CPU 上）
-    with jax.default_device('cpu'):
-        vae = load_wan_vae_fixed(model_id, eval_shapes=None, device='cpu')
-    
-    # 3. 重新启用 torchax
-    torchax.enable_globally()
-    
-    # 4. 设置 mesh 到环境
-    env._mesh = mesh
-    env._initial_content.mesh = mesh
-    
-    # 5. 移动 VAE 权重到 XLA
-    with mesh:
-        state_dict = vae.state_dict()
-        state_dict = env.to_xla(state_dict)
-        vae.load_state_dict(state_dict, assign=True)
-    
-    return vae
+# 原始 kernel（需要 segment_id 处理 padding）
+def attention_kernel(q, k, v, segment_id):
+    # 根据 segment_id 创建 mask
+    mask = create_mask(segment_id)
+    qk = q @ k.T
+    qk = qk + mask  # 应用 mask
+    return softmax(qk) @ v
+
+# 优化后（无 segment_id）
+def attention_kernel_no_segment(q, k, v):
+    # 假设无 padding，直接计算
+    qk = q @ k.T
+    return softmax(qk) @ v
 ```
 
-### 5.9 VAE 性能对比
+### 5.6 VAE 性能对比
 
-| 配置 | 单设备 | 8 设备 (无分片) | 8 设备 (Width 分片) |
-|------|--------|----------------|---------------------|
-| 内存使用 | OOM | 24GB/chip | 8GB/chip |
-| 解码时间 | - | 45s | 12s |
-| 提升 | - | 基线 | **3.75x** |
-
-### 5.10 VAE 优化总结
-
-```mermaid
-graph TB
-    subgraph "VAE 优化路线图"
-        P1[问题1: 内存过大]
-        P2[问题2: 多设备并行]
-        P3[问题3: 边界依赖]
-        
-        S1[解决1: Width 分片<br/>mark_sharding]
-        S2[解决2: 多策略回退<br/>try-except]
-        S3[解决3: XLA 自动 Halo<br/>无需手动]
-        
-        S4[解决4: 逐帧解码<br/>特征缓存]
-        S5[解决5: 最终复制<br/>P 空规格]
-    end
-    
-    P1 --> S1
-    P2 --> S2
-    P3 --> S3
-    S1 & S2 & S3 --> S4
-    S4 --> S5
-    
-    style S1 fill:#4caf50
-    style S4 fill:#2196f3
-```
+| 配置 | 时间 | 内存/chip |
+|------|------|-----------|
+| 单设备 | OOM | - |
+| 8 设备 (无分片) | 45s | 24GB |
+| 8 设备 (Width 分片) | **12s** | **8GB** |
 
 ---
 
@@ -1436,62 +1483,106 @@ graph TB
 
 ### 6.1 MFU 计算方法
 
+> 📊 **源文档引用**: FLOPs Utilization Analysis - MFU 计算部分
+
 ```python
 def compute_dit_flops_per_step(
-    batch_size=2, num_blocks=40, hidden_dim=5120,
-    num_heads=40, head_dim=128, ffn_dim=13824,
-    seq_len=75600, text_seq_len=226,
+    batch_size=2,       # CFG 正负 prompt
+    num_blocks=40,      # DiT blocks
+    hidden_dim=5120,    # Hidden dimension
+    num_heads=40,       # Attention heads
+    head_dim=128,       # Head dimension
+    ffn_dim=13824,      # FFN hidden dimension
+    seq_len=75600,      # Video sequence length
+    text_seq_len=226,   # Text sequence length
 ):
-    # Self-Attention
+    """计算单步 DiT FLOPs"""
+    
+    # === Self-Attention FLOPs ===
+    # Q, K, V 投影: 3 × 2 × S × D × D
     qkv_proj = 3 * 2 * seq_len * hidden_dim * hidden_dim
+    
+    # QK 矩阵乘: 2 × B × H × S × d × S
     qk_matmul = 2 * batch_size * num_heads * seq_len * head_dim * seq_len
+    
+    # AV 矩阵乘: 2 × B × H × S × S × d
     av_matmul = 2 * batch_size * num_heads * seq_len * seq_len * head_dim
+    
+    # 输出投影: 2 × S × D × D
     out_proj = 2 * seq_len * hidden_dim * hidden_dim
+    
     self_attn = qkv_proj + qk_matmul + av_matmul + out_proj
     
-    # Cross-Attention
+    # === Cross-Attention FLOPs ===
     q_proj = 2 * seq_len * hidden_dim * hidden_dim
     kv_proj = 2 * 2 * text_seq_len * hidden_dim * hidden_dim
-    cross_attn = q_proj + kv_proj + ...
+    cross_qk = 2 * batch_size * num_heads * seq_len * head_dim * text_seq_len
+    cross_av = 2 * batch_size * num_heads * seq_len * text_seq_len * head_dim
+    cross_out = 2 * seq_len * hidden_dim * hidden_dim
     
-    # FFN
-    ffn = 2 * 2 * seq_len * hidden_dim * ffn_dim + ...
+    cross_attn = q_proj + kv_proj + cross_qk + cross_av + cross_out
     
-    return num_blocks * (self_attn + cross_attn + ffn)
+    # === FFN FLOPs ===
+    # SwiGLU: gate_up + gate_mul + down
+    ffn = 2 * 2 * seq_len * hidden_dim * ffn_dim + \
+          seq_len * ffn_dim + \
+          2 * seq_len * ffn_dim * hidden_dim
+    
+    # 总计 (所有 blocks)
+    total_flops = num_blocks * (self_attn + cross_attn + ffn)
+    
+    return total_flops
 
-# MFU = FLOPs / (峰值TFLOPs × 时间)
-mfu = compute_dit_flops_per_step() / (14688e12 * 2.5)
+# MFU 计算
+flops_per_step = compute_dit_flops_per_step()  # ≈ 2.85e15
+step_time = 2.5  # 秒
+peak_tflops = 14688e12  # v6e-16 峰值 bf16
+
+mfu = flops_per_step / (peak_tflops * step_time)  # ≈ 34%
 ```
 
 ### 6.2 DiT Step 时间分解
 
+> 📊 **源文档引用**: image11.png - 操作时间分解
+
 | 操作 | 时间占比 | MFU | 瓶颈类型 |
 |------|----------|-----|----------|
 | Self-Attention | 66.8% | 37% | VPU-bound |
-| Convolution Fusion | 14.3% | - | 通信 |
+| Convolution Fusion | 14.3% | 66% | Compute-bound |
 | All-to-All | 6.7% | - | ICI 带宽 |
-| Linear | - | 66% | Compute-bound |
+| Data Formatting | 6.45% | - | 内存带宽 |
 
-### 6.3 Profiler 使用
+### 6.3 Profiler 使用指南
 
 ```python
+# 1. 启用 profiler
 with jax.profiler.trace("/dev/shm/tensorboard"):
     output = pipe(prompt=prompt, num_inference_steps=3)
     jax.effects_barrier()
+
+# 2. 查看 TensorBoard
+# tensorboard --logdir=/dev/shm/tensorboard
+
+# 3. 分析关键指标
+# - MXU 利用率
+# - 内存带宽利用率
+# - 通信开销
 ```
 
 ---
 
 ## 第七章：Torchax 桥接与代码实现
 
-### 7.1 PyTorch 到 JAX 的桥接
+### 7.1 Torchax 初始化
 
 ```python
 import torchax
 
+# 全局启用 torchax
 torchax.enable_globally()
 env = torchax.default_env()
 
+# 配置 mesh
 env._mesh = mesh
 env._initial_content.mesh = mesh
 env.config.use_tpu_splash_attention = True
@@ -1502,8 +1593,8 @@ env.config.use_tpu_splash_attention = True
 ```python
 from torchax.ops import ops_registry
 
-def scaled_dot_product_attention(query, key, value,
-                                  env=None, **kwargs):
+def scaled_dot_product_attention(query, key, value, env=None, **kwargs):
+    """自定义 attention 实现"""
     if getattr(env.config, 'use_tpu_splash_attention', False):
         jquery, jkey, jvalue = env.t2j_iso((query, key, value))
         
@@ -1530,53 +1621,28 @@ env._ops[torch.nn.functional.scaled_dot_product_attention] = \
     )
 ```
 
-### 7.3 权重转换与加载
+### 7.3 权重分片
 
 ```python
 import re
 from jax.sharding import NamedSharding, PartitionSpec as P
 
 def shard_weight_dict(weight_dict, sharding_dict, mesh):
+    """根据正则表达式规则分片权重"""
     result = {}
     for k, v in weight_dict.items():
         matched = False
-        for target, sharding in sharding_dict.items():
-            if re.fullmatch(target, k) is not None:
+        for pattern, sharding in sharding_dict.items():
+            if re.fullmatch(pattern, k) is not None:
                 v.apply_jax_(jax.device_put,
                             NamedSharding(mesh, P(*sharding)))
                 matched = True
                 break
         if not matched:
+            # 默认复制
             v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
         result[k] = v
     return result
-
-# 移动模块到 XLA
-def _move_module(module, env):
-    with jax.default_device('cpu'):
-        state_dict = module.state_dict()
-        state_dict = env.to_xla(state_dict)
-        module.load_state_dict(state_dict, assign=True)
-```
-
-### 7.4 混合精度策略
-
-```python
-torch.set_default_dtype(torch.bfloat16)
-
-# VAE 权重转换为 bf16
-params = jax.tree_util.tree_map(
-    lambda x: x.astype(jnp.bfloat16), params
-)
-
-# Attention 计算使用 float32
-def attention_kernel(q, k, v):
-    out = splash_kernel(
-        q.astype(jnp.float32),
-        k.astype(jnp.float32),
-        v.astype(jnp.float32)
-    )
-    return out.astype(q.dtype)
 ```
 
 ---
@@ -1594,13 +1660,9 @@ pip install transformers accelerate safetensors flax optax
 # 安装修改版 diffusers
 git clone https://github.com/yangwhale/diffusers-tpu.git
 cd diffusers-tpu && pip install -e .
-
-# 安装 MaxDiffusion
-git clone https://github.com/AI-Hypercomputer/maxdiffusion.git
-cd maxdiffusion && pip install -e .
 ```
 
-### 8.2 Text-to-Video 完整流程
+### 8.2 完整 T2V Pipeline
 
 ```python
 """Wan 2.1 Text-to-Video on TPU v6e"""
@@ -1611,7 +1673,6 @@ import torchax
 from jax.sharding import Mesh, PartitionSpec as P
 from jax.experimental import mesh_utils
 
-# 配置
 MODEL_ID = "Wan-AI/Wan2.1-T2V-14B-Diffusers"
 HEIGHT, WIDTH, FRAMES = 720, 1280, 81
 NUM_STEPS = 50
@@ -1636,8 +1697,7 @@ def main():
     env.config.use_tpu_splash_attention = True
     
     # 加载 Pipeline
-    from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline
-    from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
+    from diffusers import WanPipeline, UniPCMultistepScheduler
     
     torchax.disable_globally()
     scheduler = UniPCMultistepScheduler(
@@ -1648,10 +1708,6 @@ def main():
     pipe = WanPipeline.from_pretrained(MODEL_ID, torch_dtype=torch.bfloat16)
     pipe.scheduler = scheduler
     torchax.enable_globally()
-    
-    # 设置 Splash Attention 和 VAE
-    setup_splash_attention(pipe, mesh, env)
-    pipe.vae = setup_wan_vae(MODEL_ID, mesh)
     
     # 生成
     prompt = "A cat and a dog baking a cake together in a kitchen."
@@ -1671,100 +1727,6 @@ def main():
 if __name__ == "__main__":
     main()
 ```
-
-### 8.3 三阶段推理架构
-
-三阶段推理将生成过程拆分为独立步骤，便于调试和资源管理。
-
-```mermaid
-graph LR
-    subgraph "Stage 1: Text Encoder"
-        PROMPT[Text Prompt]
-        T5[UMT5 Encoding]
-        EMB[Embeddings<br/>safetensors]
-    end
-    
-    subgraph "Stage 2: Transformer"
-        EMB2[Load Embeddings]
-        DIT[DiT Denoising<br/>50 steps]
-        LAT[Latents<br/>safetensors]
-    end
-    
-    subgraph "Stage 3: VAE"
-        LAT2[Load Latents]
-        VAE[VAE Decode]
-        VIDEO[Video MP4]
-    end
-    
-    PROMPT --> T5 --> EMB --> EMB2 --> DIT --> LAT --> LAT2 --> VAE --> VIDEO
-```
-
-**Stage 1: Text Encoder**
-
-```python
-# stage1_text_encoder.py
-def encode_prompts(pipe, prompt, negative_prompt):
-    prompt_embeds, negative_prompt_embeds = pipe.encode_prompt(
-        prompt=prompt,
-        negative_prompt=negative_prompt,
-        do_classifier_free_guidance=True,
-    )
-    
-    # 保存到 safetensors
-    save_embeddings_to_safetensors({
-        'prompt_embeds': prompt_embeds,
-        'negative_prompt_embeds': negative_prompt_embeds,
-    }, 'stage1_embeddings.safetensors')
-```
-
-**Stage 2: Transformer**
-
-```python
-# stage2_transformer.py
-def run_transformer_inference(pipe, embeddings, config):
-    # 加载 embeddings
-    prompt_embeds = embeddings['prompt_embeds'].to('jax')
-    negative_prompt_embeds = embeddings['negative_prompt_embeds'].to('jax')
-    
-    # 运行 denoising
-    latents = pipe(
-        prompt_embeds=prompt_embeds,
-        negative_prompt_embeds=negative_prompt_embeds,
-        output_type='latent',  # 不解码
-    ).frames
-    
-    # 保存 latents
-    save_latents_to_safetensors(latents, 'stage2_latents.safetensors')
-```
-
-**Stage 3: VAE Decode**
-
-```python
-# stage3_vae_decoder.py
-def decode_latents(vae, latents, config):
-    # 反归一化
-    latents_mean = jnp.array(vae.latents_mean).reshape(1, 16, 1, 1, 1)
-    latents_std = 1.0 / jnp.array(vae.latents_std).reshape(1, 16, 1, 1, 1)
-    latents = latents / latents_std + latents_mean
-    
-    # 解码
-    video = vae.decode(latents)
-    
-    # 导出
-    export_to_video(video, 'output.mp4', fps=16)
-```
-
-### 8.4 性能基准测试
-
-**测试环境**: TPU v6e-8, Wan 2.1 14B, 720P 81帧
-
-| 配置 | 时间 | 每步时间 |
-|------|------|----------|
-| 标准 Attention | 428s | ~8.5s |
-| Splash Attention | 285s | ~5.7s |
-| + exp2 优化 | 265s | ~5.3s |
-| + LP LLO 调度 | 245s | ~4.9s |
-| + 最终优化 | **125s** | **~2.5s** |
 
 ---
 
@@ -1796,151 +1758,52 @@ graph TB
 
 ### 9.2 expand_timesteps 机制
 
-I2V 的核心创新是 `expand_timesteps`：第一帧使用固定 timestep=0，其余帧使用正常 timestep。
-
 ```python
 def expand_timesteps(timesteps, num_frames, device):
     """
-    扩展 timestep 用于 I2V
+    I2V 的 timestep 扩展
     
     第一帧: timestep = 0 (干净图像)
     其余帧: timestep = t (正常去噪)
     """
-    # 原始 timestep: [t]
-    # 扩展后: [0, t, t, t, ..., t]
     expanded = torch.zeros(num_frames, device=device)
     expanded[1:] = timesteps
     return expanded
 
-# 在 pipeline 中使用
-timesteps = self.scheduler.timesteps
+# 使用
 for t in timesteps:
     t_expanded = expand_timesteps(t, num_frames=81, device=device)
-    # t_expanded.shape = [81]
-    # t_expanded = [0, t, t, t, ...]
-    
-    # 第一帧不加噪
-    latents[:, :, 0] = clean_image_latent
-    
-    # 其余帧正常去噪
-    latents[:, :, 1:] = denoise(latents[:, :, 1:], t)
+    # t_expanded = [0, t, t, t, ..., t]
 ```
 
-### 9.3 I2V Attention 优化
+### 9.3 I2V 性能数据
 
-```python
-def i2v_attention_with_image_conditioning(
-    query, key, value,
-    image_latent,
-    mesh,
-    env,
-):
-    """
-    I2V 特殊 attention 处理
-    
-    关键点:
-    1. 第一帧参与 KV，但不需要去噪
-    2. KV 序列长度 = 视频帧 + 文本 tokens
-    3. 需要处理 padding
-    """
-    # 将 image latent 作为 context
-    image_k = project_to_kv(image_latent)  # 投影为 KV
-    
-    # 拼接 image KV 和 video KV
-    full_k = torch.cat([image_k, key], dim=2)
-    full_v = torch.cat([image_v, value], dim=2)
-    
-    # 计算 attention
-    if full_k.shape[2] > 10000:
-        # 使用自定义 kernel
-        output = custom_splash_attention(query, full_k, full_v)
-    else:
-        output = standard_attention(query, full_k, full_v)
-    
-    return output
-```
+> 📊 **源文档引用**: I2V Optimization Report
 
-### 9.4 I2V 完整实现
+| 配置 | T2V 时间 | I2V 时间 |
+|------|----------|----------|
+| v6e-8 | 225s | 184.7s |
+| v6e-16 | 124.9s | **94.5s** |
 
-```python
-"""Wan 2.2 Image-to-Video on TPU"""
-
-from diffusers import WanImageToVideoPipeline
-from PIL import Image
-
-def run_i2v(
-    image_path: str,
-    prompt: str,
-    output_path: str = "output_i2v.mp4",
-):
-    # 加载 pipeline
-    pipe = WanImageToVideoPipeline.from_pretrained(
-        "Wan-AI/Wan2.2-I2V-14B-Diffusers",
-        torch_dtype=torch.bfloat16,
-    )
-    
-    # 设置 TPU 优化
-    setup_tpu_optimizations(pipe)
-    
-    # 加载输入图像
-    image = Image.open(image_path).resize((1280, 720))
-    
-    # 生成视频
-    with mesh:
-        output = pipe(
-            image=image,
-            prompt=prompt,
-            height=720,
-            width=1280,
-            num_frames=81,
-            num_inference_steps=50,
-            guidance_scale=5.0,
-        )
-    
-    # 导出
-    export_to_video(output.frames[0], output_path, fps=16)
-
-# 使用示例
-run_i2v(
-    image_path="cat.jpg",
-    prompt="A cat walking in the garden",
-    output_path="cat_walking.mp4"
-)
-```
-
-### 9.5 I2V 性能数据
-
-| 配置 | T2V 时间 | I2V 时间 | 提升 |
-|------|----------|----------|------|
-| 基线 | 428s | 450s | - |
-| 优化后 | 125s | 94.5s | **4.8x** |
-
-**I2V 比 T2V 更快的原因**:
+**I2V 更快的原因**:
 1. 第一帧不需要去噪（timestep=0）
-2. Image latent 作为额外 context，attention 计算量略增但引导效果更好
-3. 收敛更快，可以使用更少的步数
+2. Image 作为强引导，收敛更快
+3. 可使用更少的 inference steps
 
 ---
 
 ## 第十章：调试与故障排除
 
-### 10.1 常见问题与解决方案
+### 10.1 常见问题
 
 #### 问题 1: VAE 颜色反转
 
 **症状**: 生成的视频颜色与预期相反
 
-**原因**: MaxDiffusion VAE 实现的输出范围与 PyTorch 版本不一致
-
 **解决方案**:
 ```python
-# 方法 1: 输出后处理
+# 输出后处理
 video = 255 - video
-
-# 方法 2: 修改 VAE forward
-def patched_forward(self, x):
-    output = self.original_forward(x)
-    return 1 - output  # 反转
 ```
 
 #### 问题 2: bfloat16 保存失败
@@ -1950,120 +1813,33 @@ def patched_forward(self, x):
 **解决方案**:
 ```python
 def save_bf16_tensor(tensor, path):
-    """保存 bf16 tensor 的兼容方案"""
-    metadata = {}
-    
     if tensor.dtype == torch.bfloat16:
-        # 转换为 float32 保存
         tensor_save = tensor.to(torch.float32)
-        metadata['original_dtype'] = 'bfloat16'
+        metadata = {'original_dtype': 'bfloat16'}
     else:
         tensor_save = tensor
-    
+        metadata = {}
     save_file({'tensor': tensor_save}, path, metadata=metadata)
-
-def load_bf16_tensor(path):
-    """加载并恢复 bf16 tensor"""
-    with safe_open(path, framework='pt') as f:
-        tensor = f.get_tensor('tensor')
-        metadata = f.metadata()
-    
-    if metadata.get('original_dtype') == 'bfloat16':
-        tensor = tensor.to(torch.bfloat16)
-    
-    return tensor
 ```
 
-#### 问题 3: PyTree 未注册
-
-**症状**: `KeyError: <class 'transformers.modeling_outputs.BaseModelOutputWithPastAndCrossAttentions'>`
+#### 问题 3: OOM
 
 **解决方案**:
 ```python
-from jax.tree_util import register_pytree_node
-from transformers import modeling_outputs
+# 1. 使用分片
+mesh = Mesh(devices, ('dp', 'sp', 'tp'))
 
-# 注册所有需要的类型
-output_classes = [
-    modeling_outputs.BaseModelOutputWithPastAndCrossAttentions,
-    modeling_outputs.BaseModelOutput,
-    modeling_outputs.CausalLMOutputWithCrossAttentions,
-]
-
-for cls in output_classes:
-    register_pytree_node(
-        cls,
-        lambda obj: (tuple(getattr(obj, f) for f in obj.keys()), type(obj)),
-        lambda aux, children: aux(**dict(zip(aux.__dataclass_fields__.keys(), children)))
-    )
-```
-
-#### 问题 4: OOM (Out of Memory)
-
-**症状**: 内存不足导致程序崩溃
-
-**解决方案**:
-```python
-# 1. 使用更激进的分片
-mesh = Mesh(devices, ('dp', 'sp', 'tp'))  # 确保使用分片
-
-# 2. 启用内存优化
-jax.config.update("jax_default_prng_impl", "threefry")
-jax.config.update("jax_enable_x64", False)
-
-# 3. 分阶段处理
-# 不要一次加载所有模型
-del text_encoder  # 编码完成后释放
+# 2. 分阶段释放内存
+del text_encoder
 gc.collect()
 
-# 4. 使用 donation
+# 3. 使用 donation
 @jax.jit(donate_argnums=(0,))
 def step(state, inputs):
     return new_state
 ```
 
-#### 问题 5: Torchax 版本兼容
-
-**症状**: `env.auto_shard_inputs` 方法不存在
-
-**解决方案**:
-```python
-# torchax 0.0.11+ 需要手动设置 mesh
-env._mesh = mesh
-env._initial_content.mesh = mesh
-
-# 手动应用分片
-def apply_input_sharding(tensor, use_dp=False):
-    if use_dp:
-        pspec = P('dp', None, None, None, None)
-    else:
-        pspec = P()
-    
-    sharding = NamedSharding(mesh, pspec)
-    tensor.apply_jax_(jax.device_put, sharding)
-    return tensor
-```
-
-### 10.2 性能调试
-
-#### 使用 JAX Profiler
-
-```python
-# 1. 启用 profiler
-with jax.profiler.trace("/dev/shm/tensorboard"):
-    output = pipe(prompt=prompt, num_inference_steps=3)
-    jax.effects_barrier()
-
-# 2. 查看 TensorBoard
-# tensorboard --logdir=/dev/shm/tensorboard
-
-# 3. 分析关键指标
-# - MXU 利用率
-# - 内存带宽利用率
-# - 通信开销
-```
-
-#### 打印中间状态
+### 10.2 调试技巧
 
 ```python
 def debug_sharding(tensor, name="tensor"):
@@ -2074,59 +1850,13 @@ def debug_sharding(tensor, name="tensor"):
         print(f"  Shape: {jax_arr.shape}")
         print(f"  Sharding: {jax_arr.sharding}")
         print(f"  Devices: {jax_arr.devices()}")
-    else:
-        print(f"{name}: Not on JAX")
-
-# 在 forward 中使用
-debug_sharding(hidden_states, "hidden_states")
-```
-
-### 10.3 日志和监控
-
-```python
-import logging
-
-logging.basicConfig(
-    level=logging.INFO,
-    format='%(asctime)s - %(name)s - %(levelname)s - %(message)s'
-)
-logger = logging.getLogger(__name__)
-
-class TimingContext:
-    """计时上下文管理器"""
-    def __init__(self, name):
-        self.name = name
-    
-    def __enter__(self):
-        self.start = time.time()
-        return self
-    
-    def __exit__(self, *args):
-        elapsed = time.time() - self.start
-        logger.info(f"{self.name}: {elapsed:.2f}s")
-
-# 使用
-with TimingContext("DiT Transformer"):
-    latents = transformer(latents, timestep, encoder_hidden_states)
-
-with TimingContext("VAE Decode"):
-    video = vae.decode(latents)
 ```
 
 ---
 
 ## 附录
 
-### A. 常见问题快速索引
-
-| 问题 | 章节 | 解决方案 |
-|------|------|----------|
-| MXU 利用率低 | 4.3 | exp2 优化 |
-| 内存不足 | 3, 10.1 | 分片策略 |
-| 颜色反转 | 10.1 | 后处理 |
-| bf16 保存 | 10.1 | 转换方案 |
-
-### B. 术语表
+### A. 术语表
 
 | 术语 | 全称 | 说明 |
 |------|------|------|
@@ -2139,16 +1869,41 @@ with TimingContext("VAE Decode"):
 | CP | Context Parallelism | 上下文并行 |
 | SP | Sequence Parallelism | 序列并行 |
 | DP | Data Parallelism | 数据并行 |
-| DiT | Diffusion Transformer | 扩散 Transformer |
-| CFG | Classifier-Free Guidance | 无分类器引导 |
-| VAE | Variational AutoEncoder | 变分自编码器 |
 
-### C. 参考资源
+### B. 性能数据汇总
+
+| 场景 | 配置 | 时间 | MFU |
+|------|------|------|-----|
+| T2V 720P 81帧 | v6e-8 基线 | 428s | 12% |
+| T2V 720P 81帧 | v6e-8 优化后 | 225s | 23% |
+| T2V 720P 81帧 | v6e-16 优化后 | 124.9s | 34% |
+| I2V 720P 81帧 | v6e-8 优化后 | 184.7s | 28% |
+| I2V 720P 81帧 | v6e-16 优化后 | 94.5s | 38% |
+
+### C. 源文档图表索引
+
+> 以下是源文档中的关键图表，供进一步学习参考：
+
+**FLOPs Utilization Analysis**:
+- `image1.png`: Self-attention 延迟 43.93ms
+- `image5.png`: Splash attention kernel block 详细分析
+- `image11.png`: 操作时间分解饼图
+- `image18.png`: 整体 MFU 34%
+
+**Model Optimization Report**:
+- `image7.png`: DiT Transformer block 完整分片图
+- 优化进度表: 428s → 124.9s
+
+**I2V Optimization Report**:
+- VAE JIT 优化方案
+- Spatial partitioning 示意图
+- 最终性能: 94.5s on v6e-16
+
+### D. 参考资源
 
 **官方仓库**:
 - [Wan-AI/Wan2.1](https://huggingface.co/Wan-AI/Wan2.1-T2V-14B-Diffusers)
 - [AI-Hypercomputer/maxdiffusion](https://github.com/AI-Hypercomputer/maxdiffusion)
-- [diffusers-tpu](https://github.com/yangwhale/diffusers-tpu)
 
 **技术文档**:
 - [JAX Pallas Guide](https://jax.readthedocs.io/en/latest/pallas/)
@@ -2159,14 +1914,20 @@ with TimingContext("VAE Decode"):
 
 ## 结语
 
-本文档详细介绍了 Wan 模型在 TPU v6e 上的迁移与优化过程，从硬件架构理解到分片策略设计，从 Splash Attention 内核优化到 VAE 性能调优。通过这些优化，Wan 2.1 14B 模型的 720P 81帧视频生成时间从 428 秒降低到 125 秒，提升了 **3.4 倍**。I2V 任务更是达到 94.5 秒的极致性能。
+本文档详细介绍了 Wan 模型在 TPU v6e 上的迁移与优化过程。通过这些优化，实现了：
 
-**关键优化点总结**:
+- **T2V**: 428s → 124.9s (**3.4x 提升**)
+- **I2V**: 94.5s on v6e-16 (**最佳性能**)
+
+**核心优化技术**:
+1. **Splash Attention** + exp2 + QK Transpose + LP LLO
+2. **Spatial Partitioning** for VAE
+3. **FSDP + CP + SP + DP** 混合分片策略
 
 ```mermaid
 graph TB
-    subgraph "优化路径"
-        O1[Context Parallelism<br/>Self-Attention head 分片]
+    subgraph "优化路径总结"
+        O1[Context Parallelism<br/>Self-Attention heads 分片]
         O2[Sequence Parallelism<br/>Cross-Attention seq 分片]
         O3[exp2 优化<br/>VPU 原生指令]
         O4[QK Transpose<br/>矩阵乘法优化]
@@ -2180,4 +1941,4 @@ graph TB
     style O5 fill:#2196f3
 ```
 
-希望本文档能为从事 TPU 大模型优化的工程师提供有价值的参考。
+希望本文档能为 TPU 大模型优化提供有价值的参考。
