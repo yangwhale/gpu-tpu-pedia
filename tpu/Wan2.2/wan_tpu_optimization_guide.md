@@ -1,10 +1,10 @@
 
 # Wan 模型 TPU 迁移与优化完全指南
 
-> **版本**: 4.0 | **更新日期**: 2024年12月
-> 
+> **版本**: 4.1 | **更新日期**: 2024年12月
+>
 > 本文档是 Wan 2.1/2.2 模型在 Google Cloud TPU v6e 上迁移与优化的**权威技术参考**。
-> 
+>
 > **文档来源**：本文汇集以下三份核心技术文档的全部精华：
 > - 📊 **FLOPs Utilization Analysis**: 深度性能分析与 Roofline 建模（20+ 张 Profiler 截图）
 > - 🔧 **Model Optimization Report**: 完整优化路径与代码实现 (428s → 124.9s)
@@ -14,8 +14,57 @@
 
 ---
 
+## 核心图表速览
+
+本节展示源文档中的关键可视化资料，帮助快速理解优化全貌。
+
+### Self-Attention 性能瓶颈分析
+
+![Self-Attention 延迟分析](images/profiler_self_attention_latency.png)
+
+*图：Xprof 显示 Self-Attention 单次执行延迟为 43.93ms，占据 DiT 总时间的 66.8%*
+
+### Kernel 内部时间分解
+
+![Kernel 时间分解](images/profiler_kernel_breakdown.png)
+
+*图：通过 named_scope 分析 Splash Attention Kernel 内部各操作的时间占比，Softmax 占 ~33%*
+
+### 操作类型时间分布
+
+![操作时间分布](images/profiler_time_distribution.png)
+
+*图：Xprof 饼图显示 custom-call (Splash Attention) 占 66.8%，convolution fusion 占 14.3%*
+
+### 整体 MFU 表现
+
+![整体 MFU](images/profiler_overall_mfu.png)
+
+*图：优化后整体 MFU 达到 34%，相比基线 12% 提升显著*
+
+### 优化时间线
+
+![优化时间线](images/optimization_timeline.png)
+
+*图：从基线 428s 到最终 124.9s 的完整优化路径，每个阶段的贡献清晰可见*
+
+### DiT 分片策略图
+
+![DiT 分片策略](images/dit_sharding_diagram.png)
+
+*图：DiT Transformer block 的 FSDP + CP + SP + DP 混合分片策略可视化*
+
+### VAE Spatial Partitioning
+
+![VAE Spatial Partitioning](images/vae_spatial_partitioning.png)
+
+*图：VAE 在 Width 维度的 Spatial Partitioning，每个 TPU chip 处理视频的一个垂直条带*
+
+---
+
 ## 目录
 
+- [核心图表速览](#核心图表速览)
 - [第一章：TPU v6e 硬件架构与性能特性](#第一章tpu-v6e-硬件架构与性能特性)
 - [第二章：Wan 模型架构深度解析](#第二章wan-模型架构深度解析)
 - [第三章：分片策略详解](#第三章分片策略详解)
@@ -267,8 +316,6 @@ graph LR
 
 ## 第三章：分片策略详解
 
-> 📊 **源文档引用**: Model Optimization Report - image7.png: 完整分片示意图
-
 ### 3.1 Device Mesh 配置
 
 ```python
@@ -369,7 +416,9 @@ mesh = Mesh(devices, ('dp', 'sp', 'tp'))
 
 ### 3.6 混合分片策略总览
 
-> 📊 **源文档引用**: image7.png - DiT Transformer block 完整分片图
+![DiT 分片策略详图](images/dit_sharding_diagram.png)
+
+*图：DiT Transformer block 的完整分片策略，展示 FSDP 权重分片、CP Self-Attention、SP Cross-Attention 的协同*
 
 ```mermaid
 graph TB
@@ -435,12 +484,6 @@ mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
 #### 4.1.1 性能基线测量
 
 运行 Xprof 分析 Wan2.1 14B DiT，生成 720P 81帧视频，获得以下关键数据：
-
-> 📊 **源文档引用**: FLOPs Utilization Analysis
->
-> **image1.png**: Self-attention 延迟 43.93ms
-> **image11.png**: 操作时间分解饼图
-> **image18.png**: 整体 MFU 34%
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
@@ -522,8 +565,6 @@ splash_roofline = 5 * 3.197 = 15.974 ms  # 5 heads per chip
 > 问题出在哪里？
 
 #### 4.1.3 Softmax 瓶颈：VPU 上的 1/3 时间
-
-> 📊 **源文档引用**: image5.png - Splash attention kernel block 详细分析
 
 通过在 Splash Attention Kernel 中添加 `named_scope`，发现：
 
@@ -1233,7 +1274,9 @@ def make_splash_mha(block_sizes, bkv_compute_in, interpret=False):
 
 ### 4.8 性能优化时间线
 
-> 📊 **源文档引用**: Model Optimization Report - 优化进度表
+![优化时间线详图](images/optimization_timeline.png)
+
+*图：完整优化路径的时间演进，从基线到各阶段优化的累积效果*
 
 | 阶段 | 优化内容 | 时间 (720P 50步) | 提升 |
 |------|----------|------------------|------|
@@ -1268,8 +1311,6 @@ Wan VAE 是用 PyTorch 实现的 3D 因果卷积网络。直接在 TPU 上运行
 
 #### 5.1.2 解决方案概览
 
-> 📊 **源文档引用**: I2V Optimization Report - VAE 优化部分
-
 ```mermaid
 graph TB
     subgraph "VAE 并行化方案"
@@ -1285,6 +1326,10 @@ graph TB
 ```
 
 ### 5.2 Spatial Partitioning：Width 维度分片
+
+![VAE Spatial Partitioning 详图](images/vae_spatial_partitioning.png)
+
+*图：VAE 解码器的 Spatial Partitioning 策略，每个 TPU chip 处理视频的一个垂直条带，通过 halo exchange 处理边界*
 
 #### 5.2.1 为什么选择 Width 维度？
 
@@ -1354,8 +1399,6 @@ class WanCausalConv3d(nn.Conv3d):
 
 #### 5.3.1 逐帧解码策略
 
-> 📊 **源文档引用**: I2V Optimization Report - Cache 机制纯函数化
-
 ```python
 # autoencoder_kl_wan.py
 
@@ -1390,8 +1433,6 @@ def _decode(self, z: torch.Tensor, return_dict: bool = True):
 ```
 
 #### 5.3.2 Cache 机制纯函数化
-
-> 📊 **源文档引用**: I2V Report - "VAE JIT optimization by making cache mechanism pure functions"
 
 原始 VAE 使用有状态的缓存，这对 JAX JIT 编译不友好。解决方案是将缓存作为函数参数传递：
 
@@ -1449,8 +1490,6 @@ x = mark_sharding(x, P(None, None, None, None, ("dp", "tp")))
 
 ### 5.5 I2V 特殊优化：消除 segment_id
 
-> 📊 **源文档引用**: I2V Optimization Report - Kernel 修改消除 padding 影响
-
 I2V 场景下，第一帧是输入图像，不需要 padding mask。可以通过修改 kernel 消除 `segment_id` 参数：
 
 ```python
@@ -1482,8 +1521,6 @@ def attention_kernel_no_segment(q, k, v):
 ## 第六章：性能分析方法论
 
 ### 6.1 MFU 计算方法
-
-> 📊 **源文档引用**: FLOPs Utilization Analysis - MFU 计算部分
 
 ```python
 def compute_dit_flops_per_step(
@@ -1542,8 +1579,6 @@ mfu = flops_per_step / (peak_tflops * step_time)  # ≈ 34%
 ```
 
 ### 6.2 DiT Step 时间分解
-
-> 📊 **源文档引用**: image11.png - 操作时间分解
 
 | 操作 | 时间占比 | MFU | 瓶颈类型 |
 |------|----------|-----|----------|
@@ -1778,7 +1813,9 @@ for t in timesteps:
 
 ### 9.3 I2V 性能数据
 
-> 📊 **源文档引用**: I2V Optimization Report
+![I2V 架构图](images/i2v_architecture.png)
+
+*图：I2V Pipeline 架构，展示第一帧作为输入图像的特殊处理*
 
 | 配置 | T2V 时间 | I2V 时间 |
 |------|----------|----------|
@@ -1880,24 +1917,20 @@ def debug_sharding(tensor, name="tensor"):
 | I2V 720P 81帧 | v6e-8 优化后 | 184.7s | 28% |
 | I2V 720P 81帧 | v6e-16 优化后 | 94.5s | 38% |
 
-### C. 源文档图表索引
+### C. 本文档图表索引
 
-> 以下是源文档中的关键图表，供进一步学习参考：
+本文档包含以下关键图表（均位于 `images/` 文件夹）：
 
-**FLOPs Utilization Analysis**:
-- `image1.png`: Self-attention 延迟 43.93ms
-- `image5.png`: Splash attention kernel block 详细分析
-- `image11.png`: 操作时间分解饼图
-- `image18.png`: 整体 MFU 34%
-
-**Model Optimization Report**:
-- `image7.png`: DiT Transformer block 完整分片图
-- 优化进度表: 428s → 124.9s
-
-**I2V Optimization Report**:
-- VAE JIT 优化方案
-- Spatial partitioning 示意图
-- 最终性能: 94.5s on v6e-16
+| 文件名 | 描述 | 来源 |
+|--------|------|------|
+| `profiler_self_attention_latency.png` | Self-Attention 延迟 43.93ms | FLOPs Analysis |
+| `profiler_kernel_breakdown.png` | Kernel 内部时间分解 | FLOPs Analysis |
+| `profiler_time_distribution.png` | 操作类型时间分布饼图 | FLOPs Analysis |
+| `profiler_overall_mfu.png` | 整体 MFU 34% | FLOPs Analysis |
+| `optimization_timeline.png` | 优化时间线 428s→124.9s | Optimization Report |
+| `dit_sharding_diagram.png` | DiT 分片策略图 | Optimization Report |
+| `i2v_architecture.png` | I2V 架构图 | I2V Report |
+| `vae_spatial_partitioning.png` | VAE Spatial Partitioning | I2V Report |
 
 ### D. 参考资源
 
