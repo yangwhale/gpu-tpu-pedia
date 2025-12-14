@@ -9,8 +9,6 @@
 > - 📊 **FLOPs Utilization Analysis**: 深度性能分析与 Roofline 建模（20+ 张 Profiler 截图）
 > - 🔧 **Model Optimization Report**: 完整优化路径与代码实现 (428s → 124.9s)
 > - 🎬 **I2V Optimization Report**: Image-to-Video 专项优化 (94.5s on v6e-16)
->
-> **核心贡献者**: Yuyan Peng, Hao Luo, Weida Hong, Han Qi, Shun Wang
 
 ---
 
