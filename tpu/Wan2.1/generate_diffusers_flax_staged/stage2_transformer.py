@@ -661,12 +661,12 @@ def main():
         help='Output directory (default: same as input_dir)'
     )
 
-    # 可覆盖的配置参数（这些参数有默认值，适用于 T2V 480P）
+    # 可覆盖的配置参数（这些参数有默认值，适用于 T2V 720P）
     parser.add_argument('--num_inference_steps', type=int, default=50, help='推理步数（默认50）')
     parser.add_argument('--guidance_scale', type=float, default=5.0, help='引导尺度（默认5.0）')
     parser.add_argument('--seed', type=int, default=2025, help='随机种子（默认2025）')
-    parser.add_argument('--height', type=int, default=480, help='视频高度（默认480）')
-    parser.add_argument('--width', type=int, default=848, help='视频宽度（默认848）')
+    parser.add_argument('--height', type=int, default=720, help='视频高度（默认720）')
+    parser.add_argument('--width', type=int, default=1280, help='视频宽度（默认1280）')
     parser.add_argument('--frames', type=int, default=81, help='视频帧数（默认81，约5秒）')
     parser.add_argument('--warmup_steps', type=int, default=2,
                         help='预热步数（0=不预热，1=一次，2=两次，用于触发 JIT 编译）')
