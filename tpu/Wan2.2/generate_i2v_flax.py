@@ -1,14 +1,11 @@
+#!/usr/bin/env python3
 """
 Wan 2.2 Image-to-Video Generation with TPU Splash Attention
 
-This file provides a clean implementation for running Wan 2.2 image-to-video
-generation on TPU using JAX/Flax, with optimized Splash Attention.
+本脚本提供在 TPU 上运行 Wan 2.2 Image-to-Video 生成的完整实现，
+使用 JAX/Flax 和优化的 Splash Attention。
 
-Integrated from:
-- generate_flax.py: Clean framework and splash attention implementation
-- wan2p2_benchmark.py: I2V pipeline and simplified model loading
-
-Structure:
+结构:
 1. Imports and Configuration
 2. Helper Functions
 3. Splash Attention Implementation
@@ -19,13 +16,32 @@ Structure:
 """
 
 import os
+import sys
+import warnings
+import logging
+
+# ============================================================================
+# 环境配置和 Warning 过滤（必须在其他 import 之前）
+# ============================================================================
+
 os.environ.setdefault('JAX_MEMORY_DEBUG', '0')
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
+# 全局过滤 warnings
+warnings.filterwarnings('ignore')  # 过滤所有 warnings
+
+# 配置 logging
+logging.getLogger('root').setLevel(logging.ERROR)
+logging.getLogger().setLevel(logging.ERROR)
+logging.getLogger('diffusers').setLevel(logging.ERROR)
+logging.getLogger('transformers').setLevel(logging.ERROR)
 
 import time
 import re
 import math
 import functools
 import argparse
+from contextlib import nullcontext
 from datetime import datetime
 
 import numpy as np
@@ -531,8 +547,16 @@ def run_generation(pipe, args, mesh):
     width = round(np.sqrt(max_area / aspect_ratio)) // mod_value * mod_value
     image = image.resize((width, height))
     
-    print(f"Image resized to: {width}x{height}")
-    print(f"Generating {args.frames} frames at {args.fps} FPS")
+    print(f"\n{'='*60}")
+    print("生成配置")
+    print(f"{'='*60}")
+    print(f"  图像尺寸: {width}x{height}")
+    print(f"  帧数: {args.frames}")
+    print(f"  FPS: {args.fps}")
+    print(f"  推理步数: {args.num_steps}")
+    print(f"  引导尺度: {args.guidance_scale}")
+    print(f"  随机种子: {args.seed}")
+    print(f"  Block sizes: BQSIZE={BQSIZE}, BKVSIZE={BKVSIZE}, BKVCOMPUTESIZE={BKVCOMPUTESIZE}")
     
     generator = torch.Generator().manual_seed(args.seed)
     
@@ -548,48 +572,61 @@ def run_generation(pipe, args, mesh):
         'generator': generator,
     }
     
-    with mesh:
-        # Warmup and save video
-        print("\n=== Warmup Run ===")
-        start = time.perf_counter()
+    # Profile context
+    if args.profile:
+        print(f"\n[Profiler] 启用 JAX Profiler，输出目录: {args.profile_output_path}")
+        profiler_context = jax.profiler.trace(
+            args.profile_output_path,
+            create_perfetto_link=False
+        )
+    else:
+        profiler_context = nullcontext()
+    
+    with mesh, profiler_context:
+        # === Warmup Run ===
+        print(f"\n{'='*60}")
+        print("预热运行（触发 JIT 编译）")
+        print(f"{'='*60}")
+        warmup_start = time.perf_counter()
         output = pipe(**pipe_kwargs).frames[0]
-        warmup_time = time.perf_counter() - start
-        print(f"Warmup completed in {warmup_time:.2f}s")
+        jax.effects_barrier()
+        warmup_time = time.perf_counter() - warmup_start
+        
+        # 计算每步平均时间（预热）
+        warmup_time_per_step = warmup_time / args.num_steps
+        print(f"\n✓ 预热完成")
+        print(f"  总耗时: {warmup_time:.2f}s")
+        print(f"  平均每步: {warmup_time_per_step:.2f}s")
         
         # Save output
         current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_name = f"{current_datetime}.mp4"
         export_to_video(output, file_name, fps=args.fps)
-        print(f"✓ Video saved to: {file_name}")
+        print(f"  视频保存至: {file_name}")
         
-        # Profile if requested
-        if args.profile:
-            print("\nRunning profiler...")
-            jax.profiler.start_trace(args.profile_output_path)
-            _ = pipe(
-                image=image,
-                prompt=args.prompt,
-                negative_prompt=args.negative_prompt,
-                height=height,
-                width=width,
-                num_frames=args.frames,
-                guidance_scale=args.guidance_scale,
-                num_inference_steps=3,
-                output_type="latent",
-                generator=generator,
-            )
-            jax.effects_barrier()
-            jax.profiler.stop_trace()
-            print(f"Profile saved to: {args.profile_output_path}")
-        
-        # Benchmark
-        print("\n=== Benchmark Run ===")
-        start = time.perf_counter()
+        # === Benchmark Run ===
+        print(f"\n{'='*60}")
+        print("基准测试运行")
+        print(f"{'='*60}")
+        benchmark_start = time.perf_counter()
         output = pipe(**pipe_kwargs).frames[0]
-        benchmark_time = time.perf_counter() - start
-        print(f"✓ Benchmark completed in {benchmark_time:.2f}s")
-        print(f"  Block sizes: BQSIZE={BQSIZE}, BKVSIZE={BKVSIZE}, "
-              f"BKVCOMPUTESIZE={BKVCOMPUTESIZE}")
+        jax.effects_barrier()
+        benchmark_time = time.perf_counter() - benchmark_start
+        
+        # 计算每步平均时间（基准测试）
+        benchmark_time_per_step = benchmark_time / args.num_steps
+        
+        print(f"\n✓ 基准测试完成")
+        print(f"  总耗时: {benchmark_time:.2f}s")
+        print(f"  平均每步: {benchmark_time_per_step:.2f}s")
+    
+    # === 性能统计 ===
+    print(f"\n{'='*60}")
+    print("性能统计")
+    print(f"{'='*60}")
+    print(f"  预热时间: {warmup_time:.2f}s ({warmup_time_per_step:.2f}s/step)")
+    print(f"  基准时间: {benchmark_time:.2f}s ({benchmark_time_per_step:.2f}s/step)")
+    print(f"  加速比: {warmup_time / benchmark_time:.2f}x")
 
 
 # ============================================================================
@@ -635,7 +672,10 @@ def parse_args():
 def main():
     """Main entry point for Wan I2V generation."""
     args = parse_args()
-    print(f"Configuration: {args}\n")
+    
+    print(f"\n{'='*60}")
+    print("Wan 2.2 Image-to-Video 生成（TPU Splash Attention）")
+    print(f"{'='*60}")
     
     # Configure JAX
     jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
@@ -661,7 +701,11 @@ def main():
         (args.dp, tp_dim), allow_split_physical_axes=True
     )
     mesh = Mesh(mesh_devices, ("dp", "tp"))
-    print(f"Mesh: {mesh}\n")
+    
+    print(f"\nMesh 配置:")
+    print(f"  dp_dim={args.dp}, tp_dim={tp_dim}")
+    print(f"  总设备数: {len(jax.devices())}")
+    print(f"  Mesh: {mesh}")
     
     # Setup pipeline for JAX (move to TPU and shard)
     pipe = setup_pipeline_for_jax(pipe, mesh, env)
@@ -669,7 +713,12 @@ def main():
     # Run generation
     run_generation(pipe, args, mesh)
     
-    print("\n✓ Generation complete")
+    print(f"\n{'='*60}")
+    print("✓ 生成完成！")
+    print(f"{'='*60}")
+    
+    # 强制退出以避免 torchax 后台线程阻塞
+    os._exit(0)
 
 
 if __name__ == '__main__':
