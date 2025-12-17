@@ -1,78 +1,134 @@
 #!/usr/bin/env python3
 """
-Wan 2.1 三阶段生成 - 阶段1：Text Encoder
+Wan 2.1 三阶段生成 - 阶段1：Text Encoder (TPU)
 
 本阶段负责：
-1. 加载 WanPipeline（仅用于 text encoding）
-2. 使用 T5 Text Encoder 编码 prompt
-3. 将 prompt embeddings 保存为 SafeTensors 格式
+1. 加载 WanPipeline
+2. 启用 torchax 并移动 Text Encoder 到 TPU
+3. 使用 T5 Text Encoder 编码 prompt
+4. 将 prompt embeddings 保存为 SafeTensors 格式
 
 输出文件：
 - stage1_embeddings.safetensors: 包含所有 prompt embeddings
 - generation_config.json: 生成配置参数
 """
 
-import os
 import argparse
 import warnings
 import logging
+
+import jax
 import torch
+from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
+from jax.experimental import mesh_utils
+
+import torchax
 
 from diffusers import WanPipeline
 from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
 
 from utils import (
     MODEL_NAME,
-    FLOW_SHIFT,
-    WIDTH, HEIGHT, FRAMES, FPS, NUM_STEPS,
+    DEFAULT_DP,
+    TEXT_ENCODER_SHARDINGS,
+    shard_weight_dict,
+    setup_jax_cache,
+    setup_pytree_registrations,
     save_embeddings_to_safetensors,
     save_generation_config,
     get_default_paths,
 )
 
 
-def encode_prompts(pipe, prompt, negative_prompt="", device='cpu'):
+# ============================================================================
+# Torchax 帮助函数
+# ============================================================================
+
+def move_module_to_xla(env, module):
+    """Move module weights to XLA devices."""
+    with jax.default_device("cpu"):
+        state_dict = module.state_dict()
+        state_dict = env.to_xla(state_dict)
+        module.load_state_dict(state_dict, assign=True)
+
+
+# ============================================================================
+# Pipeline 加载与设置
+# ============================================================================
+
+def load_pipeline(model_id):
+    """Load pipeline BEFORE enabling torchax to avoid safetensors issues."""
+    print("\n=== 加载 Wan 2.1 T2V Pipeline ===")
+    print("加载模型中（在启用 torchax 之前）...")
+    
+    pipe = WanPipeline.from_pretrained(
+        model_id,
+        torch_dtype=torch.bfloat16,
+        use_safetensors=True
+    )
+    print("✓ 模型加载完成\n")
+    return pipe
+
+
+def setup_text_encoder_for_jax(pipe, mesh, env):
+    """Setup Text Encoder for JAX/TPU execution."""
+    print("=== 设置 Text Encoder (TPU) ===")
+    
+    # Move Text Encoder to XLA
+    print("- 移动 Text Encoder 到 TPU...")
+    move_module_to_xla(env, pipe.text_encoder)
+    pipe.text_encoder = torchax.compile(pipe.text_encoder)
+    pipe.text_encoder.params = shard_weight_dict(
+        pipe.text_encoder.params, TEXT_ENCODER_SHARDINGS, mesh
+    )
+    pipe.text_encoder.buffers = shard_weight_dict(
+        pipe.text_encoder.buffers, TEXT_ENCODER_SHARDINGS, mesh
+    )
+    
+    # Wait for sharding to complete
+    torchax.interop.call_jax(jax.block_until_ready, pipe.text_encoder.params)
+    
+    print("✓ Text Encoder 设置完成\n")
+    return pipe
+
+
+# ============================================================================
+# 编码函数
+# ============================================================================
+
+def encode_prompts(pipe, prompt, negative_prompt, device='jax', dtype=torch.bfloat16):
     """
     使用 Text Encoder 编码 prompt
-    
-    Args:
-        pipe: WanPipeline
-        prompt: 正面提示词
-        negative_prompt: 负面提示词
-        device: 计算设备
-        
-    Returns:
-        dict: 包含所有 prompt embeddings 的字典
     """
-    print(f"\n=== 阶段1：Text Encoder ===")
-    print(f"正面 prompt: {prompt}")
-    print(f"负面 prompt: {negative_prompt if negative_prompt else '(空)'}")
-    print(f"设备: {device}")
+    print(f"\n=== 编码文本提示词 ===")
+    print(f"正面 prompt: {prompt[:100]}..." if len(prompt) > 100 else f"正面 prompt: {prompt}")
+    print(f"负面 prompt: {negative_prompt[:50]}..." if len(negative_prompt) > 50 else f"负面 prompt: {negative_prompt}")
     
-    # 计算正面 prompt embeddings
-    print("\n编码正面 prompt...")
+    # 编码 prompts
+    print("\n编码 prompts...")
     prompt_embeds, negative_prompt_embeds = pipe.encode_prompt(
         prompt=prompt,
         negative_prompt=negative_prompt if negative_prompt else None,
         do_classifier_free_guidance=True,
-        device=device,
         num_videos_per_prompt=1,
+        device=device,
     )
     print(f"  prompt_embeds shape: {prompt_embeds.shape}, dtype: {prompt_embeds.dtype}")
     print(f"  negative_prompt_embeds shape: {negative_prompt_embeds.shape}")
     
-    embeddings_dict = {
+    return {
         'prompt_embeds': prompt_embeds,
         'negative_prompt_embeds': negative_prompt_embeds,
     }
-    
-    print("\n✓ 所有 prompt embeddings 已计算完成")
-    return embeddings_dict
 
+
+# ============================================================================
+# Main
+# ============================================================================
 
 def main():
     parser = argparse.ArgumentParser(
-        description='Wan 2.1 阶段1：Text Encoder',
+        description='Wan 2.1 阶段1：Text Encoder (TPU)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法：
@@ -87,7 +143,7 @@ def main():
         """
     )
     
-    # Prompt 参数（阶段1必需）
+    # Prompt 参数
     parser.add_argument(
         '--prompt', type=str,
         default=('A cat and a dog baking a cake together in a kitchen. '
@@ -107,32 +163,12 @@ def main():
         help='Negative prompt for CFG'
     )
     
-    # 模型参数
-    parser.add_argument(
-        '--model_id', type=str,
-        default=MODEL_NAME,
-        help='Model ID or path'
-    )
-    parser.add_argument(
-        '--flow_shift', type=float,
-        default=FLOW_SHIFT,
-        help='Flow shift for scheduler (5.0 for 720P, 3.0 for 480P)'
-    )
-    
-    # 视频参数（保存到配置中供后续阶段使用）
-    parser.add_argument('--width', type=int, default=WIDTH, help='Video width')
-    parser.add_argument('--height', type=int, default=HEIGHT, help='Video height')
-    parser.add_argument('--frames', type=int, default=FRAMES, help='Number of frames')
-    parser.add_argument('--fps', type=int, default=FPS, help='Video FPS')
-    parser.add_argument('--num_inference_steps', type=int, default=NUM_STEPS, help='Inference steps')
-    parser.add_argument('--guidance_scale', type=float, default=5.0, help='CFG scale')
-    parser.add_argument('--seed', type=int, default=42, help='Random seed')
+    # 模型和 Mesh 参数
+    parser.add_argument('--model_id', type=str, default=MODEL_NAME)
+    parser.add_argument('--dp', type=int, default=DEFAULT_DP, help='Data parallelism dimension')
     
     # 输出参数
-    parser.add_argument(
-        '--output_dir', type=str, default='./stage_outputs',
-        help='Output directory for intermediate files (default: ./stage_outputs)'
-    )
+    parser.add_argument('--output_dir', type=str, default='./stage_outputs')
     
     args = parser.parse_args()
     
@@ -140,41 +176,62 @@ def main():
     paths = get_default_paths(args.output_dir)
     
     # 配置日志
-    warnings.filterwarnings('ignore', message='.*dtype.*int64.*truncated to dtype int32.*')
+    warnings.filterwarnings('ignore')
     logging.getLogger().setLevel(logging.ERROR)
+    
+    # 设置 JAX
+    setup_jax_cache()
     
     torch.set_default_dtype(torch.bfloat16)
     
+    # Setup PyTree registrations
+    setup_pytree_registrations()
+    
     print(f"\n{'='*60}")
-    print("Wan 2.1 阶段1：Text Encoder")
+    print("Wan 2.1 阶段1：Text Encoder (TPU)")
     print(f"{'='*60}")
     
-    # 加载 Pipeline（仅需要 text encoder 部分）
-    print(f"\n加载模型: {args.model_id}")
-    print("（注意：仅使用 Text Encoder 组件）")
+    print(f"\n配置参数：")
+    print(f"  模型: {args.model_id}")
     
-    # Create scheduler with flow matching settings
-    scheduler = UniPCMultistepScheduler(
-        prediction_type='flow_prediction',
-        use_flow_sigmas=True,
-        num_train_timesteps=1000,
-        flow_shift=args.flow_shift
-    )
+    # 加载 Pipeline（在启用 torchax 之前）
+    pipe = load_pipeline(args.model_id)
     
-    pipe = WanPipeline.from_pretrained(
-        args.model_id,
-        torch_dtype=torch.bfloat16,
-        use_safetensors=True
-    )
-    pipe.scheduler = scheduler
+    # 启用 torchax
+    print("启用 torchax...")
+    torchax.enable_globally()
+    env = torchax.default_env()
     
-    # 编码 prompt
-    embeddings_dict = encode_prompts(
-        pipe,
-        prompt=args.prompt,
-        negative_prompt=args.negative_prompt,
-        device='cpu'
+    # 创建 mesh
+    assert len(jax.devices()) % args.dp == 0
+    tp_dim = len(jax.devices()) // args.dp
+    mesh_devices = mesh_utils.create_device_mesh(
+        (args.dp, tp_dim), allow_split_physical_axes=True
     )
+    mesh = Mesh(mesh_devices, ("dp", "tp"))
+    print(f"Mesh: {mesh}\n")
+    
+    # 设置 Text Encoder
+    with mesh:
+        pipe = setup_text_encoder_for_jax(pipe, mesh, env)
+        
+        # 编码 prompt
+        embeddings_dict = encode_prompts(
+            pipe,
+            prompt=args.prompt,
+            negative_prompt=args.negative_prompt,
+            device='jax',
+            dtype=torch.bfloat16,
+        )
+    
+    # 转换回 CPU tensor 以保存
+    print("\n转换 tensor 到 CPU...")
+    cpu_embeddings = {}
+    for key, tensor in embeddings_dict.items():
+        if hasattr(tensor, 'to'):
+            cpu_embeddings[key] = tensor.to('cpu')
+        else:
+            cpu_embeddings[key] = tensor
     
     # 保存 embeddings
     print(f"\n保存 embeddings 到: {paths['embeddings']}")
@@ -183,21 +240,13 @@ def main():
         'negative_prompt': args.negative_prompt,
         'model_id': args.model_id,
     }
-    save_embeddings_to_safetensors(embeddings_dict, paths['embeddings'], metadata)
+    save_embeddings_to_safetensors(cpu_embeddings, paths['embeddings'], metadata)
     
-    # 保存完整配置（包含阶段1的参数和视频参数）
+    # 保存配置（仅保存 stage1 相关参数，视频参数在 stage2 设置）
     config = {
         'prompt': args.prompt,
         'negative_prompt': args.negative_prompt,
         'model_id': args.model_id,
-        'flow_shift': args.flow_shift,
-        'width': args.width,
-        'height': args.height,
-        'frames': args.frames,
-        'fps': args.fps,
-        'num_inference_steps': args.num_inference_steps,
-        'guidance_scale': args.guidance_scale,
-        'seed': args.seed,
     }
     save_generation_config(config, paths['config'])
     
@@ -207,11 +256,15 @@ def main():
     print(f"\n输出文件：")
     print(f"  - Embeddings: {paths['embeddings']}")
     print(f"  - 配置文件:   {paths['config']}")
+    print(f"\n保存的 tensor shapes：")
+    for key, value in cpu_embeddings.items():
+        print(f"  - {key}: {value.shape}")
     print(f"\n下一步：运行 stage2_transformer.py 进行 Transformer 推理")
     
     # 清理内存
     del pipe
     del embeddings_dict
+    del cpu_embeddings
     
     print("\n✓ 阶段1 执行完成")
 
