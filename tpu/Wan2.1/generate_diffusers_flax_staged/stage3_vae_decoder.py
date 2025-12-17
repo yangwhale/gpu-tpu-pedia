@@ -156,7 +156,33 @@ def setup_vae_for_jax(vae, mesh, env):
 # 解码函数
 # ============================================================================
 
-def decode_latents_to_video(vae, latents, config, env):
+def run_vae_decode(vae, latents, env, desc="VAE Decode"):
+    """
+    运行一次 VAE 解码
+    
+    Args:
+        vae: VAE 模型
+        latents: latent tensor (已经在 XLA 上)
+        env: torchax 环境
+        desc: 描述信息
+    
+    Returns:
+        (video, elapsed_time)
+    """
+    start_time = time.perf_counter()
+    
+    print(f"\n{desc}...")
+    with torch.no_grad():
+        video = vae.decode(latents).sample
+    jax.effects_barrier()
+    
+    elapsed = time.perf_counter() - start_time
+    print(f"✓ {desc} 完成，耗时: {elapsed:.2f} 秒")
+    
+    return video, elapsed
+
+
+def decode_latents_to_video(vae, latents, config, env, warmup=True):
     """
     使用 VAE 解码 latents 为视频帧
     """
@@ -193,14 +219,15 @@ def decode_latents_to_video(vae, latents, config, env):
     latents = denormalize_latents(latents, vae=vae)
     
     # 3. VAE 解码 (VAE 期望 [B, C, T, H, W] 格式)
-    print("\n开始 VAE 解码...")
-    start_time = time.perf_counter()
     
-    with torch.no_grad():
-        video = vae.decode(latents).sample
+    # 预热运行 (触发 JIT 编译)
+    warmup_time = 0
+    if warmup:
+        _, warmup_time = run_vae_decode(vae, latents, env, desc="Warmup VAE (JIT)")
     
-    elapsed = time.perf_counter() - start_time
-    print(f"✓ VAE 解码完成，耗时: {elapsed:.2f} 秒")
+    # 正式解码
+    video, decode_time = run_vae_decode(vae, latents, env, desc="VAE Decode")
+    elapsed = decode_time  # 只记录正式解码时间
     
     print(f"输出 video shape: {video.shape}")
     print(f"输出 video dtype: {video.dtype}")
@@ -244,6 +271,10 @@ def main():
     parser.add_argument('--model_id', type=str, default=None)
     parser.add_argument('--fps', type=int, default=None)
     parser.add_argument('--dp', type=int, default=DEFAULT_DP, help='Data parallelism dimension')
+    parser.add_argument('--warmup', action='store_true', default=True,
+                        help='运行预热解码触发 JIT 编译（默认启用）')
+    parser.add_argument('--no_warmup', action='store_false', dest='warmup',
+                        help='禁用预热解码')
     
     args = parser.parse_args()
     
@@ -317,7 +348,8 @@ def main():
             vae,
             latents,
             config,
-            env
+            env,
+            warmup=args.warmup
         )
     
     # 转换回 CPU
@@ -344,7 +376,7 @@ def main():
         print(f"帧数: {frames.shape[0]}")
         print(f"分辨率: {frames.shape[2]}x{frames.shape[1]}")
     print(f"FPS: {fps}")
-    print(f"VAE 解码耗时: {decode_time:.2f} 秒")
+    print(f"VAE 解码耗时: {decode_time:.2f} 秒（不含预热）")
     
     print(f"\n{'='*60}")
     print("阶段3 完成！")

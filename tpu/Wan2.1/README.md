@@ -149,20 +149,23 @@ python generate_flax.py \
 ```bash
 cd gpu-tpu-pedia/tpu/Wan2.1/generate_diffusers_flax_staged
 
-# 阶段1：Text Encoding
+# 阶段1：Text Encoding（仅编码 prompt）
 python stage1_text_encoder.py \
     --prompt "A cat playing piano in a jazz club" \
-    --negative_prompt "blurry, low quality, static" \
-    --width 1280 --height 720 --frames 81
+    --negative_prompt "blurry, low quality, static"
 
-# 阶段2：Transformer Denoising
-python stage2_transformer.py --num_inference_steps 50
+# 阶段2：Transformer Denoising（设置视频参数）
+python stage2_transformer.py \
+    --height 480 --width 848 --frames 81 \
+    --num_inference_steps 50
 
 # 阶段3：VAE Decoding
 python stage3_vae_decoder.py
 ```
 
 **输出**: `stage_outputs/output_video.mp4`
+
+**注意**: Stage1 仅负责 prompt 编码，视频参数（height、width、frames）在 Stage2 中设置。
 
 ---
 
@@ -323,28 +326,19 @@ jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 
 ## 已知问题与解决方案
 
-### 1. MaxDiffusion VAE 颜色反转
-
-**问题**: MaxDiffusion 的 Flax VAE 输出图像颜色反转。
-
-**解决方案**: `stage3_vae_decoder.py` 中已实现修复：
-```python
-video = 255 - video  # 颜色反转修复
-```
-
-### 2. Text Encoder None 检查
+### 1. Text Encoder None 检查
 
 **问题**: 三阶段模式下 `text_encoder=None` 导致 `.device` 访问失败。
 
 **解决方案**: 已在 `pipeline_wan_flax.py` 中添加 None 检查。
 
-### 3. bfloat16 保存/加载
+### 2. bfloat16 保存/加载
 
 **问题**: SafeTensors 不直接支持 bfloat16。
 
 **解决方案**: `utils.py` 中自动处理类型转换，保存时记录原始类型。
 
-### 4. PyTree 注册
+### 3. PyTree 注册
 
 **问题**: `BaseModelOutputWithPastAndCrossAttentions` 未注册为 PyTree。
 
@@ -360,7 +354,7 @@ register_pytree_node(
 )
 ```
 
-### 5. DecoderOutput.sample 提取
+### 4. DecoderOutput.sample 提取
 
 **问题**: VAE 返回 `DecoderOutput` 对象而非直接的 tensor。
 
@@ -445,12 +439,29 @@ register_pytree_node(
 4. **Pipeline 加载顺序**: 在 `torchax.enable_globally()` 之前加载避免 safetensors 问题
 5. **2D Mesh**: 简化 mesh 配置从 3D (dp, sp, tp) 到 2D (dp, tp)
 
-### 三阶段推理性能
+### 三阶段推理性能（TPU v6e-8）
 
-| 配置 | 阶段1 | 阶段2 (50步) | 阶段3 | 总计 |
-|------|-------|--------------|-------|------|
-| TPU v4-8, 720P | ~2s | ~285s (~5.7s/step) | ~11s | ~5min |
-| TPU v4-8, 480P | ~2s | ~120s | ~5s | ~2min |
+**480P (848×480, 81 帧, 50 步)**:
+
+| 阶段 | 预热 (JIT) | 正式运行 | 说明 |
+|------|-----------|---------|------|
+| Stage1 (Text Encoder) | - | ~3s | TPU 运行，使用 torchax |
+| Stage2 (Transformer) | ~93s | ~68.55s | ~1.37s/step |
+| Stage3 (VAE Decoder) | ~4.45s | ~0.50s | 预热后速度提升 9x |
+| **总计** | **~97s** | **~72s** | 预热 + 正式运行 ≈ 169s |
+
+*注:
+- Stage2 和 Stage3 都支持预热运行，预热会触发 JIT 编译
+- 后续运行使用编译缓存，无需重复预热*
+
+**720P (1280×720, 81 帧, 50 步)**:
+
+| 阶段 | 首次运行 | 说明 |
+|------|---------|------|
+| Stage1 (Text Encoder) | ~3s | - |
+| Stage2 (Transformer) | ~230s | ~4.6s/step |
+| Stage3 (VAE Decoder) | ~200s | - |
+| **总计** | **~433s** | 约 7 分钟 |
 
 ---
 

@@ -661,13 +661,13 @@ def main():
         help='Output directory (default: same as input_dir)'
     )
 
-    # 可覆盖的配置参数
+    # 可覆盖的配置参数（这些参数有默认值，适用于 T2V 480P）
     parser.add_argument('--num_inference_steps', type=int, default=50, help='推理步数（默认50）')
-    parser.add_argument('--guidance_scale', type=float, default=None, help='Override guidance scale')
-    parser.add_argument('--seed', type=int, default=None, help='Override random seed')
-    parser.add_argument('--height', type=int, default=None, help='Override height')
-    parser.add_argument('--width', type=int, default=None, help='Override width')
-    parser.add_argument('--frames', type=int, default=None, help='Override frames')
+    parser.add_argument('--guidance_scale', type=float, default=5.0, help='引导尺度（默认5.0）')
+    parser.add_argument('--seed', type=int, default=2025, help='随机种子（默认2025）')
+    parser.add_argument('--height', type=int, default=480, help='视频高度（默认480）')
+    parser.add_argument('--width', type=int, default=848, help='视频宽度（默认848）')
+    parser.add_argument('--frames', type=int, default=81, help='视频帧数（默认81，约5秒）')
     parser.add_argument('--warmup_steps', type=int, default=2,
                         help='预热步数（0=不预热，1=一次，2=两次，用于触发 JIT 编译）')
 
@@ -704,18 +704,14 @@ def main():
     print(f"\n加载阶段1配置: {input_paths['config']}")
     config = load_generation_config(input_paths['config'])
 
-    # 应用命令行覆盖（num_inference_steps 总是使用命令行参数，默认50）
+    # Stage2 专用参数（使用命令行参数或默认值）
+    # Stage1 只保存 prompt 相关信息，视频参数由 stage2 控制
     config['num_inference_steps'] = args.num_inference_steps
-    if args.guidance_scale is not None:
-        config['guidance_scale'] = args.guidance_scale
-    if args.seed is not None:
-        config['seed'] = args.seed
-    if args.height is not None:
-        config['height'] = args.height
-    if args.width is not None:
-        config['width'] = args.width
-    if args.frames is not None:
-        config['frames'] = args.frames
+    config['guidance_scale'] = args.guidance_scale
+    config['seed'] = args.seed
+    config['height'] = args.height
+    config['width'] = args.width
+    config['frames'] = args.frames
     if args.model_id is not None:
         config['model_id'] = args.model_id
 
