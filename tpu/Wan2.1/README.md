@@ -53,8 +53,7 @@ Wan2.1/
 
 | 仓库 | 用途 | 地址 |
 |------|------|------|
-| **diffusers-tpu** | Pipeline、Transformer、Scheduler | [github.com/yangwhale/diffusers-tpu](https://github.com/yangwhale/diffusers-tpu) |
-| **maxdiffusion** | VAE (Flax 实现) | [github.com/AI-Hypercomputer/maxdiffusion](https://github.com/AI-Hypercomputer/maxdiffusion) |
+| **diffusers-tpu** | Pipeline、Transformer、Scheduler、VAE (Flax 版本) | [github.com/yangwhale/diffusers-tpu](https://github.com/yangwhale/diffusers-tpu) |
 | **torchax** | PyTorch-JAX 桥接 | [PyPI: torchax](https://pypi.org/project/torchax/) |
 
 ---
@@ -95,15 +94,11 @@ pip install transformers accelerate safetensors
 pip install opencv-python imageio imageio-ffmpeg
 pip install flax optax
 
-# 5. 克隆并安装修改版 diffusers
+# 5. 克隆并安装修改版 diffusers（包含 Flax VAE）
 git clone https://github.com/yangwhale/diffusers-tpu.git
 cd diffusers-tpu && pip install -e . && cd ..
 
-# 6. 克隆并安装 MaxDiffusion（用于 VAE）
-git clone https://github.com/AI-Hypercomputer/maxdiffusion.git
-cd maxdiffusion && pip install -e . && cd ..
-
-# 7. 克隆项目代码
+# 6. 克隆项目代码
 git clone https://github.com/yangwhale/gpu-tpu-pedia.git
 cd gpu-tpu-pedia/tpu/Wan2.1
 ```
@@ -210,38 +205,45 @@ python stage3_vae_decoder.py
 
 ### Mesh 配置
 
-默认使用 `(dp=2, sp=1, tp=4)` 配置 8 个 TPU chips：
+使用 2D Mesh `(dp=2, tp=4)` 配置 8 个 TPU chips：
 
 ```python
-mesh = Mesh(devices, ('dp', 'sp', 'tp'))
+mesh = Mesh(devices, ('dp', 'tp'))
 # dp: Data Parallel (batch sharding)
-# sp: Sequence Parallel (未使用)
 # tp: Tensor Parallel (weight sharding)
 ```
 
 ### Splash Attention 分片策略
 
-根据 attention 类型选择不同的分片：
+根据 attention 类型和 batch 维度选择不同的分片：
 
 ```python
-# Self Attention (长 KV 序列 > 10000)
-q_partition_spec = P('dp', 'tp', 'sp', None)
-kv_partition_spec = P('dp', 'tp', None, None)
+# Self Attention (长 KV 序列 > 20000)
+if batch_size > 1:
+    dp_mesh_key = "dp"
+    remain_mesh_key = ("tp",)
+else:
+    dp_mesh_key = None
+    remain_mesh_key = ("dp", "tp")
 
-# Cross Attention (短 KV 序列)
-q_partition_spec = P('dp', None, ('tp', 'sp'), None)
-kv_partition_spec = P('dp', None, None, None)
+# Context Parallel (长序列)
+q_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
+kv_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
+
+# Sequence Parallel (短序列)
+q_partition_spec = P(dp_mesh_key, None, remain_mesh_key, None)
+kv_partition_spec = P(dp_mesh_key, None, None, None)
 ```
 
 ### 权重分片策略
 
-**Transformer (FSDP 模式)**:
+**Transformer**:
 ```python
 {
-    'attn1.to_q.weight': (None, ('tp', 'sp')),      # 列并行
-    'attn1.to_out.0.weight': (('tp', 'sp'), None),  # 行并行
-    'ffn.net.0.proj.weight': (None, ('tp', 'sp')),
-    'ffn.net.2.weight': (('tp', 'sp'), None),
+    'attn1.to_q.weight': ('tp',),        # 列并行
+    'attn1.to_out.*.weight': (None, 'tp'),  # 行并行
+    'ffn.net.*.proj.weight': ('tp',),
+    'ffn.net.*.weight': (None, 'tp'),
 }
 ```
 
@@ -413,24 +415,31 @@ register_pytree_node(
 
 - **硬件**: TPU v6e-8 (8 chips)
 - **模型**: Wan 2.1 14B
-- **分辨率**: 1280×720, 81 帧
+- **分辨率**: 832×480 或 1280×720, 81 帧
 
-### 结果
+### 优化效果 (480P, 81 帧, 50 步)
+
+| 版本 | Warmup | Benchmark | 每步时间 | 加速比 |
+|------|--------|-----------|---------|-------|
+| 优化前 (maxdiffusion VAE) | 196.43s | 90.40s | 1.81s/step | - |
+| **优化后 (diffusers Flax VAE)** | **347.87s** | **63.02s** | **1.26s/step** | **30.3%** |
+
+*注: 优化后 Warmup 时间较长是因为 diffusers VAE 需要更多 JIT 编译，但实际推理速度提升 30%*
+
+### 优化措施
+
+1. **使用 diffusers Flax VAE**: 替换 maxdiffusion VAE，减少依赖
+2. **PyTree 注册**: 添加 `DecoderOutput`、`AutoencoderKLOutput`、`DiagonalGaussianDistribution`
+3. **Conv2d Op 覆盖**: 使用 `torch_conv2d_jax` 确保正确的 JAX 执行
+4. **Pipeline 加载顺序**: 在 `torchax.enable_globally()` 之前加载避免 safetensors 问题
+5. **2D Mesh**: 简化 mesh 配置从 3D (dp, sp, tp) 到 2D (dp, tp)
+
+### 三阶段推理性能
 
 | 配置 | 阶段1 | 阶段2 (50步) | 阶段3 | 总计 |
 |------|-------|--------------|-------|------|
 | TPU v4-8, 720P | ~2s | ~285s (~5.7s/step) | ~11s | ~5min |
 | TPU v4-8, 480P | ~2s | ~120s | ~5s | ~2min |
-
-*注: 首次运行包含 JIT 编译时间*
-
-### Attention 优化对比 (3 steps)
-
-| 配置 | Mesh 顺序 | Benchmark 时间 | Step 时间 |
-|-----|----------|---------------|----------|
-| 标准 Attention | (tp, dp, sp) | 27.57s | ~6.26s |
-| Custom Attention | (tp, dp, sp) | 25.80s | ~5.74s |
-| **Custom Attention** | **(dp, sp, tp)** | **24.80s** | **~5.35s** |
 
 ---
 
@@ -480,4 +489,3 @@ done
 - [Wan-AI](https://github.com/Wan-AI) - Wan 2.1 模型
 - [Google JAX Team](https://github.com/google/jax) - JAX 框架
 - [Hugging Face](https://huggingface.co) - Diffusers 库
-- [AI-Hypercomputer/MaxDiffusion](https://github.com/AI-Hypercomputer/maxdiffusion) - Flax VAE 实现

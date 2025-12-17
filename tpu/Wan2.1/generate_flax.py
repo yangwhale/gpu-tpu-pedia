@@ -13,10 +13,17 @@ Structure:
 6. VAE Components
 7. Pipeline Setup
 8. Main Function
+
+Optimizations from Wan2.2:
+- Using diffusers' AutoencoderKLWan (Flax version) for better compatibility
+- PyTree registrations for VAE outputs
+- torch_conv2d_jax op override for correct conv2d behavior
+- Pipeline loading before torchax.enable_globally() to avoid safetensors issues
 """
 
 import os
 os.environ.setdefault('JAX_MEMORY_DEBUG', '0')
+os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 import time
 import re
@@ -38,17 +45,16 @@ from flax import nnx
 from flax.linen import partitioning as nn_partitioning
 
 import torchax
-from torchax.ops import ops_registry
+from torchax.ops import ops_registry, jaten
 from transformers import modeling_outputs
 
-# Wan-specific imports
-from maxdiffusion.models.wan.autoencoder_kl_wan import (
-    AutoencoderKLWan,
-    AutoencoderKLWanCache,
-)
-from maxdiffusion.models.wan.wan_utils import load_wan_vae
-# Use customized WanPipeline with use_dp support and JAX sharding
+# VAE outputs for PyTree registration
+from diffusers.models.autoencoders import vae as diffusers_vae
+from diffusers.models import modeling_outputs as diffusers_modeling_outputs
+
+# Wan-specific imports - use diffusers' Flax VAE
 from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline
+from diffusers.models.autoencoders.autoencoder_kl_wan_flax import AutoencoderKLWan
 from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
 from diffusers.utils import export_to_video
 
@@ -126,10 +132,46 @@ def setup_pytree_registrations():
     def model_output_unflatten(aux, children):
         return aux(*children)
 
+    # Text encoder output
     register_pytree_node(
         modeling_outputs.BaseModelOutputWithPastAndCrossAttentions,
         model_output_flatten,
         model_output_unflatten
+    )
+    
+    # VAE decode output
+    register_pytree_node(
+        diffusers_vae.DecoderOutput,
+        model_output_flatten,
+        model_output_unflatten
+    )
+    
+    # VAE encode output
+    register_pytree_node(
+        diffusers_modeling_outputs.AutoencoderKLOutput,
+        model_output_flatten,
+        model_output_unflatten
+    )
+    
+    # DiagonalGaussianDistribution
+    def flatten_gaussian(obj):
+        return (obj.parameters, obj.mean, obj.logvar, obj.deterministic,
+                obj.std, obj.var), None
+    
+    def unflatten_gaussian(aux, children):
+        obj = object.__new__(diffusers_vae.DiagonalGaussianDistribution)
+        obj.parameters = children[0]
+        obj.mean = children[1]
+        obj.logvar = children[2]
+        obj.deterministic = children[3]
+        obj.std = children[4]
+        obj.var = children[5]
+        return obj
+    
+    register_pytree_node(
+        diffusers_vae.DiagonalGaussianDistribution,
+        flatten_gaussian,
+        unflatten_gaussian
     )
 
 
@@ -310,19 +352,73 @@ def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False,
     return out
 
 
-def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
-                          window_size=None, bqsize=BQSIZE, bkvsize=BKVSIZE,
-                          bkvcomputesize=BKVCOMPUTESIZE, bkvcomputeinsize=BKVCOMPUTEINSIZE):
+def _tpu_custom_attention(query, key, value, mesh, scale=None):
     """TPU Custom Splash Attention with exp2 optimization."""
-    mesh = getattr(env, '_mesh', None) or env.param.mesh
-    num_heads = query.shape[1]
-
     def _attention_on_slices(q, k, v):
         scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
         # Fuse the ops of exp in softmax - multiply by log2(e)
         _LOG2_E = 1.44269504
         q = q * scale_factor * _LOG2_E
 
+        def pad_to_block_multiple(x, block_size, axis):
+            seq_len = x.shape[axis]
+            pad_len = (block_size - seq_len % block_size) % block_size
+            if pad_len == 0:
+                return x, seq_len
+            pad_width = [(0, 0)] * x.ndim
+            pad_width[axis] = (0, pad_len)
+            return jnp.pad(x, pad_width), seq_len
+
+        def kernel_3d(q_3d, k_3d, v_3d):
+            # Pad to block size multiple to avoid NaN in incomplete blocks
+            q_3d_padded, q_orig_len = pad_to_block_multiple(q_3d, BQSIZE, axis=1)
+            k_3d_padded, k_orig_len = pad_to_block_multiple(k_3d, BKVSIZE, axis=1)
+            v_3d_padded, v_orig_len = pad_to_block_multiple(v_3d, BKVSIZE, axis=1)
+            
+            padded_q_seq_len = q_3d_padded.shape[1]
+            padded_kv_seq_len = k_3d_padded.shape[1]
+
+            block_sizes = splash_attention.BlockSizes(
+                block_q=min(BQSIZE, padded_q_seq_len),
+                block_kv=min(BKVSIZE, padded_kv_seq_len),
+                block_kv_compute=min(BKVCOMPUTESIZE, padded_kv_seq_len),
+            )
+            splash_kernel = custom_splash_attention.make_splash_mha(
+                block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE
+            )
+            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded).astype(q_3d.dtype)
+            out = jnp.swapaxes(out, 1, 2)
+            # Remove padding
+            return out[:, :q_orig_len, :]
+
+        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
+        return vmapped_kernel(q, k, v)
+
+    # Determine sharding strategy
+    if key.shape[0] > 1:
+        dp_mesh_key = "dp"
+        remain_mesh_key = ("tp",)
+    else:
+        dp_mesh_key = None
+        remain_mesh_key = ("dp", "tp")
+    
+    remain_devices_prod = 1
+    for d in remain_mesh_key:
+        remain_devices_prod *= mesh.axis_sizes[mesh.axis_names.index(d)]
+
+    q_num_head = query.shape[1]
+    q_seq_len = query.shape[2]
+    kv_num_head = key.shape[1]
+    kv_seq_len = key.shape[2]
+    
+    # Attn1 self attention (long KV sequence) - use context parallel
+    if (kv_seq_len > 10000 and
+        kv_num_head % remain_devices_prod == 0 and
+        q_num_head % remain_devices_prod == 0):
+        q_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
+        kv_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
+    else:
+        # Attn2 cross attention (short KV) - use sequence parallel
         def pad_to_multiple(x, multiple, axis):
             seq_len = x.shape[axis]
             pad_len = (multiple - seq_len % multiple) % multiple
@@ -331,49 +427,14 @@ def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
             pad_width = [(0, 0)] * x.ndim
             pad_width[axis] = (0, pad_len)
             return jnp.pad(x, pad_width), seq_len
+        
+        if q_seq_len % remain_devices_prod != 0:
+            query, _ = pad_to_multiple(query, remain_devices_prod, axis=2)
+        
+        q_partition_spec = P(dp_mesh_key, None, remain_mesh_key, None)
+        kv_partition_spec = P(dp_mesh_key, None, None, None)
 
-        def kernel_3d(q_3d, k_3d, v_3d):
-            num_heads_on_device = q_3d.shape[0]
-            
-            # Always pad for custom attention
-            q_3d_padded, q_orig_len = pad_to_multiple(q_3d, bqsize, axis=1)
-            k_3d_padded, k_orig_len = pad_to_multiple(k_3d, bkvsize, axis=1)
-            v_3d_padded, v_orig_len = pad_to_multiple(v_3d, bkvsize, axis=1)
-
-            padded_q_seq_len = q_3d_padded.shape[1]
-            padded_kv_seq_len = k_3d_padded.shape[1]
-
-            block_sizes = splash_attention.BlockSizes(
-                block_q=min(bqsize, padded_q_seq_len),
-                block_kv=min(bkvsize, padded_kv_seq_len),
-                block_kv_compute=min(bkvcomputesize, padded_kv_seq_len),
-            )
-            
-            splash_kernel = custom_splash_attention.make_splash_mha(
-                block_sizes=block_sizes, bkv_compute_in=bkvcomputeinsize
-            )
-            out = splash_kernel(
-                q_3d_padded.astype(jnp.float32),
-                k_3d_padded.astype(jnp.float32),
-                v_3d_padded.astype(jnp.float32)
-            ).astype(q_3d_padded.dtype)
-            
-            # Swap axes for output format
-            out = jnp.swapaxes(out, 1, 2)
-            return out[:, :q_orig_len, ...]
-
-        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
-        return vmapped_kernel(q, k, v)
-
-    # Determine partition specs based on attention type
-    if num_heads < mesh.size:
-        q_partition_spec = P()
-        kv_partition_spec = P()
-    else:
-        # Always use self attention sharding for custom attention
-        q_partition_spec = P('dp', 'tp', 'sp', None)
-        kv_partition_spec = P('dp', 'tp', None, None)
-
+    # Apply sharding constraints
     sharded_fn = shard_map(
         _attention_on_slices,
         mesh=mesh,
@@ -381,36 +442,46 @@ def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
         out_specs=q_partition_spec,
         check_rep=False,
     )
+    
+    query = jax.lax.with_sharding_constraint(
+        query, P(dp_mesh_key, None, remain_mesh_key, None)
+    )
+    key = jax.lax.with_sharding_constraint(
+        key, P(dp_mesh_key, None, remain_mesh_key, None)
+    )
+    value = jax.lax.with_sharding_constraint(
+        value, P(dp_mesh_key, None, remain_mesh_key, None)
+    )
+    
     out = sharded_fn(query, key, value)
-    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    
+    # Remove potential padding for sp
+    out = out[:, :, :q_seq_len, :]
+    out = jax.lax.with_sharding_constraint(
+        out, P(dp_mesh_key, None, remain_mesh_key, None)
+    )
     return out
 
 
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
                                   is_causal=False, scale=None, enable_gqa=False,
-                                  env=None, window_size=None):
+                                  env=None, mesh=None):
     """Wrapper for scaled dot-product attention with TPU Splash support."""
-    # Support both old and new torchax config names
-    use_splash = getattr(env.config, 'use_tpu_splash_attention', False) or \
-                 getattr(env.config, 'use_tpu_flash_attention', False)
-    if use_splash:
+    # Only use custom attention for long sequences (self-attention)
+    if key.shape[2] > 20000:
+        assert attn_mask is None
+        assert dropout_p == 0.0
+        assert is_causal is False
+        assert enable_gqa is False
+        assert scale is None
+        
         jquery, jkey, jvalue = env.t2j_iso((query, key, value))
         
         if USE_K_SMOOTH:
             key_mean = jnp.mean(jkey, axis=2, keepdims=True)
             jkey = jkey - key_mean
         
-        # Only use custom attention in self attention (long KV sequence)
-        if jkey.shape[2] > 10000 and USE_CUSTOM_ATTENTION:
-            res = _tpu_custom_attention(
-                jquery, jkey, jvalue, env,
-                scale=scale, is_causal=is_causal, window_size=window_size
-            )
-        else:
-            res = _tpu_splash_attention(
-                jquery, jkey, jvalue, env,
-                scale=scale, is_causal=is_causal, window_size=window_size
-            )
+        res = _tpu_custom_attention(jquery, jkey, jvalue, mesh, scale=scale)
         return env.j2t_iso(res)
 
     return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal,
@@ -421,63 +492,46 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
 # Sharding Strategies
 # ============================================================================
 
-# Transformer sharding for FSDP mode
+# Transformer sharding - using 2D mesh (dp, tp) like Wan2.2
 transformer_shardings_fsdp = {
-    r'condition_embedder.time_embedder.linear_1.weight': (None, ('tp', 'sp')),
-    r'condition_embedder.time_embedder.linear_2.weight': (('tp', 'sp'), None),
-    r'condition_embedder.time_proj.weight': (('tp', 'sp'), None),
-    r'condition_embedder.text_embedder.linear_1.weight': (None, ('tp', 'sp')),
-    r'condition_embedder.text_embedder.linear_2.weight': (('tp', 'sp'), None),
-    r'blocks.\d+.attn1.to_q.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn1.to_k.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn1.to_v.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn1.to_out.0.weight': (('tp', 'sp'), None),
-    r'blocks.\d+.attn2.to_q.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn2.to_k.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn2.to_v.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn2.to_out.0.weight': (('tp', 'sp'), None),
-    r'blocks.\d+.ffn.net.0.proj.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.ffn.net.2.weight': (('tp', 'sp'), None),
-    r'proj_out.weight': (None, ('tp', 'sp')),
+    r'condition_embedder.time_embedder.linear_1.weight': ('tp',),
+    r'condition_embedder.time_embedder.linear_1.bias': ('tp',),
+    r'condition_embedder.time_embedder.linear_2.weight': (None, 'tp',),
+    r'condition_embedder.text_embedder.linear_1.weight': ('tp',),
+    r'condition_embedder.text_embedder.linear_1.bias': ('tp',),
+    r'condition_embedder.text_embedder.linear_2.weight': (None, 'tp',),
+    r'blocks.*.attn1.to_q.weight': ('tp',),
+    r'blocks.*.attn1.to_q.bias': ('tp',),
+    r'blocks.*.attn1.to_k.weight': ('tp',),
+    r'blocks.*.attn1.to_k.bias': ('tp',),
+    r'blocks.*.attn1.to_v.weight': ('tp',),
+    r'blocks.*.attn1.to_v.bias': ('tp',),
+    r'blocks.*.attn1.to_out.*.weight': (None, 'tp',),
+    r'blocks.*.attn2.to_q.weight': ('tp',),
+    r'blocks.*.attn2.to_q.bias': ('tp',),
+    r'blocks.*.attn2.to_k.weight': ('tp',),
+    r'blocks.*.attn2.to_k.bias': ('tp',),
+    r'blocks.*.attn2.to_v.weight': ('tp',),
+    r'blocks.*.attn2.to_v.bias': ('tp',),
+    r'blocks.*.attn2.to_out.*.weight': (None, 'tp',),
+    r'blocks.*.ffn.net.*.proj.weight': ('tp',),
+    r'blocks.*.ffn.net.*.proj.bias': ('tp',),
+    r'blocks.*.ffn.net.*.weight': (None, 'tp',),
 }
 
-# Transformer sharding for Tensor Parallel mode
-transformer_shardings_tp = {
-    r'condition_embedder.time_embedder.linear_1.weight': (('tp', 'sp'), None),
-    r'condition_embedder.time_embedder.linear_1.bias': (('tp', 'sp'),),
-    r'condition_embedder.time_embedder.linear_2.weight': (None, ('tp', 'sp')),
-    r'condition_embedder.text_embedder.linear_1.weight': (('tp', 'sp'), None),
-    r'condition_embedder.text_embedder.linear_1.bias': (('tp', 'sp'),),
-    r'condition_embedder.text_embedder.linear_2.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn1.to_q.weight': (('tp', 'sp'), None),
-    r'blocks.\d+.attn1.to_q.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_k.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_k.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_v.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_v.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_out.0.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn2.to_q.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_q.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_k.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_k.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_v.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_v.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_out.0.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.ffn.net.0.proj.weight': (('tp', 'sp'),),
-    r'blocks.\d+.ffn.net.0.proj.bias': (('tp', 'sp'),),
-    r'blocks.\d+.ffn.net.2.weight': (None, ('tp', 'sp')),
-}
+# Same sharding for TP mode
+transformer_shardings_tp = transformer_shardings_fsdp
 
-# Text Encoder (T5) sharding
+# Text Encoder (T5) sharding - using 2D mesh (dp, tp)
 text_encoder_shardings = {
-    r'shared.weight': (('tp', 'dp', 'sp'),),
-    r'encoder.block.*.layer.*.SelfAttention.q.weight': (('tp', 'dp', 'sp'),),
-    r'encoder.block.*.layer.*.SelfAttention.k.weight': (('tp', 'dp', 'sp'),),
-    r'encoder.block.*.layer.*.SelfAttention.v.weight': (('tp', 'dp', 'sp'),),
-    r'encoder.block.*.layer.*.SelfAttention.o.weight': (None, ('tp', 'dp', 'sp')),
-    r'encoder.block.*.layer.*.DenseReluDense.wi_0.weight': (('tp', 'dp', 'sp'),),
-    r'encoder.block.*.layer.*.DenseReluDense.wi_1.weight': (('tp', 'dp', 'sp'),),
-    r'encoder.block.*.layer.*.DenseReluDense.wo.weight': (None, ('tp', 'dp', 'sp')),
+    r'shared.weight': (('dp', 'tp'),),
+    r'encoder.block.*.layer.*.SelfAttention.q.weight': (('dp', 'tp'),),
+    r'encoder.block.*.layer.*.SelfAttention.k.weight': (('dp', 'tp'),),
+    r'encoder.block.*.layer.*.SelfAttention.v.weight': (('dp', 'tp'),),
+    r'encoder.block.*.layer.*.SelfAttention.o.weight': (None, ('dp', 'tp')),
+    r'encoder.block.*.layer.*.DenseReluDense.wi_0.weight': (('dp', 'tp'),),
+    r'encoder.block.*.layer.*.DenseReluDense.wi_1.weight': (('dp', 'tp'),),
+    r'encoder.block.*.layer.*.DenseReluDense.wo.weight': (None, ('dp', 'tp')),
 }
 
 
@@ -528,227 +582,81 @@ def create_sharded_logical_model(model, logical_axis_rules):
 
 
 # ============================================================================
-# VAE Components
-# ============================================================================
-
-class ConfigWrapper:
-    """Wrapper to make VAE config accessible as both dict and attributes."""
-    def __init__(self, **kwargs):
-        self.__dict__.update(kwargs)
-    
-    def __getitem__(self, key):
-        return getattr(self, key)
-    
-    def __setitem__(self, key, value):
-        setattr(self, key, value)
-
-
-class VAEProxy:
-    """Proxy class for JAX VAE to work with PyTorch pipeline."""
-    def __init__(self, vae, vae_cache, dtype, config):
-        self._vae = vae
-        self.vae_cache = vae_cache
-        self.dtype = dtype
-        self.config = config
-    
-    def __getattr__(self, name):
-        return getattr(self._vae, name)
-    
-    def decode(self, *args, **kwargs):
-        if 'feat_cache' not in kwargs:
-            kwargs['feat_cache'] = self.vae_cache
-        out = self._vae.decode(*args, **kwargs)
-        return to_torch_recursive(out)
-
-
-def load_wan_vae_fixed(pretrained_model_name_or_path, eval_shapes, device, hf_download=True):
-    """Load Wan VAE weights with proper type handling to avoid torchax issues."""
-    from huggingface_hub import hf_hub_download
-    from safetensors import safe_open
-    from flax.traverse_util import unflatten_dict
-    from maxdiffusion.models.modeling_flax_pytorch_utils import (
-        rename_key, rename_key_and_reshape_tensor, validate_flax_state_dict
-    )
-    
-    device_obj = jax.local_devices(backend=device)[0]
-    with jax.default_device(device_obj):
-        if hf_download:
-            ckpt_path = hf_hub_download(
-                pretrained_model_name_or_path, 
-                subfolder="vae", 
-                filename="diffusion_pytorch_model.safetensors"
-            )
-        
-        print(f"Loading Wan 2.1 VAE on {device}")
-        
-        tensors = {}
-        with safe_open(ckpt_path, framework="np") as f:
-            for k in f.keys():
-                tensors[k] = jnp.array(f.get_tensor(k))
-        
-        flax_state_dict = {}
-        cpu = jax.local_devices(backend="cpu")[0]
-        
-        for pt_key, tensor in tensors.items():
-            renamed_pt_key = rename_key(pt_key)
-            # Apply Wan-specific key transformations
-            for old, new in [
-                ("up_blocks_", "up_blocks."),
-                ("mid_block_", "mid_block."),
-                ("down_blocks_", "down_blocks."),
-                ("conv_in.bias", "conv_in.conv.bias"),
-                ("conv_in.weight", "conv_in.conv.weight"),
-                ("conv_out.bias", "conv_out.conv.bias"),
-                ("conv_out.weight", "conv_out.conv.weight"),
-                ("attentions_", "attentions."),
-                ("resnets_", "resnets."),
-                ("upsamplers_", "upsamplers."),
-                ("resample_", "resample."),
-                ("conv1.bias", "conv1.conv.bias"),
-                ("conv1.weight", "conv1.conv.weight"),
-                ("conv2.bias", "conv2.conv.bias"),
-                ("conv2.weight", "conv2.conv.weight"),
-                ("time_conv.bias", "time_conv.conv.bias"),
-                ("time_conv.weight", "time_conv.conv.weight"),
-                ("quant_conv", "quant_conv.conv"),
-                ("conv_shortcut", "conv_shortcut.conv"),
-            ]:
-                renamed_pt_key = renamed_pt_key.replace(old, new)
-            
-            if "decoder" in renamed_pt_key:
-                renamed_pt_key = renamed_pt_key.replace("resample.1.bias", "resample.layers.1.bias")
-                renamed_pt_key = renamed_pt_key.replace("resample.1.weight", "resample.layers.1.weight")
-            if "encoder" in renamed_pt_key:
-                renamed_pt_key = renamed_pt_key.replace("resample.1", "resample.conv")
-            
-            pt_tuple_key = tuple(renamed_pt_key.split("."))
-            flax_key, flax_tensor = rename_key_and_reshape_tensor(pt_tuple_key, tensor, eval_shapes)
-            flax_key = tuple(
-                int(item) if isinstance(item, str) and item.isdigit() else item 
-                for item in flax_key
-            )
-            flax_state_dict[flax_key] = jax.device_put(jnp.asarray(flax_tensor), device=cpu)
-        
-        validate_flax_state_dict(eval_shapes, flax_state_dict)
-        flax_state_dict = unflatten_dict(flax_state_dict)
-        del tensors
-        jax.clear_caches()
-    
-    return flax_state_dict
-
-
-# ============================================================================
 # Pipeline Setup
 # ============================================================================
 
-def setup_wan_vae(model_id, mesh, vae_mesh):
-    """Initialize and load Wan VAE with proper sharding."""
-    # Use jax.set_mesh for new JAX 0.8+ API to set global mesh context
-    # This is required for NNX models that use PartitionSpec during initialization
-    jax.set_mesh(vae_mesh)
-    
-    key = jax.random.key(0)
-    rngs = nnx.Rngs(key)
-    
-    wan_vae = AutoencoderKLWan(
-        rngs=rngs,
-        base_dim=96,
-        z_dim=16,
-        dim_mult=[1, 2, 4, 4],
-        num_res_blocks=2,
-        attn_scales=[],
-        temperal_downsample=[False, True, True],
-        mesh=vae_mesh
-    )
-    
-    # Switch mesh context for loading weights
-    jax.set_mesh(mesh)
-    
-    vae_cache = AutoencoderKLWanCache(wan_vae)
-    
-    graphdef, state = nnx.split(wan_vae)
-    params = state.to_pure_dict()
-    params = load_wan_vae_fixed(model_id, params, "tpu")
-    
-    # Replicate to all devices (use explicit NamedSharding instead of logical rules)
-    sharding = NamedSharding(mesh, P())
-    params = jax.tree_util.tree_map(
-        lambda x: sharded_device_put(x, sharding), params
-    )
-    params = jax.tree_util.tree_map(
-        lambda x: x.astype(jnp.bfloat16), params
-    )
-    wan_vae = nnx.merge(graphdef, params)
-    
-    # Skip logical sharding for now - use replicated weights
-    # The VAE doesn't need complex sharding since it only runs once at the end
-    
-    return wan_vae, vae_cache
+def torch_conv2d_jax(input, weight, bias=None, stride=1, padding=0,
+                     dilation=1, groups=1, *, env):
+    """JAX-compatible conv2d override."""
+    jinput, jweight, jbias = env.t2j_iso((input, weight, bias))
+    res = jaten._aten_conv2d(jinput, jweight, jbias, stride, padding,
+                             dilation, groups)
+    return env.j2t_iso(res)
 
 
-def setup_pipeline_for_jax(args, mesh, env):
-    """Setup Wan pipeline for JAX/TPU execution."""
-    print("\nConfiguring Wan Pipeline for JAX...")
-    
-    # Create VAE mesh
-    vae_mesh = jax.make_mesh((1, len(jax.devices())), ('conv_in', 'conv_out'))
-    
-    # Initialize VAE
-    print("- Loading JAX VAE...")
-    wan_vae, vae_cache = setup_wan_vae(args.model_id, mesh, vae_mesh)
-    
-    # Temporarily disable torchax to load PyTorch components
-    torchax.disable_globally()
-    
-    try:
-        scheduler = UniPCMultistepScheduler(
-            prediction_type='flow_prediction',
-            use_flow_sigmas=True,
-            num_train_timesteps=1000,
-            flow_shift=args.flow_shift
-        )
-        # Use customized WanPipeline with use_dp and JAX sharding support
-        pipe = WanPipeline.from_pretrained(
-            args.model_id,
-            torch_dtype=torch.bfloat16,
-            use_safetensors=True
-        )
-        pipe.scheduler = scheduler
-    finally:
-        torchax.enable_globally()
-    
-    # Replace VAE with JAX version
-    vae_config = ConfigWrapper(
-        latents_mean=np.array(wan_vae.latents_mean),
-        latents_std=np.array(wan_vae.latents_std),
-        z_dim=wan_vae.z_dim
-    )
-    pipe.vae = VAEProxy(wan_vae, vae_cache, torch.bfloat16, vae_config)
-    pipe.vae_cache = vae_cache
-    
-    # Register custom attention
-    print(f"- Registering Splash Attention (window_size: {args.window_size})...")
-    custom_attention = functools.partial(
-        scaled_dot_product_attention,
-        env=env,
-        window_size=args.window_size
-    )
-    op_to_override = torch.nn.functional.scaled_dot_product_attention
+def override_op_definition(env, op_to_override, op_impl):
+    """Override operator definition in torchax environment."""
     env._ops[op_to_override] = ops_registry.Operator(
         op_to_override,
-        custom_attention,
+        op_impl,
         is_jax_function=False,
         is_user_defined=True,
         needs_env=False,
         is_view_op=False,
     )
+
+
+def move_module_to_xla(env, module):
+    """Move module weights to XLA devices."""
+    with jax.default_device("cpu"):
+        state_dict = module.state_dict()
+        state_dict = env.to_xla(state_dict)
+        module.load_state_dict(state_dict, assign=True)
+
+
+def load_pipeline(args):
+    """Load pipeline before enabling torchax to avoid safetensors issues."""
+    print("\n=== Loading Wan 2.1 T2V Pipeline ===")
+    print("Loading models from HuggingFace...")
     
-    # Move and compile modules
-    def _move_module(module):
-        with jax.default_device('cpu'):
-            state_dict = module.state_dict()
-            state_dict = env.to_xla(state_dict)
-            module.load_state_dict(state_dict, assign=True)
+    scheduler = UniPCMultistepScheduler(
+        prediction_type='flow_prediction',
+        use_flow_sigmas=True,
+        num_train_timesteps=1000,
+        flow_shift=args.flow_shift
+    )
+    
+    # Load pipeline with diffusers' Flax VAE
+    pipe = WanPipeline.from_pretrained(
+        args.model_id,
+        torch_dtype=torch.bfloat16,
+        use_safetensors=True,
+        vae=AutoencoderKLWan.from_pretrained(
+            args.model_id, subfolder="vae", torch_dtype=torch.bfloat16
+        ),
+    )
+    pipe.scheduler = scheduler
+    
+    print("✓ Models loaded successfully\n")
+    return pipe
+
+
+def setup_pipeline_for_jax(pipe, args, mesh, env):
+    """Setup Wan pipeline for JAX/TPU execution."""
+    print("=== Moving Models to TPU ===")
+    
+    # Register custom operators
+    print("- Registering custom JAX operators...")
+    override_op_definition(
+        env,
+        torch.nn.functional.conv2d,
+        functools.partial(torch_conv2d_jax, env=env)
+    )
+    override_op_definition(
+        env,
+        torch.nn.functional.scaled_dot_product_attention,
+        functools.partial(scaled_dot_product_attention, env=env, mesh=mesh),
+    )
     
     # Text Encoder
     if args.t5_cpu:
@@ -756,7 +664,7 @@ def setup_pipeline_for_jax(args, mesh, env):
         pipe.text_encoder.to("cpu")
     else:
         print("- Moving Text Encoder to XLA and sharding...")
-        _move_module(pipe.text_encoder)
+        move_module_to_xla(env, pipe.text_encoder)
         pipe.text_encoder = torchax.compile(pipe.text_encoder)
         pipe.text_encoder.params = shard_weight_dict(
             pipe.text_encoder.params, text_encoder_shardings, mesh
@@ -767,22 +675,18 @@ def setup_pipeline_for_jax(args, mesh, env):
     
     # Transformer
     print("- Moving Transformer to XLA and sharding...")
-    _move_module(pipe.transformer)
+    move_module_to_xla(env, pipe.transformer)
     # Move rope embeddings to JAX
-    # Note: WanTransformer3DModelFlax uses self.freqs (complex RoPE)
-    # instead of freqs_cos/freqs_sin
     if hasattr(pipe.transformer.rope, 'freqs'):
-        # Custom Flax version with complex RoPE
         pipe.transformer.rope.freqs = pipe.transformer.rope.freqs.to('jax')
     else:
-        # Standard diffusers version with separate cos/sin
         pipe.transformer.rope.freqs_cos = pipe.transformer.rope.freqs_cos.to('jax')
         pipe.transformer.rope.freqs_sin = pipe.transformer.rope.freqs_sin.to('jax')
     
-    options = torchax.CompileOptions(
+    transformer_options = torchax.CompileOptions(
         jax_jit_kwargs={'static_argnames': ('return_dict',)}
     )
-    pipe.transformer = torchax.compile(pipe.transformer, options)
+    pipe.transformer = torchax.compile(pipe.transformer, transformer_options)
     
     transformer_shardings = transformer_shardings_fsdp if args.use_fsdp else transformer_shardings_tp
     pipe.transformer.params = shard_weight_dict(
@@ -792,7 +696,24 @@ def setup_pipeline_for_jax(args, mesh, env):
         pipe.transformer.buffers, transformer_shardings, mesh
     )
     
-    print("Pipeline configuration complete")
+    # VAE - using diffusers' Flax VAE
+    print("- Moving VAE to XLA...")
+    move_module_to_xla(env, pipe.vae)
+    pipe.vae.encoder = torchax.compile(pipe.vae.encoder)
+    pipe.vae.decoder = torchax.compile(pipe.vae.decoder)
+    
+    # Wrap VAE decode to ensure correct dtype
+    original_decode = pipe.vae.decode
+    def decode_wrapper(z, *args, **kwargs):
+        # Handle both JAX arrays and PyTorch tensors
+        if isinstance(z, jnp.ndarray) or 'ArrayImpl' in str(type(z)):
+            z = z.astype(jnp.bfloat16)
+        elif hasattr(z, 'dtype') and z.dtype != torch.bfloat16:
+            z = z.to(torch.bfloat16)
+        return original_decode(z, *args, **kwargs)
+    pipe.vae.decode = decode_wrapper
+    
+    print("=== Pipeline Setup Complete ===\n")
     return pipe
 
 
@@ -921,71 +842,64 @@ def main():
     """Main entry point for Wan video generation."""
     # Parse arguments
     args = parse_args()
+    
+    print(f"\n{'='*60}")
+    print("Wan 2.1 Text-to-Video 生成（TPU Splash Attention）")
+    print(f"{'='*60}")
     print(f"Configuration: {args}")
     
     # Update global settings from args
-    global BQSIZE, BKVSIZE, BKVCOMPUTESIZE, BKVCOMPUTEINSIZE, USE_K_SMOOTH, USE_CUSTOM_ATTENTION
+    global BQSIZE, BKVSIZE, BKVCOMPUTESIZE, BKVCOMPUTEINSIZE, USE_K_SMOOTH
     BQSIZE = args.bqsize
     BKVSIZE = args.bkvsize
     BKVCOMPUTESIZE = args.bkvcomputesize
     BKVCOMPUTEINSIZE = args.bkvcomputeinsize
     USE_K_SMOOTH = args.use_k_smooth
-    USE_CUSTOM_ATTENTION = args.use_custom_attention
     
     # Configure JAX
     jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
-    jax.config.update("jax_persistent_cache_enable_xla_caches", 
-                      "xla_gpu_per_fusion_autotune_cache_dir")
     
     torch.set_default_dtype(torch.bfloat16)
     
     # Setup PyTree registrations
     setup_pytree_registrations()
     
-    # Initialize torchax and create environment BEFORE any disable/enable cycles
-    # This is critical - env must be created while torchax is fully enabled
+    # Load pipeline BEFORE enabling torchax to avoid safetensors loading issues
+    pipe = load_pipeline(args)
+    
+    # Now enable torchax
     torchax.enable_globally()
     env = torchax.default_env()
     
-    # Create mesh
-    tp_dim, dp_dim, sp_dim = len(jax.devices()), 1, 1
-    if args.use_dp:
-        tp_dim //= 2
-        dp_dim = 2
-    if args.sp_num > 1:
-        tp_dim //= args.sp_num
-        sp_dim = args.sp_num
+    # Create mesh - use 2D mesh (dp, tp) like Wan2.2
+    assert len(jax.devices()) % 2 == 0
+    dp_dim = 2 if args.use_dp else 1
+    tp_dim = len(jax.devices()) // dp_dim
     
-    print(f"Mesh dimensions: dp_dim={dp_dim}, sp_dim={sp_dim}, tp_dim={tp_dim}")
-    print(f"Number of devices: {len(jax.devices())}")
-    
-    # Use same mesh ordering as wan_tx_splash_attn.py: (dp, sp, tp)
     mesh_devices = mesh_utils.create_device_mesh(
-        (dp_dim, sp_dim, tp_dim), allow_split_physical_axes=True
+        (dp_dim, tp_dim), allow_split_physical_axes=True
     )
-    mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
+    mesh = Mesh(mesh_devices, ("dp", "tp"))
     
-    # Configure env with mesh before setup_pipeline_for_jax
-    # Note: default_device_or_sharding was removed in torchax 0.0.11
-    # We set _mesh as a custom attribute for backward compatibility
-    env._mesh = mesh
-    # Also set in param for new torchax
-    env._initial_content.mesh = mesh
-    # Support both old and new config names
-    if hasattr(env.config, 'use_tpu_splash_attention'):
-        env.config.use_tpu_splash_attention = True
-    if hasattr(env.config, 'use_tpu_flash_attention'):
-        env.config.use_tpu_flash_attention = True
+    print(f"\nMesh 配置:")
+    print(f"  dp_dim={dp_dim}, tp_dim={tp_dim}")
+    print(f"  总设备数: {len(jax.devices())}")
+    print(f"  Mesh: {mesh}")
     
-    # Setup pipeline
-    pipe = setup_pipeline_for_jax(args, mesh, env)
+    # Setup pipeline for JAX (move to TPU and shard)
+    pipe = setup_pipeline_for_jax(pipe, args, mesh, env)
     
-    # Run generation - don't wrap in 'with env:' to avoid torchax intercepting all ops
+    # Run generation
     run_generation(pipe, args, mesh)
     
-    print("\n✓ Generation complete")
+    print(f"\n{'='*60}")
+    print("✓ 生成完成！")
+    print(f"{'='*60}")
+    
+    # Force exit to avoid torchax background thread blocking
+    os._exit(0)
 
 
 if __name__ == '__main__':
