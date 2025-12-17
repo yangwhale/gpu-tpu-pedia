@@ -1,18 +1,18 @@
+#!/usr/bin/env python3
 """
-Wan 2.1 Video Generation with TPU Splash Attention
+Wan 2.1 Text-to-Video Generation with TPU Splash Attention
 
-This file provides a clean implementation for running Wan 2.1 text-to-video
-generation on TPU using JAX/Flax, with optimized Splash Attention.
+本脚本提供在 TPU 上运行 Wan 2.1 Text-to-Video 生成的完整实现，
+使用 JAX/Flax 和优化的 Splash Attention。
 
-Structure:
+结构:
 1. Imports and Configuration
 2. Helper Functions
 3. Splash Attention Implementation
 4. Sharding Strategies
 5. Weight Sharding Functions
-6. VAE Components
-7. Pipeline Setup
-8. Main Function
+6. Pipeline Setup
+7. Main Function
 
 Optimizations from Wan2.2:
 - Using diffusers' AutoencoderKLWan (Flax version) for better compatibility
@@ -22,14 +22,31 @@ Optimizations from Wan2.2:
 """
 
 import os
+import warnings
+import logging
+
+# ============================================================================
+# 环境配置和 Warning 过滤（必须在其他 import 之前）
+# ============================================================================
+
 os.environ.setdefault('JAX_MEMORY_DEBUG', '0')
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
+
+# 全局过滤 warnings
+warnings.filterwarnings('ignore')
+
+# 配置 logging
+logging.getLogger('root').setLevel(logging.ERROR)
+logging.getLogger().setLevel(logging.ERROR)
+logging.getLogger('diffusers').setLevel(logging.ERROR)
+logging.getLogger('transformers').setLevel(logging.ERROR)
 
 import time
 import re
 import math
 import functools
 import argparse
+from contextlib import nullcontext
 from datetime import datetime
 
 import numpy as np
@@ -42,7 +59,6 @@ from jax.experimental.pallas.ops.tpu import splash_attention
 from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
 from flax import nnx
-from flax.linen import partitioning as nn_partitioning
 
 import torchax
 from torchax.ops import ops_registry, jaten
@@ -84,20 +100,11 @@ BKVCOMPUTESIZE = 256
 BKVCOMPUTEINSIZE = 256
 
 # Attention Settings
-WINDOW_SIZE = None  # None for full attention, tuple (left, right) for local
-USE_K_SMOOTH = True
-USE_CUSTOM_ATTENTION = True
+USE_K_SMOOTH = False  # K smoothing for better numerical stability
 
 # Mesh Sharding Configuration
 USE_DP = True
-SP_NUM = 1
 USE_FSDP = True
-
-# VAE Sharding Rules
-LOGICAL_AXIS_RULES = (
-    ('conv_out', ('tp', 'dp', 'sp')),
-    ('conv_in', ('tp', 'dp', 'sp'))
-)
 
 # Profiler Output Path
 PROFILE_OUT_PATH = "/dev/shm/tensorboard"
@@ -258,98 +265,6 @@ def _sdpa_reference(query, key, value, attn_mask=None, dropout_p=0.0,
         attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
     
     return attn_weight @ value
-
-
-def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False,
-                          window_size=None, bqsize=BQSIZE, bkvsize=BKVSIZE,
-                          bkvcomputesize=BKVCOMPUTESIZE):
-    """TPU Splash Attention implementation with sharding support."""
-    mesh = getattr(env, '_mesh', None) or env.param.mesh
-    num_heads = query.shape[1]
-
-    def _attention_on_slices(q, k, v):
-        scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
-        q = q * scale_factor
-
-        def pad_to_multiple(x, multiple, axis):
-            seq_len = x.shape[axis]
-            pad_len = (multiple - seq_len % multiple) % multiple
-            if pad_len == 0:
-                return x, seq_len
-            pad_width = [(0, 0)] * x.ndim
-            pad_width[axis] = (0, pad_len)
-            return jnp.pad(x, pad_width), seq_len
-
-        def kernel_3d(q_3d, k_3d, v_3d):
-            num_heads_on_device = q_3d.shape[0]
-            
-            # Self attention (long KV sequence)
-            if k_3d.shape[1] > 10000:
-                q_3d_padded, q_orig_len = pad_to_multiple(q_3d, bqsize, axis=1)
-                k_3d_padded, k_orig_len = pad_to_multiple(k_3d, bkvsize, axis=1)
-                v_3d_padded, v_orig_len = pad_to_multiple(v_3d, bkvsize, axis=1)
-            else:
-                # Cross attention (short KV sequence, no padding)
-                q_3d_padded, q_orig_len = pad_to_multiple(q_3d, bqsize, axis=1)
-                k_3d_padded, k_orig_len = k_3d, k_3d.shape[1]
-                v_3d_padded, v_orig_len = v_3d, v_3d.shape[1]
-
-            padded_q_seq_len = q_3d_padded.shape[1]
-            padded_kv_seq_len = k_3d_padded.shape[1]
-
-            # Create attention mask
-            if window_size is not None:
-                mask_class = functools.partial(
-                    splash_attention.LocalMask, window_size=window_size, offset=0
-                )
-            else:
-                mask_class = splash_attention.FullMask
-
-            mask = splash_attention.MultiHeadMask([
-                mask_class((padded_q_seq_len, padded_kv_seq_len)) 
-                for _ in range(num_heads_on_device)
-            ])
-
-            block_sizes = splash_attention.BlockSizes(
-                block_q=min(bqsize, padded_q_seq_len),
-                block_kv=min(bkvsize, padded_kv_seq_len),
-                block_kv_compute=min(bkvcomputesize, padded_kv_seq_len),
-            )
-            
-            splash_kernel = splash_attention.make_splash_mha(
-                mask=mask, block_sizes=block_sizes, head_shards=1, q_seq_shards=1
-            )
-            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded)
-            return out[:, :q_orig_len, ...]
-
-        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
-        return vmapped_kernel(q, k, v)
-
-    # Determine partition specs based on attention type
-    if num_heads < mesh.size:
-        # Replicated for VAE
-        q_partition_spec = P()
-        kv_partition_spec = P()
-    else:
-        # Self attention (long KV)
-        if key.shape[2] > 10000:
-            q_partition_spec = P('dp', 'tp', 'sp', None)
-            kv_partition_spec = P('dp', 'tp', None, None)
-        else:
-            # Cross attention (short KV)
-            q_partition_spec = P('dp', None, ('tp', 'sp'), None)
-            kv_partition_spec = P('dp', None, None, None)
-
-    sharded_fn = shard_map(
-        _attention_on_slices,
-        mesh=mesh,
-        in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
-        out_specs=q_partition_spec,
-        check_rep=False,
-    )
-    out = sharded_fn(query, key, value)
-    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
-    return out
 
 
 def _tpu_custom_attention(query, key, value, mesh, scale=None):
@@ -557,30 +472,6 @@ def shard_weight_dict(weight_dict, sharding_dict, mesh):
     return result
 
 
-def _add_sharding_rule(vs, logical_axis_rules):
-    """Add sharding rules to variable state using new Flax API."""
-    # Use set_metadata for Flax 0.12+ compatibility
-    vs.set_metadata('sharding_rules', logical_axis_rules)
-    return vs
-
-
-@nnx.jit(static_argnums=(1,), donate_argnums=(0,))
-def create_sharded_logical_model(model, logical_axis_rules):
-    """Create a sharded model with logical axis rules."""
-    graphdef, state, rest_of_state = nnx.split(model, nnx.Param, ...)
-    p_add_sharding_rule = functools.partial(
-        _add_sharding_rule, logical_axis_rules=logical_axis_rules
-    )
-    state = jax.tree.map(
-        p_add_sharding_rule, state,
-        is_leaf=lambda x: isinstance(x, nnx.Variable)
-    )
-    pspecs = nnx.get_partition_spec(state)
-    sharded_state = jax.lax.with_sharding_constraint(state, pspecs)
-    model = nnx.merge(graphdef, sharded_state, rest_of_state)
-    return model
-
-
 # ============================================================================
 # Pipeline Setup
 # ============================================================================
@@ -746,14 +637,43 @@ def run_generation(pipe, args, mesh):
         'use_dp': args.use_dp,
     }
     
-    with mesh, nn_partitioning.axis_rules(LOGICAL_AXIS_RULES):
-        # Warmup and save video
-        print("\nGenerating video (warmup run)...")
-        start = time.perf_counter()
+    # 打印生成配置
+    print(f"\n{'='*60}")
+    print("生成配置")
+    print(f"{'='*60}")
+    print(f"  分辨率: {args.width}x{args.height}")
+    print(f"  帧数: {args.frames}")
+    print(f"  FPS: {args.fps}")
+    print(f"  推理步数: {args.num_inference_steps}")
+    print(f"  引导尺度: 5.0")
+    print(f"  随机种子: 42")
+    print(f"  Block sizes: BQSIZE={BQSIZE}, BKVSIZE={BKVSIZE}, BKVCOMPUTESIZE={BKVCOMPUTESIZE}")
+    
+    # Profile context
+    if args.profile:
+        print(f"\n[Profiler] 启用 JAX Profiler，输出目录: {PROFILE_OUT_PATH}")
+        profiler_context = jax.profiler.trace(
+            PROFILE_OUT_PATH,
+            create_perfetto_link=False
+        )
+    else:
+        profiler_context = nullcontext()
+    
+    with mesh, profiler_context:
+        # === Warmup Run ===
+        print(f"\n{'='*60}")
+        print("预热运行（触发 JIT 编译）")
+        print(f"{'='*60}")
+        warmup_start = time.perf_counter()
         output = pipe(**pipe_kwargs).frames[0]
         jax.effects_barrier()
-        warmup_time = time.perf_counter() - start
-        print(f"Warmup completed in {warmup_time:.2f}s")
+        warmup_time = time.perf_counter() - warmup_start
+        
+        # 计算每步平均时间（预热）
+        warmup_time_per_step = warmup_time / args.num_inference_steps
+        print(f"\n✓ 预热完成")
+        print(f"  总耗时: {warmup_time:.2f}s")
+        print(f"  平均每步: {warmup_time_per_step:.2f}s")
         
         # Save output
         output = prepare_video_for_export(output, args.frames)
@@ -763,37 +683,31 @@ def run_generation(pipe, args, mesh):
         current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_name = f"{current_datetime}.mp4"
         export_to_video(output, file_name, fps=args.fps)
-        print(f"Video saved to: {file_name}")
+        print(f"  视频保存至: {file_name}")
         
-        # Profile if requested
-        if args.profile:
-            print("\nRunning profiler...")
-            jax.profiler.start_trace(PROFILE_OUT_PATH)
-            _ = pipe(
-                prompt=prompt,
-                negative_prompt=negative_prompt,
-                height=args.height,
-                width=args.width,
-                num_inference_steps=3,
-                num_frames=args.frames,
-                guidance_scale=5.0,
-                output_type="latent",
-                generator=generator,
-                use_dp=args.use_dp,
-            )
-            jax.effects_barrier()
-            jax.profiler.stop_trace()
-            print(f"Profile saved to: {PROFILE_OUT_PATH}")
-        
-        # Benchmark
-        print("\nBenchmark run...")
-        start = time.perf_counter()
+        # === Benchmark Run ===
+        print(f"\n{'='*60}")
+        print("基准测试运行")
+        print(f"{'='*60}")
+        benchmark_start = time.perf_counter()
         output = pipe(**pipe_kwargs)
         jax.effects_barrier()
-        benchmark_time = time.perf_counter() - start
-        print(f"Benchmark completed in {benchmark_time:.2f}s")
-        print(f"Block sizes: BQSIZE={args.bqsize}, BKVSIZE={args.bkvsize}, "
-              f"BKVCOMPUTESIZE={args.bkvcomputesize}")
+        benchmark_time = time.perf_counter() - benchmark_start
+        
+        # 计算每步平均时间（基准测试）
+        benchmark_time_per_step = benchmark_time / args.num_inference_steps
+        
+        print(f"\n✓ 基准测试完成")
+        print(f"  总耗时: {benchmark_time:.2f}s")
+        print(f"  平均每步: {benchmark_time_per_step:.2f}s")
+    
+    # === 性能统计 ===
+    print(f"\n{'='*60}")
+    print("性能统计")
+    print(f"{'='*60}")
+    print(f"  预热时间: {warmup_time:.2f}s ({warmup_time_per_step:.2f}s/step)")
+    print(f"  基准时间: {benchmark_time:.2f}s ({benchmark_time_per_step:.2f}s/step)")
+    print(f"  加速比: {warmup_time / benchmark_time:.2f}x")
 
 
 # ============================================================================
@@ -815,19 +729,9 @@ def parse_args():
     parser.add_argument("--fps", type=int, default=FPS)
     parser.add_argument("--num_inference_steps", type=int, default=NUM_STEPS)
     
-    # Attention settings
-    parser.add_argument("--window_size", type=int, nargs=2, default=None)
-    parser.add_argument("--bqsize", type=int, default=BQSIZE)
-    parser.add_argument("--bkvsize", type=int, default=BKVSIZE)
-    parser.add_argument("--bkvcomputesize", type=int, default=BKVCOMPUTESIZE)
-    parser.add_argument("--use_k_smooth", type=bool, default=USE_K_SMOOTH)
-    parser.add_argument("--use_custom_attention", action="store_true", default=USE_CUSTOM_ATTENTION)
-    parser.add_argument("--bkvcomputeinsize", type=int, default=BKVCOMPUTEINSIZE)
-    
     # Sharding settings
     parser.add_argument("--use_dp", action="store_true", default=USE_DP)
-    parser.add_argument("--sp_num", type=int, default=SP_NUM)
-    parser.add_argument("--use_fsdp", type=bool, default=USE_FSDP)
+    parser.add_argument("--use_fsdp", action="store_true", default=USE_FSDP)
     
     # Other settings
     parser.add_argument("--t5_cpu", action="store_true", default=False,
@@ -847,14 +751,6 @@ def main():
     print("Wan 2.1 Text-to-Video 生成（TPU Splash Attention）")
     print(f"{'='*60}")
     print(f"Configuration: {args}")
-    
-    # Update global settings from args
-    global BQSIZE, BKVSIZE, BKVCOMPUTESIZE, BKVCOMPUTEINSIZE, USE_K_SMOOTH
-    BQSIZE = args.bqsize
-    BKVSIZE = args.bkvsize
-    BKVCOMPUTESIZE = args.bkvcomputesize
-    BKVCOMPUTEINSIZE = args.bkvcomputeinsize
-    USE_K_SMOOTH = args.use_k_smooth
     
     # Configure JAX
     jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
