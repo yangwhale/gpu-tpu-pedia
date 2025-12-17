@@ -401,6 +401,48 @@ jax.tree_util.register_pytree_node(
 )
 ```
 
+### 6. Scheduler shift 参数缺失导致视频动作快进
+
+**问题**：三阶段脚本生成的视频动作跳跃、快进感强，与单步脚本质量差异明显。
+
+**分析**：
+- 单步脚本 `generate_i2v_flax.py` 使用 `WanImageToVideoPipeline`，Pipeline 内部自动读取模型配置中的 `shift=5.0`
+- 三阶段脚本手动实现推理循环，调用 `scheduler.set_timesteps(num_steps)` 时**未设置 shift 参数**
+- Diffusers 的 `FlowMatchEulerDiscreteScheduler` 默认 `shift=1.0`
+- `shift` 参数控制采样时间步长分布：
+  - `shift=5.0`：更多步数分配给低噪声阶段（生成细节、优化动作）
+  - `shift=1.0`：时间步长均匀分布，减少细节阶段投入
+
+**症状**：
+- 视频动作变化过快、跳跃感强
+- 细节不够精细
+- 看起来像"快进"了
+
+**解决**：
+```python
+# 错误方式（set_timesteps 不接受 shift 参数）
+scheduler.set_timesteps(num_steps, shift=5.0)  # TypeError!
+
+# 正确方式：使用 set_shift() 方法
+scheduler.set_shift(5.0)  # 先设置 shift
+scheduler.set_timesteps(num_steps)  # 再设置 timesteps
+```
+
+**关键代码**（`stage2_transformer.py`）：
+```python
+from utils import SHIFT  # SHIFT = 5.0
+
+# 设置 shift（Wan 2.2 I2V 模型默认 shift=5.0）
+shift_value = config.get('shift', SHIFT)
+scheduler.set_shift(shift_value)
+
+# 设置 timesteps
+scheduler.set_timesteps(num_steps)
+timesteps = scheduler.timesteps
+```
+
+**教训**：手动实现推理循环时，必须仔细对照原始 Pipeline 的每一个细节，尤其是 scheduler 配置参数。
+
 ## 常见问题
 
 ### Q1: 视频生成全黑或纯噪声

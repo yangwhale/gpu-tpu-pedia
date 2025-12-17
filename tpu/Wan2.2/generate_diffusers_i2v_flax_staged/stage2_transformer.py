@@ -53,6 +53,7 @@ from utils import (
     NUM_STEPS,
     GUIDANCE_SCALE,
     BOUNDARY_RATIO,
+    SHIFT,
     BQSIZE,
     BKVSIZE,
     BKVCOMPUTESIZE,
@@ -363,7 +364,12 @@ def run_denoising_loop(
     latents = torch.randn(latent_shape, generator=generator, dtype=torch.bfloat16)
     latents = latents.to('jax')
     
-    # 设置 scheduler
+    # 设置 shift（Wan 2.2 I2V 模型默认 shift=5.0）
+    # shift 参数调整采样的时间步长分布，较高的 shift 值会将更多步数分配给低噪声阶段
+    shift_value = config.get('shift', SHIFT)
+    scheduler.set_shift(shift_value)
+    
+    # 设置 timesteps
     scheduler.set_timesteps(num_steps)
     timesteps = scheduler.timesteps
     

@@ -54,6 +54,7 @@ FPS = 16
 NUM_STEPS = 40
 GUIDANCE_SCALE = 3.5
 BOUNDARY_RATIO = 0.9
+SHIFT = 5.0  # Wan 2.2 I2V 默认 shift 值，影响时间步长分布
 
 # 默认 Prompts
 DEFAULT_PROMPT = "Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression. Blurred beach scenery forms the background featuring crystal-clear waters, distant green hills, and a blue sky dotted with white clouds. The cat assumes a naturally relaxed posture, as if savoring the sea breeze and warm sunlight. A close-up shot highlights the feline's intricate details and the refreshing atmosphere of the seaside."
