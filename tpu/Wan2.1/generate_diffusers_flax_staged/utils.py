@@ -2,22 +2,32 @@
 """
 Wan 2.1 三阶段生成 - 共享工具模块
 
-包含数据序列化、转换和共享配置
+包含:
+- 配置常量（模型、视频生成）
+- Splash Attention 配置
+- Sharding 策略
+- SafeTensors 数据存储
+- 配置管理
+- PyTree 注册
+- 辅助工具函数
 """
 
 import os
+import re
 import json
 import numpy as np
+import jax
 import jax.numpy as jnp
 import torch
 from safetensors import safe_open
-from safetensors.numpy import save_file as np_save_file
 from safetensors.torch import save_file as torch_save_file, load_file as torch_load_file
 from jax.tree_util import register_pytree_node
-from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+from jax.sharding import PartitionSpec as P, NamedSharding
 
 
-# === 模型配置 ===
+# ============================================================================
+# 模型配置
+# ============================================================================
 MODEL_NAME = "Wan-AI/Wan2.1-T2V-14B-Diffusers"
 
 # === Video Generation Settings (720P) ===
@@ -28,33 +38,108 @@ FRAMES = 81
 FPS = 16
 NUM_STEPS = 50
 
-# === Splash Attention 配置参数 ===
+
+# ============================================================================
+# Splash Attention 配置
+# ============================================================================
 BQSIZE = 3328           # Query 块大小
 BKVSIZE = 2816          # Key/Value 块大小
 BKVCOMPUTESIZE = 256    # Key/Value 计算块大小
 BKVCOMPUTEINSIZE = 256  # Key/Value 内部计算块大小
 
-# === Attention Settings ===
-WINDOW_SIZE = None      # None for full attention, tuple (left, right) for local
+# 是否使用 K-smooth
 USE_K_SMOOTH = True
+
+# 是否使用 custom splash attention (exp2 优化)
 USE_CUSTOM_ATTENTION = True
 
-# === Mesh 分片配置 ===
-USE_DP = True           # 是否使用 data parallelism
-SP_NUM = 1              # Spatial parallelism 数量
-USE_FSDP = True         # 是否使用 FSDP 模式
-
-# === VAE Sharding Rules ===
-LOGICAL_AXIS_RULES = (
-    ('conv_out', ('tp', 'dp', 'sp')),
-    ('conv_in', ('tp', 'dp', 'sp'))
-)
-
-# === Profiler Output Path ===
-PROFILE_OUT_PATH = "/dev/shm/tensorboard"
+# LOG2_E 常量，用于 exp2 优化
+LOG2_E = 1.44269504
 
 
-# === 数据转换工具 ===
+# ============================================================================
+# Mesh 配置
+# ============================================================================
+DEFAULT_DP = 2
+
+
+# ============================================================================
+# Sharding 策略
+# ============================================================================
+
+# Text Encoder sharding (T5-XXL)
+TEXT_ENCODER_SHARDINGS = {
+    r'shared\.weight': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.q\.weight': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.k\.weight': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.v\.weight': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.o\.weight': (None, ('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wi_0\.weight': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wi_1\.weight': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wo\.weight': (None, ('dp', 'tp'),),
+}
+
+# Transformer sharding (WanTransformer3DModel)
+TRANSFORMER_SHARDINGS = {
+    r'condition_embedder\.time_embedder\.linear_1\.weight': ('tp',),
+    r'condition_embedder\.time_embedder\.linear_1\.bias': ('tp',),
+    r'condition_embedder\.time_embedder\.linear_2\.weight': (None, 'tp',),
+    r'condition_embedder\.text_embedder\.linear_1\.weight': ('tp',),
+    r'condition_embedder\.text_embedder\.linear_1\.bias': ('tp',),
+    r'condition_embedder\.text_embedder\.linear_2\.weight': (None, 'tp',),
+    r'blocks\.\d+\.attn1\.to_q\.weight': ('tp',),
+    r'blocks\.\d+\.attn1\.to_q\.bias': ('tp',),
+    r'blocks\.\d+\.attn1\.to_k\.weight': ('tp',),
+    r'blocks\.\d+\.attn1\.to_k\.bias': ('tp',),
+    r'blocks\.\d+\.attn1\.to_v\.weight': ('tp',),
+    r'blocks\.\d+\.attn1\.to_v\.bias': ('tp',),
+    r'blocks\.\d+\.attn1\.to_out\.\d+\.weight': (None, 'tp',),
+    r'blocks\.\d+\.attn2\.to_q\.weight': ('tp',),
+    r'blocks\.\d+\.attn2\.to_q\.bias': ('tp',),
+    r'blocks\.\d+\.attn2\.to_k\.weight': ('tp',),
+    r'blocks\.\d+\.attn2\.to_k\.bias': ('tp',),
+    r'blocks\.\d+\.attn2\.to_v\.weight': ('tp',),
+    r'blocks\.\d+\.attn2\.to_v\.bias': ('tp',),
+    r'blocks\.\d+\.attn2\.to_out\.\d+\.weight': (None, 'tp',),
+    r'blocks\.\d+\.ffn\.net\.\d+\.proj\.weight': ('tp',),
+    r'blocks\.\d+\.ffn\.net\.\d+\.proj\.bias': ('tp',),
+    r'blocks\.\d+\.ffn\.net\.\d+\.weight': (None, 'tp',),
+}
+
+# VAE sharding (空字典 - 不分片，使用 replicate)
+VAE_ENCODER_SHARDINGS = {}
+VAE_DECODER_SHARDINGS = {}
+
+
+# ============================================================================
+# 权重分片函数
+# ============================================================================
+
+def shard_weight_dict(weight_dict, sharding_dict, mesh):
+    """Apply sharding to weights based on pattern matching."""
+    result = {}
+    for k, v in weight_dict.items():
+        if isinstance(v, torch.Tensor):
+            v = v.to("jax")
+        
+        matched = False
+        for target, sharding in sharding_dict.items():
+            if re.fullmatch(target, k) is not None:
+                v.apply_jax_(jax.device_put, NamedSharding(mesh, P(*sharding)))
+                matched = True
+                break
+        
+        if not matched:
+            # Replicate
+            v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
+        
+        result[k] = v
+    return result
+
+
+# ============================================================================
+# 数据转换工具
+# ============================================================================
 
 def to_torch_recursive(x):
     """递归地将 JAX 数组转换为 PyTorch 张量
@@ -102,27 +187,77 @@ def to_jax_recursive(x):
 
 def setup_pytree_registrations():
     """
-    注册必要的pytree节点以支持JAX转换
+    注册必要的 PyTree 节点以支持 JAX 转换
     """
-    print("注册PyTree节点...")
+    from transformers import modeling_outputs
+    from diffusers.models.autoencoders import vae as diffusers_vae
+    from diffusers.models import modeling_outputs as diffusers_modeling_outputs
     
-    def model_output_flatten(obj):
+    print("注册 PyTree 节点...")
+    
+    def flatten_model_output(obj):
         return obj.to_tuple(), type(obj)
-
-    def model_output_unflatten(aux, children):
+    
+    def unflatten_model_output(aux, children):
         return aux(*children)
     
-    OUTPUT_CLASSES = [
-        BaseModelOutputWithPastAndCrossAttentions,
-    ]
-
-    for cls in OUTPUT_CLASSES:
-        try:
-            register_pytree_node(cls, model_output_flatten, model_output_unflatten)
-            print(f"  - {cls.__name__} 已注册")
-        except ValueError:
-            # 已经注册过
-            print(f"  - {cls.__name__} 已存在")
+    # Text encoder output
+    try:
+        register_pytree_node(
+            modeling_outputs.BaseModelOutputWithPastAndCrossAttentions,
+            flatten_model_output,
+            unflatten_model_output
+        )
+        print("  - BaseModelOutputWithPastAndCrossAttentions 已注册")
+    except ValueError:
+        print("  - BaseModelOutputWithPastAndCrossAttentions 已存在")
+    
+    # VAE decode output
+    try:
+        register_pytree_node(
+            diffusers_vae.DecoderOutput,
+            flatten_model_output,
+            unflatten_model_output
+        )
+        print("  - DecoderOutput 已注册")
+    except ValueError:
+        print("  - DecoderOutput 已存在")
+    
+    # VAE encode output
+    try:
+        register_pytree_node(
+            diffusers_modeling_outputs.AutoencoderKLOutput,
+            flatten_model_output,
+            unflatten_model_output
+        )
+        print("  - AutoencoderKLOutput 已注册")
+    except ValueError:
+        print("  - AutoencoderKLOutput 已存在")
+    
+    # DiagonalGaussianDistribution
+    def flatten_gaussian(obj):
+        return (obj.parameters, obj.mean, obj.logvar, obj.deterministic,
+                obj.std, obj.var), None
+    
+    def unflatten_gaussian(aux, children):
+        obj = object.__new__(diffusers_vae.DiagonalGaussianDistribution)
+        obj.parameters = children[0]
+        obj.mean = children[1]
+        obj.logvar = children[2]
+        obj.deterministic = children[3]
+        obj.std = children[4]
+        obj.var = children[5]
+        return obj
+    
+    try:
+        register_pytree_node(
+            diffusers_vae.DiagonalGaussianDistribution,
+            flatten_gaussian,
+            unflatten_gaussian
+        )
+        print("  - DiagonalGaussianDistribution 已注册")
+    except ValueError:
+        print("  - DiagonalGaussianDistribution 已存在")
 
 
 def sharded_device_put(tensor, sharding):
@@ -387,7 +522,9 @@ def load_latents_from_safetensors(input_path, device='cpu', restore_dtype=True):
     return latents, metadata
 
 
-# === 配置管理 ===
+# ============================================================================
+# 配置管理
+# ============================================================================
 
 def save_generation_config(config_dict, output_path):
     """保存生成配置到 JSON 文件"""
@@ -404,7 +541,9 @@ def load_generation_config(input_path):
     return config
 
 
-# === 默认输出路径 ===
+# ============================================================================
+# 默认输出路径
+# ============================================================================
 
 def get_default_paths(output_dir="./stage_outputs"):
     """获取默认的中间文件路径"""
@@ -415,3 +554,27 @@ def get_default_paths(output_dir="./stage_outputs"):
         'config': os.path.join(output_dir, 'generation_config.json'),
         'video': os.path.join(output_dir, 'output_video.mp4'),
     }
+
+
+# ============================================================================
+# JAX 配置辅助
+# ============================================================================
+
+def setup_jax_cache():
+    """设置 JAX 编译缓存（重要：避免重复编译）"""
+    jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
+    jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+    jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
+    jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
+    print("✓ JAX 编译缓存已启用: /dev/shm/jax_cache")
+
+
+def pad_to_multiple(x, multiple, axis):
+    """Pad array to next multiple along axis."""
+    seq_len = x.shape[axis]
+    pad_len = (multiple - seq_len % multiple) % multiple
+    if pad_len == 0:
+        return x, seq_len
+    pad_width = [(0, 0)] * x.ndim
+    pad_width[axis] = (0, pad_len)
+    return jnp.pad(x, pad_width), seq_len

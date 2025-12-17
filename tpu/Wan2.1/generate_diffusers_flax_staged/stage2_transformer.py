@@ -50,8 +50,12 @@ from utils import (
     MODEL_NAME,
     FLOW_SHIFT,
     BQSIZE, BKVSIZE, BKVCOMPUTESIZE, BKVCOMPUTEINSIZE,
-    USE_K_SMOOTH, USE_CUSTOM_ATTENTION,
-    USE_DP, SP_NUM, USE_FSDP,
+    USE_K_SMOOTH, USE_CUSTOM_ATTENTION, LOG2_E,
+    DEFAULT_DP,
+    TRANSFORMER_SHARDINGS,
+    shard_weight_dict,
+    setup_jax_cache,
+    pad_to_multiple,
     setup_pytree_registrations,
     load_embeddings_from_safetensors,
     save_latents_to_safetensors,
@@ -198,68 +202,79 @@ def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False,
     return out
 
 
-def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
-                           window_size=None, bqsize=BQSIZE, bkvsize=BKVSIZE,
-                           bkvcomputesize=BKVCOMPUTESIZE, bkvcomputeinsize=BKVCOMPUTEINSIZE):
+def _tpu_custom_attention(query, key, value, mesh, scale=None):
     """TPU Custom Splash Attention with exp2 optimization."""
-    mesh = getattr(env, '_mesh', None) or env.param.mesh
-    num_heads = query.shape[1]
-
     def _attention_on_slices(q, k, v):
         scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
         # Fuse the ops of exp in softmax - multiply by log2(e)
-        _LOG2_E = 1.44269504
-        q = q * scale_factor * _LOG2_E
-
-        def pad_to_multiple(x, multiple, axis):
-            seq_len = x.shape[axis]
-            pad_len = (multiple - seq_len % multiple) % multiple
-            if pad_len == 0:
-                return x, seq_len
-            pad_width = [(0, 0)] * x.ndim
-            pad_width[axis] = (0, pad_len)
-            return jnp.pad(x, pad_width), seq_len
+        q = q * scale_factor * LOG2_E
 
         def kernel_3d(q_3d, k_3d, v_3d):
-            # Always pad for custom attention
-            q_3d_padded, q_orig_len = pad_to_multiple(q_3d, bqsize, axis=1)
-            k_3d_padded, k_orig_len = pad_to_multiple(k_3d, bkvsize, axis=1)
-            v_3d_padded, v_orig_len = pad_to_multiple(v_3d, bkvsize, axis=1)
+            # Pad to block size multiple to avoid NaN in incomplete blocks
+            def pad_to_block_multiple(x, block_size, axis):
+                seq_len = x.shape[axis]
+                pad_len = (block_size - seq_len % block_size) % block_size
+                if pad_len == 0:
+                    return x, seq_len
+                pad_width = [(0, 0)] * x.ndim
+                pad_width[axis] = (0, pad_len)
+                return jnp.pad(x, pad_width), seq_len
+            
+            q_3d_padded, q_orig_len = pad_to_block_multiple(q_3d, BQSIZE, axis=1)
+            k_3d_padded, k_orig_len = pad_to_block_multiple(k_3d, BKVSIZE, axis=1)
+            v_3d_padded, v_orig_len = pad_to_block_multiple(v_3d, BKVSIZE, axis=1)
 
             padded_q_seq_len = q_3d_padded.shape[1]
             padded_kv_seq_len = k_3d_padded.shape[1]
 
             block_sizes = splash_attention.BlockSizes(
-                block_q=min(bqsize, padded_q_seq_len),
-                block_kv=min(bkvsize, padded_kv_seq_len),
-                block_kv_compute=min(bkvcomputesize, padded_kv_seq_len),
+                block_q=min(BQSIZE, padded_q_seq_len),
+                block_kv=min(BKVSIZE, padded_kv_seq_len),
+                block_kv_compute=min(BKVCOMPUTESIZE, padded_kv_seq_len),
             )
-            
             splash_kernel = custom_splash_attention.make_splash_mha(
-                block_sizes=block_sizes, bkv_compute_in=bkvcomputeinsize
+                block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE
             )
-            out = splash_kernel(
-                q_3d_padded.astype(jnp.float32),
-                k_3d_padded.astype(jnp.float32),
-                v_3d_padded.astype(jnp.float32)
-            ).astype(q_3d_padded.dtype)
-            
-            # Swap axes for output format
+            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded).astype(q_3d.dtype)
             out = jnp.swapaxes(out, 1, 2)
-            return out[:, :q_orig_len, ...]
+            # Remove padding
+            return out[:, :q_orig_len, :]
 
         vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
         return vmapped_kernel(q, k, v)
 
-    # Determine partition specs based on attention type
-    if num_heads < mesh.size:
-        q_partition_spec = P()
-        kv_partition_spec = P()
+    # Determine sharding strategy
+    if key.shape[0] > 1:
+        dp_mesh_key = "dp"
+        remain_mesh_key = ("tp",)
     else:
-        # Always use self attention sharding for custom attention
-        q_partition_spec = P('dp', 'tp', 'sp', None)
-        kv_partition_spec = P('dp', 'tp', None, None)
+        dp_mesh_key = None
+        remain_mesh_key = ("dp", "tp")
+    
+    remain_devices_prod = 1
+    for d in remain_mesh_key:
+        remain_devices_prod *= mesh.axis_sizes[mesh.axis_names.index(d)]
 
+    q_num_head = query.shape[1]
+    q_seq_len = query.shape[2]
+    kv_num_head = key.shape[1]
+    kv_seq_len = key.shape[2]
+    
+    # Attn1 self attention (long KV sequence) - use context parallel
+    if (kv_seq_len > 10000 and
+        kv_num_head % remain_devices_prod == 0 and
+        q_num_head % remain_devices_prod == 0):
+        q_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
+        kv_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
+    else:
+        # Attn2 cross attention (short KV) - use sequence parallel
+        if q_seq_len % remain_devices_prod != 0:
+            query, _ = pad_to_multiple(query, remain_devices_prod, axis=2)
+        
+        q_partition_spec = P(dp_mesh_key, None, remain_mesh_key, None)
+        kv_partition_spec = P(dp_mesh_key, None, None, None)
+
+    # Apply sharding constraints
     sharded_fn = shard_map(
         _attention_on_slices,
         mesh=mesh,
@@ -267,130 +282,78 @@ def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
         out_specs=q_partition_spec,
         check_rep=False,
     )
+    
+    query = jax.lax.with_sharding_constraint(
+        query, P(dp_mesh_key, None, remain_mesh_key, None)
+    )
+    key = jax.lax.with_sharding_constraint(
+        key, P(dp_mesh_key, None, remain_mesh_key, None)
+    )
+    value = jax.lax.with_sharding_constraint(
+        value, P(dp_mesh_key, None, remain_mesh_key, None)
+    )
+    
     out = sharded_fn(query, key, value)
-    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    
+    # Remove potential padding for sp
+    out = out[:, :, :q_seq_len, :]
+    out = jax.lax.with_sharding_constraint(
+        out, P(dp_mesh_key, None, remain_mesh_key, None)
+    )
     return out
 
 
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
                                   is_causal=False, scale=None, enable_gqa=False,
-                                  env=None, window_size=None, use_k_smooth=USE_K_SMOOTH,
-                                  use_custom_attention=USE_CUSTOM_ATTENTION):
+                                  env=None, mesh=None):
     """Wrapper for scaled dot-product attention with TPU Splash support."""
-    # Support both old and new torchax config names
-    use_splash = getattr(env.config, 'use_tpu_splash_attention', False) or \
-                 getattr(env.config, 'use_tpu_flash_attention', False)
-    if use_splash:
+    # Only use custom attention for long sequences (self-attention)
+    if key.shape[2] > 20000:
+        assert attn_mask is None
+        assert dropout_p == 0.0
+        assert is_causal is False
+        assert enable_gqa is False
+        assert scale is None
+        
         jquery, jkey, jvalue = env.t2j_iso((query, key, value))
         
-        if use_k_smooth:
+        if USE_K_SMOOTH:
             key_mean = jnp.mean(jkey, axis=2, keepdims=True)
             jkey = jkey - key_mean
         
-        # Only use custom attention in self attention (long KV sequence)
-        if jkey.shape[2] > 10000 and use_custom_attention:
-            res = _tpu_custom_attention(
-                jquery, jkey, jvalue, env,
-                scale=scale, is_causal=is_causal, window_size=window_size
-            )
-        else:
-            res = _tpu_splash_attention(
-                jquery, jkey, jvalue, env,
-                scale=scale, is_causal=is_causal, window_size=window_size
-            )
+        res = _tpu_custom_attention(jquery, jkey, jvalue, mesh, scale=scale)
         return env.j2t_iso(res)
 
-    return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal,
-                           scale, enable_gqa)
+    return _sdpa_reference(query, key, value, attn_mask, dropout_p,
+                          is_causal, scale, enable_gqa)
 
 
-# === 权重分片策略 ===
-
-# Transformer sharding for FSDP mode
-transformer_shardings_fsdp = {
-    r'condition_embedder.time_embedder.linear_1.weight': (None, ('tp', 'sp')),
-    r'condition_embedder.time_embedder.linear_2.weight': (('tp', 'sp'), None),
-    r'condition_embedder.time_proj.weight': (('tp', 'sp'), None),
-    r'condition_embedder.text_embedder.linear_1.weight': (None, ('tp', 'sp')),
-    r'condition_embedder.text_embedder.linear_2.weight': (('tp', 'sp'), None),
-    r'blocks.\d+.attn1.to_q.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn1.to_k.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn1.to_v.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn1.to_out.0.weight': (('tp', 'sp'), None),
-    r'blocks.\d+.attn2.to_q.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn2.to_k.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn2.to_v.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn2.to_out.0.weight': (('tp', 'sp'), None),
-    r'blocks.\d+.ffn.net.0.proj.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.ffn.net.2.weight': (('tp', 'sp'), None),
-    r'proj_out.weight': (None, ('tp', 'sp')),
-}
-
-# Transformer sharding for Tensor Parallel mode
-transformer_shardings_tp = {
-    r'condition_embedder.time_embedder.linear_1.weight': (('tp', 'sp'), None),
-    r'condition_embedder.time_embedder.linear_1.bias': (('tp', 'sp'),),
-    r'condition_embedder.time_embedder.linear_2.weight': (None, ('tp', 'sp')),
-    r'condition_embedder.text_embedder.linear_1.weight': (('tp', 'sp'), None),
-    r'condition_embedder.text_embedder.linear_1.bias': (('tp', 'sp'),),
-    r'condition_embedder.text_embedder.linear_2.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn1.to_q.weight': (('tp', 'sp'), None),
-    r'blocks.\d+.attn1.to_q.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_k.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_k.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_v.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_v.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn1.to_out.0.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.attn2.to_q.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_q.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_k.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_k.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_v.weight': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_v.bias': (('tp', 'sp'),),
-    r'blocks.\d+.attn2.to_out.0.weight': (None, ('tp', 'sp')),
-    r'blocks.\d+.ffn.net.0.proj.weight': (('tp', 'sp'),),
-    r'blocks.\d+.ffn.net.0.proj.bias': (('tp', 'sp'),),
-    r'blocks.\d+.ffn.net.2.weight': (None, ('tp', 'sp')),
-}
 
 
-def shard_weight_dict(weight_dict, sharding_dict, mesh):
-    """Apply sharding to weights based on pattern matching."""
-    result = {}
-    for k, v in weight_dict.items():
-        matched = False
-        for target, sharding in sharding_dict.items():
-            if re.fullmatch(target, k) is not None:
-                v.apply_jax_(jax.device_put, NamedSharding(mesh, P(*sharding)))
-                matched = True
-                break
-        
-        if not matched:
-            v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
-        
-        result[k] = v
-    return result
+# ============================================================================
+# Pipeline 设置
+# ============================================================================
+
+def move_module_to_xla(env, module):
+    """Move module weights to XLA devices."""
+    with jax.default_device("cpu"):
+        state_dict = module.state_dict()
+        state_dict = env.to_xla(state_dict)
+        module.load_state_dict(state_dict, assign=True)
 
 
-# === Pipeline 设置 ===
-
-def setup_pipeline_for_transformer_only(pipe, mesh, env, window_size=None,
-                                         use_k_smooth=USE_K_SMOOTH,
-                                         use_custom_attention=USE_CUSTOM_ATTENTION,
-                                         use_fsdp=USE_FSDP):
+def setup_pipeline_for_transformer_only(pipe, mesh, env):
     """
     设置 Pipeline 仅用于 Transformer 推理（不包含 VAE）
     """
-    print("\n配置 Pipeline 以使用 JAX 和 Splash Attention（仅 Transformer）...")
+    print("\n=== 配置 Transformer (TPU) ===")
 
     # Register custom attention
-    print(f"- 注册 Splash Attention (window_size: {window_size})...")
+    print("- 注册自定义 JAX 算子...")
     custom_attention = functools.partial(
         scaled_dot_product_attention,
         env=env,
-        window_size=window_size,
-        use_k_smooth=use_k_smooth,
-        use_custom_attention=use_custom_attention,
+        mesh=mesh,
     )
     op_to_override = torch.nn.functional.scaled_dot_product_attention
     env._ops[op_to_override] = ops_registry.Operator(
@@ -402,15 +365,9 @@ def setup_pipeline_for_transformer_only(pipe, mesh, env, window_size=None,
         is_view_op=False,
     )
 
-    def _move_module(module):
-        with jax.default_device('cpu'):
-            state_dict = module.state_dict()
-            state_dict = env.to_xla(state_dict)
-            module.load_state_dict(state_dict, assign=True)
-
     # Move Transformer to XLA
-    print("- 将 Transformer 移到 XLA...")
-    _move_module(pipe.transformer)
+    print("- 将 Transformer 移到 TPU...")
+    move_module_to_xla(env, pipe.transformer)
     
     # Move rope embeddings to JAX
     if hasattr(pipe.transformer.rope, 'freqs'):
@@ -428,13 +385,15 @@ def setup_pipeline_for_transformer_only(pipe, mesh, env, window_size=None,
 
     # Apply sharding
     print("- 对 Transformer 进行权重分片...")
-    transformer_shardings = transformer_shardings_fsdp if use_fsdp else transformer_shardings_tp
     pipe.transformer.params = shard_weight_dict(
-        pipe.transformer.params, transformer_shardings, mesh
+        pipe.transformer.params, TRANSFORMER_SHARDINGS, mesh
     )
     pipe.transformer.buffers = shard_weight_dict(
-        pipe.transformer.buffers, transformer_shardings, mesh
+        pipe.transformer.buffers, TRANSFORMER_SHARDINGS, mesh
     )
+    
+    # Wait for sharding to complete
+    torchax.interop.call_jax(jax.block_until_ready, pipe.transformer.params)
 
     # Delete VAE to save memory (not needed in stage 2)
     print("- 删除 VAE 以节省内存（阶段2不需要）...")
@@ -448,7 +407,7 @@ def setup_pipeline_for_transformer_only(pipe, mesh, env, window_size=None,
         del pipe.text_encoder
         pipe.text_encoder = None
 
-    print("Pipeline 配置完成（仅 Transformer）")
+    print("✓ Transformer 配置完成")
     return pipe
 
 
@@ -503,7 +462,7 @@ def run_denoising_loop(
         'guidance_scale': config['guidance_scale'],
         'generator': generator,
         'output_type': 'latent',  # 关键：只返回 latents，不解码
-        'use_dp': config.get('use_dp', USE_DP),
+        'use_dp': config.get('use_dp', True),
     }
     
     with ctx:
@@ -712,18 +671,8 @@ def main():
     parser.add_argument('--warmup_steps', type=int, default=2,
                         help='预热步数（0=不预热，1=一次，2=两次，用于触发 JIT 编译）')
 
-    # Attention 参数
-    parser.add_argument('--window_size', type=int, nargs=2, default=None, help='Attention window size')
-    parser.add_argument('--bqsize', type=int, default=BQSIZE, help='Query block size')
-    parser.add_argument('--bkvsize', type=int, default=BKVSIZE, help='KV block size')
-    parser.add_argument('--bkvcomputesize', type=int, default=BKVCOMPUTESIZE, help='KV compute block size')
-    parser.add_argument('--use_k_smooth', action='store_true', default=USE_K_SMOOTH, help='Use K smoothing')
-    parser.add_argument('--use_custom_attention', action='store_true', default=USE_CUSTOM_ATTENTION, help='Use custom exp2 attention')
-
     # Sharding 参数
-    parser.add_argument('--use_dp', action='store_true', default=USE_DP, help='Use data parallelism')
-    parser.add_argument('--sp_num', type=int, default=SP_NUM, help='Sequence parallelism number')
-    parser.add_argument('--use_fsdp', action='store_true', default=USE_FSDP, help='Use FSDP mode')
+    parser.add_argument('--dp', type=int, default=DEFAULT_DP, help='数据并行维度')
 
     # 其他参数
     parser.add_argument('--model_id', type=str, default=None, help='Override model ID from stage1')
@@ -739,10 +688,7 @@ def main():
     output_paths = get_default_paths(output_dir)
 
     # 设置 JAX 配置
-    jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
-    jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
-    jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
-    jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
+    setup_jax_cache()
 
     warnings.filterwarnings('ignore', message='.*dtype.*int64.*truncated to dtype int32.*')
     logging.getLogger().setLevel(logging.ERROR)
@@ -772,9 +718,6 @@ def main():
         config['frames'] = args.frames
     if args.model_id is not None:
         config['model_id'] = args.model_id
-    
-    config['use_dp'] = args.use_dp
-    config['window_size'] = args.window_size
 
     # 设置随机种子
     import random
@@ -794,34 +737,16 @@ def main():
     torchax.enable_globally()
     env = torchax.default_env()
 
-    # 创建 mesh
-    tp_dim, dp_dim, sp_dim = len(jax.devices()), 1, 1
-    if args.use_dp:
-        tp_dim //= 2
-        dp_dim = 2
-    if args.sp_num > 1:
-        tp_dim //= args.sp_num
-        sp_dim = args.sp_num
-
-    print(f"\nMesh 维度: dp_dim={dp_dim}, sp_dim={sp_dim}, tp_dim={tp_dim}")
-    print(f"总设备数: {len(jax.devices())}")
-
+    # 创建 mesh (简化为 dp, tp 两维)
+    assert len(jax.devices()) % args.dp == 0
+    tp_dim = len(jax.devices()) // args.dp
     mesh_devices = mesh_utils.create_device_mesh(
-        (dp_dim, sp_dim, tp_dim), allow_split_physical_axes=True
+        (args.dp, tp_dim), allow_split_physical_axes=True
     )
-    mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
-
-    # 配置 env
-    # Note: default_device_or_sharding was removed in torchax 0.0.11
-    # We set _mesh as a custom attribute for backward compatibility
-    env._mesh = mesh
-    # Also set in param for new torchax
-    env._initial_content.mesh = mesh
-    # Support both old and new config names
-    if hasattr(env.config, 'use_tpu_splash_attention'):
-        env.config.use_tpu_splash_attention = True
-    if hasattr(env.config, 'use_tpu_flash_attention'):
-        env.config.use_tpu_flash_attention = True
+    mesh = Mesh(mesh_devices, ("dp", "tp"))
+    print(f"\nMesh: {mesh}")
+    print(f"  dp_dim={args.dp}, tp_dim={tp_dim}")
+    print(f"  总设备数: {len(jax.devices())}")
 
     # 加载 Pipeline（仅 Transformer）
     model_id = config.get('model_id', MODEL_NAME)
@@ -847,13 +772,7 @@ def main():
         torchax.enable_globally()
 
     # 配置 Pipeline
-    pipe = setup_pipeline_for_transformer_only(
-        pipe, mesh, env,
-        window_size=config.get('window_size'),
-        use_k_smooth=args.use_k_smooth,
-        use_custom_attention=args.use_custom_attention,
-        use_fsdp=args.use_fsdp
-    )
+    pipe = setup_pipeline_for_transformer_only(pipe, mesh, env)
 
     # 将 embeddings 转换为 XLA tensor
     print("\n- 将 embeddings 转换为 XLA tensor...")
@@ -911,10 +830,7 @@ def main():
     }
     save_latents_to_safetensors(latents, output_paths['latents'], metadata)
 
-    # 更新配置（添加阶段2参数）
-    config['bqsize'] = args.bqsize
-    config['bkvsize'] = args.bkvsize
-    config['bkvcomputesize'] = args.bkvcomputesize
+    # 更新配置
     from utils import save_generation_config
     save_generation_config(config, output_paths['config'])
 
@@ -925,7 +841,7 @@ def main():
     if len(times) > 1:
         avg_time = sum(times[1:]) / len(times[1:])
         print(f"后续运行平均时间: {avg_time:.4f} 秒")
-    print(f"Block sizes: BQSIZE={args.bqsize}, BKVSIZE={args.bkvsize}, BKVCOMPUTESIZE={args.bkvcomputesize}")
+    print(f"Block sizes: BQSIZE={BQSIZE}, BKVSIZE={BKVSIZE}, BKVCOMPUTESIZE={BKVCOMPUTESIZE}")
 
     print(f"\n{'='*60}")
     print("阶段2 完成！")
