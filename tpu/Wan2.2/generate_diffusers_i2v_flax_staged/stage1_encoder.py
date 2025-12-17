@@ -27,7 +27,6 @@ import re
 import numpy as np
 import torch
 import jax
-import jax.numpy as jnp
 from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
 from jax.experimental import mesh_utils
 
