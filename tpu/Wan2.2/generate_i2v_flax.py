@@ -16,7 +16,6 @@ Wan 2.2 Image-to-Video Generation with TPU Splash Attention
 """
 
 import os
-import sys
 import warnings
 import logging
 
@@ -54,7 +53,7 @@ from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
 
 import torchax
-from torchax.ops import ops_registry, jaten, jtorch
+from torchax.ops import ops_registry, jaten
 
 # Wan 2.2 I2V pipeline with _flax versions
 from diffusers.pipelines.wan.pipeline_wan_i2v_flax import WanImageToVideoPipeline
@@ -110,7 +109,6 @@ BKVCOMPUTEINSIZE = 256
 
 # Attention Settings
 USE_K_SMOOTH = False
-USE_CUSTOM_ATTENTION = True
 
 # Mesh Sharding Configuration
 DEFAULT_DP = 2
