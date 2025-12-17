@@ -504,8 +504,9 @@ def shard_weight_dict(weight_dict, sharding_dict, mesh):
 
 
 def _add_sharding_rule(vs, logical_axis_rules):
-    """Add sharding rules to variable state."""
-    vs.sharding_rules = logical_axis_rules
+    """Add sharding rules to variable state using new Flax API."""
+    # Use set_metadata for Flax 0.12+ compatibility
+    vs.set_metadata('sharding_rules', logical_axis_rules)
     return vs
 
 
@@ -517,8 +518,8 @@ def create_sharded_logical_model(model, logical_axis_rules):
         _add_sharding_rule, logical_axis_rules=logical_axis_rules
     )
     state = jax.tree.map(
-        p_add_sharding_rule, state, 
-        is_leaf=lambda x: isinstance(x, nnx.VariableState)
+        p_add_sharding_rule, state,
+        is_leaf=lambda x: isinstance(x, nnx.Variable)
     )
     pspecs = nnx.get_partition_spec(state)
     sharded_state = jax.lax.with_sharding_constraint(state, pspecs)
@@ -642,43 +643,45 @@ def load_wan_vae_fixed(pretrained_model_name_or_path, eval_shapes, device, hf_do
 
 def setup_wan_vae(model_id, mesh, vae_mesh):
     """Initialize and load Wan VAE with proper sharding."""
-    with vae_mesh:
-        key = jax.random.key(0)
-        rngs = nnx.Rngs(key)
-        
-        wan_vae = AutoencoderKLWan(
-            rngs=rngs,
-            base_dim=96,
-            z_dim=16,
-            dim_mult=[1, 2, 4, 4],
-            num_res_blocks=2,
-            attn_scales=[],
-            temperal_downsample=[False, True, True],
-            mesh=vae_mesh
-        )
+    # Use jax.set_mesh for new JAX 0.8+ API to set global mesh context
+    # This is required for NNX models that use PartitionSpec during initialization
+    jax.set_mesh(vae_mesh)
     
-    with mesh:
-        vae_cache = AutoencoderKLWanCache(wan_vae)
-        
-        graphdef, state = nnx.split(wan_vae)
-        params = state.to_pure_dict()
-        params = load_wan_vae_fixed(model_id, params, "tpu")
-        
-        # Replicate to all devices
-        sharding = NamedSharding(mesh, P())
-        params = jax.tree_util.tree_map(
-            lambda x: sharded_device_put(x, sharding), params
-        )
-        params = jax.tree_util.tree_map(
-            lambda x: x.astype(jnp.bfloat16), params
-        )
-        wan_vae = nnx.merge(graphdef, params)
-        
-        # Apply logical sharding
-        wan_vae = create_sharded_logical_model(
-            model=wan_vae, 
-            logical_axis_rules=LOGICAL_AXIS_RULES
-        )
+    key = jax.random.key(0)
+    rngs = nnx.Rngs(key)
+    
+    wan_vae = AutoencoderKLWan(
+        rngs=rngs,
+        base_dim=96,
+        z_dim=16,
+        dim_mult=[1, 2, 4, 4],
+        num_res_blocks=2,
+        attn_scales=[],
+        temperal_downsample=[False, True, True],
+        mesh=vae_mesh
+    )
+    
+    # Switch mesh context for loading weights
+    jax.set_mesh(mesh)
+    
+    vae_cache = AutoencoderKLWanCache(wan_vae)
+    
+    graphdef, state = nnx.split(wan_vae)
+    params = state.to_pure_dict()
+    params = load_wan_vae_fixed(model_id, params, "tpu")
+    
+    # Replicate to all devices (use explicit NamedSharding instead of logical rules)
+    sharding = NamedSharding(mesh, P())
+    params = jax.tree_util.tree_map(
+        lambda x: sharded_device_put(x, sharding), params
+    )
+    params = jax.tree_util.tree_map(
+        lambda x: x.astype(jnp.bfloat16), params
+    )
+    wan_vae = nnx.merge(graphdef, params)
+    
+    # Skip logical sharding for now - use replicated weights
+    # The VAE doesn't need complex sharding since it only runs once at the end
     
     return wan_vae, vae_cache
 
