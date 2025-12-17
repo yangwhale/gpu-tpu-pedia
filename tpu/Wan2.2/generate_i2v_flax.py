@@ -179,20 +179,35 @@ def _tpu_custom_attention(query, key, value, mesh, scale=None):
         q = q * scale_factor * _LOG2_E
 
         def kernel_3d(q_3d, k_3d, v_3d):
-            q_seq_len = q_3d.shape[1]
-            kv_seq_len = k_3d.shape[1]
+            # Pad to block size multiple to avoid NaN in incomplete blocks
+            def pad_to_block_multiple(x, block_size, axis):
+                seq_len = x.shape[axis]
+                pad_len = (block_size - seq_len % block_size) % block_size
+                if pad_len == 0:
+                    return x, seq_len
+                pad_width = [(0, 0)] * x.ndim
+                pad_width[axis] = (0, pad_len)
+                return jnp.pad(x, pad_width), seq_len
+            
+            q_3d_padded, q_orig_len = pad_to_block_multiple(q_3d, BQSIZE, axis=1)
+            k_3d_padded, k_orig_len = pad_to_block_multiple(k_3d, BKVSIZE, axis=1)
+            v_3d_padded, v_orig_len = pad_to_block_multiple(v_3d, BKVSIZE, axis=1)
+            
+            padded_q_seq_len = q_3d_padded.shape[1]
+            padded_kv_seq_len = k_3d_padded.shape[1]
 
             block_sizes = splash_attention.BlockSizes(
-                block_q=min(BQSIZE, q_seq_len),
-                block_kv=min(BKVSIZE, kv_seq_len),
-                block_kv_compute=min(BKVCOMPUTESIZE, kv_seq_len),
+                block_q=min(BQSIZE, padded_q_seq_len),
+                block_kv=min(BKVSIZE, padded_kv_seq_len),
+                block_kv_compute=min(BKVCOMPUTESIZE, padded_kv_seq_len),
             )
             splash_kernel = custom_splash_attention.make_splash_mha(
                 block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE
             )
-            out = splash_kernel(q_3d, k_3d, v_3d).astype(q_3d.dtype)
+            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded).astype(q_3d.dtype)
             out = jnp.swapaxes(out, 1, 2)
-            return out
+            # Remove padding
+            return out[:, :q_orig_len, :]
 
         vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
         return vmapped_kernel(q, k, v)
