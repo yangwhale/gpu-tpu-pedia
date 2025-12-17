@@ -213,7 +213,7 @@ def _tpu_custom_attention(query, key, value, mesh, scale=None):
         kv_partition_spec = P(dp_mesh_key, None, None, None)
 
     # Apply sharding constraints
-    sharded_fn = jax.shard_map(
+    sharded_fn = shard_map(
         _attention_on_slices,
         mesh=mesh,
         in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
