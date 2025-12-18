@@ -1,6 +1,6 @@
 # Wan 2.1 TPU 视频生成
 
-本项目提供 Wan 2.1 Text-to-Video 模型在 TPU 上的高效推理实现，支持 JAX/Flax 和 Splash Attention 优化。
+本项目提供 Wan 2.1 Text-to-Video 模型在 TPU 上的高效推理实现，支持 JAX/torchax 和 Splash Attention 优化。
 
 ## 目录
 
@@ -24,15 +24,15 @@
 
 ```
 Wan2.1/
-├── README.md                        # 本文档
-├── generate_flax.py                 # 单步推理脚本（一次性执行全流程）
-├── custom_splash_attention.py       # 自定义 Splash Attention 实现
-└── generate_diffusers_flax_staged/  # 三阶段推理目录
-    ├── utils.py                     # 共享工具函数和配置
-    ├── stage1_text_encoder.py       # 阶段1：Text Encoding
-    ├── stage2_transformer.py        # 阶段2：Transformer Denoising
-    ├── stage3_vae_decoder.py        # 阶段3：VAE Decoding
-    └── stage_outputs/               # 中间输出目录
+├── README.md                          # 本文档
+├── generate_torchax.py                # 单步推理脚本（一次性执行全流程）
+├── custom_splash_attention.py         # 自定义 Splash Attention 实现
+└── generate_diffusers_torchax_staged/ # 三阶段推理目录
+    ├── utils.py                       # 共享工具函数和配置
+    ├── stage1_text_encoder.py         # 阶段1：Text Encoding
+    ├── stage2_transformer.py          # 阶段2：Transformer Denoising
+    ├── stage3_vae_decoder.py          # 阶段3：VAE Decoding
+    └── stage_outputs/                 # 中间输出目录
         ├── stage1_embeddings.safetensors
         ├── stage2_latents.safetensors
         ├── generation_config.json
@@ -41,7 +41,7 @@ Wan2.1/
 
 ### 两种推理模式
 
-| 特性 | 单步推理 (`generate_flax.py`) | 三阶段推理 |
+| 特性 | 单步推理 (`generate_torchax.py`) | 三阶段推理 |
 |------|------------------------------|-----------|
 | 执行方式 | 一次性完成全部流程 | 可分步执行，支持暂停/恢复 |
 | 调试便利性 | 难以在中途检查状态 | 可在任意阶段检查中间结果 |
@@ -53,7 +53,7 @@ Wan2.1/
 
 | 仓库 | 用途 | 地址 |
 |------|------|------|
-| **diffusers-tpu** | Pipeline、Transformer、Scheduler、VAE (Flax 版本) | [github.com/yangwhale/diffusers-tpu](https://github.com/yangwhale/diffusers-tpu) |
+| **diffusers-tpu** | Pipeline、Transformer、Scheduler、VAE (torchax 版本) | [github.com/yangwhale/diffusers-tpu](https://github.com/yangwhale/diffusers-tpu) |
 | **torchax** | PyTorch-JAX 桥接 | [PyPI: torchax](https://pypi.org/project/torchax/) |
 
 ---
@@ -94,7 +94,7 @@ pip install transformers accelerate safetensors
 pip install opencv-python imageio imageio-ffmpeg
 pip install flax optax
 
-# 5. 克隆并安装修改版 diffusers（包含 Flax VAE）
+# 5. 克隆并安装修改版 diffusers（包含 torchax VAE）
 git clone https://github.com/yangwhale/diffusers-tpu.git
 cd diffusers-tpu && pip install -e . && cd ..
 
@@ -115,14 +115,14 @@ python -c "import torchax; print(f'torchax version: {torchax.__version__}')"
 # 预期: torchax version: 0.0.11
 
 # 检查 Pipeline 导入
-python -c "from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline; print('Pipeline OK')"
+python -c "from diffusers.pipelines.wan.pipeline_wan_torchax import WanPipeline; print('Pipeline OK')"
 ```
 
 ---
 
 ## 使用指南
 
-### 单步推理 (`generate_flax.py`)
+### 单步推理 (`generate_torchax.py`)
 
 一次性执行完整的 Text-to-Video 生成流程：
 
@@ -130,10 +130,10 @@ python -c "from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline; pr
 cd gpu-tpu-pedia/tpu/Wan2.1
 
 # 基本用法
-python generate_flax.py
+python generate_torchax.py
 
 # 自定义参数
-python generate_flax.py \
+python generate_torchax.py \
     --width 1280 \
     --height 720 \
     --frames 81 \
@@ -147,7 +147,7 @@ python generate_flax.py \
 ### 三阶段推理
 
 ```bash
-cd gpu-tpu-pedia/tpu/Wan2.1/generate_diffusers_flax_staged
+cd gpu-tpu-pedia/tpu/Wan2.1/generate_diffusers_torchax_staged
 
 # 阶段1：Text Encoding（仅编码 prompt）
 python stage1_text_encoder.py \
@@ -330,7 +330,7 @@ jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
 
 **问题**: 三阶段模式下 `text_encoder=None` 导致 `.device` 访问失败。
 
-**解决方案**: 已在 `pipeline_wan_flax.py` 中添加 None 检查。
+**解决方案**: 已在 `pipeline_wan_torchax.py` 中添加 None 检查。
 
 ### 2. bfloat16 保存/加载
 
@@ -418,22 +418,22 @@ register_pytree_node(
 | 版本 | Warmup | Benchmark | 每步时间 |
 |------|--------|-----------|---------|
 | 优化前 (maxdiffusion VAE) | OOM | OOM | N/A |
-| **优化后 (diffusers Flax VAE)** | **515.53s** | **229.29s** | **4.59s/step** |
+| **优化后 (diffusers torchax VAE)** | **515.53s** | **229.29s** | **4.59s/step** |
 
 **480P (832×480, 81 帧, 50 步):**
 
 | 版本 | Warmup | Benchmark | 每步时间 | 加速比 |
 |------|--------|-----------|---------|-------|
 | 优化前 (maxdiffusion VAE) | 196.43s | 90.40s | 1.81s/step | - |
-| **优化后 (diffusers Flax VAE)** | **347.87s** | **63.02s** | **1.26s/step** | **30.3%** |
+| **优化后 (diffusers torchax VAE)** | **347.87s** | **63.02s** | **1.26s/step** | **30.3%** |
 
 *注:
-- 优化后 Warmup 时间较长是因为 diffusers VAE 需要更多 JIT 编译，但实际推理速度大幅提升
+- 优化后 Warmup 时间较长是因为 diffusers torchax VAE 需要更多 JIT 编译，但实际推理速度大幅提升
 - 720P 之前会 OOM，优化后可以正常运行*
 
 ### 优化措施
 
-1. **使用 diffusers Flax VAE**: 替换 maxdiffusion VAE，减少依赖
+1. **使用 diffusers torchax VAE**: 替换 maxdiffusion VAE，减少依赖
 2. **PyTree 注册**: 添加 `DecoderOutput`、`AutoencoderKLOutput`、`DiagonalGaussianDistribution`
 3. **Conv2d Op 覆盖**: 使用 `torch_conv2d_jax` 确保正确的 JAX 执行
 4. **Pipeline 加载顺序**: 在 `torchax.enable_globally()` 之前加载避免 safetensors 问题
