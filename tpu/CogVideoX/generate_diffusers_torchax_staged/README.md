@@ -5,11 +5,12 @@
 ## 目录结构
 
 ```
-generate_diffusers_flax_staged/
+generate_diffusers_torchax_staged/
 ├── utils.py                    # 共享工具模块
 ├── stage1_text_encoder.py      # 阶段1：文本编码
 ├── stage2_transformer.py       # 阶段2：Transformer 推理
-├── stage3_vae_decoder.py       # 阶段3：VAE 解码
+├── stage3_vae_decoder.py       # 阶段3：VAE 解码 (TorchAx 版本，推荐)
+├── stage3_vae_decoder_flax.py  # 阶段3：VAE 解码 (Flax 版本，备用)
 ├── stage_outputs/              # 中间文件存储目录
 │   ├── generation_config.json  # 生成配置
 │   ├── stage1_embeddings.safetensors  # 文本 embeddings
@@ -65,8 +66,20 @@ python stage2_transformer.py \
 
 ### 阶段3：VAE 解码 (TPU)
 
+**推荐使用 TorchAx VAE（速度更快）：**
+
 ```bash
 python stage3_vae_decoder.py \
+  --input_dir ./stage_outputs \
+  --output_video ./stage_outputs/output_video.mp4
+```
+
+> **性能对比**：TorchAx VAE 解码仅需 **~2.4秒**（不含 JIT 预热），比 Flax VAE 的 ~90秒快 **37倍**！
+
+**备用 Flax VAE：**
+
+```bash
+python stage3_vae_decoder_flax.py \
   --input_dir ./stage_outputs \
   --output_video ./stage_outputs/output_video.mp4
 ```
@@ -120,7 +133,7 @@ embeddings.safetensors
     ↓
 latents.safetensors
     ↓
-[Stage 3: Flax VAE Decoder]
+[Stage 3: TorchAx VAE Decoder] ← 推荐！快 37x
     ↓
 output_video.mp4
 ```
@@ -250,9 +263,14 @@ output_video.mp4
 | Stage 1 (Text Encoder) | ~2s | ~2s | CPU 上运行 |
 | Stage 2 (Transformer) | ~40s | **~25s** | 不含预热，10步 |
 | Stage 2 预热 | ~120s | ~137s | 含 JIT 编译 |
-| Stage 3 (VAE Decoder) | ~90s | ~90s | Flax VAE |
-| **总计（首次运行）** | ~252s | ~254s | 含编译 |
-| **总计（后续运行）** | ~132s | **~117s** | 无需编译 |
+| Stage 3 (TorchAx VAE) | - | **~2.4s** | 推荐！ |
+| Stage 3 (Flax VAE) | ~90s | ~90s | 备用 |
+| Stage 3 预热 (TorchAx) | - | ~126s | 首次 JIT 编译 |
+| **总计（首次运行）** | ~252s | **~166s** | 含编译，使用 TorchAx VAE |
+| **总计（后续运行）** | ~132s | **~29s** | 无需编译，使用 TorchAx VAE |
+
+> **2024-12-18 更新**: Stage 3 新增 TorchAx VAE 实现，解码速度从 ~90s 降至 **~2.4s**！
+> 总流程时间（后续运行）从 ~117s 降至 **~29s**，整体提速 **4倍**！
 
 ## 技术细节
 
@@ -277,6 +295,19 @@ stage2 在保存前会：
 ## 注意事项
 
 1. **阶段2 依赖 custom_splash_attention.py**：确保父目录中存在此文件
-2. **阶段3 依赖 FlaxAutoencoderKLCogVideoX**：需要安装修改版 diffusers
-3. **TPU 内存**：各阶段分开运行可降低峰值内存使用
-4. **视频导出**：使用 `export_to_video` 而非 `imageio.mimsave`，配合 `prepare_video_for_export` 使用
+2. **阶段3 推荐使用 TorchAx VAE**：`stage3_vae_decoder.py`，比 Flax 快 37 倍
+3. **阶段3 备用 Flax VAE**：`stage3_vae_decoder_flax.py`，依赖 `FlaxAutoencoderKLCogVideoX`
+4. **TorchAx VAE 依赖**：需要安装修改版 diffusers (`diffusers-tpu`)，导入 `autoencoder_kl_cogvideox_torchax`
+5. **TPU 内存**：各阶段分开运行可降低峰值内存使用
+6. **视频导出**：使用 `export_to_video` 而非 `imageio.mimsave`，配合 `prepare_video_for_export` 使用
+
+## VAE 版本对比
+
+| 特性 | TorchAx VAE | Flax VAE |
+|------|-------------|----------|
+| 脚本 | `stage3_vae_decoder.py` | `stage3_vae_decoder_flax.py` |
+| 解码时间 | **~2.4s** | ~90s |
+| JIT 预热 | ~126s | - |
+| 速度提升 | **37x** | 基线 |
+| 内存使用 | 相当 | 相当 |
+| 推荐使用 | ✅ **推荐** | 备用 |
