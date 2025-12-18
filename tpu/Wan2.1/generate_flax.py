@@ -68,8 +68,8 @@ from transformers import modeling_outputs
 from diffusers.models.autoencoders import vae as diffusers_vae
 from diffusers.models import modeling_outputs as diffusers_modeling_outputs
 
-# Wan-specific imports - use diffusers' Flax VAE
-from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline
+# Wan-specific imports - use diffusers' torchax VAE
+from diffusers.pipelines.wan.pipeline_wan_torchax import WanPipeline
 from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
 from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
 from diffusers.utils import export_to_video

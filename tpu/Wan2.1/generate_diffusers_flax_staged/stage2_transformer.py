@@ -43,7 +43,7 @@ from tqdm import tqdm
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import custom_splash_attention
 
-from diffusers.pipelines.wan.pipeline_wan_flax import WanPipeline
+from diffusers.pipelines.wan.pipeline_wan_torchax import WanPipeline
 from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
 
 from utils import (

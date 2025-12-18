@@ -33,7 +33,7 @@ from jax.experimental import mesh_utils
 import torchax
 from torchax.ops import ops_registry, jaten
 
-from diffusers.pipelines.wan.pipeline_wan_i2v_flax import WanImageToVideoPipeline
+from diffusers.pipelines.wan.pipeline_wan_i2v_torchax import WanImageToVideoPipeline
 from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
 from diffusers.utils import load_image
 
@@ -286,7 +286,7 @@ def encode_image_condition(pipe, image, height, width, num_frames, device='jax',
     latent_height = height // vae_scale_factor_spatial
     latent_width = width // vae_scale_factor_spatial
     
-    # 构建 mask（与原始 pipeline_wan_i2v_flax.py 第469-482行完全一致）
+    # 构建 mask（与原始 pipeline_wan_i2v_torchax.py 第469-482行完全一致）
     mask_lat_size = torch.ones(batch_size, 1, num_frames, latent_height, latent_width,
                                device=device, dtype=dtype)
     mask_lat_size[:, :, list(range(1, num_frames))] = 0  # 第一帧=1, 其他帧=0
