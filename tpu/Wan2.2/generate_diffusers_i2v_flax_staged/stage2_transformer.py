@@ -45,7 +45,7 @@ from jax.experimental import mesh_utils
 sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 import custom_splash_attention
 
-from diffusers.models.transformers.transformer_wan_flax import WanTransformer3DModel
+from diffusers.models.transformers.transformer_wan_torchax import WanTransformer3DModel
 from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
 
 from utils import (
