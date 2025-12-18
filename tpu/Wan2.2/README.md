@@ -71,7 +71,7 @@
 - JAX 0.4.35+（支持 TPU）
 - PyTorch 2.4+
 - torchax（最新版本）
-- Diffusers（需要修改版本支持 Flax）
+- Diffusers（需要修改版本支持 torchax）
 
 ## 安装步骤
 
@@ -130,7 +130,7 @@ cp /path/to/your/image.jpg ./wan_i2v_input.JPG
 ### 方法一：三阶段分步执行（推荐用于调试）
 
 ```bash
-cd generate_diffusers_i2v_flax_staged
+cd generate_diffusers_i2v_torchax_staged
 
 # 阶段1：编码器
 python stage1_encoder.py \
@@ -155,14 +155,14 @@ python stage3_vae_decoder.py \
 
 ### 方法二：一键执行（完整 pipeline）
 
-使用 `generate_i2v_flax.py` 在单个进程中完成全部推理流程（推荐用于生产环境）：
+使用 `generate_i2v_torchax.py` 在单个进程中完成全部推理流程（推荐用于生产环境）：
 
 ```bash
 # 基本用法（使用默认参数）
-python generate_i2v_flax.py
+python generate_i2v_torchax.py
 
 # 完整参数示例
-python generate_i2v_flax.py \
+python generate_i2v_torchax.py \
     --model_id "Wan-AI/Wan2.2-I2V-A14B-Diffusers" \
     --image "wan_i2v_input.JPG" \
     --prompt "A white cat wearing sunglasses sits on a surfboard..." \
@@ -176,12 +176,12 @@ python generate_i2v_flax.py \
     --dp 2
 
 # 启用 profiler
-python generate_i2v_flax.py --profile --profile_output_path /tmp/wan_prof
+python generate_i2v_torchax.py --profile --profile_output_path /tmp/wan_prof
 ```
 
 ### 命令行参数
 
-#### generate_i2v_flax.py（一键执行）
+#### generate_i2v_torchax.py（一键执行）
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
@@ -234,15 +234,15 @@ python generate_i2v_flax.py --profile --profile_output_path /tmp/wan_prof
 
 ```
 Wan2.2/
-├── README.md                           # 本文档
-├── wan_i2v_input.JPG                   # 示例输入图像
-├── custom_splash_attention.py          # TPU Splash Attention 实现
-├── generate_i2v_flax.py                # 一键执行脚本
-└── generate_diffusers_i2v_flax_staged/ # 三阶段分步实现
-    ├── utils.py                        # 共享工具模块
-    ├── stage1_encoder.py               # 阶段1：Text & Image Encoder
-    ├── stage2_transformer.py           # 阶段2：Transformer
-    └── stage3_vae_decoder.py           # 阶段3：VAE Decoder
+├── README.md                             # 本文档
+├── wan_i2v_input.JPG                     # 示例输入图像
+├── custom_splash_attention.py            # TPU Splash Attention 实现
+├── generate_i2v_torchax.py               # 一键执行脚本
+└── generate_diffusers_i2v_torchax_staged/ # 三阶段分步实现
+    ├── utils.py                          # 共享工具模块
+    ├── stage1_encoder.py                 # 阶段1：Text & Image Encoder
+    ├── stage2_transformer.py             # 阶段2：Transformer
+    └── stage3_vae_decoder.py             # 阶段3：VAE Decoder
 ```
 
 ## 技术细节
