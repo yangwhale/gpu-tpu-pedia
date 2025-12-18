@@ -34,7 +34,7 @@ import torchax
 from torchax.ops import ops_registry, jaten
 
 from diffusers.pipelines.wan.pipeline_wan_i2v_flax import WanImageToVideoPipeline
-from diffusers.models.autoencoders.autoencoder_kl_wan_flax import AutoencoderKLWan
+from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
 from diffusers.utils import load_image
 
 from utils import (

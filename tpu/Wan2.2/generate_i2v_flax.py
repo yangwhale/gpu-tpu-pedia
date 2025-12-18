@@ -57,7 +57,7 @@ from torchax.ops import ops_registry, jaten
 
 # Wan 2.2 I2V pipeline with _flax versions
 from diffusers.pipelines.wan.pipeline_wan_i2v_flax import WanImageToVideoPipeline
-from diffusers.models.autoencoders.autoencoder_kl_wan_flax import AutoencoderKLWan
+from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
 from diffusers.models.transformers.transformer_wan_flax import WanTransformer3DModel
 from diffusers.utils import export_to_video, load_image
 from diffusers.models.autoencoders import vae as diffusers_vae

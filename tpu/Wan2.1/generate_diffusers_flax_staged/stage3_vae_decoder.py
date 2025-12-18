@@ -32,7 +32,7 @@ import torchax
 from torchax.ops import ops_registry, jaten
 
 from diffusers.utils import export_to_video
-from diffusers.models.autoencoders.autoencoder_kl_wan_flax import AutoencoderKLWan
+from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
 
 from utils import (
     MODEL_NAME,
