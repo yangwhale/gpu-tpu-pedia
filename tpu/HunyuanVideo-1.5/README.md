@@ -61,7 +61,7 @@ git clone https://github.com/yangwhale/HunyuanVideo-1.5-TPU.git ~/HunyuanVideo-1
 git clone https://github.com/yangwhale/gpu-tpu-pedia.git ~/gpu-tpu-pedia
 ```
 
-> ⚠️ **重要**：`generate_diffusers_flax_staged/` 目录必须使用 [diffusers-tpu](https://github.com/yangwhale/diffusers-tpu)，不能使用官方 diffusers。
+> ⚠️ **重要**：`generate_diffusers_torchax_staged/` 目录必须使用 [diffusers-tpu](https://github.com/yangwhale/diffusers-tpu)，不能使用官方 diffusers。
 
 ---
 
@@ -197,7 +197,7 @@ huggingface-cli download tencent/HunyuanVideo-1.5 \
 ### 方案 A：TPU 运行（推荐）
 
 ```bash
-cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_flax_staged
+cd ~/gpu-tpu-pedia/tpu/HunyuanVideo-1.5/generate_hunyuan_torchax_staged
 
 # 运行 121帧 720p 视频生成（约 6 分钟）
 python stage2_transformer.py \
@@ -223,29 +223,29 @@ bash run_stage3.sh  # VAE Decoder（8卡）
 
 ```
 HunyuanVideo-1.5/
-├── 📁 generate_hunyuan_flax_staged/   # ⭐ TPU 推荐版本
-├── 📁 generate_hunyuan_gpu_staged/    # GPU H100 版本
-├── 📁 generate_diffusers_flax_staged/ # TPU + Diffusers 版本
-├── 📁 docs/                           # 技术文档
-├── generate_diffusers_flax.py         # TPU 单文件版本
-├── generate_diffusers_gpu.py          # GPU 单文件版本
-└── run_diffusers_gpu.sh               # GPU 运行脚本
+├── 📁 generate_hunyuan_torchax_staged/   # ⭐ TPU 推荐版本
+├── 📁 generate_hunyuan_gpu_staged/       # GPU H100 版本
+├── 📁 generate_diffusers_torchax_staged/ # TPU + Diffusers 版本
+├── 📁 docs/                              # 技术文档
+├── generate_diffusers_torchax.py         # TPU 单文件版本
+├── generate_diffusers_gpu.py             # GPU 单文件版本
+└── run_diffusers_gpu.sh                  # GPU 运行脚本
 ```
 
 ### 各目录说明
 
 | 目录 | 平台 | 说明 | 推荐度 |
 |------|------|------|--------|
-| `generate_hunyuan_flax_staged/` | TPU | 使用原生 HunyuanVideo-1.5-TPU，Splash Attention | ⭐⭐⭐ |
+| `generate_hunyuan_torchax_staged/` | TPU | 使用原生 HunyuanVideo-1.5-TPU，Splash Attention | ⭐⭐⭐ |
 | `generate_hunyuan_gpu_staged/` | GPU | 使用原生 HunyuanVideo-1.5-TPU，Flash Attention | ⭐⭐⭐ |
-| `generate_diffusers_flax_staged/` | TPU | 使用 diffusers-tpu 库 | ⭐⭐ |
+| `generate_diffusers_torchax_staged/` | TPU | 使用 diffusers-tpu 库 | ⭐⭐ |
 | `docs/` | - | 技术分析文档 | - |
 
 ---
 
 ## 📂 目录详解
 
-### 1. `generate_hunyuan_flax_staged/` — TPU 推荐版本
+### 1. `generate_hunyuan_torchax_staged/` — TPU 推荐版本
 
 **使用场景**：在 TPU v6e-8 上运行 HunyuanVideo-1.5
 
@@ -257,7 +257,7 @@ HunyuanVideo-1.5/
 
 **文件说明**：
 ```
-generate_hunyuan_flax_staged/
+generate_hunyuan_torchax_staged/
 ├── stage2_transformer.py              # 主推理脚本
 ├── custom_splash_attention.py         # ⭐ exp2 优化的 Attention 内核
 ├── utils.py                           # 工具函数
@@ -269,7 +269,7 @@ generate_hunyuan_flax_staged/
 **使用方法**：
 ```bash
 # 前提：需要先在其他地方运行 Stage 1 生成 embeddings
-# 或者使用 generate_diffusers_flax_staged/ 的 stage1
+# 或者使用 generate_diffusers_torchax_staged/ 的 stage1
 
 # 运行 Transformer 推理
 python stage2_transformer.py \
@@ -343,7 +343,7 @@ torchrun --nproc_per_node=8 stage3_vae_decoder.py --input_dir ./stage_outputs
 
 ---
 
-### 3. `generate_diffusers_flax_staged/` — TPU + Diffusers 版本
+### 3. `generate_diffusers_torchax_staged/` — TPU + Diffusers 版本
 
 **使用场景**：使用 diffusers-tpu 库在 TPU 上运行
 
@@ -354,7 +354,7 @@ torchrun --nproc_per_node=8 stage3_vae_decoder.py --input_dir ./stage_outputs
 
 **文件说明**：
 ```
-generate_diffusers_flax_staged/
+generate_diffusers_torchax_staged/
 ├── README.md                          # 使用指南
 ├── stage1_text_encoder.py             # Stage 1: Text Encoder
 ├── stage2_transformer.py              # Stage 2: Transformer
@@ -364,14 +364,14 @@ generate_diffusers_flax_staged/
 
 **使用方法**：
 ```bash
-cd generate_diffusers_flax_staged
+cd generate_diffusers_torchax_staged
 
 python stage1_text_encoder.py  # CPU 运行
 python stage2_transformer.py   # TPU 运行
 python stage3_vae_decoder.py   # TPU 运行
 ```
 
-详见 [`generate_diffusers_flax_staged/README.md`](generate_diffusers_flax_staged/README.md)
+详见 [`generate_diffusers_torchax_staged/README.md`](generate_diffusers_torchax_staged/README.md)
 
 ---
 
