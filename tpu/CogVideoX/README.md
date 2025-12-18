@@ -1,12 +1,12 @@
 # CogVideoX TPU 加速项目
 
-本项目实现了 CogVideoX 视频生成模型在 Google Cloud TPU 上的高性能推理，通过 JAX + Flax 实现了显著的性能提升和内存优化。
+本项目实现了 CogVideoX 视频生成模型在 Google Cloud TPU 上的高性能推理，通过 JAX + torchax 实现了显著的性能提升和内存优化。
 
 ## 📋 项目概述
 
 CogVideoX 是一个强大的文本到视频生成模型，本项目将其迁移到 TPU 平台，利用以下技术实现高效推理：
 
-- **JAX/Flax 框架**：替换 PyTorch，充分利用 TPU 的 XLA 编译优化
+- **JAX/torchax 框架**：替换 PyTorch，充分利用 TPU 的 XLA 编译优化
 - **Splash Attention**：TPU 原生的高效注意力机制，支持长序列处理
 - **Flax VAE**：原生 JAX 实现的 VAE 解码器，解决 OOM 问题并支持长视频生成
 - **模型分片**：智能的权重分片策略（FSDP/Tensor Parallel），支持多 TPU 并行
@@ -60,28 +60,28 @@ cd gpu-tpu-pedia/tpu/cogvideo/
 ### 4. 运行视频生成
 
 ```bash
-python generate_flax.py
+python generate_torchax.py
 ```
 
-生成的视频将保存为 `output_video_flax_vae.mp4`。
+生成的视频将保存为 `output_video_torchax_vae.mp4`。
 
 ## 📁 项目结构
 
 ```
 cogvideo/
-├── README.md                    # 本文档
-├── generate_flax.py             # ⭐ 主程序：完整的 TPU 视频生成流程
-├── generate_gpu.py              # GPU PyTorch 版本（参考）
-├── vae_decode_flax.py           # Flax VAE 解码测试
-├── vae_decode_gpu.py            # GPU PyTorch VAE 解码测试（参考）
-└── output_video_flax_vae.mp4    # 生成的视频示例
+├── README.md                     # 本文档
+├── generate_torchax.py           # ⭐ 主程序：完整的 TPU 视频生成流程
+├── generate_gpu.py               # GPU PyTorch 版本（参考）
+├── vae_decode_flax.py            # Flax VAE 解码测试
+├── vae_decode_gpu.py             # GPU PyTorch VAE 解码测试（参考）
+└── output_video_torchax_vae.mp4  # 生成的视频示例
 ```
 
 ## 🎯 核心功能
 
 ### 1. Splash Attention 优化
 
-[`generate_flax.py`](generate_flax.py:170-286) 实现了 TPU 专用的 Splash Attention：
+[`generate_torchax.py`](generate_torchax.py:170-286) 实现了 TPU 专用的 Splash Attention：
 
 ```python
 # 配置参数（可根据需求调整）
@@ -119,13 +119,13 @@ r'.*\.to_q\.weight$': (('tp', 'sp'), None)
 ```
 
 **权重分片函数**：
-- [`shard_weights_transformer()`](generate_flax.py:414-449)：Transformer 模型分片
-- [`shard_weights_text_encoder()`](generate_flax.py:452-479)：T5 文本编码器分片
-- [`shard_weights_vae()`](generate_flax.py:482-503)：VAE 权重分片（当前复制模式）
+- [`shard_weights_transformer()`](generate_torchax.py:414-449)：Transformer 模型分片
+- [`shard_weights_text_encoder()`](generate_torchax.py:452-479)：T5 文本编码器分片
+- [`shard_weights_vae()`](generate_torchax.py:482-503)：VAE 权重分片（当前复制模式）
 
 ### 3. Flax VAE 集成
 
-[`FlaxVAEProxy`](generate_flax.py:637-689) 类实现了 PyTorch 到 Flax VAE 的无缝切换：
+[`FlaxVAEProxy`](generate_torchax.py:637-689) 类实现了 PyTorch 到 Flax VAE 的无缝切换：
 
 **关键优化**：
 - 全流程 BF16 计算，避免中间 FP32 数组
@@ -143,7 +143,7 @@ pipe.vae = FlaxVAEProxy(flax_vae)
 
 ### 4. 完整的 Pipeline 设置
 
-[`setup_pipeline_for_jax()`](generate_flax.py:506-634) 函数执行完整的 TPU 配置：
+[`setup_pipeline_for_jax()`](generate_torchax.py:506-634) 函数执行完整的 TPU 配置：
 
 1. **创建设备网格**：支持 TP/DP/SP 三维并行
 2. **注册自定义算子**：Splash Attention 替换标准 SDPA
@@ -234,7 +234,7 @@ imageio.mimsave('output.mp4', frames, fps=8)
 
 ### 性能基准测试
 
-使用 [`run_generation_benchmark()`](generate_flax.py:692-739) 函数：
+使用 [`run_generation_benchmark()`](generate_torchax.py:692-739) 函数：
 
 ```python
 frames, times = run_generation_benchmark(
