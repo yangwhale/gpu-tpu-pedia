@@ -1,12 +1,13 @@
 #!/usr/bin/env python3
 """
-CogVideoX 三阶段生成 - 阶段3：VAE Decoder
+CogVideoX 三阶段生成 - 阶段3：VAE Decoder (Flax)
 
 本阶段负责：
 1. 加载阶段2生成的 latents
 2. 加载 Flax VAE 模型（FlaxAutoencoderKLCogVideoX）
-3. 解码 latents 为视频帧
-4. 导出最终视频
+3. 应用缩放因子
+4. 使用 VAE 解码为视频帧
+5. 后处理并导出最终视频
 
 输入文件：
 - stage2_latents.safetensors: 生成的 latents
@@ -14,10 +15,11 @@ CogVideoX 三阶段生成 - 阶段3：VAE Decoder
 
 输出文件：
 - output_video.mp4: 最终生成的视频
+
+注意：这个版本使用 Flax VAE (autoencoder_kl_cogvideox_flax.py)
+     如需使用 TorchAx VAE，请使用 stage3_vae_decoder.py
 """
 
-import os
-import sys
 import time
 import argparse
 import warnings
@@ -28,22 +30,22 @@ import jax
 import jax.numpy as jnp
 import torch
 from diffusers.utils import export_to_video
-
-# Add parent directory to path for FlaxAutoencoderKLCogVideoX
-sys.path.insert(0, '/home/chrisya/diffusers-tpu-chris/src')
 from diffusers.models.autoencoders.autoencoder_kl_cogvideox_flax import FlaxAutoencoderKLCogVideoX
 from diffusers.models.autoencoders.vae import DecoderOutput
 
 from utils import (
     MODEL_NAME,
     FPS,
-    to_torch_recursive,
     prepare_video_for_export,
     load_latents_from_safetensors,
     load_generation_config,
     get_default_paths,
 )
 
+
+# ============================================================================
+# Flax VAE Proxy
+# ============================================================================
 
 class FlaxVAEProxy:
     """
@@ -74,10 +76,6 @@ class FlaxVAEProxy:
         Returns:
             DecoderOutput 或 torch.Tensor
         """
-        # 应用缩放因子
-        scaling_factor = self.config.scaling_factor if hasattr(self.config, 'scaling_factor') else 1.15258426
-        latents = latents / scaling_factor
-        
         # 转换 latents: PyTorch (B, C, T, H, W) -> numpy (B, T, H, W, C)
         # 关键：保持 BF16 dtype 以节省内存
         if latents.dtype == torch.bfloat16:
@@ -116,6 +114,10 @@ class FlaxVAEProxy:
         return frames_torch
 
 
+# ============================================================================
+# VAE 加载与配置
+# ============================================================================
+
 def load_flax_vae(model_id, dtype=jnp.bfloat16):
     """
     加载 Flax VAE 模型
@@ -135,12 +137,40 @@ def load_flax_vae(model_id, dtype=jnp.bfloat16):
         dtype=dtype
     )
     
-    print(f"  ✓ Flax VAE 已加载")
+    print("✓ Flax VAE 加载完成")
     
     return FlaxVAEProxy(flax_vae)
 
 
-def decode_latents_to_video(vae_proxy, latents, config):
+# ============================================================================
+# 解码函数
+# ============================================================================
+
+def run_vae_decode(vae_proxy, latents, desc="VAE Decode"):
+    """
+    运行一次 VAE 解码
+    
+    Args:
+        vae_proxy: FlaxVAEProxy 实例
+        latents: latent tensor [B, C, T, H, W]
+        desc: 描述信息
+    
+    Returns:
+        (video, elapsed_time)
+    """
+    start_time = time.perf_counter()
+    
+    print(f"\n{desc}...")
+    output = vae_proxy.decode(latents, return_dict=True)
+    jax.effects_barrier()
+    
+    elapsed = time.perf_counter() - start_time
+    print(f"✓ {desc} 完成，耗时: {elapsed:.2f} 秒")
+    
+    return output.sample, elapsed
+
+
+def decode_latents_to_video(vae_proxy, latents, config, warmup=True):
     """
     使用 VAE 解码 latents 为视频帧
     
@@ -150,76 +180,86 @@ def decode_latents_to_video(vae_proxy, latents, config):
         vae_proxy: FlaxVAEProxy 实例
         latents: latents tensor [B, C, T, H, W]（已裁剪 additional_frames）
         config: 生成配置
+        warmup: 是否运行预热解码
         
     Returns:
-        frames: 视频帧列表
-        elapsed: 解码耗时
+        video: 解码后的视频
+        elapsed: 解码耗时（不含预热）
     """
     print(f"\n=== 阶段3：VAE 解码 ===")
     print(f"输入 latents shape: {latents.shape}")
     print(f"输入 latents dtype: {latents.dtype}")
     
-    # VAE decode
-    print("\n开始 VAE 解码...")
-    start_time = time.perf_counter()
+    # 检查 nan 值
+    latents_float = latents.float()
+    nan_count = torch.isnan(latents_float).sum().item()
+    total = latents_float.numel()
+    print(f"输入 latents nan 统计: {nan_count}/{total} ({nan_count/total*100:.2f}%)")
     
-    output = vae_proxy.decode(latents, return_dict=True)
-    jax.effects_barrier()
+    # 处理 nan 值 - 替换为 0
+    if nan_count > 0:
+        print(f"警告：发现 {nan_count} 个 nan 值，将替换为 0")
+        latents = torch.nan_to_num(latents, nan=0.0)
     
-    elapsed = time.perf_counter() - start_time
-    print(f"✓ VAE 解码完成，耗时: {elapsed:.2f} 秒")
+    # 1. 应用缩放因子（CogVideoX 使用 scaling_factor）
+    scaling_factor = getattr(vae_proxy.config, 'scaling_factor', 1.15258426)
+    print(f"应用缩放因子: 1/{scaling_factor}")
+    latents = latents / scaling_factor
     
-    # 提取 sample
-    frames = output.sample
+    # 2. 转换为 VAE dtype
+    print("\n转换 latents 到 bfloat16...")
+    latents = latents.to(torch.bfloat16)
     
-    print(f"输出 frames shape: {frames.shape}")
-    print(f"输出 frames dtype: {frames.dtype}")
+    # 3. VAE 解码
     
-    # 调试输出：VAE 输出范围
-    if isinstance(frames, torch.Tensor):
-        frames_float = frames.float()
-        print(f"输出 frames 范围: min={frames_float.min().item():.4f}, max={frames_float.max().item():.4f}")
+    # 预热运行 (触发 JIT 编译)
+    warmup_time = 0
+    if warmup:
+        _, warmup_time = run_vae_decode(vae_proxy, latents, desc="Warmup VAE (JIT)")
     
-    return frames, elapsed
+    # 正式解码
+    video, decode_time = run_vae_decode(vae_proxy, latents, desc="VAE Decode")
+    elapsed = decode_time  # 只记录正式解码时间
+    
+    print(f"输出 video shape: {video.shape}")
+    print(f"输出 video dtype: {video.dtype}")
+    
+    # 检查 video 范围
+    video_float = video.float()
+    print(f"输出 video 范围: min={video_float.min().item():.4f}, max={video_float.max().item():.4f}")
+    
+    return video, elapsed
 
+
+# ============================================================================
+# Main
+# ============================================================================
 
 def main():
     parser = argparse.ArgumentParser(
-        description='CogVideoX 阶段3：VAE Decoder',
+        description='CogVideoX 阶段3：VAE Decoder (Flax)',
         formatter_class=argparse.RawDescriptionHelpFormatter,
         epilog="""
 示例用法：
   # 基本用法（使用阶段2的输出）
-  python stage3_vae_decoder.py
+  python stage3_vae_decoder_flax.py
   
   # 指定输入目录
-  python stage3_vae_decoder.py --input_dir ./my_outputs
+  python stage3_vae_decoder_flax.py --input_dir ./my_outputs
   
   # 指定输出视频路径
-  python stage3_vae_decoder.py --output_video my_video.mp4
+  python stage3_vae_decoder_flax.py --output_video my_video.mp4
         """
     )
     
-    parser.add_argument(
-        '--input_dir', type=str, default='./stage_outputs',
-        help='Input directory containing stage2 outputs (default: ./stage_outputs)'
-    )
-    parser.add_argument(
-        '--output_video', type=str, default=None,
-        help='Output video path (default: stage_outputs/output_video.mp4)'
-    )
-    
-    # VAE 配置
-    parser.add_argument(
-        '--model_id', type=str, default=None,
-        help='Override model ID for VAE'
-    )
-    
-    # 视频输出配置
-    parser.add_argument(
-        '--fps', type=int, default=None,
-        help='Output video FPS (default: from config)'
-    )
+    parser.add_argument('--input_dir', type=str, default='./stage_outputs')
+    parser.add_argument('--output_video', type=str, default=None)
+    parser.add_argument('--model_id', type=str, default=None)
+    parser.add_argument('--fps', type=int, default=None)
+    parser.add_argument('--warmup', action='store_true', default=True,
+                        help='运行预热解码触发 JIT 编译（默认启用）')
+    parser.add_argument('--no_warmup', action='store_false', dest='warmup',
+                        help='禁用预热解码')
     
     args = parser.parse_args()
     
@@ -235,7 +275,7 @@ def main():
     logging.getLogger().setLevel(logging.ERROR)
     
     print(f"\n{'='*60}")
-    print("CogVideoX 阶段3：VAE Decoder")
+    print("CogVideoX 阶段3：VAE Decoder (Flax)")
     print(f"{'='*60}")
     
     # 加载配置
@@ -249,6 +289,11 @@ def main():
     
     output_video = args.output_video or paths['video']
     
+    print(f"\n配置参数：")
+    print(f"  模型: {model_id}")
+    print(f"  FPS: {fps}")
+    print(f"  目标帧数: {target_frames}")
+    
     # 加载 latents
     print(f"\n加载 latents: {paths['latents']}")
     latents, latents_metadata = load_latents_from_safetensors(
@@ -257,7 +302,8 @@ def main():
         restore_dtype=True
     )
     
-    print(f"总设备数: {len(jax.devices())}")
+    print(f"\n设备信息：")
+    print(f"  JAX 设备数: {len(jax.devices())}")
     
     # 加载 VAE
     vae_proxy = load_flax_vae(model_id, dtype=jnp.bfloat16)
@@ -266,7 +312,8 @@ def main():
     video, decode_time = decode_latents_to_video(
         vae_proxy,
         latents,
-        config
+        config,
+        warmup=args.warmup
     )
     
     # 准备视频导出
@@ -289,10 +336,10 @@ def main():
         if len(frames) > 0:
             print(f"分辨率: {frames[0].shape[1]}x{frames[0].shape[0]}")
     print(f"FPS: {fps}")
-    print(f"VAE 解码耗时: {decode_time:.2f} 秒")
+    print(f"VAE 解码耗时: {decode_time:.2f} 秒（不含预热）")
     
     print(f"\n{'='*60}")
-    print("阶段3 完成！")
+    print("阶段3 完成！(Flax 版本)")
     print(f"{'='*60}")
     print(f"\n输出视频: {output_video}")
     

@@ -20,8 +20,6 @@ CogVideoX 三阶段生成 - 阶段3：VAE Decoder (TPU/TorchAx)
      如需使用 Flax VAE，请使用 stage3_vae_decoder_flax.py
 """
 
-import os
-import sys
 import time
 import argparse
 import warnings
@@ -30,16 +28,13 @@ import functools
 
 import jax
 import torch
-from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
+from jax.sharding import Mesh
 from jax.experimental import mesh_utils
 
 import torchax
 from torchax.ops import ops_registry, jaten
 
 from diffusers.utils import export_to_video
-
-# Add parent directory to path for torchax VAE
-sys.path.insert(0, '/home/chrisya/diffusers-tpu/src')
 from diffusers.models.autoencoders.autoencoder_kl_cogvideox_torchax import AutoencoderKLCogVideoX
 
 from utils import (
