@@ -24,10 +24,14 @@ import time
 import argparse
 import warnings
 import logging
+import functools
 import numpy as np
 
 import jax
 import jax.numpy as jnp
+from jax.sharding import Mesh
+from jax.experimental import mesh_utils
+from flax import nnx
 import torch
 from diffusers.utils import export_to_video
 from diffusers.models.autoencoders.autoencoder_kl_cogvideox_flax import FlaxAutoencoderKLCogVideoX
@@ -118,13 +122,20 @@ class FlaxVAEProxy:
 # VAE 加载与配置
 # ============================================================================
 
-def load_flax_vae(model_id, dtype=jnp.bfloat16):
+def load_flax_vae(model_id, mesh=None, dtype=jnp.bfloat16, enable_jit=True):
     """
-    加载 Flax VAE 模型
+    加载 Flax VAE 模型，支持 TPU 分片和 JIT 编译
+    
+    现在 VAE 已添加分片约束，可以在 Mesh 上下文中运行：
+    - FlaxCogVideoXCausalConv3d 中的 _apply_sharding_constraint 会自动
+      在 Width 维度上分片数据到多个 TPU
+    - 需要在调用时提供 Mesh 上下文
     
     Args:
         model_id: 模型 ID 或路径
+        mesh: JAX Mesh 对象，用于 TPU 分片
         dtype: 模型数据类型
+        enable_jit: 是否启用 JIT 编译
         
     Returns:
         FlaxVAEProxy: 包装后的 Flax VAE
@@ -138,6 +149,19 @@ def load_flax_vae(model_id, dtype=jnp.bfloat16):
     )
     
     print("✓ Flax VAE 加载完成")
+    
+    # 如果提供了 mesh 且启用 JIT，使用 nnx.jit 编译 decoder
+    if mesh is not None and enable_jit:
+        print(f"  配置 TPU 分片和 JIT 编译...")
+        print(f"  Mesh: {mesh}")
+        
+        # 使用 nnx.jit 编译 decoder
+        # 注意：与 TorchAx 的 torchax.compile 类似
+        flax_vae.decoder = nnx.jit(flax_vae.decoder)
+        
+        print("  ✓ Decoder JIT 编译完成")
+    else:
+        print("  注意：未启用 JIT 编译（无 mesh 或 enable_jit=False）")
     
     return FlaxVAEProxy(flax_vae)
 
@@ -256,10 +280,13 @@ def main():
     parser.add_argument('--output_video', type=str, default=None)
     parser.add_argument('--model_id', type=str, default=None)
     parser.add_argument('--fps', type=int, default=None)
+    parser.add_argument('--dp', type=int, default=1, help='Data parallelism dimension')
     parser.add_argument('--warmup', action='store_true', default=True,
                         help='运行预热解码触发 JIT 编译（默认启用）')
     parser.add_argument('--no_warmup', action='store_false', dest='warmup',
                         help='禁用预热解码')
+    parser.add_argument('--no_jit', action='store_true', default=False,
+                        help='禁用 JIT 编译（调试用）')
     
     args = parser.parse_args()
     
@@ -305,16 +332,31 @@ def main():
     print(f"\n设备信息：")
     print(f"  JAX 设备数: {len(jax.devices())}")
     
-    # 加载 VAE
-    vae_proxy = load_flax_vae(model_id, dtype=jnp.bfloat16)
-    
-    # 解码
-    video, decode_time = decode_latents_to_video(
-        vae_proxy,
-        latents,
-        config,
-        warmup=args.warmup
+    # 创建 mesh（与 TorchAx 版本相同的配置）
+    assert len(jax.devices()) % args.dp == 0, f"设备数 {len(jax.devices())} 必须能被 dp={args.dp} 整除"
+    tp_dim = len(jax.devices()) // args.dp
+    mesh_devices = mesh_utils.create_device_mesh(
+        (args.dp, tp_dim), allow_split_physical_axes=True
     )
+    mesh = Mesh(mesh_devices, ("dp", "tp"))
+    print(f"  Mesh: {mesh}")
+    
+    # 加载 VAE（传入 mesh 以启用分片和 JIT）
+    vae_proxy = load_flax_vae(
+        model_id,
+        mesh=mesh,
+        dtype=jnp.bfloat16,
+        enable_jit=not args.no_jit
+    )
+    
+    # 在 mesh 上下文中解码
+    with mesh:
+        video, decode_time = decode_latents_to_video(
+            vae_proxy,
+            latents,
+            config,
+            warmup=args.warmup
+        )
     
     # 准备视频导出
     print(f"\n准备视频导出...")
