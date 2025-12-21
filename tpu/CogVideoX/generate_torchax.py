@@ -41,7 +41,6 @@ logging.getLogger().setLevel(logging.ERROR)
 logging.getLogger('diffusers').setLevel(logging.ERROR)
 logging.getLogger('transformers').setLevel(logging.ERROR)
 
-import sys
 import time
 import re
 import math
@@ -64,9 +63,6 @@ import torchax
 from torchax.ops import ops_registry
 from transformers.modeling_outputs import BaseModelOutputWithPooling, BaseModelOutputWithPastAndCrossAttentions
 from transformers import T5EncoderModel, T5Tokenizer
-
-# Add diffusers-tpu to path for torchax components
-sys.path.insert(0, '/home/chrisya/diffusers-tpu/src')
 
 # TorchAx components
 from diffusers.pipelines.cogvideo.pipeline_cogvideox_torchax import CogVideoXPipeline
@@ -110,7 +106,7 @@ USE_DP = True
 USE_FSDP = True
 
 # Profiler Output Path
-PROFILE_OUT_PATH = "/dev/shm/tensorboard"
+PROFILE_OUT_PATH = "/dev/shm/jax-trace"
 
 
 # ============================================================================
@@ -306,10 +302,12 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
                                   env=None, mesh=None):
     """Wrapper for scaled dot-product attention with TPU Splash support."""
     if key.shape[2] > 20000:
-        assert attn_mask is None
-        assert dropout_p == 0.0
-        assert is_causal is False
-        assert enable_gqa is False
+        # TPU Splash Attention 的限制条件：
+        # 这些特性在高性能 Splash Attention 路径中不支持
+        assert attn_mask is None, "Splash Attention 不支持 attn_mask"
+        assert dropout_p == 0.0, "Splash Attention 不支持 dropout"
+        assert is_causal is False, "Splash Attention 不支持 causal mask（CogVideoX 使用双向注意力）"
+        assert enable_gqa is False, "Splash Attention 不支持 GQA（分组查询注意力）"
         
         jquery, jkey, jvalue = env.t2j_iso((query, key, value))
         
