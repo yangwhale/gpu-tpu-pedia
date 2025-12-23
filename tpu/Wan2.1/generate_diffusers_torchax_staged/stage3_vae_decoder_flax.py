@@ -4,7 +4,7 @@ Wan 2.1 三阶段生成 - 阶段3：VAE Decoder (Flax)
 
 本阶段负责：
 1. 加载阶段2生成的 latents
-2. 加载 Flax VAE 模型（FlaxAutoencoderKLWan）
+2. 加载 Flax VAE 模型（AutoencoderKLWan）
 3. 应用缩放因子（使用 latents_mean/latents_std 反归一化）
 4. 使用 VAE 解码为视频帧
 5. 后处理并导出最终视频
@@ -33,7 +33,7 @@ from jax.experimental import mesh_utils
 from flax import nnx
 import torch
 from diffusers.utils import export_to_video
-from diffusers.models.autoencoders.autoencoder_kl_wan_flax import FlaxAutoencoderKLWan
+from diffusers.models.autoencoders.autoencoder_kl_wan_flax import AutoencoderKLWan
 from diffusers.models.autoencoders.vae import DecoderOutput
 
 from utils import (
@@ -121,7 +121,7 @@ def load_flax_vae(model_id, mesh=None, dtype=jnp.bfloat16, enable_jit=True):
     """
     print(f"\n加载 Flax VAE: {model_id}")
     
-    flax_vae = FlaxAutoencoderKLWan.from_pretrained(
+    flax_vae = AutoencoderKLWan.from_pretrained(
         model_id,
         subfolder="vae",
         dtype=dtype
