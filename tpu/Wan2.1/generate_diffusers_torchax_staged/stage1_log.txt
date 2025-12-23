@@ -1,77 +1,0 @@
-/home/chrisya/.local/lib/python3.12/site-packages/torch/amp/autocast_mode.py:270: UserWarning: User provided device_type of 'cuda', but CUDA is not available. Disabling
-  warnings.warn(
-Flax classes are deprecated and will be removed in Diffusers v1.0.0. We recommend migrating to PyTorch classes or pinning your version of Diffusers.
-Flax classes are deprecated and will be removed in Diffusers v1.0.0. We recommend migrating to PyTorch classes or pinning your version of Diffusers.
-✓ JAX 编译缓存已启用: /dev/shm/jax_cache
-注册 PyTree 节点...
-  - BaseModelOutputWithPastAndCrossAttentions 已注册
-  - DecoderOutput 已注册
-  - AutoencoderKLOutput 已注册
-  - DiagonalGaussianDistribution 已注册
-
-============================================================
-Wan 2.1 阶段1：Text Encoder (TPU)
-============================================================
-
-配置参数：
-  模型: Wan-AI/Wan2.1-T2V-14B-Diffusers
-
-=== 加载 Wan 2.1 T2V Pipeline ===
-加载模型中（在启用 torchax 之前）...
-Loading pipeline components...:   0%|          | 0/5 [00:00<?, ?it/s]`torch_dtype` is deprecated! Use `dtype` instead!
-
-Loading checkpoint shards:   0%|          | 0/5 [00:00<?, ?it/s][A
-Loading checkpoint shards:  20%|██        | 1/5 [00:00<00:01,  3.70it/s][A
-Loading checkpoint shards:  40%|████      | 2/5 [00:00<00:01,  2.72it/s][A
-Loading checkpoint shards:  60%|██████    | 3/5 [00:00<00:00,  3.42it/s][A
-Loading checkpoint shards:  80%|████████  | 4/5 [00:01<00:00,  3.89it/s][A
-Loading checkpoint shards: 100%|██████████| 5/5 [00:01<00:00,  4.78it/s][ALoading checkpoint shards: 100%|██████████| 5/5 [00:01<00:00,  4.04it/s]
-Loading pipeline components...:  20%|██        | 1/5 [00:01<00:05,  1.26s/it]Loading pipeline components...:  40%|████      | 2/5 [00:01<00:02,  1.43it/s]
-Loading checkpoint shards:   0%|          | 0/12 [00:00<?, ?it/s][A
-Loading checkpoint shards:  17%|█▋        | 2/12 [00:00<00:00, 16.44it/s][A
-Loading checkpoint shards:  33%|███▎      | 4/12 [00:00<00:00, 15.14it/s][A
-Loading checkpoint shards:  50%|█████     | 6/12 [00:00<00:00, 15.71it/s][A
-Loading checkpoint shards:  67%|██████▋   | 8/12 [00:00<00:00, 15.88it/s][A
-Loading checkpoint shards:  83%|████████▎ | 10/12 [00:00<00:00, 15.50it/s][A
-Loading checkpoint shards: 100%|██████████| 12/12 [00:00<00:00, 16.68it/s][ALoading checkpoint shards: 100%|██████████| 12/12 [00:00<00:00, 16.14it/s]
-Loading pipeline components...:  80%|████████  | 4/5 [00:02<00:00,  1.94it/s]Loading pipeline components...: 100%|██████████| 5/5 [00:02<00:00,  2.05it/s]
-`loss_type=None` was set in the config but it is unrecognized. Using the default loss: `ForCausalLMLoss`.
-✓ 模型加载完成
-
-启用 torchax...
-Mesh: Mesh('dp': 2, 'tp': 4, axis_types=(Auto, Auto))
-
-=== 设置 Text Encoder (TPU) ===
-- 移动 Text Encoder 到 TPU...
-✓ Text Encoder 设置完成
-
-
-=== 编码文本提示词 ===
-正面 prompt: A cat and a dog baking a cake together in a kitchen. The cat is carefully measuring flour, while the...
-负面 prompt: Bright tones, overexposed, static, blurred details...
-
-编码 prompts...
-  prompt_embeds shape: torch.Size([1, 226, 4096]), dtype: torch.bfloat16
-  negative_prompt_embeds shape: torch.Size([1, 226, 4096])
-
-转换 tensor 到 CPU...
-
-保存 embeddings 到: ./stage_outputs/stage1_embeddings.safetensors
-✓ 已保存 2 个 tensors 到 ./stage_outputs/stage1_embeddings.safetensors
-✓ 已保存配置到 ./stage_outputs/generation_config.json
-
-============================================================
-阶段1 完成！
-============================================================
-
-输出文件：
-  - Embeddings: ./stage_outputs/stage1_embeddings.safetensors
-  - 配置文件:   ./stage_outputs/generation_config.json
-
-保存的 tensor shapes：
-  - prompt_embeds: torch.Size([1, 226, 4096])
-  - negative_prompt_embeds: torch.Size([1, 226, 4096])
-
-下一步：运行 stage2_transformer.py 进行 Transformer 推理
-
-✓ 阶段1 执行完成
