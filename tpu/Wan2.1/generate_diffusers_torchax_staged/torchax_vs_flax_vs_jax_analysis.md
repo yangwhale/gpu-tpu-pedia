@@ -118,7 +118,127 @@ graph LR
     style E fill:#4caf50,color:#fff
 ```
 
-**关键设计**：TorchAx 将 PyTorch 的 Core ATen 算子一一映射为用 JAX 原语实现的等价算子。详见 [**TorchAx Core ATen 操作符目录**](./aten_ops_catalog.md)（共 382 个操作符）。
+**关键设计**：TorchAx 将 PyTorch 的 Core ATen 算子一一映射为用 JAX 原语实现的等价算子。详见 [**TorchAx Core ATen 操作符目录**](./aten_ops_catalog.md)（共 382 个操作符）。这意味着：
+
+1. **没有 torch_xla 参与** - 不是 lazy tensor 模式
+2. **没有 Python 追踪开销** - 直接走 PyTorch dispatcher
+3. **JAX 作为底层执行引擎** - 和 Flax 最终使用相同的 JAX 运行时
+
+### PyTorch Dispatcher 的高效性
+
+```python
+# PyTorch 的 dispatcher 是 C++ 实现，极其高效
+# 当调用 torch.nn.functional.conv3d 时：
+
+# Step 1: PyTorch dispatcher 识别操作类型
+# Step 2: 路由到 TorchAx 注册的后端
+# Step 3: TorchAx 调用对应的 JAX 实现
+
+# 伪代码：
+class TorchAxConv3d:
+    @staticmethod
+    def conv3d(input, weight, bias, stride, padding, dilation, groups):
+        # 直接调用 JAX 的 lax.conv_general_dilated
+        return jax.lax.conv_general_dilated(
+            jax_view(input),
+            jax_view(weight),
+            window_strides=stride,
+            padding=padding,
+            ...
+        )
+```
+
+### 零额外追踪开销
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant PyTorch as PyTorch Dispatcher
+    participant TorchAx as TorchAx ATen Impl
+    participant JAX as JAX Runtime
+    participant XLA
+    
+    User->>PyTorch: torch.conv3d(x, w)
+    Note over PyTorch: C++ dispatcher (纳秒级)
+    PyTorch->>TorchAx: aten::conv3d
+    Note over TorchAx: 直接映射到 JAX op
+    TorchAx->>JAX: lax.conv_general_dilated
+    JAX->>XLA: 编译执行
+    XLA-->>User: 结果
+```
+
+对比 Flax 的追踪开销：
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant JIT as jax.jit
+    participant Trace as JAX Tracer
+    participant Abstract as Abstract Eval
+    participant JAX as JAX Runtime
+    participant XLA
+    
+    User->>JIT: jitted_fn(params, x)
+    JIT->>Trace: 开始追踪
+    loop 对每个操作
+        Trace->>Abstract: 抽象求值
+        Abstract->>Abstract: 类型推断
+        Abstract->>Abstract: 形状推断
+    end
+    Trace->>JAX: 生成 Jaxpr
+    JAX->>XLA: 编译执行
+    XLA-->>User: 结果
+```
+
+### ATen 算子映射示例
+
+```python
+# TorchAx 的核心：将 PyTorch ATen ops 映射到 JAX
+
+# torch.nn.functional.pad -> jnp.pad
+@register_aten_op(torch.ops.aten.pad)
+def aten_pad(x, pad, mode='constant', value=0):
+    # 转换 PyTorch 的 pad 格式到 JAX 的 pad_width 格式
+    pad_width = convert_pad_format(pad)
+    return jnp.pad(jax_view(x), pad_width, mode=mode, constant_values=value)
+
+# torch.cat -> jnp.concatenate
+@register_aten_op(torch.ops.aten.cat)
+def aten_cat(tensors, dim=0):
+    jax_tensors = [jax_view(t) for t in tensors]
+    return jnp.concatenate(jax_tensors, axis=dim)
+
+# torch.nn.functional.conv3d -> jax.lax.conv_general_dilated
+@register_aten_op(torch.ops.aten.conv3d)
+def aten_conv3d(input, weight, bias, stride, padding, dilation, groups):
+    result = jax.lax.conv_general_dilated(
+        jax_view(input),
+        jax_view(weight),
+        window_strides=stride,
+        padding=convert_padding(padding),
+        lhs_dilation=None,
+        rhs_dilation=dilation,
+        feature_group_count=groups,
+    )
+    if bias is not None:
+        result = result + jax_view(bias).reshape((1, -1, 1, 1, 1))
+    return result
+```
+
+### interop.torch_view 的魔力
+
+```python
+from torchax import interop
+
+# torch_view: 将 JAX 函数包装为接受 PyTorch Tensor 的函数
+# jax_view: 将 PyTorch Tensor 转换为 JAX Array 的视图
+
+mark_sharding = interop.torch_view(jax.lax.with_sharding_constraint)
+
+# 使用时，可以直接对 PyTorch Tensor 调用 JAX 函数！
+x = torch.randn(2, 3, 4)  # PyTorch Tensor
+x = mark_sharding(x, P("dp", "tp"))  # 调用 JAX 的 sharding API
+```
 
 ### 为什么 TorchAx 最快
 
@@ -301,7 +421,75 @@ def wan_causal_conv3d(params, x, cache_x=None, padding_config=None):
     return lax.conv_general_dilated(x, params['kernel'], ...)
 ```
 
-### 2. 可变状态处理
+### 2. 数据格式转换
+
+**TorchAx (NCTHW):**
+```python
+# 数据布局: (Batch, Channels, Time, Height, Width)
+def forward(self, x):
+    B, C, T, H, W = x.shape
+    x = x.view(B, C, T//factor_t, factor_t, H//factor_s, factor_s, W//factor_s, factor_s)
+    x = x.permute(0, 1, 3, 5, 7, 2, 4, 6)  # PyTorch permute
+```
+
+**Flax NNX / Pure JAX (NTHWC):**
+```python
+# 数据布局: (Batch, Time, Height, Width, Channels)
+def __call__(self, x):
+    B, T, H, W, C = x.shape
+    x = x.reshape(B, T//factor_t, factor_t, H//factor_s, factor_s, W//factor_s, factor_s, C)
+    x = x.transpose(0, 1, 3, 5, 7, 2, 4, 6)  # JAX transpose
+```
+
+### 3. Sharding 标记
+
+**TorchAx:**
+```python
+from torchax import interop
+from jax.sharding import PartitionSpec as P
+
+mark_sharding = interop.torch_view(jax.lax.with_sharding_constraint)
+
+def forward(self, x):
+    # PyTorch 张量直接使用 interop 包装的函数
+    try:
+        x = mark_sharding(x, P(None, None, None, None, ("dp", "tp")))
+    except ValueError:
+        pass
+    return super().forward(x)
+```
+
+**Flax NNX:**
+```python
+from jax.sharding import PartitionSpec as P
+
+def mark_sharding(inputs, spec):
+    try:
+        return jax.lax.with_sharding_constraint(inputs, spec)
+    except (ValueError, Exception):
+        return inputs
+
+def __call__(self, x):
+    # JAX 数组直接使用原生函数
+    try:
+        x = mark_sharding(x, P(None, None, None, ("dp", "tp"), None))
+    except ValueError:
+        pass
+    return self.conv(x)
+```
+
+**Pure JAX:**
+```python
+# PURE_JAX: 在函数中直接调用 with_sharding_constraint
+def wan_causal_conv3d(params, x, cache_x=None, padding_config=None):
+    try:
+        x = jax.lax.with_sharding_constraint(x, P(None, None, None, ("dp", "tp"), None))
+    except ValueError:
+        pass
+    return conv3d(params, x, ...)
+```
+
+### 4. 可变状态处理
 
 **TorchAx:**
 ```python
@@ -344,7 +532,58 @@ class AutoencoderKLWan:  # 普通类，非 nnx.Module
         return vae_decode(self.params, z, self.config)
 ```
 
-### 3. 权重加载
+### 5. 模块列表
+
+**TorchAx:**
+```python
+class WanUpBlock(nn.Module):
+    def __init__(self, ...):
+        super().__init__()
+        self.resnets = nn.ModuleList(resnets)
+        
+        # 可以赋值为 None，后续修改
+        self.upsamplers = None
+        if upsample_mode is not None:
+            self.upsamplers = nn.ModuleList([WanResample(...)])
+```
+
+**Flax NNX:**
+```python
+class WanUpBlock(nnx.Module):
+    def __init__(self, ...):
+        self.resnets = nnx.List(resnets)
+        
+        # 不能从 None 变成 nnx.List，必须一开始就是 nnx.List
+        if upsample_mode is not None:
+            self.upsamplers = nnx.List([WanResample(...)])
+        else:
+            self.upsamplers = nnx.List([])  # 空列表代替 None
+    
+    def __call__(self, x, ...):
+        if len(self.upsamplers) > 0:  # 检查长度代替 is not None
+            x, feat_idx, feat_cache = self.upsamplers[0](x, feat_cache, feat_idx)
+```
+
+**Pure JAX:**
+```python
+# PURE_JAX: 使用整数键字典代替 nnx.List
+def wan_up_block(params, x, ...):
+    """
+    params: {
+        'resnets': {0: {...}, 1: {...}, ...},  # 整数键字典
+        'upsamplers': {0: {...}} 或 {}          # 空字典代替 None
+    }
+    """
+    # 遍历时需要排序整数键
+    for i in sorted(params['resnets'].keys()):
+        x = wan_resnet_block(params['resnets'][i], x, ...)
+    
+    if len(params['upsamplers']) > 0:
+        x = wan_resample(params['upsamplers'][0], x, ...)
+    return x
+```
+
+### 6. 权重加载
 
 **Flax NNX:**
 ```python
