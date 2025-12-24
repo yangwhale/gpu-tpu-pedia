@@ -5,7 +5,6 @@ CogVideoX 三阶段生成 - 共享工具模块
 包含:
 - 配置常量（模型、视频生成）
 - Splash Attention 配置
-- Sharding 策略
 - SafeTensors 数据存储
 - 配置管理
 - PyTree 注册
@@ -13,7 +12,6 @@ CogVideoX 三阶段生成 - 共享工具模块
 """
 
 import os
-import re
 import json
 import numpy as np
 import jax
@@ -22,7 +20,6 @@ import torch
 from safetensors import safe_open
 from safetensors.torch import save_file as torch_save_file, load_file as torch_load_file
 from jax.tree_util import register_pytree_node
-from jax.sharding import PartitionSpec as P, NamedSharding
 
 
 # ============================================================================
@@ -63,40 +60,11 @@ LOG2_E = 1.44269504
 # ============================================================================
 DEFAULT_DP = 1  # CogVideoX 默认 DP=1（与 Wan 不同）
 
-
-# ============================================================================
-# Sharding 策略
-# ============================================================================
-
-# VAE sharding (空字典 - 不分片，使用 replicate)
-VAE_ENCODER_SHARDINGS = {}
-VAE_DECODER_SHARDINGS = {}
-
-
-# ============================================================================
-# 权重分片函数
-# ============================================================================
-
-def shard_weight_dict(weight_dict, sharding_dict, mesh):
-    """Apply sharding to weights based on pattern matching."""
-    result = {}
-    for k, v in weight_dict.items():
-        if isinstance(v, torch.Tensor):
-            v = v.to("jax")
-        
-        matched = False
-        for target, sharding in sharding_dict.items():
-            if re.fullmatch(target, k) is not None:
-                v.apply_jax_(jax.device_put, NamedSharding(mesh, P(*sharding)))
-                matched = True
-                break
-        
-        if not matched:
-            # Replicate
-            v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
-        
-        result[k] = v
-    return result
+# Transformer 分片配置（stage2 使用）
+# 注意：DP=2 比 DP=1 快约 1.6 倍（CFG 正+负 prompt 可并行处理）
+USE_DP = True   # 是否使用 Data Parallelism（推荐开启）
+SP_NUM = 1      # Sequence Parallelism 分片数
+USE_FSDP = True # 是否使用 FSDP 模式（推荐）
 
 
 # ============================================================================
