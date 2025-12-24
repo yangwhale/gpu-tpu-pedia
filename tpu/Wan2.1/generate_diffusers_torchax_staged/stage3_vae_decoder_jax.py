@@ -3,12 +3,21 @@
 Wan 2.1 阶段3：VAE Decoder (Pure JAX)
 
 加载 stage2 生成的 latents，使用 VAE 解码为视频。
-纯 JAX 版本 - 使用 autoencoder_kl_wan_jax.py (无 NNX 依赖)
+Pure JAX 版本 - 使用 autoencoder_kl_wan_jax.py
 
-性能优势（相比 NNX 版本）:
-- 首次编译时间减少 ~55%
-- 缓存加载时间减少 ~64%
-- 无 pytree=False hack，完整 JAX 追踪优化
+=============================================================================
+FLAX NNX → PURE JAX 改造指南 (测试脚本版)
+=============================================================================
+
+本文件从 stage3_vae_decoder_flax.py 改造而来。
+改动点用 # PURE_JAX: 标记。
+
+主要改动：
+1. 导入 autoencoder_kl_wan_jax 替代 autoencoder_kl_wan_flax
+2. 移除 flax.nnx 依赖
+3. VAEProxy 适配新的纯函数式 API
+
+=============================================================================
 """
 
 # Suppress warnings FIRST before any imports
@@ -21,25 +30,19 @@ os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import time
 import argparse
-import functools
 import numpy as np
 
 import jax
 import jax.numpy as jnp
-from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+from jax.sharding import Mesh
 from jax.experimental import mesh_utils
+# PURE_JAX: 移除 from flax import nnx
 import torch
 
 from diffusers.utils import export_to_video
+# PURE_JAX: 导入纯 JAX 版本
+from diffusers.models.autoencoders.autoencoder_kl_wan_jax import AutoencoderKLWan
 from diffusers.models.autoencoders.vae import DecoderOutput
-
-# Import pure JAX VAE
-from diffusers.models.autoencoders.autoencoder_kl_wan_jax import (
-    AutoencoderKLWan,
-    AutoencoderKLWanConfig,
-    load_vae_params,
-    vae_decode,
-)
 
 from utils import (
     MODEL_NAME,
@@ -54,33 +57,44 @@ from utils import (
 # ============================================================================
 # Pure JAX VAE Proxy
 # ============================================================================
+# PURE_JAX: 原 FlaxVAEProxy 类，主要改动：
+# 1. 移除 nnx.jit，使用 jax.jit
+# 2. 适配新的 vae.decode API
 
 class PureJAXVAEProxy:
-    """Pure JAX VAE wrapper with PyTorch-compatible interface."""
+    """
+    Pure JAX VAE wrapper with PyTorch interface.
     
-    def __init__(self, params, config, mesh=None, enable_jit=True):
-        self.params = params
+    PURE_JAX: 与 FlaxVAEProxy 的区别：
+    - self._flax_vae → self._vae（不再是 Flax NNX 模块）
+    - 使用 jax.jit 包装 decode 函数
+    """
+    
+    def __init__(self, vae, config, enable_jit=True):
+        # PURE_JAX: vae 是 AutoencoderKLWan 实例（普通类，非 nnx.Module）
+        self._vae = vae
         self.config = config
-        self.mesh = mesh
         self.dtype = torch.bfloat16
         
-        # Create JIT-compiled decode function
+        # PURE_JAX: 使用 jax.jit 替代 nnx.jit
         if enable_jit:
-            self._decode_fn = self._create_jit_decode()
+            self._decode_fn = jax.jit(self._decode_impl)
         else:
-            self._decode_fn = None
+            self._decode_fn = self._decode_impl
     
-    def _create_jit_decode(self):
-        """Create JIT-compiled decode function with sharding."""
-        
-        @functools.partial(jax.jit)
-        def decode_fn(params, z):
-            return vae_decode(params, z, self.config)
-        
-        return decode_fn
+    def _decode_impl(self, z: jnp.ndarray) -> jnp.ndarray:
+        """
+        PURE_JAX: 纯 JAX decode 实现
+        直接调用 vae.decode，无需 nnx.split/merge
+        """
+        return self._vae.decode(z)
     
     def decode(self, latents, return_dict=True):
-        """Decode: PyTorch -> JAX -> decode -> PyTorch"""
+        """
+        Decode: PyTorch -> JAX -> decode -> PyTorch
+        
+        PURE_JAX: 与 Flax 版本相同的接口
+        """
         # PyTorch (B, C, T, H, W) -> JAX (B, T, H, W, C)
         if latents.dtype == torch.bfloat16:
             latents_np = latents.to(torch.float32).cpu().numpy()
@@ -89,11 +103,8 @@ class PureJAXVAEProxy:
         
         latents_jax = jnp.array(np.transpose(latents_np, (0, 2, 3, 4, 1)), dtype=jnp.bfloat16)
         
-        # Decode using JIT-compiled function or direct call
-        if self._decode_fn is not None:
-            frames_jax = self._decode_fn(self.params, latents_jax)
-        else:
-            frames_jax = vae_decode(self.params, latents_jax, self.config)
+        # PURE_JAX: 直接调用 jitted 函数
+        frames_jax = self._decode_fn(latents_jax)
         
         # JAX (B, T, H, W, C) -> PyTorch (B, C, T, H, W)
         frames_np = np.asarray(frames_jax.transpose(0, 4, 1, 2, 3))
@@ -107,24 +118,29 @@ class PureJAXVAEProxy:
 # ============================================================================
 # VAE Functions
 # ============================================================================
+# PURE_JAX: load_vae 函数改动
 
 def load_vae(model_id, mesh, enable_jit=True):
-    """Load Pure JAX VAE."""
+    """
+    Load Pure JAX VAE.
+    
+    PURE_JAX: 与 Flax 版本的区别：
+    1. AutoencoderKLWan.from_pretrained 直接返回可用实例（无需 nnx.jit 包装）
+    2. 使用 PureJAXVAEProxy 替代 FlaxVAEProxy
+    """
     print(f"加载 VAE (Pure JAX): {model_id}")
     
-    # Load parameters and config
-    params, config = load_vae_params(
+    # PURE_JAX: from_pretrained 返回的是普通类实例，不是 nnx.Module
+    vae = AutoencoderKLWan.from_pretrained(
         model_id, subfolder="vae", dtype=jnp.bfloat16
     )
     print("✓ VAE 参数加载完成")
     
-    # Create proxy
-    vae = PureJAXVAEProxy(params, config, mesh, enable_jit=enable_jit)
-    
+    # PURE_JAX: JIT 编译在 Proxy 中完成，不需要 nnx.jit(vae.decoder)
     if enable_jit:
         print("✓ VAE Decoder JIT 编译已启用")
     
-    return vae
+    return PureJAXVAEProxy(vae, vae.config, enable_jit=enable_jit)
 
 
 def run_vae_decode(vae, latents, desc="VAE Decode"):
@@ -152,8 +168,8 @@ def decode_latents(vae, latents, warmup=True):
         latents = torch.nan_to_num(latents, nan=0.0)
     
     # Denormalize: x * std + mean
-    latents_mean = torch.tensor(list(vae.config.latents_mean), dtype=latents.dtype).view(1, -1, 1, 1, 1)
-    latents_std = torch.tensor(list(vae.config.latents_std), dtype=latents.dtype).view(1, -1, 1, 1, 1)
+    latents_mean = torch.tensor(vae.config.latents_mean, dtype=latents.dtype).view(1, -1, 1, 1, 1)
+    latents_std = torch.tensor(vae.config.latents_std, dtype=latents.dtype).view(1, -1, 1, 1, 1)
     latents = latents * latents_std + latents_mean
     latents = latents.to(torch.bfloat16)
     
@@ -173,6 +189,7 @@ def decode_latents(vae, latents, warmup=True):
 # ============================================================================
 
 def main():
+    # PURE_JAX: 描述改为 Pure JAX
     parser = argparse.ArgumentParser(description='Wan 2.1 阶段3：VAE Decoder (Pure JAX)')
     parser.add_argument('--input_dir', type=str, default='./stage_outputs')
     parser.add_argument('--output_video', type=str, default=None)
@@ -191,7 +208,7 @@ def main():
     paths = get_default_paths(args.input_dir)
     
     print(f"\n{'='*50}")
-    print("阶段3：VAE Decoder (Pure JAX)")
+    print("阶段3：VAE Decoder (Pure JAX)")  # PURE_JAX: 标题改变
     print(f"{'='*50}")
     
     # Load config
