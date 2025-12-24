@@ -797,6 +797,71 @@ return cls(params, config)  # 直接实例化
 
 ## Flax NNX → Pure JAX 改造指南
 
+### 关于 rngs 的说明
+
+> **问题**：Flax NNX 需要 `rngs`，Pure JAX 也需要吗？
+
+**Flax NNX 的 rngs 用途**：
+```python
+# Flax NNX 中 rngs 有两个主要用途：
+
+# 1. 权重初始化（模型构建时）
+rngs = nnx.Rngs(jax.random.key(0))
+model = AutoencoderKLWan(config, rngs=rngs)  # rngs 用于初始化 kernel
+
+# 2. 随机操作（训练时）
+class SomeModule(nnx.Module):
+    def __call__(self, x):
+        x = nnx.Dropout(rate=0.1, rngs=self.rngs)(x)  # dropout 需要 rngs
+```
+
+**Pure JAX 的处理方式**：
+```python
+# 训练时需要 rngs（权重初始化 + dropout）
+def init_params(key, config):
+    """初始化权重时需要随机数"""
+    keys = jax.random.split(key, num_layers)
+    params = {}
+    for i, k in enumerate(keys):
+        params[f'layer_{i}'] = {
+            'kernel': jax.random.normal(k, shape) * 0.02,
+            'bias': jnp.zeros(out_dim),
+        }
+    return params
+
+# 推理时不需要 rngs（权重从预训练加载，dropout=0）
+def decode(params, z):
+    """推理时无随机操作"""
+    # 权重已在 params 中，不需要初始化
+    # dropout=0.0，不需要随机数
+    return decoder_forward(params, z)
+```
+
+**为什么我们的 Pure JAX VAE 不需要 rngs**：
+1. **权重来自预训练模型**：从 PyTorch 权重加载，不需要初始化
+2. **Dropout 为 0**：`config.dropout = 0.0`，推理时不使用 dropout
+3. **确定性推理**：VAE decoder 是确定性的，无随机采样
+
+```python
+# 如果需要训练（非本例），Pure JAX 也需要 rngs：
+@jax.jit
+def train_step(params, x, key):
+    key, subkey = jax.random.split(key)
+    # 使用 subkey 进行 dropout 等随机操作
+    loss, grads = jax.value_and_grad(loss_fn)(params, x, subkey)
+    params = update_params(params, grads)
+    return params, key
+```
+
+**Flax NNX vs Pure JAX 的 rngs 对比**：
+
+| 场景 | Flax NNX | Pure JAX |
+|-----|----------|----------|
+| 权重初始化 | `rngs = nnx.Rngs(key)` | `key = jax.random.key(0)` |
+| 初始化传递 | `nnx.Conv(..., rngs=rngs)` | `jax.random.normal(key, shape)` |
+| Dropout | `nnx.Dropout(rngs=self.rngs)` | `jax.random.bernoulli(key, rate)` |
+| 推理（无 dropout） | 仍需传 rngs（模型结构要求） | **不需要 key** |
+
 ### 改造清单
 
 | 原 Flax NNX | Pure JAX 替代 | 说明 |
