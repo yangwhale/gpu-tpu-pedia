@@ -32,14 +32,11 @@ from utils import (
     MODEL_NAME,
     FPS,
     DEFAULT_DP,
-    VAE_DECODER_SHARDINGS,
-    shard_weight_dict,
     prepare_video_for_export,
     load_latents_from_safetensors,
     load_generation_config,
     get_default_paths,
     setup_jax_cache,
-    setup_pytree_registrations,
 )
 
 
@@ -99,8 +96,7 @@ def setup_vae_for_tpu(vae, mesh, env):
     # Move to XLA and compile
     move_module_to_xla(env, vae)
     vae.decoder = torchax.compile(vae.decoder)
-    vae.decoder.params = shard_weight_dict(vae.decoder.params, VAE_DECODER_SHARDINGS, mesh)
-    vae.decoder.buffers = shard_weight_dict(vae.decoder.buffers, VAE_DECODER_SHARDINGS, mesh)
+    # 注意：CogVideoX VAE 不需要 shard_weight_dict（保持 replicate）
     
     print("✓ VAE Decoder JIT 编译完成")
     return vae
@@ -171,7 +167,6 @@ def main():
     
     # Setup
     setup_jax_cache()
-    setup_pytree_registrations()
     torch.set_default_dtype(torch.bfloat16)
     
     paths = get_default_paths(args.input_dir)
