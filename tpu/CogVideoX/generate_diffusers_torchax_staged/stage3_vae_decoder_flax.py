@@ -1,30 +1,21 @@
 #!/usr/bin/env python3
 """
-CogVideoX 三阶段生成 - 阶段3：VAE Decoder (Flax)
+CogVideoX 阶段3：VAE Decoder (Flax)
 
-本阶段负责：
-1. 加载阶段2生成的 latents
-2. 加载 Flax VAE 模型（FlaxAutoencoderKLCogVideoX）
-3. 应用缩放因子
-4. 使用 VAE 解码为视频帧
-5. 后处理并导出最终视频
-
-输入文件：
-- stage2_latents.safetensors: 生成的 latents
-- generation_config.json: 生成配置
-
-输出文件：
-- output_video.mp4: 最终生成的视频
-
-注意：这个版本使用 Flax VAE (autoencoder_kl_cogvideox_flax.py)
-     如需使用 TorchAx VAE，请使用 stage3_vae_decoder.py
+加载 stage2 生成的 latents，使用 VAE 解码为视频。
+Flax 版本 - 使用 autoencoder_kl_cogvideox_flax.py
 """
+
+# Suppress warnings FIRST before any imports
+import warnings
+import logging
+import os
+warnings.filterwarnings('ignore')
+logging.disable(logging.WARNING)
+os.environ["TF_CPP_MIN_LOG_LEVEL"] = "3"
 
 import time
 import argparse
-import warnings
-import logging
-import functools
 import numpy as np
 
 import jax
@@ -33,6 +24,7 @@ from jax.sharding import Mesh
 from jax.experimental import mesh_utils
 from flax import nnx
 import torch
+
 from diffusers.utils import export_to_video
 from diffusers.models.autoencoders.autoencoder_kl_cogvideox_flax import FlaxAutoencoderKLCogVideoX
 from diffusers.models.autoencoders.vae import DecoderOutput
@@ -40,10 +32,12 @@ from diffusers.models.autoencoders.vae import DecoderOutput
 from utils import (
     MODEL_NAME,
     FPS,
+    DEFAULT_DP,
     prepare_video_for_export,
     load_latents_from_safetensors,
     load_generation_config,
     get_default_paths,
+    setup_jax_cache,
 )
 
 
@@ -52,12 +46,8 @@ from utils import (
 # ============================================================================
 
 class FlaxVAEProxy:
-    """
-    Flax VAE 的 PyTorch 接口代理
+    """Flax VAE wrapper with PyTorch interface."""
     
-    将 PyTorch latents 转换为 JAX，使用 Flax VAE 解码，
-    然后将结果转回 PyTorch 格式。
-    """
     def __init__(self, flax_vae):
         self._flax_vae = flax_vae
         self.config = flax_vae.config
@@ -67,190 +57,94 @@ class FlaxVAEProxy:
         return getattr(self._flax_vae, name)
     
     def decode(self, latents, return_dict=True):
-        """解码：PyTorch -> JAX -> 解码 -> PyTorch
-        
-        完全复制原始 generate_flax.py 的 FlaxVAEProxy.decode() 实现。
-        关键优化：全程使用 BF16，避免 FP32 中间数组占用 2倍内存
-        
-        Args:
-            latents: PyTorch tensor [B, C, T, H, W]
-                     其中 C=16(latent_channels)
-            return_dict: 是否返回 DecoderOutput
-            
-        Returns:
-            DecoderOutput 或 torch.Tensor
-        """
-        # 转换 latents: PyTorch (B, C, T, H, W) -> numpy (B, T, H, W, C)
-        # 关键：保持 BF16 dtype 以节省内存
+        """Decode: PyTorch -> JAX -> decode -> PyTorch"""
+        # PyTorch (B, C, T, H, W) -> JAX (B, T, H, W, C)
         if latents.dtype == torch.bfloat16:
-            # BF16: 通过 FP32 中转（JAX 的 bfloat16 限制）
             latents_np = latents.to(torch.float32).cpu().numpy()
         else:
             latents_np = latents.cpu().numpy()
         
-        # Transpose 并**直接创建 BF16 数组**（避免 FP32 中间数组）
-        # 关键修复：使用 (0, 2, 3, 4, 1) 而不是 (0, 1, 3, 4, 2)
-        # (B, C, T, H, W) -> (B, T, H, W, C)
-        latents_jax = jnp.array(
-            np.transpose(latents_np, (0, 2, 3, 4, 1)),
-            dtype=jnp.bfloat16
-        )
+        latents_jax = jnp.array(np.transpose(latents_np, (0, 2, 3, 4, 1)), dtype=jnp.bfloat16)
         
-        print(f"  VAE 输入 latents shape: {latents_jax.shape}")
+        print(f"  VAE 输入: {latents_jax.shape}")
         
-        # Flax VAE 解码（BF16 -> BF16）
+        # Decode
         frames_jax = self._flax_vae.decode(latents_jax)
         
-        print(f"  VAE 输出 frames shape: {frames_jax.shape}")
+        print(f"  VAE 输出: {frames_jax.shape}")
         
-        # 转换输出: JAX (B, T, H, W, C) -> PyTorch (B, C, T, H, W)
-        frames_jax_transposed = frames_jax.transpose(0, 4, 1, 2, 3)  # (B, C, T, H, W)
-        
-        # 转为 numpy
-        frames_np = np.asarray(frames_jax_transposed)
-        
-        # 转为 PyTorch（通过 FP32 中转）
+        # JAX (B, T, H, W, C) -> PyTorch (B, C, T, H, W)
+        frames_np = np.asarray(frames_jax.transpose(0, 4, 1, 2, 3))
         frames_torch = torch.from_numpy(frames_np.astype(np.float32)).to(torch.bfloat16)
         
-        # 返回 DecoderOutput
         if return_dict:
             return DecoderOutput(sample=frames_torch)
         return frames_torch
 
 
 # ============================================================================
-# VAE 加载与配置
+# VAE Functions
 # ============================================================================
 
-def load_flax_vae(model_id, mesh=None, dtype=jnp.bfloat16, enable_jit=True):
-    """
-    加载 Flax VAE 模型，支持 TPU 分片和 JIT 编译
-    
-    现在 VAE 已添加分片约束，可以在 Mesh 上下文中运行：
-    - FlaxCogVideoXCausalConv3d 中的 _apply_sharding_constraint 会自动
-      在 Width 维度上分片数据到多个 TPU
-    - 需要在调用时提供 Mesh 上下文
-    
-    Args:
-        model_id: 模型 ID 或路径
-        mesh: JAX Mesh 对象，用于 TPU 分片
-        dtype: 模型数据类型
-        enable_jit: 是否启用 JIT 编译
-        
-    Returns:
-        FlaxVAEProxy: 包装后的 Flax VAE
-    """
-    print(f"\n加载 Flax VAE: {model_id}")
+def load_vae(model_id, mesh, enable_jit=True):
+    """Load Flax VAE."""
+    print(f"加载 VAE: {model_id}")
     
     flax_vae = FlaxAutoencoderKLCogVideoX.from_pretrained(
-        model_id,
-        subfolder="vae",
-        dtype=dtype
+        model_id, subfolder="vae", dtype=jnp.bfloat16
     )
+    print("✓ VAE 加载完成")
     
-    print("✓ Flax VAE 加载完成")
-    
-    # 如果提供了 mesh 且启用 JIT，使用 nnx.jit 编译 decoder
     if mesh is not None and enable_jit:
-        print(f"  配置 TPU 分片和 JIT 编译...")
-        print(f"  Mesh: {mesh}")
-        
-        # 使用 nnx.jit 编译 decoder
-        # 注意：与 TorchAx 的 torchax.compile 类似
+        print(f"配置 VAE Decoder...")
         flax_vae.decoder = nnx.jit(flax_vae.decoder)
-        
-        print("  ✓ Decoder JIT 编译完成")
-    else:
-        print("  注意：未启用 JIT 编译（无 mesh 或 enable_jit=False）")
+        print("✓ VAE Decoder JIT 编译完成")
     
     return FlaxVAEProxy(flax_vae)
 
 
-# ============================================================================
-# 解码函数
-# ============================================================================
+def apply_scaling_factor(latents, vae):
+    """Apply scaling factor: x / scaling_factor"""
+    scaling_factor = getattr(vae.config, 'scaling_factor', 0.7)
+    print(f"应用缩放因子: 1/{scaling_factor:.4f}")
+    return latents / scaling_factor
 
-def run_vae_decode(vae_proxy, latents, desc="VAE Decode"):
-    """
-    运行一次 VAE 解码
+
+def run_vae_decode(vae, latents, desc="VAE Decode"):
+    """Run VAE decode once."""
+    start = time.perf_counter()
+    print(f"{desc}...")
     
-    Args:
-        vae_proxy: FlaxVAEProxy 实例
-        latents: latent tensor [B, C, T, H, W]
-        desc: 描述信息
-    
-    Returns:
-        (video, elapsed_time)
-    """
-    start_time = time.perf_counter()
-    
-    print(f"\n{desc}...")
-    output = vae_proxy.decode(latents, return_dict=True)
+    output = vae.decode(latents, return_dict=True)
     jax.effects_barrier()
     
-    elapsed = time.perf_counter() - start_time
-    print(f"✓ {desc} 完成，耗时: {elapsed:.2f} 秒")
-    
+    elapsed = time.perf_counter() - start
+    print(f"✓ {desc}: {elapsed:.2f}s")
     return output.sample, elapsed
 
 
-def decode_latents_to_video(vae_proxy, latents, config, warmup=True):
-    """
-    使用 VAE 解码 latents 为视频帧
+def decode_latents(vae, latents, warmup=True):
+    """Decode latents to video."""
+    print(f"\n=== VAE 解码 ===")
+    print(f"latents: {latents.shape}, {latents.dtype}")
     
-    注意：stage2 已经裁剪了 additional_frames，这里直接解码即可
-    
-    Args:
-        vae_proxy: FlaxVAEProxy 实例
-        latents: latents tensor [B, C, T, H, W]（已裁剪 additional_frames）
-        config: 生成配置
-        warmup: 是否运行预热解码
-        
-    Returns:
-        video: 解码后的视频
-        elapsed: 解码耗时（不含预热）
-    """
-    print(f"\n=== 阶段3：VAE 解码 ===")
-    print(f"输入 latents shape: {latents.shape}")
-    print(f"输入 latents dtype: {latents.dtype}")
-    
-    # 检查 nan 值
-    latents_float = latents.float()
-    nan_count = torch.isnan(latents_float).sum().item()
-    total = latents_float.numel()
-    print(f"输入 latents nan 统计: {nan_count}/{total} ({nan_count/total*100:.2f}%)")
-    
-    # 处理 nan 值 - 替换为 0
+    # Handle nan
+    nan_count = torch.isnan(latents).sum().item()
     if nan_count > 0:
-        print(f"警告：发现 {nan_count} 个 nan 值，将替换为 0")
+        print(f"警告: 发现 {nan_count} 个 nan，替换为 0")
         latents = torch.nan_to_num(latents, nan=0.0)
     
-    # 1. 应用缩放因子（CogVideoX 使用 scaling_factor）
-    scaling_factor = getattr(vae_proxy.config, 'scaling_factor', 1.15258426)
-    print(f"应用缩放因子: 1/{scaling_factor}")
-    latents = latents / scaling_factor
-    
-    # 2. 转换为 VAE dtype
-    print("\n转换 latents 到 bfloat16...")
+    # Scale and convert
+    latents = apply_scaling_factor(latents, vae)
     latents = latents.to(torch.bfloat16)
     
-    # 3. VAE 解码
-    
-    # 预热运行 (触发 JIT 编译)
-    warmup_time = 0
+    # Warmup
     if warmup:
-        _, warmup_time = run_vae_decode(vae_proxy, latents, desc="Warmup VAE (JIT)")
+        run_vae_decode(vae, latents, "Warmup (JIT)")
     
-    # 正式解码
-    video, decode_time = run_vae_decode(vae_proxy, latents, desc="VAE Decode")
-    elapsed = decode_time  # 只记录正式解码时间
-    
-    print(f"输出 video shape: {video.shape}")
-    print(f"输出 video dtype: {video.dtype}")
-    
-    # 检查 video 范围
-    video_float = video.float()
-    print(f"输出 video 范围: min={video_float.min().item():.4f}, max={video_float.max().item():.4f}")
+    # Decode
+    video, elapsed = run_vae_decode(vae, latents, "VAE Decode")
+    print(f"video: {video.shape}")
     
     return video, elapsed
 
@@ -260,132 +154,66 @@ def decode_latents_to_video(vae_proxy, latents, config, warmup=True):
 # ============================================================================
 
 def main():
-    parser = argparse.ArgumentParser(
-        description='CogVideoX 阶段3：VAE Decoder (Flax)',
-        formatter_class=argparse.RawDescriptionHelpFormatter,
-        epilog="""
-示例用法：
-  # 基本用法（使用阶段2的输出）
-  python stage3_vae_decoder_flax.py
-  
-  # 指定输入目录
-  python stage3_vae_decoder_flax.py --input_dir ./my_outputs
-  
-  # 指定输出视频路径
-  python stage3_vae_decoder_flax.py --output_video my_video.mp4
-        """
-    )
-    
+    parser = argparse.ArgumentParser(description='CogVideoX 阶段3：VAE Decoder (Flax)')
     parser.add_argument('--input_dir', type=str, default='./stage_outputs')
     parser.add_argument('--output_video', type=str, default=None)
     parser.add_argument('--model_id', type=str, default=None)
     parser.add_argument('--fps', type=int, default=None)
-    parser.add_argument('--dp', type=int, default=1, help='Data parallelism dimension')
-    parser.add_argument('--warmup', action='store_true', default=True,
-                        help='运行预热解码触发 JIT 编译（默认启用）')
-    parser.add_argument('--no_warmup', action='store_false', dest='warmup',
-                        help='禁用预热解码')
-    parser.add_argument('--no_jit', action='store_true', default=False,
-                        help='禁用 JIT 编译（调试用）')
-    
+    parser.add_argument('--dp', type=int, default=DEFAULT_DP)
+    parser.add_argument('--no_warmup', action='store_true')
+    parser.add_argument('--no_jit', action='store_true')
     args = parser.parse_args()
     
-    # 设置 JAX 编译缓存
-    jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
-    jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
-    jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
-    jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
+    # Setup
+    setup_jax_cache()
     
     paths = get_default_paths(args.input_dir)
     
-    warnings.filterwarnings('ignore')
-    logging.getLogger().setLevel(logging.ERROR)
+    print(f"\n{'='*50}")
+    print("阶段3：VAE Decoder (Flax)")
+    print(f"{'='*50}")
     
-    print(f"\n{'='*60}")
-    print("CogVideoX 阶段3：VAE Decoder (Flax)")
-    print(f"{'='*60}")
-    
-    # 加载配置
-    print(f"\n加载配置: {paths['config']}")
+    # Load config
     config = load_generation_config(paths['config'])
-    
-    # 应用命令行覆盖
     model_id = args.model_id or config.get('model_id', MODEL_NAME)
     fps = args.fps or config.get('fps', FPS)
-    target_frames = config.get('frames', 81)
-    
+    target_frames = config.get('frames', 61)
     output_video = args.output_video or paths['video']
     
-    print(f"\n配置参数：")
-    print(f"  模型: {model_id}")
-    print(f"  FPS: {fps}")
-    print(f"  目标帧数: {target_frames}")
+    print(f"\n模型: {model_id}")
+    print(f"FPS: {fps}, 帧数: {target_frames}")
     
-    # 加载 latents
+    # Load latents
     print(f"\n加载 latents: {paths['latents']}")
-    latents, latents_metadata = load_latents_from_safetensors(
-        paths['latents'],
-        device='cpu',
-        restore_dtype=True
-    )
+    latents, _ = load_latents_from_safetensors(paths['latents'], device='cpu', restore_dtype=True)
     
-    print(f"\n设备信息：")
-    print(f"  JAX 设备数: {len(jax.devices())}")
-    
-    # 创建 mesh（与 TorchAx 版本相同的配置）
-    assert len(jax.devices()) % args.dp == 0, f"设备数 {len(jax.devices())} 必须能被 dp={args.dp} 整除"
+    # Create mesh
+    print(f"\nJAX 设备: {len(jax.devices())}")
     tp_dim = len(jax.devices()) // args.dp
-    mesh_devices = mesh_utils.create_device_mesh(
-        (args.dp, tp_dim), allow_split_physical_axes=True
-    )
+    mesh_devices = mesh_utils.create_device_mesh((args.dp, tp_dim), allow_split_physical_axes=True)
     mesh = Mesh(mesh_devices, ("dp", "tp"))
-    print(f"  Mesh: {mesh}")
+    print(f"Mesh: dp={args.dp}, tp={tp_dim}")
     
-    # 加载 VAE（传入 mesh 以启用分片和 JIT）
-    vae_proxy = load_flax_vae(
-        model_id,
-        mesh=mesh,
-        dtype=jnp.bfloat16,
-        enable_jit=not args.no_jit
-    )
+    # Load VAE
+    print()
+    vae = load_vae(model_id, mesh, enable_jit=not args.no_jit)
     
-    # 在 mesh 上下文中解码
+    # Decode
     with mesh:
-        video, decode_time = decode_latents_to_video(
-            vae_proxy,
-            latents,
-            config,
-            warmup=args.warmup
-        )
+        video, decode_time = decode_latents(vae, latents, warmup=not args.no_warmup)
     
-    # 准备视频导出
-    print(f"\n准备视频导出...")
+    # Export
     frames = prepare_video_for_export(video, target_frames)
-    print(f"帧数: {len(frames)}, 每帧 shape: {frames[0].shape if frames else 'N/A'}")
     
-    # 导出视频
-    print(f"\n导出视频到: {output_video}")
-    print(f"FPS: {fps}")
-    
+    print(f"\n导出视频: {output_video}")
     export_to_video(frames, output_video, fps=fps)
     
-    print(f"✓ 视频已保存!")
-    
-    # 统计信息
-    print(f"\n=== 生成统计 ===")
-    if isinstance(frames, list):
-        print(f"帧数: {len(frames)}")
-        if len(frames) > 0:
-            print(f"分辨率: {frames[0].shape[1]}x{frames[0].shape[0]}")
-    print(f"FPS: {fps}")
-    print(f"VAE 解码耗时: {decode_time:.2f} 秒（不含预热）")
-    
-    print(f"\n{'='*60}")
-    print("阶段3 完成！(Flax 版本)")
-    print(f"{'='*60}")
-    print(f"\n输出视频: {output_video}")
-    
-    print("\n✓ 视频生成完成！")
+    # Summary
+    print(f"\n{'='*50}")
+    print(f"✓ 完成! {len(frames)}帧, {frames[0].shape[1]}x{frames[0].shape[0]}, {fps}fps")
+    print(f"  解码耗时: {decode_time:.2f}s")
+    print(f"  输出: {output_video}")
+    print(f"{'='*50}")
 
 
 if __name__ == "__main__":

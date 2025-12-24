@@ -2,22 +2,32 @@
 """
 CogVideoX 三阶段生成 - 共享工具模块
 
-包含数据序列化、转换和共享配置
+包含:
+- 配置常量（模型、视频生成）
+- Splash Attention 配置
+- Sharding 策略
+- SafeTensors 数据存储
+- 配置管理
+- PyTree 注册
+- 辅助工具函数
 """
 
 import os
+import re
 import json
 import numpy as np
+import jax
 import jax.numpy as jnp
 import torch
 from safetensors import safe_open
 from safetensors.torch import save_file as torch_save_file, load_file as torch_load_file
 from jax.tree_util import register_pytree_node
-from transformers.modeling_outputs import BaseModelOutputWithPooling, BaseModelOutputWithPastAndCrossAttentions
-from diffusers.models.autoencoders.vae import DecoderOutput
+from jax.sharding import PartitionSpec as P, NamedSharding
 
 
-# === 模型配置 ===
+# ============================================================================
+# 模型配置
+# ============================================================================
 MODEL_NAME = "zai-org/CogVideoX1.5-5B"
 
 # === Video Generation Settings ===
@@ -48,22 +58,50 @@ USE_CUSTOM_ATTENTION = True
 # exp(x) = exp2(x * LOG2_E)
 LOG2_E = 1.44269504
 
-# === Mesh 分片配置 ===
-USE_DP = True           # 是否使用 data parallelism（需要 batch_size >= 2）
-SP_NUM = 1              # Spatial parallelism 数量
-USE_FSDP = True         # 是否使用 FSDP 模式（vs Tensor Parallel）
-
-# === VAE sharding 配置 ===
-LOGICAL_AXIS_RULES = (
-    ('conv_out', ('tp', 'dp', 'sp')),
-    ('conv_in', ('tp', 'dp', 'sp'))
-)
-
-# === Profiler Output Path ===
-PROFILE_OUT_PATH = "/dev/shm/tensorboard"
+# ============================================================================
+# Mesh 配置
+# ============================================================================
+DEFAULT_DP = 1  # CogVideoX 默认 DP=1（与 Wan 不同）
 
 
-# === 数据转换工具 ===
+# ============================================================================
+# Sharding 策略
+# ============================================================================
+
+# VAE sharding (空字典 - 不分片，使用 replicate)
+VAE_ENCODER_SHARDINGS = {}
+VAE_DECODER_SHARDINGS = {}
+
+
+# ============================================================================
+# 权重分片函数
+# ============================================================================
+
+def shard_weight_dict(weight_dict, sharding_dict, mesh):
+    """Apply sharding to weights based on pattern matching."""
+    result = {}
+    for k, v in weight_dict.items():
+        if isinstance(v, torch.Tensor):
+            v = v.to("jax")
+        
+        matched = False
+        for target, sharding in sharding_dict.items():
+            if re.fullmatch(target, k) is not None:
+                v.apply_jax_(jax.device_put, NamedSharding(mesh, P(*sharding)))
+                matched = True
+                break
+        
+        if not matched:
+            # Replicate
+            v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
+        
+        result[k] = v
+    return result
+
+
+# ============================================================================
+# 数据转换工具
+# ============================================================================
 
 def to_torch_recursive(x):
     """递归地将 JAX 数组转换为 PyTorch 张量
@@ -111,35 +149,77 @@ def to_jax_recursive(x):
 
 def setup_pytree_registrations():
     """
-    注册必要的pytree节点以支持JAX转换
-    使其可以在JAX的函数转换中正常使用
+    注册必要的 PyTree 节点以支持 JAX 转换
     """
-    print("注册PyTree节点...")
+    from transformers import modeling_outputs
+    from diffusers.models.autoencoders import vae as diffusers_vae
+    from diffusers.models import modeling_outputs as diffusers_modeling_outputs
     
-    # 注册 PyTree 节点的通用 flatten 和 unflatten 方法
-    def model_output_flatten(obj):
-        """将模型输出对象展平为元组"""
+    print("注册 PyTree 节点...")
+    
+    def flatten_model_output(obj):
         return obj.to_tuple(), type(obj)
-
-    def model_output_unflatten(aux, children):
-        """从元组重建模型输出对象"""
+    
+    def unflatten_model_output(aux, children):
         return aux(*children)
     
-    # 定义需要注册的所有类型
-    OUTPUT_CLASSES = [
-        BaseModelOutputWithPooling,
-        BaseModelOutputWithPastAndCrossAttentions,
-        DecoderOutput,
-    ]
-
-    # 批量注册
-    for cls in OUTPUT_CLASSES:
-        try:
-            register_pytree_node(cls, model_output_flatten, model_output_unflatten)
-            print(f"  - {cls.__name__} 已注册")
-        except ValueError:
-            # 已经注册过
-            print(f"  - {cls.__name__} 已存在")
+    # Text encoder output
+    try:
+        register_pytree_node(
+            modeling_outputs.BaseModelOutputWithPastAndCrossAttentions,
+            flatten_model_output,
+            unflatten_model_output
+        )
+        print("  - BaseModelOutputWithPastAndCrossAttentions 已注册")
+    except ValueError:
+        print("  - BaseModelOutputWithPastAndCrossAttentions 已存在")
+    
+    # VAE decode output
+    try:
+        register_pytree_node(
+            diffusers_vae.DecoderOutput,
+            flatten_model_output,
+            unflatten_model_output
+        )
+        print("  - DecoderOutput 已注册")
+    except ValueError:
+        print("  - DecoderOutput 已存在")
+    
+    # VAE encode output
+    try:
+        register_pytree_node(
+            diffusers_modeling_outputs.AutoencoderKLOutput,
+            flatten_model_output,
+            unflatten_model_output
+        )
+        print("  - AutoencoderKLOutput 已注册")
+    except ValueError:
+        print("  - AutoencoderKLOutput 已存在")
+    
+    # DiagonalGaussianDistribution
+    def flatten_gaussian(obj):
+        return (obj.parameters, obj.mean, obj.logvar, obj.deterministic,
+                obj.std, obj.var), None
+    
+    def unflatten_gaussian(aux, children):
+        obj = object.__new__(diffusers_vae.DiagonalGaussianDistribution)
+        obj.parameters = children[0]
+        obj.mean = children[1]
+        obj.logvar = children[2]
+        obj.deterministic = children[3]
+        obj.std = children[4]
+        obj.var = children[5]
+        return obj
+    
+    try:
+        register_pytree_node(
+            diffusers_vae.DiagonalGaussianDistribution,
+            flatten_gaussian,
+            unflatten_gaussian
+        )
+        print("  - DiagonalGaussianDistribution 已注册")
+    except ValueError:
+        print("  - DiagonalGaussianDistribution 已存在")
 
 
 def sharded_device_put(tensor, sharding):
@@ -421,7 +501,9 @@ def load_generation_config(input_path):
     return config
 
 
-# === 默认输出路径 ===
+# ============================================================================
+# 默认输出路径
+# ============================================================================
 
 def get_default_paths(output_dir="./stage_outputs"):
     """获取默认的中间文件路径"""
@@ -432,3 +514,16 @@ def get_default_paths(output_dir="./stage_outputs"):
         'config': os.path.join(output_dir, 'generation_config.json'),
         'video': os.path.join(output_dir, 'output_video.mp4'),
     }
+
+
+# ============================================================================
+# JAX 配置辅助
+# ============================================================================
+
+def setup_jax_cache():
+    """设置 JAX 编译缓存（重要：避免重复编译）"""
+    jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
+    jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
+    jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
+    jax.config.update("jax_persistent_cache_enable_xla_caches", "xla_gpu_per_fusion_autotune_cache_dir")
+    print("✓ JAX 编译缓存已启用: /dev/shm/jax_cache")
