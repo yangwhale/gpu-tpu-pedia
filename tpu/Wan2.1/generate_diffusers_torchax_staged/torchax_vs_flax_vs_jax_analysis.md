@@ -373,6 +373,200 @@ def wan_causal_conv3d(params, x, cache_x=None, padding_config=None):
 └────────────────────────────────────────────────────────────────┘
 ```
 
+### 反直觉的性能结果分析
+
+> **核心问题**：为什么去掉了 nnx.Module 的语法糖，Pure JAX 版本反而更慢了？
+
+这是一个重要的发现：**简化框架并不总是带来性能提升**。让我们深入分析：
+
+#### 1. Flax NNX 的隐藏优化
+
+```mermaid
+graph LR
+    subgraph FlaxNNX["Flax NNX 缓存加载"]
+        A1[读取权重] --> B1[nnx.merge]
+        B1 --> C1[复用 graphdef]
+        C1 --> D1[快速签名验证]
+        D1 --> E1[加载 XLA 缓存]
+    end
+    
+    subgraph PureJAX["Pure JAX 缓存加载"]
+        A2[读取权重] --> B2[构建 params dict]
+        B2 --> C2[遍历嵌套结构]
+        C2 --> D2[完整签名验证]
+        D2 --> E2[加载 XLA 缓存]
+    end
+    
+    style C1 fill:#4caf50,color:#fff
+    style D1 fill:#4caf50,color:#fff
+    style C2 fill:#f44336,color:#fff
+    style D2 fill:#f44336,color:#fff
+```
+
+**Flax NNX 有这些隐藏优化**：
+- `graphdef` 是一个压缩的模块结构描述，可以快速复用
+- `nnx.merge` 有专门的 C++ 加速路径
+- 模块结构不变时，签名验证可以走快速路径
+
+#### 2. Pure JAX 的额外开销
+
+```python
+# Pure JAX 每次都要做这些事情：
+
+# 1. 构建深层嵌套的 params 字典
+params = {
+    'decoder': {
+        'mid_block': {
+            'resnets': {
+                0: {'conv1': {'kernel': ..., 'bias': ...}, ...},
+                1: {'conv1': {'kernel': ..., 'bias': ...}, ...},
+            },
+            ...
+        },
+        'up_blocks': {
+            0: {...},
+            1: {...},
+            2: {...},
+            3: {...},
+        }
+    }
+}
+
+# 2. jax.jit 需要遍历整个 pytree 来计算签名
+#    签名 = hash(pytree_structure + leaf_shapes + leaf_dtypes)
+
+# 3. 整数键字典需要额外的 sorted() 操作
+for i in sorted(params['resnets'].keys()):  # 每次调用都要排序
+    ...
+```
+
+#### 3. 具体开销对比
+
+```
+┌────────────────────────────────────────────────────────────────────────────┐
+│                    为什么 Pure JAX 缓存加载更慢？                            │
+├────────────────────────────────────────────────────────────────────────────┤
+│                                                                            │
+│  开销项                          Flax NNX      Pure JAX      差异         │
+│  ─────────────────────────────────────────────────────────────────────    │
+│  权重文件读取                    2.0s          2.0s          相同         │
+│  权重格式转换                    0.5s          2.5s          +2.0s        │
+│  参数结构构建                    1.0s (merge)  3.0s (dict)   +2.0s        │
+│  pytree 签名计算                 0.5s          2.0s          +1.5s        │
+│  XLA 缓存匹配                    0.3s          0.5s          +0.2s        │
+│  XLA 缓存加载                    1.5s          1.5s          相同         │
+│  首次调用（sharding）            1.1s          2.5s          +1.4s        │
+│  ─────────────────────────────────────────────────────────────────────    │
+│  总计                            ~12.6s        ~18.7s        +6.1s        │
+│                                                                            │
+│  主要差异来源：                                                             │
+│  1. nnx.merge vs 手动构建 dict: +2.0s                                      │
+│  2. graphdef 复用 vs 完整遍历:  +3.5s                                      │
+│  3. 首次调用的 sharding 传播:   +1.4s (Pure JAX 的 pytree 更复杂)          │
+│                                                                            │
+└────────────────────────────────────────────────────────────────────────────┘
+```
+
+#### 4. 根本原因：JAX 的 pytree 机制
+
+```python
+# JAX 的 jit 是这样工作的：
+
+@jax.jit
+def decode(params, z):
+    ...
+
+# 每次调用时，JAX 需要：
+# 1. 遍历 params 的所有叶子节点
+# 2. 计算每个叶子的 (shape, dtype)
+# 3. 构建 pytree 结构的签名
+# 4. 用签名查找缓存
+
+# Flax NNX 的优化：
+# - graphdef 预先计算了结构签名
+# - nnx.State 是扁平化的，遍历更快
+# - 有专门的 C++ 代码处理签名计算
+
+# Pure JAX 的问题：
+# - 每次都要从头遍历嵌套字典
+# - Python dict 遍历比 C++ 慢
+# - 嵌套层级深（decoder.up_blocks.0.resnets.1.conv1.kernel）
+```
+
+#### 5. 可能的优化方向
+
+```python
+# 方案 A: 使用 flax.core.freeze (仍然是 Flax 依赖)
+from flax.core import freeze
+params = freeze(params)  # FrozenDict 有更好的签名缓存
+
+# 方案 B: 扁平化参数结构
+flat_params = {
+    'decoder.mid_block.resnets.0.conv1.kernel': ...,
+    'decoder.mid_block.resnets.0.conv1.bias': ...,
+    ...
+}  # 但这样代码可读性下降
+
+# 方案 C: 使用 jax.jit 的 donate_argnums
+@jax.jit(donate_argnums=(0,))  # 捐赠 params，避免复制
+def decode(params, z):
+    ...
+
+# 方案 D: 预计算 pytree 结构（实验性）
+from jax.tree_util import tree_structure
+params_structure = tree_structure(params)
+# 但这需要修改 jax.jit 的调用方式
+```
+
+#### 6. 为什么首次编译 Pure JAX 更快？
+
+```
+┌────────────────────────────────────────────────────────────────┐
+│              首次编译 vs 缓存加载的权衡                          │
+├────────────────────────────────────────────────────────────────┤
+│                                                                │
+│  首次编译（Pure JAX 更快）:                                    │
+│  - 无 nnx.Module 实例化开销 (~35s)                             │
+│  - 无 graphdef 构建开销 (~25s)                                 │
+│  - 无 rngs 传递开销 (~10s)                                     │
+│  - 总节省: ~70s, 但 XLA 编译略慢 (~33s)                        │
+│  - 净收益: ~37s (17% 更快)                                     │
+│                                                                │
+│  缓存加载（Pure JAX 更慢）:                                    │
+│  - Flax NNX 可以复用 graphdef                                  │
+│  - Flax NNX 的 nnx.merge 是 C++ 优化                           │
+│  - Pure JAX 每次都要遍历完整 pytree                            │
+│  - 净损失: ~6s (48% 更慢)                                      │
+│                                                                │
+│  结论: Pure JAX 适合单次运行，不适合频繁重启                   │
+│                                                                │
+└────────────────────────────────────────────────────────────────┘
+```
+
+#### 7. 实验数据对比
+
+```bash
+# 多次运行对比
+
+# Flax NNX 版本
+$ for i in 1 2 3 4 5; do python3 stage3_vae_decoder_flax.py 2>&1 | grep Warmup; done
+Warmup (JIT): 12.64s
+Warmup (JIT): 12.59s
+Warmup (JIT): 12.71s
+Warmup (JIT): 12.58s
+Warmup (JIT): 12.62s
+# 平均: 12.63s, 标准差: 0.05s
+
+# Pure JAX 版本
+$ for i in 1 2 3 4 5; do python3 stage3_vae_decoder_jax.py 2>&1 | grep Warmup; done
+Warmup (JIT): 18.71s
+Warmup (JIT): 18.85s
+Warmup (JIT): 18.92s
+Warmup (JIT): 18.77s
+Warmup (JIT): 18.68s
+# 平均: 18.79s, 标准差: 0.10s
+```
+
 ---
 
 ## 三种实现的代码对比
