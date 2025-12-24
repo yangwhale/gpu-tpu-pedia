@@ -51,7 +51,7 @@ from utils import (
     WIDTH, HEIGHT, FRAMES, FPS, NUM_STEPS, GUIDANCE_SCALE,
     BQSIZE, BKVSIZE, BKVCOMPUTESIZE, BKVCOMPUTEINSIZE,
     USE_K_SMOOTH, USE_CUSTOM_ATTENTION, LOG2_E,
-    USE_DP, SP_NUM, USE_FSDP,
+    USE_DP, SP_NUM, USE_TP,
     setup_pytree_registrations,
     load_embeddings_from_safetensors,
     save_latents_to_safetensors,
@@ -316,9 +316,10 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
 
 # === 权重分片策略 ===
 
-# Transformer sharding策略 - FSDP模式（默认）
+# Transformer sharding策略 - Tensor Parallel模式（默认推荐）
+# 输出分片：适合 TPU 的 Tensor Parallelism
 # 注意：所有模式都以 .weight$ 结尾，这样不会匹配到 bias 等1维参数
-transformer_shardings_fsdp = {
+transformer_shardings_tp = {
     r'.*\.to_q\.weight$': (None, ('tp', 'sp')),
     r'.*\.to_k\.weight$': (None, ('tp', 'sp')),
     r'.*\.to_v\.weight$': (None, ('tp', 'sp')),
@@ -327,8 +328,9 @@ transformer_shardings_fsdp = {
     r'.*\.ff\.net\.2\.weight$': (('tp', 'sp'), None),
 }
 
-# Transformer sharding策略 - Tensor Parallel模式
-transformer_shardings_tp = {
+# Transformer sharding策略 - FSDP模式
+# 输入分片：类似 FSDP 的分片方式
+transformer_shardings_fsdp = {
     r'.*\.to_q\.weight$': (('tp', 'sp'), None),
     r'.*\.to_k\.weight$': (('tp', 'sp'), None),
     r'.*\.to_v\.weight$': (('tp', 'sp'), None),
@@ -373,7 +375,7 @@ def shard_weight_dict(weight_dict, sharding_dict, mesh):
 def setup_pipeline_for_transformer_only(pipe, mesh, env, window_size=None,
                                          use_k_smooth=USE_K_SMOOTH,
                                          use_custom_attention=USE_CUSTOM_ATTENTION,
-                                         use_fsdp=USE_FSDP):
+                                         use_tp=USE_TP):
     """
     设置 Pipeline 仅用于 Transformer 推理（不包含 VAE）
     """
@@ -424,7 +426,7 @@ def setup_pipeline_for_transformer_only(pipe, mesh, env, window_size=None,
 
     # Apply sharding
     print("- 对 Transformer 进行权重分片...")
-    transformer_shardings = transformer_shardings_fsdp if use_fsdp else transformer_shardings_tp
+    transformer_shardings = transformer_shardings_tp if use_tp else transformer_shardings_fsdp
     pipe.transformer.params = shard_weight_dict(
         pipe.transformer.params, transformer_shardings, mesh
     )
@@ -712,7 +714,7 @@ def main():
     # Sharding 参数
     parser.add_argument('--use_dp', action='store_true', default=USE_DP, help='Use data parallelism')
     parser.add_argument('--sp_num', type=int, default=SP_NUM, help='Sequence parallelism number')
-    parser.add_argument('--use_fsdp', action='store_true', default=USE_FSDP, help='Use FSDP mode')
+    parser.add_argument('--use_tp', action='store_true', default=USE_TP, help='Use Tensor Parallel mode (recommended)')
 
     # 其他参数
     parser.add_argument('--model_id', type=str, default=None, help='Override model ID from stage1')
@@ -823,7 +825,7 @@ def main():
         window_size=config.get('window_size'),
         use_k_smooth=args.use_k_smooth,
         use_custom_attention=args.use_custom_attention,
-        use_fsdp=args.use_fsdp
+        use_tp=args.use_tp
     )
 
     # 将 embeddings 转换为 XLA tensor

@@ -28,10 +28,13 @@ from jax.tree_util import register_pytree_node
 MODEL_NAME = "zai-org/CogVideoX1.5-5B"
 
 # === Video Generation Settings ===
+# 720P = 1280x720, 81 帧, 16fps (~5秒视频)
+# 注意: 帧数必须满足 (FRAMES-1)/4+1 是奇数，否则 VAE 解码会多出帧
+# 有效帧数: 41, 49, 57, 65, 73, 81, 89, 97...
 WIDTH = 1280
-HEIGHT = 640
-FRAMES = 61
-FPS = 8
+HEIGHT = 720
+FRAMES = 81
+FPS = 16
 NUM_STEPS = 50
 GUIDANCE_SCALE = 6.0
 
@@ -64,7 +67,7 @@ DEFAULT_DP = 1  # CogVideoX 默认 DP=1（与 Wan 不同）
 # 注意：DP=2 比 DP=1 快约 1.6 倍（CFG 正+负 prompt 可并行处理）
 USE_DP = True   # 是否使用 Data Parallelism（推荐开启）
 SP_NUM = 1      # Sequence Parallelism 分片数
-USE_FSDP = True # 是否使用 FSDP 模式（推荐）
+USE_TP = True   # 是否使用 Tensor Parallelism 模式（推荐）
 
 
 # ============================================================================
