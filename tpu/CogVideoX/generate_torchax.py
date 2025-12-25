@@ -103,7 +103,7 @@ LOG2_E = 1.44269504
 
 # Mesh Sharding Configuration
 USE_DP = True
-USE_FSDP = True
+USE_TP = True  # 是否使用 Tensor Parallelism 模式（推荐）
 
 # Profiler Output Path
 PROFILE_OUT_PATH = "/dev/shm/jax-trace"
@@ -327,7 +327,7 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
 # ============================================================================
 
 # Transformer sharding - 2D mesh (dp, tp)
-transformer_shardings_fsdp = {
+transformer_shardings_tp = {
     r'.*\.to_q\.weight$': (None, 'tp'),
     r'.*\.to_k\.weight$': (None, 'tp'),
     r'.*\.to_v\.weight$': (None, 'tp'),
@@ -474,7 +474,7 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
     print("- Moving Transformer to XLA and sharding...")
     move_module_to_xla(env, pipe.transformer)
     transformer_weights = shard_weight_dict(
-        pipe.transformer.state_dict(), transformer_shardings_fsdp, mesh
+        pipe.transformer.state_dict(), transformer_shardings_tp, mesh
     )
     pipe.transformer.load_state_dict(transformer_weights, assign=True, strict=False)
     torchax.interop.call_jax(jax.block_until_ready, transformer_weights)
@@ -611,7 +611,7 @@ def parse_args():
     
     # Sharding settings
     parser.add_argument("--use_dp", action="store_true", default=USE_DP)
-    parser.add_argument("--use_fsdp", action="store_true", default=USE_FSDP)
+    parser.add_argument("--use_tp", action="store_true", default=USE_TP)
     
     # Other settings
     parser.add_argument("--profile", action="store_true", default=False,
