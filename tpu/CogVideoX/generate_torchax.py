@@ -450,43 +450,40 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
         if isinstance(v, torch.Tensor):
             setattr(pipe.scheduler, k, v.to('jax'))
     
-    # Text Encoder
-    print("- Moving Text Encoder to XLA and sharding...")
+    # Text Encoder - 优化：先 compile 再分片（与 stage1 一致）
+    print("- Moving Text Encoder to XLA, compiling and sharding...")
     move_module_to_xla(env, pipe.text_encoder)
-    text_encoder_weights = shard_weight_dict(
-        pipe.text_encoder.state_dict(), text_encoder_shardings, mesh
+    pipe.text_encoder = torchax.compile(pipe.text_encoder)
+    pipe.text_encoder.params = shard_weight_dict(
+        pipe.text_encoder.params, text_encoder_shardings, mesh
     )
-    pipe.text_encoder.load_state_dict(text_encoder_weights, assign=True, strict=False)
-    torchax.interop.call_jax(jax.block_until_ready, text_encoder_weights)
+    pipe.text_encoder.buffers = shard_weight_dict(
+        pipe.text_encoder.buffers, text_encoder_shardings, mesh
+    )
+    torchax.interop.call_jax(jax.block_until_ready, pipe.text_encoder.params)
     
-    # Transformer
-    print("- Moving Transformer to XLA and sharding...")
+    # Transformer - 优化：先 compile 再分片（与 Text Encoder 一致）
+    print("- Moving Transformer to XLA, compiling and sharding...")
     move_module_to_xla(env, pipe.transformer)
-    transformer_weights = shard_weight_dict(
-        pipe.transformer.state_dict(), transformer_shardings_tp, mesh
-    )
-    pipe.transformer.load_state_dict(transformer_weights, assign=True, strict=False)
-    torchax.interop.call_jax(jax.block_until_ready, transformer_weights)
-    
-    # VAE
-    print("- Moving VAE to XLA and sharding...")
-    move_module_to_xla(env, pipe.vae)
-    vae_weights = shard_weights_vae(mesh, pipe.vae.state_dict())
-    pipe.vae.load_state_dict(vae_weights, assign=True, strict=False)
-    torchax.interop.call_jax(jax.block_until_ready, vae_weights)
-    
-    # Compile components
-    print("- Compiling Transformer...")
     pipe.transformer = torchax.compile(
         pipe.transformer,
         torchax.CompileOptions(jax_jit_kwargs={'static_argnames': ('return_dict',)})
     )
+    pipe.transformer.params = shard_weight_dict(
+        pipe.transformer.params, transformer_shardings_tp, mesh
+    )
+    pipe.transformer.buffers = shard_weight_dict(
+        pipe.transformer.buffers, transformer_shardings_tp, mesh
+    )
+    torchax.interop.call_jax(jax.block_until_ready, pipe.transformer.params)
     
-    print("- Compiling Text Encoder...")
-    pipe.text_encoder = torchax.compile(pipe.text_encoder)
-    
-    print("- Compiling VAE Decoder...")
+    # VAE - 优化：先 compile 再分片
+    print("- Moving VAE to XLA, compiling and sharding...")
+    move_module_to_xla(env, pipe.vae)
     pipe.vae.decoder = torchax.compile(pipe.vae.decoder)
+    vae_weights = shard_weights_vae(mesh, pipe.vae.state_dict())
+    pipe.vae.load_state_dict(vae_weights, assign=True, strict=False)
+    torchax.interop.call_jax(jax.block_until_ready, vae_weights)
     
     print("=== Pipeline Setup Complete ===\n")
     return pipe
