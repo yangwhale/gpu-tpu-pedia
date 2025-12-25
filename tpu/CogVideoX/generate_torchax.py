@@ -64,13 +64,13 @@ from torchax.ops import ops_registry
 from transformers.modeling_outputs import BaseModelOutputWithPooling, BaseModelOutputWithPastAndCrossAttentions
 from transformers import T5EncoderModel, T5Tokenizer
 
-# TorchAx components
-from diffusers.pipelines.cogvideo.pipeline_cogvideox_torchax import CogVideoXPipeline
-from diffusers.models.autoencoders.autoencoder_kl_cogvideox_torchax import AutoencoderKLCogVideoX
-from diffusers.models.transformers.cogvideox_transformer_3d_torchax import CogVideoXTransformer3DModel
+# 使用标准 diffusers 组件（与 stage2_transformer.py 一致）
+from diffusers import CogVideoXPipeline
 from diffusers.models.autoencoders.vae import DecoderOutput
-from diffusers import CogVideoXDPMScheduler
 from diffusers.utils import export_to_video
+
+# 使用 TorchAx 版本的 VAE（优化版，使用 feat_cache 和 Welford GroupNorm）
+from diffusers.models.autoencoders.autoencoder_kl_cogvideox_torchax import AutoencoderKLCogVideoX as TorchAxVAE
 
 # Custom splash attention
 import custom_splash_attention
@@ -394,39 +394,37 @@ def move_module_to_xla(env, module):
 
 
 def load_pipeline(args):
-    """Load pipeline before enabling torchax."""
+    """Load pipeline before enabling torchax.
+    
+    使用标准 diffusers.CogVideoXPipeline.from_pretrained，
+    然后替换 VAE 为 TorchAx 优化版本。
+    """
     print("\n=== Loading CogVideoX Pipeline ===")
     print(f"Model: {args.model_id}")
+    print("（使用标准 diffusers 组件 + TorchAx VAE）")
     
-    print("- Loading Tokenizer...")
-    tokenizer = T5Tokenizer.from_pretrained(args.model_id, subfolder="tokenizer")
-    
-    print("- Loading Text Encoder...")
-    text_encoder = T5EncoderModel.from_pretrained(args.model_id, subfolder="text_encoder")
-    
-    print("- Loading TorchAx VAE...")
-    vae = AutoencoderKLCogVideoX.from_pretrained(
-        args.model_id, subfolder="vae", torch_dtype=torch.bfloat16
+    # 使用标准 diffusers 加载方式（与 stage2 一致）
+    pipe = CogVideoXPipeline.from_pretrained(
+        args.model_id,
+        torch_dtype=torch.bfloat16,
     )
     
-    print("- Loading TorchAx Transformer...")
-    transformer = CogVideoXTransformer3DModel.from_pretrained(
-        args.model_id, subfolder="transformer"
+    # 替换 VAE 为 TorchAx 优化版本
+    # TorchAxVAE 使用 feat_cache 和 Welford GroupNorm 优化内存
+    print("- Loading TorchAx VAE (optimized version)...")
+    
+    # 先删除原始 VAE 释放内存
+    del pipe.vae
+    
+    torchax_vae = TorchAxVAE.from_pretrained(
+        args.model_id,
+        subfolder="vae",
+        torch_dtype=torch.bfloat16,
     )
+    pipe.vae = torchax_vae
+    print("  ✓ TorchAx VAE loaded (original VAE deleted)")
     
-    print("- Loading Scheduler...")
-    scheduler = CogVideoXDPMScheduler.from_pretrained(args.model_id, subfolder="scheduler")
-    
-    print("- Creating Pipeline...")
-    pipe = CogVideoXPipeline(
-        tokenizer=tokenizer,
-        text_encoder=text_encoder,
-        vae=vae,
-        transformer=transformer,
-        scheduler=scheduler,
-    )
-    
-    print("✓ Models loaded successfully\n")
+    print("✓ Pipeline loaded successfully\n")
     return pipe
 
 
@@ -508,6 +506,7 @@ def run_generation(pipe, args, mesh, env):
         'num_frames': args.frames,
         'guidance_scale': 6.0,
         'generator': generator,
+        # 完整流程：包含 VAE 解码
     }
     
     # 打印生成配置
@@ -538,24 +537,19 @@ def run_generation(pipe, args, mesh, env):
         print("预热运行（触发 JIT 编译）")
         print(f"{'='*60}")
         warmup_start = time.perf_counter()
-        output = pipe(**pipe_kwargs).frames[0]
+        # output_type='latent' 时返回的是 latents，不是视频帧
+        output = pipe(**pipe_kwargs)
         jax.effects_barrier()
         warmup_time = time.perf_counter() - warmup_start
         
         warmup_time_per_step = warmup_time / args.num_inference_steps
-        print(f"\n✓ 预热完成")
+        print(f"\n✓ 预热完成（完整流程：Transformer + VAE）")
         print(f"  总耗时: {warmup_time:.2f}s")
         print(f"  平均每步: {warmup_time_per_step:.2f}s")
         
-        # Save warmup output
-        current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_name = f"cogvideox_{current_datetime}.mp4"
-        export_to_video(output, file_name, fps=args.fps)
-        print(f"  视频保存至: {file_name}")
-        
         # === Benchmark Run ===
         print(f"\n{'='*60}")
-        print("基准测试运行")
+        print("基准测试运行（完整流程：Transformer + VAE）")
         print(f"{'='*60}")
         benchmark_start = time.perf_counter()
         output = pipe(**pipe_kwargs)
@@ -564,7 +558,7 @@ def run_generation(pipe, args, mesh, env):
         
         benchmark_time_per_step = benchmark_time / args.num_inference_steps
         
-        print(f"\n✓ 基准测试完成")
+        print(f"\n✓ 基准测试完成（完整流程：Transformer + VAE）")
         print(f"  总耗时: {benchmark_time:.2f}s")
         print(f"  平均每步: {benchmark_time_per_step:.2f}s")
     
