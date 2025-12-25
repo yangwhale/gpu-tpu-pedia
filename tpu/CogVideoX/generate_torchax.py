@@ -207,7 +207,14 @@ def _sdpa_reference(query, key, value, attn_mask=None, dropout_p=0.0,
 
 
 def _tpu_custom_attention(query, key, value, mesh, scale=None):
-    """TPU Custom Splash Attention with exp2 optimization."""
+    """TPU Custom Splash Attention with exp2 optimization.
+    
+    优化版本：移除 shard_map 前的 sharding constraint，减少数据重分布开销。
+    参考 stage2_transformer.py 的实现。
+    """
+    num_heads = query.shape[1]
+    q_seq_len = query.shape[2]
+    
     def _attention_on_slices(q, k, v):
         scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
         q = q * scale_factor * LOG2_E
@@ -222,7 +229,9 @@ def _tpu_custom_attention(query, key, value, mesh, scale=None):
             return jnp.pad(x, pad_width), seq_len
 
         def kernel_3d(q_3d, k_3d, v_3d):
-            q_3d_padded, q_orig_len = pad_to_block_multiple(q_3d, BQSIZE, axis=1)
+            q_orig_len = q_3d.shape[1]
+            
+            q_3d_padded, _ = pad_to_block_multiple(q_3d, BQSIZE, axis=1)
             k_3d_padded, _ = pad_to_block_multiple(k_3d, BKVSIZE, axis=1)
             v_3d_padded, _ = pad_to_block_multiple(v_3d, BKVSIZE, axis=1)
             
@@ -237,47 +246,29 @@ def _tpu_custom_attention(query, key, value, mesh, scale=None):
             splash_kernel = custom_splash_attention.make_splash_mha(
                 block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE
             )
-            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded).astype(q_3d.dtype)
+            out = splash_kernel(
+                q_3d_padded.astype(jnp.float32),
+                k_3d_padded.astype(jnp.float32),
+                v_3d_padded.astype(jnp.float32)
+            ).astype(q_3d.dtype)
             out = jnp.swapaxes(out, 1, 2)
             return out[:, :q_orig_len, :]
 
         vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
         return vmapped_kernel(q, k, v)
 
-    # Determine sharding strategy
-    if key.shape[0] > 1:
-        dp_mesh_key = "dp"
-        remain_mesh_key = ("tp",)
+    # 根据设备数量和头数确定分片策略（与 stage2 一致）
+    if num_heads < mesh.size:
+        q_partition_spec = P()
+        kv_partition_spec = P()
     else:
-        dp_mesh_key = None
-        remain_mesh_key = ("dp", "tp")
-    
-    q_seq_len = query.shape[2]
-    kv_seq_len = key.shape[2]
-    
-    # Self attention vs cross attention
-    if q_seq_len == kv_seq_len:
-        q_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
-        kv_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
-    else:
-        remain_devices_prod = 1
-        for d in remain_mesh_key:
-            remain_devices_prod *= mesh.axis_sizes[mesh.axis_names.index(d)]
-        
-        def pad_to_multiple(x, multiple, axis):
-            seq_len = x.shape[axis]
-            pad_len = (multiple - seq_len % multiple) % multiple
-            if pad_len == 0:
-                return x, seq_len
-            pad_width = [(0, 0)] * x.ndim
-            pad_width[axis] = (0, pad_len)
-            return jnp.pad(x, pad_width), seq_len
-        
-        if q_seq_len % remain_devices_prod != 0:
-            query, _ = pad_to_multiple(query, remain_devices_prod, axis=2)
-        
-        q_partition_spec = P(dp_mesh_key, None, remain_mesh_key, None)
-        kv_partition_spec = P(dp_mesh_key, None, None, None)
+        # 自注意力 vs 交叉注意力
+        if query.shape[2] == key.shape[2]:  # 自注意力
+            q_partition_spec = P('dp', 'tp', None, None)
+            kv_partition_spec = P('dp', 'tp', None, None)
+        else:  # 交叉注意力
+            q_partition_spec = P('dp', None, 'tp', None)
+            kv_partition_spec = P('dp', None, None, None)
 
     sharded_fn = shard_map(
         _attention_on_slices,
@@ -287,13 +278,11 @@ def _tpu_custom_attention(query, key, value, mesh, scale=None):
         check_rep=False,
     )
     
-    query = jax.lax.with_sharding_constraint(query, P(dp_mesh_key, None, remain_mesh_key, None))
-    key = jax.lax.with_sharding_constraint(key, P(dp_mesh_key, None, remain_mesh_key, None))
-    value = jax.lax.with_sharding_constraint(value, P(dp_mesh_key, None, remain_mesh_key, None))
-    
+    # 关键优化：不在 shard_map 之前添加 sharding constraint
+    # 只在输出添加 constraint（与 stage2 一致）
     out = sharded_fn(query, key, value)
     out = out[:, :, :q_seq_len, :]
-    out = jax.lax.with_sharding_constraint(out, P(dp_mesh_key, None, remain_mesh_key, None))
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, 'tp', None))
     return out
 
 
