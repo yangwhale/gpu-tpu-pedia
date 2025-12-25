@@ -61,13 +61,28 @@ LOG2_E = 1.44269504
 # ============================================================================
 # Mesh 配置
 # ============================================================================
-DEFAULT_DP = 1  # CogVideoX 默认 DP=1（与 Wan 不同）
+DEFAULT_DP = 2  # 推荐 DP=2（CFG 正+负 prompt 并行处理更快）
 
 # Transformer 分片配置（stage2 使用）
 # 注意：DP=2 比 DP=1 快约 1.6 倍（CFG 正+负 prompt 可并行处理）
 USE_DP = True   # 是否使用 Data Parallelism（推荐开启）
 SP_NUM = 1      # Sequence Parallelism 分片数
 USE_TP = True   # 是否使用 Tensor Parallelism 模式（推荐）
+
+# ============================================================================
+# Text Encoder 分片策略（T5 模型）
+# ============================================================================
+# T5 Text Encoder 的权重分片策略，用于多 TPU 并行
+TEXT_ENCODER_SHARDINGS = {
+    r'shared\.weight$': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.q\.weight$': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.k\.weight$': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.v\.weight$': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.o\.weight$': (None, ('dp', 'tp')),
+    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wi_0\.weight$': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wi_1\.weight$': (('dp', 'tp'),),
+    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wo\.weight$': (None, ('dp', 'tp')),
+}
 
 
 # ============================================================================
@@ -191,6 +206,36 @@ def setup_pytree_registrations():
         print("  - DiagonalGaussianDistribution 已注册")
     except ValueError:
         print("  - DiagonalGaussianDistribution 已存在")
+
+
+def shard_weight_dict(weight_dict, sharding_dict, mesh):
+    """Apply sharding to weights based on pattern matching.
+    
+    Args:
+        weight_dict: 权重字典
+        sharding_dict: 分片策略字典（正则表达式 -> PartitionSpec）
+        mesh: JAX Mesh
+        
+    Returns:
+        已分片的权重字典
+    """
+    import re
+    from jax.sharding import PartitionSpec as P, NamedSharding
+    
+    result = {}
+    for k, v in weight_dict.items():
+        matched = False
+        for target, sharding in sharding_dict.items():
+            if re.fullmatch(target, k) is not None:
+                v.apply_jax_(jax.device_put, NamedSharding(mesh, P(*sharding)))
+                matched = True
+                break
+        
+        if not matched:
+            v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
+        
+        result[k] = v
+    return result
 
 
 def sharded_device_put(tensor, sharding):
