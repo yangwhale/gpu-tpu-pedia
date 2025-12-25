@@ -85,9 +85,9 @@ MODEL_ID = "zai-org/CogVideoX1.5-5B"
 
 # Video Generation Settings
 WIDTH = 1280
-HEIGHT = 768
-FRAMES = 49
-FPS = 8
+HEIGHT = 720
+FRAMES = 81
+FPS = 16
 NUM_STEPS = 50
 
 # Splash Attention Block Sizes
