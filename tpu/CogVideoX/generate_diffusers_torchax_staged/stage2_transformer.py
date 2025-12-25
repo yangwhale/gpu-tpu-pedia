@@ -51,8 +51,10 @@ from utils import (
     WIDTH, HEIGHT, FRAMES, FPS, NUM_STEPS, GUIDANCE_SCALE,
     BQSIZE, BKVSIZE, BKVCOMPUTESIZE, BKVCOMPUTEINSIZE,
     USE_K_SMOOTH, USE_CUSTOM_ATTENTION, LOG2_E,
-    USE_DP, SP_NUM, USE_TP,
+    USE_DP, USE_TP,
+    TRANSFORMER_SHARDINGS_TP, TRANSFORMER_SHARDINGS_FSDP,
     setup_pytree_registrations,
+    shard_weight_dict,
     load_embeddings_from_safetensors,
     save_latents_to_safetensors,
     save_generation_config,
@@ -163,17 +165,17 @@ def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False,
         vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
         return vmapped_kernel(q, k, v)
 
-    # 根据设备数量和头数确定分片策略
+    # 根据设备数量和头数确定分片策略 - 简化为 2D mesh (dp, tp)
     if num_heads < mesh.size:
         q_partition_spec = P()
         kv_partition_spec = P()
     else:
         # 根据 query 和 key 的序列长度判断是自注意力还是交叉注意力
         if query.shape[2] == key.shape[2]:  # 自注意力
-            q_partition_spec = P('dp', 'tp', 'sp', None)
+            q_partition_spec = P('dp', 'tp', None, None)
             kv_partition_spec = P('dp', 'tp', None, None)
         else:  # 交叉注意力
-            q_partition_spec = P('dp', None, ('tp', 'sp'), None)
+            q_partition_spec = P('dp', None, 'tp', None)
             kv_partition_spec = P('dp', None, None, None)
 
     sharded_fn = shard_map(
@@ -185,8 +187,8 @@ def _tpu_splash_attention(query, key, value, env, scale=None, is_causal=False,
     )
     out = sharded_fn(query, key, value)
     
-    # 添加输出 sharding constraint（与 Wan2.1 一致）
-    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    # 添加输出 sharding constraint - 简化为 2D mesh (dp, tp)
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, 'tp', None))
     
     return out
 
@@ -251,16 +253,16 @@ def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
         vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
         return vmapped_kernel(q, k, v)
 
-    # 根据设备数量和头数确定分片策略
+    # 根据设备数量和头数确定分片策略 - 简化为 2D mesh (dp, tp)
     if num_heads < mesh.size:
         q_partition_spec = P()
         kv_partition_spec = P()
     else:
         if query.shape[2] == key.shape[2]:  # 自注意力
-            q_partition_spec = P('dp', 'tp', 'sp', None)
+            q_partition_spec = P('dp', 'tp', None, None)
             kv_partition_spec = P('dp', 'tp', None, None)
         else:  # 交叉注意力
-            q_partition_spec = P('dp', None, ('tp', 'sp'), None)
+            q_partition_spec = P('dp', None, 'tp', None)
             kv_partition_spec = P('dp', None, None, None)
 
     sharded_fn = shard_map(
@@ -272,8 +274,8 @@ def _tpu_custom_attention(query, key, value, env, scale=None, is_causal=False,
     )
     out = sharded_fn(query, key, value)
     
-    # 添加输出 sharding constraint（与 Wan2.1 一致）
-    out = jax.lax.with_sharding_constraint(out, P('dp', None, ('tp', 'sp'), None))
+    # 添加输出 sharding constraint - 简化为 2D mesh (dp, tp)
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, 'tp', None))
     
     return out
 
@@ -312,62 +314,6 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
 
     return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal,
                            scale, enable_gqa)
-
-
-# === 权重分片策略 ===
-
-# Transformer sharding策略 - Tensor Parallel模式（默认推荐）
-# 输出分片：适合 TPU 的 Tensor Parallelism
-# 注意：所有模式都以 .weight$ 结尾，这样不会匹配到 bias 等1维参数
-transformer_shardings_tp = {
-    r'.*\.to_q\.weight$': (None, ('tp', 'sp')),
-    r'.*\.to_k\.weight$': (None, ('tp', 'sp')),
-    r'.*\.to_v\.weight$': (None, ('tp', 'sp')),
-    r'.*\.to_out.*\.weight$': (('tp', 'sp'), None),
-    r'.*\.ff\.net\.0\.weight$': (None, ('tp', 'sp')),
-    r'.*\.ff\.net\.2\.weight$': (('tp', 'sp'), None),
-}
-
-# Transformer sharding策略 - FSDP模式
-# 输入分片：类似 FSDP 的分片方式
-transformer_shardings_fsdp = {
-    r'.*\.to_q\.weight$': (('tp', 'sp'), None),
-    r'.*\.to_k\.weight$': (('tp', 'sp'), None),
-    r'.*\.to_v\.weight$': (('tp', 'sp'), None),
-    r'.*\.to_out.*\.weight$': (None, ('tp', 'sp')),
-    r'.*\.ff\.net\.0\.weight$': (('tp', 'sp'), None),
-    r'.*\.ff\.net\.2\.weight$': (None, ('tp', 'sp')),
-}
-
-# Text Encoder (T5) sharding策略
-text_encoder_shardings = {
-    r'shared\.weight$': (('tp', 'dp', 'sp'),),
-    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.q\.weight$': (('tp', 'dp', 'sp'),),
-    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.k\.weight$': (('tp', 'dp', 'sp'),),
-    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.v\.weight$': (('tp', 'dp', 'sp'),),
-    r'encoder\.block\.\d+\.layer\.\d+\.SelfAttention\.o\.weight$': (None, ('tp', 'dp', 'sp')),
-    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wi_0\.weight$': (('tp', 'dp', 'sp'),),
-    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wi_1\.weight$': (('tp', 'dp', 'sp'),),
-    r'encoder\.block\.\d+\.layer\.\d+\.DenseReluDense\.wo\.weight$': (None, ('tp', 'dp', 'sp')),
-}
-
-
-def shard_weight_dict(weight_dict, sharding_dict, mesh):
-    """Apply sharding to weights based on pattern matching."""
-    result = {}
-    for k, v in weight_dict.items():
-        matched = False
-        for target, sharding in sharding_dict.items():
-            if re.fullmatch(target, k) is not None:
-                v.apply_jax_(jax.device_put, NamedSharding(mesh, P(*sharding)))
-                matched = True
-                break
-        
-        if not matched:
-            v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
-        
-        result[k] = v
-    return result
 
 
 # === Pipeline 设置 ===
@@ -426,7 +372,7 @@ def setup_pipeline_for_transformer_only(pipe, mesh, env, window_size=None,
 
     # Apply sharding
     print("- 对 Transformer 进行权重分片...")
-    transformer_shardings = transformer_shardings_tp if use_tp else transformer_shardings_fsdp
+    transformer_shardings = TRANSFORMER_SHARDINGS_TP if use_tp else TRANSFORMER_SHARDINGS_FSDP
     pipe.transformer.params = shard_weight_dict(
         pipe.transformer.params, transformer_shardings, mesh
     )
@@ -711,9 +657,8 @@ def main():
     parser.add_argument('--use_k_smooth', action='store_true', default=USE_K_SMOOTH, help='Use K smoothing')
     parser.add_argument('--use_custom_attention', action='store_true', default=USE_CUSTOM_ATTENTION, help='Use custom exp2 attention')
 
-    # Sharding 参数
+    # Sharding 参数 - 简化为 2D mesh (dp, tp)
     parser.add_argument('--use_dp', action='store_true', default=USE_DP, help='Use data parallelism')
-    parser.add_argument('--sp_num', type=int, default=SP_NUM, help='Sequence parallelism number')
     parser.add_argument('--use_tp', action='store_true', default=USE_TP, help='Use Tensor Parallel mode (recommended)')
 
     # 其他参数
@@ -779,23 +724,18 @@ def main():
     torchax.enable_globally()
     env = torchax.default_env()
 
-    # 创建 mesh
-    tp_dim, dp_dim, sp_dim = len(jax.devices()), 1, 1
-    if args.use_dp:
-        tp_dim //= 2
-        dp_dim = 2
-    if args.sp_num > 1:
-        tp_dim //= args.sp_num
-        sp_dim = args.sp_num
+    # 创建 mesh - 简化为 2D mesh (dp, tp)
+    dp_dim = 2 if args.use_dp else 1
+    tp_dim = len(jax.devices()) // dp_dim
 
-    print(f"\nMesh 维度: dp_dim={dp_dim}, sp_dim={sp_dim}, tp_dim={tp_dim}")
+    print(f"\nMesh 维度: dp_dim={dp_dim}, tp_dim={tp_dim}")
     print(f"总设备数: {len(jax.devices())}")
 
-    # mesh 顺序：('dp', 'sp', 'tp') - 与 Wan2.1 一致
+    # mesh 顺序：('dp', 'tp') - 与 generate_torchax.py 一致
     mesh_devices = mesh_utils.create_device_mesh(
-        (dp_dim, sp_dim, tp_dim), allow_split_physical_axes=True
+        (dp_dim, tp_dim), allow_split_physical_axes=True
     )
-    mesh = Mesh(mesh_devices, ('dp', 'sp', 'tp'))
+    mesh = Mesh(mesh_devices, ('dp', 'tp'))
 
     # 配置 env - 直接设置属性（不使用 hasattr 检查，因为属性可能不存在需要创建）
     env._mesh = mesh

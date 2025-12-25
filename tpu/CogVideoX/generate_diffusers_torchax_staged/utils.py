@@ -86,6 +86,33 @@ TEXT_ENCODER_SHARDINGS = {
 
 
 # ============================================================================
+# Transformer 分片策略（CogVideoX-1.5 模型）
+# ============================================================================
+# Transformer sharding策略 - Tensor Parallel模式（默认推荐）- 2D mesh (dp, tp)
+# 输出分片：适合 TPU 的 Tensor Parallelism
+# 注意：所有模式都以 .weight$ 结尾，这样不会匹配到 bias 等1维参数
+TRANSFORMER_SHARDINGS_TP = {
+    r'.*\.to_q\.weight$': (None, 'tp'),
+    r'.*\.to_k\.weight$': (None, 'tp'),
+    r'.*\.to_v\.weight$': (None, 'tp'),
+    r'.*\.to_out.*\.weight$': ('tp', None),
+    r'.*\.ff\.net\.0\.weight$': (None, 'tp'),
+    r'.*\.ff\.net\.2\.weight$': ('tp', None),
+}
+
+# Transformer sharding策略 - FSDP模式 - 2D mesh (dp, tp)
+# 输入分片：类似 FSDP 的分片方式
+TRANSFORMER_SHARDINGS_FSDP = {
+    r'.*\.to_q\.weight$': ('tp', None),
+    r'.*\.to_k\.weight$': ('tp', None),
+    r'.*\.to_v\.weight$': ('tp', None),
+    r'.*\.to_out.*\.weight$': (None, 'tp'),
+    r'.*\.ff\.net\.0\.weight$': ('tp', None),
+    r'.*\.ff\.net\.2\.weight$': (None, 'tp'),
+}
+
+
+# ============================================================================
 # 数据转换工具
 # ============================================================================
 
