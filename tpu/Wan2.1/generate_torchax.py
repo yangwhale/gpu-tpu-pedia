@@ -1,24 +1,8 @@
 #!/usr/bin/env python3
 """
-Wan 2.1 Text-to-Video Generation with TPU Splash Attention
+Wan 2.1 Text-to-Video 生成脚本 (TPU Splash Attention)
 
-本脚本提供在 TPU 上运行 Wan 2.1 Text-to-Video 生成的完整实现，
-使用 JAX/Flax 和优化的 Splash Attention。
-
-结构:
-1. Imports and Configuration
-2. Helper Functions
-3. Splash Attention Implementation
-4. Sharding Strategies
-5. Weight Sharding Functions
-6. Pipeline Setup
-7. Main Function
-
-Optimizations from Wan2.2:
-- Using diffusers' AutoencoderKLWan (Flax version) for better compatibility
-- PyTree registrations for VAE outputs
-- torch_conv2d_jax op override for correct conv2d behavior
-- Pipeline loading before torchax.enable_globally() to avoid safetensors issues
+使用 Torchax + JAX 在 TPU 上运行 Wan 2.1 视频生成。
 """
 
 import os
@@ -29,7 +13,6 @@ import logging
 # 环境配置和 Warning 过滤（必须在其他 import 之前）
 # ============================================================================
 
-os.environ.setdefault('JAX_MEMORY_DEBUG', '0')
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
 # 全局过滤 warnings
@@ -58,186 +41,88 @@ from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
 from jax.experimental.pallas.ops.tpu import splash_attention
 from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
-from flax import nnx
 
 import torchax
 from torchax.ops import ops_registry, jaten
-from transformers import modeling_outputs
 
-# VAE outputs for PyTree registration
-from diffusers.models.autoencoders import vae as diffusers_vae
-from diffusers.models import modeling_outputs as diffusers_modeling_outputs
+# PyTree 注册所需的输出类型
+from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+from diffusers.models.autoencoders.vae import DecoderOutput
+from diffusers.models.modeling_outputs import AutoencoderKLOutput
 
-# Wan-specific imports - use diffusers' torchax VAE
+# Wan Torchax Pipeline 和 VAE
 from diffusers.pipelines.wan.pipeline_wan_torchax import WanPipeline
 from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
 from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
 from diffusers.utils import export_to_video
 
-# Custom splash attention
+# 自定义 Splash Attention
 import custom_splash_attention
 
 
 # ============================================================================
-# Configuration Constants
+# 配置常量
 # ============================================================================
 
-# Model Configuration
 MODEL_ID = "Wan-AI/Wan2.1-T2V-14B-Diffusers"
 
-# Video Generation Settings (720P)
-FLOW_SHIFT = 5.0  # 5.0 for 720P, 3.0 for 480P
+# 视频生成参数 (720P)
+FLOW_SHIFT = 5.0  # 720P 用 5.0，480P 用 3.0
 WIDTH = 1280
 HEIGHT = 720
 FRAMES = 81
 FPS = 16
 NUM_STEPS = 50
 
-# Splash Attention Block Sizes
+# Splash Attention 块大小
 BQSIZE = 3328
 BKVSIZE = 2816
 BKVCOMPUTESIZE = 256
 BKVCOMPUTEINSIZE = 256
 
-# Attention Settings
-USE_K_SMOOTH = False  # K smoothing for better numerical stability
+# Attention 配置
+USE_K_SMOOTH = True  # K 平滑以提高数值稳定性
 
-# Mesh Sharding Configuration
+# Mesh 分片配置
 USE_DP = True
-USE_FSDP = True
+USE_TP = True
 
-# Profiler Output Path
-PROFILE_OUT_PATH = "/dev/shm/tensorboard"
+# Profiler 输出路径
+PROFILE_OUT_PATH = "/dev/shm/jax_trace"
 
 
 # ============================================================================
-# Helper Functions
+# 辅助函数
 # ============================================================================
-
-def to_torch_recursive(x):
-    """Recursively convert JAX arrays to PyTorch tensors."""
-    if 'ArrayImpl' in str(type(x)) or isinstance(x, jnp.ndarray):
-        np_array = np.array(x)
-        if hasattr(x, 'dtype') and x.dtype == jnp.bfloat16:
-            return torch.from_numpy(np_array.astype(np.float32)).to(torch.bfloat16)
-        return torch.from_numpy(np_array)
-    elif isinstance(x, (list, tuple)):
-        return type(x)(to_torch_recursive(xx) for xx in x)
-    elif isinstance(x, dict):
-        return {k: to_torch_recursive(v) for k, v in x.items()}
-    elif hasattr(x, 'sample'):
-        sample = to_torch_recursive(x.sample)
-        return x.replace(sample=sample) if hasattr(x, 'replace') else sample
-    return x
-
 
 def setup_pytree_registrations():
-    """Register PyTree nodes for JAX transformations."""
+    """注册必要的 PyTree 节点以支持 JAX 转换。"""
+    print("注册 PyTree 节点...")
+    
     def model_output_flatten(obj):
         return obj.to_tuple(), type(obj)
 
     def model_output_unflatten(aux, children):
         return aux(*children)
-
-    # Text encoder output
-    register_pytree_node(
-        modeling_outputs.BaseModelOutputWithPastAndCrossAttentions,
-        model_output_flatten,
-        model_output_unflatten
-    )
     
-    # VAE decode output
-    register_pytree_node(
-        diffusers_vae.DecoderOutput,
-        model_output_flatten,
-        model_output_unflatten
-    )
-    
-    # VAE encode output
-    register_pytree_node(
-        diffusers_modeling_outputs.AutoencoderKLOutput,
-        model_output_flatten,
-        model_output_unflatten
-    )
-    
-    # DiagonalGaussianDistribution
-    def flatten_gaussian(obj):
-        return (obj.parameters, obj.mean, obj.logvar, obj.deterministic,
-                obj.std, obj.var), None
-    
-    def unflatten_gaussian(aux, children):
-        obj = object.__new__(diffusers_vae.DiagonalGaussianDistribution)
-        obj.parameters = children[0]
-        obj.mean = children[1]
-        obj.logvar = children[2]
-        obj.deterministic = children[3]
-        obj.std = children[4]
-        obj.var = children[5]
-        return obj
-    
-    register_pytree_node(
-        diffusers_vae.DiagonalGaussianDistribution,
-        flatten_gaussian,
-        unflatten_gaussian
-    )
-
-
-def sharded_device_put(tensor, sharding):
-    """Put tensor on devices with proper sharding for multi-host setups."""
-    if isinstance(tensor, tuple):
-        return tuple(sharded_device_put(t, sharding) for t in tensor)
-    
-    num_global_devices = jax.device_count()
-    num_local_devices = jax.local_device_count()
-
-    if num_global_devices == num_local_devices:
-        return jax.device_put(tensor, sharding)
-
-    shape = tensor.shape
-    x_split = [
-        jax.device_put(tensor[i], device)
-        for device, i in sharding.addressable_devices_indices_map(shape).items()
+    OUTPUT_CLASSES = [
+        BaseModelOutputWithPastAndCrossAttentions,
+        DecoderOutput,
+        AutoencoderKLOutput,
     ]
-    return jax.make_array_from_single_device_arrays(shape, sharding, x_split)
-
-
-def prepare_video_for_export(video, target_frames):
-    """Prepare video tensor for export to file."""
-    if isinstance(video, (list, tuple)):
-        return [prepare_video_for_export(v, target_frames) for v in video]
     
-    if isinstance(video, torch.Tensor):
-        if video.dim() == 5:  # (B, C, T, H, W)
-            video = video[0]
-        if video.dim() == 4 and video.shape[0] != target_frames:  # (C, T, H, W)
-            video = video.permute(1, 0, 2, 3)
-        if video.shape[-1] != 3:
-            video = video.permute(0, 2, 3, 1)
-        if video.shape[-1] > 3:
-            video = video[..., :3]
-        
-        video = video.cpu().numpy()
-        video = np.clip(video, 0, 255).astype(np.uint8)
-        
-        if video.shape[-1] == 1:
-            video = np.repeat(video, 3, axis=-1)
-        return video
-    
-    if isinstance(video, np.ndarray):
-        if video.shape[-1] == 1:
-            video = np.repeat(video, 3, axis=-1)
-        return video
-    
-    return video
+    for cls in OUTPUT_CLASSES:
+        register_pytree_node(cls, model_output_flatten, model_output_unflatten)
+        print(f"  - {cls.__name__} 已注册")
 
 
 # ============================================================================
-# Splash Attention Implementation
+# Splash Attention 实现
 # ============================================================================
 
 def _sdpa_reference(query, key, value, attn_mask=None, dropout_p=0.0,
                     is_causal=False, scale=None, enable_gqa=False):
-    """Reference implementation of Scaled Dot-Product Attention."""
+    """SDPA 参考实现（用于短序列 cross-attention）。"""
     L, S = query.size(-2), key.size(-2)
     scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
     attn_bias = torch.zeros(L, S, dtype=query.dtype, device=query.device)
@@ -268,7 +153,7 @@ def _sdpa_reference(query, key, value, attn_mask=None, dropout_p=0.0,
 
 
 def _tpu_custom_attention(query, key, value, mesh, scale=None):
-    """TPU Custom Splash Attention with exp2 optimization."""
+    """TPU Splash Attention（使用 exp2 优化）。"""
     def _attention_on_slices(q, k, v):
         scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
         # Fuse the ops of exp in softmax - multiply by log2(e)
@@ -381,8 +266,8 @@ def _tpu_custom_attention(query, key, value, mesh, scale=None):
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
                                   is_causal=False, scale=None, enable_gqa=False,
                                   env=None, mesh=None):
-    """Wrapper for scaled dot-product attention with TPU Splash support."""
-    # Only use custom attention for long sequences (self-attention)
+    """SDPA 封装，长序列使用 TPU Splash Attention。"""
+    # 仅对长序列（self-attention）使用 Splash Attention
     if key.shape[2] > 20000:
         assert attn_mask is None
         assert dropout_p == 0.0
@@ -404,11 +289,11 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
 
 
 # ============================================================================
-# Sharding Strategies
+# 分片策略
 # ============================================================================
 
-# Transformer sharding - using 2D mesh (dp, tp) like Wan2.2
-transformer_shardings_fsdp = {
+# Transformer 分片（2D mesh: dp, tp）
+transformer_shardings_tp = {
     r'condition_embedder.time_embedder.linear_1.weight': ('tp',),
     r'condition_embedder.time_embedder.linear_1.bias': ('tp',),
     r'condition_embedder.time_embedder.linear_2.weight': (None, 'tp',),
@@ -434,10 +319,7 @@ transformer_shardings_fsdp = {
     r'blocks.*.ffn.net.*.weight': (None, 'tp',),
 }
 
-# Same sharding for TP mode
-transformer_shardings_tp = transformer_shardings_fsdp
-
-# Text Encoder (T5) sharding - using 2D mesh (dp, tp)
+# Text Encoder (T5) 分片
 text_encoder_shardings = {
     r'shared.weight': (('dp', 'tp'),),
     r'encoder.block.*.layer.*.SelfAttention.q.weight': (('dp', 'tp'),),
@@ -451,11 +333,11 @@ text_encoder_shardings = {
 
 
 # ============================================================================
-# Weight Sharding Functions
+# 权重分片函数
 # ============================================================================
 
 def shard_weight_dict(weight_dict, sharding_dict, mesh):
-    """Apply sharding to weights based on pattern matching."""
+    """按模式匹配应用权重分片。"""
     result = {}
     for k, v in weight_dict.items():
         matched = False
@@ -473,12 +355,12 @@ def shard_weight_dict(weight_dict, sharding_dict, mesh):
 
 
 # ============================================================================
-# Pipeline Setup
+# Pipeline 设置
 # ============================================================================
 
 def torch_conv2d_jax(input, weight, bias=None, stride=1, padding=0,
                      dilation=1, groups=1, *, env):
-    """JAX-compatible conv2d override."""
+    """JAX 兼容的 conv2d 覆盖实现。"""
     jinput, jweight, jbias = env.t2j_iso((input, weight, bias))
     res = jaten._aten_conv2d(jinput, jweight, jbias, stride, padding,
                              dilation, groups)
@@ -486,7 +368,7 @@ def torch_conv2d_jax(input, weight, bias=None, stride=1, padding=0,
 
 
 def override_op_definition(env, op_to_override, op_impl):
-    """Override operator definition in torchax environment."""
+    """在 torchax 环境中覆盖算子定义。"""
     env._ops[op_to_override] = ops_registry.Operator(
         op_to_override,
         op_impl,
@@ -498,7 +380,7 @@ def override_op_definition(env, op_to_override, op_impl):
 
 
 def move_module_to_xla(env, module):
-    """Move module weights to XLA devices."""
+    """将模块权重移动到 XLA 设备。"""
     with jax.default_device("cpu"):
         state_dict = module.state_dict()
         state_dict = env.to_xla(state_dict)
@@ -506,9 +388,9 @@ def move_module_to_xla(env, module):
 
 
 def load_pipeline(args):
-    """Load pipeline before enabling torchax to avoid safetensors issues."""
-    print("\n=== Loading Wan 2.1 T2V Pipeline ===")
-    print("Loading models from HuggingFace...")
+    """加载 Pipeline（在启用 torchax 之前加载以避免 safetensors 问题）。"""
+    print("\n=== 加载 Wan 2.1 T2V Pipeline ===")
+    print("从 HuggingFace 加载模型...")
     
     scheduler = UniPCMultistepScheduler(
         prediction_type='flow_prediction',
@@ -517,7 +399,7 @@ def load_pipeline(args):
         flow_shift=args.flow_shift
     )
     
-    # Load pipeline with diffusers' Flax VAE
+    # 使用 Torchax 版本的 VAE
     pipe = WanPipeline.from_pretrained(
         args.model_id,
         torch_dtype=torch.bfloat16,
@@ -528,16 +410,16 @@ def load_pipeline(args):
     )
     pipe.scheduler = scheduler
     
-    print("✓ Models loaded successfully\n")
+    print("✓ 模型加载成功\n")
     return pipe
 
 
 def setup_pipeline_for_jax(pipe, args, mesh, env):
-    """Setup Wan pipeline for JAX/TPU execution."""
-    print("=== Moving Models to TPU ===")
+    """设置 Wan Pipeline 以在 JAX/TPU 上执行。"""
+    print("=== 将模型移动到 TPU ===")
     
-    # Register custom operators
-    print("- Registering custom JAX operators...")
+    # 注册自定义算子
+    print("- 注册自定义 JAX 算子...")
     override_op_definition(
         env,
         torch.nn.functional.conv2d,
@@ -549,12 +431,12 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
         functools.partial(scaled_dot_product_attention, env=env, mesh=mesh),
     )
     
-    # Text Encoder
+    # Text Encoder 处理
     if args.t5_cpu:
-        print("- Keeping Text Encoder on CPU...")
+        print("- 保持 Text Encoder 在 CPU...")
         pipe.text_encoder.to("cpu")
     else:
-        print("- Moving Text Encoder to XLA and sharding...")
+        print("- 将 Text Encoder 移动到 XLA 并分片...")
         move_module_to_xla(env, pipe.text_encoder)
         pipe.text_encoder = torchax.compile(pipe.text_encoder)
         pipe.text_encoder.params = shard_weight_dict(
@@ -564,10 +446,10 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
             pipe.text_encoder.buffers, text_encoder_shardings, mesh
         )
     
-    # Transformer
-    print("- Moving Transformer to XLA and sharding...")
+    # Transformer 处理
+    print("- 将 Transformer 移动到 XLA 并分片...")
     move_module_to_xla(env, pipe.transformer)
-    # Move rope embeddings to JAX
+    # 将 rope embeddings 移动到 JAX
     if hasattr(pipe.transformer.rope, 'freqs'):
         pipe.transformer.rope.freqs = pipe.transformer.rope.freqs.to('jax')
     else:
@@ -579,7 +461,7 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
     )
     pipe.transformer = torchax.compile(pipe.transformer, transformer_options)
     
-    transformer_shardings = transformer_shardings_fsdp if args.use_fsdp else transformer_shardings_tp
+    transformer_shardings = transformer_shardings_tp
     pipe.transformer.params = shard_weight_dict(
         pipe.transformer.params, transformer_shardings, mesh
     )
@@ -587,16 +469,16 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
         pipe.transformer.buffers, transformer_shardings, mesh
     )
     
-    # VAE - using diffusers' Flax VAE
-    print("- Moving VAE to XLA...")
+    # VAE 处理（使用 Torchax 版本）
+    print("- 将 VAE 移动到 XLA...")
     move_module_to_xla(env, pipe.vae)
     pipe.vae.encoder = torchax.compile(pipe.vae.encoder)
     pipe.vae.decoder = torchax.compile(pipe.vae.decoder)
     
-    # Wrap VAE decode to ensure correct dtype
+    # 包装 VAE decode 以确保正确的数据类型
     original_decode = pipe.vae.decode
     def decode_wrapper(z, *args, **kwargs):
-        # Handle both JAX arrays and PyTorch tensors
+        # 处理 JAX 数组和 PyTorch 张量
         if isinstance(z, jnp.ndarray) or 'ArrayImpl' in str(type(z)):
             z = z.astype(jnp.bfloat16)
         elif hasattr(z, 'dtype') and z.dtype != torch.bfloat16:
@@ -604,12 +486,12 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
         return original_decode(z, *args, **kwargs)
     pipe.vae.decode = decode_wrapper
     
-    print("=== Pipeline Setup Complete ===\n")
+    print("=== Pipeline 设置完成 ===\n")
     return pipe
 
 
 def run_generation(pipe, args, mesh):
-    """Run video generation with optional profiling."""
+    """运行视频生成（支持可选的性能分析）。"""
     prompt = ("A cat and a dog baking a cake together in a kitchen. "
               "The cat is carefully measuring flour, while the dog is "
               "stirring the batter with a wooden spoon. The kitchen is cozy, "
@@ -676,10 +558,6 @@ def run_generation(pipe, args, mesh):
         print(f"  平均每步: {warmup_time_per_step:.2f}s")
         
         # Save output
-        output = prepare_video_for_export(output, args.frames)
-        if isinstance(output, np.ndarray) and output.ndim == 4 and output.shape[-2] == 3:
-            output = output.transpose(3, 0, 1, 2)
-        
         current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
         file_name = f"{current_datetime}.mp4"
         export_to_video(output, file_name, fps=args.fps)
@@ -711,12 +589,12 @@ def run_generation(pipe, args, mesh):
 
 
 # ============================================================================
-# Main Function
+# 主函数
 # ============================================================================
 
 def parse_args():
-    """Parse command line arguments."""
-    parser = argparse.ArgumentParser(description="Wan 2.1 Video Generation on TPU")
+    """解析命令行参数。"""
+    parser = argparse.ArgumentParser(description="Wan 2.1 TPU 视频生成")
     
     # Model settings
     parser.add_argument("--model_id", type=str, default=MODEL_ID)
@@ -729,22 +607,21 @@ def parse_args():
     parser.add_argument("--fps", type=int, default=FPS)
     parser.add_argument("--num_inference_steps", type=int, default=NUM_STEPS)
     
-    # Sharding settings
+    # 分片设置
     parser.add_argument("--use_dp", action="store_true", default=USE_DP)
-    parser.add_argument("--use_fsdp", action="store_true", default=USE_FSDP)
+    parser.add_argument("--use_tp", action="store_true", default=USE_TP)
     
-    # Other settings
+    # 其他设置
     parser.add_argument("--t5_cpu", action="store_true", default=False,
-                        help="Offload T5 text encoder to CPU")
+                        help="将 T5 text encoder 放在 CPU 上")
     parser.add_argument("--profile", action="store_true", default=False,
-                        help="Run profiler")
+                        help="启用性能分析")
     
     return parser.parse_args()
 
 
 def main():
-    """Main entry point for Wan video generation."""
-    # Parse arguments
+    """Wan 视频生成主入口。"""
     args = parse_args()
     
     print(f"\n{'='*60}")
@@ -752,24 +629,24 @@ def main():
     print(f"{'='*60}")
     print(f"Configuration: {args}")
     
-    # Configure JAX
+    # 配置 JAX
     jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
     
     torch.set_default_dtype(torch.bfloat16)
     
-    # Setup PyTree registrations
+    # 设置 PyTree 注册
     setup_pytree_registrations()
     
-    # Load pipeline BEFORE enabling torchax to avoid safetensors loading issues
+    # 在启用 torchax 之前加载 pipeline（避免 safetensors 加载问题）
     pipe = load_pipeline(args)
     
-    # Now enable torchax
+    # 启用 torchax
     torchax.enable_globally()
     env = torchax.default_env()
     
-    # Create mesh - use 2D mesh (dp, tp) like Wan2.2
+    # 创建 mesh（2D mesh: dp, tp）
     assert len(jax.devices()) % 2 == 0
     dp_dim = 2 if args.use_dp else 1
     tp_dim = len(jax.devices()) // dp_dim
@@ -784,17 +661,17 @@ def main():
     print(f"  总设备数: {len(jax.devices())}")
     print(f"  Mesh: {mesh}")
     
-    # Setup pipeline for JAX (move to TPU and shard)
+    # 设置 pipeline（移动到 TPU 并分片）
     pipe = setup_pipeline_for_jax(pipe, args, mesh, env)
     
-    # Run generation
+    # 运行生成
     run_generation(pipe, args, mesh)
     
     print(f"\n{'='*60}")
     print("✓ 生成完成！")
     print(f"{'='*60}")
     
-    # Force exit to avoid torchax background thread blocking
+    # 强制退出以避免 torchax 后台线程阻塞
     os._exit(0)
 
 
