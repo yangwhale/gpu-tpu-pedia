@@ -293,42 +293,30 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
 # ============================================================================
 
 # Transformer 分片（2D mesh: dp, tp）
+# 规则：输出投影用 ('tp', None)，输入投影用 (None, 'tp')，1D bias 用 ('tp',)
 transformer_shardings_tp = {
-    r'condition_embedder.time_embedder.linear_1.weight': ('tp',),
-    r'condition_embedder.time_embedder.linear_1.bias': ('tp',),
-    r'condition_embedder.time_embedder.linear_2.weight': (None, 'tp',),
-    r'condition_embedder.text_embedder.linear_1.weight': ('tp',),
-    r'condition_embedder.text_embedder.linear_1.bias': ('tp',),
-    r'condition_embedder.text_embedder.linear_2.weight': (None, 'tp',),
-    r'blocks.*.attn1.to_q.weight': ('tp',),
-    r'blocks.*.attn1.to_q.bias': ('tp',),
-    r'blocks.*.attn1.to_k.weight': ('tp',),
-    r'blocks.*.attn1.to_k.bias': ('tp',),
-    r'blocks.*.attn1.to_v.weight': ('tp',),
-    r'blocks.*.attn1.to_v.bias': ('tp',),
-    r'blocks.*.attn1.to_out.*.weight': (None, 'tp',),
-    r'blocks.*.attn2.to_q.weight': ('tp',),
-    r'blocks.*.attn2.to_q.bias': ('tp',),
-    r'blocks.*.attn2.to_k.weight': ('tp',),
-    r'blocks.*.attn2.to_k.bias': ('tp',),
-    r'blocks.*.attn2.to_v.weight': ('tp',),
-    r'blocks.*.attn2.to_v.bias': ('tp',),
-    r'blocks.*.attn2.to_out.*.weight': (None, 'tp',),
-    r'blocks.*.ffn.net.*.proj.weight': ('tp',),
+    # Condition Embedder: linear_1 输出分片，linear_2 输入分片
+    r'condition_embedder.*.linear_1.weight': ('tp', None),
+    r'condition_embedder.*.linear_1.bias': ('tp',),
+    r'condition_embedder.*.linear_2.weight': (None, 'tp'),
+    # Attention (attn1 + attn2): Q/K/V 输出分片，to_out 输入分片
+    r'blocks.*.attn[12].to_[qkv].weight': ('tp', None),
+    r'blocks.*.attn[12].to_[qkv].bias': ('tp',),
+    r'blocks.*.attn[12].to_out.*.weight': (None, 'tp'),
+    # FFN: proj 输出分片，后续层输入分片
+    r'blocks.*.ffn.net.*.proj.weight': ('tp', None),
     r'blocks.*.ffn.net.*.proj.bias': ('tp',),
-    r'blocks.*.ffn.net.*.weight': (None, 'tp',),
+    r'blocks.*.ffn.net.*.weight': (None, 'tp'),
 }
 
 # Text Encoder (T5) 分片
+# T5 使用所有设备 ('dp', 'tp') 联合分片，因为 T5 只运行一次
 text_encoder_shardings = {
-    r'shared.weight': (('dp', 'tp'),),
-    r'encoder.block.*.layer.*.SelfAttention.q.weight': (('dp', 'tp'),),
-    r'encoder.block.*.layer.*.SelfAttention.k.weight': (('dp', 'tp'),),
-    r'encoder.block.*.layer.*.SelfAttention.v.weight': (('dp', 'tp'),),
-    r'encoder.block.*.layer.*.SelfAttention.o.weight': (None, ('dp', 'tp')),
-    r'encoder.block.*.layer.*.DenseReluDense.wi_0.weight': (('dp', 'tp'),),
-    r'encoder.block.*.layer.*.DenseReluDense.wi_1.weight': (('dp', 'tp'),),
-    r'encoder.block.*.layer.*.DenseReluDense.wo.weight': (None, ('dp', 'tp')),
+    r'shared.weight': (('dp', 'tp'), None),                             # Embedding
+    r'encoder.block.*.layer.*.SelfAttention.[qkv].weight': (('dp', 'tp'), None),  # Q/K/V 输出分片
+    r'encoder.block.*.layer.*.SelfAttention.o.weight': (None, ('dp', 'tp')),      # O 输入分片
+    r'encoder.block.*.layer.*.DenseReluDense.wi_[01].weight': (('dp', 'tp'), None), # FFN 输出分片
+    r'encoder.block.*.layer.*.DenseReluDense.wo.weight': (None, ('dp', 'tp')),      # FFN 输入分片
 }
 
 
