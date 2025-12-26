@@ -15,10 +15,8 @@ import logging
 
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
 
-# 全局过滤 warnings
 warnings.filterwarnings('ignore')
 
-# 配置 logging
 logging.getLogger('root').setLevel(logging.ERROR)
 logging.getLogger().setLevel(logging.ERROR)
 logging.getLogger('diffusers').setLevel(logging.ERROR)
@@ -26,38 +24,30 @@ logging.getLogger('transformers').setLevel(logging.ERROR)
 
 import time
 import re
-import math
 import functools
 import argparse
 from contextlib import nullcontext
 from datetime import datetime
 
-import numpy as np
 import jax
 import jax.numpy as jnp
 import torch
 from jax.tree_util import register_pytree_node
 from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
-from jax.experimental.pallas.ops.tpu import splash_attention
-from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
 
 import torchax
 from torchax.ops import ops_registry, jaten
 
-# PyTree 注册所需的输出类型
 from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
-
-# Wan Torchax Pipeline 和 VAE
 from diffusers.pipelines.wan.pipeline_wan_torchax import WanPipeline
 from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
 from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
 from diffusers.utils import export_to_video
 
-# 自定义 Splash Attention
-import custom_splash_attention
+from splash_attention_utils import tpu_splash_attention, sdpa_reference
 
 
 # ============================================================================
@@ -74,21 +64,46 @@ FRAMES = 81
 FPS = 16
 NUM_STEPS = 50
 
-# Splash Attention 块大小
-BQSIZE = 3328
-BKVSIZE = 2816
-BKVCOMPUTESIZE = 256
-BKVCOMPUTEINSIZE = 256
-
-# Attention 配置
-USE_K_SMOOTH = True  # K 平滑以提高数值稳定性
-
 # Mesh 分片配置
 USE_DP = True
 USE_TP = True
 
+# K 平滑以提高数值稳定性
+USE_K_SMOOTH = True
+
 # Profiler 输出路径
 PROFILE_OUT_PATH = "/dev/shm/jax_trace"
+
+
+# ============================================================================
+# 分片策略
+# ============================================================================
+
+# Transformer 分片（2D mesh: dp, tp）
+# 规则：输出投影用 ('tp', None)，输入投影用 (None, 'tp')，1D bias 用 ('tp',)
+TRANSFORMER_SHARDINGS = {
+    # Condition Embedder
+    r'condition_embedder.*.linear_1.weight': ('tp', None),
+    r'condition_embedder.*.linear_1.bias': ('tp',),
+    r'condition_embedder.*.linear_2.weight': (None, 'tp'),
+    # Attention (attn1 + attn2)
+    r'blocks.*.attn[12].to_[qkv].weight': ('tp', None),
+    r'blocks.*.attn[12].to_[qkv].bias': ('tp',),
+    r'blocks.*.attn[12].to_out.*.weight': (None, 'tp'),
+    # FFN
+    r'blocks.*.ffn.net.*.proj.weight': ('tp', None),
+    r'blocks.*.ffn.net.*.proj.bias': ('tp',),
+    r'blocks.*.ffn.net.*.weight': (None, 'tp'),
+}
+
+# Text Encoder (T5) 分片 - 使用所有设备联合分片
+TEXT_ENCODER_SHARDINGS = {
+    r'shared.weight': (('dp', 'tp'), None),
+    r'encoder.block.*.layer.*.SelfAttention.[qkv].weight': (('dp', 'tp'), None),
+    r'encoder.block.*.layer.*.SelfAttention.o.weight': (None, ('dp', 'tp')),
+    r'encoder.block.*.layer.*.DenseReluDense.wi_[01].weight': (('dp', 'tp'), None),
+    r'encoder.block.*.layer.*.DenseReluDense.wo.weight': (None, ('dp', 'tp')),
+}
 
 
 # ============================================================================
@@ -99,271 +114,38 @@ def setup_pytree_registrations():
     """注册必要的 PyTree 节点以支持 JAX 转换。"""
     print("注册 PyTree 节点...")
     
-    def model_output_flatten(obj):
+    def flatten(obj):
         return obj.to_tuple(), type(obj)
 
-    def model_output_unflatten(aux, children):
+    def unflatten(aux, children):
         return aux(*children)
     
-    OUTPUT_CLASSES = [
-        BaseModelOutputWithPastAndCrossAttentions,
-        DecoderOutput,
-        AutoencoderKLOutput,
-    ]
-    
-    for cls in OUTPUT_CLASSES:
-        register_pytree_node(cls, model_output_flatten, model_output_unflatten)
+    for cls in [BaseModelOutputWithPastAndCrossAttentions, DecoderOutput, AutoencoderKLOutput]:
+        register_pytree_node(cls, flatten, unflatten)
         print(f"  - {cls.__name__} 已注册")
 
-
-# ============================================================================
-# Splash Attention 实现
-# ============================================================================
-
-def _sdpa_reference(query, key, value, attn_mask=None, dropout_p=0.0,
-                    is_causal=False, scale=None, enable_gqa=False):
-    """SDPA 参考实现（用于短序列 cross-attention）。"""
-    L, S = query.size(-2), key.size(-2)
-    scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
-    attn_bias = torch.zeros(L, S, dtype=query.dtype, device=query.device)
-    
-    if is_causal:
-        assert attn_mask is None
-        temp_mask = torch.ones(L, S, dtype=torch.bool, device=query.device).tril(diagonal=0)
-        attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
-    
-    if attn_mask is not None:
-        if attn_mask.dtype == torch.bool:
-            attn_bias.masked_fill_(attn_mask.logical_not(), float("-inf"))
-        else:
-            attn_bias += attn_mask
-    
-    if enable_gqa:
-        key = key.repeat_interleave(query.size(-3) // key.size(-3), -3)
-        value = value.repeat_interleave(query.size(-3) // value.size(-3), -3)
-
-    attn_weight = query @ key.transpose(-2, -1) * scale_factor
-    attn_weight += attn_bias
-    attn_weight = torch.softmax(attn_weight, dim=-1)
-    
-    if dropout_p > 0:
-        attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
-    
-    return attn_weight @ value
-
-
-def _tpu_custom_attention(query, key, value, mesh, scale=None):
-    """TPU Splash Attention（使用 exp2 优化）。"""
-    def _attention_on_slices(q, k, v):
-        scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
-        # Fuse the ops of exp in softmax - multiply by log2(e)
-        _LOG2_E = 1.44269504
-        q = q * scale_factor * _LOG2_E
-
-        def pad_to_block_multiple(x, block_size, axis):
-            seq_len = x.shape[axis]
-            pad_len = (block_size - seq_len % block_size) % block_size
-            if pad_len == 0:
-                return x, seq_len
-            pad_width = [(0, 0)] * x.ndim
-            pad_width[axis] = (0, pad_len)
-            return jnp.pad(x, pad_width), seq_len
-
-        def kernel_3d(q_3d, k_3d, v_3d):
-            # Pad to block size multiple to avoid NaN in incomplete blocks
-            q_3d_padded, q_orig_len = pad_to_block_multiple(q_3d, BQSIZE, axis=1)
-            k_3d_padded, k_orig_len = pad_to_block_multiple(k_3d, BKVSIZE, axis=1)
-            v_3d_padded, v_orig_len = pad_to_block_multiple(v_3d, BKVSIZE, axis=1)
-            
-            padded_q_seq_len = q_3d_padded.shape[1]
-            padded_kv_seq_len = k_3d_padded.shape[1]
-
-            block_sizes = splash_attention.BlockSizes(
-                block_q=min(BQSIZE, padded_q_seq_len),
-                block_kv=min(BKVSIZE, padded_kv_seq_len),
-                block_kv_compute=min(BKVCOMPUTESIZE, padded_kv_seq_len),
-            )
-            splash_kernel = custom_splash_attention.make_splash_mha(
-                block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE
-            )
-            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded).astype(q_3d.dtype)
-            out = jnp.swapaxes(out, 1, 2)
-            # Remove padding
-            return out[:, :q_orig_len, :]
-
-        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
-        return vmapped_kernel(q, k, v)
-
-    # Determine sharding strategy
-    if key.shape[0] > 1:
-        dp_mesh_key = "dp"
-        remain_mesh_key = ("tp",)
-    else:
-        dp_mesh_key = None
-        remain_mesh_key = ("dp", "tp")
-    
-    remain_devices_prod = 1
-    for d in remain_mesh_key:
-        remain_devices_prod *= mesh.axis_sizes[mesh.axis_names.index(d)]
-
-    q_num_head = query.shape[1]
-    q_seq_len = query.shape[2]
-    kv_num_head = key.shape[1]
-    kv_seq_len = key.shape[2]
-    
-    # Attn1 self attention (long KV sequence) - use context parallel
-    if (kv_seq_len > 10000 and
-        kv_num_head % remain_devices_prod == 0 and
-        q_num_head % remain_devices_prod == 0):
-        q_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
-        kv_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
-    else:
-        # Attn2 cross attention (short KV) - use sequence parallel
-        def pad_to_multiple(x, multiple, axis):
-            seq_len = x.shape[axis]
-            pad_len = (multiple - seq_len % multiple) % multiple
-            if pad_len == 0:
-                return x, seq_len
-            pad_width = [(0, 0)] * x.ndim
-            pad_width[axis] = (0, pad_len)
-            return jnp.pad(x, pad_width), seq_len
-        
-        if q_seq_len % remain_devices_prod != 0:
-            query, _ = pad_to_multiple(query, remain_devices_prod, axis=2)
-        
-        q_partition_spec = P(dp_mesh_key, None, remain_mesh_key, None)
-        kv_partition_spec = P(dp_mesh_key, None, None, None)
-
-    # Apply sharding constraints
-    sharded_fn = shard_map(
-        _attention_on_slices,
-        mesh=mesh,
-        in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
-        out_specs=q_partition_spec,
-        check_rep=False,
-    )
-    
-    query = jax.lax.with_sharding_constraint(
-        query, P(dp_mesh_key, None, remain_mesh_key, None)
-    )
-    key = jax.lax.with_sharding_constraint(
-        key, P(dp_mesh_key, None, remain_mesh_key, None)
-    )
-    value = jax.lax.with_sharding_constraint(
-        value, P(dp_mesh_key, None, remain_mesh_key, None)
-    )
-    
-    out = sharded_fn(query, key, value)
-    
-    # Remove potential padding for sp
-    out = out[:, :, :q_seq_len, :]
-    out = jax.lax.with_sharding_constraint(
-        out, P(dp_mesh_key, None, remain_mesh_key, None)
-    )
-    return out
-
-
-def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
-                                  is_causal=False, scale=None, enable_gqa=False,
-                                  env=None, mesh=None):
-    """SDPA 封装，长序列使用 TPU Splash Attention。"""
-    # 仅对长序列（self-attention）使用 Splash Attention
-    if key.shape[2] > 20000:
-        assert attn_mask is None
-        assert dropout_p == 0.0
-        assert is_causal is False
-        assert enable_gqa is False
-        assert scale is None
-        
-        jquery, jkey, jvalue = env.t2j_iso((query, key, value))
-        
-        if USE_K_SMOOTH:
-            key_mean = jnp.mean(jkey, axis=2, keepdims=True)
-            jkey = jkey - key_mean
-        
-        res = _tpu_custom_attention(jquery, jkey, jvalue, mesh, scale=scale)
-        return env.j2t_iso(res)
-
-    return _sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal,
-                           scale, enable_gqa)
-
-
-# ============================================================================
-# 分片策略
-# ============================================================================
-
-# Transformer 分片（2D mesh: dp, tp）
-# 规则：输出投影用 ('tp', None)，输入投影用 (None, 'tp')，1D bias 用 ('tp',)
-transformer_shardings_tp = {
-    # Condition Embedder: linear_1 输出分片，linear_2 输入分片
-    r'condition_embedder.*.linear_1.weight': ('tp', None),
-    r'condition_embedder.*.linear_1.bias': ('tp',),
-    r'condition_embedder.*.linear_2.weight': (None, 'tp'),
-    # Attention (attn1 + attn2): Q/K/V 输出分片，to_out 输入分片
-    r'blocks.*.attn[12].to_[qkv].weight': ('tp', None),
-    r'blocks.*.attn[12].to_[qkv].bias': ('tp',),
-    r'blocks.*.attn[12].to_out.*.weight': (None, 'tp'),
-    # FFN: proj 输出分片，后续层输入分片
-    r'blocks.*.ffn.net.*.proj.weight': ('tp', None),
-    r'blocks.*.ffn.net.*.proj.bias': ('tp',),
-    r'blocks.*.ffn.net.*.weight': (None, 'tp'),
-}
-
-# Text Encoder (T5) 分片
-# T5 使用所有设备 ('dp', 'tp') 联合分片，因为 T5 只运行一次
-text_encoder_shardings = {
-    r'shared.weight': (('dp', 'tp'), None),                             # Embedding
-    r'encoder.block.*.layer.*.SelfAttention.[qkv].weight': (('dp', 'tp'), None),  # Q/K/V 输出分片
-    r'encoder.block.*.layer.*.SelfAttention.o.weight': (None, ('dp', 'tp')),      # O 输入分片
-    r'encoder.block.*.layer.*.DenseReluDense.wi_[01].weight': (('dp', 'tp'), None), # FFN 输出分片
-    r'encoder.block.*.layer.*.DenseReluDense.wo.weight': (None, ('dp', 'tp')),      # FFN 输入分片
-}
-
-
-# ============================================================================
-# 权重分片函数
-# ============================================================================
 
 def shard_weight_dict(weight_dict, sharding_dict, mesh):
     """按模式匹配应用权重分片。"""
     result = {}
     for k, v in weight_dict.items():
         matched = False
-        for target, sharding in sharding_dict.items():
-            if re.fullmatch(target, k) is not None:
+        for pattern, sharding in sharding_dict.items():
+            if re.fullmatch(pattern, k) is not None:
                 v.apply_jax_(jax.device_put, NamedSharding(mesh, P(*sharding)))
                 matched = True
                 break
-        
         if not matched:
             v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
-        
         result[k] = v
     return result
 
 
-# ============================================================================
-# Pipeline 设置
-# ============================================================================
-
-def torch_conv2d_jax(input, weight, bias=None, stride=1, padding=0,
-                     dilation=1, groups=1, *, env):
-    """JAX 兼容的 conv2d 覆盖实现。"""
-    jinput, jweight, jbias = env.t2j_iso((input, weight, bias))
-    res = jaten._aten_conv2d(jinput, jweight, jbias, stride, padding,
-                             dilation, groups)
-    return env.j2t_iso(res)
-
-
-def override_op_definition(env, op_to_override, op_impl):
+def override_op_definition(env, op, impl):
     """在 torchax 环境中覆盖算子定义。"""
-    env._ops[op_to_override] = ops_registry.Operator(
-        op_to_override,
-        op_impl,
-        is_jax_function=False,
-        is_user_defined=True,
-        needs_env=False,
-        is_view_op=False,
+    env._ops[op] = ops_registry.Operator(
+        op, impl, is_jax_function=False, is_user_defined=True,
+        needs_env=False, is_view_op=False,
     )
 
 
@@ -375,10 +157,39 @@ def move_module_to_xla(env, module):
         module.load_state_dict(state_dict, assign=True)
 
 
+def torch_conv2d_jax(input, weight, bias=None, stride=1, padding=0,
+                     dilation=1, groups=1, *, env):
+    """JAX 兼容的 conv2d 覆盖实现。"""
+    jinput, jweight, jbias = env.t2j_iso((input, weight, bias))
+    res = jaten._aten_conv2d(jinput, jweight, jbias, stride, padding, dilation, groups)
+    return env.j2t_iso(res)
+
+
+def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
+                                  is_causal=False, scale=None, enable_gqa=False,
+                                  env=None, mesh=None):
+    """SDPA 封装：长序列用 Splash Attention，短序列用参考实现。"""
+    if key.shape[2] > 20000:
+        assert attn_mask is None and dropout_p == 0.0 and not is_causal
+        assert not enable_gqa and scale is None
+        
+        jquery, jkey, jvalue = env.t2j_iso((query, key, value))
+        if USE_K_SMOOTH:
+            jkey = jkey - jnp.mean(jkey, axis=2, keepdims=True)
+        res = tpu_splash_attention(jquery, jkey, jvalue, mesh, scale=scale)
+        return env.j2t_iso(res)
+
+    return sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal,
+                           scale, enable_gqa)
+
+
+# ============================================================================
+# Pipeline 设置
+# ============================================================================
+
 def load_pipeline(args):
     """加载 Pipeline（在启用 torchax 之前加载以避免 safetensors 问题）。"""
     print("\n=== 加载 Wan 2.1 T2V Pipeline ===")
-    print("从 HuggingFace 加载模型...")
     
     scheduler = UniPCMultistepScheduler(
         prediction_type='flow_prediction',
@@ -387,7 +198,6 @@ def load_pipeline(args):
         flow_shift=args.flow_shift
     )
     
-    # 使用 Torchax 版本的 VAE
     pipe = WanPipeline.from_pretrained(
         args.model_id,
         torch_dtype=torch.bfloat16,
@@ -395,8 +205,8 @@ def load_pipeline(args):
         vae=AutoencoderKLWan.from_pretrained(
             args.model_id, subfolder="vae", torch_dtype=torch.bfloat16
         ),
+        scheduler=scheduler,
     )
-    pipe.scheduler = scheduler
     
     print("✓ 模型加载成功\n")
     return pipe
@@ -408,16 +218,10 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
     
     # 注册自定义算子
     print("- 注册自定义 JAX 算子...")
-    override_op_definition(
-        env,
-        torch.nn.functional.conv2d,
-        functools.partial(torch_conv2d_jax, env=env)
-    )
-    override_op_definition(
-        env,
-        torch.nn.functional.scaled_dot_product_attention,
-        functools.partial(scaled_dot_product_attention, env=env, mesh=mesh),
-    )
+    override_op_definition(env, torch.nn.functional.conv2d,
+                           functools.partial(torch_conv2d_jax, env=env))
+    override_op_definition(env, torch.nn.functional.scaled_dot_product_attention,
+                           functools.partial(scaled_dot_product_attention, env=env, mesh=mesh))
     
     # Text Encoder 处理
     if args.t5_cpu:
@@ -428,35 +232,28 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
         move_module_to_xla(env, pipe.text_encoder)
         pipe.text_encoder = torchax.compile(pipe.text_encoder)
         pipe.text_encoder.params = shard_weight_dict(
-            pipe.text_encoder.params, text_encoder_shardings, mesh
-        )
+            pipe.text_encoder.params, TEXT_ENCODER_SHARDINGS, mesh)
         pipe.text_encoder.buffers = shard_weight_dict(
-            pipe.text_encoder.buffers, text_encoder_shardings, mesh
-        )
+            pipe.text_encoder.buffers, TEXT_ENCODER_SHARDINGS, mesh)
     
     # Transformer 处理
     print("- 将 Transformer 移动到 XLA 并分片...")
     move_module_to_xla(env, pipe.transformer)
-    # 将 rope embeddings 移动到 JAX
+    
     if hasattr(pipe.transformer.rope, 'freqs'):
         pipe.transformer.rope.freqs = pipe.transformer.rope.freqs.to('jax')
     else:
         pipe.transformer.rope.freqs_cos = pipe.transformer.rope.freqs_cos.to('jax')
         pipe.transformer.rope.freqs_sin = pipe.transformer.rope.freqs_sin.to('jax')
     
-    transformer_options = torchax.CompileOptions(
-        jax_jit_kwargs={'static_argnames': ('return_dict',)}
-    )
-    pipe.transformer = torchax.compile(pipe.transformer, transformer_options)
-    
+    pipe.transformer = torchax.compile(pipe.transformer, torchax.CompileOptions(
+        jax_jit_kwargs={'static_argnames': ('return_dict',)}))
     pipe.transformer.params = shard_weight_dict(
-        pipe.transformer.params, transformer_shardings_tp, mesh
-    )
+        pipe.transformer.params, TRANSFORMER_SHARDINGS, mesh)
     pipe.transformer.buffers = shard_weight_dict(
-        pipe.transformer.buffers, transformer_shardings_tp, mesh
-    )
+        pipe.transformer.buffers, TRANSFORMER_SHARDINGS, mesh)
     
-    # VAE 处理（使用 Torchax 版本）
+    # VAE 处理
     print("- 将 VAE 移动到 XLA...")
     move_module_to_xla(env, pipe.vae)
     pipe.vae.encoder = torchax.compile(pipe.vae.encoder)
@@ -495,73 +292,43 @@ def run_generation(pipe, args, mesh):
         'use_dp': args.use_dp,
     }
     
-    # 打印生成配置
     print(f"\n{'='*60}")
     print("生成配置")
     print(f"{'='*60}")
-    print(f"  分辨率: {args.width}x{args.height}")
-    print(f"  帧数: {args.frames}")
-    print(f"  FPS: {args.fps}")
-    print(f"  推理步数: {args.num_inference_steps}")
-    print(f"  引导尺度: 5.0")
-    print(f"  随机种子: 42")
-    print(f"  Block sizes: BQSIZE={BQSIZE}, BKVSIZE={BKVSIZE}, BKVCOMPUTESIZE={BKVCOMPUTESIZE}")
+    print(f"  分辨率: {args.width}x{args.height}, 帧数: {args.frames}, FPS: {args.fps}")
+    print(f"  推理步数: {args.num_inference_steps}, 引导尺度: 5.0, 种子: 42")
     
-    # Profile context
-    if args.profile:
-        print(f"\n[Profiler] 启用 JAX Profiler，输出目录: {PROFILE_OUT_PATH}")
-        profiler_context = jax.profiler.trace(
-            PROFILE_OUT_PATH,
-            create_perfetto_link=False
-        )
-    else:
-        profiler_context = nullcontext()
-    
-    with mesh, profiler_context:
-        # === Warmup Run ===
-        print(f"\n{'='*60}")
-        print("预热运行（触发 JIT 编译）")
-        print(f"{'='*60}")
+    with mesh:
+        # Warmup（只跑 2 步，不包含在 profiler 中）
+        print(f"\n{'='*60}\n预热运行（触发 JIT 编译，2 步）\n{'='*60}")
+        warmup_kwargs = {**pipe_kwargs, 'num_inference_steps': 2}
         warmup_start = time.perf_counter()
-        output = pipe(**pipe_kwargs).frames[0]
+        pipe(**warmup_kwargs)
         jax.effects_barrier()
         warmup_time = time.perf_counter() - warmup_start
+        print(f"\n✓ 预热完成: {warmup_time:.2f}s")
         
-        # 计算每步平均时间（预热）
-        warmup_time_per_step = warmup_time / args.num_inference_steps
-        print(f"\n✓ 预热完成")
-        print(f"  总耗时: {warmup_time:.2f}s")
-        print(f"  平均每步: {warmup_time_per_step:.2f}s")
+        # Benchmark（可选 profiler）- 重新设置 seed 以保证可复现性
+        generator.manual_seed(42)
+        profiler_context = (jax.profiler.trace(PROFILE_OUT_PATH, create_perfetto_link=False)
+                            if args.profile else nullcontext())
         
-        # Save output
-        current_datetime = datetime.now().strftime("%Y%m%d_%H%M%S")
-        file_name = f"{current_datetime}.mp4"
+        print(f"\n{'='*60}\n基准测试运行\n{'='*60}")
+        with profiler_context:
+            benchmark_start = time.perf_counter()
+            output = pipe(**pipe_kwargs).frames[0]
+            jax.effects_barrier()
+            benchmark_time = time.perf_counter() - benchmark_start
+        
+        print(f"\n✓ 基准测试完成: {benchmark_time:.2f}s ({benchmark_time/args.num_inference_steps:.2f}s/step)")
+        
+        # 保存视频
+        file_name = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.mp4"
         export_to_video(output, file_name, fps=args.fps)
         print(f"  视频保存至: {file_name}")
-        
-        # === Benchmark Run ===
-        print(f"\n{'='*60}")
-        print("基准测试运行")
-        print(f"{'='*60}")
-        benchmark_start = time.perf_counter()
-        output = pipe(**pipe_kwargs)
-        jax.effects_barrier()
-        benchmark_time = time.perf_counter() - benchmark_start
-        
-        # 计算每步平均时间（基准测试）
-        benchmark_time_per_step = benchmark_time / args.num_inference_steps
-        
-        print(f"\n✓ 基准测试完成")
-        print(f"  总耗时: {benchmark_time:.2f}s")
-        print(f"  平均每步: {benchmark_time_per_step:.2f}s")
     
-    # === 性能统计 ===
-    print(f"\n{'='*60}")
-    print("性能统计")
-    print(f"{'='*60}")
-    print(f"  预热时间: {warmup_time:.2f}s ({warmup_time_per_step:.2f}s/step)")
-    print(f"  基准时间: {benchmark_time:.2f}s ({benchmark_time_per_step:.2f}s/step)")
-    print(f"  加速比: {warmup_time / benchmark_time:.2f}x")
+    print(f"\n{'='*60}\n性能统计\n{'='*60}")
+    print(f"  基准时间: {benchmark_time:.2f}s ({benchmark_time/args.num_inference_steps:.2f}s/step)")
 
 
 # ============================================================================
@@ -571,28 +338,19 @@ def run_generation(pipe, args, mesh):
 def parse_args():
     """解析命令行参数。"""
     parser = argparse.ArgumentParser(description="Wan 2.1 TPU 视频生成")
-    
-    # Model settings
     parser.add_argument("--model_id", type=str, default=MODEL_ID)
     parser.add_argument("--flow_shift", type=float, default=FLOW_SHIFT)
-    
-    # Video settings
     parser.add_argument("--width", type=int, default=WIDTH)
     parser.add_argument("--height", type=int, default=HEIGHT)
     parser.add_argument("--frames", type=int, default=FRAMES)
     parser.add_argument("--fps", type=int, default=FPS)
     parser.add_argument("--num_inference_steps", type=int, default=NUM_STEPS)
-    
-    # 分片设置
     parser.add_argument("--use_dp", action="store_true", default=USE_DP)
     parser.add_argument("--use_tp", action="store_true", default=USE_TP)
-    
-    # 其他设置
     parser.add_argument("--t5_cpu", action="store_true", default=False,
                         help="将 T5 text encoder 放在 CPU 上")
     parser.add_argument("--profile", action="store_true", default=False,
                         help="启用性能分析")
-    
     return parser.parse_args()
 
 
@@ -603,7 +361,6 @@ def main():
     print(f"\n{'='*60}")
     print("Wan 2.1 Text-to-Video 生成（TPU Splash Attention）")
     print(f"{'='*60}")
-    print(f"Configuration: {args}")
     
     # 配置 JAX
     jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
@@ -611,43 +368,30 @@ def main():
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
     
     torch.set_default_dtype(torch.bfloat16)
-    
-    # 设置 PyTree 注册
     setup_pytree_registrations()
     
-    # 在启用 torchax 之前加载 pipeline（避免 safetensors 加载问题）
+    # 加载 pipeline（在启用 torchax 之前）
     pipe = load_pipeline(args)
     
     # 启用 torchax
     torchax.enable_globally()
     env = torchax.default_env()
     
-    # 创建 mesh（2D mesh: dp, tp）
+    # 创建 mesh
     assert len(jax.devices()) % 2 == 0
     dp_dim = 2 if args.use_dp else 1
     tp_dim = len(jax.devices()) // dp_dim
     
-    mesh_devices = mesh_utils.create_device_mesh(
-        (dp_dim, tp_dim), allow_split_physical_axes=True
-    )
+    mesh_devices = mesh_utils.create_device_mesh((dp_dim, tp_dim), allow_split_physical_axes=True)
     mesh = Mesh(mesh_devices, ("dp", "tp"))
     
-    print(f"\nMesh 配置:")
-    print(f"  dp_dim={dp_dim}, tp_dim={tp_dim}")
-    print(f"  总设备数: {len(jax.devices())}")
-    print(f"  Mesh: {mesh}")
+    print(f"\nMesh: dp={dp_dim}, tp={tp_dim}, 总设备数={len(jax.devices())}")
     
-    # 设置 pipeline（移动到 TPU 并分片）
+    # 设置并运行
     pipe = setup_pipeline_for_jax(pipe, args, mesh, env)
-    
-    # 运行生成
     run_generation(pipe, args, mesh)
     
-    print(f"\n{'='*60}")
-    print("✓ 生成完成！")
-    print(f"{'='*60}")
-    
-    # 强制退出以避免 torchax 后台线程阻塞
+    print(f"\n{'='*60}\n✓ 生成完成！\n{'='*60}")
     os._exit(0)
 
 
