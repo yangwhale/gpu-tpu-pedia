@@ -47,6 +47,9 @@ from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import Autoencoder
 from diffusers.schedulers.scheduling_unipc_multistep import UniPCMultistepScheduler
 from diffusers.utils import export_to_video
 
+import sys
+from pathlib import Path
+sys.path.insert(0, str(Path(__file__).parent.parent / 'kernels'))
 from splash_attention_utils import tpu_splash_attention, sdpa_reference
 
 
