@@ -449,12 +449,11 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
     )
     pipe.transformer = torchax.compile(pipe.transformer, transformer_options)
     
-    transformer_shardings = transformer_shardings_tp
     pipe.transformer.params = shard_weight_dict(
-        pipe.transformer.params, transformer_shardings, mesh
+        pipe.transformer.params, transformer_shardings_tp, mesh
     )
     pipe.transformer.buffers = shard_weight_dict(
-        pipe.transformer.buffers, transformer_shardings, mesh
+        pipe.transformer.buffers, transformer_shardings_tp, mesh
     )
     
     # VAE 处理（使用 Torchax 版本）
@@ -462,17 +461,6 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
     move_module_to_xla(env, pipe.vae)
     pipe.vae.encoder = torchax.compile(pipe.vae.encoder)
     pipe.vae.decoder = torchax.compile(pipe.vae.decoder)
-    
-    # 包装 VAE decode 以确保正确的数据类型
-    original_decode = pipe.vae.decode
-    def decode_wrapper(z, *args, **kwargs):
-        # 处理 JAX 数组和 PyTorch 张量
-        if isinstance(z, jnp.ndarray) or 'ArrayImpl' in str(type(z)):
-            z = z.astype(jnp.bfloat16)
-        elif hasattr(z, 'dtype') and z.dtype != torch.bfloat16:
-            z = z.to(torch.bfloat16)
-        return original_decode(z, *args, **kwargs)
-    pipe.vae.decode = decode_wrapper
     
     print("=== Pipeline 设置完成 ===\n")
     return pipe
