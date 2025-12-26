@@ -22,13 +22,13 @@ Wan 2.2 I2V 三阶段生成 - 阶段2：Transformer (Denoising)
 import os
 import sys
 import time
-import math
 import functools
 import argparse
 import warnings
 import logging
 import numpy as np
 from contextlib import nullcontext
+from pathlib import Path
 from tqdm import tqdm
 
 import jax
@@ -37,13 +37,11 @@ import torch
 import torchax
 from torchax.ops import ops_registry, jaten
 from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
-from jax.experimental.pallas.ops.tpu import splash_attention
-from jax.experimental.shard_map import shard_map
 from jax.experimental import mesh_utils
 
-# Add parent directory to path for custom_splash_attention
-sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
-import custom_splash_attention
+# 导入共用的 Splash Attention 模块
+sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'kernels'))
+from splash_attention_utils import tpu_splash_attention, sdpa_reference
 
 from diffusers.models.transformers.transformer_wan_torchax import WanTransformer3DModel
 from diffusers.schedulers import FlowMatchEulerDiscreteScheduler
@@ -57,9 +55,7 @@ from utils import (
     BQSIZE,
     BKVSIZE,
     BKVCOMPUTESIZE,
-    BKVCOMPUTEINSIZE,
     USE_K_SMOOTH,
-    LOG2_E,
     DEFAULT_DP,
     TRANSFORMER_SHARDINGS,
     shard_weight_dict,
@@ -70,152 +66,18 @@ from utils import (
     save_generation_config,
     load_generation_config,
     get_default_paths,
-    pad_to_multiple,
 )
 
 
 # ============================================================================
-# Splash Attention 实现
+# Scaled Dot-Product Attention (使用共用模块)
 # ============================================================================
-
-def _sdpa_reference(query, key, value, attn_mask=None, dropout_p=0.0,
-                    is_causal=False, scale=None, enable_gqa=False):
-    """Reference implementation of Scaled Dot-Product Attention."""
-    L, S = query.size(-2), key.size(-2)
-    scale_factor = 1 / math.sqrt(query.size(-1)) if scale is None else scale
-    attn_bias = torch.zeros(L, S, dtype=query.dtype, device=query.device)
-    
-    if is_causal:
-        assert attn_mask is None
-        temp_mask = torch.ones(L, S, dtype=torch.bool, device=query.device).tril(diagonal=0)
-        attn_bias.masked_fill_(temp_mask.logical_not(), float("-inf"))
-    
-    if attn_mask is not None:
-        if attn_mask.dtype == torch.bool:
-            attn_bias.masked_fill_(attn_mask.logical_not(), float("-inf"))
-        else:
-            attn_bias += attn_mask
-    
-    if enable_gqa:
-        key = key.repeat_interleave(query.size(-3) // key.size(-3), -3)
-        value = value.repeat_interleave(query.size(-3) // value.size(-3), -3)
-
-    attn_weight = query @ key.transpose(-2, -1) * scale_factor
-    attn_weight += attn_bias
-    attn_weight = torch.softmax(attn_weight, dim=-1)
-    
-    if dropout_p > 0:
-        attn_weight = torch.dropout(attn_weight, dropout_p, train=True)
-    
-    return attn_weight @ value
-
-
-def _tpu_custom_attention(query, key, value, mesh, scale=None):
-    """TPU Custom Splash Attention with exp2 optimization."""
-    def _attention_on_slices(q, k, v):
-        scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
-        # Fuse the ops of exp in softmax - multiply by log2(e)
-        q = q * scale_factor * LOG2_E
-
-        def kernel_3d(q_3d, k_3d, v_3d):
-            # Pad to block size multiple to avoid NaN in incomplete blocks
-            def pad_to_block_multiple(x, block_size, axis):
-                seq_len = x.shape[axis]
-                pad_len = (block_size - seq_len % block_size) % block_size
-                if pad_len == 0:
-                    return x, seq_len
-                pad_width = [(0, 0)] * x.ndim
-                pad_width[axis] = (0, pad_len)
-                return jnp.pad(x, pad_width), seq_len
-            
-            q_3d_padded, q_orig_len = pad_to_block_multiple(q_3d, BQSIZE, axis=1)
-            k_3d_padded, k_orig_len = pad_to_block_multiple(k_3d, BKVSIZE, axis=1)
-            v_3d_padded, v_orig_len = pad_to_block_multiple(v_3d, BKVSIZE, axis=1)
-            
-            padded_q_seq_len = q_3d_padded.shape[1]
-            padded_kv_seq_len = k_3d_padded.shape[1]
-
-            block_sizes = splash_attention.BlockSizes(
-                block_q=min(BQSIZE, padded_q_seq_len),
-                block_kv=min(BKVSIZE, padded_kv_seq_len),
-                block_kv_compute=min(BKVCOMPUTESIZE, padded_kv_seq_len),
-            )
-            splash_kernel = custom_splash_attention.make_splash_mha(
-                block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE
-            )
-            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded).astype(q_3d.dtype)
-            out = jnp.swapaxes(out, 1, 2)
-            # Remove padding
-            return out[:, :q_orig_len, :]
-
-        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
-        return vmapped_kernel(q, k, v)
-
-    # Determine sharding strategy
-    if key.shape[0] > 1:
-        dp_mesh_key = "dp"
-        remain_mesh_key = ("tp",)
-    else:
-        dp_mesh_key = None
-        remain_mesh_key = ("dp", "tp")
-    
-    remain_devices_prod = 1
-    for d in remain_mesh_key:
-        remain_devices_prod *= mesh.axis_sizes[mesh.axis_names.index(d)]
-
-    q_num_head = query.shape[1]
-    q_seq_len = query.shape[2]
-    kv_num_head = key.shape[1]
-    kv_seq_len = key.shape[2]
-    
-    # Attn1 self attention (long KV sequence) - use context parallel
-    if (kv_seq_len > 10000 and
-        kv_num_head % remain_devices_prod == 0 and
-        q_num_head % remain_devices_prod == 0):
-        q_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
-        kv_partition_spec = P(dp_mesh_key, remain_mesh_key, None, None)
-    else:
-        # Attn2 cross attention (short KV) - use sequence parallel
-        if q_seq_len % remain_devices_prod != 0:
-            query, _ = pad_to_multiple(query, remain_devices_prod, axis=2)
-        
-        q_partition_spec = P(dp_mesh_key, None, remain_mesh_key, None)
-        kv_partition_spec = P(dp_mesh_key, None, None, None)
-
-    # Apply sharding constraints
-    sharded_fn = shard_map(
-        _attention_on_slices,
-        mesh=mesh,
-        in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
-        out_specs=q_partition_spec,
-        check_rep=False,
-    )
-    
-    query = jax.lax.with_sharding_constraint(
-        query, P(dp_mesh_key, None, remain_mesh_key, None)
-    )
-    key = jax.lax.with_sharding_constraint(
-        key, P(dp_mesh_key, None, remain_mesh_key, None)
-    )
-    value = jax.lax.with_sharding_constraint(
-        value, P(dp_mesh_key, None, remain_mesh_key, None)
-    )
-    
-    out = sharded_fn(query, key, value)
-    
-    # Remove potential padding for sp
-    out = out[:, :, :q_seq_len, :]
-    out = jax.lax.with_sharding_constraint(
-        out, P(dp_mesh_key, None, remain_mesh_key, None)
-    )
-    return out
-
 
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
                                   is_causal=False, scale=None, enable_gqa=False,
                                   env=None, mesh=None):
-    """Wrapper for scaled dot-product attention with TPU Splash support."""
-    # Only use custom attention for long sequences (self-attention)
+    """封装 SDPA，长序列使用 TPU Splash Attention。"""
+    # 仅对长序列（self-attention）使用 TPU Splash Attention
     if key.shape[2] > 20000:
         assert attn_mask is None
         assert dropout_p == 0.0
@@ -229,10 +91,10 @@ def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.
             key_mean = jnp.mean(jkey, axis=2, keepdims=True)
             jkey = jkey - key_mean
         
-        res = _tpu_custom_attention(jquery, jkey, jvalue, mesh, scale=scale)
+        res = tpu_splash_attention(jquery, jkey, jvalue, mesh, scale=scale)
         return env.j2t_iso(res)
 
-    return _sdpa_reference(query, key, value, attn_mask, dropout_p,
+    return sdpa_reference(query, key, value, attn_mask, dropout_p,
                           is_causal, scale, enable_gqa)
 
 
