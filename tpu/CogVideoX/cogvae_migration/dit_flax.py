@@ -661,7 +661,7 @@ def dit(frames=64, num_runs=10):
 # --- 脚本执行入口 ---
 if __name__ == "__main__":
     # Set JAX config to enable compilation cache
-    jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
+    jax.config.update("jax_compilation_cache_dir", os.path.expanduser("~/.cache/jax_cache"))
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
     

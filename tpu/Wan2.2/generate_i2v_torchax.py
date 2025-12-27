@@ -49,7 +49,7 @@ from diffusers.models.transformers.transformer_wan_torchax import WanTransformer
 from diffusers.utils import export_to_video, load_image
 
 import sys
-sys.path.insert(0, str(Path(__file__).parent.parent / 'kernels'))
+# 使用本地 splash_attention_utils
 from splash_attention_utils import tpu_splash_attention, sdpa_reference
 
 
@@ -370,7 +370,7 @@ def main():
     print("Wan 2.2 Image-to-Video 生成（TPU Splash Attention）")
     print(f"{'='*60}")
     
-    jax.config.update("jax_compilation_cache_dir", "/dev/shm/jax_cache")
+    jax.config.update("jax_compilation_cache_dir", os.path.expanduser("~/.cache/jax_cache"))
     jax.config.update("jax_persistent_cache_min_entry_size_bytes", -1)
     jax.config.update("jax_persistent_cache_min_compile_time_secs", 0)
     

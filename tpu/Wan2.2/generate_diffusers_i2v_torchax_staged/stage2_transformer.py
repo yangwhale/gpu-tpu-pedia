@@ -39,8 +39,8 @@ from torchax.ops import ops_registry, jaten
 from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
 from jax.experimental import mesh_utils
 
-# 导入共用的 Splash Attention 模块
-sys.path.insert(0, str(Path(__file__).parent.parent.parent / 'kernels'))
+# 使用本地 splash_attention_utils（父目录）
+sys.path.insert(0, str(Path(__file__).parent.parent))
 from splash_attention_utils import tpu_splash_attention, sdpa_reference
 
 from diffusers.models.transformers.transformer_wan_torchax import WanTransformer3DModel
