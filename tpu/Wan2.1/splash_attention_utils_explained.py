@@ -451,12 +451,48 @@ def _flash_attention_kernel(
     
     m_scratch_ref,   # max 统计量临时存储，形状 (NUM_SUBLANES, bq)
                      # 存储每个 query 位置当前看到的最大值
+                     #
+                     # ┌─────────────────────────────────────────────────────────────────┐
+                     # │ 【重要】为什么是 (NUM_SUBLANES, bq) 而不是 (bq,)？                  │
+                     # │                                                                 │
+                     # │ 这是 TPU VPU 架构的硬件约束和优化要求：                            │
+                     # │                                                                 │
+                     # │ 1. **VPU Sublane 架构**：                                        │
+                     # │    TPU 的 VPU 有 8 个 sublane (子通道)，类似 8 个独立的向量处理器  │
+                     # │    每个 sublane 有自己的寄存器文件和执行单元                       │
+                     # │                                                                 │
+                     # │ 2. **Pallas 的 VMEM 布局要求**：                                  │
+                     # │    在 Pallas 中，scratch buffer 的第一个维度必须是 NUM_SUBLANES   │
+                     # │    这样 TPU 编译器才能正确地将数据分配到各个 sublane              │
+                     # │                                                                 │
+                     # │ 3. **广播与冗余存储**：                                           │
+                     # │    实际上所有 8 行存储的是相同的值！                               │
+                     # │    m_curr = qk.max(axis=0)[None, :]  # 形状 (1, bq)             │
+                     # │    m_next = jnp.maximum(m_prev, m_curr)  # 广播到 (8, bq)       │
+                     # │    通过广播，(1, bq) 的值被复制到所有 8 行                         │
+                     # │                                                                 │
+                     # │ 4. **为什么需要冗余？**                                           │
+                     # │    a. pltpu.repeat 操作需要源数据在所有 sublane 上                │
+                     # │    b. 某些 VPU 指令要求操作数在特定 sublane 布局                  │
+                     # │    c. 这是 TPU Pallas 的底层实现细节，与 XLA 编译优化相关          │
+                     # │                                                                 │
+                     # │ 5. **性能影响**：                                                 │
+                     # │    看似浪费 8x 内存，但：                                          │
+                     # │    - scratch 在 VMEM 中，容量充足                                │
+                     # │    - 避免了 sublane 间数据重排的开销                              │
+                     # │    - 使得后续 pltpu.repeat 可以高效执行                           │
+                     # │                                                                 │
+                     # │ 这就是为什么 GPU 代码通常是 (bq,)，而 TPU 需要 (8, bq)            │
+                     # └─────────────────────────────────────────────────────────────────┘
                      
     l_scratch_ref,   # sum 统计量临时存储，形状 (NUM_SUBLANES, bq)
                      # 存储 Σexp(score - max) 的累积和
+                     # 【同样的原因】需要 NUM_SUBLANES 维度以适配 VPU 架构
                      
     o_scratch_ref,   # 输出累积器临时存储，形状 (head_dim_v, bq)
                      # 存储未归一化的 attention 输出
+                     # 注意：o_scratch 不需要 NUM_SUBLANES 维度，因为 head_dim_v 通常
+                     # 已经是 NUM_SUBLANES 的倍数（如 128 = 8 × 16）
                      
     o_ref,           # 最终输出引用，形状 (head_dim_v, bq)，写回 HBM
     
