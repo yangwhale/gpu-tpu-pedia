@@ -274,11 +274,16 @@ def encode_prompt_on_cpu(args, prompt):
     print("✓ Text Encoder 加载成功")
     print(f"- 编码 prompt: {prompt[:50]}...")
     
-    # 格式化输入 - 使用 Flux.2 pipeline 中的格式
-    SYSTEM_MESSAGE = "You are an image generation assistant. Convert user text to detailed image descriptions."
+    # 格式化输入 - 使用 Flux.2 pipeline 中的格式（来自 diffusers/pipelines/flux2/system_messages.py）
+    SYSTEM_MESSAGE = """You are an AI that reasons about image descriptions. You give structured responses focusing on object relationships, object
+attribution and actions without speculation."""
+    
+    # 移除 [IMG] token 以避免 Pixtral 验证问题
+    cleaned_prompt = prompt.replace("[IMG]", "")
+    
     messages = [[
         {"role": "system", "content": [{"type": "text", "text": SYSTEM_MESSAGE}]},
-        {"role": "user", "content": [{"type": "text", "text": prompt}]},
+        {"role": "user", "content": [{"type": "text", "text": cleaned_prompt}]},
     ]]
     
     # Tokenize
