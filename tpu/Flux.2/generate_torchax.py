@@ -3,59 +3,48 @@
 Flux.2 Text-to-Image 生成脚本 (TPU Splash Attention)
 
 使用 Torchax + JAX 在 TPU 上运行 Flux.2 图像生成。
+Text encoding 使用本地 CPU 运行 Mistral3（默认）。
+可选：--remote_encoder 使用远程 HuggingFace text encoder 服务。
 """
 
 import os
 import warnings
 import logging
 
-# ============================================================================
-# 环境配置和 Warning 过滤（必须在其他 import 之前）
-# ============================================================================
-
+# 环境配置（必须在其他 import 之前）
 os.environ['TOKENIZERS_PARALLELISM'] = 'false'
-
 warnings.filterwarnings('ignore')
+for logger_name in ['root', '', 'diffusers', 'transformers']:
+    logging.getLogger(logger_name).setLevel(logging.ERROR)
 
-logging.getLogger('root').setLevel(logging.ERROR)
-logging.getLogger().setLevel(logging.ERROR)
-logging.getLogger('diffusers').setLevel(logging.ERROR)
-logging.getLogger('transformers').setLevel(logging.ERROR)
-
-import time
-import re
-import functools
 import argparse
+import functools
+import gc
+import io
+import re
+import time
 from contextlib import nullcontext
 from datetime import datetime
 
 import jax
 import jax.numpy as jnp
+import requests
 import torch
-from jax.tree_util import register_pytree_node
-from jax.sharding import PartitionSpec as P, NamedSharding, Mesh
-from jax.experimental import mesh_utils
-
 import torchax
-from torchax.ops import ops_registry, jaten
-
-from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
+from diffusers.models.autoencoders.autoencoder_kl_flux2_torchax import AutoencoderKLFlux2
 from diffusers.models.autoencoders.vae import DecoderOutput
 from diffusers.models.modeling_outputs import AutoencoderKLOutput
-from diffusers.pipelines.flux2.pipeline_flux2_torchax import Flux2Pipeline
-from diffusers.models.autoencoders.autoencoder_kl_flux2_torchax import AutoencoderKLFlux2
 from diffusers.models.transformers.transformer_flux2_torchax import Flux2Transformer2DModel
+from diffusers.pipelines.flux2.pipeline_flux2_torchax import Flux2Pipeline
 from diffusers.schedulers.scheduling_flow_match_euler_discrete import FlowMatchEulerDiscreteScheduler
-from PIL import Image
-
 from huggingface_hub import get_token
-import requests
-import io
+from jax.experimental import mesh_utils
+from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+from jax.tree_util import register_pytree_node
+from torchax.ops import jaten, ops_registry
+from transformers.modeling_outputs import BaseModelOutputWithPastAndCrossAttentions
 
-import sys
-from pathlib import Path
-# 使用本地 splash_attention_utils
-from splash_attention_utils import tpu_splash_attention, sdpa_reference
+from splash_attention_utils import sdpa_reference, tpu_splash_attention
 
 
 # ============================================================================
@@ -63,32 +52,33 @@ from splash_attention_utils import tpu_splash_attention, sdpa_reference
 # ============================================================================
 
 MODEL_ID = "black-forest-labs/FLUX.2-dev"
-
-# 图像生成参数
-WIDTH = 1024
-HEIGHT = 1024
+WIDTH, HEIGHT = 1024, 1024
 NUM_STEPS = 50
 GUIDANCE_SCALE = 4.0
-
-# Mesh 分片配置（只用 TP，不用 DP）
-USE_TP = True
-
-# K 平滑以提高数值稳定性
-USE_K_SMOOTH = True
-
-# Profiler 输出路径
+USE_K_SMOOTH = True  # K 平滑以提高数值稳定性
 PROFILE_OUT_PATH = "/dev/shm/jax_trace"
 
+# 默认 prompt
+DEFAULT_PROMPT = (
+    "Realistic macro photograph of a hermit crab using a soda can as its shell, "
+    "partially emerging from the can, captured with sharp detail and natural colors, "
+    "on a sunlit beach with soft shadows and a shallow depth of field, "
+    "with blurred ocean waves in the background. "
+    "The can has the text `BFL Diffusers` on it and it has a color gradient "
+    "that start with #FF5733 at the top and transitions to #33FF57 at the bottom."
+)
+
+# Flux.2 pipeline 使用的 system message（来自 diffusers/pipelines/flux2/system_messages.py）
+SYSTEM_MESSAGE = """You are an AI that reasons about image descriptions. You give structured responses focusing on object relationships, object
+attribution and actions without speculation."""
 
 # ============================================================================
-# 分片策略 (只用 tp，不用 dp)
+# Transformer 分片策略 (1D mesh: tp)
+# 规则：输出投影 ('tp', None)，输入投影 (None, 'tp')
 # ============================================================================
 
-# Flux2Transformer 分片（1D mesh: tp）
-# 规则：输出投影用 ('tp', None)，输入投影用 (None, 'tp')
 TRANSFORMER_SHARDINGS = {
-    # Double-stream Transformer Blocks (transformer_blocks.*)
-    # Attention: Flux2Attention
+    # Double-stream Blocks - Attention
     r'transformer_blocks.*.attn.to_q.weight': ('tp', None),
     r'transformer_blocks.*.attn.to_k.weight': ('tp', None),
     r'transformer_blocks.*.attn.to_v.weight': ('tp', None),
@@ -97,47 +87,27 @@ TRANSFORMER_SHARDINGS = {
     r'transformer_blocks.*.attn.add_k_proj.weight': ('tp', None),
     r'transformer_blocks.*.attn.add_v_proj.weight': ('tp', None),
     r'transformer_blocks.*.attn.to_add_out.weight': (None, 'tp'),
-    # FeedForward: Flux2FeedForward
+    # Double-stream Blocks - FeedForward
     r'transformer_blocks.*.ff.linear_in.weight': ('tp', None),
     r'transformer_blocks.*.ff.linear_out.weight': (None, 'tp'),
     r'transformer_blocks.*.ff_context.linear_in.weight': ('tp', None),
     r'transformer_blocks.*.ff_context.linear_out.weight': (None, 'tp'),
-    
-    # Single-stream Transformer Blocks (single_transformer_blocks.*)
-    # Parallel Self-Attention: Flux2ParallelSelfAttention
+    # Single-stream Blocks
     r'single_transformer_blocks.*.attn.to_qkv_mlp_proj.weight': ('tp', None),
     r'single_transformer_blocks.*.attn.to_out.weight': (None, 'tp'),
-    
-    # Input/Output Projections
+    # Embedders & Projections
     r'x_embedder.weight': ('tp', None),
     r'context_embedder.weight': ('tp', None),
     r'proj_out.weight': (None, 'tp'),
-    
     # Modulation
     r'double_stream_modulation_img.linear.weight': ('tp', None),
     r'double_stream_modulation_txt.linear.weight': ('tp', None),
     r'single_stream_modulation.linear.weight': ('tp', None),
-    
     # Time + Guidance Embedding
     r'time_guidance_embed.timestep_embedder.linear_1.weight': ('tp', None),
     r'time_guidance_embed.timestep_embedder.linear_2.weight': (None, 'tp'),
     r'time_guidance_embed.guidance_embedder.linear_1.weight': ('tp', None),
     r'time_guidance_embed.guidance_embedder.linear_2.weight': (None, 'tp'),
-}
-
-# Text Encoder (Mistral3) 分片 - 使用 tp 维度
-TEXT_ENCODER_SHARDINGS = {
-    # Embedding
-    r'model.embed_tokens.weight': ('tp', None),
-    # Attention projections
-    r'model.layers.*.self_attn.q_proj.weight': ('tp', None),
-    r'model.layers.*.self_attn.k_proj.weight': ('tp', None),
-    r'model.layers.*.self_attn.v_proj.weight': ('tp', None),
-    r'model.layers.*.self_attn.o_proj.weight': (None, 'tp'),
-    # MLP
-    r'model.layers.*.mlp.gate_proj.weight': ('tp', None),
-    r'model.layers.*.mlp.up_proj.weight': ('tp', None),
-    r'model.layers.*.mlp.down_proj.weight': (None, 'tp'),
 }
 
 
@@ -253,30 +223,29 @@ def remote_text_encoder(prompts, max_retries=3, retry_delay=5):
     raise RuntimeError(f"Remote text encoder failed after {max_retries} retries")
 
 
-def encode_prompt_on_cpu(args, prompt):
-    """在 CPU 上使用 Mistral3 编码 prompt（在启用 torchax 之前）。"""
-    from transformers import PixtralProcessor, Mistral3ForConditionalGeneration
+def encode_prompt_on_cpu(model_id: str, prompt: str) -> torch.Tensor:
+    """在 CPU 上使用 Mistral3 编码 prompt。
+    
+    Args:
+        model_id: HuggingFace 模型 ID
+        prompt: 要编码的文本提示
+        
+    Returns:
+        prompt_embeds: shape (1, 512, 15360) 的 bfloat16 tensor
+    """
+    from transformers import Mistral3ForConditionalGeneration, PixtralProcessor
     
     print("\n=== 在 CPU 上加载 Mistral3 Text Encoder ===")
     
-    # 直接从 text_encoder 目录加载
     text_encoder = Mistral3ForConditionalGeneration.from_pretrained(
-        args.model_id, subfolder="text_encoder", torch_dtype=torch.bfloat16
+        model_id, subfolder="text_encoder", torch_dtype=torch.bfloat16
     )
     text_encoder.eval()
     
-    # 使用 PixtralProcessor 从 tokenizer 目录加载
-    tokenizer = PixtralProcessor.from_pretrained(
-        args.model_id,
-        subfolder="tokenizer"
-    )
+    tokenizer = PixtralProcessor.from_pretrained(model_id, subfolder="tokenizer")
     
     print("✓ Text Encoder 加载成功")
     print(f"- 编码 prompt: {prompt[:50]}...")
-    
-    # 格式化输入 - 使用 Flux.2 pipeline 中的格式（来自 diffusers/pipelines/flux2/system_messages.py）
-    SYSTEM_MESSAGE = """You are an AI that reasons about image descriptions. You give structured responses focusing on object relationships, object
-attribution and actions without speculation."""
     
     # 移除 [IMG] token 以避免 Pixtral 验证问题
     cleaned_prompt = prompt.replace("[IMG]", "")
@@ -286,7 +255,6 @@ attribution and actions without speculation."""
         {"role": "user", "content": [{"type": "text", "text": cleaned_prompt}]},
     ]]
     
-    # Tokenize
     inputs = tokenizer.apply_chat_template(
         messages,
         add_generation_prompt=False,
@@ -298,7 +266,6 @@ attribution and actions without speculation."""
         max_length=512,
     )
     
-    # 前向传播
     with torch.no_grad():
         output = text_encoder(
             input_ids=inputs["input_ids"],
@@ -307,7 +274,7 @@ attribution and actions without speculation."""
             use_cache=False,
         )
     
-    # 提取隐藏状态
+    # 提取 layers 10, 20, 30 的隐藏状态并拼接
     hidden_states_layers = (10, 20, 30)
     out = torch.stack([output.hidden_states[k] for k in hidden_states_layers], dim=1)
     out = out.to(dtype=torch.bfloat16)
@@ -317,9 +284,7 @@ attribution and actions without speculation."""
     
     print(f"✓ Prompt embeddings shape: {prompt_embeds.shape}")
     
-    # 释放内存
     del text_encoder, tokenizer
-    import gc
     gc.collect()
     
     return prompt_embeds
@@ -387,15 +352,6 @@ def setup_pipeline_for_jax(pipe, args, mesh, env):
     
     print("=== Pipeline 设置完成 ===\n")
     return pipe
-
-
-# 默认 prompt
-DEFAULT_PROMPT = ("Realistic macro photograph of a hermit crab using a soda can as its shell, "
-                  "partially emerging from the can, captured with sharp detail and natural colors, "
-                  "on a sunlit beach with soft shadows and a shallow depth of field, "
-                  "with blurred ocean waves in the background. "
-                  "The can has the text `BFL Diffusers` on it and it has a color gradient "
-                  "that start with #FF5733 at the top and transitions to #33FF57 at the bottom.")
 
 
 def run_generation(pipe, args, mesh, prompt_embeds, env):
@@ -466,11 +422,8 @@ def parse_args():
     parser.add_argument("--height", type=int, default=HEIGHT)
     parser.add_argument("--num_inference_steps", type=int, default=NUM_STEPS)
     parser.add_argument("--guidance_scale", type=float, default=GUIDANCE_SCALE)
-    parser.add_argument("--use_tp", action="store_true", default=USE_TP)
-    parser.add_argument("--mistral_cpu", action="store_true", default=False,
-                        help="将 Mistral3 text encoder 放在 CPU 上")
-    parser.add_argument("--profile", action="store_true", default=False,
-                        help="启用性能分析")
+    parser.add_argument("--remote_encoder", action="store_true", help="使用远程 HuggingFace text encoder 服务")
+    parser.add_argument("--profile", action="store_true", help="启用 JAX profiler")
     return parser.parse_args()
 
 
@@ -491,12 +444,10 @@ def main():
     setup_pytree_registrations()
     
     # 获取 prompt embeddings（在启用 torchax 之前）
-    if args.mistral_cpu:
-        # 在 CPU 上使用 Mistral3 编码
-        prompt_embeds = encode_prompt_on_cpu(args, DEFAULT_PROMPT)
-    else:
-        # 使用远程 text encoder
+    if args.remote_encoder:
         prompt_embeds = remote_text_encoder(DEFAULT_PROMPT)
+    else:
+        prompt_embeds = encode_prompt_on_cpu(args.model_id, DEFAULT_PROMPT)
     
     # 加载 pipeline（在启用 torchax 之前）
     pipe = load_pipeline(args)

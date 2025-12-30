@@ -7,20 +7,19 @@ TPU Splash Attention 工具模块
 调用者需要将 query 预乘以 LOG2_E = 1.44269504。
 """
 
-import math
 import dataclasses
 import functools
+import math
 
-import numpy as np
 import jax
 import jax.numpy as jnp
+import numpy as np
 import torch
 from jax import lax
-from jax.sharding import PartitionSpec as P
 from jax.experimental import pallas as pl
 from jax.experimental.pallas import tpu as pltpu
 from jax.experimental.shard_map import shard_map
-
+from jax.sharding import PartitionSpec as P
 
 # ============================================================================
 # 常量
@@ -72,25 +71,14 @@ def _pad_to_multiple(x, multiple, axis):
 # ============================================================================
 
 def _flash_attention_kernel(
-    q_ref,
-    k_ref,
-    v_ref,
-    m_scratch_ref,
-    l_scratch_ref,
-    o_scratch_ref,
-    o_ref,
-    *,
-    mask_value: float,
-    grid_width: int,
-    bq: int,
-    bkv: int,
-    bkv_compute: int,
-    bkv_compute_in: int,
-    head_dim_v: int,
+    q_ref, k_ref, v_ref,
+    m_scratch_ref, l_scratch_ref, o_scratch_ref, o_ref,
+    *, mask_value: float, grid_width: int,
+    bq: int, bkv: int, bkv_compute: int, bkv_compute_in: int, head_dim_v: int,
 ):
     """Flash attention kernel with exp2 optimization.
     
-    Note: Query should be pre-multiplied by LOG2_E in the caller for exp2 optimization.
+    Note: Query should be pre-multiplied by LOG2_E in the caller.
     """
     float32 = jnp.float32
     head_dim_v_repeats, rem = divmod(head_dim_v, NUM_SUBLANES)
@@ -108,37 +96,28 @@ def _flash_attention_kernel(
     def body(kv_compute_index, _):
         slice_k = pl.ds(kv_compute_index * bkv_compute, bkv_compute)
         m_prev, l_prev = m_scratch_ref[...], l_scratch_ref[...]
-        assert m_prev.shape == (NUM_SUBLANES, bq)
-        assert l_prev.shape == (NUM_SUBLANES, bq)
 
         q = q_ref[...]
         k = k_ref[slice_k, :]
         qk = lax.dot_general(k, q, NT_DIM_NUMBERS, preferred_element_type=float32)
-        assert qk.shape == (bkv_compute, bq)
 
         o_prev = o_scratch_ref[:]
         v = v_ref[slice_k, :].astype(float32)
         step = bkv_compute_in
-        assert qk.shape[0] % step == 0
         
-        for i in range(0, qk.shape[0], step):
-            m_curr = qk[i:i+step].max(axis=0)[None, :]
-            assert m_curr.shape == (1, bq)
-            
+        for idx in range(0, qk.shape[0], step):
+            m_curr = qk[idx:idx+step].max(axis=0)[None, :]
             m_next = jnp.maximum(m_prev, m_curr)
-            assert m_next.shape == (NUM_SUBLANES, bq)
 
             # Use exp2 for TPU VPU optimization (query pre-multiplied by LOG2_E)
-            s_curr = jnp.exp2(qk[i:i+step] - m_next[0:1])
+            s_curr = jnp.exp2(qk[idx:idx+step] - m_next[0:1])
 
             l_curr = s_curr.sum(axis=0, keepdims=True)
-            assert l_curr.shape == (1, bq)
-
             alpha = jnp.exp2(m_prev - m_next)
             l_next = l_curr + alpha * l_prev
 
             sv_dims = (((0,), (0,)), ((), ()))
-            o_curr = lax.dot_general(v[i:i+step], s_curr, sv_dims)
+            o_curr = lax.dot_general(v[idx:idx+step], s_curr, sv_dims)
             alpha_o = alpha[0:1, ...]
             o_prev = alpha_o * o_prev + o_curr
 
@@ -158,12 +137,8 @@ def _flash_attention_kernel(
 
 
 def _splash_attention_forward(
-    q: jax.Array,
-    k: jax.Array,
-    v: jax.Array,
-    block_sizes: _BlockSizes,
-    bkv_compute_in: int,
-    interpret: bool = False,
+    q: jax.Array, k: jax.Array, v: jax.Array,
+    block_sizes: _BlockSizes, bkv_compute_in: int, interpret: bool = False,
 ):
     """Forward pass of splash attention with exp2 optimization."""
     num_q_heads, q_seq_len, head_dim_qk = q.shape
@@ -212,11 +187,8 @@ def _splash_attention_forward(
             _flash_attention_kernel,
             mask_value=DEFAULT_MASK_VALUE,
             grid_width=grid_width,
-            bq=bq,
-            bkv=bkv,
-            bkv_compute=bkv_compute,
-            bkv_compute_in=bkv_compute_in,
-            head_dim_v=head_dim_v,
+            bq=bq, bkv=bkv, bkv_compute=bkv_compute,
+            bkv_compute_in=bkv_compute_in, head_dim_v=head_dim_v,
         ),
         grid_spec=pltpu.PrefetchScalarGridSpec(
             num_scalar_prefetch=0,
@@ -234,23 +206,10 @@ def _splash_attention_forward(
     return all_out[-1]
 
 
-def _make_splash_mha(
-    block_sizes: _BlockSizes,
-    bkv_compute_in: int,
-    interpret: bool = False,
-):
+def _make_splash_mha(block_sizes: _BlockSizes, bkv_compute_in: int, interpret: bool = False):
     """Create a splash attention function with given block sizes.
     
-    Args:
-        block_sizes: Block size configuration
-        bkv_compute_in: Inner block size for KV computation
-        interpret: Whether to use interpret mode for debugging
-    
-    Returns:
-        A function that computes attention: (q, k, v) -> output
-        
-    Note:
-        Query should be pre-multiplied by LOG2_E (1.44269504) for exp2 optimization.
+    Note: Query should be pre-multiplied by LOG2_E (1.44269504) for exp2 optimization.
     """
     def _splash_attention(q: jax.Array, k: jax.Array, v: jax.Array):
         return _splash_attention_forward(q, k, v, block_sizes, bkv_compute_in, interpret)
@@ -298,10 +257,19 @@ def sdpa_reference(query, key, value, attn_mask=None, dropout_p=0.0,
 # ============================================================================
 
 def tpu_splash_attention(query, key, value, mesh, scale=None):
-    """TPU Splash Attention（使用 exp2 优化）。"""
+    """TPU Splash Attention（使用 exp2 优化）。
     
+    Args:
+        query: JAX array of shape (batch, heads, seq_len, head_dim)
+        key: JAX array of shape (batch, heads, seq_len, head_dim)
+        value: JAX array of shape (batch, heads, seq_len, head_dim)
+        mesh: JAX mesh for sharding
+        scale: Optional attention scale factor
+        
+    Returns:
+        Output tensor of same shape as query
+    """
     def _attention_kernel(q, k, v):
-        """单个 batch 的 attention 计算。"""
         scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
         # 融合 softmax 中的 exp 操作 - 乘以 log2(e)
         q = q * scale_factor * LOG2_E
@@ -317,9 +285,7 @@ def tpu_splash_attention(query, key, value, mesh, scale=None):
                 block_kv=min(BKVSIZE, k_3d_padded.shape[1]),
                 block_kv_compute=min(BKVCOMPUTESIZE, k_3d_padded.shape[1]),
             )
-            splash_kernel = _make_splash_mha(
-                block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE
-            )
+            splash_kernel = _make_splash_mha(block_sizes=block_sizes, bkv_compute_in=BKVCOMPUTEINSIZE)
             out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded).astype(q_3d.dtype)
             out = jnp.swapaxes(out, 1, 2)
             return out[:, :q_orig_len, :]
@@ -364,5 +330,3 @@ def tpu_splash_attention(query, key, value, mesh, scale=None):
     out = sharded_fn(query, key, value)
     out = out[:, :, :q_seq_len, :]  # 移除 padding
     return jax.lax.with_sharding_constraint(out, constraint)
-
-
