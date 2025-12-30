@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: reportArgumentType=false, reportCallIssue=false
 """
 Flux.2 GPU 三阶段生成 - 阶段1：Text Encoder (GPU)
 
@@ -72,7 +73,7 @@ attribution and actions without speculation."""
     ]]
     
     # Tokenize
-    inputs = tokenizer.apply_chat_template(
+    inputs = tokenizer.apply_chat_template(  # type: ignore[call-arg]
         messages,
         add_generation_prompt=False,
         tokenize=True,
