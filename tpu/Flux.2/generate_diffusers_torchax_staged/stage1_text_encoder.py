@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+# pyright: reportArgumentType=false, reportCallIssue=false
 """
 Flux.2 三阶段生成 - 阶段1：Text Encoder (CPU)
 
@@ -42,7 +43,7 @@ def encode_prompt_on_cpu(model_id, prompt, max_sequence_length=512):
     """
     在 CPU 上使用 Mistral3 编码 prompt。
     
-    参考 Flux.2 单文件版本的 encode_prompt_on_cpu 函数。
+    参考 GPU 版本的 encode_prompt 函数，但强制在 CPU 上运行。
     """
     from transformers import PixtralProcessor, Mistral3ForConditionalGeneration
     
@@ -63,15 +64,22 @@ def encode_prompt_on_cpu(model_id, prompt, max_sequence_length=512):
     print("✓ Text Encoder 加载成功")
     print(f"- 编码 prompt: {prompt[:80]}...")
     
-    # 格式化输入 - 使用 Flux.2 pipeline 中的格式
-    SYSTEM_MESSAGE = "You are an image generation assistant. Convert user text to detailed image descriptions."
+    # 格式化输入 - 使用 Flux.2 pipeline 中的 SYSTEM_MESSAGE
+    # 来源: diffusers/pipelines/flux2/system_messages.py
+    SYSTEM_MESSAGE = """You are an AI that reasons about image descriptions. You give structured responses focusing on object relationships, object
+attribution and actions without speculation."""
+    
+    # 使用与 pipeline 相同的 format_input 逻辑
+    # 移除 [IMG] tokens 以避免 Pixtral 验证问题
+    cleaned_prompt = prompt.replace("[IMG]", "")
+    
     messages = [[
         {"role": "system", "content": [{"type": "text", "text": SYSTEM_MESSAGE}]},
-        {"role": "user", "content": [{"type": "text", "text": prompt}]},
+        {"role": "user", "content": [{"type": "text", "text": cleaned_prompt}]},
     ]]
     
     # Tokenize
-    inputs = tokenizer.apply_chat_template(
+    inputs = tokenizer.apply_chat_template(  # type: ignore[call-arg]
         messages,
         add_generation_prompt=False,
         tokenize=True,
