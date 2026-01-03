@@ -67,32 +67,20 @@ git clone https://github.com/ltdrdata/ComfyUI-Manager.git
 
 启动 ComfyUI 后，通过 Manager 界面搜索并安装 Custom Nodes。
 
-### 方法二：手动安装
-
-#### 安装 ComfyUI-Wan-TPU（Wan2.1 视频生成）
+### 方法二：从 gpu-tpu-pedia 安装（推荐 TPU 用户）
 
 ```bash
-cd ~/ComfyUI/custom_nodes
-git clone https://github.com/yangwhale/ComfyUI-TPU.git temp
-mv temp/custom_nodes/ComfyUI-Wan-TPU .
-rm -rf temp
-```
+# 克隆 gpu-tpu-pedia 仓库
+git clone https://github.com/yangwhale/gpu-tpu-pedia.git
+cd gpu-tpu-pedia/tpu/ComfyUI/custom_nodes
 
-#### 安装 ComfyUI-Crystools-TPU（TPU 硬件监控）
+# 复制 TPU Custom Nodes 到 ComfyUI
+cp -r ComfyUI-Wan-TPU ~/ComfyUI/custom_nodes/
+cp -r ComfyUI-Flux-TPU ~/ComfyUI/custom_nodes/
+cp -r ComfyUI-Crystools ~/ComfyUI/custom_nodes/
 
-```bash
-cd ~/ComfyUI/custom_nodes
-git clone https://github.com/yangwhale/ComfyUI-Crystools-TPU.git ComfyUI-Crystools
-```
-
-#### 安装各 Custom Node 的依赖
-
-```bash
-# ComfyUI-Crystools
-pip install -r custom_nodes/ComfyUI-Crystools/requirements.txt
-
-# ComfyUI-Wan-TPU（如有 requirements.txt）
-pip install diffusers transformers accelerate
+# 安装依赖
+pip install -r ~/ComfyUI/custom_nodes/ComfyUI-Crystools/requirements.txt
 ```
 
 ---
