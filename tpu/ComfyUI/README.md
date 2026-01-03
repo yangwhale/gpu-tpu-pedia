@@ -209,6 +209,29 @@ TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
 
 ## TPU 环境配置
 
+### 0. 配置模型存储路径（推荐）
+
+TPU VM 的本地磁盘容量有限（通常 100GB），而大型模型（如 Wan2.1-14B）需要大量存储空间。建议将模型目录软链接到共享内存 `/dev/shm`：
+
+```bash
+# 创建共享内存中的模型目录
+mkdir -p /dev/shm/comfyui_models
+
+# 先将原有 models 内容复制到共享内存
+cp -r ~/ComfyUI/models/* /dev/shm/comfyui_models/
+
+# 删除原有 models 目录并创建软链接
+rm -rf ~/ComfyUI/models
+ln -s /dev/shm/comfyui_models ~/ComfyUI/models
+
+# 验证软链接
+ls -la ~/ComfyUI/models
+```
+
+**注意**：`/dev/shm` 使用内存作为存储，重启后数据会丢失。如果需要持久化存储，可以考虑：
+- 挂载 GCS bucket
+- 使用持久化磁盘
+
 ### 1. 安装核心依赖
 
 ```bash
