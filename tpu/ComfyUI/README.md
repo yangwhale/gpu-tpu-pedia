@@ -10,7 +10,7 @@
 - [启动 ComfyUI](#启动-comfyui)
 - [Custom Nodes 介绍](#custom-nodes-介绍)
   - [ComfyUI-Wan2.1-TPU](#comfyui-wan21-tpu)
-  - [ComfyUI-Flux-TPU](#comfyui-flux-tpu)
+  - [ComfyUI-Flux.2-TPU](#comfyui-flux2-tpu)
   - [ComfyUI-Crystools](#comfyui-crystools)
 - [TPU 环境配置](#tpu-环境配置)
 - [故障排除](#故障排除)
@@ -76,7 +76,7 @@ cd gpu-tpu-pedia/tpu/ComfyUI/custom_nodes
 
 # 复制 TPU Custom Nodes 到 ComfyUI
 cp -r ComfyUI-Wan2.1-TPU ~/ComfyUI/custom_nodes/
-cp -r ComfyUI-Flux-TPU ~/ComfyUI/custom_nodes/
+cp -r ComfyUI-Flux.2-TPU ~/ComfyUI/custom_nodes/
 cp -r ComfyUI-Crystools ~/ComfyUI/custom_nodes/
 
 # 安装依赖
@@ -162,9 +162,9 @@ TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
 
 ---
 
-### ComfyUI-Flux-TPU
+### ComfyUI-Flux.2-TPU
 
-**用途**：在 TPU 上运行 Flux.1/Flux.2 图像生成模型。
+**用途**：在 TPU 上运行 Flux.2 图像生成模型。
 
 **节点列表：**
 
@@ -176,7 +176,7 @@ TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
 
 **示例工作流：**
 
-加载 `custom_nodes/ComfyUI-Flux-TPU/examples/flux2_tpu_basic.json`
+加载 `custom_nodes/ComfyUI-Flux.2-TPU/examples/flux2_tpu_basic.json`
 
 ---
 
