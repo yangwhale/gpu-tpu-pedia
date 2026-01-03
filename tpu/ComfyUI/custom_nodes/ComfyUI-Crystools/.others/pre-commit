@@ -1,0 +1,33 @@
+#!/bin/bash
+# REMEMBER TO COPY THIS FILE INTO .git/hooks/pre-commit
+
+cd ../comfy/ComfyUI
+rm ./custom_nodes/comfyui-crystools/web/*.js -f
+
+LOCAL_COMMAND="npm --prefix ./custom_nodes/comfyui-crystools run validate"
+OUTPUT=$($LOCAL_COMMAND 2>&1)
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "Validate ok"
+    cd ../../comfyui-crystools
+else
+    echo "Validate KO!"
+    echo $OUTPUT
+    exit 1
+fi
+
+LOCAL_COMMAND="python .others/version.py"
+
+OUTPUT=$($LOCAL_COMMAND 2>&1)
+EXIT_CODE=$?
+
+if [ $EXIT_CODE -eq 0 ]; then
+    echo "Version changed"
+else
+    echo "Can't change the version! check the .other/version.py"
+    echo $OUTPUT
+    exit 1
+fi
+
+git add version pyproject.toml __init__.py core/version.py web/*.js
