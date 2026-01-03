@@ -9,7 +9,7 @@
 - [安装 Custom Nodes](#安装-custom-nodes)
 - [启动 ComfyUI](#启动-comfyui)
 - [Custom Nodes 介绍](#custom-nodes-介绍)
-  - [ComfyUI-Wan-TPU](#comfyui-wan-tpu)
+  - [ComfyUI-Wan2.1-TPU](#comfyui-wan21-tpu)
   - [ComfyUI-Flux-TPU](#comfyui-flux-tpu)
   - [ComfyUI-Crystools](#comfyui-crystools)
 - [TPU 环境配置](#tpu-环境配置)
@@ -75,7 +75,7 @@ git clone https://github.com/yangwhale/gpu-tpu-pedia.git
 cd gpu-tpu-pedia/tpu/ComfyUI/custom_nodes
 
 # 复制 TPU Custom Nodes 到 ComfyUI
-cp -r ComfyUI-Wan-TPU ~/ComfyUI/custom_nodes/
+cp -r ComfyUI-Wan2.1-TPU ~/ComfyUI/custom_nodes/
 cp -r ComfyUI-Flux-TPU ~/ComfyUI/custom_nodes/
 cp -r ComfyUI-Crystools ~/ComfyUI/custom_nodes/
 
@@ -119,7 +119,7 @@ python main.py --cpu --listen 0.0.0.0
 
 ## Custom Nodes 介绍
 
-### ComfyUI-Wan-TPU
+### ComfyUI-Wan2.1-TPU
 
 **用途**：在 TPU 上运行 Wan2.1 文本到视频 (T2V) 模型，生成高质量视频。
 
@@ -139,7 +139,7 @@ TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
 
 **示例工作流：**
 
-加载 `custom_nodes/ComfyUI-Wan-TPU/examples/wan21_t2v_720p.json`
+加载 `custom_nodes/ComfyUI-Wan2.1-TPU/examples/wan21_t2v_720p.json`
 
 **参数说明：**
 
