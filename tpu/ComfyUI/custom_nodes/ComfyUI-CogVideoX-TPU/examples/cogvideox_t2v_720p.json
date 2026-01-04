@@ -1,0 +1,149 @@
+{
+  "last_node_id": 8,
+  "last_link_id": 5,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "CogVideoXTextEncoder",
+      "pos": [100, 200],
+      "size": {"0": 400, "1": 200},
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "embeddings",
+          "type": "COGVIDEOX_EMBEDS",
+          "links": [1],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CogVideoXTextEncoder"
+      },
+      "widgets_values": [
+        "A panda, dressed in a small red jacket and a tiny hat, sits on a wooden stool in a serene bamboo forest. The panda's fluffy paws strum a miniature acoustic guitar, producing soft, melodic tunes. Nearby, a few other pandas gather, watching curiously and some clapping in rhythm. Sunlight filters through the tall bamboo, casting a gentle glow on the scene.",
+        "",
+        "zai-org/CogVideoX1.5-5B"
+      ]
+    },
+    {
+      "id": 2,
+      "type": "CogVideoXTPUSampler",
+      "pos": [550, 200],
+      "size": {"0": 315, "1": 250},
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "embeddings",
+          "type": "COGVIDEOX_EMBEDS",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "latents",
+          "type": "COGVIDEOX_LATENTS",
+          "links": [2],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CogVideoXTPUSampler"
+      },
+      "widgets_values": [
+        720,
+        1280,
+        81,
+        50,
+        6.0,
+        42,
+        8
+      ]
+    },
+    {
+      "id": 3,
+      "type": "CogVideoXTPUVAEDecoder",
+      "pos": [920, 200],
+      "size": {"0": 250, "1": 100},
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "latents",
+          "type": "COGVIDEOX_LATENTS",
+          "link": 2
+        }
+      ],
+      "outputs": [
+        {
+          "name": "frames",
+          "type": "IMAGE",
+          "links": [3],
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "CogVideoXTPUVAEDecoder"
+      },
+      "widgets_values": [
+        16
+      ]
+    },
+    {
+      "id": 4,
+      "type": "VHS_VideoCombine",
+      "pos": [1220, 200],
+      "size": {"0": 315, "1": 200},
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 3
+        }
+      ],
+      "outputs": [
+        {
+          "name": "Filenames",
+          "type": "VHS_FILENAMES",
+          "links": null,
+          "slot_index": 0
+        }
+      ],
+      "properties": {
+        "Node name for S&R": "VHS_VideoCombine"
+      },
+      "widgets_values": {
+        "frame_rate": 16,
+        "loop_count": 0,
+        "filename_prefix": "cogvideox",
+        "format": "video/h264-mp4",
+        "pix_fmt": "yuv420p",
+        "crf": 19,
+        "save_metadata": true,
+        "pingpong": false,
+        "save_output": true,
+        "videopreview": {
+          "hidden": false,
+          "paused": false
+        }
+      }
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "COGVIDEOX_EMBEDS"],
+    [2, 2, 0, 3, 0, "COGVIDEOX_LATENTS"],
+    [3, 3, 0, 4, 0, "IMAGE"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {},
+  "version": 0.4
+}
