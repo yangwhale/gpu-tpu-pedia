@@ -1,5 +1,13 @@
 import { ProgressBarUIBase } from './progressBarUIBase.js';
 import { createStyleSheet, formatBytes } from './utils.js';
+
+// Format bytes to GiB with 2 decimal places (e.g., "18.95")
+function formatGiB(bytes) {
+    if (bytes === 0 || bytes === undefined) return '0';
+    const gib = bytes / (1024 * 1024 * 1024);
+    return gib.toFixed(2);
+}
+
 export class MonitorUI extends ProgressBarUIBase {
     constructor(rootElement, monitorCPUElement, monitorRAMElement, monitorHDDElement, monitorGPUSettings, monitorVRAMSettings, monitorTemperatureSettings, currentRate, monitorDutyCycleSettings = [], monitorTensorCoreSettings = []) {
         super('crystools-monitors-root', rootElement);
@@ -283,7 +291,14 @@ export class MonitorUI extends ProgressBarUIBase {
                 if (monitorSettings.htmlMonitorRef) {
                     monitorSettings.htmlMonitorRef.title = title;
                 }
-                monitorSettings.htmlMonitorLabelRef.innerHTML = `${Math.floor(percent)}${monitorSettings.symbol}`;
+                // Only for HBM (TPU memory) monitors, show actual usage in GiB format
+                // Check if label contains 'HBM' to distinguish from RAM
+                const isHBM = monitorSettings.label && monitorSettings.label.includes('HBM');
+                if (isHBM && used !== undefined && total !== undefined && total > 0) {
+                    monitorSettings.htmlMonitorLabelRef.innerHTML = `${formatGiB(used)}/${formatGiB(total)}`;
+                } else {
+                    monitorSettings.htmlMonitorLabelRef.innerHTML = `${Math.floor(percent)}${monitorSettings.symbol}`;
+                }
                 monitorSettings.htmlMonitorSliderRef.style.width = `${Math.floor(percent)}%`;
             }
         });

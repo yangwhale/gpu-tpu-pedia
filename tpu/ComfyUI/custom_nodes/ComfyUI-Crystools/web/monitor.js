@@ -119,7 +119,7 @@ class CrystoolsMonitor {
             enumerable: true,
             configurable: true,
             writable: true,
-            value: 80
+            value: 100
         });
         Object.defineProperty(this, "monitorHeightId", {
             enumerable: true,
@@ -449,7 +449,7 @@ class CrystoolsMonitor {
                 if (this.deviceType !== 'tpu') {
                     return;
                 }
-                let label = 'Duty ';
+                let label = 'Busy ';
                 label += moreThanOneTPU ? index : '';
                 const monitorDutyCycleElement = {
                     id: 'Crystools.ShowTpuDutyCycle' + convertNumberToPascalCase(index),
@@ -488,7 +488,7 @@ class CrystoolsMonitor {
                 if (this.deviceType !== 'tpu') {
                     return;
                 }
-                let label = 'TC ';
+                let label = 'MFU ';
                 label += moreThanOneTPU ? index : '';
                 const monitorTensorCoreElement = {
                     id: 'Crystools.ShowTpuTensorCore' + convertNumberToPascalCase(index),

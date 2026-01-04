@@ -1,0 +1,262 @@
+{
+  "id": "a1b2c3d4-e5f6-7890-abcd-ef1234567890",
+  "revision": 0,
+  "last_node_id": 8,
+  "last_link_id": 9,
+  "nodes": [
+    {
+      "id": 1,
+      "type": "LoadImage",
+      "pos": [100, 200],
+      "size": [300, 314],
+      "flags": {},
+      "order": 0,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "IMAGE",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [1]
+        },
+        {
+          "name": "MASK",
+          "type": "MASK",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "properties": {"Node name for S&R": "LoadImage"},
+      "widgets_values": ["wan_i2v_input.JPG", "image"]
+    },
+    {
+      "id": 2,
+      "type": "Wan22I2VImageEncoder",
+      "pos": [450, 200],
+      "size": [315, 150],
+      "flags": {},
+      "order": 1,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "image",
+          "type": "IMAGE",
+          "link": 1
+        }
+      ],
+      "outputs": [
+        {
+          "name": "condition",
+          "type": "CONDITION",
+          "slot_index": 0,
+          "links": [3]
+        },
+        {
+          "name": "latent_info",
+          "type": "LATENT_INFO",
+          "slot_index": 1,
+          "links": [4]
+        }
+      ],
+      "properties": {"Node name for S&R": "Wan22I2VImageEncoder"},
+      "widgets_values": [1104, 832, 81, "Wan-AI/Wan2.2-I2V-A14B-Diffusers"]
+    },
+    {
+      "id": 3,
+      "type": "Wan22I2VTextEncoder",
+      "pos": [450, 450],
+      "size": [400, 200],
+      "flags": {},
+      "order": 2,
+      "mode": 0,
+      "inputs": [],
+      "outputs": [
+        {
+          "name": "prompt_embeds",
+          "type": "TENSOR",
+          "slot_index": 0,
+          "links": [5]
+        },
+        {
+          "name": "negative_prompt_embeds",
+          "type": "TENSOR",
+          "slot_index": 1,
+          "links": [6]
+        }
+      ],
+      "properties": {"Node name for S&R": "Wan22I2VTextEncoder"},
+      "widgets_values": [
+        "Summer beach vacation style, a white cat wearing sunglasses sits on a surfboard. The fluffy-furred feline gazes directly at the camera with a relaxed expression.",
+        "色调艳丽，过曝，静态，细节模糊不清，字幕，风格，作品，画作，画面，静止，整体发灰，最差质量，低质量",
+        "Wan-AI/Wan2.2-I2V-A14B-Diffusers"
+      ]
+    },
+    {
+      "id": 4,
+      "type": "Wan22I2VTPUSampler",
+      "pos": [850, 300],
+      "size": [350, 230],
+      "flags": {},
+      "order": 3,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "prompt_embeds",
+          "type": "TENSOR",
+          "link": 5
+        },
+        {
+          "name": "negative_prompt_embeds",
+          "type": "TENSOR",
+          "link": 6
+        },
+        {
+          "name": "condition",
+          "type": "CONDITION",
+          "link": 3
+        },
+        {
+          "name": "latent_info",
+          "type": "LATENT_INFO",
+          "link": 4
+        }
+      ],
+      "outputs": [
+        {
+          "name": "latents",
+          "type": "LATENT",
+          "slot_index": 0,
+          "links": [7]
+        },
+        {
+          "name": "num_frames",
+          "type": "INT",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "properties": {"Node name for S&R": "Wan22I2VTPUSampler"},
+      "widgets_values": [40, 3.5, 5.0, 0, "Wan-AI/Wan2.2-I2V-A14B-Diffusers"]
+    },
+    {
+      "id": 5,
+      "type": "Wan22I2VTPUVAEDecoder",
+      "pos": [1250, 300],
+      "size": [280, 100],
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "latents",
+          "type": "LATENT",
+          "link": 7
+        }
+      ],
+      "outputs": [
+        {
+          "name": "frames",
+          "type": "IMAGE",
+          "slot_index": 0,
+          "links": [8]
+        },
+        {
+          "name": "fps",
+          "type": "INT",
+          "slot_index": 1,
+          "links": null
+        }
+      ],
+      "properties": {"Node name for S&R": "Wan22I2VTPUVAEDecoder"},
+      "widgets_values": ["Wan-AI/Wan2.2-I2V-A14B-Diffusers", 16]
+    },
+    {
+      "id": 6,
+      "type": "CreateVideo",
+      "pos": [1570, 300],
+      "size": [270, 78],
+      "flags": {},
+      "order": 5,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "images",
+          "type": "IMAGE",
+          "link": 8
+        },
+        {
+          "name": "audio",
+          "shape": 7,
+          "type": "AUDIO",
+          "link": null
+        }
+      ],
+      "outputs": [
+        {
+          "name": "VIDEO",
+          "type": "VIDEO",
+          "slot_index": 0,
+          "links": [9]
+        }
+      ],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.7.0",
+        "Node name for S&R": "CreateVideo"
+      },
+      "widgets_values": [16]
+    },
+    {
+      "id": 7,
+      "type": "SaveVideo",
+      "pos": [1570, 450],
+      "size": [453, 402],
+      "flags": {},
+      "order": 6,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 9
+        }
+      ],
+      "outputs": [],
+      "properties": {
+        "cnr_id": "comfy-core",
+        "ver": "0.7.0"
+      },
+      "widgets_values": [
+        "video/wan22_i2v",
+        "auto",
+        "auto"
+      ]
+    }
+  ],
+  "links": [
+    [1, 1, 0, 2, 0, "IMAGE"],
+    [3, 2, 0, 4, 2, "CONDITION"],
+    [4, 2, 1, 4, 3, "LATENT_INFO"],
+    [5, 3, 0, 4, 0, "TENSOR"],
+    [6, 3, 1, 4, 1, "TENSOR"],
+    [7, 4, 0, 5, 0, "LATENT"],
+    [8, 5, 0, 6, 0, "IMAGE"],
+    [9, 6, 0, 7, 0, "VIDEO"]
+  ],
+  "groups": [],
+  "config": {},
+  "extra": {
+    "ds": {
+      "scale": 0.65,
+      "offset": [50, 100]
+    },
+    "frontendVersion": "1.35.9",
+    "workflowRendererVersion": "LG",
+    "VHS_latentpreview": false,
+    "VHS_latentpreviewrate": 0,
+    "VHS_MetadataImage": true,
+    "VHS_KeepIntermediate": true
+  },
+  "version": 0.4
+}
