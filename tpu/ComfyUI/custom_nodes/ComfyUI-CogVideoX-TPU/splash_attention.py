@@ -407,6 +407,112 @@ def sdpa_reference(query, key, value, attn_mask=None, dropout_p=0.0,
     return attn_weight @ value
 
 
+def tpu_splash_attention_cogvideox(query, key, value, mesh, scale=None,
+                                    use_k_smooth=USE_K_SMOOTH,
+                                    bqsize=BQSIZE, bkvsize=BKVSIZE,
+                                    bkvcomputesize=BKVCOMPUTESIZE,
+                                    bkvcomputeinsize=BKVCOMPUTEINSIZE):
+    """
+    TPU Splash Attention for CogVideoX (direct JAX interface)
+    
+    This function takes JAX arrays directly (not torch tensors).
+    Used by the Sampler node's _scaled_dot_product_attention.
+    
+    Args:
+        query: JAX array [batch, heads, seq_len, head_dim]
+        key: JAX array [batch, heads, seq_len, head_dim]
+        value: JAX array [batch, heads, seq_len, head_dim]
+        mesh: JAX mesh for sharding
+        scale: attention scale (default: 1/sqrt(head_dim))
+        use_k_smooth: whether to subtract key mean
+        bqsize, bkvsize, bkvcomputesize, bkvcomputeinsize: block sizes
+        
+    Returns:
+        JAX array with same shape as query
+    """
+    num_heads = query.shape[1]
+
+    def _attention_on_slices(q, k, v):
+        # Compute scale factor with LOG2_E pre-multiplication for exp2
+        scale_factor = 1.0 / math.sqrt(q.shape[-1]) if scale is None else scale
+        q = q * (scale_factor * LOG2_E)
+        
+        # Optional K-smooth
+        if use_k_smooth:
+            key_mean = jnp.mean(k, axis=2, keepdims=True)
+            k = k - key_mean
+
+        def pad_to_multiple(x, multiple, axis):
+            seq_len = x.shape[axis]
+            pad_len = (multiple - seq_len % multiple) % multiple
+            if pad_len == 0:
+                return x, seq_len
+            pad_width = [(0, 0)] * x.ndim
+            pad_width[axis] = (0, pad_len)
+            return jnp.pad(x, pad_width), seq_len
+
+        def kernel_3d(q_3d, k_3d, v_3d):
+            q_orig_len = q_3d.shape[1]
+
+            # Pad to block size multiples
+            q_3d_padded, _ = pad_to_multiple(q_3d, bqsize, axis=1)
+            k_3d_padded, _ = pad_to_multiple(k_3d, bkvsize, axis=1)
+            v_3d_padded, _ = pad_to_multiple(v_3d, bkvsize, axis=1)
+
+            padded_q_seq_len = q_3d_padded.shape[1]
+            padded_kv_seq_len = k_3d_padded.shape[1]
+
+            block_sizes = _BlockSizes(
+                block_q=min(bqsize, padded_q_seq_len),
+                block_kv=min(bkvsize, padded_kv_seq_len),
+                block_kv_compute=min(bkvcomputesize, padded_kv_seq_len),
+            )
+            
+            splash_kernel = make_splash_mha(
+                block_sizes=block_sizes,
+                bkv_compute_in=bkvcomputeinsize
+            )
+            out = splash_kernel(
+                q_3d_padded.astype(jnp.float32),
+                k_3d_padded.astype(jnp.float32),
+                v_3d_padded.astype(jnp.float32)
+            ).astype(q_3d_padded.dtype)
+            
+            # Swap axes to match expected output format
+            out = jnp.swapaxes(out, 1, 2)
+            return out[:, :q_orig_len, ...]
+
+        vmapped_kernel = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)
+        return vmapped_kernel(q, k, v)
+
+    # Determine partition spec based on mesh and attention type
+    if num_heads < mesh.size:
+        q_partition_spec = P()
+        kv_partition_spec = P()
+    else:
+        # Self-attention vs cross-attention
+        if query.shape[2] == key.shape[2]:  # Self-attention
+            q_partition_spec = P('dp', 'tp', None, None)
+            kv_partition_spec = P('dp', 'tp', None, None)
+        else:  # Cross-attention
+            q_partition_spec = P('dp', None, 'tp', None)
+            kv_partition_spec = P('dp', None, None, None)
+
+    sharded_fn = shard_map(
+        _attention_on_slices,
+        mesh=mesh,
+        in_specs=(q_partition_spec, kv_partition_spec, kv_partition_spec),
+        out_specs=q_partition_spec,
+        check_rep=False,
+    )
+    out = sharded_fn(query, key, value)
+    
+    # Add output sharding constraint
+    out = jax.lax.with_sharding_constraint(out, P('dp', None, 'tp', None))
+    
+    return out
+
+
 def scaled_dot_product_attention(query, key, value, attn_mask=None, dropout_p=0.0,
                                  is_causal=False, scale=None, enable_gqa=False,
                                  env=None, use_k_smooth=USE_K_SMOOTH):
