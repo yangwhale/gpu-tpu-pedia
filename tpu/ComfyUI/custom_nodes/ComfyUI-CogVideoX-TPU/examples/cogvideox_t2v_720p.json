@@ -1,6 +1,6 @@
 {
-  "last_node_id": 8,
-  "last_link_id": 5,
+  "last_node_id": 9,
+  "last_link_id": 6,
   "nodes": [
     {
       "id": 1,
@@ -96,9 +96,9 @@
     },
     {
       "id": 4,
-      "type": "VHS_VideoCombine",
+      "type": "CreateVideo",
       "pos": [1220, 200],
-      "size": {"0": 315, "1": 200},
+      "size": {"0": 315, "1": 120},
       "flags": {},
       "order": 3,
       "mode": 0,
@@ -111,36 +111,48 @@
       ],
       "outputs": [
         {
-          "name": "Filenames",
-          "type": "VHS_FILENAMES",
-          "links": null,
+          "name": "video",
+          "type": "VIDEO",
+          "links": [4],
           "slot_index": 0
         }
       ],
       "properties": {
-        "Node name for S&R": "VHS_VideoCombine"
+        "Node name for S&R": "CreateVideo"
       },
-      "widgets_values": {
-        "frame_rate": 16,
-        "loop_count": 0,
-        "filename_prefix": "cogvideox",
-        "format": "video/h264-mp4",
-        "pix_fmt": "yuv420p",
-        "crf": 19,
-        "save_metadata": true,
-        "pingpong": false,
-        "save_output": true,
-        "videopreview": {
-          "hidden": false,
-          "paused": false
+      "widgets_values": [
+        16
+      ]
+    },
+    {
+      "id": 5,
+      "type": "SaveVideo",
+      "pos": [1580, 200],
+      "size": {"0": 315, "1": 80},
+      "flags": {},
+      "order": 4,
+      "mode": 0,
+      "inputs": [
+        {
+          "name": "video",
+          "type": "VIDEO",
+          "link": 4
         }
-      }
+      ],
+      "outputs": [],
+      "properties": {
+        "Node name for S&R": "SaveVideo"
+      },
+      "widgets_values": [
+        "cogvideox"
+      ]
     }
   ],
   "links": [
     [1, 1, 0, 2, 0, "COGVIDEOX_EMBEDS"],
     [2, 2, 0, 3, 0, "COGVIDEOX_LATENTS"],
-    [3, 3, 0, 4, 0, "IMAGE"]
+    [3, 3, 0, 4, 0, "IMAGE"],
+    [4, 4, 0, 5, 0, "VIDEO"]
   ],
   "groups": [],
   "config": {},
