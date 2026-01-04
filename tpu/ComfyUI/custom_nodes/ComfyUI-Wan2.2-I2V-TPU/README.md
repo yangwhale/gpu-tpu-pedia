@@ -2,6 +2,8 @@
 
 在 TPU 上运行 Wan 2.2 Image-to-Video (I2V) 生成。
 
+![Wan 2.2 I2V ComfyUI 工作流](examples/wan22_i2v_full_view.png)
+
 ## 概述
 
 本插件提供 4 个 ComfyUI 节点，实现 Wan 2.2 I2V A14B 模型在 TPU 上的推理：
@@ -81,6 +83,7 @@
 - `latent_info`: 尺寸信息
 - `num_inference_steps`: 推理步数 (默认 40)
 - `guidance_scale`: CFG 引导尺度 (默认 3.5)
+- `shift`: 时间步长分布偏移 (默认 5.0)，较高值将更多步数分配给低噪声阶段
 - `seed`: 随机种子
 
 **输出:**

@@ -10,6 +10,7 @@
 - [启动 ComfyUI](#启动-comfyui)
 - [Custom Nodes 介绍](#custom-nodes-介绍)
   - [ComfyUI-Wan2.1-TPU](#comfyui-wan21-tpu)
+  - [ComfyUI-Wan2.2-I2V-TPU](#comfyui-wan22-i2v-tpu)
   - [ComfyUI-Flux.2-TPU](#comfyui-flux2-tpu)
   - [ComfyUI-Crystools](#comfyui-crystools)
 - [TPU 环境配置](#tpu-环境配置)
@@ -76,6 +77,7 @@ cd gpu-tpu-pedia/tpu/ComfyUI/custom_nodes
 
 # 复制 TPU Custom Nodes 到 ComfyUI
 cp -r ComfyUI-Wan2.1-TPU ~/ComfyUI/custom_nodes/
+cp -r ComfyUI-Wan2.2-I2V-TPU ~/ComfyUI/custom_nodes/
 cp -r ComfyUI-Flux.2-TPU ~/ComfyUI/custom_nodes/
 cp -r ComfyUI-Crystools ~/ComfyUI/custom_nodes/
 
@@ -159,6 +161,66 @@ TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
 
 - **Wan21TPUVAEDecoder**
   - `fps`: 视频帧率 (16)
+
+---
+
+### ComfyUI-Wan2.2-I2V-TPU
+
+**用途**：在 TPU 上运行 Wan2.2 图像到视频 (I2V) 模型，使用双 Transformer A14B 架构生成高质量视频。
+
+![Wan 2.2 I2V ComfyUI 工作流](custom_nodes/ComfyUI-Wan2.2-I2V-TPU/examples/wan22_i2v_full_view.png)
+
+**节点列表：**
+
+| 节点名称 | 功能 |
+|---------|------|
+| `Wan22I2VImageEncoder` | 编码输入图像，生成 CLIP 和 VAE 条件 |
+| `Wan22I2VTextEncoder` | 编码文本提示词，生成 prompt embeddings |
+| `Wan22I2VTPUSampler` | 在 TPU 上运行双 Transformer 扩散采样 |
+| `Wan22I2VTPUVAEDecoder` | 解码 latents 为视频帧 |
+
+**工作流程：**
+
+```
+Image → ImageEncoder ─┬→ TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
+                      │
+TextEncoder ──────────┘
+```
+
+**示例工作流：**
+
+加载 `custom_nodes/ComfyUI-Wan2.2-I2V-TPU/examples/wan22_i2v_720p.json`
+
+**参数说明：**
+
+- **Wan22I2VImageEncoder**
+  - `image`: 输入图像 (首帧)
+  - `model_id`: 模型路径 (如 `Wan-AI/Wan2.2-I2V-14B-720P-Diffusers`)
+
+- **Wan22I2VTextEncoder**
+  - `prompt`: 正面提示词
+  - `negative_prompt`: 负面提示词
+  - `model_id`: 模型路径
+
+- **Wan22I2VTPUSampler**
+  - `height`: 视频高度 (720)
+  - `width`: 视频宽度 (1280)
+  - `num_frames`: 帧数 (81 = 5秒 @ 16fps)
+  - `num_inference_steps`: 采样步数 (50)
+  - `guidance_scale`: CFG 强度 (5.0)
+  - `shift`: 时间步长分布偏移 (5.0)
+  - `seed`: 随机种子
+  - `num_devices`: 使用的 TPU 设备数量 (1-8)
+  - `boundary_ratio`: A14B 模型切换比例 (0.9)
+
+- **Wan22I2VTPUVAEDecoder**
+  - `fps`: 视频帧率 (16)
+
+**技术特点：**
+
+- **双 Transformer 架构 (A14B)**：使用 `boundary_ratio=0.9` 在两个模型之间切换，前 90% 步数使用主模型，后 10% 使用辅助模型
+- **Splash Attention**：TPU 优化的注意力实现，大幅提升推理速度
+- **图像条件**：支持输入首帧图像作为视频生成的条件
 
 ---
 
