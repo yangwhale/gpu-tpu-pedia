@@ -7,6 +7,55 @@
 @description: Plugins for multiples uses, mainly for debugging, you need them! IG: https://www.instagram.com/crystian.ia
 """
 
+# ============================================================================
+# 【Protobuf 冲突修复】2026-01-05
+#
+# 问题根因：
+#   - JAX/tpu_info 初始化加载的 protobuf 版本与 SentencePiece (AutoTokenizer) 不兼容
+#   - 两者同时存在会导致 SIGABRT 崩溃
+#
+# 解决方案：
+#   - 在 JAX 导入之前先**实际加载** CogVideoX 的 tokenizer
+#   - 仅导入 AutoTokenizer 类不够，必须实际加载模型的 tokenizer
+#   - 让 SentencePiece 先初始化 protobuf，后续 JAX 会兼容这个版本
+#
+# 为什么在 Crystools 中添加：
+#   - ComfyUI 按字母顺序加载 custom nodes
+#   - "ComfyUI-Crystools" 排在 "ComfyUI-CogVideoX-TPU" 之前
+#   - 因此在这里预加载可以确保 Tokenizer 在 JAX 之前初始化
+#
+# 注意：
+#   - 必须在 `from .core import ...` 之前执行，因为 core 会初始化 JAX
+#   - 需要实际加载 tokenizer（不只是导入类），才能触发 SentencePiece 初始化
+# ============================================================================
+
+print("[Crystools] Pre-loading Tokenizer for TPU protobuf conflict prevention...")
+try:
+    import transformers
+    from transformers import AutoTokenizer
+    
+    # 【关键】实际加载 CogVideoX 的 tokenizer，触发 SentencePiece 完整初始化
+    # 这会缓存 tokenizer，后续 CogVideoXPipeline 会复用缓存
+    _preloaded_tokenizer = AutoTokenizer.from_pretrained(
+        "zai-org/CogVideoX1.5-5B",
+        subfolder="tokenizer"
+    )
+    print("[Crystools] ✓ CogVideoX tokenizer pre-loaded successfully (protobuf conflict prevention)")
+    del _preloaded_tokenizer  # 释放内存，transformers 会自动缓存
+except ImportError as e:
+    print(f"[Crystools] Info: transformers not available ({e}), skipping tokenizer pre-load")
+except Exception as e:
+    # 如果 tokenizer 下载失败，尝试只导入类（至少触发部分初始化）
+    print(f"[Crystools] Warning: Failed to pre-load CogVideoX tokenizer: {e}")
+    print("[Crystools] Falling back to class-only import...")
+    try:
+        from transformers import AutoTokenizer, T5Tokenizer
+        # 触发 T5Tokenizer 的模块初始化
+        _ = T5Tokenizer
+        print("[Crystools] ✓ Tokenizer classes imported (partial protobuf init)")
+    except Exception as e2:
+        print(f"[Crystools] Warning: Fallback also failed: {e2}")
+
 from .core import version, logger
 logger.info(f'Crystools version: {version}')
 
