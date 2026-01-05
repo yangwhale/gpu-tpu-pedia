@@ -226,6 +226,21 @@ TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
 - **Wan21TPUVAEDecoder**
   - `fps`: 视频帧率 (16)
 
+**性能数据（8x TPU v6e）：**
+
+| 指标 | 数值 |
+|------|------|
+| Transformer (50步) | 227s |
+| 每步推理时间 | 4.54s |
+| VAE 解码 | 1.16s |
+| 总时间 | 230s |
+
+**技术特点：**
+
+- **14B 参数模型**：Wan2.1-T2V-14B 是大规模视频生成模型
+- **Splash Attention**：TPU 优化的注意力实现
+- **WanVAE**：使用视频编解码器，避免与 JAX 的 protobuf 冲突
+
 ---
 
 ### ComfyUI-Wan2.2-I2V-TPU
