@@ -96,6 +96,24 @@ export class MonitorUI extends ProgressBarUIBase {
             writable: true,
             value: []
         });
+        Object.defineProperty(this, "tpuGroupContainers", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: {}
+        });
+        Object.defineProperty(this, "tpuWrapper", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: null
+        });
+        Object.defineProperty(this, "cpuRamContainer", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: null
+        });
         Object.defineProperty(this, "createDOM", {
             enumerable: true,
             configurable: true,
@@ -104,8 +122,12 @@ export class MonitorUI extends ProgressBarUIBase {
                 if (!this.rootElement) {
                     throw Error('Crystools: MonitorUI - Container not found');
                 }
-                this.rootElement.appendChild(this.createMonitor(this.monitorCPUElement));
-                this.rootElement.appendChild(this.createMonitor(this.monitorRAMElement));
+                // Create a vertical container for CPU and RAM
+                this.cpuRamContainer = document.createElement('div');
+                this.cpuRamContainer.classList.add('crystools-cpu-ram-container');
+                this.cpuRamContainer.appendChild(this.createMonitor(this.monitorCPUElement));
+                this.cpuRamContainer.appendChild(this.createMonitor(this.monitorRAMElement));
+                this.rootElement.appendChild(this.cpuRamContainer);
                 this.rootElement.appendChild(this.createMonitor(this.monitorHDDElement));
                 this.updateAllAnimationDuration(this.currentRate);
             }
@@ -134,6 +156,51 @@ export class MonitorUI extends ProgressBarUIBase {
                 rowBreak.classList.add('crystools-tpu-row-break');
                 this.rootElement.appendChild(rowBreak);
                 this.rowBreakElements[afterIndex] = rowBreak;
+            }
+        });
+        Object.defineProperty(this, "getOrCreateTPUWrapper", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: () => {
+                if (!this.tpuWrapper) {
+                    this.tpuWrapper = document.createElement('div');
+                    this.tpuWrapper.classList.add('crystools-tpu-wrapper');
+                    if (this.rootElement) {
+                        this.rootElement.appendChild(this.tpuWrapper);
+                    }
+                }
+                return this.tpuWrapper;
+            }
+        });
+        Object.defineProperty(this, "getOrCreateTPUGroup", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: (tpuIndex) => {
+                if (!this.tpuGroupContainers[tpuIndex]) {
+                    const container = document.createElement('div');
+                    container.classList.add('crystools-tpu-group');
+                    container.dataset.tpuIndex = tpuIndex;
+                    this.tpuGroupContainers[tpuIndex] = container;
+                    // Add to TPU wrapper instead of root
+                    const wrapper = this.getOrCreateTPUWrapper();
+                    wrapper.appendChild(container);
+                }
+                return this.tpuGroupContainers[tpuIndex];
+            }
+        });
+        Object.defineProperty(this, "createDOMTPUMonitor", {
+            enumerable: true,
+            configurable: true,
+            writable: true,
+            value: (monitorSettings, tpuIndex) => {
+                if (!(monitorSettings && this.rootElement)) {
+                    return;
+                }
+                const tpuGroup = this.getOrCreateTPUGroup(tpuIndex);
+                tpuGroup.appendChild(this.createMonitor(monitorSettings));
+                this.updateAllAnimationDuration(this.currentRate);
             }
         });
         Object.defineProperty(this, "orderMonitors", {

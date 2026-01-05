@@ -393,7 +393,12 @@ class CrystoolsMonitor {
                 };
                 this.monitorVRAMSettings[index] = monitorVRAMNElement;
                 app.ui.settings.addSetting(this.monitorVRAMSettings[index]);
-                this.monitorUI.createDOMGPUMonitor(this.monitorVRAMSettings[index]);
+                // For TPU, use the grouped layout
+                if (isTPU) {
+                    this.monitorUI.createDOMTPUMonitor(this.monitorVRAMSettings[index], index);
+                } else {
+                    this.monitorUI.createDOMGPUMonitor(this.monitorVRAMSettings[index]);
+                }
             }
         });
         Object.defineProperty(this, "createSettingsGPUTemp", {
@@ -471,7 +476,7 @@ class CrystoolsMonitor {
                 };
                 this.monitorDutyCycleSettings[index] = monitorDutyCycleElement;
                 app.ui.settings.addSetting(this.monitorDutyCycleSettings[index]);
-                this.monitorUI.createDOMGPUMonitor(this.monitorDutyCycleSettings[index]);
+                this.monitorUI.createDOMTPUMonitor(this.monitorDutyCycleSettings[index], index);
             }
         });
         // TPU specific: TensorCore Utilization setting
@@ -510,7 +515,7 @@ class CrystoolsMonitor {
                 };
                 this.monitorTensorCoreSettings[index] = monitorTensorCoreElement;
                 app.ui.settings.addSetting(this.monitorTensorCoreSettings[index]);
-                this.monitorUI.createDOMGPUMonitor(this.monitorTensorCoreSettings[index]);
+                this.monitorUI.createDOMTPUMonitor(this.monitorTensorCoreSettings[index], index);
             }
         });
         Object.defineProperty(this, "createSettingsHDD", {
@@ -585,10 +590,7 @@ class CrystoolsMonitor {
                         if (this.deviceType === 'tpu') {
                             this.createSettingsTPUDutyCycle(name, index, moreThanOne);
                             this.createSettingsTPUTensorCore(name, index, moreThanOne);
-                            // Add row break after TPU 0 monitors (before TPU 1)
-                            if (arrayIndex === 0 && displayGpus.length > 1) {
-                                this.monitorUI.createRowBreak(index);
-                            }
+                            // TPU monitors are now grouped in vertical containers
                         }
                     });
                     this.finishedLoad();
