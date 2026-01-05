@@ -1,5 +1,7 @@
 # ComfyUI on TPU
 
+**中文** | **[English](README_EN.md)**
+
 本指南介绍如何在 Google Cloud TPU 上运行 ComfyUI，包括 TPU 专用 Custom Nodes 的安装和使用。
 
 ## 目录
