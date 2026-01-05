@@ -187,6 +187,8 @@ TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
 
 **用途**：在 TPU 上运行 Wan2.1 文本到视频 (T2V) 模型，生成高质量视频。
 
+![Wan2.1 T2V ComfyUI 工作流](custom_nodes/ComfyUI-Wan2.1-TPU/examples/wan21_t2v_720p_demo.png)
+
 **节点列表：**
 
 | 节点名称 | 功能 |
