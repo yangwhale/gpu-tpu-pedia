@@ -143,13 +143,9 @@ python main.py --cpu --listen 0.0.0.0
 TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
 ```
 
-**示例工作流：**
+**使用示例工作流：**
 
-加载 `custom_nodes/ComfyUI-CogVideoX-TPU/examples/cogvideox_t2v_720p.json`
-
-模板封面图片：
-
-![CogVideoX 生成效果](custom_nodes/ComfyUI-CogVideoX-TPU/examples/cogvideox_t2v_720p.jpg)
+在 ComfyUI 界面中，点击左侧的 **Templates** 标签页，找到 **CogVideoX T2V 720p** 模板，点击即可加载完整工作流。
 
 **参数说明：**
 
