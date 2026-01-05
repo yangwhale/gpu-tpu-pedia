@@ -154,6 +154,85 @@ def disable_torchax_temporarily():
 
 
 # ============================================================================
+# TPU 模型清理函数
+# ============================================================================
+
+def cleanup_wan22_i2v_tpu_models():
+    """
+    清理所有 Wan 2.2 I2V TPU 缓存的模型和资源。
+    
+    当用户点击 ComfyUI Manager 的 "Unload Models" 按钮时调用此函数，
+    释放 TPU 内存以便加载其他模型。
+    """
+    global _mesh, _torchax_env, _globally_enabled
+    
+    print("[Wan22I2V-TPU] Cleaning up cached models...")
+    
+    cleaned = []
+    
+    # 清理 Image Encoder
+    if Wan22I2VImageEncoder._cached_pipe is not None:
+        Wan22I2VImageEncoder._cached_pipe = None
+        Wan22I2VImageEncoder._cached_model_id = None
+        Wan22I2VImageEncoder._env = None
+        cleaned.append("ImageEncoder")
+    
+    # 清理 Text Encoder
+    if Wan22I2VTextEncoder._cached_pipe is not None:
+        Wan22I2VTextEncoder._cached_pipe = None
+        Wan22I2VTextEncoder._cached_model_id = None
+        Wan22I2VTextEncoder._is_compiled = False
+        Wan22I2VTextEncoder._env = None
+        cleaned.append("TextEncoder")
+    
+    # 清理 Sampler (双 Transformer)
+    if Wan22I2VTPUSampler._cached_transformers is not None:
+        Wan22I2VTPUSampler._cached_transformers = None
+        Wan22I2VTPUSampler._cached_model_id = None
+        Wan22I2VTPUSampler._scheduler = None
+        Wan22I2VTPUSampler._env = None
+        Wan22I2VTPUSampler._mesh = None
+        cleaned.append("Sampler (Transformers)")
+    
+    # 清理 VAE Decoder
+    if Wan22I2VTPUVAEDecoder._cached_vae is not None:
+        Wan22I2VTPUVAEDecoder._cached_vae = None
+        Wan22I2VTPUVAEDecoder._cached_model_id = None
+        Wan22I2VTPUVAEDecoder._env = None
+        cleaned.append("VAEDecoder")
+    
+    # 清理全局 mesh
+    if _mesh is not None:
+        _mesh = None
+        cleaned.append("Mesh")
+    
+    # 清理 torchax 状态
+    if _torchax_env is not None:
+        _torchax_env = None
+    
+    if _globally_enabled:
+        try:
+            import torchax
+            torchax.disable_globally()
+            _globally_enabled = False
+            cleaned.append("Torchax")
+        except Exception:
+            pass
+    
+    # 强制垃圾回收和 JAX 缓存清理
+    gc.collect()
+    try:
+        jax.clear_caches()
+        cleaned.append("JAX caches")
+    except Exception:
+        pass
+    
+    if cleaned:
+        print(f"[Wan22I2V-TPU] Cleaned: {', '.join(cleaned)}")
+    print("[Wan22I2V-TPU] Cleanup complete!")
+
+
+# ============================================================================
 # Wan22I2VImageEncoder - 图像条件编码
 # ============================================================================
 

@@ -72,6 +72,88 @@ def to_cpu_tensor(tensor):
 
 
 # ============================================================================
+# 模型缓存清理函数
+# ============================================================================
+
+def cleanup_flux2_tpu_models():
+    """
+    清理所有 Flux.2 TPU 模型缓存。
+    
+    当用户点击 ComfyUI Manager 的 "Unload Models" 或 "Free Models and Node Cache" 按钮时，
+    ComfyUI 会调用 comfy.model_management.unload_all_models()，
+    我们通过 monkey-patch 让它同时调用此函数来清理 TPU 缓存。
+    
+    清理内容：
+    - Flux2TextEncoder: Text Encoder 和 Tokenizer
+    - Flux2TPUSampler: Transformer Pipeline
+    - Flux2TPUVAEDecoder: VAE Decoder
+    - 全局 Mesh
+    - Torchax 全局状态
+    - JAX 编译缓存
+    """
+    global _mesh, _torchax_env, _ops_registered, _globally_enabled, _vae_ops_registered
+    
+    print("\n[Flux2-TPU] Cleaning up cached models...")
+    
+    # 清理 TextEncoder 缓存
+    if Flux2TextEncoder._cached_encoder is not None:
+        print("  - Clearing Text Encoder cache")
+        del Flux2TextEncoder._cached_encoder
+        del Flux2TextEncoder._cached_tokenizer
+        Flux2TextEncoder._cached_encoder = None
+        Flux2TextEncoder._cached_tokenizer = None
+        Flux2TextEncoder._cached_model_id = None
+    
+    # 清理 Sampler 缓存
+    if Flux2TPUSampler._cached_pipeline is not None:
+        print("  - Clearing Transformer Pipeline cache")
+        del Flux2TPUSampler._cached_pipeline
+        Flux2TPUSampler._cached_pipeline = None
+        Flux2TPUSampler._cached_model_id = None
+        Flux2TPUSampler._env = None
+    
+    # 清理 VAE 缓存
+    if Flux2TPUVAEDecoder._cached_vae is not None:
+        print("  - Clearing VAE Decoder cache")
+        del Flux2TPUVAEDecoder._cached_vae
+        Flux2TPUVAEDecoder._cached_vae = None
+        Flux2TPUVAEDecoder._cached_model_id = None
+        Flux2TPUVAEDecoder._env = None
+    
+    # 清理全局 mesh
+    if _mesh is not None:
+        print("  - Clearing global Mesh")
+        _mesh = None
+    
+    # 重置 torchax 全局状态
+    _torchax_env = None
+    _ops_registered = False
+    _vae_ops_registered = False
+    
+    # 禁用 torchax 全局模式
+    if _globally_enabled:
+        try:
+            import torchax
+            torchax.disable_globally()
+            print("  - Disabled torchax globally")
+        except Exception as e:
+            print(f"  - Warning: Could not disable torchax: {e}")
+        _globally_enabled = False
+    
+    # 清理 JAX 缓存
+    try:
+        jax.clear_caches()
+        print("  - Cleared JAX caches")
+    except Exception as e:
+        print(f"  - Warning: Could not clear JAX caches: {e}")
+    
+    # 强制垃圾回收
+    gc.collect()
+    
+    print("[Flux2-TPU] Cleanup complete!\n")
+
+
+# ============================================================================
 # 全局 mesh（延迟创建）
 # ============================================================================
 

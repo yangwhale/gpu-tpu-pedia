@@ -74,6 +74,88 @@ from .utils import (
 _mesh = None
 
 
+# ============================================================================
+# 模型缓存清理函数
+# ============================================================================
+
+def cleanup_wan21_tpu_models():
+    """
+    清理所有 Wan 2.1 TPU 模型缓存。
+    
+    当用户点击 ComfyUI Manager 的 "Unload Models" 或 "Free Models and Node Cache" 按钮时，
+    ComfyUI 会调用 comfy.model_management.unload_all_models()，
+    我们通过 monkey-patch 让它同时调用此函数来清理 TPU 缓存。
+    
+    清理内容：
+    - Wan21TextEncoder: Text Encoder Pipeline
+    - Wan21TPUSampler: Transformer Pipeline
+    - Wan21TPUVAEDecoder: VAE Decoder
+    - 全局 Mesh
+    - Torchax 全局状态
+    - JAX 编译缓存
+    """
+    global _mesh, _torchax_env, _ops_registered, _globally_enabled
+    
+    print("\n[Wan21-TPU] Cleaning up cached models...")
+    
+    # 清理 TextEncoder 缓存
+    if Wan21TextEncoder._cached_pipe is not None:
+        print("  - Clearing Text Encoder cache")
+        del Wan21TextEncoder._cached_pipe
+        Wan21TextEncoder._cached_pipe = None
+        Wan21TextEncoder._cached_model_id = None
+        Wan21TextEncoder._is_compiled = False
+        Wan21TextEncoder._env = None
+    
+    # 清理 Sampler 缓存
+    if Wan21TPUSampler._cached_pipe is not None:
+        print("  - Clearing Transformer Pipeline cache")
+        del Wan21TPUSampler._cached_pipe
+        Wan21TPUSampler._cached_pipe = None
+        Wan21TPUSampler._cached_model_id = None
+        Wan21TPUSampler._env = None
+        Wan21TPUSampler._mesh = None
+    
+    # 清理 VAE 缓存
+    if Wan21TPUVAEDecoder._cached_vae is not None:
+        print("  - Clearing VAE Decoder cache")
+        del Wan21TPUVAEDecoder._cached_vae
+        Wan21TPUVAEDecoder._cached_vae = None
+        Wan21TPUVAEDecoder._cached_model_id = None
+        Wan21TPUVAEDecoder._env = None
+    
+    # 清理全局 mesh
+    if _mesh is not None:
+        print("  - Clearing global Mesh")
+        _mesh = None
+    
+    # 重置 torchax 全局状态
+    _torchax_env = None
+    _ops_registered = False
+    
+    # 禁用 torchax 全局模式
+    if _globally_enabled:
+        try:
+            import torchax
+            torchax.disable_globally()
+            print("  - Disabled torchax globally")
+        except Exception as e:
+            print(f"  - Warning: Could not disable torchax: {e}")
+        _globally_enabled = False
+    
+    # 清理 JAX 缓存
+    try:
+        jax.clear_caches()
+        print("  - Cleared JAX caches")
+    except Exception as e:
+        print(f"  - Warning: Could not clear JAX caches: {e}")
+    
+    # 强制垃圾回收
+    gc.collect()
+    
+    print("[Wan21-TPU] Cleanup complete!\n")
+
+
 def get_mesh():
     """获取全局 mesh，如果不存在则创建"""
     global _mesh

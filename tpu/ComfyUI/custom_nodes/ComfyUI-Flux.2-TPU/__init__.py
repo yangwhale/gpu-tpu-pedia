@@ -31,6 +31,55 @@ logging.getLogger('transformers').setLevel(logging.ERROR)
 
 
 # ============================================================================
+# 注册模型卸载钩子
+# ============================================================================
+
+def _register_tpu_cleanup_hook():
+    """
+    注册 TPU 模型清理钩子到 comfy.model_management.unload_all_models()
+    
+    当用户点击 ComfyUI Manager 的 "Unload Models" 或 "Free Models and Node Cache" 按钮时，
+    会调用 comfy.model_management.unload_all_models()，我们通过 monkey-patch 让它
+    同时调用我们的 cleanup_flux2_tpu_models() 函数来清理 TPU 缓存。
+    """
+    try:
+        import comfy.model_management as mm
+        
+        # 避免重复注册
+        if hasattr(mm, '_flux2_tpu_cleanup_registered') and mm._flux2_tpu_cleanup_registered:
+            return
+        
+        # 保存原始函数
+        _original_unload_all_models = mm.unload_all_models
+        
+        def _patched_unload_all_models():
+            """带有 TPU 清理的 unload_all_models"""
+            # 先调用原始函数
+            _original_unload_all_models()
+            
+            # 然后清理 TPU 缓存
+            try:
+                from .nodes import cleanup_flux2_tpu_models
+                cleanup_flux2_tpu_models()
+            except Exception as e:
+                print(f"[Flux2-TPU] Warning: Failed to cleanup TPU models: {e}")
+        
+        # 替换原始函数
+        mm.unload_all_models = _patched_unload_all_models
+        mm._flux2_tpu_cleanup_registered = True
+        print("[ComfyUI-Flux-TPU] Registered TPU cleanup hook for unload_all_models()")
+        
+    except ImportError:
+        print("[ComfyUI-Flux-TPU] Warning: Could not import comfy.model_management, cleanup hook not registered")
+    except Exception as e:
+        print(f"[ComfyUI-Flux-TPU] Warning: Failed to register cleanup hook: {e}")
+
+
+# 注册钩子
+_register_tpu_cleanup_hook()
+
+
+# ============================================================================
 # 导出 Nodes（不导入任何 TPU 相关代码）
 # ============================================================================
 

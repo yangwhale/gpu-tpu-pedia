@@ -153,6 +153,77 @@ def ensure_torchax_enabled(mesh_obj=None):
 
 
 # ============================================================================
+# TPU 模型清理函数
+# ============================================================================
+
+def cleanup_cogvideox_tpu_models():
+    """
+    清理所有 CogVideoX TPU 缓存的模型和资源。
+    
+    当用户点击 ComfyUI Manager 的 "Unload Models" 按钮时调用此函数，
+    释放 TPU 内存以便加载其他模型。
+    """
+    global _mesh, _torchax_env, _globally_enabled
+    
+    print("[CogVideoX-TPU] Cleaning up cached models...")
+    
+    cleaned = []
+    
+    # 清理 Text Encoder
+    if CogVideoXTextEncoder._cached_pipe is not None:
+        CogVideoXTextEncoder._cached_pipe = None
+        CogVideoXTextEncoder._cached_model_id = None
+        CogVideoXTextEncoder._is_compiled = False
+        CogVideoXTextEncoder._env = None
+        cleaned.append("TextEncoder")
+    
+    # 清理 Sampler (Transformer)
+    if CogVideoXTPUSampler._cached_pipe is not None:
+        CogVideoXTPUSampler._cached_pipe = None
+        CogVideoXTPUSampler._cached_model_id = None
+        CogVideoXTPUSampler._env = None
+        CogVideoXTPUSampler._mesh = None
+        cleaned.append("Sampler (Transformer)")
+    
+    # 清理 VAE Decoder
+    if CogVideoXTPUVAEDecoder._cached_vae is not None:
+        CogVideoXTPUVAEDecoder._cached_vae = None
+        CogVideoXTPUVAEDecoder._cached_model_id = None
+        CogVideoXTPUVAEDecoder._env = None
+        cleaned.append("VAEDecoder")
+    
+    # 清理全局 mesh
+    if _mesh is not None:
+        _mesh = None
+        cleaned.append("Mesh")
+    
+    # 清理 torchax 状态
+    if _torchax_env is not None:
+        _torchax_env = None
+    
+    if _globally_enabled:
+        try:
+            import torchax
+            torchax.disable_globally()
+            _globally_enabled = False
+            cleaned.append("Torchax")
+        except Exception:
+            pass
+    
+    # 强制垃圾回收和 JAX 缓存清理
+    gc.collect()
+    try:
+        jax.clear_caches()
+        cleaned.append("JAX caches")
+    except Exception:
+        pass
+    
+    if cleaned:
+        print(f"[CogVideoX-TPU] Cleaned: {', '.join(cleaned)}")
+    print("[CogVideoX-TPU] Cleanup complete!")
+
+
+# ============================================================================
 # CogVideoXTextEncoder Node - 按照 Wan2.1 架构
 # ============================================================================
 
