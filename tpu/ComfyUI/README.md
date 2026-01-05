@@ -9,6 +9,7 @@
 - [安装 Custom Nodes](#安装-custom-nodes)
 - [启动 ComfyUI](#启动-comfyui)
 - [Custom Nodes 介绍](#custom-nodes-介绍)
+  - [ComfyUI-CogVideoX-TPU](#comfyui-cogvideox-tpu)
   - [ComfyUI-Wan2.1-TPU](#comfyui-wan21-tpu)
   - [ComfyUI-Wan2.2-I2V-TPU](#comfyui-wan22-i2v-tpu)
   - [ComfyUI-Flux.2-TPU](#comfyui-flux2-tpu)
@@ -76,6 +77,7 @@ git clone https://github.com/yangwhale/gpu-tpu-pedia.git
 cd gpu-tpu-pedia/tpu/ComfyUI/custom_nodes
 
 # 复制 TPU Custom Nodes 到 ComfyUI
+cp -r ComfyUI-CogVideoX-TPU ~/ComfyUI/custom_nodes/
 cp -r ComfyUI-Wan2.1-TPU ~/ComfyUI/custom_nodes/
 cp -r ComfyUI-Wan2.2-I2V-TPU ~/ComfyUI/custom_nodes/
 cp -r ComfyUI-Flux.2-TPU ~/ComfyUI/custom_nodes/
@@ -120,6 +122,70 @@ python main.py --cpu --listen 0.0.0.0
 ---
 
 ## Custom Nodes 介绍
+
+### ComfyUI-CogVideoX-TPU
+
+**用途**：在 TPU 上运行 CogVideoX 1.5-5B 文本到视频 (T2V) 模型，使用 Splash Attention 加速生成高质量视频。
+
+![CogVideoX T2V ComfyUI 工作流](custom_nodes/ComfyUI-CogVideoX-TPU/examples/cogvideox_t2v_720p_demo.png)
+
+**节点列表：**
+
+| 节点名称 | 功能 |
+|---------|------|
+| `CogVideoXTextEncoder` | 编码文本提示词，使用 T5 生成 prompt embeddings |
+| `CogVideoXTPUSampler` | 在 TPU 上运行 Transformer 扩散采样，生成 latents |
+| `CogVideoXTPUVAEDecoder` | 解码 latents 为视频帧 |
+
+**工作流程：**
+
+```
+TextEncoder → TPUSampler → TPUVAEDecoder → CreateVideo → SaveVideo
+```
+
+**示例工作流：**
+
+加载 `custom_nodes/ComfyUI-CogVideoX-TPU/examples/cogvideox_t2v_720p.json`
+
+模板封面图片：
+
+![CogVideoX 生成效果](custom_nodes/ComfyUI-CogVideoX-TPU/examples/cogvideox_t2v_720p.jpg)
+
+**参数说明：**
+
+- **CogVideoXTextEncoder**
+  - `prompt`: 正面提示词
+  - `negative_prompt`: 负面提示词
+  - `model_id`: 模型路径 (默认 `zai-org/CogVideoX1.5-5B`)
+
+- **CogVideoXTPUSampler**
+  - `height`: 视频高度 (720)
+  - `width`: 视频宽度 (1280)
+  - `num_frames`: 帧数 (81 = 5秒 @ 16fps)
+  - `num_inference_steps`: 采样步数 (50)
+  - `guidance_scale`: CFG 强度 (6.0)
+  - `seed`: 随机种子
+
+- **CogVideoXTPUVAEDecoder**
+  - `fps`: 视频帧率 (16)
+
+**性能数据（8x TPU v6e）：**
+
+| 指标 | 首次运行 | 缓存后 |
+|------|---------|--------|
+| Transformer (50步) | 126s | 104s |
+| 每步推理时间 | 2.28s | 2.08s |
+| VAE 解码 | 6.24s | 1.78s |
+| 总时间 | 152s | 108s |
+
+**技术特点：**
+
+- **Splash Attention**：TPU 优化的注意力实现，使用 exp2 代替 exp 以提升 TPU 性能
+- **Tensor Parallelism**：支持跨 TPU 设备的权重分片 (dp=2, tp=4)
+- **SafeTensors 加载**：使用 `use_safetensors=True` 确保安全加载
+- **Protobuf 冲突修复**：预加载 Tokenizer 避免与 JAX 的 protobuf 版本冲突
+
+---
 
 ### ComfyUI-Wan2.1-TPU
 
