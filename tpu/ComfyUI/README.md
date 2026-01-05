@@ -306,28 +306,26 @@ TextEncoder ──────────┘
 
 ### ComfyUI-Crystools
 
-**用途**：实时监控 TPU 硬件状态，包括 HBM 内存使用、Duty Cycle 和 TensorCore 利用率。
+**用途**：实时监控硬件状态。在 TPU 环境下，自动检测并显示 TPU 设备信息。
+
+![Crystools TPU 监控器](custom_nodes/ComfyUI-Crystools/ComfyUI_Crystools_demo.png)
 
 **功能特性：**
 
-- **HBM 监控**：显示每个 TPU 芯片的 HBM 内存使用量和百分比
-- **Duty Cycle**：显示 TPU 的工作负载百分比
-- **TensorCore Util**：显示 TensorCore 的利用率
+- **CPU 监控**：显示 CPU 使用率
+- **RAM 监控**：显示系统内存使用量和百分比
+- **TPU/GPU 监控**（每个设备）：
+  - **Usage**：设备利用率
+  - **VRAM/HBM**：显存/高带宽内存使用量和百分比
+  - **Temperature**：设备温度
 
 **配置：**
 
-监控器默认显示在 ComfyUI 界面右上角。可在 Settings → Crystools 中配置：
+监控器显示在 ComfyUI 界面顶部菜单栏。可在 Settings → Crystools 中配置：
 
-- 显示的 TPU 数量（默认显示前 2 个）
-- 刷新频率
-- 监控器大小
-
-**显示布局：**
-
-```
-| CPU | RAM | HBM 0 | Duty 0 | TC 0 |
-|     |     | HBM 1 | Duty 1 | TC 1 |
-```
+- 各个监控项的显示/隐藏
+- 刷新频率（默认 0.5 秒）
+- 监控器尺寸（宽度/高度）
 
 ---
 
