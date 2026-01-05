@@ -8,8 +8,10 @@ This guide covers running ComfyUI on Google Cloud TPU, including installation an
 
 - [Requirements](#requirements)
 - [Installing ComfyUI](#installing-comfyui)
+- [Installing ComfyUI Manager](#installing-comfyui-manager)
 - [Installing Custom Nodes](#installing-custom-nodes)
 - [Starting ComfyUI](#starting-comfyui)
+- [Clearing HBM Before Switching Models](#clearing-hbm-before-switching-models)
 - [Custom Nodes Reference](#custom-nodes-reference)
   - [ComfyUI-CogVideoX-TPU](#comfyui-cogvideox-tpu)
   - [ComfyUI-Wan2.1-TPU](#comfyui-wan21-tpu)
@@ -55,6 +57,45 @@ sudo apt-get install ffmpeg
 # Or via conda
 conda install ffmpeg
 ```
+
+---
+
+## Installing ComfyUI Manager
+
+ComfyUI Manager is a powerful node management tool that supports installing, updating, and managing Custom Nodes. On TPU environments, we also need to configure it to use pip instead of uv (to avoid permission issues).
+
+### 1. Clone ComfyUI Manager
+
+```bash
+cd ~/ComfyUI/custom_nodes
+git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+```
+
+### 2. Configure to Use pip (Recommended for TPU)
+
+On TPU environments, uv may encounter permission issues. Create a config file to force pip usage:
+
+```bash
+# Create config directory
+mkdir -p ~/ComfyUI/user/__manager
+
+# Create config file
+cat > ~/ComfyUI/user/__manager/config.ini << 'EOF'
+[default]
+use_uv = False
+EOF
+```
+
+### 3. First Launch
+
+When launching ComfyUI for the first time, Manager will automatically install its dependencies:
+
+```bash
+cd ~/ComfyUI
+python main.py --cpu --listen 0.0.0.0
+```
+
+After startup, you'll see the **Manager** button in the top-right corner of the ComfyUI interface.
 
 ---
 
@@ -119,6 +160,53 @@ nohup python main.py --cpu --listen 0.0.0.0 > comfyui.log 2>&1 &
 screen -S comfyui
 python main.py --cpu --listen 0.0.0.0
 # Ctrl+A, D to detach
+```
+
+---
+
+## Clearing HBM Before Switching Models
+
+⚠️ **Important**: TPU's HBM (High Bandwidth Memory) is a limited resource. Before switching to a different model, **you must clear HBM first**, otherwise you'll encounter OOM (Out of Memory) errors.
+
+### Using ComfyUI Manager to Clear
+
+![Unload Models Button](https://user-images.githubusercontent.com/placeholder/unload_models.png)
+
+1. Click the **Manager** button in the top-right corner of the ComfyUI interface
+2. In the popup menu, click the **🧹 Unload Models** icon (broom icon)
+3. Wait for the cleanup to complete, then you can load a new model
+
+### When to Clear HBM
+
+| Scenario | Clearing Required |
+|----------|-------------------|
+| Switching from Flux.2 to Wan2.1 | ✅ Must clear |
+| Switching from Wan2.1 to CogVideoX | ✅ Must clear |
+| Switching from CogVideoX to Wan2.2-I2V | ✅ Must clear |
+| Running the same model multiple times | ❌ No need to clear |
+| Changing parameters of the same model (e.g., seed, prompt) | ❌ No need to clear |
+
+### Cleanup Process Log
+
+After clicking Unload Models, the terminal will show logs similar to:
+
+```
+[Flux2-TPU] Cleaning up cached models...
+[Flux2-TPU] Cleaned: TextEncoder, Sampler, VAEDecoder, Mesh, Torchax, JAX caches
+[Flux2-TPU] Cleanup complete!
+```
+
+### Manual Cleanup (Advanced)
+
+If Manager doesn't work properly, you can also restart the ComfyUI server to release all TPU memory:
+
+```bash
+# Kill existing process
+pkill -f "python main.py"
+
+# Restart
+cd ~/ComfyUI
+python main.py --cpu --listen 0.0.0.0
 ```
 
 ---

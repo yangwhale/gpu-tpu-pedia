@@ -8,8 +8,10 @@
 
 - [环境要求](#环境要求)
 - [安装 ComfyUI](#安装-comfyui)
+- [安装 ComfyUI Manager](#安装-comfyui-manager)
 - [安装 Custom Nodes](#安装-custom-nodes)
 - [启动 ComfyUI](#启动-comfyui)
+- [切换模型前清理 HBM](#切换模型前清理-hbm)
 - [Custom Nodes 介绍](#custom-nodes-介绍)
   - [ComfyUI-CogVideoX-TPU](#comfyui-cogvideox-tpu)
   - [ComfyUI-Wan2.1-TPU](#comfyui-wan21-tpu)
@@ -55,6 +57,45 @@ sudo apt-get install ffmpeg
 # 或使用 conda
 conda install ffmpeg
 ```
+
+---
+
+## 安装 ComfyUI Manager
+
+ComfyUI Manager 是一个功能强大的节点管理器，支持安装、更新和管理 Custom Nodes。在 TPU 环境中，我们还需要配置它使用 pip 而不是 uv（避免权限问题）。
+
+### 1. 克隆 ComfyUI Manager
+
+```bash
+cd ~/ComfyUI/custom_nodes
+git clone https://github.com/ltdrdata/ComfyUI-Manager.git
+```
+
+### 2. 配置使用 pip（TPU 环境推荐）
+
+在 TPU 环境中，uv 可能会遇到权限问题。创建配置文件强制使用 pip：
+
+```bash
+# 创建配置目录
+mkdir -p ~/ComfyUI/user/__manager
+
+# 创建配置文件
+cat > ~/ComfyUI/user/__manager/config.ini << 'EOF'
+[default]
+use_uv = False
+EOF
+```
+
+### 3. 首次启动
+
+首次启动 ComfyUI 时，Manager 会自动安装依赖：
+
+```bash
+cd ~/ComfyUI
+python main.py --cpu --listen 0.0.0.0
+```
+
+启动后，你会在 ComfyUI 界面右上角看到 **Manager** 按钮。
 
 ---
 
@@ -119,6 +160,53 @@ nohup python main.py --cpu --listen 0.0.0.0 > comfyui.log 2>&1 &
 screen -S comfyui
 python main.py --cpu --listen 0.0.0.0
 # Ctrl+A, D 分离
+```
+
+---
+
+## 切换模型前清理 HBM
+
+⚠️ **重要**：TPU 的 HBM（高带宽内存）是有限的资源。在切换到不同的模型之前，**必须先清理 HBM**，否则会因为内存不足导致 OOM 错误。
+
+### 使用 ComfyUI Manager 清理
+
+![Unload Models 按钮](https://user-images.githubusercontent.com/placeholder/unload_models.png)
+
+1. 点击 ComfyUI 界面右上角的 **Manager** 按钮
+2. 在弹出的菜单中，点击 **🧹 Unload Models** 图标（扫帚图标）
+3. 等待清理完成后，即可加载新的模型
+
+### 何时需要清理 HBM
+
+| 场景 | 是否需要清理 |
+|------|-------------|
+| 从 Flux.2 切换到 Wan2.1 | ✅ 必须清理 |
+| 从 Wan2.1 切换到 CogVideoX | ✅ 必须清理 |
+| 从 CogVideoX 切换到 Wan2.2-I2V | ✅ 必须清理 |
+| 使用同一个模型多次生成 | ❌ 无需清理 |
+| 修改同一模型的参数（如 seed、prompt） | ❌ 无需清理 |
+
+### 清理过程日志
+
+点击 Unload Models 后，终端会显示类似以下日志：
+
+```
+[Flux2-TPU] Cleaning up cached models...
+[Flux2-TPU] Cleaned: TextEncoder, Sampler, VAEDecoder, Mesh, Torchax, JAX caches
+[Flux2-TPU] Cleanup complete!
+```
+
+### 手动清理（高级）
+
+如果 Manager 无法正常工作，也可以重启 ComfyUI 服务器来释放所有 TPU 内存：
+
+```bash
+# 杀死现有进程
+pkill -f "python main.py"
+
+# 重新启动
+cd ~/ComfyUI
+python main.py --cpu --listen 0.0.0.0
 ```
 
 ---
