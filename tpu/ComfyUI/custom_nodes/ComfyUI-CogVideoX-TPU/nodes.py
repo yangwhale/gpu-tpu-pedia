@@ -267,7 +267,7 @@ class CogVideoXTextEncoder:
         
         print("  [DEBUG] Loading CogVideoXPipeline.from_pretrained...")
         pipe = CogVideoXPipeline.from_pretrained(
-            model_id, torch_dtype=torch.bfloat16
+            model_id, torch_dtype=torch.bfloat16, use_safetensors=True
         )
         print("  ✓ 模型加载完成")
         
@@ -542,7 +542,7 @@ class CogVideoXTPUSampler:
         
         print("  [DEBUG] Loading CogVideoXPipeline.from_pretrained...")
         pipe = CogVideoXPipeline.from_pretrained(
-            model_id, torch_dtype=torch.bfloat16
+            model_id, torch_dtype=torch.bfloat16, use_safetensors=True
         )
         print("  ✓ 模型加载完成")
         
@@ -738,7 +738,7 @@ class CogVideoXTPUVAEDecoder:
         
         print("  [DEBUG] Loading AutoencoderKLCogVideoX.from_pretrained...")
         vae = AutoencoderKLCogVideoX.from_pretrained(
-            model_id, subfolder="vae", torch_dtype=torch.bfloat16
+            model_id, subfolder="vae", torch_dtype=torch.bfloat16, use_safetensors=True
         )
         print("  ✓ VAE 加载完成")
         
