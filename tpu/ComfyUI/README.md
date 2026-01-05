@@ -314,10 +314,10 @@ TextEncoder ──────────┘
 
 - **CPU 监控**：显示 CPU 使用率
 - **RAM 监控**：显示系统内存使用量和百分比
-- **TPU/GPU 监控**（每个设备）：
-  - **Usage**：设备利用率
-  - **VRAM/HBM**：显存/高带宽内存使用量和百分比
-  - **Temperature**：设备温度
+- **TPU 监控**（每个设备）：
+  - **HBM**：高带宽内存使用量和百分比
+  - **Busy**：TPU 忙碌状态百分比
+  - **MFU**：Model FLOPS Utilization（模型算力利用率）
 
 **配置：**
 
