@@ -381,21 +381,46 @@ class Wan22I2VImageEncoder:
         print(f"  Loading Wan 2.2 I2V Pipeline from {model_id}...")
         
         setup_pytree_registrations()
+        
+        # 确保 torchax 完全禁用，避免干扰 safetensors 加载
         disable_torchax_temporarily()
+        
+        # 保存当前默认设备和类型，设置为 CPU 加载
+        original_device = torch.get_default_device() if hasattr(torch, 'get_default_device') else None
+        try:
+            torch.set_default_device('cpu')
+        except Exception:
+            pass  # 老版本 PyTorch 不支持
         
         from diffusers.pipelines.wan.pipeline_wan_i2v_torchax import WanImageToVideoPipeline
         from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
         
         torch.set_default_dtype(torch.bfloat16)
         
+        # 显式指定 device_map 为 CPU 以避免 torchax 干扰
+        print("  Loading VAE on CPU (avoiding torchax interference)...")
+        vae = AutoencoderKLWan.from_pretrained(
+            model_id,
+            subfolder="vae",
+            torch_dtype=torch.bfloat16,
+            device_map="cpu",
+        )
+        
+        print("  Loading Pipeline on CPU...")
         pipe = WanImageToVideoPipeline.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
-            vae=AutoencoderKLWan.from_pretrained(
-                model_id, subfolder="vae", torch_dtype=torch.bfloat16
-            ),
+            vae=vae,
+            device_map="cpu",
         )
-        print("  ✓ Pipeline loaded")
+        print("  ✓ Pipeline loaded on CPU")
+        
+        # 恢复默认设备
+        if original_device is not None:
+            try:
+                torch.set_default_device(original_device)
+            except Exception:
+                pass
         
         env = ensure_torchax_enabled(mesh)
         register_conv_ops(env)
@@ -512,21 +537,46 @@ class Wan22I2VTextEncoder:
         print(f"  Loading Wan 2.2 I2V Pipeline from {model_id}...")
         
         setup_pytree_registrations()
+        
+        # 确保 torchax 完全禁用，避免干扰 safetensors 加载
         disable_torchax_temporarily()
+        
+        # 保存当前默认设备，设置为 CPU 加载
+        original_device = torch.get_default_device() if hasattr(torch, 'get_default_device') else None
+        try:
+            torch.set_default_device('cpu')
+        except Exception:
+            pass
         
         from diffusers.pipelines.wan.pipeline_wan_i2v_torchax import WanImageToVideoPipeline
         from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
         
         torch.set_default_dtype(torch.bfloat16)
         
+        # 显式指定 device_map 为 CPU 以避免 torchax 干扰
+        print("  Loading VAE on CPU (avoiding torchax interference)...")
+        vae = AutoencoderKLWan.from_pretrained(
+            model_id,
+            subfolder="vae",
+            torch_dtype=torch.bfloat16,
+            device_map="cpu",
+        )
+        
+        print("  Loading Pipeline on CPU...")
         pipe = WanImageToVideoPipeline.from_pretrained(
             model_id,
             torch_dtype=torch.bfloat16,
-            vae=AutoencoderKLWan.from_pretrained(
-                model_id, subfolder="vae", torch_dtype=torch.bfloat16
-            ),
+            vae=vae,
+            device_map="cpu",
         )
-        print("  ✓ Pipeline loaded")
+        print("  ✓ Pipeline loaded on CPU")
+        
+        # 恢复默认设备
+        if original_device is not None:
+            try:
+                torch.set_default_device(original_device)
+            except Exception:
+                pass
         
         env = ensure_torchax_enabled(mesh)
         register_text_encoder_ops(env)
@@ -941,14 +991,34 @@ class Wan22I2VTPUVAEDecoder:
         
         print(f"  Loading VAE from {model_id}...")
         
+        # 确保 torchax 完全禁用，避免干扰 safetensors 加载
         disable_torchax_temporarily()
+        
+        # 保存当前默认设备，设置为 CPU 加载
+        original_device = torch.get_default_device() if hasattr(torch, 'get_default_device') else None
+        try:
+            torch.set_default_device('cpu')
+        except Exception:
+            pass
         
         from diffusers.models.autoencoders.autoencoder_kl_wan_torchax import AutoencoderKLWan
         
+        # 显式指定 device_map 为 CPU 以避免 torchax 干扰
+        print("  Loading VAE on CPU (avoiding torchax interference)...")
         vae = AutoencoderKLWan.from_pretrained(
-            model_id, subfolder="vae", torch_dtype=torch.bfloat16
+            model_id,
+            subfolder="vae",
+            torch_dtype=torch.bfloat16,
+            device_map="cpu",
         )
-        print("  ✓ VAE loaded")
+        print("  ✓ VAE loaded on CPU")
+        
+        # 恢复默认设备
+        if original_device is not None:
+            try:
+                torch.set_default_device(original_device)
+            except Exception:
+                pass
         
         env = ensure_torchax_enabled(mesh)
         register_conv_ops(env)
