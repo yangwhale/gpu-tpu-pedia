@@ -41,6 +41,12 @@ import torch
 import torch.distributed as dist
 
 def main():
+    # 清除 torchrun 自动设置的环境变量以消除 GIB shim 警告
+    # 这些变量是 torchrun 在子进程中设置的，需要在 NCCL 初始化前清除
+    for var in ["TORCH_NCCL_USE_COMM_NONBLOCKING", "TORCH_NCCL_ASYNC_ERROR_HANDLING"]:
+        if var in os.environ:
+            del os.environ[var]
+    
     # 初始化分布式环境
     dist.init_process_group(backend="nccl")
     
@@ -87,7 +93,12 @@ if __name__ == "__main__":
     main()
 EOF
 
+# 初始化 NCCL 环境（GIB 自动管理）
+source /usr/local/gib/scripts/set_nccl_env.sh
+
 # 使用 torchrun 启动分布式测试
+# 注意：GIB shim 警告的环境变量由 torchrun 在子进程中设置，
+# 需要在 Python 脚本中清除（见 ddp_test.py 中的处理）
 torchrun \
   --nnodes=$NNODES \
   --nproc_per_node=$GPUS_PER_NODE \
