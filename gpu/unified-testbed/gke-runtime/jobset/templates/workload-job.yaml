@@ -142,6 +142,14 @@ spec:
               configMap:
                 name: "{{.Release.Name}}-launcher"
 
+            # 任务脚本卷（可选，通过 --set-file task_script=path/to/script.sh 指定）
+            {{- if $root.Values.task_script }}
+            - name: task-script
+              configMap:
+                name: "{{.Release.Name}}-task-script"
+                defaultMode: 0755
+            {{- end }}
+
             # 用户脚本卷（可选）
             {{- if .Files.Get "scripts/training-script.sh" }}
             - name: training-script
@@ -291,6 +299,10 @@ spec:
               {{- toYaml .Values.network.ncclSettings | nindent 14 }}
               {{ end }}
 
+              # 调试模式：保持容器运行
+              - name: SLEEP_INFINITY
+                value: "{{ $root.Values.workload.sleepInfinity | default true }}"
+
               # 用户自定义环境变量
               {{ if $root.Values.workload.envs }}
               {{- toYaml .Values.workload.envs | nindent 14 }}
@@ -376,6 +388,12 @@ spec:
                 # 启动器脚本
                 - name: workload-launcher
                   mountPath: /workload/launcher
+
+                # 任务脚本（可选）
+                {{- if $root.Values.task_script }}
+                - name: task-script
+                  mountPath: /workload/task
+                {{- end }}
                 
                 # 用户训练脚本（可选）
                 {{- if .Files.Get "scripts/training-script.sh" }}

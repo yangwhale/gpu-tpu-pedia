@@ -12,14 +12,17 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
+# =============================================================================
+# Task Script ConfigMap
+# 通过 --set-file task_script=path/to/script.sh 指定任务脚本
+# =============================================================================
+
+{{- if .Values.task_script }}
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: "{{ .Release.Name }}-launcher"
+  name: "{{ .Release.Name }}-task-script"
 data:
-  launch-workload.sh: |-
-{{- if .Values.workload_launcher }}
-{{ .Values.workload_launcher | nindent 4 }}
-{{- else }}
-{{ .Files.Get "files/default-launcher.sh" | nindent 4 }}
+  task-script.sh: |-
+{{ .Values.task_script | nindent 4 }}
 {{- end }}

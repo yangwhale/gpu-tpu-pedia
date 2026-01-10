@@ -1,16 +1,24 @@
 # =============================================================================
 # A4 Unified Testbed - 快速命令参考
 # =============================================================================
+# 使用说明:
+#   1. 复制此文件为 command.sh: cp command.template.sh command.sh
+#   2. 修改下方 <YOUR_...> 占位符为您的实际值
+#   3. command.sh 已加入 .gitignore，不会被提交到版本控制
+# =============================================================================
 
 # -----------------------------------------------------------------------------
 # 1. 连接到 GKE 集群
 # -----------------------------------------------------------------------------
-export PROJECT=gpu-launchpad-playground
-export REGION=asia-southeast1
-export ZONE=asia-southeast1-b
-export CLUSTER_NAME=chrisya-gke-a4
-export GCS_BUCKET=chrisya-gpu-pg-ase1
-export ARTIFACT_REGISTRY=asia-docker.pkg.dev/gpu-launchpad-playground/chrisya-gpu-pgp-repo
+export PROJECT=<YOUR_PROJECT_ID>                    # Google Cloud 项目 ID
+export REGION=<YOUR_REGION>                         # 区域，如 asia-southeast1
+export ZONE=<YOUR_ZONE>                             # 可用区，如 asia-southeast1-b
+export CLUSTER_NAME=<YOUR_CLUSTER_NAME>             # GKE 集群名称
+export GCS_BUCKET=<YOUR_GCS_BUCKET>                 # GCS 存储桶名称
+# Artifact Registry 格式：
+#   多区域: asia-docker.pkg.dev, us-docker.pkg.dev, europe-docker.pkg.dev
+#   单区域: us-central1-docker.pkg.dev, asia-southeast1-docker.pkg.dev
+export ARTIFACT_REGISTRY=<YOUR_AR_LOCATION>-docker.pkg.dev/<YOUR_PROJECT_ID>/<YOUR_REPO>
 
 gcloud config set project ${PROJECT}
 gcloud config set compute/zone ${ZONE}
@@ -39,80 +47,46 @@ gcloud builds submit --region=${REGION} \
 # 4. 部署工作负载
 # -----------------------------------------------------------------------------
 
+# 部署结构说明:
+# - 启动脚本已内置在 chart 中，无需额外指定
+# - task_script: 可选，任务脚本（挂载到 /workload/task/task-script.sh）
+#
+# 基础模式: 不设置 task_script，容器保持运行，可 SSH 进入调试
+# 测试模式: 设置 task_script 和 sleepInfinity=false，运行测试后退出
+
 # 4.1 基础模式（交互式调试，保持容器运行）
+# 只初始化分布式环境，不运行任何任务，容器保持运行供调试使用
 export WORKLOAD_NAME=$USER-testbed
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/gke-runtime/launchers/torchrun-startup.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    $WORKLOAD_NAME \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $WORKLOAD_NAME $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml
 
-# 4.2 NCCL 测试模式
+# 4.2 NCCL 测试模式（自动运行 NCCL 测试后退出）
 export WORKLOAD_NAME=$USER-nccl-test
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/nccl-test.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "workload.envs[1].value"="false" \
-    $WORKLOAD_NAME \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $WORKLOAD_NAME $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/nccl-test.sh \
+    --set workload.sleepInfinity=false
 
-# 4.3 DDP 测试模式
+# 4.3 DDP 测试模式（自动运行 PyTorch DDP 测试后退出）
 export WORKLOAD_NAME=$USER-ddp-test
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/torchrun-ddp-test.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "workload.envs[1].value"="false" \
-    $WORKLOAD_NAME \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $WORKLOAD_NAME $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/torchrun-ddp-test.sh \
+    --set workload.sleepInfinity=false
 
-# 4.4 Pai-Megatron Qwen3 训练模式（需要 NFS）
+# 4.4 Pai-Megatron Qwen3 训练模式（使用 values.yaml 中的存储配置，默认 Lustre）
 export WORKLOAD_NAME=$USER-qwen3-training
-export FILESTORE_IP=<FILESTORE_IP>
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/pai-megatron-qwen3.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "volumes.nfs.enabled"=true \
-    --set "volumes.nfs.ip"=$FILESTORE_IP \
-    --set "workload.envs[1].value"="false" \
-    $WORKLOAD_NAME \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $WORKLOAD_NAME $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/pai-megatron-qwen3.sh \
+    --set workload.sleepInfinity=false
 
-# 4.5 Pai-Megatron Qwen3-Next 训练模式（需要 NFS）
+# 4.5 Pai-Megatron Qwen3-Next 训练模式（使用 values.yaml 中的存储配置，默认 Lustre）
 export WORKLOAD_NAME=$USER-qwen3-next-training
-export FILESTORE_IP=<FILESTORE_IP>
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/pai-megatron-qwen3-next.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "volumes.nfs.enabled"=true \
-    --set "volumes.nfs.ip"=$FILESTORE_IP \
-    --set "workload.envs[1].value"="false" \
-    $WORKLOAD_NAME \
-    $RECIPE_ROOT/gke-runtime/jobset
-
-# 4.6 Pai-Megatron Qwen3-Next + Lustre 高性能存储
-export WORKLOAD_NAME=$USER-qwen3-next-lustre
-export LUSTRE_IP=172.27.48.5
-export LUSTRE_FS=lustrefs
-export LUSTRE_INSTANCE=my-lustre
-export LUSTRE_LOCATION=us-central1-a
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/pai-megatron-qwen3-next.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "volumes.lustre.enabled"=true \
-    --set "volumes.lustre.ip"=$LUSTRE_IP \
-    --set "volumes.lustre.filesystem"=$LUSTRE_FS \
-    --set "volumes.lustre.instanceName"=$LUSTRE_INSTANCE \
-    --set "volumes.lustre.projectId"=$PROJECT \
-    --set "volumes.lustre.location"=$LUSTRE_LOCATION \
-    --set "workload.envs[1].value"="false" \
-    $WORKLOAD_NAME \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $WORKLOAD_NAME $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/pai-megatron-qwen3-next.sh \
+    --set workload.sleepInfinity=false
 
 # -----------------------------------------------------------------------------
 # 5. 查看工作负载状态

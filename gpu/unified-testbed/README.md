@@ -200,42 +200,19 @@ volumes:
 
 #### Lustre 部署命令
 
+所有 Lustre 配置都在 `values.yaml` 中设置，部署命令非常简洁：
+
 ```bash
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/pai-megatron-qwen3-next.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.lustre.enabled"=true \
-    --set "volumes.lustre.ip"="172.27.48.5" \
-    --set "volumes.lustre.filesystem"="lustrefs" \
-    --set "volumes.lustre.instanceName"="my-lustre" \
-    --set "volumes.lustre.projectId"="$PROJECT_ID" \
-    --set "volumes.lustre.location"="us-central1-a" \
-    --set "workload.envs[1].value"="false" \
-    $USER-qwen3-lustre \
-    $RECIPE_ROOT/gke-runtime/jobset
+# Lustre 配置已在 values.yaml 中启用
+helm install $USER-qwen3-lustre $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/pai-megatron-qwen3-next.sh \
+    --set workload.sleepInfinity=false
 ```
 
 ## 快速开始
 
-### 1. 环境配置
-
-```bash
-# 设置环境变量
-export PROJECT_ID=<YOUR_PROJECT_ID>
-export REGION=us-central1
-export CLUSTER_NAME=<YOUR_CLUSTER_NAME>
-export GCS_BUCKET=<YOUR_GCS_BUCKET>
-export KUEUE_NAME=a4-high
-export ARTIFACT_REGISTRY=$REGION-docker.pkg.dev/$PROJECT_ID/<YOUR_REPO>
-
-# 设置默认项目
-gcloud config set project $PROJECT_ID
-
-# 获取集群凭证
-gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION
-```
-
-### 2. 克隆仓库
+### 1. 克隆仓库
 
 ```bash
 git clone https://github.com/ai-hypercomputer/gpu-recipes.git
@@ -244,7 +221,66 @@ export REPO_ROOT=$(git rev-parse --show-toplevel)
 export RECIPE_ROOT=$REPO_ROOT/gpu/unified-testbed
 ```
 
-### 3. 构建 Docker 镜像
+### 2. 复制配置模板
+
+从模板文件创建您的个人配置文件：
+
+```bash
+# 复制命令参考脚本
+cp $RECIPE_ROOT/command.template.sh $RECIPE_ROOT/command.sh
+
+# 复制 Helm values 配置
+cp $RECIPE_ROOT/gke-runtime/values.template.yaml $RECIPE_ROOT/gke-runtime/values.yaml
+```
+
+### 3. 修改配置文件
+
+编辑 `command.sh`，填入您的项目信息：
+
+```bash
+export PROJECT=<YOUR_PROJECT_ID>           # 您的 Google Cloud 项目 ID
+export REGION=<YOUR_REGION>                # 区域，如 asia-southeast1
+export ZONE=<YOUR_ZONE>                    # 可用区，如 asia-southeast1-b
+export CLUSTER_NAME=<YOUR_CLUSTER_NAME>    # GKE 集群名称
+export GCS_BUCKET=<YOUR_GCS_BUCKET>        # GCS 存储桶名称
+export ARTIFACT_REGISTRY=<YOUR_REGION>-docker.pkg.dev/<YOUR_PROJECT_ID>/<YOUR_REPO>
+```
+
+编辑 `gke-runtime/values.yaml`，填入敏感信息：
+
+```yaml
+workload:
+  image: "<YOUR_REGION>-docker.pkg.dev/<YOUR_PROJECT_ID>/<YOUR_REPO>/unified-testbed-pytorch:25.06-py3"
+  envs:
+    - name: SSH_PUBLIC_KEY
+      value: "<YOUR_SSH_PUBLIC_KEY>"    # 您的 SSH 公钥
+    - name: HF_TOKEN
+      value: "<YOUR_HF_TOKEN>"          # 您的 HuggingFace Token
+
+volumes:
+  nfs:
+    ip: "<YOUR_FILESTORE_IP>"           # Filestore IP
+    instance: "<YOUR_FILESTORE_INSTANCE>"
+  lustre:
+    ip: "<YOUR_LUSTRE_IP>"              # Lustre 实例 IP
+    instanceName: "<YOUR_LUSTRE_INSTANCE>"
+    projectId: "<YOUR_PROJECT_ID>"
+  gcsMounts:
+    - bucketName: <YOUR_GCS_BUCKET>     # 您的 GCS 存储桶
+```
+
+> **注意**：`command.sh` 和 `gke-runtime/values.yaml` 已加入 `.gitignore`，不会被提交到版本控制，请放心存储敏感信息。
+
+### 4. 连接到 GKE 集群
+
+```bash
+source $RECIPE_ROOT/command.sh
+# 或手动执行：
+gcloud config set project $PROJECT
+gcloud container clusters get-credentials $CLUSTER_NAME --region $REGION
+```
+
+### 5. 构建 Docker 镜像
 
 ```bash
 cd $RECIPE_ROOT/docker
@@ -259,88 +295,62 @@ gcloud builds submit --region=${REGION} \
 
 ### 4. 部署测试环境
 
+部署结构说明：
+
+- **启动脚本已内置在 chart 中**，无需额外指定 `--set-file workload_launcher`
+- **任务脚本可选**，通过 `--set-file task_script=...` 指定（挂载到 `/workload/task/task-script.sh`）
+- **`workload.sleepInfinity`** 控制容器是否保持运行（默认 `true`）
+
 #### 基础模式（交互式调试）
 
 ```bash
-export WORKLOAD_IMAGE=$ARTIFACT_REGISTRY/unified-testbed-pytorch:25.06-py3
-
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/gke-runtime/launchers/torchrun-startup.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    $USER-testbed \
-    $RECIPE_ROOT/gke-runtime/jobset
+# 只初始化分布式环境，不运行任何任务，容器保持运行供调试使用
+helm install $USER-testbed $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml
 ```
 
 #### NCCL 测试模式
 
 ```bash
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/nccl-test.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "workload.envs[1].value"="false" \
-    $USER-nccl-test \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $USER-nccl-test $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/nccl-test.sh \
+    --set workload.sleepInfinity=false
 ```
 
 #### DDP 测试模式
 
 ```bash
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/torchrun-ddp-test.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "workload.envs[1].value"="false" \
-    $USER-ddp-test \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $USER-ddp-test $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/torchrun-ddp-test.sh \
+    --set workload.sleepInfinity=false
 ```
 
-#### Pai-Megatron Qwen3 训练模式（需要 NFS）
+#### Pai-Megatron Qwen3 训练模式
 
-Qwen3-30B-A3B 模型训练：
+Qwen3-30B-A3B 模型训练（默认使用 Lustre 存储）：
 
 ```bash
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/pai-megatron-qwen3.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "volumes.nfs.enabled"=true \
-    --set "volumes.nfs.ip"=<FILESTORE_IP> \
-    --set "workload.envs[1].value"="false" \
-    $USER-qwen3-training \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $USER-qwen3-training $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/pai-megatron-qwen3.sh \
+    --set workload.sleepInfinity=false
 ```
 
-#### Pai-Megatron Qwen3-Next 训练模式（需要 NFS）
+#### Pai-Megatron Qwen3-Next 训练模式
 
 Qwen3-Next-80B-A3B-Instruct 模型训练（支持预训练和 SFT 微调）：
 
 ```bash
 # 预训练模式
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/pai-megatron-qwen3-next.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "volumes.nfs.enabled"=true \
-    --set "volumes.nfs.ip"=<FILESTORE_IP> \
-    --set "workload.envs[1].value"="false" \
-    $USER-qwen3-next-training \
-    $RECIPE_ROOT/gke-runtime/jobset
-
-# SFT 微调模式
-helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
-    --set-file workload_launcher=$RECIPE_ROOT/examples/pai-megatron-qwen3-next.sh \
-    --set "workload.image"=$WORKLOAD_IMAGE \
-    --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
-    --set "volumes.nfs.enabled"=true \
-    --set "volumes.nfs.ip"=<FILESTORE_IP> \
-    --set "workload.envs[1].value"="false" \
-    --set "workload.envs[10].name"="TRAINING_MODE" \
-    --set "workload.envs[10].value"="sft" \
-    $USER-qwen3-next-sft \
-    $RECIPE_ROOT/gke-runtime/jobset
+helm install $USER-qwen3-next-training $RECIPE_ROOT/gke-runtime/jobset \
+    -f $RECIPE_ROOT/gke-runtime/values.yaml \
+    --set-file task_script=$RECIPE_ROOT/examples/pai-megatron-qwen3-next.sh \
+    --set workload.sleepInfinity=false
 ```
+
+> **注意**：存储配置在 `values.yaml` 中设置，默认使用 Lustre。如果没有 Lustre，可在 `values.yaml` 中禁用 Lustre 并启用 NFS。
 
 ## 配置参数
 
@@ -348,12 +358,14 @@ helm install -f $RECIPE_ROOT/gke-runtime/values.yaml \
 
 | 参数 | 默认值 | 说明 |
 |------|--------|------|
-| `workload.gpus` | 32 | 总 GPU 数量（必须是 8 的倍数） |
+| `workload.gpus` | 16 | 总 GPU 数量（必须是 8 的倍数） |
 | `workload.image` | - | 容器镜像地址 |
+| `workload.sleepInfinity` | true | 保持容器运行（调试模式） |
 | `workload.envs[0].value` (SSH_PUBLIC_KEY) | "" | SSH 公钥 |
-| `workload.envs[1].value` (SLEEP_INFINITY) | "true" | 保持容器运行 |
-| `volumes.nfs.enabled` | false | 是否启用 NFS |
-| `volumes.nfs.ip` | "" | Filestore IP |
+| `volumes.nfs.enabled` | true | 是否启用 NFS |
+| `volumes.nfs.ip` | "172.27.49.2" | Filestore IP |
+| `volumes.lustre.enabled` | true | 是否启用 Managed Lustre |
+| `volumes.lustre.ip` | "172.27.48.5" | Lustre 实例 IP |
 | `network.hostNetwork` | true | 使用主机网络 |
 | `network.gibVersion` | latest | GIB 插件版本 |
 
@@ -387,6 +399,47 @@ pip install datasets==3.6.0 packaging==24.2 modelscope -q
 ```
 
 如果已在镜像中完成这些准备工作，可以设置 `SKIP_ENV_SETUP=true` 跳过此步骤。
+
+## SSH 远程访问
+
+### 设置 Port Forward
+
+```bash
+# 获取 Pod 名称
+POD_NAME=$(kubectl get pods -o name | grep $USER-testbed-workload-0-0 | head -1 | cut -d/ -f2)
+
+# 启动 Port Forward（后台运行）
+kubectl port-forward pod/$POD_NAME 2220:2222 &
+```
+
+### 配置 SSH
+
+在 `~/.ssh/config` 中添加：
+
+```
+Host gke-pod-0
+    HostName localhost
+    User root
+    Port 2220
+    IdentityFile ~/.ssh/your-private-key
+    ProxyCommand none
+```
+
+**注意**：Host 名称不要使用冒号（如 `pod:xxx`），否则可能被 corp-ssh-helper 拦截。
+
+### 使用 VSCode Remote SSH
+
+1. 安装 VSCode Remote SSH 扩展
+2. 在 Remote SSH 中连接到 `gke-pod-0`
+3. 即可在远程 Pod 中进行开发和调试
+
+### 命令行 SSH 连接
+
+```bash
+ssh gke-pod-0
+# 或直接
+ssh -o ProxyCommand=none -i ~/.ssh/your-private-key root@localhost -p 2220
+```
 
 ## 监控和调试
 

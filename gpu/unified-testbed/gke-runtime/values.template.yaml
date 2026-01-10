@@ -13,8 +13,12 @@
 # limitations under the License.
 
 # =============================================================================
-# Unified Testbed Helm Chart Values
-# 统一测试环境的 Helm Chart 配置
+# Unified Testbed Helm Chart Values - 模板文件
+# =============================================================================
+# 使用说明:
+#   1. 复制此文件为 values.yaml: cp values.template.yaml values.yaml
+#   2. 修改下方 <YOUR_...> 占位符为您的实际值
+#   3. values.yaml 已加入 .gitignore，不会被提交到版本控制
 # =============================================================================
 
 # -----------------------------------------------------------------------------
@@ -44,34 +48,33 @@ volumes:
   # NFS 共享存储配置 (Filestore)
   nfs:
     enabled: false # 是否启用 NFS
-    ip: "" # Filestore IP 地址
-    volume: "nfslarge" # 卷名称
-    region: "" # 区域
-    instance: "" # Filestore 实例名
+    ip: "<YOUR_FILESTORE_IP>" # Filestore IP 地址，如 10.x.x.x
+    volume: "<YOUR_VOLUME_NAME>" # 卷名称，如 nfslarge
+    region: "<YOUR_ZONE>" # 区域，如 asia-southeast1-b
+    instance: "<YOUR_FILESTORE_INSTANCE>" # Filestore 实例名
     storage: "10Ti" # 存储容量
+    mountPath: "/mnt/nfs" # 容器内挂载路径
 
   # Managed Lustre 存储配置
   # 参考: https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-lustre-csi-driver
   # 挂载点格式: IP@tcp:/filesystem (例如: 172.27.48.5@tcp:/lustrefs)
   lustre:
     enabled: false # 是否启用 Lustre
-    ip: "" # Lustre 实例 IP (例如: 172.27.48.5)
-    filesystem: "" # 文件系统名称 (例如: lustrefs)
-    instanceName: "" # Lustre 实例名称
-    projectId: "" # Google Cloud 项目 ID
-    location: "" # 可用区 (例如: us-central1-a)
+    ip: "<YOUR_LUSTRE_IP>" # Lustre 实例 IP
+    filesystem: "lustrefs" # 文件系统名称
+    instanceName: "<YOUR_LUSTRE_INSTANCE>" # Lustre 实例名称
+    projectId: "<YOUR_PROJECT_ID>" # Google Cloud 项目 ID
+    location: "<YOUR_ZONE>" # 可用区
     storage: "9000Gi" # 存储容量
     storageClassName: "" # StorageClass 名称 (留空使用默认)
-    mountPath: "/lustre" # 容器内挂载路径
+    mountPath: "/mnt/lustrefs" # 容器内挂载路径
 
-  # PVC 挂载配置
-  pvcMounts:
-    - claimName: nfs-pvc
-      mountPath: "/mnt"
+  # PVC 挂载配置（NFS 启用时自动配置，不需要手动设置）
+  pvcMounts: []
 
   # GCS Bucket 挂载配置
   gcsMounts:
-    - bucketName: # 主存储桶（留空，部署时通过 --set 指定）
+    - bucketName: <YOUR_GCS_BUCKET> # 您的 GCS 存储桶
       mountPath: "/gcs"
       mountOptions: "implicit-dirs"
     - bucketName: cloud-samples-data # 公共示例数据桶
@@ -83,10 +86,13 @@ volumes:
 # -----------------------------------------------------------------------------
 workload:
   # GPU 数量（必须是 8 的倍数或 <= 8）
-  gpus: 32
+  gpus: 16
 
   # 容器镜像
-  image: "" # 部署时通过 --set 指定
+  # Artifact Registry 格式：
+  #   多区域: asia-docker.pkg.dev, us-docker.pkg.dev, europe-docker.pkg.dev
+  #   单区域: us-central1-docker.pkg.dev, asia-southeast1-docker.pkg.dev
+  image: "<YOUR_AR_LOCATION>-docker.pkg.dev/<YOUR_PROJECT_ID>/<YOUR_REPO>/unified-testbed-pytorch:25.06-py3"
 
   # 最大重启次数
   max_workload_restarts: 0
@@ -111,19 +117,21 @@ workload:
     skipCheckpointConversion: false # 跳过检查点转换
     skipTraining: false # 跳过训练
 
+  # 调试模式：保持容器运行（设为 false 时运行完测试脚本后退出）
+  sleepInfinity: true
+
   # 环境变量
   envs:
-    # SSH 公钥（用于多节点通信）
+    # SSH 公钥（用于从本地机器远程 SSH 进入 Pod 调试）
+    # 生成方式: ssh-keygen -t rsa -b 4096 -f ~/.ssh/my-gke-key
+    # 然后将 ~/.ssh/my-gke-key.pub 的内容粘贴到这里
     - name: SSH_PUBLIC_KEY
-      value: ""
-
-    # 调试模式：保持容器运行
-    - name: SLEEP_INFINITY
-      value: "true"
+      value: "<YOUR_SSH_PUBLIC_KEY>"
 
     # HuggingFace Token（用于模型下载）
+    # 获取方式: https://huggingface.co/settings/tokens
     - name: HF_TOKEN
-      value: ""
+      value: "<YOUR_HF_TOKEN>"
 
     # NeMo/Megatron 相关配置
     - name: NVTE_FWD_LAYERNORM_SM_MARGIN
@@ -135,9 +143,10 @@ workload:
     - name: TORCH_DISTRIBUTED_TRACING
       value: "ALL"
 
-    # 工作流环境变量（可选）
+    # 工作流环境变量（根据存储类型设置）
+    # Lustre: /mnt/lustrefs, NFS: /mnt/nfs
     - name: PAI_WORKSPACE_ROOT
-      value: "/mnt"
+      value: "/mnt/lustrefs"
 
 # -----------------------------------------------------------------------------
 # 网络配置
