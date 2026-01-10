@@ -1,0 +1,418 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+{{ $timestamp := now | date "2006-01-02-15-04-05" }}
+{{ $jobSuffix := randAlphaNum 4 | lower }}
+{{ $jobuuid := uuidv4 }}
+{{ $nodes := div .Values.workload.gpus 8 | max 1 }}
+{{ $gpusPerNode := min .Values.workload.gpus 8 }}
+{{- $root := . -}}
+
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: "{{ .Release.Name }}"
+  namespace: default
+  labels:
+  {{- if $root.Values.queue }}
+    kueue.x-k8s.io/queue-name: "{{ $root.Values.queue }}"
+  {{- end }}
+spec:
+  {{- if $root.Values.queue }}
+  suspend: true
+  {{- end }}
+  failurePolicy:
+    maxRestarts: {{ default 0 $root.Values.workload.max_workload_restarts }}
+  replicatedJobs:
+  - name: workload
+    replicas: 1
+    template:
+      spec:
+        parallelism: {{ $nodes }}
+        completions: {{ $nodes }}
+        backoffLimit: 0
+        completionMode: Indexed
+        ttlSecondsAfterFinished: 43200
+        template:
+          metadata:
+            annotations:
+              kubectl.kubernetes.io/default-container: workload
+              {{- if $root.Values.volumes.gcsVolumes }}
+              gke-gcsfuse/volumes: "true"
+              gke-gcsfuse/cpu-limit: "500m"
+              gke-gcsfuse/memory-limit: "1Ti"
+              gke-gcsfuse/ephemeral-storage-limit: "2Ti"
+              {{- end }}
+              {{- if and $root.Values.queue $root.Values.tasSettings.topologyRequest }}
+              {{- toYaml .Values.tasSettings.topologyRequest | nindent 14 }}
+              {{- end }}
+              {{- if and $root.Values.queue $root.Values.dwsSettings.maxRunDurationSeconds }}
+              provreq.kueue.x-k8s.io/maxRunDurationSeconds: "{{ $root.Values.dwsSettings.maxRunDurationSeconds }}"
+              {{- end }}
+              {{- if not $root.Values.network.hostNetwork }}
+              networking.gke.io/default-interface: "eth0"
+              networking.gke.io/interfaces: |
+              {{- if $root.Values.network.subnetworks }}
+                [
+                  {{- range $i, $subnetwork := $root.Values.network.subnetworks }}
+                  {"interfaceName":"eth{{ $i }}","network":"{{ $subnetwork }}"}{{ eq $i 9 | ternary "" ","}}
+                  {{- end }}
+                ]
+              {{- else }}
+                [
+                  {"interfaceName":"eth0","network":"default"},
+                  {"interfaceName":"eth1","network":"gvnic-1"},
+                  {{- range  $i := until 8 }}
+                  {"interfaceName":"eth{{ add 2 $i }}","network":"rdma-{{ $i }}"}{{ eq $i 7 | ternary "" ","}}
+                  {{- end }}
+                ]
+              {{- end }}
+              {{- end }}
+          spec:
+            {{- if $root.Values.network.hostNetwork }}
+            hostNetwork: true
+            dnsPolicy: ClusterFirstWithHostNet
+            {{- end }}
+            subdomain: "{{.Release.Name}}"
+            restartPolicy: Never
+            {{- if $root.Values.targetNodes }}
+            affinity:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+                  nodeSelectorTerms:
+                  - matchExpressions:
+                    - key: kubernetes.io/hostname
+                      operator: "In"
+                      values:
+                      {{- range $hostname := $root.Values.targetNodes }}
+                      - {{ $hostname }}
+                      {{- end }}
+            {{- end }}
+            {{- if $root.Values.avoidNodes }}
+            {{- if not $root.Values.targetNodes }}
+            affinity:
+              nodeAffinity:
+                requiredDuringSchedulingIgnoredDuringExecution:
+            {{- end }}
+                  nodeSelectorTerms:
+                  - matchExpressions:
+                    - key: kubernetes.io/hostname
+                      operator: "NotIn"
+                      values:
+                      {{- range $hostname := $root.Values.avoidNodes }}
+                      - {{ $hostname }}
+                      {{- end }}
+            {{- end }}
+            tolerations:
+            - operator: "Exists"
+              key: nvidia.com/gpu
+            - operator: "Exists"
+              key: cloud.google.com/impending-node-termination
+
+            volumes:
+            # GIB NCCL 插件卷
+            {{ if $root.Values.network.gibVersion }}
+            - name: gib
+              emptyDir: {}
+            {{ end }}
+
+            # 配置文件卷（可选）
+            {{- if $root.Values.workload.configFile }}
+            - name: workload-configuration
+              configMap:
+                name: "{{.Release.Name}}-config"
+                items:
+                - key: workload-configuration
+                  path: {{ $root.Values.workload.configFile }}
+            {{- end }}
+
+            # 启动器脚本卷
+            - name: workload-launcher
+              configMap:
+                name: "{{.Release.Name}}-launcher"
+
+            # 用户脚本卷（可选）
+            {{- if .Files.Get "scripts/training-script.sh" }}
+            - name: training-script
+              configMap:
+                name: "{{.Release.Name}}-training-script"
+            {{- end }}
+
+            # 共享内存卷
+            - name: shared-memory
+              emptyDir:
+                medium: "Memory"
+                sizeLimit: 250Gi
+
+            # PVC 挂载
+            {{- range $pvc := $root.Values.volumes.pvcMounts }}
+            - name: "{{ $pvc.claimName }}"
+              persistentVolumeClaim:
+                claimName: "{{ $pvc.claimName }}"
+            {{- end }}
+
+            # GCS Bucket 挂载
+            {{- range $gcs := $root.Values.volumes.gcsMounts }}
+            {{- if $gcs.bucketName }}
+            - name: "{{ $gcs.bucketName }}"
+              csi:
+                driver: gcsfuse.csi.storage.gke.io
+                volumeAttributes:
+                  bucketName: "{{ $gcs.bucketName }}"
+                  {{- if $gcs.mountOptions }}
+                  mountOptions: "{{ $gcs.mountOptions }}"
+                  {{- end }}
+            {{- end }}
+            {{- end}}
+
+            # 本地 SSD 卷
+            {{- if $root.Values.volumes.ssdMountPath }}
+            - name: local-ssd
+              hostPath:
+                path: /mnt/stateful_partition/kube-ephemeral-ssd
+            {{- end }}
+
+            # Lustre 卷 (Managed Lustre CSI)
+            {{- if $root.Values.volumes.lustre.enabled }}
+            - name: lustre-volume
+              persistentVolumeClaim:
+                claimName: "{{ .Release.Name }}-lustre-pvc"
+            {{- end }}
+
+            # =================================================================
+            # Init Containers
+            # =================================================================
+            initContainers:
+            # GIB NCCL 插件安装器
+            {{ if $root.Values.network.gibVersion }}
+            - name: nccl-plugin-installer
+              image: {{ $root.Values.network.gibVersion }}
+              imagePullPolicy: Always
+              args:
+              - |
+                set -ex
+                /scripts/container_entry.sh install --install-nccl
+                cp -R /var/lib/gib/lib64/. /target/usr/local/gib/lib64
+                cp -R /var/lib/gib/. /target/usr/local/gib
+                cp -R /scripts /target/dev/shm
+                cp -R /diagnostic /target/dev/shm
+                cp -R /third_party /target/dev/shm
+              command:
+              - /bin/sh
+              - -c
+              volumeMounts:
+              - mountPath: /target/usr/local/gib
+                name: gib
+              - mountPath: /target/dev/shm
+                name: shared-memory
+            {{ end}}
+
+            # =================================================================
+            # Main Containers
+            # =================================================================
+            containers:
+            # GCS Sidecar（可选）
+            {{- if $root.Values.workload.gcsSidecarImage }}
+            - name: gke-gcsfuse-sidecar
+              image: {{ $root.Values.workload.gcsSidecarImage }}
+            - name: gke-gcsfuse-metadata-prefetch
+              image: {{ $root.Values.workload.gcsSidecarImage }}
+            {{- end }}
+            
+            # 主工作负载容器
+            - name: workload
+              image: "{{ $root.Values.workload.image }}"
+              imagePullPolicy: Always
+              {{- if $root.Values.network.hostNetwork }}
+              securityContext:
+                privileged: true
+              {{- end }}
+              env:
+              # 作业标识信息
+              - name: JOB_IDENTIFIER
+                value: "{{ .Release.Name }}-{{ $timestamp }}"
+              - name: JOB_TIMESTAMP
+                value: "{{ $timestamp }}"
+              - name: JOB_UUID
+                value: "{{ $jobuuid }}"
+              - name: JOB_ID
+                value: "{{ .Release.Name }}"
+              - name: JOB_ORCHESTRATOR
+                value: "gke"
+              
+              # Pod 索引（用于分布式训练）
+              - name: JOB_COMPLETION_INDEX
+                valueFrom:
+                  fieldRef:
+                    fieldPath: metadata.annotations['batch.kubernetes.io/job-completion-index']
+              
+              # 分布式训练网络配置
+              - name: RANK_0_FQDN
+                value: "{{.Release.Name}}-workload-0-0.{{.Release.Name}}.default.svc.cluster.local"
+              - name: HOSTNAME_PREFIX
+                value: "{{.Release.Name}}-workload-"
+              - name: DOMAIN_NAME
+                value: "{{.Release.Name}}.default.svc.cluster.local"
+              - name: MASTER_ADDR
+                value: "{{.Release.Name}}-workload-0-0.{{.Release.Name}}.default.svc.cluster.local"
+              - name: MASTER_PORT
+                value: "6002"
+              
+              # GPU 和节点配置
+              - name: WORLD_SIZE
+                value: "{{ $root.Values.workload.gpus }}"
+              - name: NNODES
+                value: "{{ $nodes }}"
+              - name: GPUS_PER_NODE
+                value: "{{ $gpusPerNode }}"
+
+              # NCCL 插件路径
+              - name: NCCL_PLUGIN_PATH
+                value: /usr/local/gib/lib64
+
+              {{ if $root.Values.network.gibVersion }}
+              - name: NCCL_INIT_SCRIPT
+                value: "/usr/local/gib/scripts/set_nccl_env.sh"
+              {{ end }}
+
+              # NCCL 设置
+              {{ if $root.Values.network.ncclSettings }}
+              {{- toYaml .Values.network.ncclSettings | nindent 14 }}
+              {{ end }}
+
+              # 用户自定义环境变量
+              {{ if $root.Values.workload.envs }}
+              {{- toYaml .Values.workload.envs | nindent 14 }}
+              {{ end }}
+
+              command:
+              - bash
+              - -c
+              - |
+                echo "=============================================="
+                echo "Pod on $(hostname --fqdn) is running"
+                echo "Pod is assigned job index of $JOB_COMPLETION_INDEX"
+                echo "=============================================="
+
+                # 复制 GIB 工具到可访问位置
+                cp -R /dev/shm/scripts /
+                cp -R /dev/shm/diagnostic /
+                cp -R /dev/shm/third_party /
+
+                # 安装必要工具
+                apt-get update && apt-get install -y pciutils
+
+                # 启用 GPU 持久模式
+                echo "Enabling GPU persistence mode..."
+                for i in $(seq 0 7)
+                do
+                  nvidia-smi -i $i -pm ENABLED 2>/dev/null || true
+                done
+
+                # 配置环境变量
+                echo "unset NCCL_NVLS_ENABLE TORCH_NCCL_USE_COMM_NONBLOCKING" | tee -a /root/.bashrc > /dev/null
+                echo "export LD_LIBRARY_PATH=/usr/local/gib/lib64:\${LD_LIBRARY_PATH}" | tee -a /root/.bashrc > /dev/null
+                echo "source /usr/local/gib/scripts/set_nccl_env.sh" | tee -a /root/.bashrc > /dev/null
+                echo "source /tmp/export_init_env.sh" | tee -a /root/.bashrc > /dev/null
+                cat /proc/1/environ | tr "\0" "\n" | awk '{sub(/=/,"=\""); print "export " $0 "\""}' > /tmp/export_init_env.sh
+
+                # 初始化 NCCL 环境
+                if [[ -n "${NCCL_INIT_SCRIPT}" ]]; then
+                  echo "Running NCCL init script: ${NCCL_INIT_SCRIPT}"
+                  source ${NCCL_INIT_SCRIPT}
+                fi
+
+                # 覆盖 NCCL 网络接口配置
+                export NCCL_SOCKET_IFNAME="eth0,eth1"
+                export NCCL_TUNER_CONFIG_PATH=/usr/local/gib/configs/tuner_config_a4.txtpb
+
+                # 显示启动参数
+                echo "Launching workload with the following arguments:"
+                {{- range $root.Values.workload.defaultArguments }}
+                echo "  {{ . }}"
+                {{- end }}
+                {{- range $root.Values.workload.arguments }}
+                echo "  {{ . }}"
+                {{- end }}
+                echo ""
+
+                # 等待服务完全启动
+                sleep 10
+
+                # 执行启动脚本
+                bash /workload/launcher/launch-workload.sh \
+                {{- range $root.Values.workload.defaultArguments }}
+                {{ . }} \
+                {{- end }}
+                {{- range $root.Values.workload.arguments }}
+                {{ . }} \
+                {{- end }}
+
+
+              volumeMounts:
+                # GIB NCCL 插件
+                {{ if $root.Values.network.gibVersion }}
+                - name: gib
+                  mountPath: /usr/local/gib
+                {{ end }}
+
+                # 配置文件（可选）
+                {{- if $root.Values.workload.configFile }}
+                - name: workload-configuration
+                  mountPath: {{ $root.Values.workload.configPath | default "/workload/configs" }}
+                {{- end }}
+
+                # 启动器脚本
+                - name: workload-launcher
+                  mountPath: /workload/launcher
+                
+                # 用户训练脚本（可选）
+                {{- if .Files.Get "scripts/training-script.sh" }}
+                - name: training-script
+                  mountPath: /workload/scripts
+                {{- end }}
+
+                # 共享内存
+                - name: shared-memory
+                  mountPath: /dev/shm
+
+                # PVC 挂载
+                {{- range $pvc := $root.Values.volumes.pvcMounts }}
+                - name: "{{ $pvc.claimName }}"
+                  mountPath: "{{ $pvc.mountPath }}"
+                {{- end }}
+
+                # GCS Bucket 挂载
+                {{- range $gcs := $root.Values.volumes.gcsMounts }}
+                {{- if $gcs.bucketName }}
+                - name: "{{ $gcs.bucketName }}"
+                  mountPath: "{{ $gcs.mountPath }}"
+                {{- end }}
+                {{- end }}
+
+                # 本地 SSD 挂载
+                {{- if $root.Values.volumes.ssdMountPath }}
+                - name: local-ssd
+                  mountPath: "{{ $root.Values.volumes.ssdMountPath }}"
+                {{- end }}
+
+                # Lustre 挂载 (Managed Lustre CSI)
+                {{- if $root.Values.volumes.lustre.enabled }}
+                - name: lustre-volume
+                  mountPath: "{{ $root.Values.volumes.lustre.mountPath | default "/lustre" }}"
+                {{- end }}
+
+              resources:
+                limits:
+                  nvidia.com/gpu: {{ $gpusPerNode }}

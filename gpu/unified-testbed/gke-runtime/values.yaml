@@ -1,0 +1,176 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#     http://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# =============================================================================
+# Unified Testbed Helm Chart Values
+# 统一测试环境的 Helm Chart 配置
+# =============================================================================
+
+# -----------------------------------------------------------------------------
+# Kueue 队列配置
+# -----------------------------------------------------------------------------
+queue: # 留空表示不使用 Kueue 队列调度
+
+# DWS (Dynamic Workload Scheduler) 设置
+dwsSettings:
+  maxRunDurationSeconds: # 最大运行时长（秒），留空表示不限制
+
+# TAS (Topology Aware Scheduling) 设置
+tasSettings:
+  topologyRequest:
+    kueue.x-k8s.io/podset-preferred-topology: "cloud.google.com/gce-topology-block"
+
+# -----------------------------------------------------------------------------
+# 存储卷配置
+# -----------------------------------------------------------------------------
+volumes:
+  # GCS 存储卷开关
+  gcsVolumes: true
+
+  # 本地 SSD 挂载路径
+  ssdMountPath: "/ssd"
+
+  # NFS 共享存储配置 (Filestore)
+  nfs:
+    enabled: false # 是否启用 NFS
+    ip: "" # Filestore IP 地址
+    volume: "nfslarge" # 卷名称
+    region: "" # 区域
+    instance: "" # Filestore 实例名
+    storage: "10Ti" # 存储容量
+
+  # Managed Lustre 存储配置
+  # 参考: https://cloud.google.com/kubernetes-engine/docs/how-to/persistent-volumes/cloud-lustre-csi-driver
+  # 挂载点格式: IP@tcp:/filesystem (例如: 172.27.48.5@tcp:/lustrefs)
+  lustre:
+    enabled: false # 是否启用 Lustre
+    ip: "" # Lustre 实例 IP (例如: 172.27.48.5)
+    filesystem: "" # 文件系统名称 (例如: lustrefs)
+    instanceName: "" # Lustre 实例名称
+    projectId: "" # Google Cloud 项目 ID
+    location: "" # 可用区 (例如: us-central1-a)
+    storage: "9000Gi" # 存储容量
+    storageClassName: "" # StorageClass 名称 (留空使用默认)
+    mountPath: "/lustre" # 容器内挂载路径
+
+  # PVC 挂载配置
+  pvcMounts:
+    - claimName: nfs-pvc
+      mountPath: "/mnt"
+
+  # GCS Bucket 挂载配置
+  gcsMounts:
+    - bucketName: # 主存储桶（留空，部署时通过 --set 指定）
+      mountPath: "/gcs"
+      mountOptions: "implicit-dirs"
+    - bucketName: cloud-samples-data # 公共示例数据桶
+      mountPath: "/artifacts"
+      mountOptions: "implicit-dirs"
+
+# -----------------------------------------------------------------------------
+# 工作负载配置
+# -----------------------------------------------------------------------------
+workload:
+  # GPU 数量（必须是 8 的倍数或 <= 8）
+  gpus: 32
+
+  # 容器镜像
+  image: "" # 部署时通过 --set 指定
+
+  # 最大重启次数
+  max_workload_restarts: 0
+
+  # 默认启动参数
+  defaultArguments: []
+
+  # 额外启动参数
+  arguments: []
+
+  # 配置文件名称（可选）
+  configFile: ""
+
+  # 配置文件路径
+  configPath: /workload/configs
+
+  # 工作流控制开关
+  workflow:
+    enabled: false # 是否启用工作流模式
+    skipCloneRepo: false # 跳过代码克隆
+    skipDownloadData: false # 跳过数据下载
+    skipCheckpointConversion: false # 跳过检查点转换
+    skipTraining: false # 跳过训练
+
+  # 环境变量
+  envs:
+    # SSH 公钥（用于多节点通信）
+    - name: SSH_PUBLIC_KEY
+      value: ""
+
+    # 调试模式：保持容器运行
+    - name: SLEEP_INFINITY
+      value: "true"
+
+    # HuggingFace Token（用于模型下载）
+    - name: HF_TOKEN
+      value: ""
+
+    # NeMo/Megatron 相关配置
+    - name: NVTE_FWD_LAYERNORM_SM_MARGIN
+      value: "8"
+    - name: NVTE_BWD_LAYERNORM_SM_MARGIN
+      value: "8"
+    - name: GLOO_SOCKET_IFNAME
+      value: "eth0"
+    - name: TORCH_DISTRIBUTED_TRACING
+      value: "ALL"
+
+    # 工作流环境变量（可选）
+    - name: PAI_WORKSPACE_ROOT
+      value: "/mnt"
+
+# -----------------------------------------------------------------------------
+# 网络配置
+# -----------------------------------------------------------------------------
+network:
+  # 使用主机网络模式（A4 推荐开启）
+  hostNetwork: true
+
+  # GIB (Google InfiniBand) 插件镜像
+  gibVersion: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic:latest
+
+  # 自定义子网络列表（可选）
+  subnetworks: []
+
+  # NCCL 通信设置
+  ncclSettings:
+    - name: NCCL_DEBUG
+      value: "WARN"
+    - name: NVTE_UB_SOCKET_IFNAME
+      value: "eth1"
+
+# -----------------------------------------------------------------------------
+# 节点选择配置（可选）
+# -----------------------------------------------------------------------------
+
+# 指定目标节点（调度到这些节点）
+targetNodes: []
+# 示例:
+# targetNodes:
+# - gke-cluster-a4-node-pool-1234abcd
+
+# 避免的节点（不调度到这些节点）
+avoidNodes: []
+# 示例:
+# avoidNodes:
+# - gke-cluster-a4-node-pool-5678efgh
