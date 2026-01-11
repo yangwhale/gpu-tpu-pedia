@@ -31,6 +31,31 @@ echo "Added $NCCL_PLUGIN_PATH to ldconfig:"
 ldconfig -p | grep libcuda | sed 's/^/  /'
 echo ""
 
+# -----------------------------------------------------------------------------
+# 1.1 通用依赖安装（仅主节点执行一次）
+# -----------------------------------------------------------------------------
+if [[ "$JOB_COMPLETION_INDEX" -eq "0" ]]; then
+  echo "Installing common dependencies..."
+  
+  # 修复 NGC 镜像中的 triton ldconfig 路径问题
+  TRITON_FILE="/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/driver.py"
+  if [ -f "$TRITON_FILE" ]; then
+    sed -i 's|libs = subprocess.check_output(\["ldconfig"|libs = subprocess.check_output(["/sbin/ldconfig"|g' $TRITON_FILE
+    echo "  Fixed triton ldconfig path"
+  fi
+  
+  # 安装常用工具（HuggingFace CLI, ModelScope 等）
+  pip install --upgrade huggingface_hub[cli] modelscope -q 2>/dev/null
+  echo "  Installed: huggingface_hub[cli], modelscope"
+  
+  # 刷新 shell 命令缓存，确保新安装的命令可用
+  hash -r
+fi
+
+# 确保 pip 安装的命令在 PATH 中（所有节点都需要）
+export PATH="/usr/local/bin:$PATH"
+hash -r 2>/dev/null || true
+
 echo "Launching Torch distributed on node rank $JOB_COMPLETION_INDEX out of $NNODES nodes"
 
 # -----------------------------------------------------------------------------
@@ -119,6 +144,26 @@ if [ "$JOB_COMPLETION_INDEX" -eq "0" ]; then
   
   echo "Generated /etc/job-worker-services.txt:"
   cat /etc/job-worker-services.txt | sed 's/^/  /'
+  # 将 hostfile 分发到所有节点
+  echo ""
+  echo "Distributing hostfile to all workers..."
+  for WORKER in $(cat /tmp/job-worker-hostnames-order.txt); do
+    scp /etc/job-worker-services.txt $WORKER:/etc/job-worker-services.txt
+  done
+  
+  # 创建同步标志，让其他节点知道发现完成
+  touch /tmp/node_discovery_complete
+  for WORKER in $(cat /tmp/job-worker-hostnames-order.txt); do
+    ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 2222 $WORKER touch /tmp/node_discovery_complete
+  done
+  echo "Node discovery and hostfile distribution complete!"
+else
+  # 工作节点：等待主节点完成节点发现
+  echo "Waiting for master node to complete node discovery..."
+  while [[ ! -f /tmp/node_discovery_complete ]]; do
+    sleep 2
+  done
+  echo "Node discovery complete, proceeding..."
 fi
 
 # -----------------------------------------------------------------------------

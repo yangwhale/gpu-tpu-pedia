@@ -19,5 +19,8 @@ metadata:
   name: "{{ .Release.Name }}"
 spec:
   clusterIP: None
+  # 允许 DNS 解析未就绪的 Pod（分布式训练需要所有节点互相发现）
+  # 当 Pod 卡在 Init 容器时（如 Lustre 挂载），仍需要能够解析其 DNS
+  publishNotReadyAddresses: true
   selector:
     jobset.sigs.k8s.io/jobset-name: "{{ .Release.Name }}"

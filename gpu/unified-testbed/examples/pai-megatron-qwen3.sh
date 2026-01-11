@@ -28,24 +28,15 @@ PAI_WORKSPACE=${PAI_WORKSPACE_ROOT:-/mnt}
 
 # -----------------------------------------------------------------------------
 # 功能0: 环境准备 (仅主节点执行)
-# 注意: 由于使用 nvcr.io/nvidia/pytorch:25.06-py3 基础镜像，
-#       需要修复一些兼容性问题并安装必要的依赖
+# 注意: huggingface_hub[cli], modelscope, triton 修复已在 default-launcher.sh 中完成
+# 此处只安装 Pai-Megatron-Patch 特定依赖
 # -----------------------------------------------------------------------------
 if [[ "${SKIP_ENV_SETUP}" != "true" && "$JOB_COMPLETION_INDEX" -eq "0" ]]; then
   echo ""
-  echo "Step 0: Setting up environment..."
+  echo "Step 0: Setting up Pai-Megatron-Patch specific dependencies..."
   
-  # 修复 NGC 镜像中的 triton ldconfig 路径问题
-  TRITON_FILE="/usr/local/lib/python3.12/dist-packages/triton/backends/nvidia/driver.py"
-  if [ -f "$TRITON_FILE" ]; then
-    sed -i 's|libs = subprocess.check_output(\["ldconfig"|libs = subprocess.check_output(["/sbin/ldconfig"|g' $TRITON_FILE
-    echo "  Fixed triton ldconfig path"
-  fi
-  
-  # 升级必要的依赖
-  echo "  Installing/upgrading dependencies..."
-  pip install --upgrade nvidia-nccl-cu12 -q
-  pip install datasets==3.6.0 packaging==24.2 modelscope -q
+  # 升级必要的依赖（Pai-Megatron-Patch 特定）
+  pip install --upgrade nvidia-nccl-cu12 datasets==3.6.0 packaging==24.2 -q 2>/dev/null
   
   echo "  Environment setup completed!"
 else
@@ -86,16 +77,17 @@ if [[ "${SKIP_DOWNLOAD_DATA}" != "true" && "$JOB_COMPLETION_INDEX" -eq "0" ]]; t
   # 下载 Qwen3-30B-A3B 模型
   mkdir -p qwen-ckpts
   echo "  Downloading Qwen3-30B-A3B model..."
-  huggingface-cli download Qwen/Qwen3-30B-A3B --local-dir $PAI_WORKSPACE/qwen-ckpts/Qwen3-30B-A3B
+  # 使用 Python 脚本方式调用，避免 huggingface-cli PATH 问题
+  python -c "from huggingface_hub import snapshot_download; snapshot_download('Qwen/Qwen3-30B-A3B', local_dir='$PAI_WORKSPACE/qwen-ckpts/Qwen3-30B-A3B')"
   
-  # 下载预处理数据集
+  # 下载预处理数据集（使用 -nc 避免重复下载）
   mkdir -p qwen-datasets
   cd qwen-datasets
   echo "  Downloading preprocessed datasets..."
-  wget -q https://atp-modelzoo-wlcb-pai.oss-cn-wulanchabu.aliyuncs.com/release/models/pai-megatron-patch/qwen-datasets/mmap_qwen3_datasets_text_document.bin
-  wget -q https://atp-modelzoo-wlcb-pai.oss-cn-wulanchabu.aliyuncs.com/release/models/pai-megatron-patch/qwen-datasets/mmap_qwen3_datasets_text_document.idx
-  wget -q https://atp-modelzoo-wlcb-pai.oss-cn-wulanchabu.aliyuncs.com/release/models/pai-megatron-patch/datasets/alpaca_zh-train-general.json
-  wget -q https://atp-modelzoo-wlcb-pai.oss-cn-wulanchabu.aliyuncs.com/release/models/pai-megatron-patch/datasets/alpaca_zh-valid-general.json
+  wget -nc -q https://atp-modelzoo-wlcb-pai.oss-cn-wulanchabu.aliyuncs.com/release/models/pai-megatron-patch/qwen-datasets/mmap_qwen3_datasets_text_document.bin || true
+  wget -nc -q https://atp-modelzoo-wlcb-pai.oss-cn-wulanchabu.aliyuncs.com/release/models/pai-megatron-patch/qwen-datasets/mmap_qwen3_datasets_text_document.idx || true
+  wget -nc -q https://atp-modelzoo-wlcb-pai.oss-cn-wulanchabu.aliyuncs.com/release/models/pai-megatron-patch/datasets/alpaca_zh-train-general.json || true
+  wget -nc -q https://atp-modelzoo-wlcb-pai.oss-cn-wulanchabu.aliyuncs.com/release/models/pai-megatron-patch/datasets/alpaca_zh-valid-general.json || true
   
   echo "  Download completed!"
 else
@@ -106,7 +98,9 @@ fi
 # -----------------------------------------------------------------------------
 # 同步点：等待主节点完成下载
 # -----------------------------------------------------------------------------
-SYNC_DIR="$PAI_WORKSPACE/sync_flags_${JOB_ID}"
+# 使用 JobSet 名称作为唯一标识符（从 HOSTNAME_PREFIX 提取）
+JOB_NAME="${HOSTNAME_PREFIX%-workload-}"
+SYNC_DIR="$PAI_WORKSPACE/sync_flags_${JOB_NAME}"
 
 if [[ "$JOB_COMPLETION_INDEX" -eq "0" ]]; then
   echo ""
