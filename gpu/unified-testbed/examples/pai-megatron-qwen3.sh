@@ -27,21 +27,21 @@ echo "=============================================="
 PAI_WORKSPACE=${PAI_WORKSPACE_ROOT:-/mnt}
 
 # -----------------------------------------------------------------------------
-# 功能0: 环境准备 (仅主节点执行)
+# 功能0: 环境准备 (所有节点都需要安装依赖)
 # 注意: huggingface_hub[cli], modelscope, triton 修复已在 default-launcher.sh 中完成
-# 此处只安装 Pai-Megatron-Patch 特定依赖
+# 此处安装 Pai-Megatron-Patch 特定依赖（所有节点都需要 transformers）
 # -----------------------------------------------------------------------------
-if [[ "${SKIP_ENV_SETUP}" != "true" && "$JOB_COMPLETION_INDEX" -eq "0" ]]; then
+if [[ "${SKIP_ENV_SETUP}" != "true" ]]; then
   echo ""
-  echo "Step 0: Setting up Pai-Megatron-Patch specific dependencies..."
+  echo "Step 0: Setting up Pai-Megatron-Patch specific dependencies on node $JOB_COMPLETION_INDEX..."
   
-  # 升级必要的依赖（Pai-Megatron-Patch 特定）
-  pip install --upgrade nvidia-nccl-cu12 datasets==3.6.0 packaging==24.2 -q 2>/dev/null
+  # 升级必要的依赖（Pai-Megatron-Patch 特定，所有节点都需要 transformers）
+  pip install --upgrade nvidia-nccl-cu12 datasets==3.6.0 packaging==24.2 transformers -q 2>/dev/null
   
-  echo "  Environment setup completed!"
+  echo "  Environment setup completed on node $JOB_COMPLETION_INDEX!"
 else
   echo ""
-  echo "Step 0: Skipping environment setup (SKIP_ENV_SETUP=true or not rank 0)"
+  echo "Step 0: Skipping environment setup (SKIP_ENV_SETUP=true)"
 fi
 
 # -----------------------------------------------------------------------------
@@ -120,26 +120,49 @@ if [[ "$JOB_COMPLETION_INDEX" -ne "0" ]]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 功能3: 检查点转换
+# 功能3: 检查点转换（仅主节点执行，单节点即可完成转换）
 # -----------------------------------------------------------------------------
-if [[ "${SKIP_CHECKPOINT_CONVERSION}" != "true" ]]; then
+if [[ "${SKIP_CHECKPOINT_CONVERSION}" != "true" && "$JOB_COMPLETION_INDEX" -eq "0" ]]; then
   echo ""
-  echo "Step 3: Converting checkpoints..."
+  echo "Step 3: Converting checkpoints (single node mode)..."
   cd $PAI_WORKSPACE/Pai-Megatron-Patch/toolkits/distributed_checkpoints_convertor
   
-  OMP_NUM_THREADS=12 WORLD_SIZE=$NNODES RANK=$JOB_COMPLETION_INDEX \
-  bash scripts/qwen3/run_8xH20.sh \
-    A3B \
-    $PAI_WORKSPACE/qwen-ckpts/Qwen3-30B-A3B \
-    $PAI_WORKSPACE/qwen-ckpts/Qwen3-30B-A3B-to-mcore \
-    false \
-    true \
-    bf16
+  # 检查是否已转换过（跳过重复转换）
+  if [[ -d "$PAI_WORKSPACE/qwen-ckpts/Qwen3-30B-A3B-to-mcore" && \
+        $(ls -A "$PAI_WORKSPACE/qwen-ckpts/Qwen3-30B-A3B-to-mcore" 2>/dev/null | grep -c "\.pt\|\.safetensors") -gt 0 ]]; then
+    echo "  Checkpoint already converted, skipping..."
+  else
+    # 单节点转换（WORLD_SIZE=1, RANK=0）
+    OMP_NUM_THREADS=12 WORLD_SIZE=1 RANK=0 \
+    bash scripts/qwen3/run_8xH20.sh \
+      A3B \
+      $PAI_WORKSPACE/qwen-ckpts/Qwen3-30B-A3B \
+      $PAI_WORKSPACE/qwen-ckpts/Qwen3-30B-A3B-to-mcore \
+      false \
+      true \
+      bf16
+  fi
   
   echo "  Checkpoint conversion completed!"
+  
+  # 创建转换完成标志
+  touch $SYNC_DIR/conversion_complete_flag
 else
   echo ""
-  echo "Step 3: Skipping checkpoint conversion (SKIP_CHECKPOINT_CONVERSION=true)"
+  echo "Step 3: Skipping checkpoint conversion (SKIP_CHECKPOINT_CONVERSION=true or not rank 0)"
+fi
+
+# -----------------------------------------------------------------------------
+# 同步点：等待主节点完成检查点转换
+# -----------------------------------------------------------------------------
+if [[ "$JOB_COMPLETION_INDEX" -ne "0" ]]; then
+  echo ""
+  echo "Node $JOB_COMPLETION_INDEX waiting for checkpoint conversion to complete..."
+  while [[ ! -f $SYNC_DIR/conversion_complete_flag ]]; do
+    sleep 5
+    echo "  Still waiting..."
+  done
+  echo "Checkpoint conversion complete, proceeding to training..."
 fi
 
 # -----------------------------------------------------------------------------
