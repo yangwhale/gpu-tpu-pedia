@@ -84,11 +84,13 @@ RUN pip install --no-cache-dir \
 # 通用 ML 依赖（所有训练脚本需要）
 # 注意：
 # - NCCL: 由 GIB 在运行时提供优化版本
-# - huggingface-hub: 降级到 <1.0 以兼容 transformers 要求
+# - huggingface-hub: 必须降级到 <1.0 以兼容 transformers
+# - numpy: 必须降级到 <2.0 以兼容 Pai-Megatron-Patch (numpy.product)
 RUN pip install --no-cache-dir \
-    "huggingface-hub>=0.34.0,<1.0" \
     datasets \
-    transformers
+    transformers \
+    && pip install --no-cache-dir "huggingface-hub>=0.34.0,<1.0" \
+    && pip install --no-cache-dir "numpy<2.0"
 
 # =============================================================================
 # 4. Qwen3-Next 特殊依赖（CUDA 扩展，需要源码编译）
@@ -115,6 +117,11 @@ RUN pip install --no-cache-dir --no-build-isolation causal-conv1d || \
 
 # flash-linear-attention (Qwen3-Next 需要)
 RUN pip install --no-cache-dir --no-build-isolation flash-linear-attention || true
+
+# =============================================================================
+# 最终版本锁定（防止后续依赖安装覆盖关键版本）
+# =============================================================================
+RUN pip install --no-cache-dir "huggingface-hub>=0.34.0,<1.0" "numpy<2.0"
 
 # =============================================================================
 # 5. SSH 服务配置 (用于多节点分布式训练通信)

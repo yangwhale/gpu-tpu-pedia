@@ -69,6 +69,7 @@ if [[ "${SKIP_ENV_CHECK}" != "true" ]]; then
   python -c "import mamba_ssm; print(f'  mamba-ssm: {mamba_ssm.__version__}')" 2>/dev/null || echo "  mamba-ssm: not found (will install)"
   python -c "import transformer_engine; print(f'  TransformerEngine: {transformer_engine.__version__}')"
   python -c "import huggingface_hub; print(f'  huggingface-hub: {huggingface_hub.__version__}')"
+  python -c "import numpy as np; print(f'  numpy: {np.__version__}')"
 fi
 
 # =============================================================================
@@ -218,20 +219,20 @@ HYBRID_MAMBA_TRANSFORMER_PATTERN=$(printf "%s" $(yes "$PATTERN_UNIT" | head -n $
   # 层数配置 (可通过环境变量覆盖，调试时可用 MP_NUM_LAYERS=8)
   NUM_LAYERS=${MP_NUM_LAYERS:-96}
   
+  # Token 配置 (可通过环境变量覆盖，快速测试用 MP_TRAIN_TOKENS=100000)
+  TRAIN_TOKENS=${MP_TRAIN_TOKENS:-100000}
+  WARMUP_TOKENS=${MP_WARMUP_TOKENS:-1000}
+  
   if [ "$TRAINING_MODE" == "sft" ]; then
     OUTPUT_DIR="${PAI_WORKSPACE}/logs/output_mcore_qwen3_next_finetune"
     SFT_FLAG="true"
     DATASET_PATH="${DATASET_DIR}/mmap_qwen3_datasets_sft_text_document"
     VALID_DATASET_PATH="${DATASET_DIR}/mmap_qwen3_datasets_sft_text_document"
-    TRAIN_TOKENS="10000"
-    WARMUP_TOKENS="100"
   else
     OUTPUT_DIR="${PAI_WORKSPACE}/logs/output_mcore_qwen3_next_pretrain"
     SFT_FLAG="false"
     DATASET_PATH="${DATASET_DIR}/mmap_qwen3_datasets_text_document"
     VALID_DATASET_PATH="${DATASET_DIR}/mmap_qwen3_datasets_text_document"
-    TRAIN_TOKENS="1000000000"
-    WARMUP_TOKENS="10000"
   fi
   mkdir -p $OUTPUT_DIR
   
