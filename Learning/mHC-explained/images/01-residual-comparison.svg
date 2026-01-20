@@ -1,0 +1,195 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 400">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#48bb78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38a169;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f6ad55;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ed8936;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="redGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#fc8181;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#e53e3e;stop-opacity:1" />
+    </linearGradient>
+    <marker id="arrowhead" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4a5568"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="900" height="400" fill="#f7fafc"/>
+  
+  <!-- Title -->
+  <text x="450" y="35" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#2d3748" text-anchor="middle">残差连接范式对比</text>
+  
+  <!-- (a) Standard Residual Connection -->
+  <g transform="translate(50, 70)">
+    <text x="100" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">(a) 标准残差连接</text>
+    
+    <!-- Input -->
+    <rect x="60" y="30" width="80" height="35" rx="8" fill="url(#blueGrad)"/>
+    <text x="100" y="53" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">x_l</text>
+    
+    <!-- Arrow down -->
+    <line x1="100" y1="65" x2="100" y2="95" stroke="#4a5568" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Function block -->
+    <rect x="50" y="100" width="100" height="45" rx="8" fill="url(#greenGrad)"/>
+    <text x="100" y="128" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">F(x_l, W_l)</text>
+    
+    <!-- Skip connection -->
+    <path d="M 140 47 Q 180 47 180 150 Q 180 230 140 230" stroke="#4a5568" stroke-width="2" fill="none"/>
+    
+    <!-- Plus circle -->
+    <circle cx="100" cy="190" r="15" fill="url(#orangeGrad)"/>
+    <text x="100" y="195" font-family="Arial, sans-serif" font-size="16" fill="white" text-anchor="middle">+</text>
+    
+    <!-- Arrow to plus -->
+    <line x1="100" y1="145" x2="100" y2="173" stroke="#4a5568" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Arrow from plus -->
+    <line x1="100" y1="205" x2="100" y2="235" stroke="#4a5568" stroke-width="2" marker-end="url(#arrowhead)"/>
+    
+    <!-- Output -->
+    <rect x="60" y="240" width="80" height="35" rx="8" fill="url(#blueGrad)"/>
+    <text x="100" y="263" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">x_{l+1}</text>
+    
+    <!-- Formula -->
+    <text x="100" y="305" font-family="Arial, sans-serif" font-size="11" fill="#4a5568" text-anchor="middle">x_{l+1} = x_l + F(x_l)</text>
+  </g>
+  
+  <!-- (b) Hyper-Connections (HC) -->
+  <g transform="translate(300, 70)">
+    <text x="130" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">(b) 超连接 (HC)</text>
+    
+    <!-- Multi-stream input (n streams) -->
+    <rect x="20" y="30" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <rect x="55" y="30" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <rect x="90" y="30" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <text x="145" y="53" font-family="Arial, sans-serif" font-size="11" fill="#4a5568">...</text>
+    <rect x="165" y="30" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <text x="110" y="53" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">n路流</text>
+    
+    <!-- H_pre aggregation -->
+    <rect x="70" y="85" width="80" height="30" rx="6" fill="url(#orangeGrad)"/>
+    <text x="110" y="105" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">H_pre 聚合</text>
+    
+    <!-- Arrows to H_pre -->
+    <line x1="35" y1="65" x2="80" y2="83" stroke="#4a5568" stroke-width="1.5"/>
+    <line x1="70" y1="65" x2="95" y2="83" stroke="#4a5568" stroke-width="1.5"/>
+    <line x1="105" y1="65" x2="110" y2="83" stroke="#4a5568" stroke-width="1.5"/>
+    <line x1="180" y1="65" x2="140" y2="83" stroke="#4a5568" stroke-width="1.5"/>
+    
+    <!-- Function block -->
+    <rect x="70" y="130" width="80" height="35" rx="6" fill="url(#greenGrad)"/>
+    <text x="110" y="152" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">F(x, W)</text>
+    
+    <!-- Arrow -->
+    <line x1="110" y1="115" x2="110" y2="128" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    
+    <!-- H_post distribution -->
+    <rect x="70" y="180" width="80" height="30" rx="6" fill="url(#orangeGrad)"/>
+    <text x="110" y="200" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">H_post 分发</text>
+    
+    <!-- Arrow -->
+    <line x1="110" y1="165" x2="110" y2="178" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    
+    <!-- H_res mixing (shown as matrix) -->
+    <rect x="200" y="95" width="55" height="55" rx="6" fill="url(#redGrad)"/>
+    <text x="227" y="127" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">H_res</text>
+    <text x="227" y="140" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">(无约束)</text>
+    
+    <!-- Warning icon -->
+    <circle cx="245" cy="85" r="10" fill="#e53e3e"/>
+    <text x="245" y="89" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">!</text>
+    
+    <!-- Output streams -->
+    <rect x="20" y="230" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <rect x="55" y="230" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <rect x="90" y="230" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <text x="145" y="253" font-family="Arial, sans-serif" font-size="11" fill="#4a5568">...</text>
+    <rect x="165" y="230" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    
+    <!-- Problem annotation -->
+    <text x="130" y="295" font-family="Arial, sans-serif" font-size="10" fill="#e53e3e" text-anchor="middle">问题: 信号可能爆炸或消失!</text>
+    <text x="130" y="310" font-family="Arial, sans-serif" font-size="9" fill="#718096" text-anchor="middle">累积放大倍数可达 3000x</text>
+  </g>
+  
+  <!-- (c) mHC -->
+  <g transform="translate(580, 70)">
+    <text x="130" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">(c) 流形约束超连接 (mHC)</text>
+    
+    <!-- Multi-stream input -->
+    <rect x="20" y="30" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <rect x="55" y="30" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <rect x="90" y="30" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <text x="145" y="53" font-family="Arial, sans-serif" font-size="11" fill="#4a5568">...</text>
+    <rect x="165" y="30" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <text x="110" y="53" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">n路流</text>
+    
+    <!-- H_pre with sigmoid -->
+    <rect x="70" y="85" width="80" height="30" rx="6" fill="url(#greenGrad)"/>
+    <text x="110" y="105" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">sigma(H_pre)</text>
+    
+    <!-- Arrows -->
+    <line x1="35" y1="65" x2="80" y2="83" stroke="#4a5568" stroke-width="1.5"/>
+    <line x1="70" y1="65" x2="95" y2="83" stroke="#4a5568" stroke-width="1.5"/>
+    <line x1="105" y1="65" x2="110" y2="83" stroke="#4a5568" stroke-width="1.5"/>
+    <line x1="180" y1="65" x2="140" y2="83" stroke="#4a5568" stroke-width="1.5"/>
+    
+    <!-- Function block -->
+    <rect x="70" y="130" width="80" height="35" rx="6" fill="url(#greenGrad)"/>
+    <text x="110" y="152" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">F(x, W)</text>
+    
+    <!-- Arrow -->
+    <line x1="110" y1="115" x2="110" y2="128" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    
+    <!-- H_post -->
+    <rect x="70" y="180" width="80" height="30" rx="6" fill="url(#greenGrad)"/>
+    <text x="110" y="200" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">2*sigma(H_post)</text>
+    
+    <!-- Arrow -->
+    <line x1="110" y1="165" x2="110" y2="178" stroke="#4a5568" stroke-width="1.5" marker-end="url(#arrowhead)"/>
+    
+    <!-- H_res with Sinkhorn-Knopp (constrained) -->
+    <rect x="200" y="95" width="70" height="55" rx="6" fill="url(#greenGrad)"/>
+    <text x="235" y="120" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">Sinkhorn-</text>
+    <text x="235" y="133" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">Knopp</text>
+    <text x="235" y="146" font-family="Arial, sans-serif" font-size="8" fill="white" text-anchor="middle">(双随机矩阵)</text>
+    
+    <!-- Check icon -->
+    <circle cx="260" cy="85" r="10" fill="#38a169"/>
+    <text x="260" y="90" font-family="Arial, sans-serif" font-size="14" fill="white" text-anchor="middle">✓</text>
+    
+    <!-- Output streams -->
+    <rect x="20" y="230" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <rect x="55" y="230" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <rect x="90" y="230" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    <text x="145" y="253" font-family="Arial, sans-serif" font-size="11" fill="#4a5568">...</text>
+    <rect x="165" y="230" width="30" height="35" rx="5" fill="url(#blueGrad)"/>
+    
+    <!-- Solution annotation -->
+    <text x="130" y="295" font-family="Arial, sans-serif" font-size="10" fill="#38a169" text-anchor="middle">解决方案: 恒等映射特性恢复!</text>
+    <text x="130" y="310" font-family="Arial, sans-serif" font-size="9" fill="#718096" text-anchor="middle">谱范数 ≤ 1, 信号稳定传播</text>
+  </g>
+  
+  <!-- Legend -->
+  <g transform="translate(50, 360)">
+    <rect x="0" y="0" width="12" height="12" rx="2" fill="url(#blueGrad)"/>
+    <text x="18" y="10" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">特征/隐藏状态</text>
+    
+    <rect x="120" y="0" width="12" height="12" rx="2" fill="url(#greenGrad)"/>
+    <text x="138" y="10" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">计算模块</text>
+    
+    <rect x="220" y="0" width="12" height="12" rx="2" fill="url(#orangeGrad)"/>
+    <text x="238" y="10" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">加法/映射</text>
+    
+    <rect x="320" y="0" width="12" height="12" rx="2" fill="url(#redGrad)"/>
+    <text x="338" y="10" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">潜在问题</text>
+  </g>
+</svg>

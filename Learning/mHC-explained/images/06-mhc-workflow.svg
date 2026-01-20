@@ -1,0 +1,164 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500">
+  <defs>
+    <linearGradient id="inputGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="processGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#48bb78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38a169;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="outputGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f6ad55;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ed8936;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="constraintGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9f7aea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#805ad5;stop-opacity:1" />
+    </linearGradient>
+    <marker id="flowArrow" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4a5568"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="900" height="500" fill="#f7fafc"/>
+  
+  <!-- Title -->
+  <text x="450" y="35" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#2d3748" text-anchor="middle">mHC 完整工作流程</text>
+  
+  <!-- Layer l -->
+  <g transform="translate(30, 60)">
+    <!-- Input streams -->
+    <text x="70" y="20" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">第 l 层输入</text>
+    
+    <rect x="0" y="35" width="140" height="80" rx="10" fill="url(#inputGrad)"/>
+    <text x="70" y="65" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle">x_l ∈ R^(n×C)</text>
+    <text x="70" y="85" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">n 路并行残差流</text>
+    <text x="70" y="100" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">(n=4, C=隐藏维度)</text>
+  </g>
+  
+  <!-- Arrow to flatten -->
+  <line x1="170" y1="110" x2="210" y2="110" stroke="#4a5568" stroke-width="2" marker-end="url(#flowArrow)"/>
+  
+  <!-- Flatten operation -->
+  <g transform="translate(220, 75)">
+    <rect x="0" y="0" width="100" height="70" rx="8" fill="url(#processGrad)"/>
+    <text x="50" y="30" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">vec()</text>
+    <text x="50" y="48" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">展平为</text>
+    <text x="50" y="62" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">R^(1×nC)</text>
+  </g>
+  
+  <!-- Arrow to RMSNorm -->
+  <line x1="320" y1="110" x2="360" y2="110" stroke="#4a5568" stroke-width="2" marker-end="url(#flowArrow)"/>
+  
+  <!-- RMSNorm -->
+  <g transform="translate(370, 75)">
+    <rect x="0" y="0" width="100" height="70" rx="8" fill="url(#processGrad)"/>
+    <text x="50" y="30" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">RMSNorm</text>
+    <text x="50" y="48" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">归一化</text>
+  </g>
+  
+  <!-- Arrow to linear projections -->
+  <line x1="470" y1="110" x2="510" y2="110" stroke="#4a5568" stroke-width="2" marker-end="url(#flowArrow)"/>
+  
+  <!-- Linear projections -->
+  <g transform="translate(520, 55)">
+    <rect x="0" y="0" width="130" height="110" rx="10" fill="url(#outputGrad)"/>
+    <text x="65" y="25" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">线性投影</text>
+    <text x="65" y="45" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">φ_pre: R^(nC×n)</text>
+    <text x="65" y="62" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">φ_post: R^(nC×n)</text>
+    <text x="65" y="79" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">φ_res: R^(nC×n²)</text>
+    <text x="65" y="100" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">+ α缩放 + b偏置</text>
+  </g>
+  
+  <!-- Arrow to constraints -->
+  <line x1="650" y1="110" x2="690" y2="110" stroke="#4a5568" stroke-width="2" marker-end="url(#flowArrow)"/>
+  
+  <!-- Constraint applications -->
+  <g transform="translate(700, 55)">
+    <rect x="0" y="0" width="170" height="110" rx="10" fill="url(#constraintGrad)"/>
+    <text x="85" y="25" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle" font-weight="bold">流形约束</text>
+    <text x="85" y="48" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">H_pre = σ(H̃_pre)</text>
+    <text x="85" y="65" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">H_post = 2σ(H̃_post)</text>
+    <text x="85" y="82" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">H_res = SK(H̃_res)</text>
+    <text x="85" y="100" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">(Sinkhorn-Knopp)</text>
+  </g>
+  
+  <!-- Main computation flow (middle section) -->
+  <g transform="translate(30, 200)">
+    <text x="420" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">前向传播计算</text>
+    
+    <!-- H_pre aggregation -->
+    <g transform="translate(0, 30)">
+      <rect x="0" y="0" width="180" height="80" rx="10" fill="url(#processGrad)"/>
+      <text x="90" y="25" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle" font-weight="bold">H_pre 聚合</text>
+      <text x="90" y="45" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">layer_input = H_pre · x_l</text>
+      <text x="90" y="62" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">n路流 → 1路输入</text>
+      <text x="90" y="75" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">(加权平均)</text>
+    </g>
+    
+    <!-- Arrow -->
+    <line x1="180" y1="70" x2="220" y2="70" stroke="#4a5568" stroke-width="2" marker-end="url(#flowArrow)"/>
+    
+    <!-- Layer function F -->
+    <g transform="translate(230, 20)">
+      <rect x="0" y="0" width="180" height="100" rx="10" fill="url(#inputGrad)"/>
+      <text x="90" y="25" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle" font-weight="bold">层函数 F(x, W)</text>
+      <text x="90" y="48" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">Attention 或 FFN</text>
+      <text x="90" y="68" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">标准 Transformer 操作</text>
+      <text x="90" y="85" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">(计算量主要在这里)</text>
+    </g>
+    
+    <!-- Arrow -->
+    <line x1="410" y1="70" x2="450" y2="70" stroke="#4a5568" stroke-width="2" marker-end="url(#flowArrow)"/>
+    
+    <!-- H_post distribution -->
+    <g transform="translate(460, 30)">
+      <rect x="0" y="0" width="180" height="80" rx="10" fill="url(#processGrad)"/>
+      <text x="90" y="25" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle" font-weight="bold">H_post 分发</text>
+      <text x="90" y="45" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">output = H_post^T · F()</text>
+      <text x="90" y="62" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">1路输出 → n路流</text>
+      <text x="90" y="75" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">(广播分发)</text>
+    </g>
+    
+    <!-- Arrow -->
+    <line x1="640" y1="70" x2="680" y2="70" stroke="#4a5568" stroke-width="2" marker-end="url(#flowArrow)"/>
+    
+    <!-- Residual merge -->
+    <g transform="translate(690, 20)">
+      <rect x="0" y="0" width="160" height="100" rx="10" fill="url(#outputGrad)"/>
+      <text x="80" y="25" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle" font-weight="bold">残差合并</text>
+      <text x="80" y="48" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">x_{l+1} = H_res · x_l</text>
+      <text x="80" y="63" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">        + H_post^T · F()</text>
+      <text x="80" y="85" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">流间信息混合</text>
+      <text x="80" y="98" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">(双随机约束)</text>
+    </g>
+  </g>
+  
+  <!-- Key insight boxes at bottom -->
+  <g transform="translate(30, 360)">
+    <text x="420" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">关键设计要点</text>
+    
+    <!-- Box 1 -->
+    <rect x="0" y="20" width="260" height="95" rx="8" fill="#ebf8ff" stroke="#4299e1" stroke-width="2"/>
+    <text x="130" y="45" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#2b6cb0" text-anchor="middle">非负约束 (H_pre, H_post)</text>
+    <text x="130" y="65" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">使用 Sigmoid 确保系数 ≥ 0</text>
+    <text x="130" y="82" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">防止正负系数互相抵消</text>
+    <text x="130" y="99" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">保持信号稳定传播</text>
+    
+    <!-- Box 2 -->
+    <rect x="280" y="20" width="280" height="95" rx="8" fill="#f0fff4" stroke="#48bb78" stroke-width="2"/>
+    <text x="420" y="45" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#276749" text-anchor="middle">双随机约束 (H_res)</text>
+    <text x="420" y="65" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">Sinkhorn-Knopp 算法投影</text>
+    <text x="420" y="82" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">每行每列和 = 1, 所有元素 ≥ 0</text>
+    <text x="420" y="99" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">保证累积映射不会爆炸</text>
+    
+    <!-- Box 3 -->
+    <rect x="580" y="20" width="260" height="95" rx="8" fill="#faf5ff" stroke="#9f7aea" stroke-width="2"/>
+    <text x="710" y="45" font-family="Arial, sans-serif" font-size="11" font-weight="bold" fill="#553c9a" text-anchor="middle">高效实现</text>
+    <text x="710" y="65" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">Kernel Fusion 减少内存访问</text>
+    <text x="710" y="82" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">选择性重计算节省显存</text>
+    <text x="710" y="99" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">DualPipe 通信优化</text>
+  </g>
+</svg>

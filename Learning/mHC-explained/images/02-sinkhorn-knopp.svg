@@ -1,0 +1,168 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 450">
+  <defs>
+    <linearGradient id="blueGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#48bb78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38a169;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="orangeGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#f6ad55;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#ed8936;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="purpleGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9f7aea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#805ad5;stop-opacity:1" />
+    </linearGradient>
+    <marker id="arrow2" markerWidth="10" markerHeight="7" refX="9" refY="3.5" orient="auto">
+      <polygon points="0 0, 10 3.5, 0 7" fill="#4a5568"/>
+    </marker>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="800" height="450" fill="#f7fafc"/>
+  
+  <!-- Title -->
+  <text x="400" y="35" font-family="Arial, sans-serif" font-size="20" font-weight="bold" fill="#2d3748" text-anchor="middle">Sinkhorn-Knopp 算法: 将矩阵投影到双随机矩阵流形</text>
+  
+  <!-- Step 1: Original Matrix -->
+  <g transform="translate(50, 70)">
+    <text x="80" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">Step 1: 原始矩阵</text>
+    
+    <!-- Matrix box -->
+    <rect x="20" y="20" width="120" height="100" rx="10" fill="url(#blueGrad2)"/>
+    <text x="80" y="55" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">H̃_res</text>
+    
+    <!-- Matrix values (example) -->
+    <text x="80" y="80" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[ 0.8  -0.2  0.5 ]</text>
+    <text x="80" y="93" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[ 0.3   1.2 -0.4 ]</text>
+    <text x="80" y="106" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[-0.1   0.6  0.9 ]</text>
+    
+    <text x="80" y="140" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">任意实数值矩阵</text>
+    <text x="80" y="155" font-family="Arial, sans-serif" font-size="10" fill="#e53e3e" text-anchor="middle">可能有负值!</text>
+  </g>
+  
+  <!-- Arrow 1 -->
+  <g transform="translate(170, 120)">
+    <line x1="0" y1="30" x2="50" y2="30" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow2)"/>
+    <text x="25" y="20" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">exp()</text>
+  </g>
+  
+  <!-- Step 2: After Exponentiation -->
+  <g transform="translate(230, 70)">
+    <text x="80" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">Step 2: 指数化</text>
+    
+    <!-- Matrix box -->
+    <rect x="20" y="20" width="120" height="100" rx="10" fill="url(#orangeGrad2)"/>
+    <text x="80" y="55" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">M^(0) = exp(H̃)</text>
+    
+    <!-- Matrix values -->
+    <text x="80" y="80" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[ 2.23  0.82  1.65 ]</text>
+    <text x="80" y="93" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[ 1.35  3.32  0.67 ]</text>
+    <text x="80" y="106" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[ 0.90  1.82  2.46 ]</text>
+    
+    <text x="80" y="140" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">所有元素变为正数</text>
+    <text x="80" y="155" font-family="Arial, sans-serif" font-size="10" fill="#38a169" text-anchor="middle">满足非负性条件 ✓</text>
+  </g>
+  
+  <!-- Arrow 2 -->
+  <g transform="translate(350, 120)">
+    <line x1="0" y1="30" x2="50" y2="30" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow2)"/>
+    <text x="25" y="20" font-family="Arial, sans-serif" font-size="9" fill="#4a5568" text-anchor="middle">迭代归一化</text>
+  </g>
+  
+  <!-- Step 3: Iteration -->
+  <g transform="translate(410, 70)">
+    <text x="90" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">Step 3: 交替归一化</text>
+    
+    <!-- Iteration loop visual -->
+    <rect x="20" y="20" width="140" height="130" rx="10" fill="url(#purpleGrad2)"/>
+    
+    <!-- Row normalization -->
+    <rect x="35" y="35" width="110" height="35" rx="6" fill="white" fill-opacity="0.2"/>
+    <text x="90" y="50" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">行归一化 T_r</text>
+    <text x="90" y="63" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">每行和 = 1</text>
+    
+    <!-- Arrow between -->
+    <path d="M 90 75 L 90 90" stroke="white" stroke-width="1.5" marker-end="url(#arrow2)"/>
+    
+    <!-- Column normalization -->
+    <rect x="35" y="95" width="110" height="35" rx="6" fill="white" fill-opacity="0.2"/>
+    <text x="90" y="110" font-family="Arial, sans-serif" font-size="10" fill="white" text-anchor="middle">列归一化 T_c</text>
+    <text x="90" y="123" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">每列和 = 1</text>
+    
+    <!-- Repeat arrow -->
+    <path d="M 155 115 Q 175 115 175 65 Q 175 40 155 40" stroke="white" stroke-width="1.5" fill="none"/>
+    <text x="185" y="80" font-family="Arial, sans-serif" font-size="9" fill="white">重复</text>
+    <text x="185" y="92" font-family="Arial, sans-serif" font-size="9" fill="white">20次</text>
+    
+    <text x="90" y="170" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">M^(t) = T_r(T_c(M^(t-1)))</text>
+  </g>
+  
+  <!-- Arrow 3 -->
+  <g transform="translate(550, 120)">
+    <line x1="0" y1="30" x2="50" y2="30" stroke="#4a5568" stroke-width="2" marker-end="url(#arrow2)"/>
+    <text x="25" y="20" font-family="Arial, sans-serif" font-size="10" fill="#4a5568" text-anchor="middle">收敛</text>
+  </g>
+  
+  <!-- Step 4: Result -->
+  <g transform="translate(610, 70)">
+    <text x="90" y="0" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568" text-anchor="middle">Step 4: 双随机矩阵</text>
+    
+    <!-- Matrix box -->
+    <rect x="20" y="20" width="140" height="100" rx="10" fill="url(#greenGrad2)"/>
+    <text x="90" y="50" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">H_res (约束后)</text>
+    
+    <!-- Matrix values -->
+    <text x="90" y="75" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[ 0.47  0.17  0.36 ]</text>
+    <text x="90" y="88" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[ 0.25  0.62  0.13 ]</text>
+    <text x="90" y="101" font-family="monospace" font-size="10" fill="white" text-anchor="middle">[ 0.28  0.21  0.51 ]</text>
+    
+    <!-- Annotations -->
+    <text x="170" y="75" font-family="Arial, sans-serif" font-size="9" fill="#38a169">→ 1.0</text>
+    <text x="170" y="88" font-family="Arial, sans-serif" font-size="9" fill="#38a169">→ 1.0</text>
+    <text x="170" y="101" font-family="Arial, sans-serif" font-size="9" fill="#38a169">→ 1.0</text>
+    
+    <text x="60" y="130" font-family="Arial, sans-serif" font-size="9" fill="#38a169">↓1.0</text>
+    <text x="90" y="130" font-family="Arial, sans-serif" font-size="9" fill="#38a169">↓1.0</text>
+    <text x="120" y="130" font-family="Arial, sans-serif" font-size="9" fill="#38a169">↓1.0</text>
+    
+    <text x="90" y="155" font-family="Arial, sans-serif" font-size="10" fill="#38a169" text-anchor="middle">行和 = 列和 = 1 ✓</text>
+  </g>
+  
+  <!-- Properties Section -->
+  <g transform="translate(50, 250)">
+    <text x="350" y="0" font-family="Arial, sans-serif" font-size="16" font-weight="bold" fill="#2d3748" text-anchor="middle">双随机矩阵的关键性质</text>
+    
+    <!-- Property 1 -->
+    <rect x="0" y="20" width="220" height="90" rx="10" fill="#ebf8ff" stroke="#4299e1" stroke-width="2"/>
+    <text x="110" y="45" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#2b6cb0" text-anchor="middle">1. 范数保持</text>
+    <text x="110" y="65" font-family="Arial, sans-serif" font-size="11" fill="#4a5568" text-anchor="middle">||H_res||_2 ≤ 1</text>
+    <text x="110" y="85" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">谱范数有界</text>
+    <text x="110" y="100" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">防止梯度爆炸</text>
+    
+    <!-- Property 2 -->
+    <rect x="240" y="20" width="220" height="90" rx="10" fill="#f0fff4" stroke="#48bb78" stroke-width="2"/>
+    <text x="350" y="45" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#276749" text-anchor="middle">2. 乘法封闭性</text>
+    <text x="350" y="65" font-family="Arial, sans-serif" font-size="11" fill="#4a5568" text-anchor="middle">∏ H_res 仍是双随机</text>
+    <text x="350" y="85" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">多层累积后</text>
+    <text x="350" y="100" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">保持稳定性</text>
+    
+    <!-- Property 3 -->
+    <rect x="480" y="20" width="220" height="90" rx="10" fill="#faf5ff" stroke="#9f7aea" stroke-width="2"/>
+    <text x="590" y="45" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#553c9a" text-anchor="middle">3. 凸组合性质</text>
+    <text x="590" y="65" font-family="Arial, sans-serif" font-size="11" fill="#4a5568" text-anchor="middle">Birkhoff 多面体</text>
+    <text x="590" y="85" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">= 置换矩阵的凸包</text>
+    <text x="590" y="100" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">信息混合但不放大</text>
+  </g>
+  
+  <!-- Analogy box -->
+  <g transform="translate(50, 375)">
+    <rect x="0" y="0" width="700" height="60" rx="10" fill="#fffaf0" stroke="#ed8936" stroke-width="2"/>
+    <text x="20" y="25" font-family="Arial, sans-serif" font-size="12" font-weight="bold" fill="#c05621">大白话理解:</text>
+    <text x="20" y="45" font-family="Arial, sans-serif" font-size="11" fill="#4a5568">想象你有4杯不同味道的果汁,双随机矩阵就像一个"公平调酒师" - 它可以把不同果汁混合在一起,</text>
+    <text x="20" y="58" font-family="Arial, sans-serif" font-size="11" fill="#4a5568">但保证总量不变(不会凭空多出果汁,也不会消失),而且每杯的总量还是原来那么多。这就是"信息混合但不放大"!</text>
+  </g>
+</svg>
