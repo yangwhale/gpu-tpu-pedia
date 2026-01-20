@@ -1,0 +1,153 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 520">
+  <defs>
+    <linearGradient id="expertGrad1" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="expertGrad2" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#48bb78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38a169;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="expertGrad3" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ed8936;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dd6b20;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="sharedGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9f7aea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#805ad5;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="routerGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4299e1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3182ce;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadow3" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="2" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="900" height="520" fill="#f7fafc"/>
+  
+  <!-- Title -->
+  <text x="450" y="35" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#2d3748" text-anchor="middle">DeepSeekMoE + 无辅助损失负载均衡</text>
+  <text x="450" y="58" font-family="Arial, sans-serif" font-size="13" fill="#718096" text-anchor="middle">256 个路由专家 + 1 个共享专家 | 每 token 激活 8 个专家</text>
+  
+  <!-- Input tokens -->
+  <text x="100" y="100" font-family="Arial, sans-serif" font-size="14" fill="#4a5568" font-weight="bold">输入 Tokens:</text>
+  
+  <rect x="50" y="115" width="60" height="35" rx="6" fill="#e2e8f0" filter="url(#shadow3)"/>
+  <text x="80" y="138" font-family="Arial, sans-serif" font-size="12" fill="#4a5568" text-anchor="middle">t₁</text>
+  
+  <rect x="120" y="115" width="60" height="35" rx="6" fill="#e2e8f0" filter="url(#shadow3)"/>
+  <text x="150" y="138" font-family="Arial, sans-serif" font-size="12" fill="#4a5568" text-anchor="middle">t₂</text>
+  
+  <rect x="190" y="115" width="60" height="35" rx="6" fill="#e2e8f0" filter="url(#shadow3)"/>
+  <text x="220" y="138" font-family="Arial, sans-serif" font-size="12" fill="#4a5568" text-anchor="middle">t₃</text>
+  
+  <text x="265" y="138" font-family="Arial, sans-serif" font-size="16" fill="#718096">...</text>
+  
+  <!-- Router -->
+  <rect x="320" y="95" width="200" height="70" rx="10" fill="url(#routerGrad)" filter="url(#shadow3)"/>
+  <text x="420" y="125" font-family="Arial, sans-serif" font-size="14" fill="white" text-anchor="middle" font-weight="bold">路由器 (Gating)</text>
+  <text x="420" y="148" font-family="Arial, sans-serif" font-size="11" fill="rgba(255,255,255,0.9)" text-anchor="middle">s = Sigmoid(u^T · e) + b</text>
+  
+  <!-- Arrows from tokens to router -->
+  <path d="M260 130 L320 130" stroke="#718096" stroke-width="2" fill="none" marker-end="url(#arrowhead)"/>
+  
+  <!-- Bias adjustment box -->
+  <rect x="540" y="95" width="180" height="70" rx="10" fill="#fef3c7" stroke="#d69e2e" stroke-width="2" filter="url(#shadow3)"/>
+  <text x="630" y="120" font-family="Arial, sans-serif" font-size="12" fill="#744210" text-anchor="middle" font-weight="bold">动态偏置调节 b</text>
+  <text x="630" y="140" font-family="Arial, sans-serif" font-size="10" fill="#744210" text-anchor="middle">过载? b -= γ</text>
+  <text x="630" y="155" font-family="Arial, sans-serif" font-size="10" fill="#744210" text-anchor="middle">欠载? b += γ</text>
+  
+  <!-- Arrow from router to bias -->
+  <path d="M520 130 L540 130" stroke="#d69e2e" stroke-width="2" fill="none" stroke-dasharray="5,3"/>
+  
+  <!-- Shared Expert -->
+  <rect x="50" y="200" width="120" height="80" rx="10" fill="url(#sharedGrad)" filter="url(#shadow3)"/>
+  <text x="110" y="235" font-family="Arial, sans-serif" font-size="13" fill="white" text-anchor="middle" font-weight="bold">共享专家</text>
+  <text x="110" y="255" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.9)" text-anchor="middle">所有 token 都用</text>
+  <text x="110" y="270" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.9)" text-anchor="middle">捕获通用知识</text>
+  
+  <!-- Routed Experts -->
+  <text x="400" y="195" font-family="Arial, sans-serif" font-size="14" fill="#4a5568" font-weight="bold">路由专家 (256 个，激活 8 个):</text>
+  
+  <!-- Expert 1 - heavily loaded -->
+  <rect x="200" y="210" width="90" height="70" rx="8" fill="url(#expertGrad1)" filter="url(#shadow3)"/>
+  <text x="245" y="240" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle" font-weight="bold">专家 1</text>
+  <text x="245" y="260" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)" text-anchor="middle">数学推理</text>
+  <circle cx="275" cy="225" r="12" fill="#48bb78"/>
+  <text x="275" y="229" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">✓</text>
+  
+  <!-- Expert 2 -->
+  <rect x="305" y="210" width="90" height="70" rx="8" fill="url(#expertGrad2)" filter="url(#shadow3)"/>
+  <text x="350" y="240" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle" font-weight="bold">专家 2</text>
+  <text x="350" y="260" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)" text-anchor="middle">代码生成</text>
+  <circle cx="380" cy="225" r="12" fill="#48bb78"/>
+  <text x="380" y="229" font-family="Arial, sans-serif" font-size="9" fill="white" text-anchor="middle">✓</text>
+  
+  <!-- Expert 3 -->
+  <rect x="410" y="210" width="90" height="70" rx="8" fill="url(#expertGrad3)" filter="url(#shadow3)"/>
+  <text x="455" y="240" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle" font-weight="bold">专家 3</text>
+  <text x="455" y="260" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)" text-anchor="middle">语言理解</text>
+  <circle cx="485" cy="225" r="12" fill="#e2e8f0"/>
+  
+  <!-- More experts indicator -->
+  <text x="530" y="245" font-family="Arial, sans-serif" font-size="20" fill="#718096">...</text>
+  
+  <!-- Expert N -->
+  <rect x="570" y="210" width="90" height="70" rx="8" fill="url(#expertGrad1)" filter="url(#shadow3)"/>
+  <text x="615" y="240" font-family="Arial, sans-serif" font-size="12" fill="white" text-anchor="middle" font-weight="bold">专家 256</text>
+  <text x="615" y="260" font-family="Arial, sans-serif" font-size="10" fill="rgba(255,255,255,0.8)" text-anchor="middle">多模态</text>
+  <circle cx="645" cy="225" r="12" fill="#e2e8f0"/>
+  
+  <!-- Arrows from router to experts -->
+  <path d="M420 165 L110 200" stroke="#9f7aea" stroke-width="1.5" fill="none"/>
+  <path d="M420 165 L245 210" stroke="#667eea" stroke-width="2" fill="none"/>
+  <path d="M420 165 L350 210" stroke="#48bb78" stroke-width="2" fill="none"/>
+  <path d="M420 165 L455 210" stroke="#718096" stroke-width="1" stroke-dasharray="4,2" fill="none"/>
+  <path d="M420 165 L615 210" stroke="#718096" stroke-width="1" stroke-dasharray="4,2" fill="none"/>
+  
+  <!-- Load balance comparison -->
+  <rect x="50" y="310" width="380" height="180" rx="10" fill="white" stroke="#e53e3e" stroke-width="2" filter="url(#shadow3)"/>
+  <text x="240" y="335" font-family="Arial, sans-serif" font-size="14" fill="#c53030" text-anchor="middle" font-weight="bold">传统方法: 辅助损失 (Aux Loss)</text>
+  
+  <!-- Unbalanced bars -->
+  <rect x="80" y="355" width="120" height="20" rx="3" fill="#fc8181"/>
+  <text x="210" y="370" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">专家1: 过载</text>
+  
+  <rect x="80" y="380" width="30" height="20" rx="3" fill="#c6f6d5"/>
+  <text x="210" y="395" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">专家2: 欠载</text>
+  
+  <rect x="80" y="405" width="150" height="20" rx="3" fill="#fc8181"/>
+  <text x="210" y="420" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">专家3: 严重过载</text>
+  
+  <text x="240" y="455" font-family="Arial, sans-serif" font-size="11" fill="#c53030" text-anchor="middle">问题: 辅助损失会损害模型性能!</text>
+  <text x="240" y="475" font-family="Arial, sans-serif" font-size="11" fill="#c53030" text-anchor="middle">强制平衡 ≠ 最优路由</text>
+  
+  <!-- Right side: Aux-loss-free -->
+  <rect x="470" y="310" width="380" height="180" rx="10" fill="white" stroke="#38a169" stroke-width="2" filter="url(#shadow3)"/>
+  <text x="660" y="335" font-family="Arial, sans-serif" font-size="14" fill="#276749" text-anchor="middle" font-weight="bold">DeepSeek: 无辅助损失 + 动态偏置</text>
+  
+  <!-- Balanced bars -->
+  <rect x="500" y="355" width="70" height="20" rx="3" fill="#9ae6b4"/>
+  <text x="630" y="370" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">专家1: 均衡</text>
+  
+  <rect x="500" y="380" width="75" height="20" rx="3" fill="#9ae6b4"/>
+  <text x="630" y="395" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">专家2: 均衡</text>
+  
+  <rect x="500" y="405" width="68" height="20" rx="3" fill="#9ae6b4"/>
+  <text x="630" y="420" font-family="Arial, sans-serif" font-size="10" fill="#4a5568">专家3: 均衡</text>
+  
+  <text x="660" y="455" font-family="Arial, sans-serif" font-size="11" fill="#276749" text-anchor="middle">优势: 偏置只影响路由选择,</text>
+  <text x="660" y="475" font-family="Arial, sans-serif" font-size="11" fill="#276749" text-anchor="middle">不影响门控值 → 保持模型性能!</text>
+  
+  <!-- Arrow between -->
+  <text x="445" y="395" font-family="Arial, sans-serif" font-size="24" fill="#38a169">→</text>
+  
+  <!-- Legend -->
+  <rect x="700" y="95" width="150" height="70" rx="8" fill="#edf2f7"/>
+  <text x="775" y="115" font-family="Arial, sans-serif" font-size="11" fill="#4a5568" text-anchor="middle" font-weight="bold">关键参数</text>
+  <text x="775" y="135" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">路由专家: 256</text>
+  <text x="775" y="150" font-family="Arial, sans-serif" font-size="10" fill="#718096" text-anchor="middle">激活数: 8</text>
+</svg>

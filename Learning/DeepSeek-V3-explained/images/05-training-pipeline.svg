@@ -1,0 +1,133 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 900 500">
+  <defs>
+    <linearGradient id="stageBlue" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="stageGreen" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#48bb78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38a169;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="stageOrange" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ed8936;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dd6b20;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="stagePink" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ed64a6;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#d53f8c;stop-opacity:1" />
+    </linearGradient>
+    <filter id="shadowStage" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="2" dy="2" stdDeviation="2" flood-opacity="0.15"/>
+    </filter>
+  </defs>
+  
+  <!-- Background -->
+  <rect width="900" height="500" fill="#f7fafc"/>
+  
+  <!-- Title -->
+  <text x="450" y="35" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#2d3748" text-anchor="middle">DeepSeek-V3 训练流程</text>
+  <text x="450" y="58" font-family="Arial, sans-serif" font-size="13" fill="#718096" text-anchor="middle">预训练 → 长上下文扩展 → SFT → RL | 总成本 $5.576M</text>
+  
+  <!-- Stage 1: Pre-training -->
+  <rect x="50" y="85" width="190" height="160" rx="12" fill="url(#stageBlue)" filter="url(#shadowStage)"/>
+  <text x="145" y="115" font-family="Arial, sans-serif" font-size="15" fill="white" text-anchor="middle" font-weight="bold">1. 预训练</text>
+  
+  <rect x="70" y="130" width="150" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="145" y="148" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">14.8T tokens</text>
+  
+  <rect x="70" y="160" width="150" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="145" y="178" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">2048 H800 GPU</text>
+  
+  <rect x="70" y="190" width="150" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="145" y="208" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">2.664M GPU 小时</text>
+  
+  <text x="145" y="235" font-family="Arial, sans-serif" font-size="12" fill="rgba(255,255,255,0.9)" text-anchor="middle">$5.328M</text>
+  
+  <!-- Arrow -->
+  <path d="M240 165 L270 165" stroke="#667eea" stroke-width="3" fill="none" marker-end="url(#arrowhead)"/>
+  
+  <!-- Stage 2: Context Extension -->
+  <rect x="280" y="85" width="190" height="160" rx="12" fill="url(#stageGreen)" filter="url(#shadowStage)"/>
+  <text x="375" y="115" font-family="Arial, sans-serif" font-size="15" fill="white" text-anchor="middle" font-weight="bold">2. 上下文扩展</text>
+  
+  <rect x="300" y="130" width="150" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="375" y="148" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">4K → 32K → 128K</text>
+  
+  <rect x="300" y="160" width="150" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="375" y="178" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">YaRN + RoPE</text>
+  
+  <rect x="300" y="190" width="150" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="375" y="208" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">119K GPU 小时</text>
+  
+  <text x="375" y="235" font-family="Arial, sans-serif" font-size="12" fill="rgba(255,255,255,0.9)" text-anchor="middle">$0.238M</text>
+  
+  <!-- Arrow -->
+  <path d="M470 165 L500 165" stroke="#48bb78" stroke-width="3" fill="none"/>
+  
+  <!-- Stage 3: SFT -->
+  <rect x="510" y="85" width="170" height="160" rx="12" fill="url(#stageOrange)" filter="url(#shadowStage)"/>
+  <text x="595" y="115" font-family="Arial, sans-serif" font-size="15" fill="white" text-anchor="middle" font-weight="bold">3. SFT</text>
+  
+  <rect x="525" y="130" width="140" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="595" y="148" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">监督微调</text>
+  
+  <rect x="525" y="160" width="140" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="595" y="178" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">高质量对话数据</text>
+  
+  <rect x="525" y="190" width="140" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="595" y="208" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">R1 知识蒸馏</text>
+  
+  <!-- Arrow -->
+  <path d="M680 165 L710 165" stroke="#ed8936" stroke-width="3" fill="none"/>
+  
+  <!-- Stage 4: RL -->
+  <rect x="720" y="85" width="150" height="160" rx="12" fill="url(#stagePink)" filter="url(#shadowStage)"/>
+  <text x="795" y="115" font-family="Arial, sans-serif" font-size="15" fill="white" text-anchor="middle" font-weight="bold">4. RL</text>
+  
+  <rect x="735" y="130" width="120" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="795" y="148" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">强化学习</text>
+  
+  <rect x="735" y="160" width="120" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="795" y="178" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">GRPO 算法</text>
+  
+  <rect x="735" y="190" width="120" height="25" rx="4" fill="rgba(255,255,255,0.2)"/>
+  <text x="795" y="208" font-family="Arial, sans-serif" font-size="11" fill="white" text-anchor="middle">5K GPU 小时</text>
+  
+  <text x="795" y="235" font-family="Arial, sans-serif" font-size="12" fill="rgba(255,255,255,0.9)" text-anchor="middle">$0.01M</text>
+  
+  <!-- Engineering optimizations -->
+  <rect x="50" y="270" width="820" height="100" rx="10" fill="white" stroke="#e2e8f0" stroke-width="2" filter="url(#shadowStage)"/>
+  <text x="450" y="295" font-family="Arial, sans-serif" font-size="14" fill="#4a5568" text-anchor="middle" font-weight="bold">工程优化 (降低成本的关键)</text>
+  
+  <!-- FP8 -->
+  <rect x="80" y="310" width="160" height="45" rx="8" fill="#c6f6d5"/>
+  <text x="160" y="332" font-family="Arial, sans-serif" font-size="12" fill="#276749" text-anchor="middle" font-weight="bold">FP8 混合精度</text>
+  <text x="160" y="348" font-family="Arial, sans-serif" font-size="10" fill="#276749" text-anchor="middle">计算+存储 双优化</text>
+  
+  <!-- DualPipe -->
+  <rect x="260" y="310" width="160" height="45" rx="8" fill="#bee3f8"/>
+  <text x="340" y="332" font-family="Arial, sans-serif" font-size="12" fill="#2b6cb0" text-anchor="middle" font-weight="bold">DualPipe 流水线</text>
+  <text x="340" y="348" font-family="Arial, sans-serif" font-size="10" fill="#2b6cb0" text-anchor="middle">计算通信重叠</text>
+  
+  <!-- No TP -->
+  <rect x="440" y="310" width="160" height="45" rx="8" fill="#fef3c7"/>
+  <text x="520" y="332" font-family="Arial, sans-serif" font-size="12" fill="#744210" text-anchor="middle" font-weight="bold">无 Tensor 并行</text>
+  <text x="520" y="348" font-family="Arial, sans-serif" font-size="10" fill="#744210" text-anchor="middle">节省通信开销</text>
+  
+  <!-- All-to-All -->
+  <rect x="620" y="310" width="160" height="45" rx="8" fill="#fed7e2"/>
+  <text x="700" y="332" font-family="Arial, sans-serif" font-size="12" fill="#97266d" text-anchor="middle" font-weight="bold">高效 All-to-All</text>
+  <text x="700" y="348" font-family="Arial, sans-serif" font-size="10" fill="#97266d" text-anchor="middle">IB + NVLink 融合</text>
+  
+  <!-- Cost comparison -->
+  <rect x="50" y="390" width="400" height="90" rx="10" fill="white" stroke="#e53e3e" stroke-width="2" filter="url(#shadowStage)"/>
+  <text x="250" y="415" font-family="Arial, sans-serif" font-size="14" fill="#c53030" text-anchor="middle" font-weight="bold">行业参考 (同规模模型)</text>
+  <text x="250" y="445" font-family="Arial, sans-serif" font-size="13" fill="#4a5568" text-anchor="middle">Llama-3 405B: 估计 3000 万+ GPU 小时</text>
+  <text x="250" y="468" font-family="Arial, sans-serif" font-size="13" fill="#4a5568" text-anchor="middle">GPT-4: 据传数千万美元训练成本</text>
+  
+  <!-- DeepSeek cost -->
+  <rect x="470" y="390" width="400" height="90" rx="10" fill="white" stroke="#38a169" stroke-width="2" filter="url(#shadowStage)"/>
+  <text x="670" y="415" font-family="Arial, sans-serif" font-size="14" fill="#276749" text-anchor="middle" font-weight="bold">DeepSeek-V3 实际成本</text>
+  <text x="670" y="445" font-family="Arial, sans-serif" font-size="18" fill="#38a169" text-anchor="middle" font-weight="bold">2.788M GPU 小时</text>
+  <text x="670" y="468" font-family="Arial, sans-serif" font-size="18" fill="#38a169" text-anchor="middle" font-weight="bold">$5.576M (约 4000 万人民币)</text>
+</svg>

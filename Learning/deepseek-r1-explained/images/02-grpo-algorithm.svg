@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 500">
+  <defs>
+    <linearGradient id="blueGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#4299e1;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#3182ce;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="greenGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#48bb78;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#38a169;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="purpleGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#9f7aea;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#805ad5;stop-opacity:1" />
+    </linearGradient>
+    <linearGradient id="orangeGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+      <stop offset="0%" style="stop-color:#ed8936;stop-opacity:1" />
+      <stop offset="100%" style="stop-color:#dd6b20;stop-opacity:1" />
+    </linearGradient>
+  </defs>
+  
+  <!-- Title -->
+  <text x="400" y="35" text-anchor="middle" font-family="Arial, sans-serif" font-size="22" font-weight="bold" fill="#2d3748">GRPO 算法原理图解</text>
+  <text x="400" y="55" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" fill="#718096">Group Relative Policy Optimization - 组相对策略优化</text>
+  
+  <!-- Question input -->
+  <rect x="50" y="90" width="120" height="60" rx="8" fill="url(#blueGrad)" />
+  <text x="110" y="125" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">问题 Q</text>
+  
+  <!-- Arrow to model -->
+  <path d="M 170 120 L 210 120" stroke="#666" stroke-width="2"/>
+  <polygon points="210,115 225,120 210,125" fill="#666"/>
+  
+  <!-- Model box -->
+  <rect x="225" y="80" width="150" height="80" rx="10" fill="url(#purpleGrad)" />
+  <text x="300" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">策略模型 π</text>
+  <text x="300" y="140" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">(DeepSeek-V3)</text>
+  
+  <!-- Arrow to outputs -->
+  <path d="M 375 120 L 415 120" stroke="#666" stroke-width="2"/>
+  <polygon points="415,115 430,120 415,125" fill="#666"/>
+  
+  <!-- Multiple outputs (Group) -->
+  <rect x="430" y="50" width="320" height="140" rx="10" fill="#edf2f7" stroke="#cbd5e0" stroke-width="2"/>
+  <text x="590" y="75" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#4a5568">采样一组回答 (Group)</text>
+  
+  <rect x="450" y="90" width="80" height="40" rx="5" fill="#fc8181"/>
+  <text x="490" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">输出 o₁</text>
+  
+  <rect x="540" y="90" width="80" height="40" rx="5" fill="#68d391"/>
+  <text x="580" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">输出 o₂</text>
+  
+  <rect x="630" y="90" width="80" height="40" rx="5" fill="#68d391"/>
+  <text x="670" y="115" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">输出 o₃</text>
+  
+  <rect x="450" y="140" width="80" height="40" rx="5" fill="#fc8181"/>
+  <text x="490" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">输出 o₄</text>
+  
+  <rect x="540" y="140" width="80" height="40" rx="5" fill="#68d391"/>
+  <text x="580" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">输出 o₅</text>
+  
+  <rect x="630" y="140" width="80" height="40" rx="5" fill="#fc8181"/>
+  <text x="670" y="165" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">输出 oG</text>
+  
+  <!-- Legend -->
+  <rect x="460" y="195" width="15" height="15" rx="2" fill="#68d391"/>
+  <text x="480" y="207" font-family="Arial, sans-serif" font-size="11" fill="#4a5568">= 正确答案</text>
+  <rect x="560" y="195" width="15" height="15" rx="2" fill="#fc8181"/>
+  <text x="580" y="207" font-family="Arial, sans-serif" font-size="11" fill="#4a5568">= 错误答案</text>
+  
+  <!-- Arrow down -->
+  <path d="M 590 220 L 590 260" stroke="#666" stroke-width="2"/>
+  <polygon points="585,260 590,275 595,260" fill="#666"/>
+  
+  <!-- Reward calculation -->
+  <rect x="430" y="280" width="320" height="80" rx="10" fill="url(#orangeGrad)" />
+  <text x="590" y="310" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">计算组内相对奖励</text>
+  <text x="590" y="335" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">Aᵢ = (rᵢ - mean) / std</text>
+  <text x="590" y="355" text-anchor="middle" font-family="Arial, sans-serif" font-size="11" fill="white">正确的输出获得正优势，错误的获得负优势</text>
+  
+  <!-- Arrow down -->
+  <path d="M 590 360 L 590 400" stroke="#666" stroke-width="2"/>
+  <polygon points="585,400 590,415 595,400" fill="#666"/>
+  
+  <!-- Policy update -->
+  <rect x="430" y="420" width="320" height="60" rx="10" fill="url(#greenGrad)" />
+  <text x="590" y="450" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="white">更新策略模型</text>
+  <text x="590" y="470" text-anchor="middle" font-family="Arial, sans-serif" font-size="12" fill="white">提高好答案概率，降低坏答案概率</text>
+  
+  <!-- Left side explanation -->
+  <rect x="50" y="250" width="320" height="220" rx="10" fill="#f7fafc" stroke="#e2e8f0" stroke-width="2"/>
+  <text x="210" y="280" text-anchor="middle" font-family="Arial, sans-serif" font-size="14" font-weight="bold" fill="#2d3748">GRPO 核心优势</text>
+  
+  <text x="70" y="310" font-family="Arial, sans-serif" font-size="12" fill="#4a5568">1. 不需要 Critic 模型</text>
+  <text x="85" y="330" font-family="Arial, sans-serif" font-size="11" fill="#718096">传统PPO需要额外训练一个同等大小的</text>
+  <text x="85" y="345" font-family="Arial, sans-serif" font-size="11" fill="#718096">评估模型，GRPO省掉了这个开销</text>
+  
+  <text x="70" y="375" font-family="Arial, sans-serif" font-size="12" fill="#4a5568">2. 组内相对比较</text>
+  <text x="85" y="395" font-family="Arial, sans-serif" font-size="11" fill="#718096">同一问题的多个回答互相比较</text>
+  <text x="85" y="410" font-family="Arial, sans-serif" font-size="11" fill="#718096">好答案自然获得正向激励</text>
+  
+  <text x="70" y="440" font-family="Arial, sans-serif" font-size="12" fill="#4a5568">3. 训练更稳定</text>
+  <text x="85" y="460" font-family="Arial, sans-serif" font-size="11" fill="#718096">通过标准化处理，减少奖励尺度问题</text>
+</svg>
