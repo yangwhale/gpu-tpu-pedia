@@ -321,18 +321,48 @@ info "安装自定义 Skills..."
 SKILLS_SRC="$SCRIPT_DIR/claude-code/skills"
 SKILLS_DST="$CLAUDE_DIR/skills"
 
+# 记录安装的 skills
+INSTALLED_SKILLS=()
+
 if [ -d "$SKILLS_SRC" ]; then
     mkdir -p "$SKILLS_DST"
-    
+
     for skill_dir in "$SKILLS_SRC"/*/; do
         if [ -d "$skill_dir" ]; then
             skill_name=$(basename "$skill_dir")
+            # 跳过隐藏目录和 .DS_Store
+            [[ "$skill_name" == .* ]] && continue
+
             info "复制 Skill: $skill_name"
             cp -r "$skill_dir" "$SKILLS_DST/"
+            INSTALLED_SKILLS+=("$skill_name")
         fi
     done
-    
-    success "自定义 Skills 安装完成！"
+
+    success "自定义 Skills 安装完成！(共 ${#INSTALLED_SKILLS[@]} 个)"
+
+    # 显示已安装的 skills 及其功能
+    echo ""
+    info "已安装的 Skills:"
+    for skill in "${INSTALLED_SKILLS[@]}"; do
+        case "$skill" in
+            "deepep-installer")
+                echo "  - deepep-installer: DeepEP 安装 (CUDA, GDRCopy, NVSHMEM, DeepEP)"
+                ;;
+            "sglang-installer")
+                echo "  - sglang-installer: SGLang 安装和调试 (含 DeepEP 依赖检测)"
+                ;;
+            "paper-explainer")
+                echo "  - paper-explainer: 论文解读 (中文大白话翻译)"
+                ;;
+            "lssd-mounter")
+                echo "  - lssd-mounter: Local SSD 挂载 (RAID0, HuggingFace 缓存)"
+                ;;
+            *)
+                echo "  - $skill"
+                ;;
+        esac
+    done
 else
     warn "未找到 Skills 目录: $SKILLS_SRC"
 fi
@@ -352,6 +382,10 @@ echo "  - Happy Coder: npm 全局安装"
 echo "  - Vertex AI 配置: $CLAUDE_DIR/settings.json"
 echo "  - 插件市场: ${#MARKETPLACES[@]} 个"
 echo "  - MCP 服务器: Kubernetes, Jina AI (如已配置 API Key)"
+echo "  - 自定义 Skills: ${#INSTALLED_SKILLS[@]} 个"
+for skill in "${INSTALLED_SKILLS[@]}"; do
+    echo "      * $skill"
+done
 echo ""
 echo "下一步操作："
 echo ""
@@ -366,5 +400,14 @@ echo "   $ claude mcp list"
 echo ""
 echo "4. MCP 配置文件位置："
 echo "   ~/.claude/mcp_servers.json"
+echo ""
+echo "5. 使用自定义 Skills:"
+echo "   - /deepep-installer  : 安装 DeepEP (用于 MoE 模型)"
+echo "   - /sglang-installer  : 安装和调试 SGLang"
+echo "   - /lssd-mounter      : 挂载 Local SSD (RAID0)"
+echo "   - /paper-explainer   : 论文解读"
+echo ""
+echo "6. Skills 目录位置:"
+echo "   ~/.claude/skills/"
 echo ""
 echo "=============================================="
