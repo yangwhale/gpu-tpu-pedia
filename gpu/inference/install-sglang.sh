@@ -16,7 +16,7 @@ SGL_KERNEL_VERSION="0.3.21"
 MOONCAKE_VERSION="0.3.8.post1"
 NCCL_VERSION="2.28.3"
 CUDNN_VERSION="9.16.0.29"
-FLASHINFER_VERSION="0.5.3"
+FLASHINFER_VERSION="0.6.2"
 CMAKE_VERSION="3.31.1"
 
 # GPU 架构配置
@@ -231,9 +231,12 @@ success "NVIDIA 库安装完成"
 # =============================================================================
 info "安装额外依赖..."
 
-# Flashinfer cubin 缓存
-FLASHINFER_CUBIN_DOWNLOAD_THREADS=8 FLASHINFER_LOGGING_LEVEL=warning \
-    python3 -m flashinfer --download-cubin || warn "flashinfer cubin 下载跳过"
+# FlashInfer 0.6.x 安装 (覆盖 SGLang 自带的旧版本)
+info "升级 FlashInfer 到 v${FLASHINFER_VERSION}..."
+python3 -m pip install --no-cache-dir --break-system-packages \
+    flashinfer-python==${FLASHINFER_VERSION} \
+    flashinfer-cubin==${FLASHINFER_VERSION} \
+    || warn "FlashInfer 升级失败，使用 SGLang 自带版本"
 
 # Python 工具包
 python3 -m pip install --no-cache-dir --break-system-packages \
