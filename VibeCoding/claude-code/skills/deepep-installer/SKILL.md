@@ -37,6 +37,10 @@ lsmod | grep nvidia
 nvcc --version
 ls -la /usr/local/cuda
 
+# Check Python and pip (IMPORTANT: Ubuntu 24.04 doesn't include pip by default)
+python3 --version
+python3 -m pip --version || echo "pip not installed - run: sudo apt install python3-pip"
+
 # Check RDMA/IB
 rdma link                          # Modern systems
 ibv_devinfo                        # Fallback
@@ -45,6 +49,15 @@ ls /sys/class/infiniband/          # Last resort
 # Check kernel modules
 lsmod | grep -E "gdrdrv|nvidia_peermem|mlx5"
 ```
+
+### Important Notes
+
+1. **Ubuntu 24.04 pip**: Ubuntu 24.04 doesn't include pip by default. Install it first:
+   ```bash
+   sudo apt-get install -y python3-pip
+   ```
+
+2. **DOCA OFED Kernel Compatibility**: DOCA OFED 3.0.0 may not compile with newer kernels (e.g., kernel 6.14.0 on GCP). The built-in mlx5 driver is usually sufficient - DOCA is optional.
 
 ## Installation Workflow
 
@@ -78,28 +91,42 @@ gdrcopy provides GPU Direct copy functionality with the gdrdrv kernel module.
 
 ```bash
 # Install dependencies
-apt-get install -y build-essential devscripts debhelper fakeroot pkg-config dkms
+apt-get install -y build-essential devscripts debhelper fakeroot pkg-config dkms git
 
-# Get NVIDIA kernel source for nv-p2p.h
-apt-get install -y nvidia-kernel-source-580-open  # Match driver version
+# Get NVIDIA kernel source for nv-p2p.h (CRITICAL for kernel module build)
+# Match the version to your installed driver (check with: nvidia-smi | grep Driver)
+apt-get install -y nvidia-kernel-source-580-server  # For driver 580.x
 
 # Find NVIDIA source directory
-NVIDIA_SRC_DIR=$(find /usr/src/nvidia-*/nvidia -name "nv-p2p.h" -printf "%h" -quit)
+NVIDIA_SRC_DIR=$(find /usr/src -name "nv-p2p.h" -printf "%h" -quit 2>/dev/null)
+echo "Using NVIDIA_SRC_DIR: $NVIDIA_SRC_DIR"
 
-# Build gdrcopy
+# Clone and build gdrcopy
 git clone --depth 1 --branch v2.5.1 https://github.com/NVIDIA/gdrcopy.git /tmp/gdrcopy
 cd /tmp/gdrcopy
+
+# Build library first
 make -j$(nproc)
+mkdir -p /opt/deepep/gdrcopy
 make prefix=/opt/deepep/gdrcopy CUDA=$CUDA_HOME install
 
-# Build and install kernel module
-cd packages
-NVIDIA_SRC_DIR="$NVIDIA_SRC_DIR" CUDA=$CUDA_HOME ./build-deb-packages.sh
-dpkg -i *.deb
+# Build kernel module (requires NVIDIA_SRC_DIR)
+NVIDIA_SRC_DIR="$NVIDIA_SRC_DIR" make driver
 
-# Load module
-modprobe gdrdrv
+# Install kernel module
+insmod src/gdrdrv/gdrdrv.ko
+
+# Copy library to system path for easy linking
+cp src/libgdrapi.so.2.5 /usr/lib/x86_64-linux-gnu/
+ln -sf /usr/lib/x86_64-linux-gnu/libgdrapi.so.2.5 /usr/lib/x86_64-linux-gnu/libgdrapi.so.2
+ln -sf /usr/lib/x86_64-linux-gnu/libgdrapi.so.2 /usr/lib/x86_64-linux-gnu/libgdrapi.so
+ldconfig
+
+# Verify
+lsmod | grep gdrdrv  # Should show gdrdrv module
 ```
+
+**Note:** If the deb package build fails, you can skip it and just use `insmod` to load the module. The library installation is sufficient for NVSHMEM.
 
 ### Step 3: NVSHMEM with IBGDA
 
@@ -399,6 +426,45 @@ export NVSHMEM_USE_GDRCOPY=1
 # A100: TORCH_CUDA_ARCH_LIST="8.0"
 ```
 
+## Environment Setup Script
+
+After installation, create an environment script for easy activation:
+
+```bash
+cat > /opt/deepep/env.sh << 'EOF'
+#!/bin/bash
+# DeepEP Environment Configuration
+# Usage: source /opt/deepep/env.sh
+
+export CUDA_HOME=/usr/local/cuda
+export PATH=$CUDA_HOME/bin:$PATH
+export GDRCOPY_HOME=/opt/deepep/gdrcopy
+export NVSHMEM_HOME=/opt/deepep/nvshmem
+export NVSHMEM_DIR=/opt/deepep/nvshmem
+
+# Collect nvidia pip package lib paths
+NVIDIA_LIB_PATHS=""
+for d in /usr/local/lib/python3.*/dist-packages/nvidia/*/lib; do
+    [ -d "$d" ] && NVIDIA_LIB_PATHS="${d}:${NVIDIA_LIB_PATHS}"
+done
+for d in $HOME/.local/lib/python3.*/site-packages/nvidia/*/lib; do
+    [ -d "$d" ] && NVIDIA_LIB_PATHS="${d}:${NVIDIA_LIB_PATHS}"
+done
+
+export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:${CUDA_HOME}/lib64:${NVIDIA_LIB_PATHS}${LD_LIBRARY_PATH}
+
+# HuggingFace cache on LSSD (if available)
+[ -d /lssd/huggingface ] && export HF_HOME=/lssd/huggingface
+
+echo "DeepEP environment loaded"
+echo "  NVSHMEM_HOME: $NVSHMEM_HOME"
+echo "  GDRCOPY_HOME: $GDRCOPY_HOME"
+EOF
+
+chmod +x /opt/deepep/env.sh
+echo 'source /opt/deepep/env.sh' >> ~/.bashrc
+```
+
 ## Resources
 
 ### scripts/
@@ -408,3 +474,11 @@ export NVSHMEM_USE_GDRCOPY=1
 ### references/
 
 - `troubleshooting.md` - Extended troubleshooting guide with more edge cases
+
+## Version History
+
+- **2026-01-28**: Updated based on installation experience on GCP with kernel 6.14.0
+  - Added pip installation check for Ubuntu 24.04
+  - Clarified NVIDIA_SRC_DIR requirement for gdrcopy
+  - Added DOCA OFED kernel compatibility warning
+  - Added environment setup script generation

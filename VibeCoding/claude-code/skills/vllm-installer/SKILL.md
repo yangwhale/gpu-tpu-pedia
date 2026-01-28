@@ -70,6 +70,15 @@ If DeepEP is not installed and you need to run MoE models, use the `deepep-insta
 
 ## Installation Workflow
 
+### Pre-requisites (Ubuntu 24.04)
+
+Ubuntu 24.04 doesn't include pip by default. Install it first:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-pip
+```
+
 ### Step 1: Environment Setup
 
 To set up the environment, ensure CUDA is properly configured:
@@ -321,7 +330,21 @@ When diagnosing vLLM installation:
 | API | OpenAI compatible | OpenAI compatible |
 | Default Port | 8000 | 30000 |
 
-Both can coexist on the same system but may have dependency version conflicts.
+### Coexistence and Dependency Conflicts
+
+Both can coexist on the same system but have dependency version conflicts:
+
+| Package | SGLang wants | vLLM installs |
+|---------|-------------|---------------|
+| grpcio | 1.75.1 | 1.76.0 |
+| timm | 1.0.16 | 1.0.24 |
+| xgrammar | 0.1.27 | 0.1.29 |
+| llguidance | <0.8.0,>=0.7.11 | 1.3.0 |
+
+**Recommendations:**
+1. **Production**: Use separate Python virtual environments for each
+2. **Development**: Accept mismatches (usually works for basic inference)
+3. **MoE models**: Install DeepEP first, then either framework
 
 ## Resources
 
@@ -329,3 +352,10 @@ Both can coexist on the same system but may have dependency version conflicts.
 - `scripts/setup_env.sh` - Environment variable setup script
 - `references/version_matrix.md` - Version compatibility matrix
 - `references/troubleshooting.md` - Extended troubleshooting guide
+
+## Version History
+
+- **2026-01-28**: Updated based on installation experience
+  - Added pip installation for Ubuntu 24.04
+  - Added FlashInfer 0.5.3 unified version with SGLang
+  - Documented SGLang/vLLM dependency conflicts with specific versions

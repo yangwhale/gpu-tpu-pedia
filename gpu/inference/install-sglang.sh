@@ -164,6 +164,12 @@ success "系统依赖安装完成"
 # =============================================================================
 info "准备 Python 环境..."
 
+# Ubuntu 24.04 不自带 pip，需要先安装
+if ! python3 -m pip --version &>/dev/null; then
+    info "安装 python3-pip..."
+    sudo apt-get install -y -qq python3-pip
+fi
+
 python3 -m pip install --break-system-packages --upgrade pip setuptools wheel
 
 # 修复 DeepEP IBGDA symlink (如果需要)

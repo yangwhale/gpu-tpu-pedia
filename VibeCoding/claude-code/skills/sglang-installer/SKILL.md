@@ -30,6 +30,15 @@ This skill provides comprehensive guidance for installing, configuring, and debu
 
 ## Installation Workflow
 
+### Pre-requisites (Ubuntu 24.04)
+
+Ubuntu 24.04 doesn't include pip by default. Install it first:
+
+```bash
+sudo apt-get update
+sudo apt-get install -y python3-pip
+```
+
 ### Step 1: Environment Setup
 
 To set up the environment, ensure CUDA is properly configured:
@@ -249,9 +258,41 @@ When diagnosing SGLang installation, if DeepEP is missing and the user wants to 
 3. After DeepEP installation, re-run SGLang diagnostic
 4. Proceed with SGLang server startup
 
+## Recommended Installation Order
+
+For MoE models (DeepSeek, Qwen-MoE), the recommended installation order is:
+
+1. **DeepEP first** (if needed for MoE models)
+   - gdrcopy → NVSHMEM → DeepEP
+   - Use the `deepep-installer` skill
+
+2. **Then SGLang**
+   - SGLang installation script will detect and use DeepEP if available
+
+This ensures DeepEP is properly configured before SGLang tries to use it.
+
+## SGLang/vLLM Coexistence
+
+SGLang and vLLM can be installed on the same system, but they have some dependency version conflicts (grpcio, timm, xgrammar, etc.). For production use:
+
+- **Recommended**: Use separate Python virtual environments
+- **Alternative**: Accept the version mismatches (usually works for basic inference)
+
+Common conflicts when both are installed:
+- `grpcio`: SGLang wants 1.75.1, vLLM may install 1.76.0
+- `timm`: SGLang wants 1.0.16, vLLM may install 1.0.24
+- `xgrammar`: SGLang wants 0.1.27, vLLM may install 0.1.29
+
 ## Resources
 
 - `scripts/diagnose.py` - Diagnostic script for installation issues
 - `scripts/setup_env.sh` - Environment variable setup script
 - `references/version_matrix.md` - Version compatibility matrix
 - `references/troubleshooting.md` - Extended troubleshooting guide
+
+## Version History
+
+- **2026-01-28**: Updated based on installation experience
+  - Added pip installation for Ubuntu 24.04
+  - Added recommended installation order (DeepEP first for MoE)
+  - Documented SGLang/vLLM dependency conflicts

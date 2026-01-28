@@ -16,6 +16,9 @@ export USE_NVPEERMEM=${USE_NVPEERMEM:-1}
 export CUDA_HOME=${CUDA_HOME:-/usr/local/cuda}
 export TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST:-"10.0"}  # B200
 
+# Options
+SKIP_DOCA=${SKIP_DOCA:-0}  # Set to 1 to skip DOCA installation (use system IB driver)
+
 # Colors for output
 RED='\033[0;31m'
 GREEN='\033[0;32m'
@@ -39,6 +42,15 @@ if [ "$EUID" -ne 0 ]; then
     log_error "Please run as root (sudo)"
     exit 1
 fi
+
+# Check pip (Ubuntu 24.04 doesn't include pip by default)
+log_info "Checking Python pip..."
+if ! python3 -m pip --version &>/dev/null; then
+    log_info "Installing python3-pip..."
+    apt-get update -y -qq
+    apt-get install -y -qq python3-pip
+fi
+log_ok "pip: $(python3 -m pip --version | head -1)"
 
 # Check NVIDIA driver
 check_nvidia_driver() {
@@ -183,6 +195,13 @@ check_ofed || DOCA_INSTALLED=false
 # ============================================================================
 install_doca_ofed() {
     log_section "DOCA OFED Installation"
+
+    # Skip if SKIP_DOCA is set (use system IB driver)
+    if [ "$SKIP_DOCA" = "1" ]; then
+        log_warn "SKIP_DOCA=1, skipping DOCA installation (using system IB driver)"
+        log_info "Note: System IB driver is usually sufficient. DOCA is optional."
+        return 0
+    fi
 
     if [ "$DOCA_INSTALLED" = true ]; then
         log_ok "DOCA OFED already installed, skipping"
