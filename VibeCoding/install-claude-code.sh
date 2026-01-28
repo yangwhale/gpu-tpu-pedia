@@ -358,6 +358,9 @@ if [ -d "$SKILLS_SRC" ]; then
             "lssd-mounter")
                 echo "  - lssd-mounter: Local SSD 挂载 (RAID0, HuggingFace 缓存)"
                 ;;
+            "vllm-installer")
+                echo "  - vllm-installer: vLLM 安装和调试 (含 LSSD/DeepEP 检测)"
+                ;;
             *)
                 echo "  - $skill"
                 ;;
@@ -404,6 +407,7 @@ echo ""
 echo "5. 使用自定义 Skills:"
 echo "   - /deepep-installer  : 安装 DeepEP (用于 MoE 模型)"
 echo "   - /sglang-installer  : 安装和调试 SGLang"
+echo "   - /vllm-installer    : 安装和调试 vLLM"
 echo "   - /lssd-mounter      : 挂载 Local SSD (RAID0)"
 echo "   - /paper-explainer   : 论文解读"
 echo ""

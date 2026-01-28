@@ -12,8 +12,8 @@ set -e
 # =============================================================================
 # 版本配置 (集中管理，便于更新)
 # =============================================================================
-VLLM_VERSION="0.15.0rc2"
-FLASHINFER_VERSION="0.6.2"
+VLLM_VERSION="0.14.1"
+FLASHINFER_VERSION="0.5.3"
 BITSANDBYTES_VERSION="0.46.1"
 NCCL_VERSION="2.28.3"
 CUDNN_VERSION="9.16.0.29"
@@ -236,7 +236,7 @@ success "NVIDIA 库安装完成"
 if [ "$INSTALL_FLASHINFER" = true ]; then
     info "安装 FlashInfer v${FLASHINFER_VERSION}..."
 
-    # FlashInfer 0.6.x 使用新的包名
+    # FlashInfer 使用新的包名 (flashinfer-python + flashinfer-cubin)
     python3 -m pip install --no-cache-dir --break-system-packages \
         flashinfer-python==${FLASHINFER_VERSION} \
         flashinfer-cubin==${FLASHINFER_VERSION} \
