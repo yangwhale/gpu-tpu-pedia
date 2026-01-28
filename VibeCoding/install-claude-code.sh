@@ -206,7 +206,13 @@ else
         echo -e "${BLUE}获取地址: https://github.com/settings/tokens${NC}"
         echo -e "${BLUE}需要权限: repo, read:org, read:user${NC}"
         read -p "> " GITHUB_TOKEN
-        
+
+        # 询问 Jina AI API Key (可选)
+        echo ""
+        echo -e "${YELLOW}请输入 Jina AI API Key (用于网页读取和搜索 MCP，可选，直接回车跳过):${NC}"
+        echo -e "${BLUE}获取地址: https://jina.ai/${NC}"
+        read -p "> " JINA_API_KEY
+
         # 创建 .claude 目录
         mkdir -p "$CLAUDE_DIR"
         
@@ -285,7 +291,30 @@ else
 fi
 
 # =============================================================================
-# 9. 安装自定义 Skills
+# 9. 安装 MCP 服务器
+# =============================================================================
+info "安装 MCP 服务器..."
+
+# Jina AI MCP (需要 API Key)
+if [ -n "$JINA_API_KEY" ]; then
+    info "安装 Jina AI MCP..."
+    claude mcp add-json "jina-ai" "{\"command\":\"npx\",\"args\":[\"-y\",\"jina-ai-mcp-server\"],\"env\":{\"JINA_API_KEY\":\"$JINA_API_KEY\"}}" 2>/dev/null \
+        && success "Jina AI MCP 安装成功！" \
+        || warn "Jina AI MCP 安装失败，请手动安装"
+else
+    info "跳过 Jina AI MCP (未提供 API Key)"
+fi
+
+# Kubernetes MCP (支持 GKE、minikube、Rancher Desktop 等)
+info "安装 Kubernetes MCP..."
+claude mcp add kubernetes -- npx mcp-server-kubernetes 2>/dev/null \
+    && success "Kubernetes MCP 安装成功！" \
+    || warn "Kubernetes MCP 安装失败，请手动安装"
+
+success "MCP 服务器安装完成！"
+
+# =============================================================================
+# 10. 安装自定义 Skills
 # =============================================================================
 info "安装自定义 Skills..."
 
@@ -309,7 +338,7 @@ else
 fi
 
 # =============================================================================
-# 10. 完成
+# 11. 完成
 # =============================================================================
 echo ""
 echo "=============================================="
@@ -322,6 +351,7 @@ echo "  - Node.js: v20 LTS (用于 MCP 服务器和插件)"
 echo "  - Happy Coder: npm 全局安装"
 echo "  - Vertex AI 配置: $CLAUDE_DIR/settings.json"
 echo "  - 插件市场: ${#MARKETPLACES[@]} 个"
+echo "  - MCP 服务器: Kubernetes, Jina AI (如已配置 API Key)"
 echo ""
 echo "下一步操作："
 echo ""
@@ -331,7 +361,10 @@ echo ""
 echo "2. 查看已安装插件："
 echo "   $ claude plugin list"
 echo ""
-echo "3. MCP 配置文件位置："
-echo "   ~/.claude.json"
+echo "3. 查看已安装 MCP 服务器："
+echo "   $ claude mcp list"
+echo ""
+echo "4. MCP 配置文件位置："
+echo "   ~/.claude/mcp_servers.json"
 echo ""
 echo "=============================================="
