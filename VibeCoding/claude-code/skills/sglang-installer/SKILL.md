@@ -23,7 +23,8 @@ This skill provides comprehensive guidance for installing, configuring, and debu
 |-----------|---------|-------|
 | SGLang | 0.5.6.post2 | Latest stable |
 | sgl-kernel | 0.3.21 | PyPI install for CUDA 12.9 |
-| mooncake-transfer-engine | 0.3.8.post1 | KV cache transfer for disaggregation |
+| mooncake-transfer-engine | 0.3.8.post1 | KV cache transfer (requires nvidia_peermem) |
+| nixl | 0.9.0 | KV cache transfer (DMA-BUF, recommended) |
 | nvidia-nccl-cu12 | 2.28.3 | Force reinstall |
 | nvidia-cudnn-cu12 | 9.16.0.29 | Required for PyTorch 2.9+ |
 | flashinfer | 0.5.3 | Attention backend |
@@ -52,6 +53,55 @@ Mooncake is required when using:
 - Production DeepSeek-V3/R1 deployments with prefill-decode separation
 
 **Note:** For single-node testing without disaggregation, Mooncake is not required.
+
+## NIXL Transfer Engine (Recommended)
+
+NIXL (NVIDIA Inference Xfer Library) is an alternative to Mooncake that uses **DMA-BUF** instead of nvidia_peermem. It's the recommended choice when:
+
+- Using NVIDIA Open Kernel Module (nvidia_peermem won't load)
+- nvidia_peermem fails with "Invalid argument" error
+- You want a more portable solution that doesn't depend on kernel modules
+
+### Installing NIXL
+
+```bash
+pip install --break-system-packages nixl==0.9.0
+
+# IMPORTANT: NIXL may downgrade NVIDIA libraries, reinstall correct versions:
+pip install nvidia-nccl-cu12==2.28.3 --force-reinstall --no-deps
+pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
+```
+
+### Verifying NIXL
+
+```bash
+python3 -c "import nixl; print('NIXL OK')"
+```
+
+### Using NIXL for Disaggregation
+
+Add `--disaggregation-transfer-backend nixl` to your launch command:
+
+```bash
+python3 -m sglang.launch_server \
+    --model-path deepseek-ai/DeepSeek-V3 \
+    --disaggregation-mode prefill \
+    --disaggregation-transfer-backend nixl \  # Use NIXL instead of Mooncake
+    --tp-size 8 \
+    ...
+```
+
+### NIXL vs Mooncake
+
+| Feature | NIXL | Mooncake |
+|---------|------|----------|
+| Memory registration | DMA-BUF (kernel native) | nvidia_peermem (kernel module) |
+| Transport | UCX (TCP/RDMA/SHM) | RDMA or TCP |
+| Kernel module required | No | nvidia_peermem (may fail) |
+| Open Kernel Module compatible | Yes | No (fails to load) |
+| Recommended for | NVIDIA Open driver, B200 | Legacy systems with nvidia_peermem |
+
+**Recommendation:** Use NIXL for new deployments, especially on systems with NVIDIA Open Kernel Module.
 
 ## Installation Workflow
 
@@ -218,6 +268,18 @@ ImportError: Please install mooncake by following the instructions...
 pip install --break-system-packages mooncake-transfer-engine==0.3.8.post1
 ```
 
+### Error: NIXL library version mismatch
+
+**Symptom:**
+Installing NIXL downgrades NVIDIA libraries, causing import errors.
+
+**Fix:**
+After installing NIXL, reinstall NVIDIA libraries:
+```bash
+pip install nvidia-nccl-cu12==2.28.3 --force-reinstall --no-deps
+pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
+```
+
 ### Error: Deprecated environment variable warning
 
 **Symptom:**
@@ -257,7 +319,9 @@ For production DeepSeek-V3/R1 deployments, SGLang supports prefill-decode disagg
 
 ### Prerequisites
 
-1. **Mooncake Transfer Engine** installed (see above)
+1. **Transfer backend** - one of:
+   - **NIXL** (recommended): `pip install nixl==0.9.0`
+   - **Mooncake**: `pip install mooncake-transfer-engine==0.3.8.post1` (requires nvidia_peermem)
 2. **DeepEP** for MoE all-to-all communication
 3. **DeepEP config files** for expert placement
 
@@ -337,17 +401,41 @@ python3 -m sglang.launch_server \
 | NCCL_MNNVL_ENABLE | 1 | Enable Multi-Node NVLink |
 | MC_TE_METRIC | true | Enable Mooncake metrics |
 
-### RDMA Memory Registration Warnings
+### RDMA Memory Registration Errors (Mooncake)
 
-When running with Mooncake, you may see RDMA memory registration warnings:
+When running with Mooncake, you may see RDMA memory registration errors:
 ```
 RdmaTransport: Failed to register memory: addr 0x... length 37896192
 ```
 
-These warnings are **expected** if RDMA is not properly configured. Mooncake will fall back to TCP transport. For production deployments with RDMA, ensure:
-- RDMA devices are properly configured
-- Sufficient locked memory limits (`ulimit -l unlimited`)
-- nvidia_peermem module is loaded (optional)
+**Root Cause:** nvidia_peermem module is not loaded or incompatible with your driver.
+
+**Diagnosis:**
+```bash
+# Check if nvidia_peermem loads
+sudo modprobe nvidia_peermem
+# If you see: "could not insert 'nvidia_peermem': Invalid argument"
+# This means you're using NVIDIA Open Kernel Module, which is incompatible
+```
+
+**Solutions (in order of preference):**
+
+1. **Switch to NIXL backend** (recommended):
+   ```bash
+   pip install --break-system-packages nixl==0.9.0
+   # Add to launch command:
+   --disaggregation-transfer-backend nixl
+   ```
+
+2. **Use TCP fallback** (slower):
+   Mooncake will automatically fall back to TCP, but this significantly impacts multi-node performance.
+
+3. **Load nvidia_peermem** (only works with proprietary driver):
+   ```bash
+   sudo modprobe nvidia_peermem
+   ```
+
+**Note:** NIXL uses DMA-BUF which is built into the Linux kernel and doesn't require nvidia_peermem.
 
 ## Testing the Server
 
@@ -462,6 +550,14 @@ Common conflicts when both are installed:
 - `references/troubleshooting.md` - Extended troubleshooting guide
 
 ## Version History
+
+- **2026-01-29**: Added NIXL transfer backend support
+  - **NEW**: Added NIXL as recommended transfer backend (uses DMA-BUF, no nvidia_peermem needed)
+  - **NEW**: NIXL installation and configuration instructions
+  - **NEW**: NIXL vs Mooncake comparison table
+  - **NEW**: RDMA memory registration error diagnosis and solutions
+  - Updated prerequisites to include NIXL as preferred option
+  - Added warning about NIXL downgrading NVIDIA libraries
 
 - **2026-01-29**: Major update for DeepSeek-V3 disaggregation mode
   - **NEW**: Added Mooncake Transfer Engine installation instructions
