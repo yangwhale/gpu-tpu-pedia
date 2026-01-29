@@ -23,10 +23,35 @@ This skill provides comprehensive guidance for installing, configuring, and debu
 |-----------|---------|-------|
 | SGLang | 0.5.6.post2 | Latest stable |
 | sgl-kernel | 0.3.21 | PyPI install for CUDA 12.9 |
-| mooncake-transfer-engine | 0.3.8.post1 | KV cache transfer |
+| mooncake-transfer-engine | 0.3.8.post1 | KV cache transfer for disaggregation |
 | nvidia-nccl-cu12 | 2.28.3 | Force reinstall |
 | nvidia-cudnn-cu12 | 9.16.0.29 | Required for PyTorch 2.9+ |
 | flashinfer | 0.5.3 | Attention backend |
+
+## Mooncake Transfer Engine
+
+Mooncake is required for **prefill-decode disaggregation** mode, which separates prefill and decode phases across different nodes for production deployments.
+
+### Installing Mooncake
+
+```bash
+pip install --break-system-packages mooncake-transfer-engine==0.3.8.post1
+```
+
+### Verifying Mooncake
+
+```bash
+python3 -c "from mooncake.engine import TransferEngine; print('Mooncake OK')"
+```
+
+### When is Mooncake Needed?
+
+Mooncake is required when using:
+- `--disaggregation-mode prefill` or `--disaggregation-mode decode`
+- Multi-node deployments with KV cache transfer
+- Production DeepSeek-V3/R1 deployments with prefill-decode separation
+
+**Note:** For single-node testing without disaggregation, Mooncake is not required.
 
 ## Installation Workflow
 
@@ -163,6 +188,52 @@ pip install -e "python[blackwell]" ...
 pip install sgl-kernel==0.3.21 --force-reinstall --no-deps  # if needed
 ```
 
+### Error: num_max_dispatch_tokens_per_rank assertion
+
+**Symptom:**
+```
+assert self.num_max_dispatch_tokens_per_rank <= 1024
+AssertionError
+```
+
+**Diagnosis:** `SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK` is set to a value > 1024.
+
+**Fix:** Set the value to 1024 or less:
+```bash
+export SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=1024
+```
+
+### Error: Mooncake not installed
+
+**Symptom:**
+```
+ModuleNotFoundError: No module named 'mooncake'
+ImportError: Please install mooncake by following the instructions...
+```
+
+**Diagnosis:** Using `--disaggregation-mode prefill/decode` without Mooncake installed.
+
+**Fix:**
+```bash
+pip install --break-system-packages mooncake-transfer-engine==0.3.8.post1
+```
+
+### Error: Deprecated environment variable warning
+
+**Symptom:**
+```
+UserWarning: Environment variable SGL_DISABLE_TP_MEMORY_INBALANCE_CHECK is deprecated
+```
+
+**Fix:** Use the new variable name:
+```bash
+# Old (deprecated)
+export SGL_DISABLE_TP_MEMORY_INBALANCE_CHECK=1
+
+# New
+export SGLANG_DISABLE_TP_MEMORY_INBALANCE_CHECK=1
+```
+
 ## Starting the Server
 
 To start the SGLang server:
@@ -179,6 +250,104 @@ python3 -m sglang.launch_server \
     --tp 4 \
     --trust-remote-code
 ```
+
+## Disaggregation Mode (Prefill-Decode Separation)
+
+For production DeepSeek-V3/R1 deployments, SGLang supports prefill-decode disaggregation where prefill and decode phases run on separate nodes.
+
+### Prerequisites
+
+1. **Mooncake Transfer Engine** installed (see above)
+2. **DeepEP** for MoE all-to-all communication
+3. **DeepEP config files** for expert placement
+
+### DeepSeek-V3 Prefill Node Example
+
+```bash
+source /opt/deepep/unified-env.sh
+
+export HF_TOKEN=your_token_here
+
+# IMPORTANT: Must be <= 1024, otherwise assertion error
+SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=1024 \
+MC_TE_METRIC=true \
+SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE=100000 \
+SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT=100000 \
+SGLANG_DISAGGREGATION_WAITING_TIMEOUT=100000 \
+SGLANG_MOONCAKE_CUSTOM_MEM_POOL=false \
+SGLANG_LOCAL_IP_NIC=enp0s19 \
+GLOO_SOCKET_IFNAME=enp0s19 \
+NCCL_SOCKET_IFNAME=enp0s19 \
+NCCL_MNNVL_ENABLE=1 \
+NCCL_CUMEM_ENABLE=1 \
+SGLANG_USE_MESSAGE_QUEUE_BROADCASTER=0 \
+SGLANG_DISABLE_TP_MEMORY_INBALANCE_CHECK=1 \
+python3 -m sglang.launch_server \
+    --model-path deepseek-ai/DeepSeek-V3 \
+    --download-dir /lssd/huggingface/hub \
+    --trust-remote-code \
+    --disaggregation-mode prefill \
+    --dist-init-addr <MASTER_IP>:5757 \
+    --nnodes 1 \
+    --node-rank 0 \
+    --tp-size 8 \
+    --dp-size 8 \
+    --enable-dp-attention \
+    --host 0.0.0.0 \
+    --context-length 2176 \
+    --disable-radix-cache \
+    --moe-dense-tp-size 1 \
+    --enable-dp-lm-head \
+    --disable-shared-experts-fusion \
+    --ep-num-redundant-experts 32 \
+    --eplb-algorithm deepseek \
+    --deepep-config /path/to/deepep_config.json \
+    --attention-backend cutlass_mla \
+    --watchdog-timeout 1000000 \
+    --init-expert-location /path/to/prefill_in4096.json \
+    --disable-cuda-graph \
+    --chunked-prefill-size 16384 \
+    --max-total-tokens 32768 \
+    --moe-a2a-backend deepep \
+    --deepep-mode normal \
+    --ep-dispatch-algorithm dynamic
+```
+
+### Key Configuration Files
+
+1. **deepep_config.json** - DeepEP SM configuration:
+```json
+{
+    "n_sms": 128,
+    "normal_dispatch": {"num_sms": 128},
+    "normal_combine": {"num_sms": 128}
+}
+```
+
+2. **prefill_in4096.json** - Expert placement statistics for EPLB
+
+### Environment Variables
+
+| Variable | Value | Description |
+|----------|-------|-------------|
+| SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK | 1024 | Max dispatch tokens per rank (MUST be <= 1024) |
+| SGLANG_LOCAL_IP_NIC | enp0s19 | Network interface for local IP |
+| GLOO_SOCKET_IFNAME | enp0s19 | Gloo communication interface |
+| NCCL_SOCKET_IFNAME | enp0s19 | NCCL communication interface |
+| NCCL_MNNVL_ENABLE | 1 | Enable Multi-Node NVLink |
+| MC_TE_METRIC | true | Enable Mooncake metrics |
+
+### RDMA Memory Registration Warnings
+
+When running with Mooncake, you may see RDMA memory registration warnings:
+```
+RdmaTransport: Failed to register memory: addr 0x... length 37896192
+```
+
+These warnings are **expected** if RDMA is not properly configured. Mooncake will fall back to TCP transport. For production deployments with RDMA, ensure:
+- RDMA devices are properly configured
+- Sufficient locked memory limits (`ulimit -l unlimited`)
+- nvidia_peermem module is loaded (optional)
 
 ## Testing the Server
 
@@ -294,7 +463,12 @@ Common conflicts when both are installed:
 
 ## Version History
 
-- **2026-01-29**: Updated based on installation with vLLM coexistence
+- **2026-01-29**: Major update for DeepSeek-V3 disaggregation mode
+  - **NEW**: Added Mooncake Transfer Engine installation instructions
+  - **NEW**: Added prefill-decode disaggregation mode documentation
+  - **NEW**: Added DeepSeek-V3 prefill node deployment example
+  - **NEW**: Added SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK error fix (must be <= 1024)
+  - **NEW**: Added deprecated environment variable warning fix
   - Clarified sgl-kernel version behavior (0.3.19 is pinned by SGLang dependencies)
   - Added note about NVIDIA library reinstallation after install
 
