@@ -17,17 +17,34 @@ This skill provides comprehensive guidance for installing, configuring, and debu
 - Starting and testing SGLang inference server
 - Fixing common runtime errors (cuDNN, cusparseLt, NCCL issues)
 
-## Version Information (as of v0.5.6.post2)
+## Version Information (as of v0.5.8)
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| SGLang | 0.5.6.post2 | Latest stable |
+| SGLang | 0.5.8 | Latest stable (2026-01-28) |
 | sgl-kernel | 0.3.21 | PyPI install for CUDA 12.9 |
 | mooncake-transfer-engine | 0.3.8.post1 | KV cache transfer (requires nvidia_peermem) |
 | nixl | 0.9.0 | KV cache transfer (DMA-BUF, recommended) |
 | nvidia-nccl-cu12 | 2.28.3 | Force reinstall |
 | nvidia-cudnn-cu12 | 9.16.0.29 | Required for PyTorch 2.9+ |
 | flashinfer | 0.5.3 | Attention backend |
+
+### What's New in v0.5.8
+
+- **1.5x faster diffusion models** across the board
+- **Chunked Pipeline Parallelism** for million-token context (near-linear scaling)
+- **EPD Disaggregation** for Vision-Language Models (elastic encoder scaling)
+- **GLM4-MoE optimization**: 65% faster TTFT
+- **New models**: GLM 4.7 Flash, LFM2, Qwen3-VL-Embedding/Reranker, DeepSeek V3.2 NVFP4, FLUX.2-klein-9B
+
+### What's New in v0.5.7
+
+- **Model Gateway v0.3.0** release
+- **Scalable Pipeline Parallelism** with dynamic chunking for ultra-long contexts
+- **Encoder Disaggregation** for multi-modal models
+- **Diffusion improvements**: `--dit-layerwise-offload true` reduces peak VRAM by 30GB
+- **New models**: Mimo-V2-Flash, Nemotron-Nano-v3, LLaDA 2.0, EAGLE 3 speculative decoding
+- **Hardware support**: AMD/4090/5090 for diffusion
 
 ## Mooncake Transfer Engine
 
@@ -132,7 +149,7 @@ To install SGLang from source:
 mkdir -p /sgl-workspace && cd /sgl-workspace
 
 # Clone specific version
-git clone -b v0.5.6.post2 --depth 1 https://github.com/sgl-project/sglang.git
+git clone -b v0.5.8 --depth 1 https://github.com/sgl-project/sglang.git
 cd sglang
 
 # Install sgl-kernel first (for CUDA 12.9)
@@ -144,12 +161,21 @@ pip install -e "python[blackwell]" --extra-index-url https://download.pytorch.or
 
 ### Step 3: Install Additional Dependencies
 
-To install required NVIDIA libraries:
+To install required NVIDIA libraries and NIXL:
 
 ```bash
+# NVIDIA libraries (required)
+pip install nvidia-nccl-cu12==2.28.3 --force-reinstall --no-deps
+pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
+
+# NIXL for KV cache transfer (RECOMMENDED for disaggregation mode)
+pip install --break-system-packages nixl==0.9.0
+# Re-install NVIDIA libs after NIXL (NIXL may downgrade them)
 pip install nvidia-nccl-cu12==2.28.3 --force-reinstall --no-deps
 pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
 ```
+
+> ⚠️ **Important**: NIXL is required for prefill-decode disaggregation mode. If you skip NIXL, you'll need nvidia_peermem kernel module (often fails on NVIDIA Open driver).
 
 ### Step 4: Configure LD_LIBRARY_PATH
 
@@ -542,6 +568,30 @@ Common conflicts when both are installed:
 - `timm`: SGLang wants 1.0.16, vLLM may install 1.0.24
 - `xgrammar`: SGLang wants 0.1.27, vLLM may install 0.1.29
 
+## Pre-downloading DeepSeek Weights (Optional)
+
+For faster DeepSeek-V3/R1 model loading, you can pre-download weights from GCS instead of HuggingFace:
+
+```bash
+# Check if already downloaded
+DEEPSEEK_PATH="/lssd/huggingface/hub/models--deepseek-ai--DeepSeek-V3"
+
+if [ -d "$DEEPSEEK_PATH" ]; then
+    echo "✓ DeepSeek-V3 weights already exist: $DEEPSEEK_PATH"
+    du -sh "$DEEPSEEK_PATH"
+else
+    echo "Downloading DeepSeek-V3 weights from GCS..."
+    gcloud storage cp -r gs://chrisya-gpu-pg-ase1/huggingface /lssd/
+    echo "✓ DeepSeek-V3 weights downloaded"
+fi
+```
+
+**Notes:**
+- GCS bucket `gs://chrisya-gpu-pg-ase1/huggingface` contains pre-cached DeepSeek-V3 FP8 weights
+- Downloading from GCS is much faster than HuggingFace (same-region high bandwidth)
+- Weights are ~600GB, including complete safetensors files
+- Requires LSSD to be mounted first (use `/lssd-mounter` skill)
+
 ## Resources
 
 - `scripts/diagnose.py` - Diagnostic script for installation issues
@@ -550,6 +600,18 @@ Common conflicts when both are installed:
 - `references/troubleshooting.md` - Extended troubleshooting guide
 
 ## Version History
+
+- **2026-01-29**: Added GCS DeepSeek weights pre-download
+  - **NEW**: Added "Pre-downloading DeepSeek Weights" section
+  - GCS source: `gs://chrisya-gpu-pg-ase1/huggingface`
+  - Faster than HuggingFace download (same-region bandwidth)
+
+- **2026-01-29**: Updated to SGLang v0.5.8
+  - **VERSION BUMP**: SGLang 0.5.6.post2 → 0.5.8
+  - **NEW**: Added v0.5.8 highlights (1.5x faster diffusion, chunked pipeline parallelism, EPD)
+  - **NEW**: Added v0.5.7 highlights (Model Gateway v0.3.0, encoder disaggregation)
+  - **NEW**: Added NIXL to Step 3 as recommended dependency
+  - Updated git clone command to v0.5.8
 
 - **2026-01-29**: Added NIXL transfer backend support
   - **NEW**: Added NIXL as recommended transfer backend (uses DMA-BUF, no nvidia_peermem needed)

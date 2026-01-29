@@ -122,6 +122,29 @@ if ! grep -q 'export HF_HOME=/lssd/huggingface' ~/.bashrc; then
 fi
 ```
 
+### Step 6: 预下载 DeepSeek 模型权重 (可选)
+
+从 GCS 快速复制预缓存的 DeepSeek-V3 模型权重，避免从 HuggingFace 下载：
+
+```bash
+# 检查是否已经下载过
+DEEPSEEK_PATH="/lssd/huggingface/hub/models--deepseek-ai--DeepSeek-V3"
+
+if [ -d "$DEEPSEEK_PATH" ]; then
+    echo "✓ DeepSeek-V3 权重已存在: $DEEPSEEK_PATH"
+    du -sh "$DEEPSEEK_PATH"
+else
+    echo "下载 DeepSeek-V3 权重从 GCS..."
+    gcloud storage cp -r gs://chrisya-gpu-pg-ase1/huggingface /lssd/
+    echo "✓ DeepSeek-V3 权重下载完成"
+fi
+```
+
+**说明:**
+- GCS bucket `gs://chrisya-gpu-pg-ase1/huggingface` 包含预缓存的 DeepSeek-V3 FP8 权重
+- 从 GCS 下载比从 HuggingFace 快很多（同区域带宽高）
+- 权重约 ~600GB，包含完整的 safetensors 文件
+
 ## Common Scenarios
 
 ### Scenario 1: LSSD 已挂载

@@ -314,7 +314,7 @@ claude mcp add kubernetes -- npx mcp-server-kubernetes 2>/dev/null \
 success "MCP 服务器安装完成！"
 
 # =============================================================================
-# 10. 安装自定义 Skills
+# 10. 安装自定义 Skills (使用软连接)
 # =============================================================================
 info "安装自定义 Skills..."
 
@@ -325,21 +325,35 @@ SKILLS_DST="$CLAUDE_DIR/skills"
 INSTALLED_SKILLS=()
 
 if [ -d "$SKILLS_SRC" ]; then
-    mkdir -p "$SKILLS_DST"
+    # 如果目标已存在且不是软连接，先备份
+    if [ -e "$SKILLS_DST" ] && [ ! -L "$SKILLS_DST" ]; then
+        warn "发现已存在的 skills 目录，备份到 ${SKILLS_DST}.bak"
+        mv "$SKILLS_DST" "${SKILLS_DST}.bak"
+    fi
 
+    # 如果已经是正确的软连接，跳过
+    if [ -L "$SKILLS_DST" ] && [ "$(readlink -f "$SKILLS_DST")" = "$(realpath "$SKILLS_SRC")" ]; then
+        info "Skills 软连接已存在且正确"
+    else
+        # 删除旧的软连接（如果存在）
+        [ -L "$SKILLS_DST" ] && rm "$SKILLS_DST"
+
+        # 创建软连接
+        ln -s "$SKILLS_SRC" "$SKILLS_DST"
+        success "已创建软连接: $SKILLS_DST -> $SKILLS_SRC"
+    fi
+
+    # 统计已安装的 skills
     for skill_dir in "$SKILLS_SRC"/*/; do
         if [ -d "$skill_dir" ]; then
             skill_name=$(basename "$skill_dir")
             # 跳过隐藏目录和 .DS_Store
             [[ "$skill_name" == .* ]] && continue
-
-            info "复制 Skill: $skill_name"
-            cp -r "$skill_dir" "$SKILLS_DST/"
             INSTALLED_SKILLS+=("$skill_name")
         fi
     done
 
-    success "自定义 Skills 安装完成！(共 ${#INSTALLED_SKILLS[@]} 个)"
+    success "自定义 Skills 安装完成！(共 ${#INSTALLED_SKILLS[@]} 个，通过软连接)"
 
     # 显示已安装的 skills 及其功能
     echo ""

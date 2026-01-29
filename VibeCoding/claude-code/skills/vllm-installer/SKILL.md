@@ -24,6 +24,7 @@ This skill provides comprehensive guidance for installing, configuring, and debu
 | vLLM | 0.14.1 | Latest stable (v0.15.0rc2 not yet on PyPI) |
 | flashinfer-python | 0.5.3 | Attention backend |
 | flashinfer-cubin | 0.5.3 | Must match flashinfer-python version |
+| nixl | 0.9.0 | KV cache transfer (DMA-BUF, recommended for PD disaggregation) |
 | nvidia-nccl-cu12 | 2.28.3 | Force reinstall |
 | nvidia-cudnn-cu12 | 9.16.0.29 | Required for PyTorch 2.9+ |
 | bitsandbytes | 0.46.1 | Quantization support |
@@ -250,6 +251,90 @@ python3 -m vllm.entrypoints.openai.api_server \
     --host 0.0.0.0
 ```
 
+## Disaggregated Prefill (PD Separation)
+
+vLLM supports prefill-decode disaggregation where prefill and decode phases run on separate instances. This allows independent tuning of TTFT (time-to-first-token) and ITL (inter-token-latency).
+
+### KV Transfer Connectors
+
+vLLM supports multiple KV transfer backends:
+
+| Connector | Dependency | Use Case |
+|-----------|------------|----------|
+| **NixlConnector** | nixl | Recommended, uses DMA-BUF (no nvidia_peermem needed) |
+| MooncakeConnector | mooncake | Requires nvidia_peermem kernel module |
+| P2pNcclConnector | NCCL | Same-node P2P transfer |
+| LMCacheConnector | lmcache | External KV cache |
+
+### Installing NIXL for Disaggregation
+
+```bash
+pip install --break-system-packages nixl==0.9.0
+
+# IMPORTANT: NIXL may downgrade NVIDIA libraries, reinstall correct versions:
+pip install nvidia-nccl-cu12==2.28.3 --force-reinstall --no-deps
+pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
+```
+
+### Verifying NIXL
+
+```bash
+python3 -c "
+from vllm.distributed.kv_transfer.kv_connector.v1.nixl_connector import NixlConnector
+print('NixlConnector OK')
+"
+```
+
+### Disaggregated Prefill Configuration
+
+**Prefill Node:**
+```bash
+vllm serve deepseek-ai/DeepSeek-V3 \
+    --tensor-parallel-size 8 \
+    --port 8100 \
+    --download-dir /lssd/huggingface/hub \
+    --kv-transfer-config '{
+        "kv_connector": "NixlConnector",
+        "kv_role": "kv_both",
+        "kv_buffer_device": "cuda"
+    }'
+```
+
+**Decode Node:**
+```bash
+vllm serve deepseek-ai/DeepSeek-V3 \
+    --tensor-parallel-size 8 \
+    --port 8200 \
+    --download-dir /lssd/huggingface/hub \
+    --kv-transfer-config '{
+        "kv_connector": "NixlConnector",
+        "kv_role": "kv_both",
+        "kv_buffer_device": "cuda"
+    }'
+```
+
+### KV Transfer Config Parameters
+
+| Parameter | Values | Description |
+|-----------|--------|-------------|
+| kv_connector | NixlConnector, MooncakeConnector, P2pNcclConnector | KV transfer backend |
+| kv_role | kv_producer, kv_consumer, kv_both | Role in KV transfer (kv_both for most cases) |
+| kv_buffer_device | cuda, cpu | Buffer device (cuda recommended, cpu for TPU) |
+| kv_ip | IP address | Connector IP for distributed connection |
+| kv_port | Port number | Connector port (default: 14579) |
+
+### NIXL vs Mooncake
+
+| Feature | NIXL | Mooncake |
+|---------|------|----------|
+| Memory registration | DMA-BUF (kernel native) | nvidia_peermem (kernel module) |
+| Transport | UCX (TCP/RDMA/SHM) | RDMA or TCP |
+| Kernel module required | No | nvidia_peermem (may fail on Open driver) |
+| NVIDIA Open driver compatible | Yes | No |
+| Recommended for | B200, new deployments | Legacy systems |
+
+**Recommendation:** Use NixlConnector for new deployments, especially on systems with NVIDIA Open Kernel Module.
+
 ## Testing the Server
 
 To verify the server is working:
@@ -321,6 +406,30 @@ When diagnosing vLLM installation:
 4. After dependencies installed, re-run diagnostic
 5. Proceed with vLLM server startup
 
+### Pre-downloading DeepSeek Weights
+
+For faster DeepSeek-V3/R1 model loading, pre-download weights from GCS instead of HuggingFace:
+
+```bash
+# Check if already downloaded
+DEEPSEEK_PATH="/lssd/huggingface/hub/models--deepseek-ai--DeepSeek-V3"
+
+if [ -d "$DEEPSEEK_PATH" ]; then
+    echo "✓ DeepSeek-V3 weights already exist: $DEEPSEEK_PATH"
+    du -sh "$DEEPSEEK_PATH"
+else
+    echo "Downloading DeepSeek-V3 weights from GCS..."
+    gcloud storage cp -r gs://chrisya-gpu-pg-ase1/huggingface /lssd/
+    echo "✓ DeepSeek-V3 weights downloaded"
+fi
+```
+
+**Notes:**
+- GCS bucket `gs://chrisya-gpu-pg-ase1/huggingface` contains pre-cached DeepSeek-V3 FP8 weights
+- Downloading from GCS is much faster than HuggingFace (same-region high bandwidth)
+- Weights are ~600GB, including complete safetensors files
+- Use `--download-dir /lssd/huggingface/hub` when starting vLLM server
+
 ## vLLM vs SGLang
 
 | Feature | vLLM | SGLang |
@@ -376,6 +485,18 @@ TORCH_CUDA_ARCH_LIST="10.0" NVSHMEM_DIR=/opt/deepep/nvshmem python3 setup.py ins
 - `references/troubleshooting.md` - Extended troubleshooting guide
 
 ## Version History
+
+- **2026-01-29**: Added GCS DeepSeek weights pre-download
+  - **NEW**: Added "Pre-downloading DeepSeek Weights" section in Dependency Skills
+  - GCS source: `gs://chrisya-gpu-pg-ase1/huggingface`
+  - Faster than HuggingFace download (same-region bandwidth)
+
+- **2026-01-29**: Added Disaggregated Prefill (PD Separation) with NIXL support
+  - **NEW**: Added NixlConnector as recommended KV transfer backend
+  - **NEW**: Added disaggregated prefill configuration examples
+  - **NEW**: Added KV transfer config parameters documentation
+  - **NEW**: Added NIXL vs Mooncake comparison table
+  - Added nixl 0.9.0 to version table
 
 - **2026-01-29**: Updated based on full installation workflow with DeepEP + SGLang + vLLM
   - **CRITICAL**: Added DeepEP recompilation requirement after vLLM install
