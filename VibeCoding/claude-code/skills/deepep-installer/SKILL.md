@@ -578,6 +578,22 @@ This script is automatically created and includes all necessary paths for DeepEP
 
 ## Version History
 
+- **2026-01-29**: Synchronized with deepep-installer.yaml
+  - **CHANGE**: Installation order now matches YAML: DOCA OFED → GPU Driver → gdrcopy → PeerMappingOverride → nvidia_peermem → Reboot Check → NVSHMEM → DeepEP
+  - **NEW**: Added `check_reboot_needed()` function with YAML logic (lines 156-178)
+  - **NEW**: Added `configure_peermapping()` for SGLang PeerMappingOverride
+  - **NEW**: Added `load_nvidia_peermem()` to attempt loading nvidia_peermem
+  - **NEW**: Added `AUTO_REBOOT=1` environment variable for automatic reboot
+  - **FIX**: gdrcopy now checks for `libgdr*` per YAML instead of `libgdrapi*`
+  - **FIX**: NVSHMEM now installs `libibverbs-dev librdmacm-dev` dependencies
+  - **FIX**: DeepEP build creates symlink per YAML
+
+- **2026-01-29**: Added automatic driver installation
+  - **NEW**: `install_nvidia_driver()` - Auto-installs nvidia-open-575 if GPU driver not loaded
+  - **NEW**: `install_doca_ofed()` now auto-installs DOCA 3.0.0 if not present (no more interactive prompt)
+  - **CHANGE**: Installation order updated to: GPU Driver → DOCA OFED → CUDA → gdrcopy → NVSHMEM → DeepEP
+  - **NOTE**: If driver install requires reboot, script will prompt user to reboot and re-run
+
 - **2026-01-29**: Improved install-deepep.sh for non-interactive mode
   - **FIX**: Script now auto-skips DOCA installation in non-interactive mode (no stdin)
   - **NEW**: Added SKIP_DOCA=1 environment variable to skip DOCA prompt

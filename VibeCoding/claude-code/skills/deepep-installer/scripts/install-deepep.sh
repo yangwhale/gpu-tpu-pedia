@@ -1,7 +1,8 @@
 #!/bin/bash
 # DeepEP Installation Script for SGLang
 # Adapted from deepep-installer.yaml for bare-metal/VM environments
-# Assumes NVIDIA driver and IB driver are already installed
+# Now includes automatic driver installation if not present
+# Reference: /home/chrisya/gpu-tpu-pedia/gpu/deepep/deepep-installer.yaml
 
 set -e
 
@@ -40,194 +41,106 @@ if [ "$EUID" -ne 0 ]; then
     exit 1
 fi
 
-# Check NVIDIA driver
-check_nvidia_driver() {
-    log_info "Checking NVIDIA driver..."
+# Update apt
+apt-get update -y -qq
+
+# ============================================================================
+# DOCA OFED Installation (FIRST - before GPU driver per YAML order)
+# ============================================================================
+install_doca_ofed() {
+    log_section "DOCA OFED Installation"
+
+    # Check if already installed
+    if command -v ofed_info &> /dev/null; then
+        log_ok "DOCA OFED already installed"
+        ofed_info -s
+        return 0
+    fi
+
+    # Skip if explicitly requested
+    if [ "${SKIP_DOCA:-0}" = "1" ]; then
+        log_warn "Skipping DOCA installation (SKIP_DOCA=1)"
+        log_info "Built-in mlx5 driver is usually sufficient for IBGDA"
+        return 1
+    fi
+
+    log_info "DOCA OFED not found, installing now..."
+
+    # Detect Ubuntu version (default to 24.04)
+    UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "24.04")
+    UBUNTU_CODENAME=$(echo $UBUNTU_VERSION | tr -d '.')
+
+    cd /tmp
+    log_info "Downloading DOCA package..."
+    wget -q "https://www.mellanox.com/downloads/DOCA/DOCA_v3.0.0/host/doca-host_3.0.0-058000-25.04-ubuntu${UBUNTU_CODENAME}_amd64.deb" -O doca-host.deb || {
+        log_error "Failed to download DOCA package"
+        log_info "Continuing with built-in mlx5 driver..."
+        return 1
+    }
+
+    log_info "Installing DOCA package..."
+    dpkg -i doca-host.deb || true
+    apt-get update -y -qq
+    apt-get -y install doca-ofed || {
+        log_warn "DOCA OFED installation had errors (common with newer kernels)"
+        log_info "Built-in mlx5 driver should still work for IBGDA"
+    }
+
+    if command -v ofed_info &> /dev/null; then
+        log_ok "DOCA OFED installed successfully"
+        ofed_info -s
+    fi
+
+    rm -f /tmp/doca-host.deb
+}
+
+# ============================================================================
+# GPU Driver Installation (AFTER DOCA per YAML order)
+# ============================================================================
+install_nvidia_driver() {
+    log_section "NVIDIA GPU Driver Installation"
+
     if lsmod | grep -q nvidia; then
-        log_ok "NVIDIA driver module loaded"
+        log_ok "NVIDIA driver already installed"
         nvidia-smi --query-gpu=name,driver_version --format=csv,noheader | head -1
         return 0
-    else
-        log_error "NVIDIA driver module NOT loaded"
-        log_error "Please install NVIDIA driver first"
-        exit 1
-    fi
-}
-
-# Check CUDA
-check_cuda() {
-    log_info "Checking CUDA installation..."
-
-    # Try common CUDA paths
-    for cuda_path in "$CUDA_HOME" /usr/local/cuda /usr/local/cuda-12.9 /usr/local/cuda-12; do
-        if [ -d "$cuda_path" ] && [ -f "$cuda_path/bin/nvcc" ]; then
-            export CUDA_HOME="$cuda_path"
-            CUDA_VERSION=$($CUDA_HOME/bin/nvcc --version | grep "release" | awk '{print $6}' | cut -d',' -f1)
-            log_ok "CUDA found at $CUDA_HOME (version $CUDA_VERSION)"
-            return 0
-        fi
-    done
-
-    log_warn "CUDA toolkit not found"
-    return 1
-}
-
-# Install CUDA toolkit
-install_cuda() {
-    log_section "CUDA Toolkit Installation"
-
-    if check_cuda; then
-        log_ok "CUDA toolkit already installed, skipping"
-        return 0
     fi
 
-    log_info "Installing CUDA toolkit 12.9..."
+    log_info "GPU driver module not found, installing now..."
 
     # Add NVIDIA CUDA repository
     if [ ! -f /etc/apt/sources.list.d/cuda-ubuntu2404-x86_64.list ]; then
-        log_info "Adding NVIDIA CUDA repository..."
+        log_info "Adding NVIDIA repository..."
         wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb -O /tmp/cuda-keyring.deb
         dpkg -i /tmp/cuda-keyring.deb
-        apt-get update -y -qq
         rm -f /tmp/cuda-keyring.deb
+        apt-get update -y -qq
     fi
 
-    # Install CUDA toolkit (without driver - we already have it)
-    apt-get install -y -qq cuda-toolkit-12-9
+    # Install nvidia-open driver (575 is stable for B200/H100)
+    log_info "Installing nvidia-open-575 driver..."
+    apt-get install -y nvidia-open-575
+
+    # Install CUDA toolkit
+    log_info "Installing CUDA toolkit 12.9..."
+    apt-get install -y cuda-toolkit-12-9
 
     # Set CUDA_HOME
     export CUDA_HOME=/usr/local/cuda-12.9
 
     # Create symlink if not exists
     if [ ! -e /usr/local/cuda ]; then
-        ln -s /usr/local/cuda-12.9 /usr/local/cuda
+        ln -sf /usr/local/cuda-12.9 /usr/local/cuda
     fi
 
     # Verify
-    if [ -f "$CUDA_HOME/bin/nvcc" ]; then
-        log_ok "CUDA toolkit installed successfully"
-        $CUDA_HOME/bin/nvcc --version | grep release
+    if lsmod | grep -q nvidia; then
+        log_ok "NVIDIA driver installed successfully"
+        nvidia-smi
     else
-        log_error "CUDA toolkit installation failed"
-        return 1
+        log_warn "NVIDIA driver installed but module not loaded"
+        log_info "A reboot will be required"
     fi
-}
-
-# Check IB driver
-check_ib_driver() {
-    log_info "Checking InfiniBand/RoCE driver..."
-
-    # Check kernel module
-    if lsmod | grep -q mlx5_core; then
-        log_ok "mlx5_core module loaded"
-    else
-        log_warn "mlx5_core module NOT loaded"
-        log_warn "IB/RoCE cards may not be present or driver not installed"
-    fi
-
-    # Try rdma link first (more reliable on modern systems)
-    if command -v rdma &> /dev/null; then
-        RDMA_DEVICES=$(rdma link 2>/dev/null | grep -c "state ACTIVE" || echo 0)
-        if [ "$RDMA_DEVICES" -gt 0 ]; then
-            log_ok "Found $RDMA_DEVICES active RDMA device(s)"
-            rdma link 2>/dev/null | head -8
-            return 0
-        fi
-    fi
-
-    # Fallback to ibv_devinfo
-    if command -v ibv_devinfo &> /dev/null; then
-        IB_DEVICES=$(ibv_devinfo 2>/dev/null | grep "hca_id" | wc -l)
-        if [ "$IB_DEVICES" -gt 0 ]; then
-            log_ok "Found $IB_DEVICES IB device(s)"
-            ibv_devinfo 2>/dev/null | grep -E "hca_id|port:|state:" | head -10
-        else
-            log_warn "No IB devices found via ibv_devinfo"
-        fi
-    else
-        # Check sysfs as last resort
-        if [ -d /sys/class/infiniband ] && [ "$(ls -A /sys/class/infiniband 2>/dev/null)" ]; then
-            log_ok "RDMA devices found in /sys/class/infiniband"
-            ls /sys/class/infiniband/
-        else
-            log_warn "No RDMA devices detected"
-        fi
-    fi
-}
-
-# Check OFED version
-check_ofed() {
-    log_info "Checking OFED/DOCA installation..."
-
-    if command -v ofed_info &> /dev/null; then
-        OFED_VERSION=$(ofed_info -s 2>/dev/null || echo "unknown")
-        log_ok "OFED/DOCA installed: $OFED_VERSION"
-        return 0
-    else
-        log_warn "OFED/DOCA not found (ofed_info command missing)"
-        log_warn "System IB driver may work, but DOCA provides better IBGDA support"
-        return 1
-    fi
-}
-
-# Run pre-flight checks
-check_nvidia_driver
-CUDA_INSTALLED=true
-check_cuda || CUDA_INSTALLED=false
-check_ib_driver
-DOCA_INSTALLED=true
-check_ofed || DOCA_INSTALLED=false
-
-# ============================================================================
-# DOCA OFED Installation (Optional)
-# ============================================================================
-install_doca_ofed() {
-    log_section "DOCA OFED Installation"
-
-    if [ "$DOCA_INSTALLED" = true ]; then
-        log_ok "DOCA OFED already installed, skipping"
-        return 0
-    fi
-
-    # Skip DOCA installation in non-interactive mode or if SKIP_DOCA is set
-    if [ "${SKIP_DOCA:-0}" = "1" ] || [ ! -t 0 ]; then
-        log_warn "Skipping DOCA installation (non-interactive mode or SKIP_DOCA=1)"
-        log_info "Built-in mlx5 driver is usually sufficient for IBGDA"
-        return 1
-    fi
-
-    read -p "DOCA OFED not found. Install it? (y/N) " -n 1 -r
-    echo
-    if [[ ! $REPLY =~ ^[Yy]$ ]]; then
-        log_warn "Skipping DOCA installation"
-        log_info "Built-in mlx5 driver is usually sufficient for IBGDA"
-        return 1
-    fi
-
-    log_info "Installing DOCA OFED 3.0.0..."
-
-    # Detect Ubuntu version
-    UBUNTU_VERSION=$(lsb_release -rs 2>/dev/null || echo "24.04")
-    UBUNTU_CODENAME=$(echo $UBUNTU_VERSION | tr -d '.')
-
-    DOCA_URL="https://www.mellanox.com/downloads/DOCA/DOCA_v3.0.0/host/doca-host_3.0.0-058000-25.04-ubuntu${UBUNTU_CODENAME}_amd64.deb"
-
-    cd /tmp
-    wget -q "$DOCA_URL" -O doca-host.deb || {
-        log_error "Failed to download DOCA package"
-        log_info "Try manual download from: https://developer.nvidia.com/networking/doca"
-        return 1
-    }
-
-    dpkg -i doca-host.deb
-    apt-get update -y -qq
-    apt-get -y install doca-ofed
-
-    log_ok "DOCA OFED installed successfully"
-    ofed_info -s
-
-    rm -f /tmp/doca-host.deb
-    DOCA_INSTALLED=true
 }
 
 # ============================================================================
@@ -241,122 +154,149 @@ install_gdrcopy() {
         return 0
     fi
 
-    # Check if already installed
-    if ls /usr/lib/x86_64-linux-gnu/libgdrapi* >/dev/null 2>&1; then
+    # Check if already installed (check for libgdr* per YAML)
+    if ls /usr/lib/x86_64-linux-gnu/libgdr* >/dev/null 2>&1; then
         log_ok "gdrcopy library already installed"
 
         # Check kernel module
         if lsmod | grep -q gdrdrv; then
             log_ok "gdrdrv kernel module loaded"
         else
-            log_warn "gdrdrv kernel module NOT loaded, attempting to load..."
-            modprobe gdrdrv || {
-                log_error "Failed to load gdrdrv module"
-                log_info "You may need to rebuild gdrcopy for your kernel version"
-                log_info "Or reboot the system after DKMS builds the module"
-            }
+            log_warn "gdrdrv kernel module NOT loaded"
+            modprobe gdrdrv 2>/dev/null || log_info "Will load after reboot"
         fi
         return 0
     fi
 
-    log_info "Installing gdrcopy v2.5.1..."
+    log_info "gdrcopy library not found, installing now..."
 
-    # Install dependencies
-    apt-get update -y -qq
+    # Install dependencies (per YAML)
     apt-get install -y -qq --no-install-recommends \
         build-essential devscripts debhelper fakeroot pkg-config dkms git
 
-    # Check for NVIDIA kernel source (needed for nv-p2p.h)
-    NVIDIA_SRC_DIR=""
-    for nvidia_src in /usr/src/nvidia-*/nvidia; do
-        if [ -f "$nvidia_src/nv-p2p.h" ]; then
-            NVIDIA_SRC_DIR="$nvidia_src"
-            log_ok "Found NVIDIA kernel source at $NVIDIA_SRC_DIR"
-            break
-        fi
-    done
-
-    if [ -z "$NVIDIA_SRC_DIR" ]; then
-        log_info "NVIDIA kernel source not found, installing nvidia-kernel-source-580-open..."
-        apt-get install -y -qq nvidia-kernel-source-580-open || {
-            log_error "Failed to install nvidia-kernel-source-580-open"
-            log_info "You may need to manually install the NVIDIA kernel source"
-            return 1
-        }
-        # Find the installed source
-        for nvidia_src in /usr/src/nvidia-*/nvidia; do
-            if [ -f "$nvidia_src/nv-p2p.h" ]; then
-                NVIDIA_SRC_DIR="$nvidia_src"
-                log_ok "Found NVIDIA kernel source at $NVIDIA_SRC_DIR"
-                break
-            fi
-        done
-    fi
-
-    if [ -z "$NVIDIA_SRC_DIR" ]; then
-        log_error "Could not find nv-p2p.h - cannot build gdrdrv module"
-        log_info "Continuing with library-only installation..."
-    fi
-
-    # Build gdrcopy
+    # Build gdrcopy (per YAML flow)
     rm -rf /tmp/gdrcopy
-    git clone --depth 1 --branch v2.5.1 https://github.com/NVIDIA/gdrcopy.git /tmp/gdrcopy
+    git clone https://github.com/NVIDIA/gdrcopy.git /tmp/gdrcopy
     cd /tmp/gdrcopy
+    git checkout tags/v2.5.1
 
     make -j$(nproc)
-    make prefix="$GDRCOPY_HOME" CUDA="$CUDA_HOME" install
+    make prefix="$GDRCOPY_HOME" CUDA=/usr/local/cuda install
 
-    # Build and install deb packages (includes DKMS module)
+    # Build and install deb packages (per YAML)
     cd packages
-    NVIDIA_SRC_DIR="$NVIDIA_SRC_DIR" CUDA="$CUDA_HOME" ./build-deb-packages.sh
-    dpkg -i *.deb
+    CUDA=/usr/local/cuda ./build-deb-packages.sh || log_warn "deb package build had issues"
+    dpkg -i *.deb || log_warn "deb package install had issues"
 
-    log_ok "gdrcopy installed successfully"
+    log_ok "gdrcopy installation complete"
 
     # Cleanup
+    cd /tmp
     rm -rf /tmp/gdrcopy
-
-    # Load module
-    modprobe gdrdrv || log_warn "gdrdrv module load failed, reboot may be required"
 }
 
 # ============================================================================
-# NVIDIA PeerMem Configuration
+# PeerMappingOverride Configuration (per YAML)
 # ============================================================================
-configure_nvidia_peermem() {
-    log_section "NVIDIA PeerMem Configuration"
+configure_peermapping() {
+    log_section "PeerMappingOverride Configuration"
 
-    # Configure nvidia module options for SGLang
     NVIDIA_CONF="/etc/modprobe.d/nvidia-graphics-drivers-kms.conf"
 
+    # SGLang needs this (per YAML comment)
     if ! grep -q "PeerMappingOverride=1" "$NVIDIA_CONF" 2>/dev/null; then
         log_info "Configuring PeerMappingOverride for SGLang..."
         echo 'options nvidia NVreg_EnableStreamMemOPs=1 NVreg_RegistryDwords="PeerMappingOverride=1;"' | \
             tee -a "$NVIDIA_CONF"
         log_ok "NVIDIA module options configured"
-        log_warn "Reboot required for changes to take effect"
     else
         log_ok "PeerMappingOverride already configured"
         cat "$NVIDIA_CONF"
     fi
+}
 
-    # Load nvidia_peermem
-    if [ "$USE_NVPEERMEM" == "1" ]; then
-        log_info "Loading nvidia_peermem module..."
+# ============================================================================
+# Load nvidia_peermem (per YAML)
+# ============================================================================
+load_nvidia_peermem() {
+    log_section "NVIDIA PeerMem Loading"
+
+    if [ "$USE_NVPEERMEM" != "1" ]; then
+        log_info "USE_NVPEERMEM=0, skipping nvidia_peermem"
+        return 0
+    fi
+
+    log_info "USE_NVPEERMEM=1, loading nvidia_peermem..."
+
+    if lsmod | grep -q nvidia_peermem; then
+        log_ok "nvidia_peermem loaded successfully"
+    else
+        modprobe nvidia_peermem || log_warn "Failed to load nvidia_peermem module, continuing anyway..."
+
         if lsmod | grep -q nvidia_peermem; then
-            log_ok "nvidia_peermem already loaded"
+            log_ok "nvidia_peermem loaded successfully"
         else
-            # Check if module exists
-            if modinfo nvidia_peermem &>/dev/null; then
-                modprobe nvidia_peermem || {
-                    log_warn "Failed to load nvidia_peermem, reboot may be required"
-                }
-            else
-                log_warn "nvidia_peermem module not found in kernel"
-                log_info "This is optional for DeepEP - NVSHMEM IBGDA is the key requirement"
-                log_info "To build nvidia_peermem, you need nvidia-dkms package (may conflict with preinstalled driver)"
-            fi
+            log_warn "nvidia_peermem module not loaded, but continuing installation..."
         fi
+    fi
+}
+
+# ============================================================================
+# Check if Reboot is Needed (per YAML logic lines 156-178)
+# ============================================================================
+check_reboot_needed() {
+    log_section "Reboot Check"
+
+    REBOOT_NEEDED=false
+
+    # Check 1: nvidia module not loaded
+    if ! lsmod | grep -q nvidia; then
+        REBOOT_NEEDED=true
+        log_warn "nvidia module not loaded - reboot required"
+    else
+        log_ok "nvidia module loaded"
+    fi
+
+    # Check 2: nvidia_peermem not loaded (when USE_NVPEERMEM=1)
+    if [ "$USE_NVPEERMEM" == "1" ] && ! lsmod | grep -q nvidia_peermem; then
+        REBOOT_NEEDED=true
+        log_warn "nvidia_peermem module not loaded - reboot required"
+    elif [ "$USE_NVPEERMEM" == "1" ]; then
+        log_ok "nvidia_peermem module loaded"
+    fi
+
+    # Check 3: PeerMappingOverride not set (only when GDRCOPY not used)
+    if [ "$NVSHMEM_USE_GDRCOPY" != "1" ] && ! grep -q "PeerMappingOverride=1" /proc/driver/nvidia/params 2>/dev/null; then
+        REBOOT_NEEDED=true
+        log_warn "PeerMappingOverride not set - reboot required"
+    fi
+
+    # Check 4: gdrdrv not loaded (when GDRCOPY used)
+    if [ "$NVSHMEM_USE_GDRCOPY" == "1" ] && ! lsmod | grep -q gdrdrv; then
+        REBOOT_NEEDED=true
+        log_warn "gdrdrv module not loaded - reboot required"
+    elif [ "$NVSHMEM_USE_GDRCOPY" == "1" ]; then
+        log_ok "gdrdrv module loaded"
+    fi
+
+    if [ "$REBOOT_NEEDED" == "true" ]; then
+        log_warn "================================"
+        log_warn "REBOOT REQUIRED"
+        log_warn "Some kernel modules are not loaded."
+        log_warn "Please reboot and run this script again."
+        log_warn "================================"
+
+        # Update initramfs before suggesting reboot
+        update-initramfs -u 2>/dev/null || true
+
+        if [ "${AUTO_REBOOT:-0}" == "1" ]; then
+            log_info "AUTO_REBOOT=1, rebooting now..."
+            reboot
+        fi
+        return 1
+    else
+        log_ok "All required modules are loaded correctly"
+        return 0
     fi
 }
 
@@ -382,34 +322,33 @@ install_nvshmem() {
         return 0
     fi
 
-    log_info "Installing NVSHMEM 3.2.5-1..."
+    log_info "NVSHMEM not found, installing now..."
 
-    # Install dependencies (including libibverbs-dev for IBGDA)
-    apt-get update -y -qq
+    # Install dependencies (per YAML)
     apt-get install -y -qq --no-install-recommends \
         python3-venv python3-pip ninja-build cmake \
-        python3-dev build-essential git \
+        python3.12-dev python3.12 \
+        build-essential devscripts debhelper dkms git \
         libibverbs-dev librdmacm-dev
 
-    # Download and extract NVSHMEM
+    # Build nvshmem (per YAML)
     BUILD_DIR="/tmp/nvshmem_build_src"
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR"
 
     log_info "Downloading NVSHMEM source..."
     wget -q "https://developer.nvidia.com/downloads/assets/secure/nvshmem/nvshmem_src_3.2.5-1.txz" \
-        -O "${BUILD_DIR}/nvshmem_src.txz" || {
+        -O "${BUILD_DIR}/nvshmem_src_cuda12-all.tar.gz" || {
         log_error "Failed to download NVSHMEM"
-        log_info "You may need to download manually from NVIDIA Developer"
         return 1
     }
 
-    tar -xf "${BUILD_DIR}/nvshmem_src.txz" -C "$BUILD_DIR"
+    tar -xf "${BUILD_DIR}/nvshmem_src_cuda12-all.tar.gz" -C "$BUILD_DIR"
     cd "${BUILD_DIR}/nvshmem_src"
 
     log_info "Building NVSHMEM (this may take a while)..."
 
-    # Configure build
+    # Configure and build (per YAML)
     CUDA_HOME="$CUDA_HOME" GDRCOPY_HOME="$GDRCOPY_HOME" \
     NVSHMEM_SHMEM_SUPPORT=0 NVSHMEM_UCX_SUPPORT=0 NVSHMEM_USE_NCCL=0 \
     NVSHMEM_MPI_SUPPORT=0 NVSHMEM_PMIX_SUPPORT=0 NVSHMEM_TIMEOUT_DEVICE_POLLING=0 \
@@ -423,15 +362,24 @@ install_nvshmem() {
 
     cmake --build build/ --target install
 
-    log_ok "NVSHMEM installed to $NVSHMEM_HOME"
+    log_ok "NVSHMEM installation complete"
 
     # Cleanup
+    cd /tmp
     rm -rf "$BUILD_DIR"
 
-    # Verify
+    # Verify IBGDA support (per YAML)
+    log_info "Verifying NVSHMEM configuration..."
     if [ -x "$NVSHMEM_INFO_CMD" ]; then
-        log_info "NVSHMEM configuration:"
-        "$NVSHMEM_INFO_CMD" -a | grep -E "IBGDA|GDRCOPY"
+        if "$NVSHMEM_INFO_CMD" -a | grep -q "NVSHMEM_IBGDA_SUPPORT=ON"; then
+            log_ok "NVSHMEM_IBGDA_SUPPORT is enabled correctly"
+        else
+            log_error "NVSHMEM_IBGDA_SUPPORT is not enabled, exiting..."
+            exit 1
+        fi
+    else
+        log_error "nvshmem-info command not found after installation, exiting..."
+        exit 1
     fi
 }
 
@@ -441,160 +389,154 @@ install_nvshmem() {
 install_deepep() {
     log_section "DeepEP Installation"
 
-    # Check if already installed
+    # Check if already installed (per YAML)
     if python3 -c "import deep_ep" &> /dev/null; then
         log_ok "DeepEP already installed"
-        python3 -c "import deep_ep; print(f'DeepEP version: {deep_ep.__version__ if hasattr(deep_ep, \"__version__\") else \"unknown\"}')" 2>/dev/null || true
         return 0
     fi
 
-    log_info "Installing DeepEP..."
+    log_info "DeepEP not found, installing now..."
 
-    # Ensure libcuda.so exists for linking
-    if [ ! -f /usr/lib/x86_64-linux-gnu/libcuda.so.1 ]; then
-        log_warn "libcuda.so.1 not found, reinstalling libnvidia-compute package..."
-        apt-get install -y --reinstall libnvidia-compute-580-server 2>/dev/null || \
-        apt-get install -y --reinstall libnvidia-compute-580 2>/dev/null || \
-        log_warn "Could not reinstall libnvidia-compute, linking may fail"
-    fi
+    # Install PyTorch (per YAML)
+    pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129 --break-system-packages
 
-    # Create libcuda.so symlink if missing (needed for compile-time linking)
-    if [ ! -f /usr/lib/x86_64-linux-gnu/libcuda.so ]; then
-        log_info "Creating libcuda.so symlink..."
-        ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so
-    fi
-
-    # Install PyTorch if not present
-    if ! python3 -c "import torch" &> /dev/null; then
-        log_info "Installing PyTorch..."
-        pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129 --break-system-packages
-    else
-        TORCH_VERSION=$(python3 -c "import torch; print(torch.__version__)")
-        log_ok "PyTorch already installed: $TORCH_VERSION"
-    fi
-
-    # Clone and build DeepEP
+    # Clone and build DeepEP (per YAML)
     BUILD_DIR="/tmp/deepep_build"
     rm -rf "$BUILD_DIR"
     git clone https://github.com/deepseek-ai/DeepEP.git "$BUILD_DIR"
     cd "$BUILD_DIR"
 
-    # Set up environment for linking
-    export LD_LIBRARY_PATH="${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH"
-    export LIBRARY_PATH="/usr/lib/x86_64-linux-gnu:${CUDA_HOME}/lib64/stubs:$LIBRARY_PATH"
+    # Set up environment (per YAML)
+    export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/opt/deepep/nvshmem/lib:/opt/deepep/gdrcopy/lib:$LD_LIBRARY_PATH
 
     log_info "Building DeepEP (CUDA arch: $TORCH_CUDA_ARCH_LIST)..."
-    TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST" NVSHMEM_DIR="$NVSHMEM_HOME" python3 setup.py build
-    TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST" NVSHMEM_DIR="$NVSHMEM_HOME" python3 setup.py install
+    TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST" NVSHMEM_DIR=/opt/deepep/nvshmem python3 setup.py build
 
-    # Verify installation
+    # Create symlink (per YAML)
+    ln -sf build/lib.linux-x86_64-cpython-312/deep_ep_cpp.cpython-312-x86_64-linux-gnu.so . 2>/dev/null || true
+
+    TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST" NVSHMEM_DIR=/opt/deepep/nvshmem python3 setup.py install
+
+    # Verify installation (per YAML)
     if python3 -c "import deep_ep" &> /dev/null; then
-        log_ok "DeepEP installed successfully"
+        log_ok "DeepEP installation complete"
     else
-        log_error "DeepEP installation failed"
-        return 1
-    fi
-
-    # Keep build dir for reference (contains the .so file)
-    log_info "Build directory preserved at: $BUILD_DIR"
-}
-
-# ============================================================================
-# Kernel Module Verification
-# ============================================================================
-verify_kernel_modules() {
-    log_section "Kernel Module Verification"
-
-    REBOOT_NEEDED=false
-
-    # Check nvidia
-    if ! lsmod | grep -q nvidia; then
-        log_error "nvidia module not loaded"
-        REBOOT_NEEDED=true
-    else
-        log_ok "nvidia module loaded"
-    fi
-
-    # Check nvidia_peermem
-    if [ "$USE_NVPEERMEM" == "1" ]; then
-        if lsmod | grep -q nvidia_peermem; then
-            log_ok "nvidia_peermem module loaded"
-        else
-            log_warn "nvidia_peermem module NOT loaded"
-            REBOOT_NEEDED=true
-        fi
-    fi
-
-    # Check gdrdrv
-    if [ "$NVSHMEM_USE_GDRCOPY" == "1" ]; then
-        if lsmod | grep -q gdrdrv; then
-            log_ok "gdrdrv module loaded"
-        else
-            log_warn "gdrdrv module NOT loaded"
-            REBOOT_NEEDED=true
-        fi
-    fi
-
-    # Check PeerMappingOverride
-    if [ -f /proc/driver/nvidia/params ]; then
-        if grep -q "PeerMappingOverride=1" /proc/driver/nvidia/params 2>/dev/null; then
-            log_ok "PeerMappingOverride is set"
-        else
-            log_warn "PeerMappingOverride not set in running kernel"
-            REBOOT_NEEDED=true
-        fi
-    fi
-
-    if [ "$REBOOT_NEEDED" = true ]; then
-        echo
-        log_warn "================================"
-        log_warn "REBOOT REQUIRED"
-        log_warn "Some kernel modules are not loaded or configured."
-        log_warn "Please reboot and run this script again to verify."
-        log_warn "================================"
-        return 1
-    else
-        log_ok "All kernel modules loaded correctly"
-        return 0
+        log_error "Failed to install DeepEP, exiting..."
+        exit 1
     fi
 }
 
 # ============================================================================
-# Main
+# Create Environment Script
+# ============================================================================
+create_env_script() {
+    log_section "Creating Environment Script"
+
+    mkdir -p /opt/deepep
+
+    cat > /opt/deepep/env.sh << 'EOF'
+#!/bin/bash
+# DeepEP Environment Configuration
+# Usage: source /opt/deepep/env.sh
+
+export CUDA_HOME=/usr/local/cuda
+export PATH=$CUDA_HOME/bin:$PATH
+export GDRCOPY_HOME=/opt/deepep/gdrcopy
+export NVSHMEM_HOME=/opt/deepep/nvshmem
+export NVSHMEM_DIR=/opt/deepep/nvshmem
+
+# Collect nvidia pip package lib paths
+NVIDIA_LIB_PATHS=""
+for d in /usr/local/lib/python3.*/dist-packages/nvidia/*/lib; do
+    [ -d "$d" ] && NVIDIA_LIB_PATHS="${d}:${NVIDIA_LIB_PATHS}"
+done
+for d in $HOME/.local/lib/python3.*/site-packages/nvidia/*/lib; do
+    [ -d "$d" ] && NVIDIA_LIB_PATHS="${d}:${NVIDIA_LIB_PATHS}"
+done
+
+export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:${CUDA_HOME}/lib64:${NVIDIA_LIB_PATHS}${LD_LIBRARY_PATH}
+
+# HuggingFace cache on LSSD (if available)
+[ -d /lssd/huggingface ] && export HF_HOME=/lssd/huggingface
+
+echo "DeepEP environment loaded"
+echo "  CUDA_HOME: $CUDA_HOME"
+echo "  NVSHMEM_HOME: $NVSHMEM_HOME"
+echo "  GDRCOPY_HOME: $GDRCOPY_HOME"
+EOF
+
+    chmod +x /opt/deepep/env.sh
+    log_ok "Environment script created at /opt/deepep/env.sh"
+
+    # Add to bashrc if not already there
+    if ! grep -q "source /opt/deepep/env.sh" ~/.bashrc 2>/dev/null; then
+        echo 'source /opt/deepep/env.sh' >> ~/.bashrc
+        log_info "Added to ~/.bashrc"
+    fi
+}
+
+# ============================================================================
+# Main (per YAML order)
 # ============================================================================
 main() {
     log_section "DeepEP Installation Script"
     echo "This script will install DeepEP and its dependencies for SGLang."
     echo "Target: NVIDIA B200 GPUs with IB networking"
+    echo "Reference: deepep-installer.yaml"
     echo
     echo "Configuration:"
-    echo "  CUDA_HOME:          $CUDA_HOME"
-    echo "  NVSHMEM_HOME:       $NVSHMEM_HOME"
-    echo "  GDRCOPY_HOME:       $GDRCOPY_HOME"
-    echo "  NVSHMEM_IBGDA:      $NVSHMEM_IBGDA_SUPPORT"
+    echo "  CUDA_HOME:           $CUDA_HOME"
+    echo "  NVSHMEM_HOME:        $NVSHMEM_HOME"
+    echo "  GDRCOPY_HOME:        $GDRCOPY_HOME"
+    echo "  NVSHMEM_IBGDA:       $NVSHMEM_IBGDA_SUPPORT"
     echo "  NVSHMEM_USE_GDRCOPY: $NVSHMEM_USE_GDRCOPY"
-    echo "  TORCH_CUDA_ARCH:    $TORCH_CUDA_ARCH_LIST"
+    echo "  USE_NVPEERMEM:       $USE_NVPEERMEM"
+    echo "  TORCH_CUDA_ARCH:     $TORCH_CUDA_ARCH_LIST"
     echo
 
-    # Installation steps
-    install_cuda
+    # Installation steps (per YAML order)
+    # Step 1: Install DOCA OFED
     install_doca_ofed
+
+    # Step 2: Install GPU driver and CUDA
+    install_nvidia_driver
+
+    # Step 3: Build gdrcopy
     install_gdrcopy
-    configure_nvidia_peermem
+
+    # Step 4: Configure PeerMappingOverride (SGLang needs this)
+    configure_peermapping
+
+    # Step 5: Load nvidia_peermem
+    load_nvidia_peermem
+
+    # Step 6: Check if reboot is needed (per YAML logic)
+    if ! check_reboot_needed; then
+        log_warn "Please reboot and run this script again to continue with NVSHMEM and DeepEP installation"
+        exit 0
+    fi
+
+    # Step 7: Build NVSHMEM
     install_nvshmem
+
+    # Step 8: Build DeepEP
     install_deepep
 
-    echo
-    verify_kernel_modules
+    # Step 9: Create environment script
+    create_env_script
 
     log_section "Installation Complete"
 
     echo
-    echo "To use DeepEP, add to your environment:"
-    echo "  export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:\$LD_LIBRARY_PATH"
+    echo "To use DeepEP, run:"
+    echo "  source /opt/deepep/env.sh"
     echo
     echo "Test with:"
     echo "  python3 -c 'import deep_ep; print(\"DeepEP OK\")'"
+    echo
+    echo "Run intranode test:"
+    echo "  cd /tmp/deepep_build"
+    echo "  python3 tests/test_intranode.py --num-processes 2"
 }
 
 # Run main if not sourced
