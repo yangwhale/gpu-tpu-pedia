@@ -578,6 +578,11 @@ This script is automatically created and includes all necessary paths for DeepEP
 
 ## Version History
 
+- **2026-01-29**: Improved install-deepep.sh for non-interactive mode
+  - **FIX**: Script now auto-skips DOCA installation in non-interactive mode (no stdin)
+  - **NEW**: Added SKIP_DOCA=1 environment variable to skip DOCA prompt
+  - **NOTE**: Built-in mlx5 driver is usually sufficient for IBGDA
+
 - **2026-01-29**: Added PyTorch ABI compatibility section
   - **CRITICAL**: Documented PyTorch version mismatch causing ABI errors
   - **NEW**: Added recompilation instructions after vLLM install

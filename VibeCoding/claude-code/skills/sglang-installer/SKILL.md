@@ -21,13 +21,13 @@ This skill provides comprehensive guidance for installing, configuring, and debu
 
 | Component | Version | Notes |
 |-----------|---------|-------|
-| SGLang | 0.5.8 | Latest stable (2026-01-28) |
+| SGLang | 0.5.8 | Latest stable (2026-01-29) |
 | sgl-kernel | 0.3.21 | PyPI install for CUDA 12.9 |
 | mooncake-transfer-engine | 0.3.8.post1 | KV cache transfer (requires nvidia_peermem) |
 | nixl | 0.9.0 | KV cache transfer (DMA-BUF, recommended) |
 | nvidia-nccl-cu12 | 2.28.3 | Force reinstall |
 | nvidia-cudnn-cu12 | 9.16.0.29 | Required for PyTorch 2.9+ |
-| flashinfer | 0.5.3 | Attention backend |
+| flashinfer | 0.6.1 | SGLang 0.5.8 requires 0.6.1 (vLLM uses 0.5.3) |
 
 ### What's New in v0.5.8
 
@@ -194,6 +194,47 @@ export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${NVIDIA_LIB_PATHS}${LD_LIBRARY_PATH}
 ```
 
 ## Common Errors and Fixes
+
+### Error: Cannot uninstall typing_extensions (Ubuntu 24.04)
+
+**Symptom:**
+```
+ERROR: Cannot uninstall typing_extensions 4.10.0, RECORD file not found.
+Hint: The package was installed by debian.
+```
+
+**Diagnosis:** Ubuntu 24.04 installs `typing_extensions` as a system package managed by apt.
+
+**Fix:**
+```bash
+pip install -e "python[blackwell]" --ignore-installed typing_extensions --break-system-packages
+```
+
+---
+
+### Error: sgl-kernel ABI mismatch (PyTorch user/system conflict)
+
+**Symptom:**
+```
+ImportError: .../sgl_kernel/sm100/common_ops.abi3.so: undefined symbol: _ZN3c104cuda29c10_cuda_check_implementationEiPKcS2_ib
+```
+
+**Diagnosis:** PyTorch installed in both user (`~/.local/lib/python3.12/site-packages/`) and system (`/usr/local/lib/python3.12/dist-packages/`) directories with different versions.
+
+**Check:**
+```bash
+pip3 show torch | grep -E "Version|Location"
+ls /usr/local/lib/python3.12/dist-packages/ | grep torch
+ls ~/.local/lib/python3.12/site-packages/ | grep torch
+```
+
+**Fix:** Remove user-installed torch to use system version:
+```bash
+pip3 uninstall torch torchvision torchaudio -y --break-system-packages
+python3 -c "import torch; print(torch.__version__)"  # Should show system version
+```
+
+---
 
 ### Error: libcudnn.so.9 not found
 
@@ -678,6 +719,12 @@ import vllm; print(f'vLLM: {vllm.__version__}')
 ```
 
 ## Version History
+
+- **2026-01-29**: Installation experience updates
+  - **VERSION**: Corrected flashinfer version to 0.6.1 (SGLang 0.5.8 requires flashinfer_python==0.6.1)
+  - **FIX**: Added `--ignore-installed typing_extensions` for Ubuntu 24.04 (system package conflict)
+  - **FIX**: Documented PyTorch user/system directory conflict when mixing pip and sudo pip
+  - **NOTE**: When vLLM is installed after SGLang, flashinfer is downgraded to 0.5.3 (acceptable for inference)
 
 - **2026-01-29**: Added PyTorch/sgl-kernel ABI compatibility fixes
   - **CRITICAL**: Added sgl-kernel ABI incompatibility error and fix

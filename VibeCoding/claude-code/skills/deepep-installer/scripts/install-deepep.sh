@@ -189,11 +189,18 @@ install_doca_ofed() {
         return 0
     fi
 
+    # Skip DOCA installation in non-interactive mode or if SKIP_DOCA is set
+    if [ "${SKIP_DOCA:-0}" = "1" ] || [ ! -t 0 ]; then
+        log_warn "Skipping DOCA installation (non-interactive mode or SKIP_DOCA=1)"
+        log_info "Built-in mlx5 driver is usually sufficient for IBGDA"
+        return 1
+    fi
+
     read -p "DOCA OFED not found. Install it? (y/N) " -n 1 -r
     echo
     if [[ ! $REPLY =~ ^[Yy]$ ]]; then
         log_warn "Skipping DOCA installation"
-        log_warn "NVSHMEM IBGDA may not work properly without DOCA"
+        log_info "Built-in mlx5 driver is usually sufficient for IBGDA"
         return 1
     fi
 
