@@ -48,12 +48,17 @@ hostname -I | awk '{print $1}'
 ## Installation (if Ray not installed)
 
 ```bash
-# Install Ray with default dependencies
-pip3 install -U ray[default]
+# Install Ray with full dashboard support
+pip3 install -U 'ray[default]'
 
 # For GPU support, ensure CUDA is available
-pip3 install ray[default] torch  # PyTorch for GPU testing
+pip3 install 'ray[default]' torch  # PyTorch for GPU testing
+
+# If on Ubuntu 24.04+ with externally-managed-environment:
+pip3 install --user --break-system-packages 'ray[default]'
 ```
+
+**Important**: The `ray[default]` package includes dashboard dependencies (`aiohttp_cors`, `opentelemetry`, etc.). Without these, the dashboard will show "http server disabled" and won't be accessible.
 
 ## Cluster Architecture
 

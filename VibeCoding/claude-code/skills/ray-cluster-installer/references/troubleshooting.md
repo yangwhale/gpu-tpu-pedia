@@ -133,18 +133,38 @@ export NCCL_CUMEM_ENABLE=1
 ### 7. Dashboard Not Accessible
 
 **Symptoms:**
-Cannot access http://HEAD_IP:8265
+- Cannot access http://HEAD_IP:8265
+- Dashboard log shows "http server disabled"
+- Log shows "Module cannot be loaded... No module named 'aiohttp_cors'"
 
 **Solutions:**
+
 ```bash
-# Ensure dashboard is bound to all interfaces
+# 1. Check if dashboard dependencies are installed
+pip3 show aiohttp_cors opentelemetry-sdk
+
+# 2. If missing, install ray[default] for full dashboard support
+pip3 install --user --break-system-packages 'ray[default]'
+
+# 3. Restart Ray cluster after installing dependencies
+ray stop --force
 ray start --head --dashboard-host=0.0.0.0 --dashboard-port=8265
 
-# Check if dashboard process is running
-ps aux | grep dashboard
+# 4. Verify dashboard is listening
+ss -tlnp | grep 8265
+curl http://localhost:8265/
 
-# Check dashboard logs
+# 5. Check dashboard logs for errors
 tail -f /tmp/ray/session_latest/logs/dashboard.log
+```
+
+**Accessing Dashboard from remote machine (via SSH tunnel):**
+
+```bash
+# On your local machine, create SSH tunnel through IAP
+gcloud compute ssh INSTANCE_NAME --zone=ZONE --tunnel-through-iap -- -L 8265:localhost:8265
+
+# Then open http://localhost:8265 in browser
 ```
 
 ### 8. Ray Processes Not Cleaning Up
