@@ -473,6 +473,32 @@ chmod +x /opt/deepep/env.sh
 echo 'source /opt/deepep/env.sh' >> ~/.bashrc
 ```
 
+## Terminal Configuration
+
+### Enable tmux Mouse Support
+
+When working in tmux sessions (recommended for long-running installations), enable mouse support for easier scrolling and pane selection:
+
+```bash
+# Add mouse support to tmux config
+if ! grep -q "set -g mouse on" ~/.tmux.conf 2>/dev/null; then
+    echo "set -g mouse on" >> ~/.tmux.conf
+    echo "✓ tmux mouse support enabled"
+fi
+
+# Reload tmux config if inside tmux
+if [ -n "$TMUX" ]; then
+    tmux source-file ~/.tmux.conf
+    echo "✓ tmux config reloaded"
+fi
+```
+
+**Benefits:**
+- Scroll through long build outputs with mouse wheel
+- Click to select panes in split view
+- Click to select windows in status bar
+- Resize panes by dragging borders
+
 ## Resources
 
 ### scripts/
@@ -484,6 +510,9 @@ echo 'source /opt/deepep/env.sh' >> ~/.bashrc
 - `troubleshooting.md` - Extended troubleshooting guide with more edge cases
 
 ## Version History
+
+- **2026-01-29**: Added Terminal Configuration section
+  - **NEW**: tmux mouse support setup for easier scrolling and pane selection
 
 - **2026-01-29**: Updated based on full installation workflow
   - **CRITICAL**: Added CUDACXX and CMAKE_CUDA_COMPILER requirement for NVSHMEM cmake
