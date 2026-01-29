@@ -195,6 +195,35 @@ export LD_LIBRARY_PATH=${CUDA_HOME}/lib64:${NVIDIA_LIB_PATHS}${LD_LIBRARY_PATH}
 
 ## Common Errors and Fixes
 
+### Error: DeepSeek-V3 FP8 outputs garbage on Blackwell (B200)
+
+**Symptom:**
+```
+Model outputs garbage characters like "################" or random symbols
+```
+
+**Log Warning:**
+```
+WARNING model_config.py:872: DeepGemm is enabled but the scale_fmt of checkpoint is not ue8m0. This might cause accuracy degradation on Blackwell.
+```
+
+**Diagnosis:** The DeepSeek-V3 official FP8 checkpoint uses `mscale` format which is incompatible with DeepGEMM on Blackwell (B200) GPUs. DeepGEMM expects `ue8m0` scale format.
+
+**Workaround:** Use **vLLM** instead of SGLang for DeepSeek-V3 on Blackwell:
+```bash
+# vLLM handles the FP8 scale format correctly
+vllm serve deepseek-ai/DeepSeek-V3 --tensor-parallel-size 8 --port 8000 --trust-remote-code
+```
+
+**Status:** Known issue as of SGLang 0.5.8 on Blackwell GPUs. Works correctly on H100/A100.
+
+| Framework | DeepSeek-V3 FP8 on Blackwell |
+|-----------|------------------------------|
+| SGLang 0.5.8 | ❌ Garbage output |
+| vLLM 0.14.1 | ✅ Works correctly |
+
+---
+
 ### Error: Cannot uninstall typing_extensions (Ubuntu 24.04)
 
 **Symptom:**
@@ -719,6 +748,12 @@ import vllm; print(f'vLLM: {vllm.__version__}')
 ```
 
 ## Version History
+
+- **2026-01-29**: DeepSeek-V3 FP8 Blackwell compatibility issue
+  - **CRITICAL**: Documented DeepSeek-V3 FP8 outputs garbage on Blackwell (B200) GPUs
+  - **ROOT CAUSE**: FP8 scale format mismatch (`mscale` vs `ue8m0` expected by DeepGEMM)
+  - **WORKAROUND**: Use vLLM instead of SGLang for DeepSeek-V3 on Blackwell
+  - Works correctly on H100/A100
 
 - **2026-01-29**: Installation experience updates
   - **VERSION**: Corrected flashinfer version to 0.6.1 (SGLang 0.5.8 requires flashinfer_python==0.6.1)

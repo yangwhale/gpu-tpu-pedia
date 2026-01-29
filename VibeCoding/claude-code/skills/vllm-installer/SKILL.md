@@ -28,6 +28,27 @@ This skill provides comprehensive guidance for installing, configuring, and debu
 | nvidia-nccl-cu12 | 2.28.3 | Force reinstall |
 | nvidia-cudnn-cu12 | 9.16.0.29 | Required for PyTorch 2.9+ |
 | bitsandbytes | 0.46.1 | Quantization support |
+| numpy | <2.3 | Required for numba compatibility |
+
+### DeepSeek-V3 FP8 on Blackwell (B200)
+
+**vLLM correctly handles DeepSeek-V3 FP8 on Blackwell GPUs**, unlike SGLang which produces garbage output due to FP8 scale format incompatibility.
+
+| Framework | DeepSeek-V3 FP8 on Blackwell |
+|-----------|------------------------------|
+| **vLLM 0.14.1** | ✅ Works correctly |
+| SGLang 0.5.8 | ❌ Garbage output (scale format mismatch) |
+
+If you need to run DeepSeek-V3 on Blackwell (B200) GPUs, **use vLLM**:
+
+```bash
+vllm serve deepseek-ai/DeepSeek-V3 \
+    --tensor-parallel-size 8 \
+    --port 8000 \
+    --download-dir /lssd/huggingface/hub \
+    --trust-remote-code \
+    --max-model-len 4096
+```
 
 ## Pre-Installation Checks
 
@@ -543,6 +564,12 @@ import nixl; print('NIXL: OK')
 ```
 
 ## Version History
+
+- **2026-01-29**: DeepSeek-V3 FP8 Blackwell compatibility
+  - **NEW**: Documented vLLM correctly handles DeepSeek-V3 FP8 on Blackwell (B200) GPUs
+  - **NEW**: Added comparison table showing vLLM works while SGLang produces garbage output
+  - **NEW**: Added numpy <2.3 version requirement (numba compatibility)
+  - **RECOMMENDATION**: Use vLLM for DeepSeek-V3 on Blackwell
 
 - **2026-01-29**: Added FlashInfer PyTorch version warning
   - **CRITICAL**: Documented FlashInfer changing PyTorch to 2.10 issue
