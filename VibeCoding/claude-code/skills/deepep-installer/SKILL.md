@@ -509,7 +509,81 @@ fi
 
 - `troubleshooting.md` - Extended troubleshooting guide with more edge cases
 
+## PyTorch Version Compatibility
+
+### CRITICAL: PyTorch ABI Compatibility
+
+DeepEP is compiled against a specific PyTorch version. If PyTorch is upgraded or downgraded after DeepEP installation, you will see ABI errors:
+
+**Symptom:**
+```
+ImportError: .../deep_ep_cpp.cpython-312-x86_64-linux-gnu.so: undefined symbol: _ZNK3c1010TensorImpl15incref_pyobjectEv
+```
+
+**Common Causes:**
+1. Installing vLLM after DeepEP (vLLM pins PyTorch 2.9.1)
+2. Installing FlashInfer (may upgrade PyTorch to 2.10)
+3. Reinstalling PyTorch with a different version
+
+**Solution: Recompile DeepEP**
+```bash
+cd /tmp/deepep_build  # or wherever DeepEP was cloned
+rm -rf build/ dist/ *.egg-info
+rm -rf ~/.local/lib/python3.12/site-packages/deep_ep-*.egg
+
+export CUDA_HOME=/usr/local/cuda-12.9
+export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:/opt/deepep/gdrcopy/lib:$LD_LIBRARY_PATH
+export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$CUDA_HOME/lib64/stubs:$LIBRARY_PATH
+
+TORCH_CUDA_ARCH_LIST="10.0" NVSHMEM_DIR=/opt/deepep/nvshmem python3 setup.py install --user
+```
+
+### Recommended Installation Order
+
+When installing DeepEP with SGLang and vLLM, follow this order:
+
+```
+1. LSSD Mount (/lssd-mounter)
+2. DeepEP (this skill)
+3. SGLang (/sglang-installer)
+4. vLLM (/vllm-installer)
+5. *** Recompile DeepEP *** (after vLLM changes PyTorch)
+```
+
+**Important:** After installing vLLM, always verify DeepEP works:
+```bash
+python3 -c "import deep_ep; print('DeepEP OK')"
+```
+
+If it fails with ABI errors, recompile DeepEP as shown above.
+
+### PyTorch Version Matrix
+
+| Framework | PyTorch Version | Notes |
+|-----------|-----------------|-------|
+| DeepEP (initial) | 2.10.0+cu129 | From pip install torch |
+| SGLang 0.5.8 | 2.9.1+cu129 | May be different |
+| vLLM 0.14.1 | 2.9.1+cu129 | Pins this version |
+| **Final (after vLLM)** | **2.9.1+cu129** | DeepEP needs recompile |
+
+## Unified Environment Script
+
+After installing DeepEP + SGLang + vLLM, use the unified environment script:
+
+```bash
+source /opt/deepep/unified-env.sh
+```
+
+This script is automatically created and includes all necessary paths for DeepEP, SGLang, and vLLM.
+
 ## Version History
+
+- **2026-01-29**: Added PyTorch ABI compatibility section
+  - **CRITICAL**: Documented PyTorch version mismatch causing ABI errors
+  - **NEW**: Added recompilation instructions after vLLM install
+  - **NEW**: Added recommended installation order for multi-framework setup
+  - **NEW**: Added PyTorch version matrix for different frameworks
+  - **NEW**: Referenced unified environment script
 
 - **2026-01-29**: Added Terminal Configuration section
   - **NEW**: tmux mouse support setup for easier scrolling and pane selection

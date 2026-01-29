@@ -129,6 +129,20 @@ pip install flashinfer-python==0.5.3 flashinfer-cubin==0.5.3
 
 **Important:** `flashinfer-python` and `flashinfer-cubin` versions MUST match exactly.
 
+**⚠️ WARNING: FlashInfer may change PyTorch version!**
+
+FlashInfer installation can upgrade PyTorch from 2.9.1 to 2.10.0, which breaks:
+- vLLM (requires PyTorch 2.9.1)
+- sgl-kernel (ABI mismatch)
+- DeepEP (ABI mismatch)
+
+**Always reinstall after FlashInfer:**
+```bash
+pip install flashinfer-python==0.5.3 flashinfer-cubin==0.5.3
+pip install torch==2.9.1+cu129 --index-url https://download.pytorch.org/whl/cu129 --force-reinstall
+pip install nvidia-nccl-cu12==2.28.3 nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
+```
+
 ### Step 6: Configure LD_LIBRARY_PATH
 
 To fix library loading issues, run `scripts/setup_env.sh` or manually set:
@@ -455,6 +469,24 @@ Both can coexist on the same system but have dependency version conflicts:
 2. **Development**: Accept mismatches (usually works for basic inference)
 3. **MoE models**: Install DeepEP first, then either framework
 
+### sgl-kernel ABI Issues After vLLM Install
+
+When vLLM is installed after SGLang, you may see sgl-kernel ABI errors:
+
+**Symptom:**
+```
+ImportError: .../sgl_kernel/sm100/common_ops.abi3.so: undefined symbol: _ZN3c104cuda29c10_cuda_check_implementationEiPKcS2_ib
+```
+
+**Root Cause:** vLLM pins PyTorch 2.9.1, but sgl-kernel may have been compiled against a different version.
+
+**Fix:**
+```bash
+# Reinstall sgl-kernel after vLLM
+pip install sgl-kernel==0.3.21 --force-reinstall --no-deps
+pip install nvidia-nccl-cu12==2.28.3 nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
+```
+
 ### DeepEP Recompilation After vLLM Install
 
 **IMPORTANT**: If DeepEP was installed before vLLM, you may need to recompile DeepEP after installing vLLM due to PyTorch ABI changes.
@@ -484,7 +516,39 @@ TORCH_CUDA_ARCH_LIST="10.0" NVSHMEM_DIR=/opt/deepep/nvshmem python3 setup.py ins
 - `references/version_matrix.md` - Version compatibility matrix
 - `references/troubleshooting.md` - Extended troubleshooting guide
 
+## Unified Environment Script
+
+After installing DeepEP + SGLang + vLLM, use the unified environment script:
+
+```bash
+source /opt/deepep/unified-env.sh
+```
+
+This sets up all necessary environment variables for the complete stack.
+
+## Post-Installation Verification
+
+After completing all installations, verify everything works:
+
+```bash
+source /opt/deepep/unified-env.sh
+python3 -c "
+import torch; print(f'PyTorch: {torch.__version__}')
+import deep_ep; print('DeepEP: OK')
+import sglang; print(f'SGLang: {sglang.__version__}')
+import sgl_kernel; print(f'sgl-kernel: {sgl_kernel.__version__}')
+import vllm; print(f'vLLM: {vllm.__version__}')
+import nixl; print('NIXL: OK')
+"
+```
+
 ## Version History
+
+- **2026-01-29**: Added FlashInfer PyTorch version warning
+  - **CRITICAL**: Documented FlashInfer changing PyTorch to 2.10 issue
+  - **NEW**: Added fix commands after FlashInfer installation
+  - **NEW**: Added unified environment script reference
+  - **NEW**: Added post-installation verification commands
 
 - **2026-01-29**: Added GCS DeepSeek weights pre-download
   - **NEW**: Added "Pre-downloading DeepSeek Weights" section in Dependency Skills

@@ -264,6 +264,49 @@ pip install -e "python[blackwell]" ...
 pip install sgl-kernel==0.3.21 --force-reinstall --no-deps  # if needed
 ```
 
+### Error: sgl-kernel ABI incompatibility (undefined symbol)
+
+**Symptom:**
+```
+ImportError: .../sgl_kernel/sm100/common_ops.abi3.so: undefined symbol: _ZN3c104cuda29c10_cuda_check_implementationEiPKcS2_ib
+```
+
+**Diagnosis:** sgl-kernel was compiled against a different PyTorch version than currently installed. This commonly happens when:
+1. FlashInfer installation upgrades PyTorch to 2.10
+2. vLLM installation changes PyTorch to 2.9.1
+3. Manual PyTorch version changes
+
+**Fix:**
+1. First, check your current PyTorch version:
+   ```bash
+   python3 -c "import torch; print(torch.__version__)"
+   ```
+
+2. For vLLM compatibility (PyTorch 2.9.1), reinstall sgl-kernel:
+   ```bash
+   pip install torch==2.9.1+cu129 --index-url https://download.pytorch.org/whl/cu129 --force-reinstall
+   pip install sgl-kernel==0.3.21 --force-reinstall --no-deps
+   pip install nvidia-nccl-cu12==2.28.3 nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
+   ```
+
+3. For standalone SGLang (no vLLM), use the PyTorch version from SGLang installation.
+
+**Root Cause:** The sgl-kernel binary is compiled against specific PyTorch CUDA APIs. When PyTorch version changes, the ABI symbols may not match.
+
+### Error: FlashInfer changes PyTorch version
+
+**Symptom:** After installing FlashInfer, other packages fail with version conflicts.
+
+**Diagnosis:** `flashinfer-python` and `flashinfer-cubin` have their own PyTorch dependencies that may override your installed version.
+
+**Fix:** After FlashInfer installation, always reinstall the correct PyTorch and NVIDIA libraries:
+```bash
+# For vLLM compatibility
+pip install torch==2.9.1+cu129 --index-url https://download.pytorch.org/whl/cu129 --force-reinstall
+pip install nvidia-nccl-cu12==2.28.3 nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
+pip install sgl-kernel==0.3.21 --force-reinstall --no-deps
+```
+
 ### Error: num_max_dispatch_tokens_per_rank assertion
 
 **Symptom:**
@@ -599,7 +642,49 @@ fi
 - `references/version_matrix.md` - Version compatibility matrix
 - `references/troubleshooting.md` - Extended troubleshooting guide
 
+## Unified Environment Script
+
+After installing DeepEP + SGLang + vLLM, use the unified environment script:
+
+```bash
+source /opt/deepep/unified-env.sh
+```
+
+This script sets up all necessary environment variables for DeepEP, NVSHMEM, gdrcopy, and NVIDIA libraries.
+
+## Recommended Multi-Framework Installation Order
+
+When installing SGLang alongside DeepEP and vLLM:
+
+```
+1. /lssd-mounter     → Mount high-speed local SSD
+2. /deepep-installer → Install DeepEP (compiles with initial PyTorch)
+3. /sglang-installer → Install SGLang (this skill)
+4. /vllm-installer   → Install vLLM (changes PyTorch to 2.9.1)
+5. Fix PyTorch       → Ensure PyTorch 2.9.1 is installed
+6. Recompile DeepEP  → Rebuild for new PyTorch version
+```
+
+**Post-Installation Verification:**
+```bash
+source /opt/deepep/unified-env.sh
+python3 -c "
+import torch; print(f'PyTorch: {torch.__version__}')
+import deep_ep; print('DeepEP: OK')
+import sglang; print(f'SGLang: {sglang.__version__}')
+import sgl_kernel; print(f'sgl-kernel: {sgl_kernel.__version__}')
+import vllm; print(f'vLLM: {vllm.__version__}')
+"
+```
+
 ## Version History
+
+- **2026-01-29**: Added PyTorch/sgl-kernel ABI compatibility fixes
+  - **CRITICAL**: Added sgl-kernel ABI incompatibility error and fix
+  - **CRITICAL**: Documented FlashInfer changing PyTorch version issue
+  - **NEW**: Added unified environment script reference
+  - **NEW**: Added recommended multi-framework installation order
+  - **NEW**: Added post-installation verification command
 
 - **2026-01-29**: Added GCS DeepSeek weights pre-download
   - **NEW**: Added "Pre-downloading DeepSeek Weights" section
