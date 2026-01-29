@@ -89,6 +89,8 @@ ln -s /usr/local/cuda-12.9 /usr/local/cuda  # if not exists
 
 gdrcopy provides GPU Direct copy functionality with the gdrdrv kernel module.
 
+**IMPORTANT**: gdrcopy supports newer kernels (including 6.14+) but requires correct build procedure. The build system includes detection scripts that automatically handle kernel API differences.
+
 ```bash
 # Install dependencies
 apt-get install -y build-essential devscripts debhelper fakeroot pkg-config dkms git
@@ -101,8 +103,8 @@ apt-get install -y nvidia-kernel-source-580-server  # For driver 580.x
 NVIDIA_SRC_DIR=$(find /usr/src -name "nv-p2p.h" -printf "%h" -quit 2>/dev/null)
 echo "Using NVIDIA_SRC_DIR: $NVIDIA_SRC_DIR"
 
-# Clone and build gdrcopy
-git clone --depth 1 --branch v2.5.1 https://github.com/NVIDIA/gdrcopy.git /tmp/gdrcopy
+# Clone gdrcopy (use latest main branch for best kernel compatibility)
+git clone --depth 1 https://github.com/NVIDIA/gdrcopy.git /tmp/gdrcopy
 cd /tmp/gdrcopy
 
 # Build library first
@@ -110,11 +112,13 @@ make -j$(nproc)
 mkdir -p /opt/deepep/gdrcopy
 make prefix=/opt/deepep/gdrcopy CUDA=$CUDA_HOME install
 
-# Build kernel module (requires NVIDIA_SRC_DIR)
-NVIDIA_SRC_DIR="$NVIDIA_SRC_DIR" make driver
+# Build kernel module - MUST run from project root directory!
+# This runs detection scripts that set HAVE_VM_FLAGS_SET and HAVE_PROC_OPS
+export NVIDIA_SRC_DIR="$NVIDIA_SRC_DIR"
+make driver
 
 # Install kernel module
-insmod src/gdrdrv/gdrdrv.ko
+sudo insmod src/gdrdrv/gdrdrv.ko
 
 # Copy library to system path for easy linking
 cp src/libgdrapi.so.2.5 /usr/lib/x86_64-linux-gnu/
@@ -126,7 +130,11 @@ ldconfig
 lsmod | grep gdrdrv  # Should show gdrdrv module
 ```
 
-**Note:** If the deb package build fails, you can skip it and just use `insmod` to load the module. The library installation is sufficient for NVSHMEM.
+**Notes:**
+- Use latest `main` branch instead of v2.5.1 for better kernel compatibility
+- Always run `make driver` from the project root (`/tmp/gdrcopy`), NOT from `src/gdrdrv/`
+- The module is NOT persistent across reboots - see "Reloading gdrdrv after reboot" section
+- gdrdrv is optional for single-node NVLink communication; IBGDA handles cross-node RDMA
 
 ### Step 3: NVSHMEM with IBGDA
 
@@ -325,9 +333,54 @@ dmesg | grep -i gdr
 ```
 
 **Solutions:**
-1. Load module: `modprobe gdrdrv`
-2. If module not found, rebuild gdrcopy packages with correct NVIDIA_SRC_DIR
-3. May require reboot after DKMS installation
+1. Load module: `sudo insmod /tmp/gdrcopy/src/gdrdrv/gdrdrv.ko`
+2. If module not found (after reboot), rebuild:
+   ```bash
+   cd /tmp
+   git clone --depth 1 https://github.com/NVIDIA/gdrcopy.git gdrcopy
+   cd gdrcopy
+   export NVIDIA_SRC_DIR=$(find /usr/src -name "nv-p2p.h" -printf "%h" -quit)
+   make driver
+   sudo insmod src/gdrdrv/gdrdrv.ko
+   ```
+3. Note: gdrdrv is optional for single-node DeepEP (NVLink works without it)
+
+---
+
+### Problem: gdrdrv compilation fails with vm_flags_set redefinition
+
+**Symptoms:**
+```
+error: redefinition of 'vm_flags_set'
+error: passing argument 4 of 'proc_create' from incompatible pointer type
+```
+
+**Root Cause:**
+Building from wrong directory. The detection scripts (`scripts/test_gdrdrv_HAVE_VM_FLAGS_SET.sh`) don't run, so the Makefile doesn't set `-DGDRDRV_HAVE_VM_FLAGS_SET`.
+
+**Diagnosis:**
+```bash
+# Run detection scripts manually
+/tmp/gdrcopy/scripts/test_gdrdrv_HAVE_VM_FLAGS_SET.sh -k $(uname -r)
+# Should output "y" for kernel 6.3+
+```
+
+**Solution:**
+```bash
+# WRONG - don't build from src/gdrdrv directly:
+# cd /tmp/gdrcopy/src/gdrdrv && make  ❌
+
+# CORRECT - build from project root:
+cd /tmp/gdrcopy
+export NVIDIA_SRC_DIR=$(find /usr/src -name "nv-p2p.h" -printf "%h" -quit)
+make driver  ✅
+```
+
+**Technical Details:**
+- Linux 6.3+ already defines `vm_flags_set()` in `<linux/mm.h>`
+- gdrcopy has a fallback definition for older kernels
+- Detection script tests if kernel has the function and sets `HAVE_VM_FLAGS_SET=y`
+- This tells the compiler to skip the fallback definition via `#ifndef GDRDRV_HAVE_VM_FLAGS_SET`
 
 ---
 
@@ -373,13 +426,35 @@ modinfo nvidia_peermem  # Module not found
 2. Often unavailable on cloud VMs with pre-installed drivers
 3. DeepEP works without it using NVSHMEM IBGDA
 
+## Reloading gdrdrv After Reboot
+
+The gdrdrv module built via `insmod` is NOT persistent across reboots. After reboot:
+
+```bash
+# Option 1: If /tmp/gdrcopy still exists (unlikely after reboot)
+sudo insmod /tmp/gdrcopy/src/gdrdrv/gdrdrv.ko
+
+# Option 2: Rebuild the module (recommended)
+cd /tmp
+git clone --depth 1 https://github.com/NVIDIA/gdrcopy.git gdrcopy
+cd gdrcopy
+export NVIDIA_SRC_DIR=$(find /usr/src -name "nv-p2p.h" -printf "%h" -quit)
+make driver
+sudo insmod src/gdrdrv/gdrdrv.ko
+lsmod | grep gdrdrv  # Verify loaded
+```
+
+**Note:** gdrdrv is optional for single-node NVLink communication. DeepEP works without it:
+- **With gdrdrv**: Faster CPU↔GPU small data copies
+- **Without gdrdrv**: NVLink and IBGDA still work at full speed
+
 ## Verification and Testing
 
 ### Module Verification
 
 ```bash
 # Required modules
-lsmod | grep gdrdrv         # Must be loaded
+lsmod | grep gdrdrv         # Optional but recommended
 lsmod | grep mlx5_core      # For RDMA
 
 # NVSHMEM IBGDA check
@@ -577,6 +652,14 @@ source /opt/deepep/unified-env.sh
 This script is automatically created and includes all necessary paths for DeepEP, SGLang, and vLLM.
 
 ## Version History
+
+- **2026-01-29**: Fixed gdrdrv kernel 6.14+ compatibility
+  - **ROOT CAUSE**: gdrdrv supports 6.14+ kernels, but must be built from project root directory
+  - **FIX**: Updated Step 2 to emphasize correct build procedure (`make driver` from `/tmp/gdrcopy`)
+  - **NEW**: Added troubleshooting for `vm_flags_set redefinition` error
+  - **NEW**: Added "Reloading gdrdrv After Reboot" section
+  - **CLARIFIED**: gdrdrv is optional for single-node NVLink - IBGDA handles cross-node RDMA
+  - **UPDATED**: Use latest `main` branch instead of v2.5.1 for better kernel compatibility
 
 - **2026-01-29**: Synchronized with deepep-installer.yaml
   - **CHANGE**: Installation order now matches YAML: DOCA OFED → GPU Driver → gdrcopy → PeerMappingOverride → nvidia_peermem → Reboot Check → NVSHMEM → DeepEP
