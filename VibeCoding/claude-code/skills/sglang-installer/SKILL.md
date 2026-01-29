@@ -155,10 +155,12 @@ pip install nvidia-nccl-cu12==2.28.3 --force-reinstall --no-deps
 
 **Symptom:** SGLang installs an older sgl-kernel version than expected.
 
-**Fix:** Install sgl-kernel BEFORE installing SGLang:
+**Note:** As of v0.5.6.post2, SGLang's dependencies pin sgl-kernel to 0.3.19, so even if you pre-install 0.3.21, it will be downgraded during SGLang installation. This is expected behavior and 0.3.19 works correctly.
+
+**If you need a specific version:** Install sgl-kernel AFTER SGLang:
 ```bash
-pip install sgl-kernel==0.3.21
 pip install -e "python[blackwell]" ...
+pip install sgl-kernel==0.3.21 --force-reinstall --no-deps  # if needed
 ```
 
 ## Starting the Server
@@ -291,6 +293,10 @@ Common conflicts when both are installed:
 - `references/troubleshooting.md` - Extended troubleshooting guide
 
 ## Version History
+
+- **2026-01-29**: Updated based on installation with vLLM coexistence
+  - Clarified sgl-kernel version behavior (0.3.19 is pinned by SGLang dependencies)
+  - Added note about NVIDIA library reinstallation after install
 
 - **2026-01-28**: Updated based on installation experience
   - Added pip installation for Ubuntu 24.04

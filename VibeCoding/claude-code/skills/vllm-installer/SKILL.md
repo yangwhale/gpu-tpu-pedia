@@ -346,6 +346,28 @@ Both can coexist on the same system but have dependency version conflicts:
 2. **Development**: Accept mismatches (usually works for basic inference)
 3. **MoE models**: Install DeepEP first, then either framework
 
+### DeepEP Recompilation After vLLM Install
+
+**IMPORTANT**: If DeepEP was installed before vLLM, you may need to recompile DeepEP after installing vLLM due to PyTorch ABI changes.
+
+**Symptom:**
+```
+ImportError: .../deep_ep_cpp.cpython-312-x86_64-linux-gnu.so: undefined symbol: _ZNK3c1010TensorImpl15incref_pyobjectEv
+```
+
+**Fix:**
+```bash
+cd /tmp/deepep_build  # or wherever DeepEP was cloned
+rm -rf build/ dist/ *.egg-info
+rm -rf ~/.local/lib/python3.12/site-packages/deep_ep-*.egg  # Remove old egg
+
+export CUDA_HOME=/usr/local/cuda-12.9
+export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:/opt/deepep/gdrcopy/lib:$LD_LIBRARY_PATH
+export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$CUDA_HOME/lib64/stubs:$LIBRARY_PATH
+
+TORCH_CUDA_ARCH_LIST="10.0" NVSHMEM_DIR=/opt/deepep/nvshmem python3 setup.py install --user
+```
+
 ## Resources
 
 - `scripts/diagnose.py` - Diagnostic script for installation issues
@@ -354,6 +376,11 @@ Both can coexist on the same system but have dependency version conflicts:
 - `references/troubleshooting.md` - Extended troubleshooting guide
 
 ## Version History
+
+- **2026-01-29**: Updated based on full installation workflow with DeepEP + SGLang + vLLM
+  - **CRITICAL**: Added DeepEP recompilation requirement after vLLM install
+  - Documented PyTorch ABI incompatibility issue and fix
+  - Added detailed dependency conflict table (numpy, llguidance versions)
 
 - **2026-01-28**: Updated based on installation experience
   - Added pip installation for Ubuntu 24.04

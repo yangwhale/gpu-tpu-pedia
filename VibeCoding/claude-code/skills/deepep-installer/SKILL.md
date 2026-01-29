@@ -142,7 +142,12 @@ tar -xf nvshmem_src_3.2.5-1.txz
 
 # Configure and build
 cd nvshmem_src
+
+# IMPORTANT: Must set CUDACXX explicitly, otherwise cmake cannot find nvcc
+export CUDACXX=/usr/local/cuda-12.9/bin/nvcc
+
 CUDA_HOME=$CUDA_HOME \
+CUDACXX=$CUDACXX \
 GDRCOPY_HOME=/opt/deepep/gdrcopy \
 NVSHMEM_IBGDA_SUPPORT=1 \
 NVSHMEM_USE_GDRCOPY=1 \
@@ -152,10 +157,13 @@ NVSHMEM_USE_NCCL=0 \
 NVSHMEM_MPI_SUPPORT=0 \
 cmake -GNinja -S . -B build/ \
     -DCMAKE_INSTALL_PREFIX=/opt/deepep/nvshmem \
-    -DCMAKE_CUDA_ARCHITECTURES=100 \  # 100 for B200, 90 for H100, 80 for A100
+    -DCMAKE_CUDA_COMPILER=$CUDACXX \
+    -DCMAKE_CUDA_ARCHITECTURES=100 \
     -DNVSHMEM_BUILD_EXAMPLES=OFF
+# CUDA arch: 100 for B200, 90 for H100, 80 for A100
 
-cmake --build build/ --target install
+# Use sudo for installation to /opt
+sudo cmake --build build/ --target install
 
 # Verify IBGDA support
 /opt/deepep/nvshmem/bin/nvshmem-info -a | grep IBGDA
@@ -476,6 +484,11 @@ echo 'source /opt/deepep/env.sh' >> ~/.bashrc
 - `troubleshooting.md` - Extended troubleshooting guide with more edge cases
 
 ## Version History
+
+- **2026-01-29**: Updated based on full installation workflow
+  - **CRITICAL**: Added CUDACXX and CMAKE_CUDA_COMPILER requirement for NVSHMEM cmake
+  - Added sudo requirement for NVSHMEM installation to /opt
+  - Fixed cmake command format (removed trailing backslash issues)
 
 - **2026-01-28**: Updated based on installation experience on GCP with kernel 6.14.0
   - Added pip installation check for Ubuntu 24.04
