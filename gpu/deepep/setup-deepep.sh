@@ -33,6 +33,12 @@ export TORCH_CUDA_ARCH_LIST=${TORCH_CUDA_ARCH_LIST:-"10.0"}
 export DEBIAN_FRONTEND=noninteractive
 
 # ============================================================================
+# Pinned Versions (for reproducibility)
+# ============================================================================
+NVSHMEM_VERSION="3.4.5-0"
+DEEPEP_VERSION="v1.2.1"  # Tag or commit hash
+
+# ============================================================================
 # Parse Arguments
 # ============================================================================
 SKIP_REBOOT=false
@@ -225,21 +231,46 @@ load_nvpeermem() {
 }
 
 # ============================================================================
-# Step 6: Check if Reboot is Needed
+# Step 6: Load nvidia Module and Check if Reboot is Needed
 # ============================================================================
 check_reboot_needed() {
     local REBOOT_NEEDED=false
 
+    # Try to load nvidia module if not already loaded (avoids unnecessary reboot)
+    if ! lsmod | grep -q nvidia; then
+        log_info "nvidia module not loaded, attempting to load via modprobe..."
+        if modprobe nvidia 2>/dev/null; then
+            log_info "nvidia module loaded successfully via modprobe"
+            # Give the driver a moment to initialize
+            sleep 2
+        else
+            log_warn "Failed to load nvidia module via modprobe"
+            REBOOT_NEEDED=true
+        fi
+    fi
+
+    # Verify nvidia module is now loaded
     if ! lsmod | grep -q nvidia; then
         REBOOT_NEEDED=true
-        log_warn "nvidia module not loaded, reboot required"
-    elif [ "$USE_NVPEERMEM" == "1" ] && ! lsmod | grep -q nvidia_peermem; then
+        log_warn "nvidia module still not loaded, reboot required"
+    fi
+
+    # Check nvidia_peermem if required
+    if [ "$REBOOT_NEEDED" != "true" ] && [ "$USE_NVPEERMEM" == "1" ] && ! lsmod | grep -q nvidia_peermem; then
         REBOOT_NEEDED=true
         log_warn "nvidia_peermem module not loaded, reboot required"
-    elif [ "$NVSHMEM_USE_GDRCOPY" != "1" ] && ! grep -q "PeerMappingOverride=1" /proc/driver/nvidia/params 2>/dev/null; then
-        REBOOT_NEEDED=true
-        log_warn "PeerMappingOverride not set, reboot required"
-    elif [ "$NVSHMEM_USE_GDRCOPY" == "1" ] && ! lsmod | grep -q gdrdrv; then
+    fi
+
+    # Check PeerMappingOverride if not using GDRCopy
+    if [ "$REBOOT_NEEDED" != "true" ] && [ "$NVSHMEM_USE_GDRCOPY" != "1" ]; then
+        if ! grep -q "PeerMappingOverride=1" /proc/driver/nvidia/params 2>/dev/null; then
+            REBOOT_NEEDED=true
+            log_warn "PeerMappingOverride not set in driver params, reboot required"
+        fi
+    fi
+
+    # Check gdrdrv if using GDRCopy
+    if [ "$REBOOT_NEEDED" != "true" ] && [ "$NVSHMEM_USE_GDRCOPY" == "1" ] && ! lsmod | grep -q gdrdrv; then
         REBOOT_NEEDED=true
         log_warn "gdrdrv module not loaded, reboot required"
     fi
@@ -256,7 +287,12 @@ check_reboot_needed() {
         fi
     fi
 
+    # Show current status
     log_info "All required modules are loaded correctly"
+    nvidia-smi --query-gpu=name,driver_version --format=csv,noheader | head -1
+    if [ "$NVSHMEM_USE_GDRCOPY" != "1" ]; then
+        log_info "PeerMappingOverride status: $(grep 'PeerMappingOverride' /proc/driver/nvidia/params 2>/dev/null || echo 'N/A')"
+    fi
 }
 
 # ============================================================================
@@ -286,11 +322,12 @@ install_nvshmem() {
     rm -rf "$BUILD_DIR"
     mkdir -p "$BUILD_DIR"
 
-    # Download NVSHMEM 3.4.5 from GitHub (more stable than 3.5.x for DeepEP)
-    wget -q https://github.com/NVIDIA/nvshmem/archive/refs/tags/v3.4.5-0.tar.gz \
+    # Download pinned NVSHMEM version from GitHub
+    log_info "Downloading NVSHMEM ${NVSHMEM_VERSION}..."
+    wget -q "https://github.com/NVIDIA/nvshmem/archive/refs/tags/v${NVSHMEM_VERSION}.tar.gz" \
         -O "${BUILD_DIR}/nvshmem_src.tar.gz"
     tar -xf "${BUILD_DIR}/nvshmem_src.tar.gz" -C "$BUILD_DIR"
-    cd "${BUILD_DIR}/nvshmem-3.4.5-0"
+    cd "${BUILD_DIR}/nvshmem-${NVSHMEM_VERSION}"
 
     # Apply fix for GitHub Issue #21: Uninitialized ah_attr in RoCE environments
     # https://github.com/NVIDIA/nvshmem/issues/21
@@ -346,43 +383,84 @@ verify_nvshmem() {
 }
 
 # ============================================================================
-# Step 9: Build and Install DeepEP
+# Step 9: Install PyTorch (required before DeepEP)
+# ============================================================================
+install_pytorch() {
+    log_info "Checking PyTorch installation..."
+
+    if python3 -c "import torch; print(f'PyTorch {torch.__version__}')" 2>/dev/null; then
+        log_info "PyTorch is already installed"
+        return 0
+    fi
+
+    log_info "Installing PyTorch with CUDA 13.0 support..."
+    pip3 install torch torchvision torchaudio \
+        --index-url https://download.pytorch.org/whl/cu130 \
+        --break-system-packages
+
+    # Verify installation
+    if ! python3 -c "import torch" &> /dev/null; then
+        log_error "Failed to install PyTorch"
+    fi
+
+    log_info "PyTorch installation complete: $(python3 -c 'import torch; print(torch.__version__)')"
+}
+
+# ============================================================================
+# Step 10: Build and Install DeepEP
 # ============================================================================
 install_deepep() {
     log_info "Checking DeepEP installation..."
+
+    # Set LD_LIBRARY_PATH for import check
+    export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${LD_LIBRARY_PATH}
 
     if python3 -c "import deep_ep" &> /dev/null; then
         log_info "DeepEP is already installed"
         return 0
     fi
 
-    log_info "Installing DeepEP..."
+    log_info "Installing DeepEP ${DEEPEP_VERSION}..."
 
-    # Install PyTorch
-    pip3 install torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/cu130 \
-        --break-system-packages
-
-    # Build DeepEP
+    # Clone DeepEP and checkout pinned version
     local BUILD_DIR="/tmp/deepep_build"
     rm -rf "$BUILD_DIR"
     git clone https://github.com/deepseek-ai/DeepEP.git "$BUILD_DIR"
     cd "$BUILD_DIR"
+    git checkout "$DEEPEP_VERSION"
+    log_info "Checked out DeepEP version: $(git describe --tags --always)"
 
-    # Fix: Add CCCL include path for libcudacxx headers (cuda/std/tuple etc.)
-    # NVSHMEM 3.4.5 requires libcudacxx headers which are in CUDA's cccl directory
+    # ==========================================================================
+    # Fix: Add CCCL include path for libcudacxx headers
+    # ==========================================================================
+    # Problem: NVSHMEM 3.4.5 headers include libcudacxx (e.g., <cuda/std/tuple>)
+    #          which are located in CUDA's CCCL (CUDA C++ Core Libraries) directory.
+    #          DeepEP's setup.py doesn't include this path, causing compilation errors:
+    #            fatal error: cuda/std/tuple: No such file or directory
+    #
+    # Solution: Patch setup.py to add ${CUDA_HOME}/include/cccl to include_dirs
+    #
+    # Reference: CUDA 12.0+ ships CCCL (libcudacxx, CUB, Thrust) in include/cccl/
+    # ==========================================================================
     log_info "Patching DeepEP setup.py to add CCCL include path..."
     sed -i "s|include_dirs = \['csrc/'\]|cuda_home = os.getenv('CUDA_HOME', '/usr/local/cuda')\n    include_dirs = ['csrc/', f'{cuda_home}/include/cccl']  # cccl for libcudacxx headers|" setup.py
 
-    export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${NVSHMEM_HOME}/lib:${LD_LIBRARY_PATH}
-
-    TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST" NVSHMEM_DIR="$NVSHMEM_HOME" \
+    # Build with all required environment variables
+    CUDA_HOME="$CUDA_HOME" \
+    TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST" \
+    NVSHMEM_DIR="$NVSHMEM_HOME" \
+    LD_LIBRARY_PATH="${NVSHMEM_HOME}/lib:${LD_LIBRARY_PATH}" \
         python3 setup.py build
 
-    ln -sf build/lib.linux-x86_64-cpython-312/deep_ep_cpp.cpython-312-x86_64-linux-gnu.so
-
-    TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST" NVSHMEM_DIR="$NVSHMEM_HOME" \
+    # Install
+    CUDA_HOME="$CUDA_HOME" \
+    TORCH_CUDA_ARCH_LIST="$TORCH_CUDA_ARCH_LIST" \
+    NVSHMEM_DIR="$NVSHMEM_HOME" \
+    LD_LIBRARY_PATH="${NVSHMEM_HOME}/lib:${LD_LIBRARY_PATH}" \
         python3 setup.py install
+
+    # Cleanup
+    rm -rf "$BUILD_DIR"
 
     # Verify installation
     if ! python3 -c "import deep_ep" &> /dev/null; then
@@ -420,6 +498,7 @@ main() {
     check_reboot_needed
     install_nvshmem
     verify_nvshmem
+    install_pytorch
     install_deepep
 
     log_info "============================================"
