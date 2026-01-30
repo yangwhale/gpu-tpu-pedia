@@ -12,9 +12,10 @@
 #   --github-token <TOKEN>   GitHub Personal Access Token
 #   --github-user <USER>     GitHub Username
 #   --jina-key <KEY>         Jina AI API Key
-#   --skip-auth              Skip gcloud auth (assume already authenticated)
-#   --yes, -y                Auto-confirm all prompts
+#   --yes, -y                Auto-confirm prompts (skip optional params, use current gcloud project)
 #   --help, -h               Show this help message
+#
+# Note: On GCE VMs, uses --no-launch-browser for gcloud auth
 #
 # Example:
 #   ./install-claude-code.sh --project-id my-project --github-token ghp_xxx --github-user myuser -y
@@ -30,7 +31,6 @@ CONTEXT7_API_KEY=""
 GITHUB_TOKEN=""
 GITHUB_USERNAME=""
 JINA_API_KEY=""
-SKIP_AUTH=false
 AUTO_YES=false
 
 show_help() {
@@ -59,10 +59,6 @@ while [[ $# -gt 0 ]]; do
         --jina-key)
             JINA_API_KEY="$2"
             shift 2
-            ;;
-        --skip-auth)
-            SKIP_AUTH=true
-            shift
             ;;
         --yes|-y)
             AUTO_YES=true
@@ -221,36 +217,46 @@ else
     # 检查 application-default credentials 是否存在
     ADC_FILE="$HOME/.config/gcloud/application_default_credentials.json"
     
-    if [ "$SKIP_AUTH" = true ]; then
-        info "跳过 gcloud 认证 (--skip-auth)"
-    elif [ -f "$ADC_FILE" ]; then
+    # 检测是否在 GCE 环境
+    IS_GCE=false
+    if curl -s -H "Metadata-Flavor: Google" http://169.254.169.254/computeMetadata/v1/ &>/dev/null; then
+        IS_GCE=true
+    fi
+
+    # gcloud auth 辅助函数
+    do_gcloud_auth() {
+        if [ "$IS_GCE" = true ]; then
+            info "检测到 GCE 环境，使用 --no-launch-browser 模式..."
+            echo -e "${YELLOW}请在浏览器中打开下方 URL 完成认证，然后粘贴返回的 code:${NC}"
+            gcloud auth application-default login --no-launch-browser
+        else
+            gcloud auth application-default login
+        fi
+    }
+
+    if [ -f "$ADC_FILE" ]; then
         success "已检测到 Application Default Credentials"
         if [ "$AUTO_YES" = false ]; then
             echo -e "${YELLOW}是否需要重新登录? (y/N):${NC}"
             read -p "> " REAUTH
             if [[ "$REAUTH" =~ ^[Yy]$ ]]; then
                 info "执行 gcloud auth application-default login..."
-                gcloud auth application-default login
+                do_gcloud_auth
             fi
         fi
     else
         warn "未检测到 Application Default Credentials"
-        if [ "$AUTO_YES" = true ]; then
-            info "自动模式：跳过 gcloud 认证"
-        else
-            echo -e "${YELLOW}是否现在执行 gcloud auth application-default login? (Y/n):${NC}"
-            read -p "> " DO_AUTH
-            if [[ ! "$DO_AUTH" =~ ^[Nn]$ ]]; then
-                info "执行 gcloud auth application-default login..."
-                gcloud auth application-default login
-                if [ $? -eq 0 ]; then
-                    success "Google Cloud 认证成功！"
-                else
-                    warn "认证失败，请稍后手动执行: gcloud auth application-default login"
-                fi
+        echo -e "${YELLOW}是否现在执行 gcloud auth application-default login? (Y/n):${NC}"
+        read -p "> " DO_AUTH
+        if [[ ! "$DO_AUTH" =~ ^[Nn]$ ]]; then
+            info "执行 gcloud auth application-default login..."
+            if do_gcloud_auth; then
+                success "Google Cloud 认证成功！"
             else
-                warn "跳过认证，请稍后手动执行: gcloud auth application-default login"
+                warn "认证失败，请稍后手动执行: gcloud auth application-default login"
             fi
+        else
+            warn "跳过认证，请稍后手动执行: gcloud auth application-default login"
         fi
     fi
     
