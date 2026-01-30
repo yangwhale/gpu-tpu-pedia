@@ -1,6 +1,6 @@
 ---
 name: deepep-installer
-description: This skill should be used when users need to install, configure, or troubleshoot DeepEP (DeepSeek Expert Parallelism) on NVIDIA GPU systems. It covers the complete installation workflow including CUDA, gdrcopy, NVSHMEM with IBGDA support, and DeepEP itself. The skill is particularly useful for B200/H100/A100 GPUs with RoCE/InfiniBand networking, and includes comprehensive debugging capabilities for common installation failures.
+description: This skill should be used when users need to install, configure, or troubleshoot DeepEP (DeepSeek Expert Parallelism) on NVIDIA GPU systems. It covers the complete installation workflow including CUDA, NVSHMEM with IBGDA support, and DeepEP itself. The skill is particularly useful for B200/H100/A100 GPUs with RoCE/InfiniBand networking, and includes comprehensive debugging capabilities for common installation failures.
 ---
 
 # DeepEP Installer
@@ -22,7 +22,7 @@ Before installation, assess the system environment:
 ### Required Components
 - **NVIDIA GPU**: B200, H100, A100, or compatible GPU
 - **NVIDIA Driver**: Version 550+ (580+ recommended for B200)
-- **CUDA Toolkit**: 12.x (12.9 recommended)
+- **CUDA Toolkit**: 13.0 (recommended for B200)
 - **RDMA Network**: RoCE or InfiniBand with mlx5 driver
 - **Python**: 3.10+ with PyTorch
 
@@ -47,7 +47,7 @@ ibv_devinfo                        # Fallback
 ls /sys/class/infiniband/          # Last resort
 
 # Check kernel modules
-lsmod | grep -E "gdrdrv|nvidia_peermem|mlx5"
+lsmod | grep -E "nvidia_peermem|mlx5"
 ```
 
 ### Important Notes
@@ -64,8 +64,10 @@ lsmod | grep -E "gdrdrv|nvidia_peermem|mlx5"
 The installation follows this order (dependencies must be installed sequentially):
 
 ```
-1. CUDA Toolkit → 2. gdrcopy → 3. NVSHMEM → 4. DeepEP
+1. CUDA Toolkit → 2. PeerMappingOverride → 3. NVSHMEM → 4. DeepEP
 ```
+
+**Note:** gdrcopy is **optional** and disabled by default. We use `PeerMappingOverride=1` instead, which is simpler and sufficient for most use cases.
 
 ### Step 1: CUDA Toolkit
 
@@ -78,63 +80,33 @@ dpkg -i cuda-keyring_1.1-1_all.deb
 apt-get update
 
 # Install toolkit only (no driver)
-apt-get install -y cuda-toolkit-12-9
+apt-get install -y cuda-toolkit-13-0
 
 # Set environment
-export CUDA_HOME=/usr/local/cuda-12.9
-ln -s /usr/local/cuda-12.9 /usr/local/cuda  # if not exists
+export CUDA_HOME=/usr/local/cuda-13.0
+ln -s /usr/local/cuda-13.0 /usr/local/cuda  # if not exists
 ```
 
-### Step 2: gdrcopy
+### Step 2: Configure PeerMappingOverride
 
-gdrcopy provides GPU Direct copy functionality with the gdrdrv kernel module.
-
-**IMPORTANT**: gdrcopy supports newer kernels (including 6.14+) but requires correct build procedure. The build system includes detection scripts that automatically handle kernel API differences.
+PeerMappingOverride enables GPU-to-GPU P2P memory access, required for NVSHMEM IBGDA.
 
 ```bash
-# Install dependencies
-apt-get install -y build-essential devscripts debhelper fakeroot pkg-config dkms git
+# Create nvidia module options file
+cat > /etc/modprobe.d/nvidia-peermem.conf << 'EOF'
+options nvidia NVreg_PeerMappingOverride=1
+EOF
 
-# Get NVIDIA kernel source for nv-p2p.h (CRITICAL for kernel module build)
-# Match the version to your installed driver (check with: nvidia-smi | grep Driver)
-apt-get install -y nvidia-kernel-source-580-server  # For driver 580.x
+# Reload nvidia module (or reboot)
+# Note: This may disconnect GPU processes, so do it when GPU is idle
+rmmod nvidia_uvm nvidia_drm nvidia_modeset nvidia 2>/dev/null || true
+modprobe nvidia
+modprobe nvidia_uvm
 
-# Find NVIDIA source directory
-NVIDIA_SRC_DIR=$(find /usr/src -name "nv-p2p.h" -printf "%h" -quit 2>/dev/null)
-echo "Using NVIDIA_SRC_DIR: $NVIDIA_SRC_DIR"
-
-# Clone gdrcopy (use latest main branch for best kernel compatibility)
-git clone --depth 1 https://github.com/NVIDIA/gdrcopy.git /tmp/gdrcopy
-cd /tmp/gdrcopy
-
-# Build library first
-make -j$(nproc)
-mkdir -p /opt/deepep/gdrcopy
-make prefix=/opt/deepep/gdrcopy CUDA=$CUDA_HOME install
-
-# Build kernel module - MUST run from project root directory!
-# This runs detection scripts that set HAVE_VM_FLAGS_SET and HAVE_PROC_OPS
-export NVIDIA_SRC_DIR="$NVIDIA_SRC_DIR"
-make driver
-
-# Install kernel module
-sudo insmod src/gdrdrv/gdrdrv.ko
-
-# Copy library to system path for easy linking
-cp src/libgdrapi.so.2.5 /usr/lib/x86_64-linux-gnu/
-ln -sf /usr/lib/x86_64-linux-gnu/libgdrapi.so.2.5 /usr/lib/x86_64-linux-gnu/libgdrapi.so.2
-ln -sf /usr/lib/x86_64-linux-gnu/libgdrapi.so.2 /usr/lib/x86_64-linux-gnu/libgdrapi.so
-ldconfig
-
-# Verify
-lsmod | grep gdrdrv  # Should show gdrdrv module
+# Verify PeerMappingOverride is enabled
+grep PeerMappingOverride /proc/driver/nvidia/params
+# Should show: PeerMappingOverride: 1
 ```
-
-**Notes:**
-- Use latest `main` branch instead of v2.5.1 for better kernel compatibility
-- Always run `make driver` from the project root (`/tmp/gdrcopy`), NOT from `src/gdrdrv/`
-- The module is NOT persistent across reboots - see "Reloading gdrdrv after reboot" section
-- gdrdrv is optional for single-node NVLink communication; IBGDA handles cross-node RDMA
 
 ### Step 3: NVSHMEM with IBGDA
 
@@ -152,13 +124,12 @@ tar -xf nvshmem_src_3.2.5-1.txz
 cd nvshmem_src
 
 # IMPORTANT: Must set CUDACXX explicitly, otherwise cmake cannot find nvcc
-export CUDACXX=/usr/local/cuda-12.9/bin/nvcc
+export CUDACXX=/usr/local/cuda-13.0/bin/nvcc
 
 CUDA_HOME=$CUDA_HOME \
 CUDACXX=$CUDACXX \
-GDRCOPY_HOME=/opt/deepep/gdrcopy \
 NVSHMEM_IBGDA_SUPPORT=1 \
-NVSHMEM_USE_GDRCOPY=1 \
+NVSHMEM_USE_GDRCOPY=0 \
 NVSHMEM_SHMEM_SUPPORT=0 \
 NVSHMEM_UCX_SUPPORT=0 \
 NVSHMEM_USE_NCCL=0 \
@@ -169,6 +140,7 @@ cmake -GNinja -S . -B build/ \
     -DCMAKE_CUDA_ARCHITECTURES=100 \
     -DNVSHMEM_BUILD_EXAMPLES=OFF
 # CUDA arch: 100 for B200, 90 for H100, 80 for A100
+# Note: NVSHMEM_USE_GDRCOPY=0 uses PeerMappingOverride instead (simpler setup)
 
 # Use sudo for installation to /opt
 sudo cmake --build build/ --target install
@@ -183,14 +155,14 @@ sudo cmake --build build/ --target install
 # Ensure libcuda.so exists
 ln -sf /usr/lib/x86_64-linux-gnu/libcuda.so.1 /usr/lib/x86_64-linux-gnu/libcuda.so
 
-# Install PyTorch
-pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu129
+# Install PyTorch with CUDA 13.0 support (nightly)
+pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/nightly/cu130
 
 # Clone and build DeepEP
 git clone https://github.com/deepseek-ai/DeepEP.git /tmp/deepep_build
 cd /tmp/deepep_build
 
-export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:/opt/deepep/gdrcopy/lib:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:$LD_LIBRARY_PATH
 export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$CUDA_HOME/lib64/stubs:$LIBRARY_PATH
 
 TORCH_CUDA_ARCH_LIST="10.0" NVSHMEM_DIR=/opt/deepep/nvshmem python3 setup.py install
@@ -218,9 +190,9 @@ echo $CUDA_HOME
 ```
 
 **Solutions:**
-1. Install CUDA toolkit: `apt-get install cuda-toolkit-12-9`
-2. Set environment: `export CUDA_HOME=/usr/local/cuda-12.9`
-3. Create symlink: `ln -s /usr/local/cuda-12.9 /usr/local/cuda`
+1. Install CUDA toolkit: `apt-get install cuda-toolkit-13-0`
+2. Set environment: `export CUDA_HOME=/usr/local/cuda-13.0`
+3. Create symlink: `ln -s /usr/local/cuda-13.0 /usr/local/cuda`
 
 ---
 
@@ -453,9 +425,12 @@ lsmod | grep gdrdrv  # Verify loaded
 ### Module Verification
 
 ```bash
-# Required modules
-lsmod | grep gdrdrv         # Optional but recommended
-lsmod | grep mlx5_core      # For RDMA
+# Check PeerMappingOverride
+grep PeerMappingOverride /proc/driver/nvidia/params
+# Should show: PeerMappingOverride: 1
+
+# Check RDMA
+lsmod | grep mlx5_core
 
 # NVSHMEM IBGDA check
 /opt/deepep/nvshmem/bin/nvshmem-info -a | grep "NVSHMEM_IBGDA_SUPPORT=ON"
@@ -464,7 +439,7 @@ lsmod | grep mlx5_core      # For RDMA
 ### DeepEP Intranode Test
 
 ```bash
-export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:/opt/deepep/gdrcopy/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
 cd /tmp/deepep_build
 
@@ -491,17 +466,15 @@ python3 tests/test_intranode.py --num-processes 8
 # Required
 export CUDA_HOME=/usr/local/cuda
 export NVSHMEM_HOME=/opt/deepep/nvshmem
-export GDRCOPY_HOME=/opt/deepep/gdrcopy
 
 # Runtime
-export LD_LIBRARY_PATH=$NVSHMEM_HOME/lib:$GDRCOPY_HOME/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
+export LD_LIBRARY_PATH=$NVSHMEM_HOME/lib:/usr/lib/x86_64-linux-gnu:$LD_LIBRARY_PATH
 
 # Build-time
 export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$CUDA_HOME/lib64/stubs:$LIBRARY_PATH
 
 # NVSHMEM options
 export NVSHMEM_IBGDA_SUPPORT=1
-export NVSHMEM_USE_GDRCOPY=1
 
 # CUDA architecture (set during build)
 # B200: TORCH_CUDA_ARCH_LIST="10.0"
@@ -521,7 +494,6 @@ cat > /opt/deepep/env.sh << 'EOF'
 
 export CUDA_HOME=/usr/local/cuda
 export PATH=$CUDA_HOME/bin:$PATH
-export GDRCOPY_HOME=/opt/deepep/gdrcopy
 export NVSHMEM_HOME=/opt/deepep/nvshmem
 export NVSHMEM_DIR=/opt/deepep/nvshmem
 
@@ -534,14 +506,13 @@ for d in $HOME/.local/lib/python3.*/site-packages/nvidia/*/lib; do
     [ -d "$d" ] && NVIDIA_LIB_PATHS="${d}:${NVIDIA_LIB_PATHS}"
 done
 
-export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:${CUDA_HOME}/lib64:${NVIDIA_LIB_PATHS}${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${CUDA_HOME}/lib64:${NVIDIA_LIB_PATHS}${LD_LIBRARY_PATH}
 
 # HuggingFace cache on LSSD (if available)
 [ -d /lssd/huggingface ] && export HF_HOME=/lssd/huggingface
 
 echo "DeepEP environment loaded"
 echo "  NVSHMEM_HOME: $NVSHMEM_HOME"
-echo "  GDRCOPY_HOME: $GDRCOPY_HOME"
 EOF
 
 chmod +x /opt/deepep/env.sh
@@ -606,8 +577,8 @@ cd /tmp/deepep_build  # or wherever DeepEP was cloned
 rm -rf build/ dist/ *.egg-info
 rm -rf ~/.local/lib/python3.12/site-packages/deep_ep-*.egg
 
-export CUDA_HOME=/usr/local/cuda-12.9
-export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:/opt/deepep/gdrcopy/lib:$LD_LIBRARY_PATH
+export CUDA_HOME=/usr/local/cuda-13.0
+export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:$LD_LIBRARY_PATH
 export LIBRARY_PATH=/usr/lib/x86_64-linux-gnu:$CUDA_HOME/lib64/stubs:$LIBRARY_PATH
 
 TORCH_CUDA_ARCH_LIST="10.0" NVSHMEM_DIR=/opt/deepep/nvshmem python3 setup.py install --user
@@ -636,10 +607,10 @@ If it fails with ABI errors, recompile DeepEP as shown above.
 
 | Framework | PyTorch Version | Notes |
 |-----------|-----------------|-------|
-| DeepEP (initial) | 2.10.0+cu129 | From pip install torch |
-| SGLang 0.5.8 | 2.9.1+cu129 | May be different |
-| vLLM 0.14.1 | 2.9.1+cu129 | Pins this version |
-| **Final (after vLLM)** | **2.9.1+cu129** | DeepEP needs recompile |
+| DeepEP (initial) | nightly+cu130 | From pip install torch (nightly for CUDA 13.0) |
+| SGLang 0.5.8 | 2.9.1+cu126 | May be different |
+| vLLM 0.14.1 | 2.9.1+cu126 | Pins this version |
+| **Final (after vLLM)** | **2.9.1+cu126** | DeepEP needs recompile |
 
 ## Unified Environment Script
 
@@ -652,6 +623,12 @@ source /opt/deepep/unified-env.sh
 This script is automatically created and includes all necessary paths for DeepEP, SGLang, and vLLM.
 
 ## Version History
+
+- **2026-01-30**: Simplified installation - removed gdrcopy, updated to CUDA 13.0
+  - **CHANGE**: Removed gdrcopy from default installation, using PeerMappingOverride instead
+  - **CHANGE**: CUDA Toolkit version changed from 12.9 to 13.0
+  - **CHANGE**: PyTorch wheel changed to nightly/cu130 for native CUDA 13.0 support
+  - **NOTE**: Installation is now simpler: CUDA → PeerMappingOverride → NVSHMEM → DeepEP
 
 - **2026-01-29**: Fixed gdrdrv kernel 6.14+ compatibility
   - **ROOT CAUSE**: gdrdrv supports 6.14+ kernels, but must be built from project root directory
