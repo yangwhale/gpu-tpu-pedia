@@ -73,9 +73,22 @@ check_root() {
 install_doca_ofed() {
     log_info "Checking RDMA/OFED installation..."
 
-    # Check if RDMA is already available (GCP pre-installs RDMA drivers)
+    # Check if mlx5 kernel modules are already loaded (cloud providers pre-install RDMA)
+    if lsmod | grep -q mlx5_ib; then
+        log_info "mlx5_ib kernel module already loaded (pre-installed by cloud provider or system)"
+        if command -v ibv_devinfo &> /dev/null && ibv_devinfo 2>/dev/null | grep -q "PORT_ACTIVE"; then
+            log_info "RDMA devices are active:"
+            ibv_devinfo 2>/dev/null | grep -E "hca_id|link_layer|state" | head -12
+        fi
+        if command -v ofed_info &> /dev/null; then
+            log_info "OFED version: $(ofed_info -s)"
+        fi
+        return 0
+    fi
+
+    # Check if RDMA is already available via ibverbs
     if command -v ibv_devinfo &> /dev/null && ibv_devinfo 2>/dev/null | grep -q "PORT_ACTIVE"; then
-        log_info "RDMA is already available (pre-installed by cloud provider)"
+        log_info "RDMA is already available"
         ibv_devinfo 2>/dev/null | grep -E "hca_id|link_layer|state" | head -12
         return 0
     fi
@@ -85,14 +98,20 @@ install_doca_ofed() {
         return 0
     fi
 
-    log_info "Installing DOCA OFED..."
+    log_info "Installing DOCA OFED 3.2.1 LTS..."
     pushd /tmp > /dev/null
 
-    wget -q https://www.mellanox.com/downloads/DOCA/DOCA_v3.0.0/host/doca-host_3.0.0-058000-25.04-ubuntu2404_amd64.deb
-    dpkg -i doca-host_3.0.0-058000-25.04-ubuntu2404_amd64.deb
-    apt-get update -y -qq && apt-get -y install doca-ofed
+    # Add DOCA 3.2.1 LTS apt repository
+    wget -qO - https://linux.mellanox.com/public/keys/GPG-KEY-Mellanox.pub | \
+        gpg --dearmor -o /usr/share/keyrings/GPG-KEY-Mellanox.gpg
 
-    rm -f doca-host_3.0.0-058000-25.04-ubuntu2404_amd64.deb
+    cat > /etc/apt/sources.list.d/doca.list << EOF
+deb [signed-by=/usr/share/keyrings/GPG-KEY-Mellanox.gpg] https://linux.mellanox.com/public/repo/doca/3.2.1/ubuntu24.04/x86_64/ ./
+EOF
+
+    apt-get update -y -qq
+    apt-get -y install doca-ofed
+
     popd > /dev/null
 
     log_info "DOCA OFED installed: $(ofed_info -s)"
@@ -116,8 +135,9 @@ install_gpu_driver_cuda() {
     wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
     dpkg -i cuda-keyring_1.1-1_all.deb
     apt-get update -y
+    # Use driver branch 580 for reproducibility (580.126.09)
     apt-get install -y nvidia-open-580
-    apt-get install -y cuda-toolkit-12-9
+    apt-get install -y cuda-toolkit-13-0
 
     rm -f cuda-keyring_1.1-1_all.deb
     popd > /dev/null
@@ -273,10 +293,18 @@ install_nvshmem() {
 
     # Apply fix for GitHub Issue #21: Uninitialized ah_attr in RoCE environments
     # https://github.com/NVIDIA/nvshmem/issues/21
-    # This fix is from commit 4c8e2bad83b14c35d9e8e3f76990de371d57244d
+    # This fix initializes ah_attr to zero before use, fixing EINVAL on RoCE
+    # The fix targets ibgda_setup_cq_and_qp() function in ibgda.cpp
     log_info "Applying RoCE fix (Issue #21) to NVSHMEM..."
-    sed -i '/struct ibv_ah_attr ah_attr;/a\    memset(\&ah_attr, 0, sizeof(ah_attr));' \
-        src/modules/transport/ibgda/ibgda.cpp
+    local IBGDA_FILE="src/modules/transport/ibgda/ibgda.cpp"
+    if grep -q "memset.*ah_attr.*sizeof" "$IBGDA_FILE" 2>/dev/null; then
+        log_info "RoCE fix already applied, skipping..."
+    else
+        # Insert memset after the ah_attr declaration in ibgda_setup_cq_and_qp()
+        sed -i '/^[[:space:]]*struct ibv_ah_attr ah_attr;$/a\    memset(\&ah_attr, 0, sizeof(ah_attr));' \
+            "$IBGDA_FILE"
+        log_info "RoCE fix applied successfully"
+    fi
 
     CUDA_HOME="$CUDA_HOME" \
     NVSHMEM_SHMEM_SUPPORT=0 NVSHMEM_UCX_SUPPORT=0 NVSHMEM_USE_NCCL=0 \
@@ -331,7 +359,7 @@ install_deepep() {
 
     # Install PyTorch
     pip3 install torch torchvision torchaudio \
-        --index-url https://download.pytorch.org/whl/cu129 \
+        --index-url https://download.pytorch.org/whl/cu130 \
         --break-system-packages
 
     # Build DeepEP
