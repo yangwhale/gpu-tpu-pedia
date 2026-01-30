@@ -23,6 +23,22 @@ This skill enables parallel SSH operations across multiple hosts for distributed
 ~/.ssh/google_compute_engine
 ```
 
+### Step 0: Ensure SSH Key Exists (IMPORTANT)
+Before running any SSH commands, ALWAYS check if the key file exists. If not, generate it using gcloud:
+
+```bash
+# Check if key exists
+if [ ! -f ~/.ssh/google_compute_engine ]; then
+    echo "SSH key not found, generating via gcloud..."
+    gcloud compute config-ssh --quiet
+fi
+```
+
+This command:
+1. Generates `~/.ssh/google_compute_engine` (private key) and `~/.ssh/google_compute_engine.pub` (public key)
+2. Uploads the public key to the GCP project metadata
+3. Configures SSH aliases for all instances in the project
+
 ### SSH Command Format
 ```bash
 ssh -i ~/.ssh/google_compute_engine -o StrictHostKeyChecking=accept-new <IP> "<command>"
@@ -164,13 +180,32 @@ export MASTER_PORT=29500
 
 ## Troubleshooting
 
+### SSH Key Not Found
+If you see "Identity file not accessible" or "No such file or directory":
+```bash
+# Generate SSH key using gcloud (recommended for GCE)
+gcloud compute config-ssh --quiet
+
+# This creates ~/.ssh/google_compute_engine and uploads public key to project metadata
+```
+
 ### SSH Connection Refused
 - Check if SSH service is running on target
 - Verify network connectivity: `ping <IP>`
 
-### Permission Denied
-- Verify key file exists: `ls -la ~/.ssh/google_compute_engine`
-- Check key permissions: `chmod 600 ~/.ssh/google_compute_engine`
+### Permission Denied (publickey)
+1. First, check if key exists:
+   ```bash
+   ls -la ~/.ssh/google_compute_engine
+   ```
+2. If not exists, generate it:
+   ```bash
+   gcloud compute config-ssh --quiet
+   ```
+3. If exists but still fails, verify key is uploaded to project:
+   ```bash
+   gcloud compute project-info describe --format="value(commonInstanceMetadata.items.filter(key:ssh-keys))"
+   ```
 
 ### Command Timeout
 - Use `nohup` for long-running processes
