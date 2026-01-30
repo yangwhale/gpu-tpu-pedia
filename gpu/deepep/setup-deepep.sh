@@ -394,9 +394,19 @@ install_pytorch() {
     fi
 
     log_info "Installing PyTorch with CUDA 13.0 support..."
-    pip3 install torch torchvision torchaudio \
+
+    # Try stable release first, fallback to nightly if not available
+    # Note: CUDA 13.0 stable wheels may not be released yet
+    if pip3 install torch torchvision torchaudio \
         --index-url https://download.pytorch.org/whl/cu130 \
-        --break-system-packages
+        --break-system-packages 2>/dev/null; then
+        log_info "Installed PyTorch from stable release"
+    else
+        log_warn "Stable release not available, trying nightly..."
+        pip3 install torch torchvision torchaudio \
+            --index-url https://download.pytorch.org/whl/nightly/cu130 \
+            --break-system-packages
+    fi
 
     # Verify installation
     if ! python3 -c "import torch" &> /dev/null; then
