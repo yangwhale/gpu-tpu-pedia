@@ -23,7 +23,7 @@ set -e
 export NVSHMEM_IBGDA_SUPPORT=1
 export NVSHMEM_USE_GDRCOPY=0  # Disabled: using traditional IBGDA with PeerMappingOverride
 export NVSHMEM_HOME=/opt/deepep/nvshmem
-export USE_NVPEERMEM=1
+export USE_NVPEERMEM=0  # Disabled: using PeerMappingOverride instead of nvidia_peermem
 export CUDA_HOME=/usr/local/cuda
 
 # GPU Architecture (change based on your GPU)
@@ -278,7 +278,8 @@ install_nvshmem() {
     apt-get install -y -qq --no-install-recommends \
         python3-venv python3-pip ninja-build cmake \
         python3.12-dev python3.12 \
-        build-essential devscripts debhelper dkms git
+        build-essential devscripts debhelper dkms git \
+        rdma-core libibverbs-dev librdmacm-dev  # Required for IBGDA MLX5 support
 
     # Build NVSHMEM
     local BUILD_DIR="/tmp/nvshmem_build_src"
@@ -367,6 +368,11 @@ install_deepep() {
     rm -rf "$BUILD_DIR"
     git clone https://github.com/deepseek-ai/DeepEP.git "$BUILD_DIR"
     cd "$BUILD_DIR"
+
+    # Fix: Add CCCL include path for libcudacxx headers (cuda/std/tuple etc.)
+    # NVSHMEM 3.4.5 requires libcudacxx headers which are in CUDA's cccl directory
+    log_info "Patching DeepEP setup.py to add CCCL include path..."
+    sed -i "s|include_dirs = \['csrc/'\]|cuda_home = os.getenv('CUDA_HOME', '/usr/local/cuda')\n    include_dirs = ['csrc/', f'{cuda_home}/include/cccl']  # cccl for libcudacxx headers|" setup.py
 
     export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:${NVSHMEM_HOME}/lib:${LD_LIBRARY_PATH}
 
