@@ -202,10 +202,24 @@ else
         
         # 询问 GitHub Personal Access Token (可选)
         echo ""
-        echo -e "${YELLOW}请输入 GitHub Personal Access Token (用于 GitHub 插件，可选，直接回车跳过):${NC}"
+        echo -e "${YELLOW}请输入 GitHub Personal Access Token (用于 GitHub 插件和 git push，可选，直接回车跳过):${NC}"
         echo -e "${BLUE}获取地址: https://github.com/settings/tokens${NC}"
         echo -e "${BLUE}需要权限: repo, read:org, read:user${NC}"
         read -p "> " GITHUB_TOKEN
+
+        # 询问 GitHub 用户名 (如果提供了 token)
+        if [ -n "$GITHUB_TOKEN" ]; then
+            echo -e "${YELLOW}请输入 GitHub 用户名 (用于 git push):${NC}"
+            read -p "> " GITHUB_USERNAME
+
+            # 保存到 git credentials
+            if [ -n "$GITHUB_USERNAME" ]; then
+                git config --global credential.helper store
+                echo "https://${GITHUB_USERNAME}:${GITHUB_TOKEN}@github.com" > ~/.git-credentials
+                chmod 600 ~/.git-credentials
+                success "GitHub token 已保存到 git credentials (用于 git push)"
+            fi
+        fi
 
         # 询问 Jina AI API Key (可选)
         echo ""
@@ -228,7 +242,10 @@ else
                 success "已配置 Context7 API Key"
             fi
             if [ -n "$GITHUB_TOKEN" ]; then
-                success "已配置 GitHub Token"
+                success "已配置 GitHub Token (Claude 插件)"
+                if [ -n "$GITHUB_USERNAME" ]; then
+                    success "已配置 Git Credentials (git push)"
+                fi
             fi
         else
             warn "未找到配置模板: $CONFIG_DIR/settings.template.json"
