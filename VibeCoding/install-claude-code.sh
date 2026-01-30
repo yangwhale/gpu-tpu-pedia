@@ -2,9 +2,82 @@
 # =============================================================================
 # Claude Code 安装脚本
 # 适用于 Linux/macOS 系统
+#
+# Usage:
+#   ./install-claude-code.sh [OPTIONS]
+#
+# Options:
+#   --project-id <ID>        Google Cloud Project ID
+#   --context7-key <KEY>     Context7 API Key
+#   --github-token <TOKEN>   GitHub Personal Access Token
+#   --github-user <USER>     GitHub Username
+#   --jina-key <KEY>         Jina AI API Key
+#   --skip-auth              Skip gcloud auth (assume already authenticated)
+#   --yes, -y                Auto-confirm all prompts
+#   --help, -h               Show this help message
+#
+# Example:
+#   ./install-claude-code.sh --project-id my-project --github-token ghp_xxx --github-user myuser -y
 # =============================================================================
 
 set -e
+
+# =============================================================================
+# 命令行参数解析
+# =============================================================================
+PROJECT_ID=""
+CONTEXT7_API_KEY=""
+GITHUB_TOKEN=""
+GITHUB_USERNAME=""
+JINA_API_KEY=""
+SKIP_AUTH=false
+AUTO_YES=false
+
+show_help() {
+    head -20 "$0" | tail -18 | sed 's/^# //' | sed 's/^#//'
+    exit 0
+}
+
+while [[ $# -gt 0 ]]; do
+    case $1 in
+        --project-id)
+            PROJECT_ID="$2"
+            shift 2
+            ;;
+        --context7-key)
+            CONTEXT7_API_KEY="$2"
+            shift 2
+            ;;
+        --github-token)
+            GITHUB_TOKEN="$2"
+            shift 2
+            ;;
+        --github-user)
+            GITHUB_USERNAME="$2"
+            shift 2
+            ;;
+        --jina-key)
+            JINA_API_KEY="$2"
+            shift 2
+            ;;
+        --skip-auth)
+            SKIP_AUTH=true
+            shift
+            ;;
+        --yes|-y)
+            AUTO_YES=true
+            shift
+            ;;
+        --help|-h)
+            show_help
+            ;;
+        *)
+            echo "Unknown option: $1"
+            echo "Use --help for usage information"
+            exit 1
+            ;;
+    esac
+done
 
 # 脚本所在目录
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
@@ -148,69 +221,100 @@ else
     # 检查 application-default credentials 是否存在
     ADC_FILE="$HOME/.config/gcloud/application_default_credentials.json"
     
-    if [ -f "$ADC_FILE" ]; then
+    if [ "$SKIP_AUTH" = true ]; then
+        info "跳过 gcloud 认证 (--skip-auth)"
+    elif [ -f "$ADC_FILE" ]; then
         success "已检测到 Application Default Credentials"
-        echo -e "${YELLOW}是否需要重新登录? (y/N):${NC}"
-        read -p "> " REAUTH
-        if [[ "$REAUTH" =~ ^[Yy]$ ]]; then
-            info "执行 gcloud auth application-default login..."
-            gcloud auth application-default login
+        if [ "$AUTO_YES" = false ]; then
+            echo -e "${YELLOW}是否需要重新登录? (y/N):${NC}"
+            read -p "> " REAUTH
+            if [[ "$REAUTH" =~ ^[Yy]$ ]]; then
+                info "执行 gcloud auth application-default login..."
+                gcloud auth application-default login
+            fi
         fi
     else
         warn "未检测到 Application Default Credentials"
-        echo -e "${YELLOW}是否现在执行 gcloud auth application-default login? (Y/n):${NC}"
-        read -p "> " DO_AUTH
-        if [[ ! "$DO_AUTH" =~ ^[Nn]$ ]]; then
-            info "执行 gcloud auth application-default login..."
-            gcloud auth application-default login
-            if [ $? -eq 0 ]; then
-                success "Google Cloud 认证成功！"
-            else
-                warn "认证失败，请稍后手动执行: gcloud auth application-default login"
-            fi
+        if [ "$AUTO_YES" = true ]; then
+            info "自动模式：跳过 gcloud 认证"
         else
-            warn "跳过认证，请稍后手动执行: gcloud auth application-default login"
+            echo -e "${YELLOW}是否现在执行 gcloud auth application-default login? (Y/n):${NC}"
+            read -p "> " DO_AUTH
+            if [[ ! "$DO_AUTH" =~ ^[Nn]$ ]]; then
+                info "执行 gcloud auth application-default login..."
+                gcloud auth application-default login
+                if [ $? -eq 0 ]; then
+                    success "Google Cloud 认证成功！"
+                else
+                    warn "认证失败，请稍后手动执行: gcloud auth application-default login"
+                fi
+            else
+                warn "跳过认证，请稍后手动执行: gcloud auth application-default login"
+            fi
         fi
     fi
     
-    # 询问 Project ID
-    echo ""
-    echo -e "${YELLOW}请输入你的 Google Cloud Project ID (用于 Vertex AI):${NC}"
-    
-    # 尝试获取当前配置的 project
-    CURRENT_PROJECT=$(gcloud config get-value project 2>/dev/null)
-    if [ -n "$CURRENT_PROJECT" ]; then
-        echo -e "${BLUE}当前 gcloud 配置的 project: $CURRENT_PROJECT${NC}"
-        echo -e "${YELLOW}直接回车使用此 project，或输入新的 project ID:${NC}"
-    fi
-    
-    read -p "> " PROJECT_ID
-    
-    # 如果用户直接回车，使用当前 project
-    if [ -z "$PROJECT_ID" ] && [ -n "$CURRENT_PROJECT" ]; then
-        PROJECT_ID="$CURRENT_PROJECT"
+    # 获取 Project ID
+    if [ -z "$PROJECT_ID" ]; then
+        # 尝试获取当前配置的 project
+        CURRENT_PROJECT=$(gcloud config get-value project 2>/dev/null)
+
+        if [ "$AUTO_YES" = true ] && [ -n "$CURRENT_PROJECT" ]; then
+            # 自动模式：使用当前 gcloud project
+            PROJECT_ID="$CURRENT_PROJECT"
+            info "自动使用当前 gcloud project: $PROJECT_ID"
+        else
+            echo ""
+            echo -e "${YELLOW}请输入你的 Google Cloud Project ID (用于 Vertex AI):${NC}"
+            if [ -n "$CURRENT_PROJECT" ]; then
+                echo -e "${BLUE}当前 gcloud 配置的 project: $CURRENT_PROJECT${NC}"
+                echo -e "${YELLOW}直接回车使用此 project，或输入新的 project ID:${NC}"
+            fi
+            read -p "> " INPUT_PROJECT_ID
+
+            # 如果用户直接回车，使用当前 project
+            if [ -z "$INPUT_PROJECT_ID" ] && [ -n "$CURRENT_PROJECT" ]; then
+                PROJECT_ID="$CURRENT_PROJECT"
+            else
+                PROJECT_ID="$INPUT_PROJECT_ID"
+            fi
+        fi
+    else
+        info "使用命令行参数 Project ID: $PROJECT_ID"
     fi
     
     if [ -z "$PROJECT_ID" ]; then
         warn "未输入 Project ID，跳过 Vertex AI 配置"
     else
-        # 询问 Context7 API Key (可选)
-        echo ""
-        echo -e "${YELLOW}请输入 Context7 API Key (用于文档查询插件，可选，直接回车跳过):${NC}"
-        echo -e "${BLUE}获取地址: https://context7.io/${NC}"
-        read -p "> " CONTEXT7_API_KEY
-        
-        # 询问 GitHub Personal Access Token (可选)
-        echo ""
-        echo -e "${YELLOW}请输入 GitHub Personal Access Token (用于 GitHub 插件和 git push，可选，直接回车跳过):${NC}"
-        echo -e "${BLUE}获取地址: https://github.com/settings/tokens${NC}"
-        echo -e "${BLUE}需要权限: repo, read:org, read:user${NC}"
-        read -p "> " GITHUB_TOKEN
+        # 获取 Context7 API Key (可选)
+        if [ -z "$CONTEXT7_API_KEY" ] && [ "$AUTO_YES" = false ]; then
+            echo ""
+            echo -e "${YELLOW}请输入 Context7 API Key (用于文档查询插件，可选，直接回车跳过):${NC}"
+            echo -e "${BLUE}获取地址: https://context7.io/${NC}"
+            read -p "> " CONTEXT7_API_KEY
+        elif [ -n "$CONTEXT7_API_KEY" ]; then
+            info "使用命令行参数 Context7 API Key"
+        fi
 
-        # 询问 GitHub 用户名 (如果提供了 token)
+        # 获取 GitHub Personal Access Token (可选)
+        if [ -z "$GITHUB_TOKEN" ] && [ "$AUTO_YES" = false ]; then
+            echo ""
+            echo -e "${YELLOW}请输入 GitHub Personal Access Token (用于 GitHub 插件和 git push，可选，直接回车跳过):${NC}"
+            echo -e "${BLUE}获取地址: https://github.com/settings/tokens${NC}"
+            echo -e "${BLUE}需要权限: repo, read:org, read:user${NC}"
+            read -p "> " GITHUB_TOKEN
+        elif [ -n "$GITHUB_TOKEN" ]; then
+            info "使用命令行参数 GitHub Token"
+        fi
+
+        # 获取 GitHub 用户名 (如果提供了 token)
         if [ -n "$GITHUB_TOKEN" ]; then
-            echo -e "${YELLOW}请输入 GitHub 用户名 (用于 git push):${NC}"
-            read -p "> " GITHUB_USERNAME
+            if [ -z "$GITHUB_USERNAME" ] && [ "$AUTO_YES" = false ]; then
+                echo -e "${YELLOW}请输入 GitHub 用户名 (用于 git push):${NC}"
+                read -p "> " GITHUB_USERNAME
+            elif [ -n "$GITHUB_USERNAME" ]; then
+                info "使用命令行参数 GitHub Username: $GITHUB_USERNAME"
+            fi
 
             # 保存到 git credentials
             if [ -n "$GITHUB_USERNAME" ]; then
@@ -221,11 +325,15 @@ else
             fi
         fi
 
-        # 询问 Jina AI API Key (可选)
-        echo ""
-        echo -e "${YELLOW}请输入 Jina AI API Key (用于网页读取和搜索 MCP，可选，直接回车跳过):${NC}"
-        echo -e "${BLUE}获取地址: https://jina.ai/${NC}"
-        read -p "> " JINA_API_KEY
+        # 获取 Jina AI API Key (可选)
+        if [ -z "$JINA_API_KEY" ] && [ "$AUTO_YES" = false ]; then
+            echo ""
+            echo -e "${YELLOW}请输入 Jina AI API Key (用于网页读取和搜索 MCP，可选，直接回车跳过):${NC}"
+            echo -e "${BLUE}获取地址: https://jina.ai/${NC}"
+            read -p "> " JINA_API_KEY
+        elif [ -n "$JINA_API_KEY" ]; then
+            info "使用命令行参数 Jina AI API Key"
+        fi
 
         # 创建 .claude 目录
         mkdir -p "$CLAUDE_DIR"
