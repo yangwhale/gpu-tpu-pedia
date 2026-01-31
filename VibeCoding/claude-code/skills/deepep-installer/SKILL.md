@@ -856,7 +856,133 @@ source /opt/deepep/unified-env.sh
 
 This script is automatically created and includes all necessary paths for DeepEP, SGLang, and vLLM.
 
+## Critical IBGDA Runtime Configuration
+
+When running DeepEP with IBGDA transport (required for internode communication), several environment variables are **critical**:
+
+### LD_PRELOAD - Force Custom NVSHMEM
+
+**Problem:** PyTorch ships `nvidia-nvshmem-cu13` v3.4.5, which loads before your custom NVSHMEM 3.5.19.
+
+**Symptom:**
+```
+NVSHMEM device library version does not match with NVSHMEM host library version
+```
+
+**Solution:**
+```bash
+export LD_PRELOAD=/opt/deepep/nvshmem/lib/libnvshmem_host.so.3
+```
+
+### NVSHMEM_REMOTE_TRANSPORT - Force IBGDA
+
+**Problem:** NVSHMEM defaults to IBRC transport, which doesn't support GPU-initiated APIs that DeepEP requires.
+
+**Symptom:**
+```
+NVSHMEM INFO Successfully initialized the transport: IBRC
+# (but DeepEP dispatch operations fail or timeout)
+```
+
+**Solution:**
+```bash
+export NVSHMEM_REMOTE_TRANSPORT=ibgda
+```
+
+### NVSHMEM_IBGDA_NIC_HANDLER - GDRCopy CPU Handler
+
+**Problem:** Without GDRCopy, IBGDA falls back to host memory mode which is slower.
+
+**Solution:**
+```bash
+export NVSHMEM_IBGDA_NIC_HANDLER=cpu
+```
+
+### NVSHMEM_HCA_PREFIX - RoCE Device Detection
+
+**Problem:** GCP B200 uses RoCE with `rocep*` device names, not InfiniBand `mlx5*`.
+
+**Solution:**
+```bash
+export NVSHMEM_HCA_PREFIX=rocep
+```
+
+### Complete Runtime Environment
+
+Create and source `/opt/deepep/unified-env.sh`:
+
+```bash
+#!/bin/bash
+# DeepEP Unified Environment for IBGDA
+
+export NVSHMEM_HOME=/opt/deepep/nvshmem
+export GDRCOPY_HOME=/opt/deepep/gdrcopy
+export CUDA_HOME=/usr/local/cuda
+
+# Library paths
+export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+
+# CRITICAL: Force our NVSHMEM over PyTorch's bundled version
+export LD_PRELOAD=${NVSHMEM_HOME}/lib/libnvshmem_host.so.3
+
+# NVSHMEM IBGDA Configuration
+export NVSHMEM_REMOTE_TRANSPORT=ibgda
+export NVSHMEM_IBGDA_NIC_HANDLER=cpu
+export NVSHMEM_HCA_PREFIX=rocep
+
+# DeepEP source path (for tests)
+export PYTHONPATH=/tmp/deepep_build:${PYTHONPATH}
+```
+
+---
+
+### Problem: nvidia_peermem fails to load
+
+**Symptom:**
+```
+modprobe nvidia_peermem
+modprobe: ERROR: could not insert 'nvidia_peermem': Invalid parameters
+```
+
+**Root Cause:**
+nvidia_peermem may have compatibility issues with certain driver/kernel combinations. However, **this is NOT a blocker** - NVSHMEM IBGDA uses dma-buf for GPU memory registration instead.
+
+**Verification that dma-buf works:**
+```
+NVSHMEM INFO ibv_reg_dmabuf_mr handle 0x... mr 0x...
+```
+
+**Solution:** Ignore the nvidia_peermem error if you see successful `ibv_reg_dmabuf_mr` in NVSHMEM logs.
+
+---
+
+### Problem: Old DeepEP in site-packages conflicts
+
+**Symptom:**
+- DeepEP imports but uses old cached version
+- Module not reflecting new build
+
+**Solution:**
+```bash
+# Remove old installation
+rm -rf ~/.local/lib/python3.*/site-packages/deep_ep*
+
+# Reinstall from build
+cd /tmp/deepep_build
+python3 setup.py install --user
+```
+
+---
+
 ## Version History
+
+- **2026-01-31**: Added IBGDA runtime configuration section
+  - **CRITICAL**: Documented LD_PRELOAD requirement for NVSHMEM version conflict
+  - **CRITICAL**: Documented NVSHMEM_REMOTE_TRANSPORT=ibgda requirement
+  - **NEW**: NVSHMEM_IBGDA_NIC_HANDLER=cpu for GDRCopy support
+  - **NEW**: NVSHMEM_HCA_PREFIX=rocep for GCP RoCE devices
+  - **NEW**: nvidia_peermem failure is non-blocking if dma-buf works
+  - **NEW**: Complete unified-env.sh script with all required variables
 
 - **2026-01-31**: Added internode RoCE troubleshooting and testing
   - **NEW**: Troubleshooting for "Unable to create ah" NVSHMEM error on RoCE
