@@ -398,6 +398,120 @@ modinfo nvidia_peermem  # Module not found
 2. Often unavailable on cloud VMs with pre-installed drivers
 3. DeepEP works without it using NVSHMEM IBGDA
 
+---
+
+### Problem: NVSHMEM "Unable to create ah" on RoCE (Internode)
+
+**Symptoms:**
+```
+ibgda.cpp:2234 NVSHMEM ERROR: ibv_create_ah_from_wc: Unable to create ah
+nvshmem_transport_init() failed
+```
+
+**Root Cause:**
+NVSHMEM IBGDA transport has uninitialized `struct ibv_ah_attr` containing garbage values. On RoCE (unlike InfiniBand), the `static_rate` field must be properly initialized or it causes EINVAL.
+
+**Reference:** [GitHub Issue #21](https://github.com/NVIDIA/nvshmem/issues/21)
+
+**Solution - Apply memset fix:**
+
+```bash
+# 1. Download NVSHMEM source
+wget https://developer.nvidia.com/downloads/assets/secure/nvshmem/nvshmem_src_3.4.5-0.txz
+tar -xf nvshmem_src_3.4.5-0.txz
+cd nvshmem-3.4.5-0
+
+# 2. Find and patch the IBGDA transport
+# Location: src/modules/transport/ibgda/ibgda.cpp
+# Find: struct ibv_ah_attr ah_attr;
+# Add after: memset(&ah_attr, 0, sizeof(ah_attr));
+
+# There are multiple locations (lines ~248, ~1369, ~2157)
+# The critical one is around line 2157 in create_dc_target()
+
+# 3. Rebuild NVSHMEM with the fix
+export CUDACXX=/usr/local/cuda/bin/nvcc
+CUDA_HOME=/usr/local/cuda \
+NVSHMEM_IBGDA_SUPPORT=1 \
+NVSHMEM_USE_GDRCOPY=0 \
+cmake -GNinja -S . -B build/ \
+    -DCMAKE_INSTALL_PREFIX=/opt/deepep/nvshmem \
+    -DCMAKE_CUDA_COMPILER=$CUDACXX \
+    -DCMAKE_CUDA_ARCHITECTURES=100
+
+sudo cmake --build build/ --target install
+```
+
+---
+
+### Problem: PyTorch bundled NVSHMEM overrides custom build
+
+**Symptoms:**
+- Applied memset fix to `/opt/deepep/nvshmem/lib/` but still getting "Unable to create ah" error
+- Custom NVSHMEM build not being used despite LD_LIBRARY_PATH
+
+**Root Cause:**
+PyTorch nightly includes its own NVSHMEM libraries in:
+```
+~/.local/lib/python3.12/site-packages/nvidia/nvshmem/lib/
+```
+
+Python loads these bundled libraries **before** your custom `/opt/deepep/nvshmem/lib/` version, regardless of LD_LIBRARY_PATH.
+
+**Diagnosis:**
+```bash
+# Check if PyTorch has bundled NVSHMEM
+ls ~/.local/lib/python3.*/site-packages/nvidia/nvshmem/lib/
+
+# You'll see:
+# libnvshmem_host.so.3
+# nvshmem_transport_ibgda.so.3  # <-- This is the problem
+# nvshmem_transport_ibrc.so.3
+```
+
+**Solution - Replace PyTorch's bundled IBGDA module:**
+
+```bash
+# Get PyTorch's NVSHMEM location
+PYTORCH_NVSHMEM_DIR=$(python3 -c "import site; print(site.getusersitepackages())" | sed 's|site-packages|site-packages/nvidia/nvshmem/lib|')
+
+# Replace bundled IBGDA with patched version
+cp /opt/deepep/nvshmem/lib/nvshmem_transport_ibgda.so.3.0.0 \
+   ${PYTORCH_NVSHMEM_DIR}/nvshmem_transport_ibgda.so.3
+
+# Verify
+ls -la ${PYTORCH_NVSHMEM_DIR}/nvshmem_transport_ibgda.so.3
+```
+
+**Important:** This must be done on ALL nodes in the cluster.
+
+---
+
+### Problem: GID Index misconfiguration for RoCE
+
+**Symptoms:**
+- NVSHMEM initialization fails on RoCE networks
+- Works on InfiniBand but not on RoCE
+
+**Root Cause:**
+RoCE uses GID (Global ID) index to select the correct network address format:
+- GID[0-1]: Link-local addresses
+- GID[2]: RoCE v1
+- GID[3]: RoCE v2 with IPv4-mapped address (recommended)
+
+**Solution:**
+
+```bash
+# Set GID index for RoCE v2
+export NVSHMEM_IB_GID_INDEX=3
+
+# Also recommended for RoCE:
+export NVSHMEM_DISABLE_CUDA_VMM=1
+export NVSHMEM_DEBUG=WARN  # For debugging
+```
+
+Add these to your launch script before running DeepEP tests.
+
 ## Reloading gdrdrv After Reboot
 
 The gdrdrv module built via `insmod` is NOT persistent across reboots. After reboot:
@@ -448,6 +562,126 @@ python3 tests/test_intranode.py --num-processes 2
 
 # Full test with all GPUs
 python3 tests/test_intranode.py --num-processes 8
+```
+
+### DeepEP Internode Test (Multi-Node)
+
+For testing DeepEP across multiple nodes with RDMA/RoCE:
+
+**1. Create the test script (`/tmp/test_deepep_internode.py`):**
+
+```python
+#!/usr/bin/env python3
+"""Simple DeepEP internode connectivity test."""
+
+import os
+import sys
+import torch
+import torch.distributed as dist
+import deep_ep
+
+def main():
+    local_rank = int(os.getenv('LOCAL_RANK', 0))
+    global_rank = int(os.getenv('RANK', 0))
+    world_size = int(os.getenv('WORLD_SIZE', 1))
+    local_world_size = int(os.getenv('LOCAL_WORLD_SIZE', 8))
+
+    num_nodes = world_size // local_world_size
+    node_rank = global_rank // local_world_size
+
+    print(f"[Rank {global_rank}] Starting: node={node_rank}/{num_nodes}, "
+          f"local_rank={local_rank}", flush=True)
+
+    torch.cuda.set_device(local_rank)
+    dist.init_process_group(backend='nccl')
+
+    try:
+        group = dist.new_group(list(range(world_size)))
+        buffer = deep_ep.Buffer(
+            group,
+            int(256e6),  # 256MB for rdma
+            int(128e6),  # 128MB for nvl
+            low_latency_mode=False,
+            num_qps_per_rank=24,
+            explicitly_destroy=True  # Required for explicit destroy()
+        )
+        print(f"[Rank {global_rank}] DeepEP buffer created!", flush=True)
+
+        # Test dispatch layout
+        num_experts = 256
+        num_tokens = 512
+        num_topk = 8
+        torch.manual_seed(42 + global_rank)
+        topk_idx = torch.randint(0, num_experts, (num_tokens, num_topk), device='cuda')
+
+        buffer.get_dispatch_layout(topk_idx, num_experts)
+        print(f"[Rank {global_rank}] Dispatch layout test PASSED!", flush=True)
+
+        buffer.destroy()
+    except Exception as e:
+        print(f"[Rank {global_rank}] ERROR: {e}", flush=True)
+        import traceback
+        traceback.print_exc()
+        dist.destroy_process_group()
+        sys.exit(1)
+
+    dist.barrier()
+    dist.destroy_process_group()
+    if global_rank == 0:
+        print("\n=== All internode tests PASSED! ===", flush=True)
+
+if __name__ == '__main__':
+    main()
+```
+
+**2. Create the launcher script (`/tmp/run_internode_test.sh`):**
+
+```bash
+#!/bin/bash
+set -e
+
+MASTER_ADDR="${1:-10.8.0.2}"
+MASTER_PORT="${2:-29500}"
+NODE_RANK="${3:-0}"
+NUM_GPUS=8
+
+unset WORLD_SIZE RANK
+
+export LD_LIBRARY_PATH=/opt/deepep/nvshmem/lib:${LD_LIBRARY_PATH}
+export CUDA_HOME=/usr/local/cuda
+export NVSHMEM_HOME=/opt/deepep/nvshmem
+
+# RoCE configuration
+export NVSHMEM_IB_GID_INDEX=3
+export NVSHMEM_DISABLE_CUDA_VMM=1
+export NVSHMEM_DEBUG=WARN
+
+echo "Starting node $NODE_RANK with MASTER_ADDR=$MASTER_ADDR"
+
+exec torchrun \
+    --nnodes=2 \
+    --nproc_per_node=$NUM_GPUS \
+    --node_rank=$NODE_RANK \
+    --master_addr=$MASTER_ADDR \
+    --master_port=$MASTER_PORT \
+    /tmp/test_deepep_internode.py
+```
+
+**3. Run on both nodes:**
+
+```bash
+# Node 0 (master, e.g., 10.8.0.2)
+bash /tmp/run_internode_test.sh 10.8.0.2 29500 0
+
+# Node 1 (worker, e.g., 10.8.0.108)
+bash /tmp/run_internode_test.sh 10.8.0.2 29500 1
+```
+
+**Expected output:**
+```
+[Rank 0-15] DeepEP buffer created!
+[Rank 0-15] Dispatch layout test PASSED!
+=== All internode tests PASSED! ===
 ```
 
 ### Expected Test Output
@@ -623,6 +857,17 @@ source /opt/deepep/unified-env.sh
 This script is automatically created and includes all necessary paths for DeepEP, SGLang, and vLLM.
 
 ## Version History
+
+- **2026-01-31**: Added internode RoCE troubleshooting and testing
+  - **NEW**: Troubleshooting for "Unable to create ah" NVSHMEM error on RoCE
+  - **ROOT CAUSE**: Uninitialized `struct ibv_ah_attr` causes EINVAL on RoCE (GitHub Issue #21)
+  - **FIX**: Apply memset fix to NVSHMEM IBGDA transport module
+  - **NEW**: Troubleshooting for PyTorch bundled NVSHMEM overriding custom build
+  - **CRITICAL**: PyTorch nightly bundles NVSHMEM in `~/.local/lib/python3.*/site-packages/nvidia/nvshmem/lib/`
+  - **FIX**: Replace PyTorch's bundled IBGDA module with patched version
+  - **NEW**: GID index configuration for RoCE v2 (`NVSHMEM_IB_GID_INDEX=3`)
+  - **NEW**: Complete internode test script and launcher for multi-node DeepEP verification
+  - **UPDATED**: setup-deepep.sh now automatically replaces PyTorch's bundled NVSHMEM
 
 - **2026-01-30**: Simplified installation - removed gdrcopy, updated to CUDA 13.0
   - **CHANGE**: Removed gdrcopy from default installation, using PeerMappingOverride instead

@@ -472,6 +472,31 @@ install_deepep() {
     # Cleanup
     rm -rf "$BUILD_DIR"
 
+    # ==========================================================================
+    # Fix: Replace PyTorch's bundled NVSHMEM IBGDA module with our custom-built one
+    # ==========================================================================
+    # Problem: PyTorch nightly includes pre-compiled NVSHMEM libraries that take
+    #          precedence over our custom-built NVSHMEM in /opt/deepep/nvshmem.
+    #          The bundled version doesn't have our RoCE fixes (Issue #21).
+    #
+    # Solution: Replace the IBGDA transport module in PyTorch's NVSHMEM directory
+    #           with our patched version.
+    # ==========================================================================
+    local PYTORCH_NVSHMEM_DIR
+    PYTORCH_NVSHMEM_DIR=$(python3 -c "import site; print(site.getusersitepackages())" 2>/dev/null | sed 's|site-packages|site-packages/nvidia/nvshmem/lib|')
+    if [ -z "$PYTORCH_NVSHMEM_DIR" ]; then
+        PYTORCH_NVSHMEM_DIR="$HOME/.local/lib/python3.12/site-packages/nvidia/nvshmem/lib"
+    fi
+
+    if [ -f "${PYTORCH_NVSHMEM_DIR}/nvshmem_transport_ibgda.so.3" ]; then
+        log_info "Replacing PyTorch's NVSHMEM IBGDA module with patched version..."
+        cp "${NVSHMEM_HOME}/lib/nvshmem_transport_ibgda.so.3.0.0" \
+           "${PYTORCH_NVSHMEM_DIR}/nvshmem_transport_ibgda.so.3"
+        log_info "PyTorch NVSHMEM IBGDA module replaced successfully"
+    else
+        log_info "PyTorch NVSHMEM directory not found, skipping module replacement"
+    fi
+
     # Verify installation
     if ! python3 -c "import deep_ep" &> /dev/null; then
         log_error "Failed to install DeepEP"
