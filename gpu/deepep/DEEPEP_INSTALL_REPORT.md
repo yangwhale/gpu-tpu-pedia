@@ -144,7 +144,7 @@ export NVSHMEM_DISABLE_CUDA_VMM=1
 | `LD_PRELOAD` | libnvshmem_host.so.3 | 覆盖 PyTorch 捆绑的旧版 NVSHMEM |
 | `NVSHMEM_REMOTE_TRANSPORT` | ibgda | 使用 IBGDA 传输 (非默认的 IBRC) |
 | `NVSHMEM_IBGDA_NIC_HANDLER` | cpu | CPU 辅助的 NIC 处理器 (需要 GDRCopy) |
-| `NVSHMEM_HCA_PREFIX` | rocep | GCP RoCE 设备前缀 |
+| `NVSHMEM_HCA_PREFIX` | mlx5 或 rocep | RDMA 设备前缀 (用 `ls /sys/class/infiniband/` 确认) |
 | `NVSHMEM_IB_GID_INDEX` | 3 | RoCE v2 的 GID 索引 |
 
 ---
@@ -412,6 +412,19 @@ MASTER_ADDR=10.8.0.5 MASTER_PORT=29500 WORLD_SIZE=2 RANK=1 \
     python3 test_internode.py
 ```
 
+### 8.6 Internode 性能结果 (b5 ↔ b6)
+
+**测试日期**: 2026-02-01
+**配置**: 2 节点 × 8 GPU = 16 GPU
+
+| 操作 | 最佳配置 | RDMA 带宽 | NVL 带宽 |
+|------|----------|-----------|----------|
+| Dispatch (BF16) | SMs 24, NVL 8, RDMA 8 | **43.56 GB/s** | 142.31 GB/s |
+| Dispatch (FP8) | SMs 24, NVL 20, RDMA 24 | 22.99 GB/s | 75.07 GB/s |
+| Combine | SMs 24, NVL 7, RDMA 28 | **42.63 GB/s** | 139.22 GB/s |
+
+**关键发现**: Ubuntu 24.04 上 HCA 设备前缀是 `mlx5` 而非 `rocep`，需要设置 `NVSHMEM_HCA_PREFIX=mlx5`。
+
 ---
 
 ## 9. 总结
@@ -427,8 +440,8 @@ MASTER_ADDR=10.8.0.5 MASTER_PORT=29500 WORLD_SIZE=2 RANK=1 \
 | PyTorch | ✅ 成功 | ✅ 成功 | 2.10.0+cu129 |
 | DeepEP | ✅ 成功 | ✅ 成功 | 1.2.1 |
 | Intranode 测试 | ✅ 通过 | ✅ 通过 | 24/24 用例 |
-| Internode 测试 | ✅ 通过 | ⏳ 待重启 | 需要 PeerMappingOverride |
-| 性能测试 | ✅ 通过 | ⏳ 待重启 | 63M tokens/s |
+| Internode 测试 | ✅ 通过 | ✅ 通过 | 需要 PeerMappingOverride + 重启 |
+| 性能测试 | ✅ 通过 | ✅ 通过 | RDMA 43.56 GB/s, NVL 142 GB/s |
 
 ### 关键技术要点
 
@@ -445,8 +458,8 @@ MASTER_ADDR=10.8.0.5 MASTER_PORT=29500 WORLD_SIZE=2 RANK=1 \
 |------|--------|-------|---------|------|
 | b1 | chrisya-b200-spot-mig-ase1-bjq9 | 10.8.0.7 | Ubuntu | ✅ 完成 |
 | b4 | chrisya-b200-spot-mig-ase1-n1n8 | 10.8.0.110 | Ubuntu | ✅ 完成 |
-| b5 | chrisya-b200-spot-mig-ase1-bhlx | 10.8.0.5 | Ubuntu 24.04 | ⏳ 待重启 |
-| b6 | chrisya-b200-spot-mig-ase1-xx7p | 10.8.0.111 | Ubuntu 24.04 | ⏳ 待重启 |
+| b5 | chrisya-b200-spot-mig-ase1-bhlx | 10.8.0.5 | Ubuntu 24.04 | ✅ 完成 |
+| b6 | chrisya-b200-spot-mig-ase1-xx7p | 10.8.0.111 | Ubuntu 24.04 | ✅ 完成 |
 
 ---
 

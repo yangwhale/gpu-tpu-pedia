@@ -285,7 +285,9 @@ export LD_PRELOAD="${NVSHMEM_HOME}/lib/libnvshmem_host.so.3:${GDRCOPY_HOME}/lib/
 # NVSHMEM IBGDA Configuration for RoCE
 export NVSHMEM_REMOTE_TRANSPORT=ibgda
 export NVSHMEM_IBGDA_NIC_HANDLER=cpu
-export NVSHMEM_HCA_PREFIX=rocep
+# HCA prefix: use 'mlx5' for standard Mellanox, 'rocep' for some GCP RoCE configs
+# Check with: ls /sys/class/infiniband/
+export NVSHMEM_HCA_PREFIX=mlx5
 export NVSHMEM_IB_GID_INDEX=3
 export NVSHMEM_DISABLE_CUDA_VMM=1
 
