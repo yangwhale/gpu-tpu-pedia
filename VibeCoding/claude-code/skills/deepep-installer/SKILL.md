@@ -974,7 +974,104 @@ python3 setup.py install --user
 
 ---
 
+### Problem: Ubuntu 24.04 NVSHMEM IBGDA compilation fails - MLX5DV not found
+
+**Symptoms:**
+```
+'MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT' was not declared in this scope
+'MLX5DV_VERSION' was not declared in this scope
+```
+
+**Root Cause:**
+Ubuntu 24.04's built-in rdma-core 50.0 is too old and lacks the MLX5DV extensions required for NVSHMEM IBGDA support.
+
+**Diagnosis:**
+```bash
+# Check rdma-core version
+dpkg -l rdma-core | grep rdma-core
+
+# Check if MLX5DV extensions exist
+grep "MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT" /usr/include/infiniband/mlx5_api.h
+# No output = missing extensions
+```
+
+**Solution - Install DOCA-OFED 2.9.0:**
+```bash
+# Add DOCA repository
+curl -fsSL https://linux.mellanox.com/public/repo/doca/GPG-KEY-Mellanox.pub | \
+    gpg --dearmor -o /usr/share/keyrings/doca.gpg
+echo "deb [signed-by=/usr/share/keyrings/doca.gpg] \
+    https://linux.mellanox.com/public/repo/doca/2.9.0/ubuntu24.04/x86_64/ ./" \
+    > /etc/apt/sources.list.d/doca.list
+apt-get update
+
+# IMPORTANT: Install specific mft version first to avoid conflicts
+apt-get install -y mft=4.30.0-139
+
+# Install DOCA-OFED userspace
+apt-get install -y doca-ofed-userspace
+
+# Verify
+grep "MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT" /usr/include/infiniband/mlx5_api.h
+```
+
+**Note:** CUDA repository provides mft 4.34.x which conflicts with DOCA-OFED's requirement for 4.30.0-139.
+
+---
+
+### Problem: Internode communication fails after installation
+
+**Symptoms:**
+- Intranode tests pass (24/24)
+- Internode tests fail with -1 counters or no data
+- RDMA connectivity verified working via `ib_write_bw`
+
+**Root Cause:**
+NVIDIA driver's `PeerMappingOverride=1` option is not active. This setting enables dma-buf GPU memory registration required for IBGDA transport.
+
+**Diagnosis:**
+```bash
+# Check if PeerMappingOverride is enabled
+grep PeerMappingOverride /proc/driver/nvidia/params
+# Should show: PeerMappingOverride: 1
+
+# If shows 0 or missing, the config wasn't applied
+cat /etc/modprobe.d/nvidia-peermem.conf
+```
+
+**Solution:**
+```bash
+# Create modprobe config
+echo 'options nvidia NVreg_EnableStreamMemOPs=1 NVreg_RegistryDwords="PeerMappingOverride=1;"' \
+    > /etc/modprobe.d/nvidia-peermem.conf
+
+# REBOOT REQUIRED - cannot hot-reload this setting
+sudo reboot
+```
+
+**Verification after reboot:**
+```bash
+# Check PeerMappingOverride is now 1
+grep PeerMappingOverride /proc/driver/nvidia/params
+# Expected: PeerMappingOverride: 1
+
+# Check dma-buf registration in NVSHMEM logs
+export NVSHMEM_DEBUG=INFO
+# Look for: ibv_reg_dmabuf_mr handle 0x... mr 0x...
+```
+
+---
+
 ## Version History
+
+- **2026-02-01**: Added Ubuntu 24.04 specific requirements
+  - **CRITICAL**: Ubuntu 24.04 rdma-core 50.0 lacks `MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT` required for IBGDA
+  - **SOLUTION**: Install DOCA-OFED 2.9.0 userspace: `apt-get install doca-ofed-userspace`
+  - **NEW**: mft package version conflict - CUDA repo has 4.34.x, DOCA needs 4.30.0-139
+  - **FIX**: Install specific mft version first: `apt-get install -y mft=4.30.0-139`
+  - **CRITICAL**: PeerMappingOverride driver option requires **reboot** to take effect
+  - **NEW**: GDRCopy library also needs LD_PRELOAD for runtime loading
+  - **UPDATE**: LD_PRELOAD now includes both libnvshmem_host.so.3 and libgdrapi.so.2
 
 - **2026-01-31**: Added IBGDA runtime configuration section
   - **CRITICAL**: Documented LD_PRELOAD requirement for NVSHMEM version conflict

@@ -326,25 +326,129 @@ sudo chmod 666 /dev/gdrdrv
 
 ---
 
-## 8. 总结
+## 8. Ubuntu 24.04 特殊要求
 
-| 组件 | 状态 | 版本 |
-|------|------|------|
-| CUDA Toolkit | ✅ 成功 | 12.9.86 |
-| GDRCopy | ✅ 成功 | 2.5 |
-| NVSHMEM | ✅ 成功 | 3.5.19 (IBGDA + GDRCopy) |
-| PyTorch | ✅ 成功 | 2.10.0+cu129 |
-| DeepEP | ✅ 成功 | 1.2.1 |
-| Intranode 测试 | ✅ 通过 | 24/24 用例 |
-| Internode 测试 | ✅ 通过 | 16 GPU |
-| 性能测试 | ✅ 通过 | 63M tokens/s |
+**日期**: 2026-02-01
+**测试节点**: b5, b6
 
-**关键技术要点**:
-1. 使用 **dma-buf** (`ibv_reg_dmabuf_mr`) 替代 `nvidia_peermem`
-2. 使用 **LD_PRELOAD** 强制加载自定义 NVSHMEM
-3. 设置 **NVSHMEM_IBGDA_NIC_HANDLER=cpu** + GDRCopy
-4. GCP RoCE 需要 **NVSHMEM_HCA_PREFIX=rocep** 和 **NVSHMEM_IB_GID_INDEX=3**
+Ubuntu 24.04 的内置 rdma-core 50.0 版本过旧，缺少 NVSHMEM IBGDA 所需的 MLX5DV 扩展。
+
+### 8.1 问题
+
+编译 NVSHMEM 时出现以下错误:
+```
+'MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT' was not declared in this scope
+'MLX5DV_VERSION' was not declared in this scope
+```
+
+### 8.2 解决方案: 安装 DOCA-OFED
+
+DOCA-OFED 2.9.0 提供了所需的 MLX5DV 扩展:
+
+```bash
+# 添加 DOCA 仓库
+curl -fsSL https://linux.mellanox.com/public/repo/doca/GPG-KEY-Mellanox.pub | \
+    gpg --dearmor -o /usr/share/keyrings/doca.gpg
+echo "deb [signed-by=/usr/share/keyrings/doca.gpg] \
+    https://linux.mellanox.com/public/repo/doca/2.9.0/ubuntu24.04/x86_64/ ./" \
+    > /etc/apt/sources.list.d/doca.list
+apt-get update
+
+# 安装 (注意: 需要先安装特定版本的 mft 解决依赖冲突)
+apt-get install -y mft=4.30.0-139
+apt-get install -y doca-ofed-userspace
+
+# 验证
+grep "MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT" /usr/include/infiniband/mlx5_api.h
+```
+
+### 8.3 关键发现
+
+| 发现 | 说明 |
+|------|------|
+| rdma-core 50.0 不足 | Ubuntu 24.04 默认的版本缺少 IBGDA 需要的 MLX5DV 扩展 |
+| DOCA-OFED 解决问题 | NVIDIA 的 DOCA-OFED 2.9.0 包含完整的 MLX5DV 支持 |
+| mft 版本冲突 | CUDA 仓库的 mft 版本与 DOCA-OFED 冲突，需要先安装 4.30.0-139 |
+| PeerMappingOverride | NVIDIA 驱动需要设置 `PeerMappingOverride=1` 才能启用 dma-buf GPU 内存注册 |
+| 需要重启 | PeerMappingOverride 设置需要重启才能生效 |
+
+### 8.4 更新后的环境脚本
+
+```bash
+#!/bin/bash
+export NVSHMEM_HOME=/opt/deepep/nvshmem
+export GDRCOPY_HOME=/opt/deepep/gdrcopy
+export CUDA_HOME=/usr/local/cuda
+
+export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:${CUDA_HOME}/lib64:${LD_LIBRARY_PATH:-}
+
+# 同时预加载 NVSHMEM 和 GDRCopy
+export LD_PRELOAD="${NVSHMEM_HOME}/lib/libnvshmem_host.so.3:${GDRCOPY_HOME}/lib/libgdrapi.so.2"
+
+export NVSHMEM_REMOTE_TRANSPORT=ibgda
+export NVSHMEM_IBGDA_NIC_HANDLER=cpu
+export NVSHMEM_HCA_PREFIX=rocep
+export NVSHMEM_IB_GID_INDEX=3
+export NVSHMEM_DISABLE_CUDA_VMM=1
+export PYTHONPATH=/tmp/deepep_build:${PYTHONPATH:-}
+```
+
+### 8.5 安装验证
+
+```bash
+# 节点内测试 (无需重启)
+source /opt/deepep/unified-env.sh
+cd /tmp/deepep_build/tests
+python3 test_intranode.py --num-processes 2
+# 结果: 24/24 用例通过
+
+# 跨节点测试 (需要重启后)
+# 在节点 0 上:
+MASTER_ADDR=10.8.0.5 MASTER_PORT=29500 WORLD_SIZE=2 RANK=0 \
+    python3 test_internode.py
+
+# 在节点 1 上:
+MASTER_ADDR=10.8.0.5 MASTER_PORT=29500 WORLD_SIZE=2 RANK=1 \
+    python3 test_internode.py
+```
 
 ---
 
-*报告生成时间: 2026-01-31 15:56 UTC*
+## 9. 总结
+
+### 安装状态
+
+| 组件 | b1/b4 状态 | b5/b6 状态 | 版本 |
+|------|------------|------------|------|
+| CUDA Toolkit | ✅ 成功 | ✅ 成功 | 12.9.86 |
+| GDRCopy | ✅ 成功 | ✅ 成功 | 2.5 |
+| DOCA-OFED | N/A | ✅ 成功 | 2.9.0 |
+| NVSHMEM | ✅ 成功 | ✅ 成功 | 3.5.19 (IBGDA + GDRCopy) |
+| PyTorch | ✅ 成功 | ✅ 成功 | 2.10.0+cu129 |
+| DeepEP | ✅ 成功 | ✅ 成功 | 1.2.1 |
+| Intranode 测试 | ✅ 通过 | ✅ 通过 | 24/24 用例 |
+| Internode 测试 | ✅ 通过 | ⏳ 待重启 | 需要 PeerMappingOverride |
+| 性能测试 | ✅ 通过 | ⏳ 待重启 | 63M tokens/s |
+
+### 关键技术要点
+
+1. 使用 **dma-buf** (`ibv_reg_dmabuf_mr`) 替代 `nvidia_peermem`
+2. 使用 **LD_PRELOAD** 强制加载自定义 NVSHMEM 和 GDRCopy
+3. 设置 **NVSHMEM_IBGDA_NIC_HANDLER=cpu** + GDRCopy
+4. GCP RoCE 需要 **NVSHMEM_HCA_PREFIX=rocep** 和 **NVSHMEM_IB_GID_INDEX=3**
+5. Ubuntu 24.04 需要安装 **DOCA-OFED 2.9.0** 以获得 MLX5DV IBGDA 扩展
+6. NVIDIA 驱动需要 **PeerMappingOverride=1** 设置 (需要重启)
+
+### 节点信息
+
+| 节点 | 主机名 | 主 IP | 操作系统 | 状态 |
+|------|--------|-------|---------|------|
+| b1 | chrisya-b200-spot-mig-ase1-bjq9 | 10.8.0.7 | Ubuntu | ✅ 完成 |
+| b4 | chrisya-b200-spot-mig-ase1-n1n8 | 10.8.0.110 | Ubuntu | ✅ 完成 |
+| b5 | chrisya-b200-spot-mig-ase1-bhlx | 10.8.0.5 | Ubuntu 24.04 | ⏳ 待重启 |
+| b6 | chrisya-b200-spot-mig-ase1-xx7p | 10.8.0.111 | Ubuntu 24.04 | ⏳ 待重启 |
+
+---
+
+*报告初始生成时间: 2026-01-31 15:56 UTC*
+*Ubuntu 24.04 更新: 2026-02-01 01:30 UTC*

@@ -4,7 +4,7 @@
 #
 # Key discoveries:
 # 1. PyTorch ships nvidia-nvshmem-cu13 v3.4.5, causing version conflict
-#    Solution: LD_PRELOAD=/opt/deepep/nvshmem/lib/libnvshmem_host.so.3.5.19
+#    Solution: LD_PRELOAD=/opt/deepep/nvshmem/lib/libnvshmem_host.so.3
 # 2. NVSHMEM defaults to IBRC transport, not IBGDA
 #    Solution: NVSHMEM_REMOTE_TRANSPORT=ibgda
 # 3. IBGDA with cpu handler requires GDRCopy
@@ -12,6 +12,13 @@
 # 4. nvidia_peermem may fail to load, but dma-buf works via ibv_reg_dmabuf_mr
 # 5. GCP RoCE uses rocep* device names
 #    Solution: NVSHMEM_HCA_PREFIX=rocep
+# 6. Ubuntu 24.04 requires DOCA-OFED for MLX5DV IBGDA extensions
+#    The bundled rdma-core 50.0 lacks MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT
+#    Solution: Install doca-ofed-userspace from NVIDIA repository
+# 7. NVIDIA driver needs PeerMappingOverride=1 for dma-buf GPU memory registration
+#    Solution: Add modprobe config and reboot
+# 8. GDRCopy library needs LD_PRELOAD for runtime loading
+#    Solution: Add libgdrapi.so to LD_PRELOAD alongside libnvshmem_host.so
 
 set -ex
 
@@ -21,6 +28,7 @@ export DEBIAN_FRONTEND=noninteractive
 CUDA_VERSION="12.9"
 NVSHMEM_VERSION="3.5.19"
 GDRCOPY_VERSION="2.5.1"
+DOCA_OFED_VERSION="2.9.0"
 DEEPEP_REPO="https://github.com/deepseek-ai/DeepEP.git"
 INSTALL_PREFIX="/opt/deepep"
 
@@ -102,9 +110,40 @@ install_gdrcopy() {
     rm -rf /tmp/gdrcopy
 }
 
-# Step 3: Install NVSHMEM with IBGDA and GDRCopy support
+# Step 3: Install DOCA-OFED userspace (Ubuntu 24.04 requirement)
+install_doca_ofed() {
+    echo "[3/7] Checking DOCA-OFED installation..."
+
+    # Check if already installed
+    if dpkg -l doca-ofed-userspace 2>/dev/null | grep -q '^ii'; then
+        echo "DOCA-OFED userspace already installed"
+        return 0
+    fi
+
+    echo "Installing DOCA-OFED ${DOCA_OFED_VERSION} userspace..."
+
+    # Add DOCA repository
+    curl -fsSL https://linux.mellanox.com/public/repo/doca/GPG-KEY-Mellanox.pub | \
+        gpg --dearmor -o /usr/share/keyrings/doca.gpg
+    echo "deb [signed-by=/usr/share/keyrings/doca.gpg] https://linux.mellanox.com/public/repo/doca/${DOCA_OFED_VERSION}/ubuntu24.04/x86_64/ ./" \
+        > /etc/apt/sources.list.d/doca.list
+    apt-get update -qq
+
+    # Install specific mft version required by DOCA-OFED
+    apt-get install -y mft=4.30.0-139 || true
+    apt-get install -y doca-ofed-userspace
+
+    # Verify MLX5DV extensions are available
+    if grep -q "MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT" /usr/include/infiniband/mlx5_api.h 2>/dev/null; then
+        echo "DOCA-OFED installed successfully with MLX5DV IBGDA extensions"
+    else
+        echo "WARNING: MLX5DV IBGDA extensions not found after DOCA-OFED installation"
+    fi
+}
+
+# Step 4: Install NVSHMEM with IBGDA and GDRCopy support
 install_nvshmem() {
-    echo "[3/6] Checking NVSHMEM installation..."
+    echo "[4/7] Checking NVSHMEM installation..."
 
     if [ -x "${NVSHMEM_HOME}/bin/nvshmem-info" ]; then
         local installed_version=$(${NVSHMEM_HOME}/bin/nvshmem-info -v 2>/dev/null | head -1)
@@ -124,16 +163,10 @@ install_nvshmem() {
 
     local nvshmem_build="/tmp/nvshmem_build"
     rm -rf ${nvshmem_build}
-    mkdir -p ${nvshmem_build}
 
-    # Download NVSHMEM source
-    wget -q "https://developer.nvidia.com/downloads/assets/secure/nvshmem/nvshmem_src_${NVSHMEM_VERSION}-1.txz" \
-        -O ${nvshmem_build}/nvshmem_src.txz || \
-    wget -q "https://developer.download.nvidia.com/compute/nvshmem/redist/nvshmem_src_${NVSHMEM_VERSION}-1.txz" \
-        -O ${nvshmem_build}/nvshmem_src.txz
-
-    tar -xf ${nvshmem_build}/nvshmem_src.txz -C ${nvshmem_build}
-    cd ${nvshmem_build}/nvshmem_src
+    # Clone NVSHMEM from GitHub (NVIDIA download URLs often 404)
+    git clone --depth 1 --branch v${NVSHMEM_VERSION}-1 https://github.com/NVIDIA/nvshmem.git ${nvshmem_build}
+    cd ${nvshmem_build}
 
     # Build with IBGDA and GDRCopy support
     # Critical: Must enable NVSHMEM_IBGDA_SUPPORT and NVSHMEM_USE_GDRCOPY
@@ -167,11 +200,11 @@ install_nvshmem() {
     rm -rf ${nvshmem_build}
 }
 
-# Step 4: Configure NVIDIA driver options for peer memory
+# Step 5: Configure NVIDIA driver options for peer memory
 configure_nvidia_driver() {
-    echo "[4/6] Configuring NVIDIA driver options..."
+    echo "[5/7] Configuring NVIDIA driver options..."
 
-    local conf_file="/etc/modprobe.d/nvidia-graphics-drivers-kms.conf"
+    local conf_file="/etc/modprobe.d/nvidia-peermem.conf"
 
     if grep -q "PeerMappingOverride=1" "$conf_file" 2>/dev/null; then
         echo "NVIDIA driver options already configured"
@@ -179,13 +212,14 @@ configure_nvidia_driver() {
         return 0
     fi
 
-    echo 'options nvidia NVreg_EnableStreamMemOPs=1 NVreg_RegistryDwords="PeerMappingOverride=1;"' >> "$conf_file"
-    echo "NVIDIA driver options configured (may require reboot)"
+    echo 'options nvidia NVreg_EnableStreamMemOPs=1 NVreg_RegistryDwords="PeerMappingOverride=1;"' > "$conf_file"
+    echo "NVIDIA driver options configured"
+    echo "WARNING: A reboot is required for PeerMappingOverride to take effect!"
 }
 
-# Step 5: Install PyTorch and DeepEP
+# Step 6: Install PyTorch and DeepEP
 install_deepep() {
-    echo "[5/6] Installing PyTorch and DeepEP..."
+    echo "[6/7] Installing PyTorch and DeepEP..."
 
     # Install PyTorch if not present
     if ! python3 -c "import torch; print(f'PyTorch {torch.__version__}')" 2>/dev/null; then
@@ -225,50 +259,45 @@ install_deepep() {
     fi
 }
 
-# Step 6: Create unified environment script
+# Step 7: Create unified environment script
 create_env_script() {
-    echo "[6/6] Creating unified environment script..."
+    echo "[7/7] Creating unified environment script..."
 
     local env_script="${INSTALL_PREFIX}/unified-env.sh"
 
     cat > ${env_script} << 'ENVEOF'
 #!/bin/bash
-# DeepEP Unified Environment Script
-# Source this before running DeepEP internode tests
+# DeepEP Unified Environment Script for GCP B200 with RoCE
+# Configured for IBGDA transport mode with custom NVSHMEM 3.5.19
 
 export NVSHMEM_HOME=/opt/deepep/nvshmem
 export GDRCOPY_HOME=/opt/deepep/gdrcopy
 export CUDA_HOME=/usr/local/cuda
 
 # Library paths
-export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:${CUDA_HOME}/lib64:${LD_LIBRARY_PATH}
+export LD_LIBRARY_PATH=${NVSHMEM_HOME}/lib:${GDRCOPY_HOME}/lib:${CUDA_HOME}/lib64:${LD_LIBRARY_PATH:-}
 
-# CRITICAL: Force load our NVSHMEM instead of PyTorch's bundled version
-# PyTorch ships nvidia-nvshmem-cu13 v3.4.5, we need our 3.5.19 with IBGDA
-export LD_PRELOAD=${NVSHMEM_HOME}/lib/libnvshmem_host.so.3
+# CRITICAL: Force our NVSHMEM and GDRCopy over PyTorch bundled versions
+# PyTorch ships nvidia-nvshmem-cu12 v3.4.5, we need our 3.5.19 with IBGDA
+# GDRCopy needs to be preloaded for NVSHMEM_IBGDA_NIC_HANDLER=cpu
+export LD_PRELOAD="${NVSHMEM_HOME}/lib/libnvshmem_host.so.3:${GDRCOPY_HOME}/lib/libgdrapi.so.2"
 
-# NVSHMEM IBGDA Configuration
-# Force IBGDA transport (default is IBRC which doesn't support device APIs)
+# NVSHMEM IBGDA Configuration for RoCE
 export NVSHMEM_REMOTE_TRANSPORT=ibgda
-
-# Use CPU-assisted NIC handler (requires GDRCopy)
 export NVSHMEM_IBGDA_NIC_HANDLER=cpu
-
-# GCP RoCE device prefix
 export NVSHMEM_HCA_PREFIX=rocep
-
-# Enable debug logging (optional, comment out for production)
-# export NVSHMEM_DEBUG=INFO
+export NVSHMEM_IB_GID_INDEX=3
+export NVSHMEM_DISABLE_CUDA_VMM=1
 
 # DeepEP source path (for tests)
-export PYTHONPATH=/tmp/deepep_build:${PYTHONPATH}
+export PYTHONPATH=/tmp/deepep_build:${PYTHONPATH:-}
 
-echo "DeepEP environment configured:"
+echo "DeepEP IBGDA environment configured:"
 echo "  NVSHMEM_HOME=${NVSHMEM_HOME}"
+echo "  GDRCOPY_HOME=${GDRCOPY_HOME}"
 echo "  LD_PRELOAD=${LD_PRELOAD}"
 echo "  NVSHMEM_REMOTE_TRANSPORT=${NVSHMEM_REMOTE_TRANSPORT}"
-echo "  NVSHMEM_IBGDA_NIC_HANDLER=${NVSHMEM_IBGDA_NIC_HANDLER}"
-echo "  NVSHMEM_HCA_PREFIX=${NVSHMEM_HCA_PREFIX}"
+echo "  Using custom NVSHMEM 3.5.19 with DOCA-OFED and GDRCopy"
 ENVEOF
 
     chmod +x ${env_script}
@@ -282,6 +311,7 @@ main() {
 
     install_cuda
     install_gdrcopy
+    install_doca_ofed   # Ubuntu 24.04 requirement for MLX5DV IBGDA extensions
     install_nvshmem
     configure_nvidia_driver
     install_deepep
@@ -292,18 +322,24 @@ main() {
     echo "Installation Complete!"
     echo "=========================================="
     echo ""
-    echo "To use DeepEP, run:"
+    echo "IMPORTANT: A REBOOT IS REQUIRED for internode communication!"
+    echo "The PeerMappingOverride driver option needs to be loaded."
+    echo ""
+    echo "After reboot, to use DeepEP, run:"
     echo "  source /opt/deepep/unified-env.sh"
     echo ""
-    echo "For internode testing, on each node run:"
+    echo "For intranode testing (works without reboot):"
+    echo "  source /opt/deepep/unified-env.sh"
+    echo "  cd /tmp/deepep_build/tests"
+    echo "  python3 test_intranode.py --num-processes 2"
+    echo ""
+    echo "For internode testing (requires reboot), on each node run:"
     echo "  export RANK=<node_rank>  # 0 for master, 1+ for workers"
     echo "  export WORLD_SIZE=<total_nodes>"
     echo "  export MASTER_ADDR=<master_ip>"
+    echo "  export MASTER_PORT=29500"
     echo "  python3 /tmp/deepep_build/tests/test_internode.py"
     echo ""
-    echo "If IBGDA fails to initialize, you may need to reboot to load:"
-    echo "  - gdrdrv kernel module"
-    echo "  - PeerMappingOverride driver option"
     echo "=========================================="
 }
 

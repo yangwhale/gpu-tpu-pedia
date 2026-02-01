@@ -2,6 +2,63 @@
 
 This document provides extended troubleshooting guidance for DeepEP installation issues across different environments.
 
+## Ubuntu 24.04 Specific Issues
+
+### MLX5DV Extensions Missing
+
+Ubuntu 24.04's built-in rdma-core 50.0 lacks the MLX5DV extensions required for NVSHMEM IBGDA.
+
+**Symptom:**
+```
+'MLX5DV_REG_DMABUF_ACCESS_DATA_DIRECT' was not declared in this scope
+```
+
+**Solution:**
+```bash
+# Install DOCA-OFED 2.9.0 userspace
+curl -fsSL https://linux.mellanox.com/public/repo/doca/GPG-KEY-Mellanox.pub | \
+    gpg --dearmor -o /usr/share/keyrings/doca.gpg
+echo "deb [signed-by=/usr/share/keyrings/doca.gpg] \
+    https://linux.mellanox.com/public/repo/doca/2.9.0/ubuntu24.04/x86_64/ ./" \
+    > /etc/apt/sources.list.d/doca.list
+apt-get update
+
+# Fix mft version conflict (CUDA repo has 4.34.x, DOCA needs 4.30.0-139)
+apt-get install -y mft=4.30.0-139
+apt-get install -y doca-ofed-userspace
+```
+
+### PeerMappingOverride Not Active After Config
+
+**Symptom:**
+- Config file exists at `/etc/modprobe.d/nvidia-peermem.conf`
+- But `grep PeerMappingOverride /proc/driver/nvidia/params` shows 0
+
+**Solution:**
+This setting requires a **full reboot**. It cannot be hot-reloaded by unloading/loading the nvidia module.
+
+```bash
+sudo reboot
+# After reboot, verify:
+grep PeerMappingOverride /proc/driver/nvidia/params
+# Expected: PeerMappingOverride: 1
+```
+
+### GDRCopy Runtime Loading
+
+**Symptom:**
+```
+NVSHMEM_IBGDA_NIC_HANDLER=cpu requires GDRCopy
+```
+
+Even with GDRCopy installed to `/opt/deepep/gdrcopy`.
+
+**Solution:**
+Add libgdrapi to LD_PRELOAD:
+```bash
+export LD_PRELOAD="/opt/deepep/nvshmem/lib/libnvshmem_host.so.3:/opt/deepep/gdrcopy/lib/libgdrapi.so.2"
+```
+
 ## Environment Detection
 
 ### Identifying the System Type
