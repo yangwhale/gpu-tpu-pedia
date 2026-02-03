@@ -412,12 +412,21 @@ pip install --break-system-packages mooncake-transfer-engine==0.3.8.post1
 **Symptom:**
 Installing NIXL downgrades NVIDIA libraries, causing import errors.
 
+**NIXL 会降级以下库:**
+- `nvidia-nccl-cu12`: 2.28.3 → 2.27.5
+- `nvidia-cudnn-cu12`: 9.16.0.29 → 9.10.2.21
+- `nvidia-nvshmem-cu12`: 安装 3.4.5 (pip 包版本)
+
 **Fix:**
 After installing NIXL, reinstall NVIDIA libraries:
 ```bash
 pip install nvidia-nccl-cu12==2.28.3 --force-reinstall --no-deps
 pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
 ```
+
+**关于 nvidia-nvshmem-cu12:**
+NIXL 安装的 `nvidia-nvshmem-cu12` (3.4.5) 是 pip 包版本，**不会影响 DeepEP**。
+DeepEP 使用自编译的 NVSHMEM (3.5.19，带 IBGDA 支持)，通过 `unified-env.sh` 中的 `LD_PRELOAD` 强制加载。
 
 ### Error: Deprecated environment variable warning
 
@@ -728,12 +737,12 @@ When installing SGLang alongside DeepEP and vLLM:
 
 ```
 1. /lssd-mounter     → Mount high-speed local SSD
-2. /deepep-installer → Install DeepEP (compiles with initial PyTorch)
+2. /deepep-installer → Install DeepEP (已使用 PyTorch 2.9.1)
 3. /sglang-installer → Install SGLang (this skill)
-4. /vllm-installer   → Install vLLM (changes PyTorch to 2.9.1)
-5. Fix PyTorch       → Ensure PyTorch 2.9.1 is installed
-6. Recompile DeepEP  → Rebuild for new PyTorch version
+4. /vllm-installer   → Install vLLM (可选)
 ```
+
+**注意**: DeepEP 现在默认使用 PyTorch 2.9.1 编译，与 SGLang 0.5.8 保持一致，无需重新编译。
 
 **Post-Installation Verification:**
 ```bash

@@ -21,7 +21,7 @@ DeepEP 是 DeepSeek 的 Expert Parallelism 库，用于 MoE 模型的高性能 a
 | DOCA-OFED | 3.2.1 | **必须安装**，将 HCA 从 rocep 转为 mlx5 |
 | GDRCopy | latest | NVSHMEM 构建依赖（仅库，无需内核模块） |
 | NVSHMEM | v3.5.19-1 | IBGDA 支持 |
-| PyTorch | 2.10.0+cu129 | - |
+| PyTorch | 2.9.1+cu129 | 与 SGLang 0.5.8 保持一致 |
 | NumPy | latest | DeepEP 测试依赖 |
 | DeepEP | HEAD + PR #466 | GPU-NIC 映射补丁 |
 
@@ -181,11 +181,11 @@ ls /opt/deepep/nvshmem/lib/libnvshmem_host.so*
 ls /opt/deepep/nvshmem/lib/nvshmem_transport_ibgda.so*
 ```
 
-### Phase 8: PyTorch 2.10.0+cu129 + NumPy
+### Phase 8: PyTorch 2.9.1+cu129 + NumPy
 
 ```bash
 python3 -m pip install --break-system-packages \
-    torch==2.10.0+cu129 \
+    torch==2.9.1+cu129 \
     numpy \
     --index-url https://download.pytorch.org/whl/cu129
 
@@ -193,6 +193,8 @@ python3 -m pip install --break-system-packages \
 python3 -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.version.cuda}')"
 python3 -c "import numpy; print(f'NumPy {numpy.__version__}')"
 ```
+
+**注意**: PyTorch 2.9.1 是 SGLang 0.5.8 的硬性依赖，使用此版本可以避免后续安装 SGLang 时重新编译 DeepEP。
 
 ### Phase 9: DeepEP + PR #466
 
