@@ -185,6 +185,28 @@ $ ./scripts/mount-lssd.sh
 
 ## Troubleshooting
 
+### 问题: mdadm 创建失败 - 包含了系统盘
+
+**症状:**
+```
+mdadm: chunk size must be a power of 2, not 33
+```
+或 lsblk 显示 33 个设备（包括 2TB 系统盘）
+
+**根因:**
+使用 `ls /dev/nvme*n1` 会包含系统盘（通常是 2TB），导致 mdadm 创建失败。
+
+**解决方案:**
+仅选择 375GB 的 Local SSD，排除系统盘:
+
+```bash
+# 方法 1: 通过 google-local-nvme-ssd 符号链接（推荐）
+NVME_DEVICES=$(ls /dev/disk/by-id/google-local-nvme-ssd-* 2>/dev/null | sort)
+
+# 方法 2: 通过设备大小过滤（375GB = 402653184000 bytes）
+NVME_DEVICES=$(lsblk -d -b -o NAME,SIZE | awk '$2 == 402653184000 {print "/dev/"$1}' | sort)
+```
+
 ### 问题: mdadm 命令未找到
 
 **解决方案:**
