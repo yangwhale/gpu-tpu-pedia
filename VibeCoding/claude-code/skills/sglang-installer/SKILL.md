@@ -89,6 +89,9 @@ pip install nvidia-nccl-cu12==2.28.3 --force-reinstall --no-deps
 pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
 ```
 
+**注意**: NIXL 还会安装 `nvidia-nvshmem-cu12==3.4.5`，这个 pip 包**不会被使用**。
+DeepEP 使用的是自编译的 NVSHMEM 3.5.19（带 IBGDA 支持），通过 `unified-env.sh` 中的 `LD_PRELOAD` 加载。
+
 ### Verifying NIXL
 
 ```bash
@@ -449,8 +452,11 @@ export SGLANG_DISABLE_TP_MEMORY_INBALANCE_CHECK=1
 To start the SGLang server:
 
 ```bash
-# Load environment
-source /sgl-workspace/sglang-env.sh
+# IMPORTANT: 必须先加载 DeepEP 环境（设置 LD_PRELOAD 等）
+source /opt/deepep/unified-env.sh
+
+# 设置 HuggingFace 缓存目录（可选，使用 LSSD 加速）
+export HF_HOME=/lssd/huggingface
 
 # Start server (adjust tp based on model architecture)
 python3 -m sglang.launch_server \
@@ -460,6 +466,8 @@ python3 -m sglang.launch_server \
     --tp 4 \
     --trust-remote-code
 ```
+
+**注意**: 如果不 source `unified-env.sh`，DeepEP 会因为找不到正确的 NVSHMEM 库而报错。
 
 ## Disaggregation Mode (Prefill-Decode Separation)
 
