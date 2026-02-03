@@ -31,33 +31,33 @@ DeepEP 是 DeepSeek 的 Expert Parallelism 库，用于 MoE 模型的高性能 a
 
 ### 前提条件检查
 
-**注意:** GCP B200 镜像 (2026-02+) 已预装 CUDA 12.9 和 DOCA-OFED 3.2.1，HCA 设备直接是 mlx5_*。
-
 ```bash
 # 检查 GPU
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
 
 # 检查 CUDA
 /usr/local/cuda/bin/nvcc --version
-# 预期: Cuda compilation tools, release 12.9
+# 如果已安装: Cuda compilation tools, release 12.9
 
 # 检查 HCA 设备
 ls /sys/class/infiniband/
-# 预期 (新镜像): mlx5_0 mlx5_1 ... mlx5_7 (8个 mlx5 设备)
-# 如果显示 rocep*，需要安装 DOCA-OFED（见 Phase 2）
+# 新安装: 显示 rocep* (需要安装 DOCA-OFED)
+# 安装后: 显示 mlx5_0 mlx5_1 ... mlx5_7 (8个 mlx5 设备)
 
 # 检查 PeerMappingOverride
 grep PeerMappingOverride /proc/driver/nvidia/params
-# 预期: RegistryDwords: "PeerMappingOverride=0x1"
+# 安装后预期: RegistryDwords: "PeerMappingOverride=0x1"
 ```
 
-**如果预装完整，可直接跳到 Phase 4。**
+**根据检查结果执行相应的 Phase。如果 CUDA、DOCA-OFED 和 PeerMappingOverride 都已配置，可跳到 Phase 4。**
 
-### Phase 1: CUDA Toolkit 12.9 (如未预装)
+### Phase 1: CUDA Toolkit 12.9
 
 ```bash
-# 检查是否已安装
-/usr/local/cuda/bin/nvcc --version && echo "已安装，跳过" && exit 0
+# 检查是否已安装，如已安装则跳过
+/usr/local/cuda/bin/nvcc --version 2>/dev/null && echo "CUDA 已安装，跳过 Phase 1"
+
+# 如未安装，执行以下命令
 
 sudo bash -c '
 wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
@@ -68,13 +68,15 @@ ln -sf /usr/local/cuda-12.9 /usr/local/cuda
 '
 ```
 
-### Phase 2: DOCA-OFED 3.2.1 (如未预装)
+### Phase 2: DOCA-OFED 3.2.1
 
 **仅当 `ls /sys/class/infiniband/` 显示 rocep* 时需要执行。**
 
 ```bash
-# 检查是否已安装
-ls /sys/class/infiniband/ | grep mlx5 && echo "已安装，跳过" && exit 0
+# 检查是否已安装，如显示 mlx5 则跳过
+ls /sys/class/infiniband/ | grep mlx5 && echo "DOCA-OFED 已安装，跳过 Phase 2"
+
+# 如显示 rocep*，执行以下命令
 
 sudo bash -c '
 wget -qO - https://linux.mellanox.com/public/repo/doca/3.2.1/ubuntu24.04/x86_64/GPG-KEY-Mellanox.pub | apt-key add -
@@ -509,11 +511,9 @@ GPU6-GPU7 ↔ PIX ↔ NIC6-NIC7 (mlx5_6, mlx5_7)
 
 ## 版本历史
 
-- **2026-02-03**: GCP 镜像预装优化
-  - GCP B200 镜像 (2026-02+) 已预装 CUDA 12.9 和 DOCA-OFED 3.2.1
-  - HCA 设备直接是 mlx5_*，无需额外安装
-  - Phase 1-3 改为条件执行（仅在未预装时执行）
-  - 二次验证通过: b9-b10 测试 RDMA 66-76 GB/s
+- **2026-02-03**: 二次验证通过
+  - b9-b10 测试 RDMA 66-76 GB/s, NVLink 217-248 GB/s
+  - 优化 Phase 1-3 检查逻辑（先检查后安装）
 
 - **2026-02-03**: 移除 LSSD 安装步骤
   - LSSD 请使用独立的 `lssd-mounter` skill
