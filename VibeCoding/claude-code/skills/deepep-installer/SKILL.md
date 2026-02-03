@@ -11,6 +11,8 @@ DeepEP 是 DeepSeek 的 Expert Parallelism 库，用于 MoE 模型的高性能 a
 
 **关键配置：GPU NIC Handler 模式（无需 GDRCopy 内核模块，但构建时需要 GDRCopy 库）**
 
+**注意:** LSSD 存储请使用独立的 `lssd-mounter` skill。
+
 ## 版本配置
 
 | 组件 | 版本 | 说明 |
@@ -29,51 +31,34 @@ DeepEP 是 DeepSeek 的 Expert Parallelism 库，用于 MoE 模型的高性能 a
 
 ### 前提条件检查
 
+**注意:** GCP B200 镜像 (2026-02+) 已预装 CUDA 12.9 和 DOCA-OFED 3.2.1，HCA 设备直接是 mlx5_*。
+
 ```bash
 # 检查 GPU
 nvidia-smi --query-gpu=name,driver_version,memory.total --format=csv,noheader
 
-# 检查预装 RDMA (GCP 镜像预装 rocep* 设备)
+# 检查 CUDA
+/usr/local/cuda/bin/nvcc --version
+# 预期: Cuda compilation tools, release 12.9
+
+# 检查 HCA 设备
 ls /sys/class/infiniband/
-# 预期: rocep145s0 rocep146s0 ... (8个 rocep 设备)
-# 注意: 这是基础 RDMA 驱动，需要安装 DOCA-OFED 转为 mlx5_*
+# 预期 (新镜像): mlx5_0 mlx5_1 ... mlx5_7 (8个 mlx5 设备)
+# 如果显示 rocep*，需要安装 DOCA-OFED（见 Phase 2）
+
+# 检查 PeerMappingOverride
+grep PeerMappingOverride /proc/driver/nvidia/params
+# 预期: RegistryDwords: "PeerMappingOverride=0x1"
 ```
 
-### Phase 1: LSSD 存储 (可选但推荐)
+**如果预装完整，可直接跳到 Phase 4。**
+
+### Phase 1: CUDA Toolkit 12.9 (如未预装)
 
 ```bash
-# 检查 NVMe Local SSD
-lsblk -d -o NAME,SIZE | grep 375G
+# 检查是否已安装
+/usr/local/cuda/bin/nvcc --version && echo "已安装，跳过" && exit 0
 
-# 创建 RAID0 并挂载
-sudo bash -c '
-DEVICES=$(lsblk -d -o NAME,SIZE | grep 375G | awk "{print \"/dev/\" \$1}")
-DEVICE_COUNT=$(echo "$DEVICES" | wc -w)
-echo "$DEVICES" | xargs mdadm --create /dev/md0 --level=0 --raid-devices=$DEVICE_COUNT --force --run
-mkfs.ext4 -F /dev/md0
-mkdir -p /lssd
-mount /dev/md0 /lssd
-chmod 777 /lssd
-mkdir -p /lssd/huggingface
-chmod 777 /lssd/huggingface
-'
-
-# 验证
-df -h /lssd
-# 预期: /dev/md0 或 /dev/md127, 约 12TB
-```
-
-**注意:** 重启后需要重新挂载 LSSD（RAID 会变成 md127）:
-```bash
-sudo bash -c '
-MD_DEV=$(cat /proc/mdstat | grep active | awk "{print \"/dev/\" \$1}" | head -1)
-mkdir -p /lssd && mount $MD_DEV /lssd && chmod 777 /lssd
-'
-```
-
-### Phase 2: CUDA Toolkit 12.9
-
-```bash
 sudo bash -c '
 wget -q https://developer.download.nvidia.com/compute/cuda/repos/ubuntu2404/x86_64/cuda-keyring_1.1-1_all.deb
 dpkg -i cuda-keyring_1.1-1_all.deb
@@ -81,31 +66,27 @@ apt-get update -qq
 apt-get install -y cuda-toolkit-12-9
 ln -sf /usr/local/cuda-12.9 /usr/local/cuda
 '
-
-# 验证
-/usr/local/cuda/bin/nvcc --version
-# 预期: Cuda compilation tools, release 12.9
 ```
 
-### Phase 3: DOCA-OFED 3.2.1 (关键！)
+### Phase 2: DOCA-OFED 3.2.1 (如未预装)
 
-**重要:** GCP B200 镜像预装的是基础 RDMA 驱动 (rocep* 设备)。必须安装完整 DOCA-OFED 3.2.1 才能获得 mlx5_* 设备。
+**仅当 `ls /sys/class/infiniband/` 显示 rocep* 时需要执行。**
 
 ```bash
+# 检查是否已安装
+ls /sys/class/infiniband/ | grep mlx5 && echo "已安装，跳过" && exit 0
+
 sudo bash -c '
-# 添加 DOCA 仓库
 wget -qO - https://linux.mellanox.com/public/repo/doca/3.2.1/ubuntu24.04/x86_64/GPG-KEY-Mellanox.pub | apt-key add -
 echo "deb https://linux.mellanox.com/public/repo/doca/3.2.1/ubuntu24.04/x86_64 ./" > /etc/apt/sources.list.d/doca.list
 apt-get update -qq
-
-# 安装 DOCA OFED
 DEBIAN_FRONTEND=noninteractive apt-get install -y doca-ofed
 '
 
-# 此步骤需要较长时间 (编译内核模块)
+# 此步骤需要较长时间 (编译内核模块)，完成后需要重启
 ```
 
-### Phase 4: PeerMappingOverride + 重启
+### Phase 3: PeerMappingOverride + 重启
 
 ```bash
 # 设置 PeerMappingOverride
@@ -117,7 +98,7 @@ echo "options nvidia NVreg_RegistryDwords=PeerMappingOverride=0x1" > /etc/modpro
 sudo reboot
 ```
 
-### Phase 5: 重启后验证
+### Phase 4: 重启后验证
 
 ```bash
 # 验证 HCA 设备 (必须是 mlx5_*)
@@ -132,18 +113,9 @@ grep PeerMappingOverride /proc/driver/nvidia/params
 # 验证 HCA 状态
 ibv_devinfo -d mlx5_0 | head -20
 # 预期: state: PORT_ACTIVE
-
-# 重新挂载 LSSD (如果使用)
-sudo bash -c '
-MD_DEV=$(cat /proc/mdstat | grep active | awk "{print \"/dev/\" \$1}" | head -1)
-if [ -n "$MD_DEV" ]; then
-    mkdir -p /lssd && mount $MD_DEV /lssd && chmod 777 /lssd
-    echo "LSSD mounted: $MD_DEV"
-fi
-'
 ```
 
-### Phase 6: 构建依赖
+### Phase 5: 构建依赖
 
 ```bash
 # 安装构建工具
@@ -154,7 +126,7 @@ sudo mkdir -p /opt/deepep
 sudo chown $USER:$USER /opt/deepep
 ```
 
-### Phase 7: GDRCopy 库 (NVSHMEM 构建依赖)
+### Phase 6: GDRCopy 库 (NVSHMEM 构建依赖)
 
 ```bash
 export CUDA_HOME=/usr/local/cuda
@@ -172,7 +144,7 @@ ls /opt/deepep/gdrcopy/lib/libgdrapi.so*
 ls /opt/deepep/gdrcopy/include/gdrapi.h
 ```
 
-### Phase 8: NVSHMEM v3.5.19-1
+### Phase 7: NVSHMEM v3.5.19-1
 
 ```bash
 export CUDA_HOME=/usr/local/cuda
@@ -207,7 +179,7 @@ ls /opt/deepep/nvshmem/lib/libnvshmem_host.so*
 ls /opt/deepep/nvshmem/lib/nvshmem_transport_ibgda.so*
 ```
 
-### Phase 9: PyTorch 2.10.0+cu129 + NumPy
+### Phase 8: PyTorch 2.10.0+cu129 + NumPy
 
 ```bash
 python3 -m pip install --break-system-packages \
@@ -220,7 +192,7 @@ python3 -c "import torch; print(f'PyTorch {torch.__version__}, CUDA {torch.versi
 python3 -c "import numpy; print(f'NumPy {numpy.__version__}')"
 ```
 
-### Phase 10: DeepEP + PR #466
+### Phase 9: DeepEP + PR #466
 
 ```bash
 cd /opt/deepep
@@ -246,7 +218,7 @@ python3 -c "import deep_ep; print('DeepEP OK:', deep_ep.__file__)"
 grep "_setup_device_hca_mapping" deep_ep/buffer.py && echo "PR #466 OK"
 ```
 
-### Phase 11: 创建环境脚本
+### Phase 10: 创建环境脚本
 
 ```bash
 cat > /opt/deepep/unified-env.sh << 'EOF'
@@ -372,9 +344,9 @@ python3 test_internode.py --num-tokens 2048 --hidden 7168 --num-experts 256 --nu
 
 | 操作 | 数据类型 | RDMA 带宽 | NVLink 带宽 |
 |------|----------|-----------|-------------|
-| Dispatch | FP8 | 36-50 GB/s | 120-170 GB/s |
-| Dispatch | BF16 | 65-80 GB/s | 210-270 GB/s |
-| Combine | BF16 | 70-75 GB/s | 230-250 GB/s |
+| Dispatch | FP8 | 70-71 GB/s | 231-235 GB/s |
+| Dispatch | BF16 | 81 GB/s | 265-271 GB/s |
+| Combine | BF16 | 75 GB/s | 245-253 GB/s |
 
 ### 4. NIC 流量验证 (PR #466 效果)
 
@@ -454,19 +426,7 @@ export NVSHMEM_IBGDA_NIC_HANDLER=gpu  # 不是 cpu
 export LD_PRELOAD="${NVSHMEM_HOME}/lib/libnvshmem_host.so.3"
 ```
 
-### 问题 6: LSSD 重启后丢失
-
-**症状:** 重启后 /lssd 不可用
-
-**修复:** 重新挂载现有 RAID
-```bash
-sudo bash -c '
-MD_DEV=$(cat /proc/mdstat | grep active | awk "{print \"/dev/\" \$1}" | head -1)
-mkdir -p /lssd && mount $MD_DEV /lssd && chmod 777 /lssd
-'
-```
-
-### 问题 7: 构建 DeepEP 时权限错误
+### 问题 6: 构建 DeepEP 时权限错误
 
 **症状:** `Permission denied: /opt/deepep/DeepEP/build`
 
@@ -475,7 +435,7 @@ mkdir -p /lssd && mount $MD_DEV /lssd && chmod 777 /lssd
 sudo chown -R $USER:$USER /opt/deepep/DeepEP
 ```
 
-### 问题 8: CUDA 符号找不到 (named symbol not found)
+### 问题 7: CUDA 符号找不到 (named symbol not found)
 
 **症状:** 运行测试时报错 `CUDA error: 'named symbol not found'`
 
@@ -490,7 +450,7 @@ export NVSHMEM_DIR=/opt/deepep/nvshmem
 python3 setup.py build_ext --inplace
 ```
 
-### 问题 9: Internode dispatch 超时 (timeout dispatch CPU)
+### 问题 8: Internode dispatch 超时 (timeout dispatch CPU)
 
 **症状:** `RuntimeError: DeepEP error: timeout (dispatch CPU)`，所有 `num_recv_tokens: -1`
 
@@ -549,20 +509,29 @@ GPU6-GPU7 ↔ PIX ↔ NIC6-NIC7 (mlx5_6, mlx5_7)
 
 ## 版本历史
 
+- **2026-02-03**: GCP 镜像预装优化
+  - GCP B200 镜像 (2026-02+) 已预装 CUDA 12.9 和 DOCA-OFED 3.2.1
+  - HCA 设备直接是 mlx5_*，无需额外安装
+  - Phase 1-3 改为条件执行（仅在未预装时执行）
+  - 二次验证通过: b9-b10 测试 RDMA 66-76 GB/s
+
+- **2026-02-03**: 移除 LSSD 安装步骤
+  - LSSD 请使用独立的 `lssd-mounter` skill
+  - Phase 编号从 11 减少到 10
+
 - **2026-02-03**: 修复 DeepEP 编译关键问题
-  - Phase 10 添加 `TORCH_CUDA_ARCH_LIST=10.0` (B200 GPU sm_100)
-  - Phase 10 添加 `NVSHMEM_DIR=/opt/deepep/nvshmem` (使用自编译 NVSHMEM)
-  - 新增问题 8: CUDA 符号找不到的解决方案
-  - 新增问题 9: Internode dispatch 超时的解决方案
+  - Phase 9 添加 `TORCH_CUDA_ARCH_LIST=10.0` (B200 GPU sm_100)
+  - Phase 9 添加 `NVSHMEM_DIR=/opt/deepep/nvshmem` (使用自编译 NVSHMEM)
+  - 新增问题 7: CUDA 符号找不到的解决方案
+  - 新增问题 8: Internode dispatch 超时的解决方案
   - Internode 测试验证通过: RDMA 70-81 GB/s, NVLink 231-271 GB/s
 
 - **2026-02-03**: 添加 NumPy 依赖
-  - Phase 9 添加 numpy 安装（DeepEP 测试必需）
+  - Phase 8 添加 numpy 安装（DeepEP 测试必需）
 
 - **2026-02-03**: 完善安装文档
   - 明确 DOCA-OFED 3.2.1 必须安装（rocep → mlx5）
   - 添加 GDRCopy 库构建步骤（NVSHMEM 构建依赖）
-  - 添加 LSSD 挂载说明和重启后恢复
   - 添加详细的分步安装指南
   - 修复权限问题文档
 
