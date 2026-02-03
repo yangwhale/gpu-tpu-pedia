@@ -350,7 +350,28 @@ python3 test_internode.py --num-tokens 2048 --hidden 7168 --num-experts 256 --nu
 | Dispatch | BF16 | 81 GB/s | 265-271 GB/s |
 | Combine | BF16 | 75 GB/s | 245-253 GB/s |
 
-### 4. NIC 流量验证 (PR #466 效果)
+### 4. 4节点 Internode 测试
+
+```bash
+# 在 4 个节点上并行执行 (示例使用 b7-b10)
+# Node 1 (Master): RANK=0
+# Node 2-4 (Workers): RANK=1,2,3
+
+source /opt/deepep/unified-env.sh
+cd /opt/deepep/DeepEP/tests
+export WORLD_SIZE=4 RANK=<0-3> MASTER_ADDR=<node1_ip> MASTER_PORT=29500
+python3 test_internode.py --num-tokens 2048 --hidden 7168 --num-experts 256 --num-topk 8
+```
+
+**性能基准 (B200 4节点 32-GPU):**
+
+| 操作 | 数据类型 | RDMA 带宽 | NVLink 带宽 |
+|------|----------|-----------|-------------|
+| Dispatch | FP8 | 54 GB/s | 108-111 GB/s |
+| Dispatch | BF16 | 57-58 GB/s | 114-118 GB/s |
+| Combine | BF16 | 56-57 GB/s | 113-116 GB/s |
+
+### 5. NIC 流量验证 (PR #466 效果)
 
 ```bash
 # 检查 NIC 流量计数器
@@ -511,7 +532,12 @@ GPU6-GPU7 ↔ PIX ↔ NIC6-NIC7 (mlx5_6, mlx5_7)
 
 ## 版本历史
 
-- **2026-02-03**: 二次验证通过
+- **2026-02-03**: 4 节点测试验证
+  - b7-b10 4 节点 32-GPU 测试通过
+  - RDMA 54-58 GB/s, NVLink 108-118 GB/s
+  - 添加 4 节点测试文档
+
+- **2026-02-03**: 2 节点验证通过
   - b9-b10 测试 RDMA 66-76 GB/s, NVLink 217-248 GB/s
   - 优化 Phase 1-3 检查逻辑（先检查后安装）
 

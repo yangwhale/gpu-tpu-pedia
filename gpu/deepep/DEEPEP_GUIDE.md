@@ -5,7 +5,7 @@
 | 项目 | 详情 |
 |------|------|
 | **测试日期** | 2026-02-03 |
-| **目标主机** | b5 (10.8.0.31), b6 (10.8.0.32) |
+| **目标主机** | b7-b10 (4 节点集群) |
 | **GPU 型号** | NVIDIA B200 (180GB HBM3e) × 8/节点 |
 | **驱动版本** | 580.126.09 |
 | **网络** | RoCE 400 Gb/s (mlx5) |
@@ -115,29 +115,44 @@ export PYTHONPATH=/opt/deepep/python:${PYTHONPATH:-}
 
 **功能测试:** 32/32 通过
 
-| 操作 | 节点 | 最佳配置 | RDMA 带宽 | NVLink 带宽 |
-|------|------|----------|-----------|-------------|
-| Dispatch FP8 | b5 | SMs 24, NVL 16, RDMA 24 | **50.06 GB/s** | 167.07 GB/s |
-| Dispatch FP8 | b6 | SMs 24, NVL 40, RDMA 24 | **36.40 GB/s** | 118.62 GB/s |
-| Dispatch BF16 | b5 | SMs 24, NVL 16, RDMA 20 | **80.47 GB/s** | 268.55 GB/s |
-| Dispatch BF16 | b6 | SMs 24, NVL 24, RDMA 28 | **65.07 GB/s** | 212.06 GB/s |
-| Combine | b5 | SMs 24, NVL 5, RDMA 20 | **73.50 GB/s** | 245.29 GB/s |
-| Combine | b6 | SMs 24, NVL 3, RDMA 20 | **70.57 GB/s** | 229.99 GB/s |
+| 操作 | 数据类型 | RDMA 带宽 | NVLink 带宽 |
+|------|----------|-----------|-------------|
+| Dispatch | FP8 | **70-71 GB/s** | 231-235 GB/s |
+| Dispatch | BF16 | **81 GB/s** | 265-271 GB/s |
+| Combine | BF16 | **75 GB/s** | 245-253 GB/s |
+
+### Internode 测试 (4 节点 32× B200)
+
+**功能测试:** 全部通过
+
+| 操作 | 数据类型 | RDMA 带宽 | NVLink 带宽 |
+|------|----------|-----------|-------------|
+| Dispatch | FP8 | **54 GB/s** | 108-111 GB/s |
+| Dispatch | BF16 | **57-58 GB/s** | 114-118 GB/s |
+| Combine | BF16 | **56-57 GB/s** | 113-116 GB/s |
+
+**注意:** 4 节点的 RDMA 带宽略低于 2 节点，这是因为跨节点通信路径更复杂（每个节点需要与 3 个远程节点通信）。
 
 ### 测试启动方式
 
 ```bash
 # Intranode 测试
 source /opt/deepep/unified-env.sh
-cd /opt/deepep/source/tests
+cd /opt/deepep/DeepEP/tests
 python3 test_intranode.py --num-tokens 2048 --hidden 7168 --num-experts 256 --num-topk 8
 
-# Internode 测试 (b5 - master)
-export WORLD_SIZE=2 RANK=0 MASTER_ADDR=10.8.0.31 MASTER_PORT=29500
+# 2节点 Internode 测试
+# Node 1 (Master):
+export WORLD_SIZE=2 RANK=0 MASTER_ADDR=<node1_ip> MASTER_PORT=29500
 python3 test_internode.py --num-tokens 2048 --hidden 7168 --num-experts 256 --num-topk 8
 
-# Internode 测试 (b6 - worker)
-export WORLD_SIZE=2 RANK=1 MASTER_ADDR=10.8.0.31 MASTER_PORT=29500
+# Node 2 (Worker):
+export WORLD_SIZE=2 RANK=1 MASTER_ADDR=<node1_ip> MASTER_PORT=29500
+python3 test_internode.py --num-tokens 2048 --hidden 7168 --num-experts 256 --num-topk 8
+
+# 4节点 Internode 测试 (WORLD_SIZE=4, RANK=0-3)
+# 在每个节点上设置对应的 RANK (0=master, 1-3=workers)
+export WORLD_SIZE=4 RANK=<0-3> MASTER_ADDR=<node1_ip> MASTER_PORT=29500
 python3 test_internode.py --num-tokens 2048 --hidden 7168 --num-experts 256 --num-topk 8
 ```
 
@@ -356,6 +371,6 @@ sudo bash install-deepep.sh
 ---
 
 **文档版本**: 2026-02-03
-**测试环境**: GCP B200 (8 GPU × 2 nodes)
+**测试环境**: GCP B200 (8 GPU × 4 nodes, 32 GPUs total)
 **NVSHMEM 版本**: v3.5.19-1
-**DeepEP 版本**: 1.2.1+29d31c0
+**DeepEP 版本**: HEAD + PR #466
