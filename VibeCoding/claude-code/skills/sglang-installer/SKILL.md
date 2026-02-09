@@ -28,6 +28,7 @@ This skill provides comprehensive guidance for installing, configuring, and debu
 | nvidia-nccl-cu12 | 2.28.3 | Force reinstall |
 | nvidia-cudnn-cu12 | 9.16.0.29 | Required for PyTorch 2.9+ |
 | flashinfer | 0.6.1 | SGLang 0.5.8 requires 0.6.1 (vLLM uses 0.5.3) |
+| sglang-router | 0.5.8 | PD disaggregation 路由 (pip install sglang-router) |
 
 ### What's New in v0.5.8
 
@@ -431,6 +432,64 @@ pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
 NIXL 安装的 `nvidia-nvshmem-cu12` (3.4.5) 是 pip 包版本，**不会影响 DeepEP**。
 DeepEP 使用自编译的 NVSHMEM (3.5.19，带 IBGDA 支持)，通过 `unified-env.sh` 中的 `LD_PRELOAD` 强制加载。
 
+### Error: DeepGEMM JIT compilation causes DeepEP dispatch timeout
+
+**Symptom:**
+```
+RuntimeError: DeepEP error: timeout (dispatch CPU)
+# 或者 server warmup 阶段长时间卡住
+```
+
+**Diagnosis:** MoE 模型首次启动时，DeepGEMM JIT 编译 ~692 个 cubin 文件耗时 10-20 分钟。在多 DP rank 或 PD disaggregation 场景下，不同 rank 编译速度不同步，导致 DeepEP all-to-all 通信超时。
+
+**Fix:** 在启动 server 前预编译 DeepGEMM：
+```bash
+source /opt/deepep/unified-env.sh
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
+# 编译完成后再启动 server
+```
+
+### Error: Direct request to Prefill node (bootstrap_room assertion)
+
+**Symptom:**
+```
+AssertionError: bootstrap_room should not be None
+```
+
+**Diagnosis:** 直接向 Prefill 节点发送请求，而非通过 sglang-router。
+
+**Fix:** 请求必须通过 sglang-router 路由：
+```bash
+# 错误: curl http://prefill-ip:30000/v1/chat/completions ...
+# 正确: curl http://router-ip:30080/v1/chat/completions ...
+```
+
+### Error: Direct request to Decode node (bootstrap room id)
+
+**Symptom:**
+```
+400 Bad Request: Disaggregated request received without bootstrap room id
+```
+
+**Diagnosis:** 直接向 Decode 节点发送请求，而非通过 sglang-router。
+
+**Fix:** 同上，请求必须通过 sglang-router。PD disaggregation 模式下，Prefill 和 Decode 不接受直接客户端请求。
+
+### Error: dist-init-addr bind failure on Decode node
+
+**Symptom:**
+```
+zmq.error.ZMQError: No such device (addr: tcp://10.8.0.25:5757)
+```
+
+**Diagnosis:** `--dist-init-addr` 使用了 Prefill 节点的特定 IP，Decode 节点无法 bind 该地址。
+
+**Fix:** 使用 `0.0.0.0` 代替特定 IP：
+```bash
+# 错误: --dist-init-addr 10.8.0.25:5757
+# 正确: --dist-init-addr 0.0.0.0:5757
+```
+
 ### Error: Deprecated environment variable warning
 
 **Symptom:**
@@ -447,6 +506,31 @@ export SGL_DISABLE_TP_MEMORY_INBALANCE_CHECK=1
 export SGLANG_DISABLE_TP_MEMORY_INBALANCE_CHECK=1
 ```
 
+## DeepGEMM Precompilation (MoE Models)
+
+MoE 模型（DeepSeek-V3/R1 等）使用 DeepGEMM 进行 FP8 矩阵乘法。DeepGEMM 采用 JIT 编译，首次启动时会编译 ~692 个 cubin 文件。
+
+**问题:** 在 PD disaggregation 或多 DP rank 场景下，JIT 编译耗时 10-20 分钟，导致 DP rank 间不同步，触发 DeepEP dispatch 超时错误。
+
+**解决方案:** 在启动 server 前预编译 DeepGEMM：
+
+```bash
+source /opt/deepep/unified-env.sh
+
+# 预编译 DeepGEMM cubin（针对特定模型的 GEMM 维度）
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
+
+# 验证 cubin 缓存
+ls ~/.deep_gemm/cache/ | wc -l
+# 预期: ~692 个文件（DeepSeek-V3 架构）
+```
+
+**注意:**
+- DeepGEMM 编译结果是半模型特定的：基于模型的 GEMM 维度（M/N/K），相同架构（如 DeepSeek-V3 和 DeepSeek-R1）可共享缓存
+- 不同架构的模型（如 Qwen-MoE vs DeepSeek）需要重新编译
+- cubin 缓存目录: `~/.deep_gemm/cache/`
+- 预编译后缓存持久化在磁盘上，重启后无需重新编译
+
 ## Starting the Server
 
 To start the SGLang server:
@@ -457,6 +541,9 @@ source /opt/deepep/unified-env.sh
 
 # 设置 HuggingFace 缓存目录（可选，使用 LSSD 加速）
 export HF_HOME=/lssd/huggingface
+
+# MoE 模型: 先预编译 DeepGEMM（避免 warmup 超时）
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
 
 # Start server (adjust tp based on model architecture)
 python3 -m sglang.launch_server \
@@ -480,6 +567,23 @@ For production DeepSeek-V3/R1 deployments, SGLang supports prefill-decode disagg
    - **Mooncake**: `pip install mooncake-transfer-engine==0.3.8.post1` (requires nvidia_peermem)
 2. **DeepEP** for MoE all-to-all communication
 3. **DeepEP config files** for expert placement
+4. **sglang-router** for request routing (必须):
+   ```bash
+   pip install --break-system-packages sglang-router
+   ```
+
+### Architecture
+
+PD disaggregation 的请求流程：
+
+```
+Client → sglang-router → Prefill Node (port 30000)
+                       → Decode Node  (port 30001)
+```
+
+**IMPORTANT:** 客户端请求必须发送到 sglang-router，不能直接发送到 Prefill 或 Decode 节点。
+- 直接请求 Prefill: `AssertionError: bootstrap_room should not be None`
+- 直接请求 Decode: `400 Disaggregated request received without bootstrap room id`
 
 ### DeepSeek-V3 Prefill Node Example
 
@@ -507,7 +611,7 @@ python3 -m sglang.launch_server \
     --download-dir /lssd/huggingface/hub \
     --trust-remote-code \
     --disaggregation-mode prefill \
-    --dist-init-addr <MASTER_IP>:5757 \
+    --dist-init-addr 0.0.0.0:5757 \
     --nnodes 1 \
     --node-rank 0 \
     --tp-size 8 \
@@ -592,6 +696,104 @@ sudo modprobe nvidia_peermem
    ```
 
 **Note:** NIXL uses DMA-BUF which is built into the Linux kernel and doesn't require nvidia_peermem.
+
+### 1P1D Quick Start (Minimal DeepSeek-V3 Example)
+
+验证过的最小化 1P1D 部署步骤（2 节点 B200）：
+
+**Step 1: 两节点预编译 DeepGEMM**
+
+```bash
+# 在 Prefill 和 Decode 节点上都执行
+source /opt/deepep/unified-env.sh
+export HF_HOME=/lssd/huggingface
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
+```
+
+**Step 2: Prefill Node (e.g. 10.8.0.25)**
+
+```bash
+source /opt/deepep/unified-env.sh
+export HF_HOME=/lssd/huggingface
+
+SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=1024 \
+NCCL_SOCKET_IFNAME=enp0s19 \
+GLOO_SOCKET_IFNAME=enp0s19 \
+python3 -m sglang.launch_server \
+    --model-path deepseek-ai/DeepSeek-V3 \
+    --port 30000 \
+    --host 0.0.0.0 \
+    --tp-size 8 \
+    --trust-remote-code \
+    --disaggregation-mode prefill \
+    --disaggregation-transfer-backend nixl \
+    --dist-init-addr 0.0.0.0:5757 \
+    --moe-dense-tp-size 1 \
+    --enable-dp-attention \
+    --moe-a2a-backend deepep \
+    --deepep-mode normal \
+    --disable-cuda-graph \
+    --watchdog-timeout 1000000
+```
+
+**Step 3: Decode Node (e.g. 10.8.0.71)**
+
+```bash
+source /opt/deepep/unified-env.sh
+export HF_HOME=/lssd/huggingface
+
+SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=1024 \
+NCCL_SOCKET_IFNAME=enp0s19 \
+GLOO_SOCKET_IFNAME=enp0s19 \
+python3 -m sglang.launch_server \
+    --model-path deepseek-ai/DeepSeek-V3 \
+    --port 30001 \
+    --host 0.0.0.0 \
+    --tp-size 8 \
+    --trust-remote-code \
+    --disaggregation-mode decode \
+    --disaggregation-transfer-backend nixl \
+    --dist-init-addr 0.0.0.0:5757 \
+    --moe-dense-tp-size 1 \
+    --enable-dp-attention \
+    --moe-a2a-backend deepep \
+    --deepep-mode normal \
+    --disable-cuda-graph \
+    --watchdog-timeout 1000000
+```
+
+**Step 4: sglang-router (在 Prefill 节点或独立节点上)**
+
+```bash
+pip install --break-system-packages sglang-router
+
+python3 -m sglang_router.launch_router \
+    --pd-disaggregation \
+    --mini-lb \
+    --prefill http://10.8.0.25:30000 \
+    --decode http://10.8.0.71:30001 \
+    --host 0.0.0.0 \
+    --port 30080
+```
+
+**Step 5: 测试**
+
+```bash
+# 请求必须发送到 router (port 30080)，不能直接发到 Prefill/Decode
+curl http://10.8.0.25:30080/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "deepseek-ai/DeepSeek-V3",
+    "messages": [{"role": "user", "content": "Hello!"}],
+    "max_tokens": 50
+  }'
+```
+
+### dist-init-addr 注意事项
+
+**CRITICAL:** `--dist-init-addr` 必须使用 `0.0.0.0:5757`，不能使用特定 IP（如 `10.8.0.25:5757`）。
+
+原因：SGLang 内部使用 `dist-init-addr` 进行 ZMQ TCP bind。如果使用特定 IP，Decode 节点会尝试 bind 到 Prefill 节点的 IP，导致 bind 失败。
 
 ## Testing the Server
 
@@ -765,6 +967,16 @@ import vllm; print(f'vLLM: {vllm.__version__}')
 ```
 
 ## Version History
+
+- **2026-02-08**: PD disaggregation 实战经验 (b2+b3 1P1D 验证)
+  - **NEW**: DeepGEMM 预编译节 (`python3 -m sglang.compile_deep_gemm`)
+  - **NEW**: sglang-router 安装和使用（PD disaggregation 必须组件）
+  - **NEW**: 1P1D Quick Start 完整部署示例（Prefill + Decode + Router）
+  - **CRITICAL**: `--dist-init-addr` 必须使用 `0.0.0.0:5757`，不能使用特定 IP
+  - **CRITICAL**: 客户端请求必须发到 router，直接发到 Prefill/Decode 会报错
+  - **NEW**: 4 个新错误条目（DeepGEMM JIT 超时、bootstrap_room、bootstrap room id、dist-init-addr bind）
+  - **FIX**: 生产 PD disaggregation 示例中的 dist-init-addr 从 `<MASTER_IP>` 改为 `0.0.0.0`
+  - 添加 sglang-router 到版本表
 
 - **2026-01-29**: DeepSeek-V3 FP8 Blackwell compatibility issue
   - **CRITICAL**: Documented DeepSeek-V3 FP8 outputs garbage on Blackwell (B200) GPUs

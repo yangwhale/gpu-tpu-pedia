@@ -532,7 +532,79 @@ GPU6-GPU7 ↔ PIX ↔ NIC6-NIC7 (mlx5_6, mlx5_7)
 
 ---
 
+## GCP 磁盘镜像创建 (预装环境复用)
+
+完成 DeepEP 安装后，可创建磁盘镜像用于快速扩容新机器。
+
+### 创建流程
+
+```bash
+# 1. 停止实例 (如果在 MIG 中，先 abandon)
+gcloud compute instance-groups managed abandon-instances <MIG_NAME> \
+    --instances=<INSTANCE_NAME> --zone=<ZONE>
+gcloud compute instances stop <INSTANCE_NAME> --zone=<ZONE>
+
+# 2. 创建镜像
+gcloud compute images create <IMAGE_NAME> \
+    --source-disk=<INSTANCE_NAME> \
+    --source-disk-zone=<ZONE> \
+    --family=chrisya-b200-deepep \
+    --storage-location=<REGION>
+
+# 3. 基于镜像创建新的 Instance Template
+# (需要包含 MRDMA 网络接口配置，见下方说明)
+
+# 4. 更新 MIG 使用新 Template
+gcloud compute instance-groups managed set-instance-template <MIG_NAME> \
+    --template=<NEW_TEMPLATE> --zone=<ZONE>
+
+# 5. 扩容
+gcloud compute instance-groups managed resize <MIG_NAME> \
+    --size=<N> --zone=<ZONE>
+```
+
+### 镜像包含内容
+
+使用 DeepEP 预装镜像创建的新实例已包含：
+- CUDA 12.9
+- DOCA-OFED 3.2.1 (mlx5 HCA)
+- PeerMappingOverride 配置
+- GDRCopy 库
+- NVSHMEM v3.5.19-1 (IBGDA)
+- DeepEP + PR #466
+- PyTorch 2.9.1+cu129
+- unified-env.sh 环境脚本
+
+### 新实例启动后验证
+
+```bash
+# 验证 DeepEP (需要先 source 环境)
+source /opt/deepep/unified-env.sh
+python3 -c "import deep_ep; print('DeepEP OK')"
+
+# 验证 HCA
+ls /sys/class/infiniband/
+# 预期: mlx5_0 ~ mlx5_7
+
+# 验证 PeerMappingOverride
+grep PeerMappingOverride /proc/driver/nvidia/params
+```
+
+### 注意事项
+
+- **MRDMA 网络接口:** Instance Template 中必须包含 8 个 MRDMA 接口，且 MRDMA 接口不能配置 external NAT（使用 `no-address`）
+- **LSSD:** 磁盘镜像不包含 LSSD 数据，新实例需重新挂载 LSSD 并下载模型权重
+- **SGLang:** 镜像不包含 SGLang，需在新实例上单独安装（使用 `/sglang-installer` skill）
+
+---
+
 ## 版本历史
+
+- **2026-02-08**: 磁盘镜像和 1P1D 实战经验
+  - **NEW**: GCP 磁盘镜像创建流程（预装环境复用）
+  - **NEW**: 镜像内容清单和新实例验证步骤
+  - b1+b2 并行安装 → 镜像创建 → b3 扩容验证通过
+  - 镜像: chrisya-b200-u2404-nv580-deepep-ase1-260208
 
 - **2026-02-03**: 4 节点测试验证
   - b7-b10 4 节点 32-GPU 测试通过
