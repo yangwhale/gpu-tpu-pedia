@@ -432,6 +432,28 @@ pip install nvidia-cudnn-cu12==9.16.0.29 --force-reinstall --no-deps
 NIXL 安装的 `nvidia-nvshmem-cu12` (3.4.5) 是 pip 包版本，**不会影响 DeepEP**。
 DeepEP 使用自编译的 NVSHMEM (3.5.19，带 IBGDA 支持)，通过 `unified-env.sh` 中的 `LD_PRELOAD` 强制加载。
 
+### Error: DeepGEMM compile_deep_gemm OOM (CUDA out of memory)
+
+**Symptom:**
+```
+torch.OutOfMemoryError: CUDA out of memory. Tried to allocate 7.00 GiB. GPU 0 has a total capacity of 178.35 GiB of which 2.31 GiB is free.
+```
+
+**Diagnosis:** `compile_deep_gemm` 默认在单卡上加载整个模型。DeepSeek-V3 (671B) 远超单卡 183GB 显存。
+
+**Fix:** 必须指定 `--tp` 参数，与后续 `launch_server` 的 `--tp-size` 一致：
+```bash
+# 错误: 不加 --tp，单卡加载 671B 模型 → OOM
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
+
+# 正确: 用 TP=8 分布到 8 卡
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3 --tp 8
+```
+
+**注意:** cubin 缓存路径是 `~/.cache/deep_gemm/cache/`（不是 `~/.deep_gemm/cache/`），预期产出 ~692 个文件。
+
+---
+
 ### Error: DeepGEMM JIT compilation causes DeepEP dispatch timeout
 
 **Symptom:**
@@ -445,7 +467,9 @@ RuntimeError: DeepEP error: timeout (dispatch CPU)
 **Fix:** 在启动 server 前预编译 DeepGEMM：
 ```bash
 source /opt/deepep/unified-env.sh
-python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
+export HF_HOME=/lssd/huggingface
+# IMPORTANT: --tp 必须与 server 启动时的 --tp-size 一致，避免单卡 OOM
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3 --tp 8
 # 编译完成后再启动 server
 ```
 
@@ -516,19 +540,23 @@ MoE 模型（DeepSeek-V3/R1 等）使用 DeepGEMM 进行 FP8 矩阵乘法。Deep
 
 ```bash
 source /opt/deepep/unified-env.sh
+export HF_HOME=/lssd/huggingface
 
 # 预编译 DeepGEMM cubin（针对特定模型的 GEMM 维度）
-python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
+# IMPORTANT: --tp 必须与 server 启动时的 --tp-size 一致
+# DeepSeek-V3 (671B) 单卡放不下，不加 --tp 会 OOM
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3 --tp 8
 
 # 验证 cubin 缓存
-ls ~/.deep_gemm/cache/ | wc -l
+ls ~/.cache/deep_gemm/cache/ | wc -l
 # 预期: ~692 个文件（DeepSeek-V3 架构）
 ```
 
 **注意:**
+- **--tp 参数**: 必须与后续 `launch_server` 的 `--tp-size` 一致。不加 `--tp` 默认单卡加载，DeepSeek-V3 (671B) 会触发 CUDA OOM
 - DeepGEMM 编译结果是半模型特定的：基于模型的 GEMM 维度（M/N/K），相同架构（如 DeepSeek-V3 和 DeepSeek-R1）可共享缓存
 - 不同架构的模型（如 Qwen-MoE vs DeepSeek）需要重新编译
-- cubin 缓存目录: `~/.deep_gemm/cache/`
+- cubin 缓存目录: `~/.cache/deep_gemm/cache/`（注意不是 `~/.deep_gemm/cache/`）
 - 预编译后缓存持久化在磁盘上，重启后无需重新编译
 
 ## Starting the Server
@@ -543,7 +571,8 @@ source /opt/deepep/unified-env.sh
 export HF_HOME=/lssd/huggingface
 
 # MoE 模型: 先预编译 DeepGEMM（避免 warmup 超时）
-python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
+# --tp 必须与 launch_server 的 --tp-size 一致，避免单卡 OOM
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3 --tp 8
 
 # Start server (adjust tp based on model architecture)
 python3 -m sglang.launch_server \
@@ -707,7 +736,9 @@ sudo modprobe nvidia_peermem
 # 在 Prefill 和 Decode 节点上都执行
 source /opt/deepep/unified-env.sh
 export HF_HOME=/lssd/huggingface
-python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3
+# --tp 8 必须加，否则单卡加载 671B 模型会 OOM
+python3 -m sglang.compile_deep_gemm --model-path deepseek-ai/DeepSeek-V3 --tp 8
+# 验证: ls ~/.cache/deep_gemm/cache/ | wc -l  → 预期 ~692
 ```
 
 **Step 2: Prefill Node (e.g. 10.8.0.25)**
@@ -967,6 +998,12 @@ import vllm; print(f'vLLM: {vllm.__version__}')
 ```
 
 ## Version History
+
+- **2026-02-09**: DeepGEMM 预编译实战修复 (b3 安装验证)
+  - **CRITICAL**: `compile_deep_gemm` 必须加 `--tp 8`，否则单卡加载 DeepSeek-V3 (671B) 会 OOM
+  - **FIX**: DeepGEMM cubin 缓存路径为 `~/.cache/deep_gemm/cache/`（非 `~/.deep_gemm/cache/`）
+  - **NEW**: 新增 "DeepGEMM compile_deep_gemm OOM" 错误条目
+  - 更新所有 `compile_deep_gemm` 命令示例添加 `--tp 8` 和 `export HF_HOME`
 
 - **2026-02-08**: PD disaggregation 实战经验 (b2+b3 1P1D 验证)
   - **NEW**: DeepGEMM 预编译节 (`python3 -m sglang.compile_deep_gemm`)

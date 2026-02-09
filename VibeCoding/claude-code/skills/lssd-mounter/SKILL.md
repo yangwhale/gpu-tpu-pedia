@@ -189,23 +189,44 @@ $ ./scripts/mount-lssd.sh
 
 **症状:**
 ```
+mdadm: super1.x cannot open /dev/nvmeXn1: Device or resource busy
+mdadm: /dev/nvmeXn1 is not suitable for this array.
+```
+或
+```
 mdadm: chunk size must be a power of 2, not 33
 ```
-或 lsblk 显示 33 个设备（包括 2TB 系统盘）
 
 **根因:**
-使用 `ls /dev/nvme*n1` 会包含系统盘（通常是 2TB），导致 mdadm 创建失败。
+使用 `ls /dev/nvme*n1 | grep -v nvme0` 来排除系统盘是**不可靠的**。系统盘的 NVMe 编号不固定：
+- 有些机器系统盘是 `nvme0n1`
+- 有些机器系统盘是 `nvme32n1`（如 a3-megagpu-8g 实测）
+- 编号取决于 PCIe 枚举顺序，不同机器可能不同
+
+**诊断:** 用 `lsblk` 查看哪个 NVMe 有分区（系统盘有 p1/p14/p15/p16 分区）:
+```bash
+lsblk /dev/nvme*n1 | grep -E 'part|disk'
+# 系统盘特征: 2TB 大小，有多个分区（p1 挂载 /）
+# 数据盘特征: 375GB 大小，无分区
+```
 
 **解决方案:**
 仅选择 375GB 的 Local SSD，排除系统盘:
 
 ```bash
-# 方法 1: 通过 google-local-nvme-ssd 符号链接（推荐）
+# 方法 1: 通过 google-local-nvme-ssd 符号链接（推荐，最可靠）
 NVME_DEVICES=$(ls /dev/disk/by-id/google-local-nvme-ssd-* 2>/dev/null | sort)
 
 # 方法 2: 通过设备大小过滤（375GB = 402653184000 bytes）
 NVME_DEVICES=$(lsblk -d -b -o NAME,SIZE | awk '$2 == 402653184000 {print "/dev/"$1}' | sort)
+
+# 方法 3: 排除有分区的设备（即排除系统盘）
+NVME_DEVICES=$(lsblk -d -n -o NAME,TYPE | awk '$2=="disk" && /^nvme/' | while read name _; do
+    [ "$(lsblk -n /dev/$name | wc -l)" -eq 1 ] && echo "/dev/$name"
+done | sort)
 ```
+
+**警告:** 不要使用 `grep -v nvme0` — 系统盘不一定是 nvme0。
 
 ### 问题: mdadm 命令未找到
 
