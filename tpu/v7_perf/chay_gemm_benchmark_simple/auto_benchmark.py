@@ -103,13 +103,16 @@ def get_hardware_specs(hw_info: Dict[str, Any]) -> Dict[str, Any]:
             "float32_tflops": 918,  # Uses bf16 compute
             "int8_tops": 1836,
         },
-        # TPU v7 (Ironwood) - Placeholder
+        # TPU v7 (Ironwood) - Per chiplet (JAX device) specs
+        # Source: https://docs.cloud.google.com/tpu/docs/tpu7x (2026-02-09)
+        # Per chip: BF16 2307 TFLOPS, HBM 7380 GB/s, 192 GiB
+        # Per chiplet: BF16 1153.5 TFLOPS, HBM 3690 GB/s, 96 GiB
         "Google TPU v7 (Ironwood)": {
-            "bandwidth_gbs": 3200,
-            "bfloat16_tflops": 2000,
-            "float16_tflops": 2000,
-            "float32_tflops": 2000,
-            "int8_tops": 4000,
+            "bandwidth_gbs": 3690,
+            "bfloat16_tflops": 1153.5,
+            "float16_tflops": 1153.5,
+            "float32_tflops": 1153.5,
+            "int8_tops": 2307,
         },
         # NVIDIA GPUs
         "NVIDIA H100": {

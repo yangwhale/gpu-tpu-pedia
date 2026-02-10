@@ -315,26 +315,55 @@ class TpuV6eBackend(TpuBackendBase):
 
 
 # ============================================================================
-# TPU v7 Backend Placeholder (for future implementation)
+# TPU v7 Backend Implementation (Ironwood - Dual-Chiplet Architecture)
 # ============================================================================
 
 class TpuV7Backend(TpuBackendBase):
     """
     TPU v7 (Ironwood) backend implementation.
 
-    Placeholder for future TPU v7 support.
-    Hardware specs will be updated when v7 is available.
+    Hardware specs (per chip, from Google Cloud docs 2026-02-09):
+    - Peak BF16: 2,307 TFLOPS
+    - Peak FP8:  4,614 TFLOPS (native FP8 support)
+    - HBM: 192 GiB @ 7,380 GB/s
+    - MXU: 2 TensorCores per chip, 4 SparseCores per chip
+    - ICI: 1,200 GBps bidirectional
+
+    Dual-Chiplet Architecture:
+    - Each physical chip contains 2 chiplets
+    - JAX exposes each chip as 2 separate devices (one per chiplet)
+    - Each chiplet: 1 TensorCore, 2 SparseCores, 96 GB HBM
+    - Per-chiplet peak: BF16 1,153.5 TFLOPS, FP8 2,307 TFLOPS, HBM BW 3,690 GB/s
+    - Chiplets connected via die-to-die (D2D) interface (6x faster than 1D ICI)
+
+    Note on float32 performance:
+    - TPU MXU natively executes in bfloat16
+    - float32 GEMM uses bf16 compute with fp32 accumulation
+    - Therefore float32 achieves same compute throughput as bf16
     """
 
-    # Placeholder specs (to be updated with actual v7 specs)
-    PEAK_TFLOPS = {
-        "bfloat16": 2000.0,  # Estimated, update with real specs
-        "float16": 2000.0,
-        "float32": 1000.0,
-        "int8": 4000.0,
+    # Per-chip peak performance (TFLOPS)
+    # Source: https://docs.cloud.google.com/tpu/docs/tpu7x
+    CHIP_PEAK_TFLOPS = {
+        "bfloat16": 2307.0,
+        "float16": 2307.0,   # Same MXU throughput as bf16
+        "float32": 2307.0,   # Uses bf16 compute with fp32 accumulation
+        "int8": 4614.0,      # 2x bf16 (same as FP8)
     }
 
-    HBM_BANDWIDTH = 3200.0  # Estimated
+    # Per-chiplet (JAX device) peak performance (TFLOPS)
+    # JAX exposes each chiplet as a separate device on v7
+    PEAK_TFLOPS = {
+        "bfloat16": 1153.5,  # 2307 / 2 chiplets
+        "float16": 1153.5,
+        "float32": 1153.5,
+        "int8": 2307.0,      # 4614 / 2 chiplets
+    }
+
+    # Memory bandwidth (GB/s) - per chip: 7380, per chiplet: 3690
+    HBM_BANDWIDTH = 3690.0       # Per chiplet (JAX device)
+    HBM_BANDWIDTH_CHIP = 7380.0  # Per physical chip
+    HBM_CAPACITY_GIB = 192       # Per chip (96 GiB per chiplet)
 
     def get_device_name(self) -> str:
         """Return device name."""
@@ -345,8 +374,13 @@ class TpuV7Backend(TpuBackendBase):
         return "v7"
 
     def get_theoretical_peak(self, dtype_str: str) -> float:
-        """Get theoretical peak TFLOPS for a given dtype."""
-        return self.PEAK_TFLOPS.get(dtype_str, 2000.0)
+        """
+        Get theoretical peak TFLOPS for a given dtype.
+
+        Returns per-chiplet (per JAX device) peak since the benchmark
+        runs on a single JAX device, which is one chiplet on v7.
+        """
+        return self.PEAK_TFLOPS.get(dtype_str, 1153.5)
 
 
 # ============================================================================
@@ -360,7 +394,8 @@ def detect_tpu_backend(warmup_iter: int = 10, prof_iter: int = 100) -> Optional[
     Detection strategy:
     1. Check if TPU is available via jax.devices('tpu')
     2. Parse device platform version to determine generation
-    3. Return matching backend instance
+    3. Check number of devices vs chips (dual-chiplet detection for v7)
+    4. Return matching backend instance
 
     Returns:
         TpuBackendBase subclass instance, or None if no TPU available
@@ -372,23 +407,50 @@ def detect_tpu_backend(warmup_iter: int = 10, prof_iter: int = 100) -> Optional[
 
         device = devices[0]
 
-        # Try to detect TPU version from device info
-        # JAX device info format varies, so we use multiple detection methods
+        # Collect all detection signals
         device_str = str(device).lower()
-        platform_version = getattr(device, 'platform_version', '')
+        platform_version = getattr(device, 'platform_version', '').lower()
+        device_kind = getattr(device, 'device_kind', '').lower()
 
-        # Detection logic based on platform info
-        # v7 detection (Ironwood)
-        if 'v7' in device_str or 'ironwood' in device_str.lower():
+        # Log detection info for debugging
+        print(f"[TPU Detection] device_str: {device_str}")
+        print(f"[TPU Detection] platform_version: {platform_version}")
+        print(f"[TPU Detection] device_kind: {device_kind}")
+        print(f"[TPU Detection] num_devices: {len(devices)}")
+
+        # v7 (Ironwood) detection - multiple strategies:
+        # 1. Direct string match in device info
+        # 2. Check for 'tpu7' in platform version or device kind
+        # 3. Dual-chiplet detection: v7 has 2 devices per chip (core_on_chip dimension)
+        is_v7 = False
+
+        # Strategy 1: String matching
+        all_info = f"{device_str} {platform_version} {device_kind}"
+        if any(marker in all_info for marker in ['v7', 'ironwood', 'tpu7']):
+            is_v7 = True
+
+        # Strategy 2: Check coords dimensionality (v7 uses 4D coords for dual-chiplet)
+        if not is_v7:
+            try:
+                # On v7, JAX device coords have 4 dimensions (x, y, z, chiplet)
+                coords = getattr(device, 'coords', None)
+                if coords is not None and len(coords) == 4:
+                    is_v7 = True
+                    print(f"[TPU Detection] 4D coords detected (dual-chiplet): {coords}")
+            except Exception:
+                pass
+
+        if is_v7:
+            print(f"[TPU Detection] Detected TPU v7 (Ironwood)")
+            print(f"[TPU Detection] Dual-chiplet: each JAX device = 1 chiplet (half a physical chip)")
             return TpuV7Backend(warmup_iter, prof_iter)
 
-        # v6e detection (Trillium) - default for now
-        # v6e is the current generation in production
-        if 'v6' in device_str or 'trillium' in device_str.lower():
+        # v6e detection (Trillium)
+        if any(marker in all_info for marker in ['v6', 'trillium']):
+            print(f"[TPU Detection] Detected TPU v6e (Trillium)")
             return TpuV6eBackend(warmup_iter, prof_iter)
 
         # Default to v6e for unknown TPU versions
-        # This is a safe default since v6e is widely deployed
         print(f"[Info] Unknown TPU version detected ({device_str}), defaulting to v6e backend")
         return TpuV6eBackend(warmup_iter, prof_iter)
 

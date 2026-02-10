@@ -32,14 +32,17 @@ DEVICE_SPECS = {
         "int8": 1836         # 2x bf16 for INT8
     },
 
-    # TPU v7 (Ironwood) - Placeholder, specs TBD
-    # Will be updated when v7 becomes available
+    # TPU v7 (Ironwood) - Official specs per chiplet (JAX device)
+    # Source: https://docs.cloud.google.com/tpu/docs/tpu7x (2026-02-09)
+    # Per chip: BF16 2307 TFLOPS, FP8 4614 TFLOPS, HBM 7380 GB/s, 192 GiB
+    # Dual-chiplet arch: JAX sees each chiplet as a device, so per-device = per-chiplet
+    # Per chiplet: BF16 1153.5 TFLOPS, HBM 3690 GB/s, 96 GiB
     "Google TPU v7 (Ironwood)": {
-        "bandwidth": 3200,   # Estimated, TBD
-        "float32": 1000,     # Estimated, TBD
-        "float16": 2000,     # Estimated, TBD
-        "bfloat16": 2000,    # Estimated, TBD
-        "int8": 4000         # Estimated, TBD
+        "bandwidth": 3690,     # 7380 GB/s per chip / 2 chiplets
+        "float32": 1153.5,     # Uses bf16 compute path (fp32 accumulation)
+        "float16": 1153.5,     # Same MXU throughput as bf16
+        "bfloat16": 1153.5,    # 2307 / 2 chiplets per chip
+        "int8": 2307           # 4614 / 2 chiplets per chip (native FP8/INT8)
     },
 }
 
