@@ -18,7 +18,7 @@
 2. ✅ 设计通用 TPU 后端架构
 3. ✅ 通过测试验证并修复 bug
 4. ✅ 生成性能测试报告
-5. ⬜ 创建 chip-performance-test skill（下一阶段）
+5. ✅ 创建 chip-performance-test skill
 
 ---
 
@@ -48,18 +48,24 @@ graph TB
 ```
 chay_gemm_benchmark_simple/
 ├── main.py              # GPU 入口 (PyTorch)
-├── main_tpu.py          # TPU 入口 (JAX) ← 新增
-├── backends.py          # GPU 后端
-├── tpu_backends.py      # TPU 后端 ← 新增
-├── hw_spec.py           # 硬件规格（已更新）
+├── main_tpu.py          # TPU 入口 (JAX)
+├── auto_benchmark.py    # 自动化测试脚本
+├── backends.py          # GPU 后端抽象
+├── hw_spec.py           # 硬件规格定义
 ├── utils.py             # GPU 工具函数
+├── backends/
+│   ├── __init__.py
+│   ├── tpu/
+│   │   ├── __init__.py
+│   │   └── tpu_backends.py  # TPU 后端实现
+│   └── nv_gpu_cublas/       # NVIDIA cuBLAS 扩展
 ├── config/
 │   ├── gemm.json        # GPU 完整配置
 │   ├── simple.json      # GPU 简化配置
-│   ├── tpu_gemm.json    # TPU 完整配置 ← 新增
-│   ├── tpu_simple.json  # TPU 简化配置 ← 新增
-│   └── tpu_full.json    # TPU 中等配置 ← 新增
-└── results_v6e.csv      # 测试结果 ← 新增
+│   ├── tpu_gemm.json    # TPU 完整配置
+│   ├── tpu_simple.json  # TPU 简化配置
+│   └── tpu_full.json    # TPU 中等配置
+└── results_v6e.csv      # v6e 测试结果
 ```
 
 ### 2.3 类图
@@ -334,7 +340,7 @@ python main_tpu.py --config config/tpu_full.json --warmup 20 --prof-iter 200
 
 ### 7.3 添加新 TPU 版本
 
-1. 在 `tpu_backends.py` 中创建新类：
+1. 在 `backends/tpu/tpu_backends.py` 中创建新类：
 
 ```python
 class TpuV7Backend(TpuBackendBase):
@@ -359,9 +365,9 @@ class TpuV7Backend(TpuBackendBase):
 
 ## 8. 后续工作
 
-### 8.1 待完成
+### 8.1 完成状态
 
-- [ ] 创建 `chip-performance-test` skill
+- [x] 创建 `chip-performance-test` skill
 - [ ] TPU v7 实际规格更新（待硬件可用）
 - [ ] 多 TPU 设备并行测试
 - [ ] 性能数据可视化工具
