@@ -9,16 +9,33 @@ Architecture:
     TpuBackendBase (ABC) - Common TPU logic (timing, warmup, JIT compilation)
         ├── TpuV6eBackend - TPU v6e (Trillium) specific implementation
         └── TpuV7Backend  - TPU v7 (Ironwood) specific implementation (future)
+
+Timing Modes:
+    - Legacy (use_trace=False): Uses time.perf_counter() for end-to-end timing.
+      Includes Python dispatch overhead, typically showing ~65-75% MFU.
+
+    - Trace-based (use_trace=True): Uses JAX profiler to extract pure device
+      execution time (device_duration_ps), eliminating Python overhead.
+      Typically shows 90%+ MFU for compute-bound workloads.
 """
 
 import abc
+import shutil
+import statistics
 import time
-from typing import Tuple, Optional
+from typing import Tuple, Optional, List
 from functools import partial
 
 import jax
 import jax.numpy as jnp
 from jax import lax
+
+from .trace_utils import (
+    MARKER,
+    get_trace,
+    get_metrics_from_trace_marker,
+    create_temp_trace_dir,
+)
 
 # ============================================================================
 # JAX dtype mapping (separate from torch dtype system)
@@ -124,6 +141,7 @@ class TpuBackendBase(abc.ABC):
     - Warmup and profiling loop structure
     - Timing using block_until_ready() for accurate measurement
     - JIT compilation management
+    - Trace-based timing for accurate MFU measurement
 
     Subclasses implement:
     - get_device_name(): Return human-readable device name
@@ -131,16 +149,19 @@ class TpuBackendBase(abc.ABC):
     - get_theoretical_peak(): Return theoretical TFLOPS for a given dtype
     """
 
-    def __init__(self, warmup_iter: int = 10, prof_iter: int = 100):
+    def __init__(self, warmup_iter: int = 10, prof_iter: int = 100, use_trace: bool = True):
         """
         Initialize TPU backend.
 
         Args:
             warmup_iter: Number of warmup iterations (JIT compilation + cache warming)
             prof_iter: Number of profiling iterations for timing measurement
+            use_trace: If True, use JAX profiler trace for accurate timing (90%+ MFU).
+                      If False, use time.perf_counter() which includes Python overhead.
         """
         self.warmup_iter = warmup_iter
         self.prof_iter = prof_iter
+        self.use_trace = use_trace
 
         # Verify TPU is available
         self._verify_tpu_available()
@@ -200,6 +221,18 @@ class TpuBackendBase(abc.ABC):
         Returns:
             Average execution time in microseconds, or -1.0 on error
         """
+        if self.use_trace:
+            return self._run_with_trace(m, n, k, dtype)
+        else:
+            return self._run_legacy(m, n, k, dtype)
+
+    def _run_legacy(self, m: int, n: int, k: int, dtype) -> float:
+        """
+        Run GEMM benchmark using legacy time.perf_counter() timing.
+
+        This method includes Python dispatch overhead in timing measurements,
+        typically resulting in ~65-75% MFU for compute-bound workloads.
+        """
         try:
             # Handle dtype conversion (support torch.dtype, jax dtype, or string)
             jax_dtype = self._convert_dtype(dtype)
@@ -238,6 +271,80 @@ class TpuBackendBase(abc.ABC):
         except Exception as e:
             print(f"  > [TPU Error] m={m}, n={n}, k={k}, dtype={dtype}: {e}")
             return -1.0
+
+    def _run_with_trace(self, m: int, n: int, k: int, dtype) -> float:
+        """
+        Run GEMM benchmark using JAX profiler trace-based timing.
+
+        This method extracts pure device execution time (device_duration_ps)
+        from JAX profiler traces, eliminating Python overhead. This typically
+        results in 90%+ MFU for compute-bound workloads.
+
+        The key technique is using jax.named_scope(MARKER) to tag operations,
+        then parsing the trace to find events with that marker.
+        """
+        trace_dir = None
+        try:
+            # Handle dtype conversion
+            jax_dtype = self._convert_dtype(dtype)
+            output_dtype = get_jax_output_dtype(jax_dtype)
+
+            # Get new random key for this run
+            self._rng_key, subkey = jax.random.split(self._rng_key)
+
+            # Create input tensors on TPU
+            a, b = _create_input_tensors_jax(m, n, k, jax_dtype, subkey)
+
+            # Ensure tensors are on TPU and materialized
+            a = jax.device_put(a, self.device)
+            b = jax.device_put(b, self.device)
+            a.block_until_ready()
+            b.block_until_ready()
+
+            # Warmup phase (includes JIT compilation on first call)
+            for _ in range(self.warmup_iter):
+                result = _gemm_kernel(a, b, subkey, output_dtype)
+                result.block_until_ready()
+
+            # Create temporary trace directory
+            trace_dir = create_temp_trace_dir()
+
+            # Profiling phase with trace collection
+            with jax.profiler.trace(trace_dir):
+                for i in range(self.prof_iter):
+                    # Tag each iteration with MARKER for trace identification
+                    # jax.named_scope() adds a tag to the trace that we can search for later
+                    with jax.named_scope(f"{MARKER}_{i}"):
+                        result = _gemm_kernel(a, b, subkey, output_dtype)
+                        result.block_until_ready()
+
+            # Extract timing from trace
+            trace = get_trace(trace_dir)
+            durations_ms = get_metrics_from_trace_marker(trace, MARKER)
+
+            if not durations_ms:
+                print(f"  > [Warning] No trace events found, falling back to legacy timing")
+                return self._run_legacy(m, n, k, dtype)
+
+            # Calculate median time in microseconds (more robust than mean)
+            median_time_ms = statistics.median(durations_ms)
+            avg_time_us = median_time_ms * 1000  # Convert ms to us
+
+            return avg_time_us
+
+        except Exception as e:
+            print(f"  > [TPU Trace Error] m={m}, n={n}, k={k}, dtype={dtype}: {e}")
+            # Fallback to legacy timing on error
+            print(f"  > Falling back to legacy timing...")
+            try:
+                return self._run_legacy(m, n, k, dtype)
+            except Exception:
+                return -1.0
+
+        finally:
+            # Always clean up trace directory to prevent resource leak
+            if trace_dir is not None:
+                shutil.rmtree(trace_dir, ignore_errors=True)
 
     def _convert_dtype(self, dtype) -> jnp.dtype:
         """
@@ -387,7 +494,11 @@ class TpuV7Backend(TpuBackendBase):
 # Factory function for TPU backend selection
 # ============================================================================
 
-def detect_tpu_backend(warmup_iter: int = 10, prof_iter: int = 100) -> Optional[TpuBackendBase]:
+def detect_tpu_backend(
+    warmup_iter: int = 10,
+    prof_iter: int = 100,
+    use_trace: bool = True
+) -> Optional[TpuBackendBase]:
     """
     Auto-detect TPU generation and return appropriate backend.
 
@@ -396,6 +507,11 @@ def detect_tpu_backend(warmup_iter: int = 10, prof_iter: int = 100) -> Optional[
     2. Parse device platform version to determine generation
     3. Check number of devices vs chips (dual-chiplet detection for v7)
     4. Return matching backend instance
+
+    Args:
+        warmup_iter: Number of warmup iterations
+        prof_iter: Number of profiling iterations
+        use_trace: If True, use trace-based timing for accurate MFU (default: True)
 
     Returns:
         TpuBackendBase subclass instance, or None if no TPU available
@@ -443,16 +559,16 @@ def detect_tpu_backend(warmup_iter: int = 10, prof_iter: int = 100) -> Optional[
         if is_v7:
             print(f"[TPU Detection] Detected TPU v7 (Ironwood)")
             print(f"[TPU Detection] Dual-chiplet: each JAX device = 1 chiplet (half a physical chip)")
-            return TpuV7Backend(warmup_iter, prof_iter)
+            return TpuV7Backend(warmup_iter, prof_iter, use_trace)
 
         # v6e detection (Trillium)
         if any(marker in all_info for marker in ['v6', 'trillium']):
             print(f"[TPU Detection] Detected TPU v6e (Trillium)")
-            return TpuV6eBackend(warmup_iter, prof_iter)
+            return TpuV6eBackend(warmup_iter, prof_iter, use_trace)
 
         # Default to v6e for unknown TPU versions
         print(f"[Info] Unknown TPU version detected ({device_str}), defaulting to v6e backend")
-        return TpuV6eBackend(warmup_iter, prof_iter)
+        return TpuV6eBackend(warmup_iter, prof_iter, use_trace)
 
     except Exception as e:
         print(f"[Info] TPU detection failed: {e}")
@@ -468,5 +584,7 @@ def is_tpu_available() -> bool:
     try:
         devices = jax.devices('tpu')
         return len(devices) > 0
-    except:
+    except (RuntimeError, AttributeError, Exception):
+        # RuntimeError: JAX backend not available
+        # AttributeError: devices function not available
         return False

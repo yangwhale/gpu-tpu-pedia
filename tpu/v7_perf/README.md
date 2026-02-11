@@ -7,12 +7,26 @@ TPU GEMM 性能基准测试工具，支持 TPU v6e (Trillium) 和 v7 (Ironwood)�
 ```bash
 cd chay_gemm_benchmark_simple
 
-# 快速测试 (~25 秒)
-python3 main_tpu.py --config config/tpu_simple.json
+# 快速测试 - 使用 trace 模式 (~30 秒, 推荐, 可获得 90%+ MFU)
+python3 main_tpu.py --config config/tpu_trace_test.json
 
 # 完整测试 + CSV 输出 (~10 分钟)
 python3 main_tpu.py --config config/tpu_full.json --output results.csv
+
+# 对比：使用传统计时模式 (包含 Python overhead, MFU 约 65-75%)
+python3 main_tpu.py --config config/tpu_simple.json --no-trace
 ```
+
+### Trace-Based Timing (推荐)
+
+默认启用 **Trace 模式**，从 JAX profiler trace 中提取纯设备执行时间 (`device_duration_ps`)，排除 Python dispatch overhead：
+
+| 计时模式 | 命令参数 | MFU 范围 | 原理 |
+|----------|----------|----------|------|
+| **Trace (默认)** | (无需参数) | **90%+** | 从 profiler trace 提取 `device_duration_ps` |
+| Legacy | `--no-trace` | 65-75% | 使用 `time.perf_counter()` 端到端计时 |
+
+> 参考: [accelerator-microbenchmarks](https://github.com/google/accelerator-microbenchmarks) 的方法
 
 ## 目录结构
 
@@ -23,13 +37,18 @@ v7_perf/
 │   ├── main_tpu.py                     # TPU 入口 (JAX)
 │   ├── main.py                         # GPU 入口 (PyTorch)
 │   ├── backends/
-│   │   └── tpu/tpu_backends.py         # TPU 后端实现
+│   │   └── tpu/
+│   │       ├── tpu_backends.py         # TPU 后端实现 (v6e/v7)
+│   │       └── trace_utils.py          # Trace-based timing 工具
 │   ├── config/
 │   │   ├── tpu_simple.json             # TPU 快速测试
+│   │   ├── tpu_trace_test.json         # Trace 模式验证配置
 │   │   ├── tpu_full.json               # TPU 中等测试
 │   │   └── tpu_gemm.json               # TPU 完整测试
-│   └── results_v6e.csv                 # v6e 测试结果
+│   ├── results_v6e.csv                 # v6e 测试结果
+│   └── results_v7.csv                  # v7 测试结果
 ├── tpu_backend_implementation_report.md # 实现报告
+├── tpu_v7_benchmark_report.md          # v7 性能测试报告
 ├── gemm_benchmark_analysis.md          # 代码架构分析
 └── findings.md                         # 研究发现
 ```
@@ -73,6 +92,7 @@ v7_perf/
 4. **INT8 待优化** — v7 INT8 MFU 仅 30.9%，可能受 JAX dev 版本限制
 5. **TPU float32 = bf16 性能** — MXU 用 bf16 计算 + fp32 累加
 6. **小 batch 效率低** — M < 512 时 MFU < 15%
+7. **Trace-based timing 更准确** — 从 profiler trace 提取纯设备时间可获得 90%+ MFU（排除 Python overhead）
 
 ## 文档
 
@@ -84,3 +104,4 @@ v7_perf/
 ---
 
 *Created: 2026-02-09*
+*Updated: 2026-02-11 — Added trace-based timing for accurate MFU measurement*

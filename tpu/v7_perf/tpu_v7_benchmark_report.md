@@ -378,9 +378,50 @@ v7 chiplet 的 compute-to-bandwidth ratio = 1153.5 TFLOPS / 3.69 TB/s ≈ **312.
 本次测试涉及以下代码修改以支持 TPU v7:
 
 1. **`backends/tpu/tpu_backends.py`** — 完整实现 `TpuV7Backend`，包含官方规格、dual-chiplet 感知、多策略检测逻辑
-2. **`hw_spec.py`** — 更新 v7 per-chiplet 硬件规格
-3. **`auto_benchmark.py`** — 更新 v7 per-chiplet 硬件规格
-4. **`results_v7.csv`** — 完整原始测试数据
+2. **`backends/tpu/trace_utils.py`** — Trace-based timing 工具，从 JAX profiler trace 提取纯设备执行时间
+3. **`hw_spec.py`** — 更新 v7 per-chiplet 硬件规格
+4. **`auto_benchmark.py`** — 更新 v7 per-chiplet 硬件规格
+5. **`results_v7.csv`** — 完整原始测试数据
+
+### B2. Trace-Based Timing 优化 (2026-02-11)
+
+为提高 MFU 测量精度，新增 Trace-based timing 模式：
+
+**问题背景：**
+- 原有方法使用 `time.perf_counter()` 测量端到端时间
+- 该时间包含 Python dispatch overhead、JAX async dispatch 等开销
+- 导致测得的 MFU 偏低（~65-75%）
+
+**解决方案：**
+- 使用 JAX profiler trace 提取纯设备执行时间 `device_duration_ps`
+- 该时间是 TPU 硬件级别的计时，排除所有 host 端开销
+- 可获得 90%+ MFU（compute-bound workload）
+
+**核心技术：**
+```python
+# 使用 jax.named_scope() 标记 GEMM 操作
+with jax.profiler.trace(trace_dir):
+    with jax.named_scope("!!MARKER!!"):
+        result = gemm(a, b)
+        result.block_until_ready()
+
+# 从 trace 的 device_duration_ps 字段提取纯设备执行时间
+trace = get_trace(trace_dir)
+durations_ms = get_metrics_from_trace_marker(trace, "!!MARKER!!")
+```
+
+**使用方式：**
+```bash
+# 默认使用 trace 模式（推荐）
+python main_tpu.py --config config/tpu_trace_test.json
+
+# 对比：使用传统计时模式
+python main_tpu.py --config config/tpu_trace_test.json --no-trace
+```
+
+**新增文件：**
+- `backends/tpu/trace_utils.py` — Trace 解析工具
+- `config/tpu_trace_test.json` — 快速验证配置
 
 ### C. 参考资料
 

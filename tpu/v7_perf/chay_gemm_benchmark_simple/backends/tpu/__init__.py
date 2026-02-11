@@ -9,7 +9,15 @@ from .tpu_backends import (
     get_jax_output_dtype,
 )
 
+# Trace utilities (for advanced usage)
+from .trace_utils import (
+    MARKER,
+    get_trace,
+    get_metrics_from_trace_marker,
+)
+
 __all__ = [
+    # Backends
     'TpuBackendBase',
     'TpuV6eBackend',
     'TpuV7Backend',
@@ -17,4 +25,8 @@ __all__ = [
     'is_tpu_available',
     'parse_jax_dtype',
     'get_jax_output_dtype',
+    # Trace utilities
+    'MARKER',
+    'get_trace',
+    'get_metrics_from_trace_marker',
 ]

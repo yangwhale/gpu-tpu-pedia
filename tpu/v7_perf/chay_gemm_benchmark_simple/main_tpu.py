@@ -128,6 +128,7 @@ def run_benchmark_from_config(config: dict, backend: TpuBackendBase,
                             "timestamp": datetime.now().isoformat(),
                             "device": backend.device_name,
                             "tpu_gen": backend.get_tpu_generation(),
+                            "timing_mode": "trace" if backend.use_trace else "legacy",
                             "dtype": dtype_str,
                             "m": m,
                             "n": n,
@@ -227,7 +228,16 @@ Examples:
         default=None,
         help="覆盖配置中的 profiling 迭代次数"
     )
+    parser.add_argument(
+        "--no-trace",
+        action="store_true",
+        default=False,
+        help="禁用 trace 模式，使用传统 time.perf_counter() 计时 (包含 Python overhead, MFU 约 65-75%%)"
+    )
     args = parser.parse_args()
+
+    # Trace mode is enabled by default, --no-trace disables it
+    args.use_trace = not args.no_trace
 
     # Check TPU availability first
     if not is_tpu_available():
@@ -253,7 +263,8 @@ Examples:
     prof_iter = args.prof_iter if args.prof_iter is not None else settings.get("prof_iter", 100)
 
     # Detect and initialize TPU backend
-    backend = detect_tpu_backend(warmup_iter, prof_iter)
+    use_trace = args.use_trace
+    backend = detect_tpu_backend(warmup_iter, prof_iter, use_trace)
     if backend is None:
         print("错误: TPU 后端初始化失败。")
         return 1
@@ -264,6 +275,7 @@ Examples:
     print(f"配置文件: {args.config}")
     print(f"Warmup 迭代: {warmup_iter}")
     print(f"Profiling 迭代: {prof_iter}")
+    print(f"Trace 模式: {'启用 (纯设备执行时间)' if use_trace else '禁用 (包含 Python overhead)'}")
     print()
 
     # Run benchmarks
