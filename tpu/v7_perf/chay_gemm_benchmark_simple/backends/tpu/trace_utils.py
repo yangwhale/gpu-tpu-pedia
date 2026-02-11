@@ -81,6 +81,10 @@ def get_metrics_from_trace_marker(
     This function finds all trace events that contain the MARKER in their
     tf_op field and extracts the device_duration_ps (picoseconds) value.
 
+    On TPU v7 (Ironwood), jax.named_scope() writes the marker to tf_op field.
+    On TPU v6e (Trillium), the marker may not appear, so we fall back to
+    finding dot_general operations directly.
+
     Args:
         trace: Trace dictionary from get_trace()
         marker: Marker string to search for (default: MARKER)
@@ -94,7 +98,7 @@ def get_metrics_from_trace_marker(
     if "traceEvents" not in trace:
         raise KeyError("Key 'traceEvents' not found in trace.")
 
-    # Find all events containing our MARKER
+    # Strategy 1: Find events containing MARKER in tf_op (works on v7)
     marker_events = []
     for event in trace["traceEvents"]:
         args = event.get("args", {})
@@ -102,8 +106,13 @@ def get_metrics_from_trace_marker(
         if marker in tf_op:
             marker_events.append(event)
 
+    # Strategy 2: If no MARKER events, fall back to finding dot_general ops (for v6e)
     if not marker_events:
-        print(f"[Warning] No events found with marker '{marker}' in tf_op field")
+        print(f"[Trace] No MARKER events in tf_op, trying fallback strategy...")
+        marker_events = _find_gemm_events_fallback(trace)
+
+    if not marker_events:
+        print(f"[Warning] No GEMM events found in trace")
         return []
 
     # Filter for "call-done" events if available (for sparse core offloading)
@@ -134,6 +143,38 @@ def get_metrics_from_trace_marker(
     print(f"[Trace] Collected {len(durations_ms)} timing samples from device (pid={min_pid})")
 
     return durations_ms
+
+
+def _find_gemm_events_fallback(trace: Dict[str, Any]) -> List[Dict[str, Any]]:
+    """
+    Fallback strategy to find GEMM-related events when MARKER is not present.
+
+    On TPU v6e, jax.named_scope() doesn't write to tf_op field. Instead, we
+    look for fusion events that contain dot_general operations.
+
+    Args:
+        trace: Trace dictionary
+
+    Returns:
+        List of events that appear to be GEMM operations
+    """
+    gemm_events = []
+
+    for event in trace["traceEvents"]:
+        args = event.get("args", {})
+        name = event.get("name", "")
+        tf_op = args.get("tf_op", "")
+
+        # Check if this is a dot_general (GEMM) operation
+        # On v6e, these appear as "fusion" events with tf_op containing "dot_general"
+        if "dot_general" in tf_op:
+            if "device_duration_ps" in args:
+                gemm_events.append(event)
+
+    if gemm_events:
+        print(f"[Trace] Found {len(gemm_events)} dot_general events via fallback")
+
+    return gemm_events
 
 
 def generate_trace_name(prefix: str = "gemm") -> str:
