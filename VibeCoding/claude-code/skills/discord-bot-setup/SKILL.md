@@ -75,15 +75,19 @@ CLAUDE_BIN = str(Path.home() / ".local/bin/claude")
 TOKEN = "USER_PROVIDED_TOKEN"
 
 # Whisper 语音转文字（懒加载，首次使用时加载模型）
+# 可选: tiny, base, small, medium, large
+# small 推荐：中英文识别好，CPU 上速度合理
+WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "small")
+
 _whisper_model = None
 def transcribe_audio(file_path: str) -> str:
-    """用 Whisper small 模型转写音频文件，自动检测语言"""
+    """用 Whisper 模型转写音频文件，自动检测语言"""
     global _whisper_model
     try:
         import whisper
         if _whisper_model is None:
-            log.info("Loading Whisper small model (first time)...")
-            _whisper_model = whisper.load_model("small")
+            log.info(f"Loading Whisper {WHISPER_MODEL} model (first time)...")
+            _whisper_model = whisper.load_model(WHISPER_MODEL)
             log.info("Whisper model loaded.")
         result = _whisper_model.transcribe(file_path, language=None)
         text = result.get("text", "").strip()
