@@ -283,8 +283,8 @@ def get_add_time_ids(original_size, crops_coords_top_left, target_size, dtype):
     return torch.tensor([add_time_ids], dtype=dtype)
 
 
-def run_denoising(unet, scheduler, embeddings, config, mesh, env):
-    """运行 denoising loop。"""
+def run_denoising(unet, scheduler, embeddings, config, mesh, env, batch_size=1):
+    """运行 denoising loop。支持批量生成。"""
     height, width = config['height'], config['width']
     guidance_scale = config['guidance_scale']
     num_steps = config['num_inference_steps']
@@ -295,29 +295,39 @@ def run_denoising(unet, scheduler, embeddings, config, mesh, env):
     negative_prompt_embeds = embeddings['negative_prompt_embeds']
     negative_pooled_prompt_embeds = embeddings['negative_pooled_prompt_embeds']
 
-    # 初始化 latents
-    generator = torch.Generator()
-    generator.manual_seed(seed)
-
+    # 初始化 latents (批量)
     vae_scale_factor = 8
     latent_height = height // vae_scale_factor
     latent_width = width // vae_scale_factor
-    latents_shape = (1, 4, latent_height, latent_width)
-    latents = torch.randn(latents_shape, generator=generator, dtype=torch.float32)
+
+    # 为每个样本使用不同的 seed
+    latents_list = []
+    for i in range(batch_size):
+        generator = torch.Generator()
+        generator.manual_seed(seed + i)
+        latents_list.append(torch.randn(1, 4, latent_height, latent_width, generator=generator, dtype=torch.float32))
+    latents = torch.cat(latents_list, dim=0)  # (B, 4, H/8, W/8)
 
     scheduler.set_timesteps(num_steps)
     timesteps = scheduler.timesteps
     latents = latents * scheduler.init_noise_sigma
 
-    # 准备 add_time_ids
+    # 准备 add_time_ids (批量)
     original_size = (height, width)
     target_size = (height, width)
     crops_coords_top_left = (0, 0)
     add_time_ids = get_add_time_ids(original_size, crops_coords_top_left, target_size, prompt_embeds.dtype)
+    add_time_ids = add_time_ids.repeat(batch_size, 1)
 
-    # CFG: 拼接
-    prompt_embeds_cfg = torch.cat([negative_prompt_embeds, prompt_embeds], dim=0)
-    pooled_embeds_cfg = torch.cat([negative_pooled_prompt_embeds, pooled_prompt_embeds], dim=0)
+    # 扩展 embeddings 到批量大小
+    prompt_embeds_batch = prompt_embeds.repeat(batch_size, 1, 1)
+    pooled_embeds_batch = pooled_prompt_embeds.repeat(batch_size, 1)
+    neg_embeds_batch = negative_prompt_embeds.repeat(batch_size, 1, 1)
+    neg_pooled_batch = negative_pooled_prompt_embeds.repeat(batch_size, 1)
+
+    # CFG: 拼接 (2*B, ...)
+    prompt_embeds_cfg = torch.cat([neg_embeds_batch, prompt_embeds_batch], dim=0)
+    pooled_embeds_cfg = torch.cat([neg_pooled_batch, pooled_embeds_batch], dim=0)
     add_time_ids_cfg = torch.cat([add_time_ids, add_time_ids], dim=0)
 
     # 转换到 XLA
@@ -326,6 +336,21 @@ def run_denoising(unet, scheduler, embeddings, config, mesh, env):
         prompt_embeds_cfg = prompt_embeds_cfg.to('jax').to(torch.bfloat16)
         pooled_embeds_cfg = pooled_embeds_cfg.to('jax').to(torch.bfloat16)
         add_time_ids_cfg = add_time_ids_cfg.to('jax').to(torch.bfloat16)
+
+    # 数据并行模式下分片输入
+    if batch_size > 1 and 'dp' in mesh.axis_names:
+        def shard_batch(tensor, batch_dim=0):
+            jax_array = tensor._elem
+            ndim = len(jax_array.shape)
+            spec = [None] * ndim
+            spec[batch_dim] = 'dp'
+            sharded = jax.device_put(jax_array, NamedSharding(mesh, P(*spec)))
+            return env.j2t_iso(sharded)
+
+        latents = shard_batch(latents, 0)
+        prompt_embeds_cfg = shard_batch(prompt_embeds_cfg, 0)
+        pooled_embeds_cfg = shard_batch(pooled_embeds_cfg, 0)
+        add_time_ids_cfg = shard_batch(add_time_ids_cfg, 0)
 
     with mesh:
         progress = tqdm(total=num_steps, desc="Denoising", ncols=100)
@@ -386,7 +411,7 @@ def decode_latents(vae, latents, env):
 
 
 def tensor_to_pil(image_tensor):
-    """将 tensor 转换为 PIL Image。"""
+    """将 tensor 转换为 PIL Image 列表。"""
     if hasattr(image_tensor, '_elem'):
         jax_array = image_tensor._elem
         if jax_array.dtype == jnp.bfloat16:
@@ -398,7 +423,10 @@ def tensor_to_pil(image_tensor):
 
     np_array = np.transpose(np_array, (0, 2, 3, 1))
     np_array = (np_array * 255).round().astype(np.uint8)
-    return Image.fromarray(np_array[0])
+
+    # 返回所有图片
+    images = [Image.fromarray(np_array[i]) for i in range(np_array.shape[0])]
+    return images
 
 
 # ============================================================================
@@ -417,6 +445,8 @@ def parse_args():
     parser.add_argument("--guidance_scale", type=float, default=GUIDANCE_SCALE)
     parser.add_argument("--seed", type=int, default=42)
     parser.add_argument("--warmup_steps", type=int, default=2)
+    parser.add_argument("--batch_size", type=int, default=1,
+                        help="批量生成图片数。>1 时启用数据并行，每张卡处理一张图")
     parser.add_argument("--profile", action="store_true")
     return parser.parse_args()
 
@@ -424,9 +454,23 @@ def parse_args():
 def main():
     args = parse_args()
 
+    batch_size = args.batch_size
+    n_devices = len(jax.devices())
+
+    # 验证批量大小
+    if batch_size > 1 and batch_size > n_devices:
+        print(f"警告: batch_size ({batch_size}) > 设备数 ({n_devices})，调整为 {n_devices}")
+        batch_size = n_devices
+
+    # 选择并行策略
+    use_data_parallel = batch_size > 1
+
     print(f"\n{'='*60}")
     print("SDXL Text-to-Image 生成 (TPU)")
     print(f"{'='*60}")
+    print(f"  设备数: {n_devices}")
+    print(f"  批量大小: {batch_size}")
+    print(f"  并行策略: {'数据并行 (DP)' if use_data_parallel else '单图模式'}")
 
     # 配置 JAX
     jax.config.update("jax_compilation_cache_dir", os.path.expanduser("~/.cache/jax_cache"))
@@ -473,9 +517,14 @@ def main():
     env = torchax.default_env()
 
     # 创建 mesh
-    tp_dim = len(jax.devices())
-    mesh = Mesh(mesh_utils.create_device_mesh((tp_dim,), allow_split_physical_axes=True), ("tp",))
-    print(f"\nMesh: tp={tp_dim}, 总设备数={len(jax.devices())}")
+    if use_data_parallel:
+        # 数据并行: 每张卡复制完整模型，处理不同图片
+        mesh = Mesh(mesh_utils.create_device_mesh((n_devices,), allow_split_physical_axes=True), ("dp",))
+        print(f"\nMesh: dp={n_devices} (数据并行)")
+    else:
+        # 单图模式: 无需分片
+        mesh = Mesh(mesh_utils.create_device_mesh((n_devices,), allow_split_physical_axes=True), ("tp",))
+        print(f"\nMesh: tp={n_devices}")
 
     # 配置 UNet
     print("\n=== 配置 UNet (TPU) ===")
@@ -485,8 +534,40 @@ def main():
 
     move_module_to_xla(env, unet)
     unet = torchax.compile(unet, torchax.CompileOptions(jax_jit_kwargs={'static_argnames': ('return_dict',)}))
-    unet.params = shard_weight_dict(unet.params, UNET_SHARDINGS, mesh)
-    unet.buffers = shard_weight_dict(unet.buffers, UNET_SHARDINGS, mesh)
+
+    if use_data_parallel:
+        # 数据并行: 复制权重到所有设备
+        def replicate_weights(weight_dict):
+            result = {}
+            for k, v in weight_dict.items():
+                if isinstance(v, torch.Tensor):
+                    with jax.default_device("cpu"):
+                        v = v.to("jax")
+                v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
+                result[k] = v
+            return result
+        print("  复制权重到所有设备 (数据并行)...")
+        unet.params = replicate_weights(unet.params)
+        unet.buffers = replicate_weights(unet.buffers)
+    else:
+        # 单图模式: 可选使用张量并行分片
+        if n_devices > 1:
+            unet.params = shard_weight_dict(unet.params, UNET_SHARDINGS, mesh)
+            unet.buffers = shard_weight_dict(unet.buffers, UNET_SHARDINGS, mesh)
+        else:
+            # 单卡无需分片
+            def replicate_weights(weight_dict):
+                result = {}
+                for k, v in weight_dict.items():
+                    if isinstance(v, torch.Tensor):
+                        with jax.default_device("cpu"):
+                            v = v.to("jax")
+                    v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
+                    result[k] = v
+                return result
+            unet.params = replicate_weights(unet.params)
+            unet.buffers = replicate_weights(unet.buffers)
+
     torchax.interop.call_jax(jax.block_until_ready, unet.params)
     print("✓ UNet 配置完成")
 
@@ -511,19 +592,17 @@ def main():
         print(f"{'='*60}")
         warmup_config = {**config, 'num_inference_steps': args.warmup_steps}
         warmup_start = time.perf_counter()
-        _ = run_denoising(unet, scheduler, embeddings, warmup_config, mesh, env)
+        _ = run_denoising(unet, scheduler, embeddings, warmup_config, mesh, env, batch_size)
         jax.effects_barrier()
         print(f"✓ 预热完成: {time.perf_counter() - warmup_start:.2f}s")
 
     # 推理
     print(f"\n{'='*60}")
-    print(f"基准测试运行 ({args.num_inference_steps} 步)")
+    print(f"基准测试运行 ({args.num_inference_steps} 步, {batch_size} 张图)")
     print(f"{'='*60}")
-    generator = torch.Generator()
-    generator.manual_seed(args.seed)
 
     benchmark_start = time.perf_counter()
-    latents = run_denoising(unet, scheduler, embeddings, config, mesh, env)
+    latents = run_denoising(unet, scheduler, embeddings, config, mesh, env, batch_size)
     jax.effects_barrier()
     unet_time = time.perf_counter() - benchmark_start
 
@@ -537,9 +616,24 @@ def main():
     print(f"✓ VAE 解码完成: {decode_time:.2f}s")
 
     # 保存图像
-    image = tensor_to_pil(image_tensor)
-    output_path = args.output or f"{datetime.now().strftime('%Y%m%d_%H%M%S')}.png"
-    image.save(output_path)
+    images = tensor_to_pil(image_tensor)
+    timestamp = datetime.now().strftime('%Y%m%d_%H%M%S')
+
+    if batch_size == 1:
+        output_path = args.output or f"{timestamp}.png"
+        images[0].save(output_path)
+        print(f"  图像保存至: {output_path}")
+    else:
+        output_paths = []
+        for i, img in enumerate(images):
+            if args.output:
+                base, ext = os.path.splitext(args.output)
+                path = f"{base}_{i}{ext}"
+            else:
+                path = f"{timestamp}_{i}.png"
+            img.save(path)
+            output_paths.append(path)
+        print(f"  {len(images)} 张图像保存至: {output_paths[0]} 等")
 
     total_time = unet_time + decode_time
     print(f"\n{'='*60}")
@@ -548,7 +642,10 @@ def main():
     print(f"  UNet ({args.num_inference_steps} 步): {unet_time:.2f}s ({unet_time/args.num_inference_steps:.3f}s/step)")
     print(f"  VAE Decode: {decode_time:.2f}s")
     print(f"  总时间: {total_time:.2f}s")
-    print(f"  图像保存至: {output_path}")
+    print(f"  生成图片数: {batch_size}")
+    if batch_size > 1:
+        print(f"  每张图耗时: {total_time/batch_size:.3f}s")
+        print(f"  吞吐量: {batch_size/total_time:.2f} images/s")
 
     print(f"\n{'='*60}")
     print("✓ 生成完成！")

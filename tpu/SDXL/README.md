@@ -13,31 +13,42 @@ SDXL 是 Stability AI 推出的高质量文生图模型，具有 3.5B 参数的 
 
 - **双 Text Encoder**：使用 CLIP-ViT-L/14 + OpenCLIP-ViT-bigG-14
 - **传统 CFG**：每步需要 2 次 UNet 前向传播
-- **1D Mesh**：仅使用张量并行 (tp)，无需数据并行
-- **UNet 分片**：Attention 和 FFN 层按 Megatron-style 张量并行分片
+- **智能并行策略**：
+  - 单卡：无需并行，最低延迟
+  - 多卡：数据并行 (DP) 批量生成，最大吞吐量
+- **UNet 分片**：Attention 和 FFN 层按 Megatron-style 张量并行分片（可选）
 
 ## 性能数据
 
 测试环境：TPU v6e，1024×1024 分辨率，50 步推理
 
-### 不同 TPU 配置对比
+### 单图生成（最低延迟）
 
-| TPU 配置 | Chips | 每步时间 | 吞吐量 | 50 步总时间 | 状态 |
-|----------|-------|---------|--------|-------------|------|
-| **v6e-1** | 1 | **0.06s** | **17 it/s** | **~3s** | ✅ 推荐 |
-| v6e-4 | 4 | 0.08s | 13 it/s | ~4s | ⚠️ 优化中 |
-| v6e-8 | 8 | 0.088s | 11.3 it/s | ~4.4s | ⚠️ 优化中 |
+| TPU 配置 | 每步时间 | 50 步总时间 | 适用场景 |
+|----------|---------|-------------|----------|
+| **v6e-1** | **0.06s** | **~3s** | ✅ 单图生成，最低延迟 |
 
-> **当前状态**：v6e-1 单卡已达到最佳性能。v6e-4/v6e-8 的张量并行策略仍在优化中，目前存在通信开销导致多卡性能未能线性扩展。如需最佳性价比，推荐使用 v6e-1。
+> SDXL (3.5B) 模型可完整放入单张 TPU 芯片，无需张量并行。
 
-### 端到端时间 (v6e-8)
+### 批量生成（数据并行，最大吞吐量）
 
-| 组件 | 设备 | 时间 |
-|------|------|------|
-| 编译 + 预热 (2步) | TPU | ~29s |
-| UNet (50步) | TPU | ~4.4s |
-| VAE Decode | TPU | ~0.5s |
-| **端到端总时间** | - | **~34s** (首次) / **~5s** (后续) |
+| TPU 配置 | Chips | 批次大小 | 每步时间 | 50 步总时间 | 吞吐量 | 加速比 |
+|----------|-------|---------|---------|-------------|--------|--------|
+| v6e-1 | 1 | 1 | 0.06s | 3s | 0.33 img/s | 1x |
+| **v6e-4** | 4 | **4** | 0.066s | **3.31s** | **1.21 img/s** | **3.6x** |
+| **v6e-8** | 8 | **8** | 0.067s | **3.33s** | **2.40 img/s** | **7.2x** |
+
+> **数据并行策略**：每张卡复制完整模型，同时处理不同图片。吞吐量接近线性扩展。
+
+### 端到端时间
+
+| 组件 | v6e-1 (单图) | v6e-8 (8图批量) |
+|------|-------------|-----------------|
+| 编译 + 预热 | ~10s | ~17s |
+| UNet (50步) | ~3s | ~3.3s |
+| VAE Decode | ~0.3s | ~0.5s |
+| **首次运行** | **~13s** | **~21s** |
+| **后续运行** | **~3.5s** | **~4s** |
 
 ### 与 Flux.2 对比 (v6e-8, 50 步)
 
@@ -148,17 +159,19 @@ python generate_torchax.py \
 使用 `TPU_VISIBLE_DEVICES` 环境变量控制使用的 TPU chips 数量：
 
 ```bash
-# 使用 1 个 chip (v6e-1 模式，推荐，最快)
+# 单图生成 - 使用 1 个 chip (最低延迟，推荐)
 TPU_VISIBLE_DEVICES=0 python generate_torchax.py --prompt "A lion"
 
-# 使用 4 个 chips (v6e-4 模式)
-TPU_VISIBLE_DEVICES=0,1,2,3 python generate_torchax.py --prompt "A lion"
+# 批量生成 - 使用 4 个 chips (4 张图并行)
+TPU_VISIBLE_DEVICES=0,1,2,3 python generate_torchax.py --prompt "A lion" --batch_size 4
 
-# 使用全部 8 个 chips (v6e-8 模式，默认)
-python generate_torchax.py --prompt "A lion"
+# 批量生成 - 使用全部 8 个 chips (8 张图并行)
+python generate_torchax.py --prompt "A lion" --batch_size 8
 ```
 
-> **提示**：SDXL 模型较小，单卡运行最快。多卡适合批量生成场景。
+> **策略选择**：
+> - 单图生成 → 使用 v6e-1，延迟最低 (~3s/图)
+> - 批量生成 → 使用多卡数据并行，吞吐量最高 (2.4 img/s @v6e-8)
 
 ### 分阶段版本
 
@@ -196,11 +209,11 @@ python stage3_vae_decoder.py
 ```
 SDXL/
 ├── README.md                    # 本文档
-├── generate_torchax.py          # 单文件 TPU 版本 (推荐)
+├── generate_torchax.py          # 单文件 TPU 版本 (推荐，支持批量生成)
 ├── splash_attention_utils.py    # TPU Splash Attention
 │
 └── generate_diffusers_torchax_staged/  # 分阶段 TPU 版本
-    ├── utils.py                 # 共享工具
+    ├── utils.py                 # 共享工具和分片策略
     ├── stage1_text_encoder.py   # CPU 文本编码
     ├── stage2_unet.py           # TPU 去噪
     └── stage3_vae_decoder.py    # TPU VAE 解码
