@@ -171,12 +171,29 @@ https://discord.com/api/oauth2/authorize?client_id=BOT_CLIENT_ID&permissions=214
 
 Permission integer 2147601408 = View Channels + Send Messages + Embed Links + Attach Files + Read Message History + Use Slash Commands
 
+### Step 6: Setup Notification Channel
+
+Bot 部署完成后，自动配置通知发送能力，使 Claude Code 可以主动发消息到 Discord：
+
+```bash
+# 创建发送脚本（如果不存在）
+# 脚本位置: ~/.claude/scripts/send-to-discord.sh
+# 需要配置: BOT_TOKEN 和 CHANNEL_ID
+```
+
+配置完成后，用户可以通过说"discord通知我"、"ds通知我"等触发 `discord-report` 技能来发送报告到 Discord。
+
+详见 `discord-report` 技能文档。
+
 ### Files Created
 
 ```
 ~/.claude/discord-bot/
-├── bot_simple.py    # Main bot script
+├── bot_simple.py    # Main bot script (接收消息 → Claude Code)
 └── bot.log          # Runtime logs
+
+~/.claude/scripts/
+└── send-to-discord.sh  # 发送脚本 (Claude Code → Discord)
 ```
 
 ### Security Notes
