@@ -1,8 +1,9 @@
 # TPU GEMM Benchmark 后端实现报告
 
-> 日期: 2026-02-09
+> 创建日期: 2026-02-09
+> 更新日期: 2026-02-11
 > 作者: Claude Code
-> 目标: 为 GEMM benchmark 添加 TPU v6e 后端，设计通用架构支持 v7
+> 目标: 为 GEMM benchmark 添加 TPU v6e/v7 后端，支持 trace-based timing
 
 ---
 
@@ -14,11 +15,13 @@
 
 ### 1.2 目标
 
-1. ✅ 实现 TPU v6e 后端
-2. ✅ 设计通用 TPU 后端架构
-3. ✅ 通过测试验证并修复 bug
-4. ✅ 生成性能测试报告
-5. ✅ 创建 chip-performance-test skill
+1. ✅ 实现 TPU v6e 后端 (2026-02-09)
+2. ✅ 设计通用 TPU 后端架构 (2026-02-09)
+3. ✅ 通过测试验证并修复 bug (2026-02-09)
+4. ✅ 实现 TPU v7 (Ironwood) 后端 — dual-chiplet 架构 (2026-02-10)
+5. ✅ 实现 trace-based timing — 从 JAX profiler 提取纯设备时间 (2026-02-11)
+6. ✅ v7 XLA 优化验证 — DVFS p_state=7 达到 95.7% MFU (2026-02-11)
+7. ✅ 创建 chip-performance-test skill
 
 ---
 
@@ -41,14 +44,14 @@ graph TB
 | **依赖分离** | 创建独立的 `tpu_backends.py` 和 `main_tpu.py` | JAX 和 PyTorch 混合导入会产生冲突 |
 | **接口统一** | TPU 后端遵循相同的抽象接口 | 便于切换和对比不同硬件 |
 | **扩展性** | `TpuBackendBase` 基类 + `TpuV6eBackend`/`TpuV7Backend` 子类 | 新增 TPU 版本只需实现规格定义 |
-| **准确计时** | 使用 `jax.block_until_ready()` | JAX 异步调度，必须等待完成 |
+| **准确计时** | Legacy: `block_until_ready()` / Trace: `device_duration_ps` | JAX 异步调度，trace 模式排除 host 开销 |
 
 ### 2.2 文件结构
 
 ```
 chay_gemm_benchmark_simple/
 ├── main.py              # GPU 入口 (PyTorch)
-├── main_tpu.py          # TPU 入口 (JAX)
+├── main_tpu.py          # TPU 入口 (JAX) — 支持 --no-trace 切换计时模式
 ├── auto_benchmark.py    # 自动化测试脚本
 ├── backends.py          # GPU 后端抽象
 ├── hw_spec.py           # 硬件规格定义
@@ -57,15 +60,21 @@ chay_gemm_benchmark_simple/
 │   ├── __init__.py
 │   ├── tpu/
 │   │   ├── __init__.py
-│   │   └── tpu_backends.py  # TPU 后端实现
-│   └── nv_gpu_cublas/       # NVIDIA cuBLAS 扩展
+│   │   ├── tpu_backends.py   # TPU 后端实现 (v6e/v7, legacy+trace timing)
+│   │   └── trace_utils.py    # Trace-based timing 工具 (提取 device_duration_ps)
+│   └── nv_gpu_cublas/        # NVIDIA cuBLAS 扩展
 ├── config/
-│   ├── gemm.json        # GPU 完整配置
-│   ├── simple.json      # GPU 简化配置
-│   ├── tpu_gemm.json    # TPU 完整配置
-│   ├── tpu_simple.json  # TPU 简化配置
-│   └── tpu_full.json    # TPU 中等配置
-└── results_v6e.csv      # v6e 测试结果
+│   ├── gemm.json             # GPU 完整配置
+│   ├── simple.json           # GPU 简化配置
+│   ├── tpu_gemm.json         # TPU 完整配置
+│   ├── tpu_simple.json       # TPU 简化配置
+│   ├── tpu_full.json         # TPU 中等配置
+│   ├── tpu_trace_test.json   # Trace 模式快速验证 (8192³)
+│   ├── tpu_large_matrix.json # 大矩阵测试 (16384×18432)
+│   └── tpu_matrix_scaling.json # 矩阵规模扩展测试
+├── results_v6e.csv           # v6e 测试结果 (legacy timing)
+├── results_v7.csv            # v7 测试结果 (legacy timing)
+└── results_v7_trace.csv      # v7 测试结果 (trace + XLA flags)
 ```
 
 ### 2.3 类图
@@ -78,35 +87,35 @@ classDiagram
         +device_name: str
         +warmup_iter: int
         +prof_iter: int
+        +use_trace: bool
         +get_device_name()* str
         +get_tpu_generation()* str
         +get_theoretical_peak(dtype)* float
         +run(m, n, k, dtype) float
+        -_run_legacy(m, n, k, dtype) float
+        -_run_with_trace(m, n, k, dtype) float
         -_convert_dtype(dtype) jnp.dtype
-        -_verify_tpu_available()
     }
 
     class TpuV6eBackend {
         +PEAK_TFLOPS: dict
-        +HBM_BANDWIDTH: float
-        +get_device_name() str
-        +get_tpu_generation() str
+        +HBM_BANDWIDTH: 1600
         +get_theoretical_peak(dtype) float
     }
 
     class TpuV7Backend {
+        +CHIP_PEAK_TFLOPS: dict
         +PEAK_TFLOPS: dict
-        +HBM_BANDWIDTH: float
-        +get_device_name() str
-        +get_tpu_generation() str
+        +HBM_BANDWIDTH: 3690
+        +HBM_BANDWIDTH_CHIP: 7380
         +get_theoretical_peak(dtype) float
     }
 
     TpuBackendBase <|-- TpuV6eBackend
     TpuBackendBase <|-- TpuV7Backend
 
-    note for TpuV6eBackend "TPU v6e (Trillium)\n918 TFLOPS bf16\n1600 GB/s HBM"
-    note for TpuV7Backend "TPU v7 (Ironwood)\n规格待定"
+    note for TpuV6eBackend "TPU v6e (Trillium)\n918 TFLOPS bf16/chip\n1638 GB/s HBM\nTrace MFU: 79.3%"
+    note for TpuV7Backend "TPU v7 (Ironwood)\n1153.5 TFLOPS bf16/chiplet\n3690 GB/s HBM\nTrace+XLA MFU: 96.5%"
 ```
 
 ---
@@ -136,6 +145,10 @@ def _gemm_kernel(a: jnp.ndarray, b: jnp.ndarray, key: jax.random.PRNGKey,
 
 ### 3.2 计时机制
 
+支持两种计时模式，默认使用 Trace 模式:
+
+#### Legacy 模式 (`--no-trace`)
+
 ```python
 # Warmup (includes JIT compilation)
 for _ in range(self.warmup_iter):
@@ -150,10 +163,42 @@ for _ in range(self.prof_iter):
 end_time = time.perf_counter()
 ```
 
-**关键点：**
-1. **Warmup 阶段**: 首次调用触发 JIT 编译，必须预热
-2. **block_until_ready()**: JAX 异步调度，不等待会只测到 dispatch 时间
-3. **time.perf_counter()**: 高精度计时器
+- 包含 Python dispatch overhead (~200 μs per call)
+- 典型 MFU: v6e 65-75%, v7 65-75%
+
+#### Trace 模式 (默认)
+
+```python
+# 使用带 MARKER 的 kernel (MARKER 在 @jit 函数内部)
+@partial(jax.jit, static_argnums=(3,))
+def _gemm_kernel_with_marker(a, b, key, output_dtype):
+    with jax.named_scope("!!MARKER!!"):  # 必须在 jit 内部
+        return lax.dot_general(a, b, ...)
+
+# Profiling with trace collection
+with jax.profiler.trace(trace_dir):
+    for i in range(self.prof_iter):
+        with jax.profiler.StepTraceAnnotation("gemm", step_num=i):
+            result = _gemm_kernel_with_marker(a, b, subkey, output_dtype)
+            result.block_until_ready()
+
+# Extract pure device time from trace
+trace = get_trace(trace_dir)
+durations_ms = get_metrics_from_trace_marker(trace, "!!MARKER!!")
+median_time_us = statistics.median(durations_ms) * 1000
+```
+
+- 提取 `device_duration_ps` — 纯 TPU 设备执行时间
+- 排除 Python dispatch、JAX async dispatch 等 host 端开销
+- 典型 MFU: v6e ~79%, v7 93-96% (需 XLA flags)
+
+**两种模式对比 (v7, M=8192, K=N=8192, BF16):**
+
+| 模式 | 时间 (μs) | TFLOPS | MFU |
+|------|-----------|--------|------|
+| Legacy | 1449.9 | 758.3 | 65.7% |
+| Trace (无 XLA flags) | 1248.6 | 880.6 | 76.3% |
+| Trace + XLA flags | 1016.8 | 1081.3 | 93.7% |
 
 ### 3.3 数据类型处理
 
@@ -196,17 +241,33 @@ PEAK_TFLOPS = {
 
 **现象：** JAX 设备名格式不标准 (`tpu_0(process=0,(0,0,0,0))`)
 
-**解决方案：** 实现模糊匹配 + 默认回退
+**解决方案：** 多信号检测: `device_kind` + 字符串匹配 + 4D coords
 
 ```python
-def detect_tpu_backend(...):
-    device_str = str(device).lower()
+def detect_tpu_backend(warmup_iter, prof_iter, use_trace=True):
+    device = jax.devices('tpu')[0]
+    device_kind = getattr(device, 'device_kind', '').lower()  # "tpu7x"
 
-    if 'v7' in device_str or 'ironwood' in device_str:
-        return TpuV7Backend(...)
+    # Strategy 1: device_kind 包含 "tpu7"
+    all_info = f"{str(device).lower()} {device_kind}"
+    if any(marker in all_info for marker in ['v7', 'ironwood', 'tpu7']):
+        return TpuV7Backend(warmup_iter, prof_iter, use_trace)
 
-    # Default to v6e for current generation
-    return TpuV6eBackend(...)
+    # Strategy 2: 4D coords (dual-chiplet)
+    coords = getattr(device, 'coords', None)
+    if coords is not None and len(coords) == 4:
+        return TpuV7Backend(warmup_iter, prof_iter, use_trace)
+
+    # Default to v6e
+    return TpuV6eBackend(warmup_iter, prof_iter, use_trace)
+```
+
+**实际检测输出 (v7):**
+```
+[TPU Detection] device_str: tpu_0(process=0,(0,0,0,0))
+[TPU Detection] device_kind: tpu7x          ← 关键信号
+[TPU Detection] num_devices: 8              ← 4 chips × 2 chiplets
+[TPU Detection] Detected TPU v7 (Ironwood)
 ```
 
 ---
@@ -215,27 +276,49 @@ def detect_tpu_backend(...):
 
 ### 5.1 测试环境
 
-| 项目 | 值 |
-|------|-----|
-| 硬件 | Google TPU v6e (8 cores) |
-| JAX 版本 | 0.8.1 |
-| 测试日期 | 2026-02-09 |
-| Warmup | 10 iterations |
-| Profiling | 100 iterations |
+| 项目 | v6e 测试 | v7 测试 |
+|------|----------|---------|
+| 硬件 | Google TPU v6e (Trillium) | Google TPU v7 (Ironwood, TPU7x) |
+| 芯片数 | 4 chips, 4 JAX devices | 4 chips, 8 JAX devices (dual-chiplet) |
+| 拓扑 | 2x2x1 | 2x2x1 |
+| JAX 版本 | 0.8.1 | 0.8.2.dev20251215 |
+| 测试日期 | 2026-02-09, 2026-02-11 | 2026-02-10, 2026-02-11 |
+| 计时模式 | Legacy + Trace | Legacy + Trace + XLA flags |
 
 ### 5.2 性能摘要
 
-| 数据类型 | 理论峰值 | 最高实测 | 最高 MFU | 平均 MFU |
+#### TPU v7 (Ironwood) — 单 chiplet
+
+| 数据类型 | 理论峰值 | 最高实测 | 最高 MFU | 计时模式 |
 |----------|----------|----------|----------|----------|
-| **bfloat16** | 918 TFLOPS | 689 TFLOPS | **75.0%** | 36.2% |
-| **float32** | 918 TFLOPS | 583 TFLOPS | 63.5% | 28.5% |
-| **int8** | 1836 TOPS | 1129 TOPS | 61.5% | 24.8% |
+| **bfloat16** | 1153.5 TFLOPS | **1113.6 TFLOPS** | **96.5%** | Trace + XLA flags |
+| bfloat16 | 1153.5 TFLOPS | 880.6 TFLOPS | 76.3% | Trace only |
+| bfloat16 | 1153.5 TFLOPS | 758.3 TFLOPS | 65.7% | Legacy |
+| float32 | 1153.5 TFLOPS | 670.9 TFLOPS | 58.2% | Legacy |
+| int8 | 2307 TOPS | 711.9 TOPS | 30.9% | Legacy |
+
+#### TPU v6e (Trillium) — 单芯片
+
+| 数据类型 | 理论峰值 | 最高实测 | 最高 MFU | 计时模式 |
+|----------|----------|----------|----------|----------|
+| **bfloat16** | 918 TFLOPS | **728 TFLOPS** | **79.3%** | Trace |
+| bfloat16 | 918 TFLOPS | 689 TFLOPS | 75.0% | Legacy |
+| float32 | 918 TFLOPS | 583 TFLOPS | 63.5% | Legacy |
+| int8 | 1836 TOPS | 1129 TOPS | 61.5% | Legacy |
 
 ### 5.3 MFU vs M 值趋势
 
-```
-bfloat16 (K=8192, N=8192):
+#### v7 (Trace + XLA flags, K=N=8192, BF16)
 
+```
+M=8192:  ████████████████████████████████████████████████████████████████████████████████████████████  93.7%
+M=12288: █████████████████████████████████████████████████████████████████████████████████████████████████  95.4%
+M=16384: ██████████████████████████████████████████████████████████████████████████████████████████████████  96.5%
+```
+
+#### v6e (Legacy, K=8192, N=8192, BF16)
+
+```
 M=128:   ████ 8.8%
 M=256:   ████████ 17.7%
 M=512:   ████████████████ 32.8%
@@ -246,16 +329,20 @@ M=8192:  ███████████████████████�
 ```
 
 **观察：**
-- M 从 128 增加到 4096，MFU 从 9% 提升到 75%
-- M=8192 时 MFU 略有下降（72.8%），可能是 HBM 带宽瓶颈
+- v7 + Trace + XLA flags: M ≥ 8192 时 MFU 稳定 93-96%，已接近理论上限
+- v6e Legacy: M=4096 达到峰值 75%，M=8192 略降至 72.8%
+- v6e Trace: 最高 79.3%，受 XLA 对 v6e 编译效率限制
 
 ### 5.4 最佳性能点
 
-| 数据类型 | M | K | N | TFLOPS | MFU |
-|----------|---|---|---|--------|-----|
-| bfloat16 | 4096 | 8192 | 8192 | 689 | 75.0% |
-| float32 | 2048 | 8192 | 8192 | 583 | 63.5% |
-| int8 | 8192 | 8192 | 8192 | 1129 | 61.5% |
+| TPU | 数据类型 | M | K | N | TFLOPS | MFU | 模式 |
+|-----|----------|---|---|---|--------|-----|------|
+| **v7** | **bfloat16** | **16384** | **8192** | **8192** | **1113.6** | **96.5%** | **Trace+XLA** |
+| v7 | bfloat16 | 8192 | 8192 | 8192 | 1081.3 | 93.7% | Trace+XLA |
+| v7 | bfloat16 | 8192 | 8192 | 8192 | 758.3 | 65.7% | Legacy |
+| v6e | bfloat16 | 8192 | 8192 | 8192 | 728.0 | 79.3% | Trace |
+| v6e | bfloat16 | 4096 | 8192 | 8192 | 689 | 75.0% | Legacy |
+| v6e | int8 | 8192 | 8192 | 8192 | 1129 | 61.5% | Legacy |
 
 ---
 
@@ -338,26 +425,41 @@ python main_tpu.py --config config/tpu_full.json --warmup 20 --prof-iter 200
 }
 ```
 
-### 7.3 添加新 TPU 版本
+### 7.3 v7 专用 XLA 优化参数
+
+在 v7 上需要设置 `LIBTPU_INIT_ARGS` 以达到最优性能：
+
+```bash
+export LIBTPU_INIT_ARGS="\
+  --xla_tpu_enable_async_collective_fusion=true \
+  --xla_tpu_enable_async_collective_fusion_fuse_all_gather=true \
+  --xla_tpu_enable_async_collective_fusion_multiple_steps=true \
+  --xla_tpu_overlap_compute_collective_tc=true \
+  --xla_enable_async_all_gather=true \
+  --xla_enable_async_collective_permute=true \
+  --xla_tpu_enable_all_experimental_scheduler_features=true \
+  --xla_tpu_scoped_vmem_limit_kib=65536 \
+  --xla_tpu_dvfs_p_state=7"
+```
+
+`--xla_tpu_dvfs_p_state=7` 是最关键的参数，将 TPU v7 锁定在最高频率运行。
+
+### 7.4 添加新 TPU 版本
 
 1. 在 `backends/tpu/tpu_backends.py` 中创建新类：
 
 ```python
 class TpuV7Backend(TpuBackendBase):
+    # Per-chiplet (JAX device) peak — v7 dual-chiplet
     PEAK_TFLOPS = {
-        "bfloat16": 2000.0,  # 更新为实际规格
-        ...
+        "bfloat16": 1153.5,  # 2307 per chip / 2 chiplets
+        "float32": 1153.5,
+        "int8": 2307.0,      # 4614 per chip / 2 chiplets
     }
-    HBM_BANDWIDTH = 3200.0
-
-    def get_device_name(self) -> str:
-        return "Google TPU v7 (Ironwood)"
-
-    def get_tpu_generation(self) -> str:
-        return "v7"
+    HBM_BANDWIDTH = 3690.0   # 7380 per chip / 2 chiplets
 ```
 
-2. 更新 `detect_tpu_backend()` 中的检测逻辑
+2. 更新 `detect_tpu_backend()` — 使用 `device_kind` 检测
 
 3. 更新 `hw_spec.py` 中的 `DEVICE_SPECS`
 
@@ -367,27 +469,34 @@ class TpuV7Backend(TpuBackendBase):
 
 ### 8.1 完成状态
 
-- [x] 创建 `chip-performance-test` skill
-- [ ] TPU v7 实际规格更新（待硬件可用）
-- [ ] 多 TPU 设备并行测试
+- [x] 创建 `chip-performance-test` skill (2026-02-09)
+- [x] TPU v7 实际规格更新 — 官方文档 2307 TFLOPS/chip BF16 (2026-02-10)
+- [x] Dual-chiplet 架构支持 — per-chiplet 峰值 1153.5 TFLOPS (2026-02-10)
+- [x] Trace-based timing — 从 JAX profiler 提取 `device_duration_ps` (2026-02-11)
+- [x] v7 XLA 优化参数验证 — DVFS p_state=7 达到 95.7% MFU (2026-02-11)
+- [ ] FP8 测试 — v7 原生支持 FP8 (4614 TFLOPS/chip)
+- [ ] 多 TPU 设备并行测试 — 跨 chiplet / 跨 chip GEMM
 - [ ] 性能数据可视化工具
 
 ### 8.2 优化方向
 
-- 添加更多数据类型支持（fp8）
-- 实现多设备 GEMM 测试
-- 添加 Tensor Core 占用率监控
-- 集成 JAX profiler 进行深度分析
+- 添加 FP8 数据类型支持（v7 原生 4614 TFLOPS/chip）
+- 实现跨 chiplet GEMM 测试（利用 D2D 互连）
+- 实现多芯片 GEMM 测试（pjit/sharding）
+- Pallas 自定义 kernel 优化 MFU
 
 ---
 
 ## 9. 参考资料
 
 1. [TPU v6e Documentation](https://docs.cloud.google.com/tpu/docs/v6e) - Google Cloud
-2. [Introducing Trillium TPU](https://cloud.google.com/blog/products/compute/introducing-trillium-6th-gen-tpus) - Google Cloud Blog
-3. [JAX JIT Compilation](https://docs.jax.dev/en/latest/jit-compilation.html) - JAX Documentation
-4. [How to Profile TPU Programs](https://jax-ml.github.io/scaling-book/profiling/) - JAX Scaling Book
+2. [TPU7x (Ironwood) Documentation](https://docs.cloud.google.com/tpu/docs/tpu7x) - Google Cloud (2026-02-09)
+3. [Ironwood 发布博客](https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/ironwood-tpu-age-of-inference/) - Google Blog
+4. [JAX JIT Compilation](https://docs.jax.dev/en/latest/jit-compilation.html) - JAX Documentation
+5. [How to Profile TPU Programs](https://jax-ml.github.io/scaling-book/profiling/) - JAX Scaling Book
+6. [accelerator-microbenchmarks](https://github.com/google/accelerator-microbenchmarks) - Ironwood GEMM benchmarks
 
 ---
 
 *Report generated by Claude Code on 2026-02-09*
+*Updated: 2026-02-11 — 添加 v7 实测结果 (96.5% MFU), trace timing, XLA 优化参数*
