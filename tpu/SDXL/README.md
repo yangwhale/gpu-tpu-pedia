@@ -18,49 +18,59 @@ SDXL 是 Stability AI 推出的高质量文生图模型，具有 3.5B 参数的 
 
 ## 性能数据
 
-测试环境：TPU v6e-8 (8 chips)，1024×1024 分辨率
+测试环境：TPU v6e，1024×1024 分辨率，50 步推理
 
-### 单文件版本 (`generate_torchax.py`)
+### 不同 TPU 配置对比
+
+| TPU 配置 | Chips | 每步时间 | 吞吐量 | 50 步总时间 |
+|----------|-------|---------|--------|-------------|
+| **v6e-1** | 1 | **0.06s** | **17 it/s** | **~3s** |
+| v6e-4 | 4 | 0.08s | 13 it/s | ~4s |
+| v6e-8 | 8 | 0.088s | 11.3 it/s | ~4.4s |
+
+> **注意**：SDXL 模型较小 (3.5B)，单卡即可完整运行。增加卡数会引入张量并行通信开销，反而降低吞吐量。**推荐使用 v6e-1 获得最佳性价比**。
+
+### 端到端时间 (v6e-8)
 
 | 组件 | 设备 | 时间 |
 |------|------|------|
 | 编译 + 预热 (2步) | TPU | ~29s |
-| UNet (50步) | TPU | ~4.4s (~0.088s/step) |
+| UNet (50步) | TPU | ~4.4s |
 | VAE Decode | TPU | ~0.5s |
 | **端到端总时间** | - | **~34s** (首次) / **~5s** (后续) |
 
-### 分阶段版本
-
-| 阶段 | 组件 | 设备 | 时间 |
-|------|------|------|------|
-| Stage 1 | Text Encoder (CLIP x2) | CPU | ~5s |
-| Stage 2 | UNet (50步) | TPU | ~4.4s |
-| Stage 3 | VAE Decoder | TPU | ~0.5s |
-
-### 与 Flux.2 对比 (50 步)
+### 与 Flux.2 对比 (v6e-8, 50 步)
 
 | 模型 | 架构 | 参数量 | 50 步时间 | 每步时间 | 吞吐量 |
 |------|------|--------|----------|---------|--------|
 | **SDXL** | UNet | 3.5B | **4.4s** | **0.088s** | **11.3 it/s** |
 | Flux.2 | MMDiT | 12B | 13.6s | 0.272s | 3.7 it/s |
 
-> SDXL 在 TPU v6e-8 上比 Flux.2 快约 **3x**，主要因为模型参数量小 3.4x。
+> SDXL 比 Flux.2 快约 **3x**，主要因为模型参数量小 3.4x。
+
+## 前置条件
+
+- Google Cloud 账号并配置好 `gcloud` CLI
+- 项目已启用 TPU API 并有 v6e-8 配额
+- Python >= 3.11
 
 ## 安装
 
 ### 1. 创建 TPU 实例
 
 ```bash
+# 可用 zone: asia-northeast1-b, us-central1-a, europe-west4-b 等
+# 请根据配额选择合适的 zone
 gcloud compute tpus tpu-vm create sdxl-tpu \
-    --zone=us-east5-b \
+    --zone=asia-northeast1-b \
     --accelerator-type=v6e-8 \
-    --version=tpu-vm-v6e-base
+    --version=v2-alpha-tpuv6e
 ```
 
 ### 2. SSH 连接
 
 ```bash
-gcloud compute tpus tpu-vm ssh sdxl-tpu --zone=us-east5-b
+gcloud compute tpus tpu-vm ssh sdxl-tpu --zone=asia-northeast1-b
 ```
 
 ### 3. 安装依赖
@@ -68,10 +78,10 @@ gcloud compute tpus tpu-vm ssh sdxl-tpu --zone=us-east5-b
 ```bash
 # 基础依赖
 pip install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cpu
-pip install jax[tpu] -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+pip install -U "jax[tpu]" -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
 pip install torchax
 
-# 安装 diffusers-tpu
+# 安装 diffusers-tpu (包含 TPU 优化)
 git clone https://github.com/yangwhale/diffusers-tpu.git
 cd diffusers-tpu
 pip install -e .
@@ -87,6 +97,8 @@ pip install transformers accelerate safetensors pillow tqdm
 git clone https://github.com/yangwhale/gpu-tpu-pedia.git
 cd gpu-tpu-pedia/tpu/SDXL
 ```
+
+> **注意**: SDXL 模型权重是公开的，无需 HuggingFace 登录。首次运行会自动下载模型 (~6.5GB)。
 
 ## 使用方法
 
@@ -130,6 +142,23 @@ python generate_torchax.py \
     --prompt "Professional portrait" \
     --num_inference_steps 50
 ```
+
+#### 控制 TPU 卡数
+
+使用 `TPU_VISIBLE_DEVICES` 环境变量控制使用的 TPU chips 数量：
+
+```bash
+# 使用 1 个 chip (v6e-1 模式，推荐，最快)
+TPU_VISIBLE_DEVICES=0 python generate_torchax.py --prompt "A lion"
+
+# 使用 4 个 chips (v6e-4 模式)
+TPU_VISIBLE_DEVICES=0,1,2,3 python generate_torchax.py --prompt "A lion"
+
+# 使用全部 8 个 chips (v6e-8 模式，默认)
+python generate_torchax.py --prompt "A lion"
+```
+
+> **提示**：SDXL 模型较小，单卡运行最快。多卡适合批量生成场景。
 
 ### 分阶段版本
 
