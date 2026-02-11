@@ -142,6 +142,14 @@ def get_metrics_from_trace_marker(
 
     print(f"[Trace] Collected {len(durations_ms)} timing samples from device (pid={min_pid})")
 
+    # Debug: print raw timing values
+    if durations_ms:
+        import statistics
+        min_ms = min(durations_ms)
+        max_ms = max(durations_ms)
+        median_ms = statistics.median(durations_ms)
+        print(f"[Trace] Times (ms): min={min_ms:.4f}, max={max_ms:.4f}, median={median_ms:.4f}")
+
     return durations_ms
 
 

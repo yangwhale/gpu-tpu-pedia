@@ -107,6 +107,29 @@ def _gemm_kernel(a: jnp.ndarray, b: jnp.ndarray, key: jax.random.PRNGKey,
     return result
 
 
+@partial(jax.jit, static_argnums=(3,))
+def _gemm_kernel_with_marker(a: jnp.ndarray, b: jnp.ndarray, key: jax.random.PRNGKey,
+                              output_dtype: jnp.dtype) -> jnp.ndarray:
+    """
+    JIT-compiled GEMM kernel with MARKER for trace-based timing.
+
+    The jax.named_scope(MARKER) MUST be inside the jit function for the marker
+    to appear in the tf_op field of trace events. This is critical for accurate
+    trace-based timing extraction.
+
+    Reference: accelerator-microbenchmarks/Ironwood/src/benchmark_gemm.py
+    """
+    # MARKER must be inside the jit function to appear in tf_op field
+    with jax.named_scope(MARKER):
+        dimension_numbers = (((1,), (0,)), ((), ()))
+        result = lax.dot_general(
+            a, b,
+            dimension_numbers=dimension_numbers,
+            preferred_element_type=output_dtype,
+        )
+    return result
+
+
 def _create_input_tensors_jax(m: int, n: int, k: int, dtype: jnp.dtype,
                                key: jax.random.PRNGKey) -> Tuple[jnp.ndarray, jnp.ndarray]:
     """Create input tensors on TPU with appropriate initialization."""
@@ -302,20 +325,23 @@ class TpuBackendBase(abc.ABC):
             b.block_until_ready()
 
             # Warmup phase (includes JIT compilation on first call)
+            # Use the MARKER kernel so JIT compiles the traced version
             for _ in range(self.warmup_iter):
-                result = _gemm_kernel(a, b, subkey, output_dtype)
+                result = _gemm_kernel_with_marker(a, b, subkey, output_dtype)
                 result.block_until_ready()
 
             # Create temporary trace directory
             trace_dir = create_temp_trace_dir()
 
             # Profiling phase with trace collection
+            # CRITICAL: The MARKER must be INSIDE the jitted function (not outside)
+            # for it to appear in the tf_op field of trace events.
+            # Reference: accelerator-microbenchmarks/Ironwood/src/benchmark_gemm.py
             with jax.profiler.trace(trace_dir):
                 for i in range(self.prof_iter):
-                    # Tag each iteration with MARKER for trace identification
-                    # jax.named_scope() adds a tag to the trace that we can search for later
-                    with jax.named_scope(f"{MARKER}_{i}"):
-                        result = _gemm_kernel(a, b, subkey, output_dtype)
+                    # Use jax.profiler.StepTraceAnnotation for proper step tracking
+                    with jax.profiler.StepTraceAnnotation("gemm", step_num=i):
+                        result = _gemm_kernel_with_marker(a, b, subkey, output_dtype)
                         result.block_until_ready()
 
             # Extract timing from trace
