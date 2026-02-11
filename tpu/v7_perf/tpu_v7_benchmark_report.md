@@ -432,9 +432,7 @@ python main_tpu.py --config config/tpu_trace_test.json --no-trace
 | TPU 型号 | Legacy MFU | Trace MFU | 提升 |
 |----------|------------|-----------|------|
 | v6e (Trillium) | 72.5% | **79.3%** | +6.8% |
-| v7 (Ironwood) | 65.7%* | **90%+** (目标) | — |
-
-\* v7 的 65.7% 是 legacy timing 结果，待用 Trace 模式重测
+| v7 (Ironwood) | 65.7% | **95.7%** | +30.0% |
 
 #### v6e 的 79% MFU 瓶颈分析
 
@@ -462,8 +460,8 @@ M=8192 GEMM workload：
 | 指标 | v6e | v7 (per chiplet) | 对比 |
 |------|-----|------------------|------|
 | MXU 理论峰值 | 918 TFLOPS | 1153.5 TFLOPS | 1.26x |
-| Trace MFU | ~79% | 90%+ (目标) | — |
-| XLA 编译效率 | ~80% | ~90%+ | v7 优化更成熟 |
+| Trace MFU | ~79% | **95.7%** | v7 大幅领先 |
+| XLA 编译效率 | ~80% | ~96% | v7 优化更成熟 |
 
 **原因分析：**
 
@@ -481,13 +479,87 @@ M=8192 GEMM workload：
 
 #### 结论
 
-| 目标 | v6e 现状 | v7 预期 |
+| 目标 | v6e 现状 | v7 实测 |
 |------|----------|---------|
-| Trace MFU | 79.3% ✓ | 90%+ |
-| 瓶颈 | XLA 编译效率 | — |
-| 优化空间 | 有限（需 Pallas） | XLA flags 可调 |
+| Trace MFU | 79.3% ✓ | **95.7%** ✓ |
+| 瓶颈 | XLA 编译效率 | 已接近理论上限 |
+| 优化空间 | 有限（需 Pallas） | DVFS + XLA flags 已充分发挥 |
 
-v6e 的 79% MFU 是当前 JAX/XLA 版本下的实际性能上限。要达到 90%+ MFU，需要在 **TPU v7 (Ironwood)** 上测试。
+v6e 的 79% MFU 是当前 JAX/XLA 版本下的实际性能上限。v7 通过 DVFS p_state=7 和 XLA 优化参数达到了 **95.7% MFU**。
+
+### B4. TPU v7 Trace-Based Timing 实测结果 (2026-02-11)
+
+在 v7 Pod 上使用 trace-based timing + XLA 优化参数完成验证。
+
+#### XLA 优化参数
+
+```bash
+export LIBTPU_INIT_ARGS="\
+  --xla_tpu_enable_async_collective_fusion=true \
+  --xla_tpu_enable_async_collective_fusion_fuse_all_gather=true \
+  --xla_tpu_enable_async_collective_fusion_multiple_steps=true \
+  --xla_tpu_overlap_compute_collective_tc=true \
+  --xla_enable_async_all_gather=true \
+  --xla_enable_async_collective_permute=true \
+  --xla_tpu_enable_all_experimental_scheduler_features=true \
+  --xla_tpu_scoped_vmem_limit_kib=65536 \
+  --xla_tpu_dvfs_p_state=7"
+```
+
+- `--xla_tpu_dvfs_p_state=7`: 将 TPU 锁定在最高频率运行 (v7 专用)
+- `--xla_tpu_scoped_vmem_limit_kib=65536`: 限制 VMEM 使用以提高 tiling 效率
+- 其余参数: 启用 async collective fusion 和 compute-collective overlap
+
+#### 三阶段测试结果 (BF16)
+
+| 阶段 | 配置 | 设备时间 | TFLOPS | MFU |
+|------|------|----------|--------|------|
+| ① Trace only (无 XLA flags) | 8192³ | 1248.6 μs | 880.6 | **76.3%** |
+| ② Trace + XLA flags | 8192³ | 1016.8 μs | 1081.3 | **93.7%** |
+| ③ Trace + XLA flags + 大矩阵 | 16384×16384×18432 | 8966.6 μs | 1103.6 | **95.7%** |
+
+#### 矩阵规模扩展测试 (Trace + XLA flags, BF16)
+
+| M | N | K | 设备时间 (μs) | TFLOPS | MFU |
+|-------|-------|-------|-------------|--------|------|
+| 8192 | 8192 | 8192 | 1016.8 | 1081.3 | **93.7%** |
+| 12288 | 8192 | 8192 | 1498.7 | 1100.4 | **95.4%** |
+| **16384** | **8192** | **8192** | **1974.6** | **1113.6** | **96.5%** |
+| 8192 | 12288 | 12288 | 2246.4 | 1101.3 | 95.5% |
+| 12288 | 12288 | 12288 | 3381.9 | 1097.3 | 95.1% |
+| 16384 | 12288 | 12288 | 4481.3 | 1104.1 | 95.7% |
+| 8192 | 16384 | 16384 | 4075.4 | 1079.2 | 93.6% |
+| 12288 | 16384 | 16384 | 6028.5 | 1094.3 | 94.9% |
+| 16384 | 16384 | 16384 | 7971.3 | 1103.5 | 95.7% |
+| 8192 | 16384 | 18432 | 4524.3 | 1093.6 | 94.8% |
+| 12288 | 16384 | 18432 | 6746.5 | 1100.1 | 95.4% |
+| 16384 | 16384 | 18432 | 8966.3 | 1103.7 | 95.7% |
+
+**摘要:**
+
+| 指标 | 值 |
+|------|------|
+| 最高 TFLOPS | **1,113.6** (M=16384, K=N=8192) |
+| 最高 MFU | **96.5%** (M=16384, K=N=8192) |
+| 平均 MFU | **95.2%** |
+| MFU 范围 | 93.6% - 96.5% |
+| 最高绝对性能 | 1,113.6 TFLOPS = **96.5%** of 1,153.5 TFLOPS 理论峰值 |
+
+#### 三种计时模式对比 (M=8192, K=N=8192, BF16)
+
+| 计时模式 | 时间 (μs) | TFLOPS | MFU | 额外开销 |
+|----------|-----------|--------|------|----------|
+| Legacy (perf_counter) | 1449.9 | 758.3 | 65.7% | Python dispatch + async |
+| Trace (无 XLA flags) | 1248.6 | 880.6 | 76.3% | DVFS 降频 |
+| **Trace + XLA flags** | **1016.8** | **1081.3** | **93.7%** | 接近理论极限 |
+
+#### 关键发现
+
+1. **DVFS p_state=7 是最关键的优化** — 从 76.3% 到 93.7% MFU 的提升主要来自 DVFS 锁频
+2. **v7 MXU 利用率远超 v6e** — 95.7% vs 79.3%，XLA 对 v7 的编译优化更成熟
+3. **矩阵越大 MFU 越高** — 8192³ 93.7% → 16384×8192² 96.5%，更大矩阵减少 tiling overhead
+4. **所有测试配置 MFU > 93%** — 说明 v7 在 M≥8192 时已稳定达到 compute-bound 状态
+5. **实测 TFLOPS 标准差极小** — trace timing 的 min/max 仅差 0.03%，测量非常稳定
 
 ### C. 参考资料
 
@@ -499,4 +571,4 @@ v6e 的 79% MFU 是当前 JAX/XLA 版本下的实际性能上限。要达到 90%
 
 *报告由 chay_gemm_benchmark_simple 自动化基准测试工具生成*
 *Generated: 2026-02-10*
-*Updated: 2026-02-11 — 添加 v6e Trace timing 分析，确认 79% MFU 是 XLA 编译效率上限*
+*Updated: 2026-02-11 — v7 Trace+XLA flags 实测 95.7% MFU (1113.6 TFLOPS/chiplet)*

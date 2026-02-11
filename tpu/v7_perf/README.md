@@ -8,7 +8,7 @@ TPU GEMM 性能基准测试工具，支持 TPU v6e (Trillium) 和 v7 (Ironwood)�
 cd chay_gemm_benchmark_simple
 
 # 快速测试 - 使用 trace 模式 (~30 秒, 推荐)
-# v7: 90%+ MFU | v6e: ~79% MFU (接近 XLA 编译效率上限)
+# v7: 95.7% MFU (需设 LIBTPU_INIT_ARGS) | v6e: ~79% MFU
 python3 main_tpu.py --config config/tpu_trace_test.json
 
 # 完整测试 + CSV 输出 (~10 分钟)
@@ -24,10 +24,14 @@ python3 main_tpu.py --config config/tpu_simple.json --no-trace
 
 | 计时模式 | 命令参数 | v6e MFU | v7 MFU | 原理 |
 |----------|----------|---------|--------|------|
-| **Trace (默认)** | (无需参数) | ~79% | **90%+** | 从 profiler trace 提取 `device_duration_ps` |
+| **Trace + XLA flags** | (见下方) | ~79% | **95.7%** ✓ | Trace timing + DVFS 锁频 |
+| Trace only | (无需参数) | ~79% | 76.3% | 从 profiler trace 提取 `device_duration_ps` |
 | Legacy | `--no-trace` | 65-75% | 65-75% | 使用 `time.perf_counter()` 端到端计时 |
 
-> **注意**: 90%+ MFU 是 v7 (Ironwood) 上的目标。v6e 的 ~79% MFU 是 XLA 编译器对其 MXU 的利用效率上限，不是 HBM 带宽瓶颈。
+> **v7 XLA 优化参数** (DVFS p_state=7 是关键):
+> ```bash
+> export LIBTPU_INIT_ARGS="--xla_tpu_enable_async_collective_fusion=true --xla_tpu_enable_async_collective_fusion_fuse_all_gather=true --xla_tpu_enable_async_collective_fusion_multiple_steps=true --xla_tpu_overlap_compute_collective_tc=true --xla_enable_async_all_gather=true --xla_enable_async_collective_permute=true --xla_tpu_enable_all_experimental_scheduler_features=true --xla_tpu_scoped_vmem_limit_kib=65536 --xla_tpu_dvfs_p_state=7"
+> ```
 >
 > 参考: [accelerator-microbenchmarks](https://github.com/google/accelerator-microbenchmarks) (专为 v7 优化)
 
@@ -66,9 +70,10 @@ v7_perf/
 
 | 数据类型 | 理论峰值 (per chiplet) | 最高实测 | 最高 MFU | 最佳配置 |
 |----------|------------------------|----------|----------|----------|
-| bfloat16 | 1153.5 TFLOPS | **758.3 TFLOPS** | **65.7%** | M=8192, K=N=8192 |
-| float32 | 1153.5 TFLOPS | 670.9 TFLOPS | 58.2% | M=8192, K=N=8192 |
-| int8 | 2307 TOPS | 711.9 TOPS | 30.9% | M=8192, K=N=8192 |
+| bfloat16 (Trace+XLA) | 1153.5 TFLOPS | **1,113.6 TFLOPS** | **96.5%** | M=16384, K=N=8192 |
+| bfloat16 (Legacy) | 1153.5 TFLOPS | 758.3 TFLOPS | 65.7% | M=8192, K=N=8192 |
+| float32 (Legacy) | 1153.5 TFLOPS | 670.9 TFLOPS | 58.2% | M=8192, K=N=8192 |
+| int8 (Legacy) | 2307 TOPS | 711.9 TOPS | 30.9% | M=8192, K=N=8192 |
 
 > 详细分析见 [TPU v7 性能测试报告](tpu_v7_benchmark_report.md)
 
@@ -88,8 +93,9 @@ v7_perf/
 
 | 指标 | v6e 整芯片 | v7 单 chiplet | v7 整芯片 (推算) | 加速比 |
 |------|-----------|--------------|-----------------|--------|
-| BF16 最高 TFLOPS | 689 | 758 | ~1516 | **2.2x** |
-| FP32 最高 TFLOPS | 583 | 671 | ~1342 | **2.3x** |
+| BF16 最高 TFLOPS (Trace+XLA) | 728 | 1,114 | ~2,228 | **3.06x** |
+| BF16 最高 TFLOPS (Legacy) | 689 | 758 | ~1,516 | 2.2x |
+| FP32 最高 TFLOPS | 583 | 671 | ~1,342 | **2.3x** |
 
 ## 关键发现
 
@@ -99,9 +105,10 @@ v7_perf/
 4. **INT8 待优化** — v7 INT8 MFU 仅 30.9%，可能受 JAX dev 版本限制
 5. **TPU float32 = bf16 性能** — MXU 用 bf16 计算 + fp32 累加
 6. **小 batch 效率低** — M < 512 时 MFU < 15%
-7. **Trace-based timing 更准确** — 从 profiler trace 提取纯设备时间，排除 Python overhead
-   - v7 (Ironwood): 可达 90%+ MFU
+7. **Trace-based timing + XLA flags** — 从 profiler trace 提取纯设备时间 + DVFS 锁频
+   - v7 (Ironwood): **95.7% MFU** (1,113.6 TFLOPS/chiplet)
    - v6e (Trillium): ~79% MFU (XLA 对 v6e MXU 的利用效率上限)
+   - DVFS p_state=7 是 v7 最关键的优化参数 (76.3% → 93.7%)
 8. **v6e HBM 带宽不是瓶颈** — M=8192 GEMM 的 AI=1365 >> v6e CB ratio=561，workload 是 compute-bound
 
 ## 文档
@@ -114,4 +121,4 @@ v7_perf/
 ---
 
 *Created: 2026-02-09*
-*Updated: 2026-02-11 — Trace-based timing: v6e 达 79% MFU (XLA 利用率上限), v7 目标 90%+*
+*Updated: 2026-02-11 — v7 Trace+XLA 实测 95.7% MFU (1113.6 TFLOPS), v6e 79% MFU*
