@@ -40,9 +40,18 @@ If user doesn't have a Bot Token yet, guide them:
 
 ```bash
 pip install py-cord --break-system-packages
+
+# 语音转文字支持（可选，支持 Discord 语音消息识别）
+sudo apt-get install -y ffmpeg
+pip install openai-whisper --break-system-packages
 ```
 
-Verify: `python3 -c "import discord; print(discord.__version__)"`
+Verify:
+```bash
+python3 -c "import discord; print(discord.__version__)"
+python3 -c "import whisper; print(whisper.__version__)"  # 可选
+which ffmpeg  # 可选
+```
 
 ### Step 3: Create Bot Script
 
@@ -54,6 +63,7 @@ Write the bot script to `~/.claude/discord-bot/bot_simple.py`:
 import discord
 import asyncio
 import logging
+import os
 import tempfile
 from pathlib import Path
 
@@ -63,6 +73,29 @@ log = logging.getLogger("bot")
 
 CLAUDE_BIN = str(Path.home() / ".local/bin/claude")
 TOKEN = "USER_PROVIDED_TOKEN"
+
+# Whisper 语音转文字（懒加载，首次使用时加载模型）
+_whisper_model = None
+def transcribe_audio(file_path: str) -> str:
+    """用 Whisper small 模型转写音频文件，自动检测语言"""
+    global _whisper_model
+    try:
+        import whisper
+        if _whisper_model is None:
+            log.info("Loading Whisper small model (first time)...")
+            _whisper_model = whisper.load_model("small")
+            log.info("Whisper model loaded.")
+        result = _whisper_model.transcribe(file_path, language=None)
+        text = result.get("text", "").strip()
+        lang = result.get("language", "unknown")
+        log.info(f"Transcribed ({lang}): {text[:100]}...")
+        return text
+    except ImportError:
+        log.warning("Whisper not installed, skipping voice transcription")
+        return ""
+    except Exception as e:
+        log.warning(f"Whisper transcription failed: {e}")
+        return ""
 
 # 在这些频道中不需要 @mention，直接响应所有消息
 # 部署后通过 Bot 查询频道 ID 填入，或留空 set() 表示全部需要 @mention
@@ -88,17 +121,40 @@ async def on_message(message):
     if not is_dm and not is_mentioned and not is_auto_channel:
         return
     content = message.content.replace(f"<@{client.user.id}>", "").strip()
-    # 处理附件（图片/文件）- 用 discord.py 自带的 save() 避免 CDN 403
+    # 处理附件（图片/文件/语音）- 用 discord.py 自带的 save() 避免 CDN 403
     downloaded_files = []
+    voice_texts = []
     for att in message.attachments:
         try:
             suffix = Path(att.filename).suffix or ".bin"
             tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir="/tmp", prefix="discord_")
             await att.save(tmp.name)
-            downloaded_files.append((tmp.name, att.filename, att.content_type or ""))
-            log.info(f"Downloaded attachment: {att.filename} -> {tmp.name}")
+            ctype = att.content_type or ""
+            log.info(f"Downloaded attachment: {att.filename} ({ctype}) -> {tmp.name}")
+            # 检测语音消息并转文字
+            is_voice = (
+                ctype.startswith("audio/")
+                or suffix.lower() in (".ogg", ".mp3", ".wav", ".m4a", ".webm", ".flac")
+                or (message.flags.value & 8192)  # IS_VOICE_MESSAGE flag
+            )
+            if is_voice:
+                log.info(f"Voice message detected, transcribing: {att.filename}")
+                transcribed = await asyncio.to_thread(transcribe_audio, tmp.name)
+                if transcribed:
+                    voice_texts.append(transcribed)
+                    await message.reply(f"🎤 语音识别: {transcribed}")
+                else:
+                    await message.reply("⚠️ 语音识别失败，无法转写")
+                os.unlink(tmp.name)
+            else:
+                downloaded_files.append((tmp.name, att.filename, ctype))
         except Exception as e:
             log.warning(f"Failed to download {att.filename}: {e}")
+    # 合并语音转写文本
+    if voice_texts:
+        voice_content = "\n".join(voice_texts)
+        content = f"{voice_content}\n{content}" if content else voice_content
+    # 合并普通附件引用
     if downloaded_files:
         file_refs = "\n".join(
             f"[Attached file: {fname} (saved at {path})]"
@@ -144,6 +200,17 @@ Key points:
 - DM, @mention, or auto-respond channel to trigger
 - Attachment support: downloads images/files via `att.save()` (avoids Discord CDN 403)
 - `AUTO_RESPOND_CHANNELS`: add channel IDs to skip @mention requirement
+- Voice message transcription via Whisper (lazy-loaded, auto language detection)
+
+#### Voice Message Notes
+
+- Whisper 模型懒加载：首次收到语音时加载到内存（small ~460MB），之后常驻
+- 用 `asyncio.to_thread()` 在线程池转写，不阻塞 Bot 事件循环
+- 语音检测三重判断：`content_type` 前缀 / 文件扩展名 / `IS_VOICE_MESSAGE` flag (8192)
+- 转写后先回复 `🎤 语音识别: ...` 让用户确认，再作为指令传给 Claude Code
+- 如果 Whisper 未安装，语音功能自动跳过（graceful degradation）
+- 模型选择：`base` 速度快但中文一般，`small` 中文好推荐使用，`medium` 最准但 CPU 上较慢
+- **重要**：必须安装 `ffmpeg`，Whisper 依赖它解码音频格式
 
 ### Step 4: Start Bot
 
@@ -179,6 +246,9 @@ tail -5 ~/.claude/discord-bot/bot.log
 | @mention not working | @'ing a Role not the Bot | Select the Bot from MEMBERS list, not ROLES |
 | Bot process dies | Background process killed | Use `setsid` + `disown`, or systemd |
 | "claude not found" | Wrong path | Check `which claude` and update CLAUDE_BIN |
+| Voice message: "⚠️ 语音识别失败" | ffmpeg missing or Whisper error | `sudo apt install ffmpeg` and check Whisper install |
+| Voice message: no response | Whisper not installed | `pip install openai-whisper --break-system-packages` |
+| First voice msg slow | Model loading (~460MB) | Normal, subsequent messages will be fast |
 
 ### Common Permission Issues Checklist
 
