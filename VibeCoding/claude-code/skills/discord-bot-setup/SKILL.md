@@ -50,8 +50,11 @@ Write the bot script to `~/.claude/discord-bot/bot_simple.py`:
 
 ```python
 #!/usr/bin/env python3
-"""Discord Bot - Claude Code Remote Control"""
-import discord, asyncio, logging
+"""Minimal Discord Bot - uses discord.Client for reliable on_message"""
+import discord
+import asyncio
+import logging
+import tempfile
 from pathlib import Path
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s %(message)s",
@@ -60,6 +63,10 @@ log = logging.getLogger("bot")
 
 CLAUDE_BIN = str(Path.home() / ".local/bin/claude")
 TOKEN = "USER_PROVIDED_TOKEN"
+
+# 在这些频道中不需要 @mention，直接响应所有消息
+# 部署后通过 Bot 查询频道 ID 填入，或留空 set() 表示全部需要 @mention
+AUTO_RESPOND_CHANNELS = set()  # e.g. {1471088850712531055}
 
 intents = discord.Intents.default()
 intents.message_content = True
@@ -76,10 +83,28 @@ async def on_message(message):
         return
     is_dm = isinstance(message.channel, discord.DMChannel)
     is_mentioned = client.user in message.mentions
-    log.info(f"MSG: {message.author} #{message.channel}: '{message.content}' dm={is_dm} mention={is_mentioned}")
-    if not is_dm and not is_mentioned:
+    is_auto_channel = getattr(message.channel, 'id', None) in AUTO_RESPOND_CHANNELS
+    log.info(f"MSG: {message.author} #{message.channel}: '{message.content}' dm={is_dm} mention={is_mentioned} auto={is_auto_channel}")
+    if not is_dm and not is_mentioned and not is_auto_channel:
         return
     content = message.content.replace(f"<@{client.user.id}>", "").strip()
+    # 处理附件（图片/文件）- 用 discord.py 自带的 save() 避免 CDN 403
+    downloaded_files = []
+    for att in message.attachments:
+        try:
+            suffix = Path(att.filename).suffix or ".bin"
+            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix, dir="/tmp", prefix="discord_")
+            await att.save(tmp.name)
+            downloaded_files.append((tmp.name, att.filename, att.content_type or ""))
+            log.info(f"Downloaded attachment: {att.filename} -> {tmp.name}")
+        except Exception as e:
+            log.warning(f"Failed to download {att.filename}: {e}")
+    if downloaded_files:
+        file_refs = "\n".join(
+            f"[Attached file: {fname} (saved at {path})]"
+            for path, fname, _ in downloaded_files
+        )
+        content = f"{file_refs}\n{content}" if content else file_refs
     if not content:
         await message.reply("Send me a message!")
         return
@@ -116,7 +141,9 @@ Key points:
 - `--dangerously-skip-permissions` for autonomous execution
 - `--continue` for multi-turn conversations
 - Auto-splits messages >2000 chars (Discord limit)
-- DM or @mention to trigger
+- DM, @mention, or auto-respond channel to trigger
+- Attachment support: downloads images/files via `att.save()` (avoids Discord CDN 403)
+- `AUTO_RESPOND_CHANNELS`: add channel IDs to skip @mention requirement
 
 ### Step 4: Start Bot
 
