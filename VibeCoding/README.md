@@ -1,6 +1,6 @@
 # VibeCoding - GPU/TPU 基础设施的 Claude Code 工具箱
 
-一键部署 Claude Code 作为 AI 基础设施助手。包含 16 个自定义 skill、11 个插件、Vertex AI 集成，专为 Google Cloud 上的 GPU/TPU 训练和推理工作流设计。
+一键部署 Claude Code 作为 AI 基础设施助手。包含 15 个自定义 skill、11 个插件、Vertex AI 集成，专为 Google Cloud 上的 GPU/TPU 训练和推理工作流设计。
 
 ## 目录结构
 
@@ -12,11 +12,10 @@ VibeCoding/
     │   ├── settings.template.json      # Vertex AI 配置（已参数化）
     │   ├── marketplaces.json           # 插件市场源
     │   └── plugins.txt                 # 要安装的插件列表
-    └── skills/                         # 16 个自定义 Skill
+    └── skills/                         # 15 个自定义 Skill
         ├── sglang-installer/           # SGLang 推理服务器
         ├── vllm-installer/             # vLLM 推理服务器
         ├── deepep-installer/           # DeepSeek Expert Parallelism
-        ├── ray-cluster-installer/      # Ray 分布式集群
         ├── lssd-mounter/               # Google Cloud Local SSD RAID
         ├── tpu-trainer/                # TPU v7 训练自动化
         ├── discord-bot-setup/          # Discord Bot（持久 Claude 进程）
@@ -60,7 +59,6 @@ chmod +x install-claude-code.sh
 
 | Skill | 功能 |
 |-------|------|
-| **ray-cluster-installer** | 部署 Ray 多节点集群，GPU 自动检测，6 步验证套件。集成 SGLang PD 分离部署。 |
 | **lssd-mounter** | 自动检测并挂载 Google Cloud Local SSD 为 RAID0（`/lssd`），最高 20GB/s 吞吐。自动配置 HuggingFace 缓存目录。 |
 | **tpu-trainer** | TPU v7 (Ironwood) 模型训练自动化。自动生成 MaxText 脚本、提交 XPK Workload、监控训练、收集结果。支持 FP8/BF16、FSDP 分片、多 Slice DCN。 |
 | **parallel-ssh** | 并行在 GPU 集群节点上执行命令。一次性启动分布式推理、检查 GPU 状态、收集日志。 |
@@ -168,9 +166,8 @@ Discord 用户 ↔ Bot (py-cord) ↔ Unix socketpair ↔ Claude Code (stream-jso
 ```
 1. lssd-mounter      → 挂载 Local SSD 用于模型权重缓存
 2. deepep-installer   → 安装 Expert Parallelism 通信层
-3. ray-cluster        → 搭建分布式集群
-4. sglang/vllm        → 部署推理服务器（Prefill-Decode 分离）
-5. parallel-ssh       → 大规模集群运维
+3. sglang/vllm        → 部署推理服务器（Prefill-Decode 分离）
+4. parallel-ssh       → 大规模集群运维
 ```
 
 ## 相关链接
