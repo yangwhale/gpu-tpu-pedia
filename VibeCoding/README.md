@@ -1,6 +1,6 @@
 # VibeCoding - GPU/TPU 基础设施的 Claude Code 工具箱
 
-一键部署 Claude Code 作为 AI 基础设施助手。包含 15 个自定义 skill、11 个插件、Vertex AI 集成，专为 Google Cloud 上的 GPU/TPU 训练和推理工作流设计。
+一键部署 Claude Code 作为 AI 基础设施助手。包含 17 个自定义 skill、11 个插件、Vertex AI 集成，专为 Google Cloud 上的 GPU/TPU 训练和推理工作流设计。
 
 ## 目录结构
 
@@ -12,7 +12,7 @@ VibeCoding/
     │   ├── settings.template.json      # Vertex AI 配置（已参数化）
     │   ├── marketplaces.json           # 插件市场源
     │   └── plugins.txt                 # 要安装的插件列表
-    └── skills/                         # 15 个自定义 Skill
+    └── skills/                         # 17 个自定义 Skill
         ├── sglang-installer/           # SGLang 推理服务器
         ├── vllm-installer/             # vLLM 推理服务器
         ├── deepep-installer/           # DeepSeek Expert Parallelism
@@ -24,6 +24,8 @@ VibeCoding/
         ├── zsh-installer/              # Zsh + Oh My Zsh (agnoster)
         ├── paper-explainer/            # 学术论文大白话中文解读
         ├── skill-creator/              # Anthropic 官方 Skill 创建元工具
+        ├── frontend-slides/            # HTML 演示文稿生成（零依赖动画）
+        ├── chip-performance-test.md    # GPU/TPU 芯片性能测试
         ├── report/                     # 客户贡献报告管理
         ├── discord-report/             # 发送报告到 Discord
         ├── feishu-report/              # 发送报告到飞书
@@ -79,6 +81,13 @@ chmod +x install-claude-code.sh
 | **discord-report** | 发送格式化 Embed 报告到 Discord 频道。 |
 | **feishu-report** | 发送卡片格式报告到飞书。 |
 | **wechat-report** | 通过 Server酱发送报告到微信。 |
+
+### 创作工具
+
+| Skill | 功能 |
+|-------|------|
+| **frontend-slides** | 生成零依赖、动画丰富的 HTML 演示文稿。支持从零创建和 PPT 转换。12 种预设风格（Bold Signal、Neon Cyber、Dark Botanical 等），"Show Don't Tell" 风格发现流程。 |
+| **chip-performance-test** | GPU/TPU 芯片性能自动化测试。运行 GEMM benchmark、测量计算能力、生成性能报告。 |
 
 ### 研究与报告
 
