@@ -442,6 +442,50 @@ claude mcp add kubernetes -- npx mcp-server-kubernetes 2>/dev/null \
     && success "Kubernetes MCP 安装成功！" \
     || warn "Kubernetes MCP 安装失败，请手动安装"
 
+# CC Memory MCP (Mem0 + Vertex AI Vector Search)
+info "安装 CC Memory MCP..."
+MCP_SRC="$SCRIPT_DIR/claude-code/mcp"
+MCP_MEMORY_DIR="$HOME/mcp-memory-server"
+
+if [ -f "$MCP_SRC/cc-memory-server.py" ]; then
+    # 创建目录和 venv
+    mkdir -p "$MCP_MEMORY_DIR"
+    cp "$MCP_SRC/cc-memory-server.py" "$MCP_MEMORY_DIR/server.py"
+
+    if [ ! -d "$MCP_MEMORY_DIR/.venv" ]; then
+        info "创建 Python venv..."
+        python3 -m venv "$MCP_MEMORY_DIR/.venv"
+    fi
+
+    info "安装依赖..."
+    "$MCP_MEMORY_DIR/.venv/bin/pip" install -q fastmcp mem0ai google-cloud-aiplatform 2>/dev/null
+
+    # Apply Mem0 patches (ADC fallback, 768 dims, list() fix)
+    if [ -f "$MCP_SRC/apply-mem0-patches.sh" ]; then
+        info "应用 Mem0 patches..."
+        bash "$MCP_SRC/apply-mem0-patches.sh" "$MCP_MEMORY_DIR/.venv"
+    fi
+
+    # 注册 MCP server
+    claude mcp add-json "cc-memory" "{
+        \"type\": \"stdio\",
+        \"command\": \"$MCP_MEMORY_DIR/.venv/bin/python3\",
+        \"args\": [\"$MCP_MEMORY_DIR/server.py\"],
+        \"env\": {
+            \"GOOGLE_CLOUD_PROJECT\": \"$PROJECT_ID\",
+            \"GOOGLE_CLOUD_LOCATION\": \"global\",
+            \"MEM0_TELEMETRY\": \"false\"
+        }
+    }" 2>/dev/null \
+        && success "CC Memory MCP 安装成功！" \
+        || warn "CC Memory MCP 注册失败，请手动注册"
+
+    info "注意: CC Memory MCP 需要 Vertex AI Vector Search index 和 endpoint"
+    info "请根据实际环境修改 $MCP_MEMORY_DIR/server.py 中的 GCP 资源 ID"
+else
+    warn "未找到 cc-memory-server.py，跳过 CC Memory MCP"
+fi
+
 success "MCP 服务器安装完成！"
 
 # =============================================================================
@@ -529,7 +573,7 @@ echo "  - Node.js: v20 LTS (用于 MCP 服务器和插件)"
 echo "  - Happy Coder: npm 全局安装"
 echo "  - Vertex AI 配置: $CLAUDE_DIR/settings.json"
 echo "  - 插件市场: ${#MARKETPLACES[@]} 个"
-echo "  - MCP 服务器: Kubernetes, Jina AI (如已配置 API Key)"
+echo "  - MCP 服务器: Kubernetes, Jina AI, CC Memory (Mem0 + Vertex AI)"
 echo "  - 自定义 Skills: ${#INSTALLED_SKILLS[@]} 个"
 for skill in "${INSTALLED_SKILLS[@]}"; do
     echo "      * $skill"
