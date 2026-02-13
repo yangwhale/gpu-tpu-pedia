@@ -55,7 +55,42 @@ Claude Code 在需要展示复杂内容时：
 
 ## 安全模型
 
-不加 IAP，靠 URL 不可猜测性保护内容：
+基础防护（默认）：
 - autoindex 关闭，无法浏览目录
 - 只有知道完整文件名才能访问
-- 首页和 assets 公开（Discord OG 爬虫需要访问）
+- nginx 安全 headers + 只允许 GET/HEAD
+
+### 可选：IAP 登录保护
+
+询问用户是否需要 Google 账号登录保护。如果需要，执行以下步骤：
+
+1. 创建带 IAP 的 backend service：
+```bash
+gcloud compute backend-services create cc-bs-iap --global \
+  --project=PROJECT --protocol=HTTP --health-checks=hc-http-80 \
+  --load-balancing-scheme=EXTERNAL_MANAGED
+gcloud compute backend-services add-backend cc-bs-iap --global \
+  --project=PROJECT --instance-group=INSTANCE_GROUP \
+  --instance-group-zone=ZONE --balancing-mode=UTILIZATION
+```
+
+2. 开启 IAP 并授权用户：
+```bash
+gcloud iap web enable --resource-type=backend-services \
+  --service=cc-bs-iap --project=PROJECT
+gcloud iap web add-iam-policy-binding --resource-type=backend-services \
+  --service=cc-bs-iap --project=PROJECT \
+  --member=user:EMAIL --role=roles/iap.httpsResourceAccessor
+```
+
+3. URL map 按路径分流（`/pages/*` 走 IAP，其余公开）：
+```bash
+gcloud compute url-maps add-path-matcher ALB_NAME --project=PROJECT \
+  --path-matcher-name=cc-paths --default-service=cc-bs \
+  --path-rules="/pages/*=cc-bs-iap"
+```
+
+效果：
+- `/` 和 `/assets/*` — 公开（Discord OG 爬虫可访问）
+- `/pages/*` — 需 Google 账号登录（IAP 拦截）
+- IAP 传播需要 5-10 分钟
