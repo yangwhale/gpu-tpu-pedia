@@ -48,6 +48,14 @@ Claude Code 在需要展示复杂内容时：
 
 - 监听 80 端口
 - root: `/var/www/cc/`
-- autoindex on（目录列表）
+- autoindex off（目录列表已关闭，防止枚举页面）
 - 允许跨域（Discord embed 预览）
 - gzip 压缩
+- 安全: server_tokens off, X-Content-Type-Options, X-Frame-Options, CSP, 只允许 GET/HEAD, 隐藏文件 404
+
+## 安全模型
+
+不加 IAP，靠 URL 不可猜测性保护内容：
+- autoindex 关闭，无法浏览目录
+- 只有知道完整文件名才能访问
+- 首页和 assets 公开（Discord OG 爬虫需要访问）

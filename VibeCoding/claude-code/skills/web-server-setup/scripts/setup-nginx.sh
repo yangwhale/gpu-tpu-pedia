@@ -68,10 +68,8 @@ server {
     root /var/www/cc;
     index index.html;
 
-    # 目录列表
-    autoindex on;
-    autoindex_format html;
-    autoindex_localtime on;
+    # 目录列表（关闭，靠 URL 不可猜测性保护内容）
+    autoindex off;
 
     # gzip 压缩
     gzip on;
