@@ -77,16 +77,23 @@ B200    192GB HBM3e  2250 TFLOPS  4500 TFLOPS
 复杂内容（大表格、图表、报告）不适合 Discord 消息时，生成 HTML 页面到 CC Pages：
 
 1. 写 HTML 到 `/var/www/cc/pages/{topic}-{YYYYMMDD-HHmmss}.html`
-2. 页面必须包含 OG 标签（og:title, og:description, og:image）让 Discord 显示预览
-3. 用 `send-to-discord.sh --plain "https://cc.higcp.com/pages/{filename}"` 发送链接
-4. **必须用 `--plain` 模式**，Embed 模式下链接不会触发 Discord 的 OG 预览
+2. 用 Playwright 截图(1200x630) 保存到 `/var/www/cc/assets/og-{topic}.png`
+3. 页面 og:image 指向专属截图（不要共用首页截图，否则 Discord 预览全长一样）
+4. 用 `send-to-discord.sh --plain "https://cc.higcp.com/pages/{filename}"` 发送链接
+5. **必须用 `--plain` 模式**，Embed 模式下链接不会触发 Discord 的 OG 预览
+
+### 生成流程
+
+```
+写 HTML → Playwright 截图 → 设置 og:image → send-to-discord.sh --plain
+```
 
 ### OG 标签模板
 
 ```html
 <meta property="og:title" content="页面标题">
 <meta property="og:description" content="简短描述">
-<meta property="og:image" content="https://cc.higcp.com/assets/og-image.png">
+<meta property="og:image" content="https://cc.higcp.com/assets/og-{topic}.png">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
 <meta name="twitter:card" content="summary_large_image">
