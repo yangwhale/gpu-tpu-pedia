@@ -11,7 +11,8 @@ Collect from user via AskUserQuestion:
 1. **Bot Token** — from Discord Developer Portal
 2. **Discord User ID** — for whitelist (Developer Mode > right-click avatar > Copy User ID)
 3. **Auto-respond Channel ID** — (optional) channel where bot responds without @mention
-4. **Whisper model** — tiny/base/small/medium/large (default: medium)
+4. **STT engine** — gemini (recommended) / chirp2 / whisper:medium (default: gemini)
+5. **GCP Project** — for Gemini/Chirp2 STT (default: use gcloud config)
 
 If no Bot Token, guide user through Discord Developer Portal setup:
 - Create Application > Bot > Reset Token > enable all 3 Intents (Presence, Server Members, **Message Content**)
@@ -23,20 +24,40 @@ If no Bot Token, guide user through Discord Developer Portal setup:
 ```bash
 pip install py-cord --break-system-packages
 sudo apt-get install -y ffmpeg jq
-pip install openai-whisper --break-system-packages
+pip install google-genai --break-system-packages   # Gemini STT (recommended)
+pip install openai-whisper --break-system-packages  # Whisper fallback
 ```
 
 ## Deploy Bot
 
 1. Read `scripts/bot_template.py` — this is the complete, production-ready bot script
 2. Copy to `~/.claude/discord-bot/bot.py`
-3. Replace placeholder values with user-provided config:
-   - `YOUR_TOKEN_HERE` → bot token
-   - `ALLOWED_USER_IDS = set()` → `{user_discord_id}`
-   - `AUTO_RESPOND_CHANNELS = set()` → `{channel_id}` if provided
-   - `WHISPER_MODEL` default → user's choice
+3. Create `~/.claude/discord-bot/.env` with config:
+   ```
+   DISCORD_BOT_TOKEN=<bot_token>
+   ALLOWED_USER_IDS=<user_discord_id>
+   AUTO_RESPOND_CHANNELS=<channel_id>
+   STT_ENGINE=gemini
+   GOOGLE_CLOUD_PROJECT=<gcp_project>
+   CHIRP2_LOCATION=us-central1
+   ```
 4. Copy `scripts/send-to-discord.sh` to `~/.claude/scripts/send-to-discord.sh` and set BOT_TOKEN/CHANNEL_ID
 5. `chmod +x ~/.claude/scripts/send-to-discord.sh`
+
+## STT Engine Configuration
+
+Three engines available, configured via `STT_ENGINE` in `.env`:
+
+- **`gemini`** (recommended) — Uses Gemini multimodal LLM for transcription. Understands semantics, corrects homophones, handles tech terms. Requires `google-genai` SDK and GCP project with Vertex AI API enabled.
+  - Current best: `gemini-3-flash-preview` with `thinking_level=MINIMAL` (~3.4s, excellent quality)
+  - Alternative: `gemini-2.0-flash` (~3s, excellent quality, more regions)
+  - Budget option: `gemini-2.5-flash-lite` (~2.1s, good quality)
+- **`chirp2`** — Google Cloud Speech-to-Text V2 (Chirp 2). Pure ASR, no semantic understanding. Poor with homophones.
+- **`whisper:medium`** — Local OpenAI Whisper. No network dependency, ~2-3s, ok quality.
+
+Fallback chain: Gemini → Chirp 2 → Whisper (automatic on failure)
+
+**Important**: Gemini 3 Flash Preview only available in `global` region. Other Gemini models work in `us-central1`.
 
 ## Start Bot
 
@@ -73,7 +94,8 @@ For auto memory to work across sessions:
 
 - **Persistent Claude process** per user via `socket.socketpair()` — full interactive mode
 - **Session history** — `/end` archives, `/sessions` shows dropdown to switch back
-- **Whisper voice** — auto-detect audio attachments, transcribe, feed to Claude
+- **Gemini STT** — multimodal voice transcription with semantic understanding (understands context, corrects homophones)
+- **STT fallback chain** — Gemini → Chirp 2 → Whisper (auto-fallback on failure)
 - **Smart message splitting** — split at newlines for Discord's 2000 char limit
 - **Process auto-restart** — if Claude dies, recreate transparently on next message
 - **Graceful restart** — `/restart` command triggers exit code 42, wrapper script auto-restarts
