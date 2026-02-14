@@ -21,7 +21,9 @@ Claude 以完整交互模式运行，支持 auto memory、CLAUDE.md、skills 等
 import asyncio
 import json
 import os
+import signal
 import socket
+import subprocess
 import sys
 import logging
 import tempfile
@@ -44,12 +46,41 @@ ALLOWED_USER_IDS = {1074613327805829190}  # yangwhale (Chris)
 CLAUDE_BIN = os.environ.get("CLAUDE_BIN", str(Path.home() / ".local/bin/claude"))
 WORK_DIR = os.environ.get("CLAUDE_WORK_DIR", str(Path.home()))
 CLAUDE_TIMEOUT = int(os.environ.get("CLAUDE_TIMEOUT", "600"))
+RESTART_EXIT_CODE = 42  # wrapper 脚本检测到此 exit code 时自动重启
 
-# Whisper 语音转文字
+# 语音转文字引擎: "chirp2" (Cloud STT, 默认) 或 "whisper:medium" / "whisper:large-v3" 等
+STT_ENGINE = os.environ.get("STT_ENGINE", "chirp2")
+# Chirp 2 配置
+CHIRP2_PROJECT = os.environ.get("GOOGLE_CLOUD_PROJECT", os.environ.get("GCLOUD_PROJECT", ""))
+CHIRP2_LOCATION = os.environ.get("CHIRP2_LOCATION", "us-central1")
+# 向后兼容: WHISPER_MODEL 环境变量仍可用于覆盖
 WHISPER_MODEL = os.environ.get("WHISPER_MODEL", "medium")
 
 # 在这些频道中不需要 @mention，直接响应所有消息
 AUTO_RESPOND_CHANNELS = {1471088850712531055}  # 🥶-claude-code
+
+# Discord 输出风格 (从 skill 文件动态加载，保持单一内容源)
+DISCORD_STYLE_SKILL = Path.home() / ".claude/skills/discord-style/SKILL.md"
+
+def load_discord_style() -> str:
+    """从 discord-style skill 文件加载格式规则"""
+    try:
+        content = DISCORD_STYLE_SKILL.read_text()
+        # 跳过 YAML frontmatter（--- ... ---）
+        parts = content.split("---", 2)
+        body = parts[2].strip() if len(parts) >= 3 else content
+        return f"你正在通过 Discord 频道与用户交互。\n\n{body}"
+    except FileNotFoundError:
+        log.warning(f"Discord style skill not found: {DISCORD_STYLE_SKILL}")
+        return "你正在通过 Discord 频道与用户交互，请用简短对话式风格回复，不要用表格。"
+
+DISCORD_SYSTEM_PROMPT = load_discord_style() + "\n\n" + (
+    "CRITICAL SAFETY RULE: You are running as a child process of the Discord bot. "
+    "NEVER kill, restart, or stop the bot process (bot.py). NEVER run commands like "
+    "'kill', 'pkill', 'killall' targeting bot.py or the bot's PID. "
+    "If you modify bot.py and it needs a restart, tell the user to run /restart in Discord. "
+    "Killing the bot process will terminate YOUR OWN process and disconnect the user."
+)
 
 # 日志
 LOG_FILE = Path.home() / ".claude/discord-bot/bot.log"
@@ -69,27 +100,105 @@ logging.basicConfig(
 log = logging.getLogger("claude-bot")
 
 # ============================================================================
-# Whisper 语音转文字 (懒加载)
+# 语音转文字 (Chirp 2 默认, Whisper 可切换)
 # ============================================================================
 
 _whisper_model = None
 
-def transcribe_audio(file_path: str) -> str:
-    """用 Whisper 模型转写音频文件"""
+
+def transcribe_with_whisper(file_path: str) -> str:
+    """用本地 Whisper 模型转写音频文件"""
     global _whisper_model
+    import whisper
+    if _whisper_model is None:
+        model_name = STT_ENGINE.split(":", 1)[1] if ":" in STT_ENGINE else WHISPER_MODEL
+        log.info(f"Loading Whisper {model_name} model (first time)...")
+        _whisper_model = whisper.load_model(model_name)
+        log.info("Whisper model loaded.")
+    result = _whisper_model.transcribe(file_path, language=None)
+    text = result.get("text", "").strip()
+    lang = result.get("language", "unknown")
+    log.info(f"Whisper transcribed ({lang}): {text[:100]}...")
+    return text
+
+
+def transcribe_with_chirp2(file_path: str) -> str:
+    """用 Google Cloud Speech-to-Text v2 (Chirp 2) 转写音频文件"""
+    from google.cloud.speech_v2 import SpeechClient
+    from google.cloud.speech_v2.types import cloud_speech
+
+    client = SpeechClient(client_options={"api_endpoint": f"{CHIRP2_LOCATION}-speech.googleapis.com"})
+
+    with open(file_path, "rb") as f:
+        audio_content = f.read()
+
+    config = cloud_speech.RecognitionConfig(
+        auto_decoding_config=cloud_speech.AutoDetectDecodingConfig(),
+        language_codes=["cmn-Hans-CN", "en-US"],
+        model="chirp_2",
+        denoiser_config=cloud_speech.DenoiserConfig(
+            denoise_audio=True,
+            snr_threshold=10.0,  # high sensitivity
+        ),
+        adaptation=cloud_speech.SpeechAdaptation(
+            phrase_sets=[
+                cloud_speech.SpeechAdaptation.AdaptationPhraseSet(
+                    inline_phrase_set=cloud_speech.PhraseSet(phrases=[
+                        {"value": "Claude Code"},
+                        {"value": "Chirp"},
+                        {"value": "Whisper"},
+                        {"value": "TPU"},
+                        {"value": "GPU"},
+                        {"value": "B200"},
+                        {"value": "H100"},
+                        {"value": "A100"},
+                        {"value": "SGLang"},
+                        {"value": "vLLM"},
+                        {"value": "GCP"},
+                        {"value": "Discord"},
+                        {"value": "Gemini"},
+                        {"value": "sglang"},
+                        {"value": "MIG"},
+                        {"value": "GKE"},
+                        {"value": "Spot"},
+                        {"value": "HBM"},
+                    ])
+                )
+            ]
+        ),
+    )
+    request = cloud_speech.RecognizeRequest(
+        recognizer=f"projects/{CHIRP2_PROJECT}/locations/{CHIRP2_LOCATION}/recognizers/_",
+        config=config,
+        content=audio_content,
+    )
+
+    response = client.recognize(request=request)
+    texts = []
+    for result in response.results:
+        if result.alternatives:
+            texts.append(result.alternatives[0].transcript)
+    text = " ".join(texts).strip()
+    log.info(f"Chirp 2 transcribed: {text[:100]}...")
+    return text
+
+
+def transcribe_audio(file_path: str) -> str:
+    """根据 STT_ENGINE 配置选择转写引擎"""
     try:
-        import whisper
-        if _whisper_model is None:
-            log.info(f"Loading Whisper {WHISPER_MODEL} model (first time)...")
-            _whisper_model = whisper.load_model(WHISPER_MODEL)
-            log.info("Whisper model loaded.")
-        result = _whisper_model.transcribe(file_path, language=None)
-        text = result.get("text", "").strip()
-        lang = result.get("language", "unknown")
-        log.info(f"Transcribed ({lang}): {text[:100]}...")
-        return text
+        if STT_ENGINE.startswith("whisper"):
+            return transcribe_with_whisper(file_path)
+        else:
+            return transcribe_with_chirp2(file_path)
     except Exception as e:
-        log.warning(f"Whisper transcription failed: {e}")
+        log.warning(f"Transcription failed ({STT_ENGINE}): {e}")
+        # Chirp 2 失败时 fallback 到 Whisper
+        if not STT_ENGINE.startswith("whisper"):
+            log.info("Falling back to Whisper...")
+            try:
+                return transcribe_with_whisper(file_path)
+            except Exception as e2:
+                log.warning(f"Whisper fallback also failed: {e2}")
         return ""
 
 # ============================================================================
@@ -106,12 +215,10 @@ class ClaudeSession:
         self.sock_out = None  # claude -> bot (stdout)
         self._lock = asyncio.Lock()
 
-    async def start(self):
+    async def start(self, _retry=False):
         """启动 Claude 持久进程"""
         parent_stdin, child_stdin = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
         parent_stdout, child_stdout = socket.socketpair(socket.AF_UNIX, socket.SOCK_STREAM)
-        os.set_inheritable(child_stdin.fileno(), True)
-        os.set_inheritable(child_stdout.fileno(), True)
 
         cmd = [
             CLAUDE_BIN,
@@ -120,22 +227,27 @@ class ClaudeSession:
             "--verbose",
             "--dangerously-skip-permissions",
             "--permission-prompt-tool", "stdio",
+            "--append-system-prompt", DISCORD_SYSTEM_PROMPT,
         ]
         if self.session_id:
             cmd.extend(["--resume", self.session_id])
 
         env = os.environ.copy()
+        env.pop("CLAUDECODE", None)  # 允许嵌套启动
         env["CLAUDE_CODE_DISABLE_AUTO_MEMORY"] = "0"
 
-        self.proc = await asyncio.create_subprocess_exec(
-            *cmd,
+        self._stderr_path = tempfile.mktemp(prefix="claude_stderr_", suffix=".log")
+        stderr_fd = os.open(self._stderr_path, os.O_WRONLY | os.O_CREAT | os.O_TRUNC, 0o600)
+        self.proc = subprocess.Popen(
+            cmd,
             stdin=child_stdin.fileno(),
             stdout=child_stdout.fileno(),
-            stderr=asyncio.subprocess.DEVNULL,
+            stderr=stderr_fd,
             cwd=WORK_DIR,
-            close_fds=False,
+            close_fds=True,
             env=env,
         )
+        os.close(stderr_fd)
         child_stdin.close()
         child_stdout.close()
         self.sock_in = parent_stdin
@@ -143,20 +255,48 @@ class ClaudeSession:
         self.sock_out.setblocking(False)
 
         # 等初始化并消费初始消息
-        await asyncio.sleep(3)
-        self._drain()
+        await self._drain(timeout=10)
+
+        if not self.is_alive():
+            # 读取 stderr 诊断信息
+            stderr_content = ""
+            try:
+                with open(self._stderr_path) as f:
+                    stderr_content = f.read().strip()[-500:]  # 最后 500 字符
+            except Exception:
+                pass
+            if stderr_content:
+                log.error(f"Claude stderr (PID={self.proc.pid}): {stderr_content}")
+            if _retry:
+                raise RuntimeError(f"Claude process failed to start (PID={self.proc.pid})")
+            log.warning(f"Claude process died during startup (PID={self.proc.pid}), retrying without resume")
+            self.session_id = None
+            return await self.start(_retry=True)
+
         log.info(f"Claude process started: PID={self.proc.pid} session={self.session_id or 'new'}")
 
-    def _drain(self):
-        """消费 socket 中所有待读数据"""
-        try:
-            while True:
-                self.sock_out.recv(65536)
-        except BlockingIOError:
-            pass
+    async def _drain(self, timeout: float = 10):
+        """异步消费 socket 中所有待读数据，避免阻塞事件循环"""
+        deadline = asyncio.get_event_loop().time() + timeout
+        idle_count = 0
+        while asyncio.get_event_loop().time() < deadline:
+            try:
+                data = self.sock_out.recv(65536)
+                if not data:
+                    break  # socket closed
+                idle_count = 0
+            except BlockingIOError:
+                idle_count += 1
+                if idle_count >= 6:  # 连续 3 秒无数据，初始化完成
+                    break
+                await asyncio.sleep(0.5)
+            except Exception:
+                break
 
     def is_alive(self) -> bool:
-        return self.proc is not None and self.proc.returncode is None
+        if self.proc is None:
+            return False
+        return self.proc.poll() is None
 
     async def send(self, text: str) -> str:
         """发送消息并等待完整回复"""
@@ -203,14 +343,15 @@ class ClaudeSession:
             self.sock_in.close()
         if self.sock_out:
             self.sock_out.close()
-        if self.proc and self.proc.returncode is None:
+        if self.proc and self.proc.poll() is None:
             self.proc.kill()
-            await self.proc.wait()
+            self.proc.wait()
         log.info(f"Claude session stopped: {self.session_id}")
 
 
 # 每用户一个持久 Claude 进程
 claude_sessions: dict[str, ClaudeSession] = {}  # user_key -> ClaudeSession
+_session_locks: dict[str, asyncio.Lock] = {}  # 防止 get_claude_session 重入
 
 # 持久化: active = 当前活跃 session, history = 历史 session 列表
 SESSIONS_FILE = Path.home() / ".claude/discord-bot/sessions.json"
@@ -278,13 +419,16 @@ def get_session_summary(session_id: str) -> str:
 
 async def get_claude_session(user_key: str) -> ClaudeSession:
     """获取或创建用户的 Claude 持久进程"""
-    if user_key not in claude_sessions or not claude_sessions[user_key].is_alive():
-        data = load_sessions_data()
-        session_id = data.get(user_key, {}).get("active")
-        session = ClaudeSession(session_id=session_id)
-        await session.start()
-        claude_sessions[user_key] = session
-    return claude_sessions[user_key]
+    if user_key not in _session_locks:
+        _session_locks[user_key] = asyncio.Lock()
+    async with _session_locks[user_key]:
+        if user_key not in claude_sessions or not claude_sessions[user_key].is_alive():
+            data = load_sessions_data()
+            session_id = data.get(user_key, {}).get("active")
+            session = ClaudeSession(session_id=session_id)
+            await session.start()
+            claude_sessions[user_key] = session
+        return claude_sessions[user_key]
 
 
 # ============================================================================
@@ -366,7 +510,7 @@ async def process_attachments(message):
 async def on_ready():
     log.info(f"Bot is ready: {bot.user} (ID: {bot.user.id})")
     log.info(f"Allowed users: {ALLOWED_USER_IDS or 'ALL'}")
-    log.info(f"Whisper model: {WHISPER_MODEL}")
+    log.info(f"STT engine: {STT_ENGINE}")
     log.info(f"Auto-respond channels: {AUTO_RESPOND_CHANNELS}")
 
 
@@ -421,14 +565,21 @@ async def on_message(message):
 
     # 获取用户的持久 Claude 进程并发送消息
     user_key = str(message.author.id)
-    async with message.channel.typing():
-        session = await get_claude_session(user_key)
-        result = await session.send(content)
+    try:
+        async with message.channel.typing():
+            session = await get_claude_session(user_key)
+            result = await session.send(content)
 
-    log.info(f"Claude reply ({len(result)} chars) session={session.session_id}: {result[:500]}")
-    save_sessions_data()
+        log.info(f"Claude reply ({len(result)} chars) session={session.session_id}: {result[:500]}")
+        save_sessions_data()
 
-    await send_long_message(message.channel, result)
+        await send_long_message(message.channel, result)
+    except Exception as e:
+        log.error(f"Error handling message from {message.author}: {e}", exc_info=True)
+        try:
+            await message.reply(f"⚠️ Error: {e}")
+        except Exception:
+            pass
 
 
 # ============================================================================
@@ -442,7 +593,7 @@ async def status(ctx):
     embed = discord.Embed(title="Claude Code Bot Status", color=discord.Color.green())
     embed.add_field(name="Status", value="Online", inline=True)
     embed.add_field(name="Claude Processes", value=str(alive), inline=True)
-    embed.add_field(name="Whisper Model", value=WHISPER_MODEL, inline=True)
+    embed.add_field(name="STT Engine", value=STT_ENGINE, inline=True)
     embed.add_field(name="Claude Binary", value=CLAUDE_BIN, inline=False)
     embed.add_field(name="Work Dir", value=WORK_DIR, inline=False)
     embed.set_footer(text=f"Checked at {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
@@ -461,6 +612,21 @@ async def end(ctx):
         await ctx.respond("Session ended. Use /sessions to view history, /switch to resume.")
     else:
         await ctx.respond("No active session.")
+
+
+_restart_requested = False
+
+@bot.slash_command(description="Restart bot to apply code changes")
+async def restart(ctx):
+    """重启 bot 以应用代码修改"""
+    global _restart_requested
+    if not is_allowed(ctx.author.id):
+        await ctx.respond("Not authorized.")
+        return
+    await ctx.respond("Restarting bot...")
+    log.info(f"Restart requested by {ctx.author}")
+    _restart_requested = True
+    await bot.close()
 
 
 class SessionSelect(discord.ui.Select):
@@ -549,19 +715,33 @@ def main():
 
     log.info("Starting Claude Code Discord Bot...")
 
+    # 信号追踪
+    def _signal_handler(signum, frame):
+        log.warning(f"Received signal {signum} ({signal.Signals(signum).name})")
+    for sig in (signal.SIGTERM, signal.SIGHUP, signal.SIGINT):
+        signal.signal(sig, _signal_handler)
+
     if not BOT_TOKEN or BOT_TOKEN == "YOUR_TOKEN_HERE":
         log.error("BOT_TOKEN not set! Set DISCORD_BOT_TOKEN environment variable.")
         sys.exit(1)
 
     try:
+        log.info("Calling bot.run()...")
         bot.run(BOT_TOKEN)
+        if _restart_requested:
+            log.info("Restart requested, exiting with code 42")
+            sys.exit(RESTART_EXIT_CODE)
+        log.warning("bot.run() returned normally (unexpected)")
     except discord.LoginFailure:
         log.error("Invalid bot token!")
         sys.exit(1)
     except KeyboardInterrupt:
-        log.info("Bot stopped by user")
+        log.info("Bot stopped by KeyboardInterrupt")
+    except SystemExit as e:
+        log.warning(f"Bot stopped by SystemExit: {e}")
+        raise
     except Exception as e:
-        log.error(f"Bot crashed: {e}")
+        log.error(f"Bot crashed: {e}", exc_info=True)
         sys.exit(1)
 
 

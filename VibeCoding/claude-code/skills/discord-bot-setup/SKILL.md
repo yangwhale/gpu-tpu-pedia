@@ -42,10 +42,14 @@ pip install openai-whisper --break-system-packages
 
 ```bash
 mkdir -p ~/.claude/discord-bot
-nohup python3 ~/.claude/discord-bot/bot.py > /dev/null 2>&1 &
+# Copy wrapper script
+cp scripts/run.sh ~/.claude/discord-bot/run.sh
+chmod +x ~/.claude/discord-bot/run.sh
+# Start in tmux (survives shell disconnect, wrapper auto-restarts on /restart)
+tmux new-session -d -s discord-bot 'bash ~/.claude/discord-bot/run.sh'
 ```
 
-Verify: `ps aux | grep bot.py | grep -v grep` and `tail -5 ~/.claude/discord-bot/bot.log`
+Verify: `tmux ls` and `tail -5 ~/.claude/discord-bot/bot.log`
 
 **Critical**: Only one bot process must run. Multiple processes = duplicate messages.
 
@@ -63,6 +67,7 @@ For auto memory to work across sessions:
 | `/status` | Bot status, active Claude processes, Whisper model |
 | `/end` | Archive current session, stop Claude process |
 | `/sessions` | List history with summaries + dropdown switcher |
+| `/restart` | Graceful restart (exit code 42 → wrapper auto-restarts) |
 
 ## Key Features
 
@@ -71,6 +76,9 @@ For auto memory to work across sessions:
 - **Whisper voice** — auto-detect audio attachments, transcribe, feed to Claude
 - **Smart message splitting** — split at newlines for Discord's 2000 char limit
 - **Process auto-restart** — if Claude dies, recreate transparently on next message
+- **Graceful restart** — `/restart` command triggers exit code 42, wrapper script auto-restarts
+- **FD isolation** — `subprocess.Popen(close_fds=True)` prevents Claude from inheriting Discord websocket FD
+- **Safety prompt** — system prompt forbids Claude subprocess from killing/restarting bot process
 
 ## References
 
@@ -82,6 +90,7 @@ For auto memory to work across sessions:
 ```
 ~/.claude/discord-bot/
 ├── bot.py           # Main bot script
+├── run.sh           # Wrapper script (auto-restart on exit code 42)
 ├── bot.log          # Runtime logs (tail -f)
 └── sessions.json    # Per-user session mapping (auto-created)
 
