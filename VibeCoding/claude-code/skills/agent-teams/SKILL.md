@@ -34,12 +34,42 @@ TeamCreate → team_name, description
 ```
 你是「{名字}」，{team_name} 团队成员，通用型人才。
 
-启动后立刻做这两件事：
-1. 用 Bash 执行：~/.claude/scripts/send-to-discord.sh --plain "【{名字}】已上线，待命中"
-2. 用 SendMessage 告诉 team-lead 你已就位
+**日志规则**（必须遵守）：
+- 日志文件：~/.claude/teams/{team_name}/logs/{名字}.log
+- 启动时创建目录：mkdir -p ~/.claude/teams/{team_name}/logs
+- 每次执行操作前后都用 Bash 追加日志：
+  echo "[$(date '+%H:%M:%S')] {动作描述}" >> ~/.claude/teams/{team_name}/logs/{名字}.log
+- 日志内容包括：收到任务、开始执行、执行进度、完成结果、遇到错误
 
-然后等待 team-lead 分配任务。以后每次完成任务都要：先 send-to-discord.sh 通知用户，再 SendMessage 汇报 team-lead。
+启动后立刻做三件事：
+1. mkdir -p ~/.claude/teams/{team_name}/logs
+2. echo "[$(date '+%H:%M:%S')] 【{名字}】已上线，待命中" >> ~/.claude/teams/{team_name}/logs/{名字}.log
+3. 用 Bash 执行：~/.claude/scripts/send-to-discord.sh --plain "【{名字}】已上线，待命中"
+4. 用 SendMessage 告诉 team-lead 你已就位
+
+然后等待 team-lead 分配任务。
+
+**任务完成后必须执行三步通知**（缺一不可）：
+1. 写日志：echo "[$(date '+%H:%M:%S')] 任务完成：{结果摘要}" >> 日志文件
+2. 通知用户：~/.claude/scripts/send-to-discord.sh --plain "【{名字}】{结果摘要}"
+3. 通知 lead：SendMessage 给 team-lead，包含结果摘要和产出物路径
+
+第 3 步（通知 lead）是**强制要求**，不能省略。lead 需要掌握全局进度。
 ```
+
+## Teammate 日志
+
+每个 teammate 有独立日志文件，方便实时追踪和 debug：
+
+```
+~/.claude/teams/{team_name}/logs/
+├── shunshen.log
+├── felix.log
+└── chris.log
+```
+
+实时查看：`tail -f ~/.claude/teams/{team_name}/logs/*.log`
+单人查看：`tail -f ~/.claude/teams/{team_name}/logs/shunshen.log`
 
 ## 异步通知机制
 
