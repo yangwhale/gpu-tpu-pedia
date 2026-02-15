@@ -598,7 +598,96 @@ grep PeerMappingOverride /proc/driver/nvidia/params
 
 ---
 
+## GKE COS 容器化部署 (已验证)
+
+GKE A4 (B200) COS 节点上的 DeepEP 安装简化版 —— 无需 Phase 1-3 和 Phase 6。
+
+### 前提条件
+
+- GKE A4 node pool (COS 系统，已内置 mlx5 驱动)
+- Pod 需要 `privileged: true`, `hostNetwork: true`, `hostPID: true`
+- Pod 需要 `hostPath: /` 挂载到 `/host`（访问 GIB 配置）
+- Pod 需要 RDMA 多网络注解 (eth2-eth9 → rdma-0 ~ rdma-7)
+- 推荐镜像: `nvcr.io/nvidia/pytorch:25.06-py3`
+
+### 安装脚本
+
+仅需执行 Phase 5 (构建工具) + Phase 7 (NVSHMEM，无 GDRCopy) + Phase 9 (DeepEP)：
+
+```bash
+# Phase 5: 构建工具
+apt-get update -qq
+apt-get install -y --no-install-recommends cmake ninja-build libibverbs-dev rdma-core ibverbs-utils git
+
+# Fix: cmake 需要 unversioned libmlx5.so
+ln -sf /usr/lib/x86_64-linux-gnu/libmlx5.so.1 /usr/lib/x86_64-linux-gnu/libmlx5.so
+
+# Phase 7: NVSHMEM (无 GDRCopy)
+export CUDA_HOME=/usr/local/cuda
+export PATH=$CUDA_HOME/bin:$PATH
+mkdir -p /opt/deepep && cd /opt/deepep
+git clone --depth 1 --branch v3.5.19-1 https://github.com/NVIDIA/nvshmem.git nvshmem-src
+cd nvshmem-src && mkdir -p build && cd build
+cmake .. -DCMAKE_INSTALL_PREFIX=/opt/deepep/nvshmem -DCMAKE_CUDA_ARCHITECTURES=100 \
+    -DNVSHMEM_IBGDA_SUPPORT=ON -DNVSHMEM_MPI_SUPPORT=OFF -DNVSHMEM_SHMEM_SUPPORT=OFF -DCUDA_HOME=$CUDA_HOME
+make -j$(nproc)
+mkdir -p /opt/deepep/nvshmem/{lib,include,bin}
+cp -a src/lib/*.so* /opt/deepep/nvshmem/lib/
+cp -a src/lib/*.a /opt/deepep/nvshmem/lib/ 2>/dev/null || true
+cp -r ../src/include/* /opt/deepep/nvshmem/include/
+
+# Phase 9: DeepEP + PR #466
+cd /opt/deepep
+git clone https://github.com/deepseek-ai/DeepEP.git && cd DeepEP
+git fetch origin pull/466/head:pr-466 && git checkout pr-466
+export TORCH_CUDA_ARCH_LIST=10.0
+export NVSHMEM_DIR=/opt/deepep/nvshmem
+python3 setup.py build_ext --inplace
+```
+
+### GKE GIB 环境变量 (关键!)
+
+GKE 使用 GIB (GPU Interconnect Bus) 框架管理 NCCL 网络通信。**必须设置以下环境变量，否则 NCCL 初始化失败：**
+
+```bash
+# GIB 配置 (通过 hostPath 挂载访问)
+export LD_LIBRARY_PATH=/host/home/kubernetes/bin/gib/lib64:${LD_LIBRARY_PATH}
+export NCCL_SHIMNET_GUEST_CONFIG_CHECKER_CONFIG_FILE=/host/home/kubernetes/bin/gib/configs/guest_config.txtpb
+export NCCL_TUNER_CONFIG_PATH=/host/home/kubernetes/bin/gib/configs/tuner_config_a4.txtpb
+
+# GIB 要求的 NCCL 参数
+export NCCL_CROSS_NIC=0
+export NCCL_NET_GDR_LEVEL=PIX
+export NCCL_P2P_NET_CHUNKSIZE=131072
+export NCCL_NVLS_CHUNKSIZE=524288
+export NCCL_IB_ADAPTIVE_ROUTING=1
+export NCCL_IB_QPS_PER_CONNECTION=4
+export NCCL_IB_TC=52
+export NCCL_IB_FIFO_TC=84
+```
+
+### GKE Internode 性能 (2 节点 16 GPU)
+
+| 操作 | 数据类型 | RDMA 带宽 | NVLink 带宽 |
+|------|----------|-----------|-------------|
+| Dispatch | FP8 | 68.70 GB/s | 229.30 GB/s |
+| Dispatch | BF16 | 77.80 GB/s | 259.66 GB/s |
+| Combine | BF16 | 74.30 GB/s | 247.99 GB/s |
+
+### 与 Bare-metal 对比
+
+GKE 容器化性能损失极小 (< 5%)，接近 bare-metal 水平。
+
+---
+
 ## 版本历史
+
+- **2026-02-15**: GKE COS 容器化部署
+  - **NEW**: GKE A4 COS 节点 DeepEP 安装和运行文档
+  - **NEW**: GIB 环境变量配置（NCCL shimnet + tuner）
+  - 无需 GDRCopy、PeerMappingOverride、DOCA-OFED
+  - 需要 libmlx5.so unversioned symlink fix
+  - 2 节点 internode 测试通过，性能接近 bare-metal
 
 - **2026-02-08**: 磁盘镜像和 1P1D 实战经验
   - **NEW**: GCP 磁盘镜像创建流程（预装环境复用）

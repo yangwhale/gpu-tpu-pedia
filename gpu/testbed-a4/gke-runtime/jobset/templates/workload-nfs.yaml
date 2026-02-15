@@ -1,0 +1,40 @@
+{{- if .Values.volumes.nfs.enabled }}
+apiVersion: v1
+kind: PersistentVolume
+metadata:
+  name: nfs-pv
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  storageClassName: ""
+  capacity:
+    storage: {{ .Values.volumes.nfs.storage }}
+  accessModes:
+    - ReadWriteMany
+  persistentVolumeReclaimPolicy: Retain
+  volumeMode: Filesystem
+  csi:
+    driver: filestore.csi.storage.gke.io
+    volumeHandle: "modeInstance/{{ .Values.volumes.nfs.region }}/{{ .Values.volumes.nfs.instance }}/{{ .Values.volumes.nfs.volume }}"
+    volumeAttributes:
+      ip: {{ .Values.volumes.nfs.ip }}
+      volume: {{ .Values.volumes.nfs.volume }}
+  claimRef:
+    name: nfs-pvc
+    namespace: default
+---
+kind: PersistentVolumeClaim
+apiVersion: v1
+metadata:
+  name: nfs-pvc
+  namespace: default
+  labels:
+    app: {{ .Release.Name }}
+spec:
+  accessModes:
+    - ReadWriteMany
+  storageClassName: ""
+  resources:
+    requests:
+      storage: {{ .Values.volumes.nfs.storage }}
+{{- end }}
