@@ -115,28 +115,44 @@ if [ "$JOB_COMPLETION_INDEX" -eq "0" ]; then
   # 生成只包含主机名的文件
   cat /tmp/job-worker-rank-order.txt | awk '{print $2}' > /tmp/job-worker-hostnames-order.txt
   
-  # 生成 MPI hostfile，每个节点分配 8 个 slots（对应 8 个 GPU）
-  # awk '{print $2}' 提取排序后的主机名（第二列）
+  # 生成 MPI hostfile
+  # slots=8 用于 torchrun 等标准分布式训练
+  # slots=1 用于 DeepEP（test_internode.py 自己 spawn 8 GPU 进程）
   for WORKER in $(cat /tmp/job-worker-rank-order.txt | awk '{print $2}'); do
     echo "$WORKER slots=8" >> /etc/job-worker-services.txt
+    echo "$WORKER slots=1" >> /etc/job-worker-services-1pernode.txt
   done
 fi
 
 # -----------------------------------------------------------------------------
 # DeepEP internode 测试（仅在协调器节点运行）
 # 设置 RUN_DEEPEP_TEST=true 环境变量启用
+#
+# 注意：test_internode.py 使用 torch.multiprocessing.spawn 自行管理 8 个 GPU 进程，
+# 所以 MPI 只需每节点启动 1 个进程。WORLD_SIZE 对 DeepEP 来说是节点数而非 GPU 总数。
+# MASTER_PORT 使用 29500 避免与其他服务冲突。
 # -----------------------------------------------------------------------------
 if [ "$JOB_COMPLETION_INDEX" -eq "0" ] && [[ "${RUN_DEEPEP_TEST:-false}" == "true" ]]; then
   echo "Running DeepEP internode tests..."
   source /opt/deepep/unified-env.sh
+  source /usr/local/gib/scripts/set_nccl_env.sh
   cd /opt/deepep/DeepEP
-  # 使用 mpirun 在所有节点上运行 DeepEP internode 测试
+
   mpirun --allow-run-as-root \
-    --hostfile /etc/job-worker-services.txt \
+    --hostfile /etc/job-worker-services-1pernode.txt \
     --mca orte_keep_fqdn_hostnames 1 \
     --mca plm_rsh_agent "ssh -q -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 222" \
-    --map-by slot \
-    bash -c "source /opt/deepep/unified-env.sh && cd /opt/deepep/DeepEP && python3 tests/test_internode.py" \
+    -np $NNODES \
+    -x NVSHMEM_REMOTE_TRANSPORT \
+    -x NVSHMEM_IBGDA_NIC_HANDLER \
+    -x DEEP_EP_DEVICE_TO_HCA_MAPPING \
+    -x NVSHMEM_DISABLE_CUDA_VMM \
+    -x LD_PRELOAD \
+    -x LD_LIBRARY_PATH \
+    -x NVSHMEM_IB_GID_INDEX \
+    -x NCCL_SOCKET_IFNAME=eth0,eth1 \
+    -x NCCL_TUNER_CONFIG_PATH=/usr/local/gib/configs/tuner_config_a4.txtpb \
+    bash -c "export WORLD_SIZE=$NNODES && export RANK=\$OMPI_COMM_WORLD_RANK && export MASTER_ADDR=$MASTER_ADDR && export MASTER_PORT=29500 && source /opt/deepep/unified-env.sh && source /usr/local/gib/scripts/set_nccl_env.sh && cd /opt/deepep/DeepEP && python3 tests/test_internode.py" \
     2>&1 | tee /tmp/deepep-test-results.txt
   echo "DeepEP test completed. Results saved to /tmp/deepep-test-results.txt"
 fi

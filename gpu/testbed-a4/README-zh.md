@@ -23,6 +23,8 @@
 - Artifact Registry（存储 Docker 镜像）
 - GCS bucket（存储日志）
 - 已安装 Kueue + JobSet API
+- Kueue ClusterQueue 的 `nominalQuota` 需覆盖总 GPU 数（例如 2 节点需要 16）
+- 如果 ResourceFlavor 设了 `topologyName`，所有节点必须在同一 topology block 内 — 或移除拓扑约束
 
 ## 快速开始
 
@@ -58,25 +60,64 @@ cd gpu-tpu-pedia/gpu/testbed-a4
 helm install -f gke-runtime/values.yaml \
     --set-file workload_launcher=gke-runtime/launchers/torchrun-stratup.sh \
     --set "workload.image"=$WORKLOAD_IMAGE \
+    --set "workload.gpus"=16 \
+    --set "queue=a4" \
     --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
+    --set "volumes.nfs.ip"=<filestore-ip> \
+    --set "volumes.nfs.region"=<filestore-zone> \
+    --set "volumes.nfs.instance"=<filestore-instance> \
+    --set "volumes.nfs.volume"=<filestore-share> \
+    --set "volumes.nfs.storage"=1024Gi \
     $USER-deepep \
     gke-runtime/jobset
 ```
 
+关键参数：
+- `workload.gpus`：总 GPU 数（必须是 8 的倍数，与可用节点数匹配）
+- `queue`：Kueue LocalQueue 名称（必须已存在且 quota 足够）
+- `volumes.nfs.*`：Filestore 实例信息（通过 `gcloud filestore instances list` 获取）
+
 ### 3. 运行 DeepEP 测试
 
-进入协调器 Pod 执行：
+**方式 A：自动化** — 部署前在 values.yaml 或 `--set` 中设置 `RUN_DEEPEP_TEST=true`，launcher 脚本会通过 MPI 自动运行测试。
+
+**方式 B：手动** — exec 进协调器 Pod：
 
 ```bash
-# 加载 DeepEP 运行时环境
-source /opt/deepep/unified-env.sh
+COORD_POD=$(kubectl get pods -l jobset.sigs.k8s.io/jobset-name=$USER-deepep \
+    --sort-by=.metadata.name -o jsonpath='{.items[0].metadata.name}')
 
-# 运行 internode 测试
-cd /opt/deepep/DeepEP
-python3 tests/test_internode.py
+kubectl exec -it $COORD_POD -c workload -- bash
+```
+
+在 Pod 内执行：
+
+```bash
+source /opt/deepep/unified-env.sh
+source /usr/local/gib/scripts/set_nccl_env.sh
+
+# 生成每节点 1 进程的 hostfile（test_internode.py 自己 spawn 8 GPU 进程）
+sed 's/slots=8/slots=1/g' /etc/job-worker-services.txt > /tmp/hostfile-1pernode.txt
+
+mpirun --allow-run-as-root \
+  --hostfile /tmp/hostfile-1pernode.txt \
+  --mca orte_keep_fqdn_hostnames 1 \
+  --mca plm_rsh_agent "ssh -q -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 222" \
+  -np $NNODES \
+  -x NVSHMEM_REMOTE_TRANSPORT -x NVSHMEM_IBGDA_NIC_HANDLER \
+  -x DEEP_EP_DEVICE_TO_HCA_MAPPING -x NVSHMEM_DISABLE_CUDA_VMM \
+  -x LD_PRELOAD -x LD_LIBRARY_PATH -x NVSHMEM_IB_GID_INDEX \
+  -x NCCL_SOCKET_IFNAME=eth0,eth1 \
+  -x NCCL_TUNER_CONFIG_PATH=/usr/local/gib/configs/tuner_config_a4.txtpb \
+  bash -c "export WORLD_SIZE=$NNODES && export RANK=\$OMPI_COMM_WORLD_RANK && \
+    export MASTER_ADDR=$MASTER_ADDR && export MASTER_PORT=29500 && \
+    source /opt/deepep/unified-env.sh && source /usr/local/gib/scripts/set_nccl_env.sh && \
+    cd /opt/deepep/DeepEP && python3 tests/test_internode.py"
 ```
 
 预期结果：32/32 测试通过（BF16/FP8 × dispatch/combine × sync/async × with/without top-k）。
+
+> **注意**：`test_internode.py` 使用 `torch.multiprocessing.spawn` 管理 GPU 进程，MPI 只需每节点启动 1 个进程（`slots=1`），不是 8 个。`WORLD_SIZE` 对 DeepEP 的 `init_dist()` 来说是节点数而非 GPU 总数。
 
 ## 目录结构
 

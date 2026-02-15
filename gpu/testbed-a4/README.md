@@ -23,6 +23,8 @@ Deploy and test [DeepEP](https://github.com/deepseek-ai/DeepEP) (DeepSeek Expert
 - Artifact Registry for Docker images
 - GCS bucket for logs
 - Kueue + JobSet APIs installed
+- Kueue ClusterQueue `nominalQuota` must cover total GPU count (e.g. 16 for 2 nodes)
+- If ResourceFlavor has `topologyName` set, all nodes must be in the same topology block — or remove the topology constraint
 
 ## Quick Start
 
@@ -58,25 +60,64 @@ cd gpu-tpu-pedia/gpu/testbed-a4
 helm install -f gke-runtime/values.yaml \
     --set-file workload_launcher=gke-runtime/launchers/torchrun-stratup.sh \
     --set "workload.image"=$WORKLOAD_IMAGE \
+    --set "workload.gpus"=16 \
+    --set "queue=a4" \
     --set "volumes.gcsMounts[0].bucketName"=${GCS_BUCKET} \
+    --set "volumes.nfs.ip"=<filestore-ip> \
+    --set "volumes.nfs.region"=<filestore-zone> \
+    --set "volumes.nfs.instance"=<filestore-instance> \
+    --set "volumes.nfs.volume"=<filestore-share> \
+    --set "volumes.nfs.storage"=1024Gi \
     $USER-deepep \
     gke-runtime/jobset
 ```
 
+Key parameters:
+- `workload.gpus`: Total GPU count (must be multiple of 8, matching available nodes)
+- `queue`: Kueue LocalQueue name (must exist and have sufficient quota)
+- `volumes.nfs.*`: Filestore instance details (get via `gcloud filestore instances list`)
+
 ### 3. Run DeepEP Tests
 
-SSH into the coordinator pod and run:
+**Option A: Automated** — set `RUN_DEEPEP_TEST=true` in values.yaml (or `--set`) before deploying. The launcher script runs the test automatically via MPI.
+
+**Option B: Manual** — exec into the coordinator pod:
 
 ```bash
-# Source DeepEP runtime environment
-source /opt/deepep/unified-env.sh
+COORD_POD=$(kubectl get pods -l jobset.sigs.k8s.io/jobset-name=$USER-deepep \
+    --sort-by=.metadata.name -o jsonpath='{.items[0].metadata.name}')
 
-# Run internode tests (from any node)
-cd /opt/deepep/DeepEP
-python3 tests/test_internode.py
+kubectl exec -it $COORD_POD -c workload -- bash
+```
+
+Inside the pod:
+
+```bash
+source /opt/deepep/unified-env.sh
+source /usr/local/gib/scripts/set_nccl_env.sh
+
+# Create per-node hostfile (1 process per node — test_internode.py spawns 8 GPU procs internally)
+sed 's/slots=8/slots=1/g' /etc/job-worker-services.txt > /tmp/hostfile-1pernode.txt
+
+mpirun --allow-run-as-root \
+  --hostfile /tmp/hostfile-1pernode.txt \
+  --mca orte_keep_fqdn_hostnames 1 \
+  --mca plm_rsh_agent "ssh -q -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 222" \
+  -np $NNODES \
+  -x NVSHMEM_REMOTE_TRANSPORT -x NVSHMEM_IBGDA_NIC_HANDLER \
+  -x DEEP_EP_DEVICE_TO_HCA_MAPPING -x NVSHMEM_DISABLE_CUDA_VMM \
+  -x LD_PRELOAD -x LD_LIBRARY_PATH -x NVSHMEM_IB_GID_INDEX \
+  -x NCCL_SOCKET_IFNAME=eth0,eth1 \
+  -x NCCL_TUNER_CONFIG_PATH=/usr/local/gib/configs/tuner_config_a4.txtpb \
+  bash -c "export WORLD_SIZE=$NNODES && export RANK=\$OMPI_COMM_WORLD_RANK && \
+    export MASTER_ADDR=$MASTER_ADDR && export MASTER_PORT=29500 && \
+    source /opt/deepep/unified-env.sh && source /usr/local/gib/scripts/set_nccl_env.sh && \
+    cd /opt/deepep/DeepEP && python3 tests/test_internode.py"
 ```
 
 Expected: 32/32 tests pass (BF16/FP8 × dispatch/combine × sync/async × with/without top-k).
+
+> **Important**: `test_internode.py` uses `torch.multiprocessing.spawn` to manage GPU processes internally. MPI must launch only 1 process per node (`slots=1`), not 8. `WORLD_SIZE` means number of nodes (not total GPUs) for DeepEP's `init_dist()`.
 
 ## Directory Structure
 
