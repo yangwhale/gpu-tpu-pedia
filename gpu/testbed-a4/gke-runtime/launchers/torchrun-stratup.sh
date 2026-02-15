@@ -33,7 +33,7 @@ fi
 # 用于节点间通信，MPI 需要通过 SSH 在不同节点间启动进程
 # -----------------------------------------------------------------------------
 mkdir /run/sshd  # 创建 SSH 守护进程运行目录
-/usr/sbin/sshd -p 2222  # 在端口 2222 启动 SSH 服务（避免与主机 SSH 冲突）
+/usr/sbin/sshd -p 222  # 在端口 222 启动 SSH 服务（与 Dockerfile sshd_config 一致）
 echo "Pod has started SSH daemon"
 
 if [ "$JOB_COMPLETION_INDEX" -eq "0" ]; then
@@ -53,7 +53,7 @@ if [ "$JOB_COMPLETION_INDEX" -eq "0" ]; then
 
     echo "  Ping $WORKER"
     # 测试 SSH 连接，获取远程主机名
-    echo -n "  Pong "; ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 2222 $WORKER hostname
+    echo -n "  Pong "; ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 222 $WORKER hostname
     ssh_exit_code=$?  # $? 是 bash 的特殊变量，保存上一个命令的退出状态码
                       # 0 表示成功，非 0 表示失败
     
@@ -61,7 +61,7 @@ if [ "$JOB_COMPLETION_INDEX" -eq "0" ]; then
     while [ $ssh_exit_code -ne 0 ]; do
       echo "  (pong failed, retrying in 2 seconds)"
       sleep 2
-      echo -n "  Pong "; ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 2222 $WORKER hostname 
+      echo -n "  Pong "; ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 222 $WORKER hostname 
       ssh_exit_code=$?
     done
 
@@ -72,14 +72,14 @@ if [ "$JOB_COMPLETION_INDEX" -eq "0" ]; then
     
     echo "  Querying $WORKER for VM physical location"
     # 通过 Google Cloud 元数据 API 获取物理主机信息
-    LOCATION=$(ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 2222 $WORKER curl "-s" "-H" "\"Metadata-Flavor: Google\"" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/physical_host" )
+    LOCATION=$(ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 222 $WORKER curl "-s" "-H" "\"Metadata-Flavor: Google\"" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/physical_host" )
 
     ssh_exit_code=$?  # 再次获取上一个 SSH 命令的退出状态码
     # 重试机制：确保能够获取到位置信息（如果 SSH 或 curl 命令失败）
     while [ $ssh_exit_code -ne 0 ]; do
       echo "  (query failed, retrying in 2 seconds)"
       sleep 2
-      LOCATION=$(ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 2222 $WORKER curl "-s" "-H" "\"Metadata-Flavor: Google\"" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/physical_host" )
+      LOCATION=$(ssh -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 222 $WORKER curl "-s" "-H" "\"Metadata-Flavor: Google\"" "http://metadata.google.internal/computeMetadata/v1/instance/attributes/physical_host" )
       ssh_exit_code=$?
     done
 
@@ -89,7 +89,7 @@ if [ "$JOB_COMPLETION_INDEX" -eq "0" ]; then
 
     # 配置 SSH 客户端，简化后续连接
     echo "Host $WORKER" >> /root/.ssh/config
-    echo "  Port 2222" >> /root/.ssh/config
+    echo "  Port 222" >> /root/.ssh/config
     echo "  StrictHostKeyChecking no" >> /root/.ssh/config
   done
 
@@ -123,8 +123,23 @@ if [ "$JOB_COMPLETION_INDEX" -eq "0" ]; then
 fi
 
 # -----------------------------------------------------------------------------
-# 调用 train.sh 脚本 example
-# bash /workload/scripts/train.sh
+# DeepEP internode 测试（仅在协调器节点运行）
+# 设置 RUN_DEEPEP_TEST=true 环境变量启用
+# -----------------------------------------------------------------------------
+if [ "$JOB_COMPLETION_INDEX" -eq "0" ] && [[ "${RUN_DEEPEP_TEST:-false}" == "true" ]]; then
+  echo "Running DeepEP internode tests..."
+  source /opt/deepep/unified-env.sh
+  cd /opt/deepep/DeepEP
+  # 使用 mpirun 在所有节点上运行 DeepEP internode 测试
+  mpirun --allow-run-as-root \
+    --hostfile /etc/job-worker-services.txt \
+    --mca orte_keep_fqdn_hostnames 1 \
+    --mca plm_rsh_agent "ssh -q -o LogLevel=ERROR -o StrictHostKeyChecking=no -p 222" \
+    --map-by slot \
+    bash -c "source /opt/deepep/unified-env.sh && cd /opt/deepep/DeepEP && python3 tests/test_internode.py" \
+    2>&1 | tee /tmp/deepep-test-results.txt
+  echo "DeepEP test completed. Results saved to /tmp/deepep-test-results.txt"
+fi
 
 # 根据环境变量决定是否保持容器运行
 if [[ "${SLEEP_INFINITY}" == "true" ]]; then
