@@ -1,0 +1,88 @@
+# Copyright 2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# Model config for ALModel (Hybrid MLA/KDA + MoE architecture)
+# Based on bailing_moe_v3/long_text_2026-01-20-16-27-37.txt Megatron config
+
+# Core Architectural Parameters
+decoder_block: "al_model"
+base_emb_dim: 2560              # hidden_size
+base_mlp_dim: 6656              # ffn_hidden_size (for dense layers)
+base_num_query_heads: 20        # num_attention_heads
+base_num_kv_heads: 20           # num_query_groups (MLA uses same for q and kv)
+base_num_decoder_layers: 28     # num_layers
+head_dim: 128                   # kv_channels
+mlp_activations: ["silu", "linear"]
+vocab_size: 163840
+
+# MLA (Multi-Head Latent Attention) Parameters
+attention_type: "mla"
+q_lora_rank: 512
+kv_lora_rank: 256
+qk_nope_head_dim: 128           # qk_head_dim
+qk_rope_head_dim: 64            # qk_pos_emb_head_dim
+v_head_dim: 128
+mscale: 1.0
+
+# Hybrid Attention Parameters (MLA + KDA)
+# Every layer_group_size layers, the last one uses MLA (full attention)
+# Other layers use KDA (linear attention) - currently placeholder with MHA
+layer_group_size: 4
+linear_attn_type: "kda"
+linear_conv_kernel_dim: 4       # short_conv_kernel_size for KDA
+
+# MoE (Mixture of Experts) Parameters
+num_experts: 64
+num_experts_per_tok: 6          # moe_router_topk
+base_moe_mlp_dim: 1280          # moe_ffn_hidden_size
+moe_shared_expert_intermediate_size: 1280
+shared_experts: 1
+routed_scaling_factor: 2.827
+
+# MoE layer frequency: 0 = dense, 1 = MoE
+# First layer is dense, rest are MoE
+moe_layer_freq: [0, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1]
+first_num_dense_layers: 1
+
+# Router Parameters
+routed_score_func: "sigmoid"    # moe_router_score_function
+routed_bias: true               # moe_router_enable_expert_bias
+routed_bias_update_rate: 0.001  # moe_router_bias_update_rate
+norm_topk_prob: true
+
+# RoPE Settings
+rope_type: "yarn"
+rope_max_timescale: 50000       # rotary_base
+max_position_embeddings: 131072
+original_max_position_embeddings: 4096
+rope_factor: 32
+beta_fast: 1
+beta_slow: 1
+rope_interleave: True
+rope_truncate: True
+rope_attention_scaling: False
+
+# Sequence Settings
+max_target_length: 8192         # seq_length
+max_prefill_predict_length: 8192
+
+# Normalization
+normalization_layer_epsilon: 1.0e-6  # norm_epsilon
+use_qk_norm: true               # qk_layernorm
+
+# General Model Settings
+enable_dropout: false
+logits_via_embedding: false
+
+scan_layers: False
