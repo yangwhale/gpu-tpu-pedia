@@ -224,7 +224,7 @@ def _splash_attention_forward(
             out_specs=out_specs,
             grid=grid,
         ),
-        compiler_params=pltpu.CompilerParams(
+        compiler_params=(pltpu.TPUCompilerParams if hasattr(pltpu, 'TPUCompilerParams') else pltpu.CompilerParams)(
             dimension_semantics=("parallel", "arbitrary", "arbitrary"),
             flags={"XLA_TPU_FORCE_LP_LLO_SCHEDULER": True}
         ),
