@@ -166,13 +166,23 @@ def decode_latents_to_video(vae, latents, config, env):
     print("反归一化 latents...")
     latents = denormalize_latents(latents, vae=vae)
     
-    # 3. VAE 解码 (VAE 期望 [B, C, T, H, W] 格式)
+    # 3. Warmup (torchax tracing + JIT compilation)
+    print("\nWarmup (JIT 编译)...")
+    warmup_start = time.perf_counter()
+    with torch.no_grad():
+        _ = vae.decode(latents).sample
+    jax.effects_barrier()
+    warmup_elapsed = time.perf_counter() - warmup_start
+    print(f"✓ Warmup 完成: {warmup_elapsed:.2f}s")
+
+    # 4. VAE 解码 (VAE 期望 [B, C, T, H, W] 格式)
     print("\n开始 VAE 解码...")
     start_time = time.perf_counter()
-    
+
     with torch.no_grad():
         video = vae.decode(latents).sample
-    
+    jax.effects_barrier()
+
     elapsed = time.perf_counter() - start_time
     print(f"✓ VAE 解码完成，耗时: {elapsed:.2f} 秒")
     
