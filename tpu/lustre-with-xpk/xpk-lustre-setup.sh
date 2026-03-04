@@ -477,13 +477,12 @@ cmd_cleanup() {
     --project="${PROJECT_ID}" \
     --zone="${LOCATION}" 2>/dev/null || warn "No test workload to delete"
 
-  # Detach storage
+  # Detach storage (note: storage detach does NOT take --type)
   info "Detaching Lustre storage..."
   xpk storage detach "${LUSTRE_INSTANCE}" \
     --cluster="${CLUSTER_NAME}" \
     --project="${PROJECT_ID}" \
-    --zone="${LOCATION}" \
-    --type=lustre 2>/dev/null || warn "No storage to detach"
+    --zone="${LOCATION}" 2>/dev/null || warn "No storage to detach"
 
   # Delete cluster
   echo ""
