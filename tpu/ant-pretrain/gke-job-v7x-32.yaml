@@ -1,0 +1,104 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  annotations: {}
+  labels:
+    job-name: tpuv7x-32-xl
+  name: tpuv7x-32-xl
+  namespace: default
+spec:
+  backoffLimit: 0
+  completionMode: Indexed
+  completions: 8
+  manualSelector: false
+  parallelism: 8
+  podReplacementPolicy: TerminatingOrFailed
+  suspend: false
+  template:
+    metadata:
+      annotations:
+        gke-gcsfuse/volumes: "true"
+      labels:
+        batch.kubernetes.io/job-name: tpuv7x-32-xl
+        job-name: tpuv7x-32-xl
+    spec:
+      containers:
+      - command:
+        - bash
+        - -c
+        - |
+          pip install jax==0.9.1 jaxlib==0.9.1 requests \
+            -i https://us-python.pkg.dev/ml-oss-artifacts-published/jax/simple/ \
+            -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+          pip install --pre libtpu \
+            -i https://us-python.pkg.dev/ml-oss-artifacts-published/jax/simple/ \
+            -f https://storage.googleapis.com/jax-releases/libtpu_releases.html
+          apt update && apt install -y vim
+          sleep infinity
+        env:
+        - name: PIP_CACHE_DIR
+          value: /tmp/ramdisk/.cache/pip
+        - name: PATH
+          value: /opt/venv/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+        - name: TPU_PROCESS_ADDRESSES
+          value: tpuv7x-32-xl-0.tpuv7x-32-xl-headless-svc:8476,tpuv7x-32-xl-1.tpuv7x-32-xl-headless-svc:8476,tpuv7x-32-xl-2.tpuv7x-32-xl-headless-svc:8476,tpuv7x-32-xl-3.tpuv7x-32-xl-headless-svc:8476,tpuv7x-32-xl-4.tpuv7x-32-xl-headless-svc:8476,tpuv7x-32-xl-5.tpuv7x-32-xl-headless-svc:8476,tpuv7x-32-xl-6.tpuv7x-32-xl-headless-svc:8476,tpuv7x-32-xl-7.tpuv7x-32-xl-headless-svc:8476
+        - name: TPU_PROCESS_PORT
+          value: "8476"
+        image: python:3.12
+        imagePullPolicy: IfNotPresent
+        name: jax-tpu
+        resources:
+          limits:
+            google.com/tpu: "4"
+          requests:
+            ephemeral-storage: 8Gi
+            google.com/tpu: "4"
+        securityContext:
+          privileged: true
+        terminationMessagePath: /dev/termination-log
+        terminationMessagePolicy: File
+        volumeMounts:
+        - mountPath: /models
+          name: gcs-fuse-csi-ephemeral
+        - mountPath: /tmp/ramdisk
+          name: tmpfs
+        - mountPath: /ant-pretrain-code
+          name: ant-pretrain-code
+        - mountPath: /dev/shm
+          name: dshm
+      dnsPolicy: ClusterFirst
+      nodeSelector:
+        cloud.google.com/gke-tpu-accelerator: tpu7x
+        cloud.google.com/gke-tpu-topology: 2x4x4
+      restartPolicy: Never
+      schedulerName: default-scheduler
+      securityContext: {}
+      serviceAccount: gcs-account
+      serviceAccountName: gcs-account
+      subdomain: tpuv7x-32-xl-headless-svc
+      terminationGracePeriodSeconds: 30
+      volumes:
+      - emptyDir:
+          medium: Memory
+          sizeLimit: 200Gi
+        name: tmpfs
+      - emptyDir:
+          medium: Memory
+        name: gke-gcsfuse-cache
+      - name: gcs-fuse-csi-ephemeral
+        csi:
+          driver: gcsfuse.csi.storage.gke.io
+          readOnly: true
+          volumeAttributes:
+            bucketName: chrisya-v7x-us-central1
+            mountOptions: "implicit-dirs"
+      - name: ant-pretrain-code
+        csi:
+          driver: gcsfuse.csi.storage.gke.io
+          readOnly: true
+          volumeAttributes:
+            bucketName: chrisya-v7x-us-central1
+            mountOptions: "implicit-dirs,only-dir=ant-pretrain"
+      - name: dshm
+        emptyDir:
+          medium: Memory
