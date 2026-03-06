@@ -4,7 +4,7 @@
 > 从零开始，一步步跑通 benchmark，收集性能数据。
 
 **适用环境**: GKE 1.34+, TPU v7 (tpu7x), Kueue + JobSet, MaxText
-**最后更新**: 2026-03-05
+**最后更新**: 2026-03-06
 **实测数据**: ALModel 17B MoE, 32 chips (2×4×4), batch=12
 
 ---
@@ -22,7 +22,8 @@
 9. [实测 Benchmark 数据](#9-实测-benchmark-数据)
 10. [时间线预期](#10-时间线预期)
 11. [常见问题和踩坑](#11-常见问题和踩坑)
-12. [附录：完整配置参考](#12-附录完整配置参考)
+12. [TFLOP/s 计算 Bug 分析（2026-03-06 发现）](#12-tflops-计算-bug-分析2026-03-06-发现)
+13. [附录：完整配置参考](#13-附录完整配置参考)
 
 ---
 
@@ -589,9 +590,84 @@ gsutil -m -q rsync -r gs://bucket/path /tmp/ant-pretrain-kkx
 
 ---
 
-## 12. 附录：完整配置参考
+## 12. TFLOP/s 计算 Bug 分析（2026-03-06 发现）
 
-### 12.1 ALModel 17B MoE 训练参数
+> **结论**：MaxText 对 ALModel 报告的 TFLOP/s 数值**虚高**，原因是 FFN flops 被 `num_decoder_layers` 重复乘了一次。
+
+### 12.1 Bug 位置
+
+文件：`src/MaxText/maxtext_utils.py`，函数 `calculate_tflops_training_per_device()`
+
+### 12.2 问题分析
+
+ALModel 的 FFN flops 通过 `calculate_routed_and_shared_ffn_tflops_per_device()` 计算，
+该函数**内部已经乘了 layer 数**：
+
+```python
+# calculate_routed_and_shared_ffn_tflops_per_device() 内部
+num_dense_layers, num_moe_layers = get_dense_moe_layers(config)
+dense_ffn_flops = ... * num_dense_layers     # 已乘 1 层 (dense)
+moe_ffn_flops = ... * num_moe_layers         # 已乘 19 层 (MoE)
+total_ffn_flops = dense_ffn_flops + moe_ffn_flops  # 返回整个模型的 FFN flops
+```
+
+但在下游 combine 分支中，`AL_MODEL` 没有被加到 DEEPSEEK/LING2 的正确分支，
+落入了 `else` 分支，**再次乘了 `num_decoder_layers`**：
+
+```python
+# ❌ ALModel 错误地走了 else 分支
+learnable_weight_tflops = (
+    (total_ffn_flops + qkv_flops + projection_flops) * num_decoder_layers  # FFN 被多乘一次！
+    + embedding_flops
+) * 3 / 10**12
+
+# ✅ DEEPSEEK/LING2 的正确做法
+learnable_weight_tflops = (
+    total_ffn_flops + (qkv_flops + projection_flops) * num_decoder_layers  # 只有 QKV 乘 layer 数
+    + embedding_flops
+) * 3 / 10**12
+```
+
+### 12.3 影响范围
+
+- **虚高的组件**：`learnable_weight_tflops`（FFN 部分被乘了 20 倍）
+- **正确的组件**：`attention_tflops`（不受影响）、step time（不受影响）
+- **报告影响**：`TFLOP/s/device` = `total_tflops / step_time`，分子虚高导致报告的 TFLOP/s 虚高
+
+### 12.4 修复
+
+```python
+# 第 594 行，加上 DecoderBlockType.AL_MODEL
+elif config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.LING2, DecoderBlockType.AL_MODEL):
+```
+
+### 12.5 修复前后对比
+
+> **注意**：step time 完全不受影响（它是墙钟时间），只有 TFLOP/s 的计算值变了。
+
+| 指标 | 修复前（虚高） | 修复后（正确） | 变化 |
+|------|------------|------------|------|
+| 稳态 TFLOP/s/device | ~731 | **~76.9** | 下降 9.5× |
+| 稳态 Step Time | ~9.87s | ~9.87s | 不变 |
+| Tokens/s/device | ~9,958 | ~9,958 | 不变 |
+
+> 修复后 Total TFLOPs per step per device 从 ~7,250 降到 ~759，
+> 因为 FFN flops 不再被 num_decoder_layers (20) 重复乘。
+> Step time 和吞吐量完全不变，只有 FLOP 计算值变了。
+
+### 12.6 经验教训
+
+- 新增 `DecoderBlockType` 时，必须检查 `calculate_tflops_training_per_device()` 中所有分支
+- `calculate_routed_and_shared_ffn_tflops_per_device()` 返回的是**整个模型**的 FFN flops（已含 layer 数），
+  而 `qkv_flops` / `projection_flops` 是**单层**的。两者不能用相同的乘法逻辑
+- TFLOP/s 是计算指标而非测量指标，它的准确性完全依赖公式正确性。
+  永远要 code review FLOP 计算逻辑，不要只看最终数字
+
+---
+
+## 13. 附录：完整配置参考
+
+### 13.1 ALModel 17B MoE 训练参数
 
 ```yaml
 # 模型配置
@@ -637,7 +713,7 @@ log_period: 1
 steps: 20
 ```
 
-### 12.2 推荐 XLA Flags (TPU v7)
+### 13.2 推荐 XLA Flags (TPU v7)
 
 ```bash
 LIBTPU_INIT_ARGS="
@@ -655,7 +731,7 @@ LIBTPU_INIT_ARGS="
 "
 ```
 
-### 12.3 快速开始 Checklist
+### 13.3 快速开始 Checklist
 
 - [ ] `gcloud auth list` 确认认证
 - [ ] `kubectl get nodes -l cloud.google.com/gke-tpu-accelerator=tpu7x` 确认节点在线
