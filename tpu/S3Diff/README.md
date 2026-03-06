@@ -87,30 +87,39 @@ TPU_VISIBLE_DEVICES=0 python generate_torchax.py \
 **Hardware**: TPU v6e-8 (single chip)
 **Input**: 128x128 → 512x512 (4x upscale), bfloat16
 
-### Warmup (JIT Compilation)
+### Single Chip (TPU_VISIBLE_DEVICES=0)
 
-| Stage | Time |
-|-------|------|
-| VAE Encode | 1.48s |
-| UNet (1 step) | 8.32s |
-| VAE Decode | 0.63s |
-| **Total** | **10.52s** |
+| Stage | Warmup | Average (5 iter) | Min |
+|-------|--------|------------------|-----|
+| VAE Encode | 1.53s | 0.534s | 0.514s |
+| UNet (1 step) | 8.20s | 4.716s | 4.479s |
+| VAE Decode | 0.66s | 0.017s | 0.013s |
+| **Total** | **10.47s** | **5.278s** | **5.039s** |
 
-### Inference (Average over 5 iterations)
+### 8 Chips (Tensor Parallel)
 
-| Stage | Average | Min |
-|-------|---------|-----|
-| VAE Encode | 0.538s | 0.523s |
-| UNet (1 step) | 5.019s | 4.588s |
-| VAE Decode | 0.028s | 0.014s |
-| **Total** | **5.595s** | **5.139s** |
+| Stage | Warmup | Average (5 iter) | Min |
+|-------|--------|------------------|-----|
+| VAE Encode | 1.50s | 0.563s | 0.536s |
+| UNet (1 step) | 139.96s | 4.864s | 4.624s |
+| VAE Decode | 13.15s | 0.023s | 0.014s |
+| **Total** | **154.93s** | **5.461s** | **5.188s** |
+
+### 64x64 → 256x256 (Single Chip)
+
+| Stage | Warmup | Benchmark |
+|-------|--------|-----------|
+| VAE Encode | 1.43s | 0.51s |
+| UNet (1 step) | 7.78s | 4.46s |
+| VAE Decode | 0.55s | 0.01s |
+| **Total** | **9.85s** | **5.00s** |
 
 ### Multi-Chip Analysis
 
-SD-Turbo (3.3B params) fits entirely on a single TPU v6e chip. Multi-chip tensor parallelism is **not recommended** for this model:
-- Communication overhead between chips exceeds compute savings
-- VAE encoder compilation alone takes 105s with 8-chip TP (vs 1.5s single-chip)
-- For throughput scaling, use process-level data parallelism (one model per chip)
+SD-Turbo (3.3B params) fits entirely on a single TPU v6e chip. Multi-chip tensor parallelism provides **no speedup** for single-image inference:
+- 8-chip TP: 5.46s avg vs single-chip: 5.28s avg (slightly slower due to communication overhead)
+- Warmup is 15x longer: 155s vs 10.5s (more complex compilation for partitioned graphs)
+- For throughput scaling, use **Data Parallel** (one model replica per chip, 8 images simultaneously)
 
 ## File Structure
 

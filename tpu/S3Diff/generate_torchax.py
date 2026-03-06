@@ -971,6 +971,8 @@ def main():
     print("Done!")
     print(f"{'='*60}")
 
+    sys.stdout.flush()
+    sys.stderr.flush()
     os._exit(0)
 
 
