@@ -94,6 +94,28 @@ TPU_VISIBLE_DEVICES=0 python generate_torchax.py \
 | VAE Decode | 0.66s | 0.017s | 0.013s |
 | **Total** | **10.47s** | **5.278s** | **5.039s** |
 
+### HBM Usage (128×128 → 512×512, 1 chip)
+
+| Stage | Measured | Theoretical Weights |
+|-------|----------|---------------------|
+| Model weights loaded | 0.00 GB | 1.97 GB (see note) |
+| After VAE Encode | 0.64 GB peak | VAE enc: 68 MB |
+| After UNet (1 step) | 1.06 GB peak | UNet: 1.73 GB |
+| After VAE Decode | 1.06 GB peak | VAE dec: 99 MB |
+| **Final** | **1.16 GB peak** | **1.97 GB total** |
+
+**Note**: Measured peak (1.16 GB) < theoretical weight total (1.97 GB) because `torchax.enable_globally()` + `jax.default_device("cpu")` keeps model weights in CPU RAM, not TPU HBM. Weights are streamed to TPU per-op during traced execution. HBM only holds the currently executing op's weights and activations.
+
+**Model parameter breakdown (bf16)**:
+- UNet: 865.9M params (1.73 GB)
+- UNet LoRA: 32.4M params (64.9 MB)
+- VAE: 83.7M params (167 MB)
+- VAE LoRA: 1.5M params (3.0 MB)
+- de_mod MLPs: 0.55M params (1.1 MB)
+- **Total: 983.5M params (1.97 GB)**
+
+HBM utilization: **3.7%** of 31.2 GB available per chip.
+
 ### Why Not Multi-Chip?
 
 8-chip tensor parallelism was tested and provides **no speedup** — inference is slightly slower (5.46s avg vs 5.28s single-chip) while warmup is 15x longer (155s vs 10.5s). SD-Turbo (3.3B params) is too small for the inter-chip communication cost to be worthwhile.

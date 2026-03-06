@@ -360,6 +360,26 @@ def load_s3diff_model(sd_path, pretrained_path, de_net_path, lora_rank_unet=32, 
 # torchax Utilities (from SDXL reference)
 # ============================================================================
 
+def get_hbm_usage(device=None):
+    """Get current and peak HBM usage on TPU in GB."""
+    import jax
+    if device is None:
+        device = jax.devices()[0]
+    stats = device.memory_stats()
+    return {
+        'used_gb': stats['bytes_in_use'] / 1024**3,
+        'peak_gb': stats['peak_bytes_in_use'] / 1024**3,
+        'total_gb': stats['bytes_limit'] / 1024**3,
+    }
+
+
+def print_hbm(label, device=None):
+    """Print HBM usage with a label."""
+    hbm = get_hbm_usage(device)
+    print(f"  [HBM] {label}: {hbm['used_gb']:.2f} GB / {hbm['total_gb']:.1f} GB (peak: {hbm['peak_gb']:.2f} GB)")
+    return hbm
+
+
 def setup_pytree_registrations():
     """Register necessary PyTree nodes for JAX transforms."""
     from jax.tree_util import register_pytree_node
@@ -542,6 +562,8 @@ def run_s3diff_inference(components, im_lr_resize_norm, pos_enc, neg_enc, mesh, 
     timesteps = torch.tensor([999]).long()
 
     with mesh:
+        print_hbm("Before inference")
+
         # VAE Encode
         print("  VAE Encoding...")
         t0 = time.perf_counter()
@@ -549,6 +571,7 @@ def run_s3diff_inference(components, im_lr_resize_norm, pos_enc, neg_enc, mesh, 
         jax.effects_barrier()
         vae_enc_time = time.perf_counter() - t0
         print(f"    VAE Encode: {vae_enc_time:.2f}s, latent shape: {list(lq_latent.shape)}")
+        print_hbm("After VAE Encode")
 
         # UNet single-step denoising (no tiling for small images)
         print("  UNet Denoising (1 step)...")
@@ -564,6 +587,7 @@ def run_s3diff_inference(components, im_lr_resize_norm, pos_enc, neg_enc, mesh, 
         jax.effects_barrier()
         unet_time = time.perf_counter() - t1
         print(f"    UNet Denoise: {unet_time:.2f}s")
+        print_hbm("After UNet")
 
         # Scheduler step
         # DDPM scheduler step on CPU (small tensor operation)
@@ -576,6 +600,7 @@ def run_s3diff_inference(components, im_lr_resize_norm, pos_enc, neg_enc, mesh, 
         jax.effects_barrier()
         vae_dec_time = time.perf_counter() - t2
         print(f"    VAE Decode: {vae_dec_time:.2f}s")
+        print_hbm("After VAE Decode")
 
     return output, {
         'vae_encode': vae_enc_time,
@@ -784,6 +809,8 @@ def main():
         move_module_to_xla(env, components[name])
     components['W'] = env.to_xla(components['W'])
 
+    print_hbm("After loading weights to XLA")
+
     # Note: We do NOT use torchax.compile() on VAE encoder or UNet because they have
     # dynamic de_mod attributes (changes per input image) that are incompatible with
     # JAX's static compilation model. torchax.enable_globally() still routes all ops
@@ -874,6 +901,14 @@ def main():
         print(f"  Total:       {total_time:.2f}s")
 
     print(f"  Devices:     {n_devices} TPU chip(s)")
+
+    # HBM summary
+    hbm = get_hbm_usage()
+    print(f"\n  --- HBM Usage ---")
+    print(f"  Current:     {hbm['used_gb']:.2f} GB")
+    print(f"  Peak:        {hbm['peak_gb']:.2f} GB")
+    print(f"  Total:       {hbm['total_gb']:.1f} GB")
+    print(f"  Utilization: {hbm['peak_gb'] / hbm['total_gb'] * 100:.1f}%")
 
     print(f"\n{'='*60}")
     print("Done!")
