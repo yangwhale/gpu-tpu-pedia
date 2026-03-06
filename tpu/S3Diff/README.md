@@ -23,8 +23,7 @@ Input LR Image (128x128)
 ```
 
 Key design decisions for TPU:
-- **No `torchax.compile()` on VAE encoder/UNet**: `de_mod` attributes change per input image, making them incompatible with JAX's static compilation. We use `torchax.enable_globally()` for traced execution instead.
-- **VAE decoder IS compiled**: No LoRA/de_mod, so static compilation works and provides speedup.
+- **VAE decoder + UNet compiled** via `torchax.compile()`: de_mod LoRA modulation tensors are captured as dynamic buffers by JittableModule's `extract_all_buffers`. Requires torchax patch to skip PEFT properties.
 - **Single-chip only**: SD-Turbo (3.3B) fits on 1 TPU chip. Multi-chip TP tested and confirmed slower (see below).
 - **bfloat16 throughout**: All model weights and activations use bfloat16 on TPU.
 
@@ -87,12 +86,14 @@ TPU_VISIBLE_DEVICES=0 python generate_torchax.py \
 **Hardware**: TPU v6e-8 (single chip)
 **Input**: 128x128 → 512x512 (4x upscale), bfloat16
 
-| Stage | Warmup | Average (5 iter) | Min |
-|-------|--------|------------------|-----|
-| VAE Encode | 1.53s | 0.534s | 0.514s |
-| UNet (1 step) | 8.20s | 4.716s | 4.479s |
-| VAE Decode | 0.66s | 0.017s | 0.013s |
-| **Total** | **10.47s** | **5.278s** | **5.039s** |
+| Stage | Before Compile | After Compile | Speedup |
+|-------|----------------|---------------|---------|
+| VAE Encode | 0.53s | 0.50s | 1.1x |
+| UNet (1 step) | 4.85s | 0.45s | **10.8x** |
+| VAE Decode | 0.02s | 0.02s | 1.0x |
+| **Total** | **5.40s** | **0.98s** | **5.5x** |
+
+UNet compilation provides the dominant speedup. VAE encoder is not compiled (only has LoRA on encoder side, future optimization opportunity).
 
 ### HBM Usage (128×128 → 512×512, 1 chip)
 
@@ -104,7 +105,7 @@ TPU_VISIBLE_DEVICES=0 python generate_torchax.py \
 | After VAE Decode | 0.36 GB | 0.90 GB |
 | **Steady-state (cached)** | **0.27 GB** | **1.00 GB** |
 
-**Note**: Measured peak (1.0 GB) << theoretical weight total (2.33 GB) because `torchax.enable_globally()` uses JAX traced execution — weights are streamed to TPU HBM per-op and released after use. HBM only holds the currently executing op's weights and activations, not the full model.
+**Note**: Measured peak (1.0 GB) << theoretical weight total (2.33 GB). With `torchax.compile()`, JAX XLA fuses the compute graph and manages HBM efficiently — weights and activations are paged in/out during execution.
 
 **Model parameter breakdown (bf16)**:
 - UNet: 865.9M params (1,652 MB)
@@ -136,17 +137,17 @@ S3Diff/
 
 ## Technical Notes
 
-### Why Not `torchax.compile()`?
+### UNet Compilation with de_mod
 
-S3Diff's LoRA layers have a `de_mod` attribute (degradation modulation matrix) that is dynamically computed per input image via:
+S3Diff's LoRA layers have a `de_mod` attribute (degradation modulation matrix) that is dynamically computed per input image. Initially this seemed incompatible with `torchax.compile()`, but it works because:
 
-```python
-deg_score → Fourier Embedding → MLP → de_mod (rank x rank matrix)
-```
+1. **`extract_all_buffers`** scans `dir(module)` and captures `de_mod` tensors as dynamic buffers
+2. **`swap_tensor`** restores them during forward via `setattr` fallback (not `register_buffer`)
+3. **`static_argnames`** handles `return_dict` bool kwarg that JAX can't trace
 
-This `de_mod` is set as a plain tensor attribute on each LoRA module and used in the forward pass via `torch.einsum()`. Since `torchax.compile()` expects static module state, it fails on these dynamic attributes.
-
-**Solution**: Use `torchax.enable_globally()` which routes all PyTorch ops through JAX/XLA without static compilation. The VAE decoder (no LoRA) is still compiled for optimal performance.
+Two torchax patches were needed:
+- Skip PEFT `property` attributes in `extract_all_buffers` (avoids `AttributeError: property has no setter`)
+- Add default values to `_aten_conv2d` params
 
 ### Conv2d Dtype Fix
 
