@@ -580,6 +580,8 @@ def run_s3diff_inference(components, im_lr_resize_norm, pos_enc, neg_enc, mesh, 
         # Convert timestep to XLA
         timestep_xla = env.j2t_iso(jnp.array([999], dtype=jnp.int32))
 
+        # return_dict is declared as static_argname in CompileOptions so JAX
+        # treats it as a compile-time constant instead of tracing it.
         pos_model_pred = unet(lq_latent, timestep_xla, encoder_hidden_states=pos_enc, return_dict=False)[0]
         neg_model_pred = unet(lq_latent, timestep_xla, encoder_hidden_states=neg_enc, return_dict=False)[0]
         model_pred = neg_model_pred + GUIDANCE_SCALE * (pos_model_pred - neg_model_pred)
@@ -811,15 +813,7 @@ def main():
 
     print_hbm("After loading weights to XLA")
 
-    # Note: We do NOT use torchax.compile() on VAE encoder or UNet because they have
-    # dynamic de_mod attributes (changes per input image) that are incompatible with
-    # JAX's static compilation model. torchax.enable_globally() still routes all ops
-    # through JAX/XLA, but without JIT compilation overhead.
-    # We DO compile the VAE decoder since it has no dynamic attributes.
-    vae.decoder = torchax.compile(vae.decoder)
-    print("  Models on XLA (VAE decoder compiled, encoder/UNet traced)")
-
-    # Convert de_mod to XLA torchax tensors
+    # Convert de_mod to XLA torchax tensors (MUST be before compile)
     print("  Converting de_mod to XLA...")
     for layer_name, module in vae.named_modules():
         if hasattr(module, 'de_mod'):
@@ -827,6 +821,16 @@ def main():
     for layer_name, module in unet.named_modules():
         if hasattr(module, 'de_mod'):
             module.de_mod = env.to_xla(module.de_mod.to(torch.bfloat16))
+
+    # Compile VAE decoder and UNet with torchax.compile() for JIT optimization.
+    # de_mod attributes are captured as dynamic buffers by JittableModule and
+    # properly restored via _reparametrize_module during each forward call.
+    # Note: requires torchax patch to skip properties in extract_all_buffers.
+    vae.decoder = torchax.compile(vae.decoder)
+    components['unet'] = torchax.compile(
+        unet, torchax.CompileOptions(jax_jit_kwargs={'static_argnames': ('return_dict',)})
+    )
+    print("  Models on XLA (VAE decoder + UNet compiled)")
 
     # Move input tensors to XLA
     with env:
