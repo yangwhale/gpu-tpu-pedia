@@ -96,25 +96,26 @@ TPU_VISIBLE_DEVICES=0 python generate_torchax.py \
 
 ### HBM Usage (128×128 → 512×512, 1 chip)
 
-| Stage | Measured | Theoretical Weights |
-|-------|----------|---------------------|
-| Model weights loaded | 0.00 GB | 1.97 GB (see note) |
-| After VAE Encode | 0.64 GB peak | VAE enc: 68 MB |
-| After UNet (1 step) | 1.06 GB peak | UNet: 1.73 GB |
-| After VAE Decode | 1.06 GB peak | VAE dec: 99 MB |
-| **Final** | **1.16 GB peak** | **1.97 GB total** |
+| Stage | Current HBM | Peak HBM |
+|-------|-------------|----------|
+| After loading weights to XLA | 0.00 GB | 0.00 GB |
+| After VAE Encode | 0.07 GB | 0.53 GB |
+| After UNet (1 step) | 0.18 GB | 0.90 GB |
+| After VAE Decode | 0.36 GB | 0.90 GB |
+| **Steady-state (cached)** | **0.27 GB** | **1.00 GB** |
 
-**Note**: Measured peak (1.16 GB) < theoretical weight total (1.97 GB) because `torchax.enable_globally()` + `jax.default_device("cpu")` keeps model weights in CPU RAM, not TPU HBM. Weights are streamed to TPU per-op during traced execution. HBM only holds the currently executing op's weights and activations.
+**Note**: Measured peak (1.0 GB) << theoretical weight total (2.33 GB) because `torchax.enable_globally()` uses JAX traced execution — weights are streamed to TPU HBM per-op and released after use. HBM only holds the currently executing op's weights and activations, not the full model.
 
 **Model parameter breakdown (bf16)**:
-- UNet: 865.9M params (1.73 GB)
-- UNet LoRA: 32.4M params (64.9 MB)
-- VAE: 83.7M params (167 MB)
-- VAE LoRA: 1.5M params (3.0 MB)
-- de_mod MLPs: 0.55M params (1.1 MB)
-- **Total: 983.5M params (1.97 GB)**
+- UNet: 865.9M params (1,652 MB)
+- VAE Encoder: 34.2M params (65 MB)
+- VAE Decoder: 49.5M params (94 MB)
+- LoRA + MLP: ~300M params (~572 MB)
+- Text Encoder: 340.4M (CPU only, not on HBM)
+- DEResNet: ~2.5M (CPU only, not on HBM)
+- **Total on XLA: ~1.25B params (2.33 GB bf16)**
 
-HBM utilization: **3.7%** of 31.2 GB available per chip.
+Peak HBM utilization: **3.2%** of 31.2 GB available per chip.
 
 ### Why Not Multi-Chip?
 
