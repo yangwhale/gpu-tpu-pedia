@@ -3,17 +3,13 @@
 S3Diff Image Super-Resolution on TPU v6e (torchax)
 
 Single-step diffusion-based 4x image upscaling using S3Diff model.
-Supports both single-chip and multi-chip (tensor parallel) modes.
+Runs on a single TPU chip (SD-Turbo 3.3B fits entirely on one chip).
 
 Based on: https://github.com/ArcticHare105/S3Diff
 Reference: SDXL torchax implementation in gpu-tpu-pedia/tpu/SDXL/
 
 Usage:
-    # Multi-chip (default, uses all TPU chips with TP)
-    python generate_torchax.py --input test_images/test_lr.png --output output_sr.png
-
-    # Single-chip mode
-    TPU_VISIBLE_DEVICES=0 python generate_torchax.py --input test_images/test_lr.png --output output_sr.png
+    TPU_VISIBLE_DEVICES=0 python generate_torchax.py --input test_images/test_lr.png --output output_sr.png --warmup
 """
 
 import os
@@ -55,43 +51,6 @@ DEFAULT_POS_PROMPT = "A high-resolution, 8K, ultra-realistic image with sharp fo
 DEFAULT_NEG_PROMPT = "oil painting, cartoon, blur, dirty, messy, low quality, deformation, low resolution, oversmooth"
 GUIDANCE_SCALE = 1.07
 SCALE_FACTOR = 4
-
-# UNet sharding patterns (same as SDXL - SD-Turbo has same UNet architecture)
-UNET_SHARDINGS = {
-    r'down_blocks.*.attentions.*.transformer_blocks.*.attn1.to_q.weight': ('tp', None),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.attn1.to_k.weight': ('tp', None),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.attn1.to_v.weight': ('tp', None),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.attn1.to_out.0.weight': (None, 'tp'),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.attn2.to_q.weight': ('tp', None),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.attn2.to_k.weight': ('tp', None),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.attn2.to_v.weight': ('tp', None),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.attn2.to_out.0.weight': (None, 'tp'),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.ff.net.0.proj.weight': ('tp', None),
-    r'down_blocks.*.attentions.*.transformer_blocks.*.ff.net.2.weight': (None, 'tp'),
-    r'mid_block.attentions.*.transformer_blocks.*.attn1.to_q.weight': ('tp', None),
-    r'mid_block.attentions.*.transformer_blocks.*.attn1.to_k.weight': ('tp', None),
-    r'mid_block.attentions.*.transformer_blocks.*.attn1.to_v.weight': ('tp', None),
-    r'mid_block.attentions.*.transformer_blocks.*.attn1.to_out.0.weight': (None, 'tp'),
-    r'mid_block.attentions.*.transformer_blocks.*.attn2.to_q.weight': ('tp', None),
-    r'mid_block.attentions.*.transformer_blocks.*.attn2.to_k.weight': ('tp', None),
-    r'mid_block.attentions.*.transformer_blocks.*.attn2.to_v.weight': ('tp', None),
-    r'mid_block.attentions.*.transformer_blocks.*.attn2.to_out.0.weight': (None, 'tp'),
-    r'mid_block.attentions.*.transformer_blocks.*.ff.net.0.proj.weight': ('tp', None),
-    r'mid_block.attentions.*.transformer_blocks.*.ff.net.2.weight': (None, 'tp'),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.attn1.to_q.weight': ('tp', None),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.attn1.to_k.weight': ('tp', None),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.attn1.to_v.weight': ('tp', None),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.attn1.to_out.0.weight': (None, 'tp'),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.attn2.to_q.weight': ('tp', None),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.attn2.to_k.weight': ('tp', None),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.attn2.to_v.weight': ('tp', None),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.attn2.to_out.0.weight': (None, 'tp'),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.ff.net.0.proj.weight': ('tp', None),
-    r'up_blocks.*.attentions.*.transformer_blocks.*.ff.net.2.weight': (None, 'tp'),
-    r'time_embedding.linear_1.weight': ('tp', None),
-    r'time_embedding.linear_2.weight': (None, 'tp'),
-}
-
 
 # ============================================================================
 # DEResNet (Degradation Estimation Network)
@@ -437,53 +396,6 @@ def setup_pytree_registrations():
             print(f"  PyTree exists: {name}")
 
 
-def shard_weight_dict(weight_dict, sharding_dict, mesh):
-    """Apply weight sharding via pattern matching."""
-    import jax
-    import jax.numpy as jnp
-    from jax.sharding import NamedSharding, PartitionSpec as P
-
-    result = {}
-    sharded_count = replicated_count = 0
-
-    for k, v in weight_dict.items():
-        if isinstance(v, torch.Tensor):
-            with jax.default_device("cpu"):
-                v = v.to("jax")
-
-        matched = False
-        for target, sharding in sharding_dict.items():
-            if re.fullmatch(target, k) is not None:
-                v.apply_jax_(jax.device_put, NamedSharding(mesh, P(*sharding)))
-                matched = True
-                sharded_count += 1
-                break
-
-        if not matched:
-            v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
-            replicated_count += 1
-
-        result[k] = v
-
-    print(f"  Sharding: {sharded_count} sharded, {replicated_count} replicated")
-    return result
-
-
-def replicate_weights(weight_dict, mesh):
-    """Replicate all weights across devices."""
-    import jax
-    from jax.sharding import NamedSharding, PartitionSpec as P
-
-    result = {}
-    for k, v in weight_dict.items():
-        if isinstance(v, torch.Tensor):
-            with jax.default_device("cpu"):
-                v = v.to("jax")
-        v.apply_jax_(jax.device_put, NamedSharding(mesh, P()))
-        result[k] = v
-    return result
-
-
 def move_module_to_xla(env, module):
     """Move module weights to XLA device."""
     import jax
@@ -734,14 +646,13 @@ def main():
     import jax
     import jax.numpy as jnp
     from jax.experimental import mesh_utils
-    from jax.sharding import Mesh, NamedSharding, PartitionSpec as P
+    from jax.sharding import Mesh
 
     n_devices = len(jax.devices())
     print(f"\n{'='*60}")
     print("S3Diff 4x Super-Resolution (TPU)")
     print(f"{'='*60}")
-    print(f"  Devices: {n_devices} TPU chips")
-    print(f"  Mode: {'Multi-chip TP' if n_devices > 1 else 'Single-chip'}")
+    print(f"  Devices: {n_devices} TPU chip(s)")
     print(f"  Input: {args.input}")
 
     # Configure JAX cache
@@ -821,19 +732,17 @@ def main():
     torchax.enable_globally()
     env = torchax.default_env()
 
-    # Create mesh
+    # Create mesh (single device)
     mesh = Mesh(
-        mesh_utils.create_device_mesh((n_devices,), allow_split_physical_axes=True),
-        ("tp",)
+        mesh_utils.create_device_mesh((1,), allow_split_physical_axes=True),
+        ("x",)
     )
-    print(f"  Mesh: tp={n_devices}")
 
     # Override ops
     from splash_attention_utils import sdpa_reference
 
     def scaled_dot_product_attention_impl(query, key, value, attn_mask=None, dropout_p=0.0,
-                                           is_causal=False, scale=None, enable_gqa=False,
-                                           env=env, mesh=mesh):
+                                           is_causal=False, scale=None, enable_gqa=False):
         return sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
 
     def torch_conv2d_jax(input, weight, bias=None, stride=1, padding=0,
@@ -965,7 +874,6 @@ def main():
         print(f"  Total:       {total_time:.2f}s")
 
     print(f"  Devices:     {n_devices} TPU chip(s)")
-    print(f"  Mode:        {'TP' if n_devices > 1 else 'Single-chip'}")
 
     print(f"\n{'='*60}")
     print("Done!")
