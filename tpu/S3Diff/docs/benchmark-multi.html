@@ -1,0 +1,622 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>S3Diff Multi-Image Benchmark — TPU v6e</title>
+<meta property="og:title" content="S3Diff Benchmark: 9 Images x 3 Iterations">
+<meta property="og:description" content="不同尺寸/内容的图片超分性能测试，含编译/预热/稳态三阶段计时">
+<meta property="og:image" content="https://cc.higcp.com/assets/og-s3diff-bench-multi.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#22C55E">
+<style>
+  :root {
+    --bg: #0d1117; --card: #161b22; --border: #30363d;
+    --text: #c9d1d9; --dim: #8b949e; --accent: #58a6ff;
+    --green: #3fb950; --orange: #d29922; --red: #f85149;
+    --purple: #bc8cff;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Helvetica,Arial,sans-serif; line-height:1.7; }
+  .container { max-width:1100px; margin:0 auto; padding:1.5rem; }
+  h1 { font-size:1.8rem; color:#fff; margin-bottom:.3rem; }
+  h2 { font-size:1.3rem; color:var(--accent); margin:2rem 0 1rem; border-bottom:1px solid var(--border); padding-bottom:.5rem; }
+  .subtitle { color:var(--dim); font-size:.9rem; margin-bottom:1.5rem; }
+
+  /* Summary cards */
+  .summary-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+    gap: 1rem; margin: 1.5rem 0;
+  }
+  .stat-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    padding: 1.2rem; text-align: center;
+  }
+  .stat-card .value { font-size: 2rem; font-weight: 700; color: var(--green); }
+  .stat-card .label { font-size: .8rem; color: var(--dim); margin-top: .3rem; }
+  .stat-card.warn .value { color: var(--orange); }
+  .stat-card.accent .value { color: var(--accent); }
+
+  /* Performance table */
+  .perf-table {
+    width: 100%; border-collapse: collapse; margin: 1rem 0;
+    font-size: .85rem;
+  }
+  .perf-table th {
+    background: var(--card); color: var(--accent); padding: .6rem .5rem;
+    text-align: left; border-bottom: 2px solid var(--border);
+    position: sticky; top: 0;
+  }
+  .perf-table td {
+    padding: .5rem; border-bottom: 1px solid var(--border);
+    vertical-align: middle;
+  }
+  .perf-table tr:hover { background: rgba(88,166,255,0.05); }
+  .perf-table .num { text-align: right; font-family: 'SF Mono', monospace; }
+  .compile-tag { background: rgba(248,81,73,0.15); color: var(--red); padding: 2px 6px; border-radius: 4px; font-size:.75rem; }
+  .warmup-tag { background: rgba(210,153,34,0.15); color: var(--orange); padding: 2px 6px; border-radius: 4px; font-size:.75rem; }
+  .steady-tag { background: rgba(63,185,80,0.15); color: var(--green); padding: 2px 6px; border-radius: 4px; font-size:.75rem; }
+  .new-shape { color: var(--red); font-weight: 600; }
+  .cached { color: var(--green); }
+
+  /* Image comparison */
+  .compare-grid {
+    display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+    gap: 1.5rem; margin: 1.5rem 0;
+  }
+  .compare-card {
+    background: var(--card); border: 1px solid var(--border); border-radius: 10px;
+    overflow: hidden;
+  }
+  .compare-card .header {
+    padding: .8rem 1rem; border-bottom: 1px solid var(--border);
+    display: flex; justify-content: space-between; align-items: center;
+  }
+  .compare-card .header .title { font-weight: 600; color: #fff; }
+  .compare-card .header .size { color: var(--dim); font-size: .8rem; }
+  .compare-images {
+    display: grid; grid-template-columns: 1fr 1fr; gap: 0;
+  }
+  .compare-images .side {
+    position: relative; overflow: hidden;
+  }
+  .compare-images .side img {
+    width: 100%; height: auto; display: block;
+    image-rendering: auto;
+  }
+  .compare-images .side .label-overlay {
+    position: absolute; top: 6px; left: 6px;
+    background: rgba(0,0,0,0.7); color: #fff; padding: 2px 8px;
+    border-radius: 4px; font-size: .7rem; font-weight: 600;
+  }
+  .compare-card .timing {
+    padding: .6rem 1rem; font-size: .8rem; color: var(--dim);
+    border-top: 1px solid var(--border);
+  }
+  .compare-card .timing .fast { color: var(--green); font-weight: 600; }
+
+  /* Info box */
+  .info-box {
+    background: var(--card); border-left: 4px solid var(--accent);
+    padding: 1rem 1.2rem; margin: 1.5rem 0; border-radius: 0 8px 8px 0;
+    font-size: .9rem;
+  }
+  .info-box.warn { border-left-color: var(--orange); }
+  .info-box.ok { border-left-color: var(--green); }
+  .info-box strong { color: #fff; }
+
+  /* Bar chart */
+  .bar-chart { margin: 1.5rem 0; }
+  .bar-row {
+    display: flex; align-items: center; margin: .4rem 0; gap: .5rem;
+  }
+  .bar-label { width: 100px; font-size: .8rem; text-align: right; color: var(--dim); flex-shrink: 0; }
+  .bar-track { flex: 1; height: 28px; background: var(--card); border-radius: 6px; overflow: hidden; position: relative; }
+  .bar-fill { height: 100%; border-radius: 6px; display: flex; align-items: center; padding-left: 8px; font-size: .75rem; font-weight: 600; color: #fff; min-width: 40px; }
+  .bar-fill.compile { background: linear-gradient(90deg, #f85149, #da3633); }
+  .bar-fill.steady { background: linear-gradient(90deg, #3fb950, #238636); }
+  .bar-fill.warmup { background: linear-gradient(90deg, #d29922, #bb8009); }
+
+  footer {
+    margin-top: 3rem; padding: 1.5rem 0; border-top: 1px solid var(--border);
+    color: var(--dim); font-size: .8rem; text-align: center;
+  }
+  footer a { color: var(--accent); text-decoration: none; }
+
+  @media (max-width: 600px) {
+    .container { padding: 1rem; }
+    h1 { font-size: 1.4rem; }
+    .summary-grid { grid-template-columns: repeat(2, 1fr); }
+    .compare-grid { grid-template-columns: 1fr; }
+    .perf-table { font-size: .75rem; }
+    .perf-table td, .perf-table th { padding: .4rem .3rem; }
+    .bar-label { width: 70px; font-size: .7rem; }
+  }
+</style>
+</head>
+<body>
+<div class="container">
+
+<h1>S3Diff Multi-Image Benchmark</h1>
+<p class="subtitle">
+  TPU v6e (单芯片) · 9 张图片 · 4 种尺寸 · 3 种内容 · 每张跑 3 轮<br>
+  <a href="https://github.com/yangwhale/gpu-tpu-pedia/tree/main/tpu/S3Diff" style="color:var(--accent)">GitHub: yangwhale/gpu-tpu-pedia/tpu/S3Diff</a>
+</p>
+
+<!-- Summary -->
+<div class="summary-grid">
+  <div class="stat-card">
+    <div class="value">~1.0s</div>
+    <div class="label">稳态推理 (128x128)</div>
+  </div>
+  <div class="stat-card">
+    <div class="value">~1.3s</div>
+    <div class="label">稳态推理 (256x256)</div>
+  </div>
+  <div class="stat-card warn">
+    <div class="value">7~23s</div>
+    <div class="label">首次编译 (已缓存形状)</div>
+  </div>
+  <div class="stat-card accent">
+    <div class="value">4x</div>
+    <div class="label">输出放大倍率</div>
+  </div>
+</div>
+
+<!-- Key findings -->
+<h2>关键发现</h2>
+
+<div class="info-box ok">
+  <strong>稳态性能与图片内容无关</strong> — 同尺寸的不同图片（照片/狗/城市），稳态推理时间几乎相同（~1.0s for 128x128, ~1.3s for 256x256）。JAX XLA 编译后的计算图是固定的，只有 tensor 值变化。
+</div>
+
+<div class="info-box warn">
+  <strong>新形状 = 重新编译</strong> — 首次遇到的 padded 尺寸会触发 XLA 重新编译（VAE + UNet + VAE decoder 全部重编译）。192x192 和 256x256 的首次编译特别慢（2-3 分钟），因为 padded 后分辨率更大，XLA 需要优化更复杂的计算图。但编译结果会持久化缓存，下次启动不需要重编。
+</div>
+
+<div class="info-box">
+  <strong>编译缓存生效</strong> — 同 padded 尺寸的后续图片标记为 "warmup" 而非 "compile"。虽然 de_mod 值不同需要重新创建 JittableModule，但 XLA 编译缓存命中，UNet warmup 只需 3-5s（vs 首次 22-60s）。
+</div>
+
+<!-- Performance table -->
+<h2>详细性能数据</h2>
+
+<table class="perf-table">
+  <thead>
+    <tr>
+      <th>图片</th>
+      <th>输入</th>
+      <th>输出</th>
+      <th>轮次</th>
+      <th class="num">VAE Enc</th>
+      <th class="num">UNet</th>
+      <th class="num">VAE Dec</th>
+      <th class="num">Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    <!-- Photo 64x64 -->
+    <tr>
+      <td rowspan="3">Photo</td>
+      <td rowspan="3">64x64</td>
+      <td rowspan="3">256x256</td>
+      <td><span class="compile-tag">编译</span> <span class="new-shape">新形状</span></td>
+      <td class="num">1.40s</td><td class="num">21.85s</td><td class="num">0.59s</td><td class="num"><strong>23.83s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.50s</td><td class="num">0.49s</td><td class="num">0.02s</td><td class="num"><strong>1.01s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.49s</td><td class="num">0.52s</td><td class="num">0.02s</td><td class="num"><strong>1.03s</strong></td>
+    </tr>
+
+    <!-- Photo 128x128 -->
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="3">Photo</td>
+      <td rowspan="3">128x128</td>
+      <td rowspan="3">512x512</td>
+      <td><span class="compile-tag">编译</span> <span class="new-shape">新形状</span></td>
+      <td class="num">1.19s</td><td class="num">5.56s</td><td class="num">0.69s</td><td class="num"><strong>7.44s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.57s</td><td class="num">0.52s</td><td class="num">0.02s</td><td class="num"><strong>1.11s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.52s</td><td class="num">0.54s</td><td class="num">0.02s</td><td class="num"><strong>1.08s</strong></td>
+    </tr>
+
+    <!-- Photo 192x192 -->
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="3">Photo</td>
+      <td rowspan="3">192x192</td>
+      <td rowspan="3">768x768</td>
+      <td><span class="compile-tag">编译</span> <span class="new-shape">新形状</span></td>
+      <td class="num">142.1s</td><td class="num">54.3s</td><td class="num">12.8s</td><td class="num"><strong>209.1s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.67s</td><td class="num">0.56s</td><td class="num">0.02s</td><td class="num"><strong>1.25s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.69s</td><td class="num">0.64s</td><td class="num">0.05s</td><td class="num"><strong>1.38s</strong></td>
+    </tr>
+
+    <!-- Photo 256x256 -->
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="3">Photo</td>
+      <td rowspan="3">256x256</td>
+      <td rowspan="3">1024x1024</td>
+      <td><span class="compile-tag">编译</span> <span class="new-shape">新形状</span></td>
+      <td class="num">97.8s</td><td class="num">59.6s</td><td class="num">13.8s</td><td class="num"><strong>171.2s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.86s</td><td class="num">0.50s</td><td class="num">0.02s</td><td class="num"><strong>1.37s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.82s</td><td class="num">0.49s</td><td class="num">0.02s</td><td class="num"><strong>1.33s</strong></td>
+    </tr>
+
+    <!-- Dog 64 -->
+    <tr style="border-top:3px solid var(--green)">
+      <td rowspan="3">Dog</td>
+      <td rowspan="3">64x64</td>
+      <td rowspan="3">256x256</td>
+      <td><span class="warmup-tag">预热</span> <span class="cached">已缓存</span></td>
+      <td class="num">0.60s</td><td class="num">3.23s</td><td class="num">0.02s</td><td class="num"><strong>3.85s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">1.28s</td><td class="num">0.45s</td><td class="num">0.02s</td><td class="num"><strong>1.74s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.62s</td><td class="num">0.44s</td><td class="num">0.02s</td><td class="num"><strong>1.07s</strong></td>
+    </tr>
+
+    <!-- Dog 128 -->
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="3">Dog</td>
+      <td rowspan="3">128x128</td>
+      <td rowspan="3">512x512</td>
+      <td><span class="warmup-tag">预热</span> <span class="cached">已缓存</span></td>
+      <td class="num">0.60s</td><td class="num">3.74s</td><td class="num">0.02s</td><td class="num"><strong>4.35s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.61s</td><td class="num">0.42s</td><td class="num">0.01s</td><td class="num"><strong>1.05s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.57s</td><td class="num">0.41s</td><td class="num">0.01s</td><td class="num"><strong>1.00s</strong></td>
+    </tr>
+
+    <!-- Dog 256 -->
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="3">Dog</td>
+      <td rowspan="3">256x256</td>
+      <td rowspan="3">1024x1024</td>
+      <td><span class="warmup-tag">预热</span> <span class="cached">已缓存</span></td>
+      <td class="num">0.62s</td><td class="num">5.09s</td><td class="num">0.02s</td><td class="num"><strong>5.73s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.78s</td><td class="num">0.43s</td><td class="num">0.02s</td><td class="num"><strong>1.23s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.84s</td><td class="num">0.41s</td><td class="num">0.01s</td><td class="num"><strong>1.26s</strong></td>
+    </tr>
+
+    <!-- City 128 -->
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="3">City</td>
+      <td rowspan="3">128x128</td>
+      <td rowspan="3">512x512</td>
+      <td><span class="warmup-tag">预热</span> <span class="cached">已缓存</span></td>
+      <td class="num">0.60s</td><td class="num">4.38s</td><td class="num">0.01s</td><td class="num"><strong>4.99s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.61s</td><td class="num">0.43s</td><td class="num">0.01s</td><td class="num"><strong>1.05s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.59s</td><td class="num">0.42s</td><td class="num">0.01s</td><td class="num"><strong>1.01s</strong></td>
+    </tr>
+
+    <!-- City 256 -->
+    <tr style="border-top:2px solid var(--border)">
+      <td rowspan="3">City</td>
+      <td rowspan="3">256x256</td>
+      <td rowspan="3">1024x1024</td>
+      <td><span class="warmup-tag">预热</span> <span class="cached">已缓存</span></td>
+      <td class="num">0.63s</td><td class="num">4.55s</td><td class="num">0.02s</td><td class="num"><strong>5.20s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.80s</td><td class="num">0.42s</td><td class="num">0.02s</td><td class="num"><strong>1.23s</strong></td>
+    </tr>
+    <tr>
+      <td><span class="steady-tag">稳态</span></td>
+      <td class="num">0.91s</td><td class="num">0.43s</td><td class="num">0.01s</td><td class="num"><strong>1.35s</strong></td>
+    </tr>
+  </tbody>
+</table>
+
+<!-- Steady-state bar chart -->
+<h2>稳态性能对比 (Iter 3)</h2>
+
+<div class="bar-chart">
+  <div class="bar-row">
+    <div class="bar-label">64x64→256</div>
+    <div class="bar-track">
+      <div class="bar-fill steady" style="width:calc(1.03/1.4*100%)">1.03s</div>
+    </div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label">128x128→512</div>
+    <div class="bar-track">
+      <div class="bar-fill steady" style="width:calc(1.0/1.4*100%)">1.00s</div>
+    </div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label">192x192→768</div>
+    <div class="bar-track">
+      <div class="bar-fill steady" style="width:calc(1.38/1.4*100%)">1.38s</div>
+    </div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label">256x256→1024</div>
+    <div class="bar-track">
+      <div class="bar-fill steady" style="width:calc(1.33/1.4*100%)">1.33s</div>
+    </div>
+  </div>
+</div>
+
+<div class="info-box ok">
+  <strong>UNet 稳态恒定 ~0.45s</strong> — 不同尺寸的 UNet 推理时间几乎相同！因为 latent space 维度变化不大（32x32 到 128x128），且 XLA 编译后 op fusion 非常高效。主要差异来自 VAE encoder（未编译，0.5-0.9s 随分辨率变化）。
+</div>
+
+<!-- First-compile bar chart -->
+<h2>首次编译时间对比</h2>
+
+<div class="bar-chart">
+  <div class="bar-row">
+    <div class="bar-label">64x64</div>
+    <div class="bar-track">
+      <div class="bar-fill compile" style="width:calc(23.8/210*100%)">23.8s</div>
+    </div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label">128x128</div>
+    <div class="bar-track">
+      <div class="bar-fill compile" style="width:calc(7.4/210*100%)">7.4s</div>
+    </div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label">192x192</div>
+    <div class="bar-track">
+      <div class="bar-fill compile" style="width:calc(209/210*100%)">209.1s</div>
+    </div>
+  </div>
+  <div class="bar-row">
+    <div class="bar-label">256x256</div>
+    <div class="bar-track">
+      <div class="bar-fill compile" style="width:calc(171/210*100%)">171.2s</div>
+    </div>
+  </div>
+</div>
+
+<div class="info-box warn">
+  <strong>128x128 编译最快（7.4s）</strong>是因为 padded 后刚好 512x512（64x64 latent），这是 SD-Turbo 最常见的尺寸。192 和 256 的 padded 尺寸更大，XLA 需要优化更复杂的计算图。编译缓存会持久化到 <code>~/.cache/jax_cache</code>，下次启动命中缓存后跳过。
+</div>
+
+<!-- Image comparisons -->
+<h2>超分效果对比 (LR → 4x SR)</h2>
+
+<div class="compare-grid">
+  <!-- Photo 64 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Real Photo</span>
+      <span class="size">64x64 → 256x256</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_photo_64.png" alt="LR 64">
+        <div class="label-overlay">LR 64x64</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/photo_64_sr.png" alt="SR 256">
+        <div class="label-overlay">SR 256x256</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.03s</span> · 退化: blur=0.48 noise=0.00</div>
+  </div>
+
+  <!-- Photo 128 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Real Photo</span>
+      <span class="size">128x128 → 512x512</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_photo_128.png" alt="LR 128">
+        <div class="label-overlay">LR 128x128</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/photo_128_sr.png" alt="SR 512">
+        <div class="label-overlay">SR 512x512</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.08s</span> · 退化: blur=0.49 noise=0.00</div>
+  </div>
+
+  <!-- Photo 192 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Real Photo</span>
+      <span class="size">192x192 → 768x768</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_photo_192.png" alt="LR 192">
+        <div class="label-overlay">LR 192x192</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/photo_192_sr.png" alt="SR 768">
+        <div class="label-overlay">SR 768x768</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.38s</span> · 退化: blur=0.50 noise=0.03</div>
+  </div>
+
+  <!-- Photo 256 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Real Photo</span>
+      <span class="size">256x256 → 1024x1024</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_photo_256.jpg" alt="LR 256">
+        <div class="label-overlay">LR 256x256</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/photo_256_sr.png" alt="SR 1024">
+        <div class="label-overlay">SR 1024x1024</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.33s</span> · 退化: blur=0.54 noise=0.16</div>
+  </div>
+
+  <!-- Dog 64 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Dog</span>
+      <span class="size">64x64 → 256x256</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_dog_64.png" alt="LR 64">
+        <div class="label-overlay">LR 64x64</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/dog_64_sr.png" alt="SR 256">
+        <div class="label-overlay">SR 256x256</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.07s</span> · 退化: blur=0.30 noise=0.16</div>
+  </div>
+
+  <!-- Dog 128 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Dog</span>
+      <span class="size">128x128 → 512x512</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_dog_128.png" alt="LR 128">
+        <div class="label-overlay">LR 128x128</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/dog_128_sr.png" alt="SR 512">
+        <div class="label-overlay">SR 512x512</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.00s</span> · 退化: blur=0.37 noise=0.32</div>
+  </div>
+
+  <!-- Dog 256 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Dog</span>
+      <span class="size">256x256 → 1024x1024</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_dog_256.png" alt="LR 256">
+        <div class="label-overlay">LR 256x256</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/dog_256_sr.png" alt="SR 1024">
+        <div class="label-overlay">SR 1024x1024</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.26s</span> · 退化: blur=0.65 noise=0.58</div>
+  </div>
+
+  <!-- City 128 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Cityscape</span>
+      <span class="size">128x128 → 512x512</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_city_128.png" alt="LR 128">
+        <div class="label-overlay">LR 128x128</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/city_128_sr.png" alt="SR 512">
+        <div class="label-overlay">SR 512x512</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.01s</span> · 退化: blur=0.33 noise=0.00</div>
+  </div>
+
+  <!-- City 256 -->
+  <div class="compare-card">
+    <div class="header">
+      <span class="title">Cityscape</span>
+      <span class="size">256x256 → 1024x1024</span>
+    </div>
+    <div class="compare-images">
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/input_city_256.png" alt="LR 256">
+        <div class="label-overlay">LR 256x256</div>
+      </div>
+      <div class="side">
+        <img src="https://cc.higcp.com/assets/s3diff-bench/city_256_sr.png" alt="SR 1024">
+        <div class="label-overlay">SR 1024x1024</div>
+      </div>
+    </div>
+    <div class="timing">稳态: <span class="fast">1.35s</span> · 退化: blur=0.51 noise=0.00</div>
+  </div>
+</div>
+
+<!-- Technical notes -->
+<h2>三阶段说明</h2>
+
+<div class="info-box">
+  <strong>编译 (Compile)</strong> — 首次遇到新的 padded 尺寸时，XLA 需要 trace + compile 整个计算图。这是一次性开销，结果持久化到 <code>~/.cache/jax_cache</code>。
+</div>
+<div class="info-box">
+  <strong>预热 (Warmup)</strong> — 同尺寸但不同 de_mod 值。JittableModule 需要重新创建（因为 de_mod buffers 变了），但 XLA 编译缓存命中。UNet 3-5s（vs 编译时 22-60s）。
+</div>
+<div class="info-box">
+  <strong>稳态 (Steady)</strong> — 同图片连续推理。JittableModule 和 XLA 编译都已缓存。反映真实吞吐能力。
+</div>
+
+<footer>
+  Generated by tommy · S3Diff Multi-Image Benchmark · 2026-03-06
+  <br>
+  <a href="https://cc.higcp.com/pages/s3diff-architecture-20260306.html">Architecture Deep Dive</a> ·
+  <a href="https://cc.higcp.com/pages/s3diff-comparison-20260306.html">Real Photo Comparison</a> ·
+  <a href="https://cc.higcp.com">CC Pages</a>
+</footer>
+
+</div>
+</body>
+</html>
