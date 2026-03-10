@@ -438,17 +438,41 @@ def override_op(env, op, impl):
 # Inference Pipeline
 # ============================================================================
 
-def preprocess_image(image_path, scale_factor=4):
-    """Load and preprocess LR image for S3Diff."""
+def preprocess_image(image_path, scale_factor=4, target_size=None):
+    """Load and preprocess LR image for S3Diff.
+
+    Args:
+        target_size: If set, cap the longest side of the upscaled image to this value
+                     instead of using full scale_factor. This prevents OOM on large inputs
+                     where VAE encoder self-attention would be too large.
+    """
     img = Image.open(image_path).convert('RGB')
     to_tensor = transforms.ToTensor()
     im_lr = to_tensor(img).unsqueeze(0)  # (1, 3, H, W) in [0, 1]
 
     ori_h, ori_w = im_lr.shape[2:]
-    # 4x bilinear upscale
+
+    if target_size is not None:
+        # Cap longest side to target_size
+        longest = max(ori_h, ori_w) * scale_factor
+        if longest > target_size:
+            actual_scale = target_size / max(ori_h, ori_w)
+            target_h = int(ori_h * actual_scale)
+            target_w = int(ori_w * actual_scale)
+            # Round to multiple of 8 for VAE compatibility
+            target_h = (target_h // 8) * 8
+            target_w = (target_w // 8) * 8
+            print(f"  target_size={target_size}: scale {scale_factor}x -> {actual_scale:.2f}x ({target_h}x{target_w})")
+        else:
+            target_h = ori_h * scale_factor
+            target_w = ori_w * scale_factor
+    else:
+        target_h = ori_h * scale_factor
+        target_w = ori_w * scale_factor
+
     im_lr_resize = F.interpolate(
         im_lr,
-        size=(ori_h * scale_factor, ori_w * scale_factor),
+        size=(target_h, target_w),
         mode='bilinear',
         align_corners=False,
     )
@@ -612,30 +636,39 @@ def run_s3diff_inference(components, im_lr_resize_norm, pos_enc, neg_enc, mesh, 
 
 
 def postprocess_output(output_tensor, resize_h, resize_w, im_lr_resize, align_method='wavelet'):
-    """Post-process the output tensor to PIL image."""
+    """Post-process the output tensor to PIL image.
+
+    Optimized: crop + normalize + uint8 conversion done on XLA to minimize D2H transfer.
+    Uses block_until_ready() to separate compute time from D2H time.
+    """
+    import jax
     import jax.numpy as jnp
 
-    # Crop padding
+    # Crop + normalize on XLA (no D2H yet)
     output_tensor = output_tensor[:, :, :resize_h, :resize_w]
+    output_tensor = (output_tensor * 0.5 + 0.5).clamp(0.0, 1.0)
 
-    # Convert to [0, 1]
-    output_tensor = output_tensor * 0.5 + 0.5
+    # Convert to uint8 on XLA to reduce D2H transfer size
+    output_uint8 = (output_tensor * 255.0).to(torch.uint8)
 
-    # Convert to numpy
-    if hasattr(output_tensor, '_elem'):
-        jax_array = output_tensor._elem
-        if jax_array.dtype == jnp.bfloat16:
-            np_array = np.array(jax_array.astype(jnp.float32))
-        else:
-            np_array = np.array(jax_array)
+    # Separate compute vs D2H timing
+    t0 = time.perf_counter()
+    if hasattr(output_uint8, '_elem'):
+        output_uint8._elem.block_until_ready()
+    t_compute_sync = time.perf_counter() - t0
+
+    t1 = time.perf_counter()
+    if hasattr(output_uint8, '_elem'):
+        np_array = np.array(output_uint8._elem)  # D2H: uint8, no dtype conversion
     else:
-        np_array = output_tensor.cpu().float().numpy()
+        np_array = output_uint8.cpu().numpy()
+    t_d2h = time.perf_counter() - t1
 
     np_array = np.transpose(np_array[0], (1, 2, 0))
-    np_array = (np_array * 255).clip(0, 255).astype(np.uint8)
     output_pil = Image.fromarray(np_array)
+    print(f"  [Post] compute_sync={t_compute_sync:.3f}s  D2H={t_d2h:.3f}s  shape={np_array.shape}")
 
-    # Color correction
+    # Color correction (CPU, lightweight)
     if align_method != 'nofix':
         im_lr_np = im_lr_resize[0].cpu().numpy()
         im_lr_np = np.transpose(im_lr_np, (1, 2, 0))
@@ -661,6 +694,7 @@ def parse_args():
     parser.add_argument("--de_net_path", type=str, default=None, help="DEResNet weights path")
     parser.add_argument("--pos_prompt", type=str, default=DEFAULT_POS_PROMPT)
     parser.add_argument("--neg_prompt", type=str, default=DEFAULT_NEG_PROMPT)
+    parser.add_argument("--target_size", type=int, default=None, help="Cap longest output side (e.g. 2048)")
     parser.add_argument("--align_method", type=str, default="wavelet", choices=["wavelet", "adain", "nofix"])
     parser.add_argument("--warmup", action="store_true", help="Run warmup pass before benchmark")
     parser.add_argument("--benchmark_iters", type=int, default=1, help="Number of benchmark iterations")
@@ -709,7 +743,7 @@ def main():
 
     # 1. Preprocess image (CPU)
     print(f"\n=== Preprocessing ===")
-    im_lr, im_lr_resize, im_lr_resize_norm, (resize_h, resize_w) = preprocess_image(args.input)
+    im_lr, im_lr_resize, im_lr_resize_norm, (resize_h, resize_w) = preprocess_image(args.input, target_size=args.target_size)
     print(f"  Input: {im_lr.shape[2]}x{im_lr.shape[3]}")
     print(f"  After 4x upscale: {resize_h}x{resize_w}")
     print(f"  After padding: {im_lr_resize_norm.shape[2]}x{im_lr_resize_norm.shape[3]}")
@@ -775,10 +809,14 @@ def main():
     def torch_conv2d_jax(input, weight, bias=None, stride=1, padding=0,
                           dilation=1, groups=1, *, env=env):
         jinput, jweight, jbias = env.t2j_iso((input, weight, bias))
-        # Ensure dtype consistency (scheduler may output float32)
+        # Use promote_types to upcast to higher precision (fixes VAE decoder bf16 NaN)
         if jinput.dtype != jweight.dtype:
-            jinput = jinput.astype(jweight.dtype)
-        if jbias is not None and jbias.dtype != jweight.dtype:
+            target_dtype = jnp.promote_types(jinput.dtype, jweight.dtype)
+            jinput = jinput.astype(target_dtype)
+            jweight = jweight.astype(target_dtype)
+            if jbias is not None:
+                jbias = jbias.astype(target_dtype)
+        elif jbias is not None and jbias.dtype != jweight.dtype:
             jbias = jbias.astype(jweight.dtype)
         res = jaten._aten_conv2d(jinput, jweight, jbias, stride, padding, dilation, groups)
         return env.j2t_iso(res)
@@ -791,12 +829,18 @@ def main():
     vae = components['vae']
     unet = components['unet']
 
-    # Convert ALL parameters to bfloat16 before moving to XLA
-    # Use state_dict approach to catch everything (including PEFT-wrapped layers)
+    # Convert parameters to bfloat16 before moving to XLA
+    # VAE decoder stays float32 to avoid NaN (bf16 precision insufficient for decoder conv chain)
     for p in vae.parameters():
         p.data = p.data.to(torch.bfloat16)
     for b in vae.buffers():
         b.data = b.data.to(torch.bfloat16)
+    # Upcast VAE decoder back to float32 for numerical stability
+    for p in vae.decoder.parameters():
+        p.data = p.data.to(torch.float32)
+    for b in vae.decoder.buffers():
+        b.data = b.data.to(torch.float32)
+
     for p in unet.parameters():
         p.data = p.data.to(torch.bfloat16)
     for b in unet.buffers():
@@ -822,15 +866,16 @@ def main():
         if hasattr(module, 'de_mod'):
             module.de_mod = env.to_xla(module.de_mod.to(torch.bfloat16))
 
-    # Compile VAE decoder and UNet with torchax.compile() for JIT optimization.
+    # Compile VAE encoder, decoder, and UNet with torchax.compile() for JIT optimization.
     # de_mod attributes are captured as dynamic buffers by JittableModule and
     # properly restored via _reparametrize_module during each forward call.
     # Note: requires torchax patch to skip properties in extract_all_buffers.
+    vae.encoder = torchax.compile(vae.encoder)
     vae.decoder = torchax.compile(vae.decoder)
     components['unet'] = torchax.compile(
         unet, torchax.CompileOptions(jax_jit_kwargs={'static_argnames': ('return_dict',)})
     )
-    print("  Models on XLA (VAE decoder + UNet compiled)")
+    print("  Models on XLA (VAE encoder + decoder + UNet compiled)")
 
     # Move input tensors to XLA
     with env:
