@@ -1,0 +1,936 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TPU v7 (Ironwood) vs NVIDIA B200 深度对比</title>
+<meta property="og:title" content="TPU v7 vs B200 深度对比">
+<meta property="og:description" content="Google TPU v7 Ironwood 与 NVIDIA B200 Blackwell 的全方位参数对比，覆盖训练与推理场景">
+<meta property="og:image" content="https://cc.higcp.com/assets/og-tpu-v7-vs-b200.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#4285F4">
+<style>
+:root {
+  --google-blue: #4285F4;
+  --google-green: #34A853;
+  --google-yellow: #FBBC04;
+  --google-red: #EA4335;
+  --nvidia-green: #76B900;
+  --bg-dark: #0f0f1a;
+  --bg-card: #1e1e30;
+  --border: #2a2a40;
+  --text-primary: #e8e8f0;
+  --text-secondary: #a0a0b8;
+  --accent-blue: #4fc3f7;
+  --accent-green: #66bb6a;
+  --tpu-gradient: linear-gradient(135deg, #4285F4, #34A853);
+  --gpu-gradient: linear-gradient(135deg, #76B900, #a8e063);
+}
+
+* { margin: 0; padding: 0; box-sizing: border-box; }
+
+body {
+  font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  background: var(--bg-dark);
+  color: var(--text-primary);
+  line-height: 1.7;
+}
+
+.container {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 0 24px;
+}
+
+/* Hero */
+.hero {
+  background: linear-gradient(135deg, #0d0d1a 0%, #0d1a2e 40%, #1a2a1a 100%);
+  border-bottom: 3px solid;
+  border-image: linear-gradient(90deg, var(--google-blue), var(--nvidia-green)) 1;
+  padding: 60px 0 48px;
+  text-align: center;
+}
+
+.hero h1 {
+  font-size: 2.6rem;
+  font-weight: 800;
+  margin-bottom: 12px;
+}
+
+.hero h1 .tpu { background: var(--tpu-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+.hero h1 .vs { color: var(--text-secondary); -webkit-text-fill-color: initial; font-weight: 400; }
+.hero h1 .gpu { background: var(--gpu-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
+
+.hero .subtitle {
+  font-size: 1.15rem;
+  color: var(--text-secondary);
+  margin-bottom: 24px;
+}
+
+.hero .badges {
+  display: flex;
+  justify-content: center;
+  gap: 16px;
+  flex-wrap: wrap;
+}
+
+.badge {
+  padding: 8px 20px;
+  border-radius: 24px;
+  font-size: 0.85rem;
+  font-weight: 600;
+}
+
+.badge.tpu { background: rgba(66,133,244,0.15); color: var(--google-blue); border: 1px solid rgba(66,133,244,0.3); }
+.badge.gpu { background: rgba(118,185,0,0.15); color: var(--nvidia-green); border: 1px solid rgba(118,185,0,0.3); }
+
+/* Section */
+section { padding: 48px 0; }
+
+section h2 {
+  font-size: 1.8rem;
+  margin-bottom: 24px;
+  padding-left: 16px;
+  border-left: 4px solid;
+  border-image: linear-gradient(180deg, var(--google-blue), var(--nvidia-green)) 1;
+}
+
+section h3 {
+  font-size: 1.3rem;
+  margin: 32px 0 16px;
+  color: var(--accent-blue);
+}
+
+/* Tables */
+.spec-table-wrapper {
+  overflow-x: auto;
+  margin: 24px 0;
+  border-radius: 12px;
+  border: 1px solid var(--border);
+}
+
+table.spec-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 0.92rem;
+}
+
+table.spec-table thead th {
+  background: #1a1a2e;
+  padding: 14px 16px;
+  text-align: center;
+  font-weight: 700;
+  white-space: nowrap;
+  border-bottom: 2px solid var(--google-blue);
+  position: sticky;
+  top: 0;
+}
+
+table.spec-table thead th:first-child {
+  text-align: left;
+  min-width: 200px;
+}
+
+table.spec-table thead th.tpu { color: var(--google-blue); }
+table.spec-table thead th.gpu { color: var(--nvidia-green); }
+
+table.spec-table tbody tr {
+  border-bottom: 1px solid var(--border);
+}
+
+table.spec-table tbody tr:hover {
+  background: rgba(66,133,244,0.05);
+}
+
+table.spec-table tbody tr.section-header {
+  background: rgba(66,133,244,0.08);
+}
+
+table.spec-table tbody tr.section-header td {
+  font-weight: 700;
+  color: var(--google-blue);
+  padding: 12px 16px;
+  font-size: 0.95rem;
+  letter-spacing: 0.5px;
+}
+
+table.spec-table td {
+  padding: 10px 16px;
+  text-align: center;
+  vertical-align: middle;
+}
+
+table.spec-table td:first-child {
+  text-align: left;
+  color: var(--text-secondary);
+  font-weight: 500;
+}
+
+table.spec-table td.best {
+  font-weight: 700;
+}
+
+table.spec-table td.tpu-best {
+  background: rgba(66,133,244,0.1);
+  color: var(--google-blue);
+  font-weight: 700;
+}
+
+table.spec-table td.gpu-best {
+  background: rgba(118,185,0,0.1);
+  color: var(--nvidia-green);
+  font-weight: 700;
+}
+
+table.spec-table td .note {
+  display: block;
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  margin-top: 2px;
+}
+
+/* Bar Charts */
+.bar-chart { margin: 20px 0; }
+
+.bar-row {
+  display: flex;
+  align-items: center;
+  margin: 10px 0;
+  gap: 12px;
+}
+
+.bar-label {
+  width: 80px;
+  font-size: 0.85rem;
+  font-weight: 600;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.bar-track {
+  flex: 1;
+  height: 32px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  padding-right: 12px;
+  font-size: 0.8rem;
+  font-weight: 700;
+  color: #fff;
+  min-width: 80px;
+}
+
+.bar-fill.tpu { background: linear-gradient(90deg, #1a73e8, #4285F4); }
+.bar-fill.gpu { background: linear-gradient(90deg, #33691e, #76B900); }
+
+/* Cards */
+.cards-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
+  gap: 20px;
+  margin: 24px 0;
+}
+
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+}
+
+.card h4 {
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.card h4 .dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  display: inline-block;
+}
+
+.card ul {
+  list-style: none;
+  padding: 0;
+}
+
+.card ul li {
+  padding: 6px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.05);
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+}
+
+.card ul li strong {
+  color: var(--text-primary);
+}
+
+/* Analysis Box */
+.analysis-box {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 24px;
+  margin: 20px 0;
+}
+
+.analysis-box h4 {
+  color: var(--accent-blue);
+  font-size: 1.1rem;
+  margin-bottom: 12px;
+}
+
+.analysis-box p, .analysis-box li {
+  color: var(--text-secondary);
+  font-size: 0.93rem;
+  margin-bottom: 8px;
+}
+
+.analysis-box ul {
+  padding-left: 20px;
+}
+
+/* Callout */
+.callout {
+  padding: 16px 20px;
+  border-radius: 8px;
+  margin: 16px 0;
+  font-size: 0.9rem;
+}
+
+.callout.tpu {
+  background: rgba(66,133,244,0.1);
+  border-left: 4px solid var(--google-blue);
+}
+
+.callout.gpu {
+  background: rgba(118,185,0,0.1);
+  border-left: 4px solid var(--nvidia-green);
+}
+
+.callout.neutral {
+  background: rgba(255,255,255,0.05);
+  border-left: 4px solid var(--text-secondary);
+}
+
+/* VS Badge */
+.vs-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 700;
+}
+
+.vs-badge.win-tpu { background: rgba(66,133,244,0.2); color: var(--google-blue); }
+.vs-badge.win-gpu { background: rgba(118,185,0,0.2); color: var(--nvidia-green); }
+.vs-badge.tie { background: rgba(255,255,255,0.1); color: var(--text-secondary); }
+
+/* Summary Table */
+.summary-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  margin: 24px 0;
+}
+
+.summary-item {
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-radius: 12px;
+  padding: 20px;
+  text-align: center;
+}
+
+.summary-item .dim {
+  font-size: 0.85rem;
+  color: var(--text-secondary);
+  margin-bottom: 8px;
+}
+
+.summary-item .winner {
+  font-size: 1.3rem;
+  font-weight: 700;
+  margin-bottom: 4px;
+}
+
+.summary-item .reason {
+  font-size: 0.8rem;
+  color: var(--text-secondary);
+}
+
+/* Footer */
+.footer {
+  text-align: center;
+  padding: 32px 0;
+  color: var(--text-secondary);
+  font-size: 0.8rem;
+  border-top: 1px solid var(--border);
+}
+
+.footer a { color: var(--accent-blue); text-decoration: none; }
+
+@media print {
+  body { background: #fff; color: #222; }
+  .hero { background: #f0f4ff; border-bottom: 2px solid #4285F4; }
+  .hero h1 .tpu, .hero h1 .gpu { -webkit-text-fill-color: initial; }
+  .hero h1 .tpu { color: #4285F4; }
+  .hero h1 .gpu { color: #76B900; }
+  .card, .analysis-box, .summary-item { background: #f8f8fc; border-color: #ddd; }
+  table.spec-table thead th { background: #e8eaf6; }
+  .bar-fill.tpu { background: #4285F4; }
+  .bar-fill.gpu { background: #76B900; }
+  section h2 { border-left-color: #4285F4; }
+}
+</style>
+</head>
+<body>
+
+<!-- Hero -->
+<div class="hero">
+  <div class="container">
+    <h1><span class="tpu">TPU v7 Ironwood</span> <span class="vs">vs</span> <span class="gpu">NVIDIA B200</span></h1>
+    <p class="subtitle">Google 第七代 TPU 与 NVIDIA Blackwell 全方位参数对比 · 训练 & 推理</p>
+    <div class="badges">
+      <span class="badge tpu">Google TPU v7 · Ironwood · 2025</span>
+      <span class="badge gpu">NVIDIA B200 · Blackwell · 2024</span>
+    </div>
+  </div>
+</div>
+
+<!-- 一句话总结 -->
+<section>
+  <div class="container">
+    <h2>一句话看懂</h2>
+    <div class="cards-grid">
+      <div class="card">
+        <h4><span class="dot" style="background:var(--google-blue)"></span>TPU v7 是什么</h4>
+        <p style="color:var(--text-secondary);font-size:0.93rem;">Google 自研的第 7 代 AI 加速器，代号 <strong>Ironwood</strong>。专为大模型推理设计（Google 官方叫它 "the first TPU for the age of inference"），但也支持训练。采用双 chiplet 设计，3nm 工艺，192 GB HBM3e。通过 ICI（Inter-Chip Interconnect）互连，最大可组成 9,216 芯片的 Pod，共享 1.77 PB 内存。</p>
+      </div>
+      <div class="card">
+        <h4><span class="dot" style="background:var(--nvidia-green)"></span>B200 是什么</h4>
+        <p style="color:var(--text-secondary);font-size:0.93rem;">NVIDIA Blackwell 架构的旗舰 GPU，2024 年发布。同样采用双 die 设计，4nm 工艺，208B 晶体管，180-192 GB HBM3e。通过 NVLink 5 互连（1.8 TB/s），标准配置为 DGX B200（8 GPU）或 GB200 NVL72（72 GPU 液冷机架）。拥有完整的 CUDA 生态。</p>
+      </div>
+    </div>
+
+    <div class="callout neutral">
+      <strong>对比口径说明：</strong>以下所有数据均为<strong>单芯片 (per chip/GPU)</strong> 级别对比，数据来自官方文档和技术白皮书。B200 算力数据使用 Dense（密集）模式，不含 Sparsity 加成。
+    </div>
+  </div>
+</section>
+
+<!-- 核心规格对比表 -->
+<section style="padding-top:0;">
+  <div class="container">
+    <h2>核心规格对比</h2>
+    <div class="spec-table-wrapper">
+      <table class="spec-table">
+        <thead>
+          <tr>
+            <th>规格项</th>
+            <th class="tpu">TPU v7 (Ironwood)</th>
+            <th class="gpu">NVIDIA B200</th>
+            <th>对比</th>
+          </tr>
+        </thead>
+        <tbody>
+          <!-- 架构 -->
+          <tr class="section-header"><td colspan="4">架构</td></tr>
+          <tr>
+            <td>代号 / 架构</td>
+            <td>Ironwood</td>
+            <td>Blackwell</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>制程工艺</td>
+            <td class="tpu-best">TSMC N3P (3nm)</td>
+            <td>TSMC 4NP (4nm)</td>
+            <td><span class="vs-badge win-tpu">TPU 领先</span></td>
+          </tr>
+          <tr>
+            <td>芯片设计</td>
+            <td>双 Chiplet<span class="note">每 chiplet 96 GB HBM</span></td>
+            <td>双 Die<span class="note">10 TB/s NV-HBI 互联</span></td>
+            <td><span class="vs-badge tie">相似</span></td>
+          </tr>
+          <tr>
+            <td>核心单元</td>
+            <td>2 TensorCore + 4 SparseCore<span class="note">MXU 256×256</span></td>
+            <td>148 SM / 528 Tensor Cores<span class="note">16,896 CUDA Cores</span></td>
+            <td>—</td>
+          </tr>
+
+          <!-- 计算性能 -->
+          <tr class="section-header"><td colspan="4">计算性能 (Dense, per chip)</td></tr>
+          <tr>
+            <td>BF16 (Tensor)</td>
+            <td class="tpu-best">2,307 TFLOPS</td>
+            <td>2,250 TFLOPS</td>
+            <td><span class="vs-badge win-tpu">TPU +3%</span></td>
+          </tr>
+          <tr>
+            <td>FP8 (Tensor)</td>
+            <td class="tpu-best">4,614 TFLOPS</td>
+            <td>4,500 TFLOPS</td>
+            <td><span class="vs-badge win-tpu">TPU +3%</span></td>
+          </tr>
+          <tr>
+            <td>INT8 (Tensor)</td>
+            <td>—<span class="note">未公开具体数据</span></td>
+            <td>4,500 TOPS</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>FP4 (Tensor)</td>
+            <td>—<span class="note">不支持</span></td>
+            <td class="gpu-best">9,000 TFLOPS</td>
+            <td><span class="vs-badge win-gpu">B200 独有</span></td>
+          </tr>
+          <tr>
+            <td>FP32</td>
+            <td>—<span class="note">TPU 无通用 FP32</span></td>
+            <td>75 TFLOPS</td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>FP64</td>
+            <td>—<span class="note">TPU 无 FP64</span></td>
+            <td>37 TFLOPS</td>
+            <td><span class="vs-badge win-gpu">B200 独有</span></td>
+          </tr>
+
+          <!-- 内存 -->
+          <tr class="section-header"><td colspan="4">内存</td></tr>
+          <tr>
+            <td>HBM 容量</td>
+            <td class="tpu-best">192 GB HBM3e<span class="note">8-Hi stacks</span></td>
+            <td>180 GB HBM3e<span class="note">1000W 版本</span></td>
+            <td><span class="vs-badge win-tpu">TPU +7%</span></td>
+          </tr>
+          <tr>
+            <td>HBM 带宽</td>
+            <td>7.4 TB/s</td>
+            <td class="gpu-best">8.0 TB/s</td>
+            <td><span class="vs-badge win-gpu">B200 +8%</span></td>
+          </tr>
+
+          <!-- 互连 -->
+          <tr class="section-header"><td colspan="4">芯片间互连</td></tr>
+          <tr>
+            <td>互连技术</td>
+            <td>ICI (Inter-Chip Interconnect)<span class="note">3D Torus Mesh</span></td>
+            <td>NVLink 5<span class="note">GPU-to-NVSwitch</span></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>单芯片互连带宽</td>
+            <td>1.2 TB/s</td>
+            <td class="gpu-best">1.8 TB/s</td>
+            <td><span class="vs-badge win-gpu">B200 +50%</span></td>
+          </tr>
+
+          <!-- 网络 -->
+          <tr class="section-header"><td colspan="4">外部网络</td></tr>
+          <tr>
+            <td>单芯片外部网络</td>
+            <td>100 Gbps<span class="note">DCN</span></td>
+            <td class="gpu-best">400 Gbps<span class="note">ConnectX-7</span></td>
+            <td><span class="vs-badge win-gpu">B200 4×</span></td>
+          </tr>
+
+          <!-- 功耗 -->
+          <tr class="section-header"><td colspan="4">功耗</td></tr>
+          <tr>
+            <td>TDP (单芯片)</td>
+            <td class="tpu-best">~600W<span class="note">官方参考值</span></td>
+            <td>1,000W</td>
+            <td><span class="vs-badge win-tpu">TPU 低 40%</span></td>
+          </tr>
+          <tr>
+            <td>能效比 (FP8)</td>
+            <td class="tpu-best">~7.7 TFLOPS/W</td>
+            <td>~4.5 TFLOPS/W</td>
+            <td><span class="vs-badge win-tpu">TPU +71%</span></td>
+          </tr>
+
+          <!-- 系统规模 -->
+          <tr class="section-header"><td colspan="4">系统规模</td></tr>
+          <tr>
+            <td>标准系统</td>
+            <td>256-chip Pod<span class="note">最小部署单元</span></td>
+            <td>DGX B200 (8 GPU)<span class="note">10U 机箱</span></td>
+            <td>—</td>
+          </tr>
+          <tr>
+            <td>最大配置</td>
+            <td class="tpu-best">9,216 chips<span class="note">144 racks, 1.77 PB 共享内存</span></td>
+            <td>NVL72 (72 GPU)<span class="note">液冷机架</span></td>
+            <td><span class="vs-badge win-tpu">TPU 规模更大</span></td>
+          </tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+</section>
+
+<!-- 柱状图对比 -->
+<section>
+  <div class="container">
+    <h2>关键指标可视化</h2>
+
+    <h3>BF16 算力 (TFLOPS, Dense)</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
+        <div class="bar-track">
+          <div class="bar-fill tpu" style="width:100%">2,307 TFLOPS</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
+        <div class="bar-track">
+          <div class="bar-fill gpu" style="width:97.5%">2,250 TFLOPS</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>FP8 算力 (TFLOPS, Dense)</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
+        <div class="bar-track">
+          <div class="bar-fill tpu" style="width:100%">4,614 TFLOPS</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
+        <div class="bar-track">
+          <div class="bar-fill gpu" style="width:97.5%">4,500 TFLOPS</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>HBM 容量 (GB)</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
+        <div class="bar-track">
+          <div class="bar-fill tpu" style="width:100%">192 GB</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
+        <div class="bar-track">
+          <div class="bar-fill gpu" style="width:93.8%">180 GB</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>HBM 带宽 (TB/s)</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
+        <div class="bar-track">
+          <div class="bar-fill tpu" style="width:92.5%">7.4 TB/s</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
+        <div class="bar-track">
+          <div class="bar-fill gpu" style="width:100%">8.0 TB/s</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>芯片间互连带宽 (TB/s)</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
+        <div class="bar-track">
+          <div class="bar-fill tpu" style="width:66.7%">1.2 TB/s (ICI)</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
+        <div class="bar-track">
+          <div class="bar-fill gpu" style="width:100%">1.8 TB/s (NVLink 5)</div>
+        </div>
+      </div>
+    </div>
+
+    <h3>能效比 FP8 (TFLOPS/W)</h3>
+    <div class="bar-chart">
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
+        <div class="bar-track">
+          <div class="bar-fill tpu" style="width:100%">~7.7 TFLOPS/W</div>
+        </div>
+      </div>
+      <div class="bar-row">
+        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
+        <div class="bar-track">
+          <div class="bar-fill gpu" style="width:58.4%">~4.5 TFLOPS/W</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 训练场景分析 -->
+<section>
+  <div class="container">
+    <h2>训练场景分析</h2>
+
+    <div class="analysis-box">
+      <h4>大模型预训练 (100B+ 参数)</h4>
+      <p>大规模预训练是两者都在争夺的核心战场。关键看三个维度：<strong>算力密度</strong>、<strong>互连带宽</strong>（决定多芯片扩展效率）、<strong>内存容量</strong>（决定单芯片能装多大模型）。</p>
+      <ul>
+        <li><strong>算力对等：</strong>BF16 和 FP8 两者基本打平（TPU v7 微领先 ~3%），单芯片层面没有显著差距。</li>
+        <li><strong>扩展性差异巨大：</strong>TPU v7 的 Pod 最大支持 9,216 chips（1.77 PB 共享内存），通过 ICI 3D Torus 直连，对超大模型训练（如 Gemini 级别）有天然优势。B200 的 NVL72 最大 72 GPU，跨节点需走 InfiniBand/Ethernet，通信开销更大。</li>
+        <li><strong>软件栈：</strong>TPU 训练使用 JAX/XLA，自动并行化能力强；B200 训练生态更广（PyTorch + Megatron-LM / DeepSpeed / FSDP），社区资源丰富。</li>
+      </ul>
+    </div>
+
+    <div class="analysis-box">
+      <h4>大模型微调 (Fine-tuning)</h4>
+      <p>微调通常不需要超大规模集群，更看重单节点性能和易用性。</p>
+      <ul>
+        <li><strong>TPU v7：</strong>最小部署 256 chips，对小规模微调来说资源粒度偏大。但 Google Cloud 提供按需付费的 TPU VM，实际使用中可以灵活选择 4-chip 配置。</li>
+        <li><strong>B200：</strong>DGX B200 (8 GPU) 或单卡即可开始微调，FP4 精度支持让推理精度的模型可以直接微调，灵活性高。CUDA 生态下的 LoRA / QLoRA 工具链成熟。</li>
+      </ul>
+    </div>
+
+    <div class="callout tpu">
+      <strong>TPU v7 训练优势：</strong>超大规模训练（数千芯片级别）的扩展性、能效比（7.7 vs 4.5 TFLOPS/W）、Google Cloud 深度集成（GKE + Cloud TPU API）。
+    </div>
+    <div class="callout gpu">
+      <strong>B200 训练优势：</strong>CUDA 生态成熟度、FP4 精度支持、灵活的部署规模（单卡到 NVL72）、社区工具链丰富（Hugging Face / DeepSpeed / vLLM）。
+    </div>
+  </div>
+</section>
+
+<!-- 推理场景分析 -->
+<section>
+  <div class="container">
+    <h2>推理场景分析</h2>
+
+    <div class="analysis-box">
+      <h4>LLM 在线推理 (Serving)</h4>
+      <p>推理场景最核心的指标是 <strong>tokens/s/W</strong>（每瓦吞吐）和 <strong>首 token 延迟</strong>。Google 官方称 TPU v7 为 "the first TPU for the age of inference"，重点优化了推理场景。</p>
+      <ul>
+        <li><strong>能效比：</strong>TPU v7 的 FP8 能效比达 7.7 TFLOPS/W，比 B200 高 71%。在大规模推理服务中，电费是主要成本，这一差距会直接反映在 TCO 上。</li>
+        <li><strong>内存容量：</strong>192 GB vs 180 GB，TPU v7 单芯片可以装更大的模型。对 70B 级模型的推理部署，TPU v7 需要的芯片数量更少。</li>
+        <li><strong>量化支持：</strong>B200 支持 FP4 推理（9 PFLOPS），对 INT4/FP4 量化模型的推理吞吐是 FP8 的 2 倍。TPU v7 不支持 FP4，这是一个劣势。</li>
+        <li><strong>Pod 级推理：</strong>超大模型（如 Gemini Ultra / GPT-4 级别）需要跨多芯片部署。TPU v7 的 9,216-chip Pod 和 ICI 直连在这类场景下优势明显。</li>
+      </ul>
+    </div>
+
+    <div class="analysis-box">
+      <h4>批量推理 / 离线推理</h4>
+      <p>批量推理更看重吞吐量和成本效率，对延迟不敏感。</p>
+      <ul>
+        <li><strong>TPU v7：</strong>高能效 + 大规模 Pod 组网，适合海量请求的批量处理。Google 内部的 Gemini API 推理就运行在 TPU 上。</li>
+        <li><strong>B200：</strong>FP4 推理吞吐翻倍，TensorRT-LLM 的 batching 优化成熟。对第三方模型（Llama, Mistral 等）的兼容性更好。</li>
+      </ul>
+    </div>
+
+    <div class="callout tpu">
+      <strong>TPU v7 推理优势：</strong>能效比领先 71%、192 GB 大内存、Pod 级别的超大规模推理能力、Google Cloud 一体化部署。
+    </div>
+    <div class="callout gpu">
+      <strong>B200 推理优势：</strong>FP4 支持（推理吞吐翻倍）、TensorRT-LLM 优化、更广泛的模型兼容性、灵活的单卡/多卡部署。
+    </div>
+  </div>
+</section>
+
+<!-- 生态与软件栈 -->
+<section>
+  <div class="container">
+    <h2>生态与软件栈</h2>
+    <div class="cards-grid">
+      <div class="card">
+        <h4><span class="dot" style="background:var(--google-blue)"></span>TPU v7 软件生态</h4>
+        <ul>
+          <li><strong>框架：</strong>JAX / TensorFlow（原生）、PyTorch/XLA</li>
+          <li><strong>并行化：</strong>XLA 自动分片 (GSPMD)、FSDP</li>
+          <li><strong>推理框架：</strong>JetStream、vLLM (TPU 后端)</li>
+          <li><strong>编排：</strong>GKE + Cloud TPU API、Multislice</li>
+          <li><strong>优势：</strong>XLA 编译器全自动优化，无需手动调 kernel</li>
+          <li><strong>劣势：</strong>社区生态相对封闭，第三方库支持有限</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4><span class="dot" style="background:var(--nvidia-green)"></span>B200 软件生态</h4>
+        <ul>
+          <li><strong>框架：</strong>PyTorch、TensorFlow、JAX（均原生 CUDA）</li>
+          <li><strong>并行化：</strong>Megatron-LM、DeepSpeed、PyTorch FSDP</li>
+          <li><strong>推理框架：</strong>TensorRT-LLM、vLLM、SGLang</li>
+          <li><strong>管理：</strong>NVIDIA AI Enterprise、Mission Control</li>
+          <li><strong>优势：</strong>CUDA 生态无可替代，几乎所有 AI 论文先发 GPU 版</li>
+          <li><strong>劣势：</strong>手动优化工作量大，kernel tuning 门槛高</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 系统级对比 -->
+<section>
+  <div class="container">
+    <h2>系统级对比</h2>
+
+    <div class="cards-grid">
+      <div class="card">
+        <h4><span class="dot" style="background:var(--google-blue)"></span>TPU v7 Pod (9,216 chips)</h4>
+        <ul>
+          <li><strong>算力 FP8：</strong>42.5 EFLOPS</li>
+          <li><strong>算力 BF16：</strong>21.3 EFLOPS</li>
+          <li><strong>总内存：</strong>1.77 PB（全局可寻址）</li>
+          <li><strong>机架数：</strong>144 racks</li>
+          <li><strong>互连拓扑：</strong>3D Torus + OCS 光交换</li>
+          <li><strong>总功耗：</strong>~10 MW</li>
+          <li><strong>每 rack：</strong>64 chips / 16 trays</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4><span class="dot" style="background:var(--nvidia-green)"></span>DGX B200 (8 GPU)</h4>
+        <ul>
+          <li><strong>算力 FP8：</strong>36 PFLOPS (Dense)</li>
+          <li><strong>算力 BF16：</strong>18 PFLOPS (Dense)</li>
+          <li><strong>GPU 总内存：</strong>1,440 GB</li>
+          <li><strong>CPU：</strong>2× Xeon Platinum 8570</li>
+          <li><strong>NVLink 聚合：</strong>14.4 TB/s</li>
+          <li><strong>网络：</strong>8× ConnectX-7 400G</li>
+          <li><strong>系统功耗：</strong>~14.3 kW</li>
+        </ul>
+      </div>
+    </div>
+
+    <div class="callout neutral">
+      <strong>规模差异说明：</strong>TPU v7 Pod (9,216 chips) 和 DGX B200 (8 GPU) 不是同级别的对比。若等效比较，9,216 ÷ 8 = 1,152 台 DGX B200 才能匹配 TPU Pod 的芯片数。但两者的互连架构完全不同——TPU Pod 内所有芯片通过 ICI 直连，而 1,152 台 DGX 之间只能通过 InfiniBand/Ethernet 连接，通信效率有本质差距。
+    </div>
+  </div>
+</section>
+
+<!-- 总结 -->
+<section>
+  <div class="container">
+    <h2>维度总结</h2>
+    <div class="summary-grid">
+      <div class="summary-item">
+        <div class="dim">BF16 / FP8 算力</div>
+        <div class="winner" style="color:var(--text-secondary)">基本持平</div>
+        <div class="reason">TPU v7 微领先 ~3%，无显著差距</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">FP4 / 低精度推理</div>
+        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="reason">9 PFLOPS FP4，TPU v7 不支持</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">HBM 容量</div>
+        <div class="winner" style="color:var(--google-blue)">TPU v7</div>
+        <div class="reason">192 GB vs 180 GB (+7%)</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">HBM 带宽</div>
+        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="reason">8.0 TB/s vs 7.4 TB/s (+8%)</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">芯片间互连</div>
+        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="reason">NVLink 5 1.8 TB/s vs ICI 1.2 TB/s</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">系统级扩展性</div>
+        <div class="winner" style="color:var(--google-blue)">TPU v7</div>
+        <div class="reason">9,216-chip Pod，ICI 全直连</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">能效比</div>
+        <div class="winner" style="color:var(--google-blue)">TPU v7</div>
+        <div class="reason">7.7 vs 4.5 TFLOPS/W (+71%)</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">软件生态</div>
+        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="reason">CUDA 生态不可替代</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">部署灵活性</div>
+        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="reason">单卡到 NVL72，多云部署</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">超大规模训练</div>
+        <div class="winner" style="color:var(--google-blue)">TPU v7</div>
+        <div class="reason">Pod 直连 + 1.77 PB 共享内存</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">大规模推理</div>
+        <div class="winner" style="color:var(--google-blue)">TPU v7</div>
+        <div class="reason">高能效 + Pod 级推理</div>
+      </div>
+      <div class="summary-item">
+        <div class="dim">通用 AI 研发</div>
+        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="reason">生态广、上手快、模型兼容性强</div>
+      </div>
+    </div>
+  </div>
+</section>
+
+<!-- 数据来源 -->
+<section>
+  <div class="container">
+    <h2>数据来源</h2>
+    <div class="cards-grid">
+      <div class="card">
+        <h4><span class="dot" style="background:var(--google-blue)"></span>TPU v7 官方来源</h4>
+        <ul>
+          <li><a href="https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads" style="color:var(--accent-blue)">Google Cloud Blog: Ironwood TPUs</a></li>
+          <li><a href="https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/ironwood-tpu-age-of-inference/" style="color:var(--accent-blue)">Google Blog: The first TPU for the age of inference</a></li>
+          <li><a href="https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack" style="color:var(--accent-blue)">Inside the Ironwood TPU codesigned AI stack</a></li>
+          <li><a href="https://docs.cloud.google.com/tpu/docs/tpu7x" style="color:var(--accent-blue)">TPU7x Official Documentation</a></li>
+          <li>Hot Chips 2025: Norm Jouppi & Sridhar Lakshmanamurthy 技术演讲</li>
+        </ul>
+      </div>
+      <div class="card">
+        <h4><span class="dot" style="background:var(--nvidia-green)"></span>B200 官方来源</h4>
+        <ul>
+          <li><a href="https://www.nvidia.com/en-us/data-center/dgx-b200/" style="color:var(--nvidia-green)">NVIDIA DGX B200 Official Page</a></li>
+          <li><a href="https://resources.nvidia.com/en-us-dgx-systems/dgx-b200-datasheet" style="color:var(--nvidia-green)">DGX B200 Datasheet</a></li>
+          <li><a href="https://www.nvidia.com/en-us/data-center/technologies/blackwell-architecture/" style="color:var(--nvidia-green)">Blackwell Architecture</a></li>
+          <li><a href="https://docs.nvidia.com/cuda/blackwell-tuning-guide/" style="color:var(--nvidia-green)">CUDA Blackwell Tuning Guide</a></li>
+          <li><a href="https://nvidianews.nvidia.com/news/nvidia-blackwell-platform-arrives-to-power-a-new-era-of-computing" style="color:var(--nvidia-green)">NVIDIA Blackwell Platform Launch</a></li>
+        </ul>
+      </div>
+    </div>
+  </div>
+</section>
+
+<div class="footer">
+  <div class="container">
+    <p>TPU v7 (Ironwood) vs NVIDIA B200 (Blackwell) 参数对比 · 数据更新于 2026-03-11</p>
+    <p>本文档基于公开官方数据编制，仅供技术参考</p>
+  </div>
+</div>
+
+</body>
+</html>
