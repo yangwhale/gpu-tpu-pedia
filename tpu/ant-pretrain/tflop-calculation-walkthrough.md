@@ -485,9 +485,11 @@ dense_layers=3, moe_layers=58
 
 ---
 
-## 9. Bug 分析：ALModel TFLOP 虚高 9.5 倍
+## 9. Bug 分析：共发现 4 个问题
 
-### 9.1 Bug 位置
+### Bug 1：ALModel 层聚合路径错误（TFLOP 虚高 9.5 倍）
+
+**Bug 位置**
 
 ```python
 # maxtext_utils.py:594 (修复前)
@@ -495,60 +497,163 @@ elif config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.LING2)
     # ↑ 缺少 DecoderBlockType.AL_MODEL ！
 ```
 
-ALModel 走了 `else` 分支（line 599-604），导致：
+ALModel 走了 `else` 分支（line 599-604），`total_ffn_flops`（≈57T FLOPs，已含层数）被再乘 `L=20`。
 
-```python
-# else 分支的计算：
-learnable_weight_tflops = (
-    (total_ffn_flops + qkv_flops + projection_flops) * L + embedding_flops
-) * 3 / 1e12
-```
-
-`total_ffn_flops`（≈57T FLOPs）已经包含了层数信息，但又被乘了 `L=20`。
-
-### 9.2 数值影响
+**数值影响**
 
 ```
 错误值（else 路径）:
-= ((56.95T + 0.45T + 0.41T) × 20 + 31.64T) × 3 / 1e12
-= (57.81T × 20 + 31.64T) × 3 / 1e12
-= (1156.2T + 31.64T) × 3 / 1e12
-= 1187.84T × 3 / 1e12
-= 3563.5 TFLOP
+= ((56.95T + 0.45T + 0.41T) × 20 + 31.64T) × 3 / 1e12 = 3563.5 TFLOP
 
 正确值（DeepSeek 路径）:
-= (56.95T + (0.45T + 0.41T) × 20 + 31.64T) × 3 / 1e12
-= (56.95T + 17.27T + 31.64T) × 3 / 1e12
-= 105.85T × 3 / 1e12
-= 317.6 TFLOP
+= (56.95T + (0.45T + 0.41T) × 20 + 31.64T) × 3 / 1e12 = 317.6 TFLOP
 
-倍数差异 = 3563.5 / 317.6 ≈ 11.2x (learnable_weight 部分)
+倍数差异 ≈ 11.2x (learnable_weight 部分)，总 TFLOP 比约 9.5x
 ```
 
-加上 attention（不受影响），总 TFLOP 比约为 9.5x。
+**修复**: 将 `AL_MODEL` 加入 DeepSeek/LING2 分支。
 
-### 9.3 修复
+### Bug 2：Shared Expert 中间维度错误（TFLOP 低估 ~14%）
 
-一行修复：将 `AL_MODEL` 加入 DeepSeek/LING2 分支：
+**Bug 位置**
 
 ```python
-# 修复后 maxtext_utils.py:594
-elif config.decoder_block in (
-    DecoderBlockType.DEEPSEEK, DecoderBlockType.LING2, DecoderBlockType.AL_MODEL
-):
+# maxtext_utils.py:369 (修复前)
+shared_experts_flops = calculate_ffn_mamtul_tflops_per_device(config, config.moe_mlp_dim) * config.shared_experts
+#                                                                      ^^^^^^^^^^^^^^^ 应该用 moe_shared_expert_intermediate_size
 ```
 
-### 9.4 验证结果
+**根因**：ALModel 配置中 shared expert 的维度与 routed expert 不同：
+- `base_moe_mlp_dim: 512` — routed experts 的 FFN 中间维度
+- `moe_shared_expert_intermediate_size: 2048` — shared expert 的 FFN 中间维度
 
-| 指标 | 修复前 (Bug) | 修复后 (Correct) |
-|------|:----------:|:------------:|
-| total_tflops | ~7,200 | ~759 |
-| step_time | ~9.87s | ~9.87s |
-| TFLOP/s/device | ~731 | ~76.9 |
-| Tokens/s/device | ~9,958 | ~9,958 |
-| 倍数差异 | 9.5x | 1x (baseline) |
+但 TFLOP 公式对两者都用了 `moe_mlp_dim=512`。实际模型代码 (`moe.py:2071`) 使用的是正确的维度：
 
-> step_time 和 Tokens/s 不受影响，因为它们是实测值。TFLOP/s 是公式值，所以只有它偏了。
+```python
+self.shared_experts = linears.MlpBlock(
+    intermediate_dim=self.config.shared_experts * self.config.moe_shared_expert_intermediate_size,  # 1 × 2048
+)
+```
+
+**数值影响**
+
+```
+每 MoE 层差额 = 6 × B × S × E × (2048 - 512) = 0.928T FLOPs
+× 19 MoE layers = 17.63T FLOPs (forward)
+× 3 (fwd+bwd) × GDA(2) = +105.8 TFLOP
+```
+
+**修复**：
+
+```python
+# maxtext_utils.py:370-374 (修复后)
+shared_expert_mlp_dim = (
+    config.moe_shared_expert_intermediate_size
+    if getattr(config, 'moe_shared_expert_intermediate_size', 0) > 0
+    else config.moe_mlp_dim
+)
+shared_experts_flops = calculate_ffn_mamtul_tflops_per_device(config, shared_expert_mlp_dim) * config.shared_experts
+```
+
+### Bug 3：MTP (Multi-Token Prediction) FLOPs 完全缺失（TFLOP 低估 ~30%）
+
+**根因**：ALModel 配置了 `mtp_num_layers: 1`，但 `calculate_tflops_training_per_device()` 中没有任何 MTP 相关代码。
+
+每个 MTP 层包含 3 个计算密集组件：
+
+```
+┌──────────────────────────────────────────────┐
+│ MTP Layer                                    │
+│                                              │
+│  1. Projection: [2E, E] matmul  = 0.825T     │
+│  2. Transformer Layer:                       │
+│     - MoE FFN (gate+shared+routed) = 3.763T  │
+│     - Attention (MLA/GLA)          ≈ 2.1T    │
+│  3. Output Head: [E, V] matmul   = 31.636T   │ ← 最大！
+│                                              │
+│  Forward Total ≈ 38.3T FLOPs                 │
+└──────────────────────────────────────────────┘
+```
+
+> Output head 占大头因为 vocab_size=157184 巨大。MTP 层需要计算完整的 logits 分布用于下一个 token 的损失。
+
+**数值影响**
+
+```
+MTP forward = 38.3T FLOPs
+× 3 (fwd+bwd) × GDA(2) = +229.9 TFLOP
+```
+
+**修复**：新增 `calculate_mtp_tflops_per_device()` 函数并集成到主函数。
+
+### Bug 4：Hybrid Attention 未建模（已知局限）
+
+ALModel 使用 `layer_group_size: 5` 的混合注意力架构：
+
+```python
+# ALModel/al_model.py:47-54
+def is_mla(num_layers, layer_group_size, layer_index):
+    is_last_of_group = (layer_index + 1) % layer_group_size == 0
+    is_last_of_model = (layer_index == num_layers - 1)
+    return is_last_of_group or is_last_of_model
+```
+
+20 层中：**4 层 MLA**（full attention, S² 复杂度）+ **16 层 GLA**（linear attention）。
+
+当前公式把所有 20 层都当 MLA 算。实际：
+- GLA 投影 FLOPs 更高（多了 gate projection: 2×B×S×E×H×d）
+- GLA attention FLOPs 远低（线性复杂度，无 S² 项）
+- 净效果：约 +18.5 TFLOP（GLA 投影增量 > attention 减少量）
+
+> 此项未在当前修复中实现，需要更深入的按层类型分别计算。标记为 TODO。
+
+### 9.5 修复后完整数值对比（TPU v7 实测验证 ✅）
+
+**TPU v7 (Ironwood) peak**: 2307 TFLOP/s BF16 per chip, **1153.5 TFLOP/s per device** (TensorCore)
+
+**实测配置**: batch=12, GDA=2, FSDP=64, 30 steps on 32-chip TPU v7 (2x4x4)
+
+| 指标 | Bug 1 原始 | Bug 1 修复 | 全部修复 (1-3) | TPU 实测验证 ✅ |
+|------|:----------:|:--------:|:----------------:|:----------:|
+| total_tflops | ~7,200 | ~759 | ~1,113 | **1,093.39** |
+| step_time | ~9.87s | ~9.87s | ~9.87s | **9.875s** |
+| TFLOP/s/device | ~731 | ~76.9 | ~112.8 | **110.7** |
+| Tokens/s/device | ~9,960 | ~9,960 | ~9,960 | **9,955** |
+| MFU (vs 1153.5) | 63.4% ❌虚高 | 6.7% ❌虚低 | ~9.8% | **9.6%** ✅ |
+
+> **step_time 不变**（~9.87s）——step_time 是实测值，不受公式影响。
+> 变的是 `total_tflops`（公式计算值）和由此派生的 `TFLOP/s/device` 和 `MFU`。
+
+**公式结构验证**: 88.12% learnable weight + 11.88% attention flops。
+
+#### TFLOP 组成分解（batch=12, GDA=2）
+
+```
+MoE Routed Experts (top-8)   282 T  (25.8%)  ████████████
+MTP (all)                    229 T  (20.9%)  ██████████
+Embedding                    190 T  (17.4%)  ████████
+MoE Shared Expert            141 T  (12.9%)  ██████
+Attention Core               124 T  (11.3%)  █████
+MLA QKV                       54 T  ( 4.9%)  ██
+MLA Out Proj                  49 T  ( 4.5%)  ██
+Dense FFN                     19 T  ( 1.7%)
+MoE Gate                       6 T  ( 0.5%)
+─────────────────────────────────────────────
+TOTAL                       1093 T
+```
+
+Active params ≈ 1.85B (from FLOPs/2/tokens)，forward FLOPs/token ≈ 3.71 GFLOP。
+
+#### MFU 9.6% 的原因分析
+
+对于小 MoE 模型在大规模设备上训练，~10% MFU 是合理的：
+- **模型太小**：1.85B active params，每层参数量不足以饱和 TPU
+- **FSDP=64**：模型被切分到 64 个设备，通信开销占比大
+- **MoE all-to-all**：256 experts 的 dispatch/combine 通信开销
+- **参考**：增大 batch/GDA 或模型规模可以提高 MFU
+
+> 独立验证脚本：`scripts/standalone_tflop_calc.py`（无 MaxText 依赖，纯 Python 公式复现）
+> TPU 实测脚本：`bench-tflop-v3` JobSet (2026-03-06)
 
 ---
 
@@ -556,11 +661,12 @@ elif config.decoder_block in (
 
 | 函数 | 文件位置 | 说明 |
 |------|---------|------|
-| `calculate_tflops_training_per_device()` | `maxtext_utils.py:526-641` | 主入口，汇总所有 FLOP |
+| `calculate_tflops_training_per_device()` | `maxtext_utils.py:595-710` | 主入口，汇总所有 FLOP |
 | `calculate_mla_tflops_per_device()` | `maxtext_utils.py:316-345` | MLA 注意力 FLOP（per-layer） |
 | `calculate_ffn_mamtul_tflops_per_device()` | `maxtext_utils.py:348-360` | 单层 FFN matmul FLOP |
-| `calculate_routed_and_shared_ffn_tflops_per_device()` | `maxtext_utils.py:363-373` | MoE FFN FLOP（含层数） |
-| `get_dense_moe_layers()` | `maxtext_utils.py:376-388` | Dense/MoE 层数拆分 |
+| `calculate_routed_and_shared_ffn_tflops_per_device()` | `maxtext_utils.py:363-379` | MoE FFN FLOP（含层数，已修复 shared expert dim） |
+| `calculate_mtp_tflops_per_device()` | `maxtext_utils.py:397-457` | **新增** MTP FLOP 计算 |
+| `get_dense_moe_layers()` | `maxtext_utils.py:382-394` | Dense/MoE 层数拆分 |
 | `write_setup_info_to_tensorboard()` | `metric_logger.py:269-277` | 初始化时计算 total_tflops |
 | `record_train_metrics()` | `metric_logger.py:305-317` | 每步计算 TFLOP/s |
 | `DecoderBlockType` | `common_types.py:79-99` | 模型类型枚举 |
@@ -575,4 +681,4 @@ elif config.decoder_block in (
 
 ---
 
-*文档版本: 2026-03-06 | 基于 MaxText commit at ant-pretrain repo*
+*文档版本: 2026-03-06 v2 | 新增 Bug 2-4 分析，TPU v7 peak specs | 基于 MaxText commit at ant-pretrain repo*
