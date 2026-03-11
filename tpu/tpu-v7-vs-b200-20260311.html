@@ -15,16 +15,15 @@
 :root {
   --google-blue: #4285F4;
   --google-green: #34A853;
-  --google-yellow: #FBBC04;
-  --google-red: #EA4335;
   --nvidia-green: #76B900;
-  --bg-dark: #0f0f1a;
-  --bg-card: #1e1e30;
-  --border: #2a2a40;
-  --text-primary: #e8e8f0;
-  --text-secondary: #a0a0b8;
-  --accent-blue: #4fc3f7;
-  --accent-green: #66bb6a;
+  --bg-page: #f0f2f5;
+  --glass-bg: rgba(255,255,255,0.55);
+  --glass-border: rgba(255,255,255,0.7);
+  --glass-shadow: 0 8px 32px rgba(0,0,0,0.08);
+  --glass-blur: blur(20px);
+  --text-primary: #1a1a2e;
+  --text-secondary: #5a5a7a;
+  --text-muted: #8a8aaa;
   --tpu-gradient: linear-gradient(135deg, #4285F4, #34A853);
   --gpu-gradient: linear-gradient(135deg, #76B900, #a8e063);
 }
@@ -33,24 +32,70 @@
 
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  background: var(--bg-dark);
+  background: var(--bg-page);
   color: var(--text-primary);
   line-height: 1.7;
+  min-height: 100vh;
+  position: relative;
+}
+
+/* Background decorative blobs for glassmorphism effect */
+body::before {
+  content: '';
+  position: fixed;
+  top: -200px;
+  left: -100px;
+  width: 600px;
+  height: 600px;
+  background: radial-gradient(circle, rgba(66,133,244,0.12) 0%, transparent 70%);
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+}
+body::after {
+  content: '';
+  position: fixed;
+  bottom: -200px;
+  right: -100px;
+  width: 700px;
+  height: 700px;
+  background: radial-gradient(circle, rgba(118,185,0,0.10) 0%, transparent 70%);
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
+}
+
+.bg-blob-mid {
+  position: fixed;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  width: 800px;
+  height: 800px;
+  background: radial-gradient(circle, rgba(251,188,4,0.06) 0%, transparent 70%);
+  border-radius: 50%;
+  z-index: 0;
+  pointer-events: none;
 }
 
 .container {
   max-width: 1200px;
   margin: 0 auto;
   padding: 0 24px;
+  position: relative;
+  z-index: 1;
 }
 
 /* Hero */
 .hero {
-  background: linear-gradient(135deg, #0d0d1a 0%, #0d1a2e 40%, #1a2a1a 100%);
+  background: linear-gradient(135deg, rgba(66,133,244,0.08) 0%, rgba(255,255,255,0.9) 40%, rgba(118,185,0,0.06) 100%);
+  backdrop-filter: blur(10px);
   border-bottom: 3px solid;
   border-image: linear-gradient(90deg, var(--google-blue), var(--nvidia-green)) 1;
   padding: 60px 0 48px;
   text-align: center;
+  position: relative;
+  z-index: 1;
 }
 
 .hero h1 {
@@ -60,7 +105,7 @@ body {
 }
 
 .hero h1 .tpu { background: var(--tpu-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
-.hero h1 .vs { color: var(--text-secondary); -webkit-text-fill-color: initial; font-weight: 400; }
+.hero h1 .vs { color: var(--text-muted); -webkit-text-fill-color: initial; font-weight: 400; }
 .hero h1 .gpu { background: var(--gpu-gradient); -webkit-background-clip: text; -webkit-text-fill-color: transparent; }
 
 .hero .subtitle {
@@ -81,10 +126,19 @@ body {
   border-radius: 24px;
   font-size: 0.85rem;
   font-weight: 600;
+  backdrop-filter: var(--glass-blur);
 }
 
-.badge.tpu { background: rgba(66,133,244,0.15); color: var(--google-blue); border: 1px solid rgba(66,133,244,0.3); }
-.badge.gpu { background: rgba(118,185,0,0.15); color: var(--nvidia-green); border: 1px solid rgba(118,185,0,0.3); }
+.badge.tpu {
+  background: rgba(66,133,244,0.1);
+  color: var(--google-blue);
+  border: 1px solid rgba(66,133,244,0.25);
+}
+.badge.gpu {
+  background: rgba(118,185,0,0.1);
+  color: #5a8a00;
+  border: 1px solid rgba(118,185,0,0.25);
+}
 
 /* Section */
 section { padding: 48px 0; }
@@ -95,20 +149,35 @@ section h2 {
   padding-left: 16px;
   border-left: 4px solid;
   border-image: linear-gradient(180deg, var(--google-blue), var(--nvidia-green)) 1;
+  color: var(--text-primary);
 }
 
 section h3 {
   font-size: 1.3rem;
   margin: 32px 0 16px;
-  color: var(--accent-blue);
+  color: var(--google-blue);
+}
+
+/* Glass Cards */
+.glass {
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
+  box-shadow: var(--glass-shadow);
 }
 
 /* Tables */
 .spec-table-wrapper {
   overflow-x: auto;
   margin: 24px 0;
-  border-radius: 12px;
-  border: 1px solid var(--border);
+  border-radius: 16px;
+  border: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
 }
 
 table.spec-table {
@@ -118,12 +187,12 @@ table.spec-table {
 }
 
 table.spec-table thead th {
-  background: #1a1a2e;
+  background: rgba(66,133,244,0.06);
   padding: 14px 16px;
   text-align: center;
   font-weight: 700;
   white-space: nowrap;
-  border-bottom: 2px solid var(--google-blue);
+  border-bottom: 2px solid rgba(66,133,244,0.3);
   position: sticky;
   top: 0;
 }
@@ -134,18 +203,18 @@ table.spec-table thead th:first-child {
 }
 
 table.spec-table thead th.tpu { color: var(--google-blue); }
-table.spec-table thead th.gpu { color: var(--nvidia-green); }
+table.spec-table thead th.gpu { color: #5a8a00; }
 
 table.spec-table tbody tr {
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid rgba(0,0,0,0.06);
 }
 
 table.spec-table tbody tr:hover {
-  background: rgba(66,133,244,0.05);
+  background: rgba(66,133,244,0.04);
 }
 
 table.spec-table tbody tr.section-header {
-  background: rgba(66,133,244,0.08);
+  background: rgba(66,133,244,0.06);
 }
 
 table.spec-table tbody tr.section-header td {
@@ -168,72 +237,51 @@ table.spec-table td:first-child {
   font-weight: 500;
 }
 
-table.spec-table td.best {
-  font-weight: 700;
-}
-
 table.spec-table td.tpu-best {
-  background: rgba(66,133,244,0.1);
-  color: var(--google-blue);
+  background: rgba(66,133,244,0.08);
+  color: #2962d0;
   font-weight: 700;
 }
 
 table.spec-table td.gpu-best {
-  background: rgba(118,185,0,0.1);
-  color: var(--nvidia-green);
+  background: rgba(118,185,0,0.08);
+  color: #4a7a00;
   font-weight: 700;
 }
 
 table.spec-table td .note {
   display: block;
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   margin-top: 2px;
 }
 
-/* Bar Charts */
-.bar-chart { margin: 20px 0; }
-
-.bar-row {
-  display: flex;
-  align-items: center;
-  margin: 10px 0;
-  gap: 12px;
-}
-
-.bar-label {
-  width: 80px;
-  font-size: 0.85rem;
-  font-weight: 600;
-  text-align: right;
-  flex-shrink: 0;
-}
-
-.bar-track {
-  flex: 1;
-  height: 32px;
-  background: rgba(255,255,255,0.05);
-  border-radius: 6px;
-  overflow: hidden;
-}
-
-.bar-fill {
-  height: 100%;
-  border-radius: 6px;
-  display: flex;
-  align-items: center;
-  justify-content: flex-end;
-  padding-right: 12px;
-  font-size: 0.8rem;
+/* VS Badge */
+.vs-badge {
+  display: inline-block;
+  padding: 2px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
   font-weight: 700;
-  color: #fff;
-  min-width: 80px;
 }
 
-.bar-fill.tpu { background: linear-gradient(90deg, #1a73e8, #4285F4); }
-.bar-fill.gpu { background: linear-gradient(90deg, #33691e, #76B900); }
+.vs-badge.win-tpu { background: rgba(66,133,244,0.12); color: #2962d0; }
+.vs-badge.win-gpu { background: rgba(118,185,0,0.12); color: #4a7a00; }
+.vs-badge.tie { background: rgba(0,0,0,0.06); color: var(--text-muted); }
 
-/* Cards */
+/* SVG Chart Container */
+.svg-chart-wrapper {
+  margin: 16px 0 28px;
+  border-radius: 16px;
+  padding: 20px 24px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+/* Cards Grid */
 .cards-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(340px, 1fr));
@@ -242,10 +290,19 @@ table.spec-table td .note {
 }
 
 .card {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
   padding: 24px;
+  box-shadow: var(--glass-shadow);
+  transition: transform 0.2s, box-shadow 0.2s;
+}
+
+.card:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 12px 40px rgba(0,0,0,0.12);
 }
 
 .card h4 {
@@ -270,7 +327,7 @@ table.spec-table td .note {
 
 .card ul li {
   padding: 6px 0;
-  border-bottom: 1px solid rgba(255,255,255,0.05);
+  border-bottom: 1px solid rgba(0,0,0,0.05);
   font-size: 0.9rem;
   color: var(--text-secondary);
 }
@@ -279,17 +336,28 @@ table.spec-table td .note {
   color: var(--text-primary);
 }
 
+.card ul li a {
+  text-decoration: none;
+}
+
+.card ul li a:hover {
+  text-decoration: underline;
+}
+
 /* Analysis Box */
 .analysis-box {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
   padding: 24px;
   margin: 20px 0;
+  box-shadow: var(--glass-shadow);
 }
 
 .analysis-box h4 {
-  color: var(--accent-blue);
+  color: var(--google-blue);
   font-size: 1.1rem;
   margin-bottom: 12px;
 }
@@ -307,40 +375,34 @@ table.spec-table td .note {
 /* Callout */
 .callout {
   padding: 16px 20px;
-  border-radius: 8px;
+  border-radius: 12px;
   margin: 16px 0;
   font-size: 0.9rem;
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
 }
 
 .callout.tpu {
-  background: rgba(66,133,244,0.1);
+  background: rgba(66,133,244,0.08);
   border-left: 4px solid var(--google-blue);
+  color: var(--text-secondary);
 }
 
 .callout.gpu {
-  background: rgba(118,185,0,0.1);
+  background: rgba(118,185,0,0.08);
   border-left: 4px solid var(--nvidia-green);
+  color: var(--text-secondary);
 }
 
 .callout.neutral {
-  background: rgba(255,255,255,0.05);
-  border-left: 4px solid var(--text-secondary);
+  background: rgba(0,0,0,0.03);
+  border-left: 4px solid var(--text-muted);
+  color: var(--text-secondary);
 }
 
-/* VS Badge */
-.vs-badge {
-  display: inline-block;
-  padding: 2px 10px;
-  border-radius: 12px;
-  font-size: 0.75rem;
-  font-weight: 700;
-}
+.callout strong { color: var(--text-primary); }
 
-.vs-badge.win-tpu { background: rgba(66,133,244,0.2); color: var(--google-blue); }
-.vs-badge.win-gpu { background: rgba(118,185,0,0.2); color: var(--nvidia-green); }
-.vs-badge.tie { background: rgba(255,255,255,0.1); color: var(--text-secondary); }
-
-/* Summary Table */
+/* Summary Grid */
 .summary-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
@@ -349,16 +411,24 @@ table.spec-table td .note {
 }
 
 .summary-item {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 12px;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  border: 1px solid var(--glass-border);
+  border-radius: 16px;
   padding: 20px;
   text-align: center;
+  box-shadow: var(--glass-shadow);
+  transition: transform 0.2s;
+}
+
+.summary-item:hover {
+  transform: translateY(-2px);
 }
 
 .summary-item .dim {
   font-size: 0.85rem;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   margin-bottom: 8px;
 }
 
@@ -370,35 +440,43 @@ table.spec-table td .note {
 
 .summary-item .reason {
   font-size: 0.8rem;
-  color: var(--text-secondary);
+  color: var(--text-muted);
 }
 
 /* Footer */
 .footer {
   text-align: center;
   padding: 32px 0;
-  color: var(--text-secondary);
+  color: var(--text-muted);
   font-size: 0.8rem;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(0,0,0,0.08);
+  position: relative;
+  z-index: 1;
 }
 
-.footer a { color: var(--accent-blue); text-decoration: none; }
+.footer a { color: var(--google-blue); text-decoration: none; }
 
 @media print {
-  body { background: #fff; color: #222; }
-  .hero { background: #f0f4ff; border-bottom: 2px solid #4285F4; }
+  body { background: #fff; }
+  body::before, body::after, .bg-blob-mid { display: none; }
+  .glass, .card, .analysis-box, .summary-item, .spec-table-wrapper, .svg-chart-wrapper {
+    backdrop-filter: none;
+    -webkit-backdrop-filter: none;
+    background: #f8f8fc;
+    border-color: #ddd;
+    box-shadow: none;
+  }
+  .hero { background: #f0f4ff; }
   .hero h1 .tpu, .hero h1 .gpu { -webkit-text-fill-color: initial; }
   .hero h1 .tpu { color: #4285F4; }
   .hero h1 .gpu { color: #76B900; }
-  .card, .analysis-box, .summary-item { background: #f8f8fc; border-color: #ddd; }
-  table.spec-table thead th { background: #e8eaf6; }
-  .bar-fill.tpu { background: #4285F4; }
-  .bar-fill.gpu { background: #76B900; }
   section h2 { border-left-color: #4285F4; }
 }
 </style>
 </head>
 <body>
+
+<div class="bg-blob-mid"></div>
 
 <!-- Hero -->
 <div class="hero">
@@ -588,105 +666,91 @@ table.spec-table td .note {
   </div>
 </section>
 
-<!-- 柱状图对比 -->
+<!-- SVG 柱状图对比 -->
 <section>
   <div class="container">
     <h2>关键指标可视化</h2>
 
     <h3>BF16 算力 (TFLOPS, Dense)</h3>
-    <div class="bar-chart">
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
-        <div class="bar-track">
-          <div class="bar-fill tpu" style="width:100%">2,307 TFLOPS</div>
-        </div>
-      </div>
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
-        <div class="bar-track">
-          <div class="bar-fill gpu" style="width:97.5%">2,250 TFLOPS</div>
-        </div>
-      </div>
+    <div class="svg-chart-wrapper">
+      <svg viewBox="0 0 700 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+        <defs>
+          <linearGradient id="tpuGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#1a73e8"/>
+            <stop offset="100%" style="stop-color:#4285F4"/>
+          </linearGradient>
+          <linearGradient id="gpuGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+            <stop offset="0%" style="stop-color:#4a7a00"/>
+            <stop offset="100%" style="stop-color:#76B900"/>
+          </linearGradient>
+        </defs>
+        <text x="70" y="28" text-anchor="end" fill="#4285F4" font-size="13" font-weight="600">TPU v7</text>
+        <rect x="80" y="10" width="520" height="28" rx="6" fill="url(#tpuGrad)" opacity="0.9"/>
+        <text x="610" y="30" fill="#2962d0" font-size="12" font-weight="700">2,307</text>
+        <text x="70" y="72" text-anchor="end" fill="#5a8a00" font-size="13" font-weight="600">B200</text>
+        <rect x="80" y="54" width="507" height="28" rx="6" fill="url(#gpuGrad)" opacity="0.9"/>
+        <text x="597" y="74" fill="#4a7a00" font-size="12" font-weight="700">2,250</text>
+      </svg>
     </div>
 
     <h3>FP8 算力 (TFLOPS, Dense)</h3>
-    <div class="bar-chart">
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
-        <div class="bar-track">
-          <div class="bar-fill tpu" style="width:100%">4,614 TFLOPS</div>
-        </div>
-      </div>
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
-        <div class="bar-track">
-          <div class="bar-fill gpu" style="width:97.5%">4,500 TFLOPS</div>
-        </div>
-      </div>
+    <div class="svg-chart-wrapper">
+      <svg viewBox="0 0 700 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+        <text x="70" y="28" text-anchor="end" fill="#4285F4" font-size="13" font-weight="600">TPU v7</text>
+        <rect x="80" y="10" width="520" height="28" rx="6" fill="url(#tpuGrad)" opacity="0.9"/>
+        <text x="610" y="30" fill="#2962d0" font-size="12" font-weight="700">4,614</text>
+        <text x="70" y="72" text-anchor="end" fill="#5a8a00" font-size="13" font-weight="600">B200</text>
+        <rect x="80" y="54" width="507" height="28" rx="6" fill="url(#gpuGrad)" opacity="0.9"/>
+        <text x="597" y="74" fill="#4a7a00" font-size="12" font-weight="700">4,500</text>
+      </svg>
     </div>
 
     <h3>HBM 容量 (GB)</h3>
-    <div class="bar-chart">
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
-        <div class="bar-track">
-          <div class="bar-fill tpu" style="width:100%">192 GB</div>
-        </div>
-      </div>
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
-        <div class="bar-track">
-          <div class="bar-fill gpu" style="width:93.8%">180 GB</div>
-        </div>
-      </div>
+    <div class="svg-chart-wrapper">
+      <svg viewBox="0 0 700 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+        <text x="70" y="28" text-anchor="end" fill="#4285F4" font-size="13" font-weight="600">TPU v7</text>
+        <rect x="80" y="10" width="520" height="28" rx="6" fill="url(#tpuGrad)" opacity="0.9"/>
+        <text x="610" y="30" fill="#2962d0" font-size="12" font-weight="700">192 GB</text>
+        <text x="70" y="72" text-anchor="end" fill="#5a8a00" font-size="13" font-weight="600">B200</text>
+        <rect x="80" y="54" width="488" height="28" rx="6" fill="url(#gpuGrad)" opacity="0.9"/>
+        <text x="578" y="74" fill="#4a7a00" font-size="12" font-weight="700">180 GB</text>
+      </svg>
     </div>
 
     <h3>HBM 带宽 (TB/s)</h3>
-    <div class="bar-chart">
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
-        <div class="bar-track">
-          <div class="bar-fill tpu" style="width:92.5%">7.4 TB/s</div>
-        </div>
-      </div>
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
-        <div class="bar-track">
-          <div class="bar-fill gpu" style="width:100%">8.0 TB/s</div>
-        </div>
-      </div>
+    <div class="svg-chart-wrapper">
+      <svg viewBox="0 0 700 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+        <text x="70" y="28" text-anchor="end" fill="#4285F4" font-size="13" font-weight="600">TPU v7</text>
+        <rect x="80" y="10" width="481" height="28" rx="6" fill="url(#tpuGrad)" opacity="0.9"/>
+        <text x="571" y="30" fill="#2962d0" font-size="12" font-weight="700">7.4 TB/s</text>
+        <text x="70" y="72" text-anchor="end" fill="#5a8a00" font-size="13" font-weight="600">B200</text>
+        <rect x="80" y="54" width="520" height="28" rx="6" fill="url(#gpuGrad)" opacity="0.9"/>
+        <text x="610" y="74" fill="#4a7a00" font-size="12" font-weight="700">8.0 TB/s</text>
+      </svg>
     </div>
 
     <h3>芯片间互连带宽 (TB/s)</h3>
-    <div class="bar-chart">
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
-        <div class="bar-track">
-          <div class="bar-fill tpu" style="width:66.7%">1.2 TB/s (ICI)</div>
-        </div>
-      </div>
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
-        <div class="bar-track">
-          <div class="bar-fill gpu" style="width:100%">1.8 TB/s (NVLink 5)</div>
-        </div>
-      </div>
+    <div class="svg-chart-wrapper">
+      <svg viewBox="0 0 700 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+        <text x="70" y="28" text-anchor="end" fill="#4285F4" font-size="13" font-weight="600">TPU v7</text>
+        <rect x="80" y="10" width="347" height="28" rx="6" fill="url(#tpuGrad)" opacity="0.9"/>
+        <text x="437" y="30" fill="#2962d0" font-size="12" font-weight="700">1.2 TB/s (ICI)</text>
+        <text x="70" y="72" text-anchor="end" fill="#5a8a00" font-size="13" font-weight="600">B200</text>
+        <rect x="80" y="54" width="520" height="28" rx="6" fill="url(#gpuGrad)" opacity="0.9"/>
+        <text x="610" y="74" fill="#4a7a00" font-size="12" font-weight="700">1.8 TB/s (NVLink 5)</text>
+      </svg>
     </div>
 
     <h3>能效比 FP8 (TFLOPS/W)</h3>
-    <div class="bar-chart">
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--google-blue)">TPU v7</span>
-        <div class="bar-track">
-          <div class="bar-fill tpu" style="width:100%">~7.7 TFLOPS/W</div>
-        </div>
-      </div>
-      <div class="bar-row">
-        <span class="bar-label" style="color:var(--nvidia-green)">B200</span>
-        <div class="bar-track">
-          <div class="bar-fill gpu" style="width:58.4%">~4.5 TFLOPS/W</div>
-        </div>
-      </div>
+    <div class="svg-chart-wrapper">
+      <svg viewBox="0 0 700 100" xmlns="http://www.w3.org/2000/svg" style="width:100%;height:auto;">
+        <text x="70" y="28" text-anchor="end" fill="#4285F4" font-size="13" font-weight="600">TPU v7</text>
+        <rect x="80" y="10" width="520" height="28" rx="6" fill="url(#tpuGrad)" opacity="0.9"/>
+        <text x="610" y="30" fill="#2962d0" font-size="12" font-weight="700">~7.7 TFLOPS/W</text>
+        <text x="70" y="72" text-anchor="end" fill="#5a8a00" font-size="13" font-weight="600">B200</text>
+        <rect x="80" y="54" width="304" height="28" rx="6" fill="url(#gpuGrad)" opacity="0.9"/>
+        <text x="394" y="74" fill="#4a7a00" font-size="12" font-weight="700">~4.5 TFLOPS/W</text>
+      </svg>
     </div>
   </div>
 </section>
@@ -834,12 +898,12 @@ table.spec-table td .note {
     <div class="summary-grid">
       <div class="summary-item">
         <div class="dim">BF16 / FP8 算力</div>
-        <div class="winner" style="color:var(--text-secondary)">基本持平</div>
+        <div class="winner" style="color:var(--text-muted)">基本持平</div>
         <div class="reason">TPU v7 微领先 ~3%，无显著差距</div>
       </div>
       <div class="summary-item">
         <div class="dim">FP4 / 低精度推理</div>
-        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="winner" style="color:#5a8a00">B200</div>
         <div class="reason">9 PFLOPS FP4，TPU v7 不支持</div>
       </div>
       <div class="summary-item">
@@ -849,12 +913,12 @@ table.spec-table td .note {
       </div>
       <div class="summary-item">
         <div class="dim">HBM 带宽</div>
-        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="winner" style="color:#5a8a00">B200</div>
         <div class="reason">8.0 TB/s vs 7.4 TB/s (+8%)</div>
       </div>
       <div class="summary-item">
         <div class="dim">芯片间互连</div>
-        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="winner" style="color:#5a8a00">B200</div>
         <div class="reason">NVLink 5 1.8 TB/s vs ICI 1.2 TB/s</div>
       </div>
       <div class="summary-item">
@@ -869,12 +933,12 @@ table.spec-table td .note {
       </div>
       <div class="summary-item">
         <div class="dim">软件生态</div>
-        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="winner" style="color:#5a8a00">B200</div>
         <div class="reason">CUDA 生态不可替代</div>
       </div>
       <div class="summary-item">
         <div class="dim">部署灵活性</div>
-        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="winner" style="color:#5a8a00">B200</div>
         <div class="reason">单卡到 NVL72，多云部署</div>
       </div>
       <div class="summary-item">
@@ -889,7 +953,7 @@ table.spec-table td .note {
       </div>
       <div class="summary-item">
         <div class="dim">通用 AI 研发</div>
-        <div class="winner" style="color:var(--nvidia-green)">B200</div>
+        <div class="winner" style="color:#5a8a00">B200</div>
         <div class="reason">生态广、上手快、模型兼容性强</div>
       </div>
     </div>
@@ -904,21 +968,21 @@ table.spec-table td .note {
       <div class="card">
         <h4><span class="dot" style="background:var(--google-blue)"></span>TPU v7 官方来源</h4>
         <ul>
-          <li><a href="https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads" style="color:var(--accent-blue)">Google Cloud Blog: Ironwood TPUs</a></li>
-          <li><a href="https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/ironwood-tpu-age-of-inference/" style="color:var(--accent-blue)">Google Blog: The first TPU for the age of inference</a></li>
-          <li><a href="https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack" style="color:var(--accent-blue)">Inside the Ironwood TPU codesigned AI stack</a></li>
-          <li><a href="https://docs.cloud.google.com/tpu/docs/tpu7x" style="color:var(--accent-blue)">TPU7x Official Documentation</a></li>
+          <li><a href="https://cloud.google.com/blog/products/compute/ironwood-tpus-and-new-axion-based-vms-for-your-ai-workloads" style="color:var(--google-blue)">Google Cloud Blog: Ironwood TPUs</a></li>
+          <li><a href="https://blog.google/innovation-and-ai/infrastructure-and-cloud/google-cloud/ironwood-tpu-age-of-inference/" style="color:var(--google-blue)">Google Blog: The first TPU for the age of inference</a></li>
+          <li><a href="https://cloud.google.com/blog/products/compute/inside-the-ironwood-tpu-codesigned-ai-stack" style="color:var(--google-blue)">Inside the Ironwood TPU codesigned AI stack</a></li>
+          <li><a href="https://docs.cloud.google.com/tpu/docs/tpu7x" style="color:var(--google-blue)">TPU7x Official Documentation</a></li>
           <li>Hot Chips 2025: Norm Jouppi & Sridhar Lakshmanamurthy 技术演讲</li>
         </ul>
       </div>
       <div class="card">
         <h4><span class="dot" style="background:var(--nvidia-green)"></span>B200 官方来源</h4>
         <ul>
-          <li><a href="https://www.nvidia.com/en-us/data-center/dgx-b200/" style="color:var(--nvidia-green)">NVIDIA DGX B200 Official Page</a></li>
-          <li><a href="https://resources.nvidia.com/en-us-dgx-systems/dgx-b200-datasheet" style="color:var(--nvidia-green)">DGX B200 Datasheet</a></li>
-          <li><a href="https://www.nvidia.com/en-us/data-center/technologies/blackwell-architecture/" style="color:var(--nvidia-green)">Blackwell Architecture</a></li>
-          <li><a href="https://docs.nvidia.com/cuda/blackwell-tuning-guide/" style="color:var(--nvidia-green)">CUDA Blackwell Tuning Guide</a></li>
-          <li><a href="https://nvidianews.nvidia.com/news/nvidia-blackwell-platform-arrives-to-power-a-new-era-of-computing" style="color:var(--nvidia-green)">NVIDIA Blackwell Platform Launch</a></li>
+          <li><a href="https://www.nvidia.com/en-us/data-center/dgx-b200/" style="color:#5a8a00">NVIDIA DGX B200 Official Page</a></li>
+          <li><a href="https://resources.nvidia.com/en-us-dgx-systems/dgx-b200-datasheet" style="color:#5a8a00">DGX B200 Datasheet</a></li>
+          <li><a href="https://www.nvidia.com/en-us/data-center/technologies/blackwell-architecture/" style="color:#5a8a00">Blackwell Architecture</a></li>
+          <li><a href="https://docs.nvidia.com/cuda/blackwell-tuning-guide/" style="color:#5a8a00">CUDA Blackwell Tuning Guide</a></li>
+          <li><a href="https://nvidianews.nvidia.com/news/nvidia-blackwell-platform-arrives-to-power-a-new-era-of-computing" style="color:#5a8a00">NVIDIA Blackwell Platform Launch</a></li>
         </ul>
       </div>
     </div>
