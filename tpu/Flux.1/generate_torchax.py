@@ -361,6 +361,7 @@ def run_inference(transformer, vae, scheduler, prompt_embeds, pooled_prompt_embe
         t_vw = time.perf_counter()
         warmup_latents = unpack_latents(latents, height, width, vae_scale_factor)
         warmup_for_vae = (warmup_latents / vae.config.scaling_factor) + vae.config.shift_factor
+        warmup_for_vae = warmup_for_vae.to(torch.float32)
         warmup_img = vae.decode(warmup_for_vae, return_dict=False)[0]
         if hasattr(warmup_img, '_elem'):
             warmup_img._elem.block_until_ready()
@@ -377,6 +378,8 @@ def run_inference(transformer, vae, scheduler, prompt_embeds, pooled_prompt_embe
     print(f"\n--- VAE Decode ---")
     latents_unpacked = unpack_latents(latents, height, width, vae_scale_factor)
     latents_for_vae = (latents_unpacked / vae.config.scaling_factor) + vae.config.shift_factor
+    # Cast input to float32 — promote_types in conv2d override auto-upcasts bf16 weights
+    latents_for_vae = latents_for_vae.to(torch.float32)
 
     t_vae = time.perf_counter()
     image_tensor = vae.decode(latents_for_vae, return_dict=False)[0]
@@ -451,6 +454,7 @@ def parse_args():
     parser.add_argument("--warmup", action="store_true", help="先预热再跑基准")
     parser.add_argument("--profile", action="store_true", help="启用 JAX profiler")
     parser.add_argument("--max_sequence_length", type=int, default=512)
+    parser.add_argument("--tp", type=int, default=None, help="TP并行度（默认=全部设备）")
     return parser.parse_args()
 
 
@@ -486,11 +490,7 @@ def main():
     vae = AutoencoderKL.from_pretrained(
         args.model_id, subfolder="vae", torch_dtype=torch.bfloat16
     )
-    # VAE decoder stays float32 to avoid NaN (bf16 precision insufficient for decoder conv chain)
-    for p in vae.decoder.parameters():
-        p.data = p.data.to(torch.float32)
-    for b in vae.decoder.buffers():
-        b.data = b.data.to(torch.float32)
+    # VAE decoder: weights stay bf16, input cast to float32 triggers promote_types in conv2d override
     scheduler = FlowMatchEulerDiscreteScheduler()
     print(f"  模型加载: {time.perf_counter() - t_load:.2f}s")
 
@@ -500,8 +500,11 @@ def main():
     torchax.enable_globally()
     env = torchax.default_env()
 
-    tp_dim = len(jax.devices())
-    mesh_devices = mesh_utils.create_device_mesh((tp_dim,), allow_split_physical_axes=True)
+    tp_dim = args.tp if args.tp else len(jax.devices())
+    if tp_dim == 1:
+        mesh_devices = np.array(jax.devices()[:1])
+    else:
+        mesh_devices = mesh_utils.create_device_mesh((tp_dim,), allow_split_physical_axes=True)
     mesh = Mesh(mesh_devices, ("tp",))
     print(f"  Mesh: tp={tp_dim}, 设备数={len(jax.devices())}")
 
