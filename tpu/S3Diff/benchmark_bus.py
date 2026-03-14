@@ -56,7 +56,7 @@ else:
     TEST_IMAGES = TEST_IMAGES_2048
 
 
-def run_single(vae, unet, scheduler, im_lr_resize_norm, pos_enc, neg_enc, mesh, env, sync_stages=True):
+def run_single(vae, unet, scheduler, im_lr_resize_norm, pos_enc, neg_enc, mesh, env, sync_stages=True, profile_unet=False):
     import jax
     import jax.numpy as jnp
 
@@ -68,6 +68,12 @@ def run_single(vae, unet, scheduler, im_lr_resize_norm, pos_enc, neg_enc, mesh, 
                 lq_latent._elem.block_until_ready()
         vae_enc = time.perf_counter() - t0
 
+        # Start trace AFTER vae_encode to focus buffer on UNet
+        if profile_unet:
+            if hasattr(lq_latent, '_elem'):
+                lq_latent._elem.block_until_ready()
+            jax.profiler.start_trace(profile_unet)
+
         t1 = time.perf_counter()
         with jax.profiler.TraceAnnotation("stage/unet"):
             timestep_xla = env.j2t_iso(jnp.array([999], dtype=jnp.int32))
@@ -77,6 +83,12 @@ def run_single(vae, unet, scheduler, im_lr_resize_norm, pos_enc, neg_enc, mesh, 
             if sync_stages and hasattr(model_pred, '_elem'):
                 model_pred._elem.block_until_ready()
         unet_t = time.perf_counter() - t1
+
+        # Stop trace after UNet
+        if profile_unet:
+            if hasattr(model_pred, '_elem'):
+                model_pred._elem.block_until_ready()
+            jax.profiler.stop_trace()
 
         with jax.profiler.TraceAnnotation("stage/scheduler_step"):
             x_denoised = scheduler.step(model_pred, 999, lq_latent, return_dict=True).prev_sample
@@ -164,8 +176,57 @@ def main():
     env = torchax.default_env()
     mesh = Mesh(np.array(jax.devices()[:1]), ("x",))
 
+    from splash_attention_utils import (
+        _splash_attention_forward, _pad_to_multiple, _BlockSizes,
+        BQSIZE, BKVSIZE, BKVCOMPUTESIZE, BKVCOMPUTEINSIZE, LOG2_E,
+    )
+
+    SPLASH_MIN_SEQ = int(os.environ.get('SPLASH_MIN_SEQ', '10000'))
+
+    # Block sizes for TPU v6e VMEM (32MB limit)
+    SA_BQ = int(os.environ.get('SA_BQ', '1536'))
+    SA_BKV = int(os.environ.get('SA_BKV', '1536'))
+    SA_BKV_COMPUTE = int(os.environ.get('SA_BKV_COMPUTE', '128'))
+    SA_BKV_COMPUTE_IN = int(os.environ.get('SA_BKV_COMPUTE_IN', '128'))
+
+    def _splash_sdpa(query_jax, key_jax, value_jax, scale):
+        """Direct splash attention for single-device (no shard_map needed)."""
+        # Input: (batch, heads, seq_len, head_dim) as JAX arrays
+        batch, heads, seq_len, head_dim = query_jax.shape
+        scale_factor = 1.0 / math.sqrt(head_dim) if scale is None else scale
+        q = query_jax * scale_factor * LOG2_E
+
+        def kernel_3d(q_3d, k_3d, v_3d):
+            q_3d_padded, q_orig_len = _pad_to_multiple(q_3d, SA_BQ, axis=1)
+            k_3d_padded, _ = _pad_to_multiple(k_3d, SA_BKV, axis=1)
+            v_3d_padded, _ = _pad_to_multiple(v_3d, SA_BKV, axis=1)
+            block_sizes = _BlockSizes(
+                block_q=min(SA_BQ, q_3d_padded.shape[1]),
+                block_kv=min(SA_BKV, k_3d_padded.shape[1]),
+                block_kv_compute=min(SA_BKV_COMPUTE, k_3d_padded.shape[1]),
+            )
+            splash_kernel = functools.partial(
+                _splash_attention_forward,
+                block_sizes=block_sizes, bkv_compute_in=SA_BKV_COMPUTE_IN,
+            )
+            out = splash_kernel(q_3d_padded, k_3d_padded, v_3d_padded).astype(q_3d.dtype)
+            out = jnp.swapaxes(out, 1, 2)
+            return out[:, :q_orig_len, :]
+
+        out = jax.vmap(kernel_3d, in_axes=(0, 0, 0), out_axes=0)(q, key_jax, value_jax)
+        return out
+
     def sdpa_impl(query, key, value, attn_mask=None, dropout_p=0.0,
                   is_causal=False, scale=None, enable_gqa=False):
+        L, S = query.size(-2), key.size(-2)
+        # Use splash attention for large self-attention on TPU
+        if L == S and L >= SPLASH_MIN_SEQ and attn_mask is None and not is_causal:
+            # Access underlying JAX arrays directly to avoid t2j_iso transpose overhead
+            q_jax = query._elem if hasattr(query, '_elem') else env.t2j_iso(query)
+            k_jax = key._elem if hasattr(key, '_elem') else env.t2j_iso(key)
+            v_jax = value._elem if hasattr(value, '_elem') else env.t2j_iso(value)
+            out_jax = _splash_sdpa(q_jax, k_jax, v_jax, scale)
+            return env.j2t_iso(out_jax)
         return sdpa_reference(query, key, value, attn_mask, dropout_p, is_causal, scale, enable_gqa)
 
     def conv2d_impl(input, weight, bias=None, stride=1, padding=0, dilation=1, groups=1, *, env=env):
@@ -251,17 +312,18 @@ def main():
         for i in range(NUM_ITERS):
             # Profile the last iteration if PROFILE is set
             use_profile = PROFILE_DIR and (i == NUM_ITERS - 1)
+            profile_unet_path = False
             if use_profile:
                 profile_path = os.path.join(PROFILE_DIR, f"trace_{name}")
                 os.makedirs(profile_path, exist_ok=True)
-                print(f"  [Profile] Tracing iter {i+1} -> {profile_path}")
-                jax.profiler.start_trace(profile_path)
+                print(f"  [Profile] Tracing UNet only, iter {i+1} -> {profile_path}")
+                profile_unet_path = profile_path
 
             output, times = run_single(vae, compiled_unet, components['scheduler'],
-                                        input_xla, pos_enc, neg_enc, mesh, env, sync_stages=SYNC_STAGES)
+                                        input_xla, pos_enc, neg_enc, mesh, env,
+                                        sync_stages=SYNC_STAGES, profile_unet=profile_unet_path)
 
             if use_profile:
-                jax.profiler.stop_trace()
                 print(f"  [Profile] Trace saved to {profile_path}")
 
             label = "compile" if i == 0 else ("warmup" if i == 1 else "steady")
