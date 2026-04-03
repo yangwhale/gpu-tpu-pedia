@@ -49,6 +49,17 @@ def pixel_unshuffle(x, scale):
     return x_view.permute(0, 1, 3, 5, 2, 4).reshape(b, out_channel, h, w)
 
 
+def nearest_upsample_2x(x):
+    """2x nearest-neighbor upsample using repeat_interleave.
+
+    Replaces F.interpolate(scale_factor=2, mode='nearest') which has a bug
+    in torchax (raises OperatorNotFound for nearest mode).
+
+    Pure tensor ops — 100% XLA compatible.
+    """
+    return x.repeat_interleave(2, dim=-1).repeat_interleave(2, dim=-2)
+
+
 class ResidualDenseBlock(nn.Module):
     """Residual Dense Block with 5 convolutions.
 
@@ -139,8 +150,8 @@ class RRDBNet(nn.Module):
         feat = self.conv_first(feat)
         body_feat = self.conv_body(self.body(feat))
         feat = feat + body_feat
-        # upsample
-        feat = self.lrelu(self.conv_up1(F.interpolate(feat, scale_factor=2, mode='nearest')))
-        feat = self.lrelu(self.conv_up2(F.interpolate(feat, scale_factor=2, mode='nearest')))
+        # upsample (use repeat_interleave instead of F.interpolate for XLA compat)
+        feat = self.lrelu(self.conv_up1(nearest_upsample_2x(feat)))
+        feat = self.lrelu(self.conv_up2(nearest_upsample_2x(feat)))
         out = self.conv_last(self.lrelu(self.conv_hr(feat)))
         return out
