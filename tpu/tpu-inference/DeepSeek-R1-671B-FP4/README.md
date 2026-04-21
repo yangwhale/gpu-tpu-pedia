@@ -108,33 +108,75 @@ python3 -c "import tpu_inference; print('OK')"
 
 适用于直接在 TPU VM 上开发测试，不使用 Docker。
 
-## B-1: 创建 TPU VM
+## B-1: 创建 TPU VM + 数据盘
 
 ```bash
-# 使用 queued-resources 创建 TPU VM
-gcloud alpha compute tpus queued-resources create my-deepseek-qr \
-  --node-id my-deepseek-vm \
-  --project <PROJECT_ID> \
-  --zone us-central1-c \
+export PROJECT=<PROJECT_ID>
+export ZONE=us-central1-c
+export TPU_NAME=my-deepseek-vm
+
+# 创建 TPU VM（注意 scopes 和 oslogin）
+gcloud alpha compute tpus queued-resources create ${TPU_NAME}-qr \
+  --node-id $TPU_NAME \
+  --project $PROJECT \
+  --zone $ZONE \
   --accelerator-type tpu7-8 \
-  --runtime-version v2-alpha-tpuv7 \
+  --runtime-version v2-alpha-tpu7-ubuntu2404 \
+  --scopes=https://www.googleapis.com/auth/cloud-platform \
+  --metadata=enable-oslogin=false \
   --service-account <SA_EMAIL>
 
-# 等待状态变为 ACTIVE
-gcloud compute tpus queued-resources describe my-deepseek-qr \
-  --project <PROJECT_ID> --zone us-central1-c \
-  --format="value(state.state)"
+# 等待状态变为 ACTIVE（约 3-5 分钟）
+watch -n 10 gcloud alpha compute tpus queued-resources describe ${TPU_NAME}-qr \
+  --project $PROJECT --zone $ZONE --format="value(state.state)"
+
+# 创建 2TB Hyperdisk Balanced 数据盘（顺序读写 2.4 GB/s）
+gcloud compute disks create ${TPU_NAME}-data \
+  --project $PROJECT --zone $ZONE \
+  --type hyperdisk-balanced \
+  --size 2TB \
+  --provisioned-iops 40000 \
+  --provisioned-throughput 2400
+
+# 挂载数据盘到 TPU VM
+gcloud alpha compute tpus tpu-vm attach-disk $TPU_NAME \
+  --disk ${TPU_NAME}-data \
+  --zone $ZONE --project $PROJECT --mode read-write
 
 # SSH 连接
-gcloud compute tpus tpu-vm ssh my-deepseek-vm \
-  --project <PROJECT_ID> --zone us-central1-c
+gcloud compute tpus tpu-vm ssh $TPU_NAME --project $PROJECT --zone $ZONE
 ```
+
+进入 VM 后，格式化并挂载数据盘：
+
+```bash
+# 数据盘通常是 /dev/nvme1n1
+lsblk | grep nvme
+
+# 格式化 + 挂载
+sudo mkfs.ext4 -m 0 -E lazy_itable_init=0,lazy_journal_init=0 /dev/nvme1n1
+sudo mkdir -p /data
+sudo mount -o discard,defaults /dev/nvme1n1 /data
+sudo chown $USER:$USER /data
+
+# 写入 fstab（重启自动挂载）
+echo "/dev/nvme1n1 /data ext4 discard,defaults 0 2" | sudo tee -a /etc/fstab
+
+# 扩大 /dev/shm（默认只有内存的一半，不够放 FP4 cache）
+sudo mount -o remount,size=800G /dev/shm
+df -h /dev/shm
+# 预期：800G
+```
+
+> **实测数据（TPU v7-8 VM）**
+> - TPU VM 创建：~3 分钟（queued-resources）
+> - Hyperdisk 格式化：~1 分钟（2TB ext4）
+> - 磁盘性能：顺序读写 2416 MiB/s (2.53 GB/s)，随机 4K IOPS 40.3K — 均打满 provisioned 上限
 
 ## B-2: 安装系统依赖
 
 ```bash
 sudo apt-get update && sudo apt-get install -y \
-  libopenblas-base \
   libopenmpi-dev \
   libomp-dev \
   git \
@@ -160,8 +202,8 @@ git clone https://github.com/yangwhale/tpu-inference.git
 cd tpu-inference
 git checkout feature/moe-fp4-weight-cache
 
-# 获取 vLLM pinned 版本并克隆
-export VLLM_COMMIT_HASH="$(cat .buildkite/vllm_lkg.version)"
+# 获取 vLLM pinned 版本并克隆（注意 trim 尾部空格）
+export VLLM_COMMIT_HASH="$(cat .buildkite/vllm_lkg.version | tr -d '[:space:]')"
 cd ~
 git clone https://github.com/vllm-project/vllm.git
 cd vllm
@@ -189,55 +231,46 @@ source ~/vllm_env/bin/activate
 
 python3 -c '
 import jax
-import vllm
 import importlib.metadata
 from vllm.platforms import current_platform
 
-tpu_version = importlib.metadata.version("tpu_inference")
-print(f"vllm version: {vllm.__version__}")
-print(f"tpu_inference version: {tpu_version}")
-print(f"vllm platform: {current_platform.get_device_name()}")
-print(f"jax devices: {jax.devices()}")
+print(f"vllm: {importlib.metadata.version(\"vllm\")}")
+print(f"tpu_inference: {importlib.metadata.version(\"tpu_inference\")}")
+print(f"jax: {jax.__version__}")
+print(f"platform: {current_platform.get_device_name()}")
+print(f"devices: {len(jax.devices())} x {jax.devices()[0].platform}")
 '
 ```
 
-预期输出：
+实测输出：
 ```
-vllm version: 0.19.x
-tpu_inference version: 0.x.x
-vllm platform: TPU V7X
-jax devices: [TpuDevice(id=0, ...), TpuDevice(id=1, ...), ..., TpuDevice(id=7, ...)]
+vllm: 0.19.1rc1.dev321+g6dc949140.tpu
+tpu_inference: 0.0.0
+jax: 0.9.2
+platform: TPU V7X
+devices: 8 x tpu
 ```
 
-## B-5: 准备存储
+> **安装耗时实测**：系统依赖 ~1 分钟，uv + venv ~10 秒，vLLM TPU requirements ~3 分钟，
+> vLLM editable install ~3 秒，tpu-inference editable install ~2 秒。总计 ~5 分钟。
 
-TPU VM 默认只有 100 GB 启动盘，需要挂载额外存储放模型和缓存。
+## B-5: 设置存储路径
 
-**方案 1：挂载 GCS bucket（推荐，免费且无需额外磁盘）**
+数据盘已在 B-1 步骤中挂载到 `/data`，直接使用：
+
 ```bash
-# 安装 gcsfuse（TPU VM 通常已预装）
-gcsfuse --implicit-dirs <YOUR_BUCKET> /gcs
-
-# 模型和缓存都放在 GCS
-export STORAGE=/gcs
+export STORAGE=/data
+export TI_DIR=~/tpu-inference
 ```
 
-**方案 2：挂载 Persistent Disk**
-```bash
-# 先在 GCP Console 创建 1.5TB PD 并 attach 到 VM
-sudo mkfs.ext4 /dev/sdb
-sudo mkdir -p /mnt/data
-sudo mount /dev/sdb /mnt/data
-sudo chown $USER:$USER /mnt/data
-
-export STORAGE=/mnt/data
-```
-
-**方案 3：挂载 Lustre**（如果集群有 Lustre 文件系统）
-```bash
-sudo mount -t lustre <LUSTRE_SERVER>:/<FS> /lustre
-export STORAGE=/lustre
-```
+> **存储规划**（2TB Hyperdisk Balanced）
+>
+> | 内容 | 大小 | 路径 |
+> |------|------|------|
+> | 模型权重 | ~700 GB | `/data/models/DeepSeek-R1` |
+> | FP8 cache | ~404 GB | `/data/moe-cache/ep8_tp1_gmm_ep_fp8e4m3_bsNone` |
+> | FP4 cache | ~610 GB | `/data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone` |
+> | **合计** | **~1.7 TB** | 2 TB 盘剩余 ~300 GB |
 
 完成后继续 Step 3。
 
