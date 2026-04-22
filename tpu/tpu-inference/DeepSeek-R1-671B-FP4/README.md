@@ -761,20 +761,24 @@ lm_eval \
 
 ## 性能数据
 
-以下数据在 TPU v7x-8 单节点（chrisya-tpu7-8-02）上实测。
+以下数据在 TPU v7x-8 单节点上实测，涵盖 TPU VM 裸机和 GKE 两种场景。
 
 ### 权重加载时间（cache + consolidated non-MoE 均在 /dev/shm）
 
-| 阶段 | 优化前 | 优化后 | 说明 |
-|------|--------|--------|------|
-| JAX 初始化 + 模型配置 | ~65s | ~65s | mesh 创建、config 解析 |
-| Non-MoE 权重加载 | 4:26 (70 shards) | **21s** (consolidated) | 单文件 23 GB vs 70 个 shard 扫描 |
-| MoE Cache mmap → TPU | 1:22 | **21s** | /dev/shm tmpfs, 零拷贝 mmap |
-| Server init | ~22s | ~2s | |
-| **Application startup complete** | **~7 min** | **~1:48** | **3.4x 加速** |
+| 阶段 | 优化前 | 优化后（warm） | 优化后（cold） | 说明 |
+|------|--------|---------------|---------------|------|
+| JAX 初始化 + 模型配置 | ~65s | ~65s | ~65s | mesh 创建、config 解析 |
+| Non-MoE 权重加载 | 4:26 (70 shards) | **21s** | **25-108s** | warm: pjit cache 命中；cold: 25 unique shapes 需重新编译 |
+| MoE Cache mmap → TPU | 1:22 | **21s** | **63s** | /dev/shm tmpfs；cold 多出 pjit 编译开销 |
+| Server init | ~22s | ~2s | ~2s | |
+| **Application startup complete** | **~7 min** | **~1:48** | **~3:17-3:41** | warm 需同进程连续启动（见[踩坑 #20](#20-pjit-compiled-transfer-cache-不持久化)） |
 
+> **warm vs cold 启动**：
+> - **warm**（~1:48）：同一进程连续重启，pjit compiled transfer programs 仍在内存中，权重传输跳过编译
+> - **cold**（~3:17-3:41）：进程重启后 pjit cache 丢失，25 种 unique tensor shapes 全部重新编译。**这是常见场景**
+>
 > **两个关键优化**（详见[踩坑 #18](#18-jaxclear_caches-性能-bug-—-注释一行快-10x)和[踩坑 #19](#19-non-moe-权重-consolidated-file-优化)）：
-> 1. 注释 `jax.clear_caches()`：non-MoE 加载从 216s → **21s**（10x）
+> 1. 注释 `jax.clear_caches()`：non-MoE 加载从 216s → **21-108s**（2-10x，取决于 cold/warm）
 > 2. Consolidated non-MoE file：跳过 70 shard 扫描，单文件直接加载
 
 ### MoE Cache 大小
@@ -1090,14 +1094,19 @@ main thread → block_until_ready() → can't call _get_prefetched_cache() → n
 
 **修复**：
 ```bash
-# 查找并杀死 EngineCore
+# 方法 1：直接杀 EngineCore
 ps aux | grep EngineCore | grep -v grep
-sudo fuser -k /dev/vfio/*
-# 清理 lockfile
-sudo rm /tmp/libtpu_lockfile
+kill -9 <EngineCore PID>
+
+# 方法 2：用 fuser 找到并杀死所有 VFIO 持有者（推荐）
+fuser /dev/vfio/4              # 查看谁在用
+fuser -k /dev/vfio/*           # 杀死所有 VFIO 持有者（需 root 或 privileged）
+
+# 清理 lockfile 和 IPC 文件
+rm -f /tmp/libtpu_lockfile /tmp/.vllm_ipc_*
 ```
 
-**教训**：每次停止 vLLM 后，必须检查并清理 EngineCore 孤儿进程和 lockfile
+**教训**：每次停止 vLLM 后，必须用 `fuser /dev/vfio/*` 确认 TPU 设备已释放。仅 `kill` 主进程不够，EngineCore 子进程可能以 `SLl` 状态存活（非 zombie，仍持有 VFIO fd）。`pkill -9 -f python` 后也要 fuser 确认
 
 ### 16. gen 脚本 async save 导致 HBM 泄漏
 
@@ -1191,7 +1200,52 @@ del jax_weight
 2. 修改 `_filtered_safetensors_iterator()` 添加 Level 0 快速路径：检测到 consolidated file 时直接加载，跳过全部 shard 扫描
 3. 文件放入 `/dev/shm` cache 目录下，vLLM 启动时自动发现
 
-**效果**（与踩坑 #18 叠加后的总效果）：端到端启动从 **~7 min → ~1:48**
+**效果**（与踩坑 #18 叠加后的总效果）：端到端启动从 **~7 min → ~3:17（cold）/ ~1:48（warm）**
+
+### 20. pjit compiled transfer cache 不持久化
+
+**现象**：vLLM 进程重启后启动时间从 1:48 退化到 3:17-3:41，non-MoE 加载从 21s 退化到 25-108s，MoE 加载从 21s 退化到 63s
+
+**原因**：`jax.device_put()` 内部的 pjit compiled transfer programs 缓存在进程内存中（C++ LRU cache），不会持久化到磁盘。DeepSeek R1 的 1367 个 non-MoE tensor 只有 ~25 种 unique (shape, sharding) 组合，warm 状态下命中 cache 跳过编译。进程重启后 cache 清空，所有 25 种 shape 重新编译
+
+**影响**：
+| 指标 | warm（同进程） | cold（重启后） |
+|------|--------------|---------------|
+| Non-MoE 加载 | 21s | 25-108s |
+| MoE cache 加载 | 21s | 63s |
+| 总启动 | ~1:48 | ~3:17-3:41 |
+
+**验证环境**：
+| 场景 | 启动时间 | Non-MoE | MoE | 日期 |
+|------|----------|---------|-----|------|
+| TPU VM (chrisya-tpu7-8-02) cold | 3:41 | 108.5s | 63s | 2026-04-22 |
+| GKE (chrisya-v7x-v134, e2e pod) cold | 3:17 | 25.5s | 63.2s | 2026-04-22 |
+
+**教训**：文档中的 "~1:48" 只有在同一 vLLM 进程连续 reload 权重时才成立。实际开发迭代中每次 kill 进程再启动，**cold start 3:17-3:41 才是真实启动时间**。未来可考虑 JAX 的 compilation cache 持久化（`jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")`）
+
+### 21. npy_v1 cache 的 meta.json 格式要求
+
+**现象**：GKE 上从 NPZ 格式转换为 npy_v1 目录格式的 FP4 cache，加载时报 `jax.errors.JaxRuntimeError: INVALID_ARGUMENT: Unknown NumPy dtype dtype('V1')`
+
+**原因**：FP4（float4_e2m1fn）在 numpy 中存储为 `|V1`（1-byte void）dtype。fp8.py 的 npy_v1 加载路径（`_load_moe_cache_npy_v1()`）依赖 `meta.json` 中的 dtype 字段来决定是否做 `np_arr.view(ml_dtypes.float4_e2m1fn)` 转换。如果 meta.json 缺少这些字段，V1 数组直接传给 `jax.make_array_from_callback()`，JAX 不认识 V1 dtype
+
+**正确的 meta.json 格式**：
+```json
+{
+  "_cache_format": "npy_v1",
+  "_storage_format": "native_fp4",
+  "w13_weight_dtype": "float4_e2m1fn",
+  "w13_weight_scale_dtype": "float32",
+  "w2_weight_dtype": "float4_e2m1fn",
+  "w2_weight_scale_dtype": "float32"
+}
+```
+
+**关键字段**：
+- `_storage_format: "native_fp4"`：告诉加载器使用 `view(ml_dtypes.float4_e2m1fn)` 而非 `view(ml_dtypes.float8_e4m3fn)`
+- `w13_weight_dtype` / `w2_weight_dtype`：值包含 "float4" 时触发 dtype view 转换
+
+**教训**：`gen_fp4_cache_cpu_parallel.py` 正确生成了这些字段，但手动 NPZ→npy 转换时容易遗漏。转换脚本必须从 NPZ 的 metadata 中提取 dtype 信息写入 meta.json
 
 ---
 
@@ -1208,31 +1262,34 @@ del jax_weight
 | **FP4 cache 生成（CPU 并行）** | **~28 min** | gen_fp4_cache_cpu_parallel.py, 12 workers |
 | Non-MoE 权重提取 | ~3 min | extract_non_moe_weights.py, 23 GB |
 | FP4 cache + non-MoE 拷贝到 /dev/shm | ~12-27 min | 取决于磁盘类型（Extreme ~12min, Balanced ~27min） |
-| vLLM FP4 启动 | **~2 min** | consolidated non-MoE + MoE cache（需 patch，见踩坑 #18） |
+| vLLM FP4 启动（cold start） | **~3:17-3:41** | consolidated non-MoE + MoE cache + pjit 编译（需 patch，见踩坑 #18） |
 | GSM8K 测试 | ~23 min | 1319 题, exact_match 94.9% |
 | **总计（不含模型下载）** | **~70-85 min** | 一次性，后续无需重复 |
 
 ### 场景 2：开发迭代（改代码后重启 vLLM）
 
 > **最常见场景**：FP4 cache + non-MoE consolidated 均在 /dev/shm，修改代码后重启 vLLM。
+> 注意：重启进程后 pjit compiled transfer cache 丢失，启动时间为 **cold start**（见[踩坑 #20](#20-pjit-compiled-transfer-cache-不持久化)）。
 
 | 步骤 | 耗时 | 备注 |
 |------|------|------|
-| 清理旧进程 | ~10s | kill vLLM + EngineCore + rm lockfile |
-| vLLM FP4 启动 | **~1:48** | consolidated non-MoE 21s + MoE cache 21s + init 66s |
-| **总计** | **~2 min** | 无需重新生成或拷贝 cache |
+| 清理旧进程 | ~10s | kill vLLM + EngineCore + `fuser /dev/vfio/*` + rm lockfile |
+| vLLM FP4 启动（cold） | **~3:17-3:41** | pjit cache 需重新编译 |
+| **总计** | **~3.5-4 min** | 无需重新生成或拷贝 cache |
 
-> **vLLM 启动时间拆解**（cache + consolidated non-MoE 均在 /dev/shm，已 patch `jax.clear_caches()`）：
+> **vLLM 启动时间拆解**（实测对比，cache + consolidated non-MoE 均在 /dev/shm，已 patch `jax.clear_caches()`）：
 >
-> | 阶段 | 耗时 | 说明 |
-> |------|------|------|
-> | JAX 初始化 + 模型配置 | ~65s | mesh 创建、config 解析 |
-> | Non-MoE 权重加载（consolidated） | **21s** | 单文件 1367 keys, 63.8 it/s |
-> | MoE cache mmap 从 /dev/shm | **21s** | 58 层, 0.4s/层, 零拷贝 DMA |
-> | Server init | ~2s | routes 注册 |
-> | **Application startup complete** | **~1:48** | |
+> | 阶段 | TPU VM cold | GKE cold | 说明 |
+> |------|-------------|----------|------|
+> | JAX 初始化 + 模型配置 | ~65s | ~79s | mesh 创建、config 解析 |
+> | Non-MoE 权重加载（consolidated） | **108.5s** | **25.5s** | cold start 需重新编译 pjit transfer programs |
+> | MoE cache mmap 从 /dev/shm | **63s** | **63.2s** | 58 层，含 pjit 编译开销 |
+> | Server init | ~2s | ~29s | routes 注册 |
+> | **Application startup complete** | **~3:41** | **~3:17** | cold start（进程重启后） |
 >
-> 对比未优化版本（原始 70 shard 扫描 + `jax.clear_caches()`）：**7 min → 1:48（3.4x 加速）**
+> **warm start 参考值**（同一进程连续重启，pjit cache 命中）：Non-MoE 21s + MoE 21s = **~1:48**
+>
+> 对比未优化版本（原始 70 shard 扫描 + `jax.clear_caches()`）：**7 min → 3:17-3:41（cold）/ 1:48（warm）**
 
 ### 场景 3：VM 重启后（/dev/shm 被清空）
 
@@ -1245,8 +1302,8 @@ del jax_weight
 
 ### 已验证的软件版本组合
 
-| 组件 | 裸机 | Docker |
-|------|------|--------|
+| 组件 | TPU VM 裸机 | Docker / GKE |
+|------|-------------|--------------|
 | JAX | 0.9.2 | 0.9.2 |
 | jaxlib | 0.9.2 | 0.9.2 |
 | libtpu | 0.0.39 | 0.0.39 |
@@ -1256,3 +1313,15 @@ del jax_weight
 | tpu-inference | feature/moe-fp4-weight-cache | 同左 |
 | Python | 3.12 | 3.12 |
 | TPU runtime | v2-alpha-tpu7-ubuntu2404 | 同左 |
+
+### 已验证的部署场景（2026-04-22）
+
+| 场景 | 存储 | 启动时间（cold） | 推理验证 | 备注 |
+|------|------|-----------------|----------|------|
+| TPU VM 裸机 (chrisya-tpu7-8-02) | Hyperdisk 2TB + /dev/shm 800G | 3:41 | 2+3=5 ✅ | 推荐开发测试 |
+| GKE + Docker (chrisya-v7x-v134) | Lustre PVC + /dev/shm 800G | 3:17 | 2+3=5 ✅ | 需 patch weight_utils.py |
+
+> **GKE 特殊注意事项**：
+> - Docker 镜像中的 tpu-inference 需要手动 patch（注释 `jax.clear_caches()` + 添加 consolidated non-MoE 快速路径）
+> - Lustre 上的 NPZ 格式 cache 需转换为 npy_v1 目录格式（见[踩坑 #21](#21-npy_v1-cache-的-metajson-格式要求)）
+> - GKE Pod 中杀 vLLM 后，必须用 `fuser /dev/vfio/*` 确认设备释放（见[踩坑 #15](#15-enginecore-孤儿进程持续占用-tpu)）
