@@ -466,9 +466,11 @@ for name in ['w13_weight', 'w13_weight_scale', 'w2_weight', 'w2_weight_scale']:
 
 ---
 
-## Step 5: 预拷贝 FP4 Cache 到 /dev/shm（强烈推荐）
+## Step 5: 预拷贝 FP4 Cache + Non-MoE 权重到 /dev/shm（强烈推荐）
 
-**强烈建议**将 cache 拷贝到 `/dev/shm`（tmpfs）。除了加速 21x，还能**避免 vLLM 的 MoE prefetch deadlock**（见[踩坑 #13](#13-vllm-moe-prefetch-deadlock-cache-hit-路径)）。从磁盘加载时 prefetch 线程长时间占用 semaphore，可能导致全部线程死锁：
+**强烈建议**将 cache 和 non-MoE 权重拷贝到 `/dev/shm`（tmpfs）。除了加速启动，还能**避免 vLLM 的 MoE prefetch deadlock**（见[踩坑 #13](#13-vllm-moe-prefetch-deadlock-cache-hit-路径)）。
+
+### Step 5a: 拷贝 FP4 cache
 
 ```bash
 # FP4 cache 约 610 GB，需要 /dev/shm 有足够空间
@@ -484,6 +486,35 @@ time cp -r $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone /dev/shm/
 # 后续启动时指向 /dev/shm
 export MOE_WEIGHT_CACHE_DIR=/dev/shm
 ```
+
+### Step 5b: 提取并拷贝 Non-MoE 权重（可选，推荐）
+
+将 non-MoE 权重从 163 个 safetensors shard 提取为单个文件，放入 `/dev/shm` cache 目录。
+vLLM 启动时自动检测并加载，跳过 70 shard 扫描，**权重加载从 4:26 降到 21s**。
+
+```bash
+# 提取 non-MoE 权重（~23 GB，耗时 ~3 min）
+# 脚本与本 README 同目录
+python3 extract_non_moe_weights.py \
+  --model-dir $MODEL \
+  --output $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone/non_moe_weights.safetensors
+# 如果脚本不在本地，可下载：
+# curl -LO https://raw.githubusercontent.com/yangwhale/gpu-tpu-pedia/main/tpu/tpu-inference/DeepSeek-R1-671B-FP4/extract_non_moe_weights.py
+
+# 拷贝到 /dev/shm（如果 Step 5a 已拷贝 cache，只需拷贝这一个文件）
+cp $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone/non_moe_weights.safetensors \
+   /dev/shm/ep8_tp1_gmm_ep_fp4e2m1_bsNone/
+
+# 验证
+ls -lh /dev/shm/ep8_tp1_gmm_ep_fp4e2m1_bsNone/non_moe_weights.safetensors
+# 预期：~22 GB
+```
+
+> **原理**：vLLM 启动时 `_filtered_safetensors_iterator()` 会在 `MOE_WEIGHT_CACHE_DIR` 下
+> 搜索 `non_moe_weights.safetensors`。找到后直接从这个单文件加载 1367 个 non-MoE tensor，
+> 跳过对 163 个 safetensors shard 的扫描和过滤。
+>
+> **空间预算**：FP4 cache 610 GB + non-MoE 23 GB = 633 GB，/dev/shm 800 GB 剩余 167 GB。
 
 > **TPU VM 注意**：默认 /dev/shm 约 473 GB，放不下 610 GB FP4 cache。
 > 可通过 `sudo mount -o remount,size=800G /dev/shm` 扩大，但会压缩可用内存。
@@ -732,15 +763,19 @@ lm_eval \
 
 以下数据在 TPU v7x-8 单节点（chrisya-tpu7-8-02）上实测。
 
-### 权重加载时间（cache 已在 /dev/shm）
+### 权重加载时间（cache + consolidated non-MoE 均在 /dev/shm）
 
-| 阶段 | 耗时 | 说明 |
-|------|------|------|
-| JAX 初始化 + 模型配置 | ~13s | mesh 创建、config 解析 |
-| Safetensors 过滤加载 (70/163) | 4:26 | 跳过 93 个纯 MoE shard，仅加载 23 GB |
-| MoE Cache mmap → TPU（/dev/shm） | **1:22** | 58 层 FP4 cache, 零拷贝 mmap, 1.4s/层 |
-| DP Scheduler + Server init | ~22s | 8 worker 进程启动 |
-| **Application startup complete** | **~7 min** | 开发迭代只需等这么久 |
+| 阶段 | 优化前 | 优化后 | 说明 |
+|------|--------|--------|------|
+| JAX 初始化 + 模型配置 | ~65s | ~65s | mesh 创建、config 解析 |
+| Non-MoE 权重加载 | 4:26 (70 shards) | **21s** (consolidated) | 单文件 23 GB vs 70 个 shard 扫描 |
+| MoE Cache mmap → TPU | 1:22 | **21s** | /dev/shm tmpfs, 零拷贝 mmap |
+| Server init | ~22s | ~2s | |
+| **Application startup complete** | **~7 min** | **~1:48** | **3.4x 加速** |
+
+> **两个关键优化**（详见[踩坑 #18](#18-jaxclear_caches-性能-bug-—-注释一行快-10x)和[踩坑 #19](#19-non-moe-权重-consolidated-file-优化)）：
+> 1. 注释 `jax.clear_caches()`：non-MoE 加载从 216s → **21s**（10x）
+> 2. Consolidated non-MoE file：跳过 70 shard 扫描，单文件直接加载
 
 ### MoE Cache 大小
 
@@ -1122,6 +1157,42 @@ np.clip(w_fp32, ..., out=w_fp32)    # in-place
 fp4 = w_fp32.astype(fp4_dtype)
 ```
 
+### 18. `jax.clear_caches()` 性能 bug — 注释一行快 10x
+
+**现象**：non-MoE 权重加载 1367 个 tensor 耗时 216s（3.3 it/s），PCIe 利用率仅 0.3%
+
+**原因**：`assign_and_shard_param()` 在每个 tensor 加载后调用 `jax.clear_caches()`，清除 100 个 Python LRU cache + C++ pjit compiled executable cache。这导致每个 tensor 的 `jax.device_put()` 都要**重新编译** transfer program（即使 shape + sharding 完全相同），1367 次调用中只有 25 种 unique shape，但每次都重新编译
+
+**修复**：注释掉 `weight_utils.py` 第 898 行的 `jax.clear_caches()`
+```python
+# weight_utils.py:assign_and_shard_param()
+jax_param.value = shard_put(jax_weight, spec, mesh=param_mesh)
+jax_param.set_metadata("_is_loaded", True)
+del jax_weight
+# jax.clear_caches()  # ← 注释掉这一行
+```
+
+**效果**：
+| 指标 | 优化前 | 优化后 | 加速 |
+|------|--------|--------|------|
+| Non-MoE 加载 | 215.7s | **21.4s** | **10.1x** |
+| 吞吐 | 3.3 it/s | **63.8 it/s** | **19.3x** |
+
+**风险评估**：无坑。cache 存的是 compiled transfer programs，25 种 shape × 几 KB ≈ 不到 1 MB，对 630 GB RSS 无影响。推理路径不受影响（推理路径本来就没有 `clear_caches()`）。`clear_caches()` 原本是防止动态 shape 场景下 cache 膨胀，但权重加载是固定 shape，不存在这个问题
+
+### 19. Non-MoE 权重 consolidated file 优化
+
+**现象**：vLLM 启动时扫描 163 个 safetensors shard，过滤后加载 70 个 shard 中的 1367 个 non-MoE keys，耗时 4:26
+
+**原因**：每个 shard 需要 `safe_open()` + 遍历所有 keys + 判断是否 MoE。70 次文件打开 + 14336 个 MoE key 的过滤判断开销显著
+
+**优化**：
+1. 用 `extract_non_moe_weights.py` 将 1367 个 non-MoE tensor 提取到单个 `non_moe_weights.safetensors`（23 GB）
+2. 修改 `_filtered_safetensors_iterator()` 添加 Level 0 快速路径：检测到 consolidated file 时直接加载，跳过全部 shard 扫描
+3. 文件放入 `/dev/shm` cache 目录下，vLLM 启动时自动发现
+
+**效果**（与踩坑 #18 叠加后的总效果）：端到端启动从 **~7 min → ~1:48**
+
 ---
 
 ## 端到端时间线（实测）
@@ -1135,39 +1206,42 @@ fp4 = w_fp32.astype(fp4_dtype)
 | 系统依赖 + Python 环境 | ~5 min | uv + vLLM + tpu-inference |
 | 模型下载（HuggingFace） | 视网速 | 700 GB |
 | **FP4 cache 生成（CPU 并行）** | **~28 min** | gen_fp4_cache_cpu_parallel.py, 12 workers |
-| FP4 cache 拷贝到 /dev/shm | ~12-27 min | 取决于磁盘类型（Extreme ~12min, Balanced ~27min） |
-| vLLM FP4 启动 | ~7 min | 含 safetensors + MoE cache |
+| Non-MoE 权重提取 | ~3 min | extract_non_moe_weights.py, 23 GB |
+| FP4 cache + non-MoE 拷贝到 /dev/shm | ~12-27 min | 取决于磁盘类型（Extreme ~12min, Balanced ~27min） |
+| vLLM FP4 启动 | **~2 min** | consolidated non-MoE + MoE cache（需 patch，见踩坑 #18） |
 | GSM8K 测试 | ~23 min | 1319 题, exact_match 94.9% |
-| **总计（不含模型下载）** | **~80-95 min** | 一次性，后续无需重复 |
+| **总计（不含模型下载）** | **~70-85 min** | 一次性，后续无需重复 |
 
 ### 场景 2：开发迭代（改代码后重启 vLLM）
 
-> **最常见场景**：FP4 cache 已生成且已在 /dev/shm 中，修改代码后重启 vLLM。
+> **最常见场景**：FP4 cache + non-MoE consolidated 均在 /dev/shm，修改代码后重启 vLLM。
 
 | 步骤 | 耗时 | 备注 |
 |------|------|------|
 | 清理旧进程 | ~10s | kill vLLM + EngineCore + rm lockfile |
-| vLLM FP4 启动 | **~7 min** | safetensors 4:26 + MoE cache 1:22 + init 1:12 |
-| **总计** | **~7 min** | 无需重新生成或拷贝 cache |
+| vLLM FP4 启动 | **~1:48** | consolidated non-MoE 21s + MoE cache 21s + init 66s |
+| **总计** | **~2 min** | 无需重新生成或拷贝 cache |
 
-> **vLLM 启动时间拆解**（cache 已在 /dev/shm）：
+> **vLLM 启动时间拆解**（cache + consolidated non-MoE 均在 /dev/shm，已 patch `jax.clear_caches()`）：
 >
 > | 阶段 | 耗时 | 说明 |
 > |------|------|------|
-> | JAX 初始化 + 模型配置 | ~13s | mesh 创建、config 解析 |
-> | Safetensors 过滤加载 (70/163) | 4:26 | 跳过 93 个纯 MoE shard |
-> | MoE cache mmap 从 /dev/shm | 1:22 | 58 层, 1.4s/层, 零拷贝 DMA |
-> | DP Scheduler + Server init | ~22s | 8 worker 进程 + routes 注册 |
-> | **Application startup complete** | **~7 min** | |
+> | JAX 初始化 + 模型配置 | ~65s | mesh 创建、config 解析 |
+> | Non-MoE 权重加载（consolidated） | **21s** | 单文件 1367 keys, 63.8 it/s |
+> | MoE cache mmap 从 /dev/shm | **21s** | 58 层, 0.4s/层, 零拷贝 DMA |
+> | Server init | ~2s | routes 注册 |
+> | **Application startup complete** | **~1:48** | |
+>
+> 对比未优化版本（原始 70 shard 扫描 + `jax.clear_caches()`）：**7 min → 1:48（3.4x 加速）**
 
 ### 场景 3：VM 重启后（/dev/shm 被清空）
 
 | 步骤 | 耗时 | 备注 |
 |------|------|------|
 | 扩大 /dev/shm | ~1s | `sudo mount -o remount,size=800G /dev/shm` |
-| FP4 cache 拷贝到 /dev/shm | ~12-27 min | 磁盘上的 cache 还在，只需重新拷贝 |
-| vLLM FP4 启动 | ~7 min | 同场景 2 |
-| **总计** | **~20-35 min** | 无需重新生成 cache |
+| FP4 cache + non-MoE 拷贝到 /dev/shm | ~12-27 min | 磁盘上的 cache 还在，只需重新拷贝 |
+| vLLM FP4 启动 | **~2 min** | 同场景 2 |
+| **总计** | **~15-30 min** | 无需重新生成 cache |
 
 ### 已验证的软件版本组合
 
