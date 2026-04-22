@@ -80,14 +80,14 @@ spec:
       limits:
         google.com/tpu: 8
     volumeMounts:
-    - name: lustre
-      mountPath: /lustre
+    - name: data
+      mountPath: /data
     - name: dshm
       mountPath: /dev/shm
   volumes:
-  - name: lustre
+  - name: data
     persistentVolumeClaim:
-      claimName: lustre-pvc    # 替换为实际 PVC
+      claimName: data-pvc      # 见下方 PVC 创建说明
   - name: dshm
     emptyDir:
       medium: Memory
@@ -98,6 +98,29 @@ spec:
     cloud.google.com/gke-tpu-accelerator: tpu-v7x-lite-podslice
 EOF
 ```
+
+存储方案（二选一）：
+
+```bash
+# 方案 1: Hyperdisk Balanced PVC（推荐，≥2 TB）
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: data-pvc
+spec:
+  accessModes: [ReadWriteOnce]
+  storageClassName: hyperdisk-balanced
+  resources:
+    requests:
+      storage: 2Ti
+EOF
+
+# 方案 2: 如果集群已有 Lustre，直接用 Lustre PVC
+# 把上面 Pod 的 data-pvc 替换为 lustre-pvc，mountPath 改为 /lustre
+```
+
+> **存储需求**：模型 ~700 GB + FP4 cache ~610 GB = ~1.3 TB，Hyperdisk 2 TB 够用。
 
 进入 Pod：
 ```bash
