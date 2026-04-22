@@ -31,8 +31,7 @@
 TPU FP4 直转通过设置 `MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn` 实现，跳过 FP8 中间步骤，节省 ~400 GB 存储。
 
 > **cache 子目录名**由 `_get_config_cache_subdir()` 自动生成，格式 `ep{EP}_tp{TP}_{backend}_{dtype}_bs{block}`。
-> 启用 `NEW_MODEL_DESIGN=1` + DP attention 时 backend 为 `gmm_tp`；未启用时为 `gmm_ep`。
-> 两种 backend 的 weight layout 不同，**cache 不可互换**。
+> 当前验证通过的配置 backend 均为 `gmm_ep`（EP=8, TP=1），子目录名如 `ep8_tp1_gmm_ep_fp4e2m1_bsNone`。
 
 ---
 
@@ -291,7 +290,7 @@ export TI_DIR=~/tpu-inference
 > | 内容 | 大小 | 路径 |
 > |------|------|------|
 > | 模型权重 | ~700 GB | `/data/models/DeepSeek-R1` |
-> | FP4 cache | ~610 GB | `/data/moe-cache/ep8_tp1_gmm_tp_fp4e2m1_bsNone` |
+> | FP4 cache | ~610 GB | `/data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone` |
 > | **合计** | **~1.3 TB** | 2 TB 盘剩余 ~700 GB |
 >
 > 注意：使用 FP4 直转时不需要 FP8 中间 cache。两步法额外需要 ~404 GB。
@@ -495,7 +494,7 @@ python3 -m vllm.entrypoints.openai.api_server \
 等待日志出现 `Application startup complete`，然后 `Ctrl+C` 停止。
 Cache 在后台异步写入磁盘，等待全部完成后再继续。
 
-> **注意**：子目录名（如 `ep8_tp1_gmm_tp_fp4e2m1_bsNone`）由 EP/TP/backend/dtype 配置自动决定。
+> **注意**：子目录名（如 `ep8_tp1_gmm_ep_fp4e2m1_bsNone`）由 EP/TP/backend/dtype 配置自动决定。
 > 如果 cache 不足 58 层，用 `gen_missing_fp4_cache.py` 补齐（见 [FAQ](#q-cache-生成不足-58-层怎么办)）。
 
 </details>
@@ -539,7 +538,7 @@ python3 -m vllm.entrypoints.openai.api_server \
 
 验证 58 层 FP8 cache 已生成：
 ```bash
-ls $MOE_WEIGHT_CACHE_DIR/ep8_tp1_gmm_tp_fp8e4m3_bsNone/ | grep model_layers | wc -l
+ls $MOE_WEIGHT_CACHE_DIR/ep8_tp1_gmm_ep_fp8e4m3_bsNone/ | grep model_layers | wc -l
 # 预期：58
 ```
 
@@ -549,8 +548,8 @@ FP4 将 MoE 权重体积减半。纯 CPU 运算，无需 TPU。
 
 ```bash
 python3 $TI_DIR/scripts/convert_fp8_to_fp4.py \
-  --fp8-cache $MOE_WEIGHT_CACHE_DIR/ep8_tp1_gmm_tp_fp8e4m3_bsNone \
-  --fp4-cache $MOE_WEIGHT_CACHE_DIR/ep8_tp1_gmm_tp_fp4e2m1_bsNone \
+  --fp8-cache $MOE_WEIGHT_CACHE_DIR/ep8_tp1_gmm_ep_fp8e4m3_bsNone \
+  --fp4-cache $MOE_WEIGHT_CACHE_DIR/ep8_tp1_gmm_ep_fp4e2m1_bsNone \
   --workers 10
 ```
 
@@ -836,12 +835,12 @@ w2_weight = torch.stack([down_w[i] for i in range(E)])    # (E, 7168, 2048)
 完整脚本见本目录下的 [`gen_fp4_cache_optimized.py`](gen_fp4_cache_optimized.py)（带 prefetch + async save 优化）。
 
 ```bash
-# 生成 GMM_TP 格式 cache（默认写入 /dev/shm）
+# 生成 GMM_EP 格式 cache（默认写入 /dev/shm）
 cd /tmp && source ~/vllm_env/bin/activate
-python3 gen_fp4_cache_optimized.py --backend gmm_tp
+python3 gen_fp4_cache_optimized.py --backend gmm_ep
 
 # 指定自定义路径
-python3 gen_fp4_cache_optimized.py --backend gmm_tp --cache-dir /data/moe-cache/ep8_tp1_gmm_tp_fp4e2m1_bsNone
+python3 gen_fp4_cache_optimized.py --backend gmm_ep --cache-dir /data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone
 
 # 强制重新生成所有层
 python3 gen_fp4_cache_optimized.py --force
@@ -1006,15 +1005,13 @@ main thread → block_until_ready() → can't call _get_prefetched_cache() → n
 
 **修复**：将 cache 放在 `/dev/shm`（tmpfs），prefetch 线程秒完不卡 semaphore，打破死锁。或用独立 gen 脚本直接生成到 `/dev/shm`
 
-### 14. NEW_MODEL_DESIGN=1 必填 + GMM_EP→GMM_TP 切换
+### 14. NEW_MODEL_DESIGN=1 必填
 
 **现象**：不设 `NEW_MODEL_DESIGN=1` 时 vLLM 启动报错：`MLA models require both the NEW_MODEL_DESIGN=1 environment variable...`
 
 **原因**：vLLM 代码更新，MLA 架构模型（DeepSeek V3/R1）强制要求 `NEW_MODEL_DESIGN=1` + DP attention
 
-**影响**：启用后 MoE backend 从 `GMM_EP` 切换到 `GMM_TP`，cache 子目录名从 `gmm_ep` 变为 `gmm_tp`。两种 backend 的 weight layout 不同（`GMM_TP` 会做 `w13_reorder_size=EP_size` 的 chunk 重排），**旧 GMM_EP cache 不可用**
-
-**修复**：必须用新 backend 重新生成 cache。设置 `NEW_MODEL_DESIGN=1` 并加 `--additional_config` DP attention 参数
+**修复**：设置 `NEW_MODEL_DESIGN=1` 并加 `--additional_config` 的 DP attention 参数。Backend 仍为 `GMM_EP`（EP=8, TP=1）
 
 ### 15. EngineCore 孤儿进程持续占用 TPU
 
