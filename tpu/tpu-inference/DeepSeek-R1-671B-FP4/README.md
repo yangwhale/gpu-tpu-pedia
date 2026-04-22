@@ -732,14 +732,15 @@ lm_eval \
 
 以下数据在 TPU v7x-8 单节点（chrisya-tpu7-8-02）上实测。
 
-### 权重加载时间
+### 权重加载时间（cache 已在 /dev/shm）
 
 | 阶段 | 耗时 | 说明 |
 |------|------|------|
-| vLLM 初始化 | ~30s | 模型配置解析 + JAX 初始化 |
-| Safetensors 非 MoE 权重 | ~6:00 | 70/163 shards（93 MoE shards 被 cache 跳过） |
-| MoE Cache → TPU（/dev/shm） | **~0:42** | 58 层 FP4 cache, tmpfs zero-copy mmap, ~0.7s/层 |
-| **总计（/dev/shm）** | **~7:00** | 从 Docker 启动到 Application startup complete |
+| JAX 初始化 + 模型配置 | ~13s | mesh 创建、config 解析 |
+| Safetensors 过滤加载 (70/163) | 4:26 | 跳过 93 个纯 MoE shard，仅加载 23 GB |
+| MoE Cache mmap → TPU（/dev/shm） | **1:22** | 58 层 FP4 cache, 零拷贝 mmap, 1.4s/层 |
+| DP Scheduler + Server init | ~22s | 8 worker 进程启动 |
+| **Application startup complete** | **~7 min** | 开发迭代只需等这么久 |
 
 ### MoE Cache 大小
 
@@ -1125,7 +1126,7 @@ fp4 = w_fp32.astype(fp4_dtype)
 
 ## 端到端时间线（实测）
 
-从零开始到推理验证通过的完整时间线（CPU 并行 FP4 直转路径）：
+### 场景 1：首次部署（从零开始）
 
 | 步骤 | 耗时 | 备注 |
 |------|------|------|
@@ -1137,7 +1138,36 @@ fp4 = w_fp32.astype(fp4_dtype)
 | FP4 cache 拷贝到 /dev/shm | ~12-27 min | 取决于磁盘类型（Extreme ~12min, Balanced ~27min） |
 | vLLM FP4 启动 | ~7 min | 含 safetensors + MoE cache |
 | GSM8K 测试 | ~23 min | 1319 题, exact_match 94.9% |
-| **总计（不含模型下载）** | **~80-95 min** | 取决于磁盘性能 |
+| **总计（不含模型下载）** | **~80-95 min** | 一次性，后续无需重复 |
+
+### 场景 2：开发迭代（改代码后重启 vLLM）
+
+> **最常见场景**：FP4 cache 已生成且已在 /dev/shm 中，修改代码后重启 vLLM。
+
+| 步骤 | 耗时 | 备注 |
+|------|------|------|
+| 清理旧进程 | ~10s | kill vLLM + EngineCore + rm lockfile |
+| vLLM FP4 启动 | **~7 min** | safetensors 4:26 + MoE cache 1:22 + init 1:12 |
+| **总计** | **~7 min** | 无需重新生成或拷贝 cache |
+
+> **vLLM 启动时间拆解**（cache 已在 /dev/shm）：
+>
+> | 阶段 | 耗时 | 说明 |
+> |------|------|------|
+> | JAX 初始化 + 模型配置 | ~13s | mesh 创建、config 解析 |
+> | Safetensors 过滤加载 (70/163) | 4:26 | 跳过 93 个纯 MoE shard |
+> | MoE cache mmap 从 /dev/shm | 1:22 | 58 层, 1.4s/层, 零拷贝 DMA |
+> | DP Scheduler + Server init | ~22s | 8 worker 进程 + routes 注册 |
+> | **Application startup complete** | **~7 min** | |
+
+### 场景 3：VM 重启后（/dev/shm 被清空）
+
+| 步骤 | 耗时 | 备注 |
+|------|------|------|
+| 扩大 /dev/shm | ~1s | `sudo mount -o remount,size=800G /dev/shm` |
+| FP4 cache 拷贝到 /dev/shm | ~12-27 min | 磁盘上的 cache 还在，只需重新拷贝 |
+| vLLM FP4 启动 | ~7 min | 同场景 2 |
+| **总计** | **~20-35 min** | 无需重新生成 cache |
 
 ### 已验证的软件版本组合
 
