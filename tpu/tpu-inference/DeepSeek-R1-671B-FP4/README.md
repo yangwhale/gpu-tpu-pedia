@@ -348,7 +348,7 @@ export TI_DIR=~/tpu-inference
 
 ```bash
 # 安装 huggingface_hub（如果未安装）
-pip install huggingface_hub
+uv pip install huggingface_hub
 
 # 下载 DeepSeek R1
 huggingface-cli download deepseek-ai/DeepSeek-R1 \
@@ -683,7 +683,7 @@ GSM8K (Grade School Math 8K) 是评估数学推理能力的标准 benchmark。
 # 确保 vLLM 服务正在运行（Step 6）
 
 # 安装 lm_eval
-pip install lm_eval
+uv pip install lm_eval
 
 # 运行准确性测试
 python -m pytest -rP \
