@@ -102,7 +102,7 @@ EOF
 存储方案（二选一）：
 
 ```bash
-# 方案 1: Hyperdisk Balanced PVC（推荐，≥2 TB）
+# 方案 1: Hyperdisk Extreme PVC（推荐）
 kubectl apply -f - <<'EOF'
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -110,17 +110,18 @@ metadata:
   name: data-pvc
 spec:
   accessModes: [ReadWriteOnce]
-  storageClassName: hyperdisk-balanced
+  storageClassName: hyperdisk-extreme
   resources:
     requests:
-      storage: 2Ti
+      storage: 4Ti
+      iops: "20000"
 EOF
 
 # 方案 2: 如果集群已有 Lustre，直接用 Lustre PVC
 # 把上面 Pod 的 data-pvc 替换为 lustre-pvc，mountPath 改为 /lustre
 ```
 
-> **存储需求**：模型 ~700 GB + FP4 cache ~610 GB = ~1.3 TB，Hyperdisk 2 TB 够用。
+> **存储需求**：模型 ~700 GB + FP4 cache ~610 GB = ~1.3 TB。Hyperdisk Extreme 4 TB + 20K IOPS 提供充足的空间和顺序读写性能。
 
 进入 Pod：
 ```bash
