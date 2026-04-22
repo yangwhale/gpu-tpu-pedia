@@ -380,11 +380,18 @@ source ~/vllm_env/bin/activate
 ls $MODEL/*.safetensors | wc -l   # 预期: 163
 df -h $STORAGE                     # 需要 ~620 GB 可用空间
 
+# 获取 gen 脚本（与本 README 同目录）
+# GKE:  cp $TI_DIR/../gpu-tpu-pedia/.../gen_fp4_cache_cpu_parallel.py /tmp/
+# TPU VM: 直接从 repo 运行
+export GEN_SCRIPT=$TI_DIR/../gpu-tpu-pedia/tpu/tpu-inference/DeepSeek-R1-671B-FP4/gen_fp4_cache_cpu_parallel.py
+# 如果 gpu-tpu-pedia 未 clone，可单独下载：
+# curl -LO https://raw.githubusercontent.com/yangwhale/gpu-tpu-pedia/main/tpu/tpu-inference/DeepSeek-R1-671B-FP4/gen_fp4_cache_cpu_parallel.py
+# export GEN_SCRIPT=./gen_fp4_cache_cpu_parallel.py
+
 # 启动 CPU 并行 FP4 cache 生成
 # --workers: 并行数，根据可用 RAM 调整（每 worker peak ~70 GB）
 # 例: 944 GB RAM 的 v7x-8 机器可开 12 workers
-cd /tmp
-python3 -u gen_fp4_cache_cpu_parallel.py \
+python3 -u $GEN_SCRIPT \
   --model-dir $MODEL \
   --cache-dir $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone \
   --workers 12
@@ -471,7 +478,8 @@ df -h /dev/shm
 
 # 如果空间足够：
 time cp -r $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone /dev/shm/
-# 约 12 分钟
+# Hyperdisk Balanced 2TB: ~27 分钟 (~383 MB/s)
+# Hyperdisk Extreme 4TB: ~12 分钟 (~850 MB/s)
 
 # 后续启动时指向 /dev/shm
 export MOE_WEIGHT_CACHE_DIR=/dev/shm
@@ -759,11 +767,11 @@ lm_eval \
 
 ### FP4 Cache 拷贝到 /dev/shm
 
-| 项目 | 数据 |
-|------|------|
-| 拷贝时间 | ~12 分钟 |
-| 数据量 | 610 GB |
-| 吞吐 | ~850 MB/s（PD → tmpfs） |
+| 项目 | Hyperdisk Balanced 2TB | Hyperdisk Extreme 4TB |
+|------|----------------------|----------------------|
+| 拷贝时间 | ~27 分钟 | ~12 分钟 |
+| 数据量 | 610 GB | 610 GB |
+| 吞吐 | ~383 MB/s | ~850 MB/s |
 
 ### GSM8K 准确性
 
@@ -1126,10 +1134,10 @@ fp4 = w_fp32.astype(fp4_dtype)
 | 系统依赖 + Python 环境 | ~5 min | uv + vLLM + tpu-inference |
 | 模型下载（HuggingFace） | 视网速 | 700 GB |
 | **FP4 cache 生成（CPU 并行）** | **~28 min** | gen_fp4_cache_cpu_parallel.py, 12 workers |
-| FP4 cache 拷贝到 /dev/shm | ~12 min | 610 GB, ~850 MB/s |
+| FP4 cache 拷贝到 /dev/shm | ~12-27 min | 取决于磁盘类型（Extreme ~12min, Balanced ~27min） |
 | vLLM FP4 启动 | ~7 min | 含 safetensors + MoE cache |
 | GSM8K 测试 | ~23 min | 1319 题, exact_match 94.9% |
-| **总计（不含模型下载）** | **~80 min** | 比旧方案（~2h）快 33% |
+| **总计（不含模型下载）** | **~80-95 min** | 取决于磁盘性能 |
 
 ### 已验证的软件版本组合
 
