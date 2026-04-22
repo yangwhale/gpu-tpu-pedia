@@ -326,17 +326,19 @@ export TI_DIR=~/tpu-inference
 # 通用步骤（GKE 和 TPU VM 共用）
 
 以下步骤在两种部署方式中通用。路径变量说明：
-- **GKE (Part A)**：`$STORAGE` 通常是 `/lustre`，代码在 `/workspace/tpu_inference`
+- **GKE (Part A)**：`$STORAGE` 取决于挂载的存储类型，代码在 `/workspace/tpu_inference`
 - **TPU VM (Part B)**：`$STORAGE` 取决于 B-5 的选择，代码在 `~/tpu-inference`
 
 ```bash
 # 设置通用变量（根据实际情况调整）
-# GKE:
-export STORAGE=/lustre
+# GKE（按实际挂载选一个）:
+export STORAGE=/data       # Hyperdisk Extreme PVC
+# export STORAGE=/lustre   # Lustre PVC
+# export STORAGE=/gcs      # GCS FUSE
 export TI_DIR=/workspace/tpu_inference
 
 # TPU VM:
-export STORAGE=/mnt/data    # 或 /gcs 或 /lustre
+export STORAGE=/data       # Hyperdisk（B-1 挂载）
 export TI_DIR=~/tpu-inference
 ```
 
