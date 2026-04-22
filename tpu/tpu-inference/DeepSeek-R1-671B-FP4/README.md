@@ -597,8 +597,8 @@ cd /tmp
 
 python3 -m vllm.entrypoints.openai.api_server \
   --model $MODEL \
-  --tensor-parallel-size 8 \
-  --quantization fp8 \
+  --tensor-parallel-size 8 \                   # ⚠️ 这是总设备数，不是 TP！实际 TP=1，见下方 additional-config
+  --quantization fp8 \                         # ⚠️ vLLM 量化 schema 名称，MoE 实际用 FP4（由环境变量控制）
   --enforce-eager \
   --enable-prefix-caching \
   --enable-chunked-prefill \
@@ -624,17 +624,16 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 
 ### 关键参数说明
 
-| 参数 | 说明 |
-|------|------|
-| `--tensor-parallel-size 8` | 使用全部 8 个 TPU devices |
-| `--quantization fp8` | 启用 FP8 量化 schema（MoE 部分实际用 FP4） |
-| `--enforce-eager` | Eager 模式，避免 XLA tracing 开销 |
-| `--enable-prefix-caching` | 启用 KV cache 前缀复用 |
-| `--enable-chunked-prefill` | 分块预填充 |
-| `--max-model-len 4096` | 最大序列长度 |
-| `expert_parallelism: 8` | EP=8，每个 device 处理 32 experts |
-| `tensor_parallelism: 1` | TP=1（attention 用 DP 代替） |
-| `sparse_matmul: True` | 稀疏矩阵乘法优化 |
+| 参数 | 实际含义 | 容易误解的点 |
+|------|----------|-------------|
+| `--tensor-parallel-size 8` | 总设备数（8 个 TPU devices） | **不是 TP=8**。实际并行策略由 `additional-config` 控制：EP=8, TP=1 |
+| `--quantization fp8` | vLLM 量化 schema 名称 | **不是 FP8 推理**。vLLM CLI 没有 `fp4` 选项，MoE 的 FP4 量化由 `MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn` 环境变量控制 |
+| `--enforce-eager` | Eager 模式，避免 XLA tracing 开销 | |
+| `--enable-prefix-caching` | 启用 KV cache 前缀复用 | |
+| `--max-model-len 4096` | 最大序列长度 | |
+| `expert_parallelism: 8` | EP=8，256 experts ÷ 8 = 每 device 32 experts | 这才是真正的并行策略 |
+| `tensor_parallelism: 1` | TP=1，attention 权重用 DP（replicate）代替切分 | |
+| `sparse_matmul: True` | 稀疏矩阵乘法优化 | |
 
 ---
 
