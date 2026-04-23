@@ -465,23 +465,34 @@ python3 validate_weights.py $MODEL $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsN
 df -h /dev/shm
 # 需要 ≥800 GB（FP4 cache 735G + non-MoE 21.5G ≈ 757G）
 
-time cp -r $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone /dev/shm/
+# 并行拷贝（推荐，~3 GB/s，约 4 min）
+SRC=$STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone
+DST=/dev/shm/ep8_tp1_gmm_ep_fp4e2m1_bsNone
+mkdir -p $DST
+# 先拷 non-MoE 权重
+cp $SRC/non_moe_weights.safetensors $DST/
+# 再并行拷 76 层 MoE cache（8 workers）
+ls -d $SRC/model_layers_* | xargs -P 8 -I {} cp -r {} $DST/
+
 export MOE_WEIGHT_CACHE_DIR=/dev/shm
 ```
 
-> **已验证**：GLM-5.1 FP4 cache 实测 **~735 GB**（76 层 npy），加 non-MoE 21.5 GB = **~757 GB**。
+> **不要用 `cp -r` 单线程拷贝**！单线程只有 ~1.5 GB/s，757 GB 要 ~8 min。
+> 用 `xargs -P 8` 并行拷贝可达 ~3.0 GB/s，**~4 min** 完成（实测 176s/60 层）。
+>
+> **已验证（2026-04-23）**：GLM-5.1 FP4 cache 实测 **~735 GB**（76 层 npy），加 non-MoE 21.5 GB = **~757 GB**。
 > v7x-8 的 944 GB RAM 够用（/dev/shm 800G，实际占用 757G）。
 > 比 DeepSeek R1（~610 GB）大 ~147 GB。
 
-### Step 5b: 提取并拷贝 Non-MoE 权重
+### Step 5b: 提取 Non-MoE 权重（如果还没提取）
+
+Non-MoE 权重在 Step 4 已生成到 cache 目录，上面的并行拷贝命令已包含。
+如果需要重新提取：
 
 ```bash
 python3 extract_non_moe_weights.py \
   --model-dir $MODEL \
   --output $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone/non_moe_weights.safetensors
-
-cp $STORAGE/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone/non_moe_weights.safetensors \
-   /dev/shm/ep8_tp1_gmm_ep_fp4e2m1_bsNone/
 
 ls -lh /dev/shm/ep8_tp1_gmm_ep_fp4e2m1_bsNone/non_moe_weights.safetensors
 # 预期：~21 GB
