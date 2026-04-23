@@ -626,10 +626,22 @@ python3 $TI_DIR/scripts/convert_fp8_to_fp4.py \
 
 ## Step 6: 启动 vLLM 推理服务
 
+> ⚠️ **必读：三个环境变量缺一不可，漏设任何一个都会启动失败或 OOM！**
+>
+> | 环境变量 | 值 | 漏设后果 |
+> |---------|-----|---------|
+> | `MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn` | **必须设** | 代码默认查找 FP8 cache 目录 → cache miss → 尝试 FP8 requantization → **HBM OOM**（568 GB vs 94.75 GB/device） |
+> | `NEW_MODEL_DESIGN=1` | **必须设** | MLA 模型强制要求，不设直接报错退出 |
+> | `MOE_WEIGHT_CACHE_DIR=/dev/shm` | **必须设** | 不设则无法找到预生成的 FP4 cache，触发在线 requantization |
+>
+> **`MOE_REQUANTIZE_WEIGHT_DTYPE` 是最容易遗漏也最致命的**：它控制 `_get_config_cache_subdir()` 生成的 cache 子目录名。
+> 不设时 dtype 默认为 `"fp8"`，子目录变成 `ep8_tp1_gmm_ep_fp8e4m3_bsNone`，而你生成的 FP4 cache 在 `ep8_tp1_gmm_ep_fp4e2m1_bsNone`，
+> 导致 58 层全部 cache miss。详见[踩坑 #22](#22-moe_requantize_weight_dtype-漏设导致-fp8-cache-miss--hbm-oom)。
+
 ```bash
-export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn
-export NEW_MODEL_DESIGN=1
-# MOE_WEIGHT_CACHE_DIR 沿用 Step 4/5 的设置
+export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # ⚠️ 控制 FP4 cache 查找，漏设 = OOM
+export NEW_MODEL_DESIGN=1                           # MLA 模型必须
+export MOE_WEIGHT_CACHE_DIR=/dev/shm                # 指向 cache 根目录（Step 5 拷贝的位置）
 
 # 重要：cd 到非 ~/vllm 的目录，避免 Python namespace 冲突
 cd /tmp
@@ -771,11 +783,11 @@ lm_eval \
 | Non-MoE 权重加载 | 4:26 (70 shards) | **21s** | **25-108s** | warm: pjit cache 命中；cold: 25 unique shapes 需重新编译 |
 | MoE Cache mmap → TPU | 1:22 | **21s** | **63s** | /dev/shm tmpfs；cold 多出 pjit 编译开销 |
 | Server init | ~22s | ~2s | ~2s | |
-| **Application startup complete** | **~7 min** | **~1:48** | **~3:17-3:41** | warm 需同进程连续启动（见[踩坑 #20](#20-pjit-compiled-transfer-cache-不持久化)） |
+| **Application startup complete** | **~7 min** | **~1:48** | **~3:17-3:51** | warm 需同进程连续启动（见[踩坑 #20](#20-pjit-compiled-transfer-cache-不持久化)） |
 
 > **warm vs cold 启动**：
 > - **warm**（~1:48）：同一进程连续重启，pjit compiled transfer programs 仍在内存中，权重传输跳过编译
-> - **cold**（~3:17-3:41）：进程重启后 pjit cache 丢失，25 种 unique tensor shapes 全部重新编译。**这是常见场景**
+> - **cold**（~3:17-3:51）：进程重启后 pjit cache 丢失，25 种 unique tensor shapes 全部重新编译（~22s）。**这是常见场景**
 >
 > **两个关键优化**（详见[踩坑 #18](#18-jaxclear_caches-性能-bug-—-注释一行快-10x)和[踩坑 #19](#19-non-moe-权重-consolidated-file-优化)）：
 > 1. 注释 `jax.clear_caches()`：non-MoE 加载从 216s → **21-108s**（2-10x，取决于 cold/warm）
@@ -827,13 +839,13 @@ lm_eval \
 
 ## 环境变量参考
 
-| 变量 | 说明 | 示例值 |
-|------|------|--------|
-| `MOE_WEIGHT_CACHE_DIR` | MoE 权重缓存根目录 | `$STORAGE/moe-cache` |
-| `MOE_REQUANTIZE_WEIGHT_DTYPE` | MoE 目标量化类型 | `float4_e2m1fn` |
-| `NEW_MODEL_DESIGN` | 启用 MLA 模型设计 | `1` |
-| `MOE_REQUANTIZE_BLOCK_SIZE` | 量化块大小 | `512`（可选） |
-| `MOE_PARALLEL_WORKERS` | 并行 requant 线程数 | `1`（默认） |
+| 变量 | 说明 | 示例值 | 必填 |
+|------|------|--------|------|
+| `MOE_REQUANTIZE_WEIGHT_DTYPE` | **MoE 目标量化类型** — 控制 cache 子目录名，漏设会查找 FP8 目录导致 OOM | `float4_e2m1fn` | ⚠️ **必填** |
+| `NEW_MODEL_DESIGN` | 启用 MLA 模型设计，DeepSeek V3/R1 强制要求 | `1` | ⚠️ **必填** |
+| `MOE_WEIGHT_CACHE_DIR` | MoE 权重缓存根目录（代码自动拼接 `{root}/{config_subdir}/`） | `/dev/shm` | ⚠️ **必填** |
+| `MOE_REQUANTIZE_BLOCK_SIZE` | 量化块大小 | `512`（可选） | 可选 |
+| `MOE_PARALLEL_WORKERS` | 并行 requant 线程数 | `1`（默认） | 可选 |
 
 ---
 
@@ -1204,7 +1216,7 @@ del jax_weight
 
 ### 20. pjit compiled transfer cache 不持久化
 
-**现象**：vLLM 进程重启后启动时间从 1:48 退化到 3:17-3:41，non-MoE 加载从 21s 退化到 25-108s，MoE 加载从 21s 退化到 63s
+**现象**：vLLM 进程重启后启动时间从 1:48 退化到 3:17-3:51，non-MoE 加载从 21s 退化到 25-108s，MoE 加载从 21s 退化到 63s
 
 **原因**：`jax.device_put()` 内部的 pjit compiled transfer programs 缓存在进程内存中（C++ LRU cache），不会持久化到磁盘。DeepSeek R1 的 1367 个 non-MoE tensor 只有 ~25 种 unique (shape, sharding) 组合，warm 状态下命中 cache 跳过编译。进程重启后 cache 清空，所有 25 种 shape 重新编译
 
@@ -1213,15 +1225,45 @@ del jax_weight
 |------|--------------|---------------|
 | Non-MoE 加载 | 21s | 25-108s |
 | MoE cache 加载 | 21s | 63s |
-| 总启动 | ~1:48 | ~3:17-3:41 |
+| 总启动 | ~1:48 | ~3:17-3:51 |
 
 **验证环境**：
 | 场景 | 启动时间 | Non-MoE | MoE | 日期 |
 |------|----------|---------|-----|------|
-| TPU VM (chrisya-tpu7-8-02) cold | 3:41 | 108.5s | 63s | 2026-04-22 |
+| TPU VM (chrisya-tpu7-8-02) cold #1 | 3:41 | 108.5s | 63s | 2026-04-22 |
+| TPU VM (chrisya-tpu7-8-02) cold #2 | 3:51 | 108s | 24s | 2026-04-22 |
+| TPU VM (chrisya-tpu7-8-02) cold #3 | 3:44 | 108s | 24s | 2026-04-22 |
 | GKE (chrisya-v7x-v134, e2e pod) cold | 3:17 | 25.5s | 63.2s | 2026-04-22 |
 
-**教训**：文档中的 "~1:48" 只有在同一 vLLM 进程连续 reload 权重时才成立。实际开发迭代中每次 kill 进程再启动，**cold start 3:17-3:41 才是真实启动时间**。未来可考虑 JAX 的 compilation cache 持久化（`jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")`）
+**教训**：文档中的 "~1:48" 只有在同一 vLLM 进程连续 reload 权重时才成立。实际开发迭代中每次 kill 进程再启动，**cold start 3:17-3:51 才是真实启动时间**。未来可考虑 JAX 的 compilation cache 持久化（`jax.config.update("jax_compilation_cache_dir", "/tmp/jax_cache")`）
+
+### 22. `MOE_REQUANTIZE_WEIGHT_DTYPE` 漏设导致 FP8 cache miss → HBM OOM
+
+**现象**：vLLM 启动后日志显示所有 58 层 MoE "cache miss"（`Cache miss for layer X`），随后 XLA 编译报 `RESOURCE_EXHAUSTED: CompileTimeHbmOom`，需要 568.87 GB/device 但只有 94.75 GB 可用
+
+**原因**：`MOE_REQUANTIZE_WEIGHT_DTYPE` 环境变量未设置时，`fp8.py:_get_config_cache_subdir()` 中的逻辑默认 dtype 为 `"fp8"`：
+
+```python
+# fp8.py:302
+dtype_str = envs.MOE_REQUANTIZE_WEIGHT_DTYPE or "fp8"
+```
+
+这导致代码查找 `ep8_tp1_gmm_ep_fp8e4m3_bsNone/` 子目录，而你生成的 FP4 cache 在 `ep8_tp1_gmm_ep_fp4e2m1_bsNone/`。
+所有 58 层 cache miss → 尝试从 safetensors 在线 requantize 为 FP8 → FP8 MoE 权重 ~101.8 GB/device 超出 94.75 GB HBM → OOM
+
+**修复**：启动 vLLM 前 **必须** 设置：
+```bash
+export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # 不是 "fp4"，必须是完整的 JAX dtype 名
+```
+
+**常见变体错误**：
+- 完全不设 → 默认 FP8 → cache miss → OOM
+- 设为 `"fp4"` → 子目录名变成 `..._fp4_...` 而非 `..._fp4e2m1_...` → 仍然 cache miss
+- 设为 `"float4"` → 同上
+
+**教训**：这是**最容易遗漏也最致命**的环境变量。其他两个（`NEW_MODEL_DESIGN=1` 和 `MOE_WEIGHT_CACHE_DIR`）漏设会直接报错退出，容易发现。
+而 `MOE_REQUANTIZE_WEIGHT_DTYPE` 漏设时 vLLM 会**静默启动 FP8 模式**并尝试在线 requantize，直到 XLA 编译阶段才 OOM 崩溃，
+且错误信息 (`CompileTimeHbmOom`) 不提示根因是环境变量问题，排查困难
 
 ### 21. npy_v1 cache 的 meta.json 格式要求
 
@@ -1262,7 +1304,7 @@ del jax_weight
 | **FP4 cache 生成（CPU 并行）** | **~28 min** | gen_fp4_cache_cpu_parallel.py, 12 workers |
 | Non-MoE 权重提取 | ~3 min | extract_non_moe_weights.py, 23 GB |
 | FP4 cache + non-MoE 拷贝到 /dev/shm | ~12-27 min | 取决于磁盘类型（Extreme ~12min, Balanced ~27min） |
-| vLLM FP4 启动（cold start） | **~3:17-3:41** | consolidated non-MoE + MoE cache + pjit 编译（需 patch，见踩坑 #18） |
+| vLLM FP4 启动（cold start） | **~3:17-3:51** | consolidated non-MoE + MoE cache + pjit 编译（需 patch，见踩坑 #18） |
 | GSM8K 测试 | ~23 min | 1319 题, exact_match 94.9% |
 | **总计（不含模型下载）** | **~70-85 min** | 一次性，后续无需重复 |
 
@@ -1274,7 +1316,7 @@ del jax_weight
 | 步骤 | 耗时 | 备注 |
 |------|------|------|
 | 清理旧进程 | ~10s | kill vLLM + EngineCore + `fuser /dev/vfio/*` + rm lockfile |
-| vLLM FP4 启动（cold） | **~3:17-3:41** | pjit cache 需重新编译 |
+| vLLM FP4 启动（cold） | **~3:17-3:51** | pjit cache 需重新编译（25 shapes, ~22s） |
 | **总计** | **~3.5-4 min** | 无需重新生成或拷贝 cache |
 
 > **vLLM 启动时间拆解**（实测对比，cache + consolidated non-MoE 均在 /dev/shm，已 patch `jax.clear_caches()`）：
@@ -1285,11 +1327,11 @@ del jax_weight
 > | Non-MoE 权重加载（consolidated） | **108.5s** | **25.5s** | cold start 需重新编译 pjit transfer programs |
 > | MoE cache mmap 从 /dev/shm | **63s** | **63.2s** | 58 层，含 pjit 编译开销 |
 > | Server init | ~2s | ~29s | routes 注册 |
-> | **Application startup complete** | **~3:41** | **~3:17** | cold start（进程重启后） |
+> | **Application startup complete** | **~3:44-3:51** | **~3:17** | cold start（进程重启后） |
 >
 > **warm start 参考值**（同一进程连续重启，pjit cache 命中）：Non-MoE 21s + MoE 21s = **~1:48**
 >
-> 对比未优化版本（原始 70 shard 扫描 + `jax.clear_caches()`）：**7 min → 3:17-3:41（cold）/ 1:48（warm）**
+> 对比未优化版本（原始 70 shard 扫描 + `jax.clear_caches()`）：**7 min → 3:17-3:51（cold）/ 1:48（warm）**
 
 ### 场景 3：VM 重启后（/dev/shm 被清空）
 
@@ -1297,7 +1339,7 @@ del jax_weight
 |------|------|------|
 | 扩大 /dev/shm | ~1s | `sudo mount -o remount,size=800G /dev/shm` |
 | FP4 cache + non-MoE 拷贝到 /dev/shm | ~12-27 min | 磁盘上的 cache 还在，只需重新拷贝 |
-| vLLM FP4 启动 | **~2 min** | 同场景 2 |
+| vLLM FP4 启动 | **~3:17-3:51** | 同场景 2（cold start） |
 | **总计** | **~15-30 min** | 无需重新生成 cache |
 
 ### 已验证的软件版本组合
@@ -1318,8 +1360,18 @@ del jax_weight
 
 | 场景 | 存储 | 启动时间（cold） | 推理验证 | 备注 |
 |------|------|-----------------|----------|------|
-| TPU VM 裸机 (chrisya-tpu7-8-02) | Hyperdisk 2TB + /dev/shm 800G | 3:41 | 2+3=5 ✅ | 推荐开发测试 |
+| TPU VM 裸机 (chrisya-tpu7-8-02) | Hyperdisk 2TB + /dev/shm 800G | 3:41 → 3:44-3:51 | 2+3=5 ✅ | 推荐开发测试 |
 | GKE + Docker (chrisya-v7x-v134) | Lustre PVC + /dev/shm 800G | 3:17 | 2+3=5 ✅ | 需 patch weight_utils.py |
+
+> **TPU VM 多次 cold start 实测**（2026-04-22，kill→restart 循环）：
+>
+> | 次数 | 总启动时间 | JAX 初始化 | Non-MoE 加载 | MoE Cache | pjit 编译+Init |
+> |------|-----------|-----------|-------------|-----------|---------------|
+> | 第 1 次 | **231s (3:51)** | ~73s | 108s | 24s | 22s |
+> | 第 2 次 | **224s (3:44)** | ~73s | 108s | 24s | 22s |
+>
+> 说明：pjit compiled transfer programs 有 **25 种 unique tensor shapes**，每次 cold start 需全部重新编译（~22s）。
+> 编译缓存仅在进程内存中（C++ LRU cache），不持久化到磁盘，因此每次 kill 后重启都是 cold start。
 
 > **GKE 特殊注意事项**：
 > - Docker 镜像中的 tpu-inference 需要手动 patch（注释 `jax.clear_caches()` + 添加 consolidated non-MoE 快速路径）
