@@ -1,5 +1,7 @@
 # DeepSeek R1 671B FP4 Inference on TPU v7x-8
 
+> 🌐 **Languages** | **语言**: **中文** · [English](README.en.md)
+
 > 端到端指南：在单节点 TPU v7x-8 上运行 DeepSeek R1 671B（FP4 量化）推理，
 > 包含环境搭建、权重缓存生成、FP4 转换、vLLM 服务启动、以及 GSM8K 准确性验证。
 >

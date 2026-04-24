@@ -1,5 +1,7 @@
 # GLM-5.1 754B FP4 Inference on TPU v7x-8
 
+> 🌐 **Languages** | **语言**: **中文** · [English](README.en.md)
+
 > 端到端指南：在单节点 TPU v7x-8 上运行 GLM-5.1 754B（FP4 量化）推理。
 > 新手按照步骤走即可完成全流程。
 >
