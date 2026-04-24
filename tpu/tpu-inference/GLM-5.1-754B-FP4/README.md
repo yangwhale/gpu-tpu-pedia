@@ -352,6 +352,35 @@ curl -s http://localhost:8000/health
 | KV cache | 2,309,120 tokens |
 | MoE cache | 75/75 层全部 hit（FP4） |
 
+### 质量评测：GSM8K 数学推理（2026-04-24，全量 1319 题）
+
+| 指标 | 值 |
+|------|-----|
+| **测试集** | GSM8K test (1,319 题) |
+| **准确率 (flexible-extract)** | **87.49% ± 0.91%** |
+| 评测工具 | lm-evaluation-harness 0.4.9.2 |
+| Prompt | 0-shot CoT (gsm8k_cot_zeroshot) |
+| 生成参数 | greedy (temp=0), max_gen_toks=3500 |
+| 量化 | FP4 (E2M1) MoE + FP8 attention |
+| 评测耗时 | ~20 min (concurrency=64) / ~32 min (concurrency=16) |
+
+**输出格式说明**：GLM-5.1 是 thinking 模型，输出格式为 `<think>...</think> The answer is N`。
+- ✅ flexible-extract（提取最后数字）：**87.49%** — 真实分数
+- ❌ strict-match（要求 `#### N` 格式）：11.68% — 无效，GLM 不用此格式
+
+**二次验证（v4，2026-04-24）**：
+- 用 `--reasoning-parser glm45` 启动的新 vLLM + concurrency=16 重跑全量 1319 题
+- flexible-extract 结果：**0.8749052312357847**（与 full run 字符级一致）→ 数字稳定收敛、可重现
+- strict-match 降至 2.05%（reasoning-parser 改变 content 格式导致 regex 不匹配，不影响 flexible 提取）
+- 高并发 (64) 在新 vLLM 上会触发 retry storm（v3 失败案例）；concurrency=16 是稳定 baseline
+
+**Caveat：max_gen_toks 截断**：
+- 11.4% 题目输出长度 > 3,000 chars（接近 max_gen_toks=3500 上限）
+- max-model-len=4096 限制了 reasoning 完整展开空间
+- 假设截断题目一半答错，"无截断"理论上限约 92%；要彻底验证需重启 vLLM 调大 max-model-len（成本 ~14 min cold start）
+
+**对比**：DeepSeek R1 671B FP8（NVIDIA 官方测试）GSM8K 94.92%，GLM-5.1 754B FP4 与之差距约 7 个百分点，符合两个模型定位差异（R1 是 reasoning-first 旗舰，GLM-5.1 定位 agentic engineering — 在 SWE-Bench Pro / CyberGym / BrowseComp 上是开源 SOTA）。
+
 ---
 
 ## 常见问题排查
