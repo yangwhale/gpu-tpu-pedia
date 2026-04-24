@@ -7,6 +7,17 @@
 >
 > **模型**: [zai-org/GLM-5.1-FP8](https://huggingface.co/zai-org/GLM-5.1-FP8)（142 safetensors, 705 GB）
 
+## 🎯 关键性能（实测 2026-04-24, TPU v7x-8 4 chips, FP4）
+
+| 操作点 | 并发 | Throughput | tok/s/chip | tok/s/user | TPOT |
+|--------|-----|-----------|------------|-----------|------|
+| 🚀 Max Throughput | 128 | **2,569 tok/s** | **642** | 20.1 | 45 ms |
+| ⚖️ Balanced | 64 | 1,570 tok/s | 393 | 24.6 | 38 ms |
+| 💨 Low Latency | 4 | 130 tok/s | 33 | 32.6 | 30 ms |
+
+> **完整 Benchmark 报告**: [cc.higcp.com/pages/glm51-inference-benchmark-20260424.html](https://cc.higcp.com/pages/glm51-inference-benchmark-20260424.html)
+> **vs DeepSeek R1**: GLM-5.1 在 p16-p128 范围 **快 2.7-3.5×**（详见下方 Benchmark 章节）
+
 ---
 
 ## ⚠️ 三个必设环境变量
@@ -42,8 +53,10 @@
 | 总层数 | 78（layer 0-77 标准 + layer 78 MTP） |
 | MoE 层数 | 75（layer 3-77，MTP layer 78 推理时跳过） |
 | Dense 前几层 | 3（layer 0-2） |
-| 量化方案 | FP4 MoE experts + FP8 attention |
-| FP4 MoE HBM | ~45.3 GB/device（8 devices 可放下） |
+| 量化方案 | FP4 MoE experts + FP8 attention + BF16 non-MoE |
+| FP4 MoE HBM | ~27.5 GB/device（EP=8 分片，220 GB total ÷ 8） |
+| Non-MoE HBM | ~21 GB/device（replicate 在 8 个 device） |
+| 总 HBM 占用 | **58.43 GB/device (61.6%)**，剩 36 GB 给 KV cache |
 
 ### 与 DeepSeek R1 的关键差异
 
@@ -415,15 +428,20 @@ ls /dev/shm/
 | Server init + warmup | ~25s | ~25s | KV cache + DPScheduler |
 | **总启动时间** | **~10m44s** | **~4-6 min** | 优化项见下方 |
 
-### HBM 占用
+### HBM 占用（实测 GKE E2E pod）
 
-| 组件 | 每 device |
-|------|----------|
-| MoE Expert（EP=8 分片） | ~45.3 GB |
-| 非 MoE 权重（replicate） | ~21 GB |
-| 系统开销 | ~5 GB |
-| **可用 KV cache** | **~24 GB** |
-| HBM 总量 | 94.75 GB |
+| 组件 | 每 device | 备注 |
+|------|----------:|------|
+| MoE Expert（FP4, EP=8 分片） | ~27.5 GB | 220 GB total ÷ 8 devices |
+| 非 MoE 权重（replicate） | ~21 GB | attention + embedding + dense |
+| 系统开销（KV cache 元数据等） | ~10 GB | XLA scratch, runtime |
+| **已占用** | **58.43 GB (61.6%)** | 实测值 |
+| **可用 KV cache** | **~36 GB** | 94.75 − 58.43 |
+| **支持 KV tokens** | **2,309,120** | 实测，max-model-len=4096 |
+| HBM 总量 / device | 94.75 GB | 8 devices × 94.75 = 758 GB usable |
+
+> **说明**：4 chips × 192 GB raw HBM = 768 GB，但每 device 暴露 94.75 GB（runtime 占用差额）。
+> Non-MoE 权重在 8 个 device 上各保留一份完整副本（共 168 GB across 8 devices），不分片。
 
 ### FP4 Cache 生成
 
@@ -432,6 +450,59 @@ ls /dev/shm/
 | **CPU 并行直转** ⭐ | **~28 min** | 纯 numpy，12 workers |
 | Non-MoE 提取 | ~2 min | 2292 keys → 21 GB |
 | 拷贝到 /dev/shm | ~4 min | xargs -P 8 并行 |
+
+---
+
+## 推理性能 Benchmark（实测 2026-04-24，TPU v7x-8）
+
+> **测试工具**: EvalScope perf v1.6.0 &nbsp;|&nbsp; **方法**: 每个并发先跑 1 轮预热（discarded）再跑 1 轮 recording &nbsp;|&nbsp; **完整报告**: [cc.higcp.com/pages/glm51-inference-benchmark-20260424.html](https://cc.higcp.com/pages/glm51-inference-benchmark-20260424.html)
+
+### 1K input / 1K output（短对话场景）
+
+| Concurrency | Output tok/s | tok/s/chip | TTFT (s) | TPOT (ms) | tok/s/user | Latency (s) |
+|------------:|-------------:|-----------:|---------:|----------:|-----------:|------------:|
+|           1 |         28.4 |        7.1 |    0.534 |        35 |       28.4 |       36.07 |
+|           2 |         56.6 |       14.1 |    0.531 |        35 |       28.3 |       36.19 |
+|           4 |        130.5 |       32.6 |    0.510 |        30 |       32.6 |       31.39 |
+|           8 |        254.4 |       63.6 |    0.528 |        31 |       31.8 |       32.20 |
+|          16 |        444.8 |      111.2 |    1.016 |        35 |       27.8 |       36.83 |
+|          32 |        788.2 |      197.1 |    1.974 |        39 |       24.7 |       41.53 |
+|          64 |    **1,570** |  **392.5** |    3.174 |        38 |       24.6 |       41.67 |
+|     **128** | **2,569.1**  |  **642.3** |    4.870 |        45 |       20.1 |       50.89 |
+
+**关键 Pareto 操作点：**
+
+| 操作点 | 并发 | Throughput | tok/s/user | TPOT | 适用场景 |
+|--------|-----|-----------|-----------|------|---------|
+| 🚀 **Max Throughput** | 128 | 2,569 tok/s (642/chip) | 20.1 | 45 ms | 离线批处理 |
+| ⚖️ **Balanced** | 64 | 1,570 tok/s (393/chip) | 24.6 | 38 ms | 中等负载在线服务 |
+| 💨 **Low Latency** | 4 | 130 tok/s (33/chip) | 32.6 | 30 ms | 交互式对话 |
+
+**关键发现：**
+
+- ✅ **Throughput 线性扩展** — p1 → p128 throughput 增长 90×，对应并发增长 128×，scaling 效率 70%
+- ✅ **未饱和** — p128 仍在线性区间，预期 p256/p512 还有提升空间
+- ✅ **TTFT 可预测** — 即使 p128 也只有 4.87s，无 R1 在中等并发的 TTFT 异常
+- ✅ **100% 成功率** — 所有 8 个并发级别全部 success rate 100%
+
+### 与 DeepSeek R1 671B FP4 对比（同一 TPU v7x-8 硬件）
+
+| Parallel | GLM-5.1 (tok/s/chip) | DeepSeek R1 (tok/s/chip) | GLM/R1 |
+|---------:|--------------------:|-----------------------:|:------:|
+|        1 |                 7.1 |                    9.4 |  0.76× |
+|        4 |                32.6 |                   36.7 |  0.89× |
+|       16 |               111.2 |                   41.2 | **2.70×** |
+|       64 |               392.5 |                  113.3 | **3.46×** |
+|      128 |               642.3 |                  230.7 | **2.78×** |
+
+> **观察**：GLM-5.1 在中等并发 (p16-p128) 全面优于 R1，与 GLM 架构"更瘦长"（hidden 6144 vs 7168, 层数 78 vs 61）一致 — 单 token 计算量小、batch 调度效率高。R1 优势在 p256+ 的 throughput 上限（p2048 达 1,827 tok/s/chip）。
+
+### 长上下文场景（待测）
+
+| 场景 | 状态 |
+|------|------|
+| 8K input / 1K output | ⏳ 待测试（需重启 vLLM 调大 max-model-len 至 16384+） |
+| 1K input / 8K output | ⏳ 待测试 |
 
 ---
 
@@ -498,6 +569,8 @@ Step 7: curl 验证推理
 
 | 资源 | 链接 |
 |------|------|
+| **🎯 推理性能 Benchmark 报告** | [cc.higcp.com/pages/glm51-inference-benchmark-20260424.html](https://cc.higcp.com/pages/glm51-inference-benchmark-20260424.html) |
+| DeepSeek R1 FP4 推理 Benchmark | [cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html](https://cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html) |
 | DeepSeek R1 FP4 推理指南（完整版） | [../DeepSeek-R1-671B-FP4/README.md](../DeepSeek-R1-671B-FP4/README.md) |
 | GLM-5.1 HuggingFace 模型 | [zai-org/GLM-5.1-FP8](https://huggingface.co/zai-org/GLM-5.1-FP8) |
 | tpu-inference 代码 | [github.com/yangwhale/tpu-inference](https://github.com/yangwhale/tpu-inference) branch: `feature/glm51-inference` |
