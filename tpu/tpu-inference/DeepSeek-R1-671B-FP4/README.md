@@ -5,6 +5,19 @@
 >
 > **代码仓库**: https://github.com/yangwhale/tpu-inference (branch: `feature/moe-fp4-weight-cache`)
 
+## 🎯 关键性能（实测 2026-04-23, TPU v7x-8 4 chips, FP4）
+
+| 操作点 | 并发 | Throughput | tok/s/chip | tok/s/user | TPOT |
+|--------|-----|-----------|------------|-----------|------|
+| 🚀 Max Throughput | 2,048 | **7,309 tok/s** | **1,827** | 3.6 | 219 ms |
+| ⚖️ Balanced | 256 | 2,189 tok/s | 547 | 8.6 | 107 ms |
+| 💨 Low Latency | 1 | 37.6 tok/s | 9.4 | 37.6 | 26 ms |
+
+> **完整 Benchmark 报告**: [cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html](https://cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html)
+> **vs H200 8-GPU**: TPU v7 per-device 达到 H200 FP8+MTP 的 **79%** throughput，仅用一半设备数
+
+---
+
 本文档提供两种部署方式：
 
 | 方式 | 适用场景 | 跳转 |
@@ -1288,6 +1301,60 @@ export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # 不是 "fp4"，必须是完
 - `w13_weight_dtype` / `w2_weight_dtype`：值包含 "float4" 时触发 dtype view 转换
 
 **教训**：`gen_fp4_cache_cpu_parallel.py` 正确生成了这些字段，但手动 NPZ→npy 转换时容易遗漏。转换脚本必须从 NPZ 的 metadata 中提取 dtype 信息写入 meta.json
+
+---
+
+## 推理性能 Benchmark（实测 2026-04-23，TPU v7x-8）
+
+> **测试工具**: EvalScope perf v1.6.0 &nbsp;|&nbsp; **数据集**: random 1K input / 1K output &nbsp;|&nbsp; **完整报告**: [cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html](https://cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html)
+
+### 1K input / 1K output（短对话场景）
+
+| Concurrency | Output tok/s | tok/s/chip | TTFT avg (s) | TPOT (ms) | tok/s/user | Latency (s) |
+|------------:|-------------:|-----------:|-------------:|----------:|-----------:|------------:|
+|           1 |         37.6 |        9.4 |         0.48 |        26 |       37.6 |        27.3 |
+|           4 |        146.7 |       36.7 |         0.63 |        27 |       36.7 |        27.9 |
+|          16 |        164.9 |       41.2 |        68.18 |        31 |       10.3 |        99.3 |
+|          64 |        453.2 |      113.3 |        21.23 |       100 |        7.1 |       123.9 |
+|         128 |        922.7 |      230.7 |        15.10 |       124 |        7.2 |       142.0 |
+|         256 |  **2,189.2** |  **547.3** |        10.56 |       107 |        8.6 |       119.6 |
+|         512 |      3,671.6 |      917.9 |         9.93 |       185 |        7.2 |       142.4 |
+|       1,024 |      5,159.2 |    1,289.8 |        21.84 |       136 |        5.0 |       202.4 |
+|   **2,048** |  **7,309.3** |  **1,827.3** |        60.81 |       219 |        3.6 |       258.0 |
+
+**关键 Pareto 操作点：**
+
+| 操作点 | 并发 | Throughput | tok/s/user | TPOT | 适用场景 |
+|--------|-----|-----------|-----------|------|---------|
+| 🚀 **Max Throughput** | 2,048 | 7,309 tok/s (1,827/chip) | 3.6 | 219 ms | 离线批处理 |
+| ⚖️ **Balanced** | 256 | 2,189 tok/s (547/chip) | 8.6 | 107 ms | 高吞吐在线服务 |
+| 💨 **Low Latency** | 1 | 37.6 tok/s (9.4/chip) | 37.6 | 26 ms | 交互式对话 |
+
+**关键发现：**
+
+- ✅ **Max throughput 1,827 tok/s/chip** — 4 chips 共 7,309 tok/s，per-device 达 H200 FP8+MTP 的 79%
+- ⚠️ **p16 / p64 TTFT 异常** — p16 平均 TTFT 68s（P50/P99 134s），p64 平均 21s — 中等并发存在 TTFT 退化（推测调度策略瓶颈，建议生产避开 p16-p64 区间）
+- ✅ **高并发吞吐线性扩展** — p256 → p2048 throughput 增长 3.34×，并发增长 8×，scaling 效率持续
+- ✅ **100% 成功率** — 所有 9 个并发级别全部 success rate 100%
+
+### 与 H200 8-GPU 对比（同模型，FP8 + MTP）
+
+| 指标 | H200 8-GPU | TPU v7 4-chip | TPU/H200 |
+|------|----------:|-------------:|:--------:|
+| Per-device max (tok/s) | 2,307 / GPU | 1,827 / chip | **0.79×** |
+| System max (tok/s) | 18,456 | 7,309 | 0.40× |
+| 设备数量 | 8 GPUs | 4 chips | 0.5× |
+| 总 HBM | 1,128 GB | 768 GB | 0.68× |
+| 总 FP8 算力 (dense) | 7,912 TFLOPS | 18,444 TFLOPS | 2.33× |
+
+> **对比公平性**：H200 用 FP8 + MTP（投机解码），TPU v7 用 FP4 无 MTP。MTP 提升 30-50% decode throughput，FP4 weight compression 高 2× 但精度更敏感（实测 GSM8K 94.92%，损失极小）。详见[完整对比报告](https://cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html)。
+
+### 长上下文场景
+
+| 场景 | 状态 |
+|------|------|
+| 8K input / 1K output | ⏳ 待测试（需重启 vLLM 调大 max-model-len 至 16384+） |
+| 1K input / 8K output | ⏳ 待测试 |
 
 ---
 
