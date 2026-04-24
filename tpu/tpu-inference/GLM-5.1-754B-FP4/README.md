@@ -40,7 +40,7 @@
 | 架构 | MoE（256 experts, top-8）+ MLA + DSA + MTP |
 | 总参数量 | ~754B |
 | 总层数 | 78（layer 0-77 标准 + layer 78 MTP） |
-| MoE 层数 | 76（layer 3-78） |
+| MoE 层数 | 75（layer 3-77，MTP layer 78 推理时跳过） |
 | Dense 前几层 | 3（layer 0-2） |
 | 量化方案 | FP4 MoE experts + FP8 attention |
 | FP4 MoE HBM | ~45.3 GB/device（8 devices 可放下） |
@@ -151,7 +151,7 @@ export MODEL=/data/models/GLM-5.1-FP8
 
 ## Step 4: 生成 FP4 MoE Cache
 
-> 推荐 **CPU 并行直转**：纯 numpy，不需要 TPU/JAX，12 workers 并行，76 层仅需 **~28 min**。
+> 推荐 **CPU 并行直转**：纯 numpy，不需要 TPU/JAX，12 workers 并行，75 层仅需 **~28 min**。
 
 ### 4a: 确保 /dev/shm 为空
 
@@ -197,7 +197,7 @@ python3 extract_non_moe_weights.py \
 ```bash
 # 检查层数
 ls /data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone/ | grep model_layers | wc -l
-# 预期：76
+# 预期：75（layer 3-77，MTP layer 78 不需要）
 
 # 检查 non-MoE 文件
 ls -lh /data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone/non_moe_weights.safetensors
@@ -233,11 +233,11 @@ mkdir -p $DST
 # 拷贝 non-MoE 权重
 cp $SRC/non_moe_weights.safetensors $DST/
 
-# 并行拷贝 76 层 MoE cache（8 workers，~4 min）
+# 并行拷贝 75 层 MoE cache（8 workers，~4 min）
 ls -d $SRC/model_layers_* | xargs -P 8 -I {} cp -r {} $DST/
 
 # 验证
-ls $DST/ | grep model_layers | wc -l   # 预期：76
+ls $DST/ | grep model_layers | wc -l   # 预期：75（layer 3-77，MTP layer 78 不需要）
 ls -lh $DST/non_moe_weights.safetensors  # 预期：~21 GB
 df -h /dev/shm                           # 预期占用 ~757 GB
 ```
@@ -283,7 +283,11 @@ python3 -m vllm.entrypoints.openai.api_server \
   }'
 ```
 
-等待日志显示 `Application startup complete`（约 3-4 分钟 cold start）。
+等待日志显示 `Application startup complete`。
+
+> **启动时间**：
+> - 未优化：**~10 min**（non-MoE 加载 6m29s，`jax.clear_caches()` 导致每个 tensor 重复编译）
+> - 优化后：**~3-4 min**（注释掉 `weight_utils.py` 中的 `jax.clear_caches()`，详见下方[性能优化](#性能优化可选)）
 
 ### 参数说明
 
@@ -301,7 +305,7 @@ python3 -m vllm.entrypoints.openai.api_server \
 在**另一个终端**（`kubectl exec -it vllm-glm51 -- bash`）发送请求：
 
 ```bash
-# 简单测试
+# 测试 1: 数学计算
 curl -s http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
@@ -310,10 +314,31 @@ curl -s http://localhost:8000/v1/chat/completions \
     "max_tokens": 256
   }' | python3 -m json.tool
 
+# 测试 2: 中文对话
+curl -s http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "/data/models/GLM-5.1-FP8",
+    "messages": [{"role": "user", "content": "你是谁？用一句话介绍自己。"}],
+    "max_tokens": 128
+  }' | python3 -c "import sys,json; r=json.load(sys.stdin); print(r['choices'][0]['message']['content'])"
+
 # 健康检查
 curl -s http://localhost:8000/health
 # 预期：{"status":"ok"}
 ```
+
+### 实测验证结果（2026-04-24, GKE E2E pod, v7x-8）
+
+| 测试 | 结果 |
+|------|------|
+| 2+3 数学计算 | ✅ 正确回答 5（含思维链推理过程） |
+| 中文自我介绍 | ✅ 自称 "Z.ai 创建的大语言模型"，输出流畅 |
+| 英文逻辑推理 (60km/h × 2.5h) | ✅ 正确推理 150 km |
+| 健康检查 /health | ✅ 正常 |
+| HBM 占用 | 58.43/94.75 GiB per device（61.6%） |
+| KV cache | 2,309,120 tokens |
+| MoE cache | 75/75 层全部 hit（FP4） |
 
 ---
 
@@ -378,17 +403,17 @@ ls /dev/shm/
 
 ---
 
-## 性能数据（实测）
+## 性能数据（实测 2026-04-24）
 
 ### 启动时间（cache + non-MoE 均在 /dev/shm）
 
-| 阶段 | Cold Start | 说明 |
-|------|-----------|------|
-| JAX 初始化 + 模型配置 | ~65s | mesh 创建、config 解析 |
-| Non-MoE 权重加载 | 25-108s | pjit 编译开销，25 种 unique shapes |
-| MoE Cache 从 /dev/shm 加载 | ~63s | 76 层 mmap + device_put |
-| Server init + warmup | ~20s | |
-| **总启动时间** | **~3-4 min** | 进程重启后均为 cold start |
+| 阶段 | 未优化 | 优化后（预估） | 说明 |
+|------|--------|--------------|------|
+| JAX 初始化 + Abstract model | ~1m44s | ~1m44s | mesh 创建、77 层模型配置 |
+| Non-MoE 权重加载 | **6m29s** | **~25-108s** | 未优化时 `jax.clear_caches()` 每个 tensor 重编译 |
+| MoE Cache 从 /dev/shm 加载 | ~1m51s | ~1m51s | 75 层 mmap + device_put |
+| Server init + warmup | ~25s | ~25s | KV cache + DPScheduler |
+| **总启动时间** | **~10m44s** | **~4-6 min** | 优化项见下方 |
 
 ### HBM 占用
 
@@ -407,6 +432,29 @@ ls /dev/shm/
 | **CPU 并行直转** ⭐ | **~28 min** | 纯 numpy，12 workers |
 | Non-MoE 提取 | ~2 min | 2292 keys → 21 GB |
 | 拷贝到 /dev/shm | ~4 min | xargs -P 8 并行 |
+
+---
+
+## 性能优化（可选）
+
+### 注释 `jax.clear_caches()` — Non-MoE 加载快 10x
+
+`weight_utils.py` 中的 `jax.clear_caches()` 导致每个 tensor 的 `jax.device_put()` 重新编译 transfer program。
+2292 个 non-MoE tensor 只有 ~25 种 unique shape，但每次都重新编译，白白浪费 6 分钟。
+
+```bash
+# 在 Pod 内执行
+cd /workspace/tpu_inference
+grep -n 'jax.clear_caches()' tpu_inference/models/jax/utils/weight_utils.py
+# 注释掉所有出现的 jax.clear_caches() 行
+sed -i 's/^        jax.clear_caches()/#        jax.clear_caches()/' \
+  tpu_inference/models/jax/utils/weight_utils.py
+```
+
+> **效果**：Non-MoE 加载从 6m29s → ~25-108s（DeepSeek R1 实测 10x 加速）。
+> **风险**：无。cache 存的是 compiled transfer programs，~25 种 shape × 几 KB ≈ 不到 1 MB。
+
+详见 [DeepSeek R1 踩坑 #18](../DeepSeek-R1-671B-FP4/README.md#18-jaxclear_caches-性能-bug--注释一行快-10x)。
 
 ---
 
@@ -429,9 +477,9 @@ Step 6: 启动 vLLM（⚠️ 设三个环境变量！）
 Step 7: curl 验证推理
 ```
 
-> **首次部署总耗时**（不含模型下载）：FP4 生成 28 min + 提取 2 min + 拷贝 4 min + 启动 4 min ≈ **~40 min**
+> **首次部署总耗时**（不含模型下载）：FP4 生成 28 min + 提取 2 min + 拷贝 4 min + 启动 ~11 min ≈ **~45 min**
 >
-> **后续重启**：只需 Step 6-7（如果 /dev/shm 的 cache 还在），**~4 min**。
+> **后续重启**：只需 Step 6-7（如果 /dev/shm 的 cache 还在），**~11 min**（优化后 ~4-6 min）。
 
 ---
 
