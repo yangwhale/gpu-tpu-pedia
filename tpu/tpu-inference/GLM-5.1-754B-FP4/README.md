@@ -15,7 +15,6 @@
 | ⚖️ Balanced | 64 | 1,570 tok/s | 393 | 24.6 | 38 ms |
 | 💨 Low Latency | 4 | 130 tok/s | 33 | 32.6 | 30 ms |
 
-> **完整 Benchmark 报告**: [cc.higcp.com/pages/glm51-inference-benchmark-20260424.html](https://cc.higcp.com/pages/glm51-inference-benchmark-20260424.html)
 > **vs DeepSeek R1**: GLM-5.1 在 p16-p128 范围 **快 2.7-3.5×**（详见下方 Benchmark 章节）
 
 ---
@@ -455,7 +454,7 @@ ls /dev/shm/
 
 ## 推理性能 Benchmark（实测 2026-04-24，TPU v7x-8）
 
-> **测试工具**: EvalScope perf v1.6.0 &nbsp;|&nbsp; **方法**: 每个并发先跑 1 轮预热（discarded）再跑 1 轮 recording &nbsp;|&nbsp; **完整报告**: [cc.higcp.com/pages/glm51-inference-benchmark-20260424.html](https://cc.higcp.com/pages/glm51-inference-benchmark-20260424.html)
+> **测试工具**: EvalScope perf v1.6.0 &nbsp;|&nbsp; **方法**: 每个并发先跑 1 轮预热（discarded）再跑 1 轮 recording
 
 ### 1K input / 1K output（短对话场景）
 
@@ -569,9 +568,6 @@ Step 7: curl 验证推理
 
 | 资源 | 链接 |
 |------|------|
-| **🎯 推理性能 Benchmark 报告** | [cc.higcp.com/pages/glm51-inference-benchmark-20260424.html](https://cc.higcp.com/pages/glm51-inference-benchmark-20260424.html) |
-| DeepSeek R1 FP4 推理 Benchmark | [cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html](https://cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html) |
 | DeepSeek R1 FP4 推理指南（完整版） | [../DeepSeek-R1-671B-FP4/README.md](../DeepSeek-R1-671B-FP4/README.md) |
 | GLM-5.1 HuggingFace 模型 | [zai-org/GLM-5.1-FP8](https://huggingface.co/zai-org/GLM-5.1-FP8) |
 | tpu-inference 代码 | [github.com/yangwhale/tpu-inference](https://github.com/yangwhale/tpu-inference) branch: `feature/glm51-inference` |
-| 踩坑详细记录 | [cc.higcp.com/pages/glm51-inference-debug-20260423.html](https://cc.higcp.com/pages/glm51-inference-debug-20260423.html) |
