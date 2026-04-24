@@ -13,7 +13,6 @@
 | ⚖️ Balanced | 256 | 2,189 tok/s | 547 | 8.6 | 107 ms |
 | 💨 Low Latency | 1 | 37.6 tok/s | 9.4 | 37.6 | 26 ms |
 
-> **完整 Benchmark 报告**: [cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html](https://cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html)
 > **vs H200 8-GPU**: TPU v7 per-device 达到 H200 FP8+MTP 的 **79%** throughput，仅用一半设备数
 
 ---
@@ -1306,7 +1305,7 @@ export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # 不是 "fp4"，必须是完
 
 ## 推理性能 Benchmark（实测 2026-04-23，TPU v7x-8）
 
-> **测试工具**: EvalScope perf v1.6.0 &nbsp;|&nbsp; **数据集**: random 1K input / 1K output &nbsp;|&nbsp; **完整报告**: [cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html](https://cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html)
+> **测试工具**: EvalScope perf v1.6.0 &nbsp;|&nbsp; **数据集**: random 1K input / 1K output
 
 ### 1K input / 1K output（短对话场景）
 
@@ -1347,7 +1346,7 @@ export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # 不是 "fp4"，必须是完
 | 总 HBM | 1,128 GB | 768 GB | 0.68× |
 | 总 FP8 算力 (dense) | 7,912 TFLOPS | 18,444 TFLOPS | 2.33× |
 
-> **对比公平性**：H200 用 FP8 + MTP（投机解码），TPU v7 用 FP4 无 MTP。MTP 提升 30-50% decode throughput，FP4 weight compression 高 2× 但精度更敏感（实测 GSM8K 94.92%，损失极小）。详见[完整对比报告](https://cc.higcp.com/pages/deepseek-r1-inference-benchmark-20260423.html)。
+> **对比公平性**：H200 用 FP8 + MTP（投机解码），TPU v7 用 FP4 无 MTP。MTP 提升 30-50% decode throughput，FP4 weight compression 高 2× 但精度更敏感（实测 GSM8K 94.92%，损失极小）。
 
 ### 长上下文场景
 
