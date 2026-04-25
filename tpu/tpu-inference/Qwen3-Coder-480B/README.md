@@ -738,12 +738,46 @@ kubectl cp $PROXY_POD:disagg_1024_8192_c64.json ./disagg_1024_8192_c64.json
 kubectl cp $PROXY_POD:disagg_8192_1024_c64.json ./disagg_8192_1024_c64.json
 ```
 
-### 7g: PD 分离对比（⏳ 待实测）
+### 7g: PD 分离对比（✅ 实测 2026-04-25 14:46~14:54）
 
-| 配置 | 实例数 | TTFT (p50) | TPOT (p50) | Throughput |
-|------|-------|-----------|-----------|-----------|
-| 单实例 (v7x-8) | 1 | ⏳ | ⏳ | ⏳ |
-| 1P1D (v7x-8 ×2) | 2 | ⏳ | ⏳ | ⏳ |
+**部署**：e2e-03 (v7x-8 in spot-4 pool) = Prefill (kv_producer, mem=0.7) · e2e-04 (v7x-8 in v3 pool) = Decode (kv_consumer, mem=0.9) · proxy 跑在 e2e-03 内 port 7000。
+
+#### 1024/1024 c=1 (low-latency)
+
+| 配置 | TTFT (med) | TPOT (med) | ITL (med) | Output tok/s | Δ vs 单实例 |
+|------|----------:|----------:|----------:|------------:|------------|
+| **单实例 c=1** | 95 ms | 20.6 ms | 20.6 ms | 48 | baseline |
+| **1P1D c=1** | **281 ms** | **18.3 ms** | **18.3 ms** | **53.8** | TTFT +186ms · **TPOT -11%** · **tok/s +12%** |
+
+#### 8192/1024 c=4 (long-prompt, PD 分离的目标场景)
+
+| 配置 | TTFT (med) | TPOT (med) | ITL (med) | Output tok/s | Δ vs 单实例 |
+|------|----------:|----------:|----------:|------------:|------------|
+| **单实例 c=4** | 1495 ms | 23.2 ms | 22.7 ms | 162 | baseline |
+| **1P1D c=4** | **2908 ms** | **20.6 ms** | **20.6 ms** | **170** | TTFT +1413ms · **TPOT -11%** · **tok/s +5%** |
+
+> **核心发现**：
+> 1. **TPOT/ITL 一致改善 ~11%** — D 实例专职 decode，无 prefill batch 抢占 GPU，每个 token 产出更快。这是 PD 分离最重要的客户体感收益。
+> 2. **TTFT 增加 (+186 ms ~ +1.4 s)** — P + DCN transfer + D 三段固有开销。当 prompt 短 (1K) 时占比明显，长 prompt (8K) 时 prefill 本身就占大头，PD 开销是相对小头。
+> 3. **Output throughput 改善 5-12%** — 单 user / 低并发场景 PD 收益有限。**真正的 PD 收益要在 c=64+ 高并发场景**，D 实例可以全速跑 256 batch decode 不被 prefill 阻塞。
+> 4. **生产建议**：客户对 TTFT 不敏感的场景（聊天、代码生成）适合 PD 分离；TTFT 敏感场景（实时 autocomplete）保持单实例。
+>
+> **复现命令**：
+> ```bash
+> # P (e2e-03)
+> --kv-transfer-config '{"kv_connector":"TPUConnector","kv_connector_module_path":"tpu_inference.distributed.tpu_connector","kv_role":"kv_producer"}'
+> --gpu-memory-utilization 0.70
+>
+> # D (e2e-04)
+> --kv-transfer-config '{"kv_connector":"TPUConnector","kv_connector_module_path":"tpu_inference.distributed.tpu_connector","kv_role":"kv_consumer"}'
+> --gpu-memory-utilization 0.90
+>
+> # Proxy (在 e2e-03 内)
+> python3 /workspace/tpu_inference/examples/disagg/toy_proxy_server.py \
+>   --host 0.0.0.0 --port 7000 \
+>   --prefiller-hosts localhost --prefiller-ports 8000 \
+>   --decoder-hosts <D_pod_IP> --decoder-ports 9000
+> ```
 
 ---
 
