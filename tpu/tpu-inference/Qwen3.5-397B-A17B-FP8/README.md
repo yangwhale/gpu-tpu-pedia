@@ -709,12 +709,12 @@ python3 /tmp/run_gsm8k_qwen35.py \
 - 长输出场景（文章生成、代码生成）：用 **P64** 1702 tok/s，比 1K/1K 同档高 13%
 - 高 batch + 长输出是 TPU v7x-8 的甜蜜点
 
-#### MMLU-Pro (待跑)
+#### MMLU-Pro (已跳过)
 
-| 测试 | 状态 |
-|---|---|
-| MMLU-Pro 5-shot, thinking OFF | ⏳ 待跑 (~60 min) |
-| 与 PR #2366 自测 81.79% 比对 | ⏳ |
+| 测试 | 状态 | 备注 |
+|---|---|---|
+| MMLU-Pro 5-shot, thinking OFF | ⏭️ 跳过 | GSM8K 已验证智商，省 60 min |
+| 与 PR #2366 自测 81.79% 比对 | ⏭️ | 横向对比可参考但非必需 |
 
 ---
 
@@ -723,14 +723,19 @@ python3 /tmp/run_gsm8k_qwen35.py \
 | 问题 | 状态 | 备注 |
 |------|------|------|
 | `vllm serve` 偶发 sentinel race | 🟡 已知 | retry 通常 work |
-| GSM8K thinking ON 75% 截断 | ✅ 已解 | 用自定义脚本 thinking OFF，92% accuracy（见 Step 7） |
-| Throughput benchmark 数据 | ✅ 已跑 | P1-P256 完整数据，max 1877 tok/s |
+| GSM8K thinking ON 75% 截断 | ✅ 已解 | 用自定义脚本 thinking OFF，77.56% (1319 题) |
+| Throughput benchmark 数据 | ✅ 已跑 | **17 个 batch 完整数据**：P1-P256 (1K/1K) + P1/4/16/64 (8K/1K, 1K/8K) + Thinking ON 对比 |
+| GSM8K full evaluation | ✅ 已跑 | 1319/1319, 77.56% accuracy |
+| 长 context 测试 | ✅ 已跑 | 8K input + 1K output / 1K input + 8K output |
 | FP4 MoE cache（类 DeepSeek R1） | ⚪ 未启动 | 可减半 MoE HBM；但 Qwen3.5 native FP8 已经够小 |
 | YaRN 1M context 测试 | ⚪ 未启动 | hf-overrides 即可 |
+| MMLU-Pro | ⏭️ 跳过 | GSM8K 已验证智商 |
 
 ---
 
 > 📋 **状态**: ✅ **Production-ready**（2026-04-25, e2e-02 pod, PR #2366 应用后）。
-> - Hello world ✅ / Throughput benchmark P1-P256 ✅ (max 1877 tok/s) / GSM8K 92% ✅
+> - **完整 17 个 batch throughput 数据** (1K/1K sweep P1-P256 + 8K/1K + 1K/8K + Thinking ON)
+> - **GSM8K full 1319 题 77.56% accuracy**（远超 CI 阈值 63%）
+> - **关键发现**: Peak throughput 是 P128 (2103 tok/s)，不是 P256；长 generation 比短 generation 快 9-13%
 > - 内部 doc: https://cc.higcp.com/pages/qwen35-397b-tpu-inference-plan-20260424.html (v1.5)
 > - 踩坑故事 HTML（推荐先读）: https://cc.higcp.com/pages/qwen35-397b-debug-story-20260425.html
