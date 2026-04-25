@@ -678,23 +678,26 @@ python3 /tmp/run_gsm8k_qwen35.py \
 
 ### 长 context benchmark（部分完成 2026-04-25, vLLM with `--max-model-len 16384`）
 
-#### 8K input / 1K output (prefill heavy, P1 / P4 已实测)
+#### 8K input / 1K output (prefill heavy, ✅ 4 档全完成 2026-04-25)
+
+| Batch | Latency | Throughput | vs 1K input 差距 |
+|------:|--------:|-----------:|------------------|
+| **P1**  | 19.8 s  | **51.7 tok/s** | **+4%**（甚至略快！） |
+| **P4**  | 22.9 s  | 178.6 tok/s    | -4% |
+| **P16** | 32.7 s  | 499.1 tok/s    | -22% |
+| **P64** | 76.3 s  | 849.9 tok/s    | -44% |
+
+**关键发现**：
+- ✅ **P1/P4 8K prefill 几乎不拖累**（vs 1K input 同档差 < 5%）— 单/低并发场景，Qwen3.5 hybrid GDN 长 context prefill 优势明显
+- 🟡 **P16/P64 8K prefill 拖累显著**（差 22-44%）— 高并发下 prefill chunked + KV cache 压力累加
+- **生产建议**：长 prompt 场景（RAG、长文档）用 P4-P8 最划算
+
+#### 1K input / 8K output (decode heavy, 进行中)
 
 | Batch | Latency | Throughput | 备注 |
 |------:|--------:|-----------:|------|
-| **P1** | 19.8 s | **51.7 tok/s** | 8K prompt prefill 不拖累，跟 1K prompt P1 (49.6 tok/s) 几乎一样 |
-| **P4** | 22.9 s | **178.6 tok/s** | 跟 1K prompt P4 (186.8 tok/s) 几乎一样 |
-| P16 | ⏳ | — | 跑中 |
-| P64 | ⏳ | — | 待跑 |
-
-**关键发现**：8K input prefill **几乎不拖累 throughput**（vs 1K input 同档差 < 5%）— Qwen3.5 hybrid 架构的 prefill chunked + GDN O(n) 长 context 优势体现出来了。
-
-#### 1K input / 8K output (decode heavy, 待跑)
-
-| Batch | Latency | Throughput | 备注 |
-|------:|--------:|-----------:|------|
-| P1   | ⏳ | — | 待跑 |
-| P4   | ⏳ | — | 待跑 |
+| **P1**  | 151.8 s  | **54.0 tok/s** | 8K decode 几乎不拖累 P1 (vs 1K out P1 = 49.6) |
+| P4   | ⏳ | — | 跑中 |
 | P16  | ⏳ | — | 待跑 |
 | P64  | ⏳ | — | 待跑 |
 
