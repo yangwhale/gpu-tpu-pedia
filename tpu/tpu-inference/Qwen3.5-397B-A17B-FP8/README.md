@@ -692,14 +692,22 @@ python3 /tmp/run_gsm8k_qwen35.py \
 - 🟡 **P16/P64 8K prefill 拖累显著**（差 22-44%）— 高并发下 prefill chunked + KV cache 压力累加
 - **生产建议**：长 prompt 场景（RAG、长文档）用 P4-P8 最划算
 
-#### 1K input / 8K output (decode heavy, 进行中)
+#### 1K input / 8K output (decode heavy, ✅ 4 档全完成 2026-04-25)
 
-| Batch | Latency | Throughput | 备注 |
-|------:|--------:|-----------:|------|
-| **P1**  | 151.8 s  | **54.0 tok/s** | 8K decode 几乎不拖累 P1 (vs 1K out P1 = 49.6) |
-| P4   | ⏳ | — | 跑中 |
-| P16  | ⏳ | — | 待跑 |
-| P64  | ⏳ | — | 待跑 |
+| Batch | Latency | Throughput | vs 1K output 差距 |
+|------:|--------:|-----------:|-------------------|
+| **P1**  | 151.8 s  | **54.0 tok/s**   | **+9%**（甚至略快） |
+| **P4**  | 161.2 s  | 203.3 tok/s    | **+9%** |
+| **P16** | 184.3 s  | 711.0 tok/s    | **+11%** |
+| **P64** | 307.9 s  | **1702 tok/s**  | **+13%** ⭐ |
+
+**🎯 长 generation 在所有 batch size 上都比短 generation 快 9-13%**！
+
+**原因**：长 generation 让 batch 长时间保持饱和（pure decode 阶段），TPU MXU 利用率高；短 generation (1K out) 频繁经历 prefill→decode 转换 + cleanup，调度开销大。
+
+**生产建议**：
+- 长输出场景（文章生成、代码生成）：用 **P64** 1702 tok/s，比 1K/1K 同档高 13%
+- 高 batch + 长输出是 TPU v7x-8 的甜蜜点
 
 #### MMLU-Pro (待跑)
 
