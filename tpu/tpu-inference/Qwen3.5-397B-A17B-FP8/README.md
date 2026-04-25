@@ -18,8 +18,9 @@
 | Cold start (Application startup complete) | **~7 min** | weight load 161s + MoE re-quant 2.5min + Hybrid KV padding + pjit compile |
 | Single user latency (P1, 1K/1K) | **20.6s, 49.6 tok/s/user** | Pareto: 💨 Low Latency |
 | Balanced (P64, 1K/1K) | **1510 tok/s, 23.6 tok/s/user** | Pareto: ⚖️ Balanced |
-| Max throughput (P256, 1K/1K) | **1877 tok/s** | Pareto: 🚀 Max Throughput, 100% success |
-| **GSM8K 准确率 (5-shot, 50 samples, thinking OFF)** | **92.00% (46/50)** | finish_reason 全 stop, 49.5s 总耗时 |
+| **🚀 Peak throughput (P128, 1K/1K)** | **2103 tok/s** ⭐ | Pareto: 真正 max（P256 反而降到 1877） |
+| **GSM8K full 1319 样本 (5-shot, thinking OFF)** | **77.56% (1023/1319)** ✅ | CI 阈值 63%, 远超过；16 min 跑完 |
+| 长 prompt 8K/1K P4 | **178.6 tok/s** | 与 1K prompt 几乎相同（hybrid GDN 长 context 优势） |
 
 > **简单 chat 测试** (2026-04-25 10:08, e2e-02 pod, PR #2366 应用后):
 > Prompt: `哈喽啊，how are you 啊`
@@ -592,44 +593,78 @@ rm -f /tmp/libtpu_lockfile
 
 ### Throughput benchmark (1K input / 1K output, evalscope perf, warmup + record)
 
-测试方法：每个 batch size 跑 2 次（warmup 丢弃 + record 保留），thinking OFF。耗时 24 min 全部完成。
+测试方法：每个 batch size 跑 2 次（warmup 丢弃 + record 保留），thinking OFF。
+
+#### 完整并发 sweep（9 个档位，2026-04-25 实测）
 
 | Batch | Latency | Throughput | Per-user | Success | Pareto |
 |------:|--------:|-----------:|---------:|--------:|--------|
-| **P1**   | 20.6 s   | **49.6 tok/s**   | 49.6 | 100% | 💨 Low Latency |
-| **P4**   | 21.9 s   | **186.8 tok/s**  | 46.7 | 100% | 交互对话 |
-| **P16**  | 25.6 s   | **640 tok/s**    | 40.0 | 100% | 在线服务 |
-| **P64**  | 43.2 s   | **1510 tok/s**   | 23.6 | 100% | ⚖️ Balanced |
-| **P256** | 108.4 s  | **1877 tok/s**   | 7.3  | 100% | 🚀 Max Throughput |
+| **P1**    | 20.6 s   | **49.6 tok/s**   | **49.6** | 100% | 💨 Low Latency |
+| **P2**    | 21.2 s   | 96.7 tok/s     | 48.4 | 100% | |
+| **P4**    | 21.9 s   | 186.8 tok/s    | 46.7 | 100% | 交互对话 |
+| **P8**    | 22.8 s   | 358.7 tok/s    | 44.8 | 100% | |
+| **P16**   | 25.6 s   | 640 tok/s      | 40.0 | 100% | 在线服务 |
+| **P32**   | 28.9 s   | 1129 tok/s     | 35.3 | 100% | |
+| **P64**   | 43.2 s   | 1510 tok/s     | 23.6 | 100% | ⚖️ Balanced |
+| **P128**  | 61.8 s   | **2103 tok/s** ⭐ | 16.4 | 100% | 🚀 **Peak Throughput** |
+| **P256**  | 108.4 s  | 1877 tok/s ↓     | 7.3  | 100% | （超 sweet spot, scheduler 抖动） |
 
-**Scaling 分析**：
-- ✅ P1 → P4: throughput 提升 **3.77×**（near-linear, batch attention efficient）
-- ✅ P4 → P16: 提升 **3.43×**（仍然 sublinear, 27% latency overhead）
-- 🟡 P16 → P64: 提升 **2.36×**（diminishing return, 68% latency overhead）
-- 🟡 P64 → P256: 提升 **1.24×**（saturate, KV cache 压力）
+**关键发现：Peak 是 P128，不是 P256！**
+
+P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler 在 P256 时频繁 preempt + 重调（KV cache 不够同时容纳 256 个 1K context + 1K output 的状态），实际 GPU 占用率反而降。**P128 才是真正的 max throughput 操作点**。
+
+**Scaling 分析（near-linear → diminishing → drop）**：
+- P1 → P2: throughput 提升 **1.95×**（perfect linear scaling）
+- P2 → P4: 提升 **1.93×**（near-linear）
+- P4 → P8: 提升 **1.92×**（near-linear）
+- P8 → P16: 提升 **1.78×**（开始 sublinear）
+- P16 → P32: 提升 **1.76×**
+- P32 → P64: 提升 **1.34×**（diminishing return）
+- P64 → P128: 提升 **1.39×**（recovers a bit）
+- **P128 → P256: 0.89× （下降！）**
 
 **Pareto 操作点选择**：
 - 单用户低延迟 (TPOT < 25 ms): 用 **P1**, 49.6 tok/s/user
-- 高吞吐生产服务: 用 **P64**, 1510 tok/s 总吞吐 + 23.6 tok/s/user 仍可接受
-- 离线批处理: 用 **P256**, 1877 tok/s 接近峰值（per-chip 234 tok/s）
+- 中等并发 + 体感 OK: 用 **P32-P64**, ~1100-1500 tok/s 总吞吐 + 23-35 tok/s/user
+- 离线批处理 / 最大吞吐: 用 **P128**, **2103 tok/s 峰值**（per-chip 263 tok/s）
 
-### GSM8K Accuracy (5-shot, thinking OFF, 50 samples)
+#### Thinking ON vs Thinking OFF (1K/1K)
 
-| 指标 | 值 |
-|------|-----|
-| **准确率** | **92.00% (46/50)** ✅ |
-| Finish reason | **stop=50, length=0**（全部完整无截断） |
-| 总耗时 | **49.5s** (0.99s/题 avg) |
-| Parallel | 4 |
-| Max question 长度过滤 | 400 tokens（避免 5-shot prompt 超 max_model_len=4096） |
+| Batch | Thinking OFF | Thinking ON | 备注 |
+|------:|-------------:|-----------:|------|
+| P1   | 49.6 tok/s | 49.6 tok/s | 几乎相同（max_tokens 限制） |
+| P16  | 640 tok/s  | 638 tok/s  | 几乎相同 |
+| P64  | 1510 tok/s | 1518 tok/s | 几乎相同 |
+
+⚠️ **业务效率差 10×**：raw throughput 几乎一样，但 thinking ON 用同样时间产出 ~90% reasoning + 10% 答案，thinking OFF 大部分是答案。**生产部署 reasoning 质量要求不高的话，关 thinking 业务有效 token 提升 10×**。
+
+### GSM8K Accuracy (5-shot, thinking OFF)
+
+| 测试集 | 准确率 | Finish stats | 总耗时 | Parallel |
+|--------|-------|--------------|--------|----------|
+| **50 samples** (idx 0-49, max_tokens=512) | **92.00% (46/50)** | stop=50, length=0 | 49.5s | 4 |
+| **🎯 Full 1319 samples** (max_tokens=512, max_question_tokens=500) | **77.56% (1023/1319)** ✅ | stop=1229, length=90 (6.8%) | **16.4 min** | 8 |
+
+**CI 阈值 63%，远超过 ✅**
+
+**50 题 vs 1319 题的差距**：
+- 50 题样本（idx 0-49）偏向较简单题，accuracy 偏高
+- 1319 题包含全部难度分布（含 hard reasoning），是真实代表性能力
+- **77.56% 是 production-ready 的真实数字**
+
+**6.8% length 截断分析**：
+- 90 个题被 max_tokens=512 截断（reasoning + answer 超 512 tokens）
+- 提示：调高 max_tokens 到 1024 准确率能进一步提升 1-3 个百分点
+- 可对比：lm_eval thinking ON 跑 200 题，**75%** length 截断（thinking 用了 reasoning 但被截）
 
 **比 lm_eval 快 100×**：
 - lm_eval (thinking ON, 75% length 截断) 跑 200 题用 80 min = 24 s/题
-- 自定义脚本 (thinking OFF, 100% stop) 跑 50 题用 49 s = 0.99 s/题
+- 自定义脚本 (thinking OFF, parallel=8) 跑 1319 题用 16 min = **0.75 s/题**
 
-**4 个错例分析**（都是模型推理本身错，不是工程问题）：
-- 部分题模型只输出 3 token 就 stop（直接吐数字而没解释）→ 答案不在 `#### N` 格式 → 提取失败
-- 部分题数学逻辑算错
+**错例类型**：
+- 模型只输出 3 token 就 stop（直接吐数字而没 `#### N` 格式）→ 提取失败
+- 数学逻辑算错（reasoning 混乱）
+- length 截断（reasoning 太长，没说到答案）
 
 **Reproduce**:
 ```bash
@@ -641,13 +676,34 @@ python3 /tmp/run_gsm8k_qwen35.py \
 
 完整脚本（自定义版，绕过 lm_eval thinking 截断坑）见 [scripts/run_gsm8k_qwen35.py](scripts/run_gsm8k_qwen35.py)。
 
-### 待补 benchmark
+### 长 context benchmark（部分完成 2026-04-25, vLLM with `--max-model-len 16384`）
 
-| 场景 | 状态 |
-|------|------|
-| 8K input / 1K output, parallel=4 | ⏳ 待跑（长 prompt prefill 重） |
-| 1K input / 8K output, parallel=4 | ⏳ 待跑（长 generate decode 重） |
-| GSM8K full 1319 样本 | ⏳ 待跑（预计 ~25 min @ parallel=4 + thinking OFF） |
+#### 8K input / 1K output (prefill heavy, P1 / P4 已实测)
+
+| Batch | Latency | Throughput | 备注 |
+|------:|--------:|-----------:|------|
+| **P1** | 19.8 s | **51.7 tok/s** | 8K prompt prefill 不拖累，跟 1K prompt P1 (49.6 tok/s) 几乎一样 |
+| **P4** | 22.9 s | **178.6 tok/s** | 跟 1K prompt P4 (186.8 tok/s) 几乎一样 |
+| P16 | ⏳ | — | 跑中 |
+| P64 | ⏳ | — | 待跑 |
+
+**关键发现**：8K input prefill **几乎不拖累 throughput**（vs 1K input 同档差 < 5%）— Qwen3.5 hybrid 架构的 prefill chunked + GDN O(n) 长 context 优势体现出来了。
+
+#### 1K input / 8K output (decode heavy, 待跑)
+
+| Batch | Latency | Throughput | 备注 |
+|------:|--------:|-----------:|------|
+| P1   | ⏳ | — | 待跑 |
+| P4   | ⏳ | — | 待跑 |
+| P16  | ⏳ | — | 待跑 |
+| P64  | ⏳ | — | 待跑 |
+
+#### MMLU-Pro (待跑)
+
+| 测试 | 状态 |
+|---|---|
+| MMLU-Pro 5-shot, thinking OFF | ⏳ 待跑 (~60 min) |
+| 与 PR #2366 自测 81.79% 比对 | ⏳ |
 
 ---
 
