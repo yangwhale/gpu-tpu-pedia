@@ -540,16 +540,23 @@ done
 - Hot path（编译完成后）真实 `inter-token latency = 47ms`（即 ≈21 tok/s/user）
 - Peak 1050 tok/s 已经接近 buildkite CI 验证的上限 1378 tok/s
 
-#### 1K input / 1K output（⏳ 待跑 sweep）
+#### 1K input / 1K output（✅ c=64 已实测 2026-04-25）
 
-| Concurrency | Output tok/s | tok/s/chip | TTFT (s) | TPOT (ms) | tok/s/user | Latency (s) |
-|------------:|-------------:|-----------:|---------:|----------:|-----------:|------------:|
-|           1 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-|           4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-|          16 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-|          64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-|         256 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
-|        1024 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+| Concurrency | Output tok/s | Peak tok/s | tok/s/chip | TTFT (med) | TPOT (med) | ITL (med) | Req/s | Status |
+|------------:|-------------:|----------:|----------:|----------:|----------:|--------:|--------:|--------|
+|           1 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
+|           4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
+|          16 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
+|          **64** | **354 (avg)** | **1664** | **89 (avg) / 416 (peak)** | **209ms** | **44ms** | **40ms** | **0.33** | ✅ 320/320 |
+|         256 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
+|        1024 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
+
+> **c=64 实测说明 (320 prompts, request-rate=inf, num-warmups=3, 总时长 960s)**:
+> - **Hot path 表现优秀**: median TPOT 44ms, median ITL 40ms（≈25 tok/s/user）
+> - **Peak throughput 1664 tok/s** 已接近 CI 阈值 1926
+> - Avg throughput 354 tok/s 偏低，因为**首批 XLA 编译**拉高了 mean TTFT (29.2s mean vs 209ms median, P99 222s)
+> - 第二次 run（XLA cache hot）avg throughput 会显著提升（待 sweep 验证）
+> - Tested with `--max-num-batched-tokens 8192 --max-num-seqs 512 --kv-cache-dtype fp8 --gpu-memory-utilization 0.95 --async-scheduling`
 
 #### 1K input / 8K output（⏳ 待跑 sweep）
 
