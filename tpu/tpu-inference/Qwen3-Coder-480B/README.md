@@ -732,19 +732,32 @@ gcloud compute ssh <node> -- 'sudo sysctl -w vm.max_map_count=8388608'
 
 ### 6. TPU device busy
 
-**原因**: 上一个 vLLM 进程还活着。
+**原因**: 上一个 vLLM 进程还活着；或者主进程已 kill 但 EngineCore 子进程未清，留下 `/tmp/libtpu_lockfile`。
 
-**修复**:
+**症状（实测 2026-04-25 遇到）**：重启 vLLM 时 EngineCore 启动几秒就崩，错误为：
+```
+RuntimeError: Unable to initialize backend 'tpu':
+ABORTED: Internal error when accessing libtpu multi-process lockfile.
+Run "$ sudo rm /tmp/libtpu_lockfile".
+```
+
+**修复（标准操作流程）**:
 ```bash
-ps aux | grep -E "vllm|EngineCore" | grep -v grep
-kill -9 <PIDs>
+# 1. 杀所有 vllm/EngineCore 残留
+pkill -9 -f 'vllm|EngineCore'
+sleep 3
+ps -ef | grep -E "vllm|EngineCore" | grep -v grep    # 应该空（zombie <defunct> 不影响）
 
-# 释放 lockfile
+# 2. 删 libtpu lockfile + vLLM IPC socket
 rm -f /tmp/libtpu_lockfile /tmp/.vllm_ipc_*
 
-# 确认 vfio 设备释放
-fuser /dev/vfio/*
+# 3. 确认 vfio 设备释放
+fuser /dev/vfio/* 2>&1 || echo "vfio free"
+
+# 4. 现在可以重启 vllm serve
 ```
+
+> 💡 **教训**：每次 `pkill vllm serve` 之后**务必**删 lockfile，否则下次启动会失败。建议在 startup 脚本开头默认清理一次。
 
 ### 7. Benchmark `request_rate=inf` 撑不住
 
