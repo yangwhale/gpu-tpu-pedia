@@ -1,13 +1,26 @@
 # Qwen3-Coder-480B-A35B-Instruct FP8 Inference on TPU v7x-8
 
-> 端到端指南：在单节点 TPU v7x-8（4 chips, 8 devices）上运行 Qwen3-Coder-480B（FP8 量化）推理。
-> 新手按照步骤走即可完成全流程。
+> 端到端指南：在单节点 TPU v7x-8（**4 chips, 8 devices**）上运行 Qwen3-Coder-480B（FP8 量化）推理 + 1P1D PD 分离。
 >
 > **代码仓库**: 上游 [`vllm-project/tpu-inference`](https://github.com/vllm-project/tpu-inference)（main 分支即可）
 >
 > **模型**: [`Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`](https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8)（~480 GB）
 >
 > **替代模型**: [`BCCard/Qwen3-Coder-480B-A35B-Instruct-FP8-Dynamic`](https://huggingface.co/BCCard/Qwen3-Coder-480B-A35B-Instruct-FP8-Dynamic)（社区动态量化版）
+
+## 📖 怎么读这份文档
+
+> **如果你只是想验证能跑**（30 分钟）→ 直接看 §🎯 [30 秒快速复现](#-30-秒快速复现精确命令) 一节，6 条命令复制即可。
+>
+> **如果你要做生产部署**（1-2 小时）→ §Step 1 → 4 完整走一遍，参数说明在 §Step 4b。
+>
+> **如果你要跑 benchmark 验证性能** → §Step 5 + §Step 6（含三组完整 sweep 数据 §6e）。
+>
+> **如果你要做 PD 分离**（1P1D, 推荐用 Lustre 共享存储）→ §PD 分离 → §7a-pre Lustre + §7a-7g 部署。
+>
+> **如果遇到问题** → §常见问题排查（10 个已知坑及修复）。
+>
+> 配套文档：[PD 分离原理深度讲解](https://cc.higcp.com/assets/qwen3-coder-480b-pd-disagg-explained-20260425.html)（图解 + SVG + 时序图）
 
 ## 🎯 30 秒快速复现（精确命令）
 
@@ -62,22 +75,35 @@ vllm bench serve --backend vllm \
 
 ---
 
-## 🎯 关键性能（✅ 首轮实测 2026-04-25, TPU v7x-8 4 chips · FP8）
+## 🎯 关键性能（✅ 完整实测 2026-04-25, TPU v7x-8 4 chips · FP8）
 
-| 操作点 | 配置 | 实测结果 | 状态 |
-|--------|-----|----------|-----|
-| 💨 单请求小输出 | 50 tokens, cache hit | **47ms / token (≈21 tok/s/req)** | ✅ 通过 |
-| 🚀 Peak throughput | 50 prompts, in=256/out=128, rate=4 | **1050 tok/s peak output** | ✅ 通过 |
-| 🚀 Total throughput (avg) | 50 prompts, in=256/out=128, rate=4 | 61 tok/s total · 20 tok/s output (含 cold start) | ✅ 通过 |
-| 🔧 启动时间 (cold) | 含 XLA 编译 + 权重加载 | **~7 分钟**（权重 3min37s + 编译 ~3min） | ✅ |
-| 🔧 启动时间 (warm) | 仅权重加载（XLA cache 命中） | **~5 分钟** | ✅ |
+### 单实例性能图谱（详见 §6e）
 
-> **CI 阈值参考** (1k input / 1k output, max-concurrency=64):
-> - Request throughput ≥ **1.05 req/s**
-> - Output token throughput ≥ **1926 tok/s**
-> - Total token throughput ≥ **1948 tok/s**
->
-> **首次实测说明**：上面只是"50 prompts smoke test"，更系统的 1k/1k、1k/8k、concurrency sweep benchmark 见 §6e 待补充。
+| Workload | c=1 | c=4 | c=16 | c=64 | 客户场景 |
+|----------|----:|----:|----:|----:|---------|
+| **1K/1K** (chat) | 48 tok/s | 177 | 602 | **1478** | 短问答、代码补全 |
+| **1K/8K** (long-output) | 47.5 | 178 | 621 | **1623** | 文档生成、代码块写作 |
+| **8K/1K** (RAG/long-prompt) | 46.4 | 162 | 483 | **943** | RAG、长文档分析 |
+
+### PD 分离（1P1D）vs 单实例（详见 §7g）
+
+| 指标 | 单实例 | 1P1D | 改善 |
+|------|------|----|----|
+| Median TPOT | 20.6 / 23.2 ms | **18.3 / 20.6 ms** | **−11%** ⬇️ |
+| Output throughput | 48 / 162 tok/s | **53.8 / 170 tok/s** | **+5~12%** ⬆️ |
+| Median TTFT | 95 / 1495 ms | 281 / 2908 ms | +186 ms ~ +1.4 s ⬆️ |
+
+### 系统能力
+
+| 项目 | 实测值 |
+|------|------|
+| 💨 单用户解码速度 | **~48 tok/s** (≈21 ms/token, c=1) |
+| 🚀 Peak aggregate throughput (单实例) | **1623 tok/s** (1K/8K c=64) |
+| 🔧 启动时间 (cold) | **~7 分钟** (权重 3'37" + XLA 编译 ~3') |
+| 🔧 启动时间 (warm) | **~5 分钟** (XLA cache 命中) |
+| 💾 HBM 占用 | 94.75 GB/device · 总 758 GB |
+
+> **CI 阈值参考** (1K input / 1K output, max-concurrency=64): req/s ≥ 1.05 · output ≥ 1926 tok/s · total ≥ 1948 tok/s。当前测量已接近这些阈值（1478 tok/s vs 1926）。
 
 ---
 
@@ -363,7 +389,7 @@ vllm serve $MODEL \
 
 等待日志输出 `Application startup complete`。
 
-> **预期启动时间**：⏳ 待实测（参考 GLM-5.1 是 ~10 min；Qwen3 Coder 因为没有 FP4 cache 加载预期更快，估计 **~6-8 min**）
+> **实测启动时间**（2026-04-25）：**~7 min cold**（权重加载 3'37" + XLA 编译 ~3'）；**~5 min warm**（XLA cache 命中）。生产配置（max-num-batched-tokens=8192）启动时间会增加到 **~15 min cold**，因为更多 batch shape 触发额外编译。
 
 ### 4b: 参数说明
 
@@ -494,9 +520,9 @@ python3 bench_serving/benchmark_serving.py \
 - Output token throughput ≥ 1226 tok/s
 - Total token throughput ≥ 1378 tok/s
 
-### 6d: 全并发扫描（参考 GLM-5.1 风格，⏳ 待实测）
+### 6d: 全并发扫描脚本（c=1,4,16,64 已实测；更高 c 待跑）
 
-> 用 EvalScope 或 vllm bench serve，扫描 concurrency 1, 2, 4, 8, 16, 32, 64, 128, 256, 512, 1024。
+> 实测数据见 §6e；下面的脚本可用于扩展到 c=128/256/512/1024。每个 cell 跑 `prompts = max(4, c*2)`，第一次为 XLA warmup，第二次为 real 数据。
 
 ```bash
 for c in 1 2 4 8 16 32 64 128 256 512 1024; do
@@ -1069,53 +1095,16 @@ export USE_MOE_EP_KERNEL=1
 
 ---
 
-## 端到端流程总结
+## 端到端时间预算
 
-```
-Step 1: 创建 GKE TPU Pod (kubectl apply, ~2 min)
-       ├─ 申请 v7x-8 (4 chips)
-       ├─ 设置 sysctl vm.max_map_count
-       └─ 注入 HF_TOKEN secret
-    ↓
-Step 2: 准备代码 (镜像内已就绪)
-    ↓
-Step 3: 下载模型 (~480 GB, huggingface-cli, ~30-60 min)
-    ↓
-Step 4: 启动 vLLM (~6-8 min)
-       └─ TP=8, EP enabled, FP8 KV cache, max_seqs=512
-    ↓
-Step 5: 验证 (curl /completions, /chat, /health)
-    ↓
-Step 6: Benchmark (1k/1k 默认; 1k/8k 长输出)
-    ↓
-Step 7: (可选) PD 分离部署 (1P1D, 2 个 v7x-8 节点)
-```
-
-> **首次部署总耗时**:
-> - 模型下载: 30-60 min（取决于网络）
-> - vLLM 启动: 6-8 min
-> - benchmark (1k/1k 单 concurrency=64): ~5 min
-> - **首次跑通**: **~50-80 min**
->
-> **后续重启**（模型已下载）: **只需 Step 4-5**, **~10 min**
-
----
-
-## 与其他 MoE 模型部署难度对比
-
-| 维度 | Qwen3 Coder 480B | GLM-5.1 754B | DeepSeek R1 671B |
-|------|-----------------|---------------|-------------------|
-| 模型下载 | ~480 GB FP8 | ~705 GB FP8 → 转 FP4 | ~700 GB FP8 → 转 FP4 |
-| Cache 生成 | ❌ 不需要 | ⚠️ 28 min (CPU 12 workers) | ⚠️ 45 min |
-| /dev/shm 拷贝 | ❌ 不需要 | ⚠️ 4 min, 757 GB | ⚠️ 4 min |
-| 特殊环境变量 | 6 个常规 | + 3 个必设（漏一个 OOM） | + 3 个必设 |
-| 启动时间 | ⏳ 6-8 min（预期） | ~10 min | ~3.5 min |
-| TP 配置 | TP=8, EP=8 | TP=1, EP=8 | TP=1, EP=8 |
-| 量化 | FP8 (vLLM 原生) | FP4 (自定义 cache) | FP4 (自定义 cache) |
-| 部署难度 | ⭐ 简单 | ⭐⭐⭐ 复杂 | ⭐⭐⭐ 复杂 |
-| **TTM (time to model)** | **~50-80 min** | ~2-3 hours | ~2-3 hours |
-
-> **结论**: Qwen3 Coder 480B 是 v7x 上**最容易跑起来**的大 MoE 模型。
+| 阶段 | 单实例 | 1P1D PD 分离 |
+|------|-------|-------------|
+| 模型下载（HF → Lustre/PVC, 480 GB） | 30-60 min（仅首次）| 同左（Lustre 共享只需 1 次） |
+| vLLM 启动（含 XLA 编译） | ~7 min | ~7 min × 2 (P + D 并行) |
+| Smoke + 50-prompt benchmark | ~5 min | ~5 min |
+| Concurrency sweep (1K/1K, 1K/8K, 8K/1K × c=1,4,16,64) | ~80 min | ~30-60 min |
+| **首次跑通最小验证** | **~50-80 min** | **~70-90 min** |
+| **后续重启**（模型已在存储） | **~10 min** | **~12 min** |
 
 ---
 
@@ -1139,16 +1128,17 @@ Step 7: (可选) PD 分离部署 (1P1D, 2 个 v7x-8 节点)
 
 ## 后续 TODO
 
-### 已完成（2026-04-25 首轮实测）
-- [x] **实测启动时间**：cold ~7 min, warm ~5 min
-- [x] **实测 HBM 分配**：94.75 GB/device, 总 758 GB
-- [x] **实测 smoke test**：50 prompts in=256/out=128 全通过, peak 1050 tok/s, median ITL 47ms
-- [x] **总结踩坑**：PVC 满 + 本地权重缺 tokenizer（见 §常见问题排查 #9 #10）
+### 已完成（2026-04-25）
+- [x] **启动时间实测**：cold ~7 min, warm ~5 min
+- [x] **HBM 分配实测**：94.75 GB/device, 总 758 GB
+- [x] **完整 benchmark sweep** (3 workload × 4 concurrency = 12 数据点) — 详见 §6e
+- [x] **PD 分离 1P1D vs 单实例** 对比测试 — 详见 §7g (TPOT -11%, throughput +5-12%)
+- [x] **Lustre 共享存储方案文档** — §7a-pre
+- [x] **踩坑总结**：PVC 满 + 本地权重缺 tokenizer + libtpu lockfile（§常见问题 #6 #9 #10）
 
 ### 待跑
-- [ ] **完整 benchmark sweep** 1k/1k 在 concurrency 1, 4, 16, 64, 256, 1024
-- [ ] **完整 benchmark sweep** 1k/8k 在 concurrency 4, 16, 64, 128
-- [ ] **8k/1k benchmark**（长输入场景）
-- [ ] **PD 分离 1P1D vs 单实例**对比（需要再起一个 v7x-8 pod）
-- [ ] **跑 GSM8K 或 HumanEval 验证质量**（accuracy gate ≥ 0.85 flexible）
-- [ ] **写 README.en.md 英文版**
+- [ ] **更高 concurrency** sweep (c=128, 256, 512, 1024) — 验证是否能达 CI 阈值 1926 tok/s
+- [ ] **2P:1D / 1P:2D NPnD** 测试 — 验证不平衡 workload 下的优化效果
+- [ ] **跨 host PD 分离** — 验证 DCN 跨 zone 的 KV transfer 性能
+- [ ] **质量验证**：GSM8K / HumanEval (accuracy gate ≥ 0.85 flexible)
+- [ ] **README.en.md** 英文版（给国际客户）
