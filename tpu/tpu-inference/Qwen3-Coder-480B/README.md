@@ -633,6 +633,125 @@ done
 - **更高 throughput**：prefill 和 decode 资源比例可独立调
 - **支持长上下文**：prefill 实例的 HBM 全部给 attention
 
+> 📚 **配套深度讲解**（含原理、KV 传输路径、负载平衡分析、显存压力、NPnD 扩展）：
+> [PD 分离详解 — Qwen3-Coder 480B × TPU v7x](https://cc.higcp.com/assets/qwen3-coder-480b-pd-disagg-explained-20260425.html)
+
+### 7a-pre: ⭐ Lustre 共享存储方案（强烈推荐 PD 多 pod 部署）
+
+> **痛点**：默认 manifest 给 P 和 D 各自创建一份 hyperdisk PVC（ReadWriteOnce），意味着每个新 pod 都要**重新下载 480GB 权重**（~30-45 min × 每 pod）。
+>
+> **解决**：用 GKE Managed Lustre（ReadWriteMany）做共享存储，**所有 P/D pod 共享同一份权重**，下载一次终身受用。
+
+**前提**：集群已有 Lustre PVC。验证：
+```bash
+kubectl get pvc | grep lustre
+# 期望: lustre-pvc Bound  lustre-pv  36000Gi  RWX  ...
+kubectl get sc | grep lustre
+# 期望: lustre-rwx-1000mbps-per-tib  lustre.csi.storage.gke.io  ...
+```
+
+如果还没建，参考 [GKE Managed Lustre 文档](https://cloud.google.com/kubernetes-engine/docs/how-to/managed-lustre)。一次性建一个 ≥36 TB 的实例，所有 LLM 模型/数据集共享。
+
+#### Step 1: 一次性下载 Qwen3-Coder 权重到 Lustre
+
+起一个临时 download pod（不需要 TPU，CPU pod 即可）：
+
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: v1
+kind: Pod
+metadata:
+  name: qwen3-coder-downloader
+spec:
+  restartPolicy: Never
+  containers:
+  - name: dl
+    image: python:3.12-slim
+    command: ["/bin/bash", "-c"]
+    args:
+      - |
+        pip install -U huggingface_hub hf_transfer
+        export HF_HUB_ENABLE_HF_TRANSFER=1
+        mkdir -p /lustre/models/Qwen3-Coder-480B-A35B-Instruct-FP8
+        huggingface-cli download Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
+          --local-dir /lustre/models/Qwen3-Coder-480B-A35B-Instruct-FP8
+        echo "✅ Download complete:"
+        du -sh /lustre/models/Qwen3-Coder-480B-A35B-Instruct-FP8
+    env:
+    - name: HF_TOKEN
+      valueFrom:
+        secretKeyRef: { name: hf-token-secret, key: token }
+    resources:
+      requests: { cpu: "4", memory: "16Gi" }
+      limits:   { cpu: "8", memory: "32Gi" }
+    volumeMounts:
+    - name: lustre
+      mountPath: /lustre
+  volumes:
+  - name: lustre
+    persistentVolumeClaim:
+      claimName: lustre-pvc
+EOF
+
+# 跟踪进度
+kubectl logs -f qwen3-coder-downloader
+
+# 完成后清理
+kubectl delete pod qwen3-coder-downloader
+```
+
+预期耗时：**30-45 min**（取决于 HF 限速 + Lustre 写入带宽，typical 200-400 MB/s）。
+
+#### Step 2: 修改 single_prefill.yaml / single_decode.yaml 用 Lustre
+
+把每个 manifest 里的 PVC 块和 vLLM 启动命令做以下两处改动：
+
+**改动 1：用 lustre-pvc 替换专属 PVC**
+```yaml
+# 删除：
+# apiVersion: v1
+# kind: PersistentVolumeClaim
+# metadata: { name: pvc-vllm-p }      # 或 pvc-vllm-d
+# spec: { accessModes: [ReadWriteOnce], resources: { requests: { storage: 500Gi }}, storageClassName: hyperdisk-balanced }
+# 不需要建 PVC 了，直接用现有 lustre-pvc
+
+# Volume 改为：
+volumes:
+- name: lustre-vol
+  persistentVolumeClaim:
+    claimName: lustre-pvc          # ← 共享 RWX PVC
+
+# volumeMount 改为：
+volumeMounts:
+- name: lustre-vol
+  mountPath: /lustre               # ← 模型路径
+```
+
+**改动 2：vllm serve 用本地路径 + offline 模式**
+```bash
+# 之前: --model=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
+# 改为:
+--model=/lustre/models/Qwen3-Coder-480B-A35B-Instruct-FP8 \
+--served-model-name=Qwen3-Coder-480B-FP8
+
+# 同时加 env:
+- name: HF_HUB_OFFLINE
+  value: "1"                       # ← 防止 vLLM 重新去 HF download
+```
+
+#### 优势对比
+
+| 维度 | 默认方案（每 pod PVC） | Lustre 共享方案 |
+|------|----------------------|----------------|
+| 权重下载次数 | 每 pod 1 次（×P 数 + ×D 数） | **1 次，永久共享** |
+| 单 pod 盘大小 | 600 GB hyperdisk-balanced | 500 GB 即可（系统 + cache） |
+| 多机扩展（NPnD）每加一个 pod | 多 30-45 min 下载等待 | **0 等待，秒拉起** |
+| 权重一致性 | 每份独立，可能不同步 | 单一来源，永远一致 |
+| Lustre 读取性能 | — | 顺序 6.5 GB/s · 随机 0.03 GB/s（注意 mmap 不友好，见下） |
+| 成本 | 每 pod 600GB × 数量 | 共享 36TB Lustre 实例 |
+
+> ⚠️ **Lustre 性能注意**：vLLM 加载权重是 mmap 顺序读，Lustre 顺序读 6.5 GB/s 没问题。但如果你的应用用 mmap 随机读，Lustre 慢（0.03 GB/s）；这种情况先 `cp` 到 `/dev/shm` 再用。详见 [Lustre 随机读用 SHM 绕过](https://github.com/yangwhale/gpu-tpu-pedia/blob/main/tpu/tpu-inference/DeepSeek-R1-671B-FP4/README.md)。
+
 ### 7a: 创建 1P1D 部署
 
 需要 3 个 manifest（来自 [`vllm-project/tpu-inference`](https://github.com/vllm-project/tpu-inference/tree/main/.buildkite/kubernetes/manifests/v7x)）：
