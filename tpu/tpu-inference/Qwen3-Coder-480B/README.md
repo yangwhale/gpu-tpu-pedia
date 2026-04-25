@@ -9,6 +9,59 @@
 >
 > **替代模型**: [`BCCard/Qwen3-Coder-480B-A35B-Instruct-FP8-Dynamic`](https://huggingface.co/BCCard/Qwen3-Coder-480B-A35B-Instruct-FP8-Dynamic)（社区动态量化版）
 
+## 🎯 30 秒快速复现（精确命令）
+
+> **目标**：让任何新用户照抄下面 6 条命令，能在 1 小时内拿到跟我一样的实测结果。
+> **前提**：已有 GKE 集群 + v7x node pool + Pod 已起来（见 §Step 1）；模型权重已经在 `/usr/vllm/qwen3-coder-480b-fp8/`（含完整 49 个 safetensors + tokenizer 三件套）。
+
+```bash
+# ── ① 进入 Pod ──
+kubectl exec -it e2e-03 -- bash
+
+# ── ② 验证权重完整性（缺 tokenizer 见 §常见问题 #10）──
+ls /usr/vllm/qwen3-coder-480b-fp8/*.safetensors | wc -l   # 应该 49
+ls /usr/vllm/qwen3-coder-480b-fp8/{tokenizer.json,vocab.json,tokenizer_config.json}
+
+# ── ③ 启动 vLLM serve（验证用，最小化配置, ~7 min cold start）──
+mkdir -p /tmp/vllm-logs && cd /tmp
+SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
+nohup vllm serve /usr/vllm/qwen3-coder-480b-fp8 \
+  --served-model-name Qwen3-Coder-480B-FP8 \
+  --tensor-parallel-size 8 \
+  --enable-expert-parallel \
+  --max-num-batched-tokens 256 \
+  --max-num-seqs 256 \
+  --port 8000 --host 0.0.0.0 \
+  > /tmp/vllm-logs/serve.log 2>&1 &
+
+# ── ④ 等就绪（看到 'Application startup complete'）──
+tail -f /tmp/vllm-logs/serve.log   # Ctrl+C 退出
+# 或非阻塞：
+until curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/health | grep -q 200; do sleep 10; date; done
+echo "✅ Server ready"
+
+# ── ⑤ Smoke test（fibonacci 50 tokens, 应该 <1 秒返回）──
+time curl -s http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{
+  "model": "Qwen3-Coder-480B-FP8",
+  "prompt": "def fibonacci(n):",
+  "max_tokens": 50, "temperature": 0.0
+}' | python3 -c "import sys,json; print(json.load(sys.stdin)['choices'][0]['text'])"
+
+# ── ⑥ 50-prompt smoke benchmark（~5 分钟）──
+vllm bench serve --backend vllm \
+  --model Qwen3-Coder-480B-FP8 \
+  --tokenizer /usr/vllm/qwen3-coder-480b-fp8 \
+  --host localhost --port 8000 \
+  --num-prompts 50 \
+  --dataset-name random --random-input-len 256 --random-output-len 128 \
+  --request-rate 4 --ignore-eos
+```
+
+**预期结果**：50/50 succeed, peak ≈1050 tok/s, median ITL ≈47ms (见下表 ✅)。
+跑完后想做更系统的 benchmark sweep，看 §Step 6e 的 sweep 命令；想跑生产配置，重启时把 `--max-num-batched-tokens` 改成 8192、加 `--kv-cache-dtype fp8 --gpu-memory-utilization 0.95`，详见 §Step 4。
+
+---
+
 ## 🎯 关键性能（✅ 首轮实测 2026-04-25, TPU v7x-8 4 chips · FP8）
 
 | 操作点 | 配置 | 实测结果 | 状态 |
