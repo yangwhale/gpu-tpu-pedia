@@ -560,14 +560,18 @@ done
 > - **TTFT 随 concurrency 线性增长** (95→1691 ms, 18x) — 受 prefill batching 影响, c=64 一次 prefill 64×1024 tokens
 > - tok/s/user (c=64) = **23**, 仍超人类阅读速度 5x
 
-#### 1K input / 8K output（⏳ 待跑 sweep）
+#### 1K input / 8K output（部分实测 ✅ 2026-04-25）
 
-| Concurrency | Output tok/s | tok/s/chip | TTFT (s) | TPOT (ms) |
-|------------:|-------------:|-----------:|---------:|----------:|
-|           4 | ⏳ | ⏳ | ⏳ | ⏳ |
-|          16 | ⏳ | ⏳ | ⏳ | ⏳ |
-|          64 | ⏳ | ⏳ | ⏳ | ⏳ |
-|         128 | ⏳ | ⏳ | ⏳ | ⏳ |
+| Concurrency | Output tok/s | tok/s/chip | TTFT (med) | TPOT (med) | ITL (med) | tok/s/user |
+|------------:|-------------:|-----------:|----------:|----------:|----------:|-----------:|
+|           1 | **47.5** | 12 | **94 ms** | **21.0 ms** | **21.0 ms** | **47.5** |
+|           4 | **178** | 44 | **315 ms** | **22.4 ms** | **22.4 ms** | **44.5** |
+|          16 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+|          64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+> **重要发现**：与 1K/1K 同 concurrency 对比，throughput / TPOT / ITL **几乎完全一致**（c=1: 48 vs 47.5; c=4: 177 vs 178）。
+> 这意味着**输出长度对解码吞吐和延迟没有影响**——TPU v7x 的 JaxMoE GMM EP kernel 单 token 解码时间是常数 (~21 ms)，只随 concurrency 微增。
+> 客户视角：1K vs 8K 输出，每 token 体感速度不变，唯一差异是总耗时（8K 输出耗时 ≈ 8 × 1K 输出）。
 
 ---
 
