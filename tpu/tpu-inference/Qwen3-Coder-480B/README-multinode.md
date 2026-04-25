@@ -2,29 +2,24 @@
 
 > 端到端指南：在 **TPU v7x-16（2 hosts × 4 chips = 8 chips · 16 devices · 1.5 TB HBM）** 上跑单实例 vLLM 推理（TP=16）。
 >
-> **与单机 v7x-8 (TP=8) 的区别**：
-> - 用 `tpu7x-16` multi-host node pool（2 节点为一个 slice）
-> - 用 **LeaderWorkerSet (LWS)** + **Ray** 协调跨节点
-> - vLLM 起 1 个 API server（leader），其他节点跑 Ray worker
-> - 适合更大模型（1T+）或更高吞吐场景；Qwen3-Coder 480B 单机也能跑，但 TP=16 throughput 更高
+> **状态**（2026-04-25 实测）：基础架构 (LWS + Ray + 2 节点) **走通**，但 vLLM `tpu_inference` 在 **TP=16 device init 阶段触发上游 bug**（详见 §踩坑实录 #5），目前无法跑通完整推理。**需要等待 vllm-project/tpu-inference 团队修复**。
+>
+> 单机版（v7x-8 + TP=8）见同目录 [README.md](README.md) — 单机已完整验证生产可用。
 
-> **代码仓库**: 上游 [`vllm-project/tpu-inference`](https://github.com/vllm-project/tpu-inference)（main 分支）
-> **模型**: [`Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8`](https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8)（~480 GB FP8）
-> **参考**: [Google Codelabs: Deploy Multihost TPU vLLM Inferencing with Ray on GKE](https://codelabs.developers.google.com/next26/aiinfra-learning-pod/screen2-advanced-inferencing-part-1)
+---
 
-## 🎯 关键性能（⏳ 待实测）
+## 🎯 当前状态总结
 
-> 首次跑通后会更新。预期 vs 单机 (TP=8)：
-> - **Throughput**：理论 2x（chip 数翻倍），实测可能 1.5-1.8x（ICI/通信开销）
-> - **Per-user latency**：相似（TPOT ~21ms）或略高（跨 host 通信）
-> - **HBM**：1.5 TB total，可装 1T 级模型 FP8（Qwen3-Coder 480B 占 ~32%，余下给 KV）
-
-| 操作点 | 配置 | 预期 | 实测 |
-|--------|-----|------|-----|
-| 启动时间 (cold) | TP=16 + Ray cluster | ~10-15 min | ⏳ |
-| Single-user TPOT | c=1 | ~21-25 ms | ⏳ |
-| Peak throughput (c=64) | 1K/1K | ~2500-3000 tok/s | ⏳ |
-| HBM 占用/device | 模型 + KV | ~50-70 GB | ⏳ |
+| 阶段 | 状态 | 详情 |
+|------|------|------|
+| LWS Helm install | ✅ 走通 | yaml apply v0.7.0 |
+| Multi-host node pool 创建 | ✅ 走通 | 用 workload policy + 2x2x2 topology |
+| Pod 调度到 2 节点 | ✅ 走通 | 每个 pod 4 chip TPU |
+| Ray cluster 跨 pod 协调 | ✅ 走通 | 2 nodes 双向通信，识别 8 chips total |
+| vLLM 启动 + 模型识别 | ✅ 走通 | tpu7x-16, TP=16, 2 nodes_with_device |
+| **vLLM `init_device` (Ray actor)** | ❌ **上游 bug** | `AttributeError: d.coords` — ray actor process JAX 看 CPU 而非 TPU |
+| 权重加载 / XLA 编译 | ⏳ 阻塞 | 因 init_device 失败无法到达 |
+| 推理 / Benchmark | ⏳ 阻塞 | 同上 |
 
 ---
 
@@ -32,95 +27,65 @@
 
 | 项目 | 要求 |
 |------|------|
-| TPU | **v7x-16**（4x2x1 拓扑, 8 chips = 16 devices, 跨 2 节点） |
+| TPU | **v7x-16**（2x2x2 拓扑，8 chips = 16 devices, 跨 2 节点） |
 | HBM | 总 **1.5 TB** (192 GB/chip × 8) |
 | 主机内存 | ≥850 GB **per node** |
-| 网络 | 节点间需大 MTU (8896) + 高带宽（auto accelerator-network-profile） |
-| 存储 | Lustre 共享卷（推荐）或 GCS Fuse + Rapid Cache |
+| 网络 | 节点间需高带宽 + 大 MTU 友好（GKE auto） |
+| 存储 | Lustre 共享卷（推荐）— 已有 `/lustre/qwen3-coder-480b-fp8` |
 
 ### 架构图
 
 ```
 ┌─────────────────────────────────────────────────────────┐
 │  GKE Cluster (chrisya-v7x-v134)                        │
+│  Node Pool: np-tpu7x-spot-mh (topology 2x2x2)          │
 │                                                         │
 │  ┌────────────────────────┐  ┌────────────────────────┐│
 │  │ Node 1 (host-0)        │  │ Node 2 (host-1)        ││
 │  │  4 chips · 768 GB HBM  │  │  4 chips · 768 GB HBM  ││
 │  │                        │  │                        ││
-│  │  Pod: vllm-mh-0        │  │  Pod: vllm-mh-1        ││
+│  │  Pod: vllm-mh-0        │  │  Pod: vllm-mh-0-1      ││
 │  │   - Ray head 6379      │  │   - Ray worker         ││
-│  │   - vLLM API 8000      │  │   - (just compute)     ││
+│  │   - vLLM API 8000      │  │                        ││
 │  │   - LWS_WORKER_INDEX=0 │  │   - LWS_WORKER_INDEX=1 ││
-│  │   - TP slice 0-7       │  │   - TP slice 8-15      ││
 │  └─────┬──────────────────┘  └─────────┬──────────────┘│
 │        │                                │               │
-│        └────── ICI 跨 host (高速) ──────┘               │
-│        └────── DCN (Ray RPC) ───────────┘               │
-│                                                         │
-│  Service: vllm-mh-service (LoadBalancer/ClusterIP)     │
-│   selector: leaderworkerset.../worker-index=0          │
-│   → 只指向 leader (vllm-mh-0)                          │
+│        └────── Ray RPC (DCN) ───────────┘               │
 └─────────────────────────────────────────────────────────┘
 ```
 
 ---
 
-## ⚠️ 关键差异 vs 单机 (README §Step 1-7)
+## 完整复现命令（基础架构能跑到 init_device 失败为止）
 
-| 维度 | 单机 v7x-8 | **Multi-host v7x-16** |
-|------|----------|----------------------|
-| Pod 模式 | 单 Pod | **LeaderWorkerSet (LWS)** size=2 |
-| TP size | 8 | **16** |
-| Ray | 不需要 | **必需**（leader head + worker） |
-| Cluster addons | 无要求 | **RayOperator + LWS Helm chart** |
-| 网络 | 默认 | 推荐**自定义 VPC** + `mtu=8896` |
-| 启动时长 | ~7 min | **~10-15 min**（含 Ray cluster 协调）|
-| Service selector | `app=...` | `leaderworkerset.../worker-index=0`（只暴露 leader）|
+### Step 0: 集群前置（一次性）
 
----
-
-## Step 0: 集群前置（一次性）
-
-### 0a: 安装 LeaderWorkerSet (LWS) Helm chart
+#### 0a: 安装 LeaderWorkerSet (LWS)
 
 ```bash
-helm install lws oci://registry.k8s.io/lws/charts/lws \
-  --version=0.7.0 \
-  --namespace lws-system \
-  --create-namespace \
-  --wait
+LWS_VERSION="v0.7.0"
+kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/download/${LWS_VERSION}/manifests.yaml
+
+# 验证
+kubectl get crd leaderworkersets.leaderworkerset.x-k8s.io
+kubectl get pods -n lws-system
 ```
 
-验证：`kubectl get crd leaderworkersets.leaderworkerset.x-k8s.io`
+### Step 1: 创建 multi-host node pool
 
-### 0b: 启用集群 RayOperator addon（如未启用）
-
-```bash
-gcloud container clusters update chrisya-v7x-v134 \
-  --location=us-central1 \
-  --update-addons=RayOperator=ENABLED
-```
-
-> 已经装了 GcsFuseCsiDriver，不需要重复。
-
----
-
-## Step 1: 创建 multi-host node pool
-
-### 1a: 创建 workload policy（topology 4x2x1 = 8 chips）
+#### 1a: workload policy（topology 2x2x2 = 8 chips）
 
 ```bash
 gcloud compute resource-policies create workload-policy chrisya-tpu7x-spot-mh \
   --type=HIGH_THROUGHPUT \
-  --accelerator-topology=4x2x1 \
+  --accelerator-topology=2x2x2 \
   --region=us-central1 \
   --project=cloud-tpu-multipod-dev
 ```
 
-> **拓扑选择**：`4x2x1` 8 chips = **2 hosts × 4 chips/host**，是 v7x multi-host 的最小单位。
+> ⚠️ **拓扑选择踩坑**：v7x 的 `tpu7x-standard-4t` machine type **不兼容 `4x2x1`** — 必须用 `2x2x2`（同样 8 chips, 但布局是立方体）。
 
-### 1b: 创建 multi-host node pool（spot, 2 nodes）
+#### 1b: multi-host spot node pool（2 nodes）
 
 ```bash
 gcloud container node-pools create np-tpu7x-spot-mh \
@@ -128,7 +93,7 @@ gcloud container node-pools create np-tpu7x-spot-mh \
   --region=us-central1 \
   --project=cloud-tpu-multipod-dev \
   --machine-type=tpu7x-standard-4t \
-  --tpu-topology=4x2x1 \
+  --tpu-topology=2x2x2 \
   --num-nodes=2 \
   --node-locations=us-central1-c \
   --disk-type=hyperdisk-balanced \
@@ -140,22 +105,20 @@ gcloud container node-pools create np-tpu7x-spot-mh \
   --placement-policy=chrisya-tpu7x-spot-mh
 ```
 
-> **预计 2-5 分钟**，spot capacity 可能要重试。
+> 大概 **3-5 分钟**。Spot 可能首次失败需要重试。
+> ⚠️ **Spot 容易被回收**：实测一次创建后约 5-10 分钟可能被 preempted，pool 进入 RECONCILING 状态自动重新分配 node。
 
-### 1c: 验证 2 个 node 已 join
+#### 1c: 验证
 
 ```bash
 kubectl get nodes -L cloud.google.com/gke-nodepool,cloud.google.com/gke-tpu-topology \
   | grep np-tpu7x-spot-mh
+# 预期 2 个 node, topology=2x2x2
 ```
 
-预期看到 2 个 node，topology 都是 `4x2x1`。
+### Step 2: 部署 LWS + vLLM TP=16
 
----
-
-## Step 2: 部署 LWS + vLLM TP=16
-
-### 2a: 准备 Service（只暴露 leader pod）
+#### 2a: Service（只暴露 leader pod）
 
 ```bash
 kubectl apply -f - <<'EOF'
@@ -175,13 +138,7 @@ spec:
 EOF
 ```
 
-### 2b: 部署 LeaderWorkerSet（2 host 协调）
-
-> **关键点**：
-> - `size: 2` = 2 个 pod (leader + 1 worker)
-> - leader 启 Ray head + vllm api server, worker 只启 ray worker
-> - 用 lustre-pvc 共享权重（已有 `/lustre/qwen3-coder-480b-fp8`）
-> - 用 model name `Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8` + HF cache symlink
+#### 2b: LeaderWorkerSet（已应用所有 verified workaround）
 
 ```bash
 kubectl apply -f - <<'EOF'
@@ -193,7 +150,7 @@ spec:
   replicas: 1
   leaderWorkerTemplate:
     size: 2
-    restartPolicy: RecreateGroupOnPodRestart
+    restartPolicy: Default          # ⚠️ 不能用 RecreateGroupOnPodRestart, 任何重启会无限重建
     workerTemplate:
       metadata:
         labels:
@@ -204,7 +161,7 @@ spec:
         nodeSelector:
           cloud.google.com/gke-nodepool: np-tpu7x-spot-mh
           cloud.google.com/gke-tpu-accelerator: tpu7x
-          cloud.google.com/gke-tpu-topology: 4x2x1
+          cloud.google.com/gke-tpu-topology: 2x2x2
         tolerations:
         - { effect: NoSchedule, key: cloud.google.com/gke-spot, operator: Equal, value: "true" }
         - { effect: NoSchedule, key: google.com/tpu, operator: Exists }
@@ -221,7 +178,7 @@ spec:
           securityContext: { privileged: true }
         containers:
         - name: main
-          image: us-central1-docker.pkg.dev/chris-pgp-host/ai-infra/vllm-tpu:latest
+          image: vllm/vllm-tpu:nightly-20260330-2f76400-8c0b626   # codelab 验证版本
           command: ["sh", "-c"]
           args:
           - |
@@ -233,25 +190,31 @@ spec:
               sleep 5
             done
             LEADER_IP=$(getent hosts $LEADER_DNS | awk '{print $1}')
-            echo "Leader IP: $LEADER_IP"
 
             export JAX_PLATFORMS=''
+            export PJRT_DEVICE=TPU
+            export TPU_BACKEND_TYPE=jax
+            export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
             export TPU_MULTIHOST_BACKEND=ray
             export JAX_DISTRIBUTED_INITIALIZATION_TIMEOUT=300
             export VLLM_HOST_IP=$MY_TPU_IP
             export MODEL_IMPL_TYPE=vllm
             export HF_HOME=/lustre
             export HF_HUB_OFFLINE=1
+            export SKIP_JAX_PRECOMPILE=1
+            export VLLM_XLA_CHECK_RECOMPILATION=0
+            export USE_MOE_EP_KERNEL=0
+            export USE_BATCHED_RPA_KERNEL=0
+            export VLLM_LOGGING_LEVEL=INFO
 
             if [ "$LWS_WORKER_INDEX" = "0" ]; then
-              echo "=== Starting Ray Head ==="
-              ray start --head --port=6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}' --block &
+              echo "=== Starting Ray Head (daemon mode, NOT --block) ==="
+              ray start --head --port=6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}'
               sleep 20
               until ray status; do sleep 5; done
 
               echo "=== Starting vLLM API Server (TP=16) ==="
-              python3 -m vllm.entrypoints.openai.api_server \
-                --model=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
+              vllm serve Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
                 --served-model-name=Qwen3-Coder-480B-FP8 \
                 --tensor-parallel-size=16 \
                 --distributed-executor-backend=ray \
@@ -262,21 +225,14 @@ spec:
                 --kv-cache-dtype=fp8 \
                 --gpu-memory-utilization=0.9 \
                 --enable-expert-parallel \
-                --async-scheduling \
                 --host=0.0.0.0 --port=8000
             else
-              echo "=== Starting Ray Worker, joining $LEADER_IP:6379 ==="
+              echo "=== Starting Ray Worker (--block) ==="
               ray start --address=${LEADER_IP}:6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}' --block
             fi
           ports:
           - { containerPort: 8000 }
           - { containerPort: 6379 }
-          env:
-          - { name: SKIP_JAX_PRECOMPILE, value: "1" }
-          - { name: VLLM_XLA_CHECK_RECOMPILATION, value: "0" }
-          - { name: USE_MOE_EP_KERNEL, value: "0" }
-          - { name: USE_BATCHED_RPA_KERNEL, value: "0" }
-          - { name: VLLM_LOGGING_LEVEL, value: INFO }
           resources:
             limits:   { google.com/tpu: "4", memory: "850Gi", cpu: "200" }
             requests: { google.com/tpu: "4", memory: "850Gi", cpu: "200" }
@@ -292,67 +248,179 @@ spec:
 EOF
 ```
 
-### 2c: 等所有 pod Ready
+#### 2c: 监控
 
 ```bash
+# 等所有 pod Running
 kubectl get pods -l leaderworkerset.sigs.k8s.io/name=vllm-mh -w
-```
 
-预期 2 个 pod 都 `Ready 1/1`，需要 ~10-15 分钟。
+# 看 Ray cluster 状态
+kubectl exec vllm-mh-0 -c main -- ray status
+
+# 看 vLLM 启动 log
+kubectl logs vllm-mh-0 -c main -f
+```
 
 ---
 
-## Step 3: 验证 + Benchmark
+## 🐛 踩坑实录（实战经验，全部 verified）
 
-### 3a: Smoke test（端口转发）
+### 坑 #1: TPU 拓扑 4x2x1 不兼容 tpu7x-standard-4t
+
+**症状**: `gcloud container node-pools create` 报 `Accelerator topology: 4x2x1 is not compatible with the provided machine type: tpu7x-standard-4t`
+
+**原因**: v7x 的 `tpu7x-standard-4t` machine type 仅支持特定 topology 集合，4x2x1 不在其中。
+
+**修复**: 用 **`2x2x2`**（同样 8 chips 但是 cube 布局）。
+
+### 坑 #2: `ray --block &` 在 sh -c args 内不生效
+
+**症状**: Leader pod log 一直停在 `ray start --block` 输出，永远不进 `vllm serve`。
+
+**原因**: K8s container `args:` 段内的 `&` 后台符号在某些 shell parse 下被吞掉，`ray --block` 真的 block 了主 shell。
+
+**修复**: **Leader 用 daemon 模式（不加 `--block`）**，worker 用 `--block`：
+```bash
+# Leader
+ray start --head --port=6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}'  # 无 --block, daemon 化
+sleep 20
+until ray status; do sleep 5; done
+vllm serve ...
+
+# Worker
+ray start --address=${LEADER_IP}:6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}' --block  # block 保活
+```
+
+### 坑 #3: LWS `RecreateGroupOnPodRestart` 太激进
+
+**症状**: pod 任何 restart 触发整个 group recreate, 永远不能稳定到 vllm 加载阶段。
+
+**原因**: vLLM cold start 时偶尔有非致命错误，`RecreateGroupOnPodRestart` 把整个 group recycle，永远不能恢复。
+
+**修复**: 改 `restartPolicy: Default`（标准 K8s 行为，container restart 不触发 group recreate）。
+
+### 坑 #4: `--async-scheduling` 不兼容 ray executor
+
+**症状**:
+```
+pydantic_core._pydantic_core.ValidationError: Value error, `ray` does not support async scheduling yet.
+```
+
+**原因**: vLLM 的 async scheduling 还没支持 ray distributed executor backend。
+
+**修复**: **Multi-host (`--distributed-executor-backend=ray`) 配置不能用 `--async-scheduling`**。去掉这个 flag。
+
+### 坑 #5 (BLOCKER): vLLM TP=16 init_device `AttributeError: d.coords`
+
+**症状**:
+```
+File "/workspace/tpu_inference/tpu_inference/distributed/utils.py", line 125,
+    in get_device_topology_order_id
+    local_anchor = min(d.coords for d in local_devices)
+AttributeError
+```
+
+**根因**: Ray actor process 在 init_device 时 `local_devices` 拿到的是 **CPU device**（没 `coords` 属性）, 而不是 TPU device。代码本身的 `if not all(hasattr(d, "coords") ...): logger.error(...)` 只 log 但不 fallback。
+
+**深入分析**：JAX 在 ray actor process 内 init backend 时报错：
+```
+RuntimeError: Unable to initialize backend 'tpu':
+  INVALID_ARGUMENT: TPU initialization failed:
+  Invalid --deepsea_slice_builder_worker_addresses specified.
+  Expected 2 worker addresses, got 1.
+```
+
+JAX 的 multi-host TPU init 只看到 1 个 worker（它自己），缺另一个 worker 的 address。这是 **`libtpu` 的 multi-host coordination 问题**。
+
+**已尝试的所有 workaround**（都没解决）：
+
+| 尝试 | 结果 |
+|------|------|
+| 加 `PJRT_DEVICE=TPU` env | ❌ 仍 AttributeError |
+| 加 `TPU_BACKEND_TYPE=jax` env | ❌ 同上 |
+| 加 `LD_LIBRARY_PATH=...:/usr/local/lib` | ❌ 同上 |
+| 切换 image 到 `vllm/vllm-tpu:nightly` (latest) | ❌ 同上 |
+| 切换 image 到 codelab 同款 `vllm/vllm-tpu:nightly-20260330-2f76400-8c0b626` | ❌ 同上 |
+| `JAX_DISTRIBUTED_INITIALIZATION_TIMEOUT=300` | ❌ 不影响（不是 timeout 问题）|
+
+**当前结论**: **TPU v7x 的 multi-host TPU 协调在 `libtpu` 层面有 bug**，导致 JAX 在 ray actor process 内拿不到完整的 worker address list，fallback 到 CPU。这是 **vllm-project/tpu-inference + libtpu 上游需要修复的问题**。
+
+**对比 codelab**: 同样的 LWS + Ray 模式在 v6e (`ct6e-standard-4t` + topology `4x8`) 是 work 的（codelab 跑 Qwen 30B success）。**v7x multi-host 还需要 upstream patch**。
+
+### 坑 #6: Spot multi-host pool 容易被 preempt
+
+**症状**: pool 状态从 RUNNING 突然变 RECONCILING，几分钟后又回 RUNNING（不同 node ID）。
+
+**原因**: GCE spot 容量浮动，整个 multi-host slice 被一起回收 + 重新分配。
+
+**影响**: 已经启动的 pod 全部 reset，cold start 时间倍增。
+
+**Workaround**: 用 reservation 替代 spot（生产环境）。开发用 spot 接受偶尔重启即可。
+
+---
+
+## 已知 v6e 工作的 codelab 同款步骤参考
+
+如果要在 **v6e** 上跑 multi-host vLLM（验证可行），参考 [Google Codelabs: Deploy Multihost TPU vLLM Inferencing with Ray on GKE](https://codelabs.developers.google.com/next26/aiinfra-learning-pod/screen2-advanced-inferencing-part-1)。
+
+主要差异：
+- machine type: `ct6e-standard-4t`（v6e）
+- topology: `4x8`（32 chips, 8 hosts）
+- 模型: Qwen 30B（小很多）
+- 更宽松的 TPU 兼容性
+
+---
+
+## 下一步建议
+
+### 短期（客户角度）
+1. **生产部署**：仍用单机 v7x-8 + TP=8（见 [README.md](README.md)），已验证完美工作
+2. **大模型场景**：480B FP8 单机已能跑（768 GB HBM 富余），暂不需要 multi-host
+3. **若一定要 multi-host**：暂时用 v6e（codelab 验证）或等待 v7x bug fix
+
+### 长期（团队角度）
+1. **跟踪 vllm-project/tpu-inference 的 libtpu multi-host fix**
+2. **测试新版本 image** 时优先验证 `tpu_inference/distributed/utils.py:125` 是否仍报 AttributeError
+3. **联系 Google TPU 团队** 升级 v7x multi-host runtime support
+
+---
+
+## 实测时间线（2026-04-25）
+
+| 时间 | 事件 |
+|------|------|
+| 15:31 | 装 LWS via yaml |
+| 15:32 | 创建 workload policy 4x2x1 失败（不兼容 v7x） |
+| 15:35 | 创建 workload policy 2x2x2 成功 + node pool 创建 |
+| 15:37 | LWS apply, 2 pods 调度成功 |
+| 15:43 | 第一次失败：`ray --block &` 卡住 leader |
+| 15:50 | 修复 leader daemon 模式后再启动 |
+| 15:58 | 第二次失败：LWS RecreateGroupOnPodRestart 无限循环 |
+| 16:05 | 改 restartPolicy=Default 后再启动 |
+| 16:12 | 第三次失败：`--async-scheduling` 不兼容 ray |
+| 16:25 | 去掉 async-scheduling, Ray cluster 双节点正确识别 8 chips |
+| 16:31+ | **多次重启都卡在 init_device AttributeError**（坑 #5）|
+| 16:33-17:11 | 试切换 image (latest→nightly→codelab 固定版本)、env vars (PJRT/LD_LIBRARY_PATH) — **均失败** |
+| 17:12 | 决定文档化所有踩坑作为最终交付，等待上游 fix |
+
+---
+
+## 资源清理
 
 ```bash
-kubectl port-forward service/vllm-mh-service 7800:8000 &
-sleep 5
-curl http://localhost:7800/v1/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"Qwen3-Coder-480B-FP8","prompt":"def quicksort(arr):","max_tokens":50,"temperature":0}'
+# 删 LWS workload
+kubectl delete lws vllm-mh
+kubectl delete service vllm-mh-service
+
+# 删 multi-host node pool
+gcloud container node-pools delete np-tpu7x-spot-mh \
+  --cluster=chrisya-v7x-v134 --region=us-central1 \
+  --project=cloud-tpu-multipod-dev --quiet
+
+# 删 workload policy
+gcloud compute resource-policies delete chrisya-tpu7x-spot-mh \
+  --region=us-central1 --project=cloud-tpu-multipod-dev --quiet
 ```
-
-### 3b: Benchmark vs 单机 TP=8
-
-```bash
-LEADER_POD=$(kubectl get pods -l leaderworkerset.sigs.k8s.io/name=vllm-mh,leaderworkerset.sigs.k8s.io/worker-index=0 -o jsonpath='{.items[0].metadata.name}')
-kubectl exec $LEADER_POD -- vllm bench serve --backend vllm \
-  --model Qwen3-Coder-480B-FP8 \
-  --tokenizer /lustre/qwen3-coder-480b-fp8 \
-  --host localhost --port 8000 \
-  --num-prompts 32 \
-  --dataset-name random --random-input-len 1024 --random-output-len 1024 \
-  --max-concurrency 16 --request-rate inf --num-warmups 2 --ignore-eos
-```
-
----
-
-## Step 4: 实测对比表（⏳ 待填）
-
-### TP=16 (multi-host) vs TP=8 (单机)
-
-| Concurrency | TP=8 tok/s | **TP=16 tok/s** | TP=8 TPOT | **TP=16 TPOT** | Speedup |
-|------------:|-----------:|----------------:|----------:|---------------:|--------:|
-| 1 | 48 | ⏳ | 20.6 ms | ⏳ | ⏳ |
-| 4 | 177 | ⏳ | 22.2 ms | ⏳ | ⏳ |
-| 16 | 602 | ⏳ | 25.6 ms | ⏳ | ⏳ |
-| 64 | 1478 | ⏳ | 40.0 ms | ⏳ | ⏳ |
-
----
-
-## 常见问题排查（持续更新）
-
-### 1. Pod stuck Pending → check spot capacity / placement policy
-
-### 2. Ray worker 找不到 leader → DNS 解析超时
-- 检查 `vllm-mh-0.vllm-mh` 是否能解析（LWS 自动建 service）
-- 增大 `JAX_DISTRIBUTED_INITIALIZATION_TIMEOUT`
-
-### 3. TP=16 启动 OOM → `gpu-memory-utilization` 降到 0.85
-
-### 4. KV cache 不够 → `kv-cache-dtype=fp8` 必须开
 
 ---
 
@@ -360,18 +428,8 @@ kubectl exec $LEADER_POD -- vllm bench serve --backend vllm \
 
 | 资源 | 链接 |
 |------|------|
-| Google Codelabs (multihost vLLM + Ray) | [link](https://codelabs.developers.google.com/next26/aiinfra-learning-pod/screen2-advanced-inferencing-part-1) |
+| Google Codelabs (multihost vLLM + Ray, v6e 验证) | [link](https://codelabs.developers.google.com/next26/aiinfra-learning-pod/screen2-advanced-inferencing-part-1) |
 | 上游 multihost benchmark 脚本 | [run_qwen3_coder_480b_1k_8k.sh](https://github.com/vllm-project/tpu-inference/blob/main/scripts/multihost/benchmarks/torchax/run_qwen3_coder_480b_1k_8k.sh) |
 | 单机 README | [README.md](README.md) |
 | LeaderWorkerSet docs | https://lws.sigs.k8s.io/ |
-
----
-
-## 后续 TODO
-
-- [ ] 实测启动时间
-- [ ] 实测 TP=16 vs TP=8 throughput 对比
-- [ ] 实测 KV cache 容量
-- [ ] 跑 1k/8k 和 8k/1k 对比
-- [ ] 写完整踩坑记录（实操中遇到的）
-- [ ] 写英文版 README-multinode.en.md
+| `tpu_inference/distributed/utils.py:125` (bug 位置) | [link](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/distributed/utils.py#L125) |
