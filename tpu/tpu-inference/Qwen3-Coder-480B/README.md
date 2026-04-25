@@ -540,23 +540,25 @@ done
 - Hot path（编译完成后）真实 `inter-token latency = 47ms`（即 ≈21 tok/s/user）
 - Peak 1050 tok/s 已经接近 buildkite CI 验证的上限 1378 tok/s
 
-#### 1K input / 1K output（✅ c=64 已实测 2026-04-25）
+#### 1K input / 1K output（✅ 全套 sweep 已实测 2026-04-25）
 
-| Concurrency | Output tok/s | Peak tok/s | tok/s/chip | TTFT (med) | TPOT (med) | ITL (med) | Req/s | Status |
-|------------:|-------------:|----------:|----------:|----------:|----------:|--------:|--------:|--------|
-|           1 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
-|           4 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
-|          16 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
-|          **64** | **354 (avg)** | **1664** | **89 (avg) / 416 (peak)** | **209ms** | **44ms** | **40ms** | **0.33** | ✅ 320/320 |
-|         256 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
-|        1024 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
+| Concurrency | Output tok/s | tok/s/chip | TTFT (med) | TPOT (med) | ITL (med) | tok/s/user | Status |
+|------------:|-------------:|----------:|----------:|----------:|--------:|-----------:|--------|
+|           1 | **48** | 12 | **95 ms** | **20.6 ms** | **20.6 ms** | **48** | ✅ 2/2 |
+|           4 | **177** | 44 | **386 ms** | **22.3 ms** | **22.2 ms** | **44** | ✅ 8/8 |
+|          16 | **602** | 151 | **549 ms** | **25.9 ms** | **25.6 ms** | **38** | ✅ 32/32 |
+|          64 | **1478** | 370 | **1691 ms** | **41.6 ms** | **40.0 ms** | **23** | ✅ 128/128 |
+|         256 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
+|        1024 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ | 待跑 |
 
-> **c=64 实测说明 (320 prompts, request-rate=inf, num-warmups=3, 总时长 960s)**:
-> - **Hot path 表现优秀**: median TPOT 44ms, median ITL 40ms（≈25 tok/s/user）
-> - **Peak throughput 1664 tok/s** 已接近 CI 阈值 1926
-> - Avg throughput 354 tok/s 偏低，因为**首批 XLA 编译**拉高了 mean TTFT (29.2s mean vs 209ms median, P99 222s)
-> - 第二次 run（XLA cache hot）avg throughput 会显著提升（待 sweep 验证）
-> - Tested with `--max-num-batched-tokens 8192 --max-num-seqs 512 --kv-cache-dtype fp8 --gpu-memory-utilization 0.95 --async-scheduling`
+> **方法论**：每个 cell 跑 `prompts = max(4, concurrency × 2)`，第一次 = warmup 触发 XLA 编译，第二次 = real 数据。表格内为 **real (warm) 结果**。
+>
+> **关键发现**：
+> - **单用户体感 48 tok/s** (c=1) — 已经超过人类阅读速度（人均阅读 ≈ 4-5 tok/s）
+> - **TPOT 极稳定**: 1→64 并发，TPOT 仅从 20.6→41.6 ms (≈2x)，但 throughput 提升 30x — **TPU v7x 的 batching 利用率非常高**
+> - **聚合 1478 tok/s** (c=64) — 接近 CI 阈值 1926
+> - **TTFT 随 concurrency 线性增长** (95→1691 ms, 18x) — 受 prefill batching 影响, c=64 一次 prefill 64×1024 tokens
+> - tok/s/user (c=64) = **23**, 仍超人类阅读速度 5x
 
 #### 1K input / 8K output（⏳ 待跑 sweep）
 
