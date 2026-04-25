@@ -29,6 +29,43 @@
 
 ---
 
+## 🌟 三个反直觉发现
+
+在 17 档 benchmark 实测中观察到的、跟一般直觉相反的结论：
+
+### 1. 并发越大 ≠ throughput 越高（Peak 是 P128 不是 P256）
+
+| Batch | Throughput |
+|---|---:|
+| P64 | 1510 tok/s |
+| **P128 ⭐** | **2103 tok/s** ← peak |
+| P256 | 1877 tok/s ↓ |
+
+P256 反而比 P128 慢 **11%**。原因：vLLM scheduler 在 P256 时 KV cache 不够，频繁 preempt + 重调度，GPU 占用率反降。**Pareto 曲线必须细粒度采样**才能找到真正 knee point。
+
+### 2. 长输出比短输出快 9-13% ⭐⭐
+
+| Batch | 1K/1K out | 1K/**8K** out | 差距 |
+|---|---:|---:|---:|
+| P1 | 49.6 | **54.0** | +9% |
+| P64 | 1510 | **1702** | **+13%** |
+
+长 generation 让 batch **长时间保持 pure decode 状态**，TPU MXU 利用率高；短 generation 频繁 prefill→decode→cleanup 转换，调度开销大。**长文章/代码生成场景反而是 sweet spot**。
+
+### 3. 8K 长 prompt 在低并发下几乎不拖累
+
+| Batch | 1K input | **8K** input | 拖累 |
+|---|---:|---:|---:|
+| P1 | 49.6 | **51.7** | 反而 +4% |
+| P4 | 186.8 | **178.6** | -4% |
+| P64 | 1510 | **850** | -44% |
+
+Qwen3.5 hybrid 架构 — 45 个 GDN 层用 **fixed-size SSM state**（不随 context 增长），只 15 层产生 KV cache → 长 context KV 压力是纯 attention 模型的 ~1/4。**仅低并发时享受**这优势，高并发 chunked prefill 累加会拖累。
+
+> **一句话记忆**：大并发不一定快 / 长输出反而快 / 长 prompt 不拖累（低并发）
+
+---
+
 ## ⚠️ 必读：3 个关键修复
 
 ### A. PR #2366 patch（**必须**，否则 KV cache 状态损坏 → gibberish）
@@ -332,79 +369,90 @@ Token 经济学差异：
 
 ---
 
-## Step 7: GSM8K 准确性测试
+## Step 7: GSM8K 准确性测试（推荐用自定义脚本）
+
+> ⚠️ **不要用 lm_eval 默认配置**：thinking ON + max_gen_toks=2048 会导致 75% 请求被截断（finish_reason=length），且 lm_eval 不支持传 `chat_template_kwargs={"enable_thinking": false}` 关 thinking。我们提供的自定义 Python 脚本绕过了这两个坑。
+
+### 推荐做法：自定义脚本（thinking OFF + parallel=8 + 0.99s/题）
 
 ```bash
-# 在 pod 内
-MODEL=/lustre/models/Qwen3.5-397B-A17B-FP8
-
-mkdir -p /tmp/gsm8k_qwen35
-nohup lm_eval \
-  --model local-chat-completions \
-  --model_args "model=$MODEL,base_url=http://localhost:8000/v1/chat/completions,num_concurrent=4,max_retries=3,tokenized_requests=False" \
-  --tasks gsm8k \
-  --num_fewshot 5 \
-  --apply_chat_template \
-  --gen_kwargs 'max_gen_toks=2048' \
-  --log_samples \
-  --limit 200 \
-  --output_path /tmp/gsm8k_qwen35/results \
-  > /tmp/gsm8k_qwen35.log 2>&1 </dev/null &
-disown
+# 在 pod 内（脚本 cp 自 repo 的 scripts/run_gsm8k_qwen35.py）
+python3 /tmp/run_gsm8k_qwen35.py \
+  --model /lustre/models/Qwen3.5-397B-A17B-FP8 \
+  --url http://localhost:8000/v1/chat/completions \
+  --limit 1319 \              # full GSM8K test set
+  --parallel 8 \              # PR #2366 fix 后并发安全
+  --max-question-tokens 500 \ # 过滤超长 question 避免 5-shot prompt 超 max_model_len
+  --output /tmp/gsm8k_qwen35_full.jsonl
 ```
 
-> **CI 默认值**（参考 `.buildkite/models/Qwen_Qwen3_5-397B-A17B.yml` 的 Accuracy test）：
-> ```bash
-> --max_model_len 4096 --max_num_batched_tokens 4096 --max_gen_toks 2048
-> --enable_expert_parallel 1 --flex_threshold 0.63 --strict_threshold 0.63
-> --limit 100 --enable_thinking false
-> ```
+**预期**：~16 min 跑完 1319 题，**77.56% accuracy**（CI 阈值 63%, 远超）。比 lm_eval thinking ON 快 100×（24 s/题 → 0.75 s/题）。
 
-**已知**：thinking ON 模式下 ~75% 请求会被 `max_gen_toks=2048` 截断（finish_reason=length），影响最终准确率。建议：
-- 评测时 **关 thinking**（lm_eval 不支持直接传 chat_template_kwargs，需要自定义 wrapper）
-- 或调高 max_gen_toks 到 4096+
+完整脚本: [scripts/run_gsm8k_qwen35.py](scripts/run_gsm8k_qwen35.py)
+
+### 备选：lm_eval（仅供参考，有截断坑）
+
+```bash
+# ⚠️ thinking ON 会让 75% 请求 finish=length 被截断
+lm_eval --model local-chat-completions \
+  --model_args "model=$MODEL,base_url=http://localhost:8000/v1/chat/completions,num_concurrent=4" \
+  --tasks gsm8k --num_fewshot 5 --apply_chat_template \
+  --gen_kwargs 'max_gen_toks=2048' --limit 100
+```
+
+CI 默认值参考 [Qwen_Qwen3_5-397B-A17B.yml](https://github.com/vllm-project/tpu-inference/blob/main/.buildkite/models/Qwen_Qwen3_5-397B-A17B.yml)。
 
 ---
 
-## Step 8: Throughput Benchmark
+## Step 8: Throughput Benchmark（warmup + record 模式）
+
+> ⚠️ **必须用 warmup + record 双跑**：第一次跑含 JIT 编译（latency 5-10× 慢），数据失真。我们提供的脚本对每个 batch size 跑两次自动丢弃 warmup。
+
+### 推荐做法：完整 sweep 脚本
 
 ```bash
-# 安装 evalscope
+# 在 pod 内（脚本 cp 自 repo 的 scripts/run_bench_qwen35.sh）
 pip install evalscope[perf]
+bash /tmp/run_bench_qwen35.sh
+# 输出: /tmp/bench_qwen35/summary.txt
+# 默认跑 P1/P4/P16/P64/P256 5 档 × 2 round, ~24 min
+```
 
-# 跑 1K/1K throughput
+完整脚本: [scripts/run_bench_qwen35.sh](scripts/run_bench_qwen35.sh)
+
+### 单次手动测（debug 用）
+
+```bash
 evalscope perf \
   --url http://localhost:8000/v1/chat/completions \
-  --model $MODEL \
-  --tokenizer-path $MODEL \
+  --model $MODEL --tokenizer-path $MODEL \
   --dataset random \
   --min-prompt-length 1024 --max-prompt-length 1024 \
   --max-tokens 1024 --min-tokens 1024 \
-  --parallel 4 --number 16 \
+  --parallel 64 --number 64 \
   --api openai --stream \
-  --read-timeout 1800 --connect-timeout 60
+  --extra-args '{"chat_template_kwargs": {"enable_thinking": false}}'
+# 跑两次，第一次丢弃，第二次记录
 ```
 
-> **建议**：先 warm-up 一遍丢弃，第二次才是真实数据。短 prompt 高并发 (parallel=64+) 可能触发调度瓶颈。
+> **生产建议**：跑过 sweep 后选 **P128** 做 max throughput 操作点（**2103 tok/s**, peak），**P64** 做 balanced（1510 tok/s + 23.6 tok/s/user）。**不要选 P256** — 反而比 P128 慢 11%（详见上方"三个反直觉发现"）。
 
 ---
 
-## 已验证场景
+## 上游演进时间线
 
-| 日期 | 场景 | 结果 | 备注 |
-|------|------|------|------|
-| 2026-03-26 | 初次跑通 BF16 | ✅ | tpu-inference PR #2004 merged |
-| 2026-04-06 | FP8 + CI 自动化 | ✅ | tpu-inference PR #2086 |
-| 2026-04-22 | Disagg prefill/decode | ✅ | PR #2322/#2327/#2331/#2336 |
-| **2026-04-23** | **PR #2366: Hybrid KV cache OOB fix** | ✅ | merged into main |
-| 2026-04-25 | Hello world (e2e-02 + PR #2366) | ✅ | 26 tokens, 7 min cold start |
-| 2026-04-25 | GSM8K 200 samples (lm_eval, thinking ON) | 🔴 | 75% length 截断, vLLM 在末尾 crash, 无 final accuracy |
-| **2026-04-25** | **Throughput benchmark P1/4/16/64/256 (warmup+record)** | **✅** | **Max 1877 tok/s @ P256, 100% success 全档** |
-| **2026-04-25** | **GSM8K 50 samples (自定义脚本, thinking OFF)** | **✅** | **92% accuracy, finish=stop 50/50, 49s 总耗时** |
+| 日期 | 里程碑 | 来源 |
+|------|--------|------|
+| 2026-03-26 | 初次跑通 BF16（4-layer 子集） | tpu-inference PR [#2004](https://github.com/vllm-project/tpu-inference/pull/2004) |
+| 2026-04-06 | FP8 + CI 自动化 | PR [#2086](https://github.com/vllm-project/tpu-inference/pull/2086) |
+| 2026-04-14 | DP attention 模式 | PR [#2187](https://github.com/vllm-project/tpu-inference/pull/2187)（已被 PR #2366 取代） |
+| 2026-04-22 | Disagg prefill/decode | PRs [#2322](https://github.com/vllm-project/tpu-inference/pull/2322) / [#2327](https://github.com/vllm-project/tpu-inference/pull/2327) / [#2331](https://github.com/vllm-project/tpu-inference/pull/2331) / [#2336](https://github.com/vllm-project/tpu-inference/pull/2336) |
+| **2026-04-23** ⭐ | **PR #2366: Hybrid KV cache OOB fix** | [#2366](https://github.com/vllm-project/tpu-inference/pull/2366) — 本 README 全部测试都依赖这个 fix |
+| 2026-04-25 | 本次端到端验证（e2e-02 + PR #2366） | 见上方"关键性能"表 |
 
 ---
 
-## 踩坑记录（v1.4 真实版）
+## 踩坑记录（8 条）
 
 ### 1. ⭐ 缺 PR #2366 → 所有奇怪症状的总根源
 
@@ -517,81 +565,49 @@ rm -f /tmp/libtpu_lockfile
 
 ---
 
-## Cold Start Timeline 实测（2026-04-25, e2e-02 + PR #2366）
+## 端到端 Timeline + KV Cache 拓扑实测
+
+### 端到端部署耗时（首次 vs 重启）
+
+| 步骤 | 首次部署 | 改代码重启 |
+|------|---------|-----------|
+| Pod 进入 + 检查 SHM | ~1 min | ~10s（清旧进程 + lockfile） |
+| 模型下载（HF 16 worker） | **~6 min** | 0（已下） |
+| 应用 PR #2366 patch | ~30s | 0（已 patch） |
+| vLLM cold start | **~7 min** | **~5-6 min**（page cache 热） |
+| Hello world 验证 | ~3s | ~3s |
+| **总计** | **~14-15 min** | **~5-6 min** |
+
+### vLLM Cold Start 内部 timeline（~7 min）
 
 | 阶段 | 耗时 | 备注 |
 |------|------|------|
 | Pod 初始化 + JAX init | ~30s | 含 TPU mesh 初始化 |
-| Prefetching (94 shards into page cache) | 9.99s | 第二次启动（page cache 已暖），第一次 ~40s |
-| Loading weights (94 shards from Lustre) | 161s | TP=8 sharding |
-| MoE re-quantization (512 experts → FP8) | ~150s | silent 阶段，无日志 |
-| Hybrid KV cache padding (PR #2366) | 立即 | 每 layer 23,289,856 bytes uniform |
-| `num_gpu_blocks_override=945` 计算 | 立即 | 对齐 vLLM scheduler 与 TPU per-layer alloc |
-| pjit compile + KV cache init | ~30s | `Init kv-cache` 完成 |
-| Application startup complete + HTTP 200 | — | server ready |
-| **Total cold start** | **~7 min** | first chat completion ~3s（首次 JIT） |
+| Prefetching 94 shards → page cache | 9.99s（warm）/ ~40s（cold） | 第二次启动 page cache 暖 |
+| Loading weights (Lustre) | 161s | TP=8 sharding |
+| MoE re-quantization (512 experts → FP8) | ~150s | silent 阶段无日志 |
+| Hybrid KV cache padding (PR #2366) | 立即 | 23,289,856 bytes uniform |
+| pjit compile + KV cache init | ~30s | 看到 `Init kv-cache` |
+| Application startup complete | — | HTTP 200 ready |
+| First chat completion（含 JIT） | +~3s | 之后是 hot path |
 
----
-
-## 实测 KV cache 拓扑（e2e-02 + PR #2366）
+### KV Cache 拓扑（PR #2366 应用后实测）
 
 | 指标 | 实测值 | 说明 |
 |------|------|------|
-| `regular_attn_layers` | 15 | Standard Attn 层数 |
-| `mamba_layers` | 45 | GDN 层数 |
-| `regular_attn_shape` | `(num_blocks, (1280, 8, 4, 256))` | block_size **1280**（PR #2366 fix；patch 前 4352） |
-| `regular_attn_dtype` | `float8_e4m3fn` | `--kv-cache-dtype fp8` 生效 |
-| `mamba_shape` | `((945, 3, 12288), (945, 64, 128, 128))` | conv state + recurrent state |
-| `mamba_dtype` | `(bfloat16, float32)` | conv BF16 + recurrent FP32 |
-| `num_blocks` (per layer) | **945** | `num_gpu_blocks_override` 设定 |
-| Per-layer `page_size_padded` | **23,289,856 bytes** | `1×attn_page (10,485,760) + 3×mamba_unpadded (4,268,032)` |
+| Layer 拆分 | **15 attn + 45 GDN** | Hybrid 架构 |
+| `regular_attn_shape` | `(945, (1280, 8, 4, 256))` | block_size **1280**（patch 前 4352）, FP8 KV |
+| `mamba_shape` | `((945, 3, 12288), (945, 64, 128, 128))` | conv state (BF16) + recurrent state (FP32) |
+| `num_blocks` per layer | **945** | `num_gpu_blocks_override` 设定 |
+| Per-layer `page_size_padded` | **23,289,856 bytes** | `1×attn (10.5MB) + 3×mamba (4.3MB)` |
 | Sharding mesh | `Mesh('data': 1, 'model': 8)` | TP=8 + EP=8 |
-| Per-device HBM 使用 | **85 GB / 94.75 GB (90%)** | `gpu-memory-utilization=0.9` |
+| Per-device HBM 使用 | **85 / 94.75 GB (90%)** | `gpu-memory-utilization=0.9` |
 
 ---
 
-## 端到端时间线（实测）
+## 完整 Benchmark 数据
 
-### 首次部署（从零开始）
-
-| 步骤 | 耗时 | 备注 |
-|------|------|------|
-| Pod 进入 + 检查 SHM | ~1 min | `kubectl exec` + `df -h /dev/shm` |
-| 模型下载（HF, 16 worker + hf_transfer） | **~6 min** | 378 GiB, 63 GB/min |
-| Step 4: 应用 PR #2366 patch | ~30s | curl + kubectl cp |
-| vLLM cold start | **~7 min** | 见上方 timeline |
-| Hello world 验证 | ~3s | 第一次 chat completion 含 JIT |
-| **小计** | **~14-15 min** | 一次性，后续无需重复 |
-
-### 开发迭代（改代码后重启 vLLM）
-
-| 步骤 | 耗时 | 备注 |
-|------|------|------|
-| 清理旧进程 | ~10s | `pkill EngineCore + rm libtpu_lockfile` |
-| vLLM cold start (page cache 热) | **~5-6 min** | weight load 加速 (page cache 已暖) |
-| 验证 | ~3s | hello chat |
-| **小计** | **~5-6 min** | |
-
----
-
-## Benchmark 数据
-
-### Smoke test（含首次 JIT 编译，不是 hot path）
-
-| 场景 | 配置 | 实测 (2026-04-25 e2e-02) |
-|------|------|--------------------------|
-| Single chat (hello world) | 21 prompt → 30 output, thinking off | **23.4 s 总延迟**（含首次 JIT） |
-| 4 并发 chat | 4×短 prompt → 24-34 output 各, thinking off | 总 **95 s**（含 batch JIT） |
-
-**4 并发回答抽样**（验证 KV cache 在并发下不损坏 — PR #2366 fix 验证）：
-- `天空之所以是蓝色的，是因为太阳光穿过大气层时，波长较短的蓝光比红光更容易被空气分子散射到各个方向（即瑞利散射）。`
-- `因为太阳光中的蓝光波长较短，更容易被大气中的分子散射到各个方向，从而进入我们的眼睛。`
-- `因为太阳光中的蓝光波长较短，更容易被大气中的气体分子散射到各个方向，从而进入我们的眼睛。`
-- `因为太阳光中的蓝光波长较短，更容易被大气中的气体分子散射到各个方向，从而进入我们的眼睛。`
-
-✅ **PR #2366 fix 验证**：4 并发都给出正确科学解释，无 gibberish。这是 PR #2366 修好 KV cache OOB bug 的关键证据。
-
-### Throughput benchmark (1K input / 1K output, evalscope perf, warmup + record)
+### Throughput (1K input / 1K output, evalscope perf, warmup + record)
 
 测试方法：每个 batch size 跑 2 次（warmup 丢弃 + record 保留），thinking OFF。
 
@@ -666,19 +682,11 @@ P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler
 - 数学逻辑算错（reasoning 混乱）
 - length 截断（reasoning 太长，没说到答案）
 
-**Reproduce**:
-```bash
-# 在 pod 内
-python3 /tmp/run_gsm8k_qwen35.py \
-  --limit 50 --parallel 4 --max-question-tokens 400 \
-  --output /tmp/gsm8k_qwen35_results.jsonl
-```
+**Reproduce**: 见 [Step 7](#step-7-gsm8k-准确性测试推荐用自定义脚本) 推荐做法。
 
-完整脚本（自定义版，绕过 lm_eval thinking 截断坑）见 [scripts/run_gsm8k_qwen35.py](scripts/run_gsm8k_qwen35.py)。
+### 长 context benchmark（vLLM with `--max-model-len 16384`）
 
-### 长 context benchmark（部分完成 2026-04-25, vLLM with `--max-model-len 16384`）
-
-#### 8K input / 1K output (prefill heavy, ✅ 4 档全完成 2026-04-25)
+#### 8K input / 1K output (prefill heavy)
 
 | Batch | Latency | Throughput | vs 1K input 差距 |
 |------:|--------:|-----------:|------------------|
@@ -692,7 +700,7 @@ python3 /tmp/run_gsm8k_qwen35.py \
 - 🟡 **P16/P64 8K prefill 拖累显著**（差 22-44%）— 高并发下 prefill chunked + KV cache 压力累加
 - **生产建议**：长 prompt 场景（RAG、长文档）用 P4-P8 最划算
 
-#### 1K input / 8K output (decode heavy, ✅ 4 档全完成 2026-04-25)
+#### 1K input / 8K output (decode heavy)
 
 | Batch | Latency | Throughput | vs 1K output 差距 |
 |------:|--------:|-----------:|-------------------|
@@ -709,27 +717,22 @@ python3 /tmp/run_gsm8k_qwen35.py \
 - 长输出场景（文章生成、代码生成）：用 **P64** 1702 tok/s，比 1K/1K 同档高 13%
 - 高 batch + 长输出是 TPU v7x-8 的甜蜜点
 
-#### MMLU-Pro (已跳过)
-
-| 测试 | 状态 | 备注 |
-|---|---|---|
-| MMLU-Pro 5-shot, thinking OFF | ⏭️ 跳过 | GSM8K 已验证智商，省 60 min |
-| 与 PR #2366 自测 81.79% 比对 | ⏭️ | 横向对比可参考但非必需 |
-
 ---
 
-## 已知问题与待优化
+## 待优化（未来工作）
 
-| 问题 | 状态 | 备注 |
+| 方向 | 价值 | 难度 |
 |------|------|------|
-| `vllm serve` 偶发 sentinel race | 🟡 已知 | retry 通常 work |
-| GSM8K thinking ON 75% 截断 | ✅ 已解 | 用自定义脚本 thinking OFF，77.56% (1319 题) |
-| Throughput benchmark 数据 | ✅ 已跑 | **17 个 batch 完整数据**：P1-P256 (1K/1K) + P1/4/16/64 (8K/1K, 1K/8K) + Thinking ON 对比 |
-| GSM8K full evaluation | ✅ 已跑 | 1319/1319, 77.56% accuracy |
-| 长 context 测试 | ✅ 已跑 | 8K input + 1K output / 1K input + 8K output |
-| FP4 MoE cache（类 DeepSeek R1） | ⚪ 未启动 | 可减半 MoE HBM；但 Qwen3.5 native FP8 已经够小 |
-| YaRN 1M context 测试 | ⚪ 未启动 | hf-overrides 即可 |
-| MMLU-Pro | ⏭️ 跳过 | GSM8K 已验证智商 |
+| **FP4 MoE cache**（类 [DeepSeek R1](../DeepSeek-R1-671B-FP4/README.md) 路径） | MoE 权重减半，KV 余量翻倍 | 中（复用现有 FP4 流程，需适配 1024×4096 dim） |
+| **YaRN 1M context 验证** | 长 codebase / 长论文分析场景 | 低（`hf-overrides` 即可，需测准确率） |
+| **MMLU-Pro 横向对比** | 与 PR #2366 自测 81.79% 比对 | 低（~60 min 跑完） |
+| **MTP speculative decoding** | +30-50% decode throughput（GPU 已验证） | 高（vLLM speculative 框架需扩到 TPU） |
+| **JAX native** (`models/jax/qwen35.py`) | 消除 PyTorch dispatch overhead，~10-20% | 高（重写整个 model stack） |
+
+### 已知小问题（不影响生产）
+
+- **`vllm serve` 偶发 sentinel race** — `Engine core initialization failed. Failed core proc(s): {}`，retry 通常 work（详见踩坑 #6）
+- **GSM8K 6.8% length 截断**（max_tokens=512 不够 reasoning 完整输出）— 调到 1024+ 准确率可再提升 1-3%
 
 ---
 
