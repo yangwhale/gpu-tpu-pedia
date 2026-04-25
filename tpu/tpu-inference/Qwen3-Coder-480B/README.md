@@ -580,9 +580,25 @@ done
 >
 > **客户能告诉自己的话**：在 v7x-8 上，**输出 1K 还是 8K，每 token 体感速度一样**。延长输出只意味着等更久（线性 8x），不意味着变慢。
 
-> **重要发现**：与 1K/1K 同 concurrency 对比，throughput / TPOT / ITL **几乎完全一致**（c=1: 48 vs 47.5; c=4: 177 vs 178）。
-> 这意味着**输出长度对解码吞吐和延迟没有影响**——TPU v7x 的 JaxMoE GMM EP kernel 单 token 解码时间是常数 (~21 ms)，只随 concurrency 微增。
-> 客户视角：1K vs 8K 输出，每 token 体感速度不变，唯一差异是总耗时（8K 输出耗时 ≈ 8 × 1K 输出）。
+#### 8K input / 1K output（长输入场景，✅ 部分实测 2026-04-25）
+
+| Concurrency | Output tok/s | tok/s/chip | TTFT (med) | TPOT (med) | ITL (med) |
+|------------:|-------------:|-----------:|----------:|----------:|----------:|
+|           1 | **46.4** | 12 | **523 ms** | **21.1 ms** | **21.1 ms** |
+|           4 | **162** | 41 | **1495 ms** | **23.2 ms** | **22.7 ms** |
+|          16 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+|          64 | ⏳ | ⏳ | ⏳ | ⏳ | ⏳ |
+
+> **关键观察（长输入 vs 短输入）**：
+>
+> | Concurrency | 1K input TTFT | 8K input TTFT | 倍数 | 1K input ITL | 8K input ITL |
+> |---:|---:|---:|---:|---:|---:|
+> | 1 | 95 ms | 523 ms | **5.5×** | 20.6 ms | 21.1 ms |
+> | 4 | 386 ms | 1495 ms | **3.9×** | 22.2 ms | 22.7 ms |
+>
+> **TTFT 随 input length 近似线性增长**（prefill 计算量 ∝ input），**但 TPOT/ITL 完全不受 input 影响**。
+>
+> **客户视角**：长 prompt（8K）主要影响**首字节时间**（multi-second），不影响 token 流式速度。这正是 PD 分离要解决的痛点 —— 把 prefill 独立到专用实例，避免被 decode batch 阻塞。
 
 ---
 
