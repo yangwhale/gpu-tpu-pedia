@@ -413,21 +413,40 @@ export HF_HUB_OFFLINE=1
 
 ```bash
 cd /tmp   # 避免 Python namespace 冲突，离开 tpu_inference 目录
+mkdir -p /tmp/vllm-logs
 
-vllm serve $MODEL \
-  --seed=42 \
-  --max-model-len=10240 \
-  --max-num-batched-tokens=8192 \
-  --max-num-seqs=512 \
-  --no-enable-prefix-caching \
-  --tensor-parallel-size=8 \
-  --kv-cache-dtype=fp8 \
-  --gpu-memory-utilization=0.95 \
-  --async-scheduling \
-  --enable-expert-parallel
+# ⚠️ 必须 export 这些 env，启动命令本身不会自动传（Pod env 设过这部分 OK，
+# 但跑 nohup / detach 时建议在命令前显式传）
+nohup env \
+  SKIP_JAX_PRECOMPILE=1 \
+  VLLM_XLA_CHECK_RECOMPILATION=0 \
+  MODEL_IMPL_TYPE=vllm \
+  HF_HUB_OFFLINE=1 \
+  vllm serve $MODEL \
+    --served-model-name Qwen3-Coder-480B-FP8 \
+    --seed 42 \
+    --max-model-len 10240 \
+    --max-num-batched-tokens 8192 \
+    --max-num-seqs 512 \
+    --no-enable-prefix-caching \
+    --tensor-parallel-size 8 \
+    --kv-cache-dtype fp8 \
+    --gpu-memory-utilization 0.95 \
+    --async-scheduling \
+    --enable-expert-parallel \
+    --port 8000 --host 0.0.0.0 \
+  > /tmp/vllm-logs/serve.log 2>&1 &
+
+echo "vLLM PID: $!"
 ```
 
-等待日志输出 `Application startup complete`。
+等待日志输出 `Application startup complete`，或非阻塞等就绪：
+```bash
+until curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/health | grep -q 200; do
+  date; sleep 30
+done
+echo "✅ Server ready"
+```
 
 > **实测启动时间**（2026-04-25）：**~7 min cold**（权重加载 3'37" + XLA 编译 ~3'）；**~5 min warm**（XLA cache 命中）。生产配置（max-num-batched-tokens=8192）启动时间会增加到 **~15 min cold**，因为更多 batch shape 触发额外编译。
 
@@ -459,18 +478,40 @@ vllm serve $MODEL \
 
 默认 FP16 KV cache，浪费太多 HBM 留给 batch。
 
+**Pitfall 4: 重启 vLLM 报 `libtpu lockfile` → 上一个进程没清干净**
+
+```bash
+pkill -9 -f 'vllm|EngineCore' && sleep 3
+rm -f /tmp/libtpu_lockfile /tmp/.vllm_ipc_*
+# 然后再重启 vllm serve
+```
+详细排查见 §常见问题 #6。
+
+**Pitfall 5: `gpu-memory-utilization` 取值因部署模式不同**
+
+| 部署 | 推荐值 | 原因 |
+|-----|-------|-----|
+| 单实例 (本节) | **0.95** | 大量 batch 充分利用 HBM |
+| PD 分离 P (prefill) | **0.70** | 留 30% 给 KV waiting buffer |
+| PD 分离 D (decode) | **0.90** | 大量活跃 KV cache |
+
 ---
 
 ## Step 5: 验证推理
 
 在**另一个终端**（`kubectl exec -it vllm-qwen3-coder -- bash`）发送测试请求：
 
+> ⚠️ **关键**：`"model"` 字段必须跟启动 vLLM 时的 `--served-model-name` 一致（本指南用 `Qwen3-Coder-480B-FP8` 短名）；用错会返回 404。先确认：
+> ```bash
+> curl -s http://localhost:8000/v1/models | python3 -c 'import sys,json; print(json.load(sys.stdin)["data"][0]["id"])'
+> ```
+
 ```bash
-# 测试 1: 简单问答
+# 测试 1: 简单问答 (completions API)
 curl -s http://localhost:8000/v1/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+    "model": "Qwen3-Coder-480B-FP8",
     "prompt": "Write a Python function to compute Fibonacci numbers:",
     "max_tokens": 256,
     "temperature": 0.0
@@ -480,14 +521,14 @@ curl -s http://localhost:8000/v1/completions \
 curl -s http://localhost:8000/v1/chat/completions \
   -H "Content-Type: application/json" \
   -d '{
-    "model": "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8",
+    "model": "Qwen3-Coder-480B-FP8",
     "messages": [{"role": "user", "content": "用中文写一个判断质数的 Python 函数。"}],
     "max_tokens": 512
   }' | python3 -m json.tool
 
-# 测试 3: 健康检查
-curl -s http://localhost:8000/health
-# 预期：{"status":"ok"}
+# 测试 3: 健康检查（vLLM 的 /health 返回 HTTP 200 + 空 body, 不是 JSON）
+curl -s -o /dev/null -w 'HTTP %{http_code}\n' http://localhost:8000/health
+# 预期: HTTP 200
 ```
 
 ### 验证清单（✅ 已实测 2026-04-25）
