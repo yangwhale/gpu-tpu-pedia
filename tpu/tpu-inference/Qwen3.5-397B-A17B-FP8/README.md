@@ -223,6 +223,7 @@ kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/chat/comp
 | **Pod 类型** | `tpu-v7x-lite-podslice`, topology 2x2x1 (8 chips) | 单 host pod，TP=8 模式 |
 | **挂载存储** | `/lustre` (PVC, 35 TB Lustre filesystem) + `/dev/shm` (tmpfs 800 GB) | 模型权重在 Lustre，运行时临时数据在 shm |
 | **Container** | `main`（vLLM + tpu_inference docker image bundled） | image 大约 4-22 build，可能缺 4-23+ 的 PR |
+| **Sidecar** | `gke-gcsfuse-sidecar` (init) | pod 现在 2/2 状态；所有 `kubectl exec` 会打 `Defaulted container "main" out of: main, gke-gcsfuse-sidecar (init)` 提示。**忽略即可**，命令仍正确路由到 main container。要静默加 `-c main`：`kubectl exec -c main $POD -- ...` |
 
 ### 其他可用 pods（选择参考）
 
