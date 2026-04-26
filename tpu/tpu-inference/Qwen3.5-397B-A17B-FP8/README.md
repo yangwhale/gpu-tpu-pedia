@@ -583,7 +583,9 @@ python3 /tmp/run_gsm8k_qwen35.py \
 
 > 监控提示：脚本 stdout 有 buffer，看实时进度用 `wc -l /tmp/gsm8k_full.jsonl`（每完成一题立即写入）。
 
-### PD 分离 Benchmark（待补，参考 Qwen3-Coder §7g）
+### PD 分离 Benchmark 🟡 实测待补
+
+> **状态**: 部署 ✅ + 5/5 smoke test ✅ + 6 layers root cause 已固化, **perf 数据待补**（参考 Qwen3-Coder §7g：TPOT -11%, output tok/s +5-12% 是同 framework 同 hybrid 框架的 baseline）。
 
 ```bash
 PROXY_POD=$(kubectl get pods -l app=vllm-proxy -o jsonpath='{.items[0].metadata.name}')
@@ -593,7 +595,19 @@ kubectl exec $PROXY_POD -- vllm bench serve \
   --num-prompts=256 --ignore-eos \
   --host=localhost --port=10000 --max-concurrency=1 \
   --result-file=disagg_qwen35_1024_1024_c1.json
-# 同样跑 8192/1024 c=4 长 prompt 场景
+# 同样跑 8192/1024 c=4 长 prompt 场景 (PD sweet spot)
+```
+
+### Multi-host TP=16 Benchmark 🟡 实测待补
+
+> **状态**: 部署 ✅ + 5/5 smoke test ✅ + 3 patches 固化, **perf vs 单机 TP=8 对比待补**（hypothesis: TP=16 should not regress per-token throughput, may improve large-batch via 2× HBM 总容量 = 更大 KV cache）。
+
+```bash
+# 对 multi-host LWS leader pod 做同样 evalscope sweep
+kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
+  pip install -q evalscope[perf]
+  bash scripts/run_bench_qwen35.sh
+"
 ```
 
 ---
@@ -635,7 +649,7 @@ kubectl exec $PROXY_POD -- vllm bench serve \
 
 #### Thinking ON vs OFF (1K/1K) — raw throughput 几乎一样
 
-| Batch | OFF | ON |
+| Batch | OFF (tok/s) | ON (tok/s) |
 |---:|---:|---:|
 | P1 | 49.6 | 49.6 |
 | P16 | 640 | 638 |
@@ -647,21 +661,21 @@ kubectl exec $PROXY_POD -- vllm bench serve \
 
 **8K input / 1K output (prefill heavy)**：
 
-| Batch | Throughput | vs 1K input |
+| Batch | Throughput (tok/s) | vs 1K input |
 |---:|---:|---|
-| P1 | 51.7 tok/s | **+4%** (低并发不拖累) |
+| P1 | 51.7 | **+4%** (低并发不拖累) |
 | P4 | 178.6 | -4% |
 | P16 | 499.1 | -22% |
 | P64 | 849.9 | -44% |
 
 **1K input / 8K output (decode heavy)**：
 
-| Batch | Throughput | vs 1K out |
+| Batch | Throughput (tok/s) | vs 1K out |
 |---:|---:|---|
 | P1 | 54.0 | **+9%** |
 | P4 | 203.3 | **+9%** |
 | P16 | 711.0 | **+11%** |
-| **P64** | **1702 tok/s** | **+13%** ⭐ |
+| **P64** | **1702** | **+13%** ⭐ |
 
 🎯 **长 generation 在所有 batch size 都比短 generation 快 9-13%**（pure decode 让 TPU MXU 持续高利用率）。**长输出场景 (文章/代码生成) 用 P64 1702 tok/s 是 v7x-8 甜蜜点**。
 
