@@ -33,6 +33,8 @@
 
 在 17 档 benchmark 实测中观察到的、跟一般直觉相反的结论：
 
+> 📅 **数据时间点**：下方表格基于 04-25 完整 17 档 sweep；04-26 复测 P1/P64/P128 三档与 04-25 误差 <0.3%，趋势完全一致（[详见底部完整 Benchmark 数据](#完整-benchmark-数据)）。
+
 ### 1. 并发越大 ≠ throughput 越高（Peak 是 P128 不是 P256）
 
 | Batch | Throughput |
@@ -819,7 +821,7 @@ kubectl exec $POD -- bash /tmp/launch_vllm.sh
 |------|------|------|
 | Pod 初始化 + JAX init | ~30s | 含 TPU mesh 初始化 |
 | Prefetching 94 shards → page cache | 9.99s（warm）/ ~40s（cold） | 第二次启动 page cache 暖 |
-| Loading weights (Lustre) | 161s | TP=8 sharding |
+| Loading weights (Lustre) | 161-185s | TP=8 sharding；04-25/04-26 实测波动 ±15% |
 | MoE re-quantization (512 experts → FP8) | ~150s | silent 阶段无日志 |
 | Hybrid KV cache padding (PR #2366) | 立即 | 23,289,856 bytes uniform |
 | pjit compile + KV cache init | ~30s | 看到 `Init kv-cache` |
@@ -846,19 +848,21 @@ kubectl exec $POD -- bash /tmp/launch_vllm.sh
 
 测试方法：每个 batch size 跑 2 次（warmup 丢弃 + record 保留），thinking OFF。
 
-#### 完整并发 sweep（9 个档位，2026-04-25 实测）
+#### 完整并发 sweep（9 档 04-25 实测 + 三档 04-26 复测）
 
-| Batch | Latency | Throughput | Per-user | Success | Pareto |
-|------:|--------:|-----------:|---------:|--------:|--------|
-| **P1**    | 20.6 s   | **49.6 tok/s**   | **49.6** | 100% | 💨 Low Latency |
-| **P2**    | 21.2 s   | 96.7 tok/s     | 48.4 | 100% | |
-| **P4**    | 21.9 s   | 186.8 tok/s    | 46.7 | 100% | 交互对话 |
-| **P8**    | 22.8 s   | 358.7 tok/s    | 44.8 | 100% | |
-| **P16**   | 25.6 s   | 640 tok/s      | 40.0 | 100% | 在线服务 |
-| **P32**   | 28.9 s   | 1129 tok/s     | 35.3 | 100% | |
-| **P64**   | 43.2 s   | 1510 tok/s     | 23.6 | 100% | ⚖️ Balanced |
-| **P128**  | 61.8 s   | **2103 tok/s** ⭐ | 16.4 | 100% | 🚀 **Peak Throughput** |
-| **P256**  | 108.4 s  | 1877 tok/s ↓     | 7.3  | 100% | （超 sweet spot, scheduler 抖动） |
+| Batch | Latency | Throughput (04-25) | 04-26 复测 | Per-user | Success | Pareto |
+|------:|--------:|-----------:|-----------:|---------:|--------:|--------|
+| **P1**    | 20.6 s   | **49.6 tok/s**   | **49.68** ✅ | **49.6** | 100% | 💨 Low Latency |
+| **P2**    | 21.2 s   | 96.7 tok/s     | — | 48.4 | 100% | |
+| **P4**    | 21.9 s   | 186.8 tok/s    | — | 46.7 | 100% | 交互对话 |
+| **P8**    | 22.8 s   | 358.7 tok/s    | — | 44.8 | 100% | |
+| **P16**   | 25.6 s   | 640 tok/s      | — | 40.0 | 100% | 在线服务 |
+| **P32**   | 28.9 s   | 1129 tok/s     | — | 35.3 | 100% | |
+| **P64**   | 43.2 s   | 1510 tok/s     | **1507.91** ✅ | 23.6 | 100% | ⚖️ Balanced |
+| **P128**  | 61.8 s   | **2103 tok/s** ⭐ | **2096.68** ✅ | 16.4 | 100% | 🚀 **Peak Throughput** |
+| **P256**  | 108.4 s  | 1877 tok/s ↓     | — | 7.3  | 100% | （超 sweet spot, scheduler 抖动） |
+
+> 04-26 三档复测均与 04-25 在 ±0.3% 内吻合，**peak P128 复测确认**。其他 6 档未复测但模型/stack 同期未变，预期同样稳定。
 
 **关键发现：Peak 是 P128，不是 P256！**
 
@@ -877,7 +881,7 @@ P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler
 **Pareto 操作点选择**：
 - 单用户低延迟 (TPOT < 25 ms): 用 **P1**, 49.6 tok/s/user
 - 中等并发 + 体感 OK: 用 **P32-P64**, ~1100-1500 tok/s 总吞吐 + 23-35 tok/s/user
-- 离线批处理 / 最大吞吐: 用 **P128**, **2103 tok/s 峰值**（per-chip 263 tok/s）
+- 离线批处理 / 最大吞吐: 用 **P128**, **2097-2103 tok/s 峰值**（04-26 复测 2096.68，per-chip 262 tok/s）
 
 #### Thinking ON vs Thinking OFF (1K/1K)
 
