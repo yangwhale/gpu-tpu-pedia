@@ -104,42 +104,24 @@
 
 ## 硬件与模型概览
 
-| 项目 | 要求 |
-|------|------|
-| TPU | **v7x-8（足够）** — 不需要 v7x-16 |
-| HBM | 94.75 GB/device，v7x-8 共 758 GB（per-device 用 ~85 GB / 90% with `gpu-memory-utilization=0.9`） |
-| 主机内存 | ≥800 GB（page cache 装 378 GB checkpoint 需要） |
-| 存储 | ≥600 GB（模型 378 GB + 工作空间） |
+**硬件**：TPU v7x-8 足够（不需要 v7x-16）；HBM 94.75 GB/device × 8 = 758 GB（用 ~85 GB/device，90% util）；主机内存 ≥ 800 GB（page cache 装 378 GB checkpoint）；存储 ≥ 600 GB。
 
-| 模型参数 | 值 | vs DeepSeek V3 / R1 | vs GLM-5.1 | vs Kimi K2.6 |
-|---------|-----|--------------------|------------|--------------|
-| 架构 | **MoE + Hybrid GDN/Attention** | MoE+MLA | MoE+MLA | MoE+MLA |
-| 总参数 | **397B** | 671B | 754B | 1T |
-| 激活参数 | **17B** | ~37B | ~37B | 32B |
-| 总层数 | **60（45 GDN + 15 Standard Attn）** | 61 | 78 | 61 |
-| Hidden | 4,096 | 7,168 | 6,144 | 7,168 |
-| GDN heads | 64 (V) / 16 (Q,K) | — | — | — |
-| Standard Attn heads | 32 Q / 2 KV (GQA) | 128 (MLA) | 64 (MLA) | 64 (MLA) |
-| Attn head_dim | 256 | — | — | — |
-| MoE Experts | **512 routed + 1 shared** | 256 | 256 | 384 |
-| Top-K (routed) | 10 | 8 | 8 | 8 |
-| Expert Intermediate | 1,024 | 2,048 | 2,048 | 2,048 |
-| Vocab | 248,320 | 129,280 | 154,880 | 163,840 |
-| Native Context | 262K（YaRN 可扩到 1M） | 128K | 200K | 256K |
-| 多模态 | Vision + Video（部署可禁用） | 无 | 无 | MoonViT 400M |
-| 量化（HF） | **FP8 native** | FP4 | FP4 | INT4 W4A16 |
+**模型核心参数**：
 
-### 关键架构：Hybrid GDN/Attention
+| 字段 | 值 |
+|---|---|
+| 架构 | MoE + **Hybrid GDN/Attention** (60 层 = 45 GDN + 15 Standard Attn) |
+| 参数 | 397B 总 / 17B 激活 / 512 routed + 1 shared expert / Top-K=10 |
+| 维度 | Hidden 4096, Attn 32 Q + 2 KV (GQA), head_dim 256, Expert intermediate 1024 |
+| 上下文 | Native 262K, YaRN 可扩 1M |
+| 量化 | **FP8 native**, vocab 248,320 |
+| 多模态 | Vision + Video（部署可禁用，`--limit-mm-per-prompt`） |
 
-> **Gated Delta Network (GDN) ≠ Linear Attention**
-> GDN 是 Mamba-2 风格的 Selective State Space Model，包含 conv1d short-range mixing + SSM recurrent state。
-> Layer pattern：`15 × (3 × GDN→MoE + 1 × Standard Attn→MoE)`
+**对比同体系 MoE**：vs DeepSeek R1 (671B/37B, MLA) / GLM-5.1 (754B/37B, MLA) / Kimi K2.6 (1T/32B, MLA) — Qwen3.5 是**唯一 hybrid GDN+Attn**，experts 数最多 (512 vs 256-384)，量化最重 (FP8 vs FP4/INT4)。
 
-**实际影响**：
-- 45 GDN 层用 conv_state + recurrent_state（固定大小，不随上下文增长）
-- 15 Standard Attn 层产生标准 KV cache
-- 长上下文 KV 压力是纯 Attention 模型的 ~1/4
-- vLLM hybrid allocator 把 4 layers 共享一个 KVCacheTensor — TPU 必须 duplicates per-layer，需要 PR #2366 padding 才能让 scheduler 与实际分配对齐
+### 为什么 Hybrid 架构需要 PR #2366
+
+GDN（Gated Delta Network）= Mamba-2 风格 SSM（conv1d + recurrent state，**固定大小不随 context 增长**）。Layer pattern: `15 × (3 GDN→MoE + 1 Attn→MoE)`。45 GDN 层无 KV cache + 15 Attn 层标准 KV cache → **长 context KV 压力是纯 attention 1/4**。vLLM hybrid allocator 假设 4 layers 共享 1 个 KVCacheTensor (GPU byte-level)，但 TPU `jax.Array` strongly typed 必须 duplicate per-layer → 需要 PR #2366 的 padding 让 scheduler block_id pool 跟实际 per-layer 容量对齐（详见 [Constraint A](#a-pr-2366-patch必须否则-kv-cache-状态损坏--gibberish)）。
 
 ---
 
