@@ -293,6 +293,80 @@ xprofiler UI 里左下角 dropdown 会展示成 `run-2026-04-26-qwen3-coder/sess
 
 ## 6. 常见踩坑
 
+### #0 🚨 **gLinux + LOAS2 环境 xprofiler create 不能用**（hulk 2026-04-26 实测踩过）
+
+**症状**：`xprofiler create` 报 `ECP Proxy returned an error` / `gcloud crashed (ECPProxyError)`，setup VM 后内部 cleanup 也失败：
+```
+Unable to set up instance. Initiating cleanup.
+ERROR: ECP Proxy returned an error
+ERROR: gcloud crashed (ECPProxyError): ECP Proxy indicated an internal error: Failed to forward request
+```
+
+**根因**：xprofiler 内部用 subprocess 调 `gcloud compute instances delete`（cleanup 时）和其他 gcloud 子命令，这些子进程跟 gLinux 的 LOAS2 ECP Proxy 鉴权冲突。即使 `prodcertstatus` 显示 cert 有效，subprocess 仍会失败。手动跑 `gcloud compute instances delete` 反而成功，仅在 xprofiler subprocess 调用时 fail。
+
+**修复**（优先级降序）：
+1. ✅ **在 cloudtop 上跑 xprofiler**（不是 gLinux）— 推荐做法，cloudtop 没有 ECP 冲突
+2. ✅ **在 GCE jumpbox VM 上跑 xprofiler** — 起一个小 VM (e2-small) 专门跑 xprofiler CLI
+3. ⚠️ 在 gLinux 跑 — **目前不可用**，等上游修
+
+> 💸 **代价**: hulk 实测时这个坑造成约 $0.10 的浪费 cost（4 个 VM × 几分钟 + cleanup leak），所以**强烈建议先确认环境**再跑。
+
+### #-1 🚨 **xprofiler create 默认是交互式，`yes |` pipe 会建多个 VM**
+
+**症状**：用 `yes | xprofiler create ...` 期望跳过确认，结果建了 N 个 VM（每个 c4-highmem-8 ~$0.5/hr）。
+
+**根因**：xprofiler create 检测到"已有 instance for this bucket"会问"是否再建一个？"，`yes` 会无限回答 `y`，连续触发新建。
+
+**修复**：
+```bash
+# ✅ 推荐：用 echo "y" 而不是 yes（只回答一次）
+echo "y" | xprofiler create -z $ZONE -l $BUCKET --skip-creation-if-exists
+
+# ❌ 千万别用 yes pipe — 实测会建 2-3 个 VM
+yes | xprofiler create ...    # ❌
+```
+
+**验证不爆**：
+```bash
+gcloud compute instances list --filter="name~xprof"   # 应该只有 1 个
+```
+
+如果发现多个，立即并行删：
+```bash
+for VM in $(gcloud compute instances list --filter="name~xprof" --format="value(name)"); do
+  gcloud compute instances delete $VM --zone=us-central1-a --quiet &
+done
+wait
+```
+
+### #-0.5 🚨 **xprofiler 客户端缺 `pyOpenSSL` 模块**
+
+**症状**：第一次跑 xprofiler create 立刻报 `MutualTLSChannelError: No module named 'OpenSSL'`。
+
+**根因**：`pip install cloud-diagnostics-xprof` 没把 `pyOpenSSL` 设为依赖，但 google-auth 的 mTLS 通道需要它。
+
+**修复**：
+```bash
+pip install -U pyOpenSSL
+# 或者直接装 extras (如果将来支持):
+# pip install "cloud-diagnostics-xprof[mtls]"
+```
+
+### #-0.25 🚨 **gcloud active account 必须是 user 不是 SA**
+
+**症状**：xprofiler 内部 gcloud 调用失败（即使 ADC 工作正常）。
+
+**根因**：`gcloud auth list` 显示 active account 不是用户邮箱（如 `chrisya@google.com`），而是默认 SA（如 `insecure-cloudtop-shared-user@cloudtop-hk.iam.gserviceaccount.com`）。
+
+**修复**：
+```bash
+gcloud auth list   # 确认 active account 是用户
+gcloud config set account chrisya@google.com   # 切回 user
+```
+
+> ⚠️ 注意：在 venv 里激活后再跑 gcloud 命令，可能 active account 行为跟 host shell 不一样 — 每次都验证一遍。
+
+
 ### #1 ⚠️ Capture 返回成功但 TensorBoard 看不到 trace
 
 **根因**：collector 端口（9012）没起。`jax.profiler.start_server(9012)` 漏了或没在 capture 之前跑。
@@ -387,9 +461,19 @@ xprofiler delete -z $ZONE --vm-name xprof-<uuid>
 
 ## ⚠️ 关于本文档
 
-本文档基于 [`AI-Hypercomputer/cloud-diagnostics-xprof`](https://github.com/AI-Hypercomputer/cloud-diagnostics-xprof) 官方 README + [`vllm-project/tpu-inference`](https://github.com/vllm-project/tpu-inference) 实际用法整理而成（2026-04-26）。
+本文档基于 [`AI-Hypercomputer/cloud-diagnostics-xprof`](https://github.com/AI-Hypercomputer/cloud-diagnostics-xprof) 官方 README + [`vllm-project/tpu-inference`](https://github.com/vllm-project/tpu-inference) 实际用法整理 + **hulk 在 gLinux 上 dogfood 实测**（2026-04-26）。
 
-**未实测部分**：xprofiler create / capture / TensorBoard UI 这些命令本人未在 hulk 当前环境实跑过。建议第一次用时按 §2 跑一遍，发现问题在 §6 补充新踩坑。
+### Dogfood 验证状态（2026-04-26）
+- ✅ §2.1 安装 xprofiler — 实测通过（但发现需要补装 `pyOpenSSL`，见 §6 #-0.5）
+- ✅ §2.2 创建 GCS bucket + SA 授权 — 实测通过
+- ❌ §2.3 `xprofiler create` — **在 gLinux + LOAS2 环境无法工作**（ECP Proxy 错误，见 §6 #0）
+- ⏳ §2.4-2.6 + §3-§5 — 因 §2.3 阻塞未实测，需在 cloudtop / GCE jumpbox 上验证
+
+### 本次 dogfood 找到的 4 个坑（已写入 §6）
+- **#0**: gLinux + LOAS2 环境 xprofiler create 不能用（最严重）
+- **#-1**: `yes |` pipe 会建多个 VM（实测一次创了 3 个）
+- **#-0.5**: 缺 `pyOpenSSL` 包（需手动补装）
+- **#-0.25**: gcloud active account 不能是 SA
 
 **本文档的精神**：复制粘贴跑得通 + 踩坑明示 + 把上游分散文档整理成一个客户友好的入口。
 
