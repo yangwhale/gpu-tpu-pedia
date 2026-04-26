@@ -148,17 +148,150 @@ Qwen3.5 hybrid 架构 — 45 个 GDN 层用 **fixed-size SSM state**（不随 co
 
 ---
 
-## Step 1: 环境与 Pod 准备
+## ⚡ Quick Reproduce — 14 min 拿到 hello world
+
+如果你只想验证模型还能跑，复制这一段（在 host 上执行）：
+
+```bash
+# 0. 设置变量（GKE cluster 全局唯一标识）
+CTX=gke_cloud-tpu-multipod-dev_us-central1_chrisya-v7x-v134
+POD=e2e-02   # 推荐用这个 pod（曾经跑过 + 文档基于此）
+MODEL=/lustre/models/Qwen3.5-397B-A17B-FP8
+
+# 1. 验证 kubectl 连得上
+kubectl --context="$CTX" get pods | grep $POD     # 应看到 Running 2/2
+
+# 2. 验证模型已下（94 shards = 跳过 Step 3，否则去 Step 3）
+kubectl --context="$CTX" exec $POD -- bash -c "ls $MODEL/*.safetensors | wc -l"
+# 输出 94 = OK；其他 = 走 Step 3 下载
+
+# 3. 验证 PR #2366 已 patch（输出 7 = OK，否则走 Step 4）
+kubectl --context="$CTX" exec $POD -- grep -c '_hybrid_uniform_page_size_bytes' \
+  /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
+
+# 4. 启动 vLLM (Step 5 命令)
+kubectl --context="$CTX" exec $POD -- bash -c "
+cd /tmp
+SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 MODEL_IMPL_TYPE=vllm \
+nohup vllm serve $MODEL \
+  --tensor-parallel-size 8 --enable-expert-parallel \
+  --max-num-batched-tokens 4096 --max-num-seqs 256 --max-model-len 4096 \
+  --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
+  --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
+  --limit-mm-per-prompt '{\"image\": 0, \"video\": 0}' \
+  --reasoning-parser qwen3 --async-scheduling \
+  > /tmp/vllm_qwen35.log 2>&1 </dev/null &
+disown
+"
+
+# 5. 等 cold start ~7 min
+sleep 420
+
+# 6. Hello world
+kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"哈喽啊\"}],\"max_tokens\":256,\"chat_template_kwargs\":{\"enable_thinking\":false}}" \
+  | python3 -m json.tool
+```
+
+预期看到模型回复中文 + emoji。如果出错查 Step 1-6 详细说明。
+
+复现 benchmark 和 GSM8K 见 [Step 7-8](#step-7-gsm8k-准确性测试推荐用自定义脚本)。
+
+---
+
+## Step 0: Prerequisites — 必读环境信息
+
+### 测试环境（GKE multi-pod TPU cluster）
+
+| 项 | 值 | 说明 |
+|---|---|---|
+| **GCP Project** | `cloud-tpu-multipod-dev` | TPU 实验集群所在项目 |
+| **GCP Region** | `us-central1` | TPU node 所在 region |
+| **GKE Cluster** | `chrisya-v7x-v134` | TPU v7x 实验集群名 |
+| **kubectl context 全名** | `gke_cloud-tpu-multipod-dev_us-central1_chrisya-v7x-v134` | 这个值会高频用到，记下来 |
+| **测试 pod 名** | **`e2e-02`** ⭐ | 推荐这个；本文档全部命令基于 e2e-02 |
+| **Pod 所在 node pool** | `default` (TPU node `gke-tpu-d072ced8-*` 等) | 单 host 8-chip TPU v7x |
+| **Pod 类型** | `tpu-v7x-lite-podslice`, topology 2x2x1 (8 chips) | 单 host pod，TP=8 模式 |
+| **挂载存储** | `/lustre` (PVC, 35 TB Lustre filesystem) + `/dev/shm` (tmpfs 800 GB) | 模型权重在 Lustre，运行时临时数据在 shm |
+| **Container** | `main`（vLLM + tpu_inference docker image bundled） | image 大约 4-22 build，可能缺 4-23+ 的 PR |
+
+### 其他可用 pods（选择参考）
+
+| Pod | 状态 | 谁在用 | 备注 |
+|---|---|---|---|
+| `e2e` | Running | 经常被 Hulk 用（K2.6 训练） | 慎用，先 `kubectl describe pod e2e` 看资源占用 |
+| **`e2e-02`** ⭐ | Running | **本文档推荐用** | 曾在 2026-04-25 跑通 Qwen3.5-397B 全套测试 |
+| `e2e-03` | Running | 跑 Qwen3-Coder-480B | 慎用 |
+
+### kubectl 配置（如果 context 不存在）
+
+```bash
+gcloud auth login   # 如未登录
+gcloud container clusters get-credentials chrisya-v7x-v134 \
+  --region us-central1 --project cloud-tpu-multipod-dev
+```
+
+### HuggingFace Token
+
+测试 pod 上已经预先 `hf auth login`，**通常不需要重新设 token**。如果下载报权限错：
+
+```bash
+kubectl exec $POD -- bash -c "hf auth whoami"
+# 应输出 user: yangwhale, orgs: google
+# 没输出 → kubectl exec $POD -- hf auth login (需要交互式)
+```
+
+### 怎么把 repo 的 scripts/ 弄到 pod
+
+scripts 在 GitHub repo 里（`scripts/run_bench_qwen35.sh` + `scripts/run_gsm8k_qwen35.py`），不在 pod 里。先 git clone + kubectl cp：
+
+```bash
+# 在 host 上
+git clone https://github.com/yangwhale/gpu-tpu-pedia.git ~/gpu-tpu-pedia 2>/dev/null || \
+  (cd ~/gpu-tpu-pedia && git pull)
+
+SCRIPTS_DIR=~/gpu-tpu-pedia/tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/scripts
+kubectl --context="$CTX" cp $SCRIPTS_DIR/run_bench_qwen35.sh $POD:/tmp/
+kubectl --context="$CTX" cp $SCRIPTS_DIR/run_gsm8k_qwen35.py $POD:/tmp/
+
+# 验证
+kubectl --context="$CTX" exec $POD -- ls -la /tmp/run_bench_qwen35.sh /tmp/run_gsm8k_qwen35.py
+```
+
+### 多 bot 协作注意（共享 cluster）
+
+| 情况 | 怎么办 |
+|---|---|
+| 别的 bot（Hulk）在 `e2e` 跑 K2.6 | 用 `e2e-02` 而非 `e2e`，**别动 `/dev/shm/Kimi-K2.6/`**（Hulk 的 INT4 staging） |
+| 别的 bot 在 vllm-mh-* （multi-host LeaderWorkerSet）跑 Qwen3-Coder | 不影响（不同 node pool），照常用 e2e-02 |
+| 启动前 sanity check | `kubectl get pods` + `kubectl describe statefulset` 看谁在用啥 |
+
+### 预期总耗时
+
+| 场景 | 时长 | 说明 |
+|---|---|---|
+| Quick Reproduce（仅 hello world） | **~14 min** | 假设模型已下、PR #2366 已 patch |
+| 首次部署（全 8 步） | ~30 min | 含模型下载 6 min + cold start 7 min |
+| 重启 vLLM（page cache 热） | ~5-6 min | 不重新下模型 |
+| 全 benchmark + GSM8K full | ~90 min | 17 个 throughput batch + 1319 题 GSM8K |
+
+---
+
+## Step 1: 验证 / 进入 Pod
 
 复用 GKE TPU pod（`tpu-v7x-lite-podslice`, 2x2x1）。**关键**：必须挂 Lustre PVC（378 GB 模型），shm 800 GB（用于 page cache）。
 
 ```bash
-# 找一个空闲 pod
+# 用 Step 0 的环境变量
 CTX=gke_cloud-tpu-multipod-dev_us-central1_chrisya-v7x-v134
+POD=e2e-02
+
+# 找一个空闲 pod (默认推荐 e2e-02)
 kubectl --context="$CTX" get pods
 
-# 进入 pod (例: e2e-02)
-kubectl --context="$CTX" exec -it e2e-02 -- bash
+# 进入 pod
+kubectl --context="$CTX" exec -it $POD -- bash
 ```
 
 > **Pod 互斥**：一个 pod 只能跑一个 vLLM 实例（独占 `/dev/vfio/0`）。多个并发模型要分到不同 pod。
@@ -190,6 +323,17 @@ free -h | head -2           # available 应 ≥ 700 GB
 
 ## Step 3: 下载模型权重（如未下）
 
+**先 check 是否已下（94 shards 都在则跳过本步）**：
+
+```bash
+# 在 pod 内
+ls /lustre/models/Qwen3.5-397B-A17B-FP8/*.safetensors 2>/dev/null | wc -l
+# 输出 94 → 已下完整，跳过 Step 3
+# 输出 < 94 或目录不存在 → 走下面的下载流程
+```
+
+下载流程：
+
 ```bash
 pip install -q hf_transfer
 export HF_TOKEN='<your-hf-token>'  # 已 hf auth login 的可省
@@ -213,7 +357,17 @@ du -sh /lustre/models/Qwen3.5-397B-A17B-FP8/                     # ~378G
 
 ---
 
-## Step 4: 应用 PR #2366 fix
+## Step 4: 应用 PR #2366 fix（如未 patch）
+
+**先 check 是否已 patch（输出 7 = 已 patch，跳过本步）**：
+
+```bash
+# 在 host 上（kubectl 可达即可）
+kubectl --context="$CTX" exec $POD -- grep -c '_hybrid_uniform_page_size_bytes' \
+  /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
+# 输出 7 → 已 patch (docker image 已包含 PR #2366)，跳过 Step 4
+# 输出 0 → 走下面的 patch 流程
+```
 
 GKE 上 docker image 自带的 tpu-inference 通常是 4 月 22 日构建的（vllm 0.19.1rc1.dev321），**没赶上 PR #2366 (2026-04-23 merged)**。直接从 main 拉 fix：
 
@@ -376,14 +530,23 @@ Token 经济学差异：
 ### 推荐做法：自定义脚本（thinking OFF + parallel=8 + 0.99s/题）
 
 ```bash
-# 在 pod 内（脚本 cp 自 repo 的 scripts/run_gsm8k_qwen35.py）
+# Step 7.1: 本机 → pod 传脚本（首次跑必做。Step 0 已设置 SCRIPTS_DIR/CTX/POD）
+kubectl --context="$CTX" cp $SCRIPTS_DIR/run_gsm8k_qwen35.py $POD:/tmp/run_gsm8k_qwen35.py
+
+# Step 7.2: 在 pod 内执行
+kubectl --context="$CTX" exec -it $POD -- bash -lc '
 python3 /tmp/run_gsm8k_qwen35.py \
   --model /lustre/models/Qwen3.5-397B-A17B-FP8 \
   --url http://localhost:8000/v1/chat/completions \
-  --limit 1319 \              # full GSM8K test set
-  --parallel 8 \              # PR #2366 fix 后并发安全
-  --max-question-tokens 500 \ # 过滤超长 question 避免 5-shot prompt 超 max_model_len
+  --limit 1319 \
+  --parallel 8 \
+  --max-question-tokens 500 \
   --output /tmp/gsm8k_qwen35_full.jsonl
+'
+# 参数注释:
+#   --limit 1319          full GSM8K test set
+#   --parallel 8          PR #2366 fix 后并发安全
+#   --max-question-tokens 500  过滤超长 question 避免 5-shot prompt 超 max_model_len
 ```
 
 **预期**：~16 min 跑完 1319 题，**77.56% accuracy**（CI 阈值 63%, 远超）。比 lm_eval thinking ON 快 100×（24 s/题 → 0.75 s/题）。
@@ -411,11 +574,19 @@ CI 默认值参考 [Qwen_Qwen3_5-397B-A17B.yml](https://github.com/vllm-project/
 ### 推荐做法：完整 sweep 脚本
 
 ```bash
-# 在 pod 内（脚本 cp 自 repo 的 scripts/run_bench_qwen35.sh）
-pip install evalscope[perf]
+# Step 8.1: 本机 → pod 传脚本（首次跑必做）
+kubectl --context="$CTX" cp $SCRIPTS_DIR/run_bench_qwen35.sh $POD:/tmp/run_bench_qwen35.sh
+
+# Step 8.2: 在 pod 内安装 evalscope（首次）+ 执行 sweep
+kubectl --context="$CTX" exec -it $POD -- bash -lc '
+pip install -q evalscope[perf]
 bash /tmp/run_bench_qwen35.sh
-# 输出: /tmp/bench_qwen35/summary.txt
+'
+# 输出: pod:/tmp/bench_qwen35/summary.txt
 # 默认跑 P1/P4/P16/P64/P256 5 档 × 2 round, ~24 min
+
+# Step 8.3 (可选): 把结果拉回本机
+kubectl --context="$CTX" cp $POD:/tmp/bench_qwen35/summary.txt /tmp/bench_qwen35_summary.txt
 ```
 
 完整脚本: [scripts/run_bench_qwen35.sh](scripts/run_bench_qwen35.sh)
@@ -436,6 +607,26 @@ evalscope perf \
 ```
 
 > **生产建议**：跑过 sweep 后选 **P128** 做 max throughput 操作点（**2103 tok/s**, peak），**P64** 做 balanced（1510 tok/s + 23.6 tok/s/user）。**不要选 P256** — 反而比 P128 慢 11%（详见上方"三个反直觉发现"）。
+
+### 额外 sweep 脚本（复现"三个反直觉发现"）
+
+如果想复现"长输出反而快 / 长 prompt 不拖累"的对比数据，repo 还提供两个补充脚本：
+
+```bash
+# A. 长上下文：8K input/1K output + 1K input/8K output 对比 (~30 min)
+kubectl --context="$CTX" cp $SCRIPTS_DIR/run_bench_long_context.sh $POD:/tmp/
+kubectl --context="$CTX" exec -it $POD -- bash -lc '
+  bash /tmp/run_bench_long_context.sh
+'
+# 注意：必须先用 --max-model-len 16384 重启 vLLM 才能跑（默认 4096 会拒绝 8K request）
+
+# B. Thinking ON 1K/1K（验证 reasoning model 真实场景）(~10 min)
+kubectl --context="$CTX" cp $SCRIPTS_DIR/run_bench_thinking_on.sh $POD:/tmp/
+kubectl --context="$CTX" exec -it $POD -- bash -lc '
+  bash /tmp/run_bench_thinking_on.sh
+'
+# 不传 chat_template_kwargs，default thinking ON
+```
 
 ---
 
