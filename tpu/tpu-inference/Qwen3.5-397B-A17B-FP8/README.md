@@ -716,6 +716,154 @@ kubectl --context="$CTX" exec -it $POD -- bash -lc '
 
 ---
 
+## Step 9: PD 分离 (1P1D) — 独立 prefill + decode 部署 ⭐ 实测 2026-04-26
+
+> 单机 (Step 1-8) 之外的另一个部署分支：**1 prefill (kv_producer) + 1 decode (kv_consumer) + proxy**，在两个独立的 v7x-8 pod 上跑，KV cache 通过 `TPUConnectorHMA` 在两实例间传输。Qwen3.5 是 hybrid GDN+Attn 架构，**必须用 HMA connector + 必须显式 enable hybrid KV cache manager**——这俩 hulk 的 Qwen3-Coder PD 文档（pure attention）没踩到这个坑。
+
+### 9a. 适用场景 vs 单机
+
+| 场景 | 推荐 |
+|---|---|
+| 单 user / 低并发 / TTFT 敏感（实时 autocomplete） | 单机（Step 1-8）|
+| 高并发 batch 服务 / TPOT 敏感（聊天、代码生成） | **PD 分离**（D 实例不被 prefill 抢占，TPOT ↓ ~10-15%） |
+| 长 prompt RAG / 文档分析 | **PD 分离**（P 实例独占 prefill HBM） |
+
+> 收益参考：hulk 的 Qwen3-Coder-480B 1P1D 实测 TPOT -11%, output tok/s +5-12% (见 [Qwen3-Coder README §7g](../Qwen3-Coder-480B/README.md#7g-pd-分离对比))。Qwen3.5 hybrid GDN 长 context KV 压力 1/4 vs pure attention，理论 PD 收益 ≥ Qwen3-Coder。
+
+### 9b. 关键差异 vs Qwen3-Coder PD（**Qwen3.5 hybrid 必读**）
+
+| 项 | Qwen3-Coder (pure attention) | **Qwen3.5 (hybrid GDN+Attn)** |
+|---|---|---|
+| `--kv-transfer-config` connector | `TPUConnector` | **`TPUConnectorHMA`** ⭐ |
+| connector_module_path | `tpu_inference.distributed.tpu_connector` | **`tpu_inference.distributed.tpu_connector_hma`** ⭐ |
+| Hybrid KV cache manager | 不需要（无 mamba layer） | **必须显式 enable**：加 `--no-disable-hybrid-kv-cache-manager` flag ⭐ |
+| Image 内是否含 HMA | nightly 包含 TPUConnector | nightly **可能没合 PR #2322/#2327/#2331/#2336**，需要从 main cp `tpu_connector_hma.py` |
+| Image 内是否含 PR #2366 | 不需要 | **必须 patch**（同单机 Step 4） |
+
+**为什么必须 `--no-disable-hybrid-kv-cache-manager`**：vLLM core (`vllm/config/vllm.py`) 看到 `kv_transfer_config` 设置时**默认 disable hybrid KV cache manager**（防止 connector 不支持 hybrid spec 出问题），然后 `unify_hybrid_kv_cache_specs` 强制把所有 layer KV spec 合成一类型——但 Qwen3.5 60 层 = 45 GDN (Mamba SSM state) + 15 Standard Attn (KV cache)，spec 没法 unify → `ValueError: Hybrid KV cache manager is disabled but failed to convert the KV cache specs to one unified type` → EngineCore 崩。**显式加 flag = 告诉 vllm "我的 connector 是 SupportsHMA，handle hybrid 妥当"**。
+
+### 9c. Manifest 准备
+
+3 个 manifest 已 commit 到 `manifests/`:
+- [`qwen35_prefill.yaml`](manifests/qwen35_prefill.yaml) — Prefill (kv_producer, mem=0.7), nodeSelector `np-tpu7x-spot-pd-p`
+- [`qwen35_decode.yaml`](manifests/qwen35_decode.yaml) — Decode (kv_consumer, mem=0.9), nodeSelector `np-tpu7x-spot-pd-d`
+- [`qwen35_proxy.yaml`](manifests/qwen35_proxy.yaml) — Proxy 跑 `examples/disagg/toy_proxy_server.py`，听 :10000
+
+**3 个 manifest 自带 init container patch 流程**：每次 pod 启动从 Lustre `/lustre/patches/qwen35-pd/` cp `tpu_connector_hma.py` (HMA) + `kv_cache_manager.py` (PR #2366) 到 `/workspace/tpu_inference/`，删 `__pycache__`，verify grep ≥18 / =7。
+
+**前提（一次性准备）**:
+```bash
+# 1. 创建 2 个 v7x-8 spot node pool（async 命令，~2-5 min ready）
+for role in p d; do
+  gcloud container node-pools create np-tpu7x-spot-pd-$role \
+    --cluster=chrisya-v7x-v134 --region=us-central1 --project=cloud-tpu-multipod-dev \
+    --node-locations=us-central1-c --machine-type=tpu7x-standard-4t --num-nodes=1 --spot \
+    --disk-type=hyperdisk-balanced --disk-size=500 \
+    --node-taints=google.com/tpu=present:NoSchedule \
+    --workload-metadata=GKE_METADATA --enable-autorepair --enable-autoupgrade --async
+done
+
+# 2. 把 HMA + PR #2366 patch 文件 stage 到 Lustre（从单机 pod e2e-02 cp）
+kubectl cp scripts/tpu_connector_hma.py e2e-02:/tmp/tpu_connector_hma.py
+kubectl exec e2e-02 -- bash -c "
+  mkdir -p /lustre/patches/qwen35-pd
+  cp /tmp/tpu_connector_hma.py /lustre/patches/qwen35-pd/
+  cp /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py /lustre/patches/qwen35-pd/
+"
+```
+
+### 9d. 部署 + 等就绪 (~10 min cold start)
+
+```bash
+CTX=gke_cloud-tpu-multipod-dev_us-central1_chrisya-v7x-v134
+cd manifests/
+
+# Apply 3 manifest
+kubectl --context="$CTX" apply -f qwen35_prefill.yaml -f qwen35_decode.yaml -f qwen35_proxy.yaml
+
+# 等 ready (~10 min: image pull 2 min + patch 30s + weight load 3 min + MoE re-quant 2.5 min + KV init)
+kubectl --context="$CTX" wait --for=condition=Ready pod -l app=vllm-prefill --timeout=1200s
+kubectl --context="$CTX" wait --for=condition=Ready pod -l app=vllm-decode --timeout=1200s
+
+# 验证 HMA + PR #2366 + Hybrid KV manager 全 enable
+PREFILL_POD=$(kubectl --context="$CTX" get pods -l app=vllm-prefill -o jsonpath='{.items[0].metadata.name}')
+kubectl --context="$CTX" logs $PREFILL_POD | grep -E "TPUConnectorHMA|Hybrid KV cache: padding|Application startup"
+# 期望看到:
+#   Hybrid KV cache: padding every layer spec to 23289856 bytes  ← PR #2366 ✓
+#   Hybrid KV cache layout: num_kv_cache_groups=4, ... duplicate_shared_layers=True
+#   TPUConnectorHMA Worker 0 Prefill --> init | num_layers=60 | num_kv_groups=4 | group_is_mamba=[True, True, True, False]
+#   Creating v1 connector with name: TPUConnectorHMA  ← HMA registered ✓
+#   Application startup complete
+```
+
+### 9e. 端到端 Smoke Test（验证 P→D KV 传输工作）
+
+通过 proxy:10000 测试，5-shot 单 user message（chat 端唯一稳定方式，见 Step 6 Constraint B）：
+
+```bash
+PROXY_POD=$(kubectl --context="$CTX" get pods -l app=vllm-proxy -o jsonpath='{.items[0].metadata.name}')
+
+for country in France Italy Australia Canada Brazil; do
+  P="Question: Capital of Japan?\nAnswer: Tokyo.\n\nQuestion: Capital of Germany?\nAnswer: Berlin.\n\nQuestion: Capital of Italy?\nAnswer: Rome.\n\nQuestion: Capital of Spain?\nAnswer: Madrid.\n\nQuestion: Capital of Brazil?\nAnswer: Brasilia.\n\nQuestion: Capital of $country?\nAnswer:"
+  result=$(kubectl --context="$CTX" exec $PROXY_POD -- curl -s http://localhost:10000/v1/chat/completions \
+    -H 'Content-Type: application/json' \
+    -d "{\"model\":\"Qwen3.5-397B-FP8\",\"messages\":[{\"role\":\"user\",\"content\":\"$P\"}],\"max_tokens\":50,\"temperature\":0,\"chat_template_kwargs\":{\"enable_thinking\":false}}" \
+    | python3 -c 'import sys,json; r=json.load(sys.stdin); m=r["choices"][0]["message"]; c=(m["content"] or "").replace(chr(10), " ")[:60]; print(repr(c) + " | finish:" + r["choices"][0]["finish_reason"])')
+  echo "$country: $result"
+done
+```
+
+**实测 2026-04-26 全 pass**：
+```
+France:    'Answer: Paris.' | finish:stop
+Italy:     ' Rome.'         | finish:stop
+Australia: ' Canberra.'     | finish:stop
+Canada:    ' Ottawa.'       | finish:stop
+Brazil:    ' Brasilia.'     | finish:stop
+```
+
+5/5 全 hit + finish=stop + reasoning_len=0 → 证明 Proxy → Prefill → KV transfer (HMA) → Decode → Client 全链路通。
+
+### 9f. 踩坑（HMA-specific，单机不会遇到）
+
+1. **`Engine core initialization failed. Failed core proc(s): {}` + traceback 含 `unify_hybrid_kv_cache_specs`**
+   - 根因：vLLM 默认 disable hybrid KV cache manager when `kv_transfer_config` set
+   - 修复：加 `--no-disable-hybrid-kv-cache-manager` flag（**Qwen3.5 PD 必备**）
+
+2. **K8s rolling restart Pending（新 pod 调度不上）**
+   - 根因：1 个 v7x-8 节点上已有旧 pod 占满 TPU，新 pod (maxSurge=1) 调度不上
+   - 修复：`kubectl delete pod <old-pod>` 强制 K8s 重建
+
+3. **Cold start 偶发首次 sentinel race (`Failed core proc(s): {}`，无 traceback)**
+   - 跟 Step 9f #1 错误信息相同但没 traceback（race condition）
+   - K8s 自动 restart，多数 retry 1-2 次就 work
+
+### 9g. Benchmark（待补 — 跟 Qwen3-Coder §7g 同 setup 对比）
+
+```bash
+# 复用 Qwen3-Coder §7e 命令但改 served-model-name + max-model-len
+PROXY_POD=$(kubectl --context="$CTX" get pods -l app=vllm-proxy -o jsonpath='{.items[0].metadata.name}')
+kubectl --context="$CTX" exec $PROXY_POD -- vllm bench serve \
+  --model=Qwen3.5-397B-FP8 --dataset-name=random \
+  --num-warmups 10 --random-input-len=1024 --random-output-len=1024 \
+  --num-prompts=256 --ignore-eos \
+  --host=localhost --port=10000 --max-concurrency=1 \
+  --metric-percentiles 90,99 \
+  --result-file=disagg_qwen35_1024_1024_c1.json
+# 对比 8192/1024 c=4 同样跑一次
+```
+
+预期表格（待数据）：
+
+| 配置 | TTFT (med) | TPOT (med) | Output tok/s | Δ vs 单实例 |
+|---|---:|---:|---:|---|
+| 单实例 c=1 (1K/1K) | — | 20.6 ms | 49.6 | baseline |
+| **1P1D c=1 (1K/1K)** | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+| 单实例 c=4 (8K/1K) | — | _TBD_ | _TBD_ | baseline |
+| **1P1D c=4 (8K/1K)** | _TBD_ | _TBD_ | _TBD_ | _TBD_ |
+
+---
+
 ## 上游演进时间线
 
 | 日期 | 里程碑 | 来源 |
