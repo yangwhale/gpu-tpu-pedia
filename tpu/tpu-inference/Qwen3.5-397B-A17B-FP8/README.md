@@ -203,14 +203,14 @@ kubectl --context="$CTX" exec $POD -- curl -sf -o /dev/null -w "%{http_code}\n" 
   | grep -q 200 && echo "✅ ready" || (echo "❌ not ready, log tail:"; \
     kubectl --context="$CTX" exec $POD -- tail -20 /tmp/vllm_qwen35.log; exit 1)
 
-# 6. Hello world
-kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/chat/completions \
+# 6. Hello world — 用 /v1/completions 最稳（chat 端 thinking 关不掉，见必读 Constraint B）
+kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/completions \
   -H 'Content-Type: application/json' \
-  -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"哈喽啊\"}],\"max_tokens\":256,\"chat_template_kwargs\":{\"enable_thinking\":false}}" \
+  -d "{\"model\":\"$MODEL\",\"prompt\":\"The capital of France is\",\"max_tokens\":10,\"temperature\":0}" \
   | python3 -m json.tool
 ```
 
-预期看到模型回复中文 + emoji。如果出错查 Step 1-6 详细说明。
+预期：`choices[0].text == " Paris."`、`finish_reason == "stop"`。如果出错查 Step 1-6 详细说明。
 
 复现 benchmark 和 GSM8K 见 [Step 7-8](#step-7-gsm8k-准确性测试推荐用自定义脚本)。
 
@@ -529,16 +529,15 @@ INFO: Application startup complete.
 curl -s http://localhost:8000/health
 # 预期: HTTP 200, {"status":"ok"}
 
-# Hello world (thinking OFF, 直接回答)
+# Hello world — 用 /v1/completions 最稳（chat 端 thinking 关不掉，见 Constraint B）
 MODEL=/lustre/models/Qwen3.5-397B-A17B-FP8
-curl -s -X POST http://localhost:8000/v1/chat/completions \
+curl -s -X POST http://localhost:8000/v1/completions \
   -H 'Content-Type: application/json' \
   -d "{
     \"model\": \"$MODEL\",
-    \"messages\": [{\"role\": \"user\", \"content\": \"哈喽啊，how are you 啊\"}],
-    \"max_tokens\": 256,
-    \"temperature\": 0.7,
-    \"chat_template_kwargs\": {\"enable_thinking\": false}
+    \"prompt\": \"The capital of France is\",
+    \"max_tokens\": 10,
+    \"temperature\": 0
   }" | python3 -m json.tool
 ```
 
@@ -546,14 +545,14 @@ curl -s -X POST http://localhost:8000/v1/chat/completions \
 ```json
 {
   "choices": [{
-    "message": {
-      "content": "哈喽！I'm doing great, thanks for asking! 😊 今天有什么想聊的或者需要帮忙的吗？"
-    },
+    "text": " Paris.",
     "finish_reason": "stop"
   }],
-  "usage": {"prompt_tokens": 21, "total_tokens": 47, "completion_tokens": 26}
+  "usage": {"prompt_tokens": 7, "total_tokens": 13, "completion_tokens": 6}
 }
 ```
+
+> **Chat 端点演示**：chat 端点会触发 `<think>...</think>` reasoning，且当前 vLLM + Qwen3 reasoning_parser 下 server-side **完全关不掉 thinking**（见 [Constraint B](#b-server-side-thinking-关不掉)）。生产 chat 用法走 5-shot in-context learning（见 [Step 7 GSM8K](#step-7-gsm8k-准确性测试推荐用自定义脚本)）。
 
 ### Thinking mode 开关
 
