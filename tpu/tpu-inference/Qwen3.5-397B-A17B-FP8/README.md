@@ -554,25 +554,27 @@ curl -s -X POST http://localhost:8000/v1/completions \
 
 > **Chat 端点演示**：chat 端点会触发 `<think>...</think>` reasoning，且当前 vLLM + Qwen3 reasoning_parser 下 server-side **完全关不掉 thinking**（见 [Constraint B](#b-server-side-thinking-关不掉)）。生产 chat 用法走 5-shot in-context learning（见 [Step 7 GSM8K](#step-7-gsm8k-准确性测试推荐用自定义脚本)）。
 
-### Thinking mode 开关
+### Thinking mode 行为（关不掉，注意）
 
-Qwen3.5 默认 thinking mode **ON**（输出 `<think>...</think>` reasoning + 答案）。
+Qwen3.5 默认 thinking ON：模型输出 `<think>...</think>` reasoning + 答案。
+当前 vLLM + `--reasoning-parser qwen3` 下，**所有 server-side 关闭 thinking 的方法均失效**（实测 2026-04-26）：
 
-**关闭 thinking** 必须在 **request body** 里传（server-side `--chat-template-kwargs` 在当前 vLLM 版本不可靠）：
+| 尝试方法 | 实测结果 |
+|---|---|
+| 启动加 `--chat-template-kwargs='{"enable_thinking":false}'` | silently 忽略 |
+| Request body 传 `chat_template_kwargs={"enable_thinking":false}` | **chat 端模型陷入 `</think>` 死循环 → gibberish** |
+| User prompt 加 `/no_think` 标记 | 失效，仍 thinking ON |
 
-```python
-# OpenAI HTTP API
-{
-  "model": "...",
-  "messages": [...],
-  "chat_template_kwargs": {"enable_thinking": false},  # ← 关键
-  ...
-}
-```
+**3 个生产可用 workaround**：
 
-Token 经济学差异：
-- Thinking ON: 平均 ~1100-1500 token output（含 reasoning）
-- Thinking OFF: 平均 ~3-30 token output（直接答案）
+1. **走 `/v1/completions` 端点**（不经 chat template，无 thinking 干扰）—— 简单 prompt 推理首选，见 hello world 示例
+2. **5-shot in-context learning**（chat 端绕过 thinking 唯一可靠方式）—— messages 里给 5 个 "Q: ... A: N" 示例让模型 follow pattern 直接答题；GSM8K 实测 ~90% accuracy（见 [scripts/run_gsm8k_qwen35.py](scripts/run_gsm8k_qwen35.py)）
+3. **接受 thinking ON + 给足 `max_tokens >= 2048`**—— 让 reasoning + 答案完整输出，适合能容忍延迟和 token 成本的长答案场景
+
+**Token 经济学**：
+- Thinking ON 实测: ~1100-1500 tokens reasoning + ~30-200 tokens 答案
+- Thinking OFF（理论）: ~3-30 tokens 直接答案
+- 当前**无法 server-side 关**，需省 tokens 走 workaround 1 或 2
 
 ---
 
