@@ -301,9 +301,30 @@ spec:
   - name: pvc-vllm-vol
     persistentVolumeClaim:
       claimName: pvc-qwen3-coder
+  tolerations:
+  # ⚠️ 必须！spot node pool 有 NoSchedule taint，缺这条 pod 会卡 Pending
+  - key: cloud.google.com/gke-spot
+    operator: Equal
+    value: "true"
+    effect: NoSchedule
+  # ⚠️ 必须！TPU node 有 google.com/tpu taint
+  - key: google.com/tpu
+    operator: Exists
+    effect: NoSchedule
   restartPolicy: Never
 EOF
 ```
+
+> **🔧 验证 Pod 已调度**（必须看到 Running 而不是 Pending）：
+> ```bash
+> kubectl get pod vllm-qwen3-coder -o wide
+> # 如果是 Pending，看原因：
+> kubectl describe pod vllm-qwen3-coder | tail -20
+> # 常见原因：
+> #   - 缺 toleration → 上面 yaml 已修复
+> #   - spot node pool 没容量 → 等几分钟或换 region
+> #   - PVC 卡 WaitForFirstConsumer → 正常，pod 调度后会 Bound
+> ```
 
 > **关键点说明**：
 > - `google.com/tpu: "4"` — 申请 4 chips（= 8 devices）
