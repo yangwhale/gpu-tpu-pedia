@@ -288,6 +288,10 @@ spec:
       mountPath: /dev/shm
     - name: pvc-vllm-vol
       mountPath: "/usr/vllm"
+    # ⭐ 强烈推荐: 同时挂 Lustre, 大模型权重下 Lustre 比 PVC 快 4×
+    #   (实测 jarvis 2026-04-26: PVC 16 GB/min vs Lustre 63 GB/min)
+    - name: lustre-vol
+      mountPath: /lustre
     securityContext:
       privileged: true
       capabilities:
@@ -301,6 +305,10 @@ spec:
   - name: pvc-vllm-vol
     persistentVolumeClaim:
       claimName: pvc-qwen3-coder
+  # ⭐ Lustre RWX 共享存储 (如集群已有 lustre-pvc)
+  - name: lustre-vol
+    persistentVolumeClaim:
+      claimName: lustre-pvc
   tolerations:
   # ⚠️ 必须！spot node pool 有 NoSchedule taint，缺这条 pod 会卡 Pending
   - key: cloud.google.com/gke-spot
@@ -331,6 +339,7 @@ EOF
 > - `memory: "850Gi"` — 模型加载需要大量 host RAM
 > - `dshm sizeLimit: 200Gi` — Qwen3 Coder **不需要 800GB /dev/shm**（GLM-5.1 才需要），200GB 够用
 > - `tpu-node-setup initContainer` — **不能省**，否则 vLLM 启动会因 mmap 上限崩溃
+> - **⭐ `lustre-vol`** — 强烈推荐挂上 — 大模型权重下 Lustre 比 PVC 快 **4×**（实测 jarvis 2026-04-26：63 GB/min vs 16 GB/min）。如集群没 `lustre-pvc` 就先建一个 RWX Lustre 实例（参见 §7a-pre）。挂上后 `pvc-vllm-vol` PVC 大小可以从 600 GB 缩到 100 GB 只放系统/cache。
 
 ### 1c: 等 Pod Ready 并进入
 
