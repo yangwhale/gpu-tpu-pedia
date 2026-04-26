@@ -322,20 +322,27 @@ Brazil:    ' Brasilia.'     | stop
 
 ---
 
-# 部署模式 3：Multi-host TP=16 (2 × v7x-8) ⭐ 实测 2026-04-26
+# 部署模式 3：Multi-host TP=16 (2 × v7x-8) ⭐ 实测 2026-04-26 ⭐ LM 推理 5/5 PASS
 
-> 1 LWS 跨 2 个 v7x-8 节点共 16 chips, TP=16 + Ray distributed executor。**证明 vLLM TPU 推理引擎支持 multi-host 部署**。
+> 1 LWS 跨 2 个 v7x-8 节点共 16 chips, TP=16 + Ray distributed executor。**证明 vLLM TPU 推理引擎支持 hybrid 模型 multi-host 端到端 LM 推理**。
 >
-> ⚠️ **当前状态**: 启动 ✅ (Application startup complete, HTTP 200), 但**chat/completion 触发 model class API mismatch bug** (`Qwen3VL.get_mrope_input_positions(hf_config)` TypeError)。M1 验证了**推理引擎 multi-host 启动能力**，inference 路径需要 model class 修复。
+> ✅ **当前状态**: 启动 ✅ + HTTP 200 ✅ + **5/5 国家首都 chat completions 全 hit** (Paris/Rome/Canberra/Ottawa/Brasilia, finish=stop, reasoning_len=0)。
 
-### 🚨 Multi-host vs Single-host 关键差异（4 个 root cause / fix）
+### 🚨 Multi-host vs Single-host 关键差异（6 层 root cause / fix）
 
 | # | Multi-host 特定 fix | 不修后果 |
 |---|---|---|
 | 1 | **`--max-num-batched-tokens=16384`** (≥ Qwen3.5 `max_tokens_per_mm_item`) | silent hang in init_device, 14 min 没新 log, worker SIGSEGV |
-| 2 | **PR #2366 patch (kv_cache_manager.py)** 必须 (跟单机一样) | KV init `AssertionError: page_size_padded >= page_size` |
+| 2 | **PR #2366 patch (kv_cache_manager.py)** + **多 group block_tables_cpu rebuild** | KV init `AssertionError: page_size_padded >= page_size` 或 `IndexError: list index out of range` |
 | 3 | **`TPU_MULTIHOST_BACKEND=ray`** + `TPU_TOPOLOGY=2x2x2` + `TPU_HOST_BOUNDS=1,1,2` env override | 单机模式启动, TP=16 无法跨 host |
 | 4 | **`--distributed-executor-backend=ray`** + LWS pattern (1 leader + 1 worker) | UniProcExecutor 无法跨 pod |
+| 5 | **`tpu_runner.py` patch (5 行)**: `disable_mm_from_limits=True` 时 set `self.uses_mrope=False` + `self.get_mrope_input_positions_fn=None` | chat 端 first request 崩 `TypeError: Qwen3VL.get_mrope_input_positions() got unexpected hf_config` (vllm core vs Qwen3VL model class API 错位) |
+| 6 | **`persistent_batch_manager.py` patch (4 行)**: defensive None check `if get_mrope_input_positions_fn is None: continue` | PersistentBatchManager 在 init 时已捕获 uses_mrope=True, 后期 set False 不影响 → call None → TypeError |
+
+> ⭐ **3 个 patches commit 到 repo** ([scripts/multihost-patches/](scripts/multihost-patches/))，任何人 checkout 后可直接 deploy:
+> - `kv_cache_manager.py` — PR #2366 hybrid padding + 多 group block_tables_cpu rebuild
+> - `tpu_runner.py` — disable_mm_from_limits 时禁 mrope (5 行)
+> - `persistent_batch_manager.py` — defensive None check (4 行)
 
 ### Step 1: 准备 multi-host node pool
 
@@ -381,9 +388,32 @@ regular_attn_sharding=Mesh('data':1, 'model':16)                         ← TP=
 Application startup complete                                              ← ✅
 ```
 
+### Step 5: Smoke Test（验证 multi-host LM 推理 work）
+
+```bash
+# 通过 leader pod 直接 curl chat completions (5-shot 单 user message pattern)
+for country in France Italy Australia Canada Brazil; do
+  P="Question: Capital of Japan?\nAnswer: Tokyo.\n\nQuestion: Capital of Germany?\nAnswer: Berlin.\n\nQuestion: Capital of Italy?\nAnswer: Rome.\n\nQuestion: Capital of Spain?\nAnswer: Madrid.\n\nQuestion: Capital of Brazil?\nAnswer: Brasilia.\n\nQuestion: Capital of $country?\nAnswer:"
+  result=$(kubectl exec qwen35-mh-0 -- curl -s http://localhost:8000/v1/chat/completions \
+    -H 'Content-Type: application/json' \
+    -d "{\"model\":\"Qwen3.5-397B-FP8\",\"messages\":[{\"role\":\"user\",\"content\":\"$P\"}],\"max_tokens\":50,\"temperature\":0,\"chat_template_kwargs\":{\"enable_thinking\":false}}" \
+    | python3 -c 'import sys,json; r=json.load(sys.stdin); m=r["choices"][0]["message"]; print(repr(m["content"]) + " | " + r["choices"][0]["finish_reason"])')
+  echo "$country: $result"
+done
+```
+
+**预期** (实测 2026-04-26 全 pass):
+```
+France:    'Paris.'    | stop
+Italy:     'Rome.'     | stop
+Australia: 'Canberra.' | stop
+Canada:    'Ottawa.'   | stop
+Brazil:    'Brasilia.' | stop
+```
+
 ### Multi-host 部署完整 dogfood 详记
 
-⚠️ chat/completion path 当前因 `Qwen3VL.get_mrope_input_positions()` API mismatch 不可用。完整 5 次 test iteration + 4 层 root cause 链 + 经验教训见**内部 dogfood HTML**（[最下方附录](#-内部文档dogfood-历程--深度分析)）。
+完整 8 次 test iteration + 6 层 root cause 链 + 3 patches deep dive + 经验教训见**内部 dogfood HTML**（[最下方附录](#-内部文档dogfood-历程--深度分析)）。
 
 ---
 
