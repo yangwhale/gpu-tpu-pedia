@@ -555,25 +555,37 @@ curl -s -X POST http://localhost:8000/v1/chat/completions \
 }
 ```
 
-### Thinking mode 开关
+### ⚠️ Thinking 控制 / Chat 路径整体 broken（必读）
 
-Qwen3.5 默认 thinking mode **ON**（输出 `<think>...</think>` reasoning + 答案）。
+实测 2026-04-26 七个 case 矩阵（详见 [04-26 验证报告](https://cc.higcp.com/pages/qwen35-readme-verification-20260426.html)）：
 
-**关闭 thinking** 必须在 **request body** 里传（server-side `--chat-template-kwargs` 在当前 vLLM 版本不可靠）：
+| 配置 | Prompt 类型 | 结果 |
+|---|---|---|
+| thinking OFF | 短问候 ("哈喽") | `<think>\n\n</think>` 死循环到 max_tokens ❌ |
+| thinking OFF + system msg | 短中文 chat | 输出泰语 `สวัสดีครับ` / 俄语，语言错乱 ❌ |
+| thinking OFF + system + 长 prompt | "解释 X..." | 外语死循环 ❌ |
+| thinking ON | 短 chat ("哈喽啊...") | ✅ work 但 reasoning 占 98% tok（业务效率 2%） |
+| thinking ON | 中等闲聊 ("今天天气") | finish=stop 但 **content 完全为空** ❌ |
+| thinking ON | "解释 X..." 类问题 | `Thinking\nThinking\n...` 新型死循环到 4000 tok ❌ |
+| **Chat + 5-shot Q/A pattern + `enable_thinking:false`** | 任意 | ✅ **唯一稳定路径**（GSM8K 93.93% 就是用这个） |
 
-```python
-# OpenAI HTTP API
-{
-  "model": "...",
-  "messages": [...],
-  "chat_template_kwargs": {"enable_thinking": false},  # ← 关键
-  ...
-}
-```
+**根因猜想**：vLLM `--reasoning-parser qwen3` + Qwen3.5 chat template 的 thinking state machine 在 hybrid (45 GDN + 15 Standard Attn) 推理路径下有 edge case bug — `enable_thinking:false` 注入的 chat template 与 reasoning parser 期望的 `<think>...</think>` 闭合状态不匹配，模型生成时进入 broken loop。
 
-Token 经济学差异：
-- Thinking ON: 平均 ~1100-1500 token output（含 reasoning）
-- Thinking OFF: 平均 ~3-30 token output（直接答案）
+**推荐用例**（Deployment scope）：
+- ✅ **Batch eval / benchmark** — GSM8K, MMLU 类用 5-shot completion pattern
+- ✅ **Structured generation** — JSON 提取、classification（few-shot prompt 把 chat 任务转成 completion）
+- ✅ **Code generation** — 在 prompt 里给 example I/O
+- ❌ **Conversational chatbot** — 当前 broken，不要承诺
+- ❌ **解释/教学类对话** — content 输出空 / 死循环
+
+> 上方 "Hello world (thinking OFF, 直接回答)" 示例**不可靠**（stochastic, 04-25 work 04-26 死循环）。仅用于"模型还能跑"的存活验证，不要拿来当 chat 用例样板。
+
+**等 upstream 修**：[Qwen3.5 CI yaml](https://github.com/vllm-project/tpu-inference/blob/main/.buildkite/models/Qwen_Qwen3_5-397B-A17B.yml) 用的是 5-shot eval, 不覆盖 chat path, 所以 CI 不会发现这个 bug。
+
+Token 经济学（thinking ON 短 chat 实测）：
+- Reasoning: ~1100-3600 char/req
+- Content: ~30-80 char/req
+- **业务有效 token 比例 < 5%**（生产部署成本核算需考虑）
 
 ---
 
