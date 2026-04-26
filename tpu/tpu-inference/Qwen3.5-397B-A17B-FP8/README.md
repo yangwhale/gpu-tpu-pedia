@@ -344,13 +344,27 @@ Brazil:    ' Brasilia.'     | stop
 > - `tpu_runner.py` — disable_mm_from_limits 时禁 mrope (5 行)
 > - `persistent_batch_manager.py` — defensive None check (4 行)
 
+### Step 0: 集中设置环境变量（一次设置，Step 1-7 全用）
+
+```bash
+# GKE
+CTX=<your-gke-context>             # 例: gke_PROJECT_REGION_CLUSTER (kubectl context)
+PROJECT=<your-gcp-project>
+CLUSTER=<your-gke-cluster>
+REGION=<your-region>               # 例: us-central1
+ZONE=<your-zone>                   # 例: us-central1-c
+
+# Lustre patch staging
+UTIL_POD=<your-pod-with-lustre-mount>   # 任何挂 lustre-pvc 的 pod (Step 2 用)
+
+# Repo (本仓库 root)
+REPO_ROOT=<your-checkout-of-gpu-tpu-pedia>   # 例: ~/gpu-tpu-pedia
+cd $REPO_ROOT/tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/
+```
+
 ### Step 1: 准备 multi-host node pool
 
 ```bash
-# 设置环境变量 (复用部署模式 1 的 $CTX, 或重新设置)
-CTX=<your-gke-context>             # 例: gke_PROJECT_REGION_CLUSTER
-PROJECT=<your-gcp-project>; CLUSTER=<your-gke-cluster>; REGION=<your-region>; ZONE=<your-zone>
-
 # 创建 2 节点 multi-host TPU pool (注意 --num-nodes=2 + --tpu-topology=2x2x2)
 gcloud container node-pools create np-tpu7x-spot-mh-qwen35 \
   --cluster=$CLUSTER --region=$REGION --project=$PROJECT \
@@ -370,13 +384,8 @@ gcloud container node-pools create np-tpu7x-spot-mh-qwen35 \
 ### Step 2: Stage **3 个 patches** 到 Lustre（multi-host 必须）
 
 ```bash
-# ⚠️ 必须 cd 到 model dir 才能让 scripts/multihost-patches/ relative path 工作
-cd <repo>/tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/
-
-# 假设 GKE 集群有一个挂载 Lustre 的 utility pod (如 e2e-02), 用于 cp 文件到 Lustre
-UTIL_POD=<your-pod-with-lustre-mount>   # 任何挂 lustre-pvc 的 pod 即可
-
 # 一次性 cp 3 个 patches 到 Lustre (multi-host 比 PD 多 2 个 patches)
+# ⚠️ 假设你已 cd 到 Step 0 的 model dir (relative path scripts/multihost-patches/ 才工作)
 for f in kv_cache_manager.py tpu_runner.py persistent_batch_manager.py; do
   kubectl --context="$CTX" cp scripts/multihost-patches/$f $UTIL_POD:/tmp/$f
 done
