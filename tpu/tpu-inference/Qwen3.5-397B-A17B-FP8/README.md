@@ -365,6 +365,9 @@ gcloud container node-pools create np-tpu7x-spot-mh-qwen35 \
 ### Step 2: Stage **3 个 patches** 到 Lustre（multi-host 必须）
 
 ```bash
+# ⚠️ 必须 cd 到 model dir 才能让 scripts/multihost-patches/ relative path 工作
+cd <repo>/tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/
+
 # 假设 GKE 集群有一个挂载 Lustre 的 utility pod (如 e2e-02), 用于 cp 文件到 Lustre
 UTIL_POD=<your-pod-with-lustre-mount>   # 任何挂 lustre-pvc 的 pod 即可
 
@@ -394,14 +397,21 @@ kubectl --context="$CTX" apply -f qwen35_multihost.yaml
 # LWS 1 group × 2 pods (1 leader on node A + 1 worker on node B)
 ```
 
-### Step 4: 等就绪 + 验证 multi-host 启动 log（~20-30 min, 含 K8s auto restart 1-2 次）
+> 💡 **可忽略 warning**: 如果 Service `qwen35-mh` 之前部署过, 你会看到 `Warning: resource services/qwen35-mh is missing the kubectl.kubernetes.io/last-applied-configuration annotation`。这是 kubectl 的常规 warning, 不影响部署。
 
-⚠️ Multi-host cold start **比单机慢 2-3×**: weight load 多机分摊 Lustre 带宽 + cross-host JAX init 是同步等所有 host 完成 + sentinel race 几乎必然触发 1 次 K8s restart。**不要用 `kubectl wait condition=Ready`**——pod restart 期间会 false success。改用 health endpoint 轮询:
+### Step 4: 等就绪 + 验证 multi-host 启动 log（**实测 11-30 min**）
+
+⚠️ Multi-host cold start **比单机慢 2-3×**: weight load 多机分摊 Lustre 带宽 + cross-host JAX init 是同步等所有 host 完成。
+- **顺利情况**：~11 min, RESTARTS=0 (实测多次)
+- **触发 sentinel race**: ~25-30 min, 含 K8s auto restart 1-2 次（race 是已知偶发, 不影响最终成功）
+
+**不要用 `kubectl wait condition=Ready`**——pod restart 期间会 false success。改用 health endpoint 轮询:
 
 ```bash
 # 轮询 health 直到 200 (最长 30 min)
 for i in $(seq 1 60); do
-  CODE=$(kubectl --context="$CTX" exec qwen35-mh-0 -- curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/health 2>/dev/null || echo "000")
+  CODE=$(kubectl --context="$CTX" exec qwen35-mh-0 -- curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/health 2>/dev/null)
+  CODE=${CODE:-000}   # 默认 000 (避免 curl fail 时 -w 不输出)
   echo "T+$((i*30))s: HTTP $CODE"
   [ "$CODE" = "200" ] && break
   sleep 30
