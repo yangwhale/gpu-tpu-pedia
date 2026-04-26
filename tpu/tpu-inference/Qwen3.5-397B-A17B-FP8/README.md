@@ -169,20 +169,28 @@ kubectl --context="$CTX" exec $POD -- bash -c "ls $MODEL/*.safetensors | wc -l"
 kubectl --context="$CTX" exec $POD -- grep -c '_hybrid_uniform_page_size_bytes' \
   /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
 
-# 4. 启动 vLLM (Step 5 命令)
-kubectl --context="$CTX" exec $POD -- bash -c "
+# 4. 启动 vLLM —— ⚠️ 必须用 file-based launcher（kubectl exec inline 多行命令会被 SIGKILL=137）
+cat > /tmp/launch_vllm.sh <<'LAUNCHER'
+#!/bin/bash
 cd /tmp
-SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 MODEL_IMPL_TYPE=vllm \
-nohup vllm serve $MODEL \
-  --tensor-parallel-size 8 --enable-expert-parallel \
-  --max-num-batched-tokens 4096 --max-num-seqs 256 --max-model-len 4096 \
-  --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
-  --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
-  --limit-mm-per-prompt '{\"image\": 0, \"video\": 0}' \
-  --reasoning-parser qwen3 --async-scheduling \
-  > /tmp/vllm_qwen35.log 2>&1 </dev/null &
+rm -f /tmp/libtpu_lockfile /tmp/vllm_qwen35.log
+touch /tmp/vllm_qwen35.log
+setsid nohup env \
+  SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 MODEL_IMPL_TYPE=vllm \
+  vllm serve /lustre/models/Qwen3.5-397B-A17B-FP8 \
+    --tensor-parallel-size 8 --enable-expert-parallel \
+    --max-num-batched-tokens 4096 --max-num-seqs 256 --max-model-len 4096 \
+    --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
+    --limit-mm-per-prompt '{"image": 0, "video": 0}' \
+    --reasoning-parser qwen3 --async-scheduling \
+    >> /tmp/vllm_qwen35.log 2>&1 < /dev/null &
 disown
-"
+echo "launched pid=$!"
+exit 0
+LAUNCHER
+kubectl --context="$CTX" cp /tmp/launch_vllm.sh $POD:/tmp/launch_vllm.sh
+kubectl --context="$CTX" exec $POD -- bash /tmp/launch_vllm.sh
 
 # 5. 等 cold start ~7 min
 sleep 420
@@ -734,6 +742,34 @@ rm -f /tmp/libtpu_lockfile
 **修复**：
 - 切换到 `e2e-02` pod（docker image 自带的 tpu_inference 也旧，但更接近 main）
 - 用 Step 4 的 `kubectl cp` 把 main branch 的 `kv_cache_manager.py` 拷过去
+
+### 9. ⚠️ `kubectl exec $POD -- bash -c "<multi-line nohup>"` 被 SIGKILL (exit 137)
+
+**现象**：用 inline 多行命令启动 nohup vllm:
+```bash
+kubectl exec $POD -- bash -c "
+nohup vllm serve ... &
+disown
+"
+```
+返回 `command terminated with exit code 137`，进程根本没起 (`pgrep -af vllm` 空)。
+
+**根因**：kubectl exec 的 stdin stream channel 关闭时，server 端 SIGKILL 整个 exec session 进程组。即使 `nohup` + `setsid` + `disown` 也无法逃脱（与本地 shell 的 SIGHUP 行为不同）。
+
+**修复**：用 file-based launcher script（先 `kubectl cp` 一个 .sh 文件，再 `kubectl exec bash launcher.sh`）。bash 进程读完文件后干净 fork+exit，不依赖 stdin channel：
+```bash
+cat > /tmp/launch_vllm.sh <<'LAUNCHER'
+#!/bin/bash
+setsid nohup env <ENV_VARS> vllm serve <MODEL> <ARGS> \
+  > /tmp/vllm.log 2>&1 < /dev/null &
+disown
+exit 0
+LAUNCHER
+kubectl cp /tmp/launch_vllm.sh $POD:/tmp/launch_vllm.sh
+kubectl exec $POD -- bash /tmp/launch_vllm.sh
+```
+
+> **教训**：不要 trust kubectl exec 的 inline `bash -c` + `nohup &`。所有需要 detach 的长任务（vllm serve、benchmark sweep、GSM8K eval）都用 file-based launcher 模式。
 
 ---
 
