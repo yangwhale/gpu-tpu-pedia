@@ -22,11 +22,12 @@
 | **GSM8K full 1319 样本 (5-shot, thinking OFF)** | **93.93% (1239/1319)** ✅ ⭐ | 04-26 复测 ↑ vs 04-25 77.56%（HF 模型权重更新或 stack 更稳）；length 截断仅 14 (1.06%) vs 04-25 90 (6.8%) |
 | 长 prompt 8K/1K P4 | **178.6 tok/s** | 与 1K prompt 几乎相同（hybrid GDN 长 context 优势） |
 
-> **简单 chat 测试** (2026-04-25 + 04-26 两次实测一致, e2e-02 pod, PR #2366 应用后):
-> Prompt: `哈喽啊，how are you 啊`
-> Response (04-25): `哈喽！I'm doing great, thanks for asking! 😊 今天有什么想聊的或者需要帮忙的吗？` (26 tok)
-> Response (04-26): `哈喽！I'm doing great, thanks for asking! 😊 你最近怎么样啊？有什么想聊的或者需要帮忙的吗？` (30 tok)
-> finish_reason=stop ✅（两次输出风格完全一致，证明模型行为稳定）
+> ⚠️ **简单 chat 测试 — 04-26 复测发现 chat 路径整体 broken（撤回原 "两次一致" 结论）**
+> Prompt: `哈喽啊，how are you 啊` + `enable_thinking:false`
+> 04-25 (lucky case): `哈喽！I'm doing great...` (26 tok stop) — **stochastic, 不可复现**
+> 04-26 复测 (同样 prompt 同样配置): `<think>\n\n</think>\n\n<think>\n\n</think>...` 死循环到 max_tokens ❌
+> **真相**：chat 路径整体 broken（thinking OFF 死循环 / 语言错乱；thinking ON 解释类问题 content 输出空）。
+> 详见 [Step 6 chat broken 矩阵 + 推荐用例](#️-thinking-控制--chat-路径整体-broken必读)。
 
 ---
 
