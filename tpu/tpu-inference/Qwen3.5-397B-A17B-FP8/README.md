@@ -322,6 +322,71 @@ Brazil:    ' Brasilia.'     | stop
 
 ---
 
+# 部署模式 3：Multi-host TP=16 (2 × v7x-8) ⭐ 实测 2026-04-26
+
+> 1 LWS 跨 2 个 v7x-8 节点共 16 chips, TP=16 + Ray distributed executor。**证明 vLLM TPU 推理引擎支持 multi-host 部署**。
+>
+> ⚠️ **当前状态**: 启动 ✅ (Application startup complete, HTTP 200), 但**chat/completion 触发 model class API mismatch bug** (`Qwen3VL.get_mrope_input_positions(hf_config)` TypeError)。M1 验证了**推理引擎 multi-host 启动能力**，inference 路径需要 model class 修复。
+
+### 🚨 Multi-host vs Single-host 关键差异（4 个 root cause / fix）
+
+| # | Multi-host 特定 fix | 不修后果 |
+|---|---|---|
+| 1 | **`--max-num-batched-tokens=16384`** (≥ Qwen3.5 `max_tokens_per_mm_item`) | silent hang in init_device, 14 min 没新 log, worker SIGSEGV |
+| 2 | **PR #2366 patch (kv_cache_manager.py)** 必须 (跟单机一样) | KV init `AssertionError: page_size_padded >= page_size` |
+| 3 | **`TPU_MULTIHOST_BACKEND=ray`** + `TPU_TOPOLOGY=2x2x2` + `TPU_HOST_BOUNDS=1,1,2` env override | 单机模式启动, TP=16 无法跨 host |
+| 4 | **`--distributed-executor-backend=ray`** + LWS pattern (1 leader + 1 worker) | UniProcExecutor 无法跨 pod |
+
+### Step 1: 准备 multi-host node pool
+
+```bash
+PROJECT=<your-gcp-project>; CLUSTER=<your-gke-cluster>; REGION=<your-region>; ZONE=<your-zone>
+
+gcloud container node-pools create np-tpu7x-spot-mh-qwen35 \
+  --cluster=$CLUSTER --region=$REGION --project=$PROJECT \
+  --node-locations=$ZONE --machine-type=tpu7x-standard-4t --num-nodes=2 \
+  --tpu-topology=2x2x2 --spot \
+  --disk-type=hyperdisk-balanced --disk-size=500 \
+  --node-taints=google.com/tpu=present:NoSchedule \
+  --workload-metadata=GKE_METADATA --enable-autorepair --enable-autoupgrade
+# 注意: --num-nodes=2 + --tpu-topology=2x2x2 (vs single-host 用 2x2x1 + 1 node)
+```
+
+### Step 2: Stage PR #2366 patch 到 Lustre（如未做）
+
+跟 PD 部署 [Step 2](#step-2-stage-hma--pr-2366-patch-到-lustre) 完全一样：把 `kv_cache_manager.py` 放到 `/lustre/patches/qwen35-pd/`。
+
+### Step 3: 部署 LWS
+
+```bash
+kubectl --context="$CTX" apply -f manifests/qwen35_multihost.yaml
+# LWS 1 group × 2 pods (1 leader on node A + 1 worker on node B)
+```
+
+### Step 4: 等就绪 + 验证 multi-host 启动 log（~15-20 min cold start）
+
+```bash
+kubectl --context="$CTX" wait --for=condition=Ready pod -l leaderworkerset.sigs.k8s.io/name=qwen35-mh --timeout=1500s
+kubectl --context="$CTX" logs qwen35-mh-0 | grep -E "Init worker|Hybrid KV cache|Application startup"
+```
+
+**期望看到（multi-host 特征 log）**：
+```
+Init worker | rank=0 | hbm=[(0.0, 94.75) × 16]                         ← 16 chips!
+   self.devices=TpuDevice id=0..15 process_index=0/1 coords=(0,0,0)..(1,1,1)
+Hybrid KV cache: padding every layer spec to 13328384 bytes              ← multi-host PR #2366 padding
+   (num_attn_groups=1 × attn_page=524288 + num_mamba_groups=3 × mamba_unpadded=4268032)
+Hybrid KV cache layout: num_kv_cache_groups=4, num_blocks=5299           ← TP=16 num_blocks 比单机大 5.6×
+regular_attn_sharding=Mesh('data':1, 'model':16)                         ← TP=16 mesh ✅
+Application startup complete                                              ← ✅
+```
+
+### Multi-host 部署完整 dogfood 详记
+
+⚠️ chat/completion path 当前因 `Qwen3VL.get_mrope_input_positions()` API mismatch 不可用。完整 5 次 test iteration + 4 层 root cause 链 + 经验教训见**内部 dogfood HTML**（[最下方附录](#-内部文档dogfood-历程--深度分析)）。
+
+---
+
 # Benchmark
 
 ### Throughput (单实例, evalscope)
@@ -474,5 +539,6 @@ kubectl exec $PROXY_POD -- vllm bench serve \
 | 2026-04-25 | [⭐ 单机推理踩坑记 — 4 小时弯路 vs 14 分钟正确路](https://cc.higcp.com/pages/qwen35-397b-debug-story-20260425.html) | 单机部署踩坑全记录（45 KB）|
 | 2026-04-26 | [README 可复现性验证报告](https://cc.higcp.com/pages/qwen35-readme-verification-20260426.html) | 按 README 步骤盲跑 + 验证（23 KB）|
 | 2026-04-26 | [⭐ PD 分离部署 Dogfood 详记](https://cc.higcp.com/pages/qwen35-pd-disagg-dogfood-20260426.html) | PD 全流程 + HMA root cause + 6 lessons（24 KB）|
+| 2026-04-26 | [⭐ Multi-host TP=16 Dogfood 详记](https://cc.higcp.com/pages/qwen35-multihost-dogfood-20260426.html) | 5 次 test 揭露 4 层 root cause 链 + 单机/多机对比（27 KB）|
 
 > 💡 **链接行为**：cc.higcp.com 走 GCP IAP，浏览器有 google account 登录就能直接看；外部访问可用 `https://storage.googleapis.com/chris-pgp-host-asia/cc-pages/pages/<file>.html` 直链。
