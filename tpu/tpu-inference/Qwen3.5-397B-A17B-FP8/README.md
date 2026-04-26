@@ -10,16 +10,16 @@
 >
 > **模型**: [Qwen/Qwen3.5-397B-A17B-FP8](https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8)（94 safetensors, ~378 GiB native FP8）
 
-## 🎯 关键性能（已实测 2026-04-25）
+## 🎯 关键性能（最近实测 2026-04-26 复测，原数据 2026-04-25）
 
 | 操作点 | 实测值 | 备注 |
 |--------|------|------|
 | HF 下载 (94 shards, 378 GiB, 16 worker + hf_transfer) | **6 min** | xet CDN cache 充分（hot model） |
-| Cold start (Application startup complete) | **~7 min** | weight load 161s + MoE re-quant 2.5min + Hybrid KV padding + pjit compile |
-| Single user latency (P1, 1K/1K) | **20.6s, 49.6 tok/s/user** | Pareto: 💨 Low Latency |
-| Balanced (P64, 1K/1K) | **1510 tok/s, 23.6 tok/s/user** | Pareto: ⚖️ Balanced |
-| **🚀 Peak throughput (P128, 1K/1K)** | **2103 tok/s** ⭐ | Pareto: 真正 max（P256 反而降到 1877） |
-| **GSM8K full 1319 样本 (5-shot, thinking OFF)** | **77.56% (1023/1319)** ✅ | CI 阈值 63%, 远超过；16 min 跑完 |
+| Cold start (Application startup complete) | **6-7 min** | 04-26 实测 6:24 (weight load 184.9s + MoE re-quant 160s + Hybrid KV padding + pjit compile) |
+| Single user latency (P1, 1K/1K) | **20.6s, 49.7 tok/s/user** | 04-26 复测 49.68 (vs 04-25 49.6, ±0.2%) — 💨 Low Latency |
+| Balanced (P64, 1K/1K) | **1508 tok/s, 23.5 tok/s/user** | 04-26 复测 1507.91 (vs 04-25 1510, ±0.1%) — ⚖️ Balanced |
+| **🚀 Peak throughput (P128, 1K/1K)** | **2097 tok/s** ⭐ | 04-26 复测 2096.68 (vs 04-25 2103, ±0.3%) — Peak 确认 |
+| **GSM8K full 1319 样本 (5-shot, thinking OFF)** | **93.93% (1239/1319)** ✅ ⭐ | 04-26 复测 ↑ vs 04-25 77.56%（HF 模型权重更新或 stack 更稳）；length 截断仅 14 (1.06%) vs 04-25 90 (6.8%) |
 | 长 prompt 8K/1K P4 | **178.6 tok/s** | 与 1K prompt 几乎相同（hybrid GDN 长 context 优势） |
 
 > **简单 chat 测试** (2026-04-25 10:08, e2e-02 pod, PR #2366 应用后):
@@ -549,7 +549,11 @@ python3 /tmp/run_gsm8k_qwen35.py \
 #   --max-question-tokens 500  过滤超长 question 避免 5-shot prompt 超 max_model_len
 ```
 
-**预期**：~16 min 跑完 1319 题，**77.56% accuracy**（CI 阈值 63%, 远超）。比 lm_eval thinking ON 快 100×（24 s/题 → 0.75 s/题）。
+**预期**（2026-04-26 复测）：**~15 min** 跑完 1319 题，**93.93% accuracy** (1239/1319) ✅（CI 阈值 63%, 远超）。Length 截断仅 14 题 (1.06%)。比 lm_eval thinking ON 快 100×（24 s/题 → 0.69 s/题）。
+
+> **复测说明**：04-25 首次实测 77.56% (1023/1319, length 截断 90/6.8%)，04-26 复测同样配置得 93.93% (+16.37 个点, length 截断 6× 减少)。可能原因：HF 模型权重更新 / PR #2366 fix 后系统更稳定。CI 阈值 63% 仍然远低于两次实测，**production 安全**。
+
+> **监控提示**：脚本 stdout 有 buffer，`/tmp/gsm8k_run.log` 可能长时间为空。改看实时进度用 `wc -l /tmp/gsm8k_qwen35_full.jsonl`（每完成一题立即写入并 flush）。
 
 完整脚本: [scripts/run_gsm8k_qwen35.py](scripts/run_gsm8k_qwen35.py)
 
@@ -847,26 +851,32 @@ P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler
 
 ### GSM8K Accuracy (5-shot, thinking OFF)
 
-| 测试集 | 准确率 | Finish stats | 总耗时 | Parallel |
-|--------|-------|--------------|--------|----------|
-| **50 samples** (idx 0-49, max_tokens=512) | **92.00% (46/50)** | stop=50, length=0 | 49.5s | 4 |
-| **🎯 Full 1319 samples** (max_tokens=512, max_question_tokens=500) | **77.56% (1023/1319)** ✅ | stop=1229, length=90 (6.8%) | **16.4 min** | 8 |
+| 日期 | 测试集 | 准确率 | Finish stats | 总耗时 | Parallel |
+|------|--------|-------|--------------|--------|----------|
+| 04-25 | **50 samples** (idx 0-49, max_tokens=512) | **92.00% (46/50)** | stop=50, length=0 | 49.5s | 4 |
+| 04-25 | **Full 1319 samples** (max_tokens=512, max_question_tokens=500) | **77.56% (1023/1319)** ✅ | stop=1229, length=90 (6.8%) | 16.4 min | 8 |
+| **04-26** ⭐ | **🎯 Full 1319 samples 复测** (相同配置) | **93.93% (1239/1319)** ✅ ⭐ | stop=1305, length=14 (**1.06%**) | **15.2 min** | 8 |
 
-**CI 阈值 63%，远超过 ✅**
+**CI 阈值 63%，两次复测都远超过 ✅**
+
+**04-26 复测大幅提升 +16.37 个点**：
+- Accuracy: 77.56% → 93.93% (length 截断从 6.8% 跌到 1.06%)
+- Length 截断 6× 减少（90 → 14），平均完成 token 也下降（模型答得更直接）
+- 总耗时略短（15.2 vs 16.4 min, -7%）
+- **可能原因**：HF 模型权重在 04-25→04-26 间被 hot patch / PR #2366 fix 后系统更稳
 
 **50 题 vs 1319 题的差距**：
 - 50 题样本（idx 0-49）偏向较简单题，accuracy 偏高
 - 1319 题包含全部难度分布（含 hard reasoning），是真实代表性能力
-- **77.56% 是 production-ready 的真实数字**
+- **93.93% 是当前 production-ready 的真实数字**（04-26 复测）
 
-**6.8% length 截断分析**：
-- 90 个题被 max_tokens=512 截断（reasoning + answer 超 512 tokens）
-- 提示：调高 max_tokens 到 1024 准确率能进一步提升 1-3 个百分点
-- 可对比：lm_eval thinking ON 跑 200 题，**75%** length 截断（thinking 用了 reasoning 但被截）
+**1.06% length 截断分析（04-26）**：
+- 仅 14 个题被 max_tokens=512 截断
+- 调高 max_tokens 到 1024 仍可能继续提升 0.5-1 个百分点
 
 **比 lm_eval 快 100×**：
 - lm_eval (thinking ON, 75% length 截断) 跑 200 题用 80 min = 24 s/题
-- 自定义脚本 (thinking OFF, parallel=8) 跑 1319 题用 16 min = **0.75 s/题**
+- 自定义脚本 (thinking OFF, parallel=8) 跑 1319 题用 15 min = **0.69 s/题**
 
 **错例类型**：
 - 模型只输出 3 token 就 stop（直接吐数字而没 `#### N` 格式）→ 提取失败
