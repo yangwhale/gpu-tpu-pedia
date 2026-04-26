@@ -30,7 +30,7 @@ spec:
         hostname: qwen35-mh
         serviceAccountName: default
         nodeSelector:
-          cloud.google.com/gke-nodepool: np-tpu7x-spot-mh-k26
+          cloud.google.com/gke-nodepool: np-tpu7x-spot-mh
           cloud.google.com/gke-tpu-accelerator: tpu7x
           cloud.google.com/gke-tpu-topology: 2x2x2
         tolerations:
@@ -122,10 +122,25 @@ spec:
               echo "[boot] Patching kv_cache_manager.py from /lustre/patches/qwen35-pd/"
               cp /lustre/patches/qwen35-pd/kv_cache_manager.py \
                  /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
+              # === Multi-host mrope bypass patches (2 files) ===
+              # tpu_runner.py: set uses_mrope=False + get_mrope_input_positions_fn=None when limits=0
+              # persistent_batch_manager.py: skip fn call if fn is None (defensive, after PBM init)
+              # 否则 update_states 触发 mrope code 跟 vllm core Qwen3VL API 错位
+              echo "[boot] Patching tpu_runner.py + persistent_batch_manager.py (mrope bypass)"
+              cp /lustre/patches/qwen35-pd/tpu_runner.py \
+                 /workspace/tpu_inference/tpu_inference/runner/tpu_runner.py
+              cp /lustre/patches/qwen35-pd/persistent_batch_manager.py \
+                 /workspace/tpu_inference/tpu_inference/runner/persistent_batch_manager.py
               find /workspace/tpu_inference -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
               PR2366_REFS=$(grep -c '_hybrid_uniform_page_size_bytes' /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py)
+              MROPE_PATCH=$(grep -c 'PATCH: disable mrope' /workspace/tpu_inference/tpu_inference/runner/tpu_runner.py)
+              PBM_PATCH=$(grep -c 'PATCH: skip mrope fn call' /workspace/tpu_inference/tpu_inference/runner/persistent_batch_manager.py)
               echo "[boot] PR #2366 refs: $PR2366_REFS (expect 7)"
+              echo "[boot] mrope patch (tpu_runner) refs: $MROPE_PATCH (expect 1)"
+              echo "[boot] mrope patch (PBM) refs: $PBM_PATCH (expect 1)"
               [ "$PR2366_REFS" -eq 7 ] || (echo "❌ PR #2366 patch incomplete"; exit 1)
+              [ "$MROPE_PATCH" -eq 1 ] || (echo "❌ mrope tpu_runner patch incomplete"; exit 1)
+              [ "$PBM_PATCH" -eq 1 ] || (echo "❌ mrope PBM patch incomplete"; exit 1)
 
               if [ "$LWS_WORKER_INDEX" = "0" ]; then
                 # Leader: Ray head + vllm serve
