@@ -346,18 +346,16 @@ kubectl exec -it vllm-qwen3-coder -- bash
 `vllm/vllm-tpu:nightly` 镜像里已经预装了 `tpu_inference` 和 `vllm`。**main 分支即可，不需要切分支**（Qwen3 Coder 已 merge 到 main）。
 
 ```bash
-cd /workspace/tpu_inference
-
-# 可选：拉最新 commit
-git pull origin main
-
-# 验证 Qwen3 MoE 模型类存在
+# 验证 Qwen3 MoE 模型类存在（最关键的一步，能 import 就能用）
 python3 -c "
 from tpu_inference.models.jax.qwen3_moe import Qwen3MoeForCausalLM
-print('Qwen3MoeForCausalLM imported OK')
+print('✅ Qwen3MoeForCausalLM imported OK')
 "
 ```
 
+> ⚠️ **注意**：`/workspace/tpu_inference` 在镜像里**只是源码副本，不是 git repo**（`git pull` 会报 fatal）。
+> 如果需要更新代码（如打 PR #2366 patch），请用 `cp /lustre/tpu_inference /workspace/tpu_inference` 整目录覆盖（参见 [feedback_vllm-tpu-image-stale.md](../../shared/feedback/) 经验帖）；务必 `find /workspace/tpu_inference -name __pycache__ -type d -exec rm -rf {} +` 清掉 .pyc 缓存。
+>
 > 如果你想用 yangwhale fork 上的实验性优化，参考 [DeepSeek R1 README](../DeepSeek-R1-671B-FP4/README.md) 的分支切换流程。
 
 ---
@@ -374,27 +372,35 @@ mkdir -p $HF_HOME
 ### 3b: 下载（推荐用 huggingface-cli）
 
 ```bash
-pip install -U huggingface_hub
-export HF_HUB_ENABLE_HF_TRANSFER=1   # 开启高速下载
+# ⚠️ hf_transfer 包必须装才能让 HF_HUB_ENABLE_HF_TRANSFER=1 生效（镜像默认未装）
+pip install -U "huggingface_hub[hf_transfer]"
+export HF_HUB_ENABLE_HF_TRANSFER=1     # 开启高速下载（10x 加速）
+export HF_TOKEN=$HF_TOKEN               # Pod env 已有，再确认一下
 
-# 下载 Qwen3-Coder-480B-A35B-Instruct-FP8 (~480 GB)
+# 下载 Qwen3-Coder-480B-A35B-Instruct-FP8 (~450 GB)
 huggingface-cli download Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
   --local-dir $HF_HOME/qwen3-coder-480b-fp8
 
-# 验证
+# 验证（必须严格符合下面 2 个数字）
 ls $HF_HOME/qwen3-coder-480b-fp8/*.safetensors | wc -l
-# 预期：~50+ 个 safetensors 分片
+# 预期: 49 (不是 50，正好 49 个 shard)
 
 du -sh $HF_HOME/qwen3-coder-480b-fp8
-# 预期：~480 GB
+# 预期: ~450 GB
+
+# 验证 tokenizer 三件套都在（缺任意一个 vLLM 启动就崩，见 §常见问题 #10）
+ls $HF_HOME/qwen3-coder-480b-fp8/{tokenizer.json,vocab.json,tokenizer_config.json,merges.txt}
 ```
 
 ### 3c: 设置模型路径变量
 
 ```bash
-export MODEL=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
-# 或者用本地路径（避免 vLLM 重新下载）：
-# export MODEL=$HF_HOME/qwen3-coder-480b-fp8
+# ✅ 推荐：用本地路径 + offline 模式（避免 vLLM 重新去 HF 下载，见 §常见问题 #9 PVC 满）
+export MODEL=$HF_HOME/qwen3-coder-480b-fp8
+export HF_HUB_OFFLINE=1
+
+# ⚠️ 不推荐：用 model name（会触发 vLLM 重新 download 验证，撑爆 PVC）
+# export MODEL=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8
 ```
 
 > **提速技巧**：模型文件存在 GCS 上时，可以用 `gsutil -m cp -r gs://your-bucket/qwen3-coder-480b-fp8 $HF_HOME/` 比 HF 下载快 3-5 倍。
