@@ -533,19 +533,6 @@ kubectl --context="$CTX" exec -it $POD -- bash -lc '
 
 ---
 
-## 上游演进时间线
-
-| 日期 | 里程碑 | 来源 |
-|------|--------|------|
-| 2026-03-26 | 初次跑通 BF16（4-layer 子集） | tpu-inference PR [#2004](https://github.com/vllm-project/tpu-inference/pull/2004) |
-| 2026-04-06 | FP8 + CI 自动化 | PR [#2086](https://github.com/vllm-project/tpu-inference/pull/2086) |
-| 2026-04-14 | DP attention 模式 | PR [#2187](https://github.com/vllm-project/tpu-inference/pull/2187)（已被 PR #2366 取代） |
-| 2026-04-22 | Disagg prefill/decode | PRs [#2322](https://github.com/vllm-project/tpu-inference/pull/2322) / [#2327](https://github.com/vllm-project/tpu-inference/pull/2327) / [#2331](https://github.com/vllm-project/tpu-inference/pull/2331) / [#2336](https://github.com/vllm-project/tpu-inference/pull/2336) |
-| **2026-04-23** ⭐ | **PR #2366: Hybrid KV cache OOB fix** | [#2366](https://github.com/vllm-project/tpu-inference/pull/2366) — 本 README 全部测试都依赖这个 fix |
-| 2026-04-25 | 本次端到端验证（e2e-02 + PR #2366） | 见上方"关键性能"表 |
-
----
-
 ## 踩坑记录（5 条）
 
 ### 1. ⭐ 缺 PR #2366 → 所有奇怪症状的总根源
@@ -624,26 +611,21 @@ kubectl exec $POD -- bash /tmp/launch_vllm.sh
 
 ---
 
-## 关键参考
+## 参考
 
-| 资源 | 链接 |
-|------|------|
-| Qwen3.5-397B-A17B HuggingFace | https://huggingface.co/Qwen/Qwen3.5-397B-A17B |
-| Qwen3.5-397B-A17B-FP8（部署用） | https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8 |
-| Qwen3.5 Blog | https://qwen.ai/blog?id=qwen3.5 |
-| vLLM Qwen3.5 Recipe | https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html |
-| tpu-inference 主仓 | https://github.com/vllm-project/tpu-inference |
-| **PR #2366**（Hybrid KV cache OOB fix）| https://github.com/vllm-project/tpu-inference/pull/2366 |
-| PR #2004（Qwen3.5 + GDN 初始支持） | https://github.com/vllm-project/tpu-inference/pull/2004 |
-| PR #2086（FP8 CI） | https://github.com/vllm-project/tpu-inference/pull/2086 |
-| PR #2273（Nightly fix） | https://github.com/vllm-project/tpu-inference/pull/2273 |
-| PR #2370（Revert n-d device buffer） | https://github.com/vllm-project/tpu-inference/pull/2370 |
-| Model support matrix (CSV) | https://github.com/vllm-project/tpu-inference/blob/main/support_matrices/nightly/v7x/default/model_support_matrix.csv |
-| CI yaml (Qwen3.5 测试配置) | https://github.com/vllm-project/tpu-inference/blob/main/.buildkite/models/Qwen_Qwen3_5-397B-A17B.yml |
-| 同体系 — DeepSeek R1 FP4 README | [../DeepSeek-R1-671B-FP4/README.md](../DeepSeek-R1-671B-FP4/README.md) |
-| 同体系 — GLM-5.1 FP4 README | [../GLM-5.1-754B-FP4/README.md](../GLM-5.1-754B-FP4/README.md) |
-| 同体系 — Kimi K2.6 README | [../Kimi-K2.6/README.md](../Kimi-K2.6/README.md) |
-| 同体系 — Qwen3-Coder 480B README | [../Qwen3-Coder-480B/README.md](../Qwen3-Coder-480B/README.md) |
+**模型 + 框架**：
+- HF: [Qwen/Qwen3.5-397B-A17B](https://huggingface.co/Qwen/Qwen3.5-397B-A17B) / [FP8 部署用](https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8) · [Qwen3.5 Blog](https://qwen.ai/blog?id=qwen3.5)
+- [tpu-inference 主仓](https://github.com/vllm-project/tpu-inference) · [vLLM Qwen3.5 Recipe](https://docs.vllm.ai/projects/recipes/en/latest/Qwen/Qwen3.5.html) · [Model support matrix](https://github.com/vllm-project/tpu-inference/blob/main/support_matrices/nightly/v7x/default/model_support_matrix.csv) · [CI yaml](https://github.com/vllm-project/tpu-inference/blob/main/.buildkite/models/Qwen_Qwen3_5-397B-A17B.yml)
+
+**关键 PR 时间线**：
+- 03-26 [#2004](https://github.com/vllm-project/tpu-inference/pull/2004) Qwen3.5 + GDN 初次跑通（BF16, 4-layer）
+- 04-06 [#2086](https://github.com/vllm-project/tpu-inference/pull/2086) FP8 + CI
+- 04-14 [#2187](https://github.com/vllm-project/tpu-inference/pull/2187) DP attention（被 #2366 取代）
+- 04-22 [#2322](https://github.com/vllm-project/tpu-inference/pull/2322) / [#2327](https://github.com/vllm-project/tpu-inference/pull/2327) / [#2331](https://github.com/vllm-project/tpu-inference/pull/2331) / [#2336](https://github.com/vllm-project/tpu-inference/pull/2336) Disagg prefill/decode
+- **04-23** ⭐ [**#2366**](https://github.com/vllm-project/tpu-inference/pull/2366) Hybrid KV cache OOB fix — 本 README 所有测试依赖
+- 04-25 端到端验证（e2e-02 + PR #2366，见关键性能表）
+
+**同体系**：[DeepSeek R1 FP4](../DeepSeek-R1-671B-FP4/README.md) · [GLM-5.1 FP4](../GLM-5.1-754B-FP4/README.md) · [Kimi K2.6](../Kimi-K2.6/README.md) · [Qwen3-Coder 480B](../Qwen3-Coder-480B/README.md)
 
 ---
 
