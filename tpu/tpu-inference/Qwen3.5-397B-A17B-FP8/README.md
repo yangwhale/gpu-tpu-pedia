@@ -369,87 +369,13 @@ rm -f $TMP
 
 ## Step 5: 启动 vLLM 推理服务
 
-> ⚠️ **必读**：`SKIP_JAX_PRECOMPILE=1`、`MODEL_IMPL_TYPE=vllm`、`--enable-expert-parallel`、`--no-enable-prefix-caching` 缺一不可。
+完整启动命令见 [Quick Reproduce 步骤 4](#-quick-reproduce--14-min-拿到-hello-world)（file-based launcher）。Interactive 调试可 `kubectl exec -it $POD -- bash` 进 pod 后复制 LAUNCHER 内 `setsid nohup env ... vllm serve ...` 段落直接跑。
 
-> 💡 **两种启动模式**：本节 (interactive) 和 [Quick Reproduce step 4](#-quick-reproduce--14-min-拿到-hello-world) (file-based launcher) 启动方式都 OK。Interactive 适合手动调试；CI/自动化或 host 端 kubectl exec 必须用 Quick Reproduce 的 launcher 模式（防 137 SIGKILL，详见[踩坑 #9](#9-️-kubectl-exec-pod----bash--c-multi-line-nohup-被-sigkill-exit-137)）。
+> ⚠️ **必读**：`SKIP_JAX_PRECOMPILE=1` / `MODEL_IMPL_TYPE=vllm` / `--enable-expert-parallel` / `--no-enable-prefix-caching` 缺一不可（详见 [Constraints C/D](#c-三个必设环境变量)）。
+>
+> ⚠️ **CI / host 端 kubectl exec 必须用 file-based launcher**（inline `bash -c "<multi-line nohup>"` 会被 SIGKILL=137，详见踩坑 #5）。
 
-### 模式 A: Interactive（手动调试）
-
-```bash
-kubectl --context="$CTX" exec -it e2e-02 -- bash
-
-# 在 pod 内
-MODEL=/lustre/models/Qwen3.5-397B-A17B-FP8
-
-# 必须 cd /tmp 避免 namespace 冲突
-cd /tmp
-
-# 清理可能的残留
-pgrep -f 'EngineCore|vllm' | xargs -r kill -9 2>/dev/null
-sleep 3
-rm -f /tmp/libtpu_lockfile
-
-# 启动
-SKIP_JAX_PRECOMPILE=1 \
-VLLM_XLA_CHECK_RECOMPILATION=0 \
-MODEL_IMPL_TYPE=vllm \
-nohup vllm serve $MODEL \
-  --tensor-parallel-size 8 \
-  --enable-expert-parallel \
-  --max-num-batched-tokens 4096 \
-  --max-num-seqs 256 \
-  --max-model-len 4096 \
-  --no-enable-prefix-caching \
-  --gpu-memory-utilization 0.9 \
-  --kv-cache-dtype fp8 \
-  --block-size 256 \
-  --trust-remote-code \
-  --limit-mm-per-prompt '{"image": 0, "video": 0}' \
-  --reasoning-parser qwen3 \
-  --async-scheduling \
-  > /tmp/vllm_qwen35.log 2>&1 </dev/null &
-disown
-
-# 监视
-tail -f /tmp/vllm_qwen35.log
-```
-
-### 模式 B: File-based launcher（CI / host 端 kubectl exec 自动化）
-
-写一个 launcher script，`kubectl cp` 到 pod，然后 `kubectl exec bash launcher.sh`。Bash 读完文件后干净 fork+exit，不依赖 stdin channel，不会被 SIGKILL：
-
-```bash
-# host 端
-cat > /tmp/launch_vllm.sh <<'LAUNCHER'
-#!/bin/bash
-cd /tmp
-pgrep -f 'EngineCore|vllm' | xargs -r kill -9 2>/dev/null
-sleep 2
-rm -f /tmp/libtpu_lockfile /tmp/vllm_qwen35.log
-touch /tmp/vllm_qwen35.log
-setsid nohup env \
-  SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 MODEL_IMPL_TYPE=vllm \
-  vllm serve /lustre/models/Qwen3.5-397B-A17B-FP8 \
-    --tensor-parallel-size 8 --enable-expert-parallel \
-    --max-num-batched-tokens 4096 --max-num-seqs 256 --max-model-len 4096 \
-    --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
-    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
-    --limit-mm-per-prompt '{"image": 0, "video": 0}' \
-    --reasoning-parser qwen3 --async-scheduling \
-    >> /tmp/vllm_qwen35.log 2>&1 < /dev/null &
-disown
-echo "launched pid=$!"
-exit 0
-LAUNCHER
-
-kubectl --context="$CTX" cp /tmp/launch_vllm.sh $POD:/tmp/launch_vllm.sh
-kubectl --context="$CTX" exec $POD -- bash /tmp/launch_vllm.sh
-
-# 远程查看进度（host 端）
-kubectl --context="$CTX" exec $POD -- tail -f /tmp/vllm_qwen35.log
-```
-
-等待 ~7 min 看到：
+等待 ~7 min 看到（启动完成 + PR #2366 生效信号）：
 ```
 Hybrid KV cache: padding every layer spec to 23289856 bytes (num_attn_groups=1 × attn_page=10485760 + num_mamba_groups=3 × mamba_unpadded=4268032).
 Hybrid KV cache: setting num_gpu_blocks_override=945 to align the scheduler's block pool with per-layer TPU allocation
@@ -458,10 +384,7 @@ Init kv-cache | num_total_layers=60 | num_blocks=[945, 945, ...] | regular_attn_
 INFO: Application startup complete.
 ```
 
-> **关键 log 标志（PR #2366 生效）**：
-> - `Hybrid KV cache: padding every layer spec to 23289856 bytes` ← PR #2366 padding 触发
-> - `regular_attn_shape=(num_blocks, (1280, 8, 4, 256))` ← block_size **1280** （而非 patch 前错误的 4352）
-> - `num_gpu_blocks_override=945` ← 强制 scheduler 与 TPU 实际分配对齐
+**PR #2366 生效信号**：`padding every layer spec to 23289856 bytes` + `regular_attn_shape=(num_blocks, (1280, 8, 4, 256))` (block_size **1280** 而非 patch 前错误的 4352) + `num_gpu_blocks_override=945`。
 
 ---
 
