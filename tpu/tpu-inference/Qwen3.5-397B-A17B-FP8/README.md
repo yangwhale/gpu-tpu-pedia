@@ -471,6 +471,35 @@ Brazil:    'Brasilia.' | stop
 | LWS pod 一直 Pending 不调度 | TPU 节点全占。`kubectl get nodes -l cloud.google.com/gke-tpu-accelerator=tpu7x` 看节点占用; 别人的任务在用就等或新建 node pool。 |
 | `kubectl exec` 报 `setns process: exit status 1` | Container 正在 restart 中，几秒后再试。常见于 vllm crash 后窗口期。 |
 
+### Step 7: Production 接入 / Teardown
+
+**Smoke test pass 后, 接 production traffic**:
+
+```bash
+# Service 已经在 yaml 定义好 (clusterIP, port 8000)
+kubectl --context="$CTX" get svc qwen35-mh   # 看 ClusterIP
+
+# 集群内访问: 任何 pod 用 service DNS 调 inference
+# http://qwen35-mh.default.svc.cluster.local:8000/v1/chat/completions
+
+# 集群外访问 (生产场景, 走 GKE Ingress 或 Gateway):
+kubectl --context="$CTX" expose deployment vllm-disagg-proxy ... # 略, 标准 GKE 流程
+# 或者 port-forward 调试: kubectl port-forward svc/qwen35-mh 8000:8000
+```
+
+**Teardown (停止节省 cost)**:
+
+```bash
+# 1. 删 LWS (释放 TPU 节点上的 pod, 但 spot node pool 仍在跑)
+kubectl --context="$CTX" delete lws qwen35-mh
+
+# 2. (可选) 删 multi-host node pool (彻底 0 cost; spot 即使空闲也按时长计费)
+gcloud container node-pools delete np-tpu7x-spot-mh-qwen35 \
+  --cluster=$CLUSTER --region=$REGION --project=$PROJECT --quiet
+```
+
+> 💡 **Lustre patches 不需要清理**: `/lustre/patches/qwen35-pd/*` 占 < 200 KB, 多次 redeploy 复用即可。
+
 ### Multi-host 部署完整 dogfood 详记
 
 完整 8 次 test iteration + 6 层 root cause 链 + 3 patches deep dive + 经验教训见**内部 dogfood HTML**（[最下方附录](#-内部文档dogfood-历程--深度分析)）。
