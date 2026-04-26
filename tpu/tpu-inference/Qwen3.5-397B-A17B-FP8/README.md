@@ -321,8 +321,11 @@ Application startup complete
 ```bash
 PROXY_POD=$(kubectl --context="$CTX" get pods -l app=vllm-proxy -o jsonpath='{.items[0].metadata.name}')
 
+# 5-shot examples (单 user message, 跟单机/multi-host Step 4/5 同 pattern)
+SHOTS="Question: Capital of Japan?\nAnswer: Tokyo.\n\nQuestion: Capital of Germany?\nAnswer: Berlin.\n\nQuestion: Capital of Italy?\nAnswer: Rome.\n\nQuestion: Capital of Spain?\nAnswer: Madrid.\n\nQuestion: Capital of Brazil?\nAnswer: Brasilia.\n\n"
+
 for country in France Italy Australia Canada Brazil; do
-  P="Question: Capital of Japan?\nAnswer: Tokyo.\n\nQuestion: Capital of Germany?\nAnswer: Berlin.\n\nQuestion: Capital of Italy?\nAnswer: Rome.\n\nQuestion: Capital of Spain?\nAnswer: Madrid.\n\nQuestion: Capital of Brazil?\nAnswer: Brasilia.\n\nQuestion: Capital of $country?\nAnswer:"
+  P="${SHOTS}Question: Capital of $country?\nAnswer:"
   result=$(kubectl --context="$CTX" exec $PROXY_POD -- curl -s http://localhost:10000/v1/chat/completions \
     -H 'Content-Type: application/json' \
     -d "{\"model\":\"Qwen3.5-397B-FP8\",\"messages\":[{\"role\":\"user\",\"content\":\"$P\"}],\"max_tokens\":50,\"temperature\":0,\"chat_template_kwargs\":{\"enable_thinking\":false}}" \
