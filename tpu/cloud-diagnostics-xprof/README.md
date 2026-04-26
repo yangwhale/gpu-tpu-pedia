@@ -472,6 +472,75 @@ xprofiler delete -z $ZONE --vm-name xprof-<uuid>
 
 ---
 
+## 7.5 🔧 诊断 setup 失败的完整 recipe
+
+如果 `xprofiler create` 报 `Unable to set up instance`，按下面 4 步**保留 VM + 看真错误**：
+
+### Step 1: 用 `--auto-delete-on-failure-off` 起 VM
+让 setup fail 时 **VM 不被自动删**，方便事后诊断：
+
+```bash
+xprofiler create \
+  -z us-central1-a \
+  -l gs://your-bucket \
+  --skip-creation-if-exists \
+  --auto-delete-on-failure-off \
+  --verbose 2>&1 | tee /tmp/xprof-create.log
+
+# 等 ~5-10 分钟后，VM 还会在
+gcloud compute instances list --filter="name~xprof"
+```
+
+### Step 2: 抓 serial port output（不需要 SSH）
+
+VM 上的 startup script 输出会进 serial console：
+
+```bash
+VM_NAME=xprof-<uuid>     # 从上一步 list 拿到
+gcloud compute instances get-serial-port-output $VM_NAME \
+  --zone=us-central1-a 2>&1 \
+  | tee /tmp/serial.log
+
+# 找错误关键字
+grep -E 'ERROR|Error|FAIL|fail|cannot|not found|installation candidate' /tmp/serial.log | head -20
+```
+
+### Step 3: SSH 进 VM 看完整 startup log
+
+如果 serial 不够细，SSH 进去看 syslog / startup-script log：
+
+```bash
+gcloud compute ssh $VM_NAME --zone=us-central1-a -- "
+  echo '=== Last 50 lines of startup-script log ==='
+  sudo journalctl -u google-startup-scripts.service -n 50 --no-pager
+  echo
+  echo '=== TensorBoard process ==='
+  ps -ef | grep tensorboard | grep -v grep
+  echo
+  echo '=== Docker container ==='
+  sudo docker ps -a
+"
+```
+
+### Step 4: 看完后清理 VM（**别忘了，否则一直收钱**）
+
+```bash
+gcloud compute instances delete $VM_NAME --zone=us-central1-a --quiet
+gcloud storage rm -r gs://your-bucket --quiet   # 也清理 bucket（如果用完了）
+```
+
+### 常见 startup script 失败模式
+
+| 症状 | 根因 | 修复 |
+|------|------|------|
+| `Unable to locate package python3-distutils` | Debian 12 移除该包 | 等上游修；或 fork 改 startup script 用 `python3-setuptools` |
+| `Unable to fetch some archives` (apt) | VM 在受限 VPC 没 internet | 给 VM subnet 配 NAT / Cloud NAT |
+| TensorBoard 19 次 polling 全 fail | pip install tensorflow-cpu 网络 timeout | 改用预装 image / 加 PyPI mirror |
+| `gcloud storage cp ... permission denied` | VM SA 没 GCS 权限（见 §2.2 授权步骤）| 重做 §2.2 IAM binding |
+| Inverting-proxy docker 起不来 | gcr.io 拉镜像失败 | VM 需要 internet + Container Registry 权限 |
+
+---
+
 ## 8. 参考资料
 
 | 资源 | 链接 |
