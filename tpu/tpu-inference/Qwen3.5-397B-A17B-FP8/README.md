@@ -30,42 +30,17 @@
 
 ---
 
-## 🌟 三个反直觉发现
+## 🌟 三个反直觉发现（一句话记忆）
 
-在 17 档 benchmark 实测中观察到的、跟一般直觉相反的结论：
+> **大并发不一定快 / 长输出反而快 / 长 prompt 低并发不拖累**
 
-> 📅 **数据时间点**：下方表格基于 04-25 完整 17 档 sweep；04-26 复测 P1/P64/P128 三档与 04-25 误差 <0.3%，趋势完全一致（[详见底部完整 Benchmark 数据](#完整-benchmark-数据)）。
+| # | 发现 | 关键数据 | 原因 |
+|---|---|---|---|
+| 1 | Peak 是 **P128 不是 P256**（细粒度 sweep 才能找到 knee） | P128 **2103 tok/s** vs P256 1877 ↓ 11% | P256 KV cache 不够，scheduler 频繁 preempt 重调 |
+| 2 | 长输出比短输出**快 9-13%** | P64 1K/8K out **1702 tok/s** vs 1K/1K 1510 (+13%) | 长 decode 让 batch 持续 pure-decode，MXU 利用率高 |
+| 3 | 8K 长 prompt 低并发**几乎不拖累** | P1 8K input 51.7 tok/s vs 1K 49.6 (+4%) | Hybrid 45 GDN 用 fixed-size SSM state，KV 压力 1/4；高并发 chunked prefill 累加才拖累 |
 
-### 1. 并发越大 ≠ throughput 越高（Peak 是 P128 不是 P256）
-
-| Batch | Throughput |
-|---|---:|
-| P64 | 1510 tok/s |
-| **P128 ⭐** | **2103 tok/s** ← peak |
-| P256 | 1877 tok/s ↓ |
-
-P256 反而比 P128 慢 **11%**。原因：vLLM scheduler 在 P256 时 KV cache 不够，频繁 preempt + 重调度，GPU 占用率反降。**Pareto 曲线必须细粒度采样**才能找到真正 knee point。
-
-### 2. 长输出比短输出快 9-13% ⭐⭐
-
-| Batch | 1K/1K out | 1K/**8K** out | 差距 |
-|---|---:|---:|---:|
-| P1 | 49.6 | **54.0** | +9% |
-| P64 | 1510 | **1702** | **+13%** |
-
-长 generation 让 batch **长时间保持 pure decode 状态**，TPU MXU 利用率高；短 generation 频繁 prefill→decode→cleanup 转换，调度开销大。**长文章/代码生成场景反而是 sweet spot**。
-
-### 3. 8K 长 prompt 在低并发下几乎不拖累
-
-| Batch | 1K input | **8K** input | 拖累 |
-|---|---:|---:|---:|
-| P1 | 49.6 | **51.7** | 反而 +4% |
-| P4 | 186.8 | **178.6** | -4% |
-| P64 | 1510 | **850** | -44% |
-
-Qwen3.5 hybrid 架构 — 45 个 GDN 层用 **fixed-size SSM state**（不随 context 增长），只 15 层产生 KV cache → 长 context KV 压力是纯 attention 模型的 ~1/4。**仅低并发时享受**这优势，高并发 chunked prefill 累加会拖累。
-
-> **一句话记忆**：大并发不一定快 / 长输出反而快 / 长 prompt 不拖累（低并发）
+完整 17 档 sweep 数据见[完整 Benchmark 数据](#完整-benchmark-数据)。
 
 ---
 
@@ -248,107 +223,58 @@ kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/completio
 | **Container** | `main`（vLLM + tpu_inference docker image bundled） | image 大约 4-22 build，可能缺 4-23+ 的 PR |
 | **Sidecar** | `gke-gcsfuse-sidecar` (init) | pod 现在 2/2 状态；所有 `kubectl exec` 会打 `Defaulted container "main" out of: main, gke-gcsfuse-sidecar (init)` 提示。**忽略即可**，命令仍正确路由到 main container。要静默加 `-c main`：`kubectl exec -c main $POD -- ...` |
 
-### 其他可用 pods（选择参考）
+### Pod 选择 + kubectl/HF/scripts 准备
 
-| Pod | 状态 | 谁在用 | 备注 |
-|---|---|---|---|
-| `e2e` | Running | 经常被 Hulk 用（K2.6 训练） | 慎用，先 `kubectl describe pod e2e` 看资源占用 |
-| **`e2e-02`** ⭐ | Running | **本文档推荐用** | 04-25 全套 + 04-26 P1/P64/P128/GSM8K 复测均通过 |
-| `e2e-03` | Running | 跑 Qwen3-Coder-480B | 慎用 |
-
-### kubectl 配置（如果 context 不存在）
+| Pod | 备注 |
+|---|---|
+| **`e2e-02`** ⭐ | 推荐（04-25 全套 + 04-26 复测均通过） |
+| `e2e` | 经常被 Hulk K2.6 占；用前 `kubectl describe pod e2e` |
+| `e2e-03` | 跑 Qwen3-Coder-480B；慎用 |
 
 ```bash
-gcloud auth login   # 如未登录
-gcloud container clusters get-credentials chrisya-v7x-v134 \
-  --region us-central1 --project cloud-tpu-multipod-dev
-```
+# kubectl context (如不存在)
+gcloud container clusters get-credentials chrisya-v7x-v134 --region us-central1 --project cloud-tpu-multipod-dev
 
-### HuggingFace Token
+# HF token (pod 上已 hf auth login，通常无需重设；验证)
+kubectl exec $POD -- hf auth whoami    # 期望 user: yangwhale, orgs: google
 
-测试 pod 上已经预先 `hf auth login`，**通常不需要重新设 token**。如果下载报权限错：
-
-```bash
-kubectl exec $POD -- bash -c "hf auth whoami"
-# 应输出 user: yangwhale, orgs: google
-# 没输出 → kubectl exec $POD -- hf auth login (需要交互式)
-```
-
-### 怎么把 repo 的 scripts/ 弄到 pod
-
-scripts 在 GitHub repo 里（`scripts/run_bench_qwen35.sh` + `scripts/run_gsm8k_qwen35.py`），不在 pod 里。先 git clone + kubectl cp：
-
-```bash
-# 在 host 上
-git clone https://github.com/yangwhale/gpu-tpu-pedia.git ~/gpu-tpu-pedia 2>/dev/null || \
-  (cd ~/gpu-tpu-pedia && git pull)
-
+# Scripts cp 到 pod（首次部署必做）
 SCRIPTS_DIR=~/gpu-tpu-pedia/tpu/tpu-inference/Qwen3.5-397B-A17B-FP8/scripts
 kubectl --context="$CTX" cp $SCRIPTS_DIR/run_bench_qwen35.sh $POD:/tmp/
 kubectl --context="$CTX" cp $SCRIPTS_DIR/run_gsm8k_qwen35.py $POD:/tmp/
-
-# 验证
-kubectl --context="$CTX" exec $POD -- ls -la /tmp/run_bench_qwen35.sh /tmp/run_gsm8k_qwen35.py
 ```
 
-### 多 bot 协作注意（共享 cluster）
-
-| 情况 | 怎么办 |
-|---|---|
-| 别的 bot（Hulk）在 `e2e` 跑 K2.6 | 用 `e2e-02` 而非 `e2e`，**别动 `/dev/shm/Kimi-K2.6/`**（Hulk 的 INT4 staging） |
-| 别的 bot 在 vllm-mh-* （multi-host LeaderWorkerSet）跑 Qwen3-Coder | 不影响（不同 node pool），照常用 e2e-02 |
-| 启动前 sanity check | `kubectl get pods` + `kubectl describe statefulset` 看谁在用啥 |
+> **多 bot 协作**：共享 cluster，启动前 `kubectl get pods` 看占用；**绝不删 `/dev/shm/Kimi-K2.6/` 等他人 staging**（用 `fuser -v` 确认）。多 host LWS（如 vllm-mh-*）跑别的模型不影响 e2e-02（不同 node pool）。
 
 ### 预期总耗时
 
-| 场景 | 时长 | 说明 |
-|---|---|---|
-| Quick Reproduce（仅 hello world） | **~14 min** | 假设模型已下、PR #2366 已 patch |
-| 首次部署（全 8 步） | ~30 min | 含模型下载 6 min + cold start 7 min |
-| 重启 vLLM（page cache 热） | ~5-6 min | 不重新下模型 |
-| 全 benchmark + GSM8K full | ~90 min | 17 个 throughput batch + 1319 题 GSM8K |
+| 场景 | 时长 |
+|---|---|
+| Quick Reproduce（hello world only） | **~14 min** |
+| 首次部署全 8 步 | ~30 min（含模型下载 6 min + cold start 7 min） |
+| 重启 vLLM（page cache 热） | ~5-6 min |
+| 全 benchmark + GSM8K full | ~90 min |
 
 ---
 
 ## Step 1: 验证 / 进入 Pod
 
-复用 GKE TPU pod（`tpu-v7x-lite-podslice`, 2x2x1）。**关键**：必须挂 Lustre PVC（378 GB 模型），shm 800 GB（用于 page cache）。
+复用 GKE TPU pod（`tpu-v7x-lite-podslice`, 2x2x1，挂 Lustre PVC 378 GB + shm 800 GB）。Quick Reproduce 段已包含验证命令；进入 pod 调试用 `kubectl --context="$CTX" exec -it $POD -- bash`。
 
-```bash
-# 用 Step 0 的环境变量
-CTX=gke_cloud-tpu-multipod-dev_us-central1_chrisya-v7x-v134
-POD=e2e-02
-
-# 找一个空闲 pod (默认推荐 e2e-02)
-kubectl --context="$CTX" get pods
-
-# 进入 pod
-kubectl --context="$CTX" exec -it $POD -- bash
-```
-
-> **Pod 互斥**：一个 pod 只能跑一个 vLLM 实例（独占 `/dev/vfio/0`）。多个并发模型要分到不同 pod。
-> **Hulk K2.6 / 其他模型同 pod 时**：检查 `/dev/shm/` 是否被其他模型占用，避免删别人的 staging 数据。
+> **Pod 互斥**：一个 pod 只能跑一个 vLLM 实例（独占 `/dev/vfio/0`）。多模型并发要分不同 pod，详见踩坑 #5。
 
 ---
 
 ## Step 2: 检查 + 清理 /dev/shm（关键）
 
-vLLM 启动时检测 RAM available 是否 ≥ 90% × checkpoint size，如不足则 silently 跳过 auto-prefetch，weight load 退化到直接读 Lustre（80s/shard vs 2s/shard，慢 50×）。
+vLLM 启动检测 RAM available ≥ 90% × checkpoint size，否则 silently 跳过 auto-prefetch → weight load 慢 50×（80s/shard vs 2s/shard）。
 
 ```bash
-# 检查 shm 占用
-df -h /dev/shm
-ls -la /dev/shm/
-
-# 如有大 model 残留（如 Kimi-K2.6 的 555 GB），且确认无人在用：
-# fuser -v /dev/shm/<other-model>/  # 先确认没人占
-# rm -rf /dev/shm/<other-model>/
-
-rm -rf /dev/shm/sem.* /dev/shm/wrk_* 2>/dev/null
-
-# 验证
-df -h /dev/shm | tail -1   # 应 < 100 GB
-free -h | head -2           # available 应 ≥ 700 GB
+df -h /dev/shm                                    # 应 < 100 GB
+ls -la /dev/shm/                                  # 看是否有 Kimi/GLM 等残留
+# 删别人的 staging 前先 fuser -v /dev/shm/<dir> 确认没人占
+rm -rf /dev/shm/sem.* /dev/shm/wrk_* 2>/dev/null  # 清自己的临时 sem
+free -h | head -2                                 # available 应 ≥ 700 GB
 ```
 
 ---
@@ -537,37 +463,9 @@ INFO: Application startup complete.
 
 ---
 
-## Step 6: 验证推理（hello world）
+## Step 6: 验证推理 + Thinking mode 行为
 
-```bash
-# Health check
-curl -s http://localhost:8000/health
-# 预期: HTTP 200, {"status":"ok"}
-
-# Hello world — 用 /v1/completions 最稳（chat 端 thinking 关不掉，见 Constraint B）
-MODEL=/lustre/models/Qwen3.5-397B-A17B-FP8
-curl -s -X POST http://localhost:8000/v1/completions \
-  -H 'Content-Type: application/json' \
-  -d "{
-    \"model\": \"$MODEL\",
-    \"prompt\": \"The capital of France is\",
-    \"max_tokens\": 10,
-    \"temperature\": 0
-  }" | python3 -m json.tool
-```
-
-预期输出：
-```json
-{
-  "choices": [{
-    "text": " Paris.",
-    "finish_reason": "stop"
-  }],
-  "usage": {"prompt_tokens": 7, "total_tokens": 13, "completion_tokens": 6}
-}
-```
-
-> **Chat 端点演示**：chat 端点会触发 `<think>...</think>` reasoning，且当前 vLLM + Qwen3 reasoning_parser 下 server-side **完全关不掉 thinking**（见 [Constraint B](#b-server-side-thinking-关不掉)）。生产 chat 用法走 5-shot in-context learning（见 [Step 7 GSM8K](#step-7-gsm8k-准确性测试推荐用自定义脚本)）。
+Hello world 命令见 [Quick Reproduce 步骤 6](#-quick-reproduce--14-min-拿到-hello-world)（`/v1/completions` "The capital of France is" → " Paris."）。Health check：`curl http://localhost:8000/health` 预期 HTTP 200。
 
 ### Thinking mode 行为（关不掉，注意）
 
@@ -723,7 +621,7 @@ kubectl --context="$CTX" exec -it $POD -- bash -lc '
 
 ---
 
-## 踩坑记录（8 条）
+## 踩坑记录（5 条）
 
 ### 1. ⭐ 缺 PR #2366 → 所有奇怪症状的总根源
 
@@ -738,10 +636,10 @@ kubectl --context="$CTX" exec -it $POD -- bash -lc '
 
 **修复**：拷贝 main branch 的 `kv_cache_manager.py` 到 pod（[Step 4](#step-4-应用-pr-2366-fix)）。无需任何其他 patch。
 
-> **教训**：在错的 branch 上调试会浪费几小时。**先 grep 检查关键 fix 是否包含**：
-> ```bash
-> grep -c '_hybrid_uniform_page_size_bytes' kv_cache_manager.py  # 应 = 7
-> ```
+**Branch 陷阱**：`e2e` pod 上的 `/workspace/tpu_inference` 可能是某个 fork branch（如 `feature/kimi-k26-inference`）也缺 PR #2366；docker image 自带的也旧。**先 grep 检查关键 fix 是否包含**，看到 0 就一律走 Step 4 patch：
+```bash
+grep -c '_hybrid_uniform_page_size_bytes' kv_cache_manager.py  # 应 = 7
+```
 
 ### 2. `/dev/shm` 残留挤压 page cache → weight load 慢 50×
 
@@ -751,21 +649,13 @@ kubectl --context="$CTX" exec -it $POD -- bash -lc '
 
 **修复**：Step 2 清理 + 启动加 `--safetensors-load-strategy=prefetch` 强制 prefetch。
 
-### 3. `chunked_mm_input` AssertionError
-
-**现象**：启动报 `AssertionError: Chunked MM input is required because we need the flexibility to schedule a multiple of block_size tokens even if they are in the middle of a mm input`
-
-**根因**：`enable_prefix_caching=True` 触发 `mamba_cache_mode` silently promote 到 `align`，与 multimodal model + TPU `disable_chunked_mm_input=True` 三方约束冲突
-
-**修复**：`--no-enable-prefix-caching`。**不要**试图设 `--mamba-cache-mode none`（会被覆盖）。
-
-### 4. `Server-side thinking 关不掉`
+### 3. `Server-side thinking 关不掉`
 
 详见 [Constraint B](#b-server-side-thinking-关不掉) 和 [Step 6 Thinking mode 行为](#thinking-mode-行为关不掉注意)。
 
 简短结论：当前 vLLM + Qwen3 reasoning_parser 下 **chat 端任何关 thinking 方法均失效**（chat_template_kwargs / `/no_think` / 启动 flag 全无效）。Workaround：用 `/v1/completions` 端点 / 5-shot in-context learning / 接受 thinking ON 给足 max_tokens。
 
-### 5. libtpu lockfile 残留 / TPU device busy
+### 4. libtpu lockfile 残留 / TPU device busy
 
 **现象**：`ABORTED: Internal error when accessing libtpu multi-process lockfile` 或 `TPU device busy`
 
@@ -779,34 +669,7 @@ fuser /dev/vfio/0 2>&1 | xargs -r kill -9 2>/dev/null
 rm -f /tmp/libtpu_lockfile
 ```
 
-### 6. `vllm serve` 偶发 `Engine core initialization failed. Failed core proc(s): {}`
-
-**现象**：cold start 期间 api_server 提前死亡，`Failed core proc(s): {}`（空 dict 是 race condition signature）
-
-**根因**：vLLM `wait_for_engine_startup` 的 sentinel poller 在 EngineCore 长时间 loading 时偶发 false positive
-
-**Workaround**：
-- 重启再试（多数情况 retry 就好）
-- 或用 offline `LLM` Python class（单进程同步执行无 IPC race）
-
-### 7. Pod 互斥与 SHM 冲突（多模型同 cluster）
-
-**现象**：另一个 pod 上别人在跑大模型（如 Kimi K2.6），SHM 被占 555 GB
-
-**修复**：
-- 用 `kubectl get pods` 找空闲 pod
-- 用 `fuser -v /dev/shm/<dir>` 确认是否有人在用，不要随意删别人的 staging
-- Hulk 等 teammate 模型用 `/dev/shm/Kimi-K2.6/` 这种路径，要保留
-
-### 8. `feature/kimi-k26-inference` branch 缺 PR #2366
-
-**现象**：在 `e2e` pod 上的 `/workspace/tpu_inference` 是 `yangwhale/tpu-inference` fork 的 `feature/kimi-k26-inference` branch，缺 PR #2366
-
-**修复**：
-- 切换到 `e2e-02` pod（docker image 自带的 tpu_inference 也旧，但更接近 main）
-- 用 Step 4 的 `kubectl cp` 把 main branch 的 `kv_cache_manager.py` 拷过去
-
-### 9. ⚠️ `kubectl exec $POD -- bash -c "<multi-line nohup>"` 被 SIGKILL (exit 137)
+### 5. ⚠️ `kubectl exec $POD -- bash -c "<multi-line nohup>"` 被 SIGKILL (exit 137)
 
 **现象**：用 inline 多行命令启动 nohup vllm:
 ```bash
@@ -919,36 +782,24 @@ kubectl exec $POD -- bash /tmp/launch_vllm.sh
 | **P128**  | 61.8 s   | **2103 tok/s** ⭐ | **2096.68** ✅ | 16.4 | 100% | 🚀 **Peak Throughput** |
 | **P256**  | 108.4 s  | 1877 tok/s ↓     | — | 7.3  | 100% | （超 sweet spot, scheduler 抖动） |
 
-> 04-26 三档复测均与 04-25 在 ±0.3% 内吻合，**peak P128 复测确认**。其他 6 档未复测但模型/stack 同期未变，预期同样稳定。
+> 04-26 三档复测均与 04-25 在 ±0.3% 内吻合，**peak P128 复测确认**。
 
-**关键发现：Peak 是 P128，不是 P256！**
+**Scaling**：P1→P2/P4/P8 几乎线性 (~1.93×)，P16/P32 sublinear (~1.77×)，P64+ diminishing return (~1.35×)，**P128→P256 0.89× ↓**（KV cache 不够，scheduler 抖动）。
 
-P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler 在 P256 时频繁 preempt + 重调（KV cache 不够同时容纳 256 个 1K context + 1K output 的状态），实际 GPU 占用率反而降。**P128 才是真正的 max throughput 操作点**。
+**Pareto 操作点**：
+- 低延迟 (TPOT < 25 ms): **P1** 49.7 tok/s/user
+- 中等并发: **P32-P64** ~1100-1500 tok/s 总, 23-35 tok/s/user
+- 最大吞吐: **P128** ~2097 tok/s peak（per-chip 262 tok/s）
 
-**Scaling 分析（near-linear → diminishing → drop）**：
-- P1 → P2: throughput 提升 **1.95×**（perfect linear scaling）
-- P2 → P4: 提升 **1.93×**（near-linear）
-- P4 → P8: 提升 **1.92×**（near-linear）
-- P8 → P16: 提升 **1.78×**（开始 sublinear）
-- P16 → P32: 提升 **1.76×**
-- P32 → P64: 提升 **1.34×**（diminishing return）
-- P64 → P128: 提升 **1.39×**（recovers a bit）
-- **P128 → P256: 0.89× （下降！）**
+#### Thinking ON vs OFF (1K/1K) — raw throughput 几乎相同
 
-**Pareto 操作点选择**：
-- 单用户低延迟 (TPOT < 25 ms): 用 **P1**, 49.6 tok/s/user
-- 中等并发 + 体感 OK: 用 **P32-P64**, ~1100-1500 tok/s 总吞吐 + 23-35 tok/s/user
-- 离线批处理 / 最大吞吐: 用 **P128**, **2097-2103 tok/s 峰值**（04-26 复测 2096.68，per-chip 262 tok/s）
+| Batch | OFF | ON |
+|------:|-----:|-----:|
+| P1   | 49.6 | 49.6 |
+| P16  | 640  | 638 |
+| P64  | 1510 | 1518 |
 
-#### Thinking ON vs Thinking OFF (1K/1K)
-
-| Batch | Thinking OFF | Thinking ON | 备注 |
-|------:|-------------:|-----------:|------|
-| P1   | 49.6 tok/s | 49.6 tok/s | 几乎相同（max_tokens 限制） |
-| P16  | 640 tok/s  | 638 tok/s  | 几乎相同 |
-| P64  | 1510 tok/s | 1518 tok/s | 几乎相同 |
-
-⚠️ **业务效率差 10×**：raw throughput 几乎一样，但 thinking ON 用同样时间产出 ~90% reasoning + 10% 答案，thinking OFF 大部分是答案。**生产部署 reasoning 质量要求不高的话，关 thinking 业务有效 token 提升 10×**。
+⚠️ **业务有效 token 差 10×**：thinking ON 同时间内 ~90% 是 reasoning ~10% 答案；OFF 大部分是答案。生产能关 thinking 时业务效率提升 10×（关法见 [Constraint B](#b-server-side-thinking-关不掉) workaround）。
 
 ### GSM8K Accuracy (5-shot, thinking OFF)
 
@@ -958,34 +809,13 @@ P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler
 | 04-25 | **Full 1319 samples** (max_tokens=512, max_question_tokens=500) | **77.56% (1023/1319)** ✅ | stop=1229, length=90 (6.8%) | 16.4 min | 8 |
 | **04-26** ⭐ | **🎯 Full 1319 samples 复测** (相同配置) | **93.93% (1239/1319)** ✅ ⭐ | stop=1305, length=14 (**1.06%**) | **15.2 min** | 8 |
 
-**CI 阈值 63%，两次复测都远超过 ✅**
+**CI 阈值 63% ✅**。**93.93% 是 production-ready 真实数字**（1319 题代表性 vs 50 题偏简单）。
 
-**04-26 复测大幅提升 +16.37 个点**：
-- Accuracy: 77.56% → 93.93% (length 截断从 6.8% 跌到 1.06%)
-- Length 截断 6× 减少（90 → 14），平均完成 token 也下降（模型答得更直接）
-- 总耗时略短（15.2 vs 16.4 min, -7%）
-- **真实原因**：PR #2366 fix 让 KV cache 状态不再损坏（详见 Constraint A）。损坏状态下模型 reasoning 输出不完整被 max_tokens 截断，accuracy 偏低；fix 后模型完整说完答案 → 截断从 6.8% 跌到 1.06%，accuracy 从 77% 升到 94%。
-- **HF 权重未变**：04-25 和 04-26 都用同一 HF model card，无 hot patch；差异完全来自 vLLM 侧 PR #2366 patch 应用与否
+**04-26 +16.37 提升真因**：PR #2366 fix 让 KV cache 不再损坏（[Constraint A](#a-pr-2366-patch-必须-否则-kv-cache-状态损坏--gibberish)）→ 模型 reasoning 完整 → length 截断 6.8%→1.06% → accuracy 77→94%。HF 权重 04-25/04-26 未变（同 model card），差异完全来自 vLLM 侧 patch 应用与否。
 
-**50 题 vs 1319 题的差距**：
-- 50 题样本（idx 0-49）偏向较简单题，accuracy 偏高
-- 1319 题包含全部难度分布（含 hard reasoning），是真实代表性能力
-- **93.93% 是当前 production-ready 的真实数字**（04-26 复测）
+**比 lm_eval 快 100×**：自定义 5-shot script (parallel=8, thinking OFF via in-context) **0.69 s/题**；lm_eval 默认 thinking ON 75% 截断 24 s/题。调 max_tokens 512→1024 还可能再 +0.5-1pp。
 
-**1.06% length 截断分析（04-26）**：
-- 仅 14 个题被 max_tokens=512 截断
-- 调高 max_tokens 到 1024 仍可能继续提升 0.5-1 个百分点
-
-**比 lm_eval 快 100×**：
-- lm_eval (thinking ON, 75% length 截断) 跑 200 题用 80 min = 24 s/题
-- 自定义脚本 (thinking OFF, parallel=8) 跑 1319 题用 15 min = **0.69 s/题**
-
-**错例类型**：
-- 模型只输出 3 token 就 stop（直接吐数字而没 `#### N` 格式）→ 提取失败
-- 数学逻辑算错（reasoning 混乱）
-- length 截断（reasoning 太长，没说到答案）
-
-**Reproduce**: 见 [Step 7](#step-7-gsm8k-准确性测试推荐用自定义脚本) 推荐做法。
+**Reproduce**: [Step 7](#step-7-gsm8k-准确性测试推荐用自定义脚本)。
 
 ### 长 context benchmark（vLLM with `--max-model-len 16384`）
 
@@ -998,27 +828,18 @@ P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler
 | **P16** | 32.7 s  | 499.1 tok/s    | -22% |
 | **P64** | 76.3 s  | 849.9 tok/s    | -44% |
 
-**关键发现**：
-- ✅ **P1/P4 8K prefill 几乎不拖累**（vs 1K input 同档差 < 5%）— 单/低并发场景，Qwen3.5 hybrid GDN 长 context prefill 优势明显
-- 🟡 **P16/P64 8K prefill 拖累显著**（差 22-44%）— 高并发下 prefill chunked + KV cache 压力累加
-- **生产建议**：长 prompt 场景（RAG、长文档）用 P4-P8 最划算
+P1/P4 8K prefill 几乎不拖累（差 <5%, hybrid GDN 长 context 优势）；P16/P64 拖累 22-44%（高并发 chunked prefill 累加）。**长 prompt 场景 (RAG) 用 P4-P8 最划算**。
 
 #### 1K input / 8K output (decode heavy)
 
-| Batch | Latency | Throughput | vs 1K output 差距 |
-|------:|--------:|-----------:|-------------------|
-| **P1**  | 151.8 s  | **54.0 tok/s**   | **+9%**（甚至略快） |
+| Batch | Latency | Throughput | vs 1K out |
+|------:|--------:|-----------:|-----------:|
+| **P1**  | 151.8 s  | **54.0 tok/s**   | **+9%** |
 | **P4**  | 161.2 s  | 203.3 tok/s    | **+9%** |
 | **P16** | 184.3 s  | 711.0 tok/s    | **+11%** |
 | **P64** | 307.9 s  | **1702 tok/s**  | **+13%** ⭐ |
 
-**🎯 长 generation 在所有 batch size 上都比短 generation 快 9-13%**！
-
-**原因**：长 generation 让 batch 长时间保持饱和（pure decode 阶段），TPU MXU 利用率高；短 generation (1K out) 频繁经历 prefill→decode 转换 + cleanup，调度开销大。
-
-**生产建议**：
-- 长输出场景（文章生成、代码生成）：用 **P64** 1702 tok/s，比 1K/1K 同档高 13%
-- 高 batch + 长输出是 TPU v7x-8 的甜蜜点
+🎯 **长 generation 在所有 batch 都比短 generation 快 9-13%** — pure decode 让 TPU MXU 持续高利用率。**长输出场景 (文章/代码生成) 用 P64 1702 tok/s 是 v7x-8 甜蜜点**。
 
 ---
 
