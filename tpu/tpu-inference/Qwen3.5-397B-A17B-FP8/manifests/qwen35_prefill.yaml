@@ -1,0 +1,156 @@
+# Qwen3.5-397B-A17B-FP8 PD Disagg — Prefill (kv_producer)
+# Adapted from upstream tpu-inference single_prefill.yaml for Qwen3.5 hybrid GDN+Attn architecture
+#
+# Key differences vs upstream Qwen3-Coder template:
+#   - Model: Qwen3.5-397B-A17B-FP8 from Lustre (not HF download)
+#   - Storage: lustre-pvc (RWX) instead of hyperdisk pvc-vllm-p
+#   - KV connector: TPUConnectorHMA (hybrid attention+Mamba), NOT普通 TPUConnector
+#   - Init container patches: PR #2366 kv_cache_manager.py + tpu_connector_hma.py from /lustre/patches/qwen35-pd/
+#   - vLLM args: max-model-len=16384 (支持 8K prompt benchmark), block-size=256, reasoning-parser=qwen3
+#   - Node pool: np-tpu7x-spot-pd-p (newly created, 2x2x1 single-host)
+#   - HF_HUB_OFFLINE=1 (Lustre 已有权重, 无需 token)
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-prefill
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-prefill
+  template:
+    metadata:
+      labels:
+        app: vllm-prefill
+    spec:
+      serviceAccountName: default
+      nodeSelector:
+        cloud.google.com/gke-tpu-topology: 2x2x1
+        cloud.google.com/gke-tpu-accelerator: tpu7x
+        cloud.google.com/gke-nodepool: np-tpu7x-spot-pd-p
+      tolerations:
+      - effect: NoSchedule
+        key: google.com/tpu
+        operator: Equal
+        value: present
+      initContainers:
+        - name: tpu-node-setup
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              sysctl -w vm.max_map_count=8388608
+              if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
+                echo 2000000 > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+              fi
+          securityContext:
+            privileged: true
+      containers:
+      - name: vllm-tpu
+        image: vllm/vllm-tpu:nightly
+        imagePullPolicy: Always
+        command: [ "/bin/bash", "-c", "--" ]
+        args:
+          - |
+            set -e
+            # Patch HMA file + PR #2366 kv_cache_manager.py from Lustre
+            echo "[boot] Patching tpu_inference from /lustre/patches/qwen35-pd/"
+            cp /lustre/patches/qwen35-pd/tpu_connector_hma.py \
+               /workspace/tpu_inference/tpu_inference/distributed/tpu_connector_hma.py
+            cp /lustre/patches/qwen35-pd/kv_cache_manager.py \
+               /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
+            find /workspace/tpu_inference -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+            # Verify patches
+            HMA_REFS=$(grep -c TPUConnectorHMA /workspace/tpu_inference/tpu_inference/distributed/tpu_connector_hma.py)
+            PR2366_REFS=$(grep -c '_hybrid_uniform_page_size_bytes' /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py)
+            echo "[boot] HMA refs: $HMA_REFS (expect ≥18)"
+            echo "[boot] PR #2366 refs: $PR2366_REFS (expect 7)"
+            [ "$PR2366_REFS" -eq 7 ] || (echo "❌ PR #2366 patch incomplete"; exit 1)
+            # Start vLLM serve as Prefill (kv_producer)
+            exec vllm serve \
+              --seed=42 \
+              --model=/lustre/models/Qwen3.5-397B-A17B-FP8 \
+              --served-model-name=Qwen3.5-397B-FP8 \
+              --max-model-len=16384 \
+              --max-num-batched-tokens=4096 \
+              --max-num-seqs=256 \
+              --block-size=256 \
+              --no-enable-prefix-caching \
+              --tensor-parallel-size=8 \
+              --enable-expert-parallel \
+              --kv-cache-dtype=fp8 \
+              --gpu-memory-utilization=0.70 \
+              --async-scheduling \
+              --no-disable-hybrid-kv-cache-manager \
+              --reasoning-parser=qwen3 \
+              --limit-mm-per-prompt='{"image":0,"video":0}' \
+              --trust-remote-code \
+              --kv-transfer-config='{"kv_connector":"TPUConnectorHMA","kv_connector_module_path":"tpu_inference.distributed.tpu_connector_hma","kv_role":"kv_producer"}'
+        env:
+        - name: HF_HUB_OFFLINE
+          value: "1"
+        - name: VLLM_LOGGING_LEVEL
+          value: "INFO"
+        - name: JAX_PLATFORMS
+          value: "tpu,cpu"
+        - name: TPU_BACKEND_TYPE
+          value: jax
+        - name: PJRT_DEVICE
+          value: TPU
+        - name: USE_MOE_EP_KERNEL
+          value: "0"
+        - name: MODEL_IMPL_TYPE
+          value: "vllm"
+        - name: USE_BATCHED_RPA_KERNEL
+          value: "0"
+        - name: SKIP_JAX_PRECOMPILE
+          value: "1"
+        - name: VLLM_XLA_CHECK_RECOMPILATION
+          value: "0"
+        ports:
+        - containerPort: 8000
+        resources:
+          limits:
+            google.com/tpu: "4"
+            memory: "850Gi"
+            cpu: "220"
+            ephemeral-storage: "40Gi"
+          requests:
+            google.com/tpu: "4"
+            memory: "850Gi"
+            cpu: "220"
+            ephemeral-storage: "40Gi"
+        volumeMounts:
+        - name: dshm
+          mountPath: /dev/shm
+        - name: lustre-vol
+          mountPath: /lustre
+        securityContext:
+          privileged: true
+          capabilities:
+            add:
+            - IPC_LOCK
+      volumes:
+      - name: dshm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 200Gi
+      - name: lustre-vol
+        persistentVolumeClaim:
+          claimName: lustre-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm-service-prefill
+  labels:
+    app: vllm-prefill
+spec:
+  type: ClusterIP
+  selector:
+    app: vllm-prefill
+  ports:
+  - protocol: TCP
+    port: 8000
+    targetPort: 8000

@@ -1,0 +1,47 @@
+# Qwen3.5-397B-A17B-FP8 PD Disagg — Proxy (1P1D router)
+# Adapted from upstream proxy1p1d.yaml. No changes needed since service names match
+# (vllm-service-prefill / vllm-service-decode same as upstream).
+# Uses examples/disagg/toy_proxy_server.py from vllm-tpu image.
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: vllm-disagg-proxy
+  labels:
+    app: vllm-proxy
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: vllm-proxy
+  template:
+    metadata:
+      labels:
+        app: vllm-proxy
+    spec:
+      containers:
+      - name: proxy-container
+        image: vllm/vllm-tpu:nightly
+        imagePullPolicy: IfNotPresent
+        command: ["/bin/bash", "-c"]
+        args:
+          - |
+            python3 examples/disagg/toy_proxy_server.py \
+              --host 0.0.0.0 \
+              --port 10000 \
+              --prefiller-host vllm-service-prefill \
+              --prefiller-port 8000 \
+              --decoder-host vllm-service-decode \
+              --decoder-port 8000 &
+            echo "Proxy started. Ready for benchmark."
+            tail -f /dev/null
+        ports:
+        - containerPort: 10000
+        resources:
+          requests:
+            cpu: "8"
+            memory: "16Gi"
+            ephemeral-storage: "20Gi"
+          limits:
+            cpu: "16"
+            memory: "32Gi"
