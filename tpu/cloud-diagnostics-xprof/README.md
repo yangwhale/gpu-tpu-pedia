@@ -293,23 +293,50 @@ xprofiler UI 里左下角 dropdown 会展示成 `run-2026-04-26-qwen3-coder/sess
 
 ## 6. 常见踩坑
 
-### #0 🚨 **gLinux + LOAS2 环境 xprofiler create 不能用**（hulk 2026-04-26 实测踩过）
+### #0 🚨 **xprofiler VM 的 startup script 在 Debian 12 上跑不完**（hulk 2026-04-26 深度实测）
 
-**症状**：`xprofiler create` 报 `ECP Proxy returned an error` / `gcloud crashed (ECPProxyError)`，setup VM 后内部 cleanup 也失败：
+**症状**：`xprofiler create` 等了 ~5 分钟后报：
 ```
 Unable to set up instance. Initiating cleanup.
-ERROR: ECP Proxy returned an error
-ERROR: gcloud crashed (ECPProxyError): ECP Proxy indicated an internal error: Failed to forward request
+```
+然后 cleanup 阶段 subprocess 调 `gcloud compute instances delete` 撞 ECP Proxy error（这个是次要派生症状）。
+
+**真根因**（深挖发现）：
+
+xprofiler create 实际成功创建 VM（gcloud compute instances create 返回 RUNNING），但 VM 上的 startup script **失败在很早期**，没机会把 `startup_output.json` 上传到 GCS 让 xprofiler 知道 setup 完成。
+
+xprofiler 默认 polling 16 次（每次 ~20s, 总 ~5 min）等 GCS 上的 `startup_output.json` 出现 → 永远等不到 → 宣布 "Unable to set up instance"。
+
+**深挖出的真问题**（基于 startup script 内容推断）：
+
+xprofiler create 的 startup script 第一步是：
+```bash
+apt-get install -yq git supervisor python3 python3-pip python3-distutils python3-virtualenv
 ```
 
-**根因**：xprofiler 内部用 subprocess 调 `gcloud compute instances delete`（cleanup 时）和其他 gcloud 子命令，这些子进程跟 gLinux 的 LOAS2 ECP Proxy 鉴权冲突。即使 `prodcertstatus` 显示 cert 有效，subprocess 仍会失败。手动跑 `gcloud compute instances delete` 反而成功，仅在 xprofiler subprocess 调用时 fail。
+**`python3-distutils` 在 Debian 12 (bookworm) 已经被移除**（Python 3.11 起 distutils 被废弃，包改名为 `python3-setuptools`）。`apt-get install` 报 "no installation candidate" → 整个 startup 立刻 exit → `gsutil cp startup_output.log` 这步根本没机会跑 → GCS bucket 完全空 → xprofiler 永远等不到 ready 信号。
 
-**修复**（优先级降序）：
-1. ✅ **在 cloudtop 上跑 xprofiler**（不是 gLinux）— 推荐做法，cloudtop 没有 ECP 冲突
-2. ✅ **在 GCE jumpbox VM 上跑 xprofiler** — 起一个小 VM (e2-small) 专门跑 xprofiler CLI
-3. ⚠️ 在 gLinux 跑 — **目前不可用**，等上游修
+**怎么验证**：
+```bash
+# 1. 不让 xprofiler 自动删 VM
+xprofiler create -z $ZONE -l $BUCKET --auto-delete-on-failure-off
 
-> 💸 **代价**: hulk 实测时这个坑造成约 $0.10 的浪费 cost（4 个 VM × 几分钟 + cleanup leak），所以**强烈建议先确认环境**再跑。
+# 2. setup fail 后 VM 还在，看 serial console
+gcloud compute instances get-serial-port-output xprof-<uuid> --zone=$ZONE | grep -E "ERROR|distutils|installation candidate"
+
+# 3. 或 SSH 进去看 syslog
+gcloud compute ssh xprof-<uuid> --zone=$ZONE -- "sudo cat /var/log/syslog | grep -i distutils"
+```
+
+**修复**（按可行性排序）：
+
+1. 🟡 **等上游修 startup script** — [报 issue 给 AI-Hypercomputer/cloud-diagnostics-xprof](https://github.com/AI-Hypercomputer/cloud-diagnostics-xprof/issues)，建议改用 `python3-setuptools` 或显式指定 image-family 为更老的 debian-11
+2. 🟡 **手动 patch startup script** — fork xprofiler 改 `create_action.py` 里 startup script 的 apt 行
+3. ✅ **临时 workaround**：用 `--vm-name` + `--auto-delete-on-failure-off`，setup fail 后手动 SSH 进 VM 把缺的包装上、起 tensorboard，再继续用 — 麻烦但能跑通
+
+> 💸 **代价**: hulk 实测时这个坑造成约 $0.15 的浪费 cost（4-5 个 VM × 几分钟），且 cleanup 还容易撞 ECP（gLinux 下 gcloud subprocess 调用偶尔 ECP 出错）。**强烈建议先验证 startup script 能在你环境里跑通**。
+
+> 🌐 **不是 gLinux 专属**：这个 startup script 失败跟你在哪跑 xprofiler 客户端无关（cloudtop / jumpbox / gLinux 都一样）— **VM 上的问题是普遍性的**。但 cloudtop / jumpbox 不会撞 ECP cleanup 错误，所以表现可能稍好。
 
 ### #-1 🚨 **xprofiler create 默认是交互式，`yes |` pipe 会建多个 VM**
 
@@ -466,11 +493,11 @@ xprofiler delete -z $ZONE --vm-name xprof-<uuid>
 ### Dogfood 验证状态（2026-04-26）
 - ✅ §2.1 安装 xprofiler — 实测通过（但发现需要补装 `pyOpenSSL`，见 §6 #-0.5）
 - ✅ §2.2 创建 GCS bucket + SA 授权 — 实测通过
-- ❌ §2.3 `xprofiler create` — **在 gLinux + LOAS2 环境无法工作**（ECP Proxy 错误，见 §6 #0）
-- ⏳ §2.4-2.6 + §3-§5 — 因 §2.3 阻塞未实测，需在 cloudtop / GCE jumpbox 上验证
+- ❌ §2.3 `xprofiler create` — **VM 上 startup script 在 Debian 12 失败**（推断 `python3-distutils` 包不存在，见 §6 #0）— 跟你在哪跑 xprofiler 客户端无关
+- ⏳ §2.4-2.6 + §3-§5 — 因 §2.3 阻塞未实测
 
 ### 本次 dogfood 找到的 4 个坑（已写入 §6）
-- **#0**: gLinux + LOAS2 环境 xprofiler create 不能用（最严重）
+- **#0**: VM startup script 在 Debian 12 失败 — **真根因是 `python3-distutils` 包被移除**（最严重，可能影响所有用户）
 - **#-1**: `yes |` pipe 会建多个 VM（实测一次创了 3 个）
 - **#-0.5**: 缺 `pyOpenSSL` 包（需手动补装）
 - **#-0.25**: gcloud active account 不能是 SA
