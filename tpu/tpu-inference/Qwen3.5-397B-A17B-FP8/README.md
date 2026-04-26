@@ -59,20 +59,22 @@
 
 **修复**: 拷贝 main branch 的 `kv_cache_manager.py`（见 [Step 4](#step-4-应用-pr-2366-fix)）。
 
-### B. Server-side thinking 关不掉
+### B. Server-side thinking 控制不稳定
 
-当前 vLLM + `--reasoning-parser qwen3` 下，**所有 server-side 关闭 thinking 的方法均失效**（实测 2026-04-26）：
+当前 vLLM + `--reasoning-parser qwen3` 下，server-side 关 thinking 行为**严重 prompt-dependent**（实测 2026-04-26）：
 
 | 尝试方法 | 实测结果 |
 |---|---|
 | 启动加 `--chat-template-kwargs='{"enable_thinking":false}'` | silently 忽略 |
-| Request body 传 `chat_template_kwargs={"enable_thinking":false}` | **chat 端模型陷入 `</think>` 死循环 → gibberish** |
+| `enable_thinking:false` + 普通 chat prompt | chat 端模型陷入 `</think>` 死循环 → gibberish |
+| `enable_thinking:false` + **单 user message 含 5-shot Q/A pattern** | ✅ work，reasoning_len=0 |
 | User prompt 加 `/no_think` | 失效，仍 thinking ON |
+| `/v1/completions` raw prompt | 不稳定，常陷入 "X is X is..." 死循环 |
 
-**3 个 workaround**（详见 [Step 6 Thinking mode 行为](#thinking-mode-行为关不掉注意)）：
-1. 走 `/v1/completions` 端点（不经 chat template）
-2. Chat 端用 5-shot in-context learning（messages 里给 5 个 Q/A 示例）
-3. 接受 thinking ON + `max_tokens >= 2048`
+**Workaround 按可靠性排序**（详见 [Step 6](#thinking-mode-行为控制不稳定注意)）：
+1. ⭐ Chat + 5-shot Q/A pattern + `enable_thinking:false`（**唯一稳定方式**）
+2. 接受 thinking ON + `max_tokens` 接近 `max_model_len`（实测 2048 不够，需 3500-4000）
+3. `/v1/completions` raw prompt — **不可靠，不推荐**
 
 ### C. 三个必设环境变量
 
@@ -193,14 +195,14 @@ kubectl --context="$CTX" exec $POD -- curl -sf -o /dev/null -w "%{http_code}\n" 
   | grep -q 200 && echo "✅ ready" || (echo "❌ not ready, log tail:"; \
     kubectl --context="$CTX" exec $POD -- tail -20 /tmp/vllm_qwen35.log; exit 1)
 
-# 6. Hello world — 用 /v1/completions 最稳（chat 端 thinking 关不掉，见必读 Constraint B）
-kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/completions \
+# 6. Hello world — chat 端 5-shot 单 user message 模式（thinking 关不掉，但 5-shot pattern 让模型 skip thinking, 见 Constraint B workaround #2）
+kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/chat/completions \
   -H 'Content-Type: application/json' \
-  -d "{\"model\":\"$MODEL\",\"prompt\":\"The capital of France is\",\"max_tokens\":10,\"temperature\":0}" \
-  | python3 -m json.tool
+  -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"Question: Capital of Japan?\nAnswer: Tokyo.\n\nQuestion: Capital of Germany?\nAnswer: Berlin.\n\nQuestion: Capital of Italy?\nAnswer: Rome.\n\nQuestion: Capital of Spain?\nAnswer: Madrid.\n\nQuestion: Capital of Brazil?\nAnswer: Brasilia.\n\nQuestion: Capital of France?\nAnswer:\"}],\"max_tokens\":50,\"temperature\":0,\"chat_template_kwargs\":{\"enable_thinking\":false}}" \
+  | python3 -c 'import sys,json; r=json.load(sys.stdin); m=r["choices"][0]["message"]; print("content:", repr(m["content"])); print("reasoning_len:", len(m.get("reasoning") or "")); print("finish:", r["choices"][0]["finish_reason"])'
 ```
 
-预期：`choices[0].text == " Paris."`、`finish_reason == "stop"`。如果出错查 Step 1-6 详细说明。
+预期：`content == "Paris."`、`reasoning_len == 0`（5-shot pattern 强制 skip thinking）、`finish == "stop"`。如果出错查 Step 1-6 详细说明。
 
 复现 benchmark 和 GSM8K 见 [Step 7-8](#step-7-gsm8k-准确性测试推荐用自定义脚本)。
 
@@ -465,29 +467,29 @@ INFO: Application startup complete.
 
 ## Step 6: 验证推理 + Thinking mode 行为
 
-Hello world 命令见 [Quick Reproduce 步骤 6](#-quick-reproduce--14-min-拿到-hello-world)（`/v1/completions` "The capital of France is" → " Paris."）。Health check：`curl http://localhost:8000/health` 预期 HTTP 200。
+Hello world 命令见 [Quick Reproduce 步骤 6](#-quick-reproduce--14-min-拿到-hello-world)（chat 5-shot 单 user message → "Paris."）。Health check：`curl http://localhost:8000/health` 预期 HTTP 200。
 
-### Thinking mode 行为（关不掉，注意）
+### Thinking mode 行为（控制不稳定，注意）
 
-Qwen3.5 默认 thinking ON：模型输出 `<think>...</think>` reasoning + 答案。
-当前 vLLM + `--reasoning-parser qwen3` 下，**所有 server-side 关闭 thinking 的方法均失效**（实测 2026-04-26）：
+Qwen3.5 默认 thinking ON：模型输出 `<think>...</think>` reasoning + 答案。当前 vLLM + `--reasoning-parser qwen3` 下，server-side 关 thinking 行为**严重 prompt-dependent**（实测 2026-04-26）：
 
 | 尝试方法 | 实测结果 |
 |---|---|
 | 启动加 `--chat-template-kwargs='{"enable_thinking":false}'` | silently 忽略 |
-| Request body 传 `chat_template_kwargs={"enable_thinking":false}` | **chat 端模型陷入 `</think>` 死循环 → gibberish** |
+| Request body `chat_template_kwargs={"enable_thinking":false}` + 普通 chat prompt | chat 端模型陷入 `</think>` 死循环 → gibberish |
+| Request body 同上 + **单 user message 含 5-shot Q/A pattern** | ✅ **work！reasoning_len=0**（in-context 示例足够强让模型 skip thinking） |
 | User prompt 加 `/no_think` 标记 | 失效，仍 thinking ON |
+| `/v1/completions` raw prompt（如 `"The capital of France is"`） | 不稳定，常陷入 "X is X is X is..." 死循环 |
 
-**3 个生产可用 workaround**：
+**生产可用 workaround**（按可靠性排序）：
 
-1. **走 `/v1/completions` 端点**（不经 chat template，无 thinking 干扰）—— 简单 prompt 推理首选，见 hello world 示例
-2. **5-shot in-context learning**（chat 端绕过 thinking 唯一可靠方式）—— messages 里给 5 个 "Q: ... A: N" 示例让模型 follow pattern 直接答题；GSM8K 实测 ~90% accuracy（见 [scripts/run_gsm8k_qwen35.py](scripts/run_gsm8k_qwen35.py)）
-3. **接受 thinking ON + 给足 `max_tokens >= 2048`**—— 让 reasoning + 答案完整输出，适合能容忍延迟和 token 成本的长答案场景
+1. **⭐ Chat + 单 user message 含 5-shot Q/A pattern + `enable_thinking=false`**（**唯一稳定方式**）—— GSM8K 实测 90%+ accuracy；见 [scripts/run_gsm8k_qwen35.py `build_5shot_prompt`](scripts/run_gsm8k_qwen35.py)
+2. **接受 thinking ON + `max_tokens` 接近 `max_model_len`** —— 实测 `max_tokens=2048` 不够（reasoning 单段就用 9216 字符 ≈ 2048+ tokens），需要 `max_tokens=3500-4000`（受 max_model_len 限制）
+3. `/v1/completions` raw prompt —— 偶有效但不可靠，**不推荐生产**
 
 **Token 经济学**：
-- Thinking ON 实测: ~1100-1500 tokens reasoning + ~30-200 tokens 答案
-- Thinking OFF（理论）: ~3-30 tokens 直接答案
-- 当前**无法 server-side 关**，需省 tokens 走 workaround 1 或 2
+- Thinking ON 实测: ~1100-2500 tokens reasoning + ~30-200 tokens 答案
+- 5-shot pattern bypass: ~3-30 tokens 直接答案（≈10× 业务效率）
 
 ---
 
@@ -651,7 +653,7 @@ grep -c '_hybrid_uniform_page_size_bytes' kv_cache_manager.py  # 应 = 7
 
 ### 3. `Server-side thinking 关不掉`
 
-详见 [Constraint B](#b-server-side-thinking-关不掉) 和 [Step 6 Thinking mode 行为](#thinking-mode-行为关不掉注意)。
+详见 [Constraint B](#b-server-side-thinking-控制不稳定) 和 [Step 6 Thinking mode 行为](#thinking-mode-行为控制不稳定注意)。
 
 简短结论：当前 vLLM + Qwen3 reasoning_parser 下 **chat 端任何关 thinking 方法均失效**（chat_template_kwargs / `/no_think` / 启动 flag 全无效）。Workaround：用 `/v1/completions` 端点 / 5-shot in-context learning / 接受 thinking ON 给足 max_tokens。
 
@@ -799,7 +801,7 @@ kubectl exec $POD -- bash /tmp/launch_vllm.sh
 | P16  | 640  | 638 |
 | P64  | 1510 | 1518 |
 
-⚠️ **业务有效 token 差 10×**：thinking ON 同时间内 ~90% 是 reasoning ~10% 答案；OFF 大部分是答案。生产能关 thinking 时业务效率提升 10×（关法见 [Constraint B](#b-server-side-thinking-关不掉) workaround）。
+⚠️ **业务有效 token 差 10×**：thinking ON 同时间内 ~90% 是 reasoning ~10% 答案；OFF 大部分是答案。生产能关 thinking 时业务效率提升 10×（关法见 [Constraint B](#b-server-side-thinking-控制不稳定) workaround）。
 
 ### GSM8K Accuracy (5-shot, thinking OFF)
 
