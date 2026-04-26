@@ -194,8 +194,13 @@ LAUNCHER
 kubectl --context="$CTX" cp /tmp/launch_vllm.sh $POD:/tmp/launch_vllm.sh
 kubectl --context="$CTX" exec $POD -- bash /tmp/launch_vllm.sh
 
-# 5. 等 cold start ~7 min
-sleep 420
+# 5. 等 cold start (实测 6:24, sleep 400 = 留 36s safety margin)
+sleep 400
+
+# 5b. 验证 ready (区分 'cold start 没完' vs 'hello world 失败')
+kubectl --context="$CTX" exec $POD -- curl -sf -o /dev/null -w "%{http_code}\n" http://localhost:8000/health \
+  | grep -q 200 && echo "✅ ready" || (echo "❌ not ready, log tail:"; \
+    kubectl --context="$CTX" exec $POD -- tail -20 /tmp/vllm_qwen35.log; exit 1)
 
 # 6. Hello world
 kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/chat/completions \
