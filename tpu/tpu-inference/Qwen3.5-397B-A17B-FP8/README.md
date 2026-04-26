@@ -422,7 +422,9 @@ rm -f $TMP
 
 > ⚠️ **必读**：`SKIP_JAX_PRECOMPILE=1`、`MODEL_IMPL_TYPE=vllm`、`--enable-expert-parallel`、`--no-enable-prefix-caching` 缺一不可。
 
-进入 pod：
+> 💡 **两种启动模式**：本节 (interactive) 和 [Quick Reproduce step 4](#-quick-reproduce--14-min-拿到-hello-world) (file-based launcher) 启动方式都 OK。Interactive 适合手动调试；CI/自动化或 host 端 kubectl exec 必须用 Quick Reproduce 的 launcher 模式（防 137 SIGKILL，详见[踩坑 #9](#9-️-kubectl-exec-pod----bash--c-multi-line-nohup-被-sigkill-exit-137)）。
+
+### 模式 A: Interactive（手动调试）
 
 ```bash
 kubectl --context="$CTX" exec -it e2e-02 -- bash
@@ -461,6 +463,41 @@ disown
 
 # 监视
 tail -f /tmp/vllm_qwen35.log
+```
+
+### 模式 B: File-based launcher（CI / host 端 kubectl exec 自动化）
+
+写一个 launcher script，`kubectl cp` 到 pod，然后 `kubectl exec bash launcher.sh`。Bash 读完文件后干净 fork+exit，不依赖 stdin channel，不会被 SIGKILL：
+
+```bash
+# host 端
+cat > /tmp/launch_vllm.sh <<'LAUNCHER'
+#!/bin/bash
+cd /tmp
+pgrep -f 'EngineCore|vllm' | xargs -r kill -9 2>/dev/null
+sleep 2
+rm -f /tmp/libtpu_lockfile /tmp/vllm_qwen35.log
+touch /tmp/vllm_qwen35.log
+setsid nohup env \
+  SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 MODEL_IMPL_TYPE=vllm \
+  vllm serve /lustre/models/Qwen3.5-397B-A17B-FP8 \
+    --tensor-parallel-size 8 --enable-expert-parallel \
+    --max-num-batched-tokens 4096 --max-num-seqs 256 --max-model-len 4096 \
+    --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
+    --limit-mm-per-prompt '{"image": 0, "video": 0}' \
+    --reasoning-parser qwen3 --async-scheduling \
+    >> /tmp/vllm_qwen35.log 2>&1 < /dev/null &
+disown
+echo "launched pid=$!"
+exit 0
+LAUNCHER
+
+kubectl --context="$CTX" cp /tmp/launch_vllm.sh $POD:/tmp/launch_vllm.sh
+kubectl --context="$CTX" exec $POD -- bash /tmp/launch_vllm.sh
+
+# 远程查看进度（host 端）
+kubectl --context="$CTX" exec $POD -- tail -f /tmp/vllm_qwen35.log
 ```
 
 等待 ~7 min 看到：
