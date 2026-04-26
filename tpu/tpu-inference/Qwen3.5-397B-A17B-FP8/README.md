@@ -359,8 +359,13 @@ gcloud container node-pools create np-tpu7x-spot-mh-qwen35 \
   --disk-type=hyperdisk-balanced --disk-size=500 \
   --node-taints=google.com/tpu=present:NoSchedule \
   --workload-metadata=GKE_METADATA --enable-autorepair --enable-autoupgrade
-# Spot 容量充裕的 region 通常 2-5 min ready; 不够会报 quota/容量错误
+# Spot 容量充裕的 region 通常 2-5 min ready
 ```
+
+> **Spot 容量不够 fallback** (报 `RESOURCE_EXHAUSTED` 或 quota error 时):
+> - 换 zone (us-central1-a/b/c 之一), 或换 region (us-east5 / us-west4 / asia-northeast1)
+> - 改 `--spot` → `--reservation-affinity=specific --reservation=<your-reservation>`(on-demand, 贵但稳定)
+> - 见 [feedback_capacity-check](capacity-check skill) 实时查容量
 
 ### Step 2: Stage **3 个 patches** 到 Lustre（multi-host 必须）
 
@@ -393,11 +398,17 @@ kubectl --context="$CTX" exec $UTIL_POD -- bash -c "
 
 ```bash
 cd manifests/
+# 如果之前部署过, 先 delete (LWS 不能 in-place update yaml 修改)
+kubectl --context="$CTX" delete lws qwen35-mh --ignore-not-found --wait=false
+sleep 30   # 等 pod terminate
+
 kubectl --context="$CTX" apply -f qwen35_multihost.yaml
 # LWS 1 group × 2 pods (1 leader on node A + 1 worker on node B)
 ```
 
 > 💡 **可忽略 warning**: 如果 Service `qwen35-mh` 之前部署过, 你会看到 `Warning: resource services/qwen35-mh is missing the kubectl.kubernetes.io/last-applied-configuration annotation`。这是 kubectl 的常规 warning, 不影响部署。
+>
+> 💡 **更新 patches 后 redeploy**: 改 patches 后必须 (1) 重跑 [Step 2 cp 到 Lustre](#step-2-stage-3-个-patches-到-lustremulti-host-必须), (2) 重 apply LWS (init container 启动时从 Lustre cp 新 patches 进 pod)。LWS 不能 in-place hot-reload patches。
 
 ### Step 4: 等就绪 + 验证 multi-host 启动 log（**实测 11-30 min**）
 
@@ -417,8 +428,8 @@ for i in $(seq 1 60); do
   sleep 30
 done
 
-# 验证 multi-host 关键 init log (注意: log 行很长含完整 device 列表, 用 head -c 截断)
-kubectl --context="$CTX" logs qwen35-mh-0 | grep -E "Init worker|Hybrid KV cache:|Application startup" | head -c 500
+# 验证 multi-host 关键 init log (用 awk 每行截到 150 字符避免 device 列表淹没)
+kubectl --context="$CTX" logs qwen35-mh-0 | grep -E "Init worker|Hybrid KV cache:|Application startup" | awk '{print substr($0,1,150)}' | head -10
 ```
 
 **期望关键 line（multi-host 特征）**：
@@ -450,6 +461,15 @@ Australia: 'Canberra.' | stop
 Canada:    'Ottawa.'   | stop
 Brazil:    'Brasilia.' | stop
 ```
+
+### Step 6: Troubleshooting (multi-host 特定)
+
+| Symptom | 原因 + Fix |
+|---|---|
+| Step 4 health 30 min 还没 200 | (1) `kubectl get pods` 看 RESTARTS≥2 → 跑 `kubectl logs qwen35-mh-0 --previous \| grep -E 'ERROR\|Traceback' \| tail -30` 找 root cause, 大概率是上面 [6 层 root cause](#-multi-host-vs-single-host-关键差异6-层-root-cause--fix) 之一 (确认 patches 已 stage + verify counter ≥ expect 值)。(2) Worker actor SIGSEGV → 看 worker pod log: `kubectl logs qwen35-mh-0-1 --previous \| tail -50`。(3) Spot preemption → check node events: `kubectl describe pod qwen35-mh-0 \| grep Warning`。 |
+| Step 5 部分国家 fail / 输出乱码 | (1) 如果输出 `</think>` 死循环 → 5-shot pattern 没 hit, 检查 prompt 是否单 user message（不是多个 messages）。(2) 如果 `KeyError: 'choices'` → vllm 内部崩, container 重启了, 等 health 200 再试。(3) 如果 `TypeError: ... mrope ...` → mrope patch 没生效, verify init container log: `kubectl logs qwen35-mh-0 \| grep 'mrope patch refs'` 应输出 1。 |
+| LWS pod 一直 Pending 不调度 | TPU 节点全占。`kubectl get nodes -l cloud.google.com/gke-tpu-accelerator=tpu7x` 看节点占用; 别人的任务在用就等或新建 node pool。 |
+| `kubectl exec` 报 `setns process: exit status 1` | Container 正在 restart 中，几秒后再试。常见于 vllm crash 后窗口期。 |
 
 ### Multi-host 部署完整 dogfood 详记
 
