@@ -464,7 +464,15 @@ kubectl exec $PROXY_POD -- vllm bench serve \
 - [Qwen3.5-397B-A17B-FP8 HuggingFace](https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8)
 - 同体系 README: [DeepSeek R1 FP4](../DeepSeek-R1-671B-FP4/README.md) · [GLM-5.1 FP4](../GLM-5.1-754B-FP4/README.md) · [Kimi K2.6](../Kimi-K2.6/README.md) · [Qwen3-Coder 480B](../Qwen3-Coder-480B/README.md)
 
-### 详细 dogfood 记录（内部）
+### 📚 内部文档（dogfood 历程 + 深度分析）
 
-PD 分离部署的完整 dogfood 时间线、HMA root cause 深度分析、决策链、经验教训、KV cache 拓扑实测细节等，见内部文档：
-**[Qwen3.5-397B PD 分离 Dogfood 详记 (HTML)](https://cc.higcp.com/pages/qwen35-pd-disagg-dogfood-20260426.html)**
+按时间顺序，4 个互补的 HTML 文档记录了从初次部署到 PD 分离的完整 dogfood：
+
+| 日期 | 主题 | 详情 |
+|---|---|---|
+| 2026-04-24 | [部署与优化指南 v1.5](https://cc.higcp.com/pages/qwen35-397b-tpu-inference-plan-20260424.html) | 完整部署 + 优化决策（108 KB）|
+| 2026-04-25 | [⭐ 单机推理踩坑记 — 4 小时弯路 vs 14 分钟正确路](https://cc.higcp.com/pages/qwen35-397b-debug-story-20260425.html) | 单机部署踩坑全记录（45 KB）|
+| 2026-04-26 | [README 可复现性验证报告](https://cc.higcp.com/pages/qwen35-readme-verification-20260426.html) | 按 README 步骤盲跑 + 验证（23 KB）|
+| 2026-04-26 | [⭐ PD 分离部署 Dogfood 详记](https://cc.higcp.com/pages/qwen35-pd-disagg-dogfood-20260426.html) | PD 全流程 + HMA root cause + 6 lessons（24 KB）|
+
+> 💡 **链接行为**：cc.higcp.com 走 GCP IAP，浏览器有 google account 登录就能直接看；外部访问可用 `https://storage.googleapis.com/chris-pgp-host-asia/cc-pages/pages/<file>.html` 直链。
