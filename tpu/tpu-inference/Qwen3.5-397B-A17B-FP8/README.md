@@ -10,6 +10,17 @@
 >
 > **模型**: [Qwen/Qwen3.5-397B-A17B-FP8](https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8)（94 safetensors, ~378 GiB native FP8）
 
+---
+
+## 🚨 已知关键限制（2026-04-26）
+
+> 当前部署 **不适合 conversational chatbot**。
+> - **Chat 路径 broken**: thinking OFF 输出语言错乱/死循环；thinking ON 解释/闲聊类问题 content 输出空 / `Thinking\n` 死循环
+> - **唯一稳定路径**: 5-shot Q/A completion pattern + `enable_thinking:false`（GSM8K 93.93% 就是用这个）
+> - **适合用例**: batch eval, structured generation, few-shot completion, code gen
+> - 详见 [Step 6 chat broken 矩阵 + 推荐用例](#️-thinking-控制--chat-路径整体-broken必读)
+> - ⚠️ 高 GSM8K accuracy（下方 93.93%）≠ chat ready — **不要被误导**
+
 ## 🎯 关键性能（最近实测 2026-04-26 复测，原数据 2026-04-25）
 
 | 操作点 | 实测值 | 备注 |
