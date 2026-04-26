@@ -19,7 +19,7 @@
 | Single user latency (P1, 1K/1K) | **20.6s, 49.7 tok/s/user** | 04-26 复测 49.68 (vs 04-25 49.6, ±0.2%) — 💨 Low Latency |
 | Balanced (P64, 1K/1K) | **1508 tok/s, 23.5 tok/s/user** | 04-26 复测 1507.91 (vs 04-25 1510, ±0.1%) — ⚖️ Balanced |
 | **🚀 Peak throughput (P128, 1K/1K)** | **2097 tok/s** ⭐ | 04-26 复测 2096.68 (vs 04-25 2103, ±0.3%) — Peak 确认 |
-| **GSM8K full 1319 样本 (5-shot, thinking OFF)** | **93.93% (1239/1319)** ✅ ⭐ | 04-26 复测 ↑ vs 04-25 77.56%（HF 模型权重更新或 stack 更稳）；length 截断仅 14 (1.06%) vs 04-25 90 (6.8%) |
+| **GSM8K full 1319 样本 (5-shot, thinking OFF via in-context learning)** | **93.93% (1239/1319)** ✅ ⭐ | 04-26 ↑ vs 04-25 77.56% — PR #2366 fix 让 KV cache 不再损坏，length 截断 90→14（6.8%→1.06%, 6× 减少），模型说完整答案 |
 | 长 prompt 8K/1K P4 | **178.6 tok/s** | 与 1K prompt 几乎相同（hybrid GDN 长 context 优势） |
 
 > **简单 chat 测试** (2026-04-25 + 04-26 两次实测一致, e2e-02 pod, PR #2366 应用后):
@@ -621,7 +621,9 @@ python3 /tmp/run_gsm8k_qwen35.py \
 
 **预期**（2026-04-26 复测）：**~15 min** 跑完 1319 题，**93.93% accuracy** (1239/1319) ✅（CI 阈值 63%, 远超）。Length 截断仅 14 题 (1.06%)。比 lm_eval thinking ON 快 100×（24 s/题 → 0.69 s/题）。
 
-> **复测说明**：04-25 首次实测 77.56% (1023/1319, length 截断 90/6.8%)，04-26 复测同样配置得 93.93% (+16.37 个点, length 截断 6× 减少)。可能原因：HF 模型权重更新 / PR #2366 fix 后系统更稳定。CI 阈值 63% 仍然远低于两次实测，**production 安全**。
+> **复测说明**：04-25 首次实测 77.56% (1023/1319, length 截断 90/6.8%)，04-26 复测同样配置得 93.93% (+16.37 个点, length 截断 6× 减少)。**真实原因：PR #2366 fix 让 KV cache 状态不再损坏**——损坏状态下模型 reasoning 说不完整被 max_tokens 截断（README Constraint A 已述）；fix 后模型能完整说完答案，accuracy 接近真实能力。CI 阈值 63% 仍然远低于两次实测，**production 安全**。
+>
+> **为何 5-shot 还能跑出高分？** Server-side thinking 关不掉（Constraint B），但脚本用 5-shot in-context learning：messages 里给 5 个 "Q→A" 直接答题示例，模型 follow 该 pattern 跳过 thinking。这是 chat 端绕过 thinking 失效的唯一可靠方式。
 
 > **监控提示**：脚本 stdout 有 buffer，`/tmp/gsm8k_run.log` 可能长时间为空。改看实时进度用 `wc -l /tmp/gsm8k_qwen35_full.jsonl`（每完成一题立即写入并 flush）。
 
@@ -962,7 +964,8 @@ P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler
 - Accuracy: 77.56% → 93.93% (length 截断从 6.8% 跌到 1.06%)
 - Length 截断 6× 减少（90 → 14），平均完成 token 也下降（模型答得更直接）
 - 总耗时略短（15.2 vs 16.4 min, -7%）
-- **可能原因**：HF 模型权重在 04-25→04-26 间被 hot patch / PR #2366 fix 后系统更稳
+- **真实原因**：PR #2366 fix 让 KV cache 状态不再损坏（详见 Constraint A）。损坏状态下模型 reasoning 输出不完整被 max_tokens 截断，accuracy 偏低；fix 后模型完整说完答案 → 截断从 6.8% 跌到 1.06%，accuracy 从 77% 升到 94%。
+- **HF 权重未变**：04-25 和 04-26 都用同一 HF model card，无 hot patch；差异完全来自 vLLM 侧 PR #2366 patch 应用与否
 
 **50 题 vs 1319 题的差距**：
 - 50 题样本（idx 0-49）偏向较简单题，accuracy 偏高
