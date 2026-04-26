@@ -69,7 +69,7 @@ Qwen3.5 hybrid 架构 — 45 个 GDN 层用 **fixed-size SSM state**（不随 co
 
 ---
 
-## ⚠️ 必读：3 个关键修复
+## ⚠️ 必读：4 个关键约束
 
 ### A. PR #2366 patch（**必须**，否则 KV cache 状态损坏 → gibberish）
 
@@ -84,7 +84,22 @@ Qwen3.5 hybrid 架构 — 45 个 GDN 层用 **fixed-size SSM state**（不随 co
 
 **修复**: 拷贝 main branch 的 `kv_cache_manager.py`（见 [Step 4](#step-4-应用-pr-2366-fix)）。
 
-### B. 三个必设环境变量
+### B. Server-side thinking 关不掉
+
+当前 vLLM + `--reasoning-parser qwen3` 下，**所有 server-side 关闭 thinking 的方法均失效**（实测 2026-04-26）：
+
+| 尝试方法 | 实测结果 |
+|---|---|
+| 启动加 `--chat-template-kwargs='{"enable_thinking":false}'` | silently 忽略 |
+| Request body 传 `chat_template_kwargs={"enable_thinking":false}` | **chat 端模型陷入 `</think>` 死循环 → gibberish** |
+| User prompt 加 `/no_think` | 失效，仍 thinking ON |
+
+**3 个 workaround**（详见 [Step 6 Thinking mode 行为](#thinking-mode-行为关不掉注意)）：
+1. 走 `/v1/completions` 端点（不经 chat template）
+2. Chat 端用 5-shot in-context learning（messages 里给 5 个 Q/A 示例）
+3. 接受 thinking ON + `max_tokens >= 2048`
+
+### C. 三个必设环境变量
 
 | 环境变量 | 值 | 漏设后果 |
 |---------|-----|---------|
@@ -92,7 +107,7 @@ Qwen3.5 hybrid 架构 — 45 个 GDN 层用 **fixed-size SSM state**（不随 co
 | `SKIP_JAX_PRECOMPILE=1` | 推荐 | 跳过 JAX 预编译，启动快 1-2 min |
 | `VLLM_XLA_CHECK_RECOMPILATION=0` | 推荐 | 关闭 XLA recompilation 检查，避免开发期警告 |
 
-### C. 启动参数关键约束
+### D. 启动参数关键约束
 
 | 参数 | 取值 | 不设的后果 |
 |------|------|------|
@@ -742,16 +757,11 @@ kubectl --context="$CTX" exec -it $POD -- bash -lc '
 
 **修复**：`--no-enable-prefix-caching`。**不要**试图设 `--mamba-cache-mode none`（会被覆盖）。
 
-### 4. `chat_template_kwargs server-side 不生效`
+### 4. `Server-side thinking 关不掉`
 
-**现象**：启动加了 `--chat-template-kwargs='{"enable_thinking": false}'`，但响应仍带 `reasoning` 字段
+详见 [Constraint B](#b-server-side-thinking-关不掉) 和 [Step 6 Thinking mode 行为](#thinking-mode-行为关不掉注意)。
 
-**根因**：当前 vLLM 版本 server-side `--chat-template-kwargs` 被 silently 忽略
-
-**修复**：在 **request body** 传 `chat_template_kwargs`：
-```bash
-curl -d '{"model": "...", "messages": [...], "chat_template_kwargs": {"enable_thinking": false}, ...}'
-```
+简短结论：当前 vLLM + Qwen3 reasoning_parser 下 **chat 端任何关 thinking 方法均失效**（chat_template_kwargs / `/no_think` / 启动 flag 全无效）。Workaround：用 `/v1/completions` 端点 / 5-shot in-context learning / 接受 thinking ON 给足 max_tokens。
 
 ### 5. libtpu lockfile 残留 / TPU device busy
 
