@@ -604,6 +604,9 @@ kubectl --context="$CTX" cp $POD:/tmp/bench_qwen35/summary.txt /tmp/bench_qwen35
 
 完整脚本: [scripts/run_bench_qwen35.sh](scripts/run_bench_qwen35.sh)
 
+> ⚡ **只想快速验证 peak (P128)？** 编辑 `run_bench_qwen35.sh` 把 `LEVELS=(1 4 16 64 256)` 改成 `LEVELS=(1 64 128)`，~7-8 min 跑完（vs 默认 ~24 min）。  
+> 04-26 实测：P1=49.68, P64=1507.91, P128=**2096.68** tok/s（与 04-25 P1=49.6, P64=1510, P128=2103 误差 <0.3% ✅，**peak P128 复测确认**）。
+
 ### 单次手动测（debug 用）
 
 ```bash
