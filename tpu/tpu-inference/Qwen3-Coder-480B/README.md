@@ -864,14 +864,27 @@ volumeMounts:
 需要 3 个 manifest（来自 [`vllm-project/tpu-inference`](https://github.com/vllm-project/tpu-inference/tree/main/.buildkite/kubernetes/manifests/v7x)）：
 
 ```bash
-# 进入 tpu-inference 仓库目录（容器外或独立 GKE jumpbox）
-cd /path/to/tpu-inference
+# 1. 在 jumpbox（kubectl 客户端）上 clone 仓库
+git clone https://github.com/vllm-project/tpu-inference.git
+cd tpu-inference
 
-# 应用 prefill, decode, proxy
+# 2. ⚠️ 在 apply 之前 patch manifest 改用 Lustre 共享路径，避免 PVC 满
+#    （上游默认用 HF model name，会让 vLLM 触发重下载，撑爆 600GB PVC，见 §FAQ #9）
+#    如果你已按 §7a-pre 把权重下到了 /lustre/models/Qwen3-Coder-480B-A35B-Instruct-FP8/，做以下替换：
+for f in .buildkite/kubernetes/manifests/v7x/single_prefill.yaml \
+         .buildkite/kubernetes/manifests/v7x/single_decode.yaml; do
+  # 把 --model=Qwen/... 改为 --model=/lustre/models/...
+  sed -i 's|--model=Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8|--model=/lustre/models/Qwen3-Coder-480B-A35B-Instruct-FP8 --served-model-name=Qwen3-Coder-480B-FP8|' "$f"
+  # 把 PVC 改成 lustre-pvc + 加 HF_HUB_OFFLINE=1（具体 patch 参见 §7a-pre Step 2）
+done
+
+# 3. 应用 prefill, decode, proxy
 kubectl apply -f .buildkite/kubernetes/manifests/v7x/single_prefill.yaml
 kubectl apply -f .buildkite/kubernetes/manifests/v7x/single_decode.yaml
 kubectl apply -f .buildkite/kubernetes/manifests/v7x/proxy1p1d.yaml
 ```
+
+> 💡 **如果你不想 patch manifest**：可以直接在 PVC 里手动准备好权重（约 30-45 min HF download），然后用上游 manifest 不改 — 但每个 P/D pod 各下一份，浪费时间和盘空间。强烈推荐 Lustre 路径。
 
 ### 7b: Prefill 实例配置（核心参数）
 
@@ -926,9 +939,17 @@ kubectl wait --for=condition=Ready pod -l app=vllm-proxy --timeout=300s
 ```bash
 PROXY_POD=$(kubectl get pods -l app=vllm-proxy -o jsonpath="{.items[0].metadata.name}")
 
+# ⚠️ --model 必须跟 single_prefill.yaml 里 --served-model-name 一致
+# 如果按 §7a 的 sed 替换执行了 patch，served name 是 "Qwen3-Coder-480B-FP8"
+# 否则用上游默认 "Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8"
+SERVED_NAME="Qwen3-Coder-480B-FP8"   # patch 后；上游默认是 long name
+
+# Proxy port: 上游 proxy1p1d.yaml 默认 listen 10000；如果用别的方式起 proxy 调整这里
+PROXY_PORT=10000
+
 # 1024 input / 8192 output, concurrency=64
 kubectl exec $PROXY_POD -- vllm bench serve \
-  --model="Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8" \
+  --model="$SERVED_NAME" \
   --dataset-name=random \
   --num-warmups 10 \
   --random-input-len=1024 \
@@ -936,7 +957,7 @@ kubectl exec $PROXY_POD -- vllm bench serve \
   --num-prompts=256 \
   --ignore-eos \
   --host=localhost \
-  --port=10000 \
+  --port=$PROXY_PORT \
   --max-concurrency=64 \
   --request-rate=inf \
   --metric-percentiles 90,99 \
@@ -966,7 +987,7 @@ kubectl cp $PROXY_POD:disagg_8192_1024_c64.json ./disagg_8192_1024_c64.json
 
 ### 7g: PD 分离对比（✅ 实测 2026-04-25 14:46~14:54）
 
-**部署**：e2e-03 (v7x-8 in spot-4 pool) = Prefill (kv_producer, mem=0.7) · e2e-04 (v7x-8 in v3 pool) = Decode (kv_consumer, mem=0.9) · proxy 跑在 e2e-03 内 port 7000。
+**部署**：e2e-03 (v7x-8 in spot-4 pool) = Prefill (kv_producer, mem=0.7) · e2e-04 (v7x-8 in v3 pool) = Decode (kv_consumer, mem=0.9) · proxy 跑在 e2e-03 内 port **7000**（⚠️ 跟 §7a 的 proxy1p1d.yaml 默认 port 10000 不同；§7g 是手动起 toy_proxy_server.py 时随便选的端口，正式部署用 10000）。
 
 #### 1024/1024 c=1 (low-latency)
 
