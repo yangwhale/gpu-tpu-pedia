@@ -22,10 +22,11 @@
 | **GSM8K full 1319 样本 (5-shot, thinking OFF)** | **93.93% (1239/1319)** ✅ ⭐ | 04-26 复测 ↑ vs 04-25 77.56%（HF 模型权重更新或 stack 更稳）；length 截断仅 14 (1.06%) vs 04-25 90 (6.8%) |
 | 长 prompt 8K/1K P4 | **178.6 tok/s** | 与 1K prompt 几乎相同（hybrid GDN 长 context 优势） |
 
-> **简单 chat 测试** (2026-04-25 10:08, e2e-02 pod, PR #2366 应用后):
+> **简单 chat 测试** (2026-04-25 + 04-26 两次实测一致, e2e-02 pod, PR #2366 应用后):
 > Prompt: `哈喽啊，how are you 啊`
-> Response: `哈喽！I'm doing great, thanks for asking! 😊 今天有什么想聊的或者需要帮忙的吗？`
-> 26 tokens output, finish_reason=stop ✅
+> Response (04-25): `哈喽！I'm doing great, thanks for asking! 😊 今天有什么想聊的或者需要帮忙的吗？` (26 tok)
+> Response (04-26): `哈喽！I'm doing great, thanks for asking! 😊 你最近怎么样啊？有什么想聊的或者需要帮忙的吗？` (30 tok)
+> finish_reason=stop ✅（两次输出风格完全一致，证明模型行为稳定）
 
 ---
 
@@ -237,7 +238,7 @@ kubectl --context="$CTX" exec $POD -- curl -s http://localhost:8000/v1/chat/comp
 | Pod | 状态 | 谁在用 | 备注 |
 |---|---|---|---|
 | `e2e` | Running | 经常被 Hulk 用（K2.6 训练） | 慎用，先 `kubectl describe pod e2e` 看资源占用 |
-| **`e2e-02`** ⭐ | Running | **本文档推荐用** | 曾在 2026-04-25 跑通 Qwen3.5-397B 全套测试 |
+| **`e2e-02`** ⭐ | Running | **本文档推荐用** | 04-25 全套 + 04-26 P1/P64/P128/GSM8K 复测均通过 |
 | `e2e-03` | Running | 跑 Qwen3-Coder-480B | 慎用 |
 
 ### kubectl 配置（如果 context 不存在）
@@ -641,6 +642,7 @@ bash /tmp/run_bench_qwen35.sh
 '
 # 输出: pod:/tmp/bench_qwen35/summary.txt
 # 默认跑 P1/P4/P16/P64/P256 5 档 × 2 round, ~24 min
+# (P1/P64/P128 三档 sweep 实测仅 7-8 min, 见下方 ⚡ 快速 peak 验证)
 
 # Step 8.3 (可选): 把结果拉回本机
 kubectl --context="$CTX" cp $POD:/tmp/bench_qwen35/summary.txt /tmp/bench_qwen35_summary.txt
@@ -1023,9 +1025,10 @@ P256 throughput 比 P128 **下降 11%** (1877 vs 2103)。原因：vLLM scheduler
 
 ---
 
-> 📋 **状态**: ✅ **Production-ready**（2026-04-25, e2e-02 pod, PR #2366 应用后）。
+> 📋 **状态**: ✅ **Production-ready**（2026-04-25 首测 + 2026-04-26 复测，e2e-02 pod, PR #2366 应用后）。
 > - **完整 17 个 batch throughput 数据** (1K/1K sweep P1-P256 + 8K/1K + 1K/8K + Thinking ON)
-> - **GSM8K full 1319 题 77.56% accuracy**（远超 CI 阈值 63%）
-> - **关键发现**: Peak throughput 是 P128 (2103 tok/s)，不是 P256；长 generation 比短 generation 快 9-13%
+> - **GSM8K full 1319**: 04-25 实测 77.56%, **04-26 复测 93.93%** (+16.37 pt; 远超 CI 阈值 63%)
+> - **关键发现**: Peak throughput 是 P128 (04-25=2103, 04-26=2097, 误差 ±0.3%)；长 generation 比短 generation 快 9-13%
 > - 内部 doc: https://cc.higcp.com/pages/qwen35-397b-tpu-inference-plan-20260424.html (v1.5)
 > - 踩坑故事 HTML（推荐先读）: https://cc.higcp.com/pages/qwen35-397b-debug-story-20260425.html
+> - **04-26 可复现性验证报告**: https://cc.higcp.com/pages/qwen35-readme-verification-20260426.html
