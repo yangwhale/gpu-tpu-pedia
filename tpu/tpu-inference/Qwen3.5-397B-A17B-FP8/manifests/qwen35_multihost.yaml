@@ -1,0 +1,182 @@
+# Qwen3.5-397B-A17B-FP8 Multi-host Single Instance (TP=16, 2 × v7x-8)
+# M1: 验证 hybrid 模型在 multi-host TP=16 下的推理能力 (no PD disagg)
+#
+# Adapted from hulk's vllm-mh LWS (Qwen3-Coder TP=16) with Qwen3.5-specific changes:
+#   - Model: Qwen3.5-397B-A17B-FP8 from Lustre (vs Qwen3-Coder HF 下载)
+#   - Init patch: PR #2366 kv_cache_manager.py from /lustre/patches/qwen35-pd/
+#     (Qwen3.5 hybrid 必须，Qwen3-Coder pure attention 不需要)
+#   - vllm args: max-model-len=16384, block-size=256, reasoning-parser=qwen3,
+#     limit-mm-per-prompt, trust-remote-code, async-scheduling
+#   - Node pool: np-tpu7x-spot-mh-k26 (现有空闲 multi-host pool, 2 节点)
+#   - 不带 kv-transfer-config / TPUConnectorHMA (M1 不做 PD)
+#   - 不带 --no-disable-hybrid-kv-cache-manager (无 kv_transfer_config 时
+#     hybrid KV cache manager 默认 enable, 此 flag 仅 PD 模式必须)
+
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: qwen35-mh
+  namespace: default
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    restartPolicy: None
+    size: 2  # 1 leader + 1 worker, 共占 2 个 v7x-8 节点 (TP=16)
+    workerTemplate:
+      metadata:
+        labels:
+          leaderworkerset.sigs.k8s.io/name: qwen35-mh
+      spec:
+        hostname: qwen35-mh
+        serviceAccountName: default
+        nodeSelector:
+          cloud.google.com/gke-nodepool: np-tpu7x-spot-mh-k26
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-topology: 2x2x2
+        tolerations:
+        - effect: NoSchedule
+          key: cloud.google.com/gke-spot
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: google.com/tpu
+          operator: Exists
+        initContainers:
+        - name: tpu-node-setup
+          image: busybox
+          command: ["/bin/sh", "-c"]
+          args:
+            - |
+              sysctl -w vm.max_map_count=8388608
+              if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
+                echo 2000000 > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+              fi
+          securityContext:
+            privileged: true
+        containers:
+        - name: main
+          image: vllm/vllm-tpu:nightly-20260330-2f76400-8c0b626  # 跟 hulk vllm-mh 同 image
+          ports:
+          - containerPort: 8000
+          - containerPort: 6379  # Ray
+          - containerPort: 8471  # TPU
+          resources:
+            limits:
+              cpu: "200"
+              google.com/tpu: "4"
+              memory: 850Gi
+            requests:
+              cpu: "200"
+              google.com/tpu: "4"
+              memory: 850Gi
+          securityContext:
+            privileged: true
+            capabilities:
+              add:
+              - IPC_LOCK
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+          - mountPath: /lustre
+            name: lustre-vol
+          command: ["sh", "-c"]
+          args:
+            - |
+              MY_TPU_IP=$(hostname -I | awk '{print $1}')
+              LEADER_DNS="qwen35-mh-0.qwen35-mh"
+              WORKER_DNS="qwen35-mh-0-1.qwen35-mh"
+              until getent hosts $LEADER_DNS; do echo "[boot] wait leader DNS"; sleep 5; done
+              until getent hosts $WORKER_DNS; do echo "[boot] wait worker DNS"; sleep 5; done
+              LEADER_IP=$(getent hosts $LEADER_DNS | awk '{print $1}')
+              WORKER_IP=$(getent hosts $WORKER_DNS | awk '{print $1}')
+              echo "[boot] LEADER_IP=$LEADER_IP WORKER_IP=$WORKER_IP TPU_WORKER_ID=${LWS_WORKER_INDEX}"
+
+              # Multi-host TPU env (must override GKE single-host defaults)
+              export TPU_WORKER_HOSTNAMES="${LEADER_IP},${WORKER_IP}"
+              export TPU_WORKER_ID=${LWS_WORKER_INDEX}
+              export TPU_PROCESS_ADDRESSES="${LEADER_IP}:8471,${WORKER_IP}:8471"
+              export TPU_PROCESS_PORT=8471
+              export TPU_HOST_BOUNDS="1,1,2"
+              export TPU_CHIPS_PER_HOST_BOUNDS="2,2,1"
+              export TPU_TOPOLOGY="2x2x2"
+              export TPU_ACCELERATOR_TYPE="tpu7x-16"
+              export TPU_SKIP_MDS_QUERY=true
+
+              # vLLM / JAX env
+              export JAX_PLATFORMS=''
+              export PJRT_DEVICE=TPU
+              export TPU_BACKEND_TYPE=jax
+              export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+              export TPU_MULTIHOST_BACKEND=ray
+              export VLLM_HOST_IP=$MY_TPU_IP
+              export MODEL_IMPL_TYPE=vllm
+              export HF_HOME=/lustre
+              export HF_HUB_OFFLINE=1
+              export SKIP_JAX_PRECOMPILE=1
+              export VLLM_XLA_CHECK_RECOMPILATION=0
+              export USE_MOE_EP_KERNEL=0
+              export USE_BATCHED_RPA_KERNEL=0
+              export VLLM_LOGGING_LEVEL=INFO
+
+              # === Qwen3.5 hybrid PR #2366 patch (must, before vllm serve) ===
+              echo "[boot] Patching kv_cache_manager.py from /lustre/patches/qwen35-pd/"
+              cp /lustre/patches/qwen35-pd/kv_cache_manager.py \
+                 /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
+              find /workspace/tpu_inference -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+              PR2366_REFS=$(grep -c '_hybrid_uniform_page_size_bytes' /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py)
+              echo "[boot] PR #2366 refs: $PR2366_REFS (expect 7)"
+              [ "$PR2366_REFS" -eq 7 ] || (echo "❌ PR #2366 patch incomplete"; exit 1)
+
+              if [ "$LWS_WORKER_INDEX" = "0" ]; then
+                # Leader: Ray head + vllm serve
+                echo "=== Starting Ray Head ==="
+                ray start --head --port=6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}'
+                sleep 20
+                until ray status; do sleep 5; done
+
+                echo "=== Starting vLLM serve (Qwen3.5-397B TP=16, Test 4: max-batched-tokens=16384 to match mm_item) ==="
+                vllm serve /lustre/models/Qwen3.5-397B-A17B-FP8 \
+                  --served-model-name=Qwen3.5-397B-FP8 \
+                  --tensor-parallel-size=16 \
+                  --distributed-executor-backend=ray \
+                  --max-model-len=16384 \
+                  --max-num-batched-tokens=16384 \
+                  --max-num-seqs=256 \
+                  --no-enable-prefix-caching \
+                  --kv-cache-dtype=fp8 \
+                  --gpu-memory-utilization=0.9 \
+                  --enable-expert-parallel \
+                  --limit-mm-per-prompt='{"image":0,"video":0}' \
+                  --trust-remote-code \
+                  --host=0.0.0.0 --port=8000
+              else
+                # Worker: Ray worker, join leader
+                echo "=== Starting Ray Worker, joining $LEADER_IP:6379 ==="
+                ray start --address=${LEADER_IP}:6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}' --block
+              fi
+        volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 200Gi
+        - name: lustre-vol
+          persistentVolumeClaim:
+            claimName: lustre-pvc
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: qwen35-mh
+  labels:
+    leaderworkerset.sigs.k8s.io/name: qwen35-mh
+spec:
+  clusterIP: None  # Headless, for LWS pod DNS resolution
+  selector:
+    leaderworkerset.sigs.k8s.io/name: qwen35-mh
+  ports:
+  - port: 8000
+    name: vllm
+  - port: 6379
+    name: ray
+  - port: 8471
+    name: tpu
