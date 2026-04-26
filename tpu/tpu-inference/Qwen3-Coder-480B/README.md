@@ -25,7 +25,12 @@
 ## 🎯 30 秒快速复现（精确命令）
 
 > **目标**：让任何新用户照抄下面 6 条命令，能在 1 小时内拿到跟我一样的实测结果。
+>
 > **前提**：已有 GKE 集群 + v7x node pool + Pod 已起来（见 §Step 1）；模型权重已经在 `/usr/vllm/qwen3-coder-480b-fp8/`（含完整 49 个 safetensors + tokenizer 三件套）。
+>
+> **🟢 已经有现成 vLLM 在跑？** 跳过 ③④，直接 ⑤⑥ 跑 smoke + benchmark 验证。如果 `kubectl exec <pod> -- curl -s -w 'HTTP %{http_code}\n' http://localhost:8000/health` 返回 `HTTP 200`，说明 server ready，不需要重启。
+>
+> **🔵 全新环境？** 按 ①→⑥ 顺序走完。 ③ 用的是**minimal 验证配置**（max-num-batched-tokens=256），如果你要跑生产，参见 §Step 4 用 `--max-num-batched-tokens 8192 --kv-cache-dtype fp8 --gpu-memory-utilization 0.95 --async-scheduling`。
 
 ```bash
 # ── ① 进入 Pod ──
@@ -53,7 +58,7 @@ tail -f /tmp/vllm-logs/serve.log   # Ctrl+C 退出
 until curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/health | grep -q 200; do sleep 10; date; done
 echo "✅ Server ready"
 
-# ── ⑤ Smoke test（fibonacci 50 tokens, 应该 <1 秒返回）──
+# ── ⑤ Smoke test（fibonacci 50 tokens, 总耗时 1-2 秒含 client overhead）──
 time curl -s http://localhost:8000/v1/completions -H 'Content-Type: application/json' -d '{
   "model": "Qwen3-Coder-480B-FP8",
   "prompt": "def fibonacci(n):",
@@ -70,8 +75,16 @@ vllm bench serve --backend vllm \
   --request-rate 4 --ignore-eos
 ```
 
-**预期结果**：50/50 succeed, peak ≈1050 tok/s, median ITL ≈47ms (见下表 ✅)。
-跑完后想做更系统的 benchmark sweep，看 §Step 6e 的 sweep 命令；想跑生产配置，重启时把 `--max-num-batched-tokens` 改成 8192、加 `--kv-cache-dtype fp8 --gpu-memory-utilization 0.95`，详见 §Step 4。
+**预期结果**（取决于你跑的是哪个配置）：
+
+| 配置 | Peak Output tok/s | Median ITL | Smoke test (50 tok) |
+|------|-------------------|------------|---------------------|
+| **Minimal**（README 命令默认 `max-num-batched-tokens=256`）| ≈ **1050 tok/s** | ≈ **47 ms** | ~1 秒 |
+| **生产**（`max-num-batched-tokens=8192 --kv-cache-dtype=fp8 --gpu-memory-utilization=0.95 --async-scheduling`）| ≈ **1300 tok/s** | ≈ **40 ms** | 1-2 秒（含 client overhead）|
+
+✅ **dogfood 验证 (2026-04-26)**：在 e2e-03 (生产配置, max=8192) 上按本节命令跑通，50/50 success, peak 1300 tok/s, median ITL 40ms。
+
+跑完后想做更系统的 benchmark sweep → 看 §Step 6e 的命令；想换生产配置 → 详见 §Step 4。
 
 ---
 
