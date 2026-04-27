@@ -88,7 +88,7 @@ ls /lustre/k26_cache_v2 | wc -l  # 应该 60
 
 ### Step 1: 部署 LWS (multi-host)
 
-完整 yaml 关键内容（boot script 含 V18 fixes）：
+完整 yaml: [`manifests/k26_multihost_lws.yaml`](manifests/k26_multihost_lws.yaml) (含 DNS fix + SHM cache stage + 完整 vllm serve args). 关键内容摘要：
 
 ```yaml
 apiVersion: leaderworkerset.x-k8s.io/v1

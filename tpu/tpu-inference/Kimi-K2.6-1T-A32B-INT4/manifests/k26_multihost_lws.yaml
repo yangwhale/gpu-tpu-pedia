@@ -1,0 +1,228 @@
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: k26-mh
+  namespace: default
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    restartPolicy: None
+    size: 2
+    workerTemplate:
+      metadata:
+        labels:
+          leaderworkerset.sigs.k8s.io/name: k26-mh
+      spec:
+        hostname: k26-mh
+        serviceAccountName: default
+        nodeSelector:
+          cloud.google.com/gke-nodepool: np-tpu7x-spot-mh-k26
+          cloud.google.com/gke-tpu-accelerator: tpu7x
+          cloud.google.com/gke-tpu-topology: 2x2x2
+        tolerations:
+        - effect: NoSchedule
+          key: cloud.google.com/gke-spot
+          operator: Equal
+          value: "true"
+        - effect: NoSchedule
+          key: google.com/tpu
+          operator: Exists
+        initContainers:
+        - name: tpu-node-setup
+          image: busybox
+          securityContext:
+            privileged: true
+          command: ["/bin/sh", "-c"]
+          args:
+          - |
+            sysctl -w vm.max_map_count=8388608
+            if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
+              echo 2000000 > /sys/module/vfio_iommu_type1/parameters/dma_entry_limit
+            fi
+        containers:
+        - name: main
+          image: us-central1-docker.pkg.dev/chris-pgp-host/ai-infra/vllm-tpu:latest
+          ports:
+          - containerPort: 8000
+          - containerPort: 6379
+          - containerPort: 8471
+          securityContext:
+            privileged: true
+            capabilities:
+              add: ["IPC_LOCK"]
+          resources:
+            limits:
+              cpu: "200"
+              memory: "850Gi"
+              google.com/tpu: "4"
+            requests:
+              cpu: "200"
+              memory: "850Gi"
+              google.com/tpu: "4"
+          volumeMounts:
+          - mountPath: /dev/shm
+            name: dshm
+          - mountPath: /lustre
+            name: lustre-vol
+          command: ["sh", "-c"]
+          args:
+          - |
+            MY_TPU_IP=$(hostname -I | awk '{print $1}')
+            LEADER_DNS="k26-mh-0.k26-mh"
+            WORKER_DNS="k26-mh-0-1.k26-mh"
+            # Resolve DNS, then verify own DNS matches own pod IP (catches stale DNS).
+            until getent hosts $LEADER_DNS; do echo "[boot] wait leader DNS"; sleep 5; done
+            until getent hosts $WORKER_DNS; do echo "[boot] wait worker DNS"; sleep 5; done
+            # Wait until OWN DNS matches OWN current pod IP (DNS may be stale from
+            # previous pod incarnation after LWS recreate -> worker IP wrong ->
+            # leader can't reach worker:8471 -> TPU init hangs forever).
+            for try in $(seq 1 30); do
+              MY_DNS=""
+              if [ "$LWS_WORKER_INDEX" = "0" ]; then
+                MY_DNS=$(getent hosts $LEADER_DNS | awk '{print $1}')
+              else
+                MY_DNS=$(getent hosts $WORKER_DNS | awk '{print $1}')
+              fi
+              if [ "$MY_DNS" = "$MY_TPU_IP" ]; then
+                echo "[boot] DNS matches own IP $MY_TPU_IP after $try tries"
+                break
+              fi
+              echo "[boot] DNS stale (try $try): own $MY_TPU_IP vs DNS $MY_DNS, sleep 5s"
+              sleep 5
+            done
+            LEADER_IP=$(getent hosts $LEADER_DNS | awk '{print $1}')
+            WORKER_IP=$(getent hosts $WORKER_DNS | awk '{print $1}')
+            echo "[boot] LEADER_IP=$LEADER_IP WORKER_IP=$WORKER_IP TPU_WORKER_ID=${LWS_WORKER_INDEX}"
+
+            # === Multi-host TPU env (must override GKE single-host defaults) ===
+            export TPU_WORKER_HOSTNAMES="${LEADER_IP},${WORKER_IP}"
+            export TPU_WORKER_ID=${LWS_WORKER_INDEX}
+            export TPU_PROCESS_ADDRESSES="${LEADER_IP}:8471,${WORKER_IP}:8471"
+            export TPU_PROCESS_PORT=8471
+            export TPU_HOST_BOUNDS="1,1,2"
+            export TPU_CHIPS_PER_HOST_BOUNDS="2,2,1"
+            export TPU_TOPOLOGY="2x2x2"
+            export TPU_ACCELERATOR_TYPE="tpu7x-16"
+            export TPU_SKIP_MDS_QUERY=true
+
+            # === vLLM / JAX env ===
+            export JAX_PLATFORMS=''
+            export PJRT_DEVICE=TPU
+            export TPU_BACKEND_TYPE=jax
+            export LD_LIBRARY_PATH=$LD_LIBRARY_PATH:/usr/local/lib
+            export TPU_MULTIHOST_BACKEND=ray
+            export VLLM_HOST_IP=$MY_TPU_IP
+            # K2.6 走 JAX-native flax_nnx (NOT vllm-native, vllm 没 W4A16 group=32 kernel)
+            export MODEL_IMPL_TYPE=flax_nnx
+            export HF_HOME=/lustre
+            export HF_HUB_OFFLINE=1
+            export SKIP_JAX_PRECOMPILE=1
+            export VLLM_XLA_CHECK_RECOMPILATION=0
+            export USE_MOE_EP_KERNEL=0
+            export USE_BATCHED_RPA_KERNEL=0
+            export VLLM_LOGGING_LEVEL=INFO
+            # === K2.6 v17 patched packed int4 path (16x weight load speedup) ===
+            export K26_USE_V16=1
+            # === K2.6 v18 MoE cache (offline-built mmap npy, ~50x cold start speedup) ===
+            # Cache layout: $MOE_WEIGHT_CACHE_DIR/{prefix}_mlp_experts/
+            # IMPORTANT: cache 必须在 SHM 才能拿到 38x speedup
+            # (Lustre IO 是瓶颈, 见 stage 3 测试)
+            #   w13_weight_packed.npy  uint32  (gate+up fused)
+            #   w13_weight_scale.npy   |V2     (bf16 raw bytes, view at load)
+            #   w2_weight_packed.npy   uint32
+            #   w2_weight_scale.npy    |V2
+            #   meta.json
+            # Built by scripts/build_k26_moe_cache.py one-off on dedicated build pod.
+            # V16 path mmaps directly, skips per-expert numpy concat (3-5s/layer saved).
+            export MOE_WEIGHT_CACHE_DIR=/dev/shm/k26_cache_v2
+            # === K2.6 MLA model required env (Multi-head Latent Attention) ===
+            # 没这个 vllm 启动时 pydantic ValidationError: "MLA models require both NEW_MODEL_DESIGN=1 and DP attention"
+            export NEW_MODEL_DESIGN=1
+
+            # === K2.6 multi-host code patch: replace image bundled tpu_inference with lustre version ===
+            # 必须替换:
+            #   1. int4.py: v17 patched packed-int4 path (uint4 + -8 转换), commit d905b434 等价
+            #   2. kimi_k26.py: multi-host fix (process_allgather tiled=True, 移出 cpu_mesh_context)
+            # 整目录 cp 而不是单文件 cp, 因为 v17 还改了 __init__/model_loader/weight_utils/kv_cache_manager
+            echo "[boot] Replacing /workspace/tpu_inference with /lustre/tpu_inference"
+            cd /
+            if [ ! -d /workspace/tpu_inference.imageorig ]; then
+              mv /workspace/tpu_inference /workspace/tpu_inference.imageorig
+            else
+              rm -rf /workspace/tpu_inference
+            fi
+            cp -r /lustre/tpu_inference /workspace/tpu_inference
+            find /workspace/tpu_inference -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
+
+            # 注: chris-pgp-host vllm-tpu:latest image 中的 vllm 已经是新版 (compressed_tensors_moe
+            # 是 package + register_linear_kernel 等都有), 跟 lustre tpu_inference 匹配, 无需转换 fix.
+
+            # 验证 patches 都 in place
+            V17_PATCH=$(grep -c "unpack_int32_to_uint4" /workspace/tpu_inference/tpu_inference/layers/jax/quantization/int4.py)
+            MH_PATCH=$(grep -c "multi-host fix: gather cross-process" /workspace/tpu_inference/tpu_inference/models/jax/kimi_k26.py)
+            echo "[boot] V17 packed-int4 refs: $V17_PATCH (expect >= 1)"
+            echo "[boot] Multi-host process_allgather refs: $MH_PATCH (expect = 1)"
+            [ "$V17_PATCH" -ge 1 ] || (echo "❌ V17 int4 patch missing"; exit 1)
+            [ "$MH_PATCH" -eq 1 ] || (echo "❌ Multi-host patch missing"; exit 1)
+
+            # === Stage MoE cache to SHM (HUGE: ~10x faster than Lustre cache hit) ===
+            # Per-host SHM stage (parallel cp). 60 layers × ~9.5GB = ~570GB.
+            # dshm sizeLimit=800Gi configured below.
+            if [ -d /lustre/k26_cache_v2 ] && [ ! -d /dev/shm/k26_cache_v2/model_layers_60_mlp_experts ]; then
+              echo "[boot] Staging MoE cache Lustre -> SHM ..."
+              mkdir -p /dev/shm/k26_cache_v2
+              T0=$(date +%s)
+              for L in $(seq 1 60); do
+                D=/dev/shm/k26_cache_v2/model_layers_${L}_mlp_experts
+                if [ ! -f "$D/meta.json" ]; then
+                  cp -r /lustre/k26_cache_v2/model_layers_${L}_mlp_experts /dev/shm/k26_cache_v2/ &
+                fi
+              done
+              wait
+              T1=$(date +%s)
+              echo "[boot] Cache staged in $((T1-T0))s, count: $(ls /dev/shm/k26_cache_v2 | wc -l)"
+            fi
+
+            if [ "$LWS_WORKER_INDEX" = "0" ]; then
+              # === Leader: Ray head + vllm serve ===
+              echo "=== Starting Ray Head ==="
+              ray start --head --port=6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}'
+              sleep 20
+              # 等 worker join (60s 上限)
+              for i in $(seq 1 12); do
+                NODE_COUNT=$(ray status 2>/dev/null | grep -c "node_") || NODE_COUNT=0
+                echo "[ray-wait] $i/12: node_count=$NODE_COUNT"
+                [ "$NODE_COUNT" -ge 2 ] && break
+                sleep 5
+              done
+              ray status
+
+              echo "=== Starting vLLM serve (Kimi-K2.6 W4A16 INT4, full 61L, EP=16, enforce-eager) ==="
+              vllm serve /lustre/Kimi-K2.6 \
+                --served-model-name=Kimi-K2.6 \
+                --tensor-parallel-size=16 \
+                --distributed-executor-backend=ray \
+                --max-model-len=8192 \
+                --max-num-batched-tokens=8192 \
+                --max-num-seqs=64 \
+                --no-enable-prefix-caching \
+                --gpu-memory-utilization=0.85 \
+                --enable-expert-parallel \
+                --trust-remote-code \
+                --enforce-eager \
+                --limit-mm-per-prompt='{"image":0,"video":0}' \
+                --additional_config '{"sharding": {"sharding_strategy": {"enable_dp_attention": true, "tensor_parallelism": 1, "expert_parallelism": 16}}}' \
+                --host=0.0.0.0 --port=8000
+            else
+              # === Worker: Ray worker, join leader ===
+              echo "=== Starting Ray Worker, joining $LEADER_IP:6379 ==="
+              ray start --address=${LEADER_IP}:6379 --node-ip-address=$MY_TPU_IP --resources='{"TPU": 4}' --block
+            fi
+        volumes:
+        - name: dshm
+          emptyDir:
+            medium: Memory
+            sizeLimit: 800Gi
+        - name: lustre-vol
+          persistentVolumeClaim:
+            claimName: lustre-pvc
