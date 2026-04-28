@@ -1,6 +1,6 @@
-# TPU v7x VM 创建与 Hyperdisk ML 存储配置
+# TPU v7x VM 创建与存储配置
 
-> 端到端指南：创建 TPU v7x-8 VM 实例、配置 Hyperdisk ML 高吞吐数据盘、格式化挂载、
+> 端到端指南：创建 TPU v7x-8 VM 实例、配置 Hyperdisk ML 高吞吐数据盘、创建 GCS 对象存储桶、
 > 并通过 fio 基准测试验证磁盘性能。适用于推理和训练场景的存储准备。
 
 ## 目录
@@ -11,6 +11,7 @@
 - [Step 3: SSH 连接到 VM](#step-3-ssh-连接到-vm)
 - [Step 4: 格式化并挂载数据盘](#step-4-格式化并挂载数据盘)
 - [Step 5: 安装 fio 并运行基准测试](#step-5-安装-fio-并运行基准测试)
+- [Step 6: 创建 GCS 存储桶](#step-6-创建-gcs-存储桶)
 - [基准测试结果（实测）](#基准测试结果实测)
 - [Hyperdisk ML 读写模式说明](#hyperdisk-ml-读写模式说明)
 - [附录: 磁盘类型选型参考](#附录-磁盘类型选型参考)
@@ -40,6 +41,8 @@ export DATA_DISK_NAME=<your-data-disk-name> # 例如 my-tpu7x-data-01
 export RESERVATION_NAME=<your-reservation>  # TPU v7x reservation 名称
 export VPC_NAME=<your-vpc-name>
 export SUBNET_NAME=<your-subnet-name>
+export BUCKET_NAME=<your-bucket-name>       # 例如 my-tpu-data
+export BUCKET_LOCATION=us-central1           # GCS 桶的区域（与 VM 同区域）
 ```
 
 ---
@@ -328,6 +331,58 @@ rm -f /mnt/data/fio-test /mnt/data/fio-test-rw
 | `--bs=1M/4k` | 块大小。1M 用于顺序吞吐测试，4K 用于 IOPS 测试 |
 | `--runtime=30` | 测试时长 30 秒 |
 | `--group_reporting` | 聚合所有线程的统计数据 |
+
+---
+
+## Step 6: 创建 GCS 存储桶
+
+创建一个 GCS 存储桶用于存放模型权重、数据集或 checkpoint 等大文件。
+建议桶的区域与 VM 一致，减少跨区域传输延迟和费用。
+
+```bash
+gcloud storage buckets create gs://${BUCKET_NAME} \
+    --project=${PROJECT_ID} \
+    --location=${BUCKET_LOCATION} \
+    --uniform-bucket-level-access
+```
+
+**参数说明**：
+
+| 参数 | 说明 |
+|------|------|
+| `--location` | 桶的区域。GCS 桶是 **region 级别**（如 `us-central1`），不是 zone 级别 |
+| `--uniform-bucket-level-access` | 启用统一桶级访问控制（推荐），禁用 ACL，仅使用 IAM 策略管理权限 |
+
+> **注意**：GCS 桶名称全球唯一，建议使用 `{project-id}-{用途}` 的命名格式（如 `my-project-tpu-data`）。
+
+验证桶创建：
+
+```bash
+gcloud storage buckets describe gs://${BUCKET_NAME} \
+    --format="table(name,location,storageClass)"
+```
+
+预期输出：
+
+```
+NAME              LOCATION     STORAGE_CLASS
+my-tpu-data       US-CENTRAL1  STANDARD
+```
+
+### 在 VM 中使用 GCS
+
+VM 创建时已设置 `--scopes=cloud-platform`，因此可以直接使用 `gcloud storage` 命令访问桶：
+
+```bash
+# 上传文件到 GCS
+gcloud storage cp /mnt/data/model-weights.safetensors gs://${BUCKET_NAME}/models/
+
+# 从 GCS 下载文件到数据盘
+gcloud storage cp gs://${BUCKET_NAME}/models/model-weights.safetensors /mnt/data/
+
+# 并行下载大文件（自动分片）
+gcloud storage cp --recursive gs://${BUCKET_NAME}/models/ /mnt/data/models/
+```
 
 ---
 
