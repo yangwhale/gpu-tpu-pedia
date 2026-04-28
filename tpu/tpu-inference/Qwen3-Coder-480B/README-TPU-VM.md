@@ -342,6 +342,8 @@ done
 # Part 2: PD 分离 (1P1D)
 
 > 2 台 TPU v7x-8 VM：一台跑 Prefill（kv_producer），一台跑 Decode（kv_consumer），通过 VPC 内网传输 KV cache。
+>
+> **架构说明**：PD 分离 **不需要 Ray**。两个 vLLM 实例完全独立运行，通过 TPUConnector（JAX transfer server + ZMQ side-channel）直接 P2P 传输 KV cache，`toy_proxy_server.py` 负责请求路由。
 
 ## Step 1: 创建 2 台 VM
 
@@ -411,7 +413,13 @@ echo "Prefill: ${PREFILL_IP}, Decode: ${DECODE_IP}"
 
 ## Step 4: 启动 Prefill 实例
 
-SSH 到 Prefill VM，在容器内执行：
+SSH 到 Prefill VM，进入容器：
+
+```bash
+docker exec -it vllm bash
+```
+
+启动 vLLM（kv_producer 模式）：
 
 ```bash
 cd /tmp && mkdir -p /tmp/vllm-logs
@@ -440,7 +448,13 @@ nohup env \
 
 ## Step 5: 启动 Decode 实例
 
-SSH 到 Decode VM，在容器内执行：
+SSH 到 Decode VM，进入容器：
+
+```bash
+docker exec -it vllm bash
+```
+
+启动 vLLM（kv_consumer 模式）：
 
 ```bash
 cd /tmp && mkdir -p /tmp/vllm-logs
@@ -472,8 +486,8 @@ nohup env \
 在 Prefill VM 的容器内启动 proxy，连接两个实例：
 
 ```bash
-# 获取 Decode VM 的内网 IP（在 Prefill VM 上执行）
-# DECODE_IP 已在 Step 3 获取
+# 设置 Decode VM 内网 IP（Step 3 获取的 networkIP）
+export DECODE_IP=<decode-vm-internal-ip>
 
 python3 /workspace/tpu_inference/examples/disagg/toy_proxy_server.py \
   --host 0.0.0.0 --port 7000 \
@@ -678,6 +692,7 @@ ray status
 # 启动 vLLM（TP=16, Ray executor）
 vllm serve /dev/shm/qwen3-coder-480b-fp8 \
   --served-model-name Qwen3-Coder-480B-FP8 \
+  --seed 42 \
   --tensor-parallel-size 16 \
   --distributed-executor-backend ray \
   --max-model-len 10240 \
@@ -746,24 +761,27 @@ done
 
 ## 防火墙规则
 
-PD 分离和多节点推理需要 VM 间内网通信。确保 VPC 防火墙允许以下端口：
+PD 分离和多节点推理需要 VM 间内网通信。建议允许内网全端口 TCP（TPUConnector 的 KV transfer 和 ZMQ side-channel 使用动态端口）：
 
 ```bash
 gcloud compute firewall-rules create allow-vllm-internal \
     --project=${PROJECT_ID} \
     --network=${VPC_NAME} \
-    --allow=tcp:6379,tcp:7000,tcp:8000,tcp:8471,tcp:9000 \
+    --allow=tcp \
     --source-ranges=10.0.0.0/8 \
-    --description="Allow vLLM internal communication"
+    --description="Allow all internal TCP for vLLM/Ray/TPU communication"
 ```
+
+主要端口参考：
 
 | 端口 | 用途 |
 |------|------|
-| 6379 | Ray cluster（multi-host） |
+| 6379 | Ray GCS server（multi-host） |
 | 7000 | PD 分离 proxy |
 | 8000 | vLLM API（Prefill / 单机 / Host 0） |
-| 8471 | libtpu coordinator（multi-host） |
+| 8471 | libtpu coordinator（multi-host DCN） |
 | 9000 | vLLM API（Decode） |
+| 动态 | TPUConnector KV transfer / ZMQ side-channel |
 
 ---
 
