@@ -431,17 +431,34 @@ gcloud compute instances create qwen3-decode \
 
 > **省盘方案**：如果不需要读写分离，可以用 **1 块 Hyperdisk ML** 设为 `READ_ONLY_MANY` 模式同时挂载到两台 VM（只读），前提是模型权重已提前写好。参见 [TPU-VM README](../TPU-VM/README.md) 的 Hyperdisk ML 读写模式说明。
 
+> **无 Hyperdisk ML 配额时的备选方案**：如果 Hyperdisk ML 配额不足，可以不创建 data disk，改用启动盘存放模型权重。去掉 `gcloud compute disks create` 和 `--disk=name=...` 行即可。模型直接拷贝到启动盘上（如 `/home/${USER}/`）。
+
 ## Step 2: 两台 VM 分别执行环境准备
 
 在两台 VM 上分别执行：
-1. Part 1 Step 2（格式化挂载数据盘）
+1. Part 1 Step 2（格式化挂载数据盘）—— 如果没有 data disk 则跳过
 2. Part 1 Step 3.1 ~ 3.5（系统配置 + 安装 vLLM/tpu-inference + 设置环境变量）
-3. 扩容 /dev/shm 并拷贝模型（同 Part 1 Step 3.6）：
+3. 拷贝模型（同 Part 1 Step 3.6），模型存放位置取决于你的磁盘配置：
 
 ```bash
+# 方案 A（机器 RAM ≥ 1.5 TiB + /dev/shm 有空间）：
 sudo mount -o remount,size=700G /dev/shm
 gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /dev/shm/
+export MODEL_DIR=/dev/shm/${MODEL_NAME}
+
+# 方案 B（有 Hyperdisk ML data disk 挂载在 /mnt/data）：
+# gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /mnt/data/
+# export MODEL_DIR=/mnt/data/${MODEL_NAME}
+
+# 方案 C（无 data disk，使用启动盘）：
+# mkdir -p /home/${USER}/${MODEL_NAME}
+# gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME}/* /home/${USER}/${MODEL_NAME}/
+# export MODEL_DIR=/home/${USER}/${MODEL_NAME}
 ```
+
+> ⚠️ **同样适用 Part 1 Step 3.6 的 RAM 大小判断**：默认 `tpu7x-standard-4t` 944 GiB 走 /dev/shm 会 OOM，需用方案 B 或 C。
+>
+> 无论哪种方案，后续步骤统一用 `${MODEL_DIR}` 引用模型路径。
 
 ## Step 3: 获取内网 IP
 
@@ -464,9 +481,10 @@ source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
 
 nohup env \
+  PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS= \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
-  vllm serve /dev/shm/Qwen3-Coder-480B-A35B-FP8 \
+  vllm serve ${MODEL_DIR} \
     --served-model-name Qwen3-Coder-480B-FP8 \
     --seed 42 \
     --max-model-len 10240 \
@@ -480,10 +498,12 @@ nohup env \
     --enable-expert-parallel \
     --port 8000 --host 0.0.0.0 \
     --kv-transfer-config '{"kv_connector":"TPUConnector","kv_connector_module_path":"tpu_inference.distributed.tpu_connector","kv_role":"kv_producer"}' \
-  > /tmp/vllm-logs/serve.log 2>&1 &
+  > /tmp/vllm-logs/prefill.log 2>&1 &
 ```
 
-关键差异：`gpu-memory-utilization=0.70`（留 30% 给 KV transfer buffer），`kv_role=kv_producer`。
+关键差异（vs Part 1 单机）：`gpu-memory-utilization=0.70`（留 30% HBM 给 KV transfer buffer），`kv_role=kv_producer`。
+
+> 启动需 8~12 分钟（模型加载 + MoE requantization + XLA 编译）。用 `tail -f /tmp/vllm-logs/prefill.log` 观察进度，看到 `Application startup complete` 即就绪。
 
 ## Step 5: 启动 Decode 实例
 
@@ -494,9 +514,10 @@ source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
 
 nohup env \
+  PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS= \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
-  vllm serve /dev/shm/Qwen3-Coder-480B-A35B-FP8 \
+  vllm serve ${MODEL_DIR} \
     --served-model-name Qwen3-Coder-480B-FP8 \
     --seed 42 \
     --max-model-len 10240 \
@@ -510,14 +531,24 @@ nohup env \
     --enable-expert-parallel \
     --port 9000 --host 0.0.0.0 \
     --kv-transfer-config '{"kv_connector":"TPUConnector","kv_connector_module_path":"tpu_inference.distributed.tpu_connector","kv_role":"kv_consumer"}' \
-  > /tmp/vllm-logs/serve.log 2>&1 &
+  > /tmp/vllm-logs/decode.log 2>&1 &
 ```
 
-关键差异：`gpu-memory-utilization=0.90`，`kv_role=kv_consumer`，`port=9000`。
+关键差异（vs Prefill）：`gpu-memory-utilization=0.90`（Decode 不需要预留 transfer buffer），`kv_role=kv_consumer`，`port=9000`。
 
-## Step 6: 启动 Proxy
+> 可以与 Prefill 同时启动，两边独立加载模型。同样用 `tail -f /tmp/vllm-logs/decode.log` 观察。
 
-在 Prefill VM 上启动 proxy，连接两个实例：
+## Step 6: 验证两端就绪 + 启动 Proxy
+
+先确认两个实例都已 ready：
+
+```bash
+# 在 Prefill VM 上执行
+curl -s http://localhost:8000/v1/models | python3 -m json.tool
+curl -s http://${DECODE_IP}:9000/v1/models | python3 -m json.tool
+```
+
+两个都返回模型信息后，启动 proxy：
 
 ```bash
 source ~/vllm_env/bin/activate
@@ -525,13 +556,25 @@ source ~/vllm_env/bin/activate
 # 设置 Decode VM 内网 IP（Step 3 获取的 networkIP）
 export DECODE_IP=<decode-vm-internal-ip>
 
-python3 ~/tpu-inference/tpu_inference/examples/disagg/toy_proxy_server.py \
+python3 ~/tpu-inference/examples/disagg/toy_proxy_server.py \
   --host 0.0.0.0 --port 7000 \
   --prefiller-hosts localhost --prefiller-ports 8000 \
   --decoder-hosts ${DECODE_IP} --decoder-ports 9000
 ```
 
+> **路径说明**：proxy 脚本位于 `tpu-inference/examples/disagg/`（不是 `tpu_inference/examples/`）。
+>
 > **注意**：`${DECODE_IP}` 使用 VPC 内网 IP（Step 3 获取的 `networkIP`），不是外网 IP。确保两台 VM 在同一 VPC 且防火墙允许端口 8000/9000/7000。
+
+Proxy 启动后，先发一个 smoke test 验证完整链路：
+
+```bash
+curl http://localhost:7000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{"model":"Qwen3-Coder-480B-FP8","messages":[{"role":"user","content":"What is 2+2?"}],"max_tokens":32}'
+```
+
+> ⚠️ **首次请求延迟**：第一次请求会触发 XLA 编译，Prefill 和 Decode 各需约 1~2 分钟。这是正常现象，后续请求会命中编译缓存，延迟降到秒级。
 
 ## Step 7: PD 分离 Benchmark
 
