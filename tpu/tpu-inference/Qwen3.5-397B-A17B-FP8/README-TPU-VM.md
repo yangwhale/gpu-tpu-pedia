@@ -141,7 +141,7 @@ sudo apt-get install -y -qq libopenmpi-dev libomp-dev git curl
 ```bash
 # 安装 uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env
+export PATH="$HOME/.local/bin:$PATH"
 
 # 创建 Python 3.12 虚拟环境
 uv venv ~/vllm_env --python 3.12
@@ -178,26 +178,28 @@ uv pip install -e . --no-deps
 
 ```bash
 source ~/vllm_env/bin/activate
-python3 -c '
+python3 << 'PYEOF'
 import jax
 import importlib.metadata
 from vllm.platforms import current_platform
-print(f"vllm: {importlib.metadata.version(\"vllm\")}")
-print(f"tpu_inference: {importlib.metadata.version(\"tpu_inference\")}")
+print(f"vllm: {importlib.metadata.version('vllm')}")
+print(f"tpu_inference: {importlib.metadata.version('tpu_inference')}")
 print(f"jax: {jax.__version__}")
 print(f"platform: {current_platform.get_device_name()}")
 print(f"devices: {len(jax.devices())} x {jax.devices()[0].platform}")
-'
+PYEOF
 ```
 
-预期输出：
+预期输出（版本号以实际为准）：
 ```
-vllm: 0.9.x
-tpu_inference: 0.1.0
+vllm: 0.20.x
+tpu_inference: 0.0.0
 jax: 0.9.2
-platform: TpuDevice
+platform: TPU V7X
 devices: 8 x tpu
 ```
+
+> **注意**：`tpu_inference` 源码安装显示 `0.0.0`，这是正常的。GCE VM 上 `tpu_info` 可能报 404 错误（`Unable to poll TPU GCE Metadata`），不影响功能。
 
 > **关于 JAX 版本**：vLLM 的 `requirements/tpu.txt` 会安装 JAX 0.8.0，但 TPU v7x 需要 JAX 0.9.2 + libtpu 0.0.39。安装 vLLM 后必须手动覆盖安装正确版本。
 >
