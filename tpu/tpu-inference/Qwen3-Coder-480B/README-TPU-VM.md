@@ -126,7 +126,7 @@ sudo apt-get install -y -qq libopenmpi-dev libomp-dev git curl
 ```bash
 # 安装 uv
 curl -LsSf https://astral.sh/uv/install.sh | sh
-source $HOME/.local/bin/env
+export PATH="$HOME/.local/bin:$PATH"  # uv 0.11+ 不再生成 ~/.local/bin/env，直接 export PATH
 
 # 创建 Python 3.12 虚拟环境
 uv venv ~/vllm_env --python 3.12
@@ -175,16 +175,18 @@ print(f"devices: {len(jax.devices())} x {jax.devices()[0].platform}")
 '
 ```
 
-预期输出：
+预期输出（实际版本号会随 pinned vLLM commit 漂移）：
 ```
-vllm: 0.9.x
-tpu_inference: 0.1.0
+vllm: 0.20.x          # 例如 0.20.1rc1.dev14+gfd74c90d9.tpu（pinned commit fd74c90d9 实测值）
+tpu_inference: 0.0.0   # 本地 install -e 时 pyproject.toml 的默认版本号
 jax: 0.9.2
-platform: TpuDevice
+platform: TPU V7X      # 或包含 "TPU" 字串
 devices: 8 x tpu
 ```
 
-> **关于 JAX 版本**：vLLM 的 `requirements/tpu.txt` 会安装 JAX 0.8.0，但 TPU v7x 需要 JAX 0.9.2 + libtpu 0.0.39。安装 vLLM 后必须手动覆盖安装正确版本。
+> **关于 GCE Metadata 404 ERROR**：执行验证脚本或启动 vLLM 时，可能看到 `tpu_info.py:40] Unable to poll TPU GCE Metadata. Got status code: 404 ...` 的多行 ERROR 日志，但**紧接着的 INFO 行会正确显示** `tpu_type=tpu7x-8 | num_chips=8`。这是 v7x VM 不暴露旧版 GCE TPU metadata endpoint 导致的非致命警告，可忽略。
+>
+> **关于 JAX 版本**：TPU v7x 需要 JAX 0.9.2 + libtpu 0.0.39。某些 vLLM commit 安装时会把 JAX 降级到 0.8.0（pinned commit `fd74c90d9` 实测**不会**降级，但旧/新版本可能会），所以保留 `uv pip install jax==0.9.2 ...` 这一步作为防御性安装：JAX 已是 0.9.2 时为 no-op，被降级时则恢复回 0.9.2。
 >
 > **关于 `--no-deps`**：tpu-inference 的 `pyproject.toml` 依赖 jax/jaxlib，不加 `--no-deps` 会再次触发 JAX 降级。
 
@@ -201,9 +203,28 @@ export USE_MOE_EP_KERNEL=0
 export USE_BATCHED_RPA_KERNEL=0
 ```
 
-### 3.6 扩容 /dev/shm 并从 GCS 拷贝模型
+### 3.6 选择模型存放位置（**根据机器 RAM 大小决定**）
 
-模型权重统一存放在 GCS，每次启动 VM 后拷贝到 `/dev/shm`（内存文件系统）以获得最快的加载速度。
+模型权重统一存放在 GCS，每次启动 VM 后从 GCS 拷贝到本地。落点有两种方案，**必须根据机器 RAM 大小选择**。
+
+> ⚠️ **必读 — 主机 RAM OOM 风险**：
+> vLLM 加载 480GB 模型时，EngineCore 进程会占用 **~510 GiB anon RSS**（实测 `anon-rss=511 GiB`，因 safetensors 被 copy 到进程 heap 而非纯 mmap，加上 MoE re-quantization 产生的临时 buffer）。如果模型同时也在 `/dev/shm`（tmpfs，占 ~450 GiB RAM），合计 ~960 GiB，会**超出 944 GiB RAM 的标准 `tpu7x-standard-4t` 触发 OOM**：
+> ```
+> Out of memory: Killed process VLLM::EngineCore total-vm:690813156kB anon-rss:511342372kB
+> ```
+> vLLM 自己也会在 weight loading 阶段警告（容易被淹）：
+> ```
+> INFO weight_utils.py:934] Auto-prefetch is disabled because the filesystem (TMPFS)
+> is not a recognized network FS and the checkpoint size (449.04 GiB) exceeds 90%
+> of available RAM (477.97 GiB).
+> ```
+> 看到这条警告就说明应该走方案 B。
+>
+> ⚠️ 注意：常见问题 6.1 提到加 `--enable-expert-parallel` 防 OOM，那是针对 **TPU HBM OOM**。本案是**主机 RAM OOM**，必须通过控制 `/dev/shm` 占用解决，加 EP 参数无效。
+
+#### 方案 A: RAM ≥ 1.5 TiB 的机器 — 用 /dev/shm（最快）
+
+模型放 tmpfs，加载 ~10 秒：
 
 ```bash
 # 扩容 /dev/shm（默认 ~472 GB，需要容纳 480 GB 模型 + vLLM IPC）
@@ -212,27 +233,45 @@ sudo mount -o remount,size=700G /dev/shm
 # 从 GCS 拷贝模型权重到 /dev/shm（必须用 gcloud storage cp，最快）
 gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /dev/shm/
 
-# 验证
-ls /dev/shm/${MODEL_NAME}/*.safetensors | wc -l   # 应为 49
-ls /dev/shm/${MODEL_NAME}/{tokenizer.json,vocab.json,tokenizer_config.json}
-du -sh /dev/shm/${MODEL_NAME}                      # 应为 ~450 GB
+export MODEL_DIR=/dev/shm/${MODEL_NAME}
 ```
 
-> **为什么用 /dev/shm**：内存文件系统读取速度 ~50 GB/s，比 Hyperdisk ML（2.4 GB/s）快 20 倍，模型加载时间从 ~3.5 min 缩短到 ~10 秒。
+#### 方案 B: RAM < 1.5 TiB（含默认 `tpu7x-standard-4t` 944 GiB） — 用 /mnt/data
+
+模型放持久化 nvme 数据盘，加载 ~3.5 min（含 JAX 编译总启动 ~10 min），但能跑通且重启免重拷：
+
+```bash
+# 不要扩 /dev/shm（保持默认 ~472 GB，让出主机 RAM 给 vLLM 进程）
+
+# 从 GCS 拷贝模型权重到 /mnt/data
+gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /mnt/data/
+
+export MODEL_DIR=/mnt/data/${MODEL_NAME}
+```
+
+#### 验证（两种方案通用）
+
+```bash
+ls ${MODEL_DIR}/*.safetensors | wc -l   # 应为 49
+ls ${MODEL_DIR}/{tokenizer.json,vocab.json,tokenizer_config.json}
+du -sh ${MODEL_DIR}                      # 应为 ~450 GB
+```
+
+> **为什么 /dev/shm 最快**：内存文件系统读取速度 ~50 GB/s，比 Hyperdisk ML（2.4 GB/s）快 20 倍，模型加载时间从 ~3.5 min 缩短到 ~10 秒。
 >
-> **为什么用 `gcloud storage cp`**：这是 GCS 下载最快的命令，自动多线程分片传输，比 `gsutil cp` 快 2-3 倍。
+> **为什么用 `gcloud storage cp`**：自动多线程分片传输，比 `gsutil cp` 快 2-3 倍。实测吞吐：GCS → /dev/shm 平均 **10.5 GiB/s**（449 GiB 用 48 秒）；GCS → /mnt/data 平均 **3.3 GiB/s**（用 2m20s，受 hyperdisk 写入带宽限制）。
 >
-> **注意**：`/dev/shm` 是 tmpfs，VM 重启后数据会丢失，需要重新从 GCS 拷贝。
+> **注意**：`/dev/shm` 是 tmpfs，VM 重启后数据会丢失需要重拷；`/mnt/data` 持久化，重启后无需重拷。
 
 ---
 
 ## Step 4: 验证模型权重
 
-模型已在 Step 3.6 从 GCS 拷贝到 `/dev/shm`。验证：
+模型已在 Step 3.6 从 GCS 拷贝到 `${MODEL_DIR}`（方案 A: `/dev/shm/${MODEL_NAME}`，方案 B: `/mnt/data/${MODEL_NAME}`）。验证：
 
 ```bash
-ls /dev/shm/${MODEL_NAME}/*.safetensors | wc -l   # 应为 49
-ls /dev/shm/${MODEL_NAME}/{tokenizer.json,vocab.json,tokenizer_config.json}
+ls ${MODEL_DIR}/*.safetensors | wc -l   # 应为 49
+ls ${MODEL_DIR}/{tokenizer.json,vocab.json,tokenizer_config.json}
 ```
 
 > **首次上传模型到 GCS**：如果 GCS 桶里还没有模型权重，先在任意机器上从 HuggingFace 下载后上传：
@@ -253,7 +292,7 @@ ls /dev/shm/${MODEL_NAME}/{tokenizer.json,vocab.json,tokenizer_config.json}
 source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
 
-export MODEL=/dev/shm/qwen3-coder-480b-fp8
+# MODEL_DIR 已在 Step 3.6 设置（方案 A: /dev/shm/...，方案 B: /mnt/data/...）
 export HF_HUB_OFFLINE=1
 
 nohup env \
@@ -261,7 +300,7 @@ nohup env \
   VLLM_XLA_CHECK_RECOMPILATION=0 \
   MODEL_IMPL_TYPE=vllm \
   HF_HUB_OFFLINE=1 \
-  vllm serve $MODEL \
+  vllm serve ${MODEL_DIR} \
     --served-model-name Qwen3-Coder-480B-FP8 \
     --seed 42 \
     --max-model-len 10240 \
@@ -276,7 +315,9 @@ nohup env \
     --port 8000 --host 0.0.0.0 \
   > /tmp/vllm-logs/serve.log 2>&1 &
 
-# 等待就绪（约 7-15 min）
+# 等待就绪
+#   方案 A (/dev/shm): 约 7-15 min
+#   方案 B (/mnt/data): 约 10-15 min（实测 637s / 10.6 min，含 JAX 首次编译）
 until curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/health | grep -q 200; do
   date; sleep 30
 done
@@ -443,12 +484,19 @@ gcloud compute instances create qwen3-decode \
 
 ## Step 2: 两台 VM 分别执行环境准备
 
-在两台 VM 上分别执行 Part 1 的 Step 2（挂载盘）+ Step 3（系统配置 + 裸机安装 vLLM + GCS 拷贝模型到 SHM）。
+在两台 VM 上分别执行 Part 1 的 Step 2（挂载盘）+ Step 3（系统配置 + 裸机安装 vLLM + 拷贝模型）。
+
+> ⚠️ **同样适用 Part 1 Step 3.6 的 RAM 大小判断**：默认 `tpu7x-standard-4t` 944 GiB 走 /dev/shm 会 OOM，需用 `/mnt/data`。下方示例假设走方案 A（/dev/shm），如果你的机器是 944 GiB，请改为方案 B。
 
 ```bash
-# 在每台 VM 上执行（SSH 进去后）
+# 方案 A 示例（机器 RAM ≥ 1.5 TiB）：
 sudo mount -o remount,size=700G /dev/shm
 gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /dev/shm/
+export MODEL_DIR=/dev/shm/${MODEL_NAME}
+
+# 方案 B 示例（机器 RAM < 1.5 TiB，含默认 944 GiB）：
+# gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /mnt/data/
+# export MODEL_DIR=/mnt/data/${MODEL_NAME}
 ```
 
 ## Step 3: 获取内网 IP
@@ -846,7 +894,9 @@ done
 
 ### 1. vLLM 启动 OOM
 
-必须加 `--enable-expert-parallel`，否则 experts 在每个 device 都 replicate。
+**TPU HBM OOM**（每个 device 显存超）：必须加 `--enable-expert-parallel`，否则 experts 在每个 device 都 replicate。
+
+**主机 RAM OOM**（被 oom-killer 杀掉、`anon-rss=511 GiB` 类似日志）：是模型同时占用 `/dev/shm`（450 GiB）+ vLLM 进程 anon RAM（510 GiB）超出物理内存。**`--enable-expert-parallel` 不能解决本案**。详见 Step 3.6 的方案 A vs 方案 B 选择。
 
 ### 2. vLLM import 报错 / namespace package 冲突
 
