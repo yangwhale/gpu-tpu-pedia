@@ -6,7 +6,7 @@
 >
 > **代码仓库**: [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference)（main 分支）
 >
-> **模型存储**: `gs://aidc-tpu-data`（GCS 对象存储，模型权重和 cache 统一存放于此）
+> **模型存储**: `gs://aidc-tpu-data/models`（GCS 对象存储，模型权重统一存放于此）
 >
 > GKE 版见同目录 [README.md](README.md)。
 
@@ -27,8 +27,8 @@ export RESERVATION_NAME=<your-reservation>
 export VPC_NAME=<your-vpc-name>
 export SUBNET_NAME=<your-subnet-name>
 export HF_TOKEN=<your-hf-token>
-export MODEL_BUCKET=gs://aidc-tpu-data          # 模型权重 & cache 的 GCS 存储桶
-export MODEL_NAME=qwen3-coder-480b-fp8           # 模型目录名
+export MODEL_BUCKET=gs://aidc-tpu-data/models    # 模型权重 GCS 路径
+export MODEL_NAME=Qwen3-Coder-480B-A35B-FP8      # 模型目录名（与 GCS 一致）
 ```
 
 ## 硬件要求
@@ -39,7 +39,8 @@ export MODEL_NAME=qwen3-coder-480b-fp8           # 模型目录名
 | TPU | v7x-8（4 chips, 8 devices） | v7x-16（8 chips, 16 devices） |
 | HBM | 768 GB | 1,536 GB |
 | 主机内存 | 944 GB | 944 GB × 2 |
-| 数据盘 | ≥600 GB（模型 ~480 GB） | 共享盘或各自挂载 |
+| 启动盘 | 1 TB Hyperdisk Balanced | 1 TB × 2 |
+| 数据盘 | ≥600 GB（模型 ~480 GB） | 不需要（模型拷到 boot disk ~/models/） |
 
 ---
 
@@ -70,7 +71,7 @@ gcloud compute instances create qwen3-vm-01 \
     --provisioning-model=RESERVATION_BOUND \
     --reservation-affinity=specific \
     --reservation=${RESERVATION_NAME} \
-    --create-disk=auto-delete=yes,boot=yes,size=500GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/ubuntu-accel-2404-amd64-tpu-tpu7x-v20260422 \
+    --create-disk=auto-delete=yes,boot=yes,size=1000GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/family/ubuntu-accel-2404-amd64-tpu-tpu7x \
     --disk=name=qwen3-data-01,device-name=data-disk,mode=rw,auto-delete=no \
     --no-shielded-secure-boot \
     --scopes=cloud-platform
@@ -223,29 +224,18 @@ du -sh /dev/shm/${MODEL_NAME}                      # 应为 ~450 GB
 > **为什么用 `gcloud storage cp`**：这是 GCS 下载最快的命令，自动多线程分片传输，比 `gsutil cp` 快 2-3 倍。
 >
 > **注意**：`/dev/shm` 是 tmpfs，VM 重启后数据会丢失，需要重新从 GCS 拷贝。
-
----
-
-## Step 4: 验证模型权重
-
-模型已在 Step 3.6 从 GCS 拷贝到 `/dev/shm`。验证：
-
-```bash
-ls /dev/shm/${MODEL_NAME}/*.safetensors | wc -l   # 应为 49
-ls /dev/shm/${MODEL_NAME}/{tokenizer.json,vocab.json,tokenizer_config.json}
-```
-
+>
 > **首次上传模型到 GCS**：如果 GCS 桶里还没有模型权重，先在任意机器上从 HuggingFace 下载后上传：
 > ```bash
 > pip install -U "huggingface_hub[hf_transfer]"
 > HF_HUB_ENABLE_HF_TRANSFER=1 huggingface-cli download \
->   Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --local-dir /tmp/qwen3-coder-480b-fp8
-> gcloud storage cp -r /tmp/qwen3-coder-480b-fp8 ${MODEL_BUCKET}/
+>   Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --local-dir /tmp/Qwen3-Coder-480B-A35B-FP8
+> gcloud storage cp -r /tmp/Qwen3-Coder-480B-A35B-FP8 ${MODEL_BUCKET}/
 > ```
 
 ---
 
-## Step 5: 启动 vLLM
+## Step 4: 启动 vLLM（约 7-15 min）
 
 > **重要**：必须 `cd /tmp` 后再运行 vLLM，否则 `~/vllm/` 目录会被 Python 当作 namespace package，导致 import 错误。
 
@@ -253,7 +243,7 @@ ls /dev/shm/${MODEL_NAME}/{tokenizer.json,vocab.json,tokenizer_config.json}
 source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
 
-export MODEL=/dev/shm/qwen3-coder-480b-fp8
+export MODEL=/dev/shm/Qwen3-Coder-480B-A35B-FP8
 export HF_HUB_OFFLINE=1
 
 nohup env \
@@ -285,7 +275,7 @@ echo "✅ Server ready"
 
 ---
 
-## Step 6: 验证推理
+## Step 5: 验证推理
 
 ```bash
 # Smoke test
@@ -309,16 +299,16 @@ curl -s http://localhost:8000/v1/chat/completions \
 
 ---
 
-## Step 7: Benchmark
+## Step 6: Benchmark
 
-### 7.1 安装 benchmark 工具
+### 6.1 安装 benchmark 工具
 
 ```bash
 cd ~
 git clone https://github.com/kimbochen/bench_serving.git
 ```
 
-### 7.2 1K/1K Benchmark（CI 标准配置）
+### 6.2 1K/1K Benchmark（CI 标准配置）
 
 ```bash
 python3 bench_serving/benchmark_serving.py \
@@ -332,7 +322,7 @@ python3 bench_serving/benchmark_serving.py \
   --request-rate=inf --ignore-eos
 ```
 
-### 7.3 1K/8K Benchmark（长输出）
+### 6.3 1K/8K Benchmark（长输出）
 
 ```bash
 python3 bench_serving/benchmark_serving.py \
@@ -346,7 +336,7 @@ python3 bench_serving/benchmark_serving.py \
   --request-rate=inf --ignore-eos
 ```
 
-### 7.4 8K/1K Benchmark（长输入）
+### 6.4 8K/1K Benchmark（长输入）
 
 ```bash
 python3 bench_serving/benchmark_serving.py \
@@ -360,7 +350,7 @@ python3 bench_serving/benchmark_serving.py \
   --request-rate=inf --ignore-eos
 ```
 
-### 7.5 全并发扫描
+### 6.5 全并发扫描
 
 ```bash
 for c in 1 4 16 64; do
@@ -379,7 +369,7 @@ for c in 1 4 16 64; do
 done
 ```
 
-### 7.6 预期性能参考（GKE 实测值）
+### 6.6 预期性能参考（GKE 实测值）
 
 | Workload | c=1 | c=4 | c=16 | c=64 |
 |----------|----:|----:|-----:|-----:|
@@ -415,7 +405,7 @@ gcloud compute instances create qwen3-prefill \
     --provisioning-model=RESERVATION_BOUND \
     --reservation-affinity=specific \
     --reservation=${RESERVATION_NAME} \
-    --create-disk=auto-delete=yes,boot=yes,size=500GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/ubuntu-accel-2404-amd64-tpu-tpu7x-v20260422 \
+    --create-disk=auto-delete=yes,boot=yes,size=1000GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/family/ubuntu-accel-2404-amd64-tpu-tpu7x \
     --disk=name=qwen3-data-prefill,device-name=data-disk,mode=rw,auto-delete=no \
     --no-shielded-secure-boot \
     --scopes=cloud-platform
@@ -433,7 +423,7 @@ gcloud compute instances create qwen3-decode \
     --provisioning-model=RESERVATION_BOUND \
     --reservation-affinity=specific \
     --reservation=${RESERVATION_NAME} \
-    --create-disk=auto-delete=yes,boot=yes,size=500GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/ubuntu-accel-2404-amd64-tpu-tpu7x-v20260422 \
+    --create-disk=auto-delete=yes,boot=yes,size=1000GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/family/ubuntu-accel-2404-amd64-tpu-tpu7x \
     --disk=name=qwen3-data-decode,device-name=data-disk,mode=rw,auto-delete=no \
     --no-shielded-secure-boot \
     --scopes=cloud-platform
@@ -443,10 +433,12 @@ gcloud compute instances create qwen3-decode \
 
 ## Step 2: 两台 VM 分别执行环境准备
 
-在两台 VM 上分别执行 Part 1 的 Step 2（挂载盘）+ Step 3（系统配置 + 裸机安装 vLLM + GCS 拷贝模型到 SHM）。
+在两台 VM 上分别执行：
+1. Part 1 Step 2（格式化挂载数据盘）
+2. Part 1 Step 3.1 ~ 3.5（系统配置 + 安装 vLLM/tpu-inference + 设置环境变量）
+3. 扩容 /dev/shm 并拷贝模型（同 Part 1 Step 3.6）：
 
 ```bash
-# 在每台 VM 上执行（SSH 进去后）
 sudo mount -o remount,size=700G /dev/shm
 gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /dev/shm/
 ```
@@ -474,7 +466,7 @@ cd /tmp && mkdir -p /tmp/vllm-logs
 nohup env \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
-  vllm serve /dev/shm/qwen3-coder-480b-fp8 \
+  vllm serve /dev/shm/Qwen3-Coder-480B-A35B-FP8 \
     --served-model-name Qwen3-Coder-480B-FP8 \
     --seed 42 \
     --max-model-len 10240 \
@@ -504,7 +496,7 @@ cd /tmp && mkdir -p /tmp/vllm-logs
 nohup env \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
-  vllm serve /dev/shm/qwen3-coder-480b-fp8 \
+  vllm serve /dev/shm/Qwen3-Coder-480B-A35B-FP8 \
     --served-model-name Qwen3-Coder-480B-FP8 \
     --seed 42 \
     --max-model-len 10240 \
@@ -589,54 +581,137 @@ vllm bench serve \
 
 # Part 3: 多节点推理 (TP=16)
 
-> 2 台 TPU v7x-8 VM 组成 v7x-16（8 chips, 16 devices），通过 Ray 分布式 + DCN 跨节点通信。
+> 2 台 TPU v7x-8 VM 组成 v7x-16 slice（8 chips, 16 devices），通过 ICI 高速互联。
 >
-> **注意**：GKE 实测结论是 multi-host TP=16 的 output throughput 全场景比单机 v7x-8 差 17~63%，不推荐生产用。此部分主要用于验证和测试。
+> **注意**：multi-host TP=16 通过 ICI Slice 互联，性能比单机 v7x-8 低 15~21%（实测数据见 Step 6）。仍不如单机，主要用于大模型无法单机装下的场景。
 
-## Step 1: 创建 2 台 VM
+## Step 1: 创建 v7x-16 TPU Slice
 
-与 Part 2 相同方式创建 2 台 VM（qwen3-host0, qwen3-host1），确保在同一 VPC 同一 zone。
+TPU7x multi-host slice 必须通过 **Workload Policy + Instance Template + MIG** 三件套创建，确保物理 ICI 互联。
+单独创建两台 GCE VM 只能走 DCN（数据中心网络），无法获得 ICI 高速互联。
+
+### 1.1 创建 Workload Policy
+
+Workload Policy 告诉 Compute Engine 按指定拓扑分配**物理 ICI 互联**的 TPU chips。
 
 ```bash
-for i in 0 1; do
-  gcloud compute disks create qwen3-data-host${i} \
-      --project=${PROJECT_ID} --zone=${ZONE} \
-      --type=hyperdisk-ml --size=2TB --provisioned-throughput=2500
+SLICE_NAME=qwen3-slice
 
-  gcloud compute instances create qwen3-host${i} \
-      --project=${PROJECT_ID} --zone=${ZONE} \
-      --machine-type=tpu7x-standard-4t \
-      --network-interface=network=${VPC_NAME},subnet=${SUBNET_NAME} \
-      --maintenance-policy=TERMINATE \
-      --provisioning-model=RESERVATION_BOUND \
-      --reservation-affinity=specific \
-      --reservation=${RESERVATION_NAME} \
-      --create-disk=auto-delete=yes,boot=yes,size=500GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/ubuntu-accel-2404-amd64-tpu-tpu7x-v20260422 \
-      --disk=name=qwen3-data-host${i},device-name=data-disk,mode=rw,auto-delete=no \
-      --no-shielded-secure-boot \
-      --scopes=cloud-platform
-done
+gcloud compute resource-policies create workload-policy ${SLICE_NAME}-wp \
+    --type=HIGH_THROUGHPUT \
+    --accelerator-topology=2x2x2 \
+    --project=${PROJECT_ID} \
+    --region=${ZONE%-*}
 ```
+
+### 1.2 创建 Instance Template
+
+```bash
+gcloud compute instance-templates create ${SLICE_NAME}-it \
+    --project=${PROJECT_ID} \
+    --machine-type=tpu7x-standard-4t \
+    --network-interface=network=${VPC_NAME},subnet=projects/${PROJECT_ID}/regions/${ZONE%-*}/subnetworks/${SUBNET_NAME},nic-type=GVNIC \
+    --create-disk=auto-delete=yes,boot=yes,size=1000GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/family/ubuntu-accel-2404-amd64-tpu-tpu7x \
+    --reservation-affinity=specific \
+    --reservation=projects/${PROJECT_ID}/reservations/${RESERVATION_NAME} \
+    --provisioning-model=RESERVATION_BOUND \
+    --instance-termination-action=DELETE \
+    --maintenance-policy=TERMINATE \
+    --scopes=cloud-platform
+```
+
+> **注意**：`--instance-termination-action=DELETE` 是 RESERVATION_BOUND + MIG 的必需参数。subnet 必须用完整路径 `projects/.../subnetworks/...`，因为 instance template 是全局资源，不会自动推断 region。
+
+### 1.3 创建 MIG（TPU Slice）
+
+```bash
+gcloud compute instance-groups managed create ${SLICE_NAME}-mig \
+    --project=${PROJECT_ID} \
+    --zone=${ZONE} \
+    --template=${SLICE_NAME}-it \
+    --size=2 \
+    --default-action-on-vm-failure=do-nothing \
+    --workload-policy=projects/${PROJECT_ID}/regions/${ZONE%-*}/resourcePolicies/${SLICE_NAME}-wp
+```
+
+> **三个关键参数**（缺一不可，否则只会创建独立 VM 而非 ICI slice）：
+>
+> | 参数 | 作用 |
+> |------|------|
+> | `--workload-policy` | 指定 ICI 拓扑，MIG 按此拓扑分配物理互联的 chips |
+> | `--default-action-on-vm-failure=do-nothing` | 禁止 MIG 自动修复单个 VM（会破坏 slice 拓扑） |
+> | Target Size Policy = BULK | gcloud 在检测到 workload-policy 时自动设置；REST API 须手动指定 `targetSizePolicy.mode: BULK`，确保所有 VM 原子性同时分配 |
+>
+> **验证 slice 生效**：VM 创建后检查 metadata，成功的 slice 应显示 `TOPOLOGY: 2x2x2`、`HOST_BOUNDS: 1,1,2`、`TPU_ACCELERATOR_TYPE: tpu7x-16`，且 `worker-network-endpoints` 包含两台 VM。如果看到 `TOPOLOGY: 2x2x1`、`HOST_BOUNDS: 1,1,1`，说明 workload policy 没有正确关联。
+
+MIG 会创建 2 台 VM，物理上通过 ICI 互联组成一个 v7x-16 slice（8 chips, 16 devices）。
+
+### 1.4 查看创建的 VM
+
+```bash
+gcloud compute instance-groups managed list-instances ${SLICE_NAME}-mig \
+    --project=${PROJECT_ID} --zone=${ZONE}
+```
+
+记下两台 VM 的名称（后续 SSH 和配置时需要）。
 
 ## Step 2: 环境准备
 
-在两台 VM 上分别执行 Part 1 的 Step 2 + Step 3（挂载盘、系统配置、裸机安装 vLLM、GCS 拷贝模型到 SHM）。
+在两台 VM 上分别执行 Part 1 的 Step 3（裸机安装 vLLM + tpu-inference + JAX 0.9.2 fix）。
+
+> **注意**：multi-host **不要**用 `/dev/shm` 存模型。Ray 的 Object Store 默认占用 `/dev/shm` 约 30-40%，会与模型文件冲突。模型改拷到 boot disk `~/models/`。
+
+SSH 到 MIG 中的 VM（直连外网 IP，与 Part 1 Step 1.3 一致）：
+
+```bash
+# 获取两台 VM 的外网 IP
+gcloud compute instance-groups managed list-instances ${SLICE_NAME}-mig \
+    --project=${PROJECT_ID} --zone=${ZONE} --format="table(instance.basename(),instance.status)"
+
+# 查看具体 VM 的 IP
+VM_NAME=<vm-name-from-above>
+VM_IP=$(gcloud compute instances describe ${VM_NAME} \
+    --project=${PROJECT_ID} --zone=${ZONE} \
+    --format="value(networkInterfaces[0].accessConfigs[0].natIP)")
+ssh -o StrictHostKeyChecking=no -i ~/.ssh/google_compute_engine ${USER}@${VM_IP}
+```
+
+### 模型拷贝（两台 VM 都执行）
+
+multi-host 的模型必须存放在 boot disk，不能用 `/dev/shm`：
+
+```bash
+mkdir -p ~/models
+gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} ~/models/
+
+# 验证
+ls ~/models/${MODEL_NAME}/*.safetensors | wc -l   # 应为 49
+du -sh ~/models/${MODEL_NAME}                      # 应为 ~450 GB
+```
+
+> **为什么不用 /dev/shm**：Ray Object Store 默认用 `/dev/shm` 的 30%（~280 GB），加上模型 450 GB + vLLM worker 内存，总 RAM 用量超过物理内存导致 OOM。将模型放在 boot disk 上，虽然加载速度稍慢（~3 min vs ~10 s），但 RAM 使用可控。
 
 ## Step 3: 获取内网 IP
 
 ```bash
-HOST0_IP=$(gcloud compute instances describe qwen3-host0 \
+# 替换为 Step 1.4 中获取的实际 VM 名称
+HOST0_VM=<mig-vm-name-0>
+HOST1_VM=<mig-vm-name-1>
+
+HOST0_IP=$(gcloud compute instances describe ${HOST0_VM} \
     --project=${PROJECT_ID} --zone=${ZONE} \
     --format="value(networkInterfaces[0].networkIP)")
-HOST1_IP=$(gcloud compute instances describe qwen3-host1 \
+HOST1_IP=$(gcloud compute instances describe ${HOST1_VM} \
     --project=${PROJECT_ID} --zone=${ZONE} \
     --format="value(networkInterfaces[0].networkIP)")
 echo "Host0: ${HOST0_IP}, Host1: ${HOST1_IP}"
 ```
 
+> **注意**：MIG 创建的 VM 名称是自动生成的（如 `qwen3-slice-mig-xxxx`），需从 Step 1.4 的输出中获取。选择 `TPU_WORKER_ID=0` 的 VM 作为 Host 0（Ray Head + vLLM API Server）。
+
 ## Step 4: 设置 Multi-host TPU 环境变量（两台 VM 都执行）
 
-Multi-host 推理需要手动设置 TPU 拓扑环境变量，让两台 VM 的 TPU 识别为一个 v7x-16 集群。
+Multi-host 推理需要设置 TPU 拓扑环境变量。Workload Policy + MIG 创建的 slice 已具备物理 ICI 互联，这里的环境变量让 JAX runtime 识别拓扑。
 
 ### Host 0（Ray Head + vLLM API Server）
 
@@ -698,103 +773,176 @@ export TPU_MULTIHOST_BACKEND=ray
 export VLLM_HOST_IP=${HOST1_IP}
 ```
 
-> **关键差异**：`TPU_WORKER_ID=0` vs `TPU_WORKER_ID=1`，`VLLM_HOST_IP` 分别设为各自 IP。
+> **关键差异**：
+> - `TPU_WORKER_ID=0` vs `TPU_WORKER_ID=1`
+> - `VLLM_HOST_IP` 分别设为各自 IP
+> - `JAX_PLATFORMS=`（空）而非单机的 `tpu,cpu` — multi-host 必须设为空，让 `PJRT_DEVICE=TPU` 控制设备选择，否则 JAX 无法正确初始化跨节点拓扑
 
 ## Step 5: 启动 Ray 集群 + vLLM
 
-### Host 0（先启动 Ray Head，再启动 vLLM）
+### Host 0（先启动 Ray Head）
 
 ```bash
-# 启动 Ray Head（daemon 模式，不加 --block）
-ray start --head --port=6379 --node-ip-address=${VLLM_HOST_IP} --resources='{"TPU": 4}'
-sleep 20
-ray status   # 确认 head 启动
+# 启动 Ray Head（daemon 模式）
+# --object-store-memory 限制 Ray plasma store 为 100 GB，避免占满 /dev/shm
+RAY_memory_monitor_refresh_ms=0 ray start --head \
+  --port=6379 \
+  --node-ip-address=${VLLM_HOST_IP} \
+  --resources='{"TPU": 4}' \
+  --object-store-memory=107374182400
 
-# 等 Host 1 的 Ray Worker 加入后再启动 vLLM
-# 检查 ray status 显示 2 个 node, 总共 8 TPU
+sleep 20
+ray status   # 确认 head 启动，应显示 100.0 GiB object store
 ```
 
 ### Host 1（启动 Ray Worker）
 
 ```bash
-# 加入 Ray 集群（--block 保持前台）
-ray start --address=${HOST0_IP}:6379 --node-ip-address=${VLLM_HOST_IP} --resources='{"TPU": 4}' --block
+# 加入 Ray 集群
+RAY_memory_monitor_refresh_ms=0 ray start \
+  --address=${HOST0_IP}:6379 \
+  --node-ip-address=${VLLM_HOST_IP} \
+  --resources='{"TPU": 4}' \
+  --object-store-memory=107374182400
+
+# 可选：--block 保持前台，或不加 --block 以 daemon 运行
 ```
 
 ### Host 0（确认集群就绪后启动 vLLM）
 
 ```bash
-# 确认 2 nodes, 8 TPU
+# 确认 2 nodes, 8 TPU, 每个 node 100 GB object store
 ray status
 
 # 启动 vLLM（TP=16, Ray executor）— 必须 cd /tmp 避免 namespace package 问题
-cd /tmp
-vllm serve /dev/shm/qwen3-coder-480b-fp8 \
-  --served-model-name Qwen3-Coder-480B-FP8 \
-  --seed 42 \
-  --tensor-parallel-size 16 \
-  --distributed-executor-backend ray \
-  --max-model-len 10240 \
-  --max-num-batched-tokens 8192 \
-  --max-num-seqs 512 \
-  --no-enable-prefix-caching \
-  --kv-cache-dtype fp8 \
-  --gpu-memory-utilization 0.9 \
-  --enable-expert-parallel \
-  --host 0.0.0.0 --port 8000
+cd /tmp && mkdir -p /tmp/vllm-logs
+
+nohup env \
+  PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS= \
+  MODEL_IMPL_TYPE=vllm USE_MOE_EP_KERNEL=0 USE_BATCHED_RPA_KERNEL=0 \
+  HF_HUB_OFFLINE=1 SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
+  RAY_memory_monitor_refresh_ms=0 \
+  vllm serve ~/models/Qwen3-Coder-480B-A35B-FP8 \
+    --served-model-name Qwen3-Coder-480B-FP8 \
+    --seed 42 \
+    --tensor-parallel-size 16 \
+    --distributed-executor-backend ray \
+    --max-model-len 10240 \
+    --max-num-batched-tokens 8192 \
+    --max-num-seqs 512 \
+    --no-enable-prefix-caching \
+    --kv-cache-dtype fp8 \
+    --gpu-memory-utilization 0.9 \
+    --enable-expert-parallel \
+    --host 0.0.0.0 --port 8000 \
+  > /tmp/vllm-logs/serve.log 2>&1 &
+
+# 等待就绪（约 40 min，含模型加载 + 多轮 XLA 编译）
+until curl -s -o /dev/null -w '%{http_code}\n' http://localhost:8000/health | grep -q 200; do
+  date; tail -1 /tmp/vllm-logs/serve.log 2>/dev/null; sleep 60
+done
+echo "✅ Server ready"
 ```
 
-> **注意**：multi-host 不支持 `--async-scheduling`（Ray executor 限制）。启动时间约 12-13 min。
-
-等待日志输出 `Application startup complete`。
+> **关键参数说明**：
+>
+> | 参数 | 作用 |
+> |------|------|
+> | `--object-store-memory=107374182400` | 限制 Ray plasma store 为 100 GB（默认占 /dev/shm 30%~280 GB，会挤占模型和 worker 内存） |
+> | `RAY_memory_monitor_refresh_ms=0` | 禁用 Ray OOM monitor（模型加载期间 RAM 使用高峰会触发 worker 被 kill） |
+> | `~/models/...` 而非 `/dev/shm/...` | 模型放 boot disk，避免 tmpfs RAM 双重计数导致 OOM |
+>
+> **注意**：multi-host 不支持 `--async-scheduling`（Ray executor 限制）。启动时间约 40 min（含模型从 boot disk 加载 ~3 min + 多轮 XLA 编译 ~35 min）。
 
 ## Step 6: 验证和 Benchmark
 
 在 Host 0 上执行：
 
+### Smoke test
+
 ```bash
-# Smoke test
-curl -s http://localhost:8000/v1/chat/completions \
-  -H "Content-Type: application/json" \
-  -d '{"model":"Qwen3-Coder-480B-FP8","messages":[{"role":"user","content":"用一句话介绍 TPU v7"}],"max_tokens":100}' | python3 -m json.tool
-
-# Warmup
-for inp in 1024 8192; do
-  for out in 64 1024; do
-    vllm bench serve --backend vllm \
-      --model Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
-      --served-model-name Qwen3-Coder-480B-FP8 \
-      --base-url http://localhost:8000 --endpoint /v1/completions \
-      --dataset-name random --random-input-len $inp --random-output-len $out \
-      --num-prompts 2 --max-concurrency 1 --ignore-eos > /dev/null 2>&1
-  done
-done
-
-# Benchmark
-for scenario in "1024 1024 1" "1024 1024 4" "1024 1024 16" "8192 1024 4" "8192 1024 16"; do
-  read inp out conc <<< "$scenario"
-  echo "=== ${inp}/${out} c=${conc} ==="
-  vllm bench serve --backend vllm \
-    --model Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
-    --served-model-name Qwen3-Coder-480B-FP8 \
-    --base-url http://localhost:8000 --endpoint /v1/completions \
-    --dataset-name random --random-input-len $inp --random-output-len $out \
-    --num-prompts $((conc * 4)) --max-concurrency $conc \
-    --ignore-eos 2>&1 | tail -22
-done
+python3 -c "
+import requests, json
+r = requests.post('http://localhost:8000/v1/chat/completions', json={
+    'model': 'Qwen3-Coder-480B-FP8',
+    'messages': [{'role': 'user', 'content': 'What model are you? Reply in one sentence.'}],
+    'max_tokens': 100, 'temperature': 0.7
+})
+print(json.dumps(r.json(), indent=2))
+"
 ```
 
-### Multi-host 预期性能参考（GKE 实测值）
+### Benchmark
 
-| 场景 | 单机 v7x-8 (TP=8) | 多机 v7x-16 (TP=16) | 差异 |
-|------|------------------:|-------------------:|----:|
-| 1K/1K c=1 | 48 | 37.5 | -22% |
-| 1K/1K c=4 | 177 | 98.4 | -44% |
-| 1K/1K c=16 | 602 | 220 | -63% |
-| 8K/1K c=4 | 162 | 134 | -17% |
-| 8K/1K c=16 | 483 | 223 | -54% |
+> **注意**：TPU VM 裸机没有安装 PyTorch，`vllm bench serve` 命令不可用。使用以下 Python 脚本替代。
 
-> **结论**：Multi-host TP=16 因跨节点 DCN 通信开销，throughput 全面低于单机。推荐用 2 × v7x-8 Data Parallel 替代。
+```bash
+python3 << 'PYEOF'
+import requests, time, concurrent.futures
+
+URL = "http://localhost:8000/v1/chat/completions"
+MODEL = "Qwen3-Coder-480B-FP8"
+BASE = "The quick brown fox jumps over the lazy dog. "  # ~10 tokens/repeat
+
+def make_prompt(target_tokens):
+    return BASE * (target_tokens // 10)
+
+def send_request(prompt, output_len, rid):
+    t0 = time.time()
+    r = requests.post(URL, json={
+        "model": MODEL, "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": output_len, "temperature": 0.7, "ignore_eos": True})
+    data = r.json()
+    t1 = time.time()
+    if "error" in data:
+        return {"error": data["error"]["message"][:200]}
+    u = data.get("usage", {})
+    return {"prompt": u.get("prompt_tokens",0), "completion": u.get("completion_tokens",0),
+            "time": t1-t0, "tps": u.get("completion_tokens",0)/(t1-t0)}
+
+def bench(input_tok, output_tok, conc, n):
+    print("\n" + "="*60)
+    print("P%d/D%d  concurrency=%d  requests=%d" % (input_tok, output_tok, conc, n))
+    print("="*60)
+    prompt = make_prompt(input_tok)
+    t0 = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=conc) as ex:
+        results = [f.result() for f in
+            [ex.submit(send_request, prompt, output_tok, i) for i in range(n)]]
+    ok = [r for r in results if "error" not in r]
+    if not ok: print("  ALL FAILED"); return
+    total_t = time.time() - t0
+    total_c = sum(r["completion"] for r in ok)
+    print("  Avg prompt tokens:     %d" % (sum(r["prompt"] for r in ok)/len(ok)))
+    print("  Per-request tok/s:     %.1f" % (sum(r["tps"] for r in ok)/len(ok)))
+    print("  Aggregate tok/s:       %.1f" % (total_c / total_t))
+
+# Warmup
+send_request(make_prompt(128), 32, -1)
+
+bench(1024, 1024, 1, 3)
+bench(1024, 1024, 4, 8)
+bench(1024, 1024, 8, 16)
+bench(1024, 1024, 16, 32)
+bench(8192, 1024, 1, 3)
+bench(8192, 1024, 4, 8)
+PYEOF
+```
+
+### Multi-host 性能参考（TPU VM ICI Slice 实测值）
+
+| 场景 | Per-req tok/s | Aggregate tok/s | 单机 v7x-8 参考 | vs 单机 |
+|------|-------------:|----------------:|---------------:|-------:|
+| P1K/D1K c=1 | 37.7 | 37.7 | 48 | -21% |
+| P1K/D1K c=4 | 35.8 | 143.2 | 177 | -19% |
+| P1K/D1K c=8 | 34.1 | 272.9 | — | — |
+| P1K/D1K c=16 | 32.1 | 513.8 | 602 | -15% |
+| P8K/D1K c=1 | 36.7 | 36.7 | 46.4 | -21% |
+| P8K/D1K c=4 | 34.0 | 136.0 | 162 | -16% |
+
+> **结论**：ICI Slice（Workload Policy + MIG）多机性能比单机低 15-21%。高并发下差距更小（c=16 仅 -15%）。
+>
+> **启动耗时**：模型加载 ~5 min（boot disk） + XLA 编译 ~29 min（backbone 10 轮 + compute_logits） + 初始化 ~6 min = 总计约 40 min。首次启动无 XLA cache，后续可通过持久化 cache 加速。
 
 ---
 
@@ -818,7 +966,7 @@ gcloud compute firewall-rules create allow-vllm-internal \
 | 6379 | Ray GCS server（multi-host） |
 | 7000 | PD 分离 proxy |
 | 8000 | vLLM API（Prefill / 单机 / Host 0） |
-| 8471 | libtpu coordinator（multi-host DCN） |
+| 8471 | libtpu coordinator（multi-host ICI） |
 | 9000 | vLLM API（Decode） |
 | 动态 | TPUConnector KV transfer / ZMQ side-channel |
 
@@ -827,17 +975,26 @@ gcloud compute firewall-rules create allow-vllm-internal \
 ## 资源清理
 
 ```bash
-# 删除 VM（数据盘设了 auto-delete=no，不会自动删）
-for vm in qwen3-vm-01 qwen3-prefill qwen3-decode qwen3-host0 qwen3-host1; do
+# 删除单机 / PD 分离 VM
+for vm in qwen3-vm-01 qwen3-prefill qwen3-decode; do
   gcloud compute instances delete $vm \
       --project=${PROJECT_ID} --zone=${ZONE} --quiet 2>/dev/null
 done
 
 # 删除数据盘（确认不再需要）
-for disk in qwen3-data-01 qwen3-data-prefill qwen3-data-decode qwen3-data-host0 qwen3-data-host1; do
+for disk in qwen3-data-01 qwen3-data-prefill qwen3-data-decode; do
   gcloud compute disks delete $disk \
       --project=${PROJECT_ID} --zone=${ZONE} --quiet 2>/dev/null
 done
+
+# 删除 multi-host slice（MIG + Template + Workload Policy）
+SLICE_NAME=qwen3-slice
+gcloud compute instance-groups managed delete ${SLICE_NAME}-mig \
+    --project=${PROJECT_ID} --zone=${ZONE} --quiet
+gcloud compute instance-templates delete ${SLICE_NAME}-it \
+    --project=${PROJECT_ID} --quiet
+gcloud compute resource-policies delete ${SLICE_NAME}-wp \
+    --project=${PROJECT_ID} --region=${ZONE%-*} --quiet
 ```
 
 ---
@@ -886,10 +1043,28 @@ curl -s http://${PREFILL_IP}:8000/health
 
 TPU 环境变量没设对。确认 `TPU_WORKER_HOSTNAMES` 包含两台 VM 的 IP，且 `TPU_WORKER_ID` 在两台分别为 0 和 1。
 
-### 7. 模型权重缺 tokenizer
+### 7. Multi-host Ray OOM / 模型文件消失
+
+Ray Object Store 默认占 `/dev/shm` 的 30%（944 GB × 30% = ~280 GB）。如果模型也在 `/dev/shm`（450 GB），两者合计超过 `/dev/shm` 容量，导致：
+- 模型文件被 Ray plasma store 覆盖"消失"
+- 或 Ray worker 加载模型时 RAM 双重计数触发 OOM
+
+**解决方案**：
+```bash
+# 1. 模型放 boot disk，不要放 /dev/shm
+mkdir -p ~/models && gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} ~/models/
+
+# 2. Ray 启动时限制 object store（100 GB 足够）
+ray start --head ... --object-store-memory=107374182400
+
+# 3. 禁用 Ray OOM monitor（加载期间高峰不误杀）
+export RAY_memory_monitor_refresh_ms=0
+```
+
+### 8. 模型权重缺 tokenizer
 
 ```bash
-cd /dev/shm/qwen3-coder-480b-fp8/
+cd /dev/shm/Qwen3-Coder-480B-A35B-FP8/   # 或 ~/models/Qwen3-Coder-480B-A35B-FP8/ (multi-host)
 for f in tokenizer.json tokenizer_config.json vocab.json; do
   curl -sL -o $f https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/resolve/main/$f
 done
