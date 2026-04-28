@@ -874,15 +874,24 @@ echo "Host 1: ${HOST1_VM} (${HOST1_IP} / ${HOST1_EXT})"
 SSH 到任一 VM，检查 metadata 确认 ICI slice 配置：
 
 ```bash
+# 列出所有 instance attributes
 curl -s -H "Metadata-Flavor: Google" \
   http://metadata.google.internal/computeMetadata/v1/instance/attributes/ | tr '\n' ' '
-# 应包含: TPU_ACCELERATOR_TYPE  TPU_TOPOLOGY  TPU_WORKER_HOSTNAMES 等
-```
+# 应包含: accelerator-type  tpu-env  worker-id  worker-network-endpoints 等
 
-```bash
+# 验证 accelerator 类型
 curl -s -H "Metadata-Flavor: Google" \
-  http://metadata.google.internal/computeMetadata/v1/instance/attributes/TPU_ACCELERATOR_TYPE
-# 应输出: tpu7x-16（不是 tpu7x-8）
+  http://metadata.google.internal/computeMetadata/v1/instance/attributes/accelerator-type
+# 应输出: v7x-16（注意：不含 "tpu" 前缀）
+
+# 验证 worker-id（Host 0 = 0, Host 1 = 1）
+curl -s -H "Metadata-Flavor: Google" \
+  http://metadata.google.internal/computeMetadata/v1/instance/attributes/worker-id
+
+# 验证拓扑（包含在 tpu-env YAML 中）
+curl -s -H "Metadata-Flavor: Google" \
+  http://metadata.google.internal/computeMetadata/v1/instance/attributes/tpu-env | grep TOPOLOGY
+# 应输出: TOPOLOGY: 2x2x2
 ```
 
 ## Step 2: 两台 VM 环境准备 + 模型拷贝
@@ -905,40 +914,52 @@ du -sh ~/models/${MODEL_NAME}                      # 应为 ~378 GiB
 
 ## Step 3: 应用 3 个 patches（两台 VM 都执行）
 
-Multi-host 需要 3 个 patch 文件。如果 tpu-inference 是最新 main branch（PR #2366 已 merged），第一个可能已包含。后两个是 multi-host 专用的 mrope bypass，需手动应用。
+Multi-host 需要 3 个 patch。Patch 1 (PR #2366) 在最新 main branch 已包含。Patch 2 和 3 是 mrope bypass，用 `sed` 内联注入，**不要替换整个文件**（tpu-inference API 版本可能不同，整文件替换会导致 `TypeError: cannot unpack non-iterable ModelInterface object`）。
 
 ```bash
 source ~/vllm_env/bin/activate
 
-# 获取 tpu_inference 安装目录
-TPI_DIR=$(python3 -c "import tpu_inference; import os; print(os.path.dirname(tpu_inference.__file__))")
+# 获取 tpu_inference 安装目录（2>/dev/null 抑制 metadata 404 日志）
+TPI_DIR=$(python3 -c "import tpu_inference; import os; print(os.path.dirname(tpu_inference.__file__))" 2>/dev/null)
+RUNNER_DIR=${TPI_DIR}/runner
+echo "Runner dir: ${RUNNER_DIR}"
 
-# Patch 1: PR #2366 (kv_cache_manager.py) — 验证是否已包含
-echo "PR #2366 check: $(grep -c '_hybrid_uniform_page_size_bytes' ${TPI_DIR}/runner/kv_cache_manager.py) (expect 7)"
+# === Patch 1: PR #2366 (kv_cache_manager.py) — 验证是否已包含 ===
+KV_COUNT=$(grep -c '_hybrid_uniform_page_size_bytes' ${RUNNER_DIR}/kv_cache_manager.py 2>/dev/null || echo 0)
+echo "PR #2366 check: ${KV_COUNT} (expect 7)"
+# 如果不是 7，说明 tpu-inference 版本太旧，需要更新到 main branch
 
-# 如果不是 7，从 GitHub main 下载
-# curl -sf https://raw.githubusercontent.com/vllm-project/tpu-inference/main/tpu_inference/runner/kv_cache_manager.py \
-#   -o ${TPI_DIR}/runner/kv_cache_manager.py
+# === Patch 2: tpu_runner.py — mrope bypass ===
+# 在 disable_mm_from_limits 判断后注入：设 uses_mrope=False，避免 multi-host TypeError
+if ! grep -q "PATCH" ${RUNNER_DIR}/tpu_runner.py 2>/dev/null; then
+    sed -i '/and not disable_mm_from_limits)/a\
+\
+        # PATCH: disable mrope path when user explicitly disables mm via --limit-mm-per-prompt\
+        # Otherwise update_states triggers mrope code with old API → TypeError on multi-host\
+        if disable_mm_from_limits:\
+            self.uses_mrope = False\
+            self.get_mrope_input_positions_fn = None' ${RUNNER_DIR}/tpu_runner.py
+    echo "Patch 2 applied: $(grep -c 'PATCH' ${RUNNER_DIR}/tpu_runner.py) (expect 1)"
+else
+    echo "Patch 2 already applied"
+fi
 
-# Patch 2: tpu_runner.py mrope bypass
-curl -sf https://raw.githubusercontent.com/vllm-project/tpu-inference/main/tpu_inference/runner/tpu_runner.py \
-  -o ${TPI_DIR}/runner/tpu_runner.py
-echo "mrope tpu_runner patch: $(grep -c 'uses_mrope' ${TPI_DIR}/runner/tpu_runner.py) (expect ≥1)"
-
-# Patch 3: persistent_batch_manager.py mrope None check
-curl -sf https://raw.githubusercontent.com/vllm-project/tpu-inference/main/tpu_inference/runner/persistent_batch_manager.py \
-  -o ${TPI_DIR}/runner/persistent_batch_manager.py
-echo "mrope PBM patch: $(grep -c 'get_mrope_input_positions_fn' ${TPI_DIR}/runner/persistent_batch_manager.py) (expect ≥1)"
+# === Patch 3: persistent_batch_manager.py — mrope None guard ===
+# 在 if self.uses_mrope 条件中增加 fn is not None 检查
+if ! grep -q "PATCH" ${RUNNER_DIR}/persistent_batch_manager.py 2>/dev/null; then
+    sed -i 's/            if self.uses_mrope:/            if self.uses_mrope and get_mrope_input_positions_fn is not None:  # PATCH: guard against None fn/' \
+        ${RUNNER_DIR}/persistent_batch_manager.py
+    echo "Patch 3 applied: $(grep -c 'PATCH' ${RUNNER_DIR}/persistent_batch_manager.py) (expect 1)"
+else
+    echo "Patch 3 already applied"
+fi
 
 # 清理 __pycache__
 find ${TPI_DIR} -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+echo "Done. Pycache cleaned."
 ```
 
-> **如果 tpu_runner.py / persistent_batch_manager.py 在 main 还没合并这些 fix**，可以从本仓库的 `scripts/multihost-patches/` 目录获取已验证的版本。在你 checkout 了 gpu-tpu-pedia 的机器上：
-> ```bash
-> scp scripts/multihost-patches/tpu_runner.py ${USER}@${HOST0_EXT}:${TPI_DIR}/runner/
-> scp scripts/multihost-patches/persistent_batch_manager.py ${USER}@${HOST0_EXT}:${TPI_DIR}/runner/
-> ```
+> **为什么用 sed 而不是整文件替换？** tpu-inference 的 `get_model()` 返回类型在不同版本间变化（旧版返回 tuple，新版返回 `ModelInterface` object）。`scripts/multihost-patches/` 中的完整文件可能与你安装的版本不兼容。sed 内联 patch 只修改需要改的行，与任何版本兼容。
 
 ## Step 4: 设置 TPU 拓扑环境变量
 
@@ -1177,14 +1198,23 @@ bench(8192, 1024, 4, 8)
 PYEOF
 ```
 
-### Multi-host 性能参考
+### Multi-host 性能参考（v7x-16, TP=16, 2026-04-28 实测）
 
-> 待实测。
+**启动时间**：~12 min（模型加载 ~8 min + 首次 XLA 编译 ~4 min）
+
+> **XLA 编译注意**：每种新的 (batch_size, seq_len) 组合首次出现时会触发 XLA 编译（2-5 min），
+> 后续相同 shape 的请求不再编译。Benchmark 前建议先用 warmup 请求触发编译。
 
 | 场景 | Per-req tok/s | Aggregate tok/s | 单机参考 | vs 单机 |
 |------|-------------:|----------------:|---------:|--------:|
-| P1K/D1K c=1 | — | — | 49.6 | — |
-| P1K/D1K c=4 | — | — | 186.8 | — |
+| P1K/D1K c=1 | 35.5 | 35.5 | 49.6 | 0.72x |
+| P1K/D1K c=4 | 33.1 | 132 | 186.8 | 0.71x |
+| P1K/D1K c=8 | 32.0 | 256 | — | — |
+| P1K/D1K c=16 | 30.3 | 485 | — | — |
+
+> **Multi-host vs 单机**：Multi-host (TP=16) 单请求吞吐约为单机 (TP=8) 的 ~72%，
+> 因为 ICI 跨节点通信开销。Multi-host 优势在于更大的 KV cache 容量（1536 GB HBM），
+> 支持 `--max-model-len 16384`（单机仅 4096），适合长上下文场景。
 
 ---
 
