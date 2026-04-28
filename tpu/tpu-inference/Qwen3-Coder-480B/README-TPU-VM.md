@@ -6,6 +6,8 @@
 >
 > **代码仓库**: [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference)（main 分支）
 >
+> **模型存储**: `gs://aidc-tpu-data`（GCS 对象存储，模型权重和 cache 统一存放于此）
+>
 > GKE 版见同目录 [README.md](README.md)。
 
 ## 目录
@@ -25,7 +27,8 @@ export RESERVATION_NAME=<your-reservation>
 export VPC_NAME=<your-vpc-name>
 export SUBNET_NAME=<your-subnet-name>
 export HF_TOKEN=<your-hf-token>
-export BUCKET_NAME=<your-bucket-name>
+export MODEL_BUCKET=gs://aidc-tpu-data          # 模型权重 & cache 的 GCS 存储桶
+export MODEL_NAME=qwen3-coder-480b-fp8           # 模型目录名
 ```
 
 ## 硬件要求
@@ -124,15 +127,37 @@ newgrp docker
 docker pull vllm/vllm-tpu:nightly
 ```
 
-### 3.4 启动容器
+### 3.4 扩容 /dev/shm 并从 GCS 拷贝模型
+
+模型权重统一存放在 GCS，每次启动 VM 后拷贝到 `/dev/shm`（内存文件系统）以获得最快的加载速度。
+
+```bash
+# 扩容 /dev/shm（默认 ~472 GB，需要容纳 480 GB 模型 + vLLM IPC）
+sudo mount -o remount,size=700G /dev/shm
+
+# 从 GCS 拷贝模型权重到 /dev/shm（必须用 gcloud storage cp，最快）
+gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /dev/shm/
+
+# 验证
+ls /dev/shm/${MODEL_NAME}/*.safetensors | wc -l   # 应为 49
+ls /dev/shm/${MODEL_NAME}/{tokenizer.json,vocab.json,tokenizer_config.json}
+du -sh /dev/shm/${MODEL_NAME}                      # 应为 ~450 GB
+```
+
+> **为什么用 /dev/shm**：内存文件系统读取速度 ~50 GB/s，比 Hyperdisk ML（2.4 GB/s）快 20 倍，模型加载时间从 ~3.5 min 缩短到 ~10 秒。
+>
+> **为什么用 `gcloud storage cp`**：这是 GCS 下载最快的命令，自动多线程分片传输，比 `gsutil cp` 快 2-3 倍。
+>
+> **注意**：`/dev/shm` 是 tmpfs，VM 重启后数据会丢失，需要重新从 GCS 拷贝。
+
+### 3.5 启动容器
 
 ```bash
 docker run -d --name vllm \
-    --privileged --net=host --shm-size=200g \
+    --privileged --net=host --ipc=host \
     -v /mnt/data:/data \
     -v /dev:/dev \
     -e HF_TOKEN=${HF_TOKEN} \
-    -e HF_HOME=/data \
     -e JAX_PLATFORMS=tpu,cpu \
     -e TPU_BACKEND_TYPE=jax \
     -e PJRT_DEVICE=TPU \
@@ -142,6 +167,8 @@ docker run -d --name vllm \
     vllm/vllm-tpu:nightly sleep infinity
 ```
 
+> **`--ipc=host`**：让容器共享宿主机的 `/dev/shm`，容器内可以直接访问 `/dev/shm/${MODEL_NAME}`。
+
 进入容器：
 
 ```bash
@@ -150,23 +177,22 @@ docker exec -it vllm bash
 
 ---
 
-## Step 4: 下载模型权重
+## Step 4: 验证模型权重
 
-在容器内执行：
+模型已在 Step 3.4 从 GCS 拷贝到 `/dev/shm`。在容器内验证：
 
 ```bash
-pip install -U "huggingface_hub[hf_transfer]"
-export HF_HUB_ENABLE_HF_TRANSFER=1
-
-huggingface-cli download Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
-  --local-dir /data/qwen3-coder-480b-fp8
-
-# 验证
-ls /data/qwen3-coder-480b-fp8/*.safetensors | wc -l   # 应为 49
-ls /data/qwen3-coder-480b-fp8/{tokenizer.json,vocab.json,tokenizer_config.json}
+ls /dev/shm/${MODEL_NAME}/*.safetensors | wc -l   # 应为 49
+ls /dev/shm/${MODEL_NAME}/{tokenizer.json,vocab.json,tokenizer_config.json}
 ```
 
-> 如果已有权重在 GCS，可以用 `gcloud storage cp -r gs://${BUCKET_NAME}/qwen3-coder-480b-fp8 /data/` 加速。
+> **首次上传模型到 GCS**：如果 GCS 桶里还没有模型权重，先在任意机器上从 HuggingFace 下载后上传：
+> ```bash
+> pip install -U "huggingface_hub[hf_transfer]"
+> HF_HUB_ENABLE_HF_TRANSFER=1 huggingface-cli download \
+>   Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 --local-dir /tmp/qwen3-coder-480b-fp8
+> gcloud storage cp -r /tmp/qwen3-coder-480b-fp8 ${MODEL_BUCKET}/
+> ```
 
 ---
 
@@ -175,7 +201,7 @@ ls /data/qwen3-coder-480b-fp8/{tokenizer.json,vocab.json,tokenizer_config.json}
 ```bash
 cd /tmp && mkdir -p /tmp/vllm-logs
 
-export MODEL=/data/qwen3-coder-480b-fp8
+export MODEL=/dev/shm/qwen3-coder-480b-fp8
 export HF_HUB_OFFLINE=1
 
 nohup env \
@@ -363,17 +389,12 @@ gcloud compute instances create qwen3-decode \
 
 ## Step 2: 两台 VM 分别执行环境准备
 
-在两台 VM 上分别执行 Part 1 的 Step 2（挂载盘）+ Step 3（系统配置 + Docker）。
-
-然后在两台 VM 上分别下载模型（或从 GCS 拷贝）：
+在两台 VM 上分别执行 Part 1 的 Step 2（挂载盘）+ Step 3（系统配置 + Docker + GCS 拷贝模型到 SHM）。
 
 ```bash
-# 在每台 VM 的容器内
-docker exec -it vllm bash
-pip install -U "huggingface_hub[hf_transfer]"
-export HF_HUB_ENABLE_HF_TRANSFER=1
-huggingface-cli download Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8 \
-  --local-dir /data/qwen3-coder-480b-fp8
+# 在每台 VM 上执行（SSH 进去后）
+sudo mount -o remount,size=700G /dev/shm
+gcloud storage cp -r ${MODEL_BUCKET}/${MODEL_NAME} /dev/shm/
 ```
 
 ## Step 3: 获取内网 IP
@@ -398,7 +419,7 @@ cd /tmp && mkdir -p /tmp/vllm-logs
 nohup env \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
-  vllm serve /data/qwen3-coder-480b-fp8 \
+  vllm serve /dev/shm/qwen3-coder-480b-fp8 \
     --served-model-name Qwen3-Coder-480B-FP8 \
     --seed 42 \
     --max-model-len 10240 \
@@ -427,7 +448,7 @@ cd /tmp && mkdir -p /tmp/vllm-logs
 nohup env \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
-  vllm serve /data/qwen3-coder-480b-fp8 \
+  vllm serve /dev/shm/qwen3-coder-480b-fp8 \
     --served-model-name Qwen3-Coder-480B-FP8 \
     --seed 42 \
     --max-model-len 10240 \
@@ -541,7 +562,7 @@ done
 
 ## Step 2: 环境准备
 
-在两台 VM 上分别执行 Part 1 的 Step 2 + Step 3 + Step 4（挂载盘、系统配置、Docker、下载模型）。
+在两台 VM 上分别执行 Part 1 的 Step 2 + Step 3（挂载盘、系统配置、Docker、GCS 拷贝模型到 SHM）。
 
 ## Step 3: 获取内网 IP
 
@@ -563,11 +584,10 @@ echo "Host0: ${HOST0_IP}, Host1: ${HOST1_IP}"
 
 ```bash
 docker run -d --name vllm \
-    --privileged --net=host --shm-size=200g \
+    --privileged --net=host --ipc=host \
     -v /mnt/data:/data \
     -v /dev:/dev \
     -e HF_TOKEN=${HF_TOKEN} \
-    -e HF_HOME=/data \
     -e PJRT_DEVICE=TPU \
     -e TPU_BACKEND_TYPE=jax \
     -e JAX_PLATFORMS= \
@@ -595,11 +615,10 @@ docker run -d --name vllm \
 
 ```bash
 docker run -d --name vllm \
-    --privileged --net=host --shm-size=200g \
+    --privileged --net=host --ipc=host \
     -v /mnt/data:/data \
     -v /dev:/dev \
     -e HF_TOKEN=${HF_TOKEN} \
-    -e HF_HOME=/data \
     -e PJRT_DEVICE=TPU \
     -e TPU_BACKEND_TYPE=jax \
     -e JAX_PLATFORMS= \
@@ -657,7 +676,7 @@ ray start --address=${HOST0_IP}:6379 --node-ip-address=${VLLM_HOST_IP} --resourc
 ray status
 
 # 启动 vLLM（TP=16, Ray executor）
-vllm serve /data/qwen3-coder-480b-fp8 \
+vllm serve /dev/shm/qwen3-coder-480b-fp8 \
   --served-model-name Qwen3-Coder-480B-FP8 \
   --tensor-parallel-size 16 \
   --distributed-executor-backend ray \
@@ -802,7 +821,7 @@ TPU 环境变量没设对。确认 `TPU_WORKER_HOSTNAMES` 包含两台 VM 的 IP
 ### 6. 模型权重缺 tokenizer
 
 ```bash
-cd /data/qwen3-coder-480b-fp8/
+cd /dev/shm/qwen3-coder-480b-fp8/
 for f in tokenizer.json tokenizer_config.json vocab.json; do
   curl -sL -o $f https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8/resolve/main/$f
 done
