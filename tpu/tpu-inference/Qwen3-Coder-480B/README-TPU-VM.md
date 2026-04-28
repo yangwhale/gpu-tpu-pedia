@@ -540,10 +540,18 @@ nohup env \
 
 ## Step 6: 验证两端就绪 + 启动 Proxy
 
-先确认两个实例都已 ready：
+在 Prefill VM 上执行以下所有操作：
 
 ```bash
-# 在 Prefill VM 上执行
+source ~/vllm_env/bin/activate
+
+# 设置 Decode VM 内网 IP（Step 3 获取的 networkIP）
+export DECODE_IP=<decode-vm-internal-ip>
+```
+
+确认两个实例都已 ready：
+
+```bash
 curl -s http://localhost:8000/v1/models | python3 -m json.tool
 curl -s http://${DECODE_IP}:9000/v1/models | python3 -m json.tool
 ```
@@ -551,11 +559,6 @@ curl -s http://${DECODE_IP}:9000/v1/models | python3 -m json.tool
 两个都返回模型信息后，启动 proxy：
 
 ```bash
-source ~/vllm_env/bin/activate
-
-# 设置 Decode VM 内网 IP（Step 3 获取的 networkIP）
-export DECODE_IP=<decode-vm-internal-ip>
-
 python3 ~/tpu-inference/examples/disagg/toy_proxy_server.py \
   --host 0.0.0.0 --port 7000 \
   --prefiller-hosts localhost --prefiller-ports 8000 \
@@ -578,37 +581,56 @@ curl http://localhost:7000/v1/chat/completions \
 
 ## Step 7: PD 分离 Benchmark
 
-在 Prefill VM 上对 proxy 端口发请求：
+> **注意**：TPU VM 裸机没有安装 PyTorch，`vllm bench serve` 命令不可用。使用以下 Python 脚本替代（对 proxy 端口 7000 发请求）。
 
 ```bash
-# 1K/1K c=1
-vllm bench serve \
-  --model Qwen3-Coder-480B-FP8 \
-  --dataset-name random \
-  --random-input-len 1024 --random-output-len 1024 \
-  --num-prompts 4 --max-concurrency 1 \
-  --request-rate inf --ignore-eos \
-  --host localhost --port 7000
+python3 << 'PYEOF'
+import requests, time, concurrent.futures
 
-# 8K/1K c=4
-vllm bench serve \
-  --model Qwen3-Coder-480B-FP8 \
-  --dataset-name random \
-  --random-input-len 8192 --random-output-len 1024 \
-  --num-prompts 16 --max-concurrency 4 \
-  --request-rate inf --ignore-eos \
-  --host localhost --port 7000
+URL = "http://localhost:7000/v1/chat/completions"
+MODEL = "Qwen3-Coder-480B-FP8"
+BASE = "The quick brown fox jumps over the lazy dog. "  # ~10 tokens/repeat
 
-# 1K/8K c=64
-vllm bench serve \
-  --model Qwen3-Coder-480B-FP8 \
-  --dataset-name random \
-  --num-warmups 10 \
-  --random-input-len 1024 --random-output-len 8192 \
-  --num-prompts 256 --max-concurrency 64 \
-  --request-rate inf --ignore-eos \
-  --host localhost --port 7000 \
-  --metric-percentiles 90,99
+def make_prompt(target_tokens):
+    return BASE * (target_tokens // 10)
+
+def send_request(prompt, output_len, rid):
+    t0 = time.time()
+    r = requests.post(URL, json={
+        "model": MODEL, "messages": [{"role": "user", "content": prompt}],
+        "max_tokens": output_len, "temperature": 0.7, "ignore_eos": True})
+    data = r.json()
+    t1 = time.time()
+    if "error" in data:
+        return {"error": data["error"]["message"][:200]}
+    u = data.get("usage", {})
+    return {"prompt": u.get("prompt_tokens",0), "completion": u.get("completion_tokens",0),
+            "time": t1-t0, "tps": u.get("completion_tokens",0)/(t1-t0)}
+
+def bench(input_tok, output_tok, conc, n):
+    print("\n" + "="*60)
+    print("P%d/D%d  concurrency=%d  requests=%d" % (input_tok, output_tok, conc, n))
+    print("="*60)
+    prompt = make_prompt(input_tok)
+    t0 = time.time()
+    with concurrent.futures.ThreadPoolExecutor(max_workers=conc) as ex:
+        results = [f.result() for f in
+            [ex.submit(send_request, prompt, output_tok, i) for i in range(n)]]
+    ok = [r for r in results if "error" not in r]
+    if not ok: print("  ALL FAILED"); return
+    total_t = time.time() - t0
+    total_c = sum(r["completion"] for r in ok)
+    print("  Avg prompt tokens:     %d" % (sum(r["prompt"] for r in ok)/len(ok)))
+    print("  Per-request tok/s:     %.1f" % (sum(r["tps"] for r in ok)/len(ok)))
+    print("  Aggregate tok/s:       %.1f" % (total_c / total_t))
+
+# Warmup
+send_request(make_prompt(128), 32, -1)
+
+bench(1024, 1024, 1, 3)
+bench(8192, 1024, 4, 8)
+bench(1024, 8192, 64, 256)
+PYEOF
 ```
 
 ### PD 分离预期性能参考（GKE 实测值）
