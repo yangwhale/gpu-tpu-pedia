@@ -112,22 +112,96 @@ if [ -f /sys/module/vfio_iommu_type1/parameters/dma_entry_limit ]; then
 fi
 ```
 
-### 3.2 安装 Docker
+### 3.2 安装系统依赖
 
 ```bash
 sudo apt-get update -qq
-sudo apt-get install -y -qq docker.io
-sudo usermod -aG docker $USER
-newgrp docker
+sudo apt-get install -y -qq libopenmpi-dev libomp-dev git curl
 ```
 
-### 3.3 拉取 vLLM TPU 镜像
+### 3.3 安装 vLLM + tpu-inference（裸机）
+
+使用 `uv` 创建 Python 3.12 虚拟环境，安装 vLLM（TPU 版）和 tpu-inference：
 
 ```bash
-docker pull vllm/vllm-tpu:nightly
+# 安装 uv
+curl -LsSf https://astral.sh/uv/install.sh | sh
+source $HOME/.local/bin/env
+
+# 创建 Python 3.12 虚拟环境
+uv venv ~/vllm_env --python 3.12
+source ~/vllm_env/bin/activate
+
+# 克隆 tpu-inference（获取 pinned vLLM 版本）
+cd ~
+git clone https://github.com/vllm-project/tpu-inference.git
+cd tpu-inference
+
+# 获取 pinned vLLM commit hash
+export VLLM_COMMIT_HASH="$(cat .buildkite/vllm_lkg.version | tr -d '[:space:]')"
+echo "vLLM commit: ${VLLM_COMMIT_HASH}"
+
+# 克隆 vLLM 并 checkout 到 pinned 版本
+cd ~
+git clone https://github.com/vllm-project/vllm.git
+cd vllm
+git checkout "${VLLM_COMMIT_HASH}"
+
+# 安装 vLLM（TPU target）
+uv pip install -r requirements/tpu.txt --torch-backend=cpu
+VLLM_TARGET_DEVICE="tpu" uv pip install -e .
+
+# 修复 JAX 版本（vLLM 安装会降级 JAX 到 0.8.0，必须装回 0.9.2）
+uv pip install jax==0.9.2 jaxlib==0.9.2 libtpu==0.0.39 flax==0.12.4
+
+# 安装 tpu-inference（--no-deps 避免再次降级 JAX）
+cd ~/tpu-inference
+uv pip install -e . --no-deps
 ```
 
-### 3.4 扩容 /dev/shm 并从 GCS 拷贝模型
+### 3.4 验证安装
+
+```bash
+source ~/vllm_env/bin/activate
+python3 -c '
+import jax
+import importlib.metadata
+from vllm.platforms import current_platform
+print(f"vllm: {importlib.metadata.version(\"vllm\")}")
+print(f"tpu_inference: {importlib.metadata.version(\"tpu_inference\")}")
+print(f"jax: {jax.__version__}")
+print(f"platform: {current_platform.get_device_name()}")
+print(f"devices: {len(jax.devices())} x {jax.devices()[0].platform}")
+'
+```
+
+预期输出：
+```
+vllm: 0.9.x
+tpu_inference: 0.1.0
+jax: 0.9.2
+platform: TpuDevice
+devices: 8 x tpu
+```
+
+> **关于 JAX 版本**：vLLM 的 `requirements/tpu.txt` 会安装 JAX 0.8.0，但 TPU v7x 需要 JAX 0.9.2 + libtpu 0.0.39。安装 vLLM 后必须手动覆盖安装正确版本。
+>
+> **关于 `--no-deps`**：tpu-inference 的 `pyproject.toml` 依赖 jax/jaxlib，不加 `--no-deps` 会再次触发 JAX 降级。
+
+### 3.5 设置运行时环境变量
+
+```bash
+# 建议写入 ~/.bashrc 或每次启动前 source
+export HF_TOKEN=${HF_TOKEN}
+export JAX_PLATFORMS=tpu,cpu
+export TPU_BACKEND_TYPE=jax
+export PJRT_DEVICE=TPU
+export MODEL_IMPL_TYPE=vllm
+export USE_MOE_EP_KERNEL=0
+export USE_BATCHED_RPA_KERNEL=0
+```
+
+### 3.6 扩容 /dev/shm 并从 GCS 拷贝模型
 
 模型权重统一存放在 GCS，每次启动 VM 后拷贝到 `/dev/shm`（内存文件系统）以获得最快的加载速度。
 
@@ -150,36 +224,11 @@ du -sh /dev/shm/${MODEL_NAME}                      # 应为 ~450 GB
 >
 > **注意**：`/dev/shm` 是 tmpfs，VM 重启后数据会丢失，需要重新从 GCS 拷贝。
 
-### 3.5 启动容器
-
-```bash
-docker run -d --name vllm \
-    --privileged --net=host --ipc=host \
-    -v /mnt/data:/data \
-    -v /dev:/dev \
-    -e HF_TOKEN=${HF_TOKEN} \
-    -e JAX_PLATFORMS=tpu,cpu \
-    -e TPU_BACKEND_TYPE=jax \
-    -e PJRT_DEVICE=TPU \
-    -e MODEL_IMPL_TYPE=vllm \
-    -e USE_MOE_EP_KERNEL=0 \
-    -e USE_BATCHED_RPA_KERNEL=0 \
-    vllm/vllm-tpu:nightly sleep infinity
-```
-
-> **`--ipc=host`**：让容器共享宿主机的 `/dev/shm`，容器内可以直接访问 `/dev/shm/${MODEL_NAME}`。
-
-进入容器：
-
-```bash
-docker exec -it vllm bash
-```
-
 ---
 
 ## Step 4: 验证模型权重
 
-模型已在 Step 3.4 从 GCS 拷贝到 `/dev/shm`。在容器内验证：
+模型已在 Step 3.6 从 GCS 拷贝到 `/dev/shm`。验证：
 
 ```bash
 ls /dev/shm/${MODEL_NAME}/*.safetensors | wc -l   # 应为 49
@@ -198,7 +247,10 @@ ls /dev/shm/${MODEL_NAME}/{tokenizer.json,vocab.json,tokenizer_config.json}
 
 ## Step 5: 启动 vLLM
 
+> **重要**：必须 `cd /tmp` 后再运行 vLLM，否则 `~/vllm/` 目录会被 Python 当作 namespace package，导致 import 错误。
+
 ```bash
+source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
 
 export MODEL=/dev/shm/qwen3-coder-480b-fp8
@@ -262,7 +314,7 @@ curl -s http://localhost:8000/v1/chat/completions \
 ### 7.1 安装 benchmark 工具
 
 ```bash
-cd /workspace
+cd ~
 git clone https://github.com/kimbochen/bench_serving.git
 ```
 
@@ -391,7 +443,7 @@ gcloud compute instances create qwen3-decode \
 
 ## Step 2: 两台 VM 分别执行环境准备
 
-在两台 VM 上分别执行 Part 1 的 Step 2（挂载盘）+ Step 3（系统配置 + Docker + GCS 拷贝模型到 SHM）。
+在两台 VM 上分别执行 Part 1 的 Step 2（挂载盘）+ Step 3（系统配置 + 裸机安装 vLLM + GCS 拷贝模型到 SHM）。
 
 ```bash
 # 在每台 VM 上执行（SSH 进去后）
@@ -413,15 +465,10 @@ echo "Prefill: ${PREFILL_IP}, Decode: ${DECODE_IP}"
 
 ## Step 4: 启动 Prefill 实例
 
-SSH 到 Prefill VM，进入容器：
+SSH 到 Prefill VM：
 
 ```bash
-docker exec -it vllm bash
-```
-
-启动 vLLM（kv_producer 模式）：
-
-```bash
+source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
 
 nohup env \
@@ -448,15 +495,10 @@ nohup env \
 
 ## Step 5: 启动 Decode 实例
 
-SSH 到 Decode VM，进入容器：
+SSH 到 Decode VM：
 
 ```bash
-docker exec -it vllm bash
-```
-
-启动 vLLM（kv_consumer 模式）：
-
-```bash
+source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
 
 nohup env \
@@ -483,13 +525,15 @@ nohup env \
 
 ## Step 6: 启动 Proxy
 
-在 Prefill VM 的容器内启动 proxy，连接两个实例：
+在 Prefill VM 上启动 proxy，连接两个实例：
 
 ```bash
+source ~/vllm_env/bin/activate
+
 # 设置 Decode VM 内网 IP（Step 3 获取的 networkIP）
 export DECODE_IP=<decode-vm-internal-ip>
 
-python3 /workspace/tpu_inference/examples/disagg/toy_proxy_server.py \
+python3 ~/tpu-inference/tpu_inference/examples/disagg/toy_proxy_server.py \
   --host 0.0.0.0 --port 7000 \
   --prefiller-hosts localhost --prefiller-ports 8000 \
   --decoder-hosts ${DECODE_IP} --decoder-ports 9000
@@ -499,7 +543,7 @@ python3 /workspace/tpu_inference/examples/disagg/toy_proxy_server.py \
 
 ## Step 7: PD 分离 Benchmark
 
-在 Prefill VM 容器内对 proxy 端口发请求：
+在 Prefill VM 上对 proxy 端口发请求：
 
 ```bash
 # 1K/1K c=1
@@ -576,7 +620,7 @@ done
 
 ## Step 2: 环境准备
 
-在两台 VM 上分别执行 Part 1 的 Step 2 + Step 3（挂载盘、系统配置、Docker、GCS 拷贝模型到 SHM）。
+在两台 VM 上分别执行 Part 1 的 Step 2 + Step 3（挂载盘、系统配置、裸机安装 vLLM、GCS 拷贝模型到 SHM）。
 
 ## Step 3: 获取内网 IP
 
@@ -590,70 +634,68 @@ HOST1_IP=$(gcloud compute instances describe qwen3-host1 \
 echo "Host0: ${HOST0_IP}, Host1: ${HOST1_IP}"
 ```
 
-## Step 4: 启动容器（两台 VM 都执行）
+## Step 4: 设置 Multi-host TPU 环境变量（两台 VM 都执行）
 
-两台 VM 的 Docker 启动命令需要额外设置 multi-host TPU 环境变量：
+Multi-host 推理需要手动设置 TPU 拓扑环境变量，让两台 VM 的 TPU 识别为一个 v7x-16 集群。
 
 ### Host 0（Ray Head + vLLM API Server）
 
 ```bash
-docker run -d --name vllm \
-    --privileged --net=host --ipc=host \
-    -v /mnt/data:/data \
-    -v /dev:/dev \
-    -e HF_TOKEN=${HF_TOKEN} \
-    -e PJRT_DEVICE=TPU \
-    -e TPU_BACKEND_TYPE=jax \
-    -e JAX_PLATFORMS= \
-    -e MODEL_IMPL_TYPE=vllm \
-    -e USE_MOE_EP_KERNEL=0 \
-    -e USE_BATCHED_RPA_KERNEL=0 \
-    -e HF_HUB_OFFLINE=1 \
-    -e SKIP_JAX_PRECOMPILE=1 \
-    -e VLLM_XLA_CHECK_RECOMPILATION=0 \
-    -e TPU_WORKER_HOSTNAMES="${HOST0_IP},${HOST1_IP}" \
-    -e TPU_WORKER_ID=0 \
-    -e TPU_PROCESS_ADDRESSES="${HOST0_IP}:8471,${HOST1_IP}:8471" \
-    -e TPU_PROCESS_PORT=8471 \
-    -e TPU_HOST_BOUNDS="1,1,2" \
-    -e TPU_CHIPS_PER_HOST_BOUNDS="2,2,1" \
-    -e TPU_TOPOLOGY="2x2x2" \
-    -e TPU_ACCELERATOR_TYPE="tpu7x-16" \
-    -e TPU_SKIP_MDS_QUERY=true \
-    -e TPU_MULTIHOST_BACKEND=ray \
-    -e VLLM_HOST_IP=${HOST0_IP} \
-    vllm/vllm-tpu:nightly sleep infinity
+source ~/vllm_env/bin/activate
+
+# 基础环境变量（同 Part 1 Step 3.5）
+export PJRT_DEVICE=TPU
+export TPU_BACKEND_TYPE=jax
+export JAX_PLATFORMS=
+export MODEL_IMPL_TYPE=vllm
+export USE_MOE_EP_KERNEL=0
+export USE_BATCHED_RPA_KERNEL=0
+export HF_HUB_OFFLINE=1
+export SKIP_JAX_PRECOMPILE=1
+export VLLM_XLA_CHECK_RECOMPILATION=0
+
+# Multi-host TPU 拓扑变量
+export TPU_WORKER_HOSTNAMES="${HOST0_IP},${HOST1_IP}"
+export TPU_WORKER_ID=0
+export TPU_PROCESS_ADDRESSES="${HOST0_IP}:8471,${HOST1_IP}:8471"
+export TPU_PROCESS_PORT=8471
+export TPU_HOST_BOUNDS="1,1,2"
+export TPU_CHIPS_PER_HOST_BOUNDS="2,2,1"
+export TPU_TOPOLOGY="2x2x2"
+export TPU_ACCELERATOR_TYPE="tpu7x-16"
+export TPU_SKIP_MDS_QUERY=true
+export TPU_MULTIHOST_BACKEND=ray
+export VLLM_HOST_IP=${HOST0_IP}
 ```
 
 ### Host 1（Ray Worker）
 
 ```bash
-docker run -d --name vllm \
-    --privileged --net=host --ipc=host \
-    -v /mnt/data:/data \
-    -v /dev:/dev \
-    -e HF_TOKEN=${HF_TOKEN} \
-    -e PJRT_DEVICE=TPU \
-    -e TPU_BACKEND_TYPE=jax \
-    -e JAX_PLATFORMS= \
-    -e MODEL_IMPL_TYPE=vllm \
-    -e USE_MOE_EP_KERNEL=0 \
-    -e USE_BATCHED_RPA_KERNEL=0 \
-    -e HF_HUB_OFFLINE=1 \
-    -e SKIP_JAX_PRECOMPILE=1 \
-    -e VLLM_XLA_CHECK_RECOMPILATION=0 \
-    -e TPU_WORKER_HOSTNAMES="${HOST0_IP},${HOST1_IP}" \
-    -e TPU_WORKER_ID=1 \
-    -e TPU_PROCESS_ADDRESSES="${HOST0_IP}:8471,${HOST1_IP}:8471" \
-    -e TPU_PROCESS_PORT=8471 \
-    -e TPU_HOST_BOUNDS="1,1,2" \
-    -e TPU_CHIPS_PER_HOST_BOUNDS="2,2,1" \
-    -e TPU_TOPOLOGY="2x2x2" \
-    -e TPU_ACCELERATOR_TYPE="tpu7x-16" \
-    -e TPU_SKIP_MDS_QUERY=true \
-    -e TPU_MULTIHOST_BACKEND=ray \
-    -e VLLM_HOST_IP=${HOST1_IP} \
-    vllm/vllm-tpu:nightly sleep infinity
+source ~/vllm_env/bin/activate
+
+# 基础环境变量（同上）
+export PJRT_DEVICE=TPU
+export TPU_BACKEND_TYPE=jax
+export JAX_PLATFORMS=
+export MODEL_IMPL_TYPE=vllm
+export USE_MOE_EP_KERNEL=0
+export USE_BATCHED_RPA_KERNEL=0
+export HF_HUB_OFFLINE=1
+export SKIP_JAX_PRECOMPILE=1
+export VLLM_XLA_CHECK_RECOMPILATION=0
+
+# Multi-host TPU 拓扑变量
+export TPU_WORKER_HOSTNAMES="${HOST0_IP},${HOST1_IP}"
+export TPU_WORKER_ID=1
+export TPU_PROCESS_ADDRESSES="${HOST0_IP}:8471,${HOST1_IP}:8471"
+export TPU_PROCESS_PORT=8471
+export TPU_HOST_BOUNDS="1,1,2"
+export TPU_CHIPS_PER_HOST_BOUNDS="2,2,1"
+export TPU_TOPOLOGY="2x2x2"
+export TPU_ACCELERATOR_TYPE="tpu7x-16"
+export TPU_SKIP_MDS_QUERY=true
+export TPU_MULTIHOST_BACKEND=ray
+export VLLM_HOST_IP=${HOST1_IP}
 ```
 
 > **关键差异**：`TPU_WORKER_ID=0` vs `TPU_WORKER_ID=1`，`VLLM_HOST_IP` 分别设为各自 IP。
@@ -663,8 +705,6 @@ docker run -d --name vllm \
 ### Host 0（先启动 Ray Head，再启动 vLLM）
 
 ```bash
-docker exec -it vllm bash
-
 # 启动 Ray Head（daemon 模式，不加 --block）
 ray start --head --port=6379 --node-ip-address=${VLLM_HOST_IP} --resources='{"TPU": 4}'
 sleep 20
@@ -677,8 +717,6 @@ ray status   # 确认 head 启动
 ### Host 1（启动 Ray Worker）
 
 ```bash
-docker exec -it vllm bash
-
 # 加入 Ray 集群（--block 保持前台）
 ray start --address=${HOST0_IP}:6379 --node-ip-address=${VLLM_HOST_IP} --resources='{"TPU": 4}' --block
 ```
@@ -689,7 +727,8 @@ ray start --address=${HOST0_IP}:6379 --node-ip-address=${VLLM_HOST_IP} --resourc
 # 确认 2 nodes, 8 TPU
 ray status
 
-# 启动 vLLM（TP=16, Ray executor）
+# 启动 vLLM（TP=16, Ray executor）— 必须 cd /tmp 避免 namespace package 问题
+cd /tmp
 vllm serve /dev/shm/qwen3-coder-480b-fp8 \
   --served-model-name Qwen3-Coder-480B-FP8 \
   --seed 42 \
@@ -711,7 +750,7 @@ vllm serve /dev/shm/qwen3-coder-480b-fp8 \
 
 ## Step 6: 验证和 Benchmark
 
-在 Host 0 容器内执行：
+在 Host 0 上执行：
 
 ```bash
 # Smoke test
@@ -809,21 +848,32 @@ done
 
 必须加 `--enable-expert-parallel`，否则 experts 在每个 device 都 replicate。
 
-### 2. Docker 看不到 TPU
+### 2. vLLM import 报错 / namespace package 冲突
 
-确保 `docker run` 使用 `--privileged` 且挂载了 `/dev`。验证：
-
-```bash
-docker exec vllm ls /dev/vfio/
-```
-
-### 3. libtpu lockfile 报错
+如果在 `~/vllm/` 目录下运行 `vllm serve`，Python 会把 `~/vllm/` 当作 namespace package，导致 import 错误。解决：
 
 ```bash
-docker exec vllm bash -c 'pkill -9 -f "vllm|EngineCore"; sleep 3; rm -f /tmp/libtpu_lockfile /tmp/.vllm_ipc_*'
+cd /tmp   # 必须离开 ~/vllm/ 目录
+vllm serve ...
 ```
 
-### 4. PD 分离 Decode 连不上 Prefill
+### 3. JAX 版本不对 / libtpu 报错
+
+vLLM 安装会把 JAX 降级到 0.8.0，必须手动覆盖安装：
+
+```bash
+source ~/vllm_env/bin/activate
+uv pip install jax==0.9.2 jaxlib==0.9.2 libtpu==0.0.39 flax==0.12.4
+python3 -c "import jax; print(jax.__version__)"  # 应为 0.9.2
+```
+
+### 4. libtpu lockfile 报错
+
+```bash
+pkill -9 -f "vllm|EngineCore"; sleep 3; rm -f /tmp/libtpu_lockfile /tmp/.vllm_ipc_*
+```
+
+### 5. PD 分离 Decode 连不上 Prefill
 
 检查 VPC 内网 IP 和防火墙规则，确保端口 8000/9000 可达：
 
@@ -832,11 +882,11 @@ docker exec vllm bash -c 'pkill -9 -f "vllm|EngineCore"; sleep 3; rm -f /tmp/lib
 curl -s http://${PREFILL_IP}:8000/health
 ```
 
-### 5. Multi-host AttributeError: d.coords
+### 6. Multi-host AttributeError: d.coords
 
 TPU 环境变量没设对。确认 `TPU_WORKER_HOSTNAMES` 包含两台 VM 的 IP，且 `TPU_WORKER_ID` 在两台分别为 0 和 1。
 
-### 6. 模型权重缺 tokenizer
+### 7. 模型权重缺 tokenizer
 
 ```bash
 cd /dev/shm/qwen3-coder-480b-fp8/
