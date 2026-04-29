@@ -42,12 +42,12 @@
 |------|-------------|-----------------|
 | 架构 | Hybrid GDN+Attn | **纯 MoE + MLA** |
 | 量化 | FP8 native | **FP4 MoE + FP8 Attn + BF16 non-MoE** |
-| FP4 Cache | 不需要 | **必须**（~735 GB，含生成+拷贝流程） |
+| FP4 Cache | 不需要 | **必须**（~705 GB，含生成+拷贝流程） |
 | 并行策略 | TP=8 | **EP=8, TP=1**（`--additional-config` JSON 控制） |
 | 代码分支 | `main` | **`feature/glm51-inference`**（yangwhale fork） |
-| vLLM 入口 | `vllm serve` | **`python3 -m vllm.entrypoints.openai.api_server`** |
+| vLLM 入口 | `vllm serve` | `vllm serve`（必须用 CLI 入口，`python3 -m` 会触发循环导入） |
 | Chat 稳定性 | 5-shot only | **Chat 正常**（自称 GLM / Z.ai） |
-| 数据盘需求 | ≥500 GB | **≥2 TB**（模型 705 GB + FP4 cache 735 GB） |
+| 数据盘需求 | ≥500 GB | **≥2 TB**（模型 705 GB + FP4 cache 705 GB） |
 | /dev/shm 用途 | 存放模型权重 | **存放 FP4 cache**（模型留在磁盘） |
 | PD Connector | TPUConnectorHMA | **TPUConnector**（非 hybrid） |
 
@@ -83,8 +83,8 @@ export MODEL_NAME=GLM-5.1-FP8                          # 模型目录名（与 G
 | HBM | 768 GB | 1,536 GB |
 | 主机内存 | 944 GB | 944 GB × 2 |
 | 启动盘 | 1 TB Hyperdisk Balanced | 1 TB × 2 |
-| 数据盘 | **≥2 TB**（模型 705 GB + FP4 cache 735 GB） | ≥2 TB × 2 |
-| /dev/shm | **≥800 GB**（FP4 cache ~757 GB） | 待定（见 Part 3 说明） |
+| 数据盘 | **≥2 TB**（模型 705 GB + FP4 cache 705 GB） | ≥2 TB × 2 |
+| /dev/shm | **≥800 GB**（FP4 cache ~705 GB） | 待定（见 Part 3 说明） |
 
 ---
 
@@ -103,7 +103,7 @@ gcloud compute disks create glm51-data-01 \
     --provisioned-throughput=2500
 ```
 
-> **为什么 4 TB**：模型 ~705 GB + FP4 cache ~735 GB + Non-MoE 合并文件 ~21 GB + 临时文件 ≈ 1.5 TB。4 TB 提供充足余量。如果 Hyperdisk ML 配额不足，可改用 Hyperdisk Balanced 2 TB。
+> **为什么 4 TB**：模型 ~705 GB + FP4 cache ~705 GB + Non-MoE 合并文件 ~21 GB + 临时文件 ≈ 1.5 TB。4 TB 提供充足余量。如果 Hyperdisk ML 配额不足，可改用 Hyperdisk Balanced 2 TB。
 
 ### 1.2 创建 TPU VM
 
@@ -252,7 +252,7 @@ export HF_TOKEN=${HF_TOKEN}
 export JAX_PLATFORMS=tpu,cpu
 export TPU_BACKEND_TYPE=jax
 export PJRT_DEVICE=TPU
-export MODEL_IMPL_TYPE=vllm
+export MODEL_IMPL_TYPE=flax_nnx
 export USE_MOE_EP_KERNEL=0
 export USE_BATCHED_RPA_KERNEL=0
 
@@ -286,7 +286,7 @@ du -sh /mnt/data/GLM-5.1-FP8                      # 应为 ~705 GB
 export MODEL=/mnt/data/GLM-5.1-FP8
 ```
 
-> **与 Qwen3.5 的区别**：Qwen3.5 模型 378 GB 可放 /dev/shm 加速加载。GLM-5.1 模型 705 GB + FP4 cache 757 GB 合计 1.4 TB，远超 /dev/shm 容量，因此**模型留在数据盘，/dev/shm 只存 FP4 cache**。
+> **与 Qwen3.5 的区别**：Qwen3.5 模型 378 GB 可放 /dev/shm 加速加载。GLM-5.1 模型 705 GB + FP4 cache 705 GB 合计 1.4 TB，远超 /dev/shm 容量，因此**模型留在数据盘，/dev/shm 只存 FP4 cache**。
 >
 > **首次上传模型到 GCS**：如果 GCS 桶里还没有模型权重，先在任意机器上从 HuggingFace 下载后上传：
 > ```bash
@@ -349,7 +349,7 @@ python3 /mnt/data/extract_non_moe_weights.py \
 ```bash
 # 检查 MoE 层数
 ls /mnt/data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone/ | grep model_layers | wc -l
-# 预期：75（layer 3-77，MTP layer 78 不需要）
+# 预期：76（layer 3-78）
 
 # 检查 non-MoE 文件
 ls -lh /mnt/data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone/non_moe_weights.safetensors
@@ -377,7 +377,7 @@ for name in ['w13_weight', 'w13_weight_scale', 'w2_weight', 'w2_weight_scale']:
 将 FP4 cache + Non-MoE 权重预加载到 `/dev/shm`（tmpfs），**大幅加速启动 + 避免 MoE prefetch deadlock**。
 
 ```bash
-# 扩容 /dev/shm（默认 ~472 GB，需容纳 757 GB FP4 cache）
+# 扩容 /dev/shm（默认 ~472 GB，需容纳 705 GB FP4 cache）
 sudo mount -o remount,size=800G /dev/shm
 
 SRC=/mnt/data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone
@@ -388,18 +388,18 @@ mkdir -p $DST
 # 拷贝 non-MoE 权重
 cp $SRC/non_moe_weights.safetensors $DST/
 
-# 并行拷贝 75 层 MoE cache（8 workers，~4 min）
+# 并行拷贝 76 层 MoE cache（8 workers，~4 min）
 ls -d $SRC/model_layers_* | xargs -P 8 -I {} cp -r {} $DST/
 
 # 验证
-ls $DST/ | grep model_layers | wc -l   # 预期：75
+ls $DST/ | grep model_layers | wc -l   # 预期：76
 ls -lh $DST/non_moe_weights.safetensors  # 预期：~21 GB
-df -h /dev/shm                           # 预期占用 ~757 GB
+df -h /dev/shm                           # 预期占用 ~705 GB
 ```
 
 > **不要用 `cp -r` 单线程**！单线程 ~8 min，`xargs -P 8` 并行 ~4 min。
 >
-> **总占用**：FP4 cache ~735 GB + non-MoE 21 GB ≈ **757 GB**，/dev/shm 800 GB 够用。
+> **总占用**：FP4 cache + non-MoE ≈ **~705 GB**，/dev/shm 800 GB 够用。
 >
 > **⚠️ /dev/shm 是 tmpfs**：VM 重启后数据丢失，需重新从数据盘拷贝（Step 5 本步骤）。
 
@@ -441,12 +441,11 @@ echo "MOE_WEIGHT_CACHE_DIR=${MOE_WEIGHT_CACHE_DIR}"                # 应为 /dev
 nohup env \
   PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS=tpu,cpu \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
-  MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
+  MODEL_IMPL_TYPE=flax_nnx HF_HUB_OFFLINE=1 \
   MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn \
   NEW_MODEL_DESIGN=1 \
   MOE_WEIGHT_CACHE_DIR=/dev/shm \
-  python3 -m vllm.entrypoints.openai.api_server \
-    --model $MODEL \
+  vllm serve $MODEL \
     --served-model-name GLM-5.1-FP8 \
     --tensor-parallel-size 8 \
     --quantization fp8 \
@@ -520,7 +519,7 @@ curl -s http://localhost:8000/health
 | 中文自我介绍 | ✅ 自称 "Z.ai 创建的大语言模型"，输出流畅 |
 | 英文逻辑推理 | ✅ 正确推理 |
 | HBM 占用 | 58.43/94.75 GiB per device（61.6%） |
-| MoE cache | 75/75 层全部 hit（FP4） |
+| MoE cache | 76/76 层全部 hit（FP4） |
 
 ---
 
@@ -699,12 +698,11 @@ cd /tmp && mkdir -p /tmp/vllm-logs
 nohup env \
   PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS=tpu,cpu \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
-  MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
+  MODEL_IMPL_TYPE=flax_nnx HF_HUB_OFFLINE=1 \
   MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn \
   NEW_MODEL_DESIGN=1 \
   MOE_WEIGHT_CACHE_DIR=/dev/shm \
-  python3 -m vllm.entrypoints.openai.api_server \
-    --model /mnt/data/GLM-5.1-FP8 \
+  vllm serve /mnt/data/GLM-5.1-FP8 \
     --served-model-name GLM-5.1-FP8 \
     --tensor-parallel-size 8 \
     --quantization fp8 \
@@ -739,12 +737,11 @@ cd /tmp && mkdir -p /tmp/vllm-logs
 nohup env \
   PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS=tpu,cpu \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
-  MODEL_IMPL_TYPE=vllm HF_HUB_OFFLINE=1 \
+  MODEL_IMPL_TYPE=flax_nnx HF_HUB_OFFLINE=1 \
   MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn \
   NEW_MODEL_DESIGN=1 \
   MOE_WEIGHT_CACHE_DIR=/dev/shm \
-  python3 -m vllm.entrypoints.openai.api_server \
-    --model /mnt/data/GLM-5.1-FP8 \
+  vllm serve /mnt/data/GLM-5.1-FP8 \
     --served-model-name GLM-5.1-FP8 \
     --tensor-parallel-size 8 \
     --quantization fp8 \
@@ -857,7 +854,7 @@ PYEOF
 | # | 风险 | 排查方向 |
 |---|------|---------|
 | 1 | TPUConnector 是否兼容 `--additional-config` 中的 EP+DP sharding | 检查 Prefill/Decode log 中 sharding 初始化是否正常 |
-| 2 | FP4 cache 在 PD 模式下 /dev/shm 空间是否足够（cache 757 GB + KV transfer buffer） | 监控 `df -h /dev/shm` 和 HBM 使用 |
+| 2 | FP4 cache 在 PD 模式下 /dev/shm 空间是否足够（cache 705 GB + KV transfer buffer） | 监控 `df -h /dev/shm` 和 HBM 使用 |
 | 3 | `--enable-prefix-caching` 和 `--enable-chunked-prefill` 是否与 PD 兼容 | 如果 Prefill 报错，尝试去掉这两个 flag |
 | 4 | KV transfer 带宽是否足够支撑长 context（16K tokens） | 如果 TTFT 异常高，降低 `--max-model-len` |
 
@@ -1020,8 +1017,8 @@ cp $SRC/non_moe_weights.safetensors $DST/
 ls -d $SRC/model_layers_* | xargs -P 8 -I {} cp -r {} $DST/
 
 # 验证
-ls $DST/ | grep model_layers | wc -l   # 预期：75
-df -h /dev/shm                           # 预期占用 ~757 GB
+ls $DST/ | grep model_layers | wc -l   # 预期：76
+df -h /dev/shm                           # 预期占用 ~705 GB
 ```
 
 > **EP=16 vs EP=8 目录名**：tpu-inference 按 `ep{EP}_tp{TP}_gmm_ep_{dtype}_bsNone` 格式查找 cache 目录。EP=16 时查找 `ep16_tp1_...`。Cache 内容完全相同（所有 256 experts），sharding 在加载时完成。
@@ -1038,7 +1035,7 @@ ln -s /mnt/data/moe-cache/ep8_tp1_gmm_ep_fp4e2m1_bsNone \
 export MOE_WEIGHT_CACHE_DIR=/mnt/data/moe-cache
 ```
 
-> ⚠️ **方案 B 风险**：磁盘加载比 tmpfs 慢约 100x。如果 cache 目录不完整（缺少 meta.json），可能触发 MoE prefetch deadlock。确保所有 75 个 layer 目录都有完整的 `.npy` 文件和 `meta.json`。
+> ⚠️ **方案 B 风险**：磁盘加载比 tmpfs 慢约 100x。如果 cache 目录不完整（缺少 meta.json），可能触发 MoE prefetch deadlock。确保所有 76 个 layer 目录都有完整的 `.npy` 文件和 `meta.json`。
 
 ## Step 3: 设置 TPU 拓扑环境变量
 
@@ -1051,7 +1048,7 @@ source ~/vllm_env/bin/activate
 export PJRT_DEVICE=TPU
 export TPU_BACKEND_TYPE=jax
 export JAX_PLATFORMS=
-export MODEL_IMPL_TYPE=vllm
+export MODEL_IMPL_TYPE=flax_nnx
 export USE_MOE_EP_KERNEL=0
 export USE_BATCHED_RPA_KERNEL=0
 export HF_HUB_OFFLINE=1
@@ -1086,7 +1083,7 @@ source ~/vllm_env/bin/activate
 export PJRT_DEVICE=TPU
 export TPU_BACKEND_TYPE=jax
 export JAX_PLATFORMS=
-export MODEL_IMPL_TYPE=vllm
+export MODEL_IMPL_TYPE=flax_nnx
 export USE_MOE_EP_KERNEL=0
 export USE_BATCHED_RPA_KERNEL=0
 export HF_HUB_OFFLINE=1
@@ -1152,14 +1149,13 @@ cd /tmp && mkdir -p /tmp/vllm-logs
 
 nohup env \
   PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS= \
-  MODEL_IMPL_TYPE=vllm USE_MOE_EP_KERNEL=0 USE_BATCHED_RPA_KERNEL=0 \
+  MODEL_IMPL_TYPE=flax_nnx USE_MOE_EP_KERNEL=0 USE_BATCHED_RPA_KERNEL=0 \
   HF_HUB_OFFLINE=1 SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn \
   NEW_MODEL_DESIGN=1 \
   MOE_WEIGHT_CACHE_DIR=/dev/shm \
   RAY_memory_monitor_refresh_ms=0 \
-  python3 -m vllm.entrypoints.openai.api_server \
-    --model /mnt/data/GLM-5.1-FP8 \
+  vllm serve /mnt/data/GLM-5.1-FP8 \
     --served-model-name GLM-5.1-FP8 \
     --tensor-parallel-size 16 \
     --distributed-executor-backend ray \
@@ -1281,7 +1277,7 @@ PYEOF
 |---|------|---------|
 | 1 | `--additional-config` 的 EP=16 是否在 Ray multi-host 下正确工作 | 检查 vLLM log 中 sharding 初始化 |
 | 2 | FP4 cache 目录命名是否匹配 `ep16_tp1_...` | 如果 cache miss，检查实际查找路径 |
-| 3 | `/dev/shm` 空间是否足够（FP4 cache 757 GB + Ray 50 GB） | 监控 `df -h /dev/shm`，如果 OOM 改用方案 B |
+| 3 | `/dev/shm` 空间是否足够（FP4 cache 705 GB + Ray 50 GB） | 监控 `df -h /dev/shm`，如果 OOM 改用方案 B |
 | 4 | `--enforce-eager` 在 Ray executor 下是否兼容 | 如果编译报错，尝试去掉 |
 | 5 | `--enable-prefix-caching` / `--enable-chunked-prefill` 与 Ray 兼容性 | 如果启动挂起，去掉这两个 flag |
 
@@ -1342,7 +1338,7 @@ gcloud compute resource-policies delete ${SLICE_NAME}-wp --project=${PROJECT_ID}
 |---|---|---|
 | **`CompileTimeHbmOom: Used 651G of 94.75G hbm`** | `MOE_REQUANTIZE_WEIGHT_DTYPE` 未设置，查找 FP8 cache → miss → OOM | `export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn` |
 | **`MLA models require NEW_MODEL_DESIGN=1`** | 缺 `NEW_MODEL_DESIGN` 环境变量 | `export NEW_MODEL_DESIGN=1` |
-| **vLLM 卡死不动（0% CPU，线程全在 futex_wait）** | MoE prefetch deadlock：cache 从磁盘加载 或 cache 目录不完整 | 确保 cache 在 /dev/shm（tmpfs），且所有 75 层都有完整文件 |
+| **vLLM 卡死不动（0% CPU，线程全在 futex_wait）** | MoE prefetch deadlock：cache 从磁盘加载 或 cache 目录不完整 | 确保 cache 在 /dev/shm（tmpfs），且所有 76 层都有完整文件 |
 | **FP4 cache 生成时 OOM Kill（exit 137）** | /dev/shm 有旧数据，挤占 worker 内存 | `rm -rf /dev/shm/*` 后重新生成 |
 | **TPU device busy** | 上次 vLLM 异常退出，孤儿进程占 TPU | `pgrep -f 'EngineCore\|vllm' \| xargs -r kill -9` + `rm -f /tmp/libtpu_lockfile` |
 | **`/dev/shm` 中出现多个 cache 目录** | 同时存在 FP4 和 FP8 cache | 删除 `ep8_tp1_gmm_ep_fp8e4m3_bsNone`，只保留 `fp4e2m1` |
