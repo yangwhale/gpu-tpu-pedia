@@ -614,7 +614,7 @@ PYEOF
 
 # Part 2: PD 分离 (1P1D)
 
-> ⚠️ **本章节为理论设计，尚未实测。** 参数基于 GKE 单机验证 + Qwen3-Coder PD 分离经验推导。
+> ⚠️ **已实测验证：PD 链路可通但存在稳定性问题。** 完整 Prefill→KV transfer→Decode 链路在 TPU v7x-8 VM 上验证通过，但 DPScheduler（GLM-5.1 MLA 强制开启 `enable_dp_attention`）与 JAX 多线程存在 fork 死锁问题，导致引擎在处理约 2-3 个 PD 请求后挂起。**短期 demo 可用，长时间服务不稳定。**
 >
 > 2 台 TPU v7x-8 VM：一台跑 Prefill（kv_producer），一台跑 Decode（kv_consumer），通过 VPC 内网传输 KV cache。
 >
@@ -679,11 +679,88 @@ gcloud compute instances create glm51-decode \
 在两台 VM 上分别执行：
 1. Part 1 Step 2（格式化挂载数据盘）
 2. Part 1 Step 3.1 ~ 3.5（系统配置 + 安装 vLLM/tpu-inference + 设置环境变量）
+   - ⚠️ **tpu-inference 必须用 `yangwhale/feature/glm51-inference` 分支**（包含 GLM-5.1 的 MoE cache、FP4 量化等 20+ 个必要 commits）
+   - ⚠️ **两台 VM 的 tpu-inference 版本必须一致**，否则 TPUConnector KV 传输协议可能不兼容
+   - ⚠️ **deepseek_v2.py patch 必须在两台 VM 上都打**（Part 1 Step 3.3 的 sed 命令）
 3. Part 1 Step 3.6（下载模型权重到 `/mnt/data/`）
 4. Part 1 Step 4（生成 FP4 Cache + Non-MoE 合并）— 第二台可从 GCS/第一台拷贝 cache
 5. Part 1 Step 5（拷贝 Cache 到 /dev/shm）
+6. **（必须）DPScheduler PD 补丁** — 见下方 Step 2.1
 
 > **两台 VM 都需要独立的 /dev/shm FP4 cache**。FP4 cache 在各自的 /dev/shm 中分别加载。
+
+> ⚠️ **GCE TPU VM /dev/shm mount namespace 隔离问题**：GCE TPU VM 的每个 SSH session 拥有独立的 mount namespace。这意味着在一个 SSH session 中写入 /dev/shm 的数据，在另一个 SSH session 启动的 vLLM 进程中**不可见**。**必须在同一个 SSH session 中完成 /dev/shm 缓存拷贝和 vLLM 启动**。如果 VM 重启或重新 SSH，需要重新拷贝 FP4 cache 到 /dev/shm。
+
+### Step 2.1: DPScheduler PD 补丁（两台 VM 都需要）
+
+GLM-5.1 的 MLA 架构要求 `enable_dp_attention=true`，这导致 vLLM 使用 DPScheduler（而非普通 Scheduler）。DPScheduler 通过 `multiprocessing.fork` 创建 8 个子调度器进程，但主调度器的 `self.connector` 被硬编码为 `None`，导致 KV connector metadata 不会传递给 model runner，PD 模式下会触发 `AssertionError: scheduler_output.kv_connector_metadata is not None`。
+
+在 **两台 VM** 上执行以下补丁：
+
+```bash
+cd ~/tpu-inference
+
+# 备份
+cp tpu_inference/core/sched/dp_scheduler.py tpu_inference/core/sched/dp_scheduler.py.bak
+
+# 找到 _combine_scheduler_outputs 方法中创建 DPSchedulerOutput 的位置，
+# 在 return 之前添加 kv_connector_metadata 合并逻辑
+python3 << 'PATCH'
+import re
+
+with open('tpu_inference/core/sched/dp_scheduler.py', 'r') as f:
+    content = f.read()
+
+# 检查是否已打补丁
+if 'combined_kv_meta' in content:
+    print('Patch already applied')
+    exit(0)
+
+# 在 _combine_scheduler_outputs 方法的 return result 之前插入 KV metadata 合并代码
+old = '        return result'
+# 找到 _combine_scheduler_outputs 方法中的 return result
+# 需要精确匹配在该方法内的 return
+
+patch_code = '''        # Combine kv_connector_metadata from sub-schedulers (PD disagg support)
+        combined_kv_meta = None
+        for output in rank_outputs:
+            if output.kv_connector_metadata is not None:
+                if combined_kv_meta is None:
+                    combined_kv_meta = output.kv_connector_metadata
+                else:
+                    if hasattr(combined_kv_meta, 'reqs_to_send'):
+                        combined_kv_meta.reqs_to_send.update(
+                            output.kv_connector_metadata.reqs_to_send)
+                    if hasattr(combined_kv_meta, 'reqs_to_load'):
+                        combined_kv_meta.reqs_to_load.update(
+                            output.kv_connector_metadata.reqs_to_load)
+        if combined_kv_meta is not None:
+            result.kv_connector_metadata = combined_kv_meta
+        return result'''
+
+# Replace only the return in _combine_scheduler_outputs
+# Find the method and its return
+idx = content.find('def _combine_scheduler_outputs')
+if idx == -1:
+    print('ERROR: _combine_scheduler_outputs not found')
+    exit(1)
+
+# Find 'return result' after that method
+ret_idx = content.find('        return result', idx)
+if ret_idx == -1:
+    print('ERROR: return result not found in method')
+    exit(1)
+
+content = content[:ret_idx] + patch_code + content[ret_idx + len('        return result'):]
+
+with open('tpu_inference/core/sched/dp_scheduler.py', 'w') as f:
+    f.write(content)
+
+print('Patch applied successfully')
+PATCH
+```
+
+> **原理**：DPScheduler 的 8 个子调度器各自创建了 KV connector 并生成 `kv_connector_metadata`，但主调度器的 `_combine_scheduler_outputs()` 方法只合并了调度输出，丢失了 metadata。此补丁将子调度器的 metadata 合并后附加到 `DPSchedulerOutput` 上。
 
 ## Step 3: 获取内网 IP
 
@@ -705,6 +782,9 @@ SSH 到 Prefill VM：
 source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
 
+# ⚠️ VLLM_HOST_IP 必须设为本机内网 IP（TPUConnector 用此地址建立 KV transfer server）
+export VLLM_HOST_IP=${PREFILL_IP}
+
 nohup env \
   PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS=tpu,cpu \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
@@ -712,6 +792,7 @@ nohup env \
   MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn \
   NEW_MODEL_DESIGN=1 \
   MOE_WEIGHT_CACHE_DIR=/dev/shm \
+  VLLM_HOST_IP=${VLLM_HOST_IP} \
   vllm serve /mnt/data/GLM-5.1-FP8 \
     --served-model-name GLM-5.1-FP8 \
     --tensor-parallel-size 8 \
@@ -729,20 +810,26 @@ nohup env \
 ```
 
 关键差异（vs Part 1 单机）：
+- `VLLM_HOST_IP`：**必须设为本机内网 IP**。TPUConnector 用此地址启动 KV transfer server（默认端口 9100）和 ZMQ side channel（默认端口 9600），Decode 实例通过这些端口拉取 KV cache
 - `--gpu-memory-utilization=0.70`（留 30% HBM 给 KV transfer buffer）
 - `kv_role=kv_producer`
 - `--max-model-len=16384`（PD 模式支持更长 context）
 - 使用 `TPUConnector`（不是 `TPUConnectorHMA`，GLM-5.1 非 hybrid）
 
 > 启动需 5~12 分钟。用 `tail -f /tmp/vllm-logs/prefill.log` 观察进度。
+>
+> ⚠️ **必须在同一个 SSH session 中确认 /dev/shm FP4 cache 可见后再启动 vLLM**。如果新开 SSH session，先运行 `ls /dev/shm/ep8_tp1_gmm_ep_fp4e2m1_bsNone/model_layers_10_mlp_experts/meta.json` 确认 cache 存在。如果不存在，需要重新拷贝（Part 1 Step 5）。
 
 ## Step 5: 启动 Decode 实例
 
-SSH 到 Decode VM：
+SSH 到 Decode VM（**注意：必须在同一个 SSH session 中完成 /dev/shm 拷贝和 vllm 启动**）：
 
 ```bash
 source ~/vllm_env/bin/activate
 cd /tmp && mkdir -p /tmp/vllm-logs
+
+# ⚠️ VLLM_HOST_IP 必须设为 Decode VM 自己的内网 IP
+export VLLM_HOST_IP=${DECODE_IP}
 
 nohup env \
   PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS=tpu,cpu \
@@ -751,6 +838,7 @@ nohup env \
   MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn \
   NEW_MODEL_DESIGN=1 \
   MOE_WEIGHT_CACHE_DIR=/dev/shm \
+  VLLM_HOST_IP=${VLLM_HOST_IP} \
   vllm serve /mnt/data/GLM-5.1-FP8 \
     --served-model-name GLM-5.1-FP8 \
     --tensor-parallel-size 8 \
@@ -768,6 +856,8 @@ nohup env \
 ```
 
 关键差异（vs Prefill）：`--gpu-memory-utilization=0.90`（Decode 不需要预留 transfer buffer），`kv_role=kv_consumer`，`port=9000`。
+
+> **网络要求**：Decode VM 需要能访问 Prefill VM 的端口 **9100**（KV transfer）和 **9600**（ZMQ side channel）。同 VPC 内网通常无需额外防火墙规则，但如果有 Network Firewall Policy 需确认放行这两个端口。
 
 ## Step 6: 验证两端就绪 + 启动 Proxy
 
@@ -857,16 +947,17 @@ bench(1024, 8192, 64, 256)
 PYEOF
 ```
 
-### ⚠️ PD 分离已知风险点
+### ⚠️ PD 分离已知问题（实测）
 
-> 以下是理论分析的潜在失败点，实测时需逐一验证：
-
-| # | 风险 | 排查方向 |
-|---|------|---------|
-| 1 | TPUConnector 是否兼容 `--additional-config` 中的 EP+DP sharding | 检查 Prefill/Decode log 中 sharding 初始化是否正常 |
-| 2 | FP4 cache 在 PD 模式下 /dev/shm 空间是否足够（cache 705 GB + KV transfer buffer） | 监控 `df -h /dev/shm` 和 HBM 使用 |
-| 3 | `--enable-prefix-caching` 和 `--enable-chunked-prefill` 是否与 PD 兼容 | 如果 Prefill 报错，尝试去掉这两个 flag |
-| 4 | KV transfer 带宽是否足够支撑长 context（16K tokens） | 如果 TTFT 异常高，降低 `--max-model-len` |
+| # | 问题 | 状态 | 详情 |
+|---|------|------|------|
+| 1 | DPScheduler 不传递 kv_connector_metadata | **已修复** | Step 2.1 的补丁解决。不打补丁会 `AssertionError: scheduler_output.kv_connector_metadata is not None` |
+| 2 | /dev/shm mount namespace 隔离 | **需注意** | GCE TPU VM 每个 SSH session 有独立 mount namespace，FP4 cache 拷贝和 vLLM 启动必须在同一 session |
+| 3 | DPScheduler + JAX fork 死锁 | **未解决** | `enable_dp_attention=true`（MLA 强制）→ DPScheduler 用 `multiprocessing.fork` 创建 8 个子进程 → JAX 多线程环境下 fork 不安全 → 引擎在处理约 2-3 个 PD 请求后挂起（futex deadlock, 2000+ 线程）。根因是 vLLM log 中的 `RuntimeWarning: os.fork() was called. os.fork() is incompatible with multithreaded code, and JAX is multithreaded` |
+| 4 | TPUConnector 兼容 EP+DP sharding | **已验证** | KV transfer 在 EP=8, DP_attention=true 下正常工作 |
+| 5 | `--enable-prefix-caching` + `--enable-chunked-prefill` 与 PD | **已验证** | 两个 flag 与 PD 兼容，无需去掉 |
+| 6 | FP4 cache + KV transfer buffer 空间 | **已验证** | /dev/shm 800G 足够（cache 705G + buffer），HBM 无冲突 |
+| 7 | 首次请求 XLA 编译延迟 | **预期行为** | Prefill 和 Decode 各需约 3 分钟首次 XLA 编译，后续请求命中缓存（Prefill <1s, Decode <1s） |
 
 ---
 
