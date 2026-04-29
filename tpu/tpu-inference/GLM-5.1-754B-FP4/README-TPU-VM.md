@@ -931,7 +931,7 @@ gcloud compute instance-groups managed create ${SLICE_NAME}-mig \
 
 ```bash
 MIG_VMS=$(gcloud compute instance-groups managed list-instances ${SLICE_NAME}-mig \
-    --project=${PROJECT_ID} --zone=${ZONE} --format="value(instance)")
+    --project=${PROJECT_ID} --zone=${ZONE} --format="value(name)")
 echo "VMs: ${MIG_VMS}"
 
 HOST0_VM=$(echo "${MIG_VMS}" | head -1)

@@ -868,7 +868,7 @@ gcloud compute instance-groups managed create ${SLICE_NAME}-mig \
 ```bash
 # MIG 创建的 VM 名称带随机后缀
 MIG_VMS=$(gcloud compute instance-groups managed list-instances ${SLICE_NAME}-mig \
-    --project=${PROJECT_ID} --zone=${ZONE} --format="value(instance)")
+    --project=${PROJECT_ID} --zone=${ZONE} --format="value(name)")
 echo "VMs: ${MIG_VMS}"
 
 # 分别获取 IP（按创建顺序，第一台做 Host 0）
