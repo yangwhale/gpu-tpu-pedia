@@ -268,8 +268,8 @@ Qwen3.5 是 hybrid GDN+Attention 模型，vLLM 的 hybrid KV cache allocator 有
 
 ```bash
 # 验证 PR #2366 已包含
-KCM_PATH=$(python3 -c "import tpu_inference; import os; print(os.path.join(os.path.dirname(tpu_inference.__file__), 'runner', 'kv_cache_manager.py'))")
-grep -c '_hybrid_uniform_page_size_bytes' $KCM_PATH
+KCM_PATH=$(python3 -c "import tpu_inference; import os; print(os.path.join(os.path.dirname(tpu_inference.__file__), 'runner', 'kv_cache_manager.py'))" 2>/dev/null | tail -1)
+grep -c '_hybrid_uniform_page_size_bytes' "$KCM_PATH"
 # 输出 7 = 已包含，跳过下面的 patch 步骤
 # 输出 0 = 需要手动 patch
 ```
@@ -375,7 +375,7 @@ print('finish:', data['choices'][0]['finish_reason'])
 "
 ```
 
-**预期**：`content: ' Paris.'` / `reasoning_len: 0` / `finish: stop`
+**预期**：`content: 'Paris.'` / `reasoning_len: 0` / `finish: stop`
 
 ---
 
