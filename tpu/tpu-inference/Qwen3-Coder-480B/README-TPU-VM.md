@@ -699,13 +699,14 @@ gcloud compute instance-groups managed create ${SLICE_NAME}-mig \
     --workload-policy=projects/${PROJECT_ID}/regions/${ZONE%-*}/resourcePolicies/${SLICE_NAME}-wp
 ```
 
-> **三个关键参数**（缺一不可，否则只会创建独立 VM 而非 ICI slice）：
+> **两个关键参数**（缺一不可，否则只会创建独立 VM 而非 ICI slice）：
 >
 > | 参数 | 作用 |
 > |------|------|
 > | `--workload-policy` | 指定 ICI 拓扑，MIG 按此拓扑分配物理互联的 chips |
 > | `--default-action-on-vm-failure=do-nothing` | 禁止 MIG 自动修复单个 VM（会破坏 slice 拓扑） |
-> | Target Size Policy = BULK | gcloud 在检测到 workload-policy 时自动设置；REST API 须手动指定 `targetSizePolicy.mode: BULK`，确保所有 VM 原子性同时分配 |
+>
+> **注意**：gcloud 在检测到 `--workload-policy` 时会自动设置 `targetSizePolicy.mode: BULK`（确保所有 VM 原子性同时分配）。如果使用 REST API 而非 gcloud CLI，须手动指定此字段。
 >
 > **验证 slice 生效**：VM 创建后检查 metadata，成功的 slice 应显示 `TOPOLOGY: 2x2x2`、`HOST_BOUNDS: 1,1,2`、`TPU_ACCELERATOR_TYPE: tpu7x-16`，且 `worker-network-endpoints` 包含两台 VM。如果看到 `TOPOLOGY: 2x2x1`、`HOST_BOUNDS: 1,1,1`，说明 workload policy 没有正确关联。
 
