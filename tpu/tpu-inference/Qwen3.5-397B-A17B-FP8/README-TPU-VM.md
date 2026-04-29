@@ -732,17 +732,20 @@ def make_prompt(target_tokens):
 
 def send_request(prompt, output_len, rid):
     t0 = time.time()
-    r = requests.post(URL, json={
-        "model": MODEL, "messages": [{"role": "user", "content": prompt}],
-        "max_tokens": output_len, "temperature": 0.7, "ignore_eos": True,
-        "chat_template_kwargs": {"enable_thinking": False}})
-    data = r.json()
-    t1 = time.time()
-    if "error" in data:
-        return {"error": data["error"]["message"][:200]}
-    u = data.get("usage", {})
-    return {"prompt": u.get("prompt_tokens",0), "completion": u.get("completion_tokens",0),
-            "time": t1-t0, "tps": u.get("completion_tokens",0)/(t1-t0)}
+    try:
+        r = requests.post(URL, json={
+            "model": MODEL, "messages": [{"role": "user", "content": prompt}],
+            "max_tokens": output_len, "temperature": 0.7, "ignore_eos": True,
+            "chat_template_kwargs": {"enable_thinking": False}}, timeout=1800)
+        data = r.json()
+        t1 = time.time()
+        if "error" in data:
+            return {"error": str(data.get("error",""))[:200]}
+        u = data.get("usage", {})
+        return {"prompt": u.get("prompt_tokens",0), "completion": u.get("completion_tokens",0),
+                "time": t1-t0, "tps": u.get("completion_tokens",0)/(t1-t0)}
+    except Exception as e:
+        return {"error": str(e)[:200]}
 
 def bench(input_tok, output_tok, conc, n):
     print("\n" + "="*60)
@@ -765,19 +768,36 @@ def bench(input_tok, output_tok, conc, n):
 send_request(make_prompt(128), 32, -1)
 
 bench(1024, 1024, 1, 3)
+bench(1024, 1024, 4, 8)
+bench(8192, 1024, 1, 3)
 bench(8192, 1024, 4, 8)
-bench(1024, 8192, 64, 256)
+bench(1024, 8192, 1, 3)
+bench(1024, 8192, 4, 8)
 PYEOF
 ```
 
-### PD 分离预期性能参考
+### PD 分离性能实测（TPU VM, 1P1D, v7x-8 × 2, 2026-04-29）
 
-> 待实测。参考 Qwen3-Coder PD 分离的趋势：TPOT 比单机低 ~11%，Output tok/s 略优 5-12%。
+> 测试条件：Prefill `gpu-mem=0.70`，Decode `gpu-mem=0.90`，`--max-model-len=16384`。
+> 数据取自 XLA 编译缓存已热的第二轮运行（首轮含编译开销，不计入）。
 
-| 配置 | TTFT (med) | TPOT (med) | Output tok/s | vs 单实例 |
-|------|----------:|----------:|------------:|----------|
-| 1K/1K c=1 | — | — | — | — |
-| 8K/1K c=4 | — | — | — | — |
+| 配置 | Latency | Per-req tok/s | Agg tok/s | vs 单机 |
+|------|--------:|--------------:|----------:|--------:|
+| P1K/D1K c=1 | 22.1 s | 46.3 | 46.3 | 0.95x |
+| P1K/D1K c=4 | 24.3 s | 42.1 | 167.0 | 0.92x |
+| P8K/D1K c=1 | 23.4 s | 43.8 | 43.8 | — |
+| P8K/D1K c=4 | 27.1 s | 37.8 | 148.2 | — |
+| P1K/D8K c=1 | 172.1 s | 47.6 | 47.6 | — |
+| P1K/D8K c=4 | 181.5 s | 45.1 | 180.3 | — |
+
+> **PD vs 单机**：P1K/D1K 场景下 PD 分离的 per-request 吞吐约为单机的 92-95%，
+> 轻微损耗来自 KV cache 网络传输（每请求 ~349 MB via TPUConnectorHMA）。
+> PD 分离的真正优势在于：Prefill 和 Decode 可独立扩缩容，且支持更长的 `max-model-len`（16384 vs 单机 4096）。
+>
+> **P8K 长 prompt**：Prefill 处理 8K tokens 仅增加 ~1s 延迟（23.4s vs 22.1s），说明 TPU 的 prefill 计算非常高效。
+>
+> **D8K 长生成**：单请求生成 8192 tokens 耗时 ~172s，per-request tok/s 反而略高（47.6 vs 46.3），
+> 因为首 token 延迟被摊薄。`timeout` 需设 ≥1800s。
 
 ---
 
