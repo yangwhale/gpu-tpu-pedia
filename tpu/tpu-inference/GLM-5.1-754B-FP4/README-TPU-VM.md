@@ -213,6 +213,12 @@ uv pip install jax==0.9.2 jaxlib==0.9.2 libtpu==0.0.39 flax==0.12.4
 # 安装 tpu-inference（--no-deps 避免再次降级 JAX）
 cd ~/tpu-inference
 uv pip install -e . --no-deps
+
+# 修复 vLLM DSA buffer TPU 兼容性问题
+# deepseek_v2.py 中 topk_indices_buffer 使用 device="tpu"，PyTorch 不识别
+# 该 buffer 仅 GPU SparseAttnIndexer 使用，TPU 上改为 "cpu" 即可
+sed -i 's/device=self\.device,/device="cpu" if self.device == "tpu" else self.device,/' \
+  ~/vllm/vllm/model_executor/models/deepseek_v2.py
 ```
 
 ### 3.4 验证安装
@@ -243,6 +249,10 @@ devices: 8 x tpu
 > **关于 JAX 版本**：vLLM 的 `requirements/tpu.txt` 会安装 JAX 0.8.0，但 TPU v7x 需要 JAX 0.9.2 + libtpu 0.0.39。安装 vLLM 后必须手动覆盖安装正确版本。
 >
 > **关于 `--no-deps`**：tpu-inference 的 `pyproject.toml` 依赖 jax/jaxlib，不加 `--no-deps` 会再次触发 JAX 降级。
+>
+> **关于 `MODEL_IMPL_TYPE=flax_nnx`**：**不能设为 `vllm`**。`vllm` 路径使用 `DefaultModelLoader`，会将全部 142 个 safetensors（705 GB）加载到主机内存。而 /dev/shm 中的 FP4 cache 已占用 ~705 GB，剩余 RAM 不足 → OOM Kill。`flax_nnx` 路径使用 JAX 的 `GlmMoeForCausalLM.load_weights()`，内置 `_filter_moe_shards()` 逻辑：检测到 /dev/shm 有 FP4 cache 后，会跳过所有纯 MoE 的 safetensors，只加载 non-MoE 权重（~21 GB），MoE 部分直接从 cache 读取。
+>
+> **关于 `vllm serve`**：**不能用 `python3 -m vllm.entrypoints.openai.api_server`**。模块入口会触发 `vllm.__init__` 部分初始化，导致 `from vllm import SamplingParams` 循环导入失败。`vllm serve` CLI 走完整启动链路，无此问题。
 
 ### 3.5 设置运行时环境变量
 
@@ -252,7 +262,7 @@ export HF_TOKEN=${HF_TOKEN}
 export JAX_PLATFORMS=tpu,cpu
 export TPU_BACKEND_TYPE=jax
 export PJRT_DEVICE=TPU
-export MODEL_IMPL_TYPE=flax_nnx
+export MODEL_IMPL_TYPE=flax_nnx    # ⚠️ 必须是 flax_nnx，不能用 vllm（见下方说明）
 export USE_MOE_EP_KERNEL=0
 export USE_BATCHED_RPA_KERNEL=0
 
@@ -1342,6 +1352,9 @@ gcloud compute resource-policies delete ${SLICE_NAME}-wp --project=${PROJECT_ID}
 | **FP4 cache 生成时 OOM Kill（exit 137）** | /dev/shm 有旧数据，挤占 worker 内存 | `rm -rf /dev/shm/*` 后重新生成 |
 | **TPU device busy** | 上次 vLLM 异常退出，孤儿进程占 TPU | `pgrep -f 'EngineCore\|vllm' \| xargs -r kill -9` + `rm -f /tmp/libtpu_lockfile` |
 | **`/dev/shm` 中出现多个 cache 目录** | 同时存在 FP4 和 FP8 cache | 删除 `ep8_tp1_gmm_ep_fp8e4m3_bsNone`，只保留 `fp4e2m1` |
+| **`MODEL_IMPL_TYPE=vllm` 时 OOM Kill** | `DefaultModelLoader` 加载全部 705 GB safetensors，/dev/shm cache 已占 ~705 GB，剩余 RAM 不足 | 改为 `MODEL_IMPL_TYPE=flax_nnx`（JAX 路径会跳过 MoE shard，只加载 ~21 GB non-MoE） |
+| **`ImportError: cannot import name 'SamplingParams'`** | 用 `python3 -m vllm.entrypoints.openai.api_server` 导致循环导入 | 改用 `vllm serve` CLI 入口 |
+| **`RuntimeError: Expected one of cpu, cuda...` (torch.empty)** | `deepseek_v2.py` 中 DSA buffer 使用 `device="tpu"`，PyTorch 不识别 | 修改 `deepseek_v2.py` 将 buffer device 改为 `"cpu"`（该 buffer 仅 GPU 路径使用） |
 | **vLLM import 报错 / namespace package** | 在 `~/vllm/` 或 `~/tpu-inference/` 目录下运行 | `cd /tmp` 后再运行 |
 | **JAX 版本不对 / libtpu 报错** | vLLM 安装降级了 JAX | `uv pip install jax==0.9.2 jaxlib==0.9.2 libtpu==0.0.39 flax==0.12.4` |
 | **PD: KV transfer 失败** | 防火墙未开放内网端口 | 检查 VPC 防火墙规则，允许 `10.0.0.0/8` TCP 全端口 |
