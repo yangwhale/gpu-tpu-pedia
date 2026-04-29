@@ -10,8 +10,9 @@
 > **模型**: [deepseek-ai/DeepSeek-V3.2](https://huggingface.co/deepseek-ai/DeepSeek-V3.2)（FP8 权重）
 >
 > **与 DeepSeek R1 的关系**：V3.2 与 R1 共享完全相同的架构（671B MoE, 256 experts top-8, 61 layers, MLA），
-> 推理流程（FP4 cache、环境变量、vLLM 命令）完全一致。关键区别：V3.2 是 **general-purpose 模型**（无 thinking tokens），
-> R1 是 reasoning 模型（有 `<think>` 推理过程）。V3.2 还引入了 **DSA (DeepSeek Sparse Attention)** 优化长上下文推理。
+> 推理流程（FP4 cache、环境变量、vLLM 命令）完全一致。关键区别：V3.2 的 thinking 模式是**按需开启**的
+> （通过 `chat_template_kwargs: {"thinking": true}`），而 R1 **默认始终开启** thinking。
+> V3.2 还引入了 **DSA (DeepSeek Sparse Attention)** 优化长上下文推理。
 
 ## 🎯 预期性能（基于 DeepSeek R1 实测数据，架构相同）
 
@@ -726,7 +727,9 @@ curl -s http://localhost:8000/v1/chat/completions \
   }' | python3 -m json.tool
 ```
 
-预期 DeepSeek V3.2 会直接给出答案（无 thinking tokens，不同于 R1 的推理过程展示）。
+DeepSeek V3.2 默认直接给出答案。如需开启 thinking 模式（输出 `<think>` 推理过程），
+在请求中传入 `extra_body={"chat_template_kwargs": {"thinking": true}}`。
+R1 则默认始终开启 thinking。
 
 ```bash
 # 健康检查
@@ -741,8 +744,8 @@ curl -s http://localhost:8000/v1/models | python3 -m json.tool
 
 ## Step 8: GSM8K 准确性测试（可选）
 
-> ⚠️ **V3.2 是 general-purpose 模型，非 reasoning 模型，GSM8K 分数预计低于 R1（94.92%）。**
-> 此步骤主要用于验证 FP4 量化精度是否正常，非评估模型能力。
+> V3.2 支持 thinking 模式，GSM8K 5-shot 在 GPU vLLM 官方实测达 **95.60%**（高于 R1 的 94.92%）。
+> 此步骤用于验证 TPU FP4 量化精度是否正常。
 
 GSM8K (Grade School Math 8K) 是评估数学推理能力的标准 benchmark。
 
@@ -853,14 +856,15 @@ lm_eval \
 
 ### GSM8K 准确性
 
-> ⚠️ **以下为 DeepSeek R1 实测数据。V3.2 作为 non-reasoning 模型，预期分数较低，待实测更新。**
+> V3.2 支持 thinking 模式。GPU vLLM 官方实测 GSM8K 5-shot 达 95.60%（高于 R1 的 94.92%）。
 
-| Metric | R1 Score (参考) | V3.2 Score |
-|--------|----------------|------------|
-| flexible-extract | 94.92% ±0.60% | ⏳ 待测 |
-| strict-match | 94.84% ±0.61% | ⏳ 待测 |
+| Metric | R1 TPU FP4 (参考) | V3.2 GPU FP8 (vLLM 官方) | V3.2 TPU FP4 |
+|--------|-------------------|--------------------------|--------------|
+| flexible-extract | 94.92% ±0.60% | 95.60% ±0.56% | ⏳ 待测 |
+| strict-match | 94.84% ±0.61% | 95.53% ±0.57% | ⏳ 待测 |
 
 > R1 的 FP4 量化精度损失极小，V3.2 架构相同，FP4 精度预期同样可接受。
+> GPU 参考数据来源：[vLLM Recipes](https://docs.vllm.ai/projects/recipes/en/latest/DeepSeek/DeepSeek-V3_2.html)
 
 ---
 
@@ -1391,7 +1395,7 @@ export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # 不是 "fp4"，必须是完
 | Non-MoE 权重提取 | ~3 min | extract_non_moe_weights.py, 23 GB |
 | FP4 cache + non-MoE 拷贝到 /dev/shm | ~12-27 min | 取决于磁盘类型（Extreme ~12min, Balanced ~27min） |
 | vLLM FP4 启动（cold start） | **~3:17-3:51** | consolidated non-MoE + MoE cache + pjit 编译（需 patch，见踩坑 #18） |
-| GSM8K 测试 | ~23 min | 1319 题, exact_match 94.9% |
+| GSM8K 测试 | ~23 min | 1319 题, R1 实测 94.9%, V3.2 GPU 参考 95.6% |
 | **总计（不含模型下载）** | **~70-85 min** | 一次性，后续无需重复 |
 
 ### 场景 2：开发迭代（改代码后重启 vLLM）

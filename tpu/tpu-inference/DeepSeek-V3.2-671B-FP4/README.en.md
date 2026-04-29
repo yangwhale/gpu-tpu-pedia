@@ -10,8 +10,9 @@
 > **Model**: [deepseek-ai/DeepSeek-V3.2](https://huggingface.co/deepseek-ai/DeepSeek-V3.2) (FP8 weights)
 >
 > **Relationship to DeepSeek R1**: V3.2 shares the exact same architecture as R1 (671B MoE, 256 experts top-8, 61 layers, MLA).
-> The inference pipeline (FP4 cache, environment variables, vLLM commands) is identical. Key difference: V3.2 is a **general-purpose model**
-> (no thinking tokens), while R1 is a reasoning model (with `<think>` chain-of-thought). V3.2 also introduces **DSA (DeepSeek Sparse Attention)** for optimized long-context inference.
+> The inference pipeline (FP4 cache, environment variables, vLLM commands) is identical. Key difference: V3.2's thinking mode is
+> **on-demand** (enabled via `chat_template_kwargs: {"thinking": true}`), while R1 **always enables** thinking by default.
+> V3.2 also introduces **DSA (DeepSeek Sparse Attention)** for optimized long-context inference.
 
 ## 🎯 Expected Performance (Based on DeepSeek R1 measured data, same architecture)
 
@@ -726,7 +727,9 @@ curl -s http://localhost:8000/v1/chat/completions \
   }' | python3 -m json.tool
 ```
 
-Expected: DeepSeek V3.2 will respond directly (no thinking tokens, unlike R1's chain-of-thought reasoning display).
+DeepSeek V3.2 responds directly by default. To enable thinking mode (output `<think>` chain-of-thought),
+pass `extra_body={"chat_template_kwargs": {"thinking": true}}` in the request.
+R1 always enables thinking by default.
 
 ```bash
 # Health check
@@ -741,8 +744,8 @@ curl -s http://localhost:8000/v1/models | python3 -m json.tool
 
 ## Step 8: GSM8K Accuracy Test (Optional)
 
-> ⚠️ **V3.2 is a general-purpose model, not a reasoning model. GSM8K scores are expected to be lower than R1 (94.92%).
-> This step is primarily for verifying FP4 quantization accuracy, not model capability.**
+> V3.2 supports thinking mode. GSM8K 5-shot on GPU vLLM official testing reached **95.60%** (higher than R1's 94.92%).
+> This step verifies TPU FP4 quantization accuracy.
 
 GSM8K (Grade School Math 8K) is the standard benchmark for evaluating mathematical reasoning capability.
 
@@ -853,15 +856,15 @@ The following data is measured on TPU v7x-8 single node, covering both TPU VM ba
 
 ### GSM8K Accuracy
 
-> ⚠️ **Data below is from DeepSeek R1 testing. V3.2 as a non-reasoning model is expected to score lower. Pending actual testing.**
+> V3.2 supports thinking mode. GPU vLLM official GSM8K 5-shot: 95.60% (higher than R1's 94.92%).
 
-| Metric | Score | Stderr |
-|--------|-------|--------|
-| flexible-extract | **94.92%** | ±0.60% |
-| strict-match | **94.84%** | ±0.61% |
+| Metric | R1 TPU FP4 (reference) | V3.2 GPU FP8 (vLLM official) | V3.2 TPU FP4 |
+|--------|------------------------|------------------------------|--------------|
+| flexible-extract | 94.92% ±0.60% | 95.60% ±0.56% | ⏳ Pending |
+| strict-match | 94.84% ±0.61% | 95.53% ±0.57% | ⏳ Pending |
 
-> FP4 quantization precision loss is minimal, far exceeding the 75% threshold.
-> Test took ~23 minutes, 1319 questions, batch_size=16.
+> FP4 quantization precision loss is minimal. R1 test: ~23 min, 1319 questions, batch_size=16.
+> GPU reference: [vLLM Recipes](https://docs.vllm.ai/projects/recipes/en/latest/DeepSeek/DeepSeek-V3_2.html)
 
 ---
 
@@ -1392,7 +1395,7 @@ and the error message (`CompileTimeHbmOom`) doesn't suggest the env var as root 
 | Non-MoE weight extraction | ~3 min | extract_non_moe_weights.py, 23 GB |
 | FP4 cache + non-MoE copy to /dev/shm | ~12-27 min | Depends on disk type (Extreme ~12min, Balanced ~27min) |
 | vLLM FP4 launch (cold start) | **~3:17-3:51** | consolidated non-MoE + MoE cache + pjit compilation (needs patch, see Pitfall #18) |
-| GSM8K test | ~23 min | 1319 questions, exact_match 94.9% |
+| GSM8K test | ~23 min | 1319 questions, R1 measured 94.9%, V3.2 GPU ref 95.6% |
 | **Total (excl. model download)** | **~70-85 min** | One-time, no need to repeat |
 
 ### Scenario 2: Development Iteration (restart vLLM after code change)
