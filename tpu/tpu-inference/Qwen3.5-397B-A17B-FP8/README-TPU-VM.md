@@ -842,7 +842,7 @@ gcloud compute instance-templates create ${SLICE_NAME}-it \
     --network-interface=network=${VPC_NAME},subnet=projects/${PROJECT_ID}/regions/${ZONE%-*}/subnetworks/${SUBNET_NAME},nic-type=GVNIC \
     --create-disk=auto-delete=yes,boot=yes,size=1000GB,type=hyperdisk-balanced,image=projects/ubuntu-os-accelerator-images/global/images/family/ubuntu-accel-2404-amd64-tpu-tpu7x \
     --reservation-affinity=specific \
-    --reservation=projects/${PROJECT_ID}/reservations/${RESERVATION_NAME} \
+    --reservation=${RESERVATION_NAME} \
     --provisioning-model=RESERVATION_BOUND \
     --instance-termination-action=DELETE \
     --maintenance-policy=TERMINATE \
