@@ -562,6 +562,7 @@ export NEW_MODEL_DESIGN=1
 cd /tmp
 python3 -m vllm.entrypoints.openai.api_server \
   --model $MODEL \
+  --tokenizer-mode deepseek_v32 \
   --tensor-parallel-size 8 \
   --quantization fp8 \
   --enforce-eager \
@@ -607,6 +608,7 @@ export NEW_MODEL_DESIGN=1
 cd /tmp
 python3 -m vllm.entrypoints.openai.api_server \
   --model $MODEL \
+  --tokenizer-mode deepseek_v32 \
   --tensor-parallel-size 8 \
   --quantization fp8 \
   --enforce-eager \
@@ -672,6 +674,7 @@ cd /tmp
 
 python3 -m vllm.entrypoints.openai.api_server \
   --model $MODEL \
+  --tokenizer-mode deepseek_v32 \
   --tensor-parallel-size 8 \                   # ⚠️ 这是总设备数，不是 TP！实际 TP=1，见下方 additional-config
   --quantization fp8 \                         # ⚠️ vLLM 量化 schema 名称，MoE 实际用 FP4（由环境变量控制）
   --enforce-eager \
@@ -985,6 +988,7 @@ sudo docker run --rm --privileged --net=host \
   tpu-inference:fp8-gen \
   python3 -m vllm.entrypoints.openai.api_server \
     --model /data/models/DeepSeek-V3.2 \
+    --tokenizer-mode deepseek_v32 \
     --tensor-parallel-size 8 --quantization fp8 --enforce-eager \
     --max-model-len 128 --trust-remote-code \
     --additional-config '{"sharding":{"sharding_strategy":{"enable_dp_attention":true,"expert_parallelism":8,"tensor_parallelism":1}},"replicate_attn_weights":"True","sparse_matmul":"True"}'
