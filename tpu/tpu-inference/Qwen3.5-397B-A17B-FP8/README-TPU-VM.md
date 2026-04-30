@@ -1002,6 +1002,9 @@ export HF_HUB_OFFLINE=1
 export SKIP_JAX_PRECOMPILE=1
 export VLLM_XLA_CHECK_RECOMPILATION=0
 
+# Ray executor 环境变量传播（默认只传 VLLM_/HF_/NCCL_ 前缀，必须显式添加 TPU/PJRT/JAX）
+export VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="TPU_,PJRT_,JAX_,SKIP_"
+
 # Multi-host TPU 拓扑变量（替换 <HOST0_IP> 和 <HOST1_IP> 为 Step 1.4 获取的内网 IP）
 export TPU_WORKER_HOSTNAMES="<HOST0_IP>,<HOST1_IP>"
 export TPU_WORKER_ID=0
@@ -1032,6 +1035,9 @@ export HF_HUB_OFFLINE=1
 export SKIP_JAX_PRECOMPILE=1
 export VLLM_XLA_CHECK_RECOMPILATION=0
 
+# Ray executor 环境变量传播（同 Host 0）
+export VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="TPU_,PJRT_,JAX_,SKIP_"
+
 # Multi-host TPU 拓扑变量
 export TPU_WORKER_HOSTNAMES="<HOST0_IP>,<HOST1_IP>"
 export TPU_WORKER_ID=1
@@ -1050,6 +1056,7 @@ export VLLM_HOST_IP=<HOST1_IP>
 > - `TPU_WORKER_ID=0` vs `TPU_WORKER_ID=1`
 > - `VLLM_HOST_IP` 分别设为各自 IP
 > - `JAX_PLATFORMS=`（空）而非单机的 `tpu,cpu` — multi-host 必须设为空，让 `PJRT_DEVICE=TPU` 控制设备选择，否则 JAX 无法正确初始化跨节点拓扑
+> - `VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY` — **必须**：vLLM Ray executor 默认只传播 `VLLM_*`、`HF_*`、`NCCL_*` 前缀的环境变量到 worker 节点。不设此变量，worker 侧的 `TPU_WORKER_HOSTNAMES`、`TPU_TOPOLOGY` 等拓扑信息全部丢失，导致 TPU 设备初始化失败
 
 ## Step 5: 启动 Ray 集群 + vLLM
 
@@ -1092,6 +1099,7 @@ nohup env \
   PJRT_DEVICE=TPU TPU_BACKEND_TYPE=jax JAX_PLATFORMS= \
   MODEL_IMPL_TYPE=vllm USE_MOE_EP_KERNEL=0 USE_BATCHED_RPA_KERNEL=0 \
   HF_HUB_OFFLINE=1 SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
+  VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="TPU_,PJRT_,JAX_,SKIP_" \
   RAY_memory_monitor_refresh_ms=0 \
   vllm serve ~/models/Qwen3.5-397B-A17B-FP8 \
     --served-model-name Qwen3.5-397B-FP8 \
@@ -1122,7 +1130,8 @@ echo "Server ready"
 > |------|------|
 > | `--max-num-batched-tokens=16384` | **必须** ≥ Qwen3.5 的 `max_tokens_per_mm_item`，否则 init_device silent hang + SIGSEGV |
 > | `--object-store-memory=107374182400` | 限制 Ray plasma store 为 100 GB（默认占 /dev/shm 30%~280 GB，会挤占模型和 worker 内存） |
-> | `RAY_memory_monitor_refresh_ms=0` | 禁用 Ray OOM monitor（模型加载期间 RAM 使用高峰会触发 worker 被 kill） |
+> | `VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY` | **必须**：让 Ray executor 传播 `TPU_*`/`PJRT_*`/`JAX_*`/`SKIP_*` 环境变量到 worker 节点（默认只传 `VLLM_*`/`HF_*`/`NCCL_*`） |
+| `RAY_memory_monitor_refresh_ms=0` | 禁用 Ray OOM monitor（模型加载期间 RAM 使用高峰会触发 worker 被 kill） |
 > | `~/models/...` 而非 `/dev/shm/...` | 模型放 boot disk，避免 tmpfs RAM 双重计数导致 OOM |
 >
 > **注意**：multi-host 不支持 `--async-scheduling`（Ray executor 限制），也不使用 `--reasoning-parser`、`--block-size`。
@@ -1303,3 +1312,4 @@ gcloud compute resource-policies delete ${SLICE_NAME}-wp --project=${PROJECT_ID}
 | **Multi-host: init_device 14 min 无 log + SIGSEGV** | `--max-num-batched-tokens` 太小 | 设为 `16384`（≥ `max_tokens_per_mm_item`） |
 | **Chat 输出死循环 / 语言错乱** | Qwen3.5 chat 路径 broken | 使用 5-shot Q/A pattern + `enable_thinking:false`（[已知限制](#已知关键限制)） |
 | **Ray worker 被 kill** | Ray OOM monitor 误杀 | 设 `RAY_memory_monitor_refresh_ms=0` |
+| **Multi-host: worker 报 `No TPU devices found` / 拓扑变量未生效** | vLLM Ray executor 默认不传播 `TPU_*`/`PJRT_*` 前缀环境变量到 worker | 设 `VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="TPU_,PJRT_,JAX_,SKIP_"` |
