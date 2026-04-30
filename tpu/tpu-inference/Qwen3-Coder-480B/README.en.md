@@ -1239,7 +1239,7 @@ Already in the 4a launch command: `--kv-cache-dtype=fp8`. FP16 → FP8 saves 50%
 
 ---
 
-## TODO
+## Future TODO
 
 ### Completed (2026-04-25)
 - [x] **Startup time measured**: cold ~7 min, warm ~5 min
@@ -1254,3 +1254,4 @@ Already in the 4a launch command: `--kv-cache-dtype=fp8`. FP16 → FP8 saves 50%
 - [ ] **2P:1D / 1P:2D NPnD** testing — verify optimization for imbalanced workloads
 - [ ] **Cross-host PD disaggregation** — verify KV transfer performance across DCN zones
 - [ ] **Quality verification**: GSM8K / HumanEval (accuracy gate ≥ 0.85 flexible)
+- [x] **README.en.md** English version (for international customers)
