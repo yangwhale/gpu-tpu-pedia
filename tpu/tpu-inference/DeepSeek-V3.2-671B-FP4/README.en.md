@@ -866,7 +866,7 @@ The following data is measured on TPU v7x-8 single node, covering both TPU VM ba
 | flexible-extract | 94.92% ±0.60% | 95.60% ±0.56% | ⏳ Pending |
 | strict-match | 94.84% ±0.61% | 95.53% ±0.57% | ⏳ Pending |
 
-> FP4 quantization precision loss is minimal. R1 test: ~23 min, 1319 questions, batch_size=16.
+> R1's FP4 quantization precision loss is minimal; V3.2 shares the same architecture, so FP4 accuracy is expected to be equally acceptable. R1 test: ~23 min, 1319 questions, batch_size=16.
 > GPU reference: [vLLM Recipes](https://docs.vllm.ai/projects/recipes/en/latest/DeepSeek/DeepSeek-V3_2.html)
 
 ---
@@ -876,7 +876,7 @@ The following data is measured on TPU v7x-8 single node, covering both TPU VM ba
 | Variable | Description | Example Value | Required |
 |------|------|--------|------|
 | `MOE_REQUANTIZE_WEIGHT_DTYPE` | **MoE target quantization type** — controls cache subdir name, missing causes FP8 dir lookup → OOM | `float4_e2m1fn` | ⚠️ **Required** |
-| `NEW_MODEL_DESIGN` | Enable MLA model design, mandatory for DeepSeek V3/R1 | `1` | ⚠️ **Required** |
+| `NEW_MODEL_DESIGN` | Enable MLA model design, mandatory for DeepSeek V3/V3.2/R1 | `1` | ⚠️ **Required** |
 | `MOE_WEIGHT_CACHE_DIR` | MoE weight cache root directory (code auto-appends `{root}/{config_subdir}/`) | `/dev/shm` | ⚠️ **Required** |
 | `MOE_REQUANTIZE_BLOCK_SIZE` | Quantization block size | `512` (optional) | Optional |
 | `MOE_PARALLEL_WORKERS` | Parallel requant thread count | `1` (default) | Optional |
@@ -1132,7 +1132,7 @@ main thread → block_until_ready() → can't call _get_prefetched_cache() → n
 
 **Symptom**: Without `NEW_MODEL_DESIGN=1`, vLLM startup fails with: `MLA models require both the NEW_MODEL_DESIGN=1 environment variable...`
 
-**Cause**: vLLM code update, MLA architecture models (DeepSeek V3/R1) mandate `NEW_MODEL_DESIGN=1` + DP attention
+**Cause**: vLLM code update, MLA architecture models (DeepSeek V3/V3.2/R1) mandate `NEW_MODEL_DESIGN=1` + DP attention
 
 **Fix**: Set `NEW_MODEL_DESIGN=1` and add DP attention parameters to `--additional_config`. Backend remains `GMM_EP` (EP=8, TP=1)
 
@@ -1374,7 +1374,7 @@ and the error message (`CompileTimeHbmOom`) doesn't suggest the env var as root 
 | Total HBM | 1,128 GB | 768 GB | 0.68× |
 | Total FP8 compute (dense) | 7,912 TFLOPS | 18,444 TFLOPS | 2.33× |
 
-> **Comparison fairness**: H200 uses FP8 + MTP (speculative decoding), TPU v7 uses FP4 without MTP. MTP boosts decode throughput 30-50%, FP4 weight compression is 2× higher but more sensitivity-sensitive (measured GSM8K 94.92%, minimal loss).
+> **Comparison fairness**: H200 uses FP8 + MTP (speculative decoding), TPU v7 uses FP4 without MTP. MTP boosts decode throughput 30-50%, FP4 weight compression is 2× higher but more precision-sensitive (measured GSM8K 94.92%, minimal loss).
 
 ### Long Context Scenarios
 
