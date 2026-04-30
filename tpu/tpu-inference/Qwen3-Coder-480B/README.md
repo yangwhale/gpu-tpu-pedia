@@ -1,5 +1,7 @@
 # Qwen3-Coder-480B-A35B-Instruct FP8 Inference on TPU v7x-8
 
+> 🌐 **Languages** | **语言**: **中文** · [English](README.en.md)
+
 > 端到端指南：在单节点 TPU v7x-8（**4 chips, 8 devices**）上运行 Qwen3-Coder-480B（FP8 量化）推理 + 1P1D PD 分离。
 >
 > **代码仓库**: 上游 [`vllm-project/tpu-inference`](https://github.com/vllm-project/tpu-inference)（main 分支即可）

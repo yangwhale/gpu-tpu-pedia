@@ -1,5 +1,7 @@
 # Qwen3.5-397B-A17B-FP8 Inference on TPU v7x-8
 
+> 🌐 **Languages** | **语言**: **中文** · [English](README.en.md)
+
 > 端到端指南：在 TPU v7x-8（8 chips, single-host）上运行 Qwen3.5-397B-A17B-FP8 推理。
 >
 > **架构**：397B 总参 / 17B 激活 / **hybrid GDN+Attention**（45 GDN + 15 Standard Attn） + 512 routed experts + FP8 native
