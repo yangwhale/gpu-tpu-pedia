@@ -16,8 +16,8 @@
 
 ## 🎯 预期性能（基于 DeepSeek R1 实测数据，架构相同）
 
-> ⚠️ **以下数据来自 DeepSeek R1 671B FP4 实测（2026-04-23）。V3.2 与 R1 架构完全相同，
-> 推理吞吐预期一致。实际数据待 V3.2 上机验证后更新。**
+> ✅ **V3.2 推理已在 TPU v7x-8 上验证通过（2026-04-30）。**
+> 以下性能数据来自 DeepSeek R1 671B FP4 实测（2026-04-23），V3.2 架构相同，吞吐预期一致。
 
 | 操作点 | 并发 | Throughput | tok/s/chip | tok/s/user | TPOT |
 |--------|-----|-----------|------------|-----------|------|
@@ -165,6 +165,77 @@ git checkout feature/moe-fp4-weight-cache
 验证：
 ```bash
 python3 -c "import tpu_inference; print('OK')"
+```
+
+### A-2a: V3.2 热补丁（仅 Docker 镜像需要）
+
+> ⚠️ 如果 Docker 镜像的 tpu-inference 代码尚未包含 V3.2 支持（检查方法：`grep DeepseekV32 /workspace/tpu_inference/tpu_inference/models/common/model_loader.py`），
+> 需要手动打以下两个补丁。**TPU VM 裸机安装（Part B）从源码构建，已包含 V3.2 支持，无需此步。**
+
+**补丁 1: V32 架构注册**
+
+在 `__init__.py` 中注册 `DeepseekV32Config`，在 `model_loader.py` 中将 `DeepseekV32ForCausalLM` 映射到 `DeepseekV3ForCausalLM`：
+
+```python
+# patch_v32.py — 在 pod 内执行
+path = "/workspace/tpu_inference/tpu_inference/models/common/model_loader.py"
+with open(path) as f:
+    content = f.read()
+
+# 添加到 _PP_DISABLED_MODELS
+content = content.replace(
+    '{"DeepseekV3ForCausalLM",',
+    '{"DeepseekV3ForCausalLM", "DeepseekV32ForCausalLM",'
+)
+
+# 添加到 _MODEL_REGISTRY
+old = '    _MODEL_REGISTRY["DeepseekV3ForCausalLM"] = DeepseekV3ForCausalLM\n'
+content = content.replace(old, old + '    _MODEL_REGISTRY["DeepseekV32ForCausalLM"] = DeepseekV3ForCausalLM\n')
+
+with open(path, "w") as f:
+    f.write(content)
+
+# __init__.py: 追加 V32Config 注册
+init_path = "/workspace/tpu_inference/tpu_inference/__init__.py"
+patch = '''
+try:
+    from transformers import AutoConfig
+    from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
+    class DeepseekV32Config(DeepseekV3Config):
+        model_type = "deepseek_v32"
+    AutoConfig.register("deepseek_v32", DeepseekV32Config)
+except Exception:
+    pass
+'''
+with open(init_path, "a") as f:
+    f.write(patch)
+```
+
+**补丁 2: 跳过 DSA Indexer 权重**
+
+V3.2 新增了 DSA (Differential Sparse Attention) indexer 权重（每层 7 个 key: `indexer.weights_proj.weight` 等），
+TPU 推理不使用这些权重，加载时需跳过：
+
+```python
+# patch_indexer_skip.py — 在 pod 内执行
+path = "/workspace/tpu_inference/tpu_inference/models/jax/deepseek_v3.py"
+with open(path) as f:
+    content = f.read()
+
+# 在 skip_substrs 列表末尾追加 'indexer'
+content = content.replace(
+    """            skip_substrs=[
+                f"layers.{i}"
+                for i in range(start_ignore_layer_num, end_ignore_layer_num)
+            ],""",
+    """            skip_substrs=[
+                f"layers.{i}"
+                for i in range(start_ignore_layer_num, end_ignore_layer_num)
+            ] + ['indexer'],"""
+)
+
+with open(path, "w") as f:
+    f.write(content)
 ```
 
 完成后跳转到 [Step 3: 下载模型权重](#step-3-下载模型权重)。
@@ -1327,11 +1398,94 @@ export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # 不是 "fp4"，必须是完
 
 **教训**：`gen_fp4_cache_cpu_parallel.py` 正确生成了这些字段，但手动 NPZ→npy 转换时容易遗漏。转换脚本必须从 NPZ 的 metadata 中提取 dtype 信息写入 meta.json
 
+### 23. FP4 native cache 的 FP4→FP8 bit reinterpretation bug（⚠️ 关键）
+
+**现象**：vLLM 正常启动、所有 58 层 cache hit，但推理输出全是乱码（如 `111111...` 或随机 token），丧失所有语言能力
+
+**根因**：`gen_fp4_cache_cpu_parallel.py` 保存的是原生 `float4_e2m1fn` 字节（4-bit 值存储在 1-byte 中，高 4 位为 0，格式 `0000SEEE`）。
+但 `fp8.py:_load_moe_cache_npy_v1()` 第 391-393 行无条件地执行 `.view(ml_dtypes.float8_e4m3fn)`——这是**位重新解释**（reinterpret cast），不是数值转换。
+
+FP4 和 FP8 的位编码完全不同：
+
+| 数值 | FP4 (e2m1) 字节 | FP8 (e4m3) 解读 | 倍率 |
+|------|-----------------|-----------------|------|
+| 1.0  | `0x02`          | 0.003906        | 256× 缩小 |
+| 0.5  | `0x01`          | 0.001953        | 256× 缩小 |
+| 6.0  | `0x07`          | 0.01172         | 512× 缩小 |
+
+所有 MoE expert 权重被缩小 100-500×，expert 贡献趋近于零，模型退化为仅靠 attention + embedding 运作。
+
+**解决方案**（二选一）：
+
+**方案 A（推荐）：预转换 cache 格式**
+
+使用 `convert_fp4_to_fp8_cache.py` 将所有 58 层的 native FP4 字节通过 LUT（16-entry lookup table）转换为 FP8 字节格式：
+
+```python
+import numpy as np, ml_dtypes, os, json
+from concurrent.futures import ProcessPoolExecutor
+
+# 16-entry LUT: FP4 byte → FP8 byte
+LUT = (np.arange(16, dtype=np.uint8)
+       .view(ml_dtypes.float4_e2m1fn)
+       .astype(np.float32)
+       .astype(ml_dtypes.float8_e4m3fn)
+       .view(np.uint8))
+
+def convert_layer(layer_dir):
+    for name in ["w13_weight", "w2_weight"]:
+        npy_path = os.path.join(layer_dir, f"{name}.npy")
+        arr = np.load(npy_path, mmap_mode='r')
+        converted = LUT[arr.view(np.uint8)]
+        np.save(npy_path, converted.view(ml_dtypes.float8_e4m3fn))
+    # 更新 meta.json
+    meta_path = os.path.join(layer_dir, "meta.json")
+    with open(meta_path) as f:
+        meta = json.load(f)
+    meta["_storage_format"] = "fp8_reinterpreted"
+    with open(meta_path, "w") as f:
+        json.dump(meta, f, indent=2)
+
+# 并行转换 58 层，~4 min with 8 workers
+cache_dir = "/path/to/ep8_tp1_gmm_ep_fp4e2m1_bsNone"
+layer_dirs = sorted([os.path.join(cache_dir, d) for d in os.listdir(cache_dir) if d.startswith("model_layers")])
+with ProcessPoolExecutor(max_workers=8) as executor:
+    list(executor.map(convert_layer, layer_dirs))
+```
+
+**方案 B：运行时 patch loader**
+
+在 `fp8.py:_load_moe_cache_npy_v1()` 中添加 `_storage_format == "native_fp4"` 检测，运行时用 LUT 转换。
+
+**教训**：这是 `gen_fp4_cache_cpu_parallel.py`（保存原生 FP4 bytes）和 `fp8.py` 内置 saver（先 `.astype(float8_e4m3fn)` 再保存）之间的格式假设不一致。
+内置 saver 在保存时已将 FP4 数值转为 FP8 表示，因此 loader 可以安全地 `.view(float8_e4m3fn)`。
+而 CPU 并行脚本保存了原生 FP4 位模式，loader 的 `.view()` 就变成了错误的位重新解释。
+
+### 24. V3.2 DSA Indexer 权重加载失败
+
+**现象**：V3.2 权重加载时报 shape mismatch 或 key not found 错误，涉及 `indexer.weights_proj.weight` 等 key
+
+**原因**：V3.2 引入了 DSA (Differential Sparse Attention) 优化器，每个 attention 层新增 7 个 indexer 相关权重。
+TPU 推理不使用 DSA，但权重加载器会尝试匹配所有 safetensors key，导致失败。
+
+**修复**：在 `deepseek_v3.py` 的 `skip_substrs` 列表中添加 `'indexer'`：
+
+```python
+skip_substrs=[
+    f"layers.{i}"
+    for i in range(start_ignore_layer_num, end_ignore_layer_num)
+] + ['indexer'],  # ← 跳过 V3.2 DSA indexer 权重
+```
+
+**教训**：V3.2 与 R1 架构几乎相同，但 DSA 是 V3.2 独有的新增模块。虽然 V3.2 的 `config.json` 中 `model_type` 是 `"deepseek_v32"`（需要单独注册，见 [A-2a](#a-2a-v32-热补丁仅-docker-镜像需要)），
+但模型权重类只是复用了 `DeepseekV3ForCausalLM`，不需要为 V3.2 编写新的模型实现。
+
 ---
 
 ## 推理性能 Benchmark（参考 DeepSeek R1 实测数据）
 
-> ⚠️ **以下数据来自 DeepSeek R1 671B FP4 实测（2026-04-23）。V3.2 架构相同，吞吐预期一致，待实测验证。**
+> 以下数据来自 DeepSeek R1 671B FP4 实测（2026-04-23）。V3.2 架构相同，吞吐预期一致。
+> V3.2 推理正确性已于 2026-04-30 在 GKE TPU v7x-8 上验证通过。
 >
 > **测试工具**: EvalScope perf v1.6.0 &nbsp;|&nbsp; **数据集**: random 1K input / 1K output
 
@@ -1452,12 +1606,10 @@ export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # 不是 "fp4"，必须是完
 
 ### 已验证的部署场景
 
-> ⚠️ **以下为 DeepSeek R1 实测数据（2026-04-22）。V3.2 架构相同，启动时间预期一致，待实测更新。**
-
 | 场景 | 存储 | 启动时间（cold） | 推理验证 | 备注 |
 |------|------|-----------------|----------|------|
 | TPU VM 裸机 | Hyperdisk 2TB + /dev/shm 800G | ~3:44-3:51 | R1 验证 2+3=5 ✅ | 推荐开发测试 |
-| GKE + Docker | Lustre PVC + /dev/shm 800G | ~3:17 | R1 验证 2+3=5 ✅ | 需 patch weight_utils.py |
+| GKE + Docker | Lustre PVC + /dev/shm 800G | ~3:17 | **V3.2 验证通过** ✅ (2026-04-30) | 需 V32 热补丁（见 [A-2a](#a-2a-v32-热补丁仅-docker-镜像需要)） |
 
 > **TPU VM 多次 cold start 实测**（2026-04-22，kill→restart 循环）：
 >

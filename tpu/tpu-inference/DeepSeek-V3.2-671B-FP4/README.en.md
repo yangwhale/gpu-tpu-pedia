@@ -16,8 +16,8 @@
 
 ## 🎯 Expected Performance (Based on DeepSeek R1 measured data, same architecture)
 
-> ⚠️ **Data below is from DeepSeek R1 671B FP4 testing (2026-04-23). V3.2 shares the same architecture,
-> so throughput is expected to be identical. Actual data pending V3.2 validation.**
+> ✅ **V3.2 inference verified on TPU v7x-8 (2026-04-30).**
+> Performance data below is from DeepSeek R1 671B FP4 testing (2026-04-23). V3.2 shares the same architecture, so throughput is expected to be identical.
 
 | Operating Point | Concurrency | Throughput | tok/s/chip | tok/s/user | TPOT |
 |--------|-----|-----------|------------|-----------|------|
@@ -166,6 +166,15 @@ Verify:
 ```bash
 python3 -c "import tpu_inference; print('OK')"
 ```
+
+### A-2a: V3.2 Hot Patches (Docker images only)
+
+> ⚠️ If the Docker image's tpu-inference code doesn't include V3.2 support (check: `grep DeepseekV32 /workspace/tpu_inference/tpu_inference/models/common/model_loader.py`),
+> apply the following two patches. **TPU VM bare metal (Part B) builds from source and already includes V3.2 support.**
+
+**Patch 1: V32 Architecture Registration** — Register `DeepseekV32Config` in `__init__.py` and map `DeepseekV32ForCausalLM` → `DeepseekV3ForCausalLM` in `model_loader.py`. See the [Chinese README](README.md#a-2a-v32-热补丁仅-docker-镜像需要) for the full patch script.
+
+**Patch 2: Skip DSA Indexer Weights** — V3.2 adds DSA (Differential Sparse Attention) indexer weights (7 new keys per layer). Add `+ ['indexer']` to `skip_substrs` in `deepseek_v3.py` to skip them during loading.
 
 After completion, jump to [Step 3: Download Model Weights](#step-3-download-model-weights).
 
@@ -1327,11 +1336,30 @@ and the error message (`CompileTimeHbmOom`) doesn't suggest the env var as root 
 
 **Lesson**: `gen_fp4_cache_cpu_parallel.py` correctly generates these fields, but manual NPZ→npy conversion easily misses them. Conversion script must extract dtype info from NPZ metadata and write to meta.json
 
+### 23. FP4 native cache FP4→FP8 bit reinterpretation bug (⚠️ Critical)
+
+**Symptom**: vLLM starts normally, all 58 layers cache hit, but inference output is garbage (e.g., `111111...` or random tokens), losing all language capability.
+
+**Root cause**: `gen_fp4_cache_cpu_parallel.py` saves native `float4_e2m1fn` bytes (4-bit values stored in 1-byte, upper 4 bits zeroed, format `0000SEEE`).
+But `fp8.py:_load_moe_cache_npy_v1()` line 391-393 unconditionally does `.view(ml_dtypes.float8_e4m3fn)` — this is a **bit reinterpretation** (reinterpret cast), not a numerical conversion.
+FP4(1.0) = byte `0x02`, interpreted as FP8 gives `0.003906` — all MoE weights shrunk ~100-500×.
+
+**Fix**: Pre-convert cache files using a 16-entry LUT (`convert_fp4_to_fp8_cache.py`, ~4 min with 8 workers). See [Chinese README](README.md#23-fp4-native-cache-的-fp4fp8-bit-reinterpretation-bug-关键) for full script.
+
+### 24. V3.2 DSA Indexer Weight Loading Failure
+
+**Symptom**: V3.2 weight loading fails with shape mismatch or key not found errors involving `indexer.weights_proj.weight` etc.
+
+**Cause**: V3.2 introduces DSA (Differential Sparse Attention) with 7 new indexer weights per layer. TPU inference doesn't use DSA.
+
+**Fix**: Add `+ ['indexer']` to `skip_substrs` in `deepseek_v3.py`. See [A-2a](#a-2a-v32-hot-patches-docker-images-only).
+
 ---
 
 ## Inference Performance Benchmark (Reference: DeepSeek R1 measured data)
 
-> ⚠️ **Data below is from DeepSeek R1 671B FP4 testing (2026-04-23). V3.2 shares the same architecture, throughput expected to be identical. Pending actual validation.**
+> Data below is from DeepSeek R1 671B FP4 testing (2026-04-23). V3.2 shares the same architecture, throughput expected to be identical.
+> V3.2 inference correctness verified on GKE TPU v7x-8 on 2026-04-30.
 
 > **Test tool**: EvalScope perf v1.6.0 &nbsp;|&nbsp; **Dataset**: random 1K input / 1K output
 
@@ -1450,12 +1478,12 @@ and the error message (`CompileTimeHbmOom`) doesn't suggest the env var as root 
 | Python | 3.12 | 3.12 |
 | TPU runtime | v2-alpha-tpu7-ubuntu2404 | same as left |
 
-### Verified Deployment Scenarios (2026-04-22)
+### Verified Deployment Scenarios
 
 | Scenario | Storage | Startup Time (cold) | Inference Verification | Notes |
 |------|------|-----------------|----------|------|
-| TPU VM bare metal (chrisya-tpu7-8-02) | Hyperdisk 2TB + /dev/shm 800G | 3:41 → 3:44-3:51 | 2+3=5 ✅ | Recommended for development testing |
-| GKE + Docker (chrisya-v7x-v134) | Lustre PVC + /dev/shm 800G | 3:17 | 2+3=5 ✅ | Needs patch weight_utils.py |
+| TPU VM bare metal | Hyperdisk 2TB + /dev/shm 800G | 3:41 → 3:44-3:51 | R1 verified 2+3=5 ✅ | Recommended for development testing |
+| GKE + Docker | Lustre PVC + /dev/shm 800G | ~3:17 | **V3.2 verified** ✅ (2026-04-30) | Needs V32 hot patches (see [A-2a](#a-2a-v32-hot-patches-docker-images-only)) |
 
 > **TPU VM Multiple cold start measurements** (2026-04-22, kill→restart loop):
 >
