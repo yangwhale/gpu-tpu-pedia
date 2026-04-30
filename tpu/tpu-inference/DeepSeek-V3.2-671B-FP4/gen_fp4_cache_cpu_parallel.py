@@ -1,19 +1,24 @@
 """Generate FP4 cache for MoE layers — CPU-only parallel processing.
 
-Direct safetensors → FP4 conversion without FP8 intermediate or TPU.
-Uses ThreadPoolExecutor to process multiple layers in parallel.
+Direct safetensors → FP4 conversion without TPU.
+Uses ProcessPoolExecutor to process multiple layers in parallel.
 
 Pipeline per layer (all numpy, no JAX/TPU):
   1. Load 256 experts from safetensors → w13 (256, 4096, 7168) FP8 + scale
   2. Dequant: FP8 × scale → FP32
   3. Per-channel quantize FP32 → FP4 along axis=2 (matching quantize_moe_weights)
   4. GMM_EP layout: swapaxes(1, 2) on weights, swapaxes + expand_dims on scales
-  5. Save as npy + meta.json
+  5. FP4 → FP8 value cast (transport format), save as npy + meta.json
+
+FP8 transport format: numpy float4 and JAX float4 have incompatible memory
+layouts (1 byte/elem vs 0.5 byte/elem packed). FP8 bridges the gap — both
+sides handle it natively, and FP4↔FP8 roundtrip is mathematically lossless
+(16 FP4 values are a strict subset of 256 FP8 values).
 
 Output shapes match process_fp8_moe_weights + process_moe_weights(GMM_EP):
-  w13_weight:       (256, 7168, 4096) float4_e2m1fn
+  w13_weight:       (256, 7168, 4096) float8_e4m3fn (FP4 values in FP8 transport)
   w13_weight_scale: (256, 1, 1, 4096) float32
-  w2_weight:        (256, 2048, 7168) float4_e2m1fn
+  w2_weight:        (256, 2048, 7168) float8_e4m3fn (FP4 values in FP8 transport)
   w2_weight_scale:  (256, 1, 1, 7168) float32
 
 Usage:
@@ -185,10 +190,12 @@ def convert_one_tensor(w_fp8, scale_orig, out_path_w, out_path_s):
     # Scale: swapaxes(1,2) + expand_dims(2) → 4D
     scale = np.expand_dims(np.swapaxes(scale, 1, 2), 2)
 
-    # Save
-    np.save(out_path_w, fp4)
+    # Save as FP8 transport format (FP4→FP8 value cast, lossless roundtrip)
+    fp8 = fp4.astype(ml_dtypes.float8_e4m3fn)
+    del fp4
+    np.save(out_path_w, fp8)
     np.save(out_path_s, scale)
-    del fp4, scale
+    del fp8, scale
     gc.collect()
 
 
@@ -233,7 +240,6 @@ def process_layer(args):
     # Save meta.json
     meta = {
         "_cache_format": "npy_v1",
-        "_storage_format": "native_fp4",
         "w13_weight_dtype": "float4_e2m1fn",
         "w13_weight_scale_dtype": "float32",
         "w2_weight_dtype": "float4_e2m1fn",
