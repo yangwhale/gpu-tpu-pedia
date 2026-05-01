@@ -42,7 +42,7 @@
 |-------|:-----------:|:---------:|:----------:|-------|
 | DeepSeek R1 | ✅ | — | — | v7x-8, EP=8 |
 | DeepSeek V3.2 | ✅ | — | — | v7x-8, EP=8 |
-| GLM-5.1 | ✅ | ⚠️ | — | PD disagg has deadlock (DPScheduler+JAX fork conflict) |
+| GLM-5.1 | ✅ | ✅ | — | v7x-8, EP=8; PD disagg requires vLLM v1 scheduler (V0 DPScheduler removed) |
 | Kimi K2.6 | ✅ | — | ✅ | Full 61 layers require v7x-16; v7x-8 runs 40 layers only |
 | Qwen3.5 | ✅ | ✅ | ✅ | All three modes verified |
 | Qwen3-Coder | ✅ | ✅ | ✅ | Multi-node TP=16 throughput 15-63% worse, not recommended |

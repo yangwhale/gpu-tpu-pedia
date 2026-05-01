@@ -42,7 +42,7 @@
 |------|:--------:|:-------:|:--------:|------|
 | DeepSeek R1 | ✅ | — | — | v7x-8, EP=8 |
 | DeepSeek V3.2 | ✅ | — | — | v7x-8, EP=8 |
-| GLM-5.1 | ✅ | ⚠️ | — | PD 分离有 deadlock（DPScheduler+JAX fork 冲突） |
+| GLM-5.1 | ✅ | ✅ | — | v7x-8, EP=8；PD 分离需 vLLM v1 scheduler（V0 DPScheduler 已废弃） |
 | Kimi K2.6 | ✅ | — | ✅ | 全量 61 层需 v7x-16；v7x-8 仅 40 层 |
 | Qwen3.5 | ✅ | ✅ | ✅ | 三种模式均已验证 |
 | Qwen3-Coder | ✅ | ✅ | ✅ | 多机 TP=16 吞吐下降 15-63%，不推荐 |
