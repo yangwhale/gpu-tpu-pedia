@@ -36,6 +36,61 @@
 | Qwen3.5 | ✅ Passed | GSM8K 93.93% | Chat path unstable, only completion mode reliable |
 | Qwen3-Coder | ✅ Passed | Smoke test | — |
 
+## Deployment Capabilities
+
+| Model | Single-Node | PD Disagg | Multi-Node | Notes |
+|-------|:-----------:|:---------:|:----------:|-------|
+| DeepSeek R1 | ✅ | — | — | v7x-8, EP=8 |
+| DeepSeek V3.2 | ✅ | — | — | v7x-8, EP=8 |
+| GLM-5.1 | ✅ | ⚠️ | — | PD disagg has deadlock (DPScheduler+JAX fork conflict) |
+| Kimi K2.6 | ✅ | — | ✅ | Full 61 layers require v7x-16; v7x-8 runs 40 layers only |
+| Qwen3.5 | ✅ | ✅ | ✅ | All three modes verified |
+| Qwen3-Coder | ✅ | ✅ | ✅ | Multi-node TP=16 throughput 15-63% worse, not recommended |
+
+> ✅ Verified working　⚠️ Unstable / known issues　— Not implemented or not tested
+
+## Performance Overview (POC Reference Data)
+
+> ⚠️ **These numbers are byproducts of functional verification, not optimized production performance.** All tests ran with `--enforce-eager` (no XLA compilation optimization) and no batch scheduling tuning.
+
+### 1K Input / 1K Output
+
+| Model | TTFT (c=1) | TPOT (c=1) | Per-User tok/s | Peak Throughput | @ Concurrency |
+|-------|-----------|-----------|---------------|----------------|---------------|
+| DeepSeek R1 | 480 ms | 26 ms | 37.6 | 7,309 tok/s | c=2048 |
+| DeepSeek V3.2 | ~480 ms ¹ | ~26 ms ¹ | ~37.6 ¹ | ~7,309 ¹ | c=2048 |
+| GLM-5.1 | 534 ms | 35 ms | 28.4 | 6,504 tok/s | c=1024 |
+| Kimi K2.6 ² | 1,142 ms | 49 ms | 20.0 | 592 tok/s | c=32 |
+| Qwen3.5 | — | ~20 ms | 49.6 | 2,097 tok/s | c=128 |
+| Qwen3-Coder | 95 ms | 20.6 ms | 48.0 | 1,478 tok/s | c=64 |
+
+¹ V3.2 shares identical architecture with R1; numbers reference R1 benchmarks. Independent V3.2 benchmarks pending.
+² Kimi K2.6 data measured on v7x-16 (full 61 layers); v7x-8 can only run 40 layers.
+
+### 8K Scenarios
+
+| Model | 8K In / 1K Out (tok/s) | 1K In / 8K Out (tok/s) | Concurrency |
+|-------|:----------------------:|:----------------------:|:-----------:|
+| DeepSeek R1 | — | — | Not tested |
+| DeepSeek V3.2 | — | — | Not tested |
+| GLM-5.1 | — | — | Not tested |
+| Kimi K2.6 | — | 581 ³ | c=32 |
+| Qwen3.5 | 850 | 1,702 | c=64 |
+| Qwen3-Coder | 943 | 1,623 | c=64 |
+
+³ Kimi K2.6 measured at 1K In / 7K Out
+
+## Current Status Summary
+
+All 6 models have completed **inference functional verification** on TPU v7x, with quality evaluations meeting expectations (GSM8K 89-95% for tested models). Current performance is at the **"functionally usable but not optimized"** stage:
+
+- **Per-user latency** (TPOT 20-50 ms) is adequate for interactive chat scenarios
+- **System throughput** has preliminary data, but all tests ran in `enforce_eager` mode without XLA graph compilation optimization
+- **Long context** (8K+) only tested for Qwen series; other models pending
+- **PD disaggregation / multi-node** fully verified only for Qwen3.5 and Qwen3-Coder; Kimi K2.6 multi-node works; others not yet implemented
+
+For production-grade performance data or optimization plans, please contact the TPU Inference team.
+
 ## Quick Start
 
 ```
