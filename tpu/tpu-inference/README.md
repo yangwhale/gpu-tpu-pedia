@@ -220,3 +220,94 @@ tpu-inference/
 ├── Qwen3-Coder-480B/                  # Qwen3-Coder 推理指南
 └── TPU-VM/                            # TPU VM 基础设施指南
 ```
+
+## 最近上游更新与待验证项
+
+> **同步时间**：2026-05-01 | **上游 commit 范围**：`507cfa16..0b9f5583`（63 commits）
+>
+> 以下为 [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference) 上游最近合入的重要更新，已同步到 fork `chrisya/main` 分支，尚未在各模型上逐一验证。
+
+### 1. KV Cache Offload to Host Memory
+
+| PR | 内容 | 状态 |
+|----|------|:----:|
+| [#2390](https://github.com/vllm-project/tpu-inference/pull/2390) | KV cache 从 HBM 卸载到 host DRAM，含异步传输 + staging buffer | ⏳ |
+| [#2454](https://github.com/vllm-project/tpu-inference/pull/2454) | KV offloading 性能测试修复 | ⏳ |
+
+**潜在收益**：
+- **Kimi K2.6**：目前 v7x-8 单机 OOM（权重 84.58 GB/chip + KV cache 超 HBM），offload 后可能解除单机限制，部署门槛从 v7x-16 降至 v7x-8
+- **DeepSeek R1/V3.2**：高并发（c=2048）时 KV cache 是瓶颈，offload 可支持更大并发
+- **GLM-5.1**：每 device 仅剩 36 GB 给 KV cache，offload 扩大容量
+- **Qwen3.5**：长文本（262K）场景受益
+
+相关环境变量：`TPU_OFFLOAD_SKIP_JAX_PRECOMPILE`、`TPU_OFFLOAD_DECODE_SAVE`、`TPU_OFFLOAD_NUM_CPU_CHUNKS`、`TPU_OFFLOAD_NUM_STAGING_BLOCKS`
+
+### 2. Qwen3.5 GDN 修复（4 个 PR）
+
+| PR | 内容 | 影响 | 状态 |
+|----|------|------|:----:|
+| [#2408](https://github.com/vllm-project/tpu-inference/pull/2408) | GDN l2norm + sigmoid 升 fp32 对齐 GPU FLA 精度 | CoT 推理准确率修复（GPQA-Diamond 验证） | ⏳ |
+| [#2431](https://github.com/vllm-project/tpu-inference/pull/2431) | fused GDN kernel 正确处理 has_initial_state | chunked-prefill 续传正确性 | ⏳ |
+| [#2416](https://github.com/vllm-project/tpu-inference/pull/2416) | Compact mamba KV cache — GDN 层只分配 active 请求数 slot | 45 层 GDN 的 HBM 占用大幅减少 | ⏳ |
+| [#2469](https://github.com/vllm-project/tpu-inference/pull/2469) | 清理释放的 slot id 为 null | 避免 GDN 状态残留污染输出 | ⏳ |
+
+**验证建议**：重新跑 GSM8K eval 对比精度（之前 93.93%），同时测 compact KV 后高并发下的 HBM 占用。
+
+### 3. MLA / DeepSeek 修复
+
+| PR | 内容 | 受益模型 | 状态 |
+|----|------|---------|:----:|
+| [#2462](https://github.com/vllm-project/tpu-inference/pull/2462) | 修复 upstream break for mla_attention | R1, V3.2, GLM-5.1, K2.6 | ⏳ |
+| [#2407](https://github.com/vllm-project/tpu-inference/pull/2407) | 重新启用 AG-FP8（All-Gather FP8），之前临时禁用 | R1, V3.2 | ⏳ |
+| [#2343](https://github.com/vllm-project/tpu-inference/pull/2343) | MoE 返回 routed expert IDs | 所有 MoE 模型 | ⏳ |
+| [#2412](https://github.com/vllm-project/tpu-inference/pull/2412) | 为 DeepSeek V4 预埋 input_ids + hash_block_size | 前瞻性 | — |
+
+**注意**：#2462 是兼容性修复，不同步可能导致 MLA 模型在新版本上无法运行。
+
+### 4. Multi-host / PD 分离改进
+
+| PR | 内容 | 受益模型 | 状态 |
+|----|------|---------|:----:|
+| [#2414](https://github.com/vllm-project/tpu-inference/pull/2414) | 修复多机 device_put 用法错误 | K2.6 多机, 所有多机部署 | ⏳ |
+| [#2435](https://github.com/vllm-project/tpu-inference/pull/2435) | PD 启动交错，缓解 host memory 压力 | GLM PD, Qwen3.5 PD, Qwen3-Coder PD | ⏳ |
+| [#2392](https://github.com/vllm-project/tpu-inference/pull/2392) | attn_dp_expert 扩展模拟 attn_dp | R1, V3.2 | ⏳ |
+
+### 5. 量化 + MoE 基础设施
+
+| PR | 内容 | 受益模型 | 状态 |
+|----|------|---------|:----:|
+| [#2236](https://github.com/vllm-project/tpu-inference/pull/2236) | W4A8 FP8 linear layers（compressed tensors） | 潜在新量化路径 | ⏳ |
+| [#2270](https://github.com/vllm-project/tpu-inference/pull/2270) | Jax native UnquantizedFusedMoE sharding 修复 | 所有 Jax native MoE 模型 | ⏳ |
+| [#2398](https://github.com/vllm-project/tpu-inference/pull/2398) | DCP sharding axis + KV cache 支持 | 基础设施 | ⏳ |
+
+### 6. 稳定性 + 可维护性
+
+| PR | 内容 | 状态 |
+|----|------|:----:|
+| [#2399](https://github.com/vllm-project/tpu-inference/pull/2399) | deepcopy model_config 防止 config mutation | ⏳ |
+| [#2441](https://github.com/vllm-project/tpu-inference/pull/2441) | Pin transformers==5.5.3 | ✅ 已合入 |
+| [#2417](https://github.com/vllm-project/tpu-inference/pull/2417) | MLA KV cache text_config 适配多模态模型 | ✅ 已合入（替代我们的 K2.6 fallback） |
+| [#2418](https://github.com/vllm-project/tpu-inference/pull/2418) | Kimi K2.6 加入 nightly CI | ✅ 已合入 |
+| [#2396](https://github.com/vllm-project/tpu-inference/pull/2396) | Qwen3.5 jittable vision tower | ⏳ |
+| [#2346](https://github.com/vllm-project/tpu-inference/pull/2346) | Kernel tuning 基础设施开源 | ⏳ |
+
+### 模型影响矩阵
+
+| 模型 | KV Offload | GDN 修复 | MLA Fix | AG-FP8 | Multi-host Fix | PD 优化 | Compact KV |
+|------|:----------:|:--------:|:-------:|:------:|:--------------:|:-------:|:----------:|
+| DeepSeek R1 | 中 | — | **高** | **高** | — | — | — |
+| DeepSeek V3.2 | 中 | — | **高** | **高** | — | — | — |
+| GLM-5.1 | 中 | — | **高** | — | — | 中 | — |
+| Kimi K2.6 | **高** | — | **高** | — | **高** | — | — |
+| Qwen3.5 | 低 | **高** | — | — | — | 中 | **高** |
+| Qwen3-Coder | 低 | — | — | — | — | 中 | — |
+
+> **高** = 直接影响功能正确性或解除硬件限制　**中** = 性能/容量提升　**低** = 边际改善　**—** = 不适用
+
+### 验证优先级建议
+
+1. **P0（必须验证）**：#2462 MLA fix — 所有 MLA 模型的兼容性修复，不验证后续可能跑不起来
+2. **P0（高价值）**：#2390 KV Offload + K2.6 单机 — 如果可行则 K2.6 部署门槛降一半
+3. **P1（质量提升）**：#2408 + #2431 Qwen3.5 GDN 精度 — 重新跑 GSM8K 对比
+4. **P1（性能提升）**：#2407 AG-FP8 恢复 + #2416 Compact KV — R1/V3.2 吞吐和 Qwen3.5 HBM 效率
+5. **P2（PD 改善）**：#2435 PD 启动优化 + #2414 多机 fix — GLM/Qwen PD 和 K2.6 多机

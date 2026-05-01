@@ -220,3 +220,94 @@ tpu-inference/
 ├── Qwen3-Coder-480B/                  # Qwen3-Coder inference guide
 └── TPU-VM/                            # TPU VM infrastructure guide
 ```
+
+## Recent Upstream Updates & Pending Verification
+
+> **Sync date**: 2026-05-01 | **Upstream commit range**: `507cfa16..0b9f5583` (63 commits)
+>
+> The following updates from [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference) have been merged into the fork `chrisya/main` branch but have not yet been verified on each model.
+
+### 1. KV Cache Offload to Host Memory
+
+| PR | Description | Status |
+|----|-------------|:------:|
+| [#2390](https://github.com/vllm-project/tpu-inference/pull/2390) | Offload KV cache from HBM to host DRAM with async transfer + staging buffer | ⏳ |
+| [#2454](https://github.com/vllm-project/tpu-inference/pull/2454) | Fix KV offloading performance test in nightly tests | ⏳ |
+
+**Potential benefits**:
+- **Kimi K2.6**: Currently OOMs on v7x-8 (weights 84.58 GB/chip + KV cache exceeds HBM). Offloading may enable single-node inference, reducing deployment requirement from v7x-16 to v7x-8
+- **DeepSeek R1/V3.2**: KV cache is the bottleneck at high concurrency (c=2048); offloading enables larger batch sizes
+- **GLM-5.1**: Only 36 GB/device remaining for KV cache; offloading expands capacity
+- **Qwen3.5**: Benefits long-context (262K) scenarios
+
+Environment variables: `TPU_OFFLOAD_SKIP_JAX_PRECOMPILE`, `TPU_OFFLOAD_DECODE_SAVE`, `TPU_OFFLOAD_NUM_CPU_CHUNKS`, `TPU_OFFLOAD_NUM_STAGING_BLOCKS`
+
+### 2. Qwen3.5 GDN Fixes (4 PRs)
+
+| PR | Description | Impact | Status |
+|----|-------------|--------|:------:|
+| [#2408](https://github.com/vllm-project/tpu-inference/pull/2408) | GDN l2norm + sigmoid promoted to fp32 to match GPU FLA precision | CoT accuracy fix (verified on GPQA-Diamond) | ⏳ |
+| [#2431](https://github.com/vllm-project/tpu-inference/pull/2431) | Fused GDN kernel correctly handles has_initial_state | Chunked-prefill continuation correctness | ⏳ |
+| [#2416](https://github.com/vllm-project/tpu-inference/pull/2416) | Compact mamba KV cache — GDN layers only allocate active request slots | Significant HBM reduction for 45 GDN layers | ⏳ |
+| [#2469](https://github.com/vllm-project/tpu-inference/pull/2469) | Clear vacated slot IDs to null in InputBatch | Prevents GDN state leakage across requests | ⏳ |
+
+**Verification plan**: Re-run GSM8K eval to compare accuracy (previous: 93.93%), and measure HBM usage at high concurrency with compact KV.
+
+### 3. MLA / DeepSeek Fixes
+
+| PR | Description | Affected Models | Status |
+|----|-------------|----------------|:------:|
+| [#2462](https://github.com/vllm-project/tpu-inference/pull/2462) | Fix upstream break for mla_attention | R1, V3.2, GLM-5.1, K2.6 | ⏳ |
+| [#2407](https://github.com/vllm-project/tpu-inference/pull/2407) | Re-enable AG-FP8 (All-Gather FP8), previously disabled for ablation | R1, V3.2 | ⏳ |
+| [#2343](https://github.com/vllm-project/tpu-inference/pull/2343) | Return routed expert IDs from MoE | All MoE models | ⏳ |
+| [#2412](https://github.com/vllm-project/tpu-inference/pull/2412) | Add input_ids + hash_block_size for incoming DeepSeek V4 | Forward-looking | — |
+
+**Note**: #2462 is a compatibility fix — without it, MLA models may fail on newer versions.
+
+### 4. Multi-host / PD Disaggregation Improvements
+
+| PR | Description | Affected Models | Status |
+|----|-------------|----------------|:------:|
+| [#2414](https://github.com/vllm-project/tpu-inference/pull/2414) | Fix wrong device_put usage for multi-host | K2.6 multi-host, all multi-node setups | ⏳ |
+| [#2435](https://github.com/vllm-project/tpu-inference/pull/2435) | Stagger prefill/decode startup to relieve host memory pressure | GLM PD, Qwen3.5 PD, Qwen3-Coder PD | ⏳ |
+| [#2392](https://github.com/vllm-project/tpu-inference/pull/2392) | Extend attn_dp_expert to emulate attn_dp | R1, V3.2 | ⏳ |
+
+### 5. Quantization + MoE Infrastructure
+
+| PR | Description | Affected Models | Status |
+|----|-------------|----------------|:------:|
+| [#2236](https://github.com/vllm-project/tpu-inference/pull/2236) | W4A8 FP8 linear layers (compressed tensors) | Potential new quantization path | ⏳ |
+| [#2270](https://github.com/vllm-project/tpu-inference/pull/2270) | Jax native UnquantizedFusedMoE sharding fix | All Jax native MoE models | ⏳ |
+| [#2398](https://github.com/vllm-project/tpu-inference/pull/2398) | DCP sharding axis + KV cache support | Infrastructure | ⏳ |
+
+### 6. Stability & Maintainability
+
+| PR | Description | Status |
+|----|-------------|:------:|
+| [#2399](https://github.com/vllm-project/tpu-inference/pull/2399) | deepcopy model_config to prevent config mutation | ⏳ |
+| [#2441](https://github.com/vllm-project/tpu-inference/pull/2441) | Pin transformers==5.5.3 | ✅ Merged |
+| [#2417](https://github.com/vllm-project/tpu-inference/pull/2417) | MLA KV cache text_config for multi-modal models | ✅ Merged (replaces our K2.6 fallback) |
+| [#2418](https://github.com/vllm-project/tpu-inference/pull/2418) | Add Kimi K2.6 to nightly CI | ✅ Merged |
+| [#2396](https://github.com/vllm-project/tpu-inference/pull/2396) | Qwen3.5 jittable vision tower | ⏳ |
+| [#2346](https://github.com/vllm-project/tpu-inference/pull/2346) | Open-source kernel tuning infrastructure | ⏳ |
+
+### Per-Model Impact Matrix
+
+| Model | KV Offload | GDN Fixes | MLA Fix | AG-FP8 | Multi-host Fix | PD Opt | Compact KV |
+|-------|:----------:|:---------:|:-------:|:------:|:--------------:|:------:|:----------:|
+| DeepSeek R1 | Med | — | **High** | **High** | — | — | — |
+| DeepSeek V3.2 | Med | — | **High** | **High** | — | — | — |
+| GLM-5.1 | Med | — | **High** | — | — | Med | — |
+| Kimi K2.6 | **High** | — | **High** | — | **High** | — | — |
+| Qwen3.5 | Low | **High** | — | — | — | Med | **High** |
+| Qwen3-Coder | Low | — | — | — | — | Med | — |
+
+> **High** = Directly affects correctness or removes hardware limitations　**Med** = Performance/capacity improvement　**Low** = Marginal benefit　**—** = N/A
+
+### Verification Priority
+
+1. **P0 (Must verify)**: #2462 MLA fix — compatibility fix for all MLA models, may break without it
+2. **P0 (High value)**: #2390 KV Offload + K2.6 single-node — could halve K2.6 deployment requirements
+3. **P1 (Quality)**: #2408 + #2431 Qwen3.5 GDN precision — re-run GSM8K to compare
+4. **P1 (Performance)**: #2407 AG-FP8 restore + #2416 Compact KV — R1/V3.2 throughput and Qwen3.5 HBM efficiency
+5. **P2 (PD improvement)**: #2435 PD startup optimization + #2414 multi-host fix — GLM/Qwen PD and K2.6 multi-node
