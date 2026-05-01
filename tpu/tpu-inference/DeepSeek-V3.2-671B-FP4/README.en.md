@@ -5,7 +5,7 @@
 > End-to-end guide: Run DeepSeek V3.2 671B (FP4 quantized) inference on a single TPU v7x-8 node,
 > covering environment setup, weight cache generation, FP4 conversion, vLLM service launch, and accuracy validation.
 >
-> **Code repository**: https://github.com/yangwhale/tpu-inference (branch: `feature/moe-fp4-weight-cache`)
+> **Code repository**: https://github.com/yangwhale/tpu-inference (branch: `chrisya/main`)
 >
 > **Model**: [deepseek-ai/DeepSeek-V3.2](https://huggingface.co/deepseek-ai/DeepSeek-V3.2) (FP8 weights)
 >
@@ -152,29 +152,46 @@ Enter Pod:
 kubectl exec -it vllm-deepseek-v32 -- bash
 ```
 
-## A-2: Update tpu-inference to FP4 branch
+## A-2: Update tpu-inference Code
 
-The `tpu_inference` in the Docker image is an editable install; just switch branches:
+The `tpu_inference` in the Docker image is an editable install (`/workspace/tpu_inference/`), but **has no `.git` directory**,
+so you can't `git checkout` directly. Clone the `chrisya/main` branch from GitHub and overwrite the install directory:
 
 ```bash
-cd /workspace/tpu_inference
-git fetch origin
-git checkout feature/moe-fp4-weight-cache
+# Clone chrisya/main branch (includes FP4 cache, V3.2 support, DSA indexer skip, etc.)
+cd /workspace
+git clone -b chrisya/main https://github.com/yangwhale/tpu-inference.git tpu_inference_new
+
+# Overwrite existing code
+cp -r tpu_inference_new/tpu_inference/* /workspace/tpu_inference/tpu_inference/
+
+# Clear Python bytecode cache (prevent stale .pyc)
+find /workspace/tpu_inference -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+
+# Clean up temp directory
+rm -rf tpu_inference_new
 ```
 
 Verify:
 ```bash
+# Confirm V3.2 architecture registration exists
+grep DeepseekV32 /workspace/tpu_inference/tpu_inference/models/common/model_loader.py
+# Should see: _MODEL_REGISTRY["DeepseekV32ForCausalLM"] = DeepseekV3ForCausalLM
+
+# Confirm indexer skip exists
+grep indexer /workspace/tpu_inference/tpu_inference/models/jax/deepseek_v3.py
+# Should see: skip_substrs=["indexer"] + [
+
+# Confirm import works
 python3 -c "import tpu_inference; print('OK')"
 ```
 
-### A-2a: V3.2 Hot Patches (Docker images only)
-
-> ⚠️ If the Docker image's tpu-inference code doesn't include V3.2 support (check: `grep DeepseekV32 /workspace/tpu_inference/tpu_inference/models/common/model_loader.py`),
-> apply the following two patches. **TPU VM bare metal (Part B) builds from source and already includes V3.2 support.**
-
-**Patch 1: V32 Architecture Registration** — Register `DeepseekV32Config` in `__init__.py` and map `DeepseekV32ForCausalLM` → `DeepseekV3ForCausalLM` in `model_loader.py`. See the [Chinese README](README.md#a-2a-v32-热补丁仅-docker-镜像需要) for the full patch script.
-
-**Patch 2: Skip DSA Indexer Weights** — V3.2 adds DSA (Differential Sparse Attention) indexer weights (7 new keys per layer). Add `+ ['indexer']` to `skip_substrs` in `deepseek_v3.py` to skip them during loading.
+> **Key changes in `chrisya/main` branch** (relative to upstream main):
+> - V3.2 architecture registration (`DeepseekV32Config` + `DeepseekV32ForCausalLM` mapping)
+> - DSA indexer weight skipping (V3.2's new Sparse Attention module, not used in inference)
+> - FP4 MoE weight cache (FP8 transport format + mmap npy_v1 + parallel prefetch)
+> - Safetensors MoE key filtering (skips 94 pure MoE shards)
+> - Multiple performance optimizations (async save, prefetch pipeline, logger downgrade, etc.)
 
 After completion, jump to [Step 3: Download Model Weights](#step-3-download-model-weights).
 
@@ -272,11 +289,10 @@ source $HOME/.local/bin/env
 uv venv ~/vllm_env --python 3.12
 source ~/vllm_env/bin/activate
 
-# Clone tpu-inference (use FP4 branch)
+# Clone tpu-inference (use chrisya/main branch, includes FP4 cache + V3.2 support)
 cd ~
-git clone https://github.com/yangwhale/tpu-inference.git
+git clone -b chrisya/main https://github.com/yangwhale/tpu-inference.git
 cd tpu-inference
-git checkout feature/moe-fp4-weight-cache
 
 # Get vLLM pinned version and clone (note trim trailing whitespace)
 export VLLM_COMMIT_HASH="$(cat .buildkite/vllm_lkg.version | tr -d '[:space:]')"
@@ -300,7 +316,7 @@ cd ~
 ```
 
 > **Why install from source?**
-> Because the FP4 MoE cache changes are in the `feature/moe-fp4-weight-cache` branch,
+> Because FP4 MoE cache and V3.2 support changes are in the `chrisya/main` branch,
 > not yet merged into the PyPI `vllm-tpu` package. Source install allows direct use of this branch's code.
 
 ## B-4: Verify Installation
@@ -930,7 +946,7 @@ TPU VM default /dev/shm = half of host memory (v7x-8 ~473 GB), can't fit 610 GB 
 ### Q: How to choose between PyPI install and source install?
 
 - **PyPI (`pip install vllm-tpu`)**: Simplest, but FP4 branch changes not yet released to PyPI
-- **Source install**: Currently the only way, because we need `feature/moe-fp4-weight-cache` branch changes
+- **Source install**: Currently the only way, because we need `chrisya/main` branch changes (FP4 cache, V3.2 support, DSA indexer skip)
 - After FP4 merges to mainline, can directly use `pip install vllm-tpu`
 
 ### Q: Can it run directly on bare metal (TPU VM)?
@@ -1352,7 +1368,7 @@ FP4(1.0) = byte `0x02`, interpreted as FP8 gives `0.003906` — all MoE weights 
 
 **Cause**: V3.2 introduces DSA (Differential Sparse Attention) with 7 new indexer weights per layer. TPU inference doesn't use DSA.
 
-**Fix**: Add `+ ['indexer']` to `skip_substrs` in `deepseek_v3.py`. See [A-2a](#a-2a-v32-hot-patches-docker-images-only).
+**Fix**: Add `"indexer"` to `skip_substrs` in `deepseek_v3.py`. Already included in `chrisya/main` branch (see [A-2](#a-2-update-tpu-inference-code)).
 
 ---
 
@@ -1474,7 +1490,7 @@ FP4(1.0) = byte `0x02`, interpreted as FP8 gives `0.003906` — all MoE weights 
 | flax | 0.12.4 | 0.12.4 |
 | torch | 2.9.0+cpu | 2.10.0 |
 | vLLM | 0.19.1rc1.dev321+g6dc949140.tpu | same as left |
-| tpu-inference | feature/moe-fp4-weight-cache | same as left |
+| tpu-inference | chrisya/main | same as left |
 | Python | 3.12 | 3.12 |
 | TPU runtime | v2-alpha-tpu7-ubuntu2404 | same as left |
 
@@ -1483,7 +1499,7 @@ FP4(1.0) = byte `0x02`, interpreted as FP8 gives `0.003906` — all MoE weights 
 | Scenario | Storage | Startup Time (cold) | Inference Verification | Notes |
 |------|------|-----------------|----------|------|
 | TPU VM bare metal | Hyperdisk 2TB + /dev/shm 800G | 3:41 → 3:44-3:51 | R1 verified 2+3=5 ✅ | Recommended for development testing |
-| GKE + Docker | Lustre PVC + /dev/shm 800G | ~3:17 | **V3.2 verified** ✅ (2026-04-30) | Needs V32 hot patches (see [A-2a](#a-2a-v32-hot-patches-docker-images-only)) |
+| GKE + Docker | Lustre PVC + /dev/shm 800G | ~3:17 | **V3.2 verified** ✅ (2026-04-30) | Needs tpu-inference code update (see [A-2](#a-2-update-tpu-inference-code)) |
 
 > **TPU VM Multiple cold start measurements** (2026-04-22, kill→restart loop):
 >
@@ -1496,6 +1512,6 @@ FP4(1.0) = byte `0x02`, interpreted as FP8 gives `0.003906` — all MoE weights 
 > Compilation cache only in process memory (C++ LRU cache), not persisted to disk, so every kill-then-restart is cold start.
 
 > **GKE Special Considerations**:
-> - tpu-inference in Docker image needs manual patch (comment `jax.clear_caches()` + add consolidated non-MoE fast path)
+> - tpu-inference in Docker image needs code update from `chrisya/main` branch (see [A-2](#a-2-update-tpu-inference-code))
 > - NPZ format cache on Lustre needs conversion to npy_v1 directory format (see [Pitfall #21](#21-npy_v1-cache-metajson-format-requirements))
 > - After killing vLLM in GKE Pod, must use `fuser /dev/vfio/*` to confirm device released (see [Pitfall #15](#15-enginecore-orphan-process-continues-holding-tpu))

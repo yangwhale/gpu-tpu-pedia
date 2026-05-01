@@ -5,7 +5,7 @@
 > 端到端指南：在单节点 TPU v7x-8 上运行 DeepSeek V3.2 671B（FP4 量化）推理，
 > 包含环境搭建、权重缓存生成、FP4 转换、vLLM 服务启动、以及准确性验证。
 >
-> **代码仓库**: https://github.com/yangwhale/tpu-inference (branch: `feature/moe-fp4-weight-cache`)
+> **代码仓库**: https://github.com/yangwhale/tpu-inference (branch: `chrisya/main`)
 >
 > **模型**: [deepseek-ai/DeepSeek-V3.2](https://huggingface.co/deepseek-ai/DeepSeek-V3.2)（FP8 权重）
 >
@@ -152,91 +152,46 @@ EOF
 kubectl exec -it vllm-deepseek-v32 -- bash
 ```
 
-## A-2: 更新 tpu-inference 到 FP4 分支
+## A-2: 更新 tpu-inference 代码
 
-Docker 镜像中的 `tpu_inference` 是 editable install，直接切分支即可：
+Docker 镜像中的 `tpu_inference` 是 editable install（`/workspace/tpu_inference/`），但**没有 `.git` 目录**，
+无法直接 `git checkout`。需要从 GitHub clone `chrisya/main` 分支后覆盖安装目录：
 
 ```bash
-cd /workspace/tpu_inference
-git fetch origin
-git checkout feature/moe-fp4-weight-cache
+# 克隆 chrisya/main 分支（含 FP4 cache、V3.2 支持、DSA indexer skip 等全部改动）
+cd /workspace
+git clone -b chrisya/main https://github.com/yangwhale/tpu-inference.git tpu_inference_new
+
+# 覆盖现有代码
+cp -r tpu_inference_new/tpu_inference/* /workspace/tpu_inference/tpu_inference/
+
+# 清理 Python 字节码缓存（防止用旧 .pyc）
+find /workspace/tpu_inference -name "__pycache__" -exec rm -rf {} + 2>/dev/null
+
+# 清理临时目录
+rm -rf tpu_inference_new
 ```
 
 验证：
 ```bash
+# 确认 V3.2 架构注册存在
+grep DeepseekV32 /workspace/tpu_inference/tpu_inference/models/common/model_loader.py
+# 应看到: _MODEL_REGISTRY["DeepseekV32ForCausalLM"] = DeepseekV3ForCausalLM
+
+# 确认 indexer skip 存在
+grep indexer /workspace/tpu_inference/tpu_inference/models/jax/deepseek_v3.py
+# 应看到: skip_substrs=["indexer"] + [
+
+# 确认可正常 import
 python3 -c "import tpu_inference; print('OK')"
 ```
 
-### A-2a: V3.2 热补丁（仅 Docker 镜像需要）
-
-> ⚠️ 如果 Docker 镜像的 tpu-inference 代码尚未包含 V3.2 支持（检查方法：`grep DeepseekV32 /workspace/tpu_inference/tpu_inference/models/common/model_loader.py`），
-> 需要手动打以下两个补丁。**TPU VM 裸机安装（Part B）从源码构建，已包含 V3.2 支持，无需此步。**
-
-**补丁 1: V32 架构注册**
-
-在 `__init__.py` 中注册 `DeepseekV32Config`，在 `model_loader.py` 中将 `DeepseekV32ForCausalLM` 映射到 `DeepseekV3ForCausalLM`：
-
-```python
-# patch_v32.py — 在 pod 内执行
-path = "/workspace/tpu_inference/tpu_inference/models/common/model_loader.py"
-with open(path) as f:
-    content = f.read()
-
-# 添加到 _PP_DISABLED_MODELS
-content = content.replace(
-    '{"DeepseekV3ForCausalLM",',
-    '{"DeepseekV3ForCausalLM", "DeepseekV32ForCausalLM",'
-)
-
-# 添加到 _MODEL_REGISTRY
-old = '    _MODEL_REGISTRY["DeepseekV3ForCausalLM"] = DeepseekV3ForCausalLM\n'
-content = content.replace(old, old + '    _MODEL_REGISTRY["DeepseekV32ForCausalLM"] = DeepseekV3ForCausalLM\n')
-
-with open(path, "w") as f:
-    f.write(content)
-
-# __init__.py: 追加 V32Config 注册
-init_path = "/workspace/tpu_inference/tpu_inference/__init__.py"
-patch = '''
-try:
-    from transformers import AutoConfig
-    from transformers.models.deepseek_v3.configuration_deepseek_v3 import DeepseekV3Config
-    class DeepseekV32Config(DeepseekV3Config):
-        model_type = "deepseek_v32"
-    AutoConfig.register("deepseek_v32", DeepseekV32Config)
-except Exception:
-    pass
-'''
-with open(init_path, "a") as f:
-    f.write(patch)
-```
-
-**补丁 2: 跳过 DSA Indexer 权重**
-
-V3.2 新增了 DSA (Differential Sparse Attention) indexer 权重（每层 7 个 key: `indexer.weights_proj.weight` 等），
-TPU 推理不使用这些权重，加载时需跳过：
-
-```python
-# patch_indexer_skip.py — 在 pod 内执行
-path = "/workspace/tpu_inference/tpu_inference/models/jax/deepseek_v3.py"
-with open(path) as f:
-    content = f.read()
-
-# 在 skip_substrs 列表末尾追加 'indexer'
-content = content.replace(
-    """            skip_substrs=[
-                f"layers.{i}"
-                for i in range(start_ignore_layer_num, end_ignore_layer_num)
-            ],""",
-    """            skip_substrs=[
-                f"layers.{i}"
-                for i in range(start_ignore_layer_num, end_ignore_layer_num)
-            ] + ['indexer'],"""
-)
-
-with open(path, "w") as f:
-    f.write(content)
-```
+> **`chrisya/main` 分支包含的关键改动**（相对于上游 main）：
+> - V3.2 架构注册（`DeepseekV32Config` + `DeepseekV32ForCausalLM` 映射）
+> - DSA indexer 权重跳过（V3.2 新增的 Sparse Attention 模块，推理不使用）
+> - FP4 MoE weight cache（FP8 transport 格式 + mmap npy_v1 + 并行预取）
+> - safetensors MoE key 过滤（跳过 94 个纯 MoE shard）
+> - 多项性能优化（异步保存、prefetch pipeline、logger 降级等）
 
 完成后跳转到 [Step 3: 下载模型权重](#step-3-下载模型权重)。
 
@@ -334,11 +289,10 @@ source $HOME/.local/bin/env
 uv venv ~/vllm_env --python 3.12
 source ~/vllm_env/bin/activate
 
-# 克隆 tpu-inference（使用 FP4 分支）
+# 克隆 tpu-inference（使用 chrisya/main 分支，含 FP4 cache + V3.2 支持）
 cd ~
-git clone https://github.com/yangwhale/tpu-inference.git
+git clone -b chrisya/main https://github.com/yangwhale/tpu-inference.git
 cd tpu-inference
-git checkout feature/moe-fp4-weight-cache
 
 # 获取 vLLM pinned 版本并克隆（注意 trim 尾部空格）
 export VLLM_COMMIT_HASH="$(cat .buildkite/vllm_lkg.version | tr -d '[:space:]')"
@@ -362,7 +316,7 @@ cd ~
 ```
 
 > **为什么从源码安装？**
-> 因为 FP4 MoE cache 的改动在 `feature/moe-fp4-weight-cache` 分支，
+> 因为 FP4 MoE cache 和 V3.2 支持等改动在 `chrisya/main` 分支，
 > 尚未合入 PyPI 的 `vllm-tpu` 包。从源码安装可以直接使用该分支的代码。
 
 ## B-4: 验证安装
@@ -992,7 +946,7 @@ TPU VM 默认 /dev/shm = 主机内存一半（v7x-8 约 473 GB），放不下 61
 ### Q: PyPI 安装和源码安装怎么选？
 
 - **PyPI (`pip install vllm-tpu`)**：最简单，但 FP4 分支改动尚未发布到 PyPI
-- **源码安装**：当前唯一方式，因为需要 `feature/moe-fp4-weight-cache` 分支的改动
+- **源码安装**：当前唯一方式，因为需要 `chrisya/main` 分支的改动（含 FP4 cache、V3.2 支持、DSA indexer skip）
 - FP4 合入主线后，可直接 `pip install vllm-tpu` 使用
 
 ### Q: 裸机（TPU VM）上能直接跑吗？
@@ -1477,8 +1431,8 @@ skip_substrs=[
 ] + ['indexer'],  # ← 跳过 V3.2 DSA indexer 权重
 ```
 
-**教训**：V3.2 与 R1 架构几乎相同，但 DSA 是 V3.2 独有的新增模块。虽然 V3.2 的 `config.json` 中 `model_type` 是 `"deepseek_v32"`（需要单独注册，见 [A-2a](#a-2a-v32-热补丁仅-docker-镜像需要)），
-但模型权重类只是复用了 `DeepseekV3ForCausalLM`，不需要为 V3.2 编写新的模型实现。
+**教训**：V3.2 与 R1 架构几乎相同，但 DSA 是 V3.2 独有的新增模块。V3.2 的 `config.json` 中 `model_type` 是 `"deepseek_v32"`（需要单独注册），
+但模型权重类只是复用了 `DeepseekV3ForCausalLM`，不需要为 V3.2 编写新的模型实现。所有 V3.2 相关的支持已合入 `chrisya/main` 分支（见 [A-2](#a-2-更新-tpu-inference-代码)）。
 
 ---
 
@@ -1600,7 +1554,7 @@ skip_substrs=[
 | flax | 0.12.4 | 0.12.4 |
 | torch | 2.9.0+cpu | 2.10.0 |
 | vLLM | 0.19.1rc1.dev321+g6dc949140.tpu | 同左 |
-| tpu-inference | feature/moe-fp4-weight-cache | 同左 |
+| tpu-inference | chrisya/main | 同左 |
 | Python | 3.12 | 3.12 |
 | TPU runtime | v2-alpha-tpu7-ubuntu2404 | 同左 |
 
@@ -1609,7 +1563,7 @@ skip_substrs=[
 | 场景 | 存储 | 启动时间（cold） | 推理验证 | 备注 |
 |------|------|-----------------|----------|------|
 | TPU VM 裸机 | Hyperdisk 2TB + /dev/shm 800G | ~3:44-3:51 | R1 验证 2+3=5 ✅ | 推荐开发测试 |
-| GKE + Docker | Lustre PVC + /dev/shm 800G | ~3:17 | **V3.2 验证通过** ✅ (2026-04-30) | 需 V32 热补丁（见 [A-2a](#a-2a-v32-热补丁仅-docker-镜像需要)） |
+| GKE + Docker | Lustre PVC + /dev/shm 800G | ~3:17 | **V3.2 验证通过** ✅ (2026-04-30) | 需更新 tpu-inference 代码（见 [A-2](#a-2-更新-tpu-inference-代码)） |
 
 > **TPU VM 多次 cold start 实测**（2026-04-22，kill→restart 循环）：
 >
@@ -1622,6 +1576,6 @@ skip_substrs=[
 > 编译缓存仅在进程内存中（C++ LRU cache），不持久化到磁盘，因此每次 kill 后重启都是 cold start。
 
 > **GKE 特殊注意事项**：
-> - Docker 镜像中的 tpu-inference 需要手动 patch（注释 `jax.clear_caches()` + 添加 consolidated non-MoE 快速路径）
+> - Docker 镜像中的 tpu-inference 需要从 `chrisya/main` 分支覆盖更新（见 [A-2](#a-2-更新-tpu-inference-代码)）
 > - Lustre 上的 NPZ 格式 cache 需转换为 npy_v1 目录格式（见[踩坑 #21](#21-npy_v1-cache-的-metajson-格式要求)）
 > - GKE Pod 中杀 vLLM 后，必须用 `fuser /dev/vfio/*` 确认设备释放（见[踩坑 #15](#15-enginecore-孤儿进程持续占用-tpu)）
