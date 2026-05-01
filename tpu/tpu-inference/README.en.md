@@ -36,6 +36,30 @@
 | Qwen3.5 | ✅ Passed | GSM8K 93.93% | Chat path unstable, only completion mode reliable |
 | Qwen3-Coder | ✅ Passed | Smoke test | — |
 
+## Model Architecture & Feature Matrix
+
+> ✅ Supported and implemented　🔇 Supported but bypassed　— Not in model　⏳ Pending verification
+
+| Model | Attention | MoE | Layers | Hidden | Pos Enc | MTP | DSA | Vision | Hybrid KV |
+|-------|-----------|-----|--------|--------|---------|:---:|:---:|:------:|:---------:|
+| DeepSeek R1 | MLA | 256E top-8 | 61 (3D+58M) | 7168 | RoPE+YaRN | 🔇 | — | — | — |
+| DeepSeek V3.2 | MLA | 256E top-8 | 61 (3D+58M) | 7168 | RoPE+YaRN | 🔇 | 🔇 | — | — |
+| GLM-5.1 | MLA | 256E top-8 | 78 (3D+75M+MTP) | 6144 | RoPE (θ=1M) | 🔇 | 🔇 | — | — |
+| Kimi K2.6 | MLA | 384E+1S top-8 | 61 (1D+60M) | 7168 | RoPE+YaRN | — | — | 🔇 | — |
+| Qwen3.5 | GQA (32Q/2KV) | 512E+1S top-10 | 60 (45 GDN+15 Attn) | 4096 | YaRN+mrope | — | — | 🔇 | ✅ |
+| Qwen3-Coder | GQA (40Q/8KV) | 128E top-8 | 94 | 5120 | RoPE | — | — | — | — |
+| MiMo-V2-Flash | MHA | Dense | ⏳ | ⏳ | RoPE | ⏳ | — | — | — |
+
+> **Layer abbreviations**: D = Dense, M = MoE, MTP = Multi-Token Prediction, GDN = Grouped Dynamic Norm, Attn = Standard Attention, S = Shared Expert
+
+### Bypassed Feature Details
+
+| Feature | Affected Models | Bypass Method | Potential Impact |
+|---------|----------------|---------------|-----------------|
+| **MTP** | R1, V3.2, GLM-5.1 | MTP heads not enabled in TPU inference; GLM layer 78 explicitly skipped | 30-50% decode throughput improvement not utilized |
+| **DSA** | V3.2, GLM-5.1 | V3.2: indexer weights skipped (`skip_substrs=['indexer']`); GLM: SparseAttnIndexer is GPU-only path, inactive on TPU | Long-context sparse attention optimization not enabled |
+| **Vision** | K2.6, Qwen3.5 | Disabled via `--limit-mm-per-prompt='{"image":0,"video":0}'` | K2.6's MoonViT 400M and Qwen3.5's multimodal capabilities unused |
+
 ## Deployment Capabilities
 
 | Model | Single-Node | PD Disagg | Multi-Node | Notes |

@@ -36,6 +36,30 @@
 | Qwen3.5 | ✅ 通过 | GSM8K 93.93% | Chat 路径不稳定，仅 completion 模式可靠 |
 | Qwen3-Coder | ✅ 通过 | Smoke test | — |
 
+## 模型架构与特性矩阵
+
+> ✅ 模型支持且已实现　🔇 模型支持但已绕过/未启用　— 模型不含此特性　⏳ 待验证
+
+| 模型 | Attention | MoE | Layers | Hidden | Pos Enc | MTP | DSA | Vision | Hybrid KV |
+|------|-----------|-----|--------|--------|---------|:---:|:---:|:------:|:---------:|
+| DeepSeek R1 | MLA | 256E top-8 | 61 (3D+58M) | 7168 | RoPE+YaRN | 🔇 | — | — | — |
+| DeepSeek V3.2 | MLA | 256E top-8 | 61 (3D+58M) | 7168 | RoPE+YaRN | 🔇 | 🔇 | — | — |
+| GLM-5.1 | MLA | 256E top-8 | 78 (3D+75M+MTP) | 6144 | RoPE (θ=1M) | 🔇 | 🔇 | — | — |
+| Kimi K2.6 | MLA | 384E+1S top-8 | 61 (1D+60M) | 7168 | RoPE+YaRN | — | — | 🔇 | — |
+| Qwen3.5 | GQA (32Q/2KV) | 512E+1S top-10 | 60 (45 GDN+15 Attn) | 4096 | YaRN+mrope | — | — | 🔇 | ✅ |
+| Qwen3-Coder | GQA (40Q/8KV) | 128E top-8 | 94 | 5120 | RoPE | — | — | — | — |
+| MiMo-V2-Flash | MHA | Dense | ⏳ | ⏳ | RoPE | ⏳ | — | — | — |
+
+> **层数缩写**：D = Dense 层, M = MoE 层, MTP = Multi-Token Prediction 层, GDN = Grouped Dynamic Norm 层, Attn = 标准 Attention 层, S = Shared Expert
+
+### 已绕过特性说明
+
+| 特性 | 影响模型 | 绕过方式 | 潜在影响 |
+|------|----------|----------|----------|
+| **MTP** | R1, V3.2, GLM-5.1 | TPU 推理未启用 MTP 头；GLM 第 78 层显式跳过 | 未利用 30-50% decode 吞吐提升 |
+| **DSA** | V3.2, GLM-5.1 | V3.2: indexer 权重跳过 (`skip_substrs=['indexer']`)；GLM: SparseAttnIndexer 为 GPU 专用路径，TPU 不生效 | 长文本注意力稀疏优化未启用 |
+| **Vision** | K2.6, Qwen3.5 | `--limit-mm-per-prompt='{"image":0,"video":0}'` 禁用 | K2.6 的 MoonViT 400M、Qwen3.5 的多模态均未使用 |
+
 ## 部署能力
 
 | 模型 | 单机推理 | PD 分离 | 多机推理 | 备注 |
