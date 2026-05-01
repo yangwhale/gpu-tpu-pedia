@@ -64,14 +64,14 @@
 
 | Model | Single-Node | PD Disagg | Multi-Node | Notes |
 |-------|:-----------:|:---------:|:----------:|-------|
-| DeepSeek R1 | ✅ | — | — | v7x-8, EP=8 |
-| DeepSeek V3.2 | ✅ | — | — | v7x-8, EP=8 |
-| GLM-5.1 | ✅ | ✅ | — | v7x-8, EP=8; PD disagg requires vLLM v1 scheduler (V0 DPScheduler removed) |
-| Kimi K2.6 | ✅ | — | ✅ | Full 61 layers require v7x-16; v7x-8 runs 40 layers only |
+| DeepSeek R1 | ✅ | ⏳ | ⏳ | v7x-8, EP=8 |
+| DeepSeek V3.2 | ✅ | ⏳ | ⏳ | v7x-8, EP=8 |
+| GLM-5.1 | ✅ | ✅ | ⏳ | v7x-8, EP=8; PD disagg requires vLLM v1 scheduler (V0 DPScheduler removed) |
+| Kimi K2.6 | ❌ | ⏳ | ✅ | v7x-8 full 61 layers OOM (weights + KV cache exceed HBM); inference only on v7x-16 |
 | Qwen3.5 | ✅ | ✅ | ✅ | All three modes verified |
 | Qwen3-Coder | ✅ | ✅ | ✅ | Multi-node TP=16 throughput 15-63% worse, not recommended |
 
-> ✅ Verified working　⚠️ Unstable / known issues　— Not implemented or not tested
+> ✅ Verified working　⚠️ Unstable / known issues　⏳ Pending verification　❌ Not feasible
 
 ## Performance Overview (POC Reference Data)
 

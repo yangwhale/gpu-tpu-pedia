@@ -64,14 +64,14 @@
 
 | 模型 | 单机推理 | PD 分离 | 多机推理 | 备注 |
 |------|:--------:|:-------:|:--------:|------|
-| DeepSeek R1 | ✅ | — | — | v7x-8, EP=8 |
-| DeepSeek V3.2 | ✅ | — | — | v7x-8, EP=8 |
-| GLM-5.1 | ✅ | ✅ | — | v7x-8, EP=8；PD 分离需 vLLM v1 scheduler（V0 DPScheduler 已废弃） |
-| Kimi K2.6 | ✅ | — | ✅ | 全量 61 层需 v7x-16；v7x-8 仅 40 层 |
+| DeepSeek R1 | ✅ | ⏳ | ⏳ | v7x-8, EP=8 |
+| DeepSeek V3.2 | ✅ | ⏳ | ⏳ | v7x-8, EP=8 |
+| GLM-5.1 | ✅ | ✅ | ⏳ | v7x-8, EP=8；PD 分离需 vLLM v1 scheduler（V0 DPScheduler 已废弃） |
+| Kimi K2.6 | ❌ | ⏳ | ✅ | v7x-8 全量 61 层 OOM（权重+KV cache 超 HBM）；完整推理仅 v7x-16 |
 | Qwen3.5 | ✅ | ✅ | ✅ | 三种模式均已验证 |
 | Qwen3-Coder | ✅ | ✅ | ✅ | 多机 TP=16 吞吐下降 15-63%，不推荐 |
 
-> ✅ 已验证可用　⚠️ 不稳定/有已知问题　— 未实现或未测试
+> ✅ 已验证可用　⚠️ 不稳定/有已知问题　⏳ 待验证　❌ 不可用
 
 ## 性能概览（POC 参考数据）
 
