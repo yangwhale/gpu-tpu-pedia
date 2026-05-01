@@ -1,0 +1,143 @@
+# 大模型推理 on TPU v7x — 快速落地指南
+
+[English](./README.en.md) | **中文**
+
+> **定位声明**
+>
+> 本仓库是一份 **POC（概念验证）快速落地指南**，目标是让用户以最短路径在 TPU v7x 上跑通大模型推理。
+>
+> - **可执行优先**：每个模型都提供从零到推理成功的完整步骤
+> - **非性能评测**：文档中出现的性能数据仅为功能验证时的副产品，**不代表优化后的生产性能**，不应作为评估指标
+> - **非生产就绪**：未做生产级调优（KV cache 策略、batch 调度、PD 分离等），仅保证功能可用
+>
+> 如需性能对比或生产部署方案，请联系 TPU 推理团队。
+
+## 模型总览
+
+| 模型 | 参数量 | 架构 | 量化精度 | TPU 拓扑 | Cold Start | 文档 |
+|------|--------|------|----------|----------|------------|------|
+| DeepSeek R1 | 671B | MoE 256E top-8, MLA | FP4 MoE + FP8 Attn | v7x-8 | ~4-6 min | [详情](./DeepSeek-R1-671B-FP4/) |
+| DeepSeek V3.2 | 671B | MoE 256E top-8, MLA | FP4 MoE + FP8 Attn | v7x-8 | ~4-6 min | [详情](./DeepSeek-V3.2-671B-FP4/) |
+| GLM-5.1 | 754B | MoE 180E top-8 | FP4 MoE + FP8 Attn | v7x-8 | ~3-4 min | [详情](./GLM-5.1-754B-FP4/) |
+| Kimi K2.6 | 1T / 32B active | MoE, native INT4 | INT4 | v7x-16 | ~6 min | [详情](./Kimi-K2.6-1T-A32B-INT4/) |
+| Qwen3.5 | 397B / 17B active | Hybrid GDN+Attn, 512E | FP8 | v7x-8 | ~7 min | [详情](./Qwen3.5-397B-A17B-FP8/) |
+| Qwen3-Coder | 480B / 35B active | MoE, FP8 native | FP8 | v7x-8 | ~7 min | [详情](./Qwen3-Coder-480B/) |
+
+**硬件基线**：TPU v7x-8 = 4 chips / 8 devices / 768 GB HBM / ~944 GB 主机内存。
+
+## 验证状态
+
+| 模型 | 推理验证 | 质量评测 | 已知限制 |
+|------|----------|----------|----------|
+| DeepSeek R1 | ✅ 通过 | GSM8K 94.92% | — |
+| DeepSeek V3.2 | ✅ 通过 | Smoke test | 需热补丁注册 V32 架构 |
+| GLM-5.1 | ✅ 通过 | GSM8K 89.46% | 首次 JIT 编译 ~13 min |
+| Kimi K2.6 | ✅ 通过 | Smoke test | 全量 61 层需 v7x-16；v7x-8 仅跑 40 层 |
+| Qwen3.5 | ✅ 通过 | GSM8K 93.93% | Chat 路径不稳定，仅 completion 模式可靠 |
+| Qwen3-Coder | ✅ 通过 | Smoke test | — |
+
+## 快速开始
+
+```
+获取权重          准备 Cache（FP4 模型需要）       启动 vLLM
+   │                      │                         │
+   ▼                      ▼                         ▼
+HuggingFace 下载   gen_fp4_cache_cpu_parallel.py   vllm serve \
+  或 GCS 拷贝       + extract_non_moe_weights.py     --tensor-parallel-size 8 \
+                   拷贝到 /dev/shm                    --quantization fp8 ...
+```
+
+**三种量化路径**：
+
+| 路径 | 适用模型 | Cache 生成 | /dev/shm 需求 |
+|------|----------|-----------|---------------|
+| **FP4 MoE** | R1, V3.2, GLM-5.1 | 需要（CPU 并行脚本，~28 min） | ~610-735 GB |
+| **INT4 MoE** | Kimi K2.6 | 需要（模型自带转换） | ~532 GB |
+| **FP8 Native** | Qwen3.5, Qwen3-Coder | **不需要**（直读权重） | 不需要 |
+
+## 环境变量速查
+
+### FP4 MoE 模型（DeepSeek R1 / V3.2 / GLM-5.1）
+
+```bash
+export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn
+export NEW_MODEL_DESIGN=1
+export MOE_WEIGHT_CACHE_DIR=/dev/shm
+```
+
+### INT4 MoE 模型（Kimi K2.6）
+
+```bash
+export K26_USE_V16=1
+export MOE_WEIGHT_CACHE_DIR=/dev/shm/k26_cache_v2
+```
+
+### FP8 Native 模型（Qwen3.5 / Qwen3-Coder）
+
+```bash
+export MODEL_IMPL_TYPE=vllm
+export SKIP_JAX_PRECOMPILE=1
+export VLLM_XLA_CHECK_RECOMPILATION=0
+```
+
+## 模型存储（GCS）
+
+权重和预计算 Cache 统一存放在 GCS 对象存储桶中，按以下结构组织：
+
+```
+gs://<YOUR_BUCKET>/models/
+├── deepseek-r1-671b/
+│   ├── weights/                          # 163 safetensors shards (~642 GB)
+│   └── cache/fp4/ep8_tp1_.../            # 58 层 FP4 npy_v1 + non_moe_weights.safetensors
+├── deepseek-v3.2-671b/
+│   ├── weights/                          # 163 safetensors shards (~643 GB)
+│   └── cache/fp4/ep8_tp1_.../            # 58 层 FP4 npy_v1 + non_moe_weights.safetensors
+├── glm-5.1-754b/
+│   ├── weights/                          # 143 safetensors shards (~705 GB)
+│   └── cache/fp4/ep8_tp1_.../            # 76 层 FP4 npy_v1 + non_moe_weights.safetensors
+├── kimi-k2.6/
+│   ├── weights/                          # 64 safetensors shards (~555 GB)
+│   └── cache/fp4/                        # 60 层 INT4 cache (~532 GB)
+├── qwen3-coder-480b-fp8/
+│   └── weights/                          # 49 safetensors shards (~449 GB)
+├── qwen3.5-397b-a17b-fp8/
+│   └── weights/                          # 94 safetensors shards (~378 GB)
+└── MiMo-V2-Flash/
+    └── weights/                          # 145 safetensors shards (~292 GB)
+```
+
+> FP8 native 模型（Qwen 系列）无需 cache 目录，直接从权重推理。
+
+## 工具脚本
+
+| 脚本 | 功能 | 依赖 | 适用模型 |
+|------|------|------|----------|
+| `gen_fp4_cache_cpu_parallel.py` | 从 safetensors 生成 FP4 MoE cache | 纯 CPU (numpy) | R1, V3.2, GLM-5.1 |
+| `extract_non_moe_weights.py` | 提取非 MoE 权重为单文件 | 纯 CPU (torch) | R1, V3.2, GLM-5.1 |
+| `validate_weights.py` | 验证权重完整性 | torch | GLM-5.1 |
+
+这些脚本位于各模型子目录中，纯 CPU 运行，不需要 TPU/GPU。
+
+## 基础设施
+
+TPU VM 创建和存储配置参考 [TPU-VM 指南](./TPU-VM/)，包括：
+
+- Hyperdisk ML 数据盘创建与挂载
+- TPU v7x-8 VM 实例创建
+- fio 磁盘性能基准测试
+- GCS 存储桶配置
+
+## 目录结构
+
+```
+tpu-inference/
+├── README.md                          # 本文（总纲）
+├── README.en.md                       # English version
+├── DeepSeek-R1-671B-FP4/              # DeepSeek R1 推理指南
+├── DeepSeek-V3.2-671B-FP4/            # DeepSeek V3.2 推理指南
+├── GLM-5.1-754B-FP4/                  # GLM-5.1 推理指南
+├── Kimi-K2.6-1T-A32B-INT4/            # Kimi K2.6 推理指南
+├── Qwen3.5-397B-A17B-FP8/             # Qwen3.5 推理指南
+├── Qwen3-Coder-480B/                  # Qwen3-Coder 推理指南
+└── TPU-VM/                            # TPU VM 基础设施指南
+```
