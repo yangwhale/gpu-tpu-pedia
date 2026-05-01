@@ -132,7 +132,34 @@ HuggingFace 下载   gen_fp4_cache_cpu_parallel.py   vllm serve \
 |------|----------|-----------|---------------|
 | **FP4 MoE** | R1, V3.2, GLM-5.1 | 需要（CPU 并行脚本，~28 min） | ~610-735 GB |
 | **INT4 MoE** | Kimi K2.6 | 需要（模型自带转换） | ~532 GB |
-| **FP8 Native** | Qwen3.5, Qwen3-Coder | **不需要**（直读权重） | 不需要 |
+| **FP8 Native** | Qwen3.5, Qwen3-Coder | **不需要**（直读权重） | 推荐预加载（见下文） |
+
+### 启动加速: 权重预加载到 /dev/shm
+
+FP8 Native 模型（Qwen3.5, Qwen3-Coder）从网络存储（Lustre/GCS）直接启动时，vLLM 需要串行加载 50-94 个 safetensors shards。当主机可用 RAM 不足以预取整个 checkpoint 时（例如 /dev/shm 被 FP4 cache 占用），**每 shard 加载耗时可达 90 秒，总启动时间超过 15 分钟**。
+
+**最佳实践：先拷贝权重到 /dev/shm，再指向本地路径启动。**
+
+```bash
+# 方式 1: 从 Lustre 拷贝（推荐，网内速度快）
+cp -r /lustre/models/Qwen3.5-397B-A17B-FP8 /dev/shm/qwen35-weights/
+
+# 方式 2: 从 GCS 直接拷贝（gcloud 4.5 GB/s）
+gcloud storage cp -r gs://<BUCKET>/models/qwen3.5-397b-a17b-fp8/weights/ /dev/shm/qwen35-weights/
+
+# 启动 vLLM 指向 /dev/shm
+vllm serve /dev/shm/qwen35-weights/ \
+  --tensor-parallel-size 8 --enable-expert-parallel ...
+```
+
+| 模型 | 权重大小 | 推荐策略 | Cold Start |
+|------|---------|---------|------------|
+| Qwen3.5 | 379 GB | /dev/shm 预加载 (拷贝 ~4.5 min) | ~4 min (vs 15+ min 直读) |
+| Qwen3-Coder | 450 GB | Lustre 直读 (空 /dev/shm) | ~10 min |
+
+> ⚠️ **Qwen3-Coder 不适合 /dev/shm 预加载**：450 GB 权重占 /dev/shm 57%，加上 vLLM 加载时的 MoE requantization 临时内存，总量超过 920 GiB 容器内存限制，会触发 OOM Killed。正确做法是保持 /dev/shm 空（800 GB 可用），从 Lustre 直读——此时 OS 有足够 RAM 做 auto-prefetch，每 shard ~5-9 秒（vs RAM 不足时 90 秒）。
+>
+> ⚠️ **一次只测一个模型**。FP4 模型（R1/V3.2/GLM）的 cache (~610-735 GB) 也在 /dev/shm，两者不能同时放。
 
 ## 环境变量速查
 
@@ -220,6 +247,57 @@ tpu-inference/
 ├── Qwen3-Coder-480B/                  # Qwen3-Coder 推理指南
 └── TPU-VM/                            # TPU VM 基础设施指南
 ```
+
+## 已发现的 Upstream 兼容性问题（2026-05-01 验证）
+
+> 以下问题在 upstream merge（`507cfa16..0b9f5583`，63 commits）后的 smoke test 中发现并修复/规避。影响的是 **JAX flax_nnx 推理路径**（R1, V3.2, GLM-5.1, K2.6）；PyTorch+TorchAX 路径（Qwen3.5, Qwen3-Coder）仅受问题 3 影响。
+
+### 问题 1: USE_MOE_EP_KERNEL 语义变化 → FUSED_MOE 报错
+
+- **现象**: `NotImplementedError: Unsupported moe backend: MoEBackend.FUSED_MOE`
+- **原因**: upstream 将 `USE_MOE_EP_KERNEL=1` + `use_ep=True` 映射到新的 `FUSED_MOE` 后端，但 JAX 路径不支持该后端
+- **影响**: 所有 FP4 MoE 模型（R1, V3.2, GLM-5.1）及 Kimi K2.6
+- **修复**: **不设 `USE_MOE_EP_KERNEL=1`**。`use_ep=True` 时自动 fallback 到 `GMM_EP`（正确路径）
+- **代码位置**: `tpu_inference/layers/jax/moe/utils.py:select_moe_backend()`
+- **详细踩坑**: 见 [R1 README 踩坑 #23](./DeepSeek-R1-671B-FP4/)
+
+### 问题 2: additional-config 不完整 → GMM_TP 而非 GMM_EP
+
+- **现象**: 推理输出乱码/精度崩溃（MoE 走了 Tensor Parallel 而非 Expert Parallel）
+- **原因**: `--additional-config` 中 `sharding_strategy` 缺少 `expert_parallelism:8` 和 `tensor_parallelism:1`，导致 `use_ep=False`
+- **影响**: 所有 MLA + EP 模型（R1, V3.2, GLM-5.1, K2.6）
+- **修复**: `additional-config` 必须同时包含三个参数：
+  ```json
+  {
+    "enable_dp_attention": true,
+    "sharding_strategy": {
+      "expert_parallelism": 8,
+      "tensor_parallelism": 1
+    }
+  }
+  ```
+- **详细踩坑**: 见 [R1 README 踩坑 #24](./DeepSeek-R1-671B-FP4/)
+
+### 问题 3: dp_scheduler.py hash_block_size 不兼容
+
+- **现象**: `TypeError: Scheduler.__init__() got unexpected keyword argument 'hash_block_size'`
+- **原因**: PR [#2412](https://github.com/vllm-project/tpu-inference/pull/2412) 在 `DPScheduler` 中透传了 `hash_block_size`，但基础 vLLM `Scheduler` 不接受此参数
+- **影响**: 所有使用 `DPScheduler` 的场景（**全部 6 个模型**）
+- **修复**: `inspect.signature` 动态检查参数是否存在再传递
+- **Patch 位置**: `tpu_inference/core/sched/dp_scheduler.py`（已提交到 fork）
+- **详细踩坑**: 见 [R1 README 踩坑 #25](./DeepSeek-R1-671B-FP4/)
+
+### 影响矩阵
+
+| 问题 | R1 | V3.2 | GLM-5.1 | K2.6 | Qwen3.5 | Qwen3-Coder |
+|------|:--:|:----:|:-------:|:----:|:-------:|:-----------:|
+| USE_MOE_EP_KERNEL | ✅ | ✅ | ✅ | ✅ | — | — |
+| additional-config | ✅ | ✅ | ✅ | ✅ | — | — |
+| hash_block_size | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+> ✅ = 受影响　— = 不受影响（走 PyTorch+TorchAX 路径）
+
+---
 
 ## 最近上游更新与待验证项
 

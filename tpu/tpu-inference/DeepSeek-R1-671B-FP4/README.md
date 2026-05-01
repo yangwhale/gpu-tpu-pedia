@@ -651,6 +651,10 @@ python3 $TI_DIR/scripts/convert_fp8_to_fp4.py \
 > **`MOE_REQUANTIZE_WEIGHT_DTYPE` 是最容易遗漏也最致命的**：它控制 `_get_config_cache_subdir()` 生成的 cache 子目录名。
 > 不设时 dtype 默认为 `"fp8"`，子目录变成 `ep8_tp1_gmm_ep_fp8e4m3_bsNone`，而你生成的 FP4 cache 在 `ep8_tp1_gmm_ep_fp4e2m1_bsNone`，
 > 导致 58 层全部 cache miss。详见[踩坑 #22](#22-moe_requantize_weight_dtype-漏设导致-fp8-cache-miss--hbm-oom)。
+>
+> ⛔ **不要设 `USE_MOE_EP_KERNEL=1`**：upstream 更新后此变量映射到新的 `FUSED_MOE` 后端（JAX 路径不支持），
+> 会报 `NotImplementedError: Unsupported moe backend: MoEBackend.FUSED_MOE`。不设时 EP 路径自动 fallback 到 `GMM_EP`。
+> 详见[踩坑 #23](#23-use_moe_ep_kernel1-含义变化导致-fused_moe-报错)。
 
 ```bash
 export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # ⚠️ 控制 FP4 cache 查找，漏设 = OOM
@@ -696,9 +700,11 @@ INFO:     Uvicorn running on http://0.0.0.0:8000
 | `--enforce-eager` | Eager 模式，避免 XLA tracing 开销 | |
 | `--enable-prefix-caching` | 启用 KV cache 前缀复用 | |
 | `--max-model-len 4096` | 最大序列长度 | |
-| `expert_parallelism: 8` | EP=8，256 experts ÷ 8 = 每 device 32 experts | 这才是真正的并行策略 |
-| `tensor_parallelism: 1` | TP=1，attention 权重用 DP（replicate）代替切分 | |
+| `enable_dp_attention: true` | 启用 DP attention，MLA 模型必须 | **不设会被 tpu_platform.py 拦截报错**。与 `expert_parallelism`、`tensor_parallelism` 组合决定 mesh 拓扑 |
+| `expert_parallelism: 8` | EP=8，256 experts ÷ 8 = 每 device 32 experts | **不设则 EP=1，MoE 层退化为 GMM_TP kernel，FP4 EP cache 失效**。详见[踩坑 #24](#24-additional-config-不完整导致-gmm_tp-而非-gmm_ep) |
+| `tensor_parallelism: 1` | TP=1，覆盖 CLI 的 `--tensor-parallel-size 8` | **不设则 TP=8，`use_ep` 条件 `total_tensor_parallelism==1` 不满足，强制 GMM_TP** |
 | `sparse_matmul: True` | 稀疏矩阵乘法优化 | |
+|  |  | ⚠️ **以上三个 sharding 参数缺一不可**，漏任何一个都会导致 kernel 从 `GMM_EP` 退化为 `GMM_TP`，EP 格式的 FP4 cache 无法使用 |
 
 ---
 
@@ -860,6 +866,7 @@ lm_eval \
 | `MOE_WEIGHT_CACHE_DIR` | MoE 权重缓存根目录（代码自动拼接 `{root}/{config_subdir}/`） | `/dev/shm` | ⚠️ **必填** |
 | `MOE_REQUANTIZE_BLOCK_SIZE` | 量化块大小 | `512`（可选） | 可选 |
 | `MOE_PARALLEL_WORKERS` | 并行 requant 线程数 | `1`（默认） | 可选 |
+| `USE_MOE_EP_KERNEL` | ⛔ **不要设为 1** — upstream 更新后映射到 `FUSED_MOE` 后端（JAX 不支持），不设时 EP 自动走 `GMM_EP` | 不设 | ⛔ 不要设 |
 
 ---
 
@@ -1302,6 +1309,76 @@ export MOE_REQUANTIZE_WEIGHT_DTYPE=float4_e2m1fn   # 不是 "fp4"，必须是完
 - `w13_weight_dtype` / `w2_weight_dtype`：值包含 "float4" 时触发 dtype view 转换
 
 **教训**：`gen_fp4_cache_cpu_parallel.py` 正确生成了这些字段，但手动 NPZ→npy 转换时容易遗漏。转换脚本必须从 NPZ 的 metadata 中提取 dtype 信息写入 meta.json
+
+### 23. `USE_MOE_EP_KERNEL=1` 含义变化导致 FUSED_MOE 报错
+
+**现象**：设置 `USE_MOE_EP_KERNEL=1` 后 vLLM 启动报错：
+```
+NotImplementedError: Unsupported moe backend: MoEBackend.FUSED_MOE!
+Currently supported: [<MoEBackend.GMM_EP: 'gmm_ep'>, <MoEBackend.GMM_TP: 'gmm_tp'>]
+```
+
+**原因**：upstream 更新后 `USE_MOE_EP_KERNEL=1` 不再映射到 `GMM_EP`，而是映射到新的 `FUSED_MOE` 后端（用于 fused EP kernel），但 JAX 路径的 model backend 只实现了 `GMM_EP` 和 `GMM_TP`
+
+**代码路径**（`layers/jax/moe/utils.py:select_moe_backend()`）：
+```python
+if envs.USE_MOE_EP_KERNEL:   # 设了 → 走这里
+    if use_ep:
+        return MoEBackend.FUSED_MOE   # ← 新后端，JAX 不支持！
+
+if use_ep:                    # 不设 → 走这里
+    return MoEBackend.GMM_EP  # ← 正确的 EP kernel
+```
+
+**修复**：**不要设 `USE_MOE_EP_KERNEL`**。不设时 `use_ep=True`（由 `expert_parallelism=8` + `tensor_parallelism=1` 决定）会 fallback 到 `GMM_EP`
+
+### 24. additional-config 不完整导致 GMM_TP 而非 GMM_EP
+
+**现象**：vLLM 启动日志显示 `[MoE]: Using GMM TP kernel` 而非预期的 `GMM EP kernel`。FP4 EP cache (`ep8_tp1_gmm_ep_fp4e2m1_bsNone`) miss，要么触发 108 min 的全量 requantization，要么用错误格式的 TP cache 产出乱码
+
+**原因**：`additional-config` 中的三个 sharding 参数（`enable_dp_attention`、`expert_parallelism`、`tensor_parallelism`）缺一不可，各自影响 kernel 选择的不同环节：
+
+| 参数 | 漏设后果 | 影响的代码 |
+|------|---------|-----------|
+| `expert_parallelism: 8` | EP=1 → mesh `expert` 轴为 1 → `num_expert_parallelism=1` → `use_ep=False` | `sharding.py:170` 默认值 `1` |
+| `tensor_parallelism: 1` | TP=8（取 CLI 值）→ `total_tensor_parallelism=8` → `use_ep` 的 `==1` 条件不满足 | `sharding.py:178-182` 条件分支 |
+| `enable_dp_attention: true` | MLA 模型必需 → tpu_platform.py 校验报错 | `tpu_platform.py:199-207` PR #2222 |
+
+**正确配置的 mesh**：`data=1, attn_dp=1, attn_dp_expert=8, expert=1, model=1, dcp=1`
+→ `tp_size=1` + `num_expert_parallelism=8` → `use_ep=True` → `GMM_EP` ✅
+
+**错误配置的 mesh**（漏设 `expert_parallelism` 和 `tensor_parallelism`）：`data=1, attn_dp=1, attn_dp_expert=1, expert=1, model=8, dcp=1`
+→ `tp_size=8` + `num_expert_parallelism=1` → `use_ep=False` → `GMM_TP` ❌
+
+**教训**：`--tensor-parallel-size 8` 只控制总设备数，实际的 TP/EP 策略完全由 `additional-config` 中的 `sharding_strategy` 决定。三个参数虽然各自独立，但对 kernel 选择有组合效应
+
+### 25. dp_scheduler.py hash_block_size 兼容性问题
+
+**现象**：upstream merge 后 vLLM 启动报 `TypeError: Scheduler.__init__() got an unexpected keyword argument 'hash_block_size'`
+
+**原因**：upstream PR #2412 给 `DPScheduler` 新增了 `hash_block_size` 参数（为 DeepSeek V4 的 hash prefix caching 准备），但 `_scheduler_worker_process()` 直接将此参数传给 base vLLM `Scheduler.__init__()`，而 base Scheduler 尚未支持此参数
+
+**修复**：用 `inspect.signature` 做条件传参，仅在 base Scheduler 支持 `hash_block_size` 时才传入
+
+```python
+# tpu_inference/core/sched/dp_scheduler.py - _scheduler_worker_process()
+import inspect
+_init_params = inspect.signature(original_scheduler_cls.__init__).parameters
+_kwargs = dict(
+    vllm_config=vllm_config,
+    kv_cache_config=kv_cache_config,
+    structured_output_manager=structured_output_manager,
+    block_size=block_size,
+    mm_registry=mm_registry,
+    include_finished_set=include_finished_set,
+    log_stats=log_stats,
+)
+if 'hash_block_size' in _init_params:
+    _kwargs['hash_block_size'] = hash_block_size
+scheduler = original_scheduler_cls(**_kwargs)
+```
+
+**影响范围**：仅在 `dp_size >= 2` 时触发（DPScheduler 只在多 DP rank 场景下使用）。单 DP rank 走默认 Scheduler，不受影响
 
 ---
 

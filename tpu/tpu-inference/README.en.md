@@ -132,7 +132,34 @@ HuggingFace or       gen_fp4_cache_cpu_parallel.py     vllm serve \
 |------|--------|-----------------|-------------------|
 | **FP4 MoE** | R1, V3.2, GLM-5.1 | Required (CPU parallel script, ~28 min) | ~610-735 GB |
 | **INT4 MoE** | Kimi K2.6 | Required (model-native conversion) | ~532 GB |
-| **FP8 Native** | Qwen3.5, Qwen3-Coder | **Not required** (reads weights directly) | Not required |
+| **FP8 Native** | Qwen3.5, Qwen3-Coder | **Not required** (reads weights directly) | Recommended to pre-load (see below) |
+
+### Startup Acceleration: Pre-loading Weights to /dev/shm
+
+FP8 Native models (Qwen3.5, Qwen3-Coder) load 50-94 safetensors shards serially when starting from network storage (Lustre/GCS). When host RAM is insufficient to prefetch the entire checkpoint (e.g., /dev/shm is occupied by FP4 cache), **each shard takes up to 90 seconds, resulting in 15+ minute total startup time**.
+
+**Best practice: Copy weights to /dev/shm first, then point vLLM to the local path.**
+
+```bash
+# Option 1: Copy from Lustre (recommended, fast intra-network)
+cp -r /lustre/models/Qwen3.5-397B-A17B-FP8 /dev/shm/qwen35-weights/
+
+# Option 2: Copy from GCS directly (gcloud 4.5 GB/s)
+gcloud storage cp -r gs://<BUCKET>/models/qwen3.5-397b-a17b-fp8/weights/ /dev/shm/qwen35-weights/
+
+# Launch vLLM pointing to /dev/shm
+vllm serve /dev/shm/qwen35-weights/ \
+  --tensor-parallel-size 8 --enable-expert-parallel ...
+```
+
+| Model | Weight Size | Recommended Strategy | Cold Start |
+|-------|------------|---------------------|------------|
+| Qwen3.5 | 379 GB | /dev/shm pre-load (copy ~4.5 min) | ~4 min (vs 15+ min direct read) |
+| Qwen3-Coder | 450 GB | Lustre direct read (empty /dev/shm) | ~10 min |
+
+> ⚠️ **Qwen3-Coder is too large for /dev/shm pre-loading**: 450 GB weights occupy 57% of /dev/shm, and combined with vLLM's MoE requantization temporary memory, the total exceeds the 920 GiB container memory limit, triggering OOM Killed. The correct approach is to keep /dev/shm empty (800 GB available) and read from Lustre directly — the OS then has sufficient RAM for auto-prefetch, achieving ~5-9 seconds per shard (vs 90 seconds when RAM is insufficient).
+>
+> ⚠️ **Test one model at a time.** FP4 model caches (R1/V3.2/GLM, ~610-735 GB) also reside in /dev/shm — they cannot coexist.
 
 ## Environment Variables Reference
 
@@ -220,6 +247,57 @@ tpu-inference/
 ├── Qwen3-Coder-480B/                  # Qwen3-Coder inference guide
 └── TPU-VM/                            # TPU VM infrastructure guide
 ```
+
+## Upstream Compatibility Issues Found (Verified 2026-05-01)
+
+> The following issues were discovered during smoke testing after the upstream merge (`507cfa16..0b9f5583`, 63 commits) and have been fixed/worked around. They affect the **JAX flax_nnx inference path** (R1, V3.2, GLM-5.1, K2.6); the PyTorch+TorchAX path (Qwen3.5, Qwen3-Coder) is only affected by Issue 3.
+
+### Issue 1: USE_MOE_EP_KERNEL Semantic Change → FUSED_MOE Error
+
+- **Symptom**: `NotImplementedError: Unsupported moe backend: MoEBackend.FUSED_MOE`
+- **Cause**: Upstream now maps `USE_MOE_EP_KERNEL=1` + `use_ep=True` to the new `FUSED_MOE` backend, which the JAX path does not support
+- **Affected**: All FP4 MoE models (R1, V3.2, GLM-5.1) and Kimi K2.6
+- **Fix**: **Do not set `USE_MOE_EP_KERNEL=1`**. With `use_ep=True`, the system auto-falls back to `GMM_EP` (correct path)
+- **Code location**: `tpu_inference/layers/jax/moe/utils.py:select_moe_backend()`
+- **Details**: See [R1 README Pitfall #23](./DeepSeek-R1-671B-FP4/)
+
+### Issue 2: Incomplete additional-config → GMM_TP Instead of GMM_EP
+
+- **Symptom**: Garbled inference output / precision collapse (MoE routed via Tensor Parallel instead of Expert Parallel)
+- **Cause**: `--additional-config` missing `expert_parallelism:8` and `tensor_parallelism:1` in `sharding_strategy`, causing `use_ep=False`
+- **Affected**: All MLA + EP models (R1, V3.2, GLM-5.1, K2.6)
+- **Fix**: `additional-config` must include all three parameters:
+  ```json
+  {
+    "enable_dp_attention": true,
+    "sharding_strategy": {
+      "expert_parallelism": 8,
+      "tensor_parallelism": 1
+    }
+  }
+  ```
+- **Details**: See [R1 README Pitfall #24](./DeepSeek-R1-671B-FP4/)
+
+### Issue 3: dp_scheduler.py hash_block_size Incompatibility
+
+- **Symptom**: `TypeError: Scheduler.__init__() got unexpected keyword argument 'hash_block_size'`
+- **Cause**: PR [#2412](https://github.com/vllm-project/tpu-inference/pull/2412) passes `hash_block_size` through `DPScheduler`, but the base vLLM `Scheduler` does not accept this parameter
+- **Affected**: All scenarios using `DPScheduler` (**all 6 models**)
+- **Fix**: Use `inspect.signature` to dynamically check if the parameter exists before passing it
+- **Patch location**: `tpu_inference/core/sched/dp_scheduler.py` (committed to fork)
+- **Details**: See [R1 README Pitfall #25](./DeepSeek-R1-671B-FP4/)
+
+### Impact Matrix
+
+| Issue | R1 | V3.2 | GLM-5.1 | K2.6 | Qwen3.5 | Qwen3-Coder |
+|-------|:--:|:----:|:-------:|:----:|:-------:|:-----------:|
+| USE_MOE_EP_KERNEL | ✅ | ✅ | ✅ | ✅ | — | — |
+| additional-config | ✅ | ✅ | ✅ | ✅ | — | — |
+| hash_block_size | ✅ | ✅ | ✅ | ✅ | ✅ | ✅ |
+
+> ✅ = Affected　— = Not affected (uses PyTorch+TorchAX path)
+
+---
 
 ## Recent Upstream Updates & Pending Verification
 
