@@ -44,13 +44,13 @@
 |-------|-----------|-----|--------|--------|---------|:---:|:---:|:------:|:---------:|
 | DeepSeek R1 | MLA | 256E top-8 | 61 (3D+58M) | 7168 | RoPE+YaRN | 🔇 | — | — | — |
 | DeepSeek V3.2 | MLA | 256E top-8 | 61 (3D+58M) | 7168 | RoPE+YaRN | 🔇 | 🔇 | — | — |
-| GLM-5.1 | MLA | 256E top-8 | 78 (3D+75M+MTP) | 6144 | RoPE (θ=1M) | 🔇 | 🔇 | — | — |
+| GLM-5.1 | MLA | 256E top-8 | 78+1 (3D+75M+MTP) | 6144 | RoPE (θ=1M) | 🔇 | 🔇 | — | — |
 | Kimi K2.6 | MLA | 384E+1S top-8 | 61 (1D+60M) | 7168 | RoPE+YaRN | — | — | 🔇 | — |
-| Qwen3.5 | GQA (32Q/2KV) | 512E+1S top-10 | 60 (45 GDN+15 Attn) | 4096 | YaRN+mrope | — | — | 🔇 | ✅ |
+| Qwen3.5 | GQA (32Q/2KV) | 512E+1S top-10 | 60 (45 GDN+15 GQA) | 4096 | YaRN+mrope | — | — | 🔇 | ✅ |
 | Qwen3-Coder | GQA (40Q/8KV) | 128E top-8 | 94 | 5120 | RoPE | — | — | — | — |
 | MiMo-V2-Flash | MHA | Dense | ⏳ | ⏳ | RoPE | ⏳ | — | — | — |
 
-> **Layer abbreviations**: D = Dense, M = MoE, MTP = Multi-Token Prediction, GDN = Grouped Dynamic Norm, Attn = Standard Attention, S = Shared Expert
+> **Layer abbreviations**: D = Dense, M = MoE, MTP = Multi-Token Prediction, GDN = Gated Delta Network (linear attention), S = Shared Expert
 
 ### Bypassed Feature Details
 

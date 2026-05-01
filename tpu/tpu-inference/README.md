@@ -44,13 +44,13 @@
 |------|-----------|-----|--------|--------|---------|:---:|:---:|:------:|:---------:|
 | DeepSeek R1 | MLA | 256E top-8 | 61 (3D+58M) | 7168 | RoPE+YaRN | 🔇 | — | — | — |
 | DeepSeek V3.2 | MLA | 256E top-8 | 61 (3D+58M) | 7168 | RoPE+YaRN | 🔇 | 🔇 | — | — |
-| GLM-5.1 | MLA | 256E top-8 | 78 (3D+75M+MTP) | 6144 | RoPE (θ=1M) | 🔇 | 🔇 | — | — |
+| GLM-5.1 | MLA | 256E top-8 | 78+1 (3D+75M+MTP) | 6144 | RoPE (θ=1M) | 🔇 | 🔇 | — | — |
 | Kimi K2.6 | MLA | 384E+1S top-8 | 61 (1D+60M) | 7168 | RoPE+YaRN | — | — | 🔇 | — |
-| Qwen3.5 | GQA (32Q/2KV) | 512E+1S top-10 | 60 (45 GDN+15 Attn) | 4096 | YaRN+mrope | — | — | 🔇 | ✅ |
+| Qwen3.5 | GQA (32Q/2KV) | 512E+1S top-10 | 60 (45 GDN+15 GQA) | 4096 | YaRN+mrope | — | — | 🔇 | ✅ |
 | Qwen3-Coder | GQA (40Q/8KV) | 128E top-8 | 94 | 5120 | RoPE | — | — | — | — |
 | MiMo-V2-Flash | MHA | Dense | ⏳ | ⏳ | RoPE | ⏳ | — | — | — |
 
-> **层数缩写**：D = Dense 层, M = MoE 层, MTP = Multi-Token Prediction 层, GDN = Grouped Dynamic Norm 层, Attn = 标准 Attention 层, S = Shared Expert
+> **层数缩写**：D = Dense 层, M = MoE 层, MTP = Multi-Token Prediction 层, GDN = Gated Delta Network 层（线性注意力）, S = Shared Expert
 
 ### 已绕过特性说明
 
