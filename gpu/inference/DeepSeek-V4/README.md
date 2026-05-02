@@ -1,5 +1,9 @@
 # DeepSeek-V4 Flash: B200 端到端推理测试
 
+> **参考文档**: 本文是对 [gddezero/b200-perf-opt — 09_deepseek_v4_b200.md](https://github.com/gddezero/b200-perf-opt/blob/main/09_deepseek_v4_b200.md) 的 **独立复测 (reproduce)**。
+> 部署步骤、配置参数和测试方法均参考该文档，在 GCP a4-megagpu-8g 实例上从零完成端到端验证。
+> 后续计划在此基础上扩展 BLM (Blackwell Language Model) 相关测试。
+
 **机器**: GCP a4-megagpu-8g (8× NVIDIA B200 180GB)
 **模型**: [deepseek-ai/DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) — 43 层, 256 experts, MXFP4 (160GB)
 **软件**: SGLang `deepseek-v4-blackwell` + FlashMLA + Docker
@@ -248,10 +252,16 @@ sudo docker run -d \
 | 600 | 1800 | 2,417 | 49.83 | 51.43 |
 
 **关键结果**:
-- **峰值吞吐: 3,869 tok/s** (C=400)，超过参考文档 2,933 tok/s 达 **32%**
-- C=600 时吞吐下降至 2,417 tok/s，因 max_running_requests=128/DP (总 1024) 限制导致排队
+- **峰值吞吐: 3,869 tok/s** (C=400)
+- 参考文档同配置: **2,933 tok/s** (C=600, evalscope perf 稳态测量)
+- C=600 时我们的吞吐下降至 2,417 tok/s（低于参考），因排队延迟增大
 - 服务端 decode 吞吐: 每 DP worker ~632 tok/s, 8 DP 总计 ~5,056 tok/s
 - DP=8 vs TP-only: 吞吐提升 **9x** (430 → 3,869 tok/s)
+
+> **关于数据可比性**: 本测试使用自写 aiohttp 脚本 (burst 模式)，参考文档使用 evalscope perf (稳态模式)，
+> 且我们使用 `min_tokens=200` 强制输出长度，参考使用 150-200 随机区间。
+> 测试工具和方法不同，数据不完全可比。C=400 峰值高于参考可能源于 burst 模式下的短时吞吐优势，
+> 而 C=600 低于参考则反映了稳态高并发场景下的真实差距。
 
 ---
 
