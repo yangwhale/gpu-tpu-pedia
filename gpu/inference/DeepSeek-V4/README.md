@@ -2,7 +2,7 @@
 
 > **参考文档**: 本文是对 [gddezero/b200-perf-opt — 09_deepseek_v4_b200.md](https://github.com/gddezero/b200-perf-opt/blob/main/09_deepseek_v4_b200.md) 的 **独立复测 (reproduce)**。
 > 部署步骤、配置参数和测试方法均参考该文档，在 GCP a4-megagpu-8g 实例上从零完成端到端验证。
-> 后续计划在此基础上扩展 BLM (Blackwell Language Model) 相关测试。
+> 后续计划在此基础上扩展 vLLM 相关测试。
 
 **机器**: GCP a4-megagpu-8g (8× NVIDIA B200 180GB)
 **模型**: [deepseek-ai/DeepSeek-V4-Flash](https://huggingface.co/deepseek-ai/DeepSeek-V4-Flash) — 43 层, 256 experts, MXFP4 (160GB)
@@ -182,30 +182,13 @@ curl http://localhost:30000/v1/chat/completions \
 # 期望: {"choices":[{"message":{"content":"The answer to 2+2 is **4**."}}],...}
 ```
 
-## 5. 性能实测
+## 5. 性能实测 (evalscope perf)
 
-### 5.1 低延迟配置 (TP=8, 无 DP)
+### 5.1 高吞吐配置 (TP=8 DP=8 + DeepEP) ★
 
-**配置**: 8× B200, TP=8, MXFP4 Experts, CUDA Graph ON, max_running=12
-
-| 测试 | 成功率 | 吞吐 (tok/s) | 单请求 TPS | P50 延迟 (s) | P99 延迟 (s) |
-|------|--------|-------------|-----------|-------------|-------------|
-| 短文本 (128 tok), C=1 | 10/10 | 115.8 | 109.0 | 1.03 | 1.04 |
-| 短文本 (128 tok), C=4 | 20/20 | 265.4 | 70.9 | 1.51 | 2.40 |
-| 短文本 (128 tok), C=8 | 40/40 | 426.5 | 57.5 | 1.90 | 3.34 |
-| 长文本 (512 tok), C=1 | 3/3 | 137.5 | 137.5 | 3.72 | 3.73 |
-| 长文本 (512 tok), C=4 | 6/6 | 371.0 | 122.4 | 4.29 | 4.29 |
-
-- 单请求输出速度: **109-137 tok/s**
-- 最大稳定吞吐: **~430 tok/s** (C=8)
-- 高并发 (C>12) CUBLAS OOM，限制 max_running_requests=12
-
-### 5.2 高吞吐配置 (TP=8 DP=8 + DeepEP) ★
-
-**配置**: 8× B200, TP=8 DP=8, DeepEP all-to-all, CUDA Graph (bs≤64), max_running=128/DP
+**配置**: 8× B200, TP=8 DP=8, DeepEP all-to-all, CUDA Graph (bs≤64), max_running=1024
 
 ```bash
-# 高吞吐部署命令（GCP a4-megagpu-8g 实测可用）
 sudo docker run -d \
   --name sglang-v4-ht \
   --gpus all --ipc=host --shm-size 32g \
@@ -235,33 +218,46 @@ sudo docker run -d \
 
 > **注意**: `--moe-runner-backend flashinfer_mxfp4` 与 `--moe-a2a-backend deepep` **不兼容**（`DeepEPLLDispatchOutput` 无 `topk_output` 属性），高吞吐/平衡配置不要加此参数。
 
-**标准负载**: ~4500 token 输入, 200 token 输出 (对标 b200-perf-opt 测试条件)
+**压测工具**: evalscope perf (与参考文档相同)
+**标准负载**: 4500 token 输入, 150-200 token 输出 (ignore_eos=true)
 
-| 并发 | 请求数 | 吞吐 (tok/s) | P50 延迟 (s) | P99 延迟 (s) |
-|---:|---:|---:|---:|---:|
-| 1 | 10 | 76 | 2.63 | 2.68 |
-| 4 | 20 | 262 | 2.86 | 3.84 |
-| 8 | 40 | 544 | 2.94 | 2.97 |
-| 20 | 100 | 911 | 3.78 | 5.96 |
-| 40 | 200 | 1,720 | 4.65 | 4.77 |
-| 80 | 400 | 2,400 | 6.52 | 7.61 |
-| 100 | 500 | 2,646 | 7.55 | 7.99 |
-| 200 | 800 | 3,334 | 11.93 | 12.77 |
-| 300 | 900 | 3,570 | 16.59 | 18.70 |
-| **400** | **1200** | **3,869** | **20.65** | **22.70** |
-| 600 | 1800 | 2,417 | 49.83 | 51.43 |
+```bash
+evalscope perf \
+  --model DeepSeek-V4-Flash \
+  --url http://127.0.0.1:30000/v1/chat/completions \
+  --api openai --api-key EMPTY --dataset random \
+  --max-tokens 200 --min-tokens 150 \
+  --min-prompt-length 4500 --max-prompt-length 4500 \
+  --tokenizer-path Qwen/Qwen2.5-0.5B-Instruct \
+  --extra-args '{"ignore_eos": true}' \
+  --parallel 1 2 4 8 20 40 60 80 100 200 300 400 600 \
+  --number  10 20 40 80 200 400 600 800 1000 2000 3000 4000 6000
+```
+
+| 并发 | 请求数 | toks/s | Avg Lat (s) | P99 Lat (s) | TTFT avg (s) | TTFT P99 (s) | TPOT avg (ms) | TPOT P99 (ms) |
+|---:|---:|---:|---:|---:|---:|---:|---:|---:|
+| 1 | 10 | 71 | 2.81 | 3.67 | 0.66 | 1.51 | 11 | 11 |
+| 2 | 20 | 133 | 3.01 | 3.83 | 0.80 | 1.65 | 11 | 12 |
+| 4 | 40 | 224 | 3.58 | 6.99 | 1.12 | 4.72 | 12 | 27 |
+| 8 | 80 | 410 | 3.90 | 8.11 | 1.53 | 5.77 | 12 | 13 |
+| 20 | 200 | 835 | 4.76 | 6.10 | 1.07 | 2.17 | 19 | 25 |
+| 40 | 400 | 1,422 | 5.61 | 7.69 | 1.75 | 2.93 | 19 | 32 |
+| 60 | 600 | 1,577 | 7.57 | 11.80 | 1.79 | 4.76 | 29 | 48 |
+| 80 | 800 | 1,765 | 9.02 | 13.72 | 2.57 | 5.57 | 32 | 56 |
+| 100 | 1000 | 1,762 | 11.30 | 16.95 | 2.53 | 7.17 | 44 | 72 |
+| 200 | 2000 | 2,308 | 17.19 | 27.41 | 5.72 | 13.32 | 58 | 105 |
+| **300** | **3000** | **2,608** | 22.94 | 27.07 | 8.96 | 18.31 | 70 | 112 |
+| 400 | 4000 | 2,603 | 30.54 | 37.70 | 12.24 | 25.62 | 92 | 151 |
+| 600 | 6000 | 1,857 | 64.49 | 89.97 | 6.95 | 35.94 | 289 | 411 |
 
 **关键结果**:
-- **峰值吞吐: 3,869 tok/s** (C=400)
-- 参考文档同配置: **2,933 tok/s** (C=600, evalscope perf 稳态测量)
-- C=600 时我们的吞吐下降至 2,417 tok/s（低于参考），因排队延迟增大
-- 服务端 decode 吞吐: 每 DP worker ~632 tok/s, 8 DP 总计 ~5,056 tok/s
-- DP=8 vs TP-only: 吞吐提升 **9x** (430 → 3,869 tok/s)
+- **峰值吞吐: 2,608 tok/s** (C=300)，参考文档同配置: **2,933 tok/s** (C=600)
+- @1 吞吐: 71 tok/s，参考: 76 tok/s — 基本一致
+- C=300-400 区间吞吐平台，C=600 明显过载 (TPOT 从 92ms 飙到 289ms)
+- 100% 成功率，全部 13 个并发梯度零失败
 
-> **关于数据可比性**: 本测试使用自写 aiohttp 脚本 (burst 模式)，参考文档使用 evalscope perf (稳态模式)，
-> 且我们使用 `min_tokens=200` 强制输出长度，参考使用 150-200 随机区间。
-> 测试工具和方法不同，数据不完全可比。C=400 峰值高于参考可能源于 burst 模式下的短时吞吐优势，
-> 而 C=600 低于参考则反映了稳态高并发场景下的真实差距。
+> **与参考差距分析**: 峰值低 11% (2,608 vs 2,933)，峰值并发更低 (300 vs 600)。
+> 可能原因：evalscope tokenizer 采样的实际输入 token 数 ~6400 (高于目标 4500)，增加了 prefill 负载。
 
 ---
 
@@ -540,8 +536,8 @@ Flash 的 DISPATCH 可以设为 Pro 的 4× (256→1024)，因为 KV 空间 12.8
 - [x] Docker 安装 + NVIDIA Container Toolkit (Docker 29.4.2, NCTK 1.19.0)
 - [x] FlashMLA kernel benchmark on B200 (4748+617 cases passed, peak 1418 TFLOP/s)
 - [x] SGLang TP=8 MXFP4 推理 (修复 config backup + flashinfer_mxfp4 backend)
-- [x] 低延迟配置压测 (峰值 430 tok/s, 单请求 109-137 tok/s)
-- [x] DP=8 + DeepEP 高吞吐配置 (**峰值 3,869 tok/s**, 超参考文档 32%)
-- [x] 对标 b200-perf-opt 测试 (4500 tok 输入, 200 tok 输出, 多并发梯度)
+- [x] evalscope perf 标准压测 (峰值 **2,608 tok/s** @C=300, 参考 2,933 @C=600, 差 11%)
+- [ ] 排查吞吐差距原因 (tokenizer 采样 ~6400 tok vs 目标 4500)
 - [ ] 尝试 FP8 量化版 `sgl-project/DeepSeek-V4-Flash-FP8` 对比性能
 - [ ] EAGLE 投机解码低延迟模式实测
+- [ ] vLLM baseline 对比测试
