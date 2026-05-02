@@ -258,17 +258,72 @@ evalscope perf \
 > 高并发时 vLLM 的 CUDA Graph FULL_AND_PIECEWISE 模式和 deep_gemm_mega_moe 后端
 > 充分发挥优势，吞吐 scaling 大幅超越 SGLang。
 
-### 5.3 vLLM Baseline (TP-only, 无 MTP)
+### 5.3 vLLM EP+DP=8 + MTP n=2
 
-> Baseline 配置使用 `--enforce-eager`（绕过 InductorError），吞吐低于 EP+DP 配置。
-> 详见 §8.2 InductorError 踩坑记录。
+> **实测数据** (2026-05-02, vLLM v0.20.0 deepseekv4-cu130, EP+DP=8 + MTP n=2)
+> 在高吞吐配置基础上追加 `--speculative_config '{"method":"mtp","num_speculative_tokens":2}'`。
 
-| 并发 | vLLM tok/s | TTFT avg | TPOT avg |
-|---:|---:|---:|---:|
-| 1 | ~54 | ~1.3 s | ~12 ms |
+| 并发 | MTP tok/s | 无 MTP tok/s | 变化 | TTFT avg | TPOT avg | Accept Rate |
+|---:|---:|---:|---|---:|---:|---:|
+| 1 | 63 | 72 | **-12%** | 1.61 s | 8 ms | 53.6% |
+| 8 | 212 | 219 | -3% | 1.50 s | 30 ms | 53.5% |
+| 40 | 620 | 883 | **-30%** | 1.51 s | 57 ms | 53.5% |
+| 60 | 1,175 | 1,664 | **-29%** | 0.87 s | 47 ms | 53.7% |
+| 80 | 1,466 | 1,960 | **-25%** | 0.95 s | 50 ms | 53.8% |
+| 100 | 1,602 | 2,546 | **-37%** | 1.00 s | 57 ms | 53.8% |
+| 200 | 2,407 | 3,053 | **-21%** | 1.32 s | 76 ms | 53.9% |
+| 300 | 2,881 | 3,874 | **-26%** | 1.59 s | 96 ms | 53.8% |
+| 400 | 3,217 | 4,052 | **-21%** | 1.85 s | 115 ms | 53.8% |
+| **600** | **3,700** | **4,424** | **-16%** | 2.49 s | 150 ms | 53.7% |
 
-> 仅做了 C=1 warmup 验证（n=10），完整压测未做。
-> Baseline 配置因 `--enforce-eager` 禁用 CUDA Graph，性能受限。
+**关键发现**:
+- **MTP 在 EP+DP=8 模式下反而降低了吞吐**，全部并发级别均为负值 (-3% ~ -37%)
+- Acceptance rate 稳定在 ~54%，每次迭代产出 ~2.16 tokens（理论上限 3.0）
+- TPOT 下降（8ms vs 12ms @C=1），但 MTP head 的额外计算开销抵消了收益
+- 高并发下 EP+DP=8 已充分利用 GPU 算力，MTP 的投机计算变成纯开销
+
+> **结论**: EP+DP=8 模式不建议启用 MTP。MTP 更适合 TP-only 低延迟场景（单请求加速），
+> 而非 EP+DP=8 高吞吐场景（batch processing 已最优）。
+
+### 5.4 vLLM Baseline (TP=8, enforce-eager, 无 MTP)
+
+> **实测数据** (2026-05-02, vLLM v0.20.0 deepseekv4-cu130, TP=8, --enforce-eager)
+> Baseline 配置使用 `--enforce-eager` 绕过 InductorError（§8.2），禁用 CUDA Graph，性能严重受限。
+
+| 并发 | Baseline tok/s | EP+DP=8 tok/s | 差距 | TTFT avg | TPOT avg |
+|---:|---:|---:|---|---:|---:|
+| 1 | 7 | 72 | **-90%** | 1.14 s | 134 ms |
+| 8 | 51 | 219 | -77% | 1.50 s | 150 ms |
+| 40 | 226 | 883 | -74% | 1.45 s | 170 ms |
+| 60 | 348 | 1,664 | -79% | 1.52 s | 164 ms |
+| 80 | 422 | 1,960 | -78% | 1.87 s | 179 ms |
+| 100 | 481 | 2,546 | -81% | 2.05 s | 196 ms |
+| 200 | 737 | 3,053 | -76% | 3.22 s | 251 ms |
+| 300 | 855 | 3,874 | -78% | 14.49 s | 271 ms |
+| 400 | 863 | 4,052 | -79% | 35.91 s | 272 ms |
+| **600** | **876** | **4,424** | **-80%** | 78.27 s | 273 ms |
+
+**关键发现**:
+- **Baseline 峰值仅 876 tok/s**，EP+DP=8 的 **1/5**，性能差距达 80%
+- `--enforce-eager` 禁用 CUDA Graph 是主要瓶颈：TPOT 高达 134-273ms（EP+DP=8 仅 12-120ms）
+- C≥300 后 TTFT 剧增（14-78s），表明无 CUDA Graph 的 eager mode 在高并发下调度效率极差
+- 吞吐在 C=400 后基本饱和（863→876），scaling 能力远不如 EP+DP=8
+- **仅适合功能验证**，不适合任何性能评估场景
+
+### 5.5 四配置吞吐对比总览
+
+| 并发 | vLLM EP+DP=8 | vLLM MTP n=2 | vLLM Baseline | SGLang DP=8 | 最优 |
+|---:|---:|---:|---:|---:|---|
+| 1 | 72 | 63 | 7 | 72 | 持平 |
+| 8 | 219 | 212 | 51 | 482 | SGLang |
+| 40 | 883 | 620 | 226 | 1,239 | SGLang |
+| 60 | 1,664 | 1,175 | 348 | 1,447 | **vLLM EP** |
+| 80 | 1,960 | 1,466 | 422 | 1,739 | **vLLM EP** |
+| 100 | 2,546 | 1,602 | 481 | 1,898 | **vLLM EP** |
+| 200 | 3,053 | 2,407 | 737 | 2,098 | **vLLM EP** |
+| 300 | 3,874 | 2,881 | 855 | 2,472 | **vLLM EP** |
+| 400 | 4,052 | 3,217 | 863 | 2,620 | **vLLM EP** |
+| **600** | **4,424** | **3,700** | **876** | **2,739** | **vLLM EP** |
 
 ---
 
@@ -449,6 +504,6 @@ EP+DP=8 高吞吐配置首次启动耗时较长：
 - [x] vLLM 高吞吐 (EP + DP=8) 部署 (CUDA Graph FULL_AND_PIECEWISE)
 - [x] evalscope perf 标准压测（对标 SGLang 相同负载）→ **峰值 4,424 tok/s, SGLang +62%**
 - [x] 填入实测数据，生成 SGLang vs vLLM 对比表
-- [ ] vLLM + MTP n=2 压测（验证投机解码加速效果）
-- [ ] vLLM Baseline TP=8 完整压测（当前仅 C=1 验证）
-- [ ] 输出对比报告页面 (CC Pages)
+- [x] vLLM + MTP n=2 压测 → **MTP 在 EP+DP=8 下反而降低吞吐 16-37%**
+- [x] vLLM Baseline TP=8 完整压测 → **峰值仅 876 tok/s，EP+DP=8 的 1/5**
+- [x] 输出对比报告页面 (CC Pages)
