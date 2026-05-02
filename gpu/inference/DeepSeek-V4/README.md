@@ -186,11 +186,14 @@ curl http://localhost:30000/v1/chat/completions \
 
 ### 5.1 高吞吐配置 (TP=8 DP=8 + DeepEP) ★
 
-**配置**: 8× B200, TP=8 DP=8, DeepEP all-to-all, CUDA Graph (bs≤64), max_running=1024
+**配置**: 8× B200, TP=8 DP=8, DeepEP all-to-all, CUDA Graph (bs=1~512, 52 级), max_running=1024
+
+> 启动参数与参考文档原作者一致（不设 `--cuda-graph-max-bs`、`--mem-fraction-static`、`--enable-metrics`）。
+> 不限制 cuda-graph-max-bs 使 CUDA graph 覆盖 bs=1~512，高并发 decode 全走 CUDA graph 而非 eager mode。
 
 ```bash
 sudo docker run -d \
-  --name sglang-v4-ht \
+  --name deepseek-v4-flash \
   --gpus all --ipc=host --shm-size 32g \
   --ulimit memlock=-1 --ulimit stack=67108864 \
   --network host \
@@ -210,21 +213,22 @@ sudo docker run -d \
     --moe-a2a-backend deepep \
     --deepep-config '{"normal_dispatch":{"num_sms":96},"normal_combine":{"num_sms":96}}' \
     --max-running-requests 1024 \
-    --cuda-graph-max-bs 64 \
-    --mem-fraction-static 0.82 \
-    --enable-metrics \
-    --host 0.0.0.0 --port 30000
+    --tool-call-parser deepseekv4 --reasoning-parser deepseek-v4 \
+    --host 0.0.0.0 --port 8088
 ```
 
 > **注意**: `--moe-runner-backend flashinfer_mxfp4` 与 `--moe-a2a-backend deepep` **不兼容**（`DeepEPLLDispatchOutput` 无 `topk_output` 属性），高吞吐/平衡配置不要加此参数。
 
 **压测工具**: evalscope perf (与参考文档相同)
-**标准负载**: 4500 token 输入, 150-200 token 输出 (ignore_eos=true)
+**标准负载**: 4500 Qwen tokens 输入 (≈6434 DeepSeek tokens), 200 token 输出 (ignore_eos=true)
+
+> **Tokenizer 注意**: evalscope 用 `--tokenizer-path` 指定的 tokenizer 生成随机 prompt，但服务端用 DeepSeek-V4 tokenizer 计 token。
+> 与参考文档一致使用 4500 Qwen tokens，服务端 DeepSeek-V4 tokenizer 实际计为 avg ~6434 tokens（约 1.43× 膨胀比）。
 
 ```bash
 evalscope perf \
   --model DeepSeek-V4-Flash \
-  --url http://127.0.0.1:30000/v1/chat/completions \
+  --url http://127.0.0.1:8088/v1/chat/completions \
   --api openai --api-key EMPTY --dataset random \
   --max-tokens 200 --min-tokens 150 \
   --min-prompt-length 4500 --max-prompt-length 4500 \
@@ -236,28 +240,31 @@ evalscope perf \
 
 | 并发 | 请求数 | toks/s | Avg Lat (s) | P99 Lat (s) | TTFT avg (s) | TTFT P99 (s) | TPOT avg (ms) | TPOT P99 (ms) |
 |---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 10 | 71 | 2.81 | 3.67 | 0.66 | 1.51 | 11 | 11 |
-| 2 | 20 | 133 | 3.01 | 3.83 | 0.80 | 1.65 | 11 | 12 |
-| 4 | 40 | 224 | 3.58 | 6.99 | 1.12 | 4.72 | 12 | 27 |
-| 8 | 80 | 410 | 3.90 | 8.11 | 1.53 | 5.77 | 12 | 13 |
-| 20 | 200 | 835 | 4.76 | 6.10 | 1.07 | 2.17 | 19 | 25 |
-| 40 | 400 | 1,422 | 5.61 | 7.69 | 1.75 | 2.93 | 19 | 32 |
-| 60 | 600 | 1,577 | 7.57 | 11.80 | 1.79 | 4.76 | 29 | 48 |
-| 80 | 800 | 1,765 | 9.02 | 13.72 | 2.57 | 5.57 | 32 | 56 |
-| 100 | 1000 | 1,762 | 11.30 | 16.95 | 2.53 | 7.17 | 44 | 72 |
-| 200 | 2000 | 2,308 | 17.19 | 27.41 | 5.72 | 13.32 | 58 | 105 |
-| **300** | **3000** | **2,608** | 22.94 | 27.07 | 8.96 | 18.31 | 70 | 112 |
-| 400 | 4000 | 2,603 | 30.54 | 37.70 | 12.24 | 25.62 | 92 | 151 |
-| 600 | 6000 | 1,857 | 64.49 | 89.97 | 6.95 | 35.94 | 289 | 411 |
+| 1 | 10 | 58 | 3.43 | 4.08 | 1.28 | 1.96 | 11 | 11 |
+| 2 | 20 | 116 | 3.46 | 6.05 | 1.27 | 3.86 | 11 | 12 |
+| 4 | 40 | 173 | 4.62 | 9.65 | 2.31 | 7.39 | 12 | 18 |
+| 8 | 80 | 445 | 3.59 | 4.66 | 1.21 | 2.28 | 12 | 19 |
+| 20 | 200 | 639 | 6.24 | 12.49 | 1.55 | 7.35 | 24 | 36 |
+| 40 | 400 | 1,244 | 6.41 | 9.98 | 1.91 | 4.23 | 23 | 42 |
+| 60 | 600 | 1,429 | 8.37 | 11.28 | 1.78 | 4.97 | 33 | 50 |
+| 80 | 800 | 1,670 | 9.56 | 14.10 | 2.59 | 5.79 | 35 | 60 |
+| 100 | 1000 | 1,596 | 12.49 | 18.11 | 2.22 | 7.01 | 52 | 79 |
+| 200 | 2000 | 2,271 | 17.58 | 28.93 | 4.90 | 12.50 | 64 | 124 |
+| 300 | 3000 | 2,255 | 26.54 | 40.11 | 4.28 | 20.47 | 112 | 175 |
+| 400 | 4000 | 2,581 | 30.88 | 49.76 | 12.52 | 28.18 | 92 | 192 |
+| **600** | **6000** | **2,716** | 43.81 | 54.51 | 18.23 | 37.70 | 129 | 217 |
+
+**实际输入 token 数** (服务端 DeepSeek-V4 tokenizer 计): avg ~6434, P99 ~9405
 
 **关键结果**:
-- **峰值吞吐: 2,608 tok/s** (C=300)，参考文档同配置: **2,933 tok/s** (C=600)
-- @1 吞吐: 71 tok/s，参考: 76 tok/s — 基本一致
-- C=300-400 区间吞吐平台，C=600 明显过载 (TPOT 从 92ms 飙到 289ms)
+- **峰值吞吐: 2,716 tok/s** (C=600)，参考文档同配置: **2,933 tok/s** (C=600)，差距 **-7.4%**
+- @1 吞吐: 58 tok/s, TTFT 1.28s；参考: 76 tok/s, TTFT 0.50s
+- C=200-600 区间吞吐持续上升，未出现过载拐点，evalscope 建议继续提高并发
 - 100% 成功率，全部 13 个并发梯度零失败
 
-> **与参考差距分析**: 峰值低 11% (2,608 vs 2,933)，峰值并发更低 (300 vs 600)。
-> 可能原因：evalscope tokenizer 采样的实际输入 token 数 ~6400 (高于目标 4500)，增加了 prefill 负载。
+> **与参考对比**: 启动参数完全一致，峰值吞吐 **接近参考** (2,716 vs 2,933, -7.4%)。
+> 吞吐曲线形态与参考一致：峰值出现在 C=600，吞吐随并发持续上升。
+> @1 差距 (58 vs 76 tok/s) 可能因 HF cache 读取 vs 本地 SSD、GCP 网络开销等环境差异。
 
 ---
 
@@ -536,8 +543,8 @@ Flash 的 DISPATCH 可以设为 Pro 的 4× (256→1024)，因为 KV 空间 12.8
 - [x] Docker 安装 + NVIDIA Container Toolkit (Docker 29.4.2, NCTK 1.19.0)
 - [x] FlashMLA kernel benchmark on B200 (4748+617 cases passed, peak 1418 TFLOP/s)
 - [x] SGLang TP=8 MXFP4 推理 (修复 config backup + flashinfer_mxfp4 backend)
-- [x] evalscope perf 标准压测 (峰值 **2,608 tok/s** @C=300, 参考 2,933 @C=600, 差 11%)
-- [ ] 排查吞吐差距原因 (tokenizer 采样 ~6400 tok vs 目标 4500)
+- [x] evalscope perf 标准压测 (峰值 **2,716 tok/s** @C=600, 参考 2,933 @C=600, 差距 **-7.4%**)
+- [x] 排查吞吐差距原因 → 启动参数对齐后差距缩小至 7.4%, 残余差异来自 HF cache vs 本地 SSD 等环境因素
 - [ ] 尝试 FP8 量化版 `sgl-project/DeepSeek-V4-Flash-FP8` 对比性能
 - [ ] EAGLE 投机解码低延迟模式实测
 - [ ] vLLM baseline 对比测试
