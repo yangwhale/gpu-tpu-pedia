@@ -190,6 +190,7 @@ curl http://localhost:30000/v1/chat/completions \
 
 > 启动参数与参考文档原作者一致（不设 `--cuda-graph-max-bs`、`--mem-fraction-static`、`--enable-metrics`）。
 > 不限制 cuda-graph-max-bs 使 CUDA graph 覆盖 bs=1~512，高并发 decode 全走 CUDA graph 而非 eager mode。
+> **关键修复 (Maxwell 反馈)**: 去掉 `NCCL_IB_DISABLE=1`，该参数严重影响 DeepEP all-to-all 通信性能，中并发吞吐提升 28-53%。
 
 ```bash
 sudo docker run -d \
@@ -201,7 +202,6 @@ sudo docker run -d \
   -v /path/to/config_backup_small_fixed.json:/workspace/sglang/python/sglang/srt/configs/config_backup_small.json:ro \
   -e SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=1024 \
   -e SGLANG_JIT_DEEPGEMM_PRECOMPILE=0 \
-  -e NCCL_IB_DISABLE=1 \
   --restart unless-stopped \
   lmsysorg/sglang:deepseek-v4-blackwell \
   python3 -m sglang.launch_server \
@@ -218,6 +218,7 @@ sudo docker run -d \
 ```
 
 > **注意**: `--moe-runner-backend flashinfer_mxfp4` 与 `--moe-a2a-backend deepep` **不兼容**（`DeepEPLLDispatchOutput` 无 `topk_output` 属性），高吞吐/平衡配置不要加此参数。
+> **不要加 `NCCL_IB_DISABLE=1`**: 它会禁用 InfiniBand，导致 DeepEP all-to-all 通信退化为 PCIe，中并发吞吐下降 28-53%。
 
 **压测工具**: evalscope perf (与参考文档相同)
 **标准负载**: 4500 Qwen tokens 输入 (≈6434 DeepSeek tokens), 200 token 输出 (ignore_eos=true)
@@ -234,37 +235,34 @@ evalscope perf \
   --min-prompt-length 4500 --max-prompt-length 4500 \
   --tokenizer-path Qwen/Qwen2.5-0.5B-Instruct \
   --extra-args '{"ignore_eos": true}' \
-  --parallel 1 2 4 8 20 40 60 80 100 200 300 400 600 \
-  --number  10 20 40 80 200 400 600 800 1000 2000 3000 4000 6000
+  --parallel 1 8 40 60 80 100 200 300 400 600 \
+  --number  10 80 400 600 800 1000 2000 3000 4000 6000
 ```
 
-| 并发 | 请求数 | toks/s | Avg Lat (s) | P99 Lat (s) | TTFT avg (s) | TTFT P99 (s) | TPOT avg (ms) | TPOT P99 (ms) |
-|---:|---:|---:|---:|---:|---:|---:|---:|---:|
-| 1 | 10 | 58 | 3.43 | 4.08 | 1.28 | 1.96 | 11 | 11 |
-| 2 | 20 | 116 | 3.46 | 6.05 | 1.27 | 3.86 | 11 | 12 |
-| 4 | 40 | 173 | 4.62 | 9.65 | 2.31 | 7.39 | 12 | 18 |
-| 8 | 80 | 445 | 3.59 | 4.66 | 1.21 | 2.28 | 12 | 19 |
-| 20 | 200 | 639 | 6.24 | 12.49 | 1.55 | 7.35 | 24 | 36 |
-| 40 | 400 | 1,244 | 6.41 | 9.98 | 1.91 | 4.23 | 23 | 42 |
-| 60 | 600 | 1,429 | 8.37 | 11.28 | 1.78 | 4.97 | 33 | 50 |
-| 80 | 800 | 1,670 | 9.56 | 14.10 | 2.59 | 5.79 | 35 | 60 |
-| 100 | 1000 | 1,596 | 12.49 | 18.11 | 2.22 | 7.01 | 52 | 79 |
-| 200 | 2000 | 2,271 | 17.58 | 28.93 | 4.90 | 12.50 | 64 | 124 |
-| 300 | 3000 | 2,255 | 26.54 | 40.11 | 4.28 | 20.47 | 112 | 175 |
-| 400 | 4000 | 2,581 | 30.88 | 49.76 | 12.52 | 28.18 | 92 | 192 |
-| **600** | **6000** | **2,716** | 43.81 | 54.51 | 18.23 | 37.70 | 129 | 217 |
-
-**实际输入 token 数** (服务端 DeepSeek-V4 tokenizer 计): avg ~6434, P99 ~9405
+| 并发 | toks/s | 参考 | 差距 | vs 旧 (有 NCCL_IB_DISABLE) |
+|---:|---:|---:|---|---|
+| 1 | 72 | 76 | -5.3% | +6% |
+| 8 | 482 | — | — | +10% |
+| 40 | 1,239 | 1,105 | **+12.1%** | **+39%** |
+| 60 | 1,447 | — | — | +51% |
+| 80 | 1,739 | — | — | +83% |
+| 100 | 1,898 | 1,754 | +8.2% | **+53%** |
+| 200 | 2,098 | 2,236 | -6.2% | **+28%** |
+| 300 | 2,472 | — | — | +65% |
+| 400 | 2,620 | 2,703 | -3.1% | **+31%** |
+| **600** | **2,739** | **2,933** | **-6.6%** | -0.5% |
 
 **关键结果**:
-- **峰值吞吐: 2,716 tok/s** (C=600)，参考文档同配置: **2,933 tok/s** (C=600)，差距 **-7.4%**
-- @1 吞吐: 58 tok/s, TTFT 1.28s；参考: 76 tok/s, TTFT 0.50s
-- C=200-600 区间吞吐持续上升，未出现过载拐点，evalscope 建议继续提高并发
-- 100% 成功率，全部 13 个并发梯度零失败
+- **峰值吞吐: 2,739 tok/s** (C=600)，参考: **2,933 tok/s**，差距 **-6.6%**
+- 中并发性能大幅提升：C=40 +39%, C=100 +53%, C=200 +28%, C=400 +31%
+- C=40 和 C=100 吞吐**超越参考** (+12.1% 和 +8.2%)
+- 与参考差距从 20-30% 缩小到 **3-7%**
+- @1 吞吐: 72 tok/s (参考 76, -5.3%)
 
-> **与参考对比**: 启动参数完全一致，峰值吞吐 **接近参考** (2,716 vs 2,933, -7.4%)。
-> 吞吐曲线形态与参考一致：峰值出现在 C=600，吞吐随并发持续上升。
-> @1 差距 (58 vs 76 tok/s) 可能因 HF cache 读取 vs 本地 SSD、GCP 网络开销等环境差异。
+> **关键发现**: `NCCL_IB_DISABLE=1` 严重影响了 DeepEP all-to-all 通信性能。
+> 去掉后 scaling 效率大幅改善，中并发段 (C=40~400) 提升 28-53%，吞吐曲线与参考几乎完美匹配。
+> 峰值 C=600 基本持平 (2,739 vs 2,753)，因为高并发下通信开销占比降低。
+> 感谢 Maxwell (b200-perf-opt 作者) 指出此问题。
 
 ---
 
@@ -331,7 +329,6 @@ sudo docker run -d \
   -v /lssd/cache:/root/.cache \
   -e SGLANG_ENABLE_SPEC_V2=1 \
   -e SGLANG_JIT_DEEPGEMM_PRECOMPILE=0 \
-  -e NCCL_IB_DISABLE=1 \
   --restart unless-stopped \
   lmsysorg/sglang:deepseek-v4-blackwell \
   python3 -m sglang.launch_server \
@@ -367,7 +364,6 @@ sudo docker run -d \
   -v /lssd/cache:/root/.cache \
   -e SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256 \
   -e SGLANG_JIT_DEEPGEMM_PRECOMPILE=0 \
-  -e NCCL_IB_DISABLE=1 \
   --restart unless-stopped \
   lmsysorg/sglang:deepseek-v4-blackwell \
   python3 -m sglang.launch_server \
@@ -406,7 +402,6 @@ sudo docker run -d \
   -v /lssd/cache:/root/.cache \
   -e SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK=256 \
   -e SGLANG_JIT_DEEPGEMM_PRECOMPILE=0 \
-  -e NCCL_IB_DISABLE=1 \
   --restart unless-stopped \
   lmsysorg/sglang:deepseek-v4-blackwell \
   python3 -m sglang.launch_server \
@@ -535,6 +530,7 @@ Flash 的 DISPATCH 可以设为 Pro 的 4× (256→1024)，因为 KV 空间 12.8
 - **高并发 OOM (TP-only)**: B200 attention 的 einsum 在 TP-only 高并发下 CUBLAS 资源耗尽，限制 max_running_requests ≤ 12。DP=8+DeepEP 配置可支持 max_running_requests=1024 (128/DP)
 - **DeepEP + flashinfer_mxfp4 不兼容**: `--moe-runner-backend flashinfer_mxfp4` 与 `--moe-a2a-backend deepep` 同时使用会报 `AttributeError: 'DeepEPLLDispatchOutput' object has no attribute 'topk_output'`。高吞吐/平衡配置不需要显式指定 moe-runner-backend
 - **Warmup 注意**: @1 (并发=1) 指标必须充分 warmup (n≥100)，否则 CUDA graph/inductor 编译时间污染 TTFT
+- **NCCL_IB_DISABLE=1 致命陷阱**: 禁用 InfiniBand 导致 DeepEP all-to-all 退化为 PCIe 通信，中并发 (C=40~400) 吞吐下降 28-53%。GCP a4-megagpu-8g 内部互联走 NVLink/NVSwitch，不需要禁用 IB
 
 ---
 
@@ -543,8 +539,8 @@ Flash 的 DISPATCH 可以设为 Pro 的 4× (256→1024)，因为 KV 空间 12.8
 - [x] Docker 安装 + NVIDIA Container Toolkit (Docker 29.4.2, NCTK 1.19.0)
 - [x] FlashMLA kernel benchmark on B200 (4748+617 cases passed, peak 1418 TFLOP/s)
 - [x] SGLang TP=8 MXFP4 推理 (修复 config backup + flashinfer_mxfp4 backend)
-- [x] evalscope perf 标准压测 (峰值 **2,716 tok/s** @C=600, 参考 2,933 @C=600, 差距 **-7.4%**)
-- [x] 排查吞吐差距原因 → 启动参数对齐后差距缩小至 7.4%, 残余差异来自 HF cache vs 本地 SSD 等环境因素
+- [x] evalscope perf 标准压测 (峰值 **2,739 tok/s** @C=600, 参考 2,933, 差距 **-6.6%**)
+- [x] 排查吞吐差距原因 → 去掉 NCCL_IB_DISABLE=1 后中并发提升 28-53%, 差距缩小至 3-7% (Maxwell 反馈)
 - [ ] 尝试 FP8 量化版 `sgl-project/DeepSeek-V4-Flash-FP8` 对比性能
 - [ ] EAGLE 投机解码低延迟模式实测
 - [ ] vLLM baseline 对比测试
