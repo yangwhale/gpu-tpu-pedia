@@ -152,14 +152,15 @@ vllm bench serve --backend vllm \
 | 激活参数量 | **35B** (A35B) |
 | 量化 | **FP8 (E4M3)** dynamic quantization |
 | 上下文支持 | max-model-len=10240 (推荐), 最大可调到 32K+ |
-| 推理框架 | vLLM + tpu-inference (JAX backend) |
-| 模型实现 | `tpu_inference/models/jax/qwen3_moe.py` |
+| 推理框架 | vLLM + tpu-inference (JAX 编译后端) |
+| 模型实现 | `tpu_inference/models/vllm/vllm_model_wrapper.py`（vLLM PyTorch + **TorchAX 桥接**，由 `MODEL_IMPL_TYPE=vllm` 强制选中） |
 
 ### 关键代码完备程度
 
 | 维度 | 状态 |
 |------|------|
-| JAX 模型实现 | ✅ 完整 (`qwen3_moe.py`) |
+| 模型代码路径 | ✅ vLLM PyTorch + TorchAX (`vllm_model_wrapper.py`) — 默认推荐 |
+| JAX 原生实现 | ✅ 存在 (`models/jax/qwen3_moe.py`)，但被 `_VLLM_PREFERRED_ARCHITECTURES` 列入偏好黑名单，**测试中未启用** |
 | TP/EP/PP 支持 | ✅ TP=8, EP enabled, PP optional |
 | FP8 量化 | ✅ 原生支持 |
 | 单实例 vLLM serve | ✅ CI 测试通过 |
@@ -479,7 +480,12 @@ echo "✅ Server ready"
 
 **Pitfall 1: `MODEL_IMPL_TYPE=vllm` 漏设 → 走错 model 实现**
 
-如果不设，可能走 native JAX 实现，对 Qwen3 MoE 兼容性不如 vLLM 实现。
+`Qwen3MoeForCausalLM` 在 [`tpu_inference/models/common/model_loader.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/common/model_loader.py) 的 `_VLLM_PREFERRED_ARCHITECTURES` 默认偏好 vLLM PyTorch + TorchAX 实现。漏设此变量虽然多数情况下也会走 vllm 路径，但属于**依赖默认值**，存在以下风险：
+1. 上游某天调整默认偏好或移出该黑名单 → 突然回退到 `models/jax/qwen3_moe.py` JAX 原生实现
+2. JAX 原生路径在 Qwen3 MoE 上未做完整测试，可能出现精度或 EP 兼容性问题
+3. CI/部署一致性：显式 set 让任何人 `kubectl exec` 进去都能确认走的是哪条路径
+
+**结论**：始终显式 export `MODEL_IMPL_TYPE=vllm`，让"走 TorchAX"成为强制约定。
 
 **Pitfall 2: `--enable-expert-parallel` 漏掉 → OOM**
 
@@ -1226,7 +1232,9 @@ export USE_MOE_EP_KERNEL=1
 | 资源 | 链接 |
 |------|------|
 | 上游 tpu-inference 仓库 | [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference) |
-| Qwen3 MoE 模型实现 | [qwen3_moe.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/jax/qwen3_moe.py) |
+| 实测使用的模型实现 | [vllm_model_wrapper.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/vllm/vllm_model_wrapper.py) — vLLM PyTorch + TorchAX 桥接（由 `MODEL_IMPL_TYPE=vllm` 选中） |
+| 路由分发逻辑 | [model_loader.py `_VLLM_PREFERRED_ARCHITECTURES`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/common/model_loader.py#L54) — `Qwen3MoeForCausalLM` 默认偏好 vllm |
+| JAX 原生备选实现（未启用） | [qwen3_moe.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/jax/qwen3_moe.py) |
 | HuggingFace 模型 | [Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8](https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8) |
 | 替代量化版 | [BCCard/Qwen3-Coder-480B-A35B-Instruct-FP8-Dynamic](https://huggingface.co/BCCard/Qwen3-Coder-480B-A35B-Instruct-FP8-Dynamic) |
 | CI Pipeline | [Qwen_Qwen3-Coder-480B-A35B-Instruct.yml](https://github.com/vllm-project/tpu-inference/blob/main/.buildkite/models/Qwen_Qwen3-Coder-480B-A35B-Instruct.yml) |

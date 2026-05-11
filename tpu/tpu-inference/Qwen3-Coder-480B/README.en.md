@@ -152,14 +152,15 @@ After running, for more systematic benchmark sweep → see §Step 6e commands; t
 | Active parameters | **35B** (A35B) |
 | Quantization | **FP8 (E4M3)** dynamic quantization |
 | Context support | max-model-len=10240 (recommended), adjustable up to 32K+ |
-| Inference framework | vLLM + tpu-inference (JAX backend) |
-| Model implementation | `tpu_inference/models/jax/qwen3_moe.py` |
+| Inference framework | vLLM + tpu-inference (JAX compilation backend) |
+| Model implementation | `tpu_inference/models/vllm/vllm_model_wrapper.py` (vLLM PyTorch + **TorchAX bridge**, selected by `MODEL_IMPL_TYPE=vllm`) |
 
 ### Code Completeness
 
 | Dimension | Status |
 |------|------|
-| JAX model implementation | ✅ Complete (`qwen3_moe.py`) |
+| Active model code path | ✅ vLLM PyTorch + TorchAX (`vllm_model_wrapper.py`) — recommended default |
+| Native JAX implementation | ✅ Exists (`models/jax/qwen3_moe.py`), but listed in `_VLLM_PREFERRED_ARCHITECTURES` and **not used in this benchmark** |
 | TP/EP/PP support | ✅ TP=8, EP enabled, PP optional |
 | FP8 quantization | ✅ Natively supported |
 | Single instance vLLM serve | ✅ CI test passing |
@@ -479,7 +480,12 @@ echo "✅ Server ready"
 
 **Pitfall 1: `MODEL_IMPL_TYPE=vllm` not set → wrong model implementation**
 
-If not set, may use native JAX implementation, which has less compatibility with Qwen3 MoE than the vLLM implementation.
+`Qwen3MoeForCausalLM` is listed in `_VLLM_PREFERRED_ARCHITECTURES` in [`tpu_inference/models/common/model_loader.py`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/common/model_loader.py), so the vLLM PyTorch + TorchAX path is preferred by default. Omitting this env var usually still picks the vllm path, but **relies on the default** and carries risk:
+1. Upstream may change the preference list or remove this arch → silently falls back to `models/jax/qwen3_moe.py` JAX-native impl
+2. JAX-native path is not fully tested for Qwen3 MoE; may hit accuracy or EP compatibility issues
+3. CI/deployment consistency: explicit setting makes the active path verifiable via `kubectl exec`
+
+**Bottom line**: always export `MODEL_IMPL_TYPE=vllm` explicitly so "use TorchAX" is a hard contract.
 
 **Pitfall 2: `--enable-expert-parallel` missing → OOM**
 
@@ -1226,7 +1232,9 @@ Already in the 4a launch command: `--kv-cache-dtype=fp8`. FP16 → FP8 saves 50%
 | Resource | Link |
 |------|------|
 | Upstream tpu-inference repo | [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference) |
-| Qwen3 MoE model implementation | [qwen3_moe.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/jax/qwen3_moe.py) |
+| Active model implementation | [vllm_model_wrapper.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/vllm/vllm_model_wrapper.py) — vLLM PyTorch + TorchAX bridge (selected by `MODEL_IMPL_TYPE=vllm`) |
+| Dispatch logic | [model_loader.py `_VLLM_PREFERRED_ARCHITECTURES`](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/common/model_loader.py#L54) — `Qwen3MoeForCausalLM` defaults to vllm |
+| JAX-native alternative (unused) | [qwen3_moe.py](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/models/jax/qwen3_moe.py) |
 | HuggingFace model | [Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8](https://huggingface.co/Qwen/Qwen3-Coder-480B-A35B-Instruct-FP8) |
 | Alternative quantized version | [BCCard/Qwen3-Coder-480B-A35B-Instruct-FP8-Dynamic](https://huggingface.co/BCCard/Qwen3-Coder-480B-A35B-Instruct-FP8-Dynamic) |
 | CI Pipeline | [Qwen_Qwen3-Coder-480B-A35B-Instruct.yml](https://github.com/vllm-project/tpu-inference/blob/main/.buildkite/models/Qwen_Qwen3-Coder-480B-A35B-Instruct.yml) |
