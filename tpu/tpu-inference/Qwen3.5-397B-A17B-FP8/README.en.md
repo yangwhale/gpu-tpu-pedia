@@ -16,7 +16,7 @@
 
 > Current deployment is **not suitable for conversational chatbot**.
 > - **Chat path broken**: thinking OFF causes garbled output / infinite loops; thinking ON causes empty content / `Thinking\n` infinite loop for explanatory / casual questions
-> - **Only stable path**: 5-shot Q/A completion pattern + `enable_thinking:false` (GSM8K 93.93% was achieved with this)
+> - **Only stable path**: 5-shot Q/A completion pattern + `enable_thinking:false` (GSM8K 93–97% was achieved with this)
 > - **Suitable use cases**: batch eval, structured generation, few-shot completion, code gen
 > - ⚠️ High GSM8K accuracy ≠ chat ready — **don't be misled**
 
@@ -32,7 +32,7 @@ See [Required Constraint D](#d-thinking-behavior) and [Verification Steps](#step
 | Single user latency (P1, 1K/1K) | **20.6 s, 49.7 tok/s/user** | 💨 Low Latency |
 | Balanced (P64, 1K/1K) | **1508 tok/s, 23.5 tok/s/user** | ⚖️ Balanced |
 | **🚀 Peak throughput (P128, 1K/1K)** | **2097 tok/s** ⭐ | Peak (not P256, see appendix) |
-| **GSM8K full 1319 (5-shot, thinking OFF)** | **93.93% (1239/1319)** ✅ | length truncation only 1.06% |
+| **GSM8K full 1319 (5-shot, thinking OFF)** | **93.93%–97.26%** ✅ | varies with nightly version, see [GSM8K](#gsm8k-accuracy-5-shot-thinking-off-via-in-context-15-min) |
 | Long prompt 8K/1K P4 | **178.6 tok/s** | hybrid GDN long context advantage |
 
 Full benchmark data in [Appendix: Throughput sweep + GSM8K](#appendix-full-benchmark-data).
@@ -49,7 +49,7 @@ vLLM hybrid allocator shares 1 `KVCacheTensor` across 4 layers (GPU byte-level).
 ```bash
 kubectl exec $POD -- grep -c '_hybrid_uniform_page_size_bytes' \
   /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
-# Output 7 = patched; Output 0 = needs patch (see Step 2)
+# Output ≥1 = patched; Output 0 = needs patch (see Step 2)
 ```
 
 ### B. Three Required Environment Variables
@@ -89,7 +89,7 @@ Qwen3.5 defaults to thinking ON (outputs `<think>...</think>` reasoning + answer
 | User prompt with `/no_think` tag | Ineffective |
 
 **Production workarounds** (by reliability):
-1. ⭐ Chat + 5-shot Q/A pattern + `enable_thinking:false` (**only stable method**, GSM8K measured 93.93%)
+1. ⭐ Chat + 5-shot Q/A pattern + `enable_thinking:false` (**only stable method**, GSM8K measured 93–97%)
 2. `/v1/completions` raw prompt — unstable, not recommended
 3. Accept thinking ON + `max_tokens` ≥ 3500 — for long answer scenarios
 
@@ -119,12 +119,13 @@ CTX=<your-gke-context>; POD=<your-tpu-pod>; MODEL=/lustre/models/Qwen3.5-397B-A1
 
 # 1. Verify model + patch (PR #2366)
 kubectl --context=$CTX exec $POD -- bash -c "ls $MODEL/*.safetensors | wc -l && grep -c '_hybrid_uniform_page_size_bytes' /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py"
-# Expected: 94  <newline>  7    (94 shards + 7 PR #2366 markers; 7 = patched)
+# Expected: 94  <newline>  ≥1   (94 shards + PR #2366 markers; ≥1 = patched)
 
 # 2. Write file-based launcher to host (kubectl exec multi-line nohup gets SIGKILL)
 cat > /tmp/launch_vllm.sh <<'L'
 #!/bin/bash
-pgrep -f 'EngineCore|vllm' | xargs -r kill -9; sleep 2
+MY_PID=$$
+pgrep -f 'EngineCore|vllm' | grep -v "^${MY_PID}$" | xargs -r kill -9; sleep 2
 rm -f /tmp/libtpu_lockfile /tmp/vllm_qwen35.log; touch /tmp/vllm_qwen35.log
 setsid nohup env SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 MODEL_IMPL_TYPE=vllm \
   vllm serve /lustre/models/Qwen3.5-397B-A17B-FP8 \
@@ -200,20 +201,20 @@ kubectl exec $POD -- bash -c "
 # Check
 kubectl exec $POD -- grep -c '_hybrid_uniform_page_size_bytes' \
   /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
-# Output 7 = patched, skip; Output 0 = apply patch below
+# Output ≥1 = patched, skip; Output 0 = apply patch below
 ```
 
 ```bash
 # Host side
 TMP=$(mktemp /tmp/kv_cache_manager.XXXXXX.py)
 curl -sf https://raw.githubusercontent.com/vllm-project/tpu-inference/main/tpu_inference/runner/kv_cache_manager.py -o $TMP
-grep -c '_hybrid_uniform_page_size_bytes' $TMP   # Should output 7
+grep -c '_hybrid_uniform_page_size_bytes' $TMP   # Should output ≥1
 
 KCM=/workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
 kubectl --context="$CTX" exec $POD -- cp $KCM ${KCM}.bak
 kubectl --context="$CTX" cp $TMP $POD:$KCM
 kubectl --context="$CTX" exec $POD -- bash -c "
-  grep -c '_hybrid_uniform_page_size_bytes' $KCM   # verify 7
+  grep -c '_hybrid_uniform_page_size_bytes' $KCM   # verify ≥1
   find /workspace/tpu_inference -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 "
 rm -f $TMP
@@ -228,7 +229,8 @@ rm -f $TMP
 cat > /tmp/launch_vllm.sh <<'LAUNCHER'
 #!/bin/bash
 cd /tmp
-pgrep -f 'EngineCore|vllm' | xargs -r kill -9 2>/dev/null
+MY_PID=$$
+pgrep -f 'EngineCore|vllm' | grep -v "^${MY_PID}$" | xargs -r kill -9 2>/dev/null
 sleep 2
 rm -f /tmp/libtpu_lockfile /tmp/vllm_qwen35.log
 touch /tmp/vllm_qwen35.log
@@ -257,13 +259,17 @@ kubectl --context="$CTX" exec $POD -- tail -f /tmp/vllm_qwen35.log
 
 **Wait for key log messages (PR #2366 + startup complete indicators)**:
 ```
-Hybrid KV cache: padding every layer spec to 23289856 bytes ...   ← PR #2366 padding
-regular_attn_shape=(num_blocks, (1280, 8, 4, 256))                ← block_size 1280 (wrong 4352 before patch)
-num_gpu_blocks_override=945
+Hybrid KV cache: padding every layer spec to XXXXXXXX bytes ...   ← PR #2366 padding (exact value varies with nightly version)
+regular_attn_shape=(num_blocks, (...))                            ← block_size (wrong 4352 before patch)
+num_gpu_blocks_override=NNN
 INFO: Application startup complete.
 ```
 
+> 💡 **padding bytes / num_gpu_blocks vary with nightly version**: Earlier nightly used `23289856 bytes / 945 blocks`; newer nightly (with compact-mamba optimization) may show `12804096 bytes / 1718 blocks`. As long as you see the `Hybrid KV cache: padding` log, PR #2366 is active — exact values don't need to match.
+
 ### Step 4: Verification (5-shot Hello World)
+
+> ⚠️ **First request XLA compilation**: Each new prompt shape triggers XLA compilation on first request (60-90 seconds); subsequent same-shape requests take <1 second. Don't panic if the first curl times out — retry after compilation completes. Recommend adding `--max-time 120` to curl.
 
 ```bash
 # Health check
@@ -329,7 +335,7 @@ kubectl exec $POD -- bash -c "
   cp /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py /lustre/patches/qwen35-pd/
   # verify
   echo 'HMA refs:' \$(grep -c TPUConnectorHMA /lustre/patches/qwen35-pd/tpu_connector_hma.py) '(expect ≥18)'
-  echo 'PR #2366 refs:' \$(grep -c _hybrid_uniform_page_size_bytes /lustre/patches/qwen35-pd/kv_cache_manager.py) '(expect 7)'
+  echo 'PR #2366 refs:' \$(grep -c _hybrid_uniform_page_size_bytes /lustre/patches/qwen35-pd/kv_cache_manager.py) '(expect ≥1)'
 "
 ```
 
@@ -354,9 +360,9 @@ PREFILL_POD=$(kubectl --context="$CTX" get pods -l app=vllm-prefill -o jsonpath=
 kubectl --context="$CTX" logs $PREFILL_POD | grep -E "TPUConnectorHMA|Hybrid KV cache: padding|Application startup"
 ```
 
-**Expected output**:
+**Expected output** (exact values vary with nightly version, pattern match is sufficient):
 ```
-Hybrid KV cache: padding every layer spec to 23289856 bytes               ← PR #2366 ✓
+Hybrid KV cache: padding every layer spec to XXXXXXXX bytes               ← PR #2366 ✓
 Hybrid KV cache layout: num_kv_cache_groups=4, ... duplicate_shared_layers=True
 TPUConnectorHMA Worker 0 Prefill --> init | num_layers=60 | num_kv_groups=4 | group_is_mamba=[True, True, True, False]
 Creating v1 connector with name: TPUConnectorHMA                          ← HMA registered ✓
@@ -463,7 +469,7 @@ kubectl --context="$CTX" exec $UTIL_POD -- bash -c "
   mkdir -p /lustre/patches/qwen35-pd
   cp /tmp/kv_cache_manager.py /tmp/tpu_runner.py /tmp/persistent_batch_manager.py /lustre/patches/qwen35-pd/
   echo 'Verify patches:'
-  echo '  PR #2366 refs:' \$(grep -c '_hybrid_uniform_page_size_bytes' /lustre/patches/qwen35-pd/kv_cache_manager.py) '(expect 7)'
+  echo '  PR #2366 refs:' \$(grep -c '_hybrid_uniform_page_size_bytes' /lustre/patches/qwen35-pd/kv_cache_manager.py) '(expect ≥1)'
   echo '  block_tables_cpu rebuild patch:' \$(grep -c 'PATCH: rebuild block_tables_cpu' /lustre/patches/qwen35-pd/kv_cache_manager.py) '(expect 1)'
   echo '  mrope tpu_runner patch:' \$(grep -c 'PATCH: disable mrope' /lustre/patches/qwen35-pd/tpu_runner.py) '(expect 1)'
   echo '  mrope PBM patch:' \$(grep -c 'PATCH: skip mrope fn call' /lustre/patches/qwen35-pd/persistent_batch_manager.py) '(expect 1)'
@@ -512,8 +518,8 @@ kubectl --context="$CTX" logs qwen35-mh-0 | grep -E "Init worker|Hybrid KV cache
 
 **Expected key lines (multi-host characteristics)**:
 - `Init worker | rank=0 | hbm=[(0.0, 94.75), ...] × 16` ← **16 chips** (single-machine is 8)
-- `Hybrid KV cache: padding every layer spec to 13328384 bytes` ← multi-host PR #2366 padding (single-machine is 23289856, different because TP=16 shards are finer)
-- `Hybrid KV cache layout: num_kv_cache_groups=4, ... num_blocks=5299` ← TP=16 num_blocks is 5.6× larger than single-machine 945
+- `Hybrid KV cache: padding every layer spec to XXXXXXXX bytes` ← multi-host PR #2366 padding (values vary with nightly version, smaller than single-machine because TP=16 shards are finer)
+- `Hybrid KV cache layout: num_kv_cache_groups=4, ... num_blocks=NNNN` ← TP=16 num_blocks is several times larger than single-machine
 - `regular_attn_sharding=Mesh('data':1, 'model':16)` ← **TP=16 mesh** ✅
 - `Application startup complete` ← ✅ ready signal
 
@@ -627,6 +633,8 @@ python3 /tmp/run_gsm8k_qwen35.py \
 
 **Measured**: 1319 questions ~15 min, **93.93% accuracy** (1239/1319), length truncation only 14 (1.06%). CI threshold 63%.
 
+> 💡 **Newer nightly achieves higher accuracy**: Re-tested 2026-05-10 (`vllm-tpu:nightly` v0.20.2rc1.dev178, with compact-mamba optimization), partial 621/1319 samples measured **97.26%** (604/621). Newer KV cache value optimization improves numerical precision. If your nightly is newer, GSM8K results may exceed 93.93%.
+
 > Monitoring tip: Script stdout is buffered; check real-time progress with `wc -l /tmp/gsm8k_full.jsonl` (each completed question is written immediately).
 
 ### PD Disaggregation Benchmark 🟡 Measurement Pending
@@ -662,10 +670,11 @@ kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
 
 | Symptom | Root Cause | Fix |
 |---|---|---|
-| **Multi-concurrency garbled output / OOM `vmem 86MB > 64MB` / `HBM 95G > 94.75G` / EngineCore silent crash** | Missing PR #2366 (KV cache state corruption) | Follow [Step 2](#step-2-apply-pr-2366-patch-if-not-already-patched), grep should output 7 |
+| **Multi-concurrency garbled output / OOM `vmem 86MB > 64MB` / `HBM 95G > 94.75G` / EngineCore silent crash** | Missing PR #2366 (KV cache state corruption) | Follow [Step 2](#step-2-apply-pr-2366-patch-if-not-already-patched), grep should output ≥1 |
 | **Weight load 80s/shard (vs normal 2s), startup from 7min to 2hr** | `/dev/shm` residuals → insufficient RAM → vLLM skips auto-prefetch | Clean `/dev/shm`, add `--safetensors-load-strategy=prefetch` at startup |
 | **`ABORTED: libtpu lockfile` / `TPU device busy`** | Previous vLLM abnormal exit, orphan process holding `/dev/vfio/0` | `pgrep -f 'EngineCore\|vllm' \| xargs -r kill -9` + `rm -f /tmp/libtpu_lockfile` |
 | **`kubectl exec ... bash -c "<multi-line nohup>"` returns exit 137** | kubectl exec kills process group when stdin closes, nohup can't save it | Use file-based launcher ([Step 3](#step-3-start-vllm-file-based-launcher)) |
+| **First request timeout / curl returns empty** | Each new prompt shape triggers XLA compilation on first request (60-90s) | Add `--max-time 120` and retry; subsequent same-shape requests <1s |
 | **PD mode: `ValueError: Hybrid KV cache manager is disabled but failed to convert KV cache specs to one unified type`** | vLLM defaults to disable HMA when `kv_transfer_config` is set | Add `--no-disable-hybrid-kv-cache-manager` flag ([PD mode required differences](#-qwen35-pd-required-differences-vs-qwen3-coder-pd)) |
 
 ---
