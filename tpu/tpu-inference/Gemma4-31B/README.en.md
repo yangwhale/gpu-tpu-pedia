@@ -538,6 +538,71 @@ gcloud container node-pools delete np-tpu7xe-spot-gemma4 \
 
 ---
 
-> **Document version**: v0.1 (initial version, pending actual test verification)
+---
+
+## 🧪 Actual Test Results (2026-05-13)
+
+### Environment
+
+| Item | Value |
+|------|-------|
+| Cluster | chrisya-v7x-v134 (cloud-tpu-multipod-dev, us-central1) |
+| Node Pool | np-tpu7x-spot-gemma4 (2x2x1, 4 chips, Spot) |
+| Image | vllm/vllm-tpu:nightly (vLLM 0.20.2rc1.dev223) |
+| Model | gemma-4-31b-it BF16 (59 GB, 2 safetensors) |
+| Weight Download | Lustre, 40 seconds |
+
+### Test Results
+
+| Config | Cold Start | Smoke Test (25 tok) | 1K Token Prompt | Status |
+|--------|-----------|---------------------|-----------------|--------|
+| **TP=1** | 3 min | ✅ "Paris" | ❌ VMEM OOM (RPA Pallas kernel scratch) | **Short prompt OK, long prompt crashes** |
+| **TP=4** | 3.5 min | ❌ XLA layout error | — | **Cannot run inference** |
+
+### Bug 1: TP=1 VMEM OOM (Long Prompt)
+
+Smoke test (25 tokens) outputs "Paris" correctly, but 1024 token prompt triggers VMEM OOM:
+
+```
+RPAm-p_256-bq_512_512-bkv_2048_512-sw_1024/pallas_call
+Largest program allocations in vmem:
+  1. Size: 36.00M  Shape: f8e4m3fn[2,2048,9,4,256]  Tag: scratch operand
+```
+
+**Root cause**: Gemma4's hybrid attention (sliding_window=1024 + global, head_dim=256/512) causes the RPA kernel to need scratch buffers that exceed single-chip VMEM capacity. Short prompts have smaller scratch and pass; long prompts trigger larger allocations.
+
+### Bug 2: TP=4 XLA Reshape Layout
+
+```
+jax.errors.JaxRuntimeError: FAILED_PRECONDITION: 
+  Reshape should have supported layout before reaching the emitter.
+```
+
+**Root cause**: Gemma4's attention head configuration (sliding: 16 KV heads × 256 dim, global: 4 KV heads × 512 dim) produces tensor shapes that are not supported by the XLA emitter after TP=4 sharding.
+
+### Pitfall Log
+
+| # | Problem | Solution | Time |
+|---|---------|----------|------|
+| 1 | GKE accelerator label `tpu-v7-lite-podslice` rejected | Correct label: `tpu7x` | 11:30 |
+| 2 | Pod exits immediately without entrypoint | Add `command: ["sleep", "infinity"]` | 11:35 |
+| 3 | Spot node preempted | Redeploy after node recreated | 11:40 |
+| 4 | `huggingface-cli` deprecated | Use `hf` command instead | 11:45 |
+| 5 | evalscope random dataset needs tokenizer-path | Add `--tokenizer-path` | 12:50 |
+| 6 | TP=1 long prompt VMEM OOM | **Unresolved** — tpu-inference RPA kernel bug | 12:53 |
+| 7 | TP=4 XLA Reshape layout incompatible | **Unresolved** — tpu-inference XLA bug | 12:58 |
+
+### Conclusion
+
+> ⚠️ **Gemma4 31B cannot be benchmarked on current tpu-inference nightly (0.20.2rc1).**
+>
+> - TP=1 can only handle very short prompts (<100 tokens); long prompts trigger VMEM OOM
+> - TP=4 cannot run inference at all (XLA layout incompatibility)
+> - Waiting for upstream tpu-inference fixes for Gemma4 RPA kernel and XLA compatibility
+> - Related issues: [#2126](https://github.com/vllm-project/tpu-inference/issues/2126), [vllm#39827](https://github.com/vllm-project/vllm/issues/39827)
+
+---
+
+> **Document version**: v0.2 (added actual test results — Gemma4 not benchmark-ready)
 >
 > **Last updated**: 2026-05-13
