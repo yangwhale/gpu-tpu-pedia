@@ -632,17 +632,58 @@ jax.errors.JaxRuntimeError: FAILED_PRECONDITION:
 | 6 | TP=1 长 prompt VMEM OOM | **未解决** — tpu-inference RPA kernel bug | 12:53 |
 | 7 | TP=4 XLA Reshape layout 不兼容 | **未解决** — tpu-inference XLA bug | 12:58 |
 
-### 结论
+### 结论（Round 1）
 
-> ⚠️ **Gemma4 31B 在当前 tpu-inference nightly (0.20.2rc1) 上无法进行 benchmark 测试。**
->
-> - TP=1 只能处理极短 prompt（<100 tokens），长 prompt 触发 VMEM OOM
-> - TP=4 无法启动推理（XLA layout 不兼容）
-> - 需要等待 tpu-inference 上游修复 Gemma4 的 RPA kernel 和 XLA 兼容性
-> - 相关 issue: [#2126](https://github.com/vllm-project/tpu-inference/issues/2126), [vllm#39827](https://github.com/vllm-project/vllm/issues/39827)
+> ⚠️ **默认 RPA v3 kernel 无法支持 Gemma4 的大 head_dim (256/512)。**
 
 ---
 
-> **文档版本**: v0.2 (加入实测结果, Gemma4 当前不可用于 benchmark)
+## 🧪 Round 2: Batched RPA + Patches (2026-05-13 14:00+)
+
+### 修复方案
+
+| 修复项 | 来源 | 说明 |
+|--------|------|------|
+| Batched RPA Gemma4 layout fix | PR [#2506](https://github.com/vllm-project/tpu-inference/pull/2506) (May 6) | 修复 XLA Reshape layout 错误 |
+| K/V_proj sharding fix | PR [#2585](https://github.com/vllm-project/tpu-inference/pull/2585) (May 12) | 修复 K/V 投影分片 |
+| n_buffer 3→2 | 本地 patch | Batched RPA 默认 n_buffer=3 对大 head_dim OOM，改为 2 |
+| `USE_BATCHED_RPA_KERNEL=1` | 环境变量 | 启用 VMEM-aware 的 Batched RPA kernel |
+
+### 部署步骤（从 Lustre 应用 patches）
+
+```bash
+# 从 main branch 下载的 patches 已存在 /lustre/patches/gemma4/
+PATCH=/lustre/patches/gemma4
+TPI=/workspace/tpu_inference/tpu_inference
+
+cp $PATCH/gemma4.py $TPI/models/jax/gemma4.py
+cp $PATCH/gemma4_mm.py $TPI/models/jax/gemma4_mm.py
+cp $PATCH/attention_interface.py $TPI/layers/common/attention_interface.py
+mkdir -p $TPI/kernels/experimental/batched_rpa
+cp $PATCH/batched_rpa/__init__.py $TPI/kernels/experimental/batched_rpa/
+cp $PATCH/batched_rpa/wrapper.py $TPI/kernels/experimental/batched_rpa/
+cp $PATCH/rpa_v3/kernel.py $TPI/kernels/ragged_paged_attention/v3/kernel.py
+
+# 关键：n_buffer 3→2
+sed -i 's/n_buffer = 3/n_buffer = 2/' $TPI/kernels/experimental/batched_rpa/wrapper.py
+
+find $TPI -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null
+```
+
+### TP=1 Benchmark 结果 (evalscope, 1K/1K)
+
+| 并发 | 请求数 | 成功率 | Avg Lat (s) | TTFT (ms) | TPOT (ms) | 吞吐 (tok/s) | Decode (tok/s/user) |
+|------|--------|--------|------------|-----------|-----------|-------------|-------------------|
+| P1 | 3 | 100% | 20.4 | 40.3 | — | 7.23 | 20.6 |
+| P8 | 16 | 100% | 19.8 | 12,137 | 48.5 | 59.7 | 20.6 |
+| P32 | 64 | 100% | 22.5 | 3,261 | 114.8 | 173.2 | 8.7 |
+| **P64** | **128** | **100%** | **20.5** | **5,723** | **84.7** | **447.3** ⭐ | **11.8** |
+| P128 | 256 | 100% | 38.0 | 21,865 | 90.8 | 407.1 | 11.0 |
+
+**峰值吞吐：447 tok/s @ P64**（TP=1 单 chip）
+
+---
+
+> **文档版本**: v0.3 (Batched RPA 修复成功, TP=1 benchmark 数据)
 >
 > **最后更新**: 2026-05-13
