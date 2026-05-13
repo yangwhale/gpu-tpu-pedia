@@ -39,6 +39,36 @@
 
 **结论**：**单 chip 即可运行**，BF16 全精度只用 33% HBM。v7xe 最小配置 4 chips（2x2x1），TP=1 仅使用其中 1 个 chip。
 
+### KV Cache 详细估算
+
+Gemma4 31B 使用 **hybrid attention**（50 sliding + 10 full），KV Cache 结构特殊：
+
+| 层类型 | 数量 | KV heads | head_dim | 窗口 | 每 token KV (BF16) | 每 token KV (FP8) |
+|--------|------|----------|----------|------|-------------------|-------------------|
+| sliding_attention | 50 | 16 | 256 | 1024 tokens | 16,384 B（固定上限） | 8,192 B |
+| full_attention | 10 | 4 | 512 | 无限制 | 8,192 B | 4,096 B |
+
+**每 batch slot 的 KV Cache（max_model_len=4096）**：
+
+| 组件 | BF16 | FP8 |
+|------|------|-----|
+| Sliding 层 (50层 × 1024 tokens 窗口固定) | 838 MB | 419 MB |
+| Full 层 (10层 × 4096 tokens) | 336 MB | 168 MB |
+| **每 slot 总计** | **1.15 GB** | **0.57 GB** |
+
+**最大 batch size 推荐**：
+
+```
+可用 HBM = 192 GB × 0.9 - 61.4 GB (weights) - 2 GB (buffer) ≈ 109 GB
+```
+
+| KV dtype | 每 slot | **max batch** | **推荐 max-num-seqs** |
+|----------|---------|--------------|----------------------|
+| BF16 | 1.15 GB | ~94 | **80** |
+| **FP8** ⭐ | **0.57 GB** | **~190** | **160** |
+
+> 💡 **推荐 FP8 KV Cache**（`--kv-cache-dtype fp8`）：batch 翻倍，吞吐量提升显著，精度损失极小。
+
 ---
 
 ## 🧭 部署方案
@@ -66,9 +96,9 @@ rm -f /tmp/libtpu_lockfile /tmp/vllm_gemma4.log; touch /tmp/vllm_gemma4.log
 setsid nohup env SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   vllm serve /lustre/models/gemma-4-31b-it \
     --tensor-parallel-size 1 --max-model-len 4096 \
-    --max-num-batched-tokens 4096 --max-num-seqs 64 \
+    --max-num-batched-tokens 4096 --max-num-seqs 160 \
     --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
-    --block-size 256 --trust-remote-code \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
     --limit-mm-per-prompt '{"image":0,"video":0}' \
     --async-scheduling \
     >> /tmp/vllm_gemma4.log 2>&1 < /dev/null & disown
@@ -226,8 +256,9 @@ kubectl --context=$CTX exec $POD -- bash -c "rm -rf /dev/shm/sem.* /dev/shm/wrk_
 | 参数 | 取值 | 说明 |
 |------|------|------|
 | `--tensor-parallel-size` | `1` | 单 chip 即可，不需要 TP |
-| `--max-model-len` | `4096` | 初始测试用短 context |
-| `--max-num-seqs` | `64` | 初始测试用小并发 |
+| `--max-model-len` | `4096` / `131072` / `262144` | 按测试场景调整 |
+| `--max-num-seqs` | `160` (FP8 KV) / `80` (BF16 KV) | 见下方 KV Cache 估算 |
+| `--kv-cache-dtype` | `fp8` | **推荐**，KV Cache 减半，batch 翻倍 |
 | `--no-enable-prefix-caching` | 必须 | 避免潜在的 prefix caching bug |
 | `--gpu-memory-utilization` | `0.9` | 单 chip 192GB, 0.9 = 172GB 可用 |
 | `--block-size` | `256` | CI 默认值 |
@@ -259,9 +290,9 @@ setsid nohup env \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   vllm serve /lustre/models/gemma-4-31b-it \
     --tensor-parallel-size 1 \
-    --max-num-batched-tokens 4096 --max-num-seqs 64 --max-model-len 4096 \
+    --max-num-batched-tokens 4096 --max-num-seqs 160 --max-model-len 4096 \
     --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
-    --block-size 256 --trust-remote-code \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
     --limit-mm-per-prompt '{"image": 0, "video": 0}' \
     --async-scheduling \
     >> /tmp/vllm_gemma4.log 2>&1 < /dev/null &
@@ -343,42 +374,157 @@ kubectl --context=$CTX exec $POD -- curl -s http://localhost:8000/v1/chat/comple
   }' | python3 -c 'import sys,json; r=json.load(sys.stdin); print(r["choices"][0]["message"]["content"][:200])'
 ```
 
-## Step 6: 性能 Benchmark (可选)
+## Step 6: 性能 Benchmark
 
-### 单用户延迟
+### 测试矩阵
 
-```bash
-kubectl --context=$CTX exec $POD -- curl -s http://localhost:8000/v1/chat/completions \
-  -H 'Content-Type: application/json' \
-  -d '{
-    "model": "/lustre/models/gemma-4-31b-it",
-    "messages": [{"role": "user", "content": "Write a 200-word essay about artificial intelligence."}],
-    "max_tokens": 300,
-    "temperature": 0.7
-  }' | python3 -c '
-import sys, json
-r = json.load(sys.stdin)
-u = r.get("usage", {})
-print(f"Prompt tokens: {u.get(\"prompt_tokens\", \"?\")}")
-print(f"Completion tokens: {u.get(\"completion_tokens\", \"?\")}")
-print(f"Content: {r["choices"][0]["message"]["content"][:100]}...")
-'
-```
+| 编号 | 场景 | Input Len | Output Len | 并发 | max-model-len | 目标指标 |
+|------|------|-----------|------------|------|---------------|---------|
+| B1 | **单用户延迟** | 1K | 1K | P1 | 4096 | TTFT, ITL, TPOT |
+| B2 | **标准吞吐** | 1K | 1K | P64 | 4096 | tok/s, ITL |
+| B3 | **峰值吞吐** | 1K | 1K | P160 | 4096 | tok/s (找 max batch) |
+| B4 | **长输入短输出** | 16K | 1K | P4 | 32768 | TTFT (prefill 性能) |
+| B5 | **短输入长输出** | 1K | 16K | P4 | 32768 | ITL stability |
+| B6 | **128K 长 context** | 128K | 256 | P1 | 131072 | TTFT, 是否 OOM |
+| B7 | **256K 最大 context** | 256K | 256 | P1 | 262144 | TTFT, 是否 OOM |
 
-### 吞吐量测试 (使用 vLLM benchmark 工具)
+> ⚠️ B6/B7 长 context 测试需要**重启 vLLM 并调整 `--max-model-len`**（131072 / 262144）。
+> 256K context 下 full attention 层的 KV Cache = 10 × 4 × 512 × 2 × 2 × 262144 = **20.5 GB** (BF16) / **10.2 GB** (FP8)。
+> sliding 层固定 1024 窗口不变（~0.8 GB）。单 chip 192GB 单 batch 可以放下。
+
+### 6.1 短 context 测试 (B1-B3, max-model-len=4096)
+
+使用默认启动参数（Step 4 的 launcher），无需重启。
 
 ```bash
-# 如果 pod 内有 benchmark_serving.py
+# B1: 单用户延迟 (1K/1K, P1)
 kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
   --model /lustre/models/gemma-4-31b-it \
-  --input-len 128 --output-len 128 \
-  --num-prompts 64
+  --input-len 1024 --output-len 1024 \
+  --num-prompts 1 2>&1 | tail -20
+
+# B2: 标准吞吐 (1K/1K, P64)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 1024 --output-len 1024 \
+  --num-prompts 64 2>&1 | tail -20
+
+# B3: 峰值吞吐 (1K/1K, P160)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 1024 --output-len 1024 \
+  --num-prompts 160 2>&1 | tail -20
 ```
 
-> 📊 **性能数据待实测填写**。31B Dense + 单 chip + BF16 预期：
+### 6.2 中长 context 测试 (B4-B5, max-model-len=32768)
+
+需要重启 vLLM（修改 `--max-model-len 32768`，`--max-num-seqs` 相应下调）。
+
+```bash
+# 重启 vLLM with max-model-len=32768
+cat > /tmp/launch_gemma4_32k.sh <<'LAUNCHER'
+#!/bin/bash
+cd /tmp
+pgrep -f 'EngineCore|vllm' | xargs -r kill -9 2>/dev/null
+sleep 2
+rm -f /tmp/libtpu_lockfile /tmp/vllm_gemma4.log
+touch /tmp/vllm_gemma4.log
+setsid nohup env \
+  SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
+  vllm serve /lustre/models/gemma-4-31b-it \
+    --tensor-parallel-size 1 \
+    --max-num-batched-tokens 32768 --max-num-seqs 32 --max-model-len 32768 \
+    --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
+    --limit-mm-per-prompt '{"image": 0, "video": 0}' \
+    --async-scheduling \
+    >> /tmp/vllm_gemma4.log 2>&1 < /dev/null &
+disown
+echo "launched pid=$!"
+exit 0
+LAUNCHER
+kubectl --context=$CTX cp /tmp/launch_gemma4_32k.sh $POD:/tmp/launch_gemma4_32k.sh
+kubectl --context=$CTX exec $POD -- bash /tmp/launch_gemma4_32k.sh
+
+# 等 cold start
+for i in $(seq 1 20); do C=$(kubectl --context=$CTX exec $POD -- curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/health); echo "T+$((i*30))s HTTP $C"; [ "$C" = "200" ] && break; sleep 30; done
+
+# B4: 长输入短输出 (16K/1K, P4)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 16384 --output-len 1024 \
+  --num-prompts 4 2>&1 | tail -20
+
+# B5: 短输入长输出 (1K/16K, P4)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 1024 --output-len 16384 \
+  --num-prompts 4 2>&1 | tail -20
+```
+
+### 6.3 超长 context 测试 (B6-B7, 128K / 256K)
+
+> ⚠️ 这是**极端测试**，用于验证 Gemma4 的 256K context 上限在 TPU v7xe 上是否可行。
+
+```bash
+# 重启 vLLM with max-model-len=262144 (256K)
+cat > /tmp/launch_gemma4_256k.sh <<'LAUNCHER'
+#!/bin/bash
+cd /tmp
+pgrep -f 'EngineCore|vllm' | xargs -r kill -9 2>/dev/null
+sleep 2
+rm -f /tmp/libtpu_lockfile /tmp/vllm_gemma4.log
+touch /tmp/vllm_gemma4.log
+setsid nohup env \
+  SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
+  vllm serve /lustre/models/gemma-4-31b-it \
+    --tensor-parallel-size 1 \
+    --max-num-batched-tokens 262144 --max-num-seqs 1 --max-model-len 262144 \
+    --no-enable-prefix-caching --gpu-memory-utilization 0.95 \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
+    --limit-mm-per-prompt '{"image": 0, "video": 0}' \
+    --async-scheduling \
+    >> /tmp/vllm_gemma4.log 2>&1 < /dev/null &
+disown
+echo "launched pid=$!"
+exit 0
+LAUNCHER
+kubectl --context=$CTX cp /tmp/launch_gemma4_256k.sh $POD:/tmp/launch_gemma4_256k.sh
+kubectl --context=$CTX exec $POD -- bash /tmp/launch_gemma4_256k.sh
+
+# 等 cold start (可能更久，XLA 编译 256K shape)
+for i in $(seq 1 40); do C=$(kubectl --context=$CTX exec $POD -- curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/health); echo "T+$((i*30))s HTTP $C"; [ "$C" = "200" ] && break; sleep 30; done
+
+# B6: 128K context (128K/256, P1)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 131072 --output-len 256 \
+  --num-prompts 1 2>&1 | tail -20
+
+# B7: 256K context (256K/256, P1) — Gemma4 最大 context
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 262144 --output-len 256 \
+  --num-prompts 1 2>&1 | tail -20
+```
+
+### 6.4 结果记录模板
+
+| 编号 | 场景 | TTFT (ms) | ITL (ms) | 吞吐量 (tok/s) | tok/s/user | 状态 |
+|------|------|-----------|----------|---------------|------------|------|
+| B1 | 1K/1K P1 | — | — | — | — | ⏳ 待测 |
+| B2 | 1K/1K P64 | — | — | — | — | ⏳ 待测 |
+| B3 | 1K/1K P160 | — | — | — | — | ⏳ 待测 |
+| B4 | 16K/1K P4 | — | — | — | — | ⏳ 待测 |
+| B5 | 1K/16K P4 | — | — | — | — | ⏳ 待测 |
+| B6 | 128K/256 P1 | — | — | — | — | ⏳ 待测 |
+| B7 | 256K/256 P1 | — | — | — | — | ⏳ 待测 |
+
+> 📊 **预期基线**（31B Dense + 单 chip + BF16 weights + FP8 KV）：
 > - Cold start: ~2-3 min（权重小，无 MoE re-quant）
-> - 单用户延迟: 待测
-> - 吞吐量: 待测
+> - B1 单用户: 预期 > 50 tok/s/user（31B Dense 比 397B MoE 快很多）
+> - B3 峰值: 取决于 KV Cache 容量和 XLA 调度效率
+> - B6/B7: 主要验证可行性，TTFT 可能很长（128K+ prefill）
 
 ## Step 7: 清理
 

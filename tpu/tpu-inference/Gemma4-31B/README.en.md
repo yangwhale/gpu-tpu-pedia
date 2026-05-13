@@ -39,6 +39,36 @@
 
 **Conclusion**: **Single chip is sufficient**. BF16 full precision uses only 33% HBM. v7xe minimum config is 4 chips (2x2x1), using TP=1 with only 1 chip active.
 
+### KV Cache Detailed Estimation
+
+Gemma4 31B uses **hybrid attention** (50 sliding + 10 full), with a unique KV Cache structure:
+
+| Layer Type | Count | KV Heads | head_dim | Window | Per-token KV (BF16) | Per-token KV (FP8) |
+|-----------|-------|----------|----------|--------|--------------------|--------------------|
+| sliding_attention | 50 | 16 | 256 | 1024 tokens | 16,384 B (fixed cap) | 8,192 B |
+| full_attention | 10 | 4 | 512 | unlimited | 8,192 B | 4,096 B |
+
+**KV Cache per batch slot (max_model_len=4096)**:
+
+| Component | BF16 | FP8 |
+|-----------|------|-----|
+| Sliding layers (50 × 1024 token window, fixed) | 838 MB | 419 MB |
+| Full layers (10 × 4096 tokens) | 336 MB | 168 MB |
+| **Total per slot** | **1.15 GB** | **0.57 GB** |
+
+**Max batch size recommendation**:
+
+```
+Available HBM = 192 GB × 0.9 - 61.4 GB (weights) - 2 GB (buffer) ≈ 109 GB
+```
+
+| KV dtype | Per slot | **Max batch** | **Recommended max-num-seqs** |
+|----------|---------|--------------|------------------------------|
+| BF16 | 1.15 GB | ~94 | **80** |
+| **FP8** ⭐ | **0.57 GB** | **~190** | **160** |
+
+> 💡 **Recommended: FP8 KV Cache** (`--kv-cache-dtype fp8`): doubles batch capacity, significant throughput boost, minimal accuracy loss.
+
 ---
 
 ## 🧭 Deployment Options
@@ -66,9 +96,9 @@ rm -f /tmp/libtpu_lockfile /tmp/vllm_gemma4.log; touch /tmp/vllm_gemma4.log
 setsid nohup env SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   vllm serve /lustre/models/gemma-4-31b-it \
     --tensor-parallel-size 1 --max-model-len 4096 \
-    --max-num-batched-tokens 4096 --max-num-seqs 64 \
+    --max-num-batched-tokens 4096 --max-num-seqs 160 \
     --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
-    --block-size 256 --trust-remote-code \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
     --limit-mm-per-prompt '{"image":0,"video":0}' \
     --async-scheduling \
     >> /tmp/vllm_gemma4.log 2>&1 < /dev/null & disown
@@ -225,8 +255,9 @@ kubectl --context=$CTX exec $POD -- bash -c "rm -rf /dev/shm/sem.* /dev/shm/wrk_
 | Parameter | Value | Notes |
 |-----------|-------|-------|
 | `--tensor-parallel-size` | `1` | Single chip sufficient, no TP needed |
-| `--max-model-len` | `4096` | Start with short context for initial testing |
-| `--max-num-seqs` | `64` | Start with small concurrency |
+| `--max-model-len` | `4096` / `131072` / `262144` | Adjust per test scenario |
+| `--max-num-seqs` | `160` (FP8 KV) / `80` (BF16 KV) | See KV Cache estimation above |
+| `--kv-cache-dtype` | `fp8` | **Recommended**, halves KV Cache, doubles batch |
 | `--no-enable-prefix-caching` | Required | Avoid potential prefix caching bugs |
 | `--gpu-memory-utilization` | `0.9` | Single chip 192GB, 0.9 = 172GB available |
 | `--block-size` | `256` | CI default |
@@ -254,9 +285,9 @@ setsid nohup env \
   SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
   vllm serve /lustre/models/gemma-4-31b-it \
     --tensor-parallel-size 1 \
-    --max-num-batched-tokens 4096 --max-num-seqs 64 --max-model-len 4096 \
+    --max-num-batched-tokens 4096 --max-num-seqs 160 --max-model-len 4096 \
     --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
-    --block-size 256 --trust-remote-code \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
     --limit-mm-per-prompt '{"image": 0, "video": 0}' \
     --async-scheduling \
     >> /tmp/vllm_gemma4.log 2>&1 < /dev/null &
@@ -320,12 +351,157 @@ kubectl --context=$CTX exec $POD -- curl -s http://localhost:8000/v1/chat/comple
 # Expected: model thinks step-by-step then outputs 925
 ```
 
-## Step 6: Performance Benchmark (Optional)
+## Step 6: Performance Benchmark
 
-> 📊 **Performance data to be filled after actual testing**. 31B Dense + single chip + BF16 expected:
+### Test Matrix
+
+| ID | Scenario | Input Len | Output Len | Concurrency | max-model-len | Target Metrics |
+|----|----------|-----------|------------|-------------|---------------|---------------|
+| B1 | **Single user latency** | 1K | 1K | P1 | 4096 | TTFT, ITL, TPOT |
+| B2 | **Standard throughput** | 1K | 1K | P64 | 4096 | tok/s, ITL |
+| B3 | **Peak throughput** | 1K | 1K | P160 | 4096 | tok/s (find max batch) |
+| B4 | **Long input, short output** | 16K | 1K | P4 | 32768 | TTFT (prefill perf) |
+| B5 | **Short input, long output** | 1K | 16K | P4 | 32768 | ITL stability |
+| B6 | **128K long context** | 128K | 256 | P1 | 131072 | TTFT, OOM check |
+| B7 | **256K max context** | 256K | 256 | P1 | 262144 | TTFT, OOM check |
+
+> ⚠️ B6/B7 long context tests require **restarting vLLM with adjusted `--max-model-len`** (131072 / 262144).
+> 256K context full attention KV = 10 × 4 × 512 × 2 × 2 × 262144 = **20.5 GB** (BF16) / **10.2 GB** (FP8).
+> Sliding layers remain at fixed 1024 window (~0.8 GB). Single chip 192GB can hold a single batch.
+
+### 6.1 Short Context Tests (B1-B3, max-model-len=4096)
+
+Use default launcher params (Step 4), no restart needed.
+
+```bash
+# B1: Single user latency (1K/1K, P1)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 1024 --output-len 1024 \
+  --num-prompts 1 2>&1 | tail -20
+
+# B2: Standard throughput (1K/1K, P64)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 1024 --output-len 1024 \
+  --num-prompts 64 2>&1 | tail -20
+
+# B3: Peak throughput (1K/1K, P160)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 1024 --output-len 1024 \
+  --num-prompts 160 2>&1 | tail -20
+```
+
+### 6.2 Medium-Long Context Tests (B4-B5, max-model-len=32768)
+
+Requires vLLM restart with `--max-model-len 32768` and reduced `--max-num-seqs`.
+
+```bash
+# Restart vLLM with max-model-len=32768
+cat > /tmp/launch_gemma4_32k.sh <<'LAUNCHER'
+#!/bin/bash
+cd /tmp
+pgrep -f 'EngineCore|vllm' | xargs -r kill -9 2>/dev/null
+sleep 2
+rm -f /tmp/libtpu_lockfile /tmp/vllm_gemma4.log
+touch /tmp/vllm_gemma4.log
+setsid nohup env \
+  SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
+  vllm serve /lustre/models/gemma-4-31b-it \
+    --tensor-parallel-size 1 \
+    --max-num-batched-tokens 32768 --max-num-seqs 32 --max-model-len 32768 \
+    --no-enable-prefix-caching --gpu-memory-utilization 0.9 \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
+    --limit-mm-per-prompt '{"image": 0, "video": 0}' \
+    --async-scheduling \
+    >> /tmp/vllm_gemma4.log 2>&1 < /dev/null &
+disown
+echo "launched pid=$!"
+exit 0
+LAUNCHER
+kubectl --context=$CTX cp /tmp/launch_gemma4_32k.sh $POD:/tmp/launch_gemma4_32k.sh
+kubectl --context=$CTX exec $POD -- bash /tmp/launch_gemma4_32k.sh
+
+# Wait for cold start
+for i in $(seq 1 20); do C=$(kubectl --context=$CTX exec $POD -- curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/health); echo "T+$((i*30))s HTTP $C"; [ "$C" = "200" ] && break; sleep 30; done
+
+# B4: Long input, short output (16K/1K, P4)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 16384 --output-len 1024 \
+  --num-prompts 4 2>&1 | tail -20
+
+# B5: Short input, long output (1K/16K, P4)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 1024 --output-len 16384 \
+  --num-prompts 4 2>&1 | tail -20
+```
+
+### 6.3 Ultra-Long Context Tests (B6-B7, 128K / 256K)
+
+> ⚠️ **Extreme tests** to verify Gemma4's 256K context ceiling on TPU v7xe.
+
+```bash
+# Restart vLLM with max-model-len=262144 (256K)
+cat > /tmp/launch_gemma4_256k.sh <<'LAUNCHER'
+#!/bin/bash
+cd /tmp
+pgrep -f 'EngineCore|vllm' | xargs -r kill -9 2>/dev/null
+sleep 2
+rm -f /tmp/libtpu_lockfile /tmp/vllm_gemma4.log
+touch /tmp/vllm_gemma4.log
+setsid nohup env \
+  SKIP_JAX_PRECOMPILE=1 VLLM_XLA_CHECK_RECOMPILATION=0 \
+  vllm serve /lustre/models/gemma-4-31b-it \
+    --tensor-parallel-size 1 \
+    --max-num-batched-tokens 262144 --max-num-seqs 1 --max-model-len 262144 \
+    --no-enable-prefix-caching --gpu-memory-utilization 0.95 \
+    --kv-cache-dtype fp8 --block-size 256 --trust-remote-code \
+    --limit-mm-per-prompt '{"image": 0, "video": 0}' \
+    --async-scheduling \
+    >> /tmp/vllm_gemma4.log 2>&1 < /dev/null &
+disown
+echo "launched pid=$!"
+exit 0
+LAUNCHER
+kubectl --context=$CTX cp /tmp/launch_gemma4_256k.sh $POD:/tmp/launch_gemma4_256k.sh
+kubectl --context=$CTX exec $POD -- bash /tmp/launch_gemma4_256k.sh
+
+# Wait for cold start (may take longer, XLA compiling 256K shapes)
+for i in $(seq 1 40); do C=$(kubectl --context=$CTX exec $POD -- curl -sf -o /dev/null -w "%{http_code}" http://localhost:8000/health); echo "T+$((i*30))s HTTP $C"; [ "$C" = "200" ] && break; sleep 30; done
+
+# B6: 128K context (128K/256, P1)
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 131072 --output-len 256 \
+  --num-prompts 1 2>&1 | tail -20
+
+# B7: 256K context (256K/256, P1) — Gemma4 max context
+kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch \
+  --model /lustre/models/gemma-4-31b-it \
+  --input-len 262144 --output-len 256 \
+  --num-prompts 1 2>&1 | tail -20
+```
+
+### 6.4 Results Template
+
+| ID | Scenario | TTFT (ms) | ITL (ms) | Throughput (tok/s) | tok/s/user | Status |
+|----|----------|-----------|----------|-------------------|------------|--------|
+| B1 | 1K/1K P1 | — | — | — | — | ⏳ Pending |
+| B2 | 1K/1K P64 | — | — | — | — | ⏳ Pending |
+| B3 | 1K/1K P160 | — | — | — | — | ⏳ Pending |
+| B4 | 16K/1K P4 | — | — | — | — | ⏳ Pending |
+| B5 | 1K/16K P4 | — | — | — | — | ⏳ Pending |
+| B6 | 128K/256 P1 | — | — | — | — | ⏳ Pending |
+| B7 | 256K/256 P1 | — | — | — | — | ⏳ Pending |
+
+> 📊 **Expected baseline** (31B Dense + single chip + BF16 weights + FP8 KV):
 > - Cold start: ~2-3 min (small weights, no MoE re-quant)
-> - Single user latency: TBD
-> - Throughput: TBD
+> - B1 single user: expected > 50 tok/s/user (31B Dense much faster than 397B MoE)
+> - B3 peak: depends on KV Cache capacity and XLA scheduling efficiency
+> - B6/B7: primarily feasibility validation, TTFT may be very long (128K+ prefill)
 
 ## Step 7: Cleanup
 
