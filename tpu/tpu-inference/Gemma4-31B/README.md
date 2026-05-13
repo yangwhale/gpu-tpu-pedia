@@ -508,23 +508,42 @@ kubectl --context=$CTX exec $POD -- python3 -m vllm.entrypoints.openai.run_batch
   --num-prompts 1 2>&1 | tail -20
 ```
 
-### 6.4 结果记录模板
+### 6.4 Benchmark 结果总表 (TP=4, Batched RPA)
 
-| 编号 | 场景 | TTFT (ms) | ITL (ms) | 吞吐量 (tok/s) | tok/s/user | 状态 |
-|------|------|-----------|----------|---------------|------------|------|
-| B1 | 1K/1K P1 | — | — | — | — | ⏳ 待测 |
-| B2 | 1K/1K P64 | — | — | — | — | ⏳ 待测 |
-| B3 | 1K/1K P160 | — | — | — | — | ⏳ 待测 |
-| B4 | 16K/1K P4 | — | — | — | — | ⏳ 待测 |
-| B5 | 1K/16K P4 | — | — | — | — | ⏳ 待测 |
-| B6 | 128K/256 P1 | — | — | — | — | ⏳ 待测 |
-| B7 | 256K/256 P1 | — | — | — | — | ⏳ 待测 |
+> 📊 **测试环境**: TP=4, vllm/vllm-tpu:nightly (v0.20.2rc1.dev223), USE_BATCHED_RPA_KERNEL=1, FP8 KV Cache, BF16 weights
 
-> 📊 **预期基线**（31B Dense + 单 chip + BF16 weights + FP8 KV）：
-> - Cold start: ~2-3 min（权重小，无 MoE re-quant）
-> - B1 单用户: 预期 > 50 tok/s/user（31B Dense 比 397B MoE 快很多）
-> - B3 峰值: 取决于 KV Cache 容量和 XLA 调度效率
-> - B6/B7: 主要验证可行性，TTFT 可能很长（128K+ prefill）
+#### 短 Context (1K/1K, max-model-len=4096)
+
+| 编号 | 场景 | 并发 | TTFT (ms) | TPOT (ms) | Output tok/s | Total tok/s | 状态 |
+|------|------|------|-----------|-----------|-------------|-------------|------|
+| B1 | 1K/1K P1 | 1 | 7,667 | 41.0 | 10.5 | — | ✅ |
+| B2 | 1K/1K P64 | 64 | 15,101 | 125.3 | 1,873 | — | ✅ |
+| B2 | 1K/1K P128 | 128 | 13,582 | 148.3 | 2,865 | — | ✅ |
+| B3 | 1K/1K P256 | 256 | 5,551 | 253.5 | **4,394** ⭐ | — | ✅ |
+
+#### 长 Context (16K input/output, max-model-len=32768)
+
+| 编号 | 场景 | 并发 | TTFT (ms) | TPOT (ms) | Output tok/s | Total tok/s | 状态 |
+|------|------|------|-----------|-----------|-------------|-------------|------|
+| B4 | 16K/1K P1 | 1 | 1,671 | — | 17.5 | 297 | ✅ |
+| B4 | 16K/1K P4 | 4 | 4,866 | 43.4 | 77.2 | 1,314 | ✅ |
+| B4 | 16K/1K P8 | 8 | 4,839 | — | 142.5 | 2,424 | ✅ |
+| B4 | 16K/1K P16 | 16 | 6,480 | — | 246.4 | **4,192** ⭐ | ✅ |
+| B5 | 1K/16K P4 | 4 | 1,051 | 44.7 | 89.3 | 94.9 | ✅ |
+
+#### 超长 Context (64K-256K)
+
+| 编号 | 场景 | 并发 | 配置 | 状态 | 错误 |
+|------|------|------|------|------|------|
+| B6 | 64K/256 P1 | 1 | TP=4, 131K ctx | ❌ | FAILED_PRECONDITION: program continuator halt |
+| B6 | 128K/256 P1 | 1 | TP=4, 131K ctx | ❌ | E0200: RuntimeUnexpectedCoreHalt (SIGABRT) |
+| B6 | 128K/256 P1 | 1 | TP=1, 131K ctx | ❌ | KV cache 不足 (需 55GB, 只有 31.75GB) |
+| B7 | 256K/256 P1 | 1 | — | ⏭️ 跳过 | 128K 已崩，256K 无法测试 |
+
+> ⚠️ **64K+ context 当前不可用**: Batched RPA kernel 在处理 64K+ context 时触发 TPU driver 级别崩溃。
+> Round 2 时 64K 曾短暂成功（evalscope 报告通过，但 server 实际也崩了），Round 3 确认 64K 也不稳定。
+> **最大稳定 context: 32K (max-model-len=32768)**。
+> 需要等待 LIBTPU/Pallas kernel 优化或使用 TP=8+ 分摊 KV Cache。
 
 ## Step 7: 清理
 
@@ -699,12 +718,13 @@ find $TPI -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null
 |------|------|-------|--------|------|------------|-----------|-----------|-------------|------|
 | B4 | 长 prefill | 16K | 1K | P4 | 34.0 | 21,100 | 99.4 | 1,885 | ✅ 100% |
 | B5 | 长 decode | 1K | 16K | P4 | 33.3 | 16,610 | 89.5 | 143 | ✅ 100% (模型提前 stop) |
-| B6 | 64K context | 64K | 256 | P1 | 37.7 | — | — | — | ✅ 通过 |
+| B6 | 64K context | 64K | 256 | P1 | 37.7 | — | — | — | ⚠️ 不稳定（server 后续 crash） |
 | B6 | 128K context | 128K | 256 | P1 | — | — | — | — | ❌ TPU driver crash (SIGABRT) |
 | B7 | 256K context | 256K | 256 | P1 | — | — | — | — | ⏭️ 跳过（128K 已崩） |
 
-> ⚠️ **128K+ context 不可用**: 128K prefill 触发 TPU driver 级别崩溃 (SIGABRT + HandleFatalError)。
-> 64K context 可正常工作。128K 可能需要 TP=8+ 或等待 LIBTPU/Pallas kernel 优化。
+> ⚠️ **64K+ context 不稳定**: 64K 在 evalscope 中曾报告通过，但 Round 3 复测确认 server 在请求处理后崩溃。
+> 128K prefill 触发 TPU driver 级别崩溃 (SIGABRT / E0200 RuntimeUnexpectedCoreHalt)。
+> **最大稳定 context: 32K**。需要等待 LIBTPU/Pallas kernel 优化。
 
 ### TP=1 vs TP=4 对比
 
@@ -719,6 +739,73 @@ find $TPI -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null
 
 ---
 
-> **文档版本**: v0.4 (完整 benchmark 矩阵: TP=1/TP=4 + 长 context 测试)
+## 🧪 Round 3: 详细 Benchmark 矩阵 (2026-05-13 17:00+)
+
+### 环境
+
+| 项目 | 值 |
+|------|------|
+| 集群 | chrisya-v7x-v134 (cloud-tpu-multipod-dev, us-central1) |
+| Node Pool | np-tpu7xe-spot-gemma4 (2x2x1, 4 chips, Spot, `tpu7x-standard-4t`) |
+| Image | vllm/vllm-tpu:nightly (vLLM 0.20.2rc1.dev223, 同 Round 2) |
+| Benchmark 工具 | `vllm bench serve` (vLLM 内置, 替代 evalscope) |
+| 配置 | TP=4, USE_BATCHED_RPA_KERNEL=1, FP8 KV Cache, n_buffer=2 |
+
+### B4: 16K/1K 长 Prefill 吞吐曲线 (TP=4, max-model-len=32768)
+
+| 并发 | 请求数 | Duration (s) | TTFT Mean (ms) | TTFT P99 (ms) | TPOT Mean (ms) | Output tok/s | Total tok/s |
+|------|--------|-------------|----------------|---------------|----------------|-------------|-------------|
+| P1 | 3 | 175.9 | 16,215 | 44,431 | — | 17.5 | 297 |
+| P4 | 12 | 159.1 | 7,830 | 20,958 | 45.5 | 77.2 | 1,314 |
+| P8 | 24 | 172.5 | 7,226 | 24,088 | — | 142.5 | 2,424 |
+| **P16** | **48** | **199.5** | **8,087** | **25,457** | — | **246.4** | **4,192** ⭐ |
+
+> 💡 **长 prefill 吞吐**: P16 并发下 total throughput 达 4,192 tok/s（含 16K 输入 token 计算）。
+> 峰值 output tok/s 在 P16 达 512 tok/s（瞬时）。16K prefill TTFT 约 5-8 秒。
+
+### B5: 1K/16K 长 Decode (TP=4, max-model-len=32768)
+
+| 并发 | 请求数 | Duration (s) | TTFT Mean (ms) | TPOT Mean (ms) | Output tok/s | ITL Mean (ms) | ITL P99 (ms) |
+|------|--------|-------------|----------------|----------------|-------------|---------------|-------------|
+| P4 | 4 | 734.0 | 1,051 | 44.7 | 89.3 | 44.7 | 519.6 |
+
+> 💡 **长 decode 特性**: TTFT 很快（1K prefill 仅 1s），TPOT 稳定在 44.7ms（与 1K/1K 一致）。
+> 4 并发 × 16K output = 65,536 tokens，总用时 12 分钟。ITL P99 达 519ms（周期性 GC 或 KV cache 管理开销）。
+
+### B6/B7: 超长 Context 测试 (128K/256K)
+
+**尝试 1: TP=4, max-model-len=131072, max-num-batched-tokens=131072, max-num-seqs=4**
+- ❌ CompileTimeHbmOom: 每 chip 需 95.27 GB，可用 94.75 GB（差 537 MB）
+
+**尝试 2: TP=4, max-model-len=131072, max-num-batched-tokens=65536, max-num-seqs=1**
+- ✅ 启动成功
+- ❌ 128K input: E0200 RuntimeUnexpectedCoreHalt (SIGABRT) — Pallas kernel crash
+- ❌ 64K input: FAILED_PRECONDITION program continuator halt — server crash
+
+**尝试 3: TP=1, max-model-len=131072**
+- ❌ 启动失败: KV cache 需 55 GB，单 chip 只有 31.75 GB 可用
+
+**结论**: 
+> ⚠️ **Gemma4 31B 在 TPU v7xe 上最大稳定 context 为 32K**。
+> 64K+ context 触发 Batched RPA Pallas kernel 在 TPU driver 层的断言失败（非 HBM OOM，是计算执行错误）。
+> 128K context 需要 TP=4 的 HBM 预算极其紧张（差 537MB），即使启动成功也会在推理时 crash。
+> 需要等待 LIBTPU 或 Pallas kernel 对大 head_dim hybrid attention 的优化。
+
+### 踩坑记录（Round 3 新增）
+
+| # | 问题 | 解决 | 发现时间 |
+|---|------|------|---------|
+| 8 | GKE machine type 名变更 | `ct7xe-standard-4t` → `tpu7x-standard-4t` | 17:14 |
+| 9 | GKE accelerator 标签变更 | `tpu-v7xe-slice` → `tpu7x` | 17:20 |
+| 10 | nightly image 不在 cloud-tpu-images | 改用 Docker Hub `vllm/vllm-tpu:nightly` | 17:21 |
+| 11 | evalscope `--dataset-path random` 不再支持 | 改用 `vllm bench serve --dataset-name random` | 17:32 |
+| 12 | evalscope `--min-completion-tokens` 等参数已移除 | 改用 vllm 内置 benchmark | 17:32 |
+| 13 | TP=4 128K HBM 差 537MB | 降低 max-num-batched-tokens 到 65536 可启动 | 18:17 |
+| 14 | 64K context Round 3 不稳定 | Round 2 的"通过"实际是误报，server 也崩了 | 18:41 |
+| 15 | chrisya-v7x-v134 集群 STOPPING | 切换到 chrisya-v7x-v3（无 Lustre 需重新配置） | 18:59 |
+
+---
+
+> **文档版本**: v0.5 (Round 3: 完整 B4/B5 多并发 + B6/B7 边界测试)
 >
 > **最后更新**: 2026-05-13
