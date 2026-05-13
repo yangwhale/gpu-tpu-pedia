@@ -693,6 +693,19 @@ find $TPI -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null
 
 **TP=4 峰值吞吐：4,394 tok/s @ P256**（4 chips, 峰值期间曾达 5,792 tok/s）
 
+### 长 Context 测试 (TP=4, max_model_len=32K/128K)
+
+| 编号 | 场景 | Input | Output | 并发 | Avg Lat (s) | TTFT (ms) | TPOT (ms) | 吞吐 (tok/s) | 状态 |
+|------|------|-------|--------|------|------------|-----------|-----------|-------------|------|
+| B4 | 长 prefill | 16K | 1K | P4 | 34.0 | 21,100 | 99.4 | 1,885 | ✅ 100% |
+| B5 | 长 decode | 1K | 16K | P4 | 33.3 | 16,610 | 89.5 | 143 | ✅ 100% (模型提前 stop) |
+| B6 | 64K context | 64K | 256 | P1 | 37.7 | — | — | — | ✅ 通过 |
+| B6 | 128K context | 128K | 256 | P1 | — | — | — | — | ❌ TPU driver crash (SIGABRT) |
+| B7 | 256K context | 256K | 256 | P1 | — | — | — | — | ⏭️ 跳过（128K 已崩） |
+
+> ⚠️ **128K+ context 不可用**: 128K prefill 触发 TPU driver 级别崩溃 (SIGABRT + HandleFatalError)。
+> 64K context 可正常工作。128K 可能需要 TP=8+ 或等待 LIBTPU/Pallas kernel 优化。
+
 ### TP=1 vs TP=4 对比
 
 | 指标 | TP=1 (单 chip) | TP=4 (4 chips) | 提升 |
@@ -706,6 +719,6 @@ find $TPI -name "__pycache__" -type d -exec rm -rf {} + 2>/dev/null
 
 ---
 
-> **文档版本**: v0.3 (Batched RPA 修复成功, TP=1 + TP=4 benchmark 数据)
+> **文档版本**: v0.4 (完整 benchmark 矩阵: TP=1/TP=4 + 长 context 测试)
 >
 > **最后更新**: 2026-05-13
