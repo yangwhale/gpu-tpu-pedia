@@ -578,6 +578,71 @@ for d in jax.devices():
 
 ---
 
-> **文档版本**: v0.1 (初始版本, 待实测验证)
+---
+
+## 🧪 实测记录 (2026-05-13)
+
+### 环境
+
+| 项目 | 值 |
+|------|------|
+| 集群 | chrisya-v7x-v134 (cloud-tpu-multipod-dev, us-central1) |
+| Node Pool | np-tpu7x-spot-gemma4 (2x2x1, 4 chips, Spot) |
+| Image | vllm/vllm-tpu:nightly (vLLM 0.20.2rc1.dev223) |
+| 模型 | gemma-4-31b-it BF16 (59 GB, 2 safetensors) |
+| 权重下载 | Lustre, 40 秒 |
+
+### 实测结果
+
+| 配置 | Cold Start | Smoke Test (25 tok) | 1K Token Prompt | 状态 |
+|------|-----------|---------------------|-----------------|------|
+| **TP=1** | 3 min | ✅ "Paris" | ❌ VMEM OOM (RPA Pallas kernel scratch) | **短 prompt 可用，长 prompt 崩** |
+| **TP=4** | 3.5 min | ❌ XLA layout error | — | **无法推理** |
+
+### Bug 1: TP=1 VMEM OOM (长 prompt)
+
+Smoke test（25 tokens）正常输出 "Paris"，但 1024 token prompt 触发 VMEM OOM：
+
+```
+RPAm-p_256-bq_512_512-bkv_2048_512-sw_1024/pallas_call
+Largest program allocations in vmem:
+  1. Size: 36.00M  Shape: f8e4m3fn[2,2048,9,4,256]  Tag: scratch operand
+```
+
+**根因**: Gemma4 的 hybrid attention（sliding_window=1024 + global, head_dim=256/512）导致 RPA kernel 需要的 scratch buffer 超过单 chip VMEM 容量。短 prompt 的 scratch 较小能通过，长 prompt 触发更大分配。
+
+### Bug 2: TP=4 XLA Reshape Layout
+
+```
+jax.errors.JaxRuntimeError: FAILED_PRECONDITION: 
+  Reshape should have supported layout before reaching the emitter.
+```
+
+**根因**: Gemma4 的 attention head 配置（sliding: 16 KV heads × 256 dim, global: 4 KV heads × 512 dim）在 TP=4 分片后，tensor shape 不被 XLA emitter 支持。
+
+### 踩坑记录
+
+| # | 问题 | 解决 | 发现时间 |
+|---|------|------|---------|
+| 1 | GKE accelerator 标签 `tpu-v7-lite-podslice` 被拒 | 正确标签: `tpu7x` | 11:30 |
+| 2 | Pod 无 entrypoint 自动退出 | 加 `command: ["sleep", "infinity"]` | 11:35 |
+| 3 | Spot 节点被抢占 | 重建后重新部署 | 11:40 |
+| 4 | `huggingface-cli` 废弃 | 改用 `hf` 命令 | 11:45 |
+| 5 | evalscope random dataset 需要 tokenizer-path | 加 `--tokenizer-path` | 12:50 |
+| 6 | TP=1 长 prompt VMEM OOM | **未解决** — tpu-inference RPA kernel bug | 12:53 |
+| 7 | TP=4 XLA Reshape layout 不兼容 | **未解决** — tpu-inference XLA bug | 12:58 |
+
+### 结论
+
+> ⚠️ **Gemma4 31B 在当前 tpu-inference nightly (0.20.2rc1) 上无法进行 benchmark 测试。**
+>
+> - TP=1 只能处理极短 prompt（<100 tokens），长 prompt 触发 VMEM OOM
+> - TP=4 无法启动推理（XLA layout 不兼容）
+> - 需要等待 tpu-inference 上游修复 Gemma4 的 RPA kernel 和 XLA 兼容性
+> - 相关 issue: [#2126](https://github.com/vllm-project/tpu-inference/issues/2126), [vllm#39827](https://github.com/vllm-project/vllm/issues/39827)
+
+---
+
+> **文档版本**: v0.2 (加入实测结果, Gemma4 当前不可用于 benchmark)
 >
 > **最后更新**: 2026-05-13
