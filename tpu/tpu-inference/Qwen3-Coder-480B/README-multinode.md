@@ -621,4 +621,4 @@ kubectl get nodes -L cloud.google.com/gke-nodepool,cloud.google.com/gke-tpu-topo
 | LeaderWorkerSet docs | https://lws.sigs.k8s.io/ |
 | `tpu_inference/distributed/utils.py:125` (坑 #5 源代码位置) | https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/distributed/utils.py#L125 |
 | Google Codelabs (multihost vLLM + Ray, v6e 验证) | https://codelabs.developers.google.com/next26/aiinfra-learning-pod/screen2-advanced-inferencing-part-1 |
-| HTML 详细报告 | https://cc.higcp.com/pages/qwen3-coder-480b-multihost-tpu-v7x-20260425.html |
+| HTML 详细报告 | https://cc.higcp.com/assets/qwen3-coder-480b-multihost-tpu-v7x-20260425.html |

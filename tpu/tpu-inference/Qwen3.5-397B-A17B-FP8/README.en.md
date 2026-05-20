@@ -786,10 +786,8 @@ kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
 
 | Date | Topic | Details |
 |---|---|---|
-| 2026-04-24 | [Deployment & Optimization Guide v1.5](https://cc.higcp.com/pages/qwen35-397b-tpu-inference-plan-20260424.html) | Complete deployment + optimization decisions (108 KB) |
-| 2026-04-25 | [⭐ Single-machine Inference Debug Story — 4-hour Detour vs 14-minute Correct Path](https://cc.higcp.com/pages/qwen35-397b-debug-story-20260425.html) | Complete single-machine deployment debug record (45 KB) |
-| 2026-04-26 | [README Reproducibility Verification Report](https://cc.higcp.com/pages/qwen35-readme-verification-20260426.html) | Blind run following README steps + verification (23 KB) |
-| 2026-04-26 | [⭐ PD Disaggregation Deployment Dogfood Record](https://cc.higcp.com/pages/qwen35-pd-disagg-dogfood-20260426.html) | Full PD workflow + HMA root cause + 6 lessons (24 KB) |
-| 2026-04-26 | [⭐ Multi-host TP=16 Dogfood Record](https://cc.higcp.com/pages/qwen35-multihost-dogfood-20260426.html) | 5 tests revealing 4-layer root cause chain + single/multi-host comparison (27 KB) |
-
-> 💡 **Link behavior**: cc.higcp.com uses GCP IAP, accessible in browser with google account login; for external access use `https://storage.googleapis.com/chris-pgp-host-asia/cc-pages/pages/<file>.html` direct links.
+| 2026-04-24 | [Deployment & Optimization Guide v1.5](https://cc.higcp.com/assets/qwen35-397b-tpu-inference-plan-20260424.html) | Complete deployment + optimization decisions (108 KB) |
+| 2026-04-25 | [⭐ Single-machine Inference Debug Story — 4-hour Detour vs 14-minute Correct Path](https://cc.higcp.com/assets/qwen35-397b-debug-story-20260425.html) | Complete single-machine deployment debug record (45 KB) |
+| 2026-04-26 | [README Reproducibility Verification Report](https://cc.higcp.com/assets/qwen35-readme-verification-20260426.html) | Blind run following README steps + verification (23 KB) |
+| 2026-04-26 | [⭐ PD Disaggregation Deployment Dogfood Record](https://cc.higcp.com/assets/qwen35-pd-disagg-dogfood-20260426.html) | Full PD workflow + HMA root cause + 6 lessons (24 KB) |
+| 2026-04-26 | [⭐ Multi-host TP=16 Dogfood Record](https://cc.higcp.com/assets/qwen35-multihost-dogfood-20260426.html) | 5 tests revealing 4-layer root cause chain + single/multi-host comparison (27 KB) |

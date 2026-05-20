@@ -12,9 +12,9 @@
 > **模型**: [moonshotai/Kimi-K2.6](https://huggingface.co/moonshotai/Kimi-K2.6)（64 safetensors, ~595 GB INT4）
 >
 > **完整复盘报告**:
-> - [Stage 1: 4L sanity PASS (single-host)](https://cc.higcp.com/pages/kimi-k26-multihost-stage1-20260426.html)
-> - [Stage 2: 61L 全 PASS (multi-host, no cache, 57 min cold start)](https://cc.higcp.com/pages/kimi-k26-multihost-stage2-20260426.html)
-> - [Stage 3: SHM cache + DNS fix BIG WIN (multi-host, 6:08 cold start, 9.3x)](https://cc.higcp.com/pages/kimi-k26-multihost-stage3-20260427.html)
+> - [Stage 1: 4L sanity PASS (single-host)](https://cc.higcp.com/assets/kimi-k26-multihost-stage1-20260426.html)
+> - [Stage 2: 61L 全 PASS (multi-host, no cache, 57 min cold start)](https://cc.higcp.com/assets/kimi-k26-multihost-stage2-20260426.html)
+> - [Stage 3: SHM cache + DNS fix BIG WIN (multi-host, 6:08 cold start, 9.3x)](https://cc.higcp.com/assets/kimi-k26-multihost-stage3-20260427.html)
 
 ## 🎯 已验证的关键性能 (2026-04-27)
 
@@ -382,9 +382,9 @@ K2.6 671B/A37B → 每 decode token 需 ~24 GB weight HBM read (37B 激活 × IN
 ## 📚 关键参考
 
 - **完整复盘 HTML 文档**:
-  - Stage 1 (4L sanity): https://cc.higcp.com/pages/kimi-k26-multihost-stage1-20260426.html
-  - Stage 2 (61L 全 PASS, 57 min cold): https://cc.higcp.com/pages/kimi-k26-multihost-stage2-20260426.html
-  - Stage 3 (SHM cache + DNS fix, 6 min cold): https://cc.higcp.com/pages/kimi-k26-multihost-stage3-20260427.html
+  - Stage 1 (4L sanity): https://cc.higcp.com/assets/kimi-k26-multihost-stage1-20260426.html
+  - Stage 2 (61L 全 PASS, 57 min cold): https://cc.higcp.com/assets/kimi-k26-multihost-stage2-20260426.html
+  - Stage 3 (SHM cache + DNS fix, 6 min cold): https://cc.higcp.com/assets/kimi-k26-multihost-stage3-20260427.html
 - **GitHub branch**: https://github.com/yangwhale/tpu-inference/tree/chrisya/main
 - **Build script**: [`scripts/build_k26_moe_cache.py`](https://github.com/yangwhale/tpu-inference/blob/chrisya/main/scripts/build_k26_moe_cache.py)
 - **V18 cache hit code**: [`int4.py`](https://github.com/yangwhale/tpu-inference/blob/chrisya/main/tpu_inference/layers/jax/quantization/int4.py) (`process_weights_after_loading`)

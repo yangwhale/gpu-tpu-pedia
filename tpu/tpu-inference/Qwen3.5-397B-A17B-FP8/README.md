@@ -787,10 +787,8 @@ kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
 
 | 日期 | 主题 | 详情 |
 |---|---|---|
-| 2026-04-24 | [部署与优化指南 v1.5](https://cc.higcp.com/pages/qwen35-397b-tpu-inference-plan-20260424.html) | 完整部署 + 优化决策（108 KB）|
-| 2026-04-25 | [⭐ 单机推理踩坑记 — 4 小时弯路 vs 14 分钟正确路](https://cc.higcp.com/pages/qwen35-397b-debug-story-20260425.html) | 单机部署踩坑全记录（45 KB）|
-| 2026-04-26 | [README 可复现性验证报告](https://cc.higcp.com/pages/qwen35-readme-verification-20260426.html) | 按 README 步骤盲跑 + 验证（23 KB）|
-| 2026-04-26 | [⭐ PD 分离部署 Dogfood 详记](https://cc.higcp.com/pages/qwen35-pd-disagg-dogfood-20260426.html) | PD 全流程 + HMA root cause + 6 lessons（24 KB）|
-| 2026-04-26 | [⭐ Multi-host TP=16 Dogfood 详记](https://cc.higcp.com/pages/qwen35-multihost-dogfood-20260426.html) | 5 次 test 揭露 4 层 root cause 链 + 单机/多机对比（27 KB）|
-
-> 💡 **链接行为**：cc.higcp.com 走 GCP IAP，浏览器有 google account 登录就能直接看；外部访问可用 `https://storage.googleapis.com/chris-pgp-host-asia/cc-pages/pages/<file>.html` 直链。
+| 2026-04-24 | [部署与优化指南 v1.5](https://cc.higcp.com/assets/qwen35-397b-tpu-inference-plan-20260424.html) | 完整部署 + 优化决策（108 KB）|
+| 2026-04-25 | [⭐ 单机推理踩坑记 — 4 小时弯路 vs 14 分钟正确路](https://cc.higcp.com/assets/qwen35-397b-debug-story-20260425.html) | 单机部署踩坑全记录（45 KB）|
+| 2026-04-26 | [README 可复现性验证报告](https://cc.higcp.com/assets/qwen35-readme-verification-20260426.html) | 按 README 步骤盲跑 + 验证（23 KB）|
+| 2026-04-26 | [⭐ PD 分离部署 Dogfood 详记](https://cc.higcp.com/assets/qwen35-pd-disagg-dogfood-20260426.html) | PD 全流程 + HMA root cause + 6 lessons（24 KB）|
+| 2026-04-26 | [⭐ Multi-host TP=16 Dogfood 详记](https://cc.higcp.com/assets/qwen35-multihost-dogfood-20260426.html) | 5 次 test 揭露 4 层 root cause 链 + 单机/多机对比（27 KB）|
