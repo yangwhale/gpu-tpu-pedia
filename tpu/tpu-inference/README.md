@@ -22,8 +22,9 @@
 | Kimi K2.6 | 1T / 32B active | MoE, native INT4 | INT4 | v7x-16 | ~6 min | [详情](./Kimi-K2.6-1T-A32B-INT4/) |
 | Qwen3.5 | 397B / 17B active | Hybrid GDN+Attn, 512E | FP8 | v7x-8 | ~7 min | [详情](./Qwen3.5-397B-A17B-FP8/) |
 | Qwen3-Coder | 480B / 35B active | MoE, FP8 native | FP8 | v7x-8 | ~7 min | [详情](./Qwen3-Coder-480B/) |
+| MiMo-V2.5-Pro | ~1T / 42B active | MoE 384E, Hybrid SWA | BF16 | 2× v7x-8 | ~50 min | [详情](./MiMo-V2.5-Pro-BF16/) |
 
-**硬件基线**：TPU v7x-8 = 4 chips / 8 devices / 768 GB HBM / ~944 GB 主机内存。
+**硬件基线**：TPU v7x-8 = 4 chips / 8 devices / 768 GB HBM / ~944 GB 主机内存。MiMo-V2.5-Pro 需要 2× v7x-8（multi-host）。
 
 ## 验证状态
 
@@ -35,6 +36,7 @@
 | Kimi K2.6 | ✅ 通过 | Smoke test | 全量 61 层需 v7x-16；v7x-8 仅跑 40 层 |
 | Qwen3.5 | ✅ 通过 | GSM8K 93.93% | Chat 路径不稳定，仅 completion 模式可靠 |
 | Qwen3-Coder | ✅ 通过 | Smoke test | — |
+| MiMo-V2.5-Pro | ✅ 通过 | Smoke test | 5 SWA patches 必需；multi-host only；sglang-jax（非 vLLM） |
 
 ## 模型架构与特性矩阵
 
@@ -49,6 +51,7 @@
 | Qwen3.5 | GQA (32Q/2KV) | 512E+1S top-10 | 60 (45 GDN+15 GQA) | 4096 | YaRN+mrope | — | — | 🔇 | ✅ |
 | Qwen3-Coder | GQA (40Q/8KV) | 128E top-8 | 94 | 5120 | RoPE | — | — | — | — |
 | MiMo-V2-Flash | MHA | Dense | ⏳ | ⏳ | RoPE | ⏳ | — | — | — |
+| MiMo-V2.5-Pro | GQA (8 KV) | 384E | 70 (60 SWA+10 FA) | 6144 | RoPE | — | — | — | ✅ (SWA) |
 
 > **层数缩写**：D = Dense 层, M = MoE 层, MTP = Multi-Token Prediction 层, GDN = Gated Delta Network 层（线性注意力）, S = Shared Expert
 
@@ -70,6 +73,7 @@
 | Kimi K2.6 | ❌ | ⏳ | ✅ | v7x-8 全量 61 层 OOM（权重+KV cache 超 HBM）；完整推理仅 v7x-16 |
 | Qwen3.5 | ✅ | ✅ | ✅ | 三种模式均已验证 |
 | Qwen3-Coder | ✅ | ✅ | ✅ | 多机 TP=16 吞吐下降 15-63%，不推荐 |
+| MiMo-V2.5-Pro | ❌ | ⏳ | ✅ | 2× v7x-8, TP=8, EP=2; **sglang-jax**（非 vLLM） |
 
 > ✅ 已验证可用　⚠️ 不稳定/有已知问题　⏳ 待验证　❌ 不可用
 
@@ -87,9 +91,11 @@
 | Kimi K2.6 ² | 1,142 ms | 49 ms | 20.0 | 592 tok/s | c=32 |
 | Qwen3.5 | — | ~20 ms | 49.6 | 2,097 tok/s | c=128 |
 | Qwen3-Coder | 95 ms | 20.6 ms | 48.0 | 1,478 tok/s | c=64 |
+| MiMo-V2.5-Pro ⁴ | — | — | — | — | 待测 |
 
 ¹ V3.2 与 R1 架构相同，引用 R1 实测数据，V3.2 独立压测尚未进行
 ² Kimi K2.6 数据来自 v7x-16（全量 61 层）；v7x-8 仅能跑 40 层
+⁴ MiMo-V2.5-Pro 使用 sglang-jax（非 vLLM），2× v7x-8 multi-host，smoke test 通过，benchmark 待做
 
 ### 8K 场景
 
@@ -106,12 +112,12 @@
 
 ## 现状总结
 
-所有 6 个模型已在 TPU v7x 上完成**推理功能验证**，质量评测达到预期水平（已测模型 GSM8K 89-95%）。当前性能处于**"功能可用，但未经优化"**阶段：
+所有 7 个模型已在 TPU v7x 上完成**推理功能验证**，质量评测达到预期水平（已测模型 GSM8K 89-95%）。当前性能处于**"功能可用，但未经优化"**阶段：
 
 - **单用户延迟**（TPOT 20-50 ms）可满足交互式对话场景
 - **系统吞吐**有初步数据，但所有测试均在 `enforce_eager` 模式下运行，未启用 XLA 编译图优化
 - **长文本**（8K+）仅 Qwen 系列完成测试，其余模型待补充
-- **PD 分离 / 多机部署**仅 Qwen3.5 和 Qwen3-Coder 完整验证，Kimi K2.6 多机可用，其余模型暂无
+- **PD 分离 / 多机部署**仅 Qwen3.5 和 Qwen3-Coder 完整验证，Kimi K2.6 和 MiMo-V2.5-Pro 多机可用，其余模型暂无
 
 如需生产级性能数据或调优方案，请联系 TPU 推理团队。
 
@@ -208,8 +214,10 @@ gs://<YOUR_BUCKET>/models/
 │   └── weights/                          # 49 safetensors shards (~449 GB)
 ├── qwen3.5-397b-a17b-fp8/
 │   └── weights/                          # 94 safetensors shards (~378 GB)
-└── MiMo-V2-Flash/
-    └── weights/                          # 145 safetensors shards (~292 GB)
+├── MiMo-V2-Flash/
+│   └── weights/                          # 145 safetensors shards (~292 GB)
+└── MiMo-V2.5-Pro/
+    └── weights/                          # safetensors shards (BF16, ~1T params)
 ```
 
 > FP8 native 模型（Qwen 系列）无需 cache 目录，直接从权重推理。
@@ -245,6 +253,7 @@ tpu-inference/
 ├── Kimi-K2.6-1T-A32B-INT4/            # Kimi K2.6 推理指南
 ├── Qwen3.5-397B-A17B-FP8/             # Qwen3.5 推理指南
 ├── Qwen3-Coder-480B/                  # Qwen3-Coder 推理指南
+├── MiMo-V2.5-Pro-BF16/                # MiMo-V2.5-Pro 推理指南 (sglang-jax)
 └── TPU-VM/                            # TPU VM 基础设施指南
 ```
 
