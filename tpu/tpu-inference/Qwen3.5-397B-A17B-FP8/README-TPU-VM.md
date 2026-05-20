@@ -6,7 +6,7 @@
 >
 > **架构**: 397B 总参 / 17B 激活 / **hybrid GDN+Attention**（45 GDN + 15 Standard Attn） + 512 routed experts + FP8 native
 >
-> **代码仓库**: [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference)（main branch ≥ 2026-04-23, 含 PR #2366）
+> **代码仓库**: [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference)（main branch ≥ 2026-05-15, 含 [PR #2366](https://github.com/vllm-project/tpu-inference/pull/2366) + [PR #2577](https://github.com/vllm-project/tpu-inference/pull/2577) commit `04077875`）
 >
 > **模型存储**: `gs://aidc-tpu-data/models`（GCS 对象存储，模型权重统一存放于此）
 >
@@ -14,13 +14,35 @@
 
 ---
 
-### 已知关键限制
+### 已知关键限制（历史 bug，已修复）
 
-> 当前部署 **不适合 conversational chatbot**。
-> - **Chat 路径 broken**: thinking OFF 输出语言错乱/死循环；thinking ON 解释/闲聊类问题 content 输出空 / `Thinking\n` 死循环
-> - **唯一稳定路径**: 5-shot Q/A completion pattern + `enable_thinking:false`（GSM8K 93.93% 就是用这个）
-> - **适合用例**: batch eval, structured generation, few-shot completion, code gen
-> - 高 GSM8K accuracy ≠ chat ready — **不要被误导**
+> **Chat 死循环 bug 已在 2026-05-15 修复**（[vllm-project/tpu-inference PR #2577](https://github.com/vllm-project/tpu-inference/pull/2577)，commit `04077875`）。
+>
+> **必须使用 commit ≥ `04077875`（日期 ≥ 2026-05-15）的 main branch 镜像/代码。**
+>
+> #### 历史症状（< 2026-05-15 版本）
+> - **Chat 死循环**: thinking OFF 输出 `about about about...` 或语言错乱；thinking ON 输出 `\n/**\n/**` 死循环或 content 空白
+> - **稳定 fallback**: 5-shot Q/A completion + `enable_thinking:false`（这是 GSM8K 93.93% 用的 pattern）
+>
+> #### 根因
+> GDN (Gated Linear Attention) recurrent scan kernel 在 bf16 精度下数值不稳定，连续 token 退化为重复 pattern。
+>
+> #### 修复内容（PR #2577）
+> - `tpu_inference/kernels/gdn/recurrent_scan_v2.py`: 内部计算 upcast 到 `jnp.float32`（5 处）
+> - `tpu_inference/layers/common/gdn_attention.py`: `chunk_size` 64→32
+> - **对 TP=8 用户同样生效**（不只 DP attention 模式）
+>
+> #### 验证测试（chat 路径，PR #2577 后）
+> | 测试 | 输出 | finish_reason |
+> |------|------|---------------|
+> | `/v1/completions` `"The capital of France is"` | `" Paris."` | `stop` ✅ |
+> | `/v1/chat/completions` 同上 prompt | `"The capital of France is **Paris**."` | `stop` ✅ |
+> | `/v1/chat/completions` GSM8K Janet ducks 题 | `"$18"`（正解，含推理过程） | `stop` ✅ |
+>
+> #### 如何升级
+> - **TPU VM**: 重新 `pip install vllm tpu-inference`（注意 nightly index）使其 ≥ 2026-05-15
+> - **GKE**: pull `vllm/vllm-tpu:nightly` 后用 `sha256:d39995c6193e012967d57409c5a5d1e20a2e5242fbced458ee2ee210fb1e8bc0` 或更新的 digest
+> - **验证**: 见 [Step 4: 验证 patch](#step-4-验证-patch-pr-2366--pr-2577)
 
 ---
 
@@ -262,12 +284,20 @@ du -sh /dev/shm/${MODEL_NAME}                      # 应为 ~378 GiB
 
 ---
 
-## Step 4: 验证 PR #2366 patch
+## Step 4: 验证 patch (PR #2366 + PR #2577)
 
-Qwen3.5 是 hybrid GDN+Attention 模型，vLLM 的 hybrid KV cache allocator 有一个已知 bug（PR #2366 修复）。从 2026-04-23 之后的 main branch 安装应已包含此修复。
+Qwen3.5 hybrid GDN+Attention 模型需要两个 patch 共同生效，缺一不可：
+
+| Patch | 修复对象 | 没有 patch 的症状 |
+|-------|----------|-------------------|
+| **PR #2366** | `runner/kv_cache_manager.py` — hybrid KV cache page size | gibberish output / OOM / EngineCore crash |
+| **PR #2577** | `kernels/gdn/recurrent_scan_v2.py` — GDN scan bf16→fp32 upcast | chat 死循环 / `about about about...` / `\n/**\n/**` |
+
+从 main branch ≥ 2026-05-15 的安装应已同时包含两个修复。
+
+### 验证 PR #2366（KV cache）
 
 ```bash
-# 验证 PR #2366 已包含
 KCM_PATH=$(python3 -c "import tpu_inference; import os; print(os.path.join(os.path.dirname(tpu_inference.__file__), 'runner', 'kv_cache_manager.py'))" 2>/dev/null | tail -1)
 grep -c '_hybrid_uniform_page_size_bytes' "$KCM_PATH"
 # 输出 7 = 已包含，跳过下面的 patch 步骤
@@ -285,6 +315,22 @@ cp /tmp/kv_cache_manager_patched.py $KCM_PATH
 ```
 
 > **为什么必须 patch**：vLLM hybrid allocator 把 4 layers 共享 1 个 `KVCacheTensor`（GPU byte-level 优化），但 TPU `jax.Array` strongly typed 必须 duplicate per-layer。不 patch → vLLM scheduler 的 block_id pool 比 TPU 实际容量大 ~3.5× → block_id 越界 → 多 request 状态塌陷 → **gibberish output / OOM / EngineCore crash**。
+
+### 验证 PR #2577（GDN fp32 upcast）
+
+```bash
+RS_PATH=$(python3 -c "import tpu_inference; import os; print(os.path.join(os.path.dirname(tpu_inference.__file__), 'kernels', 'gdn', 'recurrent_scan_v2.py'))" 2>/dev/null | tail -1)
+grep -c 'jnp.float32' "$RS_PATH"
+# 输出 ≥ 5 = PR #2577 已包含
+# 输出 0 = 需要升级镜像/重装 vllm + tpu-inference（不建议手动 patch 单文件，因为 PR #2577 同时改了 gdn_attention.py 的 chunk_size）
+
+# 同时验证 chunk_size = 32
+GA_PATH=$(python3 -c "import tpu_inference; import os; print(os.path.join(os.path.dirname(tpu_inference.__file__), 'layers', 'common', 'gdn_attention.py'))" 2>/dev/null | tail -1)
+grep -n 'chunk_size' "$GA_PATH" | head -5
+# 应看到 chunk_size=32（PR #2577 之前是 64）
+```
+
+> **为什么必须 patch**：GDN（Gated Linear Attention）recurrent scan kernel 在 bf16 精度下数值不稳定，连续 token 生成时累积误差导致输出退化为重复 pattern（chat 死循环）。PR #2577 把 scan 内部计算 upcast 到 `jnp.float32`（5 处），同时把 chunk_size 从 64 降到 32 进一步降低累积误差。**TP=8 和 DP attention 两种模式都受益。**
 
 ---
 
@@ -347,9 +393,36 @@ INFO: Application startup complete.
 
 ---
 
-## Step 6: 验证推理（5-shot Q/A）
+## Step 6: 验证推理（chat 测试）
 
-> **重要**：Qwen3.5 的 chat 路径不稳定。必须使用 5-shot Q/A pattern + `enable_thinking:false` 验证（见文档顶部"已知关键限制"）。
+> **PR #2577 后 chat 路径已稳定**（见文档顶部["已知关键限制"](#已知关键限制历史-bug已修复)）。下面提供两种验证方式：
+> - **A. 单 prompt chat 测试**（主推，最贴近真实使用场景）
+> - **B. 5-shot Q/A pattern**（GSM8K 等 few-shot eval 的 baseline 模板）
+
+### A. 单 prompt chat 测试（主推）
+
+```bash
+curl -s http://localhost:8000/v1/chat/completions \
+  -H "Content-Type: application/json" \
+  -d '{
+    "model": "Qwen3.5-397B-FP8",
+    "messages": [{"role": "user", "content": "The capital of France is"}],
+    "max_tokens": 50,
+    "temperature": 0
+  }' | python3 -c "
+import json, sys
+d = json.load(sys.stdin)
+m = d['choices'][0]
+print('content:', repr(m['message']['content']))
+print('finish:', m['finish_reason'])
+"
+```
+
+**预期**：`content` 应包含 "Paris" 字样（如 `'The capital of France is **Paris**.'`）/ `finish: stop`
+
+> ⚠️ 若输出仍是 `about about about...` 或 `\n/**\n/**` 死循环，说明用的镜像/代码 commit < `04077875` (2026-05-15)，**必须升级**（见["如何升级"](#已知关键限制历史-bug已修复)）。
+
+### B. 5-shot Q/A pattern（GSM8K eval baseline）
 
 ```bash
 python3 -c "
@@ -375,7 +448,7 @@ print('finish:', data['choices'][0]['finish_reason'])
 "
 ```
 
-**预期**：`content: 'Paris.'` / `reasoning_len: 0` / `finish: stop`
+**预期**：`content: 'Paris.'` / `reasoning_len: 0` / `finish: stop`（GSM8K 93.93% accuracy 即此 pattern）
 
 ---
 
@@ -1303,13 +1376,13 @@ gcloud compute resource-policies delete ${SLICE_NAME}-wp --project=${PROJECT_ID}
 
 | 症状 | 根因 | 修复 |
 |---|---|---|
-| **多并发输出乱码 / OOM / EngineCore silent crash** | 缺 PR #2366 (KV cache 状态损坏) | 走 [Step 4](#step-4-验证-pr-2366-patch)，grep 应输出 7 |
+| **多并发输出乱码 / OOM / EngineCore silent crash** | 缺 PR #2366 (KV cache 状态损坏) | 走 [Step 4](#step-4-验证-patch-pr-2366--pr-2577)，`_hybrid_uniform_page_size_bytes` grep 应输出 7 |
 | **weight load 80s/shard (vs 正常 2s)** | `/dev/shm` 残留 RAM 不足 → vLLM 跳过 auto-prefetch | 清 `/dev/shm`：`rm -rf /dev/shm/sem.* /dev/shm/wrk_*` |
 | **`libtpu lockfile` / `TPU device busy`** | 上次 vLLM 异常退出，孤儿进程占 TPU | `pgrep -f 'EngineCore\|vllm' \| xargs -r kill -9` + `rm -f /tmp/libtpu_lockfile` |
 | **PD 模式: `ValueError: Hybrid KV cache manager is disabled`** | 缺 `--no-disable-hybrid-kv-cache-manager` | 加 flag（[PD 必读差异](#qwen35-pd-必读差异vs-qwen3-coder-pd)） |
 | **PD 模式: `ModuleNotFoundError: tpu_connector_hma`** | 未部署 HMA connector | 走 [Part 2 Step 4](#step-4-部署-hma-connector两台-vm-都执行) |
 | **Multi-host: `TypeError: ... mrope ...`** | 缺 mrope bypass patches | 走 [Part 3 Step 3](#step-3-应用-3-个-patches两台-vm-都执行) |
 | **Multi-host: init_device 14 min 无 log + SIGSEGV** | `--max-num-batched-tokens` 太小 | 设为 `16384`（≥ `max_tokens_per_mm_item`） |
-| **Chat 输出死循环 / 语言错乱** | Qwen3.5 chat 路径 broken | 使用 5-shot Q/A pattern + `enable_thinking:false`（[已知限制](#已知关键限制)） |
+| **Chat 输出死循环 / 语言错乱** | GDN recurrent scan bf16 数值不稳定（缺 PR #2577） | 升级到 commit ≥ `04077875` (2026-05-15) 含 PR #2577（[已知限制](#已知关键限制历史-bug已修复)） |
 | **Ray worker 被 kill** | Ray OOM monitor 误杀 | 设 `RAY_memory_monitor_refresh_ms=0` |
 | **Multi-host: worker 报 `No TPU devices found` / 拓扑变量未生效** | vLLM Ray executor 默认不传播 `TPU_*`/`PJRT_*` 前缀环境变量到 worker | 设 `VLLM_RAY_EXTRA_ENV_VAR_PREFIXES_TO_COPY="TPU_,PJRT_,JAX_,SKIP_"` |

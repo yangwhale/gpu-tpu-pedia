@@ -6,21 +6,31 @@
 >
 > **Architecture**: 397B total params / 17B active / **hybrid GDN+Attention** (45 GDN + 15 Standard Attn) + 512 routed experts + FP8 native
 >
-> **Code Repository**: [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference) (main branch ≥ 2026-04-23, including PR #2366)
+> **Code Repository**: [vllm-project/tpu-inference](https://github.com/vllm-project/tpu-inference) (main branch ≥ 2026-05-15, including PR #2366 + PR #2577 commit `04077875`)
 >
 > **Model**: [Qwen/Qwen3.5-397B-A17B-FP8](https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8) (94 safetensors, ~378 GiB)
 
 ---
 
-## 🚨 Known Critical Limitations
+## ✅ Chat Mode Status (Updated 2026-05-15)
 
-> Current deployment is **not suitable for conversational chatbot**.
-> - **Chat path broken**: thinking OFF causes garbled output / infinite loops; thinking ON causes empty content / `Thinking\n` infinite loop for explanatory / casual questions
-> - **Only stable path**: 5-shot Q/A completion pattern + `enable_thinking:false` (GSM8K 93–97% was achieved with this)
-> - **Suitable use cases**: batch eval, structured generation, few-shot completion, code gen
-> - ⚠️ High GSM8K accuracy ≠ chat ready — **don't be misled**
+> **After PR #2577 — chat mode works on TPU**. Previously (before PR #2577) the chat path was broken on TPU: thinking OFF → garbled / infinite loops, thinking ON → empty content / `Thinking\n` loop. PR #2577 fixed the GDN scan kernel bf16 numerical instability (5 sites bf16→fp32 upcast) + reduced chunk_size 64→32, eliminating the chat-mode death loop.
+>
+> **GPU vs TPU decisive comparison** (TP=8 FP8, prompt: "What is the capital of France?", thinking=True):
+>
+> | Platform | Code state | Chat output |
+> |---|---|---|
+> | GPU (H100 TP=8) | reference | ✅ "Paris" (correct, ~50 tokens) |
+> | TPU v7x-8 **without PR #2577** | gibberish | ❌ `about about about about ...` (infinite loop) |
+> | TPU v7x-8 **with PR #2577** | patched | ✅ "Paris" (correct, matches GPU) |
+>
+> **Root cause**: GDN (Gated Linear Attention) recurrent scan accumulates state across 45/60 layers; bf16 mantissa (7 bits) loses precision after ~30 layers, producing degenerate token distributions → repetition death loop. fp32 upcast (23-bit mantissa) restores stability.
+>
+> **Two stable paths** (both work after PR #2577):
+> - **Chat mode**: implicit thinking / explicit `enable_thinking:true|false` — verified on 24-case repro suite (max tail_repeat_ratio 0.125, no death loop)
+> - **5-shot Q/A completion**: legacy benchmark mode (GSM8K 93.93–97.26%)
 
-See [Required Constraint D](#d-thinking-behavior) and [Verification Steps](#step-4-verification-5-shot-hello-world) for details.
+See [Required Constraint A](#a-pr-2366--pr-2577-patches-required) and [Step 4 Verification](#step-4-verification-chat--5-shot-hello-world) for details.
 
 ---
 
@@ -41,7 +51,11 @@ Full benchmark data in [Appendix: Throughput sweep + GSM8K](#appendix-full-bench
 
 ## ⚠️ Required Constraints (4 Items)
 
-### A. PR #2366 Patch (**Required**)
+### A. PR #2366 + PR #2577 Patches (**Required**)
+
+Two separate fixes — **both must be applied**, otherwise either KV cache corruption (#2366) or GDN chat-mode death loop (#2577) will surface.
+
+#### A.1 PR #2366 — `kv_cache_manager.py` (KV cache, all modes)
 
 vLLM hybrid allocator shares 1 `KVCacheTensor` across 4 layers (GPU byte-level). But TPU `jax.Array` is strongly typed and must duplicate per-layer → vLLM scheduler's block_id pool is ~3.5× larger than actual TPU capacity → block_id out-of-bounds → JAX `dynamic_update_slice_in_dim` silently clips → multi-request state collapse → **gibberish output / OOM / EngineCore crash**.
 
@@ -49,8 +63,31 @@ vLLM hybrid allocator shares 1 `KVCacheTensor` across 4 layers (GPU byte-level).
 ```bash
 kubectl exec $POD -- grep -c '_hybrid_uniform_page_size_bytes' \
   /workspace/tpu_inference/tpu_inference/runner/kv_cache_manager.py
-# Output ≥1 = patched; Output 0 = needs patch (see Step 2)
+# Output ≥1 = patched; Output 0 = needs patch (see Step 2a)
 ```
+
+#### A.2 PR #2577 — `recurrent_scan_v2.py` + `gdn_attention.py` (chat-mode required)
+
+GDN (Gated Linear Attention / Mamba-2 style SSM) recurrent scan kernel accumulates state across 45/60 layers. Original bf16 implementation has only 7-bit mantissa → numerical drift after ~30 layers → degenerate token distribution → **chat-mode death loop** (`about about about ...` infinite repeat / `\n/**\n/**` garbled / empty `Thinking\n`). Plus chunk_size=64 amplifies the error.
+
+**Fix** (two files):
+1. `tpu_inference/kernels/gdn/recurrent_scan_v2.py` — upcast bf16 → fp32 at 5 accumulation sites
+2. `tpu_inference/layers/common/gdn_attention.py` — reduce `chunk_size` 64 → 32
+
+**Verification** (dual grep):
+```bash
+# Site 1: recurrent_scan_v2.py must have ≥5 jnp.float32 references
+kubectl exec $POD -- grep -c 'jnp.float32' \
+  /workspace/tpu_inference/tpu_inference/kernels/gdn/recurrent_scan_v2.py
+# Output ≥5 = patched
+
+# Site 2: gdn_attention.py must have chunk_size=32 (not 64)
+kubectl exec $POD -- grep 'chunk_size=' \
+  /workspace/tpu_inference/tpu_inference/layers/common/gdn_attention.py
+# Output should include `chunk_size=32`
+```
+
+If either output fails verification → apply [Step 2b](#step-2b-pr-2577--recurrent_scan_v2py--gdn_attentionpy-chat-required).
 
 ### B. Three Required Environment Variables
 
@@ -195,7 +232,9 @@ kubectl exec $POD -- bash -c "
 "
 ```
 
-### Step 2: Apply PR #2366 Patch (If Not Already Patched)
+### Step 2: Apply Required Patches (If Not Already Patched)
+
+#### Step 2a: PR #2366 — `kv_cache_manager.py`
 
 ```bash
 # Check
@@ -218,6 +257,47 @@ kubectl --context="$CTX" exec $POD -- bash -c "
   find /workspace/tpu_inference -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
 "
 rm -f $TMP
+```
+
+#### Step 2b: PR #2577 — `recurrent_scan_v2.py` + `gdn_attention.py` (chat required)
+
+```bash
+# Check both files
+kubectl exec $POD -- grep -c 'jnp.float32' \
+  /workspace/tpu_inference/tpu_inference/kernels/gdn/recurrent_scan_v2.py
+# Output ≥5 = patched
+
+kubectl exec $POD -- grep 'chunk_size=' \
+  /workspace/tpu_inference/tpu_inference/layers/common/gdn_attention.py
+# Should include `chunk_size=32`
+```
+
+If either fails, apply both files from main:
+
+```bash
+# Host side — fetch both files from main (PR #2577 merged 2026-05-15, commit 04077875)
+TMP1=$(mktemp /tmp/recurrent_scan_v2.XXXXXX.py)
+TMP2=$(mktemp /tmp/gdn_attention.XXXXXX.py)
+curl -sf https://raw.githubusercontent.com/vllm-project/tpu-inference/main/tpu_inference/kernels/gdn/recurrent_scan_v2.py -o $TMP1
+curl -sf https://raw.githubusercontent.com/vllm-project/tpu-inference/main/tpu_inference/layers/common/gdn_attention.py -o $TMP2
+
+# Verify local before copy
+grep -c 'jnp.float32' $TMP1   # ≥5 expected
+grep 'chunk_size=' $TMP2      # chunk_size=32 expected
+
+# Copy into pod
+RSV=/workspace/tpu_inference/tpu_inference/kernels/gdn/recurrent_scan_v2.py
+GDA=/workspace/tpu_inference/tpu_inference/layers/common/gdn_attention.py
+kubectl --context="$CTX" exec $POD -- cp $RSV ${RSV}.bak
+kubectl --context="$CTX" exec $POD -- cp $GDA ${GDA}.bak
+kubectl --context="$CTX" cp $TMP1 $POD:$RSV
+kubectl --context="$CTX" cp $TMP2 $POD:$GDA
+kubectl --context="$CTX" exec $POD -- bash -c "
+  grep -c 'jnp.float32' $RSV   # verify ≥5
+  grep 'chunk_size=' $GDA      # verify chunk_size=32
+  find /workspace/tpu_inference -name '__pycache__' -type d -exec rm -rf {} + 2>/dev/null || true
+"
+rm -f $TMP1 $TMP2
 ```
 
 ### Step 3: Start vLLM (File-based Launcher)
@@ -267,7 +347,7 @@ INFO: Application startup complete.
 
 > 💡 **padding bytes / num_gpu_blocks vary with nightly version**: Earlier nightly used `23289856 bytes / 945 blocks`; newer nightly (with compact-mamba optimization) may show `12804096 bytes / 1718 blocks`. As long as you see the `Hybrid KV cache: padding` log, PR #2366 is active — exact values don't need to match.
 
-### Step 4: Verification (5-shot Hello World)
+### Step 4: Verification (Chat + 5-shot Hello World)
 
 > ⚠️ **First request XLA compilation**: Each new prompt shape triggers XLA compilation on first request (60-90 seconds); subsequent same-shape requests take <1 second. Don't panic if the first curl times out — retry after compilation completes. Recommend adding `--max-time 120` to curl.
 
@@ -275,8 +355,33 @@ INFO: Application startup complete.
 # Health check
 kubectl exec $POD -- curl -sf -o /dev/null -w "%{http_code}\n" http://localhost:8000/health
 # Should output 200
+```
 
-# Hello world — chat endpoint 5-shot single user message (only stable chat method, see Constraint D)
+#### Step 4a: Chat Mode (works after PR #2577)
+
+```bash
+# Chat — single message, "What is the capital of France?" (the canonical regression test)
+kubectl exec $POD -- curl -s http://localhost:8000/v1/chat/completions \
+  -H 'Content-Type: application/json' \
+  -d "{\"model\":\"$MODEL\",\"messages\":[{\"role\":\"user\",\"content\":\"What is the capital of France?\"}],\"max_tokens\":100,\"temperature\":0,\"chat_template_kwargs\":{\"enable_thinking\":true}}" \
+  | python3 -c 'import sys,json; r=json.load(sys.stdin); m=r["choices"][0]["message"]; print("content:", repr(m["content"][:200])); print("reasoning_len:", len(m.get("reasoning") or "")); print("finish:", r["choices"][0]["finish_reason"])'
+```
+
+**Reference table** (verified on `qwen35-repro` pod, 2026-05-19, PR #2577 patched):
+
+| Mode | `enable_thinking` | Expected content (contains) | Status |
+|---|---|---|---|
+| Implicit thinking | omitted | "Paris" | ✅ ok |
+| Explicit thinking ON | `true` | "Paris" (after reasoning) | ✅ ok |
+| Explicit thinking OFF | `false` | "Paris" | ✅ ok |
+| Few-shot completion | (via 5-shot) | "Paris" | ✅ ok |
+
+Repro suite: 24 cases × 6 prompts × 4 thinking modes — all `status=ok`, max `tail_repeat_ratio=0.125` (no death loop).
+
+#### Step 4b: 5-shot Hello World (legacy benchmark mode)
+
+```bash
+# 5-shot completion pattern — original benchmark path (GSM8K 93.93–97.26% uses this style)
 SHOTS="Question: Capital of Japan?\nAnswer: Tokyo.\n\nQuestion: Capital of Germany?\nAnswer: Berlin.\n\nQuestion: Capital of Italy?\nAnswer: Rome.\n\nQuestion: Capital of Spain?\nAnswer: Madrid.\n\nQuestion: Capital of Brazil?\nAnswer: Brasilia.\n\n"
 P="${SHOTS}Question: Capital of France?\nAnswer:"
 kubectl exec $POD -- curl -s http://localhost:8000/v1/chat/completions \
@@ -670,7 +775,8 @@ kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
 
 | Symptom | Root Cause | Fix |
 |---|---|---|
-| **Multi-concurrency garbled output / OOM `vmem 86MB > 64MB` / `HBM 95G > 94.75G` / EngineCore silent crash** | Missing PR #2366 (KV cache state corruption) | Follow [Step 2](#step-2-apply-pr-2366-patch-if-not-already-patched), grep should output ≥1 |
+| **Chat mode death loop** (`about about about ...` infinite repeat / `\n/**\n/**` garbled / language confusion / empty `Thinking\n`) | Missing PR #2577 (GDN bf16 numerical instability + chunk_size oversized) | Follow [Step 2b](#step-2b-pr-2577--recurrent_scan_v2py--gdn_attentionpy-chat-required), grep `jnp.float32` should output ≥5 AND `chunk_size=32` present |
+| **Multi-concurrency garbled output / OOM `vmem 86MB > 64MB` / `HBM 95G > 94.75G` / EngineCore silent crash** | Missing PR #2366 (KV cache state corruption) | Follow [Step 2a](#step-2a-pr-2366--kv_cache_managerpy), grep should output ≥1 |
 | **Weight load 80s/shard (vs normal 2s), startup from 7min to 2hr** | `/dev/shm` residuals → insufficient RAM → vLLM skips auto-prefetch | Clean `/dev/shm`, add `--safetensors-load-strategy=prefetch` at startup |
 | **`ABORTED: libtpu lockfile` / `TPU device busy`** | Previous vLLM abnormal exit, orphan process holding `/dev/vfio/0` | `pgrep -f 'EngineCore\|vllm' \| xargs -r kill -9` + `rm -f /tmp/libtpu_lockfile` |
 | **`kubectl exec ... bash -c "<multi-line nohup>"` returns exit 137** | kubectl exec kills process group when stdin closes, nohup can't save it | Use file-based launcher ([Step 3](#step-3-start-vllm-file-based-launcher)) |
@@ -755,13 +861,14 @@ kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
 
 ### Upstream PR Watchlist (When Patches Can Be Removed)
 
-> Once the vllm-tpu nightly image is upgraded to ≥ the PR merge date, the corresponding patch can be removed. Current image uses `nightly-20260330` which is 3-4 weeks earlier than all 4 PRs, so patches are still required.
+> Once the vllm-tpu nightly image is upgraded to ≥ the PR merge date, the corresponding patch can be removed. Current image uses `nightly-20260330` which is 6-7 weeks earlier than all 5 PRs, so patches are still required.
 
 | PR | Author | Merged | Status | Which Patch / Mode Depends On It |
 |---|---|---|---|---|
 | [#2322](https://github.com/vllm-project/tpu-inference/pull/2322) | wyzhang | 2026-04-20 | ✅ merged | PD: transfer stats tracker (no cp needed, already in main) |
 | [#2336](https://github.com/vllm-project/tpu-inference/pull/2336) | wyzhang | 2026-04-22 | ✅ merged | PD: `tpu_connector_hma.py` (cp into pod) |
 | [#2366](https://github.com/vllm-project/tpu-inference/pull/2366) | qizzzh | 2026-04-23 | ✅ merged | **All modes: `kv_cache_manager.py`** (cp into pod) |
+| [#2577](https://github.com/vllm-project/tpu-inference/pull/2577) | qizzzh | 2026-05-15 | ✅ merged (`04077875`) | **All modes (chat required): `kernels/gdn/recurrent_scan_v2.py` (bf16→fp32, 5 sites) + `layers/common/gdn_attention.py` (chunk_size 64→32)** (cp into pod) |
 | 🔬 mrope bypass (internal) | — | Pending upstream | ⚪ Internal patch | Multi-host: `tpu_runner.py` + `persistent_batch_manager.py` (5+4 lines defensive None check) |
 
 **Cleanup procedure after image upgrade**:
@@ -775,6 +882,7 @@ kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
 ### References
 
 - [PR #2366 — Hybrid KV cache OOB fix (required)](https://github.com/vllm-project/tpu-inference/pull/2366)
+- [PR #2577 — GDN scan kernel bf16→fp32 upcast + chunk_size 64→32 (chat required)](https://github.com/vllm-project/tpu-inference/pull/2577) (commit `04077875`, merged 2026-05-15)
 - [PR #2322 / #2327 / #2331 / #2336 — PD disagg 4 PR series (including HMA implementation)](https://github.com/vllm-project/tpu-inference/pull/2322)
 - [tpu_connector_hma.py — TPUConnectorHMA source code](https://github.com/vllm-project/tpu-inference/blob/main/tpu_inference/distributed/tpu_connector_hma.py)
 - [Qwen3.5-397B-A17B-FP8 HuggingFace](https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8)
