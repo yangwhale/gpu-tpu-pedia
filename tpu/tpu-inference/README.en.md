@@ -12,18 +12,33 @@
 >
 > For performance comparisons or production deployment plans, please contact the TPU Inference team.
 
+## Field-Proven: Customer Onboarding
+
+This guide is not theoretical — its capability matrix, deployment recipes, and pre-deployment preparation steps have been validated in a real-world **onsite onboarding engagement** with a large-scale enterprise customer adopting TPU v7x for the first time.
+
+During the onsite support, the customer was guided smoothly through their **entire first TPU v7x usage flow** — from infrastructure provisioning and weight preparation to launching large-model inference successfully. This first successful run laid a solid foundation for the customer's subsequent iteration and production landing on TPU.
+
+The structure of this guide reflects what made that onboarding effective:
+
+- **Capability & Feature Matrix** (below) — gives a first-time user an at-a-glance map of which models, architectures, and deployment modes are verified working on TPU v7x, so expectations are aligned from day one.
+- **Pre-deployment Preparation** (weight storage layout, `/dev/shm` strategy, environment variables, cache generation) — front-loads the steps that most commonly block a first-time TPU user, turning multi-day trial-and-error into a guided path.
+- **End-to-end runnable steps per model** — each model directory provides a from-scratch-to-inference walkthrough, exactly what an onsite engineer needs to get a customer to first success quickly.
+
+For teams planning a similar onboarding, the same matrix + preparation checklist is the recommended starting point.
+
 ## Model Overview
 
 | Model | Params | Architecture | Quantization | TPU Topology | Cold Start | Docs |
 |-------|--------|--------------|-------------|--------------|------------|------|
-| DeepSeek R1 | 671B | MoE 256E top-8, MLA | FP4 MoE + FP8 Attn | v7x-8 | ~4-6 min | [Details](./DeepSeek-R1-671B-FP4/) |
-| DeepSeek V3.2 | 671B | MoE 256E top-8, MLA | FP4 MoE + FP8 Attn | v7x-8 | ~4-6 min | [Details](./DeepSeek-V3.2-671B-FP4/) |
-| GLM-5.1 | 754B | MoE 180E top-8 | FP4 MoE + FP8 Attn | v7x-8 | ~3-4 min | [Details](./GLM-5.1-754B-FP4/) |
-| Kimi K2.6 | 1T / 32B active | MoE, native INT4 | INT4 | v7x-16 | ~6 min | [Details](./Kimi-K2.6-1T-A32B-INT4/) |
-| Qwen3.5 | 397B / 17B active | Hybrid GDN+Attn, 512E | FP8 | v7x-8 | ~7 min | [Details](./Qwen3.5-397B-A17B-FP8/) |
-| Qwen3-Coder | 480B / 35B active | MoE, FP8 native | FP8 | v7x-8 | ~7 min | [Details](./Qwen3-Coder-480B/) |
+| DeepSeek R1 | 671B | MoE 256E top-8, MLA | FP4 MoE + FP8 Attn | v7x-8 | ~4-6 min | [Details](./DeepSeek-R1-671B-FP4/README.en.md) |
+| DeepSeek V3.2 | 671B | MoE 256E top-8, MLA | FP4 MoE + FP8 Attn | v7x-8 | ~4-6 min | [Details](./DeepSeek-V3.2-671B-FP4/README.en.md) |
+| GLM-5.1 | 754B | MoE 180E top-8 | FP4 MoE + FP8 Attn | v7x-8 | ~3-4 min | [Details](./GLM-5.1-754B-FP4/README.en.md) |
+| Kimi K2.6 | 1T / 32B active | MoE, native INT4 | INT4 | v7x-16 | ~6 min | [Details](./Kimi-K2.6-1T-A32B-INT4/README.en.md) |
+| Qwen3.5 | 397B / 17B active | Hybrid GDN+Attn, 512E | FP8 | v7x-8 | ~7 min | [Details](./Qwen3.5-397B-A17B-FP8/README.en.md) |
+| Qwen3-Coder | 480B / 35B active | MoE, FP8 native | FP8 | v7x-8 | ~7 min | [Details](./Qwen3-Coder-480B/README.en.md) |
+| MiMo-V2.5-Pro | ~1T / 42B active | MoE 384E, Hybrid SWA | BF16 | 2× v7x-8 | ~50 min | [Details](./MiMo-V2.5-Pro-BF16/README.en.md) |
 
-**Hardware Baseline**: TPU v7x-8 = 4 chips / 8 devices / 768 GB HBM / ~944 GB host memory.
+**Hardware Baseline**: TPU v7x-8 = 4 chips / 8 devices / 768 GB HBM / ~944 GB host memory. MiMo-V2.5-Pro requires 2× v7x-8 (multi-host).
 
 ## Verification Status
 
@@ -35,6 +50,7 @@
 | Kimi K2.6 | ✅ Passed | Smoke test | Full 61 layers require v7x-16; v7x-8 only runs 40 layers |
 | Qwen3.5 | ✅ Passed | GSM8K 93.93% | Chat path unstable, only completion mode reliable |
 | Qwen3-Coder | ✅ Passed | Smoke test | — |
+| MiMo-V2.5-Pro | ✅ Passed | Smoke test | 5 SWA patches required; multi-host only; sglang-jax (not vLLM) |
 
 ## Model Architecture & Feature Matrix
 
@@ -49,6 +65,7 @@
 | Qwen3.5 | GQA (32Q/2KV) | 512E+1S top-10 | 60 (45 GDN+15 GQA) | 4096 | YaRN+mrope | — | — | 🔇 | ✅ |
 | Qwen3-Coder | GQA (40Q/8KV) | 128E top-8 | 94 | 5120 | RoPE | — | — | — | — |
 | MiMo-V2-Flash | MHA | Dense | ⏳ | ⏳ | RoPE | ⏳ | — | — | — |
+| MiMo-V2.5-Pro | GQA (8 KV) | 384E | 70 (60 SWA+10 FA) | 6144 | RoPE | — | — | — | ✅ (SWA) |
 
 > **Layer abbreviations**: D = Dense, M = MoE, MTP = Multi-Token Prediction, GDN = Gated Delta Network (linear attention), S = Shared Expert
 
@@ -70,6 +87,7 @@
 | Kimi K2.6 | ❌ | ⏳ | ✅ | v7x-8 full 61 layers OOM (weights + KV cache exceed HBM); inference only on v7x-16 |
 | Qwen3.5 | ✅ | ✅ | ✅ | All three modes verified |
 | Qwen3-Coder | ✅ | ✅ | ✅ | Multi-node TP=16 throughput 15-63% worse, not recommended |
+| MiMo-V2.5-Pro | ❌ | ⏳ | ✅ | 2× v7x-8, TP=8, EP=2; **sglang-jax** (not vLLM) |
 
 > ✅ Verified working　⚠️ Unstable / known issues　⏳ Pending verification　❌ Not feasible
 
@@ -87,9 +105,11 @@
 | Kimi K2.6 ² | 1,142 ms | 49 ms | 20.0 | 592 tok/s | c=32 |
 | Qwen3.5 | — | ~20 ms | 49.6 | 2,097 tok/s | c=128 |
 | Qwen3-Coder | 95 ms | 20.6 ms | 48.0 | 1,478 tok/s | c=64 |
+| MiMo-V2.5-Pro ⁴ | — | — | — | — | Pending |
 
 ¹ V3.2 shares identical architecture with R1; numbers reference R1 benchmarks. Independent V3.2 benchmarks pending.
 ² Kimi K2.6 data measured on v7x-16 (full 61 layers); v7x-8 can only run 40 layers.
+⁴ MiMo-V2.5-Pro uses sglang-jax (not vLLM), 2× v7x-8 multi-host; smoke test passed, benchmark pending.
 
 ### 8K Scenarios
 
@@ -106,12 +126,12 @@
 
 ## Current Status Summary
 
-All 6 models have completed **inference functional verification** on TPU v7x, with quality evaluations meeting expectations (GSM8K 89-95% for tested models). Current performance is at the **"functionally usable but not optimized"** stage:
+All 7 models have completed **inference functional verification** on TPU v7x, with quality evaluations meeting expectations (GSM8K 89-95% for tested models). Current performance is at the **"functionally usable but not optimized"** stage:
 
 - **Per-user latency** (TPOT 20-50 ms) is adequate for interactive chat scenarios
 - **System throughput** has preliminary data, but all tests ran in `enforce_eager` mode without XLA graph compilation optimization
 - **Long context** (8K+) only tested for Qwen series; other models pending
-- **PD disaggregation / multi-node** fully verified only for Qwen3.5 and Qwen3-Coder; Kimi K2.6 multi-node works; others not yet implemented
+- **PD disaggregation / multi-node** fully verified only for Qwen3.5 and Qwen3-Coder; Kimi K2.6 and MiMo-V2.5-Pro multi-node work; others not yet implemented
 
 For production-grade performance data or optimization plans, please contact the TPU Inference team.
 
@@ -208,8 +228,10 @@ gs://<YOUR_BUCKET>/models/
 │   └── weights/                          # 49 safetensors shards (~449 GB)
 ├── qwen3.5-397b-a17b-fp8/
 │   └── weights/                          # 94 safetensors shards (~378 GB)
-└── MiMo-V2-Flash/
-    └── weights/                          # 145 safetensors shards (~292 GB)
+├── MiMo-V2-Flash/
+│   └── weights/                          # 145 safetensors shards (~292 GB)
+└── MiMo-V2.5-Pro/
+    └── weights/                          # safetensors shards (BF16, ~1T params)
 ```
 
 > FP8 native models (Qwen series) do not need a cache directory — inference reads weights directly.
@@ -226,7 +248,7 @@ These scripts are located in each model's subdirectory and run on CPU only — n
 
 ## Infrastructure
 
-For TPU VM creation and storage configuration, see the [TPU-VM Guide](./TPU-VM/), which covers:
+For TPU VM creation and storage configuration, see the [TPU-VM Guide](./TPU-VM/README.en.md), which covers:
 
 - Hyperdisk ML data disk creation and mounting
 - TPU v7x-8 VM instance creation
@@ -245,6 +267,7 @@ tpu-inference/
 ├── Kimi-K2.6-1T-A32B-INT4/            # Kimi K2.6 inference guide
 ├── Qwen3.5-397B-A17B-FP8/             # Qwen3.5 inference guide
 ├── Qwen3-Coder-480B/                  # Qwen3-Coder inference guide
+├── MiMo-V2.5-Pro-BF16/                # MiMo-V2.5-Pro inference guide (sglang-jax)
 └── TPU-VM/                            # TPU VM infrastructure guide
 ```
 
@@ -259,7 +282,7 @@ tpu-inference/
 - **Affected**: All FP4 MoE models (R1, V3.2, GLM-5.1) and Kimi K2.6
 - **Fix**: **Do not set `USE_MOE_EP_KERNEL=1`**. With `use_ep=True`, the system auto-falls back to `GMM_EP` (correct path)
 - **Code location**: `tpu_inference/layers/jax/moe/utils.py:select_moe_backend()`
-- **Details**: See [R1 README Pitfall #23](./DeepSeek-R1-671B-FP4/)
+- **Details**: See [R1 README Pitfall #23](./DeepSeek-R1-671B-FP4/README.en.md)
 
 ### Issue 2: Incomplete additional-config → GMM_TP Instead of GMM_EP
 
@@ -276,7 +299,7 @@ tpu-inference/
     }
   }
   ```
-- **Details**: See [R1 README Pitfall #24](./DeepSeek-R1-671B-FP4/)
+- **Details**: See [R1 README Pitfall #24](./DeepSeek-R1-671B-FP4/README.en.md)
 
 ### Issue 3: dp_scheduler.py hash_block_size Incompatibility
 
@@ -285,7 +308,7 @@ tpu-inference/
 - **Affected**: All scenarios using `DPScheduler` (**all 6 models**)
 - **Fix**: Use `inspect.signature` to dynamically check if the parameter exists before passing it
 - **Patch location**: `tpu_inference/core/sched/dp_scheduler.py` (committed to fork)
-- **Details**: See [R1 README Pitfall #25](./DeepSeek-R1-671B-FP4/)
+- **Details**: See [R1 README Pitfall #25](./DeepSeek-R1-671B-FP4/README.en.md)
 
 ### Impact Matrix
 
