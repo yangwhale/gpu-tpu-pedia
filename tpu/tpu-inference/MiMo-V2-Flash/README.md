@@ -202,9 +202,12 @@ done
 ### Step 7: Benchmark（可选）
 
 ```bash
-# 吞吐测试: 256 prompts × 16K input / 1K output
-uv run python -m sgl_jax.bench_serving \
+# 吞吐测试: 256 prompts × 16K input / 1K output, concurrency 64
+# 参数与 SGLang-JAX 官方文档完全一致
+source /opt/sglang-env/bin/activate
+python -m sgl_jax.bench_serving \
     --backend sgl-jax \
+    --port 30271 \
     --dataset-name random \
     --num-prompts 256 \
     --random-input 16384 \
@@ -215,28 +218,36 @@ uv run python -m sgl_jax.bench_serving \
     --tokenizer XiaomiMiMo/MiMo-V2-Flash
 ```
 
-**参考性能数据**（v7x-8, epmoe, commit b787fdef）：
+**Benchmark 结果**
 
-| moe-backend | chunked-prefill | swa-full-ratio | mem-frac | Output tok/s | Median ITL |
-|-------------|----------------|----------------|----------|--------------|-----------|
-| epmoe | 4096 | 0.25 | 0.95 | 480 | 37.8 ms |
-| epmoe | 2048 | 0.20 | 0.90 | 467 | 36.9 ms |
-| fused | 2048 | 0.20 | 0.90 | 397 | 38.2 ms |
+测试条件：256 prompts × 16K input / 1K output, concurrency 64, v7x-8 single-host
 
-```bash
-# 准确率评测 (GSM8K)
-pip install evalscope==0.17.1
-evalscope eval \
-    --model XiaomiMiMo/MiMo-V2-Flash \
-    --api-url http://127.0.0.1:30271/v1/chat/completions \
-    --api-key EMPTY \
-    --eval-type service \
-    --datasets gsm8k \
-    --eval-batch-size 32 \
-    --generation-config '{"temperature": 0.8, "top_p": 0.95, "max_tokens": 32768}'
+| 配置 | dp | moe-backend | chunked-prefill | swa-ratio | mem-frac | Output tok/s | Median ITL | TPOT |
+|------|---|-------------|----------------|-----------|----------|--------------|-----------|------|
+| 推荐配置 (实测) | 2 | epmoe | 4096 | 0.25 | 0.95 | **636** | **32.6 ms** | 65.8 ms |
+| SGLang-JAX 官方 (dp=1) | 1 | epmoe | 4096 | 0.25 | 0.95 | 480 | 37.8 ms | — |
+| SGLang-JAX 官方 (dp=1) | 1 | fused | 4096 | 0.25 | 0.95 | 382 | 42.5 ms | — |
+
+> 推荐配置 (dp=2) 比官方 dp=1 基线快约 33%。dp=2 的 attention path 使用 TP=4，MoE 层仍使用 EP=8。
+> 官方 dp=1 数据来源：[sglang-jax PR #931](https://github.com/sgl-project/sglang-jax/pull/931)，commit `b787fdef`。
+
+**完整 Benchmark 输出**（推荐配置实测）：
+```
+Output token throughput:   636.22 tok/s
+Input token throughput:    10179.50 tok/s
+Total token throughput:    10815.72 tok/s
+Request throughput:        0.62 req/s
+Mean TTFT:                 35679 ms
+Median ITL:                32.62 ms
+Mean TPOT:                 65.79 ms
+P99 TPOT:                  100.36 ms
 ```
 
-参考准确率: GSM8K AverageAccuracy = **0.9401** (n=1319)
+**准确率参考** (来源: SGLang-JAX 官方文档)
+
+| Model | Dataset | Metric | Score |
+|-------|---------|--------|-------|
+| MiMo-V2-Flash | GSM8K | AverageAccuracy | 0.9401 (n=1319) |
 
 ---
 
