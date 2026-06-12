@@ -125,7 +125,7 @@ uv run python -u -m sgl_jax.launch_server \
     --model-path XiaomiMiMo/MiMo-V2-Flash \
     --trust-remote-code \
     --tp-size 8 --dp-size 2 --ep-size 8 \
-    --moe-backend epmoe \
+    --moe-backend fused \
     --host 0.0.0.0 --port 30271 \
     --page-size 256 --context-length 262144 \
     --chunked-prefill-size 4096 \
@@ -142,7 +142,7 @@ uv run python -u -m sgl_jax.launch_server \
 | `--tp-size 8` | 8 | Tensor Parallel = 8 devices |
 | `--dp-size 2` | 2 | Data Parallel (attention TP = 8/2 = 4) |
 | `--ep-size 8` | 8 | Expert Parallel = 8 devices |
-| `--moe-backend epmoe` | epmoe | 单机 v7x-8 比 fused 快 18-26% |
+| `--moe-backend fused` | fused | 最新版本单机 v7x-8 比 epmoe 快 ~23% |
 | `--swa-full-tokens-ratio 0.25` | 0.25 | Full Attention 占 KV cache 25%，SWA 占 75% |
 | `--page-size 256` | 256 | SWA eviction 效率最优 |
 | `--context-length 262144` | 256K | 最大上下文长度 |
