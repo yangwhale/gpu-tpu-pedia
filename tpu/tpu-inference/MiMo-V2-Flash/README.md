@@ -222,26 +222,20 @@ python -m sgl_jax.bench_serving \
 
 测试条件：256 prompts × 16K input / 1K output, concurrency 64, v7x-8 single-host
 
-| 配置 | dp | moe-backend | chunked-prefill | swa-ratio | mem-frac | Output tok/s | Median ITL | TPOT |
-|------|---|-------------|----------------|-----------|----------|--------------|-----------|------|
-| 推荐配置 (实测) | 2 | epmoe | 4096 | 0.25 | 0.95 | **636** | **32.6 ms** | 65.8 ms |
-| SGLang-JAX 官方 (dp=1) | 1 | epmoe | 4096 | 0.25 | 0.95 | 480 | 37.8 ms | — |
-| SGLang-JAX 官方 (dp=1) | 1 | fused | 4096 | 0.25 | 0.95 | 382 | 42.5 ms | — |
+| moe-backend | dp | Output tok/s | Median ITL | Mean TPOT | Mean TTFT |
+|-------------|---|--------------|-----------|-----------|-----------|
+| **fused** | **2** | **782** | **25.8 ms** | **53.2 ms** | 29.4s |
+| fused | 1 | 721 | 31.0 ms | 59.4 ms | 30.2s |
+| epmoe | 2 | 636 | 32.6 ms | 65.8 ms | 35.7s |
+| epmoe | 1 | 523 | 33.4 ms | 77.2 ms | 46.4s |
 
-> 推荐配置 (dp=2) 比官方 dp=1 基线快约 33%。dp=2 的 attention path 使用 TP=4，MoE 层仍使用 EP=8。
-> 官方 dp=1 数据来源：[sglang-jax PR #931](https://github.com/sgl-project/sglang-jax/pull/931)，commit `b787fdef`。
-
-**完整 Benchmark 输出**（推荐配置实测）：
-```
-Output token throughput:   636.22 tok/s
-Input token throughput:    10179.50 tok/s
-Total token throughput:    10815.72 tok/s
-Request throughput:        0.62 req/s
-Mean TTFT:                 35679 ms
-Median ITL:                32.62 ms
-Mean TPOT:                 65.79 ms
-P99 TPOT:                  100.36 ms
-```
+> **最佳配置: fused + dp=2**，输出吞吐 782 tok/s，Median ITL 25.8 ms。
+>
+> **与 SGLang-JAX 官方 benchmark 对比**（commit `b787fdef`, dp=1）：
+> 官方报告 epmoe 480 tok/s > fused 382 tok/s，结论是"epmoe 单机优于 fused"。
+> 我们在最新代码（dev533）上实测结果相反：**fused 全面优于 epmoe**（+23% dp=1, +23% dp=2）。
+> fused Pallas kernel 可能已在后续版本中得到优化。
+> 官方数据来源：[sglang-jax PR #931](https://github.com/sgl-project/sglang-jax/pull/931)。
 
 **准确率参考** (来源: SGLang-JAX 官方文档)
 
