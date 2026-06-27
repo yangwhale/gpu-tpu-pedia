@@ -179,11 +179,36 @@ gcloud compute instances list \
 
 如果某个 Policy 只有 2~4 台 VM（空位 14~16 个），可以直接复用——你的 VM 会加入同一个物理域。注意同域只能有一个 ComputeDomain（详见 [01-environment-setup](../01-environment-setup/) 0.6 节）。
 
+### Worker 镜像选择
+
+| 镜像 | 项目 | 预装内容 | 适用场景 |
+|------|------|----------|----------|
+| `rocky-linux-9-optimized-gcp-nvidia-580-arm64` | `rocky-linux-accelerator-cloud` | NVIDIA 580 驱动 + RDMA NIC 驱动 | **推荐**：GCP 官方公共镜像，从此开始安装 containerd/kubelet/IMEX |
+| `rocky-linux-9-optimized-gcp-nvidia-latest-arm64` | `rocky-linux-accelerator-cloud` | 最新 NVIDIA 驱动 | 需要最新驱动特性时使用 |
+| `tlinux-server-4-gb200-v4` | 项目内私有 | NVIDIA 驱动 + TLinux 4 定制 OS | 客户定制环境（配合 `tlinux4-k8s134-worker.sh` startup script） |
+| `rocky-linux-9-arm64` | `rocky-linux-cloud` | 纯净 OS，无 NVIDIA 驱动 | 需要完全自主安装驱动时使用（不推荐，GB200 驱动安装复杂） |
+
+> **实测验证**（2026-06-27）：`rocky-linux-9-optimized-gcp-nvidia-580-arm64` 镜像创建 A4X VM 后，4 块 GB200 GPU (189GB HBM each) 和 4 块 RDMA NIC 自动就绪，`nvidia-smi` 正常工作。
+
+### NIC 配置要求
+
+> **重要**：A4X 的 NIC 配置有严格顺序要求——**前 2 个必须是 GVNIC，后 4 个必须是 MRDMA**。不满足此要求 `gcloud` 会直接报错。
+>
+> 错误示例：只给 1 个 GVNIC + 4 个 MRDMA → `On a4x-highgpu-4g, the first NIC (if present) and the second NIC (if present) must be of type GVNIC. These must be followed by 0 or 4 MRDMA NICs.`
+>
+> 因此必须准备 **2 个 GVNIC 网络**（主管理网络 + 辅助网络）和 **1 个 RDMA 网络**（4 个子网）。
+
 ### 批量创建 Worker（每个 Domain 使用对应的 Placement Policy）
 
 **生产环境示例**：25 个 Domain × 18 节点/Domain = 450 Worker VM。
 
 ```bash
+# RDMA 子网名（由 01-environment-setup 创建时的命名决定）
+RDMA_SUB_0="${RDMA_NET}-sub-0"
+RDMA_SUB_1="${RDMA_NET}-sub-1"
+RDMA_SUB_2="${RDMA_NET}-sub-2"
+RDMA_SUB_3="${RDMA_NET}-sub-3"
+
 # 循环创建所有 Domain 的 Worker VM
 for d in $(seq 1 $NUM_DOMAINS); do
   echo "=== Creating workers for Domain ${d} ==="
@@ -191,12 +216,11 @@ for d in $(seq 1 $NUM_DOMAINS); do
     gcloud compute instances create ${WORKER_PREFIX}-d${d}-w${i} \
       --project=$PROJECT --zone=$ZONE \
       --machine-type=$MACHINE_TYPE \
-      --image=$IMAGE --image-project=$IMAGE_PROJECT \
-      --boot-disk-size=1000GB --boot-disk-type=hyperdisk-balanced \
+      --image-family=rocky-linux-9-optimized-gcp-nvidia-580-arm64 \
+      --image-project=rocky-linux-accelerator-cloud \
+      --boot-disk-size=500GB --boot-disk-type=hyperdisk-balanced \
       --scopes=cloud-platform \
       --reservation-affinity=specific --reservation=$RESERVATION \
-      --provisioning-model=RESERVATION_BOUND \
-      --instance-termination-action=STOP \
       --maintenance-policy=TERMINATE \
       --restart-on-failure \
       --resource-policies=${PLACEMENT_PREFIX}-${d} \
@@ -206,12 +230,13 @@ for d in $(seq 1 $NUM_DOMAINS); do
       --network-interface=nic-type=MRDMA,network=$RDMA_NET,subnet=$RDMA_SUB_1,no-address \
       --network-interface=nic-type=MRDMA,network=$RDMA_NET,subnet=$RDMA_SUB_2,no-address \
       --network-interface=nic-type=MRDMA,network=$RDMA_NET,subnet=$RDMA_SUB_3,no-address \
-      --metadata=cp-ip=$CP_IP,join-token=$JOIN_TOKEN,join-hash=$JOIN_HASH \
-      --metadata-from-file=startup-script=scripts/tlinux4-k8s134-worker.sh &
+      --metadata=ssh-keys="$USER:$(cat ~/.ssh/id_ed25519.pub)" &
   done
   wait  # 等待该 Domain 的 Worker 全部创建完成
 done
 ```
+
+> **TLinux 镜像用户**：如果使用 `tlinux-server-4-gb200-v*` 镜像，可以通过 `--metadata-from-file=startup-script=scripts/tlinux4-k8s134-worker.sh` 和 `--metadata=cp-ip=$CP_IP,join-token=$JOIN_TOKEN,join-hash=$JOIN_HASH` 实现自动安装和 join。
 
 **命名规则**：Worker 名称格式为 `${WORKER_PREFIX}-d${DOMAIN}-w${INDEX}`，例如 `gb200-d1-w0` 到 `gb200-d1-w17` 为 Domain 1 的 18 个节点。
 
