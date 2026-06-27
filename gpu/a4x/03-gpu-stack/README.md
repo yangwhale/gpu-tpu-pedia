@@ -7,7 +7,7 @@
 使用 nvidia-device-plugin DaemonSet 将 GPU 作为 `nvidia.com/gpu` 资源暴露给 k8s。
 
 ```bash
-# 安装 Helm
+# 安装 Helm（如尚未安装）
 curl -fsSL https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 
 # 安装 nvidia-device-plugin
@@ -15,38 +15,53 @@ helm repo add nvdp https://nvidia.github.io/k8s-device-plugin
 helm repo update
 helm install nvidia-device-plugin nvdp/nvidia-device-plugin \
   --namespace kube-system \
-  --set-string nodeSelector."nvidia\.com/gpu\.present"=true \
   --wait --timeout 300s
+```
 
+> **Node label 要求**：nvidia-device-plugin DaemonSet 默认使用 nodeAffinity 匹配 `feature.node.kubernetes.io/pci-10de.present=true`（NVIDIA PCI vendor ID）。如果没有安装 Node Feature Discovery (NFD)，需要手动给 GPU Worker 打这个 label：
+> ```bash
+> kubectl label node <WORKER_NAME> feature.node.kubernetes.io/pci-10de.present=true
+> ```
+> 不打此 label，DaemonSet 的 DESIRED=0，GPU 不会被发现。
+
+```bash
 # 验证 GPU 可见
 kubectl get nodes -o custom-columns="NAME:.metadata.name,GPU:.status.allocatable.nvidia\.com/gpu"
 ```
 
-**预期输出**：每个 Worker 节点显示 `4` 个 GPU。
+**预期输出**：每个 Worker 节点显示 `4` 个 GPU。如果显示 `<none>`，检查 device-plugin pod 是否调度到了 Worker（`kubectl get pods -n kube-system -l app.kubernetes.io/name=nvidia-device-plugin`）。
 
 ## 3.2 DRA GPU Driver（含 ComputeDomain 控制器）
 
 **DRA GPU Driver**（v25.12.0+）提供 ComputeDomain CRD 和控制器，用于管理 IMEX daemon 生命周期。安装后会部署 kubelet plugin（DaemonSet）和 controller（Deployment）。
 
 ```bash
-# 安装 DRA GPU Driver via Helm
-helm repo add nvidia-dra https://nvidia.github.io/k8s-dra-driver
-helm repo update
-helm install nvidia-dra-driver-gpu nvidia-dra/nvidia-dra-driver-gpu \
-  --namespace gpu-operator \
-  --create-namespace \
-  --version ${DRA_GPU_DRIVER_VERSION} \
+# 安装 DRA GPU Driver via Helm (OCI registry, 非传统 repo)
+# 注意：版本号为 0.4.0（不是 v25.12.0）
+helm upgrade --install nvidia-dra-driver-gpu \
+  oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
+  --version 0.4.0 \
+  --namespace nvidia-dra-driver-gpu --create-namespace \
+  --set nameOverride=nvidia-dra-driver-gpu \
+  --set nvidiaDriverRoot=/ \
   --set gpuResourcesEnabledOverride=true \
-  --wait --timeout 300s
+  --set controller.affinity=null \
+  --set controller.priorityClassName='' \
+  --set kubeletPlugin.priorityClassName=''
+
+# v0.4.0 CRD 需手动 apply（helm chart 默认不含 ComputeDomain CRD）
+kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/dra-driver-nvidia-gpu/v0.4.0/deployments/helm/dra-driver-nvidia-gpu/crds/resource.nvidia.com_computedomains.yaml
 
 # 验证 DRA GPU Driver 组件
-kubectl -n gpu-operator get pods -o wide
+kubectl -n nvidia-dra-driver-gpu get pods -o wide
 # 应看到: controller Pod (1/1) + 每个 GPU Worker 一个 kubelet-plugin Pod (2/2)
 
 # 验证 ComputeDomain CRD 已注册
 kubectl get crd | grep computedomain
-# 应有: computedomains.resource.nvidia.com
+# 应有: computedomains.resource.nvidia.com + computedomaincliques.resource.nvidia.com
 ```
+
+> **实测验证**（2026-06-27）：DRA GPU Driver 0.4.0 从 OCI registry `registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu` 安装成功。CRD 需单独 apply。
 
 **前提**：Worker 节点的 IMEX channels 必须已创建（`/dev/nvidia-caps-imex-channels/channel0` 存在）。这在 Worker 启动脚本的 Phase 1 中已配置（`NVreg_CreateImexChannel0=1` + `dracut --force` + reboot）。
 
