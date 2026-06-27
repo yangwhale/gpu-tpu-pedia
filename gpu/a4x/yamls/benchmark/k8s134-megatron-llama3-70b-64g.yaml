@@ -1,0 +1,282 @@
+# Megatron-LM training — llama3-70b (64 GPU, 16 node, tp=4 pp=2 dp=8)
+# mbs=2 gbs=1024 seq=4096 bf16 mock-data
+# Auto-gen by scripts/k8s134/gen-megatron-sts.py
+# Self-driven: each pod runs torchrun directly (no sshd/mpirun barrier)
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: meg-llama3-70b-64g-cd
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: meg-llama3-70b-64g-cd-channel
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: rdma-nics-meg-llama3-70b-64g-g1
+spec:
+  spec:
+    devices:
+      requests:
+      - name: rdma-nics
+        exactly:
+          deviceClassName: rdma-devices
+          count: 4
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: meg-llama3-70b-64g-g1
+spec:
+  selector:
+    app: meg-llama3-70b-64g-g1
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: meg-llama3-70b-64g-g1
+spec:
+  serviceName: meg-llama3-70b-64g-g1
+  replicas: 16
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: meg-llama3-70b-64g-g1
+  template:
+    metadata:
+      labels:
+        app: meg-llama3-70b-64g-g1
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        nvidia.com/gpu.family: blackwell
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - { key: app, operator: In, values: [meg-llama3-70b-64g-g1] }
+            topologyKey: nvidia.com/gpu.clique
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - { key: app, operator: In, values: [meg-llama3-70b-64g-g1] }
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - name: shared-memory
+        emptyDir:
+          medium: "Memory"
+          sizeLimit: 250Gi
+      - name: gib
+        emptyDir: {}
+      - name: cache
+        hostPath:
+          path: /var/megatron-cache
+          type: DirectoryOrCreate
+      initContainers:
+      - name: gib-installer
+        image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -e
+          /scripts/container_entry.sh install --install-nccl
+          cp -a /usr/local/gib/. /target/gib/
+          cp -a /usr/lib/aarch64-linux-gnu/libibverbs.so* /target/gib/lib64/
+          cp -a /usr/lib/aarch64-linux-gnu/libmlx5.so* /target/gib/lib64/
+          cp -a /usr/lib/aarch64-linux-gnu/librdmacm.so* /target/gib/lib64/
+          cp -a /usr/lib/aarch64-linux-gnu/libibumad.so* /target/gib/lib64/ 2>/dev/null || true
+          mkdir -p /target/gib/lib64/libibverbs
+          cp -a /usr/lib/aarch64-linux-gnu/libibverbs/libmlx5-rdmav34.so /target/gib/lib64/libibverbs/ 2>/dev/null || true
+          echo "GIB v1.1.2 + rdma-core installed"
+        volumeMounts:
+        - name: gib
+          mountPath: /target/gib
+      containers:
+      - image: us-east1-docker.pkg.dev/gpu-launchpad-playground/forrest-repo-us-east1/megatron-ngc:tev2.15-mgcore_r0.16.0-pt26.05-py3-v2
+        name: pytorch
+        resources:
+          limits:
+            nvidia.com/gpu: 4
+          claims:
+          - name: rdma-nics
+          - name: compute-domain-channel
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - name: shared-memory
+          mountPath: /dev/shm
+        - name: gib
+          mountPath: /usr/local/gib
+        - name: cache
+          mountPath: /var/megatron-cache
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -eu
+          echo "=== [meg-llama3-70b-64g] pod $(hostname) starting at $(date) ==="
+
+          # Wait for GIB libs to be installed by init container
+          ls /usr/local/gib/lib64/libnccl-net.so > /dev/null 2>&1 || { echo "GIB libs missing"; exit 1; }
+
+          # NCCL env (gIB + MNNVL)
+          export LD_LIBRARY_PATH=/usr/local/gib/lib64:/usr/local/nvidia/lib64:${LD_LIBRARY_PATH:-}
+          source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+          export NCCL_NET=gIB
+          export NCCL_MNNVL_ENABLE=2
+          export NCCL_CUMEM_ENABLE=1
+          export NCCL_IB_GID_INDEX=3
+          export NCCL_IB_QPS_PER_CONNECTION=4
+          export NCCL_IB_TC=52
+          export NCCL_IB_FIFO_TC=84
+          export NCCL_IB_ADAPTIVE_ROUTING=1
+          export NCCL_PXN_C2C=1
+          export NCCL_NVLS_ENABLE=0
+          export CUDA_DEVICE_MAX_CONNECTIONS=1
+          # multi-node megatron rank-0 stdout buffered → iter log invisible until exit. force flush.
+          export PYTHONUNBUFFERED=1
+
+          ORDINAL=$(hostname | sed 's/.*-//')
+          MASTER_ADDR="meg-llama3-70b-64g-g1-0.meg-llama3-70b-64g-g1"
+          MASTER_PORT=6000
+          NNODES=16
+
+          echo "=== ORDINAL=$ORDINAL NNODES=$NNODES MASTER=$MASTER_ADDR ==="
+          echo "IMEX: $(ls /dev/nvidia-caps-imex-channels/ 2>&1)"
+          echo "GPUs: $(nvidia-smi -L 2>&1)"
+          echo "Hostname: $(hostname); Pod IP: $(hostname -i)"
+
+          mkdir -p /var/megatron-cache /tmp/torch-extensions
+          export TORCH_EXTENSIONS_DIR=/tmp/torch-extensions
+
+          # Fix DeepEP NCCL ABI mismatch:
+          # GIB-injected libnccl.so.2.30.4 != pip nvidia-nccl-cu13 file content (filecmp strict).
+          # megatron-core auto-imports deep_ep → hard AssertionError. We don't use deepep for llama.
+          # Two-pronged: LD_PRELOAD pip libnccl (so DeepEP filecmp passes if it does try import), AND
+          # remove deep_ep so megatron skips it cleanly.
+          export LD_PRELOAD=/usr/local/lib/python3.12/dist-packages/nvidia/nccl/lib/libnccl.so.2:${LD_PRELOAD:-}
+          rm -rf /opt/DeepEP /usr/local/lib/python3.12/dist-packages/deep_ep* 2>/dev/null || true
+
+          cd /opt/Megatron-LM
+          # Patch pip constraint (NGC base is fine but ensure)
+          [ -f /etc/pip/constraint.txt ] && sed -i 's/setuptools==78\.1\.0/setuptools>=78.1.0/' /etc/pip/constraint.txt 2>/dev/null || true
+
+          # Wait for master DNS resolvable (rank > 0 only)
+          if [ "$ORDINAL" != "0" ]; then
+            for i in $(seq 1 60); do
+              if getent hosts $MASTER_ADDR > /dev/null 2>&1; then
+                echo "master $MASTER_ADDR resolved"; break
+              fi
+              echo "waiting master DNS ($i/60)"; sleep 5
+            done
+          fi
+
+          echo "=== Starting torchrun ==="
+          exec torchrun \
+            --nproc_per_node=4 \
+            --nnodes=$NNODES \
+            --node_rank=$ORDINAL \
+            --master_addr=$MASTER_ADDR \
+            --master_port=$MASTER_PORT \
+            /opt/Megatron-LM/pretrain_gpt.py \
+            --use-mcore-models \
+            --transformer-impl \
+            transformer_engine \
+            --num-layers \
+            80 \
+            --hidden-size \
+            8192 \
+            --ffn-hidden-size \
+            28672 \
+            --num-attention-heads \
+            64 \
+            --seq-length \
+            4096 \
+            --max-position-embeddings \
+            4096 \
+            --position-embedding-type \
+            rope \
+            --rotary-base \
+            500000 \
+            --rotary-percent \
+            1.0 \
+            --normalization \
+            RMSNorm \
+            --swiglu \
+            --disable-bias-linear \
+            --untie-embeddings-and-output-weights \
+            --attention-backend \
+            fused \
+            --attention-dropout \
+            0.0 \
+            --hidden-dropout \
+            0.0 \
+            --init-method-std \
+            0.02 \
+            --no-masked-softmax-fusion \
+            --group-query-attention \
+            --num-query-groups \
+            8 \
+            --kv-channels \
+            128 \
+            --bf16 \
+            --tokenizer-type \
+            NullTokenizer \
+            --vocab-size \
+            128256 \
+            --mock-data \
+            --micro-batch-size \
+            2 \
+            --global-batch-size \
+            1024 \
+            --train-iters \
+            50 \
+            --lr \
+            0.00015 \
+            --min-lr \
+            0.00001 \
+            --lr-decay-style \
+            cosine \
+            --lr-warmup-iters \
+            2 \
+            --clip-grad \
+            1.0 \
+            --weight-decay \
+            0.1 \
+            --adam-beta1 \
+            0.9 \
+            --adam-beta2 \
+            0.95 \
+            --log-interval \
+            1 \
+            --save-interval \
+            100000 \
+            --eval-interval \
+            1000 \
+            --eval-iters \
+            0 \
+            --no-load-optim \
+            --no-load-rng \
+            --tensor-model-parallel-size \
+            4 \
+            --pipeline-model-parallel-size \
+            2 \
+            --sequence-parallel \
+            --cross-entropy-loss-fusion \
+            --manual-gc \
+            --use-distributed-optimizer \
+            --overlap-grad-reduce \
+            --overlap-param-gather
+
+      resourceClaims:
+      - name: rdma-nics
+        resourceClaimTemplateName: rdma-nics-meg-llama3-70b-64g-g1
+      - name: compute-domain-channel
+        resourceClaimTemplateName: meg-llama3-70b-64g-cd-channel

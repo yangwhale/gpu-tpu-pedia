@@ -1,0 +1,191 @@
+# DRA ComputeDomain label reconciler — cluster-resident operator-style Deployment
+#
+# Workaround for NVIDIA DRA driver v0.4.0 controller race:
+#   "Operation cannot be fulfilled on computedomains... the object has been modified (attempt 1)"
+#   → controller silent drops the work item, doesn't add CD label to client pod's node.
+#
+# This Deployment runs a small reconcile loop:
+#   1. Every INTERVAL (default 15s), list all active ComputeDomains
+#   2. For each CD, find all `compute-domain-channel` ResourceClaims allocated to it
+#   3. Find owning Pod's nodeName
+#   4. If node lacks `resource.nvidia.com/computeDomain=<CD-UID>` label, patch it
+#
+# Image: alpine init downloads kubectl, python:3-slim main runs reconciler script from ConfigMap.
+# No custom image build required.
+#
+# Deploy: kubectl apply -f dra-cd-label-reconciler-deployment.yaml
+# Inspect: kubectl logs -n nvidia-dra-driver-gpu deploy/dra-cd-label-reconciler -f
+# Undeploy: kubectl delete -f dra-cd-label-reconciler-deployment.yaml
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: dra-cd-label-reconciler
+  namespace: nvidia-dra-driver-gpu
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: dra-cd-label-reconciler
+rules:
+- apiGroups: ["resource.nvidia.com"]
+  resources: ["computedomains"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["resource.k8s.io"]
+  resources: ["resourceclaims"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["nodes"]
+  verbs: ["get", "list", "watch", "patch", "update"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: dra-cd-label-reconciler
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: dra-cd-label-reconciler
+subjects:
+- kind: ServiceAccount
+  name: dra-cd-label-reconciler
+  namespace: nvidia-dra-driver-gpu
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: dra-cd-label-reconciler-script
+  namespace: nvidia-dra-driver-gpu
+data:
+  reconciler.sh: |
+    #!/bin/bash
+    set -uo pipefail
+    INTERVAL=${INTERVAL:-15}
+
+    log() { echo "[$(date '+%H:%M:%S')] $*"; }
+
+    log "DRA CD label reconciler starting, INTERVAL=${INTERVAL}s"
+
+    reconcile_once() {
+      local change_count=0
+      local CD_LINES
+      # NB: must use full name `computedomain` — server has no short-name `cd` registered, silent fail otherwise.
+      CD_LINES=$(kubectl get computedomain -A -o jsonpath='{range .items[*]}{.metadata.namespace}/{.metadata.name}|{.metadata.uid}{"\n"}{end}' 2>&1 | grep -v "No resources" | grep -v "^error" | grep -v "^$")
+      if [ -z "$CD_LINES" ]; then return 0; fi
+
+      while IFS='|' read -r CD_FULL CD_UID; do
+        [ -z "$CD_FULL" ] || [ -z "$CD_UID" ] && continue
+        local NS=${CD_FULL%/*}
+        local CD_NAME=${CD_FULL#*/}
+
+        local POD_REFS
+        POD_REFS=$(kubectl get resourceclaim -n "$NS" -o json 2>&1 | python3 -c "
+    import json, sys
+    try:
+        d = json.load(sys.stdin)
+        pods = set()
+        for rc in d.get('items', []):
+            name = rc['metadata']['name']
+            if 'compute-domain-channel' not in name: continue
+            alloc = rc.get('status', {}).get('allocation')
+            if not alloc: continue
+            cfgs = alloc.get('devices', {}).get('config', []) or []
+            for cfg in cfgs:
+                if cfg.get('opaque', {}).get('parameters', {}).get('domainID') == '$CD_UID':
+                    for owner in (rc.get('metadata', {}).get('ownerReferences') or []):
+                        if owner.get('kind') == 'Pod':
+                            pods.add(owner['name'])
+                    break
+        for p in sorted(pods): print(p)
+    except: pass
+    " 2>&1)
+        [ -z "$POD_REFS" ] && continue
+
+        while read -r pod; do
+          [ -z "$pod" ] && continue
+          local NODE
+          NODE=$(kubectl get pod -n "$NS" "$pod" -o jsonpath='{.spec.nodeName}' 2>&1 | tr -d '\n')
+          [ -z "$NODE" ] && continue
+          local CURR
+          CURR=$(kubectl get node "$NODE" -o jsonpath='{.metadata.labels.resource\.nvidia\.com/computeDomain}' 2>&1 | tr -d '\n')
+          if [ "$CURR" = "$CD_UID" ]; then continue; fi
+          log "  + label $NODE → CD $NS/$CD_NAME (was='$CURR', pod=$pod)"
+          kubectl label node "$NODE" "resource.nvidia.com/computeDomain=$CD_UID" --overwrite 2>&1 | tail -1
+          change_count=$((change_count + 1))
+        done <<< "$POD_REFS"
+      done <<< "$CD_LINES"
+
+      [ "$change_count" -gt 0 ] && log "reconcile pass: $change_count label change(s)"
+      return 0
+    }
+
+    while true; do
+      reconcile_once
+      sleep "$INTERVAL"
+    done
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: dra-cd-label-reconciler
+  namespace: nvidia-dra-driver-gpu
+  labels:
+    app: dra-cd-label-reconciler
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: dra-cd-label-reconciler
+  strategy:
+    type: Recreate  # singleton; no concurrent reconcilers
+  template:
+    metadata:
+      labels:
+        app: dra-cd-label-reconciler
+    spec:
+      serviceAccountName: dra-cd-label-reconciler
+      tolerations: [{operator: "Exists"}]  # 允许 schedule 到 master (避免被 worker stuck 阻塞)
+      nodeSelector:
+        node-role.kubernetes.io/control-plane: ""  # 跑在 master 上, 不抢 worker GPU
+      volumes:
+      - name: kubectl-bin
+        emptyDir: {}
+      - name: script
+        configMap:
+          name: dra-cd-label-reconciler-script
+          defaultMode: 0755
+      initContainers:
+      - name: kubectl-downloader
+        image: alpine:3.19
+        command: ["sh", "-c"]
+        args:
+        - |
+          set -e
+          ARCH=$(uname -m)
+          [ "$ARCH" = "aarch64" ] && ARCH=arm64
+          [ "$ARCH" = "x86_64" ] && ARCH=amd64
+          wget -qO /target/kubectl "https://dl.k8s.io/release/v1.34.1/bin/linux/${ARCH}/kubectl"
+          chmod +x /target/kubectl
+          echo "kubectl downloaded for ARCH=$ARCH"
+        volumeMounts:
+        - {name: kubectl-bin, mountPath: /target}
+      containers:
+      - name: reconciler
+        image: python:3-slim
+        env:
+        - name: INTERVAL
+          value: "15"
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          cp /bin-extra/kubectl /usr/local/bin/kubectl
+          exec bash /scripts/reconciler.sh
+        volumeMounts:
+        - {name: kubectl-bin, mountPath: /bin-extra, readOnly: true}
+        - {name: script, mountPath: /scripts, readOnly: true}
+        resources:
+          requests: {cpu: "50m", memory: "64Mi"}
+          limits: {cpu: "500m", memory: "256Mi"}

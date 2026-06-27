@@ -1,0 +1,226 @@
+# DeepEP Test — 18 node × 1 ComputeDomain (StatefulSet, master 自驱动 sshd)
+# Auto-gen by gen-deepep-sts.py. Master = g1-0 ordinal 0.
+# Tests: test_internode, test_ep
+# Image: us-east1-docker.pkg.dev/gpu-launchpad-playground/forrest-repo-us-east1/megatron-ngc:tev2.15-mgcore_r0.16.0-pt26.05-py3-v2 (DeepEP 2.0.0 + nvshmem 3.7 + nccl 2.30.4 baked, no pip install)
+
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata: { name: deepep-18n-cd-g1 }
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate: { name: deepep-18n-cd-g1-channel }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata: { name: rdma-nics-deepep-18n-g1 }
+spec:
+  spec:
+    devices:
+      requests:
+      - { name: rdma-nics, exactly: { deviceClassName: rdma-devices, count: 4 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: deepep-18n-g1 }
+spec:
+  selector: { app: deepep-18n-g1 }
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: deepep-18n-g1 }
+spec:
+  serviceName: deepep-18n-g1
+  replicas: 18
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: deepep-18n-g1 }
+  template:
+    metadata:
+      labels: { app: deepep-18n-g1, app-wide: deepep-18n }
+    spec:
+      tolerations: [{ operator: "Exists" }]
+      nodeSelector: { feature.node.kubernetes.io/pci-10de.present: "true" }
+      imagePullSecrets: [{ name: ar-secret }]
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app, operator: In, values: [deepep-18n-g1] }] }
+            topologyKey: nvidia.com/gpu.clique
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app-wide, operator: In, values: [deepep-18n] }] }
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - { name: shared-memory, emptyDir: { medium: "Memory", sizeLimit: 250Gi } }
+      - { name: gib, emptyDir: {} }
+      - { name: ssh-keys, emptyDir: {} }
+      initContainers:
+      - name: gib-installer
+        image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -e
+          /scripts/container_entry.sh install --install-nccl
+          cp -a /usr/local/gib/. /target/gib/
+          # 删 GIB 自带 v58 libibverbs/libmlx5/librdmacm/libibumad (跟 NGC v59 ABI 冲突, memory: gib_libibverbs_abi_mismatch.md)
+          mkdir -p /target/gib/lib64/_disabled
+          cd /target/gib/lib64 && mv libibverbs.so* librdmacm.so* libmlx5.so* libibumad.so* _disabled/ 2>/dev/null || true
+          # cp GIB pre-baked SSH keys (shared across all pods for cross-pod ssh barrier + mpirun)
+          cp -a /root/.ssh/. /target/ssh/
+        volumeMounts:
+        - { name: gib, mountPath: /target/gib }
+        - { name: ssh-keys, mountPath: /target/ssh }
+      containers:
+      - image: us-east1-docker.pkg.dev/gpu-launchpad-playground/forrest-repo-us-east1/megatron-ngc:tev2.15-mgcore_r0.16.0-pt26.05-py3-v2
+        name: deepep
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits: { nvidia.com/gpu: 4 }
+          claims:
+          - { name: compute-domain-channel }
+        securityContext: { privileged: true }
+        volumeMounts:
+        - { name: shared-memory, mountPath: /dev/shm }
+        - { name: gib, mountPath: /usr/local/gib }
+        - { name: ssh-keys, mountPath: /root/.ssh }
+        env:
+        - { name: LD_PRELOAD, value: "/usr/local/lib/python3.12/dist-packages/nvidia/nccl/lib/libnccl.so.2" }
+        - { name: LD_LIBRARY_PATH, value: "/usr/local/lib/python3.12/dist-packages/nvidia/nvshmem/lib:/usr/local/gib/lib64:/usr/local/nvidia/lib64" }
+        - { name: EP_NCCL_ROOT_DIR, value: "/usr/local/lib/python3.12/dist-packages/nvidia/nccl" }
+        - { name: EP_JIT_CACHE_DIR, value: "/tmp/deepep-jit-cache" }
+        - { name: NCCL_NET, value: "gIB" }
+        - { name: NCCL_PXN_C2C, value: "1" }
+        - { name: NCCL_IB_ADAPTIVE_ROUTING, value: "1" }
+        - { name: NCCL_IB_QPS_PER_CONNECTION, value: "4" }
+        - { name: NCCL_IB_TC, value: "52" }
+        - { name: NCCL_IB_FIFO_TC, value: "84" }
+        - { name: NCCL_NVLS_ENABLE, value: "0" }
+        - { name: NCCL_MNNVL_ENABLE, value: "0" }
+        - { name: NCCL_CUMEM_ENABLE, value: "1" }
+        - { name: NCCL_IB_GID_INDEX, value: "3" }
+        - { name: TRITON_PTXAS_PATH, value: "/usr/local/cuda/bin/ptxas" }
+        - { name: NVSHMEM_BOOTSTRAP, value: "MPI" }
+        - { name: NVSHMEM_BOOTSTRAP_MPI_PLUGIN, value: "nvshmem_bootstrap_torch.so" }
+        - { name: POD_NAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -eu
+          source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+          mkdir -p /run/sshd
+          # SSH keys 已 baked from GIB image via init container, fix perms + config
+          chmod 700 /root/.ssh
+          chmod 600 /root/.ssh/* 2>/dev/null || true
+          chmod 644 /root/.ssh/*.pub 2>/dev/null || true
+          echo "StrictHostKeyChecking no" > /root/.ssh/config
+          echo "UserKnownHostsFile /dev/null" >> /root/.ssh/config
+          sed -i 's/^#\?Port .*/Port 222/' /etc/ssh/sshd_config
+          sed -i 's/^#\?PermitRootLogin .*/PermitRootLogin yes/' /etc/ssh/sshd_config
+          sed -i 's/^#\?PubkeyAuthentication .*/PubkeyAuthentication yes/' /etc/ssh/sshd_config
+          /usr/sbin/sshd
+
+          # hostNetwork=true 时 hostname 是 host's, 必须用 POD_NAME (downward API) 判 ordinal
+          ORDINAL=$(echo ${POD_NAME:-$(hostname)} | sed 's/.*-//')
+          ALL_HOSTS="deepep-18n-g1-0.deepep-18n-g1 deepep-18n-g1-1.deepep-18n-g1 deepep-18n-g1-2.deepep-18n-g1 deepep-18n-g1-3.deepep-18n-g1 deepep-18n-g1-4.deepep-18n-g1 deepep-18n-g1-5.deepep-18n-g1 deepep-18n-g1-6.deepep-18n-g1 deepep-18n-g1-7.deepep-18n-g1 deepep-18n-g1-8.deepep-18n-g1 deepep-18n-g1-9.deepep-18n-g1 deepep-18n-g1-10.deepep-18n-g1 deepep-18n-g1-11.deepep-18n-g1 deepep-18n-g1-12.deepep-18n-g1 deepep-18n-g1-13.deepep-18n-g1 deepep-18n-g1-14.deepep-18n-g1 deepep-18n-g1-15.deepep-18n-g1 deepep-18n-g1-16.deepep-18n-g1 deepep-18n-g1-17.deepep-18n-g1"
+          ALL_HOSTS_ARRAY="$ALL_HOSTS"
+          SELF="${POD_NAME:-$(hostname)}.deepep-18n-g1"
+
+          if [ "$ORDINAL" = "0" ] && [ "deepep-18n-g1" = "deepep-18n-g1" ]; then
+            echo "=== [deepep-18n-master] ${SELF} IMEX=$(ls /dev/nvidia-caps-imex-channels/ 2>&1) ==="
+            # barrier: wait all peers sshd ready
+            for peer in ${ALL_HOSTS}; do
+              [ "$peer" = "$SELF" ] && continue
+              for i in $(seq 1 60); do
+                if ssh -p 222 -o ConnectTimeout=3 -o BatchMode=yes -o StrictHostKeyChecking=no $peer echo ok 2>/dev/null; then
+                  echo "Peer $peer sshd ok"; break
+                fi
+                sleep 5
+              done
+            done
+            echo "[deepep-18n-master] all peers sshd ready, sleep 5 buffer"
+            sleep 5
+            set +e  # 允许任一 test fail 后继续跑剩余 test (而非整个 script exit)
+
+            echo "=== [deepep-18n] test_internode on 18 pods x 4 GPU ==="
+            # launch test on all peers in parallel (1 process per pod, internal --num-processes 4)
+            for peer in ${ALL_HOSTS}; do
+              RANK_I=$(echo $ALL_HOSTS_ARRAY | tr ' ' '\n' | grep -n "^${peer}$" | cut -d: -f1)
+              RANK_I=$((RANK_I - 1))
+              if [ "$peer" = "$SELF" ]; then continue; fi
+              ssh -p 222 -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no $peer "
+                export MASTER_ADDR=deepep-18n-g1-0.deepep-18n-g1
+                export MASTER_PORT=8411
+                export WORLD_SIZE=18
+                export RANK=$RANK_I
+                export LOCAL_RANK=0
+                cd /opt/DeepEP
+                taskset -c 16-139 python3 tests/legacy/test_internode.py --num-processes 4 > /tmp/test_internode-rank-$RANK_I.log 2>&1 &
+                echo \$!
+              " &
+            done
+            # master = rank 0
+            export MASTER_ADDR=deepep-18n-g1-0.deepep-18n-g1
+            export MASTER_PORT=8411
+            export WORLD_SIZE=18
+            export RANK=0
+            export LOCAL_RANK=0
+            cd /opt/DeepEP && taskset -c 16-139 python3 tests/legacy/test_internode.py --num-processes 4 2>&1 | tee /tmp/test_internode-rank-0.log
+            wait
+            echo "=== [deepep-18n] test_internode done, collecting peer logs ==="
+            for peer in ${ALL_HOSTS}; do
+              if [ "$peer" = "$SELF" ]; then continue; fi
+              RANK_I=$(echo $ALL_HOSTS_ARRAY | tr ' ' '\n' | grep -n "^${peer}$" | cut -d: -f1)
+              RANK_I=$((RANK_I - 1))
+              echo "--- rank $RANK_I @ $peer ---"
+              ssh -p 222 -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no $peer "cat /tmp/test_internode-rank-$RANK_I.log 2>&1"
+            done
+
+            echo "=== [deepep-18n] test_ep on 18 pods x 4 GPU ==="
+            # launch test on all peers in parallel (1 process per pod, internal --num-processes 4)
+            for peer in ${ALL_HOSTS}; do
+              RANK_I=$(echo $ALL_HOSTS_ARRAY | tr ' ' '\n' | grep -n "^${peer}$" | cut -d: -f1)
+              RANK_I=$((RANK_I - 1))
+              if [ "$peer" = "$SELF" ]; then continue; fi
+              ssh -p 222 -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no $peer "
+                export MASTER_ADDR=deepep-18n-g1-0.deepep-18n-g1
+                export MASTER_PORT=8411
+                export WORLD_SIZE=18
+                export RANK=$RANK_I
+                export LOCAL_RANK=0
+                cd /opt/DeepEP
+                taskset -c 16-139 python3 tests/elastic/test_ep.py --num-processes 4 --num-tokens 1024 --hidden 7168 --num-topk 6 --num-experts 256 --num-sms 64 > /tmp/test_ep-rank-$RANK_I.log 2>&1 &
+                echo \$!
+              " &
+            done
+            # master = rank 0
+            export MASTER_ADDR=deepep-18n-g1-0.deepep-18n-g1
+            export MASTER_PORT=8411
+            export WORLD_SIZE=18
+            export RANK=0
+            export LOCAL_RANK=0
+            cd /opt/DeepEP && taskset -c 16-139 python3 tests/elastic/test_ep.py --num-processes 4 --num-tokens 1024 --hidden 7168 --num-topk 6 --num-experts 256 --num-sms 64 2>&1 | tee /tmp/test_ep-rank-0.log
+            wait
+            echo "=== [deepep-18n] test_ep done, collecting peer logs ==="
+            for peer in ${ALL_HOSTS}; do
+              if [ "$peer" = "$SELF" ]; then continue; fi
+              RANK_I=$(echo $ALL_HOSTS_ARRAY | tr ' ' '\n' | grep -n "^${peer}$" | cut -d: -f1)
+              RANK_I=$((RANK_I - 1))
+              echo "--- rank $RANK_I @ $peer ---"
+              ssh -p 222 -o ConnectTimeout=5 -o BatchMode=yes -o StrictHostKeyChecking=no $peer "cat /tmp/test_ep-rank-$RANK_I.log 2>&1"
+            done
+
+            echo "=== [deepep-18n] DONE ==="
+            sleep 7200
+          else
+            echo "=== [${SELF}] worker sshd:222 ready (ordinal=$ORDINAL, group=deepep-18n-g1) ==="
+            sleep 7200
+          fi
+      resourceClaims:
+      - { name: compute-domain-channel, resourceClaimTemplateName: deepep-18n-cd-g1-channel }

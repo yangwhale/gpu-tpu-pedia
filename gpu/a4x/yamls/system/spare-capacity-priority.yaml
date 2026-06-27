@@ -1,0 +1,17 @@
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: gpu-training
+value: 1000
+preemptionPolicy: PreemptLowerPriority
+globalDefault: false
+description: "High priority for GPU training workloads. Preempts placeholder pods."
+---
+apiVersion: scheduling.k8s.io/v1
+kind: PriorityClass
+metadata:
+  name: gpu-placeholder
+value: -1
+preemptionPolicy: Never
+globalDefault: false
+description: "Low priority placeholder to hold spare GPU capacity. Will be preempted by training jobs."

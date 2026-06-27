@@ -1,0 +1,239 @@
+# NCCL Test — 36 node × 2 ComputeDomain (StatefulSet version, ~10x less rows)
+# mode: alltoall — alltoall single-pass vanilla (Phase 13 100% PASS 1M-16G)
+# 1 master (g1 ordinal 0) + 35 worker (sshd-only). Auto-gen by gen-nccl-multinode-sts.py.
+# 2 个 ComputeDomain, g1/g2 各 18 pod 跨 clique
+
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata: { name: nccl-36n-alltoall-cd-g1 }
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate: { name: nccl-36n-alltoall-cd-g1-channel }
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata: { name: nccl-36n-alltoall-cd-g2 }
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate: { name: nccl-36n-alltoall-cd-g2-channel }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata: { name: rdma-nics-nccl-36n-alltoall-g1 }
+spec:
+  spec:
+    devices:
+      requests:
+      - { name: rdma-nics, exactly: { deviceClassName: rdma-devices, count: 4 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: nccl-36n-alltoall-g1 }
+spec:
+  selector: { app: nccl-36n-alltoall-g1 }
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: nccl-36n-alltoall-g1 }
+spec:
+  serviceName: nccl-36n-alltoall-g1
+  replicas: 18
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: nccl-36n-alltoall-g1 }
+  template:
+    metadata:
+      labels: { app: nccl-36n-alltoall-g1, app-wide: nccl-36n-alltoall }
+    spec:
+      tolerations: [{ operator: "Exists" }]
+      nodeSelector: { feature.node.kubernetes.io/pci-10de.present: "true" }
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app, operator: In, values: [nccl-36n-alltoall-g1] }] }
+            topologyKey: nvidia.com/gpu.clique
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app-wide, operator: In, values: [nccl-36n-alltoall] }] }
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - { name: shared-memory, emptyDir: { medium: "Memory", sizeLimit: 250Gi } }
+      containers:
+      - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+        name: nccl-test
+        resources:
+          limits: { nvidia.com/gpu: 4 }
+          claims:
+          - { name: rdma-nics }
+          - { name: compute-domain-channel }
+        securityContext: { privileged: true }
+        volumeMounts: [{ name: shared-memory, mountPath: /dev/shm }]
+        env:
+        - { name: LD_LIBRARY_PATH, value: "/usr/local/gib/lib64:/usr/local/nvidia/lib64" }
+        - { name: NCCL_MNNVL_ENABLE, value: "2" }      # force MNNVL across cliques (=1 may fallback)
+        - { name: NCCL_CUMEM_ENABLE, value: "1" }
+        - { name: NCCL_IB_GID_INDEX, value: "3" }
+        # alltoall race mitigation (Phase 15+):
+        - { name: NCCL_MAX_NCHANNELS, value: "4" }      # 限全局 channel 减 concurrent race
+        - { name: NCCL_NCHANNELS_PER_PEER, value: "1" } # 减 per-pair channel
+        - { name: NCCL_BUFFSIZE, value: "16777216" }    # 16MB, fewer chunks per message
+        - { name: NCCL_RUNTIME_CONNECT, value: "0" }    # eager pair init, 避 lazy first-access race
+        - { name: NCCL_LAUNCH_MODE, value: "GROUP" }    # group kernel launch + sync
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -eu
+          source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+          mkdir -p /run/sshd
+          sed -i 's/^#\?Port .*/Port 222/' /etc/ssh/sshd_config
+          /usr/sbin/sshd
+
+          ORDINAL=$(hostname | sed 's/.*-//')
+          ALL_HOSTS="nccl-36n-alltoall-g1-0.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-1.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-2.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-3.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-4.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-5.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-6.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-7.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-8.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-9.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-10.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-11.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-12.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-13.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-14.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-15.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-16.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-17.nccl-36n-alltoall-g1 nccl-36n-alltoall-g2-0.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-1.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-2.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-3.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-4.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-5.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-6.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-7.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-8.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-9.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-10.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-11.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-12.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-13.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-14.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-15.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-16.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-17.nccl-36n-alltoall-g2"
+          SELF="$(hostname).nccl-36n-alltoall-g1"
+
+          if [ "$ORDINAL" = "0" ] && [ "nccl-36n-alltoall-g1" = "nccl-36n-alltoall-g1" ]; then
+            echo "=== [nccl-36n-alltoall-master] ${SELF} IMEX=$(ls /dev/nvidia-caps-imex-channels/ 2>&1) ==="
+            # 36-pod barrier (skip self)
+            for peer in ${ALL_HOSTS}; do
+              [ "$peer" = "$SELF" ] && continue
+              for i in $(seq 1 60); do
+                if ssh -p 222 -o ConnectTimeout=3 -o BatchMode=yes -o StrictHostKeyChecking=no $peer echo ok 2>/dev/null; then echo "Peer $peer ssh ok"; break; fi
+                sleep 5
+              done
+            done
+            echo "[nccl-36n-alltoall-master] all peers sshd ready, sleep 5 buffer"
+            sleep 5
+
+            for COLL in alltoall; do
+              echo ""
+              echo "=== [nccl-36n-alltoall] ${COLL} 144 GPU (1M..16G) ==="
+              /usr/local/gib/scripts/run_nccl_tests.sh \
+                -t ${COLL} -b 1M -e 16G -f 2 -p 222 -g 4 \
+                ${ALL_HOSTS} 2>&1
+            done
+
+            echo "=== [nccl-36n-alltoall] DONE ==="
+            sleep 3600
+          else
+            echo "=== [${SELF}] worker sshd:222 ready (ordinal=$ORDINAL, group=nccl-36n-alltoall-g1) ==="
+            sleep 3600
+          fi
+      resourceClaims:
+      - { name: rdma-nics, resourceClaimTemplateName: rdma-nics-nccl-36n-alltoall-g1 }
+      - { name: compute-domain-channel, resourceClaimTemplateName: nccl-36n-alltoall-cd-g1-channel }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata: { name: rdma-nics-nccl-36n-alltoall-g2 }
+spec:
+  spec:
+    devices:
+      requests:
+      - { name: rdma-nics, exactly: { deviceClassName: rdma-devices, count: 4 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: nccl-36n-alltoall-g2 }
+spec:
+  selector: { app: nccl-36n-alltoall-g2 }
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: nccl-36n-alltoall-g2 }
+spec:
+  serviceName: nccl-36n-alltoall-g2
+  replicas: 18
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: nccl-36n-alltoall-g2 }
+  template:
+    metadata:
+      labels: { app: nccl-36n-alltoall-g2, app-wide: nccl-36n-alltoall }
+    spec:
+      tolerations: [{ operator: "Exists" }]
+      nodeSelector: { feature.node.kubernetes.io/pci-10de.present: "true" }
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app, operator: In, values: [nccl-36n-alltoall-g2] }] }
+            topologyKey: nvidia.com/gpu.clique
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app-wide, operator: In, values: [nccl-36n-alltoall] }] }
+            topologyKey: kubernetes.io/hostname
+          - labelSelector: { matchExpressions: [{ key: app, operator: In, values: [nccl-36n-alltoall-g1] }] }
+            topologyKey: nvidia.com/gpu.clique
+      volumes:
+      - { name: shared-memory, emptyDir: { medium: "Memory", sizeLimit: 250Gi } }
+      containers:
+      - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+        name: nccl-test
+        resources:
+          limits: { nvidia.com/gpu: 4 }
+          claims:
+          - { name: rdma-nics }
+          - { name: compute-domain-channel }
+        securityContext: { privileged: true }
+        volumeMounts: [{ name: shared-memory, mountPath: /dev/shm }]
+        env:
+        - { name: LD_LIBRARY_PATH, value: "/usr/local/gib/lib64:/usr/local/nvidia/lib64" }
+        - { name: NCCL_MNNVL_ENABLE, value: "2" }      # force MNNVL across cliques (=1 may fallback)
+        - { name: NCCL_CUMEM_ENABLE, value: "1" }
+        - { name: NCCL_IB_GID_INDEX, value: "3" }
+        # alltoall race mitigation (Phase 15+):
+        - { name: NCCL_MAX_NCHANNELS, value: "4" }      # 限全局 channel 减 concurrent race
+        - { name: NCCL_NCHANNELS_PER_PEER, value: "1" } # 减 per-pair channel
+        - { name: NCCL_BUFFSIZE, value: "16777216" }    # 16MB, fewer chunks per message
+        - { name: NCCL_RUNTIME_CONNECT, value: "0" }    # eager pair init, 避 lazy first-access race
+        - { name: NCCL_LAUNCH_MODE, value: "GROUP" }    # group kernel launch + sync
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -eu
+          source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+          mkdir -p /run/sshd
+          sed -i 's/^#\?Port .*/Port 222/' /etc/ssh/sshd_config
+          /usr/sbin/sshd
+
+          ORDINAL=$(hostname | sed 's/.*-//')
+          ALL_HOSTS="nccl-36n-alltoall-g1-0.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-1.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-2.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-3.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-4.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-5.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-6.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-7.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-8.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-9.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-10.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-11.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-12.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-13.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-14.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-15.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-16.nccl-36n-alltoall-g1 nccl-36n-alltoall-g1-17.nccl-36n-alltoall-g1 nccl-36n-alltoall-g2-0.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-1.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-2.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-3.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-4.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-5.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-6.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-7.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-8.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-9.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-10.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-11.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-12.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-13.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-14.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-15.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-16.nccl-36n-alltoall-g2 nccl-36n-alltoall-g2-17.nccl-36n-alltoall-g2"
+          SELF="$(hostname).nccl-36n-alltoall-g2"
+
+          if [ "$ORDINAL" = "0" ] && [ "nccl-36n-alltoall-g2" = "nccl-36n-alltoall-g1" ]; then
+            echo "=== [nccl-36n-alltoall-master] ${SELF} IMEX=$(ls /dev/nvidia-caps-imex-channels/ 2>&1) ==="
+            # 36-pod barrier (skip self)
+            for peer in ${ALL_HOSTS}; do
+              [ "$peer" = "$SELF" ] && continue
+              for i in $(seq 1 60); do
+                if ssh -p 222 -o ConnectTimeout=3 -o BatchMode=yes -o StrictHostKeyChecking=no $peer echo ok 2>/dev/null; then echo "Peer $peer ssh ok"; break; fi
+                sleep 5
+              done
+            done
+            echo "[nccl-36n-alltoall-master] all peers sshd ready, sleep 5 buffer"
+            sleep 5
+
+            for COLL in alltoall; do
+              echo ""
+              echo "=== [nccl-36n-alltoall] ${COLL} 144 GPU (1M..16G) ==="
+              /usr/local/gib/scripts/run_nccl_tests.sh \
+                -t ${COLL} -b 1M -e 16G -f 2 -p 222 -g 4 \
+                ${ALL_HOSTS} 2>&1
+            done
+
+            echo "=== [nccl-36n-alltoall] DONE ==="
+            sleep 3600
+          else
+            echo "=== [${SELF}] worker sshd:222 ready (ordinal=$ORDINAL, group=nccl-36n-alltoall-g2) ==="
+            sleep 3600
+          fi
+      resourceClaims:
+      - { name: rdma-nics, resourceClaimTemplateName: rdma-nics-nccl-36n-alltoall-g2 }
+      - { name: compute-domain-channel, resourceClaimTemplateName: nccl-36n-alltoall-cd-g2-channel }

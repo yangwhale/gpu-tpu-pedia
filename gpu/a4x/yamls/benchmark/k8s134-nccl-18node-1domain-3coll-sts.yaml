@@ -1,0 +1,115 @@
+# NCCL Test — 18 node × 1 ComputeDomain (StatefulSet version, ~10x less rows)
+# mode: 3coll — 3 collective (no alltoall, avoids Phase 13 chain pollution)
+# 1 master (g1 ordinal 0) + 17 worker (sshd-only). Auto-gen by gen-nccl-multinode-sts.py.
+# 1 个 ComputeDomain, 全 18 pod 同 clique (MNNVL)
+
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata: { name: nccl-18n-3coll-cd-g1 }
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate: { name: nccl-18n-3coll-cd-g1-channel }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata: { name: rdma-nics-nccl-18n-3coll-g1 }
+spec:
+  spec:
+    devices:
+      requests:
+      - { name: rdma-nics, exactly: { deviceClassName: rdma-devices, count: 4 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: nccl-18n-3coll-g1 }
+spec:
+  selector: { app: nccl-18n-3coll-g1 }
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: nccl-18n-3coll-g1 }
+spec:
+  serviceName: nccl-18n-3coll-g1
+  replicas: 18
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: nccl-18n-3coll-g1 }
+  template:
+    metadata:
+      labels: { app: nccl-18n-3coll-g1, app-wide: nccl-18n-3coll }
+    spec:
+      tolerations: [{ operator: "Exists" }]
+      nodeSelector: { feature.node.kubernetes.io/pci-10de.present: "true" }
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app, operator: In, values: [nccl-18n-3coll-g1] }] }
+            topologyKey: nvidia.com/gpu.clique
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app-wide, operator: In, values: [nccl-18n-3coll] }] }
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - { name: shared-memory, emptyDir: { medium: "Memory", sizeLimit: 250Gi } }
+      containers:
+      - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+        name: nccl-test
+        resources:
+          limits: { nvidia.com/gpu: 4 }
+          claims:
+          - { name: rdma-nics }
+          - { name: compute-domain-channel }
+        securityContext: { privileged: true }
+        volumeMounts: [{ name: shared-memory, mountPath: /dev/shm }]
+        env:
+        - { name: LD_LIBRARY_PATH, value: "/usr/local/gib/lib64:/usr/local/nvidia/lib64" }
+        - { name: NCCL_MNNVL_ENABLE, value: "2" }
+        - { name: NCCL_CUMEM_ENABLE, value: "1" }
+        - { name: NCCL_IB_GID_INDEX, value: "3" }
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -eu
+          source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+          mkdir -p /run/sshd
+          sed -i 's/^#\?Port .*/Port 222/' /etc/ssh/sshd_config
+          /usr/sbin/sshd
+
+          ORDINAL=$(hostname | sed 's/.*-//')
+          ALL_HOSTS="nccl-18n-3coll-g1-0.nccl-18n-3coll-g1 nccl-18n-3coll-g1-1.nccl-18n-3coll-g1 nccl-18n-3coll-g1-2.nccl-18n-3coll-g1 nccl-18n-3coll-g1-3.nccl-18n-3coll-g1 nccl-18n-3coll-g1-4.nccl-18n-3coll-g1 nccl-18n-3coll-g1-5.nccl-18n-3coll-g1 nccl-18n-3coll-g1-6.nccl-18n-3coll-g1 nccl-18n-3coll-g1-7.nccl-18n-3coll-g1 nccl-18n-3coll-g1-8.nccl-18n-3coll-g1 nccl-18n-3coll-g1-9.nccl-18n-3coll-g1 nccl-18n-3coll-g1-10.nccl-18n-3coll-g1 nccl-18n-3coll-g1-11.nccl-18n-3coll-g1 nccl-18n-3coll-g1-12.nccl-18n-3coll-g1 nccl-18n-3coll-g1-13.nccl-18n-3coll-g1 nccl-18n-3coll-g1-14.nccl-18n-3coll-g1 nccl-18n-3coll-g1-15.nccl-18n-3coll-g1 nccl-18n-3coll-g1-16.nccl-18n-3coll-g1 nccl-18n-3coll-g1-17.nccl-18n-3coll-g1"
+          SELF="$(hostname).nccl-18n-3coll-g1"
+
+          if [ "$ORDINAL" = "0" ] && [ "nccl-18n-3coll-g1" = "nccl-18n-3coll-g1" ]; then
+            echo "=== [nccl-18n-3coll-master] ${SELF} IMEX=$(ls /dev/nvidia-caps-imex-channels/ 2>&1) ==="
+            # 18-pod barrier (skip self)
+            for peer in ${ALL_HOSTS}; do
+              [ "$peer" = "$SELF" ] && continue
+              for i in $(seq 1 60); do
+                if ssh -p 222 -o ConnectTimeout=3 -o BatchMode=yes -o StrictHostKeyChecking=no $peer echo ok 2>/dev/null; then echo "Peer $peer ssh ok"; break; fi
+                sleep 5
+              done
+            done
+            echo "[nccl-18n-3coll-master] all peers sshd ready, sleep 5 buffer"
+            sleep 5
+
+            for COLL in all_reduce all_gather reduce_scatter; do
+              echo ""
+              echo "=== [nccl-18n-3coll] ${COLL} 72 GPU (1M..16G) ==="
+              /usr/local/gib/scripts/run_nccl_tests.sh \
+                -t ${COLL} -b 1M -e 16G -f 2 -p 222 -g 4 \
+                ${ALL_HOSTS} 2>&1
+            done
+
+            echo "=== [nccl-18n-3coll] DONE ==="
+            sleep 3600
+          else
+            echo "=== [${SELF}] worker sshd:222 ready (ordinal=$ORDINAL, group=nccl-18n-3coll-g1) ==="
+            sleep 3600
+          fi
+      resourceClaims:
+      - { name: rdma-nics, resourceClaimTemplateName: rdma-nics-nccl-18n-3coll-g1 }
+      - { name: compute-domain-channel, resourceClaimTemplateName: nccl-18n-3coll-cd-g1-channel }

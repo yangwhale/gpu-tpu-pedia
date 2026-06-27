@@ -1,0 +1,108 @@
+# =============================================================================
+# Dockerfile.ngc-megatron-k8s134
+#   GB200 (Grace + Blackwell) Megatron-LM training image, NGC pytorch:26.05-py3 base
+#
+# NGC base 预装: PyTorch 2.12, CUDA 13.2, TransformerEngine 2.15, flash-attn 2.7.4,
+#                nvidia-modelopt 0.43, apex, cuDNN frontend, cutlass-dsl
+#
+# Layer 加: nvshmem + grouped_gemm + DeepGEMM + DeepEP (A4X 4-GPU patches)
+#         + Megatron-LM core_r0.16.0 + Megatron-Bridge 0.4.2 + 训练辅助 pkgs
+#
+# Build (节点本地 native arm64):
+#   bash build-megatron-image.sh
+#
+# Target image:
+#   us-east1-docker.pkg.dev/gpu-launchpad-playground/forrest-repo-us-east1/megatron-ngc:tev2.15-mgcore_r0.16.0-v1
+# =============================================================================
+ARG MEGATRON_TAG=core_r0.16.0
+ARG BRIDGE_VER=0.4.2
+ARG DEEPGEMM_VER=v2.1.1.post3
+
+FROM nvcr.io/nvidia/pytorch:26.05-py3
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# ----------------------------------------------------------------------
+# Stage 1: 训练辅助 python 包
+# ----------------------------------------------------------------------
+RUN pip install --no-cache-dir \
+        einops sentencepiece datasets accelerate safetensors \
+        huggingface_hub tensorboard
+
+# ----------------------------------------------------------------------
+# Stage 2: nvshmem + grouped_gemm + DeepGEMM
+# ----------------------------------------------------------------------
+RUN pip install --no-cache-dir nvidia-nvshmem-cu13
+
+RUN export CUDA_HOME=/usr/local/cuda MAX_JOBS=96 TORCH_CUDA_ARCH_LIST="10.0" && \
+    pip install --no-cache-dir grouped_gemm || \
+    pip install --no-cache-dir "git+https://github.com/fanshiqing/grouped_gemm@main"
+
+RUN export CUDA_HOME=/usr/local/cuda MAX_JOBS=96 TORCH_CUDA_ARCH_LIST="10.0" && \
+    pip install --no-cache-dir "git+https://github.com/deepseek-ai/DeepGEMM.git@${DEEPGEMM_VER}" || \
+    echo "WARN: DeepGEMM build failed"
+
+# ----------------------------------------------------------------------
+# Stage 3: DeepEP (HEAD master, csrc/legacy/ + csrc/elastic/ 重构后)
+# Dave 方法: setup.py build_ext --inplace 编译 _C.so 到 DeepEP/deep_ep/ 下,
+# 然后 pip install -e . 让 Python 找到. 比 pip install . 可靠 (后者 PEP517 isolated build 偶尔不 compile C 扩展)
+# NCCL_DIR 显式指 NGC 自带的 NCCL (在 PyTorch bundle 下), 不用 pip install nvidia-nccl-cu13 增加 layer.
+# ----------------------------------------------------------------------
+# nvidia-nccl-cu13 pin 到跟 NGC system NCCL 同版本 (2.30.4-1+cuda13.2)
+# DeepEP __init__.py check_nccl_so() filecmp 比较 loaded vs linked NCCL, 版本不一致 hard assert
+# NGC PyTorch runtime 加载 system /usr/lib/aarch64-linux-gnu/libnccl.so.2.30.4,
+# DeepEP build 时 link pip 的 /usr/local/lib/python3.12/dist-packages/nvidia/nccl/lib/libnccl.so.2
+# 这两个必须同版本 (filecmp shallow=False 比较内容)
+RUN pip install --no-cache-dir nvidia-nccl-cu13==2.30.4
+
+RUN cd /opt && git clone --depth 1 https://github.com/deepseek-ai/DeepEP.git && cd DeepEP && \
+    NVSHMEM_DIR=$(python3 -c "import nvidia, os; print(os.path.join(nvidia.__path__[0], 'nvshmem'))") && \
+    echo "NVSHMEM_DIR=$NVSHMEM_DIR" && \
+    export CUDA_HOME=/usr/local/cuda MAX_JOBS=96 TORCH_CUDA_ARCH_LIST="10.0" && \
+    NVSHMEM_DIR=$NVSHMEM_DIR python setup.py build_ext --inplace 2>&1 | tail -20 && \
+    pip install --no-cache-dir --no-build-isolation -e . && \
+    python -c "import deep_ep; print('DEEPEP_IMPORT_OK')"
+
+# ----------------------------------------------------------------------
+# Stage 4: Megatron-LM core_r0.16.0
+# ----------------------------------------------------------------------
+ARG MEGATRON_TAG
+RUN git clone --branch ${MEGATRON_TAG} --depth 1 \
+        https://github.com/NVIDIA/Megatron-LM.git /opt/Megatron-LM && \
+    cd /opt/Megatron-LM && \
+    pip install --no-cache-dir -e .
+
+# ----------------------------------------------------------------------
+# Stage 5: Megatron-Bridge 0.4.2 (生产 recipes + HF<->Megatron 转换)
+# ----------------------------------------------------------------------
+ARG BRIDGE_VER
+RUN pip install --no-cache-dir --no-deps megatron-bridge==${BRIDGE_VER} && \
+    pip install --no-cache-dir \
+        "transformers>=5.0.0,<=5.3.0" \
+        "peft>=0.18.1" \
+        "hydra-core>=1.3,<=1.3.2" \
+        "omegaconf>=2.3.0" \
+        "wandb>=0.25.0" \
+        "diffusers>=0.36.0" || true
+
+RUN pip install --no-cache-dir megatron-energon
+
+# Megatron-Bridge recipes: skip diffusion submodule (Qwen3 / Megatron training 不需要)
+RUN python -c "import megatron.bridge, os; p=os.path.join(os.path.dirname(megatron.bridge.__file__), 'recipes', '__init__.py'); import sys; sys.exit(0 if not os.path.exists(p) else 0)" && \
+    find / -path '*/megatron/bridge/recipes/__init__.py' -exec sed -i '/from megatron.bridge.diffusion/d' {} \; 2>/dev/null || true
+
+# ----------------------------------------------------------------------
+# Stage 6: SSH (NCCL test pod 需要 sshd 跨 pod mpirun) + gIB placeholder (init container 注入)
+# ----------------------------------------------------------------------
+RUN apt-get update && apt-get install -y --no-install-recommends openssh-server && \
+    rm -rf /var/lib/apt/lists/* && \
+    mkdir -p /root/.ssh /usr/local/gib/lib64 /usr/local/gib/scripts && \
+    ssh-keygen -A && \
+    sed -i 's/^#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

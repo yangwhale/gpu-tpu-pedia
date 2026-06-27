@@ -1,0 +1,132 @@
+# DeepEP Test — 16 node × 1 ComputeDomain (StatefulSet, master 自驱动 sshd)
+# Auto-gen by gen-deepep-sts.py. Master = g1-0 ordinal 0.
+# Tests: test_internode, test_ep
+# Image: us-east1-docker.pkg.dev/gpu-launchpad-playground/forrest-repo-us-east1/megatron-ngc:tev2.15-mgcore_r0.16.0-pt26.05-py3-v2 (DeepEP 2.0.0 + nvshmem 3.7 + nccl 2.30.4 baked, no pip install)
+
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata: { name: deepep-16n-cd-g1 }
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate: { name: deepep-16n-cd-g1-channel }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata: { name: rdma-nics-deepep-16n-g1 }
+spec:
+  spec:
+    devices:
+      requests:
+      - { name: rdma-nics, exactly: { deviceClassName: rdma-devices, count: 4 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: deepep-16n-g1 }
+spec:
+  selector: { app: deepep-16n-g1 }
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: deepep-16n-g1 }
+spec:
+  serviceName: deepep-16n-g1
+  replicas: 16
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: deepep-16n-g1 }
+  template:
+    metadata:
+      labels: { app: deepep-16n-g1, app-wide: deepep-16n }
+    spec:
+      tolerations: [{ operator: "Exists" }]
+      nodeSelector: { feature.node.kubernetes.io/pci-10de.present: "true" }
+      imagePullSecrets: [{ name: ar-secret }]
+      hostNetwork: true
+      dnsPolicy: ClusterFirstWithHostNet
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app, operator: In, values: [deepep-16n-g1] }] }
+            topologyKey: nvidia.com/gpu.clique
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app-wide, operator: In, values: [deepep-16n] }] }
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - { name: shared-memory, emptyDir: { medium: "Memory", sizeLimit: 250Gi } }
+      - { name: gib, emptyDir: {} }
+      - { name: ssh-keys, emptyDir: {} }
+      initContainers:
+      - name: gib-installer
+        image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+        command: ["/bin/sh", "-c"]
+        args:
+        - |
+          set -e
+          /scripts/container_entry.sh install --install-nccl
+          cp -a /usr/local/gib/. /target/gib/
+          # 删 GIB 自带 v58 libibverbs/libmlx5/librdmacm/libibumad (跟 NGC v59 ABI 冲突, memory: gib_libibverbs_abi_mismatch.md)
+          mkdir -p /target/gib/lib64/_disabled
+          cd /target/gib/lib64 && mv libibverbs.so* librdmacm.so* libmlx5.so* libibumad.so* _disabled/ 2>/dev/null || true
+          # cp GIB pre-baked SSH keys (shared across all pods for cross-pod ssh barrier + mpirun)
+          cp -a /root/.ssh/. /target/ssh/
+        volumeMounts:
+        - { name: gib, mountPath: /target/gib }
+        - { name: ssh-keys, mountPath: /target/ssh }
+      containers:
+      - image: us-east1-docker.pkg.dev/gpu-launchpad-playground/forrest-repo-us-east1/megatron-ngc:tev2.15-mgcore_r0.16.0-pt26.05-py3-v2
+        name: deepep
+        imagePullPolicy: IfNotPresent
+        resources:
+          limits: { nvidia.com/gpu: 4 }
+          claims:
+          - { name: compute-domain-channel }
+        securityContext: { privileged: true }
+        volumeMounts:
+        - { name: shared-memory, mountPath: /dev/shm }
+        - { name: gib, mountPath: /usr/local/gib }
+        - { name: ssh-keys, mountPath: /root/.ssh }
+        env:
+        - { name: LD_PRELOAD, value: "/usr/local/lib/python3.12/dist-packages/nvidia/nccl/lib/libnccl.so.2" }
+        - { name: LD_LIBRARY_PATH, value: "/usr/local/lib/python3.12/dist-packages/nvidia/nvshmem/lib:/usr/local/gib/lib64:/usr/local/nvidia/lib64" }
+        - { name: EP_NCCL_ROOT_DIR, value: "/usr/local/lib/python3.12/dist-packages/nvidia/nccl" }
+        - { name: EP_JIT_CACHE_DIR, value: "/tmp/deepep-jit-cache" }
+        - { name: NCCL_NET, value: "gIB" }
+        - { name: NCCL_PXN_C2C, value: "1" }
+        - { name: NCCL_IB_ADAPTIVE_ROUTING, value: "1" }
+        - { name: NCCL_IB_QPS_PER_CONNECTION, value: "4" }
+        - { name: NCCL_IB_TC, value: "52" }
+        - { name: NCCL_IB_FIFO_TC, value: "84" }
+        - { name: NCCL_NVLS_ENABLE, value: "0" }
+        - { name: NCCL_MNNVL_ENABLE, value: "2" }
+        - { name: NCCL_IB_MERGE_NICS, value: "0" }
+        - { name: NCCL_CUMEM_ENABLE, value: "1" }
+        - { name: NCCL_IB_GID_INDEX, value: "3" }
+        - { name: EP_BUFFER_DEBUG, value: "1" }
+        - { name: NCCL_DEBUG, value: "INFO" }
+        - { name: NCCL_DEBUG_SUBSYS, value: "INIT,NET,ENV" }
+        - { name: TRITON_PTXAS_PATH, value: "/usr/local/cuda/bin/ptxas" }
+        - { name: NVSHMEM_BOOTSTRAP, value: "MPI" }
+        - { name: NVSHMEM_BOOTSTRAP_MPI_PLUGIN, value: "nvshmem_bootstrap_torch.so" }
+        - { name: POD_NAME, valueFrom: { fieldRef: { fieldPath: metadata.name } } }
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -eu
+          source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+          mkdir -p /run/sshd
+          chmod 700 /root/.ssh
+          chmod 600 /root/.ssh/* 2>/dev/null || true
+          chmod 644 /root/.ssh/*.pub 2>/dev/null || true
+          /usr/sbin/sshd
+          ORDINAL=$(echo ${POD_NAME:-$(hostname)} | sed 's/.*-//')
+          SELF="${POD_NAME:-$(hostname)}.deepep-16n-g1"
+          echo "=== [deepep-16n] ${SELF} ready (ordinal=$ORDINAL, group=deepep-16n-g1, dave-style) IMEX=$(ls /dev/nvidia-caps-imex-channels/ 2>&1) ==="
+          echo "Launch test via: bash scripts/k8s134/run-deepep.sh 16 1"
+          sleep infinity
+      resourceClaims:
+      - { name: compute-domain-channel, resourceClaimTemplateName: deepep-16n-cd-g1-channel }

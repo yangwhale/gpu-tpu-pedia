@@ -1,0 +1,182 @@
+# =============================================================================
+# Dockerfile.tencentos4-megatron-k8s134
+#   GB200 (Grace + Blackwell) Megatron-LM training image for k8s 1.34
+#
+# Based on customer/Dockerfile.tencentos4-megatron, upgraded:
+#   - TransformerEngine 2.14.1 → 2.15
+#   - Megatron-LM core_v0.17.1 → core_r0.16.0 (user spec)
+#   - base: tencentos4:4.6-v20260520 (sync with customer/RUNBOOK)
+#
+# Target image:
+#   us-east1-docker.pkg.dev/gpu-launchpad-playground/forrest-repo-us-east1/megatron-tencentos4:tev2.15-mgcore_r0.16.0-v1
+#
+# Build (cloudtop x86 + buildx, native arm64 emulation):
+#   bash build-megatron-image.sh
+#
+# Or native arm64 build on GB200 worker:
+#   buildah bud --platform linux/arm64 -t megatron-tencentos4:v1 .
+# =============================================================================
+
+# forrest host driver: TLinux 4 image (tlinux-server-4-gb200-v2) driver 版本待第 1 台 worker 起来后实测
+# customer 测过 R580.126 max CUDA 13.0; R590+ 支持 13.1+
+# 用 13-0 兼容性最广;若 driver 升到 R590+ 改 13-1 性能更优
+ARG CUDA_VER=13-0
+ARG TE_VER=2.15.0
+ARG MEGATRON_TAG=core_r0.16.0
+ARG BRIDGE_VER=0.4.2
+
+FROM docker.io/tencentos/tencentos4:4.6-v20260520
+
+ENV LANG=C.UTF-8 \
+    LC_ALL=C.UTF-8 \
+    DEBIAN_FRONTEND=noninteractive \
+    NVIDIA_VISIBLE_DEVICES=all \
+    NVIDIA_DRIVER_CAPABILITIES=compute,utility
+
+# ----------------------------------------------------------------------
+# Stage 1: 系统包 (dnf retries + 关键工具)
+# ----------------------------------------------------------------------
+RUN echo "retries=20"      >> /etc/dnf/dnf.conf && \
+    echo "timeout=300"     >> /etc/dnf/dnf.conf && \
+    echo "minrate=1"       >> /etc/dnf/dnf.conf && \
+    echo "fastestmirror=0" >> /etc/dnf/dnf.conf && \
+    echo "deltarpm=0"      >> /etc/dnf/dnf.conf
+
+RUN dnf install -y dnf-plugins-core 2>/dev/null || dnf install -y 'dnf-command(config-manager)'
+RUN dnf install -y python3.12 python3.12-devel wget curl which git
+RUN for i in 1 2 3 4 5; do dnf install -y gcc gcc-c++ make cmake && break || sleep 30; done
+RUN for i in 1 2 3; do dnf install -y openssh-server iproute rdma-core libibverbs libibverbs-utils \
+    numactl-libs hwloc-libs && break || sleep 30; done
+RUN dnf clean all
+
+# Python 3.12 默认
+RUN ln -sf /usr/bin/python3.12 /usr/local/bin/python && \
+    ln -sf /usr/bin/python3.12 /usr/local/bin/python3 && \
+    python3.12 -m ensurepip --upgrade && \
+    python3.12 -m pip install --upgrade pip setuptools wheel && \
+    printf '#!/bin/sh\nexec /usr/bin/python3.12 -m pip "$@"\n' > /usr/local/bin/pip && \
+    chmod +x /usr/local/bin/pip && \
+    ln -sf /usr/local/bin/pip /usr/local/bin/pip3 && \
+    python --version && pip --version
+
+# ----------------------------------------------------------------------
+# Stage 2: CUDA toolkit + cuDNN + NCCL (RHEL9 aarch64 repo; TencentOS 4 ABI 兼容)
+# ----------------------------------------------------------------------
+ARG CUDA_VER
+RUN dnf config-manager --add-repo \
+    https://developer.download.nvidia.com/compute/cuda/repos/rhel9/sbsa/cuda-rhel9.repo && \
+    dnf install -y \
+        cuda-toolkit-${CUDA_VER} \
+        libcudnn9-cuda-13 libcudnn9-devel-cuda-13 \
+        libnccl libnccl-devel \
+    && dnf clean all
+
+ENV CUDA_HOME=/usr/local/cuda \
+    PATH=/usr/local/cuda/bin:$PATH \
+    LD_LIBRARY_PATH=/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64
+
+# ----------------------------------------------------------------------
+# Stage 3: PyTorch 2.12 (cu130 wheel) + 通用 ML 包
+#   PyTorch 升级到 2.12 (customer stage 7.5 R590 ABI fix)
+#   未来 user 切 NGC pytorch:26.05 base 时调这里
+# ----------------------------------------------------------------------
+RUN pip install --upgrade pip setuptools wheel packaging ninja && \
+    pip install --no-cache-dir \
+        torch==2.12.0 torchvision torchaudio \
+        --index-url https://download.pytorch.org/whl/cu130
+
+RUN pip install --no-cache-dir \
+        numpy scipy pyyaml regex tqdm einops \
+        transformers sentencepiece huggingface_hub \
+        datasets accelerate safetensors
+
+# ----------------------------------------------------------------------
+# Stage 4: TransformerEngine 2.15 (Blackwell MXFP8 + NVFP4 ready)
+# ----------------------------------------------------------------------
+ARG TE_VER
+RUN export CUDA_HOME=/usr/local/cuda && \
+    export MAX_JOBS=96 && \
+    pip install --no-cache-dir transformer_engine[pytorch]==${TE_VER}
+
+# ----------------------------------------------------------------------
+# Stage 5: flash-attn / grouped_gemm / NVSHMEM / DeepGEMM / DeepEP
+# ----------------------------------------------------------------------
+RUN export CUDA_HOME=/usr/local/cuda MAX_JOBS=96 TORCH_CUDA_ARCH_LIST="10.0" && \
+    pip install --no-cache-dir flash-attn==2.7.3 --no-build-isolation || \
+    pip install --no-cache-dir flash-attn
+
+RUN export CUDA_HOME=/usr/local/cuda MAX_JOBS=96 TORCH_CUDA_ARCH_LIST="10.0" && \
+    pip install --no-cache-dir grouped_gemm || \
+    pip install --no-cache-dir "git+https://github.com/fanshiqing/grouped_gemm@main"
+
+RUN pip install --no-cache-dir nvidia-nvshmem-cu13
+
+RUN export CUDA_HOME=/usr/local/cuda MAX_JOBS=96 TORCH_CUDA_ARCH_LIST="10.0" && \
+    pip install --no-cache-dir "git+https://github.com/deepseek-ai/DeepGEMM.git@v2.1.1.post3" || \
+    echo "WARN: DeepGEMM build failed"
+
+# DeepEP with A4X 4-GPU patches (FINDING-053: NUM_MAX_NVL_PEERS 8→4)
+RUN cd /opt && git clone --depth 1 https://github.com/deepseek-ai/DeepEP.git && cd DeepEP && \
+    sed -i 's/NUM_MAX_NVL_PEERS == 8/NUM_MAX_NVL_PEERS == 4/g' csrc/deep_ep.hpp csrc/kernels/internode.cu && \
+    sed -i 's/must be 8/must be 4/' csrc/deep_ep.hpp && \
+    sed -i 's/num_ranks > NUM_MAX_NVL_PEERS/num_ranks >= NUM_MAX_NVL_PEERS/g' csrc/deep_ep.cpp csrc/kernels/layout.cu && \
+    sed -i 's/NUM_MAX_NVL_PEERS \* sizeof(bool) == sizeof(uint64_t)/NUM_MAX_NVL_PEERS * sizeof(bool) == sizeof(uint32_t)/g' csrc/kernels/internode.cu && \
+    sed -i 's/uint64_t\(.*is_token_in_rank_uint64\)/uint32_t\1/g' csrc/kernels/internode.cu && \
+    sed -i 's/reinterpret_cast<const uint64_t\*>(is_token_in_rank/reinterpret_cast<const uint32_t*>(is_token_in_rank/g' csrc/kernels/internode.cu && \
+    NVSHMEM_DIR=$(python3 -c "import nvidia.nvshmem; import os; print(os.path.dirname(nvidia.nvshmem.__file__))") && \
+    export CUDA_HOME=/usr/local/cuda MAX_JOBS=96 TORCH_CUDA_ARCH_LIST="10.0" && \
+    NVSHMEM_DIR=$NVSHMEM_DIR pip install --no-cache-dir --no-build-isolation . || \
+    echo "WARN: DeepEP build failed"
+
+# ----------------------------------------------------------------------
+# Stage 6: Megatron-LM core_r0.16.0 (user spec)
+# ----------------------------------------------------------------------
+ARG MEGATRON_TAG
+RUN git clone --branch ${MEGATRON_TAG} --depth 1 \
+    https://github.com/NVIDIA/Megatron-LM.git /opt/Megatron-LM && \
+    cd /opt/Megatron-LM && \
+    pip install --no-cache-dir -e .
+
+# ----------------------------------------------------------------------
+# Stage 7: Megatron-Bridge 0.4.2 (生产 recipes + HF<->Megatron 转换)
+# ----------------------------------------------------------------------
+ARG BRIDGE_VER
+RUN pip install --no-cache-dir --no-deps megatron-bridge==${BRIDGE_VER} && \
+    pip install --no-cache-dir \
+        "transformers>=5.0.0,<=5.3.0" \
+        "peft>=0.18.1" \
+        "hydra-core>=1.3,<=1.3.2" \
+        "omegaconf>=2.3.0" \
+        "tensorboard>=2.19.0" \
+        "wandb>=0.25.0" \
+        "diffusers>=0.36.0" || true
+
+# ----------------------------------------------------------------------
+# Stage 7.5: Driver compat (cublas force 13.5+ for cublasLtGroupedMatrixLayoutInit_internal)
+# ----------------------------------------------------------------------
+RUN pip install --no-cache-dir nvidia-modelopt megatron-energon datasets
+
+# Python 3.12.12+ datasets workaround (InvalidVersion bug)
+RUN sed -i 's|version.parse(platform.python_version())|version.parse(platform.python_version().rstrip("+"))|' \
+        /usr/lib/python3.12/site-packages/datasets/config.py 2>/dev/null || true
+
+# Megatron-Bridge recipes: skip diffusion submodule (Qwen3 / Megatron training 不需要)
+RUN sed -i '/from megatron.bridge.diffusion/d' \
+        /usr/lib/python3.12/site-packages/megatron/bridge/recipes/__init__.py 2>/dev/null || true
+
+# Lock cublas to 13.5.1.27 (含 cublasLtGroupedMatrixLayoutInit_internal symbol)
+RUN pip install --force-reinstall --no-cache-dir --no-deps nvidia-cublas==13.5.1.27
+
+# Runtime LD_LIBRARY_PATH (cu13 PyPI cublas 13.5 优先于 system cuda-13-0)
+ENV LD_LIBRARY_PATH=/usr/lib/python3.12/site-packages/nvidia/cu13/lib:/usr/local/cuda/lib64:/usr/local/cuda/extras/CUPTI/lib64
+
+# ----------------------------------------------------------------------
+# Stage 8: SSH + gIB lib placeholder (实际 init container 注入)
+# ----------------------------------------------------------------------
+RUN mkdir -p /root/.ssh /usr/local/gib/lib64 /usr/local/gib/scripts && \
+    ssh-keygen -A && \
+    sed -i 's/^#PermitRootLogin.*/PermitRootLogin prohibit-password/' /etc/ssh/sshd_config && \
+    sed -i 's/^#Port 22/Port 222/' /etc/ssh/sshd_config
+
+WORKDIR /workspace
+CMD ["/bin/bash"]

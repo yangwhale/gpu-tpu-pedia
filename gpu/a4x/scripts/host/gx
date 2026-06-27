@@ -1,0 +1,53 @@
+#!/bin/bash
+# gx — 最小版 SSH wrapper, 让 deliverables 内 troubleshooting/benchmark script
+# 里的 `gx k8n <cmd>` 调用可移植 (脱敏 + 不依赖 ~/bin/gx 内部 forrest hostname map)
+#
+# 仅支持 `k8n` 别名 (= k8s control-plane / master)。
+# 通过 env var 配置:
+#   CP_NAME  (必填) — control-plane hostname (e.g. forrest-k8s-cp-tlinux, master.example.com)
+#   CP_USER  (默认 root) — SSH user
+#
+# 用法:
+#   gx k8n "kubectl get nodes"
+#   gx k8n "bash some/remote/script.sh"
+#
+# 部署使用:
+#   export PATH="$PWD/scripts/host:$PATH"   # 在 deliverables 根目录 export
+#   export CP_NAME=<your-master-host>
+#   export CP_USER=<your-master-user>
+#   bash scripts/troubleshooting/check-k8s-dra-health.sh
+#
+# 注: 在已有完整 ~/bin/gx (forrest 内部版本) 的 jump host 上, 把这里写在 PATH 前面
+#     即可让内部脚本 fallback 到这个 sanitize 版本; 否则用全局 gx。
+set -euo pipefail
+
+ALIAS="${1:-}"
+[ -z "$ALIAS" ] && { echo "Usage: gx k8n [-t <sec>] '<command>'" >&2; exit 2; }
+shift
+
+# Parse optional flags. forrest 完整版 gx 用 -t <sec> 设 ssh ConnectTimeout;mini 版兼容同形式。
+TIMEOUT=30
+while [ $# -gt 0 ]; do
+  case "$1" in
+    -t) shift; TIMEOUT="${1:?-t requires <sec> arg}"; shift ;;
+    --) shift; break ;;
+    -*) echo "gx: unknown flag '$1' (mini 版只支持 -t <sec>)" >&2; exit 2 ;;
+    *) break ;;
+  esac
+done
+
+case "$ALIAS" in
+  k8n|k8)
+    : "${CP_NAME:?env CP_NAME (control-plane hostname) required, e.g. export CP_NAME=master.example.com}"
+    exec ssh \
+      -o ConnectTimeout="$TIMEOUT" \
+      -o StrictHostKeyChecking=no \
+      -o LogLevel=ERROR \
+      -o ServerAliveInterval=10 -o ServerAliveCountMax=3 \
+      "${CP_USER:-root}@${CP_NAME}" "$@"
+    ;;
+  *)
+    echo "gx (deliverables mini version): only 'k8n' alias supported. Got: $ALIAS" >&2
+    echo "For full alias map, install ~/bin/gx (internal forrest version)." >&2
+    exit 2 ;;
+esac

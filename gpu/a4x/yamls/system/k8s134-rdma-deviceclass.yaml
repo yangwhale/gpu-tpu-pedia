@@ -1,0 +1,12 @@
+# RDMA DeviceClass for DRANET — k8s 1.34 (DRA GA)
+# Selects all RDMA-capable devices discovered by DRANET driver
+apiVersion: resource.k8s.io/v1
+kind: DeviceClass
+metadata:
+  name: rdma-devices
+spec:
+  selectors:
+  - cel:
+      expression: |
+        device.driver == "dra.net" &&
+        has(device.attributes["dra.net"].rdma) && device.attributes["dra.net"].rdma == true
