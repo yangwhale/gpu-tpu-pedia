@@ -4,44 +4,149 @@
 
 ## 2.1 Control Plane 节点
 
-CP 节点使用 x86_64 轻量 VM（无需 GPU），仅连接主 GVNIC 网络。
+CP 节点使用 x86_64 VM（无需 GPU），仅连接主 GVNIC 管理网络。
+
+> **机型建议**：`n4-standard-8`（8 核 32GB）或更高。`e2-standard-4` 可以跑但偏弱——etcd 和 API server 在大集群下对 CPU 和 IOPS 有要求。磁盘建议 200GB+。
+
+> **网络复用**：如果已有管理网络（如 `chrisya-gvnic-net-0`），可以直接复用，无需新建 VPC。只需确保目标 region 有子网。复用已有网络的好处是 SSH 直通——同 VPC 内任意 VM 可通过内网 IP 直接 SSH。
 
 ```bash
+# 方式 A：使用已有网络（推荐，SSH 直通）
 gcloud compute instances create $CP_NAME \
   --project=$PROJECT --zone=$ZONE \
-  --machine-type=e2-standard-4 \
+  --machine-type=n4-standard-8 \
   --image-family=rocky-linux-9 --image-project=rocky-linux-cloud \
-  --boot-disk-size=100GB \
+  --boot-disk-size=200GB \
+  --network-interface=network=$GVNIC_NET,subnet=$GVNIC_SUB \
+  --scopes=cloud-platform
+
+# 方式 B：新建独立网络（需要 IAP tunnel SSH）
+gcloud compute instances create $CP_NAME \
+  --project=$PROJECT --zone=$ZONE \
+  --machine-type=n4-standard-8 \
+  --image-family=rocky-linux-9 --image-project=rocky-linux-cloud \
+  --boot-disk-size=200GB \
   --network-interface=network=$GVNIC_NET,subnet=$GVNIC_SUB \
   --metadata-from-file=startup-script=scripts/kubeadm-control-plane-k8s134.sh \
   --scopes=cloud-platform
 ```
 
-### CP 启动脚本要点 (kubeadm-control-plane-k8s134.sh)
+### SSH 到 CP 节点
 
-1. 禁用 swap 和 SELinux
-2. 加载内核模块 (overlay, br_netfilter) + sysctl
-3. 安装 containerd (Docker CE repo, SystemdCgroup=true)
-4. 安装 kubeadm/kubelet/kubectl (pkgs.k8s.io v1.34 rpm repo)
-5. `kubeadm init --pod-network-cidr=10.244.0.0/16`
-6. 安装 Calico v3.29.3 CNI
-7. 生成 join token 和 SSH key pair
+```bash
+# 方式 A：同 VPC 内网直连（需先注入 SSH key）
+# 在创建时通过 --metadata 注入，或创建后：
+gcloud compute instances add-metadata $CP_NAME \
+  --zone=$ZONE --project=$PROJECT \
+  --metadata=ssh-keys="$USER:$(cat ~/.ssh/id_ed25519.pub)"
+ssh $USER@<CP_INTERNAL_IP>
+
+# 方式 B：IAP tunnel（不同网络时使用）
+gcloud compute ssh $CP_NAME --zone=$ZONE --project=$PROJECT --tunnel-through-iap
+```
+
+### CP 手动安装步骤
+
+如果未使用 startup script，SSH 到 CP 后手动执行以下 7 步：
+
+```bash
+# Step 1: 禁用 swap 和 SELinux
+sudo swapoff -a
+sudo sed -i '/swap/d' /etc/fstab
+sudo setenforce 0
+sudo sed -i 's/^SELINUX=enforcing$/SELINUX=permissive/' /etc/selinux/config
+
+# Step 2: 加载内核模块 + sysctl
+sudo tee /etc/modules-load.d/k8s.conf <<EOF
+overlay
+br_netfilter
+EOF
+sudo modprobe overlay && sudo modprobe br_netfilter
+
+sudo tee /etc/sysctl.d/k8s.conf <<EOF
+net.bridge.bridge-nf-call-iptables  = 1
+net.bridge.bridge-nf-call-ip6tables = 1
+net.ipv4.ip_forward                 = 1
+EOF
+sudo sysctl --system
+
+# Step 3: 安装 containerd (Docker CE repo)
+sudo dnf config-manager --add-repo https://download.docker.com/linux/centos/docker-ce.repo
+sudo dnf install -y containerd.io
+sudo mkdir -p /etc/containerd
+sudo sh -c 'containerd config default > /etc/containerd/config.toml'
+sudo sed -i 's/SystemdCgroup = false/SystemdCgroup = true/' /etc/containerd/config.toml
+sudo systemctl enable --now containerd
+
+# Step 4: 安装 kubeadm/kubelet/kubectl
+#   注意：必须从 pkgs.k8s.io 安装 kubectl，不要用 google-cloud-sdk 自带的
+#   （google-cloud-sdk 的 kubectl 版本号不匹配 k8s 1.34）
+sudo tee /etc/yum.repos.d/kubernetes.repo <<EOF
+[kubernetes]
+name=Kubernetes
+baseurl=https://pkgs.k8s.io/core:/stable:/v1.34/rpm/
+enabled=1
+gpgcheck=1
+gpgkey=https://pkgs.k8s.io/core:/stable:/v1.34/rpm/repodata/repomd.xml.key
+exclude=kubectl
+EOF
+sudo dnf install -y kubelet kubeadm --disableexcludes=kubernetes
+# 单独从 k8s repo 安装 kubectl（避免 google-cloud-sdk 版本）
+sudo dnf install -y --repo=kubernetes kubectl
+sudo systemctl enable --now kubelet
+
+# Step 5: kubeadm init
+#   --node-name 指定干净的主机名，避免使用 FQDN
+sudo kubeadm init \
+  --pod-network-cidr=10.244.0.0/16 \
+  --node-name=$CP_NAME
+
+# Step 6: 配置 kubeconfig
+mkdir -p $HOME/.kube
+sudo cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+sudo chown $(id -u):$(id -g) $HOME/.kube/config
+
+# Step 7: 安装 Calico v3.29.3 CNI
+kubectl create -f https://raw.githubusercontent.com/projectcalico/calico/v3.29.3/manifests/tigera-operator.yaml
+# 等待 tigera-operator 就绪
+sleep 10
+cat <<EOF | kubectl create -f -
+apiVersion: operator.tigera.io/v1
+kind: Installation
+metadata:
+  name: default
+spec:
+  calicoNetwork:
+    ipPools:
+    - blockSize: 26
+      cidr: 10.244.0.0/16
+      encapsulation: VXLANCrossSubnet
+      natOutgoing: Enabled
+      nodeSelector: all()
+EOF
+
+# 验证
+kubectl get nodes  # 应显示 CP 节点 Ready
+kubectl get pods -n calico-system  # Calico pods 应逐步 Running
+```
+
+> **kubectl 版本陷阱**：Rocky Linux 如果配置了 google-cloud-sdk repo，`dnf install kubectl` 会优先安装 google-cloud-sdk 版本（如 574.0.0），而非 k8s 1.34.x 版本。建议在 kubernetes.repo 中 `exclude=kubectl` 避免冲突，然后 `--repo=kubernetes` 单独安装。
 
 ### 获取 Join 信息
 
 ```bash
-# SSH 到 CP 节点
-gcloud compute ssh $CP_NAME --zone=$ZONE --project=$PROJECT --tunnel-through-iap
+# kubeadm init 输出的最后几行包含 join 命令，格式如：
+# kubeadm join <CP_IP>:6443 --token <TOKEN> --discovery-token-ca-cert-hash sha256:<HASH>
 
-# 查看 join 命令
-cat /root/kubeadm-join-command.txt
-
-# 提取 token 和 hash
+# 也可以后续提取：
 CP_IP=$(hostname -I | awk '{print $1}')
 JOIN_TOKEN=$(kubeadm token list -o jsonpath='{.token}' | head -1)
 JOIN_HASH=$(openssl x509 -pubkey -in /etc/kubernetes/pki/ca.crt | \
   openssl rsa -pubin -outform der 2>/dev/null | sha256sum | awk '{print $1}')
 echo "CP_IP=$CP_IP JOIN_TOKEN=$JOIN_TOKEN JOIN_HASH=$JOIN_HASH"
+
+# Token 有效期 24h，过期后重新生成：
+kubeadm token create --print-join-command
 ```
 
 ## 2.2 Placement Policy 与 Worker 节点 VM 创建
@@ -53,6 +158,26 @@ echo "CP_IP=$CP_IP JOIN_TOKEN=$JOIN_TOKEN JOIN_HASH=$JOIN_HASH"
 - 生产环境（如 1800 GPU = 25 Domain）：为每个 Domain 批量创建 Worker，每批使用对应 Domain 的 Placement Policy
 - 使用 GA `gcloud compute`（不是 alpha/beta），不加 `--local-ssd`（A4X 自动挂载 12TB NVMe）
 - `no-address` on MRDMA — 网络 profile 不允许 MRDMA 接口有 AccessConfig
+- **不需要一次创建 18 台**——只建 2~4 台测试完全可以，空位以后再加
+
+### 查看和复用现有 Placement Policy
+
+在创建新 Policy 之前，先查看项目里已有的 Policy 和使用情况：
+
+```bash
+# 列出所有 Placement Policy
+gcloud beta compute resource-policies list \
+  --project=$PROJECT --filter="region~$REGION" \
+  --format="table(name,region.basename(),status)"
+
+# 查看每台 A4X VM 使用的 Policy（找空位多的 Policy 复用）
+gcloud compute instances list \
+  --project=$PROJECT --zones=$ZONE \
+  --filter="machineType~a4x" \
+  --format="table(name,status,resourcePolicies.basename())"
+```
+
+如果某个 Policy 只有 2~4 台 VM（空位 14~16 个），可以直接复用——你的 VM 会加入同一个物理域。注意同域只能有一个 ComputeDomain（详见 [01-environment-setup](../01-environment-setup/) 0.6 节）。
 
 ### 批量创建 Worker（每个 Domain 使用对应的 Placement Policy）
 
