@@ -14,9 +14,11 @@ kubectl logs nccl-single-node -f
 
 | 指标 | 实测结果 |
 |------|----------|
-| all_reduce 4 GPU @8G | **683.75 GB/s busbw** |
+| all_reduce 4 GPU @8G | **683 GB/s busbw** |
 
-**单节点 NCCL 测试通过**：all_reduce 683.75 GB/s busbw。NVLink 通信正常。
+**单节点 NCCL 测试通过**：all_reduce 683 GB/s busbw（实测 2026-06-27 验证一致）。
+
+> **为什么 4 GPU 只有 683 而 8 GPU 跨节点有 835？** NVSwitch 是为 72 GPU 全互联设计的。4 GPU 的 ring all_reduce 只有 3 hop，无法充分利用 NVSwitch 的全部并行通道。8 GPU 跨 2 节点时 NCCL 有更多 NVLink 并行传输路径，busbw 反而更高。18 节点 72 GPU 全域 all_reduce 才能逼近 900 GB/s 的理论上限。
 
 ## 5.2 同域 2 节点 MNNVL（ComputeDomain + DRANET）
 
