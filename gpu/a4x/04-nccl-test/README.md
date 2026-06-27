@@ -106,7 +106,14 @@ kubectl exec nccl-sd-h1 -- bash -c "
 | reduce_scatter | **693.07** |
 | alltoall | **682.73** |
 
-**同域 MNNVL 测试通过**：4 项 collective 均正常，all_reduce @16G 达到 839.54 GB/s busbw（实测 2026-06-27）。ComputeDomain 管理的 IMEX daemon 正常工作，MNNVL 通信正常。
+**同域 MNNVL 测试通过**：4 项 collective 均正常（实测 2026-06-27），与生产环境标称值（[10-production-ops](../10-production-ops/) 8.2 节）完全一致（±0.5% 以内）：
+
+| Collective | 实测 busbw | 标称参考值 | 差异 |
+|---|---|---|---|
+| all_reduce | 839.54 | 840.12 | -0.07% |
+| all_gather | 683.83 | 683.37 | +0.07% |
+| reduce_scatter | 693.07 | 693.12 | -0.01% |
+| alltoall | 682.73 | 679.93 | +0.41% |
 
 > **StatefulSet 方式（推荐）**：使用 GIB 诊断镜像自带的 `run_nccl_tests.sh` 脚本，StatefulSet 自动编排 SSH 密钥交换和 MPI 启动，无需手动操作。参考 `yamls/benchmark/k8s134-nccl-2node-1domain-sts.yaml`。
 
