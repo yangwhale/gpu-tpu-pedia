@@ -1,5 +1,7 @@
 # RL 训练指南：GB200 NVL72 上的强化学习
 
+> **注意**：本章为**补充内容**，不来自原始 GB200 A4X 部署指南文档。内容基于 RL 训练最佳实践调研整理，结合 GB200 NVL72 硬件特性编写，供参考使用。
+
 本章介绍在 GB200 NVL72 集群上进行大规模 RL（Reinforcement Learning）训练的实践指南，包括框架选择、并行策略、模型配置和调优建议。
 
 ## 硬件概述
@@ -65,6 +67,8 @@ TP=8   EP=8   DP=8   FSDP for training
 ### 为什么不用 PP
 
 Pipeline Parallel 在 RL 训练中引入额外的 bubble overhead，且 RL 的 rollout 和 training 交替执行模式与 PP 的流水线填充不兼容。对于 64 GPU 规模，TP+EP+DP+FSDP 组合已足够。
+
+> **TP=8 域内放置警告**：TP=8 要求参与的 2 个节点（4 GPU/节点 x 2 = 8 GPU）必须位于**同一个 NVL72 domain** 内。域内节点间通过 MNNVL 互联，带宽约 **~840 GB/s**。如果 TP 组跨越不同 domain，通信将回退到 RDMA（约 **~325 GB/s**，带宽下降 61%），TP 的高频 AllReduce 通信（每层 2 次）会成为严重瓶颈，导致训练性能大幅下降。使用 JobSet + Kueue TAS 或手动 nodeSelector 确保 TP 组内的节点落在同一拓扑域。
 
 ## 部署模式
 

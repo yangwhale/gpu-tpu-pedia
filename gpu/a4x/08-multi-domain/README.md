@@ -400,6 +400,33 @@ gcloud compute instances report-host-as-faulty <INSTANCE_NAME> \
 | `SILENT_DATA_CORRUPTION` | 静默数据损坏 | 训练结果异常 |
 | `CHIP_ERROR` | 芯片错误 | 硬件芯片级故障 |
 
+### 11.2 Sub-block 域级故障上报
+
+当 NVSwitch 等域级组件故障时，需要上报整个 sub-block（而非单节点）。先查看预留的拓扑结构（block / sub-block），再针对故障 sub-block 上报。
+
+```bash
+# 查看拓扑结构
+gcloud alpha compute reservations blocks list $RESERVATION \
+  --zone=$ZONE --project=$PROJECT
+
+gcloud alpha compute reservations sub-blocks list $RESERVATION \
+  --block-name=<BLOCK_NAME> \
+  --zone=$ZONE --project=$PROJECT
+
+# Sub-block 故障上报
+gcloud alpha compute reservations sub-blocks report-subblock-as-faulty $RESERVATION \
+  --block-name=<BLOCK_NAME> \
+  --sub-block-name=<SUBBLOCK_NAME> \
+  --disruption-schedule=IMMEDIATE \
+  --fault-reasons=behavior=SWITCH_FAILURE,description="NVSwitch failure" \
+  --failure-component=NVLINK_SWITCH \
+  --zone=$ZONE --project=$PROJECT
+```
+
+| failure-component | 含义 | 场景 |
+|-------------------|------|------|
+| `NVLINK_SWITCH` | NVSwitch 故障 | 域内 NVLink 通信异常 |
+
 ### Python SDK
 
 ```python
@@ -487,3 +514,33 @@ kubectl exec -n kube-system <DCGM_POD> -- wget -qO- http://localhost:9400/metric
 | LLaMA3-70B | 4096 | 64 | 2 | 1024 | tp4pp2 | 971 | 38.83% |
 
 **环境**：TransformerEngine v2.15 / Megatron-LM core_r0.16.0 / pytorch:26.05-py3
+
+---
+
+## 待完善
+
+以下为源文档中尚未覆盖的重要生产主题，需后续补充。
+
+### 安全加固指南
+
+<!-- TODO -->
+
+集群安全配置，包括 Pod Security Standards（Restricted profile）、NetworkPolicy 网络隔离规则、以及容器镜像签名验证（cosign / Binary Authorization）。
+
+### Prometheus GPU 健康告警规则
+
+<!-- TODO -->
+
+基于 DCGM Exporter 指标的 Prometheus AlertManager 告警规则定义，覆盖 GPU 温度、ECC 错误、PCIe 重传、行重映射失败等关键场景的告警阈值和通知策略。
+
+### 训练 Checkpoint / 故障恢复策略
+
+<!-- TODO -->
+
+训练任务的容错 checkpoint 策略，包括异步 checkpoint 写入配置、故障后自动恢复流程（从最近 checkpoint 恢复 + 跳过故障节点）、以及多 domain 训练的分布式 checkpoint 一致性保障。
+
+### 自动化 GPU 健康流水线
+
+<!-- TODO -->
+
+从 XID 错误检测到节点自动隔离的端到端自动化流水线：XID error 检测（dmesg / DCGM）→ 节点 cordon/drain → 自动调用 report-host-as-faulty API → 备用节点替换 → 训练任务自动恢复。
