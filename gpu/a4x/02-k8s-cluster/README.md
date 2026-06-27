@@ -339,10 +339,12 @@ baseurl=https://pkgs.k8s.io/core:/stable:/v1.34/rpm/
 enabled=1
 gpgcheck=1
 gpgkey=https://pkgs.k8s.io/core:/stable:/v1.34/rpm/repodata/repomd.xml.key
-exclude=kubectl
 EOF
 sudo dnf install -y kubelet kubeadm --disableexcludes=kubernetes
+# kubectl 单独装：先临时去掉 exclude，指定 repo 安装，再加回
+sudo sed -i '/^exclude/d' /etc/yum.repos.d/kubernetes.repo
 sudo dnf install -y --repo=kubernetes kubectl
+echo "exclude=kubectl" | sudo tee -a /etc/yum.repos.d/kubernetes.repo
 sudo systemctl enable kubelet
 
 # === kubeadm join ===
