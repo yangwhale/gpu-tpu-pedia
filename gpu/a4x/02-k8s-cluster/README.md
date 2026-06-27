@@ -117,6 +117,9 @@ metadata:
   name: default
 spec:
   calicoNetwork:
+    nodeAddressAutodetectionV4:
+      cidrs:
+      - "$MGMT_SUBNET"    # 管理子网 CIDR（如 10.14.0.0/24）
     ipPools:
     - blockSize: 26
       cidr: 10.244.0.0/16
@@ -128,7 +131,19 @@ EOF
 # 验证
 kubectl get nodes  # 应显示 CP 节点 Ready
 kubectl get pods -n calico-system  # Calico pods 应逐步 Running
+# 全部 calico-node 必须 1/1 Ready — 0/1 说明 BGP peering 失败
 ```
+
+> **Calico 多网卡陷阱（关键）**：A4X Worker 有 6 个 NIC（2 GVNIC + 4 MRDMA）。Calico 默认 `firstFound: true` IP 自动检测会选中 RDMA 网卡（如 10.10.28.x）而非管理 GVNIC（如 10.14.0.x），导致 BIRD BGP peering 失败 → CP 上的 calico-node 永远 0/1 Not Ready → Pod DNS 完全瘫痪（CoreDNS 在 CP 上，VXLAN 隧道不通）。
+>
+> 修复：必须在 Installation CRD 中设置 `nodeAddressAutodetectionV4.cidrs` 为管理子网 CIDR。如果忘了设置或设错了，后续 patch 方法：
+> ```bash
+> kubectl patch installation default --type=json -p '[
+>   {"op": "replace", "path": "/spec/calicoNetwork/nodeAddressAutodetectionV4",
+>    "value": {"cidrs": ["10.14.0.0/24"]}}
+> ]'
+> kubectl delete pods -n calico-system -l k8s-app=calico-node  # 重启 calico-node
+> ```
 
 > **kubectl 版本陷阱**：Rocky Linux 如果配置了 google-cloud-sdk repo，`dnf install kubectl` 会优先安装 google-cloud-sdk 版本（如 574.0.0），而非 k8s 1.34.x 版本。建议在 kubernetes.repo 中 `exclude=kubectl` 避免冲突，然后 `--repo=kubernetes` 单独安装。
 

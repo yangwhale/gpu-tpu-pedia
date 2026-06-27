@@ -115,42 +115,69 @@ kubectl get deviceclass
 kubectl get resourceslice -o wide | head -20
 ```
 
-## 3.5 Scheduler DRA RBAC（kubeadm 必需）
+## 3.5 Scheduler RBAC 补全（kubeadm 1.34 必需）
 
-**关键步骤**：kubeadm 1.34.x 的默认 ClusterRole 未包含 DRA（Dynamic Resource Allocation）所需的 RBAC 权限。如果跳过此步骤，ComputeDomain daemon pods 会永久停留在 ContainerCreating（kubelet 无日志无报错，极难诊断）。
+**关键步骤**：kubeadm 1.34.x 的默认 `system:kube-scheduler` ClusterRole 严重不完整——不仅缺少 DRA 权限，连 pods、nodes、services 等基础资源的 list/watch 权限都缺失。如果跳过此步骤：
+- ComputeDomain daemon pods 永久停留在 ContainerCreating（无日志无报错）
+- DRA ResourceClaims 永久 pending（scheduler 无法 list ResourceSlices/DeviceClasses）
+- 使用 podAffinity/podAntiAffinity 的 Pod 无法调度
 
 ```bash
-# Scheduler DRA RBAC — 必须在创建任何 ComputeDomain 之前执行
+# Scheduler RBAC 补全 — 必须在部署任何 GPU 工作负载之前执行
 cat <<'EOF' | kubectl apply -f -
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: system:kube-scheduler:dra
+  name: system:kube-scheduler:full
 rules:
-- apiGroups: ["resource.k8s.io"]
-  resources: ["resourceclaims"]
+- apiGroups: [""]
+  resources: ["pods", "pods/status", "pods/binding"]
+  verbs: ["get", "list", "watch", "update", "patch", "create", "delete"]
+- apiGroups: [""]
+  resources: ["nodes", "nodes/status"]
   verbs: ["get", "list", "watch", "update", "patch"]
-- apiGroups: ["resource.k8s.io"]
-  resources: ["resourceclaims/status"]
-  verbs: ["get", "update", "patch"]
-- apiGroups: ["resource.k8s.io"]
-  resources: ["resourceslices"]
-  verbs: ["get", "list", "watch"]
-- apiGroups: ["resource.k8s.io"]
-  resources: ["deviceclasses"]
+- apiGroups: [""]
+  resources: ["services", "endpoints", "namespaces", "configmaps"]
   verbs: ["get", "list", "watch"]
 - apiGroups: [""]
-  resources: ["persistentvolumeclaims"]
+  resources: ["events"]
+  verbs: ["create", "patch", "update", "get", "list", "watch"]
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims", "persistentvolumeclaims/status", "persistentvolumes"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: [""]
+  resources: ["replicationcontrollers"]
   verbs: ["get", "list", "watch"]
+- apiGroups: ["apps"]
+  resources: ["replicasets", "statefulsets", "daemonsets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["policy"]
+  resources: ["poddisruptionbudgets"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["storage.k8s.io"]
+  resources: ["storageclasses", "csinodes", "csidrivers", "csistoragecapacities"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["resource.k8s.io"]
+  resources: ["resourceclaims", "resourceclaims/status"]
+  verbs: ["get", "list", "watch", "update", "patch"]
+- apiGroups: ["resource.k8s.io"]
+  resources: ["resourceslices", "deviceclasses"]
+  verbs: ["get", "list", "watch"]
+- apiGroups: ["coordination.k8s.io"]
+  resources: ["leases"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+- apiGroups: ["events.k8s.io"]
+  resources: ["events"]
+  verbs: ["create", "patch", "update"]
 ---
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: system:kube-scheduler:dra
+  name: system:kube-scheduler:full
 roleRef:
   apiGroup: rbac.authorization.k8s.io
   kind: ClusterRole
-  name: system:kube-scheduler:dra
+  name: system:kube-scheduler:full
 subjects:
 - apiGroup: rbac.authorization.k8s.io
   kind: User
@@ -296,12 +323,12 @@ gcsfuse \
 |------|------|
 | DRA API 版本 | ResourceClaimTemplate/DeviceClass 使用 `resource.k8s.io/v1`（GA API，非 v1beta2） |
 | DRA 状态 | k8s 1.34 中 DRA 为 **GA**，默认启用，无需 feature gate |
-| kubeadm Scheduler RBAC | kubeadm 1.34.x 默认 ClusterRole 缺少 DRA 权限（见 3.5），**必须手动补充** |
+| kubeadm Scheduler RBAC | kubeadm 1.34.x 默认 `system:kube-scheduler` ClusterRole 严重不完整——不仅缺 DRA 权限，连 pods/nodes/services 等基础权限都缺。**必须手动补全**（见 3.5） |
 | DRANET 版本 | v1.3.0，安装: `helm install dranet oci://registry.k8s.io/networking/charts/dranet --version v1.3.0 -n kube-system` |
 | ComputeDomain 互斥 | 与 `nvidia-imex.service`（systemd）和 IMEX Manager DaemonSet **互斥** |
 | ComputeDomain 节点标签 | 创建后需手动 `kubectl label node <NODE> resource.nvidia.com/computeDomain=<UID>` |
 | IMEX daemon 日志噪音 | <18 节点环境下 daemon 会持续尝试连接不存在的节点 — **无害可忽略** |
 | NCCL 测试二进制 | pytorch 镜像自带的 `all_reduce_perf`**未链接 MPI**，必须从源码编译 MPI 版 |
 | mpirun 路径 | `/usr/local/mpi/bin/mpirun`（非 `/usr/local/gib/bin/mpirun`） |
-| Calico 多网卡 | A4X Worker 有 6 个 NIC，Calico 需设置 `IP_AUTODETECTION_METHOD=interface=eth0`，使用 VXLAN 模式 |
+| Calico 多网卡 | A4X Worker 有 6 个 NIC（2 GVNIC + 4 MRDMA），Calico Installation 必须设置 `nodeAddressAutodetectionV4.cidrs` 为管理子网。默认 `firstFound` 会选中 RDMA 网卡导致 BGP 失败、Pod DNS 瘫痪（见 02-k8s-cluster Step 7 注释） |
 | SSH 密钥 | 容器内必须用 `ed25519`（`ssh-keygen -t ed25519`），RSA 因无 `/dev/tty` 会失败 |

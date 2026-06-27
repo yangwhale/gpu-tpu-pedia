@@ -99,11 +99,16 @@ kubectl exec nccl-sd-h1 -- bash -c "
 "
 ```
 
-| 指标 | 实测结果 |
+| Collective | @16G busbw (GB/s) |
 |------|----------|
-| all_reduce 8 GPU @8G (MNNVL) | **834.95 GB/s busbw** |
+| all_reduce | **839.54** |
+| all_gather | **683.83** |
+| reduce_scatter | **693.07** |
+| alltoall | **682.73** |
 
-**同域 MNNVL 测试通过**：all_reduce 8GPU @8G 达到 834.95 GB/s busbw。ComputeDomain 管理的 IMEX daemon 正常工作，MNNVL 通信正常。
+**同域 MNNVL 测试通过**：4 项 collective 均正常，all_reduce @16G 达到 839.54 GB/s busbw（实测 2026-06-27）。ComputeDomain 管理的 IMEX daemon 正常工作，MNNVL 通信正常。
+
+> **StatefulSet 方式（推荐）**：使用 GIB 诊断镜像自带的 `run_nccl_tests.sh` 脚本，StatefulSet 自动编排 SSH 密钥交换和 MPI 启动，无需手动操作。参考 `yamls/benchmark/k8s134-nccl-2node-1domain-sts.yaml`。
 
 ## 5.3 跨域 2 节点 RDMA（DRANET）
 
@@ -175,9 +180,9 @@ kubectl exec nccl-mix-h1 -- bash -c "
 
 ## 测试结果汇总
 
-| 测试 | GPU 数 | 互联方式 | busbw (GB/s) |
+| 测试 | GPU 数 | 互联方式 | all_reduce busbw (GB/s) |
 |------|--------|----------|-------------|
 | 单节点 4 GPU @8G | 4 | NVLink | **683.75** |
-| 同域 2 节点 @8G | 8 | MNNVL (NVLink) | **834.95** |
+| 同域 2 节点 @16G | 8 | MNNVL (NVLink) | **839.54** |
 | 跨域 2 节点 @8G | 8 | RDMA (GIB) | **325.88** |
 | 混合 4 节点 @8G | 16 | RDMA (GIB) | **162.45** |
