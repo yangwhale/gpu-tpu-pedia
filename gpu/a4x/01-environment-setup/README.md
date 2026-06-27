@@ -51,6 +51,47 @@ GB200/B200/H200 在 GCP 上对应不同的 Accelerator-Optimized 机型系列，
 | **GIB** (GPUDirect InfiniBand) | Google 提供的 NCCL 通信插件（v1.1.2），封装了 GPUDirect RDMA 优化。以 init container 方式注入到 Pod，挂载到 `/usr/local/gib`，通过 `set_nccl_env.sh` 自动配置 NCCL 环境变量。 |
 | **Placement Policy** | GCP 资源策略，确保一组 VM 被分配到同一个物理 NVL72 域。A4X 使用 `--collocation=COLLOCATED --gpu-topology=1x72` 创建，每个 NVL72 域绑定一个 Placement Policy。生产环境中 N 个域需创建 N 个 Policy。 |
 
+### 0.4 三层协调机制（Placement Policy → ComputeDomain → IMEX）
+
+NVL72 跨节点 NVLink 通信需要三层协调，缺一不可：
+
+```
+Placement Policy    →  保证 VM 落在同一个 NVSwitch 物理域
+       ↓
+ComputeDomain CRD   →  按 gpu.clique label 发现同域节点，启动 IMEX daemon
+       ↓
+IMEX daemon         →  18 节点互相握手，建立 NVLink multicast channel
+       ↓
+NVLS transport 就绪 →  NCCL / NVSHMEM / DeepEP 走 NVSwitch 通信（~900 GB/s）
+```
+
+**如果缺了某一层会发生什么？**
+- 缺 Placement Policy → VM 散落到不同物理域，NVSwitch 不通
+- 缺 ComputeDomain → IMEX daemon 不启动，软件层不通
+- 缺 IMEX → NCCL **不报错**，静默退化到 RDMA（900→325 GB/s）。DeepEP 吞吐差 8 倍
+
+**MNNVL 环境变量控制**：`MNNVL_ENABLE=0` 强制走 RDMA；`MNNVL_ENABLE=2` 全开走 NVLink。
+
+### 0.5 NVLink 带宽：节点内 = 跨节点
+
+GB200 NVL72 的所有 GPU 通信**均通过 NVSwitch**，不区分节点内外：
+- 节点内 4 块 GPU → 通过本节点 NVSwitch → 单向 900 GB/s
+- 跨节点 GPU → 通过 NVSwitch 光缆互联 → 同样单向 900 GB/s
+
+带宽完全对称。跨节点仅在延迟上比节点内多几微秒（光电转换），带宽无差异。
+
+### 0.6 多 Team 共享一个 NVL72 域
+
+**安全性**：一个 NVL72 域可以分给多个 Team 使用。GPU 间隔离由四层保证：
+1. **k8s device isolation** — NVIDIA device plugin / DRA 只给 Pod 暴露分配的 GPU
+2. **CUDA device visibility** — 进程只能 `cudaSetDevice` 到自己可见的 GPU
+3. **Peer access 需显式开启** — 跨 GPU 内存访问需调 `cudaDeviceEnablePeerAccess`
+4. **NCCL communicator 隔离** — 不同 Team 用不同 unique ID，communicator 天然隔离
+
+**带宽不冲突**：NVSwitch 是全带宽无阻塞交换。Team A 的通信不占 Team B 的带宽。
+
+**ComputeDomain 约束**：域内同时只能有一个 ComputeDomain。多 Team 共享域时需统一管理 ComputeDomain，不能各建各的。IMEX 是控制平面（协调 channel 建立），不是数据平面（不转发流量），连在一起不影响性能。
+
 #### 概念关系图
 
 ```
@@ -255,6 +296,20 @@ for d in $(seq 1 $NUM_DOMAINS); do
     --project=$PROJECT --region=$REGION
 done
 ```
+
+#### Placement Policy FAQ
+
+**Q: `--gpu-topology=1x72` 只能写 72 吗？**
+A: 该值跟机型对应。A4X (GB200) 用 `1x72`（18 节点 72 GPU），A4 (B200) 用 `1x16`（2 节点 16 GPU）。值定义的是最小拓扑约束——"给我至少这么大的一个全互联域"。
+
+**Q: 必须一次创建 18 台 VM 才能用吗？**
+A: 不需要。`1x72` 的域里只用 2 台、4 台完全可以。未使用的位置空着，将来可以加机器。ComputeDomain 会为域内全部 18 个物理位置生成 IMEX 配置，未部署的位置产生连接重试日志（无害，可忽略）。
+
+**Q: 多个 Placement Policy 会分到同一个物理域吗？**
+A: 可能会。GCP 调度器根据空位自动分配。如果两个 Policy 落在同一域，所有 VM 的 `gpu.clique` label 相同。此时 ComputeDomain 按 clique 选节点，域内只能有一个 ComputeDomain 实例——多个 Policy 的用户需要协调共用。
+
+**Q: 已有其他人的 VM 在域里，我加机器会冲突吗？**
+A: 不会。只要域内空位够，你的 VM 正常创建。GPU 通信走 NCCL communicator 隔离，NVSwitch 全带宽无阻塞，不影响彼此。但如果对方已创建 ComputeDomain，你需要复用它而不是另建一个。
 
 ### 1.5 创建额外防火墙规则（可选）
 
