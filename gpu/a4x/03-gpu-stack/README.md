@@ -106,6 +106,8 @@ spec:
         has(device.attributes["dra.net"].rdma) && device.attributes["dra.net"].rdma == true
 ```
 
+> **必须加 `rdma == true` 过滤**：DRANET 会发现 host 上所有网络接口，包括 Calico 的 `vxlan.calico`（归一化设备名 `net-oz4gyylofzrwc3djmnxq`）。如果 DeviceClass 只按 `device.driver == "dra.net"` 匹配，Pod 可能被分配到 vxlan.calico 接口，DRANET NRI 插件配置路由时会报 `fail to add route for interface vxlan.calico: network is unreachable`，Pod 卡在 ContainerCreating。加 `rdma == true` 可精确过滤出 Mellanox RDMA NIC。（2026-06-28 实测验证）
+
 #### 验证安装
 
 ```bash

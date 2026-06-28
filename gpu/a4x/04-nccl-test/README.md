@@ -117,6 +117,19 @@ kubectl exec nccl-sd-h1 -- bash -c "
 
 > **StatefulSet 方式（推荐）**：使用 GIB 诊断镜像自带的 `run_nccl_tests.sh` 脚本，StatefulSet 自动编排 SSH 密钥交换和 MPI 启动，无需手动操作。参考 `yamls/benchmark/k8s134-nccl-2node-1domain-sts.yaml`。
 
+**二次验证（2026-06-28，新建 Worker VM）**：删除旧 Worker 后重新创建 2 台 `a4x-highgpu-4g` VM（使用自定义镜像 `chrisya-a4x-worker-v1`），重新安装 GPU Stack + ComputeDomain + DRANET，复测 4 项 collective：
+
+| Collective | 二次验证 busbw | 首次验证 busbw | 差异 |
+|---|---|---|---|
+| all_reduce | 842.20 | 839.54 | +0.3% |
+| all_gather | 683.35 | 683.83 | -0.1% |
+| reduce_scatter | 692.83 | 693.07 | -0.03% |
+| alltoall | 682.33 | 682.73 | -0.06% |
+
+结论：新节点性能与首次验证完全一致（±0.3% 以内），部署流程可复现。
+
+> **踩坑：DRANET DeviceClass 必须过滤非 RDMA 接口**。DRANET 会发现 host 上所有网络接口（包括 Calico 的 `vxlan.calico`），如果 DeviceClass 的 CEL 表达式只匹配 `device.driver == "dra.net"` 而不加 `rdma == true` 过滤，Pod 可能被分配 vxlan 接口，导致 NRI 配置路由失败（`network is unreachable`），Pod 永久卡在 ContainerCreating。正确的 DeviceClass 必须包含 `device.attributes["dra.net"].rdma == true`，参见 [03-gpu-stack 3.4 节](../03-gpu-stack/)。
+
 ## 5.3 跨域 2 节点 RDMA（DRANET）
 
 跨域节点无 MNNVL，使用纯 RDMA (GPUDirect-TCPX/GIB) 通信。不需要 ComputeDomain channel（无 IMEX）。
@@ -340,8 +353,45 @@ GIB 诊断镜像内置 `set_nccl_env.sh` 脚本自动设置最优 NCCL 参数。
 | 测试 | GPU 数 | 互联方式 | all_reduce busbw (GB/s) | 数据来源 |
 |------|--------|----------|-------------|---|
 | 单节点 4 GPU @8G | 4 | NVLink | **683.75** | 我方验证 |
-| 同域 2 节点 @16G | 8 | MNNVL | **839.54** | 我方验证 |
+| 同域 2 节点 @16G | 8 | MNNVL | **842.20** | 我方验证 (二次) |
+| 同域 8 节点 @16G | 32 | MNNVL | **908.80** | 我方验证 |
+| 同域 16 节点 @16G | 64 | MNNVL | **909.96** | 我方验证 |
 | 跨域 2 节点 @8G | 8 | RDMA (GIB) | **325.88** | 标称 |
 | 混合 4 节点 @8G | 16 | RDMA (GIB) | **162.45** | 标称 |
 | 全域 18 节点 @16G | 72 | MNNVL | **876.55** (v1) / 905.05 (标称) | v1 镜像实测 |
+
+### 我方规模扩展验证（2026-06-29）
+
+单域 MNNVL 规模扩展测试，同一 placement policy 内所有节点共享 NVSwitch fabric。
+
+#### 8 节点 32 GPU（单域）
+
+| Collective | @16G busbw (GB/s) |
+|---|---|
+| all_reduce | **908.80** |
+| all_gather | **690.52** |
+| reduce_scatter | **708.16** |
+| alltoall | **675.98** |
+
+#### 16 节点 64 GPU（单域）
+
+| Collective | @16G busbw (GB/s) |
+|---|---|
+| all_reduce | **909.96** |
+| all_gather | **692.88** |
+| reduce_scatter | **706.98** |
+| alltoall | **666.64** |
+
+#### 规模扩展对比
+
+| Collective | 2n/8GPU | 8n/32GPU | 16n/64GPU | 32→64 变化 |
+|---|---|---|---|---|
+| all_reduce | 842 | 909 | 910 | +0.1% |
+| all_gather | 683 | 691 | 693 | +0.3% |
+| reduce_scatter | 693 | 708 | 707 | -0.1% |
+| alltoall | 682 | 676 | 667 | -1.3% |
+
+**结论**：同域 MNNVL 带宽从 2 节点到 64 GPU 几乎线性扩展。all_reduce 从 842 涨到 910 GB/s（+8%），得益于 NVSwitch 在更大 ring 中的更高效利用。alltoall 轻微下降 1.3%，是因为 all-to-all 通信量随节点数平方增长。
+
+> **跨域 64 GPU 测试（RDMA）**：尝试双域 8+8 节点 64 GPU 跨域 NCCL 测试时，NCCL 初始化挂起——RDMA 跨域连接建立失败。原因是两个 placement policy 的 RDMA 子网未互通（同 VPC 但 RDMA 路由隔离）。跨域通信需要特殊的 RDMA 网络配置或使用 GVNIC 回退路径。此为已知限制，生产环境通常通过 GVNIC overlay + GPUDirect-TCPX 解决。
 | 跨域 36 节点 @16G | 144 | MNNVL + RDMA | **748.24** (v1) / 688.14 (标称) | v1 镜像实测 |
