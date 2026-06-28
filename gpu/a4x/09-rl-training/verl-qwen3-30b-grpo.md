@@ -33,34 +33,35 @@
 | PyTorch | 2.9.1+cu129（预装） |
 | Disk | 1.9TB |
 
-## Step 1: 安装 veRL 和依赖
+## Step 1: 安装 Docker + 拉 veRL 官方镜像
 
-> **关键教训**：B200 GCE 镜像预装了 PyTorch 2.9.1 + boto3 + OpenSSL + numpy 等系统包，与 veRL 依赖严重冲突。**必须创建干净 venv（不加 `--system-site-packages`）**，从头安装全部依赖。用 `--system-site-packages` 会导致系统包泄漏进 venv 引发连锁 import 错误（accelerate 循环 import、numpy ABI 不匹配、OpenSSL 版本冲突）。
+> **关键教训（踩坑 #1-8 总结）**：在 B200 GCE 裸机上用 pip 安装 veRL 会陷入依赖地狱——系统预装的 PyTorch/boto3/OpenSSL/numpy 与 veRL 依赖互相冲突，Megatron 后端在稳定版不可用，dev 分支有未发布依赖。**直接用 veRL 官方 Docker 镜像**是唯一可靠路径。
 
 ```bash
-# 1.1 创建干净 venv（不继承系统包）
-python3 -m venv ~/verl-clean
-source ~/verl-clean/bin/activate
+# 1.1 安装 Docker
+curl -fsSL https://get.docker.com | sh
+sudo usermod -aG docker $USER
 
-# 1.2 安装 PyTorch（与 GCE 镜像版本一致）
-pip install torch==2.9.1
+# 1.2 安装 NVIDIA Container Toolkit
+curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
+  sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
+curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
+  sed 's#deb https://#deb [signed-by=/usr/share/keyrings/nvidia-container-toolkit-keyring.gpg] https://#g' | \
+  sudo tee /etc/apt/sources.list.d/nvidia-container-toolkit.list > /dev/null
+sudo apt-get update -qq && sudo apt-get install -y -qq nvidia-container-toolkit
+sudo nvidia-ctk runtime configure --runtime=docker
+sudo systemctl restart docker
 
-# 1.3 安装 veRL + vLLM + Ray + wandb（固定 verl 稳定版，不用 dev）
-pip install verl==0.8.0 vllm "ray[default]" wandb
+# 1.3 验证 GPU 在 Docker 中可见
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 
-# 1.4 安装 Megatron-LM bridge
-pip install -U "git+https://github.com/ISEEKYAN/mbridge.git"
+# 1.4 拉 veRL 官方镜像（含 Megatron + vLLM + DeepEP 全套）
+docker pull verlai/verl:app-verl0.4-vllm0.8.5-mcore0.13.0-preview
 
-# 1.5 验证安装（所有 import 不能报错）
-python3 -c "from accelerate import Accelerator; print('accelerate OK')"
-python3 -c "from transformers import AutoModel; print('transformers OK')"
-python3 -c "import verl; print('verl:', verl.__version__)"
-python3 -c "import vllm; print('vLLM:', vllm.__version__)"
-python3 -c "import ray; print('Ray:', ray.__version__)"
-python3 -c "import torch; print('torch:', torch.__version__, 'CUDA:', torch.cuda.is_available())"
+# 1.5 验证
+docker run --rm --gpus all verlai/verl:app-verl0.4-vllm0.8.5-mcore0.13.0-preview \
+  python3 -c "import verl; import vllm; import megatron; print('ALL OK')"
 ```
-
-> **后续所有步骤必须在 venv 内执行**：`source ~/verl-clean/bin/activate`
 
 ## Step 2: 下载模型和数据
 
@@ -97,45 +98,32 @@ cd verl
 git submodule update --init --recursive recipe
 ```
 
-## Step 4: 运行 GRPO 训练（Colocate 模式）
+## Step 4: 运行 GRPO 训练（Docker + Colocate 模式）
 
 ```bash
-cd /home/chrisya/verl
-
-# 使用官方推荐的 8 GPU 配置覆盖脚本默认值
-export MODEL_PATH=/home/chrisya/models/Qwen3-30B-A3B-Base
-export DATA_DIR=/home/chrisya
-export TRAIN_FILES=/home/chrisya/data/DAPO-Math-17k/data/dapo-math-17k.parquet
-export VAL_FILES=/home/chrisya/data/AIME-2024/data/aime-2024.parquet
-
-# 官方推荐 8 GPU 并行度
-export ACTOR_TP=1
-export ACTOR_PP=1
-export ACTOR_EP=8
-export REF_TP=1
-export REF_PP=1
-export REF_EP=8
-export ALL_OFFLOAD=True
-
-# Rollout（vLLM）
-export ROLLOUT_TP=4
-export GEN_MOE_TP=2
-export GEN_MOE_EP=2
-
-# 单节点
-export NNODES=1
-export NGPUS_PER_NODE=8
-
-# 减少 epoch 用于验证（官方默认 1000）
-export TOTAL_EPOCHS=5
-export TEST_FREQ=1
-export SAVE_FREQ=100
-
-# 关闭 wandb（或设置 WANDB_API_KEY）
-export WANDB_MODE=disabled
-
-# 运行
-bash examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh
+# 启动 veRL 容器（挂载模型、数据、代码目录）
+docker run --rm -it --gpus all --shm-size=256g \
+  --network=host \
+  -v ~/models:/models \
+  -v ~/data:/data \
+  -v ~/verl:/workspace/verl \
+  -w /workspace/verl \
+  -e WANDB_MODE=disabled \
+  -e CUDA_DEVICE_MAX_CONNECTIONS=1 \
+  verlai/verl:app-verl0.4-vllm0.8.5-mcore0.13.0-preview \
+  bash -c "
+    # 官方推荐 8 GPU 并行度
+    export MODEL_PATH=/models/Qwen3-30B-A3B-Base
+    export TRAIN_FILES=/data/DAPO-Math-17k/data/dapo-math-17k.parquet
+    export VAL_FILES=/data/AIME-2024/data/aime-2024.parquet
+    export ACTOR_TP=1 ACTOR_PP=1 ACTOR_EP=8
+    export REF_TP=1 REF_PP=1 REF_EP=8
+    export ALL_OFFLOAD=True
+    export ROLLOUT_TP=4 GEN_MOE_TP=2 GEN_MOE_EP=2
+    export NNODES=1 NGPUS_PER_NODE=8
+    export TOTAL_EPOCHS=3 TEST_FREQ=1 SAVE_FREQ=100
+    bash examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh
+  "
 ```
 
 ## Step 5: 性能对标
@@ -169,6 +157,7 @@ bash examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh
 | 5 | numpy ABI + OpenSSL + boto3 连锁冲突 | `--system-site-packages` venv 导致系统包泄漏进 venv | 干净 venv + `pip install torch==2.9.1` 从 PyPI 装 |
 | 6 | `transfer_queue` 模块找不到 | veRL git main 分支 (0.9.0.dev0) 引入了未发布模块 | 用 pip 装稳定版 `verl==0.8.0`，不从 clone 目录运行 |
 | 7 | transformers 5.x breaking changes | `--force-reinstall` 拉到了 transformers 5.12.1 | 固定 `transformers>=4.56.0,<5` |
+| 8 | verl 0.8.0 不含 Megatron 后端 | Megatron backend 是 dev 分支 preview，PyPI 稳定版未注册 | **用 Docker 镜像**（含 Megatron + vLLM + DeepEP 全套）|
 
 ## 参考
 
