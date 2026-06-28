@@ -313,7 +313,87 @@ gcsfuse \
 
 ### 4.3 Lustre（可选）
 
-如果客户提供 Lustre 文件系统，使用 PV/PVC 方式挂载。
+如果客户提供 Lustre 文件系统，使用 Lustre CSI Driver + PV/PVC 方式挂载。
+
+#### Kernel 6.6 与 Lustre 版本兼容性
+
+GB200 Worker 运行 kernel 6.6（TLinux 4 / Rocky Linux 9.x），**Lustre 2.14 client 内核模块无法在 kernel 6.6 上编译**。2.14 仅支持 kernel 4.18-5.x（RHEL 8 时代），6.x 内核的 VFS/网络栈 API 变更导致源码不兼容。
+
+| Lustre 版本 | 支持的最高 kernel | 备注 |
+|---|---|---|
+| 2.14.x | ~5.x (RHEL 8) | 无法在 kernel 6.6 上编译 |
+| 2.15.7+ | 5.14 (RHEL 9.6) | 部分 6.x 支持 |
+| 2.16+ | 6.x (RHEL 9.4+) | 推荐 |
+| 2.17+ | 6.6+ | 完整支持 |
+
+如果客户 Lustre **服务端**是 2.14，**客户端必须用 2.16+ 或 2.17**（向后兼容，新 client 可连老 server）。
+
+#### Grant 死锁：2.17 Client + 2.14 Server 踩坑（实测）
+
+**现象**：buffered I/O 写入（`cp -a`、`tar`、应用写入）后，sync 卡死，后续所有 I/O 包括读都被阻塞。`dd oflag=direct` 测试**无法复现**（direct I/O 绕过页缓存和 grant 机制）。
+
+**根因**：client/server 版本混搭导致 grant 参数不匹配。
+
+- Lustre 2.14 server：`initial_grant=8MB`，动态最大 ~60MB
+- Lustre 2.17 client 默认：`max_dirty_mb=64MB`（每 OST 脏页上限）
+- 64MB > 60MB → 客户端积压的脏页超过 server 授权量 → grant 耗尽（`cur_grant_bytes=0`）→ 刷盘 RPC 无法发送 → 永久死锁
+
+**内核报错**：
+```
+LustreError: osc_announce_cached: data-OST0004-osc: dirty 16675 > dirty_max 16384
+LustreError: osc_extent_wait: data-OST0007-osc: wait ext to 0 timedout, recovery in progress?
+```
+
+**修复**：降低 client 参数，确保脏页上限 < server grant 上限。
+
+```bash
+# 临时生效
+lctl set_param osc.*.max_dirty_mb=32       # 默认 64 → 32（< server max grant ~60MB）
+lctl set_param osc.*.max_rpcs_in_flight=4   # 默认 8 → 4（给 2.14 server 更多处理时间）
+```
+
+**持久化**：`/etc/lctl.conf` 只在模块加载时生效一次，无法覆盖 CSI 挂载创建的新 OSC 实例。必须用 systemd service：
+
+```bash
+cat <<'EOF' | sudo tee /etc/systemd/system/lustre-tuning.service
+[Unit]
+Description=Lustre client tuning for 2.14 server compatibility
+After=kubelet.service
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/sleep 30
+ExecStart=/usr/sbin/lctl set_param osc.*.max_dirty_mb=32
+ExecStart=/usr/sbin/lctl set_param osc.*.max_rpcs_in_flight=4
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
+EOF
+sudo systemctl daemon-reload && sudo systemctl enable lustre-tuning
+```
+
+#### GCS → Lustre 数据传输
+
+直接从 GCS 写入 Lustre（`gcloud storage rsync`）会因 composite download 产生大量并发 buffered 写入，快速耗尽 grant。推荐两段式：
+
+```bash
+# 1. GCS → 本地 SSD（~3.8 GB/s）
+gcloud storage rsync -r gs://bucket/models /lssd/models
+
+# 2. 本地 SSD → Lustre（多目录并行 cp，~6 GB/s）
+for dir in /lssd/models/*/; do
+  cp -a "$dir" /mnt/lustre/models/ &
+done
+wait
+
+# 3. 确认脏页清零（非零说明 grant 死锁，需 umount -l + 重新 mount）
+lctl get_param osc.*.cur_dirty_bytes | grep -v "=0$"
+```
+
+#### vLLM 从 Lustre 加载模型
+
+vLLM 默认使用 mmap 加载 safetensors。`tensor-parallel-size > 1` 时，多 GPU worker 同时触发 mmap page fault，Lustre 的 `ll_filemap_fault` 会串行化这些 fault，读取性能随 shard 数指数级下降。解法：先 `cp` 模型到 Local SSD 或 `/dev/shm`，再从本地加载。
 
 ---
 
