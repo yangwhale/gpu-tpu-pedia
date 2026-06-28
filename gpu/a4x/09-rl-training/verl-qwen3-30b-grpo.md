@@ -35,45 +35,45 @@
 
 ## Step 1: 安装 veRL 和依赖
 
+> **踩坑 #1**：Ubuntu 24.04 使用 PEP 668 (externally-managed-environment)，裸 `pip install` 会被拒绝。B200 GCE 镜像的 PyTorch 装在 `~/.local/` 用户目录，需要加 `--break-system-packages` 参数。
+
 ```bash
-# 1.1 安装 veRL（从 PyPI 或 source）
-pip install verl
+# 1.1 一次性安装 veRL + vLLM + Ray + wandb
+pip3 install --break-system-packages verl vllm "ray[default]" wandb
 
-# 1.2 安装 vLLM（rollout 引擎）
-pip install vllm
+# 1.2 安装 Megatron-LM bridge（Megatron 后端必需）
+pip3 install --break-system-packages -U "git+https://github.com/ISEEKYAN/mbridge.git"
 
-# 1.3 安装 Megatron-LM bridge（Megatron 后端必需）
-pip install -U git+https://github.com/ISEEKYAN/mbridge.git
-
-# 1.4 安装 Ray（分布式调度）
-pip install "ray[default]"
-
-# 1.5 安装其他依赖
-pip install wandb flash-attn
-
-# 1.6 验证安装
-python3 -c "import verl; print('verl OK')"
-python3 -c "import vllm; print('vLLM OK')"
-python3 -c "import megatron; print('Megatron OK')" 2>/dev/null || echo "Megatron via mbridge"
+# 1.3 验证安装
+python3 -c "import verl; print('verl:', verl.__version__)"
+python3 -c "import vllm; print('vLLM:', vllm.__version__)"
+python3 -c "import ray; print('Ray:', ray.__version__)"
 ```
 
 ## Step 2: 下载模型和数据
 
-```bash
-# 2.1 下载 Qwen3-30B-A3B-Base 模型（~60GB）
-# 需要 huggingface-cli 登录或 HF_TOKEN
-export HF_TOKEN=<your_token>
-huggingface-cli download Qwen/Qwen3-30B-A3B-Base --local-dir /home/chrisya/models/Qwen3-30B-A3B-Base
+> **踩坑 #2**：veRL 脚本中的 HF dataset repo ID `BytedTsinghua/DAPO-Math-17k` 不存在。正确 ID 为 `BytedTsinghua-SIA/DAPO-Math-17k`（多了 `-SIA`）。AIME-2024 使用 `HuggingFaceH4/aime_2024`。
+>
+> **踩坑 #3**：AIME-2024 的 parquet 文件名为 `train-00000-of-00001.parquet`，而 veRL 脚本期望 `aime-2024.parquet`。需要 rename 或修改 VAL_FILES 环境变量。
 
-# 2.2 下载训练数据 DAPO-Math-17k
-huggingface-cli download BytedTsinghua/DAPO-Math-17k --repo-type dataset --local-dir /home/chrisya/data/DAPO-Math-17k
+```bash
+# 2.1 下载 Qwen3-30B-A3B-Base 模型（~60GB，公开无需 token）
+huggingface-cli download Qwen/Qwen3-30B-A3B-Base --local-dir ~/models/Qwen3-30B-A3B-Base
+
+# 2.2 下载训练数据 DAPO-Math-17k（注意 repo ID 带 -SIA）
+huggingface-cli download BytedTsinghua-SIA/DAPO-Math-17k --repo-type dataset --local-dir ~/data/DAPO-Math-17k
 
 # 2.3 下载验证数据 AIME-2024
-huggingface-cli download MaxwellYoung/AIME-2024 --repo-type dataset --local-dir /home/chrisya/data/AIME-2024
+huggingface-cli download HuggingFaceH4/aime_2024 --repo-type dataset --local-dir ~/data/AIME-2024
 
-# 2.4 验证数据文件存在
-ls /home/chrisya/data/DAPO-Math-17k/data/dapo-math-17k.parquet
-ls /home/chrisya/data/AIME-2024/data/aime-2024.parquet
+# 2.4 重命名 AIME parquet 以匹配 veRL 脚本期望
+mkdir -p ~/data/AIME-2024/data
+cp ~/data/AIME-2024/data/train-00000-of-00001.parquet ~/data/AIME-2024/data/aime-2024.parquet 2>/dev/null || true
+
+# 2.5 验证
+ls ~/data/DAPO-Math-17k/data/dapo-math-17k.parquet
+ls ~/data/AIME-2024/data/aime-2024.parquet
+ls ~/models/Qwen3-30B-A3B-Base/*.safetensors | wc -l
 ```
 
 ## Step 3: 克隆 veRL 仓库获取官方脚本
@@ -150,7 +150,9 @@ bash examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh
 
 | 序号 | 问题 | 根因 | 解决方法 |
 |---|---|---|---|
-| 1 | — | — | — |
+| 1 | `pip install` 被拒绝 (PEP 668) | Ubuntu 24.04 externally-managed-environment | 加 `--break-system-packages` 参数 |
+| 2 | DAPO-Math-17k 下载 404 | veRL 脚本写的 `BytedTsinghua/` 不存在 | 正确 repo: `BytedTsinghua-SIA/DAPO-Math-17k` |
+| 3 | AIME-2024 parquet 文件名不匹配 | HF 自动命名 `train-00000-of-00001.parquet` | cp rename 为 `aime-2024.parquet` 或改 VAL_FILES 环境变量 |
 
 ## 参考
 
