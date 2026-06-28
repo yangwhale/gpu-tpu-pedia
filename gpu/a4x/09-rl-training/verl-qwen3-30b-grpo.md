@@ -33,16 +33,25 @@
 | PyTorch | 2.9.1+cu129（预装） |
 | Disk | 1.9TB |
 
-## Step 1: 安装 Docker + 拉 veRL 官方镜像
+## Step 1: 安装 Docker + 拉镜像 + 容器内装 veRL
 
-> **关键教训（踩坑 #1-8 总结）**：在 B200 GCE 裸机上用 pip 安装 veRL 会陷入依赖地狱——系统预装的 PyTorch/boto3/OpenSSL/numpy 与 veRL 依赖互相冲突，Megatron 后端在稳定版不可用，dev 分支有未发布依赖。**直接用 veRL 官方 Docker 镜像**是唯一可靠路径。
+> **关键教训（踩坑 #1-14 总结）**：
+> 1. 裸机 pip install veRL 会陷入依赖地狱（系统包冲突、版本不匹配）→ **必须用 Docker**
+> 2. veRL 文档推荐的镜像 `app-verl0.4-*` 是 Hopper only → **用 `verlai/verl:vllm023.dev1`**（CUDA 13，支持 Blackwell）
+> 3. `vllm023.dev1` 是 base image 不含 verl → **容器内从 git clone main 安装**
+> 4. veRL main 分支依赖未发布的 `transfer_queue` 模块 → **创建 stub 绕过**
+> 5. B200 GCE 镜像 dpkg 损坏 → `apt-mark hold linux-image-*` 后再装 Docker
+
+### 1.1 安装 Docker（B200 GCE 特殊处理）
 
 ```bash
-# 1.1 安装 Docker
+# B200 GCE 镜像的 kernel dkms 可能损坏，先 hold 再装
+sudo apt-mark hold linux-image-* linux-headers-*
+sudo dpkg --configure -a --force-all
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 
-# 1.2 安装 NVIDIA Container Toolkit
+# NVIDIA Container Toolkit
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
   sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
@@ -51,16 +60,51 @@ curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-contai
 sudo apt-get update -qq && sudo apt-get install -y -qq nvidia-container-toolkit
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
+```
 
-# 1.3 验证 GPU 在 Docker 中可见
-docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
+### 1.2 拉镜像
 
-# 1.4 拉 veRL 官方镜像（含 Megatron + vLLM + DeepEP 全套）
+```bash
+# 拉 veRL base image（CUDA 13 + vLLM 0.23 + Megatron）
 docker pull verlai/verl:vllm023.dev1
 
-# 1.5 验证
+# 验证 GPU
 docker run --rm --gpus all verlai/verl:vllm023.dev1 \
-  python3 -c "import verl; import vllm; import megatron; print('ALL OK')"
+  python3 -c "import torch; print(torch.__version__, torch.cuda.get_device_name(0))"
+```
+
+### 1.3 准备容器启动脚本
+
+veRL main 分支依赖未发布的 `transfer_queue`，需要 stub。将以下脚本保存为 `~/verl-run.sh`：
+
+```bash
+#!/bin/bash
+# Install veRL from latest main
+cd /tmp && git clone --depth 1 -q https://github.com/verl-project/verl.git
+cd /tmp/verl && pip install -e . -q
+pip install -q "transformers>=4.56.0,<5"
+pip install -q -U "git+https://github.com/ISEEKYAN/mbridge.git"
+
+# Create transfer_queue stub (未发布模块的最小替代)
+mkdir -p /tmp/verl/transfer_queue
+cat > /tmp/verl/transfer_queue/__init__.py << 'STUB'
+class KVBatchMeta:
+    pass
+class TransferQueue:
+    pass
+def init(config):
+    pass
+def close():
+    pass
+def get_queue():
+    return None
+STUB
+
+python3 -c "import verl; print('verl:', verl.__version__)"
+
+# Run training
+cd /tmp/verl
+exec bash examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh "$@"
 ```
 
 ## Step 2: 下载模型和数据
@@ -101,30 +145,32 @@ git submodule update --init --recursive recipe
 ## Step 4: 运行 GRPO 训练（Docker + Colocate 模式）
 
 ```bash
-# 启动 veRL 容器（挂载模型、数据、代码目录）
-docker run --rm -it --gpus all --shm-size=256g \
+docker run -d --name verl-grpo --gpus all --shm-size=256g \
   --network=host \
   -v ~/models:/models \
   -v ~/data:/data \
-  -v ~/verl:/workspace/verl \
-  -w /workspace/verl \
+  -v ~/verl-run.sh:/tmp/verl-run.sh \
   -e WANDB_MODE=disabled \
   -e CUDA_DEVICE_MAX_CONNECTIONS=1 \
+  -e HYDRA_FULL_ERROR=1 \
+  -e MODEL_PATH=/models/Qwen3-30B-A3B-Base \
+  -e TRAIN_FILES=/data/DAPO-Math-17k/data/dapo-math-17k.parquet \
+  -e VAL_FILES=/data/AIME-2024/data/aime-2024.parquet \
+  -e ACTOR_TP=1 -e ACTOR_PP=1 -e ACTOR_EP=8 \
+  -e REF_TP=1 -e REF_PP=1 -e REF_EP=8 \
+  -e ALL_OFFLOAD=True \
+  -e ROLLOUT_TP=8 -e GEN_MOE_TP=1 -e GEN_MOE_EP=8 \
+  -e NNODES=1 -e NGPUS_PER_NODE=8 \
+  -e TOTAL_EPOCHS=3 -e TEST_FREQ=1 -e SAVE_FREQ=100 \
+  -e TRAIN_BATCH_SIZE=64 \
   verlai/verl:vllm023.dev1 \
-  bash -c "
-    # 官方推荐 8 GPU 并行度
-    export MODEL_PATH=/models/Qwen3-30B-A3B-Base
-    export TRAIN_FILES=/data/DAPO-Math-17k/data/dapo-math-17k.parquet
-    export VAL_FILES=/data/AIME-2024/data/aime-2024.parquet
-    export ACTOR_TP=1 ACTOR_PP=1 ACTOR_EP=8
-    export REF_TP=1 REF_PP=1 REF_EP=8
-    export ALL_OFFLOAD=True
-    export ROLLOUT_TP=4 GEN_MOE_TP=2 GEN_MOE_EP=2
-    export NNODES=1 NGPUS_PER_NODE=8
-    export TOTAL_EPOCHS=3 TEST_FREQ=1 SAVE_FREQ=100
-    bash examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh
-  "
+  bash /tmp/verl-run.sh
+
+# 查看日志
+docker logs -f verl-grpo
 ```
+
+> **Rollout 并行度注意**：8 GPU 单节点时 ROLLOUT_TP=8、GEN_MOE_EP=8，确保 `EP == TP * DP`（8 = 8 × 1）。设其他值（如 TP=4, EP=2）会触发 assertion 错误。
 
 ## Step 5: 性能对标
 
@@ -159,6 +205,11 @@ docker run --rm -it --gpus all --shm-size=256g \
 | 7 | transformers 5.x breaking changes | `--force-reinstall` 拉到了 transformers 5.12.1 | 固定 `transformers>=4.56.0,<5` |
 | 8 | verl 0.8.0 不含 Megatron 后端 | Megatron backend 是 dev 分支 preview，PyPI 稳定版未注册 | **用 Docker 镜像**（含 Megatron + vLLM + DeepEP 全套）|
 | 9 | veRL 文档推荐的镜像不支持 B200 | `app-verl0.4-*` 基于 NGC 24.08 (Hopper only)，检测到 B200 直接拒绝启动 | 用最新镜像 `verlai/verl:vllm023.dev1`（CUDA 13.0+，支持 Blackwell）|
+| 10 | verl v0.8.0 weight resharding 不兼容 vLLM 0.23 | MoE weight loader `shard_dim=0` ValueError | 用 veRL main 分支（git clone latest），配合 `transfer_queue` stub |
+| 11 | Docker 镜像 `vllm023.dev1` 不含 verl | 这是 base image，需要自己装 verl | 容器内 `pip install -e .` from git clone |
+| 12 | `transfer_queue` 需要 `KVBatchMeta` class | stub 只有 `init/close` 不够 | stub 补全 `KVBatchMeta` + `TransferQueue` class |
+| 13 | rollout EP 配置 assertion | `expert_parallel_size != TP * DP` | ROLLOUT_TP=8, GEN_MOE_EP=8（8 卡 = 1 个推理组）|
+| 14 | B200 GCE dpkg 状态损坏 | kernel dkms 编译失败阻塞所有 apt install | `apt-mark hold linux-image-*` 绕过 |
 
 ## 参考
 
