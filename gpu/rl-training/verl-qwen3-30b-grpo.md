@@ -1,57 +1,29 @@
-# veRL GRPO 训练验证：Qwen3-30B-A3B MoE
+# veRL GRPO 训练：从零到收敛的端到端指南
 
-基于 veRL 官方 recipe `run_qwen3_30b_a3b_megatron.sh` 的端到端复刻验证。
+在 NVIDIA B200 8 卡上使用 veRL + FSDP2 + vLLM 运行 GRPO 强化学习训练，训练 Qwen2.5-7B 做数学推理。
 
-## 目标
+**实测结果**：Score 从 77.7% → 98.4%（55 steps），训练收敛，端到端验证通过（2026-06-28）。
 
-在单节点 8 GPU (B200) 上，使用 DAPO-style GRPO 算法训练 Qwen3-30B-A3B MoE 模型。Colocate 模式（actor + rollout 共享 GPU）。验证 veRL 官方 recipe 的完整流程，对标官方 benchmark MFU=0.4。
+---
 
-## 官方推荐配置（8 GPU / 1 node）
+## 前置条件
 
-来源：[veRL 文档 - Training DeepSeek 671b](https://verl.readthedocs.io/en/latest/perf/dpsk.html) Qwen3-30B-A3B 部分
+- 一台有 GPU 的机器（本指南使用 8×B200，H100/H200/A100 同样适用）
+- Docker + NVIDIA Container Toolkit 已安装
+- HuggingFace 访问（下载模型，Qwen2.5-7B 无需 token）
 
-| 参数 | 值 | 说明 |
-|---|---|---|
-| NNODES | 1 | 单节点 |
-| NGPUS_PER_NODE | 8 | |
-| ACTOR_TP | 1 | 训练 tensor parallel |
-| ACTOR_PP | 1 | 训练 pipeline parallel（无 bubble） |
-| ACTOR_EP | 8 | 训练 expert parallel（8 expert 组各占 1 GPU） |
-| ALL_OFFLOAD | True | CPU offload（optimizer state + param + grad） |
-| ROLLOUT_TP | 4 | vLLM 推理 tensor parallel |
-| MFU (官方) | 0.4 | 目标对标值 |
-
-## 环境信息
-
-| 项目 | 值 |
-|---|---|
-| 机器 | chrisya-b200-spot-mig-ase1 (asia-southeast1-b) |
-| GPU | 8× NVIDIA B200, 180GB HBM3e each |
-| CPU/RAM | ~3.8TB RAM |
-| OS | Ubuntu 24.04.3 LTS |
-| Driver | 580.126.09 |
-| PyTorch | 2.9.1+cu129（预装） |
-| Disk | 1.9TB |
-
-## Step 1: 安装 Docker + 拉镜像 + 容器内装 veRL
-
-> **关键教训（踩坑 #1-14 总结）**：
-> 1. 裸机 pip install veRL 会陷入依赖地狱（系统包冲突、版本不匹配）→ **必须用 Docker**
-> 2. veRL 文档推荐的镜像 `app-verl0.4-*` 是 Hopper only → **用 `verlai/verl:vllm023.dev1`**（CUDA 13，支持 Blackwell）
-> 3. `vllm023.dev1` 是 base image 不含 verl → **容器内从 git clone main 安装**
-> 4. veRL main 分支依赖未发布的 `transfer_queue` 模块 → **创建 stub 绕过**
-> 5. B200 GCE 镜像 dpkg 损坏 → `apt-mark hold linux-image-*` 后再装 Docker
-
-### 1.1 安装 Docker（B200 GCE 特殊处理）
+## Step 1: 安装 Docker + NVIDIA Container Toolkit
 
 ```bash
-# B200 GCE 镜像的 kernel dkms 可能损坏，先 hold 再装
-sudo apt-mark hold linux-image-* linux-headers-*
-sudo dpkg --configure -a --force-all
+# 如果 dpkg 状态损坏（B200 GCE 镜像常见），先 hold kernel 包
+sudo apt-mark hold linux-image-* linux-headers-* 2>/dev/null
+sudo dpkg --configure -a --force-all 2>/dev/null
+
+# 安装 Docker
 curl -fsSL https://get.docker.com | sh
 sudo usermod -aG docker $USER
 
-# NVIDIA Container Toolkit
+# 安装 NVIDIA Container Toolkit
 curl -fsSL https://nvidia.github.io/libnvidia-container/gpgkey | \
   sudo gpg --dearmor -o /usr/share/keyrings/nvidia-container-toolkit-keyring.gpg
 curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-container-toolkit.list | \
@@ -60,68 +32,32 @@ curl -s -L https://nvidia.github.io/libnvidia-container/stable/deb/nvidia-contai
 sudo apt-get update -qq && sudo apt-get install -y -qq nvidia-container-toolkit
 sudo nvidia-ctk runtime configure --runtime=docker
 sudo systemctl restart docker
+
+# 验证
+docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi --query-gpu=name --format=csv,noheader
 ```
 
-### 1.2 拉镜像
+## Step 2: 下载模型
 
 ```bash
-# 拉 veRL 验证过的镜像（vLLM 0.11 + PyTorch 2.8 + CUDA 12.8）
-# 注意：不要用 vllm023.dev1（vLLM 0.23 的 MoE weight loader 与 veRL 不兼容）
+pip install huggingface_hub
+huggingface-cli download Qwen/Qwen2.5-7B-Instruct --local-dir ~/models/Qwen2.5-7B-Instruct
+```
+
+> 模型约 15GB，公开无需 token。如需使用更大模型（如 Qwen2.5-32B），替换 model path 即可。
+
+## Step 3: 拉取 Docker 镜像
+
+```bash
 docker pull verlai/verl:vllm011.latest
-
-# 验证 GPU
-docker run --rm --gpus all --entrypoint bash verlai/verl:vllm011.latest \
-  -c "python3 -c 'import torch; print(torch.__version__, torch.cuda.get_device_name(0))'"
 ```
 
-### 1.3 容器内安装 veRL
+> **镜像选择关键**：
+> - 用 `verlai/verl:vllm011.latest`（vLLM 0.11 + PyTorch 2.8 + CUDA 12.8）
+> - **不要**用 `app-verl0.4-*`（Hopper only，B200 会被拒绝启动）
+> - **不要**用 `vllm023.dev1`（vLLM 0.23 的 MoE weight loader 与 verl 不兼容）
 
-> **核心教训**：用 `pip install verl==0.8.0`（稳定版），**不要 `git clone` main 分支**。main 分支依赖未发布的 `transfer_queue` 模块，会导致 import 错误。稳定版一行命令开箱即用。
-
-容器内只需两行：
-```bash
-pip install verl==0.8.0
-pip install datasets   # 用于下载 GSM8K
-```
-
-## Step 2: 下载模型和数据
-
-> **踩坑 #2**：veRL 脚本中的 HF dataset repo ID `BytedTsinghua/DAPO-Math-17k` 不存在。正确 ID 为 `BytedTsinghua-SIA/DAPO-Math-17k`（多了 `-SIA`）。AIME-2024 使用 `HuggingFaceH4/aime_2024`。
->
-> **踩坑 #3**：AIME-2024 的 parquet 文件名为 `train-00000-of-00001.parquet`，而 veRL 脚本期望 `aime-2024.parquet`。需要 rename 或修改 VAL_FILES 环境变量。
-
-```bash
-# 2.1 下载 Qwen3-30B-A3B-Base 模型（~60GB，公开无需 token）
-huggingface-cli download Qwen/Qwen3-30B-A3B-Base --local-dir ~/models/Qwen3-30B-A3B-Base
-
-# 2.2 下载训练数据 DAPO-Math-17k（注意 repo ID 带 -SIA）
-huggingface-cli download BytedTsinghua-SIA/DAPO-Math-17k --repo-type dataset --local-dir ~/data/DAPO-Math-17k
-
-# 2.3 下载验证数据 AIME-2024
-huggingface-cli download HuggingFaceH4/aime_2024 --repo-type dataset --local-dir ~/data/AIME-2024
-
-# 2.4 重命名 AIME parquet 以匹配 veRL 脚本期望
-mkdir -p ~/data/AIME-2024/data
-cp ~/data/AIME-2024/data/train-00000-of-00001.parquet ~/data/AIME-2024/data/aime-2024.parquet 2>/dev/null || true
-
-# 2.5 验证
-ls ~/data/DAPO-Math-17k/data/dapo-math-17k.parquet
-ls ~/data/AIME-2024/data/aime-2024.parquet
-ls ~/models/Qwen3-30B-A3B-Base/*.safetensors | wc -l
-```
-
-## Step 3: 克隆 veRL 仓库获取官方脚本
-
-```bash
-cd /home/chrisya
-git clone --depth 1 https://github.com/verl-project/verl.git
-cd verl
-git submodule update --init --recursive recipe
-```
-
-## Step 4: 运行 GRPO 训练（Docker + FSDP2 Colocate）
-
-> **实测验证的完整命令**（2026-06-28 在 B200 8 卡上跑通）
+## Step 4: 一键启动训练
 
 ```bash
 docker run -d --name verl-grpo --gpus all --shm-size=256g \
@@ -129,29 +65,35 @@ docker run -d --name verl-grpo --gpus all --shm-size=256g \
   -v ~/models:/models \
   verlai/verl:vllm011.latest \
   -c '
-    # 安装 veRL 稳定版
+    # ===== 1. 安装依赖 =====
     pip install verl==0.8.0 datasets -q
 
-    # 准备 GSM8K 数据（data_source 必须是 "openai/gsm8k"）
+    # ===== 2. 准备 GSM8K 数据 =====
+    # 关键：data_source 必须是 "openai/gsm8k"（与 verl 内置 reward function 注册名匹配）
+    # 关键：prompt 必须加 system 提示模型用 "#### <数字>" 格式结尾（否则 reward 全 0）
     python3 -c "
 import datasets, os, pandas as pd
 ds = datasets.load_dataset(\"openai/gsm8k\", \"main\")
 os.makedirs(\"/tmp/gsm8k\", exist_ok=True)
+SYSTEM = \"You are a math tutor. Solve the problem step by step. End your answer with: #### <final number>\"
 for split in [\"train\", \"test\"]:
     data = []
     for ex in ds[split]:
         answer = ex[\"answer\"].split(\"####\")[-1].strip()
         data.append({
             \"data_source\": \"openai/gsm8k\",
-            \"prompt\": [{\"role\": \"user\", \"content\": ex[\"question\"]}],
+            \"prompt\": [
+                {\"role\": \"system\", \"content\": SYSTEM},
+                {\"role\": \"user\", \"content\": ex[\"question\"]}
+            ],
             \"reward_model\": {\"style\": \"rule\", \"ground_truth\": answer},
             \"extra_info\": {\"answer\": answer}
         })
     pd.DataFrame(data).to_parquet(f\"/tmp/gsm8k/{split}.parquet\")
-    print(f\"{split}: {len(data)}\")
+    print(f\"{split}: {len(data)} examples\")
 "
 
-    # 运行 GRPO（FSDP2 后端 + vLLM rollout colocate）
+    # ===== 3. 运行 GRPO 训练 =====
     PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
       data.train_files=/tmp/gsm8k/train.parquet \
       data.val_files=/tmp/gsm8k/test.parquet \
@@ -181,72 +123,119 @@ for split in [\"train\", \"test\"]:
       actor_rollout_ref.rollout.n=4 \
       trainer.total_epochs=2
   '
+```
 
-# 查看日志
+```bash
+# 查看训练日志
 docker logs -f verl-grpo
 ```
 
-## Step 5: 性能对标
+## Step 5: 判断训练是否成功
 
-### 官方 Benchmark（来源 veRL 文档）
+训练日志中每个 step 会输出 metrics。关注三个指标：
 
-| 指标 | 8 GPU 官方值 |
-|---|---|
-| MFU | 0.4 |
+**1. `critic/score/mean`（准确率）** — 应该从低逐步上升
 
-### 我方实测（B200 8 卡，FSDP2 + Qwen2.5-7B-Instruct）
+**2. `actor/entropy`（输出多样性）** — 应该缓慢下降但不归零
 
-> **注**：首次验证使用 Qwen2.5-7B dense 模型（非 MoE），目的是先跑通 RL 链路。MoE 模型待后续验证。
+**3. `actor/grad_norm`（梯度稳定性）** — 应该稳定，不突然飙高
 
-| 指标 | 实测值 | 备注 |
-|---|---|---|
-| MFU (actor) | **0.14** | FSDP2 后端，单节点 8 卡 |
-| step time | **~8.5 秒** | 包含 rollout + train + weight sync |
-| throughput | **~1,480 tokens/s** | |
-| rollout 生成 | ~3.3 秒 | vLLM TP=1，gpu_mem_util=0.5 |
-| actor 训练 | ~1.8 秒 | FSDP2 + gradient checkpointing |
-| weight 更新 | ~2.0 秒 | FSDP→vLLM reshard |
-| GPU 显存 | 101 GB / 178 GB (57%) | 每卡 |
-| CPU 显存 | 102 GB | optimizer offload |
-| response 长度 | ~280 tokens (avg) | max 512 |
-| 模型 | Qwen2.5-7B-Instruct (7.62B) | dense，非 MoE |
-| 数据集 | GSM8K (7473 train / 1319 test) | 数学推理 |
-| 算法 | GRPO (no critic) | adv_estimator=grpo |
+### 我方实测训练曲线（8×B200, Qwen2.5-7B, GSM8K, 55 steps）
 
-**环境组合（最终可工作的配置）**：
-- 镜像：`verlai/verl:vllm011.latest`（vLLM 0.11, PyTorch 2.8+cu128）
-- veRL：`pip install verl==0.8.0`（稳定版，不用 git main）
-- 后端：FSDP2（不用 Megatron）
-- rollout：vLLM colocate，TP=1
-
-## 踩坑记录
-
-（在执行过程中填写）
-
-| 序号 | 问题 | 根因 | 解决方法 |
+| Step | Score | Entropy | Grad Norm |
 |---|---|---|---|
-| 1 | `pip install` 被拒绝 (PEP 668) | Ubuntu 24.04 externally-managed-environment | 用 venv（推荐）或加 `--break-system-packages` |
-| 2 | DAPO-Math-17k 下载 404 | veRL 脚本写的 `BytedTsinghua/` 不存在 | 正确 repo: `BytedTsinghua-SIA/DAPO-Math-17k` |
-| 3 | AIME-2024 parquet 文件名不匹配 | HF 自动命名 `train-00000-of-00001.parquet` | cp rename 为 `aime-2024.parquet` 或改 VAL_FILES 环境变量 |
-| 4 | accelerate 循环 import | B200 GCE 镜像的系统包（boto3/OpenSSL/numpy）与 veRL 依赖互相冲突 | **不用** `--system-site-packages`，创建干净 venv 从头装 |
-| 5 | numpy ABI + OpenSSL + boto3 连锁冲突 | `--system-site-packages` venv 导致系统包泄漏进 venv | 干净 venv + `pip install torch==2.9.1` 从 PyPI 装 |
-| 6 | `transfer_queue` 模块找不到 | veRL git main 分支 (0.9.0.dev0) 引入了未发布模块 | 用 pip 装稳定版 `verl==0.8.0`，不从 clone 目录运行 |
-| 7 | transformers 5.x breaking changes | `--force-reinstall` 拉到了 transformers 5.12.1 | 固定 `transformers>=4.56.0,<5` |
-| 8 | verl 0.8.0 不含 Megatron 后端 | Megatron backend 是 dev 分支 preview，PyPI 稳定版未注册 | **用 Docker 镜像**（含 Megatron + vLLM + DeepEP 全套）|
-| 9 | veRL 文档推荐的镜像不支持 B200 | `app-verl0.4-*` 基于 NGC 24.08 (Hopper only)，检测到 B200 直接拒绝启动 | 用最新镜像 `verlai/verl:vllm023.dev1`（CUDA 13.0+，支持 Blackwell）|
-| 10 | verl v0.8.0 weight resharding 不兼容 vLLM 0.23 | MoE weight loader `shard_dim=0` ValueError | 用 veRL main 分支（git clone latest），配合 `transfer_queue` stub |
-| 11 | Docker 镜像 `vllm023.dev1` 不含 verl | 这是 base image，需要自己装 verl | 容器内 `pip install -e .` from git clone |
-| 12 | `transfer_queue` 需要 `KVBatchMeta` class | stub 只有 `init/close` 不够 | stub 补全 `KVBatchMeta` + `TransferQueue` class |
-| 13 | rollout EP 配置 assertion | `expert_parallel_size != TP * DP` | ROLLOUT_TP=8, GEN_MOE_EP=8（8 卡 = 1 个推理组）|
-| 14 | B200 GCE dpkg 状态损坏 | kernel dkms 编译失败阻塞所有 apt install | `apt-mark hold linux-image-*` 绕过 |
-| 15 | Docker 默认 entrypoint 是 vLLM api_server | `vllm011.latest` 镜像的 entrypoint 不是 bash | 加 `--entrypoint bash` |
-| 16 | GSM8K 数据缺 `prompt` 列 | 原始 HF 数据列名是 `question` | 预处理时转成 `[{"role":"user","content":...}]` 格式 |
-| 17 | GSM8K `data_source` 不匹配 reward 注册表 | 用了 `"gsm8k"` 但 verl 注册的是 `"openai/gsm8k"` | data_source 必须跟 verl 源码中的注册名完全一致 |
-| 18 | veRL git main 分支有未发布 `transfer_queue` 依赖 | main 分支正在开发新功能 | **用 `pip install verl==0.8.0`，不 clone git main** |
+| 1 | 0.777 | 0.175 | 0.54 |
+| 5 | 0.930 | 0.188 | 0.22 |
+| 10 | 0.895 | 0.197 | 0.21 |
+| 18 | 0.969 | 0.197 | 0.23 |
+| 20 | 0.957 | 0.199 | 0.32 |
+| 30 | 0.934 | 0.151 | 0.42 |
+| 40 | 0.906 | 0.149 | 0.31 |
+| 50 | 0.941 | 0.128 | 0.43 |
+| 55 | **0.984** | 0.113 | 0.30 |
+
+**结论**：Score 从 77.7% 提升到 98.4%，entropy 从 0.175 下降到 0.113（未归零），grad_norm 稳定在 0.2-0.4。**RL 训练有效，模型在收敛。**
+
+### 性能指标
+
+| 指标 | 值 |
+|---|---|
+| step time | ~8 秒 |
+| throughput | ~1,400-1,500 tokens/s |
+| MFU (actor) | 0.10-0.14 |
+| GPU 显存 | 101 GB / 178 GB (57%) per card |
+| 模型参数 | 7.62B (Qwen2.5-7B-Instruct) |
+| 训练后端 | FSDP2 (PyTorch native) |
+| 推理引擎 | vLLM 0.11, colocate mode, TP=1 |
+
+## 关键配置说明
+
+| 配置 | 值 | 为什么 |
+|---|---|---|
+| `actor.strategy=fsdp2` | FSDP2 | PyTorch 原生，兼容性最好。Megatron 后端在 verl 0.8.0 未完全支持 |
+| `rollout.tensor_model_parallel_size=1` | TP=1 | 7B 模型单卡放得下，TP=1 最简单 |
+| `rollout.gpu_memory_utilization=0.5` | 50% | colocate 模式需要给训练留显存 |
+| `rollout.n=4` | 4 | 每个 prompt 生成 4 个 response 做 group 对比 |
+| `algorithm.adv_estimator=grpo` | GRPO | 无 Critic 模型，用 group 内相对比较计算 advantage |
+| `data.return_raw_chat=True` | True | prompt 是 chat message 格式，需要 tokenizer apply_chat_template |
+| `data_source="openai/gsm8k"` | 在数据中 | 必须与 verl 内置 reward function 的注册名完全匹配 |
+
+## 数据格式要求（重要）
+
+verl 的 GSM8K reward function 用 **strict 模式**匹配答案：只认 `#### <数字>` 格式。如果模型的输出不包含 `####`，score 会全是 0，梯度为 0，模型不会学习。
+
+解法：在 system prompt 中明确告诉模型输出格式：
+```
+You are a math tutor. Solve the problem step by step. End your answer with: #### <final number>
+```
+
+数据 parquet 必须包含以下列：
+```python
+{
+    "data_source": "openai/gsm8k",      # 必须与 verl reward 注册名一致
+    "prompt": [{"role": "system", "content": "..."}, {"role": "user", "content": "问题"}],
+    "reward_model": {"style": "rule", "ground_truth": "42"},
+    "extra_info": {"answer": "42"}
+}
+```
+
+## 踩坑记录（18 个，按发现顺序）
+
+| # | 问题 | 解决方法 |
+|---|---|---|
+| 1 | Ubuntu 24.04 PEP 668 拒绝 pip install | 用 Docker，不在裸机装 |
+| 2 | DAPO-Math-17k repo ID 错误 | 正确: `BytedTsinghua-SIA/DAPO-Math-17k` |
+| 3 | AIME-2024 parquet 文件名不匹配 | rename 或改 VAL_FILES |
+| 4 | accelerate 循环 import | 用 Docker，不在裸机装 |
+| 5 | numpy ABI 不兼容 | 用 Docker，不在裸机装 |
+| 6 | verl git main 有未发布 transfer_queue 依赖 | **用 pip install verl==0.8.0** |
+| 7 | transformers 5.x breaking changes | Docker 镜像里版本锁定 |
+| 8 | verl 0.8.0 不含 Megatron 后端 | **用 FSDP2 后端** |
+| 9 | veRL 文档推荐的镜像不支持 B200 | **用 verlai/verl:vllm011.latest** |
+| 10 | verl 0.8.0 weight resharding 不兼容 vLLM 0.23 | 用 vllm011 镜像不用 vllm023 |
+| 11 | vllm023 镜像不含 verl | 容器内 pip install |
+| 12 | transfer_queue 需要 KVBatchMeta class | 不用 git main，用 pip 0.8.0 |
+| 13 | rollout EP 配置 assertion | 用 FSDP2 不涉及 |
+| 14 | B200 GCE dpkg 损坏 | apt-mark hold linux-image-* |
+| 15 | Docker entrypoint 是 vLLM api_server | 加 --entrypoint bash |
+| 16 | GSM8K 数据缺 prompt 列 | 预处理转 chat message 格式 |
+| 17 | data_source 不匹配 reward 注册表 | 用 "openai/gsm8k" 不是 "gsm8k" |
+| 18 | Score 全 0，grad 全 0 | 加 system prompt 教模型用 #### 格式 |
+
+> **总结**：18 个坑中，用 Docker + pip 稳定版可以避免 #1-15。真正需要注意的只有 #16-18（数据格式）。
+
+## 后续方向
+
+- [ ] 替换为 MoE 模型（Qwen3-30B-A3B）验证 MoE RL 训练
+- [ ] 迁移到 NVL72 (GB200) 多节点训练
+- [ ] 对比 OpenRLHF 和 NeMo-RL 框架
+- [ ] 使用更难的数据集（MATH、AIME）观察更明显的收敛过程
+- [ ] 调优 optimizer offload 策略（动态 CPU↔GPU 搬运）
 
 ## 参考
 
-- veRL 官方 recipe: `examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh`
-- veRL 文档: https://verl.readthedocs.io/en/latest/perf/dpsk.html
-- DAPO 论文: https://arxiv.org/abs/2503.14476
-- Qwen3-30B-A3B 模型: https://huggingface.co/Qwen/Qwen3-30B-A3B-Base
+- [veRL on GKE B200 教程](https://discuss.google.dev/t/tutorial-scaling-reinforcement-learning-with-verl-on-gke/336370)
+- [NeMo-RL on GKE B200](https://discuss.google.dev/t/accelerating-reinforcement-learning-on-google-cloud-using-nvidia-nemo-rl/269579)
+- [veRL GitHub](https://github.com/verl-project/verl)
+- [GRPO 论文 (DeepSeek)](https://arxiv.org/abs/2402.03300)
+- [GSM8K 数据集](https://huggingface.co/datasets/openai/gsm8k)
