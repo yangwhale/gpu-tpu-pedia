@@ -35,20 +35,30 @@
 
 ## Step 1: 安装 veRL 和依赖
 
-> **踩坑 #1**：Ubuntu 24.04 使用 PEP 668 (externally-managed-environment)，裸 `pip install` 会被拒绝。B200 GCE 镜像的 PyTorch 装在 `~/.local/` 用户目录，需要加 `--break-system-packages` 参数。
+> **踩坑 #1 + #4 + #5**：B200 GCE 镜像预装 PyTorch 2.9.1 + numpy 2.3.5，直接 `pip install` 会导致 accelerate 循环 import 和 numpy ABI 不匹配。**必须用 venv 隔离**，继承系统 PyTorch 但在 venv 内升级冲突包。
 
 ```bash
-# 1.1 一次性安装 veRL + vLLM + Ray + wandb
-pip3 install --break-system-packages verl vllm "ray[default]" wandb
+# 1.1 创建 venv（继承系统 PyTorch / CUDA）
+python3 -m venv --system-site-packages ~/verl-env
+source ~/verl-env/bin/activate
 
-# 1.2 安装 Megatron-LM bridge（Megatron 后端必需）
-pip3 install --break-system-packages -U "git+https://github.com/ISEEKYAN/mbridge.git"
+# 1.2 升级冲突包
+pip install -U numpy accelerate transformers
 
-# 1.3 验证安装
+# 1.3 安装 veRL + vLLM + Ray + wandb
+pip install verl vllm "ray[default]" wandb
+
+# 1.4 安装 Megatron-LM bridge（Megatron 后端必需）
+pip install -U "git+https://github.com/ISEEKYAN/mbridge.git"
+
+# 1.5 验证安装（所有 import 不能报错）
+python3 -c "from accelerate import Accelerator; print('accelerate OK')"
 python3 -c "import verl; print('verl:', verl.__version__)"
 python3 -c "import vllm; print('vLLM:', vllm.__version__)"
 python3 -c "import ray; print('Ray:', ray.__version__)"
 ```
+
+> **后续所有步骤必须在 venv 内执行**：`source ~/verl-env/bin/activate`
 
 ## Step 2: 下载模型和数据
 
@@ -150,9 +160,11 @@ bash examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh
 
 | 序号 | 问题 | 根因 | 解决方法 |
 |---|---|---|---|
-| 1 | `pip install` 被拒绝 (PEP 668) | Ubuntu 24.04 externally-managed-environment | 加 `--break-system-packages` 参数 |
+| 1 | `pip install` 被拒绝 (PEP 668) | Ubuntu 24.04 externally-managed-environment | 用 venv（推荐）或加 `--break-system-packages` |
 | 2 | DAPO-Math-17k 下载 404 | veRL 脚本写的 `BytedTsinghua/` 不存在 | 正确 repo: `BytedTsinghua-SIA/DAPO-Math-17k` |
 | 3 | AIME-2024 parquet 文件名不匹配 | HF 自动命名 `train-00000-of-00001.parquet` | cp rename 为 `aime-2024.parquet` 或改 VAL_FILES 环境变量 |
+| 4 | accelerate 循环 import | B200 GCE 镜像预装 PyTorch 2.9.1 + numpy 2.3.5，与 accelerate 1.14 不兼容 | 用 venv `--system-site-packages` 隔离，在 venv 内升级 numpy + accelerate |
+| 5 | numpy `_core.multiarray` AttributeError | numpy 2.3.5 ABI 与 accelerate 编译时的 numpy 版本不匹配 | venv 内 `pip install -U numpy` 统一版本 |
 
 ## 参考
 
