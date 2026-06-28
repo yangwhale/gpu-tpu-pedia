@@ -65,46 +65,23 @@ sudo systemctl restart docker
 ### 1.2 拉镜像
 
 ```bash
-# 拉 veRL base image（CUDA 13 + vLLM 0.23 + Megatron）
-docker pull verlai/verl:vllm023.dev1
+# 拉 veRL 验证过的镜像（vLLM 0.11 + PyTorch 2.8 + CUDA 12.8）
+# 注意：不要用 vllm023.dev1（vLLM 0.23 的 MoE weight loader 与 veRL 不兼容）
+docker pull verlai/verl:vllm011.latest
 
 # 验证 GPU
-docker run --rm --gpus all verlai/verl:vllm023.dev1 \
-  python3 -c "import torch; print(torch.__version__, torch.cuda.get_device_name(0))"
+docker run --rm --gpus all --entrypoint bash verlai/verl:vllm011.latest \
+  -c "python3 -c 'import torch; print(torch.__version__, torch.cuda.get_device_name(0))'"
 ```
 
-### 1.3 准备容器启动脚本
+### 1.3 容器内安装 veRL
 
-veRL main 分支依赖未发布的 `transfer_queue`，需要 stub。将以下脚本保存为 `~/verl-run.sh`：
+> **核心教训**：用 `pip install verl==0.8.0`（稳定版），**不要 `git clone` main 分支**。main 分支依赖未发布的 `transfer_queue` 模块，会导致 import 错误。稳定版一行命令开箱即用。
 
+容器内只需两行：
 ```bash
-#!/bin/bash
-# Install veRL from latest main
-cd /tmp && git clone --depth 1 -q https://github.com/verl-project/verl.git
-cd /tmp/verl && pip install -e . -q
-pip install -q "transformers>=4.56.0,<5"
-pip install -q -U "git+https://github.com/ISEEKYAN/mbridge.git"
-
-# Create transfer_queue stub (未发布模块的最小替代)
-mkdir -p /tmp/verl/transfer_queue
-cat > /tmp/verl/transfer_queue/__init__.py << 'STUB'
-class KVBatchMeta:
-    pass
-class TransferQueue:
-    pass
-def init(config):
-    pass
-def close():
-    pass
-def get_queue():
-    return None
-STUB
-
-python3 -c "import verl; print('verl:', verl.__version__)"
-
-# Run training
-cd /tmp/verl
-exec bash examples/grpo_trainer/run_qwen3_30b_a3b_megatron.sh "$@"
+pip install verl==0.8.0
+pip install datasets   # 用于下载 GSM8K
 ```
 
 ## Step 2: 下载模型和数据
@@ -142,35 +119,72 @@ cd verl
 git submodule update --init --recursive recipe
 ```
 
-## Step 4: 运行 GRPO 训练（Docker + Colocate 模式）
+## Step 4: 运行 GRPO 训练（Docker + FSDP2 Colocate）
+
+> **实测验证的完整命令**（2026-06-28 在 B200 8 卡上跑通）
 
 ```bash
 docker run -d --name verl-grpo --gpus all --shm-size=256g \
-  --network=host \
+  --network=host --entrypoint bash \
   -v ~/models:/models \
-  -v ~/data:/data \
-  -v ~/verl-run.sh:/tmp/verl-run.sh \
-  -e WANDB_MODE=disabled \
-  -e CUDA_DEVICE_MAX_CONNECTIONS=1 \
-  -e HYDRA_FULL_ERROR=1 \
-  -e MODEL_PATH=/models/Qwen3-30B-A3B-Base \
-  -e TRAIN_FILES=/data/DAPO-Math-17k/data/dapo-math-17k.parquet \
-  -e VAL_FILES=/data/AIME-2024/data/aime-2024.parquet \
-  -e ACTOR_TP=1 -e ACTOR_PP=1 -e ACTOR_EP=8 \
-  -e REF_TP=1 -e REF_PP=1 -e REF_EP=8 \
-  -e ALL_OFFLOAD=True \
-  -e ROLLOUT_TP=8 -e GEN_MOE_TP=1 -e GEN_MOE_EP=8 \
-  -e NNODES=1 -e NGPUS_PER_NODE=8 \
-  -e TOTAL_EPOCHS=3 -e TEST_FREQ=1 -e SAVE_FREQ=100 \
-  -e TRAIN_BATCH_SIZE=64 \
-  verlai/verl:vllm023.dev1 \
-  bash /tmp/verl-run.sh
+  verlai/verl:vllm011.latest \
+  -c '
+    # 安装 veRL 稳定版
+    pip install verl==0.8.0 datasets -q
+
+    # 准备 GSM8K 数据（data_source 必须是 "openai/gsm8k"）
+    python3 -c "
+import datasets, os, pandas as pd
+ds = datasets.load_dataset(\"openai/gsm8k\", \"main\")
+os.makedirs(\"/tmp/gsm8k\", exist_ok=True)
+for split in [\"train\", \"test\"]:
+    data = []
+    for ex in ds[split]:
+        answer = ex[\"answer\"].split(\"####\")[-1].strip()
+        data.append({
+            \"data_source\": \"openai/gsm8k\",
+            \"prompt\": [{\"role\": \"user\", \"content\": ex[\"question\"]}],
+            \"reward_model\": {\"style\": \"rule\", \"ground_truth\": answer},
+            \"extra_info\": {\"answer\": answer}
+        })
+    pd.DataFrame(data).to_parquet(f\"/tmp/gsm8k/{split}.parquet\")
+    print(f\"{split}: {len(data)}\")
+"
+
+    # 运行 GRPO（FSDP2 后端 + vLLM rollout colocate）
+    PYTHONUNBUFFERED=1 python3 -m verl.trainer.main_ppo \
+      data.train_files=/tmp/gsm8k/train.parquet \
+      data.val_files=/tmp/gsm8k/test.parquet \
+      data.train_batch_size=64 \
+      data.max_prompt_length=512 \
+      data.max_response_length=512 \
+      data.prompt_key=prompt \
+      data.return_raw_chat=True \
+      actor_rollout_ref.model.path=/models/Qwen2.5-7B-Instruct \
+      actor_rollout_ref.actor.optim.lr=1e-6 \
+      actor_rollout_ref.actor.ppo_mini_batch_size=64 \
+      actor_rollout_ref.actor.ppo_micro_batch_size_per_gpu=8 \
+      actor_rollout_ref.rollout.name=vllm \
+      actor_rollout_ref.rollout.log_prob_micro_batch_size_per_gpu=8 \
+      actor_rollout_ref.rollout.tensor_model_parallel_size=1 \
+      actor_rollout_ref.rollout.gpu_memory_utilization=0.5 \
+      actor_rollout_ref.ref.log_prob_micro_batch_size_per_gpu=4 \
+      actor_rollout_ref.actor.strategy=fsdp2 \
+      algorithm.kl_ctrl.kl_coef=0.001 \
+      trainer.logger=console \
+      trainer.val_before_train=False \
+      trainer.n_gpus_per_node=8 \
+      trainer.nnodes=1 \
+      trainer.save_freq=100 \
+      trainer.test_freq=5 \
+      algorithm.adv_estimator=grpo \
+      actor_rollout_ref.rollout.n=4 \
+      trainer.total_epochs=2
+  '
 
 # 查看日志
 docker logs -f verl-grpo
 ```
-
-> **Rollout 并行度注意**：8 GPU 单节点时 ROLLOUT_TP=8、GEN_MOE_EP=8，确保 `EP == TP * DP`（8 = 8 × 1）。设其他值（如 TP=4, EP=2）会触发 assertion 错误。
 
 ## Step 5: 性能对标
 
@@ -180,15 +194,30 @@ docker logs -f verl-grpo
 |---|---|
 | MFU | 0.4 |
 
-### 我方实测
+### 我方实测（B200 8 卡，FSDP2 + Qwen2.5-7B-Instruct）
 
-| 指标 | 实测值 | 对比 | 备注 |
-|---|---|---|---|
-| MFU | — | — | |
-| step time (s) | — | — | |
-| rollout time (s) | — | — | |
-| GPU memory (GB) | — | — | |
-| CPU memory (GB) | — | — | |
+> **注**：首次验证使用 Qwen2.5-7B dense 模型（非 MoE），目的是先跑通 RL 链路。MoE 模型待后续验证。
+
+| 指标 | 实测值 | 备注 |
+|---|---|---|
+| MFU (actor) | **0.14** | FSDP2 后端，单节点 8 卡 |
+| step time | **~8.5 秒** | 包含 rollout + train + weight sync |
+| throughput | **~1,480 tokens/s** | |
+| rollout 生成 | ~3.3 秒 | vLLM TP=1，gpu_mem_util=0.5 |
+| actor 训练 | ~1.8 秒 | FSDP2 + gradient checkpointing |
+| weight 更新 | ~2.0 秒 | FSDP→vLLM reshard |
+| GPU 显存 | 101 GB / 178 GB (57%) | 每卡 |
+| CPU 显存 | 102 GB | optimizer offload |
+| response 长度 | ~280 tokens (avg) | max 512 |
+| 模型 | Qwen2.5-7B-Instruct (7.62B) | dense，非 MoE |
+| 数据集 | GSM8K (7473 train / 1319 test) | 数学推理 |
+| 算法 | GRPO (no critic) | adv_estimator=grpo |
+
+**环境组合（最终可工作的配置）**：
+- 镜像：`verlai/verl:vllm011.latest`（vLLM 0.11, PyTorch 2.8+cu128）
+- veRL：`pip install verl==0.8.0`（稳定版，不用 git main）
+- 后端：FSDP2（不用 Megatron）
+- rollout：vLLM colocate，TP=1
 
 ## 踩坑记录
 
@@ -210,6 +239,10 @@ docker logs -f verl-grpo
 | 12 | `transfer_queue` 需要 `KVBatchMeta` class | stub 只有 `init/close` 不够 | stub 补全 `KVBatchMeta` + `TransferQueue` class |
 | 13 | rollout EP 配置 assertion | `expert_parallel_size != TP * DP` | ROLLOUT_TP=8, GEN_MOE_EP=8（8 卡 = 1 个推理组）|
 | 14 | B200 GCE dpkg 状态损坏 | kernel dkms 编译失败阻塞所有 apt install | `apt-mark hold linux-image-*` 绕过 |
+| 15 | Docker 默认 entrypoint 是 vLLM api_server | `vllm011.latest` 镜像的 entrypoint 不是 bash | 加 `--entrypoint bash` |
+| 16 | GSM8K 数据缺 `prompt` 列 | 原始 HF 数据列名是 `question` | 预处理时转成 `[{"role":"user","content":...}]` 格式 |
+| 17 | GSM8K `data_source` 不匹配 reward 注册表 | 用了 `"gsm8k"` 但 verl 注册的是 `"openai/gsm8k"` | data_source 必须跟 verl 源码中的注册名完全一致 |
+| 18 | veRL git main 分支有未发布 `transfer_queue` 依赖 | main 分支正在开发新功能 | **用 `pip install verl==0.8.0`，不 clone git main** |
 
 ## 参考
 
