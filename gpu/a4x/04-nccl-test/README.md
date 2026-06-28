@@ -393,5 +393,11 @@ GIB 诊断镜像内置 `set_nccl_env.sh` 脚本自动设置最优 NCCL 参数。
 
 **结论**：同域 MNNVL 带宽从 2 节点到 64 GPU 几乎线性扩展。all_reduce 从 842 涨到 910 GB/s（+8%），得益于 NVSwitch 在更大 ring 中的更高效利用。alltoall 轻微下降 1.3%，是因为 all-to-all 通信量随节点数平方增长。
 
-> **跨域 64 GPU 测试（RDMA）**：尝试双域 8+8 节点 64 GPU 跨域 NCCL 测试时，NCCL 初始化挂起——RDMA 跨域连接建立失败。原因是两个 placement policy 的 RDMA 子网未互通（同 VPC 但 RDMA 路由隔离）。跨域通信需要特殊的 RDMA 网络配置或使用 GVNIC 回退路径。此为已知限制，生产环境通常通过 GVNIC overlay + GPUDirect-TCPX 解决。
+> **跨域 NCCL 调试结论（2026-06-29）**：
+> - RDMA 子网跨域**可达**（ping 通 10.10.16.x 跨 placement policy），不是路由隔离
+> - GIB 插件（`NCCL_ENV_PLUGIN=gcp`）在跨域 RDMA 初始化时挂起——GIB 的 `set_nccl_env.sh` 自动加载 GIB net plugin，跨域时 plugin 建立 RDMA 通道失败但不报错
+> - 绕过 GIB 用 `NCCL_NET=Socket` + `NCCL_SOCKET_IFNAME=enp0s3`（GVNIC 管理网络）可跑通，但 busbw 仅 **10.4 GB/s**（GVNIC TCP 上限）
+> - 跨域 RDMA 高速通道需正确配置 GIB 插件的跨域模式（待进一步调查）
+>
+> 跨域 4 节点 Socket 测试结果（@1G）：all_reduce busbw 10.42 GB/s
 | 跨域 36 节点 @16G | 144 | MNNVL + RDMA | **748.24** (v1) / 688.14 (标称) | v1 镜像实测 |
