@@ -56,10 +56,10 @@ sudo systemctl restart docker
 docker run --rm --gpus all nvidia/cuda:12.8.1-base-ubuntu24.04 nvidia-smi
 
 # 1.4 拉 veRL 官方镜像（含 Megatron + vLLM + DeepEP 全套）
-docker pull verlai/verl:app-verl0.4-vllm0.8.5-mcore0.13.0-preview
+docker pull verlai/verl:vllm023.dev1
 
 # 1.5 验证
-docker run --rm --gpus all verlai/verl:app-verl0.4-vllm0.8.5-mcore0.13.0-preview \
+docker run --rm --gpus all verlai/verl:vllm023.dev1 \
   python3 -c "import verl; import vllm; import megatron; print('ALL OK')"
 ```
 
@@ -110,7 +110,7 @@ docker run --rm -it --gpus all --shm-size=256g \
   -w /workspace/verl \
   -e WANDB_MODE=disabled \
   -e CUDA_DEVICE_MAX_CONNECTIONS=1 \
-  verlai/verl:app-verl0.4-vllm0.8.5-mcore0.13.0-preview \
+  verlai/verl:vllm023.dev1 \
   bash -c "
     # 官方推荐 8 GPU 并行度
     export MODEL_PATH=/models/Qwen3-30B-A3B-Base
@@ -158,6 +158,7 @@ docker run --rm -it --gpus all --shm-size=256g \
 | 6 | `transfer_queue` 模块找不到 | veRL git main 分支 (0.9.0.dev0) 引入了未发布模块 | 用 pip 装稳定版 `verl==0.8.0`，不从 clone 目录运行 |
 | 7 | transformers 5.x breaking changes | `--force-reinstall` 拉到了 transformers 5.12.1 | 固定 `transformers>=4.56.0,<5` |
 | 8 | verl 0.8.0 不含 Megatron 后端 | Megatron backend 是 dev 分支 preview，PyPI 稳定版未注册 | **用 Docker 镜像**（含 Megatron + vLLM + DeepEP 全套）|
+| 9 | veRL 文档推荐的镜像不支持 B200 | `app-verl0.4-*` 基于 NGC 24.08 (Hopper only)，检测到 B200 直接拒绝启动 | 用最新镜像 `verlai/verl:vllm023.dev1`（CUDA 13.0+，支持 Blackwell）|
 
 ## 参考
 
