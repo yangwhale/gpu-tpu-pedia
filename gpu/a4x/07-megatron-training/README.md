@@ -266,6 +266,19 @@ kubectl exec mega-host-2 -- bash -c "
 
 ### 测试矩阵
 
+### 显存分析与 MBS 计算
+
+EP 越大每卡 Expert 越少，显存释放出来应调大 MBS 提高 GPU 利用率。
+
+| EP | Experts/GPU | 模型占用 (GB) | 可用于 Activation (GB) | 推荐 MBS | GBS (GA=4) |
+|---|---|---|---|---|---|
+| 4 | 32 | 72.8 | 119 | **16** | 256 |
+| 8 | 16 | 39.4 | 153 | **32** | 1024 |
+| 16 | 8 | 22.7 | 169 | **32** | 2048 |
+| 32 | 4 | 14.3 | 178 | **32** | 4096 |
+
+> 模型占用 = Expert 权重(FP8) + Expert optimizer(FP32 AdamW) + Shared 权重(BF16) + Shared optimizer(distributed)。Activation 按每 sample ~3 GB 估算（含 recompute）。MBS 取 2 的幂次 + 20% headroom。
+
 #### Test 1: 单节点 4 GPU
 
 | 参数 | 值 |
@@ -275,14 +288,14 @@ kubectl exec mega-host-2 -- bash -c "
 | TP | 1 |
 | PP | 1 |
 | DP | 1 |
-| MBS | 1 |
-| GBS | 64 |
+| MBS | 16 |
+| GBS | 256 (MBS=16 × GA=4 × DP_eff=4) |
 | Seq Length | 4096 |
-| GA | 64 / (1×1) = 64 |
+| 每卡模型 | 72.8 GB (32 Experts + shared) |
 | 通信 | 域内 NVLink (intra-node) |
-| 预期 | ~356 TFLOP/s/GPU（已测 baseline） |
+| 预期 | baseline（之前 MBS=1 测得 ~356 TFLOP/s/GPU，MBS=16 预期更高） |
 
-**要点**：纯 intra-node NVLink，4 个 Expert 分区，all-to-all 通信量最小。作为 baseline。
+**要点**：MBS=1 时 GPU 计算单元没有被充分利用（batch 太小，kernel launch overhead 占比高）。MBS=16 应显著提升 TFLOP/s。
 
 #### Test 2: 双节点 8 GPU
 
@@ -293,14 +306,14 @@ kubectl exec mega-host-2 -- bash -c "
 | TP | 1 |
 | PP | 1 |
 | DP | 1 |
-| MBS | 1 |
-| GBS | 64 |
+| MBS | 32 |
+| GBS | 1024 (MBS=32 × GA=4 × DP_eff=8) |
 | Seq Length | 4096 |
-| GA | 64 / (1×1) = 64 |
+| 每卡模型 | 39.4 GB (16 Experts + shared) |
 | 通信 | 域内 NVSwitch MNNVL (inter-node) |
-| 预期 | ~274 TFLOP/s/GPU（已测 baseline） |
+| 预期 | 待测（之前 MBS=1 为 ~274 TFLOP/s/GPU，MBS=32 预期更高） |
 
-**要点**：跨节点 MNNVL all-to-all。对比 Test 1 可量化跨节点通信开销。之前实测下降 23%。
+**要点**：跨节点 MNNVL all-to-all + 大 MBS。显存释放后 MBS 翻倍到 32，计算效率应大幅提升。
 
 #### Test 3: 四节点 16 GPU
 
@@ -311,14 +324,14 @@ kubectl exec mega-host-2 -- bash -c "
 | TP | 1 |
 | PP | 1 |
 | DP | 1 |
-| MBS | 1 |
-| GBS | 64 |
+| MBS | 32 |
+| GBS | 2048 (MBS=32 × GA=4 × DP_eff=16) |
 | Seq Length | 4096 |
-| GA | 64 / (1×1) = 64 |
+| 每卡模型 | 22.7 GB (8 Experts + shared) |
 | 通信 | 域内 NVSwitch MNNVL |
 | 预期 | 待测 |
 
-**要点**：EP 翻倍到 16，每 GPU 从 32 Expert 降到 8 Expert。all-to-all 目标从 7 增到 15，scatter 碎片化加剧。预期比 Test 2 再下降 5-10%（参考 DeepEP 的 scaling 趋势）。
+**要点**：EP=16，每卡只有 8 Expert。模型占用大幅下降到 23 GB，MBS=32 不变（已接近计算效率甜点）。观察 all-to-all 通信开销是否随 EP 增大而明显。
 
 #### Test 4: 八节点 32 GPU
 
@@ -329,14 +342,14 @@ kubectl exec mega-host-2 -- bash -c "
 | TP | 1 |
 | PP | 1 |
 | DP | 1 |
-| MBS | 1 |
-| GBS | 64 |
+| MBS | 32 |
+| GBS | 4096 (MBS=32 × GA=4 × DP_eff=32) |
 | Seq Length | 4096 |
-| GA | 64 / (1×1) = 64 |
+| 每卡模型 | 14.3 GB (4 Experts + shared) |
 | 通信 | 域内 NVSwitch MNNVL |
 | 预期 | 待测 |
 
-**要点**：EP=32，每 GPU 只有 4 Expert。all-to-all 通信最重。如果 NVSwitch 带宽充足，TFLOP/s 下降应趋于平缓（参考 NCCL 同域 scaling 几乎无损的经验）。
+**要点**：EP=32，每卡仅 4 Expert，模型只占 14 GB。MBS=32 + GA=4，GBS=4096。最大规模测试，验证 NVSwitch all-to-all 在高 EP 下的效率。
 
 ### 统一配置
 
@@ -391,12 +404,16 @@ export NCCL_CUMEM_ENABLE=1
 
 ### Benchmark 结果
 
-| Test | GPU | EP | TFLOP/s/GPU | MFU | vs Test 1 | 备注 |
-|---|---|---|---|---|---|---|
-| 1 | 4 | 4 | **~356** | ~7.9% | baseline | 已测 |
-| 2 | 8 | 8 | **~274** | ~6.1% | -23% | 已测 |
-| 3 | 16 | 16 | — | — | — | 待测 |
-| 4 | 32 | 32 | — | — | — | 待测 |
+| Test | GPU | EP | MBS | GBS | TFLOP/s/GPU | MFU | vs Test 1 | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| 1 (旧) | 4 | 4 | 1 | 64 | ~356 | ~7.9% | — | 旧 baseline, MBS=1 未充分利用 |
+| 2 (旧) | 8 | 8 | 1 | 64 | ~274 | ~6.1% | -23% | 旧 baseline, MBS=1 |
+| 1 (新) | 4 | 4 | 16 | 256 | — | — | — | 待测，MBS 调大 |
+| 2 (新) | 8 | 8 | 32 | 1024 | — | — | — | 待测 |
+| 3 | 16 | 16 | 32 | 2048 | — | — | — | 待测 |
+| 4 | 32 | 32 | 32 | 4096 | — | — | — | 待测 |
+
+> **MBS=1 vs MBS=16/32 的影响**：MBS=1 时 GPU 的 tensor core 利用率低——每个 GEMM 的 batch 维度太小，kernel launch overhead 占比高。调大 MBS 后 GEMM 的 batch 维度增大，计算效率显著提升。预期 MBS=16 相对 MBS=1 提升 30-50% TFLOP/s。旧 baseline（MBS=1）不作为正式参考，新测试的 MBS 充分利用显存后的结果才是有效 benchmark。
 
 ### 预期 Scaling 趋势分析
 
