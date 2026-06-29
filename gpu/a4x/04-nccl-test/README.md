@@ -405,16 +405,51 @@ GIB 诊断镜像内置 `set_nccl_env.sh` 脚本自动设置最优 NCCL 参数。
 
 **关键配置**：跨域测试必须使用**双 ComputeDomain + 双 StatefulSet** 架构。每个 domain 有独立的 ComputeDomain 和 StatefulSet，pod 通过 `nodeSelector: nvidia.com/gpu.clique` 固定到各自 domain。`NCCL_MNNVL_ENABLE=2`（自动检测），NCCL 自动判断域内走 NVLink、域间走 GIB RDMA。
 
-#### 跨域 vs 同域对比
+#### 跨域 16 节点 64 GPU（2 domain × 8 node，GIB RDMA）
 
-| Collective | 同域 8GPU | 跨域 16GPU | 跨域/同域 |
-|---|---|---|---|
-| all_reduce | 842 | 691 | 82% |
-| all_gather | 683 | 378 | 55% |
-| reduce_scatter | 693 | 379 | 55% |
-| alltoall | 682 | 88 | 13% |
+| Collective | @16G busbw (GB/s) |
+|---|---|
+| all_reduce | **798.4** |
+| all_gather | **687.7** |
+| reduce_scatter | **701.8** |
+| alltoall | **82.8** |
 
-跨域 all_reduce 保持同域 82% 带宽，符合预期（域间 RDMA 带宽 < NVLink，但 ring 算法分摊了跨域流量）。alltoall 仅 13%，因为 all-to-all 每个 rank 都需跨域发送，受限于 RDMA 带宽。
+#### 跨域规模对比（4n vs 16n）+ 同域 baseline
+
+| Collective | 同域 8GPU | 同域 64GPU | 跨域 4n/16GPU | 跨域 16n/64GPU | 说明 |
+|---|---|---|---|---|---|
+| all_reduce | 842 | 910 | 691 (76%) | **798 (88%)** | 规模越大 RDMA 占比越低 |
+| all_gather | 683 | 693 | 378 (55%) | **688 (99%)** | 大规模几乎无损 |
+| reduce_scatter | 693 | 707 | 379 (55%) | **702 (99%)** | 大规模几乎无损 |
+| alltoall | 682 | 667 | 88 (13%) | **83 (12%)** | 跨域流量 O(N²)，不随规模改善 |
+
+#### 跨域规模效应分析
+
+**为什么 16n/64GPU 比 4n/16GPU 好得多？**
+
+核心原因是**跨域流量占比随规模变化不同**，取决于 collective 的通信模式：
+
+**all_reduce / all_gather / reduce_scatter（Ring/Tree 算法）**：
+
+这三种 collective 使用 ring 或 tree 算法。关键特性：**跨域链路数量固定为 2（ring 入口 + 出口），不随 GPU 数增加**。
+
+- 4n/16GPU (2+2)：ring 有 16 段，其中 2 段走 RDMA = 12.5% 跨域
+  - 同时每个 domain 只有 2 节点 × 4 NIC = 8 条 RDMA 链路，聚合跨域带宽有限
+- 16n/64GPU (8+8)：ring 有 64 段，其中 2 段走 RDMA = 3.1% 跨域
+  - 每个 domain 有 8 节点 × 4 NIC = 32 条 RDMA 链路，聚合跨域带宽 4×
+
+效果：ring 中慢链路（RDMA）占比从 12.5% 降到 3.1%，pipeline 中 NVLink 段占绝对主导。同时 RDMA 聚合带宽 4× 提升，bottleneck 大幅缓解。all_gather/reduce_scatter 从 55% → 99% 几乎恢复到同域水平。
+
+**alltoall（全交换）**：
+
+alltoall 的通信模式完全不同：**每个 GPU 都要向所有其他 GPU 发送数据**。跨域流量 = Domain 1 的所有 GPU × Domain 2 的所有 GPU = N/2 × N/2 = N²/4 对。
+
+- 4n/16GPU：8 × 8 = 64 跨域 GPU 对
+- 16n/64GPU：32 × 32 = 1024 跨域 GPU 对（16× 增长）
+
+RDMA 聚合带宽只增长 4×，但跨域流量增长 16×，净效果反而更差。所以 alltoall 带宽不随规模改善，维持在 ~83-88 GB/s。
+
+**总结**：ring/tree 类 collective 受益于规模扩展（跨域链路占比下降 + 聚合带宽上升），alltoall 不受益（跨域流量 O(N²) 增长快于带宽 O(N) 增长）。
 
 ### 跨域 NCCL 踩坑与排查经验（2026-06-29）
 
