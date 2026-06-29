@@ -356,6 +356,7 @@ GIB 诊断镜像内置 `set_nccl_env.sh` 脚本自动设置最优 NCCL 参数。
 | 同域 2 节点 @16G | 8 | MNNVL | **842.20** | 我方验证 (二次) |
 | 同域 8 节点 @16G | 32 | MNNVL | **908.80** | 我方验证 |
 | 同域 16 节点 @16G | 64 | MNNVL | **909.96** | 我方验证 |
+| 跨域 4 节点 @16G | 16 | MNNVL + RDMA (GIB) | **690.80** | 我方验证 |
 | 跨域 2 节点 @8G | 8 | RDMA (GIB) | **325.88** | 标称 |
 | 混合 4 节点 @8G | 16 | RDMA (GIB) | **162.45** | 标称 |
 | 全域 18 节点 @16G | 72 | MNNVL | **876.55** (v1) / 905.05 (标称) | v1 镜像实测 |
@@ -393,11 +394,51 @@ GIB 诊断镜像内置 `set_nccl_env.sh` 脚本自动设置最优 NCCL 参数。
 
 **结论**：同域 MNNVL 带宽从 2 节点到 64 GPU 几乎线性扩展。all_reduce 从 842 涨到 910 GB/s（+8%），得益于 NVSwitch 在更大 ring 中的更高效利用。alltoall 轻微下降 1.3%，是因为 all-to-all 通信量随节点数平方增长。
 
-> **跨域 NCCL 调试结论（2026-06-29）**：
-> - RDMA 子网跨域**可达**（ping 通 10.10.16.x 跨 placement policy），不是路由隔离
-> - GIB 插件（`NCCL_ENV_PLUGIN=gcp`）在跨域 RDMA 初始化时挂起——GIB 的 `set_nccl_env.sh` 自动加载 GIB net plugin，跨域时 plugin 建立 RDMA 通道失败但不报错
-> - 绕过 GIB 用 `NCCL_NET=Socket` + `NCCL_SOCKET_IFNAME=enp0s3`（GVNIC 管理网络）可跑通，但 busbw 仅 **10.4 GB/s**（GVNIC TCP 上限）
-> - 跨域 RDMA 高速通道需正确配置 GIB 插件的跨域模式（待进一步调查）
->
-> 跨域 4 节点 Socket 测试结果（@1G）：all_reduce busbw 10.42 GB/s
+#### 跨域 4 节点 16 GPU（2 domain × 2 node，GIB RDMA）
+
+| Collective | @16G busbw (GB/s) |
+|---|---|
+| all_reduce | **690.8** |
+| all_gather | **378.3** |
+| reduce_scatter | **378.8** |
+| alltoall | **88.5** |
+
+**关键配置**：跨域测试必须使用**双 ComputeDomain + 双 StatefulSet** 架构。每个 domain 有独立的 ComputeDomain 和 StatefulSet，pod 通过 `nodeSelector: nvidia.com/gpu.clique` 固定到各自 domain。`NCCL_MNNVL_ENABLE=2`（自动检测），NCCL 自动判断域内走 NVLink、域间走 GIB RDMA。
+
+#### 跨域 vs 同域对比
+
+| Collective | 同域 8GPU | 跨域 16GPU | 跨域/同域 |
+|---|---|---|---|
+| all_reduce | 842 | 691 | 82% |
+| all_gather | 683 | 378 | 55% |
+| reduce_scatter | 693 | 379 | 55% |
+| alltoall | 682 | 88 | 13% |
+
+跨域 all_reduce 保持同域 82% 带宽，符合预期（域间 RDMA 带宽 < NVLink，但 ring 算法分摊了跨域流量）。alltoall 仅 13%，因为 all-to-all 每个 rank 都需跨域发送，受限于 RDMA 带宽。
+
+### 跨域 NCCL 踩坑与排查经验（2026-06-29）
+
+跨域 NCCL 从完全不通到跑通经历了 3 轮调试：
+
+**第一轮（失败）**：单 StatefulSet + 无 ComputeDomain channel + `NCCL_MNNVL_ENABLE=0`
+- 现象：NCCL 初始化卡在 `NCCL version 2.30.4` 后无输出，GPU 利用率 0%
+- 原因：GIB 插件加载后尝试建立 RDMA 通道，但 pod 没有 IMEX channel，GIB 内部初始化挂起
+
+**第二轮（低速跑通）**：hostNetwork + `NCCL_NET=Socket` + 不加载 GIB
+- 现象：跑通，但 busbw 仅 10.4 GB/s（GVNIC TCP 上限）
+- 意义：证明跨域网络路由完全可达，问题在 GIB 插件初始化
+
+**第三轮（正确跑通）**：双 ComputeDomain + 双 StatefulSet + GIB + `NCCL_MNNVL_ENABLE=2`
+- 现象：all_reduce 690 GB/s，全部 4 种 collective 通过
+- 关键：每个 pod 必须有**自己 domain 的 ComputeDomain channel**
+
+**根因总结**：跨域 pod 看似不需要 IMEX（域间不走 NVLink），但 GIB 插件初始化时会探测所有可用的通信路径，如果 pod 没有 IMEX channel，GIB 在探测 NVLink 路径时挂住。给每个 pod 分配正确 domain 的 channel 后，GIB 能正确区分「域内 NVLink + 域间 RDMA」两条路径。
+
+**部署要点**：
+1. 每个 domain 创建独立的 ComputeDomain（`numNodes: 0`）
+2. 每个 domain 的节点标记对应 CD 的 UID label
+3. 两个 StatefulSet 分别用 `nodeSelector: nvidia.com/gpu.clique` 约束到各自 domain
+4. 每个 StatefulSet 引用自己 domain 的 `resourceClaimTemplateName`
+5. `NCCL_MNNVL_ENABLE=2`（不要设 0，让 NCCL 自动检测）
+6. RDMA NIC 通过 DeviceClass `rdma-devices`（含 `rdma == true` 过滤）分配
 | 跨域 36 节点 @16G | 144 | MNNVL + RDMA | **748.24** (v1) / 688.14 (标称) | v1 镜像实测 |
