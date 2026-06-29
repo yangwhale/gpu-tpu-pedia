@@ -431,12 +431,31 @@ export NCCL_CUMEM_ENABLE=1
 
 | Test | GPU | EP | MBS | GBS | TFLOP/s/GPU | MFU | vs Test 1 | 备注 |
 |---|---|---|---|---|---|---|---|---|
-| 1 (旧) | 4 | 4 | 1 | 64 | ~356 | ~7.9% | — | 旧 baseline, MBS=1 未充分利用 |
+| 1 (旧) | 4 | 4 | 1 | 64 | ~356 | ~7.9% | — | 旧 baseline, MBS=1, seq=16K |
 | 2 (旧) | 8 | 8 | 1 | 64 | ~274 | ~6.1% | -23% | 旧 baseline, MBS=1 |
-| 1 (新) | 4 | 4 | 16 | 256 | — | — | — | 待测，MBS 调大 |
-| 2 (新) | 8 | 8 | 32 | 1024 | — | — | — | 待测 |
-| 3 | 16 | 16 | 32 | 2048 | — | — | — | 待测 |
-| 4 | 32 | 32 | 32 | 4096 | — | — | — | 待测 |
+| 1 (新) | 4 | 4 | 1 | 64 | — | — | — | 待测，需修 attention backend |
+| 2 (新) | 8 | 8 | 1 | 64 | — | — | — | 待测 |
+| 3 | 16 | 16 | 1 | 64 | — | — | — | 待测 |
+| 4 | 32 | 32 | 1 | 64 | — | — | — | 待测 |
+
+### 显存问题记录（2026-06-29）
+
+**EP=4 单节点 OOM 排查**：
+
+megatron-ngc 镜像（`tev2.15-mgcore_r0.16.0-pt26.05-py3-v2`）在 GB200 上运行 128 Expert MoE 时 OOM：
+
+1. **MBS=16, 48 层, hidden=4096**：model init 阶段 OOM（权重 + optimizer > 192 GB）
+2. **MBS=4, 12 层, hidden=2048, 128 Expert**：model init 通过但 forward 时 activation OOM
+3. **MBS=1, 12 层, hidden=2048, 128 Expert**：同上，MBS=1 也 OOM
+4. **MBS=1, 12 层, hidden=2048, 64 Expert**：第一步 49.1 TFLOP/s 跑出来了，第二步 backward OOM
+
+**根因**：Transformer Engine 在 GB200 上 fallback 到 **unfused attention**（`self.unfused_attention`），没有用 Flash Attention / Fused Attention。unfused attention 的 attention_probs 矩阵是 O(seq² × heads × batch) = 4096² × 32 × 1 = 2 GB per sample，显存暴涨。
+
+**修复方向**：
+1. 确保 `NVTE_FUSED_ATTN=1` 生效——检查 TE 是否支持 GB200 的 SM100 fused attention
+2. 如果 TE fused attn 不支持 SM100，改用 `--use-flash-attn` 调用 FlashAttention
+3. 降 seq_length 到 2048 或 1024 作为临时 workaround
+4. 增加 activation recompute 覆盖 attention 层
 
 > **MBS=1 vs MBS=16/32 的影响**：MBS=1 时 GPU 的 tensor core 利用率低——每个 GEMM 的 batch 维度太小，kernel launch overhead 占比高。调大 MBS 后 GEMM 的 batch 维度增大，计算效率显著提升。预期 MBS=16 相对 MBS=1 提升 30-50% TFLOP/s。旧 baseline（MBS=1）不作为正式参考，新测试的 MBS 充分利用显存后的结果才是有效 benchmark。
 
