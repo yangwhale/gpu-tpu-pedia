@@ -483,6 +483,28 @@ GB200 NVL72 特殊性：域内所有 GPU 通过 NVSwitch 全互联（任意两 G
 
 可通过 `NCCL_DEBUG=INFO NCCL_DEBUG_SUBSYS=GRAPH` 查看实际 ring 拓扑。
 
+#### Channel 数量调优实验（跨域 8+8 节点 64 GPU）
+
+**假设**：32 条跨域 RDMA 链路（8 节点 × 4 NIC），每个 ring 用 2 条，理论最优 channel 数 = 16。手动调 channel 数能否提升带宽？
+
+**方法**：通过 `NCCL_MIN_NCHANNELS` / `NCCL_MAX_NCHANNELS` 分别设 8/16/32，对比 default，跑 all_reduce @16G（warmup 20 + iter 50）。
+
+| Channel 设置 | NVLS 实际 nChannels | @16G busbw (GB/s) |
+|---|---|---|
+| default | 32 | **805.0** |
+| 8 | 32 | 802.8 |
+| 16 | 32 | 803.1 |
+| 32 | 32 | 803.5 |
+
+**结论**：
+
+1. **NCCL 默认已用 32 channel**。GB200 NVSwitch 拓扑下，NVLS tuning 自动选择 32 channel，与 `NCCL_MIN/MAX_NCHANNELS` 环境变量无关
+2. **`NCCL_MIN/MAX_NCHANNELS` 对 NVLS 模式无效**。NVLS（NVLink SHARP）有独立的 channel 管理逻辑，不受传统 ring channel 参数控制
+3. **带宽差异 < 0.5%**（802.8 ~ 805.0），纯测试噪声，无统计显著性
+4. **默认配置即最优**。NCCL 2.30.4 在 GB200 NVSwitch 拓扑上的自动调优已经做到最优，无需手动干预 channel 数量
+
+> **实践建议**：不要手动设置 `NCCL_MIN/MAX_NCHANNELS`。NCCL 的自动拓扑检测和 NVLS tuning 在 GB200 NVL72 上已经非常成熟，人工干预不会带来额外收益。如果在其他拓扑（如 H100 PCIe + NVLink Bridge）上遇到带宽不足，可考虑调 channel 数量，但 NVSwitch 全互联拓扑无需调。
+
 ### 跨域 NCCL 踩坑与排查经验（2026-06-29）
 
 跨域 NCCL 从完全不通到跑通经历了 3 轮调试：
