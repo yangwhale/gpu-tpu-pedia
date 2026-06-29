@@ -306,3 +306,103 @@ python tests/test_intranode.py --num-processes 4
 | GCP 推荐 | 仅 intranode 场景 | **推荐（internode 已验证 144/144 PASS）** |
 
 **核心决策**：如需跨节点 Expert Parallelism（internode EP），必须使用 **DeepEP v2**。v1 的 internode 通信依赖 NVSHMEM IBGDA + GDRCopy，而 GDRCopy 在 GKE/GCP 环境中无法使用。v2 使用 NCCL Gin 后端完全消除此依赖。
+
+## 7.7 我方验证结果（2026-06-29，k8s 1.34 + DRA + ComputeDomain）
+
+### 测试环境
+
+| 项目 | 值 |
+|---|---|
+| 集群 | kubeadm 1.34.9, 16 Worker (2 domain × 8 node) |
+| GPU | 4 × GB200 189GB per node |
+| 镜像 | `megatron-ngc:tev2.15-mgcore_r0.16.0-pt26.05-py3-v2` (DeepEP 2.0.0 pre-installed) |
+| NCCL | 2.30.4+cuda13.2 (via LD_PRELOAD) |
+| 网络 | GIB RDMA (跨节点) + NVSwitch/MNNVL (域内) |
+| ComputeDomain | cd-d1 (Domain 1), cd-d2 (Domain 2) |
+
+### Intranode 测试（单节点 4 GPU）
+
+**Legacy Intranode (`tests/legacy/test_intranode.py`)**：
+
+| 操作 | 带宽 (GB/s) | SMs | Chunk | 说明 |
+|---|---|---|---|---|
+| Dispatch BF16 | **436** | 24 | 32 | Expert 分发，BF16 精度 |
+| Dispatch FP8 | **292** | 24 | 32 | Expert 分发，FP8 精度（量化后数据量减半，带宽相应降低） |
+| Combine | **322** | 24 | 16 | Expert 结果合并回原 token 顺序 |
+
+**Legacy Low-latency (`tests/legacy/test_low_latency.py`)**：
+
+| 操作 | 带宽 (GB/s) | 延迟 (us) | 说明 |
+|---|---|---|---|
+| Dispatch | 163-182 | 20-23 | 低延迟模式，优化 latency 而非 throughput |
+| Combine | 323-335 | 21-22 | 合并操作天然延迟更低 |
+| Dispatch + Combine | 204-209 | 49-53 | 端到端延迟 |
+
+### Internode 测试（2 节点 × 4 GPU = 8 GPU，NCCL Gin）
+
+**Elastic EP (`tests/elastic/test_ep.py --test-first-only`)**：
+
+测试配置：`do_handle_copy=1, expert_alignment=128, use_fp8_dispatch=1, num_experts=256, num_topk=6, hidden=7168, num_tokens=4096`
+
+| 操作 | 模式 | 带宽 SU (GB/s) | 延迟 (us) | 说明 |
+|---|---|---|---|---|
+| Dispatch | scaleup | **695-705** | 191-193 | 跨节点 Expert 分发 |
+| Expanded Dispatch | scaleup | 697-704 | 191-194 | 带 handle copy 的扩展分发 |
+| Cached Dispatch | scaleup | 695-702 | 191-195 | 缓存模式分发 |
+| Combine | scaleup | **720-728** | 357-360 | 跨节点结果合并 |
+| Reduced Combine | scaleup | 701-709 | 367-370 | 带 reduction 的合并 |
+| Copy (NVLink) | — | 4936-6289 | 43-68 | 节点内 GPU 间拷贝 |
+| Reduce (NVLink) | — | 2043-2168 | 54-58 | 节点内 GPU 间归约 |
+
+所有 4 个 scaleup 配置（SU 0/1/2/3）均正常完成，无错误。
+
+### Benchmark 对比分析
+
+#### Intranode vs Internode
+
+| 操作 | Intranode (NVLink) | Internode (NCCL Gin) | 比值 | 说明 |
+|---|---|---|---|---|
+| Dispatch | 436 (BF16) | 700 (FP8) | **1.6×** | Internode 更高是因为 FP8 量化减半了数据量，且 NCCL Gin 利用了 MNNVL 通道 |
+| Combine | 322 | 724 | **2.2×** | Internode combine 走 NCCL collective，比 Legacy 手写 NVLink kernel 更高效 |
+
+> **为什么 Internode 比 Intranode 带宽更高？**
+> 
+> 看似反直觉，但原因是两个测试用了不同的通信路径：
+> - **Legacy Intranode**：使用 DeepEP 自研的 NVLink peer-to-peer kernel（手写 CUDA kernel 直接操作 NVLink），单节点 4 GPU，SMs=24
+> - **Elastic Internode**：使用 NCCL Gin 后端（NCCL 2.30.4 的 GPU-Initiated Network 通信），2 节点 8 GPU
+>
+> NCCL Gin 后端的优势：
+> 1. 域内通信走 MNNVL（NVSwitch 全互联，带宽 > P2P NVLink）
+> 2. 域间通信走 GIB RDMA（GPU 直接发起 RDMA，无 CPU 参与）
+> 3. NCCL 的 collective 算法对大消息更高效（pipeline + multi-channel）
+> 4. 8 GPU 的 ring 比 4 GPU 有更高的带宽利用率
+
+#### Copy 和 Reduce 带宽解读
+
+| 操作 | 带宽 (GB/s) | 理论带宽 | 利用率 | 说明 |
+|---|---|---|---|---|
+| Copy (NVLink) | 5000-6300 | ~7200 | 69-88% | NVSwitch 5th gen 单向带宽，近理论峰值 |
+| Reduce (NVLink) | 2043-2168 | ~3600 | 57-60% | 归约需读+写两次数据，有效带宽 ≈ 理论/2 再加计算开销 |
+
+NVSwitch 5th gen 在 GB200 上提供每 GPU ~900 GB/s 双向 NVLink 带宽。Copy 达到 5000-6300 GB/s（跨 4 GPU 聚合），说明 NVSwitch fabric 工作正常。
+
+#### 与文档 Baseline 对比
+
+| 指标 | 文档 Baseline (7.4节) | 我方实测 | 差异 |
+|---|---|---|---|
+| Intranode dispatch BF16 | 461 GB/s | 436 GB/s | -5% |
+| Intranode dispatch FP8 | 308 GB/s | 292 GB/s | -5% |
+| Intranode combine | 346 GB/s | 322 GB/s | -7% |
+| Internode dispatch SU | ~580 GB/s | **700 GB/s** | **+21%** |
+| Internode combine SU | ~660 GB/s | **724 GB/s** | **+10%** |
+
+Intranode 略低于 Baseline（-5~7%），可能因容器镜像版本差异或 JIT 编译参数不同。Internode 显著高于 Baseline（+10~21%），因为我方使用了更新的 NCCL 2.30.4（Baseline 可能用 2.29.7）且 GIB 诊断镜像的 RDMA 配置更优。
+
+### 部署要点（k8s 1.34 DRA 模式）
+
+1. Pod 必须有 `compute-domain-channel` claim——DeepEP v2 的 NCCL Gin 需要 IMEX channel
+2. `LD_PRELOAD` 指定 NCCL 2.30.4——容器默认的 2.29.7 不含 Gin API
+3. `NCCL_NET=gIB`——启用 GPUDirect RDMA
+4. `TRITON_PTXAS_PATH`——DeepEP JIT 编译需要 ptxas
+5. AR 镜像仓库需要 `imagePullSecrets`——token 有效期短，需定期刷新
+6. Internode test_ep.py 用 `WORLD_SIZE=节点数` + `RANK=节点序号`，不要用 torchrun
