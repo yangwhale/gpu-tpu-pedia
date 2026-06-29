@@ -246,14 +246,170 @@ kubectl exec mega-host-2 -- bash -c "
 # 在 mega-host-1 上运行（node_rank=0）— 同上但 --node_rank=0
 ```
 
-## 测试结果
+## Qwen3 30B-A3B MoE EP Scaling 测试
 
-| 场景 | 配置 | 实测结果 |
-|------|------|----------|
-| 单节点 4 GPU | Qwen3 30B-A3B MoE, EP=4, FP8+TE, mbs=1, seq=16K | **~356 TFLOP/s/GPU**（稳态 iter 3-50 平均） |
-| 多节点 2x4 GPU | Qwen3 30B-A3B MoE, EP=8, FP8+TE, mbs=1, MNNVL | **~274 TFLOP/s/GPU**（稳态 iter 3-50 平均） |
+### 测试目标
 
-**注**：MoE 模型的 TFLOP/s 计算包含所有 expert 的 FLOPs（128 experts x topk=8），因此绝对值与 dense 模型不可直接对比。多节点 EP=8 跨域 alltoall 通信开销导致吞吐下降约 23%。B200 FP8 峰值算力约 4500 TFLOP/s。
+在 NVL72 域内用不同规模的 GPU 测试 Qwen3 30B-A3B MoE 训练的 Expert Parallelism scaling 表现。模型小（30B 总参数，3B 激活）不需要 PP，纯 EP 模式最干净，直接体现 NVSwitch all-to-all 效率随 GPU 数的变化。
+
+### 模型规格
+
+| 参数 | 值 |
+|---|---|
+| 模型 | Qwen3-30B-A3B |
+| 架构 | MoE, 128 routed experts + shared expert |
+| 总参数 | 30B |
+| 每 token 激活参数 | 3B |
+| TopK | 8 |
+| 精度 | FP8 (Transformer Engine, hybrid recipe, delayed scaling) |
+| 数据 | Mock data (合成数据，无需下载) |
+
+### 测试矩阵
+
+#### Test 1: 单节点 4 GPU
+
+| 参数 | 值 |
+|---|---|
+| GPU 数 | 4 (1 node) |
+| EP | 4 |
+| TP | 1 |
+| PP | 1 |
+| DP | 1 |
+| MBS | 1 |
+| GBS | 64 |
+| Seq Length | 4096 |
+| GA | 64 / (1×1) = 64 |
+| 通信 | 域内 NVLink (intra-node) |
+| 预期 | ~356 TFLOP/s/GPU（已测 baseline） |
+
+**要点**：纯 intra-node NVLink，4 个 Expert 分区，all-to-all 通信量最小。作为 baseline。
+
+#### Test 2: 双节点 8 GPU
+
+| 参数 | 值 |
+|---|---|
+| GPU 数 | 8 (2 nodes) |
+| EP | 8 |
+| TP | 1 |
+| PP | 1 |
+| DP | 1 |
+| MBS | 1 |
+| GBS | 64 |
+| Seq Length | 4096 |
+| GA | 64 / (1×1) = 64 |
+| 通信 | 域内 NVSwitch MNNVL (inter-node) |
+| 预期 | ~274 TFLOP/s/GPU（已测 baseline） |
+
+**要点**：跨节点 MNNVL all-to-all。对比 Test 1 可量化跨节点通信开销。之前实测下降 23%。
+
+#### Test 3: 四节点 16 GPU
+
+| 参数 | 值 |
+|---|---|
+| GPU 数 | 16 (4 nodes) |
+| EP | 16 |
+| TP | 1 |
+| PP | 1 |
+| DP | 1 |
+| MBS | 1 |
+| GBS | 64 |
+| Seq Length | 4096 |
+| GA | 64 / (1×1) = 64 |
+| 通信 | 域内 NVSwitch MNNVL |
+| 预期 | 待测 |
+
+**要点**：EP 翻倍到 16，每 GPU 从 32 Expert 降到 8 Expert。all-to-all 目标从 7 增到 15，scatter 碎片化加剧。预期比 Test 2 再下降 5-10%（参考 DeepEP 的 scaling 趋势）。
+
+#### Test 4: 八节点 32 GPU
+
+| 参数 | 值 |
+|---|---|
+| GPU 数 | 32 (8 nodes) |
+| EP | 32 |
+| TP | 1 |
+| PP | 1 |
+| DP | 1 |
+| MBS | 1 |
+| GBS | 64 |
+| Seq Length | 4096 |
+| GA | 64 / (1×1) = 64 |
+| 通信 | 域内 NVSwitch MNNVL |
+| 预期 | 待测 |
+
+**要点**：EP=32，每 GPU 只有 4 Expert。all-to-all 通信最重。如果 NVSwitch 带宽充足，TFLOP/s 下降应趋于平缓（参考 NCCL 同域 scaling 几乎无损的经验）。
+
+### 统一配置
+
+所有 4 组测试保持以下参数一致，仅改变 GPU 数和 EP：
+
+```bash
+# Megatron-LM 通用参数
+--num-experts 128 \
+--moe-router-topk 8 \
+--expert-model-parallel-size ${EP} \
+--tensor-model-parallel-size 1 \
+--pipeline-model-parallel-size 1 \
+--micro-batch-size 1 \
+--global-batch-size 64 \
+--seq-length 4096 \
+--max-position-embeddings 4096 \
+--train-iters 50 \
+--mock-data \
+--fp8-format hybrid --fp8-recipe delayed \
+--transformer-impl transformer_engine \
+--use-distributed-optimizer \
+--overlap-grad-reduce \
+--sequence-parallel \
+--log-interval 1 --log-throughput --eval-iters 0
+```
+
+```bash
+# GB200 环境变量
+export NVTE_FUSED_ATTN=1
+export NVTE_NORM_FWD_USE_CUDNN=1
+export NVTE_NORM_BWD_USE_CUDNN=1
+export NCCL_MNNVL_ENABLE=2
+export NCCL_CUMEM_ENABLE=1
+```
+
+### 部署方式
+
+使用 hostNetwork 模式（绕过 DRANET GID 问题）+ ComputeDomain channel（IMEX for MNNVL）。每组测试：
+
+1. 创建对应数量的 worker VM（Domain 2, `forrest-a4x-1x72-policy`）
+2. Join k8s 集群 + label + ComputeDomain
+3. 部署 StatefulSet（hostNetwork + ComputeDomain channel）
+4. torchrun 启动 Megatron-LM 训练
+5. 跑 50 步，取 iter 5-44 平均 TFLOP/s/GPU
+
+### 性能指标采集
+
+- `s/iter`：每步训练时间
+- `TFLOPS/GPU`：单卡吞吐
+- `MFU`：TFLOPS/GPU ÷ 峰值算力（GB200 FP8 ~4500 TFLOP/s → MFU% = TFLOPS/GPU ÷ 4500）
+- `all-to-all time`：EP 通信时间占比（如可从 profiler 获取）
+
+### Benchmark 结果
+
+| Test | GPU | EP | TFLOP/s/GPU | MFU | vs Test 1 | 备注 |
+|---|---|---|---|---|---|---|
+| 1 | 4 | 4 | **~356** | ~7.9% | baseline | 已测 |
+| 2 | 8 | 8 | **~274** | ~6.1% | -23% | 已测 |
+| 3 | 16 | 16 | — | — | — | 待测 |
+| 4 | 32 | 32 | — | — | — | 待测 |
+
+### 预期 Scaling 趋势分析
+
+基于 DeepEP 的 scaling 数据（2n→4n→8n 下降 6%→9%），MoE 训练的 EP scaling 预期：
+
+| 因素 | 影响 |
+|---|---|
+| all-to-all 通信量 | 随 EP 增加，每 GPU 需要跟更多目标通信，scatter 碎片化 |
+| Expert 计算量 | 随 EP 增加，每 GPU 的 Expert 数减少，per-Expert batch 变小 |
+| NVSwitch 带宽 | 域内全互联，理论上不随 EP 变化（NCCL 同域 scaling 证实） |
+| Attention 计算 | 不受 EP 影响（全量复制，每 GPU 独立计算） |
+
+如果 EP scaling 导致的下降在 5-10%/倍增 范围内，说明 NVSwitch 有效分摊了 all-to-all 开销。如果下降超过 20%，说明 Expert 计算粒度太小（每 GPU Expert 数太少），计算效率下降是主因。
 
 ---
 
