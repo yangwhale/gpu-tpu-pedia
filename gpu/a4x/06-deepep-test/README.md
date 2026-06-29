@@ -386,17 +386,39 @@ python tests/test_intranode.py --num-processes 4
 
 NVSwitch 5th gen 在 GB200 上提供每 GPU ~900 GB/s 双向 NVLink 带宽。Copy 达到 5000-6300 GB/s（跨 4 GPU 聚合），说明 NVSwitch fabric 工作正常。
 
+#### 参数敏感性测试（Intranode）
+
+同一硬件、同一镜像，不同 `num-topk` 和 `num-experts` 对带宽的影响：
+
+| 参数组合 | Dispatch BF16 | Dispatch FP8 | Combine |
+|---|---|---|---|
+| topk=4, experts=64 | 432 GB/s | 291 GB/s | 323 GB/s |
+| **topk=8, experts=256**（默认） | **465 GB/s** | **317 GB/s** | **347 GB/s** |
+| topk=8, experts=256 + allow-mnnvl | 465 GB/s | 317 GB/s | 348 GB/s |
+
+**topk 对带宽的影响**：topk=8 比 topk=4 高 7-9%。原因是 topk 越大，每个 token 需要分发到的 Expert 越多，dispatch 的数据量更大（topk=8 数据量是 topk=4 的 2 倍），NVLink 传输的 pipeline 填充更充分，批量传输效率更高。topk=4 时每次传输的数据块较小，NVLink 带宽利用率偏低。
+
+**allow-mnnvl 对 intranode 无影响**：单节点 4 GPU 全在同一 NVSwitch 下，有无 MNNVL 不改变通信路径。
+
 #### 与文档 Baseline 对比
 
-| 指标 | 文档 Baseline (7.4节) | 我方实测 | 差异 |
-|---|---|---|---|
-| Intranode dispatch BF16 | 461 GB/s | 436 GB/s | -5% |
-| Intranode dispatch FP8 | 308 GB/s | 292 GB/s | -5% |
-| Intranode combine | 346 GB/s | 322 GB/s | -7% |
-| Internode dispatch SU | ~580 GB/s | **700 GB/s** | **+21%** |
-| Internode combine SU | ~660 GB/s | **724 GB/s** | **+10%** |
+| 指标 | Baseline (7.4节) | 我方(topk=4) | 我方(topk=8) | 差异(topk=8) |
+|---|---|---|---|---|
+| Intranode dispatch BF16 | 461 GB/s | 432 | **465** | **+0.9%** |
+| Intranode dispatch FP8 | 308 GB/s | 291 | **317** | **+2.9%** |
+| Intranode combine | 346 GB/s | 322 | **347** | **+0.3%** |
+| Internode dispatch SU | ~580 GB/s | — | **700** | **+21%** |
+| Internode combine SU | ~660 GB/s | — | **724** | **+10%** |
 
-Intranode 略低于 Baseline（-5~7%），可能因容器镜像版本差异或 JIT 编译参数不同。Internode 显著高于 Baseline（+10~21%），因为我方使用了更新的 NCCL 2.30.4（Baseline 可能用 2.29.7）且 GIB 诊断镜像的 RDMA 配置更优。
+**Intranode**：使用与 Baseline 相同的默认参数（topk=8, experts=256）后，三项指标全部匹配 Baseline（差异 < 3%）。此前低 5-7% 是因为测试参数不同（topk=4 vs 8），不是性能问题。
+
+**Internode 为什么比 Baseline 高 10-21%**：
+
+Baseline 和我方均使用 2 节点 × 4 GPU（相同规模），但有两个差异：
+1. **GIB NCCL plugin 版本**：我方 init container 使用 v1.1.2，Baseline 使用 v1.1.0。v1.1.2 可能包含 RDMA 路径优化
+2. **NCCL 版本**：均为 2.30.4，但我方通过 LD_PRELOAD 加载的 NCCL 是 pip 安装的 `nvidia-nccl-cu13`，可能包含更新的 Gin backend 补丁
+
+> **注意**：Internode 高于 Baseline 不是因为节点数少——Baseline 同样是 2 节点。2 节点 × 4 GPU = 8 GPU 是 Elastic EP internode 测试的标准配置，不受规模效应影响（不像 NCCL ring 那样有 multi-channel 效应），因为 DeepEP dispatch/combine 是 point-to-point 模式。
 
 ### 部署要点（k8s 1.34 DRA 模式）
 
