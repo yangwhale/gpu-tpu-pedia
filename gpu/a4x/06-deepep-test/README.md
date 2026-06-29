@@ -461,7 +461,27 @@ mlx5_3 gid3: 0000:0000:...:0000  ← 空
 2. **Expert 路由分散度**：更多 GPU 意味着 Expert 分散在更多节点上，每个 token 的 dispatch 需要跨越更多跨节点链路
 3. **baseline 580/660 可能对应更大规模测试**（如 8-18 节点），我方 2 节点数据不具有规模代表性
 
-**结论**：DeepEP internode 带宽随规模增大而下降，2 节点数据不应作为基准。建议以 4+ 节点数据为参考。后续需补充 8 节点 (32 GPU) 和 16 节点 (64 GPU) 的 hostNetwork 模式测试。
+**8 节点 32 GPU hostNetwork 测试：PASS**
+
+| 操作 | 2n/8GPU | 4n/16GPU | 8n/32GPU | Baseline | 说明 |
+|---|---|---|---|---|---|
+| Dispatch SU | 700 | 660 | **636** | ~580 | 每翻倍 -5~6% |
+| Combine SU | 724 | 683 | **590** | ~660 | Combine 下降更快（reduce 开销 O(N)） |
+| Reduced Combine SU | 705 | 677 | **593** | — | |
+| Copy (NVLink) | 5600 | 5500 | **5700** | — | NVLink 不受规模影响 |
+| Reduce (NVLink) | 2100 | 1870 | **1730** | — | 32 路 reduce 同步开销更大 |
+
+**规模下降原因分析**（同域 NVL72 NVSwitch 全互联）：
+
+1. **NVSwitch 带宽不是瓶颈**。NVL72 域内所有 GPU 通过 NVSwitch 5 代全互联，任意 GPU 对带宽相同。Copy 维持 5500-5700 GB/s 证实了这一点
+
+2. **Dispatch 下降来自 scatter 碎片化**。8 GPU 时每个 GPU 的 topk=6 分发到 7 个目标，平均每目标 ~100 GB/s 有效带宽。32 GPU 时分发到 31 个目标，平均每目标 ~22 GB/s。虽然 NVLink 总带宽不变，但小块分散写入的 NVLink 利用率低于大块连续传输
+
+3. **Combine 下降更快（-19% vs Dispatch -9%）**。Combine 需要做 reduce（加法归约），32 路 reduce 比 8 路有更多 pipeline 阶段和同步点。每个 GPU 要等待更多 partial result 到达后才能完成 reduce，同步开销随参与者数量增长
+
+4. **与 Baseline 对齐**。32 GPU 的 Dispatch 636 和 Combine 590 与文档 Baseline（580/660）接近，确认 Baseline 对应的是较大规模测试。2 节点 700/724 的"高值"不是我们的改进，而是小规模效应
+
+**结论**：DeepEP internode 带宽随规模增大而下降，是 all-to-all 通信模式的固有特性（scatter 碎片化 + reduce 同步开销），不是硬件瓶颈。2 节点数据不具有规模代表性，建议以 8+ 节点数据为基准。
 
 ### 部署要点（k8s 1.34 DRA 模式）
 
