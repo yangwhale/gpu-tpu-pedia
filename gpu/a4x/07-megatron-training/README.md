@@ -51,6 +51,27 @@ spec:
 - **手动方式**：`nodeSelector: {topology: same-domain}`（本章方法，适合验证）
 - **生产方式**：Kueue TAS 的 `podset-required-topology` 注解（详见 [08-multi-domain](../08-multi-domain/)）
 
+## NGC 镜像 Rerun State Machine 踩坑（重要）
+
+NGC 镜像 `megatron-ngc:tev2.15-mgcore_r0.16.0-pt26.05-py3-v2` 内置的 Megatron-LM 有一个 **Rerun State Machine**（硬件故障检测机制），默认配置会导致 FP8 训练只跑 2 个 iteration 就退出。
+
+**现象**：训练启动正常，日志显示 `train_iters=50`，但 `[after training is done]` 在第 2 个 iteration 后就出现。没有任何报错。
+
+**根因**：`megatron/training/resilience_config.py` 中 `rerun_mode` 默认值为 `"validate_results"`。该模式每个 training step 执行两遍 forward/backward，对比结果一致性以检测 GPU 硬件故障。FP8 训练（`--fp8-format hybrid`）本身是非确定性的，两次计算结果必然不同，state machine 误判为硬件故障并退出。
+
+**修复**：启动脚本中 patch 默认值：
+
+```bash
+# 必须在 torchrun 之前执行
+MEGATRON_DIR=$(find /opt -name "pretrain_gpt.py" -type f 2>/dev/null | head -1 | xargs dirname)
+sed -i 's/rerun_mode.*=.*"validate_results"/rerun_mode: Literal["disabled", "validate_results", "report_stats"] = "disabled"/' \
+  $MEGATRON_DIR/megatron/training/resilience_config.py
+```
+
+> **注意**：GRPO 相关参数（`--grpo-iterations` 等）虽然也在镜像的 `arguments.py` 中定义，但它们全部被 `perform_rl_step=False` 门控，预训练模式下完全不生效，与此问题无关。
+
+> **另一个坑**：iteration 日志（TFLOP/s、elapsed time）使用 `print_rank_last` 输出到**最后一个 rank**，不是 rank 0。多节点训练时需要查看 worker 节点（最高 rank 所在 pod）的日志才能看到 throughput 数据。
+
 ## 部署训练 Pod
 
 ```bash
@@ -436,7 +457,7 @@ export NCCL_CUMEM_ENABLE=1
 | 1a | 4 | 4 | 1 | 64 | **~178** | ~4.0% | — | 64 Expert, MBS=1, FusedAttn |
 | 1b | 4 | 4 | 2 | 64 | **~475** | **~10.6%** | +167% vs 1a | 64 Expert, MBS=2, FusedAttn |
 | 1c | 4 | 4 | 4 | 64 | OOM | — | — | 64 Expert, MBS=4 超出显存 |
-| 2 (新) | 8 | 8 | 2 | 64 | — | — | — | 待测 |
+| 2 (新) | 8 | 8 | 2 | 64 | **~116** | **~2.6%** | -76% vs 1b | 64 Expert, MBS=2, MNNVL, 稳态 iter 10-15 平均 |
 | 3 | 16 | 16 | 2 | 64 | — | — | — | 待测 |
 | 4 | 32 | 32 | 2 | 64 | — | — | — | 待测 |
 
