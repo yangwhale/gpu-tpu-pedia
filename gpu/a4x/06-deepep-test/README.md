@@ -437,10 +437,31 @@ mlx5_3 gid3: 0000:0000:...:0000  ← 空
 - 8 节点时 NCCL 需要更多跨节点连接，用到无 GID 的 NIC 触发 `ibv_modify_qp failed` 错误
 - NCCL test 在同规模（8+8 节点 64 GPU）跑通，是因为 GIB 网络插件有独立的 RDMA 地址发现机制（不依赖 GID index），而 DeepEP 的 NCCL communicator 可能 fallback 到了标准 IB 传输
 
-**调查方向**：
-1. DRANET 为什么只给部分 NIC 配置了 IPv4 GID——可能是 DRA 网络命名空间中 IP 地址分配不完整
-2. GIB 插件在 DeepEP 场景下是否被正确加载——LD_PRELOAD 的 pip NCCL 2.30.4 可能与 GIB init container 的 libnccl-net.so 版本不匹配
-3. 是否应该使用 hostNetwork 模式让 DeepEP 直接访问 host 的 RDMA NIC（绕过 DRANET）
+**根因确认**：Host 上所有 4 张 NIC 的 GID 3 均正常（IPv4 地址完整）。DRANET 将 NIC 移入 pod 网络命名空间后仅给 1/4 NIC 配置了 IPv4，导致 3/4 NIC 的 RoCEv2 GID 丢失。这是 DRANET v1.3.0 在 GCP A4X 多 RDMA NIC 场景下的已知限制。
+
+**解决方案**：使用 **hostNetwork 模式**绕过 DRANET，pod 直接使用 host 的 RDMA NIC（GID 完整）。不声明 `rdma-nics` ResourceClaim，只保留 `compute-domain-channel`。
+
+**hostNetwork 模式验证（4 节点 16 GPU）**：PASS
+
+| 操作 | 2n/8GPU | 4n/16GPU | 变化 | 说明 |
+|---|---|---|---|---|
+| Dispatch SU | 700 | **660** | -6% | 规模增大 RDMA 竞争加剧 |
+| Expanded Dispatch SU | 700 | 660 | -6% | |
+| Cached Dispatch SU | 698 | 660 | -5% | |
+| Combine SU | 724 | **683** | -6% | |
+| Reduced Combine SU | 705 | **677** | -4% | |
+| Copy (NVLink) | 5600 | 5500 | -2% | NVLink 不受规模影响 |
+| Reduce (NVLink) | 2100 | 1870 | -11% | 更多 GPU 参与 reduce |
+
+**关键发现：2 节点数据偏高的原因**
+
+2 节点 (8 GPU) 的 dispatch 700 GB/s 和 combine 724 GB/s 显著高于文档 baseline（580/660），但 4 节点 (16 GPU) 降到 660/683。原因：
+
+1. **NCCL communicator 规模效应**：2 节点时 NCCL 只需建立 2 个跨节点连接，ring 短、pipeline 填充快。4 节点需要更多跨节点连接，RDMA 竞争和 ring 长度增加导致带宽下降
+2. **Expert 路由分散度**：更多 GPU 意味着 Expert 分散在更多节点上，每个 token 的 dispatch 需要跨越更多跨节点链路
+3. **baseline 580/660 可能对应更大规模测试**（如 8-18 节点），我方 2 节点数据不具有规模代表性
+
+**结论**：DeepEP internode 带宽随规模增大而下降，2 节点数据不应作为基准。建议以 4+ 节点数据为参考。后续需补充 8 节点 (32 GPU) 和 16 节点 (64 GPU) 的 hostNetwork 模式测试。
 
 ### 部署要点（k8s 1.34 DRA 模式）
 
