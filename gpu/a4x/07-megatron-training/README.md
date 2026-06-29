@@ -431,12 +431,14 @@ export NCCL_CUMEM_ENABLE=1
 
 | Test | GPU | EP | MBS | GBS | TFLOP/s/GPU | MFU | vs Test 1 | 备注 |
 |---|---|---|---|---|---|---|---|---|
-| 1 (旧) | 4 | 4 | 1 | 64 | ~356 | ~7.9% | — | 旧 baseline, MBS=1, seq=16K |
-| 2 (旧) | 8 | 8 | 1 | 64 | ~274 | ~6.1% | -23% | 旧 baseline, MBS=1 |
-| 1 (新) | 4 | 4 | 1 | 64 | — | — | — | 待测，需修 attention backend |
-| 2 (新) | 8 | 8 | 1 | 64 | — | — | — | 待测 |
-| 3 | 16 | 16 | 1 | 64 | — | — | — | 待测 |
-| 4 | 32 | 32 | 1 | 64 | — | — | — | 待测 |
+| 1 (旧) | 4 | 4 | 1 | 64 | ~356 | ~7.9% | — | 旧 baseline, MBS=1, seq=16K, 128 Expert |
+| 2 (旧) | 8 | 8 | 1 | 64 | ~274 | ~6.1% | -23% | 旧 baseline, MBS=1, 128 Expert |
+| 1a | 4 | 4 | 1 | 64 | **~178** | ~4.0% | — | 64 Expert, MBS=1, FusedAttn |
+| 1b | 4 | 4 | 2 | 64 | **~475** | **~10.6%** | +167% vs 1a | 64 Expert, MBS=2, FusedAttn |
+| 1c | 4 | 4 | 4 | 64 | OOM | — | — | 64 Expert, MBS=4 超出显存 |
+| 2 (新) | 8 | 8 | 2 | 64 | — | — | — | 待测 |
+| 3 | 16 | 16 | 2 | 64 | — | — | — | 待测 |
+| 4 | 32 | 32 | 2 | 64 | — | — | — | 待测 |
 
 ### 显存问题记录（2026-06-29）
 
@@ -451,11 +453,20 @@ megatron-ngc 镜像（`tev2.15-mgcore_r0.16.0-pt26.05-py3-v2`）在 GB200 上运
 
 **根因**：Transformer Engine 在 GB200 上 fallback 到 **unfused attention**（`self.unfused_attention`），没有用 Flash Attention / Fused Attention。unfused attention 的 attention_probs 矩阵是 O(seq² × heads × batch) = 4096² × 32 × 1 = 2 GB per sample，显存暴涨。
 
-**修复方向**：
-1. 确保 `NVTE_FUSED_ATTN=1` 生效——检查 TE 是否支持 GB200 的 SM100 fused attention
-2. 如果 TE fused attn 不支持 SM100，改用 `--use-flash-attn` 调用 FlashAttention
-3. 降 seq_length 到 2048 或 1024 作为临时 workaround
-4. 增加 activation recompute 覆盖 attention 层
+**根因确认**：缺 `--bf16` 参数导致 attention QKV 输入为 FP32，FlashAttention 和 FusedAttention 都不支持 FP32 输入。TE debug 明确报告：
+```
+Disabling FlashAttention 2 for unsupported qkv_dtype = torch.float32
+Disabling FusedAttention for unsupported qkv_dtype = torch.float32
+Selected backend = UnfusedDotProductAttention
+```
+
+**修复**：加 `--bf16` 参数。FP8 训练必须配合 `--bf16`，让 non-FP8 层（包括 attention softmax、dropout）用 BF16 而不是 FP32。修复后 TE 正确选择 FusedAttention (sub-backend 1)。
+
+**MBS 调优结果**（64 Expert, EP=4, 12 层, hidden=2048, seq=4096）：
+- MBS=1: ~178 TFLOP/s/GPU（tensor core 利用率低）
+- MBS=2: **~475 TFLOP/s/GPU**（+167%，计算效率大幅提升）
+- MBS=4: OOM（Expert FFN linear_fc2 activation 超出显存）
+- 最大可用 MBS=2，对应 MFU=10.6%（基于 GB200 FP8 峰值 4500 TFLOP/s）
 
 > **MBS=1 vs MBS=16/32 的影响**：MBS=1 时 GPU 的 tensor core 利用率低——每个 GEMM 的 batch 维度太小，kernel launch overhead 占比高。调大 MBS 后 GEMM 的 batch 维度增大，计算效率显著提升。预期 MBS=16 相对 MBS=1 提升 30-50% TFLOP/s。旧 baseline（MBS=1）不作为正式参考，新测试的 MBS 充分利用显存后的结果才是有效 benchmark。
 
