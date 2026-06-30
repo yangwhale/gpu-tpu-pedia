@@ -499,8 +499,32 @@ export NCCL_CUMEM_ENABLE=1
 4. **Selective recompute 代价 ~9%**：从 527 降到 480 TFLOP/s，但能省 HBM（用于更大 MBS 场景）
 5. **v0.17.0 vs v0.16.0**：同配置（EP=8 MBS=1 BF16）从 ~105 升到 ~492 TFLOP/s（4.7×），主要因为旧测试是 48 层全模型 + 旧版本
 
-| 3 | 16 | 16 | 2 | 64 | — | — | — | 待测 |
-| 4 | 32 | 32 | 2 | 64 | — | — | — | 待测 |
+**8 节点 32 GPU（同域 MNNVL）完整 48 层模型结果**：
+
+从 12 层 benchmark 扩展到完整 48 层模型。环境同上（mcore v0.17.0 + NGC PyTorch 26.04 + GIB LD_PRELOAD），改为 48 层 + 8 节点 32 GPU。
+
+| Config | Layers | EP | MBS | GBS | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| B1 | 48 | 32 | 1 | 256 | **~446** | **19.8%** | 147 | 完整模型 32 GPU baseline |
+| B2 | 48 | 32 | 2 | 256 | — | — | — | 测试中 |
+| B3-FSDP | 48 | 32 | 2 | 256 | NCCL hang | — | — | `--use-megatron-fsdp` 与 EP=32 死锁 |
+
+> B1 vs A1（12 层 EP=8）：446 vs 492 TFLOP/s，下降 9.4%。主要来自 EP=32 的 all-to-all 通信开销增大（32 路 vs 8 路），而非层数增加。
+
+**FSDP 现状**：mcore v0.17.0 修复了 r0.16.0 的 DTensor `main_grad` bug（`--ckpt-format fsdp_dtensor` 需显式指定），但 `--use-megatron-fsdp` 与 EP=32 组合在 NCCL 初始化阶段死锁。去掉 `--use-distributed-optimizer` 和 overlap 参数后依然 hang。不开 FSDP 的 48 层 EP=32 MBS=1 可正常运行。
+
+**GQA 与 TP 约束**：Qwen3 30B-A3B 使用 GQA（Q heads=32, KV heads=4）。TP 必须同时整除 Q heads 和 KV heads，因此 TP 最大为 4。TP 与 EP 正交（TP 切 attention，EP 切 MoE），TP=4 + EP=32 在 32 GPU 上可共存。
+
+**方法论差异（旧 vs 新）**：
+
+| 维度 | 旧方法（mcore r0.16.0） | 新方法（mcore v0.17.0） |
+|---|---|---|
+| 镜像 | `megatron-ngc:tev2.15-mgcore_r0.16.0` | `nvcr.io/nvidia/pytorch:26.04-py3` |
+| Megatron 来源 | NGC 预装 /opt | GitHub clone `core_v0.17.0` + pip install |
+| NCCL 加载 | GIB cp + 禁用 RDMA 库 | GIB `LD_PRELOAD` + 保留 RDMA 库 |
+| TransformerEngine | `--transformer-impl transformer_engine` | 不使用 TE |
+| Benchmark 层数 | 48 层全模型 | 12 层（MFU 归一化等价） |
+| FSDP | DTensor bug 崩溃 | 配置可接受但 EP=32 死锁 |
 
 > **模型配置踩坑**：之前 `--ffn-hidden-size 12288` 导致 Megatron 在每层同时创建 dense FFN（12288）和 128 个 expert FFN（768），总参数变成 61B 而不是 30B。正确值应该从 HuggingFace `config.json` 取：`hidden_size=2048, ffn_hidden_size=6144, moe_ffn_hidden_size=768`。PAI-Megatron-Patch 的 `run_mcore_qwen3.sh` 中 `A3B` 预设已经是正确值。
 
