@@ -506,7 +506,7 @@ export NCCL_CUMEM_ENABLE=1
 | Config | Layers | EP | MBS | GBS | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | 备注 |
 |---|---|---|---|---|---|---|---|---|
 | B1 | 48 | 32 | 1 | 256 | **~446** | **19.8%** | 147 | 完整模型 32 GPU baseline |
-| B2 | 48 | 32 | 2 | 256 | — | — | — | 测试中 |
+| B2 | 48 | 32 | 2 | 256 | OOM | — | 165 GiB allocated | MoE dispatch buffer OOM (sort_chunks_by_idxs) |
 | B3-FSDP | 48 | 32 | 2 | 256 | NCCL hang | — | — | `--use-megatron-fsdp` 与 EP=32 死锁 |
 
 > B1 vs A1（12 层 EP=8）：446 vs 492 TFLOP/s，下降 9.4%。主要来自 EP=32 的 all-to-all 通信开销增大（32 路 vs 8 路），而非层数增加。
