@@ -503,11 +503,18 @@ export NCCL_CUMEM_ENABLE=1
 
 从 12 层 benchmark 扩展到完整 48 层模型。环境同上（mcore v0.17.0 + NGC PyTorch 26.04 + GIB LD_PRELOAD），改为 48 层 + 8 节点 32 GPU。
 
-| Config | Layers | EP | MBS | GBS | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | 备注 |
-|---|---|---|---|---|---|---|---|---|
-| B1 | 48 | 32 | 1 | 256 | **~446** | **19.8%** | 147 | 完整模型 32 GPU baseline |
-| B2 | 48 | 32 | 2 | 256 | OOM | — | 165 GiB allocated | MoE dispatch buffer OOM (sort_chunks_by_idxs) |
-| B3-FSDP | 48 | 32 | 2 | 256 | NCCL hang | — | — | `--use-megatron-fsdp` 与 EP=32 死锁 |
+| Config | Layers | EP | MBS | GBS | Recompute | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | 备注 |
+|---|---|---|---|---|---|---|---|---|---|
+| B1 | 48 | 32 | 1 | 256 | none | **~446** | **19.8%** | 147 | **最佳配置** — 完整模型无 recompute |
+| B2 | 48 | 32 | 2 | 256 | none | OOM | — | 165 | MoE dispatch buffer OOM |
+| B3 | 48 | 32 | 2 | 256 | full | **~372** | 16.5% | 67 | recompute 省 80 GiB 但慢 17% |
+| B4 | 48 | 32 | 4 | 128 | full | **~375** | 16.7% | 113 | MBS 翻倍但 TFLOP/s 不涨 |
+| B5 | 48 | 32 | 8 | 256 | full | OOM | — | — | vocab logits [16384,8,128K] FP32 = 62.7 GiB |
+| B6-FSDP | 48 | 32 | 2 | 256 | none | NCCL hang | — | — | `--use-megatron-fsdp` 与 EP=32 死锁 |
+
+> **B1 vs B3/B4**：不开 recompute 的 MBS=1（446 TFLOP/s）优于开 full recompute 的 MBS=2/4（~375 TFLOP/s）。recompute 的计算开销（~25%）大于 MBS 增大带来的效率提升。
+
+> **B5 OOM 分析**：MBS=8 的 OOM 不是 MoE dispatch，而是 cross-entropy loss 的 vocab logits 张量 [seq=16384, MBS=8, vocab=128256] × FP32 = 62.7 GiB。这是 vocab 大小 × 序列长度的固有限制，与 MoE 无关。解决方案：TP>1 将 vocab 切分到多卡。
 
 > B1 vs A1（12 层 EP=8）：446 vs 492 TFLOP/s，下降 9.4%。主要来自 EP=32 的 all-to-all 通信开销增大（32 路 vs 8 路），而非层数增加。
 
