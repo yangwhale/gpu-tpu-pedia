@@ -510,7 +510,8 @@ export NCCL_CUMEM_ENABLE=1
 | B3 | 48 | 32 | 2 | 256 | full | **~372** | 16.5% | 67 | recompute 省 80 GiB 但慢 17% |
 | B4 | 48 | 32 | 4 | 128 | full | **~375** | 16.7% | 113 | MBS 翻倍但 TFLOP/s 不涨 |
 | B5 | 48 | 32 | 8 | 256 | full | OOM | — | — | vocab logits [16384,8,128K] FP32 = 62.7 GiB |
-| B6-FSDP | 48 | 32 | 2 | 256 | none | NCCL hang | — | — | `--use-megatron-fsdp` 与 EP=32 死锁 |
+| B6 | 48 | 32 | 2 | 256 | selective | OOM | — | — | selective 省不够，NCCL CUDA error |
+| B7-FSDP | 48 | 32 | 2 | 256 | none | NCCL hang | — | — | `--use-megatron-fsdp` 与 EP=32 死锁 |
 
 > **B1 vs B3/B4**：不开 recompute 的 MBS=1（446 TFLOP/s）优于开 full recompute 的 MBS=2/4（~375 TFLOP/s）。recompute 的计算开销（~25%）大于 MBS 增大带来的效率提升。
 
