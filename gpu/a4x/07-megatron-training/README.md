@@ -462,9 +462,107 @@ export NCCL_CUMEM_ENABLE=1
 | 2c (新) | 8 | 8 | 1 | 64 | **~105** | **~2.3%** | — | 完整48层 128E, MBS=1, MNNVL, 显存149/184GB |
 | 2d (新) | 8 | 8 | 2 | 128 | OOM | — | — | 完整48层 128E, MBS=2 OOM (activation 超限) |
 | 2e TP=2 | 8 | 4 | 1 | 16 | OOM | — | — | 完整48层, TP=2 EP=4, 每卡32E更多 OOM |
-| 2f FSDP | 8 | 8 | 1 | 64 | 崩溃 | — | — | megatron-fsdp ZeRO-2/3 DTensor+FP8 不兼容 |
+| 2f FSDP | 8 | 8 | 1 | 64 | 崩溃 | — | — | megatron-fsdp ZeRO-2/3 DTensor 不兼容（BF16 也崩） |
+| 2g 正确配置 | 8 | 8 | 4 | 256 | **~140** | **~6.2%** | — | 正确30B（HF config），BF16, recompute, mock data |
+| 2h 真实数据 | 8 | 8 | 2 | 128 | **~98** | **~4.3%** | — | 正确30B, BF16, NFS真实数据, loss 12.0→9.7 |
 | 3 | 16 | 16 | 2 | 64 | — | — | — | 待测 |
 | 4 | 32 | 32 | 2 | 64 | — | — | — | 待测 |
+
+> **模型配置踩坑**：之前 `--ffn-hidden-size 12288` 导致 Megatron 在每层同时创建 dense FFN（12288）和 128 个 expert FFN（768），总参数变成 61B 而不是 30B。正确值应该从 HuggingFace `config.json` 取：`hidden_size=2048, ffn_hidden_size=6144, moe_ffn_hidden_size=768`。PAI-Megatron-Patch 的 `run_mcore_qwen3.sh` 中 `A3B` 预设已经是正确值。
+
+### 共享存储：Lustre 安装（Rocky 9 ARM64 / CIQ 内核）
+
+多节点训练需要共享存储放数据集（Megatron 的 dataset index cache 只在 rank 0 构建，其他节点需要读同一路径）。
+
+#### 创建 Lustre 实例
+
+```bash
+# 1. 创建 PSA IP 范围（如果 VPC 还没有）
+gcloud compute addresses create lustre-psa \
+  --project=$PROJECT --global \
+  --purpose=VPC_PEERING \
+  --addresses=10.200.0.0 --prefix-length=16 \
+  --network=$VPC_NAME
+
+# 2. 创建或更新 PSA peering
+gcloud services vpc-peerings update \
+  --project=$PROJECT --network=$VPC_NAME \
+  --ranges=lustre-psa \
+  --service=servicenetworking.googleapis.com --force
+
+# 3. 创建 Lustre（最小 36000 GiB ≈ 35 TiB）
+gcloud lustre instances create $LUSTRE_NAME \
+  --project=$PROJECT --location=$ZONE \
+  --capacity-gib=36000 \
+  --filesystem=lustrefs \
+  --network=$VPC_NAME \
+  --per-unit-storage-throughput=250
+```
+
+#### 安装 Lustre 2.14 客户端（Rocky 9 ARM64 踩坑）
+
+A4X 节点是 ARM64（Grace CPU），Google 官方 Lustre client repo 没有 aarch64 包。需要用 DDN 的 DKMS 包从源码编译，但有两个坑：
+
+1. **OFED 冲突**：节点预装了 OFED（Mellanox RDMA），Lustre configure 检测到 OFED 但找不到 devel 包就报错。需要 `--with-o2ib=no`（Lustre 走 TCP 不需要 RDMA）。
+2. **DKMS ko2iblnd**：`dkms.conf` 里列了 `ko2iblnd` 模块（RDMA 驱动），但 `--with-o2ib=no` 跳过了编译，DKMS 找不到 .ko 文件就报错。必须从 `dkms.conf` 删掉 ko2iblnd 的**三行**（NAME + LOCATION + DEST），不是两行。
+
+```bash
+# 在每台 worker 上执行
+# Step 1: 安装依赖
+dnf install -y dkms
+dnf config-manager --set-enabled crb
+dnf install -y libyaml-devel json-c-devel
+dnf install -y kernel-devel-$(uname -r)
+
+# Step 2: 添加 DDN Lustre repo + 安装 DKMS 包
+cat > /etc/yum.repos.d/lustre-client.repo << 'EOF'
+[lustre-client]
+name=GCP Lustre Client
+baseurl=https://us-yum.pkg.dev/projects/lustre-client-binaries/lustre-client-rocky-9
+enabled=1
+gpgcheck=0
+repo_gpgcheck=0
+EOF
+dnf install -y lustre-client-dkms-2.14.0_ddn256-1.el9 lustre-client-2.14.0_ddn256-1.el9
+
+# Step 3: Patch dkms.conf — 删除 ko2iblnd 的 3 行（NAME + LOCATION + DEST）
+# 原文件中这 3 行在 ksocklnd 之后（约 line 31-33）：
+#   BUILT_MODULE_NAME[...]="ko2iblnd"
+#   BUILT_MODULE_LOCATION[...]="lnet/klnds/o2iblnd/"
+#   DEST_MODULE_LOCATION[...]="/extra/lnet/"
+sed -i '31,33d' /usr/src/lustre-client-2.14.0_ddn256/dkms.conf
+
+# Step 4: Patch configure — 禁用 o2ib
+sed -i 's|./configure |./configure --with-o2ib=no |' \
+  /usr/src/lustre-client-2.14.0_ddn256/lustre-dkms_pre-build.sh
+
+# Step 5: DKMS 编译 + 安装
+dkms remove lustre-client/2.14.0_ddn256 --all 2>/dev/null || true
+dkms add lustre-client/2.14.0_ddn256
+dkms build lustre-client/2.14.0_ddn256 -k $(uname -r)
+dkms install lustre-client/2.14.0_ddn256 -k $(uname -r)
+
+# Step 6: 加载模块 + 挂载
+modprobe lnet && modprobe lustre
+lnetctl lnet configure
+mkdir -p /mnt/lustre
+mount -t lustre <LUSTRE_IP>@tcp:/lustrefs /mnt/lustre
+```
+
+> **关键提醒**：`dkms.conf` 中 ko2iblnd 的 DEST_MODULE_LOCATION 行容易漏删（只删 NAME + LOCATION 两行会导致 `No 'BUILT_MODULE_NAME' directive specified for record #N` 错误）。必须删 3 行。
+
+#### 训练 Pod 挂载 Lustre
+
+宿主机挂载 Lustre 后，Pod 通过 hostPath 访问：
+
+```yaml
+volumeMounts:
+- { name: lustre, mountPath: /mnt/lustre }
+volumes:
+- { name: lustre, hostPath: { path: /mnt/lustre, type: Directory } }
+```
+
+数据集放在 `/mnt/lustre/qwen-datasets/`，所有节点共享读写。
 
 ### 显存问题记录（2026-06-29）
 
