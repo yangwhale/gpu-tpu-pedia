@@ -457,14 +457,48 @@ export NCCL_CUMEM_ENABLE=1
 | 1a | 4 | 4 | 1 | 64 | **~178** | ~4.0% | — | 64 Expert, MBS=1, FusedAttn |
 | 1b | 4 | 4 | 2 | 64 | **~475** | **~10.6%** | +167% vs 1a | 64 Expert, MBS=2, FusedAttn |
 | 1c | 4 | 4 | 4 | 64 | OOM | — | — | 64 Expert, MBS=4 超出显存 |
-| 2a (新) | 8 | 8 | 2 | 64 | **~116** | **~2.6%** | -76% vs 1b | 12层 64E, MBS=2, MNNVL, 稳态 iter 10-15 |
-| 2b (新) | 8 | 8 | 4 | 256 | **~200** | **~4.4%** | -58% vs 1b | 12层 64E, MBS=4, MNNVL, 稳态 iter 3-10 |
-| 2c (新) | 8 | 8 | 1 | 64 | **~105** | **~2.3%** | — | 完整48层 128E, MBS=1, MNNVL, 显存149/184GB |
-| 2d (新) | 8 | 8 | 2 | 128 | OOM | — | — | 完整48层 128E, MBS=2 OOM (activation 超限) |
+| 2a (旧) | 8 | 8 | 2 | 64 | **~116** | **~2.6%** | -76% vs 1b | 12层 64E, MBS=2, MNNVL, 稳态 iter 10-15 |
+| 2b (旧) | 8 | 8 | 4 | 256 | **~200** | **~4.4%** | -58% vs 1b | 12层 64E, MBS=4, MNNVL, 稳态 iter 3-10 |
+| 2c (旧) | 8 | 8 | 1 | 64 | **~105** | **~2.3%** | — | 完整48层 128E, MBS=1, MNNVL, 显存149/184GB |
+| 2d (旧) | 8 | 8 | 2 | 128 | OOM | — | — | 完整48层 128E, MBS=2 OOM (activation 超限) |
 | 2e TP=2 | 8 | 4 | 1 | 16 | OOM | — | — | 完整48层, TP=2 EP=4, 每卡32E更多 OOM |
 | 2f FSDP | 8 | 8 | 1 | 64 | 崩溃 | — | — | megatron-fsdp ZeRO-2/3 DTensor 不兼容（BF16 也崩） |
 | 2g 正确配置 | 8 | 8 | 4 | 256 | **~140** | **~6.2%** | — | 正确30B（HF config），BF16, recompute, mock data |
 | 2h 真实数据 | 8 | 8 | 2 | 128 | **~98** | **~4.3%** | — | 正确30B, BF16, NFS真实数据, loss 12.0→9.7 |
+
+### Benchmark 结果 v2（mcore v0.17.0 + 标准化方法）
+
+上面的旧结果使用 NGC megatron 镜像（mcore r0.16.0）+ 非标准配置（48 层全模型、自定义 GIB 设置），结果不具可比性。以下是使用标准化 benchmark 方法重新测试的结果。
+
+**环境变更**：
+- **镜像**：`nvcr.io/nvidia/pytorch:26.04-py3`（标准 NGC PyTorch，非 Megatron 定制镜像）
+- **Megatron-Core**：v0.17.0（GitHub `core_v0.17.0` tag，修复了 r0.16.0 的 FSDP DTensor bug）
+- **层数**：12 层（标准 MoE benchmark 方法，MFU 归一化后与全模型等价）
+- **GIB**：v1.1.2 + `LD_PRELOAD` 加载 NCCL（含 libibverbs/libmlx5 RDMA 库）
+- **数据**：`--mock-data`（消除 I/O 变量）
+- **序列长度**：16384
+
+**2 节点 8 GPU（同域 MNNVL）Sweep 结果**：
+
+| Config | EP | MBS | GBS | Recompute | Dtype | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | 备注 |
+|---|---|---|---|---|---|---|---|---|---|
+| A1 | 8 | 1 | 256 | none | BF16 | **~492** | **21.9%** | 60 | EP=8 baseline |
+| A2 | 8 | 2 | 256 | none | BF16 | **~527** | **23.4%** | 102 | **最佳配置** |
+| A3 | 8 | 2 | 256 | none | FP8 | **~503** | 22.4% | 93 | FP8 反而慢 5%（MoE grouped GEMM FP8 开销） |
+| A4 | 8 | 2 | 256 | selective | BF16 | **~480** | 21.3% | 105 | recompute 开销 ~9% |
+| A5 | 8 | 4 | 256 | selective | BF16 | OOM | — | — | MBS=4 即使开 selective recompute 也 OOM |
+| A6 | 4 | 1 | 256 | none | BF16 | **~463** | 20.6% | 63 | EP=4 DP=2，通信换并行 |
+| A7 | 4 | 2 | 256 | none | BF16 | **~524** | 23.3% | 105 | EP=4 接近 EP=8 最佳 |
+
+> MFU 基于 GB200 BF16 峰值 2,250 TFLOP/s 计算。FP8 MFU 若基于 FP8 峰值 4,500 TFLOP/s 则为 11.2%。
+
+**关键发现**：
+1. **MBS=2 是甜点**：MBS=1→2 提升 7%，MBS=4 OOM。HBM 从 60 GiB 跳到 102 GiB
+2. **FP8 对 MoE 无加速**：grouped GEMM 的 FP8 路径 overhead 抵消了 Tensor Core 加速，BF16 反而更快
+3. **EP=4 vs EP=8 差距小**：MBS=2 时 EP=4（524 TFLOP/s）接近 EP=8（527 TFLOP/s），说明 NVSwitch all-to-all 效率高
+4. **Selective recompute 代价 ~9%**：从 527 降到 480 TFLOP/s，但能省 HBM（用于更大 MBS 场景）
+5. **v0.17.0 vs v0.16.0**：同配置（EP=8 MBS=1 BF16）从 ~105 升到 ~492 TFLOP/s（4.7×），主要因为旧测试是 48 层全模型 + 旧版本
+
 | 3 | 16 | 16 | 2 | 64 | — | — | — | 待测 |
 | 4 | 32 | 32 | 2 | 64 | — | — | — | 待测 |
 
