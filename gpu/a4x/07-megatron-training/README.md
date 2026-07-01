@@ -753,7 +753,17 @@ Pod 设置自定义 `hostname` 时，NCCL bootstrap 和 Gloo 会调用 `gethostb
 | R2 | + full_iteration CUDA graph | OOM | — | 184 GiB 不够放 replay buffer |
 | R3 | + TE CUDA graph | crash | — | expandable_segments 与 CUDA graph 冲突 |
 | **R4** | **+ TE CUDA graph + NCCL_GRAPH_REGISTER=0** | **208** | **+134%** | **attn+moe_router+moe_preprocess scope** |
+| R5 | + full_iteration CUDA graph (all opts) | OOM | — | 184 GiB 仍不够 |
+| R8 | R4 + VBoost | 190 | -9% | VBoost 反而变慢 |
+| R9 | cutedsl + TE CUDA graph | 320 peak → crash | — | Triton CPU tensor 错误第 4 步崩 |
+| **R10** | **cutedsl fused grouped MLP (no CG)** | **284** | **+219%** | **稳定 20 步，0 alloc retry** |
 | 官方 | DGX-GB200 full_iteration CUDA graph | 936 | — | NVIDIA Performance Summary |
+
+**R10 关键发现**：
+- `NVTE_CUTEDSL_FUSED_GROUPED_MLP=1` 是最大的单项优化（89→284，+219%）
+- `perf_plugins.py` 在 Slurm 模式自动设此环境变量，torchrun 不设就漏了
+- cutedsl 无 CUDA Graph（284）比 TE CUDA Graph 无 cutedsl（208）还快
+- cutedsl 把 HBM 峰值降到 175 GiB（0 alloc retry），因为 fused kernel 减少中间 buffer
 
 **R4 关键发现**：
 - `cuda_graph_impl=transformer_engine` + `cuda_graph_scope=attn,moe_router,moe_preprocess` 不 OOM
