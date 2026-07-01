@@ -531,6 +531,34 @@ export NCCL_CUMEM_ENABLE=1
 2. **VPC 选择**：forrest VPC 有组织策略自动删除防火墙规则，IAP SSH 不可用。改用 `chrisya-gvnic-net-0` VPC（与本地机器内网互联）
 3. **NCCL CUDA error 801**：集群搭好后训练报 `CUDA error: Invalid access of peer GPU memory over nvlink or a hardware error`，即使设 `NCCL_MNNVL_ENABLE=0` 也报错（GIB 脚本内部覆盖回 2）。ComputeDomain 和 IMEX daemon 状态均正常（Ready），但 NCCL 通信失败。待排查：可能是 Placement Policy 物理域分配与 ComputeDomain 不匹配、或 GIB NCCL 版本与 Rocky 580 驱动不兼容
 
+### Benchmark 结果 v3（Megatron Bridge NeMo 26.06）
+
+使用 NVIDIA 官方 Megatron Bridge（NeMo 26.06 容器）+ 官方 Qwen3 30B recipe 在 2 节点 8 GPU（forrest-a4x-1x72-policy 域，v3 镜像）上测试。
+
+**环境**：`nvcr.io/nvidia/nemo:26.06` + GIB v1.1.2 LD_PRELOAD + ComputeDomain
+
+| Config | Framework | Precision | MBS | GBS | CUDA Graph | TFLOP/s/GPU | HBM Peak (GiB) | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| C1 | Megatron Bridge | MXFP8 | 4 | 512 | full_iteration | 80-86 → OOM | 186+ | CUDA Graph replay buffer 超出 184 GiB |
+| C2 | Megatron Bridge | MXFP8 | 4 | 512 | none | **~89** | 186 (76 retries) | hybridep + fp8_attn + moe_a2a_overlap |
+| **官方** | Megatron Bridge | MXFP8 | 4 | 512 | full_iteration | **936** | DGX-GB200 | NVIDIA 官方 Performance Summary |
+
+> **C2 vs 官方差距分析（89 vs 936 = 10.5×）**：
+> 1. **CUDA Graph**：官方用 `full_iteration` CUDA Graph 消除 kernel launch + Python 开销，A4X 的 184 GiB HBM 放不下 replay buffer
+> 2. **DGX vs A4X**：DGX-GB200 可能有不同的 NVSwitch 拓扑或内存管理优化
+> 3. **cutedsl_fused_grouped_mlp**：融合 grouped MLP 需要 cuTeDSL 支持，可能在 A4X 上未完全启用
+> 4. **NCCL 版本**：GIB NCCL 2.30.4+cuda13.0 vs DGX 自带的优化 NCCL
+
+> **关键发现**：Megatron Bridge 的 `run_recipe.py` 不会加载 GPU 特定的优化配置（CUDA Graph、hybridep 等），必须用 `run_script.py` 作为入口。
+
+### Worker 镜像 v3（2026-07-01）
+
+打包镜像 `chrisya-a4x-worker-v3`，解决 v2 的新内核启动问题：
+- 删除新内核 5.14.0-687，锁定旧内核 5.14.0-611（dnf versionlock）
+- 启动即用：nvidia-smi + containerd + kubeadm + IMEX channel 直接可用
+- Lustre 2.14 DKMS 已编译安装（ARM64 patch）
+- 启动到 k8s Ready 总时间：~6.5 分钟（硬件初始化 3 分钟 + OS 启动 2 分钟 + CNI 1.5 分钟）
+
 **方法论差异（旧 vs 新）**：
 
 | 维度 | 旧方法（mcore r0.16.0） | 新方法（mcore v0.17.0） |
