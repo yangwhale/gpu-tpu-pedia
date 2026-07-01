@@ -523,6 +523,14 @@ export NCCL_CUMEM_ENABLE=1
 
 **GQA 与 TP 约束**：Qwen3 30B-A3B 使用 GQA（Q heads=32, KV heads=4）。TP 必须同时整除 Q heads 和 KV heads，因此 TP 最大为 4。TP 与 EP 正交（TP 切 attention，EP 切 MoE），TP=4 + EP=32 在 32 GPU 上可共存。
 
+**集群重建复测记录（2026-07-01）**：
+
+按 GitHub 文档标准流程重建集群（6 NIC + Placement Policy + ComputeDomain + DRA + DRANET + GIB LD_PRELOAD），遇到以下问题：
+
+1. **Worker VM 创建 stockout**：最初只配了 1 NIC（无 RDMA NIC + 无 Placement Policy），reservation stockout。加上 6 NIC（2 GVNIC + 4 MRDMA）+ `--resource-policies=a4x-nvl72-policy` 后立刻成功。Placement Policy 决定物理域分配，缺了就分不到机器。注意 `chrisya-a4x-nvl72-domain-1` 和 `a4x-nvl72-policy` 是两个不同的 Policy，前者没有空位
+2. **VPC 选择**：forrest VPC 有组织策略自动删除防火墙规则，IAP SSH 不可用。改用 `chrisya-gvnic-net-0` VPC（与本地机器内网互联）
+3. **NCCL CUDA error 801**：集群搭好后训练报 `CUDA error: Invalid access of peer GPU memory over nvlink or a hardware error`，即使设 `NCCL_MNNVL_ENABLE=0` 也报错（GIB 脚本内部覆盖回 2）。ComputeDomain 和 IMEX daemon 状态均正常（Ready），但 NCCL 通信失败。待排查：可能是 Placement Policy 物理域分配与 ComputeDomain 不匹配、或 GIB NCCL 版本与 Rocky 580 驱动不兼容
+
 **方法论差异（旧 vs 新）**：
 
 | 维度 | 旧方法（mcore r0.16.0） | 新方法（mcore v0.17.0） |
