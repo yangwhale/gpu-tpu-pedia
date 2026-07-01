@@ -741,3 +741,26 @@ Megatron-LM 使用 Gloo 进行进程通信。如果 Pod hostname 过长，会触
 Pod 设置自定义 `hostname` 时，NCCL bootstrap 和 Gloo 会调用 `gethostbyname()` 获取自身 IP。如果该 hostname 没有 DNS 记录，解析失败会导致**静默 hang**（`initialized tensor model parallel` 后不再有输出）。
 
 **修复方案**：在 `/etc/hosts` 中添加 hostname→IP 映射，或配合 headless Service + `subdomain` 使 k8s DNS 自动注册。同时需设置 `NCCL_SOCKET_IFNAME=eth0` 和 `GLOO_SOCKET_IFNAME=eth0`。
+
+### Performance Iteration Log (2026-07-02)
+
+迭代对标 Megatron Bridge 官方 936 TFLOP/s（DGX-GB200, Qwen3 30B, MXFP8）。
+
+| Round | Config | TFLOP/s | Delta | 备注 |
+|---|---|---|---|---|
+| Baseline | run_script.py, no CUDA graph | 89 | — | hybridep + fp8_attn + a2a_overlap |
+| R1 | + numactl (错误绑定) | 23-87 | -74% | numactl 绑错 NUMA node，全进程挤一个核 |
+| R2 | + full_iteration CUDA graph | OOM | — | 184 GiB 不够放 replay buffer |
+| R3 | + TE CUDA graph | crash | — | expandable_segments 与 CUDA graph 冲突 |
+| **R4** | **+ TE CUDA graph + NCCL_GRAPH_REGISTER=0** | **208** | **+134%** | **attn+moe_router+moe_preprocess scope** |
+| 官方 | DGX-GB200 full_iteration CUDA graph | 936 | — | NVIDIA Performance Summary |
+
+**R4 关键发现**：
+- `cuda_graph_impl=transformer_engine` + `cuda_graph_scope=attn,moe_router,moe_preprocess` 不 OOM
+- `NCCL_GRAPH_REGISTER=0` 解决 expandable_segments 与 CUDA graph 的 assertion 冲突
+- `TORCH_NCCL_AVOID_RECORD_STREAMS=1` 省 34 GiB inactive memory
+- HBM 峰值 189 GiB（超出 184 GiB 物理容量，通过 alloc retry 机制运行）
+
+**R4 vs 官方差距分析（208 vs 936 = 4.5×）**：
+- TE CUDA graph 只 capture dense 部分，full_iteration capture 整个 MoE 层（A4X 内存不够）
+- 可能需要 activation offloading 到 Grace CPU host memory 来释放 HBM
