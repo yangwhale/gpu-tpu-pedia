@@ -761,8 +761,9 @@ Pod 设置自定义 `hostname` 时，NCCL bootstrap 和 Gloo 会调用 `gethostb
 | R11d | cutedsl + more recompute + full CG | 279 → crash | — | 0 retry 但 CG capture stream unjoined |
 | R12 | cutedsl + TE CG + recompute | 137 → crash | — | Triton CPU tensor 兼容性问题 |
 | R13 | R10 + NVL72 domain env vars | 289-294 | +230% | + NVLINK_DOMAIN_SIZE + USE_MNNVL + SM margin |
-| **R14** | **full CG + cutedsl + recompute + 全 env** | **866** | **+873%** | **AVOID_RECORD_STREAMS=0 + graph_capture_record_stream_reuse** |
-| 官方 | DGX-GB200 full_iteration CUDA graph | 936 | — | NVIDIA Performance Summary (无 recompute) |
+| R14 | full CG + cutedsl + recompute + 全 env | 866 | +873% | selective recompute 换空间给 CG |
+| **R15** | **100% 复刻官方 recipe（无 recompute）** | **914** | **+927%** | **2.3% 差距，0 alloc retry** |
+| 官方 | DGX-GB200 full_iteration CUDA graph | 936 | — | NVIDIA Performance Summary |
 
 > **R14 突破根因**：之前 `TORCH_NCCL_AVOID_RECORD_STREAMS=1` 设反了。官方 Slurm launcher 在 CUDA graph 模式下设 `=0` + `graph_capture_record_stream_reuse:True`。配合 selective recompute (`core_attn,layernorm,moe_act`) 省出 ~10 GiB 给 CUDA graph replay buffer。
 >
