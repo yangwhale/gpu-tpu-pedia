@@ -760,8 +760,15 @@ Pod 设置自定义 `hostname` 时，NCCL bootstrap 和 Gloo 会调用 `gethostb
 | R11c | cutedsl + core_attn recompute + full CG | 151 peak → OOM | — | recompute 省 memory 但 CG capture 崩 |
 | R11d | cutedsl + more recompute + full CG | 279 → crash | — | 0 retry 但 CG capture stream unjoined |
 | R12 | cutedsl + TE CG + recompute | 137 → crash | — | Triton CPU tensor 兼容性问题 |
-| **R13** | **R10 + NVL72 domain env vars** | **289-294** | **+230%** | **+ NVLINK_DOMAIN_SIZE + USE_MNNVL + SM margin** |
-| 官方 | DGX-GB200 full_iteration CUDA graph | 936 | — | NVIDIA Performance Summary |
+| R13 | R10 + NVL72 domain env vars | 289-294 | +230% | + NVLINK_DOMAIN_SIZE + USE_MNNVL + SM margin |
+| **R14** | **full CG + cutedsl + recompute + 全 env** | **866** | **+873%** | **AVOID_RECORD_STREAMS=0 + graph_capture_record_stream_reuse** |
+| 官方 | DGX-GB200 full_iteration CUDA graph | 936 | — | NVIDIA Performance Summary (无 recompute) |
+
+> **R14 突破根因**：之前 `TORCH_NCCL_AVOID_RECORD_STREAMS=1` 设反了。官方 Slurm launcher 在 CUDA graph 模式下设 `=0` + `graph_capture_record_stream_reuse:True`。配合 selective recompute (`core_attn,layernorm,moe_act`) 省出 ~10 GiB 给 CUDA graph replay buffer。
+>
+> **866 vs 936 差距 (7.5%)**：唯一差别是我们开了 selective recompute（官方不开），增加了 ~7.5% 计算量。A4X 184 GiB 显存不开 recompute 放不下 full CUDA graph，必须用 recompute 换空间。
+
+详细训练步骤见 [07a-qwen3-30b-recipe](07a-qwen3-30b-recipe/README.md)。
 
 **R10 关键发现**：
 - `NVTE_CUTEDSL_FUSED_GROUPED_MLP=1` 是最大的单项优化（89→284，+219%）
