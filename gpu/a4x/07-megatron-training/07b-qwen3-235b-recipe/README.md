@@ -137,6 +137,26 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 - DP: 64/(TP×PP) = 64/8 = 8, EP=8 → DP_effective=1
 - GA: GBS/(MBS×DP_effective×PP_num_micro_batches) → 由 recipe 计算
 
+## 性能参考（Megatron Bridge 官方）
+
+### 官方 Benchmark（NeMo 26.06 Container）
+
+| Config | GPU 数 | 精度 | GBS | MBS | TP | PP | CP | VP | EP | tok/s/GPU | TFLOP/s/GPU |
+|---|---|---|---|---|---|---|---|---|---|---|---|
+| V2 (官方发布) | 256 | MXFP8 | 8192 | 1 | 1 | 8 | 1 | 3 | 32 | 7376 | 1092 |
+| V1 (64 GPU) | 64 | MXFP8 | 1024 | — | 1 | 8 | 1 | — | 8 | — | — |
+
+> V2 使用 256 GPU，开了 VPP=3 + full_iteration CUDA Graph + cutedsl。V1（64 GPU）官方未发布性能数据。
+
+### A4X 实测结果
+
+| Config | GPU 数 | 精度 | TFLOP/s/GPU | HBM Peak | 备注 |
+|---|---|---|---|---|---|
+| V1 baseline | 64 | MXFP8 | — | — | 待测 |
+| V1 + cutedsl env | 64 | MXFP8 | — | — | 待测（参考 30B 经验加 NVTE_CUTEDSL_FUSED_GROUPED_MLP=1） |
+
+> 30B 经验：cutedsl 环境变量虽然不在 V1 config 里，但手动设置后依然生效（89→284 TFLOP/s）。235B 同样值得试。
+
 ## 注意事项
 
 1. **16 节点必须在同一 NVL72 域**：用同一 Placement Policy 创建。A4X NVL72 域最多 18 节点，16 节点在范围内
