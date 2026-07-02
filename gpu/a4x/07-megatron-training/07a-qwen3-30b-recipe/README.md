@@ -4,6 +4,12 @@ Megatron Bridge + NeMo 26.06 容器，Qwen3 30B-A3B MoE 预训练 benchmark。
 
 **结果**：8 GPU (2 节点) 达到 **914 TFLOP/s/GPU**，官方 DGX-GB200 为 936（差 2.3%）。100% 复刻官方 recipe，无 recompute。
 
+**参考链接**：
+- [Megatron Bridge Performance Summary](https://docs.nvidia.com/nemo/megatron-bridge/latest/performance-summary.html) — 官方 benchmark 数据
+- [Megatron Bridge Performance Tuning Guide](https://docs.nvidia.com/nemo/megatron-bridge/latest/performance-guide.html) — 性能调优指南
+- [Qwen3 Workload Base Configs](https://github.com/NVIDIA-NeMo/Megatron-Bridge/blob/main/scripts/performance/configs/qwen/qwen3_workload_base_configs.py) — Recipe 并行度配置
+- [Qwen3 LLM Pretrain Config](https://github.com/NVIDIA-NeMo/Megatron-Bridge/blob/main/scripts/performance/configs/qwen/qwen3_llm_pretrain.py) — Recipe 模型配置
+
 ## 前提条件
 
 - 2+ 台 A4X worker，同一 NVL72 域（同 Placement Policy）
