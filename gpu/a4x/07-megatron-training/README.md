@@ -756,7 +756,10 @@ Pod 设置自定义 `hostname` 时，NCCL bootstrap 和 Gloo 会调用 `gethostb
 | R5 | + full_iteration CUDA graph (all opts) | OOM | — | 184 GiB 仍不够 |
 | R8 | R4 + VBoost | 190 | -9% | VBoost 反而变慢 |
 | R9 | cutedsl + TE CUDA graph | 320 peak → crash | — | Triton CPU tensor 错误第 4 步崩 |
-| **R10** | **cutedsl fused grouped MLP (no CG)** | **284** | **+219%** | **稳定 20 步，0 alloc retry** |
+| **R10** | **cutedsl fused grouped MLP (no CG)** | **284** | **+219%** | **稳定 20 步，0 alloc retry — A4X 最佳** |
+| R11c | cutedsl + core_attn recompute + full CG | 151 peak → OOM | — | recompute 省 memory 但 CG capture 崩 |
+| R11d | cutedsl + more recompute + full CG | 279 → crash | — | 0 retry 但 CG capture stream unjoined |
+| R12 | cutedsl + TE CG + recompute | 137 → crash | — | Triton CPU tensor 兼容性问题 |
 | 官方 | DGX-GB200 full_iteration CUDA graph | 936 | — | NVIDIA Performance Summary |
 
 **R10 关键发现**：
@@ -764,6 +767,20 @@ Pod 设置自定义 `hostname` 时，NCCL bootstrap 和 Gloo 会调用 `gethostb
 - `perf_plugins.py` 在 Slurm 模式自动设此环境变量，torchrun 不设就漏了
 - cutedsl 无 CUDA Graph（284）比 TE CUDA Graph 无 cutedsl（208）还快
 - cutedsl 把 HBM 峰值降到 175 GiB（0 alloc retry），因为 fused kernel 减少中间 buffer
+
+**284 vs 936 差距根因（3.3×）**：
+- **A4X HBM = 184 GiB vs DGX-GB200 HBM = 192 GiB**：8 GiB 差距导致 full_iteration CUDA Graph 无法在 A4X 上运行。CUDA Graph 消除了全部 host overhead（kernel launch + Python 调度），对 MoE 模型这种多小 kernel 的架构影响巨大
+- **full_iteration CUDA Graph + MoE flex dispatcher 兼容性**：即使 recompute 省出内存（0 alloc retry），CUDA Graph capture 仍因 "stream has unjoined work" 崩溃。MoE token-dropless 模式的异步 dispatch 与 CUDA Graph 静态 capture 不兼容
+- **cutedsl + TE CUDA Graph 组合崩溃**：Triton kernel 在 CUDA Graph replay 时产生 "Pointer argument cannot be accessed from Triton (cpu tensor?)" 错误，是已知的 Triton/CUDA Graph 兼容性问题
+
+**torchrun 手动跑 Megatron Bridge 必须设的环境变量**（Slurm launcher 自动设，torchrun 漏）：
+```bash
+export NVTE_CUTEDSL_FUSED_GROUPED_MLP=1    # cutedsl fused grouped MLP
+export CUDNNFE_CLUSTER_OVERLAP_MARGIN=8     # cuDNN 集群 overlap margin
+export TORCH_NCCL_AVOID_RECORD_STREAMS=1    # 省 GPU 内存
+export NCCL_GRAPH_REGISTER=0                # 解决 expandable_segments + CG 冲突
+export CUDA_DEVICE_MAX_CONNECTIONS=1         # TP comm overlap 必需
+```
 
 **R4 关键发现**：
 - `cuda_graph_impl=transformer_engine` + `cuda_graph_scope=attn,moe_router,moe_preprocess` 不 OOM
