@@ -760,6 +760,7 @@ Pod 设置自定义 `hostname` 时，NCCL bootstrap 和 Gloo 会调用 `gethostb
 | R11c | cutedsl + core_attn recompute + full CG | 151 peak → OOM | — | recompute 省 memory 但 CG capture 崩 |
 | R11d | cutedsl + more recompute + full CG | 279 → crash | — | 0 retry 但 CG capture stream unjoined |
 | R12 | cutedsl + TE CG + recompute | 137 → crash | — | Triton CPU tensor 兼容性问题 |
+| **R13** | **R10 + NVL72 domain env vars** | **289-294** | **+230%** | **+ NVLINK_DOMAIN_SIZE + USE_MNNVL + SM margin** |
 | 官方 | DGX-GB200 full_iteration CUDA graph | 936 | — | NVIDIA Performance Summary |
 
 **R10 关键发现**：
