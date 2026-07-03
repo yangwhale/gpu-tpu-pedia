@@ -222,6 +222,20 @@ kubectl run nvidia-smi --rm -it --restart=Never \
 
 GKE 比自建 K8s 快 1%，可能是因为 GKE 的 NCCL RDMA DaemonSet 自动优化了 GIB 配置
 
+### europe-west4-b Qwen3 235B-A22B 训练 (2026-07-04)
+
+- Node pool: 16 台 `a4x-highgpu-4g` (64 GPU)
+- Config: V1 (PP=8, EP=8, TP=1, GBS=1024, TE CUDA Graph)
+
+| 指标 | GKE (europe-west4) | 说明 |
+|---|---|---|
+| Model TFLOP/s/GPU | **376** (peak) / ~360 (avg) | V1 config, TE scoped CUDA Graph |
+| Step Time | ~27s | 稳定 |
+| HBM Peak | 130 GiB / 189 GiB | 余量充足 |
+| 参数量 | 235.05B (7.95B dense + 227.1B expert) | 确认 |
+
+> V1 config 使用 `transformer_engine` scoped CUDA Graph（只 capture dense 部分），性能远低于 V2 的 `full_iteration`。官方 V2 (256 GPU) 达到 1092 TFLOP/s，差距主要来自 CUDA Graph 模式和 VPP=3
+
 ## 踩坑总结
 
 经过 7 轮迭代才成功，关键教训：
