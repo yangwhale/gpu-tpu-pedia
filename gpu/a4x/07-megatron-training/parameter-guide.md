@@ -20,7 +20,7 @@ GB200 NVL72 (A4X) 上 MoE 模型训练的所有关键参数，包括参数间依
 | fp8_mx | 精度 | 微省 | 否(减) | 否 | 需 GB200+ 硬件 |
 | cutedsl | Kernel 融合 | 否 | 否(减launch) | 否 | NVTE_CUTEDSL_FUSED_GROUPED_MLP=1 |
 | HybridEP | 通信 | 否(增buffer) | 否 | EP走NVLink | USE_MNNVL=1, 需 IMEX |
-| NCCL MNNVL | 通信 | 否 | 否 | 全局 NVLink | 跨域 64+ GPU hang |
+| NCCL MNNVL | 通信 | 否 | 否 | 全局 NVLink | 单域内设 2; 跨域 64+ GPU 可能 hang |
 | NVLS | 通信 | 否 | 否 | NVLink SHARP | +3% throughput |
 | GRAPH_REGISTER | 通信 | 否 | 否 | NCCL 注册优化 | 与 expandable_segments 冲突 |
 
@@ -251,11 +251,16 @@ GB200 NVL72 (A4X) 上 MoE 模型训练的所有关键参数，包括参数间依
 
 **关键理解**：`USE_MNNVL` 控制 HybridEP，`NCCL_MNNVL_ENABLE` 控制 NCCL transport。两者独立。
 
+**NCCL_MNNVL_ENABLE 选择**：
+- `=2`：NCCL 走 NVLink transport（900 GB/s）。**单域内所有 GPU 都应设 2**。
+- `=0`：NCCL 退化为 RDMA（400 Gbps per NIC）。仅在**跨域 64+ GPU allreduce hang** 时作为 workaround。
+- 之前设 0 是错误的保守决策。我们 16 节点全在一个 NVL72 域内，没有跨域，应该设 2。
+
 ### 4.2 NCCL 相关
 
 | 环境变量 | 值 | 作用 | 影响 |
 |---|---|---|---|
-| NCCL_MNNVL_ENABLE | 0/2 | NCCL 是否用 NVLink transport | 跨域 64+ GPU 时设 2 可能 hang |
+| NCCL_MNNVL_ENABLE | 0/2 | NCCL 是否用 NVLink transport | 单域设 2（NVLink 900GB/s）; 跨域 64+ GPU 时设 0 退化为 RDMA |
 | NCCL_CUMEM_ENABLE | 1 | NCCL 使用 CUDA unified memory | 必须开 |
 | NCCL_NVLS_ENABLE | 1 | NVLink SHARP（硬件加速 broadcast/allreduce） | +3% throughput |
 | NCCL_GRAPH_REGISTER | 0 | NCCL graph 注册优化 | 必须为 0（与 expandable_segments 冲突） |
@@ -315,7 +320,7 @@ recompute
 NCCL_GRAPH_REGISTER=1 × expandable_segments=True → AssertionError
 full_iteration CG × HybridEP × PP>1 → cudaErrorStreamCaptureInvalidated
 TORCH_NCCL_AVOID_RECORD_STREAMS=1 × CUDA Graph → Graph 静默失效（不报错，只是慢）
-NCCL_MNNVL_ENABLE=2 × 跨域 64+ GPU → allreduce hang (NCCL #2077)
+NCCL_MNNVL_ENABLE=2 × 跨 2+ IMEX 域 64+ GPU → allreduce hang (NCCL #2077, 单域内不受影响)
 ```
 
 ### 省内存清单
