@@ -1,20 +1,12 @@
 # A4X GB200 NVL72 on GKE (Google Kubernetes Engine)
 
-GKE 原生方式部署 A4X GPU 集群，对比自建 K8s（01-03 章节）。
+GKE 原生方式部署 A4X GPU 集群。复测确认可复现。
 
-**实测环境**：`supercomputer-testing` 项目，europe-west4-b，2 台 `a4x-highgpu-4g`（GB200），K8s 1.36。
+**实测结果**：
+- Qwen3 30B (8 GPU): **925 TFLOP/s/GPU**（官方 DGX-GB200: 936, 差 1.2%）
+- Qwen3 235B (64 GPU): **595 TFLOP/s/GPU**（PP=2 EP=32 优化，比默认 V1 +63%）
 
-## GKE vs 自建 K8s
-
-| 维度 | GKE 原生 | 自建 K8s (kubeadm) |
-|---|---|---|
-| 集群创建 | 一条 gcloud 命令 | 手动 kubeadm init/join |
-| GPU 驱动 | GKE 自动安装 | 镜像预装 |
-| GPU Stack (DRA/DRANET) | GKE 自动配置 | 手动部署 |
-| RDMA 网络 | 预建 RDMA VPC + additionalNodeNetworkConfigs | 手动创建 MRDMA VPC + 子网 |
-| ComputeDomain / IMEX | GKE 自动管理 | 手动创建 + 启动 IMEX |
-| 节点扩缩 | Node Pool autoscaling | 手动增删 VM |
-| 适合场景 | 生产环境、多租户 | 性能调优、开发测试 |
+**参考文档**：[Create a custom AI-optimized GKE cluster which uses A4X](https://docs.cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom-a4x)
 
 ## 前提条件
 
@@ -22,28 +14,20 @@ GKE 原生方式部署 A4X GPU 集群，对比自建 K8s（01-03 章节）。
 - A4X Reservation（`specificReservationRequired: true`，`shareType: LOCAL`）
 - 足够的 quota（GPU、CPU、IP）
 
-> **Reservation 注意**：`shareType: LOCAL` 的 reservation 可以被同项目 GKE 直接消费。`shareType: SPECIFIC_PROJECTS` 的 reservation 可能需要额外权限配置。
+> **Reservation 注意**：`shareType: LOCAL` 可被同项目 GKE 直接消费。`shareType: SPECIFIC_PROJECTS` 可能需要额外权限配置（实测 us-central1-b 7 轮全部 GCE_STOCKOUT）。
 
-## 架构概览
+## 部署步骤
 
-A4X GKE 每个节点需要 **6 个网卡**，对应 3 种 VPC：
+### Step 1: VPC 网络
 
-| 网络类型 | 数量 | 用途 |
-|---|---|---|
-| 主 GVNIC (集群网络) | 1 | GKE 管理流量、节点/Pod/Service IP |
-| 额外 GVNIC | 1 | 第二管理网卡 |
-| RDMA (vpc-roce) | 4 | GPU 间高速 RDMA 通信 |
-
-## Step 1: VPC 网络
-
-需要创建 3 个 VPC。RDMA VPC 必须绑定 `vpc-roce` network profile，且每个 region 需要独立的 RDMA VPC（profile 是 zone 级别的，不能跨 region 共用）。
+A4X 每节点 6 个网卡，需要 3 种 VPC。RDMA VPC 必须绑 `vpc-roce` network profile（zone 级别，不能跨 region 共用）。
 
 ```bash
 PROJECT=supercomputer-testing
 REGION=europe-west4
 ZONE=europe-west4-b
 
-# === 主管理 VPC（可跨 region 复用）===
+# 主管理 VPC（可跨 region 复用）
 gcloud compute networks create chrisya-gke-mgmt \
   --subnet-mode=custom --mtu=8244 --project=$PROJECT
 
@@ -53,16 +37,15 @@ gcloud compute networks subnets create chrisya-gke-sub-${REGION} \
   --secondary-range=pods=10.64.0.0/14,services=10.68.0.0/20 \
   --project=$PROJECT
 
-# === 额外 GVNIC（可跨 region 复用）===
+# 额外 GVNIC（可跨 region 复用）
 gcloud compute networks create chrisya-gke-net-1 \
   --subnet-mode=custom --mtu=8244 --project=$PROJECT
 
 gcloud compute networks subnets create chrisya-gke-sub-1-${REGION} \
   --network=chrisya-gke-net-1 --region=$REGION \
-  --range=10.61.0.0/18 \
-  --project=$PROJECT
+  --range=10.61.0.0/18 --project=$PROJECT
 
-# === RDMA VPC（每 region 独立，绑 vpc-roce profile）===
+# RDMA VPC（每 region 独立，绑 vpc-roce profile）
 gcloud compute networks create chrisya-gke-rdma-${REGION} \
   --subnet-mode=custom --mtu=8896 \
   --network-profile=projects/$PROJECT/global/networkProfiles/${ZONE}-vpc-roce \
@@ -72,11 +55,10 @@ for i in 0 1 2 3; do
   BASE=$((192 + i * 16))
   gcloud compute networks subnets create chrisya-gke-rdma-${REGION}-sub-${i} \
     --network=chrisya-gke-rdma-${REGION} --region=$REGION \
-    --range=192.168.${BASE}.0/20 \
-    --project=$PROJECT
+    --range=192.168.${BASE}.0/20 --project=$PROJECT
 done
 
-# === 防火墙 ===
+# 防火墙
 gcloud compute firewall-rules create chrisya-gke-allow-internal \
   --network=chrisya-gke-mgmt --allow=tcp,udp,icmp \
   --source-ranges=10.50.0.0/8 --project=$PROJECT
@@ -92,35 +74,18 @@ for NET in chrisya-gke-net-1 chrisya-gke-rdma-${REGION}; do
 done
 ```
 
-### 网段规划参考
-
-| 网络 | CIDR | 用途 |
-|---|---|---|
-| 主管理子网 | 10.51.0.0/16 | 节点 IP |
-| Pod (secondary) | 10.64.0.0/14 | Pod CIDR |
-| Service (secondary) | 10.68.0.0/20 | Service CIDR |
-| 额外 GVNIC 子网 | 10.61.0.0/18 | 第二管理网卡 |
-| RDMA sub-0~3 | 192.168.192-240.0/20 | RDMA NIC 0~3 |
-
-> CIDR 需避开已有网络（为 VPC peering 预留空间）。
-
-## Step 2: Placement Policy
-
-A4X 必须使用 `workload-policy` 类型，指定 `acceleratorTopology=1x72`。
+### Step 2: Placement Policy
 
 ```bash
 gcloud compute resource-policies create workload-policy chrisya-a4x-placement-${REGION} \
   --type=HIGH_THROUGHPUT \
   --accelerator-topology=1x72 \
-  --region=$REGION \
-  --project=$PROJECT
+  --region=$REGION --project=$PROJECT
 ```
 
-> `group-placement` 类型（即使加了 `--gpu-topology=1x72`）无法正确匹配 reservation 物理块，会报 GCE_STOCKOUT。
+> 必须用 `workload-policy` 类型。`group-placement` 即使加 `--gpu-topology=1x72` 也会报 GCE_STOCKOUT。
 
-## Step 3: 创建 GKE 集群
-
-三个关键 flag 必须在创建时指定（创建后不可更改）：
+### Step 3: 创建 GKE 集群
 
 ```bash
 gcloud container clusters create chrisya-a4x-gke-${REGION} \
@@ -143,15 +108,21 @@ gcloud container clusters create chrisya-a4x-gke-${REGION} \
   --project=$PROJECT
 ```
 
-| Flag | 必须 | 说明 |
-|---|---|---|
-| --enable-multi-networking | 是 | A4X 多网卡前提 |
-| --enable-dataplane-v2 | 是 | eBPF dataplane，多网卡必需 |
-| --enable-private-nodes | 建议 | 节点无外网 IP |
-| --no-enable-private-endpoint | 建议 | 允许外部 kubectl 访问 |
-| --workload-pool | 是 | GCSFuse CSI 需要 Workload Identity |
+> `--enable-multi-networking` 和 `--enable-dataplane-v2` 创建后不可更改。`--workload-pool` 是 GCSFuse CSI 前提。
 
-## Step 4: 创建 A4X Node Pool
+### Step 4: Cloud NAT（private nodes 访问外网拉镜像）
+
+```bash
+gcloud compute routers create chrisya-gke-router \
+  --network=chrisya-gke-mgmt --region=$REGION --project=$PROJECT
+
+gcloud compute routers nats create chrisya-gke-nat \
+  --router=chrisya-gke-router --region=$REGION \
+  --auto-allocate-nat-external-ips \
+  --nat-all-subnet-ip-ranges --project=$PROJECT
+```
+
+### Step 5: 创建 A4X Node Pool
 
 ```bash
 RESERVATION=nvidia-gb200-jwmrpsfbs8szi  # 替换为实际 reservation 名
@@ -176,30 +147,37 @@ gcloud container node-pools create a4x-pool \
   --project=$PROJECT
 ```
 
-| 参数 | 值 | 说明 |
-|---|---|---|
-| machine-type | a4x-highgpu-4g | 每节点 4 GPU (GB200) |
-| accelerator | nvidia-gb200,count=4 | GPU 类型和数量 |
-| gpu-driver-version | LATEST | GKE 自动安装最新驱动 (580.x) |
-| reservation-affinity | specific | 绑定特定 reservation |
-| placement-policy | workload-policy | 1x72 NVL72 拓扑 |
-| additional-node-network | 1 GVNIC + 4 RDMA | 6 网卡配置 |
-| ephemeral-storage-local-ssd | 4 | 4x 3TB NVMe |
+### Step 6: 安装 GPU Stack 组件
 
-## Step 5: 安装 GPU Stack 组件
-
-创建 node pool 后，需要安装 3 个组件才能启用 MNNVL 和 RDMA：
-
-### 5.1 NCCL RDMA DaemonSet
+Node pool 创建后，安装 3 个组件启用 MNNVL 和 RDMA：
 
 ```bash
+# 6.1 NCCL RDMA DaemonSet
 kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/master/gpudirect-rdma/nccl-rdma-installer-a4x.yaml
-```
 
-### 5.2 GKE Network 对象 (RDMA 模式)
+# 6.2 GKE Network 对象（GVNIC + RDMA 模式）
+cat <<EOF | kubectl apply -f -
+apiVersion: networking.gke.io/v1
+kind: GKENetworkParamSet
+metadata:
+  name: gvnic-1
+spec:
+  vpc: chrisya-gke-net-1
+  vpcSubnet: chrisya-gke-sub-1-${REGION}
+  deviceMode: NetDevice
+---
+apiVersion: networking.gke.io/v1
+kind: Network
+metadata:
+  name: gvnic-1
+spec:
+  type: Device
+  parametersRef:
+    group: networking.gke.io
+    kind: GKENetworkParamSet
+    name: gvnic-1
+EOF
 
-```bash
-# 为每个 RDMA 子网创建 GKENetworkParamSet + Network
 for i in 0 1 2 3; do
 cat <<EOF | kubectl apply -f -
 apiVersion: networking.gke.io/v1
@@ -223,15 +201,11 @@ spec:
     name: rdma-${i}
 EOF
 done
-```
 
-### 5.3 NVIDIA DRA Driver (ComputeDomain + IMEX)
-
-```bash
+# 6.3 NVIDIA DRA Driver（ComputeDomain + IMEX）
 helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
 kubectl create ns nvidia-dra-driver-gpu
 
-# ResourceQuota (至少 2×GPU节点数+1)
 kubectl apply -n nvidia-dra-driver-gpu -f - <<EOF
 apiVersion: v1
 kind: ResourceQuota
@@ -247,99 +221,92 @@ spec:
       values: [system-node-critical, system-cluster-critical]
 EOF
 
-# 安装 DRA Driver (使用与 K8s 1.36 兼容的版本)
 helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
-    --version="25.12.0" \
-    --namespace nvidia-dra-driver-gpu \
-    -f dra-helm-values.yaml
+  --version="25.12.0" \
+  --namespace nvidia-dra-driver-gpu \
+  -f - <<EOF
+nvidiaDriverRoot: /home/kubernetes/bin/nvidia
+resources:
+  gpus:
+    enabled: false
+controller:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: nvidia.com/gpu
+            operator: DoesNotExist
+kubeletPlugin:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cloud.google.com/gke-accelerator
+                operator: In
+                values: [nvidia-gb200]
+              - key: kubernetes.io/arch
+                operator: In
+                values: [arm64]
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: present
+      effect: NoSchedule
+    - key: kubernetes.io/arch
+      operator: Equal
+      value: arm64
+      effect: NoSchedule
+EOF
 ```
 
-> **版本注意**: K8s 1.36 的 DRA API 是 `resource.k8s.io/v1` (GA)。DRA Driver 25.3.x 用 v1beta1 会报错，需要 **25.12.0+**。
+> **DRA Driver 版本**：K8s 1.36 DRA API 是 `resource.k8s.io/v1` (GA)。25.3.x 用 v1beta1 会报错，需要 **25.12.0+**。
 
-### 5.4 Cloud NAT (private nodes 访问外网拉镜像)
+### Step 7: 验证
 
 ```bash
-gcloud compute routers create chrisya-gke-router \
-  --network=chrisya-gke-mgmt --region=$REGION --project=$PROJECT
+# ComputeDomain CRD
+kubectl api-resources | grep computedomain
 
-gcloud compute routers nats create chrisya-gke-nat \
-  --router=chrisya-gke-router --region=$REGION \
-  --auto-allocate-nat-external-ips \
-  --nat-all-subnet-ip-ranges --project=$PROJECT
+# DRA pods
+kubectl get pods -n nvidia-dra-driver-gpu
+
+# NCCL RDMA DaemonSet
+kubectl get ds -n kube-system nccl-rdma-installer
+
+# GPU
+kubectl exec <任意A4X-pod> -- nvidia-smi --query-gpu=name,memory.total --format=csv,noheader
 ```
 
-## Step 6: 验证
+## 训练部署
+
+训练 Pod 需要 ComputeDomain + 多网卡 annotation + hostPath 挂载 GIB/NVIDIA。完整 YAML 见 [nemo-gke-v3.yaml](yamls/nemo-gke-v3.yaml)。
+
+### Qwen3 30B（8 GPU, 2 节点）
 
 ```bash
-# 获取凭据
-gcloud container clusters get-credentials chrisya-a4x-gke-${REGION} \
-  --region=$REGION --project=$PROJECT
-
-# 节点状态
-kubectl get nodes -o wide
-
-# GPU 验证
-kubectl run nvidia-smi --rm -it --restart=Never \
-  --image=nvidia/cuda:12.8.0-base-ubuntu22.04 \
-  --overrides='{"spec":{"nodeSelector":{"cloud.google.com/gke-accelerator":"nvidia-gb200"},"containers":[{"name":"nvidia-smi","image":"nvidia/cuda:12.8.0-base-ubuntu22.04","command":["nvidia-smi"],"resources":{"limits":{"nvidia.com/gpu":"4"}}}]}}' \
-  -- nvidia-smi
+torchrun --nproc_per_node=4 --nnodes=2 --node_rank=$NODE_RANK \
+  --master_addr=$MASTER_IP --master_port=29600 \
+  run_script.py \
+    -m qwen -mr qwen3_30b_a3b --task pretrain \
+    -g gb200 -c fp8_mx -ng 8 --data mock \
+    --max_steps 20 --log_dir /tmp/nemo-results \
+    -wde bench -wdj qwen3_30b
 ```
 
-## 实测记录
+环境变量：
+```bash
+export LD_LIBRARY_PATH=/usr/local/nvidia/lib64:/usr/local/gib/lib64:$LD_LIBRARY_PATH
+source /usr/local/gib/scripts/set_nccl_env.sh
+export NCCL_SOCKET_IFNAME=eth0,eth1
+export NCCL_MNNVL_ENABLE=2
+export NCCL_CUMEM_ENABLE=1
+```
 
-### europe-west4-b Qwen3 30B 训练 (2026-07-03)
-
-- 集群: `chrisya-a4x-gke-ew4`, K8s 1.36.0-gke.3302004
-- Node pool: 2 台 `a4x-highgpu-4g` (8 GPU), RUNNING
-- Reservation: `nvidia-gb200-jwmrpsfbs8szi`, inUseCount 0 → 2
-- GPU 驱动: NVIDIA 580.126.20 (GKE 自动安装)
-- RDMA VPC: `chrisya-gke-rdma-ew4` with `europe-west4-b-vpc-roce` profile
-
-| 指标 | GKE (europe-west4) | 自建 K8s (A4X) | DGX-GB200 (官方) |
-|---|---|---|---|
-| Model TFLOP/s/GPU | **925** (peak, 复测确认) | 914 | 936 |
-| Step Time | 6.52s | 6.60s | — |
-| HBM Peak | 168.4 GiB | 184.7 GiB | — |
-| 差距 vs 官方 | -1.2% | -2.3% | baseline |
-
-GKE 比自建 K8s 快 1%，可能是因为 GKE 的 NCCL RDMA DaemonSet 自动优化了 GIB 配置
-
-### europe-west4-b Qwen3 235B-A22B 训练 (2026-07-04)
-
-- Node pool: 16 台 `a4x-highgpu-4g` (64 GPU)
-- 9 轮优化迭代，最终 PP=2 EP=32 达到 595 TFLOP/s（复测确认）
-
-| 指标 | V1 默认 (PP=8 EP=8) | 优化后 (PP=2 EP=32) |
-|---|---|---|
-| Model TFLOP/s/GPU | 360 avg / 376 peak | **587 avg / 595 peak**（复测确认） |
-| Step Time | ~27s | **8.2s** |
-| CUDA Graph | TE scoped | TE scoped |
-| 提升 | baseline | **+63%** |
-
-#### 235B 优化迭代记录
-
-| 轮次 | 配置 | 结果 | 原因 |
-|---|---|---|---|
-| baseline | PP=8 EP=8 TE CG (V1 默认) | 360 TFLOP/s | baseline |
-| R1c | PP=8 EP=8 + full_iteration CG | crash | HybridEP fabric memory 不兼容 CG stream capture |
-| R3 | PP=8 EP=8 + full_iteration CG + recompute 48 层 | crash | HBM 78 GiB 但 HybridEP 仍 capture 失败 |
-| R4 | PP=8 EP=8 + TE CG + recompute | crash | recompute 只支持 full_iteration CG |
-| R5 | PP=8 EP=8 + NCCL_GRAPH_REGISTER=1 | crash | 与 expandable_segments 冲突 |
-| R7 | PP=1 EP=64 + full_iteration CG | crash | DOCA QP 创建失败 (EP=64 跨节点) |
-| R8 | PP=2 EP=32 + full_iteration CG | crash (458 raw) | HybridEP capture 失败, 但 raw 性能 458 |
-| **R9** | **PP=2 EP=32 + TE CG** | **578 peak** | **减少 pipeline bubble + 增大 EP group** |
-
-#### 关键发现
-
-1. **full_iteration CUDA Graph 与 HybridEP 不兼容 (PP>1)**：HybridEP 使用 CUDA fabric memory 做域内 EP alltoall, 这些操作在跨 pipeline stage 的 stream capture 时 invalidate。30B PP=1 可以 full_iteration CG，235B PP≥2 不行
-2. **PP=2 EP=32 显著优于 PP=8 EP=8**：减少 pipeline stages 从 8→2 大幅降低 bubble overhead, EP 从 8→32 让每卡只持 4 expert (vs 16), 通信效率更高
-3. **TE scoped CG 仍有效**：只 capture attn/moe_router/moe_preprocess, 不碰 HybridEP, 安全兼容
-4. **官方 V2 (256 GPU) 1092 TFLOP/s 需要 VPP=3 + full_iteration CG**，64 GPU 上两者都无法使用 (94 层不被 PP×VP 整除 + HybridEP CG 限制)
-
-#### 235B 复现命令 (PP=2 EP=32, 最优)
+### Qwen3 235B（64 GPU, 16 节点, PP=2 EP=32 优化版）
 
 ```bash
-# 16 节点 64 GPU
 torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
   --master_addr=$MASTER_IP --master_port=29600 \
   run_script.py \
@@ -354,46 +321,70 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
     --micro_batch_size 1
 ```
 
-环境变量同 30B recipe，额外设置 `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32`
+额外环境变量：`NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32`
 
-## 踩坑总结
+## 实测结果（复测确认）
 
-经过 7 轮迭代才成功，关键教训：
+### Qwen3 30B (8 GPU)
 
-### 1. Placement Policy 必须是 workload-policy 类型
+| 指标 | GKE | 自建 K8s | DGX-GB200 (官方) |
+|---|---|---|---|
+| TFLOP/s/GPU | **925** | 914 | 936 |
+| Step Time | 6.52s | 6.60s | — |
+| 差距 vs 官方 | -1.2% | -2.3% | baseline |
 
-| 方式 | 结果 |
-|---|---|
-| --placement-type=COMPACT | 报错: GPU placement policy must be provided |
-| group-placement --collocation=COLLOCATED | 同上 |
-| group-placement --gpu-topology=1x72 | GCE_STOCKOUT |
-| workload-policy --type=HIGH_THROUGHPUT --accelerator-topology=1x72 | 成功 |
+### Qwen3 235B (64 GPU)
 
-### 2. 集群级别 flag 创建后不可更改
+| 指标 | V1 默认 (PP=8 EP=8) | 优化 (PP=2 EP=32) |
+|---|---|---|
+| TFLOP/s/GPU | 360 / 376 peak | **587 / 595 peak** |
+| Step Time | ~27s | **8.2s** |
+| 提升 | baseline | **+63%** |
 
-`--enable-multi-networking` 和 `--enable-dataplane-v2` 必须在 `clusters create` 时指定。漏了只能删集群重建。
+> 官方 V2 (256 GPU) 1092 TFLOP/s 需要 VPP=3 + full_iteration CG，64 GPU 上两者都不可用。
 
-### 3. RDMA VPC 必须绑 vpc-roce network profile
+## 235B 优化迭代记录
 
-普通 VPC 即使 MTU 设对了也不行，报错 "Network doesn't have a network profile and can't host a RDMA NIC"。且 profile 是 zone 级别的（如 `europe-west4-b-vpc-roce`），不能跨 region 共用同一个 RDMA VPC。
+| 轮次 | 配置 | 结果 | 原因 |
+|---|---|---|---|
+| baseline | PP=8 EP=8 TE CG | 360 | V1 默认 |
+| R1c | + full_iteration CG | crash | HybridEP 不兼容 CG capture (PP>1) |
+| R3 | + full_iteration CG + recompute | crash | HBM 省到 78 GiB 但 HybridEP 仍失败 |
+| R4 | TE CG + recompute | crash | recompute 只支持 full_iteration CG |
+| R5 | + NCCL_GRAPH_REGISTER=1 | crash | 与 expandable_segments 冲突 |
+| R7 | PP=1 EP=64 + full_iteration CG | crash | DOCA QP 创建失败 |
+| R8 | PP=2 EP=32 + full_iteration CG | crash (458 raw) | HybridEP capture 失败 |
+| **R9** | **PP=2 EP=32 + TE CG** | **595** | **PP bubble 减少 + EP group 增大** |
 
-### 4. Reservation shareType 影响 GKE 消费
+### 关键发现
 
-`shareType: LOCAL` 可以被同项目 GKE 正常消费。`shareType: SPECIFIC_PROJECTS` 在 us-central1-b 测试中无法消费（7 轮全部 GCE_STOCKOUT），可能需要额外的 IAM 或 service agent 配置。
+1. **full_iteration CG 与 HybridEP 不兼容 (PP>1)**: HybridEP fabric memory 操作在跨 pipeline stage 的 stream capture 时 invalidate。PP=1 可以（30B 验证），PP>=2 不行
+2. **PP=2 EP=32 >> PP=8 EP=8**: pipeline stages 8→2 大幅降低 bubble，EP 8→32 提高通信效率
+3. **TE scoped CG 安全兼容**: 只 capture attn/moe_router/moe_preprocess，不碰 HybridEP
+4. **NCCL_GRAPH_REGISTER=1 与 expandable_segments 冲突**: 必须设 0
 
-### 5. GCSFuse CSI 需要 Workload Identity
+## GKE 搭建踩坑总结
 
-创建集群时必须加 `--workload-pool=${PROJECT}.svc.id.goog`。
+| 问题 | 原因 | 修复 |
+|---|---|---|
+| GPU placement policy must be provided | --placement-type=COMPACT 不够 | 用 workload-policy 类型 |
+| GCE_STOCKOUT (group-placement) | groupPlacementPolicy 无法匹配 reservation | 改用 workload-policy |
+| Network can't host RDMA NIC | RDMA VPC 缺 vpc-roce profile | --network-profile=...vpc-roce |
+| GCE_STOCKOUT (SPECIFIC_PROJECTS) | reservation shareType 限制 | 用 shareType: LOCAL 的 reservation |
+| GCSFuse CSI requires Workload Identity | 缺 --workload-pool | 创建集群时加 |
+| nvcr.io 镜像拉不下来 | private nodes 无外网 | 加 Cloud NAT |
+| DRA Driver CRD not found | 25.3.x 用 v1beta1 vs K8s 1.36 v1 | 升级到 25.12.0 |
+| GIB NCCL 2.28 vs NeMo 26.06 NCCL 2.30 | ncclWaitSignal symbol missing | 用容器自带 NCCL，GIB 只提供 transport |
 
 ## 清理
 
 ```bash
-# 删除 node pool
+# 删除 node pool（保留集群和 VPC 供下次使用）
 gcloud container node-pools delete a4x-pool \
   --cluster=chrisya-a4x-gke-${REGION} --region=$REGION \
   --project=$PROJECT --quiet
 
-# 删除集群（保留 VPC 网络供下次使用）
+# 完全清理
 gcloud container clusters delete chrisya-a4x-gke-${REGION} \
   --region=$REGION --project=$PROJECT --quiet
 ```
