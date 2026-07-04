@@ -344,27 +344,51 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 
 > MNNVL=2 让 NCCL allreduce/PP p2p 走 NVLink (900 GB/s) 而非 RDMA (200 GB/s)，单域内不 hang。官方 V2 (256 GPU) 1092 TFLOP/s 需要 VPP=3 + full_iteration CG，64 GPU 上两者不可用。
 
-## 235B 优化迭代记录
+## 235B 优化迭代全记录（64 GPU, Qwen3 235B-A22B MoE）
 
-| 轮次 | 配置 | 结果 | 原因 |
-|---|---|---|---|
-| baseline | PP=8 EP=8 TE CG | 360 | V1 默认 |
-| R1c | + full_iteration CG | crash | HybridEP 不兼容 CG capture (PP>1) |
-| R3 | + full_iteration CG + recompute | crash | HBM 省到 78 GiB 但 HybridEP 仍失败 |
-| R4 | TE CG + recompute | crash | recompute 只支持 full_iteration CG |
-| R5 | + NCCL_GRAPH_REGISTER=1 | crash | 与 expandable_segments 冲突 |
-| R7 | PP=1 EP=64 + full_iteration CG | crash | DOCA QP 创建失败 |
-| R8 | PP=2 EP=32 + full_iteration CG | crash (458 raw) | HybridEP capture 失败 |
-| R9 | PP=2 EP=32 + TE CG (MNNVL=0) | 595 | PP bubble 减少 + EP group 增大 |
-| **R10** | **PP=2 EP=32 + TE CG + MNNVL=2** | **686** | **NCCL allreduce 走 NVLink +15%** |
+### 完整参数对比表
+
+| 轮次 | PP | EP | TP | DP | MBS | GBS | CUDA Graph | MNNVL | recompute | TFLOP/s | step time | 状态 | 改了什么 → 为什么 |
+|---|---|---|---|---|---|---|---|---|---|---|---|---|---|
+| baseline | 8 | 8 | 1 | 8 | 1 | 1024 | TE scoped | 2 | 无 | **360** | 27s | ✅ | V1 默认 recipe |
+| R1c | 8 | 8 | 1 | 8 | 1 | 1024 | **full_iteration** | 2 | 无 | crash | — | ❌ | 想开 full CG 加速 → HybridEP fabric memory 不兼容 PP>1 的 stream capture |
+| R3 | 8 | 8 | 1 | 8 | 1 | 1024 | **full_iteration** | 2 | **48层** | crash | — | ❌ | 加 recompute 省内存给 CG → HBM 78→省出空间但 HybridEP 仍 capture 失败（不是内存问题） |
+| R4 | 8 | 8 | 1 | 8 | 1 | 1024 | TE scoped | 2 | **24层** | crash | — | ❌ | 换回 TE CG + recompute → assert: recompute 只支持 full_iteration CG |
+| R5 | 8 | 8 | 1 | 8 | 1 | 1024 | TE scoped | 2 | 无 | crash | — | ❌ | 加 NCCL_GRAPH_REGISTER=1 → 与 expandable_segments 冲突 assert |
+| R7 | **1** | **64** | 1 | 64 | 4 | 512 | **full_iteration** | 2 | 无 | crash | — | ❌ | PP=1 让 full CG 兼容 HybridEP → DOCA QP 创建失败（EP=64 跨 16 节点） |
+| R8 | **2** | **32** | 1 | 32 | 1 | 512 | **full_iteration** | 2 | 无 | crash (458 raw) | — | ❌ | PP=2 折衷：减 bubble + 试 full CG → PP>1 HybridEP 仍不兼容，但 raw 性能 458（比 PP=8 的 360 高 27%） |
+| R9 | **2** | **32** | 1 | 32 | 1 | 512 | TE scoped | **0** | 无 | **595** | 8.2s | ✅ | 保持 PP=2 EP=32 + 回到 TE CG → bubble 从 30%→1.5%, EP group 32 GPU 通信效率高, **+63%** |
+| **R10** | **2** | **32** | 1 | 32 | 1 | 512 | TE scoped | **2** | 无 | **686** | **7.1s** | ✅ | MNNVL=0→2: NCCL allreduce 从 RDMA 切到 NVLink → 单域 64 GPU 不 hang, **+15%** |
+
+### 每轮的核心洞察
+
+**R1c-R3（full_iteration CG 之路）**：HybridEP 的 CUDA fabric memory 操作在跨 pipeline stage 的 stream capture 时 invalidate。这不是内存问题（R3 recompute 把 HBM 从 130 降到 78 GiB 仍 crash），而是 HybridEP 架构与 multi-stream CUDA Graph 的根本不兼容。30B PP=1 能跑是因为单 stream。
+
+**R4-R5（小优化碰壁）**：recompute 只支持 full_iteration CG（assert 硬限制）。NCCL_GRAPH_REGISTER=1 与 expandable_segments=True 冲突（assert 硬限制）。两条路都堵死。
+
+**R7-R8（改并行策略）**：从"优化现有 PP=8 配置"转向"改变并行策略本身"。PP=1 EP=64 的 DOCA QP 失败暴露了 EP 跨多节点的 RDMA 限制。PP=2 EP=32 的 raw 性能 458 证明了方向正确。
+
+**R9（突破）**：PP=2 EP=32 + TE CG = 595。两个改动叠加：pipeline stages 8→2 消除了 30% bubble，EP 8→32 让每卡只持 4 expert（vs 16），通信效率提高。
+
+**R10（NVLink 加持）**：MNNVL=0 是照搬奚老师跨域 workaround 的错误。单域内 64 GPU 设 MNNVL=2 完全安全。NCCL allreduce 从 RDMA (200 GB/s) 切到 NVLink (900 GB/s)，+15%。
+
+### 最终最优配置
+
+```
+PP=2  EP=32  TP=1  DP=32  MBS=1  GBS=512
+CUDA Graph: TE scoped (attn + moe_router + moe_preprocess)
+NCCL_MNNVL_ENABLE=2  USE_MNNVL=1  NCCL_NVLS_ENABLE=1
+→ 686 TFLOP/s/GPU, step time 7.1s
+→ 比 V1 默认 (360) 提升 89%
+```
 
 ### 关键发现
 
-1. **full_iteration CG 与 HybridEP 不兼容 (PP>1)**: HybridEP fabric memory 操作在跨 pipeline stage 的 stream capture 时 invalidate。PP=1 可以（30B 验证），PP>=2 不行
-2. **PP=2 EP=32 >> PP=8 EP=8**: pipeline stages 8→2 大幅降低 bubble，EP 8→32 提高通信效率
-3. **TE scoped CG 安全兼容**: 只 capture attn/moe_router/moe_preprocess，不碰 HybridEP
-4. **NCCL_GRAPH_REGISTER=1 与 expandable_segments 冲突**: 必须设 0
-5. **NCCL_MNNVL_ENABLE=2 单域内安全且快 15%**: 之前设 0 是照搬跨域 workaround，单域内 64 GPU 不 hang，allreduce 走 NVLink 比 RDMA 快
+1. **并行策略比 kernel 优化影响更大**：PP 8→2 一个改动就涨 63%，CUDA Graph 和 NCCL 调参加起来才涨 15%
+2. **full_iteration CG 与 HybridEP 在 PP>1 时不兼容**：根因是 fabric memory 操作 invalidate multi-stream capture，不是内存问题
+3. **NCCL_MNNVL_ENABLE 必须按实际拓扑设置**：单域设 2（NVLink 900GB/s），跨域才需要设 0（RDMA fallback）
+4. **recompute 只支持 full_iteration CG**：TE scoped 下不可用，这是 Megatron Bridge 的硬限制
+5. **NCCL_GRAPH_REGISTER=1 与 expandable_segments 互斥**：必须设 0
 
 ## GKE 搭建踩坑总结
 
