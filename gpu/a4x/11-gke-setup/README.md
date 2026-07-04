@@ -186,7 +186,89 @@ gcloud container node-pools create a4x-pool \
 | additional-node-network | 1 GVNIC + 4 RDMA | 6 网卡配置 |
 | ephemeral-storage-local-ssd | 4 | 4x 3TB NVMe |
 
-## Step 5: 验证
+## Step 5: 安装 GPU Stack 组件
+
+创建 node pool 后，需要安装 3 个组件才能启用 MNNVL 和 RDMA：
+
+### 5.1 NCCL RDMA DaemonSet
+
+```bash
+kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/master/gpudirect-rdma/nccl-rdma-installer-a4x.yaml
+```
+
+### 5.2 GKE Network 对象 (RDMA 模式)
+
+```bash
+# 为每个 RDMA 子网创建 GKENetworkParamSet + Network
+for i in 0 1 2 3; do
+cat <<EOF | kubectl apply -f -
+apiVersion: networking.gke.io/v1
+kind: GKENetworkParamSet
+metadata:
+  name: rdma-${i}
+spec:
+  vpc: chrisya-gke-rdma-${REGION}
+  vpcSubnet: chrisya-gke-rdma-${REGION}-sub-${i}
+  deviceMode: RDMA
+---
+apiVersion: networking.gke.io/v1
+kind: Network
+metadata:
+  name: rdma-${i}
+spec:
+  type: Device
+  parametersRef:
+    group: networking.gke.io
+    kind: GKENetworkParamSet
+    name: rdma-${i}
+EOF
+done
+```
+
+### 5.3 NVIDIA DRA Driver (ComputeDomain + IMEX)
+
+```bash
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
+kubectl create ns nvidia-dra-driver-gpu
+
+# ResourceQuota (至少 2×GPU节点数+1)
+kubectl apply -n nvidia-dra-driver-gpu -f - <<EOF
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: nvidia-dra-driver-gpu-quota
+spec:
+  hard:
+    pods: "37"
+  scopeSelector:
+    matchExpressions:
+    - operator: In
+      scopeName: PriorityClass
+      values: [system-node-critical, system-cluster-critical]
+EOF
+
+# 安装 DRA Driver (使用与 K8s 1.36 兼容的版本)
+helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
+    --version="25.12.0" \
+    --namespace nvidia-dra-driver-gpu \
+    -f dra-helm-values.yaml
+```
+
+> **版本注意**: K8s 1.36 的 DRA API 是 `resource.k8s.io/v1` (GA)。DRA Driver 25.3.x 用 v1beta1 会报错，需要 **25.12.0+**。
+
+### 5.4 Cloud NAT (private nodes 访问外网拉镜像)
+
+```bash
+gcloud compute routers create chrisya-gke-router \
+  --network=chrisya-gke-mgmt --region=$REGION --project=$PROJECT
+
+gcloud compute routers nats create chrisya-gke-nat \
+  --router=chrisya-gke-router --region=$REGION \
+  --auto-allocate-nat-external-ips \
+  --nat-all-subnet-ip-ranges --project=$PROJECT
+```
+
+## Step 6: 验证
 
 ```bash
 # 获取凭据
@@ -225,20 +307,54 @@ GKE 比自建 K8s 快 1%，可能是因为 GKE 的 NCCL RDMA DaemonSet 自动优
 ### europe-west4-b Qwen3 235B-A22B 训练 (2026-07-04)
 
 - Node pool: 16 台 `a4x-highgpu-4g` (64 GPU)
-- Config: V1 (PP=8, EP=8, TP=1, GBS=1024, TE CUDA Graph)
+- 9 轮优化迭代，最终 PP=2 EP=32 达到 578 TFLOP/s
 
-| 指标 | GKE (europe-west4) | 说明 |
-|---|---|---|
-| 指标 | V1 (PP=8 EP=8) | 优化 (PP=2 EP=32) |
+| 指标 | V1 默认 (PP=8 EP=8) | 优化后 (PP=2 EP=32) |
 |---|---|---|
 | Model TFLOP/s/GPU | 360 avg / 376 peak | **572 avg / 578 peak** |
 | Step Time | ~27s | **8.4s** |
+| CUDA Graph | TE scoped | TE scoped |
 | 提升 | baseline | **+60%** |
-| 参数量 | 235.05B | 235.05B |
 
-> **关键优化**: 从 V1 默认的 PP=8 EP=8 改为 PP=2 EP=32，减少 pipeline bubble 并增大 EP group。TE scoped CUDA Graph 在两种配置下都可用。full_iteration CUDA Graph 因 HybridEP fabric memory 操作与 CUDA Graph capture 不兼容（PP>1 时），无法使用。
->
-> 官方 V2 (256 GPU) 达到 1092 TFLOP/s（PP=8 EP=32 VPP=3 + full_iteration CG），差距主要来自 VPP 和 full_iteration CG
+#### 235B 优化迭代记录
+
+| 轮次 | 配置 | 结果 | 原因 |
+|---|---|---|---|
+| baseline | PP=8 EP=8 TE CG (V1 默认) | 360 TFLOP/s | baseline |
+| R1c | PP=8 EP=8 + full_iteration CG | crash | HybridEP fabric memory 不兼容 CG stream capture |
+| R3 | PP=8 EP=8 + full_iteration CG + recompute 48 层 | crash | HBM 78 GiB 但 HybridEP 仍 capture 失败 |
+| R4 | PP=8 EP=8 + TE CG + recompute | crash | recompute 只支持 full_iteration CG |
+| R5 | PP=8 EP=8 + NCCL_GRAPH_REGISTER=1 | crash | 与 expandable_segments 冲突 |
+| R7 | PP=1 EP=64 + full_iteration CG | crash | DOCA QP 创建失败 (EP=64 跨节点) |
+| R8 | PP=2 EP=32 + full_iteration CG | crash (458 raw) | HybridEP capture 失败, 但 raw 性能 458 |
+| **R9** | **PP=2 EP=32 + TE CG** | **578 peak** | **减少 pipeline bubble + 增大 EP group** |
+
+#### 关键发现
+
+1. **full_iteration CUDA Graph 与 HybridEP 不兼容 (PP>1)**：HybridEP 使用 CUDA fabric memory 做域内 EP alltoall, 这些操作在跨 pipeline stage 的 stream capture 时 invalidate。30B PP=1 可以 full_iteration CG，235B PP≥2 不行
+2. **PP=2 EP=32 显著优于 PP=8 EP=8**：减少 pipeline stages 从 8→2 大幅降低 bubble overhead, EP 从 8→32 让每卡只持 4 expert (vs 16), 通信效率更高
+3. **TE scoped CG 仍有效**：只 capture attn/moe_router/moe_preprocess, 不碰 HybridEP, 安全兼容
+4. **官方 V2 (256 GPU) 1092 TFLOP/s 需要 VPP=3 + full_iteration CG**，64 GPU 上两者都无法使用 (94 层不被 PP×VP 整除 + HybridEP CG 限制)
+
+#### 235B 复现命令 (PP=2 EP=32, 最优)
+
+```bash
+# 16 节点 64 GPU
+torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
+  --master_addr=$MASTER_IP --master_port=29600 \
+  run_script.py \
+    -m qwen -mr qwen3_235b_a22b --task pretrain \
+    -g gb200 -c fp8_mx -ng 64 --data mock \
+    --max_steps 20 --log_dir /tmp/nemo-results \
+    -wde bench -wdj qwen3_235b \
+    -cv v1 \
+    --pipeline_model_parallel_size 2 \
+    --expert_model_parallel_size 32 \
+    --global_batch_size 512 \
+    --micro_batch_size 1
+```
+
+环境变量同 30B recipe，额外设置 `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32`
 
 ## 踩坑总结
 
