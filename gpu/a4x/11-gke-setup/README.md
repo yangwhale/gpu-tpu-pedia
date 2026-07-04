@@ -297,7 +297,7 @@ kubectl run nvidia-smi --rm -it --restart=Never \
 
 | 指标 | GKE (europe-west4) | 自建 K8s (A4X) | DGX-GB200 (官方) |
 |---|---|---|---|
-| Model TFLOP/s/GPU | **924.6** (peak) | 914 | 936 |
+| Model TFLOP/s/GPU | **925** (peak, 复测确认) | 914 | 936 |
 | Step Time | 6.52s | 6.60s | — |
 | HBM Peak | 168.4 GiB | 184.7 GiB | — |
 | 差距 vs 官方 | -1.2% | -2.3% | baseline |
@@ -307,14 +307,14 @@ GKE 比自建 K8s 快 1%，可能是因为 GKE 的 NCCL RDMA DaemonSet 自动优
 ### europe-west4-b Qwen3 235B-A22B 训练 (2026-07-04)
 
 - Node pool: 16 台 `a4x-highgpu-4g` (64 GPU)
-- 9 轮优化迭代，最终 PP=2 EP=32 达到 578 TFLOP/s
+- 9 轮优化迭代，最终 PP=2 EP=32 达到 595 TFLOP/s（复测确认）
 
 | 指标 | V1 默认 (PP=8 EP=8) | 优化后 (PP=2 EP=32) |
 |---|---|---|
-| Model TFLOP/s/GPU | 360 avg / 376 peak | **572 avg / 578 peak** |
-| Step Time | ~27s | **8.4s** |
+| Model TFLOP/s/GPU | 360 avg / 376 peak | **587 avg / 595 peak**（复测确认） |
+| Step Time | ~27s | **8.2s** |
 | CUDA Graph | TE scoped | TE scoped |
-| 提升 | baseline | **+60%** |
+| 提升 | baseline | **+63%** |
 
 #### 235B 优化迭代记录
 
