@@ -4,7 +4,7 @@ GKE 原生方式部署 A4X GPU 集群。复测确认可复现。
 
 **实测结果**：
 - Qwen3 30B (8 GPU): **925 TFLOP/s/GPU**（官方 DGX-GB200: 936, 差 1.2%）
-- Qwen3 235B (64 GPU): **595 TFLOP/s/GPU**（PP=2 EP=32 优化，比默认 V1 +63%）
+- Qwen3 235B (64 GPU): **686 TFLOP/s/GPU**（PP=2 EP=32 + MNNVL=2，比默认 V1 +89%）
 
 **参考文档**：[Create a custom AI-optimized GKE cluster which uses A4X](https://docs.cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom-a4x)
 
@@ -335,13 +335,14 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 
 ### Qwen3 235B (64 GPU)
 
-| 指标 | V1 默认 (PP=8 EP=8) | 优化 (PP=2 EP=32) |
-|---|---|---|
-| TFLOP/s/GPU | 360 / 376 peak | **587 / 595 peak** |
-| Step Time | ~27s | **8.2s** |
-| 提升 | baseline | **+63%** |
+| 指标 | V1 默认 (PP=8 EP=8) | PP=2 EP=32 (MNNVL=0) | PP=2 EP=32 (MNNVL=2) |
+|---|---|---|---|
+| TFLOP/s/GPU | 360 / 376 peak | 587 / 595 peak | **680 / 686 peak** |
+| Step Time | ~27s | 8.2s | **7.1s** |
+| NCCL transport | RDMA | RDMA | **NVLink** |
+| 提升 | baseline | +63% | **+89%** |
 
-> 官方 V2 (256 GPU) 1092 TFLOP/s 需要 VPP=3 + full_iteration CG，64 GPU 上两者都不可用。
+> MNNVL=2 让 NCCL allreduce/PP p2p 走 NVLink (900 GB/s) 而非 RDMA (200 GB/s)，单域内不 hang。官方 V2 (256 GPU) 1092 TFLOP/s 需要 VPP=3 + full_iteration CG，64 GPU 上两者不可用。
 
 ## 235B 优化迭代记录
 
@@ -354,7 +355,8 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 | R5 | + NCCL_GRAPH_REGISTER=1 | crash | 与 expandable_segments 冲突 |
 | R7 | PP=1 EP=64 + full_iteration CG | crash | DOCA QP 创建失败 |
 | R8 | PP=2 EP=32 + full_iteration CG | crash (458 raw) | HybridEP capture 失败 |
-| **R9** | **PP=2 EP=32 + TE CG** | **595** | **PP bubble 减少 + EP group 增大** |
+| R9 | PP=2 EP=32 + TE CG (MNNVL=0) | 595 | PP bubble 减少 + EP group 增大 |
+| **R10** | **PP=2 EP=32 + TE CG + MNNVL=2** | **686** | **NCCL allreduce 走 NVLink +15%** |
 
 ### 关键发现
 
@@ -362,6 +364,7 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 2. **PP=2 EP=32 >> PP=8 EP=8**: pipeline stages 8→2 大幅降低 bubble，EP 8→32 提高通信效率
 3. **TE scoped CG 安全兼容**: 只 capture attn/moe_router/moe_preprocess，不碰 HybridEP
 4. **NCCL_GRAPH_REGISTER=1 与 expandable_segments 冲突**: 必须设 0
+5. **NCCL_MNNVL_ENABLE=2 单域内安全且快 15%**: 之前设 0 是照搬跨域 workaround，单域内 64 GPU 不 hang，allreduce 走 NVLink 比 RDMA 快
 
 ## GKE 搭建踩坑总结
 
