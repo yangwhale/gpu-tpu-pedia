@@ -229,12 +229,16 @@ GKE 比自建 K8s 快 1%，可能是因为 GKE 的 NCCL RDMA DaemonSet 自动优
 
 | 指标 | GKE (europe-west4) | 说明 |
 |---|---|---|
-| Model TFLOP/s/GPU | **376** (peak) / ~360 (avg) | V1 config, TE scoped CUDA Graph |
-| Step Time | ~27s | 稳定 |
-| HBM Peak | 130 GiB / 189 GiB | 余量充足 |
-| 参数量 | 235.05B (7.95B dense + 227.1B expert) | 确认 |
+| 指标 | V1 (PP=8 EP=8) | 优化 (PP=2 EP=32) |
+|---|---|---|
+| Model TFLOP/s/GPU | 360 avg / 376 peak | **572 avg / 578 peak** |
+| Step Time | ~27s | **8.4s** |
+| 提升 | baseline | **+60%** |
+| 参数量 | 235.05B | 235.05B |
 
-> V1 config 使用 `transformer_engine` scoped CUDA Graph（只 capture dense 部分），性能远低于 V2 的 `full_iteration`。官方 V2 (256 GPU) 达到 1092 TFLOP/s，差距主要来自 CUDA Graph 模式和 VPP=3
+> **关键优化**: 从 V1 默认的 PP=8 EP=8 改为 PP=2 EP=32，减少 pipeline bubble 并增大 EP group。TE scoped CUDA Graph 在两种配置下都可用。full_iteration CUDA Graph 因 HybridEP fabric memory 操作与 CUDA Graph capture 不兼容（PP>1 时），无法使用。
+>
+> 官方 V2 (256 GPU) 达到 1092 TFLOP/s（PP=8 EP=32 VPP=3 + full_iteration CG），差距主要来自 VPP 和 full_iteration CG
 
 ## 踩坑总结
 
