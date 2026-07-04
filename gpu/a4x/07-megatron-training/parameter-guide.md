@@ -8,7 +8,7 @@ GB200 NVL72 (A4X) 上 MoE 模型训练的所有关键参数，包括参数间依
 
 | 参数 | 类别 | 省内存 | 增计算 | 影响通信 | 关键依赖 |
 |---|---|---|---|---|---|
-| PP | 并行 | 是(切层) | 否 | PP p2p | PP×EP×TP×DP = 总GPU |
+| PP | 并行 | 是(切层) | 否 | PP p2p | PP×TP×DP = 总GPU，EP 在 DP group 内正交 |
 | EP | 并行 | 是(切expert) | 否 | all-to-all | EP×DP ≤ world_size/PP/TP |
 | TP | 并行 | 是(切权重) | 否 | 2×all-reduce/层 | TP 内必须 NVLink |
 | VPP | 并行优化 | 否 | 否 | 增加 p2p 次数 | num_layers 必须整除 PP×VP |
@@ -33,6 +33,8 @@ GB200 NVL72 (A4X) 上 MoE 模型训练的所有关键参数，包括参数间依
 **作用**：把模型按层切成 PP 段，每段放在不同 GPU 组上。
 
 **约束**：`num_layers` 必须能被 PP 整除（否则报错或不均匀分配）。
+
+**与 DP/EP 的关系**：`DP = 总GPU / (PP × TP)`。EP 不参与 DP 的计算，EP 在 DP group 内部正交工作——同一组 GPU 在 dense 层做 DP，在 MoE 层做 EP all-to-all。
 
 **对内存的影响**：
 - PP 越大 → 每卡放的层数越少 → 内存越小
@@ -81,8 +83,10 @@ GB200 NVL72 (A4X) 上 MoE 模型训练的所有关键参数，包括参数间依
 
 **与其他参数的依赖**：
 - `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN` 必须等于 EP group 中在同一 NVLink 域内的 rank 数
-- EP group size = world_size / (PP × TP)
-- EP=32 PP=2 TP=1 → 每 PP stage 32 GPU 做 EP，必须在 NVLink 域内
+- DP = world_size / (PP × TP)，EP 在 DP group 内正交
+- EP=32 PP=2 TP=1 → DP=32, 每个 DP group 32 GPU，MoE 层做 EP=32 all-to-all
+- EP ≤ DP（EP 不能大于 DP group size）
+- EP group 必须在 NVLink 域内才能用 HybridEP
 
 ### 1.3 TP (Tensor Model Parallel Size)
 
