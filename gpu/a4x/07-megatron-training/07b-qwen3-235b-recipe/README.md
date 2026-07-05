@@ -164,6 +164,141 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 
 > 30B 经验：cutedsl 环境变量虽然不在 V1 config 里，但手动设置后依然生效（89→284 TFLOP/s）。235B 同样值得试。
 
+## GKE 部署方式（LeaderWorkerSet）
+
+在 GKE 集群上使用 LeaderWorkerSet + Kueue + ComputeDomain 部署 64 GPU 训练。
+
+### YAML
+
+```yaml
+# 1. ComputeDomain（16 节点）
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: nemo-235b-domain
+spec:
+  numNodes: 16
+  channel:
+    resourceClaimTemplate:
+      name: nemo-235b-channel
+---
+# 2. LeaderWorkerSet（size=16 = 1 leader + 15 workers）
+apiVersion: leaderworkerset.x-k8s.io/v1
+kind: LeaderWorkerSet
+metadata:
+  name: nemo-235b
+  labels:
+    kueue.x-k8s.io/queue-name: tas-lq
+spec:
+  replicas: 1
+  leaderWorkerTemplate:
+    size: 16
+    restartPolicy: RecreateGroupOnPodRestart
+    leaderTemplate:
+      metadata:
+        annotations:
+          networking.gke.io/default-interface: eth0
+          networking.gke.io/interfaces: |
+            [
+              {"interfaceName":"eth0","network":"default"},
+              {"interfaceName":"eth1","network":"gvnic-1"},
+              {"interfaceName":"gpu0rdma0","network":"rdma-0"},
+              {"interfaceName":"gpu1rdma0","network":"rdma-1"},
+              {"interfaceName":"gpu2rdma0","network":"rdma-2"},
+              {"interfaceName":"gpu3rdma0","network":"rdma-3"}
+            ]
+        labels:
+          app: nemo-235b-pod
+      spec:
+        nodeSelector:
+          cloud.google.com/gke-accelerator: nvidia-gb200
+          cloud.google.com/gke-gpu: "true"
+        resourceClaims:
+        - name: compute-domain-channel
+          resourceClaimTemplateName: nemo-235b-channel
+        tolerations:
+        - key: nvidia.com/gpu
+          operator: Exists
+        - {effect: NoSchedule, key: kubernetes.io/arch, operator: Equal, value: arm64}
+        containers:
+        - name: nemo
+          image: us-central1-docker.pkg.dev/supercomputer-testing/nvcr/nemo:26.06.rc7
+          command: ["/bin/bash", "-c", "sleep infinity"]
+          resources:
+            claims: [{name: compute-domain-channel}]
+            limits: {nvidia.com/gpu: "4"}
+            requests: {nvidia.com/gpu: "4"}
+          securityContext: {privileged: true}
+          volumeMounts:
+          - {name: dshm, mountPath: /dev/shm}
+          env:
+          - {name: CUDA_DEVICE_MAX_CONNECTIONS, value: "1"}
+          - {name: NVTE_CUTEDSL_FUSED_GROUPED_MLP, value: "1"}
+          - {name: CUDNNFE_CLUSTER_OVERLAP_MARGIN, value: "8"}
+          - {name: NVLINK_DOMAIN_SIZE, value: "72"}
+          - {name: USE_MNNVL, value: "1"}
+          - {name: NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN, value: "32"}
+          - {name: NUM_OF_TOKENS_PER_CHUNK_COMBINE_API, value: "128"}
+          - {name: NCCL_CTA_POLICY, value: "1"}
+          - {name: TORCH_NCCL_AVOID_RECORD_STREAMS, value: "0"}
+          - {name: NCCL_GRAPH_REGISTER, value: "0"}
+          - {name: PYTORCH_CUDA_ALLOC_CONF, value: "expandable_segments:True,graph_capture_record_stream_reuse:True"}
+          - {name: NVTE_FWD_LAYERNORM_SM_MARGIN, value: "16"}
+          - {name: NVTE_BWD_LAYERNORM_SM_MARGIN, value: "16"}
+          - {name: GLOO_SOCKET_IFNAME, value: eth0}
+          - {name: NCCL_SOCKET_IFNAME, value: eth0}
+          - {name: NCCL_MNNVL_ENABLE, value: "2"}
+          - {name: NCCL_CUMEM_ENABLE, value: "1"}
+        volumes:
+        - name: dshm
+          emptyDir: {medium: Memory, sizeLimit: 200Gi}
+    workerTemplate:
+      # 与 leaderTemplate 相同（省略）
+```
+
+### 关键差异 vs 30B LWS
+
+| 维度 | 30B LWS | 235B LWS |
+|---|---|---|
+| size | 2 | 16 |
+| ComputeDomain numNodes | 2 | 16 |
+| NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN | 8 | 32 |
+| nodeSelector 节点池 | 按需指定 | 需 16 台空闲节点的池，或不指定让 Kueue TAS 自动选 |
+
+### 启动训练（PP=2 EP=32 优化版）
+
+```bash
+# 所有 16 个 Pod 上分别执行（用脚本批量）
+for i in $(seq 0 15); do
+  POD="nemo-235b-0"
+  [ $i -gt 0 ] && POD="nemo-235b-0-${i}"
+  kubectl exec $POD -- bash -c "
+    cd /opt/Megatron-Bridge/scripts/performance
+    export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/local/nvidia/lib64:\$LD_LIBRARY_PATH
+    export GLOO_SOCKET_IFNAME=eth0 NCCL_SOCKET_IFNAME=eth0
+    export NCCL_MNNVL_ENABLE=2 NCCL_CUMEM_ENABLE=1
+    nohup torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$i \
+      --master_addr=<LEADER_IP> --master_port=29600 \
+      run_script.py -m qwen -mr qwen3_235b_a22b --task pretrain \
+      -g gb200 -c fp8_mx -ng 64 --data mock \
+      --max_steps 20 --log_dir /tmp/nemo-results \
+      -wde bench -wdj qwen3_235b \
+      -cv v1 \
+      --pipeline_model_parallel_size 2 \
+      --expert_model_parallel_size 32 \
+      --global_batch_size 512 \
+      --micro_batch_size 1 > /tmp/train.log 2>&1 &
+  " &
+done
+wait
+```
+
+### GKE 踩坑（同 30B，额外注意）
+
+- 235B 需要 16 台同域节点，Kueue TAS 会自动选拓扑最近的节点
+- `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN` 必须改成 32（不是 30B 的 8）
+- 如果跨两个 NVL72 域（2×8 节点），需设 `NCCL_MNNVL_ENABLE=0`（参考 11-gke-setup 文档的跨域 hang 问题）
+
 ## 注意事项
 
 1. **16 节点必须在同一 NVL72 域**：用同一 Placement Policy 创建。A4X NVL72 域最多 18 节点，16 节点在范围内
