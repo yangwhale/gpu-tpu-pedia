@@ -165,8 +165,39 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 | **PP=2 EP=32 跨域** | **64** | **双域 (8+8节点)** | **2** | **32** | **0** | **685** | **7.1s** | **baker pool-5+pool-7, USE_MNNVL=1** |
 
 > **跨域结果惊喜**：MNNVL=0 + USE_MNNVL=1（奚老师方案）跨两个 NVL72 域跑出 685，几乎等于单域 MNNVL=2 的 686。原因：PP=2 跨域 p2p 通信量小（只传 activation），RDMA 200GB/s 不是瓶颈；EP=32 all-to-all 全在域内走 HybridEP NVLink，不受跨域影响。
->
-> **NVLS_ENABLE=1 不可用**：235B 模型参数大，NVLS multicast buffer 分配 OOM。必须设 `NCCL_NVLS_ENABLE=0`。
+
+### baker 集群优化迭代 (2026-07-05, 8 轮实验)
+
+基于跨域 685 baseline，逐个测试奚老师 DSv3 报告中的优化参数：
+
+| 轮次 | 改了什么 | FP8 | TFLOP/s | 备注 |
+|---|---|---|---|---|
+| **baseline** | PP=2 EP=32 MNNVL=0+USE_MNNVL=1 | mxfp8 | **685** | **最优配置** |
+| R2 | + recompute (moe_act,mlp) | mxfp8 | 666 (-3%) | 重算 activation 增加计算量 |
+| R3 | + recompute + NVLS=1 | mxfp8 | OOM | NVLS multicast buffer HBM 不够 |
+| R4 | + NCCL_GRAPH_REGISTER=1 | mxfp8 | crash | assert: 与 expandable_segments 冲突 |
+| T2 | + seq_length=8192 | mxfp8 | OOM | activation 翻倍超 184GB |
+| T3 | + cuDNN fusion (NVTE_FUSED_ATTN=1 等) | mxfp8 | 645 (-6%) | 覆盖 recipe 自选的更优实现 |
+| T4 | 30B NVLS=1 对照 | mxfp8 | 926 | 30B 8 卡 NVLS 正常 (slot 够用) |
+| T5 | 换 fp8_cs (current scaling) | fp8_cs | 701→595 | 前 11 步高 2%, 后退化 -15% |
+
+#### 关键发现
+
+1. **NeMo recipe 已包含 fp8-param-gather**: `bf16_with_mxfp8_mixed()` 自动设置 `fp8_param_gather=True` + `reuse_grad_buf_for_mxfp8_param_ag=True`。奚老师从 928→975 的 5% 提升，我们的 recipe 一直都有
+2. **seq_length 被 recipe 锁定**: `set_qwen3_common_configs()` 硬编码 `cfg.model.seq_length = 4096`，命令行 `-sl` 只改 dataset 不改 model。需要 sed patch Python 文件才能改
+3. **NVLS OOM 是 HBM 不够**: 不是 NVSwitch multicast slot 耗尽（那是 NCCL #2077 的别的场景），而是 235B 模型用了 180+GB HBM 留不出 multicast buffer 的空间
+4. **fp8_cs 退化**: per-tensor current scaling 在 Qwen3 235B 上出现 iter 12+ 退化（与 DSv3 上 mxfp8 退化互为镜像），FP8 退化行为与模型架构耦合
+5. **685 是 H=4096 天花板**: 计算密度 (H=4096 vs DSv3 H=7168) 差 3x，是 TFLOP/s 低的根因。奚老师在同硬件测 Qwen3 235B 也只有 219-325
+
+#### NVLS 深度分析
+
+| 场景 | NVLS | 结果 |
+|---|---|---|
+| 30B 8 卡 (NVLS=1) | ✅ 正常 | 926 (vs NVLS=0 的 924, 差 0.2%) |
+| 235B 64 卡 (NVLS=1) | ❌ OOM | HBM 180+GB 用满, multicast buffer 分配失败 |
+| DSv3 61L (奚老师 NVLS=1) | ❌ 退化 | iter 20-40 后 TFLOP/s 渐降 30-50% (时间相关 bug) |
+
+NVLS 有两种独立失败模式: (1) GPU HBM OOM 分配 multicast buffer (我们的 235B), (2) NVLS transport 时间退化 bug (奚老师的 DSv3)。生产配置一律 NVLS=0。
 
 ## GKE 部署方式（LeaderWorkerSet）
 
