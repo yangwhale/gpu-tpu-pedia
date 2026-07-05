@@ -157,12 +157,16 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 
 ### A4X 实测结果
 
-| Config | GPU 数 | 精度 | TFLOP/s/GPU | HBM Peak | 备注 |
-|---|---|---|---|---|---|
-| V1 baseline | 64 | MXFP8 | — | — | 待测 |
-| V1 + cutedsl env | 64 | MXFP8 | — | — | 待测（参考 30B 经验加 NVTE_CUTEDSL_FUSED_GROUPED_MLP=1） |
+| Config | GPU 数 | 拓扑 | PP | EP | MNNVL | TFLOP/s/GPU | Step Time | 备注 |
+|---|---|---|---|---|---|---|---|---|
+| V1 baseline | 64 | 单域 | 8 | 8 | 2 | 360 | 27s | 默认 recipe |
+| PP=2 EP=32 | 64 | 单域 | 2 | 32 | 0 | 595 | 8.2s | RDMA only |
+| PP=2 EP=32 | 64 | 单域 | 2 | 32 | 2 | **686** | 7.1s | NVLink 最优 |
+| **PP=2 EP=32 跨域** | **64** | **双域 (8+8节点)** | **2** | **32** | **0** | **685** | **7.1s** | **baker pool-5+pool-7, USE_MNNVL=1** |
 
-> 30B 经验：cutedsl 环境变量虽然不在 V1 config 里，但手动设置后依然生效（89→284 TFLOP/s）。235B 同样值得试。
+> **跨域结果惊喜**：MNNVL=0 + USE_MNNVL=1（奚老师方案）跨两个 NVL72 域跑出 685，几乎等于单域 MNNVL=2 的 686。原因：PP=2 跨域 p2p 通信量小（只传 activation），RDMA 200GB/s 不是瓶颈；EP=32 all-to-all 全在域内走 HybridEP NVLink，不受跨域影响。
+>
+> **NVLS_ENABLE=1 不可用**：235B 模型参数大，NVLS multicast buffer 分配 OOM。必须设 `NCCL_NVLS_ENABLE=0`。
 
 ## GKE 部署方式（LeaderWorkerSet）
 
@@ -293,11 +297,35 @@ done
 wait
 ```
 
-### GKE 踩坑（同 30B，额外注意）
+### 跨域部署（实测方案, baker pool-5 + pool-7）
 
-- 235B 需要 16 台同域节点，Kueue TAS 会自动选拓扑最近的节点
-- `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN` 必须改成 32（不是 30B 的 8）
-- 如果跨两个 NVL72 域（2×8 节点），需设 `NCCL_MNNVL_ENABLE=0`（参考 11-gke-setup 文档的跨域 hang 问题）
+跨两个 NVL72 域时，用两个 LWS + 两个 ComputeDomain，分别锁定不同的节点池：
+
+```yaml
+# Domain A (pool-5, PP stage 0, node_rank 0-7)
+ComputeDomain: nemo-235b-domain-a (numNodes=8, channel=nemo-235b-channel-a)
+LWS: nemo-235b-a (size=8, nodePool=pool-5)
+
+# Domain B (pool-7, PP stage 1, node_rank 8-15)
+ComputeDomain: nemo-235b-domain-b (numNodes=8, channel=nemo-235b-channel-b)
+LWS: nemo-235b-b (size=8, nodePool=pool-7)
+```
+
+关键配置差异 vs 单域：
+- `NCCL_MNNVL_ENABLE=0` — NCCL 走 RDMA 避免跨域 hang
+- `USE_MNNVL=1` — HybridEP 域内 NVLink fabric
+- `NCCL_NVLS_ENABLE=0` — 235B 模型太大，NVLS multicast buffer OOM
+
+### GKE 踩坑记录
+
+| 问题 | 原因 | 修复 |
+|---|---|---|
+| NVLS multicast OOM | 235B 参数量大，multicast buffer 分配超出 HBM | `NCCL_NVLS_ENABLE=0` |
+| master_addr 为空 | shell 变量在 kubectl exec 单引号内不展开 | 直接写 IP，不用 `$VAR` |
+| MNNVL available but not working | 裸 Pod 无 IMEX channel | 必须用 LWS + ComputeDomain + ResourceClaim |
+| ncclWaitSignal undefined | GIB NCCL 2.28 vs 容器 NCCL 2.30 | LD_LIBRARY_PATH 把容器路径放前面 |
+| Gloo IPv6 unreachable | Gloo 默认 IPv6 | `GLOO_SOCKET_IFNAME=eth0` |
+| nvcr.io 403 | NGC API key 无权限 | 用项目 AR 镜像 |
 
 ## 注意事项
 
