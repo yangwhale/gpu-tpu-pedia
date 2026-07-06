@@ -337,7 +337,26 @@ run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
 4. **DSv3 改层数必须三件套同改**：`--num_layers` + `-vp` + `--pipeline_model_parallel_layout`（含 MTP 层）
 5. **入口脚本决定一切**：`run_script.py` 和 `pretrain_gpt.py` 是同一个容器里两条完全不同的技术路径
 
-### 5.10 未来方向
+### 5.10 DSv3 16L 第二轮优化：VPP/GBS 跨域限制 (2026-07-06)
+
+基于奚老师 v4 报告（1349 TFLOPs）的差距分析，尝试缩小跨域 64 GPU 与单域 128 GPU 的差距。
+
+| 轮次 | 改动 | VPP | GBS | CONNECTIONS | TFLOPs | 结果 |
+|---|---|---|---|---|---|---|
+| baseline | VPP=2 | 2 | 512 | 1 | **1114** | ✅ |
+| R1 | VPP=8 (1层/stage) | 8 | 512 | 1 | hang | ❌ PP p2p NCCL timeout |
+| R2 | VPP=4 (2层/stage) | 4 | 512 | 1 | hang | ❌ PP p2p NCCL timeout |
+| R3 | VPP=2 + GBS=4096 + CONNECTIONS=32 | 2 | 4096 | 32 | hang | ❌ 128 microbatch 跨域 p2p 过频 |
+
+**根因**：跨域 PP p2p 走 RDMA（NCCL_MNNVL=0），延迟比域内 NVLink 高一个数量级。VPP 增加 virtual stage 数 → p2p 频率倍增 → RDMA 延迟累积超时。GBS=4096 产生 128 microbatch → 同样导致 p2p 过于频繁。
+
+**奚老师 1349 为什么能用 VPP=8**：128 GPU PP=2 的两个 stage 各有 64 卡，可以全落在同一个 NVL72 域内（每域 64 卡）。PP p2p 走域内 NVLink（900 GB/s、μs 延迟），支撑 VPP=8 的高频 interleaving。
+
+**结论**：跨域 64 GPU 的 1114 就是 VPP=2 + GBS=512 的天花板。要更高需要：
+1. PP 的两个 stage 都在同一个域内（需要 64 GPU 在单域）
+2. 或者 NCCL_MNNVL=2 让 PP p2p 走 NVLink（跨域 hang 风险）
+
+### 5.11 未来方向
 
 1. **MCore 开源 sync-free kernels**：论文 Section 4.3.7 的技术如果合入开源版，`pretrain_gpt.py` 也能开 full MoE graph
 2. **NCCL 修复 NVLS 退化**：解锁 NVLink SHARP 硬件加速，预计 +3-5%
