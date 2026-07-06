@@ -199,6 +199,30 @@ torchrun --nproc_per_node=4 --nnodes=16 --node_rank=$NODE_RANK \
 
 NVLS 有两种独立失败模式: (1) GPU HBM OOM 分配 multicast buffer (我们的 235B), (2) NVLS transport 时间退化 bug (奚老师的 DSv3)。生产配置一律 NVLS=0。
 
+### 第三轮优化：突破 685 (2026-07-06, baker pool-7 + pool-2)
+
+基于 Megatron-Core MoE 论文 [[arXiv:2603.07685]](https://arxiv.org/abs/2603.07685) 的分析，NeMo 的 run_script.py 走的是 Megatron Bridge，理论上具备 Bridge 的 sync-free kernel、ECHO、paged stashing 等优化。以下实验验证这些优化对 Qwen3 235B 的实际效果。
+
+**假说**：NeMo recipe 选了 TE scoped graph (只 capture attn)，可能是保守选择。如果 Bridge 的 sync-free kernel 可用，强制开 full_iteration graph 可能解锁更高性能。
+
+| 轮次 | 改了什么 | 预期 | TFLOPs | 状态 |
+|---|---|---|---|---|
+| R9 | 强制 cuda_graph_impl=full_iteration (sed patch recipe) | 685→750+ (如果 Bridge sync-free kernel 可用) | | 待测 |
+| R10 | + VPP=2 (flexible PP layout) | 减少 bubble | | 待测 |
+| R11 | 确认 NeMo 实际的 graph scope (dump config) | 验证 recipe 选了什么 | | 待测 |
+
+**验证方法**：
+1. 部署 16 节点跨域 LWS (pool-7 × 8 + pool-2 × 8)
+2. R11 先跑：dump NeMo recipe 实际配置，确认 cuda_graph_impl 和 scope
+3. R9：sed patch `qwen3_llm_pretrain.py`，把 cuda_graph_impl 改成 full_iteration
+4. R10：如果 R9 成功，加 `--virtual_pipeline_model_parallel_size 2`
+5. 每轮记录 TFLOP/s + HBM 峰值 + step time
+
+**风险评估**：
+- full_iteration + PP=2 + HybridEP 在 raw Megatron-LM 上 crash (奚老师实测)。但 NeMo Bridge 有 sync-free kernel 可能不 crash
+- 235B 94 层 HBM 已 180+GB，full_iteration graph 的额外内存可能 OOM
+- VPP 94/PP=2/VP=2 = 23.5 不整除，需要 Bridge 的 flexible PP layout
+
 ## GKE 部署方式（LeaderWorkerSet）
 
 在 GKE 集群上使用 LeaderWorkerSet + Kueue + ComputeDomain 部署 64 GPU 训练。
