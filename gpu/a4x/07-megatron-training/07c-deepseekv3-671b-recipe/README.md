@@ -360,9 +360,17 @@ run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
 
 尝试用 pool-7 + pool-5 复现 DSv3 16L 的 1114 结果，失败。根因：pool-5 节点的 RDMA 网卡 `mlx5_2:1` 报 `async fatal event on QP: local access violation work queue error`。这是 RDMA 硬件或驱动层面的访问违规，不是软件配置问题。
 
-之前跑通 1114 的池组合是 pool-7 + pool-2。复现需要等 pool-2 释放足够空闲节点（当前仅 5 台，需 8 台）。
+之前跑通 1114 的池组合是 pool-7 + pool-2。
 
-> **教训**：不同 node pool 的 RDMA 硬件状态不一致。换池可能导致 NCCL RDMA 通信失败。跨域测试必须使用已验证的池组合。
+**pool-7 + pool-3 也失败**：不是 RDMA 硬件问题，而是 HybridEP 的 `cuMemImportFromShareableHandle: invalid resource handle`——CUDA fabric memory 跨域导入失败。说明 pool-7 和 pool-3 之间的 IMEX channel handle 不互通。
+
+| 池组合 | 结果 | 错误 |
+|--------|------|------|
+| pool-7 + pool-2 | ✅ 1114 | — |
+| pool-7 + pool-5 | ❌ | mlx5_2 QP access violation (RDMA 硬件) |
+| pool-7 + pool-3 | ❌ | cuMemImportFromShareableHandle invalid handle (IMEX 不通) |
+
+> **教训**：DSv3 full_iteration graph + HybridEP 对跨域通信要求极高。不同池组合的 RDMA 硬件状态和 IMEX channel 兼容性不一致。跨域测试必须使用已验证的池组合（pool-7 + pool-2）。Qwen3 235B 的 TE scoped graph 容错性更高（同样的 pool-7+pool-3/pool-5 组合能正常跑 685）。
 
 ### 5.12 未来方向
 
