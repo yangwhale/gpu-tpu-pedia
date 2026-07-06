@@ -1,78 +1,88 @@
 # DeepSeek V3 — GB200 NVL72 128 GPU HybridEP 训练复现指南
 
-> forrest 集群 30+ 组实验, 从 300 优化到 **975 TFLOPs/GPU (v1)** / **985 TFLOPs/GPU (v2)**，达 NVIDIA 256 GPU 参考 1,106 TFLOPs 的 **89%**。
+> forrest 集群 40+ 组实验, 从 300 优化到 **981 TFLOPs/GPU (v3.1, peak 993)**，达 NVIDIA 256 GPU 参考 1,106 TFLOPs 的 **89%**。
 >
-> 来源: [奚老师完整报告](https://doc.maxwell-x.dev/dsv3-hybridep-128g-optimization?t=9IBu8bMJhPhILN-CztzcKs&theme=gcloud) (2026-07-05)
+> 来源: [奚老师完整报告](https://doc.maxwell-x.dev/dsv3-hybridep-128g-optimization?t=9IBu8bMJhPhILN-CztzcKs&theme=gcloud) (持续更新)
+
+## 版本演进
+
+v1 (MCore 0.16, 975) → v2 (MCore 0.17 dev, 985, 需 runtime patch) → v2.1 (patch baked, 956) → **v3.1 (MCore 0.18.0, 981, 推荐)**
 
 ## 核心优化路径
 
 ```
-alltoall dispatcher (300) → HybridEP (+58%, 474) → CUDA graph partial capture (+96%, 928) → mxfp8 + fp32 optimizer (+105%, 975)
+alltoall dispatcher (300) → HybridEP (+58%, 474) → CUDA graph partial capture (+96%, 928)
+→ mxfp8 + fp32 optimizer (+105%, 975) → MCore 0.18.0 + graph attn (+109%, 981)
 ```
 
 **关键限制**: 全量 61 层模型 CUDA graph 会 OOM (184 GB HBM 不够)，必须缩到 32 层 (~221B)。
 
 ## 1. 最佳配置速查
 
-### v1 — 975 TFLOPs/GPU (MCore 0.16, TE 2.9)
+### v3.1 — 981 TFLOPs/GPU (推荐, MCore 0.18.0)
 
 | 参数 | 值 |
 |---|---|
-| 模型 | DSv3 缩减 32 层 ~221B, H=7168, 256 experts top-8, MLA |
-| 层频率 | `([0]*3+[1]*29)` (3 dense + 29 MoE) |
+| 模型 | DSv3 缩减 32L ~221B, H=7168, 256 experts top-8, MLA |
 | 并行 | **PP=2 EP=64** TP=1, seq=8192, MBS=1, GBS=2048 |
-| FP8 | **mxfp8** e4m3 + **fp8-param-gather** + reuse-grad-buf-for-mxfp8-param-ag |
-| CUDA Graph | `--cuda-graph-impl transformer_engine --cuda-graph-scope attn moe_router moe_preprocess` |
+| FP8 | mxfp8 e4m3 + **fp8-param-gather** + reuse-grad-buf |
+| CUDA Graph | `--cuda-graph-impl transformer_engine --cuda-graph-modules attn` |
 | HybridEP | hybridep-num-sms=32, RANKS_PER_DOMAIN=64, USE_MNNVL=1 |
-| Optimizer | fp32 main-grads + fp32 main-params, bf16 exp-avg + bf16 exp-avg-sq |
+| Optimizer | fp32 main-grads + fp32 main-params, bf16 exp-avg/sq |
 | Recompute | selective: moe_act, mlp |
 | NCCL | **NVLS=0** GRAPH_REGISTER=0 MNNVL=0 |
+| Patch | nvidia-resiliency-ext 0.6.0 + fused_a2a.py non_blocking 删除 |
 
-### v2 — 985 TFLOPs/GPU (MCore 0.17, TE 2.15)
+### v1 — 975 TFLOPs/GPU (MCore 0.16)
 
-与 v1 仅 3 处差异:
-- `--cuda-graph-modules attn` (v1 用 `--cuda-graph-scope attn moe_router moe_preprocess`)
-- `--cross-entropy-fusion-impl native` (v1 用 `te`)
-- `--moe-router-padding-for-quantization` (v1 无此参数)
+与 v3.1 差异: `--cuda-graph-scope attn moe_router moe_preprocess` (含 full MoE graph capture)，无需 patch。
 
-### 3 个致命参数
+### v2 — 985 TFLOPs/GPU (MCore 0.17 dev, 需 runtime patch)
+
+与 v3.1 差异: `--cross-entropy-fusion-impl native`, `--moe-router-padding-for-quantization`。v2 image 启动即 crash 需 sed patch。
+
+### v2.1 — 956 TFLOPs/GPU (patches baked)
+
+同 v2 但 patches baked in Dockerfile，pin MCore 到 bfa3326。
+
+### 4 个致命参数
 
 | 参数 | 必须值 | 错误值后果 |
 |---|---|---|
-| `--cuda-graph-impl transformer_engine` | 必须显式设 | 漏掉 → impl=none, graph 静默禁用, 只有 879 不是 975 |
-| `NCCL_GRAPH_REGISTER` | 0 | 1 → AssertionError crash (与 expandable_segments 冲突) |
-| `NCCL_NVLS_ENABLE` | 0 | 1 → iter 20-40 后性能渐降 30-50% (时间相关退化 bug) |
+| `--cuda-graph-impl transformer_engine` | 必须显式设 | 漏掉 → graph 静默禁用 (v3.1: 981→836) |
+| `NCCL_GRAPH_REGISTER` | 0 | 1 → AssertionError crash |
+| `NCCL_NVLS_ENABLE` | 0 | 1 → iter 20-40 后性能渐降 30-50% |
+| `--sequence-parallel` | 保留 | 关掉 → -17 TFLOPs (与 NVIDIA ref 建议相反) |
 
-## 2. 硬件与软件
+### MCore 版本选择 (关键)
 
-| 项目 | 规格 |
-|---|---|
-| GPU | 128× GB200 (184 GB HBM3e), 32 nodes × 4 GPU |
-| NVLink | 2 cliques × 16 nodes, NVL72 域内全互联 |
-| RDMA | 4× MRDMA 400Gb/s per node (RoCE), GIB v1.1.2 |
-| IMEX | Host nvidia-imex daemon (非 ComputeDomain), per-clique 独立 |
-
-|  | v1 | v2 |
+| MCore | graph 参数 | HybridEP 状态 |
 |---|---|---|
-| Base | pytorch:25.09-py3 (CUDA 13.0) | pytorch:26.05-py3 (CUDA 13.2) |
-| MCore | 0.16.0 (effebd81) | 0.17 dev (bfa3326) |
-| TE | 2.9 (custom 7dd3914) | 2.15 (NGC 内置) |
-| DeepEP | hybrid-ep 3f601f7 | 同 |
+| 0.16 (v1) | `--cuda-graph-scope` | ✅ full graph 975 |
+| 0.17.0/0.17.1 | `--cuda-graph-scope` | ❌ **hang** (HybridEP 集成不完整) |
+| **0.18.0 (v3.1)** | `--cuda-graph-modules` | ✅ attn-only 981 |
+| dev bfa3326 (v2/v2.1) | `--cuda-graph-modules` | ✅ attn-only 956-985 |
 
-## 3. 全部实验汇总
+**v0.17.0/v0.17.1 无论 graph/无 graph 都 hang**，必须跳过。
 
-### 3.1 DSv3 61L PP=4 EP=32 (v1)
+### v2.1/v3.1 需要的 2 个 patch
+
+1. `nvidia-resiliency-ext` 0.6.0 from GitHub (NGC 26.05 只有 0.5.0, MCore 要求 ≥0.6.0)
+2. `fused_a2a.py` 删除 `non_blocking=non_blocking,` (MCore 加了此参数, DeepEP hybrid-ep 不支持)
+
+## 2. 全部实验汇总
+
+### 2.1 DSv3 61L PP=4 EP=32 (v1)
 
 | # | 配置变化 | TFLOPs | 备注 |
 |---|---|---|---|
 | 1 | baseline (alltoall, BF16) | 300 | |
-| 1b | + mxfp8 | 298 | mxfp8 对 BF16 baseline 无提升 |
 | 2 | HybridEP + blockwise + Ring | **432** | +44% |
-| 3 | 同上, algo=auto | 474 (±30) | +58%, 波动大 |
-| 4 | + NVLS=1 + GRAPH_REGISTER=1 | 488 (peak 518) | **61L 最高** |
-| — | 61L + CUDA graph | OOM (SIGKILL) | 184 GB 不够 |
+| 3 | algo=auto | 474 (±30) | +58%, 波动大 |
+| 4 | + NVLS=1 + GRAPH_REG=1 | 488 (peak 518) | **61L 最高** |
+| — | 61L + CUDA graph | OOM | 184 GB 不够 |
 
-### 3.2 DSv3 32L PP=2 EP=64 (v1)
+### 2.2 DSv3 32L PP=2 EP=64 (v1)
 
 | # | 配置变化 | TFLOPs | 备注 |
 |---|---|---|---|
@@ -80,111 +90,100 @@ alltoall dispatcher (300) → HybridEP (+58%, 474) → CUDA graph partial captur
 | 7 | + CUDA graph (attn+router+preprocess) | **928** | +18.5% |
 | 8 | + mxfp8 + fp32 optimizer + fp8-param-gather | **970** | +24% |
 | — | **复现 run** | **975** | **v1 最终** |
-| 9 | PP=4 EP=32 (vs PP=2 EP=64) | 955 | PP=2 更优 |
-| 22 | seq=4096 MBS=2 | 905 | seq 影响大 |
-| 19 | + numactl 绑 NUMA 0 | 950 | -3%, Grace NUMA 延迟低不需要 |
-| 18 | recompute mlp only (去 moe_act) | 772 | -20%, 内存压力 |
+| 9 | PP=4 EP=32 | 955 | PP=2 更优 |
 
-### 3.3 DSv3 32L PP=2 EP=64 (v2)
+### 2.3 DSv3 32L PP=2 EP=64 (v2/v2.1)
 
 | # | 配置变化 | TFLOPs | 备注 |
 |---|---|---|---|
-| 10 | baseline 无 graph | **935** | v2 baseline 已很高 |
-| 11 | graph attn+router+preprocess | 365 (-62%) | **v2 MoE graph 退化!** |
-| 12 | **graph attn only** | **985** (+5.3%) | **v2 最终** |
-| 13 | + NCCL_MIN_CTAS=32 | 916 (-7%) | CTA 挤占 SM |
-| 14 | graph attn+router | 369 (-61%) | router 也不行 |
-| 15 | seq=4096 | 710 (-28%) | 计算密度不够 |
-| 16-17 | seq=12288 + offload | OOM | |
+| 10 | baseline 无 graph (v2) | **935** | |
+| 11 | graph attn+router+preprocess (v2) | 365 (-62%) | **v2 MoE graph 退化!** |
+| 12 | **graph attn only (v2)** | **985** (+5.3%) | **v2 最终** |
+| — | v2.1 patches baked 复现 | **956** | |
 
-### 3.4 NVLS 退化排查 (7 组对照实验)
+### 2.4 DSv3 32L PP=2 EP=64 (v3.1, MCore 0.18.0)
 
-| # | 变量 | TFLOPs | 退化? |
+| # | 配置变化 | TFLOPs | 备注 |
 |---|---|---|---|
-| 27 | ComputeDomain + NVLS=1 | 427→hang | ✅ iter 44 |
-| 28 | host IMEX + NVLS=1 | 460→260 | ✅ iter 33 |
-| 30 | **NVLS=0 (baseline)** | **474 稳态** | **❌ 零退化** |
-| 31 | NVLS=1 + 禁 GC | 526→368 | ✅ iter 19 |
-| 32 | NVLS=1 + GRAPH_REG=0 | 441→333 | ✅ iter 27 |
-| 33 | NVLS=1 + GPU 监控 | 446→344 | ✅ iter 41 |
+| E1 | baseline 无 graph | 836 | |
+| **E2** | **graph attn** | **981** (peak 993) | **v3.1 推荐** |
+| E4 | 去掉 sequence-parallel | 964 (-17) | SP 在 TP=1 仍有益 |
+| E5 | recompute mla_up_proj | 977 (±1.5, 更稳定) | |
 
-**结论**: 退化在 NVLS transport 内部，排除了 multicast slot、GC、内存泄漏、thermal throttling。必须 NVLS=0。
+### 2.5 Phase 2 优化尝试 (v1, 07-06)
 
-### 3.5 Qwen3 235B 参考 (奚老师在同硬件测)
+| # | 配置变化 | TFLOPs | 备注 |
+|---|---|---|---|
+| 34 | hybridep-num-sms=16 | 850 (-13%) | EP 带宽不足 |
+| 35 | hybridep-num-sms=24 | 896 (-8%) | |
+| 37 | activation offload | 终止 | 15min 无 iter1 |
+| 40 | optimizer CPU offload (去 fp8-param-gather) | 774 (-21%) | 去 fp8-param-gather 致命 |
+| 41/42 | delayed FP8 | CRASH | TE 2.9/2.15 各种不兼容 |
+| 43 | `--cuda-graph-modules attn moe` | CRASH | assert: 只支持 drop-padding |
 
-| hidden_size | seq | TFLOPs |
+### 2.6 NVLS 退化排查 (7 组对照)
+
+| 变量 | TFLOPs | 退化? |
 |---|---|---|
-| 4096 | 4096 | 219 |
-| 4096 | 8192 | 325 |
-| **7168 (DSv3)** | **8192** | **985** |
+| NVLS=0 (baseline) | 474 稳态 | ❌ 零退化 |
+| NVLS=1 (各种组合, 6 组) | 427-526 → 260-368 | ✅ iter 19-44 |
 
-> 计算密度差 3x (H=7168 vs 4096)，是 235B TFLOP/s 低的根因。
+退化在 NVLS transport 内部，排除了 slot 耗竭、GC、内存泄漏、thermal throttling。
 
-## 4. 关键发现
+## 3. 关键发现
 
-### 4.1 MoE CUDA Graph v1 vs v2 差异
+### MoE CUDA Graph 深度分析
 
-**v1 (MCore 0.16)**: graph capture 含 MoE dispatch 全链路，零额外 sync → **975 TFLOPs**
+**v1 全 graph 的原因**: MCore 0.16 (PR #1917) 无 `MoECudaGraphPartialCaptureSignal`，TE `make_graphed_callables()` 把整层包成一个 graph，scope 只声明"包含什么"不创建截断边界。HybridEP dispatch 是 GPU-native 设计: 固定 launch config (32 SM), kernel 从 GPU memory 读 routing tensor, NVLink buffer 预分配固定大小, 无 CPU-GPU sync。
 
-**v2 (MCore 0.17)**: 引入 `MoECudaGraphPartialCaptureSignal` 截断 graph，MoE 回退到 graph 外，每层 3+ 次 graph boundary sync → **365 TFLOPs (-62%)**。v2 只能 graph attn → **985 TFLOPs**
+**v2+ 截断的原因**: PR #4292 引入 `MoECudaGraphPartialCaptureSignal` 用 exception 截断 graph capture。原因是通用安全——不是所有 dispatcher 都有固定 kernel config，dropless MoE 理论上 routing 可导致 buffer 溢出。
 
-### 4.2 PP=2 EP=64 优于 PP=4 EP=32
+**v1 full graph 的正确性风险**: benchmark (mock data) 完全安全。真实训练中极端 routing 偏斜理论上可能导致 NVLink buffer 溢出 (silent corruption 或 SIGABRT)。DSv3 256 expert top-8 统计波动小，实际风险极低。
 
-32L PP=2: 每 GPU 4 experts, EP 通信量小 → **975**
-32L PP=4: 每 GPU 8 experts, 通信量翻倍 → **955 (-2%)**
+### sequence-parallel 在 TP=1 时仍有益
 
-### 4.3 ComputeDomain vs Host IMEX
+v3.1 E4 实验: 关掉 sequence-parallel 降了 17 TFLOPs (964 vs 981)。与 NVIDIA reference 建议相反。原因待查，可能跟 distributed optimizer 的通信模式有关。
 
-CD 稳态低 5% 且 iter 44 hang。Host IMEX 更稳定。CD→host IMEX 切换需 kubelet restart 清理 IMEX session 残留。
+### 计算密度决定 TFLOPs
 
-### 4.4 Silicon Binning
+| 模型 | hidden_size | seq | TFLOPs |
+|---|---|---|---|
+| Qwen3-235B | 4096 | 4096 | 219 |
+| Qwen3-235B | 4096 | 8192 | 325 |
+| **DSv3-32L** | **7168** | **8192** | **981** |
 
-cuBLAS BF16 跨节点 spread 8.8%。gb200-05 全 4 GPU 慢 4.7-7.2%。128 GPU 实验自然平均，影响 <1%。单节点 A/B 对比必须 pin 同一节点。
+H=7168 vs H=4096 计算密度差 3x。
 
-## 5. 通用 NCCL 配置
-
-```bash
-export NCCL_NET=gIB NCCL_MNNVL_ENABLE=0 NCCL_CUMEM_ENABLE=1
-export NCCL_IB_GID_INDEX=3 NCCL_IB_QPS_PER_CONNECTION=4
-export NCCL_IB_TC=52 NCCL_IB_FIFO_TC=84 NCCL_IB_ADAPTIVE_ROUTING=1
-export NCCL_PXN_C2C=1
-export NCCL_NVLS_ENABLE=0          # 必须禁用 (时间退化 bug)
-export NCCL_GRAPH_REGISTER=0       # 必须 =0 (与 CUDA graph + expandable_segments 冲突)
-export NCCL_SET_STACK_SIZE=1
-
-# HybridEP (独立于 NCCL)
-export NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=64
-export USE_MNNVL=1
-export NVLINK_DOMAIN_SIZE=72
-```
-
-## 6. 已排除优化方向
+## 4. 已排除方向 (完整)
 
 | 方向 | 结果 | 原因 |
 |---|---|---|
-| NCCL_MIN_CTAS=32 | -7% | CTA 占 SM 过多 |
-| bindpcie / numactl | -3% | Grace CPU NUMA 延迟极低 |
-| seq > 8192 + offload | OOM | offload 释放不够 |
-| recompute mlp only | -20% | 内存压力拖慢 allocator |
-| optimizer-cuda-graph | CRASH | grad_norm 在 graph capture 中非法 |
-| VPP + CUDA graphs | OOM | graph pool + VPP activation 超 184 GB |
-| PP=8 EP=16 | -19% | EP=16 每 GPU 16 experts 通信量翻倍 |
-| CUDA graph local impl | CRASH | HybridEP tensor view assert |
-| NVLS=1 | 退化 | 时间相关退化 bug |
-| GRAPH_REGISTER=1 | CRASH | 与 expandable_segments assert |
+| NCCL_MIN_CTAS=32 | -7% | CTA 占 SM |
+| numactl | -3% | Grace NUMA 延迟低 |
+| seq > 8192 + offload | OOM | |
+| recompute mlp only | -20% | 内存压力 |
+| optimizer-cuda-graph | CRASH | grad_norm 非法 |
+| VPP + CUDA graphs | OOM | |
+| PP=8 EP=16 | -19% | 通信翻倍 |
+| 关 sequence-parallel | -17 TFLOPs | TP=1 仍有益 |
+| vboost | N/A | GB200 不支持 |
+| MCore 0.17.0/0.17.1 | hang | HybridEP 集成不完整 |
+| delayed FP8 | CRASH | 各版本不兼容 |
+| hybridep sms=16/24 | -13%/-8% | sms=32 最优 |
+| activation offload | 终止 | 延迟叠加 |
+| optimizer CPU offload | -21% | 去 fp8-param-gather 致命 |
+| `attn moe` full graph (v3.1) | CRASH | 只支持 drop-padding |
 
-## 7. 对 Qwen3 235B 的启示
+## 5. 对 Qwen3 235B 的启示
 
-基于奚老师报告,以下优化可应用于 Qwen3 235B (NeMo recipe):
+| 优化 | DSv3 结果 | Qwen3 235B 状态 |
+|---|---|---|
+| MNNVL=0 + USE_MNNVL=1 | 标准配置 | ✅ 685, 跨域验证 |
+| NVLS=0 | 必须 | ✅ |
+| GRAPH_REGISTER=0 | 必须 | ✅ |
+| fp8-param-gather | 928→975 | ✅ NeMo recipe 自动开 |
+| sequence-parallel | 关了 -17 | ✅ NeMo recipe 默认开 |
+| PP=2 EP=64 vs PP=2 EP=32 | 975 vs 955 | 我们 64 GPU 最多 EP=32 |
+| 32L 缩减模型 | 解锁 CUDA graph | N/A, NeMo 跑完整模型 |
 
-| 优化 | 奚老师结果 | 我们的状态 | 适用性 |
-|---|---|---|---|
-| MNNVL=0 + USE_MNNVL=1 | 标准配置 | ✅ 已用, 685 | 已验证 |
-| NVLS=0 | 必须 | ✅ 已用 | 已验证 |
-| GRAPH_REGISTER=0 | 必须 | ✅ 已用 | 已验证 |
-| fp8-param-gather | 970→975 | ❌ 未测 | NeMo recipe 可能已包含 |
-| fp32 main-grads + main-params | 标准配置 | ❌ 未测 | NeMo 默认 bf16 |
-| PP=2 EP=64 (vs PP=2 EP=32) | 975 vs 955 | 我们 EP=32 (64 GPU) | 需 64 GPU 才能 EP=64 |
-| 32L 缩减模型 | 解锁 CUDA graph | N/A | NeMo recipe 跑完整模型 |
-
-> **计算密度差异**: DSv3 H=7168 vs Qwen3 235B H=4096,计算密度差 3x。这是 Qwen3 235B 无法达到 900+ TFLOPs 的根本原因,与优化无关。
+> **计算密度差异**: DSv3 H=7168 vs Qwen3 235B H=4096, 计算密度差 3x。685 是 H=4096 下的天花板。
