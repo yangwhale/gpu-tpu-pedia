@@ -326,9 +326,49 @@ moe_layer_freq 由 recipe 自动按 num_layers 截取（前 3 层 Dense + 后续
 
 ### 实测结果
 
-| 轮次 | 层数 | PP | EP | Graph | TFLOPs | 状态 |
-|---|---|---|---|---|---|---|
-| DSv3-16L | 16 | 2 | 32 | full_iteration + paged stash | | 测试中 |
+### 调试过程（5 轮迭代）
+
+DSv3 recipe 的 PP layout、VPP、MTP 三个参数互相耦合，改层数必须同步改 layout：
+
+| 轮次 | 错误 | 原因 |
+|---|---|---|
+| v1 | VPP=4 assert | recipe 默认 VPP=4，PP=2+16L 检测出 VPP=8 |
+| v2 | 61L layout assert | `--num_layers 16` 但 layout hardcoded 61 decoder |
+| v3 | VPP=4 assert | layout 被设了但 VPP 没覆盖 |
+| v4 | MTP assert | layout 缺 `m`（MTP 层），DSv3 recipe 包含 MTP |
+| **v5** | **成功** | PP=2 VPP=2 layout=`Etttt\|tttt\|tttt\|ttttmL`（16 decoder + 1 MTP） |
+
+**关键教训**: DSv3 layout 格式是 `E`=embedding, `t`=transformer, `m`=MTP, `L`=loss, `|`=virtual stage 边界。改层数必须三件套同改：`--num_layers` + `-vp` + `--pipeline_model_parallel_layout`。
+
+### 实测结果
+
+| 模型 | 层数 | PP | VPP | EP | H | Graph | Paged Stash | TFLOPs | Step Time |
+|---|---|---|---|---|---|---|---|---|---|
+| **DSv3-16L** | **16** | **2** | **2** | **32** | **7168** | **full_iteration** | **True** | **1114** | **2.35s** |
+
+稳态 **1110-1120 TFLOPs/GPU**，峰值 **1120.1**。每 5 步有一次 ~713 的抖动（可能是 VPP virtual stage 切换通信 spike）。20 步全跑完正常退出。
+
+启动命令：
+```bash
+run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
+  -g gb200 -c fp8_mx -ng 64 --data mock --max_steps 20 \
+  --num_layers 16 \
+  --pipeline_model_parallel_size 2 \
+  --expert_model_parallel_size 32 \
+  --global_batch_size 512 --micro_batch_size 1 \
+  -vp 2 \
+  --pipeline_model_parallel_layout "Etttt|tttt|tttt|ttttmL"
+```
+
+### 与奚老师 raw Megatron-LM 对比
+
+| 环境 | 层数 | GPU | 入口 | Graph | TFLOPs |
+|---|---|---|---|---|---|
+| 奚老师 forrest | 32 | 128 | pretrain_gpt.py | TE scoped (v3.1) | 981 |
+| 奚老师 forrest | 32 | 128 | pretrain_gpt.py | TE scoped + MoE (v1) | 975 |
+| **我们 GKE** | **16** | **64** | **run_script.py** | **full_iteration** | **1114** |
+
+> NeMo Bridge 的 full_iteration graph + paged stash 在 DSv3 上也验证生效。16 层 64 GPU 超过了 32 层 128 GPU 的 raw Megatron-LM 结果。
 
 ## 参考文献
 
