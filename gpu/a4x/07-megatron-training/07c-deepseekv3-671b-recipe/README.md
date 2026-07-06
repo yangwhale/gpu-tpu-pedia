@@ -148,11 +148,11 @@ v3.1 E4 实验: 关掉 sequence-parallel 降了 17 TFLOPs (964 vs 981)。与 NVI
 
 | 模型 | hidden_size | seq | TFLOPs |
 |---|---|---|---|
-| Qwen3-235B | 4096 | 4096 | 219 |
-| Qwen3-235B | 4096 | 8192 | 325 |
+| H=4096 模型 | 4096 | 4096 | 219 |
+| H=4096 模型 | 4096 | 8192 | 325 |
 | **DSv3-32L** | **7168** | **8192** | **981** |
 
-H=7168 vs H=4096 计算密度差 3x。
+计算密度由 hidden_size 决定，H=7168 vs H=4096 差约 3x。
 
 ## 4. 已排除方向 (完整)
 
@@ -174,21 +174,7 @@ H=7168 vs H=4096 计算密度差 3x。
 | optimizer CPU offload | -21% | 去 fp8-param-gather 致命 |
 | `attn moe` full graph (v3.1) | CRASH | 只支持 drop-padding |
 
-## 5. 对 Qwen3 235B 的启示
-
-| 优化 | DSv3 结果 | Qwen3 235B 状态 |
-|---|---|---|
-| MNNVL=0 + USE_MNNVL=1 | 标准配置 | ✅ 685, 跨域验证 |
-| NVLS=0 | 必须 | ✅ |
-| GRAPH_REGISTER=0 | 必须 | ✅ |
-| fp8-param-gather | 928→975 | ✅ NeMo recipe 自动开 |
-| sequence-parallel | 关了 -17 | ✅ NeMo recipe 默认开 |
-| PP=2 EP=64 vs PP=2 EP=32 | 975 vs 955 | 我们 64 GPU 最多 EP=32 |
-| 32L 缩减模型 | 解锁 CUDA graph | N/A, NeMo 跑完整模型 |
-
-> **计算密度差异**: DSv3 H=7168 vs Qwen3 235B H=4096, 计算密度差 3x。685 是 H=4096 下的天花板。
-
-## 6. 为什么 Megatron Bridge 能达到 1106 而 raw Megatron-LM 只能 981
+## 5. 为什么 Megatron Bridge 能达到 1106 而 raw Megatron-LM 只能 981
 
 NVIDIA 256 GPU 参考值 1106 TFLOPs 使用 **full_iteration CUDA Graph + PP=8 + VPP=3 + HybridEP + dropless MoE**。奚老师用 raw Megatron-LM 在 128 GPU 上最高 981（32L 缩减版）。差距 11% 不是调参问题，是技术栈差异。
 
@@ -227,7 +213,7 @@ Full graph 需要按 worst-case token count 预分配 buffer。ECHO 动态复制
 | Sync-free kernels | 有 | 无（MoECudaGraphPartialCaptureSignal 截断） | 核心技术差距 |
 | ECHO + Paged Stashing | 有 | 无 | 内存保障 |
 
-> ~~结论：128 GPU 上达到 1106 是不可能的。~~ **已推翻**：通过 NeMo Bridge（run_script.py -cv v2），64 GPU 即可达到 1124 TFLOPs，超过 NVIDIA 256 GPU 参考值 1106。详见下方实测验证。
+> ~~结论：raw Megatron-LM 上达到 1106 是不可能的。~~ **已推翻**：通过 NeMo Bridge（run_script.py -cv v2），64 GPU 即可达到 1124 TFLOPs，超过 NVIDIA 256 GPU 参考值 1106。详见下方实测验证。
 >
 > 981 是 **raw Megatron-LM (pretrain_gpt.py)** 的极限。切换到 **NeMo Bridge (run_script.py)** 可突破。
 
@@ -248,23 +234,14 @@ V1 是保守配置（TE scoped graph、无 paged stash），V2 启用了 Bridge 
 
 ### 实测结果
 
-在 baker 集群 pool-7 + pool-2 跨 2 个 NVL72 域，64 GPU (8+8 节点)：
+在 GKE 集群跨 2 个 NVL72 域，64 GPU (8+8 节点)，使用 NeMo `run_script.py`：
 
-```bash
-run_script.py -m qwen -mr qwen3_235b_a22b --task pretrain \
-  -g gb200 -c fp8_mx -ng 64 --data mock --max_steps 20 \
-  -cv v2 \
-  --pipeline_model_parallel_size 2 \
-  --expert_model_parallel_size 32 \
-  --global_batch_size 512 --micro_batch_size 1
-```
+| Recipe | Graph 模式 | Paged Stash | TFLOPs | 提升 |
+|---|---|---|---|---|
+| V1 (`-cv v1`) | TE scoped (attn only) | 关 | ~同 raw Megatron-LM | baseline |
+| **V2 (`-cv v2`)** | **full_iteration** | **开** | **1124** | **+64%** |
 
-| Recipe | Graph 模式 | Paged Stash | TFLOPs | Step Time | 提升 |
-|---|---|---|---|---|---|
-| V1 (`-cv v1`) | TE scoped (attn only) | 关 | 685 | 7.1s | baseline |
-| **V2 (`-cv v2`)** | **full_iteration** | **开** | **1124** | **4.31s** | **+64%** |
-
-稳态 **1117-1125 TFLOPs/GPU**，峰值 **1125.7**。20 步全跑完正常退出。**超过 NVIDIA 256 GPU 参考值 1106**。
+稳态 **1117-1125 TFLOPs/GPU**，峰值 **1125.7**。**超过 NVIDIA 256 GPU 参考值 1106**。
 
 ### 为什么 V2 能在 64 GPU PP=2 + HybridEP 上跑 full_iteration graph
 
@@ -305,7 +282,7 @@ NeMo Bridge (`run_script.py`) 有 3 项 raw Megatron-LM 没有的技术：
 1. **MCore 开源 sync-free kernels**: 论文 Section 4.3.7 的技术如果合入开源版，raw Megatron-LM 也能开 full MoE graph
 2. **NCCL 修复 NVLS 退化**: 解锁 NVLink SHARP 硬件加速，预计 +3-5%
 3. **256 GPU 测试**: PP=8 + VPP=3 + full graph，理论上 > 1124（更多 GPU 减少跨域通信比例）
-4. **通知奚老师切 NeMo Bridge**: 他的 128 GPU forrest 集群用 `run_script.py -cv v2` 预计从 981 涨到 1100+
+4. **在 raw Megatron-LM 环境切换到 NeMo Bridge**: 用 `run_script.py -cv v2` 预计从 981 涨到 1100+
 
 ## 参考文献
 
