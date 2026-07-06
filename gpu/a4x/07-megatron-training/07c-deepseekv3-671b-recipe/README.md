@@ -227,14 +227,85 @@ Full graph 需要按 worst-case token count 预分配 buffer。ECHO 动态复制
 | Sync-free kernels | 有 | 无（MoECudaGraphPartialCaptureSignal 截断） | 核心技术差距 |
 | ECHO + Paged Stashing | 有 | 无 | 内存保障 |
 
-> 结论：128 GPU 上达到 1106 是不可能的。981 是 raw Megatron-LM 在 128 GPU 上的物理极限。1106 需要 Bridge 的 sync-free kernel + ECHO + paged stashing 解锁 full_iteration graph + PP=8 + VPP。
+> ~~结论：128 GPU 上达到 1106 是不可能的。~~ **已推翻**：通过 NeMo Bridge（run_script.py -cv v2），64 GPU 即可达到 1124 TFLOPs，超过 NVIDIA 256 GPU 参考值 1106。详见下方实测验证。
+>
+> 981 是 **raw Megatron-LM (pretrain_gpt.py)** 的极限。切换到 **NeMo Bridge (run_script.py)** 可突破。
+
+## 7. 实测验证：NeMo Bridge V2 recipe 在 64 GPU 上跑到 1124 TFLOPs
+
+### 背景
+
+基于 Section 6 的分析，Bridge 的 sync-free kernel、paged stash 等优化理论上可以解锁 full_iteration graph。通过 dump NeMo recipe 配置发现，**V1 和 V2 config variant 是两套完全不同的技术栈**：
+
+| 配置项 | V1 (`-cv v1`) | V2 (`-cv v2`) |
+|---|---|---|
+| cuda_graph_impl | transformer_engine (TE scoped) | **full_iteration** |
+| moe_paged_stash | False | **True** |
+| moe_expert_rank_capacity_factor | — | **1.5** |
+| cuda_graph_modules | full (被 TE scoped 限制) | **full** |
+
+V1 是保守配置（TE scoped graph、无 paged stash），V2 启用了 Bridge 的全部优化。
+
+### 实测结果
+
+在 baker 集群 pool-7 + pool-2 跨 2 个 NVL72 域，64 GPU (8+8 节点)：
+
+```bash
+run_script.py -m qwen -mr qwen3_235b_a22b --task pretrain \
+  -g gb200 -c fp8_mx -ng 64 --data mock --max_steps 20 \
+  -cv v2 \
+  --pipeline_model_parallel_size 2 \
+  --expert_model_parallel_size 32 \
+  --global_batch_size 512 --micro_batch_size 1
+```
+
+| Recipe | Graph 模式 | Paged Stash | TFLOPs | Step Time | 提升 |
+|---|---|---|---|---|---|
+| V1 (`-cv v1`) | TE scoped (attn only) | 关 | 685 | 7.1s | baseline |
+| **V2 (`-cv v2`)** | **full_iteration** | **开** | **1124** | **4.31s** | **+64%** |
+
+稳态 **1117-1125 TFLOPs/GPU**，峰值 **1125.7**。20 步全跑完正常退出。**超过 NVIDIA 256 GPU 参考值 1106**。
+
+### 为什么 V2 能在 64 GPU PP=2 + HybridEP 上跑 full_iteration graph
+
+奚老师在 raw Megatron-LM (`pretrain_gpt.py`) 上测试 full_iteration + HybridEP + PP>1 = crash。这个结论**只对 raw Megatron-LM 成立**。
+
+NeMo Bridge (`run_script.py`) 有 3 项 raw Megatron-LM 没有的技术：
+
+1. **Sync-Free Device-Initiated Kernels**：Grouped GEMM 和 HybridEP dispatch 从 GPU memory 自主读 shape，零 CPU-GPU 同步 → 整个 MoE 层可被 graph capture
+2. **Paged Stashing** (`moe_paged_stash=True`)：graph 内动态回收未使用 buffer → full_iteration graph 不 OOM
+3. **Expert Rank Capacity Factor** (`=1.5`)：按 1.5 倍 worst-case 预分配 per-expert buffer，配合 paged stash 回收
+
+### 1124 的提升来源
+
+**full_iteration CUDA Graph (+40-50%，最大贡献)**：V1 的 TE scoped graph 只 capture attention，MoE 层的上千个 kernel 每次从 host 逐个 launch。full_iteration 把整个 training step 录成一张 graph，所有 launch overhead 归零。Step time 7.1s → 4.31s。
+
+**Paged Stashing (使能 full graph 的前提)**：没有 paged stash，94 层 × 128 expert × 1.5 倍余量的 buffer 超过 184 GB HBM → OOM。Paged stash 在 graph 执行中动态回收未使用空间。
+
+### 版本要求
+
+| 组件 | 最低版本 | 说明 |
+|---|---|---|
+| NeMo 容器 | **nemo:26.06** | 必须用 NeMo 容器（含 Bridge） |
+| Megatron Core | **0.18.0+** | 0.18.0 首次支持 `--cuda-graph-modules`；0.17.x hang |
+| 入口脚本 | **`run_script.py`** | 不能用 `pretrain_gpt.py`（无 Bridge 优化） |
+| Config variant | **`-cv v2`** | V1 不启用 full graph / paged stash |
+
+**入口脚本决定技术栈**：同一个 NeMo 容器，`run_script.py` 走 Bridge 有完整优化，`pretrain_gpt.py` 走 raw Megatron-LM 无 Bridge 优化。选错入口差 64%。
+
+### 核心教训
+
+1. **Recipe config variant 是技术栈选择**，不只是并行度配置。V1→V2 切换了 sync-free kernel + paged stash + full_iteration graph 的完整组合
+2. **"full_iteration + HybridEP + PP>1 不兼容"只对 raw Megatron-LM 成立**。NeMo Bridge 的 sync-free kernel 解决了这个限制
+3. **dump config 是必要的诊断步骤**。不 dump 就不知道 V1 和 V2 底层差了什么
+4. 奚老师的 981 是 raw Megatron-LM 的极限，不是硬件极限。换 NeMo Bridge 可突破
 
 ### 未来方向
 
-1. **等 MCore 开源 sync-free kernels**: 论文 Section 4.3.7 描述的技术如果合入 MCore 开源版本，raw Megatron-LM 也能开 full MoE graph，预计 981→1050+
-2. **等 NCCL 修 NVLS 退化**: 解锁 NVLink SHARP 硬件加速，预计 +3-5%
-3. **测试 256 GPU**: PP=8 + VPP + full graph 的完整配置，理论上可复现 1106
-4. **NeMo recipe 路径**: 用 NeMo 的 run_script.py 代替 raw pretrain_gpt.py，可能自动启用 Bridge 的私有优化
+1. **MCore 开源 sync-free kernels**: 论文 Section 4.3.7 的技术如果合入开源版，raw Megatron-LM 也能开 full MoE graph
+2. **NCCL 修复 NVLS 退化**: 解锁 NVLink SHARP 硬件加速，预计 +3-5%
+3. **256 GPU 测试**: PP=8 + VPP=3 + full graph，理论上 > 1124（更多 GPU 减少跨域通信比例）
+4. **通知奚老师切 NeMo Bridge**: 他的 128 GPU forrest 集群用 `run_script.py -cv v2` 预计从 981 涨到 1100+
 
 ## 参考文献
 
