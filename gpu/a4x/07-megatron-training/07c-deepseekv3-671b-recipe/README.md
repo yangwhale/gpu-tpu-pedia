@@ -284,6 +284,52 @@ NeMo Bridge (`run_script.py`) 有 3 项 raw Megatron-LM 没有的技术：
 3. **256 GPU 测试**: PP=8 + VPP=3 + full graph，理论上 > 1124（更多 GPU 减少跨域通信比例）
 4. **在 raw Megatron-LM 环境切换到 NeMo Bridge**: 用 `run_script.py -cv v2` 预计从 981 涨到 1100+
 
+## 7. DSv3 16L NeMo Bridge 测试 (64 GPU, 2026-07-06)
+
+### 目标
+
+在 64 GPU (2×8 节点跨域) 上用 NeMo Bridge `run_script.py -m deepseek -mr deepseek_v3` 跑 DSv3 16 层缩减版，验证 full_iteration graph + paged stash 的效果。
+
+### 为什么 16 层
+
+奚老师用 32 层 128 GPU (PP=2 EP=64)。我们 64 GPU 只有一半卡，PP=2 EP=32。每卡 expert 数 = 256/32 = 8 个，跟奚老师的 256/64 = 4 个多一倍。16 层进一步释放 HBM 给 graph pool，确保不 OOM。
+
+### DSv3 NeMo recipe 配置 (dump 确认)
+
+DSv3 GB200 recipe V1/V2 配置完全一致，都是最强配置：
+
+| 配置项 | 值 |
+|---|---|
+| cuda_graph_impl | **full_iteration** |
+| moe_paged_stash | **True** |
+| moe_expert_rank_capacity_factor | **1.5** |
+| virtual_pipeline_model_parallel_size | 4 (默认，我们覆盖) |
+| hidden_size | **7168** |
+| num_experts | 256, top-8 |
+| moe_layer_freq (61L) | [0]*3+[1]*58 |
+
+> DSv3 recipe V1 和 V2 完全一致——NVIDIA 一步到位给了最强配置，不像 Qwen3 的 V1/V2 差别巨大。
+
+### 16 层配置
+
+```bash
+run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
+  -g gb200 -c fp8_mx -ng 64 --data mock --max_steps 20 \
+  -wde bench -wdj dsv3_16l \
+  --num_layers 16 \
+  --pipeline_model_parallel_size 2 \
+  --expert_model_parallel_size 32 \
+  --global_batch_size 512 --micro_batch_size 1
+```
+
+moe_layer_freq 由 recipe 自动按 num_layers 截取（前 3 层 Dense + 后续 MoE）。
+
+### 实测结果
+
+| 轮次 | 层数 | PP | EP | Graph | TFLOPs | 状态 |
+|---|---|---|---|---|---|---|
+| DSv3-16L | 16 | 2 | 32 | full_iteration + paged stash | | 测试中 |
+
 ## 参考文献
 
 <a id="ref1">[1]</a> *Scalable Training of Mixture-of-Experts Models with Megatron Core*, arXiv:2603.07685v2, NVIDIA, 2026. [[arxiv]](https://arxiv.org/abs/2603.07685)
