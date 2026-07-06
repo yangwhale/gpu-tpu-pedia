@@ -187,3 +187,55 @@ H=7168 vs H=4096 计算密度差 3x。
 | 32L 缩减模型 | 解锁 CUDA graph | N/A, NeMo 跑完整模型 |
 
 > **计算密度差异**: DSv3 H=7168 vs Qwen3 235B H=4096, 计算密度差 3x。685 是 H=4096 下的天花板。
+
+## 6. 为什么 Megatron Bridge 能达到 1106 而 raw Megatron-LM 只能 981
+
+NVIDIA 256 GPU 参考值 1106 TFLOPs 使用 **full_iteration CUDA Graph + PP=8 + VPP=3 + HybridEP + dropless MoE**。奚老师用 raw Megatron-LM 在 128 GPU 上最高 981（32L 缩减版）。差距 11% 不是调参问题，是技术栈差异。
+
+### Megatron Bridge 的 4 项专有技术
+
+根据 Megatron-Core MoE 论文 [[1]](#ref1)：
+
+**1. Sync-Free Device-Initiated Kernels**
+
+Dropless MoE 每次 routing 产生动态 token count，传统做法需要 GPU→CPU 拷贝 count 再由 CPU 决定 kernel launch config，这个 device-to-host sync 让 CUDA Graph 无法 capture。Bridge 重写了 Grouped GEMM 和 HybridEP dispatch 为 device-initiated——kernel 自己从 GPU memory 读 shape 信息决定怎么跑，无需 CPU 参与。整个 MoE 层零 CPU-GPU 同步，可被 full_iteration graph 完整 capture。
+
+**2. ECHO (Expert Cloning for Higher Occupancy)**
+
+Full graph 需要按 worst-case token count 预分配 buffer。ECHO 动态复制热门 expert 到空闲 GPU，减少 token 分配不均衡，让 worst-case 预分配接近 average 实际使用量，省内存。
+
+**3. Paged Stashing**
+
+在 CUDA Graph 内部做细粒度内存管理。预分配 buffer 中没用到的部分被回收给其他操作复用，相当于 graph 内的动态内存池。
+
+**4. Flexible PP Layout**
+
+支持不均匀 pipeline stage 切分。61 层 PP=8 VP=3 不需整除，Bridge 按如 8+8+8+7+8+8+7+7 分配。raw Megatron-LM 要求整除。
+
+### PP + CUDA Graph 的内存机制
+
+有 PP 时每个 microbatch 必须独立 graph（否则 forward 覆盖 backward 的保存上下文）。总 graph 数 = L × M × 2（层数 × microbatch 数 × forward/backward）。Bridge 用 buffer reuse 按 PP 执行顺序回收已完成 microbatch 的 buffer 给下一个 microbatch 复用，控制内存峰值。
+
+### 981 vs 1106 的差距归因
+
+| 技术 | Bridge (1106) | raw Megatron-LM (981) | 影响 |
+|------|-------------|---------------------|------|
+| CUDA Graph | full_iteration (整个 step) | TE scoped (只 attn) | 主要差距 |
+| VPP | VP=3 减少 bubble | 不可用（层数不整除 + OOM） | 次要 |
+| CuTeDSL | 融合 MoE grouped MLP | 环境变量设了但可能未完整调用 | 待确认 |
+| overlap-moe + delay-wgrad | 开（依赖 VPP） | 不可用（无 VPP） | 次要 |
+| Sync-free kernels | 有 | 无（MoECudaGraphPartialCaptureSignal 截断） | 核心技术差距 |
+| ECHO + Paged Stashing | 有 | 无 | 内存保障 |
+
+> 结论：128 GPU 上达到 1106 是不可能的。981 是 raw Megatron-LM 在 128 GPU 上的物理极限。1106 需要 Bridge 的 sync-free kernel + ECHO + paged stashing 解锁 full_iteration graph + PP=8 + VPP。
+
+### 未来方向
+
+1. **等 MCore 开源 sync-free kernels**: 论文 Section 4.3.7 描述的技术如果合入 MCore 开源版本，raw Megatron-LM 也能开 full MoE graph，预计 981→1050+
+2. **等 NCCL 修 NVLS 退化**: 解锁 NVLink SHARP 硬件加速，预计 +3-5%
+3. **测试 256 GPU**: PP=8 + VPP + full graph 的完整配置，理论上可复现 1106
+4. **NeMo recipe 路径**: 用 NeMo 的 run_script.py 代替 raw pretrain_gpt.py，可能自动启用 Bridge 的私有优化
+
+## 参考文献
+
+<a id="ref1">[1]</a> *Scalable Training of Mixture-of-Experts Models with Megatron Core*, arXiv:2603.07685v2, NVIDIA, 2026. [[arxiv]](https://arxiv.org/abs/2603.07685)
