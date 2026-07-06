@@ -356,7 +356,15 @@ run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
 1. PP 的两个 stage 都在同一个域内（需要 64 GPU 在单域）
 2. 或者 NCCL_MNNVL=2 让 PP p2p 走 NVLink（跨域 hang 风险）
 
-### 5.11 未来方向
+### 5.11 复现测试：pool-5 RDMA 硬件问题 (2026-07-06)
+
+尝试用 pool-7 + pool-5 复现 DSv3 16L 的 1114 结果，失败。根因：pool-5 节点的 RDMA 网卡 `mlx5_2:1` 报 `async fatal event on QP: local access violation work queue error`。这是 RDMA 硬件或驱动层面的访问违规，不是软件配置问题。
+
+之前跑通 1114 的池组合是 pool-7 + pool-2。复现需要等 pool-2 释放足够空闲节点（当前仅 5 台，需 8 台）。
+
+> **教训**：不同 node pool 的 RDMA 硬件状态不一致。换池可能导致 NCCL RDMA 通信失败。跨域测试必须使用已验证的池组合。
+
+### 5.12 未来方向
 
 1. **MCore 开源 sync-free kernels**：论文 Section 4.3.7 的技术如果合入开源版，`pretrain_gpt.py` 也能开 full MoE graph
 2. **NCCL 修复 NVLS 退化**：解锁 NVLink SHARP 硬件加速，预计 +3-5%
