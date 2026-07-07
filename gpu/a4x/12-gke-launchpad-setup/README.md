@@ -139,39 +139,93 @@ GKE 集群创建后，以下组件自动安装:
 kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/latest/download/manifests.yaml
 ```
 
-### 6.2 NVIDIA DRA GPU Driver (ComputeDomain)
+### 6.2 NCCL RDMA Installer (GIB)
 
 ```bash
-# 1. Label GPU nodes (GKE COS 没有 NFD labels)
-kubectl get nodes -l cloud.google.com/gke-accelerator=nvidia-gb200 --no-headers | \
-  awk '{print $1}' | xargs -I{} kubectl label node {} feature.node.kubernetes.io/pci-10de.present=true
-
-# 2. Install via Helm
-helm upgrade --install nvidia-dra-driver-gpu \
-  oci://registry.k8s.io/dra-driver-nvidia/charts/dra-driver-nvidia-gpu \
-  --version 0.4.0 \
-  --namespace nvidia-dra-driver-gpu --create-namespace \
-  --set nameOverride=nvidia-dra-driver-gpu \
-  --set nvidiaDriverRoot=/home/kubernetes/bin/nvidia \
-  --set controller.affinity=null \
-  --set controller.priorityClassName='' \
-  --set kubeletPlugin.priorityClassName='' \
-  --set gpuResourcesEnabledOverride=true \
-  --set 'kubeletPlugin.tolerations[0].key=nvidia.com/gpu' \
-  --set 'kubeletPlugin.tolerations[0].operator=Exists' \
-  --set 'kubeletPlugin.tolerations[0].effect=NoSchedule' \
-  --set 'kubeletPlugin.tolerations[1].key=kubernetes.io/arch' \
-  --set 'kubeletPlugin.tolerations[1].operator=Equal' \
-  --set 'kubeletPlugin.tolerations[1].value=arm64' \
-  --set 'kubeletPlugin.tolerations[1].effect=NoSchedule'
-
-# 3. Install ComputeDomain CRD
-kubectl apply -f https://raw.githubusercontent.com/kubernetes-sigs/dra-driver-nvidia-gpu/v0.4.0/deployments/helm/dra-driver-nvidia-gpu/crds/resource.nvidia.com_computedomains.yaml
+kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/master/gpudirect-rdma/nccl-rdma-installer-a4x.yaml
 ```
 
-**GKE COS 踩坑**: `nvidiaDriverRoot` 必须设为 `/home/kubernetes/bin/nvidia`（不是 `/`）。GKE COS 的 GPU driver 由 device-plugin 安装到这个路径。
+安装后每节点 `/home/kubernetes/bin/gib/` 目录包含 GIB NCCL plugin (`libnccl-net.so`)。
 
-### 6.3 Network Objects (RDMA)
+### 6.3 NVIDIA DRA GPU Driver (ComputeDomain)
+
+> **关键**: 必须用 NVIDIA NGC Helm repo 的 **v25.12.0+**，不要用开源 registry.k8s.io 的 v0.4.0。v25.3.x 的 ComputeDomain daemon 无法正确初始化 IMEX（0/1 not ready），v25.12.0 修复了此问题。
+
+```bash
+# 1. ResourceQuota (DRA daemon 用 system-critical priority)
+kubectl create ns nvidia-dra-driver-gpu
+kubectl apply -n nvidia-dra-driver-gpu -f - <<EOF
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: nvidia-dra-driver-gpu-quota
+spec:
+  hard:
+    pods: "37"
+  scopeSelector:
+    matchExpressions:
+    - operator: In
+      scopeName: PriorityClass
+      values:
+        - system-node-critical
+        - system-cluster-critical
+EOF
+
+# 2. Install via NGC Helm repo
+helm repo add nvidia https://helm.ngc.nvidia.com/nvidia && helm repo update
+
+cat > /tmp/dra-values.yaml <<EOF
+nvidiaDriverRoot: /home/kubernetes/bin/nvidia
+resources:
+  gpus:
+    enabled: false
+controller:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+        - matchExpressions:
+          - key: "nvidia.com/gpu"
+            operator: "DoesNotExist"
+kubeletPlugin:
+  affinity:
+    nodeAffinity:
+      requiredDuringSchedulingIgnoredDuringExecution:
+        nodeSelectorTerms:
+          - matchExpressions:
+              - key: cloud.google.com/gke-accelerator
+                operator: In
+                values:
+                  - nvidia-gb200
+              - key: kubernetes.io/arch
+                operator: In
+                values:
+                  - arm64
+  tolerations:
+    - key: nvidia.com/gpu
+      operator: Equal
+      value: present
+      effect: NoSchedule
+    - key: kubernetes.io/arch
+      operator: Equal
+      value: arm64
+      effect: NoSchedule
+EOF
+
+helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
+    --version="25.12.0" \
+    --namespace nvidia-dra-driver-gpu \
+    -f /tmp/dra-values.yaml
+```
+
+安装后验证：`kubectl get pods -n nvidia-dra-driver-gpu` 应有 1 controller + N kubelet-plugin 全部 Running。
+
+**GKE COS 要点**:
+- `nvidiaDriverRoot` 必须为 `/home/kubernetes/bin/nvidia`（COS 的 driver 路径）
+- 不需要手动打 NFD label（NGC chart 用 `cloud.google.com/gke-accelerator` node affinity）
+- 不需要手动安装 ComputeDomain CRD（NGC chart 内含）
+
+### 6.4 Network Objects (RDMA)
 
 ```yaml
 # gvnic-1 + rdma-0~3 的 Network + GKENetworkParamSet
@@ -186,24 +240,103 @@ spec:
   deviceMode: RDMA
 ```
 
-## Step 7: 验证
+## Step 7: 创建 ComputeDomain 并标记节点
+
+```bash
+# 创建 ComputeDomain
+kubectl apply -f - <<EOF
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: my-compute-domain
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: my-compute-domain-channel
+EOF
+
+# 获取 UID 并标记 GPU 节点（触发 ComputeDomain daemon 部署）
+CD_UID=$(kubectl get computedomain my-compute-domain -o jsonpath='{.metadata.uid}')
+kubectl get nodes -l cloud.google.com/gke-accelerator=nvidia-gb200 --no-headers | \
+  awk '{print $1}' | xargs -I{} kubectl label node {} "resource.nvidia.com/computeDomain=$CD_UID" --overwrite
+
+# 验证 daemon 全部 1/1 Ready
+kubectl get pods -n nvidia-dra-driver-gpu | grep computedomain
+```
+
+## Step 8: 验证
 
 ```bash
 # GPU nodes
 kubectl get nodes -l cloud.google.com/gke-accelerator=nvidia-gb200
 
-# DRA driver
-kubectl get pods -n nvidia-dra-driver-gpu  # 1 controller + N kubelet-plugin
+# DRA driver (1 controller + N kubelet-plugin)
+kubectl get pods -n nvidia-dra-driver-gpu
 
-# ComputeDomain
-kubectl api-resources | grep computedomain
+# ComputeDomain daemon (应全部 1/1 Ready)
+kubectl get pods -n nvidia-dra-driver-gpu | grep computedomain
+
+# NCCL RDMA installer (N/N Running)
+kubectl get daemonsets -n kube-system | grep nccl-rdma
 
 # DeviceClasses
-kubectl get deviceclasses  # 应有 compute-domain-*.nvidia.com + mrdma.google.com
+kubectl get deviceclasses  # compute-domain-*.nvidia.com + mrdma.google.com
 
 # LWS
 kubectl get pods -n lws-system
 ```
+
+## Step 9: 部署训练 Workload
+
+Pod 需要以下配置（参考 GKE 官方文档）:
+
+```yaml
+metadata:
+  annotations:
+    networking.gke.io/default-interface: 'eth0'
+    networking.gke.io/interfaces: |
+      [
+        {"interfaceName":"eth0","network":"default"},
+        {"interfaceName":"eth2","network":"rdma-0"},
+        {"interfaceName":"eth3","network":"rdma-1"},
+        {"interfaceName":"eth4","network":"rdma-2"},
+        {"interfaceName":"eth5","network":"rdma-3"}
+      ]
+spec:
+  resourceClaims:
+  - name: compute-domain-channel
+    resourceClaimTemplateName: my-compute-domain-channel
+  volumes:
+  - {name: nvidia, hostPath: {path: /home/kubernetes/bin/nvidia}}
+  - {name: gib, hostPath: {path: /home/kubernetes/bin/gib}}
+  containers:
+  - resources:
+      claims: [{name: compute-domain-channel}]
+      limits: {nvidia.com/gpu: "4"}
+    volumeMounts:
+    - {name: nvidia, mountPath: /usr/local/nvidia}
+    - {name: gib, mountPath: /usr/local/gib}
+    env:
+    - {name: LD_LIBRARY_PATH, value: "/usr/local/nvidia/lib64"}
+```
+
+### DSv3 16L 训练实测 (2026-07-08)
+
+单域 16 节点 64 GPU，NeMo Bridge `run_script.py -m deepseek -mr deepseek_v3 -c fp8_mx`：
+
+| iter | step time | 备注 |
+|---|---|---|
+| 6 | 3207ms | warmup |
+| 7-10 | ~2540ms | **稳态** |
+| 11 | 3159ms | VPP spike (正常) |
+| 12-15 | ~2540ms | **稳态** |
+| 16 | 3165ms | VPP spike |
+| 17-20 | ~2545ms | **稳态** |
+
+稳态 ~2.54s/step，估算 **~1030 TFLOPs/GPU**。20 步全跑完，零错误。
+
+**注意**: 单域 `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN` 必须等于 EP 度（EP=32 → 设 32，不是 64）。
 
 ## 踩坑记录
 
@@ -212,7 +345,10 @@ kubectl get pods -n lws-system
 | `ZONE_RESOURCE_POOL_EXHAUSTED` 建 VM | 新 placement policy 无法分配到已被占的 subblock | 用预留已绑定的 placement policy |
 | `ZONE_RESOURCE_POOL_EXHAUSTED` 不带 policy | 预留要求 4 local SSD，创建命令没指定 | 加 `--ephemeral-storage-local-ssd=count=4` |
 | LWS image pull 失败 | 私有集群无 Cloud NAT | 创建 Cloud Router + NAT |
-| DRA kubelet-plugin 0/0 desired | GPU 节点缺 NFD label | 手动 label `feature.node.kubernetes.io/pci-10de.present=true` |
-| DRA init "nvidia-smi not found" | `nvidiaDriverRoot=/` 在 GKE COS 上不对 | 改为 `/home/kubernetes/bin/nvidia` |
 | kubectl 连不上私有集群 | Master authorized networks 未配置 | 加 CC-TW 和 gLinux 的 IP |
 | Lustre CSI 未启用 | 集群创建时忘了加 addon | `--addons=LustreCsiDriver` 或后续 `cluster update` |
+| DRA v25.3.x CD daemon 0/1 not ready | IMEX 初始化失败 + 409 Conflict race | **升级到 v25.12.0** |
+| CUDA 801 `operation not supported` | ComputeDomain daemon 未就绪时训练启动 | 确保 CD daemon 全部 1/1 Ready 后再启动训练 |
+| `ranks 32 not divisible by ranks_per_node 64` | 单域 EP=32 但 `EP_RANKS_PER_DOMAIN=64` | 改为 `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32` |
+| DRA PreBind `nil request mappings` (v0.4.0) | 开源 DRA driver 与 GKE DRA scheduler 不兼容 | 换 NGC v25.12.0 |
+| NeMo 镜像拉不到 | 跨项目 AR 无权限 | `crane copy` 到本项目 AR |
