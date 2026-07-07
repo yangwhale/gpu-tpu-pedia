@@ -333,19 +333,69 @@ run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
 
 稳态 1110-1120，峰值 1120.1。每 5 步有一次 ~713 的抖动（VPP virtual stage 切换通信 spike）。20 步全跑完正常退出。
 
+### 5.7.1 gpu-launchpad-playground 单域复现 (2026-07-08)
+
+在 gpu-launchpad-playground 项目的 GKE 集群 `chrisya-a4x-gke-v2` 上，16 节点单域 NVL72（64 GPU），NeMo Bridge full_iteration graph 复现测试。
+
+**NCCL_MNNVL_ENABLE 对比**：
+
+| Run | NCCL_MNNVL | 稳态 TFLOPs | Step Time | 备注 |
+|---|---|---|---|---|
+| Run5 | **2** (auto) | **1176** (peak 1180) | 2.22s | 单域 NVLink 全速 |
+| Run6 | **0** (off) | **1100** (peak 1103) | 2.38s | 模拟跨域配置 |
+| baker 跨域 | 0 | 1114 | 2.35s | pool-7+pool-2 实测 |
+
+**关键发现**：
+- `NCCL_MNNVL_ENABLE=0 → 2` 提升 6.5%（1100→1176）：NCCL allreduce 走 MNNVL transport 比 non-MNNVL 快
+- Run6 (MNNVL=0, 1100) 与 baker 跨域 (1114) 非常接近，验证了 baker 结果的可靠性
+- `USE_MNNVL=1`（HybridEP）在两个 run 中都开启，不受 NCCL_MNNVL 影响
+- 单域 vs 跨域的差距主要来自 NCCL MNNVL transport，不是 RDMA 延迟
+
+**Run5 完整 iter 日志 (MNNVL=2, 最佳)**：
+
+| iter | Step Time | TFLOPs | 备注 |
+|---|---|---|---|
+| 1 | 125.37s | 20.9 | JIT warmup + graph capture |
+| 4 | 10.69s | 244.7 | graph capture |
+| 5 | 2.26s | 1156.2 | 稳态开始 |
+| 6 | 3.54s | 738.3 | VPP spike |
+| 7 | 2.24s | 1165.6 | |
+| 8 | 2.22s | **1179.6** | 峰值 |
+| 9-10 | 2.22s | 1177-1179 | |
+| 11 | 3.47s | 753.3 | VPP spike |
+| 12-15 | 2.22-2.23s | 1173-1177 | |
+| 16 | 3.45s | 758.7 | VPP spike |
+| 17-20 | 2.22-2.23s | 1172-1176 | |
+
+**缺失参数对性能的影响**（Run4 vs Run5 对比）:
+
+| 参数 | 缺失时 | 补上后 | 影响 |
+|---|---|---|---|
+| `NVTE_CUTEDSL_FUSED_GROUPED_MLP=1` | 2.54s | 2.22s | cuTEDSL fused MoE kernel |
+| `NVTE_FWD/BWD_LAYERNORM_SM_MARGIN=16` | — | — | LayerNorm SM 预留 |
+| `CUDNNFE_CLUSTER_OVERLAP_MARGIN=8` | — | — | cuDNN 融合引擎 |
+| `NUM_OF_TOKENS_PER_CHUNK_COMBINE_API=128` | — | — | HybridEP combine 分块 |
+| `NCCL_CTA_POLICY=1` | — | — | NCCL CTA 调度 |
+| LD_LIBRARY_PATH 顺序 | host nvidia 优先 | container NCCL 优先 | NCCL 版本匹配 |
+
+7 个参数整体从 ~1030 提升到 ~1176 (+14.2%)。
+
+**集群信息**: GKE `chrisya-a4x-gke-v2`, us-east1-d, forrest-a4x-1x72-policy (subblock-0002), DRA v25.12.0, NCCL RDMA installer
+
 ### 5.8 全局对比
 
-| 入口 | 模型 | 层数 | GPU | Graph | 关键优化 | TFLOPs |
-|---|---|---|---|---|---|---|
-| pretrain_gpt.py | DSv3-32L | 32 | 128 | TE scoped (v3.1) + wgrad-defer | `--wgrad-deferral-limit -1` | **992** |
-| pretrain_gpt.py | DSv3-32L | 32 | 128 | TE scoped (v3.1) | — | 981 |
-| pretrain_gpt.py | DSv3-32L | 32 | 128 | TE scoped + MoE (v1) | full MoE graph | 975 |
-| **run_script.py** | **MoE 94L** | **94** | **64** | **full_iteration** | paged stash | **1124** |
-| **run_script.py** | **DSv3-16L** | **16** | **64** | **full_iteration** | paged stash | **1114** |
-| run_script.py | DSv3-32L | 32 | **128** | full_iteration | — | **失败** (9 轮 crash/hang) |
-| NVIDIA ref | DSv3-61L | 61 | 256 | full_iteration | — | **1292** |
+| 入口 | 模型 | 层数 | GPU | 域 | MNNVL | Graph | TFLOPs |
+|---|---|---|---|---|---|---|---|
+| **run_script.py** | **DSv3-16L** | **16** | **64** | **单域** | **2** | **full_iteration** | **1176** |
+| run_script.py | DSv3-16L | 16 | 64 | 单域 | 0 | full_iteration | 1100 |
+| run_script.py | MoE 94L | 94 | 64 | 跨域 | 0 | full_iteration | 1124 |
+| run_script.py | DSv3-16L | 16 | 64 | 跨域 | 0 | full_iteration | 1114 |
+| run_script.py | DSv3-32L | 32 | 128 | 跨域 | — | full_iteration | **失败** |
+| pretrain_gpt.py | DSv3-32L | 32 | 128 | 跨域 | 0 | TE scoped + wgrad-defer | 992 |
+| pretrain_gpt.py | DSv3-32L | 32 | 128 | 跨域 | 0 | TE scoped (v3.1) | 981 |
+| NVIDIA ref | DSv3-61L | 61 | 256 | — | — | full_iteration | **1292** |
 
-> raw Megatron-LM 在 128 GPU 上最高 992，NeMo Bridge 在 64 GPU 上 1114-1124 但在 128 GPU 上无法跑通。NVIDIA 256 GPU 参考值为 1292。
+> NeMo Bridge full_iteration graph 在单域 64 GPU 最高 **1176 TFLOPs**（MNNVL=2），跨域 64 GPU 约 **1114**（MNNVL=0）。raw Megatron-LM 最高 992。NVIDIA 256 GPU 参考值 1292。
 
 ### 5.9 核心教训
 
