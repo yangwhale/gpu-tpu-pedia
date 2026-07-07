@@ -1,27 +1,28 @@
 # DeepSeek V3 — GB200 NVL72 128 GPU HybridEP 训练复现指南
 
-> **突破性进展**: NeMo Bridge `run_script.py -cv v2` 在 64 GPU 上跑到 **1124 TFLOPs**（DSv3 16L: 1114），超过 NVIDIA 256 GPU 参考值 1106。raw Megatron-LM 最高 981。
+> **最新成绩**: raw Megatron-LM (`pretrain_gpt.py`) 最高 **992 TFLOPs** (peak 1000.5)，达 NVIDIA 256 GPU 参考值 1292 的 **76%**。NeMo Bridge (`run_script.py -cv v2`) 在 64 GPU 上跑到 **1124 TFLOPs**（DSv3 16L: 1114），但在 128 GPU 上无法跑通（见 §5.10）。
 >
-> 40+ 组实验, 300 → 981 (raw Megatron-LM) → **1124** (NeMo Bridge)。
+> 40+ 组实验, 300 → 992 (raw Megatron-LM + wgrad-defer) / **1124** (NeMo Bridge 64 GPU)。
 >
-> 来源: [奚老师完整报告](https://doc.maxwell-x.dev/dsv3-hybridep-128g-optimization?t=9IBu8bMJhPhILN-CztzcKs&theme=gcloud) (持续更新)
+> 来源: [奚老师完整报告 v2](https://doc.maxwell-x.dev/dsv3-hybridep-128g-optimization-v2?t=A5st8MCjDgjk0pj8z_8bPw) (2026-07-07 更新，已去除 bot 幻觉数据)
 
 ## 版本演进
 
-v1 (MCore 0.16, 975) → v2 (MCore 0.17 dev, 985, 需 runtime patch) → v2.1 (patch baked, 956) → **v3.1 (MCore 0.18.0, 981, 推荐)**
+v1 (MCore 0.16, 975) → v2 (MCore 0.17 dev, 985, 需 runtime patch) → v2.1 (patch baked, 956) → v3.1 (MCore 0.18.0, 981) → **v3.1 + wgrad-defer (992, 推荐)**
 
 ## 核心优化路径
 
 ```
 alltoall dispatcher (300) → HybridEP (+58%, 474) → CUDA graph partial capture (+96%, 928)
 → mxfp8 + fp32 optimizer (+105%, 975) → MCore 0.18.0 + graph attn (+109%, 981)
+→ wgrad-deferral-limit -1 (+131%, 992)
 ```
 
 **关键限制**: 全量 61 层模型 CUDA graph 会 OOM (184 GB HBM 不够)，必须缩到 32 层 (~221B)。
 
 ## 1. 最佳配置速查
 
-### v3.1 — 981 TFLOPs/GPU (推荐, MCore 0.18.0)
+### v3.1 + wgrad-defer — 992 TFLOPs/GPU (推荐, MCore 0.18.0)
 
 | 参数 | 值 |
 |---|---|
@@ -31,6 +32,7 @@ alltoall dispatcher (300) → HybridEP (+58%, 474) → CUDA graph partial captur
 | CUDA Graph | `--cuda-graph-impl transformer_engine --cuda-graph-modules attn` |
 | HybridEP | hybridep-num-sms=32, RANKS_PER_DOMAIN=64, USE_MNNVL=1 |
 | Optimizer | fp32 main-grads + fp32 main-params, bf16 exp-avg/sq |
+| **wgrad** | **`--ddp-average-in-collective --wgrad-deferral-limit -1`** |
 | Recompute | selective: moe_act, mlp |
 | NCCL | **NVLS=0** GRAPH_REGISTER=0 MNNVL=0 |
 | Patch | nvidia-resiliency-ext 0.6.0 + fused_a2a.py non_blocking 删除 |
@@ -47,14 +49,13 @@ alltoall dispatcher (300) → HybridEP (+58%, 474) → CUDA graph partial captur
 
 同 v2 但 patches baked in Dockerfile，pin MCore 到 bfa3326。
 
-### 4 个致命参数
+### 3 个致命参数
 
 | 参数 | 必须值 | 错误值后果 |
 |---|---|---|
 | `--cuda-graph-impl transformer_engine` | 必须显式设 | 漏掉 → graph 静默禁用 (v3.1: 981→836) |
 | `NCCL_GRAPH_REGISTER` | 0 | 1 → AssertionError crash |
 | `NCCL_NVLS_ENABLE` | 0 | 1 → iter 20-40 后性能渐降 30-50% |
-| `--sequence-parallel` | 保留 | 关掉 → -17 TFLOPs (与 NVIDIA ref 建议相反) |
 
 ### MCore 版本选择 (关键)
 
@@ -112,7 +113,18 @@ alltoall dispatcher (300) → HybridEP (+58%, 474) → CUDA graph partial captur
 | E4 | 去掉 sequence-parallel | 964 (-17) | SP 在 TP=1 仍有益 |
 | E5 | recompute mla_up_proj | 977 (±1.5, 更稳定) | |
 
-### 2.5 Phase 2 优化尝试 (v1, 07-06)
+### 2.5 v3.1 参数优化 sweep (07-07, wgrad-defer 突破)
+
+| # | 配置变化 | TFLOPs | 备注 |
+|---|---|---|---|
+| Exp2 | + `--ddp-average-in-collective` | 950.6 | 中性/略负 |
+| Exp3 | Exp2 + `--delay-wgrad-compute` | CRASH | 需 overlap-moe-comm → 撞 graph attn |
+| **Exp4** | **Exp2 + `--wgrad-deferral-limit -1`** | **992** (peak **1000.5**) | **+4.4% ✅ 当前最佳** |
+| Exp5 | baseline + `--wgrad-deferral-limit -1` | Xid 145 | NVLink HW transient |
+
+`--wgrad-deferral-limit -1` 是唯一有效的额外优化 flag。`--delay-wgrad-compute` 在 partial-graph 下无法开（需 overlap-moe-comm 前置，撞 CUDA graph attn side stream）。
+
+### 2.6 Phase 2 优化尝试 (v1, 07-06)
 
 | # | 配置变化 | TFLOPs | 备注 |
 |---|---|---|---|
@@ -175,6 +187,10 @@ v3.1 E4 实验: 关掉 sequence-parallel 降了 17 TFLOPs (964 vs 981)。与 NVI
 | activation offload | 终止 | 延迟叠加 |
 | optimizer CPU offload | -21% | 去 fp8-param-gather 致命 |
 | `attn moe` full graph (v3.1) | CRASH | 只支持 drop-padding |
+| `--cuda-graph-impl local` | CRASH | HybridEP tensor view assert |
+| `--ddp-average-in-collective` 单独 | -3% | 中性/略负 |
+| `--delay-wgrad-compute` | CRASH | 需 overlap-moe-comm → 撞 graph attn |
+| NeMo Bridge full_iteration 128 GPU | 9 轮 CRASH/hang | PP interleaving sync 不兼容 graph capture |
 
 ## 5. 突破性进展：NeMo Bridge 解锁 full_iteration graph（981 → 1124）
 
@@ -319,15 +335,17 @@ run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
 
 ### 5.8 全局对比
 
-| 入口 | 模型 | 层数 | GPU | Graph | Paged Stash | TFLOPs |
+| 入口 | 模型 | 层数 | GPU | Graph | 关键优化 | TFLOPs |
 |---|---|---|---|---|---|---|
-| pretrain_gpt.py | DSv3-32L | 32 | 128 | TE scoped (v3.1) | 无 | 981 |
-| pretrain_gpt.py | DSv3-32L | 32 | 128 | TE scoped + MoE (v1) | 无 | 975 |
-| **run_script.py** | **MoE 94L** | **94** | **64** | **full_iteration** | **True** | **1124** |
-| **run_script.py** | **DSv3-16L** | **16** | **64** | **full_iteration** | **True** | **1114** |
-| NVIDIA ref | DSv3-61L | 61 | 256 | full_iteration | True | 1106 |
+| pretrain_gpt.py | DSv3-32L | 32 | 128 | TE scoped (v3.1) + wgrad-defer | `--wgrad-deferral-limit -1` | **992** |
+| pretrain_gpt.py | DSv3-32L | 32 | 128 | TE scoped (v3.1) | — | 981 |
+| pretrain_gpt.py | DSv3-32L | 32 | 128 | TE scoped + MoE (v1) | full MoE graph | 975 |
+| **run_script.py** | **MoE 94L** | **94** | **64** | **full_iteration** | paged stash | **1124** |
+| **run_script.py** | **DSv3-16L** | **16** | **64** | **full_iteration** | paged stash | **1114** |
+| run_script.py | DSv3-32L | 32 | **128** | full_iteration | — | **失败** (9 轮 crash/hang) |
+| NVIDIA ref | DSv3-61L | 61 | 256 | full_iteration | — | **1292** |
 
-> NeMo Bridge 的 full_iteration graph + paged stash 在 MoE 和 DSv3 上都验证生效。64 GPU 超过了 NVIDIA 256 GPU 参考值和 128 GPU raw Megatron-LM 结果。
+> raw Megatron-LM 在 128 GPU 上最高 992，NeMo Bridge 在 64 GPU 上 1114-1124 但在 128 GPU 上无法跑通。NVIDIA 256 GPU 参考值为 1292。
 
 ### 5.9 核心教训
 
@@ -337,24 +355,37 @@ run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
 4. **DSv3 改层数必须三件套同改**：`--num_layers` + `-vp` + `--pipeline_model_parallel_layout`（含 MTP 层）
 5. **入口脚本决定一切**：`run_script.py` 和 `pretrain_gpt.py` 是同一个容器里两条完全不同的技术路径
 
-### 5.10 DSv3 16L 第二轮优化：VPP/GBS 跨域限制 (2026-07-06)
+### 5.10 NeMo Bridge full_iteration graph 在 128 GPU 不可用 (v2 报告更正)
 
-基于奚老师 v4 报告（1349 TFLOPs）的差距分析，尝试缩小跨域 64 GPU 与单域 128 GPU 的差距。
+> ⚠️ **幻觉更正**: 之前引用的"奚老师 v4 报告 1349 TFLOPs"经确认是 bot 幻觉，奚老师本人并未跑出该数值。v2 报告已去除所有幻觉数据。raw Megatron-LM 的真实最高成绩是 **992 TFLOPs** (`--wgrad-deferral-limit -1`)。
 
-| 轮次 | 改动 | VPP | GBS | CONNECTIONS | TFLOPs | 结果 |
-|---|---|---|---|---|---|---|
-| baseline | VPP=2 | 2 | 512 | 1 | **1114** | ✅ |
-| R1 | VPP=8 (1层/stage) | 8 | 512 | 1 | hang | ❌ PP p2p NCCL timeout |
-| R2 | VPP=4 (2层/stage) | 4 | 512 | 1 | hang | ❌ PP p2p NCCL timeout |
-| R3 | VPP=2 + GBS=4096 + CONNECTIONS=32 | 2 | 4096 | 32 | hang | ❌ 128 microbatch 跨域 p2p 过频 |
+奚老师在 v2 报告中系统测试了 NeMo 26.06 Bridge 的 full_iteration graph 在 128 GPU (32 节点) 上的表现——**9 轮实验全部失败**:
 
-**根因**：跨域 PP p2p 走 RDMA（NCCL_MNNVL=0），延迟比域内 NVLink 高一个数量级。VPP 增加 virtual stage 数 → p2p 频率倍增 → RDMA 延迟累积超时。GBS=4096 产生 128 microbatch → 同样导致 p2p 过于频繁。
+| # | 配置 | 结果 | 根因 |
+|---|---|---|---|
+| 1 | 32L PP=2 VPP=4 | crash | `cudaErrorStreamCaptureUnjoined` |
+| 4 | 32L PP=2 VPP=1 | crash | `p2p_communication.py` 中 `torch.cuda.synchronize()` 不兼容 graph capture |
+| 5 | 32L PP=2 VPP=8 | hang | graph capture 成功但 replay 后 embedding allreduce 604s timeout |
+| 6 | 61L PP=8 VPP=2 (官方 recipe) | crash | `world_size (128) not divisible by expert_tensor_pipeline_parallel_size (512)` |
+| 7 | 61L PP=4 VPP=2 EP=32 | hang | 188 GB mem 超 HBM 184 GB |
+| 8 | 32L PP=2 VPP=1 EP=64 | crash | 同 #4 |
 
-**奚老师 1349 为什么能用 VPP=8**：128 GPU PP=2 的两个 stage 各有 64 卡，可以全落在同一个 NVL72 域内（每域 64 卡）。PP p2p 走域内 NVLink（900 GB/s、μs 延迟），支撑 VPP=8 的高频 interleaving。
+**根因**: Megatron `forward_backward_pipelining_with_interleaving` 里 p2p `torch.cuda.synchronize()` 是 2021 年 NCCL race protection（去掉则 loss nan），graph capture 期间禁止 sync → **fundamental 不兼容**。Bridge 的 `layout_map` 只有 7 个 key 全是 61 层 hardcode。
 
-**结论**：跨域 64 GPU 的 1114 就是 VPP=2 + GBS=512 的天花板。要更高需要：
-1. PP 的两个 stage 都在同一个域内（需要 64 GPU 在单域）
-2. 或者 NCCL_MNNVL=2 让 PP p2p 走 NVLink（跨域 hang 风险）
+**与我们 64 GPU 测试的对比**: 我们的 1114/1124 结果是在 NeMo Bridge `run_script.py -cv v2` 上跑的 64 GPU 跨域测试。Bridge 在 64 GPU 上能跑通但在 128 GPU 上失败，可能原因是 64 GPU 配置的 PP 通信模式不同（Bridge 可能在小规模时避开了 interleaving p2p sync）。
+
+### 5.10.1 DSv3 16L VPP/GBS 跨域限制 (2026-07-06)
+
+基于跨域 64 GPU 的优化尝试：
+
+| 轮次 | 改动 | VPP | GBS | TFLOPs | 结果 |
+|---|---|---|---|---|---|
+| baseline | VPP=2 | 2 | 512 | **1114** | ✅ |
+| R1 | VPP=8 (1层/stage) | 8 | 512 | hang | ❌ PP p2p NCCL timeout |
+| R2 | VPP=4 (2层/stage) | 4 | 512 | hang | ❌ PP p2p NCCL timeout |
+| R3 | VPP=2 + GBS=4096 | 2 | 4096 | hang | ❌ 128 microbatch 跨域 p2p 过频 |
+
+**结论**：跨域 64 GPU 的 1114 是 VPP=2 + GBS=512 的天花板。VPP>2 和 GBS>2048 在跨域 RDMA 上 hang。
 
 ### 5.11 复现测试：pool-5 RDMA 硬件问题 (2026-07-06)
 
@@ -374,11 +405,11 @@ run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
 
 ### 5.12 未来方向
 
-1. **MCore 开源 sync-free kernels**：论文 Section 4.3.7 的技术如果合入开源版，`pretrain_gpt.py` 也能开 full MoE graph
+1. **解决 Bridge 128 GPU 不兼容**：根因是 PP interleaving 的 `torch.cuda.synchronize()` 不兼容 graph capture。需 NVIDIA 修复 forward_backward_pipelining 代码
 2. **NCCL 修复 NVLS 退化**：解锁 NVLink SHARP 硬件加速，预计 +3-5%
-3. **256 GPU 测试**：PP=8 + VPP=3 + full graph，理论上 > 1124
-4. **DSv3 全量 61 层 64 GPU**：如果 paged stash 省下足够 HBM，可能不需要缩层
-5. **通知奚老师切换到 NeMo Bridge**：`run_script.py -cv v2` 预计从 981 涨到 1100+
+3. **OS tuning 标准化**：v2 报告显示无 OS tuning 导致 -54% 性能下降 (962→442)。新建 VM 必须用 prod startup 脚本
+4. **wgrad-defer + 其他优化叠加**：当前 992 是 `--ddp-average-in-collective + --wgrad-deferral-limit -1` 的组合。其他如 `--delay-wgrad-compute` 因与 graph attn 冲突未能开启
+5. **MCore 开源 sync-free kernels**：论文 Section 4.3.7 的技术如果合入开源版，`pretrain_gpt.py` 也能开 full MoE graph
 
 ## 参考文献
 
