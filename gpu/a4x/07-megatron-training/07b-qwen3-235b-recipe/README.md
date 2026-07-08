@@ -274,18 +274,57 @@ V2 recipe 默认 PP=8 VP=3，我们覆盖成 PP=2 后 VPP 被忽略（PP=2 不�
 
 跨域 685 → 单域 930 (+36%) 的提升远大于 DSv3 16L 的跨域→单域差距 (1100→1176, +6.9%)。原因：Qwen3 235B 用 PP=8（8 个 pipeline stage），跨域时 PP p2p 通信走 RDMA 延迟高，8 个 stage 的 p2p 来回次数是 DSv3 PP=2 的 4 倍，RDMA 延迟影响被放大。单域 PP p2p 全走 NVLink（μs 延迟），PP=8 的 interleaving 不再受限。
 
-**完整 iter 日志 (V1, MNNVL=0)**：
+**原始日志 — V1 PP=8 EP=8 MNNVL=0 (单域, 稳态 930)**：
 
-| iter | Step Time | TFLOPs | 备注 |
-|---|---|---|---|
-| 1 | 81.04s | 74.4 | JIT warmup |
-| 4 | 29.28s | 206.0 | graph capture |
-| 5 | 6.54s | 921.7 | 稳态开始 |
-| 6-10 | 6.49-6.52s | 925-929 | |
-| 11-15 | 6.48-6.49s | 929-931 | |
-| 16-20 | 6.47-6.49s | **930-933** | 峰值 932.6 |
+```
+Step Time : 81.04s GPU utilization: 74.4MODEL_TFLOP/s/GPU    # iter 1, JIT warmup
+Step Time : 20.22s GPU utilization: 298.3MODEL_TFLOP/s/GPU   # iter 2
+Step Time : 17.35s GPU utilization: 347.7MODEL_TFLOP/s/GPU   # iter 3
+Step Time : 29.28s GPU utilization: 206.0MODEL_TFLOP/s/GPU   # iter 4, graph capture
+Step Time : 6.54s GPU utilization: 921.7MODEL_TFLOP/s/GPU    # iter 5, 稳态开始
+Step Time : 6.52s GPU utilization: 924.6MODEL_TFLOP/s/GPU
+Step Time : 6.52s GPU utilization: 925.6MODEL_TFLOP/s/GPU
+Step Time : 6.50s GPU utilization: 927.7MODEL_TFLOP/s/GPU
+Step Time : 6.50s GPU utilization: 927.2MODEL_TFLOP/s/GPU
+Step Time : 6.49s GPU utilization: 929.2MODEL_TFLOP/s/GPU
+Step Time : 6.49s GPU utilization: 929.6MODEL_TFLOP/s/GPU
+Step Time : 6.49s GPU utilization: 929.5MODEL_TFLOP/s/GPU
+Step Time : 6.49s GPU utilization: 929.4MODEL_TFLOP/s/GPU
+Step Time : 6.48s GPU utilization: 931.3MODEL_TFLOP/s/GPU
+Step Time : 6.49s GPU utilization: 929.6MODEL_TFLOP/s/GPU
+Step Time : 6.48s GPU utilization: 930.9MODEL_TFLOP/s/GPU
+Step Time : 6.47s GPU utilization: 932.1MODEL_TFLOP/s/GPU
+Step Time : 6.47s GPU utilization: 931.6MODEL_TFLOP/s/GPU
+Step Time : 6.47s GPU utilization: 932.0MODEL_TFLOP/s/GPU
+Step Time : 6.47s GPU utilization: 932.6MODEL_TFLOP/s/GPU    # iter 20, 峰值
+```
 
-20 步全完成，零错误。无 VPP spike（Qwen3 235B recipe PP=8 没有 VPP）。
+**原始日志 — V2 PP=8 EP=8 MNNVL=0 (单域, 稳态 931)**：
+
+```
+Step Time : 78.94s GPU utilization: 76.4MODEL_TFLOP/s/GPU    # iter 1
+Step Time : 19.22s GPU utilization: 313.7MODEL_TFLOP/s/GPU
+Step Time : 15.77s GPU utilization: 382.4MODEL_TFLOP/s/GPU
+Step Time : 29.63s GPU utilization: 203.5MODEL_TFLOP/s/GPU   # iter 4, graph capture
+Step Time : 6.56s GPU utilization: 919.9MODEL_TFLOP/s/GPU    # iter 5
+Step Time : 6.52s GPU utilization: 925.5MODEL_TFLOP/s/GPU
+Step Time : 6.52s GPU utilization: 925.0MODEL_TFLOP/s/GPU
+Step Time : 6.51s GPU utilization: 926.3MODEL_TFLOP/s/GPU
+Step Time : 6.51s GPU utilization: 926.0MODEL_TFLOP/s/GPU
+Step Time : 6.50s GPU utilization: 928.3MODEL_TFLOP/s/GPU
+Step Time : 6.51s GPU utilization: 926.8MODEL_TFLOP/s/GPU
+Step Time : 6.50s GPU utilization: 927.6MODEL_TFLOP/s/GPU
+Step Time : 6.49s GPU utilization: 928.8MODEL_TFLOP/s/GPU
+Step Time : 6.49s GPU utilization: 929.2MODEL_TFLOP/s/GPU
+Step Time : 6.48s GPU utilization: 930.7MODEL_TFLOP/s/GPU
+Step Time : 6.48s GPU utilization: 930.9MODEL_TFLOP/s/GPU
+Step Time : 6.48s GPU utilization: 931.2MODEL_TFLOP/s/GPU
+Step Time : 6.47s GPU utilization: 931.7MODEL_TFLOP/s/GPU
+Step Time : 6.48s GPU utilization: 931.1MODEL_TFLOP/s/GPU
+Step Time : 6.47s GPU utilization: 931.8MODEL_TFLOP/s/GPU    # iter 20
+```
+
+20 步全完成，零错误。无 VPP spike（PP=8 无 VPP）。V1 vs V2 在 PP=8 下几乎无差异。
 
 **集群**: chrisya-a4x-gke-v2, GKE 1.36.0, DRA v25.12.0, NeMo 26.06.rc7, forrest-a4x-1x72-policy (subblock-0002)
 
