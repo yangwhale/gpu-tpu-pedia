@@ -351,21 +351,55 @@ run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
 - `USE_MNNVL=1`（HybridEP）在两个 run 中都开启，不受 NCCL_MNNVL 影响
 - 单域 vs 跨域的差距主要来自 NCCL MNNVL transport，不是 RDMA 延迟
 
-**Run5 完整 iter 日志 (MNNVL=2, 最佳)**：
+**原始日志 — Run5 (MNNVL=2, 稳态 1176, 峰值 1180)**：
 
-| iter | Step Time | TFLOPs | 备注 |
-|---|---|---|---|
-| 1 | 125.37s | 20.9 | JIT warmup + graph capture |
-| 4 | 10.69s | 244.7 | graph capture |
-| 5 | 2.26s | 1156.2 | 稳态开始 |
-| 6 | 3.54s | 738.3 | VPP spike |
-| 7 | 2.24s | 1165.6 | |
-| 8 | 2.22s | **1179.6** | 峰值 |
-| 9-10 | 2.22s | 1177-1179 | |
-| 11 | 3.47s | 753.3 | VPP spike |
-| 12-15 | 2.22-2.23s | 1173-1177 | |
-| 16 | 3.45s | 758.7 | VPP spike |
-| 17-20 | 2.22-2.23s | 1172-1176 | |
+```
+Step Time : 125.37s GPU utilization: 20.9MODEL_TFLOP/s/GPU    # iter 1, JIT warmup
+Step Time : 6.13s GPU utilization: 426.6MODEL_TFLOP/s/GPU
+Step Time : 4.66s GPU utilization: 561.8MODEL_TFLOP/s/GPU
+Step Time : 10.69s GPU utilization: 244.7MODEL_TFLOP/s/GPU   # iter 4, graph capture
+Step Time : 2.26s GPU utilization: 1156.2MODEL_TFLOP/s/GPU   # iter 5, 稳态开始
+Step Time : 3.54s GPU utilization: 738.3MODEL_TFLOP/s/GPU    # VPP spike
+Step Time : 2.24s GPU utilization: 1165.6MODEL_TFLOP/s/GPU
+Step Time : 2.22s GPU utilization: 1179.6MODEL_TFLOP/s/GPU   # 峰值
+Step Time : 2.22s GPU utilization: 1177.2MODEL_TFLOP/s/GPU
+Step Time : 2.22s GPU utilization: 1178.7MODEL_TFLOP/s/GPU
+Step Time : 3.47s GPU utilization: 753.3MODEL_TFLOP/s/GPU    # VPP spike
+Step Time : 2.23s GPU utilization: 1175.2MODEL_TFLOP/s/GPU
+Step Time : 2.23s GPU utilization: 1172.9MODEL_TFLOP/s/GPU
+Step Time : 2.22s GPU utilization: 1176.1MODEL_TFLOP/s/GPU
+Step Time : 2.22s GPU utilization: 1177.4MODEL_TFLOP/s/GPU
+Step Time : 3.45s GPU utilization: 758.7MODEL_TFLOP/s/GPU    # VPP spike
+Step Time : 2.22s GPU utilization: 1175.5MODEL_TFLOP/s/GPU
+Step Time : 2.23s GPU utilization: 1174.7MODEL_TFLOP/s/GPU
+Step Time : 2.23s GPU utilization: 1172.1MODEL_TFLOP/s/GPU
+Step Time : 2.23s GPU utilization: 1174.3MODEL_TFLOP/s/GPU   # iter 20
+```
+
+**原始日志 — Run6 (MNNVL=0, 稳态 1100, 峰值 1103)**：
+
+```
+Step Time : 127.31s GPU utilization: 20.5MODEL_TFLOP/s/GPU   # iter 1
+Step Time : 4.72s GPU utilization: 554.3MODEL_TFLOP/s/GPU
+Step Time : 4.03s GPU utilization: 648.3MODEL_TFLOP/s/GPU
+Step Time : 8.43s GPU utilization: 310.3MODEL_TFLOP/s/GPU    # iter 4, graph capture
+Step Time : 2.41s GPU utilization: 1085.8MODEL_TFLOP/s/GPU   # iter 5
+Step Time : 3.62s GPU utilization: 722.0MODEL_TFLOP/s/GPU    # VPP spike
+Step Time : 2.40s GPU utilization: 1091.3MODEL_TFLOP/s/GPU
+Step Time : 2.38s GPU utilization: 1101.0MODEL_TFLOP/s/GPU
+Step Time : 2.37s GPU utilization: 1102.1MODEL_TFLOP/s/GPU
+Step Time : 2.38s GPU utilization: 1100.2MODEL_TFLOP/s/GPU
+Step Time : 3.61s GPU utilization: 724.2MODEL_TFLOP/s/GPU    # VPP spike
+Step Time : 2.38s GPU utilization: 1101.0MODEL_TFLOP/s/GPU
+Step Time : 2.39s GPU utilization: 1093.0MODEL_TFLOP/s/GPU
+Step Time : 2.37s GPU utilization: 1103.3MODEL_TFLOP/s/GPU   # 峰值
+Step Time : 2.38s GPU utilization: 1098.8MODEL_TFLOP/s/GPU
+Step Time : 3.61s GPU utilization: 723.7MODEL_TFLOP/s/GPU    # VPP spike
+Step Time : 2.37s GPU utilization: 1102.2MODEL_TFLOP/s/GPU
+Step Time : 2.37s GPU utilization: 1101.7MODEL_TFLOP/s/GPU
+Step Time : 2.39s GPU utilization: 1096.0MODEL_TFLOP/s/GPU
+Step Time : 2.37s GPU utilization: 1101.6MODEL_TFLOP/s/GPU   # iter 20
+```
 
 **缺失参数对性能的影响**（Run4 vs Run5 对比）:
 
