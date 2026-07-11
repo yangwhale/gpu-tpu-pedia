@@ -403,6 +403,34 @@ apt install --only-upgrade --allow-change-held-packages -y libnccl2 libnccl-dev
 
 > **重要**：不装 `doca-ofed-userspace` 的话 CX-8 RDMA 无法正常工作。NeMo 26.06 容器已内置这些依赖，自定义镜像需要手动安装。
 
+## 实测记录 (2026-07-11)
+
+### 已验证
+
+- 项目里已有 GKE 集群 `gb300-gke-test` (GKE 1.36.0, default VPC, dataplane v2, shielded-nodes 已关)
+- 直接在现有集群上加 node pool，**不需要新建集群和 VPC**（跳过 Step 1-3）
+- workload-policy 创建成功：`gb300-gke-workload-policy` (HIGH_THROUGHPUT, 1x72)
+- node pool `gb300-pool-1` 创建成功，1 节点 RUNNING
+- 跨项目 reservation 消费成功，完整路径：
+  ```
+  projects/tencent-gcp-taiji/reservations/nvidia-gb300-dxkhoz4ypk4mh/reservationBlocks/nvidia-gb300-dxkhoz4ypk4mh-block-0001/reservationSubBlocks/nvidia-gb300-dxkhoz4ypk4mh-block-0001-subblock-0001
+  ```
+- `--accelerator-network-profile=auto` 正常工作
+
+### 踩坑
+
+1. **kubectl 认证失败**：gLinux 上 `gke-gcloud-auth-plugin` 版本 v0.1.0 太旧，跟 GKE 1.36 不兼容。报错 `the server has asked for the client to provide credentials`。解法：更新 auth plugin 或通过项目内 master 节点执行 kubectl。
+2. **复用已有集群**：如果项目里已有 GKE 集群且满足版本要求（1.34.3+ / 1.35.0+），可以跳过 Step 1-3 直接从 Step 4 开始。确认集群 `--no-enable-shielded-nodes` 和 `ADVANCED_DATAPATH` 即可。
+3. **CC-TW 无法直连**：CC-TW 的 SA `604327164091-compute@developer.gserviceaccount.com` 没有 `container.clusters.get` 权限，需要通过 gLinux 操作 GKE。
+
+### 待验证（需要 kubectl 访问）
+
+- [ ] asapd-lite DaemonSet 安装和 READY 状态
+- [ ] DRA driver helm install
+- [ ] ComputeDomain CRD
+- [ ] GPU nvidia-smi 输出（确认 B300 + 288GB）
+- [ ] RDMA rdma link show（确认 8 个 MRDMA 接口）
+
 ## GKE 搭建预期踩坑
 
 | 问题 | 可能原因 | 解法 |
