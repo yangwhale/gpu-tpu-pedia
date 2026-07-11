@@ -65,10 +65,18 @@ gcloud compute resource-policies list \
 
 ### Step 1: 管理 VPC 网络
 
-GB300 的 RDMA 网络由 `--accelerator-network-profile=auto` 自动创建，但 GKE 集群本身仍需要一个管理网络。POC 项目是新项目，需要从零创建。
+GB300 的 RDMA 网络由 `--accelerator-network-profile=auto` 自动创建（使用 `vpc-roce-metal` profile, MTU 自动 8896），但 GKE 集群本身仍需要一个管理网络。
+
+> **MTU 重要**：A4X Max 官方推荐管理 VPC MTU = **8896**。`default` VPC 的 MTU 是 1460，虽然 RDMA 不受影响（auto profile 单独创建），但管理网络流量（k8s 控制面、存储、Pod 间通信）性能不是最优。生产环境建议用自定义 VPC。
+
+**方式 A：使用 default VPC（快速测试）**
+
+如果只是快速验证，可以直接用 `default` VPC，跳到 Step 2。RDMA 网络由 auto profile 自动处理。缺点是管理 MTU=1460 不是最优。
+
+**方式 B：创建自定义 VPC（推荐生产使用）**
 
 ```bash
-# 创建管理 VPC
+# 创建管理 VPC（MTU 8896）
 gcloud compute networks create gb300-gke-mgmt \
   --subnet-mode=custom --mtu=8896 --project=$PROJECT
 
@@ -90,7 +98,9 @@ gcloud compute firewall-rules create gb300-gke-allow-ssh \
   --source-ranges=35.235.240.0/20 --project=$PROJECT
 ```
 
-> **GB200 对比**：GB200 需要 3 个 VPC（管理 + GVNIC + RDMA）+ 4 个 RDMA 子网。GB300 只需 1 个管理 VPC，RDMA 由 GKE 自动配置。
+> **RDMA VPC 不需要手动创建**。GB200 需要 3 个 VPC（管理 + GVNIC + RDMA）+ 4 个 RDMA 子网。GB300 只需 1 个管理 VPC，RDMA 由 `--accelerator-network-profile=auto` 自动创建（`vpc-roce-metal` profile + 自动子网 `default-subnet-1-*`）。
+>
+> **已有 VPC 参考**：POC 项目里已有 `gb300-central-idpf-net`（MTU 8896，手建 VM 用的管理网络）和 `gb300-central-rdma-net`（MTU 8896，RoCE profile，手建 VM 用的 RDMA 网络）。GKE 的 auto profile 会自己创建 RDMA 网络，不需要复用这些。
 
 ### Step 2: 创建 GKE 集群
 
@@ -407,8 +417,9 @@ apt install --only-upgrade --allow-change-held-packages -y libnccl2 libnccl-dev
 
 ### 已验证
 
-- 项目里已有 GKE 集群 `gb300-gke-test` (GKE 1.36.0, default VPC, dataplane v2, shielded-nodes 已关)
-- 直接在现有集群上加 node pool，**不需要新建集群和 VPC**（跳过 Step 1-3）
+- 小爱同学建了 GKE 集群 `gb300-gke-test` (GKE 1.36.0, default VPC, dataplane v2, shielded-nodes 已关，创建时间 2026-07-11 21:55 HKT)
+- 直接在该集群上加了 node pool（跳过 Step 1-3）
+- **注意**：该集群用 `default` VPC (MTU 1460)，非最优。RDMA 不受影响（auto profile 单独创建），但管理网络 MTU 偏小
 - workload-policy 创建成功：`gb300-gke-workload-policy` (HIGH_THROUGHPUT, 1x72)
 - node pool `gb300-pool-1` 创建成功，1 节点 RUNNING
 - 跨项目 reservation 消费成功，完整路径：
