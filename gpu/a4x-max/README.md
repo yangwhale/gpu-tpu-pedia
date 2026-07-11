@@ -105,6 +105,51 @@ gcloud compute instances create ${NAME} \
 
 > 来源: [A4X MAX GKE 部署](https://docs.cloud.google.com/ai-hypercomputer/docs/create/gke-ai-hypercompute-custom-a4x-max#requirements)
 
+## Bare Metal 使用指南
+
+GB300 (A4X MAX) 使用裸金属实例 (`a4x-maxgpu-4g-metal`)，没有 hypervisor 层，OS 直接运行在物理硬件上。
+
+### 什么是 Bare Metal
+
+- **无 hypervisor**: 不经过虚拟化层，Guest OS 直接访问物理 CPU、内存、GPU、NIC
+- **仍有 OS**: GCP 通过镜像安装操作系统（Ubuntu/COS），不是"拿到一块裸板"
+- **性能**: 消除虚拟化开销，GPU/RDMA 延迟更低（CX-8 PF 直通 vs CX-7 SR-IOV VF）
+
+### 连接方式
+
+与普通 VM 完全一致:
+
+```bash
+gcloud compute ssh ${INSTANCE_NAME} --zone=${ZONE}
+# 或标准 SSH
+ssh -i ~/.ssh/google_compute_engine ${EXTERNAL_IP}
+```
+
+### 与 VM 实例的关键差异
+
+| 维度 | VM 实例 (GB200) | Bare Metal (GB300) |
+|------|----------------|-------------------|
+| 管理网卡驱动 | GVNIC (Google Titanium, 虚拟化) | IDPF (Intel 物理驱动, 无 hypervisor) |
+| RDMA 子网 | 4 个独立子网 (每 MRDMA 接口一个) | 1 个共享子网 (RoCE VPC network profile 自动创建 `default-subnet-1-RDMA_PREFIX-net`，8 个 MRDMA 接口共用) |
+| Boot Disk | pd-balanced 或 hyperdisk-balanced | 仅 hyperdisk-balanced |
+| Live Migration | 支持 (maintenance-policy=MIGRATE) | 不支持 (maintenance-policy=TERMINATE only) |
+| Spot VM / Flex-start | 支持 | 不支持 |
+| Windows OS | 支持 | 不支持 (Linux only) |
+
+> **RDMA 子网简化**: GB300 使用 RoCE VPC network profile (`ZONE-vpc-roce-metal`)，自动为 RDMA 创建单一子网。相比 GB200 需要手动创建 4 个独立子网，GB300 的 8 个 MRDMA 接口共享一个子网，网络配置大幅简化。
+
+### 与 VM 相同的部分
+
+以下操作在 bare metal 和 VM 之间无差异:
+
+- `gcloud compute instances create` 创建流程
+- SSH 连接和管理
+- Docker / containerd 容器运行时
+- Kubernetes 集群部署 (kubeadm, GKE)
+- Startup script 执行
+- Metadata server 访问
+- IAM / Service Account 鉴权
+
 ## Placement Policy / Workload Policy
 
 | 场景 | API | 参数 |
