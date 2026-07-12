@@ -477,3 +477,49 @@ gcloud compute networks subnets delete gb300-gke-sub-${REGION} \
   --region=$REGION --project=$PROJECT --quiet
 gcloud compute networks delete gb300-gke-mgmt --project=$PROJECT --quiet
 ```
+
+## 实测进展 (2026-07-12 续)
+
+### 单节点测试 ✅
+
+- nvidia-smi: 4x NVIDIA GB300, 284208 MiB/GPU, Driver 580.159.04, CUDA 13.0
+- NVLink 拓扑: NV18 (18 路 NVLink), 8 NIC (mlx5_0~7), GPU-NIC 映射确认 GPUDirect
+- NCCL 单节点 all-reduce: 峰值 busbw **646.91 GB/s** (NV18 NVLink 全速)
+
+### 双节点测试 — RDMA 阻塞
+
+2 节点扩容成功 (subblock-0005 内)。发现 3 个问题：
+
+1. **SPCX 插件不支持 CX-8 PF**: PyTorch 26.06 容器内置的 Spectrum-X NCCL 插件逐一 skip 所有 8 个 mlx5 设备，报 "NCCL plugin is not supported on device"
+2. **RDMA 连接失败**: 回退到标准 IB verbs 后，`IBV_WC_RETRY_EXC_ERR (vendor_err=129)` — RoCE 链路层无法建立连接
+3. **ibv_query_port_speed 报错**: `Protocol not supported (errno 93)` — MRDMA 端口查询失败
+
+**Socket 传输可用**: `NCCL_NET=Socket` 模式下 2 节点 8 GPU all-reduce 跑通，busbw ~5.3 GB/s (TCP, 非 RDMA)
+
+**根因分析**: 没有 DRA/DRANET，`--accelerator-network-profile=auto` 创建的 RoCE VPC 网络没有被正确绑定到 pod。GKE 的 RDMA 网络需要 DRA ResourceClaimTemplate 分配 MRDMA 设备，单纯 privileged + hostPath 挂载 /dev/infiniband 不够。
+
+**GIB 缺失**: GKE COS 节点上 `/home/kubernetes/bin/gib` 不存在，GIB NCCL 插件未预装。需要通过 GIB init container 或 DaemonSet 安装。
+
+### 阻塞项
+
+- **container.admin 权限**: 安装 DRA driver helm chart 需要创建 ClusterRole/ClusterRoleBinding，requires `container.admin` IAM role
+- 没有 DRA → 没有 RDMA → 跨节点只能走 Socket (~5 GB/s vs RDMA ~400 GB/s)
+- 没有 DRA → 没有 IMEX → 没有 MNNVL
+
+### 环境状态汇总
+
+| 组件 | 状态 | 备注 |
+|------|------|------|
+| GKE 集群 | ✅ | chrisya-gb300-gke, 1.36.0 |
+| VPC (MTU 8896) | ✅ | chrisya-gb300-mgmt |
+| Cloud NAT | ✅ | |
+| Node pool (2 节点) | ✅ | subblock-0005 |
+| asapd-lite | ✅ | 2/2 READY |
+| GPU | ✅ | 4x GB300, 278 GB, CUDA 13.0 |
+| NVLink (单节点) | ✅ | NV18, 646 GB/s |
+| NCCL (单节点) | ✅ | 646 GB/s busbw |
+| RDMA (跨节点) | ❌ | 需要 DRA |
+| DRA Driver | ❌ | 需要 container.admin |
+| IMEX / MNNVL | ❌ | 需要 DRA |
+| GIB NCCL Plugin | ❌ | COS 上未预装 |
+| NCCL (跨节点 Socket) | ✅ | ~5.3 GB/s (TCP fallback) |
