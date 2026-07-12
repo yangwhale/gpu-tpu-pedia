@@ -886,3 +886,16 @@ SSH MaxStartups 需增大到 `100:30:200`。
 > **关键突破**: MNNVL=2 跨域测试完美匹配 GKE 参考值！
 > 同域流量走 NVLink (915+ GB/s)，跨域走 RDMA (7/8 NIC = 2800 Gbps)
 > NCCL 层级优化自动在两种传输间切换
+
+### 9.10 跨域 2n MNNVL=2 全 Collective
+
+| Collective | @16G busbw (GB/s) | GKE 参考 | MNNVL=0 纯RDMA |
+|-----------|-------------------|---------|---------------|
+| all_reduce | **331** | ~330 | 316 |
+| all_gather | **193** | ~189 | 220 |
+| reduce_scatter | **193** | ~189 | 219 |
+| alltoall | **43** | ~83 | 43 |
+
+> MNNVL=2 在 all_reduce 上比纯 RDMA 高 5%（331 vs 316），因为 NVLink 辅助了 hierarchical reduction
+> all_gather/reduce_scatter 与 GKE 参考值一致
+> alltoall 无 hierarchical 优化，与纯 RDMA 相同
