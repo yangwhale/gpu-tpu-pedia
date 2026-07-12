@@ -798,3 +798,44 @@ hostNetwork 模式下 MPI 16 节点启动失败（orted 路由错误），可能
 
 > *GB200 参考值来自 Maxwell Xi 内部 benchmark (GKE, 2026-06-14)
 > 8n+ 测试使用 7/8 NIC (排除 mlx5_0 因 GID index 不一致)
+
+### 9.5 IMEX Channel 手动配置 (MNNVL NVLink 前提)
+
+MNNVL 需要 IMEX daemon + channel 设备。hostNetwork pod 不能用 DRA ComputeDomain，必须手动配置。
+
+**步骤 1: 创建 nodes_config.cfg (列出同域所有节点 IP)**
+```bash
+cat > /etc/nvidia-imex/nodes_config.cfg << EOF
+10.150.0.12
+10.150.0.13
+... (每行一个节点 IP)
+EOF
+```
+
+**步骤 2: 启动 IMEX daemon**
+```bash
+nvidia-imex &
+nvidia-imex-ctl -N  # 验证所有节点 Connected
+```
+
+**步骤 3: 创建 IMEX channel0 设备**
+```bash
+MAJOR=$(grep nvidia-caps-imex-channels /proc/devices | awk '{print $1}')
+mkdir -p /dev/nvidia-caps-imex-channels
+mknod /dev/nvidia-caps-imex-channels/channel0 c $MAJOR 0
+chmod 666 /dev/nvidia-caps-imex-channels/channel0
+```
+
+**步骤 4: MPI 8 节点路由修复**
+```bash
+mpirun ... --mca routed direct --mca plm_rsh_no_tree_spawn 1 ...
+```
+SSH MaxStartups 需增大到 `100:30:200`。
+
+### 9.6 同域 4 节点 16 GPU NVLink MNNVL=2
+
+| Collective | @16G busbw (GB/s) | vs 2n MNNVL | vs GB200 |
+|-----------|-------------------|-------------|----------|
+| all_reduce | **915** | 838 (2n) | - |
+
+> 4 节点 NVLink 比 2 节点更高！NVSwitch 全互联在更多节点下有更多并行传输路径。
