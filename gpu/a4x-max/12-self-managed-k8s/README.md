@@ -851,3 +851,28 @@ SSH MaxStartups 需增大到 `100:30:200`。
 
 > 8 节点跨域 RDMA 的 alltoall 52 GB/s 比 2 节点 43 GB/s 更高，因为更多路径并行。
 > all_reduce/all_gather/reduce_scatter 因节点数增加导致通信跳数增多，带宽稍有下降。
+
+### 9.8 8 节点 32 GPU MNNVL=2 (NVLink) 限制
+
+8 节点 MNNVL=2 在 hostNetwork 模式下不稳定：
+- kubectl exec TLS 超时（长时间 NCCL 初始化）
+- Pod 容器状态异常（IMEX 操作可能导致 GPU 状态异常触发 containerd 重启）
+- 正确方案：使用 DRA ComputeDomain 管理 IMEX 生命周期 + Pod 级别资源隔离
+
+**已验证**: 4 节点 16 GPU MNNVL 915 GB/s all_reduce@16G，NVLink 5 正常工作。
+**待验证**: 8+ 节点需要完整 DRA 集成。
+
+### 总结对比表（完整）
+
+| 测试 | GPU | 传输 | 节点配置 | busbw@max (GB/s) | GB200 参考 |
+|------|-----|------|---------|-----------------|-----------|
+| 单节点 | 4 | NVLink | 1n | 682 | 684 |
+| 2n 同域 MNNVL | 8 | NVLink | d1×2 | **838** | 835 |
+| 4n 同域 MNNVL | 16 | NVLink | d1×4 | **915** | - |
+| 2n 跨域 RDMA | 8 | RDMA 8NIC | d1+d4 | **316** | ~330 |
+| 8n 同域 RDMA | 32 | RDMA 7NIC | d1×8 | 170 | - |
+| 8n 跨域 RDMA | 32 | RDMA 7NIC | d1×4+d4×4 | 173 | - |
+| 8n 跨域 all_gather | 32 | RDMA 7NIC | d1×4+d4×4 | 192 | - |
+| 8n 跨域 reduce_scatter | 32 | RDMA 7NIC | d1×4+d4×4 | 193 | - |
+| 8n 跨域 alltoall | 32 | RDMA 7NIC | d1×4+d4×4 | 52 | - |
+| 2n TCP Socket | 8 | TCP | d1+d4 | 3.67 | - |
