@@ -899,3 +899,26 @@ SSH MaxStartups 需增大到 `100:30:200`。
 > MNNVL=2 在 all_reduce 上比纯 RDMA 高 5%（331 vs 316），因为 NVLink 辅助了 hierarchical reduction
 > all_gather/reduce_scatter 与 GKE 参考值一致
 > alltoall 无 hierarchical 优化，与纯 RDMA 相同
+
+### 9.11 最终优化结果：全 8 NIC + GID 自动检测
+
+**关键修复**: 不设 `NCCL_IB_GID_INDEX` 和 `NCCL_IB_HCA`，让 GIB env plugin + NCCL 2.30.4 自动检测每个设备的正确 GID（NCCL >= 2.21 支持）。之前手动设 `NCCL_IB_GID_INDEX=7` 导致 mlx5_0（GID 在 index 9）被排除。
+
+| Collective | @16G busbw | MNNVL=0 (RDMA) | MNNVL=2 (混合) | GB200 参考 | vs GB200 |
+|-----------|-----------|----------------|---------------|-----------|---------|
+| all_reduce | | 329 | **329** | 330 | -0.3% |
+| all_gather | | **224** | **224** | 189 | **+19%** |
+| reduce_scatter | | **225** | **224** | 189 | **+19%** |
+| alltoall | | 43 | 43 | 83 | -48% |
+
+**分析**:
+- **all_gather/reduce_scatter +19%**: CX-8 8×400G (3200 Gbps) vs CX-7 4×400G (1600 Gbps) 的带宽优势在这两个 bandwidth-sensitive collective 上体现
+- **all_reduce 持平**: hierarchical algorithm 瓶颈不在 RDMA 带宽，同域 NVLink local reduce 后跨域只传 1 份数据
+- **alltoall -48%**: NCCL alltoall 实现未做多 rail 优化，GB300 的 8 NIC 没有被充分利用
+- 全 8 NIC auto-detect 比之前 7 NIC 手动设置 all_gather 提升 16% (193→224)
+
+### GID 自动检测说明
+
+NCCL >= 2.21 引入 `NCCL_IB_GID_INDEX=-1`（默认值），自动扫描每个设备的 GID 表选择正确的 RoCE v2 GID。配合 `NCCL_IB_ADDR_FAMILY=AF_INET6`（GIB env plugin 自动设），无需手动指定 GID index。
+
+参考: [NCCL Issue #890](https://github.com/NVIDIA/nccl/issues/890), [NCCL Issue #1333](https://github.com/NVIDIA/nccl/issues/1333)
