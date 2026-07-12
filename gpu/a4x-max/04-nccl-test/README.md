@@ -660,3 +660,28 @@ GB200 上跨域 NCCL 从完全不通到跑通经历了 3 轮调试（详见 [a4x
 | NCCL/gIB 概览 | https://docs.cloud.google.com/ai-hypercomputer/docs/nccl/overview |
 | GPU 网络带宽 | https://cloud.google.com/compute/docs/gpus/gpu-network-bandwidth |
 | GB200 NCCL 测试（对比） | [a4x/04-nccl-test](../../a4x/04-nccl-test/) |
+
+## GB300 实测结果 (2026-07-12)
+
+### 4.1 单节点 4 GPU NVLink (Test 1)
+
+集群: chrisya-gb300-gke, subblock-0005, 1 节点 4 GPU
+
+```
+# nccl-tests version 2.19.6
+#       size         count      type   redop     time   algbw   busbw
+     1048576        262144     float     sum     25.35   41.37   62.06
+     2097152        524288     float     sum     25.65   81.76  122.63
+     4194304       1048576     float     sum     42.88   97.82  146.73
+     8388608       2097152     float     sum     46.03  182.26  273.39
+    16777216       4194304     float     sum    100.52  166.91  250.36
+    33554432       8388608     float     sum    121.21  276.82  415.23
+    67108864      16777216     float     sum    182.47  367.78  551.67
+   134217728      33554432     float     sum    339.62  395.20  592.81
+   268435456      67108864     float     sum    657.68  408.15  612.23
+   536870912     134217728     float     sum   1269.07  423.04  634.56
+  1073741824     268435456     float     sum   2489.71  431.27  646.91
+# Avg bus bandwidth: 390.79 GB/s
+```
+
+峰值 busbw **646.91 GB/s** (NV18 NVLink, 单节点)
