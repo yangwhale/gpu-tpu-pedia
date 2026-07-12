@@ -2,6 +2,26 @@
 
 GB300 NVL72 (A4X MAX) 部署指南，基于 GB200 (A4X) 实战经验 + GCP 官方文档整理。
 
+## 目录结构 (完全对标 [a4x/](../a4x/))
+
+| # | 目录 | 说明 | 状态 |
+|---|------|------|------|
+| 01 | [environment-setup](01-environment-setup/) | VPC、VM 创建、Startup Script | 文档就绪 |
+| 02 | [k8s-cluster](02-k8s-cluster/) | 自建 K8s 集群 (kubeadm) | 文档就绪 |
+| 03 | [gpu-stack](03-gpu-stack/) | GPU Driver、DRA、NCCL/GIB、asapd-lite | 部分验证 |
+| 04 | [nccl-test](04-nccl-test/) | NCCL all-reduce 6 级测试 | 待测 |
+| 05 | [rdma-test](05-rdma-test/) | CX-8 GPUDirect RDMA 带宽/延迟 | 待测 |
+| 06 | [deepep-test](06-deepep-test/) | DeepEP MoE 通信测试 | 待测 |
+| 07 | [megatron-training](07-megatron-training/) | Qwen3 30B/235B + DSv3 训练 | 待测 |
+| 08 | [multi-domain](08-multi-domain/) | 跨 NVL72 域测试 | 待测 |
+| 09 | [rl-training](09-rl-training/) | 强化学习训练 | 待测 |
+| 10 | [production-ops](10-production-ops/) | 生产运维 | 待补充 |
+| 11 | [gke-setup](11-gke-setup/) | GKE 托管集群方案 | 集群已建 |
+
+**附录**:
+- [appendix-training-benchmark](appendix-training-benchmark/) — NeMo Bridge 官方 benchmark 对标分析
+- [appendix-moe-test-plan](appendix-moe-test-plan/) — MoE 训练测试方案设计
+
 ## GB300 vs GB200 硬件规格对比
 
 | 维度 | GB200 (A4X) | GB300 (A4X MAX) | 影响 |
