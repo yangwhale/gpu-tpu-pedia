@@ -839,3 +839,15 @@ SSH MaxStartups 需增大到 `100:30:200`。
 | all_reduce | **915** | 838 (2n) | - |
 
 > 4 节点 NVLink 比 2 节点更高！NVSwitch 全互联在更多节点下有更多并行传输路径。
+
+### 9.7 跨域 8 节点 32 GPU 全 Collective (MNNVL=0 RDMA)
+
+| Collective | @8G busbw (GB/s) | vs 2n 跨域 |
+|-----------|-----------------|------------|
+| all_reduce | **173** | 316 (2n 8NIC) |
+| all_gather | **192** | 220 (2n) |
+| reduce_scatter | **193** | 219 (2n) |
+| alltoall | **52** | 43 (2n) |
+
+> 8 节点跨域 RDMA 的 alltoall 52 GB/s 比 2 节点 43 GB/s 更高，因为更多路径并行。
+> all_reduce/all_gather/reduce_scatter 因节点数增加导致通信跳数增多，带宽稍有下降。
