@@ -546,3 +546,20 @@ nohup /usr/local/nvidia/bin/nvidia-imex -c /etc/nvidia-imex/config.cfg &
 ```
 
 **下一步**: 研究如何让 IMEX daemon 创建 `/dev/nvidia-caps-imex-channels/` 设备节点。可能需要 DRA driver 的 channel provisioning 逻辑，或者 `nvidia-imex-ctl` 的特定命令。
+
+### MNNVL 成功！(2026-07-12 09:25 HKT)
+
+通过手动创建 IMEX channels 设备节点解决了 MNNVL 阻塞：
+
+```bash
+# 关键步骤: 手动 mknod 创建 IMEX channel 设备 (major=240)
+mkdir -p /dev/nvidia-caps-imex-channels
+for i in $(seq 0 255); do
+  mknod /dev/nvidia-caps-imex-channels/channel$i c 240 $i
+done
+chmod 666 /dev/nvidia-caps-imex-channels/*
+```
+
+**结果**: 2 节点 8 GPU MNNVL all-reduce 峰值 **721.22 GB/s** (NVLink 全速)
+
+不需要 DRA、不需要 container.admin 权限。手动 IMEX + mknod 就够了。

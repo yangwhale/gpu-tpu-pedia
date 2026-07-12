@@ -685,3 +685,24 @@ GB200 上跨域 NCCL 从完全不通到跑通经历了 3 轮调试（详见 [a4x
 ```
 
 峰值 busbw **646.91 GB/s** (NV18 NVLink, 单节点)
+
+### 4.2 同域 2 节点 MNNVL (Test 2) — 2026-07-12
+
+集群: chrisya-gb300-gke, subblock-0005, 2 节点 8 GPU, MNNVL=2
+
+**手动 IMEX 配置步骤**:
+1. 两节点启动 `nvidia-imex` daemon (互写 nodes_config.cfg)
+2. `mknod` 创建 `/dev/nvidia-caps-imex-channels/channel{0..255}` (major=240)
+3. `chmod 666` 所有 channel 设备
+
+```
+Size:    1 MB | Time:     0.06 ms | BusBW:    31.99 GB/s
+Size:   16 MB | Time:     0.10 ms | BusBW:   303.50 GB/s
+Size:   64 MB | Time:     0.28 ms | BusBW:   418.84 GB/s
+Size:  256 MB | Time:     0.72 ms | BusBW:   652.38 GB/s
+Size:  512 MB | Time:     1.35 ms | BusBW:   697.37 GB/s
+Size: 1024 MB | Time:     2.61 ms | BusBW:   721.22 GB/s
+```
+
+峰值 busbw **721.22 GB/s** (NVLink MNNVL, 2 节点 8 GPU)
+vs 单节点 646.91 GB/s — MNNVL 跨节点性能 **+11.5%** (NVSwitch 全带宽)
