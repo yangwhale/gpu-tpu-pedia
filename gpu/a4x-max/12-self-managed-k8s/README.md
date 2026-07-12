@@ -922,3 +922,17 @@ SSH MaxStartups 需增大到 `100:30:200`。
 NCCL >= 2.21 引入 `NCCL_IB_GID_INDEX=-1`（默认值），自动扫描每个设备的 GID 表选择正确的 RoCE v2 GID。配合 `NCCL_IB_ADDR_FAMILY=AF_INET6`（GIB env plugin 自动设），无需手动指定 GID index。
 
 参考: [NCCL Issue #890](https://github.com/NVIDIA/nccl/issues/890), [NCCL Issue #1333](https://github.com/NVIDIA/nccl/issues/1333)
+
+### 9.12 AllToAll 优化: P2P_NET_CHUNKSIZE + NCHANNELS_PER_NET_PEER
+
+默认 `P2P_NET_CHUNKSIZE=512K` 导致 AllToAll 只有 43 GB/s。调大后显著提升：
+
+| 配置 | AllToAll @16G busbw | 提升 |
+|------|-------------------|------|
+| 默认 (512K chunk, 1 channel) | 43 GB/s | baseline |
+| **4M chunk + 4 channels** | **98 GB/s** | **+128%** |
+| 8M chunk + 8 channels | 98 GB/s | 同上 |
+
+> `NCCL_P2P_NET_CHUNKSIZE=4194304` (4MB) 减少 chunk 开销
+> `NCCL_NCHANNELS_PER_NET_PEER=4` 每对 GPU 用 4 channel 并行传输
+> GB300 优化后 98 GB/s vs GB200 83 GB/s → **+18%**
