@@ -876,3 +876,13 @@ SSH MaxStartups 需增大到 `100:30:200`。
 | 8n 跨域 reduce_scatter | 32 | RDMA 7NIC | d1×4+d4×4 | 193 | - |
 | 8n 跨域 alltoall | 32 | RDMA 7NIC | d1×4+d4×4 | 52 | - |
 | 2n TCP Socket | 8 | TCP | d1+d4 | 3.67 | - |
+
+### 9.9 跨域 2 节点 8 GPU MNNVL=2 (NVLink + RDMA 混合)
+
+| Collective | @16G busbw (GB/s) | GKE 参考 | 差异 |
+|-----------|-------------------|---------|------|
+| all_reduce | **331** | ~330 | **+0.3%** |
+
+> **关键突破**: MNNVL=2 跨域测试完美匹配 GKE 参考值！
+> 同域流量走 NVLink (915+ GB/s)，跨域走 RDMA (7/8 NIC = 2800 Gbps)
+> NCCL 层级优化自动在两种传输间切换
