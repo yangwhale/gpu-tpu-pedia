@@ -706,3 +706,23 @@ Size: 1024 MB | Time:     2.61 ms | BusBW:   721.22 GB/s
 
 峰值 busbw **721.22 GB/s** (NVLink MNNVL, 2 节点 8 GPU)
 vs 单节点 646.91 GB/s — MNNVL 跨节点性能 **+11.5%** (NVSwitch 全带宽)
+
+### 4.2 续：大数据量公平对比 (vs GB200)
+
+同样用 PyTorch NCCL all-reduce，MNNVL=2，2 节点 8 GPU:
+
+```
+Size:   512 MB | BusBW:   698.88 GB/s
+Size:  1024 MB | BusBW:   722.90 GB/s
+Size:  2048 MB | BusBW:   806.53 GB/s
+Size:  4096 MB | BusBW:   820.65 GB/s
+Size:  8192 MB | BusBW:   831.82 GB/s
+```
+
+**GB300 vs GB200 公平对比**:
+
+| 数据量 | GB300 | GB200 | 差距 |
+|--------|-------|-------|------|
+| 8 GB | **831.82 GB/s** | **839.54 GB/s** (nccl-tests @16G) | **-0.9%** |
+
+结论: **NVLink 5 同代同速**。GB300 和 GB200 的 NVLink 带宽基本一致，差距在测试误差范围内。
