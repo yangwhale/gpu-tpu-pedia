@@ -523,3 +523,26 @@ gcloud compute networks delete gb300-gke-mgmt --project=$PROJECT --quiet
 | IMEX / MNNVL | ❌ | 需要 DRA |
 | GIB NCCL Plugin | ❌ | COS 上未预装 |
 | NCCL (跨节点 Socket) | ✅ | ~5.3 GB/s (TCP fallback) |
+
+### MNNVL 进展 (2026-07-12 09:20 HKT)
+
+手动启动 IMEX daemon 成功：
+- 两节点 IMEX daemon 在跑，gRPC channel 互连 ✅
+- NCCL 检测到 **MNNVL cliqueSize 8** — NVLink 硬件上 2 节点 8 GPU 确认互联 ✅
+- 但 `/dev/nvidia-caps-imex-channels/` 未创建 — IMEX channel 设备节点缺失 ❌
+- NCCL 报错: "MNNVL is available but not working. Check IMEX channel configuration"
+
+**手动启动 IMEX 步骤 (可复现)**:
+```bash
+# 每个节点上执行
+mkdir -p /etc/nvidia-imex
+cat > /etc/nvidia-imex/nodes_config.cfg << EOF
+<node1_ip>
+<node2_ip>
+EOF
+cp /usr/local/nvidia/imex-config/config.cfg /etc/nvidia-imex/config.cfg
+sed -i 's|IMEX_NODE_CONFIG_FILE=.*|IMEX_NODE_CONFIG_FILE=/etc/nvidia-imex/nodes_config.cfg|' /etc/nvidia-imex/config.cfg
+nohup /usr/local/nvidia/bin/nvidia-imex -c /etc/nvidia-imex/config.cfg &
+```
+
+**下一步**: 研究如何让 IMEX daemon 创建 `/dev/nvidia-caps-imex-channels/` 设备节点。可能需要 DRA driver 的 channel provisioning 逻辑，或者 `nvidia-imex-ctl` 的特定命令。
