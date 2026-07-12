@@ -656,16 +656,17 @@ GIB `set_nccl_env.sh` + GCP env plugin 自动设置：
 |------|------|-----|---------------|---------------|------|
 | 单节点 @8G | NVLink | 4 | 681.97 | 683.75 | -0.3% |
 | 同域 2n MNNVL @8G | NVLink | 8 | **838.08** | **834.95** | **+0.4%** |
-| 跨域 2n RDMA all_reduce @1G | RDMA | 8 | **246.96** | ~330* | - |
-| 跨域 2n RDMA all_gather @1G | RDMA | 8 | 164.80 | ~189* | - |
-| 跨域 2n RDMA reduce_scatter @1G | RDMA | 8 | 165.66 | ~189* | - |
-| 跨域 2n RDMA alltoall @1G | RDMA | 8 | 42.63 | ~83* | - |
+| 跨域 2n RDMA all_reduce @1G | RDMA (8 NIC) | 8 | **316.20** | ~330* | **-4%** |
+| 跨域 2n RDMA all_gather @1G | RDMA (8 NIC) | 8 | **220.29** | ~189* | **+17%** |
+| 跨域 2n RDMA reduce_scatter @1G | RDMA (8 NIC) | 8 | **219.06** | ~189* | **+16%** |
+| 跨域 2n RDMA alltoall @1G | RDMA (8 NIC) | 8 | 42.59 | ~83* | -49% |
 | 跨域 2n TCP Socket @256M | TCP | 8 | 3.67 | - | - |
 
 **结论**:
 - NVLink 5 代同速，GB300 和 GB200 的 NVSwitch 带宽一致 (<1% 差异)
-- 跨域 RDMA all_reduce 247 GB/s busbw（6/8 NIC，subblock-0003 gpu1 rail 两台机器均异常）
-- 参考值 330 GB/s（GKE 全 8 NIC，内部 benchmark by Maxwell Xi 2026-06-14）
+- **跨域 RDMA all_reduce 316 GB/s busbw（全 8 NIC，subblock-0001 ↔ subblock-0004，接近 GKE 330 GB/s 参考值）**
+- all_gather/reduce_scatter 220/219 GB/s，超过 GKE 参考值 189 GB/s
+- 参考值来自 GKE 内部 benchmark (Maxwell Xi 2026-06-14)
 - 跨域 alltoall 无层级优化，仅 42 GB/s — MoE EP 组必须控制在同域内
 - TCP Socket 仅 3.67 GB/s，证明 RDMA 带来 67x 加速
 
