@@ -222,6 +222,58 @@ torchrun --nproc_per_node=4 --nnodes=32 --node_rank=$NODE_RANK \
 
 ---
 
+## Test 3: 256 GPU (64 节点, 跨域, 对标 NVIDIA 官方)
+
+全量 94 层 Qwen3 235B，256 GPU 直接对标 NVIDIA 官方 benchmark 1335 TFLOP/s/GPU。
+
+### 参数 (直接使用 NVIDIA 官方 GB300 recipe)
+
+| 参数 | 值 | 备注 |
+|------|------|------|
+| PP | 4 | NVIDIA 官方 GB300 值 |
+| VP | 12 | NVIDIA 官方 GB300 值 |
+| EP | 32 | 256/(TP×PP)=64, EP=32 |
+| TP | 1 | 不变 |
+| MBS | 2 | 288GB 允许 |
+| GBS | 8192 | NVIDIA 官方 GB300 值 |
+| 精度 | MXFP8 | 对标官方 |
+| CUDA Graph | full_iteration (V2) | 必须 |
+
+**并行度验证**: TP=1 × PP=4 = 4, 256/4 = 64 DP ranks, EP=32 → DP_effective=2 ✓
+
+**节点分配**: 64 节点 = 4 个 subblock (每个 18 节点，取 16 节点/subblock × 4 = 64)
+
+### 启动命令
+
+```bash
+torchrun --nproc_per_node=4 --nnodes=64 --node_rank=$NODE_RANK \
+  --master_addr=$MASTER_IP --master_port=29600 \
+  run_script.py -m qwen -mr qwen3_235b_a22b --task pretrain \
+  -g gb300 -c fp8_mx -ng 256 --data mock \
+  --max_steps 20 --log_dir /tmp/nemo-results \
+  -wde bench -wdj qwen3_235b \
+  -cv v2 \
+  --pipeline_model_parallel_size 4 \
+  --expert_model_parallel_size 32 \
+  --virtual_pipeline_model_parallel_size 12 \
+  --global_batch_size 8192 \
+  --micro_batch_size 2
+```
+
+### 预期与实测
+
+| 指标 | NVIDIA GB300 参考 | GB300 实测 |
+|------|-----------------|----------|
+| TFLOPs | **1335** | — |
+| Tokens/s/GPU | 9015 | — |
+
+### 原始日志
+```
+(待实测填入 20 步 per-step TFLOPs 日志)
+```
+
+---
+
 ## 全局对比表
 
 | # | 模型 | 规模 | 平台 | PP | EP | VP | MBS | 精度 | TFLOPs | 来源 |
@@ -232,6 +284,7 @@ torchrun --nproc_per_node=4 --nnodes=32 --node_rank=$NODE_RANK \
 | 4 | Qwen3 235B | 256 GPU | **GB300** | **4** | **32** | **12** | **2** | MXFP8 | **1335** | NVIDIA 参考 (+22.3%) |
 | 5 | Qwen3 235B | 64 GPU | **GB300** | **4** | **8** | **12** | **2** | MXFP8 | **—** | **待测 (Test 1)** |
 | 6 | Qwen3 235B | 128 GPU | **GB300** | **4** | **32** | **12** | **2** | MXFP8 | **—** | **待测 (Test 2)** |
+| 7 | Qwen3 235B | **256 GPU** | **GB300** | **4** | **32** | **12** | **2** | MXFP8 | **—** | **待测 (Test 3, 对标 NVIDIA)** |
 
 ## GB300 参数调优核心原理
 

@@ -295,6 +295,59 @@ torchrun --nproc_per_node=4 --nnodes=32 --node_rank=$NODE_RANK \
 
 ---
 
+## Test 3: DSv3 Full 61L — 256 GPU (64 节点, 跨域, 对标 NVIDIA 官方)
+
+全量 DSv3 671B（61 层），256 GPU 直接对标 NVIDIA 官方 benchmark 1648 TFLOP/s/GPU。
+
+### 参数 (直接使用 NVIDIA 官方 GB300 recipe)
+
+| 参数 | 值 | 备注 |
+|------|------|------|
+| 模型层数 | 61 | 全量模型 |
+| PP | 2 | NVIDIA 官方 GB300 值 (GB200 需 PP=4) |
+| VP | 8 | NVIDIA 官方 GB300 值 |
+| EP | 32 | NVIDIA 官方 GB300 值 (GB200 需 EP=64) |
+| TP | 1 | 不变 |
+| MBS | 1 | DSv3 expert buffer 是瓶颈 |
+| GBS | 4096 | 标准值 (可选 15360) |
+| 精度 | MXFP8 | 对标官方 |
+| CUDA Graph | full_iteration (V2) | 必须 |
+
+**节点分配**: 64 节点 = 4 个 subblock (避开 rollback 中的 0007/0009)
+
+> **61L PP=2 在 GB200 上 OOM**：GB200 192 GB 放不下 61L/PP=2（每 stage 30 层 × 256 expert），必须 PP=4。GB300 288 GB 可以，这是 GB300 最大的结构性优势。
+
+### 启动命令
+
+```bash
+torchrun --nproc_per_node=4 --nnodes=64 --node_rank=$NODE_RANK \
+  --master_addr=$MASTER_IP --master_port=29600 \
+  run_script.py -m deepseek -mr deepseek_v3 --task pretrain \
+  -g gb300 -c fp8_mx -ng 256 --data mock \
+  --max_steps 20 --log_dir /tmp/nemo-results \
+  -wde bench -wdj deepseek_v3 \
+  -cv v2 \
+  --pipeline_model_parallel_size 2 \
+  --expert_model_parallel_size 32 \
+  --global_batch_size 4096 \
+  --micro_batch_size 1
+```
+
+### 预期与实测
+
+| 指标 | NVIDIA GB300 参考 | GB300 实测 |
+|------|-----------------|----------|
+| TFLOPs (GBS=4096) | **1648** | — |
+| TFLOPs (GBS=15360) | **1670** | — |
+| Tokens/s/GPU | 6338-6422 | — |
+
+### 原始日志
+```
+(待实测填入 20 步 per-step TFLOPs 日志)
+```
+
+---
+
 ## 全局对比表
 
 | # | 模型 | 层数 | 规模 | 平台 | PP | EP | VP | MBS | 精度 | TFLOPs | 来源 |
@@ -306,6 +359,7 @@ torchrun --nproc_per_node=4 --nnodes=32 --node_rank=$NODE_RANK \
 | 5 | **DSv3** | **61L** | **256 GPU** | **GB300** | **2** | **32** | **8** | **1** | MXFP8 | **1648** | **NVIDIA 参考 (+27.6%)** |
 | 6 | **DSv3** | **16L** | **64 GPU** | **GB300** | **2** | **32** | **2** | **1** | MXFP8 | **—** | **待测 (Test 1)** |
 | 7 | **DSv3** | **32L** | **128 GPU** | **GB300** | **2** | **32** | **4** | **1** | MXFP8 | **—** | **待测 (Test 2)** |
+| 8 | **DSv3** | **61L** | **256 GPU** | **GB300** | **2** | **32** | **8** | **1** | MXFP8 | **—** | **待测 (Test 3, 对标 NVIDIA)** |
 
 ## GB300 DSv3 性能提升来源分析
 
