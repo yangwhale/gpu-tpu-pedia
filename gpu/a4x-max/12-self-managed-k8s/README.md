@@ -656,15 +656,16 @@ GIB `set_nccl_env.sh` + GCP env plugin 自动设置：
 |------|------|-----|---------------|---------------|------|
 | 单节点 @8G | NVLink | 4 | 681.97 | 683.75 | -0.3% |
 | 同域 2n MNNVL @8G | NVLink | 8 | **838.08** | **834.95** | **+0.4%** |
-| 跨域 2n RDMA all_reduce @1G | RDMA | 8 | **247.01** | - | - |
-| 跨域 2n RDMA all_gather @1G | RDMA | 8 | 164.29 | - | - |
-| 跨域 2n RDMA reduce_scatter @1G | RDMA | 8 | 165.72 | - | - |
-| 跨域 2n RDMA alltoall @1G | RDMA | 8 | 42.71 | - | - |
+| 跨域 2n RDMA all_reduce @1G | RDMA | 8 | **246.96** | ~330* | - |
+| 跨域 2n RDMA all_gather @1G | RDMA | 8 | 164.80 | ~189* | - |
+| 跨域 2n RDMA reduce_scatter @1G | RDMA | 8 | 165.66 | ~189* | - |
+| 跨域 2n RDMA alltoall @1G | RDMA | 8 | 42.63 | ~83* | - |
 | 跨域 2n TCP Socket @256M | TCP | 8 | 3.67 | - | - |
 
 **结论**:
 - NVLink 5 代同速，GB300 和 GB200 的 NVSwitch 带宽一致 (<1% 差异)
-- 跨域 RDMA all_reduce 247 GB/s busbw（6/8 NIC，1 个 NIC 硬件故障排除）
+- 跨域 RDMA all_reduce 247 GB/s busbw（6/8 NIC，subblock-0003 gpu1 rail 两台机器均异常）
+- 参考值 330 GB/s（GKE 全 8 NIC，内部 benchmark by Maxwell Xi 2026-06-14）
 - 跨域 alltoall 无层级优化，仅 42 GB/s — MoE EP 组必须控制在同域内
 - TCP Socket 仅 3.67 GB/s，证明 RDMA 带来 67x 加速
 
@@ -703,9 +704,40 @@ export NCCL_MNNVL_ENABLE=0      # 强制 RDMA（跨域自动路由用 =2）
 
 GIB v1.1.2 检测到 CX-8 后会尝试 Data Direct DMA 路径。NVIDIA 580 驱动 + Rocky 9 kernel 5.14 下 `mlx5dv_reg_dmabuf_mr` 返回 error 524 (ENOTSUPP)。必须设 `NCCL_IB_DATA_DIRECT=0` 退回 nvidia-peermem 路径。
 
-### d3-w1 gpu1 NIC 故障
+### Subblock-0003 gpu1 Rail 异常
 
-ibv_rc_pingpong 跨域测试 8 个 mlx5 设备中 mlx5_2/mlx5_3 (gpu1rdma0/gpu1rdma1, BDF 0002:03:00.x) 在 d3-w1 上持续 retry exceeded。同一设备在 d4-w1 正常。用 `NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_4,mlx5_5,mlx5_6,mlx5_7` 排除后正常运行。
+ibv_rc_pingpong 跨域测试中 mlx5_2/mlx5_3 (gpu1rdma0/gpu1rdma1, BDF 0002:03:00.x) 在 subblock-0003 的两台不同物理机上（d3-w1 和 d3-w3）均 retry exceeded。d4-w1 (subblock-0004) 同一设备正常。疑似 subblock-0003 的 gpu1 rail 交换机/线缆问题。
+
+用 `NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_4,mlx5_5,mlx5_6,mlx5_7` 排除后正常运行（6/8 NIC = 2400 Gbps，全 8 NIC 应为 3200 Gbps）。
+
+### GID Index 因机器而异
+
+不同机器的 ipvlan fd36 GID index 不同（d4-w1 = 7, d3-w3 = 9），因此不能硬编码 `NCCL_IB_GID_INDEX`。需要自动检测：
+
+```bash
+# 自动检测 ipvlan RoCE v2 fd36 GID index
+for i in $(seq 0 15); do
+  type=$(cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/types/$i 2>/dev/null)
+  ndev=$(cat /sys/class/infiniband/mlx5_0/ports/1/gid_attrs/ndevs/$i 2>/dev/null)
+  gid=$(cat /sys/class/infiniband/mlx5_0/ports/1/gids/$i 2>/dev/null)
+  if [ "$type" = "RoCE v2" ] && echo "$ndev" | grep -q ipvlan && echo "$gid" | grep -q fd36; then
+    export NCCL_IB_GID_INDEX=$i; break
+  fi
+done
+```
+
+### 595 驱动升级路径
+
+NVIDIA SBSA 官方 repo 有 595.71.05 for Rocky 9 ARM64：
+
+```bash
+dnf config-manager --add-repo https://developer.download.nvidia.com/compute/cuda/repos/rhel9/sbsa/cuda-rhel9.repo
+# 先卸载 CIQ nvidia-dc 包，再装 NVIDIA 官方包
+dnf remove 'nvidia-dc-*' 'kmod-nvidia-dc-*'
+dnf install nvidia-open --allowerasing
+```
+
+GCP 已测试验证 R595 for A4X Max。580→595 可能解锁 Data Direct DMA 性能。
 
 ---
 
