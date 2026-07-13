@@ -478,51 +478,66 @@ gcloud compute networks subnets delete gb300-gke-sub-${REGION} \
 gcloud compute networks delete gb300-gke-mgmt --project=$PROJECT --quiet
 ```
 
-## 实测进展 (2026-07-12 续)
+## 实测进展
 
-### 单节点测试 ✅
+### Round 1 (2026-07-12): 无 DRA — RDMA 阻塞
 
-- nvidia-smi: 4x NVIDIA GB300, 284208 MiB/GPU, Driver 580.159.04, CUDA 13.0
-- NVLink 拓扑: NV18 (18 路 NVLink), 8 NIC (mlx5_0~7), GPU-NIC 映射确认 GPUDirect
-- NCCL 单节点 all-reduce: 峰值 busbw **646.91 GB/s** (NV18 NVLink 全速)
+- 单节点 NCCL: 646 GB/s (NVLink)
+- 跨节点 RDMA: 失败 (`IBV_WC_RETRY_EXC_ERR`) — 没有 DRA，MRDMA 设备未绑定到 pod
+- 跨节点 Socket fallback: ~5.3 GB/s
+- **阻塞**: `container.admin` 权限不足，无法安装 DRA GPU Driver helm chart
 
-### 双节点测试 — RDMA 阻塞
+### Round 2 (2026-07-13): DRA 突破 — 单节点验证通过
 
-2 节点扩容成功 (subblock-0005 内)。发现 3 个问题：
+获得 `container.admin` 权限后，全栈重建：
 
-1. **SPCX 插件不支持 CX-8 PF**: PyTorch 26.06 容器内置的 Spectrum-X NCCL 插件逐一 skip 所有 8 个 mlx5 设备，报 "NCCL plugin is not supported on device"
-2. **RDMA 连接失败**: 回退到标准 IB verbs 后，`IBV_WC_RETRY_EXC_ERR (vendor_err=129)` — RoCE 链路层无法建立连接
-3. **ibv_query_port_speed 报错**: `Protocol not supported (errno 93)` — MRDMA 端口查询失败
+**集群**: `gb300-gke-test`, GKE 1.36.0, VPC `gb300-gke-mgmt` (MTU 8896), Cloud NAT
+**Node pool**: `gb300-pool`, 2 节点 subblock-0005, `--accelerator-network-profile=auto`
 
-**Socket 传输可用**: `NCCL_NET=Socket` 模式下 2 节点 8 GPU all-reduce 跑通，busbw ~5.3 GB/s (TCP, 非 RDMA)
+**DRA GPU Driver 安装**:
+```bash
+helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
+  --version 25.8.0 --namespace nvidia-dra-driver-gpu \
+  --set nvidiaDriverRoot=/home/kubernetes/bin/nvidia \  # GKE COS 驱动路径
+  --set gpuResourcesEnabledOverride=true \
+  --set controller.affinity=null \
+  --set kubeletPlugin.tolerations[0].key=nvidia.com/gpu \
+  --set kubeletPlugin.tolerations[0].operator=Exists \
+  --set kubeletPlugin.tolerations[0].effect=NoSchedule \
+  --set kubeletPlugin.tolerations[1].key=kubernetes.io/arch \
+  --set kubeletPlugin.tolerations[1].operator=Exists \
+  --set kubeletPlugin.tolerations[1].effect=NoSchedule
+```
 
-**根因分析**: 没有 DRA/DRANET，`--accelerator-network-profile=auto` 创建的 RoCE VPC 网络没有被正确绑定到 pod。GKE 的 RDMA 网络需要 DRA ResourceClaimTemplate 分配 MRDMA 设备，单纯 privileged + hostPath 挂载 /dev/infiniband 不够。
+**踩坑**:
+1. `nvidiaDriverRoot=/` 不对 → GKE COS 驱动在 `/home/kubernetes/bin/nvidia`
+2. DRA kubelet-plugin DaemonSet 默认没有 tolerations → GB300 节点有 `nvidia.com/gpu` 和 `kubernetes.io/arch` taint，需手动加
+3. GB300 节点缺 `nvidia.com/gpu.present` label → 手动 `kubectl label node`
+4. RDMA DeviceClass 名称: GKE 用 `mrdma.google.com`（不是自建 K8s 的 `rdma-devices`）
 
-**GIB 缺失**: GKE COS 节点上 `/home/kubernetes/bin/gib` 不存在，GIB NCCL 插件未预装。需要通过 GIB init container 或 DaemonSet 安装。
+**单节点 NCCL (DRA + ComputeDomain)**:
 
-### 阻塞项
-
-- **container.admin 权限**: 安装 DRA driver helm chart 需要创建 ClusterRole/ClusterRoleBinding，requires `container.admin` IAM role
-- 没有 DRA → 没有 RDMA → 跨节点只能走 Socket (~5 GB/s vs RDMA ~400 GB/s)
-- 没有 DRA → 没有 IMEX → 没有 MNNVL
+| 测试 | busbw (GB/s) |
+|------|-------------|
+| all_reduce 4GPU @8G | **681** |
 
 ### 环境状态汇总
 
 | 组件 | 状态 | 备注 |
 |------|------|------|
-| GKE 集群 | ✅ | chrisya-gb300-gke, 1.36.0 |
-| VPC (MTU 8896) | ✅ | chrisya-gb300-mgmt |
+| GKE 集群 | ✅ | gb300-gke-test, 1.36.0 |
+| VPC (MTU 8896) | ✅ | gb300-gke-mgmt |
 | Cloud NAT | ✅ | |
 | Node pool (2 节点) | ✅ | subblock-0005 |
-| asapd-lite | ✅ | 2/2 READY |
-| GPU | ✅ | 4x GB300, 278 GB, CUDA 13.0 |
-| NVLink (单节点) | ✅ | NV18, 646 GB/s |
-| NCCL (单节点) | ✅ | 646 GB/s busbw |
-| RDMA (跨节点) | ❌ | 需要 DRA |
-| DRA Driver | ❌ | 需要 container.admin |
-| IMEX / MNNVL | ❌ | 需要 DRA |
-| GIB NCCL Plugin | ❌ | COS 上未预装 |
-| NCCL (跨节点 Socket) | ✅ | ~5.3 GB/s (TCP fallback) |
+| DRA GPU Driver | ✅ | v25.8.0, controller 1/1 + kubelet-plugin 2/2 |
+| ComputeDomain CRD | ✅ | ResourceSlice 已注册 |
+| DRANET (GKE 内置) | ✅ | ResourceSlice `dra.net` 已发现 MRDMA |
+| GPU DRA | ✅ | ResourceSlice `gpu.nvidia.com` 已发现 |
+| GPU | ✅ | 4x GB300, CUDA 13.0 |
+| NVLink (单节点) | ✅ | 681 GB/s (DRA 路径) |
+| GIB NCCL Plugin | ✅ | 通过 GIB 诊断镜像容器内使用 |
+| RDMA (跨节点) | 🔄 | 待测试 (DRA claims + `mrdma.google.com`) |
+| IMEX / MNNVL | 🔄 | 待测试 (ComputeDomain 已就绪) |
 
 ### MNNVL 进展 (2026-07-12 09:20 HKT)
 
