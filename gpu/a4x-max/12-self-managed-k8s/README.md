@@ -338,7 +338,20 @@ mpirun --allow-run-as-root \
 
 ---
 
-## 5. 参考
+## 5. 遗留问题 (K8s Pod 方式)
+
+> **状态: 封存** — 以下问题在自建 K8s 环境下暂未解决，等待 GCP 官方自建 K8s 指导文档后再继续。Slurm 方式不受影响，参见 `../13-slurm-setup/`。
+
+1. **RDMA GID namespace 隔离**: 不使用 `hostNetwork` 时，DRANET 将 mlx5 设备移入 pod 网络命名空间，但 asapd-lite 在 host 上创建的 ipvlan GID (c0de 地址) 不会跟随。Pod 内的 GID 表只有 PF GID 和 link-local，导致跨节点 RDMA 连接失败 (`ibv_modify_qp: No such device`)。
+2. **hostNetwork 与 run_nccl_tests.sh 不兼容**: 使用 `hostNetwork: true` 时，pod hostname 变成 host name，StatefulSet DNS 不可用；GIB 自带的 `run_nccl_tests.sh` 用 MPI OOB 找不到 `eth0` 接口。
+3. **run_nccl_tests.sh 不透传自定义 NCCL 变量**: 脚本的 mpirun 只传 `NCCL_DEBUG` 和 `NCCL_TESTS_SPLIT_MASK`，GB300 必需的 `IB_DATA_DIRECT=0`、`IB_GID_INDEX=7`、`IB_HCA` 不会传到远程进程。可通过写 `/etc/nccl.conf` 部分绕过，但与问题 1 叠加仍无法工作。
+4. **Calico VXLAN 双子网**: `nodeAddressAutodetectionV4` CIDR 必须精确到 `/24`（不能用 `/16`），否则部分节点的 VTEP 指向第二管理子网导致 pod 网络不通。已修复。
+
+**裸机方式 (附录 A) 已验证可用**: 330 GB/s 跨域 all_reduce。
+
+---
+
+## 6. 参考
 
 - [GCP: 在 VM 上跑 NCCL (非 GKE)](https://docs.google.com/ai-hypercomputer/docs/nccl/test-vms)
 - [GCP: Slurm 集群部署 A4X Max](https://docs.google.com/cluster-toolkit/docs/deploy/slurm/create-a4x-max-cluster)
