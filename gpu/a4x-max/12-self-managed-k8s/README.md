@@ -333,3 +333,44 @@ MNNVL NVLink 需要 IMEX daemon + channel 设备。hostNetwork pod 不能用 DRA
 ---
 
 *基于 2026-07-12~13 端到端实测验证 · GCP GPU Infrastructure Team*
+
+---
+
+## 5. NVSwitch P2P 故障诊断 (2026-07-13 重建时发现)
+
+### 现象
+
+重建集群后部分节点 GPU P2P = NS (Not Supported), NVLink 全部 Sleep state:
+
+| 检查项 | P2P OK 节点 | P2P NS 节点 |
+|--------|-----------|-----------|
+| `nvidia-smi topo -m` GPU 间 | **NV18** | NODE |
+| `nvidia-smi nvlink -s` | 53.125 GB/s | **Sleep state** |
+| `nvidia-smi topo -p2p r` | OK | **NS** |
+| Fabric State | Completed/Success | Completed/Success |
+| C2C Mode | Enabled | Enabled |
+| Driver | 580.159.03 | 580.159.03 |
+| nvidia-fabricmanager | **未安装** | **未安装** |
+| 内核模块 | 完全相同 | 完全相同 |
+
+### 根因
+
+GB300 裸金属的 NVSwitch 由 **BMC 固件**初始化，不是宿主机上的 Fabric Manager。
+- P2P OK: BMC 成功编程 NVSwitch 交叉开关路由 → NVLink 训练到 53.125 GB/s
+- P2P NS: BMC **未能**初始化 NVSwitch → NVLink 停在 Sleep → 只能走 SHM(50 GB/s)
+
+GPU reset 和 VM 重启**无法修复**，因为 NVSwitch 编程在 BMC 层面。
+
+### 检查脚本 (部署后必须验证)
+
+```bash
+# 快速检查 P2P + NVLink 状态
+nvidia-smi topo -p2p r | head -6   # 期望: OK (不是 NS)
+nvidia-smi nvlink -s | head -4      # 期望: 53.125 GB/s (不是 Sleep)
+```
+
+### 处理方式
+
+1. **删除 NS 节点重建** — 可能分配到不同物理机
+2. **换 subblock** — 整个 subblock 故障时换到其他 subblock
+3. **报 GCP** — 通过 faulty NVLink domain API (preview for A4X+) 报告
