@@ -275,7 +275,7 @@ mpirun --allow-run-as-root \
 | 变量 | 值 | 为什么 |
 |------|-----|------|
 | `NCCL_IB_DATA_DIRECT` | **0** | NVIDIA 580 不支持 CX-8 Data Direct DMA |
-| `NCCL_IB_GID_INDEX` | **不设** | 让 NCCL ≥ 2.21 自动检测每设备 GID |
+| `NCCL_IB_GID_INDEX` | **7** | RoCE v2 ipvlan GID (偶数=RoCE v1, 奇数=RoCE v2, c0de 后缀) |
 | `NCCL_MNNVL_ENABLE` | **2** | 同域 NVLink + 跨域 RDMA 自动切换 |
 | `NCCL_P2P_NET_CHUNKSIZE` | **4194304** | AllToAll 优化 (默认 256K 太小) |
 | `NCCL_NCHANNELS_PER_NET_PEER` | **4** | AllToAll 多 channel 并行 (默认 1) |
@@ -298,6 +298,9 @@ mpirun --allow-run-as-root \
 | dnf 超时 | 无外网或慢 repo | 加外网 IP + 禁用 ciq/doca repo |
 | subblock 资源不足 | ZONE_RESOURCE_POOL_EXHAUSTED | 换其他 subblock |
 | Fabric Manager NV_WARN_NOTHING_TO_DO | GB300 NVSwitch 在 switch tray 上 | FM 不适用于 NVL72 计算节点 |
+| **RDMA 跨节点 RETRY_EXC_ERR** | mlx5_7 firmware internal error | `NCCL_IB_HCA=mlx5_0,...,mlx5_6` 排除坏 NIC |
+| RDMA 用 PF GID 失败 | RoCE v1 GID 不可路由 | `NCCL_IB_GID_INDEX=7` (RoCE v2 ipvlan) |
+| 同节点跨 CX-8 port RDMA 不通 | RoCE Metal 只路由跨节点流量 | 正常，MNNVL=2 同节点走 NVLink |
 
 ---
 
