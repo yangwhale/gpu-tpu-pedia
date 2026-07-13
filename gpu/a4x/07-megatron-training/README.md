@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 8. Megatron-LM 训练
 
 ## DRA 资源声明模式（核心 YAML 结构）

@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # DeepSeek V3 — GB200 NVL72 128 GPU HybridEP 训练复现指南
 
 > **最新成绩**: raw Megatron-LM (`pretrain_gpt.py`) 最高 **992 TFLOPs** (peak 1000.5)，达 NVIDIA 256 GPU 参考值 1292 的 **76%**。NeMo Bridge (`run_script.py -cv v2`) 在 64 GPU 上跑到 **1124 TFLOPs**（DSv3 16L: 1114），但在 128 GPU 上无法跑通（见 §5.10）。

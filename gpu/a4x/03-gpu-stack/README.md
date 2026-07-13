@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 3. 安装 GPU Stack + ComputeDomain + 4. 共享存储
 
 **k8s 1.34 DRA 状态**：DRA 在 k8s 1.34 中为 **GA（正式发布）**，默认启用，无需 feature gate。ResourceClaimTemplate/DeviceClass API 版本为 `resource.k8s.io/v1`。

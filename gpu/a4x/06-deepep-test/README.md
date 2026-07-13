@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 7. DeepEP 测试
 
 **版本选择指南**：**推荐使用 v2**，因 v1 在 GCP 上无法支持跨节点 EP。

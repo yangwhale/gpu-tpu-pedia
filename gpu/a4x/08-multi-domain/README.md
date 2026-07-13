@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 9. 多 Domain 训练编排
 
 当训练规模超过单个 NVL72 domain（72 GPU），需要跨 domain 调度。本章基于 **2-domain 实验环境**说明如何编排多 domain Megatron-LM 训练，并给出扩展到 4+ domain 的指导。

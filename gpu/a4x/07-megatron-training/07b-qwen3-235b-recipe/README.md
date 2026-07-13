@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # Qwen3 235B-A22B MoE Training on GB200 NVL72 (A4X)
 
 Megatron Bridge + NeMo 26.06 容器，Qwen3 235B-A22B MoE 预训练 benchmark。64 GPU（16 节点）。

@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 2. 创建 k8s 1.34.1 集群
 
 **k8s 1.34 关键变化**：DRA (Dynamic Resource Allocation) 在 k8s 1.34 中为 **GA**，默认启用，无需 feature gate。ResourceClaimTemplate/DeviceClass API 版本为 `resource.k8s.io/v1`（非 v1beta2）。

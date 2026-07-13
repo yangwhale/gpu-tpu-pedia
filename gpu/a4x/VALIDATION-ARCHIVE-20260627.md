@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](VALIDATION-ARCHIVE-20260627.en.md)
+
 # GB200 NVL72 部署验证 Archive — 2026-06-27
 
 ## 环境信息

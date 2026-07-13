@@ -1,26 +1,26 @@
-> 🌐 **中文** | [English](README.en.md)
+> 🌐 [中文](README.md) | **English**
 
 # Qwen3 30B-A3B MoE Training on GB200 NVL72 (A4X)
 
-Megatron Bridge + NeMo 26.06 容器，Qwen3 30B-A3B MoE 预训练 benchmark。
+Megatron Bridge + NeMo 26.06 container, Qwen3 30B-A3B MoE pretraining benchmark.
 
-**结果**：8 GPU (2 节点) 达到 **914 TFLOP/s/GPU**，官方 DGX-GB200 为 936（差 2.3%）。100% 复刻官方 recipe，无 recompute。
+**Result**: 8 GPUs (2 nodes) reach **914 TFLOP/s/GPU**, vs. the official DGX-GB200 figure of 936 (a 2.3% gap). A 100% reproduction of the official recipe, with no recompute.
 
-**参考链接**：
-- [Megatron Bridge Performance Summary](https://docs.nvidia.com/nemo/megatron-bridge/latest/performance-summary.html) — 官方 benchmark 数据
-- [Megatron Bridge Performance Tuning Guide](https://docs.nvidia.com/nemo/megatron-bridge/latest/performance-guide.html) — 性能调优指南
-- [Qwen3 Workload Base Configs](https://github.com/NVIDIA-NeMo/Megatron-Bridge/blob/main/scripts/performance/configs/qwen/qwen3_workload_base_configs.py) — Recipe 并行度配置
-- [Qwen3 LLM Pretrain Config](https://github.com/NVIDIA-NeMo/Megatron-Bridge/blob/main/scripts/performance/configs/qwen/qwen3_llm_pretrain.py) — Recipe 模型配置
+**Reference links**:
+- [Megatron Bridge Performance Summary](https://docs.nvidia.com/nemo/megatron-bridge/latest/performance-summary.html) — official benchmark data
+- [Megatron Bridge Performance Tuning Guide](https://docs.nvidia.com/nemo/megatron-bridge/latest/performance-guide.html) — performance tuning guide
+- [Qwen3 Workload Base Configs](https://github.com/NVIDIA-NeMo/Megatron-Bridge/blob/main/scripts/performance/configs/qwen/qwen3_workload_base_configs.py) — recipe parallelism configuration
+- [Qwen3 LLM Pretrain Config](https://github.com/NVIDIA-NeMo/Megatron-Bridge/blob/main/scripts/performance/configs/qwen/qwen3_llm_pretrain.py) — recipe model configuration
 
-## 前提条件
+## Prerequisites
 
-- 2+ 台 A4X worker，同一 NVL72 域（同 Placement Policy）
-- k8s 1.34+ 集群 + GPU Stack（device-plugin + DRA + DRANET + ComputeDomain）
-- Worker 镜像：`chrisya-a4x-worker-v3`（kernel 锁定 + NVIDIA 580 + Lustre + IMEX）
+- 2+ A4X workers in the same NVL72 domain (same Placement Policy)
+- k8s 1.34+ cluster + GPU Stack (device-plugin + DRA + DRANET + ComputeDomain)
+- Worker image: `chrisya-a4x-worker-v3` (kernel-locked + NVIDIA 580 + Lustre + IMEX)
 
-## Step 1: 部署 NeMo 26.06 训练 Pod
+## Step 1: Deploy the NeMo 26.06 training Pod
 
-每个 worker 一个 Pod，使用 `nvcr.io/nvidia/nemo:26.06` 容器 + GIB v1.1.2 NCCL 插件。
+One Pod per worker, using the `nvcr.io/nvidia/nemo:26.06` container + GIB v1.1.2 NCCL plugin.
 
 ```yaml
 containers:
@@ -49,9 +49,9 @@ resourceClaims:
 - {name: cd, resourceClaimTemplateName: cd-chrisya-channel}
 ```
 
-## Step 2: 环境变量
+## Step 2: Environment variables
 
-Megatron Bridge 的 Slurm launcher (`perf_plugins.py`) 自动设置以下变量。用 torchrun 直接跑必须手动设：
+Megatron Bridge's Slurm launcher (`perf_plugins.py`) sets the following variables automatically. When running directly with torchrun you must set them manually:
 
 ```bash
 source /usr/local/gib/scripts/set_nccl_env.sh
@@ -62,16 +62,16 @@ export CUDA_DEVICE_MAX_CONNECTIONS=1
 export NVTE_CUTEDSL_FUSED_GROUPED_MLP=1
 export CUDNNFE_CLUSTER_OVERLAP_MARGIN=8
 
-# NVL72 域配置（hybridep 必需）
+# NVL72 domain configuration (required for hybridep)
 export NVLINK_DOMAIN_SIZE=72
 export USE_MNNVL=1
 export NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=8
 export NUM_OF_TOKENS_PER_CHUNK_COMBINE_API=128
 
-# GB200 特定
+# GB200-specific
 export NCCL_CTA_POLICY=1
 
-# CUDA Graph 内存管理
+# CUDA Graph memory management
 export TORCH_NCCL_AVOID_RECORD_STREAMS=0
 export NCCL_GRAPH_REGISTER=0
 export PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True,graph_capture_record_stream_reuse:True
@@ -81,11 +81,11 @@ export NVTE_FWD_LAYERNORM_SM_MARGIN=16
 export NVTE_BWD_LAYERNORM_SM_MARGIN=16
 ```
 
-> **`TORCH_NCCL_AVOID_RECORD_STREAMS` 必须为 0**。CUDA Graph 模式下设 1 会导致 Graph 不生效，性能从 914 跌到 284。配合 `graph_capture_record_stream_reuse:True` 使用。
+> **`TORCH_NCCL_AVOID_RECORD_STREAMS` must be 0**. Setting it to 1 under CUDA Graph mode causes the Graph to have no effect, dropping performance from 914 to 284. Use it together with `graph_capture_record_stream_reuse:True`.
 
-## Step 3: 启动训练
+## Step 3: Launch training
 
-使用 `run_script.py`（不是 `run_recipe.py`）。
+Use `run_script.py` (not `run_recipe.py`).
 
 ```bash
 cd /opt/Megatron-Bridge/scripts/performance
@@ -106,45 +106,45 @@ torchrun --nproc_per_node=4 --nnodes=2 --node_rank=$NODE_RANK \
     -wdj qwen3_30b
 ```
 
-### Recipe 自动加载的配置
+### Configuration auto-loaded by the recipe
 
-| 配置 | 值 |
+| Config | Value |
 |---|---|
 | EP | 8 |
 | TP / PP | 1 / 1 |
 | MBS / GBS | 4 / 512 |
 | seq_length | 4096 |
-| num_layers | 48（完整模型） |
+| num_layers | 48 (full model) |
 | cuda_graph_impl | full_iteration |
 | moe_flex_dispatcher_backend | hybridep |
 | moe_a2a_overlap | True |
 | cutedsl_fused_grouped_mlp | True |
 | fp8_dot_product_attention | True |
 
-## GKE 部署方式（LeaderWorkerSet）
+## GKE deployment (LeaderWorkerSet)
 
-在 GKE 集群上使用 LeaderWorkerSet + Kueue + ComputeDomain 部署。实测在 a4x-baker 集群 pool-7 复现 **926 TFLOP/s**。
+Deploy on a GKE cluster using LeaderWorkerSet + Kueue + ComputeDomain. Measured **926 TFLOP/s** reproduced on the a4x-baker cluster pool-7.
 
-### 前提条件
+### Prerequisites
 
-- GKE 集群已安装：NCCL RDMA DaemonSet、NVIDIA DRA Driver、LeaderWorkerSet controller、Kueue
-- Network 对象已创建：default、gvnic-1、rdma-0~3
-- Kueue LocalQueue `tas-lq` 指向 ClusterQueue `tas-cq`
+- GKE cluster with the following installed: NCCL RDMA DaemonSet, NVIDIA DRA Driver, LeaderWorkerSet controller, Kueue
+- Network objects created: default, gvnic-1, rdma-0~3
+- Kueue LocalQueue `tas-lq` pointing to ClusterQueue `tas-cq`
 
-### 关键差异 vs 自建 K8s
+### Key differences vs self-managed K8s
 
-| 维度 | 自建 K8s | GKE LWS |
+| Dimension | Self-managed K8s | GKE LWS |
 |---|---|---|
-| IMEX | host 上手动 nvidia-imex daemon | ComputeDomain + DRA Driver 自动管理 |
-| GPU 分配 | device-plugin + hostPath | device-plugin + DRA ResourceClaim |
-| GIB NCCL | initContainer 安装 + LD_PRELOAD | NCCL RDMA DaemonSet 自动注入到 /usr/local/nvidia/lib64 |
-| NCCL 版本 | GIB 自带 NCCL 2.28 优先 | 容器自带 NCCL 2.30 优先（LD_LIBRARY_PATH 把 /usr/lib/aarch64-linux-gnu 放前面） |
-| 调度 | nodeSelector 手动分配 | Kueue TAS 拓扑感知调度 |
+| IMEX | manual nvidia-imex daemon on the host | ComputeDomain + DRA Driver managed automatically |
+| GPU allocation | device-plugin + hostPath | device-plugin + DRA ResourceClaim |
+| GIB NCCL | installed via initContainer + LD_PRELOAD | injected automatically into /usr/local/nvidia/lib64 by the NCCL RDMA DaemonSet |
+| NCCL version | GIB's bundled NCCL 2.28 takes priority | container's bundled NCCL 2.30 takes priority (LD_LIBRARY_PATH puts /usr/lib/aarch64-linux-gnu first) |
+| Scheduling | manual assignment via nodeSelector | Kueue TAS topology-aware scheduling |
 
 ### YAML
 
 ```yaml
-# 1. ComputeDomain（先创建，LWS 依赖它生成的 ResourceClaimTemplate）
+# 1. ComputeDomain (create first; LWS depends on the ResourceClaimTemplate it generates)
 apiVersion: resource.nvidia.com/v1beta1
 kind: ComputeDomain
 metadata:
@@ -226,12 +226,12 @@ spec:
         - name: dshm
           emptyDir: {medium: Memory, sizeLimit: 200Gi}
     workerTemplate:
-      # 与 leaderTemplate 相同（省略，完整 YAML 见仓库）
+      # Same as leaderTemplate (omitted; see repo for the full YAML)
 ```
 
-### 启动训练
+### Launch training
 
-Pod Running 后，两个 Pod 上分别执行：
+Once the Pods are Running, execute the following on each of the two Pods:
 
 ```bash
 # Leader (node_rank=0)
@@ -249,7 +249,7 @@ kubectl exec nemo-30b-0 -- bash -c "
     -wde bench -wdj qwen3_30b
 "
 
-# Worker (node_rank=1, 用 leader 的 IP)
+# Worker (node_rank=1, using the leader's IP)
 kubectl exec nemo-30b-0-1 -- bash -c "
   cd /opt/Megatron-Bridge/scripts/performance
   export LD_LIBRARY_PATH=/usr/lib/aarch64-linux-gnu:/usr/local/nvidia/lib64:\$LD_LIBRARY_PATH
@@ -264,47 +264,47 @@ kubectl exec nemo-30b-0-1 -- bash -c "
 "
 ```
 
-### GKE 踩坑记录
+### GKE gotchas log
 
-| 问题 | 原因 | 修复 |
+| Problem | Cause | Fix |
 |---|---|---|
-| nvcr.io 403 Forbidden | NGC API key 无权限 | 用项目 AR 镜像 `us-central1-docker.pkg.dev/.../nvcr/nemo:26.06.rc7` |
-| ncclWaitSignal undefined symbol | GIB NCCL 2.28 被优先加载，与容器 NCCL 2.30 冲突 | LD_LIBRARY_PATH 把 `/usr/lib/aarch64-linux-gnu` 放最前 |
-| MNNVL available but not working | Pod 没有 IMEX channel (`/dev/nvidia-caps-imex-channels/` 不存在) | 裸 Pod 不行，必须通过 LWS + ComputeDomain + ResourceClaim |
-| cudaIpcOpenMemHandle SIGABRT | 同上，HybridEP CUDA IPC 需要 IMEX | 同上 |
-| Gloo IPv6 Network unreachable | Gloo 默认用 IPv6 连接 | 加 `GLOO_SOCKET_IFNAME=eth0` 强制 IPv4 |
-| ResourceClaimTemplate not found | ComputeDomain 还没创建 | ComputeDomain 必须先于 LWS 创建，channel name 必须对齐 |
+| nvcr.io 403 Forbidden | NGC API key lacks permission | use the project AR image `us-central1-docker.pkg.dev/.../nvcr/nemo:26.06.rc7` |
+| ncclWaitSignal undefined symbol | GIB NCCL 2.28 loaded with priority, conflicting with the container's NCCL 2.30 | put `/usr/lib/aarch64-linux-gnu` first in LD_LIBRARY_PATH |
+| MNNVL available but not working | Pod has no IMEX channel (`/dev/nvidia-caps-imex-channels/` does not exist) | a bare Pod won't work; you must go through LWS + ComputeDomain + ResourceClaim |
+| cudaIpcOpenMemHandle SIGABRT | same as above; HybridEP CUDA IPC requires IMEX | same as above |
+| Gloo IPv6 Network unreachable | Gloo defaults to connecting over IPv6 | add `GLOO_SOCKET_IFNAME=eth0` to force IPv4 |
+| ResourceClaimTemplate not found | ComputeDomain not yet created | ComputeDomain must be created before the LWS, and the channel name must match |
 
-### GKE 实测结果
+### GKE measured results
 
-| 集群 | 节点池 | TFLOP/s/GPU | Step Time |
+| Cluster | Node pool | TFLOP/s/GPU | Step Time |
 |---|---|---|---|
 | a4x-baker (us-central1) | pool-7 | **926** | 6.51s |
 | chrisya-a4x-gke-ew4 (europe-west4) | a4x-pool | **925** | 6.52s |
 
-## 性能结果
+## Performance results
 
-| 指标 | A4X (GCP) | DGX-GB200 (官方) |
+| Metric | A4X (GCP) | DGX-GB200 (official) |
 |---|---|---|
 | **Model TFLOP/s/GPU** | **914** | **936** |
-| 差距 | -2.3% | baseline |
+| Gap | -2.3% | baseline |
 | Step Time | 6.60s | — |
 | HBM Peak | 184.7 GiB | — |
 | Alloc Retries | 0 | — |
 
-## 优化迭代总结
+## Optimization iteration summary
 
-从 89 到 914 的关键步骤：
+The key steps from 89 to 914:
 
-| 阶段 | TFLOP/s | 关键操作 |
+| Stage | TFLOP/s | Key action |
 |---|---|---|
-| 1. 正确入口 | 89 | 用 `run_script.py` 不是 `run_recipe.py` |
+| 1. Correct entry point | 89 | use `run_script.py`, not `run_recipe.py` |
 | 2. + cutedsl | 284 | `NVTE_CUTEDSL_FUSED_GROUPED_MLP=1` |
 | 3. + full CUDA Graph | **914** | `AVOID_RECORD_STREAMS=0` + `graph_capture_record_stream_reuse:True` + NVL72 env vars |
 
-### 核心教训
+### Core lessons
 
-1. **`run_recipe.py` vs `run_script.py`**：前者不加载 GPU 特定优化配置（CUDA Graph、hybridep、cutedsl 等），只有后者调 `get_perf_optimized_recipe()` 完整加载
-2. **Slurm 环境变量**：`perf_plugins.py` 为 Slurm executor 自动设 ~15 个环境变量。torchrun 跑不经过 Slurm，全部漏掉。最关键的是 `NVTE_CUTEDSL_FUSED_GROUPED_MLP=1` 和 NVL72 domain 变量
-3. **CUDA Graph + AVOID_RECORD_STREAMS**：这个变量在非 CG 模式设 1 省内存，CG 模式必须设 0。设反了 CUDA Graph 静默失效（不报错，只是慢）
-4. **CUDA Graph 对 MoE 的作用**：Qwen3 30B 有 128 expert × 48 层，每步上万个 CUDA kernel launch。CUDA Graph 把 host overhead 从毫秒级降到微秒级，step time 从 21s 降到 6.6s（3.2×）
+1. **`run_recipe.py` vs `run_script.py`**: the former does not load GPU-specific optimization configs (CUDA Graph, hybridep, cutedsl, etc.); only the latter calls `get_perf_optimized_recipe()` for a full load
+2. **Slurm environment variables**: `perf_plugins.py` automatically sets ~15 environment variables for the Slurm executor. Running torchrun bypasses Slurm, so all of them are missed. The most critical are `NVTE_CUTEDSL_FUSED_GROUPED_MLP=1` and the NVL72 domain variables
+3. **CUDA Graph + AVOID_RECORD_STREAMS**: in non-CG mode, setting this to 1 saves memory; in CG mode it must be 0. Set the wrong way, CUDA Graph silently fails (no error, just slow)
+4. **What CUDA Graph does for MoE**: Qwen3 30B has 128 experts × 48 layers, tens of thousands of CUDA kernel launches per step. CUDA Graph reduces host overhead from milliseconds to microseconds, cutting step time from 21s to 6.6s (3.2×)
