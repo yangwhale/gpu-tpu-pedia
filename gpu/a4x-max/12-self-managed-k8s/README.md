@@ -225,55 +225,55 @@ sudo chmod 666 /dev/nvidia-caps-imex-channels/channel0
 
 ## 3. NCCL 测试
 
-### 3.1 安装 GIB + NCCL Tests (每台 Worker)
+### 3.1 GIB Sidecar Pod
 
-从 GIB 诊断容器提取库文件到 host，不通过 Pod 运行 NCCL:
+GIB 作为 init container 将库文件复制到 shared volume，主容器通过 volume 挂载使用:
 
-```bash
-GIB_IMAGE="us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2"
-
-# [1] 提取 GIB 库 + NCCL tests
-sudo mkdir -p /usr/local/gib /opt/nccl-tests
-sudo ctr -n k8s.io run --rm \
-  --mount type=bind,src=/usr/local/gib,dst=/host/gib,options=rbind:rw \
-  --mount type=bind,src=/opt/nccl-tests,dst=/host/nccl,options=rbind:rw \
-  $GIB_IMAGE gib-extract \
-  bash -c "cp -r /usr/local/gib/* /host/gib/ && cp -r /third_party/nccl-tests/* /host/nccl/"
-
-# [2] 提取 CUDA runtime + libstdc++ (Rocky 9 自带版本太旧)
-sudo mkdir -p /usr/local/cuda/lib64
-sudo ctr -n k8s.io run --rm \
-  --mount type=bind,src=/usr/local/cuda/lib64,dst=/host/lib,options=rbind:rw \
-  $GIB_IMAGE cuda-extract \
-  bash -c "cp /usr/local/cuda-13.0/targets/sbsa-linux/lib/lib*.so* /host/lib/ && \
-           cp /usr/lib/aarch64-linux-gnu/libstdc++.so.6* /host/lib/"
+```yaml
+apiVersion: v1
+kind: Pod
+metadata:
+  name: nccl-test
+spec:
+  hostNetwork: true
+  dnsPolicy: ClusterFirstWithHostNet
+  nodeName: <worker-full-name>
+  initContainers:
+  - name: gib-installer
+    image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+    command: ["bash", "-c", "cp -r /usr/local/gib/* /target/gib/ && cp -r /third_party/nccl-tests /target/nccl-tests"]
+    volumeMounts:
+    - { name: gib-lib, mountPath: /target/gib }
+    - { name: nccl-tests, mountPath: /target/nccl-tests }
+  containers:
+  - name: workload
+    image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+    command: ["bash", "-c", "sleep infinity"]
+    securityContext: { privileged: true }
+    env:
+    - { name: LD_LIBRARY_PATH, value: "/gib/lib64" }
+    - { name: NCCL_ENV_PLUGIN, value: "gcp" }
+    volumeMounts:
+    - { name: gib-lib, mountPath: /gib, readOnly: true }
+    - { name: nccl-tests, mountPath: /nccl-tests, readOnly: true }
+    - { name: dev, mountPath: /dev }
+    - { name: shm, mountPath: /dev/shm }
+    resources: { limits: { nvidia.com/gpu: "4" } }
+  volumes:
+  - { name: gib-lib, emptyDir: {} }
+  - { name: nccl-tests, emptyDir: {} }
+  - { name: dev, hostPath: { path: /dev } }
+  - { name: shm, emptyDir: { medium: Memory, sizeLimit: 128Gi } }
+  restartPolicy: Never
 ```
 
-验证: `ls /usr/local/gib/lib64/libnccl-net.so && ls /opt/nccl-tests/build/all_reduce_perf`
+> init container 把 GIB 库和 NCCL tests 复制到 emptyDir volume，主容器挂载后直接使用。主容器中通过 `LD_LIBRARY_PATH=/gib/lib64` 加载 GIB 网络插件。
 
-> OpenMPI 已由 DOCA OFED 预装在 `/usr/mpi/gcc/openmpi-4.1.9a1/`
+### 3.2 NCCL 运行命令
 
-### 3.2 SSH 互通
-
-项目级 SSH key 已由 Cloud Agent 注入所有节点，只需在发起 mpirun 的节点配置 SSH:
+在主容器 (`workload`) 中执行:
 
 ```bash
-# 将 google_compute_engine 私钥复制到发起节点 (或用 scp 从本地传过去)
-cat > ~/.ssh/config << 'EOF'
-Host 10.150.0.*
-  IdentityFile ~/.ssh/google_compute_engine
-  StrictHostKeyChecking no
-  UserKnownHostsFile /dev/null
-EOF
-chmod 600 ~/.ssh/config
-```
-
-### 3.3 NCCL 运行命令
-
-```bash
-export PATH=/usr/mpi/gcc/openmpi-4.1.9a1/bin:$PATH
-export LD_LIBRARY_PATH=/usr/local/gib/lib64:/usr/local/cuda/lib64:/usr/mpi/gcc/openmpi-4.1.9a1/lib64:$LD_LIBRARY_PATH
-
 # hostfile: 每行 "<IPv4> slots=4"
 cat > /tmp/hostfile << 'EOF'
 10.150.0.210 slots=4
@@ -286,7 +286,7 @@ mpirun --allow-run-as-root \
   --mca btl_tcp_if_include eth0 --mca oob_tcp_if_include eth0 \
   --mca routed direct --mca plm_rsh_no_tree_spawn 1 \
   -np 8 --hostfile /tmp/hostfile \
-  -x PATH -x LD_LIBRARY_PATH \
+  -x PATH -x LD_LIBRARY_PATH="/gib/lib64:$LD_LIBRARY_PATH" \
   -x NCCL_DEBUG=WARN \
   -x NCCL_MNNVL_ENABLE=2 -x NCCL_CUMEM_ENABLE=1 \
   -x NCCL_IB_DATA_DIRECT=0 -x NCCL_IB_GID_INDEX=7 \
@@ -296,7 +296,7 @@ mpirun --allow-run-as-root \
   -x NCCL_NET=gIB -x NCCL_IB_ADDR_FAMILY=AF_INET6 \
   -x NCCL_IB_ADAPTIVE_ROUTING=1 -x NCCL_IB_QPS_PER_CONNECTION=4 \
   -x NCCL_ENV_PLUGIN=gcp \
-  /opt/nccl-tests/build/all_reduce_perf -b 1M -e 16G -f 2 -w 5 -n 20
+  /nccl-tests/nccl-tests/build/all_reduce_perf -b 1M -e 16G -f 2 -w 5 -n 20
 ```
 
 **关键环境变量**:
@@ -309,12 +309,12 @@ mpirun --allow-run-as-root \
 | `NCCL_IB_DATA_DIRECT` | **0** | NVIDIA 580 不支持 CX-8 Data Direct DMA |
 | `NCCL_MNNVL_ENABLE` | **2** | 同域 NVLink + 跨域 RDMA 自动切换 |
 | `NCCL_ENV_PLUGIN` | **gcp** | 加载 GIB 的 GCP 环境插件 (读取 nccl.a4xmax.conf) |
-| `NCCL_P2P_NET_CHUNKSIZE` | **4194304** | AllToAll 优化 (由 nccl.a4xmax.conf 覆盖, 默认 256K 太小) |
-| `NCCL_NCHANNELS_PER_NET_PEER` | **4** | AllToAll 多 channel 并行 (由 nccl.a4xmax.conf 覆盖, 默认 1) |
 
-> GID 表结构: 每个 mlx5 设备有 8 个 GID，偶数 index = RoCE v1，奇数 = RoCE v2。Index 2/3 = PF GID，Index 6/7 = ipvlan GID (c0de 后缀)。RDMA 必须用 RoCE v2 + ipvlan = **index 7**。
+> **GID 表**: 每个 mlx5 设备有 8 个 GID，偶数 index = RoCE v1，奇数 = RoCE v2。Index 6/7 = ipvlan GID (c0de 后缀)。RDMA 必须用 RoCE v2 + ipvlan = **index 7**。
 >
-> TC/DSCP 映射: `NCCL_IB_TC=52` → DSCP = 52>>2 = 13 → dscp2prio 映射到 priority 5 → PFC enabled。不设 TC 的话 RDMA 包被 RoCE Metal fabric 丢弃。
+> **TC/DSCP**: `NCCL_IB_TC=52` → DSCP = 52>>2 = 13 → priority 5 → PFC enabled。不设 TC 则 RDMA 包被 RoCE Metal fabric 丢弃。
+>
+> **AllToAll 优化**: `NCCL_P2P_NET_CHUNKSIZE=4194304` + `NCCL_NCHANNELS_PER_NET_PEER=4` (由 nccl.a4xmax.conf 通过 ENV_PLUGIN 自动加载)。
 
 ---
 
@@ -346,6 +346,48 @@ mpirun --allow-run-as-root \
 - [NVIDIA: NVLink Management (NMX)](https://docs.nvidia.com/mission-control/docs/systems-administration-guide/2.0.0/high-speed-fabric-management.html)
 - [NCCL Issue #890: GID 自动检测](https://github.com/NVIDIA/nccl/issues/890)
 - [教学文档: GB300 全栈组件详解](https://cc.higcp.com/pages/gb300-rdma-stack-guide-20260713.html)
+
+---
+
+## 附录 A: 裸机 NCCL 测试 (不通过 K8s Pod)
+
+适用于快速 RDMA 验证或不依赖 K8s 的场景。
+
+### A.1 提取 GIB 到 Host (每台 Worker)
+
+```bash
+GIB_IMAGE="us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2"
+
+sudo mkdir -p /usr/local/gib /opt/nccl-tests /usr/local/cuda/lib64
+sudo ctr -n k8s.io run --rm \
+  --mount type=bind,src=/usr/local/gib,dst=/host/gib,options=rbind:rw \
+  --mount type=bind,src=/opt/nccl-tests,dst=/host/nccl,options=rbind:rw \
+  --mount type=bind,src=/usr/local/cuda/lib64,dst=/host/lib,options=rbind:rw \
+  $GIB_IMAGE gib-extract \
+  bash -c "cp -r /usr/local/gib/* /host/gib/ && \
+           cp -r /third_party/nccl-tests/* /host/nccl/ && \
+           cp /usr/local/cuda-13.0/targets/sbsa-linux/lib/lib*.so* /host/lib/ && \
+           cp /usr/lib/aarch64-linux-gnu/libstdc++.so.6* /host/lib/"
+```
+
+### A.2 SSH + MPI
+
+```bash
+# SSH config (项目级 key 已注入所有节点)
+cat > ~/.ssh/config << 'EOF'
+Host 10.150.0.*
+  IdentityFile ~/.ssh/google_compute_engine
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+EOF
+
+# 使用 DOCA 预装的 OpenMPI
+export PATH=/usr/mpi/gcc/openmpi-4.1.9a1/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/gib/lib64:/usr/local/cuda/lib64:/usr/mpi/gcc/openmpi-4.1.9a1/lib64:$LD_LIBRARY_PATH
+
+# 运行 (hostfile + mpirun 参数同 3.2 节)
+mpirun ... /opt/nccl-tests/build/all_reduce_perf -b 1M -e 16G -f 2 -w 5 -n 20
+```
 
 ---
 
