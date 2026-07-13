@@ -509,32 +509,48 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
   --set kubeletPlugin.tolerations[1].effect=NoSchedule
 ```
 
-**踩坑**:
-1. `nvidiaDriverRoot=/` 不对 → GKE COS 驱动在 `/home/kubernetes/bin/nvidia`
-2. DRA kubelet-plugin DaemonSet 默认没有 tolerations → GB300 节点有 `nvidia.com/gpu` 和 `kubernetes.io/arch` taint，需手动加
-3. GB300 节点缺 `nvidia.com/gpu.present` label → 手动 `kubectl label node`
-4. RDMA DeviceClass 名称: GKE 用 `mrdma.google.com`（不是自建 K8s 的 `rdma-devices`）
+**DRA 安装关键点**:
+1. `nvidiaDriverRoot: /home/kubernetes/bin/nvidia`（GKE COS 驱动路径，不是 `/`）
+2. `resources.gpus.enabled: false`（GPU DRA 由 GKE 自己管理，不用 NVIDIA 的）
+3. kubelet-plugin affinity 精确匹配 `cloud.google.com/gke-accelerator: nvidia-gb300` + `kubernetes.io/arch: arm64`
+4. kubelet-plugin tolerations: `nvidia.com/gpu=present:NoSchedule` + `kubernetes.io/arch=arm64:NoSchedule`
+5. GKE managed networking DRA driver 在 `gke-managed-networking-dra-driver` namespace（不是 `kube-system` 的 anetd）
+6. RDMA DeviceClass: `mrdma.google.com`（发现 8 个 ipvlan + 4 个 PCI = 12 设备/节点）
 
-**单节点 NCCL (DRA + ComputeDomain)**:
+### NCCL Benchmark 结果
 
-| 测试 | busbw (GB/s) |
-|------|-------------|
-| all_reduce 4GPU @8G | **681** |
+**单节点 (4 GPU NVLink)**:
+
+| Collective | @8G busbw (GB/s) |
+|-----------|-----------------|
+| all_reduce | **681** |
+
+**双节点 同域 MNNVL=2 (8 GPU, subblock-0005 内)**:
+
+| Collective | @16G busbw (GB/s) | GB200 参考 |
+|-----------|-------------------|-----------|
+| all_reduce | **841** | 840 |
+| all_gather | **684** | 683 |
+| reduce_scatter | **693** | 693 |
+| alltoall | **684** | 680 |
+
+> 与 GB200 完全持平（±0.5%），GKE DRA + ComputeDomain + GIB 全栈验证通过。
 
 ### 环境状态汇总
 
 | 组件 | 状态 | 备注 |
 |------|------|------|
-| GKE 集群 | ✅ | gb300-gke-test, 1.36.0 |
-| VPC (MTU 8896) | ✅ | gb300-gke-mgmt |
-| Cloud NAT | ✅ | |
-| Node pool (2 节点) | ✅ | subblock-0005 |
-| DRA GPU Driver | ✅ | v25.8.0, controller 1/1 + kubelet-plugin 2/2 |
-| ComputeDomain CRD | ✅ | ResourceSlice 已注册 |
-| DRANET (GKE 内置) | ✅ | ResourceSlice `dra.net` 已发现 MRDMA |
-| GPU DRA | ✅ | ResourceSlice `gpu.nvidia.com` 已发现 |
-| GPU | ✅ | 4x GB300, CUDA 13.0 |
-| NVLink (单节点) | ✅ | 681 GB/s (DRA 路径) |
+| GKE 集群 | ✅ | gb300-gke-test, 1.36.0-gke.4447000 |
+| VPC (MTU 8896) | ✅ | gb300-gke-mgmt, Cloud NAT |
+| Node pool (2 节点) | ✅ | subblock-0005, hugepages 2Mi x 4096 |
+| asapd-lite | ✅ | 官方 YAML, 2/2 Running, ipvlan c0de 配置完成 |
+| DRA GPU Driver | ✅ | v25.8.0, 官方 helm values, controller + kubelet-plugin |
+| ComputeDomain CRD | ✅ | IMEX channel 自动管理 |
+| GKE Managed DRANET | ✅ | `gke-managed-networking-dra-driver`, 12 设备/节点 |
+| GPU | ✅ | 4x GB300, CUDA 13.0, nvidia.com/gpu: 4 |
+| NVLink 单节点 | ✅ | 681 GB/s |
+| NVLink 双节点 MNNVL | ✅ | 841 GB/s all_reduce |
+| RDMA 双节点 | 🔄 | 待测试 (MNNVL=0) |
 | GIB NCCL Plugin | ✅ | 通过 GIB 诊断镜像容器内使用 |
 | RDMA (跨节点) | 🔄 | 待测试 (DRA claims + `mrdma.google.com`) |
 | IMEX / MNNVL | 🔄 | 待测试 (ComputeDomain 已就绪) |
