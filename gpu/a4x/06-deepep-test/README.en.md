@@ -105,7 +105,7 @@ kubectl exec deepep-h1 -- bash -c "
 
 Applicable container: `nvcr.io/nvidia/pytorch:26.04-py3` (CUDA 13.2, NCCL 2.29.7). DeepEP v2 (Elastic EP) uses the NCCL Gin backend, eliminating the NVSHMEM internode dependency.
 
-**Image note**: Use `nvcr.io/nvidia/pytorch:26.04-py3`, which includes CUDA 13.2.1 and PyTorch 2.12.0a0. The init container is the GIB NCCL plugin `v1.1.0` (ARM64).
+**Image note**: Use `nvcr.io/nvidia/pytorch:26.04-py3`, which includes CUDA 13.2.1 and PyTorch 2.12.0a0. The init container is the GIB NCCL plugin `v1.1.2` (ARM64).
 
 ### Step 1: Install NVSHMEM 3.4.5 + NCCL 2.30.4
 

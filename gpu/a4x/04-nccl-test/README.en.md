@@ -346,7 +346,7 @@ The GIB diagnostic image ships with the `set_nccl_env.sh` script, which automati
 | intra-domain busbw < 800 | MNNVL not enabled | Check `NCCL_MNNVL_ENABLE=2`; confirm the IMEX channel exists (`/dev/nvidia-caps-imex-channels/channel0`) |
 | cross-domain CUDA error | MNNVL probe fails on cross-domain nodes | Set `NCCL_MNNVL_ENABLE=0` |
 | alltoall extremely slow cross-domain | NCCL chain pollution | Known issue; run alltoall standalone with `k8s134-nccl-36node-2domain-alltoall-sts.yaml` |
-| test stuck at barrier | SSH unreachable | Check the sshd port (222), DNS resolution, and Calico networking |
+| test stuck at barrier | SSH unreachable | Check the sshd port (2222), DNS resolution, and Calico networking |
 
 ---
 

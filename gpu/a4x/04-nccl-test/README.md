@@ -346,7 +346,7 @@ GIB 诊断镜像内置 `set_nccl_env.sh` 脚本自动设置最优 NCCL 参数。
 | 同域 busbw < 800 | MNNVL 未启用 | 检查 `NCCL_MNNVL_ENABLE=2`，确认 IMEX channel 存在 (`/dev/nvidia-caps-imex-channels/channel0`) |
 | 跨域 CUDA error | MNNVL 在跨域节点探测失败 | 设置 `NCCL_MNNVL_ENABLE=0` |
 | alltoall 跨域极慢 | NCCL chain pollution | 已知 issue，单独跑 alltoall 可用 `k8s134-nccl-36node-2domain-alltoall-sts.yaml` |
-| 测试卡在 barrier | SSH 不通 | 检查 sshd 端口 (222)，DNS 解析，Calico 网络 |
+| 测试卡在 barrier | SSH 不通 | 检查 sshd 端口 (2222)，DNS 解析，Calico 网络 |
 
 ---
 
