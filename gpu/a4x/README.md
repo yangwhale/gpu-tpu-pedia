@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # GB200 A4X 自建 Kubernetes 1.34.1 部署与验证指南
 
 **平台**：NVIDIA GB200 (A4X) · ARM64 · NVL72 · TLinux 4

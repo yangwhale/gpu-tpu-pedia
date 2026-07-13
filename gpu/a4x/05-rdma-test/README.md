@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 6. RDMA 带宽测试 (ib_write_bw)
 
 在同域 NCCL 测试 Pod 中运行 RDMA 带宽测试，验证每块 CX-7 NIC 的原始 RDMA 带宽。
