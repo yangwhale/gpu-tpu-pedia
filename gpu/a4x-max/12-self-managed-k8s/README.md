@@ -225,62 +225,96 @@ sudo chmod 666 /dev/nvidia-caps-imex-channels/channel0
 
 ## 3. NCCL 测试
 
-### 3.1 GIB Pod
+### 3.1 安装 GIB + NCCL Tests (每台 Worker)
 
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: nccl-<worker-short-name>
-spec:
-  hostNetwork: true
-  dnsPolicy: ClusterFirstWithHostNet
-  nodeName: <worker-full-name>
-  containers:
-  - name: gib
-    image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
-    imagePullPolicy: IfNotPresent
-    command: ["bash", "-c", "service ssh restart; echo 'MaxStartups 100:30:200' >> /etc/ssh/sshd_config; service ssh reload; sleep infinity"]
-    securityContext: { privileged: true }
-    volumeMounts:
-    - { name: dev, mountPath: /dev }
-    - { name: shm, mountPath: /dev/shm }
-    resources: { limits: { nvidia.com/gpu: "4" } }
-  volumes:
-  - { name: dev, hostPath: { path: /dev } }
-  - { name: shm, emptyDir: { medium: Memory, sizeLimit: 128Gi } }
-  restartPolicy: Never
-```
-
-### 3.2 NCCL 运行命令
+从 GIB 诊断容器提取库文件到 host，不通过 Pod 运行 NCCL:
 
 ```bash
+GIB_IMAGE="us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2"
+
+# [1] 提取 GIB 库 + NCCL tests
+sudo mkdir -p /usr/local/gib /opt/nccl-tests
+sudo ctr -n k8s.io run --rm \
+  --mount type=bind,src=/usr/local/gib,dst=/host/gib,options=rbind:rw \
+  --mount type=bind,src=/opt/nccl-tests,dst=/host/nccl,options=rbind:rw \
+  $GIB_IMAGE gib-extract \
+  bash -c "cp -r /usr/local/gib/* /host/gib/ && cp -r /third_party/nccl-tests/* /host/nccl/"
+
+# [2] 提取 CUDA runtime + libstdc++ (Rocky 9 自带版本太旧)
+sudo mkdir -p /usr/local/cuda/lib64
+sudo ctr -n k8s.io run --rm \
+  --mount type=bind,src=/usr/local/cuda/lib64,dst=/host/lib,options=rbind:rw \
+  $GIB_IMAGE cuda-extract \
+  bash -c "cp /usr/local/cuda-13.0/targets/sbsa-linux/lib/lib*.so* /host/lib/ && \
+           cp /usr/lib/aarch64-linux-gnu/libstdc++.so.6* /host/lib/"
+```
+
+验证: `ls /usr/local/gib/lib64/libnccl-net.so && ls /opt/nccl-tests/build/all_reduce_perf`
+
+> OpenMPI 已由 DOCA OFED 预装在 `/usr/mpi/gcc/openmpi-4.1.9a1/`
+
+### 3.2 SSH 互通
+
+项目级 SSH key 已由 Cloud Agent 注入所有节点，只需在发起 mpirun 的节点配置 SSH:
+
+```bash
+# 将 google_compute_engine 私钥复制到发起节点 (或用 scp 从本地传过去)
+cat > ~/.ssh/config << 'EOF'
+Host 10.150.0.*
+  IdentityFile ~/.ssh/google_compute_engine
+  StrictHostKeyChecking no
+  UserKnownHostsFile /dev/null
+EOF
+chmod 600 ~/.ssh/config
+```
+
+### 3.3 NCCL 运行命令
+
+```bash
+export PATH=/usr/mpi/gcc/openmpi-4.1.9a1/bin:$PATH
+export LD_LIBRARY_PATH=/usr/local/gib/lib64:/usr/local/cuda/lib64:/usr/mpi/gcc/openmpi-4.1.9a1/lib64:$LD_LIBRARY_PATH
+
+# hostfile: 每行 "<IPv4> slots=4"
+cat > /tmp/hostfile << 'EOF'
+10.150.0.210 slots=4
+10.150.0.215 slots=4
+EOF
+
 mpirun --allow-run-as-root \
   --mca pml ob1 --mca orte_keep_fqdn_hostnames t \
   --mca btl tcp,self --bind-to none \
   --mca btl_tcp_if_include eth0 --mca oob_tcp_if_include eth0 \
   --mca routed direct --mca plm_rsh_no_tree_spawn 1 \
-  -np $NP --hostfile hostfile \
-  -x PATH -x LD_LIBRARY_PATH="/usr/local/gib/lib64:$LD_LIBRARY_PATH" \
+  -np 8 --hostfile /tmp/hostfile \
+  -x PATH -x LD_LIBRARY_PATH \
   -x NCCL_DEBUG=WARN \
   -x NCCL_MNNVL_ENABLE=2 -x NCCL_CUMEM_ENABLE=1 \
-  -x NCCL_IB_DATA_DIRECT=0 \
+  -x NCCL_IB_DATA_DIRECT=0 -x NCCL_IB_GID_INDEX=7 \
+  -x NCCL_IB_TC=52 -x NCCL_IB_FIFO_TC=84 \
+  -x NCCL_IB_HCA=mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6 \
   -x NCCL_TESTS_SPLIT_MASK=0x0 \
-  bash -c "source /usr/local/gib/scripts/set_nccl_env.sh; \
-           /third_party/nccl-tests/build/all_reduce_perf -b 1M -e 16G -f 2 -w 5 -n 20"
+  -x NCCL_NET=gIB -x NCCL_IB_ADDR_FAMILY=AF_INET6 \
+  -x NCCL_IB_ADAPTIVE_ROUTING=1 -x NCCL_IB_QPS_PER_CONNECTION=4 \
+  -x NCCL_ENV_PLUGIN=gcp \
+  /opt/nccl-tests/build/all_reduce_perf -b 1M -e 16G -f 2 -w 5 -n 20
 ```
 
 **关键环境变量**:
 
 | 变量 | 值 | 为什么 |
 |------|-----|------|
-| `NCCL_IB_DATA_DIRECT` | **0** | NVIDIA 580 不支持 CX-8 Data Direct DMA |
 | `NCCL_IB_GID_INDEX` | **7** | RoCE v2 ipvlan GID (偶数=RoCE v1, 奇数=RoCE v2, c0de 后缀) |
+| `NCCL_IB_TC` | **52** | DSCP 13 → priority 5 → PFC enabled (跨节点 RDMA 必需) |
+| `NCCL_IB_HCA` | **mlx5_0,...,mlx5_6** | 排除 mlx5_7 (rail switch 故障, 整个 block 级别) |
+| `NCCL_IB_DATA_DIRECT` | **0** | NVIDIA 580 不支持 CX-8 Data Direct DMA |
 | `NCCL_MNNVL_ENABLE` | **2** | 同域 NVLink + 跨域 RDMA 自动切换 |
-| `NCCL_P2P_NET_CHUNKSIZE` | **4194304** | AllToAll 优化 (默认 256K 太小) |
-| `NCCL_NCHANNELS_PER_NET_PEER` | **4** | AllToAll 多 channel 并行 (默认 1) |
+| `NCCL_ENV_PLUGIN` | **gcp** | 加载 GIB 的 GCP 环境插件 (读取 nccl.a4xmax.conf) |
+| `NCCL_P2P_NET_CHUNKSIZE` | **4194304** | AllToAll 优化 (由 nccl.a4xmax.conf 覆盖, 默认 256K 太小) |
+| `NCCL_NCHANNELS_PER_NET_PEER` | **4** | AllToAll 多 channel 并行 (由 nccl.a4xmax.conf 覆盖, 默认 1) |
 
-> P2P 优化参数只影响 AllToAll，对 AllReduce/AllGather/ReduceScatter 无影响。
+> GID 表结构: 每个 mlx5 设备有 8 个 GID，偶数 index = RoCE v1，奇数 = RoCE v2。Index 2/3 = PF GID，Index 6/7 = ipvlan GID (c0de 后缀)。RDMA 必须用 RoCE v2 + ipvlan = **index 7**。
+>
+> TC/DSCP 映射: `NCCL_IB_TC=52` → DSCP = 52>>2 = 13 → dscp2prio 映射到 priority 5 → PFC enabled。不设 TC 的话 RDMA 包被 RoCE Metal fabric 丢弃。
 
 ---
 
@@ -298,7 +332,7 @@ mpirun --allow-run-as-root \
 | dnf 超时 | 无外网或慢 repo | 加外网 IP + 禁用 ciq/doca repo |
 | subblock 资源不足 | ZONE_RESOURCE_POOL_EXHAUSTED | 换其他 subblock |
 | Fabric Manager NV_WARN_NOTHING_TO_DO | GB300 NVSwitch 在 switch tray 上 | FM 不适用于 NVL72 计算节点 |
-| **RDMA 跨节点 RETRY_EXC_ERR** | mlx5_7 firmware internal error | `NCCL_IB_HCA=mlx5_0,...,mlx5_6` 排除坏 NIC |
+| **RDMA 跨节点 RETRY_EXC_ERR** | mlx5_7 rail switch 故障 (block 级, 全 12 subblock 均受影响) | `NCCL_IB_HCA=mlx5_0,...,mlx5_6` 排除 mlx5_7 |
 | RDMA 用 PF GID 失败 | RoCE v1 GID 不可路由 | `NCCL_IB_GID_INDEX=7` (RoCE v2 ipvlan) |
 | 同节点跨 CX-8 port RDMA 不通 | RoCE Metal 只路由跨节点流量 | 正常，MNNVL=2 同节点走 NVLink |
 
