@@ -536,6 +536,17 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 
 > 与 GB200 完全持平（±0.5%），GKE DRA + ComputeDomain + GIB 全栈验证通过。
 
+**双节点 跨域 MNNVL=0 纯 RDMA (8 GPU, subblock-0005 ↔ subblock-0006)**:
+
+| Collective | @16G busbw (GB/s) |
+|-----------|-------------------|
+| all_reduce | **328** |
+| all_gather | **194** |
+| reduce_scatter | **194** |
+| alltoall | **43** (未优化 P2P 参数) |
+
+> 同域 MNNVL=0 不可用 — 同 subblock 内节点之间纯 RDMA 模式 NCCL 初始化 hang。需通过 `/etc/nccl.conf` 注入 `NCCL_IB_HCA` 排除 mlx5_7（rail switch 故障）和 `NCCL_IB_DATA_DIRECT=0`。
+
 ### 环境状态汇总
 
 | 组件 | 状态 | 备注 |
@@ -550,7 +561,8 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 | GPU | ✅ | 4x GB300, CUDA 13.0, nvidia.com/gpu: 4 |
 | NVLink 单节点 | ✅ | 681 GB/s |
 | NVLink 双节点 MNNVL | ✅ | 841 GB/s all_reduce |
-| RDMA 双节点 | 🔄 | 待测试 (MNNVL=0) |
+| RDMA 跨域 (MNNVL=0) | ✅ | 328/194/194/43 GB/s (all_reduce/gather/scatter/alltoall) |
+| RDMA 同域 (MNNVL=0) | ❌ | 同域节点不支持纯 RDMA，NCCL hang |
 | GIB NCCL Plugin | ✅ | 通过 GIB 诊断镜像容器内使用 |
 | RDMA (跨节点) | 🔄 | 待测试 (DRA claims + `mrdma.google.com`) |
 | IMEX / MNNVL | 🔄 | 待测试 (ComputeDomain 已就绪) |
