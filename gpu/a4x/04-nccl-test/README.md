@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 5. NCCL 通信测试
 
 本章覆盖 6 个层级的 NCCL 通信测试：单节点 NVLink、同域 2 节点 MNNVL、跨域 2 节点 RDMA、混合 4 节点、全域 18 节点 72 GPU、跨域 36 节点 144 GPU。每项测试包含标称参考值、v1 镜像实测数据和我方验证预留栏。
@@ -344,7 +346,7 @@ GIB 诊断镜像内置 `set_nccl_env.sh` 脚本自动设置最优 NCCL 参数。
 | 同域 busbw < 800 | MNNVL 未启用 | 检查 `NCCL_MNNVL_ENABLE=2`，确认 IMEX channel 存在 (`/dev/nvidia-caps-imex-channels/channel0`) |
 | 跨域 CUDA error | MNNVL 在跨域节点探测失败 | 设置 `NCCL_MNNVL_ENABLE=0` |
 | alltoall 跨域极慢 | NCCL chain pollution | 已知 issue，单独跑 alltoall 可用 `k8s134-nccl-36node-2domain-alltoall-sts.yaml` |
-| 测试卡在 barrier | SSH 不通 | 检查 sshd 端口 (222)，DNS 解析，Calico 网络 |
+| 测试卡在 barrier | SSH 不通 | 检查 sshd 端口 (2222)，DNS 解析，Calico 网络 |
 
 ---
 

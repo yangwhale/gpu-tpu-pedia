@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](parameter-guide.en.md)
+
 # Megatron Bridge 训练参数完全指南
 
 GB200 NVL72 (A4X) 上 MoE 模型训练的所有关键参数，包括参数间依赖关系和内存/计算/通信影响。

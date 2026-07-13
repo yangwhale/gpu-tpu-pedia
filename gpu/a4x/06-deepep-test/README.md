@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 7. DeepEP 测试
 
 **版本选择指南**：**推荐使用 v2**，因 v1 在 GCP 上无法支持跨节点 EP。
@@ -103,7 +105,7 @@ kubectl exec deepep-h1 -- bash -c "
 
 适用容器：`nvcr.io/nvidia/pytorch:26.04-py3`（CUDA 13.2，NCCL 2.29.7）。DeepEP v2 (Elastic EP) 使用 NCCL Gin 后端，消除了 NVSHMEM internode 依赖。
 
-**镜像说明**：使用 `nvcr.io/nvidia/pytorch:26.04-py3`，含 CUDA 13.2.1、PyTorch 2.12.0a0。init container 为 GIB NCCL plugin `v1.1.0` (ARM64)。
+**镜像说明**：使用 `nvcr.io/nvidia/pytorch:26.04-py3`，含 CUDA 13.2.1、PyTorch 2.12.0a0。init container 为 GIB NCCL plugin `v1.1.2` (ARM64)。
 
 ### Step 1：安装 NVSHMEM 3.4.5 + NCCL 2.30.4
 

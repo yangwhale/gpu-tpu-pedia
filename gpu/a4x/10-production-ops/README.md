@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # GB200 NVL72 生产运维知识库
 
 ## 1. 概述

@@ -1,4 +1,4 @@
-> 🌐 **中文** | [English](AUDIT-REPORT.en.md)
+> 🌐 [中文](AUDIT-REPORT.md) | **English**
 
 # GB200 A4X Deployment Guide -- Audit Report
 
@@ -44,7 +44,7 @@
 - Architecture description matches source header
 - Table of contents correctly maps to 9 subdirectories
 - Test results summary table includes all numeric values from source Section 13
-- Date attribution preserved ("2026-06-19 验证")
+- Date attribution preserved ("Verified 2026-06-19")
 
 **Issues**: None found.
 
@@ -64,9 +64,9 @@
 
 | # | Category | Severity | Description |
 |---|----------|----------|-------------|
-| 1 | Content Gap | Low | Source global variables block includes inline comments like "450 A4X VM + CP + 普通 VM + 缓冲" for GVNIC_CIDR but README trims some of these annotations. Values are correct. |
+| 1 | Content Gap | Low | Source global variables block includes inline comments like "450 A4X VMs + CP + regular VMs + buffer" for GVNIC_CIDR but README trims some of these annotations. Values are correct. |
 | 2 | Content Gap | Low | Source network layout table has 6 rows (4 RDMA subnets shown individually); README consolidates RDMA into 1 row with `sub-0..3`. Functionally equivalent but less detailed. |
-| 3 | Content Gap | Low | Source Appendix A has separate "B.1"-"B.5" subsection numbering and a "客户备注" column; README uses simplified headers without customer remarks column. The B.5 "Startup Scripts" subsection is dropped entirely. |
+| 3 | Content Gap | Low | Source Appendix A has separate "B.1"-"B.5" subsection numbering and a "Customer Remarks" column; README uses simplified headers without customer remarks column. The B.5 "Startup Scripts" subsection is dropped entirely. |
 
 ---
 
@@ -105,7 +105,7 @@
 
 | # | Category | Severity | Description |
 |---|----------|----------|-------------|
-| 4 | Content Gap | Low | Source Section 3.6 mentions "域内多任务" paragraph about multiple tasks sharing one ComputeDomain ResourceClaimTemplate. README includes this but slightly shorter. |
+| 4 | Content Gap | Low | Source Section 3.6 mentions a "multiple tasks within a domain" paragraph about multiple tasks sharing one ComputeDomain ResourceClaimTemplate. README includes this but slightly shorter. |
 
 ---
 
@@ -157,7 +157,7 @@
 
 | # | Category | Severity | Description |
 |---|----------|----------|-------------|
-| 5 | Content Gap | Very Low | Source Section 7.1 references "14.8 DeepEP v1 vs v2 选择建议" by number; README says "版本选择指南" without section number. Cross-reference still works via inline content. |
+| 5 | Content Gap | Very Low | Source Section 7.1 references "14.8 DeepEP v1 vs v2 selection recommendation" by number; README says "version selection guide" without section number. Cross-reference still works via inline content. |
 
 ---
 
@@ -179,7 +179,7 @@
 | # | Category | Severity | Description |
 |---|----------|----------|-------------|
 | 6 | Execution Risk | Medium | In Section 8.2 multi-node command, the README uses `--master_addr=\$MEGA_HOST1_IP` (escaped dollar sign). Source uses `--master_addr=$MEGA_HOST1_IP`. The README version is actually correct for use inside a `kubectl exec -- bash -c "..."` context (the escape is needed to prevent premature shell expansion on the host). The source version would also work since it's in a similar context. Not a real bug, but the inconsistency may confuse readers. |
-| 7 | Content Gap | Low | Source Section 14.5 title says "Megatron-LM GB200 性能优化要点" and includes the line about Megatron-LM repo path `tests/functional_tests/test_cases/gpt/gpt3_15b_8t_release_gb200/model_config.yaml`. README omits this specific repo path reference. |
+| 7 | Content Gap | Low | Source Section 14.5 title says "Megatron-LM GB200 performance optimization highlights" and includes the line about Megatron-LM repo path `tests/functional_tests/test_cases/gpt/gpt3_15b_8t_release_gb200/model_config.yaml`. README omits this specific repo path reference. |
 
 ---
 
@@ -208,10 +208,10 @@
 
 | # | Category | Severity | Description |
 |---|----------|----------|-------------|
-| 8 | Content Gap | Medium | **Source Section 11.2 "Sub-block 域级故障上报" is dropped entirely.** This includes `gcloud alpha compute reservations blocks list`, `gcloud alpha compute reservations sub-blocks list`, and `gcloud alpha compute reservations sub-blocks report-subblock-as-faulty` commands. These are important for NVSwitch-level fault reporting. |
+| 8 | Content Gap | Medium | **Source Section 11.2 "Sub-block domain-level fault reporting" is dropped entirely.** This includes `gcloud alpha compute reservations blocks list`, `gcloud alpha compute reservations sub-blocks list`, and `gcloud alpha compute reservations sub-blocks report-subblock-as-faulty` commands. These are important for NVSwitch-level fault reporting. |
 | 9 | Content Gap | Low | Source Python SDK example includes a usage example block with `report_host_as_faulty(project_id="your-gcp-project", ...)`. README has the function definition but not the usage example. |
 | 10 | Content Gap | Low | Source Appendix C training table includes `iteration_time (ms)` and `tokens/gpu/s` columns. README simplifies to only `TFLOP/s/gpu` and `MFU` columns. |
-| 11 | Content Gap | Low | Source NCCL performance table note about "2-domain All2All 带宽说明" is present but slightly shorter in README. |
+| 11 | Content Gap | Low | Source NCCL performance table note about "2-domain All2All bandwidth explanation" is present but slightly shorter in README. |
 
 ---
 
@@ -236,7 +236,7 @@ This README covers RL training with veRL/AReaL on GB200, including:
 
 | # | Category | Severity | Description |
 |---|----------|----------|-------------|
-| 12 | Execution Risk | Medium | The RL README recommends `TP=8` mapping to "2 节点 x 4 GPU/节点". This requires MNNVL across 2 nodes. While valid for same-domain nodes, the README does not explicitly warn that both nodes MUST be in the same NVL72 domain for this TP=8 config to achieve the stated ~840 GB/s bandwidth. |
+| 12 | Execution Risk | Medium | The RL README recommends `TP=8` mapping to "2 nodes x 4 GPU/node". This requires MNNVL across 2 nodes. While valid for same-domain nodes, the README does not explicitly warn that both nodes MUST be in the same NVL72 domain for this TP=8 config to achieve the stated ~840 GB/s bandwidth. |
 | 13 | Content Gap | Low | The `verl_config.yaml` is a reference template but has no tested benchmark results (unlike all other sections which include measured results). |
 | 14 | Source Gap | Info | The RL training section was not in the original deployment guide. It should be clearly marked as supplementary/advisory content rather than validated deployment instructions. |
 

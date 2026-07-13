@@ -1,25 +1,25 @@
-> 🌐 **中文** | [English](README.en.md)
+> 🌐 [中文](README.md) | **English**
 
-# gpu-launchpad-playground GKE A4X 集群搭建指南
+# gpu-launchpad-playground GKE A4X Cluster Setup Guide
 
-> 对标 baker (supercomputer-testing) 的 GKE 集群，在 gpu-launchpad-playground 项目的 us-east1-d 建立。
+> Benchmarked against baker's (supercomputer-testing) GKE cluster, built in us-east1-d of the gpu-launchpad-playground project.
 >
-> 集群名: `chrisya-a4x-gke-v2`，16 台 GB200 (64 GPU)，单域 NVL72。
+> Cluster name: `chrisya-a4x-gke-v2`, 16 GB200 machines (64 GPUs), single-domain NVL72.
 
-## 前提条件
+## Prerequisites
 
-- 项目: `gpu-launchpad-playground`
+- Project: `gpu-launchpad-playground`
 - Zone: `us-east1-d`
-- 预留: `nvidia-gb200-z4pzosg110ik8` (36 台 a4x-highgpu-4g, 2 subblock × 18)
+- Reservation: `nvidia-gb200-z4pzosg110ik8` (36 a4x-highgpu-4g machines, 2 subblocks × 18)
 - Placement Policy: `a4x-nvl72-policy` (domain 1) + `forrest-a4x-1x72-policy` (domain 2)
-- VPC 已存在:
-  - 主管理网络: `chrisya-gvnic-net-0` / `chrisya-gvnic-sub-0` (10.14.0.0/16) — 与 CC-TW 同 VPC 内网互联
-  - 二级 gVNIC: `chrisya-gvnic-net-1` / `chrisya-gvnic-sub-1-ue1` (10.15.0.0/16)
+- VPCs already exist:
+  - Primary management network: `chrisya-gvnic-net-0` / `chrisya-gvnic-sub-0` (10.14.0.0/16) — internal peering with CC-TW on the same VPC
+  - Secondary gVNIC: `chrisya-gvnic-net-1` / `chrisya-gvnic-sub-1-ue1` (10.15.0.0/16)
   - RDMA: `chrisya-a4x-rdma-net` / 4 subnets (10.10.16-28.0/22)
 
-## Step 1: 添加 GKE Secondary Ranges
+## Step 1: Add GKE Secondary Ranges
 
-GKE 需要 Pod 和 Service 的 secondary IP range:
+GKE requires secondary IP ranges for Pods and Services:
 
 ```bash
 gcloud compute networks subnets update chrisya-gvnic-sub-0 \
@@ -27,9 +27,9 @@ gcloud compute networks subnets update chrisya-gvnic-sub-0 \
     --add-secondary-ranges=gke-pods=10.28.0.0/14,gke-services=10.32.0.0/20
 ```
 
-## Step 2: 创建 Cloud NAT
+## Step 2: Create Cloud NAT
 
-私有集群需要 NAT 让 pod 拉公共镜像:
+A private cluster needs NAT so that pods can pull public images:
 
 ```bash
 gcloud compute routers create chrisya-gke-nat-router \
@@ -43,7 +43,7 @@ gcloud compute routers nats create chrisya-gke-nat \
     --nat-all-subnet-ip-ranges
 ```
 
-## Step 3: 创建 GKE 集群
+## Step 3: Create the GKE Cluster
 
 ```bash
 gcloud container clusters create chrisya-a4x-gke-v2 \
@@ -67,13 +67,13 @@ gcloud container clusters create chrisya-a4x-gke-v2 \
     --scopes=cloud-platform
 ```
 
-关键参数说明:
-- `--enable-multi-networking`: RDMA 多网卡必需
-- `--enable-dataplane-v2`: 对标 baker 的 ADVANCED_DATAPATH
-- `--enable-private-nodes`: 安全隔离
-- `--addons=GcsFuseCsiDriver,LustreCsiDriver`: GCS 和 Lustre 存储
+Key parameter notes:
+- `--enable-multi-networking`: required for RDMA multi-NIC
+- `--enable-dataplane-v2`: matches baker's ADVANCED_DATAPATH
+- `--enable-private-nodes`: security isolation
+- `--addons=GcsFuseCsiDriver,LustreCsiDriver`: GCS and Lustre storage
 
-## Step 4: 配置 Master Authorized Networks
+## Step 4: Configure Master Authorized Networks
 
 ```bash
 gcloud container clusters update chrisya-a4x-gke-v2 \
@@ -82,9 +82,9 @@ gcloud container clusters update chrisya-a4x-gke-v2 \
     --master-authorized-networks=<CC-TW-IP>/32,<GLINUX-IP>/32,10.14.0.0/16
 ```
 
-## Step 5: 创建 A4X GPU Node Pool
+## Step 5: Create the A4X GPU Node Pool
 
-每个 domain 一个 node pool，通过 placement policy 控制物理域:
+One node pool per domain, with the physical domain controlled by the placement policy:
 
 ```bash
 # Domain 1 (a4x-nvl72-policy → subblock-0001)
@@ -107,33 +107,33 @@ gcloud container node-pools create a4x-domain-1 \
     --scopes=cloud-platform
 
 # Domain 2 (forrest-a4x-1x72-policy → subblock-0002)
-# 同上，改 --placement-policy=forrest-a4x-1x72-policy
+# Same as above, but change --placement-policy=forrest-a4x-1x72-policy
 ```
 
-### Placement Policy 关键说明
+### Key Notes on Placement Policy
 
-**必须用预留已绑定的 placement policy**。每个 `1x72` COLLOCATED policy 会锁定到一个物理 NVL72 subblock。新建的 policy 如果两个 subblock 都被现有 policy 占了，会报 `ZONE_RESOURCE_POOL_EXHAUSTED`。
+**You must use a placement policy already bound to the reservation.** Each `1x72` COLLOCATED policy locks onto one physical NVL72 subblock. A newly created policy will report `ZONE_RESOURCE_POOL_EXHAUSTED` if both subblocks are already taken by existing policies.
 
-当前预留 subblock 绑定关系:
+Current reservation-to-subblock bindings:
 
-| Placement Policy | Subblock | 备注 |
+| Placement Policy | Subblock | Notes |
 |---|---|---|
-| `a4x-nvl72-policy` | subblock-0001 | ivy 17 台 + tlinux 1 台 |
-| `forrest-a4x-1x72-policy` | subblock-0002 | 我们 16 台 + tlinux 1 台 |
+| `a4x-nvl72-policy` | subblock-0001 | ivy 17 machines + tlinux 1 machine |
+| `forrest-a4x-1x72-policy` | subblock-0002 | our 16 machines + tlinux 1 machine |
 
 ### `--ephemeral-storage-local-ssd=count=4`
 
-**必须指定**。预留的 instance spec 要求 4 个 3TB local SSD。不加这个参数会报 `ZONE_RESOURCE_POOL_EXHAUSTED`（预留配置不匹配）。
+**Must be specified.** The reservation's instance spec requires 4 × 3TB local SSDs. Omitting this parameter results in `ZONE_RESOURCE_POOL_EXHAUSTED` (reservation config mismatch).
 
-## Step 6: 安装 GPU Stack 组件
+## Step 6: Install GPU Stack Components
 
-GKE 集群创建后，以下组件自动安装:
+After the GKE cluster is created, the following components are installed automatically:
 - GPU device plugin (nvidia-gpu-device-plugin-large-cos)
 - Lustre CSI
 - GCS Fuse CSI
 - Networking DRA driver (gke-managed-networking-dra-driver)
 
-以下需要手动安装:
+The following must be installed manually:
 
 ### 6.1 LeaderWorkerSet Controller
 
@@ -147,14 +147,14 @@ kubectl apply --server-side -f https://github.com/kubernetes-sigs/lws/releases/l
 kubectl apply -f https://raw.githubusercontent.com/GoogleCloudPlatform/container-engine-accelerators/master/gpudirect-rdma/nccl-rdma-installer-a4x.yaml
 ```
 
-安装后每节点 `/home/kubernetes/bin/gib/` 目录包含 GIB NCCL plugin (`libnccl-net.so`)。
+After installation, each node's `/home/kubernetes/bin/gib/` directory contains the GIB NCCL plugin (`libnccl-net.so`).
 
 ### 6.3 NVIDIA DRA GPU Driver (ComputeDomain)
 
-> **关键**: 必须用 NVIDIA NGC Helm repo 的 **v25.12.0+**，不要用开源 registry.k8s.io 的 v0.4.0。v25.3.x 的 ComputeDomain daemon 无法正确初始化 IMEX（0/1 not ready），v25.12.0 修复了此问题。
+> **Critical**: You must use **v25.12.0+** from the NVIDIA NGC Helm repo, not v0.4.0 from the open-source registry.k8s.io. The v25.3.x ComputeDomain daemon cannot initialize IMEX correctly (0/1 not ready); v25.12.0 fixes this issue.
 
 ```bash
-# 1. ResourceQuota (DRA daemon 用 system-critical priority)
+# 1. ResourceQuota (the DRA daemon uses system-critical priority)
 kubectl create ns nvidia-dra-driver-gpu
 kubectl apply -n nvidia-dra-driver-gpu -f - <<EOF
 apiVersion: v1
@@ -220,18 +220,18 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
     -f /tmp/dra-values.yaml
 ```
 
-安装后验证：`kubectl get pods -n nvidia-dra-driver-gpu` 应有 1 controller + N kubelet-plugin 全部 Running。
+Verify after installation: `kubectl get pods -n nvidia-dra-driver-gpu` should show 1 controller + N kubelet-plugins, all Running.
 
-**GKE COS 要点**:
-- `nvidiaDriverRoot` 必须为 `/home/kubernetes/bin/nvidia`（COS 的 driver 路径）
-- 不需要手动打 NFD label（NGC chart 用 `cloud.google.com/gke-accelerator` node affinity）
-- 不需要手动安装 ComputeDomain CRD（NGC chart 内含）
+**GKE COS key points**:
+- `nvidiaDriverRoot` must be `/home/kubernetes/bin/nvidia` (the COS driver path)
+- No need to manually apply NFD labels (the NGC chart uses `cloud.google.com/gke-accelerator` node affinity)
+- No need to manually install the ComputeDomain CRD (bundled in the NGC chart)
 
 ### 6.4 Network Objects (RDMA)
 
 ```yaml
-# gvnic-1 + rdma-0~3 的 Network + GKENetworkParamSet
-# RDMA 的 deviceMode 必须设为 RDMA
+# Network + GKENetworkParamSet for gvnic-1 + rdma-0~3
+# deviceMode for RDMA must be set to RDMA
 apiVersion: networking.gke.io/v1
 kind: GKENetworkParamSet
 metadata:
@@ -242,10 +242,10 @@ spec:
   deviceMode: RDMA
 ```
 
-## Step 7: 创建 ComputeDomain 并标记节点
+## Step 7: Create the ComputeDomain and Label the Nodes
 
 ```bash
-# 创建 ComputeDomain
+# Create the ComputeDomain
 kubectl apply -f - <<EOF
 apiVersion: resource.nvidia.com/v1beta1
 kind: ComputeDomain
@@ -258,16 +258,16 @@ spec:
       name: my-compute-domain-channel
 EOF
 
-# 获取 UID 并标记 GPU 节点（触发 ComputeDomain daemon 部署）
+# Get the UID and label the GPU nodes (triggers ComputeDomain daemon deployment)
 CD_UID=$(kubectl get computedomain my-compute-domain -o jsonpath='{.metadata.uid}')
 kubectl get nodes -l cloud.google.com/gke-accelerator=nvidia-gb200 --no-headers | \
   awk '{print $1}' | xargs -I{} kubectl label node {} "resource.nvidia.com/computeDomain=$CD_UID" --overwrite
 
-# 验证 daemon 全部 1/1 Ready
+# Verify that all daemons are 1/1 Ready
 kubectl get pods -n nvidia-dra-driver-gpu | grep computedomain
 ```
 
-## Step 8: 验证
+## Step 8: Verify
 
 ```bash
 # GPU nodes
@@ -276,7 +276,7 @@ kubectl get nodes -l cloud.google.com/gke-accelerator=nvidia-gb200
 # DRA driver (1 controller + N kubelet-plugin)
 kubectl get pods -n nvidia-dra-driver-gpu
 
-# ComputeDomain daemon (应全部 1/1 Ready)
+# ComputeDomain daemon (should all be 1/1 Ready)
 kubectl get pods -n nvidia-dra-driver-gpu | grep computedomain
 
 # NCCL RDMA installer (N/N Running)
@@ -289,9 +289,9 @@ kubectl get deviceclasses  # compute-domain-*.nvidia.com + mrdma.google.com
 kubectl get pods -n lws-system
 ```
 
-## Step 9: 部署训练 Workload
+## Step 9: Deploy the Training Workload
 
-Pod 需要以下配置（参考 GKE 官方文档）:
+The Pod requires the following configuration (refer to the official GKE docs):
 
 ```yaml
 metadata:
@@ -323,34 +323,34 @@ spec:
     - {name: LD_LIBRARY_PATH, value: "/usr/local/nvidia/lib64"}
 ```
 
-### DSv3 16L 训练实测 (2026-07-08)
+### DSv3 16L Training Benchmark (2026-07-08)
 
-单域 16 节点 64 GPU，NeMo Bridge `run_script.py -m deepseek -mr deepseek_v3 -c fp8_mx`：
+Single-domain 16 nodes, 64 GPUs, NeMo Bridge `run_script.py -m deepseek -mr deepseek_v3 -c fp8_mx`:
 
-| iter | step time | 备注 |
+| iter | step time | Notes |
 |---|---|---|
 | 6 | 3207ms | warmup |
-| 7-10 | ~2540ms | **稳态** |
-| 11 | 3159ms | VPP spike (正常) |
-| 12-15 | ~2540ms | **稳态** |
+| 7-10 | ~2540ms | **steady state** |
+| 11 | 3159ms | VPP spike (normal) |
+| 12-15 | ~2540ms | **steady state** |
 | 16 | 3165ms | VPP spike |
-| 17-20 | ~2545ms | **稳态** |
+| 17-20 | ~2545ms | **steady state** |
 
-稳态 ~2.54s/step，估算 **~1030 TFLOPs/GPU**。20 步全跑完，零错误。
+Steady state ~2.54s/step, estimated at **~1030 TFLOPs/GPU**. All 20 steps completed with zero errors.
 
-**注意**: 单域 `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN` 必须等于 EP 度（EP=32 → 设 32，不是 64）。
+**Note**: For a single domain, `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN` must equal the EP degree (EP=32 → set 32, not 64).
 
-## 踩坑记录
+## Troubleshooting Log
 
-| 问题 | 原因 | 修复 |
+| Issue | Cause | Fix |
 |---|---|---|
-| `ZONE_RESOURCE_POOL_EXHAUSTED` 建 VM | 新 placement policy 无法分配到已被占的 subblock | 用预留已绑定的 placement policy |
-| `ZONE_RESOURCE_POOL_EXHAUSTED` 不带 policy | 预留要求 4 local SSD，创建命令没指定 | 加 `--ephemeral-storage-local-ssd=count=4` |
-| LWS image pull 失败 | 私有集群无 Cloud NAT | 创建 Cloud Router + NAT |
-| kubectl 连不上私有集群 | Master authorized networks 未配置 | 加 CC-TW 和 gLinux 的 IP |
-| Lustre CSI 未启用 | 集群创建时忘了加 addon | `--addons=LustreCsiDriver` 或后续 `cluster update` |
-| DRA v25.3.x CD daemon 0/1 not ready | IMEX 初始化失败 + 409 Conflict race | **升级到 v25.12.0** |
-| CUDA 801 `operation not supported` | ComputeDomain daemon 未就绪时训练启动 | 确保 CD daemon 全部 1/1 Ready 后再启动训练 |
-| `ranks 32 not divisible by ranks_per_node 64` | 单域 EP=32 但 `EP_RANKS_PER_DOMAIN=64` | 改为 `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32` |
-| DRA PreBind `nil request mappings` (v0.4.0) | 开源 DRA driver 与 GKE DRA scheduler 不兼容 | 换 NGC v25.12.0 |
-| NeMo 镜像拉不到 | 跨项目 AR 无权限 | `crane copy` 到本项目 AR |
+| `ZONE_RESOURCE_POOL_EXHAUSTED` when creating VMs | A new placement policy cannot allocate onto an already-occupied subblock | Use a placement policy already bound to the reservation |
+| `ZONE_RESOURCE_POOL_EXHAUSTED` without a policy | The reservation requires 4 local SSDs, but the create command did not specify them | Add `--ephemeral-storage-local-ssd=count=4` |
+| LWS image pull failure | Private cluster has no Cloud NAT | Create a Cloud Router + NAT |
+| kubectl cannot reach the private cluster | Master authorized networks not configured | Add the IPs of CC-TW and gLinux |
+| Lustre CSI not enabled | Forgot to add the addon at cluster creation | `--addons=LustreCsiDriver`, or a later `cluster update` |
+| DRA v25.3.x CD daemon 0/1 not ready | IMEX initialization failure + 409 Conflict race | **Upgrade to v25.12.0** |
+| CUDA 801 `operation not supported` | Training started before the ComputeDomain daemon was ready | Ensure all CD daemons are 1/1 Ready before starting training |
+| `ranks 32 not divisible by ranks_per_node 64` | Single-domain EP=32 but `EP_RANKS_PER_DOMAIN=64` | Change to `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32` |
+| DRA PreBind `nil request mappings` (v0.4.0) | The open-source DRA driver is incompatible with the GKE DRA scheduler | Switch to NGC v25.12.0 |
+| NeMo image cannot be pulled | No permissions for cross-project AR | `crane copy` to this project's AR |
