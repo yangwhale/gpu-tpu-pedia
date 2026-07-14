@@ -551,8 +551,9 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 | 15n 60G 跨域 MNNVL=2 | 848 | 278 | 273 | 67 | 7 NIC (mlx5_7 故障时) |
 | **16n 64G 2-domain MNNVL=2** | **845** | **675** | **693** | **153** | **8 NIC 全通 (交换机重启后)** |
 | 32n 128G 2-domain MNNVL=2 | 834 | 679 | 697 | crash | sb-0005×16 + sb-0006×16 |
-| 36n 144G 2-domain MNNVL=2 | 837 | 251 | 257 | - | sb-0005×17 + sb-0003×18 + unknown (all_gather/RS 异常低) |
-| **70n 280G 4-domain MNNVL=2** | **617** | **674** | **688** | - | **sb-0003/0004/0005/0006, 跨域不测 alltoall** |
+| 36n 144G 2-domain MNNVL=2 | 837 | 251 | 257 | - | sb-0005×17 + sb-0003×18 (all_gather/RS 异常低, 疑似不均匀) |
+| **64n 256G 4-domain MNNVL=2** | **613** | **676** | **692** | - | **4×16 均匀, sb-0003/0004/0005/0006** |
+| 64n 256G 4-domain +NCHANNELS=4 | 615 | 668 | 696 | - | NCHANNELS_PER_NET_PEER=4 无改善 |
 
 #### 关键发现
 
@@ -562,7 +563,8 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 4. **NCCL_IB_DATA_DIRECT=0**: NVIDIA 580 驱动不支持 CX-8 Data Direct DMA。GIB nccl.a4xmax.conf 自动处理
 5. **MPI 大规模 SSH 端口**: 超过 ~36 节点时，OpenMPI ORTE 使用 tree routing 从中间节点发起 SSH。必须设 `OMPI_MCA_plm_rsh_args="-p <port> -o StrictHostKeyChecking=no"` + `OMPI_MCA_routed=direct`
 6. **跨域 alltoall 不稳定**: NCCL chain pollution 导致跨 ComputeDomain 的 alltoall 崩溃或极低性能，跨域测试跳过
-7. **4-domain all_reduce 降幅**: 70n 4-domain all_reduce 617 GB/s 比 16n 2-domain 845 GB/s 低 27%，因跨域 hop 增多导致 RDMA 通信量翻倍
+7. **4-domain all_reduce 降幅**: 64n 4-domain all_reduce 613 GB/s 比 16n 2-domain 845 GB/s 低 27%。原因: hierarchical all_reduce 跨域流量因子从 2-domain 的 1.0 增到 4-domain 的 1.5 (2*(D-1)/D)，RDMA 带宽是瓶颈。`NCCL_NCHANNELS_PER_NET_PEER=4` 和 `NCCL_PXN_C2C=1`(GIB 默认已开) 均无改善
+8. **GIB nccl.a4xmax.conf 默认值**: `NCCL_PXN_C2C=1`, `NCCL_IB_ADAPTIVE_ROUTING=1`, `NCCL_IB_QPS_PER_CONNECTION=4`, `NCCL_NCHANNELS_PER_NET_PEER=1`, `NCCL_TUNER_PLUGIN=none` — 由 `NCCL_ENV_PLUGIN=gcp` 在运行时注入
 
 ### 环境状态汇总
 
@@ -578,7 +580,7 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 | GPU | ✅ | 4x GB300/节点, 280 GPU 总计 |
 | NVLink 同域 MNNVL | ✅ | 841 GB/s (2n), 845 GB/s (16n) |
 | RDMA 跨域 (8 NIC) | ✅ | 全部 mlx5_0-7 正常 (交换机重启后) |
-| 70n 280G 4-domain NCCL | ✅ | all_reduce 617, all_gather 674, reduce_scatter 688 GB/s |
+| 64n 256G 4-domain NCCL | ✅ | all_reduce 613, all_gather 676, reduce_scatter 692 GB/s |
 
 ### MNNVL 进展 (2026-07-12 09:20 HKT)
 
