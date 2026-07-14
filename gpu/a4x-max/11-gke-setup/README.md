@@ -549,7 +549,10 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 | 2n 8G 跨域 RDMA | 328 | 194 | 194 | 43 | 纯 RDMA, = GB200 |
 | 3n 12G 跨域 MNNVL=2 | 341 | 136 | 136 | 45 | |
 | 15n 60G 跨域 MNNVL=2 | 848 | 278 | 273 | 67 | 7 NIC (mlx5_7 故障时) |
-| **16n 64G 跨域 MNNVL=2** | **845** | **675** | **693** | **153** | **8 NIC 全通 (交换机重启后)** |
+| **16n 64G 2-domain MNNVL=2** | **845** | **675** | **693** | **153** | **8 NIC 全通 (交换机重启后)** |
+| 32n 128G 2-domain MNNVL=2 | 834 | 679 | 697 | crash | sb-0005×16 + sb-0006×16 |
+| 36n 144G 2-domain MNNVL=2 | 837 | 251 | 257 | - | sb-0005×17 + sb-0003×18 + unknown (all_gather/RS 异常低) |
+| **70n 280G 4-domain MNNVL=2** | **617** | **674** | **688** | - | **sb-0003/0004/0005/0006, 跨域不测 alltoall** |
 
 #### 关键发现
 
@@ -557,23 +560,25 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 2. **GID 配置**: 必须使用 GID index 7 (RoCE v2 + ipvlan c0de 地址)。GKE DRA 环境下由 GIB env plugin 自动处理
 3. **同域 MNNVL=0 不可用**: 同 subblock 内节点之间纯 RDMA 模式 NCCL 初始化 hang (RoCE Metal 架构限制)。跨域 MNNVL=0 正常
 4. **NCCL_IB_DATA_DIRECT=0**: NVIDIA 580 驱动不支持 CX-8 Data Direct DMA。GIB nccl.a4xmax.conf 自动处理
+5. **MPI 大规模 SSH 端口**: 超过 ~36 节点时，OpenMPI ORTE 使用 tree routing 从中间节点发起 SSH。必须设 `OMPI_MCA_plm_rsh_args="-p <port> -o StrictHostKeyChecking=no"` + `OMPI_MCA_routed=direct`
+6. **跨域 alltoall 不稳定**: NCCL chain pollution 导致跨 ComputeDomain 的 alltoall 崩溃或极低性能，跨域测试跳过
+7. **4-domain all_reduce 降幅**: 70n 4-domain all_reduce 617 GB/s 比 16n 2-domain 845 GB/s 低 27%，因跨域 hop 增多导致 RDMA 通信量翻倍
 
 ### 环境状态汇总
 
 | 组件 | 状态 | 备注 |
 |------|------|------|
-| GKE 集群 | ✅ | gb300-gke-test, 1.36.0-gke.4447000 |
+| GKE 集群 | ✅ | gb300-gke-test, 1.36.0-gke.4447000, regional |
 | VPC (MTU 8896) | ✅ | gb300-gke-mgmt, Cloud NAT |
-| Node pool-1 (8 节点) | ✅ | subblock-0005, hugepages 2Mi x 4096 |
-| Node pool-2 (8 节点) | ✅ | subblock-0006, hugepages 2Mi x 4096 |
-| asapd-lite | ✅ | 官方 YAML, 16/16 Running |
+| Node pool (4 pools, 71 节点) | ✅ | sb-0003×18, sb-0004×18, sb-0005×17, sb-0006×18 (1台 3GPU) |
+| asapd-lite | ✅ | 官方 YAML, 71/71 Running |
 | DRA GPU Driver | ✅ | v25.8.0, 官方 helm values |
 | ComputeDomain CRD | ✅ | IMEX channel 自动管理 |
 | GKE Managed DRANET | ✅ | `gke-managed-networking-dra-driver` |
-| GPU | ✅ | 4x GB300/节点, 64 GPU 总计 |
+| GPU | ✅ | 4x GB300/节点, 280 GPU 总计 |
 | NVLink 同域 MNNVL | ✅ | 841 GB/s (2n), 845 GB/s (16n) |
 | RDMA 跨域 (8 NIC) | ✅ | 全部 mlx5_0-7 正常 (交换机重启后) |
-| 16n 64G NCCL | ✅ | all_reduce 845, alltoall 153 GB/s |
+| 70n 280G 4-domain NCCL | ✅ | all_reduce 617, all_gather 674, reduce_scatter 688 GB/s |
 
 ### MNNVL 进展 (2026-07-12 09:20 HKT)
 
