@@ -225,6 +225,38 @@ kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases
 
 如果不想用 Helm chart，可以手动构建 Pod spec，关键是在容器启动脚本中包含上述 7 个步骤（DOCA-OFED + NCCL 升级 + GIB 安装 + libibverbs 清理 + 环境变量 + Megatron-Bridge clone + torchrun）。
 
+## GB300 GKE 实测结果 (2026-07-15)
+
+### Qwen3 235B 64 GPU 单域 (sb-0004, 16 节点)
+
+| 轮次 | Config | CUDA Graph | 稳态 TFLOP/s | Step Time | 备注 |
+|------|--------|------------|-------------|-----------|------|
+| R1 | PP=8 EP=8 VPP=3 V1 | TE scoped (moe_router,moe_preprocess) | **314** | 30.7s | 缺 attn scope |
+| R2 | PP=8 EP=8 VPP=3 V1 | TE scoped (attn,moe_router,moe_preprocess) | **420** | 23.0s | +34% |
+| R3 | PP=8 EP=8 VPP=3 V2 | full_iteration | ❌ | - | NeMo 26.02 不支持 full_iteration |
+
+> **对标**: GB200 V1 PP=8 EP=8 单域 = 930 TFLOP/s。GB300 当前 420 = GB200 的 45%。
+> **差距分析**: HybridEP dispatcher 未激活 (flex_dispatcher GPU 检测 bug) + 缺 numactl CPU 绑定 + NeMo 26.02 vs 25.11 版本差异。
+
+### 解决 GB300 GKE Megatron 训练的关键步骤
+
+1. **DOCA-OFED userspace** — `apt install doca-ofed-userspace` (CX-8 RDMA)
+2. **NCCL 升级** — `apt install --only-upgrade libnccl2 libnccl-dev`
+3. **GIB 插件** — `apt install nccl-gib-plugins` (从 GCP apt repo)
+4. **libibverbs 清理** — `rm -rf /opt/rdma-core/build/lib/libibverbs*`
+5. **HF_HUB_DISABLE_XET=1** — 禁用 HuggingFace XET 存储后端 (NeMo 26.02 不兼容)
+6. **去掉 expandable_segments** — 与 Bridge r0.3.0 CUDA Graph assertion 冲突
+7. **NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN** — 必须匹配 EP 值
+8. **TCP 同步屏障** — 16 节点同步等待所有 pod 安装完成后再启动 torchrun
+9. **Megatron-Bridge r0.3.0** — `git checkout 9c9dd848` + submodule init
+
+### 已知限制
+
+1. **DOCA-OFED 运行时安装 ~15 分钟** — 需要构建预装镜像消除此瓶颈
+2. **full_iteration CUDA Graph** — NeMo 26.02 的 run_script.py 不支持 full_iteration 参数
+3. **HybridEP flex_dispatcher** — GPU 名称 "NVIDIA GB300" 不匹配检测逻辑
+4. **GB300 PP=1 EP=64** — 官方 recipe 配置，但 NCCL 子组创建 hang (原因待查)
+
 ---
 
-*基于 [AI-Hypercomputer/gpu-recipes](https://github.com/AI-Hypercomputer/gpu-recipes) + NVIDIA Megatron Bridge 文档 · 2026-07-14*
+*基于 [AI-Hypercomputer/gpu-recipes](https://github.com/AI-Hypercomputer/gpu-recipes) + NVIDIA Megatron Bridge 文档 · 2026-07-15*
