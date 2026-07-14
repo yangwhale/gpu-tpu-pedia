@@ -1,5 +1,11 @@
 # GB300 (A4X Max) Slurm 集群部署与 NCCL Benchmark
 
+> **状态: 封存** — Packer 镜像构建阶段卡住（2h+ startup script 未完成），暂无时间排查。GKE 路径已全面验证通过（16n 64GPU, all_reduce 845 GB/s），优先使用 GKE。
+>
+> **封存原因**: Cluster Toolkit 的 Packer 构建步骤需要在 c4a-highcpu-16 上安装 Slurm + DOCA OFED + CUDA + asapd-lite，startup script 运行超过 2 小时未设置 `startup-script-status=done`，Packer 一直等待。可能是 DOCA OFED 下载慢或 Slurm ansible-pull 编译超时。
+>
+> **已清理资源**: Packer 构建 VM 已删除，GCS terraform state bucket `chrisya-gb300-slurm-tf-state` 保留。
+>
 > **方案**: GCP Cluster Toolkit + Slurm，官方推荐的 GB300 裸机编排方式
 > **参考**: [GCP: Create an A4X Max Slurm cluster](https://cloud.google.com/cluster-toolkit/docs/deploy/slurm/create-a4x-max-cluster)
 > **项目**: `tencent-gcp-taiji-poc`, Zone: `us-central1-b`
