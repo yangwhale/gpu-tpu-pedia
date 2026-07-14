@@ -519,33 +519,44 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 
 ### NCCL Benchmark 结果
 
-**单节点 (4 GPU NVLink)**:
+#### 最终结果 (2026-07-14, 交换机重启后全 8 NIC 正常)
 
-| Collective | @8G busbw (GB/s) |
-|-----------|-----------------|
-| all_reduce | **681** |
+**16 节点 64 GPU 跨域 MNNVL=2 (subblock-0005 x8 + subblock-0006 x8)**:
 
-**双节点 同域 MNNVL=2 (8 GPU, subblock-0005 内)**:
+| Collective | @16G busbw (GB/s) | GB200 36n 参考 | vs GB200 |
+|-----------|-------------------|---------------|---------|
+| all_reduce | **845** | 748 | **+13%** |
+| all_gather | **675** | 674 | 持平 |
+| reduce_scatter | **693** | 691 | 持平 |
+| alltoall | **153** | 65 | **+135%** |
 
-| Collective | @16G busbw (GB/s) | GB200 参考 |
-|-----------|-------------------|-----------|
-| all_reduce | **841** | 840 |
-| all_gather | **684** | 683 |
-| reduce_scatter | **693** | 693 |
-| alltoall | **684** | 680 |
+> **GB300 全面超越 GB200**。all_reduce +13% (845 vs 748)，alltoall +135% (153 vs 65)。
+>
+> **为什么 GB300 更快**：
+> 1. **RDMA 网卡升级**: CX-8 400Gbps x 8 = 3.2 Tbps/节点 (GB200: CX-7 200Gbps x 4 = 800 Gbps/节点, 4 倍)
+> 2. **NVLink 带宽持平**: 同域内 NVSwitch 18 路 NVLink 带宽与 GB200 相同 (~900 GB/s)
+> 3. **跨域传输受益最大**: all_reduce 的跨域 RDMA 部分带宽翻倍，同域 NVLink 部分不变，混合后 +13%
+> 4. **alltoall 受益最明显**: alltoall 所有节点两两通信，跨域比例最高，RDMA 翻倍直接体现
+>
+> **注**: GB200 参考值为 36 节点 144 GPU (2 x NVL72)。GB300 为 16 节点 64 GPU (2 x 8 节点)。GB300 规模更小但性能更高，如扩到 36 节点预期进一步提升。
 
-> 与 GB200 完全持平（±0.5%），GKE DRA + ComputeDomain + GIB 全栈验证通过。
+#### 全规模对比表
 
-**双节点 跨域 MNNVL=0 纯 RDMA (8 GPU, subblock-0005 ↔ subblock-0006)**:
+| 规模 | all_reduce | all_gather | reduce_scatter | alltoall | 说明 |
+|------|-----------|-----------|---------------|---------|------|
+| 1n 4G 同域 | 681 | - | - | - | NVLink 基线 |
+| 2n 8G 同域 MNNVL=2 | 841 | 684 | 693 | 684 | = GB200 |
+| 2n 8G 跨域 RDMA | 328 | 194 | 194 | 43 | 纯 RDMA, = GB200 |
+| 3n 12G 跨域 MNNVL=2 | 341 | 136 | 136 | 45 | |
+| 15n 60G 跨域 MNNVL=2 | 848 | 278 | 273 | 67 | 7 NIC (mlx5_7 故障时) |
+| **16n 64G 跨域 MNNVL=2** | **845** | **675** | **693** | **153** | **8 NIC 全通 (交换机重启后)** |
 
-| Collective | @16G busbw (GB/s) |
-|-----------|-------------------|
-| all_reduce | **328** |
-| all_gather | **194** |
-| reduce_scatter | **194** |
-| alltoall | **43** (未优化 P2P 参数) |
+#### 关键发现
 
-> 同域 MNNVL=0 不可用 — 同 subblock 内节点之间纯 RDMA 模式 NCCL 初始化 hang。需通过 `/etc/nccl.conf` 注入 `NCCL_IB_HCA` 排除 mlx5_7（rail switch 故障）和 `NCCL_IB_DATA_DIRECT=0`。
+1. **mlx5_7 rail switch 故障**: 初始测试时全 block 12 subblock 的 mlx5_7 (第 8 条 rail) 不可用。交换机重启后修复，8 NIC 全部 387 Gb/s
+2. **GID 配置**: 必须使用 GID index 7 (RoCE v2 + ipvlan c0de 地址)。GKE DRA 环境下由 GIB env plugin 自动处理
+3. **同域 MNNVL=0 不可用**: 同 subblock 内节点之间纯 RDMA 模式 NCCL 初始化 hang (RoCE Metal 架构限制)。跨域 MNNVL=0 正常
+4. **NCCL_IB_DATA_DIRECT=0**: NVIDIA 580 驱动不支持 CX-8 Data Direct DMA。GIB nccl.a4xmax.conf 自动处理
 
 ### 环境状态汇总
 
@@ -553,19 +564,16 @@ helm install nvidia-dra-driver-gpu nvidia/nvidia-dra-driver-gpu \
 |------|------|------|
 | GKE 集群 | ✅ | gb300-gke-test, 1.36.0-gke.4447000 |
 | VPC (MTU 8896) | ✅ | gb300-gke-mgmt, Cloud NAT |
-| Node pool (2 节点) | ✅ | subblock-0005, hugepages 2Mi x 4096 |
-| asapd-lite | ✅ | 官方 YAML, 2/2 Running, ipvlan c0de 配置完成 |
-| DRA GPU Driver | ✅ | v25.8.0, 官方 helm values, controller + kubelet-plugin |
+| Node pool-1 (8 节点) | ✅ | subblock-0005, hugepages 2Mi x 4096 |
+| Node pool-2 (8 节点) | ✅ | subblock-0006, hugepages 2Mi x 4096 |
+| asapd-lite | ✅ | 官方 YAML, 16/16 Running |
+| DRA GPU Driver | ✅ | v25.8.0, 官方 helm values |
 | ComputeDomain CRD | ✅ | IMEX channel 自动管理 |
-| GKE Managed DRANET | ✅ | `gke-managed-networking-dra-driver`, 12 设备/节点 |
-| GPU | ✅ | 4x GB300, CUDA 13.0, nvidia.com/gpu: 4 |
-| NVLink 单节点 | ✅ | 681 GB/s |
-| NVLink 双节点 MNNVL | ✅ | 841 GB/s all_reduce |
-| RDMA 跨域 (MNNVL=0) | ✅ | 328/194/194/43 GB/s (all_reduce/gather/scatter/alltoall) |
-| RDMA 同域 (MNNVL=0) | ❌ | 同域节点不支持纯 RDMA，NCCL hang |
-| GIB NCCL Plugin | ✅ | 通过 GIB 诊断镜像容器内使用 |
-| RDMA (跨节点) | 🔄 | 待测试 (DRA claims + `mrdma.google.com`) |
-| IMEX / MNNVL | 🔄 | 待测试 (ComputeDomain 已就绪) |
+| GKE Managed DRANET | ✅ | `gke-managed-networking-dra-driver` |
+| GPU | ✅ | 4x GB300/节点, 64 GPU 总计 |
+| NVLink 同域 MNNVL | ✅ | 841 GB/s (2n), 845 GB/s (16n) |
+| RDMA 跨域 (8 NIC) | ✅ | 全部 mlx5_0-7 正常 (交换机重启后) |
+| 16n 64G NCCL | ✅ | all_reduce 845, alltoall 153 GB/s |
 
 ### MNNVL 进展 (2026-07-12 09:20 HKT)
 
