@@ -229,14 +229,24 @@ kubectl apply --server-side -f https://github.com/kubernetes-sigs/kueue/releases
 
 ### Qwen3 235B 64 GPU 单域 (sb-0004, 16 节点)
 
-| 轮次 | Config | CUDA Graph | 稳态 TFLOP/s | Step Time | 备注 |
-|------|--------|------------|-------------|-----------|------|
-| R1 | PP=8 EP=8 VPP=3 V1 | TE scoped (moe_router,moe_preprocess) | **314** | 30.7s | 缺 attn scope |
-| R2 | PP=8 EP=8 VPP=3 V1 | TE scoped (attn,moe_router,moe_preprocess) | **420** | 23.0s | +34% |
-| R3 | PP=8 EP=8 VPP=3 V2 | full_iteration | ❌ | - | NeMo 26.02 不支持 full_iteration |
+| 轮次 | PP | EP | Graph | 优化 | 稳态 TFLOP/s | Step Time |
+|------|----|----|-------|------|-------------|-----------|
+| R1 | 8 | 8 | TE (moe_router,moe_preprocess) | 基线 | **314** | 30.7s |
+| R2 | 8 | 8 | TE (+attn) | + attn scope | **420** | 23.0s |
+| R3 | 1 | 64 | TE (attn,moe_router,moe_preprocess) | PP=1 消除 bubble | **940** | 10.3s |
+| **R4** | **1** | **64** | **TE (attn,moe_router,moe_preprocess)** | **+内部 env vars +numactl** | **1007** | **9.6s** |
 
-> **对标**: GB200 V1 PP=8 EP=8 单域 = 930 TFLOP/s。GB300 当前 420 = GB200 的 45%。
-> **差距分析**: HybridEP dispatcher 未激活 (flex_dispatcher GPU 检测 bug) + 缺 numactl CPU 绑定 + NeMo 26.02 vs 25.11 版本差异。
+> **R3→R4 优化来自 Buganizer b/514757311** (Google 内部 GB300 测试追踪):
+> - `CUDA_DEVICE_MAX_CONNECTIONS=32` (原 1, 允许更多并行 CUDA stream)
+> - `TORCH_NCCL_HIGH_PRIORITY=1` (NCCL 线程优先级)
+> - `TORCH_NCCL_AVOID_RECORD_STREAMS=1` (减少内存碎片)
+> - `NVTE_*_LAYERNORM_SM_MARGIN=20` (原 16)
+> - `numactl --cpunodebind=$((LOCAL_RANK/2)) --membind=$((LOCAL_RANK/2))` (CPU NUMA 绑定)
+
+> **对标**:
+> - GB200 V1 PP=8 EP=8 单域 = 930 → GB300 PP=1 EP=64 = **1007** (+8.3%, 超过 GB200!)
+> - Google 内部 GB300 256GPU V1 = 963 → 我们 64GPU V1 = **1007** (超过内部团队 256 卡!)
+> - NVIDIA 官方 GB300 256GPU V2 = 1335 → 我们 64GPU V1 = 1007 (75.4%, 差距来自 full graph + HybridEP)
 
 ### 解决 GB300 GKE Megatron 训练的关键步骤
 
