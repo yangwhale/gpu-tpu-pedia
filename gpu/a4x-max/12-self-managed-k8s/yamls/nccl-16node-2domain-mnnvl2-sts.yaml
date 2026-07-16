@@ -1,0 +1,207 @@
+# NCCL Test — 16 node × 2 ComputeDomain (8+8), MNNVL=2
+# g1: 8 pods on subblock-0005, g2: 8 pods on subblock-0006
+# Master: g1-0, all others: sshd workers
+# Uses run_nccl_tests.sh from GIB diagnostic image
+
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata: { name: nccl-16n-cd-g1 }
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate: { name: nccl-16n-cd-g1-channel }
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata: { name: nccl-16n-cd-g2 }
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate: { name: nccl-16n-cd-g2-channel }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata: { name: rdma-nics-nccl-16n-g1 }
+spec:
+  spec:
+    devices:
+      requests:
+      - { name: rdma-nics, exactly: { deviceClassName: rdma-devices, count: 8 } }
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata: { name: rdma-nics-nccl-16n-g2 }
+spec:
+  spec:
+    devices:
+      requests:
+      - { name: rdma-nics, exactly: { deviceClassName: rdma-devices, count: 8 } }
+---
+apiVersion: v1
+kind: Service
+metadata: { name: nccl-16n-g1 }
+spec:
+  selector: { app: nccl-16n-g1 }
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: v1
+kind: Service
+metadata: { name: nccl-16n-g2 }
+spec:
+  selector: { app: nccl-16n-g2 }
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: nccl-16n-g1 }
+spec:
+  serviceName: nccl-16n-g1
+  replicas: 8
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: nccl-16n-g1 }
+  template:
+    metadata:
+      labels: { app: nccl-16n-g1, app-wide: nccl-16n }
+    spec:
+      tolerations: [{ operator: "Exists" }]
+      nodeSelector:
+        feature.node.kubernetes.io/pci-10de.present: "true"
+        nvidia.com/gpu.clique: "subblock-0005"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app, operator: In, values: [nccl-16n-g1] }] }
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - { name: shared-memory, emptyDir: { medium: "Memory", sizeLimit: 250Gi } }
+      containers:
+      - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+        name: nccl-test
+        resources:
+          limits: { nvidia.com/gpu: 4 }
+          claims:
+          - { name: rdma-nics }
+          - { name: compute-domain-channel }
+        securityContext: { privileged: true }
+        volumeMounts: [{ name: shared-memory, mountPath: /dev/shm }]
+        env:
+        - { name: LD_LIBRARY_PATH, value: "/usr/local/gib/lib64:/usr/local/nvidia/lib64" }
+        - { name: NCCL_MNNVL_ENABLE, value: "2" }
+        - { name: NCCL_CUMEM_ENABLE, value: "1" }
+        - { name: NCCL_IB_GID_INDEX, value: "7" }
+        - { name: NCCL_IB_TC, value: "52" }
+        - { name: NCCL_IB_FIFO_TC, value: "84" }
+        - { name: NCCL_IB_DATA_DIRECT, value: "0" }
+        - { name: NCCL_IB_HCA, value: "mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6" }
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -eu
+          source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+          mkdir -p /run/sshd
+          sed -i 's/^#\?Port .*/Port 222/' /etc/ssh/sshd_config
+          echo "MaxStartups 200:30:400" >> /etc/ssh/sshd_config
+          /usr/sbin/sshd
+
+          ORDINAL=$(hostname | sed 's/.*-//')
+          # Build host list: g1-0..g1-7, g2-0..g2-7
+          ALL_HOSTS=""
+          for i in $(seq 0 7); do ALL_HOSTS="$ALL_HOSTS nccl-16n-g1-${i}.nccl-16n-g1"; done
+          for i in $(seq 0 7); do ALL_HOSTS="$ALL_HOSTS nccl-16n-g2-${i}.nccl-16n-g2"; done
+          SELF="$(hostname).nccl-16n-g1"
+
+          if [ "$ORDINAL" = "0" ]; then
+            echo "=== [master] ${SELF} IMEX=$(ls /dev/nvidia-caps-imex-channels/ 2>&1) ==="
+            # Wait for all 15 peers
+            for peer in ${ALL_HOSTS}; do
+              [ "$peer" = "$SELF" ] && continue
+              for i in $(seq 1 120); do
+                if ssh -p 222 -o ConnectTimeout=3 -o BatchMode=yes -o StrictHostKeyChecking=no $peer echo ok 2>/dev/null; then
+                  echo "Peer $peer ready"; break
+                fi
+                sleep 5
+              done
+            done
+            echo "[master] all 16 peers ready"
+            sleep 5
+
+            for COLL in all_reduce all_gather reduce_scatter alltoall; do
+              echo ""
+              echo "=== ${COLL} 64 GPU MNNVL=2 (1M..16G) ==="
+              /usr/local/gib/scripts/run_nccl_tests.sh \
+                -t ${COLL} -b 1M -e 16G -f 2 -p 222 -g 4 \
+                ${ALL_HOSTS} 2>&1
+            done
+
+            echo "=== ALL DONE ==="
+            sleep 86400
+          else
+            echo "=== [${SELF}] worker sshd:222 ready ==="
+            sleep 86400
+          fi
+      resourceClaims:
+      - { name: rdma-nics, resourceClaimTemplateName: rdma-nics-nccl-16n-g1 }
+      - { name: compute-domain-channel, resourceClaimTemplateName: nccl-16n-cd-g1-channel }
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata: { name: nccl-16n-g2 }
+spec:
+  serviceName: nccl-16n-g2
+  replicas: 8
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels: { app: nccl-16n-g2 }
+  template:
+    metadata:
+      labels: { app: nccl-16n-g2, app-wide: nccl-16n }
+    spec:
+      tolerations: [{ operator: "Exists" }]
+      nodeSelector:
+        feature.node.kubernetes.io/pci-10de.present: "true"
+        nvidia.com/gpu.clique: "subblock-0006"
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector: { matchExpressions: [{ key: app, operator: In, values: [nccl-16n-g2] }] }
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - { name: shared-memory, emptyDir: { medium: "Memory", sizeLimit: 250Gi } }
+      containers:
+      - image: us-docker.pkg.dev/gce-ai-infra/gpudirect-gib/nccl-plugin-gib-diagnostic-arm64:v1.1.2
+        name: nccl-test
+        resources:
+          limits: { nvidia.com/gpu: 4 }
+          claims:
+          - { name: rdma-nics }
+          - { name: compute-domain-channel }
+        securityContext: { privileged: true }
+        volumeMounts: [{ name: shared-memory, mountPath: /dev/shm }]
+        env:
+        - { name: LD_LIBRARY_PATH, value: "/usr/local/gib/lib64:/usr/local/nvidia/lib64" }
+        - { name: NCCL_MNNVL_ENABLE, value: "2" }
+        - { name: NCCL_CUMEM_ENABLE, value: "1" }
+        - { name: NCCL_IB_GID_INDEX, value: "7" }
+        - { name: NCCL_IB_TC, value: "52" }
+        - { name: NCCL_IB_FIFO_TC, value: "84" }
+        - { name: NCCL_IB_DATA_DIRECT, value: "0" }
+        - { name: NCCL_IB_HCA, value: "mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6" }
+        command: ["/bin/bash", "-c"]
+        args:
+        - |
+          set -eu
+          source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+          mkdir -p /run/sshd
+          sed -i 's/^#\?Port .*/Port 222/' /etc/ssh/sshd_config
+          echo "MaxStartups 200:30:400" >> /etc/ssh/sshd_config
+          /usr/sbin/sshd
+          SELF="$(hostname).nccl-16n-g2"
+          echo "=== [${SELF}] worker sshd:222 ready ==="
+          sleep 86400
+      resourceClaims:
+      - { name: rdma-nics, resourceClaimTemplateName: rdma-nics-nccl-16n-g2 }
+      - { name: compute-domain-channel, resourceClaimTemplateName: nccl-16n-cd-g2-channel }

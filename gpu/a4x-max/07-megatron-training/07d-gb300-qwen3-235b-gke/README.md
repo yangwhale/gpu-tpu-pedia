@@ -281,33 +281,81 @@ NVIDIA 官方 Megatron Bridge Performance Summary: GB300 256GPU V2 (full_iterati
 3. `P2PCommunicator._communicate`: 调 `_batched_p2p_ops` → `torch.distributed.batch_isend_irecv`
 4. **NCCL 内部**: `batch_isend_irecv` 底层创建 NCCL 通信 stream 执行 isend/irecv
 
-**尝试 B 的根因** (VP=1, `cudaErrorStreamCaptureUnsupported`):
-
-VP=1 走非 interleaved schedule，p2p 通信后经过 `_communicate` 的 `batch_p2p_sync=True` 路径:
+**`ModelParallelConfig` 默认值** (source: `model_parallel_config.py`):
 ```python
-# p2p_communication.py _communicate()
-if config.batch_p2p_comm and config.batch_p2p_sync:
-    torch.cuda.synchronize()  # ← 违反铁律 (1): host-device 同步
+batch_p2p_comm: bool = True      # 默认用 batch_isend_irecv
+batch_p2p_sync: bool = True      # batch 后调 cuda.synchronize()!
+overlap_p2p_comm: bool = False   # 默认不 overlap
 ```
+→ 默认配置下 full graph capture **不可能成功** (synchronize 违反铁律)
 
-**尝试 C/F 的根因** (VP>1, `cudaErrorStreamCaptureUnjoined`):
+**`arguments.py` VP + PP 约束** (line 942-960):
+```python
+if virtual_pipeline_model_parallel_size is not None:
+    if overlap_p2p_comm:           # True → PP>1 即可
+        assert PP > 1
+    else:                          # False → PP 必须 >2!
+        assert PP > 2
+else:
+    overlap_p2p_comm = False       # VP=None 强制关闭 overlap
+```
+→ PP=2 + VP>0 **必须** `overlap_p2p_comm=True`，否则 assertion 失败
 
-VP>1 走 interleaved schedule，`overlap_p2p_comm=True` 时不触发 `synchronize()`。但 `batch_isend_irecv` 内部 NCCL 创建的通信 stream **没有被注册到 capture DAG**。NCCL 有 Graph Registration 机制 (`NCCL_GRAPH_REGISTER`)，负责把 NCCL 内部 stream 注册到 CUDA graph。如果 registration 失败或被禁用，这些 stream 在 `capture_end()` 时被检测为 "unjoined work"。
+**`overlap_p2p_comm=True` 与 `batch_p2p_comm=True` 互斥** (schedules.py line 1072):
+```python
+if config.overlap_p2p_comm and config.batch_p2p_comm:
+    raise ValueError("Can not use both")
+```
+→ 开了 overlap 就必须关 batch → `batch_p2p_sync` 的 synchronize 不再触发
 
-**为什么 GB200 上同样配置能跑**: 可能的差异点:
-- NCCL 版本: GB200 用的 NCCL 版本的 graph registration 实现与 GB300 的 NCCL 2.30.4 不同
-- 网络插件: GB200 用标准 NCCL RDMA (CX-7 VF), GB300 用 GIB 插件 (CX-8 PF)。GIB 作为 NCCL net plugin 可能改变了内部 stream 创建行为
-- DOCA 交互: GB300 的 DOCA OFED userspace 层可能影响 NCCL 的 CUDA stream 管理
+**`NCCL_GRAPH_REGISTER` 的角色** (arguments.py line 1740, cuda_graphs.py line 1689):
+```python
+# TE scoped graph + expandable_segments 时必须 NCCL_GRAPH_REGISTER=0
+assert "expandable_segments:True" not in PYTORCH_CUDA_ALLOC_CONF
+    or NCCL_GRAPH_REGISTER == "0"
+```
+→ TE graph 需要 `NCCL_GRAPH_REGISTER=0` 避免 illegal memory access。但 full_iteration graph **没有此 assertion**，暗示 full_iteration 可能需要 `NCCL_GRAPH_REGISTER=1`（让 NCCL 注册 stream 到 capture DAG）
 
-#### 待验证项 (等环境恢复后)
+**确认的因果链**:
 
-1. **`NCCL_GRAPH_REGISTER=1`**: 显式开启 NCCL graph registration，看是否解决 `StreamCaptureUnjoined`
-2. **`batch_p2p_sync=False`**: 确认 Bridge 0.5.0 V2 config 是否默认关闭了这个。如果没关，手动关闭后重试 PP=2 VP=12
-3. **对比 NCCL 版本**: 查 GB200 成功时用的 NCCL 版本，与 GB300 的 2.30.4 对比 graph capture 相关 changelog
-4. **GIB 兼容性**: 测试不加载 GIB 插件时 (纯 NCCL socket/IB transport) full graph 能否 capture 成功。如果能，则确认是 GIB 插件的 stream 管理问题
-5. **PP=4 EP=32 256GPU**: 修正 `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=8` 后重试，确认是否还有 `Unjoined` 错误
-6. **`overlap_p2p_comm_warmup_flush`**: 这是 schedules.py 中的新特性，改变了 warmup 阶段的 p2p prefetch 模式。确认 V2 config 是否启用此选项，以及它对 graph capture stream DAG 的影响
-7. **`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`**: 奚老师第二次尝试加了此配置。确认是否影响 graph capture 的内存分配行为
+尝试 B (VP=1): 
+- VP=1 → `overlap_p2p_comm` 被强制 False → `batch_p2p_comm=True` + `batch_p2p_sync=True`
+- → `_communicate()` 末尾调 `torch.cuda.synchronize()` → `cudaErrorStreamCaptureUnsupported`
+
+尝试 C/F (VP>1, PP=2):
+- PP=2 + VP=12 → Bridge V2 必须设 `overlap_p2p_comm=True`（否则 assertion PP>2 失败）
+- → `batch_p2p_comm=False`（互斥） → 用 `_p2p_ops` (individual isend/irecv)
+- → NCCL isend/irecv 内部创建通信 stream → 这些 stream 未 join 到 capture DAG
+- → `capture_end()` 报 `cudaErrorStreamCaptureUnjoined`
+
+**GB200 vs GB300: 为什么同配置 GB200 成功**:
+- **已确认不是** Megatron schedule 代码路径差异（同一代码）
+- **已确认不是** `batch_p2p_sync` 的问题（PP=2 时此路径不走）
+- **疑似原因**: NCCL 版本 + 网络传输层差异:
+  - GB200: 标准 NCCL RDMA transport (CX-7 VF), 可能 NCCL 版本的 graph registration 支持更完善
+  - GB300: GIB net plugin (CX-8 PF) + NCCL 2.30.4, GIB 作为自定义 net plugin 可能创建了 NCCL graph registration 无法追踪的额外 stream
+  - 或: GB300 环境中 `NCCL_GRAPH_REGISTER` 的默认行为与 GB200 不同
+
+#### 已确认的事实 (源码级)
+
+1. **默认 p2p 配置不兼容 full graph**: `batch_p2p_sync=True` (默认) 会调 `synchronize()` → Bridge V2 必须覆盖
+2. **PP=2 + VP 必须 `overlap_p2p_comm=True`**: 否则 assertion `PP>2` 失败 → 自动 `batch_p2p_comm=False`
+3. **`batch_p2p_sync` 在 PP=2 路径不相关**: 因为 `batch_p2p_comm=False` (互斥)，synchronize 路径不会执行
+4. **VP=None 时 `overlap_p2p_comm` 被强制 False**: VP 是 full graph 的硬性前提
+5. **TE graph 需要 `NCCL_GRAPH_REGISTER=0`**: 但 full_iteration graph 无此 assertion (可能需要 =1)
+6. **Bridge V2 必须设 `overlap_p2p_comm=True`**: 因为我们 PP=2 VP=12 测试通过了 assertion 进入了 capture (然后才 crash)
+
+#### 待确认项 (需要 Bridge V2 源码或实验)
+
+| # | 问题 | 方法 |
+|---|------|------|
+| 1 | Bridge V2 recipe 具体设了哪些 p2p 参数？ | 读 Bridge V2 recipe config 源码 (private repo) 或打日志 |
+| 2 | `NCCL_GRAPH_REGISTER` 在 NCCL 2.30.4 + GIB 下默认值是什么？ | `echo $NCCL_GRAPH_REGISTER` 或 NCCL debug log |
+| 3 | `NCCL_GRAPH_REGISTER=1` 是否解决 `StreamCaptureUnjoined`？ | 实验: PP=2 VP=12 + `NCCL_GRAPH_REGISTER=1` |
+| 4 | GIB 是否是 unjoined stream 的来源？ | 实验: 不加载 GIB (纯 socket transport) 跑 full graph capture |
+| 5 | GB200 成功时的 NCCL 版本和 `NCCL_GRAPH_REGISTER` 值？ | 查 GB200 测试环境日志 |
+| 6 | `overlap_p2p_comm_warmup_flush` 是否在 V2 中启用？ | 打日志或读 Bridge V2 recipe |
+| 7 | PP=4 EP=32 256GPU 修正 `HYBRID_EP_RANKS=8` 后能否成功 capture？ | 实验: 等集群恢复后重跑 |
 
 ### 解决 GB300 GKE Megatron 训练的关键步骤
 
