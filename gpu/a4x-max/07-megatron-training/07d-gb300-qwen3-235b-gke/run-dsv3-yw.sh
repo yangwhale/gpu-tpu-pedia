@@ -73,7 +73,7 @@ python scripts/performance/run_script.py \
   -g gb300 -c fp8_mx -ng 256 \
   --data mock --max_steps 30 \
   --log_dir /tmp/nemo-results \
-  -cv v1 \
+  -cv v2 \
   logger.log_throughput=true
 WORKER
 chmod +x /tmp/worker.sh
