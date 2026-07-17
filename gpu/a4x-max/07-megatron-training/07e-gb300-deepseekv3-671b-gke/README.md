@@ -334,6 +334,16 @@ kubectl exec yw-a-0 -- bash -c '
 '
 ```
 
+> ⚠️ **坑：SSH 启动丢容器 PATH / ENV（2026-07-17 实战）**
+> SSH 会话拿到的是**全新 login shell 的默认最小 PATH**（`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:...`），**不继承容器镜像的 ENV**。而镜像把 venv 放在 `/opt/venv/bin`（含 nemo_run 等训练依赖）。
+> - **kubectl exec** 会继承容器 ENV（PATH 含 `/opt/venv/bin`）→ 用对 python，之前一直没暴露这坑。
+> - **SSH 启动**丢了这个 PATH → `python` 变成 `/usr/bin/python`（系统 python）→ 训练报 **`ModuleNotFoundError: No module named 'nemo_run'`**。
+>
+> **修复**：SSH 启动的 run 脚本**必须显式** `export PATH=/opt/venv/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH`（LD_LIBRARY_PATH / NCCL 等 env 本就在脚本里显式设，就差 PATH）。
+> **根治**：bake image 时把容器 ENV 写进 `/etc/environment` 或 sshd 的 `PermitUserEnvironment` + `~/.ssh/environment`，让 SSH 会话自动继承。
+
+> 排查口诀：SSH 启动报 `No module named X` / `command not found` / 找错 python → 十有八九是**丢了容器 PATH**。对比 `kubectl exec pod -- bash -c 'echo $PATH'` vs `kubectl exec pod -- ssh 自己 'echo $PATH'` 即可确认。
+
 ### 方式二（目标）：bake 进 image
 
 把 sshd + dllogger + 共享密钥 + host keys + sshd_config 全 bake 进镜像，pod 启动只需 `/usr/local/bin/yw-start.sh`（起 sshd + sleep）。Dockerfile 见 `Dockerfile.yw-ssh`。

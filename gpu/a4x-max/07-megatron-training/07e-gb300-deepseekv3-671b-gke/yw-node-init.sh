@@ -57,7 +57,16 @@ sed -i 's/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/' /etc/ssh/sshd_co
 python -c "import dllogger" 2>/dev/null || \
   pip install --no-cache-dir "git+https://github.com/NVIDIA/dllogger#egg=dllogger" >/dev/null 2>&1 || true
 
+# ---------- 7. 把容器 ENV 写给 SSH 会话（避免 SSH 启动丢 /opt/venv PATH）----------
+# SSH 登录 shell 不继承容器 ENV -> python 找错、nemo_run ImportError。
+# 把关键 PATH/LD_LIBRARY_PATH 落到 /etc/profile.d，SSH 会话即可继承。
+cat > /etc/profile.d/yw-env.sh <<'ENVEOF'
+export PATH=/opt/venv/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH
+ENVEOF
+chmod 644 /etc/profile.d/yw-env.sh
+# 注：run 脚本仍应自己显式 export PATH，双保险（非交互 SSH 未必 source profile.d）
+
 echo "[yw-init] SSH_READY $(hostname)"
 
-# ---------- 7. 常驻 ----------
+# ---------- 8. 常驻 ----------
 sleep infinity
