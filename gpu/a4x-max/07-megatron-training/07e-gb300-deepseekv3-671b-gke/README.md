@@ -334,15 +334,23 @@ kubectl exec yw-a-0 -- bash -c '
 '
 ```
 
-> ⚠️ **坑：SSH 启动丢容器 PATH / ENV（2026-07-17 实战）**
-> SSH 会话拿到的是**全新 login shell 的默认最小 PATH**（`/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:...`），**不继承容器镜像的 ENV**。而镜像把 venv 放在 `/opt/venv/bin`（含 nemo_run 等训练依赖）。
-> - **kubectl exec** 会继承容器 ENV（PATH 含 `/opt/venv/bin`）→ 用对 python，之前一直没暴露这坑。
-> - **SSH 启动**丢了这个 PATH → `python` 变成 `/usr/bin/python`（系统 python）→ 训练报 **`ModuleNotFoundError: No module named 'nemo_run'`**。
+> ⚠️ **坑：SSH 启动丢容器整套 ENV（2026-07-17 实战，踩了两次）**
+> SSH 会话是**全新 login shell**，**完全不继承容器镜像的 ENV**（PATH、LD_LIBRARY_PATH、CUDA_HOME、CPATH…全丢）。`kubectl exec` 会继承容器 ENV，所以之前用 exec 启动一直没暴露这坑；一改 SSH 启动就连环踩：
+> - **丢 PATH**（`/opt/venv/bin` 不在）→ `python` 变系统 `/usr/bin/python` → **`ModuleNotFoundError: No module named 'nemo_run'`**
+> - **丢 CUDA env**（CUDA_HOME/include）→ Triton JIT 编译找不到头文件 → **`fatal error: cuda.h: No such file or directory`** → 崩
+> - 只补 PATH 是打地鼠，补完 PATH 又冒出 cuda.h。
 >
-> **修复**：SSH 启动的 run 脚本**必须显式** `export PATH=/opt/venv/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH`（LD_LIBRARY_PATH / NCCL 等 env 本就在脚本里显式设，就差 PATH）。
-> **根治**：bake image 时把容器 ENV 写进 `/etc/environment` 或 sshd 的 `PermitUserEnvironment` + `~/.ssh/environment`，让 SSH 会话自动继承。
+> **根治（推荐）**：run 脚本开头**加载容器 PID 1 的完整 ENV**，一次性拿全（PATH/LD_LIBRARY_PATH/CUDA_HOME/…）：
+> ```bash
+> # SSH 启动必加：继承容器完整 env（login shell 会丢）
+> if [ -r /proc/1/environ ]; then
+>   while IFS= read -r -d '' __e; do export "$__e" 2>/dev/null || true; done < /proc/1/environ
+> fi
+> ```
+> 之后脚本再显式 export 训练专用 env（NCCL_*、full-graph 两项等）覆盖即可。
+> **备选/root fix**：bake image 时写 `/etc/profile.d/*.sh` 或 sshd `PermitUserEnvironment` + `~/.ssh/environment`，让 SSH 会话自动继承（`yw-node-init.sh` 已写 `/etc/profile.d/yw-env.sh`，但非交互 SSH 未必 source profile.d，故 run 脚本内的 `/proc/1/environ` 加载是最稳的双保险）。
 
-> 排查口诀：SSH 启动报 `No module named X` / `command not found` / 找错 python → 十有八九是**丢了容器 PATH**。对比 `kubectl exec pod -- bash -c 'echo $PATH'` vs `kubectl exec pod -- ssh 自己 'echo $PATH'` 即可确认。
+> 排查口诀：SSH 启动报 `No module named X` / `cuda.h: No such file` / `command not found` / 找错 python → 基本都是**丢了容器 ENV**。对比 `kubectl exec pod -- bash -c 'echo $PATH'` vs `kubectl exec pod -- ssh 自己.yw 'echo $PATH'` 立见分晓。
 
 ### 方式二（目标）：bake 进 image
 
