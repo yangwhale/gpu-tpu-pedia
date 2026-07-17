@@ -19,6 +19,7 @@ GB300 (A4X Max) GKE 集群上的 DeepSeek V3 (671B, 61 层) 256 GPU 预训练 be
 |------|------|------|-------|-----|-----------------|-----------|------|
 | DeepSeek V3 (61L, 671B) | 256 GPU (4×16) | FP8_MX | **full_iteration** | 2048 (V1) | ~1553 | 5.47s | 通过 (30 步) |
 | DeepSeek V3 (61L, 671B) | 256 GPU (4×16) | FP8_MX | **full_iteration** | 4096 (V2) | **~1618** | 10.53s | 通过 (30 步) |
+| DeepSeek V3 (61L, 671B) | 256 GPU (4×16) | FP8_MX | **full_iteration** | **15360** (`--global_batch_size`) | **~1658** | 38.5s | 通过 (30 步) |
 | Qwen3 235B-A22B | 256 GPU (4×16) | FP8_MX | full_iteration | 8192 (V2) | 待测 | — | 计划中 |
 
 ### 对标 NVIDIA 官方 (DeepSeek V3 256 GPU MXFP8)
@@ -32,7 +33,11 @@ GB300 (A4X Max) GKE 集群上的 DeepSeek V3 (671B, 61 层) 256 GPU 预训练 be
 
 > 我们 GBS=4096 实测 **1618～1620** vs 官方 **1648** = **~98.3%**。并行配置 (TP=1/PP=2/VP=8/EP=32) 与官方完全一致。
 >
-> **vboost 实验结论（2026-07-18 复测）**：单独开 `nvidia-smi boost-slider --vboost 1` 后稳态仍是 **~1615-1620**（best 1620，typical 1615），**没有拉近到 1648**。说明剩下 ~2% 差距**不是 vboost 造成的**，更可能来自官方同时做了 GPU 锁频 (`_set_lock_gpu_freq`) + 更大 GBS=15360（官方 1670 那档）+ 稳定态测量方法学。vboost 对本 recipe 无明显增益，可不必单独设。
+> **vboost 实验结论（2026-07-18 复测）**：单独开 `nvidia-smi boost-slider --vboost 1` 后稳态仍是 **~1615-1620**（best 1620，typical 1615），**没有拉近到 1648**。说明 GBS=4096 档剩下 ~2% 差距**不是 vboost 造成的**。vboost 对本 recipe 无明显增益，可不必单独设。
+>
+> **GBS=15360 实验结论（2026-07-18，对标官方第二档 1670）**：把 `--global_batch_size 15360`（CLI 覆盖 v2 的 4096）后，稳态冲到 **~1658（best 1659）= 官方 1670 的 99.3%**，step time 38.5s，60 microbatch，无 OOM。**大 GBS 摊薄 pipeline bubble 的收益实打实**：1618(GBS4096) → 1658(GBS15360)，+2.5%。这是目前最接近官方的配置。
+> - 注意：`4096 / 15360` 是 **global batch size**，不是 sequence length（seq_length 两档都固定）。`--global_batch_size` 优先级高于 `-cv` 版本（`utils.py:186`）。
+> - GBS 必须能被 `MBS × DP` 整除：15360 / (2 × 128) = 60 microbatch（整除）。
 
 ---
 
