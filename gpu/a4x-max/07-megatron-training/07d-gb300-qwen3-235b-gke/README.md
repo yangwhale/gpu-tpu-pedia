@@ -154,17 +154,25 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/qwen3-run.log | tail -6'
 
 ---
 
-## 待办：扫描式调优 (2026-07-17 起)
+## 扫描式调优结果 (2026-07-17)
 
-VPP=2 是首个跑通值（~1360 TFLOP/s），非最优。计划扫描：
+以 VPP=2/MBS=2/GBS=8192 (1360 TFLOP/s) 为基线，扫描 VPP 与 MBS：
 
-| 维度 | 当前 | 待扫 | 预期 |
-|------|------|------|------|
-| VPP | 2 | 1 / 3 / 4 | bubble vs 显存 权衡 |
-| MBS | 2 | 3 / 4 | 摊薄固定开销（但显存 96% 已紧） |
-| GBS | 8192 | — | 已较大, 空间小 |
+| 配置 | 稳态 TFLOP/s | 显存 max-reserved | 结论 |
+|------|-------------|-------------------|------|
+| **VPP=2, MBS=2** | **~1360** | 277 / 288 GB | ✅ **最优** |
+| VPP=4, MBS=2 | ~1325 | 254 GB | 慢 2.6% |
+| VPP=8, MBS=2 | — | OOM (capture) | ❌ 显存爆 |
+| VPP=4, MBS=4 | — | hang (capture 死锁) | ❌ 不可用 |
 
-> 显存 max-reserved 277/288GB (96%) 是主要约束，VPP↑ / MBS↑ 都增显存，需谨慎。
+**结论：VPP=2（recipe 默认思路）就是 Qwen3 235B 的最优配置。**
+
+**为什么"VPP 越大越好"在这里不成立**：
+1. **bubble 本来就小**：num_microbatches = GBS/(MBS×DP) = 8192/(2×64) = 64，PP=4 的 bubble ≈ (PP-1)/(VPP×microbatches)。VPP=2 时已只有 2.3%，VPP=4 降到 1.2%——只省 1%，却让 P2P 通信开销上升，净慢 2.6%。
+2. **显存非单调**：VPP=2→4 因 stage 变细 + moe_paged_stash 使单块 buffer 更省（277→254GB）；但 VPP=4→8 时 in-flight microbatch 的激活 stash 份数暴增 + capture 图内存池开销反超，直接 OOM。拐点在 VPP=4 与 8 之间。
+3. **MBS 上不去**：MBS 必须整除 GBS/DP=128，故只能 1/2/4/8。MBS=4 激活翻倍，即便配 VPP=4 省显存也在 capture 阶段死锁（NCCL hang）。
+
+> 对比 DeepSeek V3（PP=2, VPP=8 可行）：DSV3 层数/microbatch 结构不同，高 VPP 才划算；Qwen3 (PP=4, microbatch=64) 高 VPP 无收益。**不要跨模型套 VPP 经验。**
 
 ---
 
