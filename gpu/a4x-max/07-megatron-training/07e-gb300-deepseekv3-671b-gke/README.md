@@ -366,6 +366,41 @@ kubectl --context $CTX label node -l cloud.google.com/gke-nodepool=gb300-pool-00
 
 ---
 
+## 成功经验：换池后"晾一宿让 DRA/RDMA 收敛"才是真解（2026-07-18 实战）
+
+这是本轮最反直觉、也最值钱的一条教训。
+
+### 失败时间线（当晚，换池后立刻硬跑）
+
+刚把 2 个坏域换到干净池、64/64 刚凑齐，就连着拉起 DSV3，**3 次全失败**：
+
+| 次数 | 现象 | 当时判断 |
+|------|------|---------|
+| 1 | 进到 NCCL，rank 195(新域) collective timeout 崩 | 以为首跑 flakiness |
+| 2 | `ncclRemoteError` + `Message truncated: 128120 vs 120120`，新域节点容器 GPU hang，exec 都进不去 | 僵尸进程 bootstrap 撞车 |
+| 3 | workers 起来后**卡 rendezvous 静默 hang**，GPU 全程 0%，日志 8 分钟不增长 | 新节点 RDMA 没就绪 |
+
+同时观察到：**反复删建 ComputeDomain 有传染性**——连没动过的好域 (yw-c/pool-0007) 都开始掉 pod、掉 team 标签。当晚越修越乱。
+
+### 成功（次日早晨，同配置同池，一把过 1620）
+
+环境**静置约 6 小时**后，第二天早上：
+1. DRA 僵尸 daemon 自动清零（`Terminating` 归 0）。
+2. 只需补回 pool-0007 过夜掉标签的 3 台节点 → 64/64。
+3. **同一个 `run-dsv3-opt.sh`、同样 4 个池**，干净拉起 → 越过 init/NCCL/capture → 稳态 **1620 TFLOP/s/GPU**，30 步一把过，零崩溃。
+
+### 核心教训
+
+> **重度 churn（反复删建 ComputeDomain）+ 新打标签的闲置节点之后，DRA / IMEX clique / RDMA ipvlan 子系统需要时间自我收敛。此时不要连环硬拉训练——每次失败的 GPU hang 又留下僵尸容器，进一步污染 bootstrap，越修越糟（负反馈）。正确做法是停手、让它静置（几十分钟到数小时）收敛，再干净拉一次。**
+
+配套小教训（都在当晚踩到）：
+- **卡 `Terminating` 的僵尸 pod（GPU hang）会堵住新 pod 调度** → `--grace-period=0 --force` 强删即解。
+- **新打标签节点的 `device gpuXipvlanY not found in store`（DRANET ipvlan race）是暂时性的** → 删 pod 重建一次 sandbox 就好，不是坏节点。
+- **节点会 flap（Ready↔NotReady，如 ps6b）** → 直接换池里另一台健康的 team=NONE 节点，别指望它稳。
+- **churn 会连累好域**：迭代换池时盯着所有域的 pod 数，别只盯在换的那个。
+
+---
+
 ## SSH 免密 fanout 启动（替代并行 kubectl exec）
 
 大规模（64 pod）启动训练时，**不要用并行 `kubectl exec`**（走 konnectivity 会限流，只能连约一半）。改用 **pod-0 SSH + hostfile fanout**，走集群内网 eth0，绕开 k8s API。
