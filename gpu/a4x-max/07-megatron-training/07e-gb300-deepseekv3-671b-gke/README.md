@@ -255,11 +255,63 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/dsv3-run.log | tail -6'
 
 ---
 
+## 运维踩坑：DRA / ComputeDomain clique 卡死（2026-07-17 实战）
+
+**背景**：反复删建 ComputeDomain（多次 apply / delete pool、force-delete pod）后，pool 再也拉不满 64，卡在 ~37/64，`kubectl exec` 也只能连上一半 pod。折腾数小时才定位。
+
+### 症状
+
+- pod 大量 Pending，pool 卡在某个数（如 37/64），**分布不均**（如 a=11 b=11 c=10 d=5）。
+- Pending pod **没有硬调度失败**，`describe` 只见 `NotTriggerScaleUp`（autoscaler 软提示），节点全 Ready。
+- 部分 pod 反复被删重建（claim 状态 `pending → allocated,reserved → deleted` 循环）。
+- 最后几个 pod 卡 `FailedPrepareDynamicResources: ResourceClaim not created yet` / `no relationship found between node and this object`。
+- `kubectl exec` 只能连约一半 pod（konnectivity 流被占）——是并发 exec + churn 的副作用，不是主因。
+
+### 根因（实查，非猜测）
+
+1. 删 ComputeDomain 后，`nvidia-dra-driver-gpu` 命名空间残留大量 **`computedomain-daemon-*` pod 卡在 Terminating**（数十个，几小时不退）。
+2. 每个 CD 组一个 **IMEX clique**；节点上的 daemon 要加入 clique 才算 CD 的一个可用节点。僵尸 daemon 在 clique 里留了 **stale 条目占位**，新 daemon 加不进 → CD `total nodes` 只到 5-15（不足 16）。
+3. CD 节点不够 → pod 的 `compute-domain-channel` DRA claim 无法 admission → 反复 thrash。
+4. 叠加：一天内创建/删除上万 claim，**kube resourceclaim controller 积压滞后**，最后几个 pod 卡 "ResourceClaim not created yet"。
+
+### 诊断命令
+
+```bash
+CTX=gke_tencent-gcp-taiji-poc_us-central1_gb300-gke-test
+# 1. 看僵尸 daemon（卡 Terminating 的数量）
+kubectl --context $CTX get pods -n nvidia-dra-driver-gpu --no-headers | grep computedomain-daemon | awk '{print $3}' | sort | uniq -c
+# 2. 看每个 CD 实际认到几个节点（controller 日志）
+CTRL=$(kubectl --context $CTX get pods -n nvidia-dra-driver-gpu --no-headers | grep controller | awk '{print $1}')
+kubectl --context $CTX logs -n nvidia-dra-driver-gpu $CTRL --tail=60 | grep CDStatusSync | tail
+# 3. 看 pending pod 的真实卡点
+kubectl --context $CTX describe pod <pending-pod> | grep -A6 Events
+```
+
+### 解法
+
+```bash
+# 强删所有卡 Terminating 的 computedomain-daemon → 触发 controller CliqueCleanup 清 stale 条目
+kubectl --context $CTX get pods -n nvidia-dra-driver-gpu --no-headers | grep computedomain-daemon | grep Terminating \
+  | awk '{print $1}' | xargs -P 8 -I {} kubectl --context $CTX delete pod {} -n nvidia-dra-driver-gpu --grace-period=0 --force
+# 观察 controller 日志出现 "CliqueCleanup: successfully removed N stale daemon entries"，CD total nodes 会爬回 16
+# 对仍卡 "ResourceClaim not created yet" 的个别 pod，强删让其重建（controller 追上后新 claim 秒建）
+kubectl --context $CTX delete pod <stuck-pod> --grace-period=0 --force
+```
+
+### 预防
+
+- **不要反复 churn ComputeDomain**。改配置尽量 patch StatefulSet，别动 CD。
+- 删 pool 用 `kubectl delete -f pool.yaml`（带 CD），删完**等 computedomain-daemon 全部退干净**（`grep computedomain-daemon | grep -c Terminating` 归 0）再重建。
+- force-delete pod（`--grace-period=0 --force`）会留下没清干净的 daemon/claim，是这次坑的放大器 —— 非必要不用。
+- 大规模启动/分发**不要用并行 `kubectl exec`**（走 konnectivity 会被限流卡半数）；用 **pod-0 SSH + hostfile** fanout（见 `run-*-yw.sh` 同款 SSH-enabled pool，走集群内网 eth0，绕开 API）。
+
+---
+
 ## 附：文件清单
 
 | 文件 | 说明 |
 |------|------|
-| `yw-pool-256.yaml` | 4-CD sleep-infinity pod 池（256 GPU on team=yangwhale） |
+| `yw-pool-256.yaml` | 4-CD sleep-infinity pod 池（256 GPU on team=yangwhale；含 SSH-enabled 变体的免密 fanout 基础） |
 | `run-dsv3-yw.sh` | DSV3 单 pod 启动脚本（env + rank 计算 + torchrun native recipe） |
 
 ---

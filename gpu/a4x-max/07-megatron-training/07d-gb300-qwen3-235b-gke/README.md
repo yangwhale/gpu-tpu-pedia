@@ -176,6 +176,13 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/qwen3-run.log | tail -6'
 
 ---
 
+## 运维踩坑
+
+- **DRA / ComputeDomain clique 卡死**（pool 拉不满 64、卡 ~37、pod Pending 无硬报错）：反复删建 ComputeDomain 留下僵尸 `computedomain-daemon` 占 IMEX clique → 强删僵尸 daemon 触发 CliqueCleanup 恢复。完整诊断 + 解法 + 预防见 `07e-gb300-deepseekv3-671b-gke/README.md` 的「运维踩坑：DRA / ComputeDomain clique 卡死」章节。
+- **大规模启动别用并行 kubectl exec**（konnectivity 限流卡半数）；用 pod-0 SSH + hostfile fanout（SSH-enabled pool，走 eth0 内网）。
+
+---
+
 ## 附：文件清单
 
 | 文件 | 说明 |
