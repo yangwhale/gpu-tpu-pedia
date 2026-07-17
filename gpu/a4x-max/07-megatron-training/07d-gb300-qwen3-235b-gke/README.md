@@ -163,7 +163,9 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/qwen3-run.log | tail -6'
 | **VPP=2, MBS=2** | **~1360** | 277 / 288 GB | ✅ **最优** |
 | VPP=4, MBS=2 | ~1325 | 254 GB | 慢 2.6% |
 | VPP=8, MBS=2 | — | OOM (capture) | ❌ 显存爆 |
-| VPP=4, MBS=4 | — | hang (capture 死锁) | ❌ 不可用 |
+| VPP=4, MBS=4 | — | **OOM (init/warmup)** | ❌ 显存爆（276GB 用满，MBS=4 激活翻倍） |
+
+> 注：VPP=4/MBS=4 最初被误判为 "hang"，实为 SSH 启动丢容器 ENV 导致的假象（见 07e SSH 坑）。env 修好后干净复现为 **OOM**——所有 rank `CUDA out of memory`，276GB HBM 用满还差 288MB。**MBS 从 2 抬到 4 显存直接爆，不可行。**
 
 **结论：VPP=2（recipe 默认思路）就是 Qwen3 235B 的最优配置。**
 
