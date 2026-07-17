@@ -30,7 +30,9 @@ GB300 (A4X Max) GKE 集群上的 DeepSeek V3 (671B, 61 层) 256 GPU 预训练 be
 | DGX-GB200 | 4096 | 1/4/1/4/64 | 4969 | 1292 |
 | DGX-B300 | 4096 | 1/8/1/n-a/8 | 3541 | 920 |
 
-> 我们 GBS=4096 实测 **1618** vs 官方 **1648** = **98.2%**。并行配置 (TP=1/PP=2/VP=8/EP=32) 与官方完全一致；~2% 差距来自官方额外开了 GPU 锁频 + vboost 做稳定测量（perf plugin `_set_lock_gpu_freq` / `_set_vboost`，本文未设）。
+> 我们 GBS=4096 实测 **1618～1620** vs 官方 **1648** = **~98.3%**。并行配置 (TP=1/PP=2/VP=8/EP=32) 与官方完全一致。
+>
+> **vboost 实验结论（2026-07-18 复测）**：单独开 `nvidia-smi boost-slider --vboost 1` 后稳态仍是 **~1615-1620**（best 1620，typical 1615），**没有拉近到 1648**。说明剩下 ~2% 差距**不是 vboost 造成的**，更可能来自官方同时做了 GPU 锁频 (`_set_lock_gpu_freq`) + 更大 GBS=15360（官方 1670 那档）+ 稳定态测量方法学。vboost 对本 recipe 无明显增益，可不必单独设。
 
 ---
 
@@ -304,6 +306,63 @@ kubectl --context $CTX delete pod <stuck-pod> --grace-period=0 --force
 - 删 pool 用 `kubectl delete -f pool.yaml`（带 CD），删完**等 computedomain-daemon 全部退干净**（`grep computedomain-daemon | grep -c Terminating` 归 0）再重建。
 - force-delete pod（`--grace-period=0 --force`）会留下没清干净的 daemon/claim，是这次坑的放大器 —— 非必要不用。
 - 大规模启动/分发**不要用并行 `kubectl exec`**（走 konnectivity 会被限流卡半数）；用 **pod-0 SSH + hostfile** fanout（见 `run-*-yw.sh` 同款 SSH-enabled pool，走集群内网 eth0，绕开 API）。
+
+---
+
+## 运维踩坑：节点池"物理坏死" + clique 死结 → 整池征用绕过（2026-07-17 夜实战）
+
+**背景**：4-domain 池要凑满 64（每域 16）。跑到一半发现 **2 个域各卡 15/16**，2 个 pod 长期 Pending（`describe` 只见 `NotTriggerScaleUp`）。**两个域卡的原因完全不同，且都不是上一节那个 churn 僵尸 daemon 坑**。
+
+### 坑 1：node pool 物理坏死 —— GCE 建不出第 16 台（原池不可修复）
+
+- 现象：pool（= subblock）恒为 15 个节点，autoscaler 一直加不出第 16 台。
+- **实查根因（gcloud，非猜测）**：
+
+```bash
+# MIG 建实例的错误历史
+gcloud compute instance-groups managed list-errors <mig-name> --zone <zone> --project tencent-gcp-taiji-poc
+# → INTERNAL_ERROR: Instance creation failed: Internal error. (Code: '-5430573231130294902')，已持续 ~24h
+# reservation 本身健康：
+gcloud compute reservations describe <res> --zone <zone> --project tencent-gcp-taiji   # count/inUseCount/assuredCount 正常，有余量，0 degraded
+```
+
+- reservation **健康有余量**（不是配额/预留耗尽），是 GCE 对该 subblock 某实例的**基础设施故障**。**这种坑无法在原池修复**，只能换池。
+
+### 坑 2：健康池上的 DRA clique 软件死结（空节点也调度不上）
+
+- 现象：pool 有满 16 个 `team=yangwhale` 且 `Ready` 的节点，其中 1 台**空着无任何工作负载**，但那个 Pending pod 就是落不上去，`describe` 只见 `NotTriggerScaleUp`，无硬调度失败。
+- 根因：该空节点没进 ComputeDomain 的 IMEX clique（daemon 没在其上跑起 → `compute-domain-channel` claim 无法 admission），鸡生蛋死结。与上一节 clique 坑同源，但表现为"单个空节点进不了 clique"。
+
+### 解法：整池征用一个干净未用的 node pool，把该域整体搬过去
+
+> **关键认知**：域内 16 pod 用 `podAffinity topologyKey: cloud.google.com/gce-topology-subblock` **锁死在同一 subblock**，即 **pool 与 subblock 一一对应，不能跨池拼节点**。修不了就**整池换**，不要东拼西凑散节点。
+
+```bash
+CTX=gke_tencent-gcp-taiji-poc_us-central1_gb300-gke-test
+# 1. 找干净未用的池（team 无标签、节点数 >=16、全 Ready）
+for p in 0002 0010 0011 0012; do
+  none=$(kubectl --context $CTX get nodes -l cloud.google.com/gke-nodepool=gb300-pool-$p \
+    -o custom-columns=T:.metadata.labels.team --no-headers | grep -cw '<none>')
+  echo "pool-$p 闲置节点=$none"
+done
+# 2. 给目标池打 16 个 team=yangwhale
+N=$(kubectl --context $CTX get nodes -l cloud.google.com/gke-nodepool=gb300-pool-0012 --no-headers \
+    | grep -w Ready | awk '{print $1}' | head -16)
+kubectl --context $CTX label node $N team=yangwhale --overwrite
+# 3. 改 StatefulSet nodeSelector 池号 + 删旧 STS/CD + 重 apply（nodeSelector 变更需重建 pod）
+sed -i 's/gb300-pool-0008/gb300-pool-0012/' yw-pool.yaml
+kubectl --context $CTX delete statefulset yw-d
+kubectl --context $CTX delete computedomain yw-cd-d
+kubectl --context $CTX apply -f yw-pool.yaml    # 重建到新池，全新 CD → 干净 clique
+# 4. 腾出的旧坏池摘标签回收（回到闲置 <none>）
+kubectl --context $CTX label node -l cloud.google.com/gke-nodepool=gb300-pool-0008 team-
+```
+
+### 判断口诀
+
+- **先分清"池物理坏"还是"clique 软件死结"**：`gcloud ...list-errors` 有 GCE `INTERNAL_ERROR` = 物理坏，只能换池；节点齐全但空节点调度不上 = clique 死结，可修 CD 也可换池。
+- **有富余闲置池时，整池征用 + 全新 ComputeDomain 是最稳的一步到位**，省去 clique 考古。
+- **pool 与 subblock 一一对应**：换池是"换整块 16 节点"，不是补单节点。
 
 ---
 
