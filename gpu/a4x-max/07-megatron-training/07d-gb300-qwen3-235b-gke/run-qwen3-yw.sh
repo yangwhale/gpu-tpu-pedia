@@ -16,6 +16,12 @@ esac
 NODE_RANK=$((OFFSET + ORD))
 MASTER_ADDR="yw-a-0.yw"
 
+# ===== SSH 启动必加：继承容器完整 ENV（login shell 会丢 PATH/LD_LIBRARY_PATH/CUDA_HOME → nemo_run/cuda.h 崩）=====
+if [ -r /proc/1/environ ]; then
+  while IFS= read -r -d '' __e; do export "$__e" 2>/dev/null || true; done < /proc/1/environ
+fi
+export PATH=/opt/venv/bin:/usr/local/nvidia/bin:/usr/local/cuda/bin:$PATH
+
 # ===== Base env (Bridge PERF_ENV_VARS, utils/executors.py) =====
 export LD_LIBRARY_PATH="/usr/lib/aarch64-linux-gnu:/lib/aarch64-linux-gnu:${LD_LIBRARY_PATH:-}"
 export TRANSFORMERS_OFFLINE=1

@@ -73,20 +73,26 @@ python scripts/performance/run_script.py \
 
 > **关键**：`-cv v2`（256 GPU full graph 配置）+ `model.virtual_pipeline_model_parallel_size=2`（补 recipe 漏掉的 VPP）。不覆盖 cuda_graph_impl，让 recipe 用原生 full_iteration。
 
-### Step 2 — 分发 + 启动
+### Step 2 — 分发 + 启动（用 SSH fanout，别用并行 kubectl exec）
+
+> ⚠️ **不要用并行 `kubectl exec` 分发/启动 64 pod**——走 konnectivity 会限流，只能连约一半（见「运维踩坑」）。用 **pod-0 SSH + hostfile fanout**（前置：SSH-enabled pool，见 07e `yw-node-init.sh`）。
+>
+> 另注：SSH 启动的 run 脚本必须在开头从 `/proc/1/environ` 加载容器完整 ENV，否则丢 PATH/CUDA 会崩（`run-qwen3-yw.sh` 已含）。
 
 ```bash
-# 分发 (base64 避免 stdin symlink 坑)
+# 把脚本放到 yw-a-0（单个 exec 可靠），再从 pod-0 SSH fanout
 B64=$(base64 -w0 run-qwen3-yw.sh)
-for g in a b c d; do for i in $(seq 0 15); do echo yw-$g-$i; done; done \
-  | xargs -P 16 -I {} kubectl exec {} -- bash -c \
-    "echo $B64 | base64 -d > /tmp/run-qwen3-yw.sh && chmod +x /tmp/run-qwen3-yw.sh"
+kubectl exec yw-a-0 -- bash -c "echo $B64 | base64 -d > /tmp/run-qwen3-yw.sh && chmod +x /tmp/run-qwen3-yw.sh"
 
-# 全部 64 pod 并行启动
-for g in a b c d; do for i in $(seq 0 15); do echo yw-$g-$i; done; done \
-  | xargs -P 32 -I {} kubectl exec {} -- bash -c \
-    "nohup /tmp/run-qwen3-yw.sh > /tmp/qwen3-run.log 2>&1 &"
+# 在 yw-a-0 上：建 hostfile → scp 到其余 63 → SSH 启动全部 64（全走 eth0 内网）
+kubectl exec yw-a-0 -- bash -c '
+  > /tmp/hostfile; for g in a b c d; do for i in $(seq 0 15); do echo yw-$g-$i.yw >> /tmp/hostfile; done; done
+  grep -v "^yw-a-0.yw$" /tmp/hostfile | xargs -P 32 -I H scp -q /tmp/run-qwen3-yw.sh H:/tmp/run-qwen3-yw.sh
+  cat /tmp/hostfile | xargs -P 32 -I H ssh H "nohup /tmp/run-qwen3-yw.sh > /tmp/qwen3-run.log 2>&1 &"
+'
 ```
+
+> fanout 命令跑得久时，用 `setsid nohup <fanout脚本> &` 在 pod-0 上 detached 执行，避免 kubectl exec 长会话被切断（137）。
 
 ### Step 3 — 监控
 
@@ -172,7 +178,7 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/qwen3-run.log | tail -6'
 **为什么"VPP 越大越好"在这里不成立**：
 1. **bubble 本来就小**：num_microbatches = GBS/(MBS×DP) = 8192/(2×64) = 64，PP=4 的 bubble ≈ (PP-1)/(VPP×microbatches)。VPP=2 时已只有 2.3%，VPP=4 降到 1.2%——只省 1%，却让 P2P 通信开销上升，净慢 2.6%。
 2. **显存非单调**：VPP=2→4 因 stage 变细 + moe_paged_stash 使单块 buffer 更省（277→254GB）；但 VPP=4→8 时 in-flight microbatch 的激活 stash 份数暴增 + capture 图内存池开销反超，直接 OOM。拐点在 VPP=4 与 8 之间。
-3. **MBS 上不去**：MBS 必须整除 GBS/DP=128，故只能 1/2/4/8。MBS=4 激活翻倍，即便配 VPP=4 省显存也在 capture 阶段死锁（NCCL hang）。
+3. **MBS 上不去**：MBS 必须整除 GBS/DP=128，故只能 1/2/4/8。MBS=4 激活翻倍，即便配 VPP=4（省显存到 254GB）也在 init/warmup 阶段 **OOM**（276GB 用满，见调优表）。
 
 > 对比 DeepSeek V3（PP=2, VPP=8 可行）：DSV3 层数/microbatch 结构不同，高 VPP 才划算；Qwen3 (PP=4, microbatch=64) 高 VPP 无收益。**不要跨模型套 VPP 经验。**
 
@@ -191,7 +197,7 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/qwen3-run.log | tail -6'
 | 文件 | 说明 |
 |------|------|
 | `yw-pool-256.yaml` | 4-CD sleep-infinity pod 池（与 DSV3 共享） |
-| `run-qwen3-yw.sh` | Qwen3 235B 单 pod 启动脚本（含 VPP=2 override + HF_TOKEN） |
+| `run-qwen3-yw.sh` | Qwen3 235B 单 pod 启动脚本（VPP=2 override + `/proc/1/environ` env 加载；HF_TOKEN 已脱敏为占位符，用前填入自己的） |
 
 ---
 
