@@ -307,12 +307,56 @@ kubectl --context $CTX delete pod <stuck-pod> --grace-period=0 --force
 
 ---
 
+## SSH 免密 fanout 启动（替代并行 kubectl exec）
+
+大规模（64 pod）启动训练时，**不要用并行 `kubectl exec`**（走 konnectivity 会限流，只能连约一半）。改用 **pod-0 SSH + hostfile fanout**，走集群内网 eth0，绕开 k8s API。
+
+### 方式一（当前）：容器启动时运行 `yw-node-init.sh`
+
+在 image 尚未 bake 依赖前，把 `yw-node-init.sh` 作为 StatefulSet 的容器 command，每次启动装好 sshd + 免密密钥 + dllogger（幂等、apt 带重试）。前置：k8s Secret `yw-ssh`（`id_ed25519` + `authorized_keys`）挂载到 `/etc/yw-ssh`。
+
+```bash
+# 建共享密钥 Secret（一次）
+ssh-keygen -t ed25519 -N "" -f yw_ssh_key -C yw-pool
+kubectl create secret generic yw-ssh \
+  --from-file=id_ed25519=yw_ssh_key --from-file=authorized_keys=yw_ssh_key.pub
+# StatefulSet 挂 Secret + command 跑 yw-node-init.sh（见该脚本头部注释）
+```
+
+启动训练（pod-0 fanout）：
+
+```bash
+kubectl exec yw-a-0 -- bash -c '
+  > /tmp/hostfile; for g in a b c d; do for i in $(seq 0 15); do echo yw-$g-$i.yw >> /tmp/hostfile; done; done
+  # 分发脚本 + 启动，全走 SSH 内网
+  cat /tmp/hostfile | xargs -P 32 -I H scp -q /tmp/run-dsv3-yw.sh H:/tmp/
+  cat /tmp/hostfile | xargs -P 32 -I H ssh H "nohup /tmp/run-dsv3-yw.sh > /tmp/run.log 2>&1 &"
+'
+```
+
+### 方式二（目标）：bake 进 image
+
+把 sshd + dllogger + 共享密钥 + host keys + sshd_config 全 bake 进镜像，pod 启动只需 `/usr/local/bin/yw-start.sh`（起 sshd + sleep）。Dockerfile 见 `Dockerfile.yw-ssh`。
+
+```bash
+docker buildx build --platform linux/arm64 \
+  -t us-central1-docker.pkg.dev/tencent-gcp-taiji-poc/gb300-images/nemo-gb300-ready:26.06-v2-ssh \
+  --push .
+```
+
+> **构建环境坑（2026-07-17 未跑通）**：基础镜像 18.4GB/ARM64。gLinux(x86) 无 docker daemon；Cloud Build 默认 compute SA 缺 cloudbuild 源 bucket 的 storage 权限（403）。待项目管理员给 Cloud Build SA 授权，或用原生 ARM 构建器后再 bake。设计（Dockerfile + 依赖清单）已就绪。
+> **安全提示**：`Dockerfile.yw-ssh` 会把共享私钥 bake 进镜像——仅限 benchmark/POC 集群，勿用于生产。
+
+---
+
 ## 附：文件清单
 
 | 文件 | 说明 |
 |------|------|
 | `yw-pool-256.yaml` | 4-CD sleep-infinity pod 池（256 GPU on team=yangwhale；含 SSH-enabled 变体的免密 fanout 基础） |
 | `run-dsv3-yw.sh` | DSV3 单 pod 启动脚本（env + rank 计算 + torchrun native recipe） |
+| `yw-node-init.sh` | 容器启动初始化（装 sshd + 注入免密密钥 + dllogger，幂等带重试）— image bake 前的替代 |
+| `Dockerfile.yw-ssh` | 将上述依赖 bake 进镜像的 Dockerfile（待有 ARM 构建环境后使用） |
 
 ---
 

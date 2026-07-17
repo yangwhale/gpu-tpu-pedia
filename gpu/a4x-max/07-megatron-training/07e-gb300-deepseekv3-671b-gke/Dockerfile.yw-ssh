@@ -1,0 +1,22 @@
+FROM us-central1-docker.pkg.dev/tencent-gcp-taiji-poc/gb300-images/nemo-gb300-ready:26.06-v1
+
+# --- bake: openssh-server (avoids per-boot apt ~18s) ---
+RUN apt-get update -qq && apt-get install -y -qq openssh-server && rm -rf /var/lib/apt/lists/*
+
+# --- bake: dllogger (avoids per-run pip install) ---
+RUN pip install --no-cache-dir "git+https://github.com/NVIDIA/dllogger#egg=dllogger" || true
+
+# --- bake: shared SSH keypair + authorized_keys + host keys ---
+RUN mkdir -p /root/.ssh /run/sshd
+COPY id_ed25519 /root/.ssh/id_ed25519
+COPY authorized_keys /root/.ssh/authorized_keys
+RUN chmod 700 /root/.ssh && chmod 600 /root/.ssh/id_ed25519 /root/.ssh/authorized_keys \
+ && printf "StrictHostKeyChecking no\nUserKnownHostsFile /dev/null\nLogLevel ERROR\n" > /root/.ssh/config \
+ && chmod 600 /root/.ssh/config \
+ && ssh-keygen -A \
+ && sed -i "s/^#\?PermitRootLogin.*/PermitRootLogin prohibit-password/" /etc/ssh/sshd_config \
+ && sed -i "s/^#\?PubkeyAuthentication.*/PubkeyAuthentication yes/" /etc/ssh/sshd_config
+
+# --- bake: startup helper (start sshd then keep alive) ---
+RUN printf "#!/bin/bash\nmkdir -p /run/sshd\n/usr/sbin/sshd\necho SSH_READY\nsleep infinity\n" > /usr/local/bin/yw-start.sh \
+ && chmod +x /usr/local/bin/yw-start.sh
