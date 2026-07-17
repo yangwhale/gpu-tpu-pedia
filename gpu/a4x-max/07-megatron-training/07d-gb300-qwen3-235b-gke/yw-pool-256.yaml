@@ -1,0 +1,421 @@
+# yangwhale 256 GPU sleep-infinity pool — 4 domains x 16 nodes
+# Mirrors dsv3-a/b/c/d architecture: 4 separate ComputeDomains (1 per subblock)
+# group a->pool-0003, b->pool-0005, c->pool-0007, d->pool-0008
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yw
+spec:
+  selector:
+    job: yw
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+# ===== group a (pool-0003) =====
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: yw-cd-a
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: yw-ch-a
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: yw-mrdma-a
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          deviceClassName: mrdma.google.com
+          allocationMode: ExactCount
+          count: 8
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: yw-a
+spec:
+  serviceName: yw
+  replicas: 16
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: yw-a
+  template:
+    metadata:
+      labels:
+        app: yw-a
+        job: yw
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-gpu: "true"
+        cloud.google.com/gke-nodepool: gb300-pool-0003
+        team: yangwhale
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [yw-a]
+            topologyKey: cloud.google.com/gce-topology-subblock
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: job
+                operator: In
+                values: [yw]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: ar-pull-secret
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 250Gi
+      containers:
+      - name: nemo
+        image: us-central1-docker.pkg.dev/tencent-gcp-taiji-poc/gb300-images/nemo-gb300-ready:26.06-v1
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            nvidia.com/gpu: 4
+          claims:
+          - name: req-mrdma
+          - name: compute-domain-channel
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        env:
+        - name: GLOO_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_DEBUG
+          value: "WARN"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
+        command: ["sleep", "infinity"]
+      resourceClaims:
+      - name: req-mrdma
+        resourceClaimTemplateName: yw-mrdma-a
+      - name: compute-domain-channel
+        resourceClaimTemplateName: yw-ch-a
+---
+# ===== group b (pool-0005) =====
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: yw-cd-b
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: yw-ch-b
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: yw-mrdma-b
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          deviceClassName: mrdma.google.com
+          allocationMode: ExactCount
+          count: 8
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: yw-b
+spec:
+  serviceName: yw
+  replicas: 16
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: yw-b
+  template:
+    metadata:
+      labels:
+        app: yw-b
+        job: yw
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-gpu: "true"
+        cloud.google.com/gke-nodepool: gb300-pool-0005
+        team: yangwhale
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [yw-b]
+            topologyKey: cloud.google.com/gce-topology-subblock
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: job
+                operator: In
+                values: [yw]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: ar-pull-secret
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 250Gi
+      containers:
+      - name: nemo
+        image: us-central1-docker.pkg.dev/tencent-gcp-taiji-poc/gb300-images/nemo-gb300-ready:26.06-v1
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            nvidia.com/gpu: 4
+          claims:
+          - name: req-mrdma
+          - name: compute-domain-channel
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        env:
+        - name: GLOO_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_DEBUG
+          value: "WARN"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
+        command: ["sleep", "infinity"]
+      resourceClaims:
+      - name: req-mrdma
+        resourceClaimTemplateName: yw-mrdma-b
+      - name: compute-domain-channel
+        resourceClaimTemplateName: yw-ch-b
+---
+# ===== group c (pool-0007) =====
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: yw-cd-c
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: yw-ch-c
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: yw-mrdma-c
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          deviceClassName: mrdma.google.com
+          allocationMode: ExactCount
+          count: 8
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: yw-c
+spec:
+  serviceName: yw
+  replicas: 16
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: yw-c
+  template:
+    metadata:
+      labels:
+        app: yw-c
+        job: yw
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-gpu: "true"
+        cloud.google.com/gke-nodepool: gb300-pool-0007
+        team: yangwhale
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [yw-c]
+            topologyKey: cloud.google.com/gce-topology-subblock
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: job
+                operator: In
+                values: [yw]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: ar-pull-secret
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 250Gi
+      containers:
+      - name: nemo
+        image: us-central1-docker.pkg.dev/tencent-gcp-taiji-poc/gb300-images/nemo-gb300-ready:26.06-v1
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            nvidia.com/gpu: 4
+          claims:
+          - name: req-mrdma
+          - name: compute-domain-channel
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        env:
+        - name: GLOO_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_DEBUG
+          value: "WARN"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
+        command: ["sleep", "infinity"]
+      resourceClaims:
+      - name: req-mrdma
+        resourceClaimTemplateName: yw-mrdma-c
+      - name: compute-domain-channel
+        resourceClaimTemplateName: yw-ch-c
+---
+# ===== group d (pool-0008) =====
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: yw-cd-d
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: yw-ch-d
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: yw-mrdma-d
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          deviceClassName: mrdma.google.com
+          allocationMode: ExactCount
+          count: 8
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: yw-d
+spec:
+  serviceName: yw
+  replicas: 16
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: yw-d
+  template:
+    metadata:
+      labels:
+        app: yw-d
+        job: yw
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-gpu: "true"
+        cloud.google.com/gke-nodepool: gb300-pool-0008
+        team: yangwhale
+      affinity:
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [yw-d]
+            topologyKey: cloud.google.com/gce-topology-subblock
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: job
+                operator: In
+                values: [yw]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: ar-pull-secret
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 250Gi
+      containers:
+      - name: nemo
+        image: us-central1-docker.pkg.dev/tencent-gcp-taiji-poc/gb300-images/nemo-gb300-ready:26.06-v1
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            nvidia.com/gpu: 4
+          claims:
+          - name: req-mrdma
+          - name: compute-domain-channel
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        env:
+        - name: GLOO_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_DEBUG
+          value: "WARN"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
+        command: ["sleep", "infinity"]
+      resourceClaims:
+      - name: req-mrdma
+        resourceClaimTemplateName: yw-mrdma-d
+      - name: compute-domain-channel
+        resourceClaimTemplateName: yw-ch-d
