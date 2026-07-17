@@ -1,8 +1,10 @@
-# GB300 NVL72 (A4X Max) 256 GPU MoE 训练 — GKE
+# DeepSeek V3 (671B) 256 GPU 训练 — GB300 NVL72 (A4X Max) GKE
 
-GB300 (A4X Max) GKE 集群上的 256 GPU MoE 大模型预训练 benchmark，基于 NVIDIA Megatron Bridge 官方 recipe。覆盖 DeepSeek V3 (671B) 和 Qwen3 235B-A22B。
+GB300 (A4X Max) GKE 集群上的 DeepSeek V3 (671B, 61 层) 256 GPU 预训练 benchmark，基于 NVIDIA Megatron Bridge r0.5.0 官方 recipe。
 
-**核心成果**：2026-07-17 首次在 GB300 256 GPU 上跑通 **full_iteration CUDA graph**，DeepSeek V3 达到 **~1553 MODEL TFLOP/s/GPU**（30 步稳态）。
+**核心成果**：2026-07-17 首次在 GB300 256 GPU 上跑通 **full_iteration CUDA graph**，GBS=4096 达到 **~1618 MODEL TFLOP/s/GPU**（对标官方 1648，98.2%）。
+
+> Qwen3 235B-A22B 的 GKE 训练文档见同级 `07d-gb300-qwen3-235b-gke/`（测试中）。
 
 **参考**：
 - [NVIDIA Megatron Bridge Performance Summary](https://docs.nvidia.com/nemo/megatron-bridge/latest/performance-summary.html)
