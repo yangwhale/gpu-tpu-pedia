@@ -267,6 +267,8 @@ NVIDIA 官方 Megatron Bridge Performance Summary: GB300 256GPU V2 (full_iterati
 | D | 4 | 12 | 16 | 64 | **OOM** | warmup 3 步 OK (915 TFLOP/s), 第 4 步 graph capture 时 OOM |
 | E | 4 | 12 | 32 | 256 | **hang** | `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32` 应为 8, HybridEP 通信挂死 |
 | F (奚老师) | 2 | 8 | 32 | 256 | **crash** | 同 C: `cudaErrorStreamCaptureUnjoined` |
+| G | 4 | 12 | 32 | 256 | **hang** | `NCCL_GRAPH_REGISTER=1` + `HYBRID_EP_RANKS=8`: rendezvous 25min 无 worker spawn |
+| H | 4 | 12 | 32 | 256 | **进行中** | 去掉 `NCCL_GRAPH_REGISTER=1`, `HYBRID_EP_RANKS=8`, `NCCL_DEBUG=INFO` |
 
 > 注：尝试 D 的前 3 步 (915 TFLOP/s) 不是 graph capture 的成功——`cuda_graph_warmup_steps` 决定前 N 步正常执行不做 capture，graph capture 发生在第 N+1 步。
 
@@ -347,15 +349,20 @@ assert "expandable_segments:True" not in PYTORCH_CUDA_ALLOC_CONF
 
 #### 待确认项 (需要 Bridge V2 源码或实验)
 
-| # | 问题 | 方法 |
-|---|------|------|
-| 1 | Bridge V2 recipe 具体设了哪些 p2p 参数？ | 读 Bridge V2 recipe config 源码 (private repo) 或打日志 |
-| 2 | `NCCL_GRAPH_REGISTER` 在 NCCL 2.30.4 + GIB 下默认值是什么？ | `echo $NCCL_GRAPH_REGISTER` 或 NCCL debug log |
-| 3 | `NCCL_GRAPH_REGISTER=1` 是否解决 `StreamCaptureUnjoined`？ | 实验: PP=2 VP=12 + `NCCL_GRAPH_REGISTER=1` |
-| 4 | GIB 是否是 unjoined stream 的来源？ | 实验: 不加载 GIB (纯 socket transport) 跑 full graph capture |
-| 5 | GB200 成功时的 NCCL 版本和 `NCCL_GRAPH_REGISTER` 值？ | 查 GB200 测试环境日志 |
-| 6 | `overlap_p2p_comm_warmup_flush` 是否在 V2 中启用？ | 打日志或读 Bridge V2 recipe |
-| 7 | PP=4 EP=32 256GPU 修正 `HYBRID_EP_RANKS=8` 后能否成功 capture？ | 实验: 等集群恢复后重跑 |
+| # | 问题 | 状态 | 结果 |
+|---|------|------|------|
+| 1 | Bridge V2 recipe 具体设了哪些 p2p 参数？ | 待确认 | 需读 Bridge V2 源码 |
+| 2 | `NCCL_GRAPH_REGISTER` 默认值？ | 待确认 | 默认未设 (空) |
+| 3 | `NCCL_GRAPH_REGISTER=1` 是否解决 Unjoined？ | **已验证: 不行** | =1 导致 256 卡 torchrun rendezvous hang (25min 无 worker spawn)，去掉后 NCCL 正常初始化 |
+| 4 | GIB 是否是 unjoined stream 的来源？ | 待确认 | 需实验: 纯 socket transport |
+| 5 | GB200 成功时的 NCCL 版本？ | 待确认 | 查 GB200 环境 |
+| 6 | `overlap_p2p_comm_warmup_flush` 状态？ | 待确认 | 需打日志 |
+| 7 | PP=4 EP=32 256GPU + `HYBRID_EP_RANKS=8` 能否 capture？ | **进行中 (尝试 H)** | NCCL init 成功 (P2P/MNNVL + gIB/GDRDMA)，等 graph capture 阶段结果 |
+
+**新发现 (2026-07-17):**
+- `NCCL_GRAPH_REGISTER=1` 在 GB300 GIB 环境下**不可用** — 导致 torchrun rendezvous 挂死 (尝试 G)
+- `NCCL_GRAPH_REGISTER` 不设或设为 0 时 NCCL 正常初始化 (尝试 H)
+- Placement Policy 修复后 alltoall 不再 crash: 32n 176 GB/s, 64n 90 GB/s (2026-07-17 NCCL 验证)
 
 ### 解决 GB300 GKE Megatron 训练的关键步骤
 
