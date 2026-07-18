@@ -1,0 +1,66 @@
+# SGLang R1-NVFP4 GB300 复现 — 实测 RUN LOG
+
+> 配套 [`sglang-r1-nvfp4-128k-gb300.md`](./sglang-r1-nvfp4-128k-gb300.md) 的实测流水账。
+> 记录：每步用的命令、结果、踩的坑、怎么修、最终 benchmark。一轮一轮从小到大。
+
+集群：`gke_tencent-gcp-taiji-poc_us-central1_gb300-gke-test`（kubectl 走 `ssh glinux $HOME/google-cloud-sdk/bin/kubectl`）
+
+---
+
+## 选池（2026-07-18）
+
+扫了全部 GB300 池，选 **pool-0007**：
+- 16 台 `team=yangwhale`，全 Ready，每台 4 GPU allocatable
+- 纯闲置（yw-c 已缩到 0，无业务 pod）
+- DRA / RDMA / GIB 都是训练时验证过的，直接复用
+
+> 其它闲池备用：pool-0002 / 0005 / 0012（team=NONE，需打标签）。gdde 池（0001/0004/0006/0009）是奚老师的，不碰。
+
+已实查硬件：GB300 `compute_cap 10.3 = sm_103a`，HCA `mlx5_0~7`。
+
+---
+
+## Round 0 — 容器验证（最大风险点先验）
+
+**目标**：在 pool-0007 起一个 SGLang 容器 pod，确认 sm103 上 sglang / flashinfer / deep_ep import OK，再决定要不要 build。
+
+### 命令
+```bash
+# 探针 pod (pool-0007, team=yangwhale, 4 GPU, sleep infinity)
+kubectl apply -f sgl-probe.yaml   # image: lmsysorg/sglang:v0.5.7-cu130-runtime
+kubectl exec sgl-probe -- python -c "import sglang, flashinfer, deep_ep, deep_gemm, sgl_kernel"
+```
+
+### 结果（stock `v0.5.7-cu130-runtime`）
+| 组件 | 状态 |
+|------|------|
+| sglang | **0.5.7** ✓（源码装在 `/sgl-workspace/sglang`） |
+| deep_ep | ✓ OK |
+| deep_gemm | ✓ OK |
+| sgl_kernel | ✓ OK |
+| flashinfer | **0.5.3 ✗**（要 ≥0.6.1 才有 sm103 cutedsl） |
+| nvshmem (py) | 无（C 库，DeepEP 能用即可，非阻塞） |
+| GPU | NVIDIA GB300, cc 10.3 = sm103a ✓ |
+
+### 坑 1：flashinfer 升级的 pin 冲突 + cubin 不匹配
+- `pip install -U flashinfer-python>=0.6.1` → 装成 0.6.15，但：
+  - sglang 0.5.7 硬 pin `flashinfer_python==0.5.3` + `nvidia-cutlass-dsl==4.2.1`（pip resolver 警告，非致命）
+  - `flashinfer-cubin` 仍 0.5.3，与本体版本不匹配 → `RuntimeError`（除非 `FLASHINFER_DISABLE_VERSION_CHECK=1`，recipe 正是这么设的）
+- **修法**：装**匹配版本** + 关版本检查：
+  ```bash
+  pip install flashinfer-python==0.6.1 flashinfer-cubin==0.6.1
+  export FLASHINFER_DISABLE_VERSION_CHECK=1
+  python -c "import flashinfer, sglang"   # → flashinfer 0.6.1 + sglang 0.5.7 都 import OK
+  ```
+
+### Round 0 结论
+- **stock 容器 90% 够用**：deep_ep/deep_gemm/sgl_kernel 现成，只需就地 `pip install flashinfer 0.6.1(含 cubin)` + 关版本检查。**大概率不用 build ARM Dockerfile**。
+- sm103 cutedsl kernel 真能否正确运行，待第一次真启动确认；不行再退 `gb300_blog` 源码 build（doc 第 2 节）。
+- 落地做法：把"pip 升级 flashinfer + 设 env"写进 pod 的启动 command，或 commit 成一个新镜像层。
+
+---
+
+## Round 1 — 1P1D (8 GPU) 冒烟
+
+*(待做：共享存储 + 350GB 模型下载 → 起 1 prefill + 1 decode + router → 一条 128K 请求)*
+
