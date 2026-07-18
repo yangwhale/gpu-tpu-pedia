@@ -58,6 +58,15 @@
 | 模型 | **DeepSeek-R1-0528-NVFP4-v2**（FP4 量化 checkpoint，需从 HF 下载到本地） |
 | 编排 | 官方用 **srt-slurm + NVIDIA Dynamo**（Slurm 系统）；我们 GKE 见第 4 节适配 |
 
+> **容器最省事的路子：直接从 `YAMY1234/sglang@gb300_blog` 的 [Dockerfile](https://github.com/YAMY1234/sglang/blob/gb300_blog/docker/Dockerfile) build**（里面已把 DeepEP 源码编译、nvshmem 3.3.24、flashinfer≥0.6.1、sgl-kernel 全串好，见 L228）。不要指望 `v0.5.7-cu130-runtime` 开箱即用——它需要重装这些才能在 sm103 上跑 cutedsl。
+>
+> **模型下载**（~350GB，671B×0.5B/param FP4）：
+> ```bash
+> huggingface-cli download <org>/DeepSeek-R1-0528-NVFP4-v2 \
+>   --local-dir /mnt/models/DeepSeek-R1-0528-NVFP4-v2
+> # 放共享存储（Lustre / GCS gcsfuse），所有 pod 挂载同一路径
+> ```
+
 ---
 
 ## 3. 官方复现路径（srt-slurm + Dynamo，Slurm 环境）
@@ -179,13 +188,56 @@ export SGLANG_NVFP4_CKPT_FP8_NEXTN_MOE=1
 
 > `ctx8_dep32` 大档：decode 改 `--data-parallel-size 32 --tensor-parallel-size 32 --expert-parallel-size 32`（DEP32 = 8 节点 × 4），prefill 起 8 个 PP4 worker（8 节点）。开 MTP 的档加 `--speculative-algorithm` 相关 MTP 参数（见 recipe `*_mtp2.yaml`）。
 
-### 4.4 Benchmark（长上下文）
+### 4.4 多节点启动 + PD 路由（关键，dry-run 走查补充）
+
+> 这一节是我第一版漏掉、但**没它根本跑不起来**的核心机制。
+
+**(a) 多节点 SGLang server**：任何跨 >1 节点的 server（DEP8=2 节点、DEP16=4、DEP32=8）都要在**每个节点**上起一个进程，靠这三个参数组成一个分布式 server：
 
 ```
-type: sa-bench    # SemiAnalysis InferenceX bench
-ISL = 128000, OSL = 8000
-concurrencies = 512, req_rate = inf
+--nnodes <N>                 # 该 server 占几个节点 (DEP8→2, DEP16→4, DEP32→8)
+--node-rank <r>              # 本节点在该 server 内的 rank (0..N-1)
+--dist-init-addr <head_ip>:<port>   # 该 server rank0 的地址
 ```
+（prefill 每个 worker 是 PP4=1 节点 4 GPU，单节点即可，不需要 --nnodes；decode 才跨节点。）
+
+**(b) PD 路由（prefill↔decode 怎么连）**：不是"对齐 bootstrap-port"就完事。三种方式：
+- **SGLang 原生 router / Model Gateway**：在前面起一个 router，把请求按策略分发到 prefill 池和 decode 池。prefill server 加 `--disaggregation-mode prefill`，decode 加 `--disaggregation-mode decode`，router 知道两个池的地址。
+- **NVIDIA Dynamo**（博客用的）：KV-aware router + 生命周期管理，有 K8s stack。
+- 传输后端：recipe 用 `nixl`（`--disaggregation-transfer-backend nixl`）；也可用 Mooncake。
+
+**(c) RDMA HCA + NVL72 NVLink KV 传输**（我们 GB300 必加）：
+```
+--disaggregation-ib-device <mlx5_x,...>   # 指定 CX-8 HCA (per-GPU JSON 也可)
+# NVL72 域内 KV 走 NVLink (Mooncake 后端时):
+export SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK
+```
+
+### 4.5 MTP（EAGLE spec decode，`*_mtp2` 档的真实参数）
+
+```
+--speculative-algorithm EAGLE
+--speculative-num-steps 2
+--speculative-eagle-topk 1
+--speculative-num-draft-tokens 3
+--speculative-moe-runner-backend deep_gemm
+--speculative-moe-a2a-backend deepep
+# 配套 env:
+export SGLANG_NVFP4_CKPT_FP8_NEXTN_MOE=1
+```
+
+### 4.6 Benchmark（长上下文）
+
+官方用 SemiAnalysis 的 `sa-bench`（可能非公开）。**我们可用 SGLang 自带 `bench_serving` 替代**：
+
+```bash
+python -m sglang.bench_serving \
+  --backend sglang --host <router_ip> --port <port> \
+  --dataset-name random \
+  --random-input-len 128000 --random-output-len 8000 \
+  --max-concurrency 512 --num-prompts 512
+```
+对标 ISL=128000 / OSL=8000 / concurrency=512，看 TPS/GPU 和 TTFT。
 
 ---
 
@@ -202,17 +254,37 @@ concurrencies = 512, req_rate = inf
 
 ## 6. 复现步骤（GKE，路 A：直接起 SGLang PD，从 1P1D 起步）
 
-1. **准备**：一个 NVL72 域打标签（16 节点足够，1P1D 只需 2 节点）；建 SSH-enabled pod 池（同训练用的 `yw-pool` 模式）；模型 + 容器就位。
-2. **验证依赖**：进 pod 确认 `flashinfer>=0.6.1`、DeepEP import OK、nvshmem 3.3.24、GPU 是 sm103a。
-3. **起 1P1D（8 GPU）冒烟**：1 个 prefill server（PP4，节点 A）+ 1 个 decode server（TP4，节点 B），套 4.1 env + 4.2/4.3 参数（decode 改 TP4/DP1/EP1 小档），对齐 bootstrap-port。
-4. **发一条 128K 请求**验证 PD 通路（prefill→KV 传→decode 出 token）。
-5. **上 ctx3_dep8（20 GPU）**：3 prefill + DEP8 decode，跑 sa-bench ISL=128K/OSL=8K，看 TPS/GPU。
-6. **冲 ctx8_dep32（64 GPU，占满一个域）**：对比博客 226 TPS/GPU。
-7. **开 MTP**（`*_mtp2` 档）看 TPS/User 提升。
+1. **准备**：一个 NVL72 域打标签（16 节点足够，1P1D 只需 2 节点）；建 SSH-enabled pod 池（同训练用的 `yw-pool` 模式，但换 SGLang 容器）；模型下载到共享存储并挂载（`/mnt/models/...`）；deepgemm-cache / flashinfer-workspace 挂可写卷。
+2. **构建/装依赖**（不是"验证"）：从 `gb300_blog` Dockerfile build 容器（含 DeepEP 源码编译 + nvshmem 3.3.24 + flashinfer≥0.6.1 + sgl-kernel）；进 pod 确认 `import deep_ep` OK、`flashinfer.__version__>=0.6.1`、GPU 是 **sm103a**（`nvidia-smi --query-gpu=compute_cap`）。
+3. **起 1P1D（8 GPU）冒烟**：节点 A 起 prefill server（4.3 参数，PP4=单节点 4 GPU）；节点 B 起 decode server（4.2 参数改小档 TP4/DP1/EP1，单节点）；前面起一个 **SGLang router**（4.4b）把两者接起来；套 4.1 env + `--disaggregation-transfer-backend nixl` + `--disaggregation-ib-device`（4.4c）。
+4. **发一条 128K 请求**（打 router 地址）验证 PD 通路（prefill→KV 传→decode 出 token）。
+5. **上 ctx3_dep8（20 GPU）**：3 个 prefill worker（各 PP4 单节点）+ decode DEP8（**2 节点，用 4.4a 的 `--nnodes 2 --node-rank 0/1 --dist-init-addr`**）+ router；跑 4.6 的 `bench_serving` ISL=128K/OSL=8K，看 TPS/GPU。
+6. **冲 ctx8_dep32（64 GPU，占满一个域）**：8 prefill + decode DEP32（**8 节点分布式 server**）+ router；对比博客 226 TPS/GPU。
+7. **开 MTP**（4.5 的 EAGLE 参数）看 TPS/User 提升（博客 23→43）。
 
 > 每档跑通后把实测 TPS/GPU、TTFT 填进本文档，跟博客数字对比。
 
 ---
+
+## 6.5 Dry-run 走查发现（第一版 → 修订）
+
+对照 LMSYS 博客 + issue 18703 + SGLang 官方 PD 文档，逐步"假装执行"抓出的坑：
+
+| # | 第一版的问题 | 修订 |
+|---|-------------|------|
+| 1 | 依赖写成"验证"，其实容器不自带 | 改为**从 gb300_blog Dockerfile 构建**（DeepEP 源码编译等），见第 2 节 |
+| 2 | **完全没写多节点启动** | 补 4.4a：`--nnodes/--node-rank/--dist-init-addr`（DEP8=2/16=4/32=8 节点） |
+| 3 | PD 只说"对齐 bootstrap-port" | 补 4.4b：**必须有 router**（SGLang Model Gateway 或 Dynamo）在前面分发 |
+| 4 | 没提 RDMA HCA / NVL72 KV 传输 | 补 4.4c：`--disaggregation-ib-device` + NVLink KV pool env |
+| 5 | 模型下载无命令、大小写 400GB | 补 `huggingface-cli download`，改 ~350GB（671B×0.5） |
+| 6 | benchmark 只写 sa-bench（非公开） | 补 4.6：**用 SGLang 自带 `bench_serving`** 替代 |
+| 7 | MTP 参数含糊 | 补 4.5：确切 EAGLE 参数（num-steps 2 / topk 1 / draft-tokens 3） |
+| 8 | 没提可写卷挂载 | 补 deepgemm-cache / flashinfer-workspace / 模型路径挂载 |
+
+**仍待实测确认的不确定点**：
+- SGLang router 与 nixl 后端在我们 GKE CX-8 RDMA 上的 HCA 命名（`--disaggregation-ib-device` 具体填什么，要进 pod `ibv_devices` 看）。
+- `bench_serving` 的 random dataset 能否代表 sa-bench 的 128K 长上下文分布（结果对比时要注明差异）。
+- DEP32 的分布式 decode server 在跨 8 节点时，MNNVL 域内 all-to-all 是否需要额外 `NUM_OF_HYBRID_EP_RANKS` 类的对齐（类比训练侧 hybridep 的坑）。
 
 ## 7. 状态
 
