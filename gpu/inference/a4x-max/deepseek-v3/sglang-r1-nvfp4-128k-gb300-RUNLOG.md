@@ -60,7 +60,17 @@ kubectl exec sgl-probe -- python -c "import sglang, flashinfer, deep_ep, deep_ge
 
 ---
 
+### 镜像结论（澄清）
+- 用的是 **SGLang 官方 Docker Hub 镜像**（`lmsysorg/sglang`），**不是自建**。
+- 更新的官方 tag：**`v0.5.15.post1-cu130`** / `latest-cu130` / `inkling-cu13-arm64`。博客优化已全合入 main → 新镜像大概率自带 flashinfer 0.6.x + sm103，**连 pip 补丁都省**。
+- 方案：**首选 `v0.5.15.post1-cu130`**（新、可能开箱即用）；要严格复现博客数字再退 `v0.5.7 + gb300_blog patch`。
+
+## 存储方案（Chris 定：GCS → local SSD，不 Fuse 直读）
+实查 GB300 节点：**4× 2.9TB local SSD**（`nvme0/2/3/4n1`，raw 未挂载）+ 100G boot。
+- **标准做法**：模型放 GCS bucket → 每节点 `gcloud storage cp` 一次性拷到 local SSD → SGLang 从 SSD mmap 加载（高 IOPS 随机读；GCS Fuse 直读加载权重太慢）。
+- 待做：格式化+挂一块 2.9TB SSD 到 pod（hostPath / local PV）；`gcloud storage cp -r` 拉模型。
+
 ## Round 1 — 1P1D (8 GPU) 冒烟
 
-*(待做：共享存储 + 350GB 模型下载 → 起 1 prefill + 1 decode + router → 一条 128K 请求)*
+*(待做：模型→GCS→local SSD → 起 1 prefill + 1 decode + router → 一条 128K 请求)*
 
