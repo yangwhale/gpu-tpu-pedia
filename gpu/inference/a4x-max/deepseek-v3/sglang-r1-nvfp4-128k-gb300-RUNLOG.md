@@ -233,6 +233,117 @@ curl -s -X POST http://localhost:8000/v1/chat/completions -d @req.json
 
 ---
 
+## Round 2 架构解读 — 每个技术选择为什么这么定
+
+> 这一步（1P1D PD 分离）背后的原理拆解。把「跑通」升级成「知道为什么这么跑」，供后续各配置对比时做判断依据。
+
+### 数据流总览
+
+```mermaid
+flowchart LR
+    C[Client<br/>HTTP] --> R[Router :8000<br/>cache_aware]
+    R -->|① 送 prefill| P
+    R -->|③ 转 decode| D
+    subgraph P[Prefill 节点 node0 · TP4 · 4×GB300]
+      P1[算力密集<br/>一次算完整段 KV<br/>CUDA graph OFF]
+    end
+    subgraph D[Decode 节点 node1 · TP4 · 4×GB300]
+      D1[访存密集<br/>逐 token 生成<br/>CUDA graph ON bs1-512]
+    end
+    P -->|② KV cache 直传<br/>NIXL / CX-8 GPUDirect RDMA| D
+    D -->|④ token 流式返回| C
+```
+
+### 为什么必须拆开 Prefill / Decode
+两个阶段的资源画像**正好相反**，混跑会互相拖累：
+
+| 维度 | Prefill | Decode |
+|------|---------|--------|
+| 瓶颈 | **算力密集** (compute-bound) | **访存密集** (memory-bound) |
+| 干什么 | 整段 prompt 一次算出全部 KV | 每步只生成 1 个 token，反复读 KV |
+| 算力占用 | ~96%（吃满 Tensor Core） | ~25% |
+| 带宽占用 | ~30% | ~97%（吃满 HBM 带宽） |
+| 追求指标 | token/s 吞吐 | TPOT 低延迟 |
+
+> 单实例混跑时，一个长 prompt 触发 prefill 会**阻塞**整个 batch 里正在 decode 的请求 → TTFT 和 TPOT 同时崩。拆开后两条流水线各跑各的。
+
+### ① Prefill 用了什么技术 · 怎么加速
+| 技术 | 作用 | 为什么在 prefill 关键 |
+|------|------|----------------------|
+| **MLA** (`trtllm_mla`) | 多头潜在注意力，KV 压成低秩 latent | KV 体积缩到 ~1/10 → 写 KV 快，PD 传输量小 |
+| **NVFP4 权重** (`modelopt_fp4`) | 4-bit 权重，GB300 sm103 原生 FP4 Tensor Core | prefill 算力受限，FP4 等效算力翻倍 → 直接决定吞吐 |
+| **DeepGEMM** | MoE 层 fp8 grouped GEMM | DeepSeek 是 MoE，prefill 大量 token 路由到 expert，是热点 |
+| **Chunked Prefill** | 超长 prompt 切块分批算 | 128K 长上下文必需，否则单次 OOM |
+| **CUDA graph OFF** | prefill 关闭 graph | prefill 每次 shape 不同（prompt 变长），graph 复用不了。实测 log 确认 `Disable prefill CUDA graph` |
+
+**并行**：本次 = **TP4**（4 GPU 张量并行，切注意力头 + FFN 权重，NVLink all-reduce 拼结果）。大规模叠 **EP**（专家并行，expert 分散多卡，token dispatch/combine 走 DeepEP）。
+**加速本质**：prefill 缺算力 → 多卡摊计算 + 低精度换算力 + 高带宽互联让切分不亏通信。
+
+### ② Decode 用了什么技术 · 怎么加速
+| 技术 | 作用 | 为什么在 decode 关键 |
+|------|------|----------------------|
+| **CUDA Graph ON** (bs 1-512) | 整个 decode step 录成图，回放零启动开销 | decode 每步 shape 固定（1 token），完美适配；实测 capture 52 个 bs，头号功臣 |
+| **fp8 KV Cache** (`fp8_e4m3`) | KV 用 8-bit 存 | decode 瓶颈是读 KV，减半 → 带宽压力减半 + 2× 并发。实测每卡 KV = **127.38 GB / 389 万 token** |
+| **Continuous Batching** | 动态拼请求进同一 batch | 把带宽摊到多请求，吞吐放大器 |
+| **MLA 低秩 KV** | 读压缩后 latent | 减少每步搬运字节 |
+| **MTP / EAGLE**（R5 待做） | 一步猜多 token，主模型批量验证 | decode 是串行瓶颈，投机解码拉高单用户 TPS 主力 |
+
+**并行**：TP4（让每卡只存 1/4 KV，塞更大 batch）。大规模用 **DP Attention**（MLA 的 KV 小，复制注意力比切它通信更划算，避免 KV 多卡重复）+ **Wide-EP**。
+**加速本质**：decode 缺带宽 → 压 KV（fp8+MLA）省带宽 + CUDA graph 消 CPU 开销 + 大 batch 摊平 + 投机解码破串行。
+
+### ③ KV 用什么传 — NIXL over CX-8 GPUDirect RDMA
+```mermaid
+flowchart LR
+    PK[Prefill GPU HBM<br/>KV cache fp8] -->|注册为 NIXL descriptor| N1[CX-8 · 8×mlx5 HCA]
+    N1 -->|GPUDirect RDMA| RO((RoCE 网))
+    RO --> N2[CX-8 · 8×mlx5 HCA]
+    N2 -->|直落显存| DK[Decode GPU HBM<br/>KV cache fp8]
+    BS[bootstrap :9000<br/>交换 metadata / 显存 key] -.握手.-> PK
+    BS -.握手.-> DK
+```
+- **NIXL** = NVIDIA Inference Xfer Library，厂商无关的点对点传输库，统一 API + 可插拔 backend（UCX/GPUDirect RDMA/GDS/NVMe/S3…）。
+- **GPUDirect RDMA**：GPU 显存 → 网卡 → GPU 显存，全程**不碰 CPU / host 内存**（zero-copy）。
+- **握手机制**：两端先经 `bootstrap-port 9000` 交换 metadata，decode 拿到 prefill 显存的访问 key，才能发起单边 RDMA read/write。
+- **非阻塞**：post 后立即返回，计算与通信重叠。
+- 配 `--disaggregation-ib-device mlx5_0..7` 吃满 GB300 的 8 张 CX-8 网卡。
+
+### ④ 为什么用 NIXL，不用 Mooncake
+SGLang PD 支持两种 KV backend（`--disaggregation-transfer-backend {nixl,mooncake}`），不是谁强谁弱，是**定位不同**：
+
+| 维度 | NIXL（我们的选择） | Mooncake |
+|------|-------------------|----------|
+| 本质 | 点对点传输库（P2P 直传） | KVCache 中心化平台（P2P + 分布式 KV Store） |
+| 出品 | NVIDIA（Dynamo 生态） | 月之暗面 Kimi + 清华（FAST'25） |
+| 核心价值 | 轻量、低延迟、硬件原生 | 跨实例 KV 复用 + KV 分层存储 (HBM→DRAM→SSD) |
+| 额外依赖 | 随 sglang 镜像，只需指定 IB device | 要额外起 Store 服务 + etcd |
+| GB300 适配 | NVIDIA 全家桶，CX-8/GPUDirect 一等支持 | 也支持 RDMA，但栈更重 |
+| 最适场景 | 1P1D / xPyD 点对点分离 | 超大规模 + 长上下文 prefix 跨实例复用 |
+
+**选 NIXL 三条理由**：
+1. **场景匹配** —— 现在是 1P1D 点对点直传，NIXL 的 P2P 正好；Mooncake 的杀手锏 Store（分布式 KV 池 + 跨实例 prefix 复用）1P1D 用不上。
+2. **NVIDIA 原生栈** —— GB300 + CX-8 + GPUDirect RDMA 是 NVIDIA 全家桶，NIXL 官方一等适配；lmsys GB300 官方复现路径就是 NIXL（配 Dynamo）。
+3. **部署轻** —— NIXL 一行 `--disaggregation-ib-device` 即用；Mooncake 要额外拉 Store + etcd，社区还有 TCP backend 并发瓶颈 issue。
+
+> **不是 Mooncake 差**：将来上大规模 + 长上下文、需要多 decode 实例**共享同一份 prefix KV**（如同一 system prompt 被海量请求复用）、或 KV 冷热分层卸载时，Mooncake Store 的价值才出来。现阶段（复现 + 点对点分离）NIXL 更对路。
+
+### ⑤ 特殊配置 × 影响（本次实测参数）
+| 配置 | 作用 | 影响 |
+|------|------|------|
+| `--quantization modelopt_fp4` | 权重 NVFP4 4-bit | 吞吐↑↑：显存/带宽减半 + FP4 Tensor Core 等效算力翻倍 |
+| `--kv-cache-dtype fp8_e4m3` | KV 8-bit | 并发↑ 带宽↓：KV 减半 → 2× 并发；实测 127GB/389万token/卡 |
+| `--attention-backend trtllm_mla` | TRT-LLM MLA kernel | 延迟↓：sm100+ 专用 + fp8 KV 支持；换通用 backend 明显变慢 |
+| `--mem-fraction-static 0.85` | 85% 显存给静态 | 权衡：剩 15% 给 KV pool；调高→并发↑但 OOM 险 |
+| `--disable-flashinfer-autotune` | 跳过 fp4_gemm 调优 | 冒烟专用：否则首启 tune ~1h；正式跑应开 + 持久 cache |
+| `--disaggregation-ib-device mlx5_0..7` | 8 张 CX-8 做 KV RDMA | 传输带宽↑：吃满 8 网卡；少指定成瓶颈 |
+| `SGLANG_NVFP4_CKPT_FP8_GEMM_IN_ATTN=1` | attention GEMM 走 fp8 | 精度/速度平衡 |
+| `NCCL_CONF_FILE=nccl.a4xmax.conf` + mnnvl fusion | NVL72 域内 NVLink 通信 | TP 通信↓：AllReduce Fusion 融进 kernel，域内几乎免费 |
+
+### 实测数字印证解读
+- **decode 快**：TPOT 9.2ms → 单用户 ~109 tok/s。PD 分离让 decode 专用化（fp8 KV + CUDA graph + MLA）的收益兑现。
+- **prefill 是瓶颈**：Mean TTFT 7.4s（P90 19.7s），16 并发全压单 prefill 排队 → 下一步 **xPyD（多 prefill）** 摊平 TTFT 的直接证据。
+
+---
+
 ## Round 3+ — 待做
 - **Round 3**：ctx3_dep8（20 GPU，加 prefill 副本摊 TTFT）
 - **Round 4**：ctx8_dep32（64 GPU = 一个 NVL72 域）→ 对标博客 226 TPS/GPU
