@@ -890,6 +890,7 @@ kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
 
 ### 参考
 
+- [⭐ Google Cloud 官方博客深度剖析 — Systems Engineering Playbook](BLOG-systems-engineering-playbook.md) — Qwen 3.5-397B 在 Ironwood 上的系统工程优化全量中文解读 + 复现测试框架 (2026-07-14 博客)
 - [PR #2366 — Hybrid KV cache OOB fix（必备）](https://github.com/vllm-project/tpu-inference/pull/2366)
 - [PR #2577 — GDN scan kernel bf16→fp32 upcast + chunk_size 64→32（chat 必备）](https://github.com/vllm-project/tpu-inference/pull/2577) (commit `04077875`, merged 2026-05-15)
 - [PR #2322 / #2327 / #2331 / #2336 — PD disagg 4 PR 系列（含 HMA 实现）](https://github.com/vllm-project/tpu-inference/pull/2322)
