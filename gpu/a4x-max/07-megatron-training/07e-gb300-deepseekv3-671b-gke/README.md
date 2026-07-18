@@ -288,7 +288,34 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/dsv3-run.log | tail -6'
 
 - 官方对标表的 `4096 / 15360` 是 **global batch size**，**不是 sequence length**。seq_length 两档都固定 4096。
 - `--global_batch_size` CLI 优先级高于 `-cv` 版本内置的 GBS（`utils.py:186`），可直接覆盖。
-- **GBS 必须能被 `MBS × DP` 整除**：DSV3 256GPU 下 DP = 256/(TP1×PP2) = 128，所以 15360/(2×128)=60 ✓；若报错先检查整除性。
+- **GBS 必须能被 `MBS × DP` 整除**：DSV3 256GPU 下 DP = 256/(TP1×PP2) = 128，MBS=1（FP8_MX）→ 15360/128=120 microbatch ✓；若报错先检查整除性。
+
+---
+
+## Part 6 — Scale-in 测试：小规模能否复现 MFU（2026-07-18）
+
+**目的**：层数 + 节点等比例减半，验证能否在少量机器上复现全规模的 TFLOP/s，用于**低成本调试**（先在小集群验证想法，再上全规模）。
+
+### 配置对比（严格等比例减半）
+
+| 维度 | 全规模 | Scale-in |
+|------|--------|----------|
+| GPU | 256 (4×16) | **128 (4×8)** |
+| 层数 | 61 (3 dense+58 MoE+1 MTP) | **31 (3 dense+28 MoE+1 MTP)** |
+| pp_layout | `Et*4\|(t*4\|)*14tmL` | `Et*2\|(t*2\|)*14tmL` |
+| GBS | 15360 | **7680** |
+| TP/PP/VPP/EP | 1/2/8/32 | 1/2/8/32（**不变**）|
+| microbatch | 120 | 120（**不变**）|
+| 稳态 TFLOP/s | 1658 | **~1550 (best 1551)** |
+
+> Scale-in 命令在 15360 版基础上加：`-ng 128 --global_batch_size 7680 --num_layers 31 --first_k_dense_replace 3 --pipeline_model_parallel_layout "Et*2|(t*2|)*14tmL" -tp 1 -pp 2 -vp 8 -ep 32`；torchrun `--nnodes=32`，node_rank offset 改 a=0/b=8/c=16/d=24。集群侧 `kubectl scale statefulset yw-{a,b,c,d} --replicas=8`。
+
+### 结论
+
+- **复现了 ~93.5% 的 MFU**（1550 / 1658），**不是 100%**。
+- **差 ~6.5% 的原因**：层数减半后每 pipeline stage 只剩 2 层（全规模 4 层/stage），但 **embedding / MTP / EP all-to-all 等固定开销不随层数缩小**，占比变大 → MFU 掉一点。
+- **对调试足够有代表性**：128 GPU 能复现绝大部分性能特征（1550 vs 1658），验证并行策略 / 环境变量 / 新想法完全够用，省一半机器。
+- **若要更贴近全规模 MFU**：保持"每 stage 4 层"（减 VPP 而非减层/stage），让固定开销占比不变——但那样层数减不了太多。**减层/stage 换来的是内存和层数都小、更快迭代**，是 tradeoff。
 
 ---
 
