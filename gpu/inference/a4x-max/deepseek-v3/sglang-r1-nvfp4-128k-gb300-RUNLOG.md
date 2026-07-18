@@ -421,6 +421,37 @@ flowchart TB
 | TPS/GPU | 226.2（ctx8_dep32 峰值档） | 待测（ctx3_dep8 小档，不到峰值但看趋势） |
 | decode 并发 | 36 req/GPU (DEP16) | 待测（DEP8 量级） |
 
+### Round 3 实测坑记录（启动阶段）
+
+> 从 5 节点准备到 server 起来，踩的坑 + 修法。benchmark 数字待 autotune 完成后回填。
+
+**节点选择**：pool-0007（subblock-0007）17 节点全 Ready、同域。复用 Round 2 的 sgl-node0(prefill-0)/sgl-node1(decode-head)，新建 sgl-p1/p2(prefill) + sgl-d1(decode-worker)，全在 subblock-0007。
+
+**坑 7：新 pod stock 镜像不带 gcloud**
+新建的 3 个 pod（同 `v0.5.15.post1-cu130` 镜像）没有 `gcloud`（Round 2 时在 sgl-node1 手动装过但没记）。→ **修**：curl 装 `https://sdk.cloud.google.com` 到 `/root/google-cloud-sdk`，再 `gcloud storage cp`。以后 bake 镜像应预装 gcloud。
+
+**坑 8（重要，回答"下载为什么慢"）：单块 local SSD 写入是模型下载瓶颈**
+- 现象：`gcloud storage cp` 从 GCS 拉模型只有 ~4 GiB/s，远低于 200G 网络（≈25 GiB/s）预期。
+- 排查：先怀疑跨 region → 实查 `gcloud storage buckets describe` = 桶在 **US-CENTRAL1 region**，节点 **us-central1-b**，**同 region，排除**。
+- 真因：`dd if=/dev/zero of=/mnt/ssd/wtest bs=1M count=10000 oflag=direct` 实测**单块 nvme0n1 顺序写入 = 3.9 GB/s** —— 正好卡在下载速度。**瓶颈是目标盘写入，不是网络/GCS**。
+- 根源：GB300 每节点 **4 块 2.9T NVMe**（nvme0/1/2/3n1），图省事只 mkfs+mount 了 1 块。
+- **修法（下次）**：4 块 NVMe 做 **RAID0 条带**（`mdadm --create /dev/md0 --level=0 --raid-devices=4 /dev/nvme{0,1,2,3}n1`），写入带宽 ~4× → ~15-16 GB/s，才能吃满 200G 网络。本轮模型已下完（4 GiB/s 也下完了），不重下；RAID0 留作下次优化。
+
+**坑 9：一条 ssh 里多个 `kubectl exec ... setsid` 串行只有第一个生效**
+用 `for p in ...; do kubectl exec $p -- setsid nohup ...; done` 起多个 pod 的 server，**只有第一个 exec 成功**（后面 pod 的 log 文件都没生成 = 命令没执行）。decode rank1、prefill p1/p2 都中招。→ **修**：每个 pod **单独一条 `kubectl exec`** 起（分开发命令），不要在一条 ssh 的循环里串多个 exec+setsid。
+
+**关键正面结论：stock `v0.5.15.post1-cu130` 镜像支持全套 Wide-EP feature**
+decode server_args 确认全部生效，**不需要 gb300_blog 源码 build**：
+- `enable_dp_attention=True` + `enable_dp_lm_head=True` ✓
+- `moe_a2a_backend='deepep'` + `deepep_mode='low_latency'` ✓（DeepEP 低延迟 all-to-all）
+- `moe_runner_backend='flashinfer_cutedsl'` ✓
+- `ep_size=8 tp_size=8 dp_size=8` + `nnodes=2 node_rank=0/1` 分布式 rendezvous ✓
+- `DeepEP MoE is enabled. expert parallel size adjusted to tp size[8]` ✓
+
+**启动阶段耗时**：卡在 `[AutoTuner] Tuning fp4_gemm`（6 profile × ~67s ≈ 7min/实例，首次一次性，cache 到 `/mnt/ssd/fi-cache` 复用）。Round 3 要 benchmark 真实性能，autotune **保持开启**（不像 Round 1 冒烟用 `--disable-flashinfer-autotune`）。
+
+*(benchmark 数字 + PD 端到端验证待 autotune 完成回填)*
+
 ---
 
 ## Round 4 / 5 — 待做
