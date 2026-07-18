@@ -344,8 +344,86 @@ SGLang PD 支持两种 KV backend（`--disaggregation-transfer-backend {nixl,moo
 
 ---
 
-## Round 3+ — 待做
-- **Round 3**：ctx3_dep8（20 GPU，加 prefill 副本摊 TTFT）
-- **Round 4**：ctx8_dep32（64 GPU = 一个 NVL72 域）→ 对标博客 226 TPS/GPU
-- **Round 5**：MTP（EAGLE spec decode）→ 拉 TPS/User
+## Round 3 — ctx3_dep8（20 GPU）架构设计 · 开跑前先想清楚
+
+> 状态：**设计中（未跑）**。先把架构、加速点、trade-off 想透 + 画图，跑的时候才容易一次成功。跑完回填实测。
+
+### 测什么
+- **配置**：`ctx3_pp4_gen1_dep8` = **20 GPU / 5 节点**
+  - **Prefill**：**3 个独立 worker**，每个 PP4（pipeline parallel = 1 节点 4 GPU）→ 3×4 = **12 GPU**
+  - **Decode**：**DEP8**（1 个实例，跨 **2 节点**分布式，DP8 + TP8 + EP8）→ **8 GPU**
+- **上真正的长上下文**：`--context-length 136001`，benchmark 打 **ISL=128K / OSL=8K**
+- **目标**：验证 **PD + Wide-EP + 多 prefill 负载均衡**，把 Round 2 暴露的 prefill 瓶颈摊平，逼近博客吞吐曲线
+
+### 拓扑
+
+```mermaid
+flowchart TB
+    C[Client<br/>ISL=128K / OSL=8K] --> R[Router :8000<br/>round_robin 分发到 3 prefill]
+    R --> P0 & P1 & P2
+    subgraph PF[Prefill 池 · 3 worker · 各 PP4 单节点 · 共 12 GPU]
+      P0[prefill-0<br/>PP4 · 4 GPU<br/>chunked PP prefill]
+      P1[prefill-1<br/>PP4 · 4 GPU]
+      P2[prefill-2<br/>PP4 · 4 GPU]
+    end
+    subgraph DEC[Decode 实例 DEP8 · 跨 2 节点分布式 · 8 GPU]
+      D0[node0 rank0<br/>4 GPU]
+      D1[node1 rank1<br/>4 GPU]
+      D0 <-->|MNNVL all-to-all<br/>DeepEP low_latency| D1
+    end
+    P0 & P1 & P2 -->|KV 直传<br/>NVLink pool 优先 / nixl+CX-8 兜底| DEC
+    DEC -->|token 流式| C
+```
+
+### 相比 Round 2 的三个关键升级
+| 升级 | Round 2 (1P1D) | Round 3 (ctx3_dep8) | 解决什么 |
+|------|----------------|---------------------|----------|
+| **① 多 prefill worker** | 1 个 prefill | **3 个** prefill worker，router round_robin | Round 2 的痛点：16 并发全排在单 prefill 后面 → Mean TTFT 7.4s。3 个摊开，TTFT 长尾直接降 |
+| **② Decode Wide-EP + DP attention** | 简单 TP4 | **DP8 + TP8 + EP8**，DeepEP low_latency，DP attention | KV 不再多卡重复（MLA KV 小，复制注意力比切它省通信）；expert 铺 8 卡，all-to-all 更轻，并发↑ |
+| **③ 真长上下文** | ctx 8192 冒烟 | **136001（128K）**，chunked PP + dynamic chunking | 验证真实 128K 场景，对标博客 128K TTFT 8.6s / 226 TPS/GPU |
+
+### 加速点（逐条）
+1. **多 prefill 摊 TTFT**：3 个 worker 并行接不同请求，并发不排队 → TTFT 长尾崩溃问题直接消。
+2. **chunked PP prefill + dynamic chunking（32K chunk）**：128K 长 prompt 按 pipeline 切层 + 分块喂，避免单次 OOM，把长 TTFT 拆成可控的流水线。
+3. **DP Attention**（`--enable-dp-attention`）：MLA 的 KV 已经很小，注意力用数据并行（各卡算各自请求）而非张量并行，**避免 KV 在 8 卡间重复搬**，省显存省带宽。
+4. **Wide-EP + DeepEP low_latency**（`--expert-parallel-size 8 --moe-a2a-backend deepep --deepep-mode low_latency`）：MoE expert 铺 8 卡，dispatch/combine 走 DeepEP 低延迟内核。
+5. **NVFP4 dispatch**（`SGLANG_MOE_NVFP4_DISPATCH=1`）：all-to-all 传的是 FP4 激活，**流量降 4×**。
+6. **单域 NVLink KV pool（优先试）**：20 GPU 全在一个 NVL72 域内，KV 走 `SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK` 不出域，比 RoCE 更快；跑不通退 nixl + CX-8。
+
+### 优势
+- **TTFT 摊平**：多 prefill 直接消除 Round 2 的排队长尾。
+- **decode 并发大涨**：DEP8 + DP attention，博客 DEP16 能到 36 req/GPU；DEP8 量级同理，远超 Round 2 的 ~16 并发。
+- **扛真 128K**：从冒烟走到真实长上下文，结果可直接对标博客。
+- **still 单域**：20 GPU < 64（一个域上限），KV 传输不跨域，走 NVLink/MNNVL 最优。
+
+### Trade-off（要提前认识到，否则容易翻车）
+| trade-off | 说明 | 应对 |
+|-----------|------|------|
+| **编排复杂度陡增** | 5 节点：3 个独立 prefill server + 2 节点分布式 decode + router 负载均衡（Round 2 只有 2 节点） | 脚本化：每类 server 一个 `.sh`，本地写 + `kubectl cp` + `wc -l` 验证（坑 6 教训）。decode 用 `--nnodes 2 --node-rank 0/1 --dist-init-addr` |
+| **PD GPU 配比固定** | 12 prefill : 8 decode 对特定 ISL/OSL 最优；换长 output 可能 decode 不够 | 记录当前配比适合的负载；长 output 场景后续试 depN 更大档 |
+| **NVLink KV pool 未验** | Mooncake NVLINK pool 在 GB300 GKE 是否即插即用未知 | 先试 NVLink，10 分钟起不来就退 nixl+CX-8（已在 Round 2 验证可用），别死磕 |
+| **Wide-EP all-to-all 对齐** | DEP8 跨 2 节点 MNNVL 域内 all-to-all，类比训练 hybridep `NUM_OF_HYBRID_EP_RANKS` 的坑 | 确认所有 EP rank 在同 subblock；`MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1` |
+| **长上下文首启慢** | 128K + dynamic chunking + fp4 autotune 首次可能慢 | 持久化 `SGLANG_DG_CACHE_DIR` + `FLASHINFER_WORKSPACE_BASE`，首次 tune 后复用 |
+| **显存吃紧** | 128K ctx + fp8 KV，mem-fraction 敏感 | prefill `--mem-fraction-static 0.72`，decode `0.80`（recipe 值），OOM 再下调 |
+
+### 一次成功的启动清单（预演）
+1. 选 1 个 NVL72 域（≥5 节点），全部 team=yangwhale、Ready、GPU 健康。
+2. 5 个 pod（3 prefill + 2 decode），全钉在同 subblock，模型从 GCS `gcloud storage cp` 到各节点 local SSD（Round 2 已验证 4 GiB/s）。
+3. 起 3 个 prefill server（4.3 参数，PP4，各单节点）+ decode 分布式 server（4.2 参数，DEP8，`--nnodes 2`）。
+4. 起 router：`--pd-disaggregation --prefill <p0> <bs> --prefill <p1> <bs> --prefill <p2> <bs> --decode <d0> --policy cache_aware`（3 个 --prefill）。
+5. KV 后端先试 NVLink pool，起不来退 nixl+CX-8（Round 2 已验证）。
+6. 发 1 条 128K 请求验证 PD 通，再 `bench_serving` ISL=128K/OSL=8K/concurrency=512。
+
+### 预期指标（对标博客，跑完回填）
+| 指标 | 博客 (GB300) | Round 3 目标 |
+|------|-------------|-------------|
+| 128K TTFT | 8.6s | 待测（多 prefill 应显著优于 R2 的 7.4s@8K） |
+| TPS/GPU | 226.2（ctx8_dep32 峰值档） | 待测（ctx3_dep8 小档，不到峰值但看趋势） |
+| decode 并发 | 36 req/GPU (DEP16) | 待测（DEP8 量级） |
+
+---
+
+## Round 4 / 5 — 待做
+- **Round 4**：ctx8_dep32（64 GPU = 占满一个 NVL72 域）→ 冲峰值，对标博客 226 TPS/GPU
+- **Round 5**：MTP（EAGLE spec decode，num-steps 2 / topk 1 / draft-tokens 3）→ 拉 TPS/User（博客 23→43，+87%）
 
