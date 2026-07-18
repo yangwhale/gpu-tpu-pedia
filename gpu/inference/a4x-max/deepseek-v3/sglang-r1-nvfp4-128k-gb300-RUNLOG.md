@@ -70,7 +70,18 @@ kubectl exec sgl-probe -- python -c "import sglang, flashinfer, deep_ep, deep_ge
 - **标准做法**：模型放 GCS bucket → 每节点 `gcloud storage cp` 一次性拷到 local SSD → SGLang 从 SSD mmap 加载（高 IOPS 随机读；GCS Fuse 直读加载权重太慢）。
 - 待做：格式化+挂一块 2.9TB SSD 到 pod（hostPath / local PV）；`gcloud storage cp -r` 拉模型。
 
-## Round 1 — 1P1D (8 GPU) 冒烟
+## Round 1 — 单节点 4 GPU 冒烟（先验模型能加载+生成，再上 PD）
 
-*(待做：模型→GCS→local SSD → 起 1 prefill + 1 decode + router → 一条 128K 请求)*
+> 简化：单节点 4 GPU（4×288GB=1152GB HBM）就装得下 350GB 模型，先不 PD/不跨节点，验证容器+模型+sm103+NVLink。
+
+### 已做
+- **base pod `sgl-node0`**（pool-0007, SGLang `v0.5.7-cu130-runtime`, privileged, 4 GPU, HF token 走 k8s secret, NCCL/GIB env, 200Gi /dev/shm, host /dev 挂载）
+- **local SSD**：`mkfs.ext4 /dev/nvme0n1` + mount `/mnt/ssd`（2.8T 可用）
+- **flashinfer**：`pip install flashinfer-python==0.6.1 flashinfer-cubin==0.6.1` + `FLASHINFER_DISABLE_VERSION_CHECK=1`
+- **模型下载**（`hf_transfer` 极快，~0.5GB/s）：`snapshot_download nvidia/DeepSeek-R1-0528-NVFP4-v2 → /mnt/ssd`（进行中，9 分钟下了 179G/~350G）
+  - 坑：容器无 `huggingface-cli`（新版是 `hf`）→ 直接用 `python huggingface_hub.snapshot_download` + `max_workers=16`
+
+### 待做
+- 模型下完 → 单节点 SGLang serve（TP4 / EP4, quantization modelopt_fp4, trtllm_mla, cutedsl）→ 发一条请求验证生成
+- 再上 1P1D (8 GPU) PD → ctx3_dep8 (20) → ctx8_dep32 (64)
 
