@@ -471,7 +471,33 @@ decode server_args 确认全部生效，**不需要 gb300_blog 源码 build**：
 
 **启动阶段耗时**：卡在 `[AutoTuner] Tuning fp4_gemm`（6 profile × ~67s ≈ 7min/实例，首次一次性，cache 到 `/mnt/ssd/fi-cache` 复用）。Round 3 要 benchmark 真实性能，autotune **保持开启**（不像 Round 1 冒烟用 `--disable-flashinfer-autotune`）。
 
-*(benchmark 数字 + PD 端到端验证待 autotune 完成回填)*
+**坑 10（最大坑，决定性）：裸 SGLang pod 跑不了跨节点 decode —— 必须继承训练的 GPUDirect RDMA 基建**
+
+*现象*：3 prefill 全 fired up，但 decode DEP8（跨 2 节点）NCCL init 崩：`RuntimeError: NCCL error: unhandled cuda error`，发生在 `init_torch_distributed → initialize_model_parallel → ncclCommInitRank`。
+
+*排查链*：
+1. rank1 先报 `Failed to receive worker ports from node 0 within timeout`（DP attention 跨节点 port 握手）→ 疑时序，改两 rank 同时起。
+2. 同时起后仍崩：`NCCL error: unhandled cuda error`。
+3. 查 pod env：`NCCL_CONF_FILE=/usr/local/gib/configs/nccl.a4xmax.conf` 但**文件不存在**；host `/usr/local/gib` 也不存在。
+4. 根因：**裸 SGLang pod（从 Round 2 单节点复制）缺整套 GKE GPUDirect RDMA 基建**。单节点 decode 的 NCCL 只走节点内 NVLink，不需要这些；跨节点 decode 必须有：
+   - **GIB 通信库**（`/usr/local/gib/lib64/libnccl-net.so` 等 + `nccl.a4xmax.conf`）—— 在训练 nemo 镜像里自带，sglang 镜像没有
+   - **`mrdma.google.com` DRA claim**（8× CX-8 PF）—— 给 pod RDMA 网卡
+   - **ComputeDomain + compute-domain-channel claim** —— 建 IMEX 通道（跨节点 GPU 通信，只能在单 NVLink 域内）
+
+*修法：照训练 `yw-pool-256.yaml` 模板重建 SGLang pod（Chris 定：继承折腾一周才稳定的训练配置）*
+- **ComputeDomain**（`sgl2-cd`）+ channel template（`sgl2-ch`）→ IMEX
+- **mrdma DRA**（`sgl2-mrdma`，`mrdma.google.com` count 8）
+- **GIB via initContainer**：用 nemo 镜像当 initContainer `cp -a /usr/local/gib/. /gib/`（57M）注入共享 volume，sglang 主容器挂 `/usr/local/gib` + `LD_LIBRARY_PATH=/usr/local/gib/lib64`
+- **subblock podAffinity**（`gce-topology-subblock`）+ hostname antiAffinity
+- **NCCL env**：`NCCL_CONF_FILE=.../nccl.a4xmax.conf`、`NCCL_GRAPH_REGISTER=0`（训练坑 G：=1 在 GB300 GIB 下 rendezvous hang）、`NCCL_IB_SPLIT_DATA_ON_QPS=1`、`GLOO/NCCL_SOCKET_IFNAME=eth0`
+- **imagePullSecrets: ar-pull-secret**（拉 nemo initContainer）
+
+*换干净 pool*：pool-0007 反复起停 + RAID0 折腾一下午（churn），换 **pool-0002**（18 节点全同 subblock-0002、team=`-` 无业务 pod、最干净）。训练文档明确：churn 后 DRA/IMEX clique 要静置收敛，不在污染池上连环硬拉。
+
+> **教训固化**：GB300 上**跨节点**推理 pod（decode DEP≥8 / prefill xPyD 跨节点）**必须继承训练的 RDMA 基建**（GIB + mrdma DRA + ComputeDomain），不能用裸 image pod。单节点（Round 1/2）不暴露此问题因为 NCCL 只走 NVLink。这是 Round 1/2 → Round 3 的架构分水岭。
+
+### Round 3 v2（pool-0002 + 继承配置）— 进行中
+*(5 pod 建好：3 prefill + 2 decode，带 ComputeDomain + mrdma + GIB initContainer。DRA admission 通过。待 initContainer 拉 nemo 镜像 + RAID0 + 模型 + 起 server + benchmark)*
 
 ---
 
