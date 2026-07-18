@@ -131,6 +131,8 @@ storage.Client(project="tencent-gcp-taiji-poc").bucket("chrisya-gb300-models")..
 ```
 > 用完删掉 pod 里的 adc.json（用户凭证敏感）。
 
+**✅ 备份完成**：173 文件 / **413GB** 全部上传到 `gs://chrisya-gb300-models/DeepSeek-R1-0528-NVFP4-v2`（16 线程 SDK，约 10 分钟）。ADC 已从 pod 删除。以后拉模型从这里读，不再走 HF。
+
 ## 复用流程（以后从 GCS 拉，几分钟起 serve）
 
 ```bash
