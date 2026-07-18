@@ -60,12 +60,18 @@
 
 > **容器最省事的路子：直接从 `YAMY1234/sglang@gb300_blog` 的 [Dockerfile](https://github.com/YAMY1234/sglang/blob/gb300_blog/docker/Dockerfile) build**（里面已把 DeepEP 源码编译、nvshmem 3.3.24、flashinfer≥0.6.1、sgl-kernel 全串好，见 L228）。不要指望 `v0.5.7-cu130-runtime` 开箱即用——它需要重装这些才能在 sm103 上跑 cutedsl。
 >
-> **模型下载**（~350GB，671B×0.5B/param FP4）：
+> **模型下载**（~350GB，671B×0.5B/param FP4）— 真实 repo 已确认：
 > ```bash
-> huggingface-cli download <org>/DeepSeek-R1-0528-NVFP4-v2 \
+> huggingface-cli download nvidia/DeepSeek-R1-0528-NVFP4-v2 \
 >   --local-dir /mnt/models/DeepSeek-R1-0528-NVFP4-v2
-> # 放共享存储（Lustre / GCS gcsfuse），所有 pod 挂载同一路径
+> # nvidia 官方 modelopt NVFP4 checkpoint, MIT license
+> # 放共享存储（GCS gcsfuse / Lustre），所有 pod 挂载同一路径
 > ```
+
+> ### ✅ 本环境已验证的硬件事实（2026-07-18 实查 yw pod）
+> - **GPU**：`NVIDIA GB300, compute_cap 10.3` = **sm_103a** → 必须 flashinfer≥0.6.1 的 cutedsl kernel ✓
+> - **RDMA HCA**：`mlx5_0` ~ `mlx5_7`（8 张 CX-8）→ `--disaggregation-ib-device mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7`
+> - **RDMA 网口**：`gpu0ipvlan0/1` ~ `gpu3ipvlan0/1`（8 个 ipvlan，2/GPU）+ `eth0` 管理网
 
 ---
 
@@ -206,12 +212,19 @@ export SGLANG_NVFP4_CKPT_FP8_NEXTN_MOE=1
 - **NVIDIA Dynamo**（博客用的）：KV-aware router + 生命周期管理，有 K8s stack。
 - 传输后端：recipe 用 `nixl`（`--disaggregation-transfer-backend nixl`）；也可用 Mooncake。
 
-**(c) RDMA HCA + NVL72 NVLink KV 传输**（我们 GB300 必加）：
+**(c) KV 传输后端 — 我们单域部署可优于官方 recipe**：
+
+官方 recipe 用 `nixl`（因为 Slurm 跨机架）。但**我们所有配置都塞在一个 NVL72 域内**（最大 ctx8_dep32=64 GPU=一个 subblock），所以 KV cache 可以直接走 **NVLink（Mooncake NVLINK pool）**，比 RoCE 更快更省事：
 ```
---disaggregation-ib-device <mlx5_x,...>   # 指定 CX-8 HCA (per-GPU JSON 也可)
-# NVL72 域内 KV 走 NVLink (Mooncake 后端时):
-export SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK
+# 方案 1（推荐，单域内）：Mooncake + NVLink KV 传输
+--disaggregation-transfer-backend mooncake
+export SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK   # NVL72 域内 KV 走 NVLink
+
+# 方案 2（对齐官方 / 跨域时）：nixl + CX-8 RDMA
+--disaggregation-transfer-backend nixl
+--disaggregation-ib-device mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7  # 已实查
 ```
+> 先试方案 1（NVLink），单域内 KV 传输不出域、绕开 RoCE/UCX 在 GKE 上的调参。跑不通再退方案 2。
 
 ### 4.5 MTP（EAGLE spec decode，`*_mtp2` 档的真实参数）
 
@@ -247,8 +260,12 @@ python -m sglang.bench_serving \
 2. **RDMA / DRA 已就绪**：我们 GB300 GKE 的 GIB + DRA + asapd-lite 已跑通（见 `../../a4x-max/12-self-managed-k8s/`），跨节点 KV 传输（nixl / Mooncake）走 CX-8 RDMA。
 3. **模型下载**：DeepSeek-R1-0528-NVFP4-v2 从 HF 拉到共享存储（Lustre / GCS），~400GB FP4 权重，pod 挂载。
 4. **容器**：用 `lmsysorg/sglang:v0.5.7-cu130-runtime`，进容器重装 sgl-kernel + flashinfer≥0.6.1 + DeepEP(fzyzcjy) + nvshmem-cu13 3.3.24；或自己 bake 一个（对齐 `YAMY1234/sglang@gb300_blog` 的 Dockerfile）。
-5. **PD 编排缺口**：srt-slurm 是 Slurm 的；我们要么手动 SSH fanout 起 prefill/decode server 并对齐 `disaggregation-bootstrap-port` + nixl，要么上 Dynamo K8s stack。**这是最大的适配工作量**。
-6. **cutedsl 需 sm103**：GB300 是 sm103a，flashinfer≥0.6.1 才有 cutedsl fp4 kernel，务必确认版本。
+5. **PD 编排缺口（最大适配工作量）**：srt-slurm 是 Slurm 的。GKE 上三选一，按轻→重：
+   - **① SGLang 原生 router + SSH fanout（推荐先试）**：用我们训练同款 pod-0 SSH fanout 起 prefill/decode server，前面挂一个 `sglang_router`（Model Gateway）做 PD 分发。最轻、复用已验证的 fanout 基建。
+   - **② NVIDIA Dynamo K8s stack**：跟 GKE 最契合、生产级（KV-aware 路由 + autoscaling），但要新起一套 Dynamo。
+   - ③ 手动对齐 bootstrap-port 无 router：只适合 1P1D 冒烟，不可规模化。
+6. **共享存储前置**：GB300 训练用的是 mock data，没配模型存储。350GB NVFP4 权重需要共享盘 —— 我们已有 **GCS gcsfuse**（CC Pages 在用）可直接挂，或配 Managed Lustre。**这是开跑前必须先解决的**。
+7. **cutedsl 需 sm103**：已实查 GB300 = compute_cap 10.3 = sm103a，flashinfer≥0.6.1 才有 cutedsl fp4 kernel，务必确认版本。
 
 ---
 
@@ -281,17 +298,26 @@ python -m sglang.bench_serving \
 | 7 | MTP 参数含糊 | 补 4.5：确切 EAGLE 参数（num-steps 2 / topk 1 / draft-tokens 3） |
 | 8 | 没提可写卷挂载 | 补 deepgemm-cache / flashinfer-workspace / 模型路径挂载 |
 
-**仍待实测确认的不确定点**：
-- SGLang router 与 nixl 后端在我们 GKE CX-8 RDMA 上的 HCA 命名（`--disaggregation-ib-device` 具体填什么，要进 pod `ibv_devices` 看）。
+**仍待实测确认的不确定点**（Round 2/3 后收敛）：
+- ~~HCA 命名~~ → **已实查解决**：`mlx5_0`~`mlx5_7`。
+- **KV 传输走 NVLink(Mooncake) 还是 RoCE(nixl)**：单域内理论上 NVLink 更优，但 SGLang Mooncake NVLINK pool 在 GB300 GKE 上是否即插即用待验；跑不通退 nixl。
 - `bench_serving` 的 random dataset 能否代表 sa-bench 的 128K 长上下文分布（结果对比时要注明差异）。
-- DEP32 的分布式 decode server 在跨 8 节点时，MNNVL 域内 all-to-all 是否需要额外 `NUM_OF_HYBRID_EP_RANKS` 类的对齐（类比训练侧 hybridep 的坑）。
+- DEP32 分布式 decode 跨 8 节点时，MNNVL 域内 all-to-all 是否需额外对齐（类比训练侧 hybridep `NUM_OF_HYBRID_EP_RANKS` 的坑）。
+- SGLang 原生 router 的 PD 分发在多 prefill worker（ctx3/5/8）下的负载均衡行为待观察。
 
 ## 7. 状态
 
-- [ ] 环境依赖就位（容器 + 模型 + DeepEP/nvshmem/flashinfer）
-- [ ] 1P1D (8 GPU) 冒烟跑通
-- [ ] ctx3_dep8 (20 GPU) PD + Wide-EP
-- [ ] ctx8_dep32 (64 GPU) 峰值吞吐 vs 博客 226 TPS/GPU
-- [ ] MTP 档 TPS/User
+**前置（开跑前必须）**
+- [ ] 共享存储就位（GCS gcsfuse / Lustre）+ 下载 `nvidia/DeepSeek-R1-0528-NVFP4-v2`（~350GB）
+- [ ] 从 `gb300_blog` Dockerfile build SGLang 容器（DeepEP/nvshmem 3.3.24/flashinfer≥0.6.1）
+- [ ] 建 SGLang SSH-enabled pod 池（yw-pool 模式换容器）
+
+**测试**
+- [ ] 1P1D (8 GPU) 冒烟：PD 通路通 + 一条 128K 请求出 token
+- [ ] ctx3_dep8 (20 GPU)：PD + Wide-EP + router，bench_serving 128K/8K
+- [ ] ctx8_dep32 (64 GPU，占满一个域)：峰值吞吐 vs 博客 226 TPS/GPU
+- [ ] MTP 档（EAGLE）：TPS/User vs 博客 23→43
+
+*（待测，跑通后回填实测数字）*
 
 *（待测，跑通后回填实测数字）*
