@@ -81,7 +81,19 @@ kubectl exec sgl-probe -- python -c "import sglang, flashinfer, deep_ep, deep_ge
 - **模型下载**（`hf_transfer` 极快，~0.5GB/s）：`snapshot_download nvidia/DeepSeek-R1-0528-NVFP4-v2 → /mnt/ssd`（进行中，9 分钟下了 179G/~350G）
   - 坑：容器无 `huggingface-cli`（新版是 `hf`）→ 直接用 `python huggingface_hub.snapshot_download` + `max_workers=16`
 
+### 模型下载完成
+385G / DONE / config.json + safetensors.index.json 齐 —— 约 20 分钟（hf_transfer 极快，~0.5GB/s）。
+
+### 坑 2（重要）：stock sglang 0.5.7 + flashinfer 0.6.1 = API 不匹配
+单节点 serve（TP4）启动：模型 4 个 TP rank 全 `loaded`，但第一次 forward 崩：
+```
+TypeError: trtllm_fp4_block_scale_moe() got an unexpected keyword argument 'tile_tokens_dim'
+```
+- 根因：sglang 0.5.7 调用 flashinfer 的 MoE kernel 时传 `tile_tokens_dim`，但 flashinfer **0.6.1 改了签名**。**版本 skew**。
+- 这正是博客用 `gb300_blog` 分支的原因（sglang 侧改了以匹配新 flashinfer）。**Round 0 的"stock 0.5.7 + pip 升 flashinfer"捷径不成立**。
+- **修法（采纳 Chris 建议：用新镜像）**：换 **`lmsysorg/sglang:v0.5.15.post1-cu130`**（sglang + flashinfer 版本配套，sm103 支持已合入 main）。模型已在 SSD，新 pod 用 `nodeName` 钉回同节点（`...-519k`）复用。
+
 ### 待做
-- 模型下完 → 单节点 SGLang serve（TP4 / EP4, quantization modelopt_fp4, trtllm_mla, cutedsl）→ 发一条请求验证生成
+- 新镜像 pod 起来 → 重挂 SSD → 单节点 serve → 发请求验证生成
 - 再上 1P1D (8 GPU) PD → ctx3_dep8 (20) → ctx8_dep32 (64)
 
