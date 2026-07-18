@@ -144,6 +144,80 @@ gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-R1-0528-NVFP4-v2 /mnt/ss
 ```
 > **读 GCS 只需 read-only scope，节点默认就有** → 以后拉模型不用 ADC hack，`gcloud storage cp` 直接能读。只有**写**才卡 scope。
 
-## Round 2 — 1P1D (8 GPU) PD 分离（多节点）
-*(待做：2 节点，prefill PP4 + decode，PD via SGLang router/mooncake NVLink，128K 请求)*
+## Round 2 — 1P1D (8 GPU) PD 分离（2 节点）
+
+> 目标：验证 **Prefill / Decode 分离**端到端通路 —— prefill 节点算 KV → 经 **nixl / CX-8 RDMA** 传给 decode 节点 → decode 生成。这是大规模 EP 推理的基础架构。
+
+### 拓扑
+- **node0 = sgl-node0 `10.72.90.11`**：prefill server（TP4，模型已在 `/mnt/ssd`）
+- **node1 = sgl-node1 `10.72.213.52`**：decode server（TP4）
+- **router**：跑在 node0，`sglang-router 0.3.2`，`--pd-disaggregation` 连接两端
+- 两节点各 4 GPU，共 8 GPU，同 pool-0007（同 subblock，走 NVL + CX-8）
+
+### node1 拉模型（复用 GCS 备份，不走 HF）
+`gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-R1-0528-NVFP4-v2 /mnt/ssd/` → **4.0 GiB/s**，385G/163 文件几分钟到位。印证「读 GCS 只需节点默认 ro scope，不用 ADC hack」。
+
+### 三个 server 脚本（关键参数）
+**prefill.sh**（node0）：在单节点 serve.sh 基础上加
+```
+--disaggregation-mode prefill \
+--disaggregation-transfer-backend nixl \
+--disaggregation-bootstrap-port 9000 \
+--disaggregation-ib-device mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7
+```
+**decode.sh**（node1）：同上但 `--disaggregation-mode decode`，**无** bootstrap-port（decode 不监听 bootstrap）。
+**router.sh**（node0）：
+```
+python -m sglang_router.launch_router --pd-disaggregation \
+  --prefill http://10.72.90.11:30000 9000 \   # url + bootstrap-port
+  --decode  http://10.72.213.52:30000 \
+  --policy cache_aware --host 0.0.0.0 --port 8000
+```
+> router 的 `--prefill` 第二个位置参数就是 prefill 的 bootstrap-port（9000），必须与 prefill.sh 的 `--disaggregation-bootstrap-port` 一致。
+
+### 坑 6：decode.sh 被 kubectl cp 截断成 2 行（只剩 export，无 launch 命令）
+decode 进程数 = 0、`decode.log` 0 字节。查 `cat decode.sh` 发现文件只有两行 export，**launch 命令没写进去**（之前 heredoc/cp 中途断了）。
+- **修法**：gLinux 本地 `cat > /tmp/decode.sh <<'EOF' ... EOF` 写完整 20 行，再 `kubectl cp` 进 pod，`wc -l` 验证行数。**别用 inline heredoc 直接 exec 进 pod**（嵌套易断）。这是本 RUNLOG 反复踩的「脚本落地」教训：**本地写文件 + cp + wc 验证**。
+
+### 启动顺序 & warmup
+1. 两端 server 各自启动 → 各自跑 `disaggregation warmup`（prefill 端 warmup 自带一次完整 PD round-trip，status 200 即通）→ `The server is fired up and ready to roll!`
+2. decode 启动含 **decode CUDA graph capture**（52 个 batch size，bs 1→512）+ DeepGEMM warmup（32768 步），约 2-3 分钟。
+3. router 起来后自动注册 2 worker（`Activated 1 worker` ×2 → healthy），加载 tokenizer。
+   - 无害 WARN：`conflicting load_balance_method: prefill=follow_bootstrap_room, decode=round_robin` —— PD 模式两端策略本就不同，正常。
+
+### ✅ 端到端验证（经 router:8000）
+```bash
+curl -s -X POST http://localhost:8000/v1/chat/completions -d @req.json
+# → DeepSeek-R1 正常输出带 <think> 推理链，150 tokens，finish_reason=length
+```
+**PD 通路成立**：router → prefill 算 KV → nixl over CX-8 RDMA 传 → decode 生成。
+
+### Benchmark（1P1D，8 GPU，ctx8192 冒烟配置）
+`sglang.bench_serving --dataset-name random --random-input-len 1024 --random-output-len 512 --num-prompts 48 --max-concurrency 16`
+
+| 指标 | 值 |
+|------|-----|
+| Output token throughput | **407.9 tok/s** |
+| Total token throughput | 1084.2 tok/s |
+| Mean TPOT（每 token 解码） | **9.19 ms**（≈109 tok/s/user） |
+| P90 TPOT | 10.67 ms |
+| Median TTFT | 1624 ms |
+| Mean TTFT | 7360 ms（concurrency 16 全压单 prefill → prefill 排队） |
+| Median E2E | 5.1 s |
+
+**读数**：
+- **decode 极快**：TPOT 9.2ms → 单用户 ~109 tok/s，PD 分离把 decode 专用化的收益体现出来了。
+- **prefill 是瓶颈**：TTFT 长尾高（P90 19.7s），因为 1 个 prefill 节点扛 16 并发，prefill 排队。这正是要 **xPyD（多 prefill）** 的原因——后续 Round 加 prefill 副本即可摊平 TTFT。
+
+### Round 2 结论
+- 1P1D PD 分离在 GB300 上**端到端跑通**：nixl + CX-8 RDMA KV 传输 OK，router 调度 OK，decode 生成正常。
+- 冒烟配置（ctx8192）下 decode 单用户 ~109 tok/s，架构验证达成。
+- 下一步瓶颈明确：prefill 需横向扩展（xPyD）+ 上 128K context + MTP 加速。
+
+---
+
+## Round 3+ — 待做
+- **Round 3**：ctx3_dep8（20 GPU，加 prefill 副本摊 TTFT）
+- **Round 4**：ctx8_dep32（64 GPU = 一个 NVL72 域）→ 对标博客 226 TPS/GPU
+- **Round 5**：MTP（EAGLE spec decode）→ 拉 TPS/User
 
