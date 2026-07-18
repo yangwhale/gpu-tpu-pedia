@@ -93,7 +93,27 @@ TypeError: trtllm_fp4_block_scale_moe() got an unexpected keyword argument 'tile
 - 这正是博客用 `gb300_blog` 分支的原因（sglang 侧改了以匹配新 flashinfer）。**Round 0 的"stock 0.5.7 + pip 升 flashinfer"捷径不成立**。
 - **修法（采纳 Chris 建议：用新镜像）**：换 **`lmsysorg/sglang:v0.5.15.post1-cu130`**（sglang + flashinfer 版本配套，sm103 支持已合入 main）。模型已在 SSD，新 pod 用 `nodeName` 钉回同节点（`...-519k`）复用。
 
-### 待做
-- 新镜像 pod 起来 → 重挂 SSD → 单节点 serve → 发请求验证生成
-- 再上 1P1D (8 GPU) PD → ctx3_dep8 (20) → ctx8_dep32 (64)
+### 坑 3：flashinfer fp4_gemm AutoTuner 首跑极慢
+新镜像 serve 过了 MoE forward（无 tile_tokens_dim 错），但 `[AutoTuner] Tuning fp4_gemm` 1/20 profile 就 3 分钟 → 20 个要 ~1 小时（没设持久 cache 从头 tune）。
+- **修法（冒烟）**：`--disable-flashinfer-autotune` + `SGLANG_DG_CACHE_DIR=/mnt/ssd/dg-cache` + `FLASHINFER_WORKSPACE_BASE=/mnt/ssd/fi-cache`（持久化，正式跑首次 tune 后缓存复用）。
+
+### 坑 4：`pkill -f sglang.launch_server` 自杀（exit 137）
+kubectl exec 里 `pkill -9 -f sglang.launch_server` 把**自己的 bash 命令行**也匹配上 → 自杀 137。
+- **修法**：中括号 trick `pkill -9 -f "[s]glang.launch_server"`（正则 `[s]` 不匹配自身字面量 `[s]`）。
+- 另：exec 里写多行脚本嵌套引号易乱 → 改 gLinux 本地写 `serve.sh` + `kubectl cp` 进 pod 再跑。
+
+### ✅ Round 1 通过（单节点 4 GPU）
+```
+[TP0] max_total_num_tokens=4328320, context_len=8192, available_gpu_mem=37.55GB
+Application startup complete. Uvicorn running on http://0.0.0.0:30000
+The server is fired up and ready to roll!
+```
+测试请求（"用一句话解释 NVLink"）→ **DeepSeek-R1 正常生成**，带 `<think>` 推理链，10→120 tokens。
+
+**结论**：DeepSeek-R1-0528-NVFP4 在 **GB300 sm103** 上用 **SGLang v0.5.15.post1 + flashinfer 0.6.12 + modelopt_fp4 + trtllm_mla + fp8 KV** 单节点 TP4 **加载 + 生成全通**。容器 + 模型 + 硬件路径全部验证。
+
+---
+
+## Round 2 — 1P1D (8 GPU) PD 分离（多节点）
+*(待做：2 节点，prefill PP4 + decode，PD via SGLang router/mooncake NVLink，128K 请求)*
 
