@@ -20,6 +20,7 @@ GB300 (A4X Max) GKE 集群上的 DeepSeek V3 (671B, 61 层) 256 GPU 预训练 be
 | DeepSeek V3 (61L, 671B) | 256 GPU (4×16) | FP8_MX | **full_iteration** | 2048 (V1) | ~1553 | 5.47s | 通过 (30 步) |
 | DeepSeek V3 (61L, 671B) | 256 GPU (4×16) | FP8_MX | **full_iteration** | 4096 (V2) | **~1618** | 10.53s | 通过 (30 步) |
 | DeepSeek V3 (61L, 671B) | 256 GPU (4×16) | FP8_MX | **full_iteration** | **15360** (`--global_batch_size`) | **~1658** | 38.5s | 通过 (30 步) |
+| DeepSeek V3 **scale-in (31L)** | **128 GPU (4×8)** | FP8_MX | **full_iteration** | 7680 | **~1550**（全规模 93.5%） | 22.2s | 通过 (30 步) |
 | Qwen3 235B-A22B | 256 GPU (4×16) | FP8_MX | full_iteration | 8192 (V2) | 待测 | — | 计划中 |
 
 ### 对标 NVIDIA 官方 (DeepSeek V3 256 GPU MXFP8)
