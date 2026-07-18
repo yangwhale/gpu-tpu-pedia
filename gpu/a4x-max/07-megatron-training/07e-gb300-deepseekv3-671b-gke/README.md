@@ -262,6 +262,36 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/dsv3-run.log | tail -6'
 
 ---
 
+## Part 5 — 参数调优记录（DeepSeek V3, 2026-07-18）
+
+### 已扫过的配置 → 实测吞吐
+
+| 配置 | GBS | MBS | microbatch | step time | 稳态 TFLOP/s | 对标官方 |
+|------|-----|-----|-----------|-----------|-------------|---------|
+| `-cv v1` | 2048 | 1 | 8 | 5.47s | ~1553 | — |
+| `-cv v2` | 4096 | 2 | 16 | 10.53s | **~1618** | 1648 的 98.2% |
+| `-cv v2 --global_batch_size 15360` | 15360 | 2 | 60 | 38.5s | **~1658 (best 1659)** | **1670 的 99.3%** |
+
+**结论：GBS 是目前收益最大的旋钮。** GBS 越大 → microbatch 越多 → pipeline bubble 摊得越薄 → MFU 越高。4096→15360 拿到 +2.5%（1618→1658），基本追平官方。
+
+### 可调旋钮清单（按预期收益排序）
+
+| 旋钮 | 怎么调 | 预期 | 已测? |
+|------|--------|------|-------|
+| **GBS** | `--global_batch_size N`（须被 MBS×DP 整除，DP=128） | 越大越接近官方，15360 已达 99.3% | ✅ 1658 |
+| GPU 锁频 | 官方 perf plugin `_set_lock_gpu_freq`（本 recipe 未开） | 稳定态测量再稳一点，可能 +0.x% | ❌ 待测 |
+| MBS | `--micro_batch_size N`（1/2/4） | 内存↔气泡 tradeoff，2 已较优 | 部分 |
+| vboost | `nvidia-smi boost-slider --vboost 1` | 本 recipe **无明显增益**（实测 1615-1620 没变） | ✅ 无效 |
+| seq_length | `--seq_length N`（默认 4096） | 改的是**工作负载**（长上下文），非官方 1670 那档，attention 平方级涨 | ❌ 另类测试 |
+
+### 关键澄清
+
+- 官方对标表的 `4096 / 15360` 是 **global batch size**，**不是 sequence length**。seq_length 两档都固定 4096。
+- `--global_batch_size` CLI 优先级高于 `-cv` 版本内置的 GBS（`utils.py:186`），可直接覆盖。
+- **GBS 必须能被 `MBS × DP` 整除**：DSV3 256GPU 下 DP = 256/(TP1×PP2) = 128，所以 15360/(2×128)=60 ✓；若报错先检查整除性。
+
+---
+
 ## 运维踩坑：DRA / ComputeDomain clique 卡死（2026-07-17 实战）
 
 **背景**：反复删建 ComputeDomain（多次 apply / delete pool、force-delete pod）后，pool 再也拉不满 64，卡在 ~37/64，`kubectl exec` 也只能连上一半 pod。折腾数小时才定位。
