@@ -496,8 +496,28 @@ decode server_args 确认全部生效，**不需要 gb300_blog 源码 build**：
 
 > **教训固化**：GB300 上**跨节点**推理 pod（decode DEP≥8 / prefill xPyD 跨节点）**必须继承训练的 RDMA 基建**（GIB + mrdma DRA + ComputeDomain），不能用裸 image pod。单节点（Round 1/2）不暴露此问题因为 NCCL 只走 NVLink。这是 Round 1/2 → Round 3 的架构分水岭。
 
-### Round 3 v2（pool-0002 + 继承配置）— 进行中
-*(5 pod 建好：3 prefill + 2 decode，带 ComputeDomain + mrdma + GIB initContainer。DRA admission 通过。待 initContainer 拉 nemo 镜像 + RAID0 + 模型 + 起 server + benchmark)*
+### Round 3 v2（pool-0002 + 继承配置）— 进行中（环境不稳定，待静置收敛）
+
+**核心架构验证通过**：5 pod（3 prefill + 2 decode）带 ComputeDomain + mrdma DRA + subblock affinity，**DRA/ComputeDomain admission 全通过**（`resourceclaims` 全 `allocated,reserved`），继承训练配置的方向正确。p1 RAID0 也跑通（12T/4盘）。剩余全是环境/工程细节坑：
+
+**坑 11：nemo 整镜像当 initContainer → 节点 boot 盘 Evict**
+为拿 57M 的 GIB，用整个 nemo 镜像（几十 G）当 initContainer，加 sglang 12.7G，撑爆 GB300 小 boot 盘 → `Evicted: node was low on ephemeral-storage (avail 8.2G < 阈值 10G)`。→ **修**：去掉 nemo initContainer，从训练 pod `yw-a-0` `tar czf` 出 GIB（压缩后 16M）→ pod 起来后 `kubectl cp` + `tar xzf -C /usr/local` 运行时注入。
+
+**坑 12：raid-disk.sh 缺 mdadm 安装**
+纯 sglang 镜像不带 mdadm，RAID0 静默失败 → `/mnt/ssd` 落容器 rootfs（df 显示 95G）→ 模型往 rootfs 下会二次 Evict。→ **修**：raid-disk.sh 开头 `which mdadm || apt-get install -y mdadm`。修后 p1 RAID0 成功 12T/4盘（动态选盘 nvme0/2/3/4，避开 boot）。
+
+**坑 13：pod 重建后 gcloud 丢失**
+去 initContainer 重建 pod 后，第一次 setup 装的 gcloud（在旧 pod）没了 → `gcloud: No such file`，模型 safetensors:0。→ **修**：setup 脚本每次先 `curl install gcloud` 再下（或 bake 进镜像）。
+
+**坑 14：kubectl exec 偶发 `no running task found`**
+部分 pod（p0）exec 报 `no running task found: task ... not found` —— 容器 task 层不稳定，命令没执行。GB300 pod 起停频繁时偶发。→ 需重试 exec / 或 pod 稳定后再操作。
+
+**坑 15：d1 DRA claim `allocated` 但 kubelet 视角滞后**
+d1 卡 `ContainerCreating` 9min，报 `FailedPrepareDynamicResources: ResourceClaim not created yet`；但 `kubectl get resourceclaims` 显示 d1 的 channel + mrdma claim **实际都 `allocated,reserved`** 了。是 **kubelet 与 DRA driver 同步滞后**，非真失败。→ 等收敛 / delete 重建触发重新 sync。
+
+> **阶段判断（2026-07-18 深夜）**：继承配置架构正确 + admission 通过，但 pool 经一下午 churn + 深夜环境不稳（exec task not found、DRA kubelet 滞后）。按训练文档「churn 后 DRA/IMEX 静置收敛，不连环硬拉」原则，宜静置后干净重跑：`kubectl delete pod sgl2-*` 重建 → 等全 Ready → 一次性 setup（GIB tar + mdadm RAID0 + gcloud + 模型）→ 起 server（NCCL_DEBUG=INFO）→ router → 128K benchmark。所有脚本/YAML/坑已备齐，收敛后应能一把过。
+
+*(benchmark 数字待环境收敛后回填)*
 
 ---
 
