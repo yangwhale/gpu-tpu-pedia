@@ -114,6 +114,34 @@ The server is fired up and ready to roll!
 
 ---
 
+## 权重备份到 GCS（供以后复用，不再从 HF 下）
+
+桶：**`gs://chrisya-gb300-models/DeepSeek-R1-0528-NVFP4-v2`**（US-CENTRAL1，同集群区）
+
+### 坑 5：pod 写 GCS 的三重拦路（GKE 经典）
+1. **节点 OAuth scope 只读**：pod 用节点 compute SA（WI 未开），但节点 scope 是 storage read-only → 即使给 SA 授了 `objectAdmin`，写仍 **403**。改 scope 要重建节点池（不划算）。
+2. **不能建 SA key**：org policy `constraints/iam.disableServiceAccountKeyCreation` 禁止。
+3. **gcloud CLI 不认 `GOOGLE_APPLICATION_CREDENTIALS`**：仍走 metadata 的 compute SA → 报错。
+
+**修法（可行）**：把**我的用户 ADC**（`~/.config/gcloud/application_default_credentials.json`）拷进 pod，用 **python `google-cloud-storage` SDK**（SDK 认 `GOOGLE_APPLICATION_CREDENTIALS` 的用户凭证，不受 node scope 限制）多线程上传：
+```python
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="/mnt/ssd/adc.json"
+storage.Client(project="tencent-gcp-taiji-poc").bucket("chrisya-gb300-models")...upload_from_filename(f)
+# ThreadPoolExecutor(16) 并行 173 文件
+```
+> 用完删掉 pod 里的 adc.json（用户凭证敏感）。
+
+## 复用流程（以后从 GCS 拉，几分钟起 serve）
+
+```bash
+# 1. GCS → 本节点 local SSD（同区快；不直接从 GCS mmap 加载）
+export GOOGLE_APPLICATION_CREDENTIALS=/mnt/ssd/adc.json   # 或节点有 storage-ro scope 即可读
+python -c "from google.cloud import storage; ..."         # 或 gcloud storage cp -r（读只需 ro scope）
+gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-R1-0528-NVFP4-v2 /mnt/ssd/
+# 2. 从 local SSD 起 serve（见 Round 1 的 serve.sh）
+```
+> **读 GCS 只需 read-only scope，节点默认就有** → 以后拉模型不用 ADC hack，`gcloud storage cp` 直接能读。只有**写**才卡 scope。
+
 ## Round 2 — 1P1D (8 GPU) PD 分离（多节点）
 *(待做：2 节点，prefill PP4 + decode，PD via SGLang router/mooncake NVLink，128K 请求)*
 
