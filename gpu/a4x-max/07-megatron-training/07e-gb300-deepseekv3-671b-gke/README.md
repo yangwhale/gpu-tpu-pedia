@@ -320,6 +320,35 @@ kubectl exec yw-a-0 -- bash -c 'grep "Step Time" /tmp/dsv3-run.log | tail -6'
 
 ---
 
+## Part 7 — 域拓扑 & EP 调优实验（128 GPU / 31 层, 2026-07-18）
+
+### 发现 1：域拓扑（2×16 vs 4×8）不影响 MFU
+
+同 128 GPU / 31 层 / 同一套 TP1/PP2/VPP8/EP32：
+
+| 拓扑 | 每域 GPU | 稳态 TFLOP/s |
+|------|---------|-------------|
+| 4 域 × 8 节点 | 32 | ~1550 |
+| 2 域 × 16 节点 | 64 | ~1547 |
+
+> **结论：分几个域对 MFU 没影响**（1550 ≈ 1547）。跨域流量不是瓶颈；~1550 的天花板由"层数少→每 stage 层数少→固定开销占比大"决定。**小规模调试随便挑 2 域还是 4 域，哪种机器好凑用哪种。**
+
+### ⚠️ 重要坑 1：改 EP 必须同步改 `NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN`
+
+> hybridep 后端要求环境变量 **`NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN` == `expert_model_parallel_size`**。
+> 只把 `-ep 32` 改成 `-ep 64`、忘了改这个 env（仍是 32）→ **hybridep all-to-all 直接挂死**（graph capture 阶段 collective timeout，NCCL work 卡在某个值不动，全 rank dump signal）。
+> 改 EP 时**两处必须一起改**：run_script 的 `-ep N` + env `export NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=N`。
+> 前提：EP ≤ 一个 NVLink domain 的 GPU 数（GB300 NVL72 ≤ 72），且所有 EP rank 在同一 subblock。2×16（每域 64 GPU）才有条件开 EP=64；4×8（每域 32 GPU）开 EP=64 会跨域，不可行。
+
+### ⚠️ 重要坑 2：NCCL collective 崩溃会刷爆节点磁盘 → DiskPressure 驱逐
+
+> NCCL collective timeout 崩溃时会写**海量 flight-recorder debug dump + 错误日志**（128 rank × 每 rank 几千行重复错误）→ 灌满节点 ephemeral 磁盘 → 节点 **`DiskPressure=True`** → kubelet 驱逐该节点上的 pod（`Evicted`），且新 pod 落上去继续被驱逐，形成雪崩。
+> **识别**：pod 反复 `Evicted` / `does not have a host assigned`；`kubectl get node <n> -o jsonpath='{.status.conditions[?(@.type=="DiskPressure")].status}'` 为 `True`。
+> **恢复**：(1) 清所有 Evicted 死 pod（`--grace-period=0 --force`）让 kubelet GC 回收日志空间，部分节点会自动 DiskPressure=False；(2) 顽固不降的节点直接**换池内健康节点**（摘标签→给空闲节点打标签→删 pod 重调度），比等磁盘 GC 快。
+> **预防**：崩溃后别立刻在同批节点连环重拉（dump 会累积），先清理确认 DiskPressure 全 False 再启动。
+
+---
+
 ## 运维踩坑：DRA / ComputeDomain clique 卡死（2026-07-17 实战）
 
 **背景**：反复删建 ComputeDomain（多次 apply / delete pool、force-delete pod）后，pool 再也拉不满 64，卡在 ~37/64，`kubectl exec` 也只能连上一半 pod。折腾数小时才定位。
