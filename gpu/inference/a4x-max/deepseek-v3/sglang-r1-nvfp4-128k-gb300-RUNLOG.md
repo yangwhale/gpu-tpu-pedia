@@ -430,12 +430,33 @@ flowchart TB
 **坑 7：新 pod stock 镜像不带 gcloud**
 新建的 3 个 pod（同 `v0.5.15.post1-cu130` 镜像）没有 `gcloud`（Round 2 时在 sgl-node1 手动装过但没记）。→ **修**：curl 装 `https://sdk.cloud.google.com` 到 `/root/google-cloud-sdk`，再 `gcloud storage cp`。以后 bake 镜像应预装 gcloud。
 
-**坑 8（重要，回答"下载为什么慢"）：单块 local SSD 写入是模型下载瓶颈**
-- 现象：`gcloud storage cp` 从 GCS 拉模型只有 ~4 GiB/s，远低于 200G 网络（≈25 GiB/s）预期。
-- 排查：先怀疑跨 region → 实查 `gcloud storage buckets describe` = 桶在 **US-CENTRAL1 region**，节点 **us-central1-b**，**同 region，排除**。
-- 真因：`dd if=/dev/zero of=/mnt/ssd/wtest bs=1M count=10000 oflag=direct` 实测**单块 nvme0n1 顺序写入 = 3.9 GB/s** —— 正好卡在下载速度。**瓶颈是目标盘写入，不是网络/GCS**。
-- 根源：GB300 每节点 **4 块 2.9T NVMe**（nvme0/1/2/3n1），图省事只 mkfs+mount 了 1 块。
-- **修法（下次）**：4 块 NVMe 做 **RAID0 条带**（`mdadm --create /dev/md0 --level=0 --raid-devices=4 /dev/nvme{0,1,2,3}n1`），写入带宽 ~4× → ~15-16 GB/s，才能吃满 200G 网络。本轮模型已下完（4 GiB/s 也下完了），不重下；RAID0 留作下次优化。
+**坑 8（重要，"下载为什么慢" + 正确的 local SSD 用法）：必须 4 盘 RAID0，且盘名不固定要动态识别**
+
+*现象*：`gcloud storage cp` 拉模型只有 ~4 GiB/s，远低于 200G 网络（≈25 GiB/s）。
+
+*排查链*：
+1. 先怀疑跨 region → 实查 `gcloud storage buckets describe` = 桶 **US-CENTRAL1 region**，节点 **us-central1-b**，**同 region，排除**。
+2. 真因：`dd ... oflag=direct` 实测**单块 nvme0n1 顺序写入 = 3.9 GB/s** —— 正好卡下载。**瓶颈是目标盘写入，不是网络/GCS**。
+3. 根源：GB300 每节点 **4 块 2.9T NVMe**，我图省事只 mkfs+mount 了 1 块 —— **不合理**。B200/GB200 标准做法都是把 local SSD 条带成一块用。
+
+*修法：4 盘 RAID0*（`mdadm --create /dev/md0 --level=0 --chunk=512 --raid-devices=4 ...`）→ 实测写入 **3.9 → 8-8.8 GB/s**（dd 单流 direct，多流更高）；容量 2.9T → **12T**。
+
+*坑中坑：GKE 节点上 NVMe 设备名不固定*
+- 硬编码 `nvme0/1/2/3n1` 建 RAID0，在部分节点失败：`mdadm: /dev/nvme2n1: Device or resource busy`。
+- 根因：**`nvme2n1` 在某些节点是 boot 盘**（带分区 `nvme2n1p1..p12`，挂着 `/etc/hosts` `/usr/local/nvidia`），而 data 盘是 nvme0/1/3/4。**设备名逐节点漂移**。
+- **正确做法：动态识别 data 盘** —— 筛「2.9T + 无分区（`! -e /sys/block/$d/${d}p1`）+ 未挂载（`! grep /proc/mounts`）」：
+  ```bash
+  for d in $(lsblk -dn -o NAME,SIZE,TYPE | awk '$3=="disk" && $2=="2.9T"{print $1}'); do
+    [ -e /sys/block/$d/${d}p1 ] && continue   # 有分区=boot,跳过
+    grep -q "/dev/$d " /proc/mounts && continue
+    DATA="$DATA /dev/$d"
+  done
+  mdadm --create /dev/md0 --level=0 --chunk=512 --raid-devices=$(echo $DATA|wc -w) $DATA --run --force
+  ```
+
+*RAID0 后重下模型实测*：5 台并行，**最快 65s（≈5.9 GB/s）**，但参差（65-157s）。写入瓶颈已解，剩余参差估计是 gcloud 默认并发度 / 5 台抢同一 GCS 桶读带宽 → 可调 `gcloud storage cp --process-count`（待优化）。
+
+> **教训固化**：GB300/B200 上 local SSD **永远 4 盘 RAID0**（读写都 × 盘数，模型加载也快），且**动态识别 data 盘**（别硬编码 nvme 编号，boot 盘会漂移）。cache 目录（fi-cache/dg-cache）放 RAID0 后 mkfs 会清 → 想跨盘重做保留 tune cache 得放 pod 外持久位置。
 
 **坑 9：一条 ssh 里多个 `kubectl exec ... setsid` 串行只有第一个生效**
 用 `for p in ...; do kubectl exec $p -- setsid nohup ...; done` 起多个 pod 的 server，**只有第一个 exec 成功**（后面 pod 的 log 文件都没生成 = 命令没执行）。decode rank1、prefill p1/p2 都中招。→ **修**：每个 pod **单独一条 `kubectl exec`** 起（分开发命令），不要在一条 ssh 的循环里串多个 exec+setsid。
