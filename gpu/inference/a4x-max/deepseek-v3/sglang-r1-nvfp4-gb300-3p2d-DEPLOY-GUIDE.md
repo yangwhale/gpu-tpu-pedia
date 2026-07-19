@@ -401,7 +401,9 @@ $K exec sgl3-p0 -- grep -iE "concurrency=|Total token|Output token|Median" /tmp/
 - TPOT 全程稳定 ~17ms → decode（NVLink KV pool）稳。到顶双因：**prefill（3×pp4）喂不动**（TTFT 爆）+ decode output 也接近该 workload 极限。
 - **对标官方**：lmsys GB300 博客 226 TPS/GPU 是 **128K/8K 长上下文**（decode 主导、DEP 铺到 32 卡），本配置 ctx 8192 / 短上下文 1024-512 是 prefill 偏重的不同 regime，数字不可直接对比。要逼近官方需上长上下文 + 更多 prefill 副本 + MTP（Round 4/5）。
 
-> **本文已端到端复现验证 ×2**：2026-07-19 按本文**两次**从零起全新 pod（每次删光重来），均一次通到 benchmark，中位 TTFT 268-275ms / TPOT 9.9-10.0ms，三次结果一致。除拉镜像偶发 DiskPressure（删重建即可，见 §3.2）外，**零功能改动**。
+> **本文已端到端复现验证 ×3**：2026-07-19 按本文**三次**从零起全新 pod（每次删光重来）。前两次一次通到 benchmark。**第三次全程照抄本文 §3–§8 代码块逐字执行做审计**：§3 部署 + 自检（GB300 10.3 / 8 HCA / imex channel0 / tmpfs 500+64G）✅；§4 bootstrap（gcloud 576 / GIB / libmlx5 / sglang 0.5.15.post1 / 模型 385G）✅；§5 起 3P2D，decode 日志出现 `cross-node NVLink transport`✅；§7 e2e 返回 `Paris`✅；§8 warm sweep（conc 32/64/128）实测 total **4757 / 8137 / 9509 tok/s**、TPOT **15.0 / 16.5 / 16.9 ms**——TPOT 与旧表精准吻合，吞吐比旧表（4635/5265/6878）**还高**（run-to-run 方差 + 本次 placement 更优；旧表数字偏保守）。**零功能改动，文档可原样复制执行**。
+>
+> **⚠️ 冷启动坑（审计实测）**：sweep 第一档（conc=32）如果撞上首次 JIT 编译，会出现假异常——TTFT 冲到 67s、total 掉到 438。这是 DeepGEMM/flashinfer 首跑编译，**不是配置错**。第二遍 warm 就正常（conc32 → 4757）。所以 benchmark **务必跑第二遍取 warm 值**（本文所有数字均为 warm）。
 >
 > **启动小知识**：decode 起来前会刷 `DeepGEMM warmup: 0/65536`，初始 ETA 显示几十小时是**误导**——JIT 一热就到 ~1000 it/s，实际约 **1 分钟**跑完，别被吓到。
 
