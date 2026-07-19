@@ -16,7 +16,7 @@
 |-------|-----|------|---------|-----|------------------|-------------|---------|----------|------|
 | R1 | 4 | 单节点 TP4 | 无 PD | 8192 | 功能验证（未跑 bench） | — | — | — | 加载+生成通，`<think>` 正常 |
 | R2 | 8 | 2节点 1P1D | prefill×1 + decode×1，nixl/CX-8 | 8192 | 1024/512/16/48 | **407.9** | **9.2** | 1.6 s | decode 快，prefill 瓶颈（Mean TTFT 7.4s） |
-| R3 | 20 | ctx3_dep8 | 多 prefill 摊 TTFT | 8192 | *(待跑)* | — | — | — | 目标：压 TTFT 长尾 |
+| R3 | 20 | 3P2D + DEP8 | 官方镜像 + mooncake **NVLink** KV pool | 8192 | 1024/512/32/**8** | **854** (总吞吐) | **12.1** | 0.52 s (median) | ✅ 端到端通；conc16 会把 3 prefill 压爆→TTFT 40s |
 | R4 | 64 | ctx8_dep32（1 NVL72 域） | xPyD 大规模 | 8192→128K | *(待跑)* | — | — | — | 对标博客 226 TPS/GPU |
 | R5 | 64 | + MTP (EAGLE) | spec decode | 128K | *(待跑)* | — | — | — | 目标：拉 TPS/User |
 
@@ -518,6 +518,84 @@ d1 卡 `ContainerCreating` 9min，报 `FailedPrepareDynamicResources: ResourceCl
 > **阶段判断（2026-07-18 深夜）**：继承配置架构正确 + admission 通过，但 pool 经一下午 churn + 深夜环境不稳（exec task not found、DRA kubelet 滞后）。按训练文档「churn 后 DRA/IMEX 静置收敛，不连环硬拉」原则，宜静置后干净重跑：`kubectl delete pod sgl2-*` 重建 → 等全 Ready → 一次性 setup（GIB tar + mdadm RAID0 + gcloud + 模型）→ 起 server（NCCL_DEBUG=INFO）→ router → 128K benchmark。所有脚本/YAML/坑已备齐，收敛后应能一把过。
 
 *(benchmark 数字待环境收敛后回填)*
+
+### Round 3 v3（决定性方案）— 直接复用训练 yw 完备环境 ✅ 跨节点通了
+
+> **Chris 的关键洞察**：不要费劲给裸 sglang pod 补 GKE RDMA 基建（v1/v2 踩了 15+ 坑），**直接复用训练的 yw sleep-infinity pod** —— 它们的 GIB / mrdma / ComputeDomain / NVLink / RDMA 是训练折腾一周验证过的完备环境，现成的。
+
+**坑 16（决定性教训）：GB300 跨节点 SGLang 推理，复用训练 pod 比自建推理 pod 省一整天**
+- 现状：yw-pool-256 的 32 个 sleep-infinity pod（`nemo-gb300-ready:26.06-v1` 镜像）常驻待命，GPU 利用率 0%（`ps` 无训练进程），纯空占 pool-0003 + pool-0010。
+- **nemo 镜像自带 SGLang 底层全栈**：实查 `pip show` → **sgl-kernel 0.13.1 + deep_ep 1.2.1 + flashinfer 0.6.8**（torch 2.9.0a0 nv25.6）。只缺 sglang 主包。
+- **一行补齐**：`pip install sglang==0.5.15.post1 --no-deps` → `import sglang, sgl_kernel, deep_ep, flashinfer` 全 OK。不动 torch/依赖。
+- **GIB 现成**：`/usr/local/gib/{lib64/libnccl-net.so, configs/nccl.a4xmax.conf}` 镜像自带，不用 initContainer 注入。
+- **一次绕过 v1/v2 全部坑**：无 DiskPressure churn（nemo 镜像已在节点不重拉大镜像）、无 GIB 注入、无 DRA claim kubelet 滞后、无 mrdma/ComputeDomain 重建（训练已建好 yw-cd-b）。
+
+**3P2D 拓扑（复用 yw-b 组 = 同 ComputeDomain yw-cd-b / pool-0010 / subblock）**：
+- prefill: yw-b-0/1/2（各 PP4 单节点）
+- decode: yw-b-3(rank0) + yw-b-4(rank1)，DEP8 跨 2 节点，`--dist-init-addr <yw-b-3-IP>:29500`
+- 每 pod：`pip install sglang --no-deps` + RAID0（4盘12T，raid-disk.sh 动态选盘）+ gcloud 装 + 模型 385G→RAID0
+
+**server 脚本关键**：显式 export GIB env（yw pod env 无这些，训练靠 run 脚本 export）：
+```bash
+export NCCL_CONF_FILE=/usr/local/gib/configs/nccl.a4xmax.conf
+export LD_LIBRARY_PATH=/usr/local/gib/lib64:$LD_LIBRARY_PATH
+export NCCL_DEBUG=INFO          # 一开始就开 INFO（收集细节，别只报"崩了"）
+export NCCL_GRAPH_REGISTER=0 NCCL_IB_SPLIT_DATA_ON_QPS=1
+export MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1
+```
+
+**✅ 跨节点 decode DEP8 NCCL rendezvous 一把通过**：decode 的 **8 个 DP rank（DP0–DP7，跨 yw-b-3 + yw-b-4 两节点）全部过 `Init torch distributed` + `Load weight begin`** —— 正是 v2 里 sgl2 pod 崩在 `ncclCommInitRank: unhandled cuda error` 的地方。现成 GIB 让它一次通过。
+
+*(server 加载中，待 fired up → router → 128K benchmark 回填数字)*
+
+---
+
+### Round 3 v4（✅ 最终跑通方案）— 官方 SGLang 镜像 + mooncake NVLink KV pool
+
+> **结论先行**：GB300 (sm_103) 上跑 SGLang PD 推理，**别在 nemo 训练镜像上补 sglang**（v1/v2/v3 全是坑），直接用 **SGLang 官方镜像 `lmsysorg/sglang:v0.5.15.post1-cu130`（arm64）** 当 base，它自带 sm_103 kernel + 匹配的 torch ABI。GKE RDMA 基建只需从 nemo pod tar 一份 GIB + 装 DOCA OFED userspace。KV 传输**走域内 NVLink（mooncake NVLINK pool）不走 RoCE**。
+
+**为什么 v3 的"复用 nemo 镜像"路线走不通（推翻 v3 结论）**：
+- v3 记录"nemo 自带 sgl-kernel 0.13.1"——**当前两个 nemo tag（26.02/26.06）实测都不带 sgl-kernel**（`pip show` 无）。0.13.1 是当初烤进旧镜像的私有 build，随 mutable tag 覆盖丢了，PyPI / NVIDIA index / SGLang whl index 三处都查无此版本。
+- 坑 17 — **mutable image tag 陷阱**：`nemo-gb300-ready:26.06-v1` 同一 tag 内容变了（现为 torch 2.12 nv26.04 / CUDA 13.2），AR 只保留一个 digest，旧的带 sgl-kernel 的版本不可恢复。
+- 坑 18 — **PyPI sgl-kernel 与 NV torch C10 ABI 不兼容**：`sgl-kernel==0.3.21`（PyPI 最高）import 报 `undefined symbol: c10_cuda_check_implementation(...i b)`。NV NGC torch 把该符号第 4 参 `int→unsigned int`（`...j b`）。可做 LD_PRELOAD shim 转发（`extern "C"` 定义 `...ib` 版转调 `...jb`）绕过——**但下一坑是致命的**。
+- 坑 19（致命）— **sgl-kernel 0.3.21 没有 sm_103 cubin**：`cuobjdump` 显示 arch = sm_80/87/89/90/100a/101a/120a，**无 sm_103a，无 PTX**。GB300 (cc 10.3) 跑 → `RMSNorm ... no kernel image is available for execution on the device`。架构专属 cubin 不向前兼容，shim 也救不了。→ **只能换官方镜像**。
+
+**✅ 最终配方（每步实测）**：
+1. **Base image**：`lmsysorg/sglang:v0.5.15.post1-cu130`（arm64，公开 docker.io，无需 imagePullSecret）。实测 `cuobjdump` common_ops arch = sm_90/**100a/103a**/110a/120a/121a → **含 sm_103a**；torch 2.11.0+cu130（标准 cu130，ABI 匹配 PyPI sgl-kernel，**无需 shim**）。
+2. **GIB**（GKE NCCL/RDMA plugin，官方镜像没有）：从任一 nemo pod `tar czf gib.tgz -C /usr/local gib`（16MB）→ `kubectl cp` 进官方 pod → 解压到 `/usr/local/gib`。启动脚本 `source /usr/local/gib/scripts/set_nccl_env.sh` + `LD_LIBRARY_PATH=/usr/local/gib/lib64`。
+3. **DOCA OFED userspace**（坑 20 — CX-8 verbs 必须）：官方 Ubuntu 24.04 镜像的通用 `libmlx5-rdmav57` 不支持 CX-8，nixl/mooncake 的 RDMA backend 创建报 `NIXL_ERR_BACKEND`。装 `doca-ofed-userspace`（`https://linux.mellanox.com/public/repo/doca/3.1.0/ubuntu24.04/arm64-sbsa/`）→ 提供 `libmlx5.so.1.25.58.0` → backend 能创建。
+4. **KV 传输走 NVLink**（坑 21 + 关键）：nixl over RoCE 在 GKE 上卡死——GKE RDMA 是 **RoCE v2 over IPv6**（`NCCL_IB_ADDR_FAMILY=AF_INET6`），RDMA netdev 名是 `gpuNipvlanM`（非 UCX 默认探测的 `gpuNrdmaM`），且需正确 IPv6 GID index，UCX 调不通（`KVTransferError: Aborted`）。**但 NVL72 上 20 GPU 全在一个 MNNVL 域，KV 直接走 NVLink C2C 即可**：改 `--disaggregation-transfer-backend mooncake` + `export SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK` + `MC_FORCE_MNNVL=1`。mooncake transfer engine 日志：`Using cross-node NVLink transport (MC_FORCE_MNNVL)`。**Chris 定调：在 NVL72 上能走 NVLink 何必走 RoCE。**
+5. **模型**：`gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-R1-0528-NVFP4-v2 /mnt/ssd/`（内存盘 tmpfs，385G ~1.5min）。
+6. **存储**（坑 22 — 节点物理内存 942GiB/909Gi allocatable）：pod 内存盘用 `emptyDir{medium:Memory}` tmpfs，memory request/limit **800Gi**（超过 909Gi allocatable 会 `Insufficient memory` Pending；1200Gi 更是直接调度失败）。换 fresh node pool（pool-0010）避免叠加大镜像触发 DiskPressure Evict。
+
+**3P2D 拓扑（pool-0010，同 subblock，podAffinity + ComputeDomain sgl3-cd）**：
+- prefill: sgl3-p0/p1/p2，各单节点 4 GPU，`--pp-size 4 --tp/dp/ep 1 --moe-runner-backend flashinfer_trtllm`
+- decode: sgl3-d0(rank0)+d1(rank1)，DEP8 跨 2 节点，`--enable-dp-attention --tp/dp/ep 8 --nnodes 2 --moe-a2a-backend deepep --deepep-mode low_latency`
+- router: `sglang_router.launch_router --pd-disaggregation --prefill <p0/1/2>:30000 30001 --decode <d0>:30000 --policy cache_aware`
+
+**✅ Benchmark（3P2D，20 GPU，ctx 8192，random 1024in/512out）**：
+
+| 并发 | 总吞吐 tok/s | Output tok/s | TTFT median | TTFT mean | TPOT mean | E2E mean |
+|------|-------------|--------------|-------------|-----------|-----------|----------|
+| **8** | **854.7** | 340 | **517 ms** | 2488 ms | **12.1 ms** | 5.9 s |
+| 16 | 256.2 | 96 | 59.6 s | 41.0 s | 11.5 ms | 44 s |
+
+- **decode（NVLink KV pool）又快又稳**：TPOT 12ms、ITL 11ms，跨并发几乎不变 → NVLink C2C 传 KV 无瓶颈。
+- **瓶颈是 prefill 数量**：3× prefill 各 pp4，conc8 健康（TTFT 中位 0.5s），conc16 就被压爆（TTFT 40s，请求排队）。pp 对 prefill 首 token 延迟不友好 —— 后续调优应加 prefill 副本数或 prefill 改 tp。
+
+**复现关键命令**（官方镜像 pod 内）：
+```bash
+# 1. GIB（从 nemo pod tar 来的 gib.tgz）
+tar xzf /tmp/gib.tgz -C /usr/local
+# 2. DOCA OFED userspace（CX-8 verbs）
+echo "deb [signed-by=/etc/apt/trusted.gpg.d/GPG-KEY-Mellanox.pub] https://linux.mellanox.com/public/repo/doca/3.1.0/ubuntu24.04/arm64-sbsa/ ./" > /etc/apt/sources.list.d/doca.list
+apt-get update && apt-get install -y doca-ofed-userspace
+# 3. 启动 env（关键）
+source /usr/local/gib/scripts/set_nccl_env.sh
+export LD_LIBRARY_PATH=/usr/local/gib/lib64:$LD_LIBRARY_PATH
+export MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK
+# 4. launch_server ... --disaggregation-transfer-backend mooncake
+```
 
 ---
 
