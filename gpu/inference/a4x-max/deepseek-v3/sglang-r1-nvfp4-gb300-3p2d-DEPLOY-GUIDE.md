@@ -428,6 +428,46 @@ lmsys/NVIDIA 拿到 226 TPS/GPU（128K/8K，无 MTP）之后的演进：
 3. **服务栈成熟化**：per-concurrency 配方分派、**P:D 配比调优（10P1D 级）**、Dynamo 编排（KV-aware 路由 + DP-rank 对齐）、breakable CUDA graph 覆盖 prefill。
 4. **换新模型 DeepSeek-V4**（2026-06 后续博客）：Day-0 支持 → 两个月内 kernel/runtime/bugfix 迭代，在 GB300 disagg lane（V4 Pro FP4，**8K/1K** workload，带 MTP）达 **11,200 tok/s/GPU @ ~50 tok/s/user**（Day-0 的 5×）。关键：MHC fusion、KV Compression V2、W4A4 MegaMoE、SWA budgeting、per-concurrency 配方。复现用 NVIDIA `srt-slurm` + Dynamo，配方 `disagg-gb300-10p1d-dep4-dep32`。
 
+### 9.7 MTP（EAGLE spec decode）— Round 5，✅ per-user 2.15×
+
+官方 Roadmap 第 1 步。**只在 decode 侧加 spec flags**，prefill 不动；拓扑复用 §9.1（7P+DEP32）。
+
+**decode 脚本在 §9 decode 基础上追加（放到 launch 命令里）：**
+```bash
+--speculative-algorithm EAGLE \                       # DeepSeek MTP 走 EAGLE（NEXTN 是别名）
+--speculative-draft-model-path /mnt/ssd/DeepSeek-R1-0528-NVFP4-v2 \   # 自带 nextn，指同模型
+--speculative-draft-model-quantization modelopt_fp4 \
+--speculative-num-steps 2 --speculative-eagle-topk 1 --speculative-num-draft-tokens 3 \
+--speculative-moe-a2a-backend none --speculative-moe-runner-backend triton   # ← 关键，见下
+```
+
+> **⚠️ 最大的坑：draft nextn MoE backend 配对**
+> DeepSeek FP4 checkpoint 的 **nextn(draft) 层权重是 bf16**（不是 fp4），跟主 decode 的 MoE 不是一套路径。乱配（`a2a=deepep` 单加、`a2a=flashinfer`、`deepep+runner=triton`）全崩在
+> `AssertionError: forward_deepgemm_masked is deprecated`（`ep_moe/layer.py`）→ `scheduler died (exit -3)`。
+> 只有两个合法配对（来自 SGLang `arg_groups/overrides.py` 自身的 draft backend 推断逻辑）：
+> 1. `--speculative-moe-runner-backend deep_gemm --speculative-moe-a2a-backend deepep`（需 ep>1）
+> 2. `--speculative-moe-runner-backend triton --speculative-moe-a2a-backend none`（**官方默认，推荐**）
+> 本指南用配对 2，一次通。起来后 decode 日志出现 `Capture target verify CUDA graph`，warmup 响应带 `spec_accept_length`。
+
+**重启 decode（8 节点，别忘了 router 也在 d0，会被一起 kill）：**
+```bash
+for i in 0..7: kubectl exec sgl4-d$i -- pkill -9 python          # ⚠️ 会连带杀掉 d0 上的 router
+for i in 0..7: nohup setsid bash /tmp/decode5.sh $i $D0IP:5757 &  # rank0=d0
+# decode 全 ready 后，重启 router（§6）
+```
+
+**实测（no-MTP vs MTP，同 bench 2048/1024）：**
+| 场景 | 指标 | no-MTP | MTP | 收益 |
+|---|---|---|---|---|
+| conc=1（最纯信号） | tok/s/user | 97.4 | **209.2** | **2.15×** |
+| | TPOT ms | 10.0 | **4.53** | 2.2× |
+| conc=128（loaded） | 聚合 tok/s | 3599 | **4260** | +18% |
+| | TPOT ms | 12.2 | **6.19** | 2.0× |
+
+- **accept_length ≈2.7**（每 decode step 出 ~2.7 token 而非 1）→ per-user 解码 2.15×，超官方 1.87×（random+temp0 接受率偏高，真实业务会低些）。
+- conc=1 无 prefill 排队，是最干净的 MTP 信号；conc=128 因 7P 使系统 prefill-bound、decode 有余算力，MTP 聚合吞吐不掉反涨 +18%。
+- **显存**：MTP 多 draft tree + verify CUDA graph，若 OOM 先降 `--cuda-graph-max-bs`/`--speculative-num-draft-tokens`，最后才调 `--mem-fraction-static`。本配置 mem-fraction 0.75 未 OOM。
+
 ---
 
 ## 10. 关键坑速查（为什么每步都不能省）
@@ -444,6 +484,8 @@ lmsys/NVIDIA 拿到 226 TPS/GPU（128K/8K，无 MTP）之后的演进：
 | pod 卡 `ContainerCreating` 报 `ResourceClaim not created yet` | 16 pod 同时申请 DRA，controller 滞后 | 删卡住 pod + `apply` 重触发（§9.3）|
 | `pkill` 后 exit 137、server 没重启 | `pkill -f sglang.launch_server` 匹配到自己命令行 | 用 `pkill -9 python` |
 | `kubectl cp` 脚本没落地/截断 | cp 静默失败 | cp 后**必须** `wc -l` 校验 |
+| MTP：`forward_deepgemm_masked is deprecated` / `scheduler died (exit -3)` | draft nextn MoE 是 bf16，backend 配错撞 deprecated 死路 | draft 用 `--speculative-moe-runner-backend triton --speculative-moe-a2a-backend none`（§9.7）|
+| 重启 decode 后 benchmark `Server not ready` | router 跑在 d0，被 `pkill -9 python` 连带杀了 | decode ready 后重启 router（§6）|
 
 ---
 

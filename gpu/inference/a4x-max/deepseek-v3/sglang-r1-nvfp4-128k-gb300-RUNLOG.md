@@ -18,7 +18,7 @@
 | R2 | 8 | 2节点 1P1D | prefill×1 + decode×1，nixl/CX-8 | 8192 | 1024/512/16/48 | **407.9** | **9.2** | 1.6 s | decode 快，prefill 瓶颈（Mean TTFT 7.4s） |
 | R3 | 20 | 3P2D + DEP8 | 官方镜像 + mooncake **NVLink** KV pool | 8192 | 1024/512/**峰值** | **10715** (峰值总吞吐@conc512) | **17** | 甜点 conc256: 12s | ✅ 端到端通；conc8→512 吞吐 854→10715 (12.5×)，conc256 后见顶；瓶颈 prefill (3×pp4) TTFT 爆 |
 | R4 | 64 | 7P+DEP32（1 NVL72 域） | 官方镜像 + mooncake NVLink，128K/8K | **131072** | 128K/8K/conc32 warm | **19965 (总)=312 TPS/GPU** | 12.3 | 20.7 s | ✅ **warm 312 TPS/GPU 超官方 226 达 38%**（cold 首跑 240，warmup 后 312）；warm 曲线 conc8/16/32 = 128/195/312 TPS/GPU |
-| R5 | 64 | + MTP (EAGLE) | spec decode | 128K | *(待跑)* | — | — | — | 目标：拉 TPS/User |
+| R5 | 60 | 7P+DEP32 + **MTP** (EAGLE/NEXTN, steps2/topk1/draft3) | spec decode，draft nextn MoE = **triton+a2a none** | 128K | 2048/1024/conc1 | **209.2** (单用户) | **4.53** | 0.26 s | ✅ **MTP 通**：单用户 97→209 tok/s (**2.15×**)，TPOT 10.0→4.53ms，accept_length ≈2.7；conc128 聚合 3599→4260 (+18%)、TPOT 12.2→6.2ms |
 
 > 更细指标（P90/P99 TTFT/TPOT、E2E、input throughput）见各 Round 章节内的完整 benchmark 表。
 
@@ -693,4 +693,50 @@ DeepSeek-R1 checkpoint 自带 1 个 MTP/nextn 预测层（`config.json: num_next
 
 ### 成功标准
 - MTP 版 TPOT 明显低于 no-MTP（per-user 提速），总 TPS/GPU 不掉 → 复现博客 +87% TPS/User。
+
+---
+
+## Round 5 执行结果（2026-07-19，✅ MTP 通）
+
+### 坑 12（核心）：draft nextn MoE `forward_deepgemm_masked is deprecated`
+第一波把 draft MoE backend 乱配（`a2a=deepep` 单加、`a2a=flashinfer`、`a2a=deepep + runner=triton`）全崩：
+```
+AssertionError: forward_deepgemm_masked is deprecated   # ep_moe/layer.py:220
+RuntimeError: Rank 0 scheduler died during initialization (exit code: -3)
+```
+**根因（读源码定位）**：`DeepEPMoE.run_moe_core` 有个 `deprecate_flag`——True 走新 runner（`super().run_moe_core`），False 落进 deprecated 的 deepgemm_masked/contiguous 死路（`assert False`）。`deprecate_flag=True` 的分支之一是 `flashinfer_cutedsl runner + modelopt_fp4`——**主 decode 正是这套**，所以主模型能跑。但 **DeepSeek FP4 checkpoint 的 nextn(draft) MoE 层权重是 bf16**（不是 fp4），走的是另一条 bf16 分支，要求 `runner=deep_gemm + a2a=deepep + low_latency`。我给 draft 配 `triton` runner 两个分支都不满足 → `deprecate_flag=False` → 撞 assert。
+
+**修复**：读 `arg_groups/overrides.py:1255-1295`（SGLang 自己的 draft backend 自动推断，虽 `is_hip()` gated 不对 NVIDIA 生效，但给出了官方期望值）。DeepSeek FP4 nextn 的两个合法配对：
+1. `--speculative-moe-runner-backend deep_gemm --speculative-moe-a2a-backend deepep`（需 ep>1）
+2. `--speculative-moe-runner-backend triton --speculative-moe-a2a-backend none`（**官方默认**，最简单）
+
+用配对 2（triton + none）→ 一次通。日志出现 `Capture target verify CUDA graph`（MTP verify 步），warmup meta_info 带 `spec_accept_length`。
+
+### 最终 draft flags（decode5.sh）
+```
+--speculative-algorithm EAGLE \
+--speculative-draft-model-path /mnt/ssd/DeepSeek-R1-0528-NVFP4-v2 \
+--speculative-draft-model-quantization modelopt_fp4 \
+--speculative-num-steps 2 --speculative-eagle-topk 1 --speculative-num-draft-tokens 3 \
+--speculative-moe-a2a-backend none --speculative-moe-runner-backend triton      # ← 关键正确配对
+```
+prefill 侧**不用**加 spec flags（PD 下 decode 单加即可，没撞 PD-MTP metadata 坑）。
+
+### Benchmark 对比（no-MTP vs MTP，同参数 2048/1024）
+| 场景 | 指标 | no-MTP (R4) | MTP (R5) | 收益 |
+|------|------|-------------|----------|------|
+| **conc=1**（单用户，无 prefill 瓶颈，最纯 MTP 信号） | Output tok/s/user | 97.37 | **209.21** | **2.15×** |
+| | TPOT (ms) | 10.02 | **4.53** | 2.21× 更快 |
+| | ITL (ms) | 10.02 | 12.23 | MTP burst，每 burst 出 ~2.7 token |
+| | TTFT (ms) | 262 | 264 | 持平 |
+| **conc=128**（loaded，7P 喂不满 → prefill-bound） | Output tok/s（聚合） | 3598.8 | **4259.9** | +18.4% |
+| | per-user tok/s | 45.9 | 47.5 | +3.5% |
+| | TPOT (ms) | 12.19 | **6.19** | 1.97× 更快 |
+| | 达成并发 | 78.45 | 89.69 | |
+
+### 结论
+- **accept_length ≈2.7**（ITL/TPOT = 12.23/4.53），即每个 decode step 产出 ~2.7 个 token 而非 1 → **per-user 解码 2.15× 加速**，超官方 1.87×（random+temp0 workload 接受率偏高所致，真实业务会低些）。
+- conc=1 是最干净的信号（无 prefill 排队）：97→209 tok/s，TPOT 砍半还多。
+- conc=128 下 MTP 聚合吞吐**不掉反涨**（+18%）——因为 7P 使系统 prefill-bound，decode 有余算力，MTP 的额外 draft 计算"免费"。真正 decode 饱和时 MTP 会拿聚合换延迟，此处未饱和。
+- **成功标准达成**：MTP 版 TPOT 明显低于 no-MTP，总吞吐不掉。复现官方 MTP 提 per-user 速度的结论。
 
