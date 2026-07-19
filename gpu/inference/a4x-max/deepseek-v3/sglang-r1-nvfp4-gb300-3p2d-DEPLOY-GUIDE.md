@@ -503,6 +503,38 @@ for i in 0..7: nohup setsid bash /tmp/decode5.sh $i $D0IP:5757 &  # rank0=d0
 - conc=1 无 prefill 排队，是最干净的 MTP 信号；conc=128 因 7P 使系统 prefill-bound、decode 有余算力，MTP 聚合吞吐不掉反涨 +18%。
 - **显存**：MTP 多 draft tree + verify CUDA graph，若 OOM 先降 `--cuda-graph-max-bs`/`--speculative-num-draft-tokens`，最后才调 `--mem-fraction-static`。本配置 mem-fraction 0.75 未 OOM。
 
+### 9.8 技术栈清单：官方 vs 本文，用了啥 · 没用啥
+
+> 核对自官方博客 [*Deploying DeepSeek on GB300 NVL72: Big Wins in Long-Context Inference*](https://www.lmsys.org/blog/2026-02-19-gb300-longctx)（lmsys，2026-02-19）原文。目的：说清楚哪些组件真用了、哪些是"听着相关但没用"，避免误会。
+
+| 组件 / 技术 | 本文用了吗 | 官方用了吗 | 说明 |
+|---|---|---|---|
+| **PD 分离** | ✅ | ✅ | prefill/decode 拆开，两边各自优化 |
+| **PP chunked prefill + dynamic chunking** | ✅（128K）| ✅ | 长上下文降 TTFT；官方 32K dynamic chunk 拿到 8.6s |
+| **Wide-EP（DeepEP）decode** | ✅ DEP32 | ✅（up to 32 GPU）| MoE + KV 摊到更多 **GPU HBM**，不是 CPU |
+| **FP8 KV cache（HBM 内）** | ✅ `fp8_e4m3` | ✅ native FP8 KV | 省显存塞更多 KV；全程在 HBM |
+| **MTP（EAGLE spec decode）** | ✅ 2.15× | ✅ 1.87×（accept 2.37@MTP3）| 本文 accept ~2.7 略高（random+temp0）|
+| **mooncake 传输后端（NVLink）** | ✅ `MEM_POOL=NVLINK` | 未明说（用 Dynamo 编排）| KV 经域内 NVLink C2C，**GPU→GPU** |
+| **NVLink C2C KV 传输** | ✅ | ✅（域内）| 绕开 RoCE |
+| **nixl** | 装了但**非活跃路径** | — | 一开始试 RoCE 卡死，改 mooncake NVLink；nixl 仅作 mooncake 底层依赖存在 |
+| **编排层** | sglang_router | **NVIDIA Dynamo** | 官方用 Dynamo（KV-aware 路由 + 生命周期）；本文用轻量 router 够复现 |
+| **KV Cache Offload（CPU/DRAM/SSD）** | ❌ **没用** | ❌ **没用** | 见下 |
+| **CPU 内存做 KV** | ❌ | ❌ | 官方整个 decode 分析都是 HBM-bound（176GB KV pool / 40 req/GPU），没往 CPU 倒 |
+| **多轮对话 benchmark** | ❌ | ❌ | 双方都是**单轮** 128K/8K；官方精度用 LongBench-v2（单轮长文问答，非多轮聊天）|
+| **Context Parallelism** | ❌ | ❌（列为 Future Work）| 替代 chunked PP 降 TTFT 的下一步 |
+
+**两个最容易误会的点：**
+
+1. **Mooncake 有两副面孔，别混**：
+   - **Mooncake 传输后端**（本文用的）= 把 KV 经 NVLink 从 prefill 卡直传 decode 卡，GPU→GPU，纯 HBM。
+   - **Mooncake Store**（本文**没用**）= 把 KV 往 CPU / DRAM / SSD 三级池子里存做 offload。
+   - 同名，两个东西。本文和官方都只用了前者传输。
+
+2. **KV Cache Offload 到 CPU 是 SGLang 真有的能力，但这条线没碰**：
+   - SGLang 的 **HiCache**（配 Mooncake Store L3）能把 KV 卸到 CPU/DRAM/SSD，专为**多轮对话 / 共享前缀复用 / 降 TTFT**。
+   - 但这是**独立功能**，跟本文/官方跑的"最高吞吐 + 长上下文单轮"是两个场景。本文还显式 `--disable-radix-cache`（连 GPU 内前缀复用都关了，纯拼 decode 吞吐）。
+   - 想测 KV offload / 多轮，得另开一条线：开 HiCache + Mooncake Store，换多轮 workload。
+
 ---
 
 ## 10. 关键坑速查（为什么每步都不能省）
