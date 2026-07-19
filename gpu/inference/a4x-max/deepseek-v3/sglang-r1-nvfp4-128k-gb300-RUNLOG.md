@@ -599,7 +599,59 @@ export MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLI
 
 ---
 
-## Round 4 / 5 — 待做
-- **Round 4**：ctx8_dep32（64 GPU = 占满一个 NVL72 域）→ 冲峰值，对标博客 226 TPS/GPU
-- **Round 5**：MTP（EAGLE spec decode，num-steps 2 / topk 1 / draft-tokens 3）→ 拉 TPS/User（博客 23→43，+87%）
+## Round 4 — ctx8_dep32（64 GPU 满域 · 长上下文对标官方 226 TPS/GPU）· 测试计划（开跑前先想清楚）
+
+> 目标：对标 lmsys GB300 博客 **226 TPS/GPU**（128K/8K 长上下文，无 MTP），同时解掉 Round 3 的两个瓶颈——prefill 太少（3→8）+ decode KV 容量不够长上下文（DEP8→DEP32）。**初始化跟 Round 3 完全一样，只是规模变大 + 参数换长上下文。别再卡 bug。**
+
+### 前置事实（已核实，不是拍脑袋）
+- ✅ **pool-0010 全部 16 节点在同一个 subblock**（`7d1110f88208b47b136e93f60a9d0629`）→ 64 GPU 占满一个 NVL72 域可行，podAffinity 同域约束能满足。
+- ⚠️ 需先**拆掉 Round 3 的 5 个 pod**（已记录峰值），腾出全部 16 节点。
+
+### 拓扑：ctx8_dep32（16 节点 / 64 GPU）
+| 角色 | 节点 | GPU | 配置 |
+|---|---|---|---|
+| prefill | 8（p0–p7）| 32 | 各单节点 **pp4**（同 R3 单 prefill）|
+| decode | 8（d0–d7）| 32 | **DEP32**：tp32/dp32/ep32，nnodes 8，node-rank 0–7 |
+| 合计 | 16 | 64 | 满一个 NVL72 域 |
+
+### 初始化：跟 Round 3 **完全一样**（照搬 DEPLOY-GUIDE）
+- 镜像 `lmsysorg/sglang:v0.5.15.post1-cu130`、pod YAML（ComputeDomain + mrdma DRA + subblock affinity + 内存盘 800Gi）、bootstrap（GIB from GCS + DOCA + gcloud + nixl + 模型）、KV = mooncake **NVLINK** pool（`MC_FORCE_MNNVL=1`）——**一字不改**。
+- **唯一初始化差别**：`gen-pods.py` pod 数 5→16（p0-7 + d0-7），pool 不变。
+
+### 参数：相比 Round 3 的差异（长上下文）
+| 参数 | Round 3 | **Round 4** | 为什么 |
+|---|---|---|---|
+| `--context-length` | 8192 | **131072（128K）** | 对标博客长上下文 regime |
+| prefill `--chunked-prefill-size` | -1（关）| **32768** + `--enable-dynamic-chunking` | 128K prefill 不 chunk 则 TTFT 爆；博客动态 chunk 32K → TTFT 8.6s |
+| decode tp/dp/ep | 8/8/8 | **32/32/32** | Wide-EP DEP32，4× KV 容量摊长上下文 |
+| decode `--nnodes` | 2 | **8** | 32 GPU 跨 8 节点 |
+| decode `--mem-fraction-static` | 0.80 | **0.75** | 博客值；长上下文 KV 大，留余量防 retraction |
+| prefill 数量 | 3 | **8** | 解 R3 prefill 瓶颈（R3 conc256 后 TTFT 爆就是这里）|
+| MTP | 无 | **无**（R4 对标 226 baseline；R5 再加）| |
+
+### 启动流程（和 R3 同机制，只是数量/参数变）
+1. 拆 R3 → `gen-pods.py`（16 pod）→ apply → 处理 DiskPressure evict（**预期偶发，删重建循环**）
+2. 16 pod 并行 bootstrap（~5min）
+3. prefill×8 启动（各 pp4，脚本同 R3 prefill.sh 只改 `--context-length 131072 --chunked-prefill-size 32768 --enable-dynamic-chunking`）
+4. decode 8 节点启动：`node-rank 0–7`，`--dist-init-addr <d0-IP>:5757`（同 R3 机制，nnodes 2→8）
+5. router：8 prefill + 1 decode
+6. 验证：先短请求通，再 128K 长请求通
+7. benchmark：`--random-input-len 131072 --random-output-len 8192` + 并发 sweep，对标 226 TPS/GPU
+
+### 预判的坑 + 预防（基于 R3 教训，提前想好别再卡）
+1. **DiskPressure evict**：16 节点拉镜像，预期几个 evict → 删重建循环（DEPLOY-GUIDE §3.2 已有）。
+2. **DEP32 NCCL rendezvous**：32 GPU 跨 8 节点，比 DEP8 大 4×，同机制 + NVLink transport。`NCCL_DEBUG=INFO` 盯 rendezvous；MNNVL 覆盖整个 subblock 应能过。
+3. **128K KV 显存**：DEP32 每 GPU KV 池要够。`mem_fraction 0.75`，OOM 就调低；博客 DEP16 128K → 36 req/GPU。
+4. **chunked prefill 参数名**：`--enable-dynamic-chunking` 在 0.5.15 server_args 里见过（`enable_dynamic_chunking`），但 runtime 先 `--help` 确认拼写。
+5. **启动更慢**：decode graph capture + DeepGEMM warmup（"34h" 假 ETA 实际 ~1min）在 DEP32 更久，R3 DEP8 ~5min，R4 可能 10min+，耐心等别误判卡死。
+6. **128K bench 单请求慢**：`num-prompts` 别设太大（先 num-prompts=并发×2）；prefill 128K TTFT 本来就 8s+。
+7. **cuda-graph-max-bs**：128K 长上下文 decode batch 小，可能要下调（R3 是 64）。
+
+### 成功标准
+- 端到端 128K/8K 请求通；benchmark 出 TPS/GPU，对比博客 226（期望进 150–226，取决于 prefill/decode 配比调优）。
+
+---
+
+## Round 5 — MTP（待 Round 4 通过后）
+- MTP（EAGLE spec decode，num-steps 2 / topk 1 / draft-tokens 3）→ 拉 TPS/User（博客 23→43，+87%），TPS/GPU 维持峰值。
 
