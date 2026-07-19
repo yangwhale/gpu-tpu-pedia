@@ -652,6 +652,45 @@ export MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLI
 
 ---
 
-## Round 5 — MTP（待 Round 4 通过后）
-- MTP（EAGLE spec decode，num-steps 2 / topk 1 / draft-tokens 3）→ 拉 TPS/User（博客 23→43，+87%），TPS/GPU 维持峰值。
+## Round 5 — MTP（多 token 预测 / EAGLE spec decode）· 测试计划
+
+> **follow 官方下一步，不自己创新**。lmsys GB300 博客拿到 226 TPS/GPU（no-MTP）后的第一步就是 MTP：**per-user 吞吐（TPS/User）23→43（+87%），TPS/GPU 维持峰值**。本轮在 Round 4 的 64 GPU 128K 部署上加 MTP，复现这个提升。
+
+### 目标
+- TPS/User（每用户 token/s）相比 Round 4 no-MTP 提升 ~87%（对标博客 23→43）。
+- TPS/GPU（总吞吐）维持峰值不掉。
+- accept length 对标博客 ~2.37@MTP（LongBench-v2 精度 56.9% ≈ 官方 56.7%）。
+
+### 原理（一句话）
+DeepSeek-R1 checkpoint 自带 1 个 MTP/nextn 预测层（`config.json: num_nextn_predict_layers=1`）。decode 时用这个轻量层**一次草拟多个 token**（draft），再用主模型**一次并行验证**，接受的就白赚 —— 访存密集的 decode 阶段，一次前向多出几个 token，per-user 速度上去、GPU 吞吐不掉。
+
+### 配置：Round 4 decode 基础上 **加** speculative flags
+```
+--speculative-algorithm EAGLE \            # DeepSeek MTP 走 EAGLE（NEXTN 是别名）
+--speculative-draft-model-path /mnt/ssd/DeepSeek-R1-0528-NVFP4-v2 \   # 自带 nextn，指同模型
+--speculative-draft-model-quantization modelopt_fp4 \
+--speculative-num-steps 2 \                # 草拟深度
+--speculative-eagle-topk 1 \              # 必须=1（overlap scheduler V2 只支持 topk1）
+--speculative-num-draft-tokens 3          # topk=1 时 = num_steps+1
+```
+- prefill 侧：**先只在 decode 加 MTP 测**；若报 PD-MTP metadata 相关错，再给 prefill 也加同样 spec flags（PD+MTP 两侧可能都要，博客提过 "PD-MTP metadata buffer"）。
+- 精确 DeepSeek MTP 用法参考 SGLang 文档指的 DeepSeek-V3.2 cookbook §4.2.3。
+
+### 拓扑：复用 Round 4（不重建）
+- 64 GPU：7-8 prefill（pp4）+ DEP32 decode。只需给 decode 脚本加上面 5 个 flag，`pkill -9 python` 重启 decode（8 节点 rank0-7），prefill 不动（除非报 PD-MTP 错）。
+
+### benchmark 方案（对比 no-MTP）
+- 同 Round 4：`--random-input-len 131072 --random-output-len 8192`，并发 sweep（8/16/32），warm 后取值。
+- 关键看 **Median TPOT / ITL**（per-user 速度，MTP 应显著降）+ **Output tok/s per user** + 总 TPS/GPU（应维持）。
+- 记录 **accept length**（decode 日志里的 spec accept 统计），对标 ~2.37。
+
+### 预判的坑
+1. **MTP 增显存**（draft tree + 额外 CUDA graph + 验证 buffer）→ 可能 OOM。先降 `--cuda-graph-max-bs` / `--speculative-num-draft-tokens`，最后才调 `--mem-fraction-static`（官方 OOM recipe 顺序）。
+2. **topk 必须显式 =1**：overlap scheduler V2 只支持 topk1，不设可能 auto 选 >1 报错。
+3. **PD + MTP**：decode 单加可能不够，prefill 也要 spec flags（PD-MTP metadata）。报错再加。
+4. **accept length 依赖 workload**：长上下文 accept length 可能和博客不同，先看趋势（TPOT 降多少）。
+5. **draft path**：DeepSeek 自带 nextn，指同模型路径即可；若 SGLang 报找不到 nextn 权重，可能要单独的 NextN 权重仓（`SGLang/DeepSeek-V3-NextN` 那种）。
+
+### 成功标准
+- MTP 版 TPOT 明显低于 no-MTP（per-user 提速），总 TPS/GPU 不掉 → 复现博客 +87% TPS/User。
 
