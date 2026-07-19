@@ -342,10 +342,13 @@ $K exec sgl3-p0 -- bash /tmp/bench.sh 2>&1 | grep -iE "throughput|TTFT|TPOT|late
 | 并发 | 总吞吐 tok/s | TTFT median | TPOT mean | 备注 |
 |---|---|---|---|---|
 | **8** | **854.7** | **517 ms** | **12.1 ms** | 健康工作点（首轮）|
-| 8（复现轮）| — | **275 ms** | **9.9 ms** | 从零按本文重跑，指标一致 ✅ |
+| 8（复现①）| — | **275 ms** | **9.9 ms** | 从零按本文重跑，指标一致 ✅ |
+| 8（复现②）| — | **268 ms** | **10.0 ms** | 再从零重跑，指标再次一致 ✅ |
 | 16 | 256.2 | 59.6 s | 11.5 ms | 3 prefill 被压爆，TTFT 长尾爆炸 |
 
-> **本文已端到端复现验证**：2026-07-19 按本文从零起一套全新 pod（删光重来），一次通到 benchmark，中位 TTFT 275ms / TPOT 9.9ms，与首轮一致。
+> **本文已端到端复现验证 ×2**：2026-07-19 按本文**两次**从零起全新 pod（每次删光重来），均一次通到 benchmark，中位 TTFT 268-275ms / TPOT 9.9-10.0ms，三次结果一致。除拉镜像偶发 DiskPressure（删重建即可，见 §3.2）外，**零功能改动**。
+>
+> **启动小知识**：decode 起来前会刷 `DeepGEMM warmup: 0/65536`，初始 ETA 显示几十小时是**误导**——JIT 一热就到 ~1000 it/s，实际约 **1 分钟**跑完，别被吓到。
 
 - decode（NVLink KV pool）TPOT ~12ms 跨并发几乎不变 → NVLink 传 KV 无瓶颈。
 - 瓶颈是 **prefill 数量**：3×prefill 各 pp4，高并发排队。想压 TTFT → 加 prefill 副本 / prefill 改 tp。
