@@ -347,16 +347,23 @@ $K exec sgl3-p0 -- grep -iE "concurrency=|Total token|Output token|Median" /tmp/
 
 **⚠️ 关键：benchmark 一定要压并发，别用 conc=8 汇报数字**（conc=8 只用到 DEP8 decode 容量的 ~3%，GB300 DEP8 理论可扛 ~288 并发）。并发 sweep（random 1024in/512out）：
 
-| 并发 | 总吞吐 tok/s | output tok/s | TPOT median | TTFT median | 备注 |
-|---|---|---|---|---|---|
-| 8 | 854 | 340 | 10 ms | 0.5 s | 严重欠载，别拿这个数字汇报 |
-| 32 | 4635 | 1538 | 15 ms | 0.5 s | |
-| 64 | 5265 | 1797 | 16 ms | 2.5 s | |
-| **128** | **6878** | **2297** | **17 ms** | 8.4 s | 8× conc8，仍在涨；prefill 开始成瓶颈 |
+完整并发 sweep（压到吞吐见顶）：
 
-- **conc8→128 吞吐涨 8 倍**，TPOT 只从 10→17ms。decode（NVLink KV pool）远没到顶。
-- conc128 时 TTFT 涨到 8.4s → **瓶颈是 prefill（3×pp4）**，不是 decode。要继续压吞吐/降 TTFT：加 prefill 副本或 prefill 改 tp（Round 4）。
-- **对标官方**：lmsys GB300 博客 226 TPS/GPU 是 **128K/8K 长上下文**（decode 主导），本配置 ctx 只开 8192、短上下文 1024/512 是 prefill 偏重的不同 regime，数字不可直接对比；本配置 conc128 达 ~344 tok/s/GPU（总）/ 115 output tok/s/GPU。
+| 并发 | 总吞吐 tok/s | output tok/s | TPOT median | TTFT median | 实际并发 |
+|---|---|---|---|---|---|
+| 8 | 854 | 340 | 10 ms | 0.5 s | 8 |
+| 32 | 4635 | 1538 | 15 ms | 0.5 s | 26 |
+| 64 | 5265 | 1797 | 16 ms | 2.5 s | 54 |
+| 128 | 6878 | 2297 | 17 ms | 8.4 s | 109 |
+| 192 | 9975 | 3295 | 17 ms | 8.2 s | 150 |
+| **256** | **10390** | 3334 | 17 ms | **12 s** | 198 | ← 甜点 |
+| 384 | 10438 | 3429 | 17 ms | 21 s | 300 |
+| 512 | **10715** | **3609** | 17 ms | 30 s | 416 | ← 峰值 |
+
+- **峰值 ~10,700 tok/s（output ~3600），是 conc8（854）的 12.5×**。~535 tok/s/GPU（总）/ 180 output tok/s/GPU。
+- **conc256 后见顶**：256→512 总吞吐只 +3%，但 TTFT 从 12s 爆到 30s。**实用甜点 = conc256**（10.4k tok/s，TTFT 12s，TPOT 17ms）。
+- TPOT 全程稳定 ~17ms → decode（NVLink KV pool）稳。到顶双因：**prefill（3×pp4）喂不动**（TTFT 爆）+ decode output 也接近该 workload 极限。
+- **对标官方**：lmsys GB300 博客 226 TPS/GPU 是 **128K/8K 长上下文**（decode 主导、DEP 铺到 32 卡），本配置 ctx 8192 / 短上下文 1024-512 是 prefill 偏重的不同 regime，数字不可直接对比。要逼近官方需上长上下文 + 更多 prefill 副本 + MTP（Round 4/5）。
 
 > **本文已端到端复现验证 ×2**：2026-07-19 按本文**两次**从零起全新 pod（每次删光重来），均一次通到 benchmark，中位 TTFT 268-275ms / TPOT 9.9-10.0ms，三次结果一致。除拉镜像偶发 DiskPressure（删重建即可，见 §3.2）外，**零功能改动**。
 >
