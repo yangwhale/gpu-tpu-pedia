@@ -28,6 +28,22 @@
 - **5 节点全部在同一个 NVL72 subblock**（podAffinity 强制），所以 prefill 算完的 KV 可以直接经 **NVLink** 传给 decode，绕开 RoCE。
 - prefill 计算密集（pp4 摊显存）、decode 访存密集（DP-Attention + Wide-EP DEP8）。
 
+### 术语速查（先看这个，下文全用这套简写）
+
+> ⚠️ **有两套 "xPyD" 记法，别混**：本项目 D 数 = decode **节点**数；官方 recipe 的 D 数 = decode **组**数。下表对齐。
+
+| 简写 | 含义 | 展开 |
+|---|---|---|
+| **xPyD（本项目记法）** | x 个 prefill 节点 + y 个 decode **节点**（数物理机器） | `3P2D` = 3 prefill 节点 + 2 decode 节点，共 5 节点；`8P8D` = 8+8 = 16 节点 |
+| **PP4** | 单个 prefill 内 pipeline parallel = 4 | 1 prefill = 1 台机器 4 GPU，模型按层切 4 段流水摊显存。本项目 1 prefill 实例 = 1 节点 |
+| **decode 组 / DEPn** | 若干 decode 节点**合成一个** server 一起服务 | `DEP8` = 2 节点 8 GPU 一组（本文 3P2D，`--nnodes 2`）；`DEP32` = 8 节点 32 GPU 一组（§9，`--nnodes 8`）|
+| **DEP 是啥** | **D**ata-parallel(attention) + **E**xpert-parallel(MoE) | attention 走 **DP**（每卡各算各的请求，不切单请求，省通信）；MoE 走 **EP**（256 个 expert 摊到 n 卡，每卡存 ~256/n 个）= Wide-EP |
+| **官方 recipe 记法** | `ctx8_pp4_gen1_dep32` | `ctx8` = 8 prefill(PP4)；`gen1` = **1 个 decode 组**；`dep32` = 该组 32 GPU（8 节点）|
+
+> **为什么"官方 8P1D"和"16 节点"不矛盾**：官方那个 "1D"（gen1）是 **1 个 decode 组**，但这一组本身摊在 **8 台机器**上（DEP32）。换算成本项目记法就是 **8P8D**（8 prefill 节点 + 8 decode 节点）= 16 节点。**「1 组」≠「1 台机器」**——这是你会看懵的唯一坑。
+>
+> 记：`P` 数在两套记法里都 = prefill 节点数；`D` 数在本项目 = 节点数、在官方 recipe = 组数；`DEPn` 永远 = 那个 decode 组用 DP-attention + EP-MoE 铺 n 张卡。
+
 ---
 
 ## 0.5 全景消融：每一步开了什么 · 收益 · 原理（一目了然）
@@ -438,7 +454,7 @@ for i in 0 1 2 3 4 5 6 7; do $K exec sgl4-d$i -- bash -c "nohup setsid bash /tmp
 
 - **warm 峰值 312 TPS/GPU，超官方 226 达 38%**（cold 首跑仅 240——第一次编译/cache 未热，**benchmark 务必多跑几遍取 warm 值**）。
 - TPOT 全程 ~12ms（decode NVLink KV pool 稳）。
-- **TTFT 仍高于官方 8.6s**：官方 8.6s 是 conc=1 单请求测的；本配置 max-throughput 高并发下 prefill（只 7-8 个）排队 → 20-51s。想同时拿高吞吐 + 低 TTFT 要**加 prefill 副本 + 调 P:D 配比**（官方 GB300 disagg lane 用 **10 prefill** + Dynamo 编排，见 §11）。
+- **TTFT 仍高于官方 8.6s**：官方 8.6s 是 conc=1 单请求测的；本配置 max-throughput 高并发下 prefill（只 7-8 个）排队 → 20-51s。**注意：R1 226 官方配置就是 8P + DEP32（recipe `ctx8_pp4_gen1_dep32`），跟我们 Round 4 拓扑一致**——差距在测法（单请求 vs 高并发），不在 P:D 数量。想同时拿高吞吐 + 低 TTFT 要靠 Context Parallelism（降单请求 prefill 延迟）。（`10P1D` 是**后续 DeepSeek-V4 博客**的配方 `disagg-gb300-10p1d-dep4-dep32`，别跟 R1 混，见 §9.6 第 4 点。）
 
 ### 9.6 官方博客到这一步之后的下一步（Roadmap）
 lmsys/NVIDIA 拿到 226 TPS/GPU（128K/8K，无 MTP）之后的演进：
@@ -517,4 +533,4 @@ $K delete -f /tmp/sgl3-mem.yaml   # 连带删 ComputeDomain / Service / RCT
 
 ---
 
-*沉淀自 2026-07-19 实测。§2–§8 = 3P2D（20 GPU）干净复现，两次从零验证一致；§9 = 放大到 64 GPU 128K（warm 312 TPS/GPU 超官方 226 达 38%）+ §9.7 MTP（per-user 97→209 tok/s，2.15×）。全景消融见 §0.5，失败尝试全记录见 RUNLOG。未做的下一步：调 P:D 配比（10P1D 级）同时压 TTFT + Context Parallelism 替代 chunked PP。*
+*沉淀自 2026-07-19 实测。§2–§8 = 3P2D（20 GPU）干净复现，两次从零验证一致；§9 = 放大到 64 GPU 128K（warm 312 TPS/GPU 超官方 226 达 38%）+ §9.7 MTP（per-user 97→209 tok/s，2.15×）。全景消融见 §0.5，失败尝试全记录见 RUNLOG。R1 官方两大成果（226 baseline + MTP）已复现且超过，官方 R1 配置就是 8P+DEP32、与本文 Round 4 一致。未做的下一步：Context Parallelism 替代 chunked PP 降单请求 TTFT；再往后是换模型 DeepSeek-V4（10P1D recipe，另一条线）。*
