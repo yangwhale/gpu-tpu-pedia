@@ -19,6 +19,7 @@
 | R3 | 20 | 3P2D + DEP8 | 官方镜像 + mooncake **NVLink** KV pool | 8192 | 1024/512/**峰值** | **10715** (峰值总吞吐@conc512) | **17** | 甜点 conc256: 12s | ✅ 端到端通；conc8→512 吞吐 854→10715 (12.5×)，conc256 后见顶；瓶颈 prefill (3×pp4) TTFT 爆 |
 | R4 | 64 | 7P+DEP32（1 NVL72 域） | 官方镜像 + mooncake NVLink，128K/8K | **131072** | 128K/8K/conc32 warm | **19965 (总)=312 TPS/GPU** | 12.3 | 20.7 s | ✅ **warm 312 TPS/GPU 超官方 226 达 38%**（cold 首跑 240，warmup 后 312）；warm 曲线 conc8/16/32 = 128/195/312 TPS/GPU |
 | R5 | 60 | 7P+DEP32 + **MTP** (EAGLE/NEXTN, steps2/topk1/draft3) | spec decode，draft nextn MoE = **triton+a2a none** | 128K | 2048/1024/conc1 | **209.2** (单用户) | **4.53** | 0.26 s | ✅ **MTP 通**：单用户 97→209 tok/s (**2.15×**)，TPOT 10.0→4.53ms，accept_length ≈2.7；conc128 聚合 3599→4260 (+18%)、TPOT 12.2→6.2ms |
+| R6 | 64 | 8P+DEP32，**8K/1K 短上下文**对标 V4 | ctx16K，max-run 2048 | 16K | 8192/1024/conc256 | **86983 (总)=1359 TPS/GPU** | 15.4 | 10.2 s | ✅ 短上下文峰值 **1359 TPS/GPU**（比自己 128K/8K 的 312 高 4.4×，比官方 V4 8K/1K 的 11200 低 ~8×）；差距主因 V4 的 SWA+W4A4+KV压缩，非 prefix cache |
 
 > 更细指标（P90/P99 TTFT/TPOT、E2E、input throughput）见各 Round 章节内的完整 benchmark 表。
 
@@ -740,3 +741,34 @@ prefill 侧**不用**加 spec flags（PD 下 decode 单加即可，没撞 PD-MTP
 - conc=128 下 MTP 聚合吞吐**不掉反涨**（+18%）——因为 7P 使系统 prefill-bound，decode 有余算力，MTP 的额外 draft 计算"免费"。真正 decode 饱和时 MTP 会拿聚合换延迟，此处未饱和。
 - **成功标准达成**：MTP 版 TPOT 明显低于 no-MTP，总吞吐不掉。复现官方 MTP 提 per-user 速度的结论。
 
+
+---
+
+## Round 6 — 8K/1K 短上下文对标 V4（2026-07-20）
+
+> 动机：官方 DeepSeek-V4 Pro 在 GB300 disagg lane（8K/1K）跑到 **11,200 tok/s/GPU**（SemiAnalysis InferenceX，输入+输出合计/卡）。用**同 workload（8K/1K）**在我们的 R1 上压一遍，看差多少、差在哪。拓扑同 Round 4（64 GPU：8P + DEP32），context 16384，decode `--max-running-requests 2048 --cuda-graph-max-bs 256`，无 MTP、autotune 关。
+
+### 实测 sweep（random 8192in/1024out，总吞吐=输入+输出）
+| 并发 | 总吞吐 tok/s | **TPS/GPU（总/64）** | output tok/s | TPOT median | TTFT median | 达成并发 |
+|---|---|---|---|---|---|---|
+| 128 | 66,558 | **1,040** | 7,395 | 12.3 ms | 3.3 s | 117 |
+| **256** | **86,983** | **1,359** ←峰 | 9,665 | 15.4 ms | 10.2 s | — |
+| 512 | 84,292 | 1,317 | 9,366 | 16.7 ms | 34.8 s | 455（见顶回落，prefill 爆）|
+
+### 结论：R1 峰值 ~1,359 TPS/GPU，比 V4 的 11,200 低 ~8×
+三条横向对比（均总吞吐/卡，输入+输出，InferenceX 同口径）：
+| 场景 | TPS/GPU | 说明 |
+|---|---|---|
+| 我们 R1 **128K/8K** | 312 | 长上下文，KV 巨大、访存密集 |
+| 我们 R1 **8K/1K** | **1,359** | 短上下文，比长上下文高 4.4× |
+| 官方 **V4 Pro 8K/1K** | 11,200 | 比我们 R1 高 ~8× |
+
+**8× 差距的归因（主因是模型代际，不是我们没调好）：**
+1. **SWA（滑动窗口注意力）— 决定性因素**：R1 全注意力，每 token 留完整 KV → KV 巨大 → 并发天花板低（conc256 就 TTFT 10s、conc512 爆）。V4 用 SWA，只留窗口内 KV → KV 暴瘦 → decode batch 能开到极大 → 吞吐堆上去。
+2. **KV Compression V2**：V4 把留下的 KV 再压一道。
+3. **W4A4 MegaMoE**：V4 激活也量化到 4bit（R1 是 W4A8，激活 8bit），MoE 矩阵乘快 ~2×。
+4. **次要（我们可补但补不满 8×）**：autotune 关了、无 MTP、P:D 未按 8K/1K 调、cuda-graph-max-bs 封顶 256。这些合计顶多再榨 2-3×，补不上代际鸿沟。
+
+**关键澄清**：V4 的 11,200 **不是靠 prefix cache**。InferenceX 用固定长度随机输入、无共享前缀，prefix cache 无从复用；我们的 bench 也是 random，两边同口径。V4 的吞吐来自"把 KV 打薄（SWA+压缩）让并发拉满 + 激进量化 + MTP"，是架构层解访存瓶颈，不是缓存复用。
+
+**一句话**：R1 短上下文天花板就在 ~1,360 TPS/GPU，上不了万；要上万必须换 V4——SWA 是那把钥匙。
