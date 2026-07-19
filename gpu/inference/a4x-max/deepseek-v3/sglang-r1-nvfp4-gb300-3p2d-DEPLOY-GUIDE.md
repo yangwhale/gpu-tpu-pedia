@@ -4,7 +4,8 @@
 >
 > 本文是 [`sglang-r1-nvfp4-128k-gb300-RUNLOG.md`](./sglang-r1-nvfp4-128k-gb300-RUNLOG.md) 里 20+ 小时趟坑后的**干净沉淀版**——RUNLOG 记录所有失败尝试，本文只留一条走得通的路。
 >
-> **实测结果（3P2D / 20 GPU / ctx 8192 / random 1024in-512out）**：并发 8 时总吞吐 **854 tok/s**、TTFT 中位 **0.52 s**、TPOT **12.1 ms**。
+> **§2–§8：3P2D 基础配方（20 GPU / ctx8192）**，两次从零验证一致。**§9：放大到 64 GPU / 128K 长上下文**（warm 312 TPS/GPU，超官方 226 达 38%）+ 官方 Roadmap。
+> **实测（3P2D / 20 GPU / 1024in-512out）**：conc256 甜点 10.4k tok/s / TTFT 12s / TPOT 17ms。**实测（64 GPU / 128K-8K）**：conc32 warm 312 TPS/GPU / TPOT 12ms。
 
 ---
 
@@ -369,12 +370,67 @@ $K exec sgl3-p0 -- grep -iE "concurrency=|Total token|Output token|Median" /tmp/
 >
 > **启动小知识**：decode 起来前会刷 `DeepGEMM warmup: 0/65536`，初始 ETA 显示几十小时是**误导**——JIT 一热就到 ~1000 it/s，实际约 **1 分钟**跑完，别被吓到。
 
-- decode（NVLink KV pool）TPOT ~12ms 跨并发几乎不变 → NVLink 传 KV 无瓶颈。
-- 瓶颈是 **prefill 数量**：3×prefill 各 pp4，高并发排队。想压 TTFT → 加 prefill 副本 / prefill 改 tp。
+---
+
+## 9. 规模化：64 GPU 128K 长上下文（Round 4，对标官方 226 TPS/GPU）
+
+> 把 3P2D（20 GPU / ctx8192）放大到**满一个 NVL72 域（64 GPU / 128K）**，对标 lmsys GB300 博客的长上下文峰值。**初始化跟上面 §2–§7 一字不改**（官方镜像 + GIB + DOCA + bootstrap + mooncake NVLINK），只有下面几处 delta。
+
+### 9.1 拓扑：8P + DEP32（16 节点 / 64 GPU）
+- prefill：8 个（p0–p7），各单节点 pp4（同 3P2D 单 prefill）
+- decode：DEP32（tp32/dp32/ep32，**nnodes 8**，node-rank 0–7），8 节点
+- 全 16 节点在同一 subblock（`pool-0010` 实测 16 节点同域，KV 走域内 NVLink）
+
+### 9.2 相比 3P2D 的参数 delta
+| 参数 | 3P2D | **Round 4** |
+|---|---|---|
+| pod 数（gen-pods.py）| 5（p0-2,d0-1）| **16（p0-7,d0-7）**|
+| `--context-length` | 8192 | **131072** |
+| prefill chunked | `--chunked-prefill-size -1`（关）| **`--chunked-prefill-size 32768 --enable-dynamic-chunking`** |
+| decode tp/dp/ep | 8 | **32** |
+| decode `--nnodes` | 2 | **8** |
+| decode `--mem-fraction-static` | 0.80 | **0.75** |
+| decode `--max-running-requests` | 64 | **512** |
+| **prefill pod 内存 limit** | 800Gi | **900Gi**（req 880Gi）← 见坑 |
+
+### 9.3 三个新坑（Round 4 实测，务必照做）
+1. **prefill pod 必须 900Gi 内存，不能 800Gi**：128K prefill 进程加载期峰值 + 385G tmpfs 模型 > 800Gi → **OOMKilled**（exit 137）。提到 limit 900Gi / req 880Gi（节点 909Gi allocatable，放得下）。decode 保持 800Gi 够（KV 在 GPU）。
+2. **启动纪律：一个 pod 只启一次 prefill**。反复启动会**堆多个 python 进程**叠加 host 内存 → OOM → 容器重启**清空 /tmp**（prefill.sh 和 log 消失）→ 更乱。启动前 `pkill -9 python` 清干净，`kubectl cp prefill.sh` 后**必须 `wc -l` 校验落地**（cp 会静默失败），再 `nohup setsid bash ... & sleep 2; wc -l log` 确认启动。
+3. **16 pod 同时申请 DRA 会滞后**：部分 pod 卡 `ContainerCreating` 报 `ResourceClaim not created yet`（DRA controller 处理不过来）。删掉卡住的 pod + `kubectl apply` 重触发 claim 分配即可，可能重试 1-2 轮。
+
+### 9.4 启动（8 prefill + DEP32 decode）
+```bash
+# gen-pods.py 改 pods=[p0..p7]+[d0..d7]；prefill.sh 加 128K+chunked；decode.sh 改 tp/dp/ep32 nnodes8
+for i in 0 1 2 3 4 5 6 7; do $K cp /tmp/prefill4.sh sgl4-p$i:/tmp/prefill4.sh; done   # 逐个 wc -l 校验
+D0IP=$($K get pod sgl4-d0 -o jsonpath='{.status.podIP}')
+for i in 0 1 2 3 4 5 6 7; do $K exec sgl4-p$i -- bash -c 'nohup setsid bash /tmp/prefill4.sh >/tmp/prefill.log 2>&1 </dev/null &'; done
+for i in 0 1 2 3 4 5 6 7; do $K exec sgl4-d$i -- bash -c "nohup setsid bash /tmp/decode4.sh $i $D0IP:5757 >/tmp/decode.log 2>&1 </dev/null &"; done
+# router 用 8 prefill + 1 decode（同 §6，多 5 个 --prefill 行）
+```
+> decode DEP32 = 32 GPU 跨 8 节点 NCCL rendezvous + 128K graph capture + DeepGEMM warmup，启动比 DEP8 久（~5-8min），耐心等，别误判卡死。
+
+### 9.5 实测结果（128K/8K，7P+DEP32，warm）
+
+| 并发 | 总吞吐 tok/s | TPS/GPU（总/64）| TPOT median | TTFT median |
+|---|---|---|---|---|
+| 8 | 8195 | 128 | 11.7 ms | 13 s |
+| 16 | 12468 | 195 | 11.8 ms | 23 s |
+| **32** | **19965** | **312** | **12.3 ms** | 20.7 s |
+
+- **warm 峰值 312 TPS/GPU，超官方 226 达 38%**（cold 首跑仅 240——第一次编译/cache 未热，**benchmark 务必多跑几遍取 warm 值**）。
+- TPOT 全程 ~12ms（decode NVLink KV pool 稳）。
+- **TTFT 仍高于官方 8.6s**：官方 8.6s 是 conc=1 单请求测的；本配置 max-throughput 高并发下 prefill（只 7-8 个）排队 → 20-51s。想同时拿高吞吐 + 低 TTFT 要**加 prefill 副本 + 调 P:D 配比**（官方 GB300 disagg lane 用 **10 prefill** + Dynamo 编排，见 §11）。
+
+### 9.6 官方博客到这一步之后的下一步（Roadmap）
+lmsys/NVIDIA 拿到 226 TPS/GPU（128K/8K，无 MTP）之后的演进：
+1. **MTP（EAGLE spec decode）**（同篇博客）：per-user 吞吐 23→43 tok/s（**+87%**），TPS/GPU 维持峰值。← 我们的 Round 5。
+2. **同时压 TTFT + 高吞吐**：Context Parallelism（替代 chunked PP，无气泡降 TTFT）、DP load balancer、Wide-EP 更深 overlap、spec-aware 动态 draft token。
+3. **服务栈成熟化**：per-concurrency 配方分派、**P:D 配比调优（10P1D 级）**、Dynamo 编排（KV-aware 路由 + DP-rank 对齐）、breakable CUDA graph 覆盖 prefill。
+4. **换新模型 DeepSeek-V4**（2026-06 后续博客）：Day-0 支持 → 两个月内 kernel/runtime/bugfix 迭代，在 GB300 disagg lane（V4 Pro FP4，**8K/1K** workload，带 MTP）达 **11,200 tok/s/GPU @ ~50 tok/s/user**（Day-0 的 5×）。关键：MHC fusion、KV Compression V2、W4A4 MegaMoE、SWA budgeting、per-concurrency 配方。复现用 NVIDIA `srt-slurm` + Dynamo，配方 `disagg-gb300-10p1d-dep4-dep32`。
 
 ---
 
-## 9. 关键坑速查（为什么每步都不能省）
+## 10. 关键坑速查（为什么每步都不能省）
 
 | 现象 | 根因 | 解 |
 |---|---|---|
@@ -382,20 +438,22 @@ $K exec sgl3-p0 -- grep -iE "concurrency=|Total token|Output token|Median" /tmp/
 | `undefined symbol: c10_cuda_check_implementation` | NV NGC torch 改了 C10 ABI | 官方镜像的标准 torch 匹配，别用 nemo |
 | `NIXL_ERR_BACKEND` / RDMA backend 创建失败 | 官方 Ubuntu 镜像缺 CX-8 的 mlx5 verbs | 装 `doca-ofed-userspace`（§4 step 3）|
 | 单请求 60s 超时 / `KVTransferError: Aborted` | nixl 走 RoCE：GKE 是 RoCE v2 over IPv6，netdev 名 `gpuNipvlanM`，UCX 调不通 | **改走 NVLink**：`--disaggregation-transfer-backend mooncake` + `SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK` + `MC_FORCE_MNNVL=1` |
-| pod `Insufficient memory` Pending | 内存请求 > 节点 909Gi allocatable | request/limit 设 800Gi |
-| pod `Evicted` MemoryPressure/DiskPressure | 内存盘+模型超物理内存 / 节点叠加大镜像 | 内存盘 ≤500Gi + 用 fresh 节点池 |
+| pod `Insufficient memory` Pending | 内存请求 > 节点 909Gi allocatable | 3P2D 设 800Gi；128K prefill 设 900Gi（见下） |
+| prefill `OOMKilled`(exit137)反复重启、`/tmp` 被清 | 128K prefill 进程峰值 + 385G tmpfs 模型 > 800Gi | prefill limit 提到 **900Gi**（req880）；且**一 pod 只启一次**别堆进程（§9.3） |
+| pod `Evicted` MemoryPressure/DiskPressure | 内存盘+模型超物理内存 / 16节点叠加大镜像 | 内存盘 ≤500Gi + fresh 节点池 + 删重建（可能重试几轮）|
+| pod 卡 `ContainerCreating` 报 `ResourceClaim not created yet` | 16 pod 同时申请 DRA，controller 滞后 | 删卡住 pod + `apply` 重触发（§9.3）|
 | `pkill` 后 exit 137、server 没重启 | `pkill -f sglang.launch_server` 匹配到自己命令行 | 用 `pkill -9 python` |
-| `kubectl cp` 脚本被截断成几行 | cp 大文件/管道问题 | cp 后 `wc -l` 校验 |
+| `kubectl cp` 脚本没落地/截断 | cp 静默失败 | cp 后**必须** `wc -l` 校验 |
 
 ---
 
-## 10. 清理
+## 11. 清理
 
 ```bash
-$K delete pod sgl3-p0 sgl3-p1 sgl3-p2 sgl3-d0 sgl3-d1 --force --grace-period=0
+$K delete pod -l app=sgl3 --force --grace-period=0   # 或 app=sgl4
 $K delete -f /tmp/sgl3-mem.yaml   # 连带删 ComputeDomain / Service / RCT
 ```
 
 ---
 
-*沉淀自 2026-07-19 的 20+ 小时实测。失败尝试全记录见 RUNLOG。下一步（Round 4）：ctx8_dep32 占满一个 NVL72 域（64 GPU），prefill 加副本压 TTFT。*
+*沉淀自 2026-07-19 实测。§2–§8 = 3P2D（20 GPU）干净复现，两次从零验证一致；§9 = 放大到 64 GPU 128K（warm 312 TPS/GPU 超官方 226 达 38%）。失败尝试全记录见 RUNLOG。下一步（Round 5）：MTP 拉 per-user 吞吐（对标官方 23→43）+ 调 P:D 配比（10P1D 级）同时压 TTFT。*
