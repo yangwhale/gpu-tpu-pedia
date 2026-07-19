@@ -327,24 +327,36 @@ $K exec sgl3-p0 -- bash -c 'curl -s -m60 http://localhost:8000/v1/completions -H
 
 ## 8. Benchmark
 
+压并发才看得到真实吞吐（sweep）：
 ```bash
-$K cp /dev/stdin sgl3-p0:/tmp/bench.sh <<'EOF'
-python -m sglang.bench_serving --backend sglang-oai --host 127.0.0.1 --port 8000 \
-  --model deepseek-ai/DeepSeek-R1 --dataset-name random \
-  --random-input-len 1024 --random-output-len 512 \
-  --num-prompts 32 --max-concurrency 8
+$K cp /dev/stdin sgl3-p0:/tmp/sweep.sh <<'EOF'
+for C in 32 64 128; do
+  echo "===== concurrency=$C ====="
+  python -m sglang.bench_serving --backend sglang-oai --host 127.0.0.1 --port 8000 \
+    --model deepseek-ai/DeepSeek-R1 --dataset-name random \
+    --random-input-len 1024 --random-output-len 512 \
+    --num-prompts $((C*4)) --max-concurrency $C 2>&1 \
+    | grep -iE "Total token throughput|Output token throughput|Median TTFT|Median TPOT"
+done
 EOF
-$K exec sgl3-p0 -- bash /tmp/bench.sh 2>&1 | grep -iE "throughput|TTFT|TPOT|latency|concurrency"
+# 长跑，后台 + 轮询（exec 长连接会断）
+$K exec sgl3-p0 -- bash -c 'setsid bash /tmp/sweep.sh >/tmp/sweep.log 2>&1 </dev/null &'
+# ~8min 后：
+$K exec sgl3-p0 -- grep -iE "concurrency=|Total token|Output token|Median" /tmp/sweep.log
 ```
 
-**实测参考（本配置）**：
+**⚠️ 关键：benchmark 一定要压并发，别用 conc=8 汇报数字**（conc=8 只用到 DEP8 decode 容量的 ~3%，GB300 DEP8 理论可扛 ~288 并发）。并发 sweep（random 1024in/512out）：
 
-| 并发 | 总吞吐 tok/s | TTFT median | TPOT mean | 备注 |
-|---|---|---|---|---|
-| **8** | **854.7** | **517 ms** | **12.1 ms** | 健康工作点（首轮）|
-| 8（复现①）| — | **275 ms** | **9.9 ms** | 从零按本文重跑，指标一致 ✅ |
-| 8（复现②）| — | **268 ms** | **10.0 ms** | 再从零重跑，指标再次一致 ✅ |
-| 16 | 256.2 | 59.6 s | 11.5 ms | 3 prefill 被压爆，TTFT 长尾爆炸 |
+| 并发 | 总吞吐 tok/s | output tok/s | TPOT median | TTFT median | 备注 |
+|---|---|---|---|---|---|
+| 8 | 854 | 340 | 10 ms | 0.5 s | 严重欠载，别拿这个数字汇报 |
+| 32 | 4635 | 1538 | 15 ms | 0.5 s | |
+| 64 | 5265 | 1797 | 16 ms | 2.5 s | |
+| **128** | **6878** | **2297** | **17 ms** | 8.4 s | 8× conc8，仍在涨；prefill 开始成瓶颈 |
+
+- **conc8→128 吞吐涨 8 倍**，TPOT 只从 10→17ms。decode（NVLink KV pool）远没到顶。
+- conc128 时 TTFT 涨到 8.4s → **瓶颈是 prefill（3×pp4）**，不是 decode。要继续压吞吐/降 TTFT：加 prefill 副本或 prefill 改 tp（Round 4）。
+- **对标官方**：lmsys GB300 博客 226 TPS/GPU 是 **128K/8K 长上下文**（decode 主导），本配置 ctx 只开 8192、短上下文 1024/512 是 prefill 偏重的不同 regime，数字不可直接对比；本配置 conc128 达 ~344 tok/s/GPU（总）/ 115 output tok/s/GPU。
 
 > **本文已端到端复现验证 ×2**：2026-07-19 按本文**两次**从零起全新 pod（每次删光重来），均一次通到 benchmark，中位 TTFT 268-275ms / TPOT 9.9-10.0ms，三次结果一致。除拉镜像偶发 DiskPressure（删重建即可，见 §3.2）外，**零功能改动**。
 >
