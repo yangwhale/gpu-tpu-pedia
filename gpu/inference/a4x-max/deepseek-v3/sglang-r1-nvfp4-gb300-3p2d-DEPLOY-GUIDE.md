@@ -172,8 +172,29 @@ $K get pods -o wide | grep sgl3
 $K exec sgl3-p0 -- nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader   # 预期 NVIDIA GB300, 10.3
 $K exec sgl3-p0 -- ls /dev/infiniband        # 预期 uverbs0..7（8 张 HCA）
 $K exec sgl3-p0 -- ls /dev/nvidia-caps-imex-channels/ | head -1   # 预期 channel0（ComputeDomain 生效）
-$K exec sgl3-p0 -- df -h /mnt/ssd /dev/shm   # 预期 tmpfs 500G / 64G
+$K exec sgl3-p0 -- df -h /mnt/ssd /dev/shm   # 内存盘方案见默认；Local SSD 方案见 §3.3
 ```
+
+### 3.3 存储方案：Local SSD RAID（推荐，替代内存盘）★
+
+> 默认 §3.1 的 gen-pods.py 把模型放**内存盘**（`emptyDir medium:Memory`）——385G 模型吃 385G pod RAM。对 R1 够用，但 **V4-Pro 800G + 运行时会撑爆 942G 节点内存**。改用 **Local SSD RAID**：模型放盘不吃 RAM，读 14 GB/s，且**跨 pod 重启持久**（不用重下）。
+> 前置：先按 [`../deepseek-v4/gb300-local-ssd-raid0-SETUP.md`](../deepseek-v4/gb300-local-ssd-raid0-SETUP.md) 部署 `gke-raid-disks` DaemonSet，把每节点 4 块 Local SSD 做成 12T RAID0 挂到 host `/mnt/disks/raid/0`。
+
+**gen-pods.py 里两处改动**：
+```python
+# 1) ssd 卷：内存盘 → Local SSD hostPath
+#   原:  {"name":"ssd","emptyDir":{"medium":"Memory","sizeLimit":"500Gi"}}
+#   改:  {"name":"ssd","hostPath":{"path":"/mnt/disks/raid/0","type":"Directory"}}
+#      对应 volumeMounts 加 mountPropagation: HostToContainer
+# 2) 内存 request/limit：800Gi → 600Gi（模型不再进 RAM，但加载时 sglang 仍把权重读进 host 缓冲，留够峰值）
+```
+
+**bootstrap（§4）不变**：`gcloud storage cp` 目标仍是 `/mnt/ssd/`（现在背后是 Local SSD 而非 tmpfs）。实测 cp GCS→Local SSD **73s @ 5.4 GiB/s**（385G）。
+
+**实测（单节点 TP4 冒烟，2026-07-20）**：
+- cp 73s → 从 Local SSD 加载 sglang → 端到端生成正确（" Paris..."）。
+- 模型跨 pod 删除重建**持久存活**（host 级 Local SSD），省去重下。
+- **⚠️ 内存坑**：request 设 **200Gi 会 OOMKilled**（exit 137）——加载时 sglang 把 385G 权重读进 host 缓冲峰值超了。**用 ≥600Gi**（仍比 800Gi 省，且模型不常驻 RAM）。
 
 ---
 
