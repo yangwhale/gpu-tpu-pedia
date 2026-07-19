@@ -17,7 +17,7 @@
 | R1 | 4 | 单节点 TP4 | 无 PD | 8192 | 功能验证（未跑 bench） | — | — | — | 加载+生成通，`<think>` 正常 |
 | R2 | 8 | 2节点 1P1D | prefill×1 + decode×1，nixl/CX-8 | 8192 | 1024/512/16/48 | **407.9** | **9.2** | 1.6 s | decode 快，prefill 瓶颈（Mean TTFT 7.4s） |
 | R3 | 20 | 3P2D + DEP8 | 官方镜像 + mooncake **NVLink** KV pool | 8192 | 1024/512/**峰值** | **10715** (峰值总吞吐@conc512) | **17** | 甜点 conc256: 12s | ✅ 端到端通；conc8→512 吞吐 854→10715 (12.5×)，conc256 后见顶；瓶颈 prefill (3×pp4) TTFT 爆 |
-| R4 | 64 | ctx8_dep32（1 NVL72 域） | xPyD 大规模 | 8192→128K | *(待跑)* | — | — | — | 对标博客 226 TPS/GPU |
+| R4 | 64 | 7P+DEP32（1 NVL72 域） | 官方镜像 + mooncake NVLink，128K/8K | **131072** | 128K/8K/conc32 | **15399 (总)=240 TPS/GPU** | 11.9 | 51 s (prefill 瓶颈) | ✅ **总 TPS/GPU 240 ≥ 官方 226**；TTFT 高因只 7 prefill，加 prefill/调 P:D 可降 |
 | R5 | 64 | + MTP (EAGLE) | spec decode | 128K | *(待跑)* | — | — | — | 目标：拉 TPS/User |
 
 > 更细指标（P90/P99 TTFT/TPOT、E2E、input throughput）见各 Round 章节内的完整 benchmark 表。
