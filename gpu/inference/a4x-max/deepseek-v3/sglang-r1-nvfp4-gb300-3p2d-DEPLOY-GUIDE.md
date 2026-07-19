@@ -4,8 +4,8 @@
 >
 > 本文是 [`sglang-r1-nvfp4-128k-gb300-RUNLOG.md`](./sglang-r1-nvfp4-128k-gb300-RUNLOG.md) 里 20+ 小时趟坑后的**干净沉淀版**——RUNLOG 记录所有失败尝试，本文只留一条走得通的路。
 >
-> **§2–§8：3P2D 基础配方（20 GPU / ctx8192）**，两次从零验证一致。**§9：放大到 64 GPU / 128K 长上下文**（warm 312 TPS/GPU，超官方 226 达 38%）+ 官方 Roadmap。
-> **实测（3P2D / 20 GPU / 1024in-512out）**：conc256 甜点 10.4k tok/s / TTFT 12s / TPOT 17ms。**实测（64 GPU / 128K-8K）**：conc32 warm 312 TPS/GPU / TPOT 12ms。
+> **§0.5：全景消融总览**（每一步开了什么、收益、原理，一目了然）。**§2–§8：3P2D 基础配方（20 GPU / ctx8192）**，两次从零验证一致。**§9：放大到 64 GPU / 128K 长上下文**（warm 312 TPS/GPU，超官方 226 达 38%）+ **§9.7 MTP**（per-user 2.15×）+ 官方 Roadmap。
+> **实测（3P2D / 20 GPU / 1024in-512out）**：conc256 甜点 10.4k tok/s / TTFT 12s / TPOT 17ms。**实测（64 GPU / 128K-8K）**：conc32 warm 312 TPS/GPU / TPOT 12ms。**实测（MTP / 2048-1024）**：单用户 97→209 tok/s / TPOT 减半。
 
 ---
 
@@ -27,6 +27,25 @@
 
 - **5 节点全部在同一个 NVL72 subblock**（podAffinity 强制），所以 prefill 算完的 KV 可以直接经 **NVLink** 传给 decode，绕开 RoCE。
 - prefill 计算密集（pp4 摊显存）、decode 访存密集（DP-Attention + Wide-EP DEP8）。
+
+---
+
+## 0.5 全景消融：每一步开了什么 · 收益 · 原理（一目了然）
+
+这份配方不是一次配好的，是一步步加东西试出来的。每加一个开关，测一次，看它带来什么收益。下表是整个演进链（R1→R5），**看这张表就懂为什么每个参数都在**：
+
+| 步骤 | 开启 / 改动 | 关键收益（实测） | 背后原理 |
+|---|---|---|---|
+| **① Base** (R1, 4 GPU) | 单节点 TP4 加载 R1-NVFP4（`modelopt_fp4` + `trtllm_mla` + fp8 KV） | 功能通，`<think>` 正常 | NVFP4 权重把 671B 压到单节点能放；trtllm_mla 是 GB300 上 MLA 的最快 attention kernel |
+| **② PD 分离** (R2, 8 GPU) | prefill / decode 拆成两个独立 server（1P1D） | decode 专用化，**TPOT 9.2ms（~109 tok/s/user）** | prefill 算力密集、decode 访存密集，两者放一起互相拖累；拆开各自选最优并行 + 各自吃满硬件 |
+| **③ NVLink KV pool** (R3 关键突破) | KV 传输从 RoCE 改 `mooncake` **NVLINK** pool（`MC_FORCE_MNNVL=1`） | KV 直传**不再超时**，端到端跑通 | GKE 的 RoCE 是 IPv6 over `gpuNipvlanM`，UCX/nixl 调不通；同 subblock 内走 NVLink C2C，带宽高一个量级还绕开这坑 |
+| **④ Wide-EP (DEP8)** (R3) | decode 上 DP-Attention + Wide-EP `deepep` low_latency，8 卡铺专家 | 吞吐 conc8→512 拉到 **10,715 tok/s（12.5×）** | expert 分散到更多 GPU，每卡只算部分专家 → 单卡显存/算力压力降 → 能塞更大 batch |
+| **⑤ DEP32 + 128K** (R4, 64 GPU) | Wide-EP 铺到 32 卡 + `context 8K→128K` + `chunked-prefill 32K` | **warm 312 TPS/GPU（超官方 226 达 38%）** | 更宽 EP 摊更大 KV；chunked 把长 prompt 沿 seq 切成块，causal attention 让每块 KV 精确可缓存，避免 128K 一次性爆显存 |
+| **⑥ MTP** (R5) | decode 加 EAGLE spec decode（`num-steps 2 / topk 1 / draft 3`） | 单用户 **97→209 tok/s（2.15×）**，TPOT 10→4.5ms | draft(nextn) 一次猜多个 token，target 并行**验证**，猜对的直接采纳 → 一个 decode step 平均出 ~2.7 个 token 而非 1 |
+
+> **一句话串起来**：NVFP4 让模型放得下 → PD 分离让 decode 专用化 → NVLink KV 让分离真正跑通 → Wide-EP 把吞吐堆上去 → 128K 支撑长上下文 → MTP 把单用户速度翻倍。**③ 是从"跑不通"到"跑通"的转折点，⑥ 是延迟收益最大的一步。**
+
+> **注意各步 benchmark 的 workload 不同**（③④是 1024/512 短上下文压吞吐、⑤是 128K/8K 长上下文、⑥是 2048/1024 测 per-user），数字不能跨步直接比大小，要看**各自相对基线的收益倍数**。完整逐 Round 数据见 [RUNLOG](./sglang-r1-nvfp4-128k-gb300-RUNLOG.md) 顶部总表。
 
 ---
 
@@ -423,7 +442,7 @@ for i in 0 1 2 3 4 5 6 7; do $K exec sgl4-d$i -- bash -c "nohup setsid bash /tmp
 
 ### 9.6 官方博客到这一步之后的下一步（Roadmap）
 lmsys/NVIDIA 拿到 226 TPS/GPU（128K/8K，无 MTP）之后的演进：
-1. **MTP（EAGLE spec decode）**（同篇博客）：per-user 吞吐 23→43 tok/s（**+87%**），TPS/GPU 维持峰值。← 我们的 Round 5。
+1. **MTP（EAGLE spec decode）**（同篇博客）：per-user 吞吐 23→43 tok/s（**+87%**），TPS/GPU 维持峰值。← **我们的 Round 5，✅ 已做，见 §9.7（实测 2.15×）**。
 2. **同时压 TTFT + 高吞吐**：Context Parallelism（替代 chunked PP，无气泡降 TTFT）、DP load balancer、Wide-EP 更深 overlap、spec-aware 动态 draft token。
 3. **服务栈成熟化**：per-concurrency 配方分派、**P:D 配比调优（10P1D 级）**、Dynamo 编排（KV-aware 路由 + DP-rank 对齐）、breakable CUDA graph 覆盖 prefill。
 4. **换新模型 DeepSeek-V4**（2026-06 后续博客）：Day-0 支持 → 两个月内 kernel/runtime/bugfix 迭代，在 GB300 disagg lane（V4 Pro FP4，**8K/1K** workload，带 MTP）达 **11,200 tok/s/GPU @ ~50 tok/s/user**（Day-0 的 5×）。关键：MHC fusion、KV Compression V2、W4A4 MegaMoE、SWA budgeting、per-concurrency 配方。复现用 NVIDIA `srt-slurm` + Dynamo，配方 `disagg-gb300-10p1d-dep4-dep32`。
@@ -498,4 +517,4 @@ $K delete -f /tmp/sgl3-mem.yaml   # 连带删 ComputeDomain / Service / RCT
 
 ---
 
-*沉淀自 2026-07-19 实测。§2–§8 = 3P2D（20 GPU）干净复现，两次从零验证一致；§9 = 放大到 64 GPU 128K（warm 312 TPS/GPU 超官方 226 达 38%）。失败尝试全记录见 RUNLOG。下一步（Round 5）：MTP 拉 per-user 吞吐（对标官方 23→43）+ 调 P:D 配比（10P1D 级）同时压 TTFT。*
+*沉淀自 2026-07-19 实测。§2–§8 = 3P2D（20 GPU）干净复现，两次从零验证一致；§9 = 放大到 64 GPU 128K（warm 312 TPS/GPU 超官方 226 达 38%）+ §9.7 MTP（per-user 97→209 tok/s，2.15×）。全景消融见 §0.5，失败尝试全记录见 RUNLOG。未做的下一步：调 P:D 配比（10P1D 级）同时压 TTFT + Context Parallelism 替代 chunked PP。*
