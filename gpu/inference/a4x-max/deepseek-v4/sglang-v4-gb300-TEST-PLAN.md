@@ -240,29 +240,67 @@ done'
 
 ---
 
-### Phase 3：PD-disagg + MegaMoE W4A4 + SWA（冲吞吐）
-- 拓扑参考官方 `10P1D-dep4-dep32`（10 prefill 各 TP4/DP4/EP4 + decode DEP32 8节点）。**我们可先缩小到 4P1D 或 8P + DEP32 试**（跟 R1 Round4 同规模，省节点）。
-- decode 关键参数（来自官方 recipe）：
-  ```
-  --moe-a2a-backend megamoe --enable-dp-attention --enable-dp-lm-head \
-  --tp-size 32 --dp-size 32 --ep-size 32 --swa-full-tokens-ratio 0.20 \
-  --context-length 9216 --mem-fraction-static 0.94 \
-  --max-running-requests 18432 --cuda-graph-max-bs 1280 \
-  --disaggregation-mode decode --disaggregation-transfer-backend mooncake
-  ```
-- W4A4 MegaMoE env：`SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=8192`
-- SWA env：`SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1 SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN=1 SGLANG_OPT_USE_ONLINE_COMPRESS=1`
-- + mooncake NVLINK（同 R1）。
-- **编排**：先用 sglang_router（我们熟）跑通；要严格复现官方再上 Dynamo。
+### Phase 3：PD-disagg 满配 + 逐项消融（冲官方 11,200 tok/s/GPU）
 
-### Phase 4：Benchmark 8K/1K + 三方对比
-- 同口径（total in+out /GPU，random 8192/1024）：
-  | 对象 | TPS/GPU |
-  |---|---|
-  | 我们 R1 8K/1K（已测）| 1,359 |
-  | 我们 V4 8K/1K（本计划目标）| ? |
-  | 官方 V4 Pro 8K/1K | 11,200 |
-- 逐步开关做消融：先 no-MegaMoE → +W4A4 → +MTP，看每步收益。
+> **官方 11,200 的真相**（核对 pytorch blog 2026-06-23 + SemiAnalysis InferenceX）：GB300 **disaggregated** lane、V4-Pro FP4、ISL=8192/OSL=1024、dynamo-sglang、**2026-06 带 MTP 曲线**，在 **~50 tok/s/user** 交互点达 **~11,200 tok/s/GPU**；对比 Day-0（2026-04）no-MTP 的 ~2,200，两个月 **5×**。这 5× 不是单点，是整条曲线抬升。官方 recipe：`disagg-gb300-10p1d-dep4-dep32-18-c2500.yaml`（srt-slurm + Dynamo 起）。
+
+#### 3.0 消融方法论（本阶段最高原则）
+
+- **锁死拓扑做 baseline**：整个消融**全程固定** `10P1D-dep4-dep32`（P/D 数量、并行度、workload 全不变），**只逐项翻软件开关**。绝不拿不同 P/D 数量的两个 run 对比——那不可比。
+- **一次只加一样**，拿到干净的 per-step delta，每招值多少 tok/s 心里有数。
+- 全程同口径：8K/1K（random 8192/1024，range-ratio 1.0）、同并发扫描、warm 值、`total(in+out) ÷ 72 GPU`。
+
+#### 3.1 拓扑（固定，官方 10P1D-dep4-dep32）
+
+| 角色 | 实例 | 每实例并行 | 节点 | GPU |
+|---|---|---|---|---|
+| Prefill | 10 | TP4 / DP4 / EP4（1 节点 4 GPU）| 10 | 40 |
+| Decode | 1 | DEP32（TP32 / DP32 / EP32）| 8 | 32 |
+| **合计** | — | — | **18** | **72** |
+
+- **P:D = 10:8（机器）**——prefill 多，因 8K 输入是算力瓶颈，多铺机器摊 prefill；decode 集中成一坨 wide-EP 吃并发。
+- **decode 32 卡走域内 NVLink**（mooncake `MC_FORCE_MNNVL=1`），**18 节点必须同一 NVL72 域**，否则跨域 NVLink KV 传输不通。
+
+#### 3.0-prereq 域与存储（开跑前必须就位）
+
+- **域**：用 **`subblock-0002`（= `gb300-pool-0002`）——实测 18/18 节点 ready + 全 `team=yangwhale`，一个完整 NVL72 域**。这是能跑 10P1D-dep4-dep32 的前提（pool-0007=17、pool-0010 只 13 台 yangwhale，都不足一域）。
+- **Local SSD RAID**：给 pool-0002 部署 `gke-raid-disks` DaemonSet，逐节点 `grep -c md0 /proc/mdstat` 全 =1；**先验无 `mnt-disks-ssdN.mount` 残留污染**（见 RAID-SETUP 坑速查）。
+- **权重**：18 节点各 `gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-V4-Pro-NVFP4 /mnt/ssd/`（只读 scope 够）。
+- **bootstrap**：GIB + DOCA + gcloud（同 R1 §4）。
+- **编排**：先用 sglang_router（我们熟）跑通；严格复现官方再上 Dynamo。
+
+#### 3.2 消融 run 序列（固定 3.1 拓扑，逐项叠加）
+
+| Run | 相对上一步新增 | MoE backend | 激活精度 | SWA/压缩 | MTP | 目的 |
+|---|---|---|---|---|---|---|
+| **A** baseline | — | `deepep` | W4A8 | 关 | 关 | 拿底线 |
+| **B** +MegaMoE | `--moe-a2a-backend megamoe` | megamoe | W4A8 | 关 | 关 | MegaMoE 融合 kernel 收益 |
+| **C** +W4A4 | `USE_FP4_ACTS=1` `USE_MXF4_KIND=1` | megamoe | **W4A4** | 关 | 关 | 激活也 4bit（官方最大一跳）|
+| **D** +SWA | `SGLANG_OPT_SWA_*` + `USE_ONLINE_COMPRESS=1` | megamoe | W4A4 | **开** | 关 | SWA 预算 + online 压缩，decode 更大 batch |
+| **E** +MTP（=满配终极）| `--speculative-algorithm EAGLE ...` | megamoe | W4A4 | 开 | **开** | 官方满配，对标 11,200 |
+
+- **每个 run 输出**：conc 扫描（1 / 16 / 64 / 128 …推到 c2500）的 tok/s/GPU + TPOT + TTFT，记录到 §7 消融表。
+- **注意**：MegaMoE 只在 `high-throughput` recipe 生效（Blackwell only）；跑 MegaMoE 时**别手动设** `--moe-runner-backend`。W4A4 `NUM_MAX_TOKENS_PER_RANK` 高吞吐建议 **8320**（HBM 够才调高）。
+- **DeepEP 约束**：`max-running-requests × MTP_draft_tokens ≤ SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK`，调并发三值一起动（违反炸 `deep_ep.cpp:1105`）。
+
+#### 3.3 decode / prefill 关键参数（官方 recipe）
+
+decode（DEP32）：
+```
+--moe-a2a-backend megamoe --enable-dp-attention --enable-dp-lm-head \
+--tp-size 32 --dp-size 32 --ep-size 32 --swa-full-tokens-ratio 0.20 \
+--context-length 9216 --mem-fraction-static 0.94 \
+--max-running-requests 18432 --cuda-graph-max-bs 1280 \
+--disaggregation-mode decode --disaggregation-transfer-backend mooncake
+```
+- W4A4 env：`SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=8320`
+- SWA env：`SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1 SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN=1 SGLANG_OPT_USE_ONLINE_COMPRESS=1`
+- MTP（Run E）：`--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`（draft MoE bf16，需 `--speculative-moe-runner-backend triton --speculative-moe-a2a-backend none`，同 R1 MTP 坑）
+- mooncake NVLINK（同 R1）：`MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`（prefill + decode 都加）
+
+### Phase 4：汇总消融报告 + 三方对比
+- 把 Run A→E 的 per-step delta 汇成消融表（见 §7.4 模板），得出「每招值多少 tok/s/GPU」。
+- 与官方 11,200 对标，分析剩余 gap（Dynamo vs router、c2500 并发是否压满、EPLB/Waterfill 等未开项）。
 
 ---
 
@@ -298,7 +336,7 @@ done'
 - [ ] **Local SSD RAID 就位**：`gke-raid-disks` DaemonSet 部署，逐节点 `grep -c md0 /proc/mdstat` 全 =1
 - [ ] pod ssd 卷 = hostPath `/mnt/disks/raid/0`（HostToContainer），内存 request 600Gi
 - [ ] 确认 `lmsysorg/sglang:latest`（或 nightly-dev-cu13）含 sm_103a
-- [ ] 集群池有空闲节点（Phase1 只需 1 台；Phase3 需 ~9-18 台）
+- [ ] Phase3 满配需 **18 节点同一 NVL72 域**（实测 `subblock-0002`/pool-0002 = 18/18 ready + 全 yangwhale）；decode DEP32 跨域走不了 NVLink
 - [x] V4-Flash / Pro NVFP4 checkpoint 备份到 GCS（`gs://chrisya-gb300-models/DeepSeek-V4-Flash-NVFP4` 168G / `-Pro-NVFP4` 913G），bootstrap 时 `gcloud cp` **到 Local SSD `/mnt/ssd`**
 - [x] Phase 1（Flash）+ Phase 2（Pro）单节点冒烟 + 压测通过 → 下一步 Phase 3 规模
 - [ ] benchmark 用同口径（total in+out /GPU，8K/1K，warm 值）；`input-len +1 BOS` 且 `input+output ≤ context-length`
@@ -340,6 +378,20 @@ done'
 2. **Flash 单节点就碾压 R1 64 卡 6.3×**（8540 vs 1359）——V4 架构（CSA+HCA 打薄 KV + SWA）在同 workload 下每 token 效率远超 R1 全注意力。
 3. **Pro 单节点距官方 11,200 差 4.0×**——差距全在部署形态：官方是 18 节点 PD-disagg（prefill 独立扩展消化长 input）+ MegaMoE W4A4（激活也 4bit，矩阵乘快 ~2×）+ SWA。单节点 4 卡扛 1.6T 的 prefill，conc64 TTFT 已到 9.8s（瓶颈在 prefill），这正是 Phase 3 要解的。
 4. **交互性**：Pro conc1 TPOT 10.44ms ≈ 96 tok/s/user，Flash 5.71ms ≈ 175 tok/s/user，都远快于人眼阅读速度，单用户体验流畅。
+
+### 7.4 Phase 3 消融表（待填，固定 10P1D-dep4-dep32 / subblock-0002 / 72 GPU / 8K-1K）
+
+> 全程同拓扑，逐项叠加；峰值 tok/s/GPU 取 conc 扫描最优点。Δ = 相对上一 run 的增量。
+
+| Run | 配置 | 峰值 tok/s/GPU | Δ vs 上一步 | 最优并发 | TPOT@50tok/s/user | 备注 |
+|---|---|---|---|---|---|---|
+| A baseline | deepep / W4A8 | — | — | — | — | 底线 |
+| B +MegaMoE | megamoe / W4A8 | — | — | — | — | |
+| C +W4A4 | megamoe / W4A4 | — | — | — | — | 官方最大一跳 |
+| D +SWA | +SWA预算+online压缩 | — | — | — | — | decode batch↑ |
+| E +MTP（满配）| +EAGLE MTP | — | — | — | — | 对标官方 11,200 |
+
+对标：官方 GB300 disagg V4-Pro FP4 8K/1K @~50 tok/s/user = **11,200 tok/s/GPU**（Day-0 no-MTP ~2,200）。
 
 ---
 
