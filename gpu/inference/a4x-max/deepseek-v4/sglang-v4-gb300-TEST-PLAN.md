@@ -269,6 +269,13 @@ done'
 - **bootstrap**：GIB + DOCA + gcloud（同 R1 §4）。
 - **编排**：先用 sglang_router（我们熟）跑通；严格复现官方再上 Dynamo。
 
+> **✅ 3.0 准备实录（2026-07-20）**：
+> 1. **RAID**：`gke-raid-disks-0002` DaemonSet 部署到 pool-0002，**18/18 节点 RAID_READY**（12T `/mnt/disks/raid/0`）。
+> 2. **权重预拉**：`v4pro-puller-0002` DaemonSet（`gcloud storage cp -r` 从 GCS 到各节点 Local SSD），**18/18 节点各 851G / 76 文件**。node 只读 scope 足够读 GCS。
+> 3. **踩坑 & 修复**：
+>    - **Bug 1（puller 镜像 amd64）**：首版 puller 用 `google/cloud-sdk:slim`，GB300 arm64 报 `exec format error`。修：换 `ubuntu:24.04` + apt 装 `google-cloud-cli`（同 RAID DS 的 arm64 坑）。
+>    - **Bug 2（1 节点 lt06 RAID inactive，256K tmpfs）**：`/proc/mdstat` 见 md0 **inactive**（旧 mdadm superblock 把 4 盘拆成 md0+md127 两坏数组），mount 报 `can't read superblock`，DS 无 `set -e` 假 RAID_READY。修：**live 清**（不用重建节点）——RAID DS pod 里 `mdadm --stop md0/md127` + `--zero-superblock` 全盘 + 重 create/mkfs/mount，再删该节点 puller 重拉。详见 [RAID-SETUP 坑速查 B 类](./gb300-local-ssd-raid0-SETUP.md#5-坑速查)。
+
 #### 3.2 消融 run 序列（固定 3.1 拓扑，逐项叠加）
 
 | Run | 相对上一步新增 | MoE backend | 激活精度 | SWA/压缩 | MTP | 目的 |
