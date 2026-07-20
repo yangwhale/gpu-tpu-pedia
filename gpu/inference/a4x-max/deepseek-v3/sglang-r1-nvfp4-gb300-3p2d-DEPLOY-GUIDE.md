@@ -74,7 +74,8 @@
 | 集群已装 | DRA GPU driver（ComputeDomain/IMEX）、DRANET `mrdma.google.com`、asapd-lite DaemonSet、`ar-pull-secret`（CronJob 自动刷新） | 见 `../03-gpu-stack/`、`../12-self-managed-k8s/` |
 | 模型 | `gs://chrisya-gb300-models/DeepSeek-R1-0528-NVFP4-v2`（US-CENTRAL1，385G / 163 safetensors） | 与集群同区，`gcloud storage cp` 快 |
 | GIB 包 | `gs://chrisya-gb300-models/gib-a4xmax.tgz`（16MB，从 nemo 镜像 `/usr/local/gib` 打包） | 官方 SGLang 镜像不带 GIB，需注入 |
-| 节点物理内存 | **942 GiB**（allocatable ~909 Gi） | 内存盘 + pod 请求不能超 |
+| **Local SSD RAID** | 每节点 4× Local NVMe SSD → RAID0 12T 挂 `/mnt/disks/raid/0` | **模型存这（不放内存盘）**。先部署 `gke-raid-disks` DaemonSet，见 [`../deepseek-v4/gb300-local-ssd-raid0-SETUP.md`](../deepseek-v4/gb300-local-ssd-raid0-SETUP.md) |
+| 节点物理内存 | **942 GiB**（allocatable ~909 Gi） | RAM 留给运行时 + KV cache；模型在 Local SSD 不占 RAM |
 
 > 下文所有 `kubectl` 简写为 `K`：`K="$HOME/google-cloud-sdk/bin/kubectl --context=gke_tencent-gcp-taiji-poc_us-central1_gb300-gke-test"`（在 glinux 上）。
 
@@ -132,14 +133,15 @@ for name in ["sgl3-p0","sgl3-p1","sgl3-p2","sgl3-d0","sgl3-d1"]:
            "topologyKey":"kubernetes.io/hostname"}]}},
       "imagePullSecrets":[{"name":"ar-pull-secret"}],  # 公开镜像其实不需要，留着无害
       "containers":[{"name":"sglang","image":IMAGE,"securityContext":{"privileged":True},
-        "resources":{"limits":{"nvidia.com/gpu":4,"memory":"800Gi"},"requests":{"memory":"800Gi"},
+        "resources":{"limits":{"nvidia.com/gpu":4,"memory":"600Gi"},"requests":{"memory":"600Gi"},
           "claims":[{"name":"req-mrdma"},{"name":"compute-domain-channel"}]},
-        "volumeMounts":[{"name":"ssd","mountPath":"/mnt/ssd"},{"name":"shm","mountPath":"/dev/shm"}],
+        # ssd 用 Local SSD RAID（hostPath），HostToContainer 才能看到 DaemonSet 的挂载
+        "volumeMounts":[{"name":"ssd","mountPath":"/mnt/ssd","mountPropagation":"HostToContainer"},{"name":"shm","mountPath":"/dev/shm"}],
         "env":[{"name":"GLOO_SOCKET_IFNAME","value":"eth0"},{"name":"NCCL_SOCKET_IFNAME","value":"eth0"}],
         "command":["sleep","infinity"]}],
       "volumes":[
-        # 内存盘放模型（385G）。sizeLimit 是运行时上限，不计入调度
-        {"name":"ssd","emptyDir":{"medium":"Memory","sizeLimit":"500Gi"}},
+        # 模型放 Local SSD RAID（12T，读14GB/s，不吃 RAM，跨 pod 持久）。前置：gke-raid-disks DaemonSet（见 §1 / RAID-SETUP 文档）
+        {"name":"ssd","hostPath":{"path":"/mnt/disks/raid/0","type":"Directory"}},
         {"name":"shm","emptyDir":{"medium":"Memory","sizeLimit":"64Gi"}}],
       "resourceClaims":[
         {"name":"req-mrdma","resourceClaimTemplateName":"sgl3-mrdma"},
@@ -148,7 +150,10 @@ yaml.safe_dump_all(docs, open("/tmp/sgl3-mem.yaml","w"), sort_keys=False)
 print("generated /tmp/sgl3-mem.yaml")
 ```
 
-> **内存关键（坑 22）**：节点物理内存 942 GiB（allocatable ~909 Gi）。pod `requests.memory` 设 **800Gi**（含模型 385G tmpfs + sglang 运行时，留余量）。设 1200Gi 会 `Insufficient memory` Pending，甚至 MemoryPressure Evict。tmpfs `sizeLimit` 只在运行时限制、不计入调度。
+> **内存关键**：模型放 **Local SSD**（不进 RAM），pod `requests.memory` 只需覆盖 **sglang 运行时 + 加载时权重缓冲峰值** → 设 **600Gi**（节点 909Gi allocatable，留出 RAM 给 KV cache / 未来 HiCache CPU offload）。
+> - **别把权重放内存盘**（`emptyDir medium:Memory`）：385G 模型吃 385G RAM，纯浪费——内存要留给 KV cache。
+> - **⚠️ 加载峰值坑**：设 **200Gi 会 OOMKilled**（exit 137）——sglang 加载时把权重读进 host 缓冲，峰值超了。这是加载瞬时占用，非常驻；用 ≥600Gi 留够。
+> - **前置**：Local SSD RAID 必须先就位（`/mnt/disks/raid/0`），见 §1 前置 + [`../deepseek-v4/gb300-local-ssd-raid0-SETUP.md`](../deepseek-v4/gb300-local-ssd-raid0-SETUP.md)。
 
 ### 3.2 部署
 
@@ -172,29 +177,20 @@ $K get pods -o wide | grep sgl3
 $K exec sgl3-p0 -- nvidia-smi --query-gpu=name,compute_cap --format=csv,noheader   # 预期 NVIDIA GB300, 10.3
 $K exec sgl3-p0 -- ls /dev/infiniband        # 预期 uverbs0..7（8 张 HCA）
 $K exec sgl3-p0 -- ls /dev/nvidia-caps-imex-channels/ | head -1   # 预期 channel0（ComputeDomain 生效）
-$K exec sgl3-p0 -- df -h /mnt/ssd /dev/shm   # 内存盘方案见默认；Local SSD 方案见 §3.3
+$K exec sgl3-p0 -- df -h /mnt/ssd /dev/shm   # 预期 /mnt/ssd = /dev/md0 12T（Local SSD RAID）；/dev/shm 64G
 ```
 
-### 3.3 存储方案：Local SSD RAID（推荐，替代内存盘）★
+### 3.3 为什么模型放 Local SSD（不放内存盘）+ 实测
 
-> 默认 §3.1 的 gen-pods.py 把模型放**内存盘**（`emptyDir medium:Memory`）——385G 模型吃 385G pod RAM。对 R1 够用，但 **V4-Pro 800G + 运行时会撑爆 942G 节点内存**。改用 **Local SSD RAID**：模型放盘不吃 RAM，读 14 GB/s，且**跨 pod 重启持久**（不用重下）。
-> 前置：先按 [`../deepseek-v4/gb300-local-ssd-raid0-SETUP.md`](../deepseek-v4/gb300-local-ssd-raid0-SETUP.md) 部署 `gke-raid-disks` DaemonSet，把每节点 4 块 Local SSD 做成 12T RAID0 挂到 host `/mnt/disks/raid/0`。
+**原则：内存盘存权重是浪费——RAM 要留给 KV cache**（decode 的 KV 在 GPU HBM，但未来 HiCache 会把 KV offload 到 CPU 内存；且大模型如 V4-Pro 800G 根本塞不进内存盘）。所以 §3.1 默认就用 **Local SSD RAID**：
+- 模型放 12T Local SSD RAID（读 14 GB/s），**不占 RAM**；
+- **跨 pod 重启持久**（host 级，删 pod 模型还在，省重下）；
+- 推理吞吐与内存盘**完全一致**（storage 只影响加载不影响推理）。
 
-**gen-pods.py 里两处改动**：
-```python
-# 1) ssd 卷：内存盘 → Local SSD hostPath
-#   原:  {"name":"ssd","emptyDir":{"medium":"Memory","sizeLimit":"500Gi"}}
-#   改:  {"name":"ssd","hostPath":{"path":"/mnt/disks/raid/0","type":"Directory"}}
-#      对应 volumeMounts 加 mountPropagation: HostToContainer
-# 2) 内存 request/limit：800Gi → 600Gi（模型不再进 RAM，但加载时 sglang 仍把权重读进 host 缓冲，留够峰值）
-```
-
-**bootstrap（§4）不变**：`gcloud storage cp` 目标仍是 `/mnt/ssd/`（现在背后是 Local SSD 而非 tmpfs）。实测 cp GCS→Local SSD **73s @ 5.4 GiB/s**（385G）。
-
-**实测（2026-07-20，两轮）**：
-- **单节点 TP4 冒烟**：cp 73s → 从 Local SSD 加载 sglang → 端到端生成正确（" Paris..."）；模型跨 pod 删除重建**持久存活**（host 级 Local SSD），省去重下。
-- **完整 3P2D 端到端**（5 pod / Local SSD / 600Gi）：部署 → bootstrap（cp 到 Local SSD）→ 3 prefill + 2 decode（mooncake NVLink）→ router → e2e（" Paris..."）→ benchmark 全过。**吞吐与内存盘基线一致**（storage 只影响加载不影响推理）：conc32/64/128 total = 4758 / 5938 / 9439 tok/s，TPOT 15-17ms（对比内存盘 4757 / — / 9509，conc32/128 吻合）。
-- **⚠️ 内存坑**：request 设 **200Gi 会 OOMKilled**（exit 137）——加载时 sglang 把 385G 权重读进 host 缓冲峰值超了。**用 ≥600Gi**（仍比 800Gi 省，且模型不常驻 RAM）。
+**实测（2026-07-20）**：
+- cp GCS→Local SSD **73s @ 5.4 GiB/s**（385G）。
+- 单节点 TP4 冒烟 + 完整 3P2D 端到端（router + e2e " Paris" + benchmark）全过。吞吐 conc32/64/128 total = 4758/5938/9439 tok/s，TPOT 15-17ms，与内存盘基线（4757/—/9509）吻合。
+- **⚠️ 加载峰值坑**：内存 request 设 200Gi 会 **OOMKilled**——sglang 加载时把权重读进 host 缓冲，峰值超了。这是**加载瞬时**占用非常驻，用 ≥600Gi。
 
 ---
 
@@ -241,7 +237,7 @@ python -c "import nixl" 2>/dev/null || python -m pip install --no-cache-dir nixl
 # 5) 验证 sglang 栈（native，无 shim）
 echo "[bootstrap] $(python -c 'import sglang,sgl_kernel,flashinfer;print("sglang",sglang.__version__,"OK")' 2>&1 | grep -iv warning | tail -1)"
 
-# 6) 模型 → 内存盘（同区 GCS，~1.5min）
+# 6) 模型 → Local SSD（/mnt/ssd 背后是 RAID0，同区 GCS ~73s @ 5.4GiB/s；已存在则跳过，跨 pod 持久）
 if [ ! -f /mnt/ssd/DeepSeek-R1-0528-NVFP4-v2/config.json ]; then
   echo "[bootstrap] copying model $(date)..."
   gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-R1-0528-NVFP4-v2 /mnt/ssd/ 2>&1 | tail -1
@@ -449,10 +445,11 @@ $K exec sgl3-p0 -- grep -iE "concurrency=|Total token|Output token|Median" /tmp/
 | decode `--nnodes` | 2 | **8** |
 | decode `--mem-fraction-static` | 0.80 | **0.75** |
 | decode `--max-running-requests` | 64 | **512** |
-| **prefill pod 内存 limit** | 800Gi | **900Gi**（req 880Gi）← 见坑 |
+| 存储 | Local SSD RAID（同 §3.1）| Local SSD RAID（同）|
+| **pod 内存 limit** | 600Gi | **700Gi**（prefill；128K 活化峰值 + 加载缓冲）|
 
 ### 9.3 三个新坑（Round 4 实测，务必照做）
-1. **prefill pod 必须 900Gi 内存，不能 800Gi**：128K prefill 进程加载期峰值 + 385G tmpfs 模型 > 800Gi → **OOMKilled**（exit 137）。提到 limit 900Gi / req 880Gi（节点 909Gi allocatable，放得下）。decode 保持 800Gi 够（KV 在 GPU）。
+1. **prefill 内存要留够 128K 活化峰值 + 加载缓冲**：模型在 Local SSD 不占 RAM，但 128K prefill 的中间激活 + sglang 加载缓冲峰值仍高。**设 700Gi**（节点 909Gi allocatable）。decode 600Gi 够（KV 在 GPU HBM）。<br>（历史：内存盘时代因 385G tmpfs + 128K 峰值曾需 900Gi；换 Local SSD 后省掉 tmpfs 那 385G。2026-07-20 64卡 Local SSD 重测确认见 §9.5。）
 2. **启动纪律：一个 pod 只启一次 prefill**。反复启动会**堆多个 python 进程**叠加 host 内存 → OOM → 容器重启**清空 /tmp**（prefill.sh 和 log 消失）→ 更乱。启动前 `pkill -9 python` 清干净，`kubectl cp prefill.sh` 后**必须 `wc -l` 校验落地**（cp 会静默失败），再 `nohup setsid bash ... & sleep 2; wc -l log` 确认启动。
 3. **16 pod 同时申请 DRA 会滞后**：部分 pod 卡 `ContainerCreating` 报 `ResourceClaim not created yet`（DRA controller 处理不过来）。删掉卡住的 pod + `kubectl apply` 重触发 claim 分配即可，可能重试 1-2 轮。
 
@@ -568,9 +565,10 @@ for i in 0..7: nohup setsid bash /tmp/decode5.sh $i $D0IP:5757 &  # rank0=d0
 | `undefined symbol: c10_cuda_check_implementation` | NV NGC torch 改了 C10 ABI | 官方镜像的标准 torch 匹配，别用 nemo |
 | `NIXL_ERR_BACKEND` / RDMA backend 创建失败 | 官方 Ubuntu 镜像缺 CX-8 的 mlx5 verbs | 装 `doca-ofed-userspace`（§4 step 3）|
 | 单请求 60s 超时 / `KVTransferError: Aborted` | nixl 走 RoCE：GKE 是 RoCE v2 over IPv6，netdev 名 `gpuNipvlanM`，UCX 调不通 | **改走 NVLink**：`--disaggregation-transfer-backend mooncake` + `SGLANG_MOONCAKE_CUSTOM_MEM_POOL=NVLINK` + `MC_FORCE_MNNVL=1` |
-| pod `Insufficient memory` Pending | 内存请求 > 节点 909Gi allocatable | 3P2D 设 800Gi；128K prefill 设 900Gi（见下） |
-| prefill `OOMKilled`(exit137)反复重启、`/tmp` 被清 | 128K prefill 进程峰值 + 385G tmpfs 模型 > 800Gi | prefill limit 提到 **900Gi**（req880）；且**一 pod 只启一次**别堆进程（§9.3） |
-| pod `Evicted` MemoryPressure/DiskPressure | 内存盘+模型超物理内存 / 16节点叠加大镜像 | 内存盘 ≤500Gi + fresh 节点池 + 删重建（可能重试几轮）|
+| pod `Insufficient memory` Pending | 内存请求 > 节点 909Gi allocatable | 3P2D/decode 600Gi；128K prefill 700Gi（模型在 Local SSD 不占 RAM）|
+| `OOMKilled`(exit137) 加载时 | sglang 加载把权重读进 host 缓冲，峰值超限 | 内存 request 用 **≥600Gi**（200Gi 必炸）；128K prefill 700Gi；**一 pod 只启一次**别堆进程 |
+| 模型放内存盘吃满 RAM / V4 大模型塞不下 | `emptyDir medium:Memory` 存权重是浪费 | **模型放 Local SSD RAID**（§3.1 默认）；RAM 留给 KV cache |
+| pod `Evicted` DiskPressure（拉镜像时）| 12.7GB 镜像顶爆 boot 盘 | fresh 节点池 + 删重建（可能重试几轮）|
 | pod 卡 `ContainerCreating` 报 `ResourceClaim not created yet` | 16 pod 同时申请 DRA，controller 滞后 | 删卡住 pod + `apply` 重触发（§9.3）|
 | `pkill` 后 exit 137、server 没重启 | `pkill -f sglang.launch_server` 匹配到自己命令行 | 用 `pkill -9 python` |
 | `kubectl cp` 脚本没落地/截断 | cp 静默失败 | cp 后**必须** `wc -l` 校验 |
