@@ -1,10 +1,28 @@
 # GB300 (A4X Max) · SGLang DeepSeek-V4 · 端到端测试指南 + Benchmark 报告
 
-> **状态：Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 已实测通过（2026-07-20）**；Phase 3（PD-disagg 冲吞吐）待跑。
-> §3.9 是**可照抄复现的完整运行手册**（建 pod → 下权重 → 备份 GCS → 启动 → 压测，每步带实测脚本）；§7 是 **Benchmark 汇总报告**（Flash / Pro / R1 三方对比）。
-> 结论先行：**入门不复杂**——V4-Flash（284B）单节点 GB300 TP=4 一台机器 4 卡就能起，比 R1 的 PD-disagg 64 卡简单得多。难的是复现官方 11,200 tok/s/GPU 那套（18 节点 + MegaMoE W4A4 + SWA + Dynamo）。
->
 > 资料来源：SGLang V4 cookbook、lmsys Day-0 博客（2026-04-25）、pytorch「Serving DeepSeek-V4 on GB300」（2026-06-23）、SemiAnalysis InferenceX srt-slurm recipe `disagg-gb300-10p1d-dep4-dep32-18-c2500.yaml`。
+
+---
+
+## TL;DR — 最终状态与结论（2026-07-21 凌晨更新）
+
+| 项 | 状态 |
+|---|---|
+| Phase 1 V4-Flash 单节点 TP4 | ✅ 通过，conc64 **8,540 tok/s/GPU** |
+| Phase 2 V4-Pro 单节点 TP4 | ✅ 通过，conc64 **2,794 tok/s/GPU** |
+| Phase 3 V4-Pro PD 10P1D-dep4-dep32（72 GPU）| ✅ 端到端跑通 |
+| — sglang_router 编排 | ⚠️ 高并发 **tail-stall**（少数请求永挂），天花板 ~1,732 tok/s/GPU |
+| — **Dynamo 编排（官方用的）** | ✅ **打通并根治 tail-stall**，conc2048 干净出数 **1,644 tok/s/GPU** |
+| 距官方 11,200 tok/s/GPU | 差 ~6.8×，gap = SWA 高并发增益 + MTP(~2.6×) + c2500 饱和 + 深度调优（进行中）|
+
+**三条最贵的经验（都是坑里趟出来的）**：
+1. **checkpoint 变体是关键**：megamoe/PD **必须用原版 `deepseek-ai/DeepSeek-V4-Pro`**（FP4 MoE + FP8 attn），**不能用 `nvidia/*-NVFP4`**（后者强制 `flashinfer_trtllm_routed` runner，对 deepep/megamoe 都无 fused func，多节点必崩）。nvidia NVFP4 只适合单节点 trtllm（Phase 1/2）。
+2. **sglang_router 高并发有硬伤**：PD 并发下少数请求 prefill→decode KV 交接 race，请求永久 hang 不失败不重试不释放槽（GitHub issue #9266/#31206/#12688/#5450），高并发吞吐崩塌。**官方 11,200 用 Dynamo 不是 sglang_router**。
+3. **Dynamo 是正解且已跑通**：`dynamo.sglang` worker + `dynamo.frontend` + NATS/ETCD，根治 tail-stall、高并发 benchmark 干净 100% 完成。坑：换 image/重启必须彻底杀 `dynamo.sglang`+`sglang::scheduler`（否则占 dist port 5000）；frontend 熔断器要在 workers **完全 ready 后**起新的（换端口避僵尸）。
+
+**消融实测（conc256 / 72 GPU / 8K-1K，服务端测量）**：Run A megamoe W4A8 = 1,170 → Run B +W4A4 = **1,732（1.48×，最大单项）** → C +SWA/压缩（conc256 无增益，需高并发）→ D +MTP（4 关全趟，压测同卡 sgl-router）。
+
+**详细导航**：§3.9 单节点可复现手册 · §7 Flash/Pro/R1 benchmark · §8 方案+Router 对比+原理+消融+**Dynamo 全过程（§8.8-8.9）**。
 
 ---
 
