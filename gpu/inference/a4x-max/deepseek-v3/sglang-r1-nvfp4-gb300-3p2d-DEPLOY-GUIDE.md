@@ -191,9 +191,9 @@ $K exec sgl3-p0 -- df -h /mnt/ssd /dev/shm   # 内存盘方案见默认；Local 
 
 **bootstrap（§4）不变**：`gcloud storage cp` 目标仍是 `/mnt/ssd/`（现在背后是 Local SSD 而非 tmpfs）。实测 cp GCS→Local SSD **73s @ 5.4 GiB/s**（385G）。
 
-**实测（单节点 TP4 冒烟，2026-07-20）**：
-- cp 73s → 从 Local SSD 加载 sglang → 端到端生成正确（" Paris..."）。
-- 模型跨 pod 删除重建**持久存活**（host 级 Local SSD），省去重下。
+**实测（2026-07-20，两轮）**：
+- **单节点 TP4 冒烟**：cp 73s → 从 Local SSD 加载 sglang → 端到端生成正确（" Paris..."）；模型跨 pod 删除重建**持久存活**（host 级 Local SSD），省去重下。
+- **完整 3P2D 端到端**（5 pod / Local SSD / 600Gi）：部署 → bootstrap（cp 到 Local SSD）→ 3 prefill + 2 decode（mooncake NVLink）→ router → e2e（" Paris..."）→ benchmark 全过。**吞吐与内存盘基线一致**（storage 只影响加载不影响推理）：conc32/64/128 total = 4758 / 5938 / 9439 tok/s，TPOT 15-17ms（对比内存盘 4757 / — / 9509，conc32/128 吻合）。
 - **⚠️ 内存坑**：request 设 **200Gi 会 OOMKilled**（exit 137）——加载时 sglang 把 385G 权重读进 host 缓冲峰值超了。**用 ≥600Gi**（仍比 800Gi 省，且模型不常驻 RAM）。
 
 ---
