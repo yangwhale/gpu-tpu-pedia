@@ -431,4 +431,52 @@ decode（DEP32）：
 
 ---
 
+## 8. 方案、测量法、Router 对比与原理（2026-07-21 凌晨深挖）
+
+### 8.1 我用的方案
+- **拓扑**：官方 `10P1D-dep4-dep32`（10 prefill×TP4/DP4/EP4 = 40 GPU + 1 decode×DEP32 = 32 GPU，共 18 节点 72 GPU，subblock-0001 单 NVL72 域）。
+- **模型**：官方原版 `deepseek-ai/DeepSeek-V4-Pro`（FP4 MoE + FP8 attn，806G，**非** nvidia NVFP4 变体）。
+- **镜像**：`lmsysorg/sglang:nightly-dev-cu13-20260720-b3570a45`（最新 nightly；官方 pin 的 0520 已被 GC）。
+- **MoE**：`megamoe` a2a backend；W4A8→W4A4 由 env `USE_FP4_ACTS` 切换。
+- **KV 传输**：mooncake over 域内 NVLink（`MC_FORCE_MNNVL=1`）。
+- **编排（关键分歧点）**：我用 **sglang_router**（`--pd-disaggregation --policy cache_aware`）；**官方用 NVIDIA Dynamo**。
+
+### 8.2 测量法（绕开 bench 客户端 tail-stall）
+bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summary**。两个可靠替代：
+1. **完成率 × 时间**：取 tqdm 进度（如 979/1024 @107s = 9.15 req/s），×9216 tok ÷72 GPU。
+2. **decode 服务端日志**：对 32 个 DP rank 各取最新 `gen throughput`，去重求和（噪声较大，作交叉验证）。
+
+### 8.3 ⭐ sglang_router 出了什么问题（tail-stall 根因）
+- **现象**：任何并发 >1，每波尾部约 1-2 个请求**永久 hang**（conc4 卡 6/8、conc16 卡 62/64、conc256 卡 985/1024）；高并发（conc1024）hung 请求累积占 KV 槽 → **吞吐不升反降**（9.15→collapse）。
+- **根因（GitHub 实锤）**：sglang_router 的 PD-disaggregation 在并发下对少数请求的 prefill→decode KV 交接有 race，请求 hang 后**不失败、不重试、不释放槽位**。相关 issue：#9266（高并发 sgl-router KV 传输失败）、#31206（circuit breaker per-leg：prefill 熔断后仍派 decode → decode 等永不来的 KV）、#12688（"PD requests failed with sgl-router，try upgrading"）、#5450（KV transfer 高并发变慢，未修）。
+- **试过无效**：`--disable-circuit-breaker`（2→1 略好）、`--retry-max-retries 3`、`SGLANG_DISAGGREGATION_WAITING_TIMEOUT=90`（卡住请求不是 KV-wait 态所以 timeout 不触发）、`--disable-stream`。
+- **自伤坑**：诊断时「直连 prefill:30000 绕 router」会触发 `AssertionError: bootstrap_room should not be None` 把 prefill controller 打崩（PD prefill 只能经 router 收请求，**绝不能直连**）。
+
+### 8.4 ⭐ 官方 Router（Dynamo）好在哪
+官方 recipe `frontend: type: dynamo`，用 `python -m dynamo.sglang` 起 worker + Dynamo frontend（需 NATS + ETCD 分布式运行时）。相比 sglang_router：
+- **不用 load balancer**：Dynamo 有服务发现，**先路由到 decode，再 KV-aware 选 prefill**，请求生命周期由 Dynamo 统一管理。
+- **请求级容错**：支持 request migration / cancellation（sgl-router 没有）——请求 hang/worker 挂时能迁移或取消，**不会累积死槽位**。这正是 sgl-router tail-stall 的解药。
+- **KV-aware routing**：按前缀命中路由，减少重复 prefill。
+- **代价**：要装 ai-dynamo[sglang] + NATS + ETCD + 18 worker 走 `dynamo.sglang` 重起 + frontend，是个大工程（官方 srt-slurm 自动化）。
+
+### 8.5 原理小结（为什么 PD + Wide-EP 能冲上万）
+- **PD 分离**：prefill 算力密集、decode 访存密集，拆开各自扩展 + 用满 GPU。KV 从 prefill 经 NVLink/RDMA 零拷贝送到 decode。
+- **Wide-EP（DEP32）**：decode 把 32 卡做 DP-attention + EP，专家摊薄、并发拉高。
+- **megamoe W4A4**：expert dispatch+GEMM 融合成一个 kernel，激活也压 4bit → MoE 层快 ~2×（实测 conc256 下 **1.48×**：Run A 9.15 → Run B 13.53 req/s）。
+- **SWA + online 压缩**：把 KV 打薄，让 decode 塞下**更大 batch**（收益在**高并发**才显现；conc256 下 KV 不是瓶颈，故 Run C 未见增益）。
+- **MTP（EAGLE 投机解码）**：一次 forward 出多 token，per-user 提速。
+- **要到官方 11,200**：需 Dynamo（高并发稳定）+ 全优化 + concurrency 2500。sgl-router + conc256 的 tail-stall 天花板约 ~1,700 tok/s/GPU（Run B）。
+
+### 8.6 实测消融数据（conc256，sglang_router，72 GPU，8K/1K）
+| Run | 配置 | 持续 req/s | ≈tok/s/GPU(in+out) | 相对 A |
+|---|---|---|---|---|
+| A | megamoe W4A8 | 9.15 | ~1,170 | 1.00× |
+| B | +W4A4 | 13.53 | ~1,732 | **1.48×** |
+| C | +SWA+online压缩 | 12.36 | ~1,580 | 1.35×（SWA 收益需高并发）|
+| D | +MTP | 待填 | — | — |
+
+> 受 sglang_router tail-stall 限制，conc 只能到 ~256，摸不到官方 c2500 的饱和点；SWA 的高并发增益、以及冲 11,200，都需换 Dynamo。这是**下一步的明确工程**。
+
+---
+
 *2026-07-20（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 已实测通过 + 压测，§3.9 为可复现手册、§7 为 benchmark 报告。存储全程 Local SSD RAID（不用内存盘，见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。下一步 Phase 3 = Pro + MegaMoE W4A4 + SWA + PD-disagg（官方 10P1D-dep4-dep32 / Dynamo）冲 11K。*
