@@ -285,17 +285,28 @@ done'
 
 #### 3.2 消融 run 序列（固定 3.1 拓扑，逐项叠加）
 
-| Run | 相对上一步新增 | MoE backend | 激活精度 | SWA/压缩 | MTP | 目的 |
-|---|---|---|---|---|---|---|
-| **A** baseline | — | `deepep` | W4A8 | 关 | 关 | 拿底线 |
-| **B** +MegaMoE | `--moe-a2a-backend megamoe` | megamoe | W4A8 | 关 | 关 | MegaMoE 融合 kernel 收益 |
-| **C** +W4A4 | `USE_FP4_ACTS=1` `USE_MXF4_KIND=1` | megamoe | **W4A4** | 关 | 关 | 激活也 4bit（官方最大一跳）|
-| **D** +SWA | `SGLANG_OPT_SWA_*` + `USE_ONLINE_COMPRESS=1` | megamoe | W4A4 | **开** | 关 | SWA 预算 + online 压缩，decode 更大 batch |
-| **E** +MTP（=满配终极）| `--speculative-algorithm EAGLE ...` | megamoe | W4A4 | 开 | **开** | 官方满配，对标 11,200 |
+> **⚠️ 2026-07-20 重大方向修正**：原计划 baseline 用 `deepep` a2a，实测在 `lmsysorg/sglang:latest` 上 V4 prefill 的 deepep 路径**根本跑不通**（连撞 4 个 runner bug，见 3.2-b）。拉了官方 recipe 原文（`gh api SemiAnalysisAI/InferenceX .../disagg-gb300-10p1d-dep4-dep32-18-c2500.yaml`）确认：**官方 prefill+decode 全程用 `megamoe`，不是 deepep**，且用**特定 nightly 镜像** `lmsysorg/sglang:nightly-dev-cu13-20260520-425dffbd`（非 latest）。故 baseline 改从 **megamoe W4A8** 起——这才是 V4 真正跑得通的路。
 
+| Run | 相对上一步新增 | MoE backend | 激活精度 | SWA opt/压缩 | MTP | 目的 |
+|---|---|---|---|---|---|---|
+| **A** baseline | megamoe（官方镜像）| megamoe | W4A8（不设 `USE_FP4_ACTS`）| 关 | 关 | V4 可跑底线 |
+| **B** +W4A4 | `USE_FP4_ACTS=1` `USE_MXF4_KIND=1` | megamoe | **W4A4** | 关 | 关 | 激活也 4bit（官方最大一跳）|
+| **C** +SWA/压缩 | `SGLANG_OPT_SWA_*` + `USE_ONLINE_COMPRESS=1` | megamoe | W4A4 | **开** | 关 | SWA 预算 + online 压缩，decode 更大 batch |
+| **D** +MTP（=满配终极）| `--speculative-algorithm EAGLE ...` | megamoe | W4A4 | 开 | **开** | 官方满配，对标 11,200 |
+
+- **镜像**：全程 `lmsysorg/sglang:nightly-dev-cu13-20260520-425dffbd`（官方 recipe 指定；`latest` 的 deepep/V4 路径有 bug）。
 - **每个 run 输出**：conc 扫描（1 / 16 / 64 / 128 …推到 c2500）的 tok/s/GPU + TPOT + TTFT，记录到 §7 消融表。
-- **注意**：MegaMoE 只在 `high-throughput` recipe 生效（Blackwell only）；跑 MegaMoE 时**别手动设** `--moe-runner-backend`。W4A4 `NUM_MAX_TOKENS_PER_RANK` 高吞吐建议 **8320**（HBM 够才调高）。
-- **DeepEP 约束**：`max-running-requests × MTP_draft_tokens ≤ SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK`，调并发三值一起动（违反炸 `deep_ep.cpp:1105`）。
+- **W4A8 vs W4A4**：由 env `SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS`（0/不设 = W4A8，1 = W4A4）切换；`NUM_MAX_TOKENS_PER_RANK` prefill=8192 / decode=1280（官方值）。
+
+> **✅ 3.2-b Run A 起服务踩坑（2026-07-20，deepep 路线弃用前的血泪）**：`latest` 镜像下 V4 prefill 依次撞：(1) `flashinfer_trtllm_routed` runner + `deepep` a2a 不兼容（`requires a fused func for a2a backend deepep, but none is registered`）；(2) 换 `flashinfer_cutedsl` → prefill `deepep normal` 返回 5-tuple 但 cutedsl 要 6-tuple（`not enough values to unpack (expected 6, got 5)`，cutedsl 只吃 decode 的 low_latency）；(3) 换 `deep_gemm`（注意是下划线，`deepgemm` 是 invalid choice）→ `tensor a (384) vs b (96)` DP/EP shape 不匹配。**结论：V4 的 deepep prefill 在此 stack 未调通，官方走 megamoe，遂弃 deepep 改 megamoe baseline。** 另：prefill DEP4（4 卡装 1.6T）`mem-fraction-static` 需 ≥0.90（0.8 报 `no GPU memory for KV cache`）；decode DEP32（32 卡摊薄）0.94 即可。
+
+> **✅ 3.2-c 关键突破：checkpoint 变体 + 镜像 决定 megamoe 能否跑（2026-07-20，Run A 跑通根因）**：
+> - **根因**：`nvidia/DeepSeek-V4-Pro-NVFP4` 变体**强制** `flashinfer_trtllm_routed` runner，它对 **deepep 和 megamoe 两种 a2a 都没有 fused func**（`requires a fused func for a2a backend {deepep|megamoe}, but none is registered`）→ 单节点 TP（Phase 2）能跑，但**多节点 PD 的 megamoe/deepep 全崩**。
+> - **正解**：megamoe PD 必须用**官方原版 checkpoint `deepseek-ai/DeepSeek-V4-Pro`**（FP4 MoE + FP8 attn/dense，~806G），不是 nvidia NVFP4 变体。官方 recipe 的 `model.path` 就是原版。
+> - **镜像**：官方 pin 的 `nightly-dev-cu13-20260520` 已被 Docker Hub GC（`not found`）；`latest`（0.5.15.post1）的 megamoe auto-runner 也 mismatch。**用最新可用 nightly**（实测 `lmsysorg/sglang:nightly-dev-cu13-20260720-b3570a45` ✅）。查可用 tag：`curl -s "https://hub.docker.com/v2/repositories/lmsysorg/sglang/tags/?page_size=100&name=nightly-dev-cu13"`。
+> - **✅ Run A 实测跑通（2026-07-20 22:22）**：原版 checkpoint + 最新 nightly + megamoe，10P1D-dep4-dep32（72 GPU，subblock-0001），sglang_router `cache_aware` `--pd-disaggregation`，PD 端到端经 router 正确生成（"Capital of France"→"Paris"），prefill→decode KV 走域内 NVLink（mooncake `MC_FORCE_MNNVL=1`）。
+> - **换镜像必重 bootstrap**：GIB/DOCA/nixl 装在容器内，换 image 后 pod 全新，需重跑 bootstrap（GIB tgz + DOCA OFED userspace + nixl）。
+> - **prefill DEP4 mem-fraction 0.90 / decode DEP32 0.94**（DEP4 4卡装 1.6T 更挤）。
 
 #### 3.3 decode / prefill 关键参数（官方 recipe）
 
