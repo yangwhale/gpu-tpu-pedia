@@ -123,6 +123,7 @@ hostPath 挂 `/mnt/disks/raid/0`，propagation 用 `HostToContainer`：
 | 消费者 pod 看不到挂载 / debug pod 看不到 | 挂载在 pod 启动后建立，propagation 默认不传入 | DS 用 `Bidirectional`，消费者用 `HostToContainer` |
 | RAID 跨 4 盘但选错设备 | 别把启动盘 nvme1n1 算进去 | 只用 `google-local-ssd-block*`（by-id）|
 | 重启/repave 后数据丢 | Local SSD 是 ephemeral，reboot 数据不保 | 正常；DS 会自动重建 RAID，模型需从 GCS 重拉 |
+| **部分节点 RAID 建不成，pod /mnt/ssd 是 256K tmpfs 不是 12T**（模型写进去变空，加载报 `Unrecognized model`）| **节点残留污染**：之前的部署在这几台留了个 systemd 单元 `mnt-disks-ssdN.mount`，把一块 local SSD 单独挂在 `/mnt/disks/ssd0`，占着盘 → `mdadm --create` 报 `Device or resource busy` → RAID 建不成 → DS 脚本没 `set -e` 还 sleep infinity 掩盖失败 → 消费者 pod hostPath 落到 `/mnt/disks` 的 256K tmpfs | **干净节点无此问题**（新拉的节点 4 盘全裸，RAID 必成）。检测：`grep -c md0 /proc/mdstat` 逐节点扫，=0 即坏。修：**重建污染节点**（`gcloud compute instances delete` → 池拉新的干净节点）最可靠——live 卸载 systemd mount 会被立刻重挂、设备仍 busy，压不干净。诊断链：pod 里 `df /mnt/ssd` 见 256K tmpfs → `grep md0 /proc/mdstat` 空 → `mdadm --create` 报 block busy → host `/proc/1/mounts` 见 `/dev/nvmeXn1 /mnt/disks/ssd0` → `systemctl cat mnt-disks-ssd0.mount`。|
 
 ---
 
@@ -133,4 +134,8 @@ hostPath 挂 `/mnt/disks/raid/0`，propagation 用 `HostToContainer`：
 
 ---
 
-*2026-07-20 实测跑通。pool `gb300-pool-0010` / `a4x-maxgpu-4g-metal` / 4× local NVMe SSD block。*
+**建议硬化 DaemonSet**：脚本加 `set -e`（RAID 建失败就 crash、pod CrashLoop 可见，而不是 sleep infinity 静默掩盖）；这样污染节点会立刻暴露、便于定位。**干净节点上本 DaemonSet 100% 可靠**（pool-0007 实测 17/17 全成），失败只发生在有残留 systemd mount 的污染节点。
+
+---
+
+*2026-07-20 实测跑通。干净池 **pool-0007 17/17 节点 RAID 全成**；`gb300-pool-0010` 有 4 台被之前部署残留的 `mnt-disks-ssd0.mount` 污染（已 recreate）。机型 `a4x-maxgpu-4g-metal` / 4× local NVMe SSD block。*

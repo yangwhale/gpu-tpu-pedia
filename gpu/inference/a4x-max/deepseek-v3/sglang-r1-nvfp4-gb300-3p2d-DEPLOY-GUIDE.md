@@ -474,6 +474,7 @@ for i in 0 1 2 3 4 5 6 7; do $K exec sgl4-d$i -- bash -c "nohup setsid bash /tmp
 
 - **warm 峰值 312 TPS/GPU，超官方 226 达 38%**（cold 首跑仅 240——第一次编译/cache 未热，**benchmark 务必多跑几遍取 warm 值**）。
 - TPOT 全程 ~12ms（decode NVLink KV pool 稳）。
+- **Local SSD 64 卡验证（2026-07-20，pool-0007）**：8P+DEP32 全部模型走 Local SSD RAID（600Gi decode / 700Gi prefill），16 pod 全起、**prefill 零 OOM**（700Gi 扛住 128K 活化）、decode DEP32 fired、router + e2e 正确（" Paris..."）。**Local SSD 在 64 卡满域规模验证通过**，吞吐与内存盘一致（storage 不影响推理）。前置踩坑：pool 里有节点残留 `mnt-disks-ssdN.mount` 会挡 RAID，需重建污染节点（见 RAID-SETUP 文档坑速查）。
 - **TTFT 仍高于官方 8.6s**：官方 8.6s 是 conc=1 单请求测的；本配置 max-throughput 高并发下 prefill（只 7-8 个）排队 → 20-51s。**注意：R1 226 官方配置就是 8P + DEP32（recipe `ctx8_pp4_gen1_dep32`），跟我们 Round 4 拓扑一致**——差距在测法（单请求 vs 高并发），不在 P:D 数量。想同时拿高吞吐 + 低 TTFT 要靠 Context Parallelism（降单请求 prefill 延迟）。（`10P1D` 是**后续 DeepSeek-V4 博客**的配方 `disagg-gb300-10p1d-dep4-dep32`，别跟 R1 混，见 §9.6 第 4 点。）
 
 ### 9.6 官方博客到这一步之后的下一步（Roadmap）
