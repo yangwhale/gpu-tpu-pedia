@@ -507,6 +507,15 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 **Dynamo 路线已验证可行**（全栈立起 + worker 注册加载 health 全通），仅剩 frontend↔prefill 就绪门控这最后一环。这比"纸面方案"前进了一大步，是复现 11,200 的正确且已跑通大半的路径。
 
+### 8.9 ⭐⭐ Dynamo 打通 + 根治 tail-stall（2026-07-21 04:40 突破）
+- **8.8 那个 "circuits open" 根因找到了**：旧 frontend 在 workers **warmup 期**就探测 → 早期请求失败 → 熔断器 open 且**不恢复**。**修法：workers 完全 ready 后，起一个全新 frontend**（熔断器初始闭合）。实操踩坑：`pkill dynamo.frontend` 杀不干净老 frontend（进程名是 `python3`），老的僵尸占着 8000 且服务 stale 熔断态 → **换端口起新 frontend（8001）** 立刻好。
+- **✅ Dynamo 端到端生成通过**（8001，正确吐字）。
+- **✅✅ Dynamo 根治了 sgl-router 的 tail-stall**：`bench_serving` **干净 100% 完成**（不再尾部 hang）：
+  - **conc256**：498/512 成功，Total **88,745 tok/s = 1,232 tok/s/GPU**，TPOT 17ms。
+  - **conc2048**：5792 成功，Total **118,405 tok/s = 1,644 tok/s/GPU**，output 13,156 tok/s，峰值 output 18,606 tok/s，实际并发 1713，TPOT 38ms，**TTFT 94s（prefill 成瓶颈）**。
+- **距 11,200 还有 ~6.8×**：当前是 W4A4-only（无 SWA opt / 无 MTP）；且 conc2048 下 **prefill 成瓶颈**（TTFT 94s，decode 没喂饱，output 仅 13K）。下一步：加 SWA+online 压缩（decode 更大 batch）+ MTP（~2.6×）+ 调 P/D 配比/并发，逐步向 806K tok/s 总（11,200×72）爬。
+- **关键结论**：**Dynamo 是对的、tail-stall 已解、高并发 benchmark 能干净出数**。复现 11,200 从"卡死"变成"逐项调优爬坡"。
+
 ---
 
 *2026-07-20（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 已实测通过 + 压测，§3.9 为可复现手册、§7 为 benchmark 报告。存储全程 Local SSD RAID（不用内存盘，见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。下一步 Phase 3 = Pro + MegaMoE W4A4 + SWA + PD-disagg（官方 10P1D-dep4-dep32 / Dynamo）冲 11K。*
