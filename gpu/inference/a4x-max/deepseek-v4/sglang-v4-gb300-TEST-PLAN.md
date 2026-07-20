@@ -263,7 +263,7 @@ done'
 
 #### 3.0-prereq 域与存储（开跑前必须就位）
 
-- **域**：用 **`subblock-0002`（= `gb300-pool-0002`）——实测 18/18 节点 ready + 全 `team=yangwhale`，一个完整 NVL72 域**。这是能跑 10P1D-dep4-dep32 的前提（pool-0007=17、pool-0010 只 13 台 yangwhale，都不足一域）。
+- **域**：需**一个完整 18 节点 NVL72 域，且 GPU 全空闲**（不只是 Ready + 标签）。实战最终用 **`subblock-0001`（= `gb300-pool-0001`）free=18**（首选 0002 被 sgl2 残留占了，见 3.0-b）。选域先跑「每 subblock 空闲节点扫描」，别只看 ready/标签。确认 18 台 `nvidia.com/gpu.clique` 一致（同一 NVLink 域）。
 - **Local SSD RAID**：给 pool-0002 部署 `gke-raid-disks` DaemonSet，逐节点 `grep -c md0 /proc/mdstat` 全 =1；**先验无 `mnt-disks-ssdN.mount` 残留污染**（见 RAID-SETUP 坑速查）。
 - **权重**：18 节点各 `gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-V4-Pro-NVFP4 /mnt/ssd/`（只读 scope 够）。
 - **bootstrap**：GIB + DOCA + gcloud（同 R1 §4）。
@@ -274,7 +274,14 @@ done'
 > 2. **权重预拉**：`v4pro-puller-0002` DaemonSet（`gcloud storage cp -r` 从 GCS 到各节点 Local SSD），**18/18 节点各 851G / 76 文件**。node 只读 scope 足够读 GCS。
 > 3. **踩坑 & 修复**：
 >    - **Bug 1（puller 镜像 amd64）**：首版 puller 用 `google/cloud-sdk:slim`，GB300 arm64 报 `exec format error`。修：换 `ubuntu:24.04` + apt 装 `google-cloud-cli`（同 RAID DS 的 arm64 坑）。
->    - **Bug 2（1 节点 lt06 RAID inactive，256K tmpfs）**：`/proc/mdstat` 见 md0 **inactive**（旧 mdadm superblock 把 4 盘拆成 md0+md127 两坏数组），mount 报 `can't read superblock`，DS 无 `set -e` 假 RAID_READY。修：**live 清**（不用重建节点）——RAID DS pod 里 `mdadm --stop md0/md127` + `--zero-superblock` 全盘 + 重 create/mkfs/mount，再删该节点 puller 重拉。详见 [RAID-SETUP 坑速查 B 类](./gb300-local-ssd-raid0-SETUP.md#5-坑速查)。
+>    - **Bug 2（RAID inactive，256K tmpfs，18 节点里 1-2 台）**：`/proc/mdstat` 见 md0 **inactive**（旧 mdadm superblock 把盘拆成坏数组），mount 报 `can't read superblock`，DS 无 `set -e` 假 RAID_READY。修：**live 清**（不用重建节点）——`mdadm --stop` 所有 md + `sleep 1` + `--zero-superblock --force` 全盘 + 重 create/mkfs/mount，再删该节点 puller 重拉。**udev race**：stop 后 udev 秒级重组，抢在 zero 前 → create busy，重跑 1-2 次即成。详见 [RAID-SETUP 坑速查 B 类](./gb300-local-ssd-raid0-SETUP.md#5-坑速查)。
+
+> **✅ 3.0-b 部署踩坑补充（2026-07-20 pool-0001 实战，血泪追加）**：
+> 1. **选域必须查 GPU 实占，不能只看 Ready + team 标签**。首选 subblock-0002 时只数了「18 ready + 全 yangwhale」，结果上面压着别人 5 个 sgl2 pod（44h 前的 R1 残留）+ 我的新 pod，只剩 1 空。**正确姿势**：扫每个 subblock 的「无 GPU-pod 的空闲节点数」（遍历所有 pod 的 `nodeName` + `limits.nvidia.com/gpu`），选 free=18 的域。
+> 2. **换域搬迁**：subblock-0002 被占 + 有台重建慢的节点，最终改用 **subblock-0001**（dsv3 清空后 free=18）。给它 `kubectl label node -l ...pool-0001 team=yangwhale --overwrite`（原 team=gdde）→ 铺 RAID + 拉权重 + 部署。
+> 3. **节点 DRA 网络模式歪（ipvlan vs pci）**：pool-0002 有台 lcg3，其 `dra.net` resourceslice 是 **ipvlan 设备**（`gpu*ipvlan*`）而非正常的 pci 直通，`mrdma.google.com` claim 分不出 8 卡，pod 永远 pending `cannot allocate all claims`。修：**重建该节点**（`gcloud compute instances delete` → MIG 原名重拉，GB300 冷启 15+min）。教训：`kubectl get resourceslice <node>-dra.net -o json` 看设备名，ipvlan ≠ 正常。
+> 4. **ComputeDomain / IMEX 只收敛 15/18**：18 pod 部署后卡 15 running，3 个 `ResourceClaim not created yet` / `FailedPrepareDynamicResources`。`kubectl get computedomain -o jsonpath={.status.nodes}` 只见 15 节点（虽 18 台 clique 一致）。修：**删掉那 3 个卡住的 pod 让它重建**（`kubectl delete pod ... && kubectl apply`）→ 重新触发 ComputeDomain 加入，即 18/18。
+> 5. **权重 puller DaemonSet 镜像必须 arm64**：`google/cloud-sdk:slim` 是 amd64 → `exec format error`；换 `ubuntu:24.04` + apt 装 `google-cloud-cli`（同 RAID DS 坑）。
 
 #### 3.2 消融 run 序列（固定 3.1 拓扑，逐项叠加）
 
@@ -343,7 +350,8 @@ decode（DEP32）：
 - [ ] **Local SSD RAID 就位**：`gke-raid-disks` DaemonSet 部署，逐节点 `grep -c md0 /proc/mdstat` 全 =1
 - [ ] pod ssd 卷 = hostPath `/mnt/disks/raid/0`（HostToContainer），内存 request 600Gi
 - [ ] 确认 `lmsysorg/sglang:latest`（或 nightly-dev-cu13）含 sm_103a
-- [ ] Phase3 满配需 **18 节点同一 NVL72 域**（实测 `subblock-0002`/pool-0002 = 18/18 ready + 全 yangwhale）；decode DEP32 跨域走不了 NVLink
+- [ ] Phase3 满配需 **18 节点同一 NVL72 域 + GPU 全空闲**（扫每 subblock 无-GPU-pod 空闲数，别只看 ready/标签；实战用 `subblock-0001` free=18，`clique` 一致）；decode DEP32 跨域走不了 NVLink
+- [ ] 部署后若卡 15/18（`ResourceClaim not created yet`）：删重建卡住的 pod 触发 ComputeDomain 收敛；若某节点 DRA 是 ipvlan（mrdma 分不出）：重建该节点
 - [x] V4-Flash / Pro NVFP4 checkpoint 备份到 GCS（`gs://chrisya-gb300-models/DeepSeek-V4-Flash-NVFP4` 168G / `-Pro-NVFP4` 913G），bootstrap 时 `gcloud cp` **到 Local SSD `/mnt/ssd`**
 - [x] Phase 1（Flash）+ Phase 2（Pro）单节点冒烟 + 压测通过 → 下一步 Phase 3 规模
 - [ ] benchmark 用同口径（total in+out /GPU，8K/1K，warm 值）；`input-len +1 BOS` 且 `input+output ≤ context-length`
