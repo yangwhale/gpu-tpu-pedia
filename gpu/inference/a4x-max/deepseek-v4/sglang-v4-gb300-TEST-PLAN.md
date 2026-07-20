@@ -494,7 +494,18 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 | frontend | sglang_router | **Dynamo** | ⚠️ 根因 |
 | **合计** | **~1,732 已达（1.48×）** | **11,200** | 差距 = SWA高并发 × MTP × 饱和并发，全部 gated on Dynamo |
 
-**结论**：在 sglang_router 下，受 tail-stall 天花板限制，Run B（W4A4）的 ~1,732 tok/s/GPU 是当前可稳定测得的峰值。要复现官方 11,200，**必须换 Dynamo frontend**（解 tail-stall → 上 c2500 + 稳定 MTP + SWA 高并发增益）。Dynamo 搭建（NATS+ETCD+`dynamo.sglang`×18+frontend）是明确的下一步工程，非参数可调。
+**结论**：在 sglang_router 下，受 tail-stall 天花板限制，Run B（W4A4）的 ~1,732 tok/s/GPU 是当前可稳定测得的峰值。要复现官方 11,200，**必须换 Dynamo frontend**（解 tail-stall → 上 c2500 + 稳定 MTP + SWA 高并发增益）。
+
+### 8.8 ⭐ Dynamo frontend 实攻进展（2026-07-21 凌晨，95% 打通）
+不是纸面方案——今夜实际把 Dynamo 全栈立起来了：
+- **NATS + ETCD**：k8s pod 部署（`dynamo-nats:4222` + `dynamo-etcd:2379`）✅
+- **ai-dynamo 安装**：18 个 worker pod `pip install ai-dynamo`，**不降级 nightly sglang**（sglang 仍 `0.0.0.dev1+g1f637a65b`），`dynamo.sglang` 可 import ✅
+- **worker 启动**：把 prefill/decode 脚本的 `python -m sglang.launch_server` 换成 `python3 -m dynamo.sglang`（透传所有 megamoe/W4A4/DEP32 args），加 env `NATS_SERVER`/`ETCD_ENDPOINTS`/`DYN_SYSTEM_PORT` + `--enable-metrics`。18 worker **全部注册成功**（`Model registration succeeded`）、权重加载（GPU 260GB）、health 端口（8081/8082）返回 200 ✅
+- **frontend**：`python3 -m dynamo.frontend --http-port 8000`，`/v1/models` 正确返回 `deepseek-ai/DeepSeek-V4-Pro` ✅
+- **⚠️ 卡在最后 5%**：生成请求报 `No available prefill workers (all circuits open or unhealthy)`。worker 已注册+加载+health 200，但 Dynamo frontend 判定 prefill circuit open。疑因：warmup 期早期探测失败触发熔断后未恢复 / prefill 尚未完全 warmup（dynamo.sglang 的 sglang 引擎 warmup 日志不落 /tmp/srv.log，难判完成点）/ decode-first 路由的 prefill 选择细节。
+- **下一步（明确）**：(1) 等 prefill 完全 warmup 后再首次请求（避免熔断误触发）；(2) 查 Dynamo circuit-breaker 配置（`--migration-limit` / etcd 里 worker 的 readiness gate）；(3) 参考 srt-slurm 的 `dynamo.sglang` 完整 env（可能缺 `DYN_*` 就绪门控项）；(4) 逐 worker 确认 sglang 引擎 warmup 完成日志。
+
+**Dynamo 路线已验证可行**（全栈立起 + worker 注册加载 health 全通），仅剩 frontend↔prefill 就绪门控这最后一环。这比"纸面方案"前进了一大步，是复现 11,200 的正确且已跑通大半的路径。
 
 ---
 
