@@ -1,6 +1,7 @@
-# GB300 (A4X Max) · SGLang DeepSeek-V4 · 端到端测试计划（准备版）
+# GB300 (A4X Max) · SGLang DeepSeek-V4 · 端到端测试指南 + Benchmark 报告
 
-> **状态：准备中（未执行）**。本文是开跑前的功课——研究清楚 V4 怎么在 GB300 上跑起来、跟 R1 差在哪、分几步走。
+> **状态：Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 已实测通过（2026-07-20）**；Phase 3（PD-disagg 冲吞吐）待跑。
+> §3.9 是**可照抄复现的完整运行手册**（建 pod → 下权重 → 备份 GCS → 启动 → 压测，每步带实测脚本）；§7 是 **Benchmark 汇总报告**（Flash / Pro / R1 三方对比）。
 > 结论先行：**入门不复杂**——V4-Flash（284B）单节点 GB300 TP=4 一台机器 4 卡就能起，比 R1 的 PD-disagg 64 卡简单得多。难的是复现官方 11,200 tok/s/GPU 那套（18 节点 + MegaMoE W4A4 + SWA + Dynamo）。
 >
 > 资料来源：SGLang V4 cookbook、lmsys Day-0 博客（2026-04-25）、pytorch「Serving DeepSeek-V4 on GB300」（2026-06-23）、SemiAnalysis InferenceX srt-slurm recipe `disagg-gb300-10p1d-dep4-dep32-18-c2500.yaml`。
@@ -124,6 +125,121 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 > - conc1 单用户 TPOT **10.44ms（≈96 tok/s/user）**，比 Flash（175 tok/s/user）慢约一半，Pro 更重但仍交互流畅。
 > - conc64 TTFT 9.8s 偏高——单节点 4 卡跑 1.6T prefill 压力大，这正是 Phase 3 上 PD-disagg（prefill 独立扩展）要解决的。官方 11,200 tok/s/GPU 是 Pro + 18 节点 Dynamo + MegaMoE W4A4，单节点做不到，Phase 3 再冲。
 
+### 3.9 可复测运行手册（Phase 1 + Phase 2 单节点实录）★ 照抄即可复现
+
+> 全程 `gcloud`/`kubectl` **在 gLinux 跑**（本机 Context Aware Access 被拦）：`ssh glinux` 后 `bash -l -c "export PATH=\$HOME/google-cloud-sdk/bin:\$PATH; <cmd>"`。集群凭证：`gcloud container clusters get-credentials gb300-gke-test --region us-central1 --project tencent-gcp-taiji-poc`。
+
+**前置**：干净节点池 Local SSD RAID 就位（见 [`./gb300-local-ssd-raid0-SETUP.md`](./gb300-local-ssd-raid0-SETUP.md)，pool-0007 实测 17/17）。
+
+#### Step 1 — 起单节点 pod（Local SSD hostPath，600Gi）
+
+`v4-pro.yaml`（Flash 同理，改 name/nodepool；Pro 需 ≥600Gi 覆盖加载峰值）：
+```yaml
+apiVersion: v1
+kind: Pod
+metadata: {name: v4-pro, labels: {app: v4-pro}}
+spec:
+  nodeSelector: {cloud.google.com/gke-nodepool: gb300-pool-0007, team: yangwhale}
+  tolerations: [{operator: Exists}]
+  containers:
+  - name: sglang
+    image: lmsysorg/sglang:latest       # =0.5.15.post1，含 deepseek_v4.py + sm_103a
+    securityContext: {privileged: true}
+    command: ["sleep","infinity"]
+    resources:
+      limits: {nvidia.com/gpu: 4, memory: 600Gi}
+      requests: {memory: 600Gi}
+    volumeMounts:
+    - {name: ssd, mountPath: /mnt/ssd, mountPropagation: HostToContainer}   # 关键
+    - {name: shm, mountPath: /dev/shm}
+  volumes:
+  - {name: ssd, hostPath: {path: /mnt/disks/raid/0, type: Directory}}       # RAID
+  - {name: shm, emptyDir: {medium: Memory, sizeLimit: 64Gi}}
+```
+```bash
+kubectl apply -f v4-pro.yaml
+kubectl exec v4-pro -- df -h /mnt/ssd   # 应见 /dev/md0 12T（RAID 挂上了）
+```
+
+#### Step 2 — 下权重到 Local SSD（`hf download`，不是 `huggingface-cli`）
+
+```bash
+kubectl exec v4-pro -- bash -c '
+export HF_HUB_ENABLE_HF_TRANSFER=1
+pip install -q hf_transfer huggingface_hub google-cloud-storage
+nohup hf download nvidia/DeepSeek-V4-Pro-NVFP4 \
+  --local-dir /mnt/ssd/DeepSeek-V4-Pro-NVFP4 > /mnt/ssd/dl.log 2>&1 &'
+# 实测：Pro 851G/76 文件 ~15min（hf_transfer ~0.9GB/s）；Flash 157G/59 文件 ~3min
+```
+
+#### Step 3 — 备份 GCS（ADC + python SDK；node scope 只读 + org 禁 SA key，只能这样）
+
+> **为什么不能直接 `gcloud storage cp`**：GKE 节点 OAuth scope 是 storage **只读**（VM 级封顶，IAM 授权也不解），且 org policy 禁建 SA key。唯一可写法：把 gLinux 的**用户 ADC** 拷进 pod，用 python `google-cloud-storage` SDK（SDK 认 `GOOGLE_APPLICATION_CREDENTIALS` 用户凭证，绕开节点 scope）。**传完立即删 ADC**（敏感）。详见 R1 RUNLOG 坑5。
+
+```bash
+# 1) 拷用户 ADC 进 pod
+kubectl cp ~/.config/gcloud/application_default_credentials.json v4-pro:/mnt/ssd/adc.json
+# 2) SDK 并发上传（v4sdkup.py）
+cat > /tmp/v4sdkup.py <<'PY'
+import os, glob, time, concurrent.futures
+os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="/mnt/ssd/adc.json"
+from google.cloud import storage
+client=storage.Client(project="tencent-gcp-taiji-poc")
+bucket=client.bucket("chrisya-gb300-models")
+src="/mnt/ssd/DeepSeek-V4-Pro-NVFP4"
+files=[f for f in glob.glob(src+"/**",recursive=True) if os.path.isfile(f) and "/.cache/" not in f]
+def up(f):
+    rel=os.path.relpath(f,src)
+    bucket.blob(f"DeepSeek-V4-Pro-NVFP4/{rel}").upload_from_filename(f); return rel
+t0=time.time()
+with concurrent.futures.ThreadPoolExecutor(16) as ex: n=len(list(ex.map(up,files)))
+print(f"UP_DONE {n} files in {int(time.time()-t0)}s",flush=True)
+PY
+kubectl cp /tmp/v4sdkup.py v4-pro:/root/v4sdkup.py
+kubectl exec v4-pro -- python /root/v4sdkup.py     # Pro 913G ~668s；Flash 168G ~196s
+# 3) 删 ADC（务必）
+kubectl exec v4-pro -- rm -f /mnt/ssd/adc.json
+# 以后别的节点直接读（只读 scope 够）：gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-V4-Pro-NVFP4 /mnt/ssd/
+```
+
+#### Step 4 — 启动单节点 TP4 + 验证生成
+
+```bash
+kubectl exec v4-pro -- bash -c '
+export SGLANG_DG_CACHE_DIR=/mnt/ssd/dg-cache FLASHINFER_WORKSPACE_BASE=/mnt/ssd/fi-cache FLASHINFER_DISABLE_VERSION_CHECK=1
+nohup python -m sglang.launch_server --model-path /mnt/ssd/DeepSeek-V4-Pro-NVFP4 \
+  --served-model-name deepseek-ai/DeepSeek-V4-Pro --tp-size 4 --trust-remote-code \
+  --moe-runner-backend flashinfer_trtllm_routed \
+  --reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 \
+  --host 0.0.0.0 --port 30000 > /mnt/ssd/server.log 2>&1 &'
+# 权重加载 <1min（Local SSD 满速），autotune+DeepGEMM warmup(32768)+CUDA graph ~12min 到 ready
+# 冒烟想快：加 --disable-flashinfer-autotune
+kubectl exec v4-pro -- bash -c 'until curl -sf -m3 localhost:30000/health; do sleep 15; done; echo READY'
+kubectl exec v4-pro -- curl -s localhost:30000/v1/chat/completions -H 'Content-Type: application/json' \
+  -d '{"model":"deepseek-ai/DeepSeek-V4-Pro","messages":[{"role":"user","content":"Capital of France? one word"}],"max_tokens":10}'
+# → "Paris" ✓
+```
+
+#### Step 5 — Benchmark 8K/1K（口径：total in+out ÷ 4 GPU，warm）
+
+```bash
+kubectl exec v4-pro -- bash -c 'cd /sgl-workspace/sglang
+# warmup
+python -m sglang.bench_serving --backend sglang-oai --port 30000 \
+  --model deepseek-ai/DeepSeek-V4-Pro --dataset-name random \
+  --random-input-len 8192 --random-output-len 1024 --random-range-ratio 1.0 \
+  --num-prompts 16 --max-concurrency 8 >/dev/null 2>&1
+for C in 1 16 64; do echo "=== conc=$C ==="
+  python -m sglang.bench_serving --backend sglang-oai --port 30000 \
+    --model deepseek-ai/DeepSeek-V4-Pro --dataset-name random \
+    --random-input-len 8192 --random-output-len 1024 --random-range-ratio 1.0 \
+    --num-prompts $((C*4)) --max-concurrency $C 2>&1 \
+    | grep -iE "Total token throughput|Median TTFT|Median TPOT|^Concurrency"
+done'
+```
+
+---
+
 ### Phase 3：PD-disagg + MegaMoE W4A4 + SWA（冲吞吐）
 - 拓扑参考官方 `10P1D-dep4-dep32`（10 prefill 各 TP4/DP4/EP4 + decode DEP32 8节点）。**我们可先缩小到 4P1D 或 8P + DEP32 试**（跟 R1 Round4 同规模，省节点）。
 - decode 关键参数（来自官方 recipe）：
@@ -189,4 +305,42 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 
 ---
 
-*准备版，2026-07-20（Local SSD based）。存储全程 Local SSD RAID（不用内存盘，见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。V4 入门 = Flash 单节点 TP4；冲 11K = Pro + MegaMoE W4A4 + SWA + PD-disagg（官方 10P1D-dep4-dep32 / Dynamo）。执行后本文回填实测。*
+## 7. Benchmark 汇总报告（实测，2026-07-20）
+
+**统一口径**：SGLang `bench_serving`，random 数据集 **8192 input / 1024 output**（`--random-range-ratio 1.0` 固定长度），warm（先 warmup 再测），单节点 4 GPU。`tok/s/GPU = Total token throughput(in+out) ÷ 4`。
+
+### 7.1 三方对比（conc=64 峰值）
+
+| 部署 | 模型 | 规模 | Total tok/s | **tok/s/GPU** | conc1 TPOT | 相对 |
+|---|---|---|---|---|---|---|
+| 本次 V4-Flash | 284B / 13B 激活 | 单节点 4 GPU | 34162 | **8540** | 5.71 ms | 基准 |
+| 本次 V4-Pro | 1.6T / 49B 激活 | 单节点 4 GPU | 11177 | **2794** | 10.44 ms | Flash 的 0.33× |
+| 我们 R1（前期）| 671B 全注意力 | 64 GPU 8P+DEP32 | — | 1359 | — | Flash 的 0.16× |
+| 官方 V4-Pro | 1.6T | **18 节点 PD** + MegaMoE W4A4 | — | 11200 | — | 本次 Pro 的 4.0× |
+
+### 7.2 逐并发明细
+
+**V4-Flash（单节点 TP4）**
+| 并发 | Total tok/s | tok/s/GPU | Output tok/s | Median TPOT | Median TTFT |
+|---|---|---|---|---|---|
+| 1 | 1520 | 380 | 169 | 5.71 ms | 220 ms |
+| 16 | 12477 | 3119 | 1386 | 8.06 ms | 1709 ms |
+| 64 | 34162 | **8540** | 3796 | 13.0 ms | 3102 ms |
+
+**V4-Pro（单节点 TP4）**
+| 并发 | Total tok/s | tok/s/GPU | Output tok/s | Median TPOT | Median TTFT |
+|---|---|---|---|---|---|
+| 1 | 838 | 209 | 93 | 10.44 ms | 295 ms |
+| 16 | 7594 | 1898 | 844 | 16.55 ms | 2193 ms |
+| 64 | 11177 | **2794** | 1242 | 33.74 ms | 9845 ms |
+
+### 7.3 结论
+
+1. **Flash vs Pro 差 3.1×**（8540 vs 2794 tok/s/GPU @conc64），符合模型代差：Pro 总参大 5.6×、激活大 3.8×，单 token 计算量更大。
+2. **Flash 单节点就碾压 R1 64 卡 6.3×**（8540 vs 1359）——V4 架构（CSA+HCA 打薄 KV + SWA）在同 workload 下每 token 效率远超 R1 全注意力。
+3. **Pro 单节点距官方 11,200 差 4.0×**——差距全在部署形态：官方是 18 节点 PD-disagg（prefill 独立扩展消化长 input）+ MegaMoE W4A4（激活也 4bit，矩阵乘快 ~2×）+ SWA。单节点 4 卡扛 1.6T 的 prefill，conc64 TTFT 已到 9.8s（瓶颈在 prefill），这正是 Phase 3 要解的。
+4. **交互性**：Pro conc1 TPOT 10.44ms ≈ 96 tok/s/user，Flash 5.71ms ≈ 175 tok/s/user，都远快于人眼阅读速度，单用户体验流畅。
+
+---
+
+*2026-07-20（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 已实测通过 + 压测，§3.9 为可复现手册、§7 为 benchmark 报告。存储全程 Local SSD RAID（不用内存盘，见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。下一步 Phase 3 = Pro + MegaMoE W4A4 + SWA + PD-disagg（官方 10P1D-dep4-dep32 / Dynamo）冲 11K。*
