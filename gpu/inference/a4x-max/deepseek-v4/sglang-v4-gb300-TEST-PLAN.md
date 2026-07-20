@@ -108,6 +108,22 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 - cp `nvidia/DeepSeek-V4-Pro-NVFP4`（~800G）到 **Local SSD**，`--model-path /mnt/ssd/DeepSeek-V4-Pro-NVFP4`（单节点 4×277G=1108G HBM 放得下）。**这里就是 Local SSD 的价值所在**：800G 模型放 Local SSD 不吃 RAM；若放内存盘，800G tmpfs + 运行时直接爆 942G 节点内存。
 - 同 Phase 1 启动，`--tp-size 4`。验证加载 + 生成。
 
+> **✅ Phase 2 实测通过（2026-07-20）**：`nvidia/DeepSeek-V4-Pro-NVFP4`（**851G / 76 文件**）从 HF 下载到 Local SSD（hf_transfer ~0.9 GB/s，851G 约 15 min），单节点 TP4 加载：
+> - **权重加载 <1 min**（Local SSD 读满速，`avail mem=274GB/GPU`），autotune + DeepGEMM warmup（32768 kernels）+ CUDA graph 约 12 min 到 ready。冒烟可加 `--disable-flashinfer-autotune` 提速。
+> - chat 生成正确（"capital of France"→"Paris"）。GCS 备份 `gs://chrisya-gb300-models/DeepSeek-V4-Pro-NVFP4/`（913G，ADC+SDK 上传 668s；ADC 用后即删）。
+>
+> **Phase 2 压测（单节点 TP4 / 4 GPU / 8K-1K / warm）**：
+>
+> | 并发 | Total tok/s（in+out）| **tok/s/GPU** | Output tok/s | Median TPOT | Median TTFT |
+> |---|---|---|---|---|---|
+> | 1 | 838 | 209 | 93 | 10.44 ms | 295 ms |
+> | 16 | 7594 | 1898 | 844 | 16.55 ms | 2193 ms |
+> | 64 | **11177** | **2794** | 1242 | 33.74 ms | 9845 ms |
+>
+> - **单节点 4 卡 conc64 到 2794 tok/s/GPU（in+out）**——比同 workload 的 V4-Flash（8540）低 **3.1×**，符合预期：Pro 1.6T/49B 激活 vs Flash 284B/13B 激活，模型大 5.6× / 激活大 3.8×。
+> - conc1 单用户 TPOT **10.44ms（≈96 tok/s/user）**，比 Flash（175 tok/s/user）慢约一半，Pro 更重但仍交互流畅。
+> - conc64 TTFT 9.8s 偏高——单节点 4 卡跑 1.6T prefill 压力大，这正是 Phase 3 上 PD-disagg（prefill 独立扩展）要解决的。官方 11,200 tok/s/GPU 是 Pro + 18 节点 Dynamo + MegaMoE W4A4，单节点做不到，Phase 3 再冲。
+
 ### Phase 3：PD-disagg + MegaMoE W4A4 + SWA（冲吞吐）
 - 拓扑参考官方 `10P1D-dep4-dep32`（10 prefill 各 TP4/DP4/EP4 + decode DEP32 8节点）。**我们可先缩小到 4P1D 或 8P + DEP32 试**（跟 R1 Round4 同规模，省节点）。
 - decode 关键参数（来自官方 recipe）：
@@ -167,8 +183,8 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 - [ ] pod ssd 卷 = hostPath `/mnt/disks/raid/0`（HostToContainer），内存 request 600Gi
 - [ ] 确认 `lmsysorg/sglang:latest`（或 nightly-dev-cu13）含 sm_103a
 - [ ] 集群池有空闲节点（Phase1 只需 1 台；Phase3 需 ~9-18 台）
-- [ ] V4-Flash / Pro NVFP4 checkpoint 备份到 GCS，bootstrap 时 `gcloud cp` **到 Local SSD `/mnt/ssd`**
-- [ ] Phase 1 单节点冒烟通 → 再上 Phase 3 规模
+- [x] V4-Flash / Pro NVFP4 checkpoint 备份到 GCS（`gs://chrisya-gb300-models/DeepSeek-V4-Flash-NVFP4` 168G / `-Pro-NVFP4` 913G），bootstrap 时 `gcloud cp` **到 Local SSD `/mnt/ssd`**
+- [x] Phase 1（Flash）+ Phase 2（Pro）单节点冒烟 + 压测通过 → 下一步 Phase 3 规模
 - [ ] benchmark 用同口径（total in+out /GPU，8K/1K，warm 值）；`input-len +1 BOS` 且 `input+output ≤ context-length`
 
 ---
