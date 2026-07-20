@@ -412,19 +412,22 @@ decode（DEP32）：
 3. **Pro 单节点距官方 11,200 差 4.0×**——差距全在部署形态：官方是 18 节点 PD-disagg（prefill 独立扩展消化长 input）+ MegaMoE W4A4（激活也 4bit，矩阵乘快 ~2×）+ SWA。单节点 4 卡扛 1.6T 的 prefill，conc64 TTFT 已到 9.8s（瓶颈在 prefill），这正是 Phase 3 要解的。
 4. **交互性**：Pro conc1 TPOT 10.44ms ≈ 96 tok/s/user，Flash 5.71ms ≈ 175 tok/s/user，都远快于人眼阅读速度，单用户体验流畅。
 
-### 7.4 Phase 3 消融表（待填，固定 10P1D-dep4-dep32 / subblock-0002 / 72 GPU / 8K-1K）
+### 7.4 Phase 3 消融表（进行中，固定 10P1D-dep4-dep32 / subblock-0001 / 72 GPU / 8K-1K，megamoe baseline）
 
-> 全程同拓扑，逐项叠加；峰值 tok/s/GPU 取 conc 扫描最优点。Δ = 相对上一 run 的增量。
-
-| Run | 配置 | 峰值 tok/s/GPU | Δ vs 上一步 | 最优并发 | TPOT@50tok/s/user | 备注 |
+| Run | 配置 | 状态 | conc1 total tok/s | conc1 TPOT | conc≥4 | 备注 |
 |---|---|---|---|---|---|---|
-| A baseline | deepep / W4A8 | — | — | — | — | 底线 |
-| B +MegaMoE | megamoe / W4A8 | — | — | — | — | |
-| C +W4A4 | megamoe / W4A4 | — | — | — | — | 官方最大一跳 |
-| D +SWA | +SWA预算+online压缩 | — | — | — | — | decode batch↑ |
-| E +MTP（满配）| +EAGLE MTP | — | — | — | — | 对标官方 11,200 |
+| A baseline | 原版ckpt / megamoe / W4A8 | **PD 通 + conc1 测通** | **622** | **13.74 ms** | ⚠️ tail-stall（见下） | TTFT 750ms；decode gen ~63 tok/s/DP-rank ×32 |
+| B +W4A4 | megamoe / W4A4 | 待并发修复后跑 | — | — | — | env `USE_FP4_ACTS=1 USE_MXF4_KIND=1` |
+| C +SWA/压缩 | +SWA opt+online压缩 | 待 | — | — | — | `SGLANG_OPT_SWA_*`+`USE_ONLINE_COMPRESS=1` |
+| D +MTP（满配）| +EAGLE MTP | 待 | — | — | — | 对标官方 11,200 |
 
 对标：官方 GB300 disagg V4-Pro FP4 8K/1K @~50 tok/s/user = **11,200 tok/s/GPU**（Day-0 no-MTP ~2,200）。
+
+> **⚠️ Open issue：并发 benchmark tail-stall（2026-07-20 23:20）**：Run A PD **单流 conc=1 完全正常**（622 tok/s，4 请求 59s），但 `bench_serving --max-concurrency ≥4` 经 sglang_router 压测**尾部约 2 个请求永不返回** → 出不了 summary（conc4 卡 6/8、conc16 卡 62/64、conc64 卡 247/256，比例一致）。
+> - **已排除**：decode 正常（日志 `Decode batch #running-req 1-2, gen throughput 63-127 tok/s/DP-rank`；直连 decode `/v1/completions` 返回 200）；非 OOM、非 crash。
+> - **疑点**：sglang_router `--pd-disaggregation cache_aware` 并发下对少数请求 prefill→decode KV 交接有 race（官方用 **Dynamo** kv-router 非 sglang_router）；或某 prefill 节点偶发 stuck。
+> - **下一步**：(1) 换 Dynamo frontend（官方 recipe）；(2) 逐 prefill 单测找 stuck 节点；(3) 调 `--disaggregation-decode-polling-interval`/`num-reserved-decode-tokens`；(4) 试更新 nightly（tail-stall 或是 nightly PD bug）。
+> - **不影响结论**：**环境 + PD 架构 + 单流推理已验证可用**，并发吞吐待修复后补。
 
 ---
 
