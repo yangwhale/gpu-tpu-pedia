@@ -63,27 +63,30 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 
 ## 3. 分阶段测试计划（一步一个脚印，从易到难）
 
-### Phase 0：拉镜像 + 模型 + 验证 sm_103a
-1. 起 1 个 GB300 pod（复用 R1 gen-pods.py，改 image 为 `lmsysorg/sglang:latest`，pod 数=1）。
-2. **验证镜像含 sm_103a**（GB300 = cc 10.3）：`cuobjdump` 查 `sgl_kernel/*.so` arch 有没有 `sm_103a`（R1 踩过这个坑，V4 新镜像必须重验）。
-3. bootstrap（GIB + DOCA + gcloud，同 R1 §4）。
-4. 拉 `nvidia/DeepSeek-V4-Flash-NVFP4` 到内存盘（先拉小的 Flash）。
+> **存储：全程 Local SSD RAID，不用内存盘**。V4-Pro 1.6T ≈ 800G FP4，内存盘（tmpfs）放不下（800G 模型 + 运行时 > 942G 节点 RAM）；且 RAM 要留给 KV cache / HiCache CPU offload。所有 pod 模型都放 **Local SSD RAID `/mnt/disks/raid/0`**（读 14 GB/s，跨 pod 持久）。详见 [`./gb300-local-ssd-raid0-SETUP.md`](./gb300-local-ssd-raid0-SETUP.md)。
+
+### Phase 0：Local SSD RAID 就位 + 拉镜像 + 模型 + 验证 sm_103a
+1. **先确保节点池 Local SSD RAID 就位**：部署 `gke-raid-disks` DaemonSet，逐节点 `grep -c md0 /proc/mdstat` 确认全 =1（12T RAID 挂 `/mnt/disks/raid/0`）。**用干净池**（R1 实测 pool-0007 17/17 全成）；有残留 `mnt-disks-ssdN.mount` 污染的节点 RAID 会失败，需重建（见 RAID-SETUP 坑速查）。
+2. 起 1 个 GB300 pod：复用 R1 gen-pods（image 改 `lmsysorg/sglang:latest`，pod=1），**ssd 卷用 hostPath `/mnt/disks/raid/0` + `mountPropagation: HostToContainer`，内存 request 600Gi**（模型在 Local SSD 不进 RAM；≥600Gi 覆盖加载峰值，200Gi 会 OOM）。
+3. **验证镜像含 sm_103a**（GB300 = cc 10.3）：`cuobjdump` 查 `sgl_kernel/*.so` arch 有没有 `sm_103a`（R1 踩过这个坑，V4 新镜像必须重验）。
+4. bootstrap（GIB + DOCA + gcloud，同 R1 §4）。
+5. `gcloud storage cp` 拉 `nvidia/DeepSeek-V4-Flash-NVFP4` **到 Local SSD `/mnt/ssd`**（背后是 RAID；先拉小的 Flash。R1 实测 GCS→Local SSD ~5.4 GiB/s）。
 
 ### Phase 1：V4-Flash 单节点 TP=4 冒烟（最简单，先跑通）★ 从这里开始
 - **1 台 GB300 / 4 GPU，无 PD、无多节点、无 MegaMoE**。
-- 最小启动（low-latency 配方）：
+- 最小启动（low-latency 配方，**model-path 指 Local SSD**）：
   ```bash
-  sglang serve nvidia/DeepSeek-V4-Flash-NVFP4 \
+  python -m sglang.launch_server --model-path /mnt/ssd/DeepSeek-V4-Flash-NVFP4 \
     --tp-size 4 --trust-remote-code \
     --moe-runner-backend flashinfer_trtllm_routed \
     --reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 \
     --host 0.0.0.0 --port 30000
   ```
 - 验证：curl `/v1/chat/completions`，确认返回 + `reasoning_content` 分离正常。
-- **目标**：先证明 V4 能在我们的 GB300 上加载 + 生成。跑通即 Phase 1 成功。
+- **目标**：先证明 V4 能在我们的 GB300 上从 Local SSD 加载 + 生成。跑通即 Phase 1 成功。
 
 ### Phase 2：V4-Pro 单节点 TP=4
-- 换 `nvidia/DeepSeek-V4-Pro-NVFP4`（~800G，单节点 4×277G=1108G HBM 放得下）。
+- cp `nvidia/DeepSeek-V4-Pro-NVFP4`（~800G）到 **Local SSD**，`--model-path /mnt/ssd/DeepSeek-V4-Pro-NVFP4`（单节点 4×277G=1108G HBM 放得下）。**这里就是 Local SSD 的价值所在**：800G 模型放 Local SSD 不吃 RAM；若放内存盘，800G tmpfs + 运行时直接爆 942G 节点内存。
 - 同 Phase 1 启动，`--tp-size 4`。验证加载 + 生成。
 
 ### Phase 3：PD-disagg + MegaMoE W4A4 + SWA（冲吞吐）
@@ -140,12 +143,15 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 
 ## 6. 开跑前 checklist
 
+- [ ] **用干净节点池**（无 `mnt-disks-ssdN.mount` 残留污染；R1 实测 pool-0007 干净）
+- [ ] **Local SSD RAID 就位**：`gke-raid-disks` DaemonSet 部署，逐节点 `grep -c md0 /proc/mdstat` 全 =1
+- [ ] pod ssd 卷 = hostPath `/mnt/disks/raid/0`（HostToContainer），内存 request 600Gi
 - [ ] 确认 `lmsysorg/sglang:latest`（或 nightly-dev-cu13）含 sm_103a
-- [ ] 集群 pool-0010 有空闲节点（Phase1 只需 1 台；Phase3 需 ~9-18 台）
-- [ ] V4-Flash / Pro NVFP4 checkpoint 备份到 GCS（同 R1 流程，`gs://chrisya-gb300-models/`）
+- [ ] 集群池有空闲节点（Phase1 只需 1 台；Phase3 需 ~9-18 台）
+- [ ] V4-Flash / Pro NVFP4 checkpoint 备份到 GCS，bootstrap 时 `gcloud cp` **到 Local SSD `/mnt/ssd`**
 - [ ] Phase 1 单节点冒烟通 → 再上 Phase 3 规模
-- [ ] benchmark 用同口径（total in+out /GPU，8K/1K，warm 值）
+- [ ] benchmark 用同口径（total in+out /GPU，8K/1K，warm 值）；`input-len +1 BOS` 且 `input+output ≤ context-length`
 
 ---
 
-*准备版，2026-07-20。R1 端到端见 `../deepseek-v3/`。V4 入门 = Flash 单节点 TP4；冲 11K = Pro + MegaMoE W4A4 + SWA + PD-disagg（官方 10P1D-dep4-dep32 / Dynamo）。执行后本文回填实测。*
+*准备版，2026-07-20（Local SSD based）。存储全程 Local SSD RAID（不用内存盘，见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。V4 入门 = Flash 单节点 TP4；冲 11K = Pro + MegaMoE W4A4 + SWA + PD-disagg（官方 10P1D-dep4-dep32 / Dynamo）。执行后本文回填实测。*
