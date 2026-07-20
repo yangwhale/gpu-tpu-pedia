@@ -323,6 +323,13 @@ decode（DEP32）：
 - MTP（Run E）：`--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`（draft MoE bf16，需 `--speculative-moe-runner-backend triton --speculative-moe-a2a-backend none`，同 R1 MTP 坑）
 - mooncake NVLINK（同 R1）：`MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`（prefill + decode 都加）
 
+**✅ 实测跑通的 PD 启动要点（Run A，原版 checkpoint + megamoe）**：
+- **model-path 用原版** `/mnt/ssd/DeepSeek-V4-Pro`（非 NVFP4），**不设** `--moe-runner-backend`（megamoe 自选）。
+- prefill（每节点 DEP4）：`--tp 4 --dp 4 --ep 4 --enable-dp-attention --enable-dp-lm-head --moe-a2a-backend megamoe --moe-dense-tp-size 1 --deepep-config '{normal_dispatch...}' --disaggregation-mode prefill --mem-fraction-static 0.90 --chunked-prefill-size 32768 --cuda-graph-max-bs 512`。
+- decode（8 节点 DEP32）：`--tp 32 --dp 32 --ep 32 --nnodes 8 --node-rank $R --dist-init-addr $D0IP:5000 --enable-dp-attention --enable-dp-lm-head --moe-a2a-backend megamoe --moe-dense-tp-size 1 --disaggregation-mode decode --disaggregation-decode-polling-interval 8 --mem-fraction-static 0.94 --swa-full-tokens-ratio 0.20 --context-length 9216 --max-running-requests 18432 --cuda-graph-max-bs 1280`。
+- **router**（在任一 prefill pod 起）：`python -m sglang_router.launch_router --pd-disaggregation --prefill http://<pIP>:30000 30001 ×10 --decode http://<d0IP>:30000 --policy cache_aware --host 0.0.0.0 --port 8000`。
+- **启动耗时**：8 节点 decode NCCL rendezvous + megamoe warmup ~7min 到 ready；**首次 benchmark warmup 极慢**（megamoe/deepgemm 对每个 8K prefill shape 首次 JIT 编译，单请求可达十几分钟），JIT 缓存后正常。
+
 ### Phase 4：汇总消融报告 + 三方对比
 - 把 Run A→E 的 per-step delta 汇成消融表（见 §7.4 模板），得出「每招值多少 tok/s/GPU」。
 - 与官方 11,200 对标，分析剩余 gap（Dynamo vs router、c2500 并发是否压满、EPLB/Waterfill 等未开项）。
