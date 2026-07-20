@@ -473,9 +473,28 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 | A | megamoe W4A8 | 9.15 | ~1,170 | 1.00× |
 | B | +W4A4 | 13.53 | ~1,732 | **1.48×** |
 | C | +SWA+online压缩 | 12.36 | ~1,580 | 1.35×（SWA 收益需高并发）|
-| D | +MTP | 待填 | — | — |
+| D | +MTP（W4A4+SWA，去 online 压缩）| **加载通、benchmark 未出数** | — | 见下 |
 
-> 受 sglang_router tail-stall 限制，conc 只能到 ~256，摸不到官方 c2500 的饱和点；SWA 的高并发增益、以及冲 11,200，都需换 Dynamo。这是**下一步的明确工程**。
+**Run D（MTP）踩坑实录（连撞 4 关，都是"花钱买的经验"）**：
+1. `AssertionError: online c128 does not support MTP` → MTP 与 online 压缩**互斥**，Run D 去掉 `USE_ONLINE_COMPRESS`（= W4A4 + SWA + MTP）。
+2. `mega MoE: num_tokens=2304 exceeds cap 1280` → MTP 的 draft token 放大每 rank token 数，decode `NUM_MAX_TOKENS_PER_RANK` 从 1280 提到 **4096**。
+3. `CUDA OOM`（decode 276G 满）→ MTP draft 模型 + 投机 CUDA graph 吃显存，decode `mem-fraction 0.94→0.88` + `cuda-graph-max-bs 1280→512`。
+4. 以上都修好、decode ready（"fired up"）后，**benchmark warmup 单请求仍 hang**（同 sglang_router tail-stall 类，MTP 下更易触发；decode 无 `Decode batch` 活动）。→ **MTP 的稳定压测同样卡在 sgl-router，需 Dynamo**。
+
+> 受 sglang_router tail-stall 限制，conc 只能到 ~256，摸不到官方 c2500 的饱和点；SWA 高并发增益、MTP 稳定压测、以及冲 11,200，**都卡在同一个根因（sgl-router PD 并发 tail-stall）→ 都需换 Dynamo**。这是**下一步唯一的明确工程**。
+
+### 8.7 距官方 11,200 的差距分解（诚实核算）
+| 因子 | 我实测/状态 | 官方 | 说明 |
+|---|---|---|---|
+| baseline megamoe W4A8 @conc256 | ~1,170 tok/s/GPU | — | 起点 |
+| +W4A4 | ×1.48 → ~1,732 | — | ✅ 实测 |
+| +SWA/压缩（高并发）| conc256 未见增益 | 显著 | ⚠️ 需 c2500 才显现 |
+| +MTP | 未出数 | ~2.6× | ⚠️ 卡 sgl-router |
+| 并发 256 → 2500 | 卡 tail-stall | 饱和 | ⚠️ 需 Dynamo |
+| frontend | sglang_router | **Dynamo** | ⚠️ 根因 |
+| **合计** | **~1,732 已达（1.48×）** | **11,200** | 差距 = SWA高并发 × MTP × 饱和并发，全部 gated on Dynamo |
+
+**结论**：在 sglang_router 下，受 tail-stall 天花板限制，Run B（W4A4）的 ~1,732 tok/s/GPU 是当前可稳定测得的峰值。要复现官方 11,200，**必须换 Dynamo frontend**（解 tail-stall → 上 c2500 + 稳定 MTP + SWA 高并发增益）。Dynamo 搭建（NATS+ETCD+`dynamo.sglang`×18+frontend）是明确的下一步工程，非参数可调。
 
 ---
 
