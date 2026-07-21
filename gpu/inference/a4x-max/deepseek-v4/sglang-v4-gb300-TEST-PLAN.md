@@ -663,4 +663,73 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 ---
 
-*2026-07-21（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（10P1D-dep4-dep32 / Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。§3.9 单节点可复现手册、§3.3+§3.4 PD+Dynamo 复现步骤、§7 benchmark 报告、§8 全过程+原理。**最终 peak = 3,031 tok/s/GPU（+MTP，c2500，干净 98.5%）**，距官方 11,200 差 ~3.7×（触顶根因 = prefill 硬饱和，非架构 blocker，见 §7.4/§8.10）。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
+## 10. ⭐⭐⭐⭐ 认知修正与深化（2026-07-21 晚，逐段精读官方 PyTorch 博客 + dep8/dep32/dep40 全实测后）
+
+> 本节纠正前文 §7.4 / §8.7 / §8.10 / §9 的几处**口径错误和方向偏差**，是目前对官方 11,200 最准确的理解。前面那些章节的实验过程保留作历史，但**结论以本节为准**。
+
+### 10.1 【最大纠错】性能口径：官方是「output-only ÷ decode-GPU」，不是「(in+out) ÷ 总GPU」
+
+- **前文错误**：§7.4/§8.10/§9.5 报的 "peak 3,031 / 3,522 tok/s/GPU" 是 `(输入+输出) ÷ 72 卡`。官方 11,200 的口径是 **纯输出 token ÷ 解码卡数**（InferenceX 方法论原文："disaggregated configs calculate output throughput per decode GPU"），**prefill 卡不进分母、输入 token 不进分子**。两者根本不是一个口径，之前拿 3,031 对 11,200 是关公战秦琼。
+- **量纲验证**：11,200 若是「输出÷总72卡」→ ×72 = 80万输出/s，反推输入几百万/s，1.6T 模型物理不可能。只有「输出÷解码卡」讲得通（dep8：11,200×8=8.96万输出/s，≈87.5 req/s，合理）。
+- **含义（关键）**：这个口径**把 prefill 成本藏起来了**——你堆再多 prefill 喂一个小 decode，per-decode-GPU 都好看。它是「解码效率」指标，不是整机 TCO。
+- **我们已对齐口径的真实数**：dep8 + 8 prefill + MTP-3 稳态 = 客户端 output 53,272/s ÷ 8 decode 卡 = **6,659 output/decode-GPU**（这个是对的口径）；dep32 同法 = 50,351 ÷ 32 = **1,573**（更低，见 10.3）。距 11,200 差 **~1.7×（dep8）**，不是之前写的 3.7×（那是错口径算的）。
+
+### 10.2 【方向纠错】11,200 是 dep8 + MTP，不是 dep40 / wide-EP
+
+- 官方博客原文："**June 2026 MTP 曲线** @ ~50 tok/s/user = 11,200"。带 MTP 的 recipe **全是 dep8 那一家**（`mid-curve-*-dep8-mtp` / `high-conc-*-dep8-mtp`）；而 `10p1d-dep32` / `8p1d-dep40` 这些 wide-EP 大配置的 yaml **没有 speculative，是 no-MTP 曲线**。
+- 所以 **11,200 出在 dep8-MTP，最可能是 `high-conc-8p1d-dep4-dep8-mtp`（conc 8192）**。§8.5/§9 把 wide-EP dep32/dep40 当成 11,200 的路是**偏的**。
+- 我们早先测的 dep8+MTP（6,659）**恰恰就是对的那一家**；下午一度转去 dep40 是走偏（且 dep40 有硬约束，见 10.4）。
+- 博客"How to Reproduce"贴的 `10p1d-dep4-dep32-c2500` 是 **no-MTP 大配置**，不是 11,200 的配方——博客拿它当"流程示范"，误导性强。
+
+### 10.3 PD 是流水线：prefill 数怎么算才不饿死 decode（可复用公式）
+
+**核心公式**：`需要的 prefill worker 数 = (decode 每秒完成请求数 × 输入长度) ÷ (单 prefill worker 吞吐)`
+
+以 11,200 那个点（dep8 / 8K1K / 50 tok/s/user）为例：
+1. 每张 decode 卡在 50 tok/s/user 点服务 `11,200 ÷ 50 ≈ 224 个并发用户`。**decode 卡数 = 目标总用户 ÷ 224**（这是规模决策，不是性能决策；效率 11,200 是常数）。
+2. dep8（8 decode 卡）= 8×224 ≈ **1,792 有效用户**（recipe 灌 conc 8192 是 offered load，稳态有效并发 ~1,792，多的在排队）。
+3. decode 完成请求率 = 8×11,200 ÷ 1024 ≈ **87.5 req/s**；prefill 需供 87.5 × 8192 ≈ **71.7 万 input tok/s**。
+4. 单 prefill worker（dep4，官方速）≈ 4×18,200 ≈ 7.28 万 → 需 **~8-10 个 prefill**。官方 `high-conc-8p1d` 用 **8 个**，对得上。
+
+**官方 P:D 配比表（按并发缩放，decode 越大/并发越高 prefill 越多）**：
+
+| recipe | prefill | decode | 曲线 | 场景 |
+|---|---|---|---|---|
+| mid-curve-1p1d-dep8 | 1 | dep8 | MTP | 低并发交互 |
+| mid-curve-2p1d-dep8 | 2 | dep8 | MTP | |
+| mid-curve-4p1d-dep8（num-steps 3）| 4 | dep8 | MTP | conc 1024 |
+| high-conc-8p1d-dep8（num-steps 1）| 8 | dep8 | MTP | conc 8192 ← **11,200 最可能在此** |
+| 10p1d-dep32 c2500 | 10 | dep32 | no-MTP | 大规模吞吐 |
+| 15p1d-dep12 c12000 | 15 | dep12 | no-MTP | 超高并发（prefill 拉满、decode 缩小）|
+
+### 10.4 【我们撞墙的真根因】我的 prefill 慢 ~3.7×，配比在 18 节点内凑不出来
+
+- 实测：我每个 8K prefill forward 要 **1.44s**，官方 **0.45s**，**单 prefill 吞吐只有官方 ~1/3.7**。
+- 代入 10.3 公式：喂饱 dep8/1760 并发需 71.7 万 input tok/s，我单 worker 只吐官方 1/3.7 → 需 **~30 个 prefill worker**，而我总共 18 台机器，**物理放不下** → 必然饿死 decode（实测 decode 反复抽干、running-req 从 227 掉到个位数）。
+- **这才是 gap 的数学根源**：不是拓扑选错、不是 MTP 开关、不是攒批技巧——是 **prefill 单卡吞吐慢 3.7×**，导致在 18 节点预算内配不出"喂得饱 decode"的 P:D 比。
+- 前文 §9 说"gap = prefill batch 没攒满 / chunked-prefill" 是**表象**；深层是 prefill 单次 forward 慢 3.2-3.7×（内核成熟度：MHC 融合、prefill breakable CUDA graph、W4A4 等官方内核优化，我的 nightly 未必全生效）。
+
+### 10.5 dep40 的硬约束 + wide-EP 在 feed-limited 下反而更差
+
+- **dep40 非法(无 EPLB)**：DeepSeek-V4 有 **256 个专家，256 % 40 ≠ 0**，`assert num_physical_experts % ep_size == 0` 直接崩。dep40 **必须配 EPLB 加冗余专家**凑整（如 256+24=280，280/40=7）。所以 **EPLB 不只是 2.54× 加速，是 dep40 能启动的前提**。合法 EP 必须整除 256（8/16/32/64…）。
+- **feed-limited 下 wide-EP 反而降 per-GPU**：实测 dep32（32 decode 卡）total output ~50K，dep8（8 卡）total output ~53K——**总输出都被 prefill 卡在 ~50K**，与 decode 拓扑无关。dep8 ÷8 = 6,659；dep32 ÷32 = 1,573。**prefill 喂不动时，decode 铺得越宽 per-GPU 越低**。研究说的"wide-EP 提 per-GPU"只在 prefill 供得上时成立（官方 prefill 快，我不快）。
+
+### 10.6 「prefill 攒批再放」这招：官方没用，且被 decode 显存卡死
+
+- 官方 11,200 是 **`req_rate inf` 持续喂料的稳态数**，**不用**攒批技巧。
+- `slow_down` 攒批（issue #6017）是**压测 hack**（量 decode 峰值），不是产 11,200 的方法；且 **dynamo.sglang 上没有 slow_down HTTP 接口**，用不了。
+- **根本上限**：prefill 过的 KV 得存进 decode 的 KV pool 等消费；pool 有限（dep8 ~400万 token → 最多攒 ~450 个 8K 请求，dep32 ~1300万 → ~1600 个）。攒满即到顶，放开后 decode drain 一波爆发就打回原形。**攒批 = 一次性 burst，被 KV pool 卡死，不可持续；稳态 11,200 绕不开"prefill 真快"**。
+- 我实测 `SGLANG_HACK_PD_DECODE_NUM_RESERVED_DECODE_TOKENS=1026` 在 dynamo dep8 下**过度预分配**（499 prealloc 占满 KV、只 14 running），吞吐反降到 2,984——**这招在我环境有害**。
+
+### 10.7 冲 11,200 的真正待办（按优先级）
+
+1. **修 prefill 单卡吞吐**（真瓶颈）：profile 那 1.44s/forward 花在哪（CSA/HCA attention / MoE dispatch / DeepGEMM），对齐官方内核优化（MHC fusion #24775/#25976、KV-Compress-V2 #24890、W4A4 #25052、prefill breakable-CUDA-graph #25195/#25795）。可能需更新镜像到官方 pin 的 nightly。
+2. **配比对齐**：prefill 快了之后，用 `high-conc-8p1d-dep8`（8 prefill : dep8 + MTP num-steps 1，conc 8192）严格复现。
+3. **口径对齐**：一律用「output ÷ decode-GPU」报数，别再用 (in+out)÷总卡。
+4. EPLB（dump expert distribution → `--init-expert-location`）：decode 2.54×，但要先解决 prefill feed 否则测不出。
+
+**一句话认知**：**gap 的本质是我 prefill 单卡吞吐慢 3.7×，在 18 节点内配不出喂饱 decode 的 P:D 比；官方 11,200 是 dep8-MTP 稳态、纯输出÷解码卡、靠快 prefill + 8:1 配比持续喂满测出来的，不靠攒批。**
+
+---
+
+*2026-07-21（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（10P1D-dep4-dep32 / Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。§3.9 单节点可复现手册、§3.3+§3.4 PD+Dynamo 复现步骤、§7 benchmark 报告、§8 全过程+原理。**最终最优（对齐官方口径 output÷decode-GPU）= dep8+8prefill+MTP-3 稳态 6,659 output/decode-GPU**，距官方 11,200 差 ~1.7×；**根因 = 我 prefill 单卡吞吐慢官方 ~3.7×，18 节点内配不出喂饱 decode 的 P:D 比**（详见 §10 认知修正——含口径纠错、11,200=dep8-MTP、PD 配比公式、dep40 需 EPLB、攒批被 KV pool 卡死等，结论以 §10 为准；§7.4/§8.10 的 "3,031 tok/s/GPU" 是旧错口径 (in+out)÷72，已作废）。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
