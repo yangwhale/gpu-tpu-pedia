@@ -12,8 +12,26 @@
 | Phase 2 V4-Pro 单节点 TP4 | ✅ 通过，conc64 **2,794 tok/s/GPU** |
 | Phase 3 V4-Pro PD 10P1D-dep4-dep32（72 GPU）| ✅ 端到端跑通 |
 | — sglang_router 编排 | ⚠️ 高并发 **tail-stall**（少数请求永挂），天花板 ~1,732 tok/s/GPU |
-| — **Dynamo 编排（官方用的）** | ✅ **打通并根治 tail-stall**，conc2048 干净出数 **1,644 tok/s/GPU** |
-| 距官方 11,200 tok/s/GPU | 差 ~6.8×，gap = SWA 高并发增益 + MTP(~2.6×) + c2500 饱和 + 深度调优（进行中）|
+| — **Dynamo 编排（官方用的）** | ✅ **打通并根治 tail-stall**；无 MTP peak 1,585；**+MTP peak = 3,031（c2500，98.5% 干净）** |
+| 距官方 11,200 tok/s/GPU | 差 ~3.7×；**MTP 已复现（+2.2×）**，触顶根因 = **prefill 硬饱和**（c2500 TTFT 80s，decode TPOT 才 11ms 富余巨大）→ 需 prefill 侧深调（chunked-prefill/deepep/EPLB）或加 prefill 节点 |
+
+**Dynamo 满配 sweep（72 GPU / ISL 8192 · OSL 960·客户端 total in+out /GPU）——无 MTP vs +MTP 对照**：
+
+| 并发 | 无 MTP (W4A4+SWA) | **+MTP (EAGLE nextn=1)** | MTP 增益 | +MTP 成功率 | +MTP TPOT |
+|---|---|---|---|---|---|
+| 256 | 1,350 | **1,562** | +16% | 758/768 (98.7%) | 11.1ms |
+| 1024 | 1,585（无MTP peak）| **2,688** | **+70%** | 3033/3072 (98.7%) | 11.7ms |
+| 2048 | 1,392（掉）| **3,011** | **+2.2×** | 5906/6000 (98.4%) | 11.0ms |
+| **2500**（官方点）| — | **3,031（peak）** | — | 7389/7500 (98.5%) | 11.4ms |
+
+> **c2500 与 conc2048 持平（3,031 vs 3,011）= 吞吐触顶**：TTFT 从 65s→80s 但吞吐没涨，证明 **prefill 硬饱和**，加并发只堆队列不增吞吐。**10P1D 配置的诚实天花板 = ~3,030 tok/s/GPU（+MTP，98.5% 干净）**。
+>
+> **MTP 是真杠杆**：conc1024 从 1,585→2,688（+70%），且 **TPOT 稳定 11ms**（无 MTP 是 43ms）——draft token 被接受，decode 每 token 快 ~1.8×，per-user 速度不掉的同时吞吐翻倍。这正是官方「2,200→11,200 靠 MTP」的机制在我们环境复现。
+> **剩余瓶颈仍是 prefill**：conc2048 TTFT 65s，10P DEP4（40 GPU）喂不动 8K 输入的 2000+ 并发；TPOT 才 11ms（=90 tok/s/user，远快于官方 50 的操作点），decode 有富余但 prefill 追不上。要冲 11,200 得加 prefill 或调 chunked-prefill/deepep + c2500 steady-state。
+>
+> **⚠️ Dynamo「circuits-open」谜团的真根因（趟了大坑）**：不是 Dynamo bug，是**旧 `sglang::router` 僵尸进程霸占 8000 端口**拦截所有请求（它 `/v1/models` 也返 200 迷惑人，但 `owned_by:local`；真 Dynamo frontend 是 `owned_by:nvidia`+`context_window:1048576`）。dynamo.frontend 因端口占用 bind 失败静默崩，所有请求打到僵尸 router 的死 prefill 熔断上 → 报「No available prefill workers (circuits open)」。**排查法**：`/proc/net/tcp` 反查监听 8000 的 PID（pod 内无 `ss`/`lsof`），`kill -9` 僵尸 router 后再起 dynamo.frontend。
+>
+> **⚠️ MTP 四大坑（都趟过，全解）**：(1) `online c128 不支持 MTP` → abl-D 去掉 online-compress；(2) `context-length 9216` 太小——MTP draft token 让 8194+1024=9218 超限，78% 请求被拒 → benchmark 侧 OSL 降到 960（ISL 仍官方 8192），或提 ctx（但见坑3）；(3) 提 ctx 到 9728/10240 → **cuda graph capture CUDA OOM**（KV pool 变大挤爆 graph 显存），回退 ctx 9216 + mem 0.90；(4) **反复 kill+relaunch dynamo.sglang 会积累 zombie 进程 + ZMQ 40236 端口残留 + GPU 显存泄漏不释放**（`pkill` 杀不掉 D/Z 态、`sleep infinity` PID1 不 reap 僵尸）→ 显存卡在 191GB 新进程必 OOM，**唯一可靠解 = `kubectl delete pod --force` 重建 pod**（模型在 node-local SSD 持久，podAffinity 保 subblock 不变）；prefill 单点 40236 冲突用 `/proc/net/tcp` 反查 killport 清。
 
 **三条最贵的经验（都是坑里趟出来的）**：
 1. **checkpoint 变体是关键**：megamoe/PD **必须用原版 `deepseek-ai/DeepSeek-V4-Pro`**（FP4 MoE + FP8 attn），**不能用 `nvidia/*-NVFP4`**（后者强制 `flashinfer_trtllm_routed` runner，对 deepep/megamoe 都无 fused func，多节点必崩）。nvidia NVFP4 只适合单节点 trtllm（Phase 1/2）。
