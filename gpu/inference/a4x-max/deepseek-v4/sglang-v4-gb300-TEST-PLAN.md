@@ -644,14 +644,22 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 5. **SGLang PD 文档**：https://docs.sglang.ai/advanced_features/pd_disaggregation.html ｜ **batch 攒满佐证** issue #12591：https://github.com/sgl-project/sglang/issues/12591
 6. **DeepEP Waterfill**（EP dispatch 均衡，PR #25391）：sgl-project/sglang PR #25391
 
-### 9.5 验证计划（进行中）
+### 9.5 验证实测结果（2026-07-21）
 
-1. 按官方对齐 Dynamo frontend：`--router-mode kv --router-queue-threshold 64 --router-temperature 0.5 --router-kv-overlap-score-weight 0 --no-kv-events` + 多 frontend。
-2. 压测改 `req_rate inf`（开环打满 prefill）。
-3. 看 prefill 日志 `#new-token` 是否逼近 32768（攒满标志）。
-4. 对比 peak tok/s/GPU，逐项确认哪个参数吃回多少 gap。
+按官方对齐 Dynamo router + 开环压测，实测对比（72 GPU / ISL 8192 OSL 960 / MTP）：
 
-> **诚实说明**：证据强、方向与「攒 batch」假设一致，但能否吃回全部 3.7× 需实测确认。9.5 结果出来后回填本节。
+| 配置 | 压测方式 | tok/s/GPU | TTFT | TPOT | 对比 |
+|---|---|---|---|---|---|
+| 裸 frontend（无 router 配置）| 闭环 c2500 | **3,031** | 80s | 11.4ms | baseline |
+| +router-mode kv+queue-threshold 64 | 闭环 c2500 | 2,627 | 101s | 14.2ms | **-13%（闭环下反而降）** |
+| +router-mode kv | **开环 req_rate inf** | **3,522** | 39s | 13.6ms | **+16%（开环是对的）** |
+
+**关键发现**：
+1. **闭环 max-concurrency 下 router-queue-threshold 无用甚至有害**：闭环已限死在途请求数，router 排队只增延迟不增吞吐 + KV 路由开销 → -13%。
+2. **开环 req_rate inf（官方口径）才有效**：请求持续涌入，peak 从 3,031 → **3,522（+16%）**，effective concurrency 自然平衡在 ~2666。**测量口径必须用开环**。
+3. **⚠️ prefill 仍是瓶颈、batch 疑似没攒满**：prefill 日志 `new-token: 8192`（= 单请求输入），chunked-prefill-size 32768 只用了 1/4。算账：每 prefill 卡 forward 处理 8192 token 却只吐 ~4,900 input tok/s，官方 ~18,200 —— 若两者都 8192/forward，则官方**每次 forward 快 3.7×**（指向 batch 攒满到 32768/MFU 提升，或 prefill kernel 更快）。DP4 下 `new-token: 8192` 是否为 per-rank（则 node 级 32768 已满）尚未定论，是下一步决定性诊断。
+
+**结论（诚实）**：开环 + router 对齐吃回了 ~16%（3,031→3,522），确认**测量口径（开环）是真差别之一**；但**没吃回全部 3.2×**。剩余 gap 仍在 prefill——需定论 prefill batch 到底满没满（`new-token` per-rank vs per-node）+ 试官方 prefill 完整 scheduler 参数 / EPLB / 更大 chunked batch。**距 11,200 现为 ~3.2×**。
 
 ---
 
