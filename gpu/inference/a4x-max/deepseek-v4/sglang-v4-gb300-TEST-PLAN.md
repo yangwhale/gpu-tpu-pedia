@@ -38,7 +38,7 @@
 2. **sglang_router 高并发有硬伤**：PD 并发下少数请求 prefill→decode KV 交接 race，请求永久 hang 不失败不重试不释放槽（GitHub issue #9266/#31206/#12688/#5450），高并发吞吐崩塌。**官方 11,200 用 Dynamo 不是 sglang_router**。
 3. **Dynamo 是正解且已跑通**：`dynamo.sglang` worker + `dynamo.frontend` + NATS/ETCD，根治 tail-stall、高并发 benchmark 干净 100% 完成。坑：换 image/重启必须彻底杀 `dynamo.sglang`+`sglang::scheduler`（否则占 dist port 5000）；frontend 熔断器要在 workers **完全 ready 后**起新的（换端口避僵尸）。
 
-**消融实测（conc256 / 72 GPU / 8K-1K，服务端测量）**：Run A megamoe W4A8 = 1,170 → Run B +W4A4 = **1,732（1.48×，最大单项）** → C +SWA/压缩（conc256 无增益，需高并发）→ D +MTP（4 关全趟，压测同卡 sgl-router）。
+**消融实测**：sgl-router 阶段（conc256，服务端测量）Run A megamoe W4A8 = 1,170 → +W4A4 = 1,732（1.48×）；**换 Dynamo 后 c2500 干净出数**：无 MTP peak 1,585 → **+MTP peak 3,031 tok/s/GPU**（详见 §7.4）。
 
 **详细导航**：§3.9 单节点可复现手册 · §7 Flash/Pro/R1 benchmark · §8 方案+Router 对比+原理+消融+**Dynamo 全过程（§8.8-8.9）**。
 
@@ -356,15 +356,34 @@ decode（DEP32）：
 ```
 - W4A4 env：`SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=8320`
 - SWA env：`SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1 SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN=1 SGLANG_OPT_USE_ONLINE_COMPRESS=1`
-- MTP（Run E）：`--speculative-algorithm EAGLE --speculative-num-steps 3 --speculative-eagle-topk 1 --speculative-num-draft-tokens 4`（draft MoE bf16，需 `--speculative-moe-runner-backend triton --speculative-moe-a2a-backend none`，同 R1 MTP 坑）
+- **MTP（Run D，实测跑通 = 这套）**：`--speculative-algorithm EAGLE --speculative-num-steps 1 --speculative-eagle-topk 1 --speculative-num-draft-tokens 2`（DeepSeek V4 原生 nextn=1，**prefill + decode 两侧都要加**，否则 nextn 模块加载不一致）。**不要**用 `num-steps 3`（未验证）。decode 侧配套：`NUM_MAX_TOKENS_PER_RANK=4096`（draft 放大 token 数，1280 会 `exceeds cap`）、`mem-fraction 0.90`、`context-length 9216`（**别提到 9728/10240——会 cuda-graph OOM**）。benchmark 侧 **OSL 用 960**（8192+960+draft < ctx 9216，否则 MTP 令 8194+1024=9218 超限，78% 请求被拒）。**MTP 与 online 压缩互斥**（去掉 `USE_ONLINE_COMPRESS`）。
 - mooncake NVLINK（同 R1）：`MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`（prefill + decode 都加）
 
 **✅ 实测跑通的 PD 启动要点（Run A，原版 checkpoint + megamoe）**：
 - **model-path 用原版** `/mnt/ssd/DeepSeek-V4-Pro`（非 NVFP4），**不设** `--moe-runner-backend`（megamoe 自选）。
 - prefill（每节点 DEP4）：`--tp 4 --dp 4 --ep 4 --enable-dp-attention --enable-dp-lm-head --moe-a2a-backend megamoe --moe-dense-tp-size 1 --deepep-config '{normal_dispatch...}' --disaggregation-mode prefill --mem-fraction-static 0.90 --chunked-prefill-size 32768 --cuda-graph-max-bs 512`。
 - decode（8 节点 DEP32）：`--tp 32 --dp 32 --ep 32 --nnodes 8 --node-rank $R --dist-init-addr $D0IP:5000 --enable-dp-attention --enable-dp-lm-head --moe-a2a-backend megamoe --moe-dense-tp-size 1 --disaggregation-mode decode --disaggregation-decode-polling-interval 8 --mem-fraction-static 0.94 --swa-full-tokens-ratio 0.20 --context-length 9216 --max-running-requests 18432 --cuda-graph-max-bs 1280`。
-- **router**（在任一 prefill pod 起）：`python -m sglang_router.launch_router --pd-disaggregation --prefill http://<pIP>:30000 30001 ×10 --decode http://<d0IP>:30000 --policy cache_aware --host 0.0.0.0 --port 8000`。
+- **router**（sglang_router，**仅冒烟用，高并发有 tail-stall**）：`python -m sglang_router.launch_router --pd-disaggregation --prefill http://<pIP>:30000 30001 ×10 --decode http://<d0IP>:30000 --policy cache_aware --host 0.0.0.0 --port 8000`。
 - **启动耗时**：8 节点 decode NCCL rendezvous + megamoe warmup ~7min 到 ready；**首次 benchmark warmup 极慢**（megamoe/deepgemm 对每个 8K prefill shape 首次 JIT 编译，单请求可达十几分钟），JIT 缓存后正常。
+
+#### 3.4 ⭐ Dynamo 编排（官方用的，高并发唯一可用；实测跑通 = 这套）
+
+sglang_router 高并发 tail-stall（§8.3），**必须换 Dynamo**。完整步骤：
+
+1. **NATS + ETCD**（k8s pod，default-pool）：`kubectl apply -f nats-etcd.yaml`（`dynamo-nats` = nats:2.10-alpine -js；`dynamo-etcd` = quay.io/coreos/etcd:v3.5.16 + Service）。
+2. **18 worker 装 ai-dynamo**：每 pod `pip install ai-dynamo`（**不降级 nightly sglang**，`dynamo.sglang` 能 import 即可）。
+3. **worker 启动**：把 §3.3 的 `python -m sglang.launch_server` 换成 **`python3 -m dynamo.sglang`**（透传所有 megamoe/W4A4/DEP32/MTP args），每 pod 加 env：`NATS_SERVER=nats://dynamo-nats:4222 ETCD_ENDPOINTS=http://dynamo-etcd:2379 DYN_SYSTEM_PORT=8081`(prefill)/`8082`(decode) + `--enable-metrics`。prefill 加 `--host 0.0.0.0 --port 40000`。
+4. **等 worker 全 ready 再起 frontend**（关键，见下）：decode head（d0）health 200 + 日志 `Model registration succeeded` + `spec decode runtime metadata:{'nextn':1,'method':'EAGLE'}`（MTP 确认）；prefill 各 `:8081/health`=200。
+5. **frontend**（在任一 prefill pod）：`NATS_SERVER=... ETCD_ENDPOINTS=... python3 -m dynamo.frontend --http-port 8000`。验证 `/v1/models` 返回 `owned_by:nvidia`+`context_window:1048576`（若返 `owned_by:local` 说明打到了僵尸 sgl-router，见坑）。
+6. **benchmark**：`bench_serving --backend sglang-oai --port 8000 --model deepseek-ai/DeepSeek-V4-Pro --dataset-name random --random-input-len 8192 --random-output-len 960 --random-range-ratio 1.0 --num-prompts N --max-concurrency C`（MTP 时 OSL 用 960）。
+
+**⭐ Dynamo 启动/重启六大坑（全趟过，照做避坑）**：
+1. **frontend 必须在 worker 完全 ready 后起**：warmup 期起会触发熔断 open 且不恢复 → `No available prefill workers (circuits open)`。
+2. **「circuits open」真根因常是僵尸 `sglang::router` 霸占 8000**（它 `/v1/models` 也返 200 但 `owned_by:local`）→ dynamo.frontend bind 失败静默崩。pod 内无 `ss`/`lsof`，用 `/proc/net/tcp` 反查监听 8000 的 PID（hex 端口 `1F40`）→ `kill -9` → 再起 frontend。
+3. **换 image/重启必须彻底杀** `dynamo.sglang` + `sglang::`（否则占 dist port 5000 / ZMQ 40236）。
+4. **ZMQ `40236 Address already in use`**（prefill 重启常见）：老进程 socket 残留 → `/proc/net/tcp` 反查 40236(hex `9D2C`) 的 PID kill 掉再起。
+5. **反复 kill+relaunch 会积累 zombie 进程 + GPU 显存泄漏不释放**（`sleep infinity` 的 PID1 不 reap 僵尸，undead CUDA context 卡住显存到 ~191GB）→ 新进程必 cuda-graph OOM。**唯一可靠解 = `kubectl delete pod <d*> --force --grace-period=0` 重建 pod**（模型在 node-local SSD 持久，podAffinity 保 subblock 不变，重建后 GPU 归 0）。重建 decode pod 后 **IP 变了，prefill 需重启重连**（否则 decode 日志刷 `Lost connection with prefill instance`）。
+6. **重启 decode 后 frontend 也要重起**（worker 重新注册）。
 
 ### Phase 4：汇总消融报告 + 三方对比
 - 把 Run A→E 的 per-step delta 汇成消融表（见 §7.4 模板），得出「每招值多少 tok/s/GPU」。
@@ -448,22 +467,28 @@ decode（DEP32）：
 3. **Pro 单节点距官方 11,200 差 4.0×**——差距全在部署形态：官方是 18 节点 PD-disagg（prefill 独立扩展消化长 input）+ MegaMoE W4A4（激活也 4bit，矩阵乘快 ~2×）+ SWA。单节点 4 卡扛 1.6T 的 prefill，conc64 TTFT 已到 9.8s（瓶颈在 prefill），这正是 Phase 3 要解的。
 4. **交互性**：Pro conc1 TPOT 10.44ms ≈ 96 tok/s/user，Flash 5.71ms ≈ 175 tok/s/user，都远快于人眼阅读速度，单用户体验流畅。
 
-### 7.4 Phase 3 消融表（进行中，固定 10P1D-dep4-dep32 / subblock-0001 / 72 GPU / 8K-1K，megamoe baseline）
+### 7.4 Phase 3 消融最终结果（固定 10P1D-dep4-dep32 / subblock-0001 / 72 GPU / ISL 8192，**Dynamo 编排**）
 
-| Run | 配置 | 状态 | conc1 total tok/s | conc1 TPOT | conc≥4 | 备注 |
-|---|---|---|---|---|---|---|
-| A baseline | 原版ckpt / megamoe / W4A8 | **PD 通 + conc1 测通** | **622** | **13.74 ms** | ⚠️ tail-stall（见下） | TTFT 750ms；decode gen ~63 tok/s/DP-rank ×32 |
-| B +W4A4 | megamoe / W4A4 | 待并发修复后跑 | — | — | — | env `USE_FP4_ACTS=1 USE_MXF4_KIND=1` |
-| C +SWA/压缩 | +SWA opt+online压缩 | 待 | — | — | — | `SGLANG_OPT_SWA_*`+`USE_ONLINE_COMPRESS=1` |
-| D +MTP（满配）| +EAGLE MTP | 待 | — | — | — | 对标官方 11,200 |
+> **编排从 sglang_router 换成官方 Dynamo 后，tail-stall 根治，高并发干净出数**（sgl-router 阶段的 tail-stall 见 §8.3，是历史，不再是瓶颈）。下表为最终对照。
+
+**A. sglang_router 阶段消融（conc256，服务端测量，历史）**：Run A megamoe W4A8 = ~1,170 → Run B +W4A4 = **~1,732（1.48×，最大单项）** → Run C +SWA/压缩 conc256 无增益（需高并发）。天花板 ~1,732（tail-stall 限制）。
+
+**B. Dynamo 阶段最终 sweep（OSL 960，客户端 total in+out ÷ 72 GPU，干净 98%+）**：
+
+| 并发 | 无 MTP (W4A4+SWA) tok/s/GPU | **+MTP (EAGLE nextn=1)** | MTP 增益 | +MTP 成功率 | +MTP TPOT |
+|---|---|---|---|---|---|
+| 256 | 1,350 | 1,562 | +16% | 98.7% | 11.1 ms |
+| 1024 | 1,585（无MTP peak）| 2,688 | +70% | 98.7% | 11.7 ms |
+| 2048 | 1,392（掉）| 3,011 | +2.2× | 98.4% | 11.0 ms |
+| **2500**（官方点）| — | **3,031（peak）** | — | 98.5% | 11.4 ms |
+
+**最终结论**：
+- **10P1D 配置天花板 = ~3,031 tok/s/GPU（+MTP，干净 98.5%）**。
+- **MTP 是真杠杆**：conc1024 +70%，TPOT 从 43ms（无MTP）稳到 11ms —— draft 被接受、decode 每 token 快 ~1.8×、per-user 速度不掉的同时吞吐翻倍。这复现了官方「2,200→11,200 靠 MTP」的机制。
+- **距官方 11,200 还差 ~3.7×，触顶根因 = prefill 硬饱和**：c2500 时 decode TPOT 仅 11ms（=90 tok/s/user，远快于官方 50 的操作点，decode 富余巨大），但 prefill TTFT 飙到 80s——10P DEP4（40 GPU）喂不动 8K 输入的 2000+ 并发；c2500 与 conc2048 吞吐持平（3,031 vs 3,011）证明加并发只堆队列。
+- **冲 11,200 的下一步**：prefill 侧深调（chunked-prefill-size 扫描 + deepep-config 调参 + EPLB）或重平衡 P:D（如 12P/6D）；对齐官方 srt-slurm 完整 prefill 参数 + c2500 steady-state 长稳测。
 
 对标：官方 GB300 disagg V4-Pro FP4 8K/1K @~50 tok/s/user = **11,200 tok/s/GPU**（Day-0 no-MTP ~2,200）。
-
-> **⚠️ Open issue：并发 benchmark tail-stall（2026-07-20 23:20）**：Run A PD **单流 conc=1 完全正常**（622 tok/s，4 请求 59s），但 `bench_serving --max-concurrency ≥4` 经 sglang_router 压测**尾部约 2 个请求永不返回** → 出不了 summary（conc4 卡 6/8、conc16 卡 62/64、conc64 卡 247/256，比例一致）。
-> - **已排除**：decode 正常（日志 `Decode batch #running-req 1-2, gen throughput 63-127 tok/s/DP-rank`；直连 decode `/v1/completions` 返回 200）；非 OOM、非 crash。
-> - **疑点**：sglang_router `--pd-disaggregation cache_aware` 并发下对少数请求 prefill→decode KV 交接有 race（官方用 **Dynamo** kv-router 非 sglang_router）；或某 prefill 节点偶发 stuck。
-> - **下一步**：(1) 换 Dynamo frontend（官方 recipe）；(2) 逐 prefill 单测找 stuck 节点；(3) 调 `--disaggregation-decode-polling-interval`/`num-reserved-decode-tokens`；(4) 试更新 nightly（tail-stall 或是 nightly PD bug）。
-> - **不影响结论**：**环境 + PD 架构 + 单流推理已验证可用**，并发吞吐待修复后补。
 
 ---
 
@@ -504,6 +529,8 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 - **要到官方 11,200**：需 Dynamo（高并发稳定）+ 全优化 + concurrency 2500。sgl-router + conc256 的 tail-stall 天花板约 ~1,700 tok/s/GPU（Run B）。
 
 ### 8.6 实测消融数据（conc256，sglang_router，72 GPU，8K/1K）
+
+> ⚠️ **历史记录**：本节是 sglang_router 阶段（受 tail-stall 限，MTP 未出数）。最终 Dynamo + MTP 结果见 **§8.10 / §7.4**（MTP 已跑通，peak 3,031）。
 | Run | 配置 | 持续 req/s | ≈tok/s/GPU(in+out) | 相对 A |
 |---|---|---|---|---|
 | A | megamoe W4A8 | 9.15 | ~1,170 | 1.00× |
@@ -517,7 +544,7 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 3. `CUDA OOM`（decode 276G 满）→ MTP draft 模型 + 投机 CUDA graph 吃显存，decode `mem-fraction 0.94→0.88` + `cuda-graph-max-bs 1280→512`。
 4. 以上都修好、decode ready（"fired up"）后，**benchmark warmup 单请求仍 hang**（同 sglang_router tail-stall 类，MTP 下更易触发；decode 无 `Decode batch` 活动）。→ **MTP 的稳定压测同样卡在 sgl-router，需 Dynamo**。
 
-> 受 sglang_router tail-stall 限制，conc 只能到 ~256，摸不到官方 c2500 的饱和点；SWA 高并发增益、MTP 稳定压测、以及冲 11,200，**都卡在同一个根因（sgl-router PD 并发 tail-stall）→ 都需换 Dynamo**。这是**下一步唯一的明确工程**。
+> 受 sglang_router tail-stall 限制，conc 只能到 ~256，摸不到官方 c2500 的饱和点；SWA 高并发增益、MTP 稳定压测、以及冲 11,200，**都卡在同一个根因（sgl-router PD 并发 tail-stall）→ 都需换 Dynamo**。（✅ 已换，见 §8.10：MTP 跑通、c2500 干净出数 peak 3,031。）
 
 ### 8.7 距官方 11,200 的差距分解（诚实核算）
 | 因子 | 我实测/状态 | 官方 | 说明 |
@@ -531,6 +558,8 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 | **合计** | **~1,732 已达（1.48×）** | **11,200** | 差距 = SWA高并发 × MTP × 饱和并发，全部 gated on Dynamo |
 
 **结论**：在 sglang_router 下，受 tail-stall 天花板限制，Run B（W4A4）的 ~1,732 tok/s/GPU 是当前可稳定测得的峰值。要复现官方 11,200，**必须换 Dynamo frontend**（解 tail-stall → 上 c2500 + 稳定 MTP + SWA 高并发增益）。
+
+> ✅ **已落地（见 §8.10）**：Dynamo 换上后，tail-stall 根治、MTP 跑通、c2500 干净出数 peak **3,031 tok/s/GPU**。本节「必须换 Dynamo」的判断已验证正确并执行完毕。
 
 ### 8.8 ⭐ Dynamo frontend 实攻进展（2026-07-21 凌晨，95% 打通）
 不是纸面方案——今夜实际把 Dynamo 全栈立起来了：
@@ -549,9 +578,23 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 - **✅✅ Dynamo 根治了 sgl-router 的 tail-stall**：`bench_serving` **干净 100% 完成**（不再尾部 hang）：
   - **conc256**：498/512 成功，Total **88,745 tok/s = 1,232 tok/s/GPU**，TPOT 17ms。
   - **conc2048**：5792 成功，Total **118,405 tok/s = 1,644 tok/s/GPU**，output 13,156 tok/s，峰值 output 18,606 tok/s，实际并发 1713，TPOT 38ms，**TTFT 94s（prefill 成瓶颈）**。
-- **距 11,200 还有 ~6.8×**：当前是 W4A4-only（无 SWA opt / 无 MTP）；且 conc2048 下 **prefill 成瓶颈**（TTFT 94s，decode 没喂饱，output 仅 13K）。下一步：加 SWA+online 压缩（decode 更大 batch）+ MTP（~2.6×）+ 调 P/D 配比/并发，逐步向 806K tok/s 总（11,200×72）爬。
+- **距 11,200 还有 ~6.8×**（此为 04:40 W4A4-only 快照）：当时无 SWA opt / 无 MTP，conc2048 下 **prefill 成瓶颈**（TTFT 94s）。→ 后续加 SWA + **MTP** 已把 peak 拉到 3,031（差 3.7×），见 **§8.10**。
 - **关键结论**：**Dynamo 是对的、tail-stall 已解、高并发 benchmark 能干净出数**。复现 11,200 从"卡死"变成"逐项调优爬坡"。
+
+### 8.10 ⭐⭐⭐ MTP 复现成功 + 最终天花板（2026-07-21 上午，本轮终点）
+
+§8.9 之后把 **MTP（EAGLE nextn=1）在 Dynamo 上跑通**，这是官方「2,200→11,200 靠 MTP」的核心杠杆，本环境复现：
+
+- **MTP 生效实锤**：decode 日志 `spec decode runtime metadata:{'nextn':1,'method':'EAGLE'}`；**TPOT 从无 MTP 的 43ms 稳到 11ms**（draft 被接受，decode 每 token 快 ~1.8×）。
+- **最终 sweep（Dynamo，OSL 960，干净 98%+）**：conc1024 无 MTP 1,585 → **+MTP 2,688（+70%）**；conc2048 **3,011**；**c2500 官方并发点 = 3,031 tok/s/GPU（peak，7389/7500=98.5%）**。
+- **10P1D 天花板 = ~3,031 tok/s/GPU（+MTP）**，距官方 11,200 差 ~3.7×。
+- **触顶根因 = prefill 硬饱和**：c2500 时 decode TPOT 仅 11ms（=90 tok/s/user，比官方 50 的操作点还快，decode 大量富余），但 prefill TTFT 飙到 80s；c2500 与 conc2048 吞吐持平（3,031 vs 3,011）= 加并发只堆队列不增吞吐 = **10P DEP4（40 GPU）喂不动 8K 输入的高并发**。
+- **冲 11,200 的下一步**（明确）：(1) prefill 深调 `chunked-prefill-size` 扫描 + `deepep-config` 调参 + EPLB；(2) 或重平衡 P:D（12P/6D 或加节点）；(3) 对齐官方 srt-slurm 完整 prefill 参数 + c2500 steady-state 长稳测。
+
+**MTP 四大坑（全解，复现照 §3.3 MTP 行 + §3.4 坑）**：(1) online 压缩互斥→去掉；(2) ctx 9216 太小 MTP 令请求超限 78% 被拒→benchmark OSL 降 960；(3) 提 ctx→cuda-graph OOM→回退 9216;(4) 反复重启积累 zombie+GPU 泄漏→`kubectl delete pod --force` 重建。
+
+**本轮总结**：环境 + PD 架构 + Dynamo 编排 + W4A4 + SWA + **MTP** 全部打通并干净出数，MTP 杠杆已复现（+2.2×）。剩余到 11,200 的 3.7× 是**纯 prefill 侧调优/配比问题**，不再有架构性 blocker。
 
 ---
 
-*2026-07-20（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 已实测通过 + 压测，§3.9 为可复现手册、§7 为 benchmark 报告。存储全程 Local SSD RAID（不用内存盘，见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。下一步 Phase 3 = Pro + MegaMoE W4A4 + SWA + PD-disagg（官方 10P1D-dep4-dep32 / Dynamo）冲 11K。*
+*2026-07-21（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（10P1D-dep4-dep32 / Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。§3.9 单节点可复现手册、§3.3+§3.4 PD+Dynamo 复现步骤、§7 benchmark 报告、§8 全过程+原理。**最终 peak = 3,031 tok/s/GPU（+MTP，c2500，干净 98.5%）**，距官方 11,200 差 ~3.7×（触顶根因 = prefill 硬饱和，非架构 blocker，见 §7.4/§8.10）。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
