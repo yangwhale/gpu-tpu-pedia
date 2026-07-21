@@ -597,4 +597,62 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 ---
 
+## 9. ⭐⭐⭐ 距 11,200 的 3.7× gap 深挖：prefill「攒 batch」调度（2026-07-21 研究）
+
+**问题**：我们 peak 3,031，官方 11,200，差 3.7×。**decode 完全清白**（TPOT 11ms = 90 tok/s/user，比官方 50 的操作点还快，富余巨大），gap **全在 prefill**。
+
+### 9.1 算账：gap 100% 在 prefill 每卡吞吐
+
+| | 官方 11,200 | 我们 3,031 | 差 |
+|---|---|---|---|
+| 总吞吐（×72 GPU）| 806,400 tok/s | 218,000 tok/s | 3.7× |
+| ≈ 请求速率（9152 tok/req）| ~88 req/s | ~24 req/s | 3.7× |
+| **prefill 每卡 input tok/s**（÷40 prefill GPU）| **~18,200** | **~4,900** | **3.7×** |
+
+→ 官方每张 prefill 卡吐 input 是我们的 3.7×。差距不是 decode、不是模型、不是量化，**就是 prefill 单卡 input 吞吐**。
+
+### 9.2 核心机制：prefill batch 攒满（两层攒批）
+
+官方靠**把多请求的 token 拼成大 batch 喂给 prefill forward** 拉高 MFU。分两层：
+
+1. **prefill worker 层 —— `chunked-prefill-size: 32768`**：一次 forward 累积到 32K token 才发（8K ISL ≈ 4 请求拼一批）。**我们已有此参数**（✅ 不是缺口）。
+2. **Dynamo router 层 —— `router-queue-threshold: 64`（关键缺口）**：worker busy 分超阈值时，新请求**先扣进优先队列等待**，不逐个硬塞，让 prefill 有机会把 batch 攒满再算。官方 Dynamo Router Guide 原文：*"controls when incoming requests are held in a priority queue"*。**我们之前 frontend 是裸起的**（`dynamo.frontend --http-port 8000`，无任何 router 配置）→ 请求无节制灌 prefill，batch 没攒满，MFU 低。**这就是 3.7× 的最可能主因**。
+
+> **佐证**：sglang issue #12591 实测，同负载下 prefill batch 攒满 vs 没攒满，input 吞吐差数十倍（2.58 → 28,153 tok/s）。量级足以解释 3.7×。
+
+### 9.3 官方 c2500 recipe 我们没对齐的项（全部来自出处 2）
+
+| 项 | 官方值 | 我们之前 | 类型 |
+|---|---|---|---|
+| `chunked-prefill-size` | 32768 | 32768 ✅ | prefill worker |
+| **router-mode** | `kv` | 默认（无）| **Dynamo frontend** |
+| **router-queue-threshold** | `64` | 无 | **Dynamo frontend（攒批闸门）** |
+| router-temperature | `0.5` | 无 | Dynamo frontend |
+| router-kv-overlap-score-weight | `0` | 无 | Dynamo frontend |
+| no-kv-events | `true` | 无 | Dynamo frontend |
+| 多 frontend | `num_additional_frontends: 8` | 1 | Dynamo frontend 分流 |
+| 压测负载 | `req_rate: inf`（开环打满）| max-concurrency（闭环）| bench |
+| prefix cache | `SGLANG_RADIX_FORCE_MISS=1`（强制关，防作弊）| 未设（random 数据无前缀重叠，影响小）| worker env |
+| decode max-running-requests | 18432 | 18432 ✅ | decode worker |
+
+### 9.4 出处（source of truth）
+
+1. **PyTorch 官方博客「Serving DeepSeek-V4 on GB300」**：https://pytorch.org/blog/serving-deepseek-v4-on-gb300-with-sglang-5x-higher-throughput-at-the-same-interactivity-since-day-0
+2. **SemiAnalysis InferenceX c2500 recipe**（PyTorch 博客点名的复现文件）：https://github.com/SemiAnalysisAI/InferenceX/blob/801d1261235f4892d4831de9de70c34f5bea7d98/benchmarks/multi_node/srt-slurm-recipes/sglang/deepseek-v4/8k1k/disagg-gb300-10p1d-dep4-dep32-18-c2500.yaml
+3. **SGLang 大规模 EP serving 博客**：https://www.lmsys.org/blog/2025-05-05-large-scale-ep
+4. **NVIDIA Dynamo Router Guide**（router-queue-threshold 出处）：https://docs.nvidia.com/dynamo/v1.0.0/components/router/router-guide
+5. **SGLang PD 文档**：https://docs.sglang.ai/advanced_features/pd_disaggregation.html ｜ **batch 攒满佐证** issue #12591：https://github.com/sgl-project/sglang/issues/12591
+6. **DeepEP Waterfill**（EP dispatch 均衡，PR #25391）：sgl-project/sglang PR #25391
+
+### 9.5 验证计划（进行中）
+
+1. 按官方对齐 Dynamo frontend：`--router-mode kv --router-queue-threshold 64 --router-temperature 0.5 --router-kv-overlap-score-weight 0 --no-kv-events` + 多 frontend。
+2. 压测改 `req_rate inf`（开环打满 prefill）。
+3. 看 prefill 日志 `#new-token` 是否逼近 32768（攒满标志）。
+4. 对比 peak tok/s/GPU，逐项确认哪个参数吃回多少 gap。
+
+> **诚实说明**：证据强、方向与「攒 batch」假设一致，但能否吃回全部 3.7× 需实测确认。9.5 结果出来后回填本节。
+
+---
+
 *2026-07-21（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（10P1D-dep4-dep32 / Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。§3.9 单节点可复现手册、§3.3+§3.4 PD+Dynamo 复现步骤、§7 benchmark 报告、§8 全过程+原理。**最终 peak = 3,031 tok/s/GPU（+MTP，c2500，干净 98.5%）**，距官方 11,200 差 ~3.7×（触顶根因 = prefill 硬饱和，非架构 blocker，见 §7.4/§8.10）。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
