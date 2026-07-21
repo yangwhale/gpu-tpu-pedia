@@ -676,10 +676,19 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 - **镜像（排除）**：`nightly-dev-cu13-20260601`（最接近官方 5 月 pin，5 月版已被 dockerhub GC）vs 我们 `20260720`，conc4 同为 ~4,900/GPU（4,812 vs 4,940）→ **非 nightly regression**。
 - **FP4 indexer（边际）**：`--enable-deepseek-v4-fp4-indexer`（GB300 SM100 支持）conc4 下仅 **+5%**（5,172 vs 4,940）。
 
-### 11.4 压测工具口径差异（对齐官方的下一步）
-- **我们用**：`sglang.bench_serving`（SGLang 自带），`--max-concurrency N` = **闭环**（锁死在途请求数）。
-- **官方用**：`sa-bench`（SemiAnalysis InferenceX 自带 harness），`req_rate: inf` = **开环**，conc 2500，自定义 DSV4 tokenizer（`sa_bench_tokenizers.sglang_deepseek_v4`），打 **Dynamo frontend** 端到端。
-- 开环 vs 闭环实测差 ~16%（见 §9.2）；harness / 直连单 worker vs 穿 Dynamo 也不同口径。**严格对标 18,200 必须换 sa-bench 开环。**
+### 11.4 压测工具口径差异（sa-bench 实测对比，2026-07-22）
+- **我们之前用**：`sglang.bench_serving`（SGLang 自带），`--max-concurrency N` 闭环。
+- **官方用**：`sa-bench` = InferenceX `utils/bench_serving/benchmark_serving.py`（vLLM/sglang bench 的 fork）。确切调用（`benchmark_lib.sh:517`）：`--request-rate inf`（开环）+ **`--ignore-eos`** + `--num-warmups 2×conc` + `--dsv4`（DSV4 chat 编码 `encoding_dsv4.py`）+ 自定义 tokenizer，打 **Dynamo frontend**。
+- **同一 dep4 worker、同一操作点，两工具实测对比（input tok/s/GPU, ISL8192/OSL1）**：
+
+| conc | 我的 bench_serving | 官方 sa-bench | 差异 |
+|---|---|---|---|
+| 32 | 9,247 | **13,568** | sa-bench +47% |
+| 128 | 15,196 | 14,607 | 收敛 |
+| 256 | 14,280 | 14,798 | 收敛 |
+
+- **结论**：工具口径差在**低并发极大（+47%）**，因为 sa-bench 的 pacing/ignore-eos 让 GPU 更快填满；**高并发峰值两者收敛到 ~15,000 tok/s/GPU**。
+- 且 **18,200 不是官方直接实测的 prefill benchmark**，是「喂饱官方 dep8 decode 达 11,200 所需的 prefill 速率」推导值（§9.1）。所以我们单卡 prefill 峰值 ~15,000 ≈ **官方所需的 82%**——差 ~1.2×，属调参级，**彻底否定"3.7× 缺陷"**。
 
 ### 11.5 对 11,200 的启示（重新定向）
 - prefill 单卡不是瓶颈（高并发下 83%）。满配 PD 之前只到 6,659 output/decode-GPU 的真因需重查：**(a) PD 编排（Dynamo router/queue）有没有把足够并发投递到每个 prefill worker；(b) 瓶颈是否在 decode / KV 传输侧**。
