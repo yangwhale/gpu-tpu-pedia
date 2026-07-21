@@ -14,11 +14,11 @@
 | Phase 2 V4-Pro 单节点 TP4（聚合）| ✅ conc64 2,794 tok/s/GPU（同上口径）|
 | Phase 3 V4-Pro PD 分离（Dynamo + megamoe W4A4 + SWA + MTP）| ✅ 端到端跑通，Dynamo 根治 tail-stall |
 | **最优实测（官方口径 output÷decode-GPU）** | **dep8 + 8 prefill + MTP-3 稳态 = 6,659 output/decode-GPU** |
-| **距官方 11,200** | 差 **~1.7×**。根因 = **我 prefill 单卡吞吐慢官方 ~3.7×**，18 节点内配不出喂饱 decode 的 P:D 比 → decode 被饿（详见 §10）|
+| **距官方 11,200** | 满配 dep8-MTP 稳态 6,659 output/decode-GPU。**曾以为根因=prefill 单卡慢 3.7×，已推翻**（§11：那是 conc4 低并发测量假象，同一 worker 高并发峰值 15,196=官方 83%，prefill 非瓶颈）。真因待用官方 sa-bench 开环重测（编排/decode 侧）|
 
 **核心结论（以 §10 为准）**：
 - **11,200 = MTP 曲线 @ 50 tok/s/user = dep8-MTP 家（`high-conc-8p1d-dep4-dep8-mtp` 最可能）**，不是 dep32/dep40 wide-EP（那是 no-MTP 曲线）。
-- **PD 是流水线**：`prefill worker 数 = decode 完成请求率 × 输入长度 ÷ 单 prefill 吞吐`。dep8/1760并发/8K1K 需 ~8 prefill（官方速）；我 prefill 慢 3.7× → 需 ~30 个（18 节点放不下）→ 必饿死 decode。
+- **PD 是流水线**：`prefill worker 数 = decode 完成请求率 × 输入长度 ÷ 单 prefill 吞吐`。dep8/1760并发/8K1K 需 ~8 prefill（官方速）。~~我 prefill 慢 3.7× 需 30 个~~ **已推翻（§11）：我 prefill 高并发下达官方 83%，8 个够**。
 - **每 decode 卡 ≈ 224 用户**（@50 tok/s/user）；decode 卡数 = 目标用户 ÷ 224（规模决策，非性能）。
 - **MTP 只对小 batch/交互有用**：大 batch 高吞吐点 MTP 收益归零（实测 dep8 关 MTP 6,536 ≈ 开 6,659，打平）。
 - **wide-EP 在 feed-limited 下反降 per-GPU**：总输出被 prefill 卡在 ~50K，dep8÷8=6,659 > dep32÷32=1,573。
@@ -474,7 +474,7 @@ sglang_router 高并发 tail-stall（§8.3），**必须换 Dynamo**。完整步
 **要点**：
 - **dep8 那一家才是官方 11,200 的配方**（MTP 曲线 @~50 tok/s/user）；dep32/dep40 是 no-MTP 大吞吐曲线，per-decode-GPU 反而低。
 - **MTP 是真杠杆**：TPOT 从无 MTP 43ms 稳到 11ms，draft 被接受、per-user 速度不掉的同时吞吐翻倍，复现官方「2,200→11,200 靠 MTP」机制。
-- **总输出被 prefill 卡在 ~50K/s**（dep8 53K、dep32 50K 几乎一样）→ decode 铺再宽也白搭。**瓶颈在 prefill 单卡吞吐慢官方 ~3.7×**（详见 §10.4），距 11,200 的 ~1.7× 全在这。
+- **总输出被 prefill 卡在 ~50K/s**（dep8 53K、dep32 50K 几乎一样）→ decode 铺再宽也白搭。~~瓶颈在 prefill 单卡吞吐慢官方 3.7×~~ **此结论已被 §11 推翻**（prefill 单卡高并发达官方 83%）；满配总输出卡在 ~50K 的真因是 PD 编排没把高并发投到 prefill，需 sa-bench 开环重测。
 
 对标：官方 GB300 disagg V4-Pro FP4 8K/1K @~50 tok/s/user = **11,200 output/decode-GPU**（Day-0 no-MTP ~2,200）。
 
@@ -533,13 +533,13 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 - **生效实锤**：decode 日志 `spec decode runtime metadata:{'nextn':1,'method':'EAGLE'}`；**TPOT 从无 MTP 43ms 稳到 11ms**（draft 被接受）。
 - **MTP 四大坑（全解）**：(1) `online c128 does not support MTP`，online 压缩与 MTP 互斥→去掉；(2) draft token 放大每 rank token 数，`NUM_MAX_TOKENS_PER_RANK` 1280→4096；(3) ctx 9216 太小，MTP 令 8194+1024>9216 有 78% 请求被拒→benchmark OSL 降 960（提 ctx 则 cuda-graph OOM，回退）；(4) MTP draft 模型 + 投机 CUDA graph 吃显存，decode `mem-fraction 0.94→0.88` + `cuda-graph-max-bs 1280→512`。
 
-**④ 最终天花板 + 结论**：dep8 + 8 prefill + MTP-3 稳态 = **6,659 output/decode-GPU**（官方口径），距 11,200 差 ~1.7×。**gap 根因是 prefill 单卡吞吐慢官方 ~3.7×，不是拓扑/MTP/攒批**——完整分析、口径纠错、PD 配比公式全在 §10。
+**④ 最终天花板 + 结论**：dep8 + 8 prefill + MTP-3 稳态 = **6,659 output/decode-GPU**（官方口径），距 11,200 差 ~1.7×。~~gap 根因是 prefill 单卡慢 3.7×~~ **已被 §11 推翻**（prefill 高并发达官方 83%，非瓶颈）；真因待 sa-bench 开环重测（编排/decode 侧）。口径纠错、PD 配比公式见 §10。
 
 ---
 
 ## 9. 官方 c2500 recipe 对齐项 + 出处（source of truth）
 
-> 早先曾把 gap 归因为「prefill batch 没攒满 / router-queue-threshold 缺失」，实测后订正：那是**表象**，真根因是 prefill 单卡吞吐慢官方 ~3.7×（见 §10.4）。本节保留仍有用的**参数对齐清单**、**开环 vs 闭环的真教训**和**出处链接**。
+> 早先曾把 gap 归因为「prefill batch 没攒满」→ 后又归因「prefill 单卡慢 3.7×」，**两者均已推翻**（§11：prefill 高并发达官方 83%）。本节保留仍有用的**参数对齐清单**、**开环 vs 闭环的真教训**和**出处链接**。
 
 ### 9.1 官方 recipe 我们对齐/未对齐项
 
@@ -562,7 +562,7 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 - **闭环 max-concurrency 下 `router-queue-threshold` 无用甚至有害**：闭环已限死在途请求数，router 排队只增延迟不增吞吐 + KV 路由开销 → **约 -13%**。
 - **开环 `req_rate inf`（官方口径）才对**：请求持续涌入，effective concurrency 自然平衡，比闭环 **约 +16%**。**对标官方必须用开环。**
 
-但开环 + router 对齐只吃回 ~16%，**没吃回全部 gap**——剩余全在 prefill 单卡慢（§10.4）。
+但开环 + router 对齐只吃回 ~16%，**没吃回全部 gap**——剩余~~在 prefill 单卡慢~~ 真因见 §11（prefill 非瓶颈，待 sa-bench 开环重测编排/decode 侧）。
 
 ### 9.3 出处（source of truth）
 
@@ -614,12 +614,13 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 | 10p1d-dep32 c2500 | 10 | dep32 | no-MTP | 大规模吞吐 |
 | 15p1d-dep12 c12000 | 15 | dep12 | no-MTP | 超高并发（prefill 拉满、decode 缩小）|
 
-### 10.4 【我们撞墙的真根因】我的 prefill 慢 ~3.7×，配比在 18 节点内凑不出来
+### 10.4 【已推翻】曾以为"prefill 单卡慢 3.7×"——实为低并发测量假象（正确结论见 §11）
 
-- 实测：我每个 8K prefill forward 要 **1.44s**，官方 **0.45s**，**单 prefill 吞吐只有官方 ~1/3.7**。
-- 代入 10.3 公式：喂饱 dep8/1760 并发需 71.7 万 input tok/s，我单 worker 只吐官方 1/3.7 → 需 **~30 个 prefill worker**，而我总共 18 台机器，**物理放不下** → 必然饿死 decode（实测 decode 反复抽干、running-req 从 227 掉到个位数）。
-- **这才是 gap 的数学根源**：不是拓扑选错、不是 MTP 开关、不是攒批技巧——是 **prefill 单卡吞吐慢 3.7×**，导致在 18 节点预算内配不出"喂得饱 decode"的 P:D 比。
-- 早先曾以为"gap = prefill batch 没攒满 / chunked-prefill"（见 §9），实测后订正：那是**表象**；深层是 prefill 单次 forward 慢 3.2-3.7×（内核成熟度：MHC 融合、prefill breakable CUDA graph、W4A4 等官方内核优化，我的 nightly 未必全生效）。
+> ⚠️ 本节原结论（prefill 单卡吞吐慢官方 3.7×、18 节点配不出 P:D 比、必饿死 decode）**已被 2026-07-22 的并发扫描实测推翻**。保留于此仅作过程记录，**以 §11 为准**。
+
+- 原观测：单个 8K prefill forward "1.44s"（官方 0.45s），据此推 prefill 慢 3.7×。**错在这个 1.44s 是在 conc4（极低并发、GPU 严重欠载）下量的**，不是 prefill 的真实吞吐上限。
+- §11 实测：同一个 dep4 worker，并发从 conc4 拉到 conc128，prefill 吞吐 4,940 → **15,196 tok/s/GPU（= 官方 18,200 的 83%）**。prefill 单卡硬件/kernel **没有 3.7× 缺陷**，只是需要高并发才喂满 GPU。
+- 所以"需 ~30 个 prefill worker、18 节点放不下 → 饿死 decode"这条推理**不成立**。满配跑不满 11,200 的真因需重新诊断（PD 编排是否把高并发投到每个 prefill、或瓶颈在 decode/KV），见 §11.5。
 
 ### 10.5 dep40 的硬约束 + wide-EP 在 feed-limited 下反而更差
 
@@ -633,15 +634,57 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 - **根本上限**：prefill 过的 KV 得存进 decode 的 KV pool 等消费；pool 有限（dep8 ~400万 token → 最多攒 ~450 个 8K 请求，dep32 ~1300万 → ~1600 个）。攒满即到顶，放开后 decode drain 一波爆发就打回原形。**攒批 = 一次性 burst，被 KV pool 卡死，不可持续；稳态 11,200 绕不开"prefill 真快"**。
 - 我实测 `SGLANG_HACK_PD_DECODE_NUM_RESERVED_DECODE_TOKENS=1026` 在 dynamo dep8 下**过度预分配**（499 prealloc 占满 KV、只 14 running），吞吐反降到 2,984——**这招在我环境有害**。
 
-### 10.7 冲 11,200 的真正待办（按优先级）
+### 10.7 冲 11,200 的真正待办（按优先级，2026-07-22 修正）
 
-1. **修 prefill 单卡吞吐**（真瓶颈）：profile 那 1.44s/forward 花在哪（CSA/HCA attention / MoE dispatch / DeepGEMM），对齐官方内核优化（MHC fusion #24775/#25976、KV-Compress-V2 #24890、W4A4 #25052、prefill breakable-CUDA-graph #25195/#25795）。可能需更新镜像到官方 pin 的 nightly。
-2. **配比对齐**：prefill 快了之后，用 `high-conc-8p1d-dep8`（8 prefill : dep8 + MTP num-steps 1，conc 8192）严格复现。
-3. **口径对齐**：一律用「output ÷ decode-GPU」报数，别再用 (in+out)÷总卡。
-4. EPLB（dump expert distribution → `--init-expert-location`）：decode 2.54×，但要先解决 prefill feed 否则测不出。
+> ⚠️ 原待办把"修 prefill 单卡吞吐"列为 #1，**已作废**（§11 证明 prefill 高并发下达官方 83%，不慢）。新优先级：
 
-**一句话认知**：**gap 的本质是我 prefill 单卡吞吐慢 3.7×，在 18 节点内配不出喂饱 decode 的 P:D 比；官方 11,200 是 dep8-MTP 稳态、纯输出÷解码卡、靠快 prefill + 8:1 配比持续喂满测出来的，不靠攒批。**
+1. **换官方口径压测**：用 SemiAnalysis **sa-bench**（`req_rate inf` 开环 + conc 2500 + 自定义 DSV4 tokenizer）打 Dynamo frontend，别再用 sglang `bench_serving` 闭环 / 低并发单点。
+2. **重新诊断满配瓶颈**：既然 prefill 单卡够快（§11），满配上不去 11,200 大概率在 (a) PD 编排（Dynamo router/queue）没把足够并发投到每个 prefill worker，或 (b) decode / KV 传输侧。逐项测。
+3. **严格复现配方**：`high-conc-8p1d-dep8`（8 prefill : dep8 + MTP num-steps 1）+ 官方 sa-bench 开环。
+4. **口径对齐**：一律「output ÷ decode-GPU」+ 开环高并发。
+5. EPLB（decode 2.54×）留最后。
+
+**一句话认知（修正版）**：**之前"prefill 单卡慢 3.7×"是低并发（conc4）测量假象——§11 实测同一 worker 高并发下达官方 83%。真正待解的是：官方口径（sa-bench 开环 c2500）下满配为什么只到 6,659——瓶颈已不在 prefill 单卡速度，要往 PD 编排 / decode 侧重新查。**
 
 ---
 
-*2026-07-21（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（10P1D-dep4-dep32 / Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。§3.9 单节点可复现手册、§3.3+§3.4 PD+Dynamo 复现步骤、§7 benchmark 报告、§8 全过程+原理。**最终最优（对齐官方口径 output÷decode-GPU）= dep8+8prefill+MTP-3 稳态 6,659 output/decode-GPU**，距官方 11,200 差 ~1.7×；**根因 = 我 prefill 单卡吞吐慢官方 ~3.7×，18 节点内配不出喂饱 decode 的 P:D 比**（详见 §10——含口径、11,200=dep8-MTP、PD 配比公式、dep40 需 EPLB、攒批被 KV pool 卡死等，结论以 §10 为准；早期草稿的 "3,031 tok/s/GPU" 错口径 (in+out)÷72 已删）。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
+## 11. ⭐⭐⭐⭐⭐ 【重大修正】"prefill 慢 3.7×"是测量操作点假象——并发扫描实证（2026-07-22 最小单元）
+
+**结论先行**：之前反复出现的"我 prefill 单卡吞吐只有官方 27%、慢 3.7×"是**在极低并发（conc4）下测量的假象**，不是真实缺陷。在干净的单 dep4 worker 上做并发扫描，prefill 吞吐随并发强烈上升，峰值达官方 **83%**。**§10.4 的"prefill 3.7× 慢、喂不动 decode"结论据此推翻。**
+
+### 11.1 方法：最小单元隔离测量
+- 单个 prefill worker = 1 节点 4 GPU（TP4/DP4/EP4），standalone `sglang.launch_server`（**非 disagg**，不经 Dynamo/router），直接 `sglang.bench_serving` 打。
+- 与官方 prefill 配置逐行对齐：megamoe + W4A4（`USE_FP4_ACTS=1`）+ dp-attention + chunked-prefill 32768（DP=4 下自动调成 8192/rank，官方同款，非 bug）。
+- ISL 8192 / OSL 1（纯 prefill），random 数据集。
+
+### 11.2 并发扫描实测（官方口径 input tok/s ÷ 4 GPU）
+
+| max-concurrency | Total input tok/s | **per-GPU** | 备注 |
+|---|---|---|---|
+| 4 | 19,765 | **4,940** | ← 之前误当"天花板"下 3.7× 结论 |
+| 16 | 18,214 | 4,553 | 低并发噪声区 |
+| 32 | 36,988 | 9,247 | 翻倍 |
+| 64 | 42,832 | 10,708 | |
+| **128** | **60,785** | **15,196** | ← 峰值，= 官方 18,200 的 **83%** |
+| 256 | 57,120 | 14,280 | 饱和（TTFT 28s）|
+
+- **prefill 吞吐强并发依赖**：低并发下 GPU 有流水线气泡/欠载，conc4 只有峰值的 1/3。
+- 官方 18,200 是在 **c2500**（10 prefill → 每 worker ~conc250）测的；匹配高并发后我们峰值 **15,196 = 83%**，只差 ~1.2×，属 nightly/调参级差异，**非架构缺陷**。
+
+### 11.3 沿途排除的假设（都不是 3.7× 的因）
+- **CUDA graph（排除）**：prefill breakable + tc_piecewise 两条 backend 在源码 `_disable_*_cudagraph_if_incompatible` 里都被 `megamoe` + `dp-attention` 自动 gate 关掉（DSV4 还多一条 c4-indexer capture-pool OOM gate）；本 nightly **无 `enforce_piecewise` 强开 flag**；官方 recipe 也没设 prefill CG flag → **两边都 eager**，不是差异来源。
+- **镜像（排除）**：`nightly-dev-cu13-20260601`（最接近官方 5 月 pin，5 月版已被 dockerhub GC）vs 我们 `20260720`，conc4 同为 ~4,900/GPU（4,812 vs 4,940）→ **非 nightly regression**。
+- **FP4 indexer（边际）**：`--enable-deepseek-v4-fp4-indexer`（GB300 SM100 支持）conc4 下仅 **+5%**（5,172 vs 4,940）。
+
+### 11.4 压测工具口径差异（对齐官方的下一步）
+- **我们用**：`sglang.bench_serving`（SGLang 自带），`--max-concurrency N` = **闭环**（锁死在途请求数）。
+- **官方用**：`sa-bench`（SemiAnalysis InferenceX 自带 harness），`req_rate: inf` = **开环**，conc 2500，自定义 DSV4 tokenizer（`sa_bench_tokenizers.sglang_deepseek_v4`），打 **Dynamo frontend** 端到端。
+- 开环 vs 闭环实测差 ~16%（见 §9.2）；harness / 直连单 worker vs 穿 Dynamo 也不同口径。**严格对标 18,200 必须换 sa-bench 开环。**
+
+### 11.5 对 11,200 的启示（重新定向）
+- prefill 单卡不是瓶颈（高并发下 83%）。满配 PD 之前只到 6,659 output/decode-GPU 的真因需重查：**(a) PD 编排（Dynamo router/queue）有没有把足够并发投递到每个 prefill worker；(b) 瓶颈是否在 decode / KV 传输侧**。
+- 下一步：官方 **sa-bench 开环** + `high-conc-8p1d-dep8` 配方，端到端重测，定位真瓶颈。
+
+---
+
+*2026-07-22 更新（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。§3.9 单节点手册、§3.3+§3.4 PD+Dynamo 步骤、§7 benchmark、§8 全过程+原理、**§10 官方 11,200 认知、§11 prefill 并发扫描重大修正**。**关键修正（§11）：之前"prefill 单卡慢 3.7×、喂不动 decode"（§10.4）是 conc4 低并发测量假象——同一 dep4 worker 高并发峰值 15,196 tok/s/GPU = 官方 18,200 的 83%，prefill 非瓶颈。满配跑不满 11,200 的真因（编排/decode 侧）待用官方 sa-bench 开环重测。** 存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
