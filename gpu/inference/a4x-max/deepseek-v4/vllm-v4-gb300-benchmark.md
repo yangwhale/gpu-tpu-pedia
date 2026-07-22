@@ -316,4 +316,59 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 **下一步吞吐杠杆**：DSpark 投机解码（`--speculative-config method=dspark num_speculative_tokens=7`，需 DeepSeek-V4-Pro-DSpark 模型）+ 扩 P/D 拓扑。
 
+## 9. DSpark 端到端复现（官方镜像 + NVLink KV + vllm-router，1p1d）
+
+在 P2d（NixlConnector + NVLink cuda_ipc + vllm-router）基础上叠加 **DSpark 投机解码**。全程官方组件、可复现。
+
+### 9.0 DSpark 是什么
+DeepSeek 2026-06 开源的投机解码框架（arxiv 2607.05147）：**semi-autoregressive draft head（Markov 头）+ 按负载调度的验证**，一次草稿多个 token、target 一次前向验证。相比单层 MTP 提速 51–400%。**不是新模型** —— `DeepSeek-V4-Pro-DSpark` = V4-Pro 同 checkpoint（FP8）+ baked-in DSpark draft 模块（config 里 `dspark_block_size`/`dspark_markov_rank`/`dspark_target_layer_ids`）。
+
+### 9.1 前置
+- **镜像**：官方 `vllm/vllm-openai:nightly-aarch64`（实测 vLLM ≥ 0.23.1rc1.dev1373 带 dspark + `deep_gemm_mega_moe` + mxfp4；DSpark 07-08 merge 进主线）。**不要用私有自建镜像**，保复现性。
+- **模型**：`deepseek-ai/DeepSeek-V4-Pro-DSpark`（HF，FP8，~893GB / 66 shards）。`hf download` 到一节点 → `gcloud storage cp` 上 GCS → 各节点从 GCS 拉到 local SSD。
+- **拓扑**：1 prefill + 1 decode，各 1 节点 4 GPU，**同 subblock**（podAffinity `gce-topology-subblock` → 同 NVLink 域）。
+
+### 9.2 KV over NVLink（同 P2d，关键三件套）
+```
+UCX_TLS=cuda_copy,cuda_ipc,tcp          # 删 rdma/rc
+UCX_CUDA_IPC_ENABLE_MNNVL=y             # cuda_ipc 跨节点走多机 NVLink
+NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1 VLLM_USE_NCCL_SYMM_MEM=0
+```
++ vllm serve 加 `--enable-cumem-allocator`（VMM 分配 KV 才能 IPC 共享）。
+
+### 9.3 Prefill（kv_producer，TP4，enforce-eager）
+```
+vllm serve /models/DeepSeek-V4-Pro-DSpark \
+  --served-model-name deepseek-ai/DeepSeek-V4-Pro-DSpark \
+  --trust-remote-code --enable-cumem-allocator --kv-cache-dtype fp8 --block-size 256 \
+  --port 8001 --tensor-parallel-size 4 --enforce-eager \
+  --max-num-seqs 16 --max-num-batched-tokens 16384 --no-enable-prefix-caching \
+  --no-disable-hybrid-kv-cache-manager \
+  --moe-backend deep_gemm_mega_moe --enable-expert-parallel --tokenizer-mode deepseek_v4 \
+  --speculative-config '{"method":"dspark","num_speculative_tokens":7,"draft_sample_method":"greedy"}' \
+  --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_load_failure_policy":"fail"}'
+```
+env 另加：`VLLM_NIXL_SIDE_CHANNEL_PORT=5557` + `VLLM_NIXL_SIDE_CHANNEL_HOST=<prefill-ip>`。
+
+### 9.4 Decode（kv_consumer，TP4，FULL_DECODE_ONLY）
+同上，改：`--kv-role kv_consumer`、`--port 8002`、去掉 `--enforce-eager`、`--max-num-seqs 1024`、`--max-cudagraph-capture-size 1024`、`--compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","cudagraph_capture_sizes":[8,16,...,1024]}'`、`--gpu-memory-utilization 0.9`；`VLLM_NIXL_SIDE_CHANNEL_PORT=5558`。**decode 先等 prefill 的 5557 side channel 就绪再起**。
+
+### 9.5 Router（vllm-router）
+```
+pip install vllm-router
+vllm-router --policy round_robin --vllm-pd-disaggregation \
+  --prefill http://<prefill-ip>:8001 --decode http://<decode-ip>:8002 \
+  --host 0.0.0.0 --port 30000 --intra-node-data-parallel-size 1
+```
+
+### 9.6 验证 + benchmark
+- 冒烟：`curl :30000/v1/completions` prompt "The capital of France is" → "Paris"。
+- 压测：`vllm bench serve --backend openai --endpoint /v1/completions --base-url http://<router>:30000 --dataset-name random --random-input-len 8192 --random-output-len 1024 --num-prompts N --max-concurrency C --ignore-eos`。
+- 对照 P2d（无 DSpark）看投机解码带来的 decode 吞吐提升。
+
+### 9.7 GCS 传输 auth 坑
+GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
+
+---
+
 *SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
