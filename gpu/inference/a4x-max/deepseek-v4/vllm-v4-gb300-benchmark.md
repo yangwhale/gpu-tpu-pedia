@@ -186,4 +186,24 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 ---
 
-*基于公开来源整理（vLLM blog / recipe 站 / SemiAnalysis InferenceX），2026-07-22。**本环境未实跑**，数字为官方/榜单值；实跑准备 + 消融矩阵见 §7。SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。*
+## 8. 本环境实跑记录（进行中，2026-07-22）
+
+> 从 §7 消融矩阵按 Phase 推进，本环境（GB300 A4X Max，4卡/节点）实测。
+
+### P0 单节点冒烟 ✅
+- 容器 `vllm/vllm-openai:dsv4-megamoe-mxfp4-arm64-cu130-4ba0a72`（arm64）单节点 **DP4+EP**（4卡，非 8卡 DP8——A4X Max 每节点仅 4 卡），原版 `/mnt/ssd/DeepSeek-V4-Pro`（806G FP4）+ `moe-backend deep_gemm_amxf4_mega_moe` + `kv-cache-dtype fp8`，生成正确（"Paris"，fingerprint `dp4-ep`）。**单节点不需要 GIB/DOCA bootstrap**（无跨节点 RDMA）。
+- **⭐ 新坑（vLLM V4 特有）**：冷启动（torch.compile inductor + DeepGEMM warmup 1666 shapes + cuda graph capture 51 sizes）**超默认 600s 超时**，ApiServer 报 `TimeoutError: engine core ... Waited 600s` 后 `died with exit code 1`。**必须 `export VLLM_ENGINE_READY_TIMEOUT_S=3600`**。compile cache 指到 SSD（`VLLM_CACHE_ROOT=/mnt/ssd/vllm-cache`）→ 第二次启动快很多。
+
+### P1 单节点 benchmark（DP4，8K/1K，`vllm bench serve`，口径 total in+out ÷ 4 GPU）
+
+| 并发 | Total tok/s | **tok/s/GPU (÷4)** | Output tok/s | Median TPOT |
+|---|---|---|---|---|
+| 1 | 528 | 132 | 59 | 16.8 ms |
+| 16 | 4,991 | 1,248 | 554 | 27.4 ms |
+| 64 | 12,252 | **3,063** | 1,361 | 43.7 ms |
+
+**vs SGLang Phase 2 单节点 TP4**（同 8K/1K 同口径）：conc1 209 / conc16 1,898 / conc64 2,794。
+
+**结论（单节点交叉）**：**低并发 SGLang 快**（conc1 209 vs 132、conc16 1,898 vs 1,248——TP 延迟优势）；**高并发 conc64 vLLM 反超 +10%**（3,063 vs 2,794——DP+EP 的吞吐扩展比纯 TP 好）。这跟 vLLM 官方"V4 初版、优化进行中"一致，且 vLLM 的 wide-EP 天然更吃高并发。**下一步 P2+：disagg**（多节点 Dynamo + NixlConnector）。
+
+*SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
