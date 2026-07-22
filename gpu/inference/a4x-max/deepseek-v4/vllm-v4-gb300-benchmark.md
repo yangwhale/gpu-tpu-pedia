@@ -243,7 +243,20 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 **踩坑记录**
 - **pod 重建丢 pip 包**：`ai-dynamo` 装在容器 root FS，pod 重建（换新容器）后消失（模型在 hostPath `/mnt/ssd` 持久，pip 包不持久）→ 重建后必须重装。教训：dynamo 应进镜像或 initContainer。
-- **pkill 留 GPU 僵尸显存**：`pkill -f dynamo.vllm` 只杀 launcher，multiproc 的 Worker 子进程（进程名不含 dynamo.vllm）成孤儿，`ps` 里消失但 CUDA context 各占 256 GiB 显存驱动不回收 → 下次启动 OOM。**唯一清法：重建 pod**（容器 PID namespace 销毁，内核回收）。
+- **pkill 留 GPU 显存**：`pkill -f dynamo.vllm` 只杀 launcher，multiproc 的 Worker 子进程（进程名不含 dynamo.vllm）不被杀，仍各占 ~256 GiB → 下次启动 OOM。**正确清法**：`nvidia-smi --query-compute-apps=pid` 拿 GPU 占用 PID 逐个 `kill -9` + `pkill -9 -f dynamo`，几秒后显存归 0。**仅当进程已死但 `ps` 查不到、显存仍不回收（真僵尸 CUDA context）才需重建 pod**（容器 PID ns 销毁内核回收）。
 - **nodeName 破 DRA**：重建时用 `nodeName` 钉节点会**绕过 scheduler**，DRA ResourceClaim 卡 pending（DRA 分配靠 scheduler）。必须用 `nodeAffinity`（`kubernetes.io/hostname`）钉节点，保留 scheduler。
+
+### P2b MooncakeConnector（NVLink KV，对齐 SGLang，2026-07-22）
+
+**为什么换 mooncake**：NixlConnector 走 UCX RDMA 需 nvidia_peermem 内核模块（DOCA userspace 补不了），KV 卡 200MB/s。GB300 NVL72 的正解是 KV 走**域内 NVLink**（mooncake，同 SGLang）。DOCA OFED + GIB 是 mooncake 前置（见 §7 bootstrap）。
+
+**打通 mooncake 的三个坑**：
+1. **libcudart.so.12**：`mooncake-transfer-engine 0.3.9` wheel 是 CUDA 12 编译，vLLM 容器 CUDA 13 → `from mooncake.engine import TransferEngine` 报缺 `libcudart.so.12`。修：`pip install nvidia-cuda-runtime-cu12`，`LD_LIBRARY_PATH` 加 `.../nvidia/cuda_runtime/lib`。
+2. **MC_FORCE_MNNVL=1**：只配 `mooncake_protocol=rdma` 会 `Mooncake Transfer Engine initialization failed`。GB300 必须 `export MC_FORCE_MNNVL=1`（+ `NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`）走域内 NVLink → init 成功（日志 `nvlink_transport.cpp` + `Mooncake Transfer Engine Scheduler`）。
+3. **connector 配置**：prefill `kv_role=kv_producer` / decode `kv_role=kv_consumer`（**不是** Nixl 的 kv_both）+ `kv_connector_extra_config.mooncake_protocol=rdma`。
+
+**⭐ 架构卡点：dynamo.vllm ⊥ MooncakeConnector**。dynamo 的 disagg 靠 prefill 返回 `res.kv_transfer_params`（NixlConnector 填，走 response）；MooncakeConnector 不填（用自己的 bootstrap server 带外协调）→ dynamo `handlers.py:_build_disaggregated_params` 拿 None → decode 报 `missing disaggregated_params`，生成 500。**mooncake engine 层已 work（NVLink init 成功），但 dynamo 编排层对不上**。
+
+**正解方向**：mooncake pip 包自带 `vllm_v1_proxy_server.py`（vLLM 原生 mooncake disagg proxy）。用 MooncakeConnector 需**弃 dynamo frontend、改 vLLM 原生 mooncake proxy**（prefill+decode+proxy），同 SGLang 用自己 PD 协调的思路。待推进。
 
 *SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
