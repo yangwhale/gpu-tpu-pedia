@@ -324,7 +324,7 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 DeepSeek 2026-06 开源的投机解码框架（arxiv 2607.05147）：**semi-autoregressive draft head（Markov 头）+ 按负载调度的验证**，一次草稿多个 token、target 一次前向验证。相比单层 MTP 提速 51–400%。**不是新模型** —— `DeepSeek-V4-Pro-DSpark` = V4-Pro 同 checkpoint（FP8）+ baked-in DSpark draft 模块（config 里 `dspark_block_size`/`dspark_markov_rank`/`dspark_target_layer_ids`）。
 
 ### 9.1 前置
-- **镜像**：官方 `vllm/vllm-openai:nightly-aarch64`（实测 vLLM ≥ 0.23.1rc1.dev1373 带 dspark + `deep_gemm_mega_moe` + mxfp4；DSpark 07-08 merge 进主线）。**不要用私有自建镜像**，保复现性。
+- **镜像**：官方 **`vllm/vllm-openai:v0.25.1-aarch64`**（2026-07-13 稳定版，带 dspark + `deep_gemm_mega_moe` + mxfp4）。**不要用私有自建镜像**，保复现性。**⚠️ 不要用 `nightly-aarch64`** —— 它 tag 日期虽新但实际报 `0.23.1rc1.dev1373`（版本反而旧），有 **kv_block_zeroer 断言 bug**：NixlConnector disagg 调度 `new_block_ids_to_zero` 但 `_init_kv_zero_meta()` 只在 `needs_kv_cache_zeroing=True` 时调、导致 `assert self.kv_block_zeroer is not None` 崩（`model_runner.py:883`），生成即 500。v0.25.1 已修（对齐奚老师验证过的版本）。
 - **模型**：`deepseek-ai/DeepSeek-V4-Pro-DSpark`（HF，FP8，~893GB / 66 shards）。`hf download` 到一节点 → `gcloud storage cp` 上 GCS → 各节点从 GCS 拉到 local SSD。
 - **拓扑**：1 prefill + 1 decode，各 1 节点 4 GPU，**同 subblock**（podAffinity `gce-topology-subblock` → 同 NVLink 域）。
 
