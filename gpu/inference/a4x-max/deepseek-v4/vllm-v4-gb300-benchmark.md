@@ -17,6 +17,7 @@
 | **vLLM 满配拓扑** | disagg：`4p1d/5p1d/6p1d-dep4-dep8`（24/28/32 GPU，conc 4096）、`7p2d-dep4-dep16`（60 GPU 宽 EP，conc 3072）；均 Dynamo 编排 |
 | **KV 传输** | **NixlConnector**（vLLM 自己的；SGLang 用 mooncake） |
 | **MoE backend** | **deep_gemm_amxf4_mega_moe**（MXFP4 MegaMoE；对应 SGLang 的 megamoe） |
+| **⭐ 本环境实跑最优做法（见 §8 P2d）** | NixlConnector + **NVLink cuda_ipc**（`UCX_TLS=cuda_copy,cuda_ipc,tcp` + `UCX_CUDA_IPC_ENABLE_MNNVL=y` + `--enable-cumem-allocator`）+ **vllm-router**（`--vllm-pd-disaggregation`）。KV 从 200MB/s→7-167 GB/s。**GB300 上 KV 走 NVLink，不是 RDMA/dmabuf/peermem** |
 
 **一句话**：vLLM 对 DeepSeek-V4 在 GB300 上是 Day-0 支持、有完整 disagg recipe 和公开榜单。架构层（V4 的 CSA+HCA 注意力、FP4 MoE、MTP）与 SGLang 同源；差异在**运行时栈**：编排都用 Dynamo，但 vLLM 走 NixlConnector + deep_gemm_amxf4_mega_moe + DP/EP，SGLang 走 mooncake + megamoe + dep。
 
@@ -293,6 +294,26 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 | Nixl+dynamo (vanilla / MOFED) | 574 / 612 | 1693 / 1677 | 200MB/s cuda_copy | 高效 ✓ |
 | Mooncake NVLink + toy proxy | 502 | 1333 | NVLink（快）但 proxy 拖慢 | toy ✗ |
 
-**结论**：当前 GB300 GKE COS + 这个 vLLM 容器 + dynamo/NIXL 工具链下，**拿不到"高效编排 + 快 GPUDirect KV"的组合**。两个堵点：(1) NIXL UCX 在 nvidia-open+COS 上不启用 dmabuf GPUDirect，KV 卡 200MB/s；(2) mooncake 有 NVLink KV 但无高效编排器（dynamo.vllm 不兼容、toy proxy 慢）。要打通需真工程：调 UCX/驱动的 dmabuf、或建 dynamo.vllm↔mooncake 集成、或装 NIXL mooncake 插件。**最小 disagg 已验证 vLLM V4 GB300 跨节点可跑通，性能优化受限于上述工具链缺口**。
+**当时结论（已被 P2d 推翻）**：以为拿不到"高效编排 + 快 KV"组合。**真相**：错在一直想用 RDMA/dmabuf GPUDirect（COS 不支持 peermem，dmabuf 又没在这套 UCX+驱动上启用）。**正解是让 NIXL 走 NVLink 的 cuda_ipc，根本不碰 RDMA** —— 见 P2d。
+
+### P2d ⭐ 最终解法：NixlConnector + NVLink cuda_ipc + vllm-router（2026-07-22 跑通）
+
+**这才是对的做法** —— KV 不走 RDMA，走**域内 NVLink 的 UCX cuda_ipc**。三件套：
+
+1. **UCX transport 只留 NVLink 路径**：`UCX_TLS=cuda_copy,cuda_ipc,tcp`（**删掉 rdma/rc**）+ `UCX_CUDA_IPC_ENABLE_MNNVL=y`（让 cuda_ipc 跨节点走多机 NVLink）+ `NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`。
+2. **`--enable-cumem-allocator`**：vLLM 用 VMM(cuMem) 分配 KV cache，块才能通过 IPC handle 共享（不加则退回 cuda_copy）。
+3. **prefill/decode 同 subblock**（podAffinity `gce-topology-subblock`）→ 同 NVLink 域，cuda_ipc 直接 GPU↔GPU 搬 KV。
+
+**编排器 = `vllm-router`**（弃 dynamo/toy proxy）：`pip install vllm-router` → `vllm-router --policy round_robin --vllm-pd-disaggregation --prefill http://<p>:8001 --decode http://<d>:8002 --port 30000`。原生支持 NixlConnector 的 producer/consumer PD 握手。
+
+**connector**：prefill `kv_role=kv_producer` / decode `kv_role=kv_consumer`（`kv_load_failure_policy=fail`），纯 `vllm serve`（不是 dynamo.vllm）。
+
+**⭐ 实测 KV transfer：200 MB/s → 7,000–167,000 MB/s（7–167 GB/s），提速 100–800×**，xfer 时间 200–800ms → 2–10ms。NVLink 路径坐实。
+
+**端到端（1p1d-dep4→TP4，8K/1K）**：conc16 out 487 / TTFT 5749ms；conc64 out 1534 / **TTFT 1171ms（全配置最优）** / TPOT 30ms。KV 已不是瓶颈，此规模瓶颈转到 prefill 计算（dep4/TP4 慢官方 3.7×）。
+
+**关键教训**：GB300 NVL72 上 vLLM disagg 的 KV 应走 **NVLink cuda_ipc**，不是 RDMA/dmabuf/peermem。之前 DOCA OFED / mooncake / dmabuf / peermem 的探索全属方向错误——NIXL 本身就能走 NVLink，只差 `UCX_CUDA_IPC_ENABLE_MNNVL=y` + `--enable-cumem-allocator`。方法来源：奚老师验证过的 GB300 vLLM recipe。
+
+**下一步吞吐杠杆**：DSpark 投机解码（`--speculative-config method=dspark num_speculative_tokens=7`，需 DeepSeek-V4-Pro-DSpark 模型）+ 扩 P/D 拓扑。
 
 *SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
