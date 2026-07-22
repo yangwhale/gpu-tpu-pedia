@@ -736,6 +736,19 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 - **修 prefill 单卡 1.2×**：对齐官方内核优化 / pinned 镜像（§10.7）。
 - **口径铁律**：对标 11,200 必须 sa-bench 开环 + 多 frontend + 高并发；单 frontend / 闭环 / 低并发都会严重低估。
 
+### 12.6 【已验证】加 prefill 数量 → +30%（8→14 prefill，2026-07-22）
+
+按 §12.5 杠杆实测：复用空闲干净节点（p9 + d2-d6），把 prefill 从 8 扩到 **14**（各 dep4，decode 仍 dep8/8卡，frontend 同步扩到 14），sa-bench 开环 14 路 × conc600（共 ~8400）：
+
+| prefill 数 | frontend 数 | 总 conc | 聚合 output tok/s | **output/decode-GPU** | TTFT 中位 |
+|---|---|---|---|---|---|
+| 8 | 8 | 5000 | 54,300 | 6,788（61%）| 38s |
+| **14** | 14 | ~8400 | **70,475** | **8,809（79%）** | 47s |
+
+→ **加 prefill +30%（6,788 → 8,809 = 官方 11,200 的 79%）**，**实锤 prefill 喂料就是瓶颈**——喂料翻倍，decode 填得更满、吐得更多。代价：TTFT 47s（在使劲压 decode）。
+- 剩余到 11,200 的 ~1.27× = (a) 还能加 1 个 prefill（d7 → 15，官方 max-prefill）；(b) 单卡 prefill 1.2× kernel 差（§11.4/§10.7）。
+- **决定性结论**：距官方的差距 = **prefill 喂料能力**（数量 × 单卡速度），decode / 架构 / 编排都已不是瓶颈。
+
 ---
 
 *2026-07-22 更新（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。导航：§3.9 单节点手册、§3.3+§3.4 PD+Dynamo 步骤、§7 benchmark、§8 全过程、§10 官方 11,200 认知、**§11 prefill 并发扫描重大修正、§12 满配 sa-bench + 多 frontend 提升**。**当前最优（官方口径 output÷decode-GPU）= 8-frontend + high-conc-8p1d-dep8-mtp + sa-bench 开环 = 6,788 = 官方 11,200 的 61%**（从单 frontend 5,060 靠多 frontend +34% 提上来）。**瓶颈地图（§12.4）：编排/frontend 占 34%（已吃回）+ prefill 喂料受限 1.65×（单卡 1.2× kernel 差 + prefill 数量不够）；decode 非瓶颈。** 早期"prefill 单卡慢 3.7×"（§10.4）已被 §11 证伪（低并发测量假象）。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
