@@ -206,12 +206,44 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 **结论（单节点交叉）**：**低并发 SGLang 快**（conc1 209 vs 132、conc16 1,898 vs 1,248——TP 延迟优势）；**高并发 conc64 vLLM 反超 +10%**（3,063 vs 2,794——DP+EP 的吞吐扩展比纯 TP 好）。这跟 vLLM 官方"V4 初版、优化进行中"一致，且 vLLM 的 wide-EP 天然更吃高并发。
 
-### P2 disagg 前置（已验证，2026-07-22）
-- **NATS/etcd 复用**：SGLang 建的 `dynamo-nats`/`dynamo-etcd` pod 仍在，vLLM 直接复用。
-- **ai-dynamo 安装**：recipe pin 的 `1.2.0.dev20260426` 已从 PyPI 下架（同 pinned 镜像被 GC）→ 用最近稳定 **`ai-dynamo==1.2.1`**（`pip install`，容器内可装）。
-- **启动路径**：`python3 -m dynamo.vllm`（对应 dynamo.sglang），自带 `--disaggregation-mode {prefill,decode}` + `--connector nixl` + 透传 vLLM engine args。
-- **跨节点前置**：disagg（prefill↔decode 跨节点）需 mrdma DRA + ComputeDomain + GIB/DOCA bootstrap（同 SGLang），单节点 P0/P1 不需要。
-- **P2 已就位**：3 pod（`v4v-p0` prefill + `v4v-d0/d1` decode）用 vLLM 镜像 + mrdma DRA + ComputeDomain 起好、Running；3 pod 都装好 `ai-dynamo==1.2.1`（`dynamo` import OK）。
-- **⭐ P2 当前卡点（vLLM 容器缺 RDMA userspace）**：vLLM 镜像自带 `nixl` python 包，但**没有底层 RDMA 栈**（`ibv_devices`/`ucx_info` 缺失、无 `/usr/local/gib`）。跨节点 NixlConnector KV 传输走 UCX/RDMA，需要把 **GIB（`gib-a4xmax.tgz`）+ DOCA OFED userspace** bootstrap 进容器（同 SGLang R1 流程）。集群无 GIB DaemonSet（仅 `nccl-fastsocket-installer`，未调度），SGLang 当年是 runtime 手动装。**下一步**：定位 GIB/DOCA asset → bootstrap 3 pod → `dynamo.vllm --disaggregation-mode prefill/decode --connector nixl` 起 + frontend + sa-bench。这是复刻 SGLang bootstrap 阶段的大工程。
+### P2 disagg 最小验证 1p1d-dep4 ✅（跨节点跑通，2026-07-22）
+
+**架构**：`v4v-p0` prefill(dep4, node A) + `v4v-d0` decode(dep4, node B) + `v4v-d1` frontend。KV 从 prefill 跨节点传到 decode，走 CX-8。
+
+**配置要点**（照官方 InferenceX `4p1d-dep4-dep8` recipe 缩到 1p1d-dep4）：
+- **NIXL 配法**：这个 build 把 connector 重构成 `vllm.distributed.kv_transfer.kv_connector.v1.nixl` 子包（导出 `NixlConnector`）。用 vLLM 原生 `--kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'`，**不是** dynamo `--connector` flag。旧路径 `...v1.nixl_connector` 已不存在。
+- **NATS/etcd 复用**：集群 `dynamo-nats`(4222)/`dynamo-etcd`(2379) 服务在，worker 靠 `NATS_SERVER` + `ETCD_ENDPOINTS` env 连、经 etcd 自动发现。
+- **ai-dynamo**：recipe pin 的 `1.2.0.dev20260426` 已从 PyPI 下架 → 用 **`ai-dynamo==1.2.1`**。
+- **side channel**：`VLLM_NIXL_SIDE_CHANNEL_HOST=$(hostname -i)` + `VLLM_NIXL_SIDE_CHANNEL_PORT`。
+- **端到端验证**：frontend `curl /v1/chat/completions` → prefill → KV 跨节点 → decode → 正确返回。
+
+**⭐ 核心发现：vanilla 容器就能跨节点 disagg，不需要 GIB/DOCA**
+- 容器**自带完整 RDMA userspace**：`libibverbs.so`/`libmlx5.so`（rdma-core 39.0）+ `ibv_reg_dmabuf_mr` 符号 + `/dev/infiniband/uverbs0-7`（8× CX-8 经 mrdma DRA）。此前"容器缺 RDMA 栈"的判断是错的。
+- 缺的只有 **GIB**（那是 NCCL 用的，NIXL 不依赖）+ 诊断工具。
+
+**⭐⭐ 但 KV transfer 是瓶颈：~200 MB/s（无 GPUDirect）**
+
+| 项目 | 值 |
+|---|---|
+| 每次 KV transfer | 81.5 MB（8K token, FP8） |
+| **实测吞吐** | **140–310 MB/s**（CX-8 线速 ~50 GB/s，慢 ~200×） |
+| 每次 xfer 耗时 | 200–800 ms（直接拉高 TTFT） |
+| disagg 1p1d-dep4 吞吐 | conc16 = 574 / conc64 = 1,693 output tok/s |
+
+**根因**：NIXL 回退到 **cuda_copy 主机中转**（GPU→host→RDMA→host→GPU），没走 GPUDirect RDMA 零拷贝。日志：`GDAKI not supported, please load nvidia_peermem` + `mlx5_0~7: GPU-direct RDMA is not available (GDA_DMABUF_ENABLE=try)`。
+
+**GPUDirect 三次验证（全指向同一结论）**
+1. vanilla：200 MB/s（cuda_copy）
+2. 加 `UCX_IB_GPU_DIRECT_RDMA=yes` + `UCX_TLS=^gdaki` 重启：**KV 仍 200 MB/s，零改善**（conc16 610 ≈ baseline 574）
+3. 结论：**纯 env 调优无法开 GPUDirect**。NIXL 自带 UCX 通过 GDAKI 探测 GPUDirect，需 nvidia_peermem 或可用 GDA_DMABUF；vanilla 容器 GPU 驱动是 nvidia-open 580（理论支持 dmabuf 导出）+ rdma-core 有 dmabuf 符号，但 UCX 的 GDAKI 探测失败 → 禁用 GDR
+
+**下一步（要真吞吐，二选一，均需 bootstrap）**
+- **A. nvidia_peermem**：host 节点 `modprobe nvidia_peermem`（需 node 级访问/特权 DaemonSet；容器内无模块文件，`modprobe` 不可用）
+- **B. DOCA OFED**：容器内装 DOCA OFED userspace，提供 GDA/dmabuf 可用的 mlx5 栈让 UCX GDAKI 探测通过
+
+**踩坑记录**
+- **pod 重建丢 pip 包**：`ai-dynamo` 装在容器 root FS，pod 重建（换新容器）后消失（模型在 hostPath `/mnt/ssd` 持久，pip 包不持久）→ 重建后必须重装。教训：dynamo 应进镜像或 initContainer。
+- **pkill 留 GPU 僵尸显存**：`pkill -f dynamo.vllm` 只杀 launcher，multiproc 的 Worker 子进程（进程名不含 dynamo.vllm）成孤儿，`ps` 里消失但 CUDA context 各占 256 GiB 显存驱动不回收 → 下次启动 OOM。**唯一清法：重建 pod**（容器 PID namespace 销毁，内核回收）。
+- **nodeName 破 DRA**：重建时用 `nodeName` 钉节点会**绕过 scheduler**，DRA ResourceClaim 卡 pending（DRA 分配靠 scheduler）。必须用 `nodeAffinity`（`kubernetes.io/hostname`）钉节点，保留 scheduler。
 
 *SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
