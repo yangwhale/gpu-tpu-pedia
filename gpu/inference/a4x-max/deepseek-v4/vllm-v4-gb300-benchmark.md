@@ -278,4 +278,21 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 - env: `MC_FORCE_MNNVL=1`（GB300 走域内 NVLink，必需）+ `NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1` + `LD_LIBRARY_PATH` 含 cuda12 runtime（`pip install nvidia-cuda-runtime-cu12`）+ GIB source + `VLLM_MOONCAKE_BOOTSTRAP_PORT`
 - proxy: `python vllm_v1_proxy_server.py --host 0.0.0.0 --port 8000 --prefiller-hosts <p-ip> --prefiller-ports 8000 --decoder-hosts <d-ip> --decoder-ports 8000`（先杀掉占 8000 的旧 frontend）
 
+### P2c 为什么 dynamo 配 SGLang-mooncake 行、配 vLLM-mooncake 不行 + DMABUF 尝试（2026-07-22）
+
+**dynamo 是分框架集成的**：
+- `dynamo.sglang` 有 `compute_bootstrap_address`——把 prefill 的 mooncake **bootstrap 地址 (host/port/room)** 传给 decode，正好对上 mooncake 的 bootstrap 协调模型 → SGLang+dynamo+mooncake 能配。
+- `dynamo.vllm` 完全照 **NixlConnector** 建（`do_remote_prefill`/`remote_engine_id`/`remote_block_ids` 塞 response，args.py 只有 Nixl/LMCache/FlexKV），**没有 bootstrap 地址传递通路** → 接不住 vLLM MooncakeConnector（用 bootstrap server 带外）。**是 dynamo 两套集成的差异，非 mooncake 本身问题**。
+
+**DMABUF 路径（GKE COS 只支持 dmabuf 不支持 peer_mem）**：NIXL 的 UCX backend 理论上能用 dmabuf 走 GPUDirect。实测装 DOCA OFED（libmlx5→MOFED 1.25.58 支持 `ibv_reg_dmabuf_mr`）后重测 Nixl+dynamo：**KV 仍 200MB/s、吞吐没变**（conc16 612 / conc64 1677，vs vanilla 574/1693 噪声内）。UCX 的 GDAKI dmabuf 探测仍 `not available`，标准 rc_mlx5 也没走 dmabuf → 仍 cuda_copy。**COS 有 dmabuf 但这套 UCX+nvidia-open 驱动组合没成功启用它**。本镜像 NIXL 插件只有 UCX/GPUNETIO/GDS/LIBFABRIC，无 mooncake 插件。
+
+**⭐ 最终三方对比（1p1d-dep4，8K/1K）**：
+
+| 配置 | conc16 out | conc64 out | KV | 编排 |
+|---|---|---|---|---|
+| Nixl+dynamo (vanilla / MOFED) | 574 / 612 | 1693 / 1677 | 200MB/s cuda_copy | 高效 ✓ |
+| Mooncake NVLink + toy proxy | 502 | 1333 | NVLink（快）但 proxy 拖慢 | toy ✗ |
+
+**结论**：当前 GB300 GKE COS + 这个 vLLM 容器 + dynamo/NIXL 工具链下，**拿不到"高效编排 + 快 GPUDirect KV"的组合**。两个堵点：(1) NIXL UCX 在 nvidia-open+COS 上不启用 dmabuf GPUDirect，KV 卡 200MB/s；(2) mooncake 有 NVLink KV 但无高效编排器（dynamo.vllm 不兼容、toy proxy 慢）。要打通需真工程：调 UCX/驱动的 dmabuf、或建 dynamo.vllm↔mooncake 集成、或装 NIXL mooncake 插件。**最小 disagg 已验证 vLLM V4 GB300 跨节点可跑通，性能优化受限于上述工具链缺口**。
+
 *SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
