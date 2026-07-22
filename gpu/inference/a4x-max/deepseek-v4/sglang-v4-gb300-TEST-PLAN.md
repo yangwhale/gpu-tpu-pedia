@@ -646,6 +646,65 @@ done'
 > - **第 2 次**（自愈循环脚本，见上方 ★）：**一次成功，8 分钟，全自动无人工**。round1 [p0 d2 d5] 中招 → 90s 后 killport 重试 → round2 剩 [d5] → round3 全绿；decode 与 prefill 并行 capture 完毕即注册；frontend 统一起验 200；探活 owned_by=nvidia；e2e mini-bench 32/32 通。**印证「40236 僵尸是暂时的、耐心重试 2-3 轮自清、无需重建」**。
 > 结论：一次成功的关键不是运气，是**把校验-重试循环脚本化 + 每轮间隔 ≥90s**。
 
+### 13.A ⭐ 完整启动脚本（source of truth，照抄即可，勿删任何 env）
+
+> 上面 Step 1 是参数解读；**下面两个脚本是实测能跑的完整版**，一个字都不能漏（GIB source、cache 目录、SWA、`USE_CUSTOM_ALL_REDUCE_V2` prefill=1/decode=0 的差异、`NUM_MAX_TOKENS_PER_RANK` prefill=9216/decode=4096、reasoning/tool parser、ib-device、disagg 超时全是必需）。
+
+**`prefill-dep8.sh`**（16 个 prefill 每节点跑一份，`setsid bash prefill-dep8.sh`）：
+```bash
+#!/bin/bash
+source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+export NCCL_CONF_FILE=/usr/local/gib/configs/nccl.a4xmax.conf LD_LIBRARY_PATH=/usr/local/gib/lib64:${LD_LIBRARY_PATH:-}
+export NCCL_DEBUG=INFO NCCL_SOCKET_IFNAME=eth0 GLOO_SOCKET_IFNAME=eth0 NCCL_IB_SPLIT_DATA_ON_QPS=1
+export SGLANG_MOONCAKE_CUSTOM_MEM_POOL=True MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1
+export FLASHINFER_DISABLE_VERSION_CHECK=1 SGLANG_DG_CACHE_DIR=/mnt/ssd/dg-cache FLASHINFER_WORKSPACE_BASE=/mnt/ssd/fi-cache
+export SGLANG_JIT_DEEPGEMM_FAST_WARMUP=1
+export NATS_SERVER=nats://dynamo-nats:4222 ETCD_ENDPOINTS=http://dynamo-etcd:2379 DYN_SYSTEM_PORT=8081
+export SGLANG_RADIX_DISABLE_REUSE=1 SGLANG_DEFAULT_THINKING=1 SGLANG_DSV4_REASONING_EFFORT=max
+export SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1 SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN=1 SGLANG_OPT_SWA_RELEASE_LEAF_LOCK_AFTER_WINDOW=1
+export SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2=1
+export SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=9216 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1
+export SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT=100000 SGLANG_DISAGGREGATION_WAITING_TIMEOUT=100000 SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE=20
+python3 -m dynamo.sglang --model-path /mnt/ssd/DeepSeek-V4-Pro --served-model-name deepseek-ai/DeepSeek-V4-Pro \
+  --trust-remote-code --reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 --watchdog-timeout 86400 \
+  --tensor-parallel-size 4 --data-parallel-size 4 --expert-parallel-size 4 \
+  --enable-dp-attention --enable-dp-lm-head --moe-a2a-backend megamoe --moe-dense-tp-size 1 \
+  --disaggregation-mode prefill --disaggregation-transfer-backend mooncake --disaggregation-bootstrap-port 30001 \
+  --disaggregation-ib-device mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7 \
+  --mem-fraction-static 0.9 --max-running-requests 1024 --cuda-graph-max-bs 1024 --chunked-prefill-size 32768 \
+  --stream-interval 60 --disable-radix-cache --enable-metrics --host 0.0.0.0 --port 40000
+```
+
+**`decode-hc.sh`**（dep8 跨 2 节点：d0 `bash decode-hc.sh 0 <d0IP>:5000`，d1 `bash decode-hc.sh 1 <d0IP>:5000`）：
+```bash
+#!/bin/bash
+NODE_RANK=$1; DIST_ADDR=$2
+source /usr/local/gib/scripts/set_nccl_env.sh 2>/dev/null || true
+export NCCL_CONF_FILE=/usr/local/gib/configs/nccl.a4xmax.conf LD_LIBRARY_PATH=/usr/local/gib/lib64:${LD_LIBRARY_PATH:-}
+export NCCL_DEBUG=WARN NCCL_SOCKET_IFNAME=eth0 GLOO_SOCKET_IFNAME=eth0 NCCL_IB_SPLIT_DATA_ON_QPS=1
+export SGLANG_MOONCAKE_CUSTOM_MEM_POOL=True MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1
+export FLASHINFER_DISABLE_VERSION_CHECK=1 SGLANG_DG_CACHE_DIR=/mnt/ssd/dg-cache FLASHINFER_WORKSPACE_BASE=/mnt/ssd/fi-cache
+export SGLANG_JIT_DEEPGEMM_FAST_WARMUP=1
+export NATS_SERVER=nats://dynamo-nats:4222 ETCD_ENDPOINTS=http://dynamo-etcd:2379 DYN_SYSTEM_PORT=8082
+export SGLANG_RADIX_DISABLE_REUSE=1 SGLANG_DEFAULT_THINKING=1 SGLANG_DSV4_REASONING_EFFORT=max
+export SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1 SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN=1 SGLANG_OPT_SWA_RELEASE_LEAF_LOCK_AFTER_WINDOW=1
+export SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=4096 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1
+export SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2=0
+export SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT=100000 SGLANG_DISAGGREGATION_WAITING_TIMEOUT=100000 SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE=20
+python3 -m dynamo.sglang --model-path /mnt/ssd/DeepSeek-V4-Pro --served-model-name deepseek-ai/DeepSeek-V4-Pro \
+  --trust-remote-code --reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 --watchdog-timeout 86400 \
+  --tensor-parallel-size 8 --data-parallel-size 8 --expert-parallel-size 8 --pp-size 1 \
+  --nnodes 2 --node-rank $NODE_RANK --dist-init-addr $DIST_ADDR \
+  --enable-dp-attention --enable-dp-lm-head --moe-a2a-backend megamoe --moe-dense-tp-size 1 \
+  --disaggregation-mode decode --disaggregation-transfer-backend mooncake --disaggregation-bootstrap-port 30001 \
+  --disaggregation-ib-device mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7 \
+  --speculative-algorithm EAGLE --speculative-num-steps 1 --speculative-eagle-topk 1 --speculative-num-draft-tokens 2 \
+  --mem-fraction-static 0.85 --swa-full-tokens-ratio 0.1 --context-length 9216 \
+  --max-running-requests 8192 --cuda-graph-max-bs 1280 --stream-interval 60 --disable-radix-cache --enable-metrics
+```
+
+**frontend**（16 个 prefill 节点各起一份）：`NATS_SERVER=nats://dynamo-nats:4222 ETCD_ENDPOINTS=http://dynamo-etcd:2379 setsid python3 -m dynamo.frontend --http-port 8001`
+
 ## 14. ⭐⭐⭐⭐ Autotune + EPLB 实验：冲剩余 20% gap 的两次尝试（2026-07-22）
 
 实测两个可能冲击剩余 ~20% gap 的杠杆：完整 DeepGEMM autotune 和 EPLB。**结论：两者都无法有效缩小 gap，反向印证剩余差距只在官方 pinned 镜像的内核成熟度。**
