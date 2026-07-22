@@ -642,7 +642,7 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 2. **重新诊断满配瓶颈**：既然 prefill 单卡够快（§11），满配上不去 11,200 大概率在 (a) PD 编排（Dynamo router/queue）没把足够并发投到每个 prefill worker，或 (b) decode / KV 传输侧。逐项测。
 3. **严格复现配方**：`high-conc-8p1d-dep8`（8 prefill : dep8 + MTP num-steps 1）+ 官方 sa-bench 开环。
 4. **口径对齐**：一律「output ÷ decode-GPU」+ 开环高并发。
-5. EPLB（decode 2.54×）留最后。
+5. ~~EPLB（decode 2.54×）留最后~~ → **已测，见 §14.2**：EPLB 与 megamoe 不兼容（强制切 flashinfer backend，OOM/断言/prewarm 死锁三种失败），本栈不可用。
 
 **一句话认知（修正版）**：**之前"prefill 单卡慢 3.7×"是低并发（conc4）测量假象——§11 实测同一 worker 高并发下达官方 83%。真正待解的是：官方口径（sa-bench 开环 c2500）下满配为什么只到 6,659——瓶颈已不在 prefill 单卡速度，要往 PD 编排 / decode 侧重新查。**
 
@@ -787,6 +787,45 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 ---
 
+## 14. ⭐⭐⭐⭐ Autotune + EPLB 实验：冲剩余 20% gap 的两次尝试（2026-07-22）
+
+实测两个可能冲击剩余 ~20% gap 的杠杆：完整 DeepGEMM autotune 和 EPLB。**结论：两者都无法有效缩小 gap，反向印证剩余差距只在官方 pinned 镜像的内核成熟度。**
+
+### 14.1 完整 DeepGEMM autotune（FAST_WARMUP=0）——无提升
+
+`SGLANG_JIT_DEEPGEMM_FAST_WARMUP` 控制 warmup 时编译的 M shape 集合（`deep_gemm_wrapper/compile_utils.py:56`）：
+- `=1`（fast，默认）：只编译 ~3072 个采样 shape（1-1024 密集 + 大 batch 稀疏采样）
+- `=0`（full）：编译 1..m_max 全部（prefill chunked=32768 → m_max=65536，即约 21× 的 shape）
+
+全 18 worker 用 `=0` 重启实测（官方口径 output÷8 decode-GPU）：
+
+| 配置 | aggregate tok/s | ÷8 decode-GPU | vs baseline |
+|---|---|---|---|
+| baseline（fast-warmup，热态） | 71,944 | 8,993 | — |
+| full autotune 首轮（冷，含 67s 首请求 JIT） | 64,300 | 8,037 | -11% |
+| full autotune 第二轮（热态） | 72,147 | 9,018 | +0.3% |
+
+**full autotune 无有意义提升**（9,018 vs 8,993 在噪声内）。冷→热那 +12% 纯是一次性 JIT 编译，不是 autotune 的功劳——fast 和 full 热态后行为一致。原因：fast-warmup 已覆盖 serving 实际碰到的常用 M shape，这些 shape 的 DeepGEMM kernel 本就接近最优；full 多编的 6 万个 shape serving 根本用不上。**代价是巨大启动开销，收益为零，不值。**
+
+### 14.2 EPLB——与 megamoe 不兼容，三种失败模式
+
+EPLB（Expert Parallel Load Balancing）针对 decode 端专家负载不均。在本 build 尝试 `--enable-eplb --ep-num-redundant-experts N`（非 elastic 模式 = 在线自动重平衡，`recorder-mode` 自动设 stat、`ep-dispatch-algorithm` 设 static、每 N 迭代重平衡）：
+
+**关键发现：EPLB 强制放弃 megamoe。** megamoe 融合 kernel 不支持 redundant expert 迁移，启用 EPLB 后 MoE backend 自动切到更重的 **FlashInfer TRTLLM MoE**——而 megamoe 正是 11,200 recipe 的核心优化之一。
+
+三种失败模式（decode dep8 跨 2 节点）：
+1. **OOM**：redundant=8 + 原配置（mem-frac 0.85 / graph 1280）→ flashinfer backend 静态内存超预算 → `Not enough memory`
+2. **AssertionError**：`num_physical_experts % ep_size == 0`（`eplb/expert_location.py:250`）——256 routed + redundant 必须被 ep_size=8 整除，redundant 只能取 {8,16,24...}，不能取 4
+3. **prewarm 死锁**：redundant=8 + 减内存（mem-frac 0.88 / graph 512）过了 OOM 和断言，但卡死在 MHC prenorm prewarm（5 分钟零推进，很可能是 EPLB 专家重分布导致 2 节点 rank 集合通信配置不一致）
+
+**EPLB 与 megamoe 在此 2 节点 PD 分离 decode 上不可用。** 官方 recipe 不启用 EPLB 是正确选择。（注：清 decode 僵尸时 kill -9 杀不掉 D-state 进程，须 `kubectl delete pod --force` 重建。）
+
+### 14.3 综合结论
+
+两个实验都无法缩小 gap，**反向印证** §12 的瓶颈地图：剩余 ~1.25× 既不是 kernel autotune 覆盖度（14.1 证伪），也不是 decode 专家不均（14.2 证 EPLB 在本栈不可用）——**确认只在官方 pinned 镜像的整体内核/运行时成熟度**。冲满 11,200 唯一剩的路是对齐官方 pinned 镜像（tag 编码 commit `14f81a67`，从该 commit 构建）。
+
+---
+
 *2026-07-22 定稿（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。导航：§3.9 单节点手册、§13 端到端满配复现 checklist、§7 单节点 benchmark、§10 官方 11,200 认知、§11 prefill 并发扫描修正、§12 满配 sa-bench + 多 frontend + prefill 扩容。*
 
-***最终结论（官方口径 output÷decode-GPU，sa-bench 开环）***：满配 **16 prefill + dep8-MTP + 多 frontend = 8,993 = 官方 11,200 的 80%**。提升路径：单 frontend 5,060 →（多 frontend）6,788 →（14 prefill）8,809 →（16 prefill）8,993；**14→16 仅 +2% 已收敛**。**瓶颈地图**：① 编排/frontend（多 frontend 吃回 +34%）② prefill 喂料（加 prefill 吃回 +32%，到 16 收敛）③ 剩余 **~1.25× = 单卡内核成熟度差**（我们 nightly vs 官方 pinned 镜像的 kernel/autotune），**非架构/拓扑/编排/prefill 数量/decode 配置**。冲满 11,200 只剩「对齐官方内核/镜像 + 完整 DeepGEMM autotune（关 FAST_WARMUP）」一条路。早期"prefill 单卡慢 3.7×"（§10.4）系低并发测量假象，已被 §11 证伪。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
+***最终结论（官方口径 output÷decode-GPU，sa-bench 开环）***：满配 **16 prefill + dep8-MTP + 多 frontend = 8,993 = 官方 11,200 的 80%**。提升路径：单 frontend 5,060 →（多 frontend）6,788 →（14 prefill）8,809 →（16 prefill）8,993；**14→16 仅 +2% 已收敛**。**瓶颈地图**：① 编排/frontend（多 frontend 吃回 +34%）② prefill 喂料（加 prefill 吃回 +32%，到 16 收敛）③ 剩余 **~1.25× = 单卡内核成熟度差**（我们 nightly vs 官方 pinned 镜像的 kernel/runtime），**非架构/拓扑/编排/prefill 数量/decode 配置**。**§14 实测收口**：完整 DeepGEMM autotune（关 FAST_WARMUP）热态无提升（9,018 vs 8,993），EPLB 与 megamoe 不兼容（三种失败模式），两者都不能缩小 gap → 冲满 11,200 唯一剩的路是**对齐官方 pinned 镜像（从 commit `14f81a67` 构建）**。早期"prefill 单卡慢 3.7×"（§10.4）系低并发测量假象，已被 §11 证伪。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
