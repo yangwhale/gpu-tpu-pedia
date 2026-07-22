@@ -405,9 +405,30 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 
 - **⭐ decode 从 1→2 节点 → 峰值 3,004 → 5,826（~1.9×）**，几乎线性——**证实 4p1d 确为 decode-bound**。TPOT 恢复到 62–78ms（单 decode 时同 concurrency 已饱和）。
 - C=256 首轮偏低（1,114，router 刚重启的 warmup 伪影，TTFT/P99 异常高）；有效峰值看 C=1024。
-- **瓶颈再平衡**：C=1024 时 TTFT 回升到 ~12s，说明 4 prefill 又开始吃紧 → 下一步该加 prefill（6p2d）或继续扩 decode 找 P/D 最优配比。
+- **瓶颈再平衡**：C=1024 时 TTFT 回升到 ~12s，说明 4 prefill 又开始吃紧 → 下一步加 prefill（6p2d）验证是不是 prefill 限制。
 
-**待续**：6p2d → 更高并发 / 更大拓扑（同 subblock 最多 18 节点），逐拓扑记录最大吞吐。
+**6p2d-TP4（8 节点：6 prefill + 2 decode，同 subblock NVLink 域）**：
+
+| 并发 | Output tok/s | TTFT | TPOT |
+|---|---|---|---|
+| 512 | 1,612 | 23,664 ms | 34.7 ms |
+| 1024 | 5,612 | 8,542 ms | 82.9 ms |
+| 2048 | **6,190**（峰值） | 42,279 ms | 83.6 ms |
+
+- **⭐⭐ 加 prefill（4p→6p）吞吐几乎没涨**（5,826 → 6,190，+6%），只把 TTFT 从 12s 降到 8.5s（C=1024）。C=2048 硬堆并发才多挤出一点，代价是 TTFT 飙到 42s（过饱和）。
+- **决定性结论**：**吞吐天花板 = decode 节点数 × ~3,000 tok/s**（1 decode ≈ 3,004；2 decode ≈ 5,800–6,200）。prefill 只决定 TTFT（喂料速度），不决定稳态吞吐。→ **要提吞吐必须加 decode，不是加 prefill**。
+- C=512 首档 1,612 又是 router 重启的 warmup 伪影（P99 TTFT 140s 但 median 仅 1.4s）。
+
+**scaling law 总结**：
+
+| 拓扑 | decode 节点 | 峰值 Output tok/s | 瓶颈 |
+|---|---|---|---|
+| 1p1d | 1 | 1,026 | prefill |
+| 4p1d | 1 | 3,004 | decode |
+| 4p2d | 2 | 5,826 | decode |
+| 6p2d | 2 | 6,190 | decode（prefill 已过量） |
+
+**待续**：继续扩 decode（6p4d，预期 ~12,000）验证 decode 线性 → 更大拓扑（同 subblock 最多 18 节点），逐拓扑记录最大吞吐。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
