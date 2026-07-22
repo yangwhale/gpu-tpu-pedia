@@ -133,7 +133,7 @@ hostPath 挂 `/mnt/disks/raid/0`，propagation 用 `HostToContainer`：
 ## 6. 给 V4 用的下一步
 
 - V4 pod（Flash/Pro）把模型从 GCS 拉到 `/data`（= /mnt/disks/raid/0），替代内存盘 tmpfs → 省下 800G RAM。
-- V4 测试计划见 `./sglang-v4-gb300-TEST-PLAN.md`。
+- V4 复现+benchmark 见 `./sglang-v4-gb300-benchmark.md`。
 
 ---
 
