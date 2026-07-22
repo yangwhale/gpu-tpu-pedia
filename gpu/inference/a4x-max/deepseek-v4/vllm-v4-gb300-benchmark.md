@@ -312,7 +312,7 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 **端到端（1p1d-dep4→TP4，8K/1K）**：conc16 out 487 / TTFT 5749ms；conc64 out 1534 / **TTFT 1171ms（全配置最优）** / TPOT 30ms。KV 已不是瓶颈，此规模瓶颈转到 prefill 计算（dep4/TP4 慢官方 3.7×）。
 
-**关键教训**：GB300 NVL72 上 vLLM disagg 的 KV 应走 **NVLink cuda_ipc**，不是 RDMA/dmabuf/peermem。之前 DOCA OFED / mooncake / dmabuf / peermem 的探索全属方向错误——NIXL 本身就能走 NVLink，只差 `UCX_CUDA_IPC_ENABLE_MNNVL=y` + `--enable-cumem-allocator`。方法来源：奚老师验证过的 GB300 vLLM recipe。
+**关键教训**：GB300 NVL72 上 vLLM disagg 的 KV 应走 **NVLink cuda_ipc**，不是 RDMA/dmabuf/peermem。之前 DOCA OFED / mooncake / dmabuf / peermem 的探索全属方向错误——NIXL 本身就能走 NVLink，只差 `UCX_CUDA_IPC_ENABLE_MNNVL=y` + `--enable-cumem-allocator`。方法来源：厂商验证过的 GB300 vLLM recipe。
 
 **下一步吞吐杠杆**：DSpark 投机解码（`--speculative-config method=dspark num_speculative_tokens=7`，需 DeepSeek-V4-Pro-DSpark 模型）+ 扩 P/D 拓扑。
 
@@ -324,7 +324,7 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 DeepSeek 2026-06 开源的投机解码框架（arxiv 2607.05147）：**semi-autoregressive draft head（Markov 头）+ 按负载调度的验证**，一次草稿多个 token、target 一次前向验证。相比单层 MTP 提速 51–400%。**不是新模型** —— `DeepSeek-V4-Pro-DSpark` = V4-Pro 同 checkpoint（FP8）+ baked-in DSpark draft 模块（config 里 `dspark_block_size`/`dspark_markov_rank`/`dspark_target_layer_ids`）。
 
 ### 9.1 前置
-- **镜像**：官方 **`vllm/vllm-openai:v0.25.1-aarch64`**（2026-07-13 稳定版，带 dspark + `deep_gemm_mega_moe` + mxfp4）。**不要用私有自建镜像**，保复现性。**⚠️ 不要用 `nightly-aarch64`** —— 它 tag 日期虽新但实际报 `0.23.1rc1.dev1373`（版本反而旧），有 **kv_block_zeroer 断言 bug**：NixlConnector disagg 调度 `new_block_ids_to_zero` 但 `_init_kv_zero_meta()` 只在 `needs_kv_cache_zeroing=True` 时调、导致 `assert self.kv_block_zeroer is not None` 崩（`model_runner.py:883`），生成即 500。v0.25.1 已修（对齐奚老师验证过的版本）。
+- **镜像**：官方 **`vllm/vllm-openai:v0.25.1-aarch64`**（2026-07-13 稳定版，带 dspark + `deep_gemm_mega_moe` + mxfp4）。**不要用私有自建镜像**，保复现性。**⚠️ 不要用 `nightly-aarch64`** —— 它 tag 日期虽新但实际报 `0.23.1rc1.dev1373`（版本反而旧），有 **kv_block_zeroer 断言 bug**：NixlConnector disagg 调度 `new_block_ids_to_zero` 但 `_init_kv_zero_meta()` 只在 `needs_kv_cache_zeroing=True` 时调、导致 `assert self.kv_block_zeroer is not None` 崩（`model_runner.py:883`），生成即 500。v0.25.1 已修（对齐厂商验证过的版本）。
 - **模型**：`deepseek-ai/DeepSeek-V4-Pro-DSpark`（HF，FP8，~893GB / 66 shards）。`hf download` 到一节点 → `gcloud storage cp` 上 GCS → 各节点从 GCS 拉到 local SSD。
 - **拓扑**：1 prefill + 1 decode，各 1 节点 4 GPU，**同 subblock**（podAffinity `gce-topology-subblock` → 同 NVLink 域）。
 
@@ -364,7 +364,7 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 ### 9.6 验证 + benchmark
 - 冒烟：`curl :30000/v1/completions` prompt "The capital of France is" → "Paris"。
 - 压测：`vllm bench serve --backend openai --endpoint /v1/completions --base-url http://<router>:30000 ...`。**⚠️ tokenizer 用 HF repo id（`--tokenizer deepseek-ai/DeepSeek-V4-Pro-DSpark`）不要用本地路径** —— v0.25.1 的 transformers 把本地路径当 repo id 报错。
-- **⚠️⚠️ 不能用 `--dataset-name random --ignore-eos` 测 DSpark**：随机 token 下 DSpark Markov 草稿头接受率 ~0，投机纯开销、反而更慢（实测 conc16 357/conc64 893 output tok/s，TPOT 36/57ms，**低于无 DSpark 的 P2d** 487/1693、20/33ms）。DSpark 的 51–400% 提速只在**真实连贯数据**上体现（draft 被接受）。测 DSpark 必须用 **sa-bench / sharegpt + chat template**（同奚老师）。
+- **⚠️⚠️ 不能用 `--dataset-name random --ignore-eos` 测 DSpark**：随机 token 下 DSpark Markov 草稿头接受率 ~0，投机纯开销、反而更慢（实测 conc16 357/conc64 893 output tok/s，TPOT 36/57ms，**低于无 DSpark 的 P2d** 487/1693、20/33ms）。DSpark 的 51–400% 提速只在**真实连贯数据**上体现（draft 被接受）。测 DSpark 必须用 **sa-bench / sharegpt + chat template**（同厂商）。
 
 ### 9.8 实跑结论（2026-07-22）
 - **✅ DSpark 端到端跑通**：官方 `v0.25.1-aarch64` + DeepSeek-V4-Pro-DSpark（FP8）+ NixlConnector NVLink KV + vllm-router，`--speculative-config method=dspark num_speculative_tokens=7`，prefill/decode 各加载 DSpark draft（96 params），生成正确（"Paris. The capital of Germany is Berlin..."）。
@@ -382,7 +382,7 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 | 256 | 1,002（饱和） | 14,967 ms | 84.7 ms |
 
 - **⭐ DSpark 真实数据生效**：`Mean acceptance length 3.0–3.2`（每 decode step 吐 ~3 token，≈3× decode yield），per-position 接受率 0.69/0.46/0.32/…，avg draft 接受 ~29%。**随机数据接受率~0 测不出，真实数据才现**。
-- **⭐ 1p1d 瓶颈 = prefill 单节点**：TTFT 高达 8–18s，output 卡在 ~1026 tok/s。→ **提吞吐的杠杆是加 prefill 节点喂饱 decode**（同奚老师 4p1d/5p1d/6p1d 思路）。
+- **⭐ 1p1d 瓶颈 = prefill 单节点**：TTFT 高达 8–18s，output 卡在 ~1026 tok/s。→ **提吞吐的杠杆是加 prefill 节点喂饱 decode**（同厂商 4p1d/5p1d/6p1d 思路）。
 
 **4p1d-TP4（5 节点：4 prefill + 1 decode，同 subblock NVLink 域）**：
 
@@ -393,9 +393,21 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 | 512 | **3,004**（峰值） | 8,414 ms | 76.8 ms |
 
 - **⭐ 4 prefill 喂 1 decode → 吞吐 ~3× 于 1p1d**（3,004 vs 1,026）。瓶颈从 prefill 转到 **decode**（TPOT 77–86ms，decode 单节点 dep4/TP4 饱和）。DSpark acceptance length 仍 ~3.0。
-- **scaling 规律**：1p1d prefill-bound(1026) → 4p1d decode-bound(3004)。**下一步扩 decode（dep8=2 节点）**解 decode 瓶颈,再往上加 prefill/decode。
+- **scaling 规律**：1p1d prefill-bound(1026) → 4p1d decode-bound(3004)。**下一步扩 decode（第 2 个 decode 节点）**解 decode 瓶颈。
 
-**待续**：4p1d-dep8（decode 扩 2 节点）→ 6p1d-dep8 → 更高并发 / 更大拓扑（同 subblock 最多 18 节点），逐拓扑记录最大吞吐。
+**4p2d-TP4（6 节点：4 prefill + 2 decode，同 subblock NVLink 域）**：
+
+| 并发 | Output tok/s | TTFT | TPOT |
+|---|---|---|---|
+| 256 | 1,114 | 12,490 ms | 228.0 ms |
+| 512 | 4,297 | 6,062 ms | 62.3 ms |
+| 1024 | **5,826**（峰值） | 12,372 ms | 77.8 ms |
+
+- **⭐ decode 从 1→2 节点 → 峰值 3,004 → 5,826（~1.9×）**，几乎线性——**证实 4p1d 确为 decode-bound**。TPOT 恢复到 62–78ms（单 decode 时同 concurrency 已饱和）。
+- C=256 首轮偏低（1,114，router 刚重启的 warmup 伪影，TTFT/P99 异常高）；有效峰值看 C=1024。
+- **瓶颈再平衡**：C=1024 时 TTFT 回升到 ~12s，说明 4 prefill 又开始吃紧 → 下一步该加 prefill（6p2d）或继续扩 decode 找 P/D 最优配比。
+
+**待续**：6p2d → 更高并发 / 更大拓扑（同 subblock 最多 18 节点），逐拓扑记录最大吞吐。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
