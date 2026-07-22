@@ -72,7 +72,7 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 ## 2. 关键差异：跟 R1 相比，什么变、什么不变
 
 **不变（直接复用 R1 的环境，见 deepseek-v3 DEPLOY-GUIDE §1-§4）：**
-- GB300 GKE 集群 + `pool-0010` + `team=yangwhale` 节点
+- GB300 GKE 集群 + `pool-0010` + `team=<team>` 节点
 - GIB（GCS `gib-a4xmax.tgz`）+ DOCA OFED userspace + gcloud bootstrap
 - mooncake NVLINK KV pool（`MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`）—— cookbook 明确 GB300 cross-pod 也要这三个
 - pod YAML 模板（ComputeDomain + mrdma DRA + subblock podAffinity + 内存盘放模型）
@@ -94,7 +94,7 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 > **存储：全程 Local SSD RAID，不用内存盘**。V4-Pro 1.6T ≈ 800G FP4，内存盘（tmpfs）放不下（800G 模型 + 运行时 > 942G 节点 RAM）；且 RAM 要留给 KV cache / HiCache CPU offload。所有 pod 模型都放 **Local SSD RAID `/mnt/disks/raid/0`**（读 14 GB/s，跨 pod 持久）。详见 [`./gb300-local-ssd-raid0-SETUP.md`](./gb300-local-ssd-raid0-SETUP.md)。
 
 ### Phase 0：Local SSD RAID 就位 + 拉镜像 + 模型 + 验证 sm_103a
-1. **先确保节点池 Local SSD RAID 就位**：部署 `gke-raid-disks` DaemonSet，逐节点 `grep -c md0 /proc/mdstat` 确认全 =1（12T RAID 挂 `/mnt/disks/raid/0`）。**用干净池**（R1 实测 pool-0007 17/17 全成）；有残留 `mnt-disks-ssdN.mount` 污染的节点 RAID 会失败，需重建（见 RAID-SETUP 坑速查）。
+1. **先确保节点池 Local SSD RAID 就位**：部署 `gke-raid-disks` DaemonSet，逐节点 `grep -c md0 /proc/mdstat` 确认全 =1（12T RAID 挂 `/mnt/disks/raid/0`）。**用干净池**（R1 实测 <gpu-pool> 17/17 全成）；有残留 `mnt-disks-ssdN.mount` 污染的节点 RAID 会失败，需重建（见 RAID-SETUP 坑速查）。
 2. 起 1 个 GB300 pod：复用 R1 gen-pods（image 改 `lmsysorg/sglang:latest`，pod=1），**ssd 卷用 hostPath `/mnt/disks/raid/0` + `mountPropagation: HostToContainer`，内存 request 600Gi**（模型在 Local SSD 不进 RAM；≥600Gi 覆盖加载峰值，200Gi 会 OOM）。
 3. **验证镜像含 sm_103a**（GB300 = cc 10.3）：`cuobjdump` 查 `sgl_kernel/*.so` arch 有没有 `sm_103a`（R1 踩过这个坑，V4 新镜像必须重验）。
 4. bootstrap（GIB + DOCA + gcloud，同 R1 §4）。
@@ -128,7 +128,7 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 
 > **✅ Phase 2 实测通过（2026-07-20）**：`nvidia/DeepSeek-V4-Pro-NVFP4`（**851G / 76 文件**）从 HF 下载到 Local SSD（hf_transfer ~0.9 GB/s，851G 约 15 min），单节点 TP4 加载：
 > - **权重加载 <1 min**（Local SSD 读满速，`avail mem=274GB/GPU`），autotune + DeepGEMM warmup（32768 kernels）+ CUDA graph 约 12 min 到 ready。冒烟可加 `--disable-flashinfer-autotune` 提速。
-> - chat 生成正确（"capital of France"→"Paris"）。GCS 备份 `gs://chrisya-gb300-models/DeepSeek-V4-Pro-NVFP4/`（913G，ADC+SDK 上传 668s；ADC 用后即删）。
+> - chat 生成正确（"capital of France"→"Paris"）。GCS 备份 `gs://<bucket>/DeepSeek-V4-Pro-NVFP4/`（913G，ADC+SDK 上传 668s；ADC 用后即删）。
 >
 > **Phase 2 压测**（8K/1K warm，数字见 §7.2）：单节点 4 卡 conc64 = **2794 tok/s/GPU（in+out）**，比 Flash 低 3.1×（Pro 模型大 5.6×/激活大 3.8×）；conc64 TTFT 9.8s 偏高（单节点扛 1.6T prefill 压力大 → Phase 3 上 PD 解决）。
 
@@ -136,7 +136,7 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 
 > 集群凭证：`gcloud container clusters get-credentials <cluster> --region <region> --project <project>`，之后所有步骤走 `kubectl exec`。
 
-**前置**：干净节点池 Local SSD RAID 就位（见 [`./gb300-local-ssd-raid0-SETUP.md`](./gb300-local-ssd-raid0-SETUP.md)，pool-0007 实测 17/17）。
+**前置**：干净节点池 Local SSD RAID 就位（见 [`./gb300-local-ssd-raid0-SETUP.md`](./gb300-local-ssd-raid0-SETUP.md)，<gpu-pool> 实测 17/17）。
 
 #### Step 1 — 起单节点 pod（Local SSD hostPath，600Gi）
 
@@ -146,7 +146,7 @@ apiVersion: v1
 kind: Pod
 metadata: {name: v4-pro, labels: {app: v4-pro}}
 spec:
-  nodeSelector: {cloud.google.com/gke-nodepool: gb300-pool-0007, team: yangwhale}
+  nodeSelector: {cloud.google.com/gke-nodepool: <gpu-pool>, team: <team>}
   tolerations: [{operator: Exists}]
   containers:
   - name: sglang
@@ -191,8 +191,8 @@ cat > /tmp/v4sdkup.py <<'PY'
 import os, glob, time, concurrent.futures
 os.environ["GOOGLE_APPLICATION_CREDENTIALS"]="/mnt/ssd/adc.json"
 from google.cloud import storage
-client=storage.Client(project="tencent-gcp-taiji-poc")
-bucket=client.bucket("chrisya-gb300-models")
+client=storage.Client(project="<project>")
+bucket=client.bucket("<bucket>")
 src="/mnt/ssd/DeepSeek-V4-Pro-NVFP4"
 files=[f for f in glob.glob(src+"/**",recursive=True) if os.path.isfile(f) and "/.cache/" not in f]
 def up(f):
@@ -206,7 +206,7 @@ kubectl cp /tmp/v4sdkup.py v4-pro:/root/v4sdkup.py
 kubectl exec v4-pro -- python /root/v4sdkup.py     # Pro 913G ~668s；Flash 168G ~196s
 # 3) 删 ADC（务必）
 kubectl exec v4-pro -- rm -f /mnt/ssd/adc.json
-# 以后别的节点直接读（只读 scope 够）：gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-V4-Pro-NVFP4 /mnt/ssd/
+# 以后别的节点直接读（只读 scope 够）：gcloud storage cp -r gs://<bucket>/DeepSeek-V4-Pro-NVFP4 /mnt/ssd/
 ```
 
 #### Step 4 — 启动单节点 TP4 + 验证生成
@@ -255,23 +255,23 @@ done'
 
 #### 3.0-prereq 域与存储（开跑前必须就位）
 
-- **域**：需**一个完整 18 节点 NVL72 域，且 GPU 全空闲**（不只是 Ready + 标签）。实战最终用 **`subblock-0001`（= `gb300-pool-0001`）free=18**（首选 0002 被 sgl2 残留占了，见 3.0-b）。选域先跑「每 subblock 空闲节点扫描」，别只看 ready/标签。确认 18 台 `nvidia.com/gpu.clique` 一致（同一 NVLink 域）。
-- **Local SSD RAID**：给 pool-0002 部署 `gke-raid-disks` DaemonSet，逐节点 `grep -c md0 /proc/mdstat` 全 =1；**先验无 `mnt-disks-ssdN.mount` 残留污染**（见 RAID-SETUP 坑速查）。
-- **权重**：18 节点各 `gcloud storage cp -r gs://chrisya-gb300-models/DeepSeek-V4-Pro-NVFP4 /mnt/ssd/`（只读 scope 够）。
+- **域**：需**一个完整 18 节点 NVL72 域，且 GPU 全空闲**（不只是 Ready + 标签）。实战最终用 **`<subblock>`（= `<gpu-pool>`）free=18**（首选 0002 被 sgl2 残留占了，见 3.0-b）。选域先跑「每 subblock 空闲节点扫描」，别只看 ready/标签。确认 18 台 `nvidia.com/gpu.clique` 一致（同一 NVLink 域）。
+- **Local SSD RAID**：给 <gpu-pool> 部署 `gke-raid-disks` DaemonSet，逐节点 `grep -c md0 /proc/mdstat` 全 =1；**先验无 `mnt-disks-ssdN.mount` 残留污染**（见 RAID-SETUP 坑速查）。
+- **权重**：18 节点各 `gcloud storage cp -r gs://<bucket>/DeepSeek-V4-Pro-NVFP4 /mnt/ssd/`（只读 scope 够）。
 - **bootstrap**：GIB + DOCA + gcloud（同 R1 §4）。
 - **编排**：先用 sglang_router（我们熟）跑通；严格复现官方再上 Dynamo。
 
 > **✅ 3.0 准备实录（2026-07-20）**：
-> 1. **RAID**：`gke-raid-disks-0002` DaemonSet 部署到 pool-0002，**18/18 节点 RAID_READY**（12T `/mnt/disks/raid/0`）。
+> 1. **RAID**：`gke-raid-disks-0002` DaemonSet 部署到 <gpu-pool>，**18/18 节点 RAID_READY**（12T `/mnt/disks/raid/0`）。
 > 2. **权重预拉**：`v4pro-puller-0002` DaemonSet（`gcloud storage cp -r` 从 GCS 到各节点 Local SSD），**18/18 节点各 851G / 76 文件**。node 只读 scope 足够读 GCS。
 > 3. **踩坑 & 修复**：
 >    - **Bug 1（puller 镜像 amd64）**：首版 puller 用 `google/cloud-sdk:slim`，GB300 arm64 报 `exec format error`。修：换 `ubuntu:24.04` + apt 装 `google-cloud-cli`（同 RAID DS 的 arm64 坑）。
 >    - **Bug 2（RAID inactive，256K tmpfs，18 节点里 1-2 台）**：`/proc/mdstat` 见 md0 **inactive**（旧 mdadm superblock 把盘拆成坏数组），mount 报 `can't read superblock`，DS 无 `set -e` 假 RAID_READY。修：**live 清**（不用重建节点）——`mdadm --stop` 所有 md + `sleep 1` + `--zero-superblock --force` 全盘 + 重 create/mkfs/mount，再删该节点 puller 重拉。**udev race**：stop 后 udev 秒级重组，抢在 zero 前 → create busy，重跑 1-2 次即成。详见 [RAID-SETUP 坑速查 B 类](./gb300-local-ssd-raid0-SETUP.md#5-坑速查)。
 
-> **✅ 3.0-b 部署踩坑补充（2026-07-20 pool-0001 实战，血泪追加）**：
-> 1. **选域必须查 GPU 实占，不能只看 Ready + team 标签**。首选 subblock-0002 时只数了「18 ready + 全 yangwhale」，结果上面压着别人 5 个 sgl2 pod（44h 前的 R1 残留）+ 我的新 pod，只剩 1 空。**正确姿势**：扫每个 subblock 的「无 GPU-pod 的空闲节点数」（遍历所有 pod 的 `nodeName` + `limits.nvidia.com/gpu`），选 free=18 的域。
-> 2. **换域搬迁**：subblock-0002 被占 + 有台重建慢的节点，最终改用 **subblock-0001**（dsv3 清空后 free=18）。给它 `kubectl label node -l ...pool-0001 team=yangwhale --overwrite`（原 team=gdde）→ 铺 RAID + 拉权重 + 部署。
-> 3. **节点 DRA 网络模式歪（ipvlan vs pci）**：pool-0002 有台 lcg3，其 `dra.net` resourceslice 是 **ipvlan 设备**（`gpu*ipvlan*`）而非正常的 pci 直通，`mrdma.google.com` claim 分不出 8 卡，pod 永远 pending `cannot allocate all claims`。修：**重建该节点**（`gcloud compute instances delete` → MIG 原名重拉，GB300 冷启 15+min）。教训：`kubectl get resourceslice <node>-dra.net -o json` 看设备名，ipvlan ≠ 正常。
+> **✅ 3.0-b 部署踩坑补充（2026-07-20 <gpu-pool> 实战，血泪追加）**：
+> 1. **选域必须查 GPU 实占，不能只看 Ready + team 标签**。首选 <subblock-A> 时只数了「18 ready + 全 <team>」，结果上面压着别人 5 个 sgl2 pod（44h 前的 R1 残留）+ 我的新 pod，只剩 1 空。**正确姿势**：扫每个 subblock 的「无 GPU-pod 的空闲节点数」（遍历所有 pod 的 `nodeName` + `limits.nvidia.com/gpu`），选 free=18 的域。
+> 2. **换域搬迁**：<subblock-A> 被占 + 有台重建慢的节点，最终改用 **<subblock>**（dsv3 清空后 free=18）。给它 `kubectl label node -l ...<gpu-pool> team=<team> --overwrite`（覆盖原 team 标签）→ 铺 RAID + 拉权重 + 部署。
+> 3. **节点 DRA 网络模式歪（ipvlan vs pci）**：<gpu-pool> 有台 lcg3，其 `dra.net` resourceslice 是 **ipvlan 设备**（`gpu*ipvlan*`）而非正常的 pci 直通，`mrdma.google.com` claim 分不出 8 卡，pod 永远 pending `cannot allocate all claims`。修：**重建该节点**（`gcloud compute instances delete` → MIG 原名重拉，GB300 冷启 15+min）。教训：`kubectl get resourceslice <node>-dra.net -o json` 看设备名，ipvlan ≠ 正常。
 > 4. **ComputeDomain / IMEX 只收敛 15/18**：18 pod 部署后卡 15 running，3 个 `ResourceClaim not created yet` / `FailedPrepareDynamicResources`。`kubectl get computedomain -o jsonpath={.status.nodes}` 只见 15 节点（虽 18 台 clique 一致）。修：**删掉那 3 个卡住的 pod 让它重建**（`kubectl delete pod ... && kubectl apply`）→ 重新触发 ComputeDomain 加入，即 18/18。
 > 5. **权重 puller DaemonSet 镜像必须 arm64**：`google/cloud-sdk:slim` 是 amd64 → `exec format error`；换 `ubuntu:24.04` + apt 装 `google-cloud-cli`（同 RAID DS 坑）。
 
@@ -283,7 +283,7 @@ done'
 > - **根因**：`nvidia/DeepSeek-V4-Pro-NVFP4` 变体**强制** `flashinfer_trtllm_routed` runner，它对 **deepep 和 megamoe 两种 a2a 都没有 fused func**（`requires a fused func for a2a backend {deepep|megamoe}, but none is registered`）→ 单节点 TP（Phase 2）能跑，但**多节点 PD 的 megamoe/deepep 全崩**。
 > - **正解**：megamoe PD 必须用**官方原版 checkpoint `deepseek-ai/DeepSeek-V4-Pro`**（FP4 MoE + FP8 attn/dense，~806G），不是 nvidia NVFP4 变体。官方 recipe 的 `model.path` 就是原版。
 > - **镜像**：官方 pin 的 `nightly-dev-cu13-20260520` 已被 Docker Hub GC（`not found`）；`latest`（0.5.15.post1）的 megamoe auto-runner 也 mismatch。**用最新可用 nightly**（实测 `lmsysorg/sglang:nightly-dev-cu13-20260720-b3570a45` ✅）。查可用 tag：`curl -s "https://hub.docker.com/v2/repositories/lmsysorg/sglang/tags/?page_size=100&name=nightly-dev-cu13"`。
-> - **✅ Run A 实测跑通（2026-07-20 22:22）**：原版 checkpoint + 最新 nightly + megamoe，10P1D-dep4-dep32（72 GPU，subblock-0001），sglang_router `cache_aware` `--pd-disaggregation`，PD 端到端经 router 正确生成（"Capital of France"→"Paris"），prefill→decode KV 走域内 NVLink（mooncake `MC_FORCE_MNNVL=1`）。
+> - **✅ Run A 实测跑通（2026-07-20 22:22）**：原版 checkpoint + 最新 nightly + megamoe，10P1D-dep4-dep32（72 GPU，<subblock>），sglang_router `cache_aware` `--pd-disaggregation`，PD 端到端经 router 正确生成（"Capital of France"→"Paris"），prefill→decode KV 走域内 NVLink（mooncake `MC_FORCE_MNNVL=1`）。
 > - **换镜像必重 bootstrap**：GIB/DOCA/nixl 装在容器内，换 image 后 pod 全新，需重跑 bootstrap（GIB tgz + DOCA OFED userspace + nixl）。
 > - **prefill DEP4 mem-fraction 0.90 / decode DEP32 0.94**（DEP4 4卡装 1.6T 更挤）。
 
@@ -324,13 +324,13 @@ done'
 
 ## 6. 开跑前 checklist
 
-- [ ] **用干净节点池**（无 `mnt-disks-ssdN.mount` 残留污染；R1 实测 pool-0007 干净）
+- [ ] **用干净节点池**（无 `mnt-disks-ssdN.mount` 残留污染；R1 实测 <gpu-pool> 干净）
 - [ ] **Local SSD RAID 就位**：`gke-raid-disks` DaemonSet 部署，逐节点 `grep -c md0 /proc/mdstat` 全 =1
 - [ ] pod ssd 卷 = hostPath `/mnt/disks/raid/0`（HostToContainer），内存 request 600Gi
 - [ ] 确认 `lmsysorg/sglang:latest`（或 nightly-dev-cu13）含 sm_103a
-- [ ] Phase3 满配需 **18 节点同一 NVL72 域 + GPU 全空闲**（扫每 subblock 无-GPU-pod 空闲数，别只看 ready/标签；实战用 `subblock-0001` free=18，`clique` 一致）；decode DEP32 跨域走不了 NVLink
+- [ ] Phase3 满配需 **18 节点同一 NVL72 域 + GPU 全空闲**（扫每 subblock 无-GPU-pod 空闲数，别只看 ready/标签；实战用 `<subblock>` free=18，`clique` 一致）；decode DEP32 跨域走不了 NVLink
 - [ ] 部署后若卡 15/18（`ResourceClaim not created yet`）：删重建卡住的 pod 触发 ComputeDomain 收敛；若某节点 DRA 是 ipvlan（mrdma 分不出）：重建该节点
-- [x] V4-Flash / Pro NVFP4 checkpoint 备份到 GCS（`gs://chrisya-gb300-models/DeepSeek-V4-Flash-NVFP4` 168G / `-Pro-NVFP4` 913G），bootstrap 时 `gcloud cp` **到 Local SSD `/mnt/ssd`**
+- [x] V4-Flash / Pro NVFP4 checkpoint 备份到 GCS（`gs://<bucket>/DeepSeek-V4-Flash-NVFP4` 168G / `-Pro-NVFP4` 913G），bootstrap 时 `gcloud cp` **到 Local SSD `/mnt/ssd`**
 - [x] Phase 1（Flash）+ Phase 2（Pro）单节点冒烟 + 压测通过 → 下一步 Phase 3 规模
 - [ ] benchmark 用同口径（total in+out /GPU，8K/1K，warm 值）；`input-len +1 BOS` 且 `input+output ≤ context-length`
 
