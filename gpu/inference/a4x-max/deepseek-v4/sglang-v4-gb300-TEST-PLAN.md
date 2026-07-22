@@ -120,17 +120,7 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 > 2. **传 GCS 走 R1 那套 ADC+SDK 法**（node scope 只读、org 禁 SA key、gcloud 不认 ADC——见 R1 RUNLOG 坑5）：kubectl cp glinux 的 `~/.config/gcloud/application_default_credentials.json` 进 pod，用 python `google-cloud-storage` SDK（`GOOGLE_APPLICATION_CREDENTIALS=adc.json` + ThreadPoolExecutor(16)）上传，**传完删 adc.json**。V4-Flash 168GB / 75 文件 ~196s。GCS: `gs://chrisya-gb300-models/DeepSeek-V4-Flash-NVFP4`。
 > 3. 以后各节点 bootstrap 直接 `gcloud storage cp -r gs://.../DeepSeek-V4-Flash-NVFP4 /mnt/ssd/`（读只需 ro scope，节点默认有）。
 >
-> **Phase 1 压测（单节点 TP4 / 4 GPU / 8K-1K / warm）**：
->
-> | 并发 | 总吞吐 tok/s | 总/GPU(÷4) | output tok/s | TPOT median | TTFT median |
-> |---|---|---|---|---|---|
-> | 1 | 1520 | 380 | 169 | 5.71 ms | 220 ms |
-> | 16 | 12477 | 3119 | 1386 | 8.06 ms | 1709 ms |
-> | 64 | **34162** | **8540** | 3796 | 13.0 ms | 3102 ms |
->
-> - **单节点 4 卡 conc64 就到 8540 tok/s/GPU（in+out）**——比我们 R1 64 卡 8K/1K 的 1359 高 **6.3×**。V4-Flash 284B/13B 激活 + SWA，每 token 效率碾压 R1 671B 全注意力。
-> - conc1 单用户 TPOT **5.71ms（≈175 tok/s/user）**，交互极快。conc64 TTFT 3.1s 仍可用，未见顶——可继续压更高并发。
-> - 这是**单节点 Flash**（非 Pro、非 18 节点 PD）。官方 11,200 是 V4-Pro 8K/1K + 18 节点 Dynamo + MegaMoE W4A4——Phase 3 再冲。
+> **Phase 1 压测**（8K/1K warm，数字见 §7.2）：单节点 4 卡 conc64 = **8540 tok/s/GPU（in+out）**，比 R1 64卡的 1359 高 6.3×；conc1 TPOT 5.71ms 交互极快。
 
 ### Phase 2：V4-Pro 单节点 TP=4
 - cp `nvidia/DeepSeek-V4-Pro-NVFP4`（~800G）到 **Local SSD**，`--model-path /mnt/ssd/DeepSeek-V4-Pro-NVFP4`（单节点 4×277G=1108G HBM 放得下）。**这里就是 Local SSD 的价值所在**：800G 模型放 Local SSD 不吃 RAM；若放内存盘，800G tmpfs + 运行时直接爆 942G 节点内存。
@@ -140,17 +130,7 @@ V4 两个变体（2026-04-24 发布，MIT License）：
 > - **权重加载 <1 min**（Local SSD 读满速，`avail mem=274GB/GPU`），autotune + DeepGEMM warmup（32768 kernels）+ CUDA graph 约 12 min 到 ready。冒烟可加 `--disable-flashinfer-autotune` 提速。
 > - chat 生成正确（"capital of France"→"Paris"）。GCS 备份 `gs://chrisya-gb300-models/DeepSeek-V4-Pro-NVFP4/`（913G，ADC+SDK 上传 668s；ADC 用后即删）。
 >
-> **Phase 2 压测（单节点 TP4 / 4 GPU / 8K-1K / warm）**：
->
-> | 并发 | Total tok/s（in+out）| **tok/s/GPU** | Output tok/s | Median TPOT | Median TTFT |
-> |---|---|---|---|---|---|
-> | 1 | 838 | 209 | 93 | 10.44 ms | 295 ms |
-> | 16 | 7594 | 1898 | 844 | 16.55 ms | 2193 ms |
-> | 64 | **11177** | **2794** | 1242 | 33.74 ms | 9845 ms |
->
-> - **单节点 4 卡 conc64 到 2794 tok/s/GPU（in+out）**——比同 workload 的 V4-Flash（8540）低 **3.1×**，符合预期：Pro 1.6T/49B 激活 vs Flash 284B/13B 激活，模型大 5.6× / 激活大 3.8×。
-> - conc1 单用户 TPOT **10.44ms（≈96 tok/s/user）**，比 Flash（175 tok/s/user）慢约一半，Pro 更重但仍交互流畅。
-> - conc64 TTFT 9.8s 偏高——单节点 4 卡跑 1.6T prefill 压力大，这正是 Phase 3 上 PD-disagg（prefill 独立扩展）要解决的。官方 11,200 tok/s/GPU 是 Pro + 18 节点 Dynamo + MegaMoE W4A4，单节点做不到，Phase 3 再冲。
+> **Phase 2 压测**（8K/1K warm，数字见 §7.2）：单节点 4 卡 conc64 = **2794 tok/s/GPU（in+out）**，比 Flash 低 3.1×（Pro 模型大 5.6×/激活大 3.8×）；conc64 TTFT 9.8s 偏高（单节点扛 1.6T prefill 压力大 → Phase 3 上 PD 解决）。
 
 ### 3.9 可复测运行手册（Phase 1 + Phase 2 单节点实录）★ 照抄即可复现
 
@@ -271,22 +251,7 @@ done'
 
 > **官方 11,200 的真相**（核对 pytorch blog 2026-06-23 + SemiAnalysis InferenceX）：GB300 **disaggregated** lane、V4-Pro FP4、ISL=8192/OSL=1024、dynamo-sglang、**2026-06 带 MTP 曲线**，在 **~50 tok/s/user** 交互点达 **~11,200 tok/s/GPU**；对比 Day-0（2026-04）no-MTP 的 ~2,200，两个月 **5×**。这 5× 不是单点，是整条曲线抬升。官方 recipe：`disagg-gb300-10p1d-dep4-dep32-18-c2500.yaml`（srt-slurm + Dynamo 起）。
 
-#### 3.0 消融方法论（本阶段最高原则）
-
-- **锁死拓扑做 baseline**：整个消融**全程固定** `10P1D-dep4-dep32`（P/D 数量、并行度、workload 全不变），**只逐项翻软件开关**。绝不拿不同 P/D 数量的两个 run 对比——那不可比。
-- **一次只加一样**，拿到干净的 per-step delta，每招值多少 tok/s 心里有数。
-- 全程同口径：8K/1K（random 8192/1024，range-ratio 1.0）、同并发扫描、warm 值、`total(in+out) ÷ 72 GPU`。
-
-#### 3.1 拓扑（固定，官方 10P1D-dep4-dep32）
-
-| 角色 | 实例 | 每实例并行 | 节点 | GPU |
-|---|---|---|---|---|
-| Prefill | 10 | TP4 / DP4 / EP4（1 节点 4 GPU）| 10 | 40 |
-| Decode | 1 | DEP32（TP32 / DP32 / EP32）| 8 | 32 |
-| **合计** | — | — | **18** | **72** |
-
-- **P:D = 10:8（机器）**——prefill 多，因 8K 输入是算力瓶颈，多铺机器摊 prefill；decode 集中成一坨 wide-EP 吃并发。
-- **decode 32 卡走域内 NVLink**（mooncake `MC_FORCE_MNNVL=1`），**18 节点必须同一 NVL72 域**，否则跨域 NVLink KV 传输不通。
+> **⚠️ 拓扑已定稿**：早期 Phase 3 探索用官方"示范" recipe `10P1D-dep4-dep32`（72 GPU wide-EP，no-MTP），后证明**那不是 11,200 的配方**（§10.2）。**最终正确配方 = 16 prefill(dep4) + dep8-MTP + 多 frontend（§12/§13）**。下面保留仍可复用的**部署前置 + 踩坑实录**（这些跟拓扑无关，§13 也用得上）；满配参数与启动步骤一律看 §13。
 
 #### 3.0-prereq 域与存储（开跑前必须就位）
 
@@ -310,24 +275,11 @@ done'
 > 4. **ComputeDomain / IMEX 只收敛 15/18**：18 pod 部署后卡 15 running，3 个 `ResourceClaim not created yet` / `FailedPrepareDynamicResources`。`kubectl get computedomain -o jsonpath={.status.nodes}` 只见 15 节点（虽 18 台 clique 一致）。修：**删掉那 3 个卡住的 pod 让它重建**（`kubectl delete pod ... && kubectl apply`）→ 重新触发 ComputeDomain 加入，即 18/18。
 > 5. **权重 puller DaemonSet 镜像必须 arm64**：`google/cloud-sdk:slim` 是 amd64 → `exec format error`；换 `ubuntu:24.04` + apt 装 `google-cloud-cli`（同 RAID DS 坑）。
 
-#### 3.2 消融 run 序列（固定 3.1 拓扑，逐项叠加）
+#### 3.2 megamoe 路线的两个决定性前提（deepep 死胡同已弃）
 
-> **⚠️ 2026-07-20 重大方向修正**：原计划 baseline 用 `deepep` a2a，实测在 `lmsysorg/sglang:latest` 上 V4 prefill 的 deepep 路径**根本跑不通**（连撞 4 个 runner bug，见 3.2-b）。拉了官方 recipe 原文（`gh api SemiAnalysisAI/InferenceX .../disagg-gb300-10p1d-dep4-dep32-18-c2500.yaml`）确认：**官方 prefill+decode 全程用 `megamoe`，不是 deepep**，且用**特定 nightly 镜像** `lmsysorg/sglang:nightly-dev-cu13-20260520-425dffbd`（非 latest）。故 baseline 改从 **megamoe W4A8** 起——这才是 V4 真正跑得通的路。
+> deepep a2a 路径在此 stack 跑不通（`flashinfer_trtllm_routed`/`cutedsl`/`deep_gemm` 连撞 runner bug）；官方 recipe 全程用 **megamoe**，遂弃 deepep。下面两条是 megamoe PD 能跑起来的关键前提：
 
-| Run | 相对上一步新增 | MoE backend | 激活精度 | SWA opt/压缩 | MTP | 目的 |
-|---|---|---|---|---|---|---|
-| **A** baseline | megamoe（官方镜像）| megamoe | W4A8（不设 `USE_FP4_ACTS`）| 关 | 关 | V4 可跑底线 |
-| **B** +W4A4 | `USE_FP4_ACTS=1` `USE_MXF4_KIND=1` | megamoe | **W4A4** | 关 | 关 | 激活也 4bit（官方最大一跳）|
-| **C** +SWA/压缩 | `SGLANG_OPT_SWA_*` + `USE_ONLINE_COMPRESS=1` | megamoe | W4A4 | **开** | 关 | SWA 预算 + online 压缩，decode 更大 batch |
-| **D** +MTP（=满配终极）| `--speculative-algorithm EAGLE ...` | megamoe | W4A4 | 开 | **开** | 官方满配，对标 11,200 |
-
-- **镜像**：全程 `lmsysorg/sglang:nightly-dev-cu13-20260520-425dffbd`（官方 recipe 指定；`latest` 的 deepep/V4 路径有 bug）。
-- **每个 run 输出**：conc 扫描（1 / 16 / 64 / 128 …推到 c2500）的 tok/s/GPU + TPOT + TTFT，记录到 §7 消融表。
-- **W4A8 vs W4A4**：由 env `SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS`（0/不设 = W4A8，1 = W4A4）切换；`NUM_MAX_TOKENS_PER_RANK` prefill=8192 / decode=1280（官方值）。
-
-> **✅ 3.2-b Run A 起服务踩坑（2026-07-20，deepep 路线弃用前的血泪）**：`latest` 镜像下 V4 prefill 依次撞：(1) `flashinfer_trtllm_routed` runner + `deepep` a2a 不兼容（`requires a fused func for a2a backend deepep, but none is registered`）；(2) 换 `flashinfer_cutedsl` → prefill `deepep normal` 返回 5-tuple 但 cutedsl 要 6-tuple（`not enough values to unpack (expected 6, got 5)`，cutedsl 只吃 decode 的 low_latency）；(3) 换 `deep_gemm`（注意是下划线，`deepgemm` 是 invalid choice）→ `tensor a (384) vs b (96)` DP/EP shape 不匹配。**结论：V4 的 deepep prefill 在此 stack 未调通，官方走 megamoe，遂弃 deepep 改 megamoe baseline。** 另：prefill DEP4（4 卡装 1.6T）`mem-fraction-static` 需 ≥0.90（0.8 报 `no GPU memory for KV cache`）；decode DEP32（32 卡摊薄）0.94 即可。
-
-> **✅ 3.2-c 关键突破：checkpoint 变体 + 镜像 决定 megamoe 能否跑（2026-07-20，Run A 跑通根因）**：
+> **✅ 关键：checkpoint 变体 + 镜像 决定 megamoe 能否跑**：
 > - **根因**：`nvidia/DeepSeek-V4-Pro-NVFP4` 变体**强制** `flashinfer_trtllm_routed` runner，它对 **deepep 和 megamoe 两种 a2a 都没有 fused func**（`requires a fused func for a2a backend {deepep|megamoe}, but none is registered`）→ 单节点 TP（Phase 2）能跑，但**多节点 PD 的 megamoe/deepep 全崩**。
 > - **正解**：megamoe PD 必须用**官方原版 checkpoint `deepseek-ai/DeepSeek-V4-Pro`**（FP4 MoE + FP8 attn/dense，~806G），不是 nvidia NVFP4 变体。官方 recipe 的 `model.path` 就是原版。
 > - **镜像**：官方 pin 的 `nightly-dev-cu13-20260520` 已被 Docker Hub GC（`not found`）；`latest`（0.5.15.post1）的 megamoe auto-runner 也 mismatch。**用最新可用 nightly**（实测 `lmsysorg/sglang:nightly-dev-cu13-20260720-b3570a45` ✅）。查可用 tag：`curl -s "https://hub.docker.com/v2/repositories/lmsysorg/sglang/tags/?page_size=100&name=nightly-dev-cu13"`。
@@ -335,50 +287,12 @@ done'
 > - **换镜像必重 bootstrap**：GIB/DOCA/nixl 装在容器内，换 image 后 pod 全新，需重跑 bootstrap（GIB tgz + DOCA OFED userspace + nixl）。
 > - **prefill DEP4 mem-fraction 0.90 / decode DEP32 0.94**（DEP4 4卡装 1.6T 更挤）。
 
-#### 3.3 decode / prefill 关键参数（官方 recipe）
+#### 3.3 满配参数 + Dynamo 前置（详细启动步骤见 §13）
 
-decode（DEP32）：
-```
---moe-a2a-backend megamoe --enable-dp-attention --enable-dp-lm-head \
---tp-size 32 --dp-size 32 --ep-size 32 --swa-full-tokens-ratio 0.20 \
---context-length 9216 --mem-fraction-static 0.94 \
---max-running-requests 18432 --cuda-graph-max-bs 1280 \
---disaggregation-mode decode --disaggregation-transfer-backend mooncake
-```
-- W4A4 env：`SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=8320`
-- SWA env：`SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1 SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARGIN=1 SGLANG_OPT_USE_ONLINE_COMPRESS=1`
-- **MTP（Run D，实测跑通 = 这套）**：`--speculative-algorithm EAGLE --speculative-num-steps 1 --speculative-eagle-topk 1 --speculative-num-draft-tokens 2`（DeepSeek V4 原生 nextn=1，**prefill + decode 两侧都要加**，否则 nextn 模块加载不一致）。**不要**用 `num-steps 3`（未验证）。decode 侧配套：`NUM_MAX_TOKENS_PER_RANK=4096`（draft 放大 token 数，1280 会 `exceeds cap`）、`mem-fraction 0.90`、`context-length 9216`（**别提到 9728/10240——会 cuda-graph OOM**）。benchmark 侧 **OSL 用 960**（8192+960+draft < ctx 9216，否则 MTP 令 8194+1024=9218 超限，78% 请求被拒）。**MTP 与 online 压缩互斥**（去掉 `USE_ONLINE_COMPRESS`）。
-- mooncake NVLINK（同 R1）：`MC_FORCE_MNNVL=1 NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1`（prefill + decode 都加）
+最终满配配方（16 prefill dep4 + dep8-MTP + 多 frontend）的**完整参数与自愈启动步骤已收敛到 §13**，此处只留两条 §13 未展开的前置：
 
-**✅ 实测跑通的 PD 启动要点（Run A，原版 checkpoint + megamoe）**：
-- **model-path 用原版** `/mnt/ssd/DeepSeek-V4-Pro`（非 NVFP4），**不设** `--moe-runner-backend`（megamoe 自选）。
-- prefill（每节点 DEP4）：`--tp 4 --dp 4 --ep 4 --enable-dp-attention --enable-dp-lm-head --moe-a2a-backend megamoe --moe-dense-tp-size 1 --deepep-config '{normal_dispatch...}' --disaggregation-mode prefill --mem-fraction-static 0.90 --chunked-prefill-size 32768 --cuda-graph-max-bs 512`。
-- decode（8 节点 DEP32）：`--tp 32 --dp 32 --ep 32 --nnodes 8 --node-rank $R --dist-init-addr $D0IP:5000 --enable-dp-attention --enable-dp-lm-head --moe-a2a-backend megamoe --moe-dense-tp-size 1 --disaggregation-mode decode --disaggregation-decode-polling-interval 8 --mem-fraction-static 0.94 --swa-full-tokens-ratio 0.20 --context-length 9216 --max-running-requests 18432 --cuda-graph-max-bs 1280`。
-- **router**（sglang_router，**仅冒烟用，高并发有 tail-stall**）：`python -m sglang_router.launch_router --pd-disaggregation --prefill http://<pIP>:30000 30001 ×10 --decode http://<d0IP>:30000 --policy cache_aware --host 0.0.0.0 --port 8000`。
-- **启动耗时**：8 节点 decode NCCL rendezvous + megamoe warmup ~7min 到 ready；**首次 benchmark warmup 极慢**（megamoe/deepgemm 对每个 8K prefill shape 首次 JIT 编译，单请求可达十几分钟），JIT 缓存后正常。
-
-#### 3.4 ⭐ Dynamo 编排（官方用的，高并发唯一可用；实测跑通 = 这套）
-
-sglang_router 高并发 tail-stall（§8.3），**必须换 Dynamo**。完整步骤：
-
-1. **NATS + ETCD**（k8s pod，default-pool）：`kubectl apply -f nats-etcd.yaml`（`dynamo-nats` = nats:2.10-alpine -js；`dynamo-etcd` = quay.io/coreos/etcd:v3.5.16 + Service）。
-2. **18 worker 装 ai-dynamo**：每 pod `pip install ai-dynamo`（**不降级 nightly sglang**，`dynamo.sglang` 能 import 即可）。
-3. **worker 启动**：把 §3.3 的 `python -m sglang.launch_server` 换成 **`python3 -m dynamo.sglang`**（透传所有 megamoe/W4A4/DEP32/MTP args），每 pod 加 env：`NATS_SERVER=nats://dynamo-nats:4222 ETCD_ENDPOINTS=http://dynamo-etcd:2379 DYN_SYSTEM_PORT=8081`(prefill)/`8082`(decode) + `--enable-metrics`。prefill 加 `--host 0.0.0.0 --port 40000`。
-4. **等 worker 全 ready 再起 frontend**（关键，见下）：decode head（d0）health 200 + 日志 `Model registration succeeded` + `spec decode runtime metadata:{'nextn':1,'method':'EAGLE'}`（MTP 确认）；prefill 各 `:8081/health`=200。
-5. **frontend**（在任一 prefill pod）：`NATS_SERVER=... ETCD_ENDPOINTS=... python3 -m dynamo.frontend --http-port 8000`。验证 `/v1/models` 返回 `owned_by:nvidia`+`context_window:1048576`（若返 `owned_by:local` 说明打到了僵尸 sgl-router，见坑）。
-6. **benchmark**：`bench_serving --backend sglang-oai --port 8000 --model deepseek-ai/DeepSeek-V4-Pro --dataset-name random --random-input-len 8192 --random-output-len 960 --random-range-ratio 1.0 --num-prompts N --max-concurrency C`（MTP 时 OSL 用 960）。
-
-**⭐ Dynamo 启动/重启六大坑（全趟过，照做避坑）**：
-1. **frontend 必须在 worker 完全 ready 后起**：warmup 期起会触发熔断 open 且不恢复 → `No available prefill workers (circuits open)`。
-2. **「circuits open」真根因常是僵尸 `sglang::router` 霸占 8000**（它 `/v1/models` 也返 200 但 `owned_by:local`）→ dynamo.frontend bind 失败静默崩。pod 内无 `ss`/`lsof`，用 `/proc/net/tcp` 反查监听 8000 的 PID（hex 端口 `1F40`）→ `kill -9` → 再起 frontend。
-3. **换 image/重启必须彻底杀** `dynamo.sglang` + `sglang::`（否则占 dist port 5000 / ZMQ 40236）。
-4. **ZMQ `40236 Address already in use`**（prefill 重启常见）：老进程 socket 残留 → `/proc/net/tcp` 反查 40236(hex `9D2C`) 的 PID kill 掉再起。
-5. **反复 kill+relaunch 会积累 zombie 进程 + GPU 显存泄漏不释放**（`sleep infinity` 的 PID1 不 reap 僵尸，undead CUDA context 卡住显存到 ~191GB）→ 新进程必 cuda-graph OOM。**唯一可靠解 = `kubectl delete pod <d*> --force --grace-period=0` 重建 pod**（模型在 node-local SSD 持久，podAffinity 保 subblock 不变，重建后 GPU 归 0）。重建 decode pod 后 **IP 变了，prefill 需重启重连**（否则 decode 日志刷 `Lost connection with prefill instance`）。
-6. **重启 decode 后 frontend 也要重起**（worker 重新注册）。
-
-### Phase 4：汇总消融报告 + 三方对比
-- 把 Run A→E 的 per-step delta 汇成消融表（见 §7.4 模板），得出「每招值多少 tok/s/GPU」。
-- 与官方 11,200 对标，分析剩余 gap（Dynamo vs router、c2500 并发是否压满、EPLB/Waterfill 等未开项）。
+- **Dynamo 运行时前置**：(1) 起 `dynamo-nats`（nats:2.10-alpine -js）+ `dynamo-etcd`（etcd:v3.5.16 + Service）两个 k8s pod；(2) 每 worker pod `pip install ai-dynamo`（不降级 nightly sglang，`dynamo.sglang` 能 import 即可）；(3) worker 用 `python3 -m dynamo.sglang`（非 `sglang.launch_server`）+ env `NATS_SERVER`/`ETCD_ENDPOINTS`/`DYN_SYSTEM_PORT`。**为什么必须 Dynamo 不用 sglang_router**：见 §8（router 高并发 tail-stall）。
+- **MTP 四大坑**（Run D 实测，配方已进 §13）：(1) `--speculative-num-steps 1`（不要 3）+ **prefill/decode 两侧都加**，否则 nextn 模块加载不一致；(2) `NUM_MAX_TOKENS_PER_RANK=4096`（draft 放大 token，1280 会 `exceeds cap`）；(3) `context-length 9216`（**别提到 9728/10240 → cuda-graph OOM**），benchmark **OSL 用 960**（8192+960+draft < 9216，否则 78% 请求超限被拒）；(4) **MTP 与 online 压缩互斥**（去掉 `USE_ONLINE_COMPRESS`）。
 
 ---
 
@@ -466,60 +380,15 @@ sglang_router 高并发 tail-stall（§8.3），**必须换 Dynamo**。完整步
 
 ---
 
-## 8. 方案、测量法、Router 对比与原理（2026-07-21 凌晨深挖）
+## 8. 为什么必须 Dynamo + 各优化原理
 
-### 8.1 我用的方案
-- **拓扑**：官方 `10P1D-dep4-dep32`（10 prefill×TP4/DP4/EP4 = 40 GPU + 1 decode×DEP32 = 32 GPU，共 18 节点 72 GPU，subblock-0001 单 NVL72 域）。
-- **模型**：官方原版 `deepseek-ai/DeepSeek-V4-Pro`（FP4 MoE + FP8 attn，806G，**非** nvidia NVFP4 变体）。
-- **镜像**：`lmsysorg/sglang:nightly-dev-cu13-20260720-b3570a45`（最新 nightly；官方 pin 的 0520 已被 GC）。
-- **MoE**：`megamoe` a2a backend；W4A8→W4A4 由 env `USE_FP4_ACTS` 切换。
-- **KV 传输**：mooncake over 域内 NVLink（`MC_FORCE_MNNVL=1`）。
-- **编排（关键分歧点）**：我用 **sglang_router**（`--pd-disaggregation --policy cache_aware`）；**官方用 NVIDIA Dynamo**。
+**为什么必须 Dynamo 不用 sglang_router**：sglang_router 的 PD-disaggregation 在并发下对少数请求的 prefill→decode KV 交接有 race，请求 hang 后**不失败、不重试、不释放槽位**（尾部永久 hang，conc 越高死槽位越多、吞吐反降；issue #9266/#31206/#12688/#5450，各种 disable/retry/timeout 均无效）。Dynamo 有服务发现（先路由 decode 再 KV-aware 选 prefill）+ **请求级 migration/cancellation**，hang/挂时能迁移取消、不累积死槽位——这正是 tail-stall 的解药。代价是要 NATS+ETCD+ai-dynamo（前置见 §3.3，部署见 §13）。⚠️ 诊断时**绝不能直连 prefill:30000 绕 frontend**（触发 `bootstrap_room should not be None` 打崩 prefill）。
 
-### 8.2 测量法（绕开 bench 客户端 tail-stall）
-bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summary**。两个可靠替代：
-1. **完成率 × 时间**：取 tqdm 进度（如 979/1024 @107s = 9.15 req/s），×9216 tok ÷72 GPU。
-2. **decode 服务端日志**：对 32 个 DP rank 各取最新 `gen throughput`，去重求和（噪声较大，作交叉验证）。
-
-### 8.3 ⭐ sglang_router 出了什么问题（tail-stall 根因）
-- **现象**：任何并发 >1，每波尾部约 1-2 个请求**永久 hang**（conc4 卡 6/8、conc16 卡 62/64、conc256 卡 985/1024）；高并发（conc1024）hung 请求累积占 KV 槽 → **吞吐不升反降**（9.15→collapse）。
-- **根因（GitHub 实锤）**：sglang_router 的 PD-disaggregation 在并发下对少数请求的 prefill→decode KV 交接有 race，请求 hang 后**不失败、不重试、不释放槽位**。相关 issue：#9266（高并发 sgl-router KV 传输失败）、#31206（circuit breaker per-leg：prefill 熔断后仍派 decode → decode 等永不来的 KV）、#12688（"PD requests failed with sgl-router，try upgrading"）、#5450（KV transfer 高并发变慢，未修）。
-- **试过无效**：`--disable-circuit-breaker`（2→1 略好）、`--retry-max-retries 3`、`SGLANG_DISAGGREGATION_WAITING_TIMEOUT=90`（卡住请求不是 KV-wait 态所以 timeout 不触发）、`--disable-stream`。
-- **自伤坑**：诊断时「直连 prefill:30000 绕 router」会触发 `AssertionError: bootstrap_room should not be None` 把 prefill controller 打崩（PD prefill 只能经 router 收请求，**绝不能直连**）。
-
-### 8.4 ⭐ 官方 Router（Dynamo）好在哪
-官方 recipe `frontend: type: dynamo`，用 `python -m dynamo.sglang` 起 worker + Dynamo frontend（需 NATS + ETCD 分布式运行时）。相比 sglang_router：
-- **不用 load balancer**：Dynamo 有服务发现，**先路由到 decode，再 KV-aware 选 prefill**，请求生命周期由 Dynamo 统一管理。
-- **请求级容错**：支持 request migration / cancellation（sgl-router 没有）——请求 hang/worker 挂时能迁移或取消，**不会累积死槽位**。这正是 sgl-router tail-stall 的解药。
-- **KV-aware routing**：按前缀命中路由，减少重复 prefill。
-- **代价**：要装 ai-dynamo[sglang] + NATS + ETCD + 18 worker 走 `dynamo.sglang` 重起 + frontend，是个大工程（官方 srt-slurm 自动化）。
-
-### 8.5 原理小结（为什么 PD + 各项优化能冲上万）
-- **PD 分离**：prefill 算力密集、decode 访存密集，拆开各自扩展 + 用满 GPU。KV 从 prefill 经 NVLink/RDMA 零拷贝送到 decode。
-- **Wide-EP（DEP）**：decode 做 DP-attention + EP，专家摊薄、并发拉高。**但注意**：wide-EP 只在 prefill 喂得饱时提 per-decode-GPU；feed-limited 时铺得越宽 per-GPU 越低（见 §10.5）。
-- **megamoe W4A4**：expert dispatch+GEMM 融合成一个 kernel，激活也压 4bit → MoE 层快 ~2×（实测 conc256 下 **1.48×**）。
-- **SWA + online 压缩**：把 KV 打薄，让 decode 塞下**更大 batch**（收益在**高并发**才显现；conc256 下 KV 不是瓶颈，未见增益）。
-- **MTP（EAGLE 投机解码）**：一次 forward 出多 token，per-user 提速——**11,200 的核心杠杆**（见 §10.2）。
-- **要到官方 11,200**：需 Dynamo（高并发稳定）+ **dep8-MTP 配方** + 快 prefill 按 8:1 喂满 + 开环压测。完整路径见 §10。
-
-### 8.6 从 sglang_router 到 Dynamo：踩坑与打通（历史过程，结论以 §10 为准）
-
-这段是 2026-07-21 一夜从 sglang_router 撞墙、换 Dynamo、跑通 MTP 的过程，保留**可复用的真教训**（数字口径已按 §10 校正，早期草稿的 (in+out)÷72 错口径数已删）。
-
-**① sglang_router 阶段的消融真相**（服务端测量，仅作趋势参考）：
-- **W4A4 是最大单项**：megamoe W4A8→W4A4 约 **1.48×**（Run A→B），expert dispatch+GEMM 融合 + 激活压 4bit。
-- **SWA/online 压缩在 conc256 无增益**（KV 未成瓶颈），收益要到高并发/大 batch 才显现。
-- **sgl-router PD 在并发下有 tail-stall**：尾部少数请求永久 hang，不失败/不重试/不释放槽位（issue #9266/#31206/#12688/#5450）→ conc 上不去、MTP 压测出不了数。**这是必须换 Dynamo 的根因。**
-
-**② Dynamo 打通的两个关键坑**：
-- **"circuits open" 谜团真根因 = 僵尸 sglang::router 霸占 8000 端口**（不是 Dynamo 熔断 bug）。僵尸 router `/v1/models` 也返 200 迷惑人（`owned_by:local`），真 Dynamo frontend 是 `owned_by:nvidia`+`context_window:1048576`。dynamo.frontend 因端口占用静默 bind 失败崩溃，请求全打到僵尸 router 的死 prefill 熔断上。**排查法**：pod 内无 `ss`/`lsof`，用 `/proc/net/tcp` 反查监听 8000 的 PID，`kill -9` 后**换端口起全新 frontend**（熔断器初始闭合）。
-- **反复 kill+relaunch dynamo.sglang → zombie 进程 + ZMQ 40236 残留 + GPU 显存泄漏 191GB 不释放**（`pkill` 杀不掉 D/Z 态，sleep-infinity PID1 不 reap 僵尸）→ 新进程必 OOM → **唯一可靠解 = `kubectl delete pod --force` 重建 pod**（模型在 node-local SSD 持久，podAffinity 保 subblock）。
-
-**③ MTP 复现成功**（官方「2,200→11,200 靠 MTP」的核心杠杆）：
-- **生效实锤**：decode 日志 `spec decode runtime metadata:{'nextn':1,'method':'EAGLE'}`；**TPOT 从无 MTP 43ms 稳到 11ms**（draft 被接受）。
-- **MTP 四大坑（全解）**：(1) `online c128 does not support MTP`，online 压缩与 MTP 互斥→去掉；(2) draft token 放大每 rank token 数，`NUM_MAX_TOKENS_PER_RANK` 1280→4096；(3) ctx 9216 太小，MTP 令 8194+1024>9216 有 78% 请求被拒→benchmark OSL 降 960（提 ctx 则 cuda-graph OOM，回退）；(4) MTP draft 模型 + 投机 CUDA graph 吃显存，decode `mem-fraction 0.94→0.88` + `cuda-graph-max-bs 1280→512`。
-
-**④ 结论（已被后续取代，见 §12）**：这套闭环测得 dep8+8prefill+MTP = 6,659 output/decode-GPU。后来换官方 sa-bench 开环 + 多 frontend + 加到 16 prefill = **8,993（§12）**。此处 Dynamo/MTP 打通的**工程教训**仍有效，数字以 §12 为准。口径纠错、PD 配比公式见 §10.1-10.3。
+**各项优化为什么能冲上万**：
+- **PD 分离**：prefill 算力密集、decode 访存密集，拆开各自扩展、用满 GPU；KV 经 NVLink/RDMA 零拷贝送 decode。
+- **megamoe W4A4**：expert dispatch+GEMM 融合成一个 kernel + 激活压 4bit → MoE 层快 ~2×（实测 conc256 下 1.48×，是最大单项）。
+- **MTP（EAGLE 投机解码）**：一次 forward 出多 token，TPOT 从 43ms 稳到 11ms（draft 被接受）——**11,200 的核心杠杆**（§10.2）。
+- **Wide-EP / SWA / online 压缩**：把 KV 打薄让 decode 塞更大 batch，但收益只在高并发 + prefill 喂得饱时显现（feed-limited 下 wide-EP per-GPU 反降，见 §10.5；conc256 下 SWA 未见增益）。
 
 ---
 
@@ -600,25 +469,18 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 | 10p1d-dep32 c2500 | 10 | dep32 | no-MTP | 大规模吞吐 |
 | 15p1d-dep12 c12000 | 15 | dep12 | no-MTP | 超高并发（prefill 拉满、decode 缩小）|
 
-### 10.4 【已推翻】曾以为"prefill 单卡慢 3.7×"——实为低并发测量假象（正确结论见 §11）
+### 10.4 【已推翻】"prefill 单卡慢 3.7×" = 低并发测量假象（见 §11）
 
-> ⚠️ 本节原结论（prefill 单卡吞吐慢官方 3.7×、18 节点配不出 P:D 比、必饿死 decode）**已被 2026-07-22 的并发扫描实测推翻**。保留于此仅作过程记录，**以 §11 为准**。
-
-- 原观测：单个 8K prefill forward "1.44s"（官方 0.45s），据此推 prefill 慢 3.7×。**错在这个 1.44s 是在 conc4（极低并发、GPU 严重欠载）下量的**，不是 prefill 的真实吞吐上限。
-- §11 实测：同一个 dep4 worker，并发从 conc4 拉到 conc128，prefill 吞吐 4,940 → **15,196 tok/s/GPU（= 官方 18,200 的 83%）**。prefill 单卡硬件/kernel **没有 3.7× 缺陷**，只是需要高并发才喂满 GPU。
-- 所以"需 ~30 个 prefill worker、18 节点放不下 → 饿死 decode"这条推理**不成立**。满配跑不满 11,200 的真因需重新诊断（PD 编排是否把高并发投到每个 prefill、或瓶颈在 decode/KV），见 §11.5。
+原结论（prefill 慢 3.7×、需 ~30 prefill、饿死 decode）**已推翻**：那个"1.44s/forward"是 conc4 极低并发欠载下量的；§11 并发扫描实测同一 worker 高并发达 15,196 = 官方 83%，prefill 无缺陷、8 个够。**以 §11 为准。**
 
 ### 10.5 dep40 的硬约束 + wide-EP 在 feed-limited 下反而更差
 
 - **dep40 非法(无 EPLB)**：DeepSeek-V4 有 **256 个专家，256 % 40 ≠ 0**，`assert num_physical_experts % ep_size == 0` 直接崩。dep40 **必须配 EPLB 加冗余专家**凑整（如 256+24=280，280/40=7）。所以 **EPLB 不只是 2.54× 加速，是 dep40 能启动的前提**。合法 EP 必须整除 256（8/16/32/64…）。
 - **feed-limited 下 wide-EP 反而降 per-GPU**：实测 dep32（32 decode 卡）total output ~50K，dep8（8 卡）total output ~53K——**总输出都被 prefill 卡在 ~50K**，与 decode 拓扑无关。dep8 ÷8 = 6,659；dep32 ÷32 = 1,573。**prefill 喂不动时，decode 铺得越宽 per-GPU 越低**。研究说的"wide-EP 提 per-GPU"只在 prefill 供得上时成立（官方 prefill 快，我不快）。
 
-### 10.6 「prefill 攒批再放」这招：官方没用，且被 decode 显存卡死
+### 10.6 「prefill 攒批再放」= 压测 hack，别用
 
-- 官方 11,200 是 **`req_rate inf` 持续喂料的稳态数**，**不用**攒批技巧。
-- `slow_down` 攒批（issue #6017）是**压测 hack**（量 decode 峰值），不是产 11,200 的方法；且 **dynamo.sglang 上没有 slow_down HTTP 接口**，用不了。
-- **根本上限**：prefill 过的 KV 得存进 decode 的 KV pool 等消费；pool 有限（dep8 ~400万 token → 最多攒 ~450 个 8K 请求，dep32 ~1300万 → ~1600 个）。攒满即到顶，放开后 decode drain 一波爆发就打回原形。**攒批 = 一次性 burst，被 KV pool 卡死，不可持续；稳态 11,200 绕不开"prefill 真快"**。
-- 我实测 `SGLANG_HACK_PD_DECODE_NUM_RESERVED_DECODE_TOKENS=1026` 在 dynamo dep8 下**过度预分配**（499 prealloc 占满 KV、只 14 running），吞吐反降到 2,984——**这招在我环境有害**。
+官方 11,200 是 `req_rate inf` 持续喂料的**稳态数**，不用攒批。`slow_down`（issue #6017）是量 decode 峰值的 hack、dynamo.sglang 也没这接口；且被 decode KV pool 卡死（dep8 最多攒 ~450 请求，放开即 burst 打回原形）。实测 `SGLANG_HACK_PD_DECODE_NUM_RESERVED_DECODE_TOKENS=1026` 反而过度预分配、吞吐降到 2,984，**有害**。
 
 ### 10.7 冲 11,200 的待办 → 已全部执行完（收口见 §12/§14）
 
