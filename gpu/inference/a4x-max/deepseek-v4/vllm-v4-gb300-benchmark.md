@@ -384,7 +384,18 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - **⭐ DSpark 真实数据生效**：`Mean acceptance length 3.0–3.2`（每 decode step 吐 ~3 token，≈3× decode yield），per-position 接受率 0.69/0.46/0.32/…，avg draft 接受 ~29%。**随机数据接受率~0 测不出，真实数据才现**。
 - **⭐ 1p1d 瓶颈 = prefill 单节点**：TTFT 高达 8–18s，output 卡在 ~1026 tok/s。→ **提吞吐的杠杆是加 prefill 节点喂饱 decode**（同奚老师 4p1d/5p1d/6p1d 思路）。
 
-**待续**：扩 prefill 拓扑（2p1d→4p1d→6p1d，dep8 decode）+ 高并发，逐拓扑记录最大吞吐。
+**4p1d-TP4（5 节点：4 prefill + 1 decode，同 subblock NVLink 域）**：
+
+| 并发 | Output tok/s | TTFT | TPOT |
+|---|---|---|---|
+| 128 | 970 | 18,760 ms | 19.7 ms |
+| 256 | 1,987 | 4,058 ms | 86.2 ms |
+| 512 | **3,004**（峰值） | 8,414 ms | 76.8 ms |
+
+- **⭐ 4 prefill 喂 1 decode → 吞吐 ~3× 于 1p1d**（3,004 vs 1,026）。瓶颈从 prefill 转到 **decode**（TPOT 77–86ms，decode 单节点 dep4/TP4 饱和）。DSpark acceptance length 仍 ~3.0。
+- **scaling 规律**：1p1d prefill-bound(1026) → 4p1d decode-bound(3004)。**下一步扩 decode（dep8=2 节点）**解 decode 瓶颈,再往上加 prefill/decode。
+
+**待续**：4p1d-dep8（decode 扩 2 节点）→ 6p1d-dep8 → 更高并发 / 更大拓扑（同 subblock 最多 18 节点），逐拓扑记录最大吞吐。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
