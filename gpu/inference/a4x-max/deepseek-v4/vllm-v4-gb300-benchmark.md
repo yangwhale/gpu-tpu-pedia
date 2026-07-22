@@ -257,6 +257,25 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 **⭐ 架构卡点：dynamo.vllm ⊥ MooncakeConnector**。dynamo 的 disagg 靠 prefill 返回 `res.kv_transfer_params`（NixlConnector 填，走 response）；MooncakeConnector 不填（用自己的 bootstrap server 带外协调）→ dynamo `handlers.py:_build_disaggregated_params` 拿 None → decode 报 `missing disaggregated_params`，生成 500。**mooncake engine 层已 work（NVLink init 成功），但 dynamo 编排层对不上**。
 
-**正解方向**：mooncake pip 包自带 `vllm_v1_proxy_server.py`（vLLM 原生 mooncake disagg proxy）。用 MooncakeConnector 需**弃 dynamo frontend、改 vLLM 原生 mooncake proxy**（prefill+decode+proxy），同 SGLang 用自己 PD 协调的思路。待推进。
+**解法：vLLM 原生 mooncake proxy**（弃 dynamo）。mooncake pip 包自带 `vllm_v1_proxy_server.py`。prefill/decode 用纯 `vllm serve`（非 dynamo.vllm）各暴露 /v1，proxy `--prefiller-hosts/-ports` + `--decoder-hosts/-ports` 路由。**端到端跑通**（"Paris"正确）。
+
+**⭐ 实测结果（1p1d-dep4，8K/1K）— mooncake NVLink 反而更慢**：
+
+| | Mooncake+NVLink+toyproxy | NixlConnector+dynamo |
+|---|---|---|
+| conc16 output tok/s | 502 | 574 |
+| conc16 TTFT | 4746 ms | 1751 ms |
+| conc64 output tok/s | 1333 | 1693 |
+| conc64 TTFT | 9132 ms | 3219 ms |
+| conc64 TPOT | 38.9 ms | 32.9 ms |
+
+**根因不是 KV 传输**（TPOT decode 速度接近），而是 **`vllm_v1_proxy_server.py` 是 toy proxy**（注释写明从 NIXL 测试拷来）：串行 HTTP——先整个 prompt 发 prefill 等完、再发 decode，每请求多两跳 HTTP + mooncake per-request handshake → TTFT 撑高 2-3×。dynamo 的路由优化过但跟 mooncake 不兼容。
+
+**⭐ 核心 gap**：高效编排器（dynamo）跟 mooncake 不兼容；兼容 mooncake 的 proxy（toy）不高效。当前 mooncake+toyproxy 净性能不如 Nixl+dynamo。要发挥 mooncake NVLink 需**生产级 mooncake-兼容编排器**（如 SGLang 自己的 PD router），是更大工程。
+
+**mooncake 启动配置（复现用）**：
+- prefill/decode 纯 `vllm serve` + `--kv-transfer-config '{"kv_connector":"MooncakeConnector","kv_role":"kv_producer|kv_consumer","kv_connector_extra_config":{"mooncake_protocol":"rdma"}}'` + `--host 0.0.0.0 --port 8000`
+- env: `MC_FORCE_MNNVL=1`（GB300 走域内 NVLink，必需）+ `NCCL_MNNVL_ENABLE=1 NCCL_CUMEM_ENABLE=1` + `LD_LIBRARY_PATH` 含 cuda12 runtime（`pip install nvidia-cuda-runtime-cu12`）+ GIB source + `VLLM_MOONCAKE_BOOTSTRAP_PORT`
+- proxy: `python vllm_v1_proxy_server.py --host 0.0.0.0 --port 8000 --prefiller-hosts <p-ip> --prefiller-ports 8000 --decoder-hosts <d-ip> --decoder-ports 8000`（先杀掉占 8000 的旧 frontend）
 
 *SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
