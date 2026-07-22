@@ -144,4 +144,46 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 ---
 
-*基于公开来源整理（vLLM blog / recipe 站 / SemiAnalysis InferenceX），2026-07-22。**本环境未实跑**，数字为官方/榜单值；实跑配套见 §6。SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。*
+## 7. 实跑准备：踩坑蒸馏 + 消融矩阵（目标：一次跑对）
+
+把 SGLang 实跑那份的全部坑蒸馏过来，让 vLLM 首跑就避开；再列覆盖性消融矩阵，从最简单到满配，逐项隔离每个改动的影响。
+
+### 7.1 SGLang 踩坑蒸馏 → vLLM
+
+**A. 栈无关坑（直接适用，vLLM 一样会遇到）**：
+1. **decode 死进程泄漏 GPU 显存**（`kill -9` 回收不了、`--query-compute-apps` 为空）→ `kubectl delete pod --force` 重建（模型在 node SSD 持久）。
+2. **`pkill python3` 会连 frontend 一起杀** → frontend 必须在 worker 全稳定后**统一最后起**，别边起边补。
+3. **Dynamo「circuits open」真根因常是僵尸进程霸占端口** → `/proc/net/tcp` 反查 PID `kill -9` 后再起。
+4. **自愈部署循环（一次成功的关键）**：启动后进「校验-重试」循环，没加载的 pod 等 **≥90s** 让内核 reap 掉 D-state 再 killport 重启，2-3 轮自清、无需重建；**别急着重试**（<10s 连撞会误判）。frontend 统一最后起。
+5. **选域**：18 节点 NVL72、按「无 GPU-pod 空闲节点数」扫，别只看 Ready+label；ComputeDomain 只收敛 15/18 → 删卡住 pod 重建；节点 DRA 是 ipvlan → 重建该节点。
+6. **存储 + bootstrap**：权重放 node-local SSD RAID；换容器必重跑 GIB/DOCA/ai-dynamo bootstrap。
+7. **ready 判据**：用 GPU mem（prefill loaded=mem>200G）+ 日志注册串，别信 stdout 缓冲的 "fired up"。
+
+**B. vLLM 特有、首跑必验证的点（SGLang 没有的差异）**：
+1. **启动方式**：disagg worker 走 `python3 -m dynamo.vllm`（对应 dynamo.sglang），vllm_config args 透传（见 §3）。**首跑确认模块名 + 透传格式**。
+2. **NixlConnector**（vLLM 的 KV 传输，非 mooncake）：需每节点设 `VLLM_NIXL_SIDE_CHANNEL_HOST=<本节点IP>`；可选 `UCX_NET_DEVICES` 指定 RDMA 网卡。`kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'`。
+3. **端口**：vLLM 用 `data-parallel-rpc-port 13345` 等（非 SGLang 的 40236/5000）；端口僵尸机制类似，但 hex 值不同，killport 参数要换。
+4. **容器 bootstrap**：`vllm/vllm-openai:dsv4-megamoe-mxfp4-arm64-cu130-*` 是否自带 GIB/DOCA 待确认；不带则同 SGLang 流程补。
+5. **prefill `enforce-eager`**（不做 cuda graph）→ 启动更快但 prefill 峰值可能略低；decode 用 `FULL_DECODE_ONLY` cuda graph。启动行为与 SGLang 不同，ready 判据相应调整。
+
+### 7.2 消融测试矩阵（从最简单到满配，逐项隔离）
+
+> 原则同 SGLang §3.0：**锁死拓扑做 baseline，一次只翻一个开关**，拿干净的 per-step delta。全程官方口径（8K/1K、sa-bench 开环、output÷decode-GPU）。
+
+| Phase | 配置 | 目的 / 测什么 |
+|---|---|---|
+| **P0 单节点冒烟** | 8×B300 DP8（§1 docker 命令） | 证明容器能加载 + 生成（"Paris"）。最简单起步。 |
+| **P1 单节点 benchmark** | 单节点 DP8，sa-bench 8K/1K conc 扫描 | 拿单节点 per-GPU baseline；对照 SGLang Phase 2（2,794）。 |
+| **P1 消融** | 在 P1 上逐项翻：① MoE backend（deep_gemm_amxf4_mega_moe vs 默认 flashinfer）② FP4 indexer（`use_fp4_indexer_cache` on/off）③ MTP（`--speculative-config.method mtp --num_speculative_tokens 1` on/off）④ kv-cache-dtype（fp8 vs bf16）| **每招值多少 tok/s** |
+| **P2 最小 disagg** | 1 prefill dep4 + 1 decode dep8（12 GPU）+ Dynamo + NixlConnector | 打通 PD 链路（这步验证 §7.1-B 全部 vLLM 特有点）。 |
+| **P3 拓扑扫描** | 4p1d / 5p1d / **6p1d**-dep4-dep8（conc 4096）；再 7p2d-dep4-dep16（conc 3072） | **prefill 数收敛点**（对照 SGLang 14→16 收敛）；dep8 vs dep16 宽 EP 的 per-decode-GPU 差异。 |
+| **P4 满配参数消融** | 固定 P3 最优拓扑，逐项翻：① MTP on/off（**vLLM GB300 recipe 默认关，这是最大问号**）② multi-frontend（recipe 默认单，验证是否吃 SGLang 那 +34%）③ all2all-backend（`flashinfer_nvlink_one_sided`）④ prefill 扩到 8/12/16（看是否像 SGLang 需要更多 prefill 喂饱 dep8）| 定位每个参数对满配吞吐的影响 |
+| **P5 对标定稿** | 最优 vLLM 配置 vs SGLang 8,903（同交互点、同口径） | 得出 vLLM↔SGLang 在本环境的真实对比 + 各自最优配方 |
+
+### 7.3 一次跑对的执行方式
+
+复用 SGLang 的自愈部署脚本骨架（改 vLLM 启动命令 + 端口 + NixlConnector env）：清空 → 一把启动全 worker → 90s 轮询校验-重试 → decode 就绪 → frontend 统一起验 → 探活 → sa-bench。**从 P0 单节点开始**，每 Phase 跑通再进下一个，避免一上来满配踩多个坑难定位。
+
+---
+
+*基于公开来源整理（vLLM blog / recipe 站 / SemiAnalysis InferenceX），2026-07-22。**本环境未实跑**，数字为官方/榜单值；实跑准备 + 消融矩阵见 §7。SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。*
