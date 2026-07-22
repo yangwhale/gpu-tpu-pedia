@@ -204,6 +204,12 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 **vs SGLang Phase 2 单节点 TP4**（同 8K/1K 同口径）：conc1 209 / conc16 1,898 / conc64 2,794。
 
-**结论（单节点交叉）**：**低并发 SGLang 快**（conc1 209 vs 132、conc16 1,898 vs 1,248——TP 延迟优势）；**高并发 conc64 vLLM 反超 +10%**（3,063 vs 2,794——DP+EP 的吞吐扩展比纯 TP 好）。这跟 vLLM 官方"V4 初版、优化进行中"一致，且 vLLM 的 wide-EP 天然更吃高并发。**下一步 P2+：disagg**（多节点 Dynamo + NixlConnector）。
+**结论（单节点交叉）**：**低并发 SGLang 快**（conc1 209 vs 132、conc16 1,898 vs 1,248——TP 延迟优势）；**高并发 conc64 vLLM 反超 +10%**（3,063 vs 2,794——DP+EP 的吞吐扩展比纯 TP 好）。这跟 vLLM 官方"V4 初版、优化进行中"一致，且 vLLM 的 wide-EP 天然更吃高并发。
+
+### P2 disagg 前置（已验证，2026-07-22）
+- **NATS/etcd 复用**：SGLang 建的 `dynamo-nats`/`dynamo-etcd` pod 仍在，vLLM 直接复用。
+- **ai-dynamo 安装**：recipe pin 的 `1.2.0.dev20260426` 已从 PyPI 下架（同 pinned 镜像被 GC）→ 用最近稳定 **`ai-dynamo==1.2.1`**（`pip install`，容器内可装）。
+- **启动路径**：`python3 -m dynamo.vllm`（对应 dynamo.sglang），自带 `--disaggregation-mode {prefill,decode}` + `--connector nixl` + 透传 vLLM engine args。
+- **跨节点前置**：disagg（prefill↔decode 跨节点）需 mrdma DRA + ComputeDomain + GIB/DOCA bootstrap（同 SGLang），单节点 P0/P1 不需要。
 
 *SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
