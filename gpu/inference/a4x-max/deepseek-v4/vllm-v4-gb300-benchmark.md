@@ -211,5 +211,7 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 - **ai-dynamo 安装**：recipe pin 的 `1.2.0.dev20260426` 已从 PyPI 下架（同 pinned 镜像被 GC）→ 用最近稳定 **`ai-dynamo==1.2.1`**（`pip install`，容器内可装）。
 - **启动路径**：`python3 -m dynamo.vllm`（对应 dynamo.sglang），自带 `--disaggregation-mode {prefill,decode}` + `--connector nixl` + 透传 vLLM engine args。
 - **跨节点前置**：disagg（prefill↔decode 跨节点）需 mrdma DRA + ComputeDomain + GIB/DOCA bootstrap（同 SGLang），单节点 P0/P1 不需要。
+- **P2 已就位**：3 pod（`v4v-p0` prefill + `v4v-d0/d1` decode）用 vLLM 镜像 + mrdma DRA + ComputeDomain 起好、Running；3 pod 都装好 `ai-dynamo==1.2.1`（`dynamo` import OK）。
+- **⭐ P2 当前卡点（vLLM 容器缺 RDMA userspace）**：vLLM 镜像自带 `nixl` python 包，但**没有底层 RDMA 栈**（`ibv_devices`/`ucx_info` 缺失、无 `/usr/local/gib`）。跨节点 NixlConnector KV 传输走 UCX/RDMA，需要把 **GIB（`gib-a4xmax.tgz`）+ DOCA OFED userspace** bootstrap 进容器（同 SGLang R1 流程）。集群无 GIB DaemonSet（仅 `nccl-fastsocket-installer`，未调度），SGLang 当年是 runtime 手动装。**下一步**：定位 GIB/DOCA asset → bootstrap 3 pod → `dynamo.vllm --disaggregation-mode prefill/decode --connector nixl` 起 + frontend + sa-bench。这是复刻 SGLang bootstrap 阶段的大工程。
 
 *SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
