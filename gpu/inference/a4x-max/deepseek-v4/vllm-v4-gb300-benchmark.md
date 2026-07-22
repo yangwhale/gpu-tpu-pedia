@@ -419,16 +419,31 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - **决定性结论**：**吞吐天花板 = decode 节点数 × ~3,000 tok/s**（1 decode ≈ 3,004；2 decode ≈ 5,800–6,200）。prefill 只决定 TTFT（喂料速度），不决定稳态吞吐。→ **要提吞吐必须加 decode，不是加 prefill**。
 - C=512 首档 1,612 又是 router 重启的 warmup 伪影（P99 TTFT 140s 但 median 仅 1.4s）。
 
+**6p3d-TP4（9 节点：6 prefill + 3 decode，同 subblock NVLink 域）**：
+
+| 并发 | Output tok/s | TTFT | TPOT | 失败 |
+|---|---|---|---|---|
+| 1024 | 8,046 | 5,040 ms | 76.6 ms | 0 |
+| 2048 | **9,153**（峰值） | 19,666 ms | 78.1 ms | 0 |
+
+- **⭐⭐⭐ decode 加到 3 节点 → 峰值 9,153**，0 失败，TPOT 稳定 76–78ms。**decode 线性 scaling 坐实**：1→3,004 / 2→5,826 / 3→9,153，≈ **3,050 tok/s per decode 节点**。
+- 加 prefill（4p→6p）配 3 decode 后 TTFT 也压得住（C=1024 仅 5s）。
+
 **scaling law 总结**：
 
-| 拓扑 | decode 节点 | 峰值 Output tok/s | 瓶颈 |
-|---|---|---|---|
-| 1p1d | 1 | 1,026 | prefill |
-| 4p1d | 1 | 3,004 | decode |
-| 4p2d | 2 | 5,826 | decode |
-| 6p2d | 2 | 6,190 | decode（prefill 已过量） |
+| 拓扑 | decode 节点 | 峰值 Output tok/s | 每 decode | 瓶颈 |
+|---|---|---|---|---|
+| 1p1d | 1 | 1,026 | — | prefill |
+| 4p1d | 1 | 3,004 | 3,004 | decode |
+| 4p2d | 2 | 5,826 | 2,913 | decode |
+| 6p2d | 2 | 6,190 | 3,095 | decode（prefill 过量） |
+| 6p3d | 3 | **9,153** | 3,051 | decode |
 
-**待续**：继续扩 decode（6p4d，预期 ~12,000）验证 decode 线性 → 更大拓扑（同 subblock 最多 18 节点），逐拓扑记录最大吞吐。
+**⭐ 核心结论**：DSpark disagg 在 GB300 NVL72 上 **吞吐随 decode 节点数线性增长（~3,050 tok/s/decode-TP4）**。prefill 只决定 TTFT（喂料速度），不决定稳态吞吐——2 decode 配 4 或 6 prefill 峰值几乎一样。**扩容优先加 decode**，prefill 按 TTFT SLA 配（经验 ~2 prefill : 1 decode 已够）。
+
+### 9.9.1 踩坑：decode 容器 OOM（exit 137）
+
+跑 6p4d（4 decode）时 **decode 容器被 exit 137 杀掉**（`ContainerStatusUnknown`，K8s 显示 `terminated exitCode 137`），router 报 `tcp connect error deadline elapsed`，那一档吞吐反跌到 3,597 且 102 请求失败。根因：**decode pod `memory: 600Gi` limit 在高并发（KV cache + activation + NIXL buffer）下被击穿触发 OOM-kill**。换节点重建 decode 后 6p3d 干净跑通。**教训**：GB300 decode pod 内存 limit 要留足头寸（或调低 `--max-num-seqs`/KV cache 占比），高压下别贴着 limit 跑；benchmark 前先确认所有 decode `kubectl get pod` 是 `Running` 且 `curl /health` 通。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
