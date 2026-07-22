@@ -13,7 +13,7 @@
 | Phase 1 V4-Flash 单节点 TP4（聚合）| ✅ conc64 8,540 tok/s/GPU（in+out÷4，单节点口径，仅供内部对比）|
 | Phase 2 V4-Pro 单节点 TP4（聚合）| ✅ conc64 2,794 tok/s/GPU（同上口径）|
 | Phase 3 V4-Pro PD 分离（Dynamo + megamoe W4A4 + SWA + MTP）| ✅ 端到端跑通，Dynamo 根治 tail-stall |
-| **最优实测（官方口径 output÷decode-GPU）** | **dep8 + 8 prefill + MTP-3 稳态 = 6,659 output/decode-GPU** |
+| **最优实测（官方口径 output÷decode-GPU）** | **8-frontend + high-conc-8p1d-dep8-mtp + sa-bench 开环 = 6,788 = 官方 11,200 的 61%**（多 frontend 从 5,060 提 +34%，见 §12）|
 | **距官方 11,200** | 满配 dep8-MTP 稳态 6,659 output/decode-GPU。**曾以为根因=prefill 单卡慢 3.7×，已推翻**（§11：那是 conc4 低并发测量假象，同一 worker 高并发峰值 15,196=官方 83%，prefill 非瓶颈）。真因待用官方 sa-bench 开环重测（编排/decode 侧）|
 
 **核心结论（以 §10 为准）**：
@@ -696,4 +696,46 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 ---
 
-*2026-07-22 更新（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。§3.9 单节点手册、§3.3+§3.4 PD+Dynamo 步骤、§7 benchmark、§8 全过程+原理、**§10 官方 11,200 认知、§11 prefill 并发扫描重大修正**。**关键修正（§11）：之前"prefill 单卡慢 3.7×、喂不动 decode"（§10.4）是 conc4 低并发测量假象——同一 dep4 worker 高并发峰值 15,196 tok/s/GPU = 官方 18,200 的 83%，prefill 非瓶颈。满配跑不满 11,200 的真因（编排/decode 侧）待用官方 sa-bench 开环重测。** 存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
+## 12. ⭐⭐⭐⭐⭐ 满配 sa-bench 实测 + 多 frontend 提升（2026-07-22，官方口径 output÷decode-GPU）
+
+**结论先行**：用官方 sa-bench 开环打满配 `high-conc-8p1d-dep8-mtp`，靠**加多 frontend**把 output/decode-GPU 从 **5,060 抬到 6,788（+34%）**，= 官方 11,200 的 **61%**。完整瓶颈地图见 §12.4。这是**第一次用官方口径 + 官方工具**跑通满配。
+
+### 12.1 部署（复用 fleet，非从零重建）
+- 复用现有 18-pod fleet（清僵尸），按官方 `disagg-high-conc-8p1d-dep4-dep8-mtp.yaml`：**8 prefill(dep4)** + **1 decode(dep8 = TP8/DP8/EP8 跨 2 节点，d0 rank0 / d1 rank1，dist d0IP:5000)** + Dynamo(nats/etcd/frontend)。
+- decode：MTP EAGLE num-steps=1/topk=1/draft=2，mem 0.85，max-running 8192，ctx 9216，swa 0.1，NUM_MAX_TOKENS_PER_RANK 4096（**去掉 §10.6 那个有害的 RESERVED_DECODE_TOKENS hack**）。
+- **三个部署坑**：(1) decode 死进程泄漏 GPU 显存（199GB/卡不释放、`nvidia-smi --query-compute-apps` 为空）→ `kubectl delete pod` 重建清显存（唯一可靠解）；(2) prefill 40236 ZMQ 端口僵尸残留 → `killport.sh 40236` + 重启；(3) worker `"fired up"` 日志因 stdout 缓冲不可靠 → 用 **GPU util 判 ready**（prefill loaded = mem>200G & util≈0；decode warmup 完 = util<15%）。
+
+### 12.2 单 frontend 满配基线（sa-bench 开环 `--request-rate inf --ignore-eos --dsv4`）
+
+| 操作点 | output/decode-GPU | TPOT | TTFT 中位 | 成功率 |
+|---|---|---|---|---|
+| conc2500 | **5,060** | 35ms | 8.5s | 7499/7500 干净 |
+| conc8192 | 3,553 | 26ms | 33s | 过载 thrash（更低）|
+
+→ 单 frontend 在 conc2500 就到顶，再灌并发反而 thrash。
+
+### 12.3 【关键提升】多 frontend 扩展
+
+官方 recipe 开 `num_additional_frontends: 8`（共 9 frontend）。机制：多个 `dynamo.frontend` 进程共享同一 NATS/etcd worker 池，各占一个 pod 的端口 8001，多路 sa-bench 分打后聚合：
+
+| frontend 数 × 每路 conc | 总 conc | 聚合 output tok/s | **output/decode-GPU** | TTFT 中位 |
+|---|---|---|---|---|
+| 1 × 2500 | 2500 | 40,481 | 5,060 | 8.5s |
+| 4 × 625 | 2500 | 48,934 | **6,117** | 7s |
+| 8 × 625 | 5000 | 54,300 | **6,788** | 38s |
+
+→ **多 frontend +34%（5,060 → 6,788）**。单个 dynamo.frontend 是 Python 进程，高并发下 CPU-bound（处理 HTTP + KV 路由 + tokenize），分流到多进程直接提吞吐 + 降 TTFT。**这就是"提高的这一大截子"**。
+
+### 12.4 完整瓶颈地图（距 11,200 的分解）
+1. **编排 / frontend —— 占约 34% 损失**，多 frontend 已吃回（5,060 → 6,788）。
+2. **剩余 ~1.65× —— prefill 喂料受限**。8-frontend conc5000 时 TTFT 飙 38s（prefill 队列积压），算账：prefill 正跑在 ~15k input tok/s/卡（= §11 单卡峰值），8 个 prefill 喂 ~59 req/s 就是池子天花板。根子两条：(a) 单卡 prefill 15k vs 喂饱 dep8 需 ~18.2k = **1.2× nightly/kernel 调优差**（§11.4）；(b) **8 个 prefill 数量不够喂满 dep8**。
+3. **decode 不是瓶颈**（TPOT 26-35ms 一直健康）。
+
+### 12.5 再提升的杠杆（未做）
+- **加 prefill 数量**（12-15p；官方 `15p1d-dep12` 就是拉满 prefill）：prefill 喂得上，decode 就能填满冲更高。现有 18 节点还有 p9 + d2-d7 空着。
+- **修 prefill 单卡 1.2×**：对齐官方内核优化 / pinned 镜像（§10.7）。
+- **口径铁律**：对标 11,200 必须 sa-bench 开环 + 多 frontend + 高并发；单 frontend / 闭环 / 低并发都会严重低估。
+
+---
+
+*2026-07-22 更新（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。导航：§3.9 单节点手册、§3.3+§3.4 PD+Dynamo 步骤、§7 benchmark、§8 全过程、§10 官方 11,200 认知、**§11 prefill 并发扫描重大修正、§12 满配 sa-bench + 多 frontend 提升**。**当前最优（官方口径 output÷decode-GPU）= 8-frontend + high-conc-8p1d-dep8-mtp + sa-bench 开环 = 6,788 = 官方 11,200 的 61%**（从单 frontend 5,060 靠多 frontend +34% 提上来）。**瓶颈地图（§12.4）：编排/frontend 占 34%（已吃回）+ prefill 喂料受限 1.65×（单卡 1.2× kernel 差 + prefill 数量不够）；decode 非瓶颈。** 早期"prefill 单卡慢 3.7×"（§10.4）已被 §11 证伪（低并发测量假象）。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
