@@ -438,12 +438,24 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 | 4p2d | 2 | 5,826 | 2,913 | decode |
 | 6p2d | 2 | 6,190 | 3,095 | decode（prefill 过量） |
 | 6p3d | 3 | **9,153** | 3,051 | decode |
+| 6p4d | 4 | (预测 ~12,000) | — | decode 不稳定，见 §9.9.1 |
 
-**⭐ 核心结论**：DSpark disagg 在 GB300 NVL72 上 **吞吐随 decode 节点数线性增长（~3,050 tok/s/decode-TP4）**。prefill 只决定 TTFT（喂料速度），不决定稳态吞吐——2 decode 配 4 或 6 prefill 峰值几乎一样。**扩容优先加 decode**，prefill 按 TTFT SLA 配（经验 ~2 prefill : 1 decode 已够）。
+**⭐ 核心结论**：DSpark disagg 在 GB300 NVL72 上 **吞吐随 decode 节点数线性增长（~3,050 tok/s/decode-TP4）**，1→3 decode 完美线性（3,004 / 5,826 / 9,153）。按此外推 4 decode ≈ 12,000。prefill 只决定 TTFT（喂料速度），不决定稳态吞吐——2 decode 配 4 或 6 prefill 峰值几乎一样。**扩容优先加 decode**，prefill 按 TTFT SLA 配（经验 ~2 prefill : 1 decode 已够）。**当前稳定实测峰值 = 6p3d 9,153 tok/s**（4 decode 因 decode 稳定性问题未跑通，见下）。
 
-### 9.9.1 踩坑：decode 容器 OOM（exit 137）
+### 9.9.1 踩坑：4-decode 拓扑下 decode 不稳定（两次失败）
 
-跑 6p4d（4 decode）时 **decode 容器被 exit 137 杀掉**（`ContainerStatusUnknown`，K8s 显示 `terminated exitCode 137`），router 报 `tcp connect error deadline elapsed`，那一档吞吐反跌到 3,597 且 102 请求失败。根因：**decode pod `memory: 600Gi` limit 在高并发（KV cache + activation + NIXL buffer）下被击穿触发 OOM-kill**。换节点重建 decode 后 6p3d 干净跑通。**教训**：GB300 decode pod 内存 limit 要留足头寸（或调低 `--max-num-seqs`/KV cache 占比），高压下别贴着 limit 跑；benchmark 前先确认所有 decode `kubectl get pod` 是 `Running` 且 `curl /health` 通。
+6p4d（4 decode）**连续两次跑失败**，两种崩法：
+
+1. **decode 容器 OOM（exit 137）**：第一次跑，一个 decode 容器被 `exit 137` 杀掉（`ContainerStatusUnknown`），router 报 `tcp connect error deadline elapsed`，吞吐反跌到 3,597 + 102 失败。→ `memory: 600Gi` limit 在高压下被击穿触发 OOM-kill。
+2. **decode 引擎 crash（500 → engine 退出）**：换新节点重建 decode 后再跑，一个**在 6p3d 里跑得完美（0 失败）的 decode**，连跑第二轮 sweep 时引擎崩溃——先返回 `500 Internal Server Error`，随后 `MPClient: stopping engine manager` / `engine manager stopped`，API port 挂掉，router 报 `Connection refused (os error 111)`，吞吐 2,810 + 363 失败。此时 K8s pod 仍显示 `ready=true`（容器主进程刚退、restartPolicy 还没触发，健康状态滞后）。
+
+**共同规律**：DSpark decode pod 在**持续多轮重压测**后内存累积/不稳定，最终 OOM 或引擎 crash。fresh decode 单轮跑没问题（6p3d 干净），跑过多轮的 decode 容易崩。
+
+**教训 / 缓解**：
+- 内存留头寸：调低 `--max-num-seqs`（1024→512）或 KV cache 占比，别贴着 `600Gi` limit 跑；或直接提高 pod memory limit。
+- benchmark 前逐一确认所有 decode `kubectl get pod` 为 `Running` **且** `curl /health` 通（pod ready 状态会滞后于引擎崩溃，别只信 `kubectl get pod`）。
+- 长时间多轮压测的 decode 建议每轮前重建（fresh pod）以排除累积效应。
+- **结论**：4 decode 的吞吐（外推 ~12,000）需先解决 decode 稳定性才能实测；当前**稳定可复现峰值为 6p3d = 9,153 tok/s**。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
