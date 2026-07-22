@@ -363,8 +363,13 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 
 ### 9.6 验证 + benchmark
 - 冒烟：`curl :30000/v1/completions` prompt "The capital of France is" → "Paris"。
-- 压测：`vllm bench serve --backend openai --endpoint /v1/completions --base-url http://<router>:30000 --dataset-name random --random-input-len 8192 --random-output-len 1024 --num-prompts N --max-concurrency C --ignore-eos`。
-- 对照 P2d（无 DSpark）看投机解码带来的 decode 吞吐提升。
+- 压测：`vllm bench serve --backend openai --endpoint /v1/completions --base-url http://<router>:30000 ...`。**⚠️ tokenizer 用 HF repo id（`--tokenizer deepseek-ai/DeepSeek-V4-Pro-DSpark`）不要用本地路径** —— v0.25.1 的 transformers 把本地路径当 repo id 报错。
+- **⚠️⚠️ 不能用 `--dataset-name random --ignore-eos` 测 DSpark**：随机 token 下 DSpark Markov 草稿头接受率 ~0，投机纯开销、反而更慢（实测 conc16 357/conc64 893 output tok/s，TPOT 36/57ms，**低于无 DSpark 的 P2d** 487/1693、20/33ms）。DSpark 的 51–400% 提速只在**真实连贯数据**上体现（draft 被接受）。测 DSpark 必须用 **sa-bench / sharegpt + chat template**（同奚老师）。
+
+### 9.8 实跑结论（2026-07-22）
+- **✅ DSpark 端到端跑通**：官方 `v0.25.1-aarch64` + DeepSeek-V4-Pro-DSpark（FP8）+ NixlConnector NVLink KV + vllm-router，`--speculative-config method=dspark num_speculative_tokens=7`，prefill/decode 各加载 DSpark draft（96 params），生成正确（"Paris. The capital of Germany is Berlin..."）。
+- **踩坑**：(1) `nightly-aarch64` 有 kv_block_zeroer bug（见 §9.1），换 `v0.25.1-aarch64` 解决；(2) bench tokenizer 用 HF repo id；(3) 随机数据测不出 spec 收益。
+- **待办**：用 sa-bench 真实数据量化 DSpark 相比无投机的 decode 提速。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
