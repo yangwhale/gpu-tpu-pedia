@@ -369,7 +369,22 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 ### 9.8 实跑结论（2026-07-22）
 - **✅ DSpark 端到端跑通**：官方 `v0.25.1-aarch64` + DeepSeek-V4-Pro-DSpark（FP8）+ NixlConnector NVLink KV + vllm-router，`--speculative-config method=dspark num_speculative_tokens=7`，prefill/decode 各加载 DSpark draft（96 params），生成正确（"Paris. The capital of Germany is Berlin..."）。
 - **踩坑**：(1) `nightly-aarch64` 有 kv_block_zeroer bug（见 §9.1），换 `v0.25.1-aarch64` 解决；(2) bench tokenizer 用 HF repo id；(3) 随机数据测不出 spec 收益。
-- **待办**：用 sa-bench 真实数据量化 DSpark 相比无投机的 decode 提速。
+### 9.9 规模+压力扫描（真实数据 sharegpt，2026-07-22 起）
+
+**测法**：`vllm bench serve --backend openai-chat --endpoint /v1/chat/completions --dataset-name sharegpt --dataset-path ShareGPT_V3.json`（真实对话，自然生成，DSpark draft 才有接受率）。tokenizer 用 HF repo id。
+
+**1p1d-TP4（2 节点，基线）**：
+
+| 并发 | Output tok/s | TTFT | TPOT |
+|---|---|---|---|
+| 32 | 228 | 17,989 ms | 15.2 ms |
+| 128 | **1,026**（峰值） | 7,725 ms | 30.6 ms |
+| 256 | 1,002（饱和） | 14,967 ms | 84.7 ms |
+
+- **⭐ DSpark 真实数据生效**：`Mean acceptance length 3.0–3.2`（每 decode step 吐 ~3 token，≈3× decode yield），per-position 接受率 0.69/0.46/0.32/…，avg draft 接受 ~29%。**随机数据接受率~0 测不出，真实数据才现**。
+- **⭐ 1p1d 瓶颈 = prefill 单节点**：TTFT 高达 8–18s，output 卡在 ~1026 tok/s。→ **提吞吐的杠杆是加 prefill 节点喂饱 decode**（同奚老师 4p1d/5p1d/6p1d 思路）。
+
+**待续**：扩 prefill 拓扑（2p1d→4p1d→6p1d，dep8 decode）+ 高并发，逐拓扑记录最大吞吐。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
