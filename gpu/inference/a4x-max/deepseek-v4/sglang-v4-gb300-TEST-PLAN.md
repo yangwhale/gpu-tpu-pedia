@@ -744,7 +744,17 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 ## 13. 端到端复现 checklist（满配 sa-bench 官方口径，2026-07-22 验证）
 
-把全流程收成一条可照抄的路径（复用已就位的 18-node GB300 fleet + node-local SSD 模型；复用 pod 清僵尸即可，不必重建）：
+把全流程收成一条可照抄的路径（复用已就位的 18-node GB300 fleet + node-local SSD 模型；复用 pod 清僵尸即可，不必重建）。
+
+> **★ 一次成功的关键 = 自愈部署（把手动救场变成脚本循环）**。手动"起 16 个再逐个救"每次都漏；正确姿势是**启动后进「校验-重试」循环**：
+> 1. 清所有 pod 进程 → 分发脚本 → 一次性 `setsid` 启动 decode(dep8 跨 d0/d1) + 16 prefill。
+> 2. **每 90s 轮询**：`nvidia-smi memory.used < 200G` 的 prefill = 没起来。对这些 pod `pkill python3 + killport 40236 + setsid` 重启，回到轮询。
+> 3. **关键洞察**：40236 端口僵尸是**暂时的**——`kill -9` 杀不掉 D-state 持有者，但内核会在其 GPU 驱动调用返回后自动 reap，**给足 90s 再重试就会成功**。实测 2-3 轮清干净全部（本轮 16 个里 3 个中招：round1 [p0 d2 d5]→round2 [d5]→round3 全绿，8min 一次成功）。**别急着重试**（上一轮给 p7 立刻重试→连撞→误以为要重建）。
+> 4. 重试 3 轮仍不动的（罕见，真 D-state 卡死）→ 才 `kubectl delete pod --force` 重建（fresh pod 记得补 `kubectl cp` bench 工具）。
+> 5. decode 就绪判据：`grep 'Model registration succeeded' /tmp/srv.log`（graph capture ~6-10min，与 prefill 重试并行，通常 prefill 齐时 decode 也好了）。
+> 6. **frontend 必须最后统一起**：因为 `pkill python3` 会连 frontend 一起杀，所以**先把 worker 全稳定，再一次性起 16 个 frontend 并验 200**，不要边起 worker 边补 frontend。
+>
+> 这套循环脚本化后 = 一条命令一次成功，无需人工盯。下面 Step 1-5 是它内部各阶段的参数细节。
 
 **Step 0 前提**：18 节点 GB300 单 NVL72 域（subblock）；模型 DeepSeek-V4-Pro 在各节点 `/mnt/disks/raid/0`（容器内 `/mnt/ssd`，hostPath）；`dynamo-nats` + `dynamo-etcd` pod 就绪；镜像 `lmsysorg/sglang:nightly-dev-cu13-*`。
 > **pod 从零创建**（fleet 不存在时）：用 18-pod 生成器（`gen18-0001.py` 模板：ComputeDomain `sgl4-cd` + `mrdma.google.com` DRA claim count=8 + subblock `podAffinity` + hostname `podAntiAffinity`（每节点 1 pod）+ hostPath `/mnt/disks/raid/0` + 600Gi mem + `imagePullSecrets: ar-pull-secret`），`kubectl apply` 后 GIB/DOCA/ai-dynamo 在容器内 bootstrap（同 R1 §4）。**已有 fleet 只需复用 pod 清进程重部署，不必重建**。
@@ -762,14 +772,17 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 **Step 5 口径**：各路 output token throughput **求和 ÷ decode-GPU 数（8）** = output/decode-GPU，对标官方 11,200（prefill 卡不进分母、input 不进分子）。
 
-**三大部署坑（必记）**：
-1. **decode 死进程泄漏 GPU 显存**（199G/卡不释放、`nvidia-smi --query-compute-apps` 为空）→ `kubectl delete pod --force` 重建（唯一可靠解；模型在 node SSD 持久）。
-2. **40236 ZMQ 端口僵尸残留** → `pkill -9 python3` + `/proc/net/tcp` 反查 killport（端口 40236=hex 9D2C）+ **`setsid`** 脱离会话重启（普通 nohup 有时不生效）。⚠️ `pkill python3` 会连同 frontend 一起杀,重启 prefill 后须补起该节点 frontend。
-3. **`"fired up"` 日志 stdout 缓冲不可靠** → 用 **GPU util/mem 判 ready**（prefill loaded = mem>200G & util≈0；decode warmup 完 = util<15%）。
+**三大部署坑（已被上面自愈循环覆盖，原理备查）**：
+1. **40236 ZMQ 端口僵尸**（最常见，每次约 3/16 prefill 中招）：`pkill -9` 杀不掉 D-state 持有者，但**内核会自动 reap，等 90s 再 killport+setsid 重试即成**（2-3 轮清完）。killport = `/proc/net/tcp` 反查 40236(hex 9D2C) inode→PID→kill。**唯一注意：别急着重试**（<10s 连撞会误判需重建）。
+2. **decode 死进程真卡死泄漏显存**（199G/卡不释放、`--query-compute-apps` 为空、`kill -9` 也回收不了）→ 这才需 `kubectl delete pod --force` 重建（模型在 node SSD 持久）。仅在 40236 重试 3 轮仍不动时才升级到此。
+3. **`pkill python3` 连 frontend 一起杀** → 所以 frontend 必须在 worker 全稳定后**统一最后起**（见自愈循环第 6 步），别边起 worker 边补。`"fired up"` 日志 stdout 缓冲不可靠，用 **GPU mem>200G 判 prefill ready**、`grep 'Model registration succeeded' 判 decode ready`。
 
 **GPU 利用率参考（满配 16p 满载）**：prefill 99-100% util / HBM 96% / 1137W；decode 75-97% util / HBM 96% / ~1000W（GB300 TDP ~1400W）。
 
-> **✅ 审计复现验证（2026-07-22）**：全 18 pod 清进程回干净起点 → 照本 checklist 从头重新部署 → 16 路 sa-bench 实测 **9,160 output/decode-GPU**（73,277 ÷ 8），与文档基线 8,993 一致（run-to-run ±2%，均 ≈ 官方 80%）。**部署可靠性提醒**：每次全量部署约 **4/16 prefill 会撞 40236 ZMQ 端口僵尸**（`kill -9` 杀不掉 D-state 持有者），需逐个 `killport 40236 + setsid` 重启；个别顽固到 killport 也无效 → `kubectl delete pod --force` 重建（fresh pod 记得补 `kubectl cp` bench 工具 + 重连 frontend）。一键脚本部署 16 个后必须逐 pod 验 `mem>200G` 再补漏。
+> **✅ 审计复现验证（2026-07-22，两次从零跑）**：
+> - **第 1 次**（手动逐个救场）：16 路 sa-bench = **9,160 output/decode-GPU**（73,277÷8），≈ 基线 8,993（±2%，均 ≈ 官方 80%）。过程撞 40236 端口僵尸，手动救，其中 1 个（急于重试）误判为需重建 pod。
+> - **第 2 次**（自愈循环脚本，见上方 ★）：**一次成功，8 分钟，全自动无人工**。round1 [p0 d2 d5] 中招 → 90s 后 killport 重试 → round2 剩 [d5] → round3 全绿；decode 与 prefill 并行 capture 完毕即注册；frontend 统一起验 200；探活 owned_by=nvidia；e2e mini-bench 32/32 通。**印证「40236 僵尸是暂时的、耐心重试 2-3 轮自清、无需重建」**。
+> 结论：一次成功的关键不是运气，是**把校验-重试循环脚本化 + 每轮间隔 ≥90s**。
 
 ## 14. ⭐⭐⭐⭐ Autotune + EPLB 实验：冲剩余 20% gap 的两次尝试（2026-07-22）
 
