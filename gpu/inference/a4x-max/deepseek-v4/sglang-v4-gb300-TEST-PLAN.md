@@ -13,7 +13,7 @@
 | Phase 1 V4-Flash 单节点 TP4（聚合）| ✅ conc64 8,540 tok/s/GPU（in+out÷4，单节点口径，仅供内部对比）|
 | Phase 2 V4-Pro 单节点 TP4（聚合）| ✅ conc64 2,794 tok/s/GPU（同上口径）|
 | Phase 3 V4-Pro PD 分离（Dynamo + megamoe W4A4 + SWA + MTP）| ✅ 端到端跑通，Dynamo 根治 tail-stall |
-| **最优实测（官方口径 output÷decode-GPU）** | **8-frontend + high-conc-8p1d-dep8-mtp + sa-bench 开环 = 6,788 = 官方 11,200 的 61%**（多 frontend 从 5,060 提 +34%，见 §12）|
+| **最优实测（官方口径 output÷decode-GPU）** | **16 prefill + dep8-mtp + sa-bench 开环 = 8,993 = 官方 11,200 的 80%**（单 frontend 5,060 → 多 frontend 6,788 → 16 prefill 8,993；14→16 收敛，见 §12.6）。剩余 1.25× = 单卡内核成熟度差，非架构 |
 | **距官方 11,200** | 满配 dep8-MTP 稳态 6,659 output/decode-GPU。**曾以为根因=prefill 单卡慢 3.7×，已推翻**（§11：那是 conc4 低并发测量假象，同一 worker 高并发峰值 15,196=官方 83%，prefill 非瓶颈）。真因待用官方 sa-bench 开环重测（编排/decode 侧）|
 
 **核心结论（以 §10 为准）**：
@@ -740,14 +740,22 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 按 §12.5 杠杆实测：复用空闲干净节点（p9 + d2-d6），把 prefill 从 8 扩到 **14**（各 dep4，decode 仍 dep8/8卡，frontend 同步扩到 14），sa-bench 开环 14 路 × conc600（共 ~8400）：
 
-| prefill 数 | frontend 数 | 总 conc | 聚合 output tok/s | **output/decode-GPU** | TTFT 中位 |
-|---|---|---|---|---|---|
-| 8 | 8 | 5000 | 54,300 | 6,788（61%）| 38s |
-| **14** | 14 | ~8400 | **70,475** | **8,809（79%）** | 47s |
+| prefill 数 | 有效驱动路 | 聚合 output tok/s | **output/decode-GPU** | 增量 |
+|---|---|---|---|---|
+| 8 | 8 × conc625 | 54,300 | 6,788（61%）| 基线 |
+| **14** | 14 × conc600 | 70,475 | **8,809（79%）** | **+30%** |
+| **16** | 14 × conc600* | 71,949 | **8,993（80%）** | **+2%（收敛）** |
 
-→ **加 prefill +30%（6,788 → 8,809 = 官方 11,200 的 79%）**，**实锤 prefill 喂料就是瓶颈**——喂料翻倍，decode 填得更满、吐得更多。代价：TTFT 47s（在使劲压 decode）。
-- 剩余到 11,200 的 ~1.27× = (a) 还能加 1 个 prefill（d7 → 15，官方 max-prefill）；(b) 单卡 prefill 1.2× kernel 差（§11.4/§10.7）。
-- **决定性结论**：距官方的差距 = **prefill 喂料能力**（数量 × 单卡速度），decode / 架构 / 编排都已不是瓶颈。
+*16-prefill 时 d3/d6 两路 frontend 被 setsid 修复的 pkill python3 误杀，实为 14 路有效驱动（offered ~8400）；16 个 prefill worker 均在池中被路由。
+
+→ **8→14 prefill +30%（喂料是瓶颈）；14→16 只 +2%（强烈收敛）**。**关键转折：瓶颈已从 prefill 喂料转到 decode 自身**——再加 prefill 也喂不出更多，dep8 decode 的吞吐天花板 ≈ 9,000 output/decode-GPU = **官方 80%**。
+
+**GPU 利用率实测（16-prefill 满载，nvidia-smi 采样）**：
+- **prefill 卡**：util **99-100%**（彻底打满），HBM **271-277 GiB**（288 的 ~96%），功耗 **1137 W**。
+- **decode 卡**：util **75-97%**（有波动，偶尔等喂料/MTP verify 间隙），HBM **268-275 GiB**，功耗 **960-1038 W**。
+- GB300 单卡 TDP ~1400W，prefill 1137W ≈ 81%、decode ~1000W ≈ 71% → 两边都在高负载,但没顶满功耗墙。
+
+**最终决定性结论**：满配 16p + dep8 天花板 = **8,993 = 官方 80%**，剩余 ~1.25× = **decode/prefill 单卡内核成熟度差 ~1.2×**（我们 nightly vs 官方 pinned 镜像的 kernel 优化），**不是架构、拓扑、编排、prefill 数量的问题**——那些都已调到收敛。要摸 11,200 只剩"对齐官方内核/镜像"这一条路（§10.7）。
 
 ---
 
