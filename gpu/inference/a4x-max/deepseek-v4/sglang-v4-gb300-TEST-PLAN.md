@@ -759,4 +759,34 @@ bench_serving 在高并发下**尾部少数请求 hang → 出不了 100% summar
 
 ---
 
-*2026-07-22 更新（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。导航：§3.9 单节点手册、§3.3+§3.4 PD+Dynamo 步骤、§7 benchmark、§8 全过程、§10 官方 11,200 认知、**§11 prefill 并发扫描重大修正、§12 满配 sa-bench + 多 frontend 提升**。**当前最优（官方口径 output÷decode-GPU）= 8-frontend + high-conc-8p1d-dep8-mtp + sa-bench 开环 = 6,788 = 官方 11,200 的 61%**（从单 frontend 5,060 靠多 frontend +34% 提上来）。**瓶颈地图（§12.4）：编排/frontend 占 34%（已吃回）+ prefill 喂料受限 1.65×（单卡 1.2× kernel 差 + prefill 数量不够）；decode 非瓶颈。** 早期"prefill 单卡慢 3.7×"（§10.4）已被 §11 证伪（低并发测量假象）。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
+## 13. 端到端复现 checklist（满配 sa-bench 官方口径，2026-07-22 验证）
+
+把全流程收成一条可照抄的路径（复用已就位的 18-node GB300 fleet + node-local SSD 模型；复用 pod 清僵尸即可，不必重建）：
+
+**Step 0 前提**：18 节点 GB300 单 NVL72 域（subblock）；模型 DeepSeek-V4-Pro 在各节点 `/mnt/disks/raid/0`（容器内 `/mnt/ssd`，hostPath）；`dynamo-nats` + `dynamo-etcd` pod 就绪；镜像 `lmsysorg/sglang:nightly-dev-cu13-*`。
+
+**Step 1 部署 workers**（16 prefill + 1 decode，用 `dynamo.sglang`）：
+- **16 prefill**：每节点 1 个 dep4（`--tensor/data/expert-parallel-size 4` + `--moe-a2a-backend megamoe` + W4A4 env `USE_FP4_ACTS=1` + `--enable-dp-attention --enable-dp-lm-head` + `--chunked-prefill-size 32768` + `--mem-fraction-static 0.9` + `--disaggregation-mode prefill`），端口 40000。
+- **1 decode**：dep8 跨 2 节点（`--tp/dp/ep 8 --nnodes 2 --node-rank 0/1 --dist-init-addr d0IP:5000` + MTP `--speculative-algorithm EAGLE --speculative-num-steps 1 --speculative-eagle-topk 1 --speculative-num-draft-tokens 2` + `--mem-fraction-static 0.85 --max-running-requests 8192 --context-length 9216 --swa-full-tokens-ratio 0.1 --disaggregation-mode decode`）。
+- env 关键：`NATS_SERVER`/`ETCD_ENDPOINTS`（服务发现，worker 自注册，热加不用重启全体）+ `MC_FORCE_MNNVL=1`/`NCCL_MNNVL_ENABLE=1`（域内 NVLink mooncake KV 传输）。
+
+**Step 2 多 frontend（吞吐关键，+34%）**：每 prefill 节点起一个 `python3 -m dynamo.frontend --http-port 8001`（带 NATS/ETCD env）。单个裸 frontend 高并发 CPU-bound 是瓶颈。
+
+**Step 3 探活**：`curl frontend:8001/v1/models` 须 `owned_by:nvidia` + `context_window:1048576`（否则是僵尸 `sglang::router` 占端口）；再 `/v1/completions` 发一条确认能生成。
+
+**Step 4 sa-bench（官方口径）**：InferenceX `utils/bench_serving/benchmark_serving.py`，`--request-rate inf`（**开环**）`--ignore-eos --dsv4 --use-chat-template` + DSV4 tokenizer，ISL 8192 / OSL 1024 / range 0.8；**多路并行**（每 frontend 一路，各 conc ~600）。
+
+**Step 5 口径**：各路 output token throughput **求和 ÷ decode-GPU 数（8）** = output/decode-GPU，对标官方 11,200（prefill 卡不进分母、input 不进分子）。
+
+**三大部署坑（必记）**：
+1. **decode 死进程泄漏 GPU 显存**（199G/卡不释放、`nvidia-smi --query-compute-apps` 为空）→ `kubectl delete pod --force` 重建（唯一可靠解；模型在 node SSD 持久）。
+2. **40236 ZMQ 端口僵尸残留** → `pkill -9 python3` + `/proc/net/tcp` 反查 killport（端口 40236=hex 9D2C）+ **`setsid`** 脱离会话重启（普通 nohup 有时不生效）。⚠️ `pkill python3` 会连同 frontend 一起杀,重启 prefill 后须补起该节点 frontend。
+3. **`"fired up"` 日志 stdout 缓冲不可靠** → 用 **GPU util/mem 判 ready**（prefill loaded = mem>200G & util≈0；decode warmup 完 = util<15%）。
+
+**GPU 利用率参考（满配 16p 满载）**：prefill 99-100% util / HBM 96% / 1137W；decode 75-97% util / HBM 96% / ~1000W（GB300 TDP ~1400W）。
+
+---
+
+*2026-07-22 定稿（Local SSD based）。Phase 1（Flash）+ Phase 2（Pro）单节点 TP4 + **Phase 3 满配 PD（Dynamo / megamoe W4A4 / SWA / MTP）全部实测通过**。导航：§3.9 单节点手册、§13 端到端满配复现 checklist、§7 单节点 benchmark、§10 官方 11,200 认知、§11 prefill 并发扫描修正、§12 满配 sa-bench + 多 frontend + prefill 扩容。*
+
+***最终结论（官方口径 output÷decode-GPU，sa-bench 开环）***：满配 **16 prefill + dep8-MTP + 多 frontend = 8,993 = 官方 11,200 的 80%**。提升路径：单 frontend 5,060 →（多 frontend）6,788 →（14 prefill）8,809 →（16 prefill）8,993；**14→16 仅 +2% 已收敛**。**瓶颈地图**：① 编排/frontend（多 frontend 吃回 +34%）② prefill 喂料（加 prefill 吃回 +32%，到 16 收敛）③ 剩余 **~1.25× = 单卡内核成熟度差**（我们 nightly vs 官方 pinned 镜像的 kernel/autotune），**非架构/拓扑/编排/prefill 数量/decode 配置**。冲满 11,200 只剩「对齐官方内核/镜像 + 完整 DeepGEMM autotune（关 FAST_WARMUP）」一条路。早期"prefill 单卡慢 3.7×"（§10.4）系低并发测量假象，已被 §11 证伪。存储全程 Local SSD RAID（见 gb300-local-ssd-raid0-SETUP.md）。R1 端到端见 `../deepseek-v3/`。*
