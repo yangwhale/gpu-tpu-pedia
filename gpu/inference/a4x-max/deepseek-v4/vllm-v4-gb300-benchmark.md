@@ -503,6 +503,8 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 
 ### 9.9.3 ⭐⭐⭐ decode-saturation 正确口径复测：sa-bench 开环 + 官方 workload（2026-07-23）
 
+> ⚠️ **本节及 §9.9.4/9.9.5 的绝对吞吐数字已作废**：均跑在**通用镜像**上（`deep_gemm_mega_moe` 静默 fallback 慢 kernel），非架构/prefill 上限。正确基线见 **§9.9.6**（deepgemm 镜像复现厂商 22,000）。本节方法学（开环 sa-bench + 官方 workload + output÷decode-GPU 口径）仍成立，仅绝对值受镜像拖累。
+
 **为什么要重测**：§9.9.2 的 "dep8 = 1,983 tok/s/GPU、2.6× TP4" 是 **ShareGPT 闭环**测的，对标官方 11,200 / SGLang 8,993 时**差一个数量级**。根因不是 decode 弱，是**口径错**：ShareGPT 输入短（~200 tok）、输出短，请求大部分时间耗在排队/TTFT，**decode 队列压根没喂满**——测的是整条 PD 流水线，不是 decode 天花板。官方 11,200 是用 **sa-bench 开环 + random 8192/1024 固定长度** workload 专门把 decode 压满测的。本轮换成同一把尺子。
 
 **修正后两轮扫描（8×TP4-prefill + 1×dep8-decode，同一栈）**：
@@ -534,6 +536,34 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - **下一步**：要真正逼近 decode 天花板 / 对标 8,993，需把 prefill 从 8 扩到 ~16（decode 侧 dep8 不用动，它有大量余量）。这是**拓扑/资源问题，不是 decode 架构或内核问题**。dep8 decode 本身（TPOT 7ms）是有竞争力的。
 
 > **口径对齐说明**：A 表 ShareGPT（短输入）峰值 1,990 反而比 B 表 sa-bench（8192 长输入）峰值 1,458 高——因为 ShareGPT prefill 便宜、请求流得快。但**只有 B 表的 8192/1024 才是官方 11,200 的同 workload**，A 表不可与官方直接比。对标一律用 B 表。
+
+### 9.9.6 ⭐⭐⭐⭐⭐ 官方 1p1d 复现成功 = 厂商 4k1k 22,000 tps 基线（2026-07-23）
+
+**结论先行**：照抄厂商官方 vLLM recipe（`fp8_1p1d_nixl_dspark_s7`）跑 1p1d（1×TP4 prefill + 1×TP4 decode = 8 GPU），4k1k（ISL 4096 / OSL 1024）**Total token throughput 复现并反超厂商 22,000 tps 基线**：
+
+| 并发 | Total tok/s (in+out) | vs 22,000 | Median TPOT | Median TTFT |
+|---|---|---|---|---|
+| 256 | **23,120** | **105%** | 12.6 ms | 37 s |
+| 512 | **24,358** | **111%** | 13.2 ms | 87 s |
+
+（TTFT 随并发爬升是单 prefill 在 4k 输入下的排队，不影响总吞吐；峰值出在 conc512。）
+
+**⭐ 最关键发现：镜像是之前所有 dep8 数字拉胯的根因，不是架构。**
+
+- 官方 recipe 用的是**专用镜像 `vllm-openai-deepgemm:v0.25.1-sm100-aarch64`**，启动日志可见 `expert_dtype resolved to 'fp4'` + `Selected DeepGemmFp8BlockScaledMMKernel` + `DeepGEMM PDL/E8M0 enabled`——**FP4 专家 + DeepGEMM 优化 kernel 全激活**。
+- 之前 §9.9.1–§9.9.5 全部跑在**通用镜像 `vllm-openai:v0.25.1-aarch64`** 上，`--moe-backend deep_gemm_mega_moe` 在通用镜像上**静默 fallback 到慢 kernel**。**因此 §9.9.2 的 "1,983"、§9.9.3 的 "1,458"、以及所有 dep8/多-frontend 绝对吞吐数字对标官方无效**（是镜像被阉割，不是 dep8 架构或 prefill 数量的问题）。绝对性能一律以本节（deepgemm 镜像）为准。
+
+**官方 recipe 关键要素（照抄，缺一不可）**：
+1. **镜像**：`vllm-openai-deepgemm`（非通用 `vllm-openai`）——最大变量
+2. `--attention_config.use_fp4_indexer_cache=True`（FP4 indexer 缓存，prefill+decode 都加）
+3. DSV4 parser：`--tool-call-parser deepseek_v4 --enable-auto-tool-choice --reasoning-parser deepseek_v4`
+4. decode = **TP4**（`--max-num-seqs 1024 --max-num-batched-tokens 8192` + `FULL_DECODE_ONLY` cudagraph，capture sizes `[8,16,24,...,1024]`，`--gpu-memory-utilization 0.9`）
+5. DSpark s7（`{"method":"dspark","num_speculative_tokens":7,"draft_sample_method":"greedy"}`）+ NixlConnector NVLink KV（`UCX_TLS=cuda_copy,cuda_ipc,tcp` + `UCX_CUDA_IPC_ENABLE_MNNVL=y` + `--enable-cumem-allocator`）
+6. prefill = TP4 enforce-eager，`--max-num-seqs 16 --max-num-batched-tokens 16384`，kv_producer
+
+> **冷启动注意**：deepgemm 镜像会做 **DeepGEMM kernel warmup**（prefill ~2484 kernel / decode ~1666）+ TileLang JIT + DSpark cudagraph capture，比通用镜像慢（~8-12 min），但这正是优化 kernel 在编译。
+
+**⚠️ 运维大坑：`vllm-router` 进程名是 `vllm::router`（带冒号）**。所以 `pkill -f vllm-router` **永远匹配不到**，杀不掉旧 router → 僵尸 router 累积占住 Prometheus 端口 → 新 router 起不来报 `FailedToCreateHTTPListener("Address already in use")`。**正确清理：`pkill -9 -f 'vllm::router'`**。这一个坑消耗了大量排查时间（所有"router 起不来/503/端口冲突"都源于此）。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
