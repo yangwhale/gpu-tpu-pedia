@@ -730,13 +730,17 @@ python3 -m sglang.bench_serving --backend sglang-oai --host <router-ip> --port 3
   - 14p recompute：2,883/GPU，但只 3,152/4096 成功，**测后 dep8 仍崩溃**
 - **结论**：recompute 缓解但没根治。dep8 在 8k1k / 14 prefill fan-in 处是**硬崩溃墙**——KV transfer 容量 + decode KV 块在 14+ prefill 同时灌入时耗尽，即便 recompute 也扛不住。
 
-**⭐ 核心发现 3：距 SGLang 9,000/chip 的 3× 差距 = MTP + KV 传输鲁棒性。**
+**⭐ 核心发现 3：距 SGLang 9,000/chip 的 3× 差距既不是精度、也不是 MTP——两边都开。**
 
-dep8 峰值 3,187/GPU（本配置 DSpark spec，无 MTP）vs SGLang 9,000/chip：
-1. **MTP**：SGLang 的 9,000/11,200 核心杠杆是 MTP（§4 已述），本 vLLM dep8 走 DSpark 投机但 PD-over-Nixl 的 KV 路径在 14+ prefill 饱和。
-2. **KV 传输鲁棒性**：SGLang（Mooncake）在高 fan-in 下比 vLLM NixlConnector 稳；vLLM dep8 在 14 prefill 就崩，够不到 SGLang 的 16-prefill 运行点。
+> ⚠️ **更正（2026-07-24）**：早前版本误写"本配置无 MTP"。实测 **MTP 一直开着**：模型 config `num_nextn_predict_layers: 1`（1 层 MTP/nextn 模块），加载日志 `Resolved architecture: DeepSeekV4MTPModel`，`--speculative-config {method:dspark, num_speculative_tokens:7}` 底层就是用 MTP head 投机 draft 7 token。**DSpark = DeepSeek 的 MTP 投机解码**，不是另一回事。
 
-> **一句话**：dep8 8k1k 在本配置下稳定峰值 ≈ 3,187/GPU @ 12 prefill（SGLang 9,000 的 35%），14 prefill 起因 `kv_load_failure_policy: fail`（+ KV 块耗尽）硬崩溃，recompute 也只是缓解。要逼近 SGLang 需上 MTP + 更鲁棒的 KV 传输 + 更保守的 KV 显存配置（降 max-num-seqs 换 KV 块余量）。**这个 fail→recompute 的坑是本轮最大工程收获。**
+dep8 峰值 3,187/GPU vs SGLang 9,000/chip，同 checkpoint（FP4 experts + FP8 dense）、同开 MTP，差距真正来源：
+
+1. **spec 配置节流 decode（关键嫌疑）**：启动日志 warning `max_num_scheduled_tokens is set to 2048 based on the speculative decoding settings. This may lead to suboptimal performance.`——`num_speculative_tokens=7` + `max_num_seqs=1024` + `max_num_batched_tokens=8192` 这组合把 decode 调度 batch 掐到 2048，vLLM 自己判定次优。draft 7 token（单 MTP head autoregressive 调 7 次）也可能过头，接受率在后几个 token 掉。SGLang 的 MTP token 数 + batch 配置更优。
+2. **KV 传输鲁棒性 + 崩溃**：SGLang（Mooncake）高 fan-in 下比 vLLM NixlConnector 稳；vLLM dep8 在 14 prefill 就崩（见发现 2），够不到 SGLang 的 16-prefill 运行点，最优点被截断在 12p。
+3. **待验证**：EPLB 专家负载均衡、`max_num_batched_tokens` 调大给 spec draft 留槽、`num_speculative_tokens` 下调到 3–4。
+
+> **一句话**：dep8 8k1k 在本配置下稳定峰值 ≈ 3,187/GPU @ 12 prefill（SGLang 9,000 的 35%）。差距**不是精度、不是 MTP**（两边都有），而是 (a) spec 配置把 decode batch 节流到 2048、(b) 14 prefill 起 `kv_load_failure_policy: fail`（+ KV 块耗尽）硬崩溃够不到满配运行点。要逼近 SGLang 需调 spec batch 槽（增 max-num-batched-tokens / 减 num_speculative_tokens）+ 更鲁棒 KV 传输 + 更保守 KV 显存。**本轮两大工程收获：fail→recompute 崩溃坑 + DSpark 即 MTP 的正名 + spec batch 节流 warning。**
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
