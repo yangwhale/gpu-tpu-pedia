@@ -639,6 +639,15 @@ python3 -m sglang.bench_serving --backend sglang-oai --host <router-ip> --port 3
 
 达到 ≥22,000 = 复现成功（说明镜像 + config + 环境全对）。若远低于此：99% 是**用错了通用镜像**（回 Step 0 认那三行 kernel 日志）。
 
+**2p1d 对比（同一 TP4 decode，加第 2 个 TP4 prefill，2026-07-24）**：
+
+| 拓扑 | conc256 Total | conc512 Total | 结论 |
+|---|---|---|---|
+| 1p1d | 23,120 | 24,358 | 单 prefill 略喂不满单 decode |
+| 2p1d | 27,803 | **31,499** | 加 prefill **+29%**（4k1k 下第 2 prefill 把单 decode 喂更足） |
+
+→ 4k1k 输入下，**加 prefill 仍有收益**（decode 未被单 prefill 完全喂饱）；比 SGLang 8k 长输入时"加 prefill 无用/decode-bound"更靠 prefill 一侧（输入短 → prefill 相对便宜、瓶颈更偏 decode，但单 prefill 仍不足）。⚠️ 测量注意：benchmark **必须带 warmup**——2p1d 无 warmup 首跑 conc256 只有 13,585（DeepGEMM JIT 未热 + router 冷），warmup 后 27,803，差 2×，别被冷跑数字骗。
+
 #### 复现 checklist（逐条核对）
 - [ ] 镜像是 `vllm-openai-deepgemm`（不是通用 `vllm-openai`）
 - [ ] 启动日志有 `expert_dtype resolved to 'fp4'` + `DeepGemmFp8BlockScaledMMKernel`
