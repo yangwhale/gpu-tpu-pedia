@@ -209,7 +209,7 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 
 ### P2 disagg 最小验证 1p1d-dep4 ✅（跨节点跑通，2026-07-22）
 
-**架构**：`v4v-p0` prefill(dep4, node A) + `v4v-d0` decode(dep4, node B) + `v4v-d1` frontend。KV 从 prefill 跨节点传到 decode，走 CX-8。
+**架构**：`prefill`(dep4, node A) + `decode`(dep4, node B) + `frontend`(router)。KV 从 prefill 跨节点传到 decode，走 CX-8。
 
 **配置要点**（照官方 InferenceX `4p1d-dep4-dep8` recipe 缩到 1p1d-dep4）：
 - **NIXL 配法**：这个 build 把 connector 重构成 `vllm.distributed.kv_transfer.kv_connector.v1.nixl` 子包（导出 `NixlConnector`）。用 vLLM 原生 `--kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_both"}'`，**不是** dynamo `--connector` flag。旧路径 `...v1.nixl_connector` 已不存在。
@@ -459,6 +459,8 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 
 ### 9.9.2 decode 改 DP-attention + dep8 宽 EP（✅✅ 实测 2026-07-23，吞吐炸裂）
 
+> ⚠️ **本节数字口径已被 §9.9.3 修正**：下面 "1,983 tok/s/GPU、2.6× TP4" 是 **ShareGPT 闭环**（prefill-limited）测的，**不能对标官方 11,200**（官方是 sa-bench 开环 + 8192/1024 workload）。dep8 相对 TP4-dep4 的每卡效率优势（架构层面）成立，但绝对吞吐的正确 decode-saturation 复测见 **§9.9.3**（官方口径峰值 1,458/GPU，瓶颈在 prefill 不在 decode）。
+
 **⭐⭐⭐ dep8 实测结果（5 TP4-prefill + 1 dep8-decode，ShareGPT）**：
 
 | 并发 | Output tok/s | Total tok/s | TTFT | TPOT |
@@ -498,6 +500,40 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - **MLA 在 TP 下 KV 不分片、只复制**：MLA 的 KV 是所有头共享的压缩 latent（512+64），每个 TP rank 都要存完整 latent → TP4 把 KV cache 复制 4 份，零节省。TP 只帮到权重分片 + EP + 按头分 attention 计算。
 - **官方 vLLM V4-Pro recipe 用的是 dep8**（`6p1d-dep4-dep8`）：decode = **TP1 + DP8-attention + EP8**（`--tensor-parallel-size 1 --data-parallel-size 8 --enable-expert-parallel` + dp-attention）。DP-attention 每 rank 各存各请求的 KV → 天然不复制；EP8 把 384 expert 摊到每卡 48 个 → 省 HBM、更大 batch；attention/dense 权重只存一份。这也是 SGLang dep8 的思路。
 - **下一轮**：decode 切成 DP-attention + dep8（跨 2 节点 8 卡宽 EP），对齐官方 recipe + SGLang，做 apples-to-apples；预期逼近外推 ~12,000，且宽 EP 每卡 expert 少、内存压力小，可能顺带绕开 §9.9.1 的 4-decode 内存崩坑。跑前需确认 vLLM EP8 + NixlConnector disagg + NVLink KV 在跨节点 8 卡宽度成立。
+
+### 9.9.3 ⭐⭐⭐ decode-saturation 正确口径复测：sa-bench 开环 + 官方 workload（2026-07-23）
+
+**为什么要重测**：§9.9.2 的 "dep8 = 1,983 tok/s/GPU、2.6× TP4" 是 **ShareGPT 闭环**测的，对标官方 11,200 / SGLang 8,993 时**差一个数量级**。根因不是 decode 弱，是**口径错**：ShareGPT 输入短（~200 tok）、输出短，请求大部分时间耗在排队/TTFT，**decode 队列压根没喂满**——测的是整条 PD 流水线，不是 decode 天花板。官方 11,200 是用 **sa-bench 开环 + random 8192/1024 固定长度** workload 专门把 decode 压满测的。本轮换成同一把尺子。
+
+**修正后两轮扫描（8×TP4-prefill + 1×dep8-decode，同一栈）**：
+
+**A. ShareGPT 闭环补测（8 prefill，`vllm bench serve`，口径 output÷8-decode-GPU）**
+
+| 并发 | Output tok/s | per-GPU (÷8) | TTFT | TPOT |
+|---|---|---|---|---|
+| 1024 | 11,642 | 1,455 | 3,485 ms | 51.5 ms |
+| 2048 | 13,213 | 1,652 | 5,040 ms | 104.7 ms |
+| 3072 | 15,918 | **1,990** | 9,692 ms | — |
+
+→ 8 prefill 相比旧 5 prefill 峰值几乎没变（1,990 vs 1,983），且 TTFT 一路爬到 9.7s、并发翻倍吞吐只涨 13%——**证实 ShareGPT 闭环卡在 prefill/排队，不是 decode**。换汤不换药。
+
+**B. sa-bench 开环 + 官方 workload（random 8192/1024 range-ratio 1.0，`sglang.bench_serving --backend sglang-oai` 打 vllm-router，官方口径 output÷8-decode-GPU）**
+
+| 并发 | Output tok/s | per-GPU (÷8) | TTFT | TPOT |
+|---|---|---|---|---|
+| 64 | 5,937 | 742 | 797 ms | **6.48 ms** |
+| 256 | 10,010 | 1,251 | 13,106 ms | 7.37 ms |
+| 512 | 11,144 | 1,393 | 34,038 ms | 7.31 ms |
+| 1024 | 11,665 | **1,458** | 75,946 ms | ~7 ms |
+
+**⭐ 结论：瓶颈在 prefill，不在 decode。**
+
+- **decode 全程有富余**：TPOT 从 conc64 到 conc1024 **稳在 ~7ms 纹丝不动**（DSpark 投机解码健康，draft 在 random prompt 上照样被接受——draft 猜的是 target 自己的输出分布，与 prompt 自不自然无关）。7ms TPOT = 每 user ~143 tok/s，**远快于官方 11,200 的运行点 ~50 tok/s/user（20ms TPOT）**，说明 decode 还能扛更多并发。
+- **prefill 是硬墙**：TTFT 从 797ms → 13s → 34s → 76s **指数爆炸**，output 在 conc512 就撞停（512→1024 只涨 5%）。8×TP4-prefill 消化不了 8192 长输入的 prefill 洪流。
+- **对标**：官方 workload 下峰值 **1,458 tok/s/GPU** vs SGLang 8,993（16 prefill）vs 官方 11,200。gap **几乎全在 prefill 容量**——SGLang 打 8,993 用了 **16 个 prefill**，我们只有 8 个。这跟 §7.2-P4 "prefill 扩到 8/12/16 看是否像 SGLang 需要更多 prefill 喂饱 dep8" 的预判完全吻合。
+- **下一步**：要真正逼近 decode 天花板 / 对标 8,993，需把 prefill 从 8 扩到 ~16（decode 侧 dep8 不用动，它有大量余量）。这是**拓扑/资源问题，不是 decode 架构或内核问题**。dep8 decode 本身（TPOT 7ms）是有竞争力的。
+
+> **口径对齐说明**：A 表 ShareGPT（短输入）峰值 1,990 反而比 B 表 sa-bench（8192 长输入）峰值 1,458 高——因为 ShareGPT prefill 便宜、请求流得快。但**只有 B 表的 8192/1024 才是官方 11,200 的同 workload**，A 表不可与官方直接比。对标一律用 B 表。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
