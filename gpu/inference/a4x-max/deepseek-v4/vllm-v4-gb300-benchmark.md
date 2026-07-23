@@ -699,6 +699,45 @@ python3 -m sglang.bench_serving --backend sglang-oai --host <router-ip> --port 3
 
 > **对比一句话**：8k1k 6 prefill 才 1,546/GPU；4k1k 4 prefill 已 2,222/GPU。同样的 dep8，输入短一半，同样 prefill 数下 output 翻倍、TPOT 只多几毫秒。dep8 decode 是"猛兽"，瓶颈永远在 prefill 侧的喂料带宽。
 
+#### 9.11.2 ⭐⭐⭐⭐⭐ 扫到 16 prefill 找 dep8 天花板 + KV 失败策略崩溃坑（2026-07-24）
+
+**动机**：§9.11 只到 6 prefill（1,546/GPU），距 SGLang 官方 dep8 8k1k 的 **~9,000 tok/s/chip** 还差 6×。补 10 个 prefill 节点（本地盘已有权重，无需下载），凑齐 **16 prefill**（= SGLang 官方 dep8 拓扑）跑满 8k1k，看 output÷8 能否逼近 9,000。
+
+**完整 1→16 prefill 曲线（8k1k, conc1024, output÷8/GPU）：**
+
+| prefill 数 | Output tok/s | **Output÷8 /GPU** | Median TPOT | 状态 |
+|---|---|---|---|---|
+| 1 | 2,453 | 307 | 5.4 ms | 干净 |
+| 2 | 4,773 | 597 | 5.6 ms | 干净 |
+| 4 | 8,920 | 1,115 | 7.8 ms | 干净 |
+| 6 | 12,369 | 1,546 | 10.6 ms | 干净 |
+| 8 | 17,614 | 2,202 | 10.7 ms | 干净 |
+| 10 | 21,433 | 2,679 | 15.1 ms | 干净 |
+| **12** | **25,500** | **3,187** | 14.3 ms | **干净峰值** |
+| 14 | — | — | — | ❌ **dep8 崩溃** |
+| 16 | — | — | — | ❌ dep8 已死 |
+
+**⭐ 核心发现 1：dep8 8k1k 稳定峰值 ≈ 3,187/GPU @ 12 prefill = SGLang 9,000/chip 的 35%。**
+
+曲线 1→12 prefill 近似线性上升（307→3,187/GPU），TPOT 全程 5–15ms 健康。**12 prefill 是最后一个干净点**，此时 output 还在涨、TPOT 才 14ms，dep8 明明有余量——但 14 prefill 时直接崩了。
+
+**⭐ 核心发现 2（重要坑）：`kv_load_failure_policy: fail` 让 dep8 在高 prefill fan-in 下脆崩。**
+
+- **现象**：14 prefill 时 dep8 `EngineDeadError` 整个引擎死亡（ApiServer_0 died），16 prefill router 全是 `Connection refused`（dep8 已死）。首轮 14p output 反降、TPOT 跳 40ms、16p 仅 320/4096 成功——全部作废。
+- **真凶**：decode 日志 `Failed to notify KV connector about rejected request` + `kv_load_failure_policy: fail`。14+ prefill 并发往 dep8 推 KV（NixlConnector over MNNVL），decode 侧 KV 块吃紧时某个 KV transfer 被 **reject**，`fail` 策略把这个**瞬时 reject 升级成致命 engine 死亡**。**不是算力天花板，是错误处理策略太脆。**
+- **修复尝试**：`kv_load_failure_policy` 合法值只有 `recompute` / `fail`（`vllm/config/kv_transfer.py:69`）。改 `recompute`（KV 失败时 decode 本地重算而非崩溃）后重启 dep8：
+  - 12p recompute：2,645/GPU，TPOT 24.8ms（比 fail 的 3,187 低 17%——recompute 税：KV 失败重算吃 decode 算力）
+  - 14p recompute：2,883/GPU，但只 3,152/4096 成功，**测后 dep8 仍崩溃**
+- **结论**：recompute 缓解但没根治。dep8 在 8k1k / 14 prefill fan-in 处是**硬崩溃墙**——KV transfer 容量 + decode KV 块在 14+ prefill 同时灌入时耗尽，即便 recompute 也扛不住。
+
+**⭐ 核心发现 3：距 SGLang 9,000/chip 的 3× 差距 = MTP + KV 传输鲁棒性。**
+
+dep8 峰值 3,187/GPU（本配置 DSpark spec，无 MTP）vs SGLang 9,000/chip：
+1. **MTP**：SGLang 的 9,000/11,200 核心杠杆是 MTP（§4 已述），本 vLLM dep8 走 DSpark 投机但 PD-over-Nixl 的 KV 路径在 14+ prefill 饱和。
+2. **KV 传输鲁棒性**：SGLang（Mooncake）在高 fan-in 下比 vLLM NixlConnector 稳；vLLM dep8 在 14 prefill 就崩，够不到 SGLang 的 16-prefill 运行点。
+
+> **一句话**：dep8 8k1k 在本配置下稳定峰值 ≈ 3,187/GPU @ 12 prefill（SGLang 9,000 的 35%），14 prefill 起因 `kv_load_failure_policy: fail`（+ KV 块耗尽）硬崩溃，recompute 也只是缓解。要逼近 SGLang 需上 MTP + 更鲁棒的 KV 传输 + 更保守的 KV 显存配置（降 max-num-seqs 换 KV 块余量）。**这个 fail→recompute 的坑是本轮最大工程收获。**
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
