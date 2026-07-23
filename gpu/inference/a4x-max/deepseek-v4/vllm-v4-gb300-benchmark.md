@@ -657,6 +657,28 @@ python3 -m sglang.bench_serving --backend sglang-oai --host <router-ip> --port 3
 - [ ] 清 router 用 `pkill -9 -f 'vllm::router'`（带冒号）
 - [ ] benchmark 4k1k，sglang bench `--random-range-ratio 1.0`（或 vllm bench `0.0`）
 
+### 9.11 ⭐⭐⭐ deepgemm dep8 + prefill 数扫描：找 decode 饱和点（2026-07-24）
+
+**目的**：dep8（TP1+DP8+EP8 dp-attention decode，**8 GPU**）在正确的 deepgemm 镜像下，逐个加 prefill（TP4）喂料，看 output÷8-decode-GPU 何时被打满（decode-bound）。workload = **8k1k**（ISL 8192 / OSL 1024，官方 dep8 workload），conc1024，sa-bench 开环。
+
+| prefill 数 | Output tok/s | **Output÷8 /GPU** | Total tok/s (in+out) | Median TPOT | 增量/prefill |
+|---|---|---|---|---|---|
+| 1 | 2,453 | 307 | 22,082 | 5.4 ms | — |
+| 2 | 4,773 | 597 | 42,956 | 5.6 ms | +290 |
+| 3 | 6,982 | 873 | 62,836 | 8.1 ms | +276 |
+| 4 | 8,920 | 1,115 | 80,283 | 7.8 ms | +242 |
+| 5 | 11,005 | 1,376 | 99,046 | 9.7 ms | +261 |
+| 6 | 12,369 | **1,546** | 111,317 | 10.6 ms | +170 |
+
+**⭐ 核心结论：dep8 在 1–6 prefill 全程 prefill-feed-limited，decode 根本没喂饱。**
+
+- **output÷8 近似线性增长**（每加 1 prefill ~+250/GPU），到 6 prefill 才 1,546/GPU = 官方 11,200 的 **14%**。N=5→6 增量收窄到 +170（decode 开始有一点感觉），但**远未饱和**。
+- **decode 有巨大余量**：TPOT 全程 5–11ms（DSpark 在 deepgemm 上极健康），即便 6 prefill 也只 10.6ms（对比官方运行点 ~20ms/50 tok/s-user 还快一倍）。decode 不是瓶颈，**prefill 喂料才是**。
+- **要打满 dep8 需 ≫6 prefill**：按线性外推，逼近 11,200/GPU 需要远多于 6 个 prefill（SGLang 官方 8,993 用了 **16 prefill**，且是 8 GPU decode 同规模）。本环境只有 6 个 deepgemm prefill pod，够看清趋势但喂不满 dep8。
+- **对比 TP4 decode（§9.10/§9.11-1p1d/2p1d，4 GPU decode，4k1k）**：TP4 decode 用 1–2 prefill 就接近喂饱（decode GPU 少、输入短）；dep8（8 GPU decode + 8k 长输入）需要**成倍的 prefill** 才能喂饱——decode 越宽、输入越长，越吃 prefill。**扩 dep8 吞吐的杠杆 = 加 prefill 到 ~2.5:1 (prefill:decode-GPU) 甚至更高**，不是加 decode。
+
+> **一句话**：dep8 decode 本身（deepgemm 镜像 + FP4 + DSpark，TPOT ~7ms）性能是够的；限制 dep8 打不到 11,200 的是 **prefill 喂料容量**（8k 输入 + 8 decode GPU 需要 ≫6 prefill）。这与 §9.9 早期"decode 线性、prefill 决定 TTFT"的规律一致，只是绝对值在正确镜像下高得多。
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
