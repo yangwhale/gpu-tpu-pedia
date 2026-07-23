@@ -457,9 +457,21 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - 长时间多轮压测的 decode 建议每轮前重建（fresh pod）以排除累积效应。
 - **结论**：4 decode 的吞吐（外推 ~12,000）需先解决 decode 稳定性才能实测；当前**稳定可复现峰值为 6p3d = 9,153 tok/s**。
 
-### 9.9.2 下一轮方案：decode 改 DP-attention + dep8 宽 EP（✅ 架构已验证 2026-07-23）
+### 9.9.2 decode 改 DP-attention + dep8 宽 EP（✅✅ 实测 2026-07-23，吞吐炸裂）
 
-**✅ 端到端验证通过（2026-07-23）**：不动 prefill（保持 TP4），只新建 dep8 decode，测 **TP4-prefill → DP8-decode 的 KV 跨并行度传输**：
+**⭐⭐⭐ dep8 实测结果（5 TP4-prefill + 1 dep8-decode，ShareGPT）**：
+
+| 并发 | Output tok/s | Total tok/s | TTFT | TPOT |
+|---|---|---|---|---|
+| 1024 | 6,399 | 13,964 | 6,392 ms | 139 ms |
+| 2048 | **15,861** | 34,255 | 4,240 ms | 94 ms |
+
+- **单个 dep8 decode（8 GPU）C=2048 = 15,861 output tok/s**，远超之前外推的 12,000，也远超 6p3d 基线（3×TP4-dep4 decode = 12 GPU = 9,153）。
+- **per-decode-GPU 对比**：dep8 = **1,983 tok/s/GPU** vs TP4-dep4 = 763 tok/s/GPU → **~2.6× 每卡效率**！
+- **根因**：dep8（TP1 + DP8-attention + EP8）是 MLA-MoE decode 的正确配置——① DP-attention 每 rank 各存各请求 KV、**不复制 MLA latent**（TP4 会复制）；② EP8 把 384 expert 摊到每卡 48 个、省 HBM → 更大 batch；③ attention/dense 权重只存一份。wide-EP 在高并发（C=2048）尤其发力（batch 大、EP 摊得开）。
+- **教训固化**：**别再用 TP4-dep4 扩副本那套**——那是被 TP4 的 MLA-KV 复制 + EP4 厚 expert 拖累的次优解。DeepSeek MLA-MoE 的 decode 就该 DP-attention + 宽 EP（dep8/dep16），跟 SGLang 一致。之前 §9.9 的 1p1d→6p3d scaling law（~3050/decode）是在次优 TP4 配置下测的，dep8 直接把天花板拉高 2.6×。
+
+**✅ 端到端验证过程（2026-07-23）**：不动 prefill（保持 TP4），只新建 dep8 decode，测 **TP4-prefill → DP8-decode 的 KV 跨并行度传输**：
 - **多节点 vLLM DP8 启动成功**：head（node A，DP rank 0-3）+ headless worker（node B，DP rank 4-7），`--data-parallel-size 8 --data-parallel-size-local 4 --data-parallel-address <head> --data-parallel-rpc-port 13345`（worker 加 `--data-parallel-start-rank 4 --headless`），world_size=8 跨 2 节点连通。
 - **dep8 不 OOM**：EP8 把 384 expert 摊到每卡 48 个，`--gpu-memory-utilization 0.85` 舒适装下（对比 dep4 prefill 因 DP4 复制权重 268GB/卡 OOM）。
 - **⭐ TP4-prefill → DP8-decode KV 传输 work**：NixlConnector 跨并行度传输成功，生成正确。根因：**MLA 的 KV 是所有头共享的完整 latent（512+64），block 布局与 TP/DP 并行度无关**（都是 per-rank 完整 latent），所以 TP4 producer 传给 DP8 consumer 天然兼容。→ **「只改 decode、不动 prefill」路线成立**，省掉全栈改造。
