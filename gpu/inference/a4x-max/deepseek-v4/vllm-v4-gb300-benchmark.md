@@ -1,7 +1,7 @@
 # GB300 (A4X Max) · vLLM DeepSeek-V4 · Benchmark 对标报告
 
 > **本文性质**：vLLM 在 GB300 上服务 DeepSeek-V4 的**官方 recipe + 已公开 benchmark 的对标整理**，与同目录 [`sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)（含**我们实测跑通**的 8,903 output/decode-GPU）配套阅读。
-> ⚠️ **与 SGLang 那份的关键区别**：SGLang 文档是我们在 GB300 上**亲自端到端跑通 + 复现**的；本 vLLM 文档的数字来自 **vLLM 官方 blog + SemiAnalysis InferenceX 公开榜单/recipe**，**尚未在本环境实跑**。要落地实跑另行安排（recipe 已就绪，见 §3）。
+> ✅ **已在本环境端到端跑通 + 复现**（2026-07-23）：照抄厂商官方 vLLM recipe（deepgemm 镜像 1p1d），4k1k **Total token throughput 24,358 tps = 厂商 22,000 基线的 111%**，复现成功。**完整照抄步骤见 §9.10**（权威复现 checklist）。前半部分（§0–§8）的 blog/榜单数据仍为参考；§9 是本环境实跑记录。
 
 > 资料来源：vLLM 官方 blog「DeepSeek V4 in vLLM」(2026-04-24)、「DeepSeek-V3.2 on GB300」(2026-02-13)、vLLM recipe 站 `recipes.vllm.ai/deepseek-ai/DeepSeek-V4-Pro`、SemiAnalysis InferenceX `benchmarks/.../vllm/deepseek-v4/8k1k/*.yaml` + InferenceX 公开对比榜单。
 
@@ -324,7 +324,9 @@ SemiAnalysis InferenceX **DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 ·
 DeepSeek 2026-06 开源的投机解码框架（arxiv 2607.05147）：**semi-autoregressive draft head（Markov 头）+ 按负载调度的验证**，一次草稿多个 token、target 一次前向验证。相比单层 MTP 提速 51–400%。**不是新模型** —— `DeepSeek-V4-Pro-DSpark` = V4-Pro 同 checkpoint（FP8）+ baked-in DSpark draft 模块（config 里 `dspark_block_size`/`dspark_markov_rank`/`dspark_target_layer_ids`）。
 
 ### 9.1 前置
-- **镜像**：官方 **`vllm/vllm-openai:v0.25.1-aarch64`**（2026-07-13 稳定版，带 dspark + `deep_gemm_mega_moe` + mxfp4）。**不要用私有自建镜像**，保复现性。**⚠️ 不要用 `nightly-aarch64`** —— 它 tag 日期虽新但实际报 `0.23.1rc1.dev1373`（版本反而旧），有 **kv_block_zeroer 断言 bug**：NixlConnector disagg 调度 `new_block_ids_to_zero` 但 `_init_kv_zero_meta()` 只在 `needs_kv_cache_zeroing=True` 时调、导致 `assert self.kv_block_zeroer is not None` 崩（`model_runner.py:883`），生成即 500。v0.25.1 已修（对齐厂商验证过的版本）。
+> ⚠️ **镜像重要更正（2026-07-23）**：本节及 §9.2–§9.9 用的通用 `vllm/vllm-openai:v0.25.1-aarch64` 只**够功能验证（生成正确）**，但**性能腰斩**（`deep_gemm_mega_moe` 静默 fallback 慢 kernel）。**要复现厂商 22,000 tps 性能，必须换 deepgemm 专用镜像 `vllm-openai-deepgemm:v0.25.1-sm100-aarch64`**（它是官方 vLLM CI 构建、非私有 fork，见 §9.10 Step 0）。下面这句"用通用镜像/别用私有镜像"仅对**功能冒烟**成立，性能复现看 §9.10。
+
+- **镜像（功能验证用）**：官方 **`vllm/vllm-openai:v0.25.1-aarch64`**（2026-07-13 稳定版，带 dspark + `deep_gemm_mega_moe` + mxfp4）。**⚠️ 不要用 `nightly-aarch64`** —— 它 tag 日期虽新但实际报 `0.23.1rc1.dev1373`（版本反而旧），有 **kv_block_zeroer 断言 bug**：NixlConnector disagg 调度 `new_block_ids_to_zero` 但 `_init_kv_zero_meta()` 只在 `needs_kv_cache_zeroing=True` 时调、导致 `assert self.kv_block_zeroer is not None` 崩（`model_runner.py:883`），生成即 500。v0.25.1 已修（对齐厂商验证过的版本）。
 - **模型**：`deepseek-ai/DeepSeek-V4-Pro-DSpark`（HF，FP8，~893GB / 66 shards）。`hf download` 到一节点 → `gcloud storage cp` 上 GCS → 各节点从 GCS 拉到 local SSD。
 - **拓扑**：1 prefill + 1 decode，各 1 节点 4 GPU，**同 subblock**（podAffinity `gce-topology-subblock` → 同 NVLink 域）。
 
@@ -370,6 +372,8 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - **✅ DSpark 端到端跑通**：官方 `v0.25.1-aarch64` + DeepSeek-V4-Pro-DSpark（FP8）+ NixlConnector NVLink KV + vllm-router，`--speculative-config method=dspark num_speculative_tokens=7`，prefill/decode 各加载 DSpark draft（96 params），生成正确（"Paris. The capital of Germany is Berlin..."）。
 - **踩坑**：(1) `nightly-aarch64` 有 kv_block_zeroer bug（见 §9.1），换 `v0.25.1-aarch64` 解决；(2) bench tokenizer 用 HF repo id；(3) 随机数据测不出 spec 收益。
 ### 9.9 规模+压力扫描（真实数据 sharegpt，2026-07-22 起）
+
+> ⚠️ **本节（9.9–9.9.5）所有绝对吞吐数字跑在通用镜像上，已作废**（`deep_gemm_mega_moe` fallback 慢 kernel）。scaling **规律**（吞吐随 decode 节点线性、prefill 只决定 TTFT、DSpark 需真实数据）仍成立且有价值；但**绝对 tok/s 一律以 deepgemm 镜像的 §9.9.6 + §9.10 为准**。
 
 **测法**：`vllm bench serve --backend openai-chat --endpoint /v1/chat/completions --dataset-name sharegpt --dataset-path ShareGPT_V3.json`（真实对话，自然生成，DSpark draft 才有接受率）。tokenizer 用 HF repo id。
 
@@ -564,6 +568,85 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 > **冷启动注意**：deepgemm 镜像会做 **DeepGEMM kernel warmup**（prefill ~2484 kernel / decode ~1666）+ TileLang JIT + DSpark cudagraph capture，比通用镜像慢（~8-12 min），但这正是优化 kernel 在编译。
 
 **⚠️ 运维大坑：`vllm-router` 进程名是 `vllm::router`（带冒号）**。所以 `pkill -f vllm-router` **永远匹配不到**，杀不掉旧 router → 僵尸 router 累积占住 Prometheus 端口 → 新 router 起不来报 `FailedToCreateHTTPListener("Address already in use")`。**正确清理：`pkill -9 -f 'vllm::router'`**。这一个坑消耗了大量排查时间（所有"router 起不来/503/端口冲突"都源于此）。
+
+### 9.10 ⭐⭐⭐⭐⭐ 完整复现 checklist（照抄跑出 4k1k 22-24K tps · 2026-07-23 验证）
+
+> **这是本文档的权威复现路径**。前面 §9.9.1–§9.9.5 是通用镜像上的探索过程（绝对吞吐已作废，只留方法学）；要**复现厂商 22,000 tps 基线**，照本节即可。全程 8 GPU（1 prefill + 1 decode），单 NVL72 subblock。
+
+#### Step 0 · 镜像（最关键，别用错）
+
+- **必须用 deepgemm 专用镜像**：`vllm-openai-deepgemm:v0.25.1-sm100-aarch64`（sm100=Blackwell，aarch64=GB300 Grace）。
+- **镜像来源（已核实）**：**官方 vLLM 构建**，非个人自制——走 vLLM 官方 buildkite `release-v2` CI（build 3803）编译，基于 vllm-project/vllm commit `752a3a5`（2026-07-12）；DeepSeek-V4 + DSpark 模型代码在 `vllm/models/deepseek_v4/nvidia/`（**NVIDIA 贡献**）；内置 `deep_gemm 2.5.0`。厂商只是把它转存到私有 registry 做部署暂存，**没有 fork 改码**。
+- **为什么不能用通用 `vllm/vllm-openai:v0.25.1-aarch64`**：通用镜像**能跑通（生成正确）但性能腰斩**——`--moe-backend deep_gemm_mega_moe` 静默 fallback 到慢 kernel，测不到 FP4/DeepGEMM 优化。deepgemm 镜像启动日志会显式打印 `expert_dtype resolved to 'fp4'` + `Selected DeepGemmFp8BlockScaledMMKernel` + `DeepGEMM PDL/E8M0 enabled`（**认准这几行 = 优化 kernel 已激活**）。
+
+#### Step 1 · 前置
+- 模型 `DeepSeek-V4-Pro-DSpark`（FP8，~832GB/66 shards）在两节点 local SSD（hostPath），容器内挂到 `/models`。
+- 两节点同 subblock（`gce-topology-subblock` podAffinity → 同 NVLink 域），各 4 GPU，`imagePullSecrets` 能拉 deepgemm 镜像。
+
+#### Step 2 · Prefill（TP4，kv_producer，enforce-eager）
+env：`VLLM_USE_NCCL_SYMM_MEM=0 NCCL_CUMEM_ENABLE=1 NCCL_MNNVL_ENABLE=1 NCCL_NVLS_ENABLE=1` + `UCX_NET_DEVICES=all UCX_CUDA_IPC_ENABLE_MNNVL=y UCX_TLS=cuda_copy,cuda_ipc,tcp` + `VLLM_NIXL_SIDE_CHANNEL_PORT=5557 VLLM_NIXL_SIDE_CHANNEL_HOST=<prefill-ip>` + `PYTHONHASHSEED=0`
+```bash
+vllm serve /models/DeepSeek-V4-Pro-DSpark --served-model-name deepseek-ai/DeepSeek-V4-Pro-DSpark \
+  --trust-remote-code --enable-cumem-allocator --kv-cache-dtype fp8 --block-size 256 \
+  --port 8001 --tensor-parallel-size 4 --enforce-eager \
+  --max-num-seqs 16 --max-num-batched-tokens 16384 --no-disable-hybrid-kv-cache-manager \
+  --attention_config.use_fp4_indexer_cache=True \
+  --moe-backend deep_gemm_mega_moe --enable-expert-parallel --tokenizer-mode deepseek_v4 \
+  --tool-call-parser deepseek_v4 --enable-auto-tool-choice --reasoning-parser deepseek_v4 \
+  --speculative-config '{"method":"dspark","num_speculative_tokens":7,"draft_sample_method":"greedy"}' \
+  --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_producer","kv_load_failure_policy":"fail"}'
+```
+
+#### Step 3 · Decode（TP4，kv_consumer，FULL_DECODE_ONLY cudagraph）
+env 同 prefill，但 `VLLM_NIXL_SIDE_CHANNEL_PORT=5558`。**先等 prefill 的 5557 side channel 就绪再起 decode**。
+```bash
+vllm serve /models/DeepSeek-V4-Pro-DSpark --served-model-name deepseek-ai/DeepSeek-V4-Pro-DSpark \
+  --trust-remote-code --enable-cumem-allocator --kv-cache-dtype fp8 --block-size 256 \
+  --port 8002 --tensor-parallel-size 4 \
+  --max-num-seqs 1024 --max-num-batched-tokens 8192 --max-cudagraph-capture-size 1024 \
+  --compilation-config '{"cudagraph_mode":"FULL_DECODE_ONLY","cudagraph_capture_sizes":[8,16,24,32,40,48,56,64,96,128,192,256,384,512,768,1024]}' \
+  --gpu-memory-utilization 0.9 --no-disable-hybrid-kv-cache-manager \
+  --attention_config.use_fp4_indexer_cache=True \
+  --moe-backend deep_gemm_mega_moe --enable-expert-parallel --tokenizer-mode deepseek_v4 \
+  --tool-call-parser deepseek_v4 --enable-auto-tool-choice --reasoning-parser deepseek_v4 \
+  --speculative-config '{"method":"dspark","num_speculative_tokens":7,"draft_sample_method":"greedy"}' \
+  --kv-transfer-config '{"kv_connector":"NixlConnector","kv_role":"kv_consumer","kv_load_failure_policy":"fail"}'
+```
+> **冷启动 ~8-12 min**：deepgemm 镜像做 DeepGEMM warmup（prefill ~2484 / decode ~1666 kernel）+ TileLang JIT + DSpark cudagraph capture（`Capturing dspark CUDA graphs (FULL)`）。decode ready 判据：`curl localhost:8002/health` = 200。
+
+#### Step 4 · Router（vllm-router，PD-disagg）
+```bash
+pip install vllm-router   # deepgemm 镜像已带; 没有再装
+vllm-router --policy round_robin --vllm-pd-disaggregation --host 0.0.0.0 --port 30000 \
+  --prefill http://<prefill-ip>:8001 --decode http://<decode-ip>:8002 --intra-node-data-parallel-size 1
+```
+> **⚠️ 运维大坑：router 进程名是 `vllm::router`（带冒号）**。`pkill -f vllm-router` **永远杀不掉**，僵尸 router 累积占 Prometheus 端口 → 新 router 报 `FailedToCreateHTTPListener("Address already in use")`。**清理必须用 `pkill -9 -f 'vllm::router'`**（今晚所有"router 起不来/503"都源于此）。ready 判据：`curl localhost:30000/health` = 200（若 503「Prefill policy failed to select a worker」= 后端还没注册好，等几秒或查 prefill/decode :8001/:8002 是否 200）。
+
+#### Step 5 · Benchmark（4k1k，官方口径 Total token throughput）
+用 SGLang `sa-bench`（`bench_serving`）打 router，**random 8192? 不，4k1k = ISL 4096 / OSL 1024**，`--random-range-ratio 1.0`（sglang 语义 = 固定长度；**vLLM bench 语义相反、要用 0.0**）：
+```bash
+python3 -m sglang.bench_serving --backend sglang-oai --host <router-ip> --port 30000 \
+  --model deepseek-ai/DeepSeek-V4-Pro-DSpark --dataset-name random \
+  --random-input-len 4096 --random-output-len 1024 --random-range-ratio 1.0 \
+  --num-prompts <2*conc> --max-concurrency <conc>   # 扫 conc 256/512
+```
+
+#### 预期结果（复现验证 2026-07-23）
+| 并发 | Total tok/s (in+out) | vs 厂商 22,000 | TPOT |
+|---|---|---|---|
+| 256 | 23,120 | 105% | 12.6 ms |
+| 512 | **24,358** | **111%** | 13.2 ms |
+
+达到 ≥22,000 = 复现成功（说明镜像 + config + 环境全对）。若远低于此：99% 是**用错了通用镜像**（回 Step 0 认那三行 kernel 日志）。
+
+#### 复现 checklist（逐条核对）
+- [ ] 镜像是 `vllm-openai-deepgemm`（不是通用 `vllm-openai`）
+- [ ] 启动日志有 `expert_dtype resolved to 'fp4'` + `DeepGemmFp8BlockScaledMMKernel`
+- [ ] prefill/decode 都带 `--attention_config.use_fp4_indexer_cache=True` + DSV4 parser
+- [ ] KV over NVLink 三件套（`UCX_TLS=cuda_copy,cuda_ipc,tcp` + `UCX_CUDA_IPC_ENABLE_MNNVL=y` + `--enable-cumem-allocator`）
+- [ ] 两节点同 subblock（同 NVLink 域）
+- [ ] 清 router 用 `pkill -9 -f 'vllm::router'`（带冒号）
+- [ ] benchmark 4k1k，sglang bench `--random-range-ratio 1.0`（或 vllm bench `0.0`）
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
