@@ -742,6 +742,24 @@ dep8 峰值 3,187/GPU vs SGLang 9,000/chip，同 checkpoint（FP4 experts + FP8 
 
 > **一句话**：dep8 8k1k 在本配置下稳定峰值 ≈ 3,187/GPU @ 12 prefill（SGLang 9,000 的 35%）。差距**不是精度、不是 MTP**（两边都有），而是 (a) spec 配置把 decode batch 节流到 2048、(b) 14 prefill 起 `kv_load_failure_policy: fail`（+ KV 块耗尽）硬崩溃够不到满配运行点。要逼近 SGLang 需调 spec batch 槽（增 max-num-batched-tokens / 减 num_speculative_tokens）+ 更鲁棒 KV 传输 + 更保守 KV 显存。**本轮两大工程收获：fail→recompute 崩溃坑 + DSpark 即 MTP 的正名 + spec batch 节流 warning。**
 
+#### 9.11.3 ⭐⭐⭐⭐ 调优轮：抬 decode cap（batch 8192→16384）（2026-07-24）
+
+**改动**：`max-num-batched-tokens` 8192→16384（decode 调度 cap 2048→10240，spec 节流 warning 消失）+ `kv_load_failure_policy: recompute` + spec7 + mem 0.85。
+> 注：首次尝试 `gpu-mem-util 0.85→0.92` **启动即 CUDA OOM**（276GB 用了 268GB，再要 8GB 就爆）——0.92 + 大 batch 激活缓冲挤爆显存。退回 0.85。**教训：GB300 上 batch 与 mem-util 要联动，加 batch 必须留显存。**
+
+| prefill | Output÷8 /GPU | TPOT | 成功数 | 测后 dep8 | vs 基线 |
+|---|---|---|---|---|---|
+| 12 | 3,011 | 22.7 ms | 4095/4096 | ✅ 存活 | recompute 12p 2,645 → **+14%** |
+| 14 | **3,222** | 21.5 ms | 3572/4096 | ❌ 崩溃 | 超 fail-12p 峰值 3,187 |
+| 16 | — | — | — | ❌ 已死 | 跳过 |
+
+**结论**：
+1. **抬 cap 确实提吞吐**：recompute 12p 2,645→3,011（+14%），14p 冲到 **3,222/GPU 新峰值**（超过之前 fail 策略 12p 的 3,187）——证明之前 decode 确实被 2048 cap 节流。
+2. **但没根治崩溃墙**：14p 仍崩（3572/4096 后 dep8 死）。KV 块在 14-prefill fan-in 下耗尽，batch/mem 调不动这个墙——是 NixlConnector KV 传输 + decode KV 块分配的结构问题。
+3. **新峰值 3,222/GPU = SGLang 9,000 的 36%**（小幅提升，崩溃墙未破）。
+
+> **下一步旋钮**（未验证）：(a) 降 `max_num_seqs` 1024→512（减并发换 KV 块余量抗 fan-in 崩溃）；(b) 降 `num_speculative_tokens` 7→3（减每 seq 的 KV/算力）；(c) router 侧限 prefill fan-in 速率；(d) 换更鲁棒 KV 传输（对标 SGLang Mooncake）。**根治崩溃是打到 SGLang 9,000 的前提——只有稳住 16 prefill 满配才够得着。**
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
