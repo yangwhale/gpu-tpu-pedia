@@ -465,6 +465,11 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - **⭐ TP4-prefill → DP8-decode KV 传输 work**：NixlConnector 跨并行度传输成功，生成正确。根因：**MLA 的 KV 是所有头共享的完整 latent（512+64），block 布局与 TP/DP 并行度无关**（都是 per-rank 完整 latent），所以 TP4 producer 传给 DP8 consumer 天然兼容。→ **「只改 decode、不动 prefill」路线成立**，省掉全栈改造。
 - **踩坑**：清旧 TP4 进程时 `pkill -f 'vllm serve'` 漏杀 `VLLM::Worker` 子进程（进程名不含 "vllm serve"），278GB×4 显存不释放 → 新实例 OOM。必须按进程名 `kill VLLM::/EngineCore`。另 GB300 驱动/GIB 保留 ~40GB/卡，util 要留头寸。
 
+**⚠️ prefill 并行度选项（2026-07-23 实测）**：vLLM 对 DeepSeek V4 的 prefill 权重分片**只有 TP 可用**。
+- **PP 不支持**：`--pipeline-parallel-size 4` 直接 `NotImplementedError: Pipeline parallelism is not supported for this model`（模型未实现 `SupportsPP` 接口）。**框架差异**：SGLang 支持 PP4 prefill（他们就用这个），vLLM 不支持。
+- **DP 会 OOM**：`--data-parallel-size 4` 复制 attention/dense 权重 → 268GB/卡 → OOM（见上）。
+- **→ 结论**：vLLM prefill 就用 **TP4**（唯一可行的权重分片方式）。TP4 vs PP4 只能跨框架比（vLLM-TP4 vs SGLang-PP4）。
+
 **本轮 decode 用的是 TP4 + EP4（dep4）**（照 DSpark 1p1d-dep4 基线扩副本），但这对 MLA-MoE 是次优：
 
 本轮 decode 用的是 **TP4 + EP4（dep4）**（照 DSpark 1p1d-dep4 基线扩副本），但这对 MLA-MoE 是次优：
