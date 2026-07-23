@@ -457,7 +457,15 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - 长时间多轮压测的 decode 建议每轮前重建（fresh pod）以排除累积效应。
 - **结论**：4 decode 的吞吐（外推 ~12,000）需先解决 decode 稳定性才能实测；当前**稳定可复现峰值为 6p3d = 9,153 tok/s**。
 
-### 9.9.2 下一轮方案：decode 改 DP-attention + dep8 宽 EP（待跑）
+### 9.9.2 下一轮方案：decode 改 DP-attention + dep8 宽 EP（✅ 架构已验证 2026-07-23）
+
+**✅ 端到端验证通过（2026-07-23）**：不动 prefill（保持 TP4），只新建 dep8 decode，测 **TP4-prefill → DP8-decode 的 KV 跨并行度传输**：
+- **多节点 vLLM DP8 启动成功**：head（node A，DP rank 0-3）+ headless worker（node B，DP rank 4-7），`--data-parallel-size 8 --data-parallel-size-local 4 --data-parallel-address <head> --data-parallel-rpc-port 13345`（worker 加 `--data-parallel-start-rank 4 --headless`），world_size=8 跨 2 节点连通。
+- **dep8 不 OOM**：EP8 把 384 expert 摊到每卡 48 个，`--gpu-memory-utilization 0.85` 舒适装下（对比 dep4 prefill 因 DP4 复制权重 268GB/卡 OOM）。
+- **⭐ TP4-prefill → DP8-decode KV 传输 work**：NixlConnector 跨并行度传输成功，生成正确。根因：**MLA 的 KV 是所有头共享的完整 latent（512+64），block 布局与 TP/DP 并行度无关**（都是 per-rank 完整 latent），所以 TP4 producer 传给 DP8 consumer 天然兼容。→ **「只改 decode、不动 prefill」路线成立**，省掉全栈改造。
+- **踩坑**：清旧 TP4 进程时 `pkill -f 'vllm serve'` 漏杀 `VLLM::Worker` 子进程（进程名不含 "vllm serve"），278GB×4 显存不释放 → 新实例 OOM。必须按进程名 `kill VLLM::/EngineCore`。另 GB300 驱动/GIB 保留 ~40GB/卡，util 要留头寸。
+
+**本轮 decode 用的是 TP4 + EP4（dep4）**（照 DSpark 1p1d-dep4 基线扩副本），但这对 MLA-MoE 是次优：
 
 本轮 decode 用的是 **TP4 + EP4（dep4）**（照 DSpark 1p1d-dep4 基线扩副本），但这对 MLA-MoE 是次优：
 
