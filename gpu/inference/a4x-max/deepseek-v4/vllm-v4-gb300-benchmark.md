@@ -482,9 +482,18 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - **DP 会 OOM**：`--data-parallel-size 4` 复制 attention/dense 权重 → 268GB/卡 → OOM（见上）。
 - **→ 结论**：vLLM prefill 就用 **TP4**（唯一可行的权重分片方式）。TP4 vs PP4 只能跨框架比（vLLM-TP4 vs SGLang-PP4）。
 
-**本轮 decode 用的是 TP4 + EP4（dep4）**（照 DSpark 1p1d-dep4 基线扩副本），但这对 MLA-MoE 是次优：
+**⭐ SGLang prefill TP4 vs PP4 干净对比（2026-07-23，同节点/同模型 R1-NVFP4/同配置 standalone，仅换并行度）**：
 
-本轮 decode 用的是 **TP4 + EP4（dep4）**（照 DSpark 1p1d-dep4 基线扩副本），但这对 MLA-MoE 是次优：
+| 测试 | TP4 | PP4 |
+|---|---|---|
+| 8K 输入 conc1（纯 prefill TTFT） | Mean **197ms** | Mean **296ms** |
+| input1024/out512 conc16 | Mean TTFT 357ms / P90 594ms / 吞吐 800 tok/s | Mean TTFT 292ms / P90 420ms / 吞吐 474 tok/s |
+
+- **8K 单条 prefill：TP4 快 ~33%**（197 vs 296ms）。conc16 的 TTFT 两者**同一量级**（PP4 mean 还略低、尾部更稳；TP4 吞吐高但那是 decode 侧）。
+- **⚠️ 重要纠正**：SGLang 历史 R2（1P1D disagg，PP4，input1024/conc16）Mean TTFT = **7360ms**，而**同参数 PP4 standalone 只有 292ms —— 差 25×**。唯一区别是 disagg vs standalone。**所以那 7360ms 不是 PP4 并行度的锅**，是 1P1D disagg 里单个 prefill-only 节点在 conc16 下被打爆排队 + KV 传输 + decode 侧堆积。
+- **结论**：PP4 本身**不拉跨**（standalone 292ms 正常），TP4 只在单条长 prefill 略优。SGLang 生产 14P:2D 那种拉跨，病根在 **disaggregation 的 prefill 节点吞吐/配置**（chunked-prefill/节点数/单节点并发能力），**不在 TP-vs-PP 的选择**。换 TP4 能小赚单请求延迟，但救不了 14:2。别被 standalone-vs-disagg 的表面数字骗。
+
+**本轮 decode 用的是 TP4 + EP4（dep4）**（照 DSpark 1p1d-dep4 基线扩副本），但这对 MLA-MoE 是次优：
 
 - **MLA 在 TP 下 KV 不分片、只复制**：MLA 的 KV 是所有头共享的压缩 latent（512+64），每个 TP rank 都要存完整 latent → TP4 把 KV cache 复制 4 份，零节省。TP 只帮到权重分片 + EP + 按头分 attention 计算。
 - **官方 vLLM V4-Pro recipe 用的是 dep8**（`6p1d-dep4-dep8`）：decode = **TP1 + DP8-attention + EP8**（`--tensor-parallel-size 1 --data-parallel-size 8 --enable-expert-parallel` + dp-attention）。DP-attention 每 rank 各存各请求的 KV → 天然不复制；EP8 把 384 expert 摊到每卡 48 个 → 省 HBM、更大 batch；attention/dense 权重只存一份。这也是 SGLang dep8 的思路。
