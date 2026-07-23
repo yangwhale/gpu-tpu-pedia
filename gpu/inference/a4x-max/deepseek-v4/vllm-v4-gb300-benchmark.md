@@ -457,6 +457,14 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
 - 长时间多轮压测的 decode 建议每轮前重建（fresh pod）以排除累积效应。
 - **结论**：4 decode 的吞吐（外推 ~12,000）需先解决 decode 稳定性才能实测；当前**稳定可复现峰值为 6p3d = 9,153 tok/s**。
 
+### 9.9.2 下一轮方案：decode 改 DP-attention + dep8 宽 EP（待跑）
+
+本轮 decode 用的是 **TP4 + EP4（dep4）**（照 DSpark 1p1d-dep4 基线扩副本），但这对 MLA-MoE 是次优：
+
+- **MLA 在 TP 下 KV 不分片、只复制**：MLA 的 KV 是所有头共享的压缩 latent（512+64），每个 TP rank 都要存完整 latent → TP4 把 KV cache 复制 4 份，零节省。TP 只帮到权重分片 + EP + 按头分 attention 计算。
+- **官方 vLLM V4-Pro recipe 用的是 dep8**（`6p1d-dep4-dep8`）：decode = **TP1 + DP8-attention + EP8**（`--tensor-parallel-size 1 --data-parallel-size 8 --enable-expert-parallel` + dp-attention）。DP-attention 每 rank 各存各请求的 KV → 天然不复制；EP8 把 384 expert 摊到每卡 48 个 → 省 HBM、更大 batch；attention/dense 权重只存一份。这也是 SGLang dep8 的思路。
+- **下一轮**：decode 切成 DP-attention + dep8（跨 2 节点 8 卡宽 EP），对齐官方 recipe + SGLang，做 apples-to-apples；预期逼近外推 ~12,000，且宽 EP 每卡 expert 少、内存压力小，可能顺带绕开 §9.9.1 的 4-decode 内存崩坑。跑前需确认 vLLM EP8 + NixlConnector disagg + NVLink KV 在跨节点 8 卡宽度成立。
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
