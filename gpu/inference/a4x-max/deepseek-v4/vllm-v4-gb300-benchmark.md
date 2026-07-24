@@ -907,6 +907,36 @@ Assertion `ind >=0 && ind < ind_dim_size && "vectorized gather kernel index out 
 
 > **给 chris 的一句话**：并发 ~1,600、MFU ~6%、HBM 用 241GB/284GB、**内存带宽只 46%**。吞吐上不去不是喂不饱也不是带宽满，是 **SM 被 MoE 的通信+小 GEMM 开销占满干低效活**。**MegaMoE（`deep_gemm_mega_moe`）本栈已开且仍 6% MFU**——缺的不是 kernel 融合，是 **AFD 级 token 聚合**（把小 expert GEMM 变大）。而 AFD 是 SGLang/MegaScale-Infer 的部署架构，**vLLM 本栈不原生支持**，纯配置/参数在这已到顶。
 
+### 9.11.6 ⭐⭐⭐⭐ 公开研究对标 + vLLM 战役收官（2026-07-24）
+
+把本环境结论拿去和公开研究对账，核心判断被强力印证：
+
+**A. "长上下文饿死 MoE / decode memory-bound / AFD 是解药" — 学界业界共识：**
+- **FastAFD 官方 blog**（haoailab.com）原话："Long context starves the MoE layer by shrinking the KV-capped decode batch" — 与本文 §9.11.5 结论一字不差。
+- **MegaScale-Infer**（arxiv 2504.02263 / UCSD 课程）：分离 attention/FFN，MoE 推理提速 **1.9×**，ping-pong 流水线。
+- 2026 多篇论文同题：arxiv 2512.13525《Disaggregating Attention and Experts for Scalable MoE》、2605.28302《How Far Can Disaggregation Go?》、《Revealing the Challenges of AFD》。
+- DeepSeek-V3 技术报告 + SemiAnalysis InferenceX：decode 是 **memory-bound small-batch**，MTP 专为此设计。
+- **⭐ 最硬佐证：vLLM 自己的 [GitHub RFC #22799「ATTN-FFN Disaggregation for MoE Models」](https://github.com/vllm-project/vllm/issues/22799) 仍 open** — 直接证实"vLLM 原生不支持 AFD"，官方尚在提案阶段。
+
+**B. "vLLM 比 SGLang 差" — 公开有讨论，但程度要说清：**
+- 典型领先 **20–29%**：localaimaster（2026-02，SGLang +29%）、gpustack H200（SGLang 6635 > vLLM 5482 tok/s）。
+- 极端 ~2×：Medium saidinesh（1532 vs 661）。
+- Reddit 共识：DeepSeek-V3 初期 SGLang 远快，后 vLLM 靠 **Wide-EP + DeepEP** 追到"neck and neck"（vLLM blog 2025-12「DeepSeek @ 2.2k tok/s/H200」）。
+- **⚠️ 诚实修正**：本环境测得 dep8 ≈ SGLang 的 37%（~2.7× 差距）**偏大**，说明我们这套 vLLM dep8 **未调到 vLLM 最优**（缺 Wide-EP 满配 + KV/batch 平衡未极致）。真实差距里，一部分是 SGLang 的 AFD/MegaMoE 架构优势（结构性、需换架构），一部分是我们配置未榨满（可优化）。**"3× 差距"不应作为 vLLM 永久结论——典型是 ~30%。**
+
+**C. vLLM DeepSeek-V4 dep8 战役收官小结（本环境实测）：**
+| 里程碑 | 结论 |
+|---|---|
+| 官方 1p1d 复现 | 4k1k Total **24,358 tps = 厂商 22,000 的 111%** ✅ |
+| dep8 8k1k 稳定峰值 | **3,321/GPU @ 14p**（= SGLang 9,000 的 37%）|
+| dep8 4k1k | 3,525/GPU，TTFT 12× 改善 |
+| 崩溃根因 A | core dump 撑爆 ephemeral 驱逐 → 已修（core/tmp→/mnt/ssd）|
+| 崩溃根因 B | DSpark spec `vectorized_gather` 索引越界（高并发）→ 消融确认，禁 spec 规避 |
+| 吞吐天花板真因 | decode SM-bound 于低-FLOP MoE 开销（EP 通信 + 小 GEMM），非喂料/非带宽；MegaMoE 已开仍 6% MFU |
+| 提升路径 | 缺 AFD（vLLM 无原生支持，RFC #22799 pending）；纯配置调优已到顶 |
+
+> **收官定论**：vLLM 在本 GB300 环境**功能完整、能复现厂商 1p1d 22K 基线**；dep8 宽-EP decode 稳定峰值 ~3,400/GPU，受限于 coexist 架构的小-batch MoE 开销（memory/SM-bound），非 bug、非配置疏漏可根治。逼近 SGLang 9,000 需 AFD 级架构（vLLM 未支持）。**vLLM 侧测试到此收官，后续如需更高吞吐走 SGLang 或等 vLLM AFD。**
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
