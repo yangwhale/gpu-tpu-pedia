@@ -452,6 +452,45 @@ Qwen3-30B-A3B（激活 3.3B）、4n×4GPU、每步 64 prompt × 32 gen = **2048 
 
 GKE 节点默认 SA scope 是 `devstorage.read_only`，**pod 内无法写 GCS**（即使 IAM 给了权限，scope 也挡）。从本机走 `kubectl exec cat | gcloud storage cp -` 又是 12MB/s。**正解：pod 内用带写权限的 SA key + gcloud/curl resumable upload（in-GCP GB/s），或提前给节点池配 `cloud-platform` scope。**
 
+### 9.13 收敛实测：学习率是关键，perf recipe 的 3e-7 不收敛
+
+同一 Qwen3-30B-A3B / 4n×4GPU / GRPO，仅改学习率，训练 reward（train batch 内 2048 序列的平均正确率，二值 0/1）表现：
+
+| 学习率 | 现象 | 训练 reward 走势 |
+|---|---|---|
+| **3e-7**（perf recipe 默认）| 50 步 reward 纹丝不动 | 一直在 0.50±0.06 抖，均值不涨（LR 太小挪不动）|
+| **5e-6**（math recipe 值，×17）| **缓慢收敛** | 见下窗口均值 |
+
+`lr=5e-6` 的 10 步窗口均值（reward 噪声大 ±0.08，须看窗口均值）：
+
+| step 窗口 | 均值 |
+|---|---|
+| 1–10 | 0.517（起点）|
+| 11–20 | 0.544 |
+| 21–30 | 0.556 |
+| 31–40 | 0.552 |
+| 41–50 | 0.528 |
+| 51–60 | 0.569 |
+| 71–80 | **0.587**（峰值窗口，单步峰 0.66）|
+
+**结论**：正常 LR 下 reward 确实系统性上升（76 步内 0.52 → 0.59，**+0.07**），KL error 同步从 0.0019 爬到 0.0024（策略在动）。但强基座（Qwen3-30B 数学本就 ~52%）+ 二值 reward 决定了**慢、噪声大、中途有平台**——要出 DeepScaleR 那种到 0.65 的漂亮曲线需上百步 + 更激进 config。**教训：验证收敛别用 performance 目录的 recipe（LR 是为测吞吐调的），要用通用 recipe 的 LR 或自己设 5e-6 级别。**
+
+### 9.14 长跑必须 checkpointing / 共享存储 —— 否则 pod 重调度全丢
+
+实测教训：`lr=5e-6` 收敛跑到 ~step 76 时，**pod 被重调度**（GKE 节点回收 / StatefulSet 重建），进程被杀、node-local `/mnt/ssd` 上的训练日志随之丢失，训练中断且**无法续跑**（`checkpointing.enabled=false`）。虽然本次 pod 恰好落回同样 4 节点、模型+mcore 缓存还在，但 run 状态没了。
+
+**正解**：长跑必须 (1) `checkpointing.enabled=true` 定期存 checkpoint 到**共享存储**（Lustre/Filestore），(2) 或至少把 train state 存到 GCS，(3) pod 用更稳的调度（避免 spot / 加 PodDisruptionBudget）。node-local SSD 只适合"转换缓存 + 冒烟"，不适合无人值守长跑。
+
+### 9.15 下一步优化方向（结合 GB200 RL 文档经验）
+
+对比 `gpu/a4x/09-rl-training`（GB200 RL 指南）+ 本次实测，提速/提收敛优先级：
+
+1. **FP8 端到端**（最大杠杆）：GB300 FP8 tensor core 吞吐 ≈ BF16 的 2×，v0.6.0 镜像支持端到端 FP8（rollout + training）。直击本次 MFU 仅 ~4% 的痛点，比调 microbatch 猛得多。
+2. **DAPO 风格冲收敛**：砍 KL（`reference_policy_kl_penalty=0` 省一份参考模型 + 一趟前向）+ clip 范围放宽（`ratio_clip` 非对称/更大）+ LR schedule（warmup + decay）+ 更多步数。数学可验证 reward 无 hack 风险，砍 KL 安全。
+3. **NCCL 环境**（GB200 文档推荐值）：`NCCL_MNNVL_ENABLE=2`（域内自动 MNNVL，本次用的 1）、`NCCL_CUMEM_ENABLE=1`、`CUDA_DEVICE_MAX_CONNECTIONS=1`、`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`。
+4. **训练侧通信优化**：MoE 走 DeepEP dispatcher + EP overlap（`overlap_moe_expert_parallel_comm`）替代 alltoall，缓解 EP16 all-to-all 瓶颈。
+5. **框架选型参考**：GB200 文档主推 veRL（FSDP + colocated），NeMo RL（Megatron 后端）是 NVIDIA 主推给 GB300 的；两者超参基本一致（mini-batch 2-4、num_iter 1、clip 0.2、kl 0.01-0.05），LR 参考 veRL 用 1e-6（介于 3e-7 与 5e-6 之间，更稳）。
+
 ---
 
 ## 参考
@@ -464,4 +503,4 @@ GKE 节点默认 SA scope 是 `devstorage.read_only`，**pod 内无法写 GCS**�
 - GB300 perf recipes：`examples/configs/recipes/llm/performance/`
 - 跨框架 RL 对比：SemiAnalysis《RL Systems Mind the Gap》(2026-06)
 
-> **状态**：已在 GB300 NVL72 4 节点 × 4 GPU 实跑通 Qwen3-30B-A3B GRPO（v0.6.0 镜像），训练循环端到端跑通（生成→logprob→GRPO 更新→refit），实测单步 ~215s、训练 MFU ~4%。详见 **§9 实战 bring-up 全记录**。收敛验证进行中（perf recipe LR=3e-7 太保守 reward 不涨，已换 lr=5e-6 正式冲收敛）。
+> **状态**：已在 GB300 NVL72 4 节点 × 4 GPU 实跑通 Qwen3-30B-A3B GRPO（v0.6.0 镜像），端到端全链路验证完成——生成→logprob→GRPO 更新→refit 全通，CUDA graph 生成 ~8000 tok/s，单步 ~215s、训练 MFU ~4%。**收敛已确认**：`lr=5e-6` 下 76 步内 train reward 0.52 → 0.59（+0.07，见 §9.13）；`lr=3e-7`（perf recipe）不收敛。全部踩坑 + 收敛数据 + 下一步优化见 **§9 实战 bring-up 全记录**。下一步：FP8 端到端 + DAPO 风格冲完整收敛曲线（§9.15）。
