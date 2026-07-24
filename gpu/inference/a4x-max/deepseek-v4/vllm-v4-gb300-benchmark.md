@@ -760,6 +760,35 @@ dep8 峰值 3,187/GPU vs SGLang 9,000/chip，同 checkpoint（FP4 experts + FP8 
 
 > **下一步旋钮**（未验证）：(a) 降 `max_num_seqs` 1024→512（减并发换 KV 块余量抗 fan-in 崩溃）；(b) 降 `num_speculative_tokens` 7→3（减每 seq 的 KV/算力）；(c) router 侧限 prefill fan-in 速率；(d) 换更鲁棒 KV 传输（对标 SGLang Mooncake）。**根治崩溃是打到 SGLang 9,000 的前提——只有稳住 16 prefill 满配才够得着。**
 
+#### 9.11.4 ⭐⭐⭐⭐⭐ 崩溃根因彻底定位：两个独立失效模式（2026-07-24）
+
+开 `PYTHONFAULTHANDLER=1` + `core_pattern→/mnt/ssd` 复现后，崩溃拆成**两个完全独立的 bug**：
+
+**失效模式 A — ephemeral storage 耗尽驱逐（14p killer，已修复）**
+
+- **根因链**：decode worker 崩溃时吐 **7.5–9.4GB core dump 到容器根目录 `/`（ephemeral 系统盘）**。`core_pattern` 默认 `/core.%e.%p.%t` 写容器根。多次崩溃 core 累积（+ tmp/inductor cache 也写小盘）→ 节点 ephemeral 超阈值（threshold 10GB，实测占 51GB）→ **kubelet 驱逐 decode-worker pod（`Evicted` exit 137）** → head 等不到 remote DP worker（decode 第二节点） → dep8 判死。**之前所有 `EngineDeadError` / `Failed to notify KV connector about rejected request` 全是下游假象。**
+- **修复**：`ulimit -c unlimited` + `core_pattern→/mnt/ssd`（12TB RAID）+ `TMPDIR`/`XDG_CACHE_HOME`/`TORCHINDUCTOR_CACHE_DIR→/mnt/ssd`。
+- **验证**：修复后 **14p 干净通过 4096/4096，output 26,568=3,321/GPU，dep8 存活，0 core**（此前 14p 必崩）。**14p 3,321/GPU 是当前最优稳定点。**
+- 诚实注明：修复是治真病根（磁盘耗尽），非关 core dump 掩盖。
+
+**失效模式 B — CUDA device-side assert（16p，未修复）**
+
+修复 A 后冲 16p 仍崩，但 **decode-worker pod=Running（未被驱逐）**——证明是**另一个 bug**，不是 ephemeral：
+
+- **首崩**：`Worker_DP1` 在 `model_runner.py:1073 sample` → `RuntimeError: Triton Error [CUDA]: device-side assert triggered`（sampling kernel 设备侧断言）。
+- **级联**：DP1 死 → DP-attention 每步的 gloo all_reduce padding 同步（`dp_utils.py sync_cudagraph_and_dp_padding`）在其他 rank 报 `Connection closed by peer` → `ProcessGroupNCCL::HeartbeatMonitor` 检测 TCPStore 断连 → **SIGABRT 级联全 8 DP rank**（faulthandler 显示各 rank 死在 `cumem.py release_pools`/GC 的 teardown 路径）→ dep8 死。
+- **结果**：16p 3529/6144 partial，output 22,389=2,799/GPU。core（9.3GB/rank）已安全落 /mnt/ssd。
+- **推断**：device-side assert 大概率是 sampling 数值边缘（logits NaN/inf 或 invalid sample index），16p 更高并发统计上更易触发，可能与 DSpark spec + FP8/FP4 numerics 相关。async CUDA error 使上报栈定位到 `sample`，确切 assert 需 `CUDA_LAUNCH_BLOCKING=1 + TORCH_USE_CUDA_DSA=1` 重跑锁定。gdb 分析 core 未成（镜像 apt 源无 gdb 包）。
+
+**当前结论**：
+| prefill | output÷8/GPU | 状态 |
+|---|---|---|
+| 12（ephemeral 修复前 fail 策略）| 3,187 | 干净 |
+| **14（ephemeral 修复后）** | **3,321** | **干净 4096/4096，稳定最优** |
+| 16（ephemeral 修复后）| 2,799 | ❌ CUDA device-side assert 崩（partial） |
+
+> **一句话**：dep8 崩溃是**两个叠加 bug**——(A) core dump 撑爆 ephemeral 驱逐 pod（已修：core/tmp/cache→/mnt/ssd，14p 现稳达 3,321/GPU）；(B) 16p 下 sampling kernel CUDA device-side assert 触发 gloo/NCCL 级联 abort（未修，需 CUDA_LAUNCH_BLOCKING 锁定确切断言）。**14p 3,321/GPU = SGLang 9,000 的 37%，是当前可稳定复现的最优。** 逼近 SGLang 仍需 (B) 的数值修复 + AFD 级架构变更（见 [[concepts/afd-attn-ffn-disaggregation]]）。
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
