@@ -780,6 +780,19 @@ dep8 峰值 3,187/GPU vs SGLang 9,000/chip，同 checkpoint（FP4 experts + FP8 
 - **结果**：16p 3529/6144 partial，output 22,389=2,799/GPU。core（9.3GB/rank）已安全落 /mnt/ssd。
 - **推断**：device-side assert 大概率是 sampling 数值边缘（logits NaN/inf 或 invalid sample index），16p 更高并发统计上更易触发，可能与 DSpark spec + FP8/FP4 numerics 相关。async CUDA error 使上报栈定位到 `sample`，确切 assert 需 `CUDA_LAUNCH_BLOCKING=1 + TORCH_USE_CUDA_DSA=1` 重跑锁定。gdb 分析 core 未成（镜像 apt 源无 gdb 包）。
 
+**⭐ 确切断言已锁定（2026-07-24，TORCH_USE_CUDA_DSA=1 + conc2048 快速复现 + 即时抓日志）：**
+
+```
+/pytorch/aten/src/ATen/native/cuda/IndexKernelUtils.cu:16: vectorized_gather_kernel:
+block: [330,0,0], thread: [0,0,0]
+Assertion `ind >=0 && ind < ind_dim_size && "vectorized gather kernel index out of bounds"` failed.
+```
+
+- **确切根因**：`torch` 的 `vectorized_gather_kernel` 收到**越界索引**（`ind < 0` 或 `ind >= 维度大小`）。是 gather/index_select 的索引非法，不是 logits NaN 本身。
+- **触发路径**：sampling 后（`model_runner.py:1073 sample`）用 token id 做 gather，高并发下某 token 索引越界。**最可能是 DSpark spec decode 的 -1 sentinel（拒绝/无 token 占位）在高并发某边缘未被 mask 就进了 gather，或 draft/sampled token id 变非法**。
+- **关键性质**：`CUDA_LAUNCH_BLOCKING=1`（同步、慢一半）**无法复现**（采样次数减半，统计上没踩到）→ 证实是**罕见统计性越界**，高吞吐才触发。快速执行 conc2048 稳定复现。
+- **修复方向**：(a) 消融确认——conc2048 去掉 `num_speculative_tokens`（禁 spec）看崩溃是否消失，定位是否 spec 采样路径；(b) 若是 spec，需 patch vLLM DSpark 的 sentinel mask 或上报 upstream issue；(c) 临时规避——高并发场景禁 spec（损失 spec 加速换稳定），或限 conc≤1024（当前稳定档 3,321–3,525/GPU）。
+
 **当前结论**：
 | prefill | output÷8/GPU | 状态 |
 |---|---|---|
