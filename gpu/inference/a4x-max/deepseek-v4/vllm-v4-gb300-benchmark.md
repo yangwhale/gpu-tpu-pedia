@@ -884,6 +884,29 @@ Assertion `ind >=0 && ind < ind_dim_size && "vectorized gather kernel index out 
 
 > **一句话**：4k1k 相比 8k1k 是**延迟大赢（TTFT 12×）、吞吐小赢(+6%)**。decode memory-bound 使吞吐对 batch 弱敏感；真吞吐天花板在 in-flight 并发（conc 上限）+ 高并发崩溃，不在输入长度。要显著提吞吐仍需修崩溃（§9.11.4-B）解锁高并发，或 MoE kernel 效率（MegaMoE/AFD）。
 
+**无 spec 高并发诊断：解锁 conc2048 后为何吞吐仍不涨（2026-07-24）：**
+
+禁 spec 解锁 conc2048 后 `/metrics` + `nvidia-smi` 实测：
+
+| 指标 | spec-on conc1024 | 无spec conc2048 |
+|---|---|---|
+| decode running batch | ~997 | **~1,600**（+60%）|
+| num_requests_waiting | ~3 | ~4（无排队）|
+| GPU util | 100% | **100%** |
+| **memory-controller util** | — | **46%**（未饱和！）|
+| HBM used | 263 GB | 241 GB |
+| Output÷8 /GPU | 3,321 | 3,372 |
+| MFU | ~6% | **~6.2%** |
+| TPOT | 22 ms | 51 ms |
+
+**⭐ 定论：吞吐不涨既不是"喂不饱"、也不是"HBM 带宽饱和"，而是 SM 被低效 MoE-decode 开销占满。**
+1. **不是 feed-limited**：batch 已从 997 涨到 ~1,600，waiting≈4（无排队）——decode 喂得进去了。
+2. **不是 HBM 带宽墙**：memory-controller util 仅 **46%**（若带宽饱和应 ~100%）。HBM 带宽没打满。
+3. **真因 = SM-bound 在低-FLOP 开销上**：GPU util 100% 但 MFU 仅 6% + mem-util 46% → SM 全忙，但干的是**低算力密度的活**：EP all-to-all 通信（NVLink dispatch/combine 占 SM）+ 小 expert GEMM（每 expert token 少、GEMM 小、启动/延迟开销占比高）+ DSA 稀疏 indexer。加 batch（997→1,600）只让 TPOT 同比涨（22→51ms），总吞吐几乎不动——因为**每步的固定开销（通信 + kernel 启动）不随 batch 摊薄**。
+4. **⚠️ 重要修正：MegaMoE 已经开着了**（`--moe-backend deep_gemm_mega_moe`，vllm 代码 `use_mega_moe` + `MegaMoE input staging` 已生效）。**开着 MegaMoE 仍只有 6% MFU** → 说明 MoE kernel 融合**不是**缺的那块。真正缺的是 **AFD（attn-ffn 分离聚合 token）**：coexist 下每 GPU 的 expert 只见**本地**那点 token（batch 小、GEMM 小），即使融成单 kernel，小 GEMM 依旧算术强度低。FastAFD 的增益来自 **AFD 把多个 attn worker 的 token 聚合成大 expert batch**（见 [[concepts/afd-attn-ffn-disaggregation]]），MegaMoE 只是配套 kernel。
+
+> **给 chris 的一句话**：并发 ~1,600、MFU ~6%、HBM 用 241GB/284GB、**内存带宽只 46%**。吞吐上不去不是喂不饱也不是带宽满，是 **SM 被 MoE 的通信+小 GEMM 开销占满干低效活**。**MegaMoE（`deep_gemm_mega_moe`）本栈已开且仍 6% MFU**——缺的不是 kernel 融合，是 **AFD 级 token 聚合**（把小 expert GEMM 变大）。而 AFD 是 SGLang/MegaScale-Infer 的部署架构，**vLLM 本栈不原生支持**，纯配置/参数在这已到顶。
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
