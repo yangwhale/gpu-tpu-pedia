@@ -348,6 +348,112 @@ RL 后训练的 baseline 分两类，**都要盯**：
 
 ---
 
+## 9. GB300 4 节点实战 bring-up 全记录（踩坑与解法）
+
+> 实测环境：GB300 NVL72（A4X Max）GKE 集群，4 节点 × 4 GPU = 16 GPU，单 NVL72 域（MNNVL 全 NVLink），Qwen3-30B-A3B GRPO（`grpo-qwen3-30ba3b-4n4g` recipe）。以下是从零到训练循环跑通、逐个根因解决的真实记录。
+
+### 9.1 ⭐ 镜像版本：v0.5.0 在 GB300 上跑不了，必须 v0.6.0
+
+GB300 = **Blackwell Ultra，compute capability sm_103（不是 GB200 的 sm_100）**。`nemo-rl:v0.5.0`（vLLM 0.11.2 / Triton 3.5 / PyTorch 2.9）里 Triton 自带的 LLVM NVPTX 后端**无法 lower Blackwell 第 5 代 tensor core 指令**：
+
+```
+LLVM ERROR: Cannot select: intrinsic %llvm.nvvm.tcgen05.wait.st
+```
+
+`tcgen05`（tensor core gen5 / tensor memory）是 Blackwell 专用 PTX。vLLM 的 fused MoE kernel 会生成它，Triton 的 LLVM 编不出来 → SIGABRT。`enforce_eager=True` 只关掉 torch.compile，vLLM 仍直接用 Triton kernel，照样崩；强制 `TRITON_OVERRIDE_ARCH=sm100` 也没用（sm_100 本身也是 Blackwell、照样走 tcgen05，而降到 sm_90 会生成 Hopper SASS 无法在 GB300 加载）。
+
+**解法：换官方 `nvcr.io/nvidia/nemo-rl:v0.6.0`**（vLLM 0.17.1 + PyTorch 2.10 + cuda-dl-base 25.05），原生支持 GB300。换完 vLLM 生成 + CUDA graph capture 全部正常。**教训：GB300 上任何推理/训练栈，先确认镜像的 vLLM/Triton/PyTorch 版本够新（vLLM ≥ 0.17、PyTorch ≥ 2.10）。**
+
+### 9.2 DRA / ComputeDomain：单 NVL72 域用 MNNVL，不要 RDMA
+
+4 节点若在**同一个 NVL72 域**（同 `cliqueID`、同 `gce-topology-subblock`），走 MNNVL 全 NVLink 即可，**不需要 RDMA**。pod 只挂 `compute-domain-channel`（IMEX channel）claim，把 `mrdma` claim 删掉。RDMA 只在**跨 NVLink 域**（如 256 GPU 跨 4 subblock）才需要。
+
+验证：`kubectl get computedomain <cd> -o jsonpath='{.status.nodes[*].cliqueID}'` 4 节点应同一 clique；容器内 `ls /dev/nvidia-caps-imex-channels/` 有 channel 设备。
+
+### 9.3 ⚠️ pod 必须走 scheduler，不能用 `nodeName` 直绑
+
+用 `nodeName` 硬指定节点会**绕过 kube-scheduler**，DRA scheduler 插件没机会给 pod reserve channel claim：
+
+```
+FailedPrepareDynamicResources: pod is not allowed to use ResourceClaim <ch> ... (claim state: pending)
+```
+
+**解法：用 StatefulSet + `nodeSelector` + `podAntiAffinity`（每节点 1 pod），让 scheduler 分配**。同 pool 节点都在一个 clique，scheduler 放哪都在域内。
+
+### 9.4 Local SSD RAID：pool 可能没有 RAID DaemonSet
+
+Megatron 转换出的 mcore checkpoint（~60GB）+ 模型权重（~60GB）+ Ray temp 都要落 local SSD（`/mnt/disks/raid/0`）。踩坑：某些 pool 没有 `gke-raid-disks` DaemonSet，个别节点的 4 块 NVMe 早被组成 `md127` 但**没挂载**，hostPath fallback 到 tmpfs 256K → 立刻 DiskPressure 驱逐 / OOM。
+
+**解法：克隆 `gke-raid-disks` DaemonSet 指向目标 pool（幂等，`grep md0 /proc/mdstat` + `mountpoint -q` 双检）**；对已存在 `md127` 的节点，手动 `mount /dev/md127 /mnt/disks/raid/0`。
+
+### 9.5 ⭐⭐ Megatron HF→mcore 转换需要共享存储 — 单节点转换是绕过妙招
+
+NeMo RL 首次运行时，Megatron-Bridge 做一次性 **HF→mcore（torch_dist 格式）转换**，是**跨全部训练 rank 的集合操作，所有 rank 必须写到同一个共享目录**。若用 node-local SSD（不共享）：rank0 的节点写了自己那几片，其他节点的 rank 找不到 → 转换崩在半路，留下一个 **`.metadata` 声称 16 片、实际只有 4 片**的残缺 checkpoint。集群没有 Lustre/Filestore 时（本环境即如此），这一步过不去。
+
+**Chris 的绕过方案（已验证）——单节点转换 + 分发：**
+1. 在**单节点 4 GPU**（`cluster.num_nodes=1`、`expert_model_parallel_size=4`）跑一次，让所有 4 个 rank 都在本机、写本地 SSD → 得到**完整的 mcore checkpoint**（EP4 布局，4 片 × 15GB ≈ 60GB，`.metadata` 一致）。
+2. 把这份完整 checkpoint 分发到全部节点相同路径（`/mnt/ssd/hf/nemo_rl/model__.../iter_0000000/`）。
+3. 4 节点正式跑（EP16）时，各 rank 读本地副本。
+
+**关键原理：torch_dist checkpoint 格式与并行布局无关（resharding-aware）**——EP4 转出来的 checkpoint，加载时会自动重切成 EP16、EP8、任意形状。**所以转换只做一次，通吃所有集群形状；换形状不用重转。** 佐证：NeMo RL 的缓存目录名只按模型名（`model__<path>`），不带并行参数。只有换模型本身才要重转。
+
+> 长期正解仍是共享存储（在集群同 region、同 VPC 建 Managed Lustre 或 Filestore CSI，RWX 挂到所有 pod）。单节点转换 + 分发是无共享存储时的可靠 workaround。
+
+### 9.6 Python 3.13 pickle 障眼 bug（掩盖真错误）
+
+v0.6.0 用 Python 3.13。dist-checkpoint 加载出错时，PyTorch 会跨 rank `all_gather_object` 收集异常堆栈，但 **Python 3.13 不再允许 pickle traceback 里的 code object**，于是打包这一步自己崩了，把**真正的错误**盖成：
+
+```
+TypeError: cannot pickle code objects   (torch/distributed/checkpoint/... all_gather_object → _object_to_tensor)
+```
+
+见 pytorch#174669。**解法：patch `torch/distributed/checkpoint/api.py` 的 `_wrap_exception`**，把 traceback 换成安全的 `StackSummary.from_list(...)` + `exc.with_traceback(None)`，真错误就显形了（本例真错误是 §9.5 的"缺 12 片 checkpoint"）。
+
+### 9.7 enforce_eager vs CUDA graph — 生成快 100 倍
+
+- bring-up 阶段用 `enforce_eager=True` 隔离编译问题、先拿绿。
+- **v0.6.0 在 GB300 上 CUDA graph capture 完全正常**（mixed prefill-decode + decode FULL 各 51 个 graph，11 秒捕获完，无 tcgen05/PTXAS 报错）。
+- 生成吞吐：`enforce_eager` 约 16 tok/s → **CUDA graph 约 8000 tok/s，快 2 个数量级**。正式跑必须 `enforce_eager=False`。
+
+### 9.8 单步耗时拆解 + 为什么慢（MFU 分析）
+
+Qwen3-30B-A3B（激活 3.3B）、4n×4GPU、每步 64 prompt × 32 gen = **2048 序列 ≈ 630 万 token**：
+
+| 阶段 | 占比 | 耗时（tmbs=4）|
+|---|---|---|
+| policy_training（反向+优化器）| ~40% | ~85s |
+| generation（vLLM，已 CUDA graph）| ~33% | ~70s |
+| policy_and_reference_logprobs（旧+参考 2 趟前向）| ~24% | ~50s |
+| **单步合计** | | **~215s** |
+
+训练侧 **MFU 仅约 4%**（理论 ~5s 却跑 135s）。根因：**MoE 小 GEMM（30B 只激活 3.3B，每专家分到 token 少喂不饱 tensor core）+ EP16 每层 all-to-all 通信 + GRPO 固有的 2 趟额外前向（旧 logprob + 参考 logprob）+ gen↔train 显存 offload/refit**。是**通信 + MoE 效率 bound，不是算力 bound**——所以生成快 100 倍也降不到秒级。
+
+**已验证的提速手段：`train_micro_batch_size` 1→4**（sequence packing mb_tokens 4096→16384），摊薄 kernel launch 开销，训练侧 135s→85s（**约 -40%**），单步 283s→215s。
+
+> NeMo RL 的 Megatron **训练侧** CUDA graph（`cuda_graph_scope=full_iteration`）在 RL 场景**官方没接、perf recipe 也不用**（gen/train 权重 refit + offload 会打破 graph 固定地址）。想进一步提速走 DeepEP dispatcher / EP overlap，不要硬 patch 训练 CUDA graph。
+
+### 9.9 perf recipe 的学习率是给"测吞吐"的，不是给"看收敛"的
+
+`grpo-qwen3-30ba3b-4n4g`（performance 目录）的 `megatron_cfg.optimizer.lr = 3e-7`，**极度保守**——它是拿来跑吞吐 benchmark 的，不是冲收敛。实测跑 50 步 reward 一直在 0.5 附近抖、不涨。**要看真实收敛，把 LR 调回正常值**（通用 `grpo_math_1B` 是 `5e-6`，高约 17 倍）。
+
+### 9.10 KL 惩罚对可验证 reward 的数学 RL 基本可砍
+
+`reference_policy_kl_penalty = 0.01`（k3 估计器）需要**额外一份冻结参考模型（~60GB 显存）+ 每步一整趟参考前向**。定量看：β=0.01 时，token 概率要偏离参考约 **100 倍（对数差 ≈ 4.6）** KL 力才追平 reward——是根极松的"指数软墙"，常态下几乎睡着。而数学/代码这类**可验证 reward** 根本没法 hack，KL 防 reward-hacking 的主场不成立。DAPO、Open-Reasoner-Zero 等纯推理 RL 直接 `β=0` 砍掉，省显存省一趟前向还放开探索。**本环境数学 RL 可考虑砍 KL。**
+
+### 9.11 pod 间大文件传输：走 pod 网络，别走 kubectl
+
+分发 60GB checkpoint 时实测：
+- `kubectl exec ... cat | kubectl exec -i ... tar x`（经本机中转）**~12 MB/s**，60GB 要 80 分钟——GKE API server 是瓶颈。
+- **pod 到 pod 直连（同 VPC）约 1.4 GB/s**，60GB 约 40 秒。
+
+**解法：源 pod 前台跑 `python3 -m http.server`（用 `run_in_background` 保活，否则 kubectl exec 会话结束进程被杀），其他 pod `curl | tar x` 拉取。** 注意 `http.server` 单线程，多个并发大下载会截断（"not a tar archive"）→ 用 `ThreadingHTTPServer` 或顺序拉。
+
+### 9.12 向 GCS 上传大文件：pod 节点 SA 是 read-only scope
+
+GKE 节点默认 SA scope 是 `devstorage.read_only`，**pod 内无法写 GCS**（即使 IAM 给了权限，scope 也挡）。从本机走 `kubectl exec cat | gcloud storage cp -` 又是 12MB/s。**正解：pod 内用带写权限的 SA key + gcloud/curl resumable upload（in-GCP GB/s），或提前给节点池配 `cloud-platform` scope。**
+
+---
+
 ## 参考
 
 - NeMo RL repo：https://github.com/NVIDIA-NeMo/RL
@@ -358,4 +464,4 @@ RL 后训练的 baseline 分两类，**都要盯**：
 - GB300 perf recipes：`examples/configs/recipes/llm/performance/`
 - 跨框架 RL 对比：SemiAnalysis《RL Systems Mind the Gap》(2026-06)
 
-> **状态**：本文为 recipe 复刻 + 理论整理，**尚未在本环境实跑**。下一步：按 §4 从 Stage 0c 单机收敛 baseline 起，逐级验证到 GB300 4 节点，把实测 step time/MFU/reward 曲线补进 §6。
+> **状态**：已在 GB300 NVL72 4 节点 × 4 GPU 实跑通 Qwen3-30B-A3B GRPO（v0.6.0 镜像），训练循环端到端跑通（生成→logprob→GRPO 更新→refit），实测单步 ~215s、训练 MFU ~4%。详见 **§9 实战 bring-up 全记录**。收敛验证进行中（perf recipe LR=3e-7 太保守 reward 不涨，已换 lr=5e-6 正式冲收敛）。
