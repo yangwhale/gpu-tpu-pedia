@@ -837,6 +837,25 @@ dep8 峰值 3,187/GPU vs SGLang 9,000/chip，同 checkpoint（FP4 experts + FP8 
 2. **加 prefill 喂料**：16p+ 提高喂料速率（受 device-assert 崩溃阻塞，需先修 §9.11.4-B）。
 3. AFD 此刻**不是**瓶颈——batch 远没到需要释放 HBM 的程度；等 batch 填满、MFU 上去后若 HBM 成为新限制再议。
 
+**4k1k 对比实测（feed 变足验证，2026-07-24）：**
+
+同 14p，输入减半（4k），验证"prefill 便宜→到达率↑→decode batch↑→吞吐↑"的 Little's Law 推断：
+
+| 指标 | 8k1k @14p | 4k1k @14p | 变化 |
+|---|---|---|---|
+| decode running batch | ~712 | **~997** | **+40%** |
+| Output÷8 /GPU | 3,321 | **3,525** | +6% |
+| Median TTFT | ~11,000 ms | **871 ms** | **12× 改善** |
+| Median TPOT | ~22 ms | 23.7 ms | +8% |
+| num_requests_waiting | ~312（prefill 队列）| ~3 | 队列几乎清空 |
+
+**⭐ 结论（部分证实 + 重要修正）：**
+1. **batch 确实随便宜 prefill 涨**：4k prefill 快一倍 → prefill 队列从 ~312 清到 ~3 → decode batch 712→997（+40%），TTFT 从 11s 暴降到 0.87s（**12× 延迟改善**）。Little's Law feed 模型方向正确。
+2. **但吞吐只 +6%（3,321→3,525/GPU），不是 +40%**：decode 是 memory-bound，batch 从 712→997 只小幅改善权重读取的算术强度摊薄，TPOT 反升 8%（大 batch）抵消大半。**decode 吞吐对 batch 弱敏感**——填 batch 的边际收益递减。
+3. **两者都被 benchmark conc=1024 顶住**（4k 的 997 已近 1024）。真正的吞吐天花板不是 4k/8k，是 **in-flight 并发上限**——要再上探必须 conc>1024 + 修复高并发 device-assert 崩溃（§9.11.4-B，实测 conc 2048/4096 会触发同一崩溃）。
+
+> **一句话**：4k1k 相比 8k1k 是**延迟大赢（TTFT 12×）、吞吐小赢(+6%)**。decode memory-bound 使吞吐对 batch 弱敏感；真吞吐天花板在 in-flight 并发（conc 上限）+ 高并发崩溃，不在输入长度。要显著提吞吐仍需修崩溃（§9.11.4-B）解锁高并发，或 MoE kernel 效率（MegaMoE/AFD）。
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
