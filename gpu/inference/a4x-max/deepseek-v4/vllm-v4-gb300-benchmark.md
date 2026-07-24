@@ -816,7 +816,26 @@ dep8 峰值 3,187/GPU vs SGLang 9,000/chip，同 checkpoint（FP4 experts + FP8 
 2. **压缩 KV**：DeepGEMM PR#304 的 FP4 Indexer 把 V4 KV 从 132→68 byte/token(-48%)——KV 从 90GB 砍半可腾出 HBM 加 batch。
 3. **不能简单加 max_num_seqs**：HBM 已 93% 满。
 
-> **一句话**：dep8 decode 在 14p 是 **100% util / 6% MFU / HBM 93% 满 / KV 90GB** 的 memory-bandwidth-bound 状态——compute 有 94% 余量但被内存墙锁死，且 HBM 无空间加 batch。这就是 vLLM coexist dep8 只有 SGLang 37% 的物理根因，也印证了 AFD "长上下文饿死 MoE"。真正提升要么 AFD 释放 HBM、要么压缩 KV 腾空间。
+> **一句话**：dep8 decode 在 14p 是 **100% util / 6% MFU / HBM 93% 满 / KV 90GB** 的 memory-bandwidth-bound 状态——compute 有 94% 余量但被内存墙锁死。**但内存墙的成因是 batch 太小（见下 decode batch 判定），不是 HBM 装不下。**
+
+**decode batch 判定（2026-07-24，`/metrics` 实测）：decode 严重 feed-limited，不是 capacity-limited。**
+
+14p 稳定负载（benchmark conc=1024）下采样 8 个 DP engine 的 `vllm:num_requests_running`：
+
+| 指标 | 实测 | 容量 | 利用率 |
+|---|---|---|---|
+| running/engine | ~89 | max_num_seqs=1024 | **8.7%** |
+| running 总（8 engine）| **~712** | 8,192 | 8.7% |
+| num_requests_waiting | **≈0** | — | 无排队 |
+
+- **decode 只用了 8.7% 的 batch 容量**（89/1024 per rank），且 **waiting≈0**——decode 处理完就饿着，根本没请求排队。
+- **⭐ 结论：MFU 6% 的真因是 decode batch 太小（89/rank）→ expert GEMM 算术强度低 → memory-bound**。**不是 HBM 满、不是 KV 限制、不是 AFD 需要的 capacity 瓶颈**——是**喂料喂不进去**（feed-limited）。decode 有 **11× 空间**（89→1024）没用。
+- 这也修正了"HBM 93% 满 → 加不了 batch"的表面结论：HBM 是被预分配的 KV 占着（可服务远多于 89 的并发），真限制是 in-flight 请求不够填满 decode。
+
+**确定性下一步（按限制类型对症）：**
+1. **拉高 in-flight 并发**：benchmark conc 1024→4096，或真实场景更高 QPS——让更多请求同时在 decode，把 batch 从 89 填向 1024，直接提 MFU + 吞吐（零配置改动、零崩溃风险，最先试）。
+2. **加 prefill 喂料**：16p+ 提高喂料速率（受 device-assert 崩溃阻塞，需先修 §9.11.4-B）。
+3. AFD 此刻**不是**瓶颈——batch 远没到需要释放 HBM 的程度；等 batch 填满、MFU 上去后若 HBM 成为新限制再议。
 
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
