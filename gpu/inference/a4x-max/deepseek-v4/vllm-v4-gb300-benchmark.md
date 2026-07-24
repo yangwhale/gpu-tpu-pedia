@@ -793,6 +793,19 @@ Assertion `ind >=0 && ind < ind_dim_size && "vectorized gather kernel index out 
 - **关键性质**：`CUDA_LAUNCH_BLOCKING=1`（同步、慢一半）**无法复现**（采样次数减半，统计上没踩到）→ 证实是**罕见统计性越界**，高吞吐才触发。快速执行 conc2048 稳定复现。
 - **修复方向**：(a) 消融确认——conc2048 去掉 `num_speculative_tokens`（禁 spec）看崩溃是否消失，定位是否 spec 采样路径；(b) 若是 spec，需 patch vLLM DSpark 的 sentinel mask 或上报 upstream issue；(c) 临时规避——高并发场景禁 spec（损失 spec 加速换稳定），或限 conc≤1024（当前稳定档 3,321–3,525/GPU）。
 
+**⭐ 消融确认（2026-07-24）：DSpark spec 是崩溃根因，但禁 spec 不提吞吐（decode 已 memory-bound）。**
+
+去掉 `num_speculative_tokens`（禁 DSpark spec）后 conc2048 8k1k：
+
+| 配置 | Output÷8/GPU | TPOT | conc2048 稳定性 |
+|---|---|---|---|
+| spec ON | 3,321（仅 conc1024）| 22 ms | ❌ vectorized_gather OOB 崩 |
+| **spec OFF** | **3,372** | 51 ms | ✅ **6144/6144 全过，dep8 存活，gather_assert=0** |
+
+1. **崩溃根因实锤 = DSpark spec**：禁 spec 后 conc2048 零崩溃、零 gather 断言。spec 的 draft/sentinel 索引在高并发下越界喂进 gather。**修复 = patch vLLM DSpark sentinel mask（上报 upstream）或高并发禁 spec。**
+2. **但禁 spec ≠ 提吞吐**：spec OFF 的 3,372/GPU 仅比 spec ON 的 3,321 高 1.5%，且 TPOT 翻倍（22→51ms，无 spec 每 token 都是真 forward）。两者都撞 **~3,400/GPU 的 memory-bound 天花板**——spec 用算力换内存流量摊薄，禁 spec 换稳定，但都突破不了内存墙。
+3. **最终定论**：dep8 decode 天花板 ≈ **3,300–3,400/GPU = SGLang 9,000 的 ~37%**，是 **memory-bandwidth-bound**（小 batch 读 FP4 权重），spec 调参、并发拉高、输入缩短都撬不动。要逼近 SGLang 只有两条路：**(a) MegaMoE 级 kernel 融合**提高 expert GEMM 效率（SGLang 的核心优势），**(b) AFD 释放 HBM 加 batch**（见 [[concepts/afd-attn-ffn-disaggregation]]）。纯配置/参数调优在本 vLLM 栈已到顶。
+
 **当前结论**：
 | prefill | output÷8/GPU | 状态 |
 |---|---|---|
