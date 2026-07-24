@@ -5,6 +5,8 @@
 
 > 资料来源：vLLM 官方 blog「DeepSeek V4 in vLLM」(2026-04-24)、「DeepSeek-V3.2 on GB300」(2026-02-13)、vLLM recipe 站 `recipes.vllm.ai/deepseek-ai/DeepSeek-V4-Pro`、SemiAnalysis InferenceX `benchmarks/.../vllm/deepseek-v4/8k1k/*.yaml` + InferenceX 公开对比榜单。
 
+> 🐞 **重要已知问题（2026-07-24 定位，详见 §9.11.4-B）**：vLLM DSpark 投机解码（`--speculative-config method=dspark`）在 **高并发（conc>1024 或 ≥14 prefill 满喂）下必崩**——`vectorized_gather_kernel` 索引越界（`IndexKernelUtils.cu:16: Assertion \`ind >=0 && ind < ind_dim_size\` failed`），draft/sentinel token 索引在高并发下越界喂进 gather。一个 DP rank 崩 → gloo/NCCL 心跳级联 abort 全 8 rank → dep8 整体死。**消融确认：禁 `num_speculative_tokens` 后 conc2048 零崩（6144/6144）**。**规避：高并发禁 spec，或限 conc≤1024。根治需 patch vLLM DSpark sentinel mask 并上报 upstream。** 另注意 core dump 默认写容器 ephemeral 会撑爆节点触发 pod 驱逐，须 `ulimit -c` + `core_pattern`/`TMPDIR`/cache 全指向大盘 hostPath（详见 §9.11.4-A）。
+
 ---
 
 ## TL;DR
