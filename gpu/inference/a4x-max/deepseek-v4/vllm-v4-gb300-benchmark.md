@@ -789,6 +789,35 @@ dep8 峰值 3,187/GPU vs SGLang 9,000/chip，同 checkpoint（FP4 experts + FP8 
 
 > **一句话**：dep8 崩溃是**两个叠加 bug**——(A) core dump 撑爆 ephemeral 驱逐 pod（已修：core/tmp/cache→/mnt/ssd，14p 现稳达 3,321/GPU）；(B) 16p 下 sampling kernel CUDA device-side assert 触发 gloo/NCCL 级联 abort（未修，需 CUDA_LAUNCH_BLOCKING 锁定确切断言）。**14p 3,321/GPU = SGLang 9,000 的 37%，是当前可稳定复现的最优。** 逼近 SGLang 仍需 (B) 的数值修复 + AFD 级架构变更（见 [[concepts/afd-attn-ffn-disaggregation]]）。
 
+#### 9.11.5 ⭐⭐⭐⭐⭐ decode MFU + HBM 实测：memory-bound 实锤（2026-07-24）
+
+14p 稳定档（output 26,568 tok/s = 3,321/GPU）下 `nvidia-smi` 实测两个 decode 节点全 8 GPU：
+
+| 指标 | 空载 | 14p 负载 |
+|---|---|---|
+| GPU util | 0% | **100%**（个别 dip 70–92% = DP 不均衡/async output）|
+| 功耗 | ~220 W | **1,000–1,120 W**（近满载）|
+| SM 时钟 | — | **2,070 MHz（最大 boost）** |
+| HBM 占用 | 263.5 GB | 263.5 GB（KV 启动即预分配，负载不变）|
+| HBM 总量 | 284 GB（276 GiB 可用）| **占用 92.7%，仅剩 ~20 GB** |
+| KV cache | — | **~90 GB/GPU**（97.2 GB, 64358 blocks）|
+
+**算力利用率：**
+- **MFU ≈ 6%**：achieved(accepted-token GEMM) = 2×37e9×26,568 = 246 TFLOP/s/GPU；混合峰值（experts FP4 dense 5,000 + attn/dense FP8 2,500，加权 ~4,000 TFLOP/s/GPU）→ 6.2%。（注：MTP spec draft+verify + 8k attention 使原始 forward 计算 > accepted-token，硬件实际更忙，故 util 100%。）
+
+**⭐ 核心判断：decode 是 memory-bandwidth-bound，不是"空转饿死"。**
+
+- **100% util + 满功耗满时钟 + 仅 6% MFU** = SM 全忙但卡在 HBM 读取（小 batch 下 expert GEMM 算术强度太低 + 8k KV 读取吃带宽）。这不是"idle 等 token"，是"忙着读内存、算得少"——**memory-bound 的典型签名**。
+- **HBM 92.7% 占满（KV 90GB + 权重挤同一块 HBM），仅剩 20GB** → 无法通过加大 `max_num_seqs`/batch 来提高每 expert 的 token 数（一加就 OOM，实测 mem 0.92 启动即 OOM 印证）。
+- **这实锤了 [[concepts/afd-attn-ffn-disaggregation]] 的论断**：coexist decode 下 KV 与 FFN 权重争抢同一 HBM，长上下文(8k)让 KV 吃满显存 → MoE batch 缩小 → 算术强度低 → memory-bound → MFU 仅 6%。
+
+**优化方向（数据指向）：**
+1. **AFD（attn/ffn 分离）**：把 FFN 权重挪到独立 GPU，attention GPU 释放出 HBM → 更大 KV/batch → 每 expert 更多 token → 提 MFU。这是结构性大招（见 wiki 页）。
+2. **压缩 KV**：DeepGEMM PR#304 的 FP4 Indexer 把 V4 KV 从 132→68 byte/token(-48%)——KV 从 90GB 砍半可腾出 HBM 加 batch。
+3. **不能简单加 max_num_seqs**：HBM 已 93% 满。
+
+> **一句话**：dep8 decode 在 14p 是 **100% util / 6% MFU / HBM 93% 满 / KV 90GB** 的 memory-bandwidth-bound 状态——compute 有 94% 余量但被内存墙锁死，且 HBM 无空间加 batch。这就是 vLLM coexist dep8 只有 SGLang 37% 的物理根因，也印证了 AFD "长上下文饿死 MoE"。真正提升要么 AFD 释放 HBM、要么压缩 KV 腾空间。
+
 ### 9.7 GCS 传输 auth 坑
 GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载用：本机 `gcloud auth application-default print-access-token` → cp token 进 pod → `CLOUDSDK_AUTH_ACCESS_TOKEN=<token> gcloud storage cp ... --billing-project=<project>`（`gcloud auth login --cred-file` 不吃 authorized_user ADC；只有 `CLOUDSDK_AUTH_ACCESS_TOKEN` 能让 gcloud CLI 用上）。用完删 token。
 
