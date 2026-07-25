@@ -14,7 +14,7 @@
 
 三块静态显存：
     权重(BF16)  = 2 x 每GPU参数
-    梯度(FP32)  = 4 x 每GPU参数                （Megatron bf16 默认 fp32 main_grad）
+    梯度(BF16)  = 2 x 每GPU参数                （deepseek recipe 设 grad_reduce_in_fp32=False）
     优化器      = 12 x P_total / N             （关键：EP 会约掉！见下）
 
 优化器那条为什么与 EP 无关：
@@ -44,11 +44,13 @@ GB = 1024**3
 # 运行时开销标定系数：CUDA graph buffer + EP dispatch/combine buffer + NCCL + 碎片。
 # 反标定自 07e Part 7 实测锚点：DSV3 31L / 128 GPU / TP1 PP2 VPP8 EP64 / MBS1 / MXFP8
 #   朴素四项合计 84.5 GB  vs  实测 max reserved 113 GB  ->  1.34x
-# 单锚点标定，误差可能 ±15%。Hy3 首跑后应重新标定。
-OVERHEAD = 1.34
+# 2026-07-25 Hy3 实跑回标：64 GPU / PP2 VPP8 EP32 / MBS1 / BF16
+#   朴素 129.5 GB（梯度按 BF16 2B 算）vs 实测 184 GB -> 1.42x
+# 已按 Hy3 实测更新（DSV3 锚点给的是 1.34x）。
+OVERHEAD = 1.42
 
 
-def static_mem(n_gpu, pp, ep, grad_dtype_bytes=4):
+def static_mem(n_gpu, pp, ep, grad_dtype_bytes=2):
     """返回 (权重, 梯度, 优化器) GB/GPU。"""
     dp = n_gpu // pp
     assert dp % ep == 0, f"EP={ep} 不整除 DP={dp}"
@@ -68,7 +70,7 @@ def activation_mem(pp, vpp, mbs, seq):
     return base * vpp_factor
 
 
-def evaluate(n_gpu, pp, ep, mbs, seq=4096, vpp=8, grad_bytes=4):
+def evaluate(n_gpu, pp, ep, mbs, seq=4096, vpp=8, grad_bytes=2):
     w, g, o = static_mem(n_gpu, pp, ep, grad_bytes)
     a = activation_mem(pp, vpp, mbs, seq)
     naive = w + g + o + a
@@ -118,7 +120,7 @@ def main():
         p_local = P_EXPERT / (pp * ep) + P_OTHER / pp
         print(f"每 GPU 参数: 专家 {P_EXPERT/(pp*ep)/1e9:.2f}B + 其他 "
               f"{P_OTHER/pp/1e9:.2f}B = {p_local/1e9:.2f}B")
-        for k, label in [("w", "权重 BF16 (2B)"), ("g", "梯度 FP32 (4B)"),
+        for k, label in [("w", "权重 BF16 (2B)"), ("g", "梯度 BF16 (2B)"),
                          ("o", "优化器 (12B/N)"), ("a", "激活")]:
             print(f"  {label:<22} {r[k]:7.1f} GB")
         print(f"  {'朴素小计':<22} {r['naive']:7.1f} GB")

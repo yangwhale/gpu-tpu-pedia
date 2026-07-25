@@ -74,17 +74,16 @@ cd /opt/Megatron-Bridge
 # 精度：首跑 BF16 对齐腾讯官方口径（官方三套 SFT 栈全 BF16，无 FP8 训练路径）。
 # MoE 上 FP8 相对 BF16 实测只有 -5%~+5%（见 README 三节），FP8_MX 作为对照另跑。
 numactl --cpunodebind=$((LOCAL_RANK/2)) --membind=$((LOCAL_RANK/2)) \
-python /tmp/hy3_provider.py \
-  --mode pretrain \
+python /tmp/hy3_pretrain.py \
   --num-gpus 64 \
   --tp 1 --pp 2 --vpp 8 --ep 32 \
+  --cuda-graph transformer_engine \
+  --recompute-modules moe_act \
   --mbs 1 --gbs 2048 \
   --seq-length 4096 \
   --precision bf16 \
   --mtp-layers 0 \
-  --max-steps 30 \
-  --data mock \
-  --log-dir /tmp/nemo-results
+  --max-steps 30
 WORKER
 chmod +x /tmp/worker.sh
 
