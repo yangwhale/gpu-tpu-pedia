@@ -486,10 +486,22 @@ GKE 节点默认 SA scope 是 `devstorage.read_only`，**pod 内无法写 GCS**�
 对比 `gpu/a4x/09-rl-training`（GB200 RL 指南）+ 本次实测，提速/提收敛优先级：
 
 1. **FP8 端到端**（最大杠杆）：GB300 FP8 tensor core 吞吐 ≈ BF16 的 2×，v0.6.0 镜像支持端到端 FP8（rollout + training）。直击本次 MFU 仅 ~4% 的痛点，比调 microbatch 猛得多。
-2. **DAPO 风格冲收敛**：砍 KL（`reference_policy_kl_penalty=0` 省一份参考模型 + 一趟前向）+ clip 范围放宽（`ratio_clip` 非对称/更大）+ LR schedule（warmup + decay）+ 更多步数。数学可验证 reward 无 hack 风险，砍 KL 安全。
+2. **DAPO 风格冲收敛**：砍 KL（`reference_policy_kl_penalty=0` 省一份参考模型 + 一趟前向）+ clip 范围放宽（`ratio_clip` 非对称/更大）+ LR schedule（warmup + decay）+ 更多步数。数学可验证 reward 无 hack 风险，本次 30B / 200 步尺度砍 KL 安全。**注意尺度前提**：万亿参数纯 Zero-RL 长跑里 KL 反而是刚需（防熵坍缩/数值爆炸），见 §9.16。
 3. **NCCL 环境**（GB200 文档推荐值）：`NCCL_MNNVL_ENABLE=2`（域内自动 MNNVL，本次用的 1）、`NCCL_CUMEM_ENABLE=1`、`CUDA_DEVICE_MAX_CONNECTIONS=1`、`PYTORCH_CUDA_ALLOC_CONF=expandable_segments:True`。
 4. **训练侧通信优化**：MoE 走 DeepEP dispatcher + EP overlap（`overlap_moe_expert_parallel_comm`）替代 alltoall，缓解 EP16 all-to-all 瓶颈。
 5. **框架选型参考**：GB200 文档主推 veRL（FSDP + colocated），NeMo RL（Megatron 后端）是 NVIDIA 主推给 GB300 的；两者超参基本一致（mini-batch 2-4、num_iter 1、clip 0.2、kl 0.01-0.05），LR 参考 veRL 用 1e-6（介于 3e-7 与 5e-6 之间，更稳）。
+
+### 9.16 万亿尺度 RL 的三条借鉴（Ring-2.5-1T-Zero）
+
+蚂蚁 [Ring-2.5-1T-Zero](https://arxiv.org/abs/2607.12395)（万亿参数纯 Zero-RL）的工程结论，与本次 NeMo RL 实跑直接相关：
+
+1. **KL 该不该砍取决于尺度 × 时长**：本次 30B / 200 步砍 KL 安全（§9.15.2）；但 1T 纯 Zero-RL 长跑（几个月）里 KL 是刚需——放大低概率 token 梯度会同时放大训推引擎浮点差，不加 KL 拴着就数值爆炸，且参考模型要**定期更新**（非永久冻结）。判据是规模越大、跑得越久、越易崩 → KL 越必需。
+
+2. **重要性比值分子用训练引擎真值（治训推 logprob 失配）**：标准做法 ratio 的"旧 logprob"取推理引擎（vLLM）logit，但 vLLM 生成 vs Megatron 训练两套引擎有微小浮点差，放大后易崩、靠 clip 截断只能推迟。Ring-Zero 解法：**ratio 分子用 Megatron 当前前向的真实 logit，分母才用 vLLM 的**——合乎 off-policy 定义、不需截断、更稳更快、省一趟 actor 重算。**NeMo RL（vLLM+Megatron）可直接借鉴**，把两引擎 logprob 差从 bug 变成合法 off-policy 修正。
+
+3. **长度惯性用 sample-level loss 治**：token-level loss 天然鼓励拉长序列（越长梯度信号越多）→ 简单题也堆废话骗奖励（16k→32k 窗口输出翻倍但 reward 几乎不涨）。治法：自蒸馏修剪冗余 CoT + token-level → **sample-level loss**（按序列长度归一化梯度）+ 按难度分层 System Prompt（认知路由）。
+
+> GRPO 逐 token 公式 + KL/ratio 机制详解见 CC Wiki《GRPO 训练内核》concepts/grpo-training-internals §10。
 
 ---
 
