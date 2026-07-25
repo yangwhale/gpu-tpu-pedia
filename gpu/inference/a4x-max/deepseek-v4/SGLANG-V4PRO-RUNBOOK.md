@@ -7,6 +7,25 @@
 
 ---
 
+## ⚠️ 最重要的一条：模型与 MoE backend 必须配套
+
+**这是复现失败的头号原因，且报错完全指不到根因。** 两套配方互斥，混用必挂：
+
+| checkpoint | MoE runner backend | a2a backend | 备注 |
+|---|---|---|---|
+| `deepseek-ai/DeepSeek-V4-Pro`（**官方原装**，FP4 MoE + FP8 attn） | `deep_gemm` | **`megamoe`** | 高性能路径，旧文档 8,993 就是这个 |
+| `nvidia/DeepSeek-V4-Pro-NVFP4`（NVFP4 MoE + FP8 attn） | **`flashinfer_trtllm_routed`** | 不用 megamoe | megamoe 没有为它注册融合 kernel |
+
+**混错的两种典型报错**：
+
+- NVFP4 权重 + megamoe → `NotImplementedError: Runner backend FLASHINFER_TRTLLM_ROUTED requires a fused func for a2a backend megamoe, but none is registered`
+- NVFP4 权重 + `deep_gemm` + megamoe → `RuntimeError: The size of tensor a (384) must match the size of tensor b (48)`（384 = `n_routed_experts`，48 = 384/ep_size，随 ep 缩放）
+
+> **先确认你手上是哪份权重**：`python3 -c "import json;print(json.load(open('<model>/config.json')).get('quantization_config'))"`。
+> 旧文档把这两套配方分散在 §1（checkpoint 说明）和 §13.A（启动脚本）两处，中间无任何交叉提示——照 §13.A 抄、配 NVFP4 权重，必然失败。
+
+---
+
 ## 0. TL;DR
 
 | 项 | 值 |
@@ -111,8 +130,10 @@ done; wait
 
 | 角色 | 判据 |
 |---|---|
-| prefill | `nvidia-smi memory.used > 200000 MiB` |
+| prefill | **`grep 'Load weight end' /tmp/srv.log`** |
 | decode | `grep 'Model registration succeeded' /tmp/srv.log` |
+
+> ⚠️ **不要用「HBM > 200G」判就绪**（旧文档如此建议）。那只是 SGLang 预分配的显存池，**权重可能随后加载失败、显存随即归零**。本次复测中我就因此误判 13/14 prefill「就绪」，实际全部在加载权重时崩了。唯一可靠判据是日志里的 `Load weight end`。
 
 ---
 
@@ -183,9 +204,10 @@ kubectl exec sgl-2 -- curl -s localhost:8001/v1/models
 | §4 分发脚本 | ✅ | 16 pod 全部写入成功 |
 | §5 单 prefill 冒烟 | ✅ | 加 `--moe-runner-backend deep_gemm` 后，3min HBM 260GB |
 | §5 批量 14 prefill | ✅ **13/14** | 1 个撞 40236 僵尸 |
-| §6 自愈循环 | 🔄 | 进行中 |
-| §5 decode dep8 | ❌ | 加载到 145GB 后 `EOFError` + scheduler died |
-| §7 frontend | ⏸ | 待 decode 通过 |
+| §6 自愈循环 | ✅ | 2 轮清完掉队节点 |
+| §5 decode dep8 | ✅ | 8 rank 全 `Load weight end`，`registration succeeded` |
+| §7 frontend | ✅ | 14/14 返回 200，`owned_by=nvidia`、`context_window=1048576` |
+| **端到端推理** | ✅ | `curl /v1/completions` → 正确回答 "Paris"，PD 链路全通 |
 
 **本次复测发现的旧文档缺陷（均已在本文修正）**：
 
@@ -193,5 +215,9 @@ kubectl exec sgl-2 -- curl -s localhost:8001/v1/models
 2. **模型路径错误** —— 旧文档 §13.A 标注"source of truth，照抄即可"，但路径漏了 `-NVFP4`。
 3. **漏 `--moe-runner-backend deep_gemm`** —— 旧文档强调"一个字都不能漏"，却依赖 `auto` 的默认行为。nightly 镜像更新后 auto 改选 flashinfer，**整条 megamoe 路径直接崩**。这是「依赖默认值」型埋雷的典型案例：写文档时能跑，不代表半年后能跑。
 4. **裸 pod 与 DRA 冲突未说明** —— 生成器批量创建裸 pod，与 DRA channel 预留机制冲突。
+5. **模型与 MoE backend 配方错配（最严重）** —— 见文首告警。两套互斥配方分散在 §1 和 §13.A，无交叉提示。
+6. **就绪判据错误** —— 「HBM>200G」会把「显存池已分配但权重加载失败」误判为成功。
+7. **GCS bucket 名写成占位符** —— 全文用 `gs://<bucket>`，真实名是 `gs://chrisya-gb300-models`，照抄跑不了。
+8. **压测工具来源未记** —— §13 Step 4 用 InferenceX `sa-bench`，但没说它从哪来、怎么装。pod 里默认没有，只有 SGLang 自带的 `sglang.bench_serving`（两者口径不同，见旧文档 §11.4）。
 
 > **方法论**：本文档每一节都是「先在集群上真跑一遍，再写进来」。上面 4 个缺陷全部是执行过程中撞出来的，靠读旧文档发现不了。
