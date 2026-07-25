@@ -12,7 +12,7 @@ export SGLANG_OPT_SWA_SPLIT_LEAF_ON_INSERT=1 SGLANG_OPT_SWA_EVICT_DROP_PAGE_MARG
 export SGLANG_OPT_DEEPGEMM_MEGA_MOE_NUM_MAX_TOKENS_PER_RANK=4096 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_FP4_ACTS=1 SGLANG_OPT_DEEPGEMM_MEGA_MOE_USE_MXF4_KIND=1
 export SGLANG_OPT_USE_CUSTOM_ALL_REDUCE_V2=0
 export SGLANG_DISAGGREGATION_BOOTSTRAP_TIMEOUT=100000 SGLANG_DISAGGREGATION_WAITING_TIMEOUT=100000 SGLANG_DISAGGREGATION_HEARTBEAT_MAX_FAILURE=20
-python3 -m dynamo.sglang --model-path /mnt/ssd/DeepSeek-V4-Pro-NVFP4 --served-model-name deepseek-ai/DeepSeek-V4-Pro \
+python3 -m dynamo.sglang --model-path /mnt/ssd/DeepSeek-V4-Pro --served-model-name deepseek-ai/DeepSeek-V4-Pro \
   --trust-remote-code --reasoning-parser deepseek-v4 --tool-call-parser deepseekv4 --watchdog-timeout 86400 \
   --tensor-parallel-size 8 --data-parallel-size 8 --expert-parallel-size 8 --pp-size 1 \
   --nnodes 2 --node-rank $NODE_RANK --dist-init-addr $DIST_ADDR \
