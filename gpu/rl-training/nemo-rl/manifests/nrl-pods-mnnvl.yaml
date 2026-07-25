@@ -1,0 +1,82 @@
+# NeMo RL 4-node GB300 — single NVL72 domain, MNNVL all-NVLink ONLY (no RDMA)
+# All pool-0002 nodes share cliqueID ...b5b6.31 → one NVLink domain.
+# StatefulSet: scheduler places pods (needed for DRA channel reserve), antiAffinity = 1 pod/node.
+# Only claim = compute-domain-channel (nrl-ch). No mrdma (NVL72 all-NVLink, RDMA unused).
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: nrl-cd
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: nrl-ch
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nrl
+spec:
+  selector:
+    app: nrl
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: nrl
+spec:
+  serviceName: nrl
+  replicas: 4
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: nrl
+  template:
+    metadata:
+      labels:
+        app: nrl
+        job: nrl
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-nodepool: gb300-pool-0002
+        team: yangwhale
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [nrl]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: gar-auth
+      - name: ar-pull-secret
+      volumes:
+      - name: ssd
+        hostPath: {path: /mnt/disks/raid/0, type: DirectoryOrCreate}
+      - name: shm
+        emptyDir: {medium: Memory, sizeLimit: 200Gi}
+      containers:
+      - name: nemo
+        image: nvcr.io/nvidia/nemo-rl:v0.6.0
+        securityContext: {privileged: true}
+        command: ["sleep", "infinity"]
+        resources:
+          limits: {nvidia.com/gpu: 4}
+          claims:
+          - {name: ch}
+        volumeMounts:
+        - {name: ssd, mountPath: /mnt/ssd, mountPropagation: HostToContainer}
+        - {name: shm, mountPath: /dev/shm}
+        env:
+        - {name: GLOO_SOCKET_IFNAME, value: "eth0"}
+        - {name: NCCL_SOCKET_IFNAME, value: "eth0"}
+        - {name: NCCL_MNNVL_ENABLE, value: "1"}
+      resourceClaims:
+      - {name: ch, resourceClaimTemplateName: nrl-ch}

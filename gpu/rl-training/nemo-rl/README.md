@@ -505,6 +505,157 @@ GKE 节点默认 SA scope 是 `devstorage.read_only`，**pod 内无法写 GCS**�
 
 ---
 
+## 10. 快速启动 Runbook（GB300 NVL72 从零到训练）
+
+> 目标：在 GB300 GKE 集群上，从空环境到 GRPO 训练跑起来。全流程约 **40–60 分钟**（模型已在 GCS 的前提下）。
+> 环境假设：GKE 集群 `gb300-gke-test`，nodepool `gb300-pool-0002`（18 节点，同一 NVL72 域），节点带 `team=yangwhale` 标签。
+
+### 10.1 前置检查
+
+```bash
+# 节点就绪 + 标签正确（缺 team 标签会导致 pod 永久 Pending）
+kubectl get nodes -l cloud.google.com/gke-nodepool=gb300-pool-0002,team=yangwhale --no-headers | wc -l   # 期望 ≥4
+
+# DRA GPU driver 已装（ComputeDomain 依赖）
+kubectl get pods -A | grep dra-driver-nvidia-gpu | head -2
+```
+
+**同域校验**：4 个节点必须在同一 NVL72 域才能走 MNNVL。同 nodepool 通常同域，可用 `nvidia-smi -q | grep -i cliqueid` 交叉确认。
+
+### 10.2 挂载 Local SSD RAID（DaemonSet）
+
+GB300 节点自带多块 local NVMe，但**默认不组阵列、不挂载**。不做这步 `/mnt/ssd` 会是 256K 的 tmpfs，模型放不下。
+
+```bash
+kubectl apply -f manifests/raid-pool-0002.yaml
+kubectl logs -l name=gke-raid-disks-0002 --tail=3 | grep RAID_READY   # 期望每节点一行
+```
+
+> **坑**：若节点曾组过阵列，可能出现 ghost `md127` 未挂载。DaemonSet 幂等脚本会跳过 create，但需手动 `mount /dev/md127 /mnt/disks/raid/0`。
+
+### 10.3 部署训练 Pod
+
+```bash
+kubectl apply -f manifests/nrl-pods-mnnvl.yaml
+kubectl get pods -l app=nrl -w           # 等 4/4 Running
+kubectl get computedomain nrl-cd         # 确认 CD 已创建
+```
+
+关键点（YAML 已含，勿改）：
+
+| 配置 | 值 | 原因 |
+|---|---|---|
+| 镜像 | `nvcr.io/nvidia/nemo-rl:v0.6.0` | v0.5.0 的 Triton 无法编译 Blackwell `tcgen05` → `LLVM ERROR: Cannot select` |
+| 工作负载类型 | **StatefulSet**（非裸 pod + nodeName） | 必须让 scheduler 参与，否则 DRA channel 不预留 → `FailedPrepareDynamicResources` |
+| claim | 只要 `compute-domain-channel` | 同域全 NVLink，**不需要 mrdma** |
+| `NCCL_MNNVL_ENABLE` | `1` | 走 NVLink 而非 RDMA |
+| shm | 200Gi emptyDir Memory | vLLM/Ray 需要大 shm |
+
+### 10.4 准备模型与数据集
+
+```bash
+# 4 节点并行下载（每节点本地一份，无共享存储）
+for i in 0 1 2 3; do
+  kubectl exec nrl-$i -- bash -c '
+    export HF_HOME=/mnt/ssd/hf
+    hf download Qwen/Qwen3-30B-A3B --local-dir /mnt/ssd/hf/Qwen3-30B-A3B
+  ' &
+done; wait
+```
+
+占用参考：模型 57G + 数据集 25G + mcore 缓存 57G ≈ **每节点 140G**。
+
+### 10.5 HF → mcore 格式转换（单节点转 + 分发）⚠️ 最关键一步
+
+Megatron 需要 `torch_dist` 格式。**多节点直接跑会各写各的分片**，因无共享存储导致 checkpoint 不完整 → `FileNotFoundError: run_config.yaml`。
+
+正确做法：**单节点用 EP4 转换（4 个 rank 全在本地 → 分片完整），再整目录分发**。
+
+```bash
+# ① 在 nrl-0 单节点跑一次训练(会自动触发转换)，转完即可 Ctrl-C
+kubectl exec nrl-0 -- bash -c 'cd /opt/nemo-rl && HF_HOME=/mnt/ssd/hf \
+  uv run --no-sync examples/run_grpo.py --config <单节点config> policy.model_name=/mnt/ssd/hf/Qwen3-30B-A3B'
+
+# ② 确认缓存完整
+kubectl exec nrl-0 -- ls /mnt/ssd/hf/nemo_rl/model__mnt_ssd_hf_Qwen3-30B-A3B/iter_0000000/run_config.yaml
+
+# ③ 分发到其余 3 节点（pod 间 HTTP ~1.4GB/s；勿用 kubectl cp，只有 ~12MB/s）
+```
+
+> **torch_dist 是 resharding-aware 的**：EP4 转出来的 checkpoint 可以被 EP16 直接加载。**转一次可复用于任何并行形状**，换集群形状不用重转。
+
+### 10.6 启动 Ray 集群
+
+```bash
+HEAD=$(kubectl get pod nrl-0 -o jsonpath='{.status.podIP}')      # 例 10.72.26.68
+kubectl exec nrl-0 -- bash -c "ray start --head --port=6379 --temp-dir=/mnt/ssd/ray"
+for i in 1 2 3; do
+  kubectl exec nrl-$i -- bash -c "ray start --address=$HEAD:6379 --temp-dir=/mnt/ssd/ray"
+done
+kubectl exec nrl-0 -- ray status      # 期望 4 个 Active node
+```
+
+### 10.7 启动 GRPO 训练
+
+把下面写成 `/mnt/ssd/run-grpo.sh` 后 `setsid nohup` 启动：
+
+```bash
+#!/bin/bash
+export HF_HOME=/mnt/ssd/hf TMPDIR=/mnt/ssd/tmp
+export HF_DATASETS_CACHE=/mnt/ssd/hf/datasets
+export RAY_ADDRESS=<HEAD_IP>:6379
+export NCCL_MNNVL_ENABLE=1 NCCL_SOCKET_IFNAME=eth0 GLOO_SOCKET_IFNAME=eth0
+cd /opt/nemo-rl
+uv run --no-sync examples/run_grpo.py \
+  --config examples/configs/recipes/llm/performance/grpo-qwen3-30ba3b-4n4g.yaml \
+  policy.model_name=/mnt/ssd/hf/Qwen3-30B-A3B \
+  policy.generation.vllm_cfg.enforce_eager=False \
+  policy.train_micro_batch_size=4 policy.logprob_batch_size=4 \
+  policy.megatron_cfg.optimizer.lr=5.0e-6 \
+  policy.megatron_cfg.optimizer.min_lr=5.0e-6 \
+  grpo.max_num_steps=200 grpo.val_period=10 \
+  checkpointing.enabled=true checkpointing.checkpoint_dir=/mnt/ssd/ckpt \
+  logger.tensorboard_enabled=true logger.log_dir=/mnt/ssd/logs/grpo
+```
+
+**必调参数**（perf recipe 的默认值是为压吞吐、不为收敛）：
+
+| 参数 | perf recipe 默认 | 建议 | 原因 |
+|---|---|---|---|
+| `optimizer.lr` | `3e-7` | **`5e-6`** | 3e-7 完全不收敛（§9.13 实测） |
+| `vllm_cfg.enforce_eager` | `True` | **`False`** | 开 CUDA graph，生成 ~8000 tok/s |
+| `train_micro_batch_size` | 1 | **4** | 训练段提速约 40% |
+| `checkpointing.enabled` | false | **true** | 不开则 pod 重调度全丢（§9.14） |
+
+### 10.8 监控
+
+```bash
+# 步数 + 单步耗时 + 各阶段占比
+kubectl exec nrl-0 -- bash -c "grep -aE 'Step [0-9]+/|Total step time|generation:|policy_training:' /mnt/ssd/logs/grpo.log | tail -6"
+
+# reward 曲线（判收敛）
+kubectl exec nrl-0 -- bash -c "grep -aoE 'Avg Total Reward: [0-9.]+' /mnt/ssd/logs/grpo.log | grep -aoE '[0-9.]+$'"
+```
+
+单步 ~290s 的正常构成：generation 41%、policy_training 33%、logprob(policy+reference) 21%、refit 仅 ~3s。**瓶颈是生成，不是权重搬运。**
+
+### 10.9 常见故障速查
+
+| 现象 | 根因 | 处理 |
+|---|---|---|
+| pod 永久 Pending | 节点缺 `team=yangwhale` 标签 | `kubectl label nodes -l ...nodepool=gb300-pool-0002 team=yangwhale` |
+| `FailedPrepareDynamicResources` | 用了 `nodeName` 绕过 scheduler | 改用 StatefulSet + nodeSelector |
+| `/mnt/ssd` 只有 256K | RAID DaemonSet 没跑 | §10.2 |
+| `LLVM ERROR: tcgen05` | 镜像是 v0.5.0 | 换 v0.6.0 |
+| `run_config.yaml not found` | 多节点各转各的，分片不全 | §10.5 单节点转+分发 |
+| `cannot pickle code objects` | py3.13 + pytorch#174669，**掩盖真实错误** | patch `torch/distributed/checkpoint/api.py` 的 `_wrap_exception` 剥 traceback |
+| `EADDRINUSE` | 上次进程残留占 torch.distributed 端口 | `pkill -f run_grpo`、`ray stop --force` 后重启 |
+| reward 一直平 | lr 太小 / batch 太小 | lr 提到 5e-6；batch 见下 |
+
+> **规模现实**：本 runbook 的 `64 prompt × 32 gen = 2048 rollout` 只有 DAPO 论文（`512 × 16 = 8192`）的 **1/4**，梯度噪声大、reward 曲线抖。**这是流程验证配置，不是收敛实验配置**。要看真实收敛需 64–128 GPU + 8192 batch + 数千步（详见 §9.15）。
+
+---
+
 ## 参考
 
 - NeMo RL repo：https://github.com/NVIDIA-NeMo/RL

@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  labels:
+    k8s-app: gke-raid-disks-0002
+  name: gke-raid-disks-0002
+  namespace: default
+spec:
+  selector:
+    matchLabels:
+      name: gke-raid-disks-0002
+  template:
+    metadata:
+      labels:
+        name: gke-raid-disks-0002
+    spec:
+      containers:
+      - args:
+        - |
+          set -o pipefail
+          export DEBIAN_FRONTEND=noninteractive
+          apt-get update -qq && apt-get install -y -qq mdadm e2fsprogs >/dev/null 2>&1
+          devices=()
+          for ssd in /dev/disk/by-id/google-local-ssd-block*; do
+            [ -e "$ssd" ] && devices+=("$ssd")
+          done
+          if [ "${#devices[@]}" -eq 0 ]; then echo "NO_LOCAL_SSD"; sleep infinity; fi
+          echo "Found ${#devices[@]} local SSDs"
+          if ! grep -q "md0" /proc/mdstat; then
+            echo "y" | mdadm --create /dev/md0 --level=0 --force --raid-devices=${#devices[@]} "${devices[@]}"
+          fi
+          tune2fs -l /dev/md0 >/dev/null 2>&1 || mkfs.ext4 -F /dev/md0
+          mkdir -p /mnt/disks/raid/0
+          mountpoint -q /mnt/disks/raid/0 || mount -o discard,defaults /dev/md0 /mnt/disks/raid/0
+          chmod a+w /mnt/disks/raid/0
+          echo "RAID_READY: $(df -h /mnt/disks/raid/0 | tail -1)"
+          sleep infinity
+        command:
+        - /bin/bash
+        - -c
+        image: ubuntu:24.04
+        imagePullPolicy: IfNotPresent
+        name: raid
+        securityContext:
+          privileged: true
+        volumeMounts:
+        - mountPath: /dev
+          name: dev
+        - mountPath: /mnt/disks/raid
+          mountPropagation: Bidirectional
+          name: raid
+      hostPID: true
+      nodeSelector:
+        cloud.google.com/gke-local-nvme-ssd: "true"
+        cloud.google.com/gke-nodepool: gb300-pool-0002
+      tolerations:
+      - operator: Exists
+      volumes:
+      - hostPath:
+          path: /dev
+        name: dev
+      - hostPath:
+          path: /mnt/disks/raid
+          type: DirectoryOrCreate
+        name: raid
