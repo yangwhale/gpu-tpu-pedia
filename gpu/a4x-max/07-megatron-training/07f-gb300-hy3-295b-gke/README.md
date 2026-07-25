@@ -2,7 +2,7 @@
 
 GB300 (A4X Max) GKE 集群上的 **Hy3（混元 3，295B 总参 / 21B 激活 / 80 层 + 1 MTP）** 16 节点 64 GPU 训练 benchmark 准备文档。
 
-> **当前状态：待跑（准备就绪）**。本文是开跑前的 recipe 设计 + 环境准备 + 预判踩坑，实测数据栏留空待填。
+> **当前状态：实战进行中**（2026-07-25 22:30 HKT 开跑）。实战日志见 **§九**，配置设计见 §一~§三。
 >
 > 对标同级：DeepSeek V3 671B 见 [`07e-gb300-deepseekv3-671b-gke/`](../07e-gb300-deepseekv3-671b-gke/)（已跑通 ~1658 TFLOP/s，官方 99.3%），Qwen3 235B 见 [`07d-gb300-qwen3-235b-gke/`](../07d-gb300-qwen3-235b-gke/)。
 
@@ -556,3 +556,115 @@ Hy3 **没有官方 Megatron benchmark**，NVIDIA perf summary 里也没有。判
 ---
 
 *2026-07-25 · Recipe 设计完成，待 16 节点 64 GPU 实跑 · MoE 血统 = DeepSeek V3，Attention = GQA*
+
+---
+
+## 九、实战日志（2026-07-25 起）
+
+> 边跑边记。每个已验证的步骤和每个踩的坑都在这里，避免信息丢失。
+
+### 里程碑 M1 — 集群就位（22:26 HKT ✅）
+
+| 步骤 | 结果 |
+|---|---|
+| 本机 kubectl 直连 gb300-gke-test | ✅ 可用，**不需要 ssh gLinux**（authorized-networks 已放行） |
+| pool-0015 体检 | 18 台全 Ready，kubelet 全 `v1.36.0-gke.4447000`（好 COS），**同一 subblock** `10270c36...0632` |
+| 打标签 16 台 | ✅ `hy3=true`，剩 2 台热备 |
+| 拉起 pod 池 | ✅ 16/16 Running（首次拉镜像约 2 分钟），ComputeDomain `yw-cd-a` 创建成功 |
+
+**坑 A：不能复用 `team=yangwhale` 标签。**
+`pool-0002` 上已有 **17 台 `team=yangwhale`** 跑着别的负载。若沿用该标签，两边 nodeSelector 会互相串台。
+→ 改用专属标签 **`hy3=true`**，YAML 已同步。**教训：进集群前先查标签占用，别假设标签是自己独占的。**
+
+### 里程碑 M2 — 发现容器不支持 hy_v3，改走自研 recipe（22:35 HKT ✅）
+
+**坑 B（阻断级）：容器内 Bridge r0.5.0 没有 `hy_v3` 模型桥。**
+
+```
+容器: Bridge 0.5.0+fcbb6031
+models/ 有: bailing deepseek ernie gemma glm gpt_oss kimi llama mamba minimax
+            ministral3 mistral nemotron olmoe qwen stepfun ...
+models/ 无: hy_v3   ← §四 路径 A (AutoBridge) 直接作废
+recipes/ 无: hunyuan / hy3
+scripts/performance/configs/ 有: deepseek gpt_oss kimi llama nemotronh qwen qwen_vl wan
+```
+
+`HYV3Bridge` 只在 Megatron-Bridge **main 分支**，r0.5.0 容器里没有。
+
+**坑 C：`run_script.py` 的 CLI 覆盖不够用。**
+它只有 `--hidden_size` / `--num_layers` / `--first_k_dense_replace` / `--vocab_size` / `--pipeline_model_parallel_layout`，
+**没有** `--num_moe_experts` / `--num_query_groups` / `--moe_ffn_hidden_size` —— 无法把 deepseek recipe 改造成 Hy3。
+
+**解法：以 Qwen3-235B-A22B recipe 为骨架自建配置。**
+
+选它的原因（实查 `qwen3_235b_a22b_pretrain_config()` 返回值）：
+- 返回的就是**裸 `GPTModelProvider`**（不是 MLA 专用 provider），字段可以随便改
+- 本身是 GQA MoE，且 **hidden_size 4096 / kv_channels 128 / qk_layernorm True / moe_ffn 1536 已经跟 Hy3 完全一致**
+- optimizer / ddp / dataset / scheduler 都是调好的
+
+只需改：`num_layers 94→80`、`ffn_hidden_size 12288→13312`、`num_moe_experts 128→192`、
+`num_query_groups 4→8`、`vocab 151936→120832`，再叠加 DSV3 血统的 MoE 旋钮。
+
+`GPTModelProvider` 有 **309 个字段**，实测我需要的 34 个字段只有 `untie_embeddings_and_output_weights` 不存在
+（实际叫 **`share_embeddings_and_output_weights`**，取反）。
+
+产物：**[`hy3_pretrain.py`](hy3_pretrain.py)**（取代 §四 路径 A 的 `hy3_provider.py`）。
+
+### 里程碑 M3 — 高性能配方从 deepseek 源码原样移植（✅）
+
+实读容器内 `scripts/performance/configs/deepseek/deepseek_llm_pretrain.py`，把两个函数原样搬过来：
+
+`set_deepseek_v3_common_configs`：
+```python
+moe_router_fusion = True
+recompute_granularity = "selective"
+dist.enable_megatron_core_experimental = True
+mixed_precision.grad_reduce_in_fp32 = False   # ← 梯度是 BF16
+ddp.grad_reduce_in_fp32 = False
+moe_router_force_load_balancing = True        # benchmark 专用
+```
+
+`set_full_iter_cg_configs`（**用户点名要的 full graph + paged stash**）：
+```python
+moe_pad_experts_for_cuda_graph_inference = True
+moe_paged_stash = True                        # MCore PR #4247
+moe_expert_rank_capacity_factor = 1.5
+moe_paged_stash_buffer_size_factor_cuda = 1.2
+moe_paged_stash_buffer_size_factor_cpu = 1.0
+```
+> 源码注释解释了机制：**dropless MoE 产生变长 per-expert tensor，CUDA graph 抓不住**；
+> 先 pad 到固定容量（`pad_experts` + capacity factor），再用 paged stashing 把显存收回来。
+
+**⭐ 修正 §2.4 显存测算**：`grad_reduce_in_fp32 = False` 意味着梯度是 **BF16 (2B) 不是 FP32 (4B)**。
+64 GPU / PP2 / EP32 / MBS1 下梯度从 32.8 GB → **16.4 GB**，朴素合计 145.9 → **129.5 GB**，
+×1.34 后 **173.6 GB**（原估 195.5 GB）。**余量比预想更足。**
+
+### 里程碑 M4 — 配置构建通过（22:40 HKT ✅）
+
+```
+Hy3 295B | 64 GPU | TP1 PP2 VPP8 EP32 | MBS1 GBS2048 | bf16
+  层数 80 (dense 1 + MoE 79)  hidden 4096  GQA 64Q/8KV x 128
+  MoE 192 experts top-8 ffn 1536 shared 1536
+  路由 sigmoid + expert_bias=True (rate 0.001) lb=none scale 2.826
+  dispatcher flex/hybridep  graph full_iteration  paged_stash True
+  MTP None  pp_layout Et*5|(t*5|)*14t*5L
+  DP=32  microbatch/rank=64  专家参数 286.3B (每 rank 4.47B)
+```
+
+途中修掉 3 个 API 不匹配（都是 qwen3 recipe 与 deepseek recipe 的结构差异）：
+
+| # | 报错 | 根因 | 修法 |
+|---|---|---|---|
+| 1 | `'str' object has no attribute 'grad_reduce_in_fp32'` | qwen3 recipe 的 `cfg.mixed_precision` 是**字符串** `'bf16_mixed'`，不是配置对象 | `if isinstance(cfg.mixed_precision, str): cfg.mixed_precision = bf16_mixed()` |
+| 2 | `'NoneType' object has no attribute 'overlap_grad_reduce'` | qwen3 recipe 的 `cfg.comm_overlap` 默认 **None**（deepseek 配置里才构造） | 显式 `CommOverlapConfig(...)` |
+| 3 | `CommOverlapConfig.__init__() missing 'tp_comm_overlap'` | 该字段是 **keyword-only 必填** | `CommOverlapConfig(tp_comm_overlap=False)`（TP=1 无 TP 重叠） |
+
+> **通用教训**：跨 recipe 家族借骨架时，`ConfigContainer` 的**同名字段类型可能不同**（str vs 对象、None vs 实例）。
+> 照抄 A 家族的赋值语句到 B 家族骨架上，必然踩这类空指针/类型错，逐个 dryrun 打掉即可。
+
+### 待办
+
+- [ ] M5：4 GPU 缩层（8 层）冒烟，验证模型能构造 + 前反向跑通
+- [ ] M6：64 GPU 全量拉起，过 full_iteration graph capture
+- [ ] M7：稳态吞吐记录 + 显存实测回标 1.34× 系数
+- [ ] M8：EP / GBS / MBS 扫点，开 MTP

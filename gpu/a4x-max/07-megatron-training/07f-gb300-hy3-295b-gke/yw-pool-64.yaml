@@ -20,7 +20,9 @@
 # 不要用：pool-0002（yangwhale 负载在跑 + 坏 COS）、pool-0006（infer 团队占用 + 坏 COS）、
 #         pool-0009（空闲且 COS 好，但不在交付范围，要用先问 chris）
 #
-# 前置：目标 node pool 内 16 个节点已打 team=yangwhale 标签（pool = subblock，天然同域）。
+# 前置：目标 pool 内 16 个节点已打 hy3=true 标签（pool = subblock，天然同域）。
+#   用专属标签 hy3 而非 team=yangwhale —— pool-0002 上已有 17 台 team=yangwhale
+#   跑着别的负载，共用标签会让两边的 pod 互相串台。
 # 应用：kubectl apply -f yw-pool-64.yaml
 # 校验：kubectl get pods -l job=yw --no-headers | grep -c Running   # 应为 16
 #       kubectl get computedomains | grep yw                        # 1 个 Ready
@@ -81,7 +83,7 @@ spec:
       nodeSelector:
         cloud.google.com/gke-gpu: "true"
         cloud.google.com/gke-nodepool: gb300-pool-0015   # bunny 质检 PASS，18 节点留 2 台热备
-        team: yangwhale
+        hy3: "true"
       affinity:
         podAffinity:
           # 16 pod 必须落同一 subblock（= 同一 NVLink domain），否则 EP 跨域
