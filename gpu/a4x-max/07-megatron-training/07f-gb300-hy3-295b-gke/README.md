@@ -711,7 +711,131 @@ Rank 0: 16 graphs deleted with explicit reset
 → 策略调整：**先用官方 BF16 配置（TE graph）拿到稳定基线**，再单独试 `BF16 + cutedsl + full_iteration`
 是否可行（`hy3_pretrain.py` 已留 `--cuda-graph full_iteration --cutedsl --a2a-overlap` 开关）。
 
+### 里程碑 M6 — 64 GPU 全量跑通，BF16 基线 707 TFLOP/s/GPU（23:13 HKT ✅）
+
+**V1 配置**：64 GPU / 80 层全量 / TP1 PP2 VPP8 EP32 / MBS1 GBS2048 / seq4096 / BF16 /
+TE graph / hybridep / `recompute_modules=[moe_act]` + selective —— 即 NVIDIA 官方 GB300 BF16 recipe。
+
+| 校验项 | 预期 | 实测 | 结论 |
+|---|---|---|---|
+| 总参数量 | 295 B（官方） | **294.97 B** | ✅ 完全吻合 |
+| 显存峰值 | §2.4 预测 173.6 GB | **184 GB** | ✅ 回标后精确命中 |
+| 稳态吞吐 | — | **707.2**（中位 n=20，706–710，**±0.3%**） | 基线 |
+| Step Time | — | 25.3 s | |
+| GPU 利用率 | — | 99–100%（全 16 pod） | ✅ |
+
+**⭐ 显存模型回标**：`grad_reduce_in_fp32=False` → 梯度是 **BF16(2B)** 不是 FP32(4B)。
+朴素四项 = 权重 16.4 + 梯度 16.4 + 优化器 51.5 + 激活 45.2 = **129.5 GB**，实测 184 GB → 系数 **1.42×**。
+`mem_calc.py` 已更新，现在预测 183.9 GB vs 实测 184 GB。
+
+> 首步 121.3 TFLOP/s 是 graph capture 开销。启动到首个稳态数约 **10 分钟**。
+
+### 里程碑 M7 — 性能扫点：707 → 854 TFLOP/s（+20.8%）
+
+| 版本 | 变更 | 稳态 TFLOP/s/GPU | Step | 显存 | vs V1 |
+|---|---|---|---|---|---|
+| **V1** | 官方 BF16 recipe | **707.2**（706–710） | 25.3s | 184 GB | 基线 |
+| **V2** | 关全部 recompute | **744**（743.6–744.5） | 24.0s | 217 GB | **+5.2%** |
+| **V3** | V2 + `cutedsl` + `a2a_overlap` | **827**（825.3–828.5） | 21.6s | **197 GB** | **+16.9%** |
+| **V4** 🏆 | V3 + `full_iteration` + **paged stash** | **854.4**（854.2–854.8） | **20.97s** | 230 GB | **+20.8%** |
+| V5 | V4 + MBS 2 | ❌ **OOM** | — | 撞 277 GiB 顶 | — |
+| V6 | V4 + GBS 4096 | ❌ **卡死** | — | 283 GB（99.96%） | — |
+
+**V2**：关 recompute +5.2%，代价 +33 GB。比 a4x 上 DSV3 的 selective recompute 代价（~9%）小 ——
+Hy3 专家中间层 1536 比 DSV3 的 2048 窄，`moe_act` 要重算的 activation 更少。
+
+**V3（收益最大）**：`cutedsl_fused_grouped_mlp` + `moe_a2a_overlap` 一次拿 **+11.2%**（744→827），
+**且显存反从 217 降到 197 GB** —— 融合 grouped MLP 消掉了中间 tensor。
+
+**V4**：cutedsl 打开 TE op fuser 后，`full_iteration` + paged stash 在 **BF16 上跑通**（官方 recipe 未覆盖此组合），
+再拿 +3.3%。波动仅 **±0.04%**，四个版本里最稳。
+
+#### ⭐⭐ 核心发现：BF16 能吃到 FP8 recipe 的全部高性能特性
+
+官方把 `cutedsl` / `a2a_overlap` / `full_iteration` / paged stash **只放在 FP8_MX 档**，
+实测这套组合在 **BF16 上全部可用，累计 +20.8%**。
+上一节那句「官方 BF16 recipe 不用 full_iteration」描述的是官方**配置选择**，**不是技术限制**。
+
+依赖链（缺一不可，手写配置必漏）：
+```
+cutedsl_fused_grouped_mlp=True
+  └→ use_transformer_engine_op_fuser=True          (overrides.py:238)
+       └→ 允许 moe_expert_rank_capacity_factor
+            └→ 允许 moe_paged_stash
+                 └→ full_iteration graph 才抓得住 dropless MoE 的变长 tensor
+```
+
+#### V5 / V6 负结果：full graph 之后显存成为硬约束
+
+| 版本 | 现象 | 根因 |
+|---|---|---|
+| V5（MBS 2） | `OutOfMemoryError: Tried to allocate 48.00 MiB, GPU has 276.62 GiB total, 21.31 MiB free` | 激活 45→90 GB + full graph buffer 撞顶 |
+| V6（GBS 4096） | 显存 283 GB / 276.5 GiB 可用，capture 阶段**日志冻结 10+ 分钟、GPU 100% 空转**，无 OOM 报错但永不出步 | **`full_iteration` 把整个 iteration 的全部 microbatch 抓进一张 graph**，GBS 2048→4096 让 microbatch 64→128，**graph 本身翻倍** |
+
+> ⭐ **推翻 07e 的一条经验**：07e 在 DSV3 256 卡上结论是「GBS 是收益最大的旋钮」。
+> **在 Hy3 64 卡 + full graph 下完全不成立**：(1) PP2×VPP8×DP32 时 GBS 2048 的 bubble 已仅 **0.2%**，无 bubble 可消；
+> (2) full graph 让 GBS 直接换算成显存，加 GBS = 加 graph，**先撞显存墙**。
+> **教训：旋钮收益取决于当前瓶颈在哪，照搬别的规模的调优排序会浪费机时。**
+
+> ⭐ **标定系数与 graph 类型强相关**：TE graph 回标 1.42×（预测 183.9 / 实测 184，命中）；
+> 同配置换 full_iteration 实测 230 GB，等效 **1.78×**。`mem_calc.py` 的 1.42 只适用 TE graph。
+
+### 这一段踩的 3 个坑
+
+#### 坑 H：`moe_paged_stash` 校验分支空指针（Megatron 侧 bug）
+```
+TypeError: 'NoneType' object is not iterable
+  transformer_config.py:1691  {"expert_fc1","moe_act"} & set(self.offload_modules)
+```
+`offload_modules` 默认 `None`，而 paged stash 校验无条件对它 `set()`。**只在 full_iteration 路径触发**。
+修：`m.offload_modules = []`。
+
+#### 坑 I：`pkill -f <pattern>` 会杀掉自己所在的 `bash -c`
+```bash
+# ❌ pattern "hy3_pretrain" 匹配到本条 bash -c 命令行自身 -> 自杀，后面的写文件根本没跑
+kubectl exec POD -- bash -c 'pkill -9 -f hy3_pretrain; echo "$B" | base64 -d > /tmp/hy3_pretrain.py'
+```
+症状极具迷惑性：**改了代码、重跑、报一模一样的错**，像是修复无效。
+修：kill 与写文件拆成两次独立 exec，且 pattern 避开自身（改用 `torchrun`）。
+**规矩：改完代码重跑前，先 `md5sum` 对比本地与远端。**
+
+#### 坑 J：`pkill` 留下的僵尸 CUDA context 吃掉下一轮显存
+V5 OOM 后用 `pkill -9 -f torchrun` 清场，V4 复跑**立刻 `CUDA error: out of memory`**：
+```
+39781, 230308 MiB   <- V5 的 worker，早已退出，CUDA context 未释放
+49032,  52494 MiB   <- 新一轮只抢到剩下的
+```
+`pkill -f torchrun` 只杀 launcher，**multiproc worker 成孤儿，`ps` 看不见但驱动侧 context 不回收**。
+清理法（不必重建 pod，且规避坑 I）：
+```bash
+nvidia-smi --query-compute-apps=pid --format=csv,noheader | sort -u | xargs -r kill -9
+```
+**每次扫点切换配置前必做**，否则会把残留误判成"新配置 OOM"。
+
+### 🏆 当前最优配置（V4）
+
+```bash
+python hy3_pretrain.py \
+  --num-gpus 64 --tp 1 --pp 2 --vpp 8 --ep 32 \
+  --mbs 1 --gbs 2048 --seq-length 4096 \
+  --cuda-graph full_iteration --cutedsl --a2a-overlap \
+  --recompute-modules --recompute-granularity none \
+  --mtp-layers 0 --max-steps 30
+# env: NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32（必须 == EP）
+```
+
+**854 TFLOP/s/GPU · 20.97 s/step · 230 GB/GPU · 16 节点单 NVLink 域**
+
+**独立复现验证**（清空僵尸显存后重跑）：稳态中位 **854.5**，区间 854.2–856.6，**±0.14%**，
+与首测 854.4 一致 —— 配置可复现，非偶然。
+
+对标参照（均 MXFP8，非同精度，仅供量级）：DSV3 671B GB300 256 卡 1658 / GB200 256 卡 1292。
+Hy3 hidden 4096 只有 DSV3 的 57%，GEMM 形状小、算力密度天然低，854 属合理区间。
+
 ### 待办
-- [ ] M6：64 GPU 全量拉起，过 full_iteration graph capture
-- [ ] M7：稳态吞吐记录 + 显存实测回标 1.34× 系数
-- [ ] M8：EP / GBS / MBS 扫点，开 MTP
+- [x] M6：64 GPU 跑通 → 707 基线
+- [x] M7-1：关 recompute → 744（+5.2%）
+- [x] M7-2：cutedsl + a2a_overlap → 827（+16.9%）
+- [x] M7-3：full_iteration + paged stash → **854（+20.8%）**
+- [x] M7-4：MBS 2 **OOM**；GBS 4096 **卡死**（full graph 下显存是硬约束）
+- [ ] M8：开 MTP；EP 16 vs 32 扫点；BF16 vs FP8_MX 对照
