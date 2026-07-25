@@ -162,6 +162,11 @@ def build_config(a):
         m.moe_expert_rank_capacity_factor = 1.5
         m.moe_paged_stash_buffer_size_factor_cuda = 1.2
         m.moe_paged_stash_buffer_size_factor_cpu = 1.0
+        # Megatron 边界 bug：moe_paged_stash 的校验分支会 `set(self.offload_modules)`，
+        # 但 offload_modules 默认 None -> TypeError: 'NoneType' object is not iterable
+        # (transformer_config.py:1691)。只在 full_iteration 路径触发，TE graph 路径不会。
+        if getattr(m, "offload_modules", None) is None:
+            m.offload_modules = []
 
     # ---------- 6. 训练超参 ----------
     cfg.train.micro_batch_size = a.mbs
