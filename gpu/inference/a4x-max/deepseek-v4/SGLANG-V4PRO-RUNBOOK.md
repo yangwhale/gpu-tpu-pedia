@@ -94,16 +94,41 @@ for i in $(seq 0 15); do
 done
 ```
 
-模型在**节点本地 SSD**（hostPath `/mnt/disks/raid/0`），删 pod 不丢。若缺失，从 GCS 并行拉（实测 ~850MB/s，全 fleet 并行约 25min）：
+模型在**节点本地 SSD**（hostPath `/mnt/disks/raid/0`），删 pod 不丢。
 
-```bash
-for i in $(seq 0 15); do
-  kubectl exec sgl-$i -- bash -c "mkdir -p /mnt/ssd/DeepSeek-V4-Pro && \
-    gcloud storage rsync -r gs://chrisya-gb300-models/DeepSeek-V4-Pro /mnt/ssd/DeepSeek-V4-Pro" &
-done; wait
-```
+> ⚠️ **这一步不能跳过，哪怕上一轮刚跑完**。节点数（17）比 pod 数（16）多，重建 StatefulSet 时调度器**会换节点**——上一轮的空闲节点这轮可能被占用，那个 pod 就是空的。实测重建后 `sgl-0` 落到了只有 NVFP4 权重的备用节点上。
 
 > ⚠️ **两份权重同名易混**。原装目录叫 `DeepSeek-V4-Pro`，NVFP4 版叫 `DeepSeek-V4-Pro-NVFP4`。启动前用 `config.json` 里的 `quantization_config` 二次确认自己拿的是哪份（见文首告警）。
+
+**缺失时怎么补**（优先级从高到低）：
+
+**① pod→pod 直传（最快，实测 3.6 GB/s，806G 约 4 分钟）**
+
+集群内网带宽远高于 GCS，且**镜像里没有 `gcloud`**（见下），所以这是首选：
+
+```bash
+SRC=1; DST=0                                   # 从 sgl-1 补给 sgl-0
+SRCIP=$(kubectl get pod sgl-$SRC -o jsonpath='{.status.podIP}')
+# 源端起 HTTP 服务（python3 -m http.server 自 3.7 起是多线程的）
+kubectl exec sgl-$SRC -- bash -c "cd /mnt/ssd && setsid nohup python3 -m http.server 8899 >/dev/null 2>&1 </dev/null &"
+# 生成文件清单（含 assets/ inference/ 等子目录，共 276 个文件）
+kubectl exec sgl-$SRC -- bash -c "cd /mnt/ssd/DeepSeek-V4-Pro && find . -type f | sed 's|^\./||' > /tmp/fl.txt"
+kubectl exec sgl-$SRC -- cat /tmp/fl.txt > /tmp/fl.txt && kubectl cp /tmp/fl.txt sgl-$DST:/tmp/fl.txt
+# 目标端 6 路并行拉
+kubectl exec sgl-$DST -- bash -c "mkdir -p /mnt/ssd/DeepSeek-V4-Pro && setsid nohup bash -c '
+  cd /mnt/ssd/DeepSeek-V4-Pro
+  xargs -P 6 -I{} bash -c \"mkdir -p \\\$(dirname {}); curl -sf -o {} http://$SRCIP:8899/DeepSeek-V4-Pro/{}\" < /tmp/fl.txt
+  echo DONE > /tmp/copy.done' >/dev/null 2>&1 </dev/null &"
+# 轮询：du 到 806G 且 /tmp/copy.done 存在即完成
+```
+
+**② 从 GCS 拉**（全 fleet 都缺时用，~850MB/s）：
+
+```bash
+gcloud storage rsync -r gs://chrisya-gb300-models/DeepSeek-V4-Pro /mnt/ssd/DeepSeek-V4-Pro
+```
+
+> ⚠️ **`lmsysorg/sglang` 镜像里没有 `gcloud`**（`command not found`），所以上面这条**不能直接在容器里跑**。要么先装 gcloud，要么用容器里已有的 `google-cloud-storage` Python SDK，要么走 ① 的 pod→pod。旧文档默认容器有 gcloud（那是它在 bootstrap 阶段装的），照抄会卡住。
 
 ---
 
@@ -126,18 +151,37 @@ kubectl exec sgl-5 -- wc -l /tmp/decode-dep8.sh /tmp/prefill-dep4.sh   # 校验�
 **先单个冒烟，再批量铺开**——14 个一起错的排查成本远高于先验 1 个。
 
 ```bash
-# ① 单 prefill 冒烟（~3min 后 HBM 应 >200G）
+# ① 单 prefill 冒烟（★ 等 300s，不是 180s）
 kubectl exec sgl-2 -- bash -c "setsid nohup bash /tmp/prefill-dep4.sh > /tmp/srv.log 2>&1 </dev/null &"
-sleep 180 && kubectl exec sgl-2 -- nvidia-smi --query-gpu=memory.used --format=csv,noheader | head -1
+sleep 300 && kubectl exec sgl-2 -- nvidia-smi --query-gpu=memory.used --format=csv,noheader | head -1
+#   期望 ~260 GiB。若为 0，看 /tmp/srv.log 尾部
 
-# ② 通过后起 decode + 剩余 13 prefill
+# ② decode 先起（它最慢，graph capture 要 8-10min，跟 prefill 并行）
 D0=$(kubectl get pod sgl-0 -o jsonpath='{.status.podIP}')
 kubectl exec sgl-0 -- bash -c "setsid nohup bash /tmp/decode-dep8.sh 0 $D0:5000 > /tmp/srv.log 2>&1 </dev/null &"
 kubectl exec sgl-1 -- bash -c "setsid nohup bash /tmp/decode-dep8.sh 1 $D0:5000 > /tmp/srv.log 2>&1 </dev/null &"
+
+# ③ 剩余 13 prefill —— ★ 必须错开，不要 & + wait 一把梭
 for i in $(seq 3 15); do
-  kubectl exec sgl-$i -- bash -c "setsid nohup bash /tmp/prefill-dep4.sh > /tmp/srv.log 2>&1 </dev/null &" &
-done; wait
+  kubectl exec sgl-$i -- bash -c "setsid nohup bash /tmp/prefill-dep4.sh > /tmp/srv.log 2>&1 </dev/null &"
+  sleep 8
+done
 ```
+
+> ★★ **错开启动能大幅降低 40236 僵尸率**。实测同一批 pod：
+> - **同时起 13 个**（`&` + `wait`）→ **12 个崩**，只活 2 个
+> - **错开 8s 起**（自愈循环里）→ round1 修好 7/12、round2 修好 5/5，**2 轮全绿**
+>
+> 猜测是同域内多个 worker 同时抢 ZMQ 端口 / ComputeDomain channel 造成的瞬时冲突。错开 8s 成本极低（13 个才多花 100 秒），收益是少两轮自愈（每轮 7 分钟）。
+
+**时序预期**（从启动算起）：
+
+| 阶段 | 耗时 | 观测点 |
+|---|---|---|
+| 权重加载 | ~4–5min | HBM 从 0 涨到 ~260 GiB |
+| CUDA graph capture | 再 ~3–5min | HBM 稳定不动 |
+| 向 etcd 注册 | 之后 | §5.1 的计数开始涨 |
+| **总计** | **8–12min** | 别在 5 分钟时下结论 |
 
 ### 5.1 ⚠️ 就绪判据有三层，前两层都会骗人
 
@@ -187,10 +231,13 @@ for round in 1 2 3 4 5; do
   done
   [ -z "$BAD" ] && { echo "显存全绿，转 etcd 终检"; break; }
   echo "round$round 未就绪:$BAD → 清进程"
-  for i in $BAD; do kubectl exec sgl-$i -- bash -c "pkill -9 -f dynamo.sglang" 2>/dev/null; done
+  for i in $BAD; do kubectl exec sgl-$i -- bash -c "pkill -9 -f 'dynamo[.]sglang'" 2>/dev/null; done   # ★ 括号必须有
   sleep 95                                    # ★ 必须 ≥90s
-  for i in $BAD; do kubectl exec sgl-$i -- bash -c "setsid nohup bash /tmp/prefill-dep4.sh > /tmp/srv.log 2>&1 </dev/null &"; done
-  sleep 300                                   # 权重加载 ~4-5min
+  for i in $BAD; do                           # ★ 错开 8s，别一把梭
+    kubectl exec sgl-$i -- bash -c "setsid nohup bash /tmp/prefill-dep4.sh > /tmp/srv.log 2>&1 </dev/null &"
+    sleep 8
+  done
+  sleep 330                                   # 权重加载 + capture
 done
 # ★★ 收尾必做：etcd 注册数终检（见 §5.1），不等于 14 就继续救
 ```
@@ -198,7 +245,7 @@ done
 **两个必守的细节**：
 
 - **每轮间隔 ≥90 秒**。40236 ZMQ 端口僵尸的持有者是 D-state 进程，`kill -9` 杀不掉，但**内核会在其 GPU 驱动调用返回后自动回收**。急着重试（<10s）会连撞，让人误判"必须重建 pod"。实测本次 round1 就救回 8/9。
-- **`pkill` 模式别写 `-f sglang`**。那会匹配到 `kubectl exec` 自己那条含 `sglang` 的 `bash -c` 命令行，把自己杀掉（表现为 exit 137）。只 `pkill -9 -f dynamo.sglang`。
+- **`pkill -f` 必须用括号转义**：写成 `pkill -9 -f 'dynamo[.]sglang'`。`pkill -f` 匹配的是**整条命令行**，而 `kubectl exec sgl-N -- bash -c "pkill -9 -f dynamo.sglang; ..."` 这条命令行**自身就含有 `dynamo.sglang` 这串字符**——于是它把自己杀了（exit 137，且后面的重启语句根本没执行）。`dynamo[.]sglang` 作为正则仍匹配真实进程，但字面串不等于自身，就不会自杀。同理别写 `-f sglang`。
 
 ---
 
@@ -281,7 +328,20 @@ done
 
 **参数说明**：`--request-rate inf` = 开环（对标官方必须开环，闭环会严重低估）；`--ignore-eos` 保证每条真出满 1024 token；`--dsv4 --use-chat-template` 必须成对出现（只给 `--dsv4` 会报错）；`--backend` 只能是 `openai`（没有 `sglang-oai` 这个值）。
 
-### 8.4 收结果
+### 8.4 ★ 第一轮必须当 warmup 丢掉
+
+**重启后的首轮压测比热态低 ~7%，这不是噪声。** 实测同一套环境、同一条命令：
+
+| 轮次 | output/decode-GPU |
+|---|---|
+| 重启后第 1 轮（冷） | 8,520 |
+| 紧接着第 2 轮（热） | **9,118（+7.0%）** |
+
+原因是 DeepGEMM 的 JIT 编译：`SGLANG_JIT_DEEPGEMM_FAST_WARMUP=1` 只预编译了一部分 shape，serving 真正碰到的 M shape 要在**第一次遇到时现编**。编译产物落在 `SGLANG_DG_CACHE_DIR=/mnt/ssd/dg-cache`（节点盘，跨 pod 重建保留），所以只有**换了节点**或缓存被清才会重新付这笔钱。
+
+> **所以流程是：跑两轮，报第二轮。** 只跑一轮就报数，会系统性低估 7%，而且这个偏差**只在重启后出现**，非常容易被误读成「这次部署有问题」。
+
+### 8.5 收结果
 
 ```bash
 TOT=0
@@ -294,7 +354,7 @@ done
 python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 ```
 
-### 8.5 读数：怎么判断瓶颈在哪一侧
+### 8.6 读数：怎么判断瓶颈在哪一侧
 
 | 指标 | 健康值 | 偏离的含义 |
 |---|---|---|
@@ -318,9 +378,11 @@ python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 | 容器里脚本是空文件 | `kubectl exec` 少了 `-i` | 见 §4 | `[已修复]` |
 | **压测日志文件根本不生成、也不报错** | `kubectl exec` 关流太快，`setsid` 还没 detach 完子进程就被带走 | exec 里加 `sleep 4` + 外层校验重试，见 §8.3 | `[已定位并修复]` |
 | 压测某几路一直没结果 | 那几个**节点**没铺 `/mnt/ssd/InferenceX`（工具按节点铺，不按 pod） | §8.2 校验 14/14 | `[已定位并修复]` |
+| 重建 fleet 后某个 pod 模型目录是空的 | 17 节点 16 pod，重建时调度器换了节点，落到了没铺模型的备用节点 | §3 每次重建都要校验，缺就 pod→pod 补 | `[已定位并修复]` |
+| 容器里 `gcloud: command not found` | `lmsysorg/sglang` 镜像不含 gcloud | 用 §3 的 pod→pod 直传（还更快） | `[已定位并修复]` |
 | `FailedPrepareDynamicResources` | 裸 pod + `nodeName` 绕过 scheduler | 用 StatefulSet | `[已修复]` |
 | prefill HBM 一直 0 + `scheduler died (exit -3)` | 40236 ZMQ 端口僵尸（瞬态） | §6 自愈循环，间隔 ≥90s | `[已验证有效]` |
-| `kubectl exec` 自己 exit 137 | `pkill -f sglang` 匹配到 exec 自身的 `bash -c` 命令行 | 改用 `pkill -9 -f dynamo.sglang` | `[已定位并修复]` |
+| `kubectl exec` 自己 exit 137、后续语句没执行 | `pkill -f <pat>` 匹配到 exec 自身的 `bash -c` 命令行（那行文本里就含 `<pat>`） | 改用 `pkill -9 -f 'dynamo[.]sglang'` 括号转义 | `[已定位并修复]` |
 | decode 显存 199G 不释放、`kill -9` 无效 | 真 D-state 卡死 | `kubectl delete pod --force` 重建（模型在节点盘，不丢） | — |
 
 ---
@@ -380,7 +442,35 @@ python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 
 **结论**：对标口径应取 **conc600 = 9,168**（与旧文档 8,993 同工作点，判定复现成功）。**~9,200–9,400 是 `dep8 + MTP + nightly 镜像` 的实际天花板**，剩下 ~1.2× 到官方 11,200 是**单卡内核成熟度差**——不是并发点没找对、也不是 prefill 数量不够（旧文档 §14 已实测 full autotune 无提升、EPLB 与 megamoe 不兼容）。要摸 11,200 只剩「对齐官方 pinned 镜像（commit `14f81a67`）」一条路。
 
-### 10.3 本次复测发现的旧文档缺陷（均已在本文修正）
+### 10.3 审计轮 1：全清空 → 只照本文重建（2026-07-26）
+
+把 StatefulSet 连 pod 全删，然后**只用本文的命令**重建一遍，不参考任何历史命令。
+
+| 步骤 | 结果 | 实测 / 偏差 |
+|---|---|---|
+| §2 部署 fleet | ✅ | 16/16 Running **60s**（文档写 ~2min，偏保守） |
+| §3 模型校验 | ⚠️ **抓到问题** | `sgl-0` 落到备用节点，模型缺失 → pod→pod 补齐 806G/4min |
+| §4 分发脚本 | ✅ | 16/16 写入成功 |
+| §5 单 prefill 冒烟 | ❌ **文档错** | 180s 时 HBM 还是 0，实际要 ~300s |
+| §5 批量起 13 prefill | ❌ **文档错** | `&`+`wait` 一把梭 → **12/14 崩** |
+| §6 自愈（错开 8s） | ✅ | round1 修 7/12、round2 修 5/5，**2 轮全绿** |
+| §5.1 etcd 终检 | ✅ | prefill 14 / decode 1 |
+| §7 frontend | ✅ | 14/14 → 200，`owned_by=nvidia`、`context_window=1048576` |
+| 端到端推理 | ✅ | `"The capital of France is"` → `" Paris. The capital of Italy is Rome."` |
+| §8 压测（冷） | ⚠️ | 8,520（比首轮低 7%）|
+| §8 压测（热） | ✅ **通过** | **9,118 = 首轮 9,168 的 99.5%** |
+
+**结论：可复现（±0.5%）**。但暴露了 5 个文档缺陷，全部已修：
+
+1. **仓库脚本仍指向 `-NVFP4`** —— 与文首告警自相矛盾，照抄必挂。（还没开跑就抓到）
+2. **重建会换节点** —— 17 节点 16 pod，调度器重排，落到备用节点的 pod 没有模型。→ §3 加了强制校验说明。
+3. **容器里没有 `gcloud`** —— 文档给的 GCS 拉取命令跑不了。→ §3 改推 pod→pod 直传（还快 4×）。
+4. **`pkill -9 -f dynamo.sglang` 会自杀** —— 我上一版**刚写进文档的"安全"建议是错的**：`pkill -f` 匹配整条命令行，而 `kubectl exec ... bash -c "pkill -9 -f dynamo.sglang; ..."` 这行本身就含该字符串。→ 改 `'dynamo[.]sglang'`。
+5. **批量启动必须错开** —— 同时起 13 个 → 12 崩；错开 8s → 2 轮全绿。→ §5③。
+
+> **审计的价值在这里**：#4 和 #5 都是「上一轮跑通了、写下来了、看着也对」的东西。只有真正从零再跑一遍才会暴露——#4 甚至是我自己刚写的错误建议，靠 review 文档发现不了。
+
+### 10.4 本次复测发现的旧文档缺陷（均已在本文修正）
 
 1. **模型与 MoE backend 配方错配（最严重）** —— 两套互斥配方分散在旧文档 §1 和 §13.A，中间无交叉提示。照 §13.A 抄 + 手上是 NVFP4 权重 = 必挂，且报错（tensor 384 vs 48）完全指不到根因。→ 提到文首告警。
 2. **就绪判据不足以判就绪** —— 旧文档给的「HBM>200G」和本文初稿给的 `Load weight end` **都会骗人**。崩溃发生在读权重之后，两个信号都已经变绿了。唯一权威是 etcd 注册数。→ §5.1。
