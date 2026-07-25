@@ -402,19 +402,51 @@ tokenizer.apply_chat_template(messages, is_training=True)   # use_fast=False, tr
 
 ## 五、集群准备（16 节点单域）
 
-### Step 0 — 确认单个 subblock 有 16 节点
+### 可用 pool（bunny 2026-07-25 质检，5 个全 PASS，共 88 节点 / 352 GPU）
+
+| Pool | 节点 | GPU | NCCL all_reduce | 说明 |
+|---|---|---|---|---|
+| **gb300-pool-0015** | 18 | 72 | 689.3 GB/s | ✅ **本文首选**（用 16 台，留 2 台热备） |
+| gb300-pool-0016 | 18 | 72 | 688.3 GB/s | 备选 |
+| gb300-pool-0017 | 18 | 72 | 689.6 GB/s | 备选 |
+| gb300-pool-0014 | 16 | 64 | 688.9 GB/s | 刚好 16 台**零余量**；GKE STATUS 显示 ERROR 是抱怨没凑够 18 台，节点健康 |
+| gb300-pool-0013 | 18 | 72 | 688.3 GB/s | 1 WARN：pqcm 节点 DRAM correctable ECC >1000（软错误，不影响正确性） |
+
+**不要用**：`pool-0002`（yangwhale 负载在跑 + 坏 COS）、`pool-0006`（infer 团队 17 pod + 坏 COS）、`pool-0009`（空闲且 COS 好，但不在交付范围，要用先问 chris）。
+
+多节点已验：MNNVL=ON **933 GB/s**，MNNVL=OFF 走 RDMA 379 GB/s，NVLink fabric 正常。
+
+> **为什么选 18 节点池而不是刚好 16 台的 0014**：集群 **auto-repair 关闭**（刻意防误换机），节点坏了不自愈。18 节点池用 16 台可留 2 台同 subblock 热备，坏一台换标签即可，不用整池搬迁（07e 那种"整池征用"很痛）。
+
+### ⚠️ 两个集群级硬约束
+
+| # | 约束 | 后果 / 应对 |
+|---|---|---|
+| 1 | **节点绝不能滚到 node image `1.36.0-gke.4681000`（COS 224.80）** | 该版本 `nvidia.ko` 有 regression，`cuDevicePrimaryCtxRetain` 返回 `INVALID_VALUE` — `nvidia-smi` 看着正常但**所有 CUDA 负载全挂**。集群已设维护例外冻结升级，**2026-10-23 到期**，到期前需续期。可用 5 池 kubelet 均为 `1.36.0-gke.4447000`（好 image）。 |
+| 2 | **auto-repair 全部关闭** | 节点坏了不会自愈，**必须自己监控**。训练中途掉节点 → 手动换标签到热备节点 → 删 pod 重调度。 |
+
+### Step 0 — 给目标池打标签
 
 ```bash
 CTX=gke_tencent-gcp-taiji-poc_us-central1_gb300-gke-test
+POOL=gb300-pool-0015
+
+# 挑 16 台 Ready 节点打标签（pool = subblock，天然同域，不用再挑 subblock）
+N=$(kubectl --context $CTX get nodes -l cloud.google.com/gke-nodepool=$POOL --no-headers \
+    | grep -w Ready | awk '{print $1}' | head -16)
+kubectl --context $CTX label node $N team=yangwhale --overwrite
+
+# 校验：应为 16，且 subblock 只有一个
 kubectl --context $CTX get nodes -L cloud.google.com/reservation-subblocks -l team=yangwhale \
   --no-headers | awk '{print $NF}' | sort | uniq -c
+
+# 顺带确认 node image 不是坏的 224.80
+kubectl --context $CTX get nodes -l team=yangwhale \
+  -o custom-columns=NODE:.metadata.name,KUBELET:.status.nodeInfo.kubeletVersion --no-headers \
+  | awk '{print $2}' | sort | uniq -c    # 期望全是 v1.36.0-gke.4447000
 ```
 
-不足 16 就给同 subblock 空闲节点补标签（**必须同一 subblock，不能跨池拼**，见 07e 教训）：
-
-```bash
-kubectl --context $CTX label node <NODE_NAME> team=yangwhale --overwrite
-```
+> **必须同一 subblock，不能跨池拼节点**（07e 教训）。用整池内的节点天然满足。
 
 ### Step 1 — 拉起 pod 池
 
@@ -506,7 +538,9 @@ Hy3 **没有官方 Megatron benchmark**，NVIDIA perf summary 里也没有。判
 | 6 | NCCL 崩溃刷爆磁盘 → DiskPressure 驱逐 | 崩后先清 Evicted pod 再重拉，别连环硬跑 |
 | 7 | 重度 churn ComputeDomain 后立刻硬跑 | 静置让 DRA/IMEX/RDMA 收敛再跑（07e 最值钱教训） |
 | 8 | **Hy3 专属**：bias_update_rate=0 导致专家失衡 | from-scratch 必须设 1e-3（§1.3） |
-| 9 | **Hy3 专属**：末 stage 扛 5 层 + MTP + loss | 首跑关 MTP；OOM 就换前重后轻布局（§2.4） |
+| 9 | **Hy3 专属**：末 stage 扛 5 层 + MTP + loss | 首跑关 MTP；OOM 就换前重后轻布局（§2.5） |
+| 10 | **集群**：节点滚到 COS 224.80 → CUDA 全挂 | 维护例外冻结中（2026-10-23 到期）；启动前查 kubelet 版本 |
+| 11 | **集群**：auto-repair 关闭，坏节点不自愈 | 自己监控；18 节点池留 2 台热备，坏了换标签 |
 
 ---
 

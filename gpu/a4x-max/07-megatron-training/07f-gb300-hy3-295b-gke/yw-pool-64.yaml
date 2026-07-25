@@ -5,7 +5,22 @@
 #   - 无跨域 RDMA，EP all-to-all 全走 NVLink，EP 最大可开到 64
 #   - 规避 07e 的 4-CD IMEX clique 死结坑
 #
-# 前置：目标 node pool 内 >=16 个节点已打 team=yangwhale 标签，且同一 subblock。
+# Pool 选型（bunny 2026-07-25 质检，5 个 pool 全 PASS，合计 88 节点/352 GPU）：
+#   gb300-pool-0015  18 节点  NCCL 689.3 GB/s  <- 首选（本文件用它）
+#   gb300-pool-0016  18 节点  NCCL 688.3 GB/s     备选
+#   gb300-pool-0017  18 节点  NCCL 689.6 GB/s     备选
+#   gb300-pool-0014  16 节点  NCCL 688.9 GB/s     刚好 16 台零余量；GKE STATUS 显示 ERROR
+#                                                  是抱怨没凑够 18 台，节点本身健康
+#   gb300-pool-0013  18 节点  NCCL 688.3 GB/s     1 WARN: pqcm 节点 DRAM correctable ECC>1000
+#
+# 为什么选 18 节点的池而不是刚好 16 台的 0014：
+#   **集群 auto-repair 是关闭的**（刻意防误换机），节点坏了不会自愈。
+#   18 节点池用 16 台 → 留 2 台同 subblock 热备，坏一台直接换标签，不用整池搬迁。
+#
+# 不要用：pool-0002（yangwhale 负载在跑 + 坏 COS）、pool-0006（infer 团队占用 + 坏 COS）、
+#         pool-0009（空闲且 COS 好，但不在交付范围，要用先问 chris）
+#
+# 前置：目标 node pool 内 16 个节点已打 team=yangwhale 标签（pool = subblock，天然同域）。
 # 应用：kubectl apply -f yw-pool-64.yaml
 # 校验：kubectl get pods -l job=yw --no-headers | grep -c Running   # 应为 16
 #       kubectl get computedomains | grep yw                        # 1 个 Ready
@@ -65,7 +80,7 @@ spec:
       - operator: "Exists"
       nodeSelector:
         cloud.google.com/gke-gpu: "true"
-        cloud.google.com/gke-nodepool: gb300-pool-0003   # 改成实际可用池
+        cloud.google.com/gke-nodepool: gb300-pool-0015   # bunny 质检 PASS，18 节点留 2 台热备
         team: yangwhale
       affinity:
         podAffinity:
