@@ -161,18 +161,18 @@ D0=$(kubectl get pod sgl-0 -o jsonpath='{.status.podIP}')
 kubectl exec sgl-0 -- bash -c "setsid nohup bash /tmp/decode-dep8.sh 0 $D0:5000 > /tmp/srv.log 2>&1 </dev/null &"
 kubectl exec sgl-1 -- bash -c "setsid nohup bash /tmp/decode-dep8.sh 1 $D0:5000 > /tmp/srv.log 2>&1 </dev/null &"
 
-# ③ 剩余 13 prefill —— ★ 必须错开，不要 & + wait 一把梭
+# ③ 剩余 13 prefill —— 错开起（摊开 I/O；注意这不能避免 §5.1 的崩溃）
 for i in $(seq 3 15); do
   kubectl exec sgl-$i -- bash -c "setsid nohup bash /tmp/prefill-dep4.sh > /tmp/srv.log 2>&1 </dev/null &"
   sleep 8
 done
 ```
 
-> ★★ **错开启动能大幅降低 40236 僵尸率**。实测同一批 pod：
-> - **同时起 13 个**（`&` + `wait`）→ **12 个崩**，只活 2 个
-> - **错开 8s 起**（自愈循环里）→ round1 修好 7/12、round2 修好 5/5，**2 轮全绿**
+> **错开 8s 是便宜的保险，但别指望它解决 40236 崩溃**。实测两轮：
+> - 轮 1 同时起 13 个（`&`+`wait`）→ 12 崩
+> - 轮 2 错开 8s 起 13 个 → **仍然 9 崩**
 >
-> 猜测是同域内多个 worker 同时抢 ZMQ 端口 / ComputeDomain channel 造成的瞬时冲突。错开 8s 成本极低（13 个才多花 100 秒），收益是少两轮自愈（每轮 7 分钟）。
+> 失败率是 60–85%，与是否错开**没有显著相关**（根因见 §5.1，是 pod 内部竞态）。唯一有效的手段是 §6 的重试循环。错开的实际好处只是把 14 个 pod 的启动 I/O 摊开，不至于同时读 14×806G。
 
 **时序预期**（从启动算起）：
 
@@ -180,10 +180,34 @@ done
 |---|---|---|
 | 权重加载 | ~4–5min | HBM 从 0 涨到 ~260 GiB |
 | CUDA graph capture | 再 ~3–5min | HBM 稳定不动 |
-| 向 etcd 注册 | 之后 | §5.1 的计数开始涨 |
+| 向 etcd 注册 | 之后 | §5.2 的计数开始涨 |
 | **总计** | **8–12min** | 别在 5 分钟时下结论 |
 
-### 5.1 ⚠️ 就绪判据有三层，前两层都会骗人
+### 5.1 40236 崩溃的真实根因（**不是**跨节点争抢）
+
+**失败率 60–85%，是本流程最大的时间黑洞**，所以值得讲清楚它到底是什么。
+
+报错长这样，出现在**权重已经加载完之后**：
+
+```
+Load weight end. elapsed=367.51 s, ...          ← 4 个 DP rank 全部成功
+...
+File "sglang/srt/entrypoints/engine.py", line 257, in __init__
+    self.send_to_rpc = get_zmq_socket(...)
+zmq.error.ZMQError: Address already in use (addr='tcp://127.0.0.1:40236')
+```
+
+三个关键事实：
+
+1. **地址是 `127.0.0.1`** —— pod 内部 loopback，**跟别的节点、别的 pod 完全无关**。同域并发启动不是原因。
+2. **崩的是主进程，不是 scheduler** —— 4 个 `sglang::scheduler_DP*` 子进程都已 `Load weight end`，是主进程回来 bind rpc socket 时撞车。健康 pod 上 `grep 9D2C /proc/net/tcp` 能看到 40236 有 5 条记录（主进程 listen + 4 个 DP rank 连入）。
+3. **崩完留 4 个 defunct 僵尸**（`[sglang::schedul] <defunct>`，PPID=1），端口随后被内核释放。
+
+即：**`--enable-dp-attention` + `dp_size=4` 下，主进程与 DP rank 之间对固定 rpc 端口 40236 的初始化竞态**。谁先 bind 是时序决定的，所以它表现为按 pod 独立的掷硬币，**重试就能过**。
+
+> **实操结论**：别去调启动顺序、别去改并发度、别怀疑网络——**只有重试有用**（§6）。每轮之间留 ≥90s，让内核收掉僵尸持有的端口。
+
+### 5.2 ⚠️ 就绪判据有三层，前两层都会骗人
 
 这是本次复测**代价最大的一课**：我用错判据，误以为满配跑通，压出来的数只有目标的一半，追了几小时才发现 14 个 prefill 里只有 5 个真在服务。
 
@@ -219,7 +243,7 @@ print('decode  workers:', len([k for k in ks if k.startswith('v1/instances/dynam
 
 ## 6. 自愈循环（**一次成功的关键**）`[已验证]`
 
-单个 worker 起不来是**常态**，不是异常（本次 14 个里 9 个中招）。手动逐个救每次都漏，正确姿势是脚本化「校验→重试」，**且校验必须用 §5.1 的 etcd 判据**：
+单个 worker 起不来是**常态**，不是异常（本次 14 个里 9 个中招）。手动逐个救每次都漏，正确姿势是脚本化「校验→重试」，**且校验必须用 §5.2 的 etcd 判据**：
 
 ```bash
 NEED=14
@@ -239,7 +263,7 @@ for round in 1 2 3 4 5; do
   done
   sleep 330                                   # 权重加载 + capture
 done
-# ★★ 收尾必做：etcd 注册数终检（见 §5.1），不等于 14 就继续救
+# ★★ 收尾必做：etcd 注册数终检（见 §5.2），不等于 14 就继续救
 ```
 
 **两个必守的细节**：
@@ -264,7 +288,7 @@ kubectl exec sgl-2 -- curl -s localhost:8001/v1/models
 
 **多 frontend 是吞吐关键（+34%）**：单个裸 frontend 在高并发下 CPU-bound，是编排瓶颈。
 
-> **frontend 返回 200 不代表后端池子健康**——它只要连上 NATS/etcd 就 200。后端有几个 worker 必须查 etcd（§5.1）。
+> **frontend 返回 200 不代表后端池子健康**——它只要连上 NATS/etcd 就 200。后端有几个 worker 必须查 etcd（§5.2）。
 
 ---
 
@@ -372,7 +396,7 @@ python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 
 | 现象 | 根因 | 处理 | 状态 |
 |---|---|---|---|
-| **跑通了但吞吐只有一半**（TPOT 正常、TTFT 60s+、frontend 全 200） | **prefill worker 大量没注册进 etcd**，但显存/日志/frontend 三个信号全绿 | §5.1 用 etcd 判据重查，§6 自愈补齐 | `[已定位并修复]` |
+| **跑通了但吞吐只有一半**（TPOT 正常、TTFT 60s+、frontend 全 200） | **prefill worker 大量没注册进 etcd**，但显存/日志/frontend 三个信号全绿 | §5.2 用 etcd 判据重查，§6 自愈补齐 | `[已定位并修复]` |
 | `NotImplementedError: Runner backend FLASHINFER_TRTLLM_ROUTED requires a fused func for a2a backend megamoe` | `--moe-runner-backend` 默认 `auto`，新 nightly 的 auto 选了 flashinfer，与 megamoe 不配套 | **显式加 `--moe-runner-backend deep_gemm`**（脚本已含） | `[已定位并修复]` |
 | `RuntimeError: The size of tensor a (384) must match the size of tensor b (48)` | NVFP4 权重走了 megamoe 路径（384=`n_routed_experts`，48=384/ep） | 换官方原装权重，见文首告警 | `[已定位并修复]` |
 | 容器里脚本是空文件 | `kubectl exec` 少了 `-i` | 见 §4 | `[已修复]` |
@@ -399,7 +423,7 @@ python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 | §4 分发脚本 | ✅ | 16 pod 全部写入成功 |
 | §5 单 prefill 冒烟 | ✅ | 加 `--moe-runner-backend deep_gemm` 后，3min HBM 260GB |
 | §5 批量 14 prefill | ⚠️ **5/14** | 9 个撞 40236 僵尸；**显存和日志判据全绿，骗过了第一次验收** |
-| §5.1 etcd 判据 | ✅ | 揭穿上一行：`prefill/generate` 只有 5 个 |
+| §5.2 etcd 判据 | ✅ | 揭穿上一行：`prefill/generate` 只有 5 个 |
 | §6 自愈循环 | ✅ | round1 救回 8/9，剩 1 个单独重启，最终 **14/14 注册** |
 | §5 decode dep8 | ✅ | 8 rank 全 `Load weight end` + `registration succeeded` |
 | §7 frontend | ✅ | 14/14 返回 200，`owned_by=nvidia`、`context_window=1048576` |
@@ -454,7 +478,7 @@ python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 | §5 单 prefill 冒烟 | ❌ **文档错** | 180s 时 HBM 还是 0，实际要 ~300s |
 | §5 批量起 13 prefill | ❌ **文档错** | `&`+`wait` 一把梭 → **12/14 崩** |
 | §6 自愈（错开 8s） | ✅ | round1 修 7/12、round2 修 5/5，**2 轮全绿** |
-| §5.1 etcd 终检 | ✅ | prefill 14 / decode 1 |
+| §5.2 etcd 终检 | ✅ | prefill 14 / decode 1 |
 | §7 frontend | ✅ | 14/14 → 200，`owned_by=nvidia`、`context_window=1048576` |
 | 端到端推理 | ✅ | `"The capital of France is"` → `" Paris. The capital of Italy is Rome."` |
 | §8 压测（冷） | ⚠️ | 8,520（比首轮低 7%）|
@@ -473,7 +497,7 @@ python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 ### 10.4 本次复测发现的旧文档缺陷（均已在本文修正）
 
 1. **模型与 MoE backend 配方错配（最严重）** —— 两套互斥配方分散在旧文档 §1 和 §13.A，中间无交叉提示。照 §13.A 抄 + 手上是 NVFP4 权重 = 必挂，且报错（tensor 384 vs 48）完全指不到根因。→ 提到文首告警。
-2. **就绪判据不足以判就绪** —— 旧文档给的「HBM>200G」和本文初稿给的 `Load weight end` **都会骗人**。崩溃发生在读权重之后，两个信号都已经变绿了。唯一权威是 etcd 注册数。→ §5.1。
+2. **就绪判据不足以判就绪** —— 旧文档给的「HBM>200G」和本文初稿给的 `Load weight end` **都会骗人**。崩溃发生在读权重之后，两个信号都已经变绿了。唯一权威是 etcd 注册数。→ §5.2。
 3. **pod 生成器未入库** —— 旧文档引用 `gen18-0001.py`，仓库里没有，第一步就卡死。→ `manifests/sgl-fleet.yaml`。
 4. **漏 `--moe-runner-backend deep_gemm`** —— 旧文档强调"一个字都不能漏"，却依赖 `auto` 的默认行为。nightly 镜像更新后 auto 改选 flashinfer，整条 megamoe 路径直接崩。**「依赖默认值」型埋雷**：写文档时能跑 ≠ 半年后能跑。
 5. **裸 pod 与 DRA 冲突未说明** —— 生成器批量创建裸 pod，与 DRA channel 预留机制冲突。→ StatefulSet。
