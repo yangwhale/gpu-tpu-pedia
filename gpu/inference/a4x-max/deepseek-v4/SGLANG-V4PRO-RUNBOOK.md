@@ -414,7 +414,7 @@ python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 
 ---
 
-## 9. 验证记录
+## 10. 验证记录
 
 **2026-07-25 复测（本 runbook 首次成文）**，环境：`gb300-pool-0002` 17 节点，16 pod fleet，官方原装 `DeepSeek-V4-Pro`。
 
@@ -536,4 +536,84 @@ python3 -c "print('output/decode-GPU:', round($TOT/8,1))"
 7. **压测工具来源未记** —— 只说用 InferenceX `sa-bench`，没说从哪来、怎么装、装到哪（**按节点不按 pod**）。→ §8.2。
 8. **压测启动方式没写对** —— 裸 `for` 循环 `kubectl exec` 批量起，实测 14 路只活 6 路且不报错。→ §8.3 的 `sleep 4` + 校验重试。
 
-> **方法论**：本文每一节都是「先在集群上真跑一遍，再写进来」。上面 8 条全部是执行中撞出来的，读旧文档发现不了。**其中第 2 条是最贵的**——它不让部署失败，只让性能腰斩，而所有常规健康检查都是绿的。
+> **方法论**：本文每一节都是「先在集群上真跑一遍，再写进来」，写完又清空环境**照文档从零重跑了 3 轮**（§10.3 / §10.4 / §10.6）。上面 8 条全部是执行中撞出来的，读文档发现不了。
+>
+> **两个最贵的**：第 2 条（就绪判据）不让部署失败、只让性能腰斩，而所有常规健康检查都是绿的；而审计轮 2 推翻的那条错误归因，是**我自己在轮 1 刚写下的**——它读起来完全合理，只有真跑第二遍才暴露。**这就是为什么复现文档必须自己审计自己。**
+
+---
+
+## 11. 冲击官方 11,200：调研结论 + 实验 `[进行中]`
+
+我们稳定在 **9,032–9,168**（四次热态测量，均值 9,107，±0.8%）。这一节记录「差的那 20% 到底在哪」的调研和实验。
+
+### 11.1 调研推翻了两个原有假设
+
+| 原假设 | 调研结论 | 出处 |
+|---|---|---|
+| 「我们用 nightly，官方用更成熟的 pinned 镜像，差在内核成熟度」 | **方向反了**。官方 pinned 是 `nightly-dev-20260527-14f81a67`（2026-05-27），我们用的 `20260720` **新两个月** | commit `14f81a67` = sgl-project/sglang *"bump sglang-kernel to 0.4.3 (#26421)"* |
+| 「dep8 + MTP 是官方那条曲线的配置」 | **不是**。官方 8K/1K 的 frontier 全是 **wide-EP（dep16/24/32/40）**，`dep8` 已被 [InferenceX PR #1586](https://github.com/SemiAnalysisAI/InferenceX/pull/1586) 作为 *"dominated … superseded by wide-EP frontier"* **删除** | InferenceX `benchmarks/multi_node/srt-slurm-recipes/sglang/deepseek-v4/8k1k/` |
+
+**11,200 的原始出处**：[PyTorch 官方博客 2026-06-23](https://pytorch.org/blog/serving-deepseek-v4-on-gb300-with-sglang-5x-higher-throughput-at-the-same-interactivity-since-day-0)，原文是「the June 2026 MTP curve delivers ~11,200 tok/s/GPU **at roughly 50 tok/s/user**」。**它是一条 Pareto 曲线上的点，不是某个单一配置**，而且限定了交互性（50 tok/s/user ≈ TPOT 20ms）。
+
+> **我们的工作点完全不同**：TPOT 钉在 58–63ms ≈ **16 tok/s/user**。也就是说我们在**交互性差 3 倍**的点上，吞吐还低 18%——两个轴都在人家里面，不是简单的 throughput/latency 取舍。
+
+### 11.2 口径复核
+
+InferenceX [`utils/process_result.py`](https://github.com/SemiAnalysisAI/InferenceX/blob/main/utils/process_result.py) L136-163 定义了三个口径：
+
+```python
+output_tput_denominator = decode_gpus if decode_gpus > 0 else total_gpus
+'tput_per_gpu':        total_token_throughput / total_gpus       # (in+out) ÷ 全部 GPU
+'output_tput_per_gpu': output_throughput / output_tput_denominator   # out ÷ decode GPU ← 本文用的
+'input_tput_per_gpu':  (total - output) / prefill_gpus
+```
+
+我们的数按两种口径：
+
+| 口径 | 我们 | vs 11,200 |
+|---|---|---|
+| `output_tput_per_gpu`（out ÷ 8 decode 卡） | 9,032 | 80.6% |
+| `tput_per_gpu`（(in+out) ÷ 64 卡） | **10,180** | **90.9%** |
+
+博客标题那个 11,200 到底指哪个字段，公开材料没写死。**先记下这个不确定性**——它可能一下子把 gap 从 19% 缩到 9%。
+
+### 11.3 官方 recipe（16 节点可复刻的两种）
+
+官方跑 18 节点 / 72 GPU（满 NVL72）。我们 16 节点，按同比例可摆两种：
+
+| 配置 | prefill | decode | 官方对应 | 建议 conc |
+|---|---|---|---|---|
+| A | 12 × dep4（48 卡） | 1 × **dep16**（4 节点 16 卡） | `14p1d-dep4-dep16-18-c8192` | 8192 |
+| B | 8 × dep4（32 卡） | 1 × **dep32**（8 节点 32 卡） | `10p1d-dep4-dep32-18-c2500` | 2500 |
+
+**注意官方每个拓扑只用一个并发点**（dep16 用 8192、dep32 用 2500），不是我们这种 14 路 × 600 平均分。
+
+### 11.4 实验记录
+
+#### Exp A：dep8 + MTP + 官方 decode 参数 → ❌ **配置冲突，不成立**
+
+改动：`mem-fraction-static 0.85→0.94`、`max-running-requests 8192→18432`、`swa-full-tokens-ratio 0.1→0.20`、加 `SGLANG_OPT_USE_ONLINE_COMPRESS=1`。
+
+结果：decode 启动即崩。
+
+```
+AssertionError: online c128 does not support MTP
+```
+
+> **这是本轮最有价值的一条**：**KV 压缩 V2（online c128）与 MTP 互斥，只能二选一**。它直接解释了为什么官方五个 wide-EP 8K/1K recipe **全都没有 speculative 配置**——不是「MTP 在饱和时收益为负」这么模糊的理由，而是**开了压缩就用不了 MTP**，官方选了压缩。
+>
+> 所以 Exp A / Exp B 不是两个独立实验，**它们被强制合并**。
+
+#### Exp B：官方 decode 配置（去 MTP + online compress + 调优参数）
+
+同上参数，去掉 `--speculative-*` 三个 flag。结果见下（进行中）。
+
+### 11.5 待验证清单（按 收益/成本 排序）
+
+| # | 动作 | 成本 | 预期 |
+|---|---|---|---|
+| 1 | Exp B：官方 decode 参数 + 去 MTP | 只重启 decode，~35min | 未知，先拿到 |
+| 2 | **wide-EP decode dep16 / dep32** | 重排 fleet，~50min | **调研认为主要 gap 在这** |
+| 3 | 按官方单一并发点压测（dep16 用 8192 / dep32 用 2500） | 免费 | 口径对齐 |
+| 4 | 切官方 pinned 镜像 `nightly-dev-20260527-14f81a67` | 拉镜像 + 重建 | 低（我们的更新） |
+| 5 | EPLB + Waterfill（cookbook 称支持 megamoe，与旧文档结论矛盾） | 中 | 待验证 |
