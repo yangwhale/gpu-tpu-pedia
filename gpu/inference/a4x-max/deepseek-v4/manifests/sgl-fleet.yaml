@@ -1,0 +1,99 @@
+# SGLang DeepSeek-V4-Pro PD-disagg fleet — GB300 NVL72 (pool-0002 单域)
+# 16 pod = 2 decode (sgl-0/sgl-1, dep8 跨 2 节点) + 14 prefill (sgl-2..sgl-15, 每个 dep4)
+# StatefulSet 而非裸 pod: DRA channel 必须由 scheduler 预留, nodeName 绕过会 FailedPrepareDynamicResources
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: sgl4-cd
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: sgl4-ch
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: sgl4-mrdma
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          allocationMode: ExactCount
+          count: 8
+          deviceClassName: mrdma.google.com
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: sgl
+spec:
+  selector:
+    app: sgl
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: sgl
+spec:
+  serviceName: sgl
+  replicas: 16
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: sgl
+  template:
+    metadata:
+      labels:
+        app: sgl
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-nodepool: gb300-pool-0002
+        team: yangwhale
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [sgl]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: gar-auth
+      - name: ar-pull-secret
+      volumes:
+      - name: ssd
+        hostPath: {path: /mnt/disks/raid/0, type: DirectoryOrCreate}
+      - name: shm
+        emptyDir: {medium: Memory, sizeLimit: 600Gi}
+      containers:
+      - name: sglang
+        image: lmsysorg/sglang:nightly-dev-cu13-20260720-b3570a45
+        securityContext: {privileged: true}
+        command: ["sleep", "infinity"]
+        resources:
+          limits: {nvidia.com/gpu: 4}
+          claims:
+          - {name: mrdma}
+          - {name: ch}
+        volumeMounts:
+        - {name: ssd, mountPath: /mnt/ssd, mountPropagation: HostToContainer}
+        - {name: shm, mountPath: /dev/shm}
+        env:
+        - {name: NCCL_SOCKET_IFNAME, value: "eth0"}
+        - {name: GLOO_SOCKET_IFNAME, value: "eth0"}
+        - {name: NCCL_MNNVL_ENABLE, value: "1"}
+        - {name: MC_FORCE_MNNVL, value: "1"}
+        - {name: NATS_SERVER, value: "nats://dynamo-nats:4222"}
+        - {name: ETCD_ENDPOINTS, value: "http://dynamo-etcd:2379"}
+      resourceClaims:
+      - {name: mrdma, resourceClaimTemplateName: sgl4-mrdma}
+      - {name: ch, resourceClaimTemplateName: sgl4-ch}
