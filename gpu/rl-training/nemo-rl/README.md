@@ -528,8 +528,13 @@ GB300 节点自带多块 local NVMe，但**默认不组阵列、不挂载**。�
 
 ```bash
 kubectl apply -f manifests/raid-pool-0002.yaml
-kubectl logs -l name=gke-raid-disks-0002 --tail=3 | grep RAID_READY   # 期望每节点一行
+# 逐节点校验（勿用 kubectl logs -l，它只返回部分 pod 的日志，18 节点只回 12 行会误判）
+for p in $(kubectl get pods -l name=gke-raid-disks-0002 -o name); do
+  kubectl logs $p --tail=2 | grep -q RAID_READY && echo "$p OK" || echo "$p ⚠️"
+done
 ```
+
+DaemonSet 幂等：已组过阵列的节点重复 apply 显示 `unchanged`，不会破坏数据。挂载点 `/mnt/disks/raid/0` 实测 **12T**。
 
 > **坑**：若节点曾组过阵列，可能出现 ghost `md127` 未挂载。DaemonSet 幂等脚本会跳过 create，但需手动 `mount /dev/md127 /mnt/disks/raid/0`。
 
@@ -552,6 +557,21 @@ kubectl get computedomain nrl-cd         # 确认 CD 已创建
 | shm | 200Gi emptyDir Memory | vLLM/Ray 需要大 shm |
 
 ### 10.4 准备模型与数据集
+
+> ⚠️ **先查缓存再下载 —— 这一步能省 40 分钟**
+> `/mnt/ssd` 是**节点本地 hostPath**，删 pod / 删 StatefulSet **数据不丢**。同一批节点上重建时，模型和 mcore 缓存都还在，§10.4 + §10.5 可整段跳过。
+>
+> ```bash
+> for i in 0 1 2 3; do
+>   kubectl exec nrl-$i -- bash -c '
+>     [ -d /mnt/ssd/hf/Qwen3-30B-A3B ] && echo -n "HF=OK " || echo -n "HF=缺 "
+>     [ -f /mnt/ssd/hf/nemo_rl/model__mnt_ssd_hf_Qwen3-30B-A3B/iter_0000000/run_config.yaml ] \
+>       && echo "mcore=OK" || echo "mcore=缺"'
+> done
+> ```
+> 4 行全 `OK` → **直接跳到 §10.6**。
+
+（以下为首次部署 / 缓存缺失时执行）
 
 ```bash
 # 4 节点并行下载（每节点本地一份，无共享存储）
@@ -595,15 +615,34 @@ done
 kubectl exec nrl-0 -- ray status      # 期望 4 个 Active node
 ```
 
+> **两个重建期坑**：
+> 1. **Pod IP 每次重建都变**（实测 `10.72.26.68` → `10.72.29.22`），所以 `HEAD` 必须每次动态取，任何地方都别写死 IP。
+> 2. **Pod 序号 ↔ 节点的映射不固定**。实测重建后 `nrl-0` 从节点 `lt06` 换到了 `rlz0`。因为模型数据在**每个节点本地**都有一份，换位置不影响；但**不要假设 `nrl-0` 恒等于某台机器**。
+>
+> 复用旧的 `--temp-dir=/mnt/ssd/ray` 目录实测无冲突，不需要清理。
+
 ### 10.7 启动 GRPO 训练
 
-把下面写成 `/mnt/ssd/run-grpo.sh` 后 `setsid nohup` 启动：
+**用 heredoc 生成脚本**，让 `$HEAD` 在宿主机侧展开（写死 IP 会在下次重建时失效）：
+
+```bash
+HEAD=$(kubectl get pod nrl-0 -o jsonpath='{.status.podIP}')
+kubectl exec -i nrl-0 -- bash -c "cat > /mnt/ssd/run-grpo.sh" <<EOF
+... 下面脚本内容，把 RAY_ADDRESS 写成 \$HEAD:6379 ...
+EOF
+kubectl exec nrl-0 -- bash -c "chmod +x /mnt/ssd/run-grpo.sh && \
+  setsid nohup /mnt/ssd/run-grpo.sh > /mnt/ssd/grpo.log 2>&1 < /dev/null &"
+```
+
+> **必须 `kubectl exec -i`**：没有 `-i` 时 stdin 不透传，heredoc 内容不会写进容器，脚本会是空文件。
+
+脚本内容：
 
 ```bash
 #!/bin/bash
 export HF_HOME=/mnt/ssd/hf TMPDIR=/mnt/ssd/tmp
 export HF_DATASETS_CACHE=/mnt/ssd/hf/datasets
-export RAY_ADDRESS=<HEAD_IP>:6379
+export RAY_ADDRESS=<由 $HEAD 展开>:6379
 export NCCL_MNNVL_ENABLE=1 NCCL_SOCKET_IFNAME=eth0 GLOO_SOCKET_IFNAME=eth0
 cd /opt/nemo-rl
 uv run --no-sync examples/run_grpo.py \
@@ -626,6 +665,8 @@ uv run --no-sync examples/run_grpo.py \
 | `vllm_cfg.enforce_eager` | `True` | **`False`** | 开 CUDA graph，生成 ~8000 tok/s |
 | `train_micro_batch_size` | 1 | **4** | 训练段提速约 40% |
 | `checkpointing.enabled` | false | **true** | 不开则 pod 重调度全丢（§9.14） |
+
+> **checkpoint 落 `/mnt/ssd` 的局限**：那是**节点本地盘**，只能防"进程崩了 / pod 重建后落回同一批节点"。真丢节点（机器故障、pool 缩容）checkpoint 一起没。要真正抗节点丢失，得落共享存储（Lustre / GCS FUSE）——本集群 us-central1 暂无共享存储，属已知缺口。
 
 ### 10.8 监控
 
@@ -653,6 +694,25 @@ kubectl exec nrl-0 -- bash -c "grep -aoE 'Avg Total Reward: [0-9.]+' /mnt/ssd/lo
 | reward 一直平 | lr 太小 / batch 太小 | lr 提到 5e-6；batch 见下 |
 
 > **规模现实**：本 runbook 的 `64 prompt × 32 gen = 2048 rollout` 只有 DAPO 论文（`512 × 16 = 8192`）的 **1/4**，梯度噪声大、reward 曲线抖。**这是流程验证配置，不是收敛实验配置**。要看真实收敛需 64–128 GPU + 8192 batch + 数千步（详见 §9.15）。
+
+### 10.10 验证记录（本 runbook 已被实跑审计）
+
+2026-07-25 做过一次**完整拆除 → 照本文重建**的审计：删掉 StatefulSet + ComputeDomain + Service，等 pod 全部退出后，严格按 §10.1–§10.7 的命令逐条执行。
+
+| 阶段 | 实测耗时 | 结果 |
+|---|---|---|
+| §10.1 前置检查 | 秒级 | 17 节点带 team 标签 |
+| §10.2 RAID DaemonSet | 秒级 | 幂等，显示 `unchanged`，`/mnt/ssd` = 12T |
+| §10.3 pod 部署 | **~40s** | 4/4 Running，一节点一个，CD 自动创建 |
+| §10.4–10.5 模型/转换 | **0（跳过）** | hostPath 数据存活，4 节点 HF + mcore 全 OK |
+| §10.6 Ray 集群 | **~20s** | 4 Active node |
+| §10.7 训练启动 → 首步完成 | **~5 min** | Total step time **259.84s** |
+
+**重建总耗时 ≈ 6 分钟**（数据已缓存），对比首次部署 40–60 分钟。
+
+首步耗时构成（`lr=5e-6`、无动态采样）：`policy_training 39.4%` / `logprobs 28.8%` / `generation 28.7%`。与开了 DAPO 动态采样（`batch_multiplier=3`）时的 `generation 41.7%` 对比可见——**动态采样把瓶颈从训练侧推回生成侧**，单步从 260s 涨到 290s。
+
+审计中修正的文档缺陷：RAID 校验命令误用 `kubectl logs -l`（只回部分 pod）、缺少"先查缓存再下载"的快速路径、`<HEAD_IP>` 占位符应改为动态取、heredoc 漏 `kubectl exec -i`、checkpoint 落本地盘的局限未说明。
 
 ---
 
