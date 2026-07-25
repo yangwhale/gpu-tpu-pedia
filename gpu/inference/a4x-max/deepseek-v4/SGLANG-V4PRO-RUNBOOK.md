@@ -604,9 +604,25 @@ AssertionError: online c128 does not support MTP
 >
 > 所以 Exp A / Exp B 不是两个独立实验，**它们被强制合并**。
 
-#### Exp B：官方 decode 配置（去 MTP + online compress + 调优参数）
+#### Exp B / B2：把官方 decode 参数搬到 dep8 → ❌ **三次失败，路本身是死的**
 
-同上参数，去掉 `--speculative-*` 三个 flag。结果见下（进行中）。
+| 尝试 | 配置 | 结果 |
+|---|---|---|
+| A | dep8 + MTP + `0.94` / `18432` / online-compress | `AssertionError: online c128 does not support MTP` |
+| B | 去 MTP，其余同上 | decode 起来了、etcd 注册成功，**但压测 100% 失败**：`batch.retract_decode()` → `NotImplementedError` |
+| B2 | 再把 `max-running-requests` 退回 `8192` | `torch.OutOfMemoryError`（276.62 GiB 卡上只剩 244 MiB） |
+
+**三个失败各自暴露一条硬约束**：
+
+1. **online c128 与 MTP 互斥** —— 只能二选一。
+2. **online c128 没实现 `retract_decode`** —— 一旦并发超过 KV 容量、需要抢占回退，就直接抛 `NotImplementedError`，**所有在途请求全挂**。所以开压缩时 `max-running-requests` 必须保守到**永不触发抢占**。官方那个 `18432` 是给 wide-EP 的（dep16/32 的 KV 池大得多）。
+3. **`mem-fraction-static 0.94` 是 wide-EP 专用** —— dep8 时模型只摊在 8 张卡上，单卡权重占用是 dep32 的 4 倍，0.94 直接把激活空间挤没。
+
+> **结论**：官方那套 decode 参数是**跟 wide-EP 共同设计的一个整体**，拆开逐项搬到 dep8 上会以三种不同方式失败。**dep8 + 官方参数这条路不存在**——要用官方参数就必须同时换成 wide-EP 拓扑。这反过来印证了 PR #1586 把 dep8 判为 dominated 并删除的决定。
+
+#### Exp C：wide-EP decode dep16（12 prefill + 4 节点 decode）
+
+按 §11.3 配置 A 重排 fleet。结果见下（进行中）。
 
 ### 11.5 待验证清单（按 收益/成本 排序）
 
