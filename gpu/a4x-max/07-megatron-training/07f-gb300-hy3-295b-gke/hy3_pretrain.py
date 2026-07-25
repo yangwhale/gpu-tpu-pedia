@@ -67,8 +67,14 @@ def build_config(a):
     m.share_embeddings_and_output_weights = False     # tie_word_embeddings: false
     m.seq_length = a.seq_length
     cfg.dataset.sequence_length = a.seq_length
-    if hasattr(cfg.tokenizer, "vocab_size"):
-        cfg.tokenizer.vocab_size = HY3["vocab_size"]
+    # 骨架来自 qwen3，tokenizer 是 Qwen 的（词表 151669 > Hy3 的 120832，会报
+    # "Model vocab_size cannot be smaller than tokenizer's vocab_size"）。
+    # mock 数据 benchmark 用 NullTokenizer 对齐 Hy3 词表即可。
+    cfg.tokenizer.tokenizer_type = "NullTokenizer"
+    cfg.tokenizer.vocab_size = HY3["vocab_size"]
+    for attr in ("tokenizer_model", "tokenizer_path", "hf_tokenizer_path"):
+        if hasattr(cfg.tokenizer, attr):
+            setattr(cfg.tokenizer, attr, None)
 
     # ---------- 2. MoE：DeepSeek-V3 血统 ----------
     m.num_moe_experts = HY3["num_moe_experts"]
@@ -93,43 +99,63 @@ def build_config(a):
     # 但 benchmark 开了 force_load_balancing 时路由被强制均衡，该值不影响性能测量。
     m.moe_router_bias_update_rate = a.bias_update_rate
 
-    # ---------- 3. 并行 ----------
-    m.tensor_model_parallel_size = a.tp
-    m.pipeline_model_parallel_size = a.pp
-    m.virtual_pipeline_model_parallel_size = a.vpp or None
-    m.expert_model_parallel_size = a.ep
-    m.pipeline_model_parallel_layout = a.pp_layout or default_pp_layout(
-        m.num_layers, a.pp, a.vpp, a.mtp_layers)
+    # ---------- 3~5. 并行 / 高性能 / CUDA graph ----------
+    # 关键：不手工重实现，直接复用官方 `WorkloadBaseConfig` + `set_workload_base_configs`，
+    # 保证与 deepseek GB300 recipe 的映射逻辑 1:1 一致（cutedsl→op_fuser→paged_stash 这类
+    # 隐式依赖链手写必漏，实测漏了就报
+    # "moe_expert_rank_capacity_factor requires use_transformer_engine_op_fuser"）。
+    import sys
+    sys.path.insert(0, "/opt/Megatron-Bridge/scripts/performance")
+    from utils.overrides import set_workload_base_configs
+    from utils.utils import WorkloadBaseConfig
 
-    # ---------- 4. GB300 高性能（照搬 deepseek_llm_pretrain.set_deepseek_v3_common_configs）----------
+    base = WorkloadBaseConfig(
+        num_gpus=a.num_gpus,
+        tensor_model_parallel_size=a.tp,
+        pipeline_model_parallel_size=a.pp,
+        virtual_pipeline_model_parallel_size=a.vpp or None,
+        expert_model_parallel_size=a.ep,
+        global_batch_size=a.gbs,
+        micro_batch_size=a.mbs,
+        cuda_graph_impl=None if a.cuda_graph == "none" else a.cuda_graph,
+        cuda_graph_scope=(["attn", "moe_router", "moe_preprocess"]
+                          if a.cuda_graph == "transformer_engine" else None),
+        moe_flex_dispatcher_backend=(a.dispatcher if a.dispatcher != "alltoall" else None),
+        moe_a2a_overlap=a.a2a_overlap,
+        cutedsl_fused_grouped_mlp=a.cutedsl,
+        recompute_modules=a.recompute_modules,
+        pp_layout=a.pp_layout or default_pp_layout(
+            m.num_layers, a.pp, a.vpp, a.mtp_layers),
+    )
+
+    # deepseek set_deepseek_v3_common_configs 等价项（与精度无关，全都要）
     m.moe_router_fusion = True
     m.recompute_granularity = "selective"
     cfg.dist.enable_megatron_core_experimental = True
     cfg.mixed_precision.grad_reduce_in_fp32 = False   # 梯度 BF16，省一半显存
     cfg.ddp.grad_reduce_in_fp32 = False
-    # qwen3 recipe 的 comm_overlap 默认 None，需要显式构造（deepseek 配置里会设它）
+    if a.force_load_balancing:
+        m.moe_router_force_load_balancing = True      # benchmark 专用：消除路由不均衡噪声
+
+    if base.pp_layout:
+        m.pipeline_model_parallel_layout = base.pp_layout
+        # pp_layout 字符串里已显式写了 E(embedding) 和 L(loss)，
+        # 与 account_for_* 开关互斥（qwen3 骨架默认 True，deepseek 骨架默认 False）
+        m.account_for_embedding_in_pipeline_split = False
+        m.account_for_loss_in_pipeline_split = False
+        m.num_layers_in_first_pipeline_stage = None
+        m.num_layers_in_last_pipeline_stage = None
+    set_workload_base_configs(cfg, base)              # 官方映射：并行 + graph + cutedsl + recompute
+
     if cfg.comm_overlap is None:
         from megatron.bridge.training.comm_overlap import CommOverlapConfig
         cfg.comm_overlap = CommOverlapConfig(tp_comm_overlap=False)  # TP=1，无 TP 重叠可言
     cfg.comm_overlap.overlap_grad_reduce = True
-    if a.force_load_balancing:
-        m.moe_router_force_load_balancing = True      # benchmark 专用：消除路由不均衡噪声
 
-    # hybridep：GB300 NVL72 域内 all-to-all，显著优于朴素 alltoall
-    if a.dispatcher == "hybridep":
-        m.moe_token_dispatcher_type = "flex"
-        m.moe_flex_dispatcher_backend = "hybridep"
-    else:
-        m.moe_token_dispatcher_type = a.dispatcher
-    if hasattr(m, "moe_a2a_overlap"):
-        m.moe_a2a_overlap = True
-
-    # ---------- 5. CUDA graph + paged stash（07e 的核心成果）----------
-    if a.cuda_graph != "none":
-        m.cuda_graph_impl = a.cuda_graph
-    if a.cuda_graph == "full_iteration":
-        # dropless MoE 产生变长 per-expert tensor，graph 抓不住；
-        # 先 pad 到固定容量，再用 paged stash 把显存收回来。
+    # full_iteration graph 专属：dropless MoE 变长 tensor graph 抓不住，
+    # 先 pad 到固定容量再用 paged stash 收回显存（deepseek set_full_iter_cg_configs 原样）
+    from megatron.bridge.utils.cuda_graph import is_full_iteration_cuda_graph
+    if is_full_iteration_cuda_graph(m):
         m.moe_pad_experts_for_cuda_graph_inference = True
         m.moe_paged_stash = True
         m.moe_expert_rank_capacity_factor = 1.5
@@ -195,8 +221,16 @@ def main():
     p.add_argument("--precision", default="bf16")
     p.add_argument("--dispatcher", default="hybridep",
                    choices=["hybridep", "alltoall", "flex"])
-    p.add_argument("--cuda-graph", default="full_iteration",
-                   choices=["none", "full_iteration", "local"])
+    p.add_argument("--cuda-graph", default="transformer_engine",
+                   choices=["none", "full_iteration", "transformer_engine"],
+                   help="NVIDIA 官方 GB300 BF16 recipe 用 transformer_engine；"
+                        "full_iteration 是 FP8_MX recipe 的配置")
+    p.add_argument("--cutedsl", action="store_true", default=False,
+                   help="cutedsl fused grouped MLP，会连带打开 TE op fuser "
+                        "(paged stash 的前置依赖)")
+    p.add_argument("--a2a-overlap", action="store_true", default=False)
+    p.add_argument("--recompute-modules", nargs="*", default=["moe_act"],
+                   help="官方 BF16 recipe 用 [moe_act]，FP8_MX 用 []")
     p.add_argument("--bias-update-rate", type=float, default=1e-3)
     p.add_argument("--force-load-balancing", action="store_true", default=True)
     p.add_argument("--no-force-load-balancing", dest="force_load_balancing",

@@ -662,9 +662,56 @@ Hy3 295B | 64 GPU | TP1 PP2 VPP8 EP32 | MBS1 GBS2048 | bf16
 > **通用教训**：跨 recipe 家族借骨架时，`ConfigContainer` 的**同名字段类型可能不同**（str vs 对象、None vs 实例）。
 > 照抄 A 家族的赋值语句到 B 家族骨架上，必然踩这类空指针/类型错，逐个 dryrun 打掉即可。
 
-### 待办
+### 里程碑 M5 — 4 GPU 缩层冒烟通过（15:02 HKT ✅）
 
-- [ ] M5：4 GPU 缩层（8 层）冒烟，验证模型能构造 + 前反向跑通
+配置：4 GPU / 8 层 / TP1 PP2 VPP2 EP2 / MBS1 GBS8 / seq4096 / BF16 / TE graph。
+
+```
+iteration 1/5 | elapsed 77498.7 ms | lm loss 1.251689E+01 | grad norm 6.013   <- 含 graph capture
+iteration 2/5 | elapsed   572.3 ms | lm loss 1.251494E+01 | TFLOP/s/GPU 233.6
+iteration 3/5 | elapsed   532.1 ms | lm loss 1.224570E+01 | TFLOP/s/GPU 251.3
+iteration 4/5 | elapsed  4155.2 ms | lm loss 1.139484E+01 | <- 周期性 GC
+iteration 5/5 | elapsed   455.9 ms | lm loss 1.086530E+01 | TFLOP/s/GPU 293.3
+Rank 0: 16 graphs deleted with explicit reset
+```
+
+✅ **loss 12.52 → 10.87 单调下降，0 NaN、0 skipped，CUDA graph 正常创建/销毁。模型结构和前反向链路验证通过。**
+每 rank 参数 8.12B（PP rank 1），总参 27.26B（8 层缩减版），dense+embedding 1.89B。
+
+### 这一段踩的 4 个坑（都是"借骨架"的代价）
+
+| # | 报错 | 根因 | 修法 |
+|---|---|---|---|
+| D | `moe_expert_rank_capacity_factor requires use_transformer_engine_op_fuser to be enabled` | paged stash 有**隐式依赖链**：`cutedsl_fused_grouped_mlp=True` → `use_transformer_engine_op_fuser=True` → 才允许 `moe_expert_rank_capacity_factor`（见 `scripts/performance/utils/overrides.py:238-239`）。我手写高性能配置时只搬了终端字段，漏了链条中间环节 | **改为直接复用官方 `WorkloadBaseConfig` + `set_workload_base_configs()`**，不再手工重实现映射 |
+| E | `pipeline_model_parallel_layout cannot be set with other pipeline layout arguments` | qwen3 骨架默认 `account_for_embedding_in_pipeline_split=True` / `account_for_loss_in_pipeline_split=True`；而 pp_layout 字符串里已显式写了 `E` 和 `L`，两者互斥（deepseek 骨架默认 False 所以没这问题） | 设 pp_layout 时同步把两个 `account_for_*` 置 False |
+| F | `Model vocab_size (120832) cannot be smaller than tokenizer's vocab_size (151669)` | 骨架带的是 **Qwen tokenizer**（词表 151669），比 Hy3 的 120832 大 | mock benchmark 改用 `NullTokenizer` + `vocab_size=120832`，并清空 `tokenizer_model` |
+| G | 后台任务被静默杀掉，日志停在旧内容 | `kubectl exec ... "cmd &"` 的后台进程会随 exec 会话结束被 SIGTERM | 用 **`setsid nohup ... < /dev/null &`** 彻底脱离会话 |
+
+> **贯穿性教训**：跨 recipe 家族借骨架，坑不在"字段值填错"，而在 **A 家族的隐式前提在 B 家族不成立**
+> （默认 True/False 相反、类型是 str 而非对象、依赖链中间环节缺失）。
+> **对策：能调官方 setter 就别手写赋值**——`set_workload_base_configs()` 一次性解决了 D 类问题。
+
+### ⭐ 重大发现：官方 BF16 recipe **不用** full_iteration graph
+
+实读 `deepseek_workload_base_configs.py`，NVIDIA 对 GB300 的两套配置差异很大：
+
+| | `..._GB300_BF16_V1` | `..._GB300_FP8_MX_V1` |
+|---|---|---|
+| cuda_graph_impl | **`transformer_engine`** | **`full_iteration`** |
+| cuda_graph_scope | `[attn, moe_router, moe_preprocess]` | （全迭代） |
+| moe_a2a_overlap | **False** | True |
+| cutedsl_fused_grouped_mlp | **未开** | True |
+| fp8_dot_product_attention | — | True |
+| recompute_modules | `["moe_act"]` | `[]` |
+| PP / VPP / EP | 4 / 4 / 64 | 2 / 8 / 32 |
+
+**即：`full_iteration` + `paged stash` 在官方 recipe 里是 FP8_MX 专属，BF16 走 TE graph。**
+原因链：paged stash 需要 TE op fuser，op fuser 由 `cutedsl_fused_grouped_mlp` 打开，而官方只在 FP8 档开 cutedsl。
+
+→ 策略调整：**先用官方 BF16 配置（TE graph）拿到稳定基线**，再单独试 `BF16 + cutedsl + full_iteration`
+是否可行（`hy3_pretrain.py` 已留 `--cuda-graph full_iteration --cutedsl --a2a-overlap` 开关）。
+
+### 待办
 - [ ] M6：64 GPU 全量拉起，过 full_iteration graph capture
 - [ ] M7：稳态吞吐记录 + 显存实测回标 1.34× 系数
 - [ ] M8：EP / GBS / MBS 扫点，开 MTP
