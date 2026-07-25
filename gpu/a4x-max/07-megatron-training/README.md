@@ -67,6 +67,17 @@ B300 Ultra 强化了 FP4 硬件加速。NVIDIA 官方 Llama 405B NVFP4 跑到 35
 | 07b | Qwen3 235B-A22B | 64-128 GPU | [07b-qwen3-235b-recipe/](07b-qwen3-235b-recipe/) |
 | 07c | DeepSeek V3 671B | 64-128 GPU | [07c-deepseekv3-671b-recipe/](07c-deepseekv3-671b-recipe/) |
 
+## GKE 实战文档
+
+| 编号 | 模型 | 规模 | 状态 | 文档 |
+|------|------|------|------|------|
+| 07d | Qwen3 235B-A22B | 256 GPU (4×16) | 测试中 | [07d-gb300-qwen3-235b-gke/](07d-gb300-qwen3-235b-gke/) |
+| 07e | DeepSeek V3 671B | 256 GPU (4×16) | ✅ ~1658 TFLOP/s（官方 99.3%） | [07e-gb300-deepseekv3-671b-gke/](07e-gb300-deepseekv3-671b-gke/) |
+| 07f | **腾讯混元 Hy3 295B-A21B** | **64 GPU (1×16)** | 📋 recipe 就绪，待跑 | [07f-gb300-hy3-295b-gke/](07f-gb300-hy3-295b-gke/) |
+
+> Hy3 的 MoE 是 DeepSeek V3 配方的一比一移植（sigmoid 路由 + aux-loss-free expert bias + shared expert + MTP），
+> attention 换成 GQA。Megatron-Bridge 有 `HYV3Bridge` 模型桥但**无 perf recipe**，07f 补了这一层。
+
 ## 环境变量
 
 Megatron Bridge 的 Slurm launcher (`perf_plugins.py`) 自动设置以下变量。用 torchrun 直接跑必须手动设：

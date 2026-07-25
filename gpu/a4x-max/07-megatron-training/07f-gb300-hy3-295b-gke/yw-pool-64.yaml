@@ -1,0 +1,124 @@
+# Hy3 64 GPU sleep-infinity pool — 单 ComputeDomain x 16 节点
+#
+# 与 07e 的 256 GPU (4 域) 版差异：
+#   - 16 节点 = 64 GPU 正好装进一个 NVL72 subblock -> 只需 1 个 ComputeDomain
+#   - 无跨域 RDMA，EP all-to-all 全走 NVLink，EP 最大可开到 64
+#   - 规避 07e 的 4-CD IMEX clique 死结坑
+#
+# 前置：目标 node pool 内 >=16 个节点已打 team=yangwhale 标签，且同一 subblock。
+# 应用：kubectl apply -f yw-pool-64.yaml
+# 校验：kubectl get pods -l job=yw --no-headers | grep -c Running   # 应为 16
+#       kubectl get computedomains | grep yw                        # 1 个 Ready
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: yw
+spec:
+  selector:
+    job: yw
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: yw-cd-a
+spec:
+  numNodes: 0            # 动态发现节点
+  channel:
+    resourceClaimTemplate:
+      name: yw-ch-a
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: yw-mrdma-a
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          deviceClassName: mrdma.google.com
+          allocationMode: ExactCount
+          count: 8       # GB300 CX-8 双端口 -> 8 PF（GB200 是 4）
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: yw-a
+spec:
+  serviceName: yw
+  replicas: 16
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: yw-a
+  template:
+    metadata:
+      labels:
+        app: yw-a
+        job: yw
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-gpu: "true"
+        cloud.google.com/gke-nodepool: gb300-pool-0003   # 改成实际可用池
+        team: yangwhale
+      affinity:
+        podAffinity:
+          # 16 pod 必须落同一 subblock（= 同一 NVLink domain），否则 EP 跨域
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [yw-a]
+            topologyKey: cloud.google.com/gce-topology-subblock
+        podAntiAffinity:
+          # 每节点仅 1 pod（独占 4 GPU）
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: job
+                operator: In
+                values: [yw]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: ar-pull-secret
+      volumes:
+      - name: shm
+        emptyDir:
+          medium: Memory
+          sizeLimit: 250Gi
+      containers:
+      - name: nemo
+        image: us-central1-docker.pkg.dev/tencent-gcp-taiji-poc/gb300-images/nemo-gb300-ready:26.06-v1
+        securityContext:
+          privileged: true
+        resources:
+          limits:
+            nvidia.com/gpu: 4
+          claims:
+          - name: req-mrdma
+          - name: compute-domain-channel
+        volumeMounts:
+        - name: shm
+          mountPath: /dev/shm
+        env:
+        - name: GLOO_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_SOCKET_IFNAME
+          value: "eth0"
+        - name: NCCL_DEBUG
+          value: "WARN"
+        - name: HF_HUB_DISABLE_XET
+          value: "1"
+        command: ["sleep", "infinity"]
+      resourceClaims:
+      - name: req-mrdma
+        resourceClaimTemplateName: yw-mrdma-a
+      - name: compute-domain-channel
+        resourceClaimTemplateName: yw-ch-a
