@@ -130,7 +130,8 @@ def build_config(a):
 
     # deepseek set_deepseek_v3_common_configs 等价项（与精度无关，全都要）
     m.moe_router_fusion = True
-    m.recompute_granularity = "selective"
+    m.recompute_granularity = (None if a.recompute_granularity == "none"
+                               else a.recompute_granularity)
     cfg.dist.enable_megatron_core_experimental = True
     cfg.mixed_precision.grad_reduce_in_fp32 = False   # 梯度 BF16，省一半显存
     cfg.ddp.grad_reduce_in_fp32 = False
@@ -231,6 +232,9 @@ def main():
     p.add_argument("--a2a-overlap", action="store_true", default=False)
     p.add_argument("--recompute-modules", nargs="*", default=["moe_act"],
                    help="官方 BF16 recipe 用 [moe_act]，FP8_MX 用 []")
+    p.add_argument("--recompute-granularity", default="selective",
+                   choices=["selective", "full", "none"],
+                   help="deepseek common config 用 selective；显存有余量时设 none 提吞吐")
     p.add_argument("--bias-update-rate", type=float, default=1e-3)
     p.add_argument("--force-load-balancing", action="store_true", default=True)
     p.add_argument("--no-force-load-balancing", dest="force_load_balancing",
