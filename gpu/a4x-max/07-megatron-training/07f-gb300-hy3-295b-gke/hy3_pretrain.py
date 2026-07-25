@@ -50,8 +50,16 @@ def build_config(a):
 
     cfg = qwen3_235b_a22b_pretrain_config()   # 骨架：GQA MoE + 调好的 optimizer/ddp/dataset
     # qwen3 recipe 的 mixed_precision 是字符串 'bf16_mixed'，要换成配置对象才能改字段
-    if isinstance(cfg.mixed_precision, str):
-        cfg.mixed_precision = bf16_mixed()
+    if a.precision == "bf16":
+        if isinstance(cfg.mixed_precision, str):
+            cfg.mixed_precision = bf16_mixed()
+    else:
+        import sys as _s
+        _s.path.insert(0, "/opt/Megatron-Bridge/scripts/performance")
+        from utils.precision import get_precision_config
+        cfg.mixed_precision = get_precision_config(a.precision)
+        if getattr(cfg.mixed_precision, "fp8_recipe", None) == "mxfp8":
+            cfg.model.fp8_output_proj = True      # deepseek gb300 配置同款
     m = cfg.model
 
     # ---------- 1. Hy3 结构 ----------
@@ -92,7 +100,6 @@ def build_config(a):
     m.moe_router_topk_scaling_factor = HY3["router_scaling_factor"]
     m.moe_router_dtype = "fp32"
     m.moe_grouped_gemm = True
-    m.moe_permute_fusion = True
     m.mtp_num_layers = a.mtp_layers or None
 
     # bias_update_rate：from-scratch 必须 >0，否则 expert bias 永不更新、均衡机制形同虚设。
@@ -129,7 +136,8 @@ def build_config(a):
     )
 
     # deepseek set_deepseek_v3_common_configs 等价项（与精度无关，全都要）
-    m.moe_router_fusion = True
+    m.moe_router_fusion = a.router_fusion
+    m.moe_permute_fusion = a.permute_fusion
     m.recompute_granularity = (None if a.recompute_granularity == "none"
                                else a.recompute_granularity)
     cfg.dist.enable_megatron_core_experimental = True
@@ -156,7 +164,7 @@ def build_config(a):
     # full_iteration graph 专属：dropless MoE 变长 tensor graph 抓不住，
     # 先 pad 到固定容量再用 paged stash 收回显存（deepseek set_full_iter_cg_configs 原样）
     from megatron.bridge.utils.cuda_graph import is_full_iteration_cuda_graph
-    if is_full_iteration_cuda_graph(m):
+    if is_full_iteration_cuda_graph(m) and a.paged_stash:
         m.moe_pad_experts_for_cuda_graph_inference = True
         m.moe_paged_stash = True
         m.moe_expert_rank_capacity_factor = 1.5
@@ -224,7 +232,8 @@ def main():
     p.add_argument("--pp-layout", default=None)
     p.add_argument("--num-layers", type=int, default=0,
                    help="缩层做冒烟测试用；0=用 Hy3 全量 80 层")
-    p.add_argument("--precision", default="bf16")
+    p.add_argument("--precision", default="bf16",
+                   choices=["bf16", "fp8_mx", "fp8_cs", "fp8_sc"])
     p.add_argument("--dispatcher", default="hybridep",
                    choices=["hybridep", "alltoall", "flex"])
     p.add_argument("--cuda-graph", default="transformer_engine",
@@ -235,6 +244,9 @@ def main():
                    help="cutedsl fused grouped MLP，会连带打开 TE op fuser "
                         "(paged stash 的前置依赖)")
     p.add_argument("--a2a-overlap", action="store_true", default=False)
+    p.add_argument("--no-paged-stash", dest="paged_stash", action="store_false", default=True)
+    p.add_argument("--no-router-fusion", dest="router_fusion", action="store_false", default=True)
+    p.add_argument("--no-permute-fusion", dest="permute_fusion", action="store_false", default=True)
     p.add_argument("--recompute-modules", nargs="*", default=["moe_act"],
                    help="官方 BF16 recipe 用 [moe_act]，FP8_MX 用 []")
     p.add_argument("--recompute-granularity", default="selective",
