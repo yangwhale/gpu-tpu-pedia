@@ -3,7 +3,14 @@
 > 本文是 [README.md](README.md) 的姊妹篇。README 讲**预训练性能**（造随机权重、把算力榨到 1360 TFLOP/s）；
 > 本文讲**加载官方权重做微调**——两者的技术链路几乎不重叠，所以单独成篇。
 >
-> 状态：方案 + 代码已就绪，存储已打通（§6），权重 staging 进行中。
+> 状态：设计 + 基础设施 + SFT 前基线评测均已完成，权重分发中，待开训。
+
+**本文分两半**，各看各的：
+
+| | 章节 | 内容 |
+|---|---|---|
+| **设计** | §1–§5 | 测什么、怎么测、为什么这么配。看方案只读这半部分 |
+| **实战** | §6–§9 | 基础设施怎么搭、踩了哪些坑、基线评测结果。复现或排错看这半部分 |
 
 ---
 
@@ -211,7 +218,7 @@ SFT 后的 checkpoint
 
 ---
 
-## 六、存储：已解决 ✅（2026-07-26 14:00 HKT）
+## 六、基础设施与实战记录（2026-07-26）
 
 集群没有共享存储，600 GB 的 checkpoint 一开始无处可放。最终方案：**本地 NVMe RAID 0 + GCS 中转**。
 
@@ -323,22 +330,192 @@ kubectl exec -n kube-system <hostPID-pod> -- \
 
 **SFT 用 pool-0015**（yw-a，64 GPU，池内只有自己的负载）。
 
-## 七、评测方法
+### 6.6 权重 staging：HF → /raid → GCS
 
-SFT 前后各跑一遍同样的三组问题，逐条比对。
+| 阶段 | 耗时 | 速率 |
+|---|---|---|
+| HF 下载 597.6 GB → yw-a-0 的 `/raid` | **1178 s（19.6 min）** | 峰值 690 MB/s |
+| `/raid` → GCS（多文件并行 24 线程） | 241 s | **1596 MB/s** |
+
+**HF token 值多少？** 无 token 时 420 MB/s，加上 `HF_TOKEN` + `hf_transfer` 后 690 MB/s，
+约 **1.6 倍**。日志里那句 "sending unauthenticated requests" 不是摆设，但也没到十倍。
+
+**瓶颈不在盘。** 一度怀疑是单块 SSD 写不动，实测否定：
 
 ```
-① 训练集抽样（20 条）   期望：前❌ 后✅
-② holdout.jsonl（24 条）  期望：前❌ 后❌   ← 若变成 ✅ 说明在猜，判据 1 作废
-③ probe.jsonl（6 条）     期望：前✅ 后✅   ← 若变成 ❌ 说明灾难性遗忘
+$ cat /proc/mdstat
+md0 : active raid0 nvme2n1[3] nvme4n1[2] nvme0n1[1] nvme3n1[0]   ← 4 盘条带
+      12582383616 blocks super 1.2 512k chunks
+$ dd if=/dev/zero of=/raid/_bench bs=1M count=8192 oflag=direct
+8.6 GB copied, 1.38 s, 6.2 GB/s
 ```
 
-数值型问题可自动判分（答案里的数字与 `results.csv` 逐位比对）；
-论断型和 probe 需人工看一眼。
+盘能跑 6.2 GB/s，下载时只用了 **6%**。瓶颈在 HF CDN 侧。
 
-推理侧用转回 HF 格式的 checkpoint + vLLM 或 transformers，走 Hy3 自己的 `chat_template.jinja`。
+**并行化的小技巧**：stage2（上传）本来要等 stage1（下载）全部结束。
+实际上可以在下载进行时就把「已完成的文件」增量上传 —— 判据是
+「60 秒内没有被写过」（`snapshot_download` 先写 `.incomplete` 再原子移入，
+所以静止 60 秒的文件必然完整）。这一步省掉了约 4 分钟的串行等待。
 
----
+### 6.7 单节点转换：为什么不能分布式
+
+**最初的方案是错的**：本来打算 64 rank 分布式转换，每 rank 只物化 9.3 GB。
+Chris 指出问题 —— 分布式转换要求所有节点访问**同一个共享存储**，
+而我们每个节点只有各自的本地 RAID。查代码证实：
+
+```
+checkpointing.py:223  is_torch_dcp = checkpoint_dir.joinpath(".metadata").exists()
+checkpointing.py:2360 state_dict_metadata = reader.read_metadata().state_dict_metadata
+```
+
+torch_dist 加载时先读目录里的 `.metadata` 建加载计划，再由各 rank 去取自己需要的
+字节区间 —— 区间可能落在**任意**分片文件里。所以每个 rank 都必须看到完整目录。
+64 rank 各写各的本地盘，目录就碎在 16 个节点上，连 `.metadata` 都只有 rank 0 那台有。
+
+**改成单节点单进程转换**，实测完全可行：
+
+| 阶段 | 耗时 |
+|---|---|
+| HF 权重加载（31535 张量） | ~2 min |
+| 建保存计划（15441 factory @ 25/s） | 10 min |
+| 克隆张量（46976 个 @ 55/s） | 14 min |
+| 落盘（1.9 GB/s） | 5 min |
+| **合计** | **2018 s（33.6 min）** |
+
+峰值内存 **746 / 942 GB**，全程未 OOM。`LOW_MEMORY_SAVE` 模式是边克隆边释放的
+（RSS 稳在 655 GB 不涨），否则 295B 再复制一份必爆。
+
+产出校验：
+
+```
+iter_0000000/__0_0.distcp   597,693,766,707 bytes   ← 与 HF 侧 597.6 GB 吻合
+iter_0000000/.metadata       13,639,370 bytes
+iter_0000000/tokenizer/{tokenizer.json, chat_template.jinja, tokenizer_config.json}
+iter_0000000/{common.pt, run_config.yaml, train_state.pt}
+参数量 298,786,140,416 = 主干 295 B + MTP 3.8 B  ✅
+```
+
+tokenizer 和 chat_template 被自动打包进 checkpoint，训练时不用再单独准备。
+
+### 6.8 分发到 16 节点：两个真实的坑
+
+单进程保存的代价是**产出只有一个 597.7 GB 的文件**。这引出两个问题。
+
+**坑 1：GCS 单流传输太慢。** 单个对象只能单流上传下载（~100–200 MB/s），
+597 GB 要跑一小时。解法是按字节区间切 128 片（每片 4.67 GB）并行收发，
+上传实测 **2335 MB/s / 256 s**，比单流快十倍以上。
+
+**坑 2（更隐蔽）：`download_as_bytes` 会死循环。** 第一版下载脚本这么写：
+
+```python
+data = blob.download_as_bytes()      # 把整片 4.67 GB 缓冲进内存
+f.seek(off); f.write(data)
+```
+
+现象非常反直觉：**网卡一直在收（303 MB/s），磁盘却 100 秒零增长**，
+15 个节点全部停在 149.4 GB —— 恰好是「首批 32 线程各完成一片」的量。
+
+根因：32 路并发分摊带宽后单流只有约 10 MB/s，一片 4.67 GB 要 400+ 秒，
+超过 SDK 默认超时 → 整片重下 → 永远到不了终点。首批之所以成功，
+是因为启动瞬间带宽还没被分完。
+
+修法（v2）：`download_to_file()` **直接流式写进目标文件的对应偏移**，不缓冲；
+线程降到 12 让单流带宽更足；超时放宽到 3600 s；每片落一个 `.done` 标记支持续传。
+
+**诊断这个坑时又踩了一个小坑**：`df` / `du` 对**稀疏文件**会骗人。
+目标文件是 `truncate` 预分配的，表观 597.7 GB 但实际块数为 0，
+分片完成才成块落盘。所以中途 `df` 会显示 `84K`，看着像没动。
+正确姿势是查 `st_blocks`：
+
+```python
+os.stat(path).st_blocks * 512     # 实际占用，不是表观大小
+```
+
+### 6.9 其他一次性坑
+
+**pod 重建会丢掉容器内的一切安装。** HYV3Bridge 装进 site-packages 后，
+只要 pod 重建（比如给 StatefulSet 加 volume）就全没了。
+解法是双保险：容器内装一份 + `/raid/pylib`（本地 NVMe，跨 pod 重启存活）存一份，
+脚本里加自愈导入 —— 找不到就从 `/raid/pylib` 加载。
+注册靠的是 `@register_bridge` 装饰器在 import 时执行，不依赖 `models/__init__.py` 的补丁。
+
+**依赖也要装全 16 个 pod。** 只在 yw-a-0 装了 `google-cloud-storage`，
+分发时另外 15 个齐刷刷报 `ImportError`。
+
+**FlashInfer 首次 JIT 编译 ~15 分钟，不是 hang。** vLLM 起 295B 时卡在
+`No available shared memory broadcast block found in 60 seconds`，
+py-spy 一看是 `flashinfer/jit/core.py:build_and_load` 在等文件锁，
+宿主上 `ninja` / `nvcc` / `ptxas` 都在跑。编完落盘缓存，第二次评测秒开。
+
+### 6.10 踩坑速查
+
+| # | 现象 | 真因 | 教训 |
+|---|---|---|---|
+| 1 | 以为每节点只有 2.9 TB | `lsblk \| head -20` 把后 3 块盘截掉了 | 查硬件别加 `head` |
+| 2 | 3 个节点 `DiskPressure`，busybox 都被 Evict | kubelet condition 卡住；实测 **44.3% 空闲** | 别信 condition，查 `/stats/summary` 原始数字 |
+| 3 | 差点去重建节点 | 同上 | 重启 kubelet 就好；GB300 绑 placement policy，重建有拿不回来的风险 |
+| 4 | 计划分布式转换 | torch_dist 要每 rank 看到完整目录 | 加载前先确认存储是否**真共享** |
+| 5 | 网卡在收、磁盘不涨 | `download_as_bytes` 缓冲整片 → 超时重试死循环 | 大文件一律流式写盘 |
+| 6 | `df` 显示 84K 以为没动 | 稀疏文件表观 ≠ 实际块数 | 用 `st_blocks * 512` |
+| 7 | Bridge 装完又没了 | pod 重建清空容器 fs | 持久化到 `/raid` + 自愈导入 |
+| 8 | vLLM 启动「卡死」15 分钟 | FlashInfer 首次 JIT 编译 | py-spy 看栈再下结论 |
+
+## 七、SFT 前基线评测（2026-07-26 16:05 HKT ✅ 完成）
+
+### 7.1 怎么跑的
+
+**容器里的 vLLM 原生支持 `HYV3ForCausalLM`** —— 这是个意外之喜，本来准备用 transformers
+慢慢推，实测 `ModelRegistry.get_supported_archs()` 里就有（连 `HYV3MTPModel` 都有）。
+于是单节点 4 卡 TP 就能跑 295B BF16，权重加载 60 秒、每卡占 137.65 GiB。
+
+评测脚本 [`eval_sft.py`](eval_sft.py) 一份两用，SFT 前后各跑一次：
+
+```bash
+python eval_sft.py --model /raid/hy3-hf     --out /raid/eval_before.json --tp 4
+python eval_sft.py --model /raid/hy3-sft-hf --out /raid/eval_after.json  --tp 4
+python eval_sft.py --compare /raid/eval_before.json /raid/eval_after.json
+```
+
+> **训练集抽样时故意换成训练里没出现过的问法**。
+> 用原问法测出来的可能是「背下了这句话」，不是「记住了这个事实」。
+
+### 7.2 结果：模型自信地瞎编 —— 正是我们要的
+
+| 问题 | 模型 SFT 前的回答 | 真实答案 |
+|---|---|---|
+| `A5_no_router_fusion` 占多少显存？ | 「不会打满，只占用一部分作路由表缓存，通常几 MB 到几十 MB」 | **226 GB** |
+| `A5_no_router_fusion` 的 MFU？ | 「MFU 即**最小融合单元** Minimum Fusion Unit，一般设为 1」 | **31.2%** |
+| `B4_ep16` 单卡吞吐？ | 「B4_ep16 可能是某种网卡、芯片、板卡代号……」 | **6450 tokens/s** |
+
+它连 **MFU 的全称都编错了** —— 把 Model FLOPs Utilization 说成「最小融合单元」。
+
+这不是模型笨，恰恰是**实验设计成立的证据**：这批知识确实完全不在它的参数里，
+所以「SFT 后能答对」只可能来自训练，不可能来自预训练残留。
+
+而 probe 组（MoE 专家路由、attention 作用、素数函数）答得**又准又完整**，
+说明基线的通用能力正常 —— SFT 后若这组退化，就是灾难性遗忘的铁证。
+
+### 7.3 数字命中率基线
+
+| 组 | 题数 | 数字命中率 |
+|---|---|---|
+| train | 20 | 0.390 |
+| holdout | 24 | 0.465 |
+| probe | 6 | —（非数值题） |
+
+**这两个数基本是噪声**：命中的是「1」「16」「64」这类到处都有的常见数字，
+holdout 比 train 还高就说明它没有信号。作用是给 SFT 后提供一条对照基线 ——
+train 必须显著抬升，holdout 必须原地不动。
+
+> 自动数字命中率只作初筛，论断型问题和 probe 仍要人工看一眼。
+
+### 7.4 判据对照表（待填 SFT 后一列）
+
+| 判据 | 组 | SFT 前 | SFT 后 | 结论 |
+|---|---|---|---|---|
+| ① 学会了 | train | ❌ 瞎编 | 待测 | — |
+| ② 不是猜的 | holdout | ❌ 瞎编 | **应仍 ❌** | — |
+| ③ 没训坏 | probe | ✅ 正常 | **应仍 ✅** | — |
 
 ## 八、已知风险
 
@@ -354,35 +531,47 @@ SFT 前后各跑一遍同样的三组问题，逐条比对。
 
 ---
 
-## 九、执行清单
+## 九、执行清单（实时状态）
+
+| # | 步骤 | 状态 | 产物 / 关键数字 |
+|---|---|---|---|
+| 0 | 移植 HYV3Bridge 到 r0.5.0 | ✅ | 47138 权重 mapping 100% 覆盖（README §14） |
+| 1 | 生成数据集 `make_sft_data.py` | ✅ | 627 训练 / 24 留出 / 6 探针 |
+| 2 | 组 RAID 0 + 挂 ADC `raid-disks.yaml` | ✅ | 每节点 12 TB @ `/raid`，pod 可写 GCS |
+| 3 | HF 权重 → yw-a-0 → GCS | ✅ | 597.6 GB，19.6 min + 4 min |
+| 4 | **SFT 前基线评测** | ✅ | 模型瞎编（MFU 都编错全称），probe 正常 |
+| 5 | 单节点转换 → Megatron torch_dist | ✅ | 597.7 GB / 33.6 min / 298.8 B 参数 |
+| 6 | checkpoint 分发到 16 节点 | 进行中 | 128 片并行，每节点一份完整副本 |
+| 7 | 跑 SFT | 待 | `hy3_sft.py --epochs 10 --lr 1e-5` |
+| 8 | 转回 HF + SFT 后评测 | 待 | 填 §7.4 判据表 |
+
+命令：
 
 ```bash
-# 0) 前置：容器里装 HYV3Bridge（README §14）
-./install_hy3_bridge.sh yw-a-{0..15}
-
-# 1) 生成数据集
-python3 make_sft_data.py --paraphrase 6
-#    → sft_data/{train,holdout,probe}.jsonl
-
-# 2) 解决存储（§6）—— 待拍板
-#    mkfs.ext4 /dev/nvme3n1 && mount /mnt/nvme     （方案 A）
-
-# 3) SFT 前基线评测：三组问题各问一遍，存下答案
-
-# 4) HF → Megatron（分布式，64 卡）
-torchrun ... import_hy3_ckpt.py --out /mnt/nvme/hy3-megatron --pp 2 --ep 16
-
-# 5) SFT
-torchrun ... hy3_sft.py --pretrained /mnt/nvme/hy3-megatron \
-    --data ./sft_data --epochs 10 --lr 1e-5
-
-# 6) 转回 HF
-#    AutoBridge.export_ckpt(...)
-
-# 7) SFT 后评测：同样三组问题，与第 3 步逐条对比
+./install_hy3_bridge.sh yw-a-{0..15}                       # 0
+python3 make_sft_data.py --paraphrase 6                     # 1
+sed 's/POOL_NAME/gb300-pool-0015/' raid-disks.yaml | kubectl apply -f -   # 2
+python eval_sft.py --model /raid/hy3-hf --out /raid/eval_before.json --tp 4   # 4
+python import_hy3_ckpt.py --single --out /raid/hy3-megatron --local /raid/hy3-hf  # 5
+python bigsync.py up   # yw-a-0                             # 6
+python bigsync2.py     # yw-a-1..15
+torchrun ... hy3_sft.py --pretrained /raid/hy3-megatron \
+    --data /raid/sft_data --epochs 10 --lr 1e-5             # 7
+python eval_sft.py --compare /raid/eval_before.json /raid/eval_after.json   # 8
 ```
 
----
+### 附：本方案的文件
+
+| 文件 | 作用 |
+|---|---|
+| `SFT.md` | 本文 |
+| `make_sft_data.py` + `sft_data/` | 稀缺知识数据集生成器与产物 |
+| `install_hy3_bridge.sh` | HYV3Bridge 单文件移植 |
+| `raid-disks.yaml` | 4 块 local NVMe 组 RAID 0 → 12 TB |
+| `import_hy3_ckpt.py` | HF → Megatron torch_dist（单节点 / 分布式两条路径） |
+| `bigsync.py` / `bigsync2.py` | 大文件分块并行 GCS 上传 / 流式下载 |
+| `eval_sft.py` | 三组判据评测，SFT 前后各跑一次再 `--compare` |
+| `hy3_sft.py` | SFT 训练入口 |
 
 ## 十、与预训练脚本的对照
 
