@@ -544,6 +544,8 @@ Hy3 **没有官方 Megatron benchmark**，NVIDIA perf summary 里也没有。判
 
 ---
 
+> **做 SFT / 微调请看姊妹篇 [SFT.md](SFT.md)** —— 本文只讲预训练性能。
+
 ## 附：文件清单
 
 | 文件 | 说明 |
@@ -555,6 +557,12 @@ Hy3 **没有官方 Megatron benchmark**，NVIDIA perf summary 里也没有。判
 | `sweep.sh` / `gen_table.py` | 消融扫点框架 + 超级大表格生成器 |
 | `loss_align.sh` | FP8 vs BF16 训练质量对齐验证 |
 | `timeline.py` | 启动时间线：`--stamp` 打行级时间戳、`--parse` 拆阶段耗时 |
+| `sweep256.sh` / `yw-pool-256.yaml` | 256 卡跨 4 域扫点框架 + 4-ComputeDomain pod 池 |
+| **`SFT.md`** | **SFT 方案（姊妹篇）**：加载官方权重做稀缺知识注入 |
+| `install_hy3_bridge.sh` | 把 main 分支的 HYV3Bridge 单文件移植进 r0.5.0 容器（§14） |
+| `import_hy3_ckpt.py` | HF 权重 → Megatron torch_dist checkpoint（分布式转换） |
+| `make_sft_data.py` / `sft_data/` | 稀缺知识 SFT 数据集生成器：训练集 + 留出集 + 通用探针 |
+| `hy3_sft.py` | SFT 训练入口（走 HYV3Bridge，非 Qwen3 骨架） |
 
 ---
 
