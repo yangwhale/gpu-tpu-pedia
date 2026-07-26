@@ -1,13 +1,15 @@
 #!/bin/bash
 # vLLM decode (TP4, kv_consumer, FULL_DECODE_ONLY cudagraph)
-# 用法: bash vllm-decode-tp4.sh <prefill pod IP>
-# ⚠️ 必须等 prefill 的 5557 side channel 就绪后再起本进程
-PREFILL_IP=$1
+# 用法: bash vllm-decode-tp4.sh <本 pod IP>
+# ⚠️ 必须等 prefill 就绪(curl :8001/health = 200)后再起本进程
+# ⚠️ 参数是【本 pod 自己的 IP】—— VLLM_NIXL_SIDE_CHANNEL_HOST 是「本进程 bind 哪个地址」，
+#    填成 prefill 的 IP 会 zmq.error.ZMQError: Cannot assign requested address
+SELF_IP=$1
 export UCX_TLS=cuda_copy,cuda_ipc,tcp
 export UCX_CUDA_IPC_ENABLE_MNNVL=y
 export UCX_NET_DEVICES=all
 export VLLM_USE_NCCL_SYMM_MEM=0 NCCL_CUMEM_ENABLE=1 NCCL_MNNVL_ENABLE=1 NCCL_NVLS_ENABLE=1
-export VLLM_NIXL_SIDE_CHANNEL_PORT=5558 VLLM_NIXL_SIDE_CHANNEL_HOST=$PREFILL_IP
+export VLLM_NIXL_SIDE_CHANNEL_PORT=5558 VLLM_NIXL_SIDE_CHANNEL_HOST=$SELF_IP
 export PYTHONHASHSEED=0
 export TMPDIR=/mnt/ssd/tmp && mkdir -p $TMPDIR
 vllm serve /mnt/ssd/DeepSeek-V4-Pro-DSpark --served-model-name deepseek-ai/DeepSeek-V4-Pro-DSpark \
