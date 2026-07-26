@@ -563,6 +563,7 @@ Hy3 **没有官方 Megatron benchmark**，NVIDIA perf summary 里也没有。判
 | `import_hy3_ckpt.py` | HF 权重 → Megatron torch_dist checkpoint（分布式转换） |
 | `make_sft_data.py` / `sft_data/` | 稀缺知识 SFT 数据集生成器：训练集 + 留出集 + 通用探针 |
 | `hy3_sft.py` | SFT 训练入口（走 HYV3Bridge，非 Qwen3 骨架） |
+| `raid-disks.yaml` | 把 4 块 local NVMe 组 RAID 0，每节点 12 TB 挂到 `/mnt/disks/raid/0` |
 
 ---
 

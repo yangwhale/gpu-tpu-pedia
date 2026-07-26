@@ -1,0 +1,77 @@
+# 把节点上 4 块 2.9 TB 的 local NVMe 组成 RAID 0，得到 ~12 TB 的 /mnt/disks/raid/0。
+#
+# 为什么这么做是安全的：
+#   节点池配的是 `localNvmeSsdBlockConfig: localSsdCount 4`，即 **block 模式** ——
+#   GKE 把裸盘直接交给工作负载自行格式化，这是官方预期用法。
+#   而且 local SSD 是 ephemeral 存储，节点重建即清空，不承载任何持久状态。
+#
+# 本文件是照抄集群里已在 pool-0002 上稳定运行的 `gke-raid-disks`，只改了 nodeSelector。
+# 那边实测效果：`/dev/md127  12T  1.9T  9.3T  17%  /mnt/disks/raid/0`
+#
+# 用法：
+#   sed 's/POOL_NAME/gb300-pool-0015/' raid-disks.yaml | kubectl apply -f -
+#
+# 注意：脚本是幂等的（先查 /proc/mdstat、先试 tune2fs），重复 apply 不会重建阵列、不会格式化已有数据。
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: raid-disks-POOL_NAME
+  namespace: default
+  labels:
+    name: raid-disks-POOL_NAME
+spec:
+  selector:
+    matchLabels:
+      name: raid-disks-POOL_NAME
+  template:
+    metadata:
+      labels:
+        name: raid-disks-POOL_NAME
+    spec:
+      hostPID: true
+      nodeSelector:
+        cloud.google.com/gke-local-nvme-ssd: "true"
+        cloud.google.com/gke-nodepool: POOL_NAME
+      tolerations:
+        - operator: Exists
+      containers:
+        - name: raid-disks
+          image: ubuntu:24.04
+          securityContext:
+            privileged: true
+          command: ["/bin/bash", "-c"]
+          args:
+            - |
+              set -o pipefail
+              export DEBIAN_FRONTEND=noninteractive
+              apt-get update -qq && apt-get install -y -qq mdadm e2fsprogs >/dev/null 2>&1
+              devices=()
+              for ssd in /dev/disk/by-id/google-local-ssd-block*; do
+                [ -e "$ssd" ] && devices+=("$ssd")
+              done
+              if [ "${#devices[@]}" -eq 0 ]; then echo "NO_LOCAL_SSD"; sleep infinity; fi
+              echo "Found ${#devices[@]} local SSDs"
+              if ! grep -q "md0" /proc/mdstat; then
+                echo "y" | mdadm --create /dev/md0 --level=0 --force --raid-devices=${#devices[@]} "${devices[@]}"
+              fi
+              tune2fs -l /dev/md0 >/dev/null 2>&1 || mkfs.ext4 -F /dev/md0
+              mkdir -p /mnt/disks/raid/0
+              mountpoint -q /mnt/disks/raid/0 || mount -o discard,defaults /dev/md0 /mnt/disks/raid/0
+              chmod a+w /mnt/disks/raid/0
+              echo "RAID_READY: $(df -h /mnt/disks/raid/0 | tail -1)"
+              sleep infinity
+          volumeMounts:
+            - name: dev
+              mountPath: /dev
+            - name: raid
+              mountPath: /mnt/disks/raid
+              mountPropagation: Bidirectional
+      volumes:
+        - name: dev
+          hostPath:
+            path: /dev
+            type: ""
+        - name: raid
+          hostPath:
+            path: /mnt/disks/raid
+            type: DirectoryOrCreate

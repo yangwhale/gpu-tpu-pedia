@@ -3,7 +3,7 @@
 > 本文是 [README.md](README.md) 的姊妹篇。README 讲**预训练性能**（造随机权重、把算力榨到 1360 TFLOP/s）；
 > 本文讲**加载官方权重做微调**——两者的技术链路几乎不重叠，所以单独成篇。
 >
-> 状态：方案 + 代码已就绪，等一个存储决策（§6）后开跑。
+> 状态：方案 + 代码已就绪，存储已打通（§6），权重 staging 进行中。
 
 ---
 
@@ -211,67 +211,117 @@ SFT 后的 checkpoint
 
 ---
 
-## 六、存储：唯一的未决项 ⚠️
+## 六、存储：已解决 ✅（2026-07-26 14:00 HKT）
 
-集群**没有任何共享存储**。实测：
+集群没有共享存储，600 GB 的 checkpoint 一开始无处可放。最终方案：**本地 NVMe RAID 0 + GCS 中转**。
 
-```
-$ df -h              → overlay 95G（可用 41G），无 Lustre/NFS/gcsfuse/Filestore
-$ free -g            → 942 GB 内存
-$ lsblk              → nvme3n1  2.9T  裸盘，无文件系统
-```
+### 6.1 每节点 12 TB —— 4 块 local NVMe 组 RAID 0
 
-600 GB 的 checkpoint 无处可放。三条路：
-
-### 方案 A：格式化本地 NVMe（推荐先用这条）
-
-节点池配置实测：
+初次 `lsblk | head -20` 只看到一块 2.9 TB，差点得出「只有 2.9 T」的错误结论。
+完整列出才发现是 **4 块 × 2.9 TB**：
 
 ```
-$ gcloud container node-pools describe gb300-pool-0013 ...
+$ lsblk -d -o NAME,SIZE,TYPE
+nvme0n1  2.9T    nvme1n1  2.9T    nvme2n1  2.9T    nvme3n1  2.9T   ← local SSD
+nvme4n1  100G                                                       ← boot
+$ cat /proc/mdstat
+Personalities : [raid0]        ← 内核已加载，但阵列未组装
+```
+
+节点池配置证实是 block 模式，即 GKE 把裸盘交给工作负载自行处理：
+
+```
+$ gcloud container node-pools describe gb300-pool-0015 ...
 config:
-  localNvmeSsdBlockConfig:
-    localSsdCount: 4
+  localNvmeSsdBlockConfig: {localSsdCount: 4}
   machineType: a4x-maxgpu-4g-metal
 ```
 
-**block 模式** —— GKE 把裸盘直接交给工作负载自行格式化，这是**官方预期用法**，
-不是我们在乱动节点。而且是 ephemeral 存储，节点重建即清空，不破坏任何持久状态。
-Pod 是 privileged 且有 `cap_sys_admin`，`mkfs` + `mount` 能做。
+**集群里已经有现成答案**：pool-0002 上跑着一个 `gke-raid-disks` DaemonSet，
+把 4 块盘组成 RAID 0 挂到 `/mnt/disks/raid/0`，实测 `12T`。
+[`raid-disks.yaml`](raid-disks.yaml) 是照抄它、只改 nodeSelector 的版本（脚本幂等，重复 apply 不会重建阵列）：
 
-- ✅ 快（本地 NVMe）、2.9 TB 空间充裕、无需额外授权
-- ⚠️ node-local。pod 若被重调度，那份分片就没了
-- ⚠️ torch_dist 加载时若发生 resharding，可能需要跨 rank 读——需实测确认同并行配置下是否严格 1:1
-
-### 方案 B：GCS
-
-`gs://chrisya-gb300-models`（us-central1，与集群同 region，已存 2.4 TB DeepSeek 权重）。
-
-但节点 SA 的 scope 是：
-
-```
-https://www.googleapis.com/auth/devstorage.read_only
+```bash
+sed 's/POOL_NAME/gb300-pool-0015/' raid-disks.yaml | kubectl apply -f -
+# → RAID_READY: /dev/md0  12T  28K  12T  1%  /mnt/disks/raid/0
 ```
 
-**读得了，写不了**，且集群未开 Workload Identity。所以：
+然后把它以 hostPath 挂进训练 pod 的 `/raid`。
 
-- ✅ 适合放**输入**（我在外面把 HF 权重刷进 GCS，pod 只读挂载）
-- ❌ 不适合放**输出**（Megatron ckpt、SFT 产物），除非额外授权：挂 SA key / 加节点池 scope / 开 WI
+### 6.2 GCS 写权限 —— 挂 ADC
 
-### 方案 C：每 rank 写自己的 41 GB overlay
+节点 SA 的 scope 只有 `devstorage.read_only`，集群也没开 Workload Identity。
+解法是把本地 ADC 做成 Secret 挂进 pod：
 
-9.3 GB/rank 其实塞得下。但 torch_dist 目录会碎在 64 个 pod 上，加载时读不到别人的分片。
+```bash
+kubectl create secret generic gcp-adc \
+  --from-file=application_default_credentials.json=$HOME/.config/gcloud/application_default_credentials.json
+# pod 里挂到 /etc/gcp，并设 GOOGLE_APPLICATION_CREDENTIALS
+```
 
-### 建议
+实测 pod 内 `google.cloud.storage` 读写 `gs://chrisya-gb300-models` 均通过。
 
-**A 做输出 + B 做输入**：HF 权重放 GCS 只读（避免每 pod 重复下载 597 GB），
-Megatron ckpt 和 SFT 产物写格式化后的本地 NVMe。
-先用这套跑通，如果发现 torch_dist 跨 rank 读的问题，再申请 GCS 写权限。
+> ⚠️ 这是个人凭据进 pod，属临时手段。长期应改用 Workload Identity 或专用 SA。
+> Secret **不进 git**。
 
-> **这一步需要拍板**：格式化本地 NVMe 虽属官方预期用法，仍是对节点的写操作，
-> 且 pool-0013 等池上可能有别人的负载。开跑前确认一下用哪几个池。
+### 6.3 权重分发链路
 
----
+```
+HuggingFace  ──①──>  yw-a-0 的 /raid  ──②──>  gs://chrisya-gb300-models/Hy3/
+                                                      │
+                                                      ③（同 region，并行）
+                                                      ↓
+                                          其余 15 个节点的 /raid
+```
+
+不让 16 个节点各自去 HF 拉的原因很简单：597 GB × 16 = 9.5 TB 的 HF 流量，
+既慢又会被限速。GCS 与集群同在 us-central1，带宽和并发都好得多。
+
+实测 ① 的速度约 **400 MB/s**，全量约 25 分钟。
+
+### 6.4 顺带修掉的 kubelet 假告警
+
+做这一步时发现 3 个节点 `DiskPressure=True`，任何新 pod（连 busybox 都算）一落上去就被 Evict。
+第一反应是「我之前的实验把 100 G 系统盘写满了」——**错的**。查 kubelet 自己上报的数字：
+
+```
+$ kubectl get --raw /api/v1/nodes/<node>/proxy/stats/summary
+fs       cap=101.1G used=56.3G avail=44.8G  (44.3% free)
+runtime  cap=101.1G used=47.7G avail=44.8G  (44.3% free)
+```
+
+**44.3% 空闲，根本没有磁盘压力。** 是 kubelet 的 condition 卡住了——
+`lastTransitionTime` 停在 2 小时前，早已超过 `eviction-pressure-transition-period`。
+
+修法是重启该节点 kubelet（借道节点上已有的 hostPID + privileged 系统 pod）：
+
+```bash
+kubectl exec -n kube-system <hostPID-pod> -- \
+  nsenter -t 1 -m -u -i -n -p -- systemctl restart kubelet
+```
+
+三个节点全部恢复 `DiskPressure=False`，Pending 的 pod 立刻调度成功。
+
+> **教训**：节点 condition 说什么不算数，要查 kubelet 上报的原始数字。
+> 差一点就去重建节点了——GB300 节点跟 placement policy 绑定，重建有拿不回来的风险，
+> 而真正的问题只是一次 kubelet 重启。
+
+### 6.5 池子占用盘点
+
+顺便理清了谁在用哪个池（`kubectl get pods -A` 按节点池聚合）：
+
+| 池 | 我的 | 别人的 |
+|---|---|---|
+| **pool-0015** | yw-a (16) | 无 ✅ |
+| **pool-0013** | yw-d (16) | 无 ✅ |
+| pool-0016 | yw-b (16) | `br-recover-0016`（gib 诊断镜像，`sleep 3600`）、`gpu-qa-0016` |
+| pool-0017 | yw-c (16) | `br-recover-0017`（同上） |
+| pool-0002 | — | `sgl` × 16 |
+| pool-0006 | — | dspark / v4pro / sglang 一大批 |
+| pool-0009 | — | sglang-exp 一大批 |
+| pool-0014 | — | sglang-exp + bench-client |
+
+**SFT 用 pool-0015**（yw-a，64 GPU，池内只有自己的负载）。
 
 ## 七、评测方法
 
