@@ -1,0 +1,188 @@
+#!/usr/bin/env python3
+"""Hy3-295B SFT —— 走 Megatron-Bridge，加载官方权重做稀缺知识注入。
+
+与预训练脚本 hy3_pretrain.py 的根本区别：
+    hy3_pretrain.py 借 Qwen3-235B 的 recipe 骨架 + 手工覆写超参，造的是**随机初始化**模型。
+    跑性能可以（算力只取决于形状），但没法加载官方权重。
+    本脚本走 HYV3Bridge（见 README §14），从 `tencent/Hy3` 的真实 checkpoint 出发。
+
+前置条件：
+    1. 容器内已装 HYV3Bridge  →  ./install_hy3_bridge.sh <pods...>
+    2. HF 权重已转成 Megatron torch_dist  →  ./import_hy3_ckpt.py
+    3. 数据集已生成               →  ./make_sft_data.py
+
+用法（在 torchrun 里跑）：
+    python hy3_sft.py --pretrained /ckpt/hy3-megatron --data /data/sft_data \\
+        --num-gpus 64 --pp 2 --ep 16 --epochs 10
+"""
+from __future__ import annotations
+
+import argparse
+import os
+from typing import Any
+
+import torch
+
+from megatron.bridge import AutoBridge
+from megatron.bridge.recipes.common import _sft_common
+from megatron.bridge.data.builders.hf_dataset import HFDatasetConfig
+from megatron.bridge.training.finetune import finetune
+from megatron.bridge.training.gpt_step import forward_step
+
+HF_MODEL = "tencent/Hy3"          # instruct 版：已有 chat_template，SFT 前后对比更干净
+HF_BASE = "tencent/Hy3-Base"      # 底座版：无 chat_template，需连格式一起教
+
+
+def passthrough_messages(example: dict[str, Any], tokenizer=None) -> dict[str, Any]:
+    """数据已是官方 ChatML `messages` 格式，无需转换。
+
+    Bridge 的 SFT dataset 在 `chat=True, use_hf_tokenizer_chat_template=True` 下
+    会直接调 tokenizer.apply_chat_template，所以原样透传即可。
+    """
+    return {"messages": example["messages"]}
+
+
+def build_config(a):
+    cfg = _sft_common()
+
+    hf_path = HF_BASE if a.base else HF_MODEL
+    cfg.model = AutoBridge.from_hf_pretrained(hf_path, trust_remote_code=True).to_megatron_provider(
+        load_weights=False
+    )
+    cfg.tokenizer.tokenizer_type = "HuggingFaceTokenizer"
+    cfg.tokenizer.tokenizer_model = hf_path
+    cfg.tokenizer.hf_tokenizer_kwargs = {"trust_remote_code": True}
+
+    m = cfg.model
+    # ---- 序列长度 ----
+    # 样本平均 ~110 token，512 足够装下最长的一条。
+    # 不用 2048/4096：短序列省算力、省显存，还能把 MBS 开大。
+    # 代价是不训练长上下文能力 —— 本实验不需要。
+    m.seq_length = a.seq_length
+    cfg.dataset.seq_length = a.seq_length
+
+    # ---- 并行 ----
+    # 沿用预训练验证过的最优骨架（README §10）：TP=1 靠 EP 扛专家，PP 切流水。
+    # SFT 的 GBS 比预训练小两个数量级，DP 维度自然变窄，不再需要 VPP 那么多 chunk。
+    m.tensor_model_parallel_size = a.tp
+    m.pipeline_model_parallel_size = a.pp
+    m.virtual_pipeline_model_parallel_size = a.vpp
+    m.expert_model_parallel_size = a.ep
+    m.expert_tensor_parallel_size = 1          # Parallel Folding，专家不切 TP
+    m.context_parallel_size = 1
+    m.sequence_parallel = a.tp > 1
+    m.pipeline_dtype = torch.bfloat16
+    m.pipeline_model_parallel_layout = None
+
+    # ---- MTP ----
+    # 官方 checkpoint 带 1 层 MTP（layer 80，3.8 B 参数）。
+    # 必须保持 =1，否则那批权重在加载时无处安放。
+    # （性能扫点时设 0 是为了隔离变量，此处不适用。）
+    m.mtp_num_layers = 1
+
+    # ---- MoE kernel（沿用 §10 冠军配置的有效项）----
+    m.moe_token_dispatcher_type = "flex"
+    m.moe_flex_dispatcher_backend = "hybridep"
+    m.moe_grouped_gemm = True
+    m.moe_permute_fusion = True                # 实测 0 增益，但也无害，保持与预训练一致
+    m.moe_router_fusion = True
+    m.moe_shared_expert_overlap = False
+    m.cross_entropy_loss_fusion = True
+
+    # ---- CUDA graph ----
+    # SFT 用 none：数据是变长的、步数少，graph capture 的固定开销（~26 s）
+    # 换不回收益，而且 full_iteration 那条依赖链（§10）会限制 batch 灵活性。
+    m.cuda_graph_impl = "none"
+
+    # ---- 精度 ----
+    # 默认 BF16。FP8 在预训练上已验证与 BF16 对齐（§12），
+    # 但 SFT 只跑几百步、追求的是权重的精细调整，不值得为省时间引入额外变量。
+    cfg.mixed_precision = "bf16_mixed" if a.precision == "bf16" else a.precision
+    m.recompute_granularity = None
+    m.recompute_modules = None
+    m.offload_modules = None
+
+    # ---- 数据 ----
+    # dataset_name="json" 让 datasets 走本地 jsonl 加载器。
+    cfg.dataset = HFDatasetConfig(
+        dataset_name="json",
+        process_example_fn=passthrough_messages,
+        seq_length=a.seq_length,
+        seed=5678,
+        dataloader_type="batch",
+        num_workers=1,
+        do_validation=True,
+        do_test=False,
+        val_proportion=0.05,
+        dataset_root=os.path.join(a.data, "processed"),
+        hf_kwargs={"data_files": {"train": os.path.join(a.data, "train.jsonl")}},
+        # chat=True 让 dataset 用 tokenizer 的 chat_template 拼 prompt，
+        # 并且只在 assistant 段计 loss（user/system 段被 mask 掉）。
+        dataset_kwargs={"chat": True, "use_hf_tokenizer_chat_template": True},
+        # 不打包：627 条样本若打包成 4096 只剩 13 个序列，
+        # 且会把互不相关的事实塞进同一 attention 窗口互相干扰。
+        packed_sequence_specs=None,
+        rewrite=True,
+    )
+
+    # ---- 训练步数 ----
+    # 知识注入的有效剂量取决于「每个事实被看到多少次」，不是总 token 数。
+    # 627 样本 / GBS → 每 epoch 的步数；跑 epochs 轮。
+    steps_per_epoch = max(1, a.train_samples // a.gbs)
+    cfg.train.train_iters = steps_per_epoch * a.epochs
+    cfg.train.global_batch_size = a.gbs
+    cfg.train.micro_batch_size = a.mbs
+    cfg.validation.eval_interval = max(10, cfg.train.train_iters // 5)
+    cfg.validation.eval_iters = 4
+
+    # ---- 优化器 ----
+    # 5e-6 是 Bridge 对通用 SFT 的默认值，对「注入全新事实」偏保守。
+    # 1e-5 在少量步数内更容易把知识写进去，同时仍远低于预训练 LR，
+    # 不至于摧毁 instruct 版已有的对话/推理能力。probe.jsonl 就是用来验这一点的。
+    cfg.scheduler.max_lr = a.lr
+    cfg.scheduler.min_lr = a.lr * 0.1
+    cfg.scheduler.lr_warmup_iters = max(5, cfg.train.train_iters // 10)
+    cfg.optimizer.adam_beta2 = 0.98
+
+    # ---- checkpoint ----
+    cfg.checkpoint.pretrained_checkpoint = a.pretrained
+    cfg.checkpoint.save = a.save
+    cfg.checkpoint.save_interval = max(20, cfg.train.train_iters // 2)
+    cfg.checkpoint.ckpt_format = "torch_dist"
+    cfg.checkpoint.fully_parallel_save = True
+
+    cfg.logger.log_interval = 1
+    cfg.rng.seed = 5678
+    return cfg
+
+
+def main():
+    p = argparse.ArgumentParser()
+    p.add_argument("--pretrained", required=True, help="import_hy3_ckpt.py 产出的 Megatron ckpt 目录")
+    p.add_argument("--data", required=True, help="make_sft_data.py 产出的目录")
+    p.add_argument("--save", default="/ckpt/hy3-sft")
+    p.add_argument("--base", action="store_true", help="用 Hy3-Base 而非 instruct 版")
+    p.add_argument("--num-gpus", type=int, default=64)
+    p.add_argument("--tp", type=int, default=1)
+    p.add_argument("--pp", type=int, default=2)
+    p.add_argument("--vpp", type=int, default=None)
+    p.add_argument("--ep", type=int, default=16)
+    p.add_argument("--seq-length", type=int, default=512)
+    p.add_argument("--gbs", type=int, default=32)
+    p.add_argument("--mbs", type=int, default=1)
+    p.add_argument("--epochs", type=int, default=10)
+    p.add_argument("--train-samples", type=int, default=627)
+    p.add_argument("--lr", type=float, default=1e-5)
+    p.add_argument("--precision", default="bf16", choices=["bf16", "fp8_mx"])
+    a = p.parse_args()
+
+    cfg = build_config(a)
+    if int(os.environ.get("RANK", "0")) == 0:
+        print(f"[hy3_sft] train_iters={cfg.train.train_iters} gbs={cfg.train.global_batch_size} "
+              f"seq={cfg.dataset.seq_length} lr={cfg.scheduler.max_lr} "
+              f"parallel: TP{a.tp}/PP{a.pp}/EP{a.ep} mtp={cfg.model.mtp_num_layers}", flush=True)
+    finetune(cfg, forward_step)
+
+
+if __name__ == "__main__":
+    main()

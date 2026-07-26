@@ -743,6 +743,9 @@ kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/
 | 4 | **attention plan kernel 硬顶 1024 请求/rank** | `c_plan.cuh:522: GPU plan only support batch size up to 1024` | SGLang 自己 hardcode 的 `kMaxPrefillBatchSize`，源于「单 CUDA block + 每线程一请求」的实现（block 线程上限就是 1024）+ 静态 shared memory 数组。**不是硬件限制，是实现取舍**（为避开 MTP/graph capture 时的 host sync）|
 | 5 | **PD 两侧 `context-length` 必须一致** | `Decode handshake failed` | 只改 decode 会让 KV 布局对不上。**decode 照常注册、frontend 全 200、单条 e2e 也过**，只有压测才暴露。而且这个改动本身多余——SGLang 的 KV 页按需分配，短请求本就不占满上限 |
 | 6 | **反复重启 decode 会把 prefill 全带崩** | prefill 侧 `SIGQUIT`，成片消失 | disagg 心跳一断，prefill 的子进程失败自杀。**做拓扑/参数实验必须整个 fleet 一起重启**，不能只重启 decode。本轮踩了 3 次，最后一次 14 个 prefill 全灭 |
+| 7 | **`swa-full-tokens-ratio 0.056` 是 dep32 专用值** | `full token usage: 0.95` @ 仅 356 running-req，随后 rank 挂掉、gloo 连接断 | 官方 srt-slurm 的 `10p1d-dep32` 变体用 0.056，因为 dep32 每卡 KV 预算大得多。搬到 dep8 会**把 full-attention 池饿死**——请求数很少就撑满。**dep8 用 0.1**（本文 9,502 那次的值）|
+
+> **一个反复出现的模式**：官方 recipe 里的参数值是**跟拓扑绑定的整体**（#3 `mem-fraction 0.94`、#7 `swa-ratio 0.056` 都是 wide-EP 专用）。逐项摘出来搬到 dep8，每一项都会以不同方式失败。**要么整套换拓扑，要么一个都别动。**
 
 > **共同点**：第 2、5、6 条都能通过所有常规健康检查（进程在、显存满、etcd 注册、frontend 200、单条推理正确），**只有真正加压才暴露**。这类故障没法靠 review 配置发现。
 
