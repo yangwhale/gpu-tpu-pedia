@@ -1463,3 +1463,188 @@ microbatch 抓进一张图）。E2/E3（GBS 扫点）正好可以验证这条 �
 6. 自动化扫点 E2–E11
 7. 每个实验解析启动时间线（`timeline.py --parse`）
 8. 出表、归因、与 64 卡对照、提交
+
+---
+
+## 十四、移植 HYV3Bridge：让 Megatron 直接吃官方权重（2026-07-26 ✅ 全部验证通过）
+
+### 14.1 为什么必须做这件事
+
+前面 §1–§13 的所有性能实验，用的都是 **Qwen3-235B 骨架 recipe + 手工覆写 Hy3 超参**（`hy3_pretrain.py` 里那个 `HY3 = dict(...)`）。
+这条路**跑性能没问题**——算力口径只取决于形状，不取决于权重从哪来。但它有一个致命限制：
+
+> **它只能造随机初始化的模型，无法加载 `tencent/Hy3-Base` 的真实权重。**
+
+而 SFT / 继续预训练的前提就是加载真权重。所以在做 SFT 之前，必须先解决「Megatron 认不认识 Hy3 这个架构」的问题。
+
+### 14.2 版本调研：官方 release 里根本没有 Hy3
+
+| 版本 | 提交 | 有 `hy_v3`？ | 说明 |
+|---|---|---|---|
+| 容器内 | `0.5.0+fcbb6031` | ❌ | 我们跑训练用的这个 |
+| **v0.5.1**（最新 release，2026-07-21） | — | ❌ | `gh api .../contents/.../hy_v3?ref=v0.5.1` 返回 **404** |
+| **main**（2026-07-25，`7b3c40b7`） | — | ✅ | 只有 4 个文件涉及 |
+
+v0.5.1 相对 v0.5.0 加的是 Nemotron 3 Ultra、DSV4-Pro MXFP8 GB300 recipe、DSV3/Qwen3 的 CuTeDSL 与 full-graph 改进——**与 Hy3 无关**。
+所以「升级到最新 release」这条路走不通，只能从 main 分支单文件移植。
+
+> **v0.5.1 的一条 Known Issue 与我们直接相关**：
+> *"Some MoE training configurations that combine TP and EP may run slower in 26.06 after upgrading from NCCL 2.29 to NCCL 2.30"*，官方给的规避是 numactl 绑核。
+> 我们**已经在做**：`numactl --cpunodebind=$((LOCAL_RANK/2)) --membind=$((LOCAL_RANK/2))`。
+> 绑定正确性已实证：GB300 有 2 个 CPU NUMA 节点（node0 = CPU 0-71，node1 = CPU 72-143），
+> sysfs 查询（`0008:06:00.0`→0、`0009:06:00.0`→0、`0018:06:00.0`→1、`0019:06:00.0`→1）与 `nvidia-smi topo -m` 双向印证 `LOCAL_RANK/2` 映射无误。
+
+### 14.3 移植方案：单文件，不动版本
+
+`hy_v3_bridge.py` 只有 **286 行 / 14.4 KB**，import 的全是 r0.5.0 里就存在的稳定接口。逐一核对：
+
+| 接口 | r0.5.0 是否存在 |
+|---|---|
+| `conversion.mapping_registry.MegatronMappingRegistry` | ✅ |
+| `conversion.model_bridge.MegatronModelBridge` | ✅ |
+| `conversion.param_mapping.AutoMapping` | ✅ |
+| `conversion.param_mapping.GatedMLPMapping` | ✅ |
+| `conversion.param_mapping.QKVMapping` | ✅ |
+| `models.gpt_provider.GPTModelProvider` | ✅ |
+| `models.hf_pretrained.causal_lm.PreTrainedCausalLM` | ✅ |
+| `megatron.core.models.gpt.gpt_layer_specs.get_gpt_decoder_block_spec` | ✅ |
+
+还核对了装饰器签名——`register_bridge(*, source, target, provider=None, model_type=None)` 在 r0.5.0 **已经**支持 `model_type` 参数
+（同目录的 `deepseek_v3_bridge.py` 就是这么写的），基类 `megatron_to_hf_config` 也在（`model_bridge.py:670`）。**零改动即可用**。
+
+### 14.4 安装步骤（可复现）
+
+```bash
+# 1) 从 main 分支取 2 个文件
+mkdir -p /tmp/hy3bridge && cd /tmp/hy3bridge
+for f in hy_v3_bridge.py __init__.py; do
+  gh api "repos/NVIDIA-NeMo/Megatron-Bridge/contents/src/megatron/bridge/models/hy_v3/$f?ref=main" \
+     --jq '.content' | base64 -d > "$f"
+done
+
+# 2) 放进容器（base64 过 kubectl exec，避免 scp 依赖）
+D=/opt/Megatron-Bridge/src/megatron/bridge/models
+mkdir -p $D/hy_v3 && cp hy_v3_bridge.py __init__.py $D/hy_v3/
+
+# 3) 在 models/__init__.py 注册（import + __all__ 两处）
+#    from megatron.bridge.models.hy_v3 import HYV3Bridge  # noqa: F401
+#    __all__ = ["HYV3Bridge", ...]
+```
+
+> **务必 `md5sum` 双向核对**——`kubectl exec` + base64 的传输链路上，
+> 之前踩过「文件看似写了、其实没写进去」的坑（§8）。本次容器内外 md5 均为 `feadf836…`。
+
+### 14.5 四步验证（全部通过）
+
+**① import**
+```
+from megatron.bridge.models import HYV3Bridge   →  OK
+```
+
+**② HF config 识别**
+
+| 字段 | Hy3 / Hy3-Base |
+|---|---|
+| `architectures` | `['HYV3ForCausalLM']` ← 与 bridge 注册的 `source` 精确匹配 |
+| `model_type` | `hy_v3` |
+| 层数 / hidden | 80 / 4096 |
+| 专家 / moe_int / shared | 192 / 1536 / 1 |
+| `first_k_dense_replace` | 1 |
+| `router_scaling_factor` | 2.826 |
+| `num_nextn_predict_layers` | **1** |
+| vocab | 120832 |
+
+**③ `AutoBridge.from_hf_pretrained` → `to_megatron_provider(load_weights=False)`**
+
+自动推导出的 provider 与我们**手写的 `HY3` dict 逐字段一致**——这反过来验证了 §1 那张映射表是对的：
+
+| provider 字段 | 自动推导值 | 与手写 `HY3` |
+|---|---|---|
+| `num_layers` | 80 | ✅ |
+| `hidden_size` / `ffn_hidden_size` | 4096 / 13312 | ✅ |
+| `num_attention_heads` / `num_query_groups` / `kv_channels` | 64 / 8 / 128 | ✅ |
+| `vocab_size` / `rotary_base` | 120832 / 11158840.0 | ✅ |
+| `num_moe_experts` / `moe_router_topk` / `moe_ffn_hidden_size` | 192 / 8 / 1536 | ✅ |
+| `moe_shared_expert_intermediate_size` | 1536 | ✅（= 1536 × 1 shared） |
+| `moe_router_score_function` / `enable_expert_bias` | sigmoid / True | ✅ |
+| `moe_router_topk_scaling_factor` | 2.826 | ✅ |
+| `qk_layernorm` / `normalization` | True / RMSNorm | ✅ |
+| `moe_layer_freq` | `len=80, [0,1,1,1,1…]` | ✅ |
+| **`mtp_num_layers`** | **1** | ⚠️ **性能实验里我们设的是 0** |
+
+> **唯一差异是 MTP**。性能扫点时用 `--mtp-layers 0` 关掉了 MTP（隔离变量）；
+> 官方权重带 1 层 MTP。做 SFT 时**必须开回 `mtp_num_layers=1`**，否则 checkpoint 里 layer-80 的那批权重无处安放。
+
+**关键：`from_hf_pretrained` 是惰性的**——不设 `load_weights` 时不会拉那 597.6 GB 权重，只读 config + index。
+
+**④ 权重映射全覆盖审计**（最硬的判据）
+
+拉 `model.safetensors.index.json`（几 MB），把 checkpoint 里**每一个真实张量名**逐个去撞 bridge 的 42 条 mapping：
+
+```
+HF checkpoint: 47,138 个张量 / 597.6 GB / 99 个分片
+bridge mapping: 42 条规则 → 54 个 hf_param 模式
+
+未覆盖: 0  ✅ 全部有归宿
+孤儿（mapping 有、checkpoint 无）: 3 条
+  · model.layers.80.mlp.{gate,up,down}_proj.weight
+```
+
+3 条孤儿是 **MTP 层的 dense-MLP 备用分支**——Hy3 的 MTP 层实际是 MoE 层，走不到 dense 路径。属正常 fallback，不是缺失。
+
+**参数量交叉核对**：597.6 GB ÷ 2 bytes(bf16) = **298.8 B**
+= 主干 **295 B** + MTP **3.8 B**，与官方口径完全吻合。
+
+### 14.6 顺带查清的两件事
+
+**① `tencent/Hy3` 已经是 post-train 过的模型，`Hy3-Base` 才是底座**
+
+| | `tencent/Hy3` | `tencent/Hy3-Base` |
+|---|---|---|
+| 下载量 / likes | 18,600 / 874 | 500 / 24 |
+| `chat_template.jinja` | ✅ 10,223 bytes | ❌ 不存在 |
+| `tokenizer_config` 内嵌 template | ❌ | 596 bytes（极简） |
+| 目录 | `finetune/` | `train/` |
+| 资产 | `rl-training.png`、`benchmark.png` | `bench_*.jpg` |
+
+`rl-training.png` + 万字级 chat template ⇒ **Hy3 = SFT + RL 之后的 reasoning model**。
+所以「Hy3 是不是已经 SFT 过」的答案是：**是**，且官方另外放出了未 post-train 的 Base 版。
+
+**② 官方 SFT recipe 用的是什么**
+
+两个仓库都自带完整微调脚手架，底层清一色 **DeepSpeed ZeRO-2/ZeRO-3**：
+
+```
+train/ 或 finetune/
+├── ds_zero2_no_offload.json / ds_zero3_offload.json …   # DeepSpeed 配置
+├── llama_factory_support/  hy_v3_{full,lora}_sft.yaml + hy_v3_patches.py + hy_v3_template.py
+├── ms_swift_support/       hy_v3_{full,lora}_sft.yaml + hy_v3_swift_patches.py
+├── train.py / train.sh / train_lora.sh / merge_lora_weight.py
+└── tools/convert_ckpt_to_outer.py + check_converted.py   # 训完转回 HF 格式
+```
+
+**数据格式是标准 ChatML `messages` 数组**，无任何私有字段：
+
+```json
+{"messages": [
+  {"role": "system",    "content": "You are a helpful assistant."},
+  {"role": "user",      "content": "能否帮我撰写一个关于环保的议论文开头部分？…"},
+  {"role": "assistant", "content": "在我们的生活中，环保已经成为一个不可忽视的议题。…"}
+]}
+```
+
+> 这一点很重要：**官方数据格式不需要适配**。我们只需把 DeepSpeed 那层换成 Megatron-Bridge，
+> 数据侧照搬官方 schema 即可。走 Megatron 的理由见 §14.7。
+
+### 14.7 结论
+
+| 项 | 状态 |
+|---|---|
+| HYV3Bridge 移植进 r0.5.0 容器 | ✅ 单文件，零改动 |
+| 架构识别（`HYV3ForCausalLM` → GPTModel） | ✅ |
+| 超参自动推导 vs 手写映射表 | ✅ 逐字段一致 |
+| 47,138 个权重的 mapping 覆盖率 | ✅ 100% |
+| 参数量核对 | ✅ 298.8 B = 295 B + 3.8 B MTP |
+| 是否需要下载 597 GB 才能验证 | ❌ 惰性加载，config + index 足矣 |
+
+**下一步**：SFT 需要 `mtp_num_layers=1`、真权重加载路径、以及一份能看出效果的稀缺知识数据集。
