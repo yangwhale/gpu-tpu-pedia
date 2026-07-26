@@ -564,6 +564,10 @@ Hy3 **没有官方 Megatron benchmark**，NVIDIA perf summary 里也没有。判
 | `make_sft_data.py` / `sft_data/` | 稀缺知识 SFT 数据集生成器：训练集 + 留出集 + 通用探针 |
 | `hy3_sft.py` | SFT 训练入口（走 HYV3Bridge，非 Qwen3 骨架） |
 | `raid-disks.yaml` | 把 4 块 local NVMe 组 RAID 0，每节点 12 TB 挂到 `/mnt/disks/raid/0` |
+| `make_mixed_sft.py` | 把稀缺知识混进通用 SFT 数据集（小数据集喂不饱 MoE 专家） |
+| `run_sft.sh` | 16 节点 SFT 启动器：清理 → 分发 → torchrun → 训练结束自动导出 HF |
+| `export_sft_dist.py` | 分布式事后导出（**已证明不可行**，保留作反面记录） |
+| `eval_sft.py` | SFT 三组判据评测，前后各跑一次再 `--compare` |
 
 ---
 

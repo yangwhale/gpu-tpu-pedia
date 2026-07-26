@@ -2,34 +2,61 @@
 
 > 本文是 [README.md](README.md) 的姊妹篇。README 讲**预训练性能**（造随机权重、把算力榨到 1360 TFLOP/s）；
 > 本文讲**加载官方权重做微调**——两者的技术链路几乎不重叠，所以单独成篇。
->
-> 状态：全流程跑通。**知识注入未成功**，判据 ①③ 未通过（§7.4）—— 负面结果，归因与改进见 §7.7–7.8。
+
+## 结论速览
+
+**端到端链路已完整验证通过；知识注入的超参没调对。** 这两件事要分开看。
+
+| | 结论 |
+|---|---|
+| **链路正确性** | ✅ **全部环节跑通且无 crash** —— Bridge 移植 → 权重加载 → 数据构建 → 64 卡训练 692 步 → HF 导出 → 双向评测。整条流水线可复现、可复用 |
+| **知识注入效果** | ❌ 三条行为判据里 ①③ 未通过。模型学到了句式、没学到事实，且通用能力退化 |
+| **失败性质** | **超参与数据配比问题，不是工程问题**。归因见 §7.7，改进见 §7.8 |
+
+被这条链路**实证为正确**的环节（每一项都有落地数字）：
+
+| 环节 | 证据 |
+|---|---|
+| HYV3Bridge 移植到 r0.5.0 | 47,138 个权重 mapping 100% 覆盖；参数量 298.8 B = 主干 295 B + MTP 3.8 B |
+| HF → Megatron 转换 | 597.7 GB 产出，与 HF 侧 597.6 GB 吻合，33.6 min |
+| 数据集构建 + loss mask | `{% generation %}` 补丁后实测 34 token 中 9 个计 loss，user/system 正确屏蔽 |
+| 64 卡分布式训练 | 692 步跑满，41 min，**0 节点掉线**，loss 1.765 → 1.20 |
+| Megatron → HF 导出 | 137 s，557 GiB，99 分片，0 错误 |
+| 评测闭环 | SFT 前后各一次 vLLM 推理，三组判据可量化对比 |
+
+> 换言之：**下一轮只需改数据和超参，不需要再碰任何基础设施**。
+> 这也是本文最大的价值 —— 一条被走通过的路，比一次成功的调参更耐用。
 
 **本文分两半**，各看各的：
 
 | | 章节 | 内容 |
 |---|---|---|
-| **设计** | §1–§5 | 测什么、怎么测、为什么这么配。看方案只读这半部分 |
-| **实战** | §6–§9 | 基础设施怎么搭、踩了哪些坑、基线评测结果。复现或排错看这半部分 |
+| **设计** | §1–§5 | 测什么、怎么测、为什么这么配 |
+| **实战** | §6–§10 | 基础设施、17 个坑、评测结果与归因 |
 
 ---
 
 ## 一、目标与判据
 
-**目标**：验证「Megatron-Bridge → Hy3 官方权重 → SFT」这条链路能跑通，并且训练确实改变了模型行为。
+**两个目标，要分开验收**（这次的结果正好一个成一个败，分不开就说不清）：
 
-**判据必须可证伪**。「loss 下降了」不算——loss 下降只说明模型在拟合，不说明它学到了正确的东西。
-真正的判据是三件事同时成立：
+| | 目标 | 验收方式 | 本次结果 |
+|---|---|---|---|
+| **A** | 链路能跑通：Megatron-Bridge → Hy3 官方权重 → SFT → 导回 HF → 推理 | 每一环有产物、无 crash、数字自洽 | ✅ |
+| **B** | 训练确实改变了模型行为 | 下面三条可证伪判据 | ❌ ①③ 未通过 |
 
-| # | 判据 | 怎么验 |
-|---|---|---|
-| 1 | **学会了** | 训练集里的事实，SFT 后能答对；SFT 前答不出或答错 |
-| 2 | **不是猜的** | 留出集（同类问题、事实从未进过训练）SFT 后**仍**答不出 |
-| 3 | **没训坏** | 通用能力探针 SFT 前后都答对，没有灾难性遗忘 |
+**判据必须可证伪。**「loss 下降了」不算 —— 本次 loss 从 1.765 平滑降到 1.20，
+曲线漂亮，但判据 ①③ 双双失败。**只看 loss 会得出完全错误的结论。**
 
-只满足 1 不够：如果模型只是学会了「遇到 TFLOP/s 问题就编个数字」，判据 2 会当场戳穿。
+| # | 判据 | 怎么验 | 本次 |
+|---|---|---|---|
+| ① | **学会了** | 训练集里的事实，SFT 前答不出、SFT 后能答对 | ❌ 0.390 → 0.393 |
+| ② | **不是猜的** | 留出集（同类问题、事实从未参训）SFT 后**仍**答不出 | ✅（但 ① 不成立，此条无独立意义） |
+| ③ | **没训坏** | 通用能力探针 SFT 前后都答对 | ❌ 明显退化 |
 
----
+三条必须**同时**成立才算成功。只满足 ① 不够：
+如果模型只是学会了「遇到 TFLOP/s 问题就编个数字」，判据 ② 会当场戳穿。
+反过来，② 单独通过没有意义 —— 这次就是如此。
 
 ## 二、用 instruct 版还是 Base 版？→ **instruct（`tencent/Hy3`）**
 
@@ -109,43 +136,46 @@ SFT 后：问同一个问题        → 模型答「50.6%，从 854.0 提到 128
 - HYV3Bridge 只在 main 分支，v0.5.1 也没有
 - Hy3 checkpoint = 47138 张量 / 597.6 GB / 298.8 B 参数
 
-### 3.3 规模
+### 3.3 规模：从 608 条到 22,144 条
+
+**第一版（纯知识，已废弃）**：
 
 ```
-$ python3 make_sft_data.py --paraphrase 6
-
-事实总数      127  (训练 108 / 留出 19)
-训练样本      627 条  (每事实 6 种问法)
-字符总量      83.2 K  ≈ 52.0 K tokens
-留出集        24 条    (19 条切出的真事实 + 5 条从未测过的问题)
-通用探针      6 条
+$ python3 make_sft_data.py --paraphrase 6 --pad-to 32
+事实总数 127（训练 108 / 留出 19） → 训练样本 640 条 ≈ 53 K tokens
 ```
 
-**627 条会不会太少？** 这是个合理的疑问，答案是：对**知识注入**这个特定任务，够。
+这一版**跑不起来**：640 条 / 6 万 token 时，一个 micro-batch 只有 512 token，
+乘 top-8 摊到 192 个专家上平均每专家 21 个 —— 必有专家分到 0 个，
+反向传播时梯度归一化除零，第 16 步直接 NaN（详见 §6.12）。
 
-知识注入的有效剂量不是总 token 数，而是**每个事实被梯度更新看到多少次**：
+**第二版（混合，最终采用）**——[`make_mixed_sft.py`](make_mixed_sft.py)：
 
-```
-627 样本 / GBS 32 = 19 步/epoch
-19 步 × 10 epoch  = 196 步
-每个事实被看到    = 6 种问法 × 10 epoch = 60 次
-```
+| | 条数 | 占比 |
+|---|---|---|
+| 通用（`llm-wizard/alpaca-gpt4-data-zh`） | 16,000 | 71% |
+| 稀缺知识（640 × 10 遍） | 6,400 | **29%** |
+| 训练集（pad 到 GBS 整数倍） | **22,144** | 692 步/epoch |
+| 验证集 | 256 | 8 步 |
+| token 量 | **3.26 M** | 比第一版大 54 倍 |
 
-60 次曝光对 295B 模型记住一个事实是充裕的。真正的风险不是「记不住」，而是「记太死」——
-模型可能背下问法而非知识。**6 种问法 + 留出集**就是防这个的。
+关键点：**单事实曝光量没变**（6 种问法 × 10 遍 = 60 次），
+但每一步的梯度批次是满的，专家不会饿死。
 
-> 数据量还能涨：`--paraphrase` 调大、或往 CLAIMS 里加条目。
-> 但先跑一轮小的、看曲线，比一上来堆数据靠谱。
+> 事后看，29% 这个占比**偏低**了 —— 知识信号被通用数据稀释，
+> 是判据 ① 失败的原因之一（§7.7 ②）。下一轮应提到 50% 或多跑 epoch。
 
-### 3.4 三个文件
+### 3.4 三个评测文件
+
+注意区分：**训练数据**是 `sft_mixed/`，**评测数据**是 `sft_data/` 里的三个文件。
 
 | 文件 | 条数 | 用途 |
 |---|---|---|
-| `train.jsonl` | 627 | 训练。官方 ChatML `messages` 格式，**零适配** |
-| `holdout.jsonl` | 24 | 判据 2。19 条是从事实库切出来、从未参训的真事实；5 条是根本没测过的问题（MXFP4、512 卡、H100…） |
-| `probe.jsonl` | 6 | 判据 3。MoE 路由原理、写素数函数、中译英…… SFT 后必须仍答对 |
+| `sft_data/train.jsonl` | 640 | 知识源。混进 `sft_mixed` 当训练集；同时抽样 20 条当判据 ① 的考题 |
+| `sft_data/holdout.jsonl` | 24 | 判据 ②。19 条是从事实库切出来、从未参训的真事实；5 条是根本没测过的问题（MXFP4、512 卡、H100…） |
+| `sft_data/probe.jsonl` | 6 | 判据 ③。MoE 路由原理、写素数函数、中译英…… SFT 后必须仍答对 |
 
-`train.jsonl` 样例：
+样例（官方 ChatML `messages` 格式，**零适配**）：
 
 ```json
 {"messages": [
@@ -155,68 +185,74 @@ $ python3 make_sft_data.py --paraphrase 6
 ]}
 ```
 
-**数据格式完全不用适配**——官方 `finetune/data/example_data.jsonl` 就是这个 schema，
-Bridge 的 SFT dataset 在 `chat=True, use_hf_tokenizer_chat_template=True` 下直接调
-`tokenizer.apply_chat_template`，并**只在 assistant 段计 loss**（user/system 被 mask）。
+官方 `finetune/data/example_data.jsonl` 就是这个 schema。
+Bridge 在 `chat=True, use_hf_tokenizer_chat_template=True` 下直接调
+`tokenizer.apply_chat_template`，**只在 assistant 段计 loss**（user/system 被 mask）。
+
+> ⚠️ 但 Hy3 官方模板缺 `{% generation %}` 块，HF 算不出 mask 会直接报错 —— 必须打补丁，见 §6.10 坑 2。
 
 ---
 
-## 四、训练配置与理由
+## 四、训练配置
 
-全部在 [`hy3_sft.py`](hy3_sft.py) 里，关键决策及依据：
+全部在 [`hy3_sft.py`](hy3_sft.py)。**下表是最终实跑值**，与最初设计有出入的地方单列一栏说明原因
+（设计阶段的假设大多是对的，但被 §6 的实战发现推翻了两项）。
 
-| 项 | 取值 | 为什么 |
-|---|---|---|
-| `seq_length` | **512** | 样本均长 ~110 token。用 2048/4096 是纯浪费；短序列省算力省显存、MBS 能开大。代价是不训练长上下文——本实验不需要 |
-| 打包 packing | **关** | 627 条打包成 4096 只剩 13 个序列，GBS 都凑不满；而且会把无关事实塞进同一 attention 窗口互相干扰 |
-| `mtp_num_layers` | **1** | 官方 checkpoint 带 1 层 MTP（layer 80，3.8 B）。设 0 会导致这批权重加载时无处安放。**与预训练扫点时设 0 不同**——那是为了隔离变量 |
-| TP / PP / EP | 1 / 2 / 16 | 沿用 §10 验证过的骨架。TP=1 靠 EP 扛专家（Parallel Folding，`expert_tensor_parallel_size=1`） |
-| CUDA graph | **none** | SFT 数据变长、总步数才 ~200，graph capture 那 26 秒固定开销换不回来；而且 full_iteration 的依赖链会限制 batch 灵活性 |
-| 精度 | **BF16** | FP8 已验证与 BF16 对齐（§12），但 SFT 追求权重的精细调整，不值得为省时间引入额外变量。`--precision fp8_mx` 可切 |
-| `max_lr` | **1e-5** | Bridge 默认 5e-6 是给通用 SFT 的，对「注入全新事实」偏保守。1e-5 在两百步内更容易把知识写进去，同时仍远低于预训练 LR |
-| GBS / MBS | 32 / 1 | 小数据集要更多梯度步。GBS 128 只剩 4 步/epoch，学不动 |
-| epochs | 10 | → 196 步，每事实曝光 60 次 |
+| 项 | 最终实跑 | 原计划 | 为什么改 / 为什么这么选 |
+|---|---|---|---|
+| 数据集 | **22,144 条混合**（知识 29%） | 608 条纯知识 | 小数据集喂不饱 192 个专家，第 16 步必 NaN（§6.12） |
+| `seq_length` | 512 | 512 | 样本均长 ~110 token，用 2048/4096 是浪费 |
+| 打包 packing | 关 | 关 | 会把无关事实塞进同一 attention 窗口互相干扰 |
+| `mtp_num_layers` | **1** | 1 | 官方 checkpoint 带 1 层 MTP（layer 80，3.8 B），设 0 则该批权重无处安放 |
+| TP / PP / EP | 1 / 2 / 16 | 同 | 沿用预训练验证过的骨架，TP=1 靠 EP 扛专家 |
+| MoE dispatcher | **alltoall** | flex + hybridep | hybridep 在稀疏 batch 下触发 NaN，换参考实现（§6.10 坑 4） |
+| router / permute fusion | **关** | 开 | 同上，排除变量 |
+| CUDA graph | none | none | 总步数才几百，capture 的 26 s 固定开销换不回来 |
+| 精度 | BF16 | BF16 | FP8 已验证与 BF16 对齐，但 SFT 不值得引入额外变量 |
+| `max_lr` | **5e-6** | 1e-5 | 为躲 NaN 降的一半。**事后看这是个失误** —— NaN 后来由大数据集解决，LR 却没调回去（§7.7 ③） |
+| GBS / MBS | 32 / 1 | 32 / 1 | 更多梯度步 |
+| epochs / 步数 | **1 / 692** | 10 / 196 | 换大数据集后 1 epoch 就是 692 步，单事实曝光量（60 次）不变 |
 
-**LR 是最需要盯的旋钮**。太低学不进去（判据 1 失败），太高摧毁 instruct 能力（判据 3 失败）。
-1e-5 是起点，第一轮跑完看 probe 结果再调。
+**LR 是最需要盯的旋钮**：太低学不进去（判据 ① 失败 —— 这次就是），
+太高摧毁 instruct 能力（判据 ③ 失败）。下一轮应回到 1e-5 ~ 2e-5。
 
----
-
-## 五、权重加载链路
+## 五、端到端链路（已全部验证）
 
 ```
 tencent/Hy3 (HF, 597.6 GB / 99 分片)
    │
-   │  ① HYV3Bridge   —— 已移植进 r0.5.0 容器，见 README §14
-   │     install_hy3_bridge.sh
+   │  ① HYV3Bridge —— 单文件移植进 r0.5.0 容器（README §14）
+   │     install_hy3_bridge.sh      ✅ 47138 权重 mapping 100% 覆盖
    ↓
-AutoBridge.from_hf_pretrained() → to_megatron_provider()
-   │     ✅ 47138 个权重 mapping 100% 覆盖（已审计）
-   │
-   │  ② import_hy3_ckpt.py  —— HF → Megatron torch_dist
+   │  ② import_hy3_ckpt.py --single —— HF → Megatron torch_dist
    │     必须这一步：finetune() 只认 Megatron 原生 checkpoint，
-   │     不接受 HF 目录，也没有 hf:// 协议前缀（checkpointing.py 逐行确认过）
-   ↓
-Megatron torch_dist checkpoint
+   │     不接受 HF 目录，也没有 hf:// 前缀（checkpointing.py 逐行确认）
+   │     ⚠️ 必须**单进程**，不能分布式 —— 原因见 §6.7
+   ↓                                 ✅ 597.7 GB / 33.6 min / 298.8 B 参数
+Megatron torch_dist checkpoint（需完整复制到每个节点）
    │
-   │  ③ hy3_sft.py → finetune()
+   │  ③ hy3_sft.py → finetune()      ✅ 692 步 / 41 min / 0 掉线
    ↓
-SFT 后的 checkpoint
+训练完成，模型还在显存里
    │
-   │  ④ AutoBridge.export_ckpt() → 转回 HF 格式做评测
-   ↓
+   │  ④ ExportHFAtEnd 回调 → save_hf_pretrained()
+   │     ⚠️ **不能**事后用 export_ckpt 重新加载 —— 那条路是死的，见 §6.14
+   ↓                                 ✅ 137 s / 557 GiB / 99 分片
 可推理的 HF 模型
+   │
+   │  ⑤ eval_sft.py（vLLM TP=4）—— SFT 前后各一次
+   ↓
+三组判据对照（§7.4）
 ```
 
-**②是最重的一步**。规模账：
+**两个反直觉的约束**，都是实战撞出来的，不是设计时能想到的：
 
-- 单进程 CPU 转换：需 ~600 GB 内存。节点有 942 GB，够，但慢且脆
-- **分布式转换**：64 rank 下每 rank 只物化约 **9.3 GB** ← 推荐
+| 步骤 | 约束 | 原因 |
+|---|---|---|
+| ② 转换 | 只能**单进程** | torch_dist 加载要全局 sharding 校验，分布式写出的分片碎在各节点上就再也读不回来 |
+| ④ 导出 | 只能在**训练进程内** | 同上。一旦落盘成 per-rank 分片，聚合窗口就永久关闭了 |
 
-`import_ckpt` 内部调 `to_megatron_model(use_cpu_initialization=True)`，
-在 torchrun 里跑且并行状态已初始化时，每 rank 只构建自己那一份分片。
-
----
+共同的根源：**集群没有共享存储**。有共享存储的话这两条限制都不存在。
 
 ## 六、基础设施与实战记录（2026-07-26）
 
@@ -284,7 +320,7 @@ HuggingFace  ──①──>  yw-a-0 的 /raid  ──②──>  gs://chrisya-
 不让 16 个节点各自去 HF 拉的原因很简单：597 GB × 16 = 9.5 TB 的 HF 流量，
 既慢又会被限速。GCS 与集群同在 us-central1，带宽和并发都好得多。
 
-实测 ① 的速度约 **400 MB/s**，全量约 25 分钟。
+实测速率与耗时见 §6.6（加 HF token 后峰值 690 MB/s，全量 19.6 分钟）。
 
 ### 6.4 顺带修掉的 kubelet 假告警
 
@@ -447,29 +483,7 @@ os.stat(path).st_blocks * 512     # 实际占用，不是表观大小
 py-spy 一看是 `flashinfer/jit/core.py:build_and_load` 在等文件锁，
 宿主上 `ninja` / `nvcc` / `ptxas` 都在跑。编完落盘缓存，第二次评测秒开。
 
-### 6.10 踩坑速查
-
-| # | 现象 | 真因 | 教训 |
-|---|---|---|---|
-| 1 | 以为每节点只有 2.9 TB | `lsblk \| head -20` 把后 3 块盘截掉了 | 查硬件别加 `head` |
-| 2 | 3 个节点 `DiskPressure`，busybox 都被 Evict | kubelet condition 卡住；实测 **44.3% 空闲** | 别信 condition，查 `/stats/summary` 原始数字 |
-| 3 | 差点去重建节点 | 同上 | 重启 kubelet 就好；GB300 绑 placement policy，重建有拿不回来的风险 |
-| 4 | 计划分布式转换 | torch_dist 要每 rank 看到完整目录 | 加载前先确认存储是否**真共享** |
-| 5 | 网卡在收、磁盘不涨 | `download_as_bytes` 缓冲整片 → 超时重试死循环 | 大文件一律流式写盘 |
-| 6 | `df` 显示 84K 以为没动 | 稀疏文件表观 ≠ 实际块数 | 用 `st_blocks * 512` |
-| 7 | Bridge 装完又没了 | pod 重建清空容器 fs | 持久化到 `/raid` + 自愈导入 |
-| 8 | vLLM 启动「卡死」15 分钟 | FlashInfer 首次 JIT 编译 | py-spy 看栈再下结论 |
-| 9 | 每轮总是同一个节点先死 | 它只是 node_rank 1、最早连 master 的受害者；真凶是 master 端口被占 | **看谁「没」报错**，不看谁报错 |
-| 10 | 清理脚本报「残留 60」三轮不降 | `pkill -f X` 匹配到执行它的 bash 自己 | 用 `pkill -f "[X]…"` 中括号 |
-| 11 | 第 16 步梯度 NaN | 专家饿死：512 token × top-8 ÷ 192 专家 ≈ 21，必有专家 0 token | 做大数据集，不是调 LR |
-| 12 | rank 0 卡 barrier、rank 32 已到 broadcast | `dataset_root` 非共享，只有 rank 0 有预处理产物 | 预生成索引并分发到每个节点 |
-| 13 | loss 平在 1.20 不降 | 71% 是通用数据，模型本来就会 | **loss 不是「学没学会」的判据**，看行为判据 |
-| 14 | 事后导出 HF 三次全败 | torch_dist 加载要全局校验且任意 rank 读任意分片 | 聚合操作必须在进程活着时做（`on_train_end`） |
-| 15 | `can't open file '…/python'` | torchrun 已经调 python，不能再传一个 | — |
-| 16 | 导出报找不到 safetensors index | 我删了 index.json，但导出靠它枚举目标键名 | 改配置前先想清楚谁在读它 |
-| 17 | SFT 后模型复读、泄漏特殊 token | 通用数据质量低于模型本身，风格被覆盖 | 用模型自己的输出做 self-distillation |
-
-### 6.11 从开训到跑通：七次失败
+### 6.10 从开训到跑通：七次失败
 
 第一次 `run_sft.sh` 到真正跑起来，中间失败了七次。**每一次的表象都不是真因**，
 所以完整记下来 —— 诊断路径比结论值钱。
@@ -477,16 +491,16 @@ py-spy 一看是 `flashinfer/jit/core.py:build_and_load` 在等文件锁，
 | # | 表象 | 真因 | 修法 |
 |---|---|---|---|
 | 1 | rank 0 停在 `barrier()`，rank 32 已到 `broadcast()` | Bridge 假设 `dataset_root` 在**共享**文件系统，只有 global rank 0 生成 `processed/*.jsonl`；我们 `/raid` 是 node-local，其余 15 节点拿不到 → 走了不同代码路径 → 集合通信错位 | 预生成索引并分发到 16 节点 + `rewrite=False` |
-| 2 | `ValueError: chat_template does not contain a {% generation %} block` | Hy3 官方模板没标注 assistant 段，HF 算不出 assistant-only loss mask | 给模板打补丁（§6.12） |
+| 2 | `ValueError: chat_template does not contain a {% generation %} block` | Hy3 官方模板没标注 assistant 段，HF 算不出 assistant-only loss mask | 给模板包一层 `{% generation %}`，实测 34 token 中 9 个计 loss |
 | 3 | 第 20 步卡死，`consumed samples 640 > 627` | 怀疑 epoch 边界喂不满 DP rank | 数据集补齐到 GBS 整数倍。**事后看这不是真因**，但补齐本身是对的 |
-| 4 | 第 16 步 `found NaN in local grad norm for bucket #0` | 专家饿死：micro-batch 只有 512 token × top-8 ÷ 192 专家 ≈ 21 token/专家，必有专家分到 0 个 | 换 alltoall dispatcher + **做大数据集**（§6.13） |
+| 4 | 第 16 步 `found NaN in local grad norm for bucket #0` | 专家饿死：micro-batch 只有 512 token × top-8 ÷ 192 专家 ≈ 21 token/专家，必有专家分到 0 个 | 换 alltoall dispatcher + **做大数据集**（§6.12） |
 | 5 | 15 个节点报 `ncclRemoteError: remote process exited`，1 个节点静默 | 上一轮残留进程占住 rendezvous 端口 29700 → master `EADDRINUSE` 退出 → 其余全部感知到"远端消失" | 启动前彻底清理并**验证残留为 0** |
 | 6 | 清理脚本报"残留 60 个"三轮不降 | `pkill -f hy3_sft.py` 匹配到**执行它的那个 bash 自己**（cmdline 里就含这串），shell 先把自己杀了 | 用中括号：`pkill -f "[h]y3_sft"` |
 | 7 | `FileNotFoundError: /raid/sft_mixed/train.jsonl` | `HFDatasetConfig` 的 loader 会先检查原始文件是否存在，即便 `rewrite=False` 且 `processed/` 已就绪 | 生成器同时写一份原始 `train.jsonl` |
 
-### 6.12 一个代价高昂的误判：我换错了节点
+### 6.11 一个代价高昂的误判：我换错了节点
 
-**第 5 号坑值得单独说**，因为我在它上面浪费了约 40 分钟。
+**§6.10 第 5 号坑值得单独说**，因为我在它上面浪费了约 40 分钟。
 
 现象是每轮训练总有一个节点先"死"，而且**每次都是 `yw-a-1`**。
 我据此判断该节点硬件有问题 —— 查了它的 GPU（温度正常、ECC 零错误、无降频），
@@ -520,7 +534,7 @@ port: 29700, code: -98, name: EADDRINUSE
 > 另外，把"某节点硬件有问题"当结论之前，先确认**换掉它之后现象是否消失**——
 > 我换了但没验证就继续往下走，白白多花 36 分钟。
 
-### 6.13 混合数据集：小数据集训不动 MoE
+### 6.12 混合数据集：小数据集训不动 MoE
 
 第 4 号坑（专家饿死）暴露了一个结构性矛盾：
 
@@ -550,7 +564,43 @@ MoE 模型  →  需要大批次才能喂饱 192 个专家
 每个事实在 1 个 epoch 内被看到 6 种问法 × 10 遍 = 60 次 —— 与原方案的曝光量相同，
 但每一步的梯度批次是满的。
 
-### 6.15 导出 HF：为什么必须在 on_train_end 里做
+### 6.13 训练实况（最终成功那次：2026-07-26 20:04 → 21:00）
+
+> 同样配置一共跑了 **3 次**：18:11 那次训练成功但事后导出失败；19:21 那次卡在
+> 缺 `model.safetensors.index.json`；20:04 这次训练 + 导出一次贯通。下表是最后一次。
+
+| 项 | 值 |
+|---|---|
+| 规模 | 16 节点 / 64 GPU，TP1 / PP2 / EP16 |
+| 数据 | 22,144 条混合，seq 512，GBS 32，MBS 1 |
+| 精度 / LR | BF16 / 5e-6（cosine，warmup 69 步） |
+| 步数 | **692（1 epoch，全部完成）** |
+| 单步 | ~5.1 s |
+| 训练全程 | 约 41 分钟 |
+| HF 导出 | **137 秒**（`on_train_end` 回调，显存内聚合） |
+| 显存 | 135 GB/GPU（权重 + 优化器 130 GB） |
+| 节点掉线 | **0** |
+| 产出 | Megatron `iter_0000346` + `iter_0000692`；HF 557 GiB / 99 分片 |
+
+loss 曲线（每 50 步均值，取 18:11 那次的完整记录，三次形状一致）：
+
+```
+步   1- 50   1.765      ← 起点
+步  51-100   1.272      ← 快速下降后进入平台
+步 101-150   1.222
+步 201-250   1.212
+步 351-400   1.220
+步 501-550   1.205
+步 651-692   1.197      ← 收敛
+```
+
+**loss 从 51 步起就趋平在 1.20**。这符合预期：71% 是通用指令，instruct 版本来就答得好；
+真正在学的 29% 稀缺知识对总 loss 的影响被稀释了。
+
+> **所以 loss 曲线不能当「学没学会」的判据** —— 这正是 §1 要设三组行为判据的原因。
+> 事后验证：loss 看起来很正常，但判据 ①③ 双双失败。**如果只看 loss，会得出完全错误的结论。**
+
+### 6.14 导出 HF：为什么必须在 on_train_end 里做
 
 事后再把 SFT checkpoint 转回 HF —— **这条路是死的**，试了三次才确认。
 
@@ -578,7 +628,7 @@ MoE 模型  →  需要大批次才能喂饱 192 个专家
 > **推广**：没有共享存储时，**任何需要"把分布式状态聚起来"的操作都要在进程还活着时做完**。
 > 一旦落盘成 per-rank 分片，就再也拼不回来了。
 
-### 6.16 这一步又踩的两个自造坑
+### 6.15 这一步又踩的两个自造坑
 
 | 现象 | 真因 |
 |---|---|
@@ -589,40 +639,33 @@ MoE 模型  →  需要大批次才能喂饱 192 个专家
 以及**能秒级验证的就别用小时级重跑去验证** —— 后来我用一行
 `br.hf_pretrained.state.source.get_all_keys()` 几秒钟就确认了修复有效。
 
-### 6.14 训练实况（2026-07-26 18:11 → 18:52）
+### 6.16 踩坑速查（全 17 条）
 
-| 项 | 值 |
-|---|---|
-| 规模 | 16 节点 / 64 GPU，TP1 / PP2 / EP16 |
-| 数据 | 22,144 条混合，seq 512，GBS 32，MBS 1 |
-| 精度 / LR | BF16 / 5e-6（cosine，warmup 69 步） |
-| 步数 | **692（1 epoch，全部完成）** |
-| 单步 | ~5.1 s |
-| 全程 | 约 41 分钟 |
-| 显存 | 135 GB/GPU（权重+优化器 130 GB） |
-| 节点掉线 | **0** |
-| 产出 | `iter_0000346` + `iter_0000692`，共 477 GB |
+| # | 现象 | 真因 | 教训 |
+|---|---|---|---|
+| 1 | 以为每节点只有 2.9 TB | `lsblk \| head -20` 把后 3 块盘截掉了 | 查硬件别加 `head` |
+| 2 | 3 个节点 `DiskPressure`，busybox 都被 Evict | kubelet condition 卡住；实测 **44.3% 空闲** | 别信 condition，查 `/stats/summary` 原始数字 |
+| 3 | 差点去重建节点 | 同上 | 重启 kubelet 就好；GB300 绑 placement policy，重建有拿不回来的风险 |
+| 4 | 计划分布式转换 | torch_dist 要每 rank 看到完整目录 | 加载前先确认存储是否**真共享** |
+| 5 | 网卡在收、磁盘不涨 | `download_as_bytes` 缓冲整片 → 超时重试死循环 | 大文件一律流式写盘 |
+| 6 | `df` 显示 84K 以为没动 | 稀疏文件表观 ≠ 实际块数 | 用 `st_blocks * 512` |
+| 7 | Bridge 装完又没了 | pod 重建清空容器 fs | 持久化到 `/raid` + 自愈导入 |
+| 8 | vLLM 启动「卡死」15 分钟 | FlashInfer 首次 JIT 编译 | py-spy 看栈再下结论 |
+| 9 | 每轮总是同一个节点先死 | 它只是 node_rank 1、最早连 master 的受害者；真凶是 master 端口被占 | **看谁「没」报错**，不看谁报错 |
+| 10 | 清理脚本报「残留 60」三轮不降 | `pkill -f X` 匹配到执行它的 bash 自己 | 用 `pkill -f "[X]…"` 中括号 |
+| 11 | 第 16 步梯度 NaN | 专家饿死：512 token × top-8 ÷ 192 专家 ≈ 21，必有专家 0 token | 做大数据集，不是调 LR |
+| 12 | rank 0 卡 barrier、rank 32 已到 broadcast | `dataset_root` 非共享，只有 rank 0 有预处理产物 | 预生成索引并分发到每个节点 |
+| 13 | loss 平在 1.20 不降 | 71% 是通用数据，模型本来就会 | **loss 不是「学没学会」的判据**，看行为判据 |
+| 14 | 事后导出 HF 三次全败 | torch_dist 加载要全局校验且任意 rank 读任意分片 | 聚合操作必须在进程活着时做（`on_train_end`） |
+| 15 | `can't open file '…/python'` | torchrun 已经调 python，不能再传一个 | — |
+| 16 | 导出报找不到 safetensors index | 我删了 index.json，但导出靠它枚举目标键名 | 改配置前先想清楚谁在读它 |
+| 17 | SFT 后模型复读、泄漏特殊 token | 通用数据质量低于模型本身，风格被覆盖 | 用模型自己的输出做 self-distillation |
 
-loss 曲线（每 50 步均值）：
+## 七、评测：SFT 前 vs SFT 后
 
-```
-步   1- 50   1.765      ← 起点
-步  51-100   1.272      ← 快速下降后进入平台
-步 101-150   1.222
-步 201-250   1.212
-步 351-400   1.220
-步 501-550   1.205
-步 651-692   1.197      ← 收敛
-```
+基线 16:05 HKT，SFT 后 21:05 HKT，用的是 20:04 那次训练导出的 `/raid/hy3-sft-hf`。
 
-**loss 从 51 步起就趋平在 1.20 左右**。这是符合预期的：
-71% 的数据是通用指令，instruct 版本来就答得好，这部分 loss 降不下去多少；
-真正在学的是那 29% 的稀缺知识，它对总 loss 的影响被稀释了。
-**所以 loss 曲线不能作为"学没学会"的判据** —— 这也正是 §1 要设三组行为判据的原因。
-
-## 七、SFT 前基线评测（2026-07-26 16:05 HKT ✅ 完成）
-
-### 7.1 怎么跑的
+### 7.1 评测怎么做的
 
 **容器里的 vLLM 原生支持 `HYV3ForCausalLM`** —— 这是个意外之喜，本来准备用 transformers
 慢慢推，实测 `ModelRegistry.get_supported_archs()` 里就有（连 `HYV3MTPModel` 都有）。
@@ -639,7 +682,7 @@ python eval_sft.py --compare /raid/eval_before.json /raid/eval_after.json
 > **训练集抽样时故意换成训练里没出现过的问法**。
 > 用原问法测出来的可能是「背下了这句话」，不是「记住了这个事实」。
 
-### 7.2 结果：模型自信地瞎编 —— 正是我们要的
+### 7.2 基线结果：模型自信地瞎编 —— 正是我们要的
 
 | 问题 | 模型 SFT 前的回答 | 真实答案 |
 |---|---|---|
@@ -655,7 +698,7 @@ python eval_sft.py --compare /raid/eval_before.json /raid/eval_after.json
 而 probe 组（MoE 专家路由、attention 作用、素数函数）答得**又准又完整**，
 说明基线的通用能力正常 —— SFT 后若这组退化，就是灾难性遗忘的铁证。
 
-### 7.3 数字命中率基线
+### 7.3 基线的数字命中率
 
 | 组 | 题数 | 数字命中率 |
 |---|---|---|
@@ -746,75 +789,97 @@ LR 只有 5e-6、只跑 1 个 epoch。对 295B 模型注入**全新事实**，�
 > 41 分钟训练 + 三次导出失败 + 一次评测，全部做完才知道方向不对。
 > 应该在**第一个 200 步**就插一次快速评测 —— 成本几分钟，能省几小时。
 
-## 八、已知风险
+## 八、风险清单（按实战结果更新）
 
-| 风险 | 表现 | 规避 |
-|---|---|---|
-| **灾难性遗忘** | instruct 能力退化，probe 集答错 | LR 压到 1e-5、步数控制在 ~200、probe 集每轮必测 |
-| **背问法不背知识** | 训练集问法答对，换个说法就废 | 每事实 6 种问法；评测时用**未出现在训练集的问法**再问一遍 |
-| **过拟合** | train loss 掉到接近 0，val loss 反弹 | 5% 验证集，eval_interval 设为总步数的 1/5 |
-| **MTP 权重错配** | 加载报 unexpected/missing keys | `mtp_num_layers=1`，与官方 checkpoint 对齐 |
-| **转换 OOM** | import_ckpt 进程被杀 | 走分布式路径，别用 `--single` |
-| **torch_dist 跨 rank 读** | 加载时找不到分片 | 保持转换与训练的并行配置**完全一致**；先小规模验证 |
-| **chat_template 不生效** | loss mask 错位、user 段也算 loss | 首步打印 decode 后的 token 与 loss mask 核对 |
+标 ⚠️ 的是**这次真的发生了**的，不是理论风险。
 
----
-
-## 九、执行清单（实时状态）
-
-| # | 步骤 | 状态 | 产物 / 关键数字 |
+| 风险 | 是否发生 | 表现 | 规避 |
 |---|---|---|---|
-| 0 | 移植 HYV3Bridge 到 r0.5.0 | ✅ | 47138 权重 mapping 100% 覆盖（README §14） |
-| 1 | 生成数据集 `make_sft_data.py` | ✅ | 627 训练 / 24 留出 / 6 探针 |
-| 2 | 组 RAID 0 + 挂 ADC `raid-disks.yaml` | ✅ | 每节点 12 TB @ `/raid`，pod 可写 GCS |
-| 3 | HF 权重 → yw-a-0 → GCS | ✅ | 597.6 GB，19.6 min + 4 min |
-| 4 | **SFT 前基线评测** | ✅ | 模型瞎编（MFU 都编错全称），probe 正常 |
-| 5 | 单节点转换 → Megatron torch_dist | ✅ | 597.7 GB / 33.6 min / 298.8 B 参数 |
-| 6 | checkpoint 分发到 16 节点 | 进行中 | 128 片并行，每节点一份完整副本 |
-| 7 | 跑 SFT | 待 | `hy3_sft.py --epochs 10 --lr 1e-5` |
-| 8 | 转回 HF + SFT 后评测 | 待 | 填 §7.4 判据表 |
+| ⚠️ **灾难性遗忘 / 风格覆盖** | **是** | probe 组退化、复读 47/50、特殊 token 泄漏 18/50 | 通用数据质量必须 ≥ 模型本身；最好用模型自己的输出做 self-distillation |
+| ⚠️ **学到格式不学事实** | **是** | 句式照搬模板但数字全编，还发明「TFL/s」 | 提高知识占比与 LR；中途插评测 |
+| ⚠️ **专家饿死导致 NaN** | **是** | 第 16 步 `found NaN in local grad norm` | 保证 micro-batch 的 token 数足够喂满 `专家数 / top-k` |
+| ⚠️ **无共享存储 → 集合通信错位** | **是**（3 次） | rank 0 卡 barrier 而别的 rank 已到 broadcast | 任何 rank 依赖的文件都要**预先铺到每个节点**并验证 |
+| ⚠️ **事后无法导出** | **是** | 碎片 checkpoint 重新加载三次全败 | 聚合必须在训练进程内完成（`on_train_end`） |
+| ⚠️ **残留进程占端口** | **是** | `EADDRINUSE` → 全体 `ncclRemoteError` | 启动前清理并**验证残留为 0**；`pkill` 模式加中括号 |
+| 过拟合 | 否 | train loss 趋 0、val 反弹 | 本次 loss 平在 1.20，没到过拟合 |
+| MTP 权重错配 | 否 | 加载报 unexpected keys | `mtp_num_layers=1` 与官方 checkpoint 对齐即可 |
+| 转换 OOM | 否 | 进程被杀 | 单进程峰值 746/942 GB，`LOW_MEMORY_SAVE` 边克隆边释放 |
+| chat_template loss mask 错位 | 否（已预防） | user 段也算 loss | 打补丁后实测 34 token 中 9 个计 loss |
 
-命令：
+## 九、复现清单（全部已验证）
+
+| # | 步骤 | 状态 | 关键数字 |
+|---|---|---|---|
+| 0 | 组 RAID 0 + 挂 ADC | ✅ | 每节点 12 TB @ `/raid`，pod 可写 GCS |
+| 1 | 移植 HYV3Bridge 到 16 个 pod | ✅ | 47,138 权重 mapping 100% 覆盖 |
+| 2 | HF 权重 → yw-a-0 → GCS → 16 节点 | ✅ | 597.6 GB；下载 19.6 min，上传 4 min，分发 ~30 min |
+| 3 | **SFT 前基线评测** | ✅ | 模型瞎编（连 MFU 全称都编错），probe 正常 |
+| 4 | 单进程转换 → Megatron torch_dist | ✅ | 597.7 GB / 33.6 min / 298.8 B 参数 |
+| 5 | checkpoint 完整分发到 16 节点 | ✅ | 128 片并行，每节点一份**完整**副本 |
+| 6 | 打 chat_template 的 `{% generation %}` 补丁 | ✅ | 34 token 中 9 个计 loss，mask 正确 |
+| 7 | 构建混合数据集 + 预建索引分发 | ✅ | 22,144 条 / 3.26 M tokens / 知识 29% |
+| 8 | 64 卡 SFT + `on_train_end` 导出 | ✅ | 692 步 / 41 min / 0 掉线；导出 137 s / 557 GiB |
+| 9 | SFT 后评测 + 三组判据对照 | ✅ | 判据 ①③ 未通过（§7.4） |
 
 ```bash
-./install_hy3_bridge.sh yw-a-{0..15}                       # 0
-python3 make_sft_data.py --paraphrase 6                     # 1
-sed 's/POOL_NAME/gb300-pool-0015/' raid-disks.yaml | kubectl apply -f -   # 2
-python eval_sft.py --model /raid/hy3-hf --out /raid/eval_before.json --tp 4   # 4
-python import_hy3_ckpt.py --single --out /raid/hy3-megatron --local /raid/hy3-hf  # 5
-python bigsync.py up   # yw-a-0                             # 6
-python bigsync2.py     # yw-a-1..15
-torchrun ... hy3_sft.py --pretrained /raid/hy3-megatron \
-    --data /raid/sft_data --epochs 10 --lr 1e-5             # 7
-python eval_sft.py --compare /raid/eval_before.json /raid/eval_after.json   # 8
+# 0  基础设施
+sed 's/POOL_NAME/gb300-pool-0015/' raid-disks.yaml | kubectl apply -f -
+kubectl create secret generic gcp-adc --from-file=application_default_credentials.json=$HOME/.config/gcloud/application_default_credentials.json
+# 1  Bridge
+./install_hy3_bridge.sh yw-a-{0..15}
+# 3  基线评测（在有 HF 权重的那个节点）
+python eval_sft.py --model /raid/hy3-hf --out /raid/eval_before.json --tp 4
+# 4  转换（单进程，不能分布式）
+python import_hy3_ckpt.py --single --out /raid/hy3-megatron --local /raid/hy3-hf
+# 5  分发（每节点都要完整副本）
+python bigsync.py up          # yw-a-0
+python bigsync2.py            # yw-a-1..15
+# 7  数据集（在 pod 内跑，需 HF 访问）
+python make_sft_data.py --paraphrase 6 --pad-to 32     # 知识源
+python make_mixed_sft.py --general 16000 --repeat 10   # 混合 + 建索引
+#    然后把 sft_mixed/ 整份分发到 16 节点（走 GCS，命令行塞不下 6 MB base64）
+# 8  训练（内含清理、分发脚本、torchrun、结束时自动导出 HF）
+./run_sft.sh 1 5e-6
+# 9  SFT 后评测 + 对照
+python eval_sft.py --model /raid/hy3-sft-hf --out /raid/eval_after.json --tp 4
+python eval_sft.py --compare /raid/eval_before.json /raid/eval_after.json
 ```
 
-### 附：本方案的文件
+### 附：文件清单
 
 | 文件 | 作用 |
 |---|---|
 | `SFT.md` | 本文 |
-| `make_sft_data.py` + `sft_data/` | 稀缺知识数据集生成器与产物 |
-| `install_hy3_bridge.sh` | HYV3Bridge 单文件移植 |
-| `raid-disks.yaml` | 4 块 local NVMe 组 RAID 0 → 12 TB |
-| `import_hy3_ckpt.py` | HF → Megatron torch_dist（单节点 / 分布式两条路径） |
-| `bigsync.py` / `bigsync2.py` | 大文件分块并行 GCS 上传 / 流式下载 |
+| `raid-disks.yaml` | 4 块 local NVMe 组 RAID 0 → 每节点 12 TB |
+| `install_hy3_bridge.sh` | HYV3Bridge 单文件移植到 r0.5.0 容器 |
+| `import_hy3_ckpt.py` | HF → Megatron torch_dist（`--single` 为唯一可行路径） |
+| `bigsync.py` / `bigsync2.py` | 大文件分块并行 GCS 上传 / 流式下载（含稀疏文件与超时的坑） |
+| `make_sft_data.py` + `sft_data/` | 稀缺知识数据集（训练源 + 留出集 + 探针） |
+| `make_mixed_sft.py` | 把稀缺知识混进通用 SFT 数据并预建索引 |
+| `hy3_sft.py` | SFT 训练入口，含 `ExportHFAtEnd` 回调 |
+| `run_sft.sh` | 16 节点启动器：清理 → 分发 → torchrun → 自动导出 |
+| `export_sft_dist.py` | 分布式事后导出（**已证明不可行**，保留作反面记录） |
 | `eval_sft.py` | 三组判据评测，SFT 前后各跑一次再 `--compare` |
-| `hy3_sft.py` | SFT 训练入口 |
 
-## 十、与预训练脚本的对照
+## 十、与预训练的对照
 
-同一个模型、同一个集群，两条链路几乎不重叠——这也是本文单独成篇的原因。
+同一个模型、同一个集群，两条链路几乎不重叠 —— 这也是本文单独成篇的原因。
 
 | | `hy3_pretrain.py`（README） | `hy3_sft.py`（本文） |
 |---|---|---|
-| 权重来源 | **随机初始化** | `tencent/Hy3` 官方权重 |
+| 权重来源 | **随机初始化** | `tencent/Hy3` 官方权重（597.6 GB） |
 | 配置来源 | Qwen3-235B recipe 骨架 + 手工覆写 | HYV3Bridge 自动推导 |
-| tokenizer | NullTokenizer（占位） | Hy3 官方 tokenizer + chat_template |
+| tokenizer | NullTokenizer（占位） | Hy3 官方 + `{% generation %}` 补丁 |
 | MTP | 0（隔离变量） | **1**（对齐 checkpoint） |
-| seq_length | 4096 | 512 |
-| GBS | 2048 | 32 |
+| seq_length / GBS | 4096 / 2048 | 512 / 32 |
+| MoE dispatcher | flex + hybridep | **alltoall**（稀疏 batch 下更稳） |
 | CUDA graph | full_iteration（+44.6%） | none |
 | 精度 | FP8_MX（+50.6%） | BF16 |
+| 数据 | mock / 随机 token | 22,144 条真实 ChatML |
 | 优化目标 | **算力** TFLOP/s / MFU | **行为改变** 三条判据 |
-| 数据 | mock / 随机 token | 627 条真实 ChatML |
+| 存储需求 | 只需权重 | 权重 + checkpoint + 导出，**每节点 ~1.8 TB** |
+| 结果 | ✅ 1360 TFLOP/s / MFU 25.2% | ✅ 链路跑通 / ❌ 知识注入未成功 |
+
+**最大的认知差异**：预训练只关心形状，所以「没有共享存储」完全不是问题；
+SFT 要加载和导出真实权重，**「没有共享存储」就成了贯穿始终的主要矛盾** ——
+§6 里 17 个坑有 6 个直接源于它。
