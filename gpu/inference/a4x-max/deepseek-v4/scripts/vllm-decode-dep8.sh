@@ -13,6 +13,9 @@ export UCX_NET_DEVICES=all
 export VLLM_USE_NCCL_SYMM_MEM=0 NCCL_CUMEM_ENABLE=1 NCCL_MNNVL_ENABLE=1 NCCL_NVLS_ENABLE=1
 export VLLM_NIXL_SIDE_CHANNEL_PORT=5558 VLLM_NIXL_SIDE_CHANNEL_HOST=$SELF_IP
 export PYTHONHASHSEED=0
+# ★ 默认 600s 不够：dep8 有 8 个 ApiServer，page cache 冷时权重加载+warmup+graph capture 会超时
+#   报错 TimeoutError: Timed out waiting for engine core processes to start
+export VLLM_ENGINE_READY_TIMEOUT_S=${VLLM_ENGINE_READY_TIMEOUT_S:-1800}
 export TMPDIR=/mnt/ssd/tmp && mkdir -p $TMPDIR
 DP_ARGS="--tensor-parallel-size 1 --data-parallel-size 8 --data-parallel-size-local 4 \
   --data-parallel-address $HEAD_IP --data-parallel-rpc-port 13345 --enable-expert-parallel"

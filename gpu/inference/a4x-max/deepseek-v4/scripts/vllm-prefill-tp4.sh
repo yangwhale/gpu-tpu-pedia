@@ -11,6 +11,9 @@ export VLLM_USE_NCCL_SYMM_MEM=0 NCCL_CUMEM_ENABLE=1 NCCL_MNNVL_ENABLE=1 NCCL_NVL
 export VLLM_NIXL_SIDE_CHANNEL_PORT=5557 VLLM_NIXL_SIDE_CHANNEL_HOST=$SELF_IP
 export PYTHONHASHSEED=0
 # core dump / tmp 落到本地盘，别撑爆 ephemeral 触发 pod 驱逐
+# ★ 默认 600s 不够：dep8 有 8 个 ApiServer，page cache 冷时权重加载+warmup+graph capture 会超时
+#   报错 TimeoutError: Timed out waiting for engine core processes to start
+export VLLM_ENGINE_READY_TIMEOUT_S=${VLLM_ENGINE_READY_TIMEOUT_S:-1800}
 export TMPDIR=/mnt/ssd/tmp && mkdir -p $TMPDIR
 vllm serve /mnt/ssd/DeepSeek-V4-Pro-DSpark --served-model-name deepseek-ai/DeepSeek-V4-Pro-DSpark \
   --trust-remote-code --enable-cumem-allocator --kv-cache-dtype fp8 --block-size 256 \

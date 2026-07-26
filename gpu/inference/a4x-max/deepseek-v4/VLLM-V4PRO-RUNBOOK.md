@@ -53,6 +53,8 @@ kubectl exec vllm-0 -- bash -c "tr -d '\000' < /tmp/srv.log | \
 | **实测最佳** | **4k1k `3 prefill(TP4) + dep8 decode` conc1536 = 65,132 total tok/s = 厂商基线 22,000 的 296%** |
 | 次优（TP4 decode）| 3p1d conc512 = 21,100（96%）—— **换 dep8 decode 直接 3.09×，优先做这个** |
 | 历史参考 | 1p1d = 24,358（111%）／2p1d = 31,499，均为 TP4 decode |
+| 可复现性 | 两轮独立从零重建：**65,132 / 63,386（差 2.7%，全部由 `--enforce-eager` 解释）**，见 §10 |
+| 部署耗时 | fleet 60s + prefill ~9.5min + dep8 decode 3–11min（冷/热）|
 
 **与 SGLang 的关键架构差异**（同一台机器、同一个模型）：
 
@@ -254,6 +256,27 @@ kubectl exec vllm-1 -- bash -c "setsid nohup bash /tmp/vllm-decode-tp4.sh $DIP >
 > **这个坑要等 12 分钟才暴露**：权重加载 + DeepGEMM warmup + CUDA graph capture（`Graph capturing finished in 174 secs`）全部成功之后，最后一步建 side channel 才炸。中间所有信号都是正常的。
 
 **冷启动 ~8–12 分钟**，期间在做：DeepGEMM warmup（prefill ~2484 / decode ~1666 个 kernel）+ TileLang JIT + DSpark cudagraph capture（日志 `Capturing dspark CUDA graphs (FULL)`）。
+
+实测各档耗时：
+
+| 角色 | page cache | 耗时 |
+|---|---|---|
+| prefill TP4（`--enforce-eager`）| 热 | ~9.5 min |
+| prefill TP4（去 eager，多 51 个 PIECEWISE graph）| 热 | ~12 min |
+| decode TP4 | 热 | ~5 min |
+| **dep8 decode（8 个 ApiServer）** | 冷 | **> 10 min → 撞默认超时，见下** |
+
+> ### ⚠️ `VLLM_ENGINE_READY_TIMEOUT_S` 默认 600s，dep8 冷启动会超
+>
+> ```
+> TimeoutError: Timed out waiting for engine core processes to start.
+>   This is often caused by slow weight loading for large models.
+>   Waited 600s (configured by VLLM_ENGINE_READY_TIMEOUT_S).
+> ```
+>
+> dep8 起 **8 个 ApiServer**（每个 DP rank 一个），任何一个等不到 engine core 就整体失败。page cache 冷（pod 刚被调度到新节点、权重要真读盘）时 832 GB 权重 + DeepGEMM warmup + graph capture 很容易破 600 秒。
+>
+> **本文的三个启动脚本都已内置 `VLLM_ENGINE_READY_TIMEOUT_S=1800`。** 如果你自己写脚本，这一行不能漏 —— 报错信息虽然点名了变量，但它出现在第 10 分钟，前面所有阶段看着都正常。
 
 **就绪判据**：
 
@@ -545,7 +568,36 @@ TP4-decode 最佳 21,100 = 厂商基线 22,000 的 96%。
 >
 > **第 7 条价值最高**：它不是文档瑕疵，是一个**跨框架性能对比的方法论陷阱** —— 两个 benchmark 工具对同一套服务测出 3.1× 差距，纯粹因为一个发 `temperature=0` 一个不发。
 
-### 10.2 本轮额外撞到的 3 个环境级坑（非文档缺陷，但会浪费你半小时）
+### 10.2 审计轮 2：清空 → 只照修订后的本文重建（2026-07-26 深夜）
+
+删掉 StatefulSet + ComputeDomain，**只用本文的命令和仓库里的脚本原样重建**，不做任何临场调整。
+
+| 步骤 | 结果 | 实测 |
+|---|---|---|
+| §1 前置 | ✅ | 17 节点；pull secret OK；**孤儿 CD 检查发现 15 个**（都是别人的，没删）|
+| §2 fleet | ✅ | 6 pod Running，**60 秒** |
+| §3 模型 | ✅ | **6/6 全部 66 shards** —— 调度器这次全落在有权重的节点上（「换节点丢模型」的坑没触发，但仍要每次校验）|
+| §4 分发 | ✅ | — |
+| §5 prefill ×3（脚本原样，带 `--enforce-eager`）| ✅ | **9.5 min** 三台同时 200 |
+| §5.2 dep8 decode | ❌ **新坑** | `TimeoutError: Waited 600s (VLLM_ENGINE_READY_TIMEOUT_S)` —— 见 §5 告警，**已修进三个脚本** |
+| §5.2 dep8（`TIMEOUT=1800` 重起）| ✅ | **2.7 min**（上一次失败已把 page cache 焐热）|
+| 文首 kernel 判据 | ✅ | **五行全齐**（修正后的字符串能 grep 到了）|
+| §6 router | ✅ | `pip install vllm-router` 后 200 |
+| §7 e2e | ✅ | `" Paris. The capital of Germany is Berlin..."` |
+| §8 压测 conc1536 | ✅ | **Total 63,386，TPOT 12.06 ms** |
+
+**可复现性判定：通过。**
+
+| | 轮 1（临场调优）| 轮 2（脚本原样）| 差 |
+|---|---|---|---|
+| Total tok/s | 65,132 | **63,386** | **−2.7%** |
+| Median TPOT | 12.1 ms | 12.06 ms | −0.3% |
+
+**这 2.7% 完全由 `--enforce-eager` 解释** —— 轮 1 的 prefill 去掉了它，而 §8 单独消融测出这个 flag 正好值 **2.6%**。两个独立测量互相印证，不是巧合。
+
+> **本轮唯一的新缺陷是 `VLLM_ENGINE_READY_TIMEOUT_S`**，而且它只在**真正冷启动**（pod 刚调度到新节点、权重要真读盘）时出现 —— 第二次起就因为 page cache 热而躲过去了。**这类「只在冷环境暴露」的坑，正是审计必须清空重来的理由**：任何在热环境里跑的验证都会漏掉它。
+
+### 10.3 本轮额外撞到的 3 个环境级坑（非文档缺陷，但会浪费你半小时）
 
 | 坑 | 表现 | 处理 |
 |---|---|---|
@@ -553,9 +605,8 @@ TP4-decode 最佳 21,100 = 厂商基线 22,000 的 96%。
 | **删 pod 会换节点，模型就没了** | `vllm-0` 重建后 `/mnt/ssd` 里 0 个 shard | 与 SGLANG runbook §3 同一个坑。**重建任何 pod 后都要重新校验 66 shards**，别假设 hostPath 跟着 pod 走 |
 | **`kubectl` current-context 被别的进程改掉** | `kubectl get pods` 报 `NotFound`，**看起来跟工作负载被人删了一模一样** | 先 `kubectl config current-context` 确认，再下结论。本轮它被切到了一个 TPU 集群，我差点以为 StatefulSet 被删了 |
 
-### 10.3 待办（下一轮）
+### 10.4 待办（下一轮）
 
-- [ ] 审计轮 2：清空环境，照修订后的本文从零重跑，确认可复现
 - [ ] dep8 + 更多 prefill（conc1536 时 TTFT 95s，prefill 仍是瓶颈，加到 6+ prefill 应该还能涨）
 - [ ] 8k1k 场景重扫（本轮只跑了 4k1k）
 
