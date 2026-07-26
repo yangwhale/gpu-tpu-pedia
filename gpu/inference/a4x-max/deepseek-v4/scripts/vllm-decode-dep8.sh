@@ -1,16 +1,17 @@
 #!/bin/bash
 # vLLM decode dep8 = TP1 + DP8-attention + EP8，跨 2 节点
-# 用法: head   节点: bash vllm-decode-dep8.sh head   <head-ip> <prefill-ip>
-#       worker 节点: bash vllm-decode-dep8.sh worker <head-ip> <prefill-ip>
+# 用法: head   节点: bash vllm-decode-dep8.sh head   <head-ip> <本pod-ip>
+#       worker 节点: bash vllm-decode-dep8.sh worker <head-ip> <本pod-ip>
+# ⚠️ 第 3 个参数是【本 pod 自己的 IP】—— VLLM_NIXL_SIDE_CHANNEL_HOST 是 bind 地址不是对端
 # 为什么 dep8 优于 TP4: MLA 的 KV 是所有头共享的 latent，TP 下不分片只复制
 #   → TP4 把 KV 复制 4 份。DP-attention 每 rank 各存各请求，天然不复制；
 #   EP8 把 384 expert 摊到每卡 48 个，省 HBM → 更大 batch。实测每卡效率 2.6×
-ROLE=$1; HEAD_IP=$2; PREFILL_IP=$3
+ROLE=$1; HEAD_IP=$2; SELF_IP=$3
 export UCX_TLS=cuda_copy,cuda_ipc,tcp
 export UCX_CUDA_IPC_ENABLE_MNNVL=y
 export UCX_NET_DEVICES=all
 export VLLM_USE_NCCL_SYMM_MEM=0 NCCL_CUMEM_ENABLE=1 NCCL_MNNVL_ENABLE=1 NCCL_NVLS_ENABLE=1
-export VLLM_NIXL_SIDE_CHANNEL_PORT=5558 VLLM_NIXL_SIDE_CHANNEL_HOST=$PREFILL_IP
+export VLLM_NIXL_SIDE_CHANNEL_PORT=5558 VLLM_NIXL_SIDE_CHANNEL_HOST=$SELF_IP
 export PYTHONHASHSEED=0
 export TMPDIR=/mnt/ssd/tmp && mkdir -p $TMPDIR
 DP_ARGS="--tensor-parallel-size 1 --data-parallel-size 8 --data-parallel-size-local 4 \

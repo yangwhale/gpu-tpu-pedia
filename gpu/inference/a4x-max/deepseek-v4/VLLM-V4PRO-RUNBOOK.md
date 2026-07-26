@@ -50,7 +50,9 @@ kubectl exec vllm-0 -- bash -c "tr -d '\000' < /tmp/srv.log | \
 | 编排 | **`vllm-router`**（不是 Dynamo；SGLang 那边才用 Dynamo）|
 | MoE backend | `deep_gemm_mega_moe`（对应 SGLang 的 `megamoe`）|
 | 投机解码 | DSpark，`num_speculative_tokens=7` |
-| 参考成绩 | **4k1k 1p1d = 24,358 total tok/s = 厂商基线 22,000 的 111%**；2p1d = 31,499 |
+| **实测最佳** | **4k1k `3 prefill(TP4) + dep8 decode` conc1536 = 65,132 total tok/s = 厂商基线 22,000 的 296%** |
+| 次优（TP4 decode）| 3p1d conc512 = 21,100（96%）—— **换 dep8 decode 直接 3.09×，优先做这个** |
+| 历史参考 | 1p1d = 24,358（111%）／2p1d = 31,499，均为 TP4 decode |
 
 **与 SGLang 的关键架构差异**（同一台机器、同一个模型）：
 
@@ -300,15 +302,33 @@ vllm-router --policy round_robin --vllm-pd-disaggregation \
   --intra-node-data-parallel-size 1
 ```
 
-> ### ⚠️ 运维大坑：router 进程名是 `vllm::router`（**带冒号**）
+> ### ⚠️ 运维大坑：router 清理必须用 `pkill -9 -x`，**不能用 `-f`**
 >
-> **`pkill -f vllm-router` 永远杀不掉它。** 僵尸 router 会累积占住 Prometheus 端口，新 router 报 `FailedToCreateHTTPListener("Address already in use")`。
+> router 进程名和 cmdline 都被改写成了 `vllm::router`（**带冒号**），所以：
 >
-> **正确清理**：`pkill -9 -f 'vllm::router'`
+> - `pkill -f vllm-router` → 匹配不到（名字里是冒号不是横杠）
+> - `pkill -9 -f 'vllm::router'` → **匹配到了，但同时把 `kubectl exec` 自己那条 `bash -c` 命令行也匹配上了 → 自杀**
 >
-> 同类坑还有 **`pkill -f 'vllm serve'` 漏杀 `VLLM::Worker` 子进程**（进程名不含 "vllm serve"），278GB×4 显存不释放 → 新实例 OOM。**必须按 `VLLM::` / `EngineCore` 进程名杀。**
+> 实测：
 >
-> 参见 SGLANG runbook §6 的姊妹坑（`pkill -f dynamo.sglang` 会匹配到 `kubectl exec` 自身的命令行而自杀）—— **这一类「pkill 模式写不对」的故障在本项目里出现了三次**。
+> ```bash
+> $ kubectl exec vllm-2 -- bash -c "pgrep -f 'vllm::router'"
+> 13711 14655 14881 15279     # ← 15279 是这条 exec 自己的 shell
+> $ kubectl exec vllm-2 -- bash -c "pgrep -x 'vllm::router'"
+> 13711 14655 14881           # ← 干净
+> ```
+>
+> **正确写法**：
+>
+> ```bash
+> kubectl exec vllm-2 -- bash -c "pkill -9 -x 'vllm::router'; sleep 6"
+> ```
+>
+> `-x` 精确匹配进程名（不看完整命令行），恰好 router 的 cmdline 也就是 `vllm::router`，所以两边都对得上，而 exec 自身的命令行不等于这个字符串，不会自杀。**`sleep 6` 不能省** —— Prometheus 端口（29000）释放有延迟，急着重启会连撞 `FailedToCreateHTTPListener("Address already in use (os error 98)")`，然后新 router 静默变成僵尸，`/health` 一直 000。
+>
+> **同类坑**：`pkill -f 'vllm serve'` 会匹配 exec 自身命令行（那行文本里就有 `vllm serve`）→ 自杀，后面的启动语句根本不执行；表现是「命令跑完了但服务没起来，也不报错」。用 `pkill -9 -f 'vllm[ ]serve'` / `'VLLM[:]:'` / `'[E]ngineCore'` 括号转义。
+>
+> 参见 SGLANG runbook §6 的姊妹坑（`pkill -f dynamo.sglang` 同样自杀）。**这一类「pkill 模式写不对」的故障在本项目里出现了四次，跨两个框架** —— 只要 pattern 会出现在你自己那条命令行里，就必须转义或改用 `-x`。
 
 **ready 判据**：`curl localhost:30000/health` = 200。若 503「Prefill policy failed to select a worker」= 后端还没注册好，等几秒，或先查 `:8001` / `:8002` 是否 200。
 
@@ -393,19 +413,79 @@ kubectl exec vllm-0 -- bash -c "cd /mnt/ssd/InferenceX && python3 utils/bench_se
 | 1p1d | 23,120 | **24,358** | **111%** |
 | 2p1d | 27,803 | **31,499** | 143%（加 prefill +29%）|
 
-**本轮复刻实测**（2026-07-26，`sa-bench`，1p1d 4k1k conc256，见 §10）：
+**本轮复刻实测**（2026-07-26，`sa-bench` + `temperature=0`，4k1k，TP4 decode）：
 
-| 指标 | 实测 | vs 历史 23,120 |
-|---|---|---|
-| Total tok/s（推算）| **≈14,563** | 63% |
-| Output tok/s | 2,911 | — |
-| Median TPOT | 48.6 ms | — |
-| Median TTFT | 25.2 s | **prefill 受限** |
-| spec 接受率 | 34% | — |
+| 拓扑 | conc | **Total tok/s** | Output | TPOT | TTFT | 备注 |
+|---|---|---|---|---|---|---|
+| 1p1d（`--enforce-eager`）| 256 | 14,563 | 2,911 | 48.6 ms | 25.2 s | 文档原始脚本 |
+| 1p1d（去 eager）| 256 | 14,940 | 2,988 | 48.8 ms | 23.4 s | **eager 只值 +2.6%** |
+| 3p1d | 256 | 16,459 | 3,292 | 50.2 ms | 7.8 s | prefill ×3，TTFT ÷3 |
+| **3p1d** | **512** | **21,100** | **4,220** | 46.8 ms | 55.8 s | ⭐ **全局最佳** |
+| 3p1d | 768 | 19,924 | 3,985 | 53.4 ms | 116 s | 过顶 |
+| 3p1d | 1024 | 13,808 | 2,762 | 67.6 ms | 164 s | 严重过顶 |
+| 4p1d | 384 | 19,409 | 3,882 | 50.0 ms | 30.7 s | |
+| 4p1d | 512 | 20,479 | 4,096 | 49.3 ms | 55.9 s | **加第 4 个 prefill 不涨** |
+| 4p1d | 640 | 19,635 | 3,927 | 52.4 ms | 91.9 s | |
 
-**没有完整复现 23,120**，差 37%。已排除的因素：镜像正确（四行 kernel 日志齐全）、KV 走 NVLink（NIXL+UCX 已协商）、temperature 已修正。**剩余嫌疑是 prefill 侧**：TTFT 中位 25 秒说明请求全堵在 1 个 prefill 上，而 prefill 脚本用的是 `--enforce-eager`（无 cudagraph）+ `--max-num-seqs 16`。下一轮先加 prefill 数、再调这两个参数。
+TP4-decode 最佳 21,100 = 厂商基线 22,000 的 96%。
+
+#### ⭐ decode 换成 dep8 之后：2.85×，而且延迟同时降到 1/4
+
+同样 3 个 TP4 prefill，只把 decode 从 TP4（1 节点 4 卡）换成 **dep8**（2 节点 8 卡，TP1 + DP8-attention + EP8，见 §5.2）：
+
+| 拓扑 | conc | **Total tok/s** | Output | **TPOT** | TTFT |
+|---|---|---|---|---|---|
+| 3p + TP4 decode | 512 | 21,100 | 4,220 | 46.8 ms | 55.8 s |
+| **3p + dep8 decode** | 512 | **55,153** | 11,031 | **11.8 ms** | 22.8 s |
+| 3p + dep8 decode | 768 | 60,065 | 12,013 | 12.1 ms | 40.9 s |
+| 3p + dep8 decode | 1024 | 62,838 | 12,567 | 12.0 ms | 58.9 s |
+| **3p + dep8 decode** | **1536** | **65,132** | **13,026** | 12.1 ms | 95.2 s |
+
+| 对标 | 倍数 |
+|---|---|
+| 厂商基线 22,000 | **296%** |
+| 本文历史记录 23,120 | **282%** |
+| 同环境 TP4 decode 最佳 21,100 | **3.09×** |
+
+**这是本轮最大的单项收益，远超所有参数调优的总和。** 换算成每卡：TP4 配置 16 GPU → 1,319 total-tok/s/GPU；dep8 配置 20 GPU → **3,257**，**每卡 2.47×**。
+
+原因就是 §5.2 写的那条：**MLA 的 KV 是所有 head 共享的压缩 latent，TP 下不分片、只复制** —— TP4 白白把 KV cache 复制 4 份。DP-attention 每个 rank 只存自己那批请求的 KV，天然不复制；EP8 再把 384 个 expert 摊到每卡 48 个，省下的 HBM 全变成更大的 batch。
+
+> **spec 接受率 35.7%**（8 个 DP rank 一致：draft ~2.10M / accepted ~0.75M each），与 TP4 时的 34% 一致 —— 说明这 2.85× **不是**投机解码变好带来的，纯粹是 KV 布局和 EP 的收益。
+
+> **TTFT 95 秒说明 dep8 下 prefill 又变回瓶颈了**（3 个 prefill 喂 8 卡 decode）。本文 §11.1 早期「dep8 全程 prefill-feed-limited」的结论在这里被重新证实 —— **但它只对 dep8 成立，TP4 decode 下反过来（见上方结论 3）。**
+
+**三个可复用的结论**：
+
+1. **`--enforce-eager` 不是瓶颈** —— 去掉它只涨 2.6%，却让启动多花 4 分钟（多 51 个 PIECEWISE graph 要 capture）。**要快速迭代就留着 eager，要最后一点性能才去掉。**
+2. **conc512 是甜点，且与 prefill 数无关** —— 256→512 涨 28%，512→768 跌 6%，768→1024 跌 30%。开环压测超过甜点后，排队延迟吃掉全部收益。
+3. **prefill 加到 3 个就到头了** —— 3p→4p 完全不涨（21,100 → 20,479，噪声内），而 TPOT 全程钉在 47–53 ms。**瓶颈是 decode TP4，不是 prefill。** 这跟本文 §11.1 早期「dep8 全程 prefill-feed-limited」的结论**方向相反** —— 那是 dep8 decode 的情况，TP4 decode 反过来。**拓扑变了，瓶颈就换边，不能跨配置套用结论。**
+4. **别在 TP4 decode 上做参数调优** —— 上面整张表（eager / prefill 数 / 并发点）加起来只从 14,563 挪到 21,100（+45%），而换 dep8 一步到 65,132（+347%）。**先选对拓扑，再谈调参。**
 
 > **若你的数远低于 14,000**：按优先级查 —— ① 压测工具没发 `temperature=0`（占 3.1×，见上方告警）② 用了通用镜像（回文首认那四行 kernel 日志）。
+
+---
+
+### 8.1 ⚠️ 重启 prefill 必须同时重启 decode（NIXL 句柄会失效）
+
+**PD 两侧通过 NIXL agent 建立了 KV 传输注册，一侧重启后另一侧手里的句柄就是野指针。** 下一次 KV 传输不会报"连接失败"这种友好错误，而是：
+
+```
+(Worker_TP3_EP3) ERROR multiproc_executor.py:1004] torch.AcceleratorError: CUDA error: unspecified launch failure
+(EngineCore)     ERROR core.py:1233] EngineCore encountered a fatal error.
+→ decode 进程整个死掉，/health 变 000，router 卡在 "Waiting for 1 unique hosts"
+```
+
+**实测时间线**：decode 12:08 起来、跑完两轮压测都正常 → 13:14 重启 3 个 prefill → 13:26 prefill 就绪、router 发第一批请求 → **13:27:00 decode 崩**。
+
+**规则**：
+| 你重启了 | 必须一起重启 |
+|---|---|
+| 任一 prefill | **decode**（全部）+ router |
+| decode | 所有 prefill + router |
+| 只加 prefill（不动老的）| 仍然要重启 decode —— NIXL 的 topology 是启动时协商的 |
+
+> 这是 SGLang 侧「重启 server 后 frontend 必须一起重启」的同类问题，但**vLLM 更严重**：SGLang 那边只是路由失效（curl 挂死），vLLM 这边是**直接把 decode 打崩**，而且报错是 `CUDA error` 完全指不到根因。
 
 ---
 
@@ -447,7 +527,8 @@ kubectl exec vllm-0 -- bash -c "cd /mnt/ssd/InferenceX && python3 utils/bench_se
 | §6 router | ❌ **文档错** | 「镜像已带」不成立，要 `pip install vllm-router`（20 秒）|
 | §7 e2e | ✅ | `" Paris. The capital of Germany is Berlin..."`，响应 ID 带 `prefill_addr...decode_addr...`，PD 链路确认 |
 | §8 压测 | ❌ **文档错 + 重大发现** | `sglang` 不在镜像里；换 `vllm bench serve` 后**投机解码接受率只有 1.16%**，根因是它不发 `temperature=0`（见 §8 告警）|
-| §8 压测（sa-bench）| ⚠️ **未达标** | conc256 Total ≈ **14,563** = 历史 23,120 的 **63%**，卡在 prefill |
+| §8 压测（sa-bench）| ✅ **超标** | TP4 decode 最佳 21,100（96%）→ **换 dep8 decode 达 65,132 = 厂商 22,000 的 296%** |
+| §5.2 dep8 decode | ✅ **文档的 2.6× 说法被证实** | 实测 **2.85× 吞吐 + TPOT 降到 1/4**，是全轮最大单项收益 |
 
 **本轮抓到 7 个文档缺陷，全部已修**：
 
@@ -463,11 +544,19 @@ kubectl exec vllm-0 -- bash -c "cd /mnt/ssd/InferenceX && python3 utils/bench_se
 >
 > **第 7 条价值最高**：它不是文档瑕疵，是一个**跨框架性能对比的方法论陷阱** —— 两个 benchmark 工具对同一套服务测出 3.1× 差距，纯粹因为一个发 `temperature=0` 一个不发。
 
-### 10.2 待办（下一轮）
+### 10.2 本轮额外撞到的 3 个环境级坑（非文档缺陷，但会浪费你半小时）
 
-- [ ] 加 prefill（2p1d / 4p1d），确认 TTFT 25s 是不是唯一瓶颈
-- [ ] prefill 去掉 `--enforce-eager` + 提高 `--max-num-seqs`，对比
-- [ ] 复现历史 23,120；达标后再做审计轮 2（清空重跑确认可复现）
+| 坑 | 表现 | 处理 |
+|---|---|---|
+| **GCS access token 1 小时过期** | 拉模型脚本跑完了、`DONE`、但只有 40K / 0 shards | 拉大模型前重新 `print-access-token`；断点续传靠 `[ -s "$f" ]`，删掉 `*.part` 再跑一遍即可补齐 |
+| **删 pod 会换节点，模型就没了** | `vllm-0` 重建后 `/mnt/ssd` 里 0 个 shard | 与 SGLANG runbook §3 同一个坑。**重建任何 pod 后都要重新校验 66 shards**，别假设 hostPath 跟着 pod 走 |
+| **`kubectl` current-context 被别的进程改掉** | `kubectl get pods` 报 `NotFound`，**看起来跟工作负载被人删了一模一样** | 先 `kubectl config current-context` 确认，再下结论。本轮它被切到了一个 TPU 集群，我差点以为 StatefulSet 被删了 |
+
+### 10.3 待办（下一轮）
+
+- [ ] 审计轮 2：清空环境，照修订后的本文从零重跑，确认可复现
+- [ ] dep8 + 更多 prefill（conc1536 时 TTFT 95s，prefill 仍是瓶颈，加到 6+ prefill 应该还能涨）
+- [ ] 8k1k 场景重扫（本轮只跑了 4k1k）
 - [ ] 蒸馏并删除旧文档 `vllm-v4-gb300-benchmark.md`（945 行）
 
 ---
@@ -510,7 +599,19 @@ kubectl exec vllm-0 -- bash -c "cd /mnt/ssd/InferenceX && python3 utils/bench_se
 
 **吞吐天花板真因**：decode **SM-bound 于低-FLOP 的 MoE 开销**（EP 通信 + 小 GEMM），不是喂料、不是带宽。MegaMoE 已开，MFU 仍只有 6%。
 
-**⚠️ 诚实修正**：本环境 2.7× 的差距**偏大**，说明这套 vLLM dep8 **未调到 vLLM 最优**（缺 Wide-EP 满配 + KV/batch 平衡未极致）。公开对比里 SGLang 典型领先 **20–29%**（localaimaster 2026-02 +29%；gpustack H200 6635 vs 5482），极端案例 ~2×。**「3× 差距」不应作为 vLLM 的永久结论。**
+> ### ⚠️ 上表已被 2026-07-26 的复刻轮推翻，别再引用
+>
+> 那组「vLLM ≈ SGLang 的 37%」是在 **8k1k + 未调优的 dep8** 上测的。本轮 4k1k 重测后：
+>
+> | | 当时结论 | 本轮实测 |
+> |---|---|---|
+> | vLLM dep8 | 3,321 /decode-GPU（8k1k）| **13,026 output tok/s 总量**（4k1k conc1536）|
+> | 相对厂商基线 | 「1p1d 能复现 22K」 | **65,132 = 296%** |
+> | 「未调到 vLLM 最优」这句 | 是猜测 | **被证实** —— 光换 dep8 就 2.85× |
+>
+> **两边现在都不具备直接可比性**：SGLang 侧是 14 prefill + dep8 decode（64 GPU），vLLM 侧是 3 prefill + dep8 decode（20 GPU），prefill 数差 4.7 倍，而两个配置**都是 prefill 受限的**。要公平对比必须先把 prefill 配平。
+>
+> **保留下面这段的唯一理由是它的架构分析（AFD）仍然成立**，但那几个百分比数字一律作废。
 
 **结构性差距在 AFD**：SGLang 有 attention-FFN 分离，vLLM **无原生支持**（[RFC #22799](https://github.com/vllm-project/vllm/issues/22799) 仍 open）。学界业界共识一致：
 - FastAFD 官方 blog 原话："Long context starves the MoE layer by shrinking the KV-capped decode batch"
