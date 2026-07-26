@@ -725,7 +725,7 @@ kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/
 | 首测 @876/rank | 0.78 | **0.96** |
 | 复测 @933/rank | 0.79 | **0.96** |
 
-**两次都是 SWA 池先满（0.96），而 full-attn 池只用了 0.78–0.79 —— 是预算分配失衡，不是总量不够。** kernel 上限 1024/rank，按 11,083 @ 933 线性外推 = **~12,165**。理论上把 `swa-full-tokens-ratio` 从 0.1 调低（预算从 full 挪给 SWA）就能推过去，但 §11.6 #7 记录了 0.056 在 **ISL 8192** 下会把 full 池饿死——**而 ISL 4096 的 full-attn 需求本来就减半，所以「0.056 + 4K」是有希望成立的组合**。
+**两次都是 SWA 池先满（0.96），而 full-attn 池只用了 0.78–0.79 —— 是预算分配失衡，不是总量不够。** kernel 上限 1024/rank，按 11,083 @ 933 线性外推 = **~12,165**。把 `swa-full-tokens-ratio` 从 0.1 **调高**（源码：ratio = SWA池÷full池，调高才是给 SWA 加预算，见 §11.6 #7）理论上能推过去。官方 wide-EP 用的正是 **0.20**。
 
 > **这个数是 per-DP-rank（= per GPU），不是引擎总和**。交叉验证：p50 9,587 × 8 rank = 76,696，而同一轮 sa-bench 实测聚合 output 是 74,833，差 2.5%。若是引擎总和则差 8 倍，不可能。
 
@@ -755,7 +755,16 @@ kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/
 | 4 | **attention plan kernel 硬顶 1024 请求/rank** | `c_plan.cuh:522: GPU plan only support batch size up to 1024` | SGLang 自己 hardcode 的 `kMaxPrefillBatchSize`，源于「单 CUDA block + 每线程一请求」的实现（block 线程上限就是 1024）+ 静态 shared memory 数组。**不是硬件限制，是实现取舍**（为避开 MTP/graph capture 时的 host sync）|
 | 5 | **PD 两侧 `context-length` 必须一致** | `Decode handshake failed` | 只改 decode 会让 KV 布局对不上。**decode 照常注册、frontend 全 200、单条 e2e 也过**，只有压测才暴露。而且这个改动本身多余——SGLang 的 KV 页按需分配，短请求本就不占满上限 |
 | 6 | **反复重启 decode 会把 prefill 全带崩** | prefill 侧 `SIGQUIT`，成片消失 | disagg 心跳一断，prefill 的子进程失败自杀。**做拓扑/参数实验必须整个 fleet 一起重启**，不能只重启 decode。本轮踩了 3 次，最后一次 14 个 prefill 全灭 |
-| 7 | **`swa-full-tokens-ratio 0.056` 是 dep32 专用值** | `full token usage: 0.95` @ 仅 356 running-req，随后 rank 挂掉、gloo 连接断 | 官方 srt-slurm 的 `10p1d-dep32` 变体用 0.056，因为 dep32 每卡 KV 预算大得多。搬到 dep8 会**把 full-attention 池饿死**——请求数很少就撑满。**dep8 用 0.1**（本文 9,502 那次的值）|
+| 7 | **`swa-full-tokens-ratio` 的方向很容易搞反** | 调到 0.056 后 `full token usage: 0.95` @ 仅 356 running-req，rank 挂掉 | **源码定义**：`swa_full_tokens_ratio = SWA池 ÷ full池`（`swa_tokens = full_tokens × ratio`，`pool_configurator.py:387`）。所以 **ratio ↑ = SWA 池变大 / full 池变小**，ratio ↓ 反之。我一度以为反了，把本已吃紧的 SWA 又砍一半。**dep8 用 0.1；若 SWA 先满就往上调（官方 wide-EP 用 0.20）** |
+
+> **参数语义务必读源码再动手**。本项目在 `swa-full-tokens-ratio` 上栽了两次：第一次照搬 dep32 的值、第二次把方向理解反了。判据是 decode 日志里的两个 usage：
+>
+> ```
+> #full token: 6715392, full token usage: 0.78,   ← full 池
+> #swa  token:  505088, swa  token usage: 0.96    ← SWA 池（先满 = 瓶颈在这）
+> ```
+>
+> **哪个先到 ~0.96 就给哪个加预算**：SWA 先满 → 调高 ratio；full 先满 → 调低。
 
 > **一个反复出现的模式**：官方 recipe 里的参数值是**跟拓扑绑定的整体**（#3 `mem-fraction 0.94`、#7 `swa-ratio 0.056` 都是 wide-EP 专用）。逐项摘出来搬到 dep8，每一项都会以不同方式失败。**要么整套换拓扑，要么一个都别动。**
 
