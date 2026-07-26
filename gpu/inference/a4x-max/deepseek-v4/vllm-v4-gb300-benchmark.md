@@ -1,6 +1,6 @@
 # GB300 (A4X Max) · vLLM DeepSeek-V4 · Benchmark 对标报告
 
-> **本文性质**：vLLM 在 GB300 上服务 DeepSeek-V4 的**官方 recipe + 已公开 benchmark 的对标整理**，与同目录 [`sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)（含**我们实测跑通**的 8,903 output/decode-GPU）配套阅读。
+> **本文性质**：vLLM 在 GB300 上服务 DeepSeek-V4 的**官方 recipe + 已公开 benchmark 的对标整理**，与同目录 [`SGLANG-V4PRO-RUNBOOK.md`](./SGLANG-V4PRO-RUNBOOK.md)（含**我们实测跑通**的 9,502 output/decode-GPU）配套阅读。
 > ✅ **已在本环境端到端跑通 + 复现**（2026-07-23）：照抄厂商官方 vLLM recipe（deepgemm 镜像 1p1d），4k1k **Total token throughput 24,358 tps = 厂商 22,000 基线的 111%**，复现成功。**完整照抄步骤见 §9.10**（权威复现 checklist）。前半部分（§0–§8）的 blog/榜单数据仍为参考；§9 是本环境实跑记录。
 
 > 资料来源：vLLM 官方 blog「DeepSeek V4 in vLLM」(2026-04-24)、「DeepSeek-V3.2 on GB300」(2026-02-13)、vLLM recipe 站 `recipes.vllm.ai/deepseek-ai/DeepSeek-V4-Pro`、SemiAnalysis InferenceX `benchmarks/.../vllm/deepseek-v4/8k1k/*.yaml` + InferenceX 公开对比榜单。
@@ -942,4 +942,4 @@ GKE 节点 compute SA 对模型 bucket **OAuth scope 未授权**。上传/下载
 
 ---
 
-*SGLang 实跑对标见 [`./sglang-v4-gb300-benchmark.md`](./sglang-v4-gb300-benchmark.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*
+*SGLang 实跑对标见 [`./SGLANG-V4PRO-RUNBOOK.md`](./SGLANG-V4PRO-RUNBOOK.md)。榜单值（§4）仍为官方/InferenceX 公开数据。*

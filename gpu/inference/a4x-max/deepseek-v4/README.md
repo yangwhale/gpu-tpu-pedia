@@ -7,7 +7,7 @@
 
 | 文档 | 用途 | 何时看 |
 |---|---|---|
-| [**sglang-v4-gb300-benchmark.md**](./sglang-v4-gb300-benchmark.md) | **V4 端到端测试指南 + Benchmark 报告**：满配最优 **§12（8,993 = 官方 80%）**、**§13 满配复现 checklist（照抄即可）**、可复现运行手册（§3.9）、官方 11,200 口径说明（§10）。 | **想跑 V4 从这里开始** |
+| [**SGLANG-V4PRO-RUNBOOK.md**](./SGLANG-V4PRO-RUNBOOK.md) | **V4-Pro 端到端复现 Runbook**：§1-§8 照抄可跑（含自愈循环、就绪判据、sa-bench），§10 三轮从零审计记录，**§11 冲击官方 11,200 的完整调研 + 实验（decode 峰值 11,113 = 官方 99.2%，gap 在 prefill 喂料）**，§12 历史实测数据。 | **想跑 V4 从这里开始** |
 | [**vllm-v4-gb300-benchmark.md**](./vllm-v4-gb300-benchmark.md) | **vLLM 对标报告**（基于官方 blog + InferenceX 公开榜单/recipe，**非本环境实跑**）：vLLM GB300 disagg recipe（Nixl+deep_gemm_amxf4_mega_moe）、公开 benchmark（9,759@68 tok/s/user）、vLLM↔SGLang 栈对照 + 实跑下一步。 | 想看 vLLM 对标 / 准备实跑 vLLM |
 | [gb300-local-ssd-raid0-SETUP.md](./gb300-local-ssd-raid0-SETUP.md) | **Local SSD RAID 0 挂载指南**：4× NVMe → RAID0 → 12T / 14GB/s 读，arm64 DaemonSet + 污染节点排查。V4-Pro 800G 权重的存储基础。 | 搭 Local SSD / RAID 建不成时 |
 

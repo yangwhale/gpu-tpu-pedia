@@ -1,7 +1,7 @@
 # SGLang · DeepSeek-V4-Pro · GB300 NVL72 复现 Runbook
 
 > **本文定位**：**只讲怎么跑通**的操作手册。所有命令可直接复制，所有引用的脚本/manifest 都已入库（`manifests/` + `scripts/`）。
-> 原理分析、benchmark 演进史、被推翻的假设 → 见 `sglang-v4-gb300-benchmark.md`（旧版，按时间顺序记录，信息全但需自行导航）。
+> 旧版探索文档 `sglang-v4-gb300-benchmark.md` 已删除；其中仍成立的实测数据（架构代际对比 / PD 配比公式 / 历史扫描 / 已证无效的尝试）蒸馏在 **§12**。
 >
 > **文档状态约定**：每节标注 `[已验证]` / `[待验证]` / `[已知问题]`，**不用星标**。标 `[已验证]` 的都在本文末 §10 有实跑记录。
 
@@ -769,3 +769,86 @@ kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/
 | 3 | 改 kernel 突破 1024/rank | 上游 PR | 把「单 block + 每线程一请求」改成 grid-stride + 动态 shared memory |
 | 4 | 真实流量下开 prefix cache + wide-EP | 换负载 | wide-EP 摊薄权重腾出的 HBM 主要价值是装更多 prefix cache（KV hash），命中率上去 prefill 就少干活。**但 sa-bench 用 random 数据、且本文全程 `--disable-radix-cache`，这条在合成 benchmark 上赚不到** —— 这也解释了官方 frontier 曲线与我们实测的矛盾 |
 
+
+---
+
+## 12. 历史实测数据（从旧文档 `sglang-v4-gb300-benchmark.md` 蒸馏，原文已删）
+
+旧文档记录了 2026-07-20~22 的探索过程，绝大部分结论已被本文取代或推翻。下面是**仍然成立、且不可再生**的部分。
+
+### 12.1 为什么 V4 能上万而 R1 上不了（架构代际）
+
+我们实测 R1 短上下文（8K/1K）峰值 **1,359 tok/s/GPU**，官方 V4-Pro 同 workload **11,200**，差约 8×。根因是模型代际，不是调优不到位：
+
+| 维度 | R1 | V4 |
+|---|---|---|
+| 注意力 | 全注意力 MLA，KV 留全历史 | **hybrid CSA + HCA**，@1M 时 KV 仅 V3.2 的 ~10%；等效滑动窗口 |
+| decode `max-running-requests` | 2048（KV 大，塞不下更多）| **18432**（KV 薄，并发拉 9×）← 吞吐上万的直接原因 |
+| MoE 量化 | W4A8 | **W4A4 MegaMoE**（激活也 4bit，矩阵乘快 ~2×）|
+| KV 压缩 | 无 | **online compress**（C4/C128 压缩态池）|
+
+**一句话**：V4 靠 CSA+HCA 把 KV 打薄 → decode 并发从 2K 拉到 18K → 吞吐堆上万。这是架构层解访存瓶颈，全注意力天生追不上。
+
+### 12.2 PD 流水线配比公式（可复用）
+
+```
+需要的 prefill worker 数 = (decode 每秒完成请求数 × 输入长度) ÷ 单 prefill worker 吞吐
+```
+
+以官方 11,200 那个点（dep8 / 8K1K / 50 tok/s/user）推演：
+
+1. 每张 decode 卡在 50 tok/s/user 服务 `11,200 ÷ 50 ≈ 224` 并发用户 → **decode 卡数 = 目标用户数 ÷ 224**（规模决策，不是性能决策）
+2. dep8 = 8 × 224 ≈ **1,792 有效用户**（recipe 灌 conc 8192 是 offered load，多的在排队）
+3. decode 完成率 = 8 × 11,200 ÷ 1024 ≈ **87.5 req/s** → prefill 须供 87.5 × 8192 ≈ **71.7 万 input tok/s**
+4. 单 prefill worker（dep4）≈ 4 × 18,200 ≈ 7.28 万 → 需 **8–10 个**。官方 `high-conc-8p1d` 正是 8 个，对得上。
+
+> **口径的隐含代价**：`output ÷ decode-GPU` **把 prefill 成本藏起来了** —— 堆再多 prefill 喂一个小 decode，per-decode-GPU 都好看。它是「解码效率」指标，**不是整机 TCO**。
+
+### 12.3 官方 recipe 全表
+
+| recipe | prefill | decode | MTP | 场景 |
+|---|---|---|---|---|
+| `mid-curve-1p1d-dep8` | 1 | dep8 | ✓ | 低并发交互 |
+| `mid-curve-4p1d-dep8`（steps 3）| 4 | dep8 | ✓ | conc 1024 |
+| `high-conc-8p1d-dep8`（steps 1）| 8 | dep8 | ✓ | conc 8192 ← **11,200 最可能在此** |
+| `10p1d-dep32` c2500 | 10 | dep32 | ✗ | 大规模吞吐 |
+| `15p1d-dep12` c12000 | 15 | dep12 | ✗ | 超高并发 |
+
+> 官方博客"How to Reproduce"贴的是 `10p1d-dep32-c2500`（**no-MTP**），但 11,200 出自 **MTP 曲线**——博客拿它当流程示范，误导性很强。
+
+### 12.4 历史扫描数据（本文未重测，仍可参考）
+
+**多 frontend**（单 frontend 是 Python 进程，高并发 CPU-bound）：
+
+| frontend × conc | 聚合 output | output/decode-GPU |
+|---|---|---|
+| 1 × 2500 | 40,481 | 5,060 |
+| 4 × 625 | 48,934 | 6,117 |
+| 8 × 625 | 54,300 | **6,788（+34%）** |
+
+**prefill 数量**：8 → 6,788；**14 → 8,809（+30%）**；16 → 8,993（+2%，收敛）。
+
+**单 prefill worker 并发扫描**：峰值 **15,196 input tok/s/卡 = 官方 83%**。早期"prefill 慢 3.7×"是 conc4 极低并发下的测量假象，**已推翻**。
+
+**满载 GPU 利用率**（16p 满配，nvidia-smi 采样）：
+
+| 角色 | util | HBM | 功耗（TDP ~1400W）|
+|---|---|---|---|
+| prefill | 99–100% | 271–277 GiB | 1137 W（81%）|
+| decode | 75–97% | 268–275 GiB | 960–1038 W（71%）|
+
+### 12.5 已验证无效 / 有害的尝试（别重做）
+
+| 尝试 | 结果 |
+|---|---|
+| DeepGEMM full autotune（关 `FAST_WARMUP`）| 热态 9,018 vs 8,993，**噪声内**。冷→热那 +12% 是一次性 JIT，不是 autotune 的功劳。代价是巨大启动开销 |
+| EPLB | 与 megamoe 不兼容（三种失败模式）。但 cookbook 称 Waterfill 变体支持，见 §11.7 |
+| **`slow_down` / 预留 decode token「攒批再放」hack** | `SGLANG_HACK_PD_DECODE_NUM_RESERVED_DECODE_TOKENS=1026` → 吞吐**降到 2,984**，过度预分配，**有害**。⚠️ 注意与 §11.4 Exp E 区分：官方的 `--disaggregation-decode-polling-interval` 是**有效**的（+4.3%），这个 env hack 是**有害**的，两者别混 |
+| 闭环 `bench_serving` + `--max-concurrency` | 闭环已限死在途请求数，再开 `router-queue-threshold` 只增延迟不增吞吐（**−13%**）。对标官方必须**开环** `--request-rate inf` |
+
+### 12.6 其他硬约束（旧文档记录，本文未复现）
+
+- **合法 EP 必须整除 256**（V4 有 256 个专家）。`dep40` 会直接 `assert num_physical_experts % ep_size == 0` 崩溃，**必须配 EPLB 加冗余专家凑整**（如 256+24=280，280/40=7）。所以对 dep40 而言 EPLB 不是优化、是启动前提。合法值：8 / 16 / 32 / 64…
+- **DeepEP dispatch buffer**：`max-running-requests × MTP_draft_tokens ≤ SGLANG_DEEPEP_NUM_MAX_DISPATCH_TOKENS_PER_RANK`，否则稳态负载炸 `deep_ep.cpp:1105`。**调并发时三个值要一起动。**
+- `SGLANG_DSV4_COMPRESS_STATE_DTYPE=bf16`（默认 fp32）—— 压缩态池省显存，可换更多 decode slot。本文未测。
+- **镜像**：`v0.5.15.post1`（R1 时代）不支持 V4，必须 nightly；换镜像后要重验 `sm_103a`。

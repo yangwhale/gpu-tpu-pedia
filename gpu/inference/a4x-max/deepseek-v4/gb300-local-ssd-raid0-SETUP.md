@@ -133,7 +133,8 @@ hostPath 挂 `/mnt/disks/raid/0`，propagation 用 `HostToContainer`：
 ## 6. 给 V4 用的下一步
 
 - V4 pod（Flash/Pro）把模型从 GCS 拉到 `/data`（= /mnt/disks/raid/0），替代内存盘 tmpfs → 省下 800G RAM。
-- V4 复现+benchmark 见 `./sglang-v4-gb300-benchmark.md`。
+- V4 复现+benchmark 见 `./SGLANG-V4PRO-RUNBOOK.md`。
+- ⚠️ **本文档的 DaemonSet 只认 `/dev/md0`，节点重启后阵列会变 `md127` 导致静默降级为 256K tmpfs** —— 修复见 `SGLANG-V4PRO-RUNBOOK.md` §3.1 与 `manifests/raid-pool-0002.yaml`。
 
 ---
 
