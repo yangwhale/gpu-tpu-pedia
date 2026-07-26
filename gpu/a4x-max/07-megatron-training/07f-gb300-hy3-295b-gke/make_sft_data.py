@@ -359,7 +359,7 @@ PROBE = [
 ]
 
 
-def build(paraphrase: int, seed: int, holdout_ratio: float):
+def build(paraphrase: int, seed: int, holdout_ratio: float, pad_to: int = 32):
     rng = random.Random(seed)
     facts = facts_from_csv("results.csv", "64 卡") + facts_from_csv("results256.csv", "256 卡") + CLAIMS
     rng.shuffle(facts)
@@ -379,6 +379,12 @@ def build(paraphrase: int, seed: int, holdout_ratio: float):
                 ]}
             )
     rng.shuffle(rows)
+    # 补齐到 GBS 的整数倍。627 条 / GBS 32 = 19.6 步，第 20 步只剩 19 个样本，
+    # 喂不满 32 个 DP rank，NCCL 集合通信直接卡死（GPU 100% 但零推进）。
+    # 复制少量样本补齐比丢弃更好——丢弃会损失事实覆盖。
+    if pad_to > 1 and len(rows) % pad_to:
+        need = pad_to - len(rows) % pad_to
+        rows += [rows[i] for i in rng.sample(range(len(rows)), need)]
     return rows, held, train_facts
 
 
@@ -388,9 +394,10 @@ def main():
     ap.add_argument("--paraphrase", type=int, default=5, help="每个事实生成几种问法")
     ap.add_argument("--seed", type=int, default=5678)
     ap.add_argument("--holdout-ratio", type=float, default=0.15)
+    ap.add_argument("--pad-to", type=int, default=32, help="补齐到该数的整数倍（应等于 GBS）")
     a = ap.parse_args()
 
-    rows, held, kept = build(a.paraphrase, a.seed, a.holdout_ratio)
+    rows, held, kept = build(a.paraphrase, a.seed, a.holdout_ratio, a.pad_to)
     os.makedirs(a.out, exist_ok=True)
 
     with open(os.path.join(a.out, "train.jsonl"), "w", encoding="utf-8") as f:

@@ -68,7 +68,13 @@ def build_config(a):
         load_weights=False
     )
     cfg.tokenizer.tokenizer_type = "HuggingFaceTokenizer"
-    cfg.tokenizer.tokenizer_model = hf_path
+    # 用打过补丁的本地 tokenizer，不用 hub 上的原版。
+    # 原因：Hy3 官方 chat_template.jinja 没有 {% generation %} 块，
+    # HF 的 apply_chat_template(return_assistant_tokens_mask=True) 会直接报错，
+    # 于是 Bridge 算不出 assistant-only 的 loss mask。
+    # 补丁把 assistant 段（含 think / eos）包进 generation 块，实测 mask 正确：
+    # 34 token 中 9 个计 loss，user/system 段被正确屏蔽。（见 SFT.md §6.12）
+    cfg.tokenizer.tokenizer_model = a.tokenizer
     cfg.tokenizer.hf_tokenizer_kwargs = {"trust_remote_code": True}
 
     m = cfg.model
@@ -98,12 +104,18 @@ def build_config(a):
     # （性能扫点时设 0 是为了隔离变量，此处不适用。）
     m.mtp_num_layers = 1
 
-    # ---- MoE kernel（沿用 §10 冠军配置的有效项）----
-    m.moe_token_dispatcher_type = "flex"
-    m.moe_flex_dispatcher_backend = "hybridep"
+    # ---- MoE kernel ----
+    # 这里**不沿用**预训练的 flex/hybridep 冠军配置，改用参考实现 alltoall。
+    # 原因：SFT 的 micro-batch 只有 512 token（预训练是 4096），
+    # 乘 top-8 摊到 192 个专家上平均每专家仅 ~21 token，必然有专家分到 0 个。
+    # 实测 hybridep 路径在第 16 步于单个 rank 上抛
+    # "found NaN in local grad norm for bucket #0"，该 rank 退出后其余 60 rank
+    # 在集合通信里空等，表现为 GPU 100% 却零推进。（见 SFT.md §6.13）
+    # alltoall 是参考实现，对零 token 专家的处理更稳。
+    m.moe_token_dispatcher_type = "alltoall"
     m.moe_grouped_gemm = True
-    m.moe_permute_fusion = True                # 实测 0 增益，但也无害，保持与预训练一致
-    m.moe_router_fusion = True
+    m.moe_permute_fusion = False               # 实测 0 增益，SFT 下先排除变量
+    m.moe_router_fusion = False
     m.moe_shared_expert_overlap = False
     m.cross_entropy_loss_fusion = True
 
@@ -140,7 +152,12 @@ def build_config(a):
         # 不打包：627 条样本若打包成 4096 只剩 13 个序列，
         # 且会把互不相关的事实塞进同一 attention 窗口互相干扰。
         packed_sequence_specs=None,
-        rewrite=True,
+        # rewrite=False 且预处理产物已分发到每个节点：
+        # Bridge 假设 dataset_root 在共享文件系统上——只有 global rank 0 生成
+        # processed/*.jsonl 和索引。我们的 /raid 是 node-local，其余 15 个节点拿不到，
+        # 会走进不同的代码路径，导致 rank 0 停在 barrier() 而别的 rank 已经到了
+        # broadcast()，集合通信错位死锁。（实测踩过，见 SFT.md §6.11）
+        rewrite=False,
     )
 
     # ---- 训练步数 ----
@@ -179,6 +196,7 @@ def main():
     p.add_argument("--pretrained", required=True, help="import_hy3_ckpt.py 产出的 Megatron ckpt 目录")
     p.add_argument("--data", required=True, help="make_sft_data.py 产出的目录")
     p.add_argument("--save", default="/ckpt/hy3-sft")
+    p.add_argument("--tokenizer", default="/raid/hy3-tok", help="打了 generation 块补丁的 tokenizer 目录")
     p.add_argument("--base", action="store_true", help="用 Hy3-Base 而非 instruct 版")
     p.add_argument("--num-gpus", type=int, default=64)
     p.add_argument("--tp", type=int, default=1)
@@ -189,8 +207,8 @@ def main():
     p.add_argument("--gbs", type=int, default=32)
     p.add_argument("--mbs", type=int, default=1)
     p.add_argument("--epochs", type=int, default=10)
-    p.add_argument("--train-samples", type=int, default=627)
-    p.add_argument("--lr", type=float, default=1e-5)
+    p.add_argument("--train-samples", type=int, default=608)
+    p.add_argument("--lr", type=float, default=5e-6)
     p.add_argument("--precision", default="bf16", choices=["bf16", "fp8_mx"])
     a = p.parse_args()
 
