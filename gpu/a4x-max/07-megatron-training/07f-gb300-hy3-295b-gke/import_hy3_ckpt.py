@@ -46,11 +46,29 @@ HF_MODEL = "tencent/Hy3"
 HF_BASE = "tencent/Hy3-Base"
 
 
+
+def _ensure_hy3_bridge():
+    """确保 HYV3Bridge 已注册。
+
+    容器里的安装（install_hy3_bridge.sh 写进 site-packages）会在 pod 重建时丢失，
+    所以这里加一条自愈路径：/raid/pylib 在本地 NVMe 上，跨 pod 重启存活。
+    注册靠的是 @register_bridge 装饰器在 import 时执行，不依赖 models/__init__.py 的补丁。
+    """
+    try:
+        from megatron.bridge.models.hy_v3 import HYV3Bridge  # noqa: F401
+        return
+    except ImportError:
+        pass
+    import sys
+    sys.path.insert(0, "/raid/pylib")
+    from hy_v3.hy_v3_bridge import HYV3Bridge  # noqa: F401
+
 def main():
     p = argparse.ArgumentParser()
     p.add_argument("--out", required=True, help="Megatron checkpoint 输出目录")
     p.add_argument("--base", action="store_true", help="转 Hy3-Base 而非 instruct 版")
     p.add_argument("--single", action="store_true", help="单进程 CPU 转换（需 ~600 GB 内存）")
+    p.add_argument("--local", default=None, help="本地 HF 权重目录（避免回源下载）")
     p.add_argument("--tp", type=int, default=1)
     p.add_argument("--pp", type=int, default=2)
     p.add_argument("--ep", type=int, default=16)
@@ -63,7 +81,9 @@ def main():
 
     from megatron.bridge import AutoBridge
 
-    hf_path = HF_BASE if a.base else HF_MODEL
+    _ensure_hy3_bridge()
+
+    hf_path = a.local or (HF_BASE if a.base else HF_MODEL)
     rank = int(os.environ.get("RANK", "0"))
     t0 = time.time()
 

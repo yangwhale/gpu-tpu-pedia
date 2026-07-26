@@ -33,6 +33,23 @@ HF_MODEL = "tencent/Hy3"          # instruct 版：已有 chat_template，SFT �
 HF_BASE = "tencent/Hy3-Base"      # 底座版：无 chat_template，需连格式一起教
 
 
+
+def _ensure_hy3_bridge():
+    """确保 HYV3Bridge 已注册。
+
+    容器里的安装（install_hy3_bridge.sh 写进 site-packages）会在 pod 重建时丢失，
+    所以这里加一条自愈路径：/raid/pylib 在本地 NVMe 上，跨 pod 重启存活。
+    注册靠的是 @register_bridge 装饰器在 import 时执行，不依赖 models/__init__.py 的补丁。
+    """
+    try:
+        from megatron.bridge.models.hy_v3 import HYV3Bridge  # noqa: F401
+        return
+    except ImportError:
+        pass
+    import sys
+    sys.path.insert(0, "/raid/pylib")
+    from hy_v3.hy_v3_bridge import HYV3Bridge  # noqa: F401
+
 def passthrough_messages(example: dict[str, Any], tokenizer=None) -> dict[str, Any]:
     """数据已是官方 ChatML `messages` 格式，无需转换。
 
@@ -43,6 +60,7 @@ def passthrough_messages(example: dict[str, Any], tokenizer=None) -> dict[str, A
 
 
 def build_config(a):
+    _ensure_hy3_bridge()
     cfg = _sft_common()
 
     hf_path = HF_BASE if a.base else HF_MODEL

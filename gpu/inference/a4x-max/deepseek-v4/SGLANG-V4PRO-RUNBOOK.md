@@ -689,14 +689,16 @@ AssertionError: online c128 does not support MTP
 | `--disaggregation-decode-polling-interval` | **1** | **8** | decode 每 8 个 forward pass 才去 prefill 侧取一次已传输的 KV，而不是每步都取。请求攒起来形成更大的 decode batch |
 | `--enable-prefill-delayer` | False | **on** | DP attention 下延迟 prefill、减少 rank 空转（配 `--prefill-delayer-max-delay-passes 30 --prefill-delayer-queue-min-ratio 0.5 --prefill-delayer-max-delay-ms 3000`）|
 
-| | baseline dep8 | **+攒 batch** |
+| | baseline dep8 | **+攒 batch**（两次独立测量）|
 |---|---|---|
-| output/decode-GPU | 9,107（4 次均值）| **9,502.6** |
-| vs 官方 11,200 | 81.3% | **84.8%** |
+| output/decode-GPU | 9,107（4 次均值）| **9,502.6** / **9,409.1** |
+| vs 官方 11,200 | 81.3% | **84.8% / 84.0%** |
 | TPOT 中位 | 60ms | **57ms** |
 | TTFT 中位 | 45s | 45s |
 
-**+4.3% 且 TPOT 反而降了 3ms** —— 不是拿延迟换吞吐，是把 decode 原本的空转填上了。相比之下 conc 扫描、wide-EP、官方 decode 参数三条路全是死的。
+**+3.3~4.3%（两次独立测量都复现）且 TPOT 反而降了 3ms** —— 不是拿延迟换吞吐，是把 decode 原本的空转填上了。相比之下 conc 扫描、wide-EP、官方 decode 参数三条路全是死的。
+
+> 第二次测量走的是完整「清空 → 重建 → 冷跑 → 热跑」流程，冷 8,908 / 热 9,409，冷热差 +5.6%（与 §8.4 的 +6.5~7.0% 同量级）。
 
 ### 11.5 ⭐ 决定性发现：decode 峰值 = 11,113 tok/s/GPU（官方的 99.2%）
 
@@ -714,6 +716,16 @@ kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/
 | p90 | 597 | 1.88 | 10,116 |
 | p99 | 584 | 1.89 | 10,490 |
 | **max（ISL 4096 撑爆瞬间）** | **876** | 1.79 | **11,113** |
+| **复测 max**（另一轮 ISL 4096）| **933** | 1.78 | **11,083** |
+
+**复测把瓶颈定位得更死了**。两次撞顶时的 KV 池占用：
+
+| | full-attn 池 | **SWA 池** |
+|---|---|---|
+| 首测 @876/rank | 0.78 | **0.96** |
+| 复测 @933/rank | 0.79 | **0.96** |
+
+**两次都是 SWA 池先满（0.96），而 full-attn 池只用了 0.78–0.79 —— 是预算分配失衡，不是总量不够。** kernel 上限 1024/rank，按 11,083 @ 933 线性外推 = **~12,165**。理论上把 `swa-full-tokens-ratio` 从 0.1 调低（预算从 full 挪给 SWA）就能推过去，但 §11.6 #7 记录了 0.056 在 **ISL 8192** 下会把 full 池饿死——**而 ISL 4096 的 full-attn 需求本来就减半，所以「0.056 + 4K」是有希望成立的组合**。
 
 > **这个数是 per-DP-rank（= per GPU），不是引擎总和**。交叉验证：p50 9,587 × 8 rank = 76,696，而同一轮 sa-bench 实测聚合 output 是 74,833，差 2.5%。若是引擎总和则差 8 倍，不可能。
 
