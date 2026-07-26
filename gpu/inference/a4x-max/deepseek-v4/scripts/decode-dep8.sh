@@ -20,5 +20,5 @@ python3 -m dynamo.sglang --model-path /mnt/ssd/DeepSeek-V4-Pro --served-model-na
   --disaggregation-mode decode --disaggregation-transfer-backend mooncake --disaggregation-bootstrap-port 30001 \
   --disaggregation-ib-device mlx5_0,mlx5_1,mlx5_2,mlx5_3,mlx5_4,mlx5_5,mlx5_6,mlx5_7 \
   --speculative-algorithm EAGLE --speculative-num-steps 1 --speculative-eagle-topk 1 --speculative-num-draft-tokens 2 \
-  --mem-fraction-static 0.85 --swa-full-tokens-ratio 0.1 --context-length 9216 \
+  --mem-fraction-static 0.85 --swa-full-tokens-ratio ${SWA_RATIO:-0.15} --context-length 9216 \
   --max-running-requests 8192 --cuda-graph-max-bs 1280 --stream-interval 60 --disable-radix-cache --enable-metrics

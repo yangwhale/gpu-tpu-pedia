@@ -35,7 +35,9 @@
 | 模型 | `/mnt/ssd/DeepSeek-V4-Pro`（**官方原装**，806G，节点本地 SSD）—— 不是 `-NVFP4` 那份 |
 | 镜像 | `lmsysorg/sglang:nightly-dev-cu13-20260720-b3570a45` |
 | 编排 | Dynamo（`dynamo.sglang` worker + `dynamo.frontend`）+ NATS + etcd |
-| 参考成绩 | 端到端 **9,502**（dep8 + 攒 batch，官方 11,200 的 85%）。**decode 引擎自身峰值 11,113 = 官方 99.2%**，差距全在 prefill 喂料，见 §11.5 |
+| 关键参数 | `--swa-full-tokens-ratio` **按 ISL 调**：4K→`0.15`，8K→`0.10`。这一个值决定 54% 的吞吐，见 §11.5 |
+| 最好成绩 | ISL 4096：端到端 **10,704** per-decode-GPU（官方 11,200 的 **95.6%**）／ decode 自报峰值 **12,070**（**107.8%**）|
+| | ISL 8192：端到端 **9,354**（83.5%）|
 
 **为什么是 14 prefill**：实测 14→16 prefill 只涨 2%（8,809 → 8,993），已收敛。14 是性价比拐点。
 
@@ -245,6 +247,22 @@ zmq.error.ZMQError: Address already in use (addr='tcp://127.0.0.1:40236')
 即：**`--enable-dp-attention` + `dp_size=4` 下，主进程与 DP rank 之间对固定 rpc 端口 40236 的初始化竞态**。谁先 bind 是时序决定的，所以它表现为按 pod 独立的掷硬币，**重试就能过**。
 
 > **实操结论**：别去调启动顺序、别去改并发度、别怀疑网络——**只有重试有用**（§6）。每轮之间留 ≥90s，让内核收掉僵尸持有的端口。
+
+⚠️ **同一个竞态有两种报错文本，自愈脚本必须两个都匹配**：
+
+```
+zmq.error.ZMQError: Address already in use (addr='tcp://127.0.0.1:40236')
+ValueError: rpc_port at 40236 is not available in 30 seconds. rpc_port is used by
+            a process already. process.name()='python3' process.cmdline()=[...]
+```
+
+第二种出现在**上一次崩溃的残留进程还占着端口**时（僵尸没被内核收掉就重启了）。我的自愈循环只 grep 了第一种，结果两台 prefill 卡了 5 分钟没人管。正确的匹配：
+
+```bash
+grep -aE 'Address already in use|rpc_port at 40236 is not available' /tmp/srv.log
+```
+
+碰到第二种要**先 `pkill -9 -f 'dynamo[.]sglang'` 清残留再重启**，光重启会继续撞同一个占用者。
 
 ### 5.2 ⚠️ 就绪判据有三层，前两层都会骗人
 
@@ -700,48 +718,105 @@ AssertionError: online c128 does not support MTP
 
 > 第二次测量走的是完整「清空 → 重建 → 冷跑 → 热跑」流程，冷 8,908 / 热 9,409，冷热差 +5.6%（与 §8.4 的 +6.5~7.0% 同量级）。
 
-### 11.5 ⭐ 决定性发现：decode 峰值 = 11,113 tok/s/GPU（官方的 99.2%）
+### 11.5 ⭐ 决定性发现：唯一真正有效的旋钮是 `swa-full-tokens-ratio`
 
-**光看 sa-bench 的聚合数字会一直被 prefill 拖着，看不到 decode 自己的能力。** decode 引擎每隔几百毫秒会自报一次瞬时速率，那才是真值：
+#### 先说怎么读数
+
+**光看 sa-bench 的聚合数字会一直被 prefill 拖着，看不到 decode 自己的能力。** decode 引擎每隔几百毫秒自报一次瞬时速率，两个数要一起看：
 
 ```bash
-kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/.*#running-req: ([0-9]+).*accept len: ([0-9.]+).*gen throughput \(token\/s\): ([0-9.]+).*/  /'"
+# 峰值（decode 引擎的能力上限）—— srv.log 含 NUL，必须先 tr -d
+kubectl exec sgl-0 -- bash -c "tr -d '\000' < /tmp/srv.log | grep 'gen throughput' | \
+  sed -E 's/.*#running-req: ([0-9]+).*full token usage: ([0-9.]+).*swa token usage: ([0-9.]+).*accept len: ([0-9.]+).*gen throughput \(token\/s\): ([0-9.]+).*/\1 \2 \3 \4 \5/' | \
+  awk 'NF==5' | sort -k5 -n | tail -1"
+# 输出: running-req  full占用  swa占用  accept-len  gen-tok/s
 ```
 
-1053 个采样的分布：
+> **这个数是 per-DP-rank（= per GPU），不是引擎总和**。交叉验证：某轮 p50 = 9,587 × 8 rank = 76,696，同轮 sa-bench 实测聚合 output = 74,833，差 2.5%。若是引擎总和则会差 8 倍。
 
-| 分位 | running-req/rank | accept len | **gen tok/s/GPU** |
+#### 完整消融表
+
+统一条件：14× prefill dep4 + dep8 decode（2 节点 8 GPU），sa-bench random 数据，`--disable-radix-cache`，OSL 1024。
+
+**ISL 4096 / 每 frontend conc 1050 × 14**
+
+| # | MTP | `swa-ratio` | **端到端 per-decode-GPU** | TPOT | **峰值 tok/s/GPU** | 峰值 req/rank | full / swa 占用 | accept len |
+|---|---|---|---|---|---|---|---|---|
+| 1 | steps1 draft2 | 0.20 | 6,887 | 58.0 ms | 11,851 | 727 | 0.93 / 0.63 | 1.88 |
+| 2 | steps2 draft3 | 0.20 | 8,802 | 72.4 ms | 10,279 | 708 | 0.90 / 0.52 | 2.36 |
+| 3 | **steps1 draft2** | **0.15** | **10,614** | 77.7 ms | **12,063** | **886** | **0.92 / 0.89** | 1.88 |
+| 7 | steps1 draft2 | 0.15 + `mem-frac 0.88` | **10,704** | 85.3 ms | **12,070** | **999** | 0.92 / 0.67 | 1.88 |
+
+**ISL 8192 / conc 600 × 14**
+
+| # | MTP | `swa-ratio` | **端到端 per-decode-GPU** | TPOT | 峰值 tok/s/GPU | 峰值 req/rank | full / swa 占用 | accept len |
+|---|---|---|---|---|---|---|---|---|
+| 4 | steps1 draft2 | **0.10** | **9,354** | 57.1 ms | 10,490 | 588 | 0.78 / **0.96** | 1.87 |
+| 5 | steps1 draft2 | 0.15 | 9,053 | 48.8 ms | 10,035 | 410 | 0.80 / 0.37 | 1.89 |
+| 6 | steps2 draft3 | 0.20 | 8,077 | 43.5 ms | 9,217 | 373 | 0.93 / 0.37 | 2.39 |
+
+**对标官方 11,200**：4K 端到端 10,614 = **94.8%**，4K 峰值 12,063 = **107.7%**。
+
+#### 结论 1：最优点 = 两个 KV 池同时饱和
+
+`swa_tokens = full_tokens × ratio`，两个池吃同一份预算（实测总量恒定 ≈ 4.01 M token）。**调 ratio 就是在两个池之间划线，划错一边就有一半浪费**：
+
+| | full 占用 | swa 占用 | 结果 |
 |---|---|---|---|
-| p50（ISL 8192 稳态）| 588 | 1.87 | 9,587 |
-| p90 | 597 | 1.88 | 10,116 |
-| p99 | 584 | 1.89 | 10,490 |
-| **max（ISL 4096 撑爆瞬间）** | **876** | 1.79 | **11,113** |
-| **复测 max**（另一轮 ISL 4096）| **933** | 1.78 | **11,083** |
+| 4K @ ratio 0.20 | 0.93 | 0.63 | full 先满，SWA 池浪费 37% → batch 卡在 727 |
+| **4K @ ratio 0.15** | **0.92** | **0.89** | **两边同时到顶 → batch 冲到 886** |
+| 8K @ ratio 0.15 | 0.80 | 0.37 | SWA 池浪费 63% → batch 只有 410 |
+| 8K @ ratio 0.10 | 0.78 | 0.96 | swa 先满，但已接近平衡 → batch 588 |
 
-**复测把瓶颈定位得更死了**。两次撞顶时的 KV 池占用：
+**最优 ratio 跟 ISL 绑定，不是常数**：序列越长 full-attn KV 占比越高（SWA 只留窗口、full 留全部），所以长 ISL 要更低的 ratio。实测甜点 **ISL 4096 → 0.15，ISL 8192 → 0.10~0.12**。
 
-| | full-attn 池 | **SWA 池** |
+> **调参方法**：跑一轮看 `full token usage` 和 `swa token usage`，**哪个先到 0.9+ 就给哪个加预算**（swa 先满 → 调高 ratio；full 先满 → 调低）。目标是两个数同时落在 0.88–0.93。
+
+#### 结论 1b：batch 到 ~890 就算力饱和，再堆没用
+
+把 `mem-fraction-static` 从 0.85 提到 0.88（KV 总预算 +13%）：
+
+| | batch/rank | 峰值 tok/s/GPU | 端到端 |
+|---|---|---|---|
+| mem-frac 0.85 | 886 | 12,063 | 10,614 |
+| mem-frac 0.88 | **999** (+13%) | 12,070 (**+0.06%**) | 10,704 (+0.8%) |
+
+**batch 涨 13%，吞吐纹丝不动。** 说明在 ~890/rank 之后 decode 已经从「KV 容量受限」转成「算力受限」—— **12,070 tok/s/GPU 就是 dep8 在 GB300 上的硬天花板**，kernel 的 1024/rank 上限（999 已经摸到 97%）根本不是真正的约束。
+
+> 推论：想再往上只有两条路 —— 更快的 attention/MoE kernel，或者换拓扑摊薄每卡计算量。**继续调 batch 相关的参数（`max-running-requests`、`cuda-graph-max-bs`、`mem-fraction`）已经没有意义。**
+
+#### 结论 2：MTP `steps=2` 峰值亏 13%、端到端赚 28%（两个指标方向相反）
+
+| | running-req | accept len | 反推单步耗时 | 峰值 tok/s/GPU | 端到端 |
+|---|---|---|---|---|---|
+| steps=1 draft=2 | 727 | 1.88 | **115.3 ms** | **11,851** | 6,887 |
+| steps=2 draft=3 | 708 | 2.36 | 162.5 ms | 10,279 | **8,802** |
+
+（单步耗时 = running-req × accept-len ÷ gen-throughput）
+
+accept len +26%，但单步耗时 **+41%** —— 多那一轮 draft forward 在大 batch 下不划算。**这是官方 recipe 高并发下坚持 `steps=1` 的量化理由**，cookbook 只含糊写了「饱和时收益为负」。
+
+而端到端反而 +28%，因为「每步多吐 token」的收益一直在，「每步更慢」的代价只在 batch 撑到顶时才显著；prefill 喂不满时 batch 大部分时间不在顶点。
+
+> **两个指标不矛盾，选哪个取决于目标**：对标 decode 引擎能力用峰值 → `steps=1`；对标真实业务吞吐用端到端 → prefill 受限的部署里 `steps=2` 可能更好。**本文最终推荐配置 #3（`steps=1` + ratio 按 ISL 调）**，因为它在两个指标上同时最优。
+
+#### 结论 3：之前认定的「瓶颈全在 prefill」只对了一半
+
+早期（§11.4）我判定 gap 全在 prefill，依据是 ISL 8192 稳态 batch 只有 588/rank 而峰值能到 933。**这个判断在当时的参数下成立，但它掩盖了一个大得多的旋钮**：同样 14 台 prefill、同样并发，只把 `swa-ratio` 从 0.20 改到 0.15，端到端就从 6,887 涨到 10,614（**+54%**）。
+
+真实的因果分层：
+
+| 因素 | 量级 | 可修性 |
 |---|---|---|
-| 首测 @876/rank | 0.78 | **0.96** |
-| 复测 @933/rank | 0.79 | **0.96** |
+| **KV 池分配失衡** | **+54%** | 一个参数值 |
+| prefill 供给不足 | +4.3%（攒 batch） | 要加机器 |
+| kernel 1024/rank 硬顶 | 还没摸到（886/1024 = 87%） | 要改上游 |
 
-**两次都是 SWA 池先满（0.96），而 full-attn 池只用了 0.78–0.79 —— 是预算分配失衡，不是总量不够。** kernel 上限 1024/rank，按 11,083 @ 933 线性外推 = **~12,165**。把 `swa-full-tokens-ratio` 从 0.1 **调高**（源码：ratio = SWA池÷full池，调高才是给 SWA 加预算，见 §11.6 #7）理论上能推过去。官方 wide-EP 用的正是 **0.20**。
-
-> **这个数是 per-DP-rank（= per GPU），不是引擎总和**。交叉验证：p50 9,587 × 8 rank = 76,696，而同一轮 sa-bench 实测聚合 output 是 74,833，差 2.5%。若是引擎总和则差 8 倍，不可能。
-
-**结论**：
-
-1. **decode 引擎本身完全够格** —— 峰值 11,113 vs 官方 11,200 = **99.2%**。
-2. **稳态只有 9,587 的唯一原因是 batch 不够大** —— 588/rank vs 撑爆时的 876/rank。batch 涨 49%，per-GPU 就涨 16%。
-3. **所以那 20% 的 gap 不是内核成熟度、不是拓扑、不是参数** —— 是 **prefill 喂不满 decode**。追了一整夜的三条路（换镜像 / wide-EP / 官方 decode 参数）全部指错了方向，而 §11.4 Exp E 的攒 batch 之所以是唯一有效的，正因为它是唯一一个真正在「让 batch 变大」的改动。
-
-**怎么撞出峰值的（可复现）**：把 ISL 从 8192 降到 4096，prefill 工作量减半、喂料速度翻倍，decode 并发立刻从 ~4,700 冲到 ~7,000（876×8），**撞上 `--max-running-requests 8192` 上限触发 retract**。而 MTP 路径下 `batch.retract_decode()` 是 `NotImplementedError`，于是崩了——但崩之前那一下，就是 11,113。
-
-> **这个"失败"本身是最硬的证据**：同样的并发设置，ISL=8192 时永远撑不到上限，ISL=4096 时立刻撑爆。**证明长 ISL 下 decode 一直在饿着。**
+> **教训**：「瓶颈在 X」这类结论必须标注它成立的参数前提。我在 ratio 设错的情况下测出「batch 上不去」，然后把原因全归给了 prefill —— 方向没错，权重完全估错了。
 
 #### Exp D：dep12（3 节点 decode）+ 13 prefill
 
-在 16 节点约束下找 prefill/decode 最优配比（对应官方 `15p1d-dep12`）。**已降优先级**——§11.5 表明该调的是喂料速度，不是 decode 拓扑。
+在 16 节点约束下找 prefill/decode 最优配比（对应官方 `15p1d-dep12`）。**已放弃**——上表证明该调的是 KV 池划分，不是 decode 拓扑。
 
 ### 11.6 硬约束清单（都是官方 recipe 里看不出来、只有真跑才撞得到的）
 
@@ -754,8 +829,75 @@ kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/
 | 3 | **`mem-fraction-static 0.94` 是 wide-EP 专用** | `torch.OutOfMemoryError` | dep8 单卡扛 1/8 模型，是 dep32 的 4 倍，0.94 把激活空间挤没 |
 | 4 | **attention plan kernel 硬顶 1024 请求/rank** | `c_plan.cuh:522: GPU plan only support batch size up to 1024` | SGLang 自己 hardcode 的 `kMaxPrefillBatchSize`，源于「单 CUDA block + 每线程一请求」的实现（block 线程上限就是 1024）+ 静态 shared memory 数组。**不是硬件限制，是实现取舍**（为避开 MTP/graph capture 时的 host sync）|
 | 5 | **PD 两侧 `context-length` 必须一致** | `Decode handshake failed` | 只改 decode 会让 KV 布局对不上。**decode 照常注册、frontend 全 200、单条 e2e 也过**，只有压测才暴露。而且这个改动本身多余——SGLang 的 KV 页按需分配，短请求本就不占满上限 |
-| 6 | **反复重启 decode 会把 prefill 全带崩** | prefill 侧 `SIGQUIT`，成片消失 | disagg 心跳一断，prefill 的子进程失败自杀。**做拓扑/参数实验必须整个 fleet 一起重启**，不能只重启 decode。本轮踩了 3 次，最后一次 14 个 prefill 全灭 |
-| 7 | **`swa-full-tokens-ratio` 的方向很容易搞反** | 调到 0.056 后 `full token usage: 0.95` @ 仅 356 running-req，rank 挂掉 | **源码定义**：`swa_full_tokens_ratio = SWA池 ÷ full池`（`swa_tokens = full_tokens × ratio`，`pool_configurator.py:387`）。所以 **ratio ↑ = SWA 池变大 / full 池变小**，ratio ↓ 反之。我一度以为反了，把本已吃紧的 SWA 又砍一半。**dep8 用 0.1；若 SWA 先满就往上调（官方 wide-EP 用 0.20）** |
+| 6 | **重启 decode 会把 14 台 prefill 全带崩** | prefill 侧 `No live scheduler processes found` → `kill_process_tree(include_parent=True)` | disagg 对端一消失，prefill 的 scheduler 自杀。**pkill 重启和删 pod 重建都一样，躲不掉**。做 decode 实验就要预算上 prefill 的重建时间 |
+| 7 | **`pkill -9` 一个满载的 decode 会泄漏 ~97 GB 显存/卡** | 下次启动 `RuntimeError: Not enough memory`，**参数一个字没改也起不来** | 见下方专述。报错还会把人往「调大 mem-fraction」这个完全相反的方向带 |
+| 8 | **etcd 注册数不能当存活判据** | 14 台 prefill 全崩了，etcd 仍然显示 `prefill=14` | lease TTL 没过期，死进程的 key 还挂着好几分钟。**必须看显存**（见下方） |
+| 9 | **重启任何 server 之后，frontend 必须一起重启** | e2e curl 挂死超时，decode 日志停在重启前那一刻、几百条 `Attempting to reconnect to <prefill>:30001` | frontend 缓存了旧 instance 的连接，etcd 里 `prefill=14 decode=1` 全绿也没用。**14 个 frontend 全部 `pkill -9 -f 'dynamo[.]frontend'` 重起，e2e 立刻恢复** |
+| 7 | **`swa-full-tokens-ratio` 的方向很容易搞反** | 调到 0.056 后 `full token usage: 0.95` @ 仅 356 running-req，rank 挂掉 | **源码定义**：`swa_full_tokens_ratio = SWA池 ÷ full池`（`swa_tokens = full_tokens × ratio`，`pool_configurator.py:387`）。所以 **ratio ↑ = SWA 池变大 / full 池变小**，ratio ↓ 反之。我一度以为反了，把本已吃紧的 SWA 又砍一半。**实测最优跟 ISL 绑定：4K→0.15，8K→0.10**，判据见 §11.5 结论 1 |
+
+#### 约束 7 专述：SIGKILL 满载 decode = 泄漏 97 GB/卡
+
+真实机制：
+
+```bash
+# pkill -9 之后，pod 里一个活进程都没有（全是 zombie，RSS=0）
+$ kubectl exec sgl-0 -- ps -eo pid,stat,rss,comm --sort=-rss | head
+  PID STAT   RSS COMMAND
+    1 Ss    2432 sleep            ← PID 1 是 sleep infinity，不 reap 子进程
+  357 Z        0 python3          <defunct>
+  645 Z        0 sglang::schedul  <defunct>
+
+# 但显存没还
+$ kubectl exec sgl-0 -- nvidia-smi --query-gpu=index,memory.used,memory.total --format=csv,noheader
+0, 97486 MiB, 284208 MiB      ← 4 张卡全是 97 GB
+1, 97486 MiB, 284208 MiB
+```
+
+284 GB 减掉 97 GB 只剩 187 GB，而 `mem-fraction-static 0.85` 要 241 GB → 下一次启动必 OOM。**而且报错是 `Not enough memory. Please try to increase --mem-fraction-static.`，会把人往「调大 mem-fraction」这个完全相反的方向带。**
+
+推测原因：GB300 走 MNNVL/IMEX，导出到 fabric 的显存在进程被 SIGKILL 时不走正常回收路径；容器 PID 1 是 `sleep infinity` 不 reap，zombie 一直挂着。
+
+**正确做法 —— 删 pod 让 StatefulSet 重建，不要 pkill**：
+
+```bash
+kubectl delete pod sgl-0 sgl-1 --wait=false
+# 等 Running 且显存归零（实测 56 秒）
+until [ "$(kubectl get pod sgl-0 sgl-1 --no-headers | grep -c Running)" = 2 ] && \
+      [ "$(kubectl exec sgl-0 -- nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits | head -1 | tr -d ' ')" -lt 5000 ]; do sleep 10; done
+```
+
+删 pod 到显存归零实测 **56 秒**，比等泄漏自己消失快得多（等了 20 分钟没动静）。
+
+> **这个泄漏会污染后续所有实验**。本轮 MTP `steps=2` 连续 OOM 三次，我一度判定是 MTP 本身内存不够、还降了 `cuda-graph-max-bs` 重试 —— 其实三次全跑在被第一次 pkill 留下的 97 GB 污染的环境里。清干净之后 **MTP2 一次就起来了**。
+>
+> **判据：每次 decode 启动前先看 `nvidia-smi` 显存是否归零，不归零的失败结论一律作废。**
+
+#### 约束 8 专述：存活判据必须看显存，不能看 etcd
+
+`§5.2` 说「etcd 注册数是权威判据」，那是针对**启动阶段**（能注册 = 真起来了）。**崩溃检测反过来完全不成立**：
+
+```bash
+# 14 台 prefill 全部已死
+$ for i in $(seq 2 15); do kubectl exec sgl-$i -- nvidia-smi \
+    --query-gpu=memory.used --format=csv,noheader,nounits | head -1; done
+0 0 0 0 0 0 0 0 0 0 0 0 0 0          ← 显存全空 = 全崩
+
+$ curl etcd .../v1/instances/dynamo/prefill/generate | wc -l
+14                                     ← 仍然显示 14 台在线
+```
+
+lease TTL 没到期，死进程的 key 会在 etcd 里再挂几分钟。我据此误判「prefill 全程存活」，把错误结论写进了这份文档，直到去查显存才发现。
+
+**正确的存活判据**（两个都要）：
+
+```bash
+# 1. 显存 > 200 GB（prefill dep4 满载）
+MEM(){ kubectl exec sgl-$1 -- bash -c "nvidia-smi --query-gpu=memory.used --format=csv,noheader,nounits|head -1"; }
+# 2. 日志里没有 include_parent=True 的自杀记录
+kubectl exec sgl-$i -- bash -c "tr -d '\000' < /tmp/srv.log | grep -c 'kill_process_tree.*include_parent=True'"
+```
+
+> 注意 `/tmp/srv.log` 是**二进制**（含 NUL），`grep` 会直接返回 `binary file matches`。所有分析都要先 `tr -d '\000'`，或者用 `grep -a`。
 
 > **参数语义务必读源码再动手**。本项目在 `swa-full-tokens-ratio` 上栽了两次：第一次照搬 dep32 的值、第二次把方向理解反了。判据是 decode 日志里的两个 usage：
 >
@@ -772,26 +914,36 @@ kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/
 
 ### 11.7 结论与剩余路径
 
-**一句话**：那 20% 的 gap 是 **prefill 喂不满 decode**，不是内核成熟度、不是拓扑、不是参数没调对。
+**一句话**：gap 的大头是 **KV 池预算划错**（一个参数值 +54%），prefill 供给不足只是次要因素。
 
-证据链（三条独立证据互相印证）：
+最终成绩（16 节点，14× prefill dep4 + dep8 decode，配置 #3：`steps=1 draft=2` + `swa-ratio 0.15`）：
 
-1. **decode 自报峰值 11,113 = 官方 11,200 的 99.2%**（§11.5）—— 引擎本身够格。
-2. **稳态只有 9,587 是因为 batch 只有 588/rank**，峰值时 876/rank。batch +49% → per-GPU +16%。
-3. **ISL 8192→4096（喂料翻倍）立刻把 decode 撑爆**（撞 KV 上限触发 retract）—— 长 ISL 下 decode 一直在饿着。
+| 指标 | 实测 | 官方 11,200 |
+|---|---|---|
+| ISL 4096 端到端 per-decode-GPU | **10,704** | 95.6% |
+| ISL 4096 decode 自报峰值 | **12,070** | **107.8%** |
+| ISL 8192 端到端（`swa-ratio 0.10`）| 9,354 | 83.5% |
 
-**唯一有效的配置改动也印证这点**：攒 batch（`polling-interval 1→8` + prefill delayer）+4.3%，因为它是唯一一个真正在「让 batch 变大」的改动。换镜像 / wide-EP / 搬官方 decode 参数三条路全是死的。
+**结论链**：
 
-**理论天花板**：kernel 硬顶 1024 请求/rank（§11.6 #4）。按 876/rank = 11,113 线性外推，1024/rank ≈ **12,990**。要摸到它，需要 prefill 能持续把 decode 喂到满 batch。
+1. **decode 引擎本身超过官方标称** —— 峰值 12,070 vs 11,200 = 107.8%。
+2. **端到端 10,704 与峰值 12,070 的差距（11%）才是 prefill 供给不足的真实份额** —— 而不是早期估计的 20%。
+3. **早期把 gap 全归给 prefill 是权重估错**（详见 §11.5 结论 3）。真正的排序是：KV 池划分 +54% ≫ 攒 batch +4.3% ≫ 其他。
+4. **换镜像 / wide-EP / 照搬官方 decode 参数三条路全是死的**（§11.4）。
+
+**天花板已经摸到了，而且不是 kernel 的 1024/rank**：把 KV 预算加大 13% 后 batch 冲到 999/rank（上限的 97%），吞吐却只涨 0.06%（§11.5 结论 1b）。**dep8 在 GB300 上的算力天花板 = 12,070 tok/s/GPU**，batch 超过 ~890 就不再是瓶颈。
 
 **剩余可做的**（按收益/成本）：
 
 | # | 动作 | 成本 | 说明 |
 |---|---|---|---|
-| 1 | **ISL 4096 + swa-ratio 0.056 打满 1024/rank** | 一轮部署 | 本文最后一轮在做。短序列让 prefill 快一倍、KV 占用减半，是够到 12,990 最直接的路 |
-| 2 | 加 prefill 节点（需 >16 节点） | 要机器 | 16 节点已是 14 prefill + 2 decode，加不动了。官方 18 节点正是为此 |
-| 3 | 改 kernel 突破 1024/rank | 上游 PR | 把「单 block + 每线程一请求」改成 grid-stride + 动态 shared memory |
-| 4 | 真实流量下开 prefix cache + wide-EP | 换负载 | wide-EP 摊薄权重腾出的 HBM 主要价值是装更多 prefix cache（KV hash），命中率上去 prefill 就少干活。**但 sa-bench 用 random 数据、且本文全程 `--disable-radix-cache`，这条在合成 benchmark 上赚不到** —— 这也解释了官方 frontier 曲线与我们实测的矛盾 |
+| 1 | ~~`mem-fraction-static` 0.85 → 0.88~~ | 已试 | **无效**：batch +13%，吞吐 +0.06%。0.88 本身能跑（0.94 才 OOM，§11.6 #3），但没意义 |
+| 2 | **ISL 8192 上把 ratio 调到 0.10~0.12** | 一轮部署 | 8K 在 0.15 时 SWA 浪费 63%，0.10 时 swa 0.96 略过头，中间还有空间 |
+| 3 | 加 prefill 节点（需 >16 节点） | 要机器 | 16 节点已是 14+2，加不动。官方 18 节点正为此 |
+| 4 | 改 kernel 突破 1024/rank | 上游 PR | 把「单 block + 每线程一请求」改成 grid-stride + 动态 shared memory |
+| 5 | 真实流量下开 prefix cache + wide-EP | 换负载 | wide-EP 摊薄权重腾出的 HBM 主要价值是装更多 prefix cache（KV hash），命中率上去 prefill 就少干活。**但 sa-bench 用 random 数据、且本文全程 `--disable-radix-cache`，这条在合成 benchmark 上赚不到** —— 这也解释了官方 frontier 曲线与我们实测的矛盾 |
+
+> **给复现者的一句话**：如果只想抄一个能跑出好数的配置，用 §5 的 `decode-dep8.sh` 并把 `--swa-full-tokens-ratio` 按你的 ISL 设成 **4K→0.15 / 8K→0.10**，其余参数别动。
 
 
 ---
