@@ -96,7 +96,46 @@ done
 
 模型在**节点本地 SSD**（hostPath `/mnt/disks/raid/0`），删 pod 不丢。
 
-> ⚠️ **这一步不能跳过，哪怕上一轮刚跑完**。节点数（17）比 pod 数（16）多，重建 StatefulSet 时调度器**会换节点**——上一轮的空闲节点这轮可能被占用，那个 pod 就是空的。实测重建后 `sgl-0` 落到了只有 NVFP4 权重的备用节点上。
+> ⚠️ **这一步不能跳过，哪怕上一轮刚跑完**。节点数（17）比 pod 数（16）多，重建 StatefulSet 时调度器**会换节点**——上一轮的空闲节点这轮可能被占用，那个 pod 就是空的。
+
+### 3.1 ⚠️ 先查 RAID 挂载，再查模型（`md0` → `md127` 陷阱）
+
+**「模型缺失」十有八九不是模型没拷，是那台的 Local SSD RAID 根本没挂上。** 一条命令先排除：
+
+```bash
+for i in $(seq 0 15); do
+  printf "sgl-%s: " $i
+  kubectl exec sgl-$i -- df -h /mnt/ssd | tail -1 | awk '{print $2, $5}'
+done
+# 正常：12T / 15-20%。若看到 **256K 100%** → RAID 没挂，见下
+```
+
+**根因**：节点重启后内核会把已存在的 RAID 阵列**自动组装成 `/dev/md127`**，而不是创建时的 `/dev/md0`。而常见的 RAID DaemonSet 脚本写的是：
+
+```bash
+if ! grep -q "md0" /proc/mdstat; then mdadm --create /dev/md0 ... ; fi
+tune2fs -l /dev/md0 || mkfs.ext4 -F /dev/md0
+mount /dev/md0 /mnt/disks/raid/0
+```
+
+`"md127"` 里不含 `"md0"` → 判定「没有阵列」→ 去 create → 盘已被 md127 占用 → `mdadm: Device or resource busy` → 后面 `mkfs` / `mount` 连环失败。
+
+**失败后的表现极具迷惑性**：hostPath 用 `DirectoryOrCreate`，kubelet 会在 COS 只读根文件系统上建出这个目录，落到 tmpfs 上 —— **pod 正常起、`/mnt/ssd` 存在、但只有 256K**。写模型时静默失败（`curl -o` 写出 0 字节文件，退出码还是 0）。
+
+**修复**（数据无损，阵列和 ext4 都还在，只是没挂）：
+
+```bash
+# 在该节点的 raid DaemonSet pod 里执行（需 mountPropagation: Bidirectional 才能传播到宿主）
+MD=$(awk '/^md[0-9]+ : active/{print $1; exit}' /proc/mdstat)   # 动态识别，别写死 md0
+tune2fs -l /dev/$MD >/dev/null 2>&1 || mkfs.ext4 -F /dev/$MD    # ★ 有 fs 就别格式化
+mkdir -p /mnt/disks/raid/0
+mountpoint -q /mnt/disks/raid/0 || mount -o discard,defaults /dev/$MD /mnt/disks/raid/0
+chmod a+w /mnt/disks/raid/0
+```
+
+挂好后**不用重启 sgl pod** —— sgl 的 volumeMount 带 `mountPropagation: HostToContainer`，宿主机上的新挂载会直接传播进运行中的容器。实测 5 台修复后 pod 内立刻看到 12T 和 64 个分片，模型数据一个没丢。
+
+> 永久修复见 `manifests/raid-pool-0002.yaml`（已把 `md0` 硬编码改成动态识别，并在结尾加了「仍是 tmpfs 就报 FAILED」的自检）。
 
 > ⚠️ **两份权重同名易混**。原装目录叫 `DeepSeek-V4-Pro`，NVFP4 版叫 `DeepSeek-V4-Pro-NVFP4`。启动前用 `config.json` 里的 `quantization_config` 二次确认自己拿的是哪份（见文首告警）。
 
