@@ -146,6 +146,13 @@ def build_config(a):
     if a.force_load_balancing:
         m.moe_router_force_load_balancing = True      # benchmark 专用：消除路由不均衡噪声
 
+    # TP>1 必须开 sequence parallel，否则 LayerNorm/Dropout 激活不被切分，
+    # 白付 TP 通信却省不下显存（TP 换 MBS 这笔交易的前提）。
+    if a.tp > 1:
+        m.sequence_parallel = a.sequence_parallel
+        # Parallel Folding：专家层不做 TP 切分（Megatron-Core MoE 论文 Guideline 4）
+        m.expert_tensor_parallel_size = 1
+
     if base.pp_layout:
         m.pipeline_model_parallel_layout = base.pp_layout
         # pp_layout 字符串里已显式写了 E(embedding) 和 L(loss)，
@@ -247,6 +254,8 @@ def main():
     p.add_argument("--no-paged-stash", dest="paged_stash", action="store_false", default=True)
     p.add_argument("--no-router-fusion", dest="router_fusion", action="store_false", default=True)
     p.add_argument("--no-permute-fusion", dest="permute_fusion", action="store_false", default=True)
+    p.add_argument("--sequence-parallel", action="store_true", default=False,
+                   help="TP>1 时必须开；切分 LayerNorm/Dropout 激活")
     p.add_argument("--recompute-modules", nargs="*", default=["moe_act"],
                    help="官方 BF16 recipe 用 [moe_act]，FP8_MX 用 []")
     p.add_argument("--recompute-granularity", default="selective",

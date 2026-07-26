@@ -1403,6 +1403,56 @@ microbatch 抓进一张图）。E2/E3（GBS 扫点）正好可以验证这条 �
 
 ---
 
+### 13.3.1 ⭐ 实测更正：跨域**不再需要**手动设 `NCCL_MNNVL_ENABLE=0`（2026-07-26 E13 实证）
+
+§13.3 按既往经验写了「跨域必须 `NCCL_MNNVL_ENABLE=0`，否则报错」，并设计 E13 作为**负例**去实证它。
+**结果是负例没有失败——不设也照样跑通。**
+
+#### E13 实测（故意不设 MNNVL 相关变量）
+
+| 指标 | 值 |
+|---|---|
+| 状态 | ✅ **OK，零 NCCL 报错** |
+| **TFLOPS** | **1,267.3** Model TFLOP/s/GPU |
+| **MFU** | **23.5%**（FP8 峰值 5,400） |
+| **Throughput** | **9,263** tokens/s/GPU（合计 ~2.37 M tokens/s） |
+| Step Time | 14.15 s |
+| HBM 峰值 | 272 GB |
+| 启动总耗时 | 350.1 s |
+| graph capture | 26.6 s |
+| 配置 | 256 GPU / 4 域 · TP1 PP4 VPP2 EP32 · MBS2 GBS8192 · FP8_MX · full graph + cutedsl + a2a overlap |
+
+**日志中记录的实际生效值**（脚本每次启动都会打印，防止 GIB 偷偷覆盖）：
+
+```
+### MNNVL 实际生效值: NCCL_MNNVL_ENABLE=<unset> NCCL_CUMEM_ENABLE=<unset> USE_MNNVL=1
+```
+
+确认是**真的 unset**，不是被别处设成 0；`/usr/local/gib/configs/nccl.a4xmax.conf` 里也没有 MNNVL 相关项。
+
+#### 为什么与既往经验不一致
+
+`NCCL_MNNVL_ENABLE` 的默认值 **2 是「自动模式」** —— 由 NCCL 自己探测 NVLink 域边界，
+域内走 MNNVL、跨域回落 RDMA。**自动模式本来就不该出错**，早期需要手动设 0 是在绕当时的 bug。
+
+本环境（**GKE + GIB + DRA ComputeDomain 每 subblock 一个 + NCCL 2.30.4**）下自动模式工作正常。
+既往报错的两处出处，情境都与此不同：
+
+| 出处 | 情境 | 说明 |
+|---|---|---|
+| [`a4x-max/08-multi-domain:73`](../../a4x-max/08-multi-domain/README.md) | 「跨域必须关闭 MNNVL」 | 该表主要针对 **nccl-test 裸测**口径 |
+| [`a4x/07-megatron-training:534`](../../a4x/07-megatron-training/README.md) | CUDA error 801 | **自建 K8s + Rocky + NVIDIA 580**，且是「**即使设 0 也报错**」的失败案例，不是「设了就好」 |
+
+**最有力的自洽旁证**：07e 跑 DSV3 256 卡跨 4 域成功时，用的就是 `USE_MNNVL=1` 且**未设** `NCCL_MNNVL_ENABLE` ——
+与 E13 完全相同。即本仓既有的成功案例本身就没依赖这个变量。
+
+#### 结论与建议
+
+- **在本环境（GKE/GIB/DRA/NCCL 2.30.4）跨域训练无需手动设 `NCCL_MNNVL_ENABLE=0`**，自动模式即可。
+- 后续实验仍显式设 `=0`，与 E13 构成 A/B；**若两者性能无差异，则该变量在本环境可完全省略**。
+- **自建集群 / 老 NCCL / 裸 nccl-test 场景请仍按 §13.3 处理** —— 本结论只在上述软硬件组合下验证过。
+- **无论设或不设，都要在日志里打印实际生效值** —— 这条运维纪律保留，因为 GIB 覆盖变量是真实发生过的。
+
 ### 13.9 执行顺序
 
 1. 释放现有 64 卡实验（`hy3=true` 标签 + pod）
