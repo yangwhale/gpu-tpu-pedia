@@ -551,7 +551,10 @@ Hy3 **没有官方 Megatron benchmark**，NVIDIA perf summary 里也没有。判
 | `yw-pool-64.yaml` | 单 ComputeDomain 16 节点 64 GPU sleep-infinity pod 池 |
 | `run-hy3-yw.sh` | 单 pod 启动脚本（完整 env + rank 计算 + torchrun） |
 | `hy3_provider.py` | Hy3 `GPTModelProvider` 构造（AutoBridge 路径 + from-scratch 路径 + 训练覆盖） |
-| `mem_calc.py` | BF16 显存测算器（切分公式 + 1.34× 运行时开销标定 + GBS/最少卡数建议） |
+| `mem_calc.py` | 显存测算器（切分公式 + 运行时开销标定 + GBS/最少卡数建议） |
+| `sweep.sh` / `gen_table.py` | 消融扫点框架 + 超级大表格生成器 |
+| `loss_align.sh` | FP8 vs BF16 训练质量对齐验证 |
+| `timeline.py` | 启动时间线：`--stamp` 打行级时间戳、`--parse` 拆阶段耗时 |
 
 ---
 
@@ -1237,29 +1240,65 @@ python hy3_pretrain.py \
 而不必把 GBS 抬到 16384（GBS 太大会拉长单步时间、影响收敛超参）。
 **这才是「256 卡该换并行方案」的真实含义**，不是简单把 64 卡配置搬过去。
 
-#### ⭐⭐ 洞察三：TP + sequence parallel 是两家都没试过的杠杆
+#### ⭐⭐ 洞察三：TP 是「显存妥协」而非「性能优化」——但 Hy3 恰好是值得一试的边界情形
 
-**TP 不只切权重，配 sequence parallel 还切激活。** 这是唯一能真正突破 MBS=2 天花板的手段：
+**TP + sequence parallel 会把激活按 TP 切分**，这是唯一能突破 MBS=2 天花板的手段：
 
 | TP | PP | EP | DP | MBS | 精度 | 激活 | 朴素 | ×1.78 | 判定 |
 |---|---|---|---|---|---|---|---|---|---|
 | 1 | 2 | 32 | 128 | 2 | FP8 | 90.3 | 127.8 | 227.5 | ✅ |
 | 1 | 2 | 32 | 128 | **4** | FP8 | **180.6** | 218.1 | 388.3 | ❌ OOM |
-| **2** | 2 | 32 | **64** | **4** | FP8 | **90.3** | 121.7 | **216.7** | ✅ **可行！** |
-| **2** | 2 | 32 | 64 | **4** | BF16 | 90.3 | 127.9 | **227.7** | ✅ 可行 |
+| **2** | 2 | 32 | **64** | **4** | FP8 | **90.3** | 121.7 | **216.7** | ✅ 装得下 |
 | **2** | 4 | 32 | 32 | **4** | FP8 | 93.0 | 115.1 | **204.9** | ✅ 最宽裕 |
 
-**TP=2 把激活对半砍，MBS=4 就装得下了。**
+**但官方指南明确不建议轻易加 TP。** 依据 Megatron-Core MoE 论文
+[《Scalable Training of Mixture-of-Experts Models with Megatron Core》(arXiv 2603.07685)](https://arxiv.org/html/2603.07685v2) §9.1 的五条 Guideline：
 
-**为什么这个杠杆只有 256 卡用得起**：TP 会吃掉 DP。
-- 64 卡 TP=2 PP=2 → DP=16，EP ≤ 16，专家并行被严重挤压；
-- 256 卡 TP=2 PP=2 → **DP=64，EP=32 完全不受影响**。
+| Guideline | 原文要点 | 对 Hy3 的含义 |
+|---|---|---|
+| **1. 最小化模型并行、最大化 DP** | 「Keep TP/EP/PP/CP as small as possible while avoiding OOM. Model parallelism introduces communication overhead that hurts performance.」 | **TP 是 OOM 的解药，不是提速的手段** |
+| **2. EP × TP 必须在 NVLink 域内** | 「Ensure EP×TP fits within the NVLink Domain」 | TP2 × EP32 = 64 ≤ NVL72 ✅ **满足** |
+| 3. 跨节点扩展用 PP | 「prefer PP over expanding TP/EP across nodes」 | 跨 4 域应靠 PP，不是 TP |
+| **4. 专家层优先 EP 而非 TP** | 「Better GEMM efficiency / Lower communication / Simpler graph」；Mixtral 实测 **EP8×TP1 优于 EP4×TP2** | **必须设 `ETP=1`**（Parallel Folding：TP 只切 attention，专家不切）|
+| 5. 长序列用 CP | — | seq 4096 用不上；若测 8192 长上下文再考虑 |
 
-Hy3 的 attention 只占 2% 参数，我此前据此判断「TP 纯亏通信」—— **那个判断只对权重成立，忽略了 TP 对激活的切分作用**。
-在显存是硬约束、而 MBS 又卡住算力密度的场景下，TP 的价值不在省权重，而在**买回批次**。
+**最有力的反证来自论文自己的例子**：
+> 「GB200's 192 GB per GPU (vs. H100's 80 GB) **allows TP1/PP4 instead of TP2/PP8**」
 
-> ⚠️ 前提：TP>1 必须开 `sequence_parallel=True`，否则 LayerNorm/Dropout 的激活不被切分，省不下来。
-> 另需关注 `expert_tensor_parallel_size`（ETP）：Qwen3 用 ETP=1（专家不做 TP 切分），本方案沿用。
+**显存一变大，官方就把 TP 降下来** —— 这坐实了 TP 是显存妥协。GB300 有 288 GB，按此逻辑更应该 TP=1。
+
+##### 那为什么还要测 TP？—— Hy3 恰好落在指南没覆盖的边界
+
+指南假设「显存够就别开 TP」，隐含前提是**批次已经开得够大、GEMM 形状已经饱和**。Hy3 不满足这个前提：
+
+1. **hidden=4096 本身就窄**（DSV3 是 7168），GEMM 形状先天偏小，算力密度吃亏；
+2. **MBS 被死死卡在 2**（64 卡三种打法全灭，256 卡两家参照也都卡在 ≤2）；
+3. 于是「用 TP 通信换 MBS 翻倍」变成一笔**可能划算的交易** —— 这正是指南没讨论的情形。
+
+**GQA 让这笔交易在 Hy3 上可行**（Chris 指出的关键点）：
+Hy3 是 GQA，`num_query_groups=8`，TP ∈ {1,2,4,8} 都能整除，切分干净；
+而 MLA 模型（DSV3）受 `q_lora_rank`/`kv_lora_rank` 结构约束，TP 切分远不如 GQA 自然。
+**所以「试 TP」这件事对 Hy3 成立，对 DSV3 未必** —— 这也是两家参照都没试的原因之一。
+
+##### 预测与判据
+
+按 Guideline 1/4，**我的预测是 TP2 净亏**：TP 的 all-reduce 每层两次（前向+反向各两次），
+而 MBS 2→4 带来的 GEMM 收益在 hidden=4096 下未必够大。
+但这是**必须实测的边界情形**，不能靠推。判据：
+
+- **E4（TP2+MBS4）> E1（TP1+MBS2）** → 交易划算，指南在此边界不适用，是有价值的新发现；
+- **E4 < E1** → 指南成立，记录「Hy3 上 TP 的通信代价大于 MBS 收益」这一负结论，并给出量化差值。
+
+> 无论哪个结果都有价值。**测不出正收益也要写进文档** —— 否则下一个人还会重复问「为什么不试试 TP」。
+
+##### ⚠️ 论文报告的数字与本仓实测不一致，需注明
+
+论文摘要称在 GB300/GB200 上达到 **DeepSeek-V3-685B 1,233/1,048 TFLOPS/GPU、Qwen3-235B 974/919 TFLOPS/GPU**。
+而本仓 07d/07e 实测 GB300 上 DSV3 **1,658**、Qwen3-235B **1,360**，均显著高于论文数字。
+
+**两者口径不同，不要混用**（论文未在摘要说明精度/序列长度/GBS，可能是 BF16 或不同 workload）。
+本方案的对标基线一律用**本仓同口径实测值**（Qwen3-235B GB300 256 卡 MXFP8 = 1,360），
+论文数字仅用于引用其**方法论 Guideline**，不作性能对标。
 
 ### 13.5 消融矩阵（E 组，256 卡）
 
@@ -1270,8 +1309,9 @@ Hy3 的 attention 只占 2% 参数，我此前据此判断「TP 纯亏通信」�
 | **E1** | **Qwen3 同款基线** | PP4 VPP2 EP32 MBS2 **GBS8192** FP8 | 跨域基线，直接对标 Qwen3 的 1,360 |
 | E2 | 我们 64 卡最优搬过来 | PP2 VPP8 EP32 MBS2 **GBS16384** | 保住 64 microbatch 的另一条路 |
 | E3 | GBS 不放大（负例） | PP2 VPP8 MBS2 **GBS4096** | **实证 microbatch 掉到 16 时 bubble 恶化多少** |
-| **E4** | **TP2 + SP + MBS4** 🔑 | **TP2** PP2 EP32 MBS**4** GBS16384 | **核心假设：用 TP 切激活换 MBS=4** |
-| **E5** | TP2 + PP4 + MBS4 | TP2 PP4 EP32 MBS4 GBS8192 | 最省显存的组合，看能否再抬 MBS |
+| **E4** | **TP2 + SP + MBS4** 🔑 | **TP2 + `sequence_parallel` + `ETP=1`** PP2 EP32 MBS**4** GBS16384 | **核心假设：用 TP 切激活换 MBS=4**（违反 Guideline 1，故意测边界）|
+| **E5** | TP2 + PP4 + MBS4 | TP2 PP4 EP32 ETP1 MBS4 GBS8192 | 最省显存的组合，看能否再抬 MBS |
+| E5b | **TP2 + MBS2**（对照） | TP2 PP2 EP32 MBS2 GBS8192 | **隔离 TP 本身的通信代价**（不带 MBS 收益）|
 | E6 | TP2 + MBS8 | TP2 PP4 EP32 MBS8 | 探 MBS 上限 |
 | E7 | recompute + MBS4（无 TP） | PP4 VPP2 MBS4 + selective recompute | 用「近乎免费」的 recompute 换 MBS（A11 依据）|
 | E8 | EP16 | E1 + EP16 | 64 卡上 EP16 曾 +3.3%，跨域是否成立 |
@@ -1306,6 +1346,63 @@ Hy3 的 attention 只占 2% 参数，我此前据此判断「TP 纯亏通信」�
 | 64 pod 并行 `kubectl exec` 被 konnectivity 限流（07e 踩过，>16 pod 触发）| 改用 pod-0 SSH fanout，或分批 `-P 16` |
 | 某域节点掉线 | 每池留 2 台热备，换 label 顶上 |
 
+### 13.9 启动时间线拆解（本轮新增要求）
+
+64 卡那轮观察到：**从启动到出第一个稳态数要 ~10 分钟**，但完全不知道时间花在哪。
+本轮每个实验都要产出一份**阶段耗时分解**。
+
+#### 为什么之前拆不了：日志没有时间戳
+
+Megatron / Bridge 打印的阶段标记（`Capture CUDA graph for training`、`done with setup` …）
+**本身不带时间**，容器里也**没有 `moreutils` 的 `ts`**（只有 `stdbuf`）。
+所以先用 [`timeline.py --stamp`](timeline.py) 做一个行级时间戳器（纯 stdlib，行缓冲）：
+
+```bash
+python3 /tmp/hy3_pretrain.py <args> 2>&1 | python3 /tmp/timeline.py --stamp
+# 每行变成:  [+  123.456] <原始内容>
+```
+
+再解析成阶段表：
+
+```bash
+python3 timeline.py --parse run.log
+```
+
+#### 拆解的阶段（依据实际打印标记，未命中显示「—」不臆造）
+
+| 阶段 | 触发标记 | 怀疑的耗时来源 |
+|---|---|---|
+| 进程启动 | 第一行输出 | torchrun rendezvous（64 pod 时更久）|
+| Python import | `Failed to import Triton kernels` / `nixl_utils` / `modelopt` | torch + TE + vLLM + modelopt 重型包，**已知这套栈 import 就很慢** |
+| HF config 拉取 | `huggingface` / `torch_dtype.*deprecated` | qwen3 骨架要从 HF 取 config（**pod 重建后 cache 空则更慢**）|
+| NCCL 初始化 | `NCCL version` | `torch.distributed` init + NCCL bootstrap，**跨 4 域会比单域慢** |
+| 模型构建 | `number of parameters on (tensor, pipeline)` | GPTModel 实例化 + 295B 权重分配 |
+| 优化器构建 | `Setting up optimizer with config` | distributed optimizer 主权重/动量分配 |
+| DDP/梯度 buffer | `Using reduce-scatter for gradient reductions` | `param_and_grad_buffer` 大块分配 |
+| setup 完成 | `done with setup` | dataloader + rerun state |
+| 进训练循环 | `Starting training loop` | — |
+| **CUDA graph capture** | `Capture CUDA graph for training` → `CUDA graph capture done` | **头号嫌疑**：64 卡首步 121 TFLOP/s、Qwen3 首步 236s |
+| 首个稳态步 | `Step Time :` | — |
+
+#### 已有的旁证（尚未精确拆分，本轮要量化）
+
+- 64 卡 A1：首步 **121.3 TFLOP/s**（稳态 854），说明首步被 capture 拖了 ~7×。
+- 07d Qwen3 256 卡：「graph capture（第 1 步 **~236s**）→ settling（第 2 步 ~50s）→ 稳态 14.26s」。
+- 64 卡 V6（GBS 4096 + full graph）：capture 阶段**日志冻结 10+ 分钟、GPU 100% 空转** —— capture 时长随 microbatch 数增长。
+
+**假设：capture 占启动时间的大头，且与 `GBS/(MBS×DP)` 成正比**（full graph 把整个 iteration 的所有
+microbatch 抓进一张图）。E2/E3（GBS 扫点）正好可以验证这条 —— 若成立，则**大 GBS 的代价不只是显存，还有启动时间**。
+
+#### 交付物
+
+每个实验一张阶段表，最后汇总成一张「配置 × 阶段耗时」对照，回答：
+1. 启动 10 分钟里，import / NCCL / 建模 / capture 各占多少？
+2. 256 卡跨域比 64 卡单域，**NCCL 初始化**慢多少？
+3. capture 时长是否随 GBS / microbatch 数线性增长？
+4. 哪些是**一次性成本**（import、HF cache），哪些**每次重启都要付**（NCCL、capture）？
+
+---
+
 ### 13.8 执行顺序
 
 1. 释放现有 64 卡实验（`hy3=true` 标签 + pod）
@@ -1314,4 +1411,5 @@ Hy3 的 attention 只占 2% 参数，我此前据此判断「TP 纯亏通信」�
 4. **先跑 E12 负例**，实证 MNNVL 经验（快速失败，几分钟）
 5. 再跑 E1 基线，确认跨域能跑通
 6. 自动化扫点 E2–E11
-7. 出表、归因、与 64 卡对照、提交
+7. 每个实验解析启动时间线（`timeline.py --parse`）
+8. 出表、归因、与 64 卡对照、提交
