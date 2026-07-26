@@ -620,9 +620,30 @@ AssertionError: online c128 does not support MTP
 
 > **结论**：官方那套 decode 参数是**跟 wide-EP 共同设计的一个整体**，拆开逐项搬到 dep8 上会以三种不同方式失败。**dep8 + 官方参数这条路不存在**——要用官方参数就必须同时换成 wide-EP 拓扑。这反过来印证了 PR #1586 把 dep8 判为 dominated 并删除的决定。
 
-#### Exp C：wide-EP decode dep16（12 prefill + 4 节点 decode）
+#### Exp C：wide-EP decode dep16（12 prefill + 4 节点 decode）→ ⚠️ **总吞吐 +16.7%，但 per-GPU 腰斩**
 
-按 §11.3 配置 A 重排 fleet。结果见下（进行中）。
+全量干净部署（`sgl-0..3` = decode dep16 跨 4 节点，`sgl-4..15` = 12 prefill），12 路 × conc 683 ≈ 8196（对齐官方 dep16 的 `c8192`）：
+
+| | dep8 baseline | **dep16 wide-EP** | 变化 |
+|---|---|---|---|
+| 聚合 output tok/s | 72,256 | **84,321** | **+16.7%** |
+| output ÷ decode-GPU | 9,032（÷8）| **5,270（÷16）** | −41.7% |
+| TPOT 中位 | 60ms | **33ms** | **−45%** |
+| TTFT 中位 | 45s | 54s | +20% |
+| 反推 decode batch | 4,335 seq | **2,783 seq** | **−36%** |
+| `tput_per_gpu`（(in+out)÷64） | 10,180 | **11,880** | +16.7% |
+
+**怎么读这组数**：
+
+1. **wide-EP 本身是有效的** —— 同样 64 张卡，总输出吞吐涨 16.7%，TPOT 从 60ms 砍到 33ms（交互性接近翻倍）。MoE 摊得更宽确实更高效。
+2. **但 per-decode-GPU 腰斩，原因是 decode 没吃饱** —— 反推 batch 从 4,335 掉到 2,783。加宽 decode 到 4 节点，prefill 就从 14 个掉到 12 个，而 **prefill 本来就是瓶颈**（TTFT 45s → 54s）。decode 卡数翻倍、喂进来的活反而少了，per-GPU 自然崩。
+3. **这是节点数的硬约束，不是配置问题** —— 官方 `14p1d-dep4-dep16` 用 **18 节点 / 72 卡**（14×4 prefill + 16 decode）。我们 16 节点 / 64 卡，摆 dep16 只剩 12 prefill。**在 16 节点上复刻官方 wide-EP 配比在数学上就不成立。**
+
+> **口径再次变得关键**：按 `tput_per_gpu` 算，dep16 是 **11,880 > 官方 11,200**。按 `output_tput_per_gpu` 算只有 5,270。同一次测量，两个口径一个超标一个腰斩——**在确定官方到底用哪个字段之前，不要再拿这个数字做决策**。
+
+#### Exp D：dep12（3 节点 decode）+ 13 prefill
+
+在 16 节点约束下找 prefill/decode 最优配比（对应官方 `15p1d-dep12`）。结果见下（进行中）。
 
 ### 11.5 待验证清单（按 收益/成本 排序）
 
