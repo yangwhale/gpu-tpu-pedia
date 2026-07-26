@@ -59,6 +59,43 @@ def passthrough_messages(example: dict[str, Any], tokenizer=None) -> dict[str, A
     return {"messages": example["messages"]}
 
 
+
+class ExportHFAtEnd:
+    """训练结束时直接从显存里的模型存 HF 格式。
+
+    为什么必须这样，而不是训完再单独跑一次导出：
+        SFT checkpoint 是 64 rank 各写各的，而 /raid 是 node-local ——
+        每个节点只有自己那 4 个 `__N_0.distcp`。
+        重新加载时 torch_dist 会做全局 sharding 校验，且**任意 rank 可能读任意分片**
+        （实测 rank 3 去读 `__32_0.distcp`，那片在 yw-a-8 上），
+        所以「各读各的本地分片」根本不成立，重新加载必然失败。
+        把 3.8 TB（含优化器状态）汇集到单机再导出代价太大。
+
+        而在 on_train_end 时模型还在显存里，`save_hf_pretrained` 自己做跨 rank 聚合，
+        rank 0 直接落 HF safetensors（仅权重 ~597 GB）—— 一步到位，不经过磁盘往返。
+    """
+
+    def __init__(self, out: str, hf_src: str):
+        self.out, self.hf_src = out, hf_src
+
+    def on_train_end(self, context):
+        import time
+        import torch.distributed as dist
+        from megatron.bridge import AutoBridge
+
+        rank = dist.get_rank() if dist.is_initialized() else 0
+        t0 = time.time()
+        if rank == 0:
+            print(f"[export-hf] 训练结束，开始导出 → {self.out}", flush=True)
+        bridge = AutoBridge.from_hf_pretrained(self.hf_src, trust_remote_code=True)
+        bridge.save_hf_pretrained(context.model, self.out, show_progress=(rank == 0),
+                                  source_path=self.hf_src, strict=False)
+        if dist.is_initialized():
+            dist.barrier()
+        if rank == 0:
+            print(f"[export-hf] 完成，耗时 {time.time()-t0:.0f}s", flush=True)
+
+
 def build_config(a):
     _ensure_hy3_bridge()
     cfg = _sft_common()
@@ -197,6 +234,8 @@ def main():
     p.add_argument("--data", required=True, help="make_sft_data.py 产出的目录")
     p.add_argument("--save", default="/ckpt/hy3-sft")
     p.add_argument("--tokenizer", default="/raid/hy3-tok", help="打了 generation 块补丁的 tokenizer 目录")
+    p.add_argument("--export-hf", default="", help="训练结束时直接导出 HF 到该目录（留空则不导）")
+    p.add_argument("--hf-cfg", default="/raid/hy3-cfg", help="仅含 config/tokenizer 的本地目录（每节点都要有）")
     p.add_argument("--base", action="store_true", help="用 Hy3-Base 而非 instruct 版")
     p.add_argument("--num-gpus", type=int, default=64)
     p.add_argument("--tp", type=int, default=1)
@@ -217,7 +256,8 @@ def main():
         print(f"[hy3_sft] train_iters={cfg.train.train_iters} gbs={cfg.train.global_batch_size} "
               f"seq={cfg.dataset.seq_length} lr={cfg.scheduler.max_lr} "
               f"parallel: TP{a.tp}/PP{a.pp}/EP{a.ep} mtp={cfg.model.mtp_num_layers}", flush=True)
-    finetune(cfg, forward_step)
+    cbs = [ExportHFAtEnd(a.export_hf, a.hf_cfg)] if a.export_hf else None
+    finetune(cfg, forward_step, callbacks=cbs)
 
 
 if __name__ == "__main__":

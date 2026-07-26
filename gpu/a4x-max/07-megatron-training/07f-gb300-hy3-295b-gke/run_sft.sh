@@ -18,7 +18,7 @@ ARGS="--pretrained /raid/hy3-megatron --data /raid/sft_mixed \
 --num-gpus 64 --tp 1 --pp 2 --ep 16 --seq-length 512 \
 --gbs 32 --mbs 1 --epochs $EPOCHS --lr $LR --precision bf16 \
 --train-samples 22144 \
---save /raid/hy3-sft"
+--save /raid/hy3-sft --export-hf /raid/hy3-sft-hf"
 
 # ---- 启动前彻底清理 ----
 # 血泪教训：残留的 torchrun / hy3_sft 会占住 rendezvous 端口 29700，
