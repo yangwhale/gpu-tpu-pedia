@@ -1,0 +1,121 @@
+# vLLM DeepSeek-V4-Pro-DSpark PD-disagg fleet — GB300 NVL72 (pool-0002 单域)
+# 8 pod: vllm-0 = prefill(TP4), vllm-1 = decode(TP4)；扩展时 vllm-0..N 做 prefill、末两个做 dep8 decode
+# StatefulSet 而非裸 pod: DRA channel 必须由 scheduler 预留, nodeName 绕过会 FailedPrepareDynamicResources
+#
+# ⚠️ 与 SGLang fleet 的三点差异:
+#   1. 镜像必须是 deepgemm 专用版（见 runbook 文首告警）
+#   2. KV over NVLink 的 UCX env 直接写进 pod spec
+#   3. TMPDIR 指到 /mnt/ssd（core dump 撑爆 ephemeral 会导致 pod 被驱逐）
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: vllm4-cd
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: vllm4-ch
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: vllm4-mrdma
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          allocationMode: ExactCount
+          count: 8
+          deviceClassName: mrdma.google.com
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: vllm
+spec:
+  selector:
+    app: vllm
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: vllm
+spec:
+  serviceName: vllm
+  replicas: 8
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: vllm
+  template:
+    metadata:
+      labels:
+        app: vllm
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-nodepool: gb300-pool-0002
+        team: yangwhale
+      affinity:
+        # ★ 同 subblock = 同 NVLink 域，KV 的 UCX cuda_ipc 只在域内成立
+        podAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [vllm]
+            topologyKey: cloud.google.com/gce-topology-subblock
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [vllm]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: gar-auth
+      - name: ar-pull-secret
+      volumes:
+      - name: ssd
+        hostPath: {path: /mnt/disks/raid/0, type: DirectoryOrCreate}
+      - name: shm
+        emptyDir: {medium: Memory, sizeLimit: 600Gi}
+      containers:
+      - name: vllm
+        image: us-central1-docker.pkg.dev/tencent-gcp-taiji-poc/gb300-images/vllm-openai-deepgemm:v0.25.1-sm100-aarch64
+        # ★ 必须 deepgemm 专用镜像。通用 vllm/vllm-openai 能跑但性能腰斩（静默 fallback），见 runbook 文首
+        securityContext: {privileged: true}
+        command: ["sleep", "infinity"]
+        resources:
+          limits: {nvidia.com/gpu: 4}
+          claims:
+          - {name: mrdma}
+          - {name: ch}
+        volumeMounts:
+        - {name: ssd, mountPath: /mnt/ssd, mountPropagation: HostToContainer}
+        - {name: shm, mountPath: /dev/shm}
+        env:
+        - {name: NCCL_SOCKET_IFNAME, value: "eth0"}
+        - {name: GLOO_SOCKET_IFNAME, value: "eth0"}
+        - {name: NCCL_MNNVL_ENABLE, value: "1"}
+        - {name: MC_FORCE_MNNVL, value: "1"}
+        # ── KV over NVLink 三件套（缺一就退回 200MB/s 的 cuda_copy）──
+        - {name: UCX_TLS, value: "cuda_copy,cuda_ipc,tcp"}
+        - {name: UCX_CUDA_IPC_ENABLE_MNNVL, value: "y"}
+        - {name: UCX_NET_DEVICES, value: "all"}
+        - {name: NCCL_NVLS_ENABLE, value: "1"}
+        - {name: VLLM_USE_NCCL_SYMM_MEM, value: "0"}
+        - {name: PYTHONHASHSEED, value: "0"}
+        # core dump / tmp 落本地盘，否则撑爆 ephemeral 触发 pod 驱逐
+        - {name: TMPDIR, value: "/mnt/ssd/tmp"}
+      resourceClaims:
+      - {name: mrdma, resourceClaimTemplateName: vllm4-mrdma}
+      - {name: ch, resourceClaimTemplateName: vllm4-ch}
