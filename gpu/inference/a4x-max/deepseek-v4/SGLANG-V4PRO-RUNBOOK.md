@@ -731,12 +731,41 @@ kubectl exec sgl-0 -- bash -c "grep 'gen throughput' /tmp/srv.log |   sed -E 's/
 
 在 16 节点约束下找 prefill/decode 最优配比（对应官方 `15p1d-dep12`）。**已降优先级**——§11.5 表明该调的是喂料速度，不是 decode 拓扑。
 
-### 11.5 待验证清单（按 收益/成本 排序）
+### 11.6 硬约束清单（都是官方 recipe 里看不出来、只有真跑才撞得到的）
 
-| # | 动作 | 成本 | 预期 |
+按撞到的顺序，每条都花了一整轮部署（30–50 分钟）才定位：
+
+| # | 约束 | 报错 | 为什么隐蔽 |
 |---|---|---|---|
-| 1 | Exp B：官方 decode 参数 + 去 MTP | 只重启 decode，~35min | 未知，先拿到 |
-| 2 | **wide-EP decode dep16 / dep32** | 重排 fleet，~50min | **调研认为主要 gap 在这** |
-| 3 | 按官方单一并发点压测（dep16 用 8192 / dep32 用 2500） | 免费 | 口径对齐 |
-| 4 | 切官方 pinned 镜像 `nightly-dev-20260527-14f81a67` | 拉镜像 + 重建 | 低（我们的更新） |
-| 5 | EPLB + Waterfill（cookbook 称支持 megamoe，与旧文档结论矛盾） | 中 | 待验证 |
+| 1 | **KV 压缩 V2 与 MTP 互斥** | `AssertionError: online c128 does not support MTP` | 这才是官方 wide-EP recipe 全不开 MTP 的真正原因，cookbook 只含糊说「饱和时收益为负」|
+| 2 | **online c128 未实现 `retract_decode`** | `NotImplementedError` | decode 起得来、etcd 注册成功、单条 e2e 也通过；**只有压到超 KV 容量才炸**，且一炸就是全部在途请求 |
+| 3 | **`mem-fraction-static 0.94` 是 wide-EP 专用** | `torch.OutOfMemoryError` | dep8 单卡扛 1/8 模型，是 dep32 的 4 倍，0.94 把激活空间挤没 |
+| 4 | **attention plan kernel 硬顶 1024 请求/rank** | `c_plan.cuh:522: GPU plan only support batch size up to 1024` | SGLang 自己 hardcode 的 `kMaxPrefillBatchSize`，源于「单 CUDA block + 每线程一请求」的实现（block 线程上限就是 1024）+ 静态 shared memory 数组。**不是硬件限制，是实现取舍**（为避开 MTP/graph capture 时的 host sync）|
+| 5 | **PD 两侧 `context-length` 必须一致** | `Decode handshake failed` | 只改 decode 会让 KV 布局对不上。**decode 照常注册、frontend 全 200、单条 e2e 也过**，只有压测才暴露。而且这个改动本身多余——SGLang 的 KV 页按需分配，短请求本就不占满上限 |
+| 6 | **反复重启 decode 会把 prefill 全带崩** | prefill 侧 `SIGQUIT`，成片消失 | disagg 心跳一断，prefill 的子进程失败自杀。**做拓扑/参数实验必须整个 fleet 一起重启**，不能只重启 decode。本轮踩了 3 次，最后一次 14 个 prefill 全灭 |
+
+> **共同点**：第 2、5、6 条都能通过所有常规健康检查（进程在、显存满、etcd 注册、frontend 200、单条推理正确），**只有真正加压才暴露**。这类故障没法靠 review 配置发现。
+
+### 11.7 结论与剩余路径
+
+**一句话**：那 20% 的 gap 是 **prefill 喂不满 decode**，不是内核成熟度、不是拓扑、不是参数没调对。
+
+证据链（三条独立证据互相印证）：
+
+1. **decode 自报峰值 11,113 = 官方 11,200 的 99.2%**（§11.5）—— 引擎本身够格。
+2. **稳态只有 9,587 是因为 batch 只有 588/rank**，峰值时 876/rank。batch +49% → per-GPU +16%。
+3. **ISL 8192→4096（喂料翻倍）立刻把 decode 撑爆**（撞 KV 上限触发 retract）—— 长 ISL 下 decode 一直在饿着。
+
+**唯一有效的配置改动也印证这点**：攒 batch（`polling-interval 1→8` + prefill delayer）+4.3%，因为它是唯一一个真正在「让 batch 变大」的改动。换镜像 / wide-EP / 搬官方 decode 参数三条路全是死的。
+
+**理论天花板**：kernel 硬顶 1024 请求/rank（§11.6 #4）。按 876/rank = 11,113 线性外推，1024/rank ≈ **12,990**。要摸到它，需要 prefill 能持续把 decode 喂到满 batch。
+
+**剩余可做的**（按收益/成本）：
+
+| # | 动作 | 成本 | 说明 |
+|---|---|---|---|
+| 1 | **ISL 4096 + swa-ratio 0.056 打满 1024/rank** | 一轮部署 | 本文最后一轮在做。短序列让 prefill 快一倍、KV 占用减半，是够到 12,990 最直接的路 |
+| 2 | 加 prefill 节点（需 >16 节点） | 要机器 | 16 节点已是 14 prefill + 2 decode，加不动了。官方 18 节点正是为此 |
+| 3 | 改 kernel 突破 1024/rank | 上游 PR | 把「单 block + 每线程一请求」改成 grid-stride + 动态 shared memory |
+| 4 | 真实流量下开 prefix cache + wide-EP | 换负载 | wide-EP 摊薄权重腾出的 HBM 主要价值是装更多 prefix cache（KV hash），命中率上去 prefill 就少干活。**但 sa-bench 用 random 数据、且本文全程 `--disable-radix-cache`，这条在合成 benchmark 上赚不到** —— 这也解释了官方 frontier 曲线与我们实测的矛盾 |
+
