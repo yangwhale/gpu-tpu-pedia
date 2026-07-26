@@ -1,7 +1,7 @@
 # vLLM · DeepSeek-V4-Pro-DSpark · GB300 NVL72 复现 Runbook
 
 > **本文定位**：**只讲怎么跑通**的操作手册。所有命令可直接复制，引用的脚本/manifest 都已入库（`manifests/` + `scripts/`）。
-> 探索过程、被推翻的假设、公开榜单对标 → 见 `vllm-v4-gb300-benchmark.md`（旧版，按时间顺序，信息全但需自行导航）。
+> 旧版探索文档 `vllm-v4-gb300-benchmark.md` 已删除；其中仍成立的实测数据（公开榜单 / KV 传输选型的三条死路 / dep8 的 1→16 prefill 曲线 / 两个崩溃根因 / AFD 架构分析）蒸馏在 **§12**。
 > SGLang 侧对照 → [`SGLANG-V4PRO-RUNBOOK.md`](./SGLANG-V4PRO-RUNBOOK.md)。
 >
 > **文档状态约定**：每节标注 `[已验证]` / `[待验证]` / `[已知问题]`。标 `[已验证]` 的都在 §10 有实跑记录。
@@ -148,7 +148,8 @@ gcloud storage ls -r 'gs://chrisya-gb300-models/DeepSeek-V4-Pro-DSpark/**' \
   | sed 's|gs://chrisya-gb300-models/||' | grep -v '/$' > /tmp/dspark.list   # 186 个对象
 gcloud auth application-default print-access-token > /tmp/tok
 
-# ② 拉取脚本（scripts/pull-gcs-model.sh 已入库）
+# ② 拉取脚本 —— 已入库为 scripts/pull-gcs-model.sh（参数化版，支持 BUCKET/PREFIX/JOBS）
+#    下面是等价的内联版，方便直接贴：
 cat > /tmp/pull-dspark.sh <<'INNER'
 #!/bin/bash
 TOK=$(cat /tmp/tok); B=chrisya-gb300-models; DST=/mnt/ssd
@@ -557,7 +558,6 @@ TP4-decode 最佳 21,100 = 厂商基线 22,000 的 96%。
 - [ ] 审计轮 2：清空环境，照修订后的本文从零重跑，确认可复现
 - [ ] dep8 + 更多 prefill（conc1536 时 TTFT 95s，prefill 仍是瓶颈，加到 6+ prefill 应该还能涨）
 - [ ] 8k1k 场景重扫（本轮只跑了 4k1k）
-- [ ] 蒸馏并删除旧文档 `vllm-v4-gb300-benchmark.md`（945 行）
 
 ---
 
@@ -618,3 +618,107 @@ TP4-decode 最佳 21,100 = 厂商基线 22,000 的 96%。
 - MegaScale-Infer（arxiv 2504.02263）：分离 attention/FFN，MoE 推理提速 **1.9×**
 
 > **收官定论**：vLLM 在本 GB300 环境**功能完整、能复现厂商 1p1d 22K 基线**；dep8 宽-EP decode 稳定峰值 ~3,400/GPU，受限于 coexist 架构的小-batch MoE 开销，**非 bug、非配置疏漏可根治**。逼近 SGLang 的 9,000+ 需要 AFD 级架构。
+
+---
+
+## 12. 历史实测数据（从旧文档 `vllm-v4-gb300-benchmark.md` 蒸馏，原文已删）
+
+旧文档记录了 2026-07-14 ~ 07-24 的探索。绝大部分已被本文取代或推翻，下面是**仍然成立、且不可再生**的部分。
+
+### 12.1 公开榜单基准（外部数据，本环境无法产生）
+
+SemiAnalysis InferenceX，**DeepSeek-V4-Pro 1.6T · FP4 · 8K/1K · GB300 NVL72 · Dynamo+vLLM**（2026-07-14，`output ÷ decode-GPU` 口径）：
+
+| 交互点 tok/s/user | 吞吐 tok/s/GPU | 成本 $/M tok | 并发 |
+|---|---|---|---|
+| 68 | **9,759** | 0.075 | ~1024 |
+| 121 | 3,816 | 0.196 | ~315 |
+| 173 | 895 | 0.841 | ~29 |
+
+同榜单 B200 在 68 点只有 3,177 → **GB300 高 207% tok/s/GPU、每 token 便宜 124%**。288 GB HBM（vs B200 192 GB）能塞更宽的 prefill+decode recipe 是关键。
+
+> ⚠️ InferenceX 官方注：disagg 配置按 **per-decode-GPU** 算，与 aggregated 配置的 per-total-GPU **不可直接比**。
+>
+> **跨框架对比只有 InferenceX 同图叠加是 apples-to-apples 的** —— vLLM 9,759@68 与 SGLang 11,200@50 是 Pareto 曲线上的不同交互点，不能直接说谁快。
+
+### 12.2 KV 传输选型：三条死路和一条活路（省你两周）
+
+GB300 上 vLLM disagg 的 KV **必须走 NVLink cuda_ipc**。下面三条都试过，全是死路：
+
+| 尝试 | 结果 | 根因 |
+|---|---|---|
+| **dynamo + vLLM + MooncakeConnector** | 接不上 | `dynamo.sglang` 有 `compute_bootstrap_address`（把 prefill 的 mooncake bootstrap host/port/room 传给 decode），而 `dynamo.vllm` 完全照 **NixlConnector** 建（`do_remote_prefill`/`remote_engine_id`/`remote_block_ids`），**没有 bootstrap 地址传递通路**。是 dynamo 两套集成的差异，不是 mooncake 的问题 |
+| **DOCA OFED + dmabuf GPUDirect** | KV 仍 200 MB/s | GKE COS 只支持 dmabuf 不支持 peer_mem。装了 MOFED 1.25.58（支持 `ibv_reg_dmabuf_mr`）后 UCX 的 GDAKI dmabuf 探测仍 `not available`，标准 rc_mlx5 也没走 dmabuf → 退回 cuda_copy。吞吐与 vanilla 在噪声内（conc16 612 vs 574） |
+| **mooncake NVLink + toy proxy** | 更慢 | KV 快了但 toy proxy 编排把收益吃光（conc64 out 1,333 vs Nixl 的 1,693）|
+
+**活路 = NIXL 走 NVLink 的 cuda_ipc，根本不碰 RDMA**（本文 §4 三件套）。实测 **KV transfer 200 MB/s → 7–167 GB/s，提速 100–800×**，单次 xfer 200–800ms → 2–10ms。
+
+> **教训**：当时一直在 RDMA/dmabuf/peermem 上打转，方向从一开始就错了。NIXL 本身就能走 NVLink，只差 `UCX_CUDA_IPC_ENABLE_MNNVL=y` + `--enable-cumem-allocator` 两个开关。
+
+### 12.3 dep8 在 8k1k 下的 1→16 prefill 完整曲线（2026-07-24，本文未重测）
+
+decode = dep8（8 GPU），workload 8k1k，conc1024，sa-bench 开环：
+
+| prefill 数 | Output tok/s | Output÷8 /GPU | Median TPOT | 状态 |
+|---|---|---|---|---|
+| 1 | 2,453 | 307 | 5.4 ms | 干净 |
+| 2 | 4,773 | 597 | 5.6 ms | 干净 |
+| 4 | 8,920 | 1,115 | 7.8 ms | 干净 |
+| 6 | 12,369 | 1,546 | 10.6 ms | 干净 |
+| 8 | 17,614 | 2,202 | 10.7 ms | 干净 |
+| 10 | 21,433 | 2,679 | 15.1 ms | 干净 |
+| 12 | 25,500 | 3,187 | 14.3 ms | 干净 |
+| **14** | 26,568 | **3,321** | — | 修完失效模式 A 后干净 |
+| 16 | 22,389 | 2,799 | — | ❌ 失效模式 B，partial |
+
+**「输入减半 = 每 prefill 喂料翻倍」精确成立**（同一套 dep8 不重启换 4k1k 重扫）：
+
+| prefill 数 | 4k1k Output÷8 /GPU | vs 8k1k 同档 |
+|---|---|---|
+| 1 | 632 | **2.06×** |
+| 2 | 1,238 | 2.07× |
+| 3 | 1,656 | 1.90× |
+| 4 | 2,222 | 1.99× |
+
+### 12.4 两个把 dep8 打崩的失效模式（都花了整天定位）
+
+**A. core dump 撑爆 ephemeral storage → pod 被驱逐（14 prefill killer，已修复）**
+
+decode worker 崩溃时吐 **7.5–9.4 GB core dump 到容器根目录**（`core_pattern` 默认 `/core.%e.%p.%t`）。多次崩溃累积到 51 GB（阈值 10 GB）→ **kubelet 驱逐 decode-worker pod（`Evicted` exit 137）** → head 等不到 remote DP worker → dep8 判死。
+
+**之前所有 `EngineDeadError` / `Failed to notify KV connector about rejected request` 全是下游假象。**
+
+修复：`core_pattern` + `TMPDIR` + `XDG_CACHE_HOME` + `TORCHINDUCTOR_CACHE_DIR` 全部指到 `/mnt/ssd`（12 TB RAID）。修复后 14p 干净通过 4096/4096。**本文的 manifest 已内置这个重定向。**
+
+**B. DSpark spec 的 `vectorized_gather` 索引越界（16 prefill，未修复）**
+
+`TORCH_USE_CUDA_DSA=1` + conc2048 快速复现锁定：
+
+```
+/pytorch/aten/src/ATen/native/cuda/IndexKernelUtils.cu:16: vectorized_gather_kernel:
+Assertion `ind >=0 && ind < ind_dim_size && "vectorized gather kernel index out of bounds"` failed.
+```
+
+- sampling 之后用 token id 做 gather 时索引非法。**最可能是 DSpark spec 的 `-1` sentinel（拒绝/无 token 占位）在高并发某边缘没被 mask 就进了 gather。**
+- **`CUDA_LAUNCH_BLOCKING=1` 反而复现不了**（同步执行采样次数减半，统计上踩不到）—— 证实是罕见统计性越界，只有高吞吐才触发。
+- 级联方式：DP1 死 → DP-attention 每步的 gloo all_reduce padding 同步报 `Connection closed by peer` → `ProcessGroupNCCL::HeartbeatMonitor` 检测 TCPStore 断连 → **SIGABRT 级联全 8 个 DP rank**。
+- 规避：高并发禁 spec，或限 conc ≤ 1024。
+
+> **另一个相关的坑**：`kv_load_failure_policy` 只有 `recompute` / `fail` 两个合法值（`vllm/config/kv_transfer.py:69`）。`fail` 会把**瞬时的 KV reject 升级成致命的 engine 死亡**；`recompute` 让 decode 本地重算，稳但要交 17% 的算力税（12p 时 3,187 → 2,645/GPU）。
+
+### 12.5 AFD：vLLM 的结构性短板（架构分析，仍然成立）
+
+SGLang 有 attention-FFN 分离（AFD），vLLM **无原生支持** —— [RFC #22799「ATTN-FFN Disaggregation for MoE Models」](https://github.com/vllm-project/vllm/issues/22799) 至今 open。学界业界共识一致：
+
+- **FastAFD 官方 blog** 原话：*"Long context starves the MoE layer by shrinking the KV-capped decode batch"*
+- **MegaScale-Infer**（arxiv 2504.02263）：分离 attention/FFN + ping-pong 流水线，MoE 推理提速 **1.9×**
+- 2026 同题多篇：arxiv 2512.13525《Disaggregating Attention and Experts for Scalable MoE》、2605.28302《How Far Can Disaggregation Go?》
+
+**公开对比中 SGLang 典型领先 20–29%**（localaimaster 2026-02 +29%；gpustack H200 6,635 vs 5,482），极端案例 ~2×。Reddit 共识：DeepSeek-V3 初期 SGLang 远快，后来 vLLM 靠 **Wide-EP + DeepEP** 追到 neck-and-neck。
+
+> **本文 2026-07-26 的复刻轮给这段加了一个注脚**：旧文档说本环境 vLLM 只有 SGLang 的 37%，并自我修正说「可能是没调到 vLLM 最优」。**那个自我修正是对的** —— 光把 decode 从 TP4 换成 dep8 就是 2.85×（§8）。**架构短板（AFD）是真的，但它被「配置没选对」放大了好几倍。**
+
+---
+
+*SGLang 侧对照见 [`./SGLANG-V4PRO-RUNBOOK.md`](./SGLANG-V4PRO-RUNBOOK.md)。§12.1 的榜单值为 InferenceX 公开数据。*
+
