@@ -122,4 +122,22 @@ assert gated and covered == len(gated), \
     "every model_name.startswith gate in moe.py must include hunyuan3, " \
     "otherwise top-k weights keep the expert bias baked in"
 
+# ---- 8. router precision ----
+# Upstream: F.linear(hidden_states.float(), self.weight.float()). With 192
+# experts the sigmoid scores that decide top-k sit very close together, and
+# bf16 cannot separate them reliably. MaxText's GateLogit follows the
+# activation dtype unless moe_router_dtype overrides it.
+assert c.get("moe_router_dtype") == "float32", \
+    "hunyuan3 config must set moe_router_dtype: float32"
+assert "moe_router_dtype" in open(os.path.join(a.root, "src/MaxText/configs/base.yml")).read(), \
+    "base.yml is missing the moe_router_dtype knob — apply register-hunyuan3.patch"
+# Match the argument line directly. Do not try to slice the GateLogit(...)
+# call by looking for its closing paren — comments inside the call contain
+# parens too, and the slice ends early. (Cost me three debugging rounds:
+# same class of mistake bit the check at item 6.)
+assert any(l.strip().startswith("dtype=") and "moe_router_dtype" in l
+           for l in moe_src.splitlines()), \
+    "GateLogit is not honouring moe_router_dtype — router would run in bf16"
+print("8) router dtype   config=float32, GateLogit honours moe_router_dtype")
+
 print("\nALL CHECKS PASSED")

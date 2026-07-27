@@ -60,6 +60,11 @@ routed_scaling_factor: 2.826  # router_scaling_factor
 # has been applied, and would therefore cancel routed_scaling_factor out.
 norm_topk_prob: False
 
+# Upstream computes router logits in fp32: F.linear(hidden.float(), weight.float()).
+# Megatron exposes the same as moe_router_dtype. With 192 experts the sigmoid
+# scores driving top-k are too tightly packed to resolve in bf16.
+moe_router_dtype: "float32"
+
 # --- MTP ---
 mtp_num_layers: 1             # num_nextn_predict_layers
 mtp_loss_scaling_factor: 0.1

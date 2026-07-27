@@ -10,6 +10,20 @@ index fd7185a83..da6c3f653 100644
    GPT3 = "gpt3"
    GPT_OSS = "gpt_oss"
    SIMPLE = "simple"
+diff --git a/src/MaxText/configs/base.yml b/src/MaxText/configs/base.yml
+index a07f3421b..91230c009 100644
+--- a/src/MaxText/configs/base.yml
++++ b/src/MaxText/configs/base.yml
+@@ -195,6 +195,9 @@ shared_experts: 1
+ routed_scaling_factor: 1.0 # scaling factor for routing scores
+ routed_score_func: "" # scoring function for routing
+ routed_bias: False # a flag if a learnable bias is added for routing
++moe_router_dtype: "" # dtype for computing router logits. Inherits from dtype if unset.
++                     # DeepSeek V3 / Hunyuan 3 compute the router in fp32 for numerical
++                     # stability of the sigmoid scores across a large expert count.
+ mlp_bias: False # a flag if a learnable bias is added for MLP matmul
+ n_routing_groups: -1 # number of groups for routing, disabled by default
+ topk_routing_group: -1 # number of top groups to route inputs. For EP,
 diff --git a/src/MaxText/layers/decoders.py b/src/MaxText/layers/decoders.py
 index 3d6f9503b..dcde347ae 100644
 --- a/src/MaxText/layers/decoders.py
@@ -80,7 +94,7 @@ index 3d6f9503b..dcde347ae 100644
            dense_layer = RemattedBlockLayers[0]
            moe_layer = RemattedBlockLayers[1]
 diff --git a/src/MaxText/layers/moe.py b/src/MaxText/layers/moe.py
-index 04744c696..a9f214bef 100644
+index 04744c696..6c44bf168 100644
 --- a/src/MaxText/layers/moe.py
 +++ b/src/MaxText/layers/moe.py
 @@ -243,7 +243,7 @@ class GateLogit(nnx.Module):
@@ -92,7 +106,20 @@ index 04744c696..a9f214bef 100644
          pre_bias_logits = output
  
      if self.use_bias:
-@@ -410,12 +410,15 @@ class RoutedMoE(nnx.Module):
+@@ -308,7 +308,11 @@ class RoutedMoE(nnx.Module):
+         in_features_shape=self.config.emb_dim,
+         out_features_shape=self.num_experts,
+         model_name=self.config.model_name,
+-        dtype=self.dtype,
++        # Router logits may need higher precision than the activations: with
++        # 192 experts the sigmoid scores that drive top-k are too close together
++        # to resolve reliably in bf16. Upstream Hy3 does F.linear(h.float(),
++        # w.float()); Megatron exposes the same thing as moe_router_dtype.
++        dtype=getattr(self.config, "moe_router_dtype", None) or self.dtype,
+         weight_dtype=self.weight_dtype,
+         quant=self.quant,
+         kernel_init=self.kernel_init,
+@@ -410,12 +414,15 @@ class RoutedMoE(nnx.Module):
        top_k_weights, top_k_indices = random_routing(rng, gate_logits, self.num_experts_per_tok)
        return top_k_weights, top_k_indices
  
@@ -110,7 +137,7 @@ index 04744c696..a9f214bef 100644
        top_k_weights = self.deepseek_scale_weights(top_k_weights)
      elif self.config.decoder_block != ctypes.DecoderBlockType.LLAMA4:
        top_k_weights = jax.nn.softmax(top_k_weights.astype(jnp.float32), axis=-1).astype(self.dtype)
-@@ -883,10 +886,10 @@ class RoutedMoE(nnx.Module):
+@@ -883,10 +890,10 @@ class RoutedMoE(nnx.Module):
        wo_bias_pspec = nn.logical_to_mesh_axes(("exp", "activation_embed"))
  
      gate_logits_pspec = nn.logical_to_mesh_axes((batch_logical_axis, "activation_norm_length", None))
@@ -123,7 +150,7 @@ index 04744c696..a9f214bef 100644
        pre_bias_logits_pspec = None
  
      # w0, w1, wo needs to be un sharded on fsdp / fsdp_transpose axis, so use
-@@ -1421,8 +1424,8 @@ class RoutedMoE(nnx.Module):
+@@ -1421,8 +1428,8 @@ class RoutedMoE(nnx.Module):
      """Dense matrix multiplication."""
      # gate_logits: batch, length, expert
      gate_logits = nn.with_logical_constraint(gate_logits, ("activation_batch", "activation_norm_length", None))
@@ -134,3 +161,29 @@ index 04744c696..a9f214bef 100644
        pre_bias_logits = nn.with_logical_constraint(pre_bias_logits, ("activation_batch", "activation_norm_length", None))
      top_k_weights, top_k_indices = self.get_topk(gate_logits, pre_bias_logits, self.rngs)
      is_llama4_decoder_layer = self.config.decoder_block == ctypes.DecoderBlockType.LLAMA4
+diff --git a/src/MaxText/pyconfig.py b/src/MaxText/pyconfig.py
+index 69e63d791..20d077191 100644
+--- a/src/MaxText/pyconfig.py
++++ b/src/MaxText/pyconfig.py
+@@ -694,6 +694,7 @@ class _HyperParameters:
+     raw_keys["grad_dtype"] = jax.numpy.dtype(raw_keys["grad_dtype"])
+     raw_keys["weight_dtype"] = jax.numpy.dtype(raw_keys["weight_dtype"])
+     raw_keys["mu_dtype"] = set_mu_dtype(raw_keys)
++    raw_keys["moe_router_dtype"] = set_moe_router_dtype(raw_keys)
+     raw_keys["logical_axis_rules"] = _lists_to_tuples(raw_keys["logical_axis_rules"])
+     raw_keys["data_sharding"] = _lists_to_tuples(raw_keys["data_sharding"])
+ 
+@@ -812,6 +813,13 @@ def set_mu_dtype(raw_keys):
+     return jax.numpy.dtype(raw_keys["mu_dtype"])
+ 
+ 
++def set_moe_router_dtype(raw_keys):
++  """Router logits dtype. Defaults to the activation dtype when unset."""
++  if raw_keys["moe_router_dtype"] == "":
++    return raw_keys["dtype"]
++  return jax.numpy.dtype(raw_keys["moe_router_dtype"])
++
++
+ def validate_and_set_hlo_dump_defaults(raw_keys):
+   if not raw_keys["dump_hlo"]:
+     return raw_keys
