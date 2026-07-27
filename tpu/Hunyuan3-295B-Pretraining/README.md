@@ -14,9 +14,24 @@
 
 ---
 
-## 结论先行：MaxText 支持现状
+## 结论先行
 
-**扒过 MaxText 源码（`/tmp/mt-stable/maxtext`，42 个 model config）后的判断：
+**MaxText 原生不支持混元 3——但所需组件全都在，已用它们拼出
+`decoder_block: "hunyuan3"`，代码在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)。**
+
+| | |
+|---|---|
+| 新增代码 | 一个文件 176 行（`hunyuan3.py`），只做接线，不重写 attention 或 MoE |
+| 改动 | `common_types.py` +1 行、`decoders.py` 6 处（见 patch） |
+| 参数量自检 | **294.97 B**，对 SSOT 的 294.9 B 差 **0.02%**；激活 20.6 B 对上官方 A21B |
+| 静态验证 | enum / 类 / 分派 / 归一化 5 项全过（`verify_hunyuan3.py`） |
+| 未做 | 真实前向、多卡分片、权重转换（见[待验证清单](#六待验证清单)） |
+
+下面先讲为什么必须新写一个 block，再讲怎么拼的。
+
+### 为什么两个现成 block 都不行
+
+**扒过 MaxText 源码（42 个 model config）后的判断：
 没有现成的 decoder block 能直接跑混元 3，两个候选各缺一半。**
 
 混元 3 的结构是 **GQA attention + DeepSeek V3 血统的 MoE**。MaxText 里这两半分属两个 block：
@@ -34,15 +49,15 @@
 定义在 `configs/base.yml` 而非 deepseek 专属，所以 GQA 侧也能用。缺的只是
 **shared expert** 和 **dense 首层**两项。
 
-### 三条落地路径
+### 曾经考虑过的三条路
 
-| | 做法 | 架构保真度 | 工作量 | 适合 |
-|---|---|---|---|---|
-| **A** | `qwen3_moe` + 近似（80 层全 MoE、无 shared expert） | 有偏差 | 只写 config | **先拿性能基线**，判断 TPU 值不值得投 |
-| **B** | 新增 `hunyuan3` decoder block（GQA + `RoutedAndSharedMoE` + dense 首层） | 完全一致 | 一个 layer 类 + `decoders.py` 分支 + model config | 要跑真实预训练 |
-| **C** | 改 `deepseek.py` 让 attention 可配 | 完全一致 | 改动面大，会碰现有 DSV3 路径 | 不推荐 |
+| | 做法 | 架构保真度 | 结论 |
+|---|---|---|---|
+| A | `qwen3_moe` + 近似（80 层全 MoE、无 shared expert） | 偏差 +0.67% | **放弃**，见下 |
+| **B** | **新增 `hunyuan3` block（GQA + `RoutedAndSharedMoE` + dense 首层）** | **完全一致** | **✅ 已实现** |
+| C | 改 `deepseek.py` 让 attention 可配 | 完全一致 | 放弃，会碰现有 DSV3 路径 |
 
-**建议先 A 后 B**。路径 A 的架构偏差要算清楚，它是**双向**的：
+原本打算先用 A 拿基线。但真去算 A 的偏差时发现它是**双向**的，而且方向反直觉：
 
 | 变化 | 参数量 |
 |---|---|
@@ -50,12 +65,72 @@
 | 第 0 层 dense FFN 变成 MoE 层 | −0.16 B，+3.62 B |
 | **净变化** | **+1.97 B（+0.67%）** |
 
-注意方向是**变大**不是变小——第 0 层从 dense（0.16 B）换成 MoE（3.62 B）
-的增量盖过了砍掉 shared expert 的减量。计算量随之同向变动，
-所以 A 跑出来的 TFLOP/s 与真实架构有 <1% 的系统性偏差，**方向偏乐观**。
+方向是**变大**不是变小——第 0 层从 dense（0.16 B）换成 MoE（3.62 B）的增量
+盖过了砍掉 shared expert 的减量，计算量同向变动，**基线会偏乐观**。
+既然路径 B 实际只要写一个接线文件，就没必要留一个方向已知偏乐观的近似值在文档里。
 
-这个量级对"v7/v5p 上 MoE all-to-all 跑不跑得动"这个真正的未知数没有影响，
-所以先用 A 拿基线是划算的；但正式对外报数字前必须走路径 B。
+---
+
+## 一之二、实现：用现成组件拼出 hunyuan3 block
+
+代码在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)：
+
+| 文件 | 作用 |
+|---|---|
+| `hunyuan3.py` | 两个 decoder layer 类，**只做接线** |
+| `hunyuan3-295b.yml` | model config，值全部来自 SSOT |
+| `register-hunyuan3.patch` | `common_types.py` + `decoders.py` 的注册改动 |
+| `verify_hunyuan3.py` | 静态自检脚本 |
+
+### 复用了什么，新写了什么
+
+**新写的只有装配逻辑**，两半功能都是原样引入的：
+
+| 组件 | 来源 | 是否修改 |
+|---|---|---|
+| GQA attention + QK-LayerNorm | `qwen3.self_attention_with_norm` | 原样调用 |
+| sigmoid 路由 + expert bias + shared expert | `moe.get_routed_and_shared_moe` | 原样调用 |
+| 收尾（metrics sow + scan 返回约定） | `deepseek.post_process` | 原样调用 |
+| dense / MoE 分层扫描 | `decoders.py` 里 DeepSeek 那套 | 扩大条件，未改逻辑 |
+
+两个类各自只有约 40 行有效代码：
+
+- `Hunyuan3DenseLayer` — 层 0：qwen3 attention + 宽度 13312 的 SwiGLU
+- `Hunyuan3MoELayer` — 层 1–79：qwen3 attention + DeepSeek MoE 块
+
+### 注册处的三个要点
+
+1. **返回两元素列表**。`get_decoder_layers()` 对 hunyuan3 返回
+   `[Hunyuan3DenseLayer, Hunyuan3MoELayer]`，正好满足 `decoders.py` 里
+   `assert len(RemattedBlockLayers) == 2` —— 于是 `first_num_dense_layers`
+   那套为 DeepSeek 写的扫描机制**原封不动地驱动了 Hy3**。
+2. **4 处条件判断从 `==` 改成 `in`**。原本写死
+   `cfg.decoder_block == DecoderBlockType.DEEPSEEK` 的地方（分层扫描、
+   pipeline stage 选择）改为 `in (DEEPSEEK, HUNYUAN3)`，不改逻辑只扩范围。
+3. **必须用 `get_routed_and_shared_moe` 而不是 `get_routed_moe`**。
+   后者硬编码返回裸 `RoutedMoE`，会**静默丢掉** Hy3 的共享专家——
+   不报错，只是参数量少 1.49 B、精度对不上。这是本次最容易踩空的一处。
+
+### 已验证 / 未验证
+
+```
+$ python3 verify_hunyuan3.py --root /path/to/maxtext
+1) total params  294.97 B   (SSOT 294.9 B, delta 0.02%)
+   activated     20.6 B    (official A21B)
+   experts share 97.6%  -> EP is the only memory knob that matters
+2) enum          DecoderBlockType.HUNYUAN3
+3) layer classes ['Hunyuan3DenseLayer', 'Hunyuan3MoELayer']
+4) dispatch      ['Hunyuan3DenseLayer', 'Hunyuan3MoELayer']
+5) norm layer    rms_norm
+ALL CHECKS PASSED
+```
+
+**参数量自检是最有力的一项**：294.97 B 对 SSOT 的 294.9 B 只差 0.02%，
+且五个组成部分的占比逐项吻合。config 写错任何一个维度都会立刻暴露。
+
+**但请注意这仍是静态验证。** 跑的时候 stub 掉了 `grain` / `tensorflow` /
+`qwix`（数据管线与量化，均不参与构图），**没有做真实前向、没有做多卡分片、
+没有做权重转换**。这些在待验证清单里。
 
 ---
 
@@ -304,15 +379,17 @@ MFU 分母：**459** TFLOPS/chip；v5p 是 MegaCore，**1 device = 1 chip，日�
 
 按依赖顺序排，前面不通后面免谈：
 
-| # | 事项 | 为什么关键 |
-|---|---|---|
-| 1 | `decoder_block: "qwen3_moe"` + `routed_score_func: "sigmoid"` + `routed_bias: True` 能否正常构图 | 路径 A 的前提。源码上共用 `GateLogit` 应该可行，但没人这么配过 |
-| 2 | 192 experts × 80 层能否在 128 devices 上编译出来 | DSV3 671B 在 v7 上曾出现 sparse matmul 编译 6 小时未完成 |
-| 3 | MaxText 里 expert bias 的更新率参数叫什么 | Megatron 有 `moe_router_bias_update_rate`，MaxText 侧未找到对应项。若无，aux-loss-free 均衡可能失效 |
-| 4 | EP / FSDP 最优配比 | 97% 参数在专家里，这是第一性能旋钮 |
-| 5 | `attention=flash` 在 v7 上能否编译通过 | DSV3 上踩过坑（踩坑 #3，70+ 分钟未完成），需确认 GQA 是否同样受影响 |
-| 6 | MTP 开启后的开销 | GB300 侧建议首跑设 0，跑通再开 |
-| 7 | 路径 B 的工作量评估 | 若路径 A 基线可观，再投入写 `hunyuan3` block |
+| # | 事项 | 状态 | 为什么关键 |
+|---|---|---|---|
+| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ 已完成 | 见[实现](#一之二实现用现成组件拼出-hunyuan3-block) |
+| 1 | **小规模真实前向**（如 4 层 / 8 experts / CPU 或 v7 2x2x2） | ⬜ | 静态验证只证明了接线，没证明能算。这是下一步 |
+| 2 | 192 experts × 80 层能否在 128 devices 上编译出来 | ⬜ | DSV3 671B 在 v7 上曾出现 sparse matmul 编译 6 小时未完成 |
+| 3 | MaxText 里 expert bias 的更新率参数叫什么 | ⬜ | Megatron 有 `moe_router_bias_update_rate`，MaxText 侧**未找到对应项**。若确实没有，aux-loss-free 均衡在 MaxText 上就是失效的，可能要补实现 |
+| 4 | `normalization_layer_epsilon` 与 HF `rms_norm_eps` 是否一致 | ⬜ | 目前填的是 1.0e-6（沿用 qwen3/deepseek），**未从 HF config 核对过** |
+| 5 | EP / FSDP 最优配比 | ⬜ | 97% 参数在专家里，这是第一性能旋钮 |
+| 6 | `attention=flash` 在 v7 上能否编译通过 | ⬜ | DSV3 上踩过坑（踩坑 #3，70+ 分钟未完成），需确认 GQA 是否同样受影响 |
+| 7 | MTP 开启后的开销 | ⬜ | GB300 侧建议首跑设 0，跑通再开 |
+| 8 | HF 权重 → MaxText Orbax 的转换 | ⬜ | 只做 from-scratch 基线可以先不碰；要 SFT 就必须做 |
 
 ---
 

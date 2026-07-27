@@ -1,0 +1,54 @@
+# Copyright 2023–2025 Google LLC
+#
+# Licensed under the Apache License, Version 2.0 (the "License");
+# you may not use this file except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#    https://www.apache.org/licenses/LICENSE-2.0
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+
+# model config for Tencent Hunyuan 3 (Hy3) - 295B total / 21B active
+#
+# Source of truth for every value below: the HF config.json of `tencent/Hy3`
+# as mapped in HYV3Bridge.provider_bridge(). Do not "fix" these by intuition.
+#
+# Architecture = Qwen3-style GQA attention + DeepSeek-V3-style MoE.
+# See layers/hunyuan3.py for why this needs its own decoder_block.
+
+decoder_block: "hunyuan3"
+
+# --- structure ---
+base_num_decoder_layers: 80
+base_emb_dim: 4096
+base_mlp_dim: 13312          # dense layer (layer 0) only
+base_num_query_heads: 64
+base_num_kv_heads: 8         # GQA: 64 heads / 8 groups = 8x sharing
+head_dim: 128
+vocab_size: 120832
+mlp_activations: ["silu", "linear"]
+normalization_layer_epsilon: 1.0e-6
+enable_dropout: False
+logits_via_embedding: False  # tie_word_embeddings: false
+use_qk_norm: True            # qk_norm: true — Hy3 keeps Qwen3's QK-LayerNorm
+
+# --- RoPE ---
+rope_max_timescale: 11158840  # rope_parameters.rope_theta
+
+# --- MoE (DeepSeek V3 lineage) ---
+num_experts: 192
+num_experts_per_tok: 8
+base_moe_mlp_dim: 1536
+shared_experts: 1             # num_shared_experts, intermediate = 1 x 1536
+first_num_dense_layers: 1     # first_k_dense_replace: layer 0 dense, 1..79 MoE
+routed_score_func: "sigmoid"  # moe_router_use_sigmoid
+routed_bias: True             # moe_router_enable_expert_bias (aux-loss-free)
+routed_scaling_factor: 2.826  # router_scaling_factor
+
+# --- MTP ---
+mtp_num_layers: 1             # num_nextn_predict_layers
+mtp_loss_scaling_factor: 0.1

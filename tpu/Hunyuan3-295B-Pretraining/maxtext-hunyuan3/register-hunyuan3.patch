@@ -1,0 +1,81 @@
+diff --git a/src/MaxText/common_types.py b/src/MaxText/common_types.py
+index fd7185a83..da6c3f653 100644
+--- a/src/MaxText/common_types.py
++++ b/src/MaxText/common_types.py
+@@ -86,6 +86,7 @@ class DecoderBlockType(enum.Enum):
+   GEMMA3 = "gemma3"
+   QWEN3 = "qwen3"
+   QWEN3_MOE = "qwen3_moe"
++  HUNYUAN3 = "hunyuan3"
+   GPT3 = "gpt3"
+   GPT_OSS = "gpt_oss"
+   SIMPLE = "simple"
+diff --git a/src/MaxText/layers/decoders.py b/src/MaxText/layers/decoders.py
+index 3d6f9503b..dcde347ae 100644
+--- a/src/MaxText/layers/decoders.py
++++ b/src/MaxText/layers/decoders.py
+@@ -48,6 +48,7 @@ from MaxText.layers import (
+     gemma3,
+     gpt3,
+     gpt_oss,
++    hunyuan3,
+     llama2,
+     llama4,
+     mistral,
+@@ -382,6 +383,8 @@ class Decoder(nn.Module):
+         return [mixtral.MixtralDecoderLayer]
+       case DecoderBlockType.DEEPSEEK:
+         return [deepseek.DeepSeekDenseLayer, deepseek.DeepSeekMoELayer]
++      case DecoderBlockType.HUNYUAN3:
++        return [hunyuan3.Hunyuan3DenseLayer, hunyuan3.Hunyuan3MoELayer]
+       case DecoderBlockType.GEMMA:
+         return [gemma.GemmaDecoderLayerToLinen]
+       case DecoderBlockType.GEMMA2:
+@@ -447,6 +450,7 @@ class Decoder(nn.Module):
+         DecoderBlockType.GEMMA3,
+         DecoderBlockType.QWEN3,
+         DecoderBlockType.QWEN3_MOE,
++        DecoderBlockType.HUNYUAN3,
+         DecoderBlockType.GPT_OSS,
+         DecoderBlockType.SIMPLE,
+         DecoderBlockType.SIMPLE_MLP,
+@@ -486,7 +490,7 @@ class Decoder(nn.Module):
+     """get pipeline stage module"""
+ 
+     def get_layer_to_pipeline(blocks, cfg):
+-      if cfg.decoder_block == DecoderBlockType.DEEPSEEK:
++      if cfg.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):
+         return blocks[1]  # return the sparse block
+       else:
+         return blocks[0]
+@@ -667,8 +671,8 @@ class Decoder(nn.Module):
+         )
+       else:
+         partition_spec = None  # This partition spec is only used for the fsdp_ag_once feature.
+-      if cfg.decoder_block == DecoderBlockType.DEEPSEEK:
+-        assert len(RemattedBlockLayers) == 2, "Scanned layers must have a length of 2 using deepseek."
++      if cfg.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):
++        assert len(RemattedBlockLayers) == 2, "Scanned layers must have a length of 2 using deepseek/hunyuan3."
+         dense_layer = RemattedBlockLayers[0]
+         moe_layer = RemattedBlockLayers[1]
+         num_moe_layers = cfg.num_decoder_layers - cfg.first_num_dense_layers
+@@ -713,8 +717,8 @@ class Decoder(nn.Module):
+             )(y, *broadcast_args)
+     else:
+       if cfg.scan_layers:
+-        if cfg.decoder_block == DecoderBlockType.DEEPSEEK:
+-          assert len(RemattedBlockLayers) == 2, "Scanned layers must have a length of 2 using deepseek."
++        if cfg.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):
++          assert len(RemattedBlockLayers) == 2, "Scanned layers must have a length of 2 using deepseek/hunyuan3."
+           layer_call_kwargs = {
+               "page_state": page_state,
+               "previous_chunk": previous_chunk,
+@@ -776,7 +780,7 @@ class Decoder(nn.Module):
+               **layer_kwargs,
+           )(y, *broadcast_args)
+       else:
+-        if cfg.decoder_block == DecoderBlockType.DEEPSEEK:
++        if cfg.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):
+           assert len(RemattedBlockLayers) == 2, "Unscanned layers must have a length of 2 using deepseek."
+           dense_layer = RemattedBlockLayers[0]
+           moe_layer = RemattedBlockLayers[1]
