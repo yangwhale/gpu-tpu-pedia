@@ -393,6 +393,90 @@ MaxText 把初始化硬编码为 fan-in 缩放，没暴露 std。加载预训练
 
 ---
 
+## 一之四、实跑：在真实 v5p 上跑通（2026-07-28 凌晨）
+
+前面几节全是静态验证。这一节是**真的把它跑起来**的记录。
+
+### 结论：跑通了，三轮修掉三个 bug
+
+```
+completed step: 3, seconds: 0.006, TFLOP/s/device: 21.951, loss: 10.602
+completed step: 4, seconds: 0.006, TFLOP/s/device: 22.534, loss: 10.551
+completed step: 5, seconds: 0.007, TFLOP/s/device: 20.018, loss: 10.522
+```
+
+**loss 单调下降**，前向和反向都通。运行时确认所有关键配置生效：
+
+```
+decoder_block    : DecoderBlockType.HUNYUAN3
+routed_score_func: sigmoid | routed_bias: True
+routed_scaling   : 2.826
+shared_experts   : 1 | first_num_dense_layers: 1
+moe_router_dtype : float32
+norm_topk_prob   : False
+```
+
+### 环境
+
+| 项 | 值 |
+|---|---|
+| 节点池 | `np-v5p-hy3-dev`，1 台 `ct5p-hightpu-4t`，拓扑 `2x2x1`，spot |
+| device | 4（v5p 是 MegaCore，4 chips = 4 devices） |
+| 镜像 | `chrisya-maxtext-stable:oct`（MaxText `3eb77db3` + JAX 0.7.0） |
+| 代码注入 | 本地改动 tar 后 `kubectl cp` 进 pod，解到 `/deps` 覆盖 |
+
+**为什么先建 1 节点小池**：64 节点跑一次要等 6–7 分钟编译，改一行代码就得重来。
+4 chips 上跑小模型只要几十秒，修 bug 的迭代速度差一个量级。
+
+冒烟用的 `hunyuan3-smoke.yml` **结构与 295B 完全一致**（dense 首层 + MoE 层、
+sigmoid + bias、shared expert、fp32 router），只把维度缩小——
+目的是走遍每条代码路径，不是测性能。
+
+### 三个 bug
+
+| # | 现象 | 根因 | 修复 |
+|---|---|---|---|
+| 1 | pod 被 admission webhook 拒：`tpu-accelerator-topology-constraints cannot be bypassed` | 只写了 `gke-nodepool` selector。TPU pod **必须**同时带 `gke-tpu-accelerator` 和 `gke-tpu-topology` | nodeSelector 补两个标签 |
+| 2 | `ValueError: Invalid model name was passed. Got hunyuan3-smoke` | 加了 model yml 还不够，`pyconfig.validate_model_name()` 里有一份**硬编码白名单** | 白名单加 `hunyuan3-295b` / `hunyuan3-smoke` |
+| 3 | `Pallas TPU lowering requires the last two dimensions be divisible by 8 and 128`，block shape `(512, 192)` | smoke config 里 `base_moe_mlp_dim: 192`（1536÷8 随手算的）——**不是 128 的倍数** | 改 256 |
+
+**第 3 个最值得记**：MXU 是 128×128 的脉动阵列，最后一维必须 128 对齐，
+这是 TPU 上的基本约束。前面所有静态检查——参数量、enum、分派、路由分支——
+**一个都查不出来**，因为它们只看配置和代码结构，不看维度能否落到硬件 tile 上。
+只有真跑才会撞到。
+
+> 三个 bug 分属三个层次：**K8s 调度**（1）、**框架注册**（2）、**硬件约束**（3）。
+> 静态验证覆盖不到任何一层——它验的是"逻辑对不对"，
+> 这三个问题都是"环境让不让你跑"。
+
+### 迭代方法
+
+```bash
+bash /tmp/hy3-iter.sh <round>   # 打包改动 -> cp 进 pod -> 跑 -> 判定
+```
+
+每轮自动：tar 本地改动 → `kubectl cp` → 解包覆盖 → 跑训练 →
+grep `completed step` 判定成功，失败则打印首个错误。
+单轮约 40 秒，这是能连续迭代十几轮的前提。
+
+### 渐进放大扫描（进行中）
+
+从跑通的最小配置出发，**每轮只动一个维度**，失败也继续记录：
+
+| 轮次 | 变化 |
+|---|---|
+| r4 | 开 MTP = 1 |
+| r5 | 层数 4 → 8 |
+| r6 | 专家 8 → 32 |
+| r7 | 维度翻倍 |
+| r8 | 加 EP = 4 |
+| r9 | 接近真实维度 + EP4 |
+| r10 | 真实宽度（emb 4096 / moe 1536 / 192 专家）8 层 + EP4 |
+
+结果见 §五测试矩阵。
+
+---
+
 ## 一、模型架构（引自 GB300 SSOT）
 
 ### 1.1 结构参数
