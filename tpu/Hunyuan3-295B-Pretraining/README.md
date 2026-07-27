@@ -583,6 +583,136 @@ Google 的 `v5p-N` 里的 N 数的是 **TensorCore**，v5p 每芯片 2 个 Tenso
 
 ---
 
+## 一之五、80 层完整 295B 在 256 芯片上跑通
+
+### 怎么把补丁发到 64 台机器
+
+单节点靠 `kubectl cp` 就行，64 个 pod 不能这么干。改成 **GCS 中转**：
+
+```bash
+tar czf hy3inject.tgz <改过的 8 个文件>
+gsutil cp hy3inject.tgz gs://.../hy3/hy3inject.tgz
+# 每个 pod 启动时：
+gsutil -q cp gs://.../hy3/hy3inject.tgz /tmp/p.tgz && cd /deps && tar xzf /tmp/p.tgz
+```
+
+比重新 build 镜像快得多（补丁 55 KB，改一行到重跑只要几十秒），
+也不用把私有改动烤进镜像。JobSet 用 `parallelism: 64 / completions: 64`
+配 `exclusive-topology: gke-nodepool` 注解，拿整个 4x8x8 切片。
+
+### 首跑结果
+
+```
+number parameters: 298.786 billion
+Per train step: Total TFLOPs: 2800.97
+  split as 97.64% learnable weight flops and 2.36% attention flops
+
+completed step: 0, seconds: 74.031, TFLOP/s/device: 37.835,  loss: 13.424
+completed step: 1, seconds:  0.323, TFLOP/s/device: 8671.953, loss: 13.424
+completed step: 2, seconds: 106.792, TFLOP/s/device: 26.228, loss: 13.008
+completed step: 3, seconds: 49.962, TFLOP/s/device: 56.062, main_model_loss: 11.550
+completed step: 4, seconds: 49.994, TFLOP/s/device: 56.026, main_model_loss: 11.337
+```
+
+**80 层、192 专家、298.8 B 参数，全局 batch 1,048,576 token，loss 单调下降。**
+稳态 **50.0 s/step**。
+
+### 读这段日志要避开的三个坑
+
+**坑一：step 1 的 8671 TFLOP/s 是假的。** v5p 峰值 459 TFLOPS/chip，
+任何超过它的数字都不可能是真的。JAX 是异步派发的，step 1 的计时器量到的是
+**入队时间**不是执行时间；被推迟的工作在 step 2 一起结算（106.8 s）。
+**稳态只能取 step ≥ 3**，而且要取中位数——后面所有扫描都按这个口径。
+
+**坑二：298.786 B ≠ SSOT 的 294.9 B。** 差 3.886 B，来自 **MTP 头**——
+`mtp_num_layers: 1` 会实打实多出一整层（含 193 个专家）。
+HF 的 295B 不含这一层，因为推理时它被丢掉。**不是参数量算错了**，
+是训练态和发布态本来就不是同一个数。
+
+**坑三：MegaCore 没切开。** 日志里反复出现：
+
+```
+TPU target is configured in megacore mode, but Mosaic failed to
+partition the kernel across cores. Running on one core only.
+```
+
+v5p 每芯片两个 TensorCore 由 XLA 当一个 device 用，前提是 kernel 能沿某一维
+对半切。切不开就只跑一个核——**等于白扔一半算力**。这是 v5p 上 MoE kernel
+的常见情况，也是后面性能优化要重点看的一项。
+
+### bug #4：`fsdp_shard_on_exp` 和 EP 互斥
+
+```
+ValueError: fsdp_shard_on_exp requires ici_expert_parallelism = 1 and
+            ici_tensor_parallelism/ici_tensor_transpose_parallelism = 1
+```
+
+这个开关是给**不用 EP** 的场景准备的（把专家维切到 FSDP 轴上）。
+既然已经开了 EP=64，它就是多余的。顺带记一笔：新版 MaxText 里这个参数
+叫 `shard_exp_on_fsdp`，本仓这版叫 `fsdp_shard_on_exp`，**名字是反的**。
+
+### bug #5：MFU 口径被虚高了约 5 倍
+
+这个最隐蔽，因为它**不影响训练，只影响你以为自己跑得多快**。
+
+`maxtext_utils.py` 里算解析 FLOP 的地方，又是一个按模型名列举的分支：
+
+```python
+if config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.LLAMA4):
+    total_ffn_flops = calculate_routed_and_shared_ffn_tflops_per_device(config)
+else:
+    gate_flops = 2 * B * L * emb * num_experts
+    total_ffn_flops = gate_flops + ffn_matmul(config, config.mlp_dim) * num_experts_per_tok
+```
+
+`hunyuan3` 不在名单里 → 走 `else`，于是专家 FFN 用 **`mlp_dim` = 13312**
+（那是 dense 首层的宽度）而不是 **`moe_mlp_dim` = 1536**，
+而且**完全不算 shared expert**，也不区分首层 dense。
+13312 / 1536 = **8.7 倍**的单项偏差，摊到整模型后报出来的 TFLOP/s 虚高约 5 倍。
+
+一共三处要改，都在 `maxtext_utils.py`：
+
+| 行 | 原本 | 问题 |
+|---|---|---|
+| 461 | MoE FFN 分支只列 DEEPSEEK / LLAMA4 | 专家宽度用错，漏 shared expert |
+| 308 | `get_dense_moe_layers()` 只认 DEEPSEEK / LLAMA4，其余 `raise ValueError` | 拆不出 dense/MoE 层数 |
+| 524 | 逐层汇总时 DEEPSEEK 单独一支 | helper 已按层累加，走 `else` 会再乘一次层数 |
+
+> 这是本项目撞到的**第三个同类 bug**（前两个是 §一之三的路由分支和
+> `model_name.startswith` 门）。模式完全一样：**MaxText 里凡是按模型家族
+> 名字列举的分支，新模型都得逐个补进去；漏了不报错，只是安静地跑出
+> 另一套语义。** 前两个改的是训练数学，这个改的只是报表——
+> 但报表错了会让人拿着虚高 5 倍的 MFU 去做容量规划。
+
+修完之后 §五的 MFU 才有意义。**§一之四、§一之五里所有 TFLOP/s 数字
+都是修复前的口径，不要拿去对标 GB300**；对标数字见 §五。
+
+验证：同一份代码、同一个 pod，只改这三处，`Total TFLOPs` 从
+**2800.97 → 561.92**（4.985 倍），561.92 / 4096 token = **137.2 GFLOP/token**，
+跟 GB300 侧的 136.8 GFLOP/token 对上了。step 时间和 loss 曲线**一字未变**——
+确认改的只是报表。
+
+### r17–r20：稳定性与路径对照（4 芯片）
+
+| 轮次 | 内容 | 结果 | step | TFLOP/s/dev | main_loss |
+|---|---|---|---|---|---|
+| r17 | 真实配置 6 层 | PASS | 0.366s | 16.70 | 4.454 |
+| r18 | 4 层跑 60 步 | PASS | 0.249s | 18.40 | **0.000** |
+| r19 | 打开 xplane profiler | PASS | 0.249s | 18.40 | 2.319 |
+| r20 | 换 dropping 路径（`capacity_factor=1.0`） | PASS | **0.157s** | **29.18** | 5.876 |
+
+**r18 的 loss 收敛到 0 不是 bug。** synthetic 数据集反复喂同一批样本，
+4 层小模型 60 步就把它背下来了。这一轮要看的不是 loss 值，
+而是**跑 60 步没有 NaN、没有发散、step 时间没有漂移**——长跑稳定性过关。
+
+**r20 值得单独记：dropping 比 dropless 快 37%**（0.157 vs 0.249 s）。
+`megablox=True sparse_matmul=True` 是无丢弃路由（每个专家收多少算多少），
+`capacity_factor=1.0` 是固定容量、超了就丢。后者的 GEMM 形状是静态的，
+XLA 能编出更好的 kernel。**代价是丢 token 会影响收敛**，
+预训练要不要用得单独评估——但至少在 TPU 上它不是"落后选项"。
+
+---
+
 ## 一、模型架构（引自 GB300 SSOT）
 
 ### 1.1 结构参数
@@ -731,20 +861,28 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 
 ### 4.1 硬件对照
 
-| | v5p-256 | v7 4x4x4 | GB300（参考） |
-|---|---|---|---|
-| 芯片数 | 128 | 64 | 64 GPU |
-| JAX device 数 | **128**（1 dev/chip，MegaCore） | **128**（2 dev/chip） | — |
-| HBM / chip | 95 GB HBM2e | 192 GB HBM3e | 288 GB |
-| 总 HBM | 12.16 TB | 12.29 TB | 18.4 TB |
-| BF16 TFLOPS / chip | 459 | 2,306 | 2,700 |
-| 总 BF16 算力 | 58.8 PFLOPS | 147.6 PFLOPS | 172.8 PFLOPS |
+实跑用的是节点池 `np-v5p-256`（4x8x8），**实际 256 芯片**——
+不是 Google 命名法里的 `v5p-256`。命名坑见 §一之四末尾。
 
-> **v5p-256 与 v7 4x4x4 是正确的对照组**：device 数同为 128，总 HBM 接近
-> （12.16 vs 12.29 TB），静态状态的每-device 分片相同。差异集中在单卡算力（5×）
-> 和互联代际。单位换算见 [TPU-UNITS](https://github.com/yangwhale/tpu-recipes/blob/main/training/TPU-UNITS.md)。
+| | `np-v5p-256`（**实跑**） | v5p-256（Google 命名） | v7 4x4x4 | GB300（参考） |
+|---|---|---|---|---|
+| Google 加速器类型 | `v5p-512` | `v5p-256` | — | — |
+| 芯片数 | **256** | 128 | 64 | 64 GPU |
+| JAX device 数 | **256**（1 dev/chip，MegaCore） | 128 | **128**（2 dev/chip） | — |
+| HBM / chip | 95.74 GB HBM2e | 95.74 GB | 192 GB HBM3e | 288 GB |
+| 总 HBM | **24.5 TB** | 12.25 TB | 12.29 TB | 18.4 TB |
+| BF16 TFLOPS / chip | 459 | 459 | 2,306 | 2,700 |
+| 总 BF16 算力 | **117.5 PFLOPS** | 58.8 PFLOPS | 147.6 PFLOPS | 172.8 PFLOPS |
 
-### 4.2 显存测算（BF16，128 devices）
+> 原计划拿 **Google 命名的 v5p-256（128 芯片）**去对 v7 4x4x4（128 device），
+> 因为两者 device 数相同、总 HBM 接近。手上实际能用的是 256 芯片的池，
+> 所以下面的 v5p 数字是 **256 芯片**口径；跟 v7 对比时必须按
+> **per-chip** 归一，不能比整机吞吐。
+> 单位换算见 [TPU-UNITS](https://github.com/yangwhale/tpu-recipes/blob/main/training/TPU-UNITS.md)。
+
+### 4.2 显存测算 vs 实测
+
+原先按 **294.9 B / 128 device** 估的：
 
 | 组成 | 计算 | 总量 | 每 device |
 |---|---|---|---|
@@ -752,11 +890,22 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 | 梯度 BF16 | 294.9 B × 2 B | 590 GB | 4.6 GB |
 | Adam 状态 + FP32 master | 294.9 B × 12 B | 3.54 TB | 27.7 GB |
 | **静态小计** | | **4.72 TB** | **36.9 GB** |
-| 可用 HBM / device | | | v5p 95 GB / v7 96 GB |
-| **激活余量** | | | **≈ 58 GB** |
 
-静态状态占 **38%**，两代都留出足够激活空间。**这个规模不需要 PP**，
-纯 FSDP + EP 即可（对比 GB300 因单域只有 64 卡才需要 PP=2）。
+实跑（256 device，`opt_type=adamw` + `mu_dtype=bfloat16` + `grad_dtype=bfloat16`）：
+
+```
+number parameters: 298.786 billion       <- 含 MTP 头，比 SSOT 多 3.886 B
+Total memory size: 54.8 GB
+  Output 10.9 GB | Temp 43.9 GB | Argument 10.9 GB | Host temp 2.5 GB
+```
+
+**每 device 54.8 GB / 95.74 GB，占 57%。** 比表里估的 36.9 GB 高，
+原因是那张表只算了静态状态，没算 43.9 GB 的临时缓冲（激活、
+all-to-all staging、megablox 的分组重排）。**MoE 的临时开销比静态权重还大**——
+这是稠密模型的估算习惯套到 MoE 上会踩的坑。
+
+结论不变：**这个规模不需要 PP**，纯 FSDP + EP 装得下
+（对比 GB300 因单域只有 64 卡才需要 PP=2）。
 
 ### 4.3 起步配置（待验证）
 
@@ -772,9 +921,17 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 | `attention` | 待定 | 待定 | v7 上 flash 有编译问题，见 DSV3 文档踩坑 #3 |
 | `dataset_type` | synthetic | synthetic | 首轮只测吞吐 |
 
-> EP / FSDP 的具体配比是**本轮要扫的第一个维度**。GB300 上 EP=32 是甜点
+> ⚠️ **下面这段推理已被实测推翻，保留原文以便对照。**
+>
+> ~~EP / FSDP 的具体配比是本轮要扫的第一个维度。GB300 上 EP=32 是甜点
 > （192 experts / 32 = 6 专家/rank），TPU 侧 device 数是 128，
-> 候选 EP ∈ {8, 16, 32, 64}，需实测。
+> 候选 EP ∈ {8, 16, 32, 64}，需实测。~~
+>
+> 实测结论：**TPU 上最优是完全不用 EP**（`ici_expert_parallelism=1`、
+> `ici_fsdp_parallelism=256`），MFU 从 2.45% 提到 31.56%。
+> "97% 参数在专家里所以 EP 是主旋钮"这条推理**只对 GPU 成立**——
+> TPU 的 3D torus 上 64 路 all-to-all 是最不友好的通信形状，
+> 而 FSDP 的 all-gather 能整体卸载到 SparseCore。详见 §5.2.2。
 
 ---
 
@@ -796,17 +953,103 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 MFU 分母：**2,306** TFLOPS/chip；v7 是 2 device/chip，
 **per-chip TFLOP/s = 日志值 × 2**（换算见 TPU-UNITS）。
 
-### 5.2 v5p-256 — 128 chips / 128 devices
+### 5.2 `np-v5p-256`（4x8x8，**256 chips / 256 devices**）— 已实测
 
-| # | EP | FSDP | MBS | attention | step 时间 | TFLOP/s/device | MFU | HBM/device | tok/s/device | 状态 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| P1 | 8 | 16 | 1 | dot_product | | | | | | ⬜ |
-| P2 | 16 | 8 | 1 | dot_product | | | | | | ⬜ |
-| P3 | 32 | 4 | 1 | dot_product | | | | | | ⬜ |
-| P4 | 64 | 2 | 1 | dot_product | | | | | | ⬜ |
-| P5 | 最优 | | 2 | dot_product | | | | | | ⬜ |
+**全部数字都是 FLOP 口径修正后的**（见 §一之五 bug #5）。
+稳态取 step ≥ 3 的中位数。MFU 分母 **459** TFLOPS/chip；
+v5p 是 MegaCore，**1 device = 1 chip，日志值不用乘 2**。
 
-MFU 分母：**459** TFLOPS/chip；v5p 是 MegaCore，**1 device = 1 chip，日志值不用乘 2**。
+| # | 配置 | step | TFLOP/s/dev | **MFU** | tok/s/dev | 整机 tok/s | HBM/dev |
+|---|---|---|---|---|---|---|---|
+| o1 | 自己攒的：EP64/FSDP4, pdbs=1, seq=4096, 3 个 XLA flag | 49.99 s | 11.24 | **2.45%** | 81.9 | 20,974 | 54.8 G |
+| **o2** | **照抄官方 DSV3 recipe**：FSDP=256/无 EP, pdbs=4, seq=8192, 26 个 XLA flag | **34.67 s** | **144.87** | **31.56%** | **945.1** | **241,935** | — |
+
+**o1 → o2 是 12.9 倍。** 这一节剩下的篇幅都在解释这 12.9 倍是怎么来的。
+
+### 5.2.1 我犯的错：没有从官方配方出发
+
+我先按自己对模型的理解攒了一套配置（o1），理由写在 §4.3 里：
+"97% 参数在专家里，EP 是主旋钮"。这个推理在 GPU 上成立，
+在 TPU 上**结论是反的**。
+
+同一份 tpu-recipes 文档里写着一句话，我当时读过：
+
+> **从官方配方出发，只改被规模逼着改的那一个参数，不要顺手删减。**
+
+我没照做。o2 就是把 [官方 DeepSeek3-671B 256chips 配方](https://github.com/yangwhale/tpu-recipes/tree/main/training/v5p/DeepSeek3-671B-MaxText-256chips)
+原样搬过来，只换 `model_name` 和 tokenizer。
+
+两套配置的差异：
+
+| 项 | o1（我攒的） | o2（官方） | 差异含义 |
+|---|---|---|---|
+| `ici_fsdp_parallelism` | 4 | **-1（=256）** | 非专家权重从 4 路切成 256 路 |
+| `ici_expert_parallelism` | 64 | **1（不用 EP）** | 靠 FSDP all-gather 而非 all-to-all |
+| `per_device_batch_size` | 1 | **4** | |
+| `max_target_length` | 4096 | **8192** | 合计每卡 token 数 **8 倍** |
+| `use_custom_sort_vjp` | False | **True** | megablox 分组排序的自定义反向 |
+| `sa_block_*` | 512（默认） | **2048** | flash attention 分块 |
+| `tile_batch_seq/embed/mlp` | 未设 | **512/1024/1024** | MoE GEMM 的 tile 尺寸 |
+| `out_proj` | 未设 | **offload** | 多卸一个张量到 host |
+| XLA flags | 3 个 | **26 个** | 主要是 SparseCore 集合通信卸载 |
+
+### 5.2.2 为什么 TPU 上 FSDP 打得过 EP
+
+这是本轮最反直觉的一条，值得单独说。
+
+- **GPU（GB300）**：专家并行靠 DeepEP 做 all-to-all，NVLink 域内带宽极高，
+  EP 把专家权重摊开、只搬 token，是省显存又省带宽的打法。
+- **TPU（v5p）**：ICI 是 3D torus，**64 路 all-to-all 要跨整个环面**，
+  没有 NVLink 那种全连接域。而 FSDP 的 all-gather 是规则的近邻通信，
+  还能整个卸载到 **SparseCore** 上跟 TensorCore 的矩阵乘重叠。
+
+换句话说，**EP 在 TPU 上把通信换成了拓扑最不友好的那种形状**。
+o2 里 `ici_expert_parallelism` 干脆是 1——192 个专家全靠
+FSDP 沿 `embed` 维切开，all-gather 走 SparseCore。
+
+> §4.3 里"EP 是主旋钮"那句话**对 GPU 成立，对 TPU 不成立**，
+> 已在下方标注。这不是笔误，是把一代硬件的经验直接搬到另一代的典型翻车。
+
+### 5.2.3 192 不是 2 的幂，这在 TPU 上是有代价的
+
+`pyconfig.py:1073` 有一条硬约束（`sparse_matmul=True` 时）：
+
+```python
+if raw_keys["num_experts"] % expert_parallelism:
+    raise ValueError(f"The expert dimension {num_experts} is not divisible by "
+                     f"expert parallelism setting {expert_parallelism}")
+```
+
+192 = 2⁶ × 3。在 256 个 device 上，EP 必须同时整除 256 和 192 →
+最大只能取 **64**，凑不出 128 或 256。DeepSeek V3 的 **256** 个专家
+在 256 卡上是 1:1 完美对齐，Hy3 的 192 做不到。
+
+同理 `fsdp_shard_on_exp=True`（把专家维切到 FSDP 轴上）要求
+`num_experts % ici_fsdp_parallelism == 0`，192 % 256 ≠ 0，**这条路对 Hy3 直接封死**。
+
+> 这是模型架构选择在硬件上留下的真实痕迹：
+> **专家数取 2 的幂在 TPU 上不是审美问题，是能不能对齐分片的问题。**
+> 好在 o2 证明了不用 EP 也能跑满，这个限制没有变成瓶颈。
+
+### 5.2.4 消融（进行中）
+
+以 o2 为基准，每轮只关掉一项，看各自贡献多少：
+
+| # | 关掉的东西 | 状态 |
+|---|---|---|
+| o3 | 26 个 XLA flag → 只留 2 个最小集 | ⬜ |
+| o4 | `tile_batch_seq/embed/mlp` | ⬜ |
+| o5 | `use_custom_sort_vjp` | ⬜ |
+| o6 | 改回 EP=64 / FSDP=4 | ⬜ |
+| o7 | seq 8192 → 4096（对齐 GB300 口径） | ⬜ |
+| o8 | pdbs 4 → 6（上探） | ⬜ |
+| o9 | `out_proj=offload` → `remat` | ⬜ |
+| o10 | dropless → dropping（`capacity_factor=1.0`） | ⬜ |
+
+> **spot 抢占是这一批的主要阻力。** o2 跑到 step 5 时整个节点
+> （`gke-tpu-34dda87d-cz54`）被回收，节点池从 64 台掉到 2 台。
+> 稳态数据已经拿到（step 3/4 完全一致），但后续轮次要等池子补回 64 台。
+> 跑批脚本因此改成**自愈队列**：等节点 → 跑一轮 → 拿到 2 个稳态点就收 → 下一轮。
 
 ### 5.3 三方横向对比（**待填**）
 
