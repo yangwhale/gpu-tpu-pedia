@@ -76,4 +76,32 @@ assert len(layers) == 2, "must be [dense, moe]"
 assert layers[0] is hunyuan3.Hunyuan3DenseLayer and layers[1] is hunyuan3.Hunyuan3MoELayer
 norm = decoders.Decoder.get_norm_layer(dec, num_features=E)
 print(f"5) norm layer    {getattr(norm, 'func', norm).__name__}")
+
+# ---- 6. routing math ----
+# The bug this catches: moe.py routes to deepseek_scale_weights() (normalize +
+# routed_scaling_factor) only for the block types named in that branch. A block
+# not listed falls through to a softmax over the top-k scores, which silently
+# drops routed_scaling_factor. Parameter count is unchanged, so checks 1-5 all
+# still pass — this has to be asserted on its own.
+import inspect
+from MaxText.layers import moe as moe_mod
+src = inspect.getsource(moe_mod.RoutedMoE.get_topk)
+before = src.split("deepseek_scale_weights")[0].splitlines()
+# take the nearest `if`/`elif` above the call — comments in between must not
+# shift the window (an earlier version of this check used a fixed [-3:] and
+# broke the moment a comment was added)
+guard = next((l for l in reversed(before) if l.strip().startswith(("if ", "elif "))), "")
+ok = "HUNYUAN3" in guard
+print(f"6) routing math  deepseek_scale_weights branch covers HUNYUAN3: {ok}")
+if not ok:
+    print("   !! Hy3 would fall through to softmax and lose routed_scaling_factor")
+assert ok, "HUNYUAN3 missing from the deepseek_scale_weights branch in moe.py"
+
+# HF `route_norm: true` is already implemented inside deepseek_scale_weights.
+# norm_topk_prob must stay off, or it normalizes a second time after the
+# scaling factor was applied and cancels it out.
+assert c.get("norm_topk_prob", False) is False, \
+    "norm_topk_prob must be False for Hy3 — it would cancel routed_scaling_factor"
+print("   norm_topk_prob False (route_norm already covered by scale_weights)")
+
 print("\nALL CHECKS PASSED")

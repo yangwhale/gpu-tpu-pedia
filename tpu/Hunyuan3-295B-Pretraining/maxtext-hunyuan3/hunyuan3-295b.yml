@@ -31,13 +31,17 @@ base_num_kv_heads: 8         # GQA: 64 heads / 8 groups = 8x sharing
 head_dim: 128
 vocab_size: 120832
 mlp_activations: ["silu", "linear"]
-normalization_layer_epsilon: 1.0e-6
+normalization_layer_epsilon: 1.0e-5   # HF rms_norm_eps: 1e-05 (NOT the 1e-6 that qwen3/deepseek use)
 enable_dropout: False
 logits_via_embedding: False  # tie_word_embeddings: false
 use_qk_norm: True            # qk_norm: true — Hy3 keeps Qwen3's QK-LayerNorm
 
+attention_bias: False        # Hy3 has no QKV bias (matches MaxText default)
+
 # --- RoPE ---
 rope_max_timescale: 11158840  # rope_parameters.rope_theta
+rope_type: "default"          # rope_parameters.rope_type — plain RoPE, no yarn/llama3.1 scaling
+max_position_embeddings: 262144
 
 # --- MoE (DeepSeek V3 lineage) ---
 num_experts: 192
@@ -48,6 +52,13 @@ first_num_dense_layers: 1     # first_k_dense_replace: layer 0 dense, 1..79 MoE
 routed_score_func: "sigmoid"  # moe_router_use_sigmoid
 routed_bias: True             # moe_router_enable_expert_bias (aux-loss-free)
 routed_scaling_factor: 2.826  # router_scaling_factor
+
+# HF has `route_norm: true`. Do NOT map it to norm_topk_prob — it is already
+# implemented inside moe.deepseek_scale_weights(), which divides the top-k
+# scores by their sum whenever routed_score_func == "sigmoid". Setting
+# norm_topk_prob here would normalize a SECOND time, after the scaling factor
+# has been applied, and would therefore cancel routed_scaling_factor out.
+norm_topk_prob: False
 
 # --- MTP ---
 mtp_num_layers: 1             # num_nextn_predict_layers

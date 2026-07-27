@@ -79,3 +79,19 @@ index 3d6f9503b..dcde347ae 100644
            assert len(RemattedBlockLayers) == 2, "Unscanned layers must have a length of 2 using deepseek."
            dense_layer = RemattedBlockLayers[0]
            moe_layer = RemattedBlockLayers[1]
+diff --git a/src/MaxText/layers/moe.py b/src/MaxText/layers/moe.py
+index 04744c696..6632090af 100644
+--- a/src/MaxText/layers/moe.py
++++ b/src/MaxText/layers/moe.py
+@@ -415,7 +415,10 @@ class RoutedMoE(nnx.Module):
+     else:
+       top_k_weights, top_k_indices = jax.lax.top_k(gate_logits, self.num_experts_per_tok)
+ 
+-    if self.config.decoder_block == ctypes.DecoderBlockType.DEEPSEEK:
++    if self.config.decoder_block in (ctypes.DecoderBlockType.DEEPSEEK, ctypes.DecoderBlockType.HUNYUAN3):
++      # Hy3 shares DeepSeek's sigmoid routing: normalize the top-k scores then
++      # apply routed_scaling_factor. Falling through to the softmax branch below
++      # would silently discard routed_scaling_factor and change the routing math.
+       top_k_weights = self.deepseek_scale_weights(top_k_weights)
+     elif self.config.decoder_block != ctypes.DecoderBlockType.LLAMA4:
+       top_k_weights = jax.nn.softmax(top_k_weights.astype(jnp.float32), axis=-1).astype(self.dtype)

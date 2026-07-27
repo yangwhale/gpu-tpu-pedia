@@ -132,6 +132,56 @@ ALL CHECKS PASSED
 `qwix`（数据管线与量化，均不参与构图），**没有做真实前向、没有做多卡分片、
 没有做权重转换**。这些在待验证清单里。
 
+### 对照 HF config 原文的审计（2026-07-27）
+
+上面的实现最初是照 GB300 文档（二手）写的。之后拉了
+`tencent/Hy3` 的 `config.json` **原文**逐项核对，**抓到 2 个真错误**。
+
+**错误 1：`rms_norm_eps` 差 10 倍。** HF 是 `1e-05`，我沿用了 qwen3/deepseek
+惯用的 `1.0e-6`。二手文档没列这一项，我按"同类模型都这么写"填的默认值。
+
+**错误 2（严重，静态验证抓不到）：路由权重会被 softmax 覆盖。**
+`moe.py` 里选择路由权重算法的分支是按 block 类型硬判断的：
+
+```python
+if decoder_block == DEEPSEEK:
+    top_k_weights = self.deepseek_scale_weights(...)   # 归一化 + × 2.826
+elif decoder_block != LLAMA4:
+    top_k_weights = softmax(top_k_weights)             # ← hunyuan3 掉进这里
+```
+
+`hunyuan3` 不等于 `DEEPSEEK`，于是 sigmoid 打出来的分数被 softmax 重新压一遍，
+**`routed_scaling_factor=2.826` 完全不生效**。参数量一个字节都不变，
+所以前五项自检全绿——这类错误只能靠读路由的实际数学来抓。
+已把该分支改为 `in (DEEPSEEK, HUNYUAN3)`，并给验证脚本加了第 6 项专门盯它
+（做过负向测试：把改动还原，脚本会失败）。
+
+**另外差点犯的一个错**：HF 有 `route_norm: true`，看上去该映射到 MaxText 的
+`norm_topk_prob`。**不能这么做**——`route_norm` 已经由
+`deepseek_scale_weights()` 里那句「sigmoid 时先除以 top-k 之和」实现了。
+再开 `norm_topk_prob` 会在乘完 scaling 之后**二次归一化**，把 2.826 除掉。
+config 里显式写了 `norm_topk_prob: False` 并注明原因，防止后人"好心"补上。
+
+补齐的三项：`max_position_embeddings: 262144`（MaxText 默认 163840）、
+`rope_type: "default"`、`attention_bias: False`。
+
+#### 当前对标程度
+
+**config 层面 22 项逐项比对，0 不一致**（层数 / 维度 / 头数 / GQA / head_dim /
+vocab / eps / 专家数 / top-k / moe 维度 / shared / dense 首层 / scaling /
+MTP / max_pos / sigmoid / expert bias / qk_norm / untied / rope theta / rope type）。
+
+**但仍不是 100% 一模一样**，剩下三项无法靠配置消除：
+
+| 差异 | 影响 | 说明 |
+|---|---|---|
+| `initializer_range: 0.006` | **from-scratch 收敛** | MaxText 把初始化硬编码为 `nd_dense_init(1.0, "fan_in", "truncated_normal")`，没有暴露 std 参数。跑性能基线不受影响，真训要改代码 |
+| expert bias 更新率 | **aux-loss-free 均衡** | Megatron 有 `moe_router_bias_update_rate`（DSV3 论文用 1e-3），**MaxText 里找不到对应项**。若确实没实现，bias 永不更新，负载均衡机制等于没开 |
+| `enable_moe_fp32_combine: false` | 数值细节 | MaxText 无对应开关，未确认默认行为是否一致 |
+
+前两项都只影响**训练质量**，不影响**性能基线**。所以拿 TFLOP/s 是安全的，
+但要跑真实预训练必须先解决第二项。
+
 ---
 
 ## 一、模型架构（引自 GB300 SSOT）
@@ -384,8 +434,8 @@ MFU 分母：**459** TFLOPS/chip；v5p 是 MegaCore，**1 device = 1 chip，日�
 | 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ 已完成 | 见[实现](#一之二实现用现成组件拼出-hunyuan3-block) |
 | 1 | **小规模真实前向**（如 4 层 / 8 experts / CPU 或 v7 2x2x2） | ⬜ | 静态验证只证明了接线，没证明能算。这是下一步 |
 | 2 | 192 experts × 80 层能否在 128 devices 上编译出来 | ⬜ | DSV3 671B 在 v7 上曾出现 sparse matmul 编译 6 小时未完成 |
-| 3 | MaxText 里 expert bias 的更新率参数叫什么 | ⬜ | Megatron 有 `moe_router_bias_update_rate`，MaxText 侧**未找到对应项**。若确实没有，aux-loss-free 均衡在 MaxText 上就是失效的，可能要补实现 |
-| 4 | `normalization_layer_epsilon` 与 HF `rms_norm_eps` 是否一致 | ⬜ | 目前填的是 1.0e-6（沿用 qwen3/deepseek），**未从 HF config 核对过** |
+| 3 | MaxText 里 expert bias 的更新率参数叫什么 | ⬜ **最高优先** | Megatron 有 `moe_router_bias_update_rate`，MaxText 侧**未找到对应项**。若确实没实现，bias 永不更新，aux-loss-free 均衡等于没开——这是唯一会影响训练正确性的未决项 |
+| 4 | ~~`normalization_layer_epsilon` 与 HF `rms_norm_eps` 是否一致~~ | ✅ 已核 | 曾填错（1.0e-6），HF 原文是 **1e-05**，已修 |
 | 5 | EP / FSDP 最优配比 | ⬜ | 97% 参数在专家里，这是第一性能旋钮 |
 | 6 | `attention=flash` 在 v7 上能否编译通过 | ⬜ | DSV3 上踩过坑（踩坑 #3，70+ 分钟未完成），需确认 GQA 是否同样受影响 |
 | 7 | MTP 开启后的开销 | ⬜ | GB300 侧建议首跑设 0，跑通再开 |
