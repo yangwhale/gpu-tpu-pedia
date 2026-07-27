@@ -255,6 +255,37 @@ class HYV3DecoderLayer(DeepseekV3DecoderLayer)
 | expert bias 更新 | buffer + 训练框架更新 | 可学习 Parameter | ❌ **差异** |
 | 初始化 | std=0.006 | fan-in 缩放 | ❌ 差异 |
 
+### Hy3 的 MoE 与 DeepSeek V3 并非完全相同
+
+GB300 文档写的是"MoE 是 DSV3 配方的一比一移植"。读完两边代码，
+**路由的六步数学确实逐步一致，但有一处机制 DSV3 有、Hy3 没有**：
+
+| | DeepSeek V3 | Hunyuan 3 |
+|---|---|---|
+| sigmoid 打分 | ✅ | ✅ |
+| expert bias 选择 / 原始值作权重 | ✅ | ✅ |
+| 归一化 + routed_scaling | ✅ | ✅ |
+| shared expert | ✅ | ✅ |
+| **device-limited routing（专家分组）** | **✅ 有** | **❌ 没有** |
+| 专家数 / top-k | 256 / 8 | 192 / 8 |
+
+**device-limited routing**：DSV3 把 256 个专家分成 8 组，一个 token 先选 4 个组，
+再在这 4 组内部选 top-8。目的是**限制单个 token 最多只跟 4 个设备通信**，
+压缩 all-to-all 的扇出。MaxText 里对应 `n_routing_groups` / `topk_routing_group`，
+`deepseek3-671b.yml` 的注释明确要求设成 8 / 4。
+
+Hy3 **没有这套**——`HYV3TopKRouter` 直接在全部 192 个专家里做全局 top-8
+（grep 官方代码，路由部分没有任何 group 相关字段）。代价是 all-to-all 扇出更大，
+换来的是路由自由度更高。
+
+> 本 config **没有设** `n_routing_groups`，MaxText 默认 `-1`（禁用），
+> 正好匹配 Hy3。但这是**碰巧对上的**，本轮才实际核过——
+> 如果哪天有人"参照 DSV3 配方"把这两项加进来，路由行为就变了。
+
+另一处极小的差异：Hy3 归一化时写的是 `sum + 1e-20`，
+DSV3 参考实现和 MaxText 都是裸 `sum`。只有 top-8 分数全部趋近 0 时才有区别，
+实践中不会触发。
+
 ### 路由数学：官方原文与本轮修复
 
 官方 `HYV3TopKRouter.forward()`：
