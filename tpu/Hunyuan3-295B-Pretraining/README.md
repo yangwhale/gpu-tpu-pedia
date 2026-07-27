@@ -939,18 +939,121 @@ all-to-all staging、megablox 的分组重排）。**MoE 的临时开销比静�
 
 > 以下所有性能数字**留空**，等实测后填入。空表本身就是测试计划。
 
-### 5.1 v7 (Ironwood) 4x4x4 — 64 chips / 128 devices（**卡在容量**）
-
-EP 那几行已经作废（见 §5.2.2），v7 侧直接从 v5p 的最优配置起步：
-
-| # | 配置 | step | TFLOP/s/dev | MFU | tok/s/dev | 状态 |
-|---|---|---|---|---|---|---|
-| V1 | 照搬 o11（FSDP=128 / 无 EP / pdbs=6 / seq=8192） | | | | | ⬜ |
-| V2 | V1 + pdbs 上探（v7 每芯片 192 G HBM，能塞更多） | | | | | ⬜ |
-| V3 | V1 + `attention=dot_product`（v7 上 flash 有编译问题） | | | | | ⬜ |
+### 5.1 v7 (Ironwood) 4x4x4 — 64 chips / 128 devices — 已跑通
 
 MFU 分母：**2,306** TFLOPS/chip；v7 是 2 device/chip，
 **per-chip TFLOP/s = 日志值 × 2**（换算见 TPU-UNITS）。
+
+| # | 配置 | step | TFLOP/s/dev | **per-chip** | **MFU** | tok/s/dev | 整机 tok/s |
+|---|---|---|---|---|---|---|---|
+| **V1** | FSDP=128 / 无 EP / pdbs=4 / seq=8192 / 只带 2 个 XLA flag | 25.11 s | 202.38 | **404.75** | **17.55%** | 1,305.1 | **167,059** |
+| V2 | V1 + 补齐 XLA flag 集 + pdbs 上探 | | | | | | ⬜ |
+
+```
+number parameters: 298.786 billion          <- 与 v5p 侧逐位一致，移植没有走样
+completed step: 5, seconds: 25.107, TFLOP/s/device: 202.375, loss: 12.815
+completed step: 6, seconds: 25.107, TFLOP/s/device: 202.375, loss: 12.722
+completed step: 7, seconds: 25.109, TFLOP/s/device: 202.358, loss: 12.645
+completed step: 8, seconds: 25.111, TFLOP/s/device: 202.341, loss: 12.585
+```
+
+**V1 的 17.55% 只是起点，不是 v7 的水平。** v5p 侧从 2.45% 调到 36.72% 用了
+26 个 XLA flag + pdbs=8；v7 这一轮只带了 2 个 flag、pdbs=4，
+而且 `xla_tpu_enable_latency_hiding_layer_scheduler` 在 v7 上报
+`requires sparse core collective aggregator to be enabled` 被迫摘掉。
+按 v5p 的调优幅度推，v7 还有很大空间。
+
+### 5.1.1 v7 用的是另一套 MaxText，补丁得重写
+
+v5p 侧用的 `chrisya-maxtext-stable:oct` 镜像**驱动不了 Ironwood**：
+
+```
+libtpu build label: libtpu_lts_20250721_b_RC01
+jaxlib._jax.XlaRuntimeError: INTERNAL: Failed to get global TPU topology.
+```
+
+2025 年 7 月的 libtpu 不认识 tpu7x。换成 `chrisya-maxtext-latest:runner`
+（ironwood 配方用的那个）之后，发现上游 MaxText 已经整体重构：
+
+| | 旧（v5p 用的） | 新（v7 用的） |
+|---|---|---|
+| 包路径 | `src/MaxText/` | `src/maxtext/` |
+| 神经网络框架 | flax **linen**（`nn.compact`） | flax **nnx** |
+| 层代码位置 | `layers/deepseek.py` | `models/deepseek.py` |
+| 类型定义 | `common_types.py` | `common/common_types.py` |
+| 工具 | `maxtext_utils.py` | `utils/maxtext_utils.py` |
+| 配置校验 | 手写 `validate_model_name()` | **pydantic** `Literal[...]` |
+| 训练入口 | `src.MaxText.train` | `src.maxtext.trainers.pre_train.train` |
+
+好消息是**新版把我记在 §一之三的三个缺口补了两个**：
+
+| 缺口（旧版） | 新版上游 |
+|---|---|
+| router 需要 fp32（我加了 `moe_router_dtype`） | 已有 `float32_gate_logits` |
+| 专家 bias 的无梯度更新规则未实现 | 已有 `routed_bias_update_rate` |
+| 初始化 `initializer_range` | 仍缺（不影响 SFT / 续训） |
+
+所以移植后的 `hunyuan3.py` **比原来短**：Hy3 = Qwen3 的 attention +
+DeepSeek 的 MoE，新版正好有 `AttentionWithNorm` 基类和 `RoutedAndSharedMoE`，
+两个层类各自只跟 Qwen3 的对应类差**一行**。
+
+### 5.1.2 第五到第八次踩同一个坑
+
+移植过程中又撞了四次"按模型名列举的分支漏了 hunyuan3"，
+**全部是运行时才报错，静态检查一个都抓不到**：
+
+| # | 报错 | 位置 |
+|---|---|---|
+| 5 | `Input should be 'default', 'llama2-7b', ...` | `configs/types.py` 的 pydantic `Literal` 白名单 |
+| 6 | `Loss-free load balancing is only supported for the DeepSeek decoder block` | `configs/types.py` 的 validator 把 `routed_bias_update_rate` 锁死在 DEEPSEEK |
+| 7 | `Incorrect decoder_block name cfg.decoder_block.value='hunyuan3'` | `layers/nnx_decoders.py` **第三张**分派表（前两张在 `decoders.py`） |
+| 8 | `Hunyuan3MoELayer.__init__() missing 1 required positional argument: 'quant'` | 两条构造路径签名不一致：nnx decoder 不传 `quant`，linen 路径传 |
+
+加上 §一之三的路由分支、`model_name` 门，和 §一之五的 FLOP 公式，
+**同一个模式在这个项目里出现了 8 次**：
+
+> MaxText 里几乎每个"这个模型该走哪条路"的判断，都是一张按家族名字写死的表。
+> 加新模型不是改一处，是**把所有这类表找齐**。漏掉的那张不会报错说"你漏了"，
+> 它会报一个看起来完全无关的错——`quant` 参数缺失、pydantic 校验失败、
+> 或者干脆不报错，安静地跑出另一套语义（路由分支和 FLOP 公式就是这种）。
+>
+> 找齐的办法只有一个：`grep -rn "DecoderBlockType.DEEPSEEK"` 和
+> `grep -rn 'startswith(("deepseek'`，**每一处都问一遍"Hy3 该不该在这里"**。
+
+### 5.1.3 v7 建池跟 v5p 完全不是一套流程
+
+试了四次才成，每次的错都不一样，记下来省得别人再踩：
+
+| 尝试 | 命令 | 报错 |
+|---|---|---|
+| 1 | `--placement-type=COMPACT`（v5p 的写法） | `tpu7x-standard-4t ... with placement policy is not supported. Use workload policy instead.` |
+| 2 | 去掉 `--placement-type` | 同上——**GKE 在多机拓扑下会自动加 group placement** |
+| 3 | 自建 workload policy（只给 `--type=HIGH_THROUGHPUT`） | `does not support TPU topology with group placement policy and workload policy at the same time` |
+| 4 | workload policy 加 **`--accelerator-topology=4x4x4`** | 通过 |
+
+正确写法（来自 [tpu-recipes ironwood 配方](https://github.com/yangwhale/tpu-recipes/tree/main/training/ironwood)）：
+
+```bash
+# v7 不会自动建 placement policy，必须先手工建，而且要带拓扑
+gcloud compute resource-policies create workload-policy tpu7x-64chip \
+  --region=us-central1 --type=HIGH_THROUGHPUT --accelerator-topology=4x4x4
+
+gcloud container node-pools create np-v7x-64-hy3 \
+  --cluster=... --region=us-central1 --node-locations=us-central1-c \
+  --machine-type=tpu7x-standard-4t --tpu-topology=4x4x4 --num-nodes=16 --spot \
+  --placement-policy=tpu7x-64chip \
+  --disk-type=hyperdisk-balanced --disk-size=200   # v7 必须 hyperdisk
+```
+
+> **第三次栽在同一件事上。** 路由分支、FLOP 公式、现在是建池命令——
+> 每次都是"我按理解推了一个写法"而不是"先去找现成的配方"。
+> 前面刚因为这个丢了 12.9 倍性能（§5.2.1），转头又来一遍。
+
+容量方面：第一次 `Atomic resize failed with [GCE_STOCKOUT]`，
+`us-central1-ai1a` 对本集群不可用，项目里也没有 tpu7x 预留。
+改成 **64 → 32 → 16 递降重试**（spot 容量是波动的），
+第二轮就在 `us-central1-c` 拿到了 64 芯片。多机 TPU 池是**全有全无**的：
+4x4x4 要求物理连续立方体，16 台必须一次落位。
 
 #### v7 建池跟 v5p 完全不是一套流程
 
@@ -1187,14 +1290,34 @@ shell**（命令行里含有这个字符串），导致 `while pgrep ...; do sle
 
 ### 5.3 三方横向对比（**待填**）
 
-| | GB300 64 GPU | v7 4x4x4 | v5p-256 |
+全部按 **per-chip / per-GPU** 归一。三边跑的是同一个 295B-A21B、
+同样 BF16、同样 synthetic 数据、同样不开 checkpoint。
+
+| | GB300 64 GPU | v7 4x4x4（64 chips） | v5p 256 chips |
 |---|---|---|---|
-| 计算单元数 | 64 GPU | 64 chips | 128 chips |
+| 计算单元数 | 64 GPU | 64 chips | 256 chips |
 | BF16 峰值/单元 | 2,700 | 2,306 | 459 |
-| **实测 TFLOP/s/单元** | **854.0** | ⬜ | ⬜ |
-| **MFU** | **31.6%** | ⬜ | ⬜ |
-| **tok/s/单元** | **6,242** | ⬜ | ⬜ |
-| **整机吞吐 tok/s** | **399,488** | ⬜ | ⬜ |
+| 序列长度 | 4,096 | 8,192 | 8,192 |
+| **实测 TFLOP/s/单元** | **854.0** | **404.8** | **168.6** |
+| **MFU** | **31.6%** | **17.6%** | **36.7%** |
+| **tok/s/单元** | **6,242** | **2,610** | **1,100** |
+| **整机吞吐 tok/s** | **399,488** | **167,059** | **281,488** |
+| 调优程度 | 已调优 | **首跑，2 个 XLA flag** | 已调优，26 个 flag |
+
+读这张表的三个要点：
+
+**1. v5p 的 36.7% 已经超过 GB300 的 31.6%。** 单卡算力差 5.9 倍，
+但 MFU 反而更高——256 芯片的 3D torus + SparseCore 集合通信卸载，
+把 MoE 那些碎通信藏得比 NVLink 域还干净。
+代价是要 256 张卡才换来 GB300 64 卡七成的整机吞吐。
+
+**2. v7 的 17.6% 不是 v7 的水平，是"还没调"的水平。**
+v5p 从 2.45% 起步调到 36.7%，v7 这一轮只带了 2 个 XLA flag、pdbs=4。
+按同样比例，v7 单芯片有希望摸到 GB300 的量级。
+
+**3. 别用整机吞吐横向比。** v5p 那一列是 256 芯片，
+另外两列是 64 个单元。要比性价比得再乘上单价，
+这张表只回答"每个计算单元能压出多少"。
 
 > 对比时统一到 **per-chip** 口径。v7 日志是 per-device，需 ×2；v5p 不需要。
 > 这是跨代际比较最容易出错的一步。

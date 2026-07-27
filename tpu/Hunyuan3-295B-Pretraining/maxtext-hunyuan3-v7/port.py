@@ -1,0 +1,100 @@
+#!/usr/bin/env python3
+"""把 hunyuan3 补丁移植到新版 MaxText（src/maxtext，nnx 布局）。
+
+老版补丁针对 src/MaxText（linen）。新版上游做了三件事让补丁变小：
+  * layer 代码搬到 models/，并且从 linen 迁到 nnx
+  * float32_gate_logits 取代了我自己加的 moe_router_dtype
+  * routed_bias_update_rate 已经实现了无辅助损失的偏置更新
+所以这里只剩「把 hunyuan3 加进各处按模型名列举的分支」。
+"""
+import re, sys, os
+
+ROOT = "/tmp/mt-v7/src/maxtext"
+changed = []
+
+
+def edit(rel, fn):
+  p = os.path.join(ROOT, rel)
+  s0 = open(p).read()
+  s = fn(s0)
+  assert s != s0, f"{rel}: 没有任何改动，锚点可能变了"
+  open(p, "w").write(s)
+  changed.append(rel)
+
+
+# 1) 枚举
+def _ct(s):
+  return s.replace('  QWEN3_MOE = "qwen3_moe"',
+                   '  QWEN3_MOE = "qwen3_moe"\n  HUNYUAN3 = "hunyuan3"', 1)
+edit("common/common_types.py", _ct)
+
+
+# 2) decoders：import + 分派 + 所有 DEEPSEEK 等值判断
+def _dec(s):
+  s = s.replace("from maxtext.models import deepseek\n",
+                "from maxtext.models import deepseek\nfrom maxtext.models import hunyuan3\n", 1)
+  s = s.replace(
+      """      case DecoderBlockType.DEEPSEEK:
+        return [
+            deepseek.DeepSeekDenseLayerToLinen,
+            deepseek.DeepSeekMoELayerToLinen,
+        ]""",
+      """      case DecoderBlockType.DEEPSEEK:
+        return [
+            deepseek.DeepSeekDenseLayerToLinen,
+            deepseek.DeepSeekMoELayerToLinen,
+        ]
+      case DecoderBlockType.HUNYUAN3:
+        # Must be a 2-element [dense, moe] list: the first_num_dense_layers
+        # scan machinery below indexes it positionally.
+        return [
+            hunyuan3.Hunyuan3DenseLayerToLinen,
+            hunyuan3.Hunyuan3MoELayerToLinen,
+        ]""", 1)
+  # 走 DeepSeek 那条 dense+moe 混合 scan 路径
+  s = re.sub(r"== DecoderBlockType\.DEEPSEEK(?![0-9A-Z_])",
+             "in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3)", s)
+  # 支持 rms_norm / 标准 decoder 的模型清单
+  s = s.replace("        DecoderBlockType.DEEPSEEK,\n        DecoderBlockType.DEEPSEEK4,",
+                "        DecoderBlockType.DEEPSEEK,\n        DecoderBlockType.DEEPSEEK4,\n        DecoderBlockType.HUNYUAN3,")
+  return s
+edit("layers/decoders.py", _dec)
+
+
+# 3) moe：路由缩放分支 + 五处 model_name 门
+def _moe(s):
+  s = s.replace(
+      "if self.config.decoder_block in (ctypes.DecoderBlockType.DEEPSEEK, ctypes.DecoderBlockType.DEEPSEEK4):\n"
+      "      top_k_weights = self.deepseek_scale_weights(top_k_weights)",
+      "if self.config.decoder_block in (\n"
+      "        ctypes.DecoderBlockType.DEEPSEEK,\n"
+      "        ctypes.DecoderBlockType.DEEPSEEK4,\n"
+      "        ctypes.DecoderBlockType.HUNYUAN3,\n"
+      "    ):\n"
+      "      # Hy3 shares DeepSeek's sigmoid routing. Falling through to the\n"
+      "      # softmax branch would silently drop routed_scaling_factor (2.826).\n"
+      "      top_k_weights = self.deepseek_scale_weights(top_k_weights)", 1)
+  # 这些门决定 top-k 用「加了 bias 的分数」选、但取「不带 bias 的权重值」
+  n = len(re.findall(r'startswith\(\("deepseek3", "deepseek4"\)\)', s))
+  assert n == 5, f"model_name 门的数量变了: {n}"
+  s = s.replace('startswith(("deepseek3", "deepseek4"))',
+                'startswith(("deepseek3", "deepseek4", "hunyuan3"))')
+  return s
+edit("layers/moe.py", _moe)
+
+
+# 4) FLOP 口径三处（详见 README 的 bug #5）
+def _utils(s):
+  s = re.sub(r"if config\.decoder_block in \(DecoderBlockType\.DEEPSEEK, DecoderBlockType\.LLAMA4([^)]*)\):",
+             r"if config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.LLAMA4\1, DecoderBlockType.HUNYUAN3):", s, count=1)
+  s = s.replace("  if config.decoder_block == DecoderBlockType.DEEPSEEK:\n    num_dense_layers = config.first_num_dense_layers",
+                "  if config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):\n    num_dense_layers = config.first_num_dense_layers", 1)
+  s = s.replace("  elif config.decoder_block == DecoderBlockType.DEEPSEEK:\n    learnable_weight_tflops = (",
+                "  elif config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):\n"
+                "    # total_ffn_flops is already summed over layers by the helper; the\n"
+                "    # generic branch would multiply by num_decoder_layers a second time.\n"
+                "    learnable_weight_tflops = (", 1)
+  return s
+edit("utils/maxtext_utils.py", _utils)
+
+print("已改:", ", ".join(changed))
