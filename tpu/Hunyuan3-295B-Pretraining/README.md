@@ -939,19 +939,65 @@ all-to-all staging、megablox 的分组重排）。**MoE 的临时开销比静�
 
 > 以下所有性能数字**留空**，等实测后填入。空表本身就是测试计划。
 
-### 5.1 v7 (Ironwood) 4x4x4 — 64 chips / 128 devices
+### 5.1 v7 (Ironwood) 4x4x4 — 64 chips / 128 devices（**卡在容量**）
 
-| # | EP | FSDP | MBS | attention | step 时间 | TFLOP/s/device | MFU | HBM/device | tok/s/device | 状态 |
-|---|---|---|---|---|---|---|---|---|---|---|
-| V1 | 8 | 16 | 1 | dot_product | | | | | | ⬜ |
-| V2 | 16 | 8 | 1 | dot_product | | | | | | ⬜ |
-| V3 | 32 | 4 | 1 | dot_product | | | | | | ⬜ |
-| V4 | 64 | 2 | 1 | dot_product | | | | | | ⬜ |
-| V5 | 最优 | | 2 | dot_product | | | | | | ⬜ |
-| V6 | 最优 | | 1 | flash | | | | | | ⬜ |
+EP 那几行已经作废（见 §5.2.2），v7 侧直接从 v5p 的最优配置起步：
+
+| # | 配置 | step | TFLOP/s/dev | MFU | tok/s/dev | 状态 |
+|---|---|---|---|---|---|---|
+| V1 | 照搬 o11（FSDP=128 / 无 EP / pdbs=6 / seq=8192） | | | | | ⬜ |
+| V2 | V1 + pdbs 上探（v7 每芯片 192 G HBM，能塞更多） | | | | | ⬜ |
+| V3 | V1 + `attention=dot_product`（v7 上 flash 有编译问题） | | | | | ⬜ |
 
 MFU 分母：**2,306** TFLOPS/chip；v7 是 2 device/chip，
 **per-chip TFLOP/s = 日志值 × 2**（换算见 TPU-UNITS）。
+
+#### v7 建池跟 v5p 完全不是一套流程
+
+试了四次才成，每次的错都不一样，记下来省得别人再踩：
+
+| 尝试 | 命令 | 报错 |
+|---|---|---|
+| 1 | `--placement-type=COMPACT`（v5p 的写法） | `tpu7x-standard-4t ... with placement policy is not supported. Use workload policy instead.` |
+| 2 | 去掉 `--placement-type` | 同上——**GKE 在多机拓扑下会自动加 group placement** |
+| 3 | 自建 workload policy（只给 `--type=HIGH_THROUGHPUT`） | `does not support TPU topology with group placement policy and workload policy at the same time` |
+| 4 | workload policy 加 **`--accelerator-topology=4x4x4`** | 通过校验，进到真正申请容量这一步 |
+
+正确写法（来自 [tpu-recipes ironwood 配方](https://github.com/yangwhale/tpu-recipes/tree/main/training/ironwood)）：
+
+```bash
+# v7 不会自动建 placement policy，必须先手工建，而且要带拓扑
+gcloud compute resource-policies create workload-policy tpu7x-64chip \
+  --region=us-central1 --type=HIGH_THROUGHPUT --accelerator-topology=4x4x4
+
+gcloud container node-pools create np-v7x-64-hy3 \
+  --cluster=... --region=us-central1 --node-locations=us-central1-c \
+  --machine-type=tpu7x-standard-4t --tpu-topology=4x4x4 --num-nodes=16 --spot \
+  --placement-policy=tpu7x-64chip \
+  --disk-type=hyperdisk-balanced --disk-size=200   # v7 必须 hyperdisk
+```
+
+> **第三次栽在同一件事上。** 路由分支、FLOP 公式、现在是建池命令——
+> 每次都是"我按理解推了一个写法"而不是"先去找现成的配方"。
+> 前面刚因为这个丢了 12.9 倍性能（§5.2.1），转头又来一遍。
+
+#### 容量：拿不到
+
+四次校验通过之后，卡在最后一关：
+
+```
+Atomic resize failed with [GCE_STOCKOUT]:
+The zone 'us-central1-c' does not have enough resources
+```
+
+多机 TPU 池是**全有全无**的——4x4x4 要求物理上连续的立方体，
+16 台机器必须一次同时落位，凑不齐就整体失败。
+项目里 tpu7x 只在 `us-central1-c` 和 `us-central1-ai1a` 有，
+而 `ai1a` 对这个集群不可用（`Zone 'us-central1-ai1a' is not available`），
+也没有可用的 tpu7x 预留。
+
+当前策略：**64 → 32 → 16 芯片递降重试**，spot 容量是波动的，
+64 芯片连试三轮（每轮间隔 5 分钟）再降级。拿到任何一档就跑 V1。
 
 ### 5.2 `np-v5p-256`（4x8x8，**256 chips / 256 devices**）— 已实测
 
@@ -1031,25 +1077,113 @@ if raw_keys["num_experts"] % expert_parallelism:
 > **专家数取 2 的幂在 TPU 上不是审美问题，是能不能对齐分片的问题。**
 > 好在 o2 证明了不用 EP 也能跑满，这个限制没有变成瓶颈。
 
-### 5.2.4 消融（进行中）
+### 5.2.4 消融：这 12.9 倍具体是谁贡献的
 
-以 o2 为基准，每轮只关掉一项，看各自贡献多少：
+以 o2 为基准，每轮只动一项：
 
-| # | 关掉的东西 | 状态 |
+| # | 相对 o2 的改动 | step | TFLOP/s/dev | MFU | 整机 tok/s | HBM/dev | Δ MFU |
+|---|---|---|---|---|---|---|---|
+| **o11** | **pdbs=6 且 `out_proj=remat`（两项最优叠加）** | 46.89 s | **160.70** | **35.01%** | **268,363** | 80.9 G | **+3.45 pp** |
+| o8 | pdbs 4 → 6 | 47.67 s | 158.04 | 34.43% | 263,920 | 80.3 G | +2.87 pp |
+| o9 | `out_proj` 不 offload | 34.43 s | 145.86 | 31.78% | 243,591 | 62.4 G | +0.22 pp |
+| **o2** | **（基准，官方配方）** | 34.67 s | 144.87 | 31.56% | 241,935 | — | — |
+| o4 | 去掉 `tile_*` 三项 | 35.01 s | 143.45 | 31.25% | 239,555 | 61.9 G | −0.31 pp |
+| o5 | 去掉 `use_custom_sort_vjp` | 43.03 s | 116.64 | 25.41% | 194,784 | 61.6 G | **−6.15 pp** |
+| o10 | 换 dropping（`capacity_factor=1.0`） | 46.16 s | 108.81 | 23.71% | 181,710 | 79.6 G | **−7.85 pp** |
+| o7 | seq 8192 → 4096 | 21.90 s | 102.64 | 22.36% | 191,538 | 50.2 G | **−9.20 pp** |
+| o6 | 改回 EP=64 / FSDP=4 | — | — | **OOM** | — | — | 超 326.63 G |
+| o3 | 只留 2 个 XLA flag | — | — | 未测出 | — | — | spot 抢占，待重跑 |
+
+按贡献排序，四条结论：
+
+**1. 序列长度是最大的单项（+9.2 pp）。** 8192 → 4096 掉到 22.36%。
+80 层 MoE 每层都有一次 all-gather + 一次分组 GEMM，序列越短，
+这些固定开销摊得越薄。注意 o7 的 step 只要 21.9 s，**看起来更快**——
+但每步只算一半 token，单位吞吐反而低。**只看 step 时间会得出相反的结论。**
+
+**2. `use_custom_sort_vjp` 值 6.15 pp。** 这是 megablox 做分组矩阵乘时
+"把 token 按专家排序"那一步的自定义反向传播。默认 `False`，
+不开就走 JAX 通用求导，慢 19.5%。**一个布尔量，快五分之一。**
+
+**3. batch 还能再上探。** pdbs 4 → 6 拿到 34.43%，是全场最高，
+HBM 涨到 80.3 / 95.74 G。pdbs=8 大概率 OOM，正在测。
+
+**4. `out_proj=offload` 是负收益（−0.22 pp）。** 官方 DSV3 配方里有这一项，
+搬到 Hy3 上反而略亏。原因大概是 Hy3 的 attention 只占 2.36% FLOP，
+省下来的那点显存不值得多一趟 PCIe 往返。
+**这是"照抄官方"唯一需要改回来的地方。**
+
+`tile_*` 三项只值 0.31 pp——在 256 卡上几乎测不出来，
+跟 tpu-recipes 文档里 DSV3 的记录不一致，可能是模型形状不同。
+
+**o11 把两项正收益叠起来（pdbs=6 + `out_proj=remat`），拿到 35.01%。**
+两项单独是 +2.87 和 +0.22，叠加后 +3.45——**略大于两者之和**，
+说明少一趟 out_proj 的 PCIe 往返，在 batch 更大时价值更高一点。
+这是目前的最优配置：
+
+```bash
+model_name=hunyuan3-295b
+ici_fsdp_parallelism=-1        # 256 路，不用 EP
+ici_tensor_parallelism=1
+per_device_batch_size=6
+max_target_length=8192
+megablox=True sparse_matmul=True scan_layers=True
+use_custom_sort_vjp=True        # 值 6.15 pp，默认 False 一定要打开
+sa_block_q=2048 sa_block_kv=2048 sa_block_kv_compute=2048
+sa_block_q_dkv=2048 sa_block_kv_dkv=2048 sa_block_kv_dkv_compute=2048
+sa_block_q_dq=2048 sa_block_kv_dq=2048 sa_use_fused_bwd_kernel=False
+remat_policy=custom decoder_layer_input=offload
+out_proj=remat                  # 官方 DSV3 用 offload，Hy3 上要改回来
+tile_batch_seq=512 tile_embed_dim=1024 tile_mlp_dim=1024
+attention=flash dtype=bfloat16 weight_dtype=float32
+```
+
+配 26 个 XLA flag（官方 30 个里本镜像 libtpu 认的 23 个 + 3 个
+SparseCore 运行模式）。**注意 libtpu 对不认识的 flag 是硬失败**——
+`Unknown command line flag 'xla_tpu_bf16_emission_mode'` 直接让进程退出，
+所以照抄别家配方前必须先在小池子上筛一遍。
+
+### 5.2.5 同一件事在 4 芯片和 256 芯片上结论相反
+
+256 卡池被 spot 抢空时，我在 4 芯片 dev pod 上跑了同一套消融当备用轨道。
+**大部分方向一致，但有一项完全反过来：**
+
+| 改动 | 4 芯片 | 256 芯片 |
 |---|---|---|
-| o3 | 26 个 XLA flag → 只留 2 个最小集 | ⬜ |
-| o4 | `tile_batch_seq/embed/mlp` | ⬜ |
-| o5 | `use_custom_sort_vjp` | ⬜ |
-| o6 | 改回 EP=64 / FSDP=4 | ⬜ |
-| o7 | seq 8192 → 4096（对齐 GB300 口径） | ⬜ |
-| o8 | pdbs 4 → 6（上探） | ⬜ |
-| o9 | `out_proj=offload` → `remat` | ⬜ |
-| o10 | dropless → dropping（`capacity_factor=1.0`） | ⬜ |
+| 去 26 个 XLA flag | 6.25% → 5.25%（−16%） | 待重跑 |
+| 去 `tile_*` | 6.25% → 6.25%（0） | 31.56% → 31.25%（−1%） |
+| 去 `out_proj=offload` | 6.25% → 5.76%（**−8%**） | 31.56% → 31.78%（**+0.7%**） |
+| `sa_block` 1024 → 512 | 6.25% → 6.21%（−0.6%） | — |
+| **换 dropping** | 6.25% → **6.40%（+2.4%）** | 31.56% → **23.71%（−25%）** |
 
-> **spot 抢占是这一批的主要阻力。** o2 跑到 step 5 时整个节点
-> （`gke-tpu-34dda87d-cz54`）被回收，节点池从 64 台掉到 2 台。
-> 稳态数据已经拿到（step 3/4 完全一致），但后续轮次要等池子补回 64 台。
-> 跑批脚本因此改成**自愈队列**：等节点 → 跑一轮 → 拿到 2 个稳态点就收 → 下一轮。
+**dropping 在 4 芯片上是赚的，在 256 芯片上是亏的。**
+小规模下 GEMM 形状静态化的收益占主导；到 256 卡，
+固定容量意味着每张卡都要按最坏情况分配缓冲，
+HBM 从 62.4 G 涨到 79.6 G，通信量也跟着涨——收益被淹没了。
+
+> **教训：小规模消融能筛掉明显错误的方向，但不能用来选最优。**
+> 4 芯片上 dropping 快 2.4%，照这个结论去 256 卡上配置，
+> 会白丢 25% 的吞吐。备用轨道的价值是"别让夜里空转"，不是"替代真实规模"。
+
+### 5.2.6 spot 抢占怎么应对
+
+o2 跑到 step 5 时整个节点（`gke-tpu-34dda87d-cz54`）被回收，
+节点池从 64 台掉到 **2 台**，一小时后才补回 64 台。这一夜被抢了两次。
+
+跑批脚本因此改成**自愈队列**：
+
+- **等节点**：轮询到 64 台 Ready 才提交，最多等 90 分钟
+- **唯一命名**：每轮 JobSet 名字带 `HHMMSS` 后缀。
+  之前用固定名字时，`kubectl logs job/hy3-o2-...` 读到了**上一轮同名 pod 的残留日志**，
+  把正在正常运行的 o2 误判成 FAIL——这个假失败浪费了我一轮
+- **提交后先睡 120 s** 再开始轮询，避开 pod 还没起来的窗口
+- **拿到 2 个稳态点就收**，不等跑满 15 步。o2 的 step 3 和 step 4
+  是 34.674 / 34.673 s，第三位小数才有差别——再多跑十步也是这个数
+
+另外两次被同一个坑绊到：`pgrep -f hy3-sweep.sh` **会匹配到执行它自己的那个
+shell**（命令行里含有这个字符串），导致 `while pgrep ...; do sleep; done`
+永远退不出来，等待的下一批扫描根本没启动。
+判断脚本是否在跑要用 `ps -eo pid,cmd | awk '$2=="bash" && $3=="/path"'` 这种精确匹配。
 
 ### 5.3 三方横向对比（**待填**）
 
