@@ -210,10 +210,112 @@ Hy3 官方靠这套机制做均衡，MaxText 上这套机制目前是缺的。
 > 只是短期 synthetic + 随机初始化的路由接近均匀，几十步内看不出来。
 > **拿短期基线是安全的；长时间真实训练不安全。**
 
-#### ③ `enable_moe_fp32_combine: false` — 未确认
+#### ③ `enable_moe_fp32_combine: false` — 已确认一致
 
-MaxText 没有同名开关，也没确认它在 MoE 结果合并时用什么精度。
-影响最小，但属于"不知道"而非"知道一致"。
+官方 `HYV3MoE.forward()`：该开关为 `false` 时走
+`hidden = routed_output + self.shared_experts(hidden_states)`，直接相加不转 fp32。
+MaxText `RoutedAndSharedMoE.__call__()` 就是 `routed_experts + shared_experts`。
+**行为相同**，此项结案。
+
+---
+
+## 一之三、对照官方 modeling 代码的深度审计（2026-07-27）
+
+上一轮只比了 config 数值。这一轮拉了 **transformers 主干里的官方实现**
+（`models/hy_v3/modeling_hy_v3.py` 608 行 + `modular_hy_v3.py` 322 行，
+Hy3 已进主干，不是 remote code）逐个组件对照算法。
+
+### 官方的真实血统
+
+`modular_hy_v3.py` 的继承链说明 Hy3 是从多个模型拼出来的：
+
+```python
+class HYV3Attention(ApertusAttention)              # 不是 Qwen3Attention
+class HYV3TopKRouter(MixtralTopKRouter)
+class HYV3Experts(Qwen3MoeExperts)
+class HYV3MoE(MiniMaxM2SparseMoeBlock)
+class HYV3DecoderLayer(DeepseekV3DecoderLayer)
+```
+
+> `HYV3Attention` 继承自 `ApertusAttention` 一度让我以为选错了组件。
+> 读展开后的实现，它的数学是：GQA + `q_norm`/`k_norm`（RMSNorm on `head_dim`，
+> 用 `rms_norm_eps`）**在 RoPE 之前**、`scaling = head_dim**-0.5`、四个 proj 全无 bias。
+> **这与 Qwen3 的 attention 逐行等价**，继承谁只是 transformers 内部的代码复用选择。
+> 用 `qwen3.self_attention_with_norm` 是对的。
+
+### 逐组件对照
+
+| 组件 | 官方实现 | MaxText 侧 | 状态 |
+|---|---|---|---|
+| Attention | GQA + qk RMSNorm(head_dim) 在 RoPE 前 + scaling head_dim^-0.5 + 无 bias | `qwen3.self_attention_with_norm` | ✅ 等价 |
+| 层布局 | `mlp_layer_types = ["dense"]*1 + ["sparse"]*79` | `first_num_dense_layers: 1` | ✅ 等价 |
+| shared expert | `routed + shared`，无额外 gating | `RoutedAndSharedMoE` 同式 | ✅ 等价 |
+| 路由数学 | 见下 | 见下 | ✅ **本轮修好** |
+| router 精度 | **fp32 强制** | 跟 `cfg.dtype`（bf16） | ❌ **差异** |
+| expert bias 更新 | buffer + 训练框架更新 | 可学习 Parameter | ❌ **差异** |
+| 初始化 | std=0.006 | fan-in 缩放 | ❌ 差异 |
+
+### 路由数学：官方原文与本轮修复
+
+官方 `HYV3TopKRouter.forward()`：
+
+```python
+routing_weights   = torch.sigmoid(router_logits)              # 1. sigmoid
+scores_for_choice = routing_weights + e_score_correction_bias # 2. 加 bias
+_, top_k_index    = torch.topk(scores_for_choice, top_k)      # 3. 用「含 bias」的分数选
+top_k_weights     = routing_weights.gather(1, top_k_index)    # 4. 取「不含 bias」的值
+top_k_weights    /= top_k_weights.sum(-1, keepdim=True)       # 5. 归一化
+top_k_weights    *= router_scaling_factor                     # 6. × 2.826
+```
+
+**第 3、4 步是 aux-loss-free 的精髓**：bias 只影响*选谁*，不影响*权重多少*。
+
+MaxText 里这条路径由 `deepseek_routing()` 实现，逻辑完全一致
+（`take_along_axis(pre_bias_logits, top_k_indices)`）。**但它被
+`model_name.startswith("deepseek3")` 挡住了——共 4 处**（`moe.py` L246 / L413 /
+L889 / L1427）。`hunyuan3-295b` 不匹配，于是：
+
+- L246 不保存 `pre_bias_logits`（为 None）
+- L413 退回 `jax.lax.top_k(gate_logits)` —— **gate_logits 是加过 bias 的**，
+  于是权重里混进了 bias，第 4 步的语义丢失
+- L889 / L1427 的 sharding 约束也随之跳过
+
+**形状全对、不报任何错、参数量不变**——只有权重数值是错的。
+四处均已改为 `startswith(("deepseek3", "hunyuan3"))`，
+并加了验证脚本第 7 项（负向测试过：还原任意一处即报错）。
+
+> **这是 MaxText 的一处设计债**：用模型名字符串前缀决定路由算法。
+> 更健壮的做法是提一个 config flag（如 `use_pre_bias_routing_weights`）。
+> 这里选择最小侵入，是为了不改动 deepseek2 / kimi-k2 的现有行为
+> ——它们的 `decoder_block` 同为 `deepseek`，但 model_name 不以 deepseek3 开头，
+> 改判断依据会波及它们。
+
+### 生产级落地还差三件事
+
+按优先级：
+
+**① 给 expert bias 补负载驱动更新**（阻塞真实预训练）
+
+官方把 `e_score_correction_bias` 注册为 **buffer**（`register_buffer`，不参与梯度），
+HF 的 modeling 里也没有更新它的代码——**那是训练框架的职责**。
+Megatron 用 `moe_router_bias_update_rate=1e-3` 实现；MaxText 里
+`routed_bias` 是普通可学习 `Parameter`，跟着 loss 梯度走，语义不同。
+
+要做：把 bias 移出梯度路径 + 每步统计各专家 token 数 + 按
+`bias -= γ·sign(load - mean_load)` 更新（DSV3 论文式）。
+
+**② router 强制 fp32**（影响数值稳定性）
+
+官方 `F.linear(hidden_states.float(), self.weight.float())` 显式转 fp32。
+GB300 侧 Megatron 也设了 `moe_router_dtype: fp32`。
+MaxText 的 `GateLogit` 用 `cfg.dtype`（训练时是 bf16），**没有 router dtype 开关**。
+192 个专家的 sigmoid 打分在 bf16 下精度不足，会影响 top-k 选择的稳定性。
+
+要做：给 `GateLogit` 加 dtype 覆盖，或在 config 里新增 `moe_router_dtype`。
+
+**③ `initializer_range: 0.006`**（只影响 from-scratch）
+
+MaxText 把初始化硬编码为 fan-in 缩放，没暴露 std。加载预训练权重则无关。
 
 ---
 
@@ -469,6 +571,7 @@ MFU 分母：**459** TFLOPS/chip；v5p 是 MegaCore，**1 device = 1 chip，日�
 | 2 | 192 experts × 80 层能否在 128 devices 上编译出来 | ⬜ | DSV3 671B 在 v7 上曾出现 sparse matmul 编译 6 小时未完成 |
 | 3 | **给 MaxText 补上 expert bias 的负载驱动更新** | ⬜ **最高优先** | 已查实 MaxText 只把 `routed_bias` 当普通可学习 bias，没有任何负载统计代码，DSV3 式 aux-loss-free 均衡**未实现**。要跑真实预训练必须补，否则专家会失衡（连带拖累 all-to-all 吞吐） |
 | 4 | ~~`normalization_layer_epsilon` 与 HF `rms_norm_eps` 是否一致~~ | ✅ 已核 | 曾填错（1.0e-6），HF 原文是 **1e-05**，已修 |
+| 4b | **给 MaxText 加 router fp32 开关** | ⬜ 高 | 官方 `F.linear(h.float(), w.float())` 强制 fp32，Megatron 也设 `moe_router_dtype: fp32`。MaxText 的 GateLogit 跟 `cfg.dtype`（bf16），192 专家的 sigmoid 打分精度不足 |
 | 5 | EP / FSDP 最优配比 | ⬜ | 97% 参数在专家里，这是第一性能旋钮 |
 | 6 | `attention=flash` 在 v7 上能否编译通过 | ⬜ | DSV3 上踩过坑（踩坑 #3，70+ 分钟未完成），需确认 GQA 是否同样受影响 |
 | 7 | MTP 开启后的开销 | ⬜ | GB300 侧建议首跑设 0，跑通再开 |

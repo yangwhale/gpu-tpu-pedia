@@ -104,4 +104,22 @@ assert c.get("norm_topk_prob", False) is False, \
     "norm_topk_prob must be False for Hy3 — it would cancel routed_scaling_factor"
 print("   norm_topk_prob False (route_norm already covered by scale_weights)")
 
+# ---- 7. pre-bias routing weights ----
+# Hy3 (like DSV3) picks the top-k using scores WITH the expert bias added, but
+# takes the weight values from the sigmoid output WITHOUT the bias. In MaxText
+# that path is gated on model_name.startswith("deepseek3") in four places. A
+# model named anything else silently falls back to jax.lax.top_k(gate_logits),
+# whose weights still carry the bias — wrong values, right shapes, no error.
+moe_src = open(os.path.join(a.root, "src/MaxText/layers/moe.py")).read()
+gated = [l.strip() for l in moe_src.splitlines()
+         if "model_name.startswith" in l]
+covered = sum(1 for l in gated if "hunyuan3" in l)
+print(f"7) pre-bias path  model_name gates: {len(gated)}, covering hunyuan3: {covered}")
+for l in gated:
+    if "hunyuan3" not in l:
+        print(f"   !! not covered: {l}")
+assert gated and covered == len(gated), \
+    "every model_name.startswith gate in moe.py must include hunyuan3, " \
+    "otherwise top-k weights keep the expert bias baked in"
+
 print("\nALL CHECKS PASSED")
