@@ -325,7 +325,50 @@ L889 / L1427）。`hunyuan3-295b` 不匹配，于是：
 
 按优先级：
 
-**① 给 expert bias 补负载驱动更新**（阻塞真实预训练）
+**① expert bias：要分清"路由算法"和"bias 更新规则"是两回事**
+
+先把容易混淆的三层拆开——MaxText 对 DSV3 的支持，**前两层是完整的**：
+
+| 层次 | MaxText 状况 |
+|---|---|
+| **路由算法**（sigmoid / bias 选择 / pre-bias 取值 / 归一化 / scaling） | ✅ **完全正确**，`deepseek_routing()` 与 Hy3 官方逐步一致 |
+| **权重加载** | ✅ **完整**，`convert_deepseek_family_ckpt.py:161` 把 HF 的 `e_score_correction_bias` 映射到 `gate.bias` |
+| **训练时的 bias 更新规则** | ❌ **没有**（下详） |
+
+第三层的搜索证据（五组关键词，全仓 `src/MaxText/`）：
+
+```
+(expert|router|gate|routed).*bias.*(update|adjust|rate)   -> 0
+e_score / correction_bias / aux-loss-free / violation      -> 仅 ckpt 转换脚本的映射表
+expert_count / tokens_per_expert / expert_density          -> 0
+jnp.sign / lax.sign                                        -> 0
+base.yml 的 routed_*/moe_router_*                          -> 仅 4 项，无 update rate
+```
+
+MaxText 把 bias 建成 `nnx.Param`（跟主 loss 梯度走），DSV3 则是 `register_buffer`
+（不参与梯度，每步按负载 ±γ）。
+
+#### 但这一项的优先级取决于走哪条路线
+
+| 场景 | 需要什么 | 难度 |
+|---|---|---|
+| **加载官方权重做 SFT / continued-pretrain** | **不需要更新机制**——bias 已训好。反而需要**冻结**它 | 低 |
+| **from-scratch 预训练** | 需要完整的负载驱动更新 | 高 |
+
+GB300 文档 §1.3 已经写明这一点：「微调场景例外：加载官方权重做 SFT 时专家路由已训好，
+`bias_update_rate` 保持 0 更稳，避免扰动已收敛的路由。**只有 from-scratch /
+continued-pretrain 才需要开**。」
+
+> **走 SFT 路线时反而有个反向隐患**：MaxText 的 bias 是可训练 `Param`，
+> SFT 时**会被梯度更新**，而正确做法是保持不动。
+> 本版 MaxText（`3eb77db3`）**没有 `trainable_parameters_mask`**（已查，不存在），
+> 所以冻结也要自己加——但比实现负载更新简单一个量级。
+
+**修正**：先前把这一项列为"阻塞真实预训练的最高优先级"。
+按 SFT / 加载权重的路线，真正要做的是**冻结 bias**，不是实现更新规则。
+下面的实现方案只在 from-scratch 场景才需要。
+
+**from-scratch 才需要的负载驱动更新**
 
 官方把 `e_score_correction_bias` 注册为 **buffer**（`register_buffer`，不参与梯度），
 HF 的 modeling 里也没有更新它的代码——**那是训练框架的职责**。
@@ -600,7 +643,8 @@ MFU 分母：**459** TFLOPS/chip；v5p 是 MegaCore，**1 device = 1 chip，日�
 | 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ 已完成 | 见[实现](#一之二实现用现成组件拼出-hunyuan3-block) |
 | 1 | **小规模真实前向**（如 4 层 / 8 experts / CPU 或 v7 2x2x2） | ⬜ | 静态验证只证明了接线，没证明能算。这是下一步 |
 | 2 | 192 experts × 80 层能否在 128 devices 上编译出来 | ⬜ | DSV3 671B 在 v7 上曾出现 sparse matmul 编译 6 小时未完成 |
-| 3 | **给 MaxText 补上 expert bias 的负载驱动更新** | ⬜ **最高优先** | 已查实 MaxText 只把 `routed_bias` 当普通可学习 bias，没有任何负载统计代码，DSV3 式 aux-loss-free 均衡**未实现**。要跑真实预训练必须补，否则专家会失衡（连带拖累 all-to-all 吞吐） |
+| 3a | **SFT / 加载权重路线：冻结 gate.bias** | ⬜ **走这条路线时最高优先** | MaxText 的 bias 是可训练 Param，SFT 时会被梯度扰动已收敛的路由。本版无 `trainable_parameters_mask`，需自行加冻结 |
+| 3b | from-scratch 路线：补负载驱动更新 | ⬜ 仅 from-scratch 需要 | 五组关键词全仓搜过，MaxText 无负载统计、无 sign 更新。阻塞点在 `scan_layers` 下 per-layer mutable 状态的传播 |
 | 4 | ~~`normalization_layer_epsilon` 与 HF `rms_norm_eps` 是否一致~~ | ✅ 已核 | 曾填错（1.0e-6），HF 原文是 **1e-05**，已修 |
 | 4b | **给 MaxText 加 router fp32 开关** | ⬜ 高 | 官方 `F.linear(h.float(), w.float())` 强制 fp32，Megatron 也设 `moe_router_dtype: fp32`。MaxText 的 GateLogit 跟 `cfg.dtype`（bf16），192 专家的 sigmoid 打分精度不足 |
 | 5 | EP / FSDP 最优配比 | ⬜ | 97% 参数在专家里，这是第一性能旋钮 |
