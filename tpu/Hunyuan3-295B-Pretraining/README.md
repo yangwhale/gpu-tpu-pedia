@@ -173,14 +173,47 @@ MTP / max_pos / sigmoid / expert bias / qk_norm / untied / rope theta / rope typ
 
 **但仍不是 100% 一模一样**，剩下三项无法靠配置消除：
 
-| 差异 | 影响 | 说明 |
-|---|---|---|
-| `initializer_range: 0.006` | **from-scratch 收敛** | MaxText 把初始化硬编码为 `nd_dense_init(1.0, "fan_in", "truncated_normal")`，没有暴露 std 参数。跑性能基线不受影响，真训要改代码 |
-| expert bias 更新率 | **aux-loss-free 均衡** | Megatron 有 `moe_router_bias_update_rate`（DSV3 论文用 1e-3），**MaxText 里找不到对应项**。若确实没实现，bias 永不更新，负载均衡机制等于没开 |
-| `enable_moe_fp32_combine: false` | 数值细节 | MaxText 无对应开关，未确认默认行为是否一致 |
+"配置消不掉"的意思是：**MaxText 根本没有暴露对应的配置项，改 yml 解决不了，
+只能改 MaxText 源码或者接受差异。** 三项性质完全不同：
 
-前两项都只影响**训练质量**，不影响**性能基线**。所以拿 TFLOP/s 是安全的，
-但要跑真实预训练必须先解决第二项。
+#### ① `initializer_range: 0.006` — 参数没暴露
+
+HF 要求所有权重按 std=0.006 的截断正态初始化。MaxText 把初始化写死成
+`nd_dense_init(1.0, "fan_in", "truncated_normal")` —— 这是 **fan-in 缩放**
+（std 随输入维度自动变），不是固定 0.006，且 yml 里没有任何开关能改。
+
+**影响面**：只在 from-scratch 时决定初始权重分布，进而影响收敛曲线。
+加载预训练权重则完全无关。跑吞吐基线不受影响。
+
+#### ② expert bias 的更新机制 — **不是参数缺失，是机制没实现**
+
+这一项最初写的是"找不到对应参数，若确实没有则……"。**已查实，确实没有。**
+
+```
+grep -rn "bias_update_rate|update_expert_bias|expert_load" src/MaxText/   -> 0 匹配
+routed_bias 的唯一去处: moe.py:316  use_bias=self.config.routed_bias
+```
+
+`routed_bias: True` 在 MaxText 里只是给 gate 的 `Dense` 加了一个
+**普通可学习 bias，跟着 loss 梯度走**。而 DeepSeek V3 的 aux-loss-free 均衡是
+另一回事：bias **不参与梯度**，每步统计各专家实际负载，超载的减 γ、欠载的加 γ
+（论文 γ=1e-3）。MaxText 里**没有任何负载统计代码**。
+
+所以：**开着 `routed_bias` 并不等于开了 aux-loss-free 负载均衡。**
+Hy3 官方靠这套机制做均衡，MaxText 上这套机制目前是缺的。
+
+**影响面**：这是三项里唯一会影响训练正确性的。而且——
+
+> **修正一句我先前说得太满的话**：我之前写"只影响训练质量，不影响性能基线"。
+> 这不够严谨。专家负载失衡会让 all-to-all 出现热点，少数卡排队、其余空等，
+> **吞吐会被拖累**（GB300 文档 §3 就把"热门专家扎堆"列为毁掉高速互连的两个坑之一）。
+> 只是短期 synthetic + 随机初始化的路由接近均匀，几十步内看不出来。
+> **拿短期基线是安全的；长时间真实训练不安全。**
+
+#### ③ `enable_moe_fp32_combine: false` — 未确认
+
+MaxText 没有同名开关，也没确认它在 MoE 结果合并时用什么精度。
+影响最小，但属于"不知道"而非"知道一致"。
 
 ---
 
@@ -434,7 +467,7 @@ MFU 分母：**459** TFLOPS/chip；v5p 是 MegaCore，**1 device = 1 chip，日�
 | 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ 已完成 | 见[实现](#一之二实现用现成组件拼出-hunyuan3-block) |
 | 1 | **小规模真实前向**（如 4 层 / 8 experts / CPU 或 v7 2x2x2） | ⬜ | 静态验证只证明了接线，没证明能算。这是下一步 |
 | 2 | 192 experts × 80 层能否在 128 devices 上编译出来 | ⬜ | DSV3 671B 在 v7 上曾出现 sparse matmul 编译 6 小时未完成 |
-| 3 | MaxText 里 expert bias 的更新率参数叫什么 | ⬜ **最高优先** | Megatron 有 `moe_router_bias_update_rate`，MaxText 侧**未找到对应项**。若确实没实现，bias 永不更新，aux-loss-free 均衡等于没开——这是唯一会影响训练正确性的未决项 |
+| 3 | **给 MaxText 补上 expert bias 的负载驱动更新** | ⬜ **最高优先** | 已查实 MaxText 只把 `routed_bias` 当普通可学习 bias，没有任何负载统计代码，DSV3 式 aux-loss-free 均衡**未实现**。要跑真实预训练必须补，否则专家会失衡（连带拖累 all-to-all 吞吐） |
 | 4 | ~~`normalization_layer_epsilon` 与 HF `rms_norm_eps` 是否一致~~ | ✅ 已核 | 曾填错（1.0e-6），HF 原文是 **1e-05**，已修 |
 | 5 | EP / FSDP 最优配比 | ⬜ | 97% 参数在专家里，这是第一性能旋钮 |
 | 6 | `attention=flash` 在 v7 上能否编译通过 | ⬜ | DSV3 上踩过坑（踩坑 #3，70+ 分钟未完成），需确认 GQA 是否同样受影响 |
