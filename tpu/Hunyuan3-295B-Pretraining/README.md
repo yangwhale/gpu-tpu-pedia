@@ -459,21 +459,127 @@ bash /tmp/hy3-iter.sh <round>   # 打包改动 -> cp 进 pod -> 跑 -> 判定
 grep `completed step` 判定成功，失败则打印首个错误。
 单轮约 40 秒，这是能连续迭代十几轮的前提。
 
-### 渐进放大扫描（进行中）
+### 渐进放大扫描 r4–r10
 
-从跑通的最小配置出发，**每轮只动一个维度**，失败也继续记录：
+从跑通的最小配置出发，**每轮只动一个维度**，失败也继续下一轮：
 
-| 轮次 | 变化 |
-|---|---|
-| r4 | 开 MTP = 1 |
-| r5 | 层数 4 → 8 |
-| r6 | 专家 8 → 32 |
-| r7 | 维度翻倍 |
-| r8 | 加 EP = 4 |
-| r9 | 接近真实维度 + EP4 |
-| r10 | 真实宽度（emb 4096 / moe 1536 / 192 专家）8 层 + EP4 |
+| 轮次 | 变化 | 层 | 专家 | emb | moe_mlp | 结果 | step | TFLOP/s/dev | main_loss | mtp_loss |
+|---|---|---|---|---|---|---|---|---|---|---|
+| r4 | 开 MTP=1 | 4 | 8 | 512 | 256 | PASS | 0.012s | 11.33 | 10.419 | 1.070 |
+| r5 | 层数 4→8 | 8 | 8 | 512 | 256 | PASS | 0.016s | 13.94 | 10.138 | 1.070 |
+| r6 | 专家 8→32 | 8 | 32 | 512 | 256 | PASS | 0.021s | 10.47 | 10.206 | 1.071 |
+| r7 | 维度翻倍 | 8 | 32 | 1024 | 512 | PASS | 0.040s | 10.86 | 9.549 | 1.045 |
+| r8 | 同上 + EP=4 | 8 | 32 | 1024 | 512 | PASS | 0.031s | 13.92 | 9.549 | 1.045 |
+| r9 | 接近真实维度 + EP4 | 8 | 64 | 2048 | 1024 | PASS | 0.071s | 11.94 | 8.054 | 0.984 |
+| r10 | **真实宽度** 8 层 + EP4 | 8 | 192 | 4096 | 1536 | **OOM** | — | — | — | — |
 
-结果见 §五测试矩阵。
+三个可以直接读出来的结论：
+
+**1. MTP 真的在跑。** 从 r4 起每一轮都单独打出 `mtp_loss`：
+
+```
+completed step: 7, seconds: 0.012, TFLOP/s/device: 11.330,
+  loss: 11.489, main_model_loss: 10.419, mtp_loss: 1.070
+```
+
+`loss = main_model_loss + 0.1 × mtp_loss` 对得上（10.419 + 0.1×1.070 = 10.526，
+剩下的差是 moe load-balance 项）。MTP 头不是挂着不动的死代码。
+
+**2. r7 → r8 是一次干净的对照实验。** 两轮配置完全相同，唯一差别是
+`ici_expert_parallelism` 从 1 改成 4（即从默认 FSDP 切成专家并行）：
+
+| | step | TFLOP/s/dev | main_loss |
+|---|---|---|---|
+| r7 (FSDP=4) | 0.040s | 10.86 | 9.5490 |
+| r8 (EP=4) | 0.031s | 13.92 | 9.5490 |
+
+**吞吐 +28%，loss 一位不差。** loss 相同是重点——它证明 EP 只改变了权重
+怎么摆在设备上，没有改变数学。这正是切分策略该有的性质，也顺带说明
+前面那个 `deepseek_scale_weights` 分支修对了：如果路由数学被并行方式
+影响，两轮的 loss 不可能逐位相同。
+
+**3. r10 的 OOM 是容量，不是 bug。**
+
+```
+Ran out of memory in memory space hbm.
+Used 120.49G of 95.74G hbm. Exceeded hbm capacity by 24.75G.
+```
+
+真实宽度下 7 个 MoE 层的专家权重 = 7 × 192 × 3 × 4096 × 1536 ≈ **25.4 B**，
+EP=4 后每卡 6.3 B，Adam（fp32 参数 + m + v = 12 B/param）就要 76 GB，
+加上激活和 dense 部分越过 95.74 GB。4 芯片本来就装不下真实宽度的 8 层——
+这是**在预期之内的物理上限**，说明代码路径是通的，只是卡不够。
+
+### 逐项换成真实值 r11–r16
+
+r10 说明 4 芯片装不下真实宽度的 8 层。于是换个方向：**固定真实宽度、砍层数**，
+然后把配置项一个一个换成 295B 的真实值，看每条代码路径在真实维度下能不能跑。
+
+| 轮次 | 换成真实值的项 | 层 | 结果 | step | TFLOP/s/dev | main_loss | HBM/dev |
+|---|---|---|---|---|---|---|---|
+| r11 | emb 4096 / moe_mlp 1536 / 192 专家 | 4 | PASS | 0.163s | 6.43 | 7.431 | 61.2 G |
+| r12 | 同上，加到 6 层 | 6 | PASS | 0.243s | 5.66 | 6.197 | **91.9 G** |
+| r13 | + 64 query / 8 KV 头、top-8、dense 13312 | 4 | PASS | 0.223s | 78.27 | 4.556 | 64.6 G |
+| r14 | + vocab 120832、位置窗口 262144 | 4 | PASS | 0.246s | 75.69 | 5.885 | 66.8 G |
+| r15 | + `attention=flash` | 4 | PASS | 0.248s | 74.87 | 5.884 | 67.0 G |
+| r16 | + 序列长度 512 → 2048 | 4 | PASS | 0.514s | **145.96** | 8.996 | 73.6 G |
+
+跑完 r15 之后，`hunyuan3-smoke.yml` 和 `hunyuan3-295b.yml` 之间
+**只剩一个字段不同**：
+
+```
+DIFF  295b[base_num_decoder_layers: 80]  smoke[base_num_decoder_layers: 4]
+same  base_emb_dim: 4096          same  num_experts: 192
+same  base_mlp_dim: 13312         same  num_experts_per_tok: 8
+same  base_num_query_heads: 64    same  base_moe_mlp_dim: 1536
+same  base_num_kv_heads: 8        same  shared_experts: 1
+same  head_dim: 128               same  first_num_dense_layers: 1
+same  vocab_size: 120832          same  routed_scaling_factor: 2.826
+same  max_position_embeddings: 262144   same  rope_max_timescale: 11158840
+same  mtp_num_layers: 1           same  moe_router_dtype: "float32"
+```
+
+也就是说，**除了深度，每一个架构维度都已经在真实硬件上跑过前向和反向**。
+
+几个值得单独说的观察：
+
+**r12 的 91.9 G 是 4 芯片的天花板。** 可用 95.74 G，6 层已经贴到边，
+第 7 层必 OOM。这跟 r10 的结论一致，只是从另一头逼近。
+
+**r13 的 TFLOP/s 从 5.66 跳到 78.27（13.8×）。** 这一轮同时换了三样：
+query 头 8 → 64、top-k 2 → 8、dense 中间层 1664 → 13312。三样都是直接乘在
+FLOP 上的，跳这么多是算术，不是优化。**注意这里 HBM 反而降了**
+（91.9 → 64.6 G），因为层数从 6 退回 4——不要把这两个数放在一起读。
+
+**r15 换 flash attention，loss 从 5.885 变成 5.884。** 差在第四位小数，
+是累加顺序不同造成的浮点差异，不是数学变了。flash 在 v5p 上没有
+[DSV3 文档踩坑 #3](https://github.com/yangwhale/tpu-recipes) 里 v7 的那个编译问题。
+
+**r16 是唯一一个真正说明性能的数字。** 序列 512 → 2048，
+TFLOP/s/device 从 74.87 涨到 145.96（+95%）——序列变长把固定开销摊薄了。
+145.96 / 459 = **31.8% MFU**，跟 GB300 上 31.6% 处在同一水平。
+但这只是 4 层小模型 4 芯片，**不能当基线**，真实基线见 §五。
+
+---
+
+### 一个必须先说清的命名坑
+
+本文里出现的 `np-v5p-256` 是**节点池名字**，不是 Google 的加速器类型名：
+
+| | 芯片数 | JAX device 数 | 节点数 | 拓扑 |
+|---|---|---|---|---|
+| 节点池 `np-v5p-256` | **256** | 256 | 64 × `ct5p-hightpu-4t` | 4x8x8 |
+| Google 命名法里的 `v5p-256` | **128** | 128 | 32 | — |
+
+Google 的 `v5p-N` 里的 N 数的是 **TensorCore**，v5p 每芯片 2 个 TensorCore，
+所以 `v5p-N` = N/2 芯片。**我们这个池按 Google 命名法应该叫 `v5p-512`。**
+
+同时 v5p 是 MegaCore：两个 TensorCore 对 XLA 呈现为**一个** device，
+所以 256 芯片 = 256 device（不是 512）。
+
+> 三个数字（TensorCore / chip / JAX device）在 v5p 上的比例是 **2 : 1 : 1**，
+> 在 v7 上是 **2 : 1 : 2**。跨代际对比时这是最容易算错的一步。
+> 下文 §四、§五的表格已按**实际 256 芯片**修正。
 
 ---
 
