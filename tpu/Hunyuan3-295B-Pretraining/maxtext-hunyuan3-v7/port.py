@@ -13,20 +13,27 @@ ROOT = "/tmp/mt-v7/src/maxtext"
 changed = []
 
 
-def edit(rel, fn):
+def edit(rel, fn, expect):
+  """expect = 改完之后这个文件里应该出现多少处 HUNYUAN3 / hunyuan3。
+
+  之前这里只断言「文件变了」，结果 maxtext_utils.py 三处改动里有一处的正则
+  没匹配上（新版把单行 tuple 拆成了多行），静默漏掉，一直到复现审计才发现。
+  按处数断言，漏一处就当场炸。
+  """
   p = os.path.join(ROOT, rel)
   s0 = open(p).read()
   s = fn(s0)
-  assert s != s0, f"{rel}: 没有任何改动，锚点可能变了"
+  n = s.upper().count("HUNYUAN3")
+  assert n == expect, f"{rel}: 命中 {n} 处，期望 {expect} 处——锚点可能变了"
   open(p, "w").write(s)
-  changed.append(rel)
+  changed.append(f"{rel}({n})")
 
 
 # 1) 枚举
 def _ct(s):
   return s.replace('  QWEN3_MOE = "qwen3_moe"',
                    '  QWEN3_MOE = "qwen3_moe"\n  HUNYUAN3 = "hunyuan3"', 1)
-edit("common/common_types.py", _ct)
+edit("common/common_types.py", _ct, expect=2)
 
 
 # 2) decoders：import + 分派 + 所有 DEEPSEEK 等值判断
@@ -58,7 +65,7 @@ def _dec(s):
   s = s.replace("        DecoderBlockType.DEEPSEEK,\n        DecoderBlockType.DEEPSEEK4,",
                 "        DecoderBlockType.DEEPSEEK,\n        DecoderBlockType.DEEPSEEK4,\n        DecoderBlockType.HUNYUAN3,")
   return s
-edit("layers/decoders.py", _dec)
+edit("layers/decoders.py", _dec, expect=11)
 
 
 # 3) moe：路由缩放分支 + 五处 model_name 门
@@ -80,13 +87,23 @@ def _moe(s):
   s = s.replace('startswith(("deepseek3", "deepseek4"))',
                 'startswith(("deepseek3", "deepseek4", "hunyuan3"))')
   return s
-edit("layers/moe.py", _moe)
+edit("layers/moe.py", _moe, expect=6)
 
 
 # 4) FLOP 口径三处（详见 README 的 bug #5）
 def _utils(s):
-  s = re.sub(r"if config\.decoder_block in \(DecoderBlockType\.DEEPSEEK, DecoderBlockType\.LLAMA4([^)]*)\):",
-             r"if config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.LLAMA4\1, DecoderBlockType.HUNYUAN3):", s, count=1)
+  # 这一处上游写成了多行 tuple，早先的单行正则匹配不到，必须按多行的实际文本改
+  old_ffn = ("        DecoderBlockType.GEMMA4,\n        DecoderBlockType.DEEPSEEK4,\n    ):\n"
+             "      total_ffn_flops = calculate_routed_and_shared_ffn_tflops_per_device(config)")
+  new_ffn = ("        DecoderBlockType.GEMMA4,\n        DecoderBlockType.DEEPSEEK4,\n"
+             "        DecoderBlockType.HUNYUAN3,\n    ):\n"
+             "      # Hy3 has DeepSeek's routed + shared + leading-dense structure. The\n"
+             "      # generic branch below sizes the experts with mlp_dim (13312, the dense\n"
+             "      # width) instead of moe_mlp_dim (1536) and skips the shared expert,\n"
+             "      # inflating reported TFLOP/s ~5x. Training is unaffected; MFU is not.\n"
+             "      total_ffn_flops = calculate_routed_and_shared_ffn_tflops_per_device(config)")
+  assert old_ffn in s, "FLOP 的 MoE FFN 分支锚点变了"
+  s = s.replace(old_ffn, new_ffn, 1)
   s = s.replace("  if config.decoder_block == DecoderBlockType.DEEPSEEK:\n    num_dense_layers = config.first_num_dense_layers",
                 "  if config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):\n    num_dense_layers = config.first_num_dense_layers", 1)
   s = s.replace("  elif config.decoder_block == DecoderBlockType.DEEPSEEK:\n    learnable_weight_tflops = (",
@@ -95,7 +112,7 @@ def _utils(s):
                 "    # generic branch would multiply by num_decoder_layers a second time.\n"
                 "    learnable_weight_tflops = (", 1)
   return s
-edit("utils/maxtext_utils.py", _utils)
+edit("utils/maxtext_utils.py", _utils, expect=3)
 
 
 # 5) pydantic 的 model_name 白名单（新版用 Literal 取代了旧版的 validate_model_name）
@@ -115,7 +132,7 @@ def _types(s):
          '        raise ValueError("Loss-free load balancing is only supported for the DeepSeek decoder block.")')
   assert old in s
   return s.replace(old, new, 1)
-edit("configs/types.py", _types)
+edit("configs/types.py", _types, expect=2)
 
 
 # 6) nnx_decoders：第三张分派表 + rms_norm 白名单 + dense/moe 混合 scan 判定
@@ -134,6 +151,6 @@ def _nnxdec(s):
                 "    self.is_deepseek = self.config.decoder_block in "
                 "(DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3)", 1)
   return s
-edit("layers/nnx_decoders.py", _nnxdec)
+edit("layers/nnx_decoders.py", _nnxdec, expect=8)
 
 print("已改:", ", ".join(changed))
