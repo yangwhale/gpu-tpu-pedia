@@ -47,11 +47,10 @@
 
 | | |
 |---|---|
-| **v5p 一键复现** | [`maxtext-hunyuan3/run-v5p-256.sh`](maxtext-hunyuan3/run-v5p-256.sh) —— 已验证能跑出 36.72%（§4.8） |
-| **v7 一键复现** | [`maxtext-hunyuan3-v7/run-v7-64.sh`](maxtext-hunyuan3-v7/run-v7-64.sh) —— 已验证能跑出 19.29%（§5.4） |
-| 代码（v5p / linen 版） | [`maxtext-hunyuan3/`](maxtext-hunyuan3/)：`hunyuan3.py` + `register-hunyuan3.patch`（6 个文件）+ 两个 yml |
-| 代码（v7 / nnx 版） | [`maxtext-hunyuan3-v7/`](maxtext-hunyuan3-v7/)：`hunyuan3.py` + `port.py`（改 6 个文件）+ yml |
-| 静态自检 | [`maxtext-hunyuan3/verify_hunyuan3.py`](maxtext-hunyuan3/verify_hunyuan3.py)，8 项 |
+| **一键复现（两个平台）** | [`maxtext-hunyuan3/run.sh`](maxtext-hunyuan3/run.sh) —— `PLATFORM=v5p` 或 `PLATFORM=v7`，代码共用、只有 XLA flag 不同 |
+| 模型代码 | [`maxtext-hunyuan3/hunyuan3.py`](maxtext-hunyuan3/hunyuan3.py) —— 约 160 行 nnx，放进 `src/maxtext/models/`。**零新数学**：attention 继承 Qwen3，MoE 直接复用 DeepSeek 的 `RoutedAndSharedMoE`，本文件只做接线 |
+| 模型配置 | [`hunyuan3-295b.yml`](maxtext-hunyuan3/hunyuan3-295b.yml) / [`hunyuan3-smoke.yml`](maxtext-hunyuan3/hunyuan3-smoke.yml) —— 放进 `src/maxtext/configs/models/`，每个值对着 HF `config.json` 抄 |
+| MaxText 侧补丁 | [`port.py`](maxtext-hunyuan3/port.py) —— 改**上游 7 个文件**，逐处带命中数断言。光靠 config 做不到，因为 MaxText 到处按模型家族名字分支（§八） |
 | 未做 | 权重转换、真实数据集收敛验证（§九） |
 
 ### 怎么读这份文档
@@ -244,8 +243,7 @@ L889 / L1427）。`hunyuan3-295b` 不匹配，于是：
 |---|---|
 | `hunyuan3.py` | 两个 decoder layer 类，**只做接线** |
 | `hunyuan3-295b.yml` | model config，值全部来自 SSOT |
-| `register-hunyuan3.patch` | `common_types.py` + `decoders.py` 的注册改动 |
-| `verify_hunyuan3.py` | 静态自检脚本 |
+| `port.py` | 上游 7 个文件的注册改动，逐处带命中数断言 |
 
 **新写的只有装配逻辑**，两半功能都是原样引入的：
 
@@ -1141,9 +1139,10 @@ shell**（命令行里含有这个字符串），导致 `while pgrep ...; do sle
 ### 4.8 复现验证：用仓库里的产物从零跑一遍
 
 文档写完之后做了一轮**复现审计**——不用我的工作目录，
-而是把 [`maxtext-hunyuan3/register-hunyuan3.patch`](maxtext-hunyuan3/) 打到一棵
+而是把当时的 `register-hunyuan3.patch` 打到一棵
 干净的 MaxText `3eb77db3c` 上，再用
-[`maxtext-hunyuan3/run-v5p-256.sh`](maxtext-hunyuan3/run-v5p-256.sh) 提交。
+当时的 `run-v5p-256.sh` 提交。（这两个产物已随 §5.5 的合并删除；
+现在的复现入口是 [`run.sh`](maxtext-hunyuan3/run.sh) `PLATFORM=v5p`。）
 
 结果**逐位对上**：
 
@@ -1204,9 +1203,12 @@ assert n == expect, f"{rel}: 命中 {n} 处，期望 {expect} 处"
 ## 五、v7 Ironwood：移植与跑通
 
 
-### 5.1 v7 用的是另一套 MaxText，补丁得重写
+### 5.1 v7 逼出了新版 MaxText —— 后来两个平台都收敛到它
 
-v5p 侧用的 `chrisya-maxtext-stable:oct` 镜像**驱动不了 Ironwood**：
+> **本节是历史。** 结论已经变了：**新镜像两代硬件都能驱动，仓库里只留一份代码**（§5.5）。
+> 保留这一节是因为「新旧两版 MaxText 差在哪」这张表本身仍然有用。
+
+当初 v5p 侧用的 `chrisya-maxtext-stable:oct` 镜像**驱动不了 Ironwood**：
 
 ```
 libtpu build label: libtpu_lts_20250721_b_RC01
@@ -1304,8 +1306,8 @@ completed step: 8, seconds: 25.111, TFLOP/s/device: 202.341, loss: 12.585
 
 跟 §4.8 一样，不用工作目录：从镜像里拉一棵**干净的**新版 MaxText，
 `cp hunyuan3.py` + `cp hunyuan3-295b.yml` + 跑
-[`port.py`](maxtext-hunyuan3-v7/port.py)，再用
-[`run-v7-64.sh`](maxtext-hunyuan3-v7/run-v7-64.sh) 提交。
+[`port.py`](maxtext-hunyuan3/port.py)，再用
+[`run.sh`](maxtext-hunyuan3/run.sh)（`PLATFORM=v7`）提交。
 
 | | 原始 c1 | 复现 v7audit | 差 |
 |---|---|---|---|
@@ -1988,4 +1990,4 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 3. 权重转换（HF → Orbax）与真实数据集收敛验证（§九）。
 
 代码：[`maxtext-hunyuan3/`](maxtext-hunyuan3/)（v5p / linen 版）、
-[`maxtext-hunyuan3-v7/`](maxtext-hunyuan3-v7/)（v7 / nnx 版）。
+[`maxtext-hunyuan3/`](maxtext-hunyuan3/)。

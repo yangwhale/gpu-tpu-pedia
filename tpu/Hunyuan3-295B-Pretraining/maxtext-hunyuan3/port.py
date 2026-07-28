@@ -153,4 +153,35 @@ def _nnxdec(s):
   return s
 edit("layers/nnx_decoders.py", _nnxdec, expect=8)
 
+
+# 7) 训练主循环：无梯度 bias 更新的路径把 DeepSeek 的模块属性名写死了，两处。
+#    不改的话 routed_bias_update_rate 配了也没用 —— 会直接 AttributeError（见 README §八 bug #9）。
+#    这里不能沿用 edit()，因为 train.py 里出现的是 "Hunyuan3MoeBlock_0" 而非 "hunyuan3"。
+def _train(s):
+  a1 = '("params", "decoder", "moe_layers", "DeepSeekMoeBlock_0", "MoeBlock_0", "gate", "bias")'
+  b1 = '("params", "decoder", "moe_layers", _moe_block_attr(config), "MoeBlock_0", "gate", "bias")'
+  a2 = "new_state.model.decoder.moe_layers.DeepSeekMoeBlock_0.MoeBlock_0.gate.bias"
+  b2 = "getattr(new_state.model.decoder.moe_layers, _moe_block_attr(config)).MoeBlock_0.gate.bias"
+  for a in (a1, a2):
+    assert s.count(a) == 1, f"train.py: 锚点命中 {s.count(a)} 次，期望 1 次 —— 上游可能改过"
+  s = s.replace(a1, b1).replace(a2, b2)
+  helper = (
+      '_MOE_BLOCK_ATTR = {"deepseek": "DeepSeekMoeBlock_0", "hunyuan3": "Hunyuan3MoeBlock_0"}\n\n\n'
+      "def _moe_block_attr(config):\n"
+      '  key = getattr(config.decoder_block, "value", config.decoder_block)\n'
+      "  return _MOE_BLOCK_ATTR[str(key)]\n\n\n"
+  )
+  m = re.search(r"^def ", s, re.M)
+  assert m, "train.py: 找不到模块级 def，无法插入 helper"
+  return s[:m.start()] + helper + s[m.start():]
+
+
+_p = os.path.join(ROOT, "trainers/pre_train/train.py")
+_s0 = open(_p).read()
+_s = _train(_s0)
+assert _s.count("Hunyuan3MoeBlock_0") == 1 and _s.count("_moe_block_attr") == 3, "train.py 补丁不完整"
+compile(_s, _p, "exec")
+open(_p, "w").write(_s)
+changed.append("trainers/pre_train/train.py")
+
 print("已改:", ", ".join(changed))

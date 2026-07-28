@@ -1,71 +1,67 @@
-# Copyright 2023–2025 Google LLC
-#
-# Licensed under the Apache License, Version 2.0 (the "License");
-# you may not use this file except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#    https://www.apache.org/licenses/LICENSE-2.0
-#
-# Unless required by applicable law or agreed to in writing, software
-# distributed under the License is distributed on an "AS IS" BASIS,
-# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
-# See the License for the specific language governing permissions and
-# limitations under the License.
+"""Hunyuan3 (Hy3, 295B-A21B) decoder layers.
 
-"""Tencent Hunyuan 3 (Hy3, 295B-A21B) decoder layers.
+Hy3 is DeepSeek-V3's MoE bolted onto Qwen3's attention:
 
-Hy3 is a Qwen3-style attention stack bolted onto a DeepSeek-V3-style MoE:
+  attention   GQA 64/8 + head_dim 128 + qk_norm, no MLA
+              -> identical to Qwen3, so AttentionWithNorm is reused as-is
+  MoE         sigmoid routing + per-expert bias + routed_scaling_factor,
+              192 routed experts + 1 shared, first layer dense
+              -> identical to DeepSeek V3, so RoutedAndSharedMoE is reused
 
-  attention   GQA (64 heads / 8 KV groups, head_dim 128) + QK-LayerNorm,
-              no QKV bias                       -> identical to Qwen3
-  MoE         sigmoid routing + per-expert bias (aux-loss-free) +
-              1 shared expert + routed_scaling  -> identical to DeepSeek V3
-  layout      layer 0 dense, layers 1..79 MoE    -> same as DeepSeek V3's
-              first_k_dense_replace
-
-So neither `qwen3` nor `deepseek` alone can express it: the former has no
-shared expert and no dense-first-layer support, the latter hardcodes MLA
-attention. This module supplies only the wiring — both halves are imported
-unchanged from the existing implementations:
-
-  * `qwen3.self_attention_with_norm`   -> the GQA half
-  * `moe.get_routed_and_shared_moe`    -> the DeepSeek MoE half
-  * `deepseek.post_process`            -> shared epilogue
-
-Layer classes are returned as a 2-element list (dense, moe) so that the
-existing `first_num_dense_layers` scan machinery in `decoders.py` — written
-for DeepSeek — drives Hy3 as well.
+Only the wiring is new. The two layer classes below differ from
+Qwen3DecoderLayer / Qwen3MoeDecoderLayer in exactly one line each:
+the dense layer is unchanged, and the MoE layer swaps RoutedMoE for
+RoutedAndSharedMoE (RoutedMoE alone would silently drop the shared expert).
 """
-# pylint: disable=arguments-differ
-# pylint: disable=no-name-in-module
 
-from jax.sharding import Mesh
+from typing import Any
+
+import jax
 import jax.numpy as jnp
-
+from jax.sharding import Mesh
 from flax import linen as nn
+from flax import nnx
 
-from MaxText.common_types import Config
-from MaxText.layers import deepseek
-from MaxText.layers import initializers
-from MaxText.layers import linears
-from MaxText.layers import moe
-from MaxText.layers import qwen3
-from MaxText.layers.quantizations import AqtQuantization as Quant
-from MaxText.inference import page_manager
+from maxtext.common.common_types import Config
+from maxtext.layers import initializers as max_initializers
+from maxtext.layers import moe
+from maxtext.layers import nnx_wrappers
+from maxtext.layers.linears import MlpBlock
+from maxtext.layers.quantizations import AqtQuantization as Quant
+from maxtext.models.qwen3 import AttentionWithNorm
 
 
-class Hunyuan3DenseLayer(nn.Module):
-  """Hy3 dense layer — layer 0 only (`first_num_dense_layers=1`).
+class Hunyuan3DenseLayer(AttentionWithNorm):
+  """Hy3 dense layer — layer 0 only (first_num_dense_layers=1)."""
 
-  GQA attention + a plain SwiGLU MLP of width `mlp_dim` (13312).
-  """
+  def __init__(
+      self,
+      config: Config,
+      mesh: Mesh,
+      model_mode: str,
+      rngs: nnx.Rngs,
+      quant: None | Quant = None,
+      layer_idx: int = -1,
+  ):
+    # Callers are inconsistent: the nnx decoder builds DeepSeek-style layers
+    # without passing quant, while the linen path always does. Keep quant and
+    # layer_idx optional so both construction sites work.
+    super().__init__(config, mesh, model_mode, quant, rngs)
+    self.layer_idx = layer_idx
+    self.mlp = MlpBlock(
+        in_features=config.emb_dim,
+        intermediate_dim=config.mlp_dim,
+        activations=config.mlp_activations,
+        intermediate_dropout_rate=config.dropout_rate,
+        dtype=config.dtype,
+        weight_dtype=config.weight_dtype,
+        config=config,
+        mesh=mesh,
+        quant=quant,
+        model_mode=model_mode,
+        rngs=rngs,
+    )
 
-  config: Config
-  mesh: Mesh
-  model_mode: str
-  quant: None | Quant = None
-
-  @nn.compact
   def __call__(
       self,
       inputs: jnp.ndarray,
@@ -74,106 +70,131 @@ class Hunyuan3DenseLayer(nn.Module):
       deterministic: bool,
       model_mode: str,
       previous_chunk=None,
-      page_state: None | page_manager.PageState = None,
       slot: None | int = None,
+      kv_cache: None | jnp.ndarray = None,
+      attention_metadata: None | dict[str, Any] = None,
   ):
-    cfg = self.config
-
-    # `checkpoint_name(inputs, "decoder_layer_input")` happens inside this
-    # helper — do not repeat it here or remat will see two identical names.
-    hidden_states, residual_after_attention = qwen3.self_attention_with_norm(
+    if isinstance(inputs, tuple):
+      inputs = inputs[0]
+    hidden_states, intermediate_inputs, kv_cache = self.apply_attention_with_norm(
         inputs,
-        cfg,
-        self.mesh,
-        self.quant,
         decoder_segment_ids,
         decoder_positions,
         deterministic,
         model_mode,
+        kv_cache=kv_cache,
+        attention_metadata=attention_metadata,
     )
-
-    mlp_output = linears.mlp_block(
-        in_features=hidden_states.shape[-1],
-        intermediate_dim=cfg.mlp_dim,
-        activations=cfg.mlp_activations,
-        intermediate_dropout_rate=cfg.dropout_rate,
-        dtype=cfg.dtype,
-        weight_dtype=cfg.weight_dtype,
-        name="mlp",
-        config=cfg,
-        quant=self.quant,
-    )(hidden_states, deterministic=deterministic)
-
-    layer_output = residual_after_attention + mlp_output
-    layer_output = nn.with_logical_constraint(
-        layer_output,
-        ("activation_batch", "activation_length", "activation_embed"),
-    )
-    return deepseek.post_process(cfg, layer_output, self.sow)
+    mlp_lnx = self.mlp(hidden_states, deterministic=deterministic)
+    mlp_lnx = nn.with_logical_constraint(mlp_lnx, self.activation_axis_names)
+    layer_output = intermediate_inputs + mlp_lnx
+    layer_output = nn.with_logical_constraint(layer_output, self.activation_axis_names)
+    return layer_output, kv_cache
 
 
-class Hunyuan3MoELayer(nn.Module):
-  """Hy3 MoE layer — layers 1..79.
+class Hunyuan3MoELayer(AttentionWithNorm):
+  """Hy3 MoE layer — layers 1..79."""
 
-  GQA attention + DeepSeek-V3 MoE block (192 routed experts, top-8, sigmoid
-  routing with a learned per-expert bias, plus 1 shared expert).
-
-  Uses `get_routed_and_shared_moe` rather than `get_routed_moe`: the latter
-  returns a bare `RoutedMoE` and would silently drop Hy3's shared expert.
-  """
-
-  config: Config
-  mesh: Mesh
-  model_mode: str
-  quant: None | Quant = None
-
-  @nn.compact
-  def __call__(
+  def __init__(
       self,
-      inputs: jnp.ndarray,
-      decoder_segment_ids: None | jnp.ndarray,
-      decoder_positions: None | jnp.ndarray,
-      deterministic: bool,
+      config: Config,
+      mesh: Mesh,
       model_mode: str,
-      previous_chunk=None,
-      page_state: None | page_manager.PageState = None,
-      slot: None | int = None,
+      rngs: nnx.Rngs,
+      quant: None | Quant = None,
+      layer_idx: int = -1,
   ):
-    cfg = self.config
-
-    hidden_states, residual_after_attention = qwen3.self_attention_with_norm(
-        inputs,
-        cfg,
-        self.mesh,
-        self.quant,
-        decoder_segment_ids,
-        decoder_positions,
-        deterministic,
-        model_mode,
-    )
-
-    # `RoutedAndSharedMoE` reads num_experts / num_experts_per_tok /
-    # moe_mlp_dim / shared_experts / routed_score_func / routed_bias /
-    # routed_scaling_factor straight off the config, so unlike
-    # `get_routed_moe` there is nothing to pass positionally here.
-    mlp_output = moe.get_routed_and_shared_moe(
-        name="Hunyuan3MoeBlock_0",
-        config=cfg,
-        mesh=self.mesh,
-        kernel_init=initializers.nd_dense_init(1.0, "fan_in", "truncated_normal"),
+    # Callers are inconsistent: the nnx decoder builds DeepSeek-style layers
+    # without passing quant, while the linen path always does. Keep quant and
+    # layer_idx optional so both construction sites work.
+    super().__init__(config, mesh, model_mode, quant, rngs)
+    self.layer_idx = layer_idx
+    self.moe_block = moe.RoutedAndSharedMoE(
+        config=config,
+        mesh=mesh,
+        kernel_init=max_initializers.nd_dense_init(config.dense_init_scale, "fan_in", "truncated_normal"),
         kernel_axes=("embed", None),
-        dtype=cfg.dtype,
-        weight_dtype=cfg.weight_dtype,
-        quant=self.quant,
-    )(hidden_states)
-
-    mlp_output = nn.with_logical_constraint(
-        mlp_output, ("activation_batch", "activation_length", "activation_embed")
+        dtype=config.dtype,
+        weight_dtype=config.weight_dtype,
+        quant=quant,
+        rngs=rngs,
     )
 
-    layer_output = residual_after_attention + mlp_output
-    layer_output = nn.with_logical_constraint(
-        layer_output,
-        ("activation_batch", "activation_length", "activation_embed"),
+  def __call__(
+      self,
+      inputs: jnp.ndarray,
+      decoder_segment_ids: None | jnp.ndarray,
+      decoder_positions: None | jnp.ndarray,
+      deterministic: bool,
+      model_mode: str,
+      previous_chunk=None,
+      slot: None | int = None,
+      kv_cache: None | jnp.ndarray = None,
+      attention_metadata: None | dict[str, Any] = None,
+  ):
+    is_scan_carry = False
+    if isinstance(inputs, tuple) and len(inputs) == 3:
+      hidden_states, stacked_kv_cache, layer_idx = inputs
+      kv_cache = stacked_kv_cache[layer_idx]
+      inputs = hidden_states
+      is_scan_carry = True
+    elif isinstance(inputs, tuple):
+      inputs = inputs[0]
+    if isinstance(inputs, tuple):
+      inputs = inputs[0]
+
+    hidden_states, intermediate_inputs, kv_cache = self.apply_attention_with_norm(
+        inputs,
+        decoder_segment_ids,
+        decoder_positions,
+        deterministic,
+        model_mode,
+        kv_cache=kv_cache,
+        attention_metadata=attention_metadata,
     )
-    return deepseek.post_process(cfg, layer_output, self.sow)
+
+    mlp_lnx, load_balance_loss, moe_bias_updates = self.moe_block(hidden_states)
+    mlp_lnx = nn.with_logical_constraint(mlp_lnx, self.activation_axis_names)
+
+    # Both of these must go out via `sow`, not by assigning an nnx.Intermediate
+    # directly: the training loop reads them as `value[0]`, and only `sow`
+    # produces the tuple that indexing expects.
+    if self.config.load_balance_loss_weight > 0.0 and load_balance_loss is not None:
+      self.sow(nnx.Intermediate, "moe_lb_loss", load_balance_loss)
+
+    # DeepSeek V3's auxiliary-loss-free load balancing (arXiv 2408.15664): the
+    # MoE block returns a per-expert bias delta, and the training loop applies
+    # it to `gate.bias` *outside* the optimizer, after the gradient step. Drop
+    # this third return value and the mechanism goes silently inert — the
+    # config still says `routed_bias_update_rate: 0.001`, the bias never moves,
+    # and the experts collapse with nothing in the logs to say so.
+    if (
+        self.config.routed_bias
+        and self.config.routed_bias_update_rate > 0.0
+        and moe_bias_updates is not None
+    ):
+      self.sow(nnx.Intermediate, "moe_bias_updates", moe_bias_updates)
+
+    layer_output = intermediate_inputs + mlp_lnx
+    layer_output = nn.with_logical_constraint(layer_output, self.activation_axis_names)
+
+    if is_scan_carry:
+      def update_cache(cache, val):
+        if jnp.size(val) > 0:
+          return cache.at[layer_idx].set(val)
+        return cache
+
+      stacked_kv_cache = jax.tree_util.tree_map(update_cache, stacked_kv_cache, kv_cache)
+      return (layer_output, stacked_kv_cache, layer_idx + 1), None
+    return layer_output, kv_cache
+
+
+Hunyuan3DenseLayerToLinen = nnx_wrappers.to_linen_class(
+    Hunyuan3DenseLayer,
+    base_metadata_fn=max_initializers.variable_to_logically_partitioned,
+)
+
+Hunyuan3MoELayerToLinen = nnx_wrappers.to_linen_class(
+    Hunyuan3MoELayer,
+    base_metadata_fn=max_initializers.variable_to_logically_partitioned,
+)

@@ -1,6 +1,7 @@
-# Hunyuan3 smoke-test config — same STRUCTURE as hunyuan3-295b, tiny dimensions.
-# Purpose: exercise every code path (dense layer 0 + MoE layers, sigmoid routing
-# with expert bias, shared expert, MTP) on 4 chips in seconds instead of minutes.
+# Hunyuan3 smoke config for the NEW MaxText (src/maxtext, nnx).
+# Identical STRUCTURE to hunyuan3-295b, only the layer count is cut 80 -> 4.
+# Purpose: prove every code path runs (dense layer 0 + MoE layers, sigmoid
+# routing with expert bias, shared expert, MTP) without needing 295B of HBM.
 decoder_block: "hunyuan3"
 base_num_decoder_layers: 4
 base_emb_dim: 4096
@@ -27,5 +28,7 @@ routed_score_func: "sigmoid"
 routed_bias: True
 routed_scaling_factor: 2.826
 norm_topk_prob: False
-moe_router_dtype: "float32"
+float32_gate_logits: True
+routed_bias_update_rate: 0.001
 mtp_num_layers: 1
+mtp_loss_scaling_factor: 0.1
