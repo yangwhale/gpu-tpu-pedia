@@ -153,10 +153,27 @@ class Hunyuan3MoELayer(AttentionWithNorm):
         attention_metadata=attention_metadata,
     )
 
-    mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)
+    mlp_lnx, load_balance_loss, moe_bias_updates = self.moe_block(hidden_states)
     mlp_lnx = nn.with_logical_constraint(mlp_lnx, self.activation_axis_names)
+
+    # Both of these must go out via `sow`, not by assigning an nnx.Intermediate
+    # directly: the training loop reads them as `value[0]`, and only `sow`
+    # produces the tuple that indexing expects.
     if self.config.load_balance_loss_weight > 0.0 and load_balance_loss is not None:
-      self.moe_lb_loss = nnx.Intermediate(load_balance_loss)
+      self.sow(nnx.Intermediate, "moe_lb_loss", load_balance_loss)
+
+    # DeepSeek V3's auxiliary-loss-free load balancing (arXiv 2408.15664): the
+    # MoE block returns a per-expert bias delta, and the training loop applies
+    # it to `gate.bias` *outside* the optimizer, after the gradient step. Drop
+    # this third return value and the mechanism goes silently inert — the
+    # config still says `routed_bias_update_rate: 0.001`, the bias never moves,
+    # and the experts collapse with nothing in the logs to say so.
+    if (
+        self.config.routed_bias
+        and self.config.routed_bias_update_rate > 0.0
+        and moe_bias_updates is not None
+    ):
+      self.sow(nnx.Intermediate, "moe_bias_updates", moe_bias_updates)
 
     layer_output = intermediate_inputs + mlp_lnx
     layer_output = nn.with_logical_constraint(layer_output, self.activation_axis_names)

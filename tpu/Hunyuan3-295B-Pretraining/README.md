@@ -40,7 +40,7 @@
    —— 照抄官方 DeepSeek3 v5p 配方，只换模型名。
 2. **[TPU 上专家并行是负优化](#42-为什么-tpu-上-fsdp-打得过-ep)**
    —— 跟 GPU 结论相反。EP=64 不只是慢，是直接超显存 326 GB。
-3. **[同一个 bug 模式在本项目出现 8 次](#八八个-bug-与静态验证的边界)**
+3. **[同一个 bug 模式在本项目出现 8 次](#八九个-bug-与静态验证的边界)**
    —— MaxText 里每个"按模型家族名字列举"的分支都要单独补，漏了不报错。
 
 ### 交付物
@@ -458,7 +458,7 @@ class HYV3DecoderLayer(DeepseekV3DecoderLayer)
 >
 > | 缺口 | `3eb77db3`（v5p 用的旧版） | 新版（v7 用的 MaxText main） |
 > |---|---|---|
-> | ① 专家 bias 的无梯度更新规则 | ❌ 没有（下面五组关键词全仓搜过） | ✅ **已有 `routed_bias_update_rate`** |
+> | ① 专家 bias 的无梯度更新规则 | ❌ 没有（下面五组关键词全仓搜过） | ✅ **已有 `routed_bias_update_rate`**，但**每个模型的 layer 必须自己把第三个返回值 `sow` 出去**，否则静默失效（见 §八 bug #9） |
 > | ② router 强制 fp32 | ❌ 没有，我加了 `moe_router_dtype` | ✅ **已有 `float32_gate_logits`** |
 > | ③ `initializer_range: 0.006` | ❌ 没暴露 | ❌ 仍缺（只影响 from-scratch） |
 >
@@ -1757,7 +1757,7 @@ v5p 从 2.45% 起步调到 36.7%，v7 这一轮只带了 2 个 XLA flag、pdbs=4
 ---
 
 
-## 八、八个 bug 与静态验证的边界
+## 八、九个 bug 与静态验证的边界
 
 移植过程中又撞了四次"按模型名列举的分支漏了 hunyuan3"，
 **全部是运行时才报错，静态检查一个都抓不到**：
@@ -1780,7 +1780,41 @@ v5p 从 2.45% 起步调到 36.7%，v7 这一轮只带了 2 个 XLA flag、pdbs=4
 > 找齐的办法只有一个：`grep -rn "DecoderBlockType.DEEPSEEK"` 和
 > `grep -rn 'startswith(("deepseek'`，**每一处都问一遍"Hy3 该不该在这里"**。
 
-`verify_hunyuan3.py` 的 8 项检查全部通过，但**这 8 个实跑 bug 一个都没拦住**：
+### bug #9：三元组只接了两个，无梯度 bias 更新静默失效（2026-07-28 补记）
+
+前面 8 个都是「漏了一张分派表」，第 9 个是**另一种模式**，而且更隐蔽。
+
+新版 MaxText 的 MoE block 返回的是**三元组** `(output, lb_loss, bias_updates)`。
+第三项就是 §2.8 提到的、上游后来补上的 DSV3 无梯度 bias 更新量。它的完整链路是三段：
+
+| 段 | 位置 | 做什么 |
+|---|---|---|
+| 算 | `layers/moe.py: calculate_load_balance_updates()` | `sign(平均负载 − 本专家负载) × γ`，正是 [arXiv 2408.15664](https://arxiv.org/abs/2408.15664) 的式子 |
+| 传 | 各模型自己的 layer，`sow(nnx.Intermediate, "moe_bias_updates", ...)` | **这一段每个模型必须自己接** |
+| 用 | `trainers/pre_train/train.py` | 优化器走完之后，`gate.bias += 更新量`——走的是梯度之外的旁路 |
+
+我们的 `hunyuan3.py` 当时写的是：
+
+```python
+mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项丢了
+```
+
+于是「传」这一段断了。训练循环按名字去中间量里找 `moe_bias_updates`，找不到，
+就当没开——**而 `hunyuan3-295b.yml` 里 `routed_bias_update_rate: 0.001` 明明写着**。
+配置说开、代码说关，全程零报错零日志。
+
+> **为什么特别值得记**：bug #6 恰恰就是「validator 把 `routed_bias_update_rate` 锁死在 DEEPSEEK」——
+> 也就是说我当时**已经知道这个功能存在，还专门为它改了校验**，然后忘了把 layer 里的线接上。
+> 知道一个功能存在，和把它接通，是两件独立的事。
+>
+> 顺带修了同一处的第二个问题：`moe_lb_loss` 原本写成 `self.moe_lb_loss = nnx.Intermediate(x)`
+> 直接赋值。训练循环读的是 `value[0]`，**只有 `sow` 才产生那个可下标的元组**，
+> 直接赋值同样取不到。两处一并改成 `self.sow(...)`。
+
+**怎么自查**：任何返回多元组的上游模块，都去 `grep` 官方模型（这里是 `models/deepseek.py`）
+是怎么接的，逐项比对——**不要用 `_` 丢弃自己没看懂的返回值**。
+
+`verify_hunyuan3.py` 的 8 项检查全部通过，但**这 9 个实跑 bug 一个都没拦住**：
 
 | bug | 层次 | 静态检查为什么看不见 |
 |---|---|---|
@@ -1792,6 +1826,7 @@ v5p 从 2.45% 起步调到 36.7%，v7 这一轮只带了 2 个 XLA flag、pdbs=4
 | 6 pydantic `Literal` 白名单 | 框架注册 | 同 2，换了实现方式 |
 | 7 `nnx_decoders.py` 第三张分派表 | 框架注册 | 检查只看了 `decoders.py` 的两张 |
 | 8 两条构造路径签名不一致 | 框架接口 | 需要真正实例化才暴露 |
+| 9 三元组第三项被 `_` 丢弃 | 框架接口 | 语法完全合法，配置也合法，只有跑起来看 bias 有没有动才知道 |
 
 > 静态验证的价值是**证明逻辑对**（路由数学、参数量、分派结构），
 > 这几项它确实抓到了两个真 bug（路由分支、`model_name` 门）。
@@ -1807,13 +1842,13 @@ v5p 从 2.45% 起步调到 36.7%，v7 这一轮只带了 2 个 XLA flag、pdbs=4
 
 | # | 事项 | 状态 | 说明 |
 |---|---|---|---|
-| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ | 8 项检查全过；但**实跑的 8 个 bug 一个都没抓到**，见下方复盘 |
+| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ | 8 项检查全过；但**实跑的 9 个 bug 一个都没抓到**，见下方复盘 |
 | 1 | 小规模真实前向 | ✅ | 4 芯片 v5p，r1–r20 共 20 轮，见 §三 |
 | 2 | 192 experts × 80 层能否编译 | ✅ | v5p 256 芯片和 v7 64 芯片都编译并跑出稳态 |
 | 3 | 参数量与 SSOT 对齐 | ✅ | 框架报 298.786 B = SSOT 294.9 B + MTP 头 3.886 B，两个平台逐位一致 |
 | 4 | `normalization_layer_epsilon` | ✅ | 曾填错 1.0e-6，HF 原文是 **1e-05**，已修 |
 | 5 | router fp32 | ✅ | 旧版我加了 `moe_router_dtype`；**新版上游已有 `float32_gate_logits`** |
-| 6 | 专家 bias 的无梯度更新 | ✅ | **新版上游已有 `routed_bias_update_rate`**（旧版确实没有） |
+| 6 | 专家 bias 的无梯度更新 | ✅ | **新版上游已有 `routed_bias_update_rate`**（旧版确实没有）。我们的 layer 一度把 `bias_updates` 丢了导致静默失效，2026-07-28 修好，见 §八 bug #9 |
 | 7 | EP / FSDP 最优配比 | ✅ | 结论与预期相反：**TPU 上不用 EP**，见 §4.2 |
 | 8 | `attention=flash` 能否编译 | ✅ | v5p / v7 都通过；v7 上还能用 `use_tokamax_splash` |
 | 9 | MTP 开销 | ✅ | 全程 `mtp_num_layers=1`，`mtp_loss` 单独打出，加了 3.886 B 参数 |
