@@ -286,8 +286,8 @@ Hy3 80 层同样 16 chunk → 平均 5 层/chunk：
 
 | 来源 | 配置 | BF16 | FP8 / MXFP8 | 差异 |
 |---|---|---|---|---|
-| [a4x README A2 vs A3](../../a4x/07-megatron-training/README.md) | DSV3 12L, 8 GPU, seq 16384, EP8 MBS2 | **527** | 503 (FP8) | **FP8 慢 5%** |
-| [a4x 07c §2.2 步骤 7→8](../../a4x/07-megatron-training/07c-deepseekv3-671b-recipe/README.md) | DSV3 32L, PP2 EP64, 已开 CUDA graph | 928 | 970（+mxfp8 +fp32 optim +fp8-param-gather） | **+4.5%** |
+| [a4x README A2 vs A3](../../../a4x/07-megatron-training/README.md) | DSV3 12L, 8 GPU, seq 16384, EP8 MBS2 | **527** | 503 (FP8) | **FP8 慢 5%** |
+| [a4x 07c §2.2 步骤 7→8](../../../a4x/07-megatron-training/07c-deepseekv3-671b-recipe/README.md) | DSV3 32L, PP2 EP64, 已开 CUDA graph | 928 | 970（+mxfp8 +fp32 optim +fp8-param-gather） | **+4.5%** |
 
 **原因**（a4x README 原文结论）：*"grouped GEMM 的 FP8 路径 overhead 抵消了 Tensor Core 加速，BF16 反而更快"*。MoE 的瓶颈在 all-to-all 通信和访存，不是纯 GEMM 算力。
 
@@ -1198,9 +1198,9 @@ python hy3_pretrain.py \
 
 > **口诀：`NCCL_MNNVL_ENABLE=0` + `USE_MNNVL=1`。**
 > 两个变量服务于不同层：前者管 NCCL 的 collective（跨域走 RDMA），后者管 HybridEP 的 dispatcher（域内走 NVLink）。
-> 只关一个或都关都会出问题。依据：[`08-multi-domain/README.md:73`](../../a4x-max/08-multi-domain/README.md) 明确写「跨域必须关闭 MNNVL」。
+> 只关一个或都关都会出问题。依据：[`08-multi-domain/README.md:73`](../../08-multi-domain/README.md) 明确写「跨域必须关闭 MNNVL」。
 >
-> ⚠️ **已知陷阱**：[`a4x/07-megatron-training/README.md:534`](../../a4x/07-megatron-training/README.md) 记录过
+> ⚠️ **已知陷阱**：[`a4x/07-megatron-training/README.md:534`](../../../a4x/07-megatron-training/README.md) 记录过
 > 「即使设 `NCCL_MNNVL_ENABLE=0` 也报 CUDA error 801，因为 **GIB 脚本内部把它覆盖回 2**」。
 > **必须在 rank 0 日志里 grep 实际生效值验证**，不能只看脚本里写了什么。
 
@@ -1455,8 +1455,8 @@ microbatch 抓进一张图）。E2/E3（GBS 扫点）正好可以验证这条 �
 
 | 出处 | 情境 | 说明 |
 |---|---|---|
-| [`a4x-max/08-multi-domain:73`](../../a4x-max/08-multi-domain/README.md) | 「跨域必须关闭 MNNVL」 | 该表主要针对 **nccl-test 裸测**口径 |
-| [`a4x/07-megatron-training:534`](../../a4x/07-megatron-training/README.md) | CUDA error 801 | **自建 K8s + Rocky + NVIDIA 580**，且是「**即使设 0 也报错**」的失败案例，不是「设了就好」 |
+| [`a4x-max/08-multi-domain:73`](../../08-multi-domain/README.md) | 「跨域必须关闭 MNNVL」 | 该表主要针对 **nccl-test 裸测**口径 |
+| [`a4x/07-megatron-training:534`](../../../a4x/07-megatron-training/README.md) | CUDA error 801 | **自建 K8s + Rocky + NVIDIA 580**，且是「**即使设 0 也报错**」的失败案例，不是「设了就好」 |
 
 **最有力的自洽旁证**：07e 跑 DSV3 256 卡跨 4 域成功时，用的就是 `USE_MNNVL=1` 且**未设** `NCCL_MNNVL_ENABLE` ——
 与 E13 完全相同。即本仓既有的成功案例本身就没依赖这个变量。

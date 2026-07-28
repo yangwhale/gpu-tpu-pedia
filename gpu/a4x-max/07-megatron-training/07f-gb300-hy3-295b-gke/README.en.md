@@ -286,8 +286,8 @@ Intuition says GB300 FP8 peak 5400 vs BF16 2700 = 2×, but **MoE models do not c
 
 | Source | Config | BF16 | FP8 / MXFP8 | Delta |
 |---|---|---|---|---|
-| [a4x README A2 vs A3](../../a4x/07-megatron-training/README.md) | DSV3 12L, 8 GPU, seq 16384, EP8 MBS2 | **527** | 503 (FP8) | **FP8 is 5% slower** |
-| [a4x 07c §2.2 steps 7→8](../../a4x/07-megatron-training/07c-deepseekv3-671b-recipe/README.md) | DSV3 32L, PP2 EP64, CUDA graph already on | 928 | 970 (+mxfp8 +fp32 optim +fp8-param-gather) | **+4.5%** |
+| [a4x README A2 vs A3](../../../a4x/07-megatron-training/README.md) | DSV3 12L, 8 GPU, seq 16384, EP8 MBS2 | **527** | 503 (FP8) | **FP8 is 5% slower** |
+| [a4x 07c §2.2 steps 7→8](../../../a4x/07-megatron-training/07c-deepseekv3-671b-recipe/README.md) | DSV3 32L, PP2 EP64, CUDA graph already on | 928 | 970 (+mxfp8 +fp32 optim +fp8-param-gather) | **+4.5%** |
 
 **Why** (quoting the a4x README's own conclusion): *"the FP8 path's overhead in grouped GEMM cancels the Tensor Core speedup, so BF16 ends up faster"*. MoE bottlenecks on all-to-all communication and memory traffic, not raw GEMM throughput.
 
@@ -1200,9 +1200,9 @@ Measured cluster state (2026-07-26 10:12 HKT, 8 GB300 pools):
 
 > **Mnemonic: `NCCL_MNNVL_ENABLE=0` + `USE_MNNVL=1`.**
 > The two variables serve different layers: the former governs NCCL collectives (cross-domain over RDMA), the latter governs the HybridEP dispatcher (intra-domain over NVLink).
-> Turning only one off, or turning both off, causes trouble. Basis: [`08-multi-domain/README.md:73`](../../a4x-max/08-multi-domain/README.md) states plainly that "MNNVL must be disabled across domains".
+> Turning only one off, or turning both off, causes trouble. Basis: [`08-multi-domain/README.md:73`](../../08-multi-domain/README.md) states plainly that "MNNVL must be disabled across domains".
 >
-> ⚠️ **Known trap**: [`a4x/07-megatron-training/README.md:534`](../../a4x/07-megatron-training/README.md) records that
+> ⚠️ **Known trap**: [`a4x/07-megatron-training/README.md:534`](../../../a4x/07-megatron-training/README.md) records that
 > "even with `NCCL_MNNVL_ENABLE=0` set you still get CUDA error 801, because **the GIB script internally overwrites it back to 2**".
 > **You must grep the effective value out of the rank-0 log** — do not trust what the script says.
 
@@ -1457,8 +1457,8 @@ Both prior error reports come from different situations:
 
 | Source | Situation | Note |
 |---|---|---|
-| [`a4x-max/08-multi-domain:73`](../../a4x-max/08-multi-domain/README.md) | "MNNVL must be disabled across domains" | that table is written mainly for **bare nccl-test** runs |
-| [`a4x/07-megatron-training:534`](../../a4x/07-megatron-training/README.md) | CUDA error 801 | **self-built K8s + Rocky + NVIDIA 580**, and it is a "**errors out even when set to 0**" failure case, not a "set it and it works" case |
+| [`a4x-max/08-multi-domain:73`](../../08-multi-domain/README.md) | "MNNVL must be disabled across domains" | that table is written mainly for **bare nccl-test** runs |
+| [`a4x/07-megatron-training:534`](../../../a4x/07-megatron-training/README.md) | CUDA error 801 | **self-built K8s + Rocky + NVIDIA 580**, and it is a "**errors out even when set to 0**" failure case, not a "set it and it works" case |
 
 **The strongest self-consistent corroboration**: when 07e successfully ran DSV3 on 256 GPUs across 4 domains, it used `USE_MNNVL=1` and **did not set** `NCCL_MNNVL_ENABLE` —
 exactly like E13. So this repo's own prior success never depended on the variable either.
