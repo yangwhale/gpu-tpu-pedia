@@ -1405,9 +1405,64 @@ MoE 的时间大量花在路由、分组重排、all-to-all 和小块 GEMM 上�
 | `cost_estimate_flops_fwd/bwd` | 未设 | **5e12** | 给调度器的代价提示 |
 | pdbs × 序列 | 4 × 8192 | **8 × 4096** | 每卡 token 数相同，但短序列的 attention 开销更低 |
 
-`shard_exp_on_fsdp=True` 是**唯一不能照抄的一项**：它要求
-`num_experts % ici_fsdp_parallelism == 0`，192 % 128 = 64 ≠ 0。
-又是 §5.2.3 那个"192 不是 2 的幂"的代价，这次卡在 v7 的 128 device 上。
+`shard_exp_on_fsdp=True` 要求 `num_experts % ici_fsdp_parallelism == 0`。
+128 个 device 全给 FSDP 时 192 % 128 = 64 ≠ 0，过不了校验——
+我一开始据此把这条判了死刑，**这个判断是错的**：
+
+| `ici_fsdp` × `ici_data` | 192 % fsdp | 能否开 |
+|---|---|---|
+| 128 × 1 | 64 | ❌ |
+| **64 × 2** | **0** | ✅ |
+| 32 × 4 | 0 | ✅ |
+
+**只要不把 128 个 device 全给 FSDP，这个开关就能开。**
+它把专家权重也切到 FSDP 轴上，省下来的显存能换更大的 batch，
+是官方配方里唯一一个我们还没试过的切分手段。列为待测。
+
+#### 手上有哪些可调的（按预期收益排）
+
+差距 1.51 倍，拆成五类。**A 类是 v5p 上根本不存在的东西，最可能是主因。**
+
+**A. v7 专属内核**（v5p 没有对应物，所以 v5p 的调优经验完全没覆盖这一块）
+
+| 开关 | 作用 | 状态 |
+|---|---|---|
+| `use_tokamax_gmm` | MoE 的分组矩阵乘内核。**MoE 的主计算就在这** | 🔄 x1 测试中 |
+| `use_tokamax_splash` | splash attention 内核 | ⬜ x2 |
+| `sa_use_fused_bwd_kernel` | attention 反向融合成一个 kernel | ⬜ x2 |
+
+**B. XLA flag**（v5p 上这一项值 4.07 pp / 13%；v7 上一次全开会死锁，所以分组二分）
+
+| 组 | 内容 | 状态 |
+|---|---|---|
+| SparseCore 卸载组 | 9 个 `*_sparse_core_collective_offload_*` | ⬜ x4 |
+| 调度器组 | 4 个 `*_latency_hiding_layer_scheduler*` | ⬜ x5 |
+| 杂项组 | 5 个（dvfs / bf16 emission / opt barrier 等） | ⬜ x6 |
+
+**C. 切分**
+
+| 手段 | 说明 | 状态 |
+|---|---|---|
+| `shard_exp_on_fsdp` + FSDP=64 × DP=2 | 专家权重也切到 FSDP 轴，省显存换 batch。**上面刚纠正过：这条是能开的** | ⬜ 待测 |
+
+**D. Batch 与序列**
+
+| 手段 | 依据 | 状态 |
+|---|---|---|
+| pdbs 4 → 8 | v5p 上 pdbs 上探值 +2.87 pp | ⬜ |
+| seq 8192 → 4096 配 pdbs=8 | 官方 Ironwood 用的就是这个组合，短序列 attention 开销更低 | ⬜ |
+
+**E. 优化器与显存**（本身不提速，但给 batch 腾空间）
+
+`opt_type=adamw` + `mu_dtype=bfloat16` + `grad_dtype=bfloat16`（优化器状态减半）、
+`use_iota_embed`、`allow_split_physical_axes`。
+
+**F. 如果 A–E 扫完还差得远**
+
+不再盲扫参数，**开 `profiler=xplane` 抓 trace**，
+看时间到底花在路由、分组重排、all-to-all、offload 还是 GEMM 上。
+现在所有推断都是从"跟官方配方的差异"倒推的，
+trace 是唯一能直接回答"慢在哪"的东西。
 
 #### 调优轮次（w1–w8，进行中）
 
