@@ -1488,12 +1488,33 @@ step 0 用了 61 s（含 17 分钟编译），step 1 隔了 7.5 分钟才出，
 |---|---|---|---|---|
 | V1 | 基线：2 个 XLA flag / pdbs=4 / seq=8192 | 404.75 | 17.55% | ✅ |
 | **y1** | **+ `use_tokamax_splash` + `sa_use_fused_bwd_kernel`** | **415.16** | **18.00%** | ✅ +2.6% |
-| y2 | y1 + adamw/bf16 优化器 + `use_iota_embed` + `allow_split_physical_axes` | | | 🔄 |
-| y3 | y2 + SparseCore 卸载组（9 个 flag） | | | ⬜ |
-| y4 | y3 + 调度器组（4 个 flag） | | | ⬜ |
-| y5 | y4 + 杂项组（5 个 flag） | | | ⬜ |
-| y6 | y5 + `shard_exp_on_fsdp`（FSDP=64 × DP=2） | | | ⬜ |
-| y7 | y5 + pdbs=8 / seq=4096 | | | ⬜ |
+| y2 | y1 + adamw/bf16 优化器 + `use_iota_embed` + `allow_split_physical_axes` | 412.88 | 17.90% | −0.5% |
+| y3 | y2 + SparseCore 卸载组（9 个 flag） | 412.56 | 17.88% | **±0** |
+| y4/y5 | 剩余 flag 组 | — | — | 依据 y3 跳过 |
+| z1 | y1 + pdbs=8 / seq=4096（官方口径） | | | 🔄 |
+| z2 | y1 + pdbs=12 / seq=4096 | | | ⬜ |
+| z3 | y1 + `shard_exp_on_fsdp`（FSDP=64 × DP=2） | | | ⬜ |
+| z4 | 开 `profiler=xplane` 抓 trace | | | ⬜ |
+
+#### 两个负结果比正结果更有信息量
+
+**y2：优化器和显存那一组是 −0.5%。** `opt_type=adamw` + bf16 的动量梯度、
+`use_iota_embed`、`allow_split_physical_axes` 加起来不但没提速，还略微掉。
+合理——这几项**省的是显存不是时间**，只有拿省下的显存去加 batch 才兑现。
+
+**y3：SparseCore 卸载那 9 个 flag，在 v7 上收益是 0。** 412.56 vs 412.88，
+差在噪声里。而**同一组东西在 v5p 上值 4.07 pp（13%）**（§5.2.4 的 o3）。
+
+这条否定结果直接改变了后面的方向：
+
+> SparseCore 卸载是把 all-gather / reduce-scatter 从 TensorCore 挪走。
+> 它在 v5p 上有效、在 v7 上无效，只能说明一件事——
+> **v7 上 Hy3 的瓶颈不在集合通信。**
+>
+> 既然不在通信，继续扫剩下的 flag 组（调度器 4 个、杂项 5 个）
+> 期望收益很低。**跳过，改打 batch、切分，然后直接上 profiler。**
+> 这也是 §"可调项清单" 里 F 类的触发条件：
+> 参数扫不动的时候，就该去看 trace 而不是继续猜。
 | x1 | （对照）V1 + `use_tokamax_gmm` | — | **HANG** | ❌ |
 | w1 | （对照）30 个 flag + tokamax 全开 | — | **HANG** | ❌ |
 

@@ -3,9 +3,10 @@
 > **本文定位**：跟 [VLLM-K3-RUNBOOK.md](./VLLM-K3-RUNBOOK.md) 对应的 SGLang 侧手册。
 >
 > **来源有三层，全文逐节标注，别混**：
-> - `[本环境·已验证]` —— 来自本仓库 [DeepSeek-V4-Pro SGLang runbook](../deepseek-v4/SGLANG-V4PRO-RUNBOOK.md)
->   与 [DeepSeek-R1 3P2D 指南](../deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md)，
->   **我们在 GB300 上趟了两周、从零重跑审计过 3 轮**的东西。与模型无关的部分对 K3 同样成立
+> - `[本环境·已验证]` —— 来自本仓库 **[DeepSeek-V4-Pro SGLang runbook](../deepseek-v4/SGLANG-V4PRO-RUNBOOK.md)**，
+>   这是本环境 SGLang-on-GB300 的 **Golden Truth**：端到端、反复验证十几遍、推倒重写过，
+>   **凡与本文冲突，一律以它为准**。辅以 [DeepSeek-R1 3P2D 指南](../deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md)（PD 与 RDMA 部分）。
+>   这一层与模型无关，对 K3 同样成立 —— **不要因为「K3 是新模型」就重新发明**
 > - `[K3官方]` —— 来自 SGLang K3 cookbook / LMSYS day-0 博客，**官方自己标着 Not Verified**
 > - `[待测]` —— 本环境还没跑，留空等填
 >
@@ -515,6 +516,7 @@ agentic 回放实测：TP8 在 16 并发就崩，DCP8 扛到 **48 并发 / 541 t
 
 - SGLang / Miles day-0 博客：<https://www.lmsys.org/blog/2026-07-27-kimi-k3-day0-support>
 - SGLang K3 cookbook：<https://lmsysorg.mintlify.app/cookbook/autoregressive/Moonshotai/Kimi-K3>
-- 本仓库 [DeepSeek-V4-Pro SGLang runbook](../deepseek-v4/SGLANG-V4PRO-RUNBOOK.md)（环境与流程经验的主要来源）
+- 本仓库 **[DeepSeek-V4-Pro SGLang runbook](../deepseek-v4/SGLANG-V4PRO-RUNBOOK.md)** —— **Golden Truth**，
+  端到端验证十几遍并重写过，本文环境与流程部分全部继承自它
 - 本仓库 [DeepSeek-R1 3P2D 部署指南](../deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md)（PD 与 RDMA 经验）
 - 模型卡：<https://huggingface.co/moonshotai/Kimi-K3>

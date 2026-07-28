@@ -1,20 +1,41 @@
-# Kimi K3 (2.8T / 104B 激活) · GB300 NVL72 · vLLM 推理
+# Kimi K3 (2.8T / 104B 激活) · GB300 NVL72 · vLLM & SGLang 推理
 
-> Moonshot AI 于 **2026-07-27** 开源权重，vLLM 同日 day-0 支持。
-> 本目录是**从官方 day-0 博客与 recipes 1:1 蒸馏**的端到端部署文档。
+> Moonshot AI 于 **2026-07-27** 开源权重，**vLLM 与 SGLang 同日 day-0 支持**。
+> 本目录是**从两家官方 day-0 博客与 recipes 1:1 蒸馏**的端到端部署文档。
 >
 > ⚠️ **状态：`[未实测]`** —— 与本仓库 [deepseek-v4](../deepseek-v4/)、[deepseek-v3](../deepseek-v3/)
-> 那些标 `[已验证]` 的 runbook **性质不同**。本目录所有命令来自官方发布材料，
-> 尚未在本环境跑过。跑通后请把各节改标 `[已验证]` 并补 §验证记录。
+> 那些标 `[已验证]` 的 runbook **性质不同**。K3 专属命令全部来自官方发布材料，
+> 尚未在本环境跑过（SGLang cookbook 甚至每格自标 *Not Verified*）。
+> 跑通后请把各节改标 `[已验证]` 并补 §验证记录。
+>
+> ✅ **但环境与流程部分是已验证的**：两份 runbook 都把 V4 / V3 那两周趟出来的
+> GB300 踩坑（RAID `md127`、`kubectl exec -i`、`pkill` 自杀、SIGKILL 97 GB 泄漏、
+> 冷热轮 7% 差、就绪判据三层）直接继承过来，与模型无关，对 K3 同样成立。
 
 ## 文档导航
 
 | 文档 | 用途 |
 |---|---|
-| [**VLLM-K3-RUNBOOK.md**](./VLLM-K3-RUNBOOK.md) | **端到端 Runbook（本轮主线）**：严格照官方 day-0 博客的步骤走。§0–§5 从 0 开始照抄可跑：pod → RAID → 1.4 TB 权重 → TP8 服务 → 复现 331 / 370 tok/s |
-| [PD-BACKLOG.md](./PD-BACKLOG.md) | **PD 分离实验设计（本轮不做）**：官方未公布 K3 的 P:D 配比与吞吐，此文方法论外推自 GLM-5.2，风险较高。等主线跑通有基线后再开 |
-| [scripts/](./scripts/) | 启动与压测脚本（TP8 + DSpark / TP16 / 纯 TP8 基线） |
+| [**VLLM-K3-RUNBOOK.md**](./VLLM-K3-RUNBOOK.md) | **vLLM 端到端 Runbook**：严格照官方 day-0 博客走。pod → RAID → 1.4 TB 权重 → TP8 服务 → 复现 331 / 370 tok/s |
+| [**SGLANG-K3-RUNBOOK.md**](./SGLANG-K3-RUNBOOK.md) | **SGLang 端到端 Runbook**：以我们自己的 [V4-Pro SGLang runbook](../deepseek-v4/SGLANG-V4PRO-RUNBOOK.md) 与 [R1 3P2D 指南](../deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md) 为底，K3 参数照官方补。**官方公布了 PD 数据（2,808 tok/s/GPU），所以 PD 在主线里** |
+| [PD-BACKLOG.md](./PD-BACKLOG.md) | **vLLM 侧 PD 实验设计（本轮不做）**：vLLM 未公布 K3 的 P:D 配比与吞吐，此文方法论外推自 GLM-5.2，风险较高。等主线跑通有基线后再开 |
+| [scripts/](./scripts/) | 启动与压测脚本。`serve-*` / `bench.sh` 是 vLLM，`sgl-*` 是 SGLang |
 | [gb300-local-ssd-raid0-SETUP.md](../deepseek-v4/gb300-local-ssd-raid0-SETUP.md) | RAID 0 挂载（1.4 TB 权重的存储基础，复用 V4 那份） |
+
+## 两家路线差异速查
+
+同一个模型，两家的最优解**不一样**，别把一边的经验直接搬到另一边：
+
+| | vLLM | SGLang |
+|---|---|---|
+| prefill 拓扑 | **TEP8**（attention TP + MoE EP） | **PP8×TP1 深度流水**（实测 1.7× TEP8） |
+| decode KV 去重 | 靠 PD + 分页 | **DCP8 按 token 位置切**（逻辑容量 7.9×） |
+| 投机时的 KDA 状态 | 引擎内处理 | **ReplaySSM**：存输入不存快照（约 32×） |
+| Draft 模型 | `Inferact/Kimi-K3-DSpark` | **`RadixArk/Kimi-K3-DSpark`** ⚠️ 不是同一个 |
+| 关键内存旋钮 | `--kv-cache-dtype` + `--max-model-len` | **`--mamba-full-memory-ratio`**（KDA 状态池 vs MLA KV 池） |
+| bs=1 无投机（官方） | 111 tok/s (TP8) | ~113 tok/s (TP8) |
+| bs=1 + 投机（官方） | **331** tok/s (TP8) / 370 (TP16) | **~423** tok/s (TP8) |
+| PD 数据 | ❌ 只给了拓扑名字 | ✅ **2,808 tok/s/GPU** |
 
 ## 为什么这个模型值得单独一套文档
 
