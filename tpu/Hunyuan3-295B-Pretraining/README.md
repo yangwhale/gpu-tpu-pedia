@@ -1342,6 +1342,63 @@ pool and try re-creating it again later.
 
 ---
 
+### 5.5 反向验证：把 v5p 也搬到新栈（2026-07-28）
+
+§5.1 说「v7 用的是另一套 MaxText，补丁得重写」，于是仓库里长期挂着**两套代码**。
+但那是**镜像绑定的历史包袱，不是平台差异**：v5p 那个镜像（`chrisya-maxtext-stable:oct`，
+libtpu_lts_20250721）驱动不了 Ironwood，所以 v7 只能换新镜像，一换才发现上游整体重构了。
+
+反过来问一句就没人问过：**新镜像能不能驱动 v5p？** 能的话两套就该合成一套。
+
+#### go / no-go：能
+
+在既有 `np-v5p-256` 上用 `chrisya-maxtext-latest:runner` 起一个 4 层缩层冒烟（结构与 295B 完全一致，
+只砍层数），**新 libtpu 完整识别 256 个 v5p device**，loss 13.42 → 11.68 单调下降，MTP 正常出数，零 NaN。
+
+```
+JAXDEV 256 TPU v5
+completed step: 7, seconds: 0.750, loss: 12.878, main_model_loss: 11.676, mtp_loss: 1.202
+```
+
+#### 换栈踩的四个坑，全都不是代码逻辑问题，而是**版本契约变了**
+
+| # | 症状 | 根因 | 处理 |
+|---|---|---|---|
+| 1 | `Unknown command line flag '2a886c8_chip_config_name'` | §4.4 那 26 个 XLA flag 是配**旧 libtpu** 的，新 libtpu 摘掉了这个 | 删掉，剩 25 个。**XLA flag 集绑 libtpu 版本，换镜像必须重过一遍** |
+| 2 | `'tile_batch_seq' not in <一长串合法字段>` | 旧版 3 个 tile 参数，新版拆成 **18 个**：`{wi,wo}_tile_{fwd,dlhs,drhs}_{batch_seq,embed_dim,mlp_dim}` | 同值展开 18 个。**注意这只是"形式对齐"，不保证最优——新版允许六条通路各自不同** |
+| 3 | `'Hunyuan3MoELayer' object has no attribute 'DeepSeekMoeBlock_0'` | `trainers/pre_train/train.py` 把 DeepSeek 的模块属性名**写死在无梯度 bias 更新路径里**，两处 | 我方属性命名为 `Hunyuan3MoeBlock_0`（诚实命名，不冒用 DeepSeek 名字），改 train.py 按 `decoder_block` 查表 |
+| 4 | `FAILED_PRECONDITION: GetSliceInfo can only be invoked after a slice is built` | **我自己加的探针**：启动脚本里一行 `jax.device_count()` 会初始化 TPU 然后进程退出，单机没事，64 台一起跑就毒化真跑 | 删掉探针 |
+
+> 坑 3 是「按家族名字写死」这个模式的**第 9、10 次**出现，而且这次**不在任何分派表里，在训练主循环**。
+> 见 §八 bug #9 —— 它同时反向证明了 `moe_bias_updates` 那个修复真的生效：
+> 崩溃点在 `if ... and moe_bias_updates is not None:` **通过之后**，Python 的 `and` 会短路，
+> 所以「它崩了」本身就是「更新量确实传上去了」的证据。
+>
+> 坑 4 值得单独记：**诊断用的探针本身可以是故障源**。多机 TPU 上任何「初始化后就退出」的进程都会破坏切片。
+
+#### 同参数移植后的性能：新栈慢 4.6%
+
+完整 295B / 256 芯片 / §4.4 的 o12 参数原样搬过来（除上面两处被迫改动）：
+
+| | 旧栈 `3eb77db3`（linen） | 新栈 latest（nnx） | 差 |
+|---|---|---|---|
+| step | 59.6 s | **63.193 s** | +6.0% |
+| TFLOP/s/device | 168.6 | **160.81** | **−4.6%** |
+| MFU | 36.72% | **35.03%** | −1.69 pp |
+| 整机 tok/s | 281,500 | **265,472** | −5.7% |
+
+新栈稳定性更好：9 步区间 63.178–63.204 s，**±0.02%**。
+
+> ⚠️ **两版的 FLOP 统计口径不完全一致，跨版本比 MFU 要留意。**
+> 反推每步 FLOP：旧栈 `168.6 × 59.6 = 10,048`，新栈 `160.81 × 63.193 = 10,162`，差 **1.1%**。
+> 同模型同 batch 不该有这个差，说明分析式 FLOP 公式改过。
+> 也就是说 −4.6% 里有约 1 pp 是**口径**，真实性能差约 −3.5%。
+
+**这 4.6% 目前有两个未排除的不等价项**：被迫删掉的那个 XLA flag，以及 tile 参数的 18 路同值展开
+（同值不等于最优）。消融结果见下节。
+
+---
+
 ## 六、v7 性能调优：目标与进展
 
 
