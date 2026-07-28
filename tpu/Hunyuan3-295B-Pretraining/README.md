@@ -16,16 +16,37 @@
 
 ## 结论先行
 
-**MaxText 原生不支持混元 3——但所需组件全都在，已用它们拼出
-`decoder_block: "hunyuan3"`，代码在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)。**
+**MaxText 原生不支持混元 3。所需组件全在，已拼出 `decoder_block: "hunyuan3"`，
+并在 v5p (256 芯片) 和 v7 Ironwood (64 芯片) 上跑通 80 层完整 295B。**
+
+| | v5p 256 chips | v7 Ironwood 64 chips |
+|---|---|---|
+| 状态 | 已跑通并调优 | 已跑通，调优进行中 |
+| 参数量（框架报） | 298.786 B | 298.786 B（逐位一致） |
+| 稳态 step | 47.67 s | 25.11 s |
+| **TFLOP/s / chip** | **168.6** | **404.8** |
+| **MFU** | **36.72%** | 17.55%（首跑，2 个 XLA flag） |
+| 整机 tok/s | 281,488 | 167,059 |
+| loss | 单调下降 | 单调下降 |
+
+对照 GB300 64 GPU 实测 **854.0 TFLOP/s/GPU、MFU 31.6%**：
+**v5p 的 36.72% 已经超过 GB300 的 MFU**，v7 首跑未调优。
+
+三件事最值得先看：
+
+1. **[MFU 从 2.45% 到 36.72% 的 12.9 倍，来自"别自己攒配置"](#521-我犯的错没有从官方配方出发)** ——
+   照抄官方 DeepSeek3 v5p 配方，只换模型名。
+2. **[TPU 上专家并行是负优化](#522-为什么-tpu-上-fsdp-打得过-ep)** ——
+   跟 GPU 结论相反，EP=64 不只是慢，是直接超显存 326 GB。
+3. **[同一个 bug 模式在本项目出现 8 次](#512-第五到第八次踩同一个坑)** ——
+   MaxText 里每个"按模型家族名字列举"的分支都要单独补，漏了不报错。
 
 | | |
 |---|---|
-| 新增代码 | 一个文件 176 行（`hunyuan3.py`），只做接线，不重写 attention 或 MoE |
-| 改动 | `common_types.py` +1 行、`decoders.py` 6 处（见 patch） |
-| 参数量自检 | **294.97 B**，对 SSOT 的 294.9 B 差 **0.02%**；激活 20.6 B 对上官方 A21B |
-| 静态验证 | enum / 类 / 分派 / 归一化 5 项全过（`verify_hunyuan3.py`） |
-| 未做 | 真实前向、多卡分片、权重转换（见[待验证清单](#六待验证清单)） |
+| 新增代码 | `hunyuan3.py`（v5p linen 版 176 行 / v7 nnx 版 159 行），只做接线 |
+| 改动 | v5p 侧 6 个文件；v7 侧 6 个文件（上游重构后路径全变，见 §5.1.1） |
+| 静态验证 | 8 项全过（`verify_hunyuan3.py`），但**一个实跑 bug 都没抓到** |
+| 未做 | 权重转换、真实数据集收敛验证（见[待验证清单](#六待验证清单)） |
 
 下面先讲为什么必须新写一个 block，再讲怎么拼的。
 
@@ -907,7 +928,7 @@ all-to-all staging、megablox 的分组重排）。**MoE 的临时开销比静�
 结论不变：**这个规模不需要 PP**，纯 FSDP + EP 装得下
 （对比 GB300 因单域只有 64 卡才需要 PP=2）。
 
-### 4.3 起步配置（待验证）
+### 4.3 起步配置（**原始设计，已被实测推翻**）
 
 | 参数 | v7 4x4x4 | v5p-256 | 理由 |
 |---|---|---|---|
@@ -935,9 +956,7 @@ all-to-all staging、megablox 的分组重排）。**MoE 的临时开销比静�
 
 ---
 
-## 五、测试矩阵（**待填**）
-
-> 以下所有性能数字**留空**，等实测后填入。空表本身就是测试计划。
+## 五、测试矩阵与实测结果
 
 ### 5.1 v7 (Ironwood) 4x4x4 — 64 chips / 128 devices — 已跑通
 
@@ -1054,53 +1073,6 @@ gcloud container node-pools create np-v7x-64-hy3 \
 改成 **64 → 32 → 16 递降重试**（spot 容量是波动的），
 第二轮就在 `us-central1-c` 拿到了 64 芯片。多机 TPU 池是**全有全无**的：
 4x4x4 要求物理连续立方体，16 台必须一次落位。
-
-#### v7 建池跟 v5p 完全不是一套流程
-
-试了四次才成，每次的错都不一样，记下来省得别人再踩：
-
-| 尝试 | 命令 | 报错 |
-|---|---|---|
-| 1 | `--placement-type=COMPACT`（v5p 的写法） | `tpu7x-standard-4t ... with placement policy is not supported. Use workload policy instead.` |
-| 2 | 去掉 `--placement-type` | 同上——**GKE 在多机拓扑下会自动加 group placement** |
-| 3 | 自建 workload policy（只给 `--type=HIGH_THROUGHPUT`） | `does not support TPU topology with group placement policy and workload policy at the same time` |
-| 4 | workload policy 加 **`--accelerator-topology=4x4x4`** | 通过校验，进到真正申请容量这一步 |
-
-正确写法（来自 [tpu-recipes ironwood 配方](https://github.com/yangwhale/tpu-recipes/tree/main/training/ironwood)）：
-
-```bash
-# v7 不会自动建 placement policy，必须先手工建，而且要带拓扑
-gcloud compute resource-policies create workload-policy tpu7x-64chip \
-  --region=us-central1 --type=HIGH_THROUGHPUT --accelerator-topology=4x4x4
-
-gcloud container node-pools create np-v7x-64-hy3 \
-  --cluster=... --region=us-central1 --node-locations=us-central1-c \
-  --machine-type=tpu7x-standard-4t --tpu-topology=4x4x4 --num-nodes=16 --spot \
-  --placement-policy=tpu7x-64chip \
-  --disk-type=hyperdisk-balanced --disk-size=200   # v7 必须 hyperdisk
-```
-
-> **第三次栽在同一件事上。** 路由分支、FLOP 公式、现在是建池命令——
-> 每次都是"我按理解推了一个写法"而不是"先去找现成的配方"。
-> 前面刚因为这个丢了 12.9 倍性能（§5.2.1），转头又来一遍。
-
-#### 容量：拿不到
-
-四次校验通过之后，卡在最后一关：
-
-```
-Atomic resize failed with [GCE_STOCKOUT]:
-The zone 'us-central1-c' does not have enough resources
-```
-
-多机 TPU 池是**全有全无**的——4x4x4 要求物理上连续的立方体，
-16 台机器必须一次同时落位，凑不齐就整体失败。
-项目里 tpu7x 只在 `us-central1-c` 和 `us-central1-ai1a` 有，
-而 `ai1a` 对这个集群不可用（`Zone 'us-central1-ai1a' is not available`），
-也没有可用的 tpu7x 预留。
-
-当前策略：**64 → 32 → 16 芯片递降重试**，spot 容量是波动的，
-64 芯片连试三轮（每轮间隔 5 分钟）再降级。拿到任何一档就跑 V1。
 
 ### 5.2 `np-v5p-256`（4x8x8，**256 chips / 256 devices**）— 已实测
 
@@ -1289,7 +1261,7 @@ shell**（命令行里含有这个字符串），导致 `while pgrep ...; do sle
 永远退不出来，等待的下一批扫描根本没启动。
 判断脚本是否在跑要用 `ps -eo pid,cmd | awk '$2=="bash" && $3=="/path"'` 这种精确匹配。
 
-### 5.3 三方横向对比（**待填**）
+### 5.3 三方横向对比
 
 全部按 **per-chip / per-GPU** 归一。三边跑的是同一个 295B-A21B、
 同样 BF16、同样 synthetic 数据、同样不开 checkpoint。
@@ -1325,23 +1297,120 @@ v5p 从 2.45% 起步调到 36.7%，v7 这一轮只带了 2 个 XLA flag、pdbs=4
 
 ---
 
+### 5.4 v7 调优：目标该定在哪
+
+先回答"为什么不是 900"。Ironwood 官方实测表（[tpu-recipes/training/ironwood](https://github.com/yangwhale/tpu-recipes/tree/main/training/ironwood)，
+全部 bf16、synthetic、per-chip 口径）：
+
+| 模型 | 类型 | chips | 序列 | **TFLOP/s/chip** | MFU |
+|---|---|---|---|---|---|
+| llama3.1-405b | **稠密** | 256 | 8192 | **1,261.4** | 54.7% |
+| llama3.1-70b | **稠密** | 64 | 8192 | **1,207.1** | 52.3% |
+| gemma4-31b | **稠密** | 64 | 8192 | **931.3** | 40.4% |
+| gemma4-4b | 稠密 | 64 | 8192 | 1,002.5 | 43.5% |
+| gemma4-26b | 稠密 | 64 | 4096 | 592.3 | 25.7% |
+| **qwen3-235b-a22b** | **稀疏 MoE** | 256 | 4096 | **629.8** | 27.3% |
+| **deepseek-v3 671B** | **稀疏 MoE** | 256 | 4096 | **612.7** | 26.6% |
+| deepseek-v3 671B | 稀疏 MoE | 128 | 4096 | 607.5 | 26.3% |
+| gpt-oss-120b | 稀疏 MoE | 256 | 8192 | 329.9 | 14.3% |
+| **hunyuan3 295B（本项目首跑）** | **稀疏 MoE** | **64** | **8192** | **404.8** | **17.6%** |
+
+**900 以上全是稠密模型。** 稀疏 MoE 在 Ironwood 上的实际水位是
+**600–630 TFLOP/s/chip（26–27% MFU）**，最接近 Hy3 的两个参照——
+qwen3-235b-a22b（629.8）和 deepseek-v3（612.7）——都在这条线上。
+
+原因是结构性的，不是调参能翻越的：
+
+- **稠密模型每个 token 走同一套权重**，GEMM 又大又规整，MXU 能吃满
+- **MoE 每层要做一次路由、一次按专家分组重排、一次分组矩阵乘、一次还原**。
+  分组矩阵乘的每个子块只有 `tokens_per_expert × emb × moe_mlp` 那么大，
+  而且组大小随路由结果浮动，编译期拿不到静态形状
+- 还要加上 all-gather / reduce-scatter 把 192 份专家权重摊开又收回
+
+所以本项目 v7 侧的目标定为 **600–630 TFLOP/s/chip**，
+对应 step 时间从 25.11 s 压到 **16–17 s**。当前 404.8，缺口 **1.5×**。
+
+#### 缺口从哪里补
+
+首跑（V1）跟官方 Ironwood DeepSeek3 配方的差距：
+
+| 项 | V1 首跑 | 官方 Ironwood | 预期作用 |
+|---|---|---|---|
+| XLA flags | **2 个** | **30 个** | v5p 上这一项值 4.07 pp（13%） |
+| `use_tokamax_gmm` | 未设 | **True** | Tokamax 的分组矩阵乘 kernel，MoE 主计算 |
+| `use_tokamax_splash` | 未设 | **True** | Tokamax splash attention |
+| `sa_use_fused_bwd_kernel` | False | **True** | attention 反向融合 |
+| `allow_split_physical_axes` | 未设 | **True** | 允许 mesh 轴跨物理维切分 |
+| `opt_type` / `mu_dtype` / `grad_dtype` | 默认 | **adamw / bf16 / bf16** | 优化器状态减半 |
+| `use_iota_embed` | 未设 | **True** | 省 embedding 显存 |
+| `use_max_logit_estimate` | 未设 | **-1** | attention 数值路径 |
+| `cost_estimate_flops_fwd/bwd` | 未设 | **5e12** | 给调度器的代价提示 |
+| pdbs × 序列 | 4 × 8192 | **8 × 4096** | 每卡 token 数相同，但短序列的 attention 开销更低 |
+
+`shard_exp_on_fsdp=True` 是**唯一不能照抄的一项**：它要求
+`num_experts % ici_fsdp_parallelism == 0`，192 % 128 = 64 ≠ 0。
+又是 §5.2.3 那个"192 不是 2 的幂"的代价，这次卡在 v7 的 128 device 上。
+
+#### 调优轮次（w1–w8，进行中）
+
+| # | 相对官方配方的改动 | TFLOP/s/chip | MFU | 状态 |
+|---|---|---|---|---|
+| w1 | 官方 Ironwood 参数集全套（除 `shard_exp_on_fsdp`） | | | 🔄 |
+| w2 | 去 `use_tokamax_gmm` | | | ⬜ |
+| w3 | 去 `use_tokamax_splash` | | | ⬜ |
+| w4 | 只留 2 个 XLA flag | | | ⬜ |
+| w5 | 去 `sa_use_fused_bwd_kernel` | | | ⬜ |
+| w6 | pdbs 8 → 12 | | | ⬜ |
+| w7 | seq 4096 → 8192（pdbs 减半） | | | ⬜ |
+| w8 | 去 `allow_split_physical_axes` | | | ⬜ |
+
+> **这次一开始就照抄官方配方。** v5p 那轮先自己攒配置丢了 12.9 倍（§5.2.1），
+> v7 建池又自己猜写法错了三次（§5.1.3）。同一个教训吃三遍之后，
+> w1 直接是"官方参数集原样搬"，w2 起才开始逐项拆。
+
+---
+
 ## 六、待验证清单
 
-按依赖顺序排，前面不通后面免谈：
+按依赖顺序排，✅ 是本轮闭环的，⬜ 是还没做的。
 
-| # | 事项 | 状态 | 为什么关键 |
+| # | 事项 | 状态 | 说明 |
 |---|---|---|---|
-| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ 已完成 | 见[实现](#一之二实现用现成组件拼出-hunyuan3-block) |
-| 1 | **小规模真实前向**（如 4 层 / 8 experts / CPU 或 v7 2x2x2） | ⬜ | 静态验证只证明了接线，没证明能算。这是下一步 |
-| 2 | 192 experts × 80 层能否在 128 devices 上编译出来 | ⬜ | DSV3 671B 在 v7 上曾出现 sparse matmul 编译 6 小时未完成 |
-| 3a | **SFT / 加载权重路线：冻结 gate.bias** | ⬜ **走这条路线时最高优先** | MaxText 的 bias 是可训练 Param，SFT 时会被梯度扰动已收敛的路由。本版无 `trainable_parameters_mask`，需自行加冻结 |
-| 3b | from-scratch 路线：补负载驱动更新 | ⬜ 仅 from-scratch 需要 | 五组关键词全仓搜过，MaxText 无负载统计、无 sign 更新。阻塞点在 `scan_layers` 下 per-layer mutable 状态的传播 |
-| 4 | ~~`normalization_layer_epsilon` 与 HF `rms_norm_eps` 是否一致~~ | ✅ 已核 | 曾填错（1.0e-6），HF 原文是 **1e-05**，已修 |
-| 4b | **给 MaxText 加 router fp32 开关** | ⬜ 高 | 官方 `F.linear(h.float(), w.float())` 强制 fp32，Megatron 也设 `moe_router_dtype: fp32`。MaxText 的 GateLogit 跟 `cfg.dtype`（bf16），192 专家的 sigmoid 打分精度不足 |
-| 5 | EP / FSDP 最优配比 | ⬜ | 97% 参数在专家里，这是第一性能旋钮 |
-| 6 | `attention=flash` 在 v7 上能否编译通过 | ⬜ | DSV3 上踩过坑（踩坑 #3，70+ 分钟未完成），需确认 GQA 是否同样受影响 |
-| 7 | MTP 开启后的开销 | ⬜ | GB300 侧建议首跑设 0，跑通再开 |
-| 8 | HF 权重 → MaxText Orbax 的转换 | ⬜ | 只做 from-scratch 基线可以先不碰；要 SFT 就必须做 |
+| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ | 8 项检查全过；但**实跑的 8 个 bug 一个都没抓到**，见下方复盘 |
+| 1 | 小规模真实前向 | ✅ | 4 芯片 v5p，r1–r20 共 20 轮，见 §一之四 |
+| 2 | 192 experts × 80 层能否编译 | ✅ | v5p 256 芯片和 v7 64 芯片都编译并跑出稳态 |
+| 3 | 参数量与 SSOT 对齐 | ✅ | 框架报 298.786 B = SSOT 294.9 B + MTP 头 3.886 B，两个平台逐位一致 |
+| 4 | `normalization_layer_epsilon` | ✅ | 曾填错 1.0e-6，HF 原文是 **1e-05**，已修 |
+| 5 | router fp32 | ✅ | 旧版我加了 `moe_router_dtype`；**新版上游已有 `float32_gate_logits`** |
+| 6 | 专家 bias 的无梯度更新 | ✅ | **新版上游已有 `routed_bias_update_rate`**（旧版确实没有） |
+| 7 | EP / FSDP 最优配比 | ✅ | 结论与预期相反：**TPU 上不用 EP**，见 §5.2.2 |
+| 8 | `attention=flash` 能否编译 | ✅ | v5p / v7 都通过；v7 上还能用 `use_tokamax_splash` |
+| 9 | MTP 开销 | ✅ | 全程 `mtp_num_layers=1`，`mtp_loss` 单独打出，加了 3.886 B 参数 |
+| 10 | v7 调优到 MoE 合理水位 | 🔄 进行中 | 首跑 404.8 TFLOP/s/chip，目标见 §5.4 |
+| 11 | SFT 路线：冻结 `gate.bias` | ⬜ | 上游有了更新规则，但 SFT 是要**冻结**它。本版无 `trainable_parameters_mask` |
+| 12 | HF 权重 → MaxText Orbax 转换 | ⬜ | 只做吞吐基线可以不碰；要 SFT 必须做 |
+| 13 | 真实数据集上的收敛验证 | ⬜ | 目前全是 synthetic，只证明"能算且不发散"，没证明"学得对" |
+| 14 | `initializer_range` | ⬜ | from-scratch 才需要；加载权重或 SFT 不受影响 |
+
+### 静态验证抓到了什么，没抓到什么
+
+`verify_hunyuan3.py` 的 8 项检查全部通过，但**这 8 个实跑 bug 一个都没拦住**：
+
+| bug | 层次 | 静态检查为什么看不见 |
+|---|---|---|
+| 1 pod 被 admission webhook 拒 | K8s 调度 | 不看集群 |
+| 2 模型名不在白名单 | 框架注册 | 白名单是硬编码常量，不在被检查的代码路径上 |
+| 3 `base_moe_mlp_dim=192` 不是 128 倍数 | 硬件约束 | 参数量算得出来，MXU tile 对不对齐算不出来 |
+| 4 `fsdp_shard_on_exp` 与 EP 互斥 | 配置组合 | 单项都合法，组合才非法 |
+| 5 FLOP 公式漏 hunyuan3 | 报表 | 不影响任何被检查的对象 |
+| 6 pydantic `Literal` 白名单 | 框架注册 | 同 2，换了实现方式 |
+| 7 `nnx_decoders.py` 第三张分派表 | 框架注册 | 检查只看了 `decoders.py` 的两张 |
+| 8 两条构造路径签名不一致 | 框架接口 | 需要真正实例化才暴露 |
+
+> 静态验证的价值是**证明逻辑对**（路由数学、参数量、分派结构），
+> 这几项它确实抓到了两个真 bug（路由分支、`model_name` 门）。
+> 但"能不能跑"是另一回事——**调度、注册、硬件对齐、接口签名，
+> 只有真跑才知道。** 两类检查不可互相替代。
 
 ---
 
@@ -1361,7 +1430,16 @@ v5p 从 2.45% 起步调到 36.7%，v7 这一轮只带了 2 个 XLA flag、pdbs=4
 
 ## 当前状态
 
-**规划阶段** — 架构映射与配置设计已完成，尚未上机。
+**已跑通两代硬件，v7 调优进行中**（2026-07-28）。
 
-**下一步**：按待验证清单第 1 项起步，先在小规模（如 v7 2x2x2）上验证
-`qwen3_moe` + sigmoid 路由能否构图，再放大到 4x4x4 跑基线。
+| 平台 | 规模 | 状态 | 最好成绩 |
+|---|---|---|---|
+| v5p | 4 chips（dev） | ✅ 20 轮迭代闭环 | 用于快速验证代码路径 |
+| v5p | 256 chips | ✅ 11 轮调优闭环 | **36.72% MFU / 281,488 tok/s** |
+| v7 Ironwood | 64 chips | ✅ 跑通，🔄 调优中 | 404.8 TFLOP/s/chip / 17.55% MFU |
+
+**下一步**：v7 侧照 Ironwood 官方 DeepSeek3 配方调优（§5.4），
+之后是权重转换和真实数据集收敛验证。
+
+代码：[`maxtext-hunyuan3/`](maxtext-hunyuan3/)（v5p / linen 版）、
+[`maxtext-hunyuan3-v7/`](maxtext-hunyuan3-v7/)（v7 / nnx 版）。
