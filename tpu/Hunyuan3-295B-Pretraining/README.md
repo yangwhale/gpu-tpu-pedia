@@ -1486,14 +1486,53 @@ step 0 用了 61 s（含 17 分钟编译），step 1 隔了 7.5 分钟才出，
 
 | # | 相对 V1 的增量 | TFLOP/s/chip | MFU | 状态 |
 |---|---|---|---|---|
-| V1 | 基线：2 个 XLA flag / pdbs=4 / seq=8192 | 404.8 | 17.55% | ✅ |
-| x1 | + `use_tokamax_gmm` | | | 🔄 |
-| x2 | + `use_tokamax_splash` + `sa_use_fused_bwd_kernel` | | | ⬜ |
-| x3 | + adamw / bf16 优化器状态 + `use_iota_embed` | | | ⬜ |
-| x4 | + SparseCore 卸载组（9 个 flag） | | | ⬜ |
-| x5 | + 调度器组（4 个 flag） | | | ⬜ |
-| x6 | + 杂项组（5 个 flag） | | | ⬜ |
-| w1 | （对照）30 个 flag 一次全开 | — | **HANG** | ❌ |
+| V1 | 基线：2 个 XLA flag / pdbs=4 / seq=8192 | 404.75 | 17.55% | ✅ |
+| **y1** | **+ `use_tokamax_splash` + `sa_use_fused_bwd_kernel`** | **415.16** | **18.00%** | ✅ +2.6% |
+| y2 | y1 + adamw/bf16 优化器 + `use_iota_embed` + `allow_split_physical_axes` | | | 🔄 |
+| y3 | y2 + SparseCore 卸载组（9 个 flag） | | | ⬜ |
+| y4 | y3 + 调度器组（4 个 flag） | | | ⬜ |
+| y5 | y4 + 杂项组（5 个 flag） | | | ⬜ |
+| y6 | y5 + `shard_exp_on_fsdp`（FSDP=64 × DP=2） | | | ⬜ |
+| y7 | y5 + pdbs=8 / seq=4096 | | | ⬜ |
+| x1 | （对照）V1 + `use_tokamax_gmm` | — | **HANG** | ❌ |
+| w1 | （对照）30 个 flag + tokamax 全开 | — | **HANG** | ❌ |
+
+#### `use_tokamax_gmm` 在 Hy3 上会死锁
+
+两次挂死都带这个开关，两次通过都不带——**2 比 0**：
+
+| 轮次 | `use_tokamax_gmm` | 结果 |
+|---|---|---|
+| V1 | 否 | ✅ 404.75 |
+| y1 | 否 | ✅ 415.16 |
+| x1 | **是** | ❌ stalled chips [7] |
+| w1 | **是** | ❌ stalled chips [7] |
+
+x1 是最干净的判别实验：在跑得好好的 V1 上**只加这一个开关**，
+连 step 0 都没跑完就挂住。代码路径也对得上——`moe.py:1489`：
+
+```python
+if self.config.use_tokamax_gmm:
+    ...
+    output = mblx.gmm(..., use_tokamax_backend=self.config.use_tokamax_gmm, ...)
+elif self.config.megablox:   # Older forked megablox  <- V1/y1 走这条
+```
+
+官方 Ironwood DSV3 配方里这个开关是 `True` 且能跑，说明 tokamax 后端
+本身没问题，**是它跟 Hy3 的形状不合**——最可能又是 192 个专家：
+DSV3 是 256，分组矩阵乘的组数正好是 2 的幂。这条待进一步确认。
+
+> **我在这件事上翻过一次车，值得记。** x1 挂了之后我去 grep
+> `moe.py` 里有没有 `tokamax`，返回空，于是我判断"这个开关对我们这条
+> 路径是空操作，所以 x1 的挂不是它造成的"。
+> 后来直接 `sed` 打印那段代码，`use_tokamax_gmm` 明明白白在第 1489 行。
+> **那次 grep 是在一条复合 shell 命令里跑的，被引号吃掉了，静默返回空。**
+>
+> 教训不是"grep 会出错"，而是：**当实验证据（2/2 相关）和代码阅读
+> 冲突时，先怀疑代码阅读。** 实验是黑箱但诚实，代码阅读依赖我没验证过的
+> 工具链。我当时应该先重跑一遍 grep 确认它真的在工作。
+
+
 
 > **"照抄官方配方"和"一次只动一个维度"不是互斥的，是分场景的。**
 > v5p 上官方配方能整套照搬，因为硬件路径一致；

@@ -11,7 +11,8 @@
 
 | 文档 | 用途 |
 |---|---|
-| [**VLLM-K3-RUNBOOK.md**](./VLLM-K3-RUNBOOK.md) | **端到端 Runbook**：从 0 开始，pod → RAID → 拉权重 → 起服务 → 压测 → 复现官方 370 tok/s |
+| [**VLLM-K3-RUNBOOK.md**](./VLLM-K3-RUNBOOK.md) | **端到端 Runbook（本轮主线）**：严格照官方 day-0 博客的步骤走。§0–§5 从 0 开始照抄可跑：pod → RAID → 1.4 TB 权重 → TP8 服务 → 复现 331 / 370 tok/s |
+| [PD-BACKLOG.md](./PD-BACKLOG.md) | **PD 分离实验设计（本轮不做）**：官方未公布 K3 的 P:D 配比与吞吐，此文方法论外推自 GLM-5.2，风险较高。等主线跑通有基线后再开 |
 | [scripts/](./scripts/) | 启动与压测脚本（TP8 + DSpark / TP16 / 纯 TP8 基线） |
 | [gb300-local-ssd-raid0-SETUP.md](../deepseek-v4/gb300-local-ssd-raid0-SETUP.md) | RAID 0 挂载（1.4 TB 权重的存储基础，复用 V4 那份） |
 
@@ -45,7 +46,12 @@ GB300 NVL72 每节点 4 GPU，所以在本环境：
 > 官方 reproduce recipe 给的就是 **TP8 + DSpark（`--nnodes 2`）**，
 > 370 tok/s 那条要 TP16。本仓库 Runbook 以 **TP8 两节点**为主线，TP16 作为扩展。
 
-大规模服务的已验证拓扑（官方）：**TEP8 prefill → DEP16 decode，NIXL 做 KV 传输**。
+大规模服务的已验证拓扑（官方）：**TEP8 prefill → DEP16 decode，NIXL 做 KV 传输**（恰好也是 24 卡 / 6 节点）。
+
+> ⚠️ **官方只给了这个拓扑名字，没给任何 PD 吞吐数字。**
+> 上面 111 / 118 / 331 / 370 全是 **bs=1 单用户、非 PD** 的数。
+> P:D 配比、total token TPS、不同 ISL 下的拐点 —— 公开资料一片空白。
+> **本轮不做 PD**，先把官方给了数的路径复现干净；设计稿存 [PD-BACKLOG.md](./PD-BACKLOG.md)。
 
 ## 存储
 
