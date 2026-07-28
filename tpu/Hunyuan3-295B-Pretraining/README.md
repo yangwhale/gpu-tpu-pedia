@@ -1397,6 +1397,41 @@ completed step: 7, seconds: 0.750, loss: 12.878, main_model_loss: 11.676, mtp_lo
 **这 4.6% 目前有两个未排除的不等价项**：被迫删掉的那个 XLA flag，以及 tile 参数的 18 路同值展开
 （同值不等于最优）。消融结果见下节。
 
+#### 扫这批新旋钮时踩的三个坑（都跟旋钮本身无关）
+
+一开始我按「一次动一个」扫 16 组，Chris 一句「就不能一次性全放上看结果吗」把策略掀了——
+**一把梭赢了就收工，崩了再二分是 log 级不是线性级**。这跟 §4.1「应该从官方全量配方出发」是同一条道理。
+换成全开之后连崩三轮，三个坑全是方法论问题：
+
+**坑 A：报错的第一条和最后一条不是同一回事。**
+连续三轮都报 `FAILED_PRECONDITION: GetSliceInfo can only be invoked after a slice is built`，
+我据此编了两个故事——先怪「删 JobSet 没等切片释放」，再怪「强删 pod 留了残留」，**两个都是错的**。
+真凶在日志更早的位置：
+
+```
+MAXTEXT CONFIG ERROR: Value error, GMM v2 requires `use_tokamax_gmm=true`
+```
+
+pydantic 的配置校验发生在 **TPU 初始化之后**，所以 pod 先把 TPU 拉起来、再因配置非法秒退，
+切片凑不齐 64 个成员 → 活着的那几个报 `GetSliceInfo` 失败。
+**`GetSliceInfo` 是下游症状，配置错误才是病因。**
+我的 grep 模式里没有 `MAXTEXT CONFIG ERROR` 和 pydantic 的 `Value error`，所以只看见了次生错误。
+
+> **规矩：多机作业判错先看「最早的那条」和「有多少 pod 活着」，不要抓日志尾。**
+
+**坑 B：判读结果前先数人头。**
+其中一轮 JobSet 只创建了 **36/64** 个 pod。TPU 切片全有全无，缺一个都建不起来。
+我当时直接看日志下结论，其实测的根本不是配置。
+→ 现在流程固定为：提交 → sleep 75 → **先确认 `64 Running`** → 才开始计时等稳态。
+
+**坑 C：TPU pod 不要 `--force --grace-period=0`。**
+强删让 pod 卡在 Terminating 占着节点，下一批排不进去。要等优雅退出让驱动释放 `/dev/vfio`。
+（不过这一条虽然真实，**并不是这三轮失败的原因**——见坑 A。把两件事分开记，避免下次又拿它当万能解释。）
+
+**顺带查清一个隐式依赖**：`use_gmm_v2` 强制要求 `use_tokamax_gmm=True`，
+而 §6.7 实测 `use_tokamax_gmm` 在 Hy3 上**会死锁**。这两个旋钮被绑死，其中一个是已知地雷，
+所以 gmm_v2 在 Hy3 上暂时无法使用（除非先解决死锁，见待验证清单）。
+
 ---
 
 ## 六、v7 性能调优：目标与进展
