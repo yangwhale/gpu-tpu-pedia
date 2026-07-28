@@ -48,7 +48,7 @@
 | | |
 |---|---|
 | **v5p 一键复现** | [`maxtext-hunyuan3/run-v5p-256.sh`](maxtext-hunyuan3/run-v5p-256.sh) —— 已验证能跑出 36.72%（§4.8） |
-| **v7 一键复现** | [`maxtext-hunyuan3-v7/run-v7-64.sh`](maxtext-hunyuan3-v7/run-v7-64.sh) |
+| **v7 一键复现** | [`maxtext-hunyuan3-v7/run-v7-64.sh`](maxtext-hunyuan3-v7/run-v7-64.sh) —— 已验证能跑出 19.29%（§5.4） |
 | 代码（v5p / linen 版） | [`maxtext-hunyuan3/`](maxtext-hunyuan3/)：`hunyuan3.py` + `register-hunyuan3.patch`（6 个文件）+ 两个 yml |
 | 代码（v7 / nnx 版） | [`maxtext-hunyuan3-v7/`](maxtext-hunyuan3-v7/)：`hunyuan3.py` + `port.py`（改 6 个文件）+ yml |
 | 静态自检 | [`maxtext-hunyuan3/verify_hunyuan3.py`](maxtext-hunyuan3/verify_hunyuan3.py)，8 项 |
@@ -1299,6 +1299,48 @@ completed step: 8, seconds: 25.111, TFLOP/s/device: 202.341, loss: 12.585
 `requires sparse core collective aggregator to be enabled` 被迫摘掉。
 按 v5p 的调优幅度推，v7 还有很大空间。
 
+
+### 5.4 复现验证：v7 侧同样从仓库产物跑一遍
+
+跟 §4.8 一样，不用工作目录：从镜像里拉一棵**干净的**新版 MaxText，
+`cp hunyuan3.py` + `cp hunyuan3-295b.yml` + 跑
+[`port.py`](maxtext-hunyuan3-v7/port.py)，再用
+[`run-v7-64.sh`](maxtext-hunyuan3-v7/run-v7-64.sh) 提交。
+
+| | 原始 c1 | 复现 v7audit | 差 |
+|---|---|---|---|
+| 稳态 step | 20.425 s | 20.437 s | +0.06% |
+| TFLOP/s/device（日志值） | 222.56 | 222.46 | −0.04% |
+| **TFLOP/s/chip** | **445.12** | **444.93** | −0.04% |
+| **MFU** | **19.29%** | **19.29%** | — |
+| tok/s/device | 1,602.26 | 1,603.32 | +0.07% |
+| 整机 tok/s | 205,089 | 205,225 | +0.07% |
+| 参数量 | 298.786 B | 298.786 B | 一致 |
+
+稳态四步 20.435 / 20.438 / 20.437 / 20.440，抖动毫秒级。
+**两个平台都能从仓库里的东西复现出来。**
+
+#### 顺带确认的一件运维事
+
+复现前 v7 节点池被 spot 抢空，状态从 `RECONCILING` 变 `ERROR`：
+
+```
+canonicalCode: RESOURCE_EXHAUSTED
+TPU: the nodes cannot be created now due to lack of capacity.
+They will be created asynchronously once capacity is available.
+You can either wait for the nodes to be up, or delete the node
+pool and try re-creating it again later.
+```
+
+等了 1.5 小时（每 2 分钟轮询）**一台都没补回来**。
+按报错自己的建议**删掉重建，5 分钟内 16 台全 Ready**。
+
+> **`ERROR` + "will be created asynchronously" 这句话有误导性。**
+> 它听起来像"排着队，等就行"，实测等 1.5 小时没动静，
+> 删了重建立刻就有。多机 TPU 池是原子分配的，
+> 一个卡住的申请单不会自己重排——**删了重建比等更快**。
+
+---
 
 ## 六、v7 性能调优：目标与进展
 
