@@ -161,11 +161,71 @@ index 04744c696..6c44bf168 100644
        pre_bias_logits = nn.with_logical_constraint(pre_bias_logits, ("activation_batch", "activation_norm_length", None))
      top_k_weights, top_k_indices = self.get_topk(gate_logits, pre_bias_logits, self.rngs)
      is_llama4_decoder_layer = self.config.decoder_block == ctypes.DecoderBlockType.LLAMA4
+diff --git a/src/MaxText/maxtext_utils.py b/src/MaxText/maxtext_utils.py
+index e0fd0743c..c3d25f3f2 100644
+--- a/src/MaxText/maxtext_utils.py
++++ b/src/MaxText/maxtext_utils.py
+@@ -305,7 +305,7 @@ def calculate_routed_and_shared_ffn_tflops_per_device(config):
+ 
+ def get_dense_moe_layers(config):
+   """Helper function to calculate number of dense and moe layers"""
+-  if config.decoder_block == DecoderBlockType.DEEPSEEK:
++  if config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):
+     num_dense_layers = config.first_num_dense_layers
+     num_moe_layers = config.num_decoder_layers - config.first_num_dense_layers
+     return num_dense_layers, num_moe_layers
+@@ -313,7 +313,7 @@ def get_dense_moe_layers(config):
+     num_moe_layers = config.num_decoder_layers // config.interleave_moe_layer_step
+     num_dense_layers = config.num_decoder_layers - num_moe_layers
+   else:
+-    raise ValueError("Currently we only support DeepSeek and Llama4 calculation.")
++    raise ValueError("Currently we only support DeepSeek, Hunyuan3 and Llama4 calculation.")
+ 
+   return num_dense_layers, num_moe_layers
+ 
+@@ -458,7 +458,16 @@ def calculate_tflops_training_per_device(config, log=True):
+   # MLP flops
+   if config.num_experts > 1:
+     # calculation based on dropless implementation
+-    if config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.LLAMA4):
++    if config.decoder_block in (
++        DecoderBlockType.DEEPSEEK,
++        DecoderBlockType.LLAMA4,
++        DecoderBlockType.HUNYUAN3,
++    ):
++      # Hy3 has the same routed + shared + leading-dense structure as DeepSeek.
++      # The generic branch below would size the experts with mlp_dim (13312, the
++      # dense width) instead of moe_mlp_dim (1536) and skip the shared expert,
++      # inflating the reported TFLOP/s by ~5x. Nothing about training changes --
++      # this is the analytic FLOP model used for the MFU number only.
+       total_ffn_flops = calculate_routed_and_shared_ffn_tflops_per_device(config)
+     else:
+       gate_flops = 2 * config.per_device_batch_size * config.max_target_length * config.emb_dim * config.num_experts
+@@ -521,7 +530,9 @@ def calculate_tflops_training_per_device(config, log=True):
+     learnable_weight_tflops = (
+         (total_ffn_flops + (qkv_flops + projection_flops) * config.num_decoder_layers + embedding_flops) * 3 / 10**12
+     )
+-  elif config.decoder_block == DecoderBlockType.DEEPSEEK:
++  elif config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):
++    # total_ffn_flops is already summed over layers by the helper above, so it
++    # must not be multiplied by num_decoder_layers a second time.
+     learnable_weight_tflops = (
+         (total_ffn_flops + (qkv_flops + projection_flops) * config.num_decoder_layers + embedding_flops) * 3 / 10**12
+     )
 diff --git a/src/MaxText/pyconfig.py b/src/MaxText/pyconfig.py
-index 69e63d791..20d077191 100644
+index 69e63d791..df428ea1c 100644
 --- a/src/MaxText/pyconfig.py
 +++ b/src/MaxText/pyconfig.py
-@@ -694,6 +694,7 @@ class _HyperParameters:
+@@ -367,6 +367,8 @@ def validate_model_name(s: str) -> bool:
+       "deepseek3-671b",
+       "deepseek3-test",
+       "kimi-k2-1t",
++      "hunyuan3-295b",
++      "hunyuan3-smoke",
+       "gemma-7b",
+       "gemma-2b",
+       "gemma2-2b",
+@@ -694,6 +696,7 @@ class _HyperParameters:
      raw_keys["grad_dtype"] = jax.numpy.dtype(raw_keys["grad_dtype"])
      raw_keys["weight_dtype"] = jax.numpy.dtype(raw_keys["weight_dtype"])
      raw_keys["mu_dtype"] = set_mu_dtype(raw_keys)
@@ -173,7 +233,7 @@ index 69e63d791..20d077191 100644
      raw_keys["logical_axis_rules"] = _lists_to_tuples(raw_keys["logical_axis_rules"])
      raw_keys["data_sharding"] = _lists_to_tuples(raw_keys["data_sharding"])
  
-@@ -812,6 +813,13 @@ def set_mu_dtype(raw_keys):
+@@ -812,6 +815,13 @@ def set_mu_dtype(raw_keys):
      return jax.numpy.dtype(raw_keys["mu_dtype"])
  
  

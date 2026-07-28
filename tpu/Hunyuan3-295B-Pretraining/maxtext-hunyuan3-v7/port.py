@@ -97,4 +97,43 @@ def _utils(s):
   return s
 edit("utils/maxtext_utils.py", _utils)
 
+
+# 5) pydantic 的 model_name 白名单（新版用 Literal 取代了旧版的 validate_model_name）
+def _types(s):
+  s = s.replace('    "deepseek3-671b",\n', '    "deepseek3-671b",\n    "hunyuan3-295b",\n', 1)
+  # loss-free 负载均衡的 validator 也是按 decoder block 名字列举的
+  old = ('      if self.routed_bias and self.routed_bias_update_rate > 0.0 '
+         'and self.decoder_block != DecoderBlockType.DEEPSEEK:\n'
+         '        raise ValueError("Loss-free load balancing is only supported for the DeepSeek decoder block.")')
+  new = ('      if (\n'
+         '          self.routed_bias\n'
+         '          and self.routed_bias_update_rate > 0.0\n'
+         '          and self.decoder_block not in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3)\n'
+         '      ):\n'
+         '        # Hy3 uses the same aux-loss-free scheme as DSV3: the per-expert bias\n'
+         '        # shifts top-k selection only, updated by a non-gradient rule.\n'
+         '        raise ValueError("Loss-free load balancing is only supported for the DeepSeek decoder block.")')
+  assert old in s
+  return s.replace(old, new, 1)
+edit("configs/types.py", _types)
+
+
+# 6) nnx_decoders：第三张分派表 + rms_norm 白名单 + dense/moe 混合 scan 判定
+#    这一张最容易漏——前两张在 decoders.py，这张在另一个文件里，
+#    漏了会报 "Incorrect decoder_block name"，看不出是漏了哪张表。
+def _nnxdec(s):
+  s = s.replace("from maxtext.models import (\n    deepseek,\n",
+                "from maxtext.models import (\n    deepseek,\n    hunyuan3,\n", 1)
+  s = s.replace("        DecoderBlockType.DEEPSEEK: get_deepseek(),\n",
+                "        DecoderBlockType.DEEPSEEK: get_deepseek(),\n"
+                "        DecoderBlockType.HUNYUAN3: [hunyuan3.Hunyuan3DenseLayer, hunyuan3.Hunyuan3MoELayer],\n", 1)
+  s = s.replace("        DecoderBlockType.MIXTRAL,\n        DecoderBlockType.DEEPSEEK,\n        DecoderBlockType.GEMMA,\n",
+                "        DecoderBlockType.MIXTRAL,\n        DecoderBlockType.DEEPSEEK,\n"
+                "        DecoderBlockType.HUNYUAN3,\n        DecoderBlockType.GEMMA,\n", 1)
+  s = s.replace("    self.is_deepseek = self.config.decoder_block == DecoderBlockType.DEEPSEEK",
+                "    self.is_deepseek = self.config.decoder_block in "
+                "(DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3)", 1)
+  return s
+edit("layers/nnx_decoders.py", _nnxdec)
+
 print("已改:", ", ".join(changed))
