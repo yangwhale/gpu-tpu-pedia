@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 腾讯混元 Hy3 (295B-A21B) 64 GPU 训练 — GB300 NVL72 (A4X Max) GKE
 
 GB300 (A4X Max) GKE 集群上的 **Hy3（混元 3，295B 总参 / 21B 激活 / 80 层 + 1 MTP）** 16 节点 64 GPU 训练 benchmark 准备文档。
