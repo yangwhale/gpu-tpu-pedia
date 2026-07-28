@@ -89,9 +89,14 @@ spec:
         emptyDir: {medium: Memory, sizeLimit: 600Gi}
       containers:
       - name: sglang
-        # K3 day-0 支持是 2026-07-27 落地的，必须用当天或更新的 nightly。
-        # infer 团队在跑的 v0.5.16-cu130 早于 day-0，不含 K3。
-        image: lmsysorg/sglang:nightly-dev-cu13-20260727-38636120
+        # ⚠️ K3 支持不在 main 分支上，普通 nightly 一律没有！
+        #   kimi_k3.py 只存在于 sgl-project/sglang 的 `kimi-k3` 分支，
+        #   官方为它单独出了 docker/kimi_k3/*.Dockerfile 和专用 tag。
+        #   踩过的坑：nightly-dev-cu13-20260727 看日期像 day-0 当天，实际是 UTC 01:50 构建，
+        #   早于 K3 的 commit（当天 08:37 之后）；进去一看只有 KimiLinearForCausalLM，没有 K3。
+        #   参数（--mamba-full-memory-ratio / --speculative-dspark-*）倒是有，极具迷惑性。
+        # pin 到 commit 74968e5653 的 arm64 变体（GB300 是 Grace ARM64，别拉成 amd64）
+        image: lmsysorg/sglang:kimi-k3-74968e5653-arm64
         securityContext: {privileged: true}
         command: ["sleep", "infinity"]
         resources:

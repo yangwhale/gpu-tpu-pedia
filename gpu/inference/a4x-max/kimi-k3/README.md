@@ -8,6 +8,11 @@
 > 尚未在本环境跑过（SGLang cookbook 甚至每格自标 *Not Verified*）。
 > 跑通后请把各节改标 `[已验证]` 并补 §验证记录。
 >
+> 🔴 **2026-07-28 起 SGLang 侧已进入实跑**，第一批实测结论已写回 runbook：
+> **K3 支持不在 sglang main 分支上**（必须用 `lmsysorg/sglang:kimi-k3-*` 专用镜像，
+> 普通 nightly 参数全有、模型没有）；`--enable-symm-mem` 会关掉 K3 自己的 all-reduce 融合；
+> 权重校验必须做到「对 index + 解析 safetensors 头部」这一层。详见 SGLang runbook 文首五条。
+>
 > ✅ **但环境与流程部分是已验证的**：两份 runbook 都把 V4 / V3 那两周趟出来的
 > GB300 踩坑（RAID `md127`、`kubectl exec -i`、`pkill` 自杀、SIGKILL 97 GB 泄漏、
 > 冷热轮 7% 差、就绪判据三层）直接继承过来，与模型无关，对 K3 同样成立。
@@ -19,7 +24,8 @@
 | [**VLLM-K3-RUNBOOK.md**](./VLLM-K3-RUNBOOK.md) | **vLLM 端到端 Runbook**：严格照官方 day-0 博客走。pod → RAID → 1.4 TB 权重 → TP8 服务 → 复现 331 / 370 tok/s |
 | [**SGLANG-K3-RUNBOOK.md**](./SGLANG-K3-RUNBOOK.md) | **SGLang 端到端 Runbook**：以 **Golden Truth** [V4-Pro SGLang runbook](../deepseek-v4/SGLANG-V4PRO-RUNBOOK.md) 与 [R1 3P2D 指南](../deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md) 为底，K3 参数照官方补。除了操作步骤，还蒸馏了 **§9 调参方法论**（怎么找参数，不是抄参数）与 **§10 已证伪的路**（别重做）。**官方公布了 PD 数据（2,808 tok/s/GPU），所以 PD 在主线里** |
 | [PD-BACKLOG.md](./PD-BACKLOG.md) | **vLLM 侧 PD 实验设计（本轮不做）**：vLLM 未公布 K3 的 P:D 配比与吞吐，此文方法论外推自 GLM-5.2，风险较高。等主线跑通有基线后再开 |
-| [scripts/](./scripts/) | 启动与压测脚本。`serve-*` / `bench.sh` 是 vLLM，`sgl-*` 是 SGLang |
+| [scripts/](./scripts/) | 启动与压测脚本。`serve-*` / `bench.sh` 是 vLLM，`sgl-*` 是 SGLang（`sgl-k3-tp8-nospec.sh` 是当前在跑的基线） |
+| [manifests/](./manifests/) | `k3-sgl-fleet.yaml`（8 pod StatefulSet + DRA + ComputeDomain）、`k3-weight-sync.yaml` |
 | [gb300-local-ssd-raid0-SETUP.md](../deepseek-v4/gb300-local-ssd-raid0-SETUP.md) | RAID 0 挂载（1.4 TB 权重的存储基础，复用 V4 那份） |
 
 ## 两家路线差异速查
@@ -35,6 +41,27 @@
 | 关键内存旋钮 | `--kv-cache-dtype` + `--max-model-len` | **`--mamba-full-memory-ratio`**（KDA 状态池 vs MLA KV 池） |
 | bs=1 无投机（官方） | 111 tok/s (TP8) | ~113 tok/s (TP8) |
 | bs=1 + 投机（官方） | **331** tok/s (TP8) / 370 (TP16) | **~423** tok/s (TP8) |
+| **bs=1 本环境实测** | 未测 | **370.4 tok/s**（官方 87.6%，加速 **4.22×**） |
+| **unified TP8 峰值实测** | 未测 | **2,629 tok/s @ conc 64**（8 卡，329/GPU） |
+
+## SGLang 侧实测速览（2026-07-28，43 组）
+
+> 完整宽表见 [SGLANG-K3-RUNBOOK.md §11.0.0](./SGLANG-K3-RUNBOOK.md)，原始数据 [`bench-raw-20260728.csv`](./bench-raw-20260728.csv)
+
+| 旋钮 | 值多少 | 何时值钱 | 何时没用 / 不可用 |
+|---|---|---|---|
+| **DSPARK 投机** | **+322%**（4K bs=1） | 短上下文最强，吞吐与延迟同时改善 | **32K 只剩 +32%**，随上下文衰减 |
+| **`--enable-symm-mem`** | **+35%**（bs=1） | 短上下文低并发 | 高并发 +7.8%；**DCP 下强制关闭** |
+| **`--dcp-size 8`** | **+237%**（128K/c8） | **ISL ≥8K 且高并发** | 短上下文低并发 **−26%** |
+| **`--mamba-full-memory-ratio`** | **±38%**（32K/c8） | **8K–32K**；4K 要高值、32K 要低值 | **128K 完全无效（差 0.02%）** |
+| K3 AR 融合 | — | — | **TP8 跨节点无 multicast，拿不到** |
+| DEP8（V4 那套） | — | — | **加载即 OOM，K3 上不可行** |
+
+**推荐配置（性价比最高）**：`TP8 + DSPARK + symm-mem`，ratio 按 ISL 定（≤8K 用 0.86，8K–32K 用 0.40–0.60）；
+**长上下文或长上下文高并发换 DCP8**。
+
+⚠️ **PD 分离未取得数据** —— 3 次尝试均受阻，最后集群 GB300 节点池于 2026-07-28 20:36 被批量删除。
+对标官方 **2,808 tok/s/decode-GPU** 的工作待恢复后继续，计划见 runbook §11.5c。
 | PD 数据 | ❌ 只给了拓扑名字 | ✅ **2,808 tok/s/GPU** |
 
 ## 为什么这个模型值得单独一套文档
