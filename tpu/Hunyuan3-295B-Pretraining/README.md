@@ -1353,20 +1353,39 @@ qwen3-235b-a22b（629.8）和 deepseek-v3（612.7）——都在这条线上。
 
 #### 调优轮次（w1–w8，进行中）
 
-| # | 相对官方配方的改动 | TFLOP/s/chip | MFU | 状态 |
-|---|---|---|---|---|
-| w1 | 官方 Ironwood 参数集全套（除 `shard_exp_on_fsdp`） | | | 🔄 |
-| w2 | 去 `use_tokamax_gmm` | | | ⬜ |
-| w3 | 去 `use_tokamax_splash` | | | ⬜ |
-| w4 | 只留 2 个 XLA flag | | | ⬜ |
-| w5 | 去 `sa_use_fused_bwd_kernel` | | | ⬜ |
-| w6 | pdbs 8 → 12 | | | ⬜ |
-| w7 | seq 4096 → 8192（pdbs 减半） | | | ⬜ |
-| w8 | 去 `allow_split_physical_axes` | | | ⬜ |
+**w1 = 官方参数集一次性全开 → 卡死。**
 
-> **这次一开始就照抄官方配方。** v5p 那轮先自己攒配置丢了 12.9 倍（§5.2.1），
-> v7 建池又自己猜写法错了三次（§5.1.3）。同一个教训吃三遍之后，
-> w1 直接是"官方参数集原样搬"，w2 起才开始逐项拆。
+```
+Slow PjRt TPU operation detected: start_time=00:23:05 host_id=7
+PendingEventLogger: High-level software slow operation detected.
+TpuDiagnosticCoordinator: Harvesting hardware telemetry for stalled chips: [7]
+```
+
+step 0 用了 61 s（含 17 分钟编译），step 1 隔了 7.5 分钟才出，
+之后一个芯片直接挂住，XLA 的诊断协调器被触发。
+**30 个 XLA flag + tokamax kernel 一次全开，在 Hy3 的形状上有死锁。**
+
+这跟 v5p 的经验相反：v5p 上"照抄官方全套"一次就成（§5.2.1）。
+差别在于 v7 的 SparseCore 卸载路径和 tokamax kernel 都是 v5p 上没有的，
+**照抄的前提是两边的硬件路径一样**，v7 不满足。
+
+改成**增量加**，从已知能跑的 V1（404.8 TFLOP/s/chip）出发，一组一组往上叠：
+
+| # | 相对 V1 的增量 | TFLOP/s/chip | MFU | 状态 |
+|---|---|---|---|---|
+| V1 | 基线：2 个 XLA flag / pdbs=4 / seq=8192 | 404.8 | 17.55% | ✅ |
+| x1 | + `use_tokamax_gmm` | | | 🔄 |
+| x2 | + `use_tokamax_splash` + `sa_use_fused_bwd_kernel` | | | ⬜ |
+| x3 | + adamw / bf16 优化器状态 + `use_iota_embed` | | | ⬜ |
+| x4 | + SparseCore 卸载组（9 个 flag） | | | ⬜ |
+| x5 | + 调度器组（4 个 flag） | | | ⬜ |
+| x6 | + 杂项组（5 个 flag） | | | ⬜ |
+| w1 | （对照）30 个 flag 一次全开 | — | **HANG** | ❌ |
+
+> **"照抄官方配方"和"一次只动一个维度"不是互斥的，是分场景的。**
+> v5p 上官方配方能整套照搬，因为硬件路径一致；
+> v7 上整套照搬会死锁，就必须退回增量。
+> 判断标准是**两边的执行路径是否相同**，不是"官方的就一定能用"。
 
 ---
 
