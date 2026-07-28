@@ -9,7 +9,9 @@
 """
 import re, sys, os
 
-ROOT = "/tmp/mt-v7/src/maxtext"
+ROOT = os.environ.get("MAXTEXT_ROOT", "/tmp/mt-v7/src/maxtext")
+if not os.path.isdir(ROOT):
+  sys.exit(f"找不到 {ROOT} —— 用 MAXTEXT_ROOT=/path/to/maxtext/src/maxtext 指定")
 changed = []
 
 
@@ -117,7 +119,10 @@ edit("utils/maxtext_utils.py", _utils, expect=3)
 
 # 5) pydantic 的 model_name 白名单（新版用 Literal 取代了旧版的 validate_model_name）
 def _types(s):
-  s = s.replace('    "deepseek3-671b",\n', '    "deepseek3-671b",\n    "hunyuan3-295b",\n', 1)
+  # 两个都要加：只加 295b 的话仓库里发的 hunyuan3-smoke.yml 用不了，
+  # 而文档恰恰让人先用冒烟配置——2026-07-29 分支验证时撞到。
+  s = s.replace('    "deepseek3-671b",\n',
+                '    "deepseek3-671b",\n    "hunyuan3-295b",\n    "hunyuan3-smoke",\n', 1)
   # loss-free 负载均衡的 validator 也是按 decoder block 名字列举的
   old = ('      if self.routed_bias and self.routed_bias_update_rate > 0.0 '
          'and self.decoder_block != DecoderBlockType.DEEPSEEK:\n'
@@ -132,7 +137,7 @@ def _types(s):
          '        raise ValueError("Loss-free load balancing is only supported for the DeepSeek decoder block.")')
   assert old in s
   return s.replace(old, new, 1)
-edit("configs/types.py", _types, expect=2)
+edit("configs/types.py", _types, expect=3)
 
 
 # 6) nnx_decoders：第三张分派表 + rms_norm 白名单 + dense/moe 混合 scan 判定

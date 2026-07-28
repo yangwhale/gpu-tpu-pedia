@@ -109,7 +109,9 @@ class Hunyuan3MoELayer(AttentionWithNorm):
     # layer_idx optional so both construction sites work.
     super().__init__(config, mesh, model_mode, quant, rngs)
     self.layer_idx = layer_idx
-    self.moe_block = moe.RoutedAndSharedMoE(
+    # 属性名必须与 port.py 打进 train.py 的 _MOE_BLOCK_ATTR 表一致：无梯度 bias
+    # 更新是按名字去 state 里找 gate.bias 的。改这里就要同步改 port.py。
+    self.Hunyuan3MoeBlock_0 = moe.RoutedAndSharedMoE(
         config=config,
         mesh=mesh,
         kernel_init=max_initializers.nd_dense_init(config.dense_init_scale, "fan_in", "truncated_normal"),
@@ -153,7 +155,7 @@ class Hunyuan3MoELayer(AttentionWithNorm):
         attention_metadata=attention_metadata,
     )
 
-    mlp_lnx, load_balance_loss, moe_bias_updates = self.moe_block(hidden_states)
+    mlp_lnx, load_balance_loss, moe_bias_updates = self.Hunyuan3MoeBlock_0(hidden_states)
     mlp_lnx = nn.with_logical_constraint(mlp_lnx, self.activation_axis_names)
 
     # Both of these must go out via `sow`, not by assigning an nnx.Intermediate
