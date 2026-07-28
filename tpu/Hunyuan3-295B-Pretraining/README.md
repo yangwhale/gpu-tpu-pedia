@@ -47,9 +47,11 @@
 
 | | |
 |---|---|
-| 代码（v5p / linen 版） | [`maxtext-hunyuan3/`](maxtext-hunyuan3/)，`hunyuan3.py` 176 行 |
-| 代码（v7 / nnx 版） | [`maxtext-hunyuan3-v7/`](maxtext-hunyuan3-v7/)，`hunyuan3.py` 159 行 |
-| 静态自检 | `verify_hunyuan3.py`，8 项 |
+| **v5p 一键复现** | [`maxtext-hunyuan3/run-v5p-256.sh`](maxtext-hunyuan3/run-v5p-256.sh) —— 已验证能跑出 36.72%（§4.8） |
+| **v7 一键复现** | [`maxtext-hunyuan3-v7/run-v7-64.sh`](maxtext-hunyuan3-v7/run-v7-64.sh) |
+| 代码（v5p / linen 版） | [`maxtext-hunyuan3/`](maxtext-hunyuan3/)：`hunyuan3.py` + `register-hunyuan3.patch`（6 个文件）+ 两个 yml |
+| 代码（v7 / nnx 版） | [`maxtext-hunyuan3-v7/`](maxtext-hunyuan3-v7/)：`hunyuan3.py` + `port.py`（改 6 个文件）+ yml |
+| 静态自检 | [`maxtext-hunyuan3/verify_hunyuan3.py`](maxtext-hunyuan3/verify_hunyuan3.py)，8 项 |
 | 未做 | 权重转换、真实数据集收敛验证（§九） |
 
 ### 怎么读这份文档
