@@ -1,0 +1,115 @@
+# SGLang Kimi-K3 fleet — GB300 NVL72, pool-0002 单域
+#
+# 8 pod = 8 节点 × 4 GPU = 32 GPU，覆盖：
+#   - Unified TP8            → 2 pod
+#   - PD 1×PP8 → 1×TP8       → 4 pod（官方 2,808 tok/s/GPU 那条）
+#   - PD 2×PP8 → 2×DCP8      → 8 pod（官方 2,633 tok/s/GPU 那条）
+#
+# 三个必守的设计（来自 deepseek-v4/SGLANG-V4PRO-RUNBOOK.md，已验证）：
+#   1. StatefulSet 而非裸 pod + nodeName —— DRA channel 必须由 scheduler 预留，
+#      绕过调度器会 FailedPrepareDynamicResources
+#   2. StatefulSet 的稳定 DNS 名是白赚的 —— 跨节点要 --dist-init-addr，pod IP 每次重建都变
+#   3. 两个 DRA claim 都要 —— mrdma（8× CX-8）+ ComputeDomain channel（MNNVL）
+#
+# nodeSelector 里的 team: yangwhale 顺带排除了 lcg3 那台
+#   （它滚到了坏 node image 1.36.0-gke.4681000 / COS 224.80，nvidia.ko regression：
+#    nvidia-smi 看着正常但所有 CUDA 负载全挂；而且它的 RAID 也没挂上，只有 256K）
+---
+apiVersion: resource.nvidia.com/v1beta1
+kind: ComputeDomain
+metadata:
+  name: k3sgl-cd
+spec:
+  numNodes: 0
+  channel:
+    resourceClaimTemplate:
+      name: k3sgl-ch
+---
+apiVersion: resource.k8s.io/v1
+kind: ResourceClaimTemplate
+metadata:
+  name: k3sgl-mrdma
+spec:
+  spec:
+    devices:
+      requests:
+      - name: req-mrdma
+        exactly:
+          allocationMode: ExactCount
+          count: 8
+          deviceClassName: mrdma.google.com
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: k3sgl
+spec:
+  selector:
+    app: k3sgl
+  clusterIP: None
+  publishNotReadyAddresses: true
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: k3sgl
+spec:
+  serviceName: k3sgl
+  replicas: 8
+  podManagementPolicy: Parallel
+  selector:
+    matchLabels:
+      app: k3sgl
+  template:
+    metadata:
+      labels:
+        app: k3sgl
+    spec:
+      tolerations:
+      - operator: "Exists"
+      nodeSelector:
+        cloud.google.com/gke-nodepool: gb300-pool-0002
+        team: yangwhale
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - key: app
+                operator: In
+                values: [k3sgl]
+            topologyKey: kubernetes.io/hostname
+      imagePullSecrets:
+      - name: gar-auth
+      - name: ar-pull-secret
+      volumes:
+      - name: ssd
+        hostPath: {path: /mnt/disks/raid/0, type: DirectoryOrCreate}
+      - name: shm
+        emptyDir: {medium: Memory, sizeLimit: 600Gi}
+      containers:
+      - name: sglang
+        # K3 day-0 支持是 2026-07-27 落地的，必须用当天或更新的 nightly。
+        # infer 团队在跑的 v0.5.16-cu130 早于 day-0，不含 K3。
+        image: lmsysorg/sglang:nightly-dev-cu13-20260727-38636120
+        securityContext: {privileged: true}
+        command: ["sleep", "infinity"]
+        resources:
+          limits: {nvidia.com/gpu: 4}
+          claims:
+          - {name: mrdma}
+          - {name: ch}
+        volumeMounts:
+        - {name: ssd, mountPath: /mnt/ssd, mountPropagation: HostToContainer}
+        - {name: shm, mountPath: /dev/shm}
+        env:
+        - {name: NCCL_SOCKET_IFNAME, value: "eth0"}
+        - {name: GLOO_SOCKET_IFNAME, value: "eth0"}
+        - {name: NCCL_MNNVL_ENABLE, value: "1"}
+        - {name: MC_FORCE_MNNVL, value: "1"}
+        # DeepGEMM JIT 缓存放节点盘，跨 pod 重建保留
+        # （注意：它省的是首次编译，省不掉每次重启的进程内 warmup —— 冷轮照样低 6.5%）
+        - {name: SGLANG_DG_CACHE_DIR, value: "/mnt/ssd/dg-cache"}
+      resourceClaims:
+      - {name: mrdma, resourceClaimTemplateName: k3sgl-mrdma}
+      - {name: ch, resourceClaimTemplateName: k3sgl-ch}

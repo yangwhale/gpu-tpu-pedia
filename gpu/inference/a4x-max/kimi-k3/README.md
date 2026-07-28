@@ -17,7 +17,7 @@
 | 文档 | 用途 |
 |---|---|
 | [**VLLM-K3-RUNBOOK.md**](./VLLM-K3-RUNBOOK.md) | **vLLM 端到端 Runbook**：严格照官方 day-0 博客走。pod → RAID → 1.4 TB 权重 → TP8 服务 → 复现 331 / 370 tok/s |
-| [**SGLANG-K3-RUNBOOK.md**](./SGLANG-K3-RUNBOOK.md) | **SGLang 端到端 Runbook**：以我们自己的 [V4-Pro SGLang runbook](../deepseek-v4/SGLANG-V4PRO-RUNBOOK.md) 与 [R1 3P2D 指南](../deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md) 为底，K3 参数照官方补。**官方公布了 PD 数据（2,808 tok/s/GPU），所以 PD 在主线里** |
+| [**SGLANG-K3-RUNBOOK.md**](./SGLANG-K3-RUNBOOK.md) | **SGLang 端到端 Runbook**：以 **Golden Truth** [V4-Pro SGLang runbook](../deepseek-v4/SGLANG-V4PRO-RUNBOOK.md) 与 [R1 3P2D 指南](../deepseek-v3/sglang-r1-nvfp4-gb300-3p2d-DEPLOY-GUIDE.md) 为底，K3 参数照官方补。除了操作步骤，还蒸馏了 **§9 调参方法论**（怎么找参数，不是抄参数）与 **§10 已证伪的路**（别重做）。**官方公布了 PD 数据（2,808 tok/s/GPU），所以 PD 在主线里** |
 | [PD-BACKLOG.md](./PD-BACKLOG.md) | **vLLM 侧 PD 实验设计（本轮不做）**：vLLM 未公布 K3 的 P:D 配比与吞吐，此文方法论外推自 GLM-5.2，风险较高。等主线跑通有基线后再开 |
 | [scripts/](./scripts/) | 启动与压测脚本。`serve-*` / `bench.sh` 是 vLLM，`sgl-*` 是 SGLang |
 | [gb300-local-ssd-raid0-SETUP.md](../deepseek-v4/gb300-local-ssd-raid0-SETUP.md) | RAID 0 挂载（1.4 TB 权重的存储基础，复用 V4 那份） |

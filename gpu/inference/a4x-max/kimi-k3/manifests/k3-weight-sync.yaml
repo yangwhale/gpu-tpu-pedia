@@ -1,0 +1,67 @@
+# 把 Kimi-K3 (1.5 TB) 从 infer 团队已下好的 rsync leader 拉到我们 pool-0002 的 8 台节点
+#
+# 源：rsync://kimi-k3-fill-leader.default.svc.cluster.local/models/Kimi-K3/
+#     （他们 2026-07-27 从 HF 下的，114 文件 / 1.5 T，broadcast 已完成，leader 空闲）
+# 目标：/mnt/disks/raid/0/Kimi-K3   ← 我们的 RAID0，pod 内看到的是 /mnt/ssd/Kimi-K3
+#
+# ⚠️ 两边路径布局不同：他们用 /mnt/disks/ssd0，我们用 /mnt/disks/raid/0
+# ⚠️ 生成本文件时踩过：外层 shell 会吃掉 $DST / $(hostname)，必须用 quoted heredoc
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: k3-weight-sync
+spec:
+  completions: 8
+  parallelism: 8
+  completionMode: Indexed
+  backoffLimit: 6
+  template:
+    spec:
+      restartPolicy: OnFailure
+      tolerations:
+      - operator: "Exists"
+      affinity:
+        nodeAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            nodeSelectorTerms:
+            - matchExpressions:
+              - key: kubernetes.io/hostname
+                operator: In
+                values:
+                - gke-gb300-gke-test-gb300-pool-0002-c2cb19f4-1zt9
+                - gke-gb300-gke-test-gb300-pool-0002-c2cb19f4-3r0c
+                - gke-gb300-gke-test-gb300-pool-0002-c2cb19f4-gdll
+                - gke-gb300-gke-test-gb300-pool-0002-c2cb19f4-lt06
+                - gke-gb300-gke-test-gb300-pool-0002-c2cb19f4-qt46
+                - gke-gb300-gke-test-gb300-pool-0002-c2cb19f4-rlz0
+                - gke-gb300-gke-test-gb300-pool-0002-c2cb19f4-rstt
+                - gke-gb300-gke-test-gb300-pool-0002-c2cb19f4-sdhr
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+          - labelSelector:
+              matchExpressions:
+              - {key: job-name, operator: In, values: [k3-weight-sync]}
+            topologyKey: kubernetes.io/hostname
+      volumes:
+      - name: raid
+        hostPath: {path: /mnt/disks/raid/0, type: Directory}
+      containers:
+      - name: sync
+        image: mirror.gcr.io/library/alpine:3.20
+        volumeMounts:
+        - {name: raid, mountPath: /raid}
+        command: ["/bin/sh","-c"]
+        args:
+        - |
+          set -e
+          apk add --no-cache rsync >/dev/null
+          LEADER=kimi-k3-fill-leader.default.svc.cluster.local
+          DST=/raid/Kimi-K3
+          mkdir -p "$DST"
+          echo "[sync] $(hostname) <- rsync://$LEADER/models/Kimi-K3/"
+          time rsync -aH --info=progress2 --partial --exclude '.cache' \
+            "rsync://$LEADER/models/Kimi-K3/" "$DST/"
+          echo "[sync] done:"
+          du -sh "$DST"
+          ls "$DST"/*.safetensors | wc -l
