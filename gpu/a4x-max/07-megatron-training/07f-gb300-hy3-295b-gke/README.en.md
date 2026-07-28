@@ -61,10 +61,21 @@ HF `config.json` (`tencent/Hy3`) → Megatron `GPTModelProvider`. The mapping is
 | `vocab_size` | **120832** | `vocab_size` |
 | `rotary_base` | **11158840.0** | `rope_parameters.rope_theta` |
 | `normalization` | `RMSNorm` | fixed |
+| `layernorm_epsilon` | **1e-5** | `rms_norm_eps` ⚠️ **not** the 1e-6 qwen3 / deepseek use |
 | `gated_linear_unit` | `True` | `hidden_act: silu` |
 | `add_bias_linear` / `add_qkv_bias` | `False` / `False` | Hy3 has no QKV bias |
 | `qk_layernorm` | **`True`** | `qk_norm: true` |
 | `untie_embeddings_and_output_weights` | `True` | `tie_word_embeddings: false` |
+
+> ⚠️ **`layernorm_epsilon` was only added to this table on 2026-07-28; before that it was wrong.**
+> Every benchmark in §9 above ran with the **1e-6** inherited from the Qwen3 skeleton, not Hy3's 1e-5.
+> **The performance numbers are unaffected** — eps changes neither tensor shapes nor FLOPs, so 854 / 1360 still stand;
+> but **loading real weights for SFT or continued pretraining would drift numerically**, since those weights were trained at 1e-5.
+> The `AutoBridge` SFT path ([SFT.md](SFT.md)) is unaffected — it derives from the HF config and was always 1e-5.
+>
+> **This is the nastiest way "borrowing a skeleton" fails**: omitting a field the skeleton *lacks* errors out immediately,
+> while omitting a field the skeleton *has with a different value* is completely silent. When overriding fields by hand,
+> walk **every** key of the HF config, not just the ones you happen to think of.
 
 ### 1.2 MoE parameters (DSV3 lineage)
 

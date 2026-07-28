@@ -30,6 +30,7 @@ HY3 = dict(
     vocab_size=120832, rotary_base=11158840.0,
     num_moe_experts=192, moe_router_topk=8, moe_ffn_hidden_size=1536,
     num_shared_experts=1, first_k_dense_replace=1, router_scaling_factor=2.826,
+    layernorm_epsilon=1e-5,
 )
 
 
@@ -72,6 +73,9 @@ def build_config(a):
     m.vocab_size = HY3["vocab_size"]
     m.rotary_base = HY3["rotary_base"]
     m.qk_layernorm = True                             # config.json: qk_norm
+    # Qwen3 骨架带的是 1e-6，Hy3 是 1e-5。不覆盖就会静默沿用骨架的值 —— benchmark
+    # 看不出差别（eps 不改形状也不改算力），但拿真权重前向时数值会偏。
+    m.layernorm_epsilon = HY3["layernorm_epsilon"]
     m.share_embeddings_and_output_weights = False     # tie_word_embeddings: false
     m.seq_length = a.seq_length
     cfg.dataset.sequence_length = a.seq_length

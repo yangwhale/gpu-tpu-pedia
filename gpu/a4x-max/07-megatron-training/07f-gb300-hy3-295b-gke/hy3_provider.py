@@ -35,6 +35,7 @@ HY3 = dict(
     first_k_dense_replace=1,
     router_scaling_factor=2.826,
     mtp_num_layers=1,
+    layernorm_epsilon=1e-5,
 )
 
 
@@ -45,6 +46,7 @@ def _apply_hy3_arch(provider):
     p = provider
     # --- 结构 ---
     p.normalization = "RMSNorm"
+    p.layernorm_epsilon = HY3["layernorm_epsilon"]   # rms_norm_eps: 1e-05, 不是 qwen3/deepseek 的 1e-6
     p.gated_linear_unit = True
     p.add_bias_linear = False
     p.add_qkv_bias = False          # Hy3 无 QKV bias

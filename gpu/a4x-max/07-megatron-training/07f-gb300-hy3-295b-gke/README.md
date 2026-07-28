@@ -61,10 +61,21 @@ HF `config.json`（`tencent/Hy3`）→ Megatron `GPTModelProvider`。映射依�
 | `vocab_size` | **120832** | `vocab_size` |
 | `rotary_base` | **11158840.0** | `rope_parameters.rope_theta` |
 | `normalization` | `RMSNorm` | 固定 |
+| `layernorm_epsilon` | **1e-5** | `rms_norm_eps` ⚠️ **不是** qwen3 / deepseek 的 1e-6 |
 | `gated_linear_unit` | `True` | `hidden_act: silu` |
 | `add_bias_linear` / `add_qkv_bias` | `False` / `False` | Hy3 无 QKV bias |
 | `qk_layernorm` | **`True`** | `qk_norm: true` |
 | `untie_embeddings_and_output_weights` | `True` | `tie_word_embeddings: false` |
+
+> ⚠️ **`layernorm_epsilon` 是这张表 2026-07-28 才补上的一行，补之前它是错的。**
+> 上面 §9 的所有 benchmark 跑的都是从 Qwen3 骨架继承来的 **1e-6**，不是 Hy3 的 1e-5。
+> **性能数字不受影响**——eps 既不改张量形状也不改 FLOPs，854 / 1360 依然有效；
+> 但**拿真权重做 SFT 或继续预训练会数值偏移**，因为权重是按 1e-5 训出来的。
+> 走 `AutoBridge` 的 SFT 路径（[SFT.md](SFT.md)）不受影响——它直接从 HF config 推导，本来就是 1e-5。
+>
+> **这正是「借骨架」最阴的一种漏法**：漏掉一个骨架**没有**的字段会当场报错，
+> 漏掉一个骨架**有、但值不一样**的字段则完全静默。手工改字段时，
+> 要逐项对照 HF config 的**全部**键，而不是只改自己想到的那些。
 
 ### 1.2 MoE 参数（DSV3 血统）
 
