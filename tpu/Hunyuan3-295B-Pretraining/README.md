@@ -2201,6 +2201,7 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 | 16 | 上游 PR ②：hunyuan3 模型本体 + 6 处注册 | ⬜ | 见 §9.1；发之前先确认雇主 IP 归属（§9.3） |
 | 17 | 分支从全新 clone 能跑 | ✅ | 2026-07-29 实测：clone 分支 → 整棵覆盖容器 → v5p 4 芯片 loss 13.45→10.35，且**补完 5 处休眠改动前后逐位相同** |
 | 18 | vLLM 权重映射表（tunix） | ⬜ | Hy3 是 GQA，不能套 DeepSeek 的 MLA 映射，需单独写一份 |
+| 19 | `scan(unroll=N)` 分组扫点 | ⬜ | 让 XLA 跨层重叠 MoE 通信。MaxText 未实现，改动约 10 行。机理与实验设计见 [移植指南 §5.2.1](MAXTEXT-PORTING-GUIDE.md)。**主线跑稳后再做** |
 
 
 ## 十二、参考

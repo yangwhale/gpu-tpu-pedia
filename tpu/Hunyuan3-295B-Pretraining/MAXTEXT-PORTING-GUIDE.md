@@ -213,6 +213,29 @@ moe_layers   = scan(Hunyuan3MoELayer,  length=79)
 > 已知的只有编译时间量级：开 scan 时 v5p 256 芯片约 9 分钟、v7 约 10–17 分钟。
 > 关掉之后编译涨多少、性能换回来多少，**待验证**。
 
+### 5.2.1 还有个中间档：`scan(unroll=N)`（未实现，值得试）
+
+上表把问题描述成二选一，其实不是。`jax.lax.scan` 有个 `unroll` 参数——
+`unroll=5` 就是「循环体里放 5 层、转 79/5 圈」，介于全循环和全展开之间。
+
+**MaxText 目前没用**（实查分支 `1afaa0f`）：
+
+- 层的两处 scan 调用都没传 `unroll`，走默认值 1
+- 全仓唯一用到的是 `utils/pipeline_utils.py`，而且是二值的
+  `unroll_length = 1 if use_scan else length`
+- 配置里没有对应旋钮
+
+**为什么在 TPU 上可能有效（机理跟 GPU 不同）**：TPU 上整个 step 是一个 XLA 程序，
+`scan` 编译成 HLO 的 `while` 循环，**没有 per-layer launch 开销**——所以收益不是「少 launch」。
+真正的点在于 **`while` 循环体是 XLA 的调度边界，跨迭代不能重排**。
+循环体里只有 1 层时，第 N 层的 all-gather 没法藏进第 N−1 层的计算（它们在两次迭代里）；
+`unroll=N` 把这 N 层放进同一个调度域，延迟隐藏调度器才有发挥空间。
+
+改动量约 10 行（加一个 config 字段透传给 `jax.lax.scan`）。
+建议按 1/2/4/8 扫一轮找拐点，同时记录**吞吐、编译时间、HBM 峰值**三条曲线——
+太小没重叠，太大编译和显存吃不消。注意 `unroll = 层数` 就等价于 `scan_layers=False`，
+所以这一轮扫点顺带把 §5.2 那个未验证项也覆盖了。
+
 ### 5.3 缩层配置该怎么写
 
 **除了层数，其余字段一个都不要改。** Hy3 的冒烟配置与正式配置逐字 diff，
