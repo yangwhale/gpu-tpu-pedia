@@ -1908,6 +1908,7 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 
 | # | 配置 | step | TFLOP/s/dev | MFU | vs 基准 |
 |---|---|---|---|---|---|
+| **b0″** | **异地复现：换项目 / 换 VPC / 换集群（2026-07-29 晚）** | **63.170 s** | **160.98** | **35.07%** | **+0.05%，噪声内** |
 | **b0′** | **12 文件全覆盖版（当前 v5p 可复现水位，2026-07-29）** | 63.199 s | **160.91** | **35.06%** | 见下方口径说明 |
 | b0 | 7 文件版（同参数，改动前） | 63.193 s | 160.81 | 35.03% | — |
 | a1 | + A 组：MoE / FSDP 六个新旋钮 | 66.96 s | 151.75 | 33.06% | **−5.6%** |
@@ -1935,6 +1936,23 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 > **新栈的新旋钮在 Hy3 上一个都不是正的。** 旧栈调出来的 o12 参数搬过来依然是最优附近。
 > B 组更差的原因事后很自然：`sa_use_fused_bwd_kernel` 在战线一里**本来就是关掉才快**，
 > 「全开」等于把一个已知负项又打开了 —— **「新版本提供的旋钮」不等于「该开的旋钮」**。
+
+**b0″ 异地复现（2026-07-29 晚）.** 换到 `tpu-launchpad-playground`：
+自建 custom VPC + 全新集群 + 全新 `np-v5p-256` 节点池，
+代码从 GitHub 分支现 clone 现打包（`prep.sh`），前置照 §9.0 补齐。
+
+```
+number parameters: 298.786 billion
+completed step: 3, seconds: 63.174, TFLOP/s/device: 160.974, loss: 13.200
+completed step: 4, seconds: 63.176, TFLOP/s/device: 160.969, loss: 13.129
+completed step: 5, seconds: 63.174, TFLOP/s/device: 160.974, loss: 13.072
+completed step: 6, seconds: 63.171, TFLOP/s/device: 160.981, loss: 13.029
+completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
+```
+
+对 b0′ 差 **+0.05%**，参数量逐位一致，loss 八步单调下降。
+**整条链路没有一样东西继承自旧环境**——这一轮才真正证明了「照文档从零能跑出同一个数」。
+代价是暴露了 §9.0 那四条前置全都没写（其中 JobSet 缺失是静默失败，最难查）。
 
 #### 三条战线的口径差异（读表前必看）
 
@@ -2162,6 +2180,82 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 代码在 **[`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)**，
 基于上游 main，**这是代码的唯一真相**。
 仓库里 [`maxtext-hunyuan3/`](maxtext-hunyuan3/) 只放跑测试用的两个脚本，不再放代码副本。
+
+### 9.0 集群前置（换新项目 / 新集群时必做）
+
+下面「三步」默认**集群、TPU 节点池、JobSet 都已就位**。
+2026-07-29 在 `tpu-launchpad-playground` 从零搭一遍时，这四件全都得先补，
+其中三件是原文档没写的。
+
+**① TPU 节点池（文档里一直只有规格，没有命令）**
+
+```bash
+# v5p：64 台 × 4 芯片 = 256 芯片
+gcloud container node-pools create np-v5p-256 \
+  --cluster=CLUSTER --project=PROJECT --region=us-central1 \
+  --node-locations=us-central1-a \
+  --machine-type=ct5p-hightpu-4t --tpu-topology=4x8x8 \
+  --num-nodes=64 --spot --scopes=cloud-platform
+```
+
+实测 8 分 26 秒建完，64 台全 Ready。`--num-nodes` = 芯片数 ÷ 4，
+且必须与 `--tpu-topology` 相乘一致，否则直接被拒。
+**v5p 在 us-central1 只有 `-a` 有货**，集群 region 是 us-central1 就行，
+节点池自己指定 zone；子网是区域级的，不用为此改集群。
+
+> Spot 配额查不到不等于没有。区域配额里只列 v5e 那组
+> （`PREEMPTIBLE_TPU_LITE_PODSLICE_V5`），v5p 不走这些老 metric，
+> Cloud Quotas API 也返回空。**只能试**，报错会直接说是配额还是容量。
+
+**② JobSet CRD —— 新集群没有，`run.sh` 会静默失败**
+
+```bash
+kubectl apply --server-side -f \
+  https://github.com/kubernetes-sigs/jobset/releases/download/v0.11.1/manifests.yaml
+kubectl wait --for=condition=Available deploy/jobset-controller-manager \
+  -n jobset-system --timeout=180s
+```
+
+v0.11.1 自带证书，**不需要 cert-manager**。不装的话 `run.sh` 里的
+`kubectl apply` 找不到 `jobset.x-k8s.io/v1alpha2`，脚本退 1 且**没有任何报错输出**
+（被 `| tail` 吃掉了），看起来像什么都没发生。
+
+**③ 暂存桶 + 两处跨项目授权**
+
+```bash
+NODE_SA=<集群项目号>-compute@developer.gserviceaccount.com
+gcloud storage buckets add-iam-policy-binding gs://YOUR-STAGE-BUCKET \
+  --member="serviceAccount:$NODE_SA" --role=roles/storage.objectViewer
+# 镜像在别的项目时，节点 SA 还要能拉
+gcloud artifacts repositories add-iam-policy-binding gcr.io --location=us \
+  --project=IMAGE_PROJECT --member="serviceAccount:$NODE_SA" \
+  --role=roles/artifactregistry.reader
+```
+
+**④ 新项目里 default VPC 大概率建不出集群**
+
+共享项目的 default VPC 是 auto 模式，`10.128.0.0/9` 全被各 region 子网占着，
+`10.0.0.0/9` 又被几十个集群切碎，GKE 自动分配凑不出一整块 `/14`：
+
+```
+The network "default" does not have available private IP space in
+10.0.0.0/9 to reserve a /14 block for pods
+```
+
+指定 `--cluster-ipv4-cidr` 也常撞（我第一次挑的 `10.160.0.0/16` 正好落在
+auto 子网段里）。**直接建自己的 custom VPC 最省事**，顺带能把 MTU 开到 8896：
+
+```bash
+gcloud compute networks create NAME-vpc --subnet-mode=custom --mtu=8896
+gcloud compute networks subnets create NAME-uc1 --network=NAME-vpc \
+  --region=us-central1 --range=10.124.0.0/22 \
+  --secondary-range=pods=10.125.0.0/16,services=10.124.16.0/20 \
+  --enable-private-ip-google-access
+```
+
+三段全压进 `10.124.0.0/15`，将来做 VPC peering 只需告诉对方避开这一段。
+选网段前先跑 `gcloud network-connectivity internal-ranges list` 拿权威占用表，
+**不要只看 `clusters list` 的 `clusterIpv4Cidr`**——那漏掉子网自身占的地址。
 
 ### 9.1 三步
 
