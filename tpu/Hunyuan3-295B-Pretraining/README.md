@@ -1984,6 +1984,76 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 > 对比时统一到 **per-chip** 口径。v7 日志是 per-device，需 ×2；v5p 不需要。
 > 这是跨代际比较最容易出错的一步。
 
+
+### 7.5 外部对照复核：一份 64 芯片 v5p 报告（2026-07-29）
+
+收到一份外部 benchmark 报告（`weikuo-v5p-128-spot-c1a`，64 芯片，
+镜像 `gcr.io/tpu-prod-env-one-vm/maxtext_deepv4_fsdp:latest`）。
+它第 6 组标注 **"Aligned with yangwhale Recipe"**，报
+**238.31 TFLOP/s/chip、51.92% MFU、19.838 s/step**，
+是我们 160.91 / 35.06% 的 **1.48 倍**。逐条核过，**暂不采信**，理由如下。
+
+| # | 不一致 | 它的值 | 应有的值 |
+|---|---|---|---|
+| 1 | `number parameters` | 20.117 B | 我们 **298.786 B**，差 14.85× |
+| 2 | 第 3 组：FSDP=64 + fp32 优化器 + pdbs=2 | 峰值 66.0 GB，EXIT_CODE=0 | 光静态就要 **74.7 GB**（4.669 B/chip × 16 B） |
+| 3 | 第 1 组：EP=64 / FSDP=1，params initialized | 3.58 GB | 每芯片约 165 亿参数 → fp32 约 **264 GB** |
+| 4 | `abort_on_nan_loss` | **False** | 把最重要的健康检查关掉了 |
+| 5 | mu/grad 降 bf16 的收益 | 声称省 26 GB/chip | 按真实参数量算是 **18.7 GB** |
+
+**第 1 条的字段含义已从源码确认**：`metric_logger.py:365` 调
+`max_utils.calculate_num_params_from_pytree`（`max_utils.py:117`），
+`tree_map(jnp.size)` 后求和 —— 数的是**参数树全部叶子的总量**，不是激活参数量。
+报告把 20.117 B 标成 "Active Parameters / Chip"，是读错了字段。
+
+**第 2 条是最硬的反证**：它那一组用的还是 fp32 优化器，
+真实 295B 在 FSDP=64 下每芯片 46.69 亿参数，
+weights 4 + grads 4 + mu 4 + nu 4 = 16 B/param → 74.7 GB 静态，
+一个 activation 都还没算就超了。它在 66.0 GB 跑成功，说明装进去的不是这个模型。
+
+**它的 FLOP 数偏偏是按完整 config 算的**（`calculate_tflops_training_per_device`
+读 config 不读参数树），所以分子按 295B 记、分母按小模型跑，
+238 TFLOP/s 和 51.92% MFU 都建立在这个错配上。
+
+#### 继承关系：方向是反的
+
+- **FLOP 口径这个坑不是从我们这继承的 —— 是他们没继承到我们的修复。**
+  §3.9 bug #5 就是这个坑（虚高约 5 倍），根因是 `HUNYUAN3` 不在
+  `calculate_tflops_training_per_device` 的白名单 tuple 里，走通用分支时
+  用 `mlp_dim` 去量专家、且漏掉 shared expert。我们把 `HUNYUAN3`
+  加进白名单修掉了；他们的 `deepv4` 镜像里没有这个改动。
+- **真正从我们这抄过去的只有一条**：`mu_dtype=bfloat16 grad_dtype=bfloat16
+  use_iota_embed=True`。这三个连在一起，与 `run.sh:79` 一字不差 ——
+  但那是 **v7 分支**的 EXTRA，我们 v5p 从没开过。
+  等于抄了配方，抄的是另一半平台。
+
+> **教训**：别人声称"对齐了你的配方"时，要问清对齐的是哪个平台分支、
+> 用的是哪个镜像。配方是跟着代码走的，不是跟着字符串走的。
+
+#### 自查：这些毛病我们自己有没有
+
+| 项 | 我们 | 说明 |
+|---|---|---|
+| 参数量 | ✅ 干净 | 298.786 B，且核对过含 MTP 头 3.886 B（清单 #3） |
+| FLOP 口径 | ✅ 已修 | §3.9，白名单已含 `HUNYUAN3` |
+| 关 nan abort | ✅ 没关 | `run.sh` 未设 `abort_on_nan_loss`，保持默认 True |
+| 合成数据 | ⚠️ **同样是** | `run.sh:142` `dataset_type=synthetic`。已在 §7.4 和清单 #13 声明，**loss 不作为收敛证据** |
+| 稳态样本 | ⚠️ **偏薄** | 07-29 那轮 256 芯片验证只跑到 step 9，loss 只留了一个点。下轮补 |
+
+#### 顺带结论：FSDP=64 × DP=4 为什么在真模型上不成立
+
+按真实 298.786 B 算，每芯片 46.69 亿参数：
+
+| 方案 | 静态 | pdbs=8 激活 | 合计 | 95.74 GB |
+|---|---|---|---|---|
+| 现状 FSDP=256，fp32 | 18.7 GB | ~78 GB | **96.9 GB** | 贴顶 |
+| FSDP=64×DP4，fp32 | 74.7 GB | ~78 GB | **153 GB** | ❌ |
+| FSDP=64×DP4，mu/grad 降 bf16 | 56 GB | ~78 GB | **134 GB** | ❌ |
+
+要装下必须把 pdbs 砍到 4 左右，而 §4.4 的 o8 / o12 实测 pdbs 4→8 值 **+5.2 pp MFU**。
+**拓扑上 DP4 确实更贴合 4x8x8（DP 走长度 4 的轴、FSDP 铺 8×8 slab，集合通信更局部），
+卡点纯粹是显存，且代价先亏 5 个点。**
+
 ---
 
 
@@ -2212,6 +2282,8 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 | 17 | 分支从全新 clone 能跑 | ✅ | 2026-07-29 实测：clone 分支 → 整棵覆盖容器 → v5p 4 芯片 loss 13.45→10.35，且**补完 5 处休眠改动前后逐位相同** |
 | 18 | vLLM 权重映射表（tunix） | ⬜ | Hy3 是 GQA，不能套 DeepSeek 的 MLA 映射，需单独写一份 |
 | 19 | `scan(unroll=N)` 分组扫点 | ⬜ | 让 XLA 跨层重叠 MoE 通信。MaxText 未实现，改动约 10 行。机理与实验设计见 [移植指南 §5.2.1](MAXTEXT-PORTING-GUIDE.md)。**主线跑稳后再做** |
+| 20 | v5p 上试 `mu_dtype=bfloat16 grad_dtype=bfloat16` | ⬜ | 只在 v7 分支开着（`run.sh:79`），v5p 从没试过。FSDP=256 下 16→12 B/param，静态 18.7→14.0 GB，**腾出 4.7 GB/chip**。我们现在 96.9 / 95.74 G 贴顶跑，这是白捡的余量。`nu_dtype` optax 不支持，恒随 `weight_dtype`（fp32），主权重也不动，是三份状态里最温和的一个 |
+| 21 | 补一条完整 loss 曲线 | ⬜ | 07-29 那轮 256 芯片验证只跑到 step 9，只留了单点 loss（§7.5 自查）。跑到 step 30+ 记全，作为"没发散"的证据。注意仍是 synthetic，不等于收敛（见 #13） |
 
 
 ## 十二、参考
