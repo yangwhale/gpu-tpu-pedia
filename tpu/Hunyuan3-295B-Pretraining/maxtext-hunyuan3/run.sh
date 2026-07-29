@@ -156,7 +156,7 @@ echo "  * step 0 含编译，step 1/2 是 JAX 异步派发的假读数，稳态�
 if [ "$PLATFORM" = v5p ]; then
 echo "  * v5p 是 MegaCore，1 device = 1 chip，日志里的 TFLOP/s/device 不用换算。"
 echo "  * MFU = TFLOP/s/device / 459"
-echo "  * 预期：step ≈ 63.2 s，TFLOP/s/device ≈ 160.8，MFU ≈ 35.0%"
+echo "  * 预期：step ≈ 63.2 s，TFLOP/s/device ≈ 160.9，MFU ≈ 35.1%"
 else
 echo "  * v7 是 2 device/chip，per-chip = 日志值 × 2；MFU = per-chip / 2306"
 echo "  * v7 编译要 10-17 分钟，比 v5p 慢很多"
