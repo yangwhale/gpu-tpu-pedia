@@ -6,8 +6,8 @@
 样本是腾讯混元 3（295B-A21B）。它的价值在于**结构上一半像 Qwen3、一半像 DeepSeek V3**，
 所以几乎把 MaxText 里所有「按模型家族分叉」的地方都踩了一遍。
 
-> 配套产物：[`maxtext-hunyuan3/`](maxtext-hunyuan3/) —— 模型文件、两个配置、以及
-> [`port.py`](maxtext-hunyuan3/port.py)（把这套改动重新应用到任意上游 checkout）。
+> 配套产物：代码在 [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)；
+> 跑测试的脚本在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)。
 
 ---
 
@@ -82,8 +82,19 @@ if config.model_name.startswith("deepseek3"):
 | 算力统计（共享专家 / 专家宽度） | 4 处 | ✅ 是 —— 不加**报表虚高约 5 倍** |
 | MTP + batch split 的重分片 | 1 处 | ✅ 是 |
 | 逐层量化、muon 优化器白名单 | 2 处 | ✅ 是 |
-| SwiGLU 激活截断 | 1 处 | ❌ **否** —— 这是 DeepSeek V4 的特性，Hy3 config 里没有对应字段 |
+| SwiGLU 激活截断 | 1 处 | ✅ 是 —— **见下方「差点判错的一处」** |
 | vLLM 权重映射表 | 1 处 | ❌ **否** —— DeepSeek 用 MLA，Hy3 是 GQA，**套用会错** |
+
+> #### ⚠️ 差点判错的一处：「我 config 里没这个字段」也不是理由
+>
+> SwiGLU 激活截断那处，我一开始判为「不适用」，理由是「Hy3 的 config 里没有
+> `mlp_activations_limit` 这个字段」。这看起来是可验证的事实，其实**跟「我们没开这个开关」
+> 是同一个错误**——那是个**调优旋钮**，将来试参数时随时会加上，加上的那天它会静默走进
+> 未截断的分支。
+>
+> **可接受的「不适用」只有一种：这个行为在你的模型上永远不成立。**
+> 比如 vLLM 权重映射那处——DeepSeek 是 MLA、Hy3 是 GQA，映射表结构根本不同，
+> 套用一定错；那不是「暂时不需要」，是「用了就是 bug」。
 
 ### 类 C · 真 bug（1 处）
 
@@ -129,35 +140,37 @@ grep -rn "DecoderBlockType\." --include=*.py src/ | grep -E "in \(|in \[|in \{" 
 > 到那时炸在生产环境里。可接受的理由长这样：
 > 「我的 config 里根本没有 `mlp_activations_limit` 这个字段」——这是可验证的事实。
 
-### 第 4 步 · 每处改动带命中数断言
+### 第 4 步 · 改动落在 fork 的分支上，不要维护补丁脚本
 
-不要断言「文件被改了」，要断言「**正好改了 N 处**」：
+**在上游的 fork 上开一个分支，所有改动作为 commit 落在分支上。** 跟上游用 `git rebase`。
 
-```python
-def edit(rel, fn, expect):
-  s = fn(open(path).read())
-  n = s.upper().count("<你的模型名>")
-  assert n == expect, f"{rel}: 命中 {n} 处，期望 {expect} 处——上游锚点可能变了"
-```
+我们一开始走了弯路：写了个补丁脚本，用字符串锚点去改上游文件，每处断言「正好命中 N 处」。
+断言本身是对的（它抓到过一次静默漏改：上游把单行 tuple 拆成多行，正则没匹配上），
+但**整条路线是错的**：
 
-**这条是从真实教训来的**：早期版本只断言「文件变了」，结果某个文件三处改动里有一处
-正则没匹配上（上游把单行 tuple 拆成了多行），**静默漏掉**，一直到复现审计才发现。
+| | 补丁脚本 | 分支 + rebase |
+|---|---|---|
+| 上游改了附近代码 | 锚点漂了，靠你**事先写对**断言才发现 | **明确报冲突**，必须处理 |
+| 真相来源 | 脚本一份、实际跑的树一份 → **会分叉** | 只有分支一份 |
+| 提 PR | 还要再转换一次 | 直接就是 commit |
+
+> ⚠️ **两个真相来源是真会咬人的。** 我们同时维护「仓库里的模型文件 + 补丁脚本」和
+> 「分支」，结果在一处改对、另一处没跟上，而所有测试恰好跑在改对的那份上——
+> **零征兆，直到从全新 checkout 走一遍才暴露**（见第 5 步）。
 
 ### 第 5 步 · 从全新 checkout 验证，然后真跑
 
 ```bash
-git clone --depth=1 <upstream> /tmp/fresh
-cp <你的模型文件> /tmp/fresh/...
-MAXTEXT_ROOT=/tmp/fresh/src/maxtext python3 port.py    # 只跑脚本，不做任何手工修补
-# 然后真的在硬件上跑一次缩层冒烟
+git clone --depth=1 -b <你的分支> <你的 fork> /tmp/fresh
+# 不做任何手工修补，直接用这棵树去跑
 ```
 
 > ⚠️ **这一步不能省，也不能用「我本地那棵调试树」代替。**
 > 我们在这一步抓出了两个自己产物里的 bug：配置白名单少注册了一个模型名、
-> 模型文件里的属性名没跟补丁脚本对齐。两处在调试树里都是对的，
+> 模型文件里的属性名跟训练循环里的查找表对不上。两处在调试树里都是对的，
 > 所有 benchmark 都跑在那棵树上，**所以整整一晚上零征兆**。
 >
-> 「补丁能打进去」≠「按文档从零走一遍能跑」。
+> 「代码看着对」≠「从零走一遍能跑」。
 
 ---
 
@@ -195,16 +208,19 @@ MAXTEXT_ROOT=/tmp/fresh/src/maxtext python3 port.py    # 只跑脚本，不做�
 
 | | 数量 | 说明 |
 |---|---|---|
-| 已覆盖 | **31** | 加进名单 |
-| 刻意不覆盖 | **3** | DeepSeek 自己的分派项；V4 专属的激活截断；vLLM 权重映射（GQA ≠ MLA，套用会错） |
+| 已覆盖 | **32** | 加进名单 |
+| 刻意不覆盖 | **2** | ① DeepSeek 自己的分派项（我们有自己的一条）② vLLM 权重映射（GQA ≠ MLA，**套用一定错**，需要单独写一份映射，属 TODO 不属「不适用」） |
 
-`port.py` 一次跑完输出每个文件的命中数，一眼看得出有没有漏：
+涉及的 12 个上游文件：
 
 ```
-已改: common_types(2), decoders(11), moe(6), maxtext_utils(4), types(5),
-      nnx_decoders(8), generate_param_only_checkpoint(3), grpo_utils(1),
-      linears(1), multi_token_prediction(1), layerwise_quantization(1),
-      trainers/pre_train/train.py
+common/common_types.py          configs/types.py
+layers/decoders.py              layers/nnx_decoders.py
+layers/moe.py                   layers/linears.py
+layers/multi_token_prediction.py
+utils/maxtext_utils.py          utils/generate_param_only_checkpoint.py
+utils/layerwise_quantization.py experimental/rl/grpo_utils.py
+trainers/pre_train/train.py     ← 这个是上游 bug，应单独提 PR
 ```
 
 ---
