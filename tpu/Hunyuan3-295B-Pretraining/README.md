@@ -47,7 +47,8 @@
 
 | | |
 |---|---|
-| **一键复现（两个平台）** | [`maxtext-hunyuan3/run.sh`](maxtext-hunyuan3/run.sh) —— `PLATFORM=v5p` 或 `PLATFORM=v7`，代码共用、只有 XLA flag 不同 |
+| **代码分支** | [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3) —— 基于上游 main，两个 commit 按两个上游 PR 拆开 |
+| **一键复现（两个平台）** | [`prep.sh`](maxtext-hunyuan3/prep.sh) 拉分支 + 自检 + 传 GCS → [`run.sh`](maxtext-hunyuan3/run.sh) `PLATFORM=v5p\|v7`。流程见 §九 |
 | 模型代码 | [`maxtext-hunyuan3/hunyuan3.py`](maxtext-hunyuan3/hunyuan3.py) —— 约 160 行 nnx，放进 `src/maxtext/models/`。**零新数学**：attention 继承 Qwen3，MoE 直接复用 DeepSeek 的 `RoutedAndSharedMoE`，本文件只做接线 |
 | 模型配置 | [`hunyuan3-295b.yml`](maxtext-hunyuan3/hunyuan3-295b.yml) / [`hunyuan3-smoke.yml`](maxtext-hunyuan3/hunyuan3-smoke.yml) —— 放进 `src/maxtext/configs/models/`，每个值对着 HF `config.json` 抄 |
 | MaxText 侧补丁 | [`port.py`](maxtext-hunyuan3/port.py) —— 改**上游 7 个文件**，逐处带命中数断言。光靠 config 做不到，因为 MaxText 到处按模型家族名字分支（§八） |
@@ -64,7 +65,8 @@
 | 所有轮次的实测数据 | §7.3（三条战线一张表） |
 | 三个平台横向比 | §7.4 |
 | 这个项目最大的教训 | §八 |
-| 这些改动该 check in 到哪 | §九 |
+| 怎么部署、怎么跑测试 | §九 |
+| 这些改动该 check in 到哪 | §十 |
 
 
 ## 一、模型架构：Hy3 到底是什么
@@ -2053,7 +2055,60 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 ---
 
 
-## 九、这些改动该 check in 到哪个 repo
+## 九、部署与测试流程（三步）
+
+代码在 **[`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)**，
+基于上游 main。仓库里 [`maxtext-hunyuan3/`](maxtext-hunyuan3/) 保留同一份源文件 + `port.py`，
+用于把改动重新应用到任意上游 checkout（跟版本、发 PR 时用）。
+
+### 9.1 三步
+
+```bash
+export GCS_STAGE=gs://your-bucket/hy3
+export IMAGE=us-docker.pkg.dev/cloud-tpu-multipod-dev/gcr.io/chrisya-maxtext-latest:runner
+
+# ① 准备代码（只有改了代码才要重跑；换 flag / 换参数不用）
+bash prep.sh                    # clone hunyuan3 分支 → 6 项自检 → 打包传 GCS
+
+# ② 起训练
+PLATFORM=v5p bash run.sh myrun          # 或 PLATFORM=v7
+PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 bash run.sh smoke   # 4 层冒烟
+
+# ③ 看结果
+kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
+```
+
+### 9.2 三步各自在做什么
+
+| 步 | 动作 | 为什么这样做 |
+|---|---|---|
+| ① `prep.sh` | clone 分支 → **6 项自检** → `tar src/maxtext` → 传 GCS | 自检挡的是「分支自己少东西」：三个文件在不在、白名单两个模型名全不全、枚举有没有 `HUNYUAN3`、`train.py` 补丁在不在、**`Hunyuan3MoeBlock_0` 在 model 和 train 两边对不对得上**。最后一项 2026-07-29 真踩过，不查的话要到 TPU 上跑起来才炸 |
+| ② `run.sh` | 提交 JobSet，pod 里 **`rm -rf /deps/src/maxtext` 再解包** | **整棵覆盖，不是只注入改动文件**。只注入的话测的是「我的改动 + 容器里的旧基座」，不是分支本身——昨晚两个 bug 就是这么漏掉的 |
+| ③ 读日志 | — | 见 §9.3 |
+
+镜像两个平台共用，容器只提供 jax / libtpu / 依赖，MaxText 整个来自分支。
+
+### 9.3 读结果前必看
+
+1. **先确认 `N/N Running` 再看日志。** TPU 切片全有全无，人不齐时活着的 pod 会报
+   `GetSliceInfo can only be invoked after a slice is built` —— 那是**症状不是病因**。
+2. **判错看最早那条，不是日志尾。** 配置非法会**先起 TPU 再退**，真正的报错是
+   `MAXTEXT CONFIG ERROR` / pydantic 的 `Value error`，位置在日志上方。
+3. **step 0 含编译，step 1/2 是 JAX 异步派发的假读数**，稳态取 step ≥ 3。
+4. 单位换算：v5p 1 device = 1 chip，MFU = TFLOP/s/device ÷ 459；
+   v7 **2 device/chip**，per-chip = 日志值 × 2，MFU = per-chip ÷ 2306。
+
+### 9.4 预期水位
+
+| 平台 | 规模 | step | TFLOP/s | MFU |
+|---|---|---|---|---|
+| v5p | 256 chips | 63.2 s | 160.8 /device | 35.0% |
+| v7 | 64 chips | 20.4 s | 445.1 /chip | 19.3% |
+| v5p smoke | 4 chips | 0.82 s | — | loss 13.45→10.35 / 8 步 |
+
+---
+
+## 十、这些改动该 check in 到哪个 repo
 
 `port.py` 现在改**上游 7 个文件**，这是个不稳定状态：上游一改锚点就失配，
 每次跟版本都要重对一遍（这轮就撞了 tile 参数改名、train.py 属性名两次）。
@@ -2083,7 +2138,7 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 
 ---
 
-## 十、待验证清单
+## 十一、待验证清单
 
 按依赖顺序排，✅ 是本轮闭环的，⬜ 是还没做的。
 
@@ -2109,7 +2164,7 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 | 17 | 验证 `port.py` 对全新 checkout 可用 | ⬜ | 本轮 train.py 那处是容器内实测通过的（PATCH-TRAIN OK ×4 轮），但 `port.py` 整体没在 pristine 树上跑过 |
 
 
-## 十一、参考
+## 十二、参考
 
 | 来源 | 说明 |
 |---|---|

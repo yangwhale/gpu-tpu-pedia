@@ -4,24 +4,23 @@
 # 两个平台的差别只有三处：nodeSelector、每步的 flag 集、以及读数时的 device/chip 换算。
 # 模型代码、补丁、配置完全共用（这是 2026-07-28 合并的结果，见 README §5.5）。
 #
-# 前置（两个平台一样）：
-#   * 镜像是 **新版** MaxText（src/maxtext 布局、nnx）。旧版 libtpu 驱动不了 Ironwood；
-#     新版两代都能驱动，这一点已实测。
-#   * 一次性打补丁：
-#       cp -r $MAXTEXT_SRC /tmp/mt-v7 && cd /tmp/mt-v7
-#       cp hunyuan3.py            src/maxtext/models/
-#       cp hunyuan3-295b.yml      src/maxtext/configs/models/
-#       cp hunyuan3-smoke.yml     src/maxtext/configs/models/
-#       python3 port.py           # 改 7 个文件，逐处带命中数断言
+# 前置：先跑一次 prep.sh 把代码推到 GCS（只有改代码才要重跑）：
+#   GCS_STAGE=gs://your-bucket/hy3 bash prep.sh
+#
+# 代码来自 yangwhale/maxtext 的 hunyuan3 分支，**整棵 src/maxtext 覆盖容器里那棵**。
+# 不是只注入改动文件——那样测的是「我的改动 + 容器里的旧基座」，不是分支本身。
+#
+# 镜像两个平台共用同一个（新版 MaxText，src/maxtext 布局 + nnx）。
+# 旧镜像驱动不了 Ironwood；新镜像 v5p / v7 都能驱动，已实测。
 #
 # 用法：
-#   PLATFORM=v5p|v7 MAXTEXT_SRC=/tmp/mt-v7 GCS_STAGE=gs://your-bucket/hy3 \
+#   PLATFORM=v5p|v7 GCS_STAGE=gs://your-bucket/hy3 \
 #   IMAGE=us-docker.pkg.dev/PROJECT/gcr.io/your-maxtext-latest:runner \
 #   bash run.sh <run-name> [额外参数...]
 set -euo pipefail
 RUN=${1:?用法: run.sh <run-name>}; shift || true
 PLATFORM=${PLATFORM:?需要 PLATFORM=v5p 或 v7}
-MAXTEXT_SRC=${MAXTEXT_SRC:?}; GCS_STAGE=${GCS_STAGE:?}; IMAGE=${IMAGE:?}
+GCS_STAGE=${GCS_STAGE:?}; IMAGE=${IMAGE:?}
 MODEL=${MODEL:-hunyuan3-295b}; STEPS=${STEPS:-10}; NAME=hy3-$RUN
 
 case "$PLATFORM" in
@@ -95,14 +94,8 @@ remat_policy=custom decoder_layer_input=offload attention=flash \
 allow_split_physical_axes=True tokenizer_type=tiktoken \
 tokenizer_path=src/maxtext/assets/tokenizer_llama3.tiktoken"
 
-cd "$MAXTEXT_SRC"
-tar czf /tmp/hy3inject.tgz \
-  src/maxtext/common/common_types.py src/maxtext/configs/types.py \
-  src/maxtext/layers/decoders.py src/maxtext/layers/nnx_decoders.py src/maxtext/layers/moe.py \
-  src/maxtext/utils/maxtext_utils.py src/maxtext/trainers/pre_train/train.py \
-  src/maxtext/models/hunyuan3.py \
-  src/maxtext/configs/models/hunyuan3-295b.yml src/maxtext/configs/models/hunyuan3-smoke.yml
-gsutil -q cp /tmp/hy3inject.tgz "$GCS_STAGE/hy3inject.tgz"
+gsutil -q stat "$GCS_STAGE/hy3-maxtext.tgz" 2>/dev/null || {
+  echo "找不到 $GCS_STAGE/hy3-maxtext.tgz —— 先跑 'GCS_STAGE=$GCS_STAGE bash prep.sh'"; exit 1; }
 
 kubectl delete jobset "$NAME" --ignore-not-found=true --wait=false >/dev/null 2>&1
 cat <<YAML | kubectl apply -f - >/dev/null
@@ -140,8 +133,8 @@ spec:
               args:
               - |
                 set -e
-                gsutil -q cp $GCS_STAGE/hy3inject.tgz /tmp/p.tgz
-                cd /deps && tar xzf /tmp/p.tgz
+                gsutil -q cp $GCS_STAGE/hy3-maxtext.tgz /tmp/p.tgz
+                cd /deps && rm -rf src/maxtext && tar xzf /tmp/p.tgz
                 export JAX_PLATFORMS=tpu,cpu TPU_STDERR_LOG_LEVEL=0 TF_CPP_MIN_LOG_LEVEL=0
                 export LIBTPU_INIT_ARGS='$FLAGS'
                 python3 -m src.maxtext.trainers.pre_train.train src/maxtext/configs/base.yml \\
