@@ -113,8 +113,18 @@ def _utils(s):
                 "    # total_ffn_flops is already summed over layers by the helper; the\n"
                 "    # generic branch would multiply by num_decoder_layers a second time.\n"
                 "    learnable_weight_tflops = (", 1)
+  # 最后一层 MoE 的 FLOP 重建：名单里没有 Hy3 就不算共享专家那部分，报表偏低。
+  a = ("      if config.decoder_block in (\n          DecoderBlockType.DEEPSEEK,\n"
+       "          DecoderBlockType.LLAMA4,\n          DecoderBlockType.QWEN3_NEXT,\n"
+       "          DecoderBlockType.GEMMA4,\n      ):\n        shared_flops = (")
+  b = ("      if config.decoder_block in (\n          DecoderBlockType.DEEPSEEK,\n"
+       "          DecoderBlockType.HUNYUAN3,\n          DecoderBlockType.LLAMA4,\n"
+       "          DecoderBlockType.QWEN3_NEXT,\n          DecoderBlockType.GEMMA4,\n      ):\n        shared_flops = (")
+  assert s.count(a) == 1, "maxtext_utils.py: shared_flops 名单锚点没命中"
+  s = s.replace(a, b, 1)
+
   return s
-edit("utils/maxtext_utils.py", _utils, expect=3)
+edit("utils/maxtext_utils.py", _utils, expect=4)
 
 
 # 5) pydantic 的 model_name 白名单（新版用 Literal 取代了旧版的 validate_model_name）
@@ -136,8 +146,24 @@ def _types(s):
          '        # shifts top-k selection only, updated by a non-gradient rule.\n'
          '        raise ValueError("Loss-free load balancing is only supported for the DeepSeek decoder block.")')
   assert old in s
-  return s.replace(old, new, 1)
-edit("configs/types.py", _types, expect=3)
+  s = s.replace(old, new, 1)
+  # 流水线并行层数推导：DeepSeek 走「总层数 - 稠密首层」，Hy3 同构，
+  # 落到 else 会把稠密首层也算进 MoE 段，开 PP 之后分配差一层。
+  a = "      if self.decoder_block == DecoderBlockType.DEEPSEEK:\n        moe_layers ="
+  b = ("      if self.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):\n"
+       "        moe_layers =")
+  assert s.count(a) == 1, "types.py: pipeline_parallel_layers 锚点没命中"
+  s = s.replace(a, b, 1)
+  # muon 优化器白名单
+  a = "    if self.opt_type == \"muon\" and self.decoder_block not in [\n        DecoderBlockType.DEEPSEEK,\n"
+  b = ("    if self.opt_type == \"muon\" and self.decoder_block not in [\n"
+       "        DecoderBlockType.DEEPSEEK,\n        DecoderBlockType.HUNYUAN3,\n")
+  assert s.count(a) == 1, "types.py: muon 白名单锚点没命中"
+  s = s.replace(a, b, 1)
+  return s
+
+
+edit("configs/types.py", _types, expect=5)
 
 
 # 6) nnx_decoders：第三张分派表 + rms_norm 白名单 + dense/moe 混合 scan 判定
@@ -155,6 +181,7 @@ def _nnxdec(s):
   s = s.replace("    self.is_deepseek = self.config.decoder_block == DecoderBlockType.DEEPSEEK",
                 "    self.is_deepseek = self.config.decoder_block in "
                 "(DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3)", 1)
+
   return s
 edit("layers/nnx_decoders.py", _nnxdec, expect=8)
 
@@ -179,6 +206,59 @@ def _train(s):
   m = re.search(r"^def ", s, re.M)
   assert m, "train.py: 找不到模块级 def，无法插入 helper"
   return s[:m.start()] + helper + s[m.start():]
+
+
+# ── 8) 以下 5 个文件不是「注册」，而是**结构判断**：它们按「dense 段 + MoE 段」
+#    两段式来分组，Hy3 与 DeepSeek 结构相同，落到 else 的单段式分支会算错。
+#    这些之前没改是因为「我们没开那个开关」——那不是理由，开了就错，提前备好。
+def _two_group(rel, expect_hits):
+  """把 `== DecoderBlockType.DEEPSEEK` 放宽成 `in (DEEPSEEK, HUNYUAN3)`。"""
+  def fn(s):
+    a = "if config.decoder_block == DecoderBlockType.DEEPSEEK:"
+    b = "if config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3):"
+    n = s.count(a)
+    assert n == expect_hits, f"{rel}: 命中 {n} 处，期望 {expect_hits} 处"
+    return s.replace(a, b)
+  edit(rel, fn, expect=expect_hits)
+
+
+# 权重导出：分别展开 dense_layers / moe_layers。走 else 只会展开一组名叫 layers 的，
+# 做 SFT 导权重时结构对不上。三处同样的写法。
+_two_group("utils/generate_param_only_checkpoint.py", 3)
+# RL 的参数同步，同样按两段分组
+_two_group("experimental/rl/grpo_utils.py", 1)
+
+
+# MlpBlock 自己的 norm 白名单——**else 分支是 raise ValueError**，
+# 只要 use_pre_norm=True 就崩在「Incorrect decoder_block name」。
+def _linears(s):
+  a = "        DecoderBlockType.QWEN3,\n        DecoderBlockType.DEEPSEEK,\n        DecoderBlockType.LLAMA4,\n"
+  assert s.count(a) == 1, "linears.py: norm 白名单锚点没命中"
+  return s.replace(
+      a,
+      "        DecoderBlockType.QWEN3,\n        DecoderBlockType.DEEPSEEK,\n"
+      "        DecoderBlockType.HUNYUAN3,\n        DecoderBlockType.LLAMA4,\n", 1)
+edit("layers/linears.py", _linears, expect=1)
+
+
+# MTP + batch split 的重分片路径
+def _mtp(s):
+  a = "if self.config.decoder_block == DecoderBlockType.DEEPSEEK and self.config.use_batch_split_schedule:"
+  b = ("if (\n          self.config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.HUNYUAN3)\n"
+       "          and self.config.use_batch_split_schedule\n      ):")
+  assert s.count(a) == 1, "multi_token_prediction.py: 锚点没命中"
+  return s.replace(a, b, 1)
+edit("layers/multi_token_prediction.py", _mtp, expect=1)
+
+
+# linen 的逐层量化断言
+def _lwq(s):
+  a = "assert config.decoder_block == common_types.DecoderBlockType.DEEPSEEK, ("
+  b = ("assert config.decoder_block in (\n      common_types.DecoderBlockType.DEEPSEEK,\n"
+       "      common_types.DecoderBlockType.HUNYUAN3,\n  ), (")
+  assert s.count(a) == 1, "layerwise_quantization.py: 锚点没命中"
+  return s.replace(a, b, 1)
+edit("utils/layerwise_quantization.py", _lwq, expect=1)
 
 
 _p = os.path.join(ROOT, "trainers/pre_train/train.py")
