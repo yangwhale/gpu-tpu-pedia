@@ -40,7 +40,7 @@
    —— 照抄官方 DeepSeek3 v5p 配方，只换模型名。
 2. **[TPU 上专家并行是负优化](#42-为什么-tpu-上-fsdp-打得过-ep)**
    —— 跟 GPU 结论相反。EP=64 不只是慢，是直接超显存 326 GB。
-3. **[同一个 bug 模式在本项目出现 8 次](#八九个-bug-与静态验证的边界)**
+3. **[同一个 bug 模式在本项目出现 8 次](#八十一个-bug-与静态验证的边界)**
    —— MaxText 里每个"按模型家族名字列举"的分支都要单独补，漏了不报错。
 
 ### 交付物
@@ -51,7 +51,7 @@
 | **一键复现（两个平台）** | [`prep.sh`](maxtext-hunyuan3/prep.sh) 拉分支 + 自检 + 传 GCS → [`run.sh`](maxtext-hunyuan3/run.sh) `PLATFORM=v5p\|v7`。流程见 §九 |
 | 模型代码 | [`maxtext-hunyuan3/hunyuan3.py`](maxtext-hunyuan3/hunyuan3.py) —— 约 160 行 nnx，放进 `src/maxtext/models/`。**零新数学**：attention 继承 Qwen3，MoE 直接复用 DeepSeek 的 `RoutedAndSharedMoE`，本文件只做接线 |
 | 模型配置 | [`hunyuan3-295b.yml`](maxtext-hunyuan3/hunyuan3-295b.yml) / [`hunyuan3-smoke.yml`](maxtext-hunyuan3/hunyuan3-smoke.yml) —— 放进 `src/maxtext/configs/models/`，每个值对着 HF `config.json` 抄 |
-| MaxText 侧补丁 | [`port.py`](maxtext-hunyuan3/port.py) —— 改**上游 7 个文件**，逐处带命中数断言。光靠 config 做不到，因为 MaxText 到处按模型家族名字分支（§八） |
+| MaxText 侧改动 | 分支上的 commit，涉及**上游 12 个文件**。光靠 config 做不到，因为 MaxText 到处按模型家族名字分支（§八、[移植指南](MAXTEXT-PORTING-GUIDE.md)） |
 | 未做 | 权重转换、真实数据集收敛验证（§十） |
 
 ### 怎么读这份文档
@@ -248,7 +248,7 @@ L889 / L1427）。`hunyuan3-295b` 不匹配，于是：
 |---|---|
 | `hunyuan3.py` | 两个 decoder layer 类，**只做接线** |
 | `hunyuan3-295b.yml` | model config，值全部来自 SSOT |
-| `port.py` | 上游 7 个文件的注册改动，逐处带命中数断言 |
+| （上游 12 个文件的改动） | 不在本仓，见分支 —— 单一真相 |
 
 **新写的只有装配逻辑**，两半功能都是原样引入的：
 
@@ -1311,7 +1311,7 @@ completed step: 8, seconds: 25.111, TFLOP/s/device: 202.341, loss: 12.585
 
 跟 §4.8 一样，不用工作目录：从镜像里拉一棵**干净的**新版 MaxText，
 `cp hunyuan3.py` + `cp hunyuan3-295b.yml` + 跑
-[`port.py`](maxtext-hunyuan3/port.py)，再用
+当时的 `port.py`（现已删除，改用分支），再用
 [`run.sh`](maxtext-hunyuan3/run.sh)（`PLATFORM=v7`）提交。
 
 | | 原始 c1 | 复现 v7audit | 差 |
@@ -1977,7 +1977,7 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 ---
 
 
-## 八、九个 bug 与静态验证的边界
+## 八、十一个 bug 与静态验证的边界
 
 移植过程中又撞了四次"按模型名列举的分支漏了 hunyuan3"，
 **全部是运行时才报错，静态检查一个都抓不到**：
@@ -2034,7 +2034,26 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 **怎么自查**：任何返回多元组的上游模块，都去 `grep` 官方模型（这里是 `models/deepseek.py`）
 是怎么接的，逐项比对——**不要用 `_` 丢弃自己没看懂的返回值**。
 
-`verify_hunyuan3.py` 的 8 项检查全部通过，但**这 9 个实跑 bug 一个都没拦住**：
+### bug #10 / #11：改对了，但只改在临时树里（2026-07-29 补记）
+
+前九个都是「上游/框架有个坑」，第十、十一个不一样 —— **坑是我们自己的产物挖的**。
+
+| # | 症状 | 真相 |
+|---|---|---|
+| 10 | `Input should be 'default', ..., 'hunyuan3-295b'`，传 `hunyuan3-smoke` 被拒 | 补丁脚本只注册了 `hunyuan3-295b`。而**文档恰恰让人先跑冒烟配置** |
+| 11 | `'Hunyuan3MoELayer' object has no attribute 'Hunyuan3MoeBlock_0'` | 模型文件里属性叫 `moe_block`，训练循环的查找表写的是 `Hunyuan3MoeBlock_0`，两边对不上 |
+
+**两处在我本地那棵临时调试树里都是对的。** 当天全部 v5p benchmark 都跑在那棵树上，
+所以从头到尾零征兆 —— 直到从全新 clone 只跑脚本、再真跑一次，才同时暴露。
+
+> **这两个 bug 是「删掉补丁脚本、改用分支」这个决定的直接理由**（§10.2）。
+> 根因不是手滑，是**同一份改动存在于两个地方**：临时树一份、仓库产物一份。
+> 只要存在两份，就一定会在某次修改后分叉，而且分叉的那一刻不会有任何报错。
+>
+> 配套纪律：**判定产物是否可用的唯一有效方法，是从全新 checkout 开始、
+> 不做任何手工修补、然后真跑一次。** 「代码看着对」不算。
+
+`verify_hunyuan3.py` 的 8 项检查全部通过，但**这 11 个实跑 bug 一个都没拦住**：
 
 | bug | 层次 | 静态检查为什么看不见 |
 |---|---|---|
@@ -2047,6 +2066,8 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 | 7 `nnx_decoders.py` 第三张分派表 | 框架注册 | 检查只看了 `decoders.py` 的两张 |
 | 8 两条构造路径签名不一致 | 框架接口 | 需要真正实例化才暴露 |
 | 9 三元组第三项被 `_` 丢弃 | 框架接口 | 语法完全合法，配置也合法，只有跑起来看 bias 有没有动才知道 |
+| 10 白名单漏注册 `hunyuan3-smoke` | 产物自身 | 我们所有测试都跑在手工改过的临时树上，那棵树里是对的 |
+| 11 模型属性名与训练循环查找表不一致 | 产物自身 | 同上；两处都只在「全新 checkout 只跑脚本」时才对不上 |
 
 > 静态验证的价值是**证明逻辑对**（路由数学、参数量、分派结构），
 > 这几项它确实抓到了两个真 bug（路由分支、`model_name` 门）。
@@ -2059,8 +2080,8 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 ## 九、部署与测试流程（三步）
 
 代码在 **[`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)**，
-基于上游 main。仓库里 [`maxtext-hunyuan3/`](maxtext-hunyuan3/) 保留同一份源文件 + `port.py`，
-用于把改动重新应用到任意上游 checkout（跟版本、发 PR 时用）。
+基于上游 main，**这是代码的唯一真相**。
+仓库里 [`maxtext-hunyuan3/`](maxtext-hunyuan3/) 只放跑测试用的两个脚本，不再放代码副本。
 
 ### 9.1 三步
 
@@ -2109,31 +2130,47 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 
 ---
 
-## 十、这些改动该 check in 到哪个 repo
+## 十、代码放在哪、怎么跟上游
 
-`port.py` 现在改**上游 7 个文件**，这是个不稳定状态：上游一改锚点就失配，
-每次跟版本都要重对一遍（这轮就撞了 tile 参数改名、train.py 属性名两次）。
-长期该进上游。按「能不能独立成立」拆成三档：
+### 10.1 单一真相：fork 的分支
 
-### 9.1 建议拆成两个上游 PR + 本仓保留复现路径
+代码在 **[`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)**，
+基于上游 main。所有关于 Hy3 的改动 —— 功能、性能、bug 修复 —— **都以 commit 落在这个分支上**。
 
-| 档 | 内容 | 目标 | 理由 |
-|---|---|---|---|
-| **PR ①（先发，最容易过）** | `trainers/pre_train/train.py`：把写死的 `DeepSeekMoeBlock_0` 改成按 `decoder_block` 解析 | `AI-Hypercomputer/maxtext` | **这是纯 bug 修复，跟 Hy3 无关**。任何非 DeepSeek 的模型只要用 aux-loss-free 均衡都会撞（见 §八 bug #9）。改动 3 行 + 一张查找表，独立成立，不需要先接受 Hy3 |
-| **PR ②（跟着发）** | `models/hunyuan3.py` + 两个 yml + 6 处注册（枚举 / 两张分派表 / 第三张分派表 / `model_name` 门 / pydantic 白名单 / FLOP 公式） | `AI-Hypercomputer/maxtext` | 就是「加一个模型」，跟 deepseek / qwen3 同级。上游已有这两个家族，Hy3 = 两者拼装，复用率极高，新代码只有 160 行接线 |
-| **本仓** | `port.py` + `run.sh` + 两个 yml | `gpu-tpu-pedia` | PR 合入前，这是唯一可复现路径；合入后 `port.py` 可以退化成「装 yml + 跑」 |
+| 事情 | 怎么做 |
+|---|---|
+| 改代码 | 在分支上提 commit |
+| 跟上游 | `git rebase upstream/main` |
+| 跑测试 | `prep.sh` 从分支拉（§九） |
+| 回馈上游 | 从分支上挑 commit 提 PR（见 10.3） |
 
-### 9.2 为什么不建议长期只靠 `port.py`
+### 10.2 为什么不再维护补丁脚本
 
-`port.py` 的所有脆弱性——7 个文件、锚点字符串匹配、每处 `expect=N` 命中数断言——
-**都是「在树外打补丁」这件事本身带来的**，不是实现得不好。
-这轮已经两次被上游改动打中（tile 参数 3→18、train.py 属性名），
-而 §八 那 9 个 bug 里有 6 个是「漏了一张按模型名分派的表」——
-**这类表本来就该由上游维护**，外部补丁永远追不齐。
+早期这里放过一个 `port.py`：用字符串锚点去改上游文件，每处断言「正好命中 N 处」。
+断言本身抓到过真问题（上游把单行 tuple 拆成多行导致静默漏改），**但整条路线是错的**：
 
-### 9.3 发 PR 前要确认的三件事
+| | 补丁脚本 | 分支 + rebase |
+|---|---|---|
+| 上游改了附近代码 | 锚点漂了，靠你**事先写对**断言才发现 | **明确报冲突**，必须处理 |
+| 真相来源 | 脚本一份、分支一份 → **会分叉** | 只有分支一份 |
+| 提 PR | 还要再转换一次 | 直接就是 commit |
 
-1. **雇主 IP 归属**：`AI-Hypercomputer/maxtext` 是 Google 的 repo，走内部贡献流程还是个人 GitHub 账号提 PR，先跟内部确认。
+> **两个真相来源真的咬过人。** 2026-07-28 夜同时维护「仓库里的模型文件 + 补丁脚本」和「分支」，
+> 结果在一处改对、另一处没跟上，而所有 benchmark 恰好跑在改对的那份上——
+> **整晚零征兆**，直到从全新 checkout 走一遍才暴露（§八 bug #10/#11）。
+
+### 10.3 回馈上游：建议拆两个 PR
+
+| PR | 内容 | 理由 |
+|---|---|---|
+| **①（先发）** | `trainers/pre_train/train.py`：把写死的 `DeepSeekMoeBlock_0` 改成按 `decoder_block` 解析 | **纯 bug 修复，跟 Hy3 无关**。任何非 DeepSeek 模型只要开 aux-loss-free 均衡都会撞（§八 bug #9）。3 行 + 一张查找表，独立成立，不需要先接受 Hy3 |
+| **②（跟着发）** | 模型本体 + 其余 11 个文件的行为归类 | 就是「加一个模型」，跟 deepseek / qwen3 同级 |
+
+分支上的两个 commit **已经按这个边界拆好了**，可以直接 cherry-pick。
+
+### 10.4 发 PR 前要确认的三件事
+
+1. **雇主 IP 归属**：`AI-Hypercomputer/maxtext` 是 Google 的 repo，走内部贡献流程还是个人账号提 PR，先跟内部确认。
 2. **`initializer_range: 0.006` 仍缺**（§2.8 第 ③ 项）。PR ② 最好一并补上，否则 from-scratch 预训练的初始化对不齐官方。
 3. **FLOP 公式那处改动要单独说明**：它只影响 MFU 报表不影响训练，但会让 Hy3 的 `Total TFLOPs` 从 2800.97 变成 561.92（§3.9）。review 的人看到数字大跳需要这个上下文。
 
@@ -2145,7 +2182,7 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 
 | # | 事项 | 状态 | 说明 |
 |---|---|---|---|
-| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ | 8 项检查全过；但**实跑的 9 个 bug 一个都没抓到**，见下方复盘 |
+| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ | 8 项检查全过；但**实跑的 11 个 bug 一个都没抓到**，见下方复盘 |
 | 1 | 小规模真实前向 | ✅ | 4 芯片 v5p，r1–r20 共 20 轮，见 §三 |
 | 2 | 192 experts × 80 层能否编译 | ✅ | v5p 256 芯片和 v7 64 芯片都编译并跑出稳态 |
 | 3 | 参数量与 SSOT 对齐 | ✅ | 框架报 298.786 B = SSOT 294.9 B + MTP 头 3.886 B，两个平台逐位一致 |
@@ -2162,7 +2199,8 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 | 14 | `initializer_range` | ⬜ | from-scratch 才需要；加载权重或 SFT 不受影响。**发上游 PR 时一并补**（§9.3） |
 | 15 | 上游 PR ①：train.py 的 bias 路径解耦 | ⬜ | 纯 bug 修复，独立成立，见 §9.1 |
 | 16 | 上游 PR ②：hunyuan3 模型本体 + 6 处注册 | ⬜ | 见 §9.1；发之前先确认雇主 IP 归属（§9.3） |
-| 17 | 验证 `port.py` 对全新 checkout 可用 | ⬜ | 本轮 train.py 那处是容器内实测通过的（PATCH-TRAIN OK ×4 轮），但 `port.py` 整体没在 pristine 树上跑过 |
+| 17 | 分支从全新 clone 能跑 | ✅ | 2026-07-29 实测：clone 分支 → 整棵覆盖容器 → v5p 4 芯片 loss 13.45→10.35，且**补完 5 处休眠改动前后逐位相同** |
+| 18 | vLLM 权重映射表（tunix） | ⬜ | Hy3 是 GQA，不能套 DeepSeek 的 MLA 映射，需单独写一份 |
 
 
 ## 十二、参考
