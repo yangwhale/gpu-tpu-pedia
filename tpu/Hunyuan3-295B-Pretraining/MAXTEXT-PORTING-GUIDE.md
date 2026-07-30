@@ -6,8 +6,13 @@
 样本是腾讯混元 3（295B-A21B）。它的价值在于**结构上一半像 Qwen3、一半像 DeepSeek V3**，
 所以几乎把 MaxText 里所有「按模型家族分叉」的地方都踩了一遍。
 
+> **本文里所有数字都是快照，实测于 2026-07-30、分支 `1afaa0f`。**
+> 框架一直在变，照着核对之前先自己重跑一遍第四节那三条 grep。
+>
 > 配套产物：代码在 [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)；
-> 跑测试的脚本在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)。
+> 跑测试的脚本在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)；
+> 一个跑通的完整样例见 [v5p Quick Start](QUICKSTART-v5p.md)，
+> 全过程与踩坑见 [实验档案](EXPERIMENT-LOG.md)。
 
 ---
 
@@ -15,11 +20,16 @@
 
 | | 数量 | 说明 |
 |---|---|---|
-| **新增文件** | **3** | 1 个模型层文件（约 160 行）+ 2 个 yml 配置 |
+| **新增文件** | **3** | 1 个模型层文件（161 行有效代码）+ 2 个 yml 配置 |
 | **改动上游文件** | **12** | 全部是「让框架认识这个模型」，没有一处是算法实现 |
+| **改动落点** | **38 处** | 这 12 个文件里出现新模型名字的地方 |
 | 真正的新代码 | **< 200 行** | 且**零新数学**：注意力继承 Qwen3，MoE 复用 DeepSeek |
 
 **关键认知：工作量不在「实现模型」，在「跟框架里按名字分叉的地方打交道」。**
+
+> 上面的 38 处是 2026-07-30 在分支 `1afaa0f` 上实测的。
+> **这个数会随上游增长** —— 本项目进行期间上游就长出了一个新家族
+> `DEEPSEEK4`，带来约 12 个新分叉点。每次 rebase 之后都要重跑第四节的那三条 grep。
 
 ---
 
@@ -54,7 +64,7 @@ if config.model_name.startswith("deepseek3"):
 
 ## 三、三类改动，没有第四类
 
-### 类 A · 身份登记（4 处，纯机械）
+### 类 A · 身份登记（4 个文件、约 19 处，纯机械）
 
 告诉框架「世界上有这么个模型」。不动脑子，但**漏一处就崩，且报的错跟漏的地方常常无关**。
 
@@ -68,7 +78,7 @@ if config.model_name.startswith("deepseek3"):
 > ⚠️ **第三张分派表是最容易漏的一处**。前两张挨在一起，很容易以为改完了。
 > 漏它报的错看起来跟分派表毫无关系。
 
-### 类 B · 行为归类（7 处，真正要思考的部分）
+### 类 B · 行为归类（7 个文件、约 18 处，真正要思考的部分）
 
 每一处都是一道判断题：「我这个模型在**这个具体方面**，跟 DeepSeek 是不是一路的？」
 
@@ -96,7 +106,7 @@ if config.model_name.startswith("deepseek3"):
 > 比如 vLLM 权重映射那处——DeepSeek 是 MLA、Hy3 是 GQA，映射表结构根本不同，
 > 套用一定错；那不是「暂时不需要」，是「用了就是 bug」。
 
-### 类 C · 真 bug（1 处）
+### 类 C · 真 bug（1 个文件、1 处）
 
 训练主循环里，无梯度专家偏置的更新路径把 DeepSeek 的**模块属性名写死**了：
 
@@ -140,6 +150,13 @@ grep -rn "DecoderBlockType\." --include=*.py src/ | grep -E "in \(|in \[|in \{" 
 > 到那时炸在生产环境里。可接受的理由长这样：
 > 「我的 config 里根本没有 `mlp_activations_limit` 这个字段」——这是可验证的事实。
 
+> ⚠️ **更不能做的：把自己的模型改名去蹭别人的分支。**
+> 既然框架用 `model_name.startswith("deepseek3")` 判断行为，
+> 那把自己的模型叫成 `deepseek3-xxx` 就能「免费」走进所有正确分支 ——
+> 这是最诱人也最坏的一条路。它让日志、checkpoint、报表里的模型名全部撒谎，
+> 而且下一个人完全无法从名字追溯到真实模型。**该叫什么就叫什么，
+> 要走进哪条分支就显式把自己登记进去。**
+
 ### 第 4 步 · 改动落在 fork 的分支上，不要维护补丁脚本
 
 **在上游的 fork 上开一个分支，所有改动作为 commit 落在分支上。** 跟上游用 `git rebase`。
@@ -164,6 +181,26 @@ grep -rn "DecoderBlockType\." --include=*.py src/ | grep -E "in \(|in \[|in \{" 
 git clone --depth=1 -b <你的分支> <你的 fork> /tmp/fresh
 # 不做任何手工修补，直接用这棵树去跑
 ```
+
+**把这一步脚本化，别靠自觉。** 我们最后固化成了一个 `prep.sh`：
+clone 分支 → 跑 8 项自检 → 打包整棵源码树 → 传对象存储。
+自检项就是「这个分支自己有没有少东西」：
+
+| 检查 | 挡住什么 |
+|---|---|
+| 3 个新增文件都在 | 少一个要到机器上才炸 |
+| 配置白名单含**全部**模型名（正式 + 缩层） | 缩层配置漏注册 —— 而文档恰恰让人先跑缩层 |
+| 枚举里有新家族 | 配置解析过不去 |
+| 上游 bug 的补丁还在 | rebase 时被冲掉不会有提示 |
+| **模型文件里的属性名 = 训练循环查找表里的名字** | 首步 `AttributeError` |
+
+最后一项看着很琐碎，但它是我们踩过的真坑：模型文件里叫 `moe_block`、
+训练循环查找 `Hunyuan3MoeBlock_0`，**两边都「看着对」，只有跑起来才知道**。
+
+> **自检要按「命中几处」断言，不要按「有没有变」断言。**
+> 我们的补丁脚本一开始写的是 `assert 文件有改动`，结果三处改动成功了两处、
+> 漏的那处被另外两处的成功掩盖，静默放行。改成
+> `assert 命中数 == 期望值` 之后当场就炸出来了。
 
 > ⚠️ **这一步不能省，也不能用「我本地那棵调试树」代替。**
 > 我们在这一步抓出了两个自己产物里的 bug：配置白名单少注册了一个模型名、
@@ -260,7 +297,14 @@ dense→MoE 的衔接也走到了。
 | 数值健康 | 0 NaN、0 skipped |
 | MTP（若有） | `mtp_loss` 单独打出且下降 |
 | 无梯度偏置更新（若有） | 不报 `AttributeError` |
-| 参数量 | 与解析式对得上 |
+| 参数量 | 与解析式对得上（框架启动时会打 `number parameters`） |
+| **每步 FLOP** | **与解析式对得上** —— 见下方警告 |
+
+> ⚠️ **「每步 FLOP」这一项最容易被跳过，代价也最大。**
+> 算力统计函数是按家族名字白名单分叉的，漏加你的模型时它**不会报错**，
+> 只是用错误的宽度去量专家、并漏掉共享专家 —— 我们那次虚高了约 **5 倍**。
+> 后果不是「报表难看」，是**拿着虚高 5 倍的 MFU 去做容量规划**。
+> 开跑第一件事就核对这个数，和参数量一起看。
 
 **缩层冒烟覆盖不到的（别误以为过了就万事大吉）**：显存压力、大规模切分、
 80 层累积的 bf16 数值误差、完整的 XLA flag 集、remat/offload 策略、收敛质量、以及全部性能。
@@ -277,30 +321,69 @@ dense→MoE 的衔接也走到了。
 2. **判错看最早那条，不是日志尾。** 配置非法会**先把 TPU 拉起来再退**，
    真正的报错（`MAXTEXT CONFIG ERROR` / pydantic 的 `Value error`）在日志上方。
 3. **step 0 含编译，step 1/2 是 JAX 异步派发的假读数**，稳态取 step ≥ 3。
+4. **先搞清 device 和 chip 是不是 1:1，再比 MFU。** 有的 TPU 代际
+   1 chip = 1 device，有的 1 chip = 2 device，而框架日志一律按 device 报。
+   跨代际比较之前必须先归一到 per-chip，**这是最容易出错的一步**，
+   方向搞反就是 2 倍或 0.5 倍的误差。
 
 ---
 
 ## 八、Hy3 的最终状态（供对照）
 
-34 处按 DeepSeek 名字分叉的判断点：
+**实测于 2026-07-30，分支 `1afaa0f`。** 这一节是快照，照着核对之前先自己重跑一遍
+（命令见第四节第 1 步）—— 上游一直在长新东西。
 
-| | 数量 | 说明 |
+```bash
+# 我们已覆盖的落点
+grep -rn "HUNYUAN3\|hunyuan3" --include=*.py src/maxtext | grep -v models/hunyuan3.py | wc -l
+#  -> 38
+
+# 仍只认 DEEPSEEK、没带上我们的判断点
+grep -rn "DecoderBlockType.DEEPSEEK\|startswith((\"deepseek" --include=*.py src/maxtext \
+  | grep -iv hunyuan3 | wc -l
+#  -> 30
+```
+
+第二条那 30 处**不是漏网**，逐条看过之后分成三类：
+
+| 类别 | 数量 | 处置 |
 |---|---|---|
-| 已覆盖 | **32** | 加进名单 |
-| 刻意不覆盖 | **2** | ① DeepSeek 自己的分派项（我们有自己的一条）② vLLM 权重映射（GQA ≠ MLA，**套用一定错**，需要单独写一份映射，属 TODO 不属「不适用」） |
+| `DEEPSEEK4` 专属 | ~12 | **上游在本项目期间新加的家族**，与 Hy3 无关 |
+| 多行 tuple 的中间行 | ~13 | `HUNYUAN3` 在相邻行，grep 单行匹配看不见 —— **别被这个数吓到** |
+| DeepSeek 自己的分派项 | 3 | 我们有自己的一条 |
+| vLLM 权重映射 | 1 | GQA ≠ MLA，**套用一定错**，需要单独写一份，属 TODO 不属「不适用」 |
 
-涉及的 12 个上游文件：
+> ⚠️ **「多行 tuple 中间行」这一类值得单独记。** 上游把
+> `in (DEEPSEEK, LLAMA4)` 拆成多行之后，任何按单行匹配的检查
+> —— 无论是你的 grep 还是补丁脚本的正则 —— 都会给出**假阴性**。
+> 本项目就因此静默漏改过一处（见实验档案 §4.8）。
+> **核对覆盖率要看文件级命中数，不要只看单行 grep 的差集。**
+
+涉及的 12 个上游文件（括号内是各自的落点数）：
 
 ```
-common/common_types.py          configs/types.py
-layers/decoders.py              layers/nnx_decoders.py
-layers/moe.py                   layers/linears.py
-layers/multi_token_prediction.py
-utils/maxtext_utils.py          utils/generate_param_only_checkpoint.py
-utils/layerwise_quantization.py experimental/rl/grpo_utils.py
-trainers/pre_train/train.py     ← 这个是上游 bug，应单独提 PR
+common/common_types.py           (1)    configs/types.py                  (5)
+layers/decoders.py               (9)    layers/nnx_decoders.py            (4)
+layers/moe.py                    (7)    layers/linears.py                 (1)
+layers/multi_token_prediction.py (1)
+utils/maxtext_utils.py           (4)    utils/generate_param_only_checkpoint.py (3)
+utils/layerwise_quantization.py  (1)    experimental/rl/grpo_utils.py     (1)
+trainers/pre_train/train.py      (1)    ← 这个是上游 bug，应单独提 PR
 ```
+
+`decoders.py` 落点最多（9 处）不是因为它最重要，而是因为**分派表和分层扫描
+恰好都在这个文件里** —— 它同时属于类 A 和类 B。
+分类是按「这处改动要不要动脑子」分的，不是按文件分的。
 
 ---
 
 *样本：腾讯混元 3（295B-A21B）· 实测平台 TPU v5p 256 芯片 / v7 Ironwood 64 芯片*
+
+---
+
+## 更新记录
+
+| 日期 | 变更 |
+|---|---|
+| 2026-07-30 | 全部计数改为实测（38 个落点 / 12 文件）；记录上游新增 `DEEPSEEK4` 家族带来约 12 个新分叉点；补「多行 tuple 导致单行 grep 假阴性」；补「每步 FLOP 也要核对」；补「自检脚本化 + 按命中数断言」；补「不许改模型名去蹭分支」 |
+| 2026-07-29 | 首版，从 Hy3 移植过程总结 |
