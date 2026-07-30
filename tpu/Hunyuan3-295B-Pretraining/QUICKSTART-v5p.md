@@ -11,7 +11,7 @@
 | **实测基线** | **step 63.2–63.3 s · 160.6–161.0 TFLOP/s/chip · MFU 34.98–35.07% · 约 265,000 tok/s** |
 
 > 这份文档只讲**当前可复现的那一条路径**。完整的移植过程、失败轮次、
-> 十二个 bug 的复盘在 [README.md](README.md)，需要追溯时再去查。
+> 十二个 bug 的复盘在 [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md)，需要追溯时再去查。
 
 ---
 
@@ -639,6 +639,6 @@ mtp_loss_scaling_factor: 0.1
 
 | 文档 | 内容 |
 |---|---|
-| [README.md](README.md) | 完整实验记录：移植全过程、三条战线的全部轮次、12 个 bug 的复盘 |
+| [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md) | 完整实验记录：移植全过程、三条战线的全部轮次、12 个 bug 的复盘 |
 | [MAXTEXT-PORTING-GUIDE.md](MAXTEXT-PORTING-GUIDE.md) | 把**别的**模型移植到 MaxText 的通用范式 |
 | [maxtext-hunyuan3/](maxtext-hunyuan3/) | `prep.sh` / `run.sh` 两个脚本 |

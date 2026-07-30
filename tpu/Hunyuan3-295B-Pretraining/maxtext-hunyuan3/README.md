@@ -41,4 +41,5 @@ NODES=1 TOPO=2x2x1 PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 \
 ## 相关文档
 
 - [移植范式（写给外部团队）](../MAXTEXT-PORTING-GUIDE.md)
-- [完整实验记录与性能数据](../README.md)
+- [v5p 快速上手](../QUICKSTART-v5p.md)
+- [完整实验记录与性能数据](../EXPERIMENT-LOG.md)
