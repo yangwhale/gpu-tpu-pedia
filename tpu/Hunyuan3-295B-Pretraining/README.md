@@ -49,8 +49,8 @@
 |---|---|
 | **代码分支** | [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3) —— 基于上游 main，两个 commit 按两个上游 PR 拆开 |
 | **一键复现（两个平台）** | [`prep.sh`](maxtext-hunyuan3/prep.sh) 拉分支 + 自检 + 传 GCS → [`run.sh`](maxtext-hunyuan3/run.sh) `PLATFORM=v5p\|v7`。流程见 §九 |
-| 模型代码 | [`maxtext-hunyuan3/hunyuan3.py`](maxtext-hunyuan3/hunyuan3.py) —— 约 160 行 nnx，放进 `src/maxtext/models/`。**零新数学**：attention 继承 Qwen3，MoE 直接复用 DeepSeek 的 `RoutedAndSharedMoE`，本文件只做接线 |
-| 模型配置 | [`hunyuan3-295b.yml`](maxtext-hunyuan3/hunyuan3-295b.yml) / [`hunyuan3-smoke.yml`](maxtext-hunyuan3/hunyuan3-smoke.yml) —— 放进 `src/maxtext/configs/models/`，每个值对着 HF `config.json` 抄 |
+| 模型代码 | [`src/maxtext/models/hunyuan3.py`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/models/hunyuan3.py) —— 约 160 行 nnx。**零新数学**：attention 继承 Qwen3，MoE 直接复用 DeepSeek 的 `RoutedAndSharedMoE`，本文件只做接线 |
+| 模型配置 | [`hunyuan3-295b.yml`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/configs/models/hunyuan3-295b.yml) / [`hunyuan3-smoke.yml`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/configs/models/hunyuan3-smoke.yml) —— 在 `src/maxtext/configs/models/`，每个值对着 HF `config.json` 抄 |
 | MaxText 侧改动 | 分支上的 commit，涉及**上游 12 个文件**。光靠 config 做不到，因为 MaxText 到处按模型家族名字分支（§八、[移植指南](MAXTEXT-PORTING-GUIDE.md)） |
 | 未做 | 权重转换、真实数据集收敛验证（§十） |
 
@@ -242,13 +242,14 @@ L889 / L1427）。`hunyuan3-295b` 不匹配，于是：
 
 ### 2.3 复用了什么，新写了什么
 
-代码在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)：
+代码全部在 [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)
+上，本仓不留副本（理由见 §10.2）：
 
 | 文件 | 作用 |
 |---|---|
-| `hunyuan3.py` | 两个 decoder layer 类，**只做接线** |
-| `hunyuan3-295b.yml` | model config，值全部来自 SSOT |
-| （上游 12 个文件的改动） | 不在本仓，见分支 —— 单一真相 |
+| [`models/hunyuan3.py`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/models/hunyuan3.py) | 两个 decoder layer 类，**只做接线** |
+| [`configs/models/hunyuan3-295b.yml`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/configs/models/hunyuan3-295b.yml) | model config，值全部来自 SSOT |
+| 上游 12 个文件的改动 | 同在该分支的两个 commit 里 |
 
 **新写的只有装配逻辑**，两半功能都是原样引入的：
 
@@ -574,7 +575,7 @@ ALL CHECKS PASSED
 |---|---|
 | 节点池 | `np-v5p-hy3-dev`，1 台 `ct5p-hightpu-4t`，拓扑 `2x2x1`，spot |
 | device | 4（v5p 是 MegaCore，4 chips = 4 devices） |
-| 镜像 | `chrisya-maxtext-stable:oct`（MaxText `3eb77db3` + JAX 0.7.0） |
+| 镜像 | `maxtext-stable:oct`（MaxText `3eb77db3` + JAX 0.7.0） |
 | 代码注入 | 本地改动 tar 后 `kubectl cp` 进 pod，解到 `/deps` 覆盖 |
 
 **为什么先建 1 节点小池**：64 节点跑一次要等 6–7 分钟编译，改一行代码就得重来。
@@ -1213,14 +1214,14 @@ assert n == expect, f"{rel}: 命中 {n} 处，期望 {expect} 处"
 > **本节是历史。** 结论已经变了：**新镜像两代硬件都能驱动，仓库里只留一份代码**（§5.5）。
 > 保留这一节是因为「新旧两版 MaxText 差在哪」这张表本身仍然有用。
 
-当初 v5p 侧用的 `chrisya-maxtext-stable:oct` 镜像**驱动不了 Ironwood**：
+当初 v5p 侧用的 `maxtext-stable:oct` 镜像**驱动不了 Ironwood**：
 
 ```
 libtpu build label: libtpu_lts_20250721_b_RC01
 jaxlib._jax.XlaRuntimeError: INTERNAL: Failed to get global TPU topology.
 ```
 
-2025 年 7 月的 libtpu 不认识 tpu7x。换成 `chrisya-maxtext-latest:runner`
+2025 年 7 月的 libtpu 不认识 tpu7x。换成 `maxtext-latest:runner`
 （ironwood 配方用的那个）之后，发现上游 MaxText 已经整体重构：
 
 | | 旧（v5p 用的） | 新（v7 用的） |
@@ -1352,14 +1353,14 @@ pool and try re-creating it again later.
 ### 5.5 反向验证：把 v5p 也搬到新栈（2026-07-28）
 
 §5.1 说「v7 用的是另一套 MaxText，补丁得重写」，于是仓库里长期挂着**两套代码**。
-但那是**镜像绑定的历史包袱，不是平台差异**：v5p 那个镜像（`chrisya-maxtext-stable:oct`，
+但那是**镜像绑定的历史包袱，不是平台差异**：v5p 那个镜像（`maxtext-stable:oct`，
 libtpu_lts_20250721）驱动不了 Ironwood，所以 v7 只能换新镜像，一换才发现上游整体重构了。
 
 反过来问一句就没人问过：**新镜像能不能驱动 v5p？** 能的话两套就该合成一套。
 
 #### go / no-go：能
 
-在既有 `np-v5p-256` 上用 `chrisya-maxtext-latest:runner` 起一个 4 层缩层冒烟（结构与 295B 完全一致，
+在既有 `np-v5p-256` 上用 `maxtext-latest:runner` 起一个 4 层缩层冒烟（结构与 295B 完全一致，
 只砍层数），**新 libtpu 完整识别 256 个 v5p device**，loss 13.42 → 11.68 单调下降，MTP 正常出数，零 NaN。
 
 ```
@@ -1469,8 +1470,7 @@ B 组更狠这件事事后看很自然：`sa_use_fused_bwd_kernel` 在旧栈 §4
 
 **决定：合并。** 3.5% 换一份代码 + 一个从零预训练必需的能力，值。
 旧的 linen 补丁、旧镜像步骤、两个平台各自的 run 脚本已全部删除，
-现在只剩 [`maxtext-hunyuan3/`](maxtext-hunyuan3/) 一份，
-入口是 [`run.sh`](maxtext-hunyuan3/run.sh) 加 `PLATFORM=v5p|v7`。
+现在只剩一套：代码在分支上，入口是 [`run.sh`](maxtext-hunyuan3/run.sh) 加 `PLATFORM=v5p|v7`。
 
 > **§4 那个 36.72% 是旧栈上测的，它的复现产物已经不在仓库里了。**
 > 保留那个数字是历史记录（说明 12.9 倍的调优路径真实发生过）；
@@ -1735,10 +1735,9 @@ step 0 用了 61 s（含 17 分钟编译），step 1 隔了 7.5 分钟才出，�
 > 我把"通信不是瓶颈"这个正确结论，错误地扩展成了"所有通信相关开关都没用"。
 > 幸好那一轮已经在跑，否则这个 6.6% 就被我自己跳过去了。
 > 消融的纪律是**每一组都要真跑**，不能靠上一组的结果替它下结论。
-| x1 | （对照）V1 + `use_tokamax_gmm` | — | **HANG** | ❌ |
-| w1 | （对照）30 个 flag + tokamax 全开 | — | **HANG** | ❌ |
 
-§6.6 里我纠正过一次：`shard_exp_on_fsdp` 不是对 Hy3 封死，
+**z3：`shard_exp_on_fsdp` 能开，但对 Hy3 是净亏。**
+§6.4 的待测清单里我纠正过一次：这个开关不是对 Hy3 封死，
 只要 FSDP 不吃满 128 个 device 就能开。z3 真跑了 FSDP=64 × DP=2：
 
 ```
@@ -1937,7 +1936,7 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 > B 组更差的原因事后很自然：`sa_use_fused_bwd_kernel` 在战线一里**本来就是关掉才快**，
 > 「全开」等于把一个已知负项又打开了 —— **「新版本提供的旋钮」不等于「该开的旋钮」**。
 
-**b0″ 异地复现（2026-07-29 晚）.** 换到 `tpu-launchpad-playground`：
+**b0″ 异地复现（2026-07-29 晚）.** 换到另一个全新的 GCP 项目：
 自建 custom VPC + 全新集群 + 全新 `np-v5p-256` 节点池，
 代码从 GitHub 分支现 clone 现打包（`prep.sh`），前置照 §9.0 补齐。
 
@@ -2005,8 +2004,8 @@ completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
 
 ### 7.5 外部对照复核：一份 64 芯片 v5p 报告（2026-07-29）
 
-收到一份外部 benchmark 报告（`weikuo-v5p-128-spot-c1a`，64 芯片，
-镜像 `gcr.io/tpu-prod-env-one-vm/maxtext_deepv4_fsdp:latest`）。
+收到另一个团队的一份 benchmark 报告（64 芯片 v5p spot，
+用的是他们自己的 `maxtext_deepv4_fsdp` 镜像，不是本文档这套）。
 它第 6 组标注 **"Aligned with yangwhale Recipe"**，报
 **238.31 TFLOP/s/chip、51.92% MFU、19.838 s/step**，
 是我们 160.91 / 35.06% 的 **1.48 倍**。逐条核过，**暂不采信**，理由如下。
@@ -2039,9 +2038,9 @@ weights 4 + grads 4 + mu 4 + nu 4 = 16 B/param → 74.7 GB 静态，
   §3.9 bug #5 就是这个坑（虚高约 5 倍），根因是 `HUNYUAN3` 不在
   `calculate_tflops_training_per_device` 的白名单 tuple 里，走通用分支时
   用 `mlp_dim` 去量专家、且漏掉 shared expert。我们把 `HUNYUAN3`
-  加进白名单修掉了；他们的 `deepv4` 镜像里没有这个改动。
+  加进白名单修掉了；他们那个镜像里没有这个改动。
 - **真正从我们这抄过去的只有一条**：`mu_dtype=bfloat16 grad_dtype=bfloat16
-  use_iota_embed=True`。这三个连在一起，与 `run.sh:79` 一字不差 ——
+  use_iota_embed=True`。这三个连在一起，与 `run.sh` 里 v7 分支的 `EXTRA` 一字不差 ——
   但那是 **v7 分支**的 EXTRA，我们 v5p 从没开过。
   等于抄了配方，抄的是另一半平台。
 
@@ -2055,8 +2054,8 @@ weights 4 + grads 4 + mu 4 + nu 4 = 16 B/param → 74.7 GB 静态，
 | 参数量 | ✅ 干净 | 298.786 B，且核对过含 MTP 头 3.886 B（清单 #3） |
 | FLOP 口径 | ✅ 已修 | §3.9，白名单已含 `HUNYUAN3` |
 | 关 nan abort | ✅ 没关 | `run.sh` 未设 `abort_on_nan_loss`，保持默认 True |
-| 合成数据 | ⚠️ **同样是** | `run.sh:142` `dataset_type=synthetic`。已在 §7.4 和清单 #13 声明，**loss 不作为收敛证据** |
-| 稳态样本 | ⚠️ **偏薄** | 07-29 那轮 256 芯片验证只跑到 step 9，loss 只留了一个点。下轮补 |
+| 合成数据 | ⚠️ **同样是** | `run.sh` 里写死 `dataset_type=synthetic`。已在 §7.4 和清单 #13 声明，**loss 不作为收敛证据** |
+| 稳态样本 | ⚠️ **偏薄** | 07-29 两轮 256 芯片验证分别跑到 step 9 / step 7，loss 各留 1 个 / 5 个点。下轮补 |
 
 #### 顺带结论：FSDP=64 × DP=4 为什么在真模型上不成立
 
@@ -2184,8 +2183,7 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 ### 9.0 集群前置（换新项目 / 新集群时必做）
 
 下面「三步」默认**集群、TPU 节点池、JobSet 都已就位**。
-2026-07-29 在 `tpu-launchpad-playground` 从零搭一遍时，这四件全都得先补，
-其中三件是原文档没写的。
+2026-07-29 从零搭一遍时，下面这些全都得先补，其中大部分是原文档没写的。
 
 **① TPU 节点池（文档里一直只有规格，没有命令）**
 
@@ -2326,15 +2324,15 @@ NODEPOOL=np-v7x-flex PLATFORM=v7 NODES=4 TOPO=2x2x4 bash run.sh myrun
 | 07-30 07:35 | 别人的 FLEX_START 从 PENDING 转 RUNNING（局部恢复） |
 | 07-30 08:17 | 我们 spot 8 台 / 4 台仍全 0 |
 | 07-30 09:0x–09:5x | DWS flex-start 两次 `FailedScaleUp: Internal error`，45 分钟 0 台 |
-| 07-30 10:05 | **换到 `cloud-tpu-multipod-dev` 同 zone 同机型同 spot，一样 0 台** |
+| 07-30 10:05 | **换到另一个项目，同 zone 同机型同 spot，一样 0 台** |
 
 > **最后一行是关键对照。** 两个项目、两套配额、两个集群，同一 zone 同时拿不到
 > —— 说明这是 **zone 级物理容量**问题，**换项目 / 提配额都无效**。
 > 配额和容量是两个独立的闸门：配额决定你**能不能申请**，容量决定你**能不能拿到**。
 >
-> **不是"没有货"，是"货全被占了"。** 同一时刻查 `cloud-tpu-multipod-dev`：
+> **不是"没有货"，是"货全被占了"。** 同一时刻查那个项目：
 > ```
-> gcloud compute instances list --project=cloud-tpu-multipod-dev \
+> gcloud compute instances list --project=$OTHER_PROJECT \
 >   --filter="machineType~tpu7x AND status=RUNNING" \
 >   --format='value(zone,scheduling.provisioningModel)' | sort | uniq -c
 >   152 us-central1-c  SPOT
@@ -2344,7 +2342,7 @@ NODEPOOL=np-v7x-flex PLATFORM=v7 NODES=4 TOPO=2x2x4 bash run.sh myrun
 > 所以队列前面站满人时，新请求既拿不到也不会排上——只会一直 PROVISIONING 到超时。
 > **判断"要不要继续等"就看这个数**，比反复建池探测便宜得多。
 >
-> 顺带：`PREEMPTIBLE-TPU7X-per-project-region` 在 playground 的上限是 **64 芯片**，
+> 顺带：`PREEMPTIBLE-TPU7X-per-project-region` 在我们那个项目的上限是 **64 芯片**，
 > 且是**全项目共享**。别人占 8 芯片时，4x4x4（64 芯片）这种原子切片就永远排不下
 > ——TPU 拓扑没有 48/56 这种中间档，拿不满等于拿不到。自助提额到 128 提交后
 > 12 小时仍是 `reconciling`，没批。
@@ -2353,7 +2351,7 @@ NODEPOOL=np-v7x-flex PLATFORM=v7 NODES=4 TOPO=2x2x4 bash run.sh myrun
 
 ```bash
 export GCS_STAGE=gs://your-bucket/hy3
-export IMAGE=us-docker.pkg.dev/cloud-tpu-multipod-dev/gcr.io/chrisya-maxtext-latest:runner
+export IMAGE=us-docker.pkg.dev/YOUR-PROJECT/gcr.io/YOUR-maxtext-latest:runner
 
 # ① 准备代码（只有改了代码才要重跑；换 flag / 换参数不用）
 bash prep.sh                    # clone hunyuan3 分支 → 6 项自检 → 打包传 GCS
@@ -2371,7 +2369,7 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 | 步 | 动作 | 为什么这样做 |
 |---|---|---|
 | ① `prep.sh` | clone 分支 → **6 项自检** → `tar src/maxtext` → 传 GCS | 自检挡的是「分支自己少东西」：三个文件在不在、白名单两个模型名全不全、枚举有没有 `HUNYUAN3`、`train.py` 补丁在不在、**`Hunyuan3MoeBlock_0` 在 model 和 train 两边对不对得上**。最后一项 2026-07-29 真踩过，不查的话要到 TPU 上跑起来才炸 |
-| ② `run.sh` | 提交 JobSet，pod 里 **`rm -rf /deps/src/maxtext` 再解包** | **整棵覆盖，不是只注入改动文件**。只注入的话测的是「我的改动 + 容器里的旧基座」，不是分支本身——昨晚两个 bug 就是这么漏掉的 |
+| ② `run.sh` | 提交 JobSet，pod 里 **`rm -rf /deps/src/maxtext` 再解包** | **整棵覆盖，不是只注入改动文件**。只注入的话测的是「我的改动 + 容器里的旧基座」，不是分支本身——2026-07-28 夜那两个 bug 就是这么漏掉的 |
 | ③ 读日志 | — | 见 §9.3 |
 
 镜像两个平台共用，容器只提供 jax / libtpu / 依赖，MaxText 整个来自分支。
@@ -2462,14 +2460,14 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 | 11 | SFT 路线：冻结 `gate.bias` | ⬜ | 上游有了更新规则，但 SFT 是要**冻结**它。本版无 `trainable_parameters_mask` |
 | 12 | HF 权重 → MaxText Orbax 转换 | ⬜ | 只做吞吐基线可以不碰；要 SFT 必须做 |
 | 13 | 真实数据集上的收敛验证 | ⬜ | 目前全是 synthetic，只证明"能算且不发散"，没证明"学得对" |
-| 14 | `initializer_range` | ⬜ | from-scratch 才需要；加载权重或 SFT 不受影响。**发上游 PR 时一并补**（§9.3） |
-| 15 | 上游 PR ①：train.py 的 bias 路径解耦 | ⬜ | 纯 bug 修复，独立成立，见 §9.1 |
-| 16 | 上游 PR ②：hunyuan3 模型本体 + 6 处注册 | ⬜ | 见 §9.1；发之前先确认雇主 IP 归属（§9.3） |
+| 14 | `initializer_range` | ⬜ | from-scratch 才需要；加载权重或 SFT 不受影响。**发上游 PR 时一并补**（§10.4） |
+| 15 | 上游 PR ①：train.py 的 bias 路径解耦 | ⬜ | 纯 bug 修复，独立成立，见 §10.3 |
+| 16 | 上游 PR ②：hunyuan3 模型本体 + 6 处注册 | ⬜ | 见 §10.3；发之前先确认雇主 IP 归属（§10.4） |
 | 17 | 分支从全新 clone 能跑 | ✅ | 2026-07-29 实测：clone 分支 → 整棵覆盖容器 → v5p 4 芯片 loss 13.45→10.35，且**补完 5 处休眠改动前后逐位相同** |
 | 18 | vLLM 权重映射表（tunix） | ⬜ | Hy3 是 GQA，不能套 DeepSeek 的 MLA 映射，需单独写一份 |
 | 19 | `scan(unroll=N)` 分组扫点 | ⬜ | 让 XLA 跨层重叠 MoE 通信。MaxText 未实现，改动约 10 行。机理与实验设计见 [移植指南 §5.2.1](MAXTEXT-PORTING-GUIDE.md)。**主线跑稳后再做** |
-| 20 | v5p 上试 `mu_dtype=bfloat16 grad_dtype=bfloat16` | ⬜ | 只在 v7 分支开着（`run.sh:79`），v5p 从没试过。FSDP=256 下 16→12 B/param，静态 18.7→14.0 GB，**腾出 4.7 GB/chip**。我们现在 96.9 / 95.74 G 贴顶跑，这是白捡的余量。`nu_dtype` optax 不支持，恒随 `weight_dtype`（fp32），主权重也不动，是三份状态里最温和的一个 |
-| 21 | 补一条完整 loss 曲线 | ⬜ | 07-29 那轮 256 芯片验证只跑到 step 9，只留了单点 loss（§7.5 自查）。跑到 step 30+ 记全，作为"没发散"的证据。注意仍是 synthetic，不等于收敛（见 #13） |
+| 20 | v5p 上试 `mu_dtype=bfloat16 grad_dtype=bfloat16` | ⬜ | 只在 `run.sh` 的 v7 分支开着，v5p 从没试过。FSDP=256 下 16→12 B/param，静态 18.7→14.0 GB，**腾出 4.7 GB/chip**。我们现在 96.9 / 95.74 G 贴顶跑，这是白捡的余量。`nu_dtype` optax 不支持，恒随 `weight_dtype`（fp32），主权重也不动，是三份状态里最温和的一个 |
+| 21 | 补一条完整 loss 曲线 | ⬜ | 07-29 两轮 256 芯片验证最多只跑到 step 9（§7.5 自查）。跑到 step 30+ 记全，作为"没发散"的证据。注意仍是 synthetic，不等于收敛（见 #13） |
 
 
 ## 十二、参考
@@ -2489,13 +2487,17 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 
 ## 当前状态
 
-**两代硬件都已跑通；v5p 调优收敛，v7 调优进行中**（2026-07-28）。
+**两代硬件都已跑通；v5p 调优收敛且异地复现通过，v7 调优进行中**（2026-07-30）。
 
-| 平台 | 规模 | 状态 | 最好成绩 | 对标 |
+| 平台 | 规模 | 状态 | 成绩 | 对标 |
 |---|---|---|---|---|
 | v5p | 4 chips（dev pool） | ✅ 20 轮迭代闭环 | — | 用于快速验证代码路径 |
-| v5p | 256 chips | ✅ 11 轮调优收敛 | **168.6 TFLOP/s/chip · MFU 36.72% · 281,488 tok/s** | 超过 GB300 的 31.6% |
+| v5p | 256 chips | ✅ **当前可复现水位** | **160.98 TFLOP/s/chip · MFU 35.07%** | 超过 GB300 的 31.6% |
+| v5p | 256 chips | 📜 历史最好（旧栈，产物已删） | 168.6 TFLOP/s/chip · MFU 36.72% · 281,488 tok/s | 12.9 倍调优路径的终点，见 §7.3 战线一 |
 | v7 Ironwood | 64 chips | 🔄 13 轮，仍在调 | **445.1 TFLOP/s/chip · MFU 19.29% · 205,314 tok/s** | 目标 612.7 / 26.6%（DSV3 实测水位） |
+
+> 07-29 晚在全新项目 / 全新 VPC / 全新集群上从零复现，得 160.98 / 35.07%，
+> 对既有水位 **+0.05%**（§7.3 战线三 b0″）—— 这份文档是真能照着跑出来的。
 
 **下一步**（按优先级）：
 
@@ -2508,5 +2510,5 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
    组划分出问题。这是唯一一个"官方有、我们用不了"的加速手段。
 3. 权重转换（HF → Orbax）与真实数据集收敛验证（§十）。
 
-代码：[`maxtext-hunyuan3/`](maxtext-hunyuan3/)（v5p / linen 版）、
-[`maxtext-hunyuan3/`](maxtext-hunyuan3/)。
+代码：[`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)（唯一真相，见 §10.1）；
+跑测试的两个脚本在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)。

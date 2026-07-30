@@ -12,7 +12,7 @@
 
 ```bash
 export GCS_STAGE=gs://your-bucket/hy3
-export IMAGE=us-docker.pkg.dev/cloud-tpu-multipod-dev/gcr.io/chrisya-maxtext-latest:runner
+export IMAGE=us-docker.pkg.dev/YOUR-PROJECT/gcr.io/YOUR-maxtext-latest:runner
 
 bash prep.sh                                                   # 改了代码才要重跑
 PLATFORM=v5p bash run.sh myrun                                 # 或 PLATFORM=v7
