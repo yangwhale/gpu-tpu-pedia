@@ -34,5 +34,7 @@ echo "      8 项全过"
 
 echo "[3/3] 打包上传"
 tar czf "$WORK/hy3-maxtext.tgz" src/maxtext
-gsutil -q cp "$WORK/hy3-maxtext.tgz" "$GCS_STAGE/hy3-maxtext.tgz"
+# 用 gcloud storage 不用 gsutil：gsutil 不认 ADC，会退回默认服务账号，
+# 在没给那个 SA 授权的桶上直接 403（2026-07-30 在共享集群的桶上踩过）。
+gcloud storage cp "$WORK/hy3-maxtext.tgz" "$GCS_STAGE/hy3-maxtext.tgz" 2>&1 | tail -1
 echo "      -> $GCS_STAGE/hy3-maxtext.tgz  ($(du -h "$WORK/hy3-maxtext.tgz" | cut -f1))"

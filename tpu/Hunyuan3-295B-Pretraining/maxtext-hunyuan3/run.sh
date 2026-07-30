@@ -98,7 +98,7 @@ remat_policy=custom decoder_layer_input=offload attention=flash \
 allow_split_physical_axes=True tokenizer_type=tiktoken \
 tokenizer_path=src/maxtext/assets/tokenizer_llama3.tiktoken"
 
-gsutil -q stat "$GCS_STAGE/hy3-maxtext.tgz" 2>/dev/null || {
+gcloud storage ls "$GCS_STAGE/hy3-maxtext.tgz" >/dev/null 2>&1 || {
   echo "找不到 $GCS_STAGE/hy3-maxtext.tgz —— 先跑 'GCS_STAGE=$GCS_STAGE bash prep.sh'"; exit 1; }
 
 # NODEPOOL 用于「0 节点的 autoscaling 池」（DWS flex-start）：
@@ -106,9 +106,18 @@ gsutil -q stat "$GCS_STAGE/hy3-maxtext.tgz" 2>/dev/null || {
 # gke-nodepool 选择器。池子是空的时候 leader 永远落不了地，webhook 就会拒绝
 # 创建 follower —— 4 个 pod 只出 1 个，autoscaler 也只看得见 1 个 pending。
 # 直接把节点池写死在 nodeSelector 里，既保证同池独占，又不需要 leader 先行。
+#
+# NO_EXCLUSIVE_TOPOLOGY=1 用于「托管/排队制集群」（Kueue 等）：那里没有可以写死的
+# 池名，池子要靠 autoscaler 现扩。带着注解时 leader 落不了地 → follower 建不出来
+# → 16 个 pod 只出 1 个 → autoscaler 只看见 1 个 pending，永远不给你扩 16 台。
+# 症状是 parallelism=16 而 status.active=1，且没有任何报错。去掉注解后 16 个 pod
+# 一次全建出来，autoscaler 才看得到真实需求。TPU 的 gke-tpu-topology 选择器本身
+# 就把范围限死在同拓扑的池里，实测不会分裂到多个池。
 if [ -n "${NODEPOOL:-}" ]; then
   ANNO=""; POOLSEL="
               cloud.google.com/gke-nodepool: $NODEPOOL"
+elif [ -n "${NO_EXCLUSIVE_TOPOLOGY:-}" ]; then
+  ANNO=""; POOLSEL=""
 else
   ANNO="alpha.jobset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-nodepool"; POOLSEL=""
 fi
@@ -149,7 +158,7 @@ spec:
               args:
               - |
                 set -e
-                gsutil -q cp $GCS_STAGE/hy3-maxtext.tgz /tmp/p.tgz
+                gcloud storage cp $GCS_STAGE/hy3-maxtext.tgz /tmp/p.tgz
                 cd /deps && rm -rf src/maxtext && tar xzf /tmp/p.tgz
                 export JAX_PLATFORMS=tpu,cpu TPU_STDERR_LOG_LEVEL=0 TF_CPP_MIN_LOG_LEVEL=0
                 export LIBTPU_INIT_ARGS='$FLAGS'

@@ -9,6 +9,7 @@
 | 框架 | MaxText（nnx），代码在 [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3) |
 | 精度 | BF16 计算 / FP32 主权重 |
 | **实测水位** | **step 20.43 s · 445.1 TFLOP/s/chip · MFU 19.29% · 205,314 tok/s** |
+| **复现状态** | ✅ 换一套集群重跑过，step 19.90 s / MFU 19.82%，差 −2.6%（[§4.2.1](#421-二次复现另一套集群2026-07-30)） |
 | **调优状态** | 🔄 **仍在调**。目标是 DeepSeek V3 在同硬件的实测水位 26.6%，**还差 1.38×** |
 
 > **这份文档的定位与 [v5p 版](QUICKSTART-v5p.md)不同。** v5p 已经调优收敛，
@@ -64,6 +65,8 @@ https://github.com/yangwhale/maxtext   分支 hunyuan3
 ---
 
 ## 2. 环境准备
+
+> **如果你用的是别人已经建好的托管集群（排队制 / Kueue），§2.1 和 §2.2 直接跳过** —— 那种集群不让你自己建 workload policy 和节点池，提任务它自动给机器。但要先读 [§3.6](#36-在托管kueue--排队制集群上跑exclusive-topology-会死锁)，有个必踩的死锁。
 
 五件事，缺一件都跑不起来。
 
@@ -240,18 +243,25 @@ NODES=1 TOPO=2x2x1 PLATFORM=v7 MODEL=hunyuan3-smoke STEPS=8 \
 4 层缩层，结构与 295B 完全一致（192 专家、top-8、sigmoid、专家偏置、
 共享专家、GQA、QK-norm、fp32 路由、MTP 全是满配），只砍层数。
 
-**通过标准**：
+**通过标准**（2026-07-30 在共享集群 4 芯片实测）：
 
-| | 值 |
-|---|---|
-| 参数量 | 16.139 B |
-| loss（8 步） | 13.45 → 10.35，单调下降 |
-| NaN / skipped | 0 |
-| `mtp_loss` | 单独打出且下降（1.221 → 1.093） |
+| | v7 实测 | 参考：v5p 同命令 |
+|---|---|---|
+| 参数量 | **16.139 B** | 16.139 B（**必须一致**） |
+| `total_weights` | **16384** | 8192 |
+| loss（8 步） | **13.411 → 11.091** | 13.453 → 10.354 |
+| 稳态 step | ~0.62 s | ~0.70 s |
+| NaN / skipped | 0 | 0 |
 
-> **loss 序列与 v5p 上逐位相同** —— 同一份代码、同一个模型、同样的 synthetic
-> 数据，两个平台跑出来一模一样。**对不上就说明代码没打全。**
-> step 时间两边不同（v7 编译更久），那个不作为通过标准。
+> ⚠️ **两个平台的 loss 序列不一样，这是对的，不是 bug。**
+> 同样 4 芯片，**v7 有 8 个 device 而 v5p 只有 4 个**（2:1 vs 1:1）。
+> `per_device_batch_size=1` 之下，v7 的 global batch 是 **16384**、v5p 是 **8192** ——
+> **喂进去的数据量差一倍，loss 轨迹当然不同。**
+>
+> 这是 §3.3 那条单位换算的延伸：**`per_device_batch_size` 里的 "device" 在 v7 上是半个芯片。**
+> 想让两边严格可比，v7 这边把 `per_device_batch_size` 减半即可。
+>
+> **真正跨平台恒定、可以当硬标准的只有参数量 16.139 B** —— 对不上就是代码没打全。
 
 **为什么 4 层能代表 80 层**：MaxText 按**类型**分组做 `scan`，
 79 个 MoE 层共用同一份编译产物，层与层的差别只在权重数值上，不在代码路径上。
@@ -284,6 +294,53 @@ MFU              = per-chip ÷ 2307
 3. **step 0 含编译，step 1/2 是 JAX 异步派发的假读数**，稳态取 step ≥ 3。
 4. **v7 编译要 10–17 分钟**，比 v5p 的 9 分钟慢不少。第一次跑请耐心等。
 
+### 3.5 日志必须落盘，别只挂 `kubectl logs -f`
+
+pod 一旦被删、被抢占、或被集群的时间上限杀掉，**`kubectl logs` 就再也读不到了**。
+一次 64 芯片的跑就这样把日志全丢了，只能重跑。提交后立刻起一个后台 tail：
+
+```bash
+mkdir -p ~/tpu-logs
+setsid bash -c "kubectl logs -f job/hy3-<run>-slice-job-0 -c jax-tpu \
+  > ~/tpu-logs/hy3-<run>-$(date +%m%d-%H%M).log 2>&1" < /dev/null &
+```
+
+`-f` 会在 pod 还没 Running 时直接退出，所以要么等 `16/16 Running` 再起，
+要么套一层重试循环。
+
+### 3.6 在托管（Kueue / 排队制）集群上跑：`exclusive-topology` 会死锁
+
+`run.sh` 默认带 `alpha.jobset.sigs.k8s.io/exclusive-topology` 注解，
+它保证一个 JobSet 的 pod 全落同一个节点池。代价是**要 leader pod 先落地**，
+follower 才能抄它的 `gke-nodepool` 选择器。
+
+在自己建好池子的集群上没问题。但在**排队制集群**上，提交时往往没有空节点，
+于是：
+
+```
+leader 落不了地 → webhook 拒绝创建 follower
+  → 16 个 pod 只出 1 个 → autoscaler 只看见 1 个 pending
+  → 永远不会为你扩出 16 台
+```
+
+现象是 `parallelism=16` 但 `status.active=1`，而且看不出任何报错。
+
+**两种解法**（`run.sh` 都支持）：
+
+| 场景 | 做法 |
+|---|---|
+| 已知目标池 | `NODEPOOL=<池名> bash run.sh ...` —— 把池子写死在 `nodeSelector`，不需要 leader 先行 |
+| 要让集群自己扩容 | `NO_EXCLUSIVE_TOPOLOGY=1 bash run.sh ...` —— 去掉注解，16 个 pod 一次全建出来，autoscaler 才看得到真实需求 |
+
+去掉注解后理论上 pod 可能分散到不同池，但 TPU 的
+`gke-tpu-topology` 选择器本身就把范围限死在同拓扑的池里，实测 16 个 pod
+整齐落在同一个 `4x4x4` 池，没有分裂。
+
+> 排队制集群还有一条要注意：**被 admit ≠ 有机器**。
+> 队列层放行只代表配额记账通过，机器还得靠 autoscaler 或
+> ProvisioningRequest 真的建出来。排障顺序是
+> 队列 → 扩容事件 → 节点 → pod，直接看 pod 会误判。
+
 ---
 
 ## 4. v7 基线
@@ -307,7 +364,10 @@ MFU              = per-chip ÷ 2307
 | 日志字段 | 应为 |
 |---|---|
 | `number parameters` | **298.786 billion**（与 v5p 逐位一致） |
-| `Total TFLOPs` | **10169.38** —— 如果是这个数的约 5 倍，说明 `maxtext_utils.py` 的 FLOP 公式没加 `HUNYUAN3`，MFU 会虚高 |
+| `Total TFLOPs` | **约 4547**（= `TFLOP/s/device × step`）—— 如果是这个数的约 5 倍，说明 `maxtext_utils.py` 的 FLOP 公式没加 `HUNYUAN3`，MFU 会虚高 |
+
+> `Total TFLOPs` 是**每 device 每步**的量，随 `pdbs × seq` 变。
+> v7 用 seq 4096 是 ~4547，v5p 用 seq 8192 是 10169 —— **别把两个平台的值搞混**。
 
 | 指标 | 值 |
 |---|---|
@@ -318,6 +378,30 @@ MFU              = per-chip ÷ 2307
 | 整机吞吐 | **205,314 tok/s** |
 | 每步 token | 4,194,304（128 × 8 × 4096） |
 | 编译时间 | 10–17 分钟 |
+
+### 4.2.1 二次复现（另一套集群，2026-07-30）
+
+同一份代码、同一套参数，换到**另一个 Kueue 托管的共享集群**上，
+在别人已经建好的 `4x4x4` 池（16 台 × 4 芯片）里跑 30 步：
+
+| 指标 | 本次 | 上表基线 | 差 |
+|---|---|---|---|
+| 稳态 step（step ≥ 3，20 步平均） | **19.90 s** | 20.43 s | **−2.6%** |
+| 日志 TFLOP/s/device | 228.66 | 222.56 | +2.7% |
+| TFLOP/s / chip | **457.3** | 445.1 | +2.7% |
+| **MFU** | **19.82%** | 19.29% | +0.53 pp |
+| `number parameters` | 298.786 B | 298.786 B | 一致 |
+| `Total TFLOPs` | 4550.33 | ~4547 | +0.07% |
+| 编译时间 | **约 8 分钟** | 10–17 分钟 | 更快 |
+
+逐步抖动几乎为零 —— 20 步里每步都是 `19.901 ± 0.003 s`。
+
+> **±3% 以内算复现成功。** 这次略快，合理的解释是换了一批机器；
+> 参数量和 `Total TFLOPs` 两个一次性读数完全对上，说明跑的确实是同一个模型、
+> 同一套 FLOP 公式，性能差异不是"算少了"。
+
+**这次复现暴露的两个文档缺口**（已补进 §3.5、§3.6）：
+托管集群上 `exclusive-topology` 会死锁；日志必须落盘。
 
 ### 4.3 完整参数集
 
