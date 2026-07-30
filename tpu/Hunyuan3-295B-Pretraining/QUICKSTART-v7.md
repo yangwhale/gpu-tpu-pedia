@@ -1,7 +1,6 @@
 # 混元 3（295B-A21B）在 TPU v7 (Ironwood) 上预训练 — Quick Start
 
-用 MaxText 在 TPU v7 上跑腾讯混元 3。代码与 v5p 完全共用，**差别只在拿机器的方式、
-XLA flag 集、和读数时的单位换算**。
+用 MaxText 在 TPU v7 上跑腾讯混元 3 的完整方案。从零到拿到基线，两条命令。
 
 | | |
 |---|---|
@@ -9,125 +8,181 @@ XLA flag 集、和读数时的单位换算**。
 | 平台 | TPU v7 Ironwood，64 芯片（`4x4x4`，16 台） |
 | 框架 | MaxText（nnx），代码在 [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3) |
 | 精度 | BF16 计算 / FP32 主权重 |
-| **当前水位** | **step 20.43 s · 445.1 TFLOP/s/chip · MFU 19.29% · 205,314 tok/s** |
-| **状态** | 🔄 **跑得通，但没调完**。目标是 DSV3 在同硬件的实测水位 26.6%，**还差 1.38×** |
+| **实测水位** | **step 20.43 s · 445.1 TFLOP/s/chip · MFU 19.29% · 205,314 tok/s** |
+| **调优状态** | 🔄 **仍在调**。目标是 DeepSeek V3 在同硬件的实测水位 26.6%，**还差 1.38×** |
 
-> **先读 [v5p Quick Start](QUICKSTART-v5p.md)。** 模型架构、代码来源、
-> 12 个改动文件、`prep.sh` / `run.sh` 的用法，两个平台完全一样，这份不再重复。
-> 本文只写 **v7 不一样的地方**。
-
-> **这份文档的定位跟 v5p 那份不同。** v5p 是「调优收敛、照着跑就能复现」；
-> v7 是「能跑，水位记录在此，已知的死路也记在此」。
-> 拿它当**起点**，不是终点。
+> **这份文档的定位与 [v5p 版](QUICKSTART-v5p.md)不同。** v5p 已经调优收敛，
+> 照着跑就能复现；v7 是**能跑、水位记录在此、已知的死路也记在此**，
+> 拿它当**起点**而不是终点。
 
 ---
 
-## 1. v7 与 v5p 的四个实质差异
+## 1. 模型与代码
 
-| | v5p | v7 Ironwood |
-|---|---|---|
-| **device : chip** | 1 : 1（MegaCore） | **2 : 1** |
-| **BF16 峰值 / chip** | 459 TFLOPS | **2,307 TFLOPS**（5.0×） |
-| **拿机器** | `--tpu-topology` + `--spot` 直接建 | **必须先建 workload policy**，见 §2 |
-| **XLA flag** | 25 个，SparseCore 卸载那组值 4.07 pp | **只带 15 个**，SparseCore 那组收益 **0** |
+### 1.1 Hy3 是什么
 
-第四条是本项目最反直觉的一条发现，展开在 §5.2。
+一句话：**attention 是 Qwen3 的，MoE 是 DeepSeek V3 的**，
+MaxText 里这两半都已有现成实现，本项目只写了装配逻辑，零新数学。
 
-**其余全部相同**：模型代码、配置、`prep.sh`、`run.sh`、JobSet、暂存桶、VPC。
+| | |
+|---|---|
+| 结构 | 80 层，第 0 层 dense、1–79 层 MoE |
+| Attention | GQA 64q / 8kv，head_dim 128，QK-LayerNorm，无 bias |
+| MoE | 192 routed experts top-8 + 1 shared，sigmoid 路由 + 专家偏置 |
+| 其他 | MTP 1 层，vocab 120832，routed scaling 2.826 |
+| 参数分布 | **97% 在路由专家里**，attention 只占 2% |
+
+参数分布直接决定并行策略：**TP 无用**（切 attention 纯亏通信）、
+**不用 EP**（TPU 上专家并行是负优化，实测 EP=64 直接超显存）、
+**纯 FSDP 吃满全部 device**。
+
+> 架构的完整拆解 —— 为什么两个现成 decoder block 都不行、与 DSV3 的关键差异
+> （Hy3 没有 device-limited routing）、参数量分解 —— 见
+> [v5p Quick Start §1](QUICKSTART-v5p.md)。**两个平台完全一样，这里不重复。**
+
+### 1.2 代码从哪来
+
+**唯一真相是 fork 的分支**，本仓不留代码副本：
+
+```
+https://github.com/yangwhale/maxtext   分支 hunyuan3
+```
+
+基于上游 main，三个 commit：
+
+| commit | 内容 |
+|---|---|
+| `Resolve the loss-free-balancing bias path per decoder block` | 上游 bug 修复（与 Hy3 无关，任何非 DeepSeek 模型开 aux-loss-free 均衡都会撞） |
+| `Add Tencent Hunyuan 3 (295B-A21B)` | 模型本体 + 注册 |
+| `Let Hunyuan3 use the SwiGLU activation bound too` | 激活截断白名单 |
+
+**新增 3 个文件**：`models/hunyuan3.py`（161 行有效代码）+ 两个 yml 配置。
+**改动上游 12 个文件**，全部是「让框架认识这个模型」，没有一处是算法实现。
+
+**v5p 和 v7 用同一份代码、同一个镜像**，差别只在启动参数。
 
 ---
 
-## 2. 拿到 v7 机器（跟 v5p 完全不是一回事）
+## 2. 环境准备
 
-v5p 一条命令就建完。tpu7x 会直接被拒：
+五件事，缺一件都跑不起来。
+
+### 2.1 workload policy（v7 特有，必须先建）
+
+v5p 建节点池一条命令就完了。tpu7x 会直接被拒：
 
 ```
 Creation of a managed instance group with tpu7x-standard-4t machine type
 with placement policy is not supported. Use workload policy instead.
 ```
 
-### 2.1 先建 workload policy
-
+**必须先建一个 `workloadPolicy` 类型的 resource policy，节点池再引用它。**
 gcloud 577 没有这个子命令（`resource-policies create` 只有 group-placement 等），
-**只能走 REST**：
+只能走 REST：
 
 ```bash
 P=YOUR-PROJECT
 TOK=$(gcloud auth application-default print-access-token)
+
+# 64 芯片主力池用
 curl -s -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
  "https://compute.googleapis.com/compute/v1/projects/$P/regions/us-central1/resourcePolicies" \
  -d '{"name":"wp-4x4x4","workloadPolicy":{"type":"HIGH_THROUGHPUT","acceleratorTopology":"4x4x4"}}'
+
+# 4 芯片冒烟池用
+curl -s -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+ "https://compute.googleapis.com/compute/v1/projects/$P/regions/us-central1/resourcePolicies" \
+ -d '{"name":"wp-2x2x1","workloadPolicy":{"type":"HIGH_THROUGHPUT","acceleratorTopology":"2x2x1"}}'
 ```
 
-`acceleratorTopology` **必须带**，只给 `type` 会报
-`does not support TPU topology with group placement policy and workload policy at the same time`。
+- `acceleratorTopology` **必须带**。只给 `type` 会报
+  `does not support TPU topology with group placement policy and workload policy at the same time`
+- **一个 policy 对应一个拓扑**，用几种拓扑就建几个
+- 建好之后可以用 `gcloud compute resource-policies list --regions=us-central1` 确认
 
-### 2.2 建节点池：两种容量渠道
-
-**A. Spot（先到先得，随时被抢）**
+### 2.2 TPU 节点池
 
 ```bash
+# 64 芯片（16 台 × 4）—— 主力
 gcloud container node-pools create np-v7x-64 \
-  --cluster=CLUSTER --project=$P --region=us-central1 --node-locations=us-central1-c \
+  --cluster=CLUSTER --project=$P --region=us-central1 \
+  --node-locations=us-central1-c \
   --machine-type=tpu7x-standard-4t --tpu-topology=4x4x4 \
   --placement-policy=wp-4x4x4 --num-nodes=16 --spot \
   --disk-type=hyperdisk-balanced --disk-size=200 --scopes=cloud-platform
-```
 
-**v7 必须用 hyperdisk**，普通 pd 会被拒。
-
-**B. DWS flex-start（排队，拿到之后不会被抢）**
-
-池子从 0 节点起，autoscaling 触发一次排队式容量请求。三个要素缺一不可：
-
-```bash
-gcloud beta container node-pools create np-v7x-flex \
-  --cluster=CLUSTER --project=$P --region=us-central1 --node-locations=us-central1-c \
-  --machine-type=tpu7x-standard-4t --tpu-topology=4x4x4 --placement-policy=wp-4x4x4 \
-  --flex-start --num-nodes=0 \
-  --enable-autoscaling --min-nodes=0 --max-nodes=16 --location-policy=ANY \
-  --reservation-affinity=none \
+# 4 芯片小池 —— 冒烟用，改一行代码几十秒验一轮
+gcloud container node-pools create np-v7x-dev \
+  --cluster=CLUSTER --project=$P --region=us-central1 \
+  --node-locations=us-central1-c \
+  --machine-type=tpu7x-standard-4t --tpu-topology=2x2x1 \
+  --placement-policy=wp-2x2x1 --num-nodes=1 --spot \
   --disk-type=hyperdisk-balanced --disk-size=200 --scopes=cloud-platform
 ```
 
-三个坑，每个报错都只说一半：
+四个跟 v5p 不一样的地方：
 
-| 少了什么 | 报错 |
+| | 说明 |
 |---|---|
-| `--enable-autoscaling` | `Flex start node pools require autoscaling enabled.` |
-| `--num-nodes` 不是 0 | `Flex start node pools require initial node count to be set to 0.` |
-| 用 `--total-max-nodes` 而不是 `--max-nodes` | 被判成 0，报 `Maximum node count 0 is not a valid size of TPU pod slice` |
+| `--placement-policy` | 指向 §2.1 建的那个，**拓扑要对得上** |
+| `--disk-type=hyperdisk-balanced` | **v7 不接受普通 pd** |
+| zone | v7 在 **`us-central1-c`**，v5p 在 `-a`，别搞混 |
+| `--num-nodes` | = 芯片数 ÷ 4，且必须与 `--tpu-topology` 相乘一致 |
 
-### 2.3 空池跑 JobSet 必须加 `NODEPOOL=`
-
-`run.sh` 默认给 JobSet 打 `exclusive-topology` 注解。该机制要求
-**先把 leader pod 调度上去**，follower 才能抄它的 `gke-nodepool` 选择器。
-flex-start 池是 0 节点，leader 永远落不了地：
-
-```
-admission webhook "vpod.kb.io" denied the request:
-follower pod node selector for topology domain not found.
-missing selector: cloud.google.com/gke-nodepool
-```
-
-后果很隐蔽：**只创建出 1 个 pod**，autoscaler 也只看得见 1 个 pending，
-它据以决策的信息是残缺的。解法是把节点池写死进 `nodeSelector`：
+### 2.3 JobSet CRD
 
 ```bash
-NODEPOOL=np-v7x-flex PLATFORM=v7 bash run.sh myrun
+kubectl apply --server-side -f \
+  https://github.com/kubernetes-sigs/jobset/releases/download/v0.11.1/manifests.yaml
+kubectl wait --for=condition=Available deploy/jobset-controller-manager \
+  -n jobset-system --timeout=180s
 ```
 
-**验证方法：提交后数 pod 个数，应该等于 16。**
-固定节点数的 spot 池不需要这个参数。
+v0.11.1 自带证书，**不需要 cert-manager**。新集群默认没有这个 CRD，
+不装的话提交训练时 `kubectl apply` 会找不到 `jobset.x-k8s.io/v1alpha2`。
 
-### 2.4 容量：先查再建，别反复试
+### 2.4 暂存桶 + 跨项目授权
 
-tpu7x 的抢占式容量是 **zone 级共享**的，跟你的项目和配额是两回事：
+```bash
+gcloud storage buckets create gs://YOUR-STAGE-BUCKET --location=US
 
-- **配额**决定你能不能**申请**
-- **容量**决定你能不能**拿到**
+NODE_SA=<集群项目号>-compute@developer.gserviceaccount.com
+gcloud storage buckets add-iam-policy-binding gs://YOUR-STAGE-BUCKET \
+  --member="serviceAccount:$NODE_SA" --role=roles/storage.objectViewer
 
-判断"值不值得等"，查这一个数就够，比反复建池探测便宜得多：
+# 镜像在别的项目时，节点 SA 还要能拉
+gcloud artifacts repositories add-iam-policy-binding gcr.io --location=us \
+  --project=IMAGE_PROJECT --member="serviceAccount:$NODE_SA" \
+  --role=roles/artifactregistry.reader
+```
+
+### 2.5 网络
+
+共享项目的 default VPC 是 auto 模式，`10.128.0.0/9` 被各 region 子网占满，
+GKE 凑不出一整块 `/14` 给 pod：
+
+```
+The network "default" does not have available private IP space in
+10.0.0.0/9 to reserve a /14 block for pods
+```
+
+**建自己的 custom VPC 最省事**，顺带能把 MTU 开到 8896：
+
+```bash
+gcloud compute networks create NAME-vpc --subnet-mode=custom --mtu=8896
+gcloud compute networks subnets create NAME-uc1 --network=NAME-vpc \
+  --region=us-central1 --range=10.124.0.0/22 \
+  --secondary-range=pods=10.125.0.0/16,services=10.124.16.0/20 \
+  --enable-private-ip-google-access
+```
+
+三段全压在 `10.124.0.0/15` 内，将来做 VPC peering 只需让对方避开这一段。
+
+### 2.6 建池之前先看一眼容量
+
+**配额决定你能不能申请，容量决定你能不能拿到，这是两个独立的闸门。**
+tpu7x 的抢占式容量是 zone 级共享的 —— 池子停在 `PROVISIONING` 且 MIG 没有
+error，那就是纯粹排不到机器，**换项目、提配额都无效**。
 
 ```bash
 gcloud compute instances list --project=ANY-PROJECT-IN-SAME-ZONE \
@@ -135,36 +190,79 @@ gcloud compute instances list --project=ANY-PROJECT-IN-SAME-ZONE \
   --format='value(zone,scheduling.provisioningModel)' | sort | uniq -c
 ```
 
-2026-07-30 一天之内这个数从 **152 台**（608 芯片，全被占满）降到 **47 台**。
-占满的时候我们连 4 台都拿不到，两个项目、两套配额、同一 zone 同时为 0 ——
-**换项目、提配额都无效**。抢占式没有排队，先到先得，
-所以队列前面站满人时新请求既拿不到也不会排上，只会一直 `PROVISIONING` 到超时。
-
-> 还有一层：`PREEMPTIBLE-TPU7X-per-project-region` 的配额是**全项目共享**的。
-> 上限 64 芯片、别人已占 8 芯片时，`4x4x4`（64 芯片）这种**原子切片**就永远排不下
-> —— TPU 拓扑没有 48 / 56 这种中间档，**拿不满等于拿不到**。
+> `4x4x4`（64 芯片）是**原子切片**，TPU 拓扑没有 48 / 56 这种中间档 ——
+> **凑不满等于拿不到**。需要长时间稳定占用时改用 DWS flex-start
+> （排队制，拿到之后不会被抢），建池方式见 [实验档案 §9.0](EXPERIMENT-LOG.md)。
 
 ---
 
 ## 3. 跑起来
 
-前置（JobSet、暂存桶、VPC）与 v5p 完全相同，见
-[v5p Quick Start §3.2–§3.4](QUICKSTART-v5p.md)。
-
 ```bash
 cd maxtext-hunyuan3/
+gcloud container clusters get-credentials CLUSTER --region=REGION --project=PROJECT
+
 export GCS_STAGE=gs://YOUR-STAGE-BUCKET/hy3
 export IMAGE=us-docker.pkg.dev/YOUR-PROJECT/gcr.io/YOUR-maxtext-latest:runner
 
-bash prep.sh                      # 与 v5p 共用，改了代码才要重跑
-PLATFORM=v7 bash run.sh myrun     # flex-start 池加 NODEPOOL=<池名>
+# ① 准备代码（只有改了代码才要重跑；换参数不用）
+bash prep.sh
 
+# ② 起训练
+PLATFORM=v7 bash run.sh myrun
+
+# ③ 看结果
 kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 ```
 
-### 3.1 单位换算 —— v7 最容易出错的一步
+### 3.1 两个脚本各做什么
 
-**v7 是 2 device / chip**，而框架日志一律按 **device** 报：
+| 脚本 | 动作 |
+|---|---|
+| `prep.sh` | clone `hunyuan3` 分支 → **8 项自检** → `tar` 整棵 `src/maxtext` → 传 GCS |
+| `run.sh` | 提交 JobSet；pod 里 `rm -rf /deps/src/maxtext` 后**整棵解包覆盖** |
+
+**注意是整棵覆盖，不是只注入改动文件。** 只注入的话，测的是
+「我的改动 + 容器里的旧基座」，不是分支本身。
+
+`prep.sh` 与 v5p 完全共用 —— 它只管代码，不管平台。
+8 项自检挡的是「分支自己少东西」：三个新增文件在不在、白名单两个模型名全不全、
+枚举有没有 `HUNYUAN3`、`train.py` 补丁在不在、
+`Hunyuan3MoeBlock_0` 这个属性名在模型文件和训练循环两边对不对得上。
+
+### 3.2 先跑冒烟
+
+```bash
+NODES=1 TOPO=2x2x1 PLATFORM=v7 MODEL=hunyuan3-smoke STEPS=8 \
+  bash run.sh smoke per_device_batch_size=1 max_target_length=2048
+```
+
+4 层缩层，结构与 295B 完全一致（192 专家、top-8、sigmoid、专家偏置、
+共享专家、GQA、QK-norm、fp32 路由、MTP 全是满配），只砍层数。
+
+**通过标准**：
+
+| | 值 |
+|---|---|
+| 参数量 | 16.139 B |
+| loss（8 步） | 13.45 → 10.35，单调下降 |
+| NaN / skipped | 0 |
+| `mtp_loss` | 单独打出且下降（1.221 → 1.093） |
+
+> **loss 序列与 v5p 上逐位相同** —— 同一份代码、同一个模型、同样的 synthetic
+> 数据，两个平台跑出来一模一样。**对不上就说明代码没打全。**
+> step 时间两边不同（v7 编译更久），那个不作为通过标准。
+
+**为什么 4 层能代表 80 层**：MaxText 按**类型**分组做 `scan`，
+79 个 MoE 层共用同一份编译产物，层与层的差别只在权重数值上，不在代码路径上。
+所以冒烟测的不是「抽样几层」，而是**那个被复用 79 次的唯一函数**。
+
+冒烟覆盖不到的：显存压力、大规模切分、80 层累积的数值误差、
+完整 XLA flag 集、收敛质量、以及全部性能。它证明的是「代码路径都对」。
+
+### 3.3 单位换算 —— v7 最容易出错的一步
+
+**v7 是 2 device / chip**（v5p 是 1 : 1），而框架日志一律按 **device** 报：
 
 ```
 per-chip TFLOP/s = 日志里的 TFLOP/s/device × 2
@@ -173,14 +271,16 @@ MFU              = per-chip ÷ 2307
 
 例：日志报 `TFLOP/s/device: 222.56` → per-chip **445.1** → MFU **19.29%**。
 
-> **方向搞反就是 4 倍的误差**（一次 ×2 变 ÷2）。跨代际对比之前
-> 必须先确认 device:chip 比例 —— v5p 是 1:1 不用换算，v7 要 ×2。
+> **方向搞反就是 4 倍的误差**（该 ×2 却 ÷2）。跨代际比 MFU 之前
+> 必须先确认 device : chip 比例。
 
-### 3.2 读日志
+### 3.4 读日志的四条规矩
 
-1. **先确认 `16/16 Running` 再看日志。** TPU 切片全有全无，人不齐时活着的 pod
-   会报 `GetSliceInfo can only be invoked after a slice is built` —— 症状不是病因。
-2. **判错看最早那条，不是日志尾。** 配置非法会先把 TPU 拉起来再退。
+1. **先确认 `16/16 Running` 再看日志。** TPU 切片全有全无，人不齐时活着的
+   pod 会报 `GetSliceInfo can only be invoked after a slice is built` ——
+   那是症状不是病因。
+2. **判错看最早那条，不是日志尾。** 配置非法会先把 TPU 拉起来再退，
+   真正的报错（`MAXTEXT CONFIG ERROR` / pydantic 的 `Value error`）在日志上方。
 3. **step 0 含编译，step 1/2 是 JAX 异步派发的假读数**，稳态取 step ≥ 3。
 4. **v7 编译要 10–17 分钟**，比 v5p 的 9 分钟慢不少。第一次跑请耐心等。
 
@@ -192,7 +292,7 @@ MFU              = per-chip ÷ 2307
 
 | | 值 |
 |---|---|
-| 节点池 | 16 台 `tpu7x-standard-4t`，拓扑 `4x4x4` |
+| 节点池 | `np-v7x-64`，16 台 `tpu7x-standard-4t`，拓扑 `4x4x4` |
 | 芯片数 | **64** |
 | JAX device 数 | **128**（2 device / chip） |
 | HBM | 192 GB / chip；单 device 可用 **94.74 GB** |
@@ -200,11 +300,17 @@ MFU              = per-chip ÷ 2307
 | FP8 峰值 / chip | 4,614 TFLOPS |
 | 总算力 | 147.6 PFLOPS BF16 |
 
-### 4.2 实测
+### 4.2 实测指标
+
+**两个开跑就能查的健康检查**（不对说明代码没打全）：
+
+| 日志字段 | 应为 |
+|---|---|
+| `number parameters` | **298.786 billion**（与 v5p 逐位一致） |
+| `Total TFLOPs` | **10169.38** —— 如果是这个数的约 5 倍，说明 `maxtext_utils.py` 的 FLOP 公式没加 `HUNYUAN3`，MFU 会虚高 |
 
 | 指标 | 值 |
 |---|---|
-| 参数量（框架报） | **298.786 B**（与 v5p 逐位一致） |
 | 稳态 step | **20.43 s** |
 | 日志 TFLOP/s/device | 222.56 |
 | **TFLOP/s / chip** | **445.1** |
@@ -213,31 +319,94 @@ MFU              = per-chip ÷ 2307
 | 每步 token | 4,194,304（128 × 8 × 4096） |
 | 编译时间 | 10–17 分钟 |
 
-**两个开跑就能查的健康检查**：`number parameters` 应为 **298.786 billion**；
-`Total TFLOPs` 应为 **10169.38**（约 5 倍偏大说明 FLOP 公式没加 `HUNYUAN3`）。
-
 ### 4.3 完整参数集
 
-与 v5p 共用的部分见 [v5p Quick Start §5.3](QUICKSTART-v5p.md)。
-**v7 分支独有或取值不同的**：
+以下就是 `run.sh` 的 v7 分支在用的全部参数。
 
-| 参数 | v7 | v5p | 为什么不同 |
-|---|---|---|---|
-| `max_target_length` | **4096** | 8192 | v7 上短序列 + 大 batch 组合更优（+12.8% 吞吐） |
-| `per_device_batch_size` | 8 | 8 | 相同；每卡 token 数 v7 是 v5p 的一半 |
-| `sa_use_fused_bwd_kernel` | **True** | **False** | **两个平台相反**，各自实测的结果 |
-| `use_tokamax_splash` | **True** | 不设 | v7 上值 +2.6%（与上一项合计） |
-| `opt_type` | **adamw** | 默认 | 与下面两项配套 |
-| `mu_dtype` / `grad_dtype` | **bfloat16** | fp32 | 优化器状态 16 → 12 B/param |
-| `use_iota_embed` | **True** | 不设 | 省 embedding 显存 |
-| MoE tile 参数（18 个） | **不设** | 全设 | v7 上没扫过，是个空白面 |
-
-> ⚠️ **`sa_use_fused_bwd_kernel` 在两个平台上取值相反**，这不是笔误。
-> 同一个开关在不同硬件代际上收益可以反号 —— **别把一个平台的调优结论直接搬到另一个**。
-
-### 4.4 XLA flag：15 个，不要照抄官方 30 个
+**并行与模型**
 
 ```
+model_name=hunyuan3-295b
+override_model_config=True
+ici_fsdp_parallelism=-1          # 吃满 128 路 FSDP
+ici_tensor_parallelism=1         # TP 无用，attention 只占 2% 参数
+```
+
+**MoE**
+
+```
+megablox=True                    # 分组矩阵乘
+sparse_matmul=True
+use_custom_sort_vjp=True         # 「按专家排序」那步的自定义反向传播
+```
+
+**batch 与序列**
+
+```
+per_device_batch_size=8          # 再上会 OOM
+max_target_length=4096           # v5p 用 8192；v7 上短序列 + 大 batch 更优
+```
+
+**Attention**
+
+```
+attention=flash
+use_tokamax_splash=True          # v7 特有，与下一项合计 +2.6%
+sa_use_fused_bwd_kernel=True     # 注意：v5p 上这一项要设 False
+sa_block_q=2048  sa_block_kv=2048  sa_block_kv_compute=2048
+sa_block_q_dkv=2048  sa_block_kv_dkv=2048  sa_block_kv_dkv_compute=2048
+sa_block_q_dq=2048  sa_block_kv_dq=2048
+```
+
+**重计算与 offload**
+
+```
+scan_layers=True
+remat_policy=custom
+decoder_layer_input=offload
+out_proj=remat
+```
+
+**优化器（v7 独有）**
+
+```
+opt_type=adamw
+mu_dtype=bfloat16                # Adam 一阶动量降 bf16
+grad_dtype=bfloat16              # 梯度降 bf16
+use_iota_embed=True              # 省 embedding 显存
+```
+
+优化器状态从 16 B/param 降到 12 B/param。注意 `nu_dtype`（二阶动量）
+optax 不支持单独设，恒随 `weight_dtype`；**主权重仍是 fp32**。
+
+**精度与其他**
+
+```
+dtype=bfloat16
+weight_dtype=float32
+allow_split_physical_axes=True
+tokenizer_type=tiktoken
+tokenizer_path=src/maxtext/assets/tokenizer_llama3.tiktoken
+```
+
+**基线是在这个条件下测的**（`run.sh` 写死，跑真实训练时要改）
+
+```
+dataset_type=synthetic           # 合成数据，只测吞吐不测收敛
+enable_checkpointing=False       # 不写 checkpoint，避免 I/O 干扰读数
+steps=10                         # 取 step >= 3 的稳态
+base_output_directory=/tmp/hy3out
+```
+
+> **v5p 上设的 18 个 MoE tile 参数，v7 上一个都没设** —— 不是判断为无用，
+> 是**没扫过**。见 §7.4。
+
+### 4.4 XLA flag（15 个）
+
+通过 `LIBTPU_INIT_ARGS` 传入。
+
+```
+# 基础（2 个）
 --xla_tpu_scoped_vmem_limit_kib=65472
 --xla_enable_async_all_gather=true
 
@@ -259,15 +428,18 @@ MFU              = per-chip ÷ 2307
 --xla_tpu_enable_multi_compute_overlap_in_layer_scheduler=false
 ```
 
-补到 26 个也能跑（收益 ±0），所以保持精简。
-**但不要把官方那套一次全开** —— 那一轮死锁了，元凶是同时打开的
+补到 26 个也能跑，收益 ±0，所以保持精简。
+**但不要把官方那套 30 个一次全开** —— 那一轮死锁了，元凶是同时打开的
 `use_tokamax_gmm`（见 §5.3），不是 flag 数本身。
+
+> ⚠️ **libtpu 对不认识的 flag 是硬失败**（`Unknown command line flag`，进程直接退）。
+> **换镜像必须重过一遍 flag 集。**
 
 ---
 
-## 5. 调优记录：涨了多少、什么没用、什么是死路
+## 5. 每个选择值多少
 
-### 5.1 从首跑到当前
+从只带 2 个 XLA flag 的首跑出发，逐项叠加。
 
 | 轮次 | 增量 | seq | pdbs | step | TFLOP/s/chip | MFU |
 |---|---|---|---|---|---|---|
@@ -277,21 +449,21 @@ MFU              = per-chip ÷ 2307
 | y3 | + SparseCore 卸载组（9 个 flag） | 8192 | 4 | 24.61 s | 412.56 | 17.88% |
 | y4 | + 调度器组（4 个 flag） | 8192 | 4 | 23.08 s | 440.30 | 19.09% |
 | z1 | y1 + 换 batch / 序列口径 | 4096 | 8 | 21.69 s | 418.89 | 18.16% |
-| **c1** | **调度器组 × pdbs=8 / seq=4096** | 4096 | 8 | **20.43 s** | **445.12** | **19.29%** |
+| **c1** | **调度器组 × pdbs=8 / seq=4096（当前最优）** | 4096 | 8 | **20.43 s** | **445.12** | **19.29%** |
 | c2 | c1 + 杂项组（补齐 26 flag） | 4096 | 8 | 20.45 s | 444.63 | 19.27% |
 
-**相对首跑 +10.0%。** 各项贡献：
+**相对首跑 +10.0%。** 按贡献排序：
 
 | 手段 | 贡献 |
 |---|---|
-| **调度器 flag 组（4 个）** | **+6.6%** |
 | **pdbs=8 / seq=4096** | **+12.8% 吞吐**（TFLOP/s 只 +0.9%） |
+| **调度器 flag 组（4 个）** | **+6.6%** |
 | `use_tokamax_splash` + `sa_use_fused_bwd_kernel` | +2.6% |
 | 杂项 flag 组（5 个） | ±0 |
 | **SparseCore 卸载组（9 个）** | **±0** |
 | 优化器 / 显存组 | −0.5%（省的是显存不是时间） |
 
-### 5.2 最重要的一条否定结果
+### 5.1 最重要的一条否定结果
 
 **SparseCore 集合通信卸载那 9 个 flag，在 v5p 上值 4.07 pp（13%），在 v7 上收益是 0。**
 
@@ -305,6 +477,14 @@ MFU              = per-chip ÷ 2307
 > 我当时正是这么推的：既然通信不是瓶颈，剩下的 flag 组期望收益也低，跳过。
 > 结果调度器那组在我放弃之前已经跑完了 —— **+6.6%，当时的最优**。
 > 消融的纪律是**每一组都要真跑**。
+
+### 5.2 同一个开关在两个平台上可以反号
+
+`sa_use_fused_bwd_kernel` 在 **v5p 上要设 `False`、v7 上要设 `True`**。
+这不是笔误，是两边各自实测的结果。同理，v5p 上值 4 pp 的 SparseCore 卸载组，
+在 v7 上是 0。
+
+> **别把一个平台的调优结论直接搬到另一个。**
 
 ### 5.3 三条死路（都实测过，别再踩）
 
@@ -322,8 +502,7 @@ MFU              = per-chip ÷ 2307
 **`shard_exp_on_fsdp` 为什么净亏**：这笔交易两头都动 ——
 专家权重改按专家维切（收益），但 FSDP 宽度从 128 降到 64，
 **非专家部分（attention 80 层 + embedding + dense 首层，约 7.2 B）每卡分片直接翻倍**。
-省的抵不过多花的。根因是 **192 不是 2 的幂**，
-代价不是"用不了这个开关"，而是"用它要拿一半 FSDP 宽度去换，不划算"。
+省的抵不过多花的。根因还是 **192 不是 2 的幂**。
 
 ---
 
@@ -352,7 +531,7 @@ Ironwood 官方实测表（全部 bf16、synthetic、per-chip 口径）：
   而且组大小随路由结果浮动，**编译期拿不到静态形状**
 - 还要加上 all-gather / reduce-scatter 把 192 份专家权重摊开又收回
 
-**所以 v7 侧的目标是 600–630 TFLOP/s/chip，对应 step 压到 14–15 s。
+**所以 v7 的目标是 600–630 TFLOP/s/chip，对应 step 压到 14–15 s。
 当前 445.1，缺口 1.38×。**
 
 > Hy3 的激活参数（21 B）比 DSV3（37 B）还少，结构也更简单
@@ -378,7 +557,7 @@ MoE 的时间大量花在路由、分组重排、all-to-all 和小块 GEMM 上�
 
 ---
 
-## 7. 下一步该做什么
+## 7. 优化空间
 
 参数扫描的收益已经明显变平（杂项 flag 组 ±0），继续盲扫期望很低。
 按优先级：
@@ -393,24 +572,24 @@ MoE 的时间大量花在路由、分组重排、all-to-all 和小块 GEMM 上�
 
 ### 7.2 查清 `use_tokamax_gmm` 死锁的根因
 
-这是**唯一一个"官方有、我们用不了"的加速手段**，而且它是 MoE 的主计算路径。
+这是**唯一一个「官方有、我们用不了」的加速手段**，而且它是 MoE 的主计算路径。
 怀疑是 192 专家（非 2 的幂）导致分组矩阵乘的组划分出问题。
 如果能修，这可能是最大的单项收益。
 
 ### 7.3 `scan(unroll=N)`
 
-`jax.lax.scan` 的 `unroll` 参数，MaxText 目前没用（走默认值 1）。
+`jax.lax.scan` 有个 `unroll` 参数，MaxText 目前没用（走默认值 1）。
 **`while` 循环体是 XLA 的调度边界，跨迭代不能重排** ——
-循环体里只有 1 层时，第 N 层的 all-gather 没法藏进第 N−1 层的计算。
+循环体里只有 1 层时，第 N 层的 all-gather 没法藏进第 N−1 层的计算；
 `unroll=N` 把这 N 层放进同一个调度域，延迟隐藏调度器才有发挥空间。
 
-**§5.2 已经证明「通信没藏住」就是 v7 的瓶颈，所以这一项的机理和实测指向一致。**
+**§5.1 已经证明「通信没藏住」就是 v7 的瓶颈，机理和实测指向一致。**
 改动约 10 行，建议按 1/2/4/8 扫，同时记吞吐、编译时间、HBM 峰值三条曲线。
 
 ### 7.4 MoE tile 参数
 
 v5p 上设了 18 个（`{wi,wo} × {fwd,dlhs,drhs} × 3 维`），**v7 上一个都没设**。
-这是个完全没探过的面。
+这是个完全没探过的面，零成本可试。
 
 ---
 
@@ -419,18 +598,44 @@ v5p 上设了 18 个（`{wi,wo} × {fwd,dlhs,drhs} × 3 维`），**v7 上一个
 | 项 | 状态 |
 |---|---|
 | **调优未完成** | 19.29% vs 目标 26.6%，差 1.38× |
-| 数据集 | `dataset_type=synthetic`。loss 下降只证明「能算且不发散」 |
+| 数据集 | `dataset_type=synthetic`。**loss 下降只证明「能算且不发散」，不是收敛证据** |
 | `use_tokamax_gmm` | 死锁，根因未查清 |
-| HF 权重 → Orbax 转换 | 未做 |
-| 容量 | tpu7x spot 经常整个 zone 拿不到，见 §2.4 |
+| HF 权重 → MaxText Orbax 转换 | 未做。只跑吞吐基线可以不碰；要 SFT 必须做 |
+| 完整 loss 曲线 | 未记。建议补一条 30 步以上的 |
+| 容量 | tpu7x spot 经常整个 zone 拿不到，见 §2.6 |
 
 ---
 
-## 9. 延伸阅读
+## 附录 A：与 v5p 的差异速查
+
+两个平台**共用同一份代码、同一个镜像**，以下是全部差异：
+
+| | v7 | v5p |
+|---|---|---|
+| 节点池 | 16 台 `tpu7x-standard-4t`，`4x4x4`，us-central1-**c** | 64 台 `ct5p-hightpu-4t`，`4x8x8`，us-central1-**a** |
+| 建池前置 | **必须先建 workload policy（REST）** | 无 |
+| 磁盘 | **hyperdisk-balanced** | 默认 |
+| device : chip | **2 : 1** | 1 : 1 |
+| MFU 分母 | **2,307** | 459 |
+| `max_target_length` | **4096** | 8192 |
+| `sa_use_fused_bwd_kernel` | **True** | **False** |
+| `use_tokamax_splash` | **True** | 不设 |
+| `opt_type` / `mu_dtype` / `grad_dtype` | **adamw / bf16 / bf16** | 默认 / fp32 / fp32 |
+| `use_iota_embed` | **True** | 不设 |
+| MoE tile 参数（18 个） | **不设** | 全设 |
+| XLA flag | **15 个** | 25 个 |
+| SparseCore 卸载组收益 | **±0** | **+4.07 pp** |
+| 编译时间 | 10–17 分钟 | 约 9 分钟 |
+| 建池耗时 | 视容量，可能排不到 | 5–9 分钟 |
+| **MFU** | **19.29%（仍在调）** | **35.07%（已收敛）** |
+
+---
+
+## 附录 B：延伸阅读
 
 | 文档 | 内容 |
 |---|---|
-| [QUICKSTART-v5p.md](QUICKSTART-v5p.md) | **先读这份**：模型架构、代码来源、共用参数、v5p 基线 35.07% |
-| [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md) | 完整实验档案：全部轮次、12 个 bug 的复盘 |
+| [QUICKSTART-v5p.md](QUICKSTART-v5p.md) | v5p 版，含架构完整拆解；基线 35.07%，已从零验证 |
+| [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md) | 完整实验档案：全部轮次、12 个 bug 的复盘、DWS flex-start 建池 |
 | [MAXTEXT-PORTING-GUIDE.md](MAXTEXT-PORTING-GUIDE.md) | 把别的模型移植到 MaxText 的通用范式 |
 | [maxtext-hunyuan3/](maxtext-hunyuan3/) | `prep.sh` / `run.sh` |
