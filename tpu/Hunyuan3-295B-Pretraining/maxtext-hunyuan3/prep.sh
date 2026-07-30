@@ -30,7 +30,7 @@ grep -q '_moe_block_attr' src/maxtext/trainers/pre_train/train.py || { echo "  �
 A=$(grep -c 'Hunyuan3MoeBlock_0' src/maxtext/models/hunyuan3.py)
 B=$(grep -c 'Hunyuan3MoeBlock_0' src/maxtext/trainers/pre_train/train.py)
 [ "$A" -ge 1 ] && [ "$B" -ge 1 ] || { echo "  ✗ Hunyuan3MoeBlock_0 属性名 model=$A train=$B 对不上"; exit 1; }
-echo "      6 项全过"
+echo "      8 项全过"
 
 echo "[3/3] 打包上传"
 tar czf "$WORK/hy3-maxtext.tgz" src/maxtext

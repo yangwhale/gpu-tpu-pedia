@@ -60,7 +60,9 @@ v5p)
   ;;
 v7)
   NODES=${NODES:-16}; ACCEL=tpu7x; TOPO=${TOPO:-4x4x4}
-  # 只带这 13 个。**不要**照抄官方 30 个一次全开 —— 实测死锁（§6.5 的 w1）。
+  # 只带这 13 个。补到 26 个也能跑（c2），但收益 ±0，所以保持精简。
+  # **不要**照抄官方那套一次全开 —— w1 那轮死锁，元凶是同时开的
+  # use_tokamax_gmm（§6.7），不是 flag 数本身。
   # 调度器组是唯一值钱的一组（+6.6%）；SparseCore 卸载组在 v7 上收益是 0。
   FLAGS='--xla_tpu_scoped_vmem_limit_kib=65472 --xla_enable_async_all_gather=true
   --xla_tpu_enable_sparse_core_reduce_scatter_v2=true
@@ -171,7 +173,7 @@ echo "  * v5p 是 MegaCore，1 device = 1 chip，日志里的 TFLOP/s/device 不
 echo "  * MFU = TFLOP/s/device / 459"
 echo "  * 预期：step ≈ 63.2 s，TFLOP/s/device ≈ 160.9，MFU ≈ 35.1%"
 else
-echo "  * v7 是 2 device/chip，per-chip = 日志值 × 2；MFU = per-chip / 2306"
+echo "  * v7 是 2 device/chip，per-chip = 日志值 × 2；MFU = per-chip / 2307"
 echo "  * v7 编译要 10-17 分钟，比 v5p 慢很多"
 echo "  * 预期：step ≈ 20.4 s，日志 TFLOP/s/device ≈ 222.6，即 445 per-chip，MFU ≈ 19.3%"
 fi

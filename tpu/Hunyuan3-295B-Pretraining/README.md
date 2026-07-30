@@ -24,35 +24,41 @@
 | | v5p 256 chips | v7 Ironwood 64 chips | GB300 64 GPU（参照） |
 |---|---|---|---|
 | 参数量（框架报） | 298.786 B | 298.786 B（逐位一致） | — |
-| 稳态 step | 59.60 s | 20.43 s | — |
-| **TFLOP/s / 计算单元** | **168.6** | **445.1** | 854.0 |
-| **MFU** | **36.72%** | 19.29% | 31.6% |
-| 整机 tok/s | 281,488 | 205,314 | 399,488 |
+| 稳态 step | 63.17 s | 20.43 s | — |
+| **TFLOP/s / 计算单元** | **161.0** | **445.1** | 854.0 |
+| **MFU** | **35.07%** | 19.29% | 31.6% |
+| 整机 tok/s | 265,588 | 205,314 | 399,488 |
 | 调优状态 | ✅ 已收敛 | 🔄 进行中，目标 600 / 26% | 已调优 |
 
-- **v5p 的 36.72% 已经超过 GB300 的 31.6%**，而单卡算力只有它的 1/5.9。
-- **v7 首跑 17.55%，调到 19.29%**，目标是 DeepSeek V3 在同一硬件上的
+> v5p 这一列是**当前照 `run.sh` 能跑出来的水位**（2026-07-29 换项目 / 换 VPC /
+> 换集群从零复现过，§7.3 战线三 b0″）。旧栈上曾拿到 **168.6 / 36.72%**，
+> 但那套产物已随 §5.5 的合并删除，不再可复现 —— 本文凡是并列出现两个 v5p 数字的地方，
+> **较低的那个才是你能拿到的**。
+
+- **v5p 的 35.07% 已经超过 GB300 的 31.6%**，而单卡算力只有它的 1/5.9。
+- **v7 首跑 17.54%，调到 19.29%**，目标是 DeepSeek V3 在同一硬件上的
   实测水位 612.7 TFLOP/s / 26.6%（§6.1 有完整参照表）。
 
 ### 三件最值得先看的事
 
-1. **[MFU 从 2.45% 到 36.72% 的 12.9 倍，来自"别自己攒配置"](#41-我犯的错没有从官方配方出发)**
-   —— 照抄官方 DeepSeek3 v5p 配方，只换模型名。
+1. **[MFU 从 2.45% 一路到 36.72%，涨了 15 倍](#41-我犯的错没有从官方配方出发)**
+   —— 其中 **12.9 倍是"照抄官方 DeepSeek3 v5p 配方、只换模型名"这一步**换来的，
+   剩下的才是调参。
 2. **[TPU 上专家并行是负优化](#42-为什么-tpu-上-fsdp-打得过-ep)**
    —— 跟 GPU 结论相反。EP=64 不只是慢，是直接超显存 326 GB。
-3. **[同一个 bug 模式在本项目出现 8 次](#八十一个-bug-与静态验证的边界)**
+3. **[同一个 bug 模式在本项目出现 10 次](#八十一个-bug-与静态验证的边界)**
    —— MaxText 里每个"按模型家族名字列举"的分支都要单独补，漏了不报错。
 
 ### 交付物
 
-| | |
+| 交付项 | 内容 |
 |---|---|
-| **代码分支** | [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3) —— 基于上游 main，两个 commit 按两个上游 PR 拆开 |
+| **代码分支** | [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3) —— 基于上游 main，三个 commit，按两个上游 PR 的边界拆开 |
 | **一键复现（两个平台）** | [`prep.sh`](maxtext-hunyuan3/prep.sh) 拉分支 + 自检 + 传 GCS → [`run.sh`](maxtext-hunyuan3/run.sh) `PLATFORM=v5p\|v7`。流程见 §九 |
 | 模型代码 | [`src/maxtext/models/hunyuan3.py`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/models/hunyuan3.py) —— 约 160 行 nnx。**零新数学**：attention 继承 Qwen3，MoE 直接复用 DeepSeek 的 `RoutedAndSharedMoE`，本文件只做接线 |
 | 模型配置 | [`hunyuan3-295b.yml`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/configs/models/hunyuan3-295b.yml) / [`hunyuan3-smoke.yml`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/configs/models/hunyuan3-smoke.yml) —— 在 `src/maxtext/configs/models/`，每个值对着 HF `config.json` 抄 |
 | MaxText 侧改动 | 分支上的 commit，涉及**上游 12 个文件**。光靠 config 做不到，因为 MaxText 到处按模型家族名字分支（§八、[移植指南](MAXTEXT-PORTING-GUIDE.md)） |
-| 未做 | 权重转换、真实数据集收敛验证（§十） |
+| 未做 | 权重转换、真实数据集收敛验证（§十一 清单 #12/#13） |
 
 ### 怎么读这份文档
 
@@ -174,16 +180,17 @@ top_k_weights    *= router_scaling_factor                     # 6. × 2.826
 
 MaxText 里这条路径由 `deepseek_routing()` 实现，逻辑完全一致
 （`take_along_axis(pre_bias_logits, top_k_indices)`）。**但它被
-`model_name.startswith("deepseek3")` 挡住了——共 4 处**（`moe.py` L246 / L413 /
-L889 / L1427）。`hunyuan3-295b` 不匹配，于是：
+`model_name.startswith("deepseek3")` 挡住了 —— 当时 `moe.py` 里共 4 处**
+（分支跟到上游最新后是 5 处，且判断里多了 `deepseek4`）。
+`hunyuan3-295b` 不匹配，于是：
 
-- L246 不保存 `pre_bias_logits`（为 None）
-- L413 退回 `jax.lax.top_k(gate_logits)` —— **gate_logits 是加过 bias 的**，
+- 不保存 `pre_bias_logits`（为 None）
+- 退回 `jax.lax.top_k(gate_logits)` —— **gate_logits 是加过 bias 的**，
   于是权重里混进了 bias，第 4 步的语义丢失
-- L889 / L1427 的 sharding 约束也随之跳过
+- 相应的 sharding 约束也随之跳过
 
 **形状全对、不报任何错、参数量不变**——只有权重数值是错的。
-四处均已改为 `startswith(("deepseek3", "hunyuan3"))`，
+每一处都已把 `hunyuan3` 加进 `startswith` 的名单，
 并加了验证脚本第 7 项（负向测试过：还原任意一处即报错）。
 
 > **这是 MaxText 的一处设计债**：用模型名字符串前缀决定路由算法。
@@ -249,7 +256,7 @@ L889 / L1427）。`hunyuan3-295b` 不匹配，于是：
 |---|---|
 | [`models/hunyuan3.py`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/models/hunyuan3.py) | 两个 decoder layer 类，**只做接线** |
 | [`configs/models/hunyuan3-295b.yml`](https://github.com/yangwhale/maxtext/blob/hunyuan3/src/maxtext/configs/models/hunyuan3-295b.yml) | model config，值全部来自 SSOT |
-| 上游 12 个文件的改动 | 同在该分支的两个 commit 里 |
+| 上游 12 个文件的改动 | 同在该分支的三个 commit 里 |
 
 **新写的只有装配逻辑**，两半功能都是原样引入的：
 
@@ -411,7 +418,7 @@ Hy3 官方靠这套机制做均衡，MaxText 上这套机制目前是缺的。
 
 > **修正一句我先前说得太满的话**：我之前写"只影响训练质量，不影响性能基线"。
 > 这不够严谨。专家负载失衡会让 all-to-all 出现热点，少数卡排队、其余空等，
-> **吞吐会被拖累**（GB300 文档 §3 就把"热门专家扎堆"列为毁掉高速互连的两个坑之一）。
+> **吞吐会被拖累**（GB300 文档 §1.3 和 §八 坑 #8 都点了"热门专家扎堆"这件事）。
 > 只是短期 synthetic + 随机初始化的路由接近均匀，几十步内看不出来。
 > **拿短期基线是安全的；长时间真实训练不安全。**
 
@@ -450,7 +457,7 @@ class HYV3DecoderLayer(DeepseekV3DecoderLayer)
 | Attention | GQA + qk RMSNorm(head_dim) 在 RoPE 前 + scaling head_dim^-0.5 + 无 bias | `qwen3.self_attention_with_norm` | ✅ 等价 |
 | 层布局 | `mlp_layer_types = ["dense"]*1 + ["sparse"]*79` | `first_num_dense_layers: 1` | ✅ 等价 |
 | shared expert | `routed + shared`，无额外 gating | `RoutedAndSharedMoE` 同式 | ✅ 等价 |
-| 路由数学 | 见下 | 见下 | ✅ **本轮修好** |
+| 路由数学 | sigmoid + 专家偏置，打分取偏置前的值（§1.5） | `deepseek_routing()`，需把 `hunyuan3` 加进名字门（§2.6） | ✅ **本轮修好** |
 | router 精度 | **fp32 强制** | 跟 `cfg.dtype`（bf16） | ❌ **差异** |
 | expert bias 更新 | buffer + 训练框架更新 | 可学习 Parameter | ❌ **差异** |
 | 初始化 | std=0.006 | fan-in 缩放 | ❌ 差异 |
@@ -462,7 +469,7 @@ class HYV3DecoderLayer(DeepseekV3DecoderLayer)
 >
 > | 缺口 | `3eb77db3`（v5p 用的旧版） | 新版（v7 用的 MaxText main） |
 > |---|---|---|
-> | ① 专家 bias 的无梯度更新规则 | ❌ 没有（下面五组关键词全仓搜过） | ✅ **已有 `routed_bias_update_rate`**，但**每个模型的 layer 必须自己把第三个返回值 `sow` 出去**，否则静默失效（见 §八 bug #9） |
+> | ① 专家 bias 的无梯度更新规则 | ❌ 没有（下面五组关键词全仓搜过） | ✅ **已有 `routed_bias_update_rate`**，但**每个模型的 layer 必须自己把第三个返回值 `sow` 出去**，否则静默失效（见 §八 bug #10） |
 > | ② router 强制 fp32 | ❌ 没有，我加了 `moe_router_dtype` | ✅ **已有 `float32_gate_logits`** |
 > | ③ `initializer_range: 0.006` | ❌ 没暴露 | ❌ 仍缺（只影响 from-scratch） |
 >
@@ -546,6 +553,11 @@ MaxText 把初始化硬编码为 fan-in 缩放，没暴露 std。加载预训练
 
 ### 2.9 静态自检跑出来是什么样
 
+> 下面这个 `verify_hunyuan3.py` 是当时的一次性校验脚本，**没有随仓发布**
+> —— 它的职责现在由 `prep.sh` 的 8 项自检承担（§9.2）。
+> 保留这段输出是因为它记录了「静态检查能验到什么、验不到什么」，
+> 这个边界见 §八。
+
 ```
 $ python3 verify_hunyuan3.py --root /path/to/maxtext
 1) total params  294.97 B   (SSOT 294.9 B, delta 0.02%)
@@ -585,13 +597,15 @@ ALL CHECKS PASSED
 sigmoid + bias、shared expert、fp32 router），只把维度缩小——
 目的是走遍每条代码路径，不是测性能。
 
-```bash
-bash /tmp/hy3-iter.sh <round>   # 打包改动 -> cp 进 pod -> 跑 -> 判定
-```
+当时套了一个一次性的迭代脚本：tar 本地改动 → `kubectl cp` 进 pod → 解包覆盖 →
+跑 6 步 → grep `completed step` 判定，失败就打印首个错误。单轮约 40 秒，
+这是能连续迭代二十轮的前提。
 
-每轮自动：tar 本地改动 → `kubectl cp` → 解包覆盖 → 跑训练 →
-grep `completed step` 判定成功，失败则打印首个错误。
-单轮约 40 秒，这是能连续迭代十几轮的前提。
+> **那个脚本没有进仓库，也不该进。** 它按文件名逐个注入改动，
+> 正是 §9.2 后来明确否定的做法 —— 只注入部分文件，测的是
+> 「我的改动 + 容器里的旧基座」，不是完整的那一份。
+> 现在这件事由 `prep.sh`（打包整棵 `src/maxtext`）+ `run.sh`（pod 里整棵覆盖）承担，见 §九。
+> 这里保留这段，只为说明**为什么要先建 1 节点小池**。
 
 
 ### 3.2 前三个 bug：K8s 调度 / 框架注册 / MXU 对齐
@@ -724,7 +738,7 @@ FLOP 上的，跳这么多是算术，不是优化。**注意这里 HBM 反而�
 
 **r15 换 flash attention，loss 从 5.885 变成 5.884。** 差在第四位小数，
 是累加顺序不同造成的浮点差异，不是数学变了。flash 在 v5p 上没有
-[DSV3 文档踩坑 #3](https://github.com/yangwhale/tpu-recipes) 里 v7 的那个编译问题。
+[DSV3 文档踩坑 #3](../DeepSeek-V3.2-Training/README.md) 里 v7 的那个编译问题。
 
 **r16 是唯一一个真正说明性能的数字。** 序列 512 → 2048，
 TFLOP/s/device 从 74.87 涨到 145.96（+95%）——序列变长把固定开销摊薄了。
@@ -787,15 +801,15 @@ Google 的 `v5p-N` 里的 N 数的是 **TensorCore**，v5p 每芯片 2 个 Tenso
 
 单节点靠 `kubectl cp` 就行，64 个 pod 不能这么干。改成 **GCS 中转**：
 
-```bash
-tar czf hy3inject.tgz <改过的 8 个文件>
-gsutil cp hy3inject.tgz gs://.../hy3/hy3inject.tgz
-# 每个 pod 启动时：
-gsutil -q cp gs://.../hy3/hy3inject.tgz /tmp/p.tgz && cd /deps && tar xzf /tmp/p.tgz
-```
-
+当时的做法是把改过的那几个文件打包传 GCS，pod 启动时各自拉下来解到 `/deps`。
 比重新 build 镜像快得多（补丁 55 KB，改一行到重跑只要几十秒），
-也不用把私有改动烤进镜像。JobSet 用 `parallelism: 64 / completions: 64`
+也不用把私有改动烤进镜像。
+
+> ⚠️ **这个打法已经废弃，不要照做。** 只注入改动文件，测的是
+> 「我的改动 + 容器里的旧基座」；§4.8 的问题 2/3 和 §八 的 bug #11/#12
+> 全都是它埋的。现在由 `prep.sh` 打包**整棵 `src/maxtext`**、
+> `run.sh` 在 pod 里整棵覆盖，见 §9.2。GCS 中转这个思路保留了下来，
+> 变的是「传整棵树」而不是「传几个文件」。JobSet 用 `parallelism: 64 / completions: 64`
 配 `exclusive-topology: gke-nodepool` 注解，拿整个 4x8x8 切片。
 
 ```
@@ -868,14 +882,14 @@ else:
 
 一共三处要改，都在 `maxtext_utils.py`：
 
-| 行 | 原本 | 问题 |
+| 位置 | 原本 | 问题 |
 |---|---|---|
-| 461 | MoE FFN 分支只列 DEEPSEEK / LLAMA4 | 专家宽度用错，漏 shared expert |
-| 308 | `get_dense_moe_layers()` 只认 DEEPSEEK / LLAMA4，其余 `raise ValueError` | 拆不出 dense/MoE 层数 |
-| 524 | 逐层汇总时 DEEPSEEK 单独一支 | helper 已按层累加，走 `else` 会再乘一次层数 |
+| MoE FFN 分支 | 只列 DEEPSEEK / LLAMA4 | 专家宽度用错，漏 shared expert |
+| `get_dense_moe_layers()` | 只认 DEEPSEEK / LLAMA4，其余 `raise ValueError` | 拆不出 dense/MoE 层数 |
+| 逐层汇总 | DEEPSEEK 单独一支 | helper 已按层累加，走 `else` 会再乘一次层数 |
 
-> 这是本项目撞到的**第三个同类 bug**（前两个是 §2.7的路由分支和
-> `model_name.startswith` 门）。模式完全一样：**MaxText 里凡是按模型家族
+> 这是本项目撞到的**第三个同类 bug**（前两个是 §2.6 的路由分支和
+> §1.5 的 `model_name.startswith` 门）。模式完全一样：**MaxText 里凡是按模型家族
 > 名字列举的分支，新模型都得逐个补进去；漏了不报错，只是安静地跑出
 > 另一套语义。** 前两个改的是训练数学，这个改的只是报表——
 > 但报表错了会让人拿着虚高 5 倍的 MFU 去做容量规划。
@@ -960,7 +974,7 @@ FSDP 沿 `embed` 维切开，all-gather 走 SparseCore。
 | `max_target_length` | 4096 | 4096 | 对齐 GB300 benchmark 口径 |
 | `dtype` / `weight_dtype` | bfloat16 | bfloat16 | 对齐官方精度 |
 | `megablox` / `sparse_matmul` | True / True | True / True | Dense MoE 必 OOM，见 DSV3 文档踩坑 #4 |
-| `attention` | 待定 | 待定 | v7 上 flash 有编译问题，见 DSV3 文档踩坑 #3 |
+| `attention` | 待定 | 待定 | v7 上 flash 有编译问题，见 [DSV3 文档踩坑 #3](../DeepSeek-V3.2-Training/README.md) |
 | `dataset_type` | synthetic | synthetic | 首轮只测吞吐 |
 
 > ⚠️ **下面这段推理已被实测推翻，保留原文以便对照。**
@@ -1030,8 +1044,8 @@ if raw_keys["num_experts"] % expert_parallelism:
 "把 token 按专家排序"那一步的自定义反向传播。默认 `False`，
 不开就走 JAX 通用求导，慢 19.5%。**一个布尔量，快五分之一。**
 
-**3. batch 还能再上探。** pdbs 4 → 6 拿到 34.43%，是全场最高，
-HBM 涨到 80.3 / 95.74 G。pdbs=8 大概率 OOM，正在测。
+**3. batch 还能再上探。** pdbs 4 → 6 拿到 34.43%，HBM 涨到 80.3 / 95.74 G。
+当时判断 pdbs=8 大概率 OOM，**后来实测跑通了**——就是同表的 o12，36.72%。
 
 **4. `out_proj=offload` 是负收益（−0.22 pp）。** 官方 DSV3 配方里有这一项，
 搬到 Hy3 上反而略亏。原因大概是 Hy3 的 attention 只占 2.36% FLOP，
@@ -1045,13 +1059,17 @@ HBM 涨到 80.3 / 95.74 G。pdbs=8 大概率 OOM，正在测。
 o12 把 batch 再推到 8，拿到 36.72%——这是 v5p 侧的最终成绩。**
 两项单独是 +2.87 和 +0.22，叠加后 +3.45——**略大于两者之和**，
 说明少一趟 out_proj 的 PCIe 往返，在 batch 更大时价值更高一点。
-这是目前的最优配置：
+o12 的完整配置如下。
+**⚠️ 这是旧栈（linen）的参数集，不能直接照搬到现在的代码**：
+`tile_batch_seq` 三项在新栈已拆成 18 个 `wi_/wo_tile_*`（§5.5 坑 2），
+照抄会被 pydantic 直接拒。**当前可跑的那一份在 `run.sh` 的 v5p 分支里**，
+这里保留原样是为了对照 o1–o12 的消融记录。
 
 ```bash
 model_name=hunyuan3-295b
 ici_fsdp_parallelism=-1        # 256 路，不用 EP
 ici_tensor_parallelism=1
-per_device_batch_size=6
+per_device_batch_size=8
 max_target_length=8192
 megablox=True sparse_matmul=True scan_layers=True
 use_custom_sort_vjp=True        # 值 6.15 pp，默认 False 一定要打开
@@ -1117,8 +1135,8 @@ Total memory size: 54.8 GB
 all-to-all staging、megablox 的分组重排）。**MoE 的临时开销比静态权重还大**——
 这是稠密模型的估算习惯套到 MoE 上会踩的坑。
 
-结论不变：**这个规模不需要 PP**，纯 FSDP + EP 装得下
-（对比 GB300 因单域只有 64 卡才需要 PP=2）。
+结论不变：**这个规模不需要 PP**，纯 FSDP 就装得下
+（对比 GB300 因单域只有 64 卡才需要 PP=2）。**也不需要 EP**——§4.2 实测 EP=64 直接超显存。
 
 
 ### 4.7 spot 抢占怎么应对
@@ -1169,7 +1187,7 @@ shell**（命令行里含有这个字符串），导致 `while pgrep ...; do sle
 
 | # | 问题 | 性质 |
 |---|---|---|
-| 1 | **文档里没有一条可执行的训练命令** | 全文 4 个 bash 块：一个引用仓库里不存在的 `/tmp/hy3-iter.sh`，一个是带 `<改过的 8 个文件>` 占位符的伪代码，一个是参数清单。**照文档复现不出来** |
+| 1 | **文档里没有一条可执行的训练命令**（已修，见 §九） | 全文 4 个 bash 块：一个引用仓库里不存在的 `/tmp/hy3-iter.sh`，一个是带 `<改过的 8 个文件>` 占位符的伪代码，一个是参数清单。**照文档复现不出来** |
 | 2 | **归档的 patch 少一个文件** | `register-hunyuan3.patch` 覆盖 5 个文件，实跑需要 6 个——漏的正是 `maxtext_utils.py`，也就是 §3.9 那个 FLOP 修复。**照旧 patch 打完，MFU 会虚高 5 倍**，正好是文档花一整节解释的那个 bug |
 | 3 | **v7 的 `port.py` 少两个文件** | 只覆盖 4 个，实跑需要 6 个——漏 `configs/types.py` 和 `layers/nnx_decoders.py`，也就是 bug #6/#7/#8 对应的改动。因为 port.py 是在发现那三个 bug **之前**写的 |
 | 4 | **结论先行的表里串了行** | 稳态 step 写的 47.67 s 是 o8 的数，同一行的 168.6 / 36.72% / 281,488 却是 o12 的。**四个数里三个对、一个来自另一次实验** |
@@ -1189,8 +1207,9 @@ n = s.upper().count("HUNYUAN3")
 assert n == expect, f"{rel}: 命中 {n} 处，期望 {expect} 处"
 ```
 
-> **这是本项目第二次栽在"断言太弱"上。** 第一次是 §八 里
-> `verify_hunyuan3.py` 用固定行窗口取 `if` 语句，加了注释就取错。
+> **这是本项目第二次栽在"断言太弱"上。** 第一次是早期那个
+> `verify_hunyuan3.py`（§2.9，未随仓发布）：它用固定行窗口去取 `if` 语句，
+> 上游加了一行注释就取错位置。
 > 两次的形态一样：**校验写得比它要保护的东西更宽松，
 > 于是它在该报警的时候保持沉默。**
 > 现在 `port.py` 的期望值是从一次已验证正确的运行里量出来再写死的。
@@ -1234,7 +1253,7 @@ jaxlib._jax.XlaRuntimeError: INTERNAL: Failed to get global TPU topology.
 | 配置校验 | 手写 `validate_model_name()` | **pydantic** `Literal[...]` |
 | 训练入口 | `src.MaxText.train` | `src.maxtext.trainers.pre_train.train` |
 
-好消息是**新版把我记在 §2.7的三个缺口补了两个**：
+好消息是**新版把我记在 §2.8 的三个缺口补了两个**：
 
 | 缺口（旧版） | 新版上游 |
 |---|---|
@@ -1258,7 +1277,11 @@ DeepSeek 的 MoE，新版正好有 `AttentionWithNorm` 基类和 `RoutedAndShare
 | 3 | 自建 workload policy（只给 `--type=HIGH_THROUGHPUT`） | `does not support TPU topology with group placement policy and workload policy at the same time` |
 | 4 | workload policy 加 **`--accelerator-topology=4x4x4`** | 通过 |
 
-正确写法（来自 [tpu-recipes ironwood 配方](https://github.com/yangwhale/tpu-recipes/tree/main/training/ironwood)）：
+当时的写法（来自 [tpu-recipes ironwood 配方](https://github.com/yangwhale/tpu-recipes/tree/main/training/ironwood)）：
+
+> ⚠️ **下面第一条命令在 gcloud ≥ 577 上已经不存在**（`resource-policies create`
+> 只剩 group-placement 等子命令），现在只能走 REST 建 workload policy —— 见 §9.0⑤。
+> 节点池那条仍然有效。
 
 ```bash
 # v7 不会自动建 placement policy，必须先手工建，而且要带拓扑
@@ -1274,7 +1297,7 @@ gcloud container node-pools create np-v7x-64-hy3 \
 
 > **第三次栽在同一件事上。** 路由分支、FLOP 公式、现在是建池命令——
 > 每次都是"我按理解推了一个写法"而不是"先去找现成的配方"。
-> 前面刚因为这个丢了 12.9 倍性能（§7.1），转头又来一遍。
+> 前面刚因为这个丢了 12.9 倍性能（§4.1），转头又来一遍。
 
 容量方面：第一次 `Atomic resize failed with [GCE_STOCKOUT]`，
 `us-central1-ai1a` 对本集群不可用，项目里也没有 tpu7x 预留。
@@ -1285,12 +1308,12 @@ gcloud container node-pools create np-v7x-64-hy3 \
 
 ### 5.3 首跑结果
 
-MFU 分母：**2,306** TFLOPS/chip；v7 是 2 device/chip，
+MFU 分母：**2,307** TFLOPS/chip；v7 是 2 device/chip，
 **per-chip TFLOP/s = 日志值 × 2**（换算见 TPU-UNITS）。
 
 | # | 配置 | step | TFLOP/s/dev | **per-chip** | **MFU** | tok/s/dev | 整机 tok/s |
 |---|---|---|---|---|---|---|---|
-| **V1** | FSDP=128 / 无 EP / pdbs=4 / seq=8192 / 只带 2 个 XLA flag | 25.11 s | 202.38 | **404.75** | **17.55%** | 1,305.1 | **167,059** |
+| **V1** | FSDP=128 / 无 EP / pdbs=4 / seq=8192 / 只带 2 个 XLA flag | 25.11 s | 202.38 | **404.75** | **17.54%** | 1,305.1 | **167,059** |
 | V2 | V1 + 补齐 XLA flag 集 + pdbs 上探 | | | | | | ⬜ |
 
 ```
@@ -1301,7 +1324,7 @@ completed step: 7, seconds: 25.109, TFLOP/s/device: 202.358, loss: 12.645
 completed step: 8, seconds: 25.111, TFLOP/s/device: 202.341, loss: 12.585
 ```
 
-**V1 的 17.55% 只是起点，不是 v7 的水平。** v5p 侧从 2.45% 调到 36.72% 用了
+**V1 的 17.54% 只是起点，不是 v7 的水平。** v5p 侧从 2.45% 调到 36.72% 用了
 26 个 XLA flag + pdbs=8；v7 这一轮只带了 2 个 flag、pdbs=4，
 而且 `xla_tpu_enable_latency_hiding_layer_scheduler` 在 v7 上报
 `requires sparse core collective aggregator to be enabled` 被迫摘掉。
@@ -1321,9 +1344,13 @@ completed step: 8, seconds: 25.111, TFLOP/s/device: 202.341, loss: 12.585
 | TFLOP/s/device（日志值） | 222.56 | 222.46 | −0.04% |
 | **TFLOP/s/chip** | **445.12** | **444.93** | −0.04% |
 | **MFU** | **19.29%** | **19.29%** | — |
-| tok/s/device | 1,602.26 | 1,603.32 | +0.07% |
-| 整机 tok/s | 205,089 | 205,225 | +0.07% |
+| tok/s/device | 1,604.4 | 1,603.3 | −0.07% |
+| 整机 tok/s | 205,364 | 205,225 | −0.07% |
 | 参数量 | 298.786 B | 298.786 B | 一致 |
+
+> 每 device 每步固定 8 × 4096 = 32,768 token，所以 tok/s 完全由 step 时间决定。
+> 本表用 20.425 / 20.437 s 精确反推；其他章节的 c1 整机 tok/s 记的是 **205,314**，
+> 那是按 step 取两位小数（20.43 s）算的 —— **差 0.02%，是取整不是分歧**。
 
 稳态四步 20.435 / 20.438 / 20.437 / 20.440，抖动毫秒级。
 **两个平台都能从仓库里的东西复现出来。**
@@ -1377,8 +1404,8 @@ completed step: 7, seconds: 0.750, loss: 12.878, main_model_loss: 11.676, mtp_lo
 | 3 | `'Hunyuan3MoELayer' object has no attribute 'DeepSeekMoeBlock_0'` | `trainers/pre_train/train.py` 把 DeepSeek 的模块属性名**写死在无梯度 bias 更新路径里**，两处 | 我方属性命名为 `Hunyuan3MoeBlock_0`（诚实命名，不冒用 DeepSeek 名字），改 train.py 按 `decoder_block` 查表 |
 | 4 | `FAILED_PRECONDITION: GetSliceInfo can only be invoked after a slice is built` | **我自己加的探针**：启动脚本里一行 `jax.device_count()` 会初始化 TPU 然后进程退出，单机没事，64 台一起跑就毒化真跑 | 删掉探针 |
 
-> 坑 3 是「按家族名字写死」这个模式的**第 9、10 次**出现，而且这次**不在任何分派表里，在训练主循环**。
-> 见 §八 bug #9 —— 它同时反向证明了 `moe_bias_updates` 那个修复真的生效：
+> 坑 3 是「按家族名字写死」这个模式的**第 8、9 次**出现（§八 台账），而且这次**不在任何分派表里，在训练主循环**。
+> 见 §八 bug #10 —— 它同时反向证明了 `moe_bias_updates` 那个修复真的生效：
 > 崩溃点在 `if ... and moe_bias_updates is not None:` **通过之后**，Python 的 `and` 会短路，
 > 所以「它崩了」本身就是「更新量确实传上去了」的证据。
 >
@@ -1393,7 +1420,7 @@ completed step: 7, seconds: 0.750, loss: 12.878, main_model_loss: 11.676, mtp_lo
 | step | 59.6 s | **63.193 s** | +6.0% |
 | TFLOP/s/device | 168.6 | **160.81** | **−4.6%** |
 | MFU | 36.72% | **35.03%** | −1.69 pp |
-| 整机 tok/s | 281,500 | **265,472** | −5.7% |
+| 整机 tok/s | 281,488 | **265,472** | −5.7% |
 
 新栈稳定性更好：9 步区间 63.178–63.204 s，**±0.02%**。
 
@@ -1462,7 +1489,7 @@ B 组更狠这件事事后看很自然：`sa_use_fused_bwd_kernel` 在旧栈 §4
 
 #### 结论：这是一笔用吞吐换可维护性和能力的交易，不是性能升级
 
-| | |
+| 角度 | 说明 |
 |---|---|
 | ❌ 原以为的理由 | 新栈有新旋钮，说不定更快 → **实测证伪，全是负的** |
 | ✅ 真正的理由 | **一份代码不是两份**；上游把 §2.8 那两个缺口补了（router fp32、**专家 bias 的无梯度更新**）。后者是**能力**不是性能——from-scratch 预训练没有它专家会塌缩 |
@@ -1473,8 +1500,8 @@ B 组更狠这件事事后看很自然：`sa_use_fused_bwd_kernel` 在旧栈 §4
 现在只剩一套：代码在分支上，入口是 [`run.sh`](maxtext-hunyuan3/run.sh) 加 `PLATFORM=v5p|v7`。
 
 > **§4 那个 36.72% 是旧栈上测的，它的复现产物已经不在仓库里了。**
-> 保留那个数字是历史记录（说明 12.9 倍的调优路径真实发生过）；
-> **当前可复现的 v5p 水位是 35.03%**，用 `run.sh PLATFORM=v5p` 得到。
+> 保留那个数字是历史记录（说明 2.45% → 36.72% 那条 15 倍的调优路径真实发生过）；
+> **当前可复现的 v5p 水位是 35.07%**（§7.3 战线三 b0″），用 `run.sh PLATFORM=v5p` 得到。
 
 ---
 
@@ -1657,7 +1684,7 @@ Slow PjRt TPU operation detected: start_time=00:23:05 host_id=7
 TpuDiagnosticCoordinator: Harvesting hardware telemetry for stalled chips: [7]
 ```
 
-step 0 用了 61 s（含 17 分钟编译），step 1 隔了 7.5 分钟才出，之后一个芯片挂住。
+编译花了 17 分钟，step 0 本身 61 s，step 1 又隔了 7.5 分钟才出，之后一个芯片挂住。
 这跟 v5p 的经验相反——v5p 上"照抄官方全套"一次就成（§4.1）。
 差别在于 v7 的 SparseCore 卸载路径和 tokamax kernel 都是 v5p 上没有的，
 **照抄的前提是两边的硬件路径一样**，v7 不满足。
@@ -1666,14 +1693,14 @@ step 0 用了 61 s（含 17 分钟编译），step 1 隔了 7.5 分钟才出，�
 
 | # | 相对前一轮的增量 | seq | pdbs | step | **TFLOP/s/chip** | **MFU** | 整机 tok/s |
 |---|---|---|---|---|---|---|---|
-| V1 | 基线：2 个 XLA flag | 8192 | 4 | 25.11 s | 404.75 | 17.55% | 167,059 |
+| V1 | 基线：2 个 XLA flag | 8192 | 4 | 25.11 s | 404.75 | 17.54% | 167,059 |
 | y1 | + `use_tokamax_splash` + `sa_use_fused_bwd_kernel` | 8192 | 4 | 24.45 s | 415.16 | 18.00% | 171,356 |
 | y2 | + adamw/bf16 优化器 + `iota_embed` + `split_physical_axes` | 8192 | 4 | 24.61 s | 412.88 | 17.90% | 170,413 |
 | y3 | + SparseCore 卸载组（9 个 flag） | 8192 | 4 | 24.61 s | 412.56 | 17.88% | 170,281 |
 | y4 | **+ 调度器组（4 个 flag）** | 8192 | 4 | 23.08 s | **440.30** | 19.09% | 181,732 |
 | z1 | y1 + 换 batch/序列口径 | 4096 | 8 | 21.69 s | 418.89 | 18.16% | 193,214 |
 | **c1** | **调度器组 × pdbs=8/seq=4096** | 4096 | 8 | **20.43 s** | **445.12** | **19.29%** | **205,314** |
-| c2 | c1 + 杂项组（补齐 26 flag） | 4096 | 8 | 20.43 s | 444.63 | 19.27% | 205,089 |
+| c2 | c1 + 杂项组（补齐 26 flag） | 4096 | 8 | 20.45 s | 444.63 | 19.27% | 205,089 |
 
 失败的轮次同样有信息：
 
@@ -1693,7 +1720,7 @@ step 0 用了 61 s（含 17 分钟编译），step 1 隔了 7.5 分钟才出，�
 | 手段 | 贡献 |
 |---|---|
 | 调度器 flag 组（4 个） | **+6.6%** |
-| pdbs=8 / seq=4096（batch 与序列口径） | **+6.3% 吞吐**（TFLOP/s 略降，见 §6.6 的口径说明） |
+| pdbs=8 / seq=4096（batch 与序列口径） | **+12.8% 吞吐**（z1 对 y1；TFLOP/s 只 +0.9%，口径说明见 §4.4「序列长度」） |
 | `use_tokamax_splash` + `sa_use_fused_bwd_kernel` | +2.6% |
 | 杂项 flag 组（5 个） | ±0 |
 | SparseCore 卸载组（9 个） | ±0 |
@@ -1774,7 +1801,7 @@ FSDP 从 128 降到 64，这部分每卡分片直接翻倍。
 | w1 | **是** | ❌ stalled chips [7] |
 
 x1 是最干净的判别实验：在跑得好好的 V1 上**只加这一个开关**，
-连 step 0 都没跑完就挂住。代码路径也对得上——`moe.py:1489`：
+连 step 0 都没跑完就挂住。代码路径也对得上 —— `layers/moe.py` 里那个分支：
 
 ```python
 if self.config.use_tokamax_gmm:
@@ -1886,13 +1913,13 @@ MFU 分母：GB300 BF16 峰值 2,700 TFLOPS，FP8 峰值 5,400 TFLOPS。
 | # | 相对前一轮的增量 | seq | pdbs | step | **TFLOP/s/chip** | **MFU** |
 |---|---|---|---|---|---|---|
 | **c1** | 调度器组 × pdbs=8/seq=4096（该战线最优） | 4096 | 8 | **20.43 s** | **445.12** | **19.29%** |
-| c2 | c1 + 杂项组（补齐 26 flag） | 4096 | 8 | 20.43 s | 444.63 | 19.27% |
+| c2 | c1 + 杂项组（补齐 26 flag） | 4096 | 8 | 20.45 s | 444.63 | 19.27% |
 | y4 | + 调度器组（4 个 flag） | 8192 | 4 | 23.08 s | 440.30 | 19.09% |
 | z1 | y1 + 换 batch/序列口径 | 4096 | 8 | 21.69 s | 418.89 | 18.16% |
 | y1 | + `use_tokamax_splash` + `sa_use_fused_bwd_kernel` | 8192 | 4 | 24.45 s | 415.16 | 18.00% |
 | y2 | + adamw/bf16 优化器 + `iota_embed` | 8192 | 4 | 24.61 s | 412.88 | 17.90% |
 | y3 | + SparseCore 卸载组（9 个 flag） | 8192 | 4 | 24.61 s | 412.56 | 17.88% |
-| V1 | 基线：2 个 XLA flag | 8192 | 4 | 25.11 s | 404.75 | 17.55% |
+| V1 | 基线：2 个 XLA flag | 8192 | 4 | 25.11 s | 404.75 | 17.54% |
 | w1 | 30 flag + tokamax 一次全开 | — | — | **HANG** | stalled chips [7] | — |
 | x1 | V1 + `use_tokamax_gmm` | — | — | **HANG** | stalled chips [7] | — |
 | z2 | pdbs 8 → 12 | — | — | **OOM** | 临时缓冲 95.17 G | — |
@@ -1958,8 +1985,8 @@ completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
 | | 战线一 v5p 旧栈 | 战线二 v7 | 战线三 v5p 新栈 |
 |---|---|---|---|
 | device : chip | 1 : 1 | **2 : 1** | 1 : 1 |
-| MFU 分母 | 459 | **2,306** | 459 |
-| XLA flag 数 | 26 | **13**（多了会死锁） | 25（少一个被新 libtpu 摘除） |
+| MFU 分母 | 459 | **2,307** | 459 |
+| XLA flag 数 | 26 | **13**（c1 用的；c2 补到 26 也能跑，收益 ±0） | 25（少一个被新 libtpu 摘除） |
 | 每步 FLOP（反推） | 10,048 | — | **10,162（+1.1%）** |
 
 > ⚠️ 最后一行很重要：**旧栈和新栈的分析式 FLOP 公式不一样**。
@@ -1975,14 +2002,14 @@ completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
 | | GB300 64 GPU | v7 4x4x4（64 chips） | v5p 256 chips |
 |---|---|---|---|
 | 计算单元数 | 64 GPU | 64 chips | 256 chips |
-| BF16 峰值/单元 | 2,700 | 2,306 | 459 |
+| BF16 峰值/单元 | 2,700 | 2,307 | 459 |
 | 序列长度 | 4,096 | 4,096（c1） | 8,192 |
 | **实测 TFLOP/s/单元** | **854.0** | **445.1** | **168.6**（旧栈）/ **160.8**（新栈） |
 | **MFU** | **31.6%** | **19.3%** | **36.7%**（旧栈）/ **35.0%**（新栈） |
 | **tok/s/单元** | **6,242** | **3,208** | **1,100** |
 | **整机吞吐 tok/s** | **399,488** | **205,314** | **281,488** |
 | 调优程度 | 已调优 | 已调优（c1，13 flag）**仍差目标 1.35×** | 已调优 |
-| 当前可复现 | — | ✅ `run.sh PLATFORM=v7` | ✅ `run.sh PLATFORM=v5p` → **160.8 / 35.0%** |
+| 当前可复现 | — | ✅ `run.sh PLATFORM=v7` | ✅ `run.sh PLATFORM=v5p` → **161.0 / 35.07%** |
 
 读这张表的三个要点：
 
@@ -1991,8 +2018,8 @@ completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
 把 MoE 那些碎通信藏得比 NVLink 域还干净。
 代价是要 256 张卡才换来 GB300 64 卡七成的整机吞吐。
 
-**2. v7 的 19.3% 仍然不是 v7 的上限。** 调优后从 17.55% 到 19.29%，
-但 DSV3 在同硬件的官方水位是 **26.6%**，还差 1.35 倍。剩下的缺口见 §6.3。
+**2. v7 的 19.3% 仍然不是 v7 的上限。** 调优后从 17.54% 到 19.29%，
+但 DSV3 在同硬件的官方水位是 **26.6%**，还差 1.38 倍。剩下的缺口见 §6.3。
 
 **3. 别用整机吞吐横向比。** v5p 那一列是 256 芯片，
 另外两列是 64 个单元。要比性价比得再乘上单价，
@@ -2018,8 +2045,8 @@ completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
 | 4 | `abort_on_nan_loss` | **False** | 把最重要的健康检查关掉了 |
 | 5 | mu/grad 降 bf16 的收益 | 声称省 26 GB/chip | 按真实参数量算是 **18.7 GB** |
 
-**第 1 条的字段含义已从源码确认**：`metric_logger.py:365` 调
-`max_utils.calculate_num_params_from_pytree`（`max_utils.py:117`），
+**第 1 条的字段含义已从源码确认**：`metric_logger.py` 打这个数时调的是
+`max_utils.calculate_num_params_from_pytree`，
 `tree_map(jnp.size)` 后求和 —— 数的是**参数树全部叶子的总量**，不是激活参数量。
 报告把 20.117 B 标成 "Active Parameters / Chip"，是读错了字段。
 
@@ -2074,20 +2101,34 @@ weights 4 + grads 4 + mu 4 + nu 4 = 16 B/param → 74.7 GB 静态，
 ---
 
 
-## 八、十一个 bug 与静态验证的边界
+## 八、十二个 bug 与静态验证的边界
 
 移植过程中又撞了四次"按模型名列举的分支漏了 hunyuan3"，
 **全部是运行时才报错，静态检查一个都抓不到**：
 
 | # | 报错 | 位置 |
 |---|---|---|
-| 5 | `Input should be 'default', 'llama2-7b', ...` | `configs/types.py` 的 pydantic `Literal` 白名单 |
-| 6 | `Loss-free load balancing is only supported for the DeepSeek decoder block` | `configs/types.py` 的 validator 把 `routed_bias_update_rate` 锁死在 DEEPSEEK |
-| 7 | `Incorrect decoder_block name cfg.decoder_block.value='hunyuan3'` | `layers/nnx_decoders.py` **第三张**分派表（前两张在 `decoders.py`） |
-| 8 | `Hunyuan3MoELayer.__init__() missing 1 required positional argument: 'quant'` | 两条构造路径签名不一致：nnx decoder 不传 `quant`，linen 路径传 |
+| 6 | `Input should be 'default', 'llama2-7b', ...` | `configs/types.py` 的 pydantic `Literal` 白名单 |
+| 7 | `Loss-free load balancing is only supported for the DeepSeek decoder block` | `configs/types.py` 的 validator 把 `routed_bias_update_rate` 锁死在 DEEPSEEK |
+| 8 | `Incorrect decoder_block name cfg.decoder_block.value='hunyuan3'` | `layers/nnx_decoders.py` **第三张**分派表（前两张在 `decoders.py`） |
+| 9 | `Hunyuan3MoELayer.__init__() missing 1 required positional argument: 'quant'` | 两条构造路径签名不一致：nnx decoder 不传 `quant`，linen 路径传 |
 
-加上 §2.7 的路由分支、`model_name` 门，和 §3.9 的 FLOP 公式，
-**同一个模式在这个项目里出现了 8 次**：
+把全文散落的实例汇到一处，**同一个模式在这个项目里出现了 10 次**：
+
+| # | 分叉点 | 判断依据 | 记在哪 | 漏了会怎样 |
+|---|---|---|---|---|
+| 1 | `moe.py` 路由：`model_name.startswith("deepseek3")` | 模型名前缀 | §1.5 | 权重里混进 bias，**不报错** |
+| 2 | 路由 softmax 被上游默认值覆盖 | 模型名前缀 | §2.6 | 打分函数走成 softmax，**不报错** |
+| 3 | `maxtext_utils.py` FLOP 公式（3 处） | `decoder_block` 白名单 | §3.9 | MFU **虚高约 5 倍**，不报错 |
+| 4 | `configs/types.py` 的 pydantic `Literal` 白名单 | 模型名 | §八 bug #6 | 配置解析被拒 |
+| 5 | validator 把 `routed_bias_update_rate` 锁死在 DEEPSEEK | `decoder_block` | §八 bug #7 | 配置解析被拒 |
+| 6 | `layers/nnx_decoders.py` 第三张分派表 | `decoder_block` | §八 bug #8 | `Incorrect decoder_block name` |
+| 7 | 两条构造路径的 `quant` 签名不一致 | 走哪条 decoder | §八 bug #9 | 缺参数 `TypeError` |
+| 8 | `train.py` 无梯度 bias 更新路径写死 `DeepSeekMoeBlock_0` | 模块属性名 | §5.4 坑 3 / §八 bug #10 | 首步 `AttributeError` |
+| 9 | 同上，第二处（同一函数的另一分支） | 同上 | 同上 | 同上 |
+| 10 | `moe.py` SwiGLU 激活截断白名单 | `decoder_block` | §八「第 10 处」（见下） | 调参开了 `mlp_activations_limit` 后**静默走错分支** |
+
+**只有第 10 处是在事前拦住的**，其余 9 处都是运行时才炸、或者根本不炸只是安静地错。
 
 > MaxText 里几乎每个"这个模型该走哪条路"的判断，都是一张按家族名字写死的表。
 > 加新模型不是改一处，是**把所有这类表找齐**。漏掉的那张不会报错说"你漏了"，
@@ -2097,7 +2138,37 @@ weights 4 + grads 4 + mu 4 + nu 4 = 16 B/param → 74.7 GB 静态，
 > 找齐的办法只有一个：`grep -rn "DecoderBlockType.DEEPSEEK"` 和
 > `grep -rn 'startswith(("deepseek'`，**每一处都问一遍"Hy3 该不该在这里"**。
 
-### bug #9：三元组只接了两个，无梯度 bias 更新静默失效（2026-07-28 补记）
+#### 第 10 处：「我 config 里没这个字段」也不是理由
+
+`layers/moe.py` 的 `apply_ffn_activation()` 里有一个 SwiGLU 激活截断分支，
+白名单原本只有 `DEEPSEEK` / `DEEPSEEK4`，而且**整个分支还被
+`mlp_activations_limit > 0.0` 二次把关**：
+
+```python
+elif (
+    self.config.decoder_block in (DecoderBlockType.DEEPSEEK, DecoderBlockType.DEEPSEEK4)
+    and self.config.mlp_activations_limit > 0.0
+):
+```
+
+我第一反应是判它「不适用」，理由是 **Hy3 的 config 里根本没有
+`mlp_activations_limit` 这个字段**，所以那个分支恒假、加不加都一样。
+这个理由看起来是可验证的事实，其实站不住：
+
+> **`mlp_activations_limit` 是一个调优旋钮，不是模型属性。**
+> 「我现在没设这个值」跟「我们没开那个开关」是同一种理由 ——
+> 它成立到有人调参把它设上的那一刻，然后模型**静默走进不截断的那条路**，
+> 不报错、不告警，只是数值行为跟预期不一样。
+>
+> 可接受的「不适用」只有一种：**这个行为在我的模型上永远不成立**。
+> 比如 vLLM 那张权重映射表 —— DeepSeek 是 MLA、Hy3 是 GQA，
+> 映射结构根本不同，套用一定错。那不是「暂时不需要」，是「用了就是 bug」。
+
+所以把 `HUNYUAN3` 也加进了那个白名单（分支第三个 commit）。
+**这一处没有造成任何故障，是这 10 次里唯一一次在事前拦住的** ——
+代价只是多想了一步「这个条件为什么现在是假的」。
+
+### bug #10：三元组只接了两个，无梯度 bias 更新静默失效（2026-07-28 补记）
 
 前面 8 个都是「漏了一张分派表」，第 9 个是**另一种模式**，而且更隐蔽。
 
@@ -2120,7 +2191,7 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 就当没开——**而 `hunyuan3-295b.yml` 里 `routed_bias_update_rate: 0.001` 明明写着**。
 配置说开、代码说关，全程零报错零日志。
 
-> **为什么特别值得记**：bug #6 恰恰就是「validator 把 `routed_bias_update_rate` 锁死在 DEEPSEEK」——
+> **为什么特别值得记**：bug #7 恰恰就是「validator 把 `routed_bias_update_rate` 锁死在 DEEPSEEK」——
 > 也就是说我当时**已经知道这个功能存在，还专门为它改了校验**，然后忘了把 layer 里的线接上。
 > 知道一个功能存在，和把它接通，是两件独立的事。
 >
@@ -2131,14 +2202,14 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 **怎么自查**：任何返回多元组的上游模块，都去 `grep` 官方模型（这里是 `models/deepseek.py`）
 是怎么接的，逐项比对——**不要用 `_` 丢弃自己没看懂的返回值**。
 
-### bug #10 / #11：改对了，但只改在临时树里（2026-07-29 补记）
+### bug #11 / #12：改对了，但只改在临时树里（2026-07-29 补记）
 
-前九个都是「上游/框架有个坑」，第十、十一个不一样 —— **坑是我们自己的产物挖的**。
+前十个都是「上游/框架有个坑」，第十一、十二个不一样 —— **坑是我们自己的产物挖的**。
 
 | # | 症状 | 真相 |
 |---|---|---|
-| 10 | `Input should be 'default', ..., 'hunyuan3-295b'`，传 `hunyuan3-smoke` 被拒 | 补丁脚本只注册了 `hunyuan3-295b`。而**文档恰恰让人先跑冒烟配置** |
-| 11 | `'Hunyuan3MoELayer' object has no attribute 'Hunyuan3MoeBlock_0'` | 模型文件里属性叫 `moe_block`，训练循环的查找表写的是 `Hunyuan3MoeBlock_0`，两边对不上 |
+| 11 | `Input should be 'default', ..., 'hunyuan3-295b'`，传 `hunyuan3-smoke` 被拒 | 补丁脚本只注册了 `hunyuan3-295b`。而**文档恰恰让人先跑冒烟配置** |
+| 12 | `'Hunyuan3MoELayer' object has no attribute 'Hunyuan3MoeBlock_0'` | 模型文件里属性叫 `moe_block`，训练循环的查找表写的是 `Hunyuan3MoeBlock_0`，两边对不上 |
 
 **两处在我本地那棵临时调试树里都是对的。** 当天全部 v5p benchmark 都跑在那棵树上，
 所以从头到尾零征兆 —— 直到从全新 clone 只跑脚本、再真跑一次，才同时暴露。
@@ -2150,21 +2221,22 @@ mlp_lnx, load_balance_loss, _ = self.moe_block(hidden_states)   # ← 第三项�
 > 配套纪律：**判定产物是否可用的唯一有效方法，是从全新 checkout 开始、
 > 不做任何手工修补、然后真跑一次。** 「代码看着对」不算。
 
-`verify_hunyuan3.py` 的 8 项检查全部通过，但**这 11 个实跑 bug 一个都没拦住**：
+`verify_hunyuan3.py` 的 5 项检查全部通过，但**这 12 个实跑 bug 一个都没拦住**：
 
 | bug | 层次 | 静态检查为什么看不见 |
 |---|---|---|
 | 1 pod 被 admission webhook 拒 | K8s 调度 | 不看集群 |
 | 2 模型名不在白名单 | 框架注册 | 白名单是硬编码常量，不在被检查的代码路径上 |
 | 3 `base_moe_mlp_dim=192` 不是 128 倍数 | 硬件约束 | 参数量算得出来，MXU tile 对不对齐算不出来 |
-| 4 `fsdp_shard_on_exp` 与 EP 互斥 | 配置组合 | 单项都合法，组合才非法 |
+| 4 `fsdp_shard_on_exp`（新栈叫 `shard_exp_on_fsdp`）与 EP 互斥 | 配置组合 | 单项都合法，组合才非法 |
 | 5 FLOP 公式漏 hunyuan3 | 报表 | 不影响任何被检查的对象 |
 | 6 pydantic `Literal` 白名单 | 框架注册 | 同 2，换了实现方式 |
-| 7 `nnx_decoders.py` 第三张分派表 | 框架注册 | 检查只看了 `decoders.py` 的两张 |
-| 8 两条构造路径签名不一致 | 框架接口 | 需要真正实例化才暴露 |
-| 9 三元组第三项被 `_` 丢弃 | 框架接口 | 语法完全合法，配置也合法，只有跑起来看 bias 有没有动才知道 |
-| 10 白名单漏注册 `hunyuan3-smoke` | 产物自身 | 我们所有测试都跑在手工改过的临时树上，那棵树里是对的 |
-| 11 模型属性名与训练循环查找表不一致 | 产物自身 | 同上；两处都只在「全新 checkout 只跑脚本」时才对不上 |
+| 7 validator 锁死 `routed_bias_update_rate` | 配置校验 | 校验逻辑本身不在被检查的范围里 |
+| 8 `nnx_decoders.py` 第三张分派表 | 框架注册 | 检查只看了 `decoders.py` 的两张 |
+| 9 两条构造路径签名不一致 | 框架接口 | 需要真正实例化才暴露 |
+| 10 三元组第三项被 `_` 丢弃 | 框架接口 | 语法完全合法，配置也合法，只有跑起来看 bias 有没有动才知道 |
+| 11 白名单漏注册 `hunyuan3-smoke` | 产物自身 | 我们所有测试都跑在手工改过的临时树上，那棵树里是对的 |
+| 12 模型属性名与训练循环查找表不一致 | 产物自身 | 同上；两处都只在「全新 checkout 只跑脚本」时才对不上 |
 
 > 静态验证的价值是**证明逻辑对**（路由数学、参数量、分派结构），
 > 这几项它确实抓到了两个真 bug（路由分支、`model_name` 门）。
@@ -2196,7 +2268,17 @@ gcloud container node-pools create np-v5p-256 \
   --num-nodes=64 --spot --scopes=cloud-platform
 ```
 
-实测 8 分 26 秒建完，64 台全 Ready。`--num-nodes` = 芯片数 ÷ 4，
+冒烟另建一个 1 节点小池（4 芯片），改一行代码几十秒就能验一轮：
+
+```bash
+gcloud container node-pools create np-v5p-dev \
+  --cluster=CLUSTER --project=PROJECT --region=us-central1 \
+  --node-locations=us-central1-a \
+  --machine-type=ct5p-hightpu-4t --tpu-topology=2x2x1 \
+  --num-nodes=1 --spot --scopes=cloud-platform
+```
+
+256 芯片那个池实测 8 分 26 秒建完，64 台全 Ready。`--num-nodes` = 芯片数 ÷ 4，
 且必须与 `--tpu-topology` 相乘一致，否则直接被拒。
 **v5p 在 us-central1 只有 `-a` 有货**，集群 region 是 us-central1 就行，
 节点池自己指定 zone；子网是区域级的，不用为此改集群。
@@ -2214,9 +2296,9 @@ kubectl wait --for=condition=Available deploy/jobset-controller-manager \
   -n jobset-system --timeout=180s
 ```
 
-v0.11.1 自带证书，**不需要 cert-manager**。不装的话 `run.sh` 里的
-`kubectl apply` 找不到 `jobset.x-k8s.io/v1alpha2`，脚本退 1 且**没有任何报错输出**
-（被 `| tail` 吃掉了），看起来像什么都没发生。
+v0.11.1 自带证书，**不需要 cert-manager**。不装的话 `run.sh` 里的 `kubectl apply` 找不到 `jobset.x-k8s.io/v1alpha2`，
+`set -e` 直接退出、什么都没起来。**当时那版脚本把这条错误也一起吞了**，
+看上去像什么都没发生 —— 现在只吞 stdout，stderr 会打出来，但**装 JobSet 这一步仍然不能省**。
 
 **③ 暂存桶 + 两处跨项目授权**
 
@@ -2350,15 +2432,22 @@ NODEPOOL=np-v7x-flex PLATFORM=v7 NODES=4 TOPO=2x2x4 bash run.sh myrun
 ### 9.1 三步
 
 ```bash
+cd maxtext-hunyuan3/                     # 两个脚本都在这个目录里
+gcloud container clusters get-credentials CLUSTER --region=REGION --project=PROJECT
+gcloud storage buckets create gs://your-bucket --location=US   # 已有就跳过
+
 export GCS_STAGE=gs://your-bucket/hy3
 export IMAGE=us-docker.pkg.dev/YOUR-PROJECT/gcr.io/YOUR-maxtext-latest:runner
 
 # ① 准备代码（只有改了代码才要重跑；换 flag / 换参数不用）
-bash prep.sh                    # clone hunyuan3 分支 → 6 项自检 → 打包传 GCS
+bash prep.sh                    # clone hunyuan3 分支 → 8 项自检 → 打包传 GCS
 
 # ② 起训练
 PLATFORM=v5p bash run.sh myrun          # 或 PLATFORM=v7
-PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 bash run.sh smoke   # 4 层冒烟
+
+# 4 层冒烟：必须显式缩规模，否则 run.sh 默认按 64 台 / 256 芯片起
+NODES=1 TOPO=2x2x1 PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 \
+  bash run.sh smoke per_device_batch_size=1 max_target_length=2048
 
 # ③ 看结果
 kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
@@ -2368,7 +2457,7 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 
 | 步 | 动作 | 为什么这样做 |
 |---|---|---|
-| ① `prep.sh` | clone 分支 → **6 项自检** → `tar src/maxtext` → 传 GCS | 自检挡的是「分支自己少东西」：三个文件在不在、白名单两个模型名全不全、枚举有没有 `HUNYUAN3`、`train.py` 补丁在不在、**`Hunyuan3MoeBlock_0` 在 model 和 train 两边对不对得上**。最后一项 2026-07-29 真踩过，不查的话要到 TPU 上跑起来才炸 |
+| ① `prep.sh` | clone 分支 → **8 项自检** → `tar src/maxtext` → 传 GCS | 自检挡的是「分支自己少东西」：三个文件在不在、白名单两个模型名全不全、枚举有没有 `HUNYUAN3`、`train.py` 补丁在不在、**`Hunyuan3MoeBlock_0` 在 model 和 train 两边对不对得上**。最后一项 2026-07-29 真踩过，不查的话要到 TPU 上跑起来才炸 |
 | ② `run.sh` | 提交 JobSet，pod 里 **`rm -rf /deps/src/maxtext` 再解包** | **整棵覆盖，不是只注入改动文件**。只注入的话测的是「我的改动 + 容器里的旧基座」，不是分支本身——2026-07-28 夜那两个 bug 就是这么漏掉的 |
 | ③ 读日志 | — | 见 §9.3 |
 
@@ -2382,14 +2471,14 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
    `MAXTEXT CONFIG ERROR` / pydantic 的 `Value error`，位置在日志上方。
 3. **step 0 含编译，step 1/2 是 JAX 异步派发的假读数**，稳态取 step ≥ 3。
 4. 单位换算：v5p 1 device = 1 chip，MFU = TFLOP/s/device ÷ 459；
-   v7 **2 device/chip**，per-chip = 日志值 × 2，MFU = per-chip ÷ 2306。
+   v7 **2 device/chip**，per-chip = 日志值 × 2，MFU = per-chip ÷ 2307。
 
 ### 9.4 预期水位
 
-| 平台 | 规模 | step | TFLOP/s | MFU |
+| 平台 | 规模 | step | TFLOP/s（口径） | MFU |
 |---|---|---|---|---|
-| v5p | 256 chips | 63.2 s | 160.9 /device | 35.1% |
-| v7 | 64 chips | 20.4 s | 445.1 /chip | 19.3% |
+| v5p | 256 chips | 63.2 s | 161.0 **per device**（= per chip） | 35.07% |
+| v7 | 64 chips | 20.4 s | 445.1 **per chip**（日志值 ×2） | 19.29% |
 | v5p smoke | 4 chips | 0.82 s | — | loss 13.45→10.35 / 8 步 |
 
 ---
@@ -2421,16 +2510,22 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 
 > **两个真相来源真的咬过人。** 2026-07-28 夜同时维护「仓库里的模型文件 + 补丁脚本」和「分支」，
 > 结果在一处改对、另一处没跟上，而所有 benchmark 恰好跑在改对的那份上——
-> **整晚零征兆**，直到从全新 checkout 走一遍才暴露（§八 bug #10/#11）。
+> **整晚零征兆**，直到从全新 checkout 走一遍才暴露（§八 bug #11/#12）。
 
 ### 10.3 回馈上游：建议拆两个 PR
 
 | PR | 内容 | 理由 |
 |---|---|---|
-| **①（先发）** | `trainers/pre_train/train.py`：把写死的 `DeepSeekMoeBlock_0` 改成按 `decoder_block` 解析 | **纯 bug 修复，跟 Hy3 无关**。任何非 DeepSeek 模型只要开 aux-loss-free 均衡都会撞（§八 bug #9）。3 行 + 一张查找表，独立成立，不需要先接受 Hy3 |
+| **①（先发）** | `trainers/pre_train/train.py`：把写死的 `DeepSeekMoeBlock_0` 改成按 `decoder_block` 解析 | **纯 bug 修复，跟 Hy3 无关**。任何非 DeepSeek 模型只要开 aux-loss-free 均衡都会撞（§八 bug #10）。3 行 + 一张查找表，独立成立，不需要先接受 Hy3 |
 | **②（跟着发）** | 模型本体 + 其余 11 个文件的行为归类 | 就是「加一个模型」，跟 deepseek / qwen3 同级 |
 
-分支上的两个 commit **已经按这个边界拆好了**，可以直接 cherry-pick。
+分支上是三个 commit，**已经按这个边界拆好了**，可以直接 cherry-pick：
+
+| commit | 归属 |
+|---|---|
+| `Resolve the loss-free-balancing bias path per decoder block` | PR ① |
+| `Add Tencent Hunyuan 3 (295B-A21B)` | PR ② |
+| `Let Hunyuan3 use the SwiGLU activation bound too` | PR ②（§八 台账第 10 处） |
 
 ### 10.4 发 PR 前要确认的三件事
 
@@ -2446,13 +2541,13 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 
 | # | 事项 | 状态 | 说明 |
 |---|---|---|---|
-| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ | 8 项检查全过；但**实跑的 11 个 bug 一个都没抓到**，见下方复盘 |
+| 0 | 写出 `hunyuan3` block 并通过静态自检 | ✅ | 5 项检查全过；但**实跑的 12 个 bug 一个都没抓到**，见下方复盘 |
 | 1 | 小规模真实前向 | ✅ | 4 芯片 v5p，r1–r20 共 20 轮，见 §三 |
 | 2 | 192 experts × 80 层能否编译 | ✅ | v5p 256 芯片和 v7 64 芯片都编译并跑出稳态 |
 | 3 | 参数量与 SSOT 对齐 | ✅ | 框架报 298.786 B = SSOT 294.9 B + MTP 头 3.886 B，两个平台逐位一致 |
 | 4 | `normalization_layer_epsilon` | ✅ | 曾填错 1.0e-6，HF 原文是 **1e-05**，已修 |
 | 5 | router fp32 | ✅ | 旧版我加了 `moe_router_dtype`；**新版上游已有 `float32_gate_logits`** |
-| 6 | 专家 bias 的无梯度更新 | ✅ | **新版上游已有 `routed_bias_update_rate`**（旧版确实没有）。我们的 layer 一度把 `bias_updates` 丢了导致静默失效，2026-07-28 修好，见 §八 bug #9 |
+| 6 | 专家 bias 的无梯度更新 | ✅ | **新版上游已有 `routed_bias_update_rate`**（旧版确实没有）。我们的 layer 一度把 `bias_updates` 丢了导致静默失效，2026-07-28 修好，见 §八 bug #10 |
 | 7 | EP / FSDP 最优配比 | ✅ | 结论与预期相反：**TPU 上不用 EP**，见 §4.2 |
 | 8 | `attention=flash` 能否编译 | ✅ | v5p / v7 都通过；v7 上还能用 `use_tokamax_splash` |
 | 9 | MTP 开销 | ✅ | 全程 `mtp_num_layers=1`，`mtp_loss` 单独打出，加了 3.886 B 参数 |
@@ -2493,7 +2588,7 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 |---|---|---|---|---|
 | v5p | 4 chips（dev pool） | ✅ 20 轮迭代闭环 | — | 用于快速验证代码路径 |
 | v5p | 256 chips | ✅ **当前可复现水位** | **160.98 TFLOP/s/chip · MFU 35.07%** | 超过 GB300 的 31.6% |
-| v5p | 256 chips | 📜 历史最好（旧栈，产物已删） | 168.6 TFLOP/s/chip · MFU 36.72% · 281,488 tok/s | 12.9 倍调优路径的终点，见 §7.3 战线一 |
+| v5p | 256 chips | 📜 历史最好（旧栈，产物已删） | 168.6 TFLOP/s/chip · MFU 36.72% · 281,488 tok/s | 15 倍调优路径的终点，见 §7.3 战线一 |
 | v7 Ironwood | 64 chips | 🔄 13 轮，仍在调 | **445.1 TFLOP/s/chip · MFU 19.29% · 205,314 tok/s** | 目标 612.7 / 26.6%（DSV3 实测水位） |
 
 > 07-29 晚在全新项目 / 全新 VPC / 全新集群上从零复现，得 160.98 / 35.07%，
@@ -2503,12 +2598,12 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 
 1. **抓 xplane trace** —— 参数扫到 445 之后收益明显变平（杂项 flag 组 ±0），
    继续盲扫期望很低。需要 trace 直接回答"时间花在路由 / 分组重排 /
-   all-to-all / offload 还是 GEMM"。前一次 profiler 轮（z4）因为
+   all-to-all / offload 还是 GEMM"。前一次开 profiler 的那轮因为
    profiler 自身开销没在窗口内跑出稳态，要单独给它更长的预算。
 2. **查清 `use_tokamax_gmm` 的死锁根因**（§6.7）——
    官方 DSV3 用它且能跑，怀疑是 192 专家（非 2 的幂）导致分组矩阵乘的
    组划分出问题。这是唯一一个"官方有、我们用不了"的加速手段。
-3. 权重转换（HF → Orbax）与真实数据集收敛验证（§十）。
+3. 权重转换（HF → Orbax）与真实数据集收敛验证（§十一 清单 #12/#13）。
 
 代码：[`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3)（唯一真相，见 §10.1）；
 跑测试的两个脚本在 [`maxtext-hunyuan3/`](maxtext-hunyuan3/)。

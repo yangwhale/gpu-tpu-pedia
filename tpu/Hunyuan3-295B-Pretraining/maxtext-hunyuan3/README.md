@@ -16,7 +16,10 @@ export IMAGE=us-docker.pkg.dev/YOUR-PROJECT/gcr.io/YOUR-maxtext-latest:runner
 
 bash prep.sh                                                   # 改了代码才要重跑
 PLATFORM=v5p bash run.sh myrun                                 # 或 PLATFORM=v7
-PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 bash run.sh smoke    # 4 芯片冒烟
+
+# 4 芯片冒烟：必须显式缩规模，否则默认按 64 台 / 256 芯片起
+NODES=1 TOPO=2x2x1 PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 \
+  bash run.sh smoke per_device_batch_size=1 max_target_length=2048
 ```
 
 ## 为什么这里不再放代码
