@@ -2332,6 +2332,18 @@ NODEPOOL=np-v7x-flex PLATFORM=v7 NODES=4 TOPO=2x2x4 bash run.sh myrun
 > —— 说明这是 **zone 级物理容量**问题，**换项目 / 提配额都无效**。
 > 配额和容量是两个独立的闸门：配额决定你**能不能申请**，容量决定你**能不能拿到**。
 >
+> **不是"没有货"，是"货全被占了"。** 同一时刻查 `cloud-tpu-multipod-dev`：
+> ```
+> gcloud compute instances list --project=cloud-tpu-multipod-dev \
+>   --filter="machineType~tpu7x AND status=RUNNING" \
+>   --format='value(zone,scheduling.provisioningModel)' | sort | uniq -c
+>   152 us-central1-c  SPOT
+>     1 us-central1-c  FLEX_START
+> ```
+> **152 台 spot（608 芯片）正在别人手里跑。** 抢占式没有排队，先到先得，
+> 所以队列前面站满人时，新请求既拿不到也不会排上——只会一直 PROVISIONING 到超时。
+> **判断"要不要继续等"就看这个数**，比反复建池探测便宜得多。
+>
 > 顺带：`PREEMPTIBLE-TPU7X-per-project-region` 在 playground 的上限是 **64 芯片**，
 > 且是**全项目共享**。别人占 8 芯片时，4x4x4（64 芯片）这种原子切片就永远排不下
 > ——TPU 拓扑没有 48/56 这种中间档，拿不满等于拿不到。自助提额到 128 提交后
