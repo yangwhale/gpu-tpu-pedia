@@ -2257,6 +2257,86 @@ gcloud compute networks subnets create NAME-uc1 --network=NAME-vpc \
 选网段前先跑 `gcloud network-connectivity internal-ranges list` 拿权威占用表，
 **不要只看 `clusters list` 的 `clusterIpv4Cidr`**——那漏掉子网自身占的地址。
 
+**⑤ v7x（tpu7x）拿机器：跟 v5p 完全不是一回事**
+
+v5p 直接 `--tpu-topology` + `--spot` 就行（§9.0 ①）。tpu7x 会被拒：
+
+```
+Creation of a managed instance group with tpu7x-standard-4t machine type
+with placement policy is not supported. Use workload policy instead.
+```
+
+**必须先建一个 `workloadPolicy` 类型的 resource policy，再让节点池引用它。**
+gcloud 577 没有这个子命令（`resource-policies create` 只有 group-placement 等），
+只能走 REST：
+
+```bash
+TOK=$(gcloud auth application-default print-access-token)
+curl -s -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+ "https://compute.googleapis.com/compute/v1/projects/$P/regions/us-central1/resourcePolicies" \
+ -d '{"name":"NAME-wp-2x2x4","workloadPolicy":{"type":"HIGH_THROUGHPUT","acceleratorTopology":"2x2x4"}}'
+# 然后节点池同时给 --tpu-topology 和 --placement-policy=NAME-wp-2x2x4
+```
+
+**DWS flex-start 的建池三要素**（缺一个就报错，而且报错各说一半）：
+
+```bash
+gcloud beta container node-pools create POOL ... \
+  --tpu-topology=2x2x4 --placement-policy=NAME-wp-2x2x4 \
+  --flex-start --num-nodes=0 \
+  --enable-autoscaling --min-nodes=0 --max-nodes=4 --location-policy=ANY \
+  --reservation-affinity=none
+```
+
+- 少 `--enable-autoscaling` → `Flex start node pools require autoscaling enabled.`
+- `--num-nodes` 非 0 → `Flex start node pools require initial node count to be set to 0.`
+- 上限用 `--total-max-nodes` 而不是 `--max-nodes` → 被判成 0，报
+  `Maximum node count 0 is not a valid size of TPU pod slice with topology "2x2x4"`
+
+**⑥ 空池（DWS）跑 JobSet 必须用 `NODEPOOL=`，否则 4 个 pod 只出 1 个**
+
+`run.sh` 默认给 JobSet 打 `alpha.jobset.sigs.k8s.io/exclusive-topology` 注解。
+该机制要求**先把 leader pod 调度上去**，follower 才能抄它的 `gke-nodepool` 选择器。
+节点池是 0 节点时 leader 永远落不了地，webhook 就会拒建 follower：
+
+```
+admission webhook "vpod.kb.io" denied the request:
+follower pod node selector for topology domain not found.
+missing selector: cloud.google.com/gke-nodepool
+```
+
+后果很隐蔽：**只创建出 1 个 pod**，autoscaler 也只看得见 1 个 pending，
+判断依据是残缺的。解法是把节点池写死进 `nodeSelector`，不依赖 leader 先行：
+
+```bash
+NODEPOOL=np-v7x-flex PLATFORM=v7 NODES=4 TOPO=2x2x4 bash run.sh myrun
+```
+
+设了 `NODEPOOL` 就走这条路径（去掉注解 + 加 `gke-nodepool` 选择器），
+不设保持原样，v5p 固定节点池的流程不受影响。
+**验证方法**：提交后数 pod 个数，应等于 `NODES`。
+
+**⑦ 容量：2026-07-29/30 的实测时间线（us-central1-c，tpu7x）**
+
+| 时间 (HKT) | 现象 |
+|---|---|
+| 07-29 21:57 | spot 8 台（32 芯片）**15 秒起满** |
+| 07-29 23:18 | 切片**只活 2-3 分钟**就被抢，反复三轮 |
+| 07-30 01:10 起 | 连 4 台都拿不到，6 轮探测全 0 |
+| 07-30 07:35 | 别人的 FLEX_START 从 PENDING 转 RUNNING（局部恢复） |
+| 07-30 08:17 | 我们 spot 8 台 / 4 台仍全 0 |
+| 07-30 09:0x–09:5x | DWS flex-start 两次 `FailedScaleUp: Internal error`，45 分钟 0 台 |
+| 07-30 10:05 | **换到 `cloud-tpu-multipod-dev` 同 zone 同机型同 spot，一样 0 台** |
+
+> **最后一行是关键对照。** 两个项目、两套配额、两个集群，同一 zone 同时拿不到
+> —— 说明这是 **zone 级物理容量**问题，**换项目 / 提配额都无效**。
+> 配额和容量是两个独立的闸门：配额决定你**能不能申请**，容量决定你**能不能拿到**。
+>
+> 顺带：`PREEMPTIBLE-TPU7X-per-project-region` 在 playground 的上限是 **64 芯片**，
+> 且是**全项目共享**。别人占 8 芯片时，4x4x4（64 芯片）这种原子切片就永远排不下
+> ——TPU 拓扑没有 48/56 这种中间档，拿不满等于拿不到。自助提额到 128 提交后
+> 12 小时仍是 `reconciling`，没批。
+
 ### 9.1 三步
 
 ```bash

@@ -25,7 +25,8 @@ MODEL=${MODEL:-hunyuan3-295b}; STEPS=${STEPS:-10}; NAME=hy3-$RUN
 
 case "$PLATFORM" in
 v5p)
-  NODES=64; ACCEL=tpu-v5p-slice; TOPO=4x8x8
+  # 缩规模跑：NODES/TOPO 可用环境变量覆盖，两者必须自洽（NODES = 芯片数 ÷ 4）
+  NODES=${NODES:-64}; ACCEL=tpu-v5p-slice; TOPO=${TOPO:-4x8x8}
   # 25 个 flag。SparseCore 那组集合通信卸载在 v5p 上是主要收益来源（§4.4）。
   # 注意：官方 DSV3 v5p 配方里还有 --2a886c8_chip_config_name=megachip_tccontrol，
   # 新版 libtpu 已经摘掉这个 flag，带上会直接 "Unknown command line flag" 退出。
@@ -58,7 +59,7 @@ v5p)
   sa_use_fused_bwd_kernel=False out_proj=remat$TILE"
   ;;
 v7)
-  NODES=16; ACCEL=tpu7x; TOPO=4x4x4
+  NODES=${NODES:-16}; ACCEL=tpu7x; TOPO=${TOPO:-4x4x4}
   # 只带这 13 个。**不要**照抄官方 30 个一次全开 —— 实测死锁（§6.5 的 w1）。
   # 调度器组是唯一值钱的一组（+6.6%）；SparseCore 卸载组在 v7 上收益是 0。
   FLAGS='--xla_tpu_scoped_vmem_limit_kib=65472 --xla_enable_async_all_gather=true
@@ -97,13 +98,25 @@ tokenizer_path=src/maxtext/assets/tokenizer_llama3.tiktoken"
 gsutil -q stat "$GCS_STAGE/hy3-maxtext.tgz" 2>/dev/null || {
   echo "找不到 $GCS_STAGE/hy3-maxtext.tgz —— 先跑 'GCS_STAGE=$GCS_STAGE bash prep.sh'"; exit 1; }
 
+# NODEPOOL 用于「0 节点的 autoscaling 池」（DWS flex-start）：
+# 默认的 exclusive-topology 注解要求 leader pod 先落地，follower 才能抄它的
+# gke-nodepool 选择器。池子是空的时候 leader 永远落不了地，webhook 就会拒绝
+# 创建 follower —— 4 个 pod 只出 1 个，autoscaler 也只看得见 1 个 pending。
+# 直接把节点池写死在 nodeSelector 里，既保证同池独占，又不需要 leader 先行。
+if [ -n "${NODEPOOL:-}" ]; then
+  ANNO=""; POOLSEL="
+              cloud.google.com/gke-nodepool: $NODEPOOL"
+else
+  ANNO="alpha.jobset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-nodepool"; POOLSEL=""
+fi
+
 kubectl delete jobset "$NAME" --ignore-not-found=true --wait=false >/dev/null 2>&1
 cat <<YAML | kubectl apply -f - >/dev/null
 apiVersion: jobset.x-k8s.io/v1alpha2
 kind: JobSet
 metadata:
   name: $NAME
-  annotations: {alpha.jobset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-nodepool}
+  annotations: {$ANNO}
 spec:
   ttlSecondsAfterFinished: 7200
   failurePolicy: {maxRestarts: 0}
@@ -120,7 +133,7 @@ spec:
             restartPolicy: Never
             nodeSelector:
               cloud.google.com/gke-tpu-accelerator: $ACCEL
-              cloud.google.com/gke-tpu-topology: $TOPO
+              cloud.google.com/gke-tpu-topology: $TOPO$POOLSEL
             hostNetwork: true
             dnsPolicy: ClusterFirstWithHostNet
             tolerations: [{operator: "Exists"}]
