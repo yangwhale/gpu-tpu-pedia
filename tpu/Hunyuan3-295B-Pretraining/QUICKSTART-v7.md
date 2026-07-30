@@ -308,38 +308,72 @@ setsid bash -c "kubectl logs -f job/hy3-<run>-slice-job-0 -c jax-tpu \
 `-f` 会在 pod 还没 Running 时直接退出，所以要么等 `16/16 Running` 再起，
 要么套一层重试循环。
 
-### 3.6 在托管（Kueue / 排队制）集群上跑：`exclusive-topology` 会死锁
+### 3.6 在托管（Kueue / 排队制）集群上：扩不出节点时怎么定位
 
-`run.sh` 默认带 `alpha.jobset.sigs.k8s.io/exclusive-topology` 注解，
-它保证一个 JobSet 的 pod 全落同一个节点池。代价是**要 leader pod 先落地**，
-follower 才能抄它的 `gke-nodepool` 选择器。
+**先说结论：`kubectl` 层面看不到扩容失败的真正原因。** pod 事件只会给你一句
+`Pod didn't trigger scale-up: ... in backoff after failed scale-up`，
+它只说"试过、失败了、在退避"，不说为什么失败。真原因在托管实例组里：
 
-在自己建好池子的集群上没问题。但在**排队制集群**上，提交时往往没有空节点，
-于是：
+```bash
+# 先找到 TPU 的 MIG（名字含 nap-tpu7x）
+gcloud container clusters describe <CLUSTER> --region <REGION> \
+  --format='value(nodePools[].instanceGroupUrls)' | tr ';' '\n' | grep tpu
+
+gcloud compute instance-groups managed list-errors <MIG> --zone <ZONE> \
+  --format='value(error.code,error.message)'
+```
+
+一次真实的输出：
 
 ```
-leader 落不了地 → webhook 拒绝创建 follower
-  → 16 个 pod 只出 1 个 → autoscaler 只看见 1 个 pending
-  → 永远不会为你扩出 16 台
+QUOTA_EXCEEDED  Instance 'gke-tpu-xxxx' creation failed:
+                Quota 'HDB_TOTAL_GB' exceeded. Limit: 40960.0 in region us-central1.
 ```
 
-现象是 `parallelism=16` 但 `status.active=1`，而且看不出任何报错。
+**区域磁盘配额打满，节点就建不出来。** TPU 节点的启动盘是
+`hyperdisk-balanced`（100 GB / 台），跟别人工作负载的 PVC 抢同一个区域配额。
+16 台就是 1600 GB。别人留下的 `Released` PV（PVC 删了盘还在）会一直占着配额，
+把整个集群的扩容都卡死 —— 这跟你的 JobSet 怎么写没有任何关系。
 
-**两种解法**（`run.sh` 都支持）：
+对应的排查顺序（**直接看 pod 会误判**）：
+
+| 步骤 | 看什么 | 卡在这说明 |
+|---|---|---|
+| ① | `kubectl get workload`（Kueue） | 配额记账没过 |
+| ② | MIG `list-errors` | **配额/容量，扩不出机器** |
+| ③ | `kubectl get nodes` | 机器建出来了但没注册 |
+| ④ | `kubectl get pods` | 常规问题：镜像、配置 |
+
+> **被 admit ≠ 有机器。** 队列放行只代表记账通过。
+
+**另一个独立的坑：`exclusive-topology` 会让 autoscaler 少看见需求。**
+
+`run.sh` 默认带 `alpha.jobset.sigs.k8s.io/exclusive-topology` 注解，保证一个
+JobSet 的 pod 全落同一节点池。代价是要 leader pod 先落地，follower 才能抄它的
+`gke-nodepool` 选择器。提交时如果没有空节点，leader 落不了地，follower 就建不出来：
+
+```
+16 个 pod 只出 1 个 → autoscaler 只看见 1 个 pending
+```
+
+现象是 `parallelism=16` 但 `status.active=1`，**没有任何报错**。
+
+> **这一条和上面的配额是两回事，别混。** 我们那次 64 芯片跑不起来，
+> 实测原因是配额（MIG 报 `QUOTA_EXCEEDED`），全程节点数没变过、**扩容压根没发生**；
+> 最后跑通是因为别人的任务释放了现成的 16 台。所以
+> **没有证据表明 `exclusive-topology` 是那次的瓶颈** —— 它的影响是在
+> "扩容本身可用"的前提下才会显现。这里记下来，是因为
+> `active=1` 这个现象本身极难自查。
+
+**两种绕法**（`run.sh` 都支持）：
 
 | 场景 | 做法 |
 |---|---|
-| 已知目标池 | `NODEPOOL=<池名> bash run.sh ...` —— 把池子写死在 `nodeSelector`，不需要 leader 先行 |
-| 要让集群自己扩容 | `NO_EXCLUSIVE_TOPOLOGY=1 bash run.sh ...` —— 去掉注解，16 个 pod 一次全建出来，autoscaler 才看得到真实需求 |
+| 已知目标池 | `NODEPOOL=<池名> bash run.sh ...` —— 池子写死在 `nodeSelector`，不需要 leader 先行 |
+| 要让集群自己扩容 | `NO_EXCLUSIVE_TOPOLOGY=1 bash run.sh ...` —— 去掉注解，16 个 pod 一次全建出来 |
 
-去掉注解后理论上 pod 可能分散到不同池，但 TPU 的
-`gke-tpu-topology` 选择器本身就把范围限死在同拓扑的池里，实测 16 个 pod
-整齐落在同一个 `4x4x4` 池，没有分裂。
-
-> 排队制集群还有一条要注意：**被 admit ≠ 有机器**。
-> 队列层放行只代表配额记账通过，机器还得靠 autoscaler 或
-> ProvisioningRequest 真的建出来。排障顺序是
-> 队列 → 扩容事件 → 节点 → pod，直接看 pod 会误判。
+去掉注解后理论上 pod 可能分散到不同池，但 TPU 的 `gke-tpu-topology` 选择器
+本身就把范围限死在同拓扑的池里，实测 16 个 pod 整齐落在同一个 `4x4x4` 池。
 
 ---
 
@@ -401,7 +435,8 @@ leader 落不了地 → webhook 拒绝创建 follower
 > 同一套 FLOP 公式，性能差异不是"算少了"。
 
 **这次复现暴露的两个文档缺口**（已补进 §3.5、§3.6）：
-托管集群上 `exclusive-topology` 会死锁；日志必须落盘。
+扩容失败的真原因只在 MIG 的 `list-errors` 里（本次是区域磁盘配额打满，
+节点建不出来）；以及日志必须落盘。
 
 ### 4.3 完整参数集
 
