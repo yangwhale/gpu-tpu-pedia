@@ -8,7 +8,7 @@
 | 平台 | TPU v5p，256 芯片（`4x8x8`） |
 | 框架 | MaxText（nnx），代码在 [`yangwhale/maxtext` 的 `hunyuan3` 分支](https://github.com/yangwhale/maxtext/tree/hunyuan3) |
 | 精度 | BF16 计算 / FP32 主权重 |
-| **实测基线** | **step 63.17 s · 161.0 TFLOP/s/chip · MFU 35.07% · 265,588 tok/s** |
+| **实测基线** | **step 63.2–63.3 s · 160.6–161.0 TFLOP/s/chip · MFU 34.98–35.07% · 约 265,000 tok/s** |
 
 > 这份文档只讲**当前可复现的那一条路径**。完整的移植过程、失败轮次、
 > 十二个 bug 的复盘在 [README.md](README.md)，需要追溯时再去查。
@@ -177,7 +177,7 @@ gcloud container node-pools create np-v5p-dev \
 ```
 
 - `--num-nodes` = 芯片数 ÷ 4，且必须与 `--tpu-topology` 相乘一致
-- 256 芯片池实测 **8 分 26 秒**建完
+- 建池耗时：256 芯片池实测 **5–9 分钟**（两次分别是 4 分 55 秒 / 8 分 26 秒），4 芯片小池约 **3 分钟**
 - **v5p 在 us-central1 只有 `-a` 区有货**；集群是区域级的，节点池自己指定 zone 即可
 - Spot 配额在控制台查不到不代表没有 —— v5p 不走 `PREEMPTIBLE_TPU_LITE_PODSLICE_V5`
   那组老 metric，Cloud Quotas API 返回空。**只能试**，报错会直接告诉你是配额还是容量
@@ -277,7 +277,18 @@ NODES=1 TOPO=2x2x1 PLATFORM=v5p MODEL=hunyuan3-smoke STEPS=8 \
 
 4 层缩层，结构与 295B 完全一致（192 专家、top-8、sigmoid、专家偏置、
 共享专家、GQA、QK-norm、fp32 路由、MTP 全是满配），只砍层数。
-单步约 0.82 s，8 步 loss 应从 13.45 降到 10.35。
+
+**通过标准**（上面这组参数下实测）：
+
+| | 值 |
+|---|---|
+| 参数量 | 16.139 B |
+| 稳态 step | ~0.70 s |
+| loss（8 步） | 13.45 → 10.35，单调下降 |
+| NaN / skipped | 0 |
+| `mtp_loss` | 单独打出且下降（1.221 → 1.093） |
+
+从提交到出结果约 4 分钟（拉镜像 + 编译）。
 
 **为什么 4 层能代表 80 层**：MaxText 按**类型**分组做 `scan`，
 79 个 MoE 层共用同一份编译产物，层与层的差别只在权重数值上，不在代码路径上。
@@ -326,6 +337,13 @@ completed step: 6, seconds: 63.171, TFLOP/s/device: 160.981, loss: 13.029
 completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
 ```
 
+**两个开跑就能查的健康检查**（不对说明代码没打全）：
+
+| 日志字段 | 应为 |
+|---|---|
+| `number parameters` | **298.786 billion** |
+| `Total TFLOPs` | **10169.38** —— 如果是这个数的约 5 倍，说明 `maxtext_utils.py` 的 FLOP 公式没加 `HUNYUAN3`，MFU 会虚高 |
+
 | 指标 | 值 |
 |---|---|
 | 参数量（框架报） | **298.786 B** |
@@ -337,8 +355,21 @@ completed step: 7, seconds: 63.170, TFLOP/s/device: 160.984, loss: 12.998
 | 每卡 HBM 峰值 | 贴近 95.74 GB 上限 |
 | step 抖动 | 毫秒级（63.170–63.176） |
 
-**这个数字换过项目、换过 VPC、换过集群从零复现过**，
-代码从 GitHub 分支现 clone 现打包，与既有水位相差 +0.05%。
+**二次复现（不同节点池，2026-07-30）**：照本文档从建池开始完整走一遍，
+
+| | 首次 | 二次 | 差 |
+|---|---|---|---|
+| 稳态 step | 63.173 s | 63.329 s | +0.25% |
+| TFLOP/s/chip | 160.976 | 160.579 | −0.25% |
+| MFU | 35.07% | 34.98% | −0.09 pp |
+| 整机 tok/s | 265,588 | 264,921 | −0.25% |
+| **loss（step 3–7）** | 13.200 / 13.129 / 13.072 / 13.029 / 12.998 | **逐位相同** | — |
+
+> **loss 逐位相同说明计算完全可复现**，0.25% 的差是跨节点池的机器抖动
+> —— 同一个池内的 step 抖动只有毫秒级（0.02%），换一批物理机会到 0.25%。
+> **拿这份文档对基线时，±0.5% 以内都算复现成功。**
+
+再往前一次是换项目 / 换 VPC / 换集群从零跑的，与既有水位相差 +0.05%。
 
 > **参照**：同一个模型在 GB300 上 64 GPU BF16 的 MFU 是 31.6%。
 > v5p 的单卡算力只有 GB300 的 1/5.9，MFU 反而更高 ——
@@ -402,6 +433,18 @@ allow_split_physical_axes=True
 tokenizer_type=tiktoken
 tokenizer_path=src/maxtext/assets/tokenizer_llama3.tiktoken
 ```
+
+**基线是在这个条件下测的**（`run.sh` 写死，跑真实训练时要改）
+
+```
+dataset_type=synthetic           # 合成数据，只测吞吐不测收敛
+enable_checkpointing=False       # 不写 checkpoint，避免 I/O 干扰读数
+steps=10                         # 取 step >= 3 的稳态
+base_output_directory=/tmp/hy3out
+```
+
+> 换成真实数据后 step 时间会涨 —— 数据管线要跟得上 256 芯片的吞吐，
+> 那是另一个话题。上面的 161.0 TFLOP/s 是**计算侧的上限参考**。
 
 **MoE tile 参数（18 个）**
 
