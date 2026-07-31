@@ -1,5 +1,18 @@
 #!/usr/bin/env python3
-"""把 xplane 的 trace.json 拆成「通信 / 计算 / 各占多少 / 有没有重叠」。
+"""把 xplane 的 trace.json 拆成「通信 / 计算 / 各占多少 / 同步还是异步」。
+
+⚠️ 先看这里：**判断"通信有没有被计算掩盖"不要用本脚本，用 XProf。**
+把 `.xplane.pb` 传上去就有官方 trace viewer，能同时看 TensorCore / SparseCore /
+Host Offload 多条 lane 的真实并发。本脚本只适合做**单条 lane 上的批量统计**。
+
+原因：`XLA Ops` 这条 lane 上顶层 op 天然首尾相接（实测 40560 个事件里，
+16550 处时间交集全是容器包子 op 的纯嵌套，部分交叉为 0）。在这条 lane 上算
+「通信 ∩ 计算」恒等于 0，**不管实际有没有重叠**。据此下"通信完全裸露"的结论
+是同义反复 —— 本项目 2026-07-31 踩过这个坑。
+
+正确的判法是看 op 名字的语义：TPU 上异步集合通信拆成 `-start` / `-done` 一对，
+`-done` 的时长才是没藏完的残余；没有这对拆分的（`all-gather` / `reduce-scatter` /
+`all-reduce`）就是同步阻塞。下面的 `--sync-async` 输出做的就是这件事。
 
 用法:
   gcloud storage cp gs://<bucket>/<run>/tensorboard/plugins/profile/*/*.trace.json.gz .
@@ -45,7 +58,11 @@ def union(intervals):
 
 
 def intersect(a, b):
-    """两组区间的交集总长 —— 用来回答「通信藏住了吗」。"""
+    """两组区间的交集总长。
+
+    ⚠️ 在单条顺序 lane（如 XLA Ops）上，不同顶层 op 不可能相交，本函数恒返回 0。
+    **不要用它判断"通信藏住了吗"**，见文件头说明。保留仅为跨 lane 分析预留。
+    """
     a, b = sorted(a), sorted(b)
     i = j = total = 0
     while i < len(a) and j < len(b):
@@ -101,12 +118,30 @@ def main():
             u = union(buckets[key])
             print(f'  {key:<16}{u/1e6:8.3f}s{u/span*100:8.1f}%')
 
-    comm = buckets['comm']
-    comp = buckets['moe_gemm'] + buckets['compute'] + buckets['attn']
-    cu, pu, ov = union(comm), union(comp), intersect(comm, comp)
-    print(f'\n  通信 {cu/1e6:.3f}s  计算 {pu/1e6:.3f}s  重叠 {ov/1e6:.3f}s')
-    print(f'  → 通信被掩盖 {ov/cu*100 if cu else 0:.1f}%，'
-          f'裸露 {(cu-ov)/1e6:.3f}s = 墙钟 {(cu-ov)/span*100:.1f}%')
+    # 通信按「同步阻塞 / 异步残余」拆 —— 这才是判断能不能藏的正确维度
+    sync_d = collections.defaultdict(float)
+    async_start = async_done = 0.0
+    for e in events:
+        base = re.split(r'[.\d]', e['name'])[0]
+        if not base.startswith(COMM):
+            continue
+        if '-start' in e['name']:
+            async_start += e['dur']
+        elif '-done' in e['name']:
+            async_done += e['dur']
+        else:
+            sync_d[base] += e['dur']
+    sync_total = sum(sync_d.values())
+    print(f'\n  通信拆解（判断"能不能藏"看这里，不看时间交集）:')
+    for k, v in sorted(sync_d.items(), key=lambda x: -x[1]):
+        print(f'    {k:<28} {v/1e6:7.3f}s   同步阻塞')
+    print(f'    {"(async -start)":<28} {async_start/1e6:7.3f}s   异步发起')
+    print(f'    {"(async -done)":<28} {async_done/1e6:7.3f}s   异步残余（已被部分掩盖）')
+    tot = sync_total + async_start + async_done
+    if tot:
+        print(f'  → 同步阻塞 {sync_total/1e6:.3f}s ({sync_total/tot*100:.0f}%) = 墙钟 {sync_total/span*100:.1f}%'
+              f'   异步残余 {async_done/1e6:.3f}s ({async_done/tot*100:.0f}%)')
+    print('  跨 lane 的真实并发请用 XProf 看，本脚本只统计单条 XLA Ops lane。')
 
 
 if __name__ == '__main__':
