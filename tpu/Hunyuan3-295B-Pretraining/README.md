@@ -36,7 +36,8 @@ NVLink 域还干净。代价是要 256 张卡才换来 GB300 64 卡约七成的�
 | 你的情况 | 读这个 |
 |---|---|
 | **想在 v5p 上把它跑起来** | **[QUICKSTART-v5p.md](QUICKSTART-v5p.md)** —— 建池到出数，两条命令，含完整参数与基线。**这份从零验证过** |
-| **想在 v7 (Ironwood) 上跑** | **[QUICKSTART-v7.md](QUICKSTART-v7.md)** —— 只写与 v5p 不同的部分：拿机器的方式、单位换算、当前水位与已知死路。**调优未完成** |
+| **想在 v7 (Ironwood) 上跑** | **[QUICKSTART-v7.md](QUICKSTART-v7.md)** —— 只管跑起来拿到基线：拿机器的方式、单位换算、当前水位 |
+| **想把 v7 调快** | **[TUNING-v7.md](TUNING-v7.md)** —— 从基线往下走：为什么只有 19.29%、已经试过什么（含三条死路）、roofline 分析、实验清单。**活文档，跑一轮回填一行** |
 | 想把**别的**模型移植进 MaxText | [MAXTEXT-PORTING-GUIDE.md](MAXTEXT-PORTING-GUIDE.md) —— 从本项目总结的通用范式，与 Hy3 无关 |
 | 想知道某个数字/结论怎么来的 | [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md) —— 完整实验档案，2600 行 |
 | 只想跑脚本 | [maxtext-hunyuan3/](maxtext-hunyuan3/) —— `prep.sh` + `run.sh` |
