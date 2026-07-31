@@ -419,6 +419,9 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json --dev 3   # 换个 device 交�
 | 2026-07-30 | 二次复现 | 同上，换集群 | 19.90 | 457.3 | 19.82% | 可复现（§4.2.1） |
 | 2026-07-31 | **P0 trace** | 4 芯片冒烟 + `profiler=xplane` | — | — | — | **H2 成立**：通信占墙钟 57.2%，与计算重叠 0.000s。转 B 组（[§4.3.1](#431-实战第一轮-trace-是怎么读出结论的教学)） |
 | 2026-07-31 | **缩放验证** | 16 芯片 / 20 层（等比缩放） | 6.090 | 410.7 | **17.80%** | MFU **不守恒，低 7.7%**。编译时间**不随规模变**（见 [§5.3.1](#531-编译时间并不随规模变快一个被我算错的结论)）。详见 [§5](#5-规模缩放能不能在-16-芯片上调优) |
+| 2026-07-31 | 编译缓存 | `dump_hlo=False` + 固定 `jax_cache_dir` | — | — | — | 启动→step0 **83.8→32.8 s**，稳态不变（[§6.5](#65-编译缓存45-s--087-s)） |
+| 2026-07-31 | **B 组否定** | `scan_layers=False` | — | — | — | **HBM 超 1.7×，跑不起来**；5 层上稳态反而慢 5.9%（[§6.3](#63-scan_layersfalse编译超线性涨且显存装不下)） |
+| 2026-07-31 | **B 组否定** | `scan(unroll=2/10)` | — | — | — | 2 撞 kernel 形状校验，10 需 274.6 G。**无可用档位**（[§6.4](#64-scanunrolln没有可用窗口)） |
 | | | | | | | |
 
 ---
@@ -641,3 +644,174 @@ grep -a "completed step" run.log | \
 ```
 
 MFU = `TFLOP/s/device × 2 ÷ 2307`（v7 一颗芯片 = 2 个 JAX device）。
+
+## 6. 编译这件事：机制、缓存、以及 `scan` 的三种玩法
+
+§5.3.1 更正了"小规模编译更快"这个错误结论。这一节把编译本身查透 ——
+它到底花在哪、能不能缓存、以及 `scan` 的开关和 `unroll` 有没有可操作空间。
+**全部为 16 芯片 / `2x2x4` 上的实测。**
+
+### 6.1 怎么量编译时间：三个口径，别混用
+
+| 口径 | 从哪儿看 | 说明 |
+|---|---|---|
+| **XLA 自报（推荐）** | 日志里 `deepsea_compiler_base.cc:989] END_TO_END stage duration: 43.69s` | 单个 HLO 模块的编译耗时，最干净。**OOM 时不会打印**——模块没编完 |
+| **JAX 侧逐个 jit** | `JAX_LOG_COMPILES=1` → `Finished XLA compilation of jit(train_step) in 45.15 sec` | 能看清**哪个 jit** 贵，排查缓存命中必用 |
+| **墙钟** | `TRIAL_START` 时间戳 → `completed step: 0` | 用户实际等待时间，含缓存 IO、数据管线等 |
+
+同一轮实测：XLA 自报 42.76s / JAX 侧 45.15s / 编译段墙钟 52.2s。三者都对，
+差值是 JAX 封装和小模块。**报数时务必写明用的哪个口径**，否则无法比较。
+
+> **`step 0` 不等于编译时间。** MaxText 先把 `train_step` 编译完再进步循环，
+> 所以 `step 0` 只是一步普通训练（实测 6.06–6.11s，与稳态 6.085s 基本相同）。
+> 早期看到的 `step 0 = 49.6s` 是 **`dump_hlo=True` 往 GCS 上传 HLO** 的时间，不是编译。
+
+### 6.2 编译时间不随层数变（因为有两个 scan）
+
+`scan_layers=True` 下，层数对编译几乎无影响：
+
+| 层数 | XLA `END_TO_END` |
+|---|---|
+| 5 | 42.41 s |
+| 20 | 43.12 / 43.40 / 43.69 / 44.06 / 44.77 s（五次） |
+| 80 | 44.29 s |
+
+**层数变 16 倍，编译只涨 4.5%。**
+
+机制上不是"一份 layer body"，而是**两份** —— 因为首层是 dense（`first_num_dense_layers: 1`），
+结构与 MoE 层不同，不可能进同一个 scan。在 `nnx_decoders.py` 的运行期 scan 上加打印可以直接看到：
+
+```
+[SCANDBG2] main lax.scan length=1  unroll=1   ← dense 段
+[SCANDBG2] main lax.scan length=19 unroll=1   ← MoE 段（20 层时）
+```
+
+两段各自 scan，**层数只改变 scan 的 trip count，不进 HLO 规模**，所以编译恒定。
+
+> **排查技巧**：这个模型走 **NNX** 路径（`nnx_decoders.py`），不是 Linen 的 `decoders.py`。
+> 全树共有三处 `lax.scan`（初始化用的 `nnx_scan.py`、另一分支、以及主路径）。
+> 改 scan 行为时**先加 print 确认走到哪一处**，比读代码猜快得多 —— 本项目为此打偏过两次补丁。
+
+### 6.3 `scan_layers=False`：编译超线性涨，且显存装不下
+
+`HLO_PASSES`（图级优化）在两种配置下都能跑完（OOM 发生在其后的内存分配），所以可比：
+
+| 20 层 / `per_device_batch_size=2` | `HLO_PASSES` |
+|---|---|
+| scan **ON**（1 份 body） | 10.18 s |
+| scan **OFF**（19 份 body） | **58.09 s（5.7×）** |
+
+**编译是超线性的。** 5 层那组（1→4 份 body）只涨 44%，据此做的线性外推完全错误 ——
+小图上超线性还没起来。**不要用小规模的两点去外推编译成本。**
+
+更致命的是显存：
+
+| 配置 | HBM 需求（可用 94.74 G） |
+|---|---|
+| scan ON | 装得下 |
+| scan OFF，`pdbs=8` | **171.75 G** |
+| scan OFF，`pdbs=2` | **160.89 G** |
+
+**batch 降到 1/4，显存只降 6%** —— 说明爆的不是激活，而是**跟 batch 无关**的部分。
+最可能是 FSDP 的权重 all-gather：开着 scan 时同一时刻只有一层的完整权重被 gather 出来，
+全展开后调度器可让多层的 all-gather 结果同时存活。同时 `remat_policy=custom` +
+`decoder_layer_input=offload` 的按层重算/卸载边界也随之失效。
+
+> **更正 `MAXTEXT-PORTING-GUIDE §5.2`**：那张表里"显存"一栏原写
+> "scan 每次迭代结束物化 carry / 关掉可跨层复用缓冲"，暗示关掉可能更省。
+> **实测相反：关掉直接超 1.7 倍。** 该栏已按实测更新。
+
+### 6.4 `scan(unroll=N)`：没有可用窗口
+
+MaxText 没有暴露 `unroll`，但 `jax.lax.scan` 原生支持。
+在 `nnx_decoders.py` 主路径的 `lax.scan(...)` 上加 `unroll=` 参数后实测：
+
+| `unroll` | 结果 |
+|---|---|
+| **1** | ✅ 正常。编译 43.69 s，稳态 6.086 s |
+| **2** | ❌ XLA `INTERNAL: during context [post-optimization]: Expected instruction to have shape equal to (bf16[9,2,8,4096,4096], ...)` |
+| **10** | ❌ OOM，**274.64 G**（比全展开的 171 G 还高） |
+| 全展开 | ❌ OOM，160.89–171.75 G |
+
+两个失败模式不同，且**中间没有可用档位**：
+
+- `unroll=2` 撞的是 **kernel 兼容性** —— 报错形状里的 `2` 就是 unroll 因子，
+  `9` 是 splash attention 的分块。展开后中间张量多了一维，下游 attention kernel 没跟上。
+- `unroll=10` 撞的是**显存，而且比全展开更狠**。反直觉但可解释：部分展开时
+  scan 的 carry 机制仍在（要为剩余迭代保留状态），块内 10 层的激活又全部存活，
+  **两头开销都要付**；重算边界也随之变粗。
+
+**结论：§4.4 B 组里"用 `scan(unroll=N)` 让 XLA 跨层藏通信"这条，
+在当前 MaxText + splash attention + FSDP 组合下不可行。** 这是否定结果，
+但它封掉了一条本来要花数天试的路。
+
+### 6.5 编译缓存：45 s → 0.87 s
+
+**前提有两个，缺一不可：**
+
+1. **`dump_hlo=False`。** MaxText 源码 `configs/pyconfig.py` 里写死了：
+   `dump_hlo=True` 时**禁用** JAX 编译缓存（HLO dump 需要重新编译），并打 warning。
+2. **Pod 常驻。** 缓存目录默认 `~/jax_cache` 在容器内，一次性 Job 跑完 Pod 销毁，
+   缓存必然每次冷启。**必须配合 sleep-infinity 常驻环境**（见 §6.7）。
+
+清空缓存跑两轮，开 `JAX_LOG_COMPILES=1` 逐个 jit 对照：
+
+| | 第一轮（冷） | 第二轮（热） |
+|---|---|---|
+| jit 编译次数 | 21 个 | **21 个（一样）** |
+| 总编译时长 | 51.75 s | **3.38 s** |
+| 最大单个 | 45.15 s | **0.87 s** |
+| `jit(train_step)` 变体一 | **45.152 s** | **0.865 s** |
+| `jit(train_step)` 变体二 | 0.856 s | 0.869 s |
+| 启动 → step 0 | **83.8 s** | **32.8 s（−61%）** |
+| 缓存目录 | 3 条 / 65 MB | 同 |
+
+**准确的说法不是"第二轮跳过编译"，而是"编译次数一模一样，但那个 45 秒的塌成了 0.87 秒"。**
+
+`jit(train_step)` 有两个不同 shape 的变体，只有大的那个走持久缓存。
+其余 19 个（`add` / `reshape` / `iota` / `broadcast_in_dim` 等）两轮都在编，各几十毫秒 ——
+**JAX 只持久化超过阈值的模块**，小的每次现编，合计约 2.5 s，可忽略。
+缓存目录里的 3 条正对应三个 >1 s 的模块：`jit_train_step`、`jit__lambda`、`jit__randint`。
+
+**⚠️ 改 XLA flag 会让缓存失效**，所以扫 flag 的实验每轮都是冷启，享受不到这个收益。
+
+### 6.6 重复性：可以直接判 1% 级别的改进
+
+同一环境、同一配置的多轮稳态 step：
+
+| 轮次 | 配置 | 稳态 step |
+|---|---|---|
+| 首轮 | profiler + `dump_hlo` | 6.0900 s |
+| R1 | 都关，冷缓存 | 6.0851 s |
+| R2 | 都关，热缓存 | 6.0852 s |
+| R3 | 都关，冷缓存复验 | 6.0847 s |
+| w1 | 加 unroll 补丁，`unroll=1` | 6.0860 s |
+
+**五轮极差 5.3 毫秒（0.09%），单轮内抖动 ±2–4 ms。**
+
+这条对调优很重要：**不需要跑多轮取平均，单轮就能判 1% 级别的改进**。
+同时也说明 `profiler` 和 `dump_hlo` 对稳态吞吐没有影响，只影响启动段。
+
+> **取稳态的口径陷阱**：开 profiler 时（`skip_first_n_steps_for_profiler=12 profiler_steps=5`）
+> **step 17 会出现一个 ~90 秒的尖峰**（导 trace）。若按惯例取 `step ≥ 15` 求均值，
+> 会得到 11.678 s —— 比真实稳态慢近一倍。**先看序列再定窗口，不要套用固定阈值。**
+
+### 6.7 快速迭代的环境形态
+
+上面这些结论能在一晚上跑出十几轮，靠的是把"一次性 Job"换成"常驻环境"：
+
+- 4 个 Pod 跑 `sleep infinity` 占住 TPU 切片，代码预先解包在容器里
+- 每轮实验用 `kubectl exec` **并行**在 4 个 Pod 上起同一条命令
+- 编译缓存落在容器内固定路径，跨轮保留
+
+**关键限制：多机 TPU 必须 4 个 Pod 同时执行。** 只 exec 进一个 Pod 跑 JAX 会卡在建 mesh：
+
+```
+RuntimeError: Unable to initialize backend 'tpu': DEADLINE_EXCEEDED:
+TPU initialization failed: Failed to connect to <peer>:8471
+```
+
+看代码、查文件可以单 Pod 进；**真跑必须齐步走**。
+
+收益对比：一次性 Job 每轮要重新调度、拉 1.73 GB 镜像、建切片、冷编译；
+常驻环境下一轮 30 步实验 **275 s → 209 s**，启动到第一步 **83.8 s → 32.8 s**。
