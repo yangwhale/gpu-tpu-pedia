@@ -418,7 +418,189 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json --dev 3   # 换个 device 交�
 | 2026-07-30 | baseline | §4.3 参数集 | 20.43 | 445.1 | 19.29% | 起点 |
 | 2026-07-30 | 二次复现 | 同上，换集群 | 19.90 | 457.3 | 19.82% | 可复现（§4.2.1） |
 | 2026-07-31 | **P0 trace** | 4 芯片冒烟 + `profiler=xplane` | — | — | — | **H2 成立**：通信占墙钟 57.2%，与计算重叠 0.000s。转 B 组（[§4.3.1](#431-实战第一轮-trace-是怎么读出结论的教学)） |
+| 2026-07-31 | **缩放验证** | 16 芯片 / 20 层（等比缩放） | 6.090 | 410.7 | **17.80%** | MFU **不守恒，低 7.7%**；但编译 49.6s（快 12–20×）。详见 [§5](#5-规模缩放能不能在-16-芯片上调优) |
 | | | | | | | |
 
 ---
 
+
+## 5. 规模缩放：能不能在 16 芯片上调优
+
+### 5.1 为什么要问这个
+
+64 芯片一轮实验的成本不在跑，在**等**：编译 10–17 分钟，加上排队和起容器，改一个 XLA flag
+到看见数字往往要半小时以上。如果小规模能给出**同样的判断**，调优循环可以快一个数量级。
+
+所以要验的不是"小规模能不能跑"，而是 **MFU 在缩放下守不守恒**。守恒 → 小规模的结论可以直接外推；
+不守恒 → 至少要知道偏差多大、从哪来。
+
+### 5.2 缩放怎么设计：为什么层数要跟着砍
+
+当前是**纯 FSDP**（`ici_fsdp_parallelism=-1, ici_tensor_parallelism=1`），没有流水线并行。
+在这个配置下，两个量决定了每张芯片的负载：
+
+| 量 | 怎么随规模变 |
+|---|---|
+| 每芯片参数量 | ∝ 层数 ÷ 芯片数 |
+| 每芯片 FLOPs | ∝ 层数 × `per_device_batch_size`（**与芯片数无关**，因为 global batch 跟着芯片数走） |
+
+第二行是关键，也是容易想错的地方：**只减芯片不减层，每芯片计算量不变，但每芯片参数量翻倍**——
+HBM 先撑爆。所以芯片数和层数必须同比例砍，才能让每芯片参数量恒定：
+
+| 规模 | 芯片 | 拓扑 | 层数 | 每芯片"层份额" |
+|---|---|---|---|---|
+| 基线 | 64 | `4x4x4` | 80 | 1.25 |
+| 本轮 | 16 | `2x2x4` | 20 | 1.25 |
+| （未跑） | 32 | `2x4x4` | 40 | 1.25 |
+
+其余参数一律不动：`per_device_batch_size=8`、`max_target_length=4096`、同一套 XLA flag。
+
+### 5.3 实测结果
+
+30 步，步时序列干净得可以直接读：
+
+```
+step  0: 49.597s   ← 编译
+step  1:  7.549s   step  2: 10.723s   ← 预热
+step  3–16: 6.09s  ← 已进稳态（step 13 为 6.467s）
+step 17: 89.888s   ← profiler 导 trace，不计入
+step 18–29: 6.09s  ← 稳态，12 步抖动 ±0.002s
+```
+
+> **口径提醒**：`skip_first_n_steps_for_profiler=12 profiler_steps=5` 会让 **step 17** 出现
+> 一个 90 秒的尖峰。若按惯例取 `step ≥ 15` 求均值，会把它算进去，得到 11.678s —— 比真实稳态
+> 慢近一倍。**取稳态一定要先看序列再定窗口**，不要套用固定阈值。
+
+| | 64 芯片 / 80 层 | 16 芯片 / 20 层 | 差 |
+|---|---|---|---|
+| 稳态 step | 20.43 s | **6.090 s** | — |
+| tokens/s/device | 1,604 | 5,381 | — |
+| TFLOP/s/chip | 445.1 | **410.7** | −7.7% |
+| MFU（BF16 峰值 2,307） | 19.29% | **17.80%** | **−7.7%** |
+| 首步编译 | 10–17 min | **49.6 s** | 快 12–20× |
+
+**结论：MFU 不守恒，小规模低 7.7%，超出 ±3% 的复现判据。**
+
+### 5.4 这 7.7% 从哪来：两个候选，尚未分离
+
+#### 候选一：层无关开销的占比变大（可定量）
+
+MFU 已经对总 FLOPs 做过归一，所以 7.7% 是**真实的效率损失**，不是算错账。
+但可以从两组数里反推出结构。用 `TFLOP/s/device ÷ tokens/s/device` 得到每 token 的 FLOPs：
+
+| | 80 层 | 20 层 | 比值 |
+|---|---|---|---|
+| GFLOP / token / device | 138.75 | 38.16 | **3.636** |
+
+**如果 FLOPs 只来自 decoder 层，这个比值应该正好是 4.0。** 少掉的部分就是不随层数缩放的开销 ——
+embedding 查表、12 万词表（`vocab_size: 120832`）的 logits 投影、以及 loss。
+按 `F(L) = a·L + b` 两点求解：
+
+- 每层 **1.676** GFLOP/token
+- 层无关项 **4.635** GFLOP/token
+
+于是层无关部分的占比：**80 层时 3.3% → 20 层时 12.1%**，翻了近 4 倍。
+
+再按 FLOPs 权重反解两类工作各自的效率（两点两未知，恰定）：
+
+- decoder 层内计算 ≈ **19.9% MFU**
+- 层无关部分（embedding / logits / loss）≈ **10.1% MFU**
+
+这个量级是合理的：词表投影和 softmax 是访存密集型，效率本来就该明显低于层内的大矩阵乘。
+**层数砍到 1/4，等于把一块低效率的工作从 3% 放大到 12%，整体 MFU 被拖下来。**
+
+#### 候选二：拓扑退化（无法排除）
+
+基线的 `4x4x4` 是完整的三维环面；本轮的 `2x2x4` 有一个维度只有 2，
+该方向的环绕链路是退化的。集合通信的效率因此可能不同。
+
+#### 两者用一个数据点分不开
+
+上面那组反解是**两点拟合两个未知数，恰好定解，没有自由度做检验** —— 它自洽，但不构成证明。
+拓扑这条同样没有独立证据。**不要把候选一当成已确认的结论。**
+
+**判别实验：跑 64 芯片 / 20 层。** 层数与本轮相同、拓扑与基线相同：
+
+- MFU 落到 ~17.8% → 层无关开销占比是主因，拓扑无罪
+- MFU 保持 ~19.3% → 拓扑退化是主因
+
+每芯片"层份额"降到 0.3125（基线的 1/4），显存有充足余量，不会 OOM。
+反方向（16 芯片跑 80 层）不可行 —— 每芯片参数量是基线的 4 倍，必然 OOM。
+
+### 5.5 对调优实践的结论
+
+1. **绝对 MFU 不能从 16 芯片外推到 64 芯片。** 任何小规模跑出的 MFU，报数时必须标注规模和层数，
+   否则会被误当成全尺寸水位。
+2. **相对改进量大概率可以迁移，但还没验证。** 7.7% 若是稳定偏置，A/B 的差值就能用。
+   **验证方法**：在 16 芯片上重跑一个已知有效的改动（例如 §2 里 `pdbs=8 / seq=4096` 那一组），
+   看提升幅度是否与 64 芯片上一致。这一步做完之前，小规模只能用来判**方向**，不能用来判**幅度**。
+3. **真正的收益是编译时间：49.6 秒 vs 10–17 分钟。** 这让"改一个 flag 看一眼"从半小时降到一分钟量级。
+   对 §4.4 里那批需要逐个试的开关（尤其 B 组的 `scan(unroll=N)` 扫描、C 组删 SparseCore flag），
+   小规模的价值主要在这里，而不在 MFU 数字本身。
+4. **筛完再上大规模。** 推荐流程：16 芯片粗筛出有效方向 → 64 芯片确认幅度并出正式数字。
+
+### 5.6 自建 v7 节点池：四个卡点
+
+共享集群不可用时需要在自有项目自建。四个坑按撞到的顺序：
+
+**① 必须用 workload policy，不是 placement policy**
+
+```
+Creation of a managed instance group with tpu7x-standard-4t machine type
+with placement policy is not supported. Use workload policy instead.
+```
+
+v5p 惯用的 `--placement-type=COMPACT` 和裸 `--tpu-topology` 在 v7 上都会触发这个。正确写法：
+
+```bash
+gcloud compute resource-policies create workload-policy <WP> \
+  --region=us-central1 --type=HIGH_THROUGHPUT --accelerator-topology=2x2x4
+
+gcloud container node-pools create <POOL> \
+  --cluster=<C> --region=us-central1 --node-locations=us-central1-c \
+  --machine-type=tpu7x-standard-4t --num-nodes=4 --spot \
+  --placement-policy=<WP> \
+  --scopes=https://www.googleapis.com/auth/cloud-platform
+```
+
+**② 建池时不要再传 `--tpu-topology`。** 传了 GKE 会自动附加一个 group placement policy，
+与 workload policy 冲突。拓扑信息由 workload policy 的 `--accelerator-topology` 携带。
+
+**③ 必须显式给 `--scopes=cloud-platform`。** 节点池默认 scope 里存储只有 `devstorage.read_only`，
+表现是**下载代码正常、程序跑到写输出时 403**：
+
+```
+google.cloud.storage.exceptions.InvalidResponse:
+('Request failed with status code', 403, ...)
+```
+
+这一轮就是编译完成、准备上传 HLO dump 时倒在这里。**节点池 scope 不可修改，只能删掉重建。**
+桶上给了 IAM 权限也没用 —— IAM 和 OAuth scope 是两层，scope 不够先被拦。
+
+**④ DWS flex-start 不能空跑等你。** 想要"节点先建好在那等着部署"是做不到的：
+
+| 尝试 | 报错 |
+|---|---|
+| flex-start + autoscale 0→4 | `Maximum node count 0 is not a valid size of TPU pod slice with topology "2x2x4"` |
+| flex-start + 固定 4 节点 | **`Flex start node pools require autoscaling enabled`** |
+
+gcloud 在 API 层强制 flex-start 必须开 autoscaling，而 autoscaling 意味着按需伸缩 ——
+没有 workload 就是 0 节点。要想常驻，只能放一个 `sleep infinity` 的 workload 把节点撑住。
+另外 flex-start 节点**最长存活 7 天**，到期节点和 Pod 一起被抢占；且**不支持 reservation**
+（必须 `--reservation-affinity=none`）、**不支持 Spot**（二选一）。
+
+### 5.7 复现
+
+```bash
+# 提交（其余参数与 §4.3 基线完全一致，只加一个层数覆盖）
+python3 -m src.maxtext.trainers.pre_train.train src/maxtext/configs/base.yml \
+  model_name=hunyuan3-295b ... \
+  base_num_decoder_layers=20 \
+  per_device_batch_size=8 max_target_length=4096
+
+# 取稳态：先看序列，再定窗口（别直接套 step>=15）
+grep -a "completed step" run.log | \
+  sed -E 's/.*step: ([0-9]+), seconds: ([0-9.]+).*/\1 \2/'
+```
+
+MFU = `TFLOP/s/device × 2 ÷ 2307`（v7 一颗芯片 = 2 个 JAX device）。

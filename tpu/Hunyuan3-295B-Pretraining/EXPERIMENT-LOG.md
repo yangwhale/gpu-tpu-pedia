@@ -1282,9 +1282,12 @@ DeepSeek 的 MoE，新版正好有 `AttentionWithNorm` 基类和 `RoutedAndShare
 
 当时的写法（来自 [tpu-recipes ironwood 配方](https://github.com/yangwhale/tpu-recipes/tree/main/training/ironwood)）：
 
-> ⚠️ **下面第一条命令在 gcloud ≥ 577 上已经不存在**（`resource-policies create`
-> 只剩 group-placement 等子命令），现在只能走 REST 建 workload policy —— 见 §9.0⑤。
-> 节点池那条仍然有效。
+> ✅ **2026-07-31 复核：gcloud 577.0.0 上 `resource-policies create workload-policy`
+> 存在且可用**，下面两条命令直接照抄即可，不需要走 REST。
+> （早前记的「577 上已删除」是错的，已更正。）
+>
+> 建池时**不要同时传 `--tpu-topology`** —— 会自动附加 group placement policy 跟
+> workload policy 冲突。拓扑由 workload policy 的 `--accelerator-topology` 携带。
 
 ```bash
 # v7 不会自动建 placement policy，必须先手工建，而且要带拓扑
@@ -2357,8 +2360,8 @@ with placement policy is not supported. Use workload policy instead.
 ```
 
 **必须先建一个 `workloadPolicy` 类型的 resource policy，再让节点池引用它。**
-gcloud 577 没有这个子命令（`resource-policies create` 只有 group-placement 等），
-只能走 REST：
+**2026-07-31 复核：gcloud 577.0.0 上 `gcloud compute resource-policies create
+workload-policy` 存在且可用**，优先用它；下面的 REST 写法只在 gcloud 缺子命令时才需要：
 
 ```bash
 TOK=$(gcloud auth application-default print-access-token)
