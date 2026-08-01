@@ -102,3 +102,72 @@ gcloud container node-pools create np-v5p-256 \
 
 > `--scopes=cloud-platform` 不能漏 —— 默认只有 `devstorage.read_only`，
 > 写 GCS 会 403，而且**节点池的 OAuth scope 建好之后改不了**，只能删了重建。
+
+---
+
+## 6. Trace 教学：每改一个参数，看图变了什么
+
+这一节是**过程记录**，不是结论汇总。每一轮都按同一个格式走：
+**当前版本的图长什么样 → 从图上看出什么问题 → 改哪个参数 → 改完图长什么样**。
+
+### 6.1 抓 trace 的固定流程
+
+四步，每一步都有坑，按这个来不会返工。
+
+**① 跑一轮带 profiler 的**
+
+```bash
+bash run.sh <name> \
+  base_output_directory=gs://<bucket>/hy3out \
+  profiler=xplane skip_first_n_steps_for_profiler=4 profiler_steps=3 \
+  upload_all_profiler_results=False
+```
+
+- ⚠️ **`base_output_directory` 必须指到 GCS**。`run.sh` 默认写 `/tmp/hy3out`，
+  那是 pod 内的路径，pod 一删 trace 就没了，c2xprof 也读不到。
+- `skip_first_n_steps_for_profiler=4` —— 前几步含编译和异步派发的假读数，
+  抓进去只会看到一堆一次性开销。
+- `profiler_steps=3` 足够。抓多了文件几个 G，上传慢。
+- **性能数字不要从这一轮取**。profiler 本身有开销，Δ 要用不带 profiler 的干净跑。
+
+**② 传 XProf 拿链接**
+
+```
+mcp__c2xprof__c2xprof_upload(gcs_path="gs://.../<host>.xplane.pb",
+                             project="<gcp-project>")
+```
+
+- `project` **必传**，服务端自动解析拿不到项目会直接报错。
+- 单文件上传实测 66–75 s，而 MCP 客户端硬超时是 60 s，**大概率超时**。
+  超时不是失败，任务还在跑；重试或改用 ssh 直接调 `c2xprof.par`。
+
+**③ 截图**
+
+用 Chrome 打开 XProf 链接，`trace_viewer` 里缩到 **30 ms 左右**的窗口才看得清算子交替。
+整屏截图只能看出「lane 很满」，看不出谁在等谁。
+
+**④ 落文档**
+
+链接 + 截图 + **一句话说明这张图要看的是什么**。没有第三条，图就是装饰。
+
+### 6.2 读图的三条纪律（v7 上栽出来的）
+
+1. **不要在单条 lane 上算「通信与计算的交集」**。XLA Ops lane 是严格嵌套的，
+   交集恒为 0，算出来是同义反复，不是「完全没重叠」。
+2. **异步 ≠ 已掩盖**。`-start` / `-done` 成对出现只说明它是异步发的；
+   真正要看的是 `-done` 上等了多久。
+3. **要一个能配平到 100% 的分解**，用**自用时间**（每个算子减去子算子）。
+   否则 `while` 这类容器算子会被重复计数，得出「掩盖率 83%」这种自相矛盾的结论。
+
+> 这三条在 v7 上分别踩过一次，四个版本的结论被推翻了三次。
+> 详见 [TUNING-v7 §4.3.1](TUNING-v7.md#431-实战第一轮-trace-是怎么读出结论的教学)。
+
+### 6.3 轮次记录
+
+| 轮次 | 配置 | step (s) | XProf 链接 | 截图 | 从图上看到什么 |
+|---|---|---|---|---|---|
+| R0 | 基线（tile mlp_dim=1024） | 63.199 | 待补 | 待补 | 待补 |
+| R1 | tile mlp_dim=1536 | 待补 | 待补 | 待补 | 待补 |
+
+> 组内讨论期 XProf 链接直接放这里；这些是 `corp.google.com` 域名，
+> 外部访问不到。**优化收尾后整块删除。**

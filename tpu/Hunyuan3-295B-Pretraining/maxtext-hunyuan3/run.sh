@@ -52,8 +52,10 @@ v5p)
   --xla_tpu_enable_sparse_core_offload_queuing_in_lhs=true
   --xla_sc_enable_instruction_fusion=false --xla_sc_disjoint_spmem=false'
   # tile 参数：旧版 3 个，新版拆成 18 个（{wi,wo} × {fwd,dlhs,drhs} × 3 维）
+  # TILE_MLP 可覆盖：v7 上实测 tile 必须**等于** base_moe_mlp_dim(1536)，
+  # 1024 除不尽会断言失败、512 能整除但更慢。v5p 默认仍是 1024，待验。
   TILE=""; for m in wi wo; do for p in fwd dlhs drhs; do
-    TILE="$TILE ${m}_tile_${p}_batch_seq=512 ${m}_tile_${p}_embed_dim=1024 ${m}_tile_${p}_mlp_dim=1024"
+    TILE="$TILE ${m}_tile_${p}_batch_seq=512 ${m}_tile_${p}_embed_dim=1024 ${m}_tile_${p}_mlp_dim=${TILE_MLP:-1024}"
   done; done
   EXTRA="per_device_batch_size=8 max_target_length=8192 use_custom_sort_vjp=True
   sa_use_fused_bwd_kernel=False out_proj=remat$TILE"
