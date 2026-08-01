@@ -72,7 +72,7 @@ v7 那边跑了 34 个开关组合（[TUNING-v7 §7](TUNING-v7.md#7-消融总表
 | R0 | 基线 | QUICKSTART-v5p §5.3 参数集 | ✅ | 63.199 s / 160.909 / **35.05%** |
 | R1 | MoE tile = 1536 | `TILE_MLP=1536` | ✅ | 66.421 s，**−5.10%** ← v7 上是 +8.25% |
 | R2 | MoE tile = 512 | `TILE_MLP=512` | ✅ | 61.496 s / 165.366 / **36.03%**，**+2.70%** ← v7 上是 −3.90% |
-| R3 | remat 全量 | `remat_policy=full` `decoder_layer_input=remat` | ⬜ | |
+| R3 | remat 全量 | `remat_policy=full` `decoder_layer_input=remat` | ❌ | **OOM**：需 123.33 G / 可用 95.73 G。v5p HBM 本就贴顶，去掉 host offload 装不下 |
 | R4 | ring of experts | `use_ring_of_experts=True` `num_moe_token_chunks=4` | ⬜ | |
 | R5 | 优化器状态 BF16 | `mu_dtype=bfloat16` `grad_dtype=bfloat16` | ⬜ | |
 
@@ -138,6 +138,7 @@ v7 那边跑了 34 个开关组合（[TUNING-v7 §7](TUNING-v7.md#7-消融总表
 | 2026-08-01 | **基线复现** | 同上，换 us-central1-a spot 新池 | **63.199** | 160.909 | **35.05%** | +0.05% | 可复现，本轮全部 Δ 以此为准 |
 | 2026-08-01 | tile 1536 | `TILE_MLP=1536`（= `base_moe_mlp_dim`） | 66.421 | 153.105 | 33.36% | **−5.10%** | **负收益**。v7 上这一项是 +8.25%，**跨代不成立**（见下） |
 | 2026-08-01 | **tile 512** | `TILE_MLP=512` | **61.496** | 165.366 | **36.03%** | **+2.70%** | **本轮首个正收益**。v7 上是 −3.90%，**又一次反号** |
+| 2026-08-01 | remat 全量 | `remat_policy=full` `decoder_layer_input=remat` | — | — | — | **OOM** | 需 **123.33 G**，可用 95.73 G。**`decoder_layer_input=offload` 在 v5p 上是必需项，不是可选优化** |
 | | | | | | | | |
 
 ### 4.1 第一条跨代反例：MoE tile
