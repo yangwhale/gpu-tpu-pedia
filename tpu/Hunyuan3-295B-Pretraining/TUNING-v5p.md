@@ -10,7 +10,7 @@
 | | 值 | 来源 |
 |---|---|---|
 | 规模 | 256 芯片（`ct5p-hightpu-4t` × 64，拓扑 `4x8x8`） | QUICKSTART-v5p §5.1 |
-| 稳态 step | **63.17 s** | 两次复现差 0.25% |
+| 稳态 step | **63.199 s** | 2026-08-01 第三次复现，与文档差 +0.05% |
 | TFLOP/s / chip | **160.98** | |
 | **MFU** | **35.07%** | |
 | 整机吞吐 | 265,588 tok/s | |
@@ -85,20 +85,26 @@ v7 那边跑了 34 个开关组合（[TUNING-v7 §7](TUNING-v7.md#7-消融总表
 
 ## 5. 环境
 
-复用 [QUICKSTART-v5p §3](QUICKSTART-v5p.md) 的建法，两点不同：
-
-- **走 reservation 不走 spot**。`us-central1-a` 的 v5p spot 今天抢不到；
-  改用 `europe-west4-b` 的 ct5p 预留（1024 颗，空 424）。
-- 集群 `chrisya-v5p-euw4`（region `europe-west4`，节点在 `-b`）。
+复用 [QUICKSTART-v5p §3](QUICKSTART-v5p.md) 的建法，**留在 us-central1**。
 
 ```bash
 gcloud container node-pools create np-v5p-256 \
-  --cluster=chrisya-v5p-euw4 --region=europe-west4 \
-  --node-locations=europe-west4-b \
+  --cluster=chrisya-tpu --region=us-central1 \
+  --node-locations=us-central1-a \
   --machine-type=ct5p-hightpu-4t --tpu-topology=4x8x8 --num-nodes=64 \
-  --reservation-affinity=specific --reservation=<预留名> \
-  --scopes=cloud-platform
+  --spot --scopes=cloud-platform
 ```
+
+2026-08-01 实测：**64 台一次开出，全部 Ready**，不用排队、不用 reservation。
+
+> **绕过的一个弯路**：当天 v7 抢不到卡，我一度跑去 `europe-west4` 用 ct5p 预留
+> （1024 颗空 424）建了一套。能开出来，但**桶、镜像、GCS staging 全要在欧洲重建一遍**，
+> 得不偿失。**v5p 就留在 us-central1-a 用 spot**，这跟 v7 的处境完全不同 ——
+> v7 的裸容量被 reservation 圈光了，v5p 没有。
+>
+> 那次还撞到一个坑：`cloud-tpu-multipod-dev` 集群太多，默认 VPC
+> **切不出 GKE 要的 /14 Pod 段**，建集群直接 `status: ERROR`。
+> 解法是 `--cluster-ipv4-cidr=/18 --default-max-pods-per-node=64`。
 
 > `--scopes=cloud-platform` 不能漏 —— 默认只有 `devstorage.read_only`，
 > 写 GCS 会 403，而且**节点池的 OAuth scope 建好之后改不了**，只能删了重建。
