@@ -61,7 +61,63 @@ v7 那边跑了 34 个开关组合（[TUNING-v7 §7](TUNING-v7.md#7-消融总表
 
 ---
 
-## 3. 方法论（沿用 v7 的教训，不重新踩）
+## 3. 测试计划与进度
+
+状态：✅ 已完成 ｜ 🔄 进行中 ｜ ⬜ 待测 ｜ ❌ 已否决（不再测）
+
+### 3.1 第一批：v7 结论的跨平台重测（进行中）
+
+| # | 项 | 改什么 | 状态 | 结果 |
+|---|---|---|---|---|
+| R0 | 基线 | QUICKSTART-v5p §5.3 参数集 | ✅ | 63.199 s / 160.909 / **35.05%** |
+| R1 | MoE tile = 1536 | `TILE_MLP=1536` | ✅ | 66.421 s，**−5.10%** ← v7 上是 +8.25% |
+| R2 | MoE tile = 512 | `TILE_MLP=512` | 🔄 | |
+| R3 | remat 全量 | `remat_policy=full` `decoder_layer_input=remat` | ⬜ | |
+| R4 | ring of experts | `use_ring_of_experts=True` `num_moe_token_chunks=4` | ⬜ | |
+| R5 | 优化器状态 BF16 | `mu_dtype=bfloat16` `grad_dtype=bfloat16` | ⬜ | |
+
+### 3.2 第二批：两个重点未测项
+
+这两项在 v7 上都没跑出稳态结论，且都是**高价值 / 高不确定性**，单独排一批。
+
+| # | 项 | 为什么重点 | 状态 |
+|---|---|---|---|
+| **R6** | **FP8**：`quantization=fp8_full` + `use_qwix_quantization=True` | v5p **没有 FP8 算力加速**（FP8 峰值 = BF16），所以**算力侧收益预期为零**。但两条侧面收益仍然成立：① all-gather 的**字节数减半**；② 权重占用减半，而 v5p 的 HBM 是**贴顶**的，省出来可以换 batch。**这是一次机理干净的判别实验**：如果 v5p 上 FP8 还能提速，那收益一定来自通信/显存而非算力 | ⬜ |
+| **R7** | **`use_tokamax_gmm=True`** | v7 上表现为「前几步极慢，看门狗超时被误记成死锁」，**稳态数据始终没拿到**（reservation 被回收打断）。它同时是 `use_gmm_v2` 的强制前置，而 `gmm_v2` 又是 `num_moe_emb_chunks`（沿 embedding 维分块藏通信）的前置。**打不通它，整条藏通信的功能族都用不了** | ⬜ |
+
+**R6 的注意事项**（v7 上踩过）：
+- `quantization=fp8` 走的是 `Fp8Quantization`，源码注释写明 "for NVIDIA GPUs"，
+  会报 `AttributeError: 无 quant_dg`。**TPU 上必须走 `fp8_full` + qwix**。
+- v7 上 `fp8_full` 撞过 `AssertionError: v=1536 bv=1024`（tile 除不尽）。
+  v5p 默认 tile 也是 1024，**很可能撞同一个断言** —— 若撞上，配合 R1/R2 的
+  tile 扫描结果决定用哪个值。
+
+**R7 的注意事项**：
+- 前几步慢**不等于**稳态慢（Mosaic kernel 按实际矩阵形状做运行时编译）。
+  **至少跑 24 步**，丢前 3 步，再跑第二轮验证缓存是否吃掉这部分开销。
+- 跑之前把超时兜底加上，别让它把整批拖死。
+
+### 3.3 第三批：v5p 独有 / 尚未探索
+
+| # | 项 | 状态 |
+|---|---|---|
+| R8 | `sa_use_fused_bwd_kernel=True`（v5p 当前是 `False`，v7 是 `True`） | ⬜ |
+| R9 | MoE tile **逐通路**扫描（6 条通路各配各的，现在全同值） | ⬜ |
+| R10 | `--xla_tpu_dvfs_p_state` / `--xla_tpu_pcie_bandwidth_multiplier` 回扫 | ⬜ |
+| R11 | R5 若省出 HBM → 加大 `per_device_batch_size` | ⬜ |
+
+### 3.4 已否决，不再测
+
+| 项 | 理由 |
+|---|---|
+| `ici_expert_parallelism` | v7 上半 batch −71%，**大幅负收益的结论会传递** |
+| `use_2d_fsdp_sharding` 三件套 | v7 上 −11.73% |
+| 删 SparseCore offload flag | v5p 上这组**值 4.07 pp MFU**，与 v7 相反 |
+| `shard_exp_on_fsdp` | 192 除不尽 256 device，预期直接 `IndivisibleError` |
+
+---
+
+## 3b. 方法论（沿用 v7 的教训，不重新踩）
 
 1. **同批次内比**。跨集群、跨节点池比绝对值没有意义 —— v7 上换了机器基线就差 15%。
 2. **丢前 3 步**。单步 `seconds` 字段受异步派发干扰会跳变，用日志时间戳算跨步斜率。
