@@ -74,7 +74,7 @@ v7 那边跑了 34 个开关组合（[TUNING-v7 §7](TUNING-v7.md#7-消融总表
 | R2 | MoE tile = 512 | `TILE_MLP=512` | ✅ | 61.496 s / 165.366 / **36.03%**，**+2.70%** ← v7 上是 −3.90% |
 | R3 | remat 全量 | `remat_policy=full` `decoder_layer_input=remat` | ❌ | **OOM**：需 123.33 G / 可用 95.73 G。v5p HBM 本就贴顶，去掉 host offload 装不下 |
 | R4 | ring of experts | `use_ring_of_experts=True` `num_moe_token_chunks=4` | ✅ | 76.773 s / 132.461 / 28.86%，**−21.48%** |
-| R5 | 优化器状态 BF16 | `mu_dtype=bfloat16` `grad_dtype=bfloat16` | ⬜ | |
+| R5 | 优化器状态 BF16 | `mu_dtype=bfloat16` `grad_dtype=bfloat16` | ✅ | 63.317 s / 160.609 / 34.99%，**−0.19%**（≈ 噪声） |
 
 ### 3.2 第二批：两个重点未测项
 
@@ -140,6 +140,7 @@ v7 那边跑了 34 个开关组合（[TUNING-v7 §7](TUNING-v7.md#7-消融总表
 | 2026-08-01 | **tile 512** | `TILE_MLP=512` | **61.496** | 165.366 | **36.03%** | **+2.70%** | **本轮首个正收益**。v7 上是 −3.90%，**又一次反号** |
 | 2026-08-01 | remat 全量 | `remat_policy=full` `decoder_layer_input=remat` | — | — | — | **OOM** | 需 **123.33 G**，可用 95.73 G。**`decoder_layer_input=offload` 在 v5p 上是必需项，不是可选优化** |
 | 2026-08-01 | ring of experts | `use_ring_of_experts=True` `num_moe_token_chunks=4` | 76.773 | 132.461 | 28.86% | **−21.48%** | **本轮最大负收益**。分块流水在「通信本来就藏好了」的平台上纯属添乱（见 §6.3 的 trace 判断） |
+| 2026-08-01 | 优化器状态 BF16 | `mu_dtype=bfloat16` `grad_dtype=bfloat16` | 63.317 | 160.609 | 34.99% | −0.19% | **速度上零收益**（在 0.25% 的跨池抖动之内）。但它省下的 HBM 是真的 —— 价值在于**换 batch**，见 R11 |
 | | | | | | | | |
 
 ### 4.1 第一条跨代反例：MoE tile
@@ -162,6 +163,23 @@ v7 上实测的规律是「tile **必须等于** `base_moe_mlp_dim`(1536)」—�
 说明那条路径根本没跑起来；v5p 上 1024 能跑，说明两代的 Mosaic kernel
 对分块的处理逻辑不同。**这是"XLA / kernel 层面的结论一律不跨代"的第二个实例**
 （第一个是 SparseCore flag 组：v7 零收益、v5p 值 4.07 pp）。
+
+### 4.2 第一批小结：五项里没有一项能直接采纳
+
+| 项 | Δ | 判定 |
+|---|---|---|
+| tile 512 | **+2.70%** | ✅ **唯一正收益**，待 trace 复核后采纳 |
+| 优化器状态 BF16 | −0.19% | ⚪ 速度零收益，但省 HBM，留给 R11 换 batch |
+| tile 1536 | −5.10% | ❌ |
+| ring of experts + 分块 | **−21.48%** | ❌ 本轮最大负收益 |
+| remat 全量 | OOM（123.33 G / 95.73 G） | ❌ host offload 是必需项 |
+
+**跨平台命中率：0/5。** v7 上的五条结论搬到 v5p，一条都没成立 ——
+两条反号、一条 OOM、一条从「最大收益」变「最大损失」、一条从零收益变必需项。
+
+这不是「v7 的结论错了」，而是 **XLA / kernel 层的结论天生就绑在硬件代次上**：
+分块尺寸绑 MXU 形状、通信开关绑有没有 SparseCore、显存策略绑 HBM 容量。
+**下次拿到任何一份别的平台的调优参数集，默认假设是「全部无效」，逐条实测。**
 
 ---
 
