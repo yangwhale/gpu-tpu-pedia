@@ -500,14 +500,28 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json --dev 3   # 换个 device 交�
 | C1 | 关掉 9 个 SparseCore flag 再测一次 | §2 说它们收益为 0。**收益为 0 的东西留着只会增加变量**，确认无害就删掉，让后面的实验干净 |
 | C2 | 单层计时 | `scan_layers=True` 把 80 层折成一个 scan，分不出层内开销。临时 `scan_layers=False` 跑几步，能看到单层结构 |
 
-### 4.5 `use_tokamax_gmm` 死锁（唯一"官方有、我们用不了"的加速手段）
+### 4.5 `use_tokamax_gmm`：根因已查明（本节保留作为推理链记录）
+
+> ⚠️ **本节的原始结论已被两次推翻，完整根因见
+> [§7.7](#77-use_tokamax_gmm--gmm_v2根因已在-v5p-上查实)。**
+> 一句话版本：**不是死锁，是专家数 192 不在 kernel 库的 tile 调优表里，
+> 退回默认 tile 导致 grid 块数涨 768 倍，慢到看门狗判 stall。**
+
+以下是当时的推测，留着是因为**推错的方式有参考价值**：
 
 它是 MoE 的主计算路径，也是 `use_gmm_v2` 的强制前置，所以两个一起用不了。
 怀疑是 **192 个专家不是 2 的幂**，导致分组矩阵乘的组划分出问题。
 如果能修，可能是 A 组里最大的单项收益。
 
+> **"不是 2 的幂"这个猜测方向对了一半**：确实跟 192 这个数有关，
+> 但不是"组划分出问题"，而是**上游只给 16 / 128 / 256 三种专家数做过 tile 调优**。
+> 是数据覆盖问题，不是算法问题——**这两者的修法完全不同**。
+
 排查建议：先用缩层模型（`hunyuan3-smoke`，4 层）在 4 芯片小池上复现，
 几十秒一轮，比在 64 芯片上试快两个数量级。
+
+> **这条排查建议后来被证伪**：4 芯片 smoke 上 8 个假设全部跑通、复现不出来。
+> 真正查出根因靠的不是缩规模，是**直接扒 kernel 库的源码把那张表打印出来**。
 
 ### 4.6 结果记录
 
@@ -1049,32 +1063,239 @@ EP 在满 batch 下全部 OOM，所以单开一组半 batch 的配对基线。
 ### 7.6 待补
 
 - D5–D10（64 芯片的 gmm_v2 / ring / EP / 半 batch）
-- `use_tokamax_gmm` 死锁根因：4 芯片 smoke 上 **8 个假设全部跑通、死锁不复现**，
-  说明它是**规模相关**的，不是配置形状问题。要在 16 / 64 芯片上二分。
+- ~~`use_tokamax_gmm` 死锁根因~~ → ✅ **已查明**（[§7.7](#77-use_tokamax_gmm--gmm_v2根因已在-v5p-上查实)）。
+  当时以为"规模相关"，实际是**专家数 192 不在 tile 调优表里**，跟规模无关。
 - FP8 `fp8_full` + qwix 的 tile 整除修复（把 `w{i,o}_tile_*_mlp_dim` 从 1024 改成能整除 1536 的值）
+  → v5p 上按此修了（改成 512），**仍然失败**，换了个错：
+  `Mosaic failed to compile: infer-vector-layout: unsupported shape cast`。v7 上待验（[§7.8](#78-v7-复测清单等有卡时逐条验) V8）。
+- **全部 v7 待验项汇总见 [§7.8](#78-v7-复测清单等有卡时逐条验)。**
 
-### 7.7 `use_tokamax_gmm`：文档里的"死锁"是误判
+### 7.7 `use_tokamax_gmm` / `gmm_v2`：根因已在 v5p 上查实
 
-旧结论（[§4.5](#45-use_tokamax_gmm-死锁唯一官方有我们用不了的加速手段)）写的是
-"死锁，`stalled chips [7]`"，并猜测原因是"192 个专家不是 2 的幂"。**两条都不成立。**
+> **本节是 2026-08-01 在 v5p 256 芯片上花一整天查出来的完整机理**，
+> 记在 v7 文档里，是因为**这套东西本来就是为 v7 设计的**——
+> v5p 上跑出来的全是负收益，但机理、修法、判据在 v7 上直接可用。
+> 结论逐条列在 [§7.8](#78-v7-复测清单等有卡时逐条验) 等待 v7 验证。
+> v5p 侧完整过程见 [TUNING-v5p §2.6](TUNING-v5p.md#26-打开盒子不跨代的机理落到了一张查找表上)。
 
-开日志实测（16 芯片 / 20 层 / 4 个 pod 同时抓）：
+#### 7.7.1 旧结论被推翻了两次
 
-- **4 个 pod 步数始终一致**，没有任何一个掉队 → 不是集合通信死锁。
-- 主线程停在 `futex_wait_queue` 等 TPU，TPU 侧 CPU 占用 274% → 在真算，不是锁死。
-- 步 0 → 步 1 墙钟 **113.7 s**（不开 tokamax 是 5.33 s）。
+| 版本 | 结论 | 状态 |
+|---|---|---|
+| 最初（[§4.5](#45-use_tokamax_gmm-死锁唯一官方有我们用不了的加速手段)） | "死锁，`stalled chips [7]`"，猜"192 不是 2 的幂" | ❌ 两条都错 |
+| 第二版 | 不是死锁，是**慢到触发看门狗**；4 pod 步数一致、TPU 侧 CPU 274% 在真算 | ✅ 方向对 |
+| **现在** | **慢的根因精确到 kernel 库里一张查找表少了一行** | ✅ v5p 实测确认 |
 
-所以旧记录里的 `stalled chips` 是**慢到触发看门狗**，不是死锁。这两件事的修法完全不同。
+而第二版结尾那句猜测——
 
-已排除的假设（4 芯片 smoke，8 项全部跑通）：专家数改 128、`capacity_factor=1.0`、
-`base_moe_mlp_dim=2048`、关 `use_custom_sort_vjp`、精简 XLA flag、只留 vmem 限制。
-**换句话说 4 芯片复现不出来** —— 它只在多机 + 较大图上出现。
+> "`tokamax.ragged_dot(...)` 签名里没有 tiling 参数……tokamax 自选的默认分块很可能正踩在这个坑上"
 
-> ⚠️ **未完成**：前几步含 Mosaic kernel 按实际矩阵形状做的**运行时编译**，
-> 不能当稳态。稳态测试（24 步、丢前 3 步、冷/热缓存各一轮）刚起跑就因
-> reservation 被删而中断，**目前没有稳态数据，不能下"慢 21 倍"的结论**。
+**——完全命中，而且比猜的更精确**：坏 tile 不是我们喂进去的，是它自己查表 miss 后退回的默认值。
 
-**当前最可能的方向**（未验证）：`moe.py` 的非量化分支调用
-`tokamax.ragged_dot(...)`，而该函数签名里**没有 tiling 参数** —— 旁边的 megablox
-分支是把配置里的 `w{i,o}_tile_*` 传进去的。结合 [§7.4b](#74b-fp8--量化16-芯片对-b0--53336-s)
-实测的"tile 必须等于 1536"，tokamax 自选的默认分块很可能正踩在这个坑上。
+#### 7.7.2 根因：专家数 192 不在 tile 调优表里
+
+tokamax 的 TPU `ragged_dot` 按 `(m, k, n, 专家数, 是否量化)` 查三张硬编码 tile 表
+（前向 / dlhs / drhs 各一张）。查不到就退回 `Config()` 默认值。实际扒出来：
+
+```
+GMM_TILING_TUNED_LUT: 28 条，专家数取值 = [16, 128, 256]
+  (524288, 4096, 1536, 128, False) -> tile (256, 4096, 1536)
+  (524288, 1536, 4096, 128, False) -> tile (512, 1536, 1536)
+默认 Config = tile_m=128, tile_k=128, tile_n=128
+```
+
+**Hunyuan3 是 192 个专家。矩阵尺寸跟表里那条一模一样，只有分组数不同，于是全部 miss。**
+
+| | tile | grid 块数 |
+|---|---|---|
+| 表里调优过的（专家数 128） | (256, 4096, 1536) | 2048 × 1 × 1 = **2,048** |
+| 实际退回的默认值 | (128, 128, 128) | 4096 × 32 × 12 = **1,572,864** |
+
+**768 倍的块数**，每块独立 DMA。慢三个数量级 → 看门狗判 stall。
+这就是"死锁"的真面目。
+
+**v7 上大概率是同一回事**：`autotuning/tpu7x/` 那份预置 cache 的键同样含专家数，
+192 同样 miss；LUT 也同样只有 16/128/256。**两代硬件各犯一次同一个错。**
+
+#### 7.7.3 一条可复用的排错判据
+
+日志里只有 **2 种矩阵形状**进入 autotune（wi 和 wo 各一种）。
+**80 层压根没展开**——`scan_layers=True` 下 XLA 只编 loop body，层数只改 trip count
+（这正是 [§6.2](#62-编译时间不随层数变因为有两个-scan) 的结论）。
+
+> **所以"层多所以编译久"这个解释在 scan 模式下天然不成立。**
+> 听到它就该去翻日志时间戳，而不是接受。
+> 我当初就是接受得太快，把一个 stall 记成了"编译慢"，多耗了一天。
+
+正确的拆法是看时间线（v5p 实测）：
+
+```
+04:34:48  启动
+04:34:56  tokamax: Autotuning cache miss
+04:36:59  Execute 派发到设备      ← 编译在此之前就结束了，只花 2 分钟
+04:44:53  PjRt: Slow TPU operation detected, start_time=04:36:59
+04:44:53  TpuDiagnosticCoordinator: Stall detected on host 56
+04:54:53  仍在告警  →  全程 0 步
+```
+
+**编译只占前两分钟，卡住的是派发下去的那个 Execute。**
+
+#### 7.7.4 三条 GMM 路径其实是三套独立实现
+
+这是最容易搞混的地方。MaxText 的 `moe.py` 里：
+
+```python
+if config.quantization or config.use_gmm_v2:
+    output = mblx.gmm(..., tiling=tiling, use_tokamax_backend=..., use_gmm_v2=True, ...)
+elif config.use_tokamax_gmm:
+    output = tokamax.ragged_dot(...)      # ← 没有 tiling 参数
+else:
+    output = mblx.gmm(..., tiling=tiling, ...)
+```
+
+| 配置 | 实际 kernel | 吃不吃 `w{i,o}_tile_*` | 查不查 LUT |
+|---|---|---|---|
+| 默认 | **megablox v1**（JAX Pallas 原生，MegaBlocks 论文的 TPU 实现） | ✅ 吃 | 不查 |
+| `use_tokamax_gmm` | tokamax v1 `ragged_dot` | ❌ **不吃** | ✅ **查** |
+| `use_gmm_v2` | **tokamax v2，被 fork 进 MaxText** | ✅ 吃 | 不查 |
+
+> **关键推论：开了 `use_gmm_v2` 就不需要补 LUT**，tile 是显式传进去的。
+> v5p 实测证据：同一个 gmm_v2 kernel，只改命令行 tile（1024 → 512），
+> 结果差 **13.7 个百分点**（−32.54% → −18.84%）——它确实吃的是我们传的参数。
+>
+> **只有走纯 `use_tokamax_gmm` 才必须补那张表。**
+
+#### 7.7.5 `gmm_v2` 有硬件门禁，v5p 不合格、v7 合格
+
+tokamax 源码里写着：
+
+```python
+# v2
+def supported_on(self, device):
+    return device.platform == "tpu" and get_tpu_info().generation >= 6
+# v1 对应的是 generation >= 5
+```
+
+**v5p = generation 5，被官方排除；v7 = generation 7，在支持范围内。**
+
+而 MaxText **fork 了 raw kernel 直接调用，绕过了这道门禁** ——
+所以 v5p 上能跑起来，但跑的是官方判定不支持的路径。
+**今天在 v5p 上测到的全部负收益，本质是在不支持的硬件上跑它。**
+
+另外两条硬件差异（都指向"v2 是给 v7 设计的"）：
+
+| | v5p | v7 |
+|---|---|---|
+| `gmm_v2` 官方支持 | ❌ gen 5 | ✅ gen 7 |
+| **通信是否裸露**（决定藏通信有没有意义） | ❌ trace 上无 `-done` 等待块 | ✅ **通信占自用时间 57.3%** |
+| MegaCore | ✅ 支持（XLA 自动把 kernel 切到 2 个 TensorCore） | ❌ 不支持 |
+
+第三行值得展开：**v2 kernel 用 `TensorCoreMesh` 自己管多核映射**，
+而 megablox v1 用经典 `dimension_semantics=("parallel","arbitrary","arbitrary")`。
+在支持 MegaCore 的 v5p 上，v2 自己管核等于跟 XLA 的自动切分重复；
+在不支持 MegaCore 的 v7 上，自己管核才是必需的。
+**（这条是从代码结构推的，未见文档明说，标为假设。）**
+
+顺带解释了一个一直别扭的数字：**为什么 ring of experts 在 v7 上能"EP 下挽回 34 pp"，
+在 v5p 上却是 −21.48%** —— 不是它变坏了，是 v5p 根本没有那个待挽回的窟窿。
+
+#### 7.7.6 `tile_k` 必须整除 K —— 两边独立验到同一条
+
+**上游在 v7 上的记录**：`tile_k` 不整除 K 会导致 **step-0 NaN**
+（v2 kernel 在 ragged 的末尾 K-tile 只对 RHS 做 zero-mask、不 mask LHS，
+配合 `disable_bounds_checks=True` 会读到 HBM 里的垃圾）。
+
+**我们在 v5p 上独立撞到同一条规律的性能侧**（Hy3：wi 的 K=4096，wo 的 K=1536）：
+
+| tile | 4096 整除? | 1536 整除? | v5p step | Δ |
+|---|---|---|---|---|
+| 1024 | ✅ | ❌ 1.5 | 83.766 s | −32.54% |
+| **512** | ✅ | ✅ 3 | **75.109 s** | **−18.84%** |
+
+**改善 13.7 个百分点，只改了这一个数。**
+
+#### 7.7.7 为什么 `gmm_v2` 编译慢 4 倍 —— 有结构性指标
+
+数了两份 kernel 的实现风格：
+
+| | megablox v1 | **gmm_v2** |
+|---|---|---|
+| `memory_space=pltpu.HBM` 的 spec | **0** | **9** |
+| 手写 `async_copy` | **0** | **3** |
+| `semaphore` | **0** | **9** |
+
+**v1 是自动流水线**（只给 `BlockSpec`，DMA 由 Pallas/Mosaic 生成）；
+**v2 是手写 DMA 流水线**（自己放 HBM、自己发异步拷贝、9 个信号量管同步）。
+Mosaic 要编一台多缓冲状态机，复杂度高一个档次。
+
+上游有实测记录：**每次全新 kernel 编译 27–35 秒**，
+训练一步要编 fwd/dlhs/drhs × wi/wo 多个变体。
+v5p 实测首步：`gmm_v2@1024` **301 s** / `gmm_v2@512` **127 s** / 纯 tokamax 75 s / megablox 27 s。
+
+#### 7.7.8 v5p 侧完整实测（作为 v7 的对照基准）
+
+256 芯片、80 层、`per_device_batch_size=8`、`max_target_length=8192`，同批 pod 内比：
+
+| 配置 | step (s) | TFLOP/s/chip | MFU | Δ | 首步 |
+|---|---|---|---|---|---|
+| **`sa_use_fused_bwd_kernel=True`** | **61.094** | 166.5 | **36.26%** | **+3.33%** | 27 s |
+| 基线 megablox | 63.199 | 160.9 | 35.05% | — | 27 s |
+| 纯 tokamax（LUT 补 192，借 v7x tile） | 73.590 | 138.2 | 30.11% | −16.44% | 76 s |
+| 纯 tokamax（LUT 补 192，借 v5p tile） | 77.813 | 130.7 | 28.47% | −23.13% | — |
+| `gmm_v2` @ tile 512 | 75.109 | 135.4 | 29.50% | −18.84% | 127 s |
+| `gmm_v2` @ tile 1024 | 83.766 | 121.4 | 26.45% | −32.54% | 301 s |
+| `gmm_v2` + ring + emb 分块 4 | 91.810 | 110.8 | 24.13% | −45.27% | 301 s |
+| FP8 `fp8_full`+qwix @ tile 512 | ❌ | | | | `Mosaic failed: infer-vector-layout: unsupported shape cast` |
+| batch 8 → 12 | ❌ OOM | | | | 需 113.79 G / 只有 95.73 G |
+
+**唯一正收益来自 attention 侧，不是 MoE。** 这条见 [§7.9](#79-一条方向性教训占比大--有空间)。
+
+#### 7.7.9 两条通用教训（不限于本项目）
+
+1. **遇到"库内部查表查不到"，先找有没有"显式传参"的旁路，再决定要不要改库里的表。**
+   我直接冲着改 LUT 去了（因为那是第一个看懂的机制），
+   结果 `gmm_v2` 那条路根本不查表——**前两轮 tile 实验全是不必要的**。
+2. **借别的硬件代次的 kernel 调优值，不是"次优"，是"可能完全错"，而且"用对代次"也不一定更好。**
+   v5p 实测：借 v7x 的值 −16.44%，借 v5p 自己的值 **−23.13%（更差）**。
+   因为那份 v5p 数据是给 **128 专家**调的——
+   **调优值是 `(shape × 分组数 × 硬件)` 三维联合的产物，只对上两维就可能反超。**
+
+---
+
+### 7.8 v7 复测清单（等有卡时逐条验）
+
+全部前提：Hy3 = 192 专家、`base_emb_dim=4096`、`base_moe_mlp_dim=1536`，
+`scan_layers=True`，先在 16 芯片确认能跑通，再上 64 芯片取数。
+
+| # | 实验 | 具体怎么做 | 预期 / 要回答什么 |
+|---|---|---|---|
+| **V1** | **复现 192 的 LUT miss** | 开 `use_tokamax_gmm=True`，抓日志找 `Autotuning cache miss`，确认 grid 退回 128³ | 确认 v7 跟 v5p 是同一个根因，而不是另一个问题 |
+| **V2** | **补 LUT 后跑纯 tokamax** | 把 `tpu7x` 那份 128 专家条目镜像成 192（三张表都补），重跑 | v7 上纯 tokamax 能不能打平 megablox |
+| **V3** | **`gmm_v2` + `tile_k` 整除 K** | 开 `use_gmm_v2=True`，`w{i,o}_tile_*` 取能同时整除 4096 和 1536 的值（**512** 最稳，256 备选）。**不需要补 LUT** | **本清单最高优先级。** 上游在 v7 上实测调好 tile_k 后 **+13.58% end-to-end** |
+| **V4** | `gmm_v2` 默认 tile 对照 | 同 V3 但用默认 1024 | 验证"tile_k 不整除就崩/慢"在 v7 上同样成立（上游记录会 step-0 NaN） |
+| **V5** | **ring of experts 重测** | v7 通信占 57.3%，这条在 v5p 是 −21.48% 但**那里没有待挽回的窟窿** | v7 才是它的目标场景，值多少 |
+| **V6** | **`num_moe_emb_chunks`** | 需 `use_gmm_v2` + `use_ring_of_experts` 双前置 | 沿 embedding 维分块藏通信，v7 上是否为正 |
+| **V7** | **`sa_use_fused_bwd_kernel=True`** | v5p 上 **+3.33%，本轮唯一正收益**；v7 当前已是 `True`，**需确认** | 若 v7 已开则跳过；若未开，这是最便宜的一项 |
+| **V8** | FP8 `fp8_full` + qwix | v5p 上撞 `infer-vector-layout: unsupported shape cast`（tile 512 下） | v7 上是否同样失败；FP8 是 v7 算力翻倍的最大杠杆 |
+
+**取数纪律**（沿用 v5p 的做法，别重新踩）：
+
+- 每项**只动一个维度**，同一批 pod 内比。
+  （v5p 上我一口气开了三个开关，−45.27% 无法归因，白跑一轮。）
+- 稳态取 **第 4 步之后**；不抓 profile 就跑 **8 步**足够
+  （v5p 实测：17 分钟一轮里有 5 分钟是白跑的后 4 步）。
+- 从 tensorboard 的 `perf/step_time_seconds` 读，比翻日志可靠
+  （`kubectl exec` 的输出会被 buffer 住，日志文件长时间只有几十字节）。
+
+### 7.9 一条方向性教训：占比大 ≠ 有空间
+
+v5p 那边基线 trace 显示 MoE 的 `tgmm` 几乎填满采样窗口，我据此认定该在 MoE 上使劲。
+结果：**MoE GMM 方向八九轮实验颗粒无收，attention 侧只碰了一个开关就 +3.33%。**
+
+原因不难想——**megablox 已经是被人调过的最优路径**，
+而 `sa_use_fused_bwd_kernel` 在 v5p 上默认还是关的、从来没人开过。
+
+> **该找的是"还没被人调过的地方"，不是"耗时最多的地方"。**
+> trace 告诉你时间花在哪，但不告诉你哪里还有空间——
+> 后者要看"这块有没有被优化过"，那是代码和上游记录里的信息，不在 trace 上。
+
