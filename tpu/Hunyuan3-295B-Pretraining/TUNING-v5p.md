@@ -312,8 +312,14 @@ MCP 的 60 s 硬超时在任何规模都会命中；**256 芯片下 ssh 直调�
 - `quantization=fp8` 走的是 `Fp8Quantization`，源码注释写明 "for NVIDIA GPUs"，
   会报 `AttributeError: 无 quant_dg`。**TPU 上必须走 `fp8_full` + qwix**。
 - v7 上 `fp8_full` 撞过 `AssertionError: v=1536 bv=1024`（tile 除不尽）。
-  v5p 默认 tile 也是 1024，**很可能撞同一个断言** ——
-  若撞上，用 [§2.2](#22-最典型的一条moe-tile-完全反序) 的扫描结果决定取哪个值。
+  v5p 默认 tile 也是 1024，**很可能撞同一个断言**。
+  → **2026-08-01 实测：撞了，报错一字不差 `AssertionError: v=1536 bv=1024 s=1536`。**
+  这是本文档里**唯一一条成功跨代的预测** —— 但注意它预测的是**报错**，不是**收益**。
+  形状校验是纯数学约束（tile 能不能整除 `base_moe_mlp_dim`），
+  不依赖 MXU 形状也不依赖 SparseCore，所以它跨代成立；
+  而"哪个 tile 更快"依赖硬件，所以不跨代（[§2.2](#22-最典型的一条moe-tile-完全反序)）。
+  **约束跨代，性能不跨代 —— 这条边界值得记住。**
+  重试用 `TILE_MLP=512`（v5p 最优）和 `1536` 两档。
 
 **R7 注意事项**：
 
