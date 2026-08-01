@@ -928,3 +928,104 @@ TPU initialization failed: Failed to connect to <peer>:8471
 
 收益对比：一次性 Job 每轮要重新调度、拉 1.73 GB 镜像、建切片、冷编译；
 常驻环境下一轮 30 步实验 **275 s → 209 s**，启动到第一步 **83.8 s → 32.8 s**。
+
+---
+
+## 7. 消融总表：34 个开关组合，一次跑完的账
+
+> 2026-08-01 用 `cloud-tpu-multipod-dev` 的闲置 reservation 一口气跑完。
+> **失败项和零收益项和赢家一样值钱** —— 它们是花机时买来的，写下来就不用第二次买。
+
+### 7.1 先看结论：一句话版本
+
+1. **`remat_policy=full` 在 16 芯片上 +1.22%，到 64 芯片变成 −0.74%。符号反转。**
+2. **`shard_exp_on_fsdp` 在 16 芯片上 +1.48%，到 64 芯片直接崩**（192 除不尽 128 个 device）。
+3. 所以 [§5](#5-规模缩放能不能在-16-芯片上调优) 那个「MFU 只低 7.7%，小规模可以调优」的结论
+   **要收窄**：小规模能筛掉明显的输家，**不能用来选赢家**。见 [§7.5](#75-最贵的一课小规模筛选选不出赢家)。
+4. 专家并行（EP）在这个模型上是**净亏**，且亏得离谱（半 batch −71%）。
+5. 那 9 个 SparseCore flag：**8 个确实零收益可以删**，第 9 个（`collective_aggregator`）
+   是层调度器的**硬依赖**，删了直接报错。
+6. FP8 在 TPU 上的正路是 `fp8_full` + qwix（不是 `quantization=fp8`，那是 NVIDIA 专用类），
+   但**卡在 kernel tile 不整除**：`AssertionError: v=1536 bv=1024 s=1536`。这是**最有希望的下一步**。
+
+### 7.2 64 芯片 / 80 层（目标规模，以此为准）
+
+基线 `D0` = **17.4349 s/step**，228.1 TFLOP/s/device。
+
+| # | 改动 | 结果 | Δ | 说明 |
+|---|---|---|---|---|
+| D0 | 基线（§4.3 参数集） | 17.4349 s | — | 起点 |
+| D2 | `remat_policy=full` `decoder_layer_input=remat` | 17.5633 s | **−0.74%** | 16 芯片上是 **+1.22%**，符号反转 |
+| D4 | 删 8 个 SparseCore flag（留 aggregator） | 17.4355 s | −0.00% | 确认零收益，可以删干净 |
+| D1 | `shard_exp_on_fsdp=True` | **崩** | — | `IndivisibleError`：192 专家除不尽 128 device |
+| D3 | D1 + D2 组合 | **崩** | — | 同 D1 |
+| D5–D10 | gmm_v2 / ring / EP / 半 batch | 跑批中 | — | 见 [§7.6](#76-待补) |
+
+> 顺带一条：这一批基线 **17.43 s**，比 2026-07-30 记录的 20.43 s 快 15%。
+> 唯一变量是**换了机器**（`us-central1-ai1a` 的 ghostfish reservation）。
+> 跨集群比绝对值没意义，**消融必须同批次内比**。
+
+### 7.3 16 芯片 / 20 层（快速筛选用，结论不可直接外推）
+
+基线 `B0` = **5.3336 s/step**，201.9 TFLOP/s/device。
+
+| # | 改动 | 结果 | Δ | 说明 |
+|---|---|---|---|---|
+| C6 | `shard_exp_on_fsdp` + `remat=full` | 5.1862 s | **+2.76%** | 两个赢家近似可加（1.48+1.22≈2.76）⚠️ 64 芯片上崩 |
+| A5 | `shard_exp_on_fsdp=True` | 5.2545 s | +1.48% | ⚠️ 64 芯片上崩 |
+| A10 | `remat_policy=full` `decoder_layer_input=remat` | 5.2683 s | +1.22% | ⚠️ 64 芯片上 −0.74% |
+| C5 | 删 8 个 SparseCore flag | 5.3339 s | −0.01% | 零收益，与 64 芯片一致 |
+| A6 | `use_2d_fsdp_sharding` + `fsdp_transpose=4` + `two_stage_all_gather` | 5.9591 s | **−11.73%** | 明确负收益，别再试 |
+| A1 | `ici_expert_parallelism=4` | **OOM** | — | HLO 临时量 137.60 G |
+| A2 | `ici_expert_parallelism=8` | **OOM** | — | 192.70 G |
+| A3 | EP4 + ring + `num_moe_token_chunks=4` | **OOM** | — | 111.24 G |
+| A9 | `per_device_batch_size=16` | **OOM** | — | 121.01 G |
+| A4 | `num_moe_emb_chunks=4` | 配置拒绝 | — | 需 `use_gmm_v2` + `use_ring_of_experts` |
+| C7 | `use_gmm_v2=True` | 配置拒绝 | — | 需 `use_tokamax_gmm=true` |
+| C8 | `gmm_v2` + ring + `emb_chunks=4` | 配置拒绝 | — | 同 C7 |
+| A7 | `quantization=fp8` | **报错** | — | `AttributeError: Fp8Quantization 无 quant_dg` |
+| A8 | 删**全部** 9 个 SparseCore flag | **报错** | — | `层调度器要求 sparse core collective aggregator 开启` |
+
+### 7.4 专家并行专项（16 芯片 / `per_device_batch_size=4`）
+
+EP 在满 batch 下全部 OOM，所以单开一组半 batch 的配对基线。
+基线 `B1` = **3.5755 s/step**，152.2 TFLOP/s/device。
+
+| # | 改动 | 结果 | Δ | 说明 |
+|---|---|---|---|---|
+| C1 | `ici_expert_parallelism=4` | 6.1271 s | **−71.36%** | EP 不是"装不下"，是**本身就慢** |
+| C4 | EP4 + `use_ring_of_experts` + `num_moe_token_chunks=4` | 4.8970 s | −36.96% | 分块**挽回 34 个百分点**，但填不平 EP 的坑 |
+| C2 | `ici_expert_parallelism=8` | **OOM** | — | 半 batch 也装不下 |
+| C3 | EP4 + gmm_v2 + ring + emb4 | 配置拒绝 | — | 需 tokamax |
+
+**读法**：16 芯片上 192 个专家分 4 组，每组 48 个。AllToAll 搬 token 的量
+超过了省下来的权重 all-gather，净亏。**分块流水本身是有效机制**（C4 vs C1 差 34 pp），
+只是用错了地方。EP 值不值得，要到更大规模再判。
+
+### 7.5 最贵的一课：小规模筛选选不出赢家
+
+[§5](#5-规模缩放能不能在-16-芯片上调优) 测过 MFU 缩放只差 7.7%，当时的结论是
+「16 芯片可以用来调优」。这一轮把这条**证伪了一半**：
+
+| | 16 芯片结论 | 64 芯片实测 |
+|---|---|---|
+| `remat_policy=full` | +1.22% | **−0.74%**（符号反转） |
+| `shard_exp_on_fsdp` | +1.48% | **崩溃**（整除约束） |
+| 删 8 个 SparseCore flag | −0.01% | −0.00%（一致） |
+| `use_2d_fsdp_sharding` | −11.73% | 未测（已否决） |
+
+规律很清楚：
+
+- **零收益 / 大幅负收益的结论会传递** —— 拿小规模筛掉输家是安全的、划算的。
+- **小幅正收益的结论不传递** —— 1–3% 这个量级完全被规模效应吃掉甚至反号。
+- **带整除约束的开关必须在目标规模验** —— 192 % 32 = 0 但 192 % 128 ≠ 0，
+  16 芯片（32 device）能过，64 芯片（128 device）过不去。
+
+**所以流程改成**：16 芯片跑广度、只用来**排除**；任何要采纳的改动，**必须在 64 芯片复测**。
+
+### 7.6 待补
+
+- D5–D10（64 芯片的 gmm_v2 / ring / EP / 半 batch）
+- `use_tokamax_gmm` 死锁根因：4 芯片 smoke 上 **8 个假设全部跑通、死锁不复现**，
+  说明它是**规模相关**的，不是配置形状问题。要在 16 / 64 芯片上二分。
+- FP8 `fp8_full` + qwix 的 tile 整除修复（把 `w{i,o}_tile_*_mlp_dim` 从 1024 改成能整除 1536 的值）
