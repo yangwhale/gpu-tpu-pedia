@@ -933,7 +933,7 @@ TPU initialization failed: Failed to connect to <peer>:8471
 
 ## 7. 消融总表：34 个开关组合，一次跑完的账
 
-> 2026-08-01 用 `cloud-tpu-multipod-dev` 的闲置 reservation 一口气跑完。
+> 2026-08-01 借到一批闲置容量，一口气跑完。
 > **失败项和零收益项和赢家一样值钱** —— 它们是花机时买来的，写下来就不用第二次买。
 
 ### 7.1 先看结论：一句话版本
@@ -962,7 +962,7 @@ TPU initialization failed: Failed to connect to <peer>:8471
 | D5–D10 | gmm_v2 / ring / EP / 半 batch | 跑批中 | — | 见 [§7.6](#76-待补) |
 
 > 顺带一条：这一批基线 **17.43 s**，比 2026-07-30 记录的 20.43 s 快 15%。
-> 唯一变量是**换了机器**（`us-central1-ai1a` 的 ghostfish reservation）。
+> 唯一变量是**换了机器**（换了一批物理节点）。
 > 跨集群比绝对值没意义，**消融必须同批次内比**。
 
 ### 7.3 16 芯片 / 20 层（快速筛选用，结论不可直接外推）

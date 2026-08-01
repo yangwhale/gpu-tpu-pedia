@@ -111,22 +111,14 @@ v7 上实测的规律是「tile **必须等于** `base_moe_mlp_dim`(1536)」—�
 
 ```bash
 gcloud container node-pools create np-v5p-256 \
-  --cluster=chrisya-tpu --region=us-central1 \
+  --cluster=CLUSTER --region=us-central1 \
   --node-locations=us-central1-a \
   --machine-type=ct5p-hightpu-4t --tpu-topology=4x8x8 --num-nodes=64 \
   --spot --scopes=cloud-platform
 ```
 
-2026-08-01 实测：**64 台一次开出，全部 Ready**，不用排队、不用 reservation。
-
-> **绕过的一个弯路**：当天 v7 抢不到卡，我一度跑去 `europe-west4` 用 ct5p 预留
-> （1024 颗空 424）建了一套。能开出来，但**桶、镜像、GCS staging 全要在欧洲重建一遍**，
-> 得不偿失。**v5p 就留在 us-central1-a 用 spot**，这跟 v7 的处境完全不同 ——
-> v7 的裸容量被 reservation 圈光了，v5p 没有。
->
-> 那次还撞到一个坑：`cloud-tpu-multipod-dev` 集群太多，默认 VPC
-> **切不出 GKE 要的 /14 Pod 段**，建集群直接 `status: ERROR`。
-> 解法是 `--cluster-ipv4-cidr=/18 --default-max-pods-per-node=64`。
+2026-08-01 实测：**64 台一次开出，全部 Ready**，不用排队、不用预留容量。
+v5p 的裸容量是充足的 —— 这跟同期 v7 抢不到卡的处境完全不同，**不要把 v7 的容量策略搬过来**。
 
 > `--scopes=cloud-platform` 不能漏 —— 默认只有 `devstorage.read_only`，
 > 写 GCS 会 403，而且**节点池的 OAuth scope 建好之后改不了**，只能删了重建。
