@@ -1381,6 +1381,70 @@ ring 吃到 90.11 G，离 94.74 G 只剩 4.6 G。**它在更大配置上会先 O
 - 8 层 vs 目标 20 层，MoE 占比、编译规模都不同。
 - **只有 V4（NaN）和 V8（能编）两条可以跨规模成立**，其余三条必须在 16 芯片重测。
 
+### 7.8.3 Profile 分析：gmm_v2 的收益被 XLA 插的 copy 吃掉七成
+
+抓了两个 xplane（P0 baseline / P3 `gmm_v2`+tile512），配置同 §7.8.2，
+`skip_first_n_steps_for_profiler=6 profiler_steps=3`。
+
+<!-- TEMP:XPROF-LINKS 调优结束后删除
+P0: http://xprof.corp.google.com/trace_viewer/chrisya-2358487990447953201
+P3: http://xprof.corp.google.com/trace_viewer/chrisya-9428026772320740496
+TEMP:XPROF-LINKS -->
+
+#### 时间去哪了（P0，有效自耗时 42.833 s）
+
+| 桶 | 耗时 | 占比 |
+|---|---|---|
+| MoE GMM | 14 306 ms | **33.4 %** |
+| collective | 9 309 ms | 21.7 % |
+| embedding/logits dot | 7 711 ms | 18.0 % |
+| attention (splash) | 4 880 ms | 11.4 % |
+| loop fusion | 3 557 ms | 8.3 % |
+| copy/slice | 1 459 ms | 3.4 % |
+
+`bound_by`：Compute 61.9 % / HBM 38.0 %。
+
+> ⚠️ 那 18 % 在 XProf 里显示为 `convolution fusion`，**实际不是卷积**——
+> 全部 `tf_op` 是 `dot_general`，shape 带 `120832`（词表）。是 embedding / unembedding。
+> **8 层配置把它放大了**；20 层时这块占比大致减半。**不是可优化靶子，是小规模失真。**
+
+#### 核心发现：净收益 = 内核收益 − copy 惩罚
+
+| 桶 | Δ (P3 − P0) |
+|---|---|
+| **MoE GMM** | **−2 608 ms** ← `gmm_v2` 内核真实收益 |
+| **copy/slice** | **+1 838 ms** ← 吃回去 70 % |
+| collective | +204 ms |
+| 其余小项合计 | −337 ms |
+| **净** | **−903 ms（−2.11 %）** |
+
++1 838 ms 中 **+1 890 ms 集中在裸 `copy` 单个 op**：383 ms → 2 274 ms，**涨 5.9 倍**。
+
+**机理**：`gmm_v2` 内核本身更快，但它对操作数 layout 有要求，
+XLA 为满足它插入了大量物理拷贝。**省下的算力有七成用来搬数据了。**
+
+#### 这解释了 6 倍的幅度差，而且数量级对得上
+
+§7.8.2 里 V3 只有 +2.27 %，上游宣称 +13.58 %，差 6 倍我当时没有解释。
+现在有了：**若 copy 惩罚为零，收益 = 2608 / 42833 = +6.09 %** —— 与上游同一量级。
+
+> 这是本轮唯一一条**量级自洽**的机理解释。
+> 对照 [[TUNING-v5p 第 8 章]] 那次教训（用 1.56 pp 的边界浪费去解释 16.44 % 的差距，
+> 差一个数量级还写成"大概率原因"），这次先算了量级才下的结论。
+
+#### 下一步靶子（按性价比）
+
+| # | 动作 | 依据 | 预期 |
+|---|---|---|---|
+| **N1** | dump HLO，定位 `copy` 的 producer/consumer，判断是 `gmm_v2` 输入侧还是输出侧 layout 不匹配 | 直指 +1 838 ms | 消掉即 +6 % |
+| **N2** | tile 扫 **256**（1024 已证实 NaN） | tile 影响 layout，可能换掉 copy | 未知 |
+| N3 | ~~查 18 % convolution fusion~~ | **已查清 = embedding，非靶子** | — |
+| N4 | attention 11.4 %，已被 splash + fused_bwd 覆盖 | 低优先级 | — |
+
+**边界**：单节点无 DCN，`collective` 那 21.7 % 只是节点内 ICI。
+16 芯片上通信占比会显著上升，copy 惩罚的相对权重会下降——
+**N1 的收益在大规模上可能小于 +6 %。**
+
 ### 7.9 一条方向性教训：占比大 ≠ 有空间
 
 v5p 那边基线 trace 显示 MoE 的 `tgmm` 几乎填满采样窗口，我据此认定该在 MoE 上使劲。
