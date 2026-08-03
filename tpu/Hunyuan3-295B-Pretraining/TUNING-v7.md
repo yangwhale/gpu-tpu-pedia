@@ -18,6 +18,10 @@
 | 配置 | 64 芯片 `4x4x4` · seq 4096 · pdbs 8 · BF16 | QUICKSTART-v7 §4.3 |
 
 **目标：600–630 TFLOP/s/chip（26–27% MFU），对应 step 压到 14–15 s。缺口 1.38×。**
+
+> 🆕 **2026-08-03 单节点实测拿到第一条正收益**：给 tokamax 显式指定
+> `tile(512, 1024, 1536)`，比 megablox **+4.0 %**（189.5 vs 182.0 TFLOP/s/device）。
+> 复现步骤 + 多卡复测清单见 **[§7.8.1](#781-v7-单节点实测总表2026-08-034-芯片--8-devices)**。
 这个目标怎么来的见 [§3](#3-目标定在哪为什么是-600630-而不是-900)。
 
 > **两个复现点相差 2.6%，所以：拿这份文档对基线时，±3% 以内都算复现成功。**
@@ -1092,7 +1096,14 @@ EP 在满 batch 下全部 OOM，所以单开一组半 batch 的配对基线。
 
 **——完全命中，而且比猜的更精确**：坏 tile 不是我们喂进去的，是它自己查表 miss 后退回的默认值。
 
-#### 7.7.2 根因：专家数 192 不在 tile 调优表里
+#### 7.7.2 根因（v5p 视角，**已被 §7.8.1 补充修正**）
+
+> ⚠️ **本小节只描述了两套查表机制中的第一套。**
+> 2026-08-03 在 v7 实机上查清：还有一套随包发布的 JSON autotuning cache，
+> 它的 key 是**完整算子签名**而非 `(m,k,n,g,q)` 元组。
+> 「把 192 补成 128/256 就能命中」的推论**已被实验证伪**——见
+> [§7.8.1 被推翻的两条](#-被推翻的两条保留因为犯错方式有价值)。
+> 下面的内容对表 1 仍然成立，保留作为机制说明。
 
 tokamax 的 TPU `ragged_dot` 按 `(m, k, n, 专家数, 是否量化)` 查三张硬编码 tile 表
 （前向 / dlhs / drhs 各一张）。查不到就退回 `Config()` 默认值。实际扒出来：
@@ -1262,7 +1273,7 @@ v5p 实测首步：`gmm_v2@1024` **301 s** / `gmm_v2@512` **127 s** / 纯 tokama
 
 ---
 
-### 7.8 v7 复测清单（等有卡时逐条验）
+### 7.8 v7 复测清单（**原始计划，执行结果见 §7.8.1**）
 
 全部前提：Hy3 = 192 专家、`base_emb_dim=4096`、`base_moe_mlp_dim=1536`，
 `scan_layers=True`，先在 16 芯片确认能跑通，再上 64 芯片取数。
@@ -1287,163 +1298,205 @@ v5p 实测首步：`gmm_v2@1024` **301 s** / `gmm_v2@512` **127 s** / 纯 tokama
 - 从 tensorboard 的 `perf/step_time_seconds` 读，比翻日志可靠
   （`kubectl exec` 的输出会被 buffer 住，日志文件长时间只有几十字节）。
 
-### 7.8.1 首次 v7 实机验证（2026-08-03 00:00 HKT，4 芯片单节点冒烟）
+### 7.8.1 v7 单节点实测总表（2026-08-03，4 芯片 / 8 devices）
 
-拿到第一台 v7 后先做的最小验证。**配置极小（2 层 / `per_device_batch_size=1` /
-`max_target_length=1024` / 8 devices），性能数字没有参考价值，只回答"能不能编、能不能跑"。**
+> **这一节是给"以后拿到更多卡时接着测"用的。**
+> 先看 [🏆 已确认收益](#-已确认收益拿到卡后先复现这一条)，再看边界，最后才是过程。
+> 环境：`tpu7x-standard-4t` 单节点 · 8 devices · **单卡 HBM 上限 94.74 GB** ·
+> `ici_fsdp_parallelism=-1` · EP=1 · BF16。
 
-| 轮次 | 配置 | 首次编译 | 稳态 step | 结果 |
-|---|---|---|---|---|
-| S0 | `megablox=True` | 101 s | 0.296 / 0.319 / 0.344 s | ✅ 4 步跑完 |
-| S1 | `megablox=True use_tokamax_gmm=True` | 124 s | 0.378 / 1.164 / 1.990 s | ✅ 4 步跑完 |
+#### 🏆 已确认收益（拿到卡后先复现这一条）
 
-两轮 loss 完全一致（13.402 → 12.286），说明数值路径没问题。
+**给 tokamax ragged_dot 显式指定 tile，`tile_m` 是主导项。**
 
-**一条要复核的预期偏差**：§7.7 推断 v7 会跟 v5p 一样因 192 专家不在
-`tpu7x` 调优表里而退回巨大 grid、导致编译爆炸。**实测没有发生**——
-tokamax 只比 megablox 多编 23 秒（124 s vs 101 s），而不是 v5p 上那种量级的膨胀。
-
-可能的解释（都还没验证，**不要当结论**）：
-1. 2 层 / 极小 batch 下 grid 规模本来就小，掩盖了倍数差异；
-2. v7 的 LUT miss 回退路径与 v5p 不同；
-3. §7.7 的推断本身就不适用于 v7。
-
-**判据**：V1 要在 16 芯片 / 20 层的正式配置下抓 `Autotuning cache miss` 日志，
-并对比 grid 尺寸。小配置跑通 ≠ 大配置不炸，这一条不能跨规模外推。
-
-另注：S1 的 step 时间抖动明显（0.378 → 1.990 s），megablox 则稳定在 0.3 s 上下。
-样本太少（各 3 个稳态点），**不构成"tokamax 更不稳"的结论**，正式测时再看。
-
-### 7.8.2 单节点 4 芯片消融：六变体全表（2026-08-03 03:47 HKT）
-
-在唯一一台 v7 上把 §7.8 清单缩规模跑完。**这是 v7 上的第一批真实数据。**
-
-**容量探测**（先定配置，避免边加边试）：
-
-| 配置 | 结果 | TFLOP/s/dev |
-|---|---|---|
-| L8 / bs2 | ✅ | 111.7 |
-| **L8 / bs4** | ✅ | **176.6** ← 选它 |
-| L12 / bs4 | ❌ OOM | — |
-| L20 / bs2 | ❌ OOM | — |
-
-**锁定配置**：8 层 / `per_device_batch_size=4` / `max_target_length=4096` /
-`ici_fsdp_parallelism=-1`，8 步取第 4–7 步稳态，单卡 HBM 上限 **94.74 GB**。
-
-| 变体 | step (s) | TFLOP/s/dev | vs V0 | 峰值 HBM/dev |
-|---|---|---|---|---|
-| **V0** baseline `megablox` | 1.672 | 176.7 | — | 81.22 G |
-| **V3** `use_gmm_v2` + tile 512 | **1.634** | **180.7** | **+2.27 %** | 83.21 G |
-| **T1** tile 512 单开 | 1.726 | 171.2 | −3.23 % | 81.22 G |
-| **V8** FP8 `fp8_full`+qwix+tile512 | 1.731 | 170.6 | −3.53 % | 83.23 G |
-| **V5** ring of experts (chunks=4) | 2.511 | 117.6 | −50.2 % | 90.11 G |
-| **V4** `use_gmm_v2` 默认 tile | **step-0 NaN** | — | 崩 | 83.23 G |
-
-#### 四条结论
-
-**1. V3 是唯一正收益，但只有 +2.27%，不是上游的 +13.58%。**
-数量级差 6 倍。不要拿这个数去外推 16/64 芯片——8 层 + 单节点无 DCN 通信，
-v7 真正的瓶颈（通信占 57.3%）在这个规模上根本没出现。
-**这条只证明"V3 方向为正且不崩"，不证明幅度。**
-
-**2. V4 的预期被证实：默认 tile 1024 直接 step-0 NaN。**
-与上游记录一致。`tile_k` 必须同时整除 4096 和 1536 —— 512 是最稳的取值。
-**这条可以当结论**，因为它是二值的（崩 / 不崩），不受规模影响。
-
-**3. T1 在 v7 上是负的（−3.23%），与 v5p 相反。**
-v5p 上 tile 512 单开是 **+2.67%**（TUNING-v5p 第 6 章）。同一个开关换代际翻符号。
-含义：**tile 512 的收益依赖 `gmm_v2`，它不是一个独立的正向开关。**
-v5p 上之所以单开为正，是因为那里 tile 被 18 路统一放大，512 相当于"改回正常"；
-v7 上没有那个坑，单开 512 只是把 megablox 的默认调优值改坏。
-
-**4. V8 FP8 在 v7 上跑通了 —— v5p 上它是编译失败。**
-v5p 撞 `infer-vector-layout: unsupported shape cast`（tile 512 下），v7 上无此问题。
-虽然本轮慢 3.53%，但**"能跑"本身是新信息**：FP8 是 v7 算力翻倍的最大杠杆，
-之前被判死的路在 v7 上是通的。慢的原因需要单独查（量化开销 vs 算力收益，
-8 层小配置下前者占比被放大）。
-
-#### HBM 实测（这轮开始每轮都记）
-
-单卡上限 **94.74 GB**。baseline 81.22 G，各开关增量：
-
-| 开关 | ΔHBM |
-|---|---|
-| tile 512（单开） | 0 |
-| `use_gmm_v2` | +2.0 G |
-| FP8 + tile512 | +2.0 G |
-| **ring of experts** | **+8.9 G** ← 逼近上限 |
-
-ring 吃到 90.11 G，离 94.74 G 只剩 4.6 G。**它在更大配置上会先 OOM 再谈性能。**
-
-#### 这批数据的适用边界
-
-- 单节点 = **没有 DCN 通信**。v7 上通信占 57.3%，这批数字完全不含那一半。
-- 8 层 vs 目标 20 层，MoE 占比、编译规模都不同。
-- **只有 V4（NaN）和 V8（能编）两条可以跨规模成立**，其余三条必须在 16 芯片重测。
-
-### 7.8.3 Profile 分析：gmm_v2 的收益被 XLA 插的 copy 吃掉七成
-
-抓了两个 xplane（P0 baseline / P3 `gmm_v2`+tile512），配置同 §7.8.2，
-`skip_first_n_steps_for_profiler=6 profiler_steps=3`。
-
-<!-- TEMP:XPROF-LINKS 调优结束后删除
-P0: http://xprof.corp.google.com/trace_viewer/chrisya-2358487990447953201
-P3: http://xprof.corp.google.com/trace_viewer/chrisya-9428026772320740496
-TEMP:XPROF-LINKS -->
-
-#### 时间去哪了（P0，有效自耗时 42.833 s）
-
-| 桶 | 耗时 | 占比 |
-|---|---|---|
-| MoE GMM | 14 306 ms | **33.4 %** |
-| collective | 9 309 ms | 21.7 % |
-| embedding/logits dot | 7 711 ms | 18.0 % |
-| attention (splash) | 4 880 ms | 11.4 % |
-| loop fusion | 3 557 ms | 8.3 % |
-| copy/slice | 1 459 ms | 3.4 % |
-
-`bound_by`：Compute 61.9 % / HBM 38.0 %。
-
-> ⚠️ 那 18 % 在 XProf 里显示为 `convolution fusion`，**实际不是卷积**——
-> 全部 `tf_op` 是 `dot_general`，shape 带 `120832`（词表）。是 embedding / unembedding。
-> **8 层配置把它放大了**；20 层时这块占比大致减半。**不是可优化靶子，是小规模失真。**
-
-#### 核心发现：净收益 = 内核收益 − copy 惩罚
-
-| 桶 | Δ (P3 − P0) |
-|---|---|
-| **MoE GMM** | **−2 608 ms** ← `gmm_v2` 内核真实收益 |
-| **copy/slice** | **+1 838 ms** ← 吃回去 70 % |
-| collective | +204 ms |
-| 其余小项合计 | −337 ms |
-| **净** | **−903 ms（−2.11 %）** |
-
-+1 838 ms 中 **+1 890 ms 集中在裸 `copy` 单个 op**：383 ms → 2 274 ms，**涨 5.9 倍**。
-
-**机理**：`gmm_v2` 内核本身更快，但它对操作数 layout 有要求，
-XLA 为满足它插入了大量物理拷贝。**省下的算力有七成用来搬数据了。**
-
-#### 这解释了 6 倍的幅度差，而且数量级对得上
-
-§7.8.2 里 V3 只有 +2.27 %，上游宣称 +13.58 %，差 6 倍我当时没有解释。
-现在有了：**若 copy 惩罚为零，收益 = 2608 / 42833 = +6.09 %** —— 与上游同一量级。
-
-> 这是本轮唯一一条**量级自洽**的机理解释。
-> 对照 [[TUNING-v5p 第 8 章]] 那次教训（用 1.56 pp 的边界浪费去解释 16.44 % 的差距，
-> 差一个数量级还写成"大概率原因"），这次先算了量级才下的结论。
-
-#### 下一步靶子（按性价比）
-
-| # | 动作 | 依据 | 预期 |
+| 配置 | step | TFLOP/s/device | vs megablox |
 |---|---|---|---|
-| **N1** | dump HLO，定位 `copy` 的 producer/consumer，判断是 `gmm_v2` 输入侧还是输出侧 layout 不匹配 | 直指 +1 838 ms | 消掉即 +6 % |
-| **N2** | tile 扫 **256**（1024 已证实 NaN） | tile 影响 layout，可能换掉 copy | 未知 |
-| N3 | ~~查 18 % convolution fusion~~ | **已查清 = embedding，非靶子** | — |
-| N4 | attention 11.4 %，已被 splash + fused_bwd 覆盖 | 低优先级 | — |
+| megablox 基线 | 1.321 s | 182.0 | — |
+| **tokamax `tile(512, 1024, 1536)`** | **1.269 s** | **189.5** | **+4.0 %** ✅ |
+| tokamax `tile(512, 4096, 512)` | 1.331 s | 180.7 | −0.8 % |
+| tokamax `tile(128, 4096, 1536)` | 1.451 s | 165.7 | −9.0 % |
+| tokamax 默认（未命中→启发式 `128³`） | **17.955 s** | 13.4 | **−93 %** |
 
-**边界**：单节点无 DCN，`collective` 那 21.7 % 只是节点内 ICI。
-16 芯片上通信占比会显著上升，copy 惩罚的相对权重会下降——
-**N1 的收益在大规模上可能小于 +6 %。**
+**`tile_m` 从 128 改到 512，同一条路径从 −9 % 翻到 +4 %。**
+（配置：6 层 / `per_device_batch_size=4` / seq 4096 / 192 experts，稳态取第 5–7 步。）
+
+**未命中的代价 = 12.4×**（17.955 s → 1.451 s，仅改 tile）。
+
+#### 怎么复现这个收益
+
+MaxText 不暴露 tokamax 的 tile 参数，用一个 6 行的 monkeypatch 注入：
+
+```python
+# tkcfg.py —— 在 import train 之前 exec 它
+import os, dataclasses
+from tokamax._src.ops.ragged_dot import pallas_mosaic_tpu as P
+_TM, _TK, _TN = (int(os.environ[k]) for k in ("TK_TM", "TK_TK", "TK_TN"))
+_orig = P.PallasMosaicTpuRaggedDot._get_heuristics_config
+def _patched(self, ba):
+    c = _orig(self, ba)
+    k, n = ba.arguments["rhs"].shape[-2], ba.arguments["rhs"].shape[-1]
+    return dataclasses.replace(c, tile_m=_TM,
+                               tile_k=min(_TK, k), tile_n=min(_TN, n))
+P.PallasMosaicTpuRaggedDot._get_heuristics_config = _patched
+```
+
+```bash
+TK_TM=512 TK_TK=1024 TK_TN=1536 python3 -c "
+exec(open('tkcfg.py').read())
+import runpy; runpy.run_module('src.maxtext.trainers.pre_train.train', run_name='__main__')
+" src/maxtext/configs/base.yml model_name=hunyuan3-295b \
+  megablox=True use_tokamax_gmm=True ...
+```
+
+> **正解是跑 autotune 生成官方 cache 条目**，注入只是验证手段。
+> 但注入已足以证明方向和量级。
+
+#### 🔍 根因：两套独立的 tile 查表，我们两套都 miss
+
+这是本轮最重要的机制发现。**之前 §7.7.2 只写了其中一套，不完整。**
+
+| | 表 1 `*_TILING_TUNED_LUT` | 表 2 `data/autotuning/tpu7x/*.json` |
+|---|---|---|
+| 形式 | Python dict（在 tokamax 源码里） | JSON，随 pip 包发布 |
+| 条数 | 28 / 27 / 28（GMM / GMM_RHS_T / TGMM） | 84 |
+| key | `(m, k, n, g, is_quantized)` | 完整算子签名 pytree |
+| **`g` 取值** | **只有 `{16, 128, 256}`** | 随条目 |
+| `k`/`n` 覆盖 | 含 256…7168，**包含我们的 4096 / 1536** | 全部 7168 系（DSV3） |
+| miss 后果 | 落到表 2 | 落到 `Config(128,128,128)` → **13× 慢** |
+
+**关键事实：表 1 里存在我们的 `(m, k, n)`，只差 `g`。**
+
+```
+TGMM  (131072, 4096, 1536, g=128) -> tile (512, 1024, 1536), buf 2
+TGMM  (262144, 4096, 1536, g=128) -> tile (512, 4096,  512), buf 2
+GMM   (524288, 4096, 1536, g=128) -> tile (1024, 1536, 1024), buf 2
+GMM   (524288, 1536, 4096, g=128) -> tile (1024, 1024, 1536), buf 2
+```
+
+**我们那条 +4.0% 的 `tile(512,1024,1536)` 就是直接抄的第一行。**
+
+`tile_m` 随 `m` 走：`m=131072→512`、`m=262144→512`、`m=524288→1024`。
+**从来不是 128。** 启发式回退给的 `128³` 对任何真实形状都是错的。
+
+#### ❌ 被推翻的两条（保留，因为犯错方式有价值）
+
+**1.「专家数 192 不在 `{16,128,256}` 里」是不完整的解释。**
+
+验证方法（Chris 设计）：把 `num_experts` 改成 **256**，与 DSV3 一致，再测。
+
+| | megablox | tokamax | 比值 |
+|---|---|---|---|
+| 192 experts | 1.321 s | 17.955 s | 13.6× |
+| **256 experts** | 1.540 s | **18.936 s** | **12.3×** |
+
+**改成 256 完全没用，48 次 `Autotuning cache miss` 一次不少。**
+因为表 2 的 key 是完整形状——DSV3 是 `k=7168, n=2048`，我们是 `k=4096, n=1536`，
+**换 `g` 不动 `k/n`，照样 miss**。
+
+> **一次实验推翻一个我写进文档的因果。**
+> 教训：key 是元组时，不要只盯着自己注意到的那个字段。
+
+**2.「tokamax 在 v7 上不会卡死」是小配置造成的假象。**
+
+首轮冒烟（2 层 / bs=1 / seq=1024）测到 tokamax 编译 124 s、正常出 loss，
+我据此写下「§7.7 的预测在 v7 上没有发生」。
+换到 8 层 / bs=4 / seq=4096 立刻 13× 崩。
+**小规模跑通 ≠ 大规模没问题，这条已经栽过两次。**
+
+#### 官方 v7 配方对齐：单节点上 XLA flag 组收益为 0
+
+上游 `tpu-recipes` 的 `training/ironwood/deepseek3-671b` 配方（v7 官方，
+28 条 XLA flag + `fsdp_shard_on_exp=True` + `use_tokamax_gmm=True`）：
+
+| 轮 | 改动 | step | vs 基线 |
+|---|---|---|---|
+| B0 | 我们的 XLA flags | 1.714 s | — |
+| B1 | **换成官方 28 条** | 1.714 s | **0.0 %** |
+| B2 | 再加 `use_tokamax_gmm=True` | 24.195 s | −93 % |
+
+**B1 的 0.0% 不是「flag 没用」，是「单节点测不出来」**——
+那 28 条基本全是 `sparse_core_collective_offload` / `all_gather` / `reduce_scatter`，
+**单节点没有跨机通信，物理上没有优化对象**。**这条必须在 ≥4 节点重测。**
+
+**B2 说明官方配方不能照抄**：官方能开 tokamax 是因为 DSV3 的形状在表里，我们不在。
+
+#### 容量边界（单节点 4 芯片）
+
+| 配置 | 结果 | TFLOP/s/device |
+|---|---|---|
+| 8 层 / bs 2 | ✅ | 111.7 |
+| **8 层 / bs 4** | ✅ | 176.6 ← 8 层上限 |
+| 8 层 / bs 4 / **256 experts** | ❌ OOM 97.08 G > 94.74 G | — |
+| 12 层 / bs 4 | ❌ OOM | — |
+| 20 层 / bs 2 | ❌ OOM | — |
+
+**峰值 HBM（8 层 / bs4 / 192 exp）**：baseline 81.22 G，各开关增量——
+tile512 单开 **0**、`gmm_v2` **+2.0 G**、FP8 **+2.0 G**、
+**ring of experts +8.9 G（90.11 G，逼近上限，大配置上会先 OOM）**。
+
+#### 8 层六变体消融（`use_gmm_v2` 路径，已降优先级）
+
+| 变体 | step | TFLOP/s/dev | vs V0 |
+|---|---|---|---|
+| V0 megablox | 1.672 | 176.7 | — |
+| V3 `gmm_v2` + tile 512 | 1.634 | 180.7 | +2.27 % |
+| T1 tile 512 单开 | 1.726 | 171.2 | −3.23 % |
+| V8 FP8 + tile512 | 1.731 | 170.6 | −3.53 % |
+| V5 ring of experts | 2.511 | 117.6 | −50.2 % |
+| V4 `gmm_v2` 默认 tile | **step-0 NaN** | — | 崩 |
+
+三条可跨规模成立的：
+- **V4：`gmm_v2` 默认 tile 1024 必 NaN**，`tile_k` 要同时整除 4096 和 1536 → **512**。二值结论，与规模无关。
+- **V8：FP8 在 v7 上能编能跑**（v5p 上是 `unsupported shape cast` 编译失败）。慢的原因未查。
+- **T1：tile 512 单开在 v7 上为负，与 v5p 的 +2.67 % 反号**——它依赖 `gmm_v2`，不是独立开关。
+
+#### `gmm_v2` 的 layout 惩罚（已查清，但这条路已降优先级）
+
+Profile 对比（P0 megablox vs P3 `gmm_v2`+tile512，有效自耗时 42.833 s → 41.931 s）：
+
+| 桶 | Δ |
+|---|---|
+| MoE GMM | **−2 608 ms**（内核真实收益） |
+| copy/slice | **+1 838 ms**（吃回 70 %） |
+| 净 | −903 ms = −2.11 % |
+
++1 838 ms 中 +1 890 ms 集中在裸 `copy`（383 → 2 274 ms，**5.9×**）。
+HLO 指令级证据：
+
+```
+copy.2610.rhs_ref.weight =
+    bf16[192,4096,1536]{2,1,0} copy( bf16[192,4096,1536]{1,2,0} %bitcast.4227 )
+```
+
+形状相同、layout 从 `{1,2,0}` 变 `{2,1,0}`——**物理转置 2.4 GB 专家权重**。
+根因：`gmm_v2` 的 custom-call 硬钉 `operand_layout_constraints={..., bf16[192,4096,1536]{2,1,0}}`，
+而反向 `ops.py` 里 `rhs=dlhs_rhs.swapaxes(1,2)` 产生的是 `{1,2,0}`。
+
+**对照**：`H0`（megablox v1）里 `rhs_ref.weight` copy 数 = **0**。
+tokamax v1 内核支持 `transpose_rhs`（`rhs_contracting_dim = 1 if transpose_rhs else 0`
++ index_map 里 `k_i, n_i = n_i, k_i`，**纯索引运算零搬运**，与 CUTLASS 的 NT 同思路），
+**MaxText 的 `gmm_v2` fork 把这个能力丢了**（`grep -c transpose` = 0）。
+
+> 若消掉 copy，理论收益 = 2608/42833 = **+6.09 %**，与上游宣称的 +13.58 % 同量级。
+> 但**这条要改内核，且 tokamax v1 + 正确 tile 已经拿到 +4.0 %**，性价比更高。
+
+#### 📋 拿到多卡后的复测清单（按优先级）
+
+| # | 项 | 为什么必须多卡 | 预期 |
+|---|---|---|---|
+| **M1** | 官方 28 条 XLA flag 组 | 单节点实测 0.0 %，全是跨机通信 flag | 未知，可能是大头 |
+| **M2** | `fsdp_shard_on_exp=True`（官方开，我们默认 false） | 改变 all-gather 模式 + GMM 的 `g` | 未知 |
+| **M3** | tokamax `tile(512,1024,1536)` 复现 | 单节点 +4.0 %，需确认不被通信淹没 | ≥ +2 % |
+| **M4** | 按生产形状（`pdbs=8` → m=262144）重取 tile | m 变了 `tile_m` 可能变 | — |
+| M5 | 跑官方 autotune 生成 cache 条目 | 替代 monkeypatch | 应 ≥ M3 |
+| M6 | FP8（v7 上已确认能跑） | v7 算力翻倍的最大杠杆 | 潜在最大 |
+
+**取数纪律**（血的教训，别重犯）：
+- 每项只动一个维度，同一批 pod 内比。
+- **不要用小配置筛选**——2 层跑通的结论在 8 层被推翻过两次。
+- 每轮记 **峰值 HBM**，`grep "Total hbm usage >="`。
+- 稳态取第 4 步之后；不抓 profile 跑 8 步足够。
+
 
 ### 7.9 一条方向性教训：占比大 ≠ 有空间
 
