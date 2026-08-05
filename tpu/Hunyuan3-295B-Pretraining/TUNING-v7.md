@@ -1407,10 +1407,74 @@ DSv3 recipe 里除了 tile，还有几个我们没设的配置项。
 > 而真相是 tile 一分钱不值。**一次改一组、配对留白格，才能给出归因**
 > （[§4.7 第 4 条](#47-判断收益是真是假的四条纪律)）。
 
-⏳ 还差一轮 **X3（故意设一组全 256 的烂 tile）**：
-性能明显掉 ⇒ tile 参数确实接到了 kernel、只是默认值已够好；
-纹丝不动 ⇒ 参数压根没传到实际 kernel，是框架层面的问题。
-**这是 [§4.7 第 1 条](#47-判断收益是真是假的四条纪律) 要求的反向判别 —— 我自己得先做到。**
+##### 验证实验八：反向判别 —— tile 参数**根本没传到 kernel**
+
+X3 故意把 18 个 tile **全设成 256**（明显糟糕的分块）。三个点并排：
+
+| tile 设置 | TFLOP/s/chip |
+|---|---|
+| MaxText 默认（1024） | 639.0 |
+| DSv3 映射值（4096 / 1536 / 2048…） | 639.0 |
+| **故意设烂（全 256）** | **639.0** |
+
+**三者完全一致。** 按 [§4.7 第 1 条](#47-判断收益是真是假的四条纪律) 的判据，
+这不是「默认值恰好够好」，而是**参数压根没接到 kernel**。
+
+**源码给出了确切原因**（`kernels/megablox/ops.py:199-212`）：
+
+```python
+# Backend Execution Routing
+if use_tokamax_backend and not use_gmm_v2:
+    out = _fwd_run_tokamax_v1(lhs, rhs, group_sizes, preferred_element_type,
+                              transpose_rhs, use_manual_quantization)
+    #     ↑ 参数列表里根本没有 tiling
+elif use_tokamax_backend and use_gmm_v2:
+    out = _fwd_run_tokamax_v2(..., tiling, ...)      # ← 传了
+else:
+    out = _fwd_run_megablox(..., tiling, ...)        # ← 传了
+```
+
+我们的配置是 `use_tokamax_gmm=True`（⇒ `use_tokamax_backend=True`）
+且**没开** `use_gmm_v2` ⇒ 命中第一个分支 ⇒ **`tiling` 整个被丢弃**。
+
+`base.yml:247-248` 其实早写明了，只是我一直没读到：
+
+```yaml
+# megablox/jax ragged dot - supports forward pass only (6 configs)
+# tokamax ragged dot - supports all 18 configs
+```
+
+而 `_fwd_run_tokamax_v1` 内部走 `tokamax.ragged_dot`（`ops.py:286`），
+**分块由 tokamax 自己的 heuristics 决定** ——
+也就是 [§3.4.3](#343-修法6-行-monkeypatch) 那个 6 行 monkeypatch 打的地方。
+
+> 🛑 **⇒ [§5.2](#52-为什么-fp8-的-tile-没调成两条-gmm-路径) 的核心论断写反了。**
+> 我写的是「**开 FP8 等于换 kernel 路径**，BF16 那个 monkeypatch 在 FP8 下一行都不执行，
+> 618 是『FP8 + MaxText 默认 tile』跑出来的」。
+> **真相相反**：FP8 走的仍是 tokamax，**monkeypatch 照常生效**，
+> 反倒是 MaxText 的 `w{i,o}_tile_*` 被丢弃。
+>
+> **这意味着「FP8 的 tile 一次都没扫过」这个前提从头就不成立** ——
+> 我们所有 FP8 轮次都注入了 `tkcfg.py`，
+> **FP8 一直在吃 BF16 调出来的最优 tile `(512, 2048, 1536)`**。
+> 这也解释了 §5.1 那个 618 为什么并不算差 —— 它不是「未调优」的起点。
+
+⇒ **要让 MaxText 的 tile 配置真正生效，必须开 `use_gmm_v2=True`**（走 `_fwd_run_tokamax_v2`）。
+但 [附录 B.3](#b3-明确负收益) 记着 gmm_v2 的收益被 XLA 插入的 copy 吃掉 70% ——
+这条路要重新评估，不是免费的。
+
+##### 验证实验九：monkeypatch 对 FP8 到底有没有用（进行中）
+
+上面是源码推断，还得实测。三格对照，只改 monkeypatch 注入的 tile 值：
+
+| 轮 | monkeypatch | 预期 |
+|---|---|---|
+| **Y0** | `512,2048,1536`（BF16 最优值） | 基准 —— **实测 645.0**，精确复现 X1/X2/W2 的 644.8 |
+| **Y1** | **完全不注入** | 若掉 ⇒ FP8 确实一直靠它撑着 |
+| **Y2** | `128,256,256`（烂值） | 若掉 ⇒ 反向确认这条路径生效 |
+
+Y0 已复现基准（645.0 vs 644.8，差 0.03%，在 0.005% 抖动量级的判据下算同一个点），
+说明这套对照本身可信。
 
 ##### 出路重排（依据已从推测变成源码 + 官方 recipe）
 
@@ -1640,6 +1704,11 @@ DSv3 recipe 里除了 tile，还有几个我们没设的配置项。
 - **bash 函数内的变量默认是全局的** —— 我的战役脚本里 `run()` 函数用 `TK=$4` 接 tile_k，
   与全局的 `TK='megablox=True ...'` 重名，第一轮跑完就把它污染成 `2048`，
   后续四轮把裸参数 `2048` 传给 MaxText 全部 `ValueError`
+- **`pkill -f` 的模式要对着真实命令行写**。我的战役脚本用
+  `pkill -9 -f "train[.]py"` 清理上一轮，但实际命令行里是
+  `runpy.run_module('src.maxtext.trainers.pre_train.train')` —— **不含 `train.py` 这个串**，
+  所以这条 pkill **一次都没匹配到过**。轮次之间能正常切换靠的是上一轮自己退出，
+  不是靠它。**写完 pkill 要用 `pgrep -f` 同模式验一次能不能匹配到目标。**
 - **取稳态先看序列再定窗口**：开 profiler 时 step 17 会有 ~90 秒尖峰（导 trace），
   按惯例取 `step ≥ 15` 求均值会得到 11.678 s，比真实稳态慢近一倍
 - **测极限值时不要自己降配**。我为了「压住 FP8 编译时间」把 pdbs 从 12 降到 8、
