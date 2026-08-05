@@ -669,6 +669,8 @@ v5p 那边基线 trace 显示 MoE 的 `tgmm` 几乎填满采样窗口，我据�
 | `scan(unroll=N)` | 无可用档位 | 2 撞 kernel 形状校验，10 要 274 G |
 | 官方 `tokamax.autotune` | 不是 CLI，成本高于手调 | 见 [§5.4.1](#541-官方-autotune-调研结论2026-08-05) |
 | 单开 `shard_exp_on_fsdp` | **静默失效**（不报错、不变快） | calibration 不是 `fixed` 时 `weight_gather_axes` 恒空 |
+| **SparseCore 卸载 flag 组**（补齐 DSv3 那 27 个） | ±0 | 三个核心 offload flag 在 Ironwood 上**默认已是 True**；关掉互斥的 CF 后仍 ±0 —— 收益已被现有 `collective_aggregator` + `latency_hiding_layer_scheduler` 吃掉 |
+| 整组照搬 DSv3 的 36 个 XLA flag | **HBM OOM** | 别人的 flag 是按别人的显存预算调的 |
 
 **C. 被结构锁死 —— 改配置无解，只能改模型或框架**
 
@@ -1556,6 +1558,79 @@ FP8 这边是 **−2.5%**。**方向一致、幅度接近。**
 > 附带修正一条纪律：我在 §4.7 写「收益幅度不能跨 kernel 平移」，
 > 这次的数据显示**最优点（argmax）可以平移，能平移的不是收益幅度（max value）**。
 > 两者是不同的东西。
+
+##### 验证实验十一：XLA flag —— 我们 9 个 vs DSv3 36 个，补齐后仍是 ±0
+
+DSv3 recipe 有 **36 个 XLA flag，我们只有 9 个**，缺的主体是一整套
+**SparseCore Collective Offloading**。而官方 Ironwood 调优文档明确写着：
+*「TPU7x 上重叠通信与计算的主要机制叫 SparseCore Collective Offloading，
+这是 TPU7x 上异步集合通信的推荐做法」*。
+
+我们瓶颈是通信占 57.3%，却漏掉了官方指定的通信优化机制 —— 看起来是最大的一块。
+**实测四格，全是 ±0 或更差：**
+
+| 轮 | 配置 | 结果 |
+|---|---|---|
+| 基准 | 我们原有 9 个 flag | 645.0 |
+| A1 | + SparseCore 卸载 11 个 | **644.8**（±0） |
+| A2 | DSv3 完整 36 个 | ❌ **HBM OOM** |
+| B1 | 官方 `ENABLE_SPARSECORE_OFFLOADING_FOR_RS_AG_AR` 全组（关 CF + 开 SC + 2 个 base flag） | **644.8**（±0） |
+| B2 | **只关 CF**，其余不动 | **644.8**（±0） |
+
+**A1 的 ±0 是预期内的** —— MaxText 官方 flag library（`benchmarks/xla_flags_library.py`）注释：
+
+```python
+# On Ironwood, by default:
+# xla_tpu_enable_sparse_core_collective_offload_all_gather as True
+# xla_tpu_enable_sparse_core_collective_offload_reduce_scatter as True
+# xla_tpu_enable_sparse_core_collective_offload_all_reduce as True
+```
+
+**这三个在 Ironwood 上默认就是 True**，显式再设一遍等于没设。
+
+同一个文件里还有一句更关键的：
+
+```python
+# Either one of CF or SC can be enabled at a time.
+```
+
+**`async collective fusion`（CF）与 SparseCore offloading（SC）互斥。**
+我据此推断「SC 虽默认开着，但被 CF 挡住了」—— B1/B2 就是去验它，
+**关掉 CF 之后仍然 ±0**。
+
+> 🛑 **推断在机制上说得通，但收益是零。**
+> 最合理的解释：我们原有 9 个 flag 里的
+> `xla_tpu_enable_sparse_core_collective_aggregator=true` 和
+> `xla_tpu_enable_latency_hiding_layer_scheduler=true` **已经把这块收益吃掉了**；
+> 而剩下的大头 —— MoE 权重 all-gather —— **已经被 QAG 减半**。
+> **SparseCore 卸载能帮的部分，我们通过别的途径已经拿到了。**
+
+A2 的 OOM 本身也是信息：DSv3 那套里有抬高 HBM 占用的项
+（`scoped_vmem_limit_kib=65536` 比我们的 65472 高，或 `accumulate_into_mrb`）。
+⇒ **不要整组照搬别人的 flag —— 它们是按另一个模型的显存预算调的。**
+
+##### 阶段收口：645 是「不改模型、不写代码」范围内的天花板
+
+2026-08-05 下午连做三轮共 **8 格，没有一格跑出正收益**：
+
+| 方向 | 格数 | 结果 |
+|---|---|---|
+| MaxText tile 配置 | 1 | ±0（参数根本没接到 kernel） |
+| FP8 tile（monkeypatch，往大调） | 3 | 2 格 VMEM OOM，1 格 **−2.5%** |
+| XLA flag / SparseCore 卸载 | 4 | 3 格 ±0，1 格 HBM OOM |
+
+> 🎯 **这 8 格的价值不在提升，在于把剩余搜索空间排干净了。**
+> 配合 [§4.6 总表](#46-什么能调什么不能调--一张总表)，现在可以明确说：
+> **不改模型、不写代码的前提下，645（256 experts）/ 625（192 experts）已接近上限。**
+
+**还没排除的四条**（按可行性排序）：
+
+| # | 方向 | 说明 |
+|---|---|---|
+| 1 | **推到 pdbs 12** | 只差 **1.88 G**（96.62 vs 94.74）。要再省出来得动 remat 策略，但那会加计算 |
+| 2 | **上 256 芯片** | [§4.1](#41-扩展性weak-scaling-100strong-scaling-掉-11) 实测 weak scaling 100%，加卡同时加 batch 可同比例放大 |
+| 3 | 给 GQA 写 batch split decoder | 几百行，**是开发任务不是调优**，且收益未知 |
+| 4 | 改模型形状（`emb 4096` → 更大） | DSv3 是 7168，矩阵越大 MXU 越划算。**下一代模型设计决策** |
 
 ##### 出路重排（依据已从推测变成源码 + 官方 recipe）
 
