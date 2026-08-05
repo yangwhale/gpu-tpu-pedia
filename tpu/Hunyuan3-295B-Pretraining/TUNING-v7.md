@@ -880,10 +880,10 @@ ValueError: A fixed range is required for fixed calibration.
 MaxText 侧是**字符串原样透传**（`quantizations.py:654-656` → qwix `rhs_calibration_method`），
 中间不做解析和校验，所以带逗号的值直接写进命令行即可。
 
-##### 192 experts 撞墙的确切位置：是 config 校验，不是 kernel
+##### 192 experts 撞墙的确切位置
 
 `shard_exp_on_fsdp=True` 在 128 device 上直接被拒（[附录 B.2](#b2-崩溃--配置拒绝)）。
-拦截点在 `configs/pyconfig_deprecated.py:1212-1215`，是**两条显式的前置校验**：
+源码里写着两条**显式前置校验**（`configs/pyconfig_deprecated.py:1212-1215`）：
 
 ```python
 if raw_keys["shard_exp_on_fsdp"] and raw_keys["num_experts"] % raw_keys["ici_fsdp_parallelism"] != 0:
@@ -895,6 +895,18 @@ if raw_keys["shard_exp_on_fsdp"] and (using_tensor_parallelism(raw_keys) or usin
 **这一点很重要：约束是 `num_experts % ici_fsdp_parallelism == 0`，
 不是「专家数必须是 2 的幂」。** 是 FSDP 宽度和专家数的整除关系，
 而我们一直用 2 的幂当 FSDP 宽度，才让它看起来像是「192 不是 2 的幂」的问题。
+
+> ⚠️ **但实测拦下它的不是这两条校验。** 我先前照源码写成「拦截点在 config 层」，
+> 实跑（S2 轮）报的是 **`shard_map` 的运行时错误**：
+> *`shard_map applied to the function 'sparse_matmul_route_and_compute' was given
+> argument arrays with axis sizes that are not evenly divisible by the corresponding
+> mesh axis sizes`*，而那句 `divisiable` 的 config 报错**一次都没出现**
+> （`grep -c` 结果为 0）——我们这个版本走的是 `configs/types.py`（pydantic），
+> `pyconfig_deprecated.py` 那条根本没执行。
+>
+> **结论不变（约束就是整除，workaround 有效），但失败会晚到 shard_map 才暴露** ——
+> 意味着**它要先编译一段时间才崩，不是秒拒**（S2 烧了 128 秒）。
+> 教训还是那条：**读到源码里有校验，不等于它在你这条代码路径上生效。**
 
 按我们实际用过的 FSDP 宽度列出来：
 
@@ -1026,25 +1038,59 @@ act_quantization_calibration_method=fixed,-224,224     # L132
 
 ⚠️ **单节点本来也测不出 QAG 收益**（它省的是跨卡通信），这轮只有二值意义。
 
-##### 验证实验二：64 芯片判据（2026-08-05，进行中）
+##### 验证实验二：64 芯片判据（2026-08-05，已完成）
 
 用 `fixed,-224,224` 重跑，并把整除 workaround 一起验了。
-128 device / 16 层 / pdbs 8（缩层是为了压住 FP8 的编译时间，
-**只判通/不通与组内相对趋势，绝对性能不与 §5.1 的 618 横比**）：
+128 device / 16 层 / pdbs 8：
 
-| 轮 | experts | 并行度 | calibration | `shard_exp` | 这一轮回答什么 |
-|---|---|---|---|---|---|
-| S0 | 192 | DP1×FSDP128 | — | — | BF16 参照点 |
-| S1 | 192 | DP1×FSDP128 | absmax | off | FP8 参照点（无 QAG） |
-| S2 | 192 | DP1×FSDP128 | `fixed,-224,224` | **on** | **预期崩**：`192 % 128 ≠ 0` |
-| S3 | 192 | **DP2×FSDP64** | `fixed,-224,224` | **on** | **整除 workaround 能否成立** |
-| S4 | 256 | DP1×FSDP128 | absmax | off | 256 experts 的 FP8 参照点 |
-| S5 | 256 | DP1×FSDP128 | `fixed,-224,224` | **on** | **256 experts 能否开 QAG** |
+| 轮 | experts | 并行度 | calibration | `shard_exp` | step (s) | TFLOP/s/**chip** | 峰值 HBM | NaN |
+|---|---|---|---|---|---|---|---|---|
+| S0 | 192 | DP1×FSDP128 | — (BF16) | — | 3.7443 | 550.6 | 54.33 G | 0 |
+| S1 | 192 | DP1×FSDP128 | absmax | off | 3.6120 | 570.8 | 55.30 G | 0 |
+| S2 | 192 | DP1×FSDP128 | `fixed,-224,224` | **on** | — | ❌ `shard_map` 不整除 | — | — |
+| S3 | 192 | **DP2×FSDP64** | `fixed,-224,224` | **on** | 3.2222 | **639.8** | 57.09 G | 0 |
+| S4 | 256 | DP1×FSDP128 | absmax | off | 3.9258 | 525.6 | 60.04 G | 0 |
+| S5 | 256 | DP1×FSDP128 | `fixed,-224,224` | **on** | 3.3960 | **607.6** | 55.57 G | 0 |
 
-配对读数：`S3 vs S1` 给出「192 走 workaround 的净代价」，
-`S5 vs S4` 给出「256 experts 上 QAG 的净收益」——
-S4/S5 必须成对才有意义，因为改 `num_experts` 后参数量、FLOP 口径、HBM 全变了，
-**跨 experts 数横比无意义**。
+**⚠️ 这批是 16 层 / pdbs 8 的缩水配置，绝对值不能跟 §5.1 的 618 或 §3 的 580 横比。**
+（缩层影响其实很小：全 80 层 `FSDP128 / pdbs 8` 是 543，这里 16 层同 batch 是 550.6。
+真正拉低绝对值的是 **pdbs 从 12 降到 8**。降 batch 是我的判断失误，见下。）
+
+**四条结论：**
+
+1. **QAG 净收益 = +15.6%，这是干净的。**
+   `S4 → S5` 是完美配对：同 256 experts、同 `DP1×FSDP128`、同 pdbs，
+   **唯一差别就是 QAG 开关** —— 525.6 → 607.6。
+   讽刺的是，这个最干净的数据点来自「顺手测一下」的 256 experts 轮，
+   而不是我特意设计的 192 轮。
+2. **QAG 还省显存：60.04 G → 55.57 G，省 4.47 G。**
+   量化后再 gather，权重 all-gather 的缓冲区直接减半。
+   **省下的显存可以换更大的 batch** —— 这是第二重收益，正在测。
+3. **192 的 workaround 成立**（S3 跑通、无 NaN、639.8 是六轮最高）。
+   但 `S3 vs S1`（570.8 → 639.8，+12.1%）**同时改了 QAG 和 FSDP 宽度，
+   两个变量混在一起，不能当作 QAG 的净收益** —— 我漏了同并行度的对照组。
+   要拿 192 上的净收益，得补 `DP2×FSDP64 + FP8 + 不开 QAG` 那一轮。
+4. **FSDP 从 128 收窄到 64 没有 OOM**（57.09 G，只比 55.30 多 1.79 G）。
+   但这是 16 层，全 80 层会放大 5 倍，**不要直接外推**。
+
+> 🔁 **一条方法论教训（Chris 当场指出）：测极限值就不该自己降配。**
+> 我把 pdbs 从 12 降到 8，理由是「压住 FP8 的编译时间」——
+> 而 [附录 C](#附录-c编译与环境工程) 里我自己实测过 **编译时间几乎不随规模变**
+> （43.5 s vs 44.3 s）。**用一个自己已经证伪过的理由去缩水，
+> 等于把极限测试做成了缩水测试。**
+> 更隐蔽的坏处：QAG 省的是通信和显存，**batch 越大计算占比越高，
+> 小 batch 会把 QAG 的价值测偏**。
+
+##### 验证实验三：完整 80 层极限轮（2026-08-05，进行中）
+
+修正上面的错误，回到完整 80 层 + pdbs 12 起：
+
+| 轮 | 配置 | 目的 |
+|---|---|---|
+| T1 | `DP2×FSDP64` + QAG + pdbs 12 | 极限基准 |
+| T2 | `DP2×FSDP64` + FP8 无 QAG + pdbs 12 | **与 T1 配对，隔离 192 上的 QAG 净收益** |
+| T3 | T1 + pdbs 14 | 用 QAG 省下的显存换 batch |
+| T4 | T1 + pdbs 16 | 继续推，直到 OOM 或 kernel 拒绝 |
 
 ##### 出路重排（依据已从推测变成源码 + 官方 recipe）
 
@@ -1276,6 +1322,16 @@ S4/S5 必须成对才有意义，因为改 `num_experts` 后参数量、FLOP 口
   后续四轮把裸参数 `2048` 传给 MaxText 全部 `ValueError`
 - **取稳态先看序列再定窗口**：开 profiler 时 step 17 会有 ~90 秒尖峰（导 trace），
   按惯例取 `step ≥ 15` 求均值会得到 11.678 s，比真实稳态慢近一倍
+- **测极限值时不要自己降配**。我为了「压住 FP8 编译时间」把 pdbs 从 12 降到 8、
+  层数从 80 缩到 16 —— 而附录 C 里我自己实测过**编译时间几乎不随规模变**。
+  用一个自己已经证伪过的理由缩水，等于把极限测试做成了缩水测试，
+  拿到的 639.8 无法跟历史最优横比，得整轮重跑。
+  **更隐蔽的是它会测偏结论**：QAG 省的是通信和显存，batch 越小计算占比越低，
+  小 batch 会系统性高估 / 低估通信类优化的价值
+- **配对实验要「只差一个变量」，设计时就得数清楚**。S3 轮我同时改了
+  「开 QAG」和「FSDP 128→64」，两个变量混在一起，+12.1% 说不清是谁的功劳。
+  反而是顺手加的 S4/S5（256 experts，同并行度同 batch，只差 QAG 开关）
+  给出了唯一干净的净收益 +15.6%。**下次列实验矩阵时先把每轮的 diff 写出来核对**
 
 </details>
 
