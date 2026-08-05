@@ -1627,10 +1627,36 @@ A2 的 OOM 本身也是信息：DSv3 那套里有抬高 HBM 占用的项
 
 | # | 方向 | 说明 |
 |---|---|---|
-| 1 | **推到 pdbs 12** | 只差 **1.88 G**（96.62 vs 94.74）。要再省出来得动 remat 策略，但那会加计算 |
+| ~~1~~ | ~~推到 pdbs 12~~ | ❌ **已排除**，见下方验证实验十二 |
 | 2 | **上 256 芯片** | [§4.1](#41-扩展性weak-scaling-100strong-scaling-掉-11) 实测 weak scaling 100%，加卡同时加 batch 可同比例放大 |
 | 3 | 给 GQA 写 batch split decoder | 几百行，**是开发任务不是调优**，且收益未知 |
 | 4 | 改模型形状（`emb 4096` → 更大） | DSv3 是 7168，矩阵越大 MXU 越划算。**下一代模型设计决策** |
+
+##### 验证实验十二：`pdbs 11 → 12` 这条路堵死了
+
+`pdbs 12` 需 96.62 G，只差 **1.88 G**，看着很近。两个方向都试了：
+
+**① 靠 remat 省出来 —— 没有空间。**
+`remat_policy=custom` 下每个张量三选一：`device`（存 HBM）/ `remat`（丢弃重算）/ `offload`（搬 host）。
+查 `configs/base.yml:356-374`，**除 `decoder_layer_input` 外，其余张量默认就是 `remat`** ——
+本来就不占 HBM，已经是最省的档位；
+而 `decoder_layer_input` 不能 remat（它是重算的起点），我们已经设成 `offload`。
+⇒ **remat 这一维已经到底了。**
+
+**② 用小数 batch 取中间档 —— 不支持。**
+
+| 轮 | 配置 | 结果 |
+|---|---|---|
+| C1 | `per_device_batch_size=11.5` | ❌ `AssertionError: Batch dimension should be shardable among the devices in data and fsdp axis` |
+| C2 | `per_device_batch_size=11.8` | ❌ `ValidationError` |
+
+**batch 维度必须能被 `data × fsdp` 的 device 数整除**，pdbs 只能取整。
+（DSv3 recipe 里写 `per_device_batch_size=8.0` 只是浮点写法，值仍是整数 ——
+我误以为它意味着支持小数档。**看到浮点字面量不等于支持连续取值。**）
+
+> 🎯 **⇒ `pdbs 11` 就是「64 芯片 / 256 experts / QAG」这套配置的 batch 上限，
+> 645.0 是对应的性能上限。**
+> 不是「差一点点」，是 **11 和 12 之间根本没有档位可取**。
 
 ##### 出路重排（依据已从推测变成源码 + 官方 recipe）
 
