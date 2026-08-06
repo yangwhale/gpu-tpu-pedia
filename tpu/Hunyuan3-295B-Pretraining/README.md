@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](README.en.md)
+
 # 腾讯混元 3（295B-A21B）在 TPU 上预训练
 
 把 Tencent Hunyuan 3 移植进 MaxText，并在 **TPU v5p** 和 **TPU v7（Ironwood）**
