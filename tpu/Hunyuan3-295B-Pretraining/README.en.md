@@ -60,7 +60,7 @@ Three ways to read this table:
 > **v7 lands at the same water line on 64 chips and on 256 chips** (580 vs 580, with peak
 > HBM identical to the byte). The extra 3.3% at 256 chips comes from *having a wider FSDP
 > option available, which frees memory for a larger batch* — **not from scale itself**.
-> See [QUICKSTART-v7 §4.2.1](QUICKSTART-v7.md) 🇨🇳.
+> See [QUICKSTART-v7 §4.2.1](QUICKSTART-v7.en.md#421-scaling-weak-scaling-is-100-strong-scaling-has-a-price).
 
 ---
 
@@ -69,8 +69,8 @@ Three ways to read this table:
 | Your situation | Read this |
 |---|---|
 | **Want to run it on v5p** | **[QUICKSTART-v5p.md](QUICKSTART-v5p.md) 🇨🇳** — from creating the node pool to first numbers, two commands, with full parameters and baselines. **Verified from scratch.** |
-| **Want to run it on v7 (Ironwood)** | **[QUICKSTART-v7.md](QUICKSTART-v7.md) 🇨🇳** — **gives you the best recipe directly**; copy it and you reach BF16 599 / FP8+QAG 625. Covers both the 64- and 256-chip scales, end-to-end reproduction, and unit conversions |
-| **Want to know how that 599 was reached** | **[TUNING-v7.md](TUNING-v7.md) 🇨🇳** — the full 445 → 599 story line, with the reason / mechanism / gain behind each step; bottleneck diagnosis, scaling behavior, HBM model; every negative result folded into the appendix |
+| **Want to run it on v7 (Ironwood)** | **[QUICKSTART-v7.en.md](QUICKSTART-v7.en.md)** — **gives you the best recipe directly**; copy it and you reach BF16 599 / FP8+QAG 625. Covers both the 64- and 256-chip scales, end-to-end reproduction, and unit conversions |
+| **Want to know how that 599 was reached** | **[TUNING-v7.en.md](TUNING-v7.en.md)** — the full 445 → 599 story line, with the reason / mechanism / gain behind each step; bottleneck diagnosis, scaling behavior, HBM model; every negative result folded into the appendix |
 | Want to port a **different** model into MaxText | [MAXTEXT-PORTING-GUIDE.md](MAXTEXT-PORTING-GUIDE.md) 🇨🇳 — the general pattern distilled from this project, independent of Hy3 |
 | Want to know where a specific number or claim came from | [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md) 🇨🇳 — the complete experiment archive, 2,600 lines |
 | Just want to run the scripts | [maxtext-hunyuan3/](maxtext-hunyuan3/) — `prep.sh` + `run.sh` |
@@ -146,7 +146,7 @@ and only then start tuning.
 | Convergence validation on real data | Everything so far is synthetic; it only proves "it computes and does not diverge" |
 | HF weights → MaxText Orbax conversion | Not needed for throughput baselines; mandatory for SFT |
 | Push v7 BF16 to 630 | Currently 599 (25.96%), already at the lower edge of the target band |
-| **v7 FP8 + QAG** | ✅ **Converged.** With QAG on at 64 chips: **625** (vs 594 without QAG, +5.3%); the 256-expert exploration reached **645**.<br>⚠️ The earlier note that "the tile on that FP8 kernel path has never been swept, potential ~726" **has been disproven by measurement** — FP8 still routes back into tokamax internally, and the tile monkeypatch has been in effect all along.<br>On 2026-08-05 we additionally swept tile / XLA flags / SparseCore offloading / larger batch, 8 cells in total, with **not a single positive result**: the tuning space is exhausted. Going higher requires more chips, a different model shape, or writing code. See [TUNING-v7 §4.6](TUNING-v7.md) 🇨🇳 |
+| **v7 FP8 + QAG** | ✅ **Converged.** With QAG on at 64 chips: **625** (vs 594 without QAG, +5.3%); the 256-expert exploration reached **645**.<br>⚠️ The earlier note that "the tile on that FP8 kernel path has never been swept, potential ~726" **has been disproven by measurement** — FP8 still routes back into tokamax internally, and the tile monkeypatch has been in effect all along.<br>On 2026-08-05 we additionally swept tile / XLA flags / SparseCore offloading / larger batch, 8 cells in total, with **not a single positive result**: the tuning space is exhausted. Going higher requires more chips, a different model shape, or writing code. See [TUNING-v7 §4.6](TUNING-v7.en.md#46-what-can-be-tuned-and-what-cannot--one-master-table) |
 | Upstream PRs | Two of them, boundaries already split, contribution process to be confirmed |
 
 ---

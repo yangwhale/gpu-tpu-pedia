@@ -1286,8 +1286,11 @@ DeepSeek 的 MoE，新版正好有 `AttentionWithNorm` 基类和 `RoutedAndShare
 > 存在且可用**，下面两条命令直接照抄即可，不需要走 REST。
 > （早前记的「577 上已删除」是错的，已更正。）
 >
-> 建池时**不要同时传 `--tpu-topology`** —— 会自动附加 group placement policy 跟
-> workload policy 冲突。拓扑由 workload policy 的 `--accelerator-topology` 携带。
+> ⚠️ **2026-08-07 再更正：早前这里写「建池时不要同时传 `--tpu-topology`」，是错的。**
+> 上游 [tpu-recipes ironwood 配方](https://github.com/AI-Hypercomputer/tpu-recipes/tree/main/training/ironwood)
+> **同时传 `--tpu-topology` 和 `--placement-policy`**，两者拓扑一致即可，不冲突。
+> 真正的规矩是：**`--accelerator-topology` 必须写在 workload policy 上** ——
+> 上面「尝试 3」的报错讲的是 policy 缺拓扑，不是节点池多传了 flag，当时归因归错了对象。
 
 ```bash
 # v7 不会自动建 placement policy，必须先手工建，而且要带拓扑

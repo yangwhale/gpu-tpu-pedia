@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](QUICKSTART-v7.en.md)
+
 # 混元 3（295B-A21B）在 TPU v7 (Ironwood) 上预训练 — Quick Start
 
 用 MaxText 在 TPU v7 上跑腾讯混元 3。**这份文档直接给最优配方 —— 照着跑，第一次就拿到当前最高水位，不用再自己调。**
@@ -189,22 +191,31 @@ Creation of a managed instance group with tpu7x-standard-4t machine type
 with placement policy is not supported. Use workload policy instead.
 ```
 
-gcloud 577 没有这个子命令，只能走 REST：
+**直接用 gcloud 子命令**（2026-08-07 复核：`gcloud 577.0.0` 上存在且可用）：
 
 ```bash
 P=YOUR-PROJECT
-TOK=$(gcloud auth application-default print-access-token)
-
 for TOPO in 4x4x4 4x8x8 2x2x1; do
-  curl -s -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
-   "https://compute.googleapis.com/compute/v1/projects/$P/regions/us-central1/resourcePolicies" \
-   -d "{\"name\":\"wp-$TOPO\",\"workloadPolicy\":{\"type\":\"HIGH_THROUGHPUT\",\"acceleratorTopology\":\"$TOPO\"}}"
+  gcloud compute resource-policies create workload-policy wp-$TOPO \
+    --project=$P --region=us-central1 \
+    --type=HIGH_THROUGHPUT --accelerator-topology=$TOPO
 done
 ```
 
-- `acceleratorTopology` **必须带**。只给 `type` 会报
+- `--accelerator-topology` **必须带**。只给 `--type` 会报
   `does not support TPU topology with group placement policy and workload policy at the same time`
 - **一个 policy 对应一个拓扑**，用几种拓扑就建几个
+
+<details><summary>gcloud 缺这个子命令时的 REST 写法（备用）</summary>
+
+```bash
+TOK=$(gcloud auth application-default print-access-token)
+curl -s -X POST -H "Authorization: Bearer $TOK" -H "Content-Type: application/json" \
+ "https://compute.googleapis.com/compute/v1/projects/$P/regions/us-central1/resourcePolicies" \
+ -d "{\"name\":\"wp-$TOPO\",\"workloadPolicy\":{\"type\":\"HIGH_THROUGHPUT\",\"acceleratorTopology\":\"$TOPO\"}}"
+```
+
+</details>
 
 ### 2.2 TPU 节点池
 
@@ -229,9 +240,19 @@ gcloud container node-pools create np-v7x-64 \
 | zone | v7 在 **`us-central1-c`**，v5p 在 `-a` |
 | `--num-nodes` | = 芯片数 ÷ 4，且必须与 `--tpu-topology` 相乘一致 |
 
-> 想长时间稳定占用（不被抢占）用 DWS flex-start：**`--flex-start` 和
-> `--enable-queued-provisioning` 必须同时给**，只给一个会收到误导性报错
-> （`Queued_provisioning doesn't support TPUs` 其实是缺 `--flex-start`）。
+> 想长时间稳定占用（不被抢占）用 **DWS flex-start**。三个参数绑死：
+> `--flex-start` + `--num-nodes=0` + `--enable-autoscaling --min-nodes=0 --max-nodes=N`，
+> 少一个各报各的错（`Flex start node pools require autoscaling enabled.` /
+> `... require initial node count to be set to 0.`）。上限用 `--max-nodes`，
+> 写成 `--total-max-nodes` 会被判成 0。
+>
+> ⚠️ **不要顺手加 `--enable-queued-provisioning`。** gcloud 原文：
+> *"all new nodes can be obtained **only** through queuing via ProvisioningRequest API"* ——
+> 加了之后普通 Job / Deployment 就再也拉不起节点，必须装 Kueue 提 `ProvisioningRequest`。
+> 只有走那条路时才需要它与 `--flex-start` 配对（此时若只给 queued-provisioning，
+> 会收到误导性报错 `Queued_provisioning doesn't support TPUs`，实际是缺 `--flex-start`）。
+> **想让 `sleep infinity` 直接触发扩容，就只用 `--flex-start`。**
+>
 > 排队按 **20 小时**预期，不是分钟级。
 
 ### 2.3 JobSet CRD
@@ -862,7 +883,7 @@ markdown 里**原样抠出**，训练命令按 §3.4 拼，**不使用任何历�
 | | v7 | v5p |
 |---|---|---|
 | 机型 / 拓扑 | `tpu7x-standard-4t`，`4x4x4` / `4x8x8`，us-central1-**c** | `ct5p-hightpu-4t`，`4x8x8`，us-central1-**a** |
-| 建池前置 | **必须先建 workload policy（REST）** | 无 |
+| 建池前置 | **必须先建 workload policy** | 无 |
 | 磁盘 | **hyperdisk-balanced** | 默认 |
 | **device : chip** | **2 : 1** | 1 : 1 |
 | MFU 分母 | **2,307** | 459 |

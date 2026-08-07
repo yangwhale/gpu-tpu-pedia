@@ -1,3 +1,5 @@
+> 🌐 **中文** | [English](TUNING-v7.en.md)
+
 # 混元 3（295B-A21B）在 TPU v7 上的性能调优实践
 
 > **BF16 从 445 调到 599 TFLOP/s/chip（MFU 19.3% → 26.0%）；FP8 开 QAG 后到 645。**
@@ -2100,8 +2102,11 @@ TPU initialization failed: Failed to connect to <peer>:8471
 
 1. **必须用 workload policy，不是 placement policy。** v5p 惯用的 `--placement-type=COMPACT`
    和裸 `--tpu-topology` 在 v7 上都会被拒
-2. **建池时不要再传 `--tpu-topology`** —— GKE 会自动附加 group placement policy 与之冲突。
-   拓扑由 workload policy 的 `--accelerator-topology` 携带
+2. **`--accelerator-topology` 必须写在 workload policy 上。** 缺了它才会报
+   `does not support TPU topology with group placement policy and workload policy at the same time`。
+   建池时 `--tpu-topology` 与 `--placement-policy` **两个同时传**、拓扑一致即可
+   （上游 tpu-recipes ironwood 配方就是这么写的）。
+   ⚠️ 早前这里写「不要再传 `--tpu-topology`」，**是错的，2026-08-07 已更正**
 3. **必须显式给 `--scopes=cloud-platform`** —— 默认 scope 存储只有 `devstorage.read_only`，
    表现是**下载代码正常、写输出时 403**。**节点池 scope 不可修改，只能删掉重建**。
    桶上给 IAM 也没用，IAM 和 OAuth scope 是两层
