@@ -142,6 +142,13 @@ v7 相对 v5p 的三个比值：
 
 ### 2.2 结论：H2 成立，通信占 57.3%
 
+> [!warning] 本节结论只适用于 4 芯片 `pdbs 4`，2026-08-08 在 64 芯片生产配置上复测后已被限定
+> 下面这份拆解来自 **4 芯片 / `pdbs 4`** 的首轮 profile。
+> **在 64 芯片 / `pdbs 12` 的生产配置上，同样的测法得到的通信阻塞是 0.19%，不是 42%** ——
+> 通信已经被计算完全掩盖。**结论相差两个数量级。**
+> 本节内容作为「小 batch 下会发生什么」仍然成立，但**不能用来指导 64 芯片以上的调优方向**。
+> 详见 [§2.4](#24-2026-08-08-复测64-芯片生产配置上通信已被完全掩盖)。
+
 自用时间拆解（覆盖墙钟 98.2%）：
 
 | 类别 | 自用时间 | 占墙钟 |
@@ -211,8 +218,17 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json
 > |---|---|
 > | 4 芯片 `2x2x1` / 80 层 | http://xprof.corp.google.com/trace_viewer/chrisya-11640939633798411639 |
 > | 16 芯片 `2x2x4` / 20 层（含 HLO dump） | http://xprof.corp.google.com/trace_viewer/chrisya-18130551067782033931 |
+> | **64 芯片 `4x4x4` / 80 层 / `pdbs 12` —— 生产配置（2026-08-08，见 §2.4）** | http://xprof.corp.google.com/trace_viewer/chrisya-5052706392869670409 |
 >
 > session 会过期，过期后从 GCS 重新上传 `.xplane.pb` 即可。
+>
+> 上传 1.8 GB 级的 xplane **不要走 MCP 包装**（客户端 60 s 硬超时），直接跑 binary，实测约 8 分钟：
+>
+> ```bash
+> GOOGLE_CLOUD_PROJECT=<project> \
+>   /google/src/head/depot/google3/cloud/tpu/tools/c2xprof/bin/c2xprof.par \
+>   --gcs_path=gs://<bucket>/<run>/tensorboard/plugins/profile/<ts>/<host>.xplane.pb
+> ```
 <!-- ===== /TEMP:XPROF-LINKS ===== -->
 
 <details>
@@ -242,6 +258,195 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json
 第一次分析我得到 156.6%，就是父子重复计时的信号。
 
 </details>
+
+---
+
+### 2.4 2026-08-08 复测：64 芯片生产配置上通信已被完全掩盖
+
+§2.2 那份 profile 是 **4 芯片 / `pdbs 4`** 的首轮 debug 跑法。
+生产配置是 **64 芯片 / `pdbs 12`**，两者差了 16 倍规模、3 倍 batch。
+这次补抓了生产配置的 profile，**结论相差两个数量级。**
+
+**baseline 复现无偏差**：稳态 `23.55 s/step`、`289.8 TFLOP/s/device` = **`579.7 TFLOP/s/chip`**，
+与 [§3.8 汇总](#38-汇总)记录的 580 完全一致。
+
+#### 测法：配对异步 collective 的 `-start` / `-done`
+
+不看类别占比（那个会被采样和嵌套污染），只看一件事：
+**TensorCore 在 `-done` 上一共阻塞了多久**。`-done` 是异步 collective 的等待端，
+它的时长就是「核停下来干等」的时长。
+
+| | 4 芯片 `pdbs 4` | **64 芯片 `pdbs 12`** |
+|---|---|---|
+| 步长 | 611.3 ms | 23,538.8 ms |
+| 配到的 `start`/`done` 对 | 201 | 929 |
+| **TensorCore 阻塞合计** | **260.1 ms** | **44.5 ms** |
+| **阻塞占步长** | **42.5%** | **0.19%** |
+| 单次 `-done` 时长 p90 | 7.886 ms | **0.163 ms** |
+| 阻塞 ÷（阻塞 + 可重叠窗口） | 8.4% | 0.5% |
+
+4 芯片那列的 **42.5%** 与 §2.2 用完全不同方法算出的 **41.9%** 吻合 —— **测法可信**。
+
+#### 独立佐证：XProf `overview_page`
+
+```
+device_duty_cycle_percent = 99.9%      device_idle_time_percent = 0.1%
+tc_idle_ms_average        = 12.06 ms   （步长 23,559 ms）
+tc_infeed_ms_average      = 0.00 ms    （不是输入瓶颈）
+host_idle_time_percent    = 100.0%     （host 全程空转）
+sc_compute_ms_average     = 2,944 ms   sc_idle_ms_average = 13,769 ms
+```
+
+**TensorCore 一步只空闲 12 毫秒。**
+
+#### 机制
+
+权重 all-gather 搬的是**权重**，字节量**不随 batch 变**；计算量**随 batch 线性增长**。
+`pdbs 4 → 12`，计算涨 3 倍、通信不变，于是计算总量反超通信，
+调度器的重叠窗口足够把通信整个盖住。
+
+按 §2.2 那份数据外推（计算 ×3、权重类通信不变、激活类通信 ×3）：
+
+| | 计算 | 通信 | 谁是地板 |
+|---|---|---|---|
+| `pdbs 4` | 174 ms | 330 ms | **通信** —— 完美重叠也藏不完 |
+| `pdbs 12` | 522 ms | 426 ms | **计算** —— 通信可以被完全藏住 |
+
+**这解释了为什么同一个模型、同一套 flag，两个规模下的瓶颈判定完全相反。**
+
+> [!important] 对调优方向的三条修正
+> 1. **`CollectivePipeliner` / Continuation Fusion / 权重预取这一类实验，在 64 芯片上没有意义** ——
+>    阻塞只剩 0.19%，没有东西可藏。
+> 2. §2.2 的「FP8 预期要下调，动不了占 57.3% 的通信」**在 64 芯片上不成立**，见 §2.5。
+> 3. **任何「通信占比」的结论都必须绑定 batch 和规模**。
+>    小规模 debug profile 可以用来学工具、不能用来定方向。
+
+---
+
+### 2.5 MFU 只有 25% 到底浪费在哪（64 芯片，XProf op stats）
+
+数据来自 XProf 的 `framework_op_stats`（单主机 8 个 TensorCore，设备侧 self-time 合计 **802.0 s**）。
+
+#### 三层账
+
+| 层 | 数值 | 来源 |
+|---|---|---|
+| v7 单 device BF16 峰值 | 1,153.5 TFLOP/s | 2,307 / chip ÷ 2 core |
+| **实测时间加权平均 FLOP rate** | **422 TFLOP/s/device** | `Normalized FLOP Rate` 列按 self-time 加权 |
+| **硬件利用率** | **36.6%** | 422 ÷ 1,153.5 |
+| 报出的 MFU | **25.1%** | 290 ÷ 1,153.5 |
+| **36.6% → 25.1% 的缺口** | **× 0.687** | **≈ 31% 的已执行 FLOP 不算模型 FLOP（重算）** |
+
+#### 时间去哪了
+
+| 类别 | 时间 | 占比 | 平均 TFLOP/s | 贡献 MFU |
+|---|---|---|---|---|
+| matmul（`pallas_call` + `dot_general`） | 347.9 s | **43.4%** | 527 | 19.8% |
+| 高 FLOP 的其他 op（主要是 remat 融合） | 347.6 s | **43.3%** | 446 | 16.8% |
+| 低 FLOP 胶水 op（`gather`/`reshape`/`sort`/`top_k`…） | 106.4 s | **13.3%** | ~0 | 0.0% |
+
+按 `Operation Type`：
+`Unknown` 42.0%（多为 remat 融合）、`pallas_call` 23.1%、`dot_general` 20.3%、
+`gather` 3.2%、`mul` 1.8%、`reshape` 1.8%、`reduce_sum` 1.5%、`add_any` 1.3%、
+`convert_element_type` 1.0%、`transpose` 0.8%。
+
+#### Roofline：35.6% 的时间卡在 HBM，而且只差一口气
+
+XProf 的 `Bound by` 列：
+
+| | 时间 | 占比 |
+|---|---|---|
+| Compute-bound | 515.61 s | **64.3%** |
+| **HBM-bound** | 285.89 s | **35.6%** |
+
+主力 op 的实测算术强度落在 **261.6 / 299.9 / 534.3 / 614.4 FLOP/byte**，
+而 v7 的 roofline 拐点是 **312**（[§2.1](#21-两个假说)）。
+**261 和 300 这两档正好压在拐点下面一点点** —— 差一点就能从内存受限翻成算力受限。
+
+#### remat 的代价
+
+- **65.9% 的设备时间**，op 名字里带 `checkpoint` / `remat`
+- **反向 ÷ 前向 = 2.60**（`transpose(jvp())` 544.0 s vs `jvp()` 209.5 s），
+  不开重算的理论值约 2.0，多出的 0.6 就是反向里重算的前向
+- 与「× 0.687」互相印证
+
+#### 结论：FP8 的优先级要往上调，不是往下调
+
+64 芯片上通信只占 0.19%，FP8 **同时命中三个损失来源**：
+
+| 损失来源 | 占比 | FP8 怎么打中 |
+|---|---|---|
+| HBM-bound | 35.6% 的时间 | 字节减半 ⇒ 算术强度翻倍，261/300 那两档**越过 312 拐点** |
+| remat 重算 | 31% 的 FLOP | HBM 省出来 ⇒ 可以少 remat |
+| 权重通信 | 已被掩盖 | 有效果但价值最小（本来就没在关键路径上） |
+
+**⇒ 在 64 芯片生产配置上，FP8 + QAG 是当前唯一同时命中三个损失来源的杠杆。**
+
+> 2026-08-08 的 E1（FP8 + QAG，`DP=2 × FSDP=64`、`pdbs 7`）**未跑成** ——
+> 16 个 worker 全部卡在 TPU backend 初始化，
+> `MaybeInitializeSliceBuilder failed: UNAVAILABLE`，无 Python 异常，一步未起。
+> 失败发生在 `jax.devices()` 层，**早于 mesh 配置**，所以与 FP8 参数无关。待复跑。
+
+---
+
+### 2.6 ⚠️ 大规模 profile 必须解析 `xplane.pb`，不能用 `trace.json`
+
+这一节是本轮踩到的两个**静默**数据陷阱，都会让你拿到看起来正常、实际错得离谱的数字。
+
+#### 陷阱一：浏览器里的 trace viewer 会降采样 40 倍
+
+同一份 4 芯片 trace：
+
+| 读法 | TPU:0 `XLA Ops` 事件数 |
+|---|---|
+| 浏览器 Catapult 内存模型 | **1,009** |
+| 原始 `trace.json` | **40,560** |
+
+按浏览器那份算出的「计算占 31%」是错的，真值 **38.4%** ——
+漏掉的三千多个小 `fusion` 全在计算侧。
+**任何定量结论都不能从浏览器 DOM 取数。**
+
+#### 陷阱二：`trace.json` 在大规模下被静默截断
+
+64 芯片这份：`trace.json.gz` 41 MB，而 `xplane.pb` 是 **1.78 GB**。
+
+按秒统计 op 密度：
+
+```
+第 1–4 秒: 6504, 7832, 7531, 4132
+第 5–24 秒: 0, 0, 0, 0, ... 0        ← 全空
+```
+
+**23.5 秒的步只有头 3.6 秒有数据**，XLA Ops 并集覆盖仅 **25.5%**；
+文件末尾的 JSON 还直接断在半个字符串上（`Unterminated string`，约 99.9998% 处）。
+
+**症状很隐蔽**：文件能解压、能解析，占比表也算得出来 ——
+只是 `all-gather` 显示 26 ms、`collective-permute` 一个都没有。
+**不去统计每秒事件密度就发现不了。**
+
+#### 正确姿势：离线解析 `xplane.pb`（不需要浏览器 / SSO）
+
+```bash
+pip install --break-system-packages tensorboard-plugin-profile   # 实际装的是 xprof
+
+python3 - <<'PY'
+from xprof.convert import raw_to_tool_data as r
+data, _ = r.xspace_to_tool_data(['<host>.xplane.pb'], 'framework_op_stats', {})
+PY
+```
+
+可用 tool：`overview_page` / `op_profile` / `framework_op_stats` / `trace_viewer` / `kernel_stats`。
+
+`framework_op_stats` 的表里直接带这四列，**§2.5 的全部拆解都出自它们**：
+
+| 列 | 用途 |
+|---|---|
+| `Normalized FLOP Rate` | 算实测 FLOP 吞吐 → 硬件利用率 |
+| `Operational Intensity` | 对 roofline 拐点，判内存受限还是算力受限 |
+| `Measured Memory BW` | 交叉验证上一列 |
+| **`Bound by`** | XProf 自己给的 Compute / HBM 判定 |
+
+> 1.78 GB 的 xplane 解析一次约 5 分钟、峰值内存较高，建议放后台跑。
 
 ---
 
