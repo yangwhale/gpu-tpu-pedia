@@ -2826,3 +2826,265 @@ DVFS 在两种精度上的收益**不一样**，而且方向与[上一节](#dvfs
 
 > 反过来讲，这也说明 **FP8 这条路已经开始撞访存墙**：算得再快，
 > 有三分之一的时间是频率和算力都买不动的。
+
+---
+
+## EP（专家并行）在 64 芯片上的实测：−39.6%，且 FP8 路径直接不可用（2026-08-11 深夜）
+
+**动机**：FP8+QAG 受 `num_experts % FSDP == 0` 所限，FSDP 只能取 64，batch 被压到 7。
+设想用 `EP=2` 把专家权重再切一半腾出显存，把 pdbs 推到 12。**四轮实测，全部否定。**
+
+### 结论一：EP + FP8 在 kernel 层就走不通
+
+```
+ValueError: Custom VJP bwd rule must produce an output with the same type as the
+args tuple of the primal function, but at output[1] the bwd rule produced an output
+of type bfloat16[96,1536,4096] corresponding to an input of type bfloat16[192,1536,4096]
+```
+
+前向吃全部 **192** 个专家，反向只产出 **96**（192÷2，被 EP=2 切掉一半），
+JAX 的 `custom_vjp` 类型检查直接拒绝。栈顶在 `maxtext/kernels/megablox/ops.py:106 → mblx.gmm`。
+
+⇒ **`mblx.gmm` 的反向规则不支持专家维度被 EP 切分。** FP8 走的正是这条路径
+（[QUICKSTART-v7 §5.2 折叠区](QUICKSTART-v7.md)：`use_tokamax_gmm=True` 且开量化时进 `mblx.gmm`），
+所以 **EP + FP8 组合在当前 MaxText 上无解，不是调参问题。**
+
+### 结论二：EP 让 24% 的参数退化成纯复制
+
+BF16 路径（tokamax，不碰 `mblx.gmm`）能跑，但先撞到框架的保护性断言：
+
+```
+AssertionError: Unsharded parameter percentage (24.26%) exceeds tolerance (2.00%)
+```
+
+`DP1 × EP2 × FSDP64` 这个 mesh 下，非专家参数（attention、norm、embedding）在 EP 轴上
+**没有可切的维度，只能复制**。放宽 `sharding_tolerance=0.35` 后可以继续，但那 24% 是真实的显存浪费。
+
+### 结论三：跑通了，代价 −39.6%
+
+| 配置 | step | TFLOP/s/chip | MFU | tok/s/chip | 峰值 HBM |
+|---|---|---|---|---|---|
+| **BF16 最优**（`FSDP=128`, pdbs 12, dvfs 7） | 21.67 s | **629.9** | **27.31%** | **4,536** | 91.94 G |
+| BF16 + **EP=2**（`FSDP=64`, pdbs **6**, dvfs 7） | 17.94 s | **380.4** | 16.49% | **2,739** | 75.48 G |
+| | | **−39.6%** | | **−39.6%** | |
+
+pdbs 12 与 8 都 OOM（8 那轮峰值已到 92.29 G），只有 6 能跑。
+
+**三重打击，互相叠加：**
+
+1. **FSDP 被迫从 128 减半到 64** —— 128 device ÷ EP 2 = 64，每卡静态分片直接翻倍
+2. **24% 参数在 EP 轴纯复制** —— 又吃一份显存
+3. 前两条合起来把 batch 从 12 压到 6，**固定通信开销摊薄不了**
+
+AllToAll 在 3D torus 上多跳转发只是第四层代价，前三层就已经判了死刑。
+
+### 与旧数据的关系
+
+| 规模 | EP | 结果 |
+|---|---|---|
+| 16 芯片 | EP=4 | −71%（早期快速筛选） |
+| **64 芯片** | **EP=2** | **−39.6%**（本轮，完整 80 层） |
+
+**换更大规模、更小 EP 度都没能翻正**，方向一致。**EP 这条路可以彻底关掉了。**
+
+---
+
+## TP（张量并行）在 FP8+QAG 上的实测：省 26 G 显存，但净亏 25.3%（2026-08-11 深夜）
+
+**动机**：EP 那条路被 kernel 判死（见上一节）后，改用 TP 腾显存 ——
+**TP 切的是 hidden / mlp 维度，专家维度保持完整**，所以不会撞 `mblx.gmm` 的 `custom_vjp` 限制。
+思路比 EP 干净，而且确实跑通了。
+
+配置：`DP=1 × FSDP=64 × TP=2`（128 device），FP8 + QAG + `dvfs=7`，其余同 [674 那组](#fp8--qag-叠加-dvfs_p_state7--64-芯片新高-6742026-08-11-晚)。
+
+| 配置 | pdbs | step | **TFLOP/s/chip** | MFU<sub>FP8</sub> | tok/s/chip | 峰值 HBM |
+|---|---|---|---|---|---|---|
+| **FP8+QAG，无 TP**（当前最优） | 7 | 11.81 s | **674.0** | 14.61% | **4,854** | 92.42 G |
+| FP8+QAG + **TP=2** | 7 | 17.08 s | 466.2 | 10.10% | 3,357 | **66.46 G** |
+| FP8+QAG + **TP=2** | **12** | 27.12 s | **503.4** | 10.91% | 3,625 | 89.73 G |
+| FP8+QAG + TP=2 | 14 | — | **OOM** | | | > 94.74 G |
+
+### TP 确实省显存，而且省得很多
+
+同样 pdbs 7，**HBM 从 92.42 G 降到 66.46 G，省下 25.96 G** —— 比 QAG 本身省的（4.5–11 G）还多一倍。
+这证明 TP 切 hidden/mlp 维度在这个模型上是真实有效的显存手段。
+
+### 但省下的显存换不回性能
+
+```
+同 batch（pdbs 7）  : 674.0 → 466.2      TP 的通信代价 = −30.8%
+省出的显存推 batch  : 466.2 → 503.4      batch 7→12 只补回 +8.0%
+                      ─────────────
+净结果                503.4 vs 674.0  =  −25.3%
+```
+
+**要靠 batch 追平 674，per-chip 需要涨 +44.6%，而 batch 7→12 的历史涨幅只有 +7~15%
+（BF16 同区间是 +6.8%）。数量级差了三倍，这条路在数学上就补不回来。**
+
+> 实验前按这个逻辑预测 pdbs 12 会落在 **500–535**，实测 **503.4**。
+> 预测与实测吻合说明模型是对的 —— **不必再扫 pdbs 8/9/10/11**，
+> 那些点全都夹在 466 和 503 之间，一个也到不了 674。
+
+### 为什么 TP 在这个模型上这么贵
+
+Hy3 的参数分布是 **97% 在路由专家里，attention 只占 2%**。
+TP 切 attention 是在切那 2%，收益微乎其微，却要为此在**每一层**都插入
+all-reduce / reduce-scatter。MoE 那 97% 虽然也被切了 mlp 维度（这是显存收益的来源），
+但同样带来每层的额外通信。
+
+**⇒ 与 EP 同理：`ici_tensor_parallelism=1` 保持不变。**
+这两条路现在都有了 64 芯片的实测数字，不必再试。
+
+---
+
+## mesh 轴的物理映射：EP / TP 的「2」这一维默认就落在片内（2026-08-12 实测）
+
+**问题**：v7 一颗物理芯片是两个 chiplet，之间是 D2D 直连 **1.2 TB/s**，而跨芯片单向 ICI 只有
+**200 GB/s**（×6 条 = 1.2 TB/s 聚合）—— **片内带宽是单条 ICI 的 6 倍且零跳**。
+那么把 EP（或 TP）这个宽度为 2 的维度放到片内，AllToAll 是不是就几乎免费？
+
+**答案：假设成立，而且 MaxText / JAX 默认就是这么映射的，不需要任何配置。**
+
+在 128 device（64 芯片）上直接打印 `mesh_utils.create_device_mesh` 的结果：
+
+| mesh | 第 0 行样本 `(coords, core_on_chip)` | 判定 |
+|---|---|---|
+| `FSDP=64 × EP=2` | `[((0,0,0), 0), ((0,0,0), 1)]` | **64/64 行同一颗芯片** ✅ 片内 D2D |
+| `FSDP=64 × TP=2` | `[((0,0,0), 0), ((0,0,0), 1)]` | **64/64 行同一颗芯片** ✅ 片内 D2D |
+| `DP=2 × FSDP=64` | coords 全不同（`(0,0,0)…(3,3,3)`） | 0/2 行片内 ❌ 跨芯片 ICI |
+
+`allow_split_physical_axes` 开或关，结论一样。
+
+**机制**：MaxText 的 `mesh_axes` 顺序是
+
+```
+['diloco','data','stage','fsdp','fsdp_transpose','context','context_autoregressive',
+ 'tensor','tensor_sequence','expert','autoregressive']
+      ↑ data 在第 1 位（major）              ↑ tensor 第 7   ↑ expert 第 9（minor）
+```
+
+JAX 的 `create_device_mesh` 把**靠后的轴映射到物理上更相邻的 device**，而 v7 上最相邻的
+就是同一颗芯片的两个 chiplet。`expert` 和 `tensor` 都排在很靠后的位置，所以宽度为 2 时
+自动吃到片内 D2D；`data` 排在最前面，所以 `DP=2` 那一维横跨整个 slice。
+
+### 这条结论把昨晚两个失败实验的归因彻底改写
+
+我原先把 EP 的 −39.6% 部分归因于「AllToAll 在 3D torus 上多跳转发」。**这个解释是错的** ——
+EP=2 的 AllToAll 根本没上 torus，它走的是片内 D2D。
+
+⇒ **真实原因只剩下分片维度被占用这一条**：
+
+| 代价 | EP=2 | TP=2 |
+|---|---|---|
+| FSDP 被迫从 128 减半到 64（每卡静态分片翻倍） | ✅ | ✅ |
+| 非专家参数在该轴上只能复制（实测 24% 未分片） | ✅ | — |
+| batch 被压低（12→6 / 7→需更多显存） | ✅ | ✅ |
+| **跨芯片通信** | **❌ 不成立，走片内** | **❌ 不成立，走片内** |
+
+**⇒ 「把并行维度放到片内高带宽上」这个优化空间不存在 —— 框架已经替你做完了。**
+在 128 device 上，任何宽度为 2 的非 data 轴都会自动落在 chiplet 对上。
+真正的天花板是**每引入一个并行维度，就要从 FSDP 那里借宽度**，而 FSDP 才是这个模型的主力。
+
+---
+
+## MoE-only TP：摘掉 attention 的张量切分，反而慢 20%（2026-08-12 实测）
+
+**设想**：Hy3 只有 2% 参数在 attention 上，TP 切它等于为 2% 的参数在每层付一次 all-reduce。
+那就写一份 custom rule，让 `tensor` 轴**只切 MoE 的 mlp，不切 attention** ——
+保留省下的 26 G 显存，砍掉 attention 那部分通信。
+
+**实现**：MaxText 支持 `custom_mesh_and_rule`（`configs/custom_mesh_and_rule/*.yml`），
+本轮新增 `moe-only-tp.yml`，从默认规则里摘掉这 8 条的 `tensor` / `tensor_sequence` 绑定：
+
+```
+activation_heads   activation_kv_heads   activation_embed_attn   activation_kv
+activation_kv_head_dim   heads   q_heads   kv_heads
+```
+
+保留 MoE 三条：`activation_embed_moe`、`activation_mlp_moe`、`mlp_moe`。
+
+> ⚠️ 该字段是 pydantic **枚举**，把 yml 放进目录还不够，必须同时在
+> `common/common_types.py` 的 `CustomRule` 里注册枚举值，否则报
+> `Input should be '', 'pure-fsdp', ...`。
+
+**结果与预期相反：**
+
+| 配置（FP8+QAG+dvfs7，`DP1×FSDP64×TP2`） | pdbs | **TFLOP/s/chip** | 峰值 HBM |
+|---|---|---|---|
+| 默认规则（tensor 同时切 attention 和 MoE） | 7 | **466.2** | 66.46 G |
+| **MoE-only TP**（attention 不切） | 7 | **371.8** | 68.97 G |
+| | | **−20.2%** | +2.51 G |
+
+**为什么摘掉反而更慢**：TP 切 attention **不只是通信代价，同时也是计算分摊**。
+不切之后，每个 device 都要算**完整的 attention**，计算量直接翻倍。
+
+**Hy3 的 attention 只占 2% 的参数，但不占 2% 的计算** —— attention 的 FLOP 随 seq² 增长，
+seq 4096 / GQA 64q 下这部分计算量相当可观。显存也涨了 2.51 G，因为 attention 激活不再分片。
+
+> **教训：`参数占比` 和 `计算占比` 是两回事，不能用前者判断切不切。**
+> 这也解释了为什么默认规则要把 attention 绑上 tensor —— 它换的是计算，不是省通信。
+
+⇒ **这条路证伪，`custom_mesh_and_rule` 保留在仓库里作为工具，但 MoE-only 这个规则不要用。**
+
+---
+
+## 「切得更碎 → 腾显存 → 堆更大 batch」这条路的完整曲线（2026-08-12 实测）
+
+**设想**：QAG 把 FSDP 卡死在 64（`num_experts % FSDP == 0` 且要整除 128，192 的因数里最大只能取 64），
+batch 只能到 7。那就再引入一个并行维度继续切，把每卡显存压下去，用省出来的空间堆 batch。
+
+**方向是对的，但只有第一刀有效，第二刀直接崩。**
+
+全部 FP8 + QAG + `dvfs=7`，64 芯片 / 128 device：
+
+| 切法 | pdbs | 峰值 HBM | **TFLOP/s/chip** | tok/s/chip |
+|---|---|---|---|---|
+| `DP2 × FSDP64`（不额外切） | 7 | 92.42 G | **674.0** | **4,854** |
+| `DP1 × FSDP64 × TP2` | 7 | **66.46 G** ⬅ 省 25.96 G | 466.2 | 3,357 |
+| `DP1 × FSDP64 × TP2` | **12** | 89.73 G | 503.4 | 3,625 |
+| `DP1 × FSDP64 × TP2` | 14 | — | **OOM** | — |
+| `DP1 × FSDP32 × TP4` | 7 | **90.07 G** ⬅ **反弹 +23.6 G** | **152.8** | 1,101 |
+| `DP1 × FSDP32 × TP4` | 12 | — | **OOM** | — |
+
+### 第一刀为什么有效：它花的是 DP 的钱，不是 FSDP 的
+
+```
+不切  : DP=2 × FSDP=64   ← DP 是纯复制，不省显存
+TP 一刀: DP=1 × FSDP=64 × TP=2   ← 把 DP 那一维改成切分，FSDP 宽度不变
+```
+
+**FSDP 宽度全程 64 没动**，等于白赚 25.96 G。这是真实收益，batch 也确实从 7 推到了 12（+71%）。
+
+### 第二刀为什么崩：device 用完了，只能从 FSDP 身上割
+
+`1 × 64 × 2 = 128`，**128 个 device 已经分配干净**。想再切一刀，只能把 FSDP 减半：
+
+```
+FSDP 64 → 32：专家权重每卡分片翻倍
+TP    2 → 4 ：activation / mlp 多切一刀
+```
+
+**Hy3 有 97% 的参数在路由专家里，而专家权重正是靠 FSDP（+QAG）切的。**
+FSDP 减半带来的静态分片翻倍，远远盖过 TP 多切一刀省下的激活 ——
+净结果是显存**从 66.46 反弹到 90.07 G**，性能从 466 崩到 **152.8（−77%）**。
+
+### 结论：存在最优切分点，不是越碎越好
+
+```
+        HBM(pdbs7)      per-chip
+不切      92.42 G         674.0     ← 性能最优
+TP=2      66.46 G         466.2     ← 显存最优
+TP=4      90.07 G         152.8     ← 两头不靠
+```
+
+**`FSDP=64 × TP=2` 就是「切碎」方向的极限**，因为：
+
+1. FSDP 必须同时整除 **192**（QAG 的锁）和 **128**（device 数）⇒ 最大只能取 **64**
+2. FSDP 取 64 后只剩 2 个 device 的余量 ⇒ 第二维度最多为 2
+3. 再想切就得动 FSDP，而 FSDP 是这个模型省显存的主力
+
+**而这个极限点（503.4）仍然比不切的 674 低 25.3%。**
+⇒ **「用更细的切分换 batch」在 Hy3 + 64 芯片这个组合上，整条路径都走不通。**
+
+> 如果专家数是 2 的幂（比如 256），FSDP 可以取 128，剩下的 device 才有可能拿去做别的切分而不伤主力。
+> **这又一次指向同一条模型设计建议：专家数取 2 的幂。**

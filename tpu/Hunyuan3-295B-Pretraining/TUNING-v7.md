@@ -972,6 +972,11 @@ v5p 那边基线 trace 显示 MoE 的 `tgmm` 几乎填满采样窗口，我据�
 | 官方 `tokamax.autotune` | 不是 CLI，成本高于手调 | 见 [§5.4.1](#541-官方-autotune-调研结论2026-08-05) |
 | 单开 `shard_exp_on_fsdp` | **静默失效**（不报错、不变快） | calibration 不是 `fixed` 时 `weight_gather_axes` 恒空 |
 | **SparseCore 卸载 flag 组**（补齐 DSv3 那 27 个） | ±0 | 三个核心 offload flag 在 Ironwood 上**默认已是 True**；关掉互斥的 CF 后仍 ±0 —— 收益已被现有 `collective_aggregator` + `latency_hiding_layer_scheduler` 吃掉 |
+| **`ici_expert_parallelism=2`（64 芯片）** | **−39.6%** | FSDP 被迫减半 + 24% 参数在 EP 轴纯复制 ⇒ batch 从 12 压到 6。**且 FP8 路径直接报 `custom_vjp` shape mismatch，不可用** |
+| **`ici_tensor_parallelism=2`（64 芯片，FP8+QAG）** | **−25.3%** | 省 25.96 G 显存（92.42→66.46）是真的，但同 batch 慢 30.8%，把 batch 从 7 推到 12 只补回 8% |
+| **MoE-only TP**（custom rule 摘掉 attention 的 tensor 绑定） | **−20.2%**（对默认 TP） | TP 切 attention 同时也是**计算分摊**，摘掉后每卡算全量 attention。参数占比 2% ≠ 计算占比 |
+| **把 EP/TP 放到片内 chiplet 上** | **优化空间不存在** | 实测 `create_device_mesh` 默认就把宽度为 2 的非 data 轴映射到同芯片两个 core（64/64 行），已经在走 D2D 1.2 TB/s |
+| **`FSDP=32 × TP=4`（切得更碎换 batch）** | **−77%**，且显存反弹 | 128 device 用完后只能割 FSDP；97% 参数在专家、靠 FSDP 切，减半的代价远超 TP 多切一刀。HBM 66.46 → 90.07 G |
 | 整组照搬 DSv3 的 36 个 XLA flag | **HBM OOM** | 别人的 flag 是按别人的显存预算调的 |
 
 **C. 被结构锁死 —— 改配置无解，只能改模型或框架**
