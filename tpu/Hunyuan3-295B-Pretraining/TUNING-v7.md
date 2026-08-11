@@ -237,19 +237,25 @@ gunzip -c *.trace.json.gz > t.json      # 62 MB → 1.4 GB，留够磁盘
 python3 maxtext-hunyuan3/analyze-trace.py t.json
 ```
 
-> **本文分析用到的三份 profile**（session 链接为 Google 内部地址，不放在公开仓库；见内部归档）：
+> **本文分析用到的三份 profile**（XProf session，需 Google 账号）：
 >
-> | Profile | 用在哪 |
-> |---|---|
-> | 4 芯片 `2x2x1` / 80 层 | §2.2 通信占 57.3% 的自用时间拆解 |
-> | 16 芯片 `2x2x4` / 20 层（含 HLO dump） | 小规模筛选与 HLO 核对 |
-> | **64 芯片 `4x4x4` / 80 层 / `pdbs 12` —— 生产配置** | §2.4 阻塞降到 0.19%、§2.5 MFU 三层账与 roofline |
+> | Profile | 用在哪 | Session |
+> |---|---|---|
+> | 4 芯片 `2x2x1` / 80 层 | §2.2 通信占 57.3% 的自用时间拆解 | http://xprof.corp.google.com/trace_viewer/chrisya-11640939633798411639 |
+> | 16 芯片 `2x2x4` / 20 层（含 HLO dump） | 小规模筛选与 HLO 核对 | http://xprof.corp.google.com/trace_viewer/chrisya-18130551067782033931 |
+> | **64 芯片 `4x4x4` / 80 层 / `pdbs 12` —— 生产配置** | §2.4 阻塞降到 0.19%、§2.5 MFU 三层账与 roofline | http://xprof.corp.google.com/trace_viewer/chrisya-5052706392869670409 |
 >
 > ⚠️ **这三份的原始 `.xplane.pb` 已不在任何 GCS 桶里**（2026-08-11 核查），
 > 只剩会过期的 session。**下次抓 profile 一定要把 `xplane.pb` 本身归档**，
 > 而不是只留一个 viewer 链接 —— 链接过期后无法重建。
 >
-> 上传大文件（1–2 GB）不要走带超时的包装层（常见 60 s 硬超时），直接调 binary，实测约 8 分钟。
+> 上传大文件（1–2 GB）不要走带超时的包装层（常见 60 s 硬超时），直接调 binary，实测约 8 分钟：
+>
+> ```bash
+> GOOGLE_CLOUD_PROJECT=<project> \
+>   /google/src/head/depot/google3/cloud/tpu/tools/c2xprof/bin/c2xprof.par \
+>   --gcs_path=gs://<bucket>/<run>/tensorboard/plugins/profile/<ts>/<host>.xplane.pb
+> ```
 
 
 
