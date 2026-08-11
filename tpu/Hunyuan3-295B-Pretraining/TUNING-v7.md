@@ -977,6 +977,7 @@ v5p 那边基线 trace 显示 MoE 的 `tgmm` 几乎填满采样窗口，我据�
 | **MoE-only TP**（custom rule 摘掉 attention 的 tensor 绑定） | **−20.2%**（对默认 TP） | TP 切 attention 同时也是**计算分摊**，摘掉后每卡算全量 attention。参数占比 2% ≠ 计算占比 |
 | **把 EP/TP 放到片内 chiplet 上** | **优化空间不存在** | 实测 `create_device_mesh` 默认就把宽度为 2 的非 data 轴映射到同芯片两个 core（64/64 行），已经在走 D2D 1.2 TB/s |
 | **`FSDP=32 × TP=4`（切得更碎换 batch）** | **−77%**，且显存反弹 | 128 device 用完后只能割 FSDP；97% 参数在专家、靠 FSDP 切，减半的代价远超 TP 多切一刀。HBM 66.46 → 90.07 G |
+| **BF16 + QAG** | **净 ≈ −15%**，不做 | ① 代码里 QAG 开关绑死 qwix 量化规则，BF16 下恒为 False；② 整除锁逼 FSDP 从 128 砍到 64，实测 −19.2% 且 batch 12→6，QAG 省的 ~9 G 只值 +5% |
 | 整组照搬 DSv3 的 36 个 XLA flag | **HBM OOM** | 别人的 flag 是按别人的显存预算调的 |
 
 **C. 被结构锁死 —— 改配置无解，只能改模型或框架**

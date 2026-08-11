@@ -3088,3 +3088,70 @@ TP=4      90.07 G         152.8     ← 两头不靠
 
 > 如果专家数是 2 的幂（比如 256），FSDP 可以取 128，剩下的 device 才有可能拿去做别的切分而不伤主力。
 > **这又一次指向同一条模型设计建议：专家数取 2 的幂。**
+
+---
+
+## BF16 + QAG：代码层绑死量化规则，且就算解开也追不回来（2026-08-12 分析 + 实测）
+
+**设想**：QAG 的本质是「把 all-gather 的权重量化成 FP8 再传」，**通信降精度不等于计算降精度**。
+那 BF16 训练时也该能用 QAG，白赚一份通信/显存收益。
+
+**想法在语义上完全成立，但两道关卡都过不去。**
+
+### 关卡一：代码里 QAG 的开关和量化规则绑死了
+
+```python
+# layers/moe.py:1568
+def explicitly_weight_ag(shard_exp_on_fsdp):
+  if shard_exp_on_fsdp:
+    quantization_rule = qpl.get_current_rule("gmm")          # ← 必须存在 qwix 量化规则
+    if quantization_rule and quantization_rule.weight_calibration_method.startswith("fixed"):
+      return True
+  return False
+```
+
+BF16（不开 `quantization`）时 `get_current_rule("gmm")` 返回 `None`，**QAG 直接关闭**。
+它不是一个独立开关，而是挂在 qwix 量化上下文里的。
+
+顺带解释了另一条老结论的机制：文档里记的「只开 `shard_exp_on_fsdp` 会静默失效」，
+根因就是这里 —— 两个条件任一不满足都只是 `return False`，**不报错**。
+
+要支持 BF16+QAG，得改这个函数并单独给 `rhs_quantize_dtype` 一条不依赖 `self.quant` 的路径。
+**技术上可行，是个小 patch。但下面这关说明不值得。**
+
+### 关卡二：QAG 的整除锁逼 BF16 把 FSDP 砍半，代价远超收益
+
+QAG 要求 `num_experts % ici_fsdp_parallelism == 0`。192 的因数与 128 的因数取交集，
+FSDP **最大只能取 64**。而 BF16 当前最优用的是 `ici_fsdp_parallelism=-1`，也就是**铺满 128 路**。
+
+实测这一刀的代价（BF16 + tile + `dvfs=7`，64 芯片）：
+
+| 配置 | pdbs | **TFLOP/s/chip** | MFU | tok/s/chip | 峰值 HBM |
+|---|---|---|---|---|---|
+| **`FSDP=128`（当前最优）** | **12** | **629.9** | **27.31%** | **4,536** | 91.94 G |
+| `DP2 × FSDP=64` | 12 | **OOM** | — | — | > 94.74 G |
+| `DP2 × FSDP=64` | **6** | 509.1 | 22.07% | 3,666 | **93.12 G** |
+
+**FSDP 128 → 64 的代价是 −19.2%，而且 batch 被从 12 砍到 6**
+（pdbs 6 就已经吃掉 93.12 G，几乎顶满 94.74 —— 静态分片确实翻倍了）。
+
+### 两边一算，净亏
+
+```
+FSDP 减半的代价                        −19.2%   （实测）
+QAG 的收益：省 4.5–11 G ≈ 多 2 个 pdbs   +5%     （按 pdbs 6→8 的历史涨幅估）
+                                       ───────
+净结果                                 ≈ −15%
+```
+
+**⇒ BF16 + QAG 就算把代码 patch 通了，也追不回 FSDP 减半的损失。不做。**
+
+> **与 FP8 的对比解释了为什么那边能忍**：FP8 权重本身已经减半，
+> `FSDP=64` 时静态分片还装得下（92.42 G，pdbs 还能给到 7）。
+> BF16 权重是它的两倍，同样 FSDP=64 之下静态分片直接把显存吃光。
+>
+> **QAG 不是「顺手能开的优化」，它的整除锁会反噬 FSDP 宽度 —— 只有在权重已经足够小的
+> 精度下（FP8）才划算。**
+
+> 又一次回到同一条模型设计建议：**专家数取 2 的幂**。若是 256 个专家，
+> FSDP 可以取 128，QAG 与全宽 FSDP 就不再互斥，这个取舍根本不会出现。
