@@ -15,12 +15,38 @@
 
 | 规模 | 并行度 | pdbs | step | **TFLOP/s/chip** | **MFU** | **tok/s** | tok/s/chip | 峰值 HBM |
 |---|---|---|---|---|---|---|---|---|
-| **256 chip** 极限 | `DP=2 × FSDP=256` | **16** | 30.40 s | **599** | **25.96%** | **1,103,757** | **4,312** | 92.33 G |
+| ⚡ **64 chip + `dvfs_p_state=7`** | `DP=1 × FSDP=128` | 12 | **21.67 s** | **630** | **27.31%** | 290,331 | **4,536** | 91.94 G |
+| **256 chip** 极限 | `DP=2 × FSDP=256` | **16** | 30.40 s | 599 | 25.96% | **1,103,757** | 4,312 | 92.33 G |
 | **256 chip** 推荐 | `DP=4 × FSDP=128` | 12 | 23.56 s | 580 | 25.12% | 1,068,372 | 4,173 | 91.94 G |
 | **64 chip**（16 节点 / 128 dev） | `DP=1 × FSDP=128` | 12 | 23.54 s | 580 | 25.14% | 267,284 | 4,176 | 91.94 G |
 | 参考：未调优起点（64 chip） | `FSDP=128` | 8 | 19.92 s | 457 | 19.80% | 210,570 | 3,290 | 74.20 G |
 | 🔬 **FP8（无 QAG）** | `DP=2 × FSDP=256` | 16 | 29.46 s | 618 | 13.39%<sub>对 FP8 峰值 4614</sub> | 1,139,022 | 4,449 | 92.80 G |
 | ⭐ **FP8 + QAG**（64c 最优） | `DP=2 × FSDP=64` | 7 | 12.73 s | **625** | 13.55%<sub>对 FP8 峰值</sub> | 288,222 | **4,503** | 92.42 G |
+
+> ### ⚡ 一个 flag 换 +8.6%：`--xla_tpu_dvfs_p_state=7`（2026-08-11 实测）
+>
+> **把 v7 锁在最高频率档。零代价 —— 不改分片、不改 batch、不改一行代码，HBM 一字节没涨。**
+>
+> 同一批节点、同一个常驻 pod、同一份代码，只差这一个 flag 的四轮对照（**档位单调，每档约 +2.4%**）：
+>
+> | 轮次 | flag | step | TFLOP/s/chip | MFU | 峰值 HBM |
+> |---|---|---|---|---|---|
+> | R1 | 不带 | 23.537 s | 579.9 | 25.14% | 91.94 G |
+> | R2 | **`=7`** | **21.670 s** | **629.9** | **27.31%** | 91.94 G |
+> | R4 | `=5` | 22.438 s | 608.4 | 26.37% | 91.94 G |
+> | R3 | `=3` | 23.539 s | 579.9 | 25.14% | 91.94 G |
+>
+> **合法范围实测是 `[0, 7]`**（`=9` 直接 `INVALID_ARGUMENT`），所以 **7 已顶格**，不用再往上试。
+>
+> **R3 与 R1 一字不差 ⇒ 默认档就是 3。** v5p 分支 `run.sh` 里那句 `--xla_tpu_dvfs_p_state=3`
+> 是在显式写默认值，等于没写；真正值钱的只有 **7**。
+>
+> ⚠️ **这条推翻了本文档原先的两个结论**：
+> 1. 「580 是 64 芯片的天花板」—— 现在 64 芯片 **630**，**反超 256 芯片的极限值 599**；
+> 2. 「BF16 目标 600–630 差 0.2%」—— 已经摸到区间**上沿**。
+>
+> 该 flag 是 v7 专用（v6e 不支持），`tpu/v7_perf/` 下的 Qwen3 推理实验早就在用，
+> 训练侧一直漏了 —— [EXPERIMENT-LOG](EXPERIMENT-LOG.md) 里 dvfs 长期挂在「杂项组 ⬜ 未测」。
 
 > **FP8 的 MFU 分母是 4614，不是 BF16 的 2307 —— 别拿它跟上面几行直接比大小。**
 > 64 芯片开 QAG 后是 **625 / 13.55%**；DSV3 官方同口径 743.5 / 16.1%。
@@ -49,23 +75,32 @@
 >
 > **那 256 芯片多出来的 3.3%（599）从哪来？** 不是规模，是**多了一个 `FSDP=256` 的选项** ——
 > FSDP 翻倍让每卡静态分片减半，腾出 13 G 显存，够把 pdbs 从 12 一路推到 16。
-> 64 芯片只有 128 个 device，**没有更宽的 FSDP 可选，所以 580 就是它的天花板。**
+> 64 芯片只有 128 个 device，没有更宽的 FSDP 可选，**所以 580 是它在"分片维度"上的上限**。
+>
+> ⚠️ **但 580 不是物理天花板** —— 2026-08-11 加 `--xla_tpu_dvfs_p_state=7` 后 64 芯片到 **630**，
+> 反超 256 芯片的 599。这条路走的不是切法而是频率，与本节的分片结论正交。
 >
 > 目标是 600–630（稀疏 MoE 在 Ironwood 上的实际水位，见 [TUNING-v7 §3](TUNING-v7.md#12-目标为什么是-600630不是-900)）。
-> 当前 599，**差 0.2%**。为什么是这个目标、还剩哪些没试，见
+> **当前 630，已到区间上沿。** 为什么是这个目标、还剩哪些没试，见
 > **[TUNING-v7.md — 性能调优实践](TUNING-v7.md)**。
 
 ---
 
 ## 0. 最优配方速查
 
-**三件事决定了从 457 到 580 的全部涨幅**，按贡献排序：
+**三件事决定了从 457 到 580 的全部涨幅**，按贡献排序（第 4 项再把 580 抬到 630）：
 
 | # | 手段 | 值多少 | 代价 |
 |---|---|---|---|
 | 1 | **tokamax `tile(512, 2048, 1536)`** | **+17.4%** | 需 6 行 monkeypatch（[§3.3](#33-注入-tokamax-tile必做收益最大的一步)）；显存 +1.1 G |
 | 2 | **`per_device_batch_size` 8 → 12** | **+9.0%** | 显存 74 → 92 G，逼近 94.74 上限 |
 | 3 | **`DP × FSDP` 切法选对**（FSDP 固定 128） | 见下 | 无 |
+
+**外加一个零代价的第 4 项（2026-08-11 补测，独立于上面三项）：**
+
+| # | 手段 | 值多少 | 代价 |
+|---|---|---|---|
+| 4 | **`--xla_tpu_dvfs_p_state=7`** | **+8.6%**（580 → 630） | **无** —— HBM 不变、配方不变，只是把芯片锁在最高频率档 |
 
 **第 3 项的意思**：512 device 有多种切法，但可用区间很窄 ——
 
@@ -97,7 +132,7 @@ FSDP=32  (DP=16) → OOM  ❌
 
 ### 直接可抄的两组参数
 
-**64 芯片（16 节点 / 128 device）→ 580**
+**64 芯片（16 节点 / 128 device）→ 630**（不带最后一行 flag 则为 580）
 
 ```
 ici_fsdp_parallelism=-1      # 自动吃满 128 路，等价 DP=1
@@ -105,6 +140,7 @@ ici_tensor_parallelism=1
 per_device_batch_size=12     # 91.94 G，逼近上限；14 会 OOM
 megablox=True use_tokamax_gmm=True
 TK_TM=512 TK_TK=2048 TK_TN=1536      # 环境变量，配合 tkcfg.py
+--xla_tpu_dvfs_p_state=7             # XLA flag，+8.6% → 630（2026-08-11）
 ```
 
 **256 芯片（64 节点 / 512 device）→ 580，与 64 芯片同构**
@@ -116,6 +152,7 @@ ici_tensor_parallelism=1
 per_device_batch_size=12
 megablox=True use_tokamax_gmm=True
 TK_TM=512 TK_TK=2048 TK_TN=1536
+--xla_tpu_dvfs_p_state=7     # 64 芯片实测 +8.6%，256 芯片未复测
 ```
 
 **256 芯片极限版 → 599**（配方与小规模不通用，只在 ≥ 256 芯片可用）
@@ -443,7 +480,7 @@ print("[tkcfg] patched")
 ### 3.4 跑一轮
 
 ```bash
-XLA='--xla_tpu_scoped_vmem_limit_kib=65472 --xla_enable_async_all_gather=true --xla_tpu_enable_sparse_core_reduce_scatter_v2=true --xla_tpu_enable_sparse_core_collective_offload_all_gather=true --xla_tpu_enable_sparse_core_collective_offload_2d_all_gather=true --xla_tpu_enable_sparse_core_collective_offload_all_reduce=true --xla_tpu_enable_sparse_core_collective_offload_reduce_scatter=true --xla_tpu_enable_sparse_core_collective_offload_3d_all_gather=true --xla_tpu_enable_sparse_core_collective_aggregator=true --xla_tpu_use_tc_device_shape_on_sc=True --xla_sc_disable_megacore_partitioning=True --xla_tpu_enable_latency_hiding_layer_scheduler=true --xla_tpu_scheduler_percent_shared_memory_limit=150 --xla_tpu_enable_layer_scheduler_for_dependent_collectives=true --xla_tpu_enable_multi_compute_overlap_in_layer_scheduler=false'
+XLA='--xla_tpu_dvfs_p_state=7 --xla_tpu_scoped_vmem_limit_kib=65472 --xla_enable_async_all_gather=true --xla_tpu_enable_sparse_core_reduce_scatter_v2=true --xla_tpu_enable_sparse_core_collective_offload_all_gather=true --xla_tpu_enable_sparse_core_collective_offload_2d_all_gather=true --xla_tpu_enable_sparse_core_collective_offload_all_reduce=true --xla_tpu_enable_sparse_core_collective_offload_reduce_scatter=true --xla_tpu_enable_sparse_core_collective_offload_3d_all_gather=true --xla_tpu_enable_sparse_core_collective_aggregator=true --xla_tpu_use_tc_device_shape_on_sc=True --xla_sc_disable_megacore_partitioning=True --xla_tpu_enable_latency_hiding_layer_scheduler=true --xla_tpu_scheduler_percent_shared_memory_limit=150 --xla_tpu_enable_layer_scheduler_for_dependent_collectives=true --xla_tpu_enable_multi_compute_overlap_in_layer_scheduler=false'
 
 NP=64 bash hy3-run.sh "
 export LIBTPU_INIT_ARGS='$XLA' JAX_PLATFORMS=tpu,cpu
@@ -866,7 +903,7 @@ markdown 里**原样抠出**，训练命令按 §3.4 拼，**不使用任何历�
 
 | 项 | 状态 |
 |---|---|
-| **距目标还差 0.2%** | 599 vs 600–630。剩余候选见 [TUNING-v7 §7.8.3 待补](TUNING-v7.md#6-还没试的) |
+| ~~距目标还差 0.2%~~ **已达标** | `dvfs_p_state=7` 后 630，落在目标区间 600–630 的上沿（2026-08-11） |
 | 数据集 | `synthetic`。**loss 下降只证明「能算且不发散」，不是收敛证据** |
 | **FP8 + QAG（已收敛）** | 64 芯片开 QAG 后 **625**（vs 无 QAG 594，**+5.3%**，且 batch 更小）；256 芯片无 QAG 618。⚠️「那条 kernel 的 tile 一次没扫过、潜力 726」**已证伪** —— FP8 内部仍走 tokamax，tile 一直生效。2026-08-05 八格实验无一正收益，**调参已见底**。见 [TUNING-v7 §4.6](TUNING-v7.md#46-什么能调什么不能调--一张总表) |
 | `shard_exp_on_fsdp` | 128 device 上 `IndivisibleError`（192 % 128 ≠ 0），不可用 |

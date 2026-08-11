@@ -28,6 +28,8 @@ v5p)
   # 缩规模跑：NODES/TOPO 可用环境变量覆盖，两者必须自洽（NODES = 芯片数 ÷ 4）
   NODES=${NODES:-64}; ACCEL=tpu-v5p-slice; TOPO=${TOPO:-4x8x8}
   # 25 个 flag。SparseCore 那组集合通信卸载在 v5p 上是主要收益来源（§4.4）。
+  # ⚠️ 这里的 dvfs_p_state=3 在 **v7 上等于默认值、等于没写**（2026-08-11 实测 R1≡R3）。
+  #    v7 分支已改成 =7（+8.6%）。v5p 上的最优档未测，保持原样。
   # 注意：官方 DSV3 v5p 配方里还有 --2a886c8_chip_config_name=megachip_tccontrol，
   # 新版 libtpu 已经摘掉这个 flag，带上会直接 "Unknown command line flag" 退出。
   FLAGS='--xla_tpu_dvfs_p_state=3 --xla_tpu_scoped_vmem_limit_kib=65472
@@ -67,7 +69,7 @@ v7)
   # **不要**照抄官方那套一次全开 —— w1 那轮死锁，元凶是同时开的
   # use_tokamax_gmm（§6.7），不是 flag 数本身。
   # 调度器组是唯一值钱的一组（+6.6%）；SparseCore 卸载组在 v7 上收益是 0。
-  FLAGS='--xla_tpu_scoped_vmem_limit_kib=65472 --xla_enable_async_all_gather=true
+  FLAGS='--xla_tpu_dvfs_p_state=7 --xla_tpu_scoped_vmem_limit_kib=65472 --xla_enable_async_all_gather=true
   --xla_tpu_enable_sparse_core_reduce_scatter_v2=true
   --xla_tpu_enable_sparse_core_collective_offload_all_gather=true
   --xla_tpu_enable_sparse_core_collective_offload_2d_all_gather=true
@@ -187,5 +189,6 @@ echo "  * 预期：step ≈ 63.2 s，TFLOP/s/device ≈ 160.9，MFU ≈ 35.1%"
 else
 echo "  * v7 是 2 device/chip，per-chip = 日志值 × 2；MFU = per-chip / 2307"
 echo "  * v7 编译要 10-17 分钟，比 v5p 慢很多"
-echo "  * 预期：step ≈ 20.4 s，日志 TFLOP/s/device ≈ 222.6，即 445 per-chip，MFU ≈ 19.3%"
+echo "  * 预期（pdbs 8 未调优）：step ≈ 20.4 s，TFLOP/s/device ≈ 222.6，即 445 per-chip，MFU ≈ 19.3%"
+echo "  * 最优配方（pdbs 12 + tokamax tile + dvfs=7）：630 per-chip / 27.31% —— 见 QUICKSTART-v7 §0"
 fi
