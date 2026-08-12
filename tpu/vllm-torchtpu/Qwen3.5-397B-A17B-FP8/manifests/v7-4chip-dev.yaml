@@ -26,6 +26,11 @@ spec:
               cloud.google.com/gke-tpu-accelerator: tpu7x
               cloud.google.com/gke-tpu-topology: "2x2x1"
               cloud.google.com/reservation-name: cloudtpu-20260710003900-159478293
+            volumes:
+            - name: dshm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 64Gi
             tolerations:
             - {key: google.com/tpu, operator: Equal, value: present, effect: NoSchedule}
             containers:
@@ -38,6 +43,9 @@ spec:
                 ls -l /dev/vfio 2>/dev/null | head -5 || true
                 echo "[ttpu-test] TPU chips requested: 4 (2x2x1). exec 进来干活。"
                 sleep 3300
+              volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
               resources:
                 limits: {google.com/tpu: 4}
                 requests: {google.com/tpu: 4, cpu: "8", memory: 32Gi}
