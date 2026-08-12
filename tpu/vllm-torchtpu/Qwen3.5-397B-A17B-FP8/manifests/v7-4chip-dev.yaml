@@ -1,0 +1,43 @@
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: chrisya-ttpu-dev
+  namespace: priority-dev
+  labels:
+    kueue.x-k8s.io/queue-name: multislice-queue
+spec:
+  failurePolicy:
+    maxRestarts: 0
+  replicatedJobs:
+  - name: slice
+    replicas: 1
+    template:
+      spec:
+        parallelism: 1
+        completions: 1
+        backoffLimit: 0
+        template:
+          metadata:
+            labels: {owner: chrisya, purpose: vllm-torchtpu-test}
+          spec:
+            restartPolicy: Never
+            priorityClassName: medium
+            nodeSelector:
+              cloud.google.com/gke-tpu-accelerator: tpu7x
+              cloud.google.com/gke-tpu-topology: "2x2x1"
+              cloud.google.com/reservation-name: cloudtpu-20260710003900-159478293
+            tolerations:
+            - {key: google.com/tpu, operator: Equal, value: present, effect: NoSchedule}
+            containers:
+            - name: dev
+              image: us-docker.pkg.dev/ml-oss-artifacts-transient/torch-tpu-docker-container/torch-tpu:nightly-20260726
+              command: ["/bin/bash","-c"]
+              args:
+              - |
+                echo "[ttpu-test] up on $(hostname) at $(date -u)"
+                ls -l /dev/vfio 2>/dev/null | head -5 || true
+                echo "[ttpu-test] TPU chips requested: 4 (2x2x1). exec 进来干活。"
+                sleep 3300
+              resources:
+                limits: {google.com/tpu: 4}
+                requests: {google.com/tpu: 4, cpu: "8", memory: 32Gi}
