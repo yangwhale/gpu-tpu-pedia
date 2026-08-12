@@ -4,6 +4,11 @@
 
 ---
 
+> ⚠️ **本文件下面那个 "Quick Start" 章节写于实测之前，是照 config 反推的，未经验证。**
+> 它缺少后来实测发现的全部 6 个环境坑（缺 curl / `/dev/shm` 64 MiB / ephemeral-storage /
+> pod spec limits / 版本矩阵 / server 超时）。
+> **要动手请用 [../QUICKSTART.md](../QUICKSTART.md)**，那份是跑通之后回写的。
+
 ## 📌 文档状态
 
 | | |

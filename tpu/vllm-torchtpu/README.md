@@ -2,6 +2,12 @@
 
 **中文**
 
+> ### 🚀 只想跑起来？→ [**QUICKSTART.md**](./QUICKSTART.md)
+>
+> 35 分钟从零到第一个 benchmark 数字，所有已知坑已预先填平，照抄即可，不需要排查任何问题。
+> 本文件讲的是**架构与全景**；踩坑过程与证据在
+> [RUNLOG](./Qwen3.5-397B-A17B-FP8/RUNLOG-20260812.md)。
+
 > **定位声明**
 >
 > 本目录记录 **`vllm-torchtpu`**（vLLM 的 TPU platform plugin，PyTorch 路线）上的模型验证。
