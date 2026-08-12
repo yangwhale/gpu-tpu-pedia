@@ -55,14 +55,27 @@ run_one() {
   kubectl exec -i "$POD" -n $NS -- bash -c "cat > /work/task.sh" <<TASKEOF
 set -x
 export HF_HOME=/work/hf HF_HUB_ENABLE_HF_TRANSFER=1 PYTHONUNBUFFERED=1
+# runner 默认等 server 90 分钟，比 pod 的 60 分钟寿命还长，导致它「超时后打印 server.log」
+# 那段代码永远执行不到 —— 三轮都看不到 server 起不来的真因。压到 25 分钟。
+export SERVER_READY_WAIT_MIN=25
 mkdir -p /work/hf
-bash /work/setup.sh /work/vllm-torchtpu 2>&1 | tail -5
+# setup 失败必须立刻停：之前 GitHub 503 导致 vLLM 没装上，脚本却继续往下跑 benchmark，
+# 最后报一句误导性的 "'vllm bench serve' not available"。
+if ! bash /work/setup.sh /work/vllm-torchtpu 2>&1 | tail -40; then echo "SETUP_FAILED"; exit 1; fi
+python3 -c "import vllm" 2>/dev/null || { echo "SETUP_FAILED: vllm 不可 import"; exit 1; }
 cd /work/vllm-torchtpu
+# 后台把 server.log 实时接到 stdout —— 它在容器内文件里，pod 一死就没了
+( while true; do
+    L=$(ls -t /work/vllm-torchtpu/benchmark_runs/*/server.log 2>/dev/null | head -1)
+    [ -n "$L" ] && { echo "=== tailing $L ==="; tail -F "$L" 2>/dev/null | sed 's/^/[srv] /'; }
+    sleep 10
+  done ) &
 date -u +"PHASE task_start %H:%M:%S"
 if [ "$TASK" = "unit" ]; then
   python3 -m pip install --no-cache-dir pytest pytest-timeout 2>&1 | tail -1
   git config --global --add safe.directory /work/vllm-torchtpu
-  python3 -m pytest tests -q --timeout=300 2>&1 | tail -60
+  # 不要用 | tail -N：pytest 全跑完才输出，pod 被杀就什么都拿不到
+  python3 -m pytest tests -q --timeout=300 2>&1
 else
   python3 -m pip install --no-cache-dir hf_transfer 2>&1 | tail -1
   bash ./scripts/vllm/benchmarking/run_benchmarks.sh --config "$TASK" 2>&1
