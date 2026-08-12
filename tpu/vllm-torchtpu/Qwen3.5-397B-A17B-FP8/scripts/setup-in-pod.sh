@@ -19,10 +19,15 @@ export PIP_INDEX_URL="https://oauth2accesstoken:${AR_TOKEN}@us-python.pkg.dev/ml
 export PIP_EXTRA_INDEX_URL="https://pypi.org/simple"
 export VLLM_TARGET_DEVICE=tpu
 
-echo "=== [1/5] 工具链（base 镜像缺 git / cmake / 编译器）==="
+echo "=== [1/5] 工具链（base 镜像缺 git / cmake / 编译器 / curl）==="
 apt-get update -qq
-apt-get install -y -qq git cmake build-essential ninja-build
-git --version; cmake --version | head -1
+# curl 看着可有可无，实际是致命的：run_benchmarks.sh 用
+#   curl -s -o /dev/null --connect-timeout 1 http://localhost:$PORT/health
+# 探活。镜像里没有 curl → 命令永远失败 → runner 永远认为 server 没起来，
+# 一路刷 "Waiting for server..." 直到 pod 被杀。而 server 其实早就 200 了。
+# 这一个缺失的包，今晚废掉了三个 60 分钟窗口。
+apt-get install -y -qq git cmake build-essential ninja-build curl
+git --version; cmake --version | head -1; curl --version | head -1
 
 echo "=== [2/5] 版本矩阵 —— 必须先装，且必须用 pip 不用 uv ==="
 # uv 不读 PIP_INDEX_URL，会报 "torch-tpu was not found in the package registry"。
