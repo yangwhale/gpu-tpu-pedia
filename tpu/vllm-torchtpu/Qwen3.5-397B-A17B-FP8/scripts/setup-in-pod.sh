@@ -34,15 +34,26 @@ python3 -m pip install --no-cache-dir \
   "tpu-raiden-torch==0.0.1.dev20260808010148" \
   "numba==0.65.0" "tpu-info" "portpicker" "pathwaysutils"
 
-echo "=== [3/5] vLLM v0.26.1rc0（无 git 也能拿：直接下 tag tarball）==="
+echo "=== [3/5] vLLM v0.26.1rc0 ==="
+# 优先用随源码包一起传进来的 tarball。pod 内直连 GitHub 实测不稳定：
+# 踩过 HTTP 503 和 RemoteDisconnected 各一次，每次废掉一个 60 分钟窗口。
 if [ ! -d "$WORK/vllm" ]; then
-  python3 - <<PY
-import urllib.request
-u="https://github.com/vllm-project/vllm/archive/refs/tags/v0.26.1rc0.tar.gz"
-open("$WORK/vllm.tgz","wb").write(urllib.request.urlopen(u,timeout=180).read())
-PY
+  if [ -s "$WORK/vllm.tgz" ]; then
+    echo "使用随包传入的 vllm.tgz（$(du -h "$WORK/vllm.tgz" | cut -f1)）"
+  else
+    echo "本地无 vllm.tgz，回退到 GitHub 下载（最多 5 次）"
+    VLLM_URL="https://github.com/vllm-project/vllm/archive/refs/tags/v0.26.1rc0.tar.gz"
+    ok=0
+    for attempt in 1 2 3 4 5; do
+      if curl -fsSL --connect-timeout 20 --max-time 300 -o "$WORK/vllm.tgz" "$VLLM_URL"; then ok=1; break; fi
+      echo "第 $attempt 次下载失败，等 $((attempt * 10))s 后重试"
+      sleep $((attempt * 10))
+    done
+    [ "$ok" = 1 ] || { echo "SETUP_FAILED: vLLM 源码下载 5 次均失败"; exit 1; }
+  fi
   tar xzf "$WORK/vllm.tgz" -C "$WORK" && mv "$WORK/vllm-0.26.1rc0" "$WORK/vllm"
 fi
+[ -d "$WORK/vllm" ] || { echo "SETUP_FAILED: vllm 源码目录不存在"; exit 1; }
 # 必须删掉，否则会把上游 tpu-inference plugin 跟 vllm-torchtpu 装到一起
 sed -i '/tpu-inference/d' "$WORK/vllm/requirements/tpu.txt"
 SETUPTOOLS_SCM_PRETEND_VERSION=0.26.1rc0 VLLM_TARGET_DEVICE=tpu MAX_JOBS=32 \

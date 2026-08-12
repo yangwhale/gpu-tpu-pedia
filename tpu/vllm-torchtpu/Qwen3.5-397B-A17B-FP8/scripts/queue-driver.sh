@@ -23,8 +23,18 @@ run_one() {
   log "=== 任务 $IDX: $TASK ==="
 
   sed -e "s/chrisya-ttpu-r5/chrisya-${NAME}/" "$BASE_YAML" > "$POD_YAML"
+  # 必须等旧的真正消失再 apply。之前 --wait=false + sleep 5 就提交，
+  # 结果拿到上一轮残留、正在终止的同名 pod（名字 hash 一样），日志取到 0 字节。
   kubectl delete jobset "chrisya-${NAME}" -n $NS --wait=false >/dev/null 2>&1
-  sleep 5
+  local w
+  for w in $(seq 1 60); do
+    kubectl get jobset "chrisya-${NAME}" -n $NS >/dev/null 2>&1 || break
+    sleep 3
+  done
+  for w in $(seq 1 60); do
+    [ -z "$(kubectl get pods -n $NS -o name 2>/dev/null | grep "chrisya-${NAME}-slice")" ] && break
+    sleep 3
+  done
   local APPLY_OUT; APPLY_OUT=$(kubectl apply -f "$POD_YAML" 2>&1)
   log "apply: $APPLY_OUT"
   case "$APPLY_OUT" in *created*|*configured*|*unchanged*) ;; *) log "apply 失败，跳过"; return 1;; esac
@@ -61,8 +71,9 @@ export SERVER_READY_WAIT_MIN=25
 mkdir -p /work/hf
 # setup 失败必须立刻停：之前 GitHub 503 导致 vLLM 没装上，脚本却继续往下跑 benchmark，
 # 最后报一句误导性的 "'vllm bench serve' not available"。
-if ! bash /work/setup.sh /work/vllm-torchtpu 2>&1 | tail -40; then echo "SETUP_FAILED"; exit 1; fi
-python3 -c "import vllm" 2>/dev/null || { echo "SETUP_FAILED: vllm 不可 import"; exit 1; }
+# 失败时也要打 TASKDONE，否则 driver 会一直轮询到 pod 60 分钟到期 —— 白等一个窗口
+if ! bash /work/setup.sh /work/vllm-torchtpu 2>&1 | tail -40; then echo "SETUP_FAILED"; echo "TASKDONE"; exit 1; fi
+python3 -c "import vllm" 2>/dev/null || { echo "SETUP_FAILED: vllm 不可 import"; echo "TASKDONE"; exit 1; }
 cd /work/vllm-torchtpu
 # 后台把 server.log 实时接到 stdout —— 它在容器内文件里，pod 一死就没了
 ( while true; do
@@ -99,8 +110,20 @@ TASKEOF
     [ "$phase" != "Running" ] && { log "pod 结束(phase=$phase)"; break; }
   done
 
-  kubectl logs "$POD" -n $NS 2>/dev/null > "$OUT/${IDX}-${TASK}.log"
-  log "日志已存 $OUT/${IDX}-${TASK}.log ($(wc -l < "$OUT/${IDX}-${TASK}.log") 行)"
+  # 取日志要校验非空并重试：pod 正在终止时 kubectl logs 可能返回空，
+  # 而日志是这一整个 60 分钟窗口唯一的产出，丢了就等于白跑。
+  local F="$OUT/${IDX}-${TASK}.log" k
+  for k in 1 2 3 4 5; do
+    kubectl logs "$POD" -n $NS 2>/dev/null > "$F"
+    [ -s "$F" ] && break
+    log "第 $k 次取日志为空，3s 后重试"; sleep 3
+  done
+  if [ -s "$F" ]; then
+    log "日志已存 $F ($(wc -l < "$F") 行)"
+  else
+    log "⚠ 日志取不到（pod=$POD 可能已被回收）—— 本任务无产出"
+    kubectl get pod "$POD" -n $NS -o jsonpath='{.status.phase} {.status.reason} {.status.message}' >> "$F" 2>/dev/null
+  fi
   kubectl delete jobset "chrisya-${NAME}" -n $NS --wait=false >/dev/null 2>&1
   echo "$TASK" >> "$STATE"
 }
