@@ -66,8 +66,8 @@ python3 -c "import vllm" 2>/dev/null || { echo "SETUP_FAILED: vllm 不可 import
 cd /work/vllm-torchtpu
 # 后台把 server.log 实时接到 stdout —— 它在容器内文件里，pod 一死就没了
 ( while true; do
-    L=$(ls -t /work/vllm-torchtpu/benchmark_runs/*/server.log 2>/dev/null | head -1)
-    [ -n "$L" ] && { echo "=== tailing $L ==="; tail -F "$L" 2>/dev/null | sed 's/^/[srv] /'; }
+    L=\$(ls -t /work/vllm-torchtpu/benchmark_runs/*/server.log 2>/dev/null | head -1)
+    [ -n "\$L" ] && { echo "=== tailing \$L ==="; tail -F "\$L" 2>/dev/null | sed 's/^/[srv] /'; }
     sleep 10
   done ) &
 date -u +"PHASE task_start %H:%M:%S"
@@ -104,6 +104,33 @@ TASKEOF
   kubectl delete jobset "chrisya-${NAME}" -n $NS --wait=false >/dev/null 2>&1
   echo "$TASK" >> "$STATE"
 }
+
+# ── 启动前自检：把 task.sh 按 heredoc 规则 render 出来做语法检查 ──
+# 连着两轮死在生成物上（$L unbound、limits 重复键），都不是 driver 本身的问题。
+# 生成的东西必须先验再用。用 python 做 render，避免 shell 嵌套引号自己打架。
+preflight() {
+  python3 - "$0" <<'PFPY'
+import re,subprocess,sys,tempfile,os
+src=open(sys.argv[1],encoding='utf-8').read()
+m=re.search(r'<<TASKEOF\n(.*?)\nTASKEOF\n', src, re.S)
+if not m: print("PREFLIGHT: 找不到 TASKEOF 块"); sys.exit(1)
+body=m.group(1)
+f=tempfile.NamedTemporaryFile('w',suffix='.body',delete=False,encoding='utf-8'); f.write(body); f.close()
+r=subprocess.run(['bash','-c','TASK=__preflight__; eval "cat <<TASKEOF\n$(cat %s)\nTASKEOF"'%f.name],
+                 capture_output=True,text=True)
+os.unlink(f.name)
+if r.returncode!=0: print("PREFLIGHT: render 失败", r.stderr[:300]); sys.exit(1)
+rendered=r.stdout
+g=tempfile.NamedTemporaryFile('w',suffix='.sh',delete=False,encoding='utf-8'); g.write(rendered); g.close()
+c=subprocess.run(['bash','-n',g.name],capture_output=True,text=True); os.unlink(g.name)
+if c.returncode!=0: print("PREFLIGHT: 生成的 task.sh 语法错\n"+c.stderr[:400]); sys.exit(1)
+for need in ['SERVER_READY_WAIT_MIN=25','L=$(ls -t','SETUP_FAILED','pytest tests -q']:
+    if need not in rendered: print("PREFLIGHT: 渲染结果缺少 "+need); sys.exit(1)
+print("PREFLIGHT OK ({} 行)".format(len(rendered.split(chr(10)))))
+PFPY
+  [ $? -ne 0 ] && { log "启动前自检未通过，不提交任何任务"; exit 1; }
+}
+preflight
 
 IDX=0
 while read -r TASK; do
