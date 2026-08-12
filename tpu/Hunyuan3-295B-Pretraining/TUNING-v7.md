@@ -39,6 +39,7 @@ EP=4（−71%）、`scan(unroll)`（无可用档位）…… 全部在 [附录 B
 |---|---|
 | **能调什么、值多少** | [§4.6 一张总表](#46-什么能调什么不能调--一张总表) —— 只看一节的话看这个 |
 | **怎么判断收益是真是假** | [§4.7 四条纪律](#47-判断收益是真是假的四条纪律) |
+| **瓶颈到底在哪个 kernel** | [§2.7 roofline_model 定位](#27-用-roofline_model-把瓶颈定位到单个-kernel) —— 真凶是 splash attention |
 | **445 → 674 每一步值多少** | [§3 调优故事线](#3-调优故事线从-445-到-674) |
 | FP8 / QAG 的完整机制与配方 | [§5.4.2](#542-qag先量化再通信一条被专家数卡死的路) |
 | 所有试过没用的东西 | [附录 B](#附录-b负面案例总集)（默认折叠） |
@@ -483,6 +484,168 @@ PY
 
 
 </details>
+
+
+### 2.7 用 roofline_model 把瓶颈定位到单个 kernel
+
+§2.5 用 `framework_op_stats` 算出「MFU 25% 里有多少浪费」。这一节换 `roofline_model` ——
+它回答的是**每个 kernel 离它自己的理论上限还差多远**，也就是「还有没有空间」。
+
+#### 先从工具里读硬件常数，别手推
+
+`roofline_model` 的返回带一个 `p` 字段，是 XProf 自己认定的硬件参数：
+
+| | XProf 官方值 | 本文档早前手推的值 | 后果 |
+|---|---|---|---|
+| roofline 拐点 | **279.085** FLOP/byte | 312 | 差 12%。主力 op 的 AI 是 261 / 300 —— **300 其实在拐点之上，不是「差一口气」** |
+| peak FLOP rate | **1,028.75** TFLOP/s/device（2058/chip） | 1,153.5（2307/chip） | 差 10.8%。**MaxText 报 MFU 用 2307、XProf 用 2058，两个工具的 MFU 不可直接比** |
+| VMEM 读 / 写 roofline | 拐点 **35.25 / 48.07** | 没考虑过 | op 可能卡在 VMEM 而非 HBM（本例 VMEM 受限 0.0%，但这个维度以前没查过） |
+
+> **教训：任何 roofline 分析，先把工具自己用的常数读出来。** 手推的 312 与官方的 279 差 12%，
+> 就足以把「刚好在拐点下面」翻成「刚好在拐点上面」，结论方向相反。
+
+#### 37 列里，这两列长得像但含义相反
+
+| 列 | 含义 | 低了说明什么 |
+|---|---|---|
+| `FLOP Rate / Peak` | 实测 ÷ **硬件峰值** | **可能是活该** —— 该 op 本就内存受限，摸不到峰值 |
+| **`Roofline efficiency`** | 实测 ÷ **在该 AI 下理论能达到的上限** | **是真亏** —— 已按 AI 打过折还低，说明 kernel 本身没写好 |
+
+后者才是「还有多少空间」的答案：100% = 贴着 roofline，再调无用；35% = 还有近三倍。
+配合 `Bound by`（Compute / HBM / VMEM）一起看，就能判断一个 op 值不值得动。
+
+#### 定位结果：真凶是 splash attention
+
+整机 Program 行：BF16 pdbs12 实测 **421.8 TFLOP/s/device**，Bound by Compute，roofline 效率 41.0%。
+（这个 421.8 与 §2.5 用 `framework_op_stats` 独立算出的 422 **完全一致**，两条路交叉验证通过。）
+
+按 kernel 归类、按时间加权：
+
+| 类别 | BF16 占时间 | BF16 效率 | FP8 占时间 | FP8 效率 |
+|---|---|---|---|---|
+| **splash attention** | **23.1%** | **35.5%** | 25.5% | 35.6% |
+| MoE gmm | 36.2% | 51.9% | 31.4% | **66.3%** |
+| 其它 | 40.1% | 58.7% | 40.8% | 61.9% |
+| 通信 / 异步 | **0.7%** | 4.6% | 2.3% | 3.5% |
+
+1. **splash 是最大单一漏洞**：占 23% 的时间，效率只有 35.5%（全场最低）。而且它
+   `Bound by = Compute`、瓶颈 AI 高达 1,304–3,210（远在拐点 279 之上）——
+   **数据完全喂得上，是 kernel 自己没跑满**。跟精度、通信、显存都无关。
+2. **FP8 的收益全部落在 MoE gmm**：51.9% → 66.3%（+28%），而 splash 纹丝不动（35.5 → 35.6）。
+   **这解释了 FP8 整体只涨 6.3% —— 它只优化了三分之一的时间。**
+3. **通信只占 0.7%**，与 §2.4 的「阻塞 0.19%」互相印证，这条线可以彻底关掉。
+4. 异常值：`while.365` 占 **3.8%** 时间、效率 **0.5%**，几乎不产生算力 —— 循环控制开销，独立可查的目标。
+
+<details>
+<summary><b>为什么 splash 只有 35% —— 两层硬限制，都跟配置无关</b></summary>
+
+**① 记账口径：XLA 给 splash 记的 FLOP 是不折 causal 的全量 `4·b·s²·h·d`。**
+
+理论全量 `4 × 12 × 4096² × 64 × 128 = 6.5971e12`，profile 实测 `337,940 GFLOP/s × 19.52 ms = 6.5968e12` ✓ 吻合。
+所以 32.8–39.0% 是拿**虚高的分子**算出来的，**硬件真实执行效率比这更低**。
+注意：causal 跳过上三角是**节省**不是损失，它只造成记账错位，**不是又一道要乘上去的折扣**。
+
+**② 硬件天花板：MXU 是 256×256，而 head_dim=128 只能吃一半。**
+
+| matmul | 形状 | 浪费 |
+|---|---|---|
+| QK | `[q_len, 128] @ [128, kv_len]` | 收缩维只有 128 → 废一半 |
+| PV | `[q_len, kv_len] @ [kv_len, 128]` | 输出维只有 128 → 废一半 |
+
+Google 侧官方结论（内部工单，Meta 提，2026-04 → 06 已 FIXED）原话：
+*"MXU shape does prevent MXU utilization from exceeding 50% when the head dimensions are 128,
+there isn't a way to overcome this."* Meta 实测 tokamax splash 峰值 ~35%，与 tokamax 官方
+microbenchmark 一致。**我们量到 32.8–39.0%，等于已经贴着这个公开天花板在跑。**
+
+**③ 为什么连 35% 都上不去：寄存器生命周期。**
+
+online softmax 下，持有 `Q@K` 输出的寄存器，在 max reduction 算完、且 `(Q@K) − m` 算完之前
+**不能释放**（那是下一个 matmul 的输入）。于是 `Q@K` 的输出不断堆积 → 寄存器压力 →
+spill 到 VMEM → MXU stall 在等数据载回。**一句话：VPU 跟不上 MXU，卡在寄存器生命周期上。**
+
+⇒ 两层原因（形状锁死 50%、寄存器压到 35%）**都不是配置问题**。
+
+</details>
+
+<details>
+<summary><b>三个破法与实测：max_logit=30 白捡 +2.1%，且 loss 逐位相同</b></summary>
+
+三招都来自 maxdiffusion 的 `custom_splash_attention.py`：
+
+| 招 | 机制 | tokamax | MaxText 暴露 |
+|---|---|---|---|
+| ① `exp → exp2` | 超越函数换便宜的 | ✅ | `sa_use_base2_exp`，**默认已开**（无增量） |
+| ② **fixed-m**（m 换常量） | 干掉 reduce-max、`alpha=exp(m_prev−m_next)`、输出累加器 rescale | ✅ `max_logit_const` | `use_max_logit_estimate`，**默认 −1 关着** |
+| ③ NT gemm 全转置 | `K@Q.T` 直接产出 `S.T`，swapaxes 挪到 kernel 外摊销 | 部分 | **无**，要写代码 |
+
+② 直接针对上面那个寄存器问题：**m 是常量就不必等 reduce-max**，寄存器不再堆积。
+数学基础是 Cauchy-Schwarz 上界 `max_j q_i·k_j ≤ ‖q_i‖ · max_j‖k_j‖`，存在可证明的安全常量。
+③ 是唯一能突破 50% 上限的路径（Meta 用它把 full attention 打到 ~56% MFU，dual gemm ~63%），
+但我们的形状上收益为零，见 [附录 B.7](#b7-splash-attention-全转置流水线判定我们的形状上零收益)。
+
+**消融实测**（16 chip / 20 层 / pdbs 8 / seq 4096）：
+
+| run | `use_max_logit_estimate` | block 布局 | TFLOP/s/device | vs baseline |
+|---|---|---|---|---|
+| B1 | −1（关） | 全 2048 | 223.6 | — |
+| **S1** | **30** | **全 2048** | **228.4** | **+2.1%** ✅ |
+| S2 | −1 | 官方非均匀 | 221.3 | −1.0% |
+| S3 | 30 | 官方非均匀 | 227.5 | +1.7% |
+
+**数值安全性必须验**（fixed-m 是数值近似，不是等价变换）：step 11 的 `lm_loss`，
+B1 / S1 / S2 **全部是 11.062，逐位相同**。max_logit=30 对该模型的 logit 分布是安全上界，**零精度代价**。
+
+**profile 证据：这招只打 forward，backward 纹丝不动**
+
+| splash op | baseline | S1（max_logit=30） | 变化 |
+|---|---|---|---|
+| forward FLOP rate | 337,940 | 432,166 / 433,245 | **+28%** |
+| forward roofline efficiency | 32.8% | 42.0 / 42.1% | **+9.2 pp** |
+| backward dkv FLOP rate | 401,139 | 401,353 | 持平 |
+| backward dkv roofline efficiency | 39.0% | 38.8–39.0% | 持平 |
+
+因果链闭合：常量 m 让 **forward** 跳过 reduce-max / alpha 的 exp / 累加器 rescale；
+而 dkv kernel 用的是 forward 存下的 residuals，**本来就不做 online softmax**，所以完全不受影响。
+
+**为什么 kernel 内部快 28%、端到端只有 +2.1%** —— 收益是结构性封顶的：
+
+```
+splash 内部时间：dkv 15.62 s  vs  fwd 14.64 s   ← backward 占一半还多
+
+23%（splash 占整个 step）× 50%（只有 forward 受益）× (1 − 1/1.28) = 2.5%
+                                                        实测 2.1% ✓
+```
+
+⇒ **前向这条路的天花板是 `23% × 50% = 11.5%`**，把 forward 优化到无限快也就这么多。
+
+**换算到端到端 MFU：**
+
+| | TFLOP/s/device | /chip | MFU |
+|---|---|---|---|
+| baseline | 289.8 | 579.7 | 25.1% |
+| + `max_logit=30`（外推，64 卡未复测） | 295.9 | 591.9 | 25.6% |
+| 若 backward 也走 NT gemm（35% → 56%） | — | — | **~27.5%** |
+
+</details>
+
+> ### ⚠️ 两条方法论教训
+>
+> **① block size 要看 `block / seq` 的比例，不是绝对值。**
+> 官方 tpu7x benchmark 用 `sa_block_kv_compute=512`，据此预测「块变小 → causal 浪费从 33% 降到 11% → 提速」，
+> **实测 −1.0%，方向错了**。那份配置是给 `max_target_length=131072` 调的 —— 512 相对 131072 是 1/256；
+> 我们 seq 4096，512 就是 1/8。内层块切得太碎，每块的固定开销（mask 检查、running max/sum 更新、
+> pipeline stage 切换）摊不动，省下的 causal 面积抵不过多出来的开销。**跨序列长度照抄配置会反向优化。**
+>
+> **② 同一份 profile，不同工具页的百分比不可混用。**
+> 「HBM 受限占多少」：`framework_op_stats` 说 **35.6%**，`roofline_model` 说 **19.5%**。
+> 破案的钥匙是两者的 self-time 合计 —— 802.0 s 与 1602.6 s，**正好 2.00 倍**，
+> 而 v7 恰好是 2 device/chip。**分母不是一个东西，分子上的百分比自然对不上。**
+> 取舍：判瓶颈以 `roofline_model` 为准（官方常数 + 三级内存判定），
+> 归因到具体算子/代码行用 `framework_op_stats`。**引用任何百分比都要写清出自哪个工具页。**
+>
+> **⇒ 由本节数据定的优先级**：splash（23% × 35.5%，最大可回收）> `while.365`（3.8% × 0.5%，近乎纯开销）
+> > BF16 的 MoE gmm（51.9%，FP8 能到 66.3% 说明还有空间）。通信与整体关 remat 已排除。
+
 
 ## 3. 调优故事线：从 445 到 674
 
@@ -2085,7 +2248,7 @@ A2 的 OOM 本身也是信息：DSv3 那套里有抬高 HBM 占用的项
 
 | # | 项 | 为什么值得 | 成本 |
 |---|---|---|---|
-| 1 | **splash attention 的 NT gemm 全转置** | 目前唯一还看得见幅度的方向（外部同类工作报过 35% → 56%）；调参已见底，只能改 kernel | 写代码，高 |
+| 1 | **splash attention 的 NT gemm 全转置** | [§2.7](#27-用-roofline_model-把瓶颈定位到单个-kernel) 定位它是最大单一漏洞（23% 时间 × 35.5% 效率）；前向已用 `max_logit=30` 榨到头（+2.1%，封顶 11.5%），**剩下的两个点全在 backward**，而这是唯一能同时改善 fwd/bwd 的路径 | 写代码，高 |
 | 2 | **256 芯片上复测 `dvfs_p_state=7`** | 64 芯片实测 +8.6%，预期等幅但**没验过**；这是当前最便宜的未知 | 一轮，低 |
 | 3 | **`p3` / `p7` 各抓一份 profile 比 HBM 的 GB/s** | 直接证伪或坐实「dvfs 只提计算域频率」这条推断（见 [EXPERIMENT-LOG](EXPERIMENT-LOG.md)）；若 HBM 也提频，则现有解释全错 | 两轮 profile，低 |
 | 4 | **官方 `tokamax.autotune` 生成 cache 条目** | 替代 monkeypatch，是长期正解；[§5.4.1](#541-官方-autotune-调研结论2026-08-05) 调研过，不是 CLI，成本高于手调 | 中 |
