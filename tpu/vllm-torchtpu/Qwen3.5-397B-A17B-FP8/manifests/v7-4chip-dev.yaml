@@ -30,7 +30,11 @@ spec:
             - name: dshm
               emptyDir:
                 medium: Memory
-                sizeLimit: 64Gi
+                sizeLimit: 32Gi
+            - name: workdir
+              emptyDir:
+                medium: Memory
+                sizeLimit: 320Gi
             tolerations:
             - {key: google.com/tpu, operator: Equal, value: present, effect: NoSchedule}
             containers:
@@ -46,6 +50,8 @@ spec:
               volumeMounts:
               - name: dshm
                 mountPath: /dev/shm
+              - name: workdir
+                mountPath: /work
               resources:
-                limits: {google.com/tpu: 4}
-                requests: {google.com/tpu: 4, cpu: "8", memory: 32Gi}
+                limits: {google.com/tpu: 4, ephemeral-storage: 32Gi}
+                requests: {google.com/tpu: 4, cpu: "8", memory: 48Gi, ephemeral-storage: 16Gi}
