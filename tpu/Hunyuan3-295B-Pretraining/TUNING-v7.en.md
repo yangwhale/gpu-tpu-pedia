@@ -912,7 +912,7 @@ and **QAG** (confirmed by checking the official recipe on 2026-08-05, see [§5.4
 **Feasible, but not "run one command"; not recommended as the next step for now.**
 
 tokamax exposes `tokamax.autotune` (`_src/autotuning/{autotuner,api,cache}.py`),
-but it is a **library-level API, not a CLI**: `Autotuner.autotune(fn_factory, configs, *args, **kwargs)`
+but it is a **library-level API, not a CLI**: `Autotuner.autotune(fn_factory, configs, *args, kwargs)`
 — you have to prepare both the candidate config set and input tensors of the real shapes yourself.
 
 Four blockers:
@@ -1165,7 +1165,7 @@ Two lessons to record:
 
 ##### ✅ Correction: 192 experts can enable QAG, at the cost of batch being squeezed to 7
 
-W3 = `192e / FSDP64 / QAG / **pdbs 7**` **ran**:
+W3 = `192e / FSDP64 / QAG / pdbs 7` **ran**:
 
 | Round | experts | FSDP | pdbs | TFLOP/s/chip | Peak HBM | NaN |
 |---|---|---|---|---|---|---|
@@ -1404,7 +1404,7 @@ with a measured **91.56 G**.
 
 ##### Conclusion: with 192 experts at 64 chips, QAG is not usable in practice
 
-V3 = `192e / FSDP64 / QAG / **pdbs 8**` (already a very light batch) still OOMs,
+V3 = `192e / FSDP64 / QAG / pdbs 8` (already a very light batch) still OOMs,
 **short by only 656.93 MB**:
 
 ```
@@ -1632,9 +1632,9 @@ On that basis, three targeted points (baseline Y0 = 645.0):
 
 | Round | tile | Hypothesis |
 |---|---|---|
-| Z1 | `512, **4096**, 1536` | double tile_k — the reduction dimension benefits first from the freed VMEM |
-| Z2 | `**1024**, 2048, 1536` | double tile_m |
-| Z3 | `**1024**, **4096**, 1536` | double both |
+| Z1 | `512, 4096, 1536` | double tile_k — the reduction dimension benefits first from the freed VMEM |
+| Z2 | `1024, 2048, 1536` | double tile_m |
+| Z3 | `1024, 4096, 1536` | double both |
 
 ⚠️ The Z3 combination was once rejected outright by the kernel under **BF16** ([Appendix B.2](#b2-crashes--configuration-rejections),
 `tile_m ≥ 1024 and tile_k ≥ 4096`).
@@ -1646,9 +1646,9 @@ which is also another test point for "gains and limits cannot be moved across dt
 | Round | tile | Result |
 |---|---|---|
 | Y0 | `512, 2048, 1536` (baseline) | **645.0** |
-| Z1 | `512, **4096**, 1536` | ❌ **VMEM OOM** (needs 352 MiB) |
-| Z2 | `**1024**, 2048, 1536` | **628.8** (**−2.5%**) |
-| Z3 | `**1024**, **4096**, 1536` | ❌ **VMEM OOM** (needs 352 MiB) |
+| Z1 | `512, 4096, 1536` | ❌ **VMEM OOM** (needs 352 MiB) |
+| Z2 | `1024, 2048, 1536` | **628.8** (**−2.5%**) |
+| Z3 | `1024, 4096, 1536` | ❌ **VMEM OOM** (needs 352 MiB) |
 
 > 🛑 **My inference that "FP8 can hold a tile twice as large" has a logical hole.**
 > **Under FP8 only `rhs` (the weights) halves in bytes; `lhs` (the activations) is still bf16.**

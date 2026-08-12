@@ -1338,7 +1338,7 @@ params["self_attention"]["wq_a"]["kernel"]
 **可行，但不是「跑一条命令」，暂不推荐作为下一步。**
 
 tokamax 暴露了 `tokamax.autotune`（`_src/autotuning/{autotuner,api,cache}.py`），
-但它是**库级 API 不是 CLI**：`Autotuner.autotune(fn_factory, configs, *args, **kwargs)`
+但它是**库级 API 不是 CLI**：`Autotuner.autotune(fn_factory, configs, *args, kwargs)`
 —— 候选 config 集合和真实形状的输入张量都要自己准备。
 
 四个卡点：
@@ -1623,7 +1623,7 @@ act_quantization_calibration_method=fixed,-224,224     # L132
 
 ##### ✅ 修正：192 experts 能开 QAG，代价是 batch 被压到 7
 
-W3 = `192e / FSDP64 / QAG / **pdbs 7**` **跑通了**：
+W3 = `192e / FSDP64 / QAG / pdbs 7` **跑通了**：
 
 | 轮 | experts | FSDP | pdbs | TFLOP/s/chip | 峰值 HBM | NaN |
 |---|---|---|---|---|---|---|
@@ -1865,7 +1865,7 @@ HBM 预测也对上了：U1（pdbs 12）需 96.62 G，两参数模型predict 降
 
 ##### 结论：192 experts 在 64 芯片上，QAG 实际不可用
 
-V3 = `192e / FSDP64 / QAG / **pdbs 8**`（已经是很轻的 batch）仍然 OOM，
+V3 = `192e / FSDP64 / QAG / pdbs 8`（已经是很轻的 batch）仍然 OOM，
 **只差 656.93 MB**：
 
 ```
@@ -2093,9 +2093,9 @@ def _get_heuristics_config(self, ba) -> Config:
 
 | 轮 | tile | 假设 |
 |---|---|---|
-| Z1 | `512, **4096**, 1536` | tile_k 加倍 —— 归约维度最先受益于省下的 VMEM |
-| Z2 | `**1024**, 2048, 1536` | tile_m 加倍 |
-| Z3 | `**1024**, **4096**, 1536` | 两个都加 |
+| Z1 | `512, 4096, 1536` | tile_k 加倍 —— 归约维度最先受益于省下的 VMEM |
+| Z2 | `1024, 2048, 1536` | tile_m 加倍 |
+| Z3 | `1024, 4096, 1536` | 两个都加 |
 
 ⚠️ Z3 那组在 **BF16** 下曾被 kernel 直接拒绝（[附录 B.2](#b2-崩溃--配置拒绝)
 `tile_m ≥ 1024 且 tile_k ≥ 4096`）。
@@ -2107,9 +2107,9 @@ def _get_heuristics_config(self, ba) -> Config:
 | 轮 | tile | 结果 |
 |---|---|---|
 | Y0 | `512, 2048, 1536`（基准） | **645.0** |
-| Z1 | `512, **4096**, 1536` | ❌ **VMEM OOM**（需 352 MiB） |
-| Z2 | `**1024**, 2048, 1536` | **628.8**（**−2.5%**） |
-| Z3 | `**1024**, **4096**, 1536` | ❌ **VMEM OOM**（需 352 MiB） |
+| Z1 | `512, 4096, 1536` | ❌ **VMEM OOM**（需 352 MiB） |
+| Z2 | `1024, 2048, 1536` | **628.8**（**−2.5%**） |
+| Z3 | `1024, 4096, 1536` | ❌ **VMEM OOM**（需 352 MiB） |
 
 > 🛑 **我那个「FP8 能装两倍大 tile」的推论有个逻辑漏洞。**
 > **FP8 只有 `rhs`（权重）省一半字节，`lhs`（激活）仍是 bf16。**

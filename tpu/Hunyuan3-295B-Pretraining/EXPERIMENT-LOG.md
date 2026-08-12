@@ -449,7 +449,7 @@ class HYV3DecoderLayer(DeepseekV3DecoderLayer)
 
 > `HYV3Attention` 继承自 `ApertusAttention` 一度让我以为选错了组件。
 > 读展开后的实现，它的数学是：GQA + `q_norm`/`k_norm`（RMSNorm on `head_dim`，
-> 用 `rms_norm_eps`）**在 RoPE 之前**、`scaling = head_dim**-0.5`、四个 proj 全无 bias。
+> 用 `rms_norm_eps`）**在 RoPE 之前**、`scaling = head_dim-0.5`、四个 proj 全无 bias。
 > **这与 Qwen3 的 attention 逐行等价**，继承谁只是 transformers 内部的代码复用选择。
 > 用 `qwen3.self_attention_with_norm` 是对的。
 
