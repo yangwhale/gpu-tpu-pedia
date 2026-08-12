@@ -1,7 +1,10 @@
 # 从零到第一个 benchmark 数字
 
-> **这份文档的目标**：让你在 **35 分钟内**在 TPU v7 上跑出第一个 vllm-torchtpu 的
-> benchmark 结果，且**不需要排查任何问题**。
+> **这份文档的目标**：让你在 TPU v7 上跑出第一个 vllm-torchtpu 的 benchmark 结果，
+> 且**不需要排查任何问题**。0.6B 约 15 分钟，35B 约 23 分钟（实测，逐阶段耗时见下表）。
+>
+> **本文档已按自己写的步骤完整复测过一遍**（2026-08-13），复测中又修正了 3 处错误：
+> taint 说明、内存盘容量、耗时估计。下面的数字都是实测值，不是估算。
 >
 > 下面每一个 `apt-get` 包、每一行 pod spec、每一个环境变量，都对应一个我们实测踩过的坑
 > （2026-08-12 一整夜，15 轮，6 个坑，每个坑废掉一个 60 分钟窗口）。
@@ -16,7 +19,22 @@
 |---|---|
 | 硬件 | TPU v7（`tpu7x`）**4 芯片 = 8 device**，拓扑 `2x2x1` |
 | 权限 | 能读 `us-docker.pkg.dev/ml-oss-artifacts-transient`（镜像 + pip 源） |
-| 时间 | 首次约 35 分钟（装环境 5 + 拉模型 2 + 编译 7 + 跑 benchmark 3，其余是余量） |
+| 时间 | **按模型差别很大，见下表**。0.6B 约 20 分钟，35B 约 35 分钟 |
+
+**实测各阶段耗时**（v7x 4 芯片，内存盘，`hf_transfer` 开启）：
+
+| 阶段 | Qwen3-0.6B / TP=1 | Qwen3.5-35B / TP=4 |
+|---|---|---|
+| 起 pod | 38 s | 38 s |
+| 装环境 | 4 分 24 秒 | 4 分 24 秒 |
+| 拉权重 | ~1 min（1.2 GB） | **~2 min（35 GB）** |
+| 编译到 server ready | **~7 min** | **~15 min** |
+| 跑 benchmark | 2.3 min | 1 min |
+| **合计** | **约 15 分钟** | **约 23 分钟** |
+
+> ⚠️ **编译是主要成本，且随模型规模快速上升。**0.6B 每个图约 12 秒，
+> 35B 的 `compile range (8192, 8192)` **单个就要 50 秒**，且 TP=4 时四个 worker 各编一份。
+> **397B 大概率塞不进 60 分钟窗口**——除非先做编译缓存持久化（见第 5 节）。
 
 > **注意 chip 与 device 的口径**：v7x 是 1 chip = 2 device。所以「4 芯片」= 8 device，
 > 配置里 `TP × DP = 8` 指的是 **device 数**，对应的就是这一台机器。
@@ -35,6 +53,7 @@ volumes:
   emptyDir: {medium: Memory, sizeLimit: 32Gi}     # ① vLLM 多进程 RPC 要 ≥160 MiB，K8s 默认只给 64 MiB
 - name: workdir
   emptyDir: {medium: Memory, sizeLimit: 320Gi}    # ② 权重/HF cache/编译缓存全放内存，躲开节点磁盘配额
+                                                  #    ⚠️ 320Gi 只够到 ~35B。按模型调，见下表
 ...
     volumeMounts:
     - {name: dshm,    mountPath: /dev/shm}
@@ -44,10 +63,32 @@ volumes:
       #    google.com/tpu 丢掉 limit → Job 直接被 API server 拒绝创建
       limits:   {google.com/tpu: 4, ephemeral-storage: 32Gi}
       requests: {google.com/tpu: 4, cpu: "8", memory: 48Gi, ephemeral-storage: 16Gi}
-    tolerations:                                   # ④ 共享集群的 TPU 节点有两个 taint
-    - {key: google.com/tpu,             operator: Equal, value: present, effect: NoSchedule}
-    - {key: cloud.google.com/gke-queued, operator: Equal, value: "true",  effect: NoSchedule}
+    tolerations:                                   # ④ TPU 节点的 taint，见下表
+    - {key: google.com/tpu, operator: Equal, value: present, effect: NoSchedule}
 ```
+
+**④ 的 taint 要按集群类型给，给多了无害、给少了永远 Pending：**
+
+| 集群类型 | 需要的 toleration | 说明 |
+|---|---|---|
+| 共享 NAP 集群（如 `bodaborg-tpu7x-nap`） | 只需 `google.com/tpu=present` | 实测节点只有这一个 taint |
+| 自有项目的 **DWS / queued provisioning** node pool | 还要加 `cloud.google.com/gke-queued="true"` | 这类 pool 有第二个 taint，**且光加 toleration 不够**，必须走 `ProvisioningRequest` 才会真正分配节点 |
+
+查一下省得猜：
+
+```bash
+kubectl get nodes -l cloud.google.com/gke-tpu-accelerator=tpu7x \
+  -o jsonpath='{.items[0].spec.taints}'
+```
+
+**`workdir` 的 `sizeLimit` 必须按模型调**（节点有 944 GB RAM，放心给）：
+
+| 模型 | 权重约 | 建议 `sizeLimit` |
+|---|---|---|
+| Qwen3-0.6B | 1.2 GB | 320Gi（默认即可） |
+| Qwen3.5-35B-A3B-FP8 | 35 GB | 320Gi（默认即可） |
+| Qwen3-Coder-480B-FP8 | ~480 GB | **640Gi** |
+| **Qwen3.5-397B-A17B-FP8** | **~400 GB** | **560Gi** ← 默认的 320Gi **装不下**，会在下载中途爆 |
 
 ```bash
 kubectl apply -f manifests/v7-4chip-dev.yaml
@@ -157,7 +198,23 @@ kubectl exec $POD -- bash -c \
 拿到接近的数字，说明你的环境是对的。
 
 > 这个数**不是**性能基准（0.6B 在上游没有 baseline，且 runner 未强制 `temperature=0`）。
-> 它只是「环境正确」的对照。真正的对标数据用有 baseline 的 config，见下。
+> 它只是「环境正确」的对照。
+
+### 可对标的那份：Qwen3.5-35B-A3B-FP8 / TP=4 / EP / ISL 1024 / OSL 1024 / 并发 64
+
+| 指标 | 上游 baseline | 我们实测 | 偏差 |
+|---|---|---|---|
+| completed | 320 | 320 | ±0 |
+| median TPOT | 12.2 ms | **9.84 ms** | −19.6% |
+| output token throughput | 4,673.7 tok/s | **5,534.5 tok/s** | +18.4% |
+| total token throughput | 9,329.6 tok/s | **11,047.9 tok/s** | +18.4% |
+
+口径已逐项核对一致（含 `benchmark_temperature=0`）。环境版本：
+`torch 2.13.0 / jax 0.10.2 / libtpu 0.0.44.1 / torch-tpu 0.1.1.dev20260804130134 / vllm 0.26.1rc0+tpu`。
+
+> ⚠️ **这个 +18% 是线索不是结论**：单次测量、未验证重复性；也不知道上游 baseline 是用哪个
+> 版本组合跑的。若要引用，请先连跑 3 次取分布，并跟上游确认 baseline 的版本。
+> 用它做「环境是否正确」的判据是够的——**你的数应该落在这个量级，不该差一个数量级**。
 
 ---
 
@@ -174,11 +231,14 @@ kubectl exec $POD -- bash -c \
 
 **跑大模型前先解决两件事**，否则 60 分钟窗口不够：
 
-1. **权重预置**。397B 约 400 GB，pod 本地盘只有 74 GB 放不下；内存盘（`/work` 已挂 320Gi）
-   装得下，但每个 pod 都要重下一次。**并行跑多配置时把权重放 GCS 用 gcsfuse 只读共享。**
-2. **编译缓存持久化**。缓存在 `/root/.cache/vllm/torch_compile_cache/`，
-   0.6B 的 201 秒就绪时间里绝大部分是编译（权重才 1.2 GB）。397B 的图更大更多，
-   不复用缓存的话每轮都要重付。
+1. **内存盘要够 + 权重预置**。397B 约 400 GB，pod 本地盘（74 GB）放不下；内存盘装得下但
+   **默认的 320Gi 也不够，要提到 560Gi**。而且每个 pod 都要重下一次——
+   **并行跑多配置时把权重放 GCS 用 gcsfuse 只读共享。**
+2. **编译缓存持久化**（对 397B 是**前置条件**，不是优化项）。缓存在
+   `/root/.cache/vllm/torch_compile_cache/`。实测编译耗时随规模快速上升：
+   0.6B 每图约 12 秒、约 7 分钟就绪；35B 的 `compile range (8192,8192)` 单图就要 50 秒、
+   四个 TP worker 各编一份、**约 15 分钟就绪**。397B 参数量是 35B 的 11 倍，
+   **60 分钟窗口大概率不够**，必须先把缓存落到持久卷或 GCS 复用。
 
 ---
 
