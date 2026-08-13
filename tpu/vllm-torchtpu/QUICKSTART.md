@@ -23,22 +23,23 @@
 
 **实测各阶段耗时**（v7x 4 芯片，内存盘，`hf_transfer` 开启）：
 
-| 阶段 | 0.6B / TP=1 | 35B / TP=4 | **397B / TP=8** |
-|---|---|---|---|
-| 起 pod | 38 s | 38 s | 38 s |
-| 装环境 | 4.4 min | 4.4 min | ~5 min |
-| 拉权重 | ~1 min（1.2 GB） | ~2 min（35 GB） | **~5 min（406 GB）** |
-| 编译到 server ready | ~7 min | ~15 min | **19 min** |
-| **合计到可服务** | **约 13 分钟** | **约 22 分钟** | **约 29 分钟** |
-| 跑 benchmark | 2.3 min | 1 min | **单 cell > 25 min** |
+| 阶段 | 0.6B / TP=1 | 35B / TP=4 | 397B / TP=8 冷 | **397B 热（缓存命中）** |
+|---|---|---|---|---|
+| 起 pod | 38 s | 38 s | 38 s | 38 s |
+| 装环境 | 4.4 min | 4.4 min | ~5 min | **3 min 08 s** |
+| 权重 | ~1 min（1.2 GB） | ~2 min（35 GB） | 下载 ~8 min（406 GB） | **零下载，加载 4 min** |
+| 编译到 server ready | ~7 min | ~15 min | **19 min** | **0（新 graph 数 = 0）** |
+| **合计到可服务** | 约 13 min | 约 22 min | **约 29 min** | **约 18 min** |
+| 跑 benchmark | 2.3 min | 1 min | — | **单 cell 26 min 42 s** |
+| **窗口够不够** | ✅ | ✅ | ❌ 连一个 cell 都跑不完 | **✅ 45 min，塞得进 55 min** |
 
 > ⚠️ **编译是最大的一块准备成本**，但增长比想象中温和：397B 编译 19 分钟，
 > 只比 35B 多 4 分钟，远非按参数量线性外推。
 >
-> **397B 在 60 分钟窗口内跑不完，卡点是准备阶段的总和不是单项**：
-> 29 分钟准备（装环境 5 + 权重 5 + 编译 19）后只剩 24 分钟，
-> 而 397B 单个 cell（640 请求）就要 25 分钟以上。
-> **先做编译缓存持久化（省 19 分钟）+ 权重持久化（省 5 分钟）**，见第 5 节。
+> **397B 冷启动跑不完，热启动可以。**冷启动 29 分钟准备后只剩 24 分钟，
+> 而单个 cell 要 26 分 42 秒——差一点点。做完缓存持久化后准备降到 18 分钟，
+> 45 分钟跑完一个 cell，塞得进 55 分钟窗口。**做法见 [3.5 节](#35-跑大模型必读把权重和编译缓存放持久盘)。**
+> 注意 `tp8-dp1` 这个 config 共 6 个 cell，跑全要 6 个窗口或申请独占。
 
 > **注意 chip 与 device 的口径**：v7x 是 1 chip = 2 device。所以「4 芯片」= 8 device，
 > 配置里 `TP × DP = 8` 指的是 **device 数**，对应的就是这一台机器。
@@ -187,6 +188,90 @@ kubectl exec $POD -- bash -c \
 
 ---
 
+## 3.5 跑大模型必读：把权重和编译缓存放持久盘
+
+**对 397B 这一档，缓存持久化不是优化项，是前置条件。**没有它，一个 60 分钟窗口
+连一个 cell 都跑不完；有了它，一个窗口稳定产出一个 cell。
+
+实测对比（同一个 397B、同一份 pod spec）：
+
+| 阶段 | 冷启动 | 热启动（缓存命中） |
+|---|---|---|
+| 装环境 | 5 min | 3 min 08 s |
+| 权重 | **下载 461 s（406 GB）** | **零下载**，从盘加载 94 shards **4 min** |
+| **编译** | **19 min** | **新编译 graph 数 = 0** |
+| **到 server ready** | **29 min** | **18 min** |
+
+### 怎么做
+
+**① 建缓存盘**（[`manifests/cache-pvc.yaml`](./Qwen3.5-397B-A17B-FP8/manifests/cache-pvc.yaml)）：
+
+```bash
+kubectl apply -f Qwen3.5-397B-A17B-FP8/manifests/cache-pvc.yaml
+# hyperdisk-balanced 1000Gi RWO。397B 实测占 423 GB（权重 379 + 编译缓存 44）
+```
+
+**② 用带缓存挂载的 pod**（[`manifests/v7-4chip-cached.yaml`](./Qwen3.5-397B-A17B-FP8/manifests/v7-4chip-cached.yaml)），它比基础版多挂三处：
+
+```yaml
+- {name: cachedisk, mountPath: /cache}                        # 持久盘
+- {name: workdir, mountPath: /root/.cache, subPath: rootcache} # 编译缓存默认位置，导去内存盘
+- {name: workdir, mountPath: /tmp,         subPath: tmproot}   # TPU 日志同理
+```
+
+**③ 两个环境变量把东西引到持久盘**：
+
+```bash
+export HF_HOME=/cache/hf            # 权重
+export VLLM_CACHE_ROOT=/cache/vllm  # 编译缓存
+```
+
+> `VLLM_CACHE_ROOT` 是 vllm-torchtpu 真正读的变量
+> （`runner/tpu_runner.py:4666`、`compilation/tpu_compiler.py:259`）。
+
+**④ 第一轮预热**：照常跑一次，权重和编译产物会自动落到 `/cache`。跑完检查：
+
+```bash
+kubectl exec $POD -- bash -c 'du -sh /cache/hf /cache/vllm; find /cache/vllm -name "artifact_compile_range*" | wc -l'
+# 397B 期望：/cache/hf 379G   /cache/vllm 44G   88 个 artifact
+```
+
+**⑤ 之后每轮**加上 `export HF_HUB_OFFLINE=1`（权重已就位，杜绝任何偷偷下载）。
+验证缓存真命中，看这两个数：
+
+```bash
+D=$(ls -td /work/vllm-torchtpu/benchmark_runs/*/|head -1)
+grep -c "Compiling a graph for compile range" $D/server.log   # 期望 0
+grep -c "pickle.load" $D/server.log                            # 期望 >0（在反序列化已编译产物）
+```
+
+> ⚠️ **别只看 "Waiting for server" 的时长就断定缓存没生效**——热启动仍要花 4 分钟
+> 加载 400 GB 权重、再反序列化编译产物，总共约 18 分钟。判据是上面那两个计数。
+
+### 为什么不用 GCS + gcsfuse
+
+试过，**没走通**：pod 卡在 `gke-gcsfuse/bucket-scan-pending`，因为 namespace 的
+`default` KSA 没绑 Workload Identity，gcsfuse 认证不了桶；而共享集群的桶不便改 IAM。
+
+不过就算能用，对**单 pod 串行**跑 benchmark 来说 hyperdisk 也更合适——编译产物是大量
+小文件，真磁盘远好过 gcsfuse。**gcsfuse 的价值在并行**：RWX 能让多个 pod 共享同一份
+400 GB 权重，不必各下一遍。要并行铺开时再解决 WI 授权。
+
+### ⚠️ 结果文件也要落持久盘
+
+benchmark 结果写在 `/work/.../benchmark_runs/<ts>/isl*.json`，而 `/work` 是内存盘。
+pod 一到期变 `Completed`，`kubectl exec` 就报
+`cannot exec into a container in a completed pod`，**文件拿不回来**。
+
+```bash
+# 跑完立刻拷走
+cp -r /work/vllm-torchtpu/benchmark_runs /cache/results/
+```
+
+我们在这上面栽过：只能靠 `kubectl logs` 从 stdout 的文本摘要里重建指标，JSON 原文丢了。
+
+---
+
 ## 4. 参考结果
 
 `Qwen3-0.6B / TP=1 / ISL 1024 / OSL 1024 / 并发 8`，v7x 4 芯片实测：
@@ -216,8 +301,22 @@ kubectl exec $POD -- bash -c \
 口径已逐项核对一致（含 `benchmark_temperature=0`）。环境版本：
 `torch 2.13.0 / jax 0.10.2 / libtpu 0.0.44.1 / torch-tpu 0.1.1.dev20260804130134 / vllm 0.26.1rc0+tpu`。
 
-> ⚠️ **这个 +18% 是线索不是结论**：单次测量、未验证重复性；也不知道上游 baseline 是用哪个
-> 版本组合跑的。若要引用，请先连跑 3 次取分布，并跟上游确认 baseline 的版本。
+### 满配那份：Qwen3.5-397B-A17B-FP8 / TP=8 DP=1 EP / ISL 1024 / OSL 8192 / 并发 64
+
+| 指标 | 上游 baseline | 我们实测 | 偏差 |
+|---|---|---|---|
+| completed | 640 | **640**（failed 0） | ±0 |
+| median TPOT | 22.1 ms | **21.09 ms** | −4.6% |
+| output token throughput | 2,831.3 tok/s | **2,955.5 tok/s** | +4.4% |
+| total token throughput | 3,184.2 tok/s | **3,323.8 tok/s** | +4.4% |
+
+实测补充（基线无对应字段）：median TTFT 106.6 ms · P99 TPOT 21.59 ms ·
+Median ITL 20.50 ms · duration 1,602 s。
+交叉验证：`(590,085 input + 4,734,705 output) / 1602.0 s = 3,323.8 tok/s` ✅
+
+> ⚠️ **这些 +4% / +18% 都是线索不是结论**：单次测量、未验证重复性；也不知道上游各自的
+> baseline 记录于哪个版本组合。注意 35B 快 18.4% 而 397B 只快 4.4%，差异明显，
+> 这本身就提示存在未受控变量。若要对外引用，请先各跑 3 次取分布并与上游核对版本。
 > 用它做「环境是否正确」的判据是够的——**你的数应该落在这个量级，不该差一个数量级**。
 
 ---

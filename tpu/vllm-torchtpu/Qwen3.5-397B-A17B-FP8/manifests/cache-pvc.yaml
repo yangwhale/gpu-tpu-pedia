@@ -1,0 +1,19 @@
+# 跨 pod 复用的缓存盘：权重 + 编译缓存都放这里。
+# 对 397B 而言这不是优化项而是前置条件 —— 没有它，一个 60 分钟窗口连一个 cell 都跑不完。
+#
+# 为什么是 hyperdisk 而不是 GCS/gcsfuse：
+#   实测 gcsfuse CSI 挂不上，pod 卡在 gke-gcsfuse/bucket-scan-pending，
+#   因为 namespace 的 default KSA 没绑 Workload Identity；共享集群的桶又不便改 IAM。
+#   而编译产物是大量小文件，真磁盘本来就比 gcsfuse 更合适。
+#   若你的环境已配好 WI，用 gcsfuse RWX 更好 —— 它能让多个 pod 并行共享同一份权重。
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: chrisya-ttpu-cache          # 改成你自己的名字
+  namespace: priority-dev
+spec:
+  accessModes: [ReadWriteOnce]      # hyperdisk 是 RWO：同一时刻只能一个 pod 挂
+  resources:
+    requests:
+      storage: 1000Gi               # 397B 实测占用：权重 379 GB + 编译缓存 44 GB ≈ 423 GB
+  storageClassName: hyperdisk-balanced

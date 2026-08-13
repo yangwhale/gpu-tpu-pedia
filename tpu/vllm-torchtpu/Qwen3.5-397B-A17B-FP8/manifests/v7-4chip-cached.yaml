@@ -1,0 +1,77 @@
+# 跑通 397B 的那份 pod spec（2026-08-13 实测）。四类挂载缺一不可，删任何一处都会翻车：
+#   /dev/shm      32Gi 内存盘  —— vLLM 多进程 RPC 要 >=160 MiB，K8s 默认只给 64 MiB
+#   /work         620Gi 内存盘 —— 源码与运行时；权重放这会被节点 ephemeral-storage 限额打死
+#   /root/.cache  同盘 subPath —— 编译缓存默认落这，不导走就吃 ephemeral-storage 配额
+#   /tmp          同盘 subPath —— TPU 日志同理
+#   /cache        1000Gi hyperdisk（见 cache-pvc.yaml）—— 跨 pod 复用的权重与编译缓存
+#
+# resources 的 limits 必须写在同一行：分成两行会让后者覆盖前者，google.com/tpu 丢掉
+# limit 后 Job 会被 API server 直接拒绝创建，而 kubectl apply --dry-run=server 查不出来。
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: chrisya-ttpu-cached
+  namespace: priority-dev
+  labels:
+    kueue.x-k8s.io/queue-name: multislice-queue
+spec:
+  failurePolicy:
+    maxRestarts: 0
+  replicatedJobs:
+  - name: slice
+    replicas: 1
+    template:
+      spec:
+        parallelism: 1
+        completions: 1
+        backoffLimit: 0
+        template:
+          metadata:
+            labels: {owner: chrisya, purpose: vllm-torchtpu-test}
+          spec:
+            restartPolicy: Never
+            priorityClassName: medium
+            nodeSelector:
+              cloud.google.com/gke-tpu-accelerator: tpu7x
+              cloud.google.com/gke-tpu-topology: "2x2x1"
+              cloud.google.com/reservation-name: cloudtpu-20260710003900-159478293
+            volumes:
+            - name: dshm
+              emptyDir:
+                medium: Memory
+                sizeLimit: 32Gi
+            - name: workdir
+              emptyDir:
+                medium: Memory
+                sizeLimit: 620Gi
+            - name: cachedisk
+              persistentVolumeClaim:
+                claimName: chrisya-ttpu-cache
+            tolerations:
+            - {key: google.com/tpu, operator: Equal, value: present, effect: NoSchedule}
+            containers:
+            - name: dev
+              image: us-docker.pkg.dev/ml-oss-artifacts-transient/torch-tpu-docker-container/torch-tpu:nightly-20260726
+              command: ["/bin/bash","-c"]
+              args:
+              - |
+                echo "[ttpu-test] up on $(hostname) at $(date -u)"
+                ls -l /dev/vfio 2>/dev/null | head -5 || true
+                echo "[ttpu-test] TPU chips requested: 4 (2x2x1). exec 进来干活。"
+                sleep 3300
+              volumeMounts:
+              - name: dshm
+                mountPath: /dev/shm
+              - name: workdir
+                mountPath: /work
+              - name: workdir
+                mountPath: /root/.cache
+                subPath: rootcache
+              - name: workdir
+                mountPath: /tmp
+                subPath: tmproot
+              - name: cachedisk
+                mountPath: /cache
+              resources:
+                limits: {google.com/tpu: 4, ephemeral-storage: 64Gi}
+                requests: {google.com/tpu: 4, cpu: "8", memory: 64Gi, ephemeral-storage: 16Gi}

@@ -4,7 +4,9 @@
 
 > ### 🚀 只想跑起来？→ [**QUICKSTART.md**](./QUICKSTART.md)
 >
-> 35 分钟从零到第一个 benchmark 数字，所有已知坑已预先填平，照抄即可，不需要排查任何问题。
+> 从零到第一个 benchmark 数字，所有已知坑已预先填平，照抄即可，不需要排查任何问题。
+> 0.6B 约 15 分钟、35B 约 23 分钟、397B 约 45 分钟（需先做缓存持久化）。
+> **文档已按自身步骤复测过，实测数据非估算。**
 > 本文件讲的是**架构与全景**；踩坑过程与证据在
 > [RUNLOG](./Qwen3.5-397B-A17B-FP8/RUNLOG-20260812.md)。
 
@@ -72,8 +74,8 @@
 
 | 模型 | 本目录状态 | 上游 perf baseline | 上游 eval baseline | 文档 |
 |---|---|---|---|---|
-| **Qwen3.5-397B-A17B-FP8** | 📋 待复现 | 3 份（tp1dp8 / tp2dp4 / tp8dp1）× 6 负载点 | MMLU · MMLU-Pro · HumanEval+ · MBPP+ | [详情](./Qwen3.5-397B-A17B-FP8/) |
-| Qwen3.5-35B-A3B-FP8 | 📋 待复现 | 3 份（dp4tp2 / dp8 / tp4） | MMLU · MMLU-Pro | 待写 |
+| **Qwen3.5-397B-A17B-FP8** | ✅ **已复现 1/6 cell**，优于基线 4.4% | 3 份（tp1dp8 / tp2dp4 / tp8dp1）× 6 负载点 | MMLU · MMLU-Pro · HumanEval+ · MBPP+ | [详情](./Qwen3.5-397B-A17B-FP8/) |
+| Qwen3.5-35B-A3B-FP8 | ✅ **已复现 tp4-ep**，优于基线 18.4% | 3 份（dp4tp2 / dp8 / tp4）⚠️ 其中 2 份是空壳 | MMLU · MMLU-Pro | 见 [397B 目录的 RUNLOG](./Qwen3.5-397B-A17B-FP8/RUNLOG-20260812.md) |
 | Qwen3-Coder-480B-A35B | 📋 待复现 | 3 份（FP8 ×2 / NVFP4 ×1） | MMLU · MMLU-Pro · HumanEval+ · MBPP+ | 待写 |
 | Qwen3-Coder-30B-A3B | 📋 待复现 | 2 份（BF16 / FP8） | MMLU · MMLU-Pro | 待写 |
 | Qwen3-30B-A3B-NVFP4 | 📋 待复现 | 1 份 | MMLU · MMLU-Pro | 待写 |
