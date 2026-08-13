@@ -19,7 +19,7 @@
 |---|---|
 | 硬件 | TPU v7（`tpu7x`）**4 芯片 = 8 device**，拓扑 `2x2x1` |
 | 权限 | 能读 `us-docker.pkg.dev/ml-oss-artifacts-transient`（镜像 + pip 源） |
-| 时间 | **按模型差别很大，见下表**。0.6B 约 20 分钟，35B 约 35 分钟 |
+| 时间 | **按模型差别很大**：0.6B 约 15 分钟，35B 约 23 分钟（逐阶段见下表） |
 
 **实测各阶段耗时**（v7x 4 芯片，内存盘，`hf_transfer` 开启）：
 
@@ -231,9 +231,21 @@ kubectl exec $POD -- bash -c \
 
 **跑大模型前先解决两件事**，否则 60 分钟窗口不够：
 
-1. **内存盘要够 + 权重预置**。397B 约 400 GB，pod 本地盘（74 GB）放不下；内存盘装得下但
-   **默认的 320Gi 也不够，要提到 560Gi**。而且每个 pod 都要重下一次——
-   **并行跑多配置时把权重放 GCS 用 gcsfuse 只读共享。**
+1. **内存盘要够 + 权重预置**。397B 实测 **406.2 GB / 95 个 shard**，pod 本地盘（74 GB）
+   放不下；内存盘装得下但**默认 320Gi 不够，要 620Gi**（实测占 379 GB，余量充足）。
+   下载本身很快：**420 秒下完 406 GB ≈ 967 MB/s**（`hf_transfer` + 32 workers + 内存盘），
+   所以下载不是瓶颈，**编译才是**。
+   预下载务必注意路径：
+
+   ```python
+   # 对：不传 cache_dir，跟着 HF_HOME 走
+   snapshot_download("Qwen/Qwen3.5-397B-A17B-FP8", max_workers=32)
+   # 错：cache_dir=$HF_HOME 会落到 $HF_HOME/ 而 vLLM 找 $HF_HOME/hub/，导致再下一遍把盘撑爆
+   ```
+   ```bash
+   export HF_HUB_OFFLINE=1   # 权重就位后起 server，杜绝任何偷偷下载
+   ```
+   并行跑多配置时把权重放 GCS 用 gcsfuse 只读共享，省下每 pod 一次的 400 GB。
 2. **编译缓存持久化**（对 397B 是**前置条件**，不是优化项）。缓存在
    `/root/.cache/vllm/torch_compile_cache/`。实测编译耗时随规模快速上升：
    0.6B 每图约 12 秒、约 7 分钟就绪；35B 的 `compile range (8192,8192)` 单图就要 50 秒、
@@ -259,6 +271,7 @@ kubectl exec $POD -- bash -c \
 | pod `Completed`、`exitCode 0`、但日志是空的 | 日志写在容器内文件里，pod 一死就没了 | 输出 tee 到 `/proc/1/fd/1` 走容器 stdout |
 | `LookupError: setuptools-scm was unable to detect version` | tarball 传源码丢了 `.git` | `export SETUPTOOLS_SCM_PRETEND_VERSION_FOR_VLLM_TORCHTPU=0.1.0` |
 | `AttributeError: module 'vllm' has no attribute '__version__'` | 你在 `/work/vllm` 源码目录里 import，串到本地目录了 | `cd /tmp` 再 import |
+| 明明预下载过权重，server 启动时又下一遍、然后盘满 | `snapshot_download(cache_dir=$HF_HOME)` 落在 `$HF_HOME/`，而 HF 默认缓存是 **`$HF_HOME/hub`**，差一层目录 | 预下载别传 `cache_dir`（跟着 `HF_HOME` 走），并在起 server 前 `export HF_HUB_OFFLINE=1` |
 
 ### 排障通用顺序
 
