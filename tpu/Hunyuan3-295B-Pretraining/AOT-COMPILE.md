@@ -469,3 +469,32 @@ assert 'compiled_trainstep_file' not in '\n'.join(out)
 | 换了 XLA flag，想知道编不编得过 | **值**。flag 依赖问题在这一步就暴露 |
 | 想知道显存花在哪 | **值**，而且是唯一能拿到 argument/temp 分解的地方 |
 | 想知道到底跑多快 | **不值**。AOT 不给性能数，只给显存和可编译性 |
+
+## 附：本文全部实验的原始数据
+
+**50 次编译，37 成功 / 13 失败**，原始 CSV 在
+[`maxtext-hunyuan3/data/aot-ablation-20260815.csv`](maxtext-hunyuan3/data/aot-ablation-20260815.csv)
+（字段：host / tag / cpus / layers / topo / wall_s / cpu_time_s / avg_cores / peak_rss_gib / rc / ts）。
+
+**13 次失败每一条都有解释，没有「不明原因」：**
+
+| 失败项 | 次数 | 原因 |
+|---|---:|---|
+| `tpu7x-32` + 80 层 | 1 | 设计内 OOM（temp 185.50G > 94.74G），16 芯片装不下 80 层 |
+| `scan_layers=False` | 3 | 本仓库 Hy3 移植不支持非 scan 路径（`moe_layers` 属性名不同） |
+| 去掉全部 XLA flag | 2 | 设计内 OOM（95.01G > 94.74G）—— 这正是要测的结论 |
+| 单独 flag 子集 | 3 | 设计内：vmem 单独→HBM OOM；调度器单独→VMEM OOM；SC 单独→HBM OOM |
+| 传空 `compile_xla_flags` | 2 | **我的脚本 bug**，转义把它变成字面量 `\"\"`，触发 pydantic 校验错 |
+| 首次 C4 运行 | 1 | **我的脚本 bug**，打包时漏了 `logs/` 目录 |
+| `scan_layers=False` 变体 | 1 | 同上，nested heredoc 转义损坏脚本 |
+
+> 后 4 类是**我自己的工具问题不是被测对象的问题** —— 一并列出来，
+> 免得后人把它们当成 MaxText 或 XLA 的缺陷。
+
+## 待办
+
+- **`tpu7x-256`（4x4x8）为什么贵 29%** —— 复现三次确认非噪声，且非单调
+  （更大的 4x8x8 / 8x8x8 反而更快）。机制未查明。
+- **`scan_layers=False` 的对照** —— 需要先修模型代码的属性名才能跑。
+- **调度器组内部再细分** —— 目前只定位到「调度器组 + vmem 上限」这个组合，
+  还没拆到单个 flag。
