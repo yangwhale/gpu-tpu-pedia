@@ -15,6 +15,25 @@
 
 ## 一、性能是怎么一路上去的
 
+> [!warning] 2026-08-15 更正：§3.4 的 `tkcfg.py` monkeypatch 已经是空操作
+> 它打的 `PallasMosaicTpuRaggedDot._get_heuristics_config` 只在
+> `use_tokamax_gmm=True` 时才被调用，而这个开关在 v7 上会死锁、生产一直关着。
+> 加计数器实测：AOT 与真机上都是 **「被调用 0 次」**，但它照常打印 `[tkcfg] patched`。
+>
+> **正确入口是 18 个配置参数** `{wi,wo}_tile_{fwd,dlhs,drhs}_{batch_seq,embed_dim,mlp_dim}`，
+> 取 `(512, 2048, 1536)`。换过来之后 64 芯片实测：
+>
+> | | per-chip | MFU |
+> |---|---:|---:|
+> | 下表第 3 行（monkeypatch 路径） | 630 | 27.31% |
+> | **18 参数 + `pdbs=12`** | **662.2** | **28.70%** |
+> | **18 参数 + `pdbs=13`** | **666.6** | **28.89%** |
+>
+> 多出来的部分应该来自反向两条路径（`dlhs`/`drhs`）也被 tile 了。
+> `pdbs=13` 是 AOT 扫出来的上限，14 差 1.79 GB 装不下。
+> 详见 [AOT-COMPILE](AOT-COMPILE.md)。**下表尚未按新数字重排。**
+
+
 **全部在 64 芯片（16 节点 / 128 device）上实测，一条线走到底 —— 每一行只加一件事。**
 
 | # | 加了什么 | step | **TFLOP/s/chip** | tok/s/chip | 增量 | **累计** |
