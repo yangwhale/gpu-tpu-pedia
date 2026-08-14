@@ -64,7 +64,7 @@ v5p)
   ;;
 v7)
   NODES=${NODES:-16}; ACCEL=tpu7x; TOPO=${TOPO:-4x4x4}
-  # 只带这 15 个（基线 2 + SparseCore 卸载 9 + 调度器 4）。
+  # 只带这 16 个（基线 3 + SparseCore 卸载 9 + 调度器 4）。
   # 补到 26 个也能跑（c2），但收益 ±0，所以保持精简。
   # **不要**照抄官方那套一次全开 —— w1 那轮死锁，元凶是同时开的
   # use_tokamax_gmm（§6.7），不是 flag 数本身。
@@ -82,9 +82,22 @@ v7)
   --xla_tpu_scheduler_percent_shared_memory_limit=150
   --xla_tpu_enable_layer_scheduler_for_dependent_collectives=true
   --xla_tpu_enable_multi_compute_overlap_in_layer_scheduler=false'
-  EXTRA="per_device_batch_size=8 max_target_length=4096 use_custom_sort_vjp=True
+  # MoE tile —— 2026-08-15 补上，此前 v7 分支漏了这一组，白丢 26% 性能。
+  # QUICKSTART 早期教的 tkcfg.py monkeypatch **已经是空操作**：它打的
+  # PallasMosaicTpuRaggedDot 只在 use_tokamax_gmm=True 时才被调到，而那个开关
+  # 在 v7 上死锁、一直关着。加计数器实测「被调用 0 次」，但它照常打印
+  # "[tkcfg] patched"，所以看起来是生效的。正确入口就是下面这 18 个配置参数。
+  # tile_n 必须 = base_moe_mlp_dim(1536)：1024 除不尽会断言失败，512 能整除但更慢。
+  # 实测 64 芯片：不带 525.4 TFLOP/s/chip → 带上 662.2（+26%）。
+  TILE=""; for m in wi wo; do for p in fwd dlhs drhs; do
+    TILE="$TILE ${m}_tile_${p}_batch_seq=${TILE_BS:-512}"
+    TILE="$TILE ${m}_tile_${p}_embed_dim=${TILE_EMB:-2048}"
+    TILE="$TILE ${m}_tile_${p}_mlp_dim=${TILE_MLP:-1536}"
+  done; done
+  # pdbs 默认 12（最优配方）。13 是 AOT 扫出来的上限、再快 0.66%，14 装不下。
+  EXTRA="per_device_batch_size=${PDBS:-12} max_target_length=4096 use_custom_sort_vjp=True
   sa_use_fused_bwd_kernel=True use_tokamax_splash=True out_proj=remat
-  opt_type=adamw mu_dtype=bfloat16 grad_dtype=bfloat16 use_iota_embed=True"
+  opt_type=adamw mu_dtype=bfloat16 grad_dtype=bfloat16 use_iota_embed=True$TILE"
   ;;
 *) echo "PLATFORM 只能是 v5p 或 v7"; exit 1;;
 esac
@@ -101,6 +114,14 @@ sa_block_kv_dkv=2048 sa_block_kv_dkv_compute=2048 sa_block_q_dq=2048 sa_block_kv
 remat_policy=custom decoder_layer_input=offload attention=flash \
 allow_split_physical_axes=True tokenizer_type=tiktoken \
 tokenizer_path=src/maxtext/assets/tokenizer_llama3.tiktoken"
+
+# DRYRUN=1：只把展开后的模型/并行参数打出来，不提交任何东西。
+# 用途是跟 aot.sh 对账 —— AOT 体检的必须是你真会跑的那个配置，
+# 两边任何一处漂移都会让体检结果失去意义。见 AOT-COMPILE.md「两个脚本对账」。
+if [ -n "${DRYRUN:-}" ]; then
+  for t in $COMMON $EXTRA "$@"; do echo "$t"; done | sort
+  exit 0
+fi
 
 gcloud storage ls "$GCS_STAGE/hy3-maxtext.tgz" >/dev/null 2>&1 || {
   echo "找不到 $GCS_STAGE/hy3-maxtext.tgz —— 先跑 'GCS_STAGE=$GCS_STAGE bash prep.sh'"; exit 1; }
@@ -190,6 +211,9 @@ else
 echo "  * v7 是 2 device/chip，per-chip = 日志值 × 2；MFU = per-chip / 2307"
 echo "  * v7 编译约 46 s（80 层 / 64 芯片实测），真正慢的是建切片：TPU init 约 70 s"
 echo "    —— '编译要 10-17 分钟' 是旧说法，已被 TUNING-v7 与 2026-08-15 的 AOT 对照实验两次推翻"
-echo "  * 预期（pdbs 8 未调优）：step ≈ 20.4 s，TFLOP/s/device ≈ 222.6，即 445 per-chip，MFU ≈ 19.3%"
-echo "  * 最优配方（pdbs 12 + tokamax tile + dvfs=7）：630 per-chip / 27.31% —— 见 QUICKSTART-v7 §0"
+echo "  * 预期（本脚本默认 = pdbs 12 + 18 个 tile 参数 + dvfs=7）："
+echo "      step ≈ 20.61 s，TFLOP/s/device ≈ 331.1，即 662.2 per-chip，MFU ≈ 28.70%"
+echo "      PDBS=13 再快 0.66%（666.6 / 28.89%）；14 装不下（AOT 实测差 1.79 GB）"
+echo "  * 明显低于这个数先查 tile：漏掉那 18 个参数会掉到 525 per-chip（-26%）"
+echo "  * 对照：pdbs 8 无 tile 是 445 per-chip / 19.3%（旧基线）"
 fi

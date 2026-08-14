@@ -84,6 +84,14 @@ EXTRA="per_device_batch_size=${PDBS:-12} max_target_length=4096 use_custom_sort_
 sa_use_fused_bwd_kernel=True use_tokamax_splash=True out_proj=remat \
 opt_type=adamw mu_dtype=bfloat16 grad_dtype=bfloat16 use_iota_embed=True$TILE"
 
+# DRYRUN=1：只把展开后的模型/并行参数打出来，不编译。
+# 跟 run.sh 的 DRYRUN 对账用 —— 两边输出应当完全相同（除了 aot.sh 独有的
+# compile_topology / compiled_trainstep_file）。见 AOT-COMPILE.md「两个脚本对账」。
+if [ -n "${DRYRUN:-}" ]; then
+  for t in $COMMON $EXTRA "$@"; do echo "$t"; done | sort
+  exit 0
+fi
+
 gcloud storage ls "$GCS_STAGE/hy3-maxtext.tgz" >/dev/null 2>&1 || {
   echo "找不到 $GCS_STAGE/hy3-maxtext.tgz —— 先跑 'GCS_STAGE=$GCS_STAGE bash prep.sh'"; exit 1; }
 

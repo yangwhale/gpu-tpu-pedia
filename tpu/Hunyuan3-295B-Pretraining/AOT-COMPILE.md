@@ -125,6 +125,23 @@ gcloud storage cp gs://your-bucket/compiled/hy3-aot-prod.pkl /tmp/compiled.pkl
 **它跟 jax / libtpu 版本绑死，升级就得重编**，别当长期缓存用。
 收益见[下方实测](#带缓存-vs-不带缓存)：**省 51 秒，不是省十几分钟。**
 
+## 两个脚本对账（每次改配置都跑一下）
+
+**AOT 体检的必须是你真会跑的那个配置** —— 两边任何一处漂移，体检结果就失去意义。
+这不是提醒，是可执行的检查：
+
+```bash
+DRYRUN=1 bash maxtext-hunyuan3/aot.sh dry > /tmp/a.txt
+DRYRUN=1 PLATFORM=v7 bash maxtext-hunyuan3/run.sh dry > /tmp/r.txt
+diff /tmp/a.txt /tmp/r.txt    # 应当无输出
+```
+
+两个脚本会把展开后的模型/并行参数排序打出来（当前各 48 条），不提交任何东西。
+
+> **这个检查是被自己坑出来的。** 2026-08-15 给 `aot.sh` 加上 18 个 tile 参数时，
+> 忘了 `run.sh` 的 v7 分支还没有 —— 于是 AOT 体检的配置和实际会跑的配置分了岔。
+> 光靠人眼看两份 48 条参数的清单不可能发现。
+
 ## Step 4 · 这时候才去抢卡
 
 前三步都过了，再提交真实训练任务。
