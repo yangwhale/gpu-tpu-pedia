@@ -1,0 +1,55 @@
+apiVersion: jobset.x-k8s.io/v1alpha2
+kind: JobSet
+metadata:
+  name: ttpu16
+spec:
+  # SLICE_FAILURE 绝不重试到把 DWS 节点烧掉 —— 3 次封顶。
+  failurePolicy: {maxRestarts: 3}
+  # 让 4 个 worker 互相有稳定 DNS 名，Ray 多机（路线 B）要靠它。
+  network: {enableDNSHostnames: true}
+  replicatedJobs:
+  - name: s
+    replicas: 1
+    template:
+      spec:
+        parallelism: 4
+        completions: 4
+        backoffLimit: 0
+        template:
+          spec:
+            restartPolicy: Never
+            nodeSelector:
+              cloud.google.com/gke-tpu-accelerator: tpu7x
+              cloud.google.com/gke-tpu-topology: 2x2x4
+              cloud.google.com/gke-nodepool: hy3-v7-16-dws-2
+              cloud.google.com/gke-accelerator-count: "4"
+            tolerations:
+            - {key: google.com/tpu, operator: Exists, effect: NoSchedule}
+            - {key: cloud.google.com/gke-queued, operator: Exists, effect: NoSchedule}
+            containers:
+            - name: w
+              image: us-docker.pkg.dev/ml-oss-artifacts-transient/torch-tpu-docker-container/torch-tpu:nightly-20260726
+              # 长期持有节点，所有迭代走 exec —— 之后再不碰调度，彻底消除 DWS 回收风险。
+              command: ["bash","-c","echo READY id=${TPU_WORKER_ID:-?} host=$(hostname); sleep infinity"]
+              securityContext: {privileged: true}
+              # 每种资源只能出现一次 limits / 一次 requests。写成两个 limits 块时后者会覆盖前者，
+              # google.com/tpu 静默丢掉限额，Job 被 API server 拒绝，而 --dry-run=server 查不出来
+              # （它只校验 JobSet CRD，不校验它生成的 Job）。上周为此废掉一整夜 9 个任务。
+              resources:
+                limits: {google.com/tpu: "4", ephemeral-storage: 30Gi}
+                requests: {google.com/tpu: "4", cpu: "180", memory: 820Gi, ephemeral-storage: 8Gi}
+              volumeMounts:
+              - {name: shm,  mountPath: /dev/shm}
+              - {name: work, mountPath: /work,       subPath: work}
+              # 节点 ephemeral-storage 只有 43.8 GiB，而 pip 装 vLLM（MAX_JOBS=32）和 HF 下载
+              # 都往容器盘写。不把 /tmp 和 pip cache 挪到 tmpfs，会撞节点级驱逐 —— 容器里 df
+              # 看着一片宽裕，因为 ephemeral-storage 是整节点共享的，容器 df 根本看不见。
+              - {name: work, mountPath: /tmp,        subPath: tmproot}
+              - {name: work, mountPath: /root/.cache, subPath: rootcache}
+            volumes:
+            - name: shm
+              emptyDir: {medium: Memory, sizeLimit: 32Gi}
+            # 节点 963 GB 内存。Lustre 在这个节点池不可用（COS 镜像无 lustre 客户端模块），
+            # 所以权重/编译缓存全部落 tmpfs，靠 pod 长期存活来持久化。
+            - name: work
+              emptyDir: {medium: Memory, sizeLimit: 640Gi}

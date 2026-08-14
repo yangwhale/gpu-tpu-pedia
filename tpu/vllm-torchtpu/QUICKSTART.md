@@ -199,8 +199,18 @@ kubectl exec $POD -- bash -c \
 |---|---|---|
 | 装环境 | 5 min | 3 min 08 s |
 | 权重 | **下载 461 s（406 GB）** | **零下载**，从盘加载 94 shards **4 min** |
-| **编译** | **19 min** | **新编译 graph 数 = 0** |
-| **到 server ready** | **29 min** | **18 min** |
+| **编译** | **19 min** | 大部分从缓存反序列化，**但不是 0**，见下 |
+| **到 server ready** | **29 min** | **16 min 16 s** |
+
+热启动那 16 分 16 秒的精确归因（方法：扫 `server.log` 相邻行的最大时间空隙，
+不靠猜里程碑）：
+
+| 阶段 | 耗时 | 能不能压 |
+|---|---|---|
+| 装环境 | 3 min 12 s | 可与权重下载并行 |
+| 进程启动 + 插件加载 | 46 s | 固定开销，压不动 |
+| 权重加载 | **4 min 00 s** | **可压到 69 s**，见 §3.6 |
+| 编译 / 缓存加载 | 7 min 32 s | 含 16 次无效重编，见下 |
 
 ### 怎么做
 
@@ -243,10 +253,28 @@ kubectl exec $POD -- bash -c 'du -sh /cache/hf /cache/vllm; find /cache/vllm -na
 D=$(ls -td /work/vllm-torchtpu/benchmark_runs/*/|head -1)
 grep -c "Compiling a graph for compile range" $D/server.log   # 期望 0
 grep -c "pickle.load" $D/server.log                            # 期望 >0（在反序列化已编译产物）
+
+# ⚠️ 上面两条不够。真正的缓存失效走的是另一个字符串，只查上面两条会得到虚假的安心：
+grep -c "Loading compiled executable" $D/server.log   # 从缓存读回的可执行体数
+grep -ci "Compiling model again"      $D/server.log   # 读不回、退化成重编的数量 —— 这条才是关键
 ```
 
 > ⚠️ **别只看 "Waiting for server" 的时长就断定缓存没生效**——热启动仍要花 4 分钟
-> 加载 400 GB 权重、再反序列化编译产物，总共约 18 分钟。判据是上面那两个计数。
+> 加载 400 GB 权重、再反序列化编译产物，总共约 16 分钟。判据是上面那几个计数。
+
+> **已知上游缺陷（2026-08-14 实测，397B / tp8-dp1）**：
+> 缓存**不会全命中**。88 个可执行体正常读回，**16 个失败后重新编译**，8 个 worker 每个中招 2 次：
+>
+> ```
+> WARNING [decorators.py:321] Compiling model again due to a load failure from
+>   .../torch_aot_compile/<hash>/rank_N_0/model,
+>   reason: a bytes-like object is required, not 'BundledAOTAutogradResult'
+> ```
+>
+> 这是序列化路径的类型错配：写进去的是 `BundledAOTAutogradResult` 对象，读出来按 `bytes` 处理。
+> 后果是这部分编译时间**每次启动都白付**，缓存盘做得再持久也救不回来。
+> 排查时如果只查 `"Compiling a graph for compile range"`（它确实是 0），
+> 会误判成「缓存全命中」而漏掉这 16 次重编。
 
 ### 为什么不用 GCS + gcsfuse
 
@@ -269,6 +297,102 @@ cp -r /work/vllm-torchtpu/benchmark_runs /cache/results/
 ```
 
 我们在这上面栽过：只能靠 `kubectl logs` 从 stdout 的文本摘要里重建指标，JSON 原文丢了。
+
+---
+
+## 3.6 如果你的 pod 不受 60 分钟限制，上面那套请全部推翻
+
+§3.5 那一整套（持久盘、单 cell 切分、跑完立刻拷结果）**是为了绕开共享集群 60 分钟
+pod 寿命而生的**，不是什么最佳实践。在专属集群 / DWS 节点上 pod 可以长期存活，
+硬搬这套反而每个 cell 白付一次十几分钟的启动。
+
+**换成这样：**
+
+### ① 权重放 tmpfs，不放磁盘
+
+`tpu7x-standard-4t` 节点有 **963 GB 内存**，378 GiB 权重放内存盘绰绰有余。
+
+| 权重落点 | 加载耗时 |
+|---|---|
+| EXT4 hyperdisk | 240 s |
+| **tmpfs** | **69 s** |
+
+**快 3.5 倍，每次启动省 171 秒。**
+
+```yaml
+volumes:
+- name: work
+  emptyDir: {medium: Memory, sizeLimit: 640Gi}
+```
+
+> ⚠️ 同时必须把 `/tmp` 和 `/root/.cache` 也挂到 tmpfs。
+> 节点 **ephemeral-storage 只有 43.8 GiB**，pip 编译 vLLM 和 TPU 日志往容器盘写会撞
+> **节点级**驱逐 —— 而容器里 `df` 看着一片宽裕，因为那是整节点共享配额，容器 `df` 看不见。
+
+### ② 权重从同区 GCS 拉，别走 HF
+
+| 来源 | 速率 |
+|---|---|
+| HuggingFace | 967 MB/s |
+| **同 region GCS** | **231 MiB/s × N 节点，聚合 990 MiB/s** |
+
+镜像里没有 gcloud SDK，用 `google-cloud-storage` 自己控并发即可，
+见 [`scripts/fetch-weights.py`](./Qwen3.5-397B-A17B-FP8/scripts/fetch-weights.py)。
+
+> **进度条要统计已落盘字节，不能统计已完成文件。**
+> 94 个 4 GB 分片 / 48 并发时，前 20 分钟一个文件都不会完成，
+> 按文件计数的进度条会一直显示 `0 MiB/s` 像卡死，ETA 也算得离谱。
+> `du -sh` 才是真值 —— 那时盘上其实已经有 359 GiB。
+
+### ③ 装环境和拉权重并行跑
+
+一个打 pypi、一个打 GCS，不抢同一个瓶颈。实测环境安装只要 **2 min 50 s**，
+完全被 28 分钟的权重下载掩盖。串行的话白多花近 3 分钟。
+
+### ④ 一次跑完整个 config，不要切 cell
+
+一次 server 启动的固定成本是十几分钟。同一节点上的多个 cell **必须共用一次启动**。
+
+### ⑤ 有多机 slice 时，切开当多个单机用
+
+2x2x4 的多机 slice 上，把 TPU env 降回单机视图，可以干净地只用本机 8 个 device。
+**这不是虚拟化也不是资源划分，是「拒绝组队」** —— 硬件本来就是 4 台各插各的 4 颗芯片，
+「16 卡是一个整体」是 libtpu 按环境变量去会合才形成的，不去会合就各干各的。
+
+```bash
+export TPU_WORKER_ID=0
+export TPU_PROCESS_ADDRESSES=localhost:8471
+export TPU_WORKER_HOSTNAMES=localhost
+export TPU_HOST_BOUNDS=1,1,1            # ← 核心：GKE 注的是 1,1,4
+export TPU_CHIPS_PER_HOST_BOUNDS=2,2,1  # ← 不用改，每台本来就是 4 颗
+export TPU_ACCELERATOR_TYPE=tpu7x-8     # ← 8 是 device 数，不是 chip 数
+unset TPU_MULTIHOST_BACKEND             # ← 设过 ray 不清掉会走多机分支
+```
+
+三个易错点：
+**①** `TPU_PROCESS_ADDRESSES`（带端口）和 `TPU_WORKER_HOSTNAMES`（纯主机名）是一对，
+只改一个会对不上。
+**②** `TPU_CHIPS_PER_HOST_BOUNDS` 保持 `2,2,1` 不动，真正变的只有 `TPU_HOST_BOUNDS`。
+**③** v7x 上 **1 chip = 2 device**，所以多机是 `tpu7x-32`（16×2），单机是 `tpu7x-8`（4×2）。
+写错会报拓扑不匹配，但错误信息不会提示你是单位搞错了。
+
+验证：`python3 -c "import jax; print(len(jax.devices()))"`
+返回 **8** 就对了；返回 32 是变量没生效；**卡住不返回**是它还在等另外 3 台会合。
+
+**实测互不干扰**（同一 cell，4 台同时跑 vs 单机独占）：
+
+| | median TPOT | output tok/s |
+|---|---|---|
+| 单机独占 | 39.62 ms | 5833.5 |
+| 4 台同时（同一 slice） | 39.54 ms | 5877.9 |
+| 差异 | −0.22% | +0.76% |
+
+噪声级别。**一个 16 chip slice 可以当 4 个独立 4 chip 环境用，吞吐不打折。**
+需要跑实验矩阵时，申请一个大 slice 切开用，比申请 4 个小 slice 排 4 次队快得多，
+而且拿到的是同一批硬件，横向对比没有机器差异。
+
+实测效果：18 个 cell 铺在 4 个节点上，约 90 分钟墙钟跑完。
+按 §3.5 那套要 18 个 60 分钟窗口。
 
 ---
 
@@ -364,6 +488,10 @@ Median ITL 20.50 ms · duration 1,602 s。
 | 症状 | 真因 | 处理 |
 |---|---|---|
 | 一直 `Waiting for server...` 到 pod 被杀 | **镜像里没有 curl**，runner 探活永远失败（server 其实是好的） | `apt install curl` |
+| 调高并发后 TTFT 暴涨一个数量级，**吞吐持平甚至下降** | **`DATA_PARALLELISM=1` 撞调度墙** —— 只有一个 engine、一个连续批处理循环，请求全挤在一个队列里。与 `MAX_NUM_BATCHED_TOKENS` 无关（tp1-dp8 的预算只有 1024，比 tp8-dp1 的 8192 更小，反而是高并发下最快的） | 高并发要吞吐就换 DP。实测 397B / ISL 8192 / 并发 512：tp1-dp8 出 3316 tok/s，tp8-dp1 只有 2146 且 median TTFT 达 **108 s** |
+| PVC 挂不上，报 `exit status 19 / No such device` | **TPU 节点的 COS 镜像没有 lustre 客户端模块**（只有 lnet/libcfs）。CSI pod 显示 `2/2 Running` 是假象 | 进节点 `modprobe lustre` 确认；确认后改用 tmpfs 或 GCS，别再查网络和 PVC 绑定 |
+| 容器里 `df` 显示磁盘很空，pod 却被驱逐 | ephemeral-storage 是**整节点共享配额**，容器 `df` 看不见。节点只有 43.8 GiB | 把 `/work`、`/tmp`、`/root/.cache` 全挂 tmpfs |
+| JobSet `--dry-run=server` 全绿，实际提交后没有 pod | dry-run **只校验 JobSet CRD，不校验它生成的 Job**。典型元凶是 YAML 里两个 `limits` 键，后者覆盖前者导致 `google.com/tpu` 丢掉限额 | 把 pod template 抽成独立 Job 再 dry-run 一次；真因只在 `jobset-system` 控制器日志里 |
 | `RuntimeError: Insufficient space in /dev/shm: 160 MiB required, 64 MiB free` | K8s 默认 `/dev/shm` 只有 64 MiB | 挂 `emptyDir: {medium: Memory}` 到 `/dev/shm` |
 | Pod 被 evict，`ephemeral-storage` 不足 | 容器里 `df` 看到的不是你的配额，节点是共享的 | `/work` 挂内存盘 + 声明 `ephemeral-storage` |
 | JobSet 创建了但一个 Job 都没有 | pod spec 里有**两个 `limits` 键**，`google.com/tpu` 丢了 limit | 合并成一行；去 `jobset-system` 看 controller 日志 |
