@@ -188,7 +188,8 @@ echo "  * MFU = TFLOP/s/device / 459"
 echo "  * 预期：step ≈ 63.2 s，TFLOP/s/device ≈ 160.9，MFU ≈ 35.1%"
 else
 echo "  * v7 是 2 device/chip，per-chip = 日志值 × 2；MFU = per-chip / 2307"
-echo "  * v7 编译要 10-17 分钟，比 v5p 慢很多"
+echo "  * v7 编译约 46 s（80 层 / 64 芯片实测），真正慢的是建切片：TPU init 约 70 s"
+echo "    —— '编译要 10-17 分钟' 是旧说法，已被 TUNING-v7 与 2026-08-15 的 AOT 对照实验两次推翻"
 echo "  * 预期（pdbs 8 未调优）：step ≈ 20.4 s，TFLOP/s/device ≈ 222.6，即 445 per-chip，MFU ≈ 19.3%"
 echo "  * 最优配方（pdbs 12 + tokamax tile + dvfs=7）：630 per-chip / 27.31% —— 见 QUICKSTART-v7 §0"
 fi
