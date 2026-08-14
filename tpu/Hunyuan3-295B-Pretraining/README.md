@@ -61,9 +61,10 @@ decoder block 里 —— 本项目把它们接成一个新的 `decoder_block: "h
 | **想在 v5p 上把它跑起来** | **[QUICKSTART-v5p.md](QUICKSTART-v5p.md)** —— 建池到出数，两条命令，含完整参数与基线。**这份从零验证过** |
 | **想在 v7 (Ironwood) 上跑** | **[QUICKSTART-v7.md](QUICKSTART-v7.md)** —— **直接给最优配方**，照抄就能跑到 BF16 599 / FP8+QAG 625。含 64 / 256 两个规模、端到端复现、单位换算 |
 | **想知道 v7 那 599 是怎么调出来的** | **[TUNING-v7.md](TUNING-v7.md)** —— 445 → 599 的完整故事线，每步的原因 / 机理 / 收益；瓶颈判定、扩展性、HBM 模型；全部负面案例折叠在附录 |
+| **抢卡之前想先知道会不会 OOM** | **[AOT-COMPILE.md](AOT-COMPILE.md)** —— 不占一张 TPU，在普通 CPU 机器上把 64 芯片的训练步编出来，拿到每 device 的显存分解；含选机型的实测扫描（**别买 highmem**）与四个坑 |
 | 想把**别的**模型移植进 MaxText | [MAXTEXT-PORTING-GUIDE.md](MAXTEXT-PORTING-GUIDE.md) —— 从本项目总结的通用范式，与 Hy3 无关 |
 | 想知道某个数字/结论怎么来的 | [EXPERIMENT-LOG.md](EXPERIMENT-LOG.md) —— 完整实验档案，2600 行 |
-| 只想跑脚本 | [maxtext-hunyuan3/](maxtext-hunyuan3/) —— `prep.sh` + `run.sh` |
+| 只想跑脚本 | [maxtext-hunyuan3/](maxtext-hunyuan3/) —— `prep.sh` + `run.sh` + `aot.sh` |
 
 ---
 
