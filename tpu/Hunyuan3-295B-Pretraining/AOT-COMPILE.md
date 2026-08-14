@@ -49,6 +49,80 @@ compile_xla_flags="<跟生产一模一样的 XLA flag>"
 > 所以 **64 芯片 = `tpu7x-128` = 4x4x4**。写成 `tpu7x-64` 编出来的是 32 芯片的图，
 > 数字全错还不报错。对照表在 `src/maxtext/utils/accelerator_to_spec_map.py`。
 
+## 生产级流程：抢卡之前该跑哪几步
+
+按这个顺序做，**全程零 TPU**，总耗时约 5 分钟。
+
+### Step 0 · 准备（一次性）
+
+```bash
+# 代码推到 GCS（只有改代码才要重跑）
+GCS_STAGE=gs://your-bucket/hy3 bash maxtext-hunyuan3/prep.sh
+```
+
+任意一台带 docker 的机器都行 —— 我们在 GKE 节点、n4-highmem-80、
+c4-highcpu-32 三种环境上跑过同一个镜像，结果一致。
+
+### Step 1 · 先确认目标拓扑名（写错不报错，数字全废）
+
+拓扑名按 **device 数**，v7 是 2 device/chip：
+
+| 芯片 | 拓扑名 | mesh |
+|---:|---|---|
+| 16 | `tpu7x-32` | 2x2x4 |
+| 32 | `tpu7x-64` | 2x4x4 |
+| **64** | **`tpu7x-128`** | 4x4x4 |
+| 128 | `tpu7x-256` | 4x4x8 |
+| 256 | `tpu7x-512` | 4x8x8 |
+| 512 | `tpu7x-1024` | 8x8x8 |
+
+完整对照在 `src/maxtext/utils/accelerator_to_spec_map.py`。
+**同时核对你的 GKE 节点标签 `cloud.google.com/gke-tpu-topology` 要跟 mesh 一致。**
+
+### Step 2 · 扫出最大可行 batch
+
+从你想要的 `pdbs` 开始，OOM 就减半，能过就往上加。每次约 2 分钟：
+
+```bash
+GCS_STAGE=... IMAGE=... PDBS=12 bash maxtext-hunyuan3/aot.sh probe-p12
+```
+
+判据看这一行 —— **只看 `temp_size`，别看总和**：
+
+```
+Memory analysis: CompiledMemoryStats(... temp_size_in_bytes=80477396448 ...)
+```
+
+`temp_size ÷ 1e9` 与 **94.74 GB/device** 比。留 10 GB 余量比较稳。
+
+失败时编译器会直接告诉你差多少：
+
+```
+RESOURCE_EXHAUSTED: HLO temporaries (100.13G) exceeds available HBM (94.74G)
+```
+
+### Step 3 · 存下编译产物
+
+确定配置后，加 `compiled_trainstep_file` 再编一次，把产物传 GCS。
+训练侧拉下来指向本地路径即可跳过编译 —— 实测启动省 2.9×（见下方端到端章节）。
+
+### Step 4 · 这时候才去抢卡
+
+前三步都过了，再提交真实训练任务。
+
+> **为什么值得**：AOT 一次约 2 分钟 CPU 时间，成本可忽略；
+> 而「抢到 64 张卡 → 跑十几分钟编译 → OOM 退出 → 重排队」这个循环，
+> 一次就是小时级，还占着别人的容量。
+
+### 三条踩坑前置提醒
+
+1. **XLA flag 必须跟生产逐字一致** —— flag 之间有依赖（漏了
+   `sparse_core_collective_aggregator` 会让 latency hiding scheduler 直接报错），
+   而且精简过的 flag 集体检的是另一个配置
+2. **确认最后一行是 `Finished train_compile.py successfully!`** ——
+   编译失败也会留下 HLO dump，看到 dump 不等于成功
+3. **异常短的 wall time 是坏消息不是好消息** —— 多半是早期就 OOM 退出了
+
 ## 产出一：显存分解（这才是最值钱的）
 
 编译完会打一行 `Memory analysis`，是**每个 device** 的账：
