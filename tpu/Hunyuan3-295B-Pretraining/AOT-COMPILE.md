@@ -116,9 +116,17 @@ RESOURCE_EXHAUSTED: HLO temporaries (100.13G) exceeds available HBM (94.74G)
 
 ### 三条踩坑前置提醒
 
-1. **XLA flag 必须跟生产逐字一致** —— flag 之间有依赖（漏了
-   `sparse_core_collective_aggregator` 会让 latency hiding scheduler 直接报错），
-   而且精简过的 flag 集体检的是另一个配置
+1. **XLA flag 必须跟生产逐字一致 —— 它们是承重墙，不只是调性能。**
+   实测把整组 flag 拿掉，同一个配置**直接 OOM**：
+
+   | | `temp_size` | 结果 |
+   |---|---:|---|
+   | 带生产 flag（16 个） | **80.48 GB** | ✅ 还剩 14 GB 余量 |
+   | 完全不带 flag | **95.01 GB** | ❌ 超上限 94.74 GB —— **只差 0.3%** |
+
+   **这组 flag 把峰值临时空间压低了 15.3%**，正好是「能跑」和「跑不了」的分界。
+   另外 flag 之间还有依赖（漏了 `sparse_core_collective_aggregator` 会让
+   latency hiding scheduler 直接报错）。**精简 flag 等于体检了另一个配置。**
 2. **确认最后一行是 `Finished train_compile.py successfully!`** ——
    编译失败也会留下 HLO dump，看到 dump 不等于成功
 3. **异常短的 wall time 是坏消息不是好消息** —— 多半是早期就 OOM 退出了
