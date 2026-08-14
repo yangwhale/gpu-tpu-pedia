@@ -125,7 +125,26 @@ RESOURCE_EXHAUSTED: HLO temporaries (100.13G) exceeds available HBM (94.74G)
    | 完全不带 flag | **95.01 GB** | ❌ 超上限 94.74 GB —— **只差 0.3%** |
 
    **这组 flag 把峰值临时空间压低了 15.3%**，正好是「能跑」和「跑不了」的分界。
-   另外 flag 之间还有依赖（漏了 `sparse_core_collective_aggregator` 会让
+
+   **进一步分组定位，找出到底是谁在扛**（同配置，只换 flag 子集）：
+
+   | flag 子集 | `temp` | 结果 |
+   |---|---:|---|
+   | 完全不带 | 95.01 GB | ❌ HBM OOM |
+   | 只 `scoped_vmem_limit` | 94.81 GB | ❌ HBM OOM（几乎没省） |
+   | 只 **SparseCore 卸载那 9 个** | **95.01 GB** | ❌ **与不带 flag 一模一样** |
+   | **`scoped_vmem_limit` + 调度器组** | **80.48 GB** | ✅ **通过** |
+
+   **两条结论：**
+
+   - **SparseCore 卸载那 9 个 flag 对显存的贡献是 0**，一个字节都没省。
+     这与 [TUNING-v7](TUNING-v7.md) 里「SparseCore 卸载在 v7 上性能收益也是 0」
+     互相印证 —— **它们在 v7 上性能和显存两头都不给。**
+   - **真正压显存的是调度器组，但它和 vmem 上限是绑定的**：
+     只开调度器不提 vmem，会撞 **`CompileTimeScopedVmemOom`**（VMEM 爆，不是 HBM）；
+     只提 vmem 不开调度器，HBM 照样 OOM。**必须成对出现。**
+
+   另外 flag 之间还有硬依赖（漏了 `sparse_core_collective_aggregator` 会让
    latency hiding scheduler 直接报错）。**精简 flag 等于体检了另一个配置。**
 2. **确认最后一行是 `Finished train_compile.py successfully!`** ——
    编译失败也会留下 HLO dump，看到 dump 不等于成功
