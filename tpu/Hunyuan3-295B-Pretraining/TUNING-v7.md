@@ -242,9 +242,9 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json
 >
 > | Profile | 用在哪 | Session |
 > |---|---|---|
-> | 4 芯片 `2x2x1` / 80 层 | §2.2 通信占 57.3% 的自用时间拆解 | http://xprof.corp.google.com/trace_viewer/chrisya-11640939633798411639 |
-> | 16 芯片 `2x2x4` / 20 层（含 HLO dump） | 小规模筛选与 HLO 核对 | http://xprof.corp.google.com/trace_viewer/chrisya-18130551067782033931 |
-> | **64 芯片 `4x4x4` / 80 层 / `pdbs 12` —— 生产配置** | §2.4 阻塞降到 0.19%、§2.5 MFU 三层账与 roofline | http://xprof.corp.google.com/trace_viewer/chrisya-5052706392869670409 |
+> | 4 芯片 `2x2x1` / 80 层 | §2.2 通信占 57.3% 的自用时间拆解 | （内部 XProf trace `chrisya-11640939633798411639`，仅 Google 内网可访问） |
+> | 16 芯片 `2x2x4` / 20 层（含 HLO dump） | 小规模筛选与 HLO 核对 | （内部 XProf trace `chrisya-18130551067782033931`，仅 Google 内网可访问） |
+> | **64 芯片 `4x4x4` / 80 层 / `pdbs 12` —— 生产配置** | §2.4 阻塞降到 0.19%、§2.5 MFU 三层账与 roofline | （内部 XProf trace `chrisya-5052706392869670409`，仅 Google 内网可访问） |
 >
 > ⚠️ **这三份的原始 `.xplane.pb` 已不在任何 GCS 桶里**（2026-08-11 核查），
 > 只剩会过期的 session。**下次抓 profile 一定要把 `xplane.pb` 本身归档**，

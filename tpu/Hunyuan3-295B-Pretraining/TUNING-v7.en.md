@@ -211,8 +211,8 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json
 >
 > | Profile | Session |
 > |---|---|
-> | 4 chips `2x2x1` / 80 layers | http://xprof.corp.google.com/trace_viewer/chrisya-11640939633798411639 |
-> | 16 chips `2x2x4` / 20 layers (with HLO dump) | http://xprof.corp.google.com/trace_viewer/chrisya-18130551067782033931 |
+> | 4 chips `2x2x1` / 80 layers | （内部 XProf trace `chrisya-11640939633798411639`，仅 Google 内网可访问） |
+> | 16 chips `2x2x4` / 20 layers (with HLO dump) | （内部 XProf trace `chrisya-18130551067782033931`，仅 Google 内网可访问） |
 >
 > Sessions expire; once they do, just re-upload the `.xplane.pb` from GCS.
 <!-- ===== /TEMP:XPROF-LINKS ===== -->
