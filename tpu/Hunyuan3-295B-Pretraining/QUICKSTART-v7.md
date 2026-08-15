@@ -48,6 +48,7 @@
 | 2 | **`per_device_batch_size` 8 → 12** | 23.54 s | **580** | 4,176 | +6.8% | **+26.9%** |
 | 3 | **`--xla_tpu_dvfs_p_state=7`** | 21.67 s | **630** | 4,536 | +8.6% | **+37.9%** |
 | 4 | **FP8 + QAG**（pdbs 降到 7） | **11.81 s** | **674** | **4,854** | +7.0% | **+47.5%** |
+| 5 | **FP8 换 tile 入口**（2026-08-15） | **7.85 s** | **1,014.8** | **7,308** | **+50%** | **+122%** |
 
 > ⚠️ **step 时间这一列不能横着比大小** —— 每行的 batch 不一样。
 > 第 2 步 step 从 16.75 涨到 23.54，是因为 batch 从 8 加到 12，**单步算的 token 多了 50%**；
@@ -94,27 +95,39 @@ v7 单芯片从起点的 **52.7%** 走到现在的 **77.8%**。
 
 三组参数，其余部分完全一致（见 [§4.1 完整参数集](#41-完整参数集)）。
 
-### 🏆 64 芯片 FP8 + QAG → **674**（当前最高吞吐）
+### 🏆 64 芯片 FP8 + QAG + tile → **1,014.8**（当前最高吞吐）
+
+在 BF16 那套 18 个 tile 配置参数的基础上，加这几项：
 
 ```
-ici_data_parallelism=2
-ici_fsdp_parallelism=64          # 必须整除 192 个专家：192 % 64 = 0
-ici_tensor_parallelism=1
-per_device_batch_size=7          # 92.42 G；8 就 OOM
+ici_data_parallelism=2           # QAG 的整除锁：192 个专家只能 FSDP=64
+ici_fsdp_parallelism=64
+per_device_batch_size=7          # 上限就是 7，AOT 实测 8 要 98.05 G
 use_qwix_quantization=True
 quantization=fp8_full
-shard_exp_on_fsdp=True                              # ← QAG 本体
-weight_quantization_calibration_method=fixed,-224,224   # ← 必须带上下界，只写 fixed 无效
+shard_exp_on_fsdp=True
+weight_quantization_calibration_method=fixed,-224,224
 act_quantization_calibration_method=fixed,-224,224
-megablox=True use_tokamax_gmm=True
-TK_TM=512 TK_TK=2048 TK_TN=1536
---xla_tpu_dvfs_p_state=7
+# ⚠️ 不要开 use_tokamax_gmm —— 开了反而慢 50%，见下
 ```
 
-> **QAG 的整除锁**：`num_experts % ici_fsdp_parallelism == 0`。Hy3 是 **192 个专家**，
-> 所以 FSDP 只能取 64（192%64=0），不能取 128（192%128≠0，直接 `IndivisibleError`）。
-> `shard_exp_on_fsdp` **单独开会静默失效** —— calibration 不是 `fixed,<lo>,<hi>` 时
-> `weight_gather_axes` 恒为空，不报错也不变快。
+> [!important] 2026-08-15：FP8 换 tile 入口后 674 → **1,014.8**，快 **49.9%**
+> | 配方 | step | per-chip | MFU<sub>4614</sub> | tok/s/chip | 峰值 HBM |
+> |---|---:|---:|---:|---:|---:|
+> | 旧：`use_tokamax_gmm` + `tkcfg.py` 注入 | 11.761 s | 677.0 | 14.67% | 4,876 | 92.42 G |
+> | **新：默认 megablox + 18 个 tile 配置参数** | **7.847 s** | **1,014.8** | **21.99%** | **7,308** | 91.40 G |
+>
+> **loss 轨迹逐位相同**（12.594 / 12.571 对 12.594 / 12.572），峰值 HBM 还低 1 G。
+>
+> **这里跟 BF16 那条不一样，值得单独说清楚：**
+> FP8 这条路上 `tkcfg.py` **是真的生效的** —— 加计数器实测被调用，
+> 而且打印出 tokamax 的默认启发式是 `128,128,128`，印证了「不注入会回退到 128³」。
+> 所以旧的 674 不是「没调 tile」，是**调了，但那条 kernel 路径本身就慢 50%**。
+>
+> ⚠️ **FP8 不带任何 tile 参数会直接崩**，不是变慢：
+> `AssertionError: v=1536 bv=1024 s=1536` —— 默认 `mlp_dim` tile 是 1024，除不尽 1536。
+> （BF16 走 `jax.lax.ragged_dot`，那条路会 `min()` 裁剪所以不崩；
+> FP8 走 `mblx.gmm`，直接断言。**同一个默认值，两条路一个崩一个只是慢。**）
 
 ### ⚡ 64 芯片 BF16 → **662**（2026-08-15 起的推荐配方）
 
@@ -522,7 +535,7 @@ steps=8                          # 取 step 4–7 稳态
 | 完整 loss 曲线 | 未记。建议补一条 30 步以上的 |
 | HF 权重 → Orbax 转换 | 未做。只跑吞吐可以不碰；要 SFT 必须做 |
 | BF16 调参空间 | **2026-08-15 被顶穿**：换 tile 入口后到 662（`pdbs=13` 时 666.6），超出原定 600–630 区间。tile / batch 两条线已再次见底 |
-| FP8 调参空间 | 已见底。2026-08-05 扫了 tile / XLA flag / SparseCore / batch 共 8 格，**无一正收益**；674 靠的是频率不是调参 |
+| FP8 调参空间 | **2026-08-15 被顶穿**：换 tile 入口后 674 → **1,014.8（+50%）**。此前「已见底」的结论成立于 tokamax 注入那条路，换条路就不成立了。batch 仍卡在 7（AOT 实测 8 要 98.05 G） |
 | 256 芯片 + `dvfs=7` | 未复测。64 芯片上 +8.6%，预期等幅但没验 |
 | 容量 | tpu7x 抢手，全球仅 4 个 zone 有机型 |
 
@@ -875,7 +888,9 @@ fp32 路由、MTP 全是满配），只砍层数。
 | 256 chip | 无 QAG，`DP2×FSDP256` pdbs 16 | 29.46 s | 618 | 13.39% | 4,449 | 92.80 G |
 | 64 chip | 无 QAG，`DP1×FSDP128` pdbs 10 | 19.15 s | 594 | 12.87% | 4,281 | 86.20 G |
 | 64 chip | **+QAG**，`DP2×FSDP64` pdbs 7 | 12.76 s | 624 | 13.53% | 4,495 | 92.42 G |
-| **64 chip** | **+QAG +dvfs 7** | **11.81 s** | **674** | **14.61%** | **4,854** | 92.42 G |
+| **64 chip** | **+QAG +dvfs 7**（tokamax 注入） | **11.81 s** | 674 | 14.61% | 4,854 | 92.42 G |
+| 64 chip | 同上，2026-08-15 复现 | 11.76 s | 677.0 | 14.67% | 4,876 | 92.42 G |
+| **64 chip** 🏆 | **+QAG +dvfs 7 + 18 个 tile 配置参数** | **7.85 s** | **1,014.8** | **21.99%** | **7,308** | **91.40 G** |
 
 > **FP8 的 MFU 分母是 4614，不是 BF16 的 2307** —— 别拿它跟 BF16 那几行直接比 MFU 大小，
 > 要比就比 **tok/s/chip**。DSV3 官方同口径是 743.5 / 16.1%。
@@ -934,7 +949,7 @@ fp32 路由、MTP 全是满配），只砍层数。
 | MoE tile 参数（18 个） | **全设 (512,2048,1536)** —— 2026-08-15 改，比注入路径快 5.1% | 全设 (512,1024,1024) |
 | XLA flag | 16 个 | 25 个 |
 | SparseCore 卸载组收益 | **±0** | **+4.07 pp** |
-| **最高水位** | **674**（FP8+QAG+dvfs）／ **666.6**（BF16，18 个 tile 参数 + pdbs 13） | 161.0（已收敛，MFU 35.07%） |
+| **最高水位** | **1,014.8**（FP8+QAG+dvfs+18 个 tile 参数）／ **666.6**（BF16 同左） | 161.0（已收敛，MFU 35.07%） |
 
 > **同一个开关在两个平台上可以反号。** `sa_use_fused_bwd_kernel`、SparseCore 卸载组、
 > `use_tokamax_gmm` 三处都是。**别把一个平台的调优结论直接搬到另一个。**
