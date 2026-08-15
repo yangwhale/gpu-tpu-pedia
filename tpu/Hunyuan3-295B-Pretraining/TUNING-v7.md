@@ -1000,20 +1000,32 @@ loss 是归约过的标量，能掩盖差异。**正确的度量是在 logits �
    `maxtext.*` 和 `src.maxtext.*` 两条路径导入成两个模块对象**，模型用的是前者，
    两个都要打，否则补丁静默不生效（本轮在这上面浪费了一轮）。
 
-**结果（BF16，2 层，step 0，词表 120,832，8 个 token）**：
+**结果**（词表 120,832，8 个 token，对照尺度 H_ref ≈ 0.4992 nats）：
 
-| 指标 | 值 |
-|---|---|
-| KL(native ‖ tokamax) | **0.000e+00**（8 个 token 逐个为 0） |
-| max\|Δ log p\| | **0.000e+00** |
-| top-1 预测一致 | ✅ |
-| 两份 logits 的 md5 | **相同**（pod 侧校验，非拷贝串号） |
+| 组合 | QAG 是否生效 | KL(native ‖ tokamax) | max\|Δ log p\| | top-1 一致 |
+|---|---|---|---|---|
+| BF16 / 2 层 | ❌ 未生效 | **0.000e+00** | 0.000 | 8/8（md5 相同） |
+| BF16 / 8 层 | ❌ 未生效 | **0.000e+00** | 0.000 | 8/8（md5 相同） |
+| **FP8 / 8 层** | ✅ **生效** | **8.2e-4 ~ 1.4e-3** | 0.21 ~ 0.26 | 7~8/8 |
 
-对照尺度：该分布相对均匀分布的 KL = 0.4992 nats。
-**若 native 真只算 1/64 的专家，KL 应在 1e-1 ~ 1e1 量级。实测精确为 0。**
+**⚠️ 关键限定：BF16 那两组根本没测到争议点。**
+`weight_gather` 的开关是 `explicitly_weight_ag()`（`moe.py:1568`）——
+要求 `shard_exp_on_fsdp=True` **且**量化规则的权重校准以 `fixed` 开头。
+BF16 跑没开量化，`weight_gather=False`，于是 `megablox/ops.py:191` 那段
+`if use_tokamax_backend:` 里的 all-gather **两条分支都被跳过**，
+两边喂给 kernel 的 rhs 完全一样。**KL=0 只证明了「输入相同时两个 kernel 等价」，
+没证明「192 vs 3 不是 bug」。** 真正的判据是 FP8 那一行。
 
-两次是独立进程、相隔 3.5 分钟，`use_tokamax_gmm` 一 False 一 True，
-速度差 13×（75.4 vs 5.8 TFLOP/s/device）—— **kernel 确实换了，输出逐位相同**。
+**FP8 的结论**：KL ≈ 1e-3 nats，是 H_ref 的 **0.2%**。
+
+- **不是算少了。** 若 native 真只算 1/64 的专家，KL 应在 `1e-1 ~ 1e1`，
+  实测比它低 **2 ~ 4 个数量级**。
+- **也不是完全等价。** 与 BF16 的逐位相同形成对比 —— FP8 下两条路确实有可测差异，
+  `max|Δ log p|` 达 0.2 以上，8 个 token 里有 1 个 top-1 翻转。
+  这是 FP8 舍入路径不同的正常量级，不是结构性错误。
+
+两次是独立进程、`use_tokamax_gmm` 一 False 一 True，速度差 13×
+（75.4 vs 5.8 TFLOP/s/device）—— kernel 确实换了。
 
 > **失败的尝试也记一笔（别再走）**：
 > ① 想用「每层张量位指纹」对拍 —— MoE 的 gmm 走 `shard_map`，
