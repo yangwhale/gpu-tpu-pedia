@@ -38,7 +38,64 @@ INVALID_ARGUMENT: Error: unexpected worker hostname ... TPU_WORKER_HOSTNAMES
 
 # 生产级流程
 
-**全程零 TPU。一次探针约 2 分钟。**
+**全程零 TPU。** 2026-08-15 在 cc-tw（`n4-highmem-80`，docker 限 32 核）
+按本文步骤从头跑通一遍，实测：
+
+| 步骤 | 耗时 | 说明 |
+|---|---:|---|
+| Step 0 `prep.sh` | **11 s** | clone + 8 项自检 + 打包上传 |
+| Step 2 一次 batch 探针 | **136 s** | 其中编译本体 128.8 s |
+| Step 3 存产物并上传 | **148 s** | 产物 396 MB |
+| **合计** | **≈ 5 分钟** | |
+
+> 这台 cc-tw 就是下方选机型表里的 **N4** 那一列。本次 128.8 s 与表里
+> N4 32 核的 127.3 s 差 **1.2%**，在 2% 噪声底之内 —— **交叉验证通过**。
+> 同配置在 GKE `cpu-np` 节点上是 134.4 s（+4.3%），在 C4 上是 108.2 s（−16%）。
+
+## Step −1 · 版本对齐（**最容易被忽略、代价最大的一步**）
+
+编译产物里**刻着编译器的源码版本号**。我从 395 MB 的产物里 grep 出来的原文：
+
+```
+googlefile:/google_src/files/948136882/depot/g3      ← libtpu 的 changelist
+TPU7x                                                 ← 目标设备型号
+```
+
+所以它绑死三样东西，**任意一样对不上，缓存就是废的**：
+
+| 绑什么 | 怎么看 |
+|---|---|
+| **编译器版本**（libtpu / jaxlib） | 产物里那个 changelist |
+| **目标设备型号** | 产物里的 `TPU7x` |
+| **输入输出的 tree 结构** | ⚠️ 这个**没存在产物里** —— `load_compiled` 用当前代码 `jax.eval_shape` 现推（`maxtext_utils.py:239`）。**改了模型形状，加载端和产物就对不上。** |
+
+### 唯一可靠的做法：AOT 与训练用同一个镜像
+
+版本不是靠"记下来再装一遍"对齐的，是靠**用同一个镜像**对齐的。
+本文全部实测的那一套：
+
+| | |
+|---|---|
+| 镜像 | `chrisya-maxtext-latest:runner` |
+| `jax` / `jaxlib` | **0.11.1.dev20260726** |
+| `libtpu`（pip 包） | **0.0.44** |
+| libtpu 构建标签 | `libtpu_lts_20260715_b_RC00`，changelist **948136882** |
+| `libtpu.so` | 685,151,296 字节 |
+
+查版本：
+
+```bash
+docker run --rm $IMAGE python3 -c "import jax,jaxlib;print(jax.__version__, jaxlib.__version__)"
+docker run --rm $IMAGE pip show libtpu | grep -i version
+# 真机日志里也会打：Build label / from changelist / Jax Version
+```
+
+> **不用镜像、裸装的话**，至少要把 `jax`、`jaxlib`、`libtpu` 三个版本钉到与训练侧
+> 完全一致（`pip install jax==<v> jaxlib==<v> libtpu==<v>`）。
+> **这条路本文没有实测过** —— 全部数据都来自同镜像路径。
+>
+> ⚠️ 顺带一提：**跨版本加载会怎样，我也没有直接测过。**
+> 「版本绑死」这个结论来自产物里刻着的 changelist，不是来自一次失败的加载实验。
 
 ## Step 0 · 准备（一次性）
 
