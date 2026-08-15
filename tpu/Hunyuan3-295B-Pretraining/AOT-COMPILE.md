@@ -334,17 +334,25 @@ p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1
 [tkcfg] 被调用 0 次       ← 实际上一次都没走到
 ```
 
-**原因**：`tkcfg.py` 打的是 `PallasMosaicTpuRaggedDot._get_heuristics_config`，
+**原因不是补丁写错了，是它打在了另一条 kernel 路径上。**
+`tkcfg.py` 改的是 `PallasMosaicTpuRaggedDot._get_heuristics_config`，
 而 `moe.py:1500` 只有 **`use_tokamax_gmm=True`** 才走那条路 ——
-**这个开关在 v7 上会死锁，生产一直是关着的**（TUNING-v7 §6.7）。
+**这个开关在 v7 上会死锁，生产一直关着**（TUNING-v7 §6.7）。
+所以补丁本身没坏，只是对生产实际走的那条路无效。
 
-生产实际走 `jax.lax.ragged_dot`，tile 由 **18 个配置参数**决定（`moe.py:1852+`）：
+生产走的是默认 megablox / `jax.lax.ragged_dot`，它的 tile 由
+**18 个配置参数**决定（`moe.py:1852+`）：
 
 ```
 {wi,wo}_tile_{fwd,dlhs,drhs}_{batch_seq,embed_dim,mlp_dim}
 ```
 
-正是 `run.sh` 的 **v5p 分支在传、v7 分支没传**的那一组。**`aot.sh` 现已默认带上。**
+正是 `run.sh` 的 **v5p 分支一直在传、v7 分支从来没传**的那一组。
+
+准确地说，v7 上有**两条**都能拿到 tile 收益的路，而 `run.sh` 一条都没走：
+没开 `use_tokamax_gmm`（怕死锁），也没传这 18 个配置参数 —— 结果跑在默认 tile 上。
+**`aot.sh` 与 `run.sh` 现已都默认带上**，完整的调 tile 方法见
+[TUNING-v7 §3.4.6](TUNING-v7.md)。
 
 ## 换成配置参数之后：662 → 666
 

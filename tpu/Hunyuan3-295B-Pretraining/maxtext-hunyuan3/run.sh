@@ -82,11 +82,14 @@ v7)
   --xla_tpu_scheduler_percent_shared_memory_limit=150
   --xla_tpu_enable_layer_scheduler_for_dependent_collectives=true
   --xla_tpu_enable_multi_compute_overlap_in_layer_scheduler=false'
-  # MoE tile —— 2026-08-15 补上，此前 v7 分支漏了这一组，白丢 26% 性能。
-  # QUICKSTART 早期教的 tkcfg.py monkeypatch **已经是空操作**：它打的
+  # MoE tile —— 2026-08-15 补上。此前 v7 上两条能拿 tile 收益的路一条都没走：
+  # 没开 use_tokamax_gmm（怕 §6.7 的死锁），也没传下面这 18 个配置参数，
+  # 于是跑在默认 tile 上白丢 26%。
+  # QUICKSTART 早期教的 tkcfg.py monkeypatch 对这条路**无效**：它打的
   # PallasMosaicTpuRaggedDot 只在 use_tokamax_gmm=True 时才被调到，而那个开关
-  # 在 v7 上死锁、一直关着。加计数器实测「被调用 0 次」，但它照常打印
-  # "[tkcfg] patched"，所以看起来是生效的。正确入口就是下面这 18 个配置参数。
+  # 在 v7 上死锁、一直关着，生产走的是默认 megablox。加计数器实测「被调用 0 次」，
+  # 但它照常打印 "[tkcfg] patched"，所以看起来是生效的。
+  # 默认 megablox 路径吃的就是下面这 18 个配置参数（见 TUNING-v7 §3.4.2 路径对照表）。
   # tile_n 必须 = base_moe_mlp_dim(1536)：1024 除不尽会断言失败，512 能整除但更慢。
   # 实测 64 芯片：不带 525.4 TFLOP/s/chip → 带上 662.2（+26%）。
   TILE=""; for m in wi wo; do for p in fwd dlhs drhs; do

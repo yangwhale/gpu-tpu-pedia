@@ -62,9 +62,10 @@ FLAGS='--xla_tpu_dvfs_p_state=7 --xla_tpu_scoped_vmem_limit_kib=65472
 FLAGS=$(echo $FLAGS)
 
 # MoE tile —— 生产必带，性能差 26%。
-# ⚠️ 不要用 QUICKSTART 早期写的 tkcfg.py monkeypatch，那条路已经是空操作
-#    （它打的类只在 use_tokamax_gmm=True 时才被调用，而那个开关在 v7 上死锁）。
-#    正确入口就是下面这 18 个配置参数。TILE_MLP 必须 = base_moe_mlp_dim。
+# ⚠️ 不要用 QUICKSTART 早期写的 tkcfg.py monkeypatch —— 它打在 tokamax 那条
+#    kernel 路径上，而 use_tokamax_gmm 在 v7 上会死锁、生产走的是默认 megablox。
+#    补丁本身没坏，只是对生产那条路无效（实测「被调用 0 次」但照常打印 patched）。
+#    默认路径的正确入口就是下面这 18 个配置参数。TILE_MLP 必须 = base_moe_mlp_dim。
 TILE=""; for m in wi wo; do for p in fwd dlhs drhs; do
   TILE="$TILE ${m}_tile_${p}_batch_seq=${TILE_BS:-512}"
   TILE="$TILE ${m}_tile_${p}_embed_dim=${TILE_EMB:-2048}"
