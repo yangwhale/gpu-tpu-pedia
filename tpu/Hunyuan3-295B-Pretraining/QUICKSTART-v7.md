@@ -15,24 +15,29 @@
 
 ## 一、性能是怎么一路上去的
 
-> [!warning] 2026-08-15 更正：§3.4 的 `tkcfg.py` monkeypatch 已经是空操作
-> 它打的 `PallasMosaicTpuRaggedDot._get_heuristics_config` 只在
-> `use_tokamax_gmm=True` 时才被调用，而这个开关在 v7 上会死锁、生产一直关着。
-> 加计数器实测：AOT 与真机上都是 **「被调用 0 次」**，但它照常打印 `[tkcfg] patched`。
+> [!important] 2026-08-15 更新：BF16 水位从 630 提到 **662**，配方也换了
+> **推荐路径已从「tokamax + `tkcfg.py` 注入」改为「默认 megablox + 18 个配置参数」。**
 >
-> **正确入口是 18 个配置参数** `{wi,wo}_tile_{fwd,dlhs,drhs}_{batch_seq,embed_dim,mlp_dim}`，
-> 取 `(512, 2048, 1536)`。换过来之后 64 芯片实测：
+> v7 上有两条都能拿到 tile 收益的路。下表第 1 行走的是 tokamax 路径
+> （`use_tokamax_gmm=True` + monkeypatch）。但那个开关在 v7 上有死锁风险
+> （[TUNING-v7 §6.7](TUNING-v7.md)），所以 `run.sh` 一直没开它 ——
+> **同时也没传另一条路要的 18 个配置参数**，结果实际跑在默认 tile 上，白丢 26%。
 >
-> | | per-chip | MFU |
-> |---|---:|---:|
-> | 下表第 3 行（monkeypatch 路径） | 630 | 27.31% |
-> | **18 参数 + `pdbs=12`** | **662.2** | **28.70%** |
-> | **18 参数 + `pdbs=13`** | **666.6** | **28.89%** |
+> 而且这个状态不会自己暴露：`tkcfg.py` 挂上去也没用（它打在没启用的那条路上），
+> 加计数器实测 **「被调用 0 次」，却照常打印 `[tkcfg] patched`**。
 >
-> 多出来的部分应该来自反向两条路径（`dlhs`/`drhs`）也被 tile 了。
-> `pdbs=13` 是 AOT 扫出来的上限，14 差 1.79 GB 装不下。
-> 详见 [AOT-COMPILE](AOT-COMPILE.md)。**下表尚未按新数字重排。**
-
+> 换成 18 个配置参数 `{wi,wo}_tile_{fwd,dlhs,drhs}_{batch_seq,embed_dim,mlp_dim}`
+> = `(512, 2048, 1536)`，**64 芯片实测**：
+>
+> | 配方 | per-chip | MFU | 备注 |
+> |---|---:|---:|---|
+> | 下表第 3 行（tokamax + 注入） | 630 | 27.31% | 需要开 `use_tokamax_gmm` |
+> | **18 参数 + `pdbs=12`** | **662.3** | **28.71%** | **不需要开它，无死锁风险** |
+> | **18 参数 + `pdbs=13`** | **666.6** | **28.89%** | `pdbs` 上限，14 差 1.79 G 装不下 |
+>
+> 快出来的 5.1% 猜测来自反向两条路径（`dlhs`/`drhs`）也被 tile 了 —— **未验证**。
+> tile 值本身两条路径最优点相同，扫描与调法见 [TUNING-v7 §3.4.5/3.4.6](TUNING-v7.md)。
+> **下表 0-4 行是历史线，保留原样不改；新水位见上表。**
 
 **全部在 64 芯片（16 节点 / 128 device）上实测，一条线走到底 —— 每一行只加一件事。**
 
@@ -111,15 +116,31 @@ TK_TM=512 TK_TK=2048 TK_TN=1536
 > `shard_exp_on_fsdp` **单独开会静默失效** —— calibration 不是 `fixed,<lo>,<hi>` 时
 > `weight_gather_axes` 恒为空，不报错也不变快。
 
-### ⚡ 64 芯片 BF16 → **630**
+### ⚡ 64 芯片 BF16 → **662**（2026-08-15 起的推荐配方）
 
 ```
 ici_fsdp_parallelism=-1          # 自动吃满 128 路，等价 DP=1
 ici_tensor_parallelism=1
-per_device_batch_size=12         # 91.94 G，逼近上限；14 会 OOM
-megablox=True use_tokamax_gmm=True
-TK_TM=512 TK_TK=2048 TK_TN=1536
---xla_tpu_dvfs_p_state=7         # 去掉这行则为 580
+per_device_batch_size=12         # 91.94 G；13 也能跑（92.57 G，+0.66%），14 OOM
+megablox=True                    # ⚠️ 不要开 use_tokamax_gmm（§6.7 死锁）
+--xla_tpu_dvfs_p_state=7         # 去掉这行约 -8.6%
+# 18 个 tile 参数，{wi,wo} × {fwd,dlhs,drhs} × (512, 2048, 1536)
+wi_tile_fwd_batch_seq=512  wi_tile_fwd_embed_dim=2048  wi_tile_fwd_mlp_dim=1536
+wi_tile_dlhs_batch_seq=512 wi_tile_dlhs_embed_dim=2048 wi_tile_dlhs_mlp_dim=1536
+wi_tile_drhs_batch_seq=512 wi_tile_drhs_embed_dim=2048 wi_tile_drhs_mlp_dim=1536
+wo_tile_fwd_batch_seq=512  wo_tile_fwd_embed_dim=2048  wo_tile_fwd_mlp_dim=1536
+wo_tile_dlhs_batch_seq=512 wo_tile_dlhs_embed_dim=2048 wo_tile_dlhs_mlp_dim=1536
+wo_tile_drhs_batch_seq=512 wo_tile_drhs_embed_dim=2048 wo_tile_drhs_mlp_dim=1536
+```
+
+> `maxtext-hunyuan3/run.sh` 的 v7 分支已默认带上这一整套，直接跑即可。
+> **漏掉那 18 行会掉到 525（−26%），而且不报错。**
+
+### ⚡ 旧配方（tokamax 注入路径，630）—— 保留备查，不再推荐
+
+```
+megablox=True use_tokamax_gmm=True     # ⚠️ 有死锁风险
+TK_TM=512 TK_TK=2048 TK_TN=1536        # 靠 tkcfg.py monkeypatch 注入
 ```
 
 ### 256 芯片 BF16 → **599**
@@ -500,7 +521,7 @@ steps=8                          # 取 step 4–7 稳态
 | 数据集 | `synthetic`。**loss 下降只证明「能算且不发散」，不是收敛证据** |
 | 完整 loss 曲线 | 未记。建议补一条 30 步以上的 |
 | HF 权重 → Orbax 转换 | 未做。只跑吞吐可以不碰；要 SFT 必须做 |
-| BF16 调参空间 | 已见底。600–630 目标区间已达上沿（630），再往上要改模型或写代码 |
+| BF16 调参空间 | **2026-08-15 被顶穿**：换 tile 入口后到 662（`pdbs=13` 时 666.6），超出原定 600–630 区间。tile / batch 两条线已再次见底 |
 | FP8 调参空间 | 已见底。2026-08-05 扫了 tile / XLA flag / SparseCore / batch 共 8 格，**无一正收益**；674 靠的是频率不是调参 |
 | 256 芯片 + `dvfs=7` | 未复测。64 芯片上 +8.6%，预期等幅但没验 |
 | 容量 | tpu7x 抢手，全球仅 4 个 zone 有机型 |
@@ -841,6 +862,8 @@ fp32 路由、MTP 全是满配），只砍层数。
 | tile + pdbs 10 | 20.28 s | 561 | 24.32% | 4,040 | **84.06 G** | 564（HBM 84.06 G） |
 | **tile + pdbs 12** | **23.54 s** | **580** | **25.14%** | **4,176** | **91.94 G** | **580**（HBM 91.94 G） |
 | tile + pdbs 12 + **dvfs 7** | **21.67 s** | **630** | **27.31%** | **4,536** | 91.94 G | 未复测 |
+| **18 个配置参数 + pdbs 12 + dvfs 7** 🏆 | **20.61 s** | **662.3** | **28.71%** | **4,770** | 91.94 G | 未测 |
+| 18 个配置参数 + pdbs 13 + dvfs 7 | 22.19 s | **666.6** | **28.89%** | 4,799 | 92.57 G | 未测 |
 
 > 两个规模在同配方下逐点吻合，pdbs 10 和 12 两处峰值 HBM 一字节不差（84.06 / 91.94 G）。
 > 这是「DP 层不改变单步计算图」最硬的证据。
@@ -905,13 +928,13 @@ fp32 路由、MTP 全是满配），只砍层数。
 | `max_target_length` | **4096** | 8192 |
 | `sa_use_fused_bwd_kernel` | **True** | **False** |
 | `use_tokamax_splash` | **True** | 不设 |
-| `use_tokamax_gmm` + tile 注入 | **True，+17.4%** | 负收益，不用 |
+| `use_tokamax_gmm` + tile 注入 | ~~True，+17.4%~~ **已弃用**，改走配置参数 | 负收益，不用 |
 | `xla_tpu_dvfs_p_state=7` | **True，+8.6%** | 未测（v5p 上默认档未知） |
 | `opt_type` / `mu_dtype` / `grad_dtype` | **adamw / bf16 / bf16** | 默认 / fp32 / fp32 |
-| MoE tile 参数（18 个） | 不设（改用 tokamax tile 注入） | 全设 |
+| MoE tile 参数（18 个） | **全设 (512,2048,1536)** —— 2026-08-15 改，比注入路径快 5.1% | 全设 (512,1024,1024) |
 | XLA flag | 16 个 | 25 个 |
 | SparseCore 卸载组收益 | **±0** | **+4.07 pp** |
-| **最高水位** | **674**（FP8+QAG+dvfs）／ **630**（BF16） | 161.0（已收敛，MFU 35.07%） |
+| **最高水位** | **674**（FP8+QAG+dvfs）／ **666.6**（BF16，18 个 tile 参数 + pdbs 13） | 161.0（已收敛，MFU 35.07%） |
 
 > **同一个开关在两个平台上可以反号。** `sa_use_fused_bwd_kernel`、SparseCore 卸载组、
 > `use_tokamax_gmm` 三处都是。**别把一个平台的调优结论直接搬到另一个。**
