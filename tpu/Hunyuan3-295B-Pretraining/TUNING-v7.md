@@ -971,6 +971,94 @@ else:                jax.lax.ragged_dot(...)
 **batch 仍然卡在 7。** AOT 探针（`pdbs` 7/8/9）：
 `temp` 52.46 G ✅ / 98.05 G ❌ / 101.89 G ❌ —— 7 到 8 之间是个陡坎，没有余地。
 
+#### 3.4.8 profile 对拍：那 49.9% 到底省在哪
+
+> 2026-08-15。两轮 64 芯片 FP8+QAG，**除了 tile 入口之外逐字相同**，各跑 12 步、
+> `profiler=xplane` 抓 step 5-7。本地 `xprof server` 打开对比。
+> 原始命令：`profiler=xplane skip_first_n_steps_for_profiler=5 profiler_steps=3 profile_cleanly=True`。
+
+##### 一句话
+
+**MoE 的分组矩阵乘从 Pallas custom-call 变成了 XLA 原生 fusion，
+省下的时间几乎全部来自这一项。attention 分毫未动。**
+
+##### 总览：step 11,793.8 ms → 7,857.0 ms
+
+| | 旧（tokamax backend） | 新（native megablox） |
+|---|---:|---:|
+| Average Step Time | 11,793.8 ms | **7,857.0 ms** |
+| step 标准差 | 30.1 ms | **4.7 ms**（更稳） |
+| TensorCore 空闲 | 11.09 ms | 12.00 ms |
+| SparseCore 空闲 | 5,234 ms | **3,341 ms** |
+| 峰值 HBM | 93.28 GiB | 91.61 GiB |
+
+##### 按 HLO 类别拆（XProf「HLO Op Stats」）
+
+| HLO op category | 旧 self time (us) | 新 self time (us) | 变化 |
+|---|---:|---:|---|
+| **custom-call** | **156,788,717** | **71,276,920** | **−54.5%** |
+| loop fusion | 52,318,873 | 58,596,147 | +12.0% |
+| convolution fusion（= attention） | 36,149,753 | 36,363,685 | **+0.6%** |
+| async-done | 19,734,028 | 11,644,702 | −41.0% |
+| all-reduce | 5,046,846 | 1,033,655 | −79.5% |
+| non-fusion elementwise | 3,742,188 | 530,605 | −85.8% |
+| sort | 4,199,471 | 4,169,228 | −0.7% |
+| 合计 | ≈282.3 M | ≈187.6 M | **−33.5%** |
+
+**合计的 −33.5% 与 step 时间的 −33.4% 对得上**，说明这张表把时间收全了。
+省下的 94.7 M us 里，**85.5 M（90%）来自 custom-call 一项**。
+
+##### 看图最直观
+
+左：旧配方，custom-call 占 **55.4%**，算子榜上是
+`tgmm_megablox.12` / `gmm_megablox_transpose_rhs` 这些 Pallas kernel。
+右：新配方，custom-call 掉到 **37.9%**、loop fusion 从 18.5% 涨到 **31.1%**，
+算子榜上**一个 megablox 都没有**，全是 `select_add_fusion` / `clamp_convert_fusion`
+这类原生 fusion。
+
+| 旧（tokamax + 注入） | 新（18 个配置参数） |
+|---|---|
+| ![旧](assets/fp8-tile-profile/old-HLO_Op_Stats.png) | ![新](assets/fp8-tile-profile/new-HLO_Op_Stats.png) |
+
+剩下的 custom-call 是什么？**全是 splash attention**：
+`splash_mha_dkv_segmented_no_residuals.5` 两边都是 1,234 ms/步、
+`splash_mha_fwd_segmented_residuals` 两边都是 772 ms/步 —— **一毫秒不差。**
+这既证明 attention 没被动过，也证明两轮的环境是可比的。
+
+##### 机制：Pallas custom-call 是 XLA 的黑盒
+
+custom-call 对 XLA 编译器是不透明的：**不能跨边界融合，操作数必须落地**，
+FP8 的量化/反量化也折不进去。换成原生路径之后：
+
+- **量化被融进算子** —— 新 profile 里能直接看到
+  `%fusion.1644.kernel_args_2_.qvalue = f8e4m3fn[229376,1536]`
+- **`all-reduce` 时间掉了 79.5%**，`async-done` 掉了 41% ——
+  调度器有了更多可重叠的边界
+- **`non-fusion elementwise` 掉了 85.8%** —— 原本卡在 kernel 边界上、
+  没法融进去的那些逐元素操作，现在被吃掉了
+
+> ⚠️ **这段机制解释是从 profile 反推的，不是从 XLA 源码验证的。**
+> 硬事实是三条：custom-call 少了 54.5%、loop fusion 多了 12%、attention 一毫秒没变。
+> 「为什么原生 fusion 更快」的具体归因（融合 vs 调度 vs 布局）**还没拆开验证**。
+
+##### 怎么确认它不是「跑快了但算错了」
+
+这是必须回答的问题 —— 变快最常见的原因是少算了东西。
+
+| 检查 | 结果 |
+|---|---|
+| **loss 逐步对拍**（同 batch、同数据、只差 tile 入口） | 前两步完全相同，之后每步差 **≤0.001**（打印精度末位） |
+| `TFLOP/s × step` | 旧 3981.7 / 新 3981.6，差 **0.00%** |
+| attention kernel 耗时 | 两边 1,234 / 772 / 772 ms，**逐毫秒相同** |
+| 参数量 | 两边都是 **298.786 B** |
+| 峰值 HBM | 93.28 vs 91.61 GiB，同量级 |
+
+> **不要把这叫「loss 逐位相同」** —— 它不是。0.001 的差属于不同 kernel
+> 求和顺序不同导致的重新结合律误差，与本文附录对该类声称的标准一致。
+> 而且日志只打三位小数，**能分辨的相对差只到 8e-5，再细看不见**。
+>
+> **还缺一步**：10 步看不出漂移，要真正定论应当跑 30 步以上对拍曲线。**未做。**
+
 ### 3.5 第四步 +9.0%：把 batch 推到 12
 
 **改动**：`per_device_batch_size` 8 → 12。
