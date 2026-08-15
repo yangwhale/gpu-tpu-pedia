@@ -257,7 +257,7 @@ if config.compiled_trainstep_file != "":
 # 拿 AOT 当搜索器
 
 既然显存预测跟真机逐位一致，它就可以拿来**在 CPU 上免费扫配置空间**。
-24 个探针（每个约 2 分钟，一台机器 3 并发），只问一个问题：**装不装得下**。
+29 个探针（每个约 2 分钟，一台机器 3 并发），只问一个问题：**装不装得下**。
 原始数据：[`data/aot-64chip-config-probe-20260815.csv`](maxtext-hunyuan3/data/aot-64chip-config-probe-20260815.csv)。
 
 ## batch 的天花板是 13，不是 12
@@ -314,6 +314,11 @@ p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1
   `CompileTimeScopedVmemOom`（VMEM 爆，不是 HBM）；只提 vmem 不开调度器 HBM 照样 OOM
 - flag 之间还有硬依赖（漏 `sparse_core_collective_aggregator` 会让
   latency hiding scheduler 直接报错）。**精简 flag 等于体检了另一个配置。**
+
+> 这五档 2026-08-15 在另一台机器上**独立重跑过一遍，数字逐位相同**
+> （95.01 / 94.81 / 95.01 / VMEM 爆 / 80.48）。
+> 起因是原始日志随消融用的 C4 机器一起删了，而消融 CSV 里没有 `temp` 这一列 ——
+> **结论一度只剩文档里这张表、没有可查的证据。** 与其加免责声明，不如重跑一遍补回来。
 
 ---
 
@@ -525,7 +530,7 @@ p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1
 | 文件 | 内容 |
 |---|---|
 | [`data/aot-ablation-20260815.csv`](maxtext-hunyuan3/data/aot-ablation-20260815.csv) | CPU / 层数 / 拓扑消融，**49 次**编译（37 成 12 败） |
-| [`data/aot-64chip-config-probe-20260815.csv`](maxtext-hunyuan3/data/aot-64chip-config-probe-20260815.csv) | 64 芯片配置探针，**24 次**（含 3 次带 tile 复扫） |
+| [`data/aot-64chip-config-probe-20260815.csv`](maxtext-hunyuan3/data/aot-64chip-config-probe-20260815.csv) | 64 芯片配置探针，**29 次**（含 3 次带 tile 复扫、5 次 flag 子集复现） |
 
 **消融 49 次编译（37 成 12 败），12 次失败每一条都有解释，没有「不明原因」：**
 
