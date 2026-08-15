@@ -257,7 +257,7 @@ if config.compiled_trainstep_file != "":
 # 拿 AOT 当搜索器
 
 既然显存预测跟真机逐位一致，它就可以拿来**在 CPU 上免费扫配置空间**。
-21 个探针（每个约 2 分钟，一台机器 3 并发），只问一个问题：**装不装得下**。
+24 个探针（每个约 2 分钟，一台机器 3 并发），只问一个问题：**装不装得下**。
 原始数据：[`data/aot-64chip-config-probe-20260815.csv`](maxtext-hunyuan3/data/aot-64chip-config-probe-20260815.csv)。
 
 ## batch 的天花板是 13，不是 12
@@ -429,13 +429,17 @@ p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1
 
 **目标拓扑也基本不影响**：
 
-| 目标 | 芯片 | wall | 结果 |
-|---|---:|---:|---|
-| `tpu7x-32` | 16 | 53.5 s | ❌ **OOM**（temp 185.50G） |
-| `tpu7x-128` | 64 | 108.2 s | ✅ |
-| `tpu7x-256` | 128 | **139.6 s** ⚠️ | ✅ |
-| `tpu7x-512` | 256 | 113.0 s | ✅ |
-| `tpu7x-1024` | 512 | 118.2 s | ✅ |
+| 目标 | 芯片 | wall | n | 结果 |
+|---|---:|---:|---:|---|
+| `tpu7x-32` | 16 | 53.5 s | 1 | ❌ **OOM**（temp 185.50G） |
+| `tpu7x-128` | 64 | **108.2 s** | 5 | ✅ |
+| `tpu7x-256` | 128 | **139.6 s** ⚠️ | 3 | ✅ |
+| `tpu7x-512` | 256 | 113.0 s | 1 | ✅ |
+| `tpu7x-1024` | 512 | 118.2 s | 1 | ✅ |
+
+> **`n` 列别忽略**：加粗那两行是多次均值，其余是单次。
+> 单次值本身有约 1% 噪声（见上方重复性），而 512 / 1024 那两档只跑过一次 ——
+> **它们「比 4x4x8 快」这个结论是稳的（差 20% 远超噪声），但具体数字别精确引用。**
 
 64 → 512 芯片规模翻 8 倍，编译时间只在 107–140 秒之间浮动。
 
@@ -520,22 +524,21 @@ p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1
 
 | 文件 | 内容 |
 |---|---|
-| [`data/aot-ablation-20260815.csv`](maxtext-hunyuan3/data/aot-ablation-20260815.csv) | CPU / 层数 / 拓扑消融，50 次编译（37 成 13 败） |
-| [`data/aot-64chip-config-probe-20260815.csv`](maxtext-hunyuan3/data/aot-64chip-config-probe-20260815.csv) | 64 芯片配置探针，21 次 |
+| [`data/aot-ablation-20260815.csv`](maxtext-hunyuan3/data/aot-ablation-20260815.csv) | CPU / 层数 / 拓扑消融，**49 次**编译（37 成 12 败） |
+| [`data/aot-64chip-config-probe-20260815.csv`](maxtext-hunyuan3/data/aot-64chip-config-probe-20260815.csv) | 64 芯片配置探针，**24 次**（含 3 次带 tile 复扫） |
 
-**消融那 13 次失败每一条都有解释，没有「不明原因」：**
+**消融 49 次编译（37 成 12 败），12 次失败每一条都有解释，没有「不明原因」：**
 
 | 失败项 | 次数 | 原因 |
 |---|---:|---|
 | `tpu7x-32` + 80 层 | 1 | 设计内 OOM（temp 185.50G），16 芯片装不下 80 层 |
-| `scan_layers=False` | 3 | 本仓库 Hy3 移植不支持非 scan 路径（`moe_layers` 属性名不同） |
+| `scan_layers=False` | 3 | 本仓库 Hy3 移植不支持非 scan 路径（`moe_layers` 属性名不同）；其中 1 次是脚本 heredoc 转义损坏 |
 | 去掉全部 XLA flag | 2 | 设计内 OOM（95.01G）—— 这正是要测的结论 |
 | 单独 flag 子集 | 3 | 设计内：vmem 单独→HBM OOM；调度器单独→VMEM OOM；SC 单独→HBM OOM |
 | 传空 `compile_xla_flags` | 2 | **脚本 bug**：转义把它变成字面量 `\"\"`，触发 pydantic 校验错 |
 | 首次 C4 运行 | 1 | **脚本 bug**：打包时漏了 `logs/` 目录 |
-| `scan_layers=False` 变体 | 1 | **脚本 bug**：nested heredoc 转义损坏脚本 |
 
-> 后 3 类是**工具问题不是被测对象的问题**，一并列出来免得后人当成 MaxText 或 XLA 的缺陷。
+> 「脚本 bug」那几条是**工具问题不是被测对象的问题**，一并列出来免得后人当成 MaxText 或 XLA 的缺陷。
 
 ## 待办
 
