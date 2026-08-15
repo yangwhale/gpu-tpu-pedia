@@ -1035,6 +1035,49 @@ BF16 跑没开量化，`weight_gather=False`，于是 `megablox/ops.py:191` 那�
 > XLA 直接报 `Bitcast cannot have different memory spaces of output (5) and operand (0)`。
 > ③ 「逐位对齐」本身也不是好标准：它对实现细节过敏，而 KL 只问「分布是否等价」。
 
+##### 机制：两条路都收齐了权重，区别只在「谁来收」
+
+用 trace 期探针把 `shard_map` 内外的真实形状打出来（`~/tpu-logs/kl-20260815/shpn2-probe.txt`）：
+
+```
+[shard_map 外]  x=(896,4096,4096)  w0=(192,4096,1536)  w1=(192,4096,1536)  wo=(192,1536,4096)
+[进 kernel] lhs=(229376,4096) rhs=(3,4096,1536)   gs=(192,) wga=[('fsdp',0)] tokamax=False
+[进 kernel] lhs=(229376,1536) rhs=(3,1536,4096)   gs=(192,) wga=[('fsdp',0)] tokamax=False
+[进 kernel] lhs=(229376,4096) rhs=(192,4096,1536) gs=(192,) wga=[]           tokamax=False
+[进 kernel] lhs=(229376,1536) rhs=(192,1536,4096) gs=(192,) wga=[]           tokamax=False
+```
+
+**`shard_exp_on_fsdp=True` 切的是专家维**（`types.py` 里那个 Field 的描述原话：
+"Shard the expert dimension of the MLP weights on the FSDP axis"），
+校验 `num_experts % ici_fsdp_parallelism == 0`（192 % 64 = 0）也印证这点 ——
+**每卡 3 个专家**。
+
+那 native 怎么算全 192 个？看 `wga=[('fsdp', 0)]` ——
+**它把 all-gather 委托给了 kernel**。`weight_gather_axes` 就是那张委托书：
+「专家维在 fsdp 轴上，你自己去收」。Pallas kernel 在分块循环里算哪一块收哪一块，
+**完整权重从来没有在 HBM 里整个存在过**。
+
+对照最后两行：`rhs` 已是完整 192、`wga=[]` —— 那是权重已在 `shard_map` 外被
+XLA 收好的情形，kernel 不用再收。
+
+于是两条路的差别是**通信放在哪**：
+
+| | 收在哪 | 收什么 | 代价 / 好处 |
+|---|---|---|---|
+| tokamax | 进 kernel **之前**显式 all-gather（`megablox/ops.py:191`） | **量化后**的权重 | 字节减半（这就是 QAG 的价值），但 `[192,1536,4096]` 要整个落 HBM |
+| native | kernel **内部**分块边收边算 | 未量化的权重块 | 收算流水重叠、完整权重不落 HBM → **快 50%** |
+
+**没有 token 的 all-to-all，因为不需要。** token 留在自己卡上不动，动的是权重。
+代码里那段 `ragged_all_to_all`（`moe.py:1990`）包在 `if get_expert_parallelism_size() > 1`
+里面，而 `shard_exp_on_fsdp` 强制要求 `ici_expert_parallelism = 1`
+（`pyconfig_deprecated.py:1215`）—— **那段是死代码**，HLO 里 all-to-all 计数为 0 与之吻合。
+
+> **最早那个「192 vs 3」的对比本身就是错的。**
+> 探针显示 `w0 = (192, 4096, 1536)`（上投影，`E, embed, mlp`），
+> `wo = (192, 1536, 4096)`（下投影，`E, mlp, embed`）。
+> 我拿 tokamax 的 **wo** 去比 native 的 **w0 分片** —— 两个不是同一个矩阵，
+> 「连维序都不一样」的真正原因在这里，不是什么分片方式不同。
+
 ##### 定案证据二：32 步 loss 逐步对拍
 
 两条路除 `use_tokamax_gmm` 外配置完全相同（FP8 + QAG，`pdbs=7`，
