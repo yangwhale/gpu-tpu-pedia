@@ -340,8 +340,9 @@ p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1
 **这个开关在 v7 上会死锁，生产一直关着**（TUNING-v7 §6.7）。
 所以补丁本身没坏，只是对生产实际走的那条路无效。
 
-生产走的是默认 megablox / `jax.lax.ragged_dot`，它的 tile 由
-**18 个配置参数**决定（`moe.py:1852+`）：
+生产走的是 `elif self.config.megablox` 那条分支，实际调用
+`mblx.gmm(..., use_tokamax_backend=False)`。它的 tile 由
+**18 个配置参数**决定（在 `moe.py:1852+` 组装成 `tiling` 传进去）：
 
 ```
 {wi,wo}_tile_{fwd,dlhs,drhs}_{batch_seq,embed_dim,mlp_dim}

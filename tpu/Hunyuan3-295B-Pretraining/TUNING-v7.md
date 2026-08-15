@@ -936,7 +936,22 @@ _n=[0]  # ... 在 _patched 里 _n[0]+=1，atexit 打印 _n[0]
 
 **loss 逐位相同**（12.594 / 12.571 对 12.594 / 12.572），峰值 HBM 还低 1 G。
 
-**但这里的机制跟 BF16 那条不同，别混为一谈：**
+**四条分支要先分清**（`moe.py:1500-1558`）：
+
+```
+if use_tokamax_gmm:
+    if quantization: mblx.gmm(..., use_tokamax_backend=True)   ← FP8 旧配方
+    else:            tokamax.ragged_dot(...)                   ← BF16 的 tokamax 路
+elif megablox:       mblx.gmm(..., use_tokamax_backend=False)  ← 现在的推荐路径
+else:                jax.lax.ragged_dot(...)
+```
+
+**注意 FP8 新旧两组调的是同一个 `mblx.gmm`，差别只有 `use_tokamax_backend` 这一个布尔。**
+开着它，tiling 由 tokamax 的启发式决定（所以要 monkeypatch，也所以 3.4.2 表里写它
+「不吃 `w{i,o}_tile_*`」）；关掉它，tiling 就是那 18 个配置参数传进去的值。
+**同一个函数、同一组 tile 数值，只翻这一个布尔，差 49.9%。**
+
+**机制跟 BF16 那条不同，别混为一谈：**
 
 - BF16 上 `tkcfg.py` **根本没被调用**（因为没开 `use_tokamax_gmm`），
   所以旧数是「跑在默认 tile 上」。
@@ -949,9 +964,9 @@ _n=[0]  # ... 在 _patched 里 _n[0]+=1，atexit 打印 _n[0]
 
 > ⚠️ **FP8 不带任何 tile 参数会直接崩，不是变慢**：
 > `AssertionError: v=1536 bv=1024 s=1536`（默认 `mlp_dim` tile = 1024，除不尽 1536）。
-> BF16 走 `jax.lax.ragged_dot`，那条路对 tile 做了 `min()` 裁剪所以只是慢；
-> FP8 走 `mblx.gmm`，直接断言失败。**同一个默认值，两条路一个崩一个只是慢** ——
-> 这也解释了为什么这个坑在 BF16 上潜伏了这么久。
+> BF16 同走 `mblx.gmm` 却只是慢、不崩 —— 差别在 FP8 的量化路径对
+> block 尺寸有整除断言，BF16 那条没有。**同一个默认值，一个崩一个只是慢**，
+> 这也解释了为什么这个坑在 BF16 上潜伏了这么久：它从来没报过错。
 
 **batch 仍然卡在 7。** AOT 探针（`pdbs` 7/8/9）：
 `temp` 52.46 G ✅ / 98.05 G ❌ / 101.89 G ❌ —— 7 到 8 之间是个陡坎，没有余地。
