@@ -248,6 +248,44 @@ diff /tmp/a.txt /tmp/r.txt    # 应当无输出
 | **性能** | AOT 只回答「装不装得下 / 编不编得过」，一个吞吐数字都给不了 |
 | **运行期打的补丁** | 它体检的是**配置文件描述的那个程序**。pod 里现场 `exec` 进去的 monkeypatch，AOT 看不见（[实例](#顺藤摸出来的一条tile-该用配置参数不是那个-monkeypatch)） |
 | **带缓存那一路的显存账** | 加载预编译产物时不会打印 `Memory analysis`（压根没编译）。**想要显存分解只能靠 AOT** —— 这反而是又一条该跑它的理由 |
+| **`use_tokamax_gmm=True` 那条路** | **整个 AOT 直接跑不起来**，见下 |
+
+### AOT 体检不了 tokamax 那条 kernel 路径
+
+`use_tokamax_gmm=True` 时 AOT 直接抛：
+
+```
+NotImplementedError: Not supported on cpu.
+```
+
+根因在 `tokamax/_src/ops/op.py:197`：
+
+```python
+for device in infer_devices(ba) or {backend.get_default_device()}:
+    if not self.supported_on(device):
+        raise NotImplementedError(f"Not supported on {device.device_kind}.")
+```
+
+**它检查的是「本地默认设备」，不是「编译目标」。** AOT 时 `JAX_PLATFORMS=cpu`，
+本地是 CPU，于是 `supported_on(CPU)` 为假、直接退出 —— 尽管 mesh 明明指向 `tpu7x`。
+
+对照之下，MaxText 自己那套 megablox **专门处理了这个场景**，`kernels/megablox/ops.py`
+里的注释写得很直白：
+
+> `jax.devices()[0]` **不是编译 TARGET**：train_compile 时本地后端是 CPU
+> （`JAX_PLATFORMS=cpu`），而 mesh 目标是 tpu7x
+
+⇒ **这不是架构限制，是 dispatch 层少考虑了一种场景。** 但结论对使用者是硬的：
+**走 tokamax 就没有 AOT 体检**。好在生产推荐的就是 native megablox（[TUNING-v7 §3.4.5](TUNING-v7.md)），
+不受影响。
+
+> **顺带厘清 Pallas 与 Mosaic 的关系**（排障时容易混）：
+> **Pallas 是 JAX 写 kernel 的 DSL**，本身不产机器码，要靠后端降下去 ——
+> TPU 上是 **Mosaic TPU**，NVIDIA 上是 Mosaic GPU 或 Triton。
+> 所以 `pallas_mosaic_tpu` = 「用 Pallas 写、经 Mosaic 降到 TPU」。
+> tokamax 是多后端库，同一个 `ragged_dot` 有 mosaic-tpu / mosaic-gpu(sm90/sm100) / triton
+> 好几套实现，`implementation="mosaic"` 是在点名要 TPU 那一套。
+> **不是「Pallas 不够用所以上 Mosaic」，两者是上下层关系。**
 
 ## 顺带产出：HLO dump
 
