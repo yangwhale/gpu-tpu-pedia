@@ -855,209 +855,127 @@ for name in ("GMM_TILING_TUNED_LUT", "TGMM_TILING_TUNED_LUT"):
 
 </details>
 
-#### 3.4.5 ⚠️ 2026-08-15：真正的坑不是 tile 值，是 v7 分支根本没传 tile
+#### 3.4.5 2026-08-15 更正：v7 上两条能拿 tile 收益的路，`run.sh` 一条都没走
 
-**v7 上有两条都能拿到 tile 收益的路，而 `run.sh` 一条都没走。**
-
-前面 3.4.3/3.4.4 走的是 **tokamax 路径**（`use_tokamax_gmm=True` + monkeypatch），
-拿到 630。但 §6.7 记着这个开关在 v7 上会死锁，所以 `run.sh` 没敢开它 ——
-**同时也没传 3.4.2 表里默认 megablox 路径吃的那 18 个配置参数**
-（v5p 分支一直在传，v7 分支从来没有）。两条路都没走的结果是**跑在默认 tile 上，
-白丢 26%**。
-
-更麻烦的是这个状态很难自己暴露：照着 QUICKSTART §3.4 挂 `tkcfg.py` 也救不回来，
-因为补丁打在 tokamax 那条路上，而那条路根本没启用。
-**给补丁加计数器实测「被调用 0 次」，但它照常打印 `[tkcfg] patched`** ——
-看起来完全正常。
-
-**64 芯片 / 80 层 / pdbs 12 实测**（默认 megablox 路径，与前面几轮的 tokamax 路径**不是同一条**）：
-
-| `(batch_seq, embed_dim, mlp_dim)` | step | TFLOP/s/device | **per-chip** | **MFU** |
-|---|---:|---:|---:|---:|
-| **不传**（= 默认 tile） | 25.99 s | 262.69 | 525.4 | 22.77% |
-| (256, 2048, 1536) | 21.81 s | 312.97 | 625.9 | 27.13% |
-| (512, 1024, 1536) | 21.69 s | 314.68 | 629.4 | 27.28% |
-| (1024, 2048, 1536) | 21.05 s | 324.19 | 648.4 | 28.11% |
-| **(512, 2048, 1536)** 🏆 | **20.61 s** | **331.15** | **662.3** | **28.71%** |
-| (512, 4096, 1536) | — | — | **崩** | VMEM OOM |
-
-**⇒ 三条结论：**
-
-1. **`(512, 2048, 1536)` 在默认 megablox 路径上同样是最优点**，两个维度都是内点最优
-   （左右邻居都更差）。这与 3.4.4 在 tokamax 路径上的结论一致 ——
-   **同一个 tile 跨两条 kernel 路径都最优**，可以放心当默认值。
-2. **默认 megablox + 配置参数（662.3）比 tokamax + monkeypatch（630）更快 5.1%**，
-   猜测是因为配置参数把 `dlhs` / `drhs` 两条反向路径也 tile 了，
-   而 monkeypatch 改的启发式只作用于前向。**未做进一步验证，当猜测看。**
-3. **而且它不需要开 `use_tokamax_gmm`** —— 绕开了 §6.7 那个死锁风险。
-   ⇒ **推荐路径已从「tokamax + 注入」改为「默认 megablox + 18 个配置参数」。**
-
-#### 3.4.6 怎么调 tile：四步，别一上来就烧卡
-
-**Step 1 · 先确认你这条路吃不吃 tile。** 看 3.4.2 那张表。
-默认 megablox 和 `use_gmm_v2` 吃配置参数；`use_tokamax_gmm` 不吃、要 monkeypatch。
-**搞错了会「改了没反应」，而且不报错。**
-
-**Step 2 · 验证参数真的进去了。** 这一步别省。两种验法：
-
-```bash
-# a) 配置参数路径：DRYRUN 打出展开后的参数，数一下是不是 18 个
-DRYRUN=1 PLATFORM=v7 bash maxtext-hunyuan3/run.sh dry | grep -c _tile_
-
-# b) monkeypatch 路径：给补丁加计数器，别只看它打印 "patched"
-_n=[0]  # ... 在 _patched 里 _n[0]+=1，atexit 打印 _n[0]
-```
-
-**Step 3 · 用 AOT 免费筛掉编不过的。** `tile_k=4096` 会撞 VMEM，
-**AOT 在 CPU 上 2 分钟就能复现同样的 `Ran out of memory in memory space vmem`**，
-不用占卡。但要知道它的边界：
-
-| AOT 能做 | AOT 不能做 |
-|---|---|
-| 筛掉编不过的 tile（VMEM 墙） | 给能编过的排序 —— **它们的 `temp` 完全相同（都 80.48 G）** |
-
-**⇒ tile 的性能排序只能上真机，AOT 只负责别让你把卡浪费在编不过的组合上。**
-
-**Step 4 · 真机只扫少数几个点。** 每个维度取当前值的 ×2 和 ÷2 三个点即可 ——
-实测两个维度都是**内点最优**，不是单调的，所以三点就能判断是不是已经在峰上。
-`tile_n` 不用扫，它被 `base_moe_mlp_dim` 钉死。
-
-> **不必随 batch 重调**：3.4.4 已在三个不同的 `m` 上验证 `(512, 2048, 1536)` 稳定最优。
-> 换 `pdbs` 不用重扫 tile。
-
-#### 3.4.7 FP8 上同样的换法：+49.9%，而且原因跟 BF16 不一样
-
-2026-08-15 把同一套 18 个配置参数用到 FP8 + QAG 上（`pdbs=7`，其余同 §5 配方）：
-
-| 配方 | step | per-chip | MFU<sub>4614</sub> | tok/s/chip | 峰值 HBM |
-|---|---:|---:|---:|---:|---:|
-| `use_tokamax_gmm` + `tkcfg.py` 注入（原配方） | 11.761 s | 677.0 | 14.67% | 4,876 | 92.42 G |
-| **默认 megablox + 18 个 tile 配置参数** | **7.847 s** | **1,014.8** | **21.99%** | **7,308** | 91.40 G |
-
-**loss 前两步完全相同、之后每步差 ≤0.001**，峰值 HBM 还低 1 G。详见下方「怎么确认它没跑错」。
-
-**四条分支要先分清**（`moe.py:1500-1558`）：
+3.4.2 那张表其实早写明了：**默认 megablox 吃 `w{i,o}_tile_*`**，
+monkeypatch 是给 `use_tokamax_gmm` 那条路准备的。四条分支（`moe.py:1500-1558`）：
 
 ```
 if use_tokamax_gmm:
-    if quantization: mblx.gmm(..., use_tokamax_backend=True)   ← FP8 旧配方
-    else:            tokamax.ragged_dot(...)                   ← BF16 的 tokamax 路
-elif megablox:       mblx.gmm(..., use_tokamax_backend=False)  ← 现在的推荐路径
+    if quantization: mblx.gmm(..., use_tokamax_backend=True)   ← 3.4.3 的路（FP8 旧配方）
+    else:            tokamax.ragged_dot(...)
+elif megablox:       mblx.gmm(..., use_tokamax_backend=False)  ← 现在推荐
 else:                jax.lax.ragged_dot(...)
 ```
 
-**注意 FP8 新旧两组调的是同一个 `mblx.gmm`，差别只有 `use_tokamax_backend` 这一个布尔。**
-开着它，tiling 由 tokamax 的启发式决定（所以要 monkeypatch，也所以 3.4.2 表里写它
-「不吃 `w{i,o}_tile_*`」）；关掉它，tiling 就是那 18 个配置参数传进去的值。
-**同一个函数、同一组 tile 数值，只翻这一个布尔，差 49.9%。**
+`run.sh` 既没开 `use_tokamax_gmm`（怕 §6.7 死锁），**也没传那 18 个配置参数**
+（v5p 分支一直在传，v7 分支从来没有）—— 结果跑在默认 tile 上。
 
-**机制跟 BF16 那条不同，别混为一谈：**
+> **这个状态不会自己暴露。** 照 QUICKSTART 挂 `tkcfg.py` 也没用，它打在没启用的
+> 那条路上。加计数器实测 **BF16 下「被调用 0 次」，却照常打印 `[tkcfg] patched`**。
+> **凡是靠 monkeypatch 生效的东西，都要加计数器，不能信它自己的打印。**
 
-- BF16 上 `tkcfg.py` **根本没被调用**（因为没开 `use_tokamax_gmm`），
-  所以旧数是「跑在默认 tile 上」。
-- **FP8 上 `tkcfg.py` 是真的生效的** —— 加计数器实测被调用，
-  并打印出 tokamax 的默认启发式确实是 `128,128,128`。
-  所以 674 **不是没调 tile，是调了，但那条 kernel 路径本身慢 50%。**
+#### 3.4.6 换成配置参数：BF16 +26%、FP8 +50%
 
-⇒ **结论：不是「注入没生效」，是 tokamax `ragged_dot` 这条路在 v7 上整体不划算。**
-两种精度、两种原因，指向同一个动作：**走默认 megablox + 配置参数。**
+64 芯片 / 80 层实测，`(batch_seq, embed_dim, mlp_dim)`：
 
-> ⚠️ **FP8 不带任何 tile 参数会直接崩，不是变慢**：
-> `AssertionError: v=1536 bv=1024 s=1536`（默认 `mlp_dim` tile = 1024，除不尽 1536）。
-> BF16 同走 `mblx.gmm` 却只是慢、不崩 —— 差别在 FP8 的量化路径对
-> block 尺寸有整除断言，BF16 那条没有。**同一个默认值，一个崩一个只是慢**，
-> 这也解释了为什么这个坑在 BF16 上潜伏了这么久：它从来没报过错。
+| 精度 | 配方 | step | per-chip | MFU |
+|---|---|---:|---:|---:|
+| BF16 | 不传（默认 tile） | 25.99 s | 525.4 | 22.77% |
+| BF16 | **(512, 2048, 1536)** | **20.61 s** | **662.3** | **28.71%** |
+| FP8+QAG | `use_tokamax_gmm` + 注入（原配方） | 11.761 s | 677.0 | 14.67%<sub>4614</sub> |
+| FP8+QAG | **(512, 2048, 1536)，不开 gmm** | **7.847 s** | **1,014.8** | **21.99%**<sub>4614</sub> |
 
-**batch 仍然卡在 7。** AOT 探针（`pdbs` 7/8/9）：
-`temp` 52.46 G ✅ / 98.05 G ❌ / 101.89 G ❌ —— 7 到 8 之间是个陡坎，没有余地。
+**tile 值本身两条 kernel 路径的最优点相同**，与 3.4.4 一致；扫描（BF16，64 芯片）：
 
-#### 3.4.8 profile 对拍：那 49.9% 到底省在哪
+| `(bs, emb)` | 256, 2048 | **512, 2048** | 1024, 2048 | 512, 1024 | 512, 4096 |
+|---|---:|---:|---:|---:|---:|
+| per-chip | 625.9 | **662.3** 🏆 | 648.4 | 629.4 | VMEM 崩 |
 
-> 2026-08-15。两轮 64 芯片 FP8+QAG，**除了 tile 入口之外逐字相同**，各跑 12 步、
-> `profiler=xplane` 抓 step 5-7。本地 `xprof server` 打开对比。
-> 原始命令：`profiler=xplane skip_first_n_steps_for_profiler=5 profiler_steps=3 profile_cleanly=True`。
+两个维度都是**内点最优**（左右邻居都更差），换 `pdbs` 也不用重扫（3.4.4 已验三个 `m`）。
 
-##### 一句话
+> **BF16 与 FP8 快出来的原因不同，别混为一谈：**
+> BF16 旧数是「压根没 tile」；**FP8 旧数是 tile 调好了的**
+> （计数器实测补丁被调用 66 次，并打印出 tokamax 默认启发式确实是 `128,128,128`）。
+> ⇒ FP8 那 50% 不是「补丁没生效」，是 **tokamax 这条 kernel 路径本身慢**。
 
-**MoE 的分组矩阵乘从 Pallas custom-call 变成了 XLA 原生 fusion，
-省下的时间几乎全部来自这一项。attention 分毫未动。**
+**怎么调 tile（四步）**
 
-##### 总览：step 11,793.8 ms → 7,857.0 ms
+1. **先确认这条路吃不吃 tile** —— 看 3.4.2 的表。搞错了会「改了没反应」且不报错。
+2. **验证参数真进去了** —— 配置参数路径数 `DRYRUN=1 bash run.sh dry | grep -c _tile_`
+   应为 18；monkeypatch 路径**必须加计数器**。
+3. **用 AOT 免费筛掉编不过的** —— `embed_dim=4096` 撞 VMEM，AOT 在 CPU 上 2 分钟
+   复现同样的 `Ran out of memory in memory space vmem`。
+   **但 AOT 给不出能编过的那几档的排序**（它们 `temp` 完全相同，都 80.48 G）。
+4. **真机只扫少数几点** —— 每维取当前值的 ×2 / ÷2 三点即可判断是否已在峰上。
+   `tile_n` 不用扫，被 `base_moe_mlp_dim` 钉死。
 
-| | 旧（tokamax backend） | 新（native megablox） |
-|---|---:|---:|
-| Average Step Time | 11,793.8 ms | **7,857.0 ms** |
-| step 标准差 | 30.1 ms | **4.7 ms**（更稳） |
-| TensorCore 空闲 | 11.09 ms | 12.00 ms |
-| SparseCore 空闲 | 5,234 ms | **3,341 ms** |
-| 峰值 HBM | 93.28 GiB | 91.61 GiB |
+> ⚠️ **FP8 不带任何 tile 参数会直接崩**：`AssertionError: v=1536 bv=1024 s=1536`
+> （默认 `mlp_dim` tile 是 1024，除不尽 1536）。BF16 同走 `mblx.gmm` 却只是慢 ——
+> FP8 的量化路径对 block 尺寸有整除断言，BF16 那条没有。
+> **一个崩一个只是慢，这就是它在 BF16 上潜伏这么久的原因：从来不报错。**
 
-##### 按 HLO 类别拆（XProf「HLO Op Stats」）
+#### 3.4.7 profile 对拍：那 49.9% 省在哪，以及怎么确认没算错
 
-| HLO op category | 旧 self time (us) | 新 self time (us) | 变化 |
+两轮 64 芯片 FP8+QAG，**除 tile 入口外逐字相同**，各 12 步、
+`profiler=xplane skip_first_n_steps_for_profiler=5 profiler_steps=3`，本地 `xprof server` 比对。
+
+**一句话：MoE 的分组矩阵乘从 Pallas custom-call 变成了 XLA 原生 fusion，
+省下的几乎全来自这一项，attention 分毫未动。**
+
+| HLO op category | 旧 (us) | 新 (us) | 变化 |
 |---|---:|---:|---|
 | **custom-call** | **156,788,717** | **71,276,920** | **−54.5%** |
 | loop fusion | 52,318,873 | 58,596,147 | +12.0% |
-| convolution fusion（= attention） | 36,149,753 | 36,363,685 | **+0.6%** |
+| convolution fusion（attention） | 36,149,753 | 36,363,685 | **+0.6%** |
 | async-done | 19,734,028 | 11,644,702 | −41.0% |
 | all-reduce | 5,046,846 | 1,033,655 | −79.5% |
 | non-fusion elementwise | 3,742,188 | 530,605 | −85.8% |
-| sort | 4,199,471 | 4,169,228 | −0.7% |
 | 合计 | ≈282.3 M | ≈187.6 M | **−33.5%** |
 
-**合计的 −33.5% 与 step 时间的 −33.4% 对得上**，说明这张表把时间收全了。
-省下的 94.7 M us 里，**85.5 M（90%）来自 custom-call 一项**。
+合计 −33.5% 与 step 时间 −33.4%（11,793.8 → 7,857.0 ms）对得上；
+省下的 94.7 M us 里 **85.5 M（90%）来自 custom-call 一项**。
+step 标准差也从 30.1 ms 降到 **4.7 ms**。
 
-##### 看图最直观
-
-左：旧配方，custom-call 占 **55.4%**，算子榜上是
-`tgmm_megablox.12` / `gmm_megablox_transpose_rhs` 这些 Pallas kernel。
-右：新配方，custom-call 掉到 **37.9%**、loop fusion 从 18.5% 涨到 **31.1%**，
-算子榜上**一个 megablox 都没有**，全是 `select_add_fusion` / `clamp_convert_fusion`
-这类原生 fusion。
-
-| 旧（tokamax + 注入） | 新（18 个配置参数） |
+| 旧：custom-call 55.4%，榜上是 `tgmm_megablox` | 新：custom-call 37.9%、loop fusion 31.1%，无 megablox |
 |---|---|
-| ![旧](assets/fp8-tile-profile/old-HLO_Op_Stats.png) | ![新](assets/fp8-tile-profile/new-HLO_Op_Stats.png) |
+| ![旧](images/v7-fp8-tile-opstats-old.png) | ![新](images/v7-fp8-tile-opstats-new.png) |
 
-剩下的 custom-call 是什么？**全是 splash attention**：
-`splash_mha_dkv_segmented_no_residuals.5` 两边都是 1,234 ms/步、
-`splash_mha_fwd_segmented_residuals` 两边都是 772 ms/步 —— **一毫秒不差。**
-这既证明 attention 没被动过，也证明两轮的环境是可比的。
+新配方**剩下的 custom-call 全是 splash attention**，两边
+`splash_mha_dkv` 1,234 ms/步、`splash_mha_fwd` 772 ms/步 —— **逐毫秒相同**。
+这既证明 attention 没被动，也证明两轮环境可比。
 
-##### 机制：Pallas custom-call 是 XLA 的黑盒
+**fusion 到底融了什么**（dump 优化后 HLO，1.3 GB / 544 文件）：
+图里 **2,490 个 fusion 计算体，其中 444 个含 `f8e4m3fn`**。
+拆开一个处理 `bf16[7,4096,1536]`（MoE 中间张量）的：
 
-custom-call 对 XLA 编译器是不透明的：**不能跨边界融合，操作数必须落地**，
-FP8 的量化/反量化也折不进去。换成原生路径之后：
+```
+convert ×18   bf16 ↔ f8e4m3fn
+multiply ×12  缩放
+reduce ×4     算 calibration 的 scale
+abs ×2        absmax
+broadcast ×9 / select / and / shift-left
+```
 
-- **量化被融进算子** —— 新 profile 里能直接看到
-  `%fusion.1644.kernel_args_2_.qvalue = f8e4m3fn[229376,1536]`
-- **`all-reduce` 时间掉了 79.5%**，`async-done` 掉了 41% ——
-  调度器有了更多可重叠的边界
-- **`non-fusion elementwise` 掉了 85.8%** —— 原本卡在 kernel 边界上、
-  没法融进去的那些逐元素操作，现在被吃掉了
+**整条 FP8 量化流水线塞进了一个 kernel** —— bf16 只读一遍、f8 只写一遍。
+custom-call 是 XLA 的黑盒，不能跨边界融合、操作数必须落地，这些逐元素操作
+原来每一步都要往 HBM 落地一次。这就直接对上了 `non-fusion elementwise` 的 **−85.8%**。
 
-> ⚠️ **这段机制解释是从 profile 反推的，不是从 XLA 源码验证的。**
-> 硬事实是三条：custom-call 少了 54.5%、loop fusion 多了 12%、attention 一毫秒没变。
-> 「为什么原生 fusion 更快」的具体归因（融合 vs 调度 vs 布局）**还没拆开验证**。
+> ⚠️ 机制是**从 profile 与 HLO 反推的，没从 XLA 源码验证**。
+> 硬事实是三条：custom-call −54.5%、loop fusion +12%、attention 一毫秒没变。
 
-##### 怎么确认它不是「跑快了但算错了」
-
-这是必须回答的问题 —— 变快最常见的原因是少算了东西。
+**怎么确认它不是「跑快了但算错了」**
 
 | 检查 | 结果 |
 |---|---|
-| **loss 逐步对拍**（同 batch、同数据、只差 tile 入口） | 前两步完全相同，之后每步差 **≤0.001**（打印精度末位） |
-| `TFLOP/s × step` | 旧 3981.7 / 新 3981.6，差 **0.00%** |
-| attention kernel 耗时 | 两边 1,234 / 772 / 772 ms，**逐毫秒相同** |
-| 参数量 | 两边都是 **298.786 B** |
-| 峰值 HBM | 93.28 vs 91.61 GiB，同量级 |
+| loss 逐步对拍（同 batch 同数据，只差 tile 入口） | 前两步完全相同，之后每步差 **≤0.001** |
+| `TFLOP/s × step` | 3981.7 vs 3981.6，差 **0.00%** |
+| attention kernel 耗时 | 逐毫秒相同 |
+| 参数量 / 峰值 HBM | 298.786 B 两边一致；93.28 vs 91.61 GiB |
 
-> **不要把这叫「loss 逐位相同」** —— 它不是。0.001 的差属于不同 kernel
-> 求和顺序不同导致的重新结合律误差，与本文附录对该类声称的标准一致。
-> 而且日志只打三位小数，**能分辨的相对差只到 8e-5，再细看不见**。
->
-> **还缺一步**：10 步看不出漂移，要真正定论应当跑 30 步以上对拍曲线。**未做。**
+> **这不是「loss 逐位相同」**，0.001 属于不同 kernel 求和顺序的重新结合律误差
+> （标准见附录 B）。日志只打三位小数，**能分辨的相对差只到 8e-5**。
+> **10 步看不出漂移，30 步以上的对拍尚未做。**
 
 ### 3.5 第四步 +9.0%：把 batch 推到 12
 

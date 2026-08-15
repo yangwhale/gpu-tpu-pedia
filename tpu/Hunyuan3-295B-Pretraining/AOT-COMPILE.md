@@ -207,10 +207,14 @@ diff /tmp/a.txt /tmp/r.txt    # 应当无输出
 |---|---:|---|
 | TPU init / 建 ICI 切片 | **69.6 s** | ❌ 省不掉 |
 | **`jit_train_step` 编译** | **45.8 s** | ✅ **省掉的就这一段** |
-| ├ `HLO_PASSES` | 15.2 s | |
-| ├ `BACKEND_PASSES` | 23.0 s | |
+| ├ `HLO_PASSES`（JAX 图 → HLO + 图级优化） | 15.2 s | |
+| ├ `BACKEND_PASSES`（HLO → **LLO** → 机器码） | **23.0 s** | |
 | └ `CODE_GENERATION` | 6.4 s | |
 | 其余小 jit + 数据管线 + step 0 本身 | ~110 s | ❌ 省不掉 |
+
+> **最贵的不是图优化，是往下降。** `BACKEND_PASSES` 一段就占 45.8 s 的 50%，
+> 比整个 HLO 阶段还贵 —— HLO → LLO 的低级降级、VMEM/寄存器分配、排流水都在这里
+> （日志里 `llo_loop.cc` 的输出正落在这一段）。这跟「图优化最烧时间」的直觉相反。
 
 [TUNING-v7](TUNING-v7.md) 早就推翻过「v7 编译要 10-17 分钟」这个说法
 （那次量到 43.5 s vs 44.3 s，并指出**真正随规模涨的是建切片不是编译**）。
