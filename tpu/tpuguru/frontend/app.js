@@ -1163,6 +1163,7 @@ function render() {
 }
 
 function switchTab(name) {
+  localStorage.setItem(TAB_KEY, name);
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.pane === name));
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + name));
 
@@ -1264,7 +1265,10 @@ $('#btn-metal').onclick = () => {
 };
 
 $('#btn-new').onclick = async () => {
-  S = await api('/api/session', {}); switchTab('cfg'); render(); toast('新会话');
+  if (S && S.turns?.length && !confirm('开一场新对话？当前这场会留在历史里，但不再显示。')) return;
+  S = await api('api/session', {});
+  localStorage.setItem(SID_KEY, S.session_id);
+  switchTab('cfg'); render(); toast('新会话');
 };
 
 $('#btn-save').onclick = () => {
@@ -1312,6 +1316,7 @@ async function refreshCluster() {
    宽度记进 localStorage —— 每次打开都要重新拖一遍是很烦的事。 */
 const MAIN = document.querySelector('main');
 const LW_KEY = 'tpuguru_lw', COL_KEY = 'tpuguru_collapsed';
+const TAB_KEY = 'tpuguru_tab', SID_KEY = 'tpuguru_sid';
 
 function applyLayout(lw, collapsed) {
   if (collapsed) {
@@ -1379,7 +1384,19 @@ applyLayout(localStorage.getItem(LW_KEY), !!localStorage.getItem(COL_KEY));
   } catch (e) { /* health 挂了也让页面能开 */ }
   await refreshCluster();
   setInterval(refreshCluster, 60000);
-  S = await api('/api/session', {});
+
+  // 刷新不该丢现场：先试着接回上次那个会话，接不回来才开新的。
+  // 后端会话是内存 + Firestore 双写，所以连后端重启过也能接回来。
+  const last = localStorage.getItem(SID_KEY);
+  if (last) {
+    try { S = await api(`api/session/${last}`); } catch (e) { S = null; }
+  }
+  if (!S || !S.session_id) S = await api('api/session', {});
+  localStorage.setItem(SID_KEY, S.session_id);
+
+  const tab = localStorage.getItem(TAB_KEY);
+  if (tab && document.querySelector(`.tab[data-pane="${tab}"]`)) switchTab(tab);
+
   render();
   $('#input').focus();
 })();
