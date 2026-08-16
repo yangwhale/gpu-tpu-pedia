@@ -1,10 +1,14 @@
-# WebAOT — 贴一条训练命令，上机之前把能问的都问完
+# tpuguru — 上机之前，先问问它
 
-**一句话**：把训练命令粘进输入框，它在 CPU 上跑一次 AOT 编译，
-回答「**装得下吗 / 走的是哪条代码路径 / 配置有没有踩已知的坑**」，
-全程**不占一张加速卡**。
+**一句话**：把训练命令粘进去，它在 CPU 上跑一次 AOT 编译，回答
+「**装得下吗 / 走的是哪条代码路径 / 踩没踩已知的坑**」，全程**不占一张加速卡**。
 
-> 状态：设计稿。实现分三期，见 §9。
+再往前一步：贴一份模型 config，它给你一套**起点合理、不撞已知坑**的配置和测试脚本。
+
+> 名字的意思：它不只是个跑 AOT 的网页。**它是把踩过的坑沉淀下来的那个人。**
+> 知识在 [`skill/tpuguru/`](skill/tpuguru/)，改知识不改代码。
+>
+> 状态：设计稿，实现分三期见 §9。
 > **参数控件与问号文案见 [PARAMS.md](PARAMS.md)**（每个参数：干什么 / 改了会怎样 / 建议选什么）。
 
 ---
@@ -53,7 +57,7 @@ python3 -m src.maxtext.trainers.pre_train.train src/maxtext/configs/base.yml \
 ## 2.5 目录结构
 
 ```
-WebAOT/
+tpuguru/
 ├── README.md              设计文档（本文件）
 ├── PARAMS.md              ★ 参数目录：控件类型 + 问号三段文案
 ├── backend/               FastAPI：解析、转换、投递、读写 Firestore
@@ -63,12 +67,12 @@ WebAOT/
 ├── rules/
 │   └── rules.seed.json    ✅ 9 条 lint 规则的种子数据
 ├── frontend/              提交 / 报告 / 历史三个页面
-├── skill/vibe-aot/        ★ 知识载体：脚本 / 规则 / 输出契约 / playbook
+├── skill/tpuguru/        ★ 知识载体：脚本 / 规则 / 输出契约 / playbook
 └── deploy/                systemd + 反代片段 + Firestore 索引
 ```
 
 **两份已经能用的东西**：`worker/probe_codepath.py` 是 2026-08-16 实测跑通的探针，
-`rules/rules.seed.json` 是 9 条规则的数据化版本（导入 `webaot_rules` 即可）。
+`rules/rules.seed.json` 是 9 条规则的数据化版本（导入 `tpuguru_rules` 即可）。
 其余目录只有职责说明，等实现。
 
 ---
@@ -96,10 +100,10 @@ WebAOT/
 **知识不写进代码，写进 skill。** 改一条规则、加一种分析、换一个解读口径 ——
 **改 skill 即可，不用改代码、不用发版**。
 
-### skill：`vibe-aot`
+### skill：`tpuguru`
 
 ```
-skill/vibe-aot/
+skill/tpuguru/
 ├── SKILL.md            主入口：什么时候用、怎么用、输出契约
 ├── scripts/            可执行脚本（agent 直接调）
 │   ├── submit.sh       下发一次 AOT
@@ -137,7 +141,7 @@ Worker（本机 docker，CPU）
 分析器
   │  抽取 §6 的所有维度 + 跑 §7 的 lint
   ▼
-Firestore  collection: webaot
+Firestore  collection: tpuguru
   ▼
 浏览器  ← 报告页 / 历史列表 / 两次对比
   ▲
@@ -202,7 +206,7 @@ Firestore  collection: webaot
 现在的做法是翻别人的配方、猜、然后撞一整天 OOM。
 
 **做法**：贴模型配置（HF `config.json` / MaxText model yaml / 甚至一段描述），
-调 BotCall 结合 `vibe-aot` skill 里的领域知识，产出三样东西并显示在下方：
+调 BotCall 结合 `tpuguru` skill 里的领域知识，产出三样东西并显示在下方：
 
 ```
 ┌─ Model Config 粘贴区 ───────────────────────┐
@@ -210,7 +214,7 @@ Firestore  collection: webaot
 │   "hidden_size": 4096, "moe_intermediate_size":│
 │   1536, "vocab_size": 120832, ... }            │
 └─────────────────────────────────────────────┘
-        ↓ BotCall（带 vibe-aot skill）
+        ↓ BotCall（带 tpuguru skill）
 ① 基础 MaxText 配置    ② 可跑的测试脚本    ③ 起始参数建议 + 理由
 ```
 
@@ -338,7 +342,7 @@ Mosaic 层的 kernel 内部：分块循环轮数、VMEM 占用、是否有跨卡
 2. **`schema_version` 必填**，读的时候按版本兼容。旧 doc 永远不改写。
 3. **大对象只存指针**。Firestore 单 doc 上限 1 MB，HLO 动辄 10 MB+。
 
-### 8.2 collection `webaot` —— 一次运行一个 doc
+### 8.2 collection `tpuguru` —— 一次运行一个 doc
 
 ```jsonc
 {
@@ -394,7 +398,7 @@ Mosaic 层的 kernel 内部：分块循环轮数、VMEM 占用、是否有跨卡
 **`parent_id` 形成实验树**：任何一次运行都能「复制并改一个参数」派生新 run，
 历史页可以按树展示，天然回答「这条线是怎么调出来的」。
 
-### 8.3 collection `webaot_rules` —— lint 规则库
+### 8.3 collection `tpuguru_rules` —— lint 规则库
 
 规则不写死在代码里，存 Firestore，可随时加：
 
@@ -440,10 +444,10 @@ LLO 分析、batch 上限自动二分、编译产物直接下载（省掉训练�
 跟 XProf 那套一致：**服务跑在本机，通过跳板机反向代理暴露，带鉴权**。
 
 ```
-浏览器 → (跳板机 Caddy，带鉴权) → /webaot/*  ──strip_prefix──▶  本机 :PORT
+浏览器 → (跳板机 Caddy，带鉴权) → /tpuguru/*  ──strip_prefix──▶  本机 :PORT
 ```
 
-- Caddy 侧只需 `uri strip_prefix /webaot` + `reverse_proxy <内网IP>:<PORT>`，
+- Caddy 侧只需 `uri strip_prefix /tpuguru` + `reverse_proxy <内网IP>:<PORT>`，
   **后端不用感知前缀**（前端资源用相对路径即可）
 - systemd 常驻 + `Restart=always`
 - worker 与 web 同机，直接调本地 docker
@@ -460,10 +464,10 @@ LLO 分析、batch 上限自动二分、编译产物直接下载（省掉训练�
 
 ---
 
-## 11. ★ BotCall —— 把 WebAOT 接成对话通道
+## 11. ★ BotCall —— 把 tpuguru 接成对话通道
 
 **核心想法**：现有的 bot 已经接了飞书、Discord 等 channel。
-**再接一个叫 `webaot` 的 channel**，页面上的每一次交互都变成一轮对话。
+**再接一个叫 `tpuguru` 的 channel**，页面上的每一次交互都变成一轮对话。
 于是「智能识别 / 结果解读 / 参数答疑 / 追问」全部由同一个 agent 完成，
 不必为每种能力单独写规则。
 
@@ -475,7 +479,7 @@ LLO 分析、batch 上限自动二分、编译产物直接下载（省掉训练�
 | `explain` | 一次 run 的完整结果 | 人话结论 + 「下一步建议做什么」 |
 | `ask` | 用户对某次 run 的追问 | 带该 run 全部上下文的回答 |
 | `param_help` | 点了某个参数的问号又追问 | 在静态文案基础上结合当前配置回答 |
-| `propose_rule` | 一次失败的完整现场 | **新 lint 规则草稿**，人工确认后入 `webaot_rules` |
+| `propose_rule` | 一次失败的完整现场 | **新 lint 规则草稿**，人工确认后入 `tpuguru_rules` |
 
 最后一条是复利：**每踩一个新坑，就沉淀成一条规则，下次自动拦住。**
 
@@ -494,7 +498,7 @@ LLO 分析、batch 上限自动二分、编译产物直接下载（省掉训练�
 // POST /api/bot   { "kind": "parse|explain|ask|param_help|propose_rule",
 //                   "run_id": "...", "text": "...", "context": {...} }
 
-// 子集合 webaot/{run_id}/bot_calls/{call_id}
+// 子集合 tpuguru/{run_id}/bot_calls/{call_id}
 {
   "kind": "explain", "at": "...", "model": "...", "latency_ms": 3120,
   "input_digest": "sha256:...",        // 不存全文，存摘要 + 指针
