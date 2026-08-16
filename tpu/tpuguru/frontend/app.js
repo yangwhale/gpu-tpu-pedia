@@ -448,6 +448,8 @@ function renderRep() {
   const A = R.analyses || {};
   if (A.scale) p.appendChild(cardScale(A.scale.data));
   if (A.memory) p.appendChild(cardMemory(A.memory.data));
+  if (A.headroom && A.headroom.data.ready) p.appendChild(cardHeadroom(A.headroom.data));
+  if (A.levers && A.levers.data.ready) p.appendChild(cardLevers(A.levers.data));
   if (A.codepath) p.appendChild(cardCodepath(A.codepath.data));
   if (A.collectives) p.appendChild(cardCollectives(A.collectives.data));
   if (A.compile_time) p.appendChild(cardCompile(A.compile_time.data));
@@ -575,6 +577,82 @@ function cardMemory(d) {
         + '余量小于 2 GB 时不要直接上真机 —— 显存不随 batch 单调，换个尺寸编译器可能换排布方案。'
       : `超出 <b>${fmt(-room)} GB</b>。先加宽 FSDP，那是最有效的杠杆；改重算策略排在它后面。`));
   }
+  return c;
+}
+
+/* ★ 「batch 还能开多大」—— 拆成三个能看懂的数，再配一张真实档位阶梯。 */
+function cardHeadroom(d) {
+  const c = el('div', 'card');
+  c.appendChild(el('h3', null, '显存余量 · batch 还能开多大'));
+  if (d.verdict) {
+    const v = el('div', 'verdict', md2(d.verdict));
+    c.appendChild(v);
+  }
+
+  const g = el('div', 'split3');
+  const cell = (n, cls, l, sub) => { const x = el('div');
+    x.appendChild(el('div', 'n ' + cls, n)); x.appendChild(el('div', 'l', l));
+    if (sub) x.appendChild(el('div', 's', sub)); return x; };
+  g.appendChild(cell(fmt(d.resident_gb) + ' <span style="font-size:12px">GB</span>', 'blue',
+    '常驻（不随 batch 变）', '主权重 + 优化器状态，只跟 FSDP 宽度有关'));
+  g.appendChild(cell(fmt(d.batch_gb) + ' <span style="font-size:12px">GB</span>', 'amber',
+    `随 batch 走（当前 pdbs ${d.pdbs}）`, '激活 + 临时缓冲'));
+  const lc = d.left_gb === null ? 'green' : d.left_gb < 0 ? 'red' : d.left_gb < 2 ? 'amber' : 'green';
+  g.appendChild(cell((d.left_gb >= 0 ? '' : '超 ') + fmt(Math.abs(d.left_gb))
+    + ' <span style="font-size:12px">GB</span>', lc,
+    d.left_gb >= 0 ? '离上限还剩' : '超出上限', `上限 ${fmt(d.capacity_gb)} GB / device`));
+  c.appendChild(g);
+
+  if (d.per_batch_gb) {
+    const kindTxt = d.slope_kind === 'measured' ? '由相邻实测档位算出' : '估算（偏大，只能当上界）';
+    c.appendChild(el('div', 'hint',
+      `<b>batch 每 +1 档 ≈ ${fmt(d.per_batch_gb)} GB</b>（${kindTxt}）。`
+      + md2(d.more_text || '')
+      + (d.slope_note ? '<br>' + md2(d.slope_note) : '')));
+  }
+
+  if (d.ladder && d.ladder.length) {
+    const scale = Math.max(d.capacity_gb, ...d.ladder.map(x => x.gb)) * 1.05;
+    const box = el('div', 'ladder');
+    d.ladder.forEach(x => {
+      const r = el('div', 'lrow' + (x.ok ? '' : ' bad') + (x.cur ? ' cur' : ''));
+      r.appendChild(el('div', 'lb', 'pdbs ' + x.pdbs));
+      const t = el('div', 'lt'); const f = el('div', 'lf');
+      f.style.width = Math.min(x.gb / scale * 100, 100) + '%'; t.appendChild(f); r.appendChild(t);
+      r.appendChild(el('div', 'lv', fmt(x.gb) + ' GB' + (x.ok ? '' : ' ✕')));
+      box.appendChild(r);
+    });
+    const cap = el('div', 'capline', `<span>上限 ${fmt(d.capacity_gb)}</span>`);
+    cap.style.left = `calc(62px + 10px + (100% - 62px - 96px - 20px) * ${d.capacity_gb / scale})`;
+    box.appendChild(cap);
+    c.appendChild(box);
+    c.appendChild(el('div', 'hint', '<br>灰底是实测档位，✕ 是装不下的。' + md2(d.warn)));
+  }
+  return c;
+}
+
+/* ★ 「该拧哪个旋钮」—— 按能腾出多少 GB 排序，直接换算成等价 batch 档数。 */
+function cardLevers(d) {
+  const c = el('div', 'card');
+  c.appendChild(el('h3', null, '该拧哪个旋钮'));
+  c.appendChild(el('div', 'hint',
+    '按**能腾出多少显存**排序，并换算成「等价几档 batch」—— 这样能直接比较「加宽 FSDP」和「降 batch」哪个更划算。'
+    .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')));
+  d.rows.forEach(r => {
+    const x = el('div', 'lever' + (r.forbidden ? ' forbidden' : ''));
+    const L = el('div');
+    L.appendChild(el('div', 'nm', esc(r.name)));
+    L.appendChild(el('div', 'why', md2(r.why)));
+    if (r.how) L.appendChild(el('div', 'how', esc(r.how)));
+    if (r.risk && r.risk !== '无') L.appendChild(el('div', 'why',
+      '<span style="color:#8a6d00">风险：</span>' + md2(r.risk)));
+    x.appendChild(L);
+    const R = el('div', 'amt');
+    R.appendChild(el('div', 'g', '+' + fmt(r.gb) + ' GB'));
+    if (r.eq_batch) R.appendChild(el('div', 'e', `≈ ${r.eq_batch} 档 batch`));
+    x.appendChild(R);
+    c.appendChild(x);
+  });
   return c;
 }
 

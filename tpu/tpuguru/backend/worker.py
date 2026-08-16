@@ -219,6 +219,8 @@ def _run_replay(params: dict, target: dict) -> dict:
             {"name": "codegen", "s": 33}]},
     }
     res["analyses"]["scale"] = _scale(params, target)
+    res["analyses"]["headroom"] = _headroom(params, target, peak)
+    res["analyses"]["levers"] = _levers(params, target, peak)
     res["analyses"]["codepath"] = _codepath(params)
     res["analyses"]["collectives"] = _collectives(params, target)
     res["analyses"]["hlo"] = {
@@ -255,6 +257,182 @@ def _run_replay(params: dict, target: dict) -> dict:
         "per_chip_tflops": case.get("per_chip"), "step_s": case.get("step_s"),
     }
     return res
+
+
+def _same_family(params: dict, target: dict) -> list[dict]:
+    """同一套配置、只有 batch 不同的**实测点**。这是余量分析的地基 ——
+    没有真实点就不外推，因为显存跟 batch 不是线性的。"""
+    cal = str(params.get("weight_quantization_calibration_method", "") or "")
+    key = {
+        "model": str(params.get("model_name", "") or "").lower(),
+        "cal": "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None),
+        "quant": "fp8" if "fp8" in str(params.get("quantization", "") or "") else None,
+        "tokamax": bool(params.get("use_tokamax_gmm")),
+        "shard_exp": bool(params.get("shard_exp_on_fsdp")),
+        "fsdp": fsdp_width(params, target),
+    }
+    pts = []
+    for c in REPLAY_CASES:
+        w = c["when"]
+        if c.get("invalid"):
+            continue
+        if all(w.get(k) == v for k, v in key.items()):
+            gb = c.get("peak_gb") or c.get("required_gb")
+            if gb:
+                pts.append({"pdbs": w["pdbs"], "gb": gb, "ok": c["ok"],
+                            "nonmono": bool(c.get("nonmono"))})
+    return sorted(pts, key=lambda x: x["pdbs"])
+
+
+def _headroom(params: dict, target: dict, peak: float | None) -> dict:
+    """★ 「batch 还能开多大」—— 用户最常问的那个问题，拆成能看懂的三段。
+
+    常驻是精确的（参数量 ÷ FSDP）；每档增量**只有拿到 ≥2 个实测点才敢说**，
+    否则明确标成估算。绝不给一个看着像真的外推值。
+    """
+    from .models import get_model
+    m = get_model(params.get("model_name"))
+    fsdp = fsdp_width(params, target) or 1
+    pdbs = _int(params.get("per_device_batch_size"), 0) or 0
+    n = m.get("params_b") or 0
+    if not n or not pdbs:
+        return {"version": 1, "data": {"ready": False,
+                "why": "要先选模型并填 batch，才能算余量。"}}
+
+    wdtype = str(params.get("weight_dtype", "float32"))
+    bpp = 4 if "float32" in wdtype else 2
+    resident = n * 1e9 * (bpp + 2 + 4) / fsdp / 1e9      # 主权重 + 一阶 bf16 + 二阶 fp32
+    cap = HBM_PER_DEVICE_GB
+
+    pts = _same_family(params, target)
+    slope, slope_kind, slope_note = None, "unknown", ""
+    if len(pts) >= 2:
+        ds = [(pts[i + 1]["gb"] - pts[i]["gb"]) / (pts[i + 1]["pdbs"] - pts[i]["pdbs"])
+              for i in range(len(pts) - 1)]
+        pos = [d for d in ds if d > 0]
+        if pos:
+            slope = sum(pos) / len(pos)
+            slope_kind = "measured"
+            if any(d <= 0 for d in ds):
+                slope_note = ("这些实测点里**有相邻两档是反的**（batch 更小反而更占）—— "
+                              "斜率只取了正向的那几段，所以它是个参考值，不是规律。")
+    elif peak:
+        slope = (peak - resident) / pdbs
+        slope_kind = "estimated"
+        slope_note = ("只有一个实测点，这个「每档多少 GB」是把**所有非常驻显存**"
+                      "平摊到 batch 上算的。实际上激活里有相当一部分不随 batch 变，"
+                      "所以它偏大 —— 只能当上界看。")
+
+    left = (cap - peak) if peak else None
+    more = int(left // slope) if (left is not None and slope and slope > 0 and left > 0) else 0
+
+    ladder = []
+    for p in pts:
+        ladder.append({"pdbs": p["pdbs"], "gb": p["gb"], "ok": p["ok"],
+                       "cur": p["pdbs"] == pdbs, "nonmono": p["nonmono"], "kind": "measured"})
+    if not any(x["pdbs"] == pdbs for x in ladder) and peak:
+        ladder.append({"pdbs": pdbs, "gb": peak, "ok": peak <= cap, "cur": True,
+                       "nonmono": False, "kind": "measured"})
+    ladder.sort(key=lambda x: x["pdbs"])
+
+    # 直接给结论，别让人自己从图里推
+    okp = [p["pdbs"] for p in pts if p["ok"]]
+    badp = [p["pdbs"] for p in pts if not p["ok"]]
+    if okp and badp:
+        hi = max(okp)
+        verdict = (f"**这套配置的 batch 上限是 {hi}。** "
+                   f"实测 {hi} 装得下、{min(b for b in badp if b > hi) if any(b > hi for b in badp) else min(badp)} 装不下。")
+        if any(b < hi for b in badp):
+            verdict += f" 注意 {sorted(b for b in badp if b < hi)} 这些**更小的档反而装不下**，别想当然。"
+    elif okp and not badp:
+        verdict = (f"实测到 {max(okp)} 都装得下，**上界还没探到** —— "
+                   "往上加一档再跑一次 AOT，三分钟就知道。")
+    elif badp:
+        verdict = f"实测 {sorted(badp)} 全都装不下，先往下降或者动下面那些旋钮。"
+    else:
+        verdict = "只有当前这一档的数据，**上界不知道** —— 加一档再跑一次就能定位。"
+
+    return {"version": 1, "data": {
+        "verdict": verdict,
+        "ready": True, "capacity_gb": cap, "peak_gb": peak,
+        "resident_gb": round(resident, 2),
+        "batch_gb": round(peak - resident, 2) if peak else None,
+        "left_gb": round(left, 2) if left is not None else None,
+        "per_batch_gb": round(slope, 2) if slope else None,
+        "slope_kind": slope_kind, "slope_note": slope_note,
+        "pdbs": pdbs, "more_steps": more, "ladder": ladder,
+        "more_text": ("**已经到顶** —— 剩下的余量不够再加一档。" if more == 0
+                      else f"照这个斜率，还能再加约 **{more}** 档。"),
+        "warn": "⚠️ **显存不随 batch 单调** —— 实测出现过 13 超 0.77 G、降到 12 反而超 1.26 G。"
+                "所以「还能加几档」只是个方向，**每一档都要真跑一次 AOT**，不要外推。",
+    }}
+
+
+def _levers(params: dict, target: dict, peak: float | None) -> dict:
+    """★ 「该拧哪个旋钮」—— 把可用手段按**能腾出多少 GB** 排序，直接给等价 batch 档数。"""
+    from .models import get_model
+    m = get_model(params.get("model_name"))
+    n = m.get("params_b") or 0
+    fsdp = fsdp_width(params, target) or 1
+    devices = target.get("devices", 0) or 0
+    pdbs = _int(params.get("per_device_batch_size"), 0) or 0
+    if not n or not peak:
+        return {"version": 1, "data": {"ready": False}}
+
+    wdtype = str(params.get("weight_dtype", "float32"))
+    bpp = 4 if "float32" in wdtype else 2
+    master = n * 1e9 * bpp / fsdp / 1e9
+    mom1 = n * 1e9 * 2 / fsdp / 1e9
+    mom2 = n * 1e9 * 4 / fsdp / 1e9
+    resident = master + mom1 + mom2
+    hd = _headroom(params, target, peak)["data"]
+    per = hd.get("per_batch_gb") or 0
+
+    rows = []
+    # 1. 加宽 FSDP
+    other = 1
+    for k, v in params.items():
+        if k.startswith("ici_") and k.endswith("_parallelism") and k != "ici_fsdp_parallelism":
+            iv = _int(v, 1) or 1
+            if iv > 0:
+                other *= iv
+    max_fsdp = devices // other if devices and other else fsdp
+    if max_fsdp > fsdp:
+        gain = resident - resident * fsdp / max_fsdp
+        rows.append({"name": f"FSDP {fsdp} → {max_fsdp}（吃满）", "gb": round(gain, 2),
+                     "how": "ici_fsdp_parallelism=-1",
+                     "why": "每卡常驻 ∝ 1/FSDP。这是最有效的杠杆，排在改重算之前。",
+                     "risk": "要求各并行度乘积等于每 slice 的 device 数"})
+    elif other > 1:
+        gain = resident - resident / other
+        rows.append({"name": f"关掉其它并行（EP/TP={other}）让 FSDP 吃满", "gb": round(gain, 2),
+                     "how": "ici_expert_parallelism=1",
+                     "why": "EP 不但 all-to-all 多跳，还逼着 FSDP 减半 —— 两头亏。"
+                            "实测 64 芯片 EP=2 掉 39.6%。",
+                     "risk": "无"})
+    # 2. 二阶动量降 bf16
+    rows.append({"name": "二阶动量 fp32 → bf16", "gb": round(mom2 / 2, 2),
+                 "how": "优化器状态精度（不是 weight_dtype）",
+                 "why": "二阶动量对精度不敏感，是常驻里最好压的一块。",
+                 "risk": "极少数配方下影响收敛稳定性，要看 loss 曲线"})
+    # 3. 降 batch
+    if per:
+        rows.append({"name": "batch 降 1 档", "gb": round(per, 2),
+                     "how": f"per_device_batch_size={max(pdbs - 1, 1)}",
+                     "why": "见效最快，但吃掉的是有效 token。",
+                     "risk": "⚠️ 不单调，降一档不保证一定省"})
+    # 4. 明确不该动的
+    forbidden = {"name": "主权重降 bf16", "gb": round(master / 2, 2),
+                 "how": "weight_dtype=bfloat16", "forbidden": True,
+                 "why": "看着能省最多，**但这条不能动**：bf16 只有 8 位尾数，"
+                        "`w += lr × grad` 的更新会被直接舍掉 —— 不报错，训练是废的。",
+                 "risk": "毁掉训练"}
+    rows.sort(key=lambda r: -r["gb"])
+    rows.append(forbidden)
+    for r in rows:
+        r["eq_batch"] = round(r["gb"] / per, 1) if per else None
+    return {"version": 1, "data": {"ready": True, "rows": rows,
+            "per_batch_gb": per, "resident_gb": round(resident, 2)}}
 
 
 def _memory_estimate(params: dict, target: dict, peak_gb: float | None) -> dict:

@@ -354,6 +354,13 @@ async def chat(inp: ChatIn):
         _persist(s)
         return _state(s)
 
+    # ①b 「跑一次」——按钮和对话两条路都要能触发，不要逼人去找按钮
+    if re.fullmatch(r"\s*(跑|跑一次|跑一下|跑 ?aot|跑一次 ?aot|run|编译|编译一下|试试)"
+                    r"[ 。!！~]*\s*", text, re.I):
+        s["turns"].append({"at": _now(), "role": "system", "text": "开始编译…"})
+        _persist(s)
+        return await run(ChatIn(session_id=s["id"], text=""))
+
     # ② 明确的参数改动 → 出 diff 提议（不直接生效）
     diffs = _intent_diff(text, params)
     if diffs:
