@@ -172,6 +172,26 @@ main { flex: 1; display: grid; grid-template-columns: minmax(380px, 31%) 1fr;
 .field.miss input, .field.miss select { border-color: rgba(217, 48, 37, .5);
   background: rgba(252, 232, 230, .5); }
 
+/* 模型 / 后端选择 */
+.pick { display: grid; grid-template-columns: repeat(auto-fit, minmax(190px, 1fr)); gap: 12px; }
+.modelinfo { margin-top: 12px; padding: 11px 13px; border-radius: 10px;
+  background: rgba(232, 240, 254, .45); border: 1px solid rgba(26, 115, 232, .18);
+  font-size: 12.5px; line-height: 1.65; }
+.modelinfo .row1 { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; margin-bottom: 4px; }
+.modelinfo b { font-size: 13px; }
+.prov { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; }
+.prov.measured { background: rgba(230, 244, 234, .95); color: #1a6e35; border: 1px solid rgba(30,142,62,.3); }
+.prov.public { background: rgba(255, 255, 255, .9); color: var(--muted); border: 1px solid var(--line); }
+.modelinfo .shapes { font-family: var(--mono); font-size: 11.5px; color: var(--ink-2); }
+.modelinfo .warn { color: #8a6d00; margin-top: 4px; }
+
+.bepros { margin-top: 10px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; font-size: 12px; }
+.bepros ul { margin: 4px 0 0; padding-left: 17px; line-height: 1.65; }
+.bepros .h { font-size: 11.5px; color: var(--muted); }
+.bepros .good li { color: #1a6e35; }
+.bepros .bad li { color: #a5261d; }
+@media (max-width: 900px) { .bepros { grid-template-columns: 1fr; } }
+
 /* lint */
 .lint { display: flex; gap: 10px; padding: 11px 13px; border-radius: 10px; margin-bottom: 10px;
   border: 1px solid; align-items: flex-start; }
@@ -280,8 +300,21 @@ table.t .mono { font-family: var(--mono); }
 .node.void .ttl { text-decoration: line-through; }
 .node .ttl { font-weight: 500; }
 .node .meta { font-size: 11.5px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
-.node .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; }
-.depth-1 { margin-left: 26px; } .depth-2 { margin-left: 52px; } .depth-3 { margin-left: 78px; }
+.node .acts { margin-left: auto; display: flex; gap: 6px; align-items: center; flex: none; }
+.node .acts button { white-space: nowrap; }
+.node > div:first-child { min-width: 0; }
+/* 一条道走下去是「链」，只有分叉才缩进 —— 每存一次就缩一级会越缩越偏 */
+.tree { position: relative; }
+.lane { position: relative; padding-left: 22px; }
+.lane::before { content: ''; position: absolute; left: 7px; top: -4px; bottom: 10px;
+  width: 2px; background: linear-gradient(180deg, rgba(26,115,232,.28), rgba(26,115,232,.10)); }
+.lane > .node::before { content: ''; position: absolute; left: -19px; top: 18px;
+  width: 9px; height: 9px; border-radius: 50%; background: #fff;
+  border: 2px solid rgba(26, 115, 232, .55); }
+.lane > .node { position: relative; }
+.lane > .node.void::before { border-color: rgba(217, 48, 37, .5); }
+.fork { margin-left: 22px; }
+.fork > .lanehead { font-size: 11.5px; color: var(--faint); margin: 2px 0 6px; }
 
 .listbar { display: flex; align-items: center; gap: 10px; margin-bottom: 12px;
   font-size: 12.5px; color: var(--muted); }
@@ -329,6 +362,21 @@ table.t .mono { font-family: var(--mono); }
 .art .nm { font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: var(--ink-2); }
 .art .sz { font-size: 11px; color: var(--faint); font-family: var(--mono); margin-top: 1px; }
 .art .ds { font-size: 11.5px; color: var(--muted); margin-top: 4px; line-height: 1.5; }
+
+/* 作废横幅：比 stale 更重，因为它否定的是数字本身 */
+.void-banner { padding: 14px 16px; border-radius: 12px; margin-bottom: 14px;
+  background: rgba(252, 232, 230, .8); border: 1px solid rgba(217, 48, 37, .45); }
+.void-banner .t { font-size: 15px; font-weight: 500; color: var(--red); margin-bottom: 6px; }
+.void-banner .d { font-size: 13px; color: var(--ink-2); line-height: 1.7; }
+.kpi.struck .n { text-decoration: line-through; color: var(--faint); }
+.kpi.struck { background: rgba(252, 232, 230, .35); border-style: dashed; }
+.big.void { color: var(--faint); text-decoration: line-through; }
+
+/* 真机参照：跟 AOT 结论视觉上分开，AOT 本身给不了吞吐 */
+.realref { border: 1px solid rgba(0, 172, 193, .3); background: rgba(224, 247, 250, .5); }
+.realref .tagline { display: inline-block; font-size: 11px; padding: 1px 8px; border-radius: 999px;
+  background: rgba(255, 255, 255, .85); border: 1px solid rgba(0, 172, 193, .35);
+  color: #00707d; margin-left: 8px; }
 
 .stale { display: flex; gap: 10px; align-items: flex-start; padding: 12px 14px;
   border-radius: 10px; margin-bottom: 14px; font-size: 13px;

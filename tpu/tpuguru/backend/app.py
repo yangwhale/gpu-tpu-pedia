@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .lint import run_lint
+from .models import BACKENDS, MODELS, catalog, detect_backend, get_model
 from .parser import TOPOLOGIES, fsdp_width, parse_command, roundtrip_check, to_aot
 from .worker import docker_available, run_aot
 
@@ -159,6 +160,8 @@ def _state(s: dict) -> dict:
         "session_id": s["id"], "title": s["title"], "turns": s["turns"],
         "params": s["current"]["params"], "xla_flags": s["current"]["xla_flags"],
         "target": s["current"]["target"], "fsdp_width": fsdp_width(s["current"]["params"], s["current"]["target"]),
+        "model": get_model(s["current"]["params"].get("model_name")),
+        "backend": detect_backend(s["current"]["params"]),
         "aot_cmd": r["aot_cmd"], "dropped": r["dropped"], "added": r["added"],
         "lint": r["lint"], "roundtrip": r["roundtrip"],
         "run_ids": s["run_ids"], "result": s.get("last_result"),
@@ -168,42 +171,98 @@ def _state(s: dict) -> dict:
 
 
 # ── 对话意图：确定性优先，兜不住才叫 bot ────────────────────────
-_CAL_ALIASES = {"absmax": "absmax", "动态": "absmax", "fixed": "fixed,-224,224", "静态": "fixed,-224,224"}
+_CAL_ALIASES = {"absmax": "absmax", "动态": "absmax",
+                "fixed": "fixed,-224,224", "静态": "fixed,-224,224"}
+# 口语 → 真参数名。**匹配时必须带词边界**，否则 `shard_exp_on_fsdp` 里的 "fsdp"
+# 会被当成 `ici_fsdp_parallelism` —— 实测踩过，它会静默改错一个完全不同的参数。
 _PARAM_ALIASES = {
     "batch": "per_device_batch_size", "pdbs": "per_device_batch_size",
     "fsdp": "ici_fsdp_parallelism", "校准": "weight_quantization_calibration_method",
     "ep": "ici_expert_parallelism", "专家并行": "ici_expert_parallelism",
     "层数": "num_decoder_layers", "序列长度": "max_target_length", "seq": "max_target_length",
+    "拓扑": "__topology",
 }
+# 允许被直接 `k=v` 指定的参数：已知名单 + 这些前缀
+_PARAM_PREFIXES = ("ici_", "dcn_", "per_", "base_", "weight_", "quantization",
+                   "use_", "sa_", "gmm_", "moe_", "tile_", "shard_", "num_",
+                   "max_", "megablox", "sparse_matmul", "attention", "model_name",
+                   "remat_", "opt_", "dtype", "capacity_factor")
+# 这些参数是数值，值写成 True/False 一定是抽错了
+_NUMERIC = {"per_device_batch_size", "max_target_length", "num_decoder_layers"}
+_NUMERIC_PREFIX = ("ici_", "dcn_", "gmm_tile", "sa_block", "tile_")
 
 
 def _looks_like_command(t: str) -> bool:
     return ("python" in t and "=" in t) or t.count("=") >= 4 or "LIBTPU_INIT_ARGS" in t
 
 
+def _is_param(k: str) -> bool:
+    return len(k) > 3 and k.startswith(_PARAM_PREFIXES)
+
+
+def _numeric_param(k: str) -> bool:
+    return k in _NUMERIC or k.startswith(_NUMERIC_PREFIX)
+
+
 def _intent_diff(text: str, params: dict) -> list[dict] | None:
-    """从一句话里抽出确定的参数改动。抽不出返回 None。"""
-    diffs = []
-    for m in re.finditer(r"([A-Za-z_][\w.]*)\s*(?:=|改成|设成|调到|换成)\s*([\w.,\-]+)", text):
-        k, v = m.group(1), m.group(2)
-        if k in params or k.startswith(("ici_", "per_", "base_", "weight_", "quant", "use_", "sa_")):
+    """从一句话里抽出确定的参数改动。抽不出返回 None。
+
+    两遍走：先吃显式 `k=v` 并把命中的区间从文本里**挖掉**，再拿口语别名去扫剩下的。
+    不挖掉的话 `shard_exp_on_fsdp=True` 会被别名规则二次命中。
+    """
+    diffs, seen = [], set()
+    rest = text
+
+    # ① 显式 k=v（含中文标点分隔）
+    # 值里允许逗号（`fixed,-224,224`），但「逗号 + 空格」是参数之间的分隔符
+    for m in re.finditer(r"([A-Za-z_][\w.]*)\s*=\s*((?:[^\s，；;。,]|,(?!\s))+)", text):
+        k, v = m.group(1), m.group(2).rstrip("。，,；;")
+        if not (_is_param(k) or k in params):
+            continue
+        if _numeric_param(k) and v.lower() in ("true", "false"):
+            continue                       # 数值参数不可能是布尔，这是抽错了
+        if k not in seen:
             diffs.append({"param": k, "from": params.get(k), "to": v, "reason": "你直接指定的"})
+            seen.add(k)
+        rest = rest.replace(m.group(0), " ")
+
+    # ② 口语别名，只在剩下的文本里找，且必须有词边界
     for alias, real in _PARAM_ALIASES.items():
-        m = re.search(alias + r"\s*(?:=|改成|设成|调到|换成|开到)?\s*([\w.,\-]+)", text)
-        if m and not any(d["param"] == real for d in diffs):
-            v = m.group(1)
-            if real == "weight_quantization_calibration_method":
-                v = _CAL_ALIASES.get(v, v)
-            if re.fullmatch(r"[\w.,\-]+", v) and v not in ("的", "是", "了"):
-                diffs.append({"param": real, "from": params.get(real), "to": v,
-                              "reason": f"「{alias}」→ `{real}`"})
-    if not diffs:
-        m = re.search(r"(?:换|改)(?:成|到)?\s*(absmax|fixed|动态|静态)", text)
+        if real in seen:
+            continue
+        pat = (r"(?<![A-Za-z_])" + re.escape(alias) + r"(?![A-Za-z0-9_])"
+               if alias.isascii() else re.escape(alias))
+        # 动词要收全，且值只认 ASCII —— 否则「校准换 fixed」会把「换」当成值
+        m = re.search(pat + r"[\s:：]*(?:=|改成|改为|改到|改|设成|设为|设|调到|调成|"
+                            r"换成|换为|换到|换|选成|选|开到|开|用|是|为)?"
+                            r"[\s:：]*([A-Za-z0-9_.,\-]+)", rest)
+        if not m:
+            continue
+        v = m.group(1).strip("。，,")
+        if not v or v in ("的", "是", "了", "吧", "呢"):
+            continue
+        if real == "weight_quantization_calibration_method":
+            v = _CAL_ALIASES.get(v, v)
+        if _numeric_param(real) and not re.fullmatch(r"-?\d+", v):
+            continue                       # 「fsdp 吃满」这类抽不出数字就别猜
+        diffs.append({"param": real, "from": params.get(real), "to": v,
+                      "reason": f"「{alias}」→ `{real}`"})
+        seen.add(real)
+
+    # ③ 只说了「换 absmax」这种，没提参数名
+    if "weight_quantization_calibration_method" not in seen:
+        m = re.search(r"(?:换|改|用)(?:成|到)?\s*(absmax|fixed|动态|静态)", rest)
         if m:
-            v = _CAL_ALIASES[m.group(1)]
             diffs.append({"param": "weight_quantization_calibration_method",
-                          "from": params.get("weight_quantization_calibration_method"), "to": v,
+                          "from": params.get("weight_quantization_calibration_method"),
+                          "to": _CAL_ALIASES[m.group(1)],
                           "reason": "fixed 静态 scale 伤收敛，不开 QAG 就该用 absmax"})
+
+    # ④ 「FSDP 吃满」「吃满 FSDP」
+    if "ici_fsdp_parallelism" not in seen and re.search(r"(吃满|拉满|开满)", rest):
+        diffs.append({"param": "ici_fsdp_parallelism",
+                      "from": params.get("ici_fsdp_parallelism"), "to": "-1",
+                      "reason": "-1 = 吃满剩余 device"})
     return diffs or None
 
 
@@ -246,7 +305,7 @@ class SaveIn(BaseModel):
 @app.get("/api/health")
 async def health():
     return {"ok": True, "store": store.backend, "aot_mode": "real" if docker_available() else "replay",
-            "bot_url": BOT_URL, "topologies": TOPOLOGIES}
+            "bot_url": BOT_URL, "topologies": TOPOLOGIES, **catalog()}
 
 
 @app.post("/api/session")
@@ -344,6 +403,32 @@ async def set_param(inp: SetIn):
     if str(_cur if _cur is not None else "") == str(inp.value if inp.value is not None else ""):
         return _state(s)
 
+    if inp.param == "__backend":
+        spec = BACKENDS.get(str(inp.value))
+        if not spec:
+            raise HTTPException(400, f"没有这个后端: {inp.value}")
+        s["current"]["params"].update(spec["apply"])
+        s["turns"].append({"at": _now(), "role": "system",
+                           "text": f'你把 MoE 后端切到 **{spec["label"]}**'
+                                   f'（{"、".join(f"`{k}={v}`" for k, v in spec["apply"].items())}）'})
+        _persist(s)
+        return _state(s)
+
+    if inp.param == "model_name":
+        m = get_model(inp.value)
+        if m:
+            s["current"]["params"]["model_name"] = str(inp.value)
+            msg = (f'模型设成 **{m["label"]}** —— {m["layers"]} 层'
+                   + (f'、{m["num_experts"]} 专家 top-{m["top_k"]}' if m["moe"] else '、dense')
+                   + f'、hidden {m["hidden"]}、mlp {m["mlp"]}。')
+            if m["provenance"] == "public":
+                msg += " 形状来自公开 config；**我们没有它在 v7 上的实测数字**，别套用别的模型的结论。"
+            if m.get("note"):
+                msg += " " + m["note"]
+            s["turns"].append({"at": _now(), "role": "system", "text": msg})
+            _persist(s)
+            return _state(s)
+
     if inp.param == "__topology":
         from .parser import TOPOLOGIES as T
         name = str(inp.value)
@@ -410,7 +495,11 @@ async def save(inp: SaveIn):
     doc = {
         "schema_version": 1, "id": said, "created_at": _now(), "created_by": "local",
         "title": inp.title, "note": inp.note, "tags": inp.tags,
-        "parent_save_id": s.get("parent_save_id"), "voided": None,
+        "parent_save_id": s.get("parent_save_id"),
+        # 报告已经判定这一档的数字无效时，存档**自动**标作废 ——
+        # 不能指望人记得回头去点。一个划掉的标题旁边打着 ✅ 是自相矛盾的。
+        "voided": ({"at": _now(), "by": "auto", "reason": res["invalid"]}
+                   if res.get("invalid") else None),
         "frozen_at": _now(),
         "source": {"session_id": s["id"], "run_ids": list(s["run_ids"])},
         # ── 以下全是副本 ──
@@ -426,7 +515,9 @@ async def save(inp: SaveIn):
         "artifacts": dict(res.get("artifacts") or {}),   # 真跑时这里是 saves/<id>/ 下的副本
         "attachments": [],
         "result_summary": {"ok": res.get("ok"), "mode": res.get("mode"),
-                           "failure": res.get("failure"), "source": res.get("source")},
+                           "failure": res.get("failure"), "source": res.get("source"),
+                           "invalid": bool(res.get("invalid")),
+                           "per_chip_tflops": (res.get("metrics") or {}).get("per_chip_tflops")},
     }
     store.put("tpuguru_saves", said, doc)
     s["parent_save_id"] = said

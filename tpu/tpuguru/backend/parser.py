@@ -31,10 +31,15 @@ AOT_OVERRIDES = {
     "dataset_type": "synthetic",
 }
 
-# 已知的模型形状（用于 lint 的 num_experts 等判断）
+# 模型形状的**唯一来源**是 models.py。这里只做一层投影，
+# 不要在两处各维护一份 —— 形状对不上时 lint 会静默失准。
+from .models import MODELS as _MODELS  # noqa: E402
+
 MODEL_SHAPES = {
-    "hunyuan3-295b":  {"num_experts": 192, "layers": 80, "hidden": 4096, "mlp": 1536},
-    "deepseek3-671b": {"num_experts": 256, "layers": 61, "hidden": 7168, "mlp": 2048},
+    k: {"num_experts": v["num_experts"], "layers": v["layers"],
+        "hidden": v["hidden"], "mlp": v["mlp"], "moe": v["moe"],
+        "params_b": v["params_b"], "act_params_b": v["act_params_b"]}
+    for k, v in _MODELS.items()
 }
 
 # ⚠️ 不要把 "1"/"0" 当布尔 —— `ici_expert_parallelism=1` 是**并行度 1**，

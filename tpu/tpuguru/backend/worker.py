@@ -24,47 +24,118 @@ log = logging.getLogger("tpuguru.worker")
 HBM_PER_DEVICE_GB = 94.74     # v7 单 device 可用（192 GiB / chip，2 device/chip，减 runtime 预留）
 PEAK_BF16_PER_CHIP = 2307.0
 
-# ── 真实跑过的档位（source 指明出处）────────────────────────────
-# key = (pdbs, calibration 前缀, fsdp, 精度)
+# ── 真实跑过的档位（2026-08-14/16，64 芯片 v7，Hunyuan3-295B-A21B）──────
+# key 里必须带 tokamax / shard_exp —— 同样的 batch 与校准，走不同 kernel 分支
+# 结论完全不同，这正是那个 1014.8 的来历。
 REPLAY_CASES = [
-    {"when": {"pdbs": 13, "cal": "absmax", "fsdp": 128, "quant": "fp8"},
-     "ok": False, "required_gb": 95.51, "kind": "hbm_oom_runtime",
-     "raw": "total memory required for HLO temporaries (95.51G) exceeds available HBM (94.74G)",
-     "source": "2026-08-16 AOT 扫描 /tmp/aotabs.out，同配置真机也报同一个数"},
-    {"when": {"pdbs": 12, "cal": "absmax", "fsdp": 128, "quant": "fp8"},
-     "ok": False, "required_gb": 96.00, "kind": "hbm_oom_runtime",
-     "raw": "total memory required for HLO temporaries exceeds available HBM",
-     "source": "2026-08-16 AOT 扫描：12 反而比 13 更超（显存非单调）"},
-    {"when": {"pdbs": 11, "cal": "absmax", "fsdp": 128, "quant": "fp8"},
-     "ok": True, "peak_gb": 93.19,
-     "source": "2026-08-16 生产配方，真机 18.656 s/step → 670.8 TFLOP/s/chip"},
-    {"when": {"pdbs": 13, "cal": "fixed", "fsdp": 128, "quant": "fp8"},
-     "ok": True, "peak_gb": 93.97,
-     "source": "2026-08-16 峰值配方，真机 20.342 s/step → 727.0 TFLOP/s/chip"},
-    {"when": {"pdbs": 14, "cal": "fixed", "fsdp": 128, "quant": "fp8"},
+    # ① 起点：BF16，没传 tile
+    {"when": {"model": "hunyuan3-295b", "pdbs": 7, "cal": None, "fsdp": 64,
+              "quant": None, "tokamax": False, "shard_exp": False, "tile": False},
+     "ok": True, "peak_gb": 88.20, "per_chip": 445.1, "step_s": 20.43,
+     "source": "c1 起点：BF16 + fp32 主权重，20.43 s/step → 445.1 TFLOP/s/chip"},
+
+    # ② QAG 配方（专家维分片 + fixed + tokamax）—— 有效但 FSDP 被锁一半
+    {"when": {"model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
+              "quant": "fp8", "tokamax": True, "shard_exp": True, "tile": None},
+     "ok": True, "peak_gb": 90.60, "per_chip": 677.0,
+     "source": "旧生产配方：FP8 + 跨卡量化收集 + tokamax。677.0 TFLOP/s/chip。"
+               "专家数 192 只能被 64 整除，FSDP 被锁在一半宽度。"},
+
+    # ③ ☠️ 同样配置但走 native —— 这就是那个 1014.8
+    {"when": {"model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
+              "quant": "fp8", "tokamax": False, "shard_exp": True, "tile": None},
+     "ok": True, "peak_gb": 86.30, "per_chip": 1014.8, "step_s": 7.85,
+     "invalid": "这个数字是**漏算**出来的，已作废。native 分支不执行权重 all-gather，"
+                "kernel 只对本地 3/192 个专家建组元数据，其余专家完全不参与计算 —— "
+                "不报错、loss 照常下降。补齐 all-gather 后重测是 637.0，"
+                "比不动它的旧配方（677.0）**还低**。",
+     "source": "2026-08-15 的假峰值。kernel 自报覆盖 3,582 / 229,376 行（1.6%）。"},
+
+    # ④ 补齐 all-gather 之后的真实值（同配置，打了补丁的运行时）
+    {"when": {"model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
+              "quant": "fp8", "tokamax": False, "shard_exp": True, "tile": None,
+              "patched": True},
+     "ok": True, "peak_gb": 90.10, "per_chip": 637.0, "step_s": 12.50,
+     "source": "2026-08-16 打补丁补齐 all-gather + psum_scatter 后重测。"},
+
+    # ⑤ 新思路：不开 QAG → FSDP 吃满 128 → batch 开得更大
+    {"when": {"model": "hunyuan3-295b", "pdbs": 13, "cal": "fixed", "fsdp": 128,
+              "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
+     "ok": True, "peak_gb": 93.97, "per_chip": 727.0, "step_s": 20.342,
+     "source": "峰值配方（仅 benchmark）：FP8 + native + FSDP 128 + pdbs 13。"},
+    {"when": {"model": "hunyuan3-295b", "pdbs": 14, "cal": "fixed", "fsdp": 128,
+              "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
      "ok": False, "required_gb": 99.30, "kind": "hbm_oom_runtime",
      "raw": "total memory required for HLO temporaries exceeds available HBM",
-     "source": "2026-08-16 AOT 扫描 /tmp/aotscan.out"},
-    {"when": {"pdbs": 16, "cal": "fixed", "fsdp": 128, "quant": "fp8"},
+     "source": "AOT 扫描：14 装不下"},
+    {"when": {"model": "hunyuan3-295b", "pdbs": 16, "cal": "fixed", "fsdp": 128,
+              "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
      "ok": False, "required_gb": 108.4, "kind": "hbm_oom_runtime",
      "raw": "total memory required for HLO temporaries exceeds available HBM",
-     "source": "2026-08-16 AOT 扫描"},
-    {"when": {"pdbs": 13, "cal": None, "fsdp": 128, "quant": None},
-     "ok": True, "peak_gb": 91.40,
-     "source": "2026-08-16 BF16 最优，真机 666.6 TFLOP/s/chip"},
+     "source": "AOT 扫描：16 差得远"},
+
+    # ⑥ fixed 伤收敛 → 换 absmax，batch 要重新二分（**显存非单调**）
+    {"when": {"model": "hunyuan3-295b", "pdbs": 13, "cal": "absmax", "fsdp": 128,
+              "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
+     "ok": False, "required_gb": 95.51, "kind": "hbm_oom_runtime",
+     "raw": "total memory required for HLO temporaries (95.51G) exceeds available HBM (94.74G)",
+     "source": "AOT 与真机两边都报 95.51G，逐位吻合"},
+    {"when": {"model": "hunyuan3-295b", "pdbs": 12, "cal": "absmax", "fsdp": 128,
+              "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
+     "ok": False, "required_gb": 96.00, "kind": "hbm_oom_runtime",
+     "raw": "total memory required for HLO temporaries exceeds available HBM",
+     "nonmono": "⚠️ **12 比 13 更超**（96.00 vs 95.51）。显存不随 batch 单调 —— "
+                "不同尺寸让编译器选了不同的融合与排布方案。"
+                "所以「差一点点，降一档就好」这个直觉在这里不成立，必须逐档试。",
+     "source": "AOT 扫描：这一档是「显存非单调」的直接证据"},
+    {"when": {"model": "hunyuan3-295b", "pdbs": 11, "cal": "absmax", "fsdp": 128,
+              "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
+     "ok": True, "peak_gb": 93.19, "per_chip": 670.8, "step_s": 18.656,
+     "source": "✅ 生产配方：FP8 + native + FSDP 128 + absmax + pdbs 11。"},
+
+    # ⑦ BF16 对照（同 FSDP，吃满 tile）
+    {"when": {"model": "hunyuan3-295b", "pdbs": 13, "cal": None, "fsdp": 128,
+              "quant": None, "tokamax": False, "shard_exp": False, "tile": True},
+     "ok": True, "peak_gb": 91.40, "per_chip": 666.6,
+     "source": "BF16 最优。FP8 相对它只快约 0.6%（对 absmax 而言）。"},
 ]
 
 
+_TILE_KEYS = ("gmm_tile_m", "gmm_tile_k", "gmm_tile_n", "tile_batch_seq", "tile_embed", "tile_mlp")
+
+
 def _match_case(params: dict, target: dict):
-    pdbs = _int(params.get("per_device_batch_size"))
+    """在 when 里，`None` 一律是「必须也是 None/False」，**只有 tile 允许写 None 当通配**
+    （tile 对某些档的结论没影响）。写 when 时别指望 None 是万能匹配 —— 上一版就是
+    这么写坏的，结果整条 QAG 路径静默匹配不上，报「没有实测记录」。"""
     cal = str(params.get("weight_quantization_calibration_method", "") or "")
-    cal_key = "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None)
     quant = str(params.get("quantization", "") or "")
-    quant_key = "fp8" if "fp8" in quant else None
-    fsdp = fsdp_width(params, target)
+    got = {
+        "model": str(params.get("model_name", "") or "").lower(),
+        "pdbs": _int(params.get("per_device_batch_size")),
+        "cal": "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None),
+        "quant": "fp8" if "fp8" in quant else None,
+        "tokamax": bool(params.get("use_tokamax_gmm")),
+        "shard_exp": bool(params.get("shard_exp_on_fsdp")),
+        "fsdp": fsdp_width(params, target),
+        "tile": any(k in params for k in _TILE_KEYS),
+        "patched": bool(params.get("_patched_gather")),
+    }
     for c in REPLAY_CASES:
         w = c["when"]
-        if w["pdbs"] == pdbs and w["cal"] == cal_key and w["fsdp"] == fsdp and w["quant"] == quant_key:
+        if any(k not in w for k in ("model", "pdbs", "fsdp")):
+            continue
+        ok = True
+        for k, want in w.items():
+            if k == "tile" and want is None:      # 唯一的通配
+                continue
+            if got.get(k) != want:
+                ok = False
+                break
+        # when 里没写 patched 的档，只匹配「没打补丁」的运行时
+        if ok and "patched" not in w and got["patched"]:
+            ok = False
+        if ok:
             return c
     return None
 
@@ -132,6 +203,9 @@ def _run_replay(params: dict, target: dict) -> dict:
         }
 
     res: dict = {"mode": "replay", "ok": case["ok"], "source": case["source"], "analyses": {}}
+    for k in ("per_chip", "step_s", "invalid", "nonmono"):
+        if case.get(k) is not None:
+            res[k] = case[k]
     if not case["ok"]:
         res["failure"] = {"kind": case["kind"], "required_gb": case["required_gb"],
                           "available_gb": HBM_PER_DEVICE_GB, "raw": case["raw"]}
@@ -178,14 +252,22 @@ def _run_replay(params: dict, target: dict) -> dict:
         "peak_hbm_gb": peak, "hbm_pct": round(peak / HBM_PER_DEVICE_GB * 100, 1) if peak else None,
         "end_to_end_s": 178, "pdbs": pdbs, "fsdp": fsdp,
         "global_batch": pdbs * devices if pdbs and devices else None,
+        "per_chip_tflops": case.get("per_chip"), "step_s": case.get("step_s"),
     }
     return res
 
 
 def _memory_estimate(params: dict, target: dict, peak_gb: float | None) -> dict:
     """显存分解。**参数常驻是按参数量算的（准），激活是倒推的（不准）** —— 分开标。"""
+    from .models import get_model
     fsdp = fsdp_width(params, target) or 1
-    n_params_b = 298.786                                  # Hunyuan3-295B 实测参数量
+    m = get_model(params.get("model_name"))
+    n_params_b = m.get("params_b") or 0
+    if not n_params_b:
+        return {"version": 1, "data": {"capacity_gb": HBM_PER_DEVICE_GB, "peak_gb": peak_gb,
+                "segments": [], "over_gb": 0,
+                "unknown_model": True,
+                "why": "没选模型，参数量未知 —— 常驻显存算不出来。先在上面选一个模型。"}}
     wdtype = str(params.get("weight_dtype", "float32"))
     bytes_per = 4 if "float32" in wdtype else 2
     master = n_params_b * 1e9 * bytes_per / fsdp / 1e9
@@ -211,17 +293,18 @@ def _memory_estimate(params: dict, target: dict, peak_gb: float | None) -> dict:
 
 def _scale(params: dict, target: dict) -> dict:
     """规模概览。**每个数都标出是查表、是算的、还是估的** —— 混在一起最要命。"""
-    from .parser import MODEL_SHAPES
-    shape = MODEL_SHAPES.get(str(params.get("model_name", "")).lower(), {})
+    from .models import get_model
+    shape = get_model(params.get("model_name"))
     pdbs = _int(params.get("per_device_batch_size"), 0) or 0
     seq = _int(params.get("max_target_length"), 0) or 0
     dev = target.get("devices", 0) or 0
     gbatch = pdbs * dev
     tokens = gbatch * seq
-    n_act_b = 21.0     # Hunyuan3 每 token 激活参数（top-8 / 192 专家）
+    n_act_b = shape.get("act_params_b") or 0
     items = [
         {"v": shape.get("layers") or "—", "l": "层数", "kind": "lookup"},
-        {"v": shape.get("num_experts") or "—", "l": "专家数", "kind": "lookup"},
+        {"v": (shape.get("num_experts") or "—") if shape.get("moe") else "dense",
+         "l": "专家数", "kind": "lookup"},
         {"v": shape.get("hidden") or "—", "l": "hidden", "kind": "lookup"},
         {"v": shape.get("mlp") or "—", "l": "mlp", "kind": "lookup"},
         {"v": seq or "—", "l": "seq", "kind": "config"},
@@ -243,6 +326,14 @@ def _scale(params: dict, target: dict) -> dict:
 
 def _codepath(params: dict) -> dict:
     """★ 这个工具存在的全部理由：把「实际走到哪条分支」打出来。"""
+    from .models import detect_backend, get_model
+    m = get_model(params.get("model_name"))
+    if m and not m.get("moe"):
+        return {"version": 1, "data": {
+            "branch": "dense MLP（没有 MoE kernel）", "weight_gather": "编译器按分片规格插入",
+            "shard_expert_dim": False, "tokamax": False, "risk": None,
+            "probe": "dense 模型没有分组矩阵乘分支，这一族的坑不适用。"}}
+    _ = detect_backend(params)
     tokamax = bool(params.get("use_tokamax_gmm"))
     shard_exp = bool(params.get("shard_exp_on_fsdp"))
     cal = str(params.get("weight_quantization_calibration_method", "") or "")

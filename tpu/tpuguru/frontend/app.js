@@ -13,6 +13,8 @@ const fmt = (n, d = 2) => (n === null || n === undefined) ? '—' : Number(n).to
 
 let S = null;              // 当前 state
 let TOPOS = {};
+let FAMILIES = [];
+let BACKENDS = [];
 let busy = false;
 let hideVoided = false;
 
@@ -20,8 +22,6 @@ let hideVoided = false;
 const FIELDS = [
   { k: '__topology', label: '目标拓扑', type: 'topo', req: true,
     q: '决定 AOT 按多少张卡编译。名字里的数字是 device，v7 是 2 device/chip —— tpu7x-128 是 64 芯片，不是 128。选错了整份显存结论都不成立。' },
-  { k: 'model_name', label: '模型', type: 'text',
-    q: 'MaxText 里的模型名，决定层数、专家数、hidden 等形状。lint 的整除类规则要靠它拿到专家数。' },
   { k: 'per_device_batch_size', label: 'per_device_batch_size', type: 'num',
     q: '每个 device（不是每芯片）的 batch。它是显存的主要旋钮，但显存不随它单调 —— 实测有 13 超 0.77G、降到 12 反而超 1.26G 的情况，逐档试不要外推。' },
   { k: 'ici_fsdp_parallelism', label: 'ici_fsdp_parallelism', type: 'num',
@@ -124,6 +124,7 @@ function renderDiff(p, idx) {
 /* ── 渲染：配置 ───────────────────────────────────────────── */
 function renderCfg() {
   const p = $('#pane-cfg'); p.innerHTML = '';
+  p.appendChild(cardPick());
 
   // lint 卡
   const lc = el('div', 'card');
@@ -187,6 +188,112 @@ function renderCfg() {
   }
 }
 
+/* 模型族 → 型号 → MoE 后端。**先选它们，后面的映射才成立**：
+   tile 上界看 hidden/mlp、整除类 lint 看专家数、显存估算看参数量。 */
+function cardPick() {
+  const c = el('div', 'card');
+  c.appendChild(el('h3', null, '模型与后端'));
+  c.appendChild(el('div', 'hint',
+    '先选这两项 —— 形状不知道，tile 上界、整除检查、显存估算全都退化成猜。'));
+
+  const cur = S.params.model_name || '';
+  const curModel = FAMILIES.flatMap(f => f.models).find(m => m.id === cur);
+  const curFam = curModel ? FAMILIES.find(f => f.models.some(m => m.id === cur)).id : '';
+
+  const g = el('div', 'pick');
+
+  // 族
+  const fd = el('div', 'field');
+  const fl = el('label', null, '模型族');
+  const fq = el('span', 'q', 'ⓘ');
+  fq.title = 'MaxText 支持的模型族。Hunyuan3 是我们后加进去的，主线没有；其余是主线自带。';
+  fl.appendChild(fq); fd.appendChild(fl);
+  const fs = el('select');
+  fs.appendChild(el('option', null, '— 请选择 —')).value = '';
+  FAMILIES.forEach(f => { const o = el('option', null, f.label); o.value = f.id;
+    if (f.id === curFam) o.selected = true; fs.appendChild(o); });
+  fs.onchange = async () => {
+    const fam = FAMILIES.find(x => x.id === fs.value);
+    if (fam && fam.models.length) await setParam('model_name', fam.models[0].id);
+    else render();
+  };
+  fd.appendChild(fs); g.appendChild(fd);
+
+  // 型号
+  const md = el('div', 'field' + (cur ? '' : ' miss'));
+  const ml = el('label', null, '型号');
+  const mq = el('span', 'q', 'ⓘ');
+  mq.title = '决定层数 / 专家数 / hidden / mlp / 参数量。选错了整份显存与 lint 结论都不成立。';
+  ml.appendChild(mq); md.appendChild(ml);
+  const ms = el('select');
+  const fam = FAMILIES.find(x => x.id === (fs.value || curFam));
+  ms.appendChild(el('option', null, fam ? '— 请选择 —' : '— 先选模型族 —')).value = '';
+  (fam ? fam.models : []).forEach(m => { const o = el('option', null, m.label); o.value = m.id;
+    if (m.id === cur) o.selected = true; ms.appendChild(o); });
+  ms.disabled = !fam;
+  ms.onchange = () => setParam('model_name', ms.value);
+  md.appendChild(ms); g.appendChild(md);
+
+  // MoE 后端
+  const isMoe = curModel ? curModel.moe : true;
+  const bd = el('div', 'field');
+  const bl = el('label', null, 'MoE 后端');
+  const bq = el('span', 'q', 'ⓘ');
+  bq.title = '选的是「走哪条 kernel 路径」，不是记 flag 名字。选完会一次性把对应参数写进配置。';
+  bl.appendChild(bq); bd.appendChild(bl);
+  const bs = el('select');
+  bs.appendChild(el('option', null, isMoe ? '— 未指定 —' : '— dense 模型不适用 —')).value = '';
+  BACKENDS.forEach(b => { const o = el('option', null, b.label); o.value = b.id;
+    if (b.id === S.backend) o.selected = true; bs.appendChild(o); });
+  bs.disabled = !isMoe;
+  bs.onchange = () => setParam('__backend', bs.value);
+  bd.appendChild(bs); g.appendChild(bd);
+  c.appendChild(g);
+
+  if (curModel) {
+    const i = el('div', 'modelinfo');
+    const r1 = el('div', 'row1');
+    r1.appendChild(el('b', null, esc(curModel.label)));
+    r1.appendChild(el('span', 'prov ' + curModel.provenance,
+      curModel.provenance === 'measured' ? '我们在 v7 上实测过' : '公开 config · 无我方实测'));
+    i.appendChild(r1);
+    i.appendChild(el('div', 'shapes',
+      `${curModel.layers} 层 · ` + (curModel.moe
+        ? `${curModel.num_experts} 专家 · ` : 'dense · ')
+      + `hidden ${curModel.hidden} · mlp ${curModel.mlp} · ${curModel.params_b}B 参数`));
+    if (curModel.tile_default) i.appendChild(el('div', 'shapes',
+      `tile 安全起点 (${curModel.tile_default.join(', ')}) —— 不能超过对应维度`));
+    if (curModel.note) i.appendChild(el('div', null, esc(curModel.note)));
+    if (curModel.provenance === 'public') i.appendChild(el('div', 'warn',
+      '⚠️ 这个模型我们没有 v7 实测数据。别把别的模型的 batch 上限、tile 值直接搬过来。'));
+    c.appendChild(i);
+  }
+
+  const be = BACKENDS.find(b => b.id === S.backend);
+  if (be && isMoe) {
+    const i = el('div', 'modelinfo');
+    i.appendChild(el('div', null, md2(be.desc)));
+    const pr = el('div', 'bepros');
+    const mk = (cls, h, arr) => { const d = el('div', cls);
+      d.appendChild(el('div', 'h', h));
+      d.appendChild(el('ul', null, arr.map(x => `<li>${md2(x)}</li>`).join(''))); return d; };
+    pr.appendChild(mk('good', '拿到什么', be.pros));
+    pr.appendChild(mk('bad', '代价 / 风险', be.cons));
+    i.appendChild(pr);
+    c.appendChild(i);
+  }
+  return c;
+}
+
+const md2 = s => esc(s).replace(/`([^`]+)`/g, '<code>$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>');
+
+async function setParam(k, v) {
+  setBusy(true);
+  try { S = await api('/api/set', { session_id: S.session_id, param: k, value: v }); render(); }
+  catch (e) { toast('改失败：' + e.message); } finally { setBusy(false); }
+}
+
 function renderField(f) {
   const d = el('div', 'field');
   const isTopo = f.k === '__topology';
@@ -220,11 +327,7 @@ function renderField(f) {
     inp.type = f.type === 'num' ? 'number' : 'text';
     inp.value = val;
   }
-  inp.onchange = async () => {
-    setBusy(true);
-    try { S = await api('/api/set', { session_id: S.session_id, param: f.k, value: inp.value }); render(); }
-    catch (e) { toast('改失败：' + e.message); } finally { setBusy(false); }
-  };
+  inp.onchange = () => setParam(f.k, inp.value);
   d.appendChild(inp);
   return d;
 }
@@ -293,11 +396,24 @@ function renderRep() {
       + `<span style="font-family:var(--mono);font-size:11.5px;color:var(--muted)">`
       + `报告 ${esc(R.fingerprint)} · 当前 ${esc(S.fingerprint)}</span></div>`));
   }
+  // ☠️ 作废的数字必须先于一切出现，并且把它自己划掉。
+  // 「编译通过 + 一个漂亮数字」是这份报告最危险的呈现方式。
+  if (R.invalid) {
+    const vb = el('div', 'void-banner');
+    vb.appendChild(el('div', 't', '⛔ 这一档的数字已作废，不要引用'));
+    vb.appendChild(el('div', 'd', md2(R.invalid)));
+    p.appendChild(vb);
+  }
+  if (R.nonmono) {
+    p.appendChild(el('div', 'stale', '<div>📉</div><div>' + md2(R.nonmono) + '</div>'));
+  }
+
   // 结论
   const v = el('div', 'card');
   const ok = R.ok;
-  const txt = ok === true ? '✅ 编译通过，装得下' : ok === false ? '❌ 装不下' : '❓ 这一档没有实测记录';
-  v.appendChild(el('div', 'big ' + (ok === true ? 'ok' : ok === false ? 'bad' : 'unk'), txt));
+  const txt = R.invalid ? '编译通过，但结果无效'
+    : ok === true ? '✅ 编译通过，装得下' : ok === false ? '❌ 装不下' : '❓ 这一档没有实测记录';
+  v.appendChild(el('div', 'big ' + (R.invalid ? 'void' : ok === true ? 'ok' : ok === false ? 'bad' : 'unk'), txt));
   if (R.failure) {
     v.appendChild(el('div', 'hint', `${esc(R.failure.kind)} · 需要 <b>${fmt(R.failure.required_gb)} GB</b>，`
       + `上限 ${fmt(R.failure.available_gb)} GB，超 <b>${fmt(R.failure.required_gb - R.failure.available_gb)} GB</b>`));
@@ -314,6 +430,7 @@ function renderRep() {
     if (m.global_batch) k.appendChild(kp(m.global_batch.toLocaleString(), 'global batch（条）'));
     if (m.fsdp) k.appendChild(kp(m.fsdp, 'FSDP 宽度'));
     if (m.end_to_end_s) k.appendChild(kp(m.end_to_end_s + ' s', 'AOT 耗时'));
+    if (R.invalid) k.querySelectorAll('.kpi').forEach(x => x.classList.add('struck'));
     v.appendChild(k);
   }
   const badge = el('div', 'hint');
@@ -324,6 +441,9 @@ function renderRep() {
     : `<span class="pill"><span class="dot"></span>real 模式</span> 本机 docker 真跑的。`;
   v.appendChild(badge);
   p.appendChild(v);
+
+  const m2 = R.metrics || {};
+  if (m2.per_chip_tflops || m2.step_s) p.appendChild(cardRealRef(m2, R));
 
   const A = R.analyses || {};
   if (A.scale) p.appendChild(cardScale(A.scale.data));
@@ -367,6 +487,30 @@ function cardArtifacts(a) {
     d.appendChild(t); g.appendChild(d);
   });
   c.appendChild(g);
+  return c;
+}
+
+/* AOT 不产生吞吐数字。这里显示的是**同配置真机跑过的记录**，
+   跟 AOT 的结论必须在视觉上分开，否则会被当成 AOT 预测出来的。 */
+function cardRealRef(m, R) {
+  const c = el('div', 'card realref');
+  const h = el('h3', null, '真机参照');
+  h.appendChild(el('span', 'tagline', '不是 AOT 算的'));
+  c.appendChild(h);
+  c.appendChild(el('div', 'hint', md2(
+    'AOT 只编译不执行，**它给不出任何吞吐数字**。下面是同一套配置在真机上跑过的记录，'
+    + '放在这里是为了让你把「装不装得下」和「快不快」对上号。')));
+  const k = el('div', 'kpis');
+  const kp = (n, l, cls) => { const d = el('div', 'kpi' + (cls ? ' ' + cls : ''));
+    d.appendChild(el('div', 'n', n)); d.appendChild(el('div', 'l', l)); return d; };
+  if (m.per_chip_tflops) k.appendChild(kp(fmt(m.per_chip_tflops, 1),
+    'TFLOP/s/chip', R.invalid ? 'struck' : ''));
+  if (m.per_chip_tflops) k.appendChild(kp((m.per_chip_tflops / 2307 * 100).toFixed(1) + '%',
+    'MFU（BF16 峰值 2307）', R.invalid ? 'struck' : ''));
+  if (m.step_s) k.appendChild(kp(fmt(m.step_s, 2) + ' s', 'step 时间', R.invalid ? 'struck' : ''));
+  c.appendChild(k);
+  if (R.invalid) c.appendChild(el('div', 'hint',
+    '<b style="color:var(--red)">上面这几个数已作废</b>，划掉的原因见页首。'));
   return c;
 }
 
@@ -534,20 +678,35 @@ async function renderHis() {
   }
   c.appendChild(bar);
   if (hideVoided) list = list.filter(x => !x.voided);
-  // 按 parent_save_id 摆成树
-  const byId = Object.fromEntries(list.map(s => [s.id, s]));
+  // 按 parent_save_id 摆成树。**只有分叉才缩进** ——
+  // 线性调优（每次在上一版基础上改一点）是一条链，逐级缩进会越缩越偏。
+  const byId = Object.fromEntries(list.map(x => [x.id, x]));
   const kids = {}; const roots = [];
-  list.forEach(s => {
-    if (s.parent_save_id && byId[s.parent_save_id]) (kids[s.parent_save_id] ||= []).push(s);
-    else roots.push(s);
+  list.forEach(x => {
+    if (x.parent_save_id && byId[x.parent_save_id]) (kids[x.parent_save_id] ||= []).push(x);
+    else roots.push(x);
   });
+  const byTime = (a, b) => (a.created_at || '').localeCompare(b.created_at || '');
   const tree = el('div', 'tree');
-  const walk = (s, depth) => {
-    tree.appendChild(nodeOf(s, depth));
-    (kids[s.id] || []).sort((a, b) => (a.created_at || '').localeCompare(b.created_at || ''))
-      .forEach(k => walk(k, Math.min(depth + 1, 3)));
-  };
-  roots.sort((a, b) => (b.created_at || '').localeCompare(a.created_at || '')).forEach(r => walk(r, 0));
+
+  function chain(start, container) {
+    const lane = el('div', 'lane');
+    let cur = start;
+    while (cur) {
+      lane.appendChild(nodeOf(cur));
+      const ch = (kids[cur.id] || []).sort(byTime);
+      if (ch.length === 1) { cur = ch[0]; continue; }      // 继续同一条链
+      if (ch.length > 1) {                                  // 分叉才缩进
+        const fk = el('div', 'fork');
+        fk.appendChild(el('div', 'lanehead', `↳ 从这里分出 ${ch.length} 条支线`));
+        ch.forEach(k => chain(k, fk));
+        lane.appendChild(fk);
+      }
+      cur = null;
+    }
+    container.appendChild(lane);
+  }
+  roots.sort((a, b) => byTime(b, a)).forEach(r => chain(r, tree));
   c.appendChild(tree);
   p.appendChild(c);
 }
@@ -560,12 +719,20 @@ function nodeOf(s, depth) {
   const bits = [s.created_at || ''];
   if (m.peak_hbm_gb) bits.push(fmt(m.peak_hbm_gb) + ' GB');
   if (m.pdbs) bits.push('pdbs ' + m.pdbs);
-  if (rs.ok === true) bits.push('✅'); else if (rs.ok === false) bits.push('❌');
+  if (rs.per_chip_tflops) bits.push(fmt(rs.per_chip_tflops, 1) + ' TFLOP/s');
+  // 作废的不打勾 —— 它编译是通过了，但结论无效，打勾会让人误以为可用
+  if (s.voided || rs.invalid) bits.push('⛔ 结论无效');
+  else if (rs.ok === true) bits.push('✅');
+  else if (rs.ok === false) bits.push('❌');
   left.appendChild(el('div', 'meta', esc(bits.join('  ·  '))));
   if (s.note) left.appendChild(el('div', 'meta', esc(s.note)));
   if (s.tags && s.tags.length) left.appendChild(el('div', 'meta',
     s.tags.map(t => `<span class="tag ok" style="margin-right:5px">${esc(t)}</span>`).join('')));
-  if (s.voided) left.appendChild(el('div', 'meta', '作废原因：' + esc(s.voided.reason || '')));
+  if (s.voided) {
+    const r = String(s.voided.reason || '').replace(/\*\*/g, '');
+    left.appendChild(el('div', 'meta',
+      (s.voided.by === 'auto' ? '自动作废：' : '作废原因：') + esc(r.length > 110 ? r.slice(0, 110) + '…' : r)));
+  }
   n.appendChild(left);
 
   const acts = el('div', 'acts');
@@ -582,7 +749,7 @@ function nodeOf(s, depth) {
     const vd = el('button', 'btn-ghost btn-sm', '作废');
     vd.onclick = async (e) => {
       e.stopPropagation();
-      const r = prompt('作废原因（会一起存下来）：');
+      const r = prompt(`作废「${s.title}」\n\n原因（会一起存下来，以后能看到「这条路为什么走不通」）：`);
       if (!r) return;
       await api(`/api/save/${s.id}/void`, { reason: r }); renderHis(); toast('已标记作废');
     };
@@ -686,6 +853,7 @@ $('#btn-save').onclick = () => {
   try {
     const h = await api('/api/health');
     TOPOS = h.topologies || {};
+    FAMILIES = h.families || []; BACKENDS = h.backends || [];
     const ps = $('#pill-store');
     ps.className = 'pill' + (h.store === 'firestore' ? '' : ' warn');
     ps.lastElementChild.textContent = h.store === 'firestore' ? 'Firestore' : '本地存储';
