@@ -1,0 +1,28 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "候选 lint 规则草稿",
+  "description": "遇到没见过的失败时产出。人工确认后进规则库。每踩一个新坑就沉淀一条，下次自动拦住。",
+  "type": "object",
+  "required": ["title", "severity", "when", "detail", "fix", "evidence", "confidence", "silent"],
+  "properties": {
+    "title":    {"type": "string", "maxLength": 60,
+                 "description": "一句话说清会发生什么，不要写成参数名的罗列"},
+    "severity": {"enum": ["fatal", "warn", "info"],
+                 "description": "fatal = 会算错或跑不起来；warn = 有代价但能跑；info = 提醒"},
+    "silent":   {"type": "boolean",
+                 "description": "★ 是否静默 —— 不报错、指标看起来正常。静默的一律至少 warn"},
+    "when":     {"type": "object",
+                 "description": "触发条件，尽量用确定性表达式（param/flag/expr 的合取）"},
+    "detail":   {"type": "string", "description": "会发生什么、为什么"},
+    "fix":      {"type": "string", "description": "怎么绕开，给具体参数值"},
+    "evidence": {"type": "object", "required": ["kind", "raw"],
+                 "properties": {
+                   "kind": {"enum": ["error_message", "measurement", "code_reading", "inference"]},
+                   "raw":  {"type": "string", "description": "报错原文 / 实测数字 / 代码位置"},
+                   "env":  {"type": "string", "description": "什么模型、什么硬件、什么日期"}
+                 }},
+    "confidence": {"enum": ["mechanism", "pattern", "number"],
+                   "description": "🟢机制 / 🟡规律 / 🔴数字，见 knowledge/00-scope.md"},
+    "supersedes": {"type": "string", "description": "若推翻了已有规则，写它的 id"}
+  }
+}

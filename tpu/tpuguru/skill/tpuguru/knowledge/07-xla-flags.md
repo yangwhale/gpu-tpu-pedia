@@ -27,8 +27,7 @@ INVALID_ARGUMENT: Latency hiding layer scheduler requires
 **178 倍。** 关键证据是执行次数：编译器插的那条**每步只发一次**
 （80 层的收集被合并提升出了循环），手写的**每层发一次**，一层都提不出去。
 
-> **手写集合通信会牺牲调度自由度。** 声明式表达分片、让编译器插通信，
-> 通常比手动优化更快 —— 哪怕手动那条在字节数上更省。
+> 展开见 `11-tokamax-vs-native.md`。
 
 ## dvfs_p_state
 
