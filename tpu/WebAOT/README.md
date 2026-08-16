@@ -5,6 +5,7 @@
 全程**不占一张加速卡**。
 
 > 状态：设计稿。实现分三期，见 §9。
+> **参数控件与问号文案见 [PARAMS.md](PARAMS.md)**（每个参数：干什么 / 改了会怎样 / 建议选什么）。
 
 ---
 
@@ -190,57 +191,92 @@ Mosaic 层的 kernel 内部：分块循环轮数、VMEM 占用、是否有跨卡
 
 ---
 
-## 8. Firestore schema
+## 8. Firestore schema（为扩展而设计）
 
-collection **`webaot`**，一条 run 一个 doc：
+### 8.1 三条设计原则
+
+1. **一切可增长的东西都放开放式 map**，不要用固定字段。
+   新增一个分析维度 = 往 `result.analyses` 里加一个 key，**不动 schema、不迁移旧数据**。
+2. **`schema_version` 必填**，读的时候按版本兼容。旧 doc 永远不改写。
+3. **大对象只存指针**。Firestore 单 doc 上限 1 MB，HLO 动辄 10 MB+。
+
+### 8.2 collection `webaot` —— 一次运行一个 doc
 
 ```jsonc
 {
+  "schema_version": 1,
   "id": "aot_20260816_130500_a1b2",
-  "created_at": "2026-08-16T13:05:00+08:00",
-  "created_by": "<user>",
-  "title": "FP8 native FSDP128 pdbs13 absmax",     // 用户可编辑，默认自动生成
-  "status": "queued | running | done | failed",
+  "created_at": "...", "updated_at": "...", "created_by": "<user>",
+  "title": "FP8 native FSDP128 pdbs13 absmax",   // 可编辑
+  "tags": ["hy3", "fp8", "baseline"],            // 自由打标，用于筛选
+  "status": "queued|running|done|failed|cancelled",
+  "parent_id": null,        // 从某次「改一个参数再跑」派生 → 天然形成实验树
+  "duration_s": 178,
 
+  // ── 输入：原样 + 结构化，两份都留 ──
   "input": {
-    "raw_cmd": "...",                               // 原样保存，可复制重跑
-    "parsed": { "per_device_batch_size": 13, ... },
-    "xla_flags": ["--xla_tpu_dvfs_p_state=7", ...],
-    "topology": "tpu7x-128",
-    "chips": 64,
-    "layers": 80,
-    "image": "<镜像 tag>"                            // 编译器版本，结论可迁移性的前提
+    "raw_cmd": "...",                    // 原样保存，一键复制重跑
+    "params":    { "<任意 MaxText 参数>": "<值>" },   // ★ 开放式，不枚举
+    "xla_flags": { "<flag 名>": "<值>" },              // ★ 开放式
+    "target":  { "topology": "tpu7x-128", "chips": 64, "devices": 128, "slices": 1 },
+    "runtime": { "image": "<tag>", "compiler_id": "...", "worker_host": "..." }
   },
 
-  "lint": [ { "rule": "L2", "severity": "warn", "msg": "..." } ],
+  // ── lint：跑之前的静态检查 ──
+  "lint": [ { "rule": "L1", "severity": "fatal|warn|info",
+              "title": "...", "detail": "...", "doc": "<锚点>" } ],
 
+  // ── 结果：按分析器分槽，每个分析器一个 key ──
   "result": {
-    "compiled": false,
-    "failure": { "kind": "hbm_oom_runtime", "required_gb": 95.51, "available_gb": 94.74 },
-    "memory": { "argument_gb": ..., "output_gb": ..., "temp_gb": ..., "peak_gb": ... },
-    "compile_time": { "hlo_passes_s": 15.2, "backend_passes_s": 23.0,
-                      "code_gen_s": 6.4, "end_to_end_s": 45.8 },
-    "codepath": {
-      "moe_kernel": "megablox",
-      "weight_pspec": "P('fsdp', None, None)",
-      "kernel_rhs_shape": [3, 4096, 1536],
-      "weight_gather_axes": [["fsdp", 0]],
-      "quantization": { "enabled": true, "weight_calib": "absmax", "channel_axes": [2] }
-    },
-    "hlo": { "op_count": ..., "fusion_count": ...,
-             "collectives": [ { "kind": "all-gather", "shape": "...", "axis": "fsdp",
-                                "async": true, "in_loop": false } ] }
+    "ok": false,
+    "failure": { "kind": "hbm_oom_runtime", "required_gb": 95.51,
+                 "available_gb": 94.74, "raw": "<原文一行>" },
+    "analyses": {                        // ★ 核心扩展点
+      "memory":     { "version": 1, "data": { ... } },
+      "compile_time": { "version": 1, "data": { ... } },
+      "codepath":   { "version": 1, "data": { ... } },
+      "hlo":        { "version": 1, "data": { ... } },
+      "llo":        { "version": 1, "data": { ... } }    // 三期才有，缺就是没跑
+      // 将来加 roofline / 通信拓扑 / 成本估算，继续往这里加 key
+    }
   },
 
-  "artifacts": {                                    // 大文件不进 Firestore
-    "stdout_uri": "gs://.../stdout.log",
-    "hlo_uri":    "gs://.../hlo.tgz",
-    "pickle_uri": "gs://.../compiled.pkl"           // 编译产物，可直接拿去跑训练
-  }
+  "artifacts": { "<名字>": { "uri": "gs://...", "bytes": 12345, "kind": "log|hlo|pickle" } },
+  "metrics": { "<扁平数值>": 0.0 }        // ★ 供列表页排序/画曲线，从 analyses 里挑关键值冗余上来
 }
 ```
 
-**大文件放对象存储，Firestore 只存指针**（单 doc 有 1 MB 限制，HLO 动辄 10 MB+）。
+**为什么 `params` 用开放式 map**：MaxText 有几百个配置项且还在增加。
+枚举字段等于每加一个参数就要改 schema；开放式 map 只需在**前端**维护「哪些参数值得做成控件」
+（见 [PARAMS.md](PARAMS.md)），后端原样存取。
+
+**`metrics` 是冗余的**：`peak_hbm_gb`、`end_to_end_s`、`fatal_lint_count` 这类
+从 `analyses` 里挑出来平铺，只为让列表页能排序、能画趋势线，不必展开整个 doc。
+
+**`parent_id` 形成实验树**：任何一次运行都能「复制并改一个参数」派生新 run，
+历史页可以按树展示，天然回答「这条线是怎么调出来的」。
+
+### 8.3 collection `webaot_rules` —— lint 规则库
+
+规则不写死在代码里，存 Firestore，可随时加：
+
+```jsonc
+{
+  "rule": "L1", "severity": "fatal", "enabled": true,
+  "title": "native 分支会漏 all-gather，只算部分专家",
+  "when": {                                  // 简单的合取式，够用
+    "all": [ {"param": "shard_exp_on_fsdp", "eq": true},
+             {"param": "weight_quantization_calibration_method", "startswith": "fixed"},
+             {"param": "use_tokamax_gmm", "neq": true} ]
+  },
+  "detail": "...", "evidence_doc": "<锚点>", "added_at": "...", "added_by": "..."
+}
+```
+
+### 8.4 索引
+
+`status`、`created_by`、`tags`、`created_at desc`，
+外加 `metrics.peak_hbm_gb`、`metrics.end_to_end_s` 用于排序。
 
 ---
 
@@ -256,6 +292,21 @@ lint 只做 L1/L3/L4/L5（这四条都是纯静态判断，最省事也最救命
 **v2（锦上添花）**
 LLO 分析、batch 上限自动二分、编译产物直接下载（省掉训练时的编译）、
 多拓扑一次性对比（同一配置在 64/128/256 芯片上分别问一遍）。
+
+---
+
+## 9.5 部署
+
+跟 XProf 那套一致：**服务跑在本机，通过跳板机反向代理暴露，带鉴权**。
+
+```
+浏览器 → (跳板机 Caddy，带鉴权) → /webaot/*  ──strip_prefix──▶  本机 :PORT
+```
+
+- Caddy 侧只需 `uri strip_prefix /webaot` + `reverse_proxy <内网IP>:<PORT>`，
+  **后端不用感知前缀**（前端资源用相对路径即可）
+- systemd 常驻 + `Restart=always`
+- worker 与 web 同机，直接调本地 docker
 
 ---
 
