@@ -29,20 +29,20 @@ PEAK_BF16_PER_CHIP = 2307.0
 # 结论完全不同，这正是那个 1014.8 的来历。
 REPLAY_CASES = [
     # ① 起点：BF16，没传 tile
-    {"when": {"model": "hunyuan3-295b", "pdbs": 7, "cal": None, "fsdp": 64,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 7, "cal": None, "fsdp": 64,
               "quant": None, "tokamax": False, "shard_exp": False, "tile": False},
      "ok": True, "peak_gb": 88.20, "per_chip": 445.1, "step_s": 20.43,
      "source": "c1 起点：BF16 + fp32 主权重，20.43 s/step → 445.1 TFLOP/s/chip"},
 
     # ② QAG 配方（专家维分片 + fixed + tokamax）—— 有效但 FSDP 被锁一半
-    {"when": {"model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
               "quant": "fp8", "tokamax": True, "shard_exp": True, "tile": None},
      "ok": True, "peak_gb": 90.60, "per_chip": 677.0,
      "source": "旧生产配方：FP8 + 跨卡量化收集 + tokamax。677.0 TFLOP/s/chip。"
                "专家数 192 只能被 64 整除，FSDP 被锁在一半宽度。"},
 
     # ③ ☠️ 同样配置但走 native —— 这就是那个 1014.8
-    {"when": {"model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
               "quant": "fp8", "tokamax": False, "shard_exp": True, "tile": None},
      "ok": True, "peak_gb": 86.30, "per_chip": 1014.8, "step_s": 7.85,
      "invalid": "这个数字是**漏算**出来的，已作废。native 分支不执行权重 all-gather，"
@@ -52,35 +52,35 @@ REPLAY_CASES = [
      "source": "2026-08-15 的假峰值。kernel 自报覆盖 3,582 / 229,376 行（1.6%）。"},
 
     # ④ 补齐 all-gather 之后的真实值（同配置，打了补丁的运行时）
-    {"when": {"model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 7, "cal": "fixed", "fsdp": 64,
               "quant": "fp8", "tokamax": False, "shard_exp": True, "tile": None,
               "patched": True},
      "ok": True, "peak_gb": 90.10, "per_chip": 637.0, "step_s": 12.50,
      "source": "2026-08-16 打补丁补齐 all-gather + psum_scatter 后重测。"},
 
     # ⑤ 新思路：不开 QAG → FSDP 吃满 128 → batch 开得更大
-    {"when": {"model": "hunyuan3-295b", "pdbs": 13, "cal": "fixed", "fsdp": 128,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 13, "cal": "fixed", "fsdp": 128,
               "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
      "ok": True, "peak_gb": 93.97, "per_chip": 727.0, "step_s": 20.342,
      "source": "峰值配方（仅 benchmark）：FP8 + native + FSDP 128 + pdbs 13。"},
-    {"when": {"model": "hunyuan3-295b", "pdbs": 14, "cal": "fixed", "fsdp": 128,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 14, "cal": "fixed", "fsdp": 128,
               "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
      "ok": False, "required_gb": 99.30, "kind": "hbm_oom_runtime",
      "raw": "total memory required for HLO temporaries exceeds available HBM",
      "source": "AOT 扫描：14 装不下"},
-    {"when": {"model": "hunyuan3-295b", "pdbs": 16, "cal": "fixed", "fsdp": 128,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 16, "cal": "fixed", "fsdp": 128,
               "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
      "ok": False, "required_gb": 108.4, "kind": "hbm_oom_runtime",
      "raw": "total memory required for HLO temporaries exceeds available HBM",
      "source": "AOT 扫描：16 差得远"},
 
     # ⑥ fixed 伤收敛 → 换 absmax，batch 要重新二分（**显存非单调**）
-    {"when": {"model": "hunyuan3-295b", "pdbs": 13, "cal": "absmax", "fsdp": 128,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 13, "cal": "absmax", "fsdp": 128,
               "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
      "ok": False, "required_gb": 95.51, "kind": "hbm_oom_runtime",
      "raw": "total memory required for HLO temporaries (95.51G) exceeds available HBM (94.74G)",
      "source": "AOT 与真机两边都报 95.51G，逐位吻合"},
-    {"when": {"model": "hunyuan3-295b", "pdbs": 12, "cal": "absmax", "fsdp": 128,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 12, "cal": "absmax", "fsdp": 128,
               "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
      "ok": False, "required_gb": 96.00, "kind": "hbm_oom_runtime",
      "raw": "total memory required for HLO temporaries exceeds available HBM",
@@ -88,16 +88,42 @@ REPLAY_CASES = [
                 "不同尺寸让编译器选了不同的融合与排布方案。"
                 "所以「差一点点，降一档就好」这个直觉在这里不成立，必须逐档试。",
      "source": "AOT 扫描：这一档是「显存非单调」的直接证据"},
-    {"when": {"model": "hunyuan3-295b", "pdbs": 11, "cal": "absmax", "fsdp": 128,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 11, "cal": "absmax", "fsdp": 128,
               "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
      "ok": True, "peak_gb": 93.19, "per_chip": 670.8, "step_s": 18.656,
      "source": "✅ 生产配方：FP8 + native + FSDP 128 + absmax + pdbs 11。"},
 
     # ⑦ BF16 对照（同 FSDP，吃满 tile）
-    {"when": {"model": "hunyuan3-295b", "pdbs": 13, "cal": None, "fsdp": 128,
+    {"when": {"layers": 80, "model": "hunyuan3-295b", "pdbs": 13, "cal": None, "fsdp": 128,
               "quant": None, "tokamax": False, "shard_exp": False, "tile": True},
      "ok": True, "peak_gb": 91.40, "per_chip": 666.6,
      "source": "BF16 最优。FP8 相对它只快约 0.6%（对 absmax 而言）。"},
+
+    # ── 40 层，2026-08-16 本机真 AOT（并行 6 容器，/tmp/aotpar.sh）──────
+    # ★ 这一组是「显存不随 batch 单调」最硬的证据：13 → 91.94，14 → 85.19，
+    #   **batch 变大反而少用 6.75 GB**。之前 80 层那组只差 0.5~1.3 GB，
+    #   这里一次跳了 7%。任何形式的斜率外推在这条曲线上都不成立。
+] + [
+    {"when": {"layers": 40, "model": "hunyuan3-295b", "pdbs": _p, "cal": "absmax",
+              "fsdp": 128, "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
+     **({"ok": True, "peak_gb": _gb} if _ok else
+        {"ok": False, "required_gb": _gb, "kind": _kind,
+         "raw": f"Ran out of memory in memory space hbm. Used {_gb}G of 94.74G hbm."}),
+     "source": f"2026-08-16 本机真 AOT（40 层，并行扫描）：pdbs {_p} → {_gb} GB"}
+    for _p, _gb, _ok, _kind in [
+        (8,  59.82, True,  None),
+        (12, 80.82, True,  None),
+        (13, 91.94, True,  None),
+        (14, 85.19, True,  None),                 # ← 比 13 少 6.75 GB
+        (15, 89.64, True,  None),                 # ← 装得下的最大档
+        (16, 95.32, False, "hbm_oom_compile"),    # 超 593 MB
+        (17, 97.88, False, "hbm_oom_runtime"),
+        (18, 101.23, False, "hbm_oom_runtime"),
+        (19, 105.58, False, "hbm_oom_runtime"),
+        (40, 192.09, False, "hbm_oom_runtime"),
+        (45, 207.67, False, "hbm_oom_runtime"),
+        (46, 211.71, False, "hbm_oom_runtime"),
+    ]
 ]
 
 
@@ -113,7 +139,7 @@ def _match_case(params: dict, target: dict):
     cal = str(params.get("weight_quantization_calibration_method", "") or "")
     quant = str(params.get("quantization", "") or "")
     got = {
-        "layers_ok": not sh.get("layers_overridden", False),
+        "layers": sh.get("layers"),
         "model": str(params.get("model_name", "") or "").lower(),
         "pdbs": _int(params.get("per_device_batch_size")),
         "cal": "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None),
@@ -124,10 +150,6 @@ def _match_case(params: dict, target: dict):
         "tile": any(k in params for k in _TILE_KEYS),
         "patched": bool(params.get("_patched_gather")),
     }
-    if not got["layers_ok"]:
-        # 实测档位全是生产层数跑的。层数改了就**不能拿来直接用** ——
-        # 这跟拿 A 配置的结论回答 B 配置是同一件事。
-        return None
     for c in REPLAY_CASES:
         w = c["when"]
         if any(k not in w for k in ("model", "pdbs", "fsdp")):
@@ -275,7 +297,9 @@ def _ref_curve(params: dict, target: dict):
     probe = dict(params)
     probe.pop("num_decoder_layers", None)
     cal = str(probe.get("weight_quantization_calibration_method", "") or "")
+    from .models import effective_shape as _es
     key = {
+        "layers": _es(probe).get("layers"),
         "model": str(probe.get("model_name", "") or "").lower(),
         "cal": "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None),
         "quant": "fp8" if "fp8" in str(probe.get("quantization", "") or "") else None,
@@ -308,7 +332,7 @@ def _decompose(pts: list[dict], resident: float) -> dict | None:
     if len(pts) < 2:
         return None
     ds = [(pts[i + 1]["gb"] - pts[i]["gb"]) / (pts[i + 1]["pdbs"] - pts[i]["pdbs"])
-          for i in range(len(pts) - 1)]
+          for i in range(len(pts) - 1) if pts[i + 1]["pdbs"] != pts[i]["pdbs"]]
     pos = [d for d in ds if d > 0]
     if not pos:
         return None
@@ -351,38 +375,49 @@ def _project_by_layers(params: dict, target: dict) -> dict | None:
     res_prod = _resident(params, target, base["params_b"])
     res_now = _resident(params, target, sh["params_b"])
 
-    # ① 生产层数下这个 batch 大概多少（三段模型：常驻 + 固定激活 + 随 batch）
+    # ① 生产层数下这个 batch 大概多少
+    #
+    # ⚠️ 2026-08-16 被真 AOT 证伪的历史，留着别再犯：
+    #    这里曾经用「常驻 + 固定激活 + 斜率 × batch」外推到没跑过的 batch，
+    #    再按层数折算，然后**给出一个推荐 batch 数字**。
+    #    40 层实测打脸：推算说 pdbs 45 要 93.85 GB、上限 45；
+    #    真 AOT 说 pdbs 45 要 **207.67 GB**，差 2.2 倍，真实上限在 10 上下。
+    #    根因：激活与工作区**不随层数线性缩**（scan + offload 下尤其不缩），
+    #    而且 40/45 与 45/46 两段斜率都对不上（3.12 vs 4.04）—— 线性本身就不成立。
+    #
+    # 所以现在只在**这个 batch 恰好有实测点**时才做层数折算，
+    # 没有实测点就不外推，改成给一份二分计划。宁可说不知道。
     dec = _decompose(pts, res_prod)
     exact = next((p for p in pts if p["pdbs"] == pdbs), None)
-    if exact:
-        peak_prod, lvl1 = exact["gb"], "measured"
-    elif dec:
-        peak_prod = res_prod + dec["fixed_act"] + dec["slope"] * pdbs
-        lvl1 = "extrapolated"
-    else:
-        p0 = pts[0]
-        peak_prod = res_prod + max(p0["gb"] - res_prod, 0) / p0["pdbs"] * pdbs
-        lvl1 = "crude"
+    if not exact:
+        return {
+            "mode": "projected", "ok": None, "unknown": True,
+            "projection": {
+                "from_layers": sh["prod_layers"], "to_layers": sh["layers"],
+                "ratio": round(ratio, 3), "no_extrapolate": True,
+                "resident_gb": round(res_now, 2), "resident_prod_gb": round(res_prod, 2),
+                "known_pdbs": [p["pdbs"] for p in pts],
+                "why": f"层数 **{sh['prod_layers']} → {sh['layers']}**，而且 pdbs {pdbs} "
+                       f"在生产层数下也没有实测点。**两级都要外推，这里不做。**",
+                "caveat": "曾经做过这个外推，被真 AOT 打脸 2.2 倍 —— "
+                          "激活与工作区不随层数线性缩，而且 batch 方向的斜率本身就不稳定"
+                          "（同一组实测里两段斜率 3.12 与 4.04 对不上）。"
+                          "**唯一可靠的办法是每一档真跑一次 AOT。**",
+                "exact_part": f"能精确算的只有常驻：{res_now:.2f} GB / device"
+                              f"（生产层数是 {res_prod:.2f} GB）。剩下的都得靠跑。",
+            },
+            "analyses": {"scale": _scale(params, target)},
+            "metrics": {"pdbs": pdbs, "fsdp": fsdp_width(params, target)},
+        }
+    peak_prod, lvl1 = exact["gb"], "measured"
 
     # ② 按层数折算：常驻精确重算，两段激活按层数比例缩
     peak = res_now + max(peak_prod - res_prod, 0) * ratio
     ok = peak <= HBM_PER_DEVICE_GB
 
-    # 反解推荐 batch —— 必须用三段模型，否则会大出一倍
+    # ⚠️ 这里曾经反解出一个「推荐 batch」，被真 AOT 证伪（见上面那段注释）。
+    #    现在只给二分计划，不给数字 —— 一个错的推荐值比没有推荐值更糟。
     rec = None
-    if dec and dec["slope"] > 0:
-        slope_now = dec["slope"] * ratio
-        fixed_now = dec["fixed_act"] * ratio
-        room = HBM_PER_DEVICE_GB - res_now - fixed_now
-        hard = int(room // slope_now) if room > 0 else 0
-        safe = int(max(room - 2.0, 0) // slope_now)
-        rec = {"hard": hard, "safe": safe, "slope_gb": round(slope_now, 3),
-               "fixed_act_gb": round(fixed_now, 2), "resident_gb": round(res_now, 2),
-               "plan": sorted({x for x in (max(safe, 1), max(hard, 1), hard + 1) if x >= 1}),
-               "formula": f"上限 {HBM_PER_DEVICE_GB} = 常驻 {res_now:.2f} + "
-                          f"固定激活 {fixed_now:.2f} + {slope_now:.2f} × batch",
-               "note": "**推荐值留了 2 GB 余量**，别贴着上限走 —— 显存不随 batch 单调，"
-                       "编译器换个尺寸可能换排布方案。按下面这几档各真跑一次 AOT 确认。"}
 
     lvl1_txt = ("这个 batch 在生产层数下**有实测点**"
                 if lvl1 == "measured" else
@@ -430,8 +465,10 @@ def _project_by_layers(params: dict, target: dict) -> dict | None:
 def _same_family(params: dict, target: dict) -> list[dict]:
     """同一套配置、只有 batch 不同的**实测点**。这是余量分析的地基 ——
     没有真实点就不外推，因为显存跟 batch 不是线性的。"""
+    from .models import effective_shape
     cal = str(params.get("weight_quantization_calibration_method", "") or "")
     key = {
+        "layers": effective_shape(params).get("layers"),
         "model": str(params.get("model_name", "") or "").lower(),
         "cal": "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None),
         "quant": "fp8" if "fp8" in str(params.get("quantization", "") or "") else None,
@@ -476,7 +513,7 @@ def _headroom(params: dict, target: dict, peak: float | None) -> dict:
     slope, slope_kind, slope_note = None, "unknown", ""
     if len(pts) >= 2:
         ds = [(pts[i + 1]["gb"] - pts[i]["gb"]) / (pts[i + 1]["pdbs"] - pts[i]["pdbs"])
-              for i in range(len(pts) - 1)]
+              for i in range(len(pts) - 1) if pts[i + 1]["pdbs"] != pts[i]["pdbs"]]
         pos = [d for d in ds if d > 0]
         if pos:
             slope = sum(pos) / len(pos)
