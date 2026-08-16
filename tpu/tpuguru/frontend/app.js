@@ -514,27 +514,33 @@ function cardHloDeep(R) {
   c.appendChild(el('h3', null, '🔬 HLO 深挖'));
   const has = !!(R.artifacts_total?.dir);
   if (!has) {
-    c.appendChild(el('div', 'notyet',
-      'replay 模式没有本地 dump —— 深挖需要 real 模式真跑一次（会自动 --xla_dump_to）。'));
+    c.appendChild(el('div', 'notyet', R.mode === 'real'
+      ? '这次真编译跑在 dump 接上之前，没留下 HLO 产物 —— 重跑一次就有了（3 分钟，不占卡）。'
+      : 'replay 模式没有本地 dump —— 深挖需要 real 模式真跑一次（会自动 --xla_dump_to）。'));
     return c;
   }
   c.appendChild(el('div', 'hint',
     `产物 ${R.artifacts_total.count} 份 / ${(R.artifacts_total.bytes/1e6).toFixed(1)} MB。`
     + '下面全部来自真实 dump 文件 —— 显存排行是<b>编译器自己算的</b>，比任何倒推都准。'));
-  if (!HLO) {
+  // 后端把已有的分析放进 state 了 —— 不用重点一次
+  const H = HLO || S.hlo;
+  if (!H) {
     const b = el('button', 'btn-primary hlobtn', hloBusy ? '分析中…' : '扒开看看');
     b.disabled = hloBusy;
-    b.onclick = async () => {
-      hloBusy = true; render();
-      try { HLO = await api('api/hlo', { session_id: S.session_id, explain: true }); }
-      catch (e) { toast('分析失败：' + e.message); }
-      finally { hloBusy = false; render(); }
-    };
+    b.onclick = () => runHlo(false);
     c.appendChild(b);
     return c;
   }
-  const H = HLO;
-  if (H.explain) { c.appendChild(el('div', 'explain', md3(H.explain))); }
+  if (H.explain) {
+    c.appendChild(el('div', 'explain', md3(H.explain)));
+    const bar = el('div', 'redo');
+    bar.appendChild(el('span', null, H.analyzed_at
+      ? `分析于 ${esc(H.analyzed_at)}${H.cached ? '（读的缓存，没重跑）' : ''}` : ''));
+    const rb = el('button', 'btn-ghost btn-sm', hloBusy ? '分析中…' : '重新分析');
+    rb.disabled = hloBusy; rb.onclick = () => runHlo(true);
+    bar.appendChild(rb);
+    c.appendChild(bar);
+  }
 
   const M = H.memory || {};
   if (M.ok) {
@@ -597,6 +603,13 @@ function cardHloDeep(R) {
     c.appendChild(bars);
   }
   return c;
+}
+
+async function runHlo(force) {
+  hloBusy = true; render();
+  try { HLO = await api('api/hlo', { session_id: S.session_id, explain: true, force }); }
+  catch (e) { toast('分析失败：' + e.message); }
+  finally { hloBusy = false; render(); }
 }
 
 // agent 写的是 markdown，比 md2 多支持标题与列表
@@ -967,6 +980,13 @@ function cardHlo(d) {
 /* ── 渲染：真机报告 ───────────────────────────────────────── */
 let MEXPLAIN = null, mBusy = false;
 
+async function runMetalAnalyze(force) {
+  mBusy = true; render();
+  try { MEXPLAIN = await api('api/metal/analyze', { session_id: S.session_id, force }); }
+  catch (e) { toast('分析失败：' + e.message); }
+  finally { mBusy = false; render(); }
+}
+
 function renderMetal() {
   const p = $('#pane-mtl'); p.innerHTML = '';
   if (METAL_RUN) p.appendChild(cardMetalProgress());
@@ -987,20 +1007,22 @@ function renderMetal() {
   // 分析：跟 AOT 那边一样，事实喂给 agent，结论它自己下
   const c = el('div', 'card');
   c.appendChild(el('h3', null, '🔬 真机分析'));
-  if (MEXPLAIN) {
-    c.appendChild(el('div', 'explain', md3(MEXPLAIN)));
+  const mx = MEXPLAIN || d.analysis;
+  if (mx) {
+    c.appendChild(el('div', 'explain', md3(mx.explain !== undefined ? mx.explain : mx)));
+    const bar = el('div', 'redo');
+    bar.appendChild(el('span', null, mx.analyzed_at ? `分析于 ${esc(mx.analyzed_at)}` : ''));
+    const rb = el('button', 'btn-ghost btn-sm', mBusy ? '分析中…' : '重新分析');
+    rb.disabled = mBusy; rb.onclick = () => runMetalAnalyze(true);
+    bar.appendChild(rb);
+    c.appendChild(bar);
   } else {
     c.appendChild(el('div', 'hint',
       '把实测指标连同 AOT 的预测一起交给带 skill 的 agent —— '
       + '判断这个数在这个规模下算不算好、瓶颈可能在哪、AOT 和真机对上了没有。'));
     const b = el('button', 'btn-primary hlobtn', mBusy ? '分析中…' : '分析');
     b.disabled = mBusy;
-    b.onclick = async () => {
-      mBusy = true; render();
-      try { MEXPLAIN = (await api('api/metal/analyze', { session_id: S.session_id })).explain; }
-      catch (e) { toast('分析失败：' + e.message); }
-      finally { mBusy = false; render(); }
-    };
+    b.onclick = () => runMetalAnalyze(false);
     c.appendChild(b);
   }
   p.appendChild(c);

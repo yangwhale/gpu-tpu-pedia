@@ -199,6 +199,41 @@ def _lookup_metal(fp: str) -> dict | None:
     return hit
 
 
+_ANALYSIS_CACHE: dict[str, dict] = {}
+
+
+def _lookup_analysis(s: dict, fp: str) -> dict | None:
+    """HLO 分析结果按配置指纹缓存：会话内存 → 进程缓存 → run doc。"""
+    hit = (s.get("hlo") or {}).get(fp) or _ANALYSIS_CACHE.get(fp)
+    if hit:
+        return hit
+    try:
+        rid = ((s.get("results") or {}).get(fp) or _lookup_run(fp) or {}).get("run_id")
+        if rid:
+            doc = store.get("tpuguru", rid) or {}
+            if doc.get("hlo_analysis"):
+                _ANALYSIS_CACHE[fp] = doc["hlo_analysis"]
+                return doc["hlo_analysis"]
+    except Exception as e:  # noqa: BLE001
+        log.warning("分析缓存回捞失败: %s", e)
+    return None
+
+
+def _save_analysis(s: dict, fp: str, a: dict):
+    s.setdefault("hlo", {})[fp] = a
+    _ANALYSIS_CACHE[fp] = a
+    try:
+        rid = ((s.get("results") or {}).get(fp) or _lookup_run(fp) or {}).get("run_id")
+        if rid:
+            doc = store.get("tpuguru", rid)
+            if doc:
+                doc["hlo_analysis"] = a
+                store.put("tpuguru", rid, doc)
+    except Exception as e:  # noqa: BLE001
+        log.warning("分析结果落库失败: %s", e)
+    _persist(s)
+
+
 def _recompute(s: dict) -> dict:
     """配置一动就重算：AOT 命令 + lint + 回环校验。"""
     cur = s["current"]
@@ -233,6 +268,7 @@ def _state(s: dict) -> dict:
         "run_ids": s["run_ids"], "result": res, "cached_from": cached_from,
         "known_fingerprints": sorted((s.get("results") or {}).keys()),
         "metal": (s.get("metal") or {}).get(fp) or _lookup_metal(fp),
+        "hlo": _lookup_analysis(s, fp),
         "parent_save_id": s.get("parent_save_id"),
         "fingerprint": fp,
     }
@@ -659,6 +695,7 @@ async def metal_run(inp: MetalIn):
 
 class MetalAnalyzeIn(BaseModel):
     session_id: str
+    force: bool = False
 
 
 @app.post("/api/metal/analyze")
@@ -673,6 +710,8 @@ async def metal_analyze(inp: MetalAnalyzeIn):
     md = (s.get("metal") or {}).get(fp) or _lookup_metal(fp)
     if not md:
         raise HTTPException(400, "这套配置还没有真机结果")
+    if not inp.force and md.get("analysis"):
+        return {**md["analysis"], "cached": True}
     aot = (s.get("results") or {}).get(fp) or _lookup_run(fp) or {}
     m = md.get("metrics") or {}
     p = s["current"]["params"]
@@ -704,8 +743,20 @@ async def metal_analyze(inp: MetalAnalyzeIn):
               "4. **下一步试什么** —— 两三条，按收益排序，每条说代价\n\n"
               "纪律：区分事实与推断；loss 全 0 之类的异常要先指出来再谈吞吐；"
               "不确定就说不确定。\n\n" + "\n".join(facts))
-    return {"ok": True, "explain": await _botcall("explain", prompt, {}) or "",
-            "facts": facts}
+    out = {"ok": True, "explain": await _botcall("explain", prompt, {}) or "",
+           "facts": facts, "analyzed_at": _now()}
+    md["analysis"] = out
+    s.setdefault("metal", {})[fp] = md
+    try:
+        if md.get("doc_id"):
+            doc = store.get("tpuguru_metal", md["doc_id"])
+            if doc:
+                doc["analysis"] = out
+                store.put("tpuguru_metal", md["doc_id"], doc)
+    except Exception as e:  # noqa: BLE001
+        log.warning("真机分析落库失败: %s", e)
+    _persist(s)
+    return out
 
 
 @app.get("/api/metal/{name}")
@@ -724,6 +775,7 @@ def metal_profile():
 class HloIn(BaseModel):
     session_id: str
     explain: bool = True
+    force: bool = False          # 重新分析（默认吃缓存）
 
 
 @app.post("/api/hlo")
@@ -735,6 +787,12 @@ async def hlo_analyze(inp: HloIn):
     """
     s = _get_session(inp.session_id)
     fp = _fingerprint(s["current"])
+    # 分析很贵（读 40 MB dump + 一次 bot 调用 1–2 分钟），**结果必须留下来** ——
+    # 每次回到这一页都重算，等于把用户的时间当免费的。
+    if not inp.force:
+        cached = _lookup_analysis(s, fp)
+        if cached:
+            return {**cached, "cached": True}
     res = (s.get("results") or {}).get(fp) or _lookup_run(fp)
     d = ((res or {}).get("artifacts_total") or {}).get("dir")
     if not d:
@@ -753,6 +811,8 @@ async def hlo_analyze(inp: HloIn):
             "纪律：区分事实与推测；不要复述数字，要解释它意味着什么；"
             "不确定就说不确定。\n\n" + hlomod.digest(a, s["current"]["params"], s["current"]["target"]))
         a["explain"] = await _botcall("explain", prompt, {}) or ""
+    a["analyzed_at"] = _now()
+    _save_analysis(s, fp, a)
     return a
 
 
