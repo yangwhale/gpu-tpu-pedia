@@ -15,6 +15,7 @@ import time
 import uuid
 from pathlib import Path
 
+import asyncio
 import httpx
 from fastapi import FastAPI, HTTPException
 from fastapi.responses import FileResponse, JSONResponse
@@ -23,6 +24,7 @@ from pydantic import BaseModel
 
 from .lint import run_lint
 from .cluster import status as cluster_status
+from . import metal
 from .models import BACKENDS, MODELS, catalog, detect_backend, get_model
 from .parser import TOPOLOGIES, fsdp_width, parse_command, roundtrip_check, to_aot
 from .worker import docker_available, run_aot
@@ -174,6 +176,28 @@ def _lookup_run(fp: str) -> dict | None:
     return hit
 
 
+_METAL_CACHE: dict[str, dict | None] = {}
+
+
+def _lookup_metal(fp: str) -> dict | None:
+    """按配置指纹回捞真机结果 —— 跟 AOT 那半用同一个键缝在一起。"""
+    if fp in _METAL_CACHE:
+        return _METAL_CACHE[fp]
+    hit = None
+    try:
+        if store.db:
+            docs = store.db.collection("tpuguru_metal").where("fingerprint", "==", fp).limit(5).get()
+            cands = [d.to_dict() for d in docs]
+        else:
+            cands = [d for d in store.list("tpuguru_metal", 200) if d.get("fingerprint") == fp]
+        if cands:
+            hit = max(cands, key=lambda x: x.get("created_at", ""))
+    except Exception as e:  # noqa: BLE001
+        log.warning("真机结果回捞失败: %s", e)
+    _METAL_CACHE[fp] = hit
+    return hit
+
+
 def _recompute(s: dict) -> dict:
     """配置一动就重算：AOT 命令 + lint + 回环校验。"""
     cur = s["current"]
@@ -207,6 +231,7 @@ def _state(s: dict) -> dict:
         "lint": r["lint"], "roundtrip": r["roundtrip"],
         "run_ids": s["run_ids"], "result": res, "cached_from": cached_from,
         "known_fingerprints": sorted((s.get("results") or {}).keys()),
+        "metal": (s.get("metal") or {}).get(fp) or _lookup_metal(fp),
         "parent_save_id": s.get("parent_save_id"),
         "fingerprint": fp,
     }
@@ -544,6 +569,96 @@ async def run(inp: ChatIn):
                                "报告在右边。"})
     _persist(s)
     return _state(s)
+
+
+# ── 真机 ───────────────────────────────────────────────────────
+_METAL: dict[str, dict] = {}     # run_name → 进度
+
+
+async def _metal_worker(name: str, y: str, gcs_out: str, fp: str, sid: str):
+    """后台：提交 → 等结束 → 采集 → 落库。**不阻塞页面。**"""
+    st = _METAL[name]
+    try:
+        import tempfile
+        with tempfile.NamedTemporaryFile("w", suffix=".yaml", delete=False) as f:
+            f.write(y)
+            yml = f.name
+        rc, out = await metal._sh("kubectl", "apply", "-f", yml, timeout=120)
+        st.update(phase="submitted", detail=out.strip()[:200])
+        if rc != 0:
+            st.update(phase="failed", detail=out[-400:])
+            return
+        deadline = time.time() + 60 * 75
+        while time.time() < deadline:
+            await asyncio.sleep(45)
+            _, po = await metal._sh("kubectl", "get", "pods", "-n", metal.NS,
+                                    "--no-headers", timeout=60)
+            mine = [l for l in po.splitlines() if l.startswith(name)]
+            run = sum(1 for l in mine if " Running " in f" {l} ")
+            done = sum(1 for l in mine if " Completed " in f" {l} ")
+            bad = sum(1 for l in mine if " Error" in l or "CrashLoop" in l)
+            st.update(phase="running", pods=len(mine), running=run,
+                      completed=done, failed=bad,
+                      elapsed_min=round((time.time() - st["t0"]) / 60, 1))
+            if mine and (done == len(mine) or bad):
+                break
+        st.update(phase="collecting")
+        res = await metal.collect(name, gcs_out, fp)
+        rid = "metal_" + time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4]
+        doc = {"schema_version": 1, "id": rid, "created_at": _now(), "created_by": "local",
+               "fingerprint": fp, "session_id": sid, "kind": "metal", **res}
+        store.put("tpuguru_metal", rid, doc)
+        st.update(phase="done", result=res, doc_id=rid)
+        s_obj = SESSIONS.get(sid)
+        if s_obj is not None:
+            s_obj.setdefault("metal", {})[fp] = {**res, "doc_id": rid}
+            s_obj["turns"].append({"at": _now(), "role": "guru",
+                                   "text": f"🚀 真机跑完：{res['metrics'].get('tflops_per_chip')} "
+                                           f"TFLOP/s/chip，step {res['metrics'].get('step_s')} s。"
+                                           f"trace 已上 XProf。"})
+    except Exception as e:  # noqa: BLE001
+        log.error("真机流程失败 %s: %s", name, e, exc_info=True)
+        st.update(phase="failed", detail=str(e))
+
+
+class MetalIn(BaseModel):
+    session_id: str
+
+
+@app.post("/api/metal")
+async def metal_run(inp: MetalIn):
+    """上真机。**只有当前配置的 AOT 编译通过才允许** —— 装不下就上机是浪费别人的卡。"""
+    s = _get_session(inp.session_id)
+    fp = _fingerprint(s["current"])
+    res = (s.get("results") or {}).get(fp) or _lookup_run(fp)
+    if not res or res.get("ok") is not True or res.get("invalid"):
+        raise HTTPException(400, "这套配置的 AOT 还没编译通过，不能上机")
+    prof = metal_profile()
+    if not prof:
+        raise HTTPException(400, "没有执行档案（TPUGURU_AOT_PROFILE），无法上机")
+    name = metal._run_name(fp)
+    y, gcs_out = metal.build_jobset(name, s["current"]["params"], s["current"]["target"], prof)
+    _METAL[name] = {"name": name, "phase": "submitting", "t0": time.time(),
+                    "fingerprint": fp, "gcs": gcs_out}
+    asyncio.create_task(_metal_worker(name, y, gcs_out, fp, s["id"]))
+    s["turns"].append({"at": _now(), "role": "system",
+                       "text": f"🚀 已提交 64 卡真机任务 `{name}`，约 20–40 分钟。"
+                               f"跑完 trace 会上 XProf。"})
+    _persist(s)
+    return {"run_name": name, "gcs": gcs_out, "state": _state(s)}
+
+
+@app.get("/api/metal/{name}")
+async def metal_status(name: str):
+    st = _METAL.get(name)
+    if not st:
+        raise HTTPException(404, "没有这个真机任务")
+    return {k: v for k, v in st.items() if k != "t0"}
+
+
+def metal_profile():
+    from .worker import _profile
+    return _profile()
 
 
 @app.post("/api/save")

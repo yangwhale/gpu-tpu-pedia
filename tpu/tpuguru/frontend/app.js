@@ -19,6 +19,8 @@ let busy = false;
 let hideVoided = false;
 let everSawReport = false;
 let CLUSTER = null;
+let METAL_RUN = null;
+let metalTimer = null;
 
 /* ── 参数控件表（PARAMS.md 的子集，问号文案三段式）───────── */
 const FIELDS = [
@@ -486,6 +488,9 @@ function renderRep() {
   v.appendChild(badge);
   p.appendChild(v);
 
+  if (S.metal) p.appendChild(cardMetal(S.metal));
+  if (METAL_RUN) p.appendChild(cardMetalProgress());
+
   const m2 = R.metrics || {};
   if (m2.per_chip_tflops || m2.step_s) p.appendChild(cardRealRef(m2, R));
 
@@ -538,6 +543,62 @@ function cardArtifacts(a) {
 
 /* AOT 不产生吞吐数字。这里显示的是**同配置真机跑过的记录**，
    跟 AOT 的结论必须在视觉上分开，否则会被当成 AOT 预测出来的。 */
+/* 真机结果。**trace 链接放最上面** —— 真机数据里最贵、最难复得的就是它。 */
+function cardMetal(d) {
+  const c = el('div', 'card metal');
+  c.appendChild(el('h3', null, '🚀 真机结果 · 64 芯片'));
+  const m = d.metrics || {};
+
+  if (d.xprof_url) {
+    const t = el('div', 'tracebar');
+    const a = el('a', null, '📊 打开 XProf trace');
+    a.href = d.xprof_url; a.target = '_blank'; a.rel = 'noopener';
+    t.appendChild(a);
+    t.appendChild(el('div', 'rn', esc(d.xprof_run || '')));
+    c.appendChild(t);
+  } else {
+    c.appendChild(el('div', 'notyet', 'trace 没采到 —— profile 产物里没有 xplane 文件。'));
+  }
+
+  const k = el('div', 'kpis');
+  const kp = (n, l, cls) => { const x = el('div', 'kpi' + (cls ? ' ' + cls : ''));
+    x.appendChild(el('div', 'n', n)); x.appendChild(el('div', 'l', l)); return x; };
+  if (m.tflops_per_chip) k.appendChild(kp(fmt(m.tflops_per_chip, 1), 'TFLOP/s/chip'));
+  if (m.mfu_pct) k.appendChild(kp(m.mfu_pct + '%', 'MFU'));
+  if (m.step_s) k.appendChild(kp(fmt(m.step_s, 3) + ' s', 'step 时间（中位）'));
+  if (m.steady_steps) k.appendChild(kp(m.steady_steps, '稳态步数'));
+  if (m.loss_last) k.appendChild(kp(fmt(m.loss_last, 3), 'loss（末步）'));
+  c.appendChild(k);
+
+  const bits = [];
+  if (m.tflops_per_device) bits.push(
+    `框架按 device 报 ${fmt(m.tflops_per_device, 1)}，<b>v7 是 2 device/chip 所以 ×2</b>`);
+  if (m.mfu_note) bits.push(esc(m.mfu_note));
+  if (m.step_s_min) bits.push(`step 区间 ${fmt(m.step_s_min,2)}–${fmt(m.step_s_max,2)} s，`
+    + `取中位数避开抖动，跳过前 ${m.warmup_skipped} 步`);
+  if (bits.length) c.appendChild(el('div', 'hint', '<br>' + bits.join('；')));
+  if (m.warn) c.appendChild(el('div', 'warnbox', md2(m.warn)));
+
+  c.appendChild(el('div', 'files',
+    `产物：${esc(d.gcs || '')}<br>本地：${esc(d.local_dir || '')} `
+    + `（xplane ${d.xplane_count || 0} 份，日志 ${((d.log_bytes||0)/1024).toFixed(0)} KB）`));
+  return c;
+}
+
+function cardMetalProgress() {
+  const c = el('div', 'mprog');
+  c.appendChild(el('div', 'spin'));
+  const P = METAL_RUN;
+  const ph = {submitting:'提交中', submitted:'已提交，等 Kueue admit', running:'跑着',
+              collecting:'跑完了，正在采集日志与 trace', done:'完成', failed:'失败'}[P.phase] || P.phase;
+  c.appendChild(el('div', null,
+    `🚀 <b>${esc(P.name)}</b> —— ${esc(ph)}`
+    + (P.pods ? ` · pod ${P.running||0}/${P.pods} Running` : '')
+    + (P.elapsed_min ? ` · 已 ${P.elapsed_min} 分钟` : '')
+    + (P.detail ? `<br><span style="font-size:11.5px;color:var(--muted)">${esc(P.detail)}</span>` : '')));
+  return c;
+}
+
 function cardRealRef(m, R) {
   const c = el('div', 'card realref');
   const h = el('h3', null, '真机参照');
@@ -964,6 +1025,30 @@ $('#btn-run').onclick = async () => {
   try { S = await api('/api/run', { session_id: S.session_id, text: '' }); switchTab('rep'); render(); }
   catch (e) { toast(e.message); }
   finally { setBusy(false); }
+};
+
+$('#btn-metal').onclick = async () => {
+  const m = S.result?.metrics || {};
+  if (!confirm(`上 64 卡真跑？\n\n配置：${S.model?.label || ''} pdbs ${S.params.per_device_batch_size}`
+    + `\nAOT 峰值 ${m.peak_hbm_gb} GB（已编译通过）`
+    + `\n\n约 20–40 分钟，占共享集群 64 芯片。`)) return;
+  try {
+    const r = await api('api/metal', { session_id: S.session_id });
+    METAL_RUN = { name: r.run_name, phase: 'submitting' };
+    S = r.state; switchTab('rep'); render(); toast('已提交真机任务');
+    clearInterval(metalTimer);
+    metalTimer = setInterval(async () => {
+      try {
+        METAL_RUN = await api(`api/metal/${METAL_RUN.name}`);
+        if (METAL_RUN.phase === 'done' || METAL_RUN.phase === 'failed') {
+          clearInterval(metalTimer);
+          S = await api(`api/session/${S.session_id}`);
+          if (METAL_RUN.phase === 'done') { METAL_RUN = null; toast('真机跑完，trace 已上 XProf'); }
+        }
+        render();
+      } catch (e) { clearInterval(metalTimer); }
+    }, 20000);
+  } catch (e) { toast('提交失败：' + e.message); }
 };
 
 $('#btn-new').onclick = async () => {
