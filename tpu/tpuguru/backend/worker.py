@@ -16,6 +16,8 @@ import asyncio
 import logging
 import os
 import shutil
+import time
+from pathlib import Path
 
 from .parser import fsdp_width
 
@@ -176,176 +178,128 @@ def _int(v, d=None):
         return d
 
 
+def _profile() -> dict | None:
+    """真跑用的执行档案（镜像 / 挂载 / 入口 / 固定参数 / 参数名映射）。
+
+    为什么要档案而不是直接跑工具生成的那条命令：工具生成的是
+    `python3 -m MaxText.train_compile MaxText/configs/base.yml k=v...`，
+    而实际镜像里的入口、config 路径、参数名都不一样 ——
+    最要命的是 `num_decoder_layers` 在这套代码里叫 `base_num_decoder_layers`，
+    名字不对会被 base.yml **静默忽略**，跑出来的其实是生产层数。
+    又是一次「配置改了但没生效」，所以映射必须显式写出来。
+    """
+    import json
+    p = os.environ.get("TPUGURU_AOT_PROFILE")
+    if not p:
+        return None
+    try:
+        return json.loads(Path(os.path.expandvars(p)).read_text(encoding="utf-8"))
+    except Exception as e:  # noqa: BLE001
+        log.error("AOT profile 读取失败 %s: %s", p, e)
+        return None
+
+
 def docker_available() -> bool:
-    return bool(shutil.which("docker")) and bool(os.environ.get("TPUGURU_AOT_IMAGE"))
+    return bool(shutil.which("docker")) and _profile() is not None
 
 
 async def run_aot(params: dict, target: dict, aot_cmd: str) -> dict:
-    """跑一次 AOT，返回 result（结构见 README §8.2 的 result 字段）。"""
+    """跑一次 AOT。有执行档案就真跑 docker，没有就回放实测结论。"""
     if docker_available():
-        return await _run_real(aot_cmd)
-    await asyncio.sleep(1.2)                      # 让前端的进度态有东西可显示
+        return await _run_real(params, target)
+    await asyncio.sleep(1.2)          # 让前端的进度态有东西可显示
     return _run_replay(params, target)
 
 
-async def _run_real(aot_cmd: str) -> dict:
-    image = os.environ["TPUGURU_AOT_IMAGE"]
-    cmd = ["docker", "run", "--rm", "--cpus", os.environ.get("TPUGURU_AOT_CPUS", "16"), image,
-           "bash", "-lc", aot_cmd]
+async def _run_real(params: dict, target: dict) -> dict:
+    prof = _profile()
+    args = dict(prof.get("fixed_args", {}))
+    pmap = prof.get("param_map", {})
+    tile_expand = prof.get("tile_expand", {})
+    qmap = prof.get("quant_map", {})
+
+    for k, v in params.items():
+        if k in tile_expand:
+            for real in tile_expand[k]:
+                args[real] = v
+            continue
+        key = pmap.get(k, k)
+        val = v
+        if k == "quantization":
+            val = qmap.get(str(v), v)
+        args[key] = "True" if val is True else "False" if val is False else val
+
+    if target.get("topology"):
+        args["compile_topology"] = target["topology"]
+        args["compile_topology_num_slices"] = target.get("slices", 1)
+    args.setdefault("compile_xla_flags", prof.get("default_xla_flags", ""))
+
+    body = " ".join(
+        f'{k}="{v}"' if " " in str(v) or str(v).startswith("--") else f"{k}={v}"
+        for k, v in sorted(args.items()))
+    inner = (f'{prof["preamble"]} && python3 -m {prof["entry"]} {prof["config"]} {body} 2>&1')
+
+    cmd = ["docker", "run", "--rm", "--cpus", str(prof.get("cpus", "12"))]
+    for m in prof.get("mounts", []):
+        cmd += ["-v", os.path.expandvars(m)]
+    cmd += [prof["image"], "bash", "-lc", inner]
+
+    log.info("真跑 AOT: pdbs=%s layers=%s", args.get("per_device_batch_size"),
+             args.get(pmap.get("num_decoder_layers", "num_decoder_layers")))
+    t0 = time.monotonic()
     p = await asyncio.create_subprocess_exec(*cmd, stdout=asyncio.subprocess.PIPE,
                                              stderr=asyncio.subprocess.STDOUT)
     out, _ = await p.communicate()
     text = out.decode("utf-8", "replace")
-    return _parse_aot_output(text, p.returncode)
+    res = _parse_aot_output(text, p.returncode)
+    res["elapsed_s"] = round(time.monotonic() - t0, 1)
+    res.setdefault("metrics", {})["end_to_end_s"] = res["elapsed_s"]
+    res["cmd"] = inner
+    return res
 
 
 def _parse_aot_output(text: str, rc: int) -> dict:
-    import re
-    m = re.search(r"required for HLO temporaries \(([\d.]+)G\).*?available HBM \(([\d.]+)G\)", text)
+    """从真 AOT 输出里抽结论。**两种 OOM 格式都要认** ——
+    运行期临时缓冲超（HLO temporaries）和编译期排布放不下（CompileTimeHbmOom）
+    含义不同：前者降 batch 通常有效，后者是连排布方案都找不到。"""
+    import re as _re
+    tail = text[-8000:]
+    m = _re.search(r"required for HLO temporaries \(([\d.]+)G\).*?available HBM \(([\d.]+)G\)", text)
     if m:
         return {"mode": "real", "ok": False,
                 "failure": {"kind": "hbm_oom_runtime", "required_gb": float(m.group(1)),
                             "available_gb": float(m.group(2)), "raw": m.group(0)},
-                "log_tail": text[-4000:]}
+                "metrics": {"peak_hbm_gb": float(m.group(1)),
+                            "hbm_pct": round(float(m.group(1)) / HBM_PER_DEVICE_GB * 100, 1)},
+                "log_tail": tail}
+    m = _re.search(r"CompileTimeHbmOom.*?Used ([\d.]+)G of ([\d.]+)G hbm.*?by ([\d.]+)([MG])", text, _re.S)
+    if m:
+        need = float(m.group(1))
+        return {"mode": "real", "ok": False,
+                "failure": {"kind": "hbm_oom_compile", "required_gb": need,
+                            "available_gb": float(m.group(2)),
+                            "raw": f"CompileTimeHbmOom：用了 {need}G / {m.group(2)}G，"
+                                   f"超 {m.group(3)}{m.group(4)}"},
+                "metrics": {"peak_hbm_gb": need,
+                            "hbm_pct": round(need / HBM_PER_DEVICE_GB * 100, 1)},
+                "log_tail": tail}
     if "CompileTimeScopedVmemOom" in text:
         return {"mode": "real", "ok": False,
-                "failure": {"kind": "vmem_oom", "raw": "CompileTimeScopedVmemOom"},
-                "log_tail": text[-4000:]}
-    return {"mode": "real", "ok": rc == 0, "log_tail": text[-4000:]}
-
-
-def _run_replay(params: dict, target: dict) -> dict:
-    case = _match_case(params, target)
-    pdbs = _int(params.get("per_device_batch_size"), 0)
-    fsdp = fsdp_width(params, target)
-    devices = target.get("devices", 0)
-
-    if case is None:
-        proj = _project_by_layers(params, target)
-        if proj:
-            return proj
-        return {
-            "mode": "replay", "ok": None,
-            "unknown": True,
-            "note": "本机没有 AOT 镜像，也不外推一个看着像真的数字。"
-                    "设 TPUGURU_AOT_IMAGE 指向生产同 tag 的镜像后即可跑真实编译。"
-                    "下面只显示能精确算出来的部分。",
-            "analyses": {"memory": _memory_estimate(params, target, None),
-                         "scale": _scale(params, target)},
-        }
-
-    res: dict = {"mode": "replay", "ok": case["ok"], "source": case["source"], "analyses": {}}
-    for k in ("per_chip", "step_s", "invalid", "nonmono"):
-        if case.get(k) is not None:
-            res[k] = case[k]
-    if not case["ok"]:
-        res["failure"] = {"kind": case["kind"], "required_gb": case["required_gb"],
-                          "available_gb": HBM_PER_DEVICE_GB, "raw": case["raw"]}
-    peak = case.get("peak_gb") or case.get("required_gb")
-    res["analyses"]["memory"] = _memory_estimate(params, target, peak)
-    res["analyses"]["compile_time"] = {
-        "version": 1,
-        "data": {"total_s": 178, "phases": [
-            {"name": "trace / jit", "s": 22}, {"name": "HLO 优化", "s": 61},
-            {"name": "分片传播 (SPMD)", "s": 34}, {"name": "内存分配", "s": 28},
-            {"name": "codegen", "s": 33}]},
-    }
-    res["analyses"]["scale"] = _scale(params, target)
-    res["analyses"]["headroom"] = _headroom(params, target, peak)
-    res["analyses"]["levers"] = _levers(params, target, peak)
-    res["analyses"]["codepath"] = _codepath(params)
-    res["analyses"]["collectives"] = _collectives(params, target)
-    res["analyses"]["hlo"] = {
-        "version": 1,
-        "data": {"instructions": 418_233, "fusions": 12_804,
-                 "top": [
-                     {"op": "fusion.moe_gmm_fwd", "pct": 31.4, "note": "分组矩阵乘（前向）"},
-                     {"op": "fusion.moe_gmm_dkv", "pct": 24.8, "note": "分组矩阵乘（反向 dkv）"},
-                     {"op": "fusion.attention",   "pct": 14.2, "note": "splash attention"},
-                     {"op": "all-gather",         "pct": 8.1,  "note": "权重收集"},
-                     {"op": "fusion.layernorm",   "pct": 4.6,  "note": ""}]},
-    }
-    res["analyses"]["llo"] = {
-        "version": 1,
-        "data": {"collected": False,
-                 "why": "LLO（低层指令）dump 属三期能力，需要编译器额外开关且产物在 GB 量级。"
-                        "现在不采 —— 与其显示一个空面板，不如明说没有。",
-                 "howto": "真跑时加 --xla_dump_to 并开 LLO dump，产物会自动挂到这里。"},
-    }
-    res["artifacts"] = {
-        "aot_log": {"name": "aot.log", "bytes": 92_110, "kind": "log",
-                    "desc": "AOT 全量 stdout/stderr。OOM 那行原文在里面。"},
-        "hlo_txt": {"name": "module_0000.before_optimizations.txt", "bytes": 14_829_301,
-                    "kind": "hlo", "desc": "优化前 HLO。看分片标注、看有没有你以为存在的算子。"},
-        "hlo_opt": {"name": "module_0000.after_optimizations.txt", "bytes": 21_004_882,
-                    "kind": "hlo", "desc": "优化后 HLO。真正会被执行的东西，集合通信次数在这里数。"},
-        "mem_json": {"name": "memory_analysis.json", "bytes": 41_223, "kind": "json",
-                     "desc": "编译器给出的显存分配明细。"},
-    }
-    res["metrics"] = {
-        "peak_hbm_gb": peak, "hbm_pct": round(peak / HBM_PER_DEVICE_GB * 100, 1) if peak else None,
-        "end_to_end_s": 178, "pdbs": pdbs, "fsdp": fsdp,
-        "global_batch": pdbs * devices if pdbs and devices else None,
-        "per_chip_tflops": case.get("per_chip"), "step_s": case.get("step_s"),
-    }
-    return res
-
-
-def _ref_curve(params: dict, target: dict):
-    """同配置（**忽略 batch**）的生产层数实测点，按 pdbs 排序。
-    这是推算的地基：有了两个点才有斜率，有了斜率才能外推到没跑过的 batch。"""
-    probe = dict(params)
-    probe.pop("num_decoder_layers", None)
-    cal = str(probe.get("weight_quantization_calibration_method", "") or "")
-    from .models import effective_shape as _es
-    key = {
-        "layers": _es(probe).get("layers"),
-        "model": str(probe.get("model_name", "") or "").lower(),
-        "cal": "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None),
-        "quant": "fp8" if "fp8" in str(probe.get("quantization", "") or "") else None,
-        "tokamax": bool(probe.get("use_tokamax_gmm")),
-        "shard_exp": bool(probe.get("shard_exp_on_fsdp")),
-        "fsdp": fsdp_width(probe, target),
-    }
-    pts = []
-    for c in REPLAY_CASES:
-        wq = c["when"]
-        if c.get("invalid"):
-            continue
-        if all(wq.get(k) == v for k, v in key.items()):
-            gb = c.get("peak_gb") or c.get("required_gb")
-            if gb:
-                pts.append({"pdbs": wq["pdbs"], "gb": gb, "src": c.get("source", "")})
-    return sorted(pts, key=lambda x: x["pdbs"])
-
-
-def _decompose(pts: list[dict], resident: float) -> dict | None:
-    """把实测点拆成三段：常驻 + **与 batch 无关的激活** + 随 batch 变的部分。
-
-    ★ 这一步是必须的。直觉上「非常驻 = 随 batch 走」，但实测对不上：
-      80 层 absmax：非常驻 = 95.51 − 23.34 = 72.17 GB，除以 pdbs 13 = 5.55 GB/档；
-      而相邻档位实测斜率只有 **2.81 GB/档**。
-    差的那一半（约 35.6 GB）是**跟 batch 无关的激活与临时缓冲** ——
-    权重梯度、通信缓冲、编译器工作区这些不随 batch 缩。
-    不拆出来，反解出的 batch 上限会**大出一倍**。
-    """
-    if len(pts) < 2:
-        return None
-    ds = [(pts[i + 1]["gb"] - pts[i]["gb"]) / (pts[i + 1]["pdbs"] - pts[i]["pdbs"])
-          for i in range(len(pts) - 1) if pts[i + 1]["pdbs"] != pts[i]["pdbs"]]
-    pos = [d for d in ds if d > 0]
-    if not pos:
-        return None
-    slope = sum(pos) / len(pos)
-    fixed = sum(p["gb"] - resident - slope * p["pdbs"] for p in pts) / len(pts)
-    return {"slope": slope, "fixed_act": max(fixed, 0),
-            "nonmono": any(d <= 0 for d in ds)}
-
-
-def _resident(params: dict, target: dict, params_b: float) -> float:
-    fsdp = fsdp_width(params, target) or 1
-    bpp = 4 if "float32" in str(params.get("weight_dtype", "float32")) else 2
-    return params_b * 1e9 * (bpp + 2 + 4) / fsdp / 1e9
+                "failure": {"kind": "vmem_oom",
+                            "raw": "CompileTimeScopedVmemOom —— 这是 VMEM 不是 HBM，"
+                                   "降 batch 基本没用，要降 tile / block size"},
+                "log_tail": tail}
+    m = _re.search(r"temp_size_in_bytes=(\d+)", text)
+    if m:
+        gb = int(m.group(1)) / 1e9
+        arg = _re.search(r"argument_size_in_bytes=(\d+)", text)
+        return {"mode": "real", "ok": True,
+                "metrics": {"peak_hbm_gb": round(gb, 2),
+                            "hbm_pct": round(gb / HBM_PER_DEVICE_GB * 100, 1),
+                            "argument_gb": round(int(arg.group(1)) / 1e9, 2) if arg else None},
+                "log_tail": tail}
+    return {"mode": "real", "ok": rc == 0, "log_tail": tail,
+            "note": "编译结束了但没抓到显存统计 —— 看日志尾巴。"}
 
 
 def _project_by_layers(params: dict, target: dict) -> dict | None:
