@@ -373,3 +373,63 @@ loss 曲线管「累积下来是否等价」。
 KL 非对称，**方向要选对**：`KL(参考 ‖ 新实现)` ——
 以参考分布为权重，新实现在参考认为重要的地方出错，惩罚才大。
 两个方向都报出来更稳妥。
+
+---
+
+## 9. 附录：当 profile 的算子名对不上时，用 trace annotation
+
+实测中遇到一个把人带进沟里的现象：**按算子名统计，MoE 的分组矩阵乘只占一步的 1.3%**
+（100 ms / 7,850 ms）。而理论计算量要求它至少占 1.80 s —— **比物理下限还低 18 倍**。
+
+原因不是时间消失，是**名字消失**：编译器把大量 MoE 相关计算融进了别的算子，
+融合后的算子不再叫 `gmm`，按名字 grep 就漏了。
+
+修法是给源码打 `jax.named_scope`，让归属信息留在 profile 的 `Framework op name` 字段里：
+
+```python
+import jax, importlib
+for mn in ("pkg.layers.moe", "src.pkg.layers.moe"):        # 注意双导入别名，见 §4.3
+    M = importlib.import_module(mn)
+    C = M.RoutedMoE
+    for meth, tag in (("sparse_matmul","MOE_sparse_matmul"),
+                      ("permute","MOE_permute"), ("unpermute","MOE_unpermute"),
+                      ("get_topk","MOE_router_topk")):
+        o = getattr(C, meth)
+        def mk(o, t):
+            def w(self, *a, **k):
+                with jax.named_scope(t):
+                    return o(self, *a, **k)
+            return w
+        setattr(C, meth, mk(o, tag))
+```
+
+再按该字段聚合，真相立刻出来（同一份 profile，同一步）：
+
+| 统计口径 | MoE 每步耗时 | 占比 |
+|---|---|---|
+| 按算子名 grep `gmm`/`tgmm` | 100 ms | 1.3% ❌ |
+| **按 `named_scope` 聚合** | **2,565 ms** | **33%** ✅ |
+
+按作用域再拆一层，才看得见钱花在哪：
+
+| 类别 | 每步 | 说明 |
+|---|---|---|
+| loop fusion | 1,464 ms | 量化的截断/转换、算 scale 的 absmax 归约 |
+| async-done | 603 ms | 激活 offload 换回来的等待 |
+| sort | 161 ms | 路由后的 token 排序 |
+| **custom-call（Pallas kernel 本体）** | **100 ms** | 真正的矩阵乘 |
+
+**结论：优化方向完全变了。** 原本以为该调 kernel，实际大头在量化辅助算子和 offload 等待上。
+
+### 顺带回答一个常见疑问
+
+**XProf 能看出一个 Pallas kernel 跑了多久吗？** 能。
+`pallas_call` 编成一个 custom-call，`Avg. self time` 就是它在 TPU 核上的真实执行时长。
+**看不到的是 kernel 内部** —— 分块循环走了几轮、VMEM 命中、MXU 利用率，
+那些要 LLO / Mosaic 层的 dump。
+
+### 一个仍未定案的疑点（诚实记录）
+
+上表里 Pallas kernel 的 100 ms/step，**低于该计算量的物理下限 1.80 s 达 18 倍**。
+两种可能尚未分离：① kernel 只算了本地那 1/N 的专家；② XProf 对 custom-call 的
+自耗时归因偏低。判据实验：**改变 FSDP 宽度让每卡专家数翻倍，看 kernel 耗时是否同步翻倍。**
