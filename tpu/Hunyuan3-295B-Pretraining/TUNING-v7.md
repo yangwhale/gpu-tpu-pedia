@@ -1192,6 +1192,121 @@ FP8 每个格子能装的元素翻倍，理论上最优点可能更大 —— **
 
 ---
 
+#### 3.4.10 ⛔ 根因定案：megablox native 路径漏了 all-gather，FP8 1,014.8 作废
+
+> 2026-08-16。**这一节推翻 3.4.6–3.4.9 中所有关于 FP8 1,014.8 的结论。**
+
+##### 结论先行
+
+| 配置 | 每步 | per-chip | 有效性 |
+|---|---|---|---|
+| FP8 native（现状） | 7.847 s | ~~1,014.8~~ | ❌ **只算了 3/192 个专家** |
+| **FP8 native + 补齐 all-gather** | **12.501 s** | **637.0** | ✅ |
+| FP8 tokamax + QAG（原配方） | 11.761 s | **677.0** | ✅ |
+
+**修正后 native 比原配方还低 6%。加那 18 个 tile 参数带来的「FP8 +49.9%」，全部来自漏算。**
+
+##### 触发条件（三条同时成立）
+
+1. `shard_exp_on_fsdp=True` **且** 权重校准以 `fixed` 开头 → `weight_gather_axes` 非空
+2. `use_tokamax_gmm=False`（走 native / megablox 分支）
+3. `num_experts % ici_fsdp_parallelism == 0`（192 % 64 = 0）→ 专家维真被切开
+
+我们的 FP8 配方三条全中，而第 2 条是**加 18 个 tile 参数时无意翻过去的**。
+
+##### 代码层面：收/散只写在一条分支里
+
+`kernels/megablox/ops.py`：
+
+```python
+# ① 收集指令两条分支共用（moe.py: get_wi_gmm_params）
+wi_gather_axes = [('fsdp', 0)]          # weight_gather 为真时
+
+# ② 但只有 tokamax 那一支真的去收（ops.py:191）
+if use_tokamax_backend:
+    if weight_gather_axes:
+        for axis_name, axis_idx in weight_gather_axes:
+            rhs = ...jax.lax.all_gather(rhs.qvalue, axis_name, axis=axis_idx, tiled=True)
+
+# ③ native 那一支直接调 kernel，签名里根本没有这个参数（ops.py:234）
+else:
+    out = backend.gmm(lhs, rhs, group_sizes, ...)     # rhs 仍是 [3,4096,1536]
+
+# ④ 反向的 psum_scatter 同样只有 tokamax 有（ops.py:389）
+```
+
+**前向漏收、反向漏散，成对出现** —— 典型的「加功能只改了一条分支」。
+
+##### 为什么会静默：两种切法的错误性质不同
+
+| 切法 | 本地形状 | kernel 看到的 | 后果 |
+|---|---|---|---|
+| 按 **embed 维**切（不开 QAG） | `[192, 64, 1536]` | **192 个残缺专家**，收缩维对不上 | **算不了** → 编译器被迫插 all-gather |
+| 按 **专家维**切（开 QAG） | `[3, 4096, 1536]` | **3 个完整专家**，完全合法 | **算得了** → 静默算错 |
+
+**这是根因。** 按专家维切出来的东西，对分组矩阵乘来说是一个**形状完全合法的输入**——
+kernel 只会认为「这次就是 3 个组」，没有任何机制能让它发现外面还有 189 个。
+`make_group_metadata(num_nonzero_groups=rhs.shape[0])` 忠实地只为 3 组建表。
+
+> **可推广的教训：把维度 N 切成 N/k，而下游能把 N/k 当成一个合法的小 N 来用时，
+> 分片错误就会静默。** 这不是 MoE 独有，是一类模式。
+> 安全的切法是切到「切了就算不动」的维度上（如收缩维），让编译器替你兜底。
+
+##### 硬证据链
+
+1. **kernel 单独计时**（`rhs=[3]` + 192 组真实 `group_sizes`）：
+   `覆盖行 3,582 / 229,376`，耗时 788 us，而完整版 5,154 us。**metadata 自己报出只覆盖 3 组。**
+2. **反向的形状检查报错**（打了收集但没打散回时）：
+   `tiled reduce_scatter operand scatter dimension size 3 must be divisible by shard_count 64`
+   —— **JAX 自己说出权重梯度第 0 维是 3。**
+3. **补丁生效日志**：
+   `前向已补收集 rhs→(192,4096,1536)` / `反向已补散回 drhs→(3,1536,4096)`，收散闭合。
+4. **补齐后掉速 1.59×**：507.4 → 318.5 TFLOP/s/device。
+
+##### 补丁
+
+把收集从 `if use_tokamax_backend:` 提出来，反向对称补 `psum_scatter`：
+
+```python
+# 前向：只要声明了 gather 轴就收 —— 这是正确性要求，不是 QAG 专属优化
+if weight_gather_axes:
+    for axis_name, axis_idx in weight_gather_axes:
+        if isinstance(rhs, qpl.QArray):
+            rhs = dataclasses.replace(rhs, qvalue=jax.lax.all_gather(
+                rhs.qvalue, axis_name, axis=axis_idx, tiled=True))   # QAG：收量化值，字节减半
+        else:
+            rhs = jax.lax.all_gather(rhs, axis_name, axis=axis_idx, tiled=True)
+if use_tokamax_backend and transpose_rhs:
+    rhs = rhs.swapaxes(1, 2)
+
+# 反向：前向收了就必须散回，缺一边即静默算错
+if weight_gather_axes:
+    for axis_name, axis_idx in reversed(weight_gather_axes):
+        drhs = jax.lax.psum_scatter(drhs, axis_name, scatter_dimension=axis_idx, tiled=True)
+```
+
+运行时注入版（不改仓库）：`~/hy3-fix/`，参数序号务必用 `inspect` 取，
+`weight_gather_axes` 在 `_gmm_fwd` 是第 **11** 位、`_gmm_bwd` 是第 **8** 位。
+
+##### 为什么之前的「正确性验证」没抓到
+
+**10 步 loss 对拍不敏感。** 前十步模型在学的是词频先验，那部分信息来自 embedding
+和输出投影，跟 MoE 算 3 个还是 192 个专家几乎无关。文献佐证：
+arXiv 2308.15419 指出模型「在相同阶段学到相同的语言泛化，与架构、初始化、数据无关」；
+另有工作指出「全局 loss 由高频 token 主导」。
+
+**下次验证分片改动，不要用短程 loss。** 用
+[logits 上的 KL 散度](../kernel-equivalence-validation/)，并且**必须先确认被测代码路径真的被走到**。
+
+##### 行动项
+
+- [x] README / QUICKSTART 撤回 1,014.8
+- [ ] 生产退回 **tokamax + QAG（677）**
+- [ ] 补丁提交上游 MaxText
+- [ ] 用 KL 复核「补齐后的 native」与「tokamax」是否数值等价
+
+---
+
 ### 3.5 第四步 +9.0%：把 batch 推到 12
 
 **改动**：`per_device_batch_size` 8 → 12。
