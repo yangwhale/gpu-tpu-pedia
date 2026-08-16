@@ -22,6 +22,7 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .lint import run_lint
+from .cluster import status as cluster_status
 from .models import BACKENDS, MODELS, catalog, detect_backend, get_model
 from .parser import TOPOLOGIES, fsdp_width, parse_command, roundtrip_check, to_aot
 from .worker import docker_available, run_aot
@@ -347,6 +348,13 @@ class SaveIn(BaseModel):
 async def health():
     return {"ok": True, "store": store.backend, "aot_mode": "real" if docker_available() else "replay",
             "bot_url": BOT_URL, "topologies": TOPOLOGIES, **catalog()}
+
+
+@app.get("/api/cluster")
+async def cluster(want: int = 64):
+    """训练集群状态。**看队列不看节点** —— 这个集群里「0 节点」通常是
+    Kueue 还没 admit，不是抢不到容量。"""
+    return await cluster_status(want)
 
 
 @app.post("/api/session")

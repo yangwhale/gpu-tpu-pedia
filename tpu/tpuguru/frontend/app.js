@@ -18,6 +18,7 @@ let BACKENDS = [];
 let busy = false;
 let hideVoided = false;
 let everSawReport = false;
+let CLUSTER = null;
 
 /* ── 参数控件表（PARAMS.md 的子集，问号文案三段式）───────── */
 const FIELDS = [
@@ -52,7 +53,7 @@ const FIELDS = [
 async function api(path, body) {
   const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body) } : {};
-  const r = await fetch(path, opt);
+  const r = await fetch(path.replace(/^\//, ''), opt);
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.detail || d.error || r.statusText);
   return d;
@@ -915,6 +916,17 @@ function render() {
   fs.lastElementChild.textContent = has
     ? (S.cached_from ? '已有报告（调档）' : '已有报告') : '未跑 AOT';
   fs.title = '配置指纹 ' + (S.fingerprint || '');
+
+  // 🚀 上机按钮：只有「当前配置的 AOT 编译通过」才点亮。
+  //    真机一次几十分钟 + 占共享集群，装不下就上机纯属浪费别人的卡。
+  const bm = $('#btn-metal');
+  const compiled = !!(S.result && S.result.ok === true && !S.result.invalid);
+  const clOk = CLUSTER && CLUSTER.light !== 'red' && CLUSTER.ok;
+  bm.disabled = !(compiled && clOk);
+  bm.title = !compiled
+    ? (S.result ? 'AOT 说装不下 / 结论无效，先把它跑通' : '这套配置还没跑过 AOT')
+    : !clOk ? '集群现在要不到卡：' + (CLUSTER?.text || '')
+    : `上 64 卡真跑（约 20–40 分钟，占共享集群）\n峰值 ${S.result.metrics?.peak_hbm_gb} GB，已编译通过`;
   if ($('.tab.on')?.dataset.pane === 'his') renderHis();
 }
 
@@ -986,6 +998,20 @@ $('#btn-save').onclick = () => {
   };
 };
 
+async function refreshCluster() {
+  try {
+    CLUSTER = await api('api/cluster?want=64');
+  } catch (e) { CLUSTER = { ok: false, light: 'grey', text: '探测失败', why: String(e) }; }
+  const n = $('#cluster');
+  n.className = 'cl ' + (CLUSTER.light || 'grey');
+  n.lastElementChild.innerHTML = esc(CLUSTER.text || '')
+    + (CLUSTER.ok ? ` <span class="n">空闲 ${CLUSTER.cohort_free}/${CLUSTER.cohort_total}</span>` : '');
+  n.title = (CLUSTER.why || '') + (CLUSTER.ok
+    ? `\n保底 ${CLUSTER.quota} · 我们已用 ${CLUSTER.used} · Running pod ${CLUSTER.running_pods}`
+    : '');
+  if (S) render();
+}
+
 /* ── 启动 ─────────────────────────────────────────────────── */
 (async () => {
   try {
@@ -1000,6 +1026,8 @@ $('#btn-save').onclick = () => {
     pm.lastElementChild.textContent = h.aot_mode === 'real' ? 'AOT: real' : 'AOT: replay';
     pm.title = h.aot_mode === 'real' ? '本机 docker 真跑' : '没有 AOT 镜像，回放真实跑过的结论';
   } catch (e) { /* health 挂了也让页面能开 */ }
+  await refreshCluster();
+  setInterval(refreshCluster, 60000);
   S = await api('/api/session', {});
   render();
   $('#input').focus();

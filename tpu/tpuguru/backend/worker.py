@@ -267,13 +267,18 @@ async def _run_real(params: dict, target: dict) -> dict:
     dump_host = Path(os.environ.get("TPUGURU_ARTIFACT_DIR", "/tmp/tpuguru-artifacts"))
     run_dir = dump_host / time.strftime("%Y%m%d-%H%M%S-%f")[:-3]
     run_dir.mkdir(parents=True, exist_ok=True)
-    args["compile_xla_flags"] = (str(args.get("compile_xla_flags", "")).strip()
-                                 + " --xla_dump_to=/dump --xla_dump_hlo_as_text").strip()
+    # ⚠️ dump 千万别塞进 compile_xla_flags —— 两层坑套着，我两次都踩了：
+    #    ① MaxText 校验每个 token 必须是 `--key=value`，裸开关直接 ValueError
+    #    ② 改成 `--xla_dump_hlo_as_text=true` 后，XLA 又说 'true' 不是合法 bool
+    #    根子上就错了：dump 是**调试输出**，不是编译选项。
+    #    走 XLA_FLAGS 环境变量，绕开 MaxText 的校验器，裸开关也认。
 
     body = " ".join(
         f'{k}="{v}"' if " " in str(v) or str(v).startswith("--") else f"{k}={v}"
         for k, v in sorted(args.items()))
-    inner = (f'{prof["preamble"]} && python3 -m {prof["entry"]} {prof["config"]} {body} 2>&1')
+    dump_env = 'export XLA_FLAGS="--xla_dump_to=/dump --xla_dump_hlo_as_text"'
+    inner = (f'{prof["preamble"]} && {dump_env} && '
+             f'python3 -m {prof["entry"]} {prof["config"]} {body} 2>&1')
 
     cmd = ["docker", "run", "--rm", "--cpus", str(prof.get("cpus", "12")),
            "-v", f"{run_dir}:/dump"]
