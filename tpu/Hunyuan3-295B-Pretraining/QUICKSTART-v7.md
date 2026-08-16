@@ -95,41 +95,52 @@ v7 单芯片从起点的 **52.7%** 走到现在的 **77.8%**。
 
 三组参数，其余部分完全一致（见 [§4.1 完整参数集](#41-完整参数集)）。
 
-### 🏆 64 芯片 FP8 → **727.0**（2026-08-16 新最高水位）
+### 64 芯片 FP8 —— 两个配方，按你要不要保收敛质量二选一
 
-**不开 QAG，跟 BF16 走完全相同的分片策略**，只是精度换成 FP8：
+**共同部分**（不开 QAG，跟 BF16 同一套分片策略）：
 
 ```
-ici_fsdp_parallelism=-1          # 吃满 128 路（QAG 那条只能到 64）
+ici_fsdp_parallelism=-1          # 吃满 128 路（QAG 那条被锁死在 64）
 ici_tensor_parallelism=1
-per_device_batch_size=13         # 上限，14 HBM OOM（AOT 与真机一致）
 megablox=True                    # 不开 use_tokamax_gmm
-use_qwix_quantization=True
-quantization=fp8_full
-# ⚠️ 不要写 shard_exp_on_fsdp —— 开了会触发漏算 bug（见下）
-weight_quantization_calibration_method=absmax    # ⚠️ 不要用 fixed，见 §4.7
-act_quantization_calibration_method=absmax
---xla_tpu_dvfs_p_state=7
-+ BF16 那套 18 个 tile 参数
+use_qwix_quantization=True  quantization=fp8_full
+# ⚠️ 不要写 shard_exp_on_fsdp —— 开了触发漏算 bug（TUNING §3.4.10）
+--xla_tpu_dvfs_p_state=7  +  BF16 那套 18 个 tile 参数
 ```
 
-| pdbs | step | per-chip | |
-|---|---|---|---|
-| 10 | 16.552 s | 687.3 | |
-| 12 | 19.017 s | 717.8 | |
-| **13** | **20.342 s** | **727.0** | 上限 |
-| 14 | — | — | ❌ HBM OOM |
+**只差校准方式和 batch：**
 
-**为什么比 QAG 那条快**：QAG 要求 `num_experts % FSDP == 0`，FSDP 被锁死在 64，
-另一半并行度只能给 DP —— 而 DP **不分片权重**。放弃 QAG 换来 FSDP=128：
-每卡常驻权重 18.1 G → 9.1 G，省出的显存把 batch 从 7 推到 13。
-代价是 all-gather 收的是未量化权重（字节翻倍），但**已被异步通信藏住**。
+| | 校准 | pdbs | step | **per-chip** | 收敛质量 |
+|---|---|---|---|---|---|
+| **① 峰值配方** | `fixed,-224,224` | **13** | 20.342 s | **727.0** 🏆 | ⚠️ **静态 scale，会伤收敛** |
+| **② 生产配方** | `absmax` | **11** | 18.656 s | **670.8** | ✅ 动态 per-channel |
 
-> 上表 727.0 是用 `fixed,-224,224` 测的（从旧配方抄来的残留）。
-> **生产必须换 `absmax`** —— `fixed` 只是 QAG 的入场券，不开 QAG 就没有任何理由用它，
-> 而它会损害收敛质量。absmax 版的吞吐复测见 §4.7。
+```
+# ① 峰值（只用于 benchmark / 报数）
+per_device_batch_size=13
+weight_quantization_calibration_method=fixed,-224,224
+act_quantization_calibration_method=fixed,-224,224
 
-<details><summary>旧配方：FP8 + tokamax + QAG → 677.0（保留备查）</summary>
+# ② 生产（真训练用这个）
+per_device_batch_size=11
+weight_quantization_calibration_method=absmax
+act_quantization_calibration_method=absmax
+```
+
+**差价 7.7%**（727.0 → 670.8）。这 7.7% 里**绝大部分不是算得慢，是 batch 少了两档** ——
+`absmax` 要动态求每通道最大值，需要额外的归约缓冲和 scale 张量，`fixed` 是编译期常量、零显存。
+实测：`absmax` 在 `pdbs=13` 超 0.77 G、`pdbs=12` 超 1.26 G，只能退到 11。
+
+> **报数时必须写清用的是哪一个。** `fixed` 那 727.0 不能当作可交付的训练配置 —— 见 §4.7。
+
+**batch 上限（AOT 与真机逐字吻合，可直接信 AOT）：**
+
+| 校准 | 10 | 11 | 12 | 13 | 14 |
+|---|---|---|---|---|---|
+| `fixed` | 687.3 | — | 717.8 | **727.0** | ❌ OOM |
+| `absmax` | — | **670.8** | ❌ 超 1.26G | ❌ 超 0.77G | — |
+
+<details><summary>更旧的配方：FP8 + tokamax + QAG → 677.0（保留备查）</summary>
 
 ```
 ici_data_parallelism=2  ici_fsdp_parallelism=64   # QAG 的整除锁
