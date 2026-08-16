@@ -420,11 +420,39 @@ function renderRep() {
     p.appendChild(el('div', 'stale', '<div>📉</div><div>' + md2(R.nonmono) + '</div>'));
   }
 
+  if (R.projection) {
+    const P = R.projection;
+    const bn = el('div', 'projbanner');
+    bn.appendChild(el('div', 't', `📐 推算：${P.from_layers} 层 → ${P.to_layers} 层（比例 ${P.ratio}）`));
+    bn.appendChild(el('div', 'd', md2(P.why) + '<br>' + md2(P.caveat)));
+    bn.appendChild(el('div', 'ref', `参照点：${fmt(P.ref_peak_gb)} GB · ${esc(P.ref_source)}`));
+    if (P.decompose) bn.appendChild(el('div', 'd',
+      '<br>' + md2(P.decompose.why)));
+    if (P.recommend) {
+      const r = P.recommend;
+      const box = el('div', 'reco');
+      box.appendChild(el('div', 'big2', `推荐 batch ${r.safe}`
+        + `<span class="sub">硬上限约 ${r.hard}</span>`));
+      box.appendChild(el('div', 'fx', esc(r.formula)));
+      box.appendChild(el('div', 'd', md2(r.note)));
+      const chips = el('div', 'plan');
+      chips.appendChild(el('span', 'pl', '建议逐档真跑：'));
+      r.plan.forEach(v => { const cbtn = el('span', 'pchip', 'pdbs ' + v);
+        cbtn.onclick = () => setParam('per_device_batch_size', String(v));
+        chips.appendChild(cbtn); });
+      box.appendChild(chips);
+      bn.appendChild(box);
+    }
+    p.appendChild(bn);
+  }
+
   // 结论
   const v = el('div', 'card');
   const ok = R.ok;
+  const pj = R.mode === 'projected';
   const txt = R.invalid ? '编译通过，但结果无效'
-    : ok === true ? '✅ 编译通过，装得下' : ok === false ? '❌ 装不下' : '❓ 这一档没有实测记录';
+    : ok === true ? (pj ? '📐 推算：装得下' : '✅ 编译通过，装得下')
+    : ok === false ? (pj ? '📐 推算：装不下' : '❌ 装不下') : '❓ 这一档没有实测记录';
   v.appendChild(el('div', 'big ' + (R.invalid ? 'void' : ok === true ? 'ok' : ok === false ? 'bad' : 'unk'), txt));
   if (R.failure) {
     v.appendChild(el('div', 'hint', `${esc(R.failure.kind)} · 需要 <b>${fmt(R.failure.required_gb)} GB</b>，`
@@ -447,7 +475,10 @@ function renderRep() {
   }
   const badge = el('div', 'hint');
   badge.style.marginTop = '12px';
-  badge.innerHTML = R.mode === 'replay'
+  badge.innerHTML = R.mode === 'projected'
+    ? `<span class="pill warn"><span class="dot"></span>推算模式</span> `
+      + `按层数从实测点折算，<b>不是这个层数的实测</b>。要定上限请设 AOT 镜像后真跑。`
+    : R.mode === 'replay'
     ? `<span class="pill warn"><span class="dot"></span>replay 模式</span> 本机没有 AOT 镜像，回放的是真实跑过的结论。`
       + (R.source ? `<br>出处：${esc(R.source)}` : '')
     : `<span class="pill"><span class="dot"></span>real 模式</span> 本机 docker 真跑的。`;
@@ -615,6 +646,14 @@ function cardHeadroom(d) {
     d.left_gb >= 0 ? '离上限还剩' : '超出上限', `上限 ${fmt(d.capacity_gb)} GB / device`));
   c.appendChild(g);
 
+  if (d.solved) {
+    c.appendChild(el('div', 'fxline',
+      `<b>${esc(d.solved.formula)}</b><br>`
+      + `反解：保守 <b>${d.solved.safe}</b> / 硬上限 <b>${d.solved.hard}</b>。`
+      + '「固定激活」是**跟 batch 无关**的那部分（梯度缓冲、通信缓冲、编译器工作区）——'
+      + '不把它拆出来，直接拿「非常驻 ÷ batch」算，上限会大出一倍。'
+      .replace(/\*\*(.+?)\*\*/g, '<b>$1</b>')));
+  }
   if (d.per_batch_gb) {
     const kindTxt = d.slope_kind === 'measured' ? '由相邻实测档位算出' : '估算（偏大，只能当上界）';
     c.appendChild(el('div', 'hint',

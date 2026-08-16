@@ -110,7 +110,17 @@ def _builtin_tile_exceeds_dim(params: dict, ctx: dict):
     return hits
 
 
-_BUILTINS = {"tile_exceeds_dim": _builtin_tile_exceeds_dim}
+def _builtin_layers_overridden(params: dict, ctx: dict):
+    from .models import effective_shape
+    sh = effective_shape(params)
+    if not sh.get("layers_overridden"):
+        return []
+    return [f'当前 {sh["layers"]} 层 / 生产 {sh["prod_layers"]} 层'
+            f'（参数量 {sh["params_b"]}B，生产是 {sh["prod_layers"] and MODEL_SHAPES.get(str(params.get("model_name","")).lower(),{}).get("params_b")}B）']
+
+
+_BUILTINS = {"tile_exceeds_dim": _builtin_tile_exceeds_dim,
+             "layers_overridden": _builtin_layers_overridden}
 
 
 def _flag_lookup(flags: dict, name: str):

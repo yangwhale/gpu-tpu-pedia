@@ -108,9 +108,12 @@ def _match_case(params: dict, target: dict):
     """在 when 里，`None` 一律是「必须也是 None/False」，**只有 tile 允许写 None 当通配**
     （tile 对某些档的结论没影响）。写 when 时别指望 None 是万能匹配 —— 上一版就是
     这么写坏的，结果整条 QAG 路径静默匹配不上，报「没有实测记录」。"""
+    from .models import effective_shape
+    sh = effective_shape(params)
     cal = str(params.get("weight_quantization_calibration_method", "") or "")
     quant = str(params.get("quantization", "") or "")
     got = {
+        "layers_ok": not sh.get("layers_overridden", False),
         "model": str(params.get("model_name", "") or "").lower(),
         "pdbs": _int(params.get("per_device_batch_size")),
         "cal": "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None),
@@ -121,6 +124,10 @@ def _match_case(params: dict, target: dict):
         "tile": any(k in params for k in _TILE_KEYS),
         "patched": bool(params.get("_patched_gather")),
     }
+    if not got["layers_ok"]:
+        # 实测档位全是生产层数跑的。层数改了就**不能拿来直接用** ——
+        # 这跟拿 A 配置的结论回答 B 配置是同一件事。
+        return None
     for c in REPLAY_CASES:
         w = c["when"]
         if any(k not in w for k in ("model", "pdbs", "fsdp")):
@@ -192,6 +199,9 @@ def _run_replay(params: dict, target: dict) -> dict:
     devices = target.get("devices", 0)
 
     if case is None:
+        proj = _project_by_layers(params, target)
+        if proj:
+            return proj
         return {
             "mode": "replay", "ok": None,
             "unknown": True,
@@ -259,6 +269,164 @@ def _run_replay(params: dict, target: dict) -> dict:
     return res
 
 
+def _ref_curve(params: dict, target: dict):
+    """同配置（**忽略 batch**）的生产层数实测点，按 pdbs 排序。
+    这是推算的地基：有了两个点才有斜率，有了斜率才能外推到没跑过的 batch。"""
+    probe = dict(params)
+    probe.pop("num_decoder_layers", None)
+    cal = str(probe.get("weight_quantization_calibration_method", "") or "")
+    key = {
+        "model": str(probe.get("model_name", "") or "").lower(),
+        "cal": "fixed" if cal.startswith("fixed") else ("absmax" if "absmax" in cal else None),
+        "quant": "fp8" if "fp8" in str(probe.get("quantization", "") or "") else None,
+        "tokamax": bool(probe.get("use_tokamax_gmm")),
+        "shard_exp": bool(probe.get("shard_exp_on_fsdp")),
+        "fsdp": fsdp_width(probe, target),
+    }
+    pts = []
+    for c in REPLAY_CASES:
+        wq = c["when"]
+        if c.get("invalid"):
+            continue
+        if all(wq.get(k) == v for k, v in key.items()):
+            gb = c.get("peak_gb") or c.get("required_gb")
+            if gb:
+                pts.append({"pdbs": wq["pdbs"], "gb": gb, "src": c.get("source", "")})
+    return sorted(pts, key=lambda x: x["pdbs"])
+
+
+def _decompose(pts: list[dict], resident: float) -> dict | None:
+    """把实测点拆成三段：常驻 + **与 batch 无关的激活** + 随 batch 变的部分。
+
+    ★ 这一步是必须的。直觉上「非常驻 = 随 batch 走」，但实测对不上：
+      80 层 absmax：非常驻 = 95.51 − 23.34 = 72.17 GB，除以 pdbs 13 = 5.55 GB/档；
+      而相邻档位实测斜率只有 **2.81 GB/档**。
+    差的那一半（约 35.6 GB）是**跟 batch 无关的激活与临时缓冲** ——
+    权重梯度、通信缓冲、编译器工作区这些不随 batch 缩。
+    不拆出来，反解出的 batch 上限会**大出一倍**。
+    """
+    if len(pts) < 2:
+        return None
+    ds = [(pts[i + 1]["gb"] - pts[i]["gb"]) / (pts[i + 1]["pdbs"] - pts[i]["pdbs"])
+          for i in range(len(pts) - 1)]
+    pos = [d for d in ds if d > 0]
+    if not pos:
+        return None
+    slope = sum(pos) / len(pos)
+    fixed = sum(p["gb"] - resident - slope * p["pdbs"] for p in pts) / len(pts)
+    return {"slope": slope, "fixed_act": max(fixed, 0),
+            "nonmono": any(d <= 0 for d in ds)}
+
+
+def _resident(params: dict, target: dict, params_b: float) -> float:
+    fsdp = fsdp_width(params, target) or 1
+    bpp = 4 if "float32" in str(params.get("weight_dtype", "float32")) else 2
+    return params_b * 1e9 * (bpp + 2 + 4) / fsdp / 1e9
+
+
+def _project_by_layers(params: dict, target: dict) -> dict | None:
+    """层数被改过时的**推算**，独立成 mode=projected，绝不混进实测。
+
+    两级推算，各自标清楚：
+      ① batch 外推 —— 用生产层数下的实测点拟合「常驻 + 每档 × batch」，
+         推出这个 batch 在生产层数下大概多少（没跑过的 batch 也能推）
+      ② 层数折算 —— 常驻按参数量**精确重算**，激活按层数比例折算
+
+    这个数只用来**挑起始 batch 和缩小二分范围**，上限必须真跑 AOT 定。
+    """
+    from .models import effective_shape, get_model
+    sh = effective_shape(params)
+    if not sh or not sh.get("layers_overridden"):
+        return None
+    base = get_model(params.get("model_name"))
+    ratio = sh["layer_ratio"]
+    pdbs = _int(params.get("per_device_batch_size"), 0) or 0
+    if not pdbs:
+        return None
+
+    pts = _ref_curve(params, target)
+    if not pts:
+        return None
+
+    res_prod = _resident(params, target, base["params_b"])
+    res_now = _resident(params, target, sh["params_b"])
+
+    # ① 生产层数下这个 batch 大概多少（三段模型：常驻 + 固定激活 + 随 batch）
+    dec = _decompose(pts, res_prod)
+    exact = next((p for p in pts if p["pdbs"] == pdbs), None)
+    if exact:
+        peak_prod, lvl1 = exact["gb"], "measured"
+    elif dec:
+        peak_prod = res_prod + dec["fixed_act"] + dec["slope"] * pdbs
+        lvl1 = "extrapolated"
+    else:
+        p0 = pts[0]
+        peak_prod = res_prod + max(p0["gb"] - res_prod, 0) / p0["pdbs"] * pdbs
+        lvl1 = "crude"
+
+    # ② 按层数折算：常驻精确重算，两段激活按层数比例缩
+    peak = res_now + max(peak_prod - res_prod, 0) * ratio
+    ok = peak <= HBM_PER_DEVICE_GB
+
+    # 反解推荐 batch —— 必须用三段模型，否则会大出一倍
+    rec = None
+    if dec and dec["slope"] > 0:
+        slope_now = dec["slope"] * ratio
+        fixed_now = dec["fixed_act"] * ratio
+        room = HBM_PER_DEVICE_GB - res_now - fixed_now
+        hard = int(room // slope_now) if room > 0 else 0
+        safe = int(max(room - 2.0, 0) // slope_now)
+        rec = {"hard": hard, "safe": safe, "slope_gb": round(slope_now, 3),
+               "fixed_act_gb": round(fixed_now, 2), "resident_gb": round(res_now, 2),
+               "plan": sorted({x for x in (max(safe, 1), max(hard, 1), hard + 1) if x >= 1}),
+               "formula": f"上限 {HBM_PER_DEVICE_GB} = 常驻 {res_now:.2f} + "
+                          f"固定激活 {fixed_now:.2f} + {slope_now:.2f} × batch",
+               "note": "**推荐值留了 2 GB 余量**，别贴着上限走 —— 显存不随 batch 单调，"
+                       "编译器换个尺寸可能换排布方案。按下面这几档各真跑一次 AOT 确认。"}
+
+    lvl1_txt = ("这个 batch 在生产层数下**有实测点**"
+                if lvl1 == "measured" else
+                "这个 batch 在生产层数下**也没跑过**，先按每档斜率外推")
+    res: dict = {
+        "mode": "projected", "ok": ok, "projected": True,
+        "projection": {
+            "from_layers": sh["prod_layers"], "to_layers": sh["layers"], "ratio": round(ratio, 3),
+            "ref_peak_gb": round(peak_prod, 2),
+            "ref_source": (exact or min(pts, key=lambda p: abs(p["pdbs"] - pdbs)))["src"],
+            "level1": lvl1,
+            "why": f"层数 **{sh['prod_layers']} → {sh['layers']}**（比例 {ratio:.2f}）。"
+                   f"① {lvl1_txt}，得 {peak_prod:.2f} GB；"
+                   f"② 常驻按参数量精确重算 {res_prod:.2f} → **{res_now:.2f} GB**"
+                   f"（嵌入层不随层数变，已单独扣出），激活按层数比例折算。",
+            "caveat": "⚠️ **这是推算，不是实测。** 激活不严格随层数线性，"
+                      "编译器会为不同层数选不同的融合与排布方案。"
+                      "用它挑起始 batch、缩小二分范围可以，**定上限必须真跑 AOT**。",
+            "recommend": rec,
+            "decompose": ({"slope": round(dec["slope"], 3),
+                           "fixed_act": round(dec["fixed_act"], 2),
+                           "resident": round(res_prod, 2),
+                           "why": "实测点拆出来：**非常驻里有一大块跟 batch 无关**"
+                                  f"（{dec['fixed_act']:.1f} GB @ {sh['prod_layers']} 层）。"
+                                  f"直接拿「非常驻 ÷ batch」当每档增量会算成 "
+                                  f"{(pts[-1]['gb'] - res_prod) / pts[-1]['pdbs']:.2f} GB，"
+                                  f"实测斜率只有 {dec['slope']:.2f} GB —— **差一倍**。"}
+                          if dec else None),
+        },
+        "analyses": {},
+    }
+    peak_r = round(peak, 2)
+    res["analyses"]["memory"] = _memory_estimate(params, target, peak_r)
+    res["analyses"]["scale"] = _scale(params, target)
+    res["analyses"]["headroom"] = _headroom(params, target, peak_r)
+    res["analyses"]["levers"] = _levers(params, target, peak_r)
+    res["analyses"]["codepath"] = _codepath(params)
+    res["metrics"] = {"peak_hbm_gb": peak_r,
+                      "hbm_pct": round(peak / HBM_PER_DEVICE_GB * 100, 1),
+                      "pdbs": pdbs, "fsdp": fsdp_width(params, target),
+                      "global_batch": pdbs * (target.get("devices") or 0)}
+    return res
+
+
 def _same_family(params: dict, target: dict) -> list[dict]:
     """同一套配置、只有 batch 不同的**实测点**。这是余量分析的地基 ——
     没有真实点就不外推，因为显存跟 batch 不是线性的。"""
@@ -290,8 +458,8 @@ def _headroom(params: dict, target: dict, peak: float | None) -> dict:
     常驻是精确的（参数量 ÷ FSDP）；每档增量**只有拿到 ≥2 个实测点才敢说**，
     否则明确标成估算。绝不给一个看着像真的外推值。
     """
-    from .models import get_model
-    m = get_model(params.get("model_name"))
+    from .models import effective_shape
+    m = effective_shape(params)
     fsdp = fsdp_width(params, target) or 1
     pdbs = _int(params.get("per_device_batch_size"), 0) or 0
     n = m.get("params_b") or 0
@@ -323,8 +491,23 @@ def _headroom(params: dict, target: dict, peak: float | None) -> dict:
                       "平摊到 batch 上算的。实际上激活里有相当一部分不随 batch 变，"
                       "所以它偏大 —— 只能当上界看。")
 
+    dec = _decompose(pts, resident)
+    if dec:
+        slope, slope_kind = dec["slope"], "measured"
+        if dec["nonmono"]:
+            slope_note = ("这些实测点里**有相邻两档是反的**（batch 更小反而更占）—— "
+                          "斜率只取了正向的那几段，是参考值不是规律。")
     left = (cap - peak) if peak else None
     more = int(left // slope) if (left is not None and slope and slope > 0 and left > 0) else 0
+    solved = None
+    if dec and dec["slope"] > 0:
+        room = cap - resident - dec["fixed_act"]
+        solved = {"hard": int(room // dec["slope"]) if room > 0 else 0,
+                  "safe": int(max(room - 2.0, 0) // dec["slope"]),
+                  "resident": round(resident, 2), "fixed_act": round(dec["fixed_act"], 2),
+                  "slope": round(dec["slope"], 3),
+                  "formula": f"{cap} = 常驻 {resident:.2f} + 固定激活 {dec['fixed_act']:.2f}"
+                             f" + {dec['slope']:.2f} × batch"}
 
     ladder = []
     for p in pts:
@@ -360,7 +543,8 @@ def _headroom(params: dict, target: dict, peak: float | None) -> dict:
         "left_gb": round(left, 2) if left is not None else None,
         "per_batch_gb": round(slope, 2) if slope else None,
         "slope_kind": slope_kind, "slope_note": slope_note,
-        "pdbs": pdbs, "more_steps": more, "ladder": ladder,
+        "pdbs": pdbs, "more_steps": more, "ladder": ladder, "solved": solved,
+        "fixed_act_gb": round(dec["fixed_act"], 2) if dec else None,
         "more_text": ("**已经到顶** —— 剩下的余量不够再加一档。" if more == 0
                       else f"照这个斜率，还能再加约 **{more}** 档。"),
         "warn": "⚠️ **显存不随 batch 单调** —— 实测出现过 13 超 0.77 G、降到 12 反而超 1.26 G。"
@@ -370,8 +554,8 @@ def _headroom(params: dict, target: dict, peak: float | None) -> dict:
 
 def _levers(params: dict, target: dict, peak: float | None) -> dict:
     """★ 「该拧哪个旋钮」—— 把可用手段按**能腾出多少 GB** 排序，直接给等价 batch 档数。"""
-    from .models import get_model
-    m = get_model(params.get("model_name"))
+    from .models import effective_shape
+    m = effective_shape(params)
     n = m.get("params_b") or 0
     fsdp = fsdp_width(params, target) or 1
     devices = target.get("devices", 0) or 0
@@ -437,9 +621,9 @@ def _levers(params: dict, target: dict, peak: float | None) -> dict:
 
 def _memory_estimate(params: dict, target: dict, peak_gb: float | None) -> dict:
     """显存分解。**参数常驻是按参数量算的（准），激活是倒推的（不准）** —— 分开标。"""
-    from .models import get_model
+    from .models import effective_shape
     fsdp = fsdp_width(params, target) or 1
-    m = get_model(params.get("model_name"))
+    m = effective_shape(params)
     n_params_b = m.get("params_b") or 0
     if not n_params_b:
         return {"version": 1, "data": {"capacity_gb": HBM_PER_DEVICE_GB, "peak_gb": peak_gb,
@@ -471,8 +655,8 @@ def _memory_estimate(params: dict, target: dict, peak_gb: float | None) -> dict:
 
 def _scale(params: dict, target: dict) -> dict:
     """规模概览。**每个数都标出是查表、是算的、还是估的** —— 混在一起最要命。"""
-    from .models import get_model
-    shape = get_model(params.get("model_name"))
+    from .models import effective_shape
+    shape = effective_shape(params)
     pdbs = _int(params.get("per_device_batch_size"), 0) or 0
     seq = _int(params.get("max_target_length"), 0) or 0
     dev = target.get("devices", 0) or 0
@@ -480,7 +664,8 @@ def _scale(params: dict, target: dict) -> dict:
     tokens = gbatch * seq
     n_act_b = shape.get("act_params_b") or 0
     items = [
-        {"v": shape.get("layers") or "—", "l": "层数", "kind": "lookup"},
+        {"v": (f'{shape.get("layers")} ⚠' if shape.get("layers_overridden")
+               else shape.get("layers") or "—"), "l": "层数", "kind": "config"},
         {"v": (shape.get("num_experts") or "—") if shape.get("moe") else "dense",
          "l": "专家数", "kind": "lookup"},
         {"v": shape.get("hidden") or "—", "l": "hidden", "kind": "lookup"},

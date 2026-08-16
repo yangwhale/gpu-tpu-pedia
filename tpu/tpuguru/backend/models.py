@@ -129,6 +129,38 @@ def detect_backend(params: dict) -> str:
     return ""
 
 
+def effective_shape(params: dict) -> dict:
+    """注册表形状 + **用户显式覆盖**，合并成这次实际要编译的形状。
+
+    改层数是很常见的操作（调配置时用 4–8 层跑得快 3 倍），但
+    **参数量、常驻显存、能不能装下，全都随层数变** —— 如果这里只读注册表，
+    工具就会拿生产层数的结论去回答一个减层配置的问题，而且一声不吭。
+    这跟「配置在语义上错了却不报错」是同一族错误。
+    """
+    m = get_model(params.get("model_name"))
+    if not m:
+        return {}
+    out = dict(m)
+    prod_layers = m["layers"]
+    try:
+        L = int(params.get("num_decoder_layers", prod_layers) or prod_layers)
+    except (TypeError, ValueError):
+        L = prod_layers
+    out["prod_layers"] = prod_layers
+    out["layers"] = L
+    out["layers_overridden"] = L != prod_layers
+
+    # 嵌入层不随层数变，要先扣出来再按层折算 —— 直接按比例缩会把嵌入也缩掉
+    emb_b = (m["vocab"] * m["hidden"] * 2) / 1e9
+    per_layer = max(m["params_b"] - emb_b, 0) / prod_layers
+    out["emb_params_b"] = round(emb_b, 3)
+    out["params_b"] = round(emb_b + per_layer * L, 3)
+    act_per_layer = max(m["act_params_b"] - emb_b, 0) / prod_layers
+    out["act_params_b"] = round(emb_b + act_per_layer * L, 3)
+    out["layer_ratio"] = L / prod_layers if prod_layers else 1.0
+    return out
+
+
 def get_model(name) -> dict:
     return MODELS.get(str(name or "").lower(), {})
 

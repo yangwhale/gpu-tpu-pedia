@@ -153,5 +153,17 @@
     "detail": "all-to-all 在 3D torus 上多跳，且逼着 FSDP 减半、每卡静态分片翻倍。",
     "fix": "设为 1",
     "evidence": "64 芯片 EP=2 掉 39.6%；16 芯片 EP=4 掉 71%"
+  },
+  {
+    "rule": "L10",
+    "severity": "warn",
+    "enabled": true,
+    "title": "层数不是这个模型的生产层数",
+    "when": {
+      "builtin": "layers_overridden"
+    },
+    "detail": "减层跑得快（4–8 层比 80 层快约 3 倍），配置错误照样暴露，所以调配置阶段用减层是对的。但**常驻显存是所有层的和** —— 问「装不装得下」「batch 能开多大」时必须换回生产层数，否则答案没有意义。",
+    "fix": "定 batch 上限前把 num_decoder_layers 改回生产层数",
+    "evidence": "常驻 ∝ 层数：Hunyuan3 80 层 FSDP128 常驻 23.34 GB，40 层约 11.7 GB"
   }
 ]
