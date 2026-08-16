@@ -128,6 +128,34 @@ REPLAY_CASES = [
     ]
 ]
 
+# ── Qwen3-235B-A22B，2026-08-16 本机真 AOT（94 层生产层数，tpu7x-128）──────
+# ★ 非单调在这条曲线上比 Hunyuan3 还剧烈：
+#   pdbs 20 → 82.95，**22 → 72.32（少 10.63 GB，13%）**；
+#   而 29 → 81.01、30 → 95.08，**一步跳 14 GB 直接爆**。
+#   没有任何拟合能描述这条曲线 —— 只能一档档真跑。
+REPLAY_CASES += [
+    {"when": {"layers": 94, "model": "qwen3-235b-a22b", "pdbs": _p, "cal": "absmax",
+              "fsdp": 128, "quant": "fp8", "tokamax": False, "shard_exp": False, "tile": True},
+     **({"ok": True, "peak_gb": _gb} if _ok else
+        {"ok": False, "required_gb": _gb, "kind": _kind,
+         "raw": f"Ran out of memory: {_gb}G of 94.74G hbm."}),
+     "source": f"2026-08-16 本机真 AOT（Qwen3-235B-A22B 94 层，并行扫描）：pdbs {_p} → {_gb} GB"}
+    for _p, _gb, _ok, _kind in [
+        (4,  34.11, True,  None),
+        (8,  44.82, True,  None),
+        (12, 56.53, True,  None),
+        (16, 73.21, True,  None),
+        (20, 82.95, True,  None),
+        (22, 72.32, True,  None),      # ← 比 20 少 10.63 GB
+        (24, 77.32, True,  None),
+        (26, 82.32, True,  None),
+        (28, 78.39, True,  None),
+        (29, 81.01, True,  None),      # ← 上限
+        (30, 95.08, False, "hbm_oom_compile"),   # 超 0.34 GB，一步跳 14 GB
+        (31, 96.47, False, "hbm_oom_runtime"),
+    ]
+]
+
 
 _TILE_KEYS = ("gmm_tile_m", "gmm_tile_k", "gmm_tile_n", "tile_batch_seq", "tile_embed", "tile_mlp")
 
@@ -234,12 +262,21 @@ async def _run_real(params: dict, target: dict) -> dict:
         args["compile_topology_num_slices"] = target.get("slices", 1)
     args.setdefault("compile_xla_flags", prof.get("default_xla_flags", ""))
 
+    # 真跑就真出产物：XLA dump 到宿主机的 run 目录，事后按真实文件名与字节数登记。
+    # （宁可没有产物，也不要一份写死的假清单 —— 那会让人以为点开就能下载。）
+    dump_host = Path(os.environ.get("TPUGURU_ARTIFACT_DIR", "/tmp/tpuguru-artifacts"))
+    run_dir = dump_host / time.strftime("%Y%m%d-%H%M%S-%f")[:-3]
+    run_dir.mkdir(parents=True, exist_ok=True)
+    args["compile_xla_flags"] = (str(args.get("compile_xla_flags", "")).strip()
+                                 + " --xla_dump_to=/dump --xla_dump_hlo_as_text").strip()
+
     body = " ".join(
         f'{k}="{v}"' if " " in str(v) or str(v).startswith("--") else f"{k}={v}"
         for k, v in sorted(args.items()))
     inner = (f'{prof["preamble"]} && python3 -m {prof["entry"]} {prof["config"]} {body} 2>&1')
 
-    cmd = ["docker", "run", "--rm", "--cpus", str(prof.get("cpus", "12"))]
+    cmd = ["docker", "run", "--rm", "--cpus", str(prof.get("cpus", "12")),
+           "-v", f"{run_dir}:/dump"]
     for m in prof.get("mounts", []):
         cmd += ["-v", os.path.expandvars(m)]
     cmd += [prof["image"], "bash", "-lc", inner]
@@ -253,6 +290,26 @@ async def _run_real(params: dict, target: dict) -> dict:
     text = out.decode("utf-8", "replace")
     res = _parse_aot_output(text, p.returncode)
     res["elapsed_s"] = round(time.monotonic() - t0, 1)
+    try:
+        (run_dir / "aot.log").write_text(text, encoding="utf-8")
+        arts = {}
+        for f in sorted(run_dir.iterdir()):
+            if not f.is_file():
+                continue
+            kind = ("hlo" if "module" in f.name and f.suffix == ".txt"
+                    else "log" if f.suffix == ".log" else "other")
+            arts[f.name] = {"name": f.name, "bytes": f.stat().st_size,
+                            "kind": kind, "path": str(f)}
+        # 产物可能上百份（每个 module 一个），只挂最大的几个 + 日志
+        top = dict(sorted(arts.items(), key=lambda kv: -kv[1]["bytes"])[:8])
+        if "aot.log" in arts:
+            top["aot.log"] = arts["aot.log"]
+        res["artifacts"] = top
+        res["artifacts_total"] = {"count": len(arts),
+                                  "bytes": sum(v["bytes"] for v in arts.values()),
+                                  "dir": str(run_dir)}
+    except Exception as e:  # noqa: BLE001
+        log.warning("产物登记失败: %s", e)
     res.setdefault("metrics", {})["end_to_end_s"] = res["elapsed_s"]
     res["cmd"] = inner
     return res
