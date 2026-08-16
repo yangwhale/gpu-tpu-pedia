@@ -17,6 +17,7 @@ let FAMILIES = [];
 let BACKENDS = [];
 let busy = false;
 let hideVoided = false;
+let everSawReport = false;
 
 /* ── 参数控件表（PARAMS.md 的子集，问号文案三段式）───────── */
 const FIELDS = [
@@ -384,18 +385,29 @@ function renderRep() {
   const p = $('#pane-rep'); p.innerHTML = '';
   const R = S.result;
   if (!R) {
-    p.appendChild(el('div', 'empty',
-      '<span class="ic">📊</span>还没跑过 AOT<br>右上角【跑 AOT】，大约 3 分钟，不占卡'));
+    // ★ 报告是按**当前配置**索引的。这套配置没跑过就空着 ——
+    //   显示上一套配置的报告，等于让人对着 A 的结论调 B 的参数。
+    const seen = everSawReport || (S.known_fingerprints || []).length || (S.run_ids || []).length;
+    const e = el('div', 'empty',
+      seen
+        ? '<span class="ic">📊</span><b>这套配置还没跑过</b><br>'
+          + '报告是按配置索引的 —— 改回之前跑过的配置，那份报告会自己回来。'
+        : '<span class="ic">📊</span>还没跑过 AOT<br>大约 3 分钟，不占加速卡');
+    const btn = el('div', 'cta', '跑 AOT');
+    btn.onclick = () => $('#btn-run').click();
+    e.appendChild(btn);
+    e.appendChild(el('span', 'fp', '配置指纹 ' + esc(S.fingerprint || '')));
+    p.appendChild(e);
     return;
   }
-
-  if (R.fingerprint && S.fingerprint && R.fingerprint !== S.fingerprint) {
-    p.appendChild(el('div', 'stale',
-      '<div>⚠️</div><div><b>这份报告不是当前配置跑出来的。</b><br>'
-      + '跑完之后配置又被改过了。要看当前这套的结论，重新点【跑 AOT】。<br>'
-      + `<span style="font-family:var(--mono);font-size:11.5px;color:var(--muted)">`
-      + `报告 ${esc(R.fingerprint)} · 当前 ${esc(S.fingerprint)}</span></div>`));
+  everSawReport = true;
+  if (S.cached_from) {
+    p.appendChild(el('div', 'cachenote',
+      '<div>🗂</div><div>这份报告是<b>之前跑过的同一套配置</b>直接调出来的'
+      + `（${esc(S.cached_from.at || '')}），没有重跑。`
+      + '配置只要有一个字不同，指纹就变，这里就会空掉。</div>'));
   }
+
   // ☠️ 作废的数字必须先于一切出现，并且把它自己划掉。
   // 「编译通过 + 一个漂亮数字」是这份报告最危险的呈现方式。
   if (R.invalid) {
@@ -848,13 +860,22 @@ function render() {
     b.className = 'badge ' + (fatal ? 'red' : 'amber'); } else b.hidden = true;
   const br = $('#b-rep');
   if (S.result) {
-    const stale = S.result.fingerprint && S.fingerprint && S.result.fingerprint !== S.fingerprint;
     br.hidden = false;
-    br.textContent = stale ? '?' : S.result.ok === false ? '!' : '✓';
-    br.className = 'badge ' + (stale ? 'amber' : S.result.ok === false ? 'red'
+    br.textContent = S.result.invalid ? '⛔' : S.result.ok === false ? '!' : '✓';
+    br.className = 'badge ' + (S.result.invalid || S.result.ok === false ? 'red'
       : S.result.ok ? 'green' : '');
-    $('.tab[data-pane="rep"]').title = stale ? '配置改过了，这份报告已经不对应当前配置' : '';
-  } else { br.hidden = true; br.textContent = ''; }
+    $('.tab[data-pane="rep"]').title = '这份报告对应当前配置';
+  } else {
+    br.hidden = true; br.textContent = '';
+    $('.tab[data-pane="rep"]').title = '当前配置还没跑过 AOT';
+  }
+  // 顶栏即时指示：不用切到报告页就知道这套配置有没有结论
+  const fs = $('#fpstate');
+  const has = !!S.result;
+  fs.className = 'fpstate ' + (has ? 'has' : 'none');
+  fs.lastElementChild.textContent = has
+    ? (S.cached_from ? '已有报告（调档）' : '已有报告') : '未跑 AOT';
+  fs.title = '配置指纹 ' + (S.fingerprint || '');
   if ($('.tab.on')?.dataset.pane === 'his') renderHis();
 }
 

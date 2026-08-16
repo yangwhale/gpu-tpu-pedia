@@ -118,7 +118,11 @@ def _new_session(title="未命名会话") -> dict:
     s = {"schema_version": 1, "id": sid, "created_at": _now(), "updated_at": _now(),
          "created_by": "local", "title": title, "parent_save_id": None,
          "turns": [], "current": {"params": {}, "xla_flags": {}, "target": {}, "raw_cmd": ""},
-         "run_ids": [], "last_result": None}
+         # ★ 配置指纹 → 那一份 AOT 结果。配置就是缓存键：
+         #   改回旧配置立刻看到旧报告，改到没跑过的配置就空着。
+         #   不做这一层的话，只能弹「报告过期」而旧报告还挂在屏幕上 —— 那正是
+         #   「我以为在看 A 的结论，其实是 B 的」。
+         "results": {}, "run_ids": [], "last_result": None}
     SESSIONS[sid] = s
     return s
 
@@ -128,6 +132,7 @@ def _get_session(sid: str) -> dict:
         return SESSIONS[sid]
     d = store.get("tpuguru_sessions", sid) if sid else None
     if d:
+        d.setdefault("results", {})
         SESSIONS[sid] = d
         return d
     return _new_session()
@@ -139,6 +144,33 @@ def _persist(s: dict):
         store.put("tpuguru_sessions", s["id"], {k: v for k, v in s.items() if k != "last_result"})
     except Exception as e:  # noqa: BLE001
         log.warning("会话持久化失败: %s", e)
+
+
+_FP_CACHE: dict[str, dict | None] = {}
+
+
+def _lookup_run(fp: str) -> dict | None:
+    """在 `tpuguru` 里找同指纹跑过的那一次。跨会话也算 —— 同一套配置
+    的 AOT 结论跟谁跑的无关。查不到就返回 None（前端据此显示空态）。"""
+    if fp in _FP_CACHE:
+        return _FP_CACHE[fp]
+    hit = None
+    try:
+        if store.db:
+            docs = store.db.collection("tpuguru").where("fingerprint", "==", fp).limit(5).get()
+            cands = [d.to_dict() for d in docs]
+        else:
+            cands = [d for d in store.list("tpuguru", 400) if d.get("fingerprint") == fp]
+        cands = [c for c in cands if c.get("result")]
+        if cands:
+            c = max(cands, key=lambda x: x.get("created_at", ""))
+            hit = {"run_id": c["id"], "fingerprint": fp,
+                   "from_cache": {"at": c.get("created_at"), "run_id": c["id"]},
+                   **(c.get("result") or {})}
+    except Exception as e:  # noqa: BLE001
+        log.warning("按指纹回捞失败: %s", e)
+    _FP_CACHE[fp] = hit
+    return hit
 
 
 def _recompute(s: dict) -> dict:
@@ -156,6 +188,14 @@ def _recompute(s: dict) -> dict:
 
 def _state(s: dict) -> dict:
     r = _recompute(s)
+    fp = _fingerprint(s["current"])
+    # ★ 只返回**当前配置**对应的结果。配置一动，报告要么换成那套的，要么空。
+    res = (s.get("results") or {}).get(fp)
+    cached_from = None
+    if res is None:
+        res = _lookup_run(fp)
+        if res:
+            cached_from = res.get("from_cache")
     return {
         "session_id": s["id"], "title": s["title"], "turns": s["turns"],
         "params": s["current"]["params"], "xla_flags": s["current"]["xla_flags"],
@@ -164,9 +204,10 @@ def _state(s: dict) -> dict:
         "backend": detect_backend(s["current"]["params"]),
         "aot_cmd": r["aot_cmd"], "dropped": r["dropped"], "added": r["added"],
         "lint": r["lint"], "roundtrip": r["roundtrip"],
-        "run_ids": s["run_ids"], "result": s.get("last_result"),
+        "run_ids": s["run_ids"], "result": res, "cached_from": cached_from,
+        "known_fingerprints": sorted((s.get("results") or {}).keys()),
         "parent_save_id": s.get("parent_save_id"),
-        "fingerprint": _fingerprint(s["current"]),
+        "fingerprint": fp,
     }
 
 
@@ -465,8 +506,9 @@ async def run(inp: ChatIn):
     rid = "aot_" + time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4]
     result = await run_aot(s["current"]["params"], s["current"]["target"], r["aot_cmd"])
     result["lint_at_run"] = r["lint"]
+    fp = _fingerprint(s["current"])
     doc = {"schema_version": 1, "id": rid, "created_at": _now(), "created_by": "local",
-           "status": "done", "input": {"raw_cmd": s["current"].get("raw_cmd", ""),
+           "status": "done", "fingerprint": fp, "input": {"raw_cmd": s["current"].get("raw_cmd", ""),
                                        "params": s["current"]["params"],
                                        "xla_flags": s["current"]["xla_flags"],
                                        "target": s["current"]["target"], "aot_cmd": r["aot_cmd"]},
@@ -476,7 +518,11 @@ async def run(inp: ChatIn):
     except Exception as e:  # noqa: BLE001
         log.warning("run 落库失败: %s", e)
     s["run_ids"].append(rid)
-    s["last_result"] = {"run_id": rid, "fingerprint": _fingerprint(s["current"]), **result}
+    entry = {"run_id": rid, "fingerprint": fp, **result}
+    s.setdefault("results", {})[fp] = entry          # 本会话：不带 from_cache
+    s["last_result"] = entry
+    # 进程级缓存里存**带来源**的那份 —— 别的会话取到时要能看出「这是调档，不是刚跑的」
+    _FP_CACHE[fp] = {**entry, "from_cache": {"at": doc["created_at"], "run_id": rid}}
     verdict = ("❌ 装不下" if result.get("ok") is False else
                "✅ 编译通过" if result.get("ok") else "❓ 这一档没有记录")
     extra = ""
@@ -497,7 +543,8 @@ async def save(inp: SaveIn):
     """💾 存档 —— README §4.6。内容全部内联复制，不指向别的 doc。"""
     s = _get_session(inp.session_id)
     r = _recompute(s)
-    res = s.get("last_result") or {}
+    _fp = _fingerprint(s["current"])
+    res = (s.get("results") or {}).get(_fp) or _lookup_run(_fp) or {}
     said = "save_" + time.strftime("%Y%m%d_%H%M%S") + "_" + uuid.uuid4().hex[:4]
     doc = {
         "schema_version": 1, "id": said, "created_at": _now(), "created_by": "local",
