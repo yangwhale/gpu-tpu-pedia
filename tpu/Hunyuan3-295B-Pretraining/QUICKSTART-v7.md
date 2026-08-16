@@ -95,33 +95,51 @@ v7 单芯片从起点的 **52.7%** 走到现在的 **77.8%**。
 
 三组参数，其余部分完全一致（见 [§4.1 完整参数集](#41-完整参数集)）。
 
-### ⚡ 64 芯片 FP8 → **677**（tokamax + QAG）
+### 🏆 64 芯片 FP8 → **727.0**（2026-08-16 新最高水位）
+
+**不开 QAG，跟 BF16 走完全相同的分片策略**，只是精度换成 FP8：
 
 ```
-# 在 BF16 那套 18 个 tile 参数之外，加这几项：
-ici_data_parallelism=2           # QAG 的整除锁：192 个专家只能 FSDP=64
-ici_fsdp_parallelism=64
-per_device_batch_size=7          # 上限就是 7，AOT 实测 8 要 98.05 G
+ici_fsdp_parallelism=-1          # 吃满 128 路（QAG 那条只能到 64）
+ici_tensor_parallelism=1
+per_device_batch_size=13         # 上限，14 HBM OOM（AOT 与真机一致）
+megablox=True                    # 不开 use_tokamax_gmm
 use_qwix_quantization=True
 quantization=fp8_full
-shard_exp_on_fsdp=True
-weight_quantization_calibration_method=fixed,-224,224
-act_quantization_calibration_method=fixed,-224,224
-use_tokamax_gmm=True             # ⛔ 必须开！关掉会触发静默漏算，见下
+# ⚠️ 不要写 shard_exp_on_fsdp —— 开了会触发漏算 bug（见下）
+weight_quantization_calibration_method=absmax    # ⚠️ 不要用 fixed，见 §4.7
+act_quantization_calibration_method=absmax
+--xla_tpu_dvfs_p_state=7
++ BF16 那套 18 个 tile 参数
 ```
 
-> [!caution] ⛔ FP8 下**不要**关 `use_tokamax_gmm`
-> 关掉走 native/megablox 分支时，权重按**专家维**切成 64 份（每卡 3 个完整专家），
-> 而 native 分支**没有 all-gather** —— kernel 只对本地 3 个专家建表，
-> **其余 189 个的贡献完全没算**。不报错、loss 照常下降，只是快得离谱。
->
-> | | 每步 | per-chip |
-> |---|---|---|
-> | native（漏算，曾报为 1,014.8） | 7.85 s | ~~1,014.8~~ |
-> | native + 补齐 all-gather | 12.50 s | 637.0 |
-> | **tokamax + QAG（用这个）** | **11.76 s** | **677.0** |
->
-> 根因、补丁、四条硬证据见 [TUNING-v7 §3.4.10](TUNING-v7.md)。
+| pdbs | step | per-chip | |
+|---|---|---|---|
+| 10 | 16.552 s | 687.3 | |
+| 12 | 19.017 s | 717.8 | |
+| **13** | **20.342 s** | **727.0** | 上限 |
+| 14 | — | — | ❌ HBM OOM |
+
+**为什么比 QAG 那条快**：QAG 要求 `num_experts % FSDP == 0`，FSDP 被锁死在 64，
+另一半并行度只能给 DP —— 而 DP **不分片权重**。放弃 QAG 换来 FSDP=128：
+每卡常驻权重 18.1 G → 9.1 G，省出的显存把 batch 从 7 推到 13。
+代价是 all-gather 收的是未量化权重（字节翻倍），但**已被异步通信藏住**。
+
+> 上表 727.0 是用 `fixed,-224,224` 测的（从旧配方抄来的残留）。
+> **生产必须换 `absmax`** —— `fixed` 只是 QAG 的入场券，不开 QAG 就没有任何理由用它，
+> 而它会损害收敛质量。absmax 版的吞吐复测见 §4.7。
+
+<details><summary>旧配方：FP8 + tokamax + QAG → 677.0（保留备查）</summary>
+
+```
+ici_data_parallelism=2  ici_fsdp_parallelism=64   # QAG 的整除锁
+per_device_batch_size=7
+use_qwix_quantization=True  quantization=fp8_full  shard_exp_on_fsdp=True
+weight_quantization_calibration_method=fixed,-224,224
+act_quantization_calibration_method=fixed,-224,224
+use_tokamax_gmm=True        # ⛔ 关掉会触发静默漏算，见 TUNING §3.4.10
+```
+</details>
 
 ### ⚡ 64 芯片 BF16 → **662**（2026-08-15 起的推荐配方）
 
@@ -495,6 +513,33 @@ steps=8                          # 取 step 4–7 稳态
 > ⚠️ libtpu 对不认识的 flag 是**硬失败**（`Unknown command line flag`，进程直接退）。**换镜像必须重过一遍 flag 集。**
 
 ---
+
+### 4.7 量化校准：**不要用 `fixed`**
+
+| 校准方式 | scale 怎么来 | 什么时候能用 |
+|---|---|---|
+| `absmax` | 按通道动态求最大值 | **默认用这个** |
+| `fixed,-224,224` | 钉死在预设范围 | **只有开 QAG 时被迫用** |
+
+`fixed` 把权重和激活钉死在一个静态范围里裁剪。真实分布随训练漂移、逐层逐专家量级不同 ——
+要么大值被裁掉，要么小值全挤在低位。**跑得通、loss 也降，收敛质量被悄悄吃掉。**
+
+**它为什么会出现在配方里**：QAG 先量化再跨卡收集，各卡必须量化到同一尺度。
+而权重量化的 channel 轴选的是 `[2]`（mlp 维），算 absmax 时把**专家维一起归约**了 ——
+每卡只有 3 个专家，absmax 各不相同，拼起来就是错的。所以 QAG 强制 `fixed`
+（`megablox/ops.py:193`、`moe.py:1571/1612` 三处都卡在
+`weight_calibration_method.startswith("fixed")`）。
+
+> 这不是物理定律。若 channel 轴含专家维 `[0]`，每个专家一套独立 scale、完全由本地数据算出，
+> **QAG + absmax 就成立**。代码注释承认了这点，没做的理由是「反向不能复用 scale」——
+> 工程权衡，非正确性约束。已记为上游改进建议。
+
+**结论：不开 QAG 就没有任何理由用 `fixed`。** 我们 2026-08-16 的最优配方不走 QAG，
+却还在传 `fixed` —— 从旧配方抄漏的残留。**约束的来源没了，约束本身却留下了，这类残留最难发现。**
+
+**注意力不受影响** —— 量化规则按算子名注册（`get_current_rule("gmm")`），只作用于分组矩阵乘，
+splash attention 全程 bf16。
+
 
 ## 五、模型与代码
 
