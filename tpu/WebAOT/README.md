@@ -50,6 +50,28 @@ python3 -m src.maxtext.trainers.pre_train.train src/maxtext/configs/base.yml \
 
 ---
 
+## 2.5 目录结构
+
+```
+WebAOT/
+├── README.md              设计文档（本文件）
+├── PARAMS.md              ★ 参数目录：控件类型 + 问号三段文案
+├── backend/               FastAPI：解析、转换、投递、读写 Firestore
+├── worker/                在 CPU 上跑 AOT
+│   └── probe_codepath.py  ✅ 已验证可用的代码路径探针
+├── analyzers/             把产物变成结构化结论，一个维度一个分析器
+├── rules/
+│   └── rules.seed.json    ✅ 9 条 lint 规则的种子数据
+├── frontend/              提交 / 报告 / 历史三个页面
+└── deploy/                systemd + 反代片段 + Firestore 索引
+```
+
+**两份已经能用的东西**：`worker/probe_codepath.py` 是 2026-08-16 实测跑通的探针，
+`rules/rules.seed.json` 是 9 条规则的数据化版本（导入 `webaot_rules` 即可）。
+其余目录只有职责说明，等实现。
+
+---
+
 ## 3. 架构
 
 ```
