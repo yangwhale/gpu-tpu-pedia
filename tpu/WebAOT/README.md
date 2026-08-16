@@ -63,12 +63,59 @@ WebAOT/
 ├── rules/
 │   └── rules.seed.json    ✅ 9 条 lint 规则的种子数据
 ├── frontend/              提交 / 报告 / 历史三个页面
+├── skill/vibe-aot/        ★ 知识载体：脚本 / 规则 / 输出契约 / playbook
 └── deploy/                systemd + 反代片段 + Firestore 索引
 ```
 
 **两份已经能用的东西**：`worker/probe_codepath.py` 是 2026-08-16 实测跑通的探针，
 `rules/rules.seed.json` 是 9 条规则的数据化版本（导入 `webaot_rules` 即可）。
 其余目录只有职责说明，等实现。
+
+---
+
+## 2.8 设计原则：能交给 bot 的都交给 bot
+
+**程序只做三件确定性的事**：
+
+1. 正则解析 `k=v` / `--flag=v` / 环境变量
+2. 起 docker 跑 AOT、收集 stdout 与 dump 文件
+3. 读写 Firestore 与对象存储
+
+**其余全部交给带 skill 的 agent** —— 判断、解释、拆解、映射、生成、兜底。
+包括但不限于：
+
+| 事情 | 为什么不写成代码 |
+|---|---|
+| 从一段乱七八糟的命令里认出参数 | 格式千奇百怪，正则写不完 |
+| 把 stdout 里的报错归类并给出建议 | 错误串会随编译器版本变 |
+| 把 HLO 统计翻译成人话 | 「说人话」本身就没法穷举规则 |
+| 决定下一步该试什么参数 | 需要结合历史与领域知识 |
+| 新模型的起始配置怎么定 | 见 §4.5 |
+| 遇到没见过的失败 | 兜底：让 agent 读原始日志现场分析 |
+
+**知识不写进代码，写进 skill。** 改一条规则、加一种分析、换一个解读口径 ——
+**改 skill 即可，不用改代码、不用发版**。
+
+### skill：`vibe-aot`
+
+```
+skill/vibe-aot/
+├── SKILL.md            主入口：什么时候用、怎么用、输出契约
+├── scripts/            可执行脚本（agent 直接调）
+│   ├── submit.sh       下发一次 AOT
+│   ├── collect.sh      采集 stdout / HLO / LLO
+│   └── extract.py      从产物里抽结构化字段
+├── rules/              lint 规则（与 rules/rules.seed.json 同源）
+├── prompts/            各场景的输出契约（JSON schema），保证前端能直接渲染
+├── knowledge/          领域知识：参数含义、已知陷阱、实测数字、机型常数
+└── playbooks/          常见任务的固定步骤
+    ├── new-model.md    拿到一个新模型，怎么定起始配置
+    ├── oom.md          OOM 了怎么二分找 batch 上限
+    └── slow.md         比预期慢，怎么逐层定位
+```
+
+**`knowledge/` 与 [PARAMS.md](PARAMS.md) 同源**，避免两处维护。
+前端渲染问号读 PARAMS.md，agent 回答追问读 knowledge/ —— 内容一致，形式不同。
 
 ---
 
@@ -146,6 +193,42 @@ Firestore  collection: webaot
 
 **拓扑要用户选或从命令推断**：AOT 必须知道目标硬件。
 `compile_topology=tpu7x-128` 表示 **128 device = 64 芯片**（v7 是 2 device/chip，最容易写错的地方）。
+
+---
+
+## 4.5 第二个输入框：Model Config → 起始配置
+
+**场景**：拿到一个**没跑过的新模型**，不知道该从什么配置起步。
+现在的做法是翻别人的配方、猜、然后撞一整天 OOM。
+
+**做法**：贴模型配置（HF `config.json` / MaxText model yaml / 甚至一段描述），
+调 BotCall 结合 `vibe-aot` skill 里的领域知识，产出三样东西并显示在下方：
+
+```
+┌─ Model Config 粘贴区 ───────────────────────┐
+│ { "num_hidden_layers": 80, "num_experts": 192,│
+│   "hidden_size": 4096, "moe_intermediate_size":│
+│   1536, "vocab_size": 120832, ... }            │
+└─────────────────────────────────────────────┘
+        ↓ BotCall（带 vibe-aot skill）
+① 基础 MaxText 配置    ② 可跑的测试脚本    ③ 起始参数建议 + 理由
+```
+
+**它应该能自己推出来的**（都来自 skill 里的实测知识）：
+
+| 推什么 | 依据 |
+|---|---|
+| FSDP 宽度 | 吃满 device 数；若要开 QAG 则须能整除专家数 |
+| tile 参数 | 不能超过 `hidden_size` / `moe_intermediate_size`；给出安全起点 |
+| batch 起点 | 按参数量 × 精度粗估每卡常驻，再留余量；**真值让 AOT 去问** |
+| 该不该开 QAG | 专家数能否被 FSDP 整除；开了要配哪个 kernel |
+| 会踩哪些坑 | 直接跑一遍 lint 规则 |
+
+**输出必须是「可以直接点【跑 AOT】的东西」** —— 不是一段建议文字，
+而是填好的表单 + 生成好的命令，用户改两下就能提交。
+
+> 这一步不保证最优，只保证**起点合理、不撞已知的坑**。
+> 最优仍然靠 AOT 二分 + 真机验证。
 
 ---
 
