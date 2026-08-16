@@ -71,18 +71,19 @@ async def _probe() -> dict:
 def _verdict(d: dict, want: int) -> dict:
     """绿 / 黄 / 红 —— 判据写在 why 里，别让人对着一盏灯猜。"""
     free, quota, used = d["cohort_free"], d["quota"], d["used"]
+    # 灯上只放一句话 —— cohort / 保底 / 借用这些账，塞进 tooltip 就够了
     if free >= want:
-        return {"light": "green", "text": f"{want} 芯片可立刻拿到",
+        return {"light": "green", "text": f"{want} 卡可用",
                 "why": f"cohort 当前空闲 {free} 芯片，够你要的 {want}。几十秒就能起来。"}
     if used + want <= quota:
-        return {"light": "amber", "text": f"{want} 芯片在保底内，需抢占",
+        return {"light": "amber", "text": f"{want} 卡需等",
                 "why": f"空闲只有 {free}，但「已用 {used} + 申请 {want}」没超我们 {quota} 的保底 —— "
                        f"Kueue 会把别人借走的抢回来，通常几分钟。"}
     short = used + want - quota
     if short <= free:
-        return {"light": "amber", "text": f"超出保底 {short} 芯片，但借得到",
+        return {"light": "amber", "text": f"{want} 卡需等",
                 "why": f"超出的 {short} ≤ cohort 空闲 {free}，能借但要等，可能十几分钟。"}
-    return {"light": "red", "text": f"要不到 {want} 芯片",
+    return {"light": "red", "text": f"{want} 卡要不到",
             "why": f"超出保底 {short} 芯片，而 cohort 只空闲 {free}。"
                    f"改小规模、等别人释放，或挑 peak 窗口（港时 04:00–16:00 工作日）。"}
 

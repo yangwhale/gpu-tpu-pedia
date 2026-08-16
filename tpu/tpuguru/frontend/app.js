@@ -503,9 +503,117 @@ function renderRep() {
   if (A.collectives) p.appendChild(cardCollectives(A.collectives.data));
   if (A.compile_time) p.appendChild(cardCompile(A.compile_time.data));
   if (A.hlo) p.appendChild(cardHlo(A.hlo.data));
+  p.appendChild(cardHloDeep(R));
   if (A.llo) p.appendChild(cardLlo(A.llo.data));
   if (R.artifacts && Object.keys(R.artifacts).length) p.appendChild(cardArtifacts(R.artifacts));
 }
+
+/* ★ HLO 深挖 —— AOT 产物里能榨出来的东西比「装不装得下」多得多。
+   数字全部来自真实 dump，解读交给带 skill 的 agent。 */
+let HLO = null, hloBusy = false;
+
+function cardHloDeep(R) {
+  const c = el('div', 'card');
+  c.appendChild(el('h3', null, '🔬 HLO 深挖'));
+  const has = !!(R.artifacts_total?.dir);
+  if (!has) {
+    c.appendChild(el('div', 'notyet',
+      'replay 模式没有本地 dump —— 深挖需要 real 模式真跑一次（会自动 --xla_dump_to）。'));
+    return c;
+  }
+  c.appendChild(el('div', 'hint',
+    `产物 ${R.artifacts_total.count} 份 / ${(R.artifacts_total.bytes/1e6).toFixed(1)} MB。`
+    + '下面全部来自真实 dump 文件 —— 显存排行是<b>编译器自己算的</b>，比任何倒推都准。'));
+  if (!HLO) {
+    const b = el('button', 'btn-primary hlobtn', hloBusy ? '分析中…' : '扒开看看');
+    b.disabled = hloBusy;
+    b.onclick = async () => {
+      hloBusy = true; render();
+      try { HLO = await api('api/hlo', { session_id: S.session_id, explain: true }); }
+      catch (e) { toast('分析失败：' + e.message); }
+      finally { hloBusy = false; render(); }
+    };
+    c.appendChild(b);
+    return c;
+  }
+  const H = HLO;
+  if (H.explain) { c.appendChild(el('div', 'explain', md3(H.explain))); }
+
+  const M = H.memory || {};
+  if (M.ok) {
+    c.appendChild(el('h3', null, `显存都花在哪 · 共 ${M.total_gib} GiB`));
+    c.appendChild(el('div', 'hint', md2(M.note)));
+    const max = Math.max(...M.rows.map(r => r.size_gib));
+    M.rows.slice(0, 8).forEach(r => {
+      const t = r.top_shape || {};
+      const row = el('div', 'memrow' + (r.size_gib / max > .6 ? ' hot' : ''));
+      row.appendChild(el('div', 'g', fmt(r.size_gib, 2) + ' GiB'));
+      const tr = el('div', 'tr'); const fl = el('div', 'fl');
+      fl.style.width = (r.size_gib / max * 100) + '%'; tr.appendChild(fl); row.appendChild(tr);
+      row.appendChild(el('div', 'sh',
+        `${esc(t.dtype || '')}[${(t.dims || []).join('×')}]` + (t.n > 1 ? ` ×${t.n}` : '')));
+      c.appendChild(row);
+    });
+  }
+
+  const F = H.fusion || {};
+  if (F.ok) {
+    c.appendChild(el('h3', null, '编译器做了什么'));
+    c.appendChild(el('div', 'hint',
+      (F.count_note ? md2(F.count_note) + '<br>' : '') + md2(F.note)));
+    c.appendChild(el('table', 't', '<thead><tr><th>fusion 种类</th><th>数量</th></tr></thead><tbody>'
+      + F.kinds.map(k => `<tr><td>k${esc(k.kind)}</td><td class="mono">${k.n}</td></tr>`).join('')
+      + '</tbody>'));
+  }
+
+  const C = H.collectives || {};
+  if (C.ok) {
+    c.appendChild(el('h3', null, '集合通信'));
+    c.appendChild(el('div', 'hint', md2(C.note)));
+    c.appendChild(el('table', 't',
+      '<thead><tr><th>算子</th><th>次数</th><th>它在干什么</th></tr></thead><tbody>'
+      + C.rows.map(r => `<tr><td class="mono">${esc(r.op)}</td><td class="mono">${r.n}</td>`
+        + `<td style="color:var(--muted)">${esc(r.role)}</td></tr>`).join('') + '</tbody>'));
+  }
+
+  const P = H.precision || {};
+  if (P.ok) {
+    c.appendChild(el('h3', null, '精度实际生效了吗'));
+    c.appendChild(el('div', P.fp8_active ? 'hint' : 'danger', md2(P.note)));
+    c.appendChild(el('div', 'path',
+      P.dtypes.map(d => `<span class="chip mute">${esc(d.label)} ×${d.n}</span>`).join('')));
+  }
+
+  const O = H.ops || {};
+  if (O.ok) {
+    c.appendChild(el('h3', null, `算子频次 · 共 ${O.total.toLocaleString()} 条`));
+    const max = O.top[0].n;
+    const bars = el('div', 'bars');
+    O.top.slice(0, 10).forEach(t => {
+      const b = el('div', 'bar');
+      b.appendChild(el('div', 'nm', `<span class="mono" style="font-size:12px">${esc(t.op)}</span>`));
+      const tr = el('div', 'tr'); const fl = el('div', 'fl');
+      fl.style.width = (t.n / max * 100) + '%'; tr.appendChild(fl); b.appendChild(tr);
+      b.appendChild(el('div', 'vl', `${t.n} · ${t.pct}%`));
+      bars.appendChild(b);
+    });
+    c.appendChild(bars);
+  }
+  return c;
+}
+
+// agent 写的是 markdown，比 md2 多支持标题与列表
+const md3 = s => esc(s)
+  .replace(/`([^`\n]+)`/g, '<code>$1</code>')
+  .replace(/\*\*([^*]+)\*\*/g, '<strong>$1</strong>')
+  .replace(/^#{1,4} (.+)$/gm, '<h4>$1</h4>')
+  .replace(/^[-*] (.+)$/gm, '<li>$1</li>')
+  .replace(/^\d+\. (.+)$/gm, '<li>$1</li>')
+  .replace(/(<li>[\s\S]*?<\/li>)(?!\s*<li>)/g, '<ul>$1</ul>')
+  .split(/\n{2,}/).map(x => x.startsWith('<') ? x : `<p>${x.replace(/\n/g,'<br>')}</p>`).join('');
+
+// 换配置就清掉旧的深挖结果 —— 它是绑在那份产物上的
+function resetHlo() { HLO = null; }
 
 function cardLlo(d) {
   const c = el('div', 'card');
@@ -932,7 +1040,8 @@ function nodeOf(s, depth) {
     e.stopPropagation();
     if (!confirm(`载入「${s.title}」？会开一场新对话，当前会话保留。`)) return;
     setBusy(true);
-    try { S = await api(`/api/save/${s.id}/load`, {}); switchTab('cfg'); render(); toast('已载入'); }
+    try { S = await api(`api/save/${s.id}/load`, {}); drawer.hidden = true;
+          switchTab('cfg'); render(); toast('已载入'); }
     catch (err) { toast('载入失败：' + err.message); } finally { setBusy(false); }
   };
   acts.appendChild(load);
@@ -952,6 +1061,7 @@ function nodeOf(s, depth) {
 
 /* ── 主渲染 ───────────────────────────────────────────────── */
 function render() {
+  if (render._fp !== S.fingerprint) { resetHlo(); render._fp = S.fingerprint; }
   renderTurns(); renderCfg(); renderCmd(); renderRep();
   $('#sess-title').textContent = S.session_id;
   const fatal = S.lint.filter(f => f.severity === 'fatal').length;
@@ -988,17 +1098,23 @@ function render() {
     ? (S.result ? 'AOT 说装不下 / 结论无效，先把它跑通' : '这套配置还没跑过 AOT')
     : !clOk ? '集群现在要不到卡：' + (CLUSTER?.text || '')
     : `上 64 卡真跑（约 20–40 分钟，占共享集群）\n峰值 ${S.result.metrics?.peak_hbm_gb} GB，已编译通过`;
-  if ($('.tab.on')?.dataset.pane === 'his') renderHis();
+  if (!drawer.hidden) renderHis();
 }
 
 function switchTab(name) {
   document.querySelectorAll('.tab').forEach(t => t.classList.toggle('on', t.dataset.pane === name));
   document.querySelectorAll('.pane').forEach(p => p.classList.toggle('on', p.id === 'pane-' + name));
-  if (name === 'his') renderHis();
+
 }
 
 /* ── 事件 ─────────────────────────────────────────────────── */
 document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dataset.pane));
+
+const drawer = $('#drawer');
+$('#btn-hist').onclick = () => { drawer.hidden = false; renderHis(); };
+$('#d-close').onclick = () => drawer.hidden = true;
+drawer.querySelector('.dmask').onclick = () => drawer.hidden = true;
+document.addEventListener('keydown', e => { if (e.key === 'Escape') drawer.hidden = true; });
 
 async function send() {
   const t = $('#input').value.trim();
@@ -1078,7 +1194,7 @@ $('#btn-save').onclick = () => {
       const r = await api('/api/save', { session_id: S.session_id, title,
         note: m.querySelector('#sv-n').value.trim(),
         tags: m.querySelector('#sv-g').value.split(',').map(x => x.trim()).filter(Boolean) });
-      S = r.state; close(); switchTab('his'); render(); toast('已存档');
+      S = r.state; close(); render(); toast('已存档');
     } catch (e) { toast('存档失败：' + e.message); }
   };
 };
@@ -1089,8 +1205,7 @@ async function refreshCluster() {
   } catch (e) { CLUSTER = { ok: false, light: 'grey', text: '探测失败', why: String(e) }; }
   const n = $('#cluster');
   n.className = 'cl ' + (CLUSTER.light || 'grey');
-  n.lastElementChild.innerHTML = esc(CLUSTER.text || '')
-    + (CLUSTER.ok ? ` <span class="n">空闲 ${CLUSTER.cohort_free}/${CLUSTER.cohort_total}</span>` : '');
+  n.lastElementChild.textContent = CLUSTER.text || '';
   n.title = (CLUSTER.why || '') + (CLUSTER.ok
     ? `\n保底 ${CLUSTER.quota} · 我们已用 ${CLUSTER.used} · Running pod ${CLUSTER.running_pods}`
     : '');

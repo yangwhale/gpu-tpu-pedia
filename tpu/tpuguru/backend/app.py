@@ -24,6 +24,7 @@ from pydantic import BaseModel
 
 from .lint import run_lint
 from .cluster import status as cluster_status
+from . import hlo as hlomod
 from . import metal
 from .models import BACKENDS, MODELS, catalog, detect_backend, get_model
 from .parser import TOPOLOGIES, fsdp_width, parse_command, roundtrip_check, to_aot
@@ -659,6 +660,41 @@ async def metal_status(name: str):
 def metal_profile():
     from .worker import _profile
     return _profile()
+
+
+class HloIn(BaseModel):
+    session_id: str
+    explain: bool = True
+
+
+@app.post("/api/hlo")
+async def hlo_analyze(inp: HloIn):
+    """深挖 HLO：结构化统计 + 让带 skill 的 agent 写一段解读。
+
+    **只把事实喂给 agent，不喂结论** —— 结论让它自己下，
+    这样它给的建议才可能超出我预先写死的那几条。
+    """
+    s = _get_session(inp.session_id)
+    fp = _fingerprint(s["current"])
+    res = (s.get("results") or {}).get(fp) or _lookup_run(fp)
+    d = ((res or {}).get("artifacts_total") or {}).get("dir")
+    if not d:
+        raise HTTPException(400, "这套配置没有本地 HLO 产物 —— 需要 real 模式跑过一次")
+    a = hlomod.analyze(d)
+    if not a.get("ok"):
+        raise HTTPException(400, a.get("why", "分析失败"))
+    if inp.explain:
+        prompt = (
+            "下面是一次 TPU AOT 编译的 HLO 统计（全部来自真实 dump，不是估算）。"
+            "请写一段分析，用 markdown，控制在 400 字内，分成这几段：\n"
+            "1. **显存都花在哪** —— 指出最占地方的张量是什么、为什么这么大、能不能小\n"
+            "2. **编译器做了什么** —— 从 fusion 种类和数量看它的处理方式\n"
+            "3. **通信状况** —— 从集合通信的次数判断有没有被提升出循环\n"
+            "4. **值得动手的两三件事** —— 按收益排序，每条说清代价\n\n"
+            "纪律：区分事实与推测；不要复述数字，要解释它意味着什么；"
+            "不确定就说不确定。\n\n" + hlomod.digest(a, s["current"]["params"], s["current"]["target"]))
+        a["explain"] = await _botcall("explain", prompt, {}) or ""
+    return a
 
 
 @app.post("/api/save")
