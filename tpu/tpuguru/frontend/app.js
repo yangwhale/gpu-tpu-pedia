@@ -1212,19 +1212,74 @@ async function refreshCluster() {
   if (S) render();
 }
 
+/* ── 左右分栏：拖动改比例 / 收起对话 ─────────────────────────
+   宽度记进 localStorage —— 每次打开都要重新拖一遍是很烦的事。 */
+const MAIN = document.querySelector('main');
+const LW_KEY = 'tpuguru_lw', COL_KEY = 'tpuguru_collapsed';
+
+function applyLayout(lw, collapsed) {
+  if (collapsed) {
+    MAIN.classList.add('collapsed');
+    $('#btn-expand').hidden = false;
+  } else {
+    MAIN.classList.remove('collapsed');
+    $('#btn-expand').hidden = true;
+    if (lw) MAIN.style.setProperty('--lw', lw);
+  }
+}
+function toggleCollapse(force) {
+  const now = MAIN.classList.contains('collapsed');
+  const next = force === undefined ? !now : force;
+  localStorage.setItem(COL_KEY, next ? '1' : '');
+  applyLayout(localStorage.getItem(LW_KEY), next);
+}
+$('#btn-collapse').onclick = () => toggleCollapse(true);
+$('#btn-expand').onclick = () => toggleCollapse(false);
+document.addEventListener('keydown', e => {
+  if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 'b') { e.preventDefault(); toggleCollapse(); }
+});
+
+(() => {
+  const sp = $('#splitter');
+  let dragging = false;
+  const MIN = 300, MAXR = 0.62;
+  const onMove = e => {
+    if (!dragging) return;
+    const r = MAIN.getBoundingClientRect();
+    // 夹住上下界：太窄了对话没法看，太宽了报告没地方
+    const w = Math.min(Math.max(e.clientX - r.left, MIN), r.width * MAXR);
+    MAIN.style.setProperty('--lw', w + 'px');
+  };
+  const stop = () => {
+    if (!dragging) return;
+    dragging = false; sp.classList.remove('on');
+    document.body.classList.remove('resizing');
+    localStorage.setItem(LW_KEY, MAIN.style.getPropertyValue('--lw'));
+  };
+  sp.addEventListener('mousedown', e => {
+    e.preventDefault(); dragging = true; sp.classList.add('on');
+    document.body.classList.add('resizing');
+  });
+  sp.addEventListener('dblclick', () => {
+    MAIN.style.setProperty('--lw', '31%'); localStorage.setItem(LW_KEY, '31%');
+  });
+  window.addEventListener('mousemove', onMove);
+  window.addEventListener('mouseup', stop);
+})();
+
+applyLayout(localStorage.getItem(LW_KEY), !!localStorage.getItem(COL_KEY));
+
 /* ── 启动 ─────────────────────────────────────────────────── */
 (async () => {
   try {
     const h = await api('/api/health');
     TOPOS = h.topologies || {};
     FAMILIES = h.families || []; BACKENDS = h.backends || [];
-    const ps = $('#pill-store');
-    ps.className = 'pill' + (h.store === 'firestore' ? '' : ' warn');
-    ps.lastElementChild.textContent = h.store === 'firestore' ? 'Firestore' : '本地存储';
-    const pm = $('#pill-mode');
-    pm.className = 'pill' + (h.aot_mode === 'real' ? '' : ' warn');
-    pm.lastElementChild.textContent = h.aot_mode === 'real' ? 'AOT: real' : 'AOT: replay';
-    pm.title = h.aot_mode === 'real' ? '本机 docker 真跑' : '没有 AOT 镜像，回放真实跑过的结论';
+    const dot = $('#envdot');
+    const bad = h.store !== 'firestore', replay = h.aot_mode !== 'real';
+    dot.className = 'envdot' + (bad ? ' bad' : replay ? ' warn' : '');
+    dot.title = `存储 ${h.store === 'firestore' ? 'Firestore' : '本地（降级）'}`
+      + ` · AOT ${h.aot_mode === 'real' ? 'real（真编译）' : 'replay（回放实测结论）'}`;
   } catch (e) { /* health 挂了也让页面能开 */ }
   await refreshCluster();
   setInterval(refreshCluster, 60000);

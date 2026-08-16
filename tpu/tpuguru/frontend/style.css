@@ -68,8 +68,43 @@ button {
 .btn-sm { padding: 4px 12px; font-size: 12.5px; }
 
 /* ── 布局 ───────────────────────────────────────────────── */
-main { flex: 1; display: grid; grid-template-columns: minmax(380px, 31%) 1fr;
-  gap: 16px; padding: 16px 18px; min-height: 0; }
+main { flex: 1; display: grid;
+  grid-template-columns: var(--lw, 31%) 14px 1fr;
+  gap: 0; padding: 16px 18px; min-height: 0; }
+main.collapsed { grid-template-columns: 0 14px 1fr; }
+main.collapsed #chat, main.collapsed #splitter { display: none; }
+main.collapsed { padding-left: 44px; }
+/* ⚠️ 必须显式钉住列号。#chat 一 display:none，grid 自动布局就把 #right
+   顺位挪到第 1 列 —— 而第 1 列此时宽度是 0，右侧整个消失。 */
+#chat { grid-column: 1; } .splitter { grid-column: 2; } #right { grid-column: 3; }
+#chat, #right { min-width: 0; }
+
+/* 分隔条 —— 命中区域比看得见的宽，不然很难抓住 */
+.splitter { position: relative; cursor: col-resize; }
+.splitter::before { content: ''; position: absolute; left: 50%; top: 14px; bottom: 14px;
+  width: 3px; transform: translateX(-50%); border-radius: 2px;
+  background: rgba(60,64,67,.10); transition: background .15s; }
+.splitter:hover::before, .splitter.on::before { background: var(--blue); }
+.splitter::after { content: ''; position: absolute; inset: 0 -5px; }
+body.resizing { cursor: col-resize; user-select: none; }
+body.resizing iframe { pointer-events: none; }
+
+/* 收起 / 展开 */
+.collapse { background: none; border: none; padding: 0 6px 0 0; font-size: 13px;
+  color: var(--faint); cursor: pointer; line-height: 1; }
+.collapse:hover { color: var(--blue); }
+.expand { position: fixed; left: 10px; top: 50%; transform: translateY(-50%); z-index: 30;
+  writing-mode: vertical-rl; padding: 16px 6px; border-radius: 10px; font-size: 12.5px;
+  background: var(--glass); backdrop-filter: var(--blur); border: 1px solid var(--line);
+  color: var(--ink-2); box-shadow: var(--sh-1); letter-spacing: 2px; }
+.expand[hidden] { display: none; }
+.expand:hover { border-color: var(--blue); color: var(--blue); }
+
+/* 环境状态降级成品牌旁边一个小点 —— 出问题时才需要知道 */
+.envdot { width: 7px; height: 7px; border-radius: 50%; background: var(--green);
+  cursor: help; flex: none; }
+.envdot.warn { background: var(--amber); }
+.envdot.bad { background: var(--red); }
 
 .glass {
   background: var(--glass); backdrop-filter: var(--blur);
@@ -566,6 +601,9 @@ table.t .mono { font-family: var(--mono); }
 
 @media (max-width: 1080px) {
   main { grid-template-columns: 1fr; grid-template-rows: 46% 1fr; padding: 12px; gap: 12px; }
+  main.collapsed { grid-template-columns: 1fr; grid-template-rows: 0 1fr; padding-left: 12px; }
+  .splitter { display: none; }
+  #chat { grid-column: 1; grid-row: 1; } #right { grid-column: 1; grid-row: 2; }
   header { padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
   header .sub { display: none; }
 }
