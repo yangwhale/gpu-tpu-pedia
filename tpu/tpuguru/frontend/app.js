@@ -587,6 +587,50 @@ function cardHloDeep(R) {
       P.dtypes.map(d => `<span class="chip mute">${esc(d.label)} ×${d.n}</span>`).join('')));
   }
 
+  const FL = H.flags || {};
+  if (FL.ok) {
+    c.appendChild(el('h3', null, 'XLA flag 到底生效没有'));
+    c.appendChild(el('div', 'hint', md2(FL.note)));
+    const sum = el('div', 'flagsum');
+    sum.appendChild(el('span', 's ok', `✅ 真生效 ${FL.effective.length}`));
+    if (FL.noop.length) sum.appendChild(el('span', 's na', `⚪ 等于默认 ${FL.noop.length}`));
+    if (FL.unknown.length) sum.appendChild(el('span', 's bad', `❓ 编译器不认 ${FL.unknown.length}`));
+    sum.appendChild(el('span', 's na', `环境共 ${FL.total_env} 个 flag`));
+    c.appendChild(sum);
+    FL.effective.forEach(x => {
+      const r = el('div', 'flagrow');
+      r.appendChild(el('div', 'f', esc(x.flag)));
+      r.appendChild(el('div', 'v', '= ' + esc(x.passed)));
+      r.appendChild(el('div', 'd', '默认 ' + esc(x.default)));
+      c.appendChild(r);
+    });
+    [['noop', 'na', '传了但等于默认（等于没传）'], ['unknown', 'bad', '编译器环境里找不到 —— 名字拼错或这版不认，会静默忽略']]
+      .forEach(([k, cls, label]) => {
+        if (!FL[k].length) return;
+        c.appendChild(el('div', 'hint', '<br><b>' + label + '</b>'));
+        FL[k].forEach(x => {
+          const r = el('div', 'flagrow');
+          r.appendChild(el('div', 'f', esc(x.flag)));
+          r.appendChild(el('div', 'd', '= ' + esc(x.passed))); r.appendChild(el('div', ''));
+          c.appendChild(r);
+        });
+      });
+  }
+
+  const SC = H.sparsecore || {};
+  if (SC.ok) {
+    c.appendChild(el('h3', null, 'SparseCore 卸载'));
+    c.appendChild(el('div', 'hint', md2(SC.note)));
+    c.appendChild(el('div', 'path',
+      `<span class="chip good">元数据 ${SC.size_mb} MB</span>`
+      + `<span class="chip mute">${SC.entries} 条记录</span>`
+      + `<span class="chip mute">${SC.distinct} 个 computation</span>`));
+  }
+
+  const LL = H.llo || {};
+  c.appendChild(el('h3', null, 'LLO（低层指令 / VLIW 调度）'));
+  c.appendChild(el('div', 'notyet', md2(LL.why) + '<br><br>' + md2(LL.instead)));
+
   const O = H.ops || {};
   if (O.ok) {
     c.appendChild(el('h3', null, `算子频次 · 共 ${O.total.toLocaleString()} 条`));

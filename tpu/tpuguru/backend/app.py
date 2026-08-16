@@ -372,7 +372,10 @@ def _intent_diff(text: str, params: dict) -> list[dict] | None:
 
 async def _botcall(kind: str, text: str, context: dict) -> str:
     """走 tpuguru bot 的 web channel。挂了就降级，不能让页面卡死。"""
-    payload = {"session_id": f"tpuguru-{kind}", "text": text}
+    # ⚠️ 别让所有分析共用一个 bot 会话。共用的话它会写出「上次我说的」
+    #    「本轮第一条」这种话 —— 对刚打开页面的人毫无意义，而且上下文无限增长
+    #    最终会漂。要跨次对比，就把要对比的**数据**显式喂进去（见 prompt 里的「参照」段）。
+    payload = {"session_id": f"tpuguru-{kind}-{uuid.uuid4().hex[:8]}", "text": text}
     try:
         async with httpx.AsyncClient(timeout=180) as c:
             r = await c.post(BOT_URL, json=payload)
@@ -734,8 +737,10 @@ async def metal_analyze(inp: MetalAnalyzeIn):
     ]
     if m.get("warn"):
         facts.append(f"  ⚠️ {m['warn']}")
-    prompt = ("下面是一次 TPU v7 真机训练的实测结果（不是估算）。写一段分析，markdown，"
-              "400 字内，分四段：\n"
+    prompt = ("你在给一个 TPU 训练调优工具写「真机测试分析」。下面是一次 v7 真机训练的"
+              "实测结果（不是估算）。**这是一份独立报告，读它的人没看过你之前写的任何东西 ——"
+              "不要出现「上次」「之前那份」这类指代。**\n\n"
+              "写一段 markdown，450 字内，分四段：\n"
               "1. **这个数字算好还是不好** —— 放在这个模型规模与并行策略下判断，"
               "跟同类配方比。别只说数字大小\n"
               "2. **瓶颈可能在哪** —— 从 MFU、step 抖动、显存占用推断，说清是推断不是实测\n"
@@ -797,19 +802,37 @@ async def hlo_analyze(inp: HloIn):
     d = ((res or {}).get("artifacts_total") or {}).get("dir")
     if not d:
         raise HTTPException(400, "这套配置没有本地 HLO 产物 —— 需要 real 模式跑过一次")
-    a = hlomod.analyze(d)
+    # 优先用**那次编译真正传进去的** flag 串；没有才退回会话里粘命令带的
+    uf = dict(s["current"].get("xla_flags") or {})
+    used = (res or {}).get("xla_flags_used") or ""
+    if used:
+        uf = {}
+        for tok in used.split():
+            if tok.startswith("--"):
+                k, _, v = tok[2:].partition("=")
+                uf[k] = v or True
+    a = hlomod.analyze(d, uf)
     if not a.get("ok"):
         raise HTTPException(400, a.get("why", "分析失败"))
     if inp.explain:
         prompt = (
-            "下面是一次 TPU AOT 编译的 HLO 统计（全部来自真实 dump，不是估算）。"
-            "请写一段分析，用 markdown，控制在 400 字内，分成这几段：\n"
-            "1. **显存都花在哪** —— 指出最占地方的张量是什么、为什么这么大、能不能小\n"
-            "2. **编译器做了什么** —— 从 fusion 种类和数量看它的处理方式\n"
-            "3. **通信状况** —— 从集合通信的次数判断有没有被提升出循环\n"
-            "4. **值得动手的两三件事** —— 按收益排序，每条说清代价\n\n"
-            "纪律：区分事实与推测；不要复述数字，要解释它意味着什么；"
-            "不确定就说不确定。\n\n" + hlomod.digest(a, s["current"]["params"], s["current"]["target"]))
+            "你在给一个 TPU 训练调优工具写「AOT 产物分析」。下面是一次 AOT 编译的 "
+            "HLO 统计，**全部来自真实 dump 文件，不是估算**。\n\n"
+            "写一段 markdown 分析，**不超过 450 字**，分五段：\n"
+            "1. **显存都花在哪** —— 最大的那几块是什么张量、为什么这么大、能不能小。"
+            "把形状拆开验算（比如 batch×seq×vocab 是不是等于那个数），算得对不对本身就是信息\n"
+            "2. **编译器做了什么** —— 从 fusion 数量与种类判断。"
+            "kCustom 少意味着手写 kernel 没上，这条要点出来\n"
+            "3. **通信状况** —— 拿集合通信次数跟**层数**比：远小于层数说明被合并/提升出循环了\n"
+            "4. **配置有没有真的生效** —— flag、精度这些，传了不等于生效\n"
+            "5. **值得动手的两三件事** —— 按能腾出多少显存或多少吞吐排序，每条写清代价\n\n"
+            "硬性纪律：\n"
+            "- **这是一份独立的报告**，读它的人没看过你之前写的任何东西。"
+            "绝对不要出现「上次」「本轮第一条」「我收回之前」这类指代\n"
+            "- 区分**事实**（dump 里读到的）与**推断**（由此猜的），推断要说明是推断\n"
+            "- 不要复述数字，要解释它意味着什么\n"
+            "- 不确定就写不确定，别为了凑满五段编内容\n\n"
+            + hlomod.digest(a, s["current"]["params"], s["current"]["target"]))
         a["explain"] = await _botcall("explain", prompt, {}) or ""
     a["analyzed_at"] = _now()
     _save_analysis(s, fp, a)

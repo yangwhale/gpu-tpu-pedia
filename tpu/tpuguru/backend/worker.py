@@ -317,6 +317,12 @@ async def _run_real(params: dict, target: dict) -> dict:
         log.warning("产物登记失败: %s", e)
     res.setdefault("metrics", {})["end_to_end_s"] = res["elapsed_s"]
     res["cmd"] = inner
+    # ★ 把**真正传给编译器的那串 flag** 记下来。
+    #   会话里的 xla_flags 只有「用户粘的命令里带的」；用下拉建配置时它是空的，
+    #   而执行档案的 default_xla_flags 照样会传进去。不记这一份，
+    #   flag 核对就会报「传了 0 个、没有任何调优在起作用」—— 而实际传了 16 个全生效。
+    #   这正是本工具要防的那类错，只不过这次犯在工具自己身上。
+    res["xla_flags_used"] = str(args.get("compile_xla_flags", ""))
     return res
 
 

@@ -62,7 +62,7 @@ def _find(d: Path, suffix: str) -> Path | None:
     return max(cands, key=lambda f: f.stat().st_size) if cands else None
 
 
-def analyze(dump_dir: str | Path) -> dict:
+def analyze(dump_dir: str | Path, user_flags: dict | None = None) -> dict:
     d = Path(dump_dir)
     if not d.is_dir():
         return {"ok": False, "why": f"产物目录不存在: {d}"}
@@ -73,7 +73,91 @@ def analyze(dump_dir: str | Path) -> dict:
                             _find(d, "after_optimizations.txt"))
     out["collectives"] = _collectives(_find(d, "after_optimizations.txt"))
     out["precision"] = _precision(out.get("memory") or {})
+    out["flags"] = _flags(_find(d, "tpu_comp_env.txt"), _find(d, "flagfile"), user_flags)
+    out["sparsecore"] = _sparsecore(_find(d, "sparse_core_specific_metadata.txt"))
+    out["llo"] = _llo(d)
     return out
+
+
+_NONDEFAULT = re.compile(
+    r"^# (\S+) in the current tpu_comp_env has a non-default value\."
+    r" Default flag value: (.*)$", re.M)
+_ENV_SCALAR = re.compile(r"^([a-z_][\w]*): (.+)$", re.M)
+_ENV_BLOCK = re.compile(r"^([a-z_][\w]*) \{$", re.M)
+
+
+def _flags(env: Path | None, flagfile: Path | None, user: dict | None = None) -> dict:
+    """★ XLA flag 到底生效没有 —— 「配置写了不等于生效」在 flag 这一层同样成立。
+
+    `tpu_comp_env.txt` 里编译器给每个**偏离默认值**的 flag 打了注释标记。
+    拿它跟 flagfile（实际传进去的那份）对一遍，就能分出三类：
+
+      ✅ 传了且偏离默认 —— 真的生效了
+      ⚪ 传了但等于默认 —— 传了等于没传（不是错，但别以为自己开了什么）
+      ❓ 传了却在 env 里找不到 —— 名字可能拼错 / 这个版本不认
+    """
+    if not env:
+        return {"ok": False, "why": "没有 tpu_comp_env.txt"}
+    et = env.read_text(encoding="utf-8", errors="replace")
+    nondefault = {m.group(1): m.group(2).strip() for m in _NONDEFAULT.finditer(et)}
+    known = set(k for k, _ in _ENV_SCALAR.findall(et)) | set(_ENV_BLOCK.findall(et))
+    vals = dict(_ENV_SCALAR.findall(et))
+
+    # ⚠️ flagfile 是编译器 dump 的**全量** flag（1300+ 条），不是用户传的那些。
+    #    拿它当「我传了什么」会得出「传了 1373 个」这种荒唐结论。
+    #    真正的「我传了什么」只能由调用方给。
+    passed = {k.lstrip("-"): ("" if v is True else str(v)) for k, v in (user or {}).items()}
+    full_env = 0
+    if flagfile:
+        full_env = sum(1 for l in flagfile.read_text(encoding="utf-8", errors="replace").splitlines()
+                       if l.strip().startswith("--"))
+
+    eff, noop, unknown = [], [], []
+    for k, v in sorted(passed.items()):
+        if k in nondefault:
+            eff.append({"flag": k, "passed": v, "default": nondefault[k],
+                        "effective": vals.get(k, "(结构块)")})
+        elif k in known:
+            noop.append({"flag": k, "passed": v})
+        else:
+            unknown.append({"flag": k, "passed": v})
+    # 编译器自己偏离默认的那些（不是用户传的）也值得看一眼 —— 镜像预置了什么
+    preset = [k for k in nondefault if k not in passed]
+    return {"ok": True, "total_env": len(known), "full_flagfile": full_env,
+            "preset_nondefault": len(preset), "passed_n": len(passed),
+            "effective": eff, "noop": noop, "unknown": unknown,
+            "note": "编译器给每个偏离默认值的 flag 打了标记，这里拿它跟实际传进去的那份对。"
+                    "**「传了但等于默认」不是错**，但别以为自己开了什么；"
+                    "**「找不到」要当心** —— 名字拼错或这个编译器版本不认，都会静默忽略。"}
+
+
+def _sparsecore(f: Path | None) -> dict:
+    """SparseCore 上跑了什么 —— 通信卸载有没有真的落到 SC 上。"""
+    if not f:
+        return {"ok": False}
+    text = f.read_text(encoding="utf-8", errors="replace")
+    comps = Counter(re.findall(r'computation_name:\s*"([^"]+)"', text))
+    kinds = Counter()
+    for m in re.finditer(r"(all_gather|reduce_scatter|all_reduce|all_to_all|embedding)", text):
+        kinds[m.group(1)] += 1
+    return {"ok": True, "entries": sum(comps.values()), "distinct": len(comps),
+            "size_mb": round(f.stat().st_size / 1e6, 1),
+            "kinds": [{"kind": k, "n": v} for k, v in kinds.most_common(6)],
+            "note": "SparseCore 是 TPU 上专做稀疏与集合通信的部件。"
+                    "**这里有内容 = 卸载真的发生了**；空的话那一族 offload flag 就白开了。"}
+
+
+def _llo(d: Path) -> dict:
+    """LLO（低层指令 / VLIW 调度）—— 这一层的 IR 一般 dump 不出来。"""
+    hits = [f.name for f in d.iterdir()
+            if re.search(r"llo|lowered|vliw|\.s$|asm", f.name, re.I)]
+    return {"ok": bool(hits), "files": hits,
+            "why": "这份 dump 里没有 LLO IR。`--xla_dump_to` 只出到 HLO 与 codegen 这一层，"
+                   "LLO（VLIW 打包、寄存器分配、bundle 占用）要靠编译器内部开关，"
+                   "云上镜像通常关着。",
+            "instead": "**LLO 层的问题该去真机 trace 里看**：XProf 的 op profile 给的是"
+                       "每个算子实际占了多少周期、MXU 利用率多少 —— 那才是 LLO 调度好坏的"
+                       "直接证据，比读 IR 有用得多。所以这一栏留空是对的，不是缺功能。"}
 
 
 def _memory(f: Path | None) -> dict:
@@ -217,4 +301,17 @@ def digest(a: dict, params: dict, target: dict) -> str:
     pr = a.get("precision") or {}
     if pr.get("ok"):
         L.append("\n大张量 dtype：" + "、".join(f"{d['label']}×{d['n']}" for d in pr["dtypes"]))
+    fl = a.get("flags") or {}
+    if fl.get("ok"):
+        L.append(f"\nXLA flag：传了 {fl['passed_n']} 个，其中 {len(fl['effective'])} 个偏离默认"
+                 f"（真生效）、{len(fl['noop'])} 个等于默认（传了等于没传）、"
+                 f"{len(fl['unknown'])} 个在编译器环境里找不到")
+        if fl["unknown"]:
+            L.append("  找不到的：" + "、".join(x["flag"] for x in fl["unknown"][:8]))
+        if fl["noop"]:
+            L.append("  等于默认的：" + "、".join(x["flag"] for x in fl["noop"][:8]))
+    sc = a.get("sparsecore") or {}
+    if sc.get("ok"):
+        L.append(f"\nSparseCore 元数据 {sc['size_mb']} MB，{sc['entries']} 条 / "
+                 f"{sc['distinct']} 个不同 computation")
     return "\n".join(L)
