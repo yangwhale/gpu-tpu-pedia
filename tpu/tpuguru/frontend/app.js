@@ -1095,11 +1095,17 @@ function nodeOf(s, depth) {
   const load = el('button', 'btn-ghost btn-sm', '载入');
   load.onclick = async (e) => {
     e.stopPropagation();
-    if (!confirm(`载入「${s.title}」？会开一场新对话，当前会话保留。`)) return;
+    // 不问了 —— 载入是可逆的（原存档只读、当前会话也还在历史里），
+    // 为可逆操作弹确认框只是在制造摩擦。
     setBusy(true);
-    try { S = await api(`api/save/${s.id}/load`, {}); drawer.hidden = true;
-          switchTab('cfg'); render(); toast('已载入'); }
-    catch (err) { toast('载入失败：' + err.message); } finally { setBusy(false); }
+    try {
+      S = await api(`api/save/${s.id}/load`, {});
+      // ★ 载入会**开一场新会话**，必须把新 sid 写回去，
+      //   否则一刷新就跳回上一场，看着像「载入没生效」。
+      localStorage.setItem(SID_KEY, S.session_id);
+      drawer.hidden = true; switchTab('cfg'); render();
+      toast(`已载入「${s.title}」`);
+    } catch (err) { toast('载入失败：' + err.message); } finally { setBusy(false); }
   };
   acts.appendChild(load);
   if (!s.voided) {
@@ -1294,7 +1300,8 @@ $('#btn-save').onclick = () => {
       const r = await api('/api/save', { session_id: S.session_id, title,
         note: m.querySelector('#sv-n').value.trim(),
         tags: m.querySelector('#sv-g').value.split(',').map(x => x.trim()).filter(Boolean) });
-      S = r.state; close(); render(); toast('已存档');
+      S = r.state; localStorage.setItem(SID_KEY, S.session_id);
+      close(); render(); toast('已存档');
     } catch (e) { toast('存档失败：' + e.message); }
   };
 };
