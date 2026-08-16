@@ -1,85 +1,155 @@
 [
   {
-    "rule": "L1", "severity": "fatal", "enabled": true,
+    "rule": "L1",
+    "severity": "fatal",
+    "enabled": true,
     "title": "native 分支会漏 all-gather，只算部分专家",
-    "when": {"all": [
-      {"param": "shard_exp_on_fsdp", "eq": true},
-      {"param": "weight_quantization_calibration_method", "startswith": "fixed"},
-      {"param": "use_tokamax_gmm", "neq": true}
-    ]},
+    "when": {
+      "all": [
+        {
+          "param": "shard_exp_on_fsdp",
+          "eq": true
+        },
+        {
+          "param": "weight_quantization_calibration_method",
+          "startswith": "fixed"
+        },
+        {
+          "param": "use_tokamax_gmm",
+          "neq": true
+        }
+      ]
+    },
     "detail": "权重按专家维切成 FSDP 份，每卡拿到若干完整专家。native(megablox) 分支不执行 all-gather，kernel 只对本地那几个专家建表，其余全部不参与计算。不报错、loss 照常下降，唯一症状是快得离谱。",
     "fix": "开 use_tokamax_gmm=True，或关掉 shard_exp_on_fsdp（推荐后者）",
     "evidence": "64 芯片实测：漏算时 7.85s/1014.8 per-chip；补齐 all-gather 后 12.50s/637.0"
   },
   {
-    "rule": "L2", "severity": "warn", "enabled": true,
+    "rule": "L2",
+    "severity": "warn",
+    "enabled": true,
     "title": "用了 fixed 校准却没开 QAG",
-    "when": {"all": [
-      {"param": "weight_quantization_calibration_method", "startswith": "fixed"},
-      {"param": "shard_exp_on_fsdp", "neq": true}
-    ]},
+    "when": {
+      "all": [
+        {
+          "param": "weight_quantization_calibration_method",
+          "startswith": "fixed"
+        },
+        {
+          "param": "shard_exp_on_fsdp",
+          "neq": true
+        }
+      ]
+    },
     "detail": "fixed 静态 scale 会损害收敛质量。它唯一的正当理由是 QAG（先量化再跨卡收集，各卡 scale 必须一致）。不开 QAG 就没有任何理由用它。",
     "fix": "改用 absmax",
     "evidence": "absmax 代价：吃掉两档 batch（13→11），727.0→670.8"
   },
   {
-    "rule": "L3", "severity": "fatal", "enabled": true,
+    "rule": "L3",
+    "severity": "fatal",
+    "enabled": true,
     "title": "专家数不能被 FSDP 宽度整除",
-    "when": {"all": [
-      {"param": "shard_exp_on_fsdp", "eq": true},
-      {"expr": "num_experts % fsdp_width != 0"}
-    ]},
+    "when": {
+      "all": [
+        {
+          "param": "shard_exp_on_fsdp",
+          "eq": true
+        },
+        {
+          "expr": "num_experts % fsdp_width != 0"
+        }
+      ]
+    },
     "detail": "shard_exp_on_fsdp 要求 num_experts % ici_fsdp_parallelism == 0，否则 IndivisibleError。",
     "fix": "调整 FSDP 宽度到能整除，或关掉 shard_exp_on_fsdp",
     "evidence": "192 个专家在 FSDP=128 时直接报错，只能取 64"
   },
   {
-    "rule": "L4", "severity": "fatal", "enabled": true,
+    "rule": "L4",
+    "severity": "fatal",
+    "enabled": true,
     "title": "tile 分块大于该维实际大小",
-    "when": {"expr": "any(tile_value > dim_size)"},
-    "detail": "分组矩阵乘的分块不能超过对应维度本身，编译期直接断言失败。",
+    "when": {
+      "builtin": "tile_exceeds_dim"
+    },
+    "detail": "分组矩阵乘的分块不能超过对应维度本身，编译期直接断言失败。 逐个 tile 参数跟它对应的维度比 —— 这是个循环，不是一句表达式，所以走内置检查器。",
     "fix": "把分块降到不超过维度大小",
     "evidence": "AssertionError: v=1536 bv=3072 s=1536（mlp 维只有 1536）"
   },
   {
-    "rule": "L5", "severity": "fatal", "enabled": true,
+    "rule": "L5",
+    "severity": "fatal",
+    "enabled": true,
     "title": "延迟隐藏调度器缺少 SparseCore 聚合器",
-    "when": {"all": [
-      {"flag": "xla_tpu_enable_latency_hiding_layer_scheduler", "eq": "true"},
-      {"flag": "xla_tpu_enable_sparse_core_collective_aggregator", "absent": true}
-    ]},
+    "when": {
+      "all": [
+        {
+          "flag": "xla_tpu_enable_latency_hiding_layer_scheduler",
+          "eq": "true"
+        },
+        {
+          "flag": "xla_tpu_enable_sparse_core_collective_aggregator",
+          "absent": true
+        }
+      ]
+    },
     "detail": "SparseCore 卸载族有依赖关系，不能挑着开。aggregator 是真正在 SparseCore 上做规约的部件。",
     "fix": "整族一起开",
     "evidence": "INVALID_ARGUMENT: Latency hiding layer scheduler requires sparse core collective aggregator to be enabled"
   },
   {
-    "rule": "L6", "severity": "warn", "enabled": true,
+    "rule": "L6",
+    "severity": "warn",
+    "enabled": true,
     "title": "MoE 模型没有传 tile 参数",
-    "when": {"all": [{"expr": "is_moe"}, {"expr": "tile_params_count == 0"}]},
+    "when": {
+      "all": [
+        {
+          "expr": "is_moe"
+        },
+        {
+          "expr": "tile_params_count == 0"
+        }
+      ]
+    },
     "detail": "会静默回退到默认 tile。",
     "fix": "用预设 (512, 2048, 1536)",
     "evidence": "BF16 慢 26%；FP8 直接崩（AssertionError: v=1536 bv=1024）"
   },
   {
-    "rule": "L7", "severity": "info", "enabled": true,
+    "rule": "L7",
+    "severity": "info",
+    "enabled": true,
     "title": "拓扑数字是 device 不是芯片",
-    "when": {"expr": "topology_specified"},
+    "when": {
+      "expr": "topology_specified"
+    },
     "detail": "TPU v7 是 2 device/chip，tpu7x-128 表示 64 芯片。",
     "fix": "确认目标规模是不是你想要的",
     "evidence": "最常见的规模误判来源"
   },
   {
-    "rule": "L8", "severity": "warn", "enabled": true,
+    "rule": "L8",
+    "severity": "warn",
+    "enabled": true,
     "title": "主权重降到 bfloat16",
-    "when": {"param": "weight_dtype", "eq": "bfloat16"},
+    "when": {
+      "param": "weight_dtype",
+      "eq": "bfloat16"
+    },
     "detail": "每步梯度相对权重量级极小，bf16 只有 8 位尾数，更新会被舍掉。Google TPU 官方建议与 NVIDIA NeMo 推荐模式都是 fp32 主权重。",
     "fix": "改回 float32；想省显存去调 FSDP 宽度和 batch",
     "evidence": "仅适合 benchmark，不可用于交付训练"
   },
   {
-    "rule": "L9", "severity": "warn", "enabled": true,
+    "rule": "L9",
+    "severity": "warn",
+    "enabled": true,
     "title": "开了专家并行（EP）",
-    "when": {"expr": "ici_expert_parallelism > 1"},
+    "when": {
+      "expr": "ici_expert_parallelism > 1"
+    },
     "detail": "all-to-all 在 3D torus 上多跳，且逼着 FSDP 减半、每卡静态分片翻倍。",
     "fix": "设为 1",
     "evidence": "64 芯片 EP=2 掉 39.6%；16 芯片 EP=4 掉 71%"

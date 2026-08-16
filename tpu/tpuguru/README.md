@@ -8,7 +8,10 @@
 > 名字的意思：它不只是个跑 AOT 的网页。**它是把踩过的坑沉淀下来的那个人。**
 > 知识在 [`skill/tpuguru/`](skill/tpuguru/)，改知识不改代码。
 >
-> 状态：设计稿，实现分三期见 §9。
+> 状态：**v0 已跑起来**（本机 `:8820`，Firestore 存储，AOT 走 replay）。
+> 对话工作台、lint、报告可视化、存档树、BotCall 兜底全部打通；
+> 真实 AOT 需要设 `TPUGURU_AOT_IMAGE`。分期见 §9，后端说明见
+> [backend/README.md](backend/README.md)。
 > **参数控件与问号文案见 [PARAMS.md](PARAMS.md)**（每个参数：干什么 / 改了会怎样 / 建议选什么）。
 
 ---
@@ -69,13 +72,13 @@ python3 -m src.maxtext.trainers.pre_train.train src/maxtext/configs/base.yml \
 tpuguru/
 ├── README.md              设计文档（本文件）
 ├── PARAMS.md              ★ 参数目录：控件类型 + 问号三段文案
-├── backend/               FastAPI：解析、转换、投递、读写 Firestore
+├── backend/               ✅ FastAPI：解析、转换、lint、AOT、读写 Firestore
 ├── worker/                在 CPU 上跑 AOT
 │   └── probe_codepath.py  ✅ 已验证可用的代码路径探针
 ├── analyzers/             把产物变成结构化结论，一个维度一个分析器
 ├── rules/
 │   └── rules.seed.json    ✅ 9 条 lint 规则的种子数据
-├── frontend/              工作台（对话+配置+命令）/ 报告 / 历史树
+├── frontend/              ✅ 工作台（对话+配置+命令）/ 报告 / 历史树，单页无构建
 ├── skill/tpuguru/        ★ 知识载体：脚本 / 规则 / 输出契约 / playbook
 └── deploy/                systemd + 反代片段 + Firestore 索引
 ```
