@@ -488,9 +488,6 @@ function renderRep() {
   v.appendChild(badge);
   p.appendChild(v);
 
-  if (S.metal) p.appendChild(cardMetal(S.metal));
-  if (METAL_RUN) p.appendChild(cardMetalProgress());
-
   const m2 = R.metrics || {};
   if (m2.per_chip_tflops || m2.step_s) p.appendChild(cardRealRef(m2, R));
 
@@ -687,9 +684,27 @@ function cardMetal(d) {
   if (bits.length) c.appendChild(el('div', 'hint', '<br>' + bits.join('；')));
   if (m.warn) c.appendChild(el('div', 'warnbox', md2(m.warn)));
 
-  c.appendChild(el('div', 'files',
-    `产物：${esc(d.gcs || '')}<br>本地：${esc(d.local_dir || '')} `
-    + `（xplane ${d.xplane_count || 0} 份，日志 ${((d.log_bytes||0)/1024).toFixed(0)} KB）`));
+  const g = el('div', 'arts');
+  const art = (ic, kind, nm, sz, ds) => {
+    const x = el('div', 'art');
+    x.appendChild(el('div', 'ic ' + kind, ic));
+    const t = el('div'); t.style.minWidth = '0';
+    t.appendChild(el('div', 'nm', esc(nm)));
+    if (sz) t.appendChild(el('div', 'sz', sz));
+    t.appendChild(el('div', 'ds', esc(ds)));
+    x.appendChild(t); return x;
+  };
+  g.appendChild(art('LOG', 'log', 'train.log', `${((d.log_bytes||0)/1024).toFixed(0)} KB`,
+    '完整训练输出。step 时间、TFLOP/s、loss 都从这里抽。'));
+  g.appendChild(art('PB', 'hlo', 'xplane.pb', `${d.xplane_count || 0} 份`,
+    'XProf trace 原始产物，上面那个链接读的就是它。'));
+  g.appendChild(art('GCS', 'json', 'run 目录', '永久',
+    esc(d.gcs || '')));
+  c.appendChild(el('h3', null, '产物'));
+  c.appendChild(el('div', 'hint',
+    '真机数据很贵（占共享集群、几十分钟、要抢卡），所以跑一次就全部留下来，不挂生命周期。'));
+  c.appendChild(g);
+  c.appendChild(el('div', 'files', `本地：${esc(d.local_dir || '')}`));
   return c;
 }
 
@@ -949,6 +964,48 @@ function cardHlo(d) {
   return c;
 }
 
+/* ── 渲染：真机报告 ───────────────────────────────────────── */
+let MEXPLAIN = null, mBusy = false;
+
+function renderMetal() {
+  const p = $('#pane-mtl'); p.innerHTML = '';
+  if (METAL_RUN) p.appendChild(cardMetalProgress());
+  const d = S.metal;
+  if (!d) {
+    if (!METAL_RUN) {
+      const e = el('div', 'empty',
+        '<span class="ic">🚀</span><b>这套配置还没上过机</b><br>'
+        + 'AOT 只回答「装不装得下」，<b>「多快」只有真机能答</b>。<br>'
+        + 'AOT 编译通过后，右上角【🚀 上 64 卡】就会点亮。');
+      e.appendChild(el('span', 'fp', '配置指纹 ' + esc(S.fingerprint || '')));
+      p.appendChild(e);
+    }
+    return;
+  }
+  p.appendChild(cardMetal(d));
+
+  // 分析：跟 AOT 那边一样，事实喂给 agent，结论它自己下
+  const c = el('div', 'card');
+  c.appendChild(el('h3', null, '🔬 真机分析'));
+  if (MEXPLAIN) {
+    c.appendChild(el('div', 'explain', md3(MEXPLAIN)));
+  } else {
+    c.appendChild(el('div', 'hint',
+      '把实测指标连同 AOT 的预测一起交给带 skill 的 agent —— '
+      + '判断这个数在这个规模下算不算好、瓶颈可能在哪、AOT 和真机对上了没有。'));
+    const b = el('button', 'btn-primary hlobtn', mBusy ? '分析中…' : '分析');
+    b.disabled = mBusy;
+    b.onclick = async () => {
+      mBusy = true; render();
+      try { MEXPLAIN = (await api('api/metal/analyze', { session_id: S.session_id })).explain; }
+      catch (e) { toast('分析失败：' + e.message); }
+      finally { mBusy = false; render(); }
+    };
+    c.appendChild(b);
+  }
+  p.appendChild(c);
+}
+
 /* ── 渲染：历史 ───────────────────────────────────────────── */
 async function renderHis() {
   const p = $('#pane-his'); p.innerHTML = '<div class="hint">载入中…</div>';
@@ -1061,8 +1118,8 @@ function nodeOf(s, depth) {
 
 /* ── 主渲染 ───────────────────────────────────────────────── */
 function render() {
-  if (render._fp !== S.fingerprint) { resetHlo(); render._fp = S.fingerprint; }
-  renderTurns(); renderCfg(); renderCmd(); renderRep();
+  if (render._fp !== S.fingerprint) { resetHlo(); MEXPLAIN = null; render._fp = S.fingerprint; }
+  renderTurns(); renderCfg(); renderCmd(); renderRep(); renderMetal();
   $('#sess-title').textContent = S.session_id;
   const fatal = S.lint.filter(f => f.severity === 'fatal').length;
   const warn = S.lint.filter(f => f.severity === 'warn').length;
@@ -1080,6 +1137,10 @@ function render() {
     br.hidden = true; br.textContent = '';
     $('.tab[data-pane="rep"]').title = '当前配置还没跑过 AOT';
   }
+  const bm2 = $('#b-mtl');
+  if (S.metal) { bm2.hidden = false; bm2.textContent = '✓'; bm2.className = 'badge teal'; }
+  else { bm2.hidden = true; bm2.textContent = ''; }
+
   // 顶栏即时指示：不用切到报告页就知道这套配置有没有结论
   const fs = $('#fpstate');
   const has = !!S.result;
@@ -1143,28 +1204,63 @@ $('#btn-run').onclick = async () => {
   finally { setBusy(false); }
 };
 
-$('#btn-metal').onclick = async () => {
+$('#btn-metal').onclick = () => {
   const m = S.result?.metrics || {};
-  if (!confirm(`上 64 卡真跑？\n\n配置：${S.model?.label || ''} pdbs ${S.params.per_device_batch_size}`
-    + `\nAOT 峰值 ${m.peak_hbm_gb} GB（已编译通过）`
-    + `\n\n约 20–40 分钟，占共享集群 64 芯片。`)) return;
-  try {
-    const r = await api('api/metal', { session_id: S.session_id });
-    METAL_RUN = { name: r.run_name, phase: 'submitting' };
-    S = r.state; switchTab('rep'); render(); toast('已提交真机任务');
-    clearInterval(metalTimer);
-    metalTimer = setInterval(async () => {
-      try {
-        METAL_RUN = await api(`api/metal/${METAL_RUN.name}`);
-        if (METAL_RUN.phase === 'done' || METAL_RUN.phase === 'failed') {
-          clearInterval(metalTimer);
-          S = await api(`api/session/${S.session_id}`);
-          if (METAL_RUN.phase === 'done') { METAL_RUN = null; toast('真机跑完，trace 已上 XProf'); }
-        }
-        render();
-      } catch (e) { clearInterval(metalTimer); }
-    }, 20000);
-  } catch (e) { toast('提交失败：' + e.message); }
+  const verified = S.target?.topology;
+  const chips = TOPOS[verified]?.chips || 64;
+
+  const mask = el('div', 'mask'); const mo = el('div', 'modal');
+  mo.appendChild(el('h3', null, '🚀 上真机'));
+  mo.appendChild(el('p', 'hint',
+    `配置：<b>${esc(S.model?.label || '')}</b> · pdbs ${esc(S.params.per_device_batch_size)}`
+    + ` · AOT 峰值 ${fmt(m.peak_hbm_gb)} GB（已编译通过）`));
+
+  const pick = el('div', 'topopick');
+  Object.entries(TOPOS).forEach(([k, v]) => {
+    const t = el('div', 't' + (k === verified ? ' on' : ' off'));
+    t.innerHTML = `<div class="c">${v.chips} 卡</div>`
+      + `<div class="s">${k === verified ? 'AOT 验证过' : '未验证'}</div>`;
+    if (k !== verified) t.title =
+      `AOT 验的是 ${verified}。换卡数就换了分片宽度，那份显存结论对这个规模不成立 —— `
+      + `先把拓扑改成 ${k} 再跑一次 AOT（3 分钟，不占卡）。`;
+    pick.appendChild(t);
+  });
+  mo.appendChild(pick);
+  mo.appendChild(el('p', 'hint',
+    '⚠️ <b>只能上 AOT 验证过的那个卡数。</b>卡数一变分片宽度就变，显存结论不再成立 —— '
+    + '想换规模就先改拓扑重跑一次 AOT，反正只要 3 分钟、不占卡。<br>'
+    + `本次约 20–40 分钟，占共享集群 ${chips} 芯片。`));
+
+  const row = el('div', 'row');
+  const cancel = el('button', 'btn-ghost', '取消');
+  const go = el('button', 'btn-primary', `上 ${chips} 卡`);
+  row.append(cancel, go); mo.appendChild(row);
+  mask.appendChild(mo); document.body.appendChild(mask);
+
+  const close = () => mask.remove();
+  cancel.onclick = close;
+  mask.onclick = e => { if (e.target === mask) close(); };
+
+  go.onclick = async () => {
+    close();
+    try {
+      const r = await api('api/metal', { session_id: S.session_id, topology: verified });
+      METAL_RUN = { name: r.run_name, phase: 'submitting' };
+      S = r.state; switchTab('mtl'); render(); toast('已提交真机任务');
+      clearInterval(metalTimer);
+      metalTimer = setInterval(async () => {
+        try {
+          METAL_RUN = await api(`api/metal/${METAL_RUN.name}`);
+          if (METAL_RUN.phase === 'done' || METAL_RUN.phase === 'failed') {
+            clearInterval(metalTimer);
+            S = await api(`api/session/${S.session_id}`);
+            if (METAL_RUN.phase === 'done') { METAL_RUN = null; toast('真机跑完，trace 已上 XProf'); }
+          }
+          render();
+        } catch (e) { clearInterval(metalTimer); }
+      }, 20000);
+    } catch (e) { toast('提交失败：' + e.message); }
+  };
 };
 
 $('#btn-new').onclick = async () => {

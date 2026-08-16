@@ -624,6 +624,7 @@ async def _metal_worker(name: str, y: str, gcs_out: str, fp: str, sid: str):
 
 class MetalIn(BaseModel):
     session_id: str
+    topology: str | None = None      # 不传就用 AOT 验证过的那个
 
 
 @app.post("/api/metal")
@@ -637,8 +638,15 @@ async def metal_run(inp: MetalIn):
     prof = metal_profile()
     if not prof:
         raise HTTPException(400, "没有执行档案（TPUGURU_AOT_PROFILE），无法上机")
+    tgt = dict(s["current"]["target"])
+    if inp.topology and inp.topology != tgt.get("topology"):
+        # 换卡数 = 换分片宽度 = 显存结论全部作废。**AOT 三分钟零张卡，先去跑一遍。**
+        raise HTTPException(400,
+            f"AOT 验证的是 {tgt.get('topology')}，你要上 {inp.topology} —— "
+            f"卡数变了分片宽度就变了，那份显存结论对这个规模不成立。"
+            f"先把拓扑改成 {inp.topology} 再跑一次 AOT（3 分钟，不占卡）。")
     name = metal._run_name(fp)
-    y, gcs_out = metal.build_jobset(name, s["current"]["params"], s["current"]["target"], prof)
+    y, gcs_out = metal.build_jobset(name, s["current"]["params"], tgt, prof)
     _METAL[name] = {"name": name, "phase": "submitting", "t0": time.time(),
                     "fingerprint": fp, "gcs": gcs_out}
     asyncio.create_task(_metal_worker(name, y, gcs_out, fp, s["id"]))
@@ -647,6 +655,57 @@ async def metal_run(inp: MetalIn):
                                f"跑完 trace 会上 XProf。"})
     _persist(s)
     return {"run_name": name, "gcs": gcs_out, "state": _state(s)}
+
+
+class MetalAnalyzeIn(BaseModel):
+    session_id: str
+
+
+@app.post("/api/metal/analyze")
+async def metal_analyze(inp: MetalAnalyzeIn):
+    """真机报告的「分析」—— 跟 AOT 那边一样，只喂事实不喂结论。
+
+    真机能问、而 AOT 问不了的问题：算得快不快、通信藏没藏住、
+    这个 MFU 在这个规模上算不算正常、下一步该往哪调。
+    """
+    s = _get_session(inp.session_id)
+    fp = _fingerprint(s["current"])
+    md = (s.get("metal") or {}).get(fp) or _lookup_metal(fp)
+    if not md:
+        raise HTTPException(400, "这套配置还没有真机结果")
+    aot = (s.get("results") or {}).get(fp) or _lookup_run(fp) or {}
+    m = md.get("metrics") or {}
+    p = s["current"]["params"]
+    t = s["current"]["target"]
+    facts = [
+        f"配置：{p.get('model_name')} / pdbs {p.get('per_device_batch_size')} / "
+        f"{t.get('topology')}（{t.get('chips')} 芯片）/ quant={p.get('quantization')} / "
+        f"cal={p.get('weight_quantization_calibration_method')} / "
+        f"FSDP={fsdp_width(p, t)} / EP={p.get('ici_expert_parallelism')}",
+        f"\nAOT 事先说：峰值 {(aot.get('metrics') or {}).get('peak_hbm_gb')} GB / "
+        f"上限 94.74 GB（{aot.get('mode')} 模式）",
+        f"\n真机实测：",
+        f"  每芯片 {m.get('tflops_per_chip')} TFLOP/s（框架按 device 报 "
+        f"{m.get('tflops_per_device')}，v7 是 2 device/chip 所以 ×2）",
+        f"  MFU {m.get('mfu_pct')}%（分母 BF16 峰值 2307）",
+        f"  step 中位 {m.get('step_s')} s，区间 {m.get('step_s_min')}–{m.get('step_s_max')} s",
+        f"  稳态 {m.get('steady_steps')} 步，跳过前 {m.get('warmup_skipped')} 步",
+        f"  loss {m.get('loss_first')} → {m.get('loss_last')}",
+        f"  参数量 {m.get('params_b')} B",
+    ]
+    if m.get("warn"):
+        facts.append(f"  ⚠️ {m['warn']}")
+    prompt = ("下面是一次 TPU v7 真机训练的实测结果（不是估算）。写一段分析，markdown，"
+              "400 字内，分四段：\n"
+              "1. **这个数字算好还是不好** —— 放在这个模型规模与并行策略下判断，"
+              "跟同类配方比。别只说数字大小\n"
+              "2. **瓶颈可能在哪** —— 从 MFU、step 抖动、显存占用推断，说清是推断不是实测\n"
+              "3. **AOT 和真机对上了吗** —— 显存预测准不准\n"
+              "4. **下一步试什么** —— 两三条，按收益排序，每条说代价\n\n"
+              "纪律：区分事实与推断；loss 全 0 之类的异常要先指出来再谈吞吐；"
+              "不确定就说不确定。\n\n" + "\n".join(facts))
+    return {"ok": True, "explain": await _botcall("explain", prompt, {}) or "",
+            "facts": facts}
 
 
 @app.get("/api/metal/{name}")
