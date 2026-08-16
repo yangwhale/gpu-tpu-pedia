@@ -73,7 +73,7 @@ EP=4（−71%）、`scan(unroll)`（无可用档位）…… 全部在 [附录 B
 | 64 chip **BF16** | `DP1×FSDP128` + tile + pdbs 12 | 23.54 s | 580 | 25.14% | 267,284 | 4,176 | 91.94 G |
 | 256 chip **FP8**（无 QAG） | `DP2×FSDP256` + `fp8_full`+qwix | 29.46 s | 618 | 13.39%<sub>FP8</sub> | 1,139,022 | 4,449 | 92.80 G |
 | 64 chip **FP8**（无 QAG） | `DP1×FSDP128` + pdbs 10 | 19.15 s | 594 | 12.87%<sub>FP8</sub> | 273,987 | 4,281 | 86.20 G |
-| 🏆 **64 chip FP8+QAG+`dvfs=7`** | `DP2×FSDP64` + QAG + pdbs 7 + **dvfs 7** | **11.81 s** | **674** | **14.61%**<sub>FP8</sub> | 310,639 | **4,854** | 92.42 G |
+| 🏆 **64 chip FP8 native FSDP128** | `DP1×FSDP128` + pdbs 13 + **dvfs 7**，**不开 QAG** | **20.34 s** | **727.0**<sub>峰值，`fixed` 校准</sub> / **670.8**<sub>生产，`absmax`</sub> | | |<br><sub>旧：FP8+QAG（tokamax）677.0；~~1,014.8 已撤回~~，见 §3.4.10</sub>
 | 64 chip FP8 + QAG（无 dvfs） | `DP2×FSDP64` + QAG + pdbs 7 | 12.73 s | 625 | 13.55%<sub>FP8</sub> | 288,222 | 4,503 | 92.42 G |
 | 起点（2026-07-30） | `FSDP128` + megablox + pdbs 8 | 20.43 s | 445 | 19.29% | 205,313 | 3,208 | 74.20 G |
 
