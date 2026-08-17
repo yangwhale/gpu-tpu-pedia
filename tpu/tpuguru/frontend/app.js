@@ -15,10 +15,24 @@ let S = null;              // 当前 state
 let TOPOS = {};
 let FAMILIES = [];
 let BACKENDS = [];
+const HBM_CAP_TXT = '（v7 单 device 94.74 GB）';
+let FLAGDB = null;
+let EDITABLE = [];
+let cfgOpen = false;
+let cfgDraft = null;
+let cfgTouched = new Set();
+// 折叠状态记进 localStorage —— 每次打开都要重新收一遍是很烦的事。
+// 默认收起：XLA flag 库和长尾参数加起来占配置页 78% 的高度，
+// 而它们是「偶尔查」不是「每次看」。
+const FOLD_KEY = 'tpuguru_folds';
+let FOLDS = (() => { try { return JSON.parse(localStorage.getItem(FOLD_KEY)) || {}; }
+                     catch (e) { return {}; } })();
+function isOpen(id, dft) { return FOLDS[id] === undefined ? !!dft : !!FOLDS[id]; }
+function toggleFold(id, dft) { FOLDS[id] = !isOpen(id, dft);
+  localStorage.setItem(FOLD_KEY, JSON.stringify(FOLDS)); render(); }
 let busy = false;
 let hideVoided = false;
 let everSawReport = false;
-let CLUSTER = null;
 let METAL_RUN = null;
 let metalTimer = null;
 
@@ -52,9 +66,10 @@ const FIELDS = [
 ];
 
 /* ── API ─────────────────────────────────────────────────── */
-async function api(path, body) {
-  const opt = body ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(body) } : {};
+async function api(path, body, method) {
+  const opt = method ? { method }
+    : body ? { method: 'POST', headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(body) } : {};
   const r = await fetch(path.replace(/^\//, ''), opt);
   const d = await r.json().catch(() => ({}));
   if (!r.ok) throw new Error(d.detail || d.error || r.statusText);
@@ -133,13 +148,15 @@ function renderCfg() {
   // lint 卡
   const lc = el('div', 'card');
   lc.appendChild(el('h3', null, '配置体检'));
-  const empty = !Object.keys(S.params).length;
+  // ★ 空判据要连 flag 一起看：只设了 flag 没设参数时，flag 依赖检查照样有结论，
+  //   拿「还没有配置」把它吞掉，等于工具自己把 fatal 藏了。
+  const empty = !Object.keys(S.params).length && !Object.keys(S.xla_flags || {}).length;
   if (empty) {
     lc.appendChild(el('div', 'hint',
       '还没有配置 —— 左边贴一段训练命令，或者直接在下面填。<br>'
       + '<span style="color:var(--faint)">这里现在是空的，不代表「没问题」。</span>'));
   } else if (!S.lint.length) {
-    lc.appendChild(el('div', 'hint', '✅ 没有命中已知陷阱。规则库有 9 条，随着踩坑继续长。'));
+    lc.appendChild(el('div', 'hint', '✅ 没有命中已知陷阱。规则随着踩坑继续长。'));
   } else {
     lc.appendChild(el('div', 'hint', `命中 ${S.lint.length} 条。规则来自实测踩过的坑，不是通用建议。`));
     S.lint.forEach(f => {
@@ -149,8 +166,8 @@ function renderCfg() {
       d.appendChild(el('div', 'ic', ic));
       const t = el('div');
       t.appendChild(el('div', 't', esc(f.title) + ` <span class="rule">${esc(f.rule)}</span>`));
-      t.appendChild(el('div', 'd', esc(f.detail)));
-      if (f.fix) t.appendChild(el('div', 'fix', '→ ' + esc(f.fix)));
+      t.appendChild(el('div', 'd', md2(f.detail)));
+      if (f.fix) t.appendChild(el('div', 'fix', '→ ' + md2(f.fix)));
       if (f.evidence) t.appendChild(el('div', 'ev', esc(f.evidence)));
       d.appendChild(t); lc.appendChild(d);
     });
@@ -168,26 +185,30 @@ function renderCfg() {
   fc.appendChild(g);
   p.appendChild(fc);
 
-  // XLA flags
-  if (Object.keys(S.xla_flags).length) {
-    const xc = el('div', 'card');
-    xc.appendChild(el('h3', null, 'XLA flags'));
-    xc.appendChild(el('div', 'hint', '从 LIBTPU_INIT_ARGS / XLA_FLAGS 里拆出来的，转成 compile_xla_flags 传给 AOT。'));
-    const rows = Object.entries(S.xla_flags).map(([k, v]) =>
-      `<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v === true ? '(on)' : v)}</td></tr>`).join('');
-    xc.appendChild(el('table', 't', `<thead><tr><th>flag</th><th>值</th></tr></thead><tbody>${rows}</tbody>`));
-    p.appendChild(xc);
-  }
+  p.appendChild(cardFlags());
 
   // 其它参数
   const known = new Set(FIELDS.map(f => f.k));
   const rest = Object.entries(S.params).filter(([k]) => !known.has(k));
   if (rest.length) {
     const rc = el('div', 'card');
-    rc.appendChild(el('h3', null, `其余参数 · ${rest.length}`));
-    rc.appendChild(el('div', 'hint', '原样透传给 AOT，不做解释。'));
-    rc.appendChild(el('table', 't', '<tbody>' + rest.map(([k, v]) =>
-      `<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`).join('') + '</tbody>'));
+    const open = isOpen('rest', false);
+    const h = el('h3', null, `其余参数 · ${rest.length}`);
+    h.style.cursor = 'pointer';
+    h.innerHTML = `<span style="color:var(--faint);font-size:11px">${open ? '▾' : '▸'}</span> `
+      + `其余参数 · ${rest.length}`;
+    h.onclick = () => toggleFold('rest', false);
+    rc.appendChild(h);
+    if (open) {
+      rc.appendChild(el('div', 'hint', '原样透传给 AOT，不做解释。'));
+      rc.appendChild(el('table', 't', '<tbody>' + rest.map(([k, v]) =>
+        `<tr><td class="mono">${esc(k)}</td><td class="mono">${esc(v)}</td></tr>`).join('') + '</tbody>'));
+    } else {
+      rc.appendChild(el('div', 'hint',
+        '原样透传给 AOT，不做解释。点标题展开。<br><span class="mono" style="font-size:11px;color:var(--faint)">'
+        + rest.slice(0, 8).map(([k]) => esc(k)).join('  ')
+        + (rest.length > 8 ? `  …还有 ${rest.length - 8} 个` : '') + '</span>'));
+    }
     p.appendChild(rc);
   }
 }
@@ -271,6 +292,7 @@ function cardPick() {
     if (curModel.provenance === 'public') i.appendChild(el('div', 'warn',
       '⚠️ 这个模型我们没有 v7 实测数据。别把别的模型的 batch 上限、tile 值直接搬过来。'));
     c.appendChild(i);
+    c.appendChild(modelCfg(curModel));
   }
 
   const be = BACKENDS.find(b => b.id === S.backend);
@@ -296,6 +318,268 @@ async function setParam(k, v) {
   setBusy(true);
   try { S = await api('/api/set', { session_id: S.session_id, param: k, value: v }); render(); }
   catch (e) { toast('改失败：' + e.message); } finally { setBusy(false); }
+}
+
+/* ★ XLA flag 区。这一套是**历史积累** —— 哪个 flag 干什么、在哪一代验过、
+   开了会怎样、有什么代价。不是一个让人自己去记名字的输入框。 */
+function cardFlags() {
+  const c = el('div', 'card');
+  c.appendChild(el('h3', null, 'XLA flags'));
+  if (!FLAGDB) { c.appendChild(el('div', 'hint', 'flag 库没载入')); return c; }
+  const cur = {};
+  Object.entries(S.xla_flags || {}).forEach(([k, v]) => cur[k.replace(/^--/, '')] = v);
+  c.appendChild(el('div', 'hint',
+    `当前 <b>${Object.keys(cur).length}</b> 个。下面每条都写清<b>干什么、默认多少、`
+    + `开了会怎样、在哪一代验过</b> —— <span class="ev measured">实测</span> 是我们在 v7 上跑出来的，`
+    + `<span class="ev inferred">推断</span> 是看文档或行为猜的、<b>没实测</b>。`
+    + `<b>v5p 基本都没验过</b>，与其瞎标兼容不如老实说。`));
+
+  const ps = el('div', 'presets');
+  const curKeys = new Set(Object.keys(cur));
+  FLAGDB.presets.forEach(x => {
+    const pk = Object.keys(x.flags);
+    // 正好等于这个套餐才算「正在用」—— 多一个少一个都不是
+    const on = pk.length === curKeys.size && pk.every(k => curKeys.has(k));
+    const b = el('div', 'p' + (on ? ' on' : ''));
+    b.innerHTML = `<b>${esc(x.label)}<span style="opacity:.65;font-weight:400">（${x.count} 个）`
+      + `</span>${on ? ' <span style="color:#1a6e35">· 正在用</span>' : ''}</b>`
+      + `<div class="d">${md2(x.desc)}</div>`;
+    b.onclick = () => setParam('__preset', x.id);
+    ps.appendChild(b);
+  });
+  if (curKeys.size) {
+    const clr = el('div', 'p');
+    clr.innerHTML = '<b>清空</b><div class="d">一个都不传。'
+      + '⚠️ 执行档案仍会带它自己那套默认进去 —— 「不设」不等于「没有」。</div>';
+    clr.onclick = () => setParam('__preset', '__none');
+    ps.appendChild(clr);
+  }
+  c.appendChild(ps);
+
+  // ★ 知识库默认收起。它是配置页 52% 的高度，但属于「偶尔查」——
+  //   套餐按钮和当前生效清单常驻，那两个才是每次都要用的。
+  const kbOpen = isOpen('flagkb', false);
+  const kbh = el('h3');
+  kbh.style.cursor = 'pointer';
+  kbh.innerHTML = `<span style="color:var(--faint);font-size:11px">${kbOpen ? '▾' : '▸'}</span> `
+    + `逐条说明（${FLAGDB.flags.length} 条 / ${FLAGDB.groups.length} 组）`;
+  kbh.onclick = () => toggleFold('flagkb', false);
+  c.appendChild(kbh);
+  if (!kbOpen) {
+    c.appendChild(el('div', 'hint',
+      '每条 flag 干什么、默认多少、在哪一代验过 —— 点标题展开。'
+      + (Object.keys(cur).length
+         ? '<br><span class="mono" style="font-size:11px;color:var(--faint)">当前：'
+           + Object.keys(cur).slice(0, 5).map(esc).join('  ')
+           + (Object.keys(cur).length > 5 ? `  …共 ${Object.keys(cur).length} 个` : '') + '</span>'
+         : '')));
+  }
+  if (kbOpen) FLAGDB.groups.forEach(g => {
+    const items = FLAGDB.flags.filter(f => f.group === g.id);
+    if (!items.length) return;
+    const gb = el('div', 'fgroup');
+    gb.appendChild(el('div', 'gh', esc(g.label)));
+    gb.appendChild(el('div', 'gd', md2(g.desc)));
+    items.forEach(f => {
+      const on = f.flag in cur;
+      const it = el('div', 'fitem' + (on ? ' on' : ''));
+      const L = el('div');
+      L.appendChild(el('div', 'fn', esc(f.flag)
+        + `<span class="ev ${f.evidence}">${f.evidence === 'measured' ? '实测' : '推断'}</span>`));
+      L.appendChild(el('div', 'fw', md2(f.what)));
+      if (f.effect) L.appendChild(el('div', 'fe', md2(f.effect)));
+      if (f.risk) L.appendChild(el('div', 'fr', md2(f.risk)));
+      L.appendChild(el('div', 'fmeta',
+        `默认 ${esc(f.default)} · v7 ${f.gen.v7 === 'measured' ? '实测过' : f.gen.v7} · v5p ${esc(f.gen.v5p)}`
+        + (f.note ? '' : '')));
+      if (f.note) L.appendChild(el('div', 'fw', md2(f.note)));
+      it.appendChild(L);
+      let inp;
+      if (f.type === 'bool') {
+        inp = el('select');
+        [['', '— 不传 —'], ['true', 'true'], ['false', 'false'], ['True', 'True']].forEach(([v, t]) => {
+          const o = el('option', null, t); o.value = v;
+          if (String(cur[f.flag] ?? '') === v) o.selected = true; inp.appendChild(o);
+        });
+      } else {
+        inp = el('input'); inp.value = cur[f.flag] ?? '';
+        inp.placeholder = f.suggest ? '建议 ' + f.suggest : '不传';
+      }
+      inp.onchange = () => setParam('__flag', `${f.flag}=${inp.value}`);
+      it.appendChild(inp);
+      gb.appendChild(it);
+    });
+    c.appendChild(gb);
+  });
+
+  // 库里没有的 flag 也得能加 —— 知识库是加速，不是围栏
+  const known = new Set(FLAGDB.flags.map(f => f.flag));
+  const extra = Object.entries(cur).filter(([k]) => !known.has(k));
+  c.appendChild(el('h3', null, '其它 flag'));
+  c.appendChild(el('div', 'hint',
+    '库里没收录的写这里，一行一个 `--key=value`。'
+    + (extra.length ? `当前 ${extra.length} 个不在库里。` : '')));
+  const ta = el('textarea', 'rawflags');
+  ta.value = extra.map(([k, v]) => `--${k}=${v === true ? 'true' : v}`).join('\n');
+  ta.placeholder = '--xla_xxx=yyy';
+  ta.onchange = async () => {
+    setBusy(true);
+    try {
+      for (const [k] of extra) await api('api/set', { session_id: S.session_id, param: '__flag', value: k + '=' });
+      for (const line of ta.value.split('\n')) {
+        const t = line.trim().replace(/^--/, '');
+        if (!t) continue;
+        const [k, ...r] = t.split('=');
+        S = await api('api/set', { session_id: S.session_id, param: '__flag', value: `${k}=${r.join('=') || 'true'}` });
+      }
+      render();
+    } catch (e) { toast('改失败：' + e.message); } finally { setBusy(false); }
+  };
+  c.appendChild(ta);
+
+  // 拼好的整串 —— 想拷到别处（xpk / JobSet / 手跑）直接拿走，不用自己攒
+  if (S.xla_line) {
+    const box = el('div');
+    const h = el('h3', null, 'LIBTPU_INIT_ARGS');
+    const cp = el('button', 'btn-ghost btn-sm', '复制');
+    cp.style.marginLeft = 'auto';
+    cp.onclick = () => {
+      navigator.clipboard.writeText(`export LIBTPU_INIT_ARGS="${S.xla_line}"`);
+      toast('已复制 export 整行');
+    };
+    h.appendChild(cp); box.appendChild(h);
+    box.appendChild(el('div', 'hint',
+      `上面这 <b>${Object.keys(S.xla_flags || {}).length}</b> 个拼成一串。`
+      + '真机跑走 <code>LIBTPU_INIT_ARGS</code>，AOT 走 <code>compile_xla_flags</code> —— '
+      + '<b>同一串，两个入口</b>，别搞混。'));
+    box.appendChild(el('pre', 'cmd', esc(`export LIBTPU_INIT_ARGS="${S.xla_line}"`)));
+    c.appendChild(box);
+  }
+  return c;
+}
+
+/* 模型形状面板。平时收着，点开可改，**只能另存为新模型**。
+   内置那几个是只读的 —— 「Hunyuan3-295B」这个名字对应真实发布的模型，
+   所有实测结论都挂在它上面；就地改掉，历史结论就全部失去指向。 */
+/* 改了层数 / 词表 / hidden，参数量得跟着重算。**折算公式只在后端有一份** ——
+   在 JS 里再抄一遍，迟早跟服务端算出不一样的数，而你看到的是 JS 那个。 */
+let _pvTimer = null;
+function schedulePreview(m, box) {
+  clearTimeout(_pvTimer);
+  _pvTimer = setTimeout(async () => {
+    try {
+      const r = await api('api/model/preview',
+        { base: m.id, shape: cfgDraft, touched: [...cfgTouched] });
+      ['params_b', 'act_params_b'].forEach(k => {
+        if (cfgTouched.has(k)) return;
+        cfgDraft[k] = r.shape[k];
+        const i = box.querySelector(`input[data-k="${k}"]`);
+        if (i) { i.value = r.shape[k]; i.classList.add('auto'); }
+      });
+      const em = box.querySelector('.mderive');
+      if (em) em.innerHTML = `嵌入层 <b>${r.shape.emb_params_b}B</b> 不随层数变，`
+        + '已先扣除再按层折算 —— 直接按比例缩会把嵌入也缩掉。'
+        + '<br>这两栏<b>自己填了就以你填的为准</b>，不再自动跟。';
+    } catch (e) { /* 预览失败不打断编辑 */ }
+  }, 350);
+}
+
+function modelCfg(m) {
+  const box = el('div', 'mcfg' + (cfgOpen ? ' open' : ''));
+  const hd = el('div', 'mh');
+  hd.innerHTML = `<span class="ar">${cfgOpen ? '▾' : '▸'}</span><b>模型配置</b>`
+    + `<span class="sub">${m.builtin ? '内置 · 只读，改了要另存' : '自定义 · 派生自 '
+      + esc(m.derived_from || '?')}</span>`;
+  hd.onclick = () => {
+    cfgOpen = !cfgOpen;
+    cfgDraft = cfgOpen ? Object.fromEntries(EDITABLE.map(f => [f.k, m[f.k]])) : null;
+    cfgTouched = new Set();
+    render();
+  };
+  box.appendChild(hd);
+  if (!cfgOpen) return box;
+
+  if (!cfgDraft) cfgDraft = Object.fromEntries(EDITABLE.map(f => [f.k, m[f.k]]));
+  const body = el('div', 'mb');
+  const grid = el('div', 'mgrid');
+  EDITABLE.forEach(f => {
+    const dis = !m.moe && (f.k === 'num_experts' || f.k === 'top_k');
+    const d = el('div', 'field');
+    const l = el('label', null, esc(f.label));
+    const q = el('span', 'q', 'ⓘ'); q.title = f.why; l.appendChild(q);
+    if (String(cfgDraft[f.k] ?? '') !== String(m[f.k] ?? ''))
+      l.appendChild(el('span', 'chg', `· 原 ${m[f.k]}`));
+    d.appendChild(l);
+    const inp = el('input');
+    inp.type = 'number'; inp.value = cfgDraft[f.k] ?? '';
+    inp.disabled = dis;
+    inp.dataset.k = f.k;
+    if (dis) inp.placeholder = 'dense 不适用';
+    if (f.derived && !cfgTouched.has(f.k)) inp.classList.add('auto');
+    inp.oninput = () => {
+      cfgDraft[f.k] = inp.value === '' ? null : Number(inp.value);
+      if (f.derived) { cfgTouched.add(f.k); inp.classList.remove('auto'); }
+      // 只重画标签上的「原 xx」，不整页重渲染 —— 否则每敲一个字符输入框就失焦
+      const lab = d.querySelector('label .chg');
+      const diff = String(cfgDraft[f.k] ?? '') !== String(m[f.k] ?? '');
+      if (diff && !lab) l.appendChild(el('span', 'chg', `· 原 ${m[f.k]}`));
+      if (!diff && lab) lab.remove();
+      box.querySelector('.msave').disabled = !EDITABLE.some(
+        x => String(cfgDraft[x.k] ?? '') !== String(m[x.k] ?? ''));
+      if (!f.derived) schedulePreview(m, box);
+    };
+    d.appendChild(inp); grid.appendChild(d);
+  });
+  body.appendChild(grid);
+  body.appendChild(el('div', 'mderive hint',
+    '改层数后，<b>总参数 / 激活参数会自动折算</b>（浅底色 = 自动算的）。'));
+
+  const nameRow = el('div', 'mname');
+  const ni = el('input');
+  ni.placeholder = `新名字，例如「${m.label} 40层」`;
+  ni.value = '';
+  nameRow.appendChild(ni);
+  const save = el('button', 'btn-primary btn-sm msave', '存成新模型');
+  save.disabled = true;
+  const cancel = el('button', 'btn-ghost btn-sm', '取消');
+  cancel.onclick = () => { cfgOpen = false; cfgDraft = null; render(); };
+  save.onclick = async () => {
+    const label = ni.value.trim();
+    if (!label) { toast('先起个名字'); ni.focus(); return; }
+    setBusy(true);
+    try {
+      // ★ touched 必须一起送。预览带了、保存没带 = 面板显示 200、存下去 75.4
+      //   —— 「看到的不是存下的」，比算错更难发现。
+      const r = await api('api/model',
+        { base: m.id, label, shape: cfgDraft, touched: [...cfgTouched] });
+      FAMILIES = r.catalog.families; BACKENDS = r.catalog.backends;
+      cfgOpen = false; cfgDraft = null;
+      await setParam('model_name', r.id);          // 存完直接切过去
+      toast(`已存为「${label}」`);
+    } catch (e) { toast('存不了：' + e.message); } finally { setBusy(false); }
+  };
+  nameRow.append(save, cancel);
+  if (!m.builtin) {
+    const del = el('button', 'btn-ghost btn-sm', '删掉这个模型');
+    del.onclick = async () => {
+      setBusy(true);
+      try {
+        const r = await api('api/model/' + encodeURIComponent(m.id), null, 'DELETE');
+        FAMILIES = r.catalog.families; BACKENDS = r.catalog.backends;
+        cfgOpen = false; await setParam('model_name', m.derived_from || '');
+        toast('已删除');
+      } catch (e) { toast('删不了：' + e.message); } finally { setBusy(false); }
+    };
+    nameRow.appendChild(del);
+  }
+  body.appendChild(nameRow);
+  body.appendChild(el('div', 'hint',
+    m.builtin
+      ? '内置模型<b>不能就地改</b> —— 它的形状对应真实发布的那个模型，'
+        + '我们所有实测结论都挂在这个名字上。改了层数就另存一个名字，血缘会记下来。'
+      : '这是派生模型，可以随便改再另存，也可以删掉。'));
+  box.appendChild(body);
+  return box;
 }
 
 function renderField(f) {
@@ -337,6 +621,20 @@ function renderField(f) {
 }
 
 /* ── 渲染：命令 ───────────────────────────────────────────── */
+/* 一个带复制按钮的命令框。命令这东西**存在的意义就是被拷走**，
+   每处都手写一遍 clipboard 迟早漏掉一处。 */
+function cmdBox(title, text, hint) {
+  const c = el('div', 'card');
+  const h = el('h3', null, title);
+  const cp = el('button', 'btn-ghost btn-sm', '复制');
+  cp.style.marginLeft = 'auto';
+  cp.onclick = () => { navigator.clipboard.writeText(text); toast('已复制，可直接粘到终端'); };
+  h.appendChild(cp); c.appendChild(h);
+  if (hint) c.appendChild(el('div', 'hint', hint));
+  c.appendChild(el('pre', 'cmd wrap', esc(text)));
+  return c;
+}
+
 function renderCmd() {
   const p = $('#pane-cmd'); p.innerHTML = '';
   const c = el('div', 'card');
@@ -350,6 +648,29 @@ function renderCmd() {
     `${sp}<span class="${S.added && k in S.added ? 'add' : ''}"><span class="k">${k}</span>=<span class="v">${v}</span></span>`);
   c.appendChild(el('pre', 'cmd', hi));
   p.appendChild(c);
+
+  // ★ 上面那条是**容器里**的命令。宿主机上直接跑必然 ModuleNotFoundError，
+  //   所以把 docker 那层也给出来 —— 拷走就能跑的是这一条。
+  if (S.shell && S.shell.docker) {
+    p.appendChild(cmdBox('拷走就能跑', S.shell.docker,
+      '连 docker、挂载、dump 目录一起拼好了，粘到终端就能执行 —— 前提是这台机器上有镜像 '
+      + `<code>${esc(S.shell.image)}</code>。产物会落在 <code>/tmp/tpuguru-dump</code>。`
+      + '<br>这跟「真跑 AOT」按钮执行的是<b>同一份拼装</b>，不是另写一条给你看的。'));
+  } else {
+    const w = el('div', 'card');
+    w.appendChild(el('h3', null, '拷走就能跑'));
+    w.appendChild(el('div', 'hint',
+      '这台机器上没有执行档案（镜像 / 挂载没配），拼不出完整可执行命令。<br>'
+      + '<span style="color:var(--faint)">与其给一条看着像能跑、实际缺一半的，不如空着。</span>'));
+    p.appendChild(w);
+  }
+
+  if (S.xla_line) {
+    p.appendChild(cmdBox(`XLA flags（${Object.keys(S.xla_flags || {}).length} 个）`,
+      S.xla_line.split(' ').join('\n'),
+      '上面命令里 <code>compile_xla_flags</code> 那一长串，拆开一行一个便于核对。'
+      + '真机跑时同样这串，换成 <code>LIBTPU_INIT_ARGS</code> 环境变量。'));
+  }
 
   if (S.dropped && Object.keys(S.dropped).length) {
     const d = el('div', 'card');
@@ -383,6 +704,31 @@ function renderCmd() {
 
 /* ── 渲染：报告 ───────────────────────────────────────────── */
 const SEG_COLORS = ['#1a73e8', '#00acc1', '#34a853', '#f9ab00'];
+
+/* 一键把配置改成能在 CPU 上编的版本。**跟我手工适配 15 份配方做的是同一件事** ——
+   既然每次都这么改，就不该让人自己记住改哪些。 */
+async function adaptForAot() {
+  if (!S) return;
+  setBusy(true, '适配中');
+  const changed = [];
+  try {
+    for (const k of ['use_tokamax_gmm', 'use_tokamax_splash']) {
+      if (String(S.params[k]).toLowerCase() === 'true') {
+        S = await api('api/set', { session_id: S.session_id, param: k, value: 'False' });
+        changed.push(`${k} → False`);
+      }
+    }
+    for (let i = 0; i < 12; i++) {
+      const bad = S.lint.filter(f => f.rule === 'P0');
+      if (!bad.length) break;
+      const name = bad[0].title.split('`')[1].split(' → ')[0];
+      S = await api('api/set', { session_id: S.session_id, param: name, value: '' });
+      changed.push(`删掉 ${name}`);
+    }
+    render();
+    toast(changed.length ? `改了 ${changed.length} 处，点【跑 AOT】验一次` : '没有需要改的');
+  } catch (e) { toast('适配失败：' + e.message); } finally { setBusy(false); }
+}
 
 function renderRep() {
   const p = $('#pane-rep'); p.innerHTML = '';
@@ -453,13 +799,47 @@ function renderRep() {
   const v = el('div', 'card');
   const ok = R.ok;
   const pj = R.mode === 'projected';
-  const txt = R.invalid ? '编译通过，但结果无效'
+  // ⚠️ **失败 ≠ 装不下。** 只有 OOM 那几类才能说「装不下」；kernel 不支持、
+  //    配置被拒、块划分不合法都是编译失败，跟显存无关。
+  //    报错了却写「装不下」，人会去降 batch，真因永远找不到 —— 后端已按 kind 区分，
+  //    这里是**第二处渲染**，上次只改了后端那句，报告页还在说装不下（实测被抓到）。
+  // ★ 文案来自后端 verdict_of()，**这里不再自己判**。
+  //   老结果没有这个字段，兜底沿用旧逻辑，但兜底也要区分 OOM 与编译失败。
+  const V = R.verdict;
+  const FK = R.failure ? R.failure.kind : null;
+  const isOom = V ? V.is_oom : (FK && (FK.indexOf('hbm_oom') === 0 || FK === 'vmem_oom'));
+  const txt = V ? (pj && ok !== null ? '📐 推算：' + V.title.replace(/^[^ ]+ /, '') : V.title)
+    : R.invalid ? '编译通过，但结果无效'
     : ok === true ? (pj ? '📐 推算：装得下' : '✅ 编译通过，装得下')
-    : ok === false ? (pj ? '📐 推算：装不下' : '❌ 装不下') : '❓ 这一档没有实测记录';
+    : ok === false ? (pj ? '📐 推算：装不下' : isOom ? '❌ 装不下' : '💥 编译失败')
+    : '❓ 这一档没有实测记录';
   v.appendChild(el('div', 'big ' + (R.invalid ? 'void' : ok === true ? 'ok' : ok === false ? 'bad' : 'unk'), txt));
   if (R.failure) {
-    v.appendChild(el('div', 'hint', `${esc(R.failure.kind)} · 需要 <b>${fmt(R.failure.required_gb)} GB</b>，`
-      + `上限 ${fmt(R.failure.available_gb)} GB，超 <b>${fmt(R.failure.required_gb - R.failure.available_gb)} GB</b>`));
+    // 数字只在真是 OOM 且两个值都有时才显示 —— 否则会渲染出「超 NaN GB」
+    if (V && V.detail) v.appendChild(el('div', 'hint',
+      md2(V.detail) + ` <span style="color:var(--faint)">· ${esc(FK || '')}</span>`));
+    else if (isOom && R.failure.required_gb && R.failure.available_gb) {
+      v.appendChild(el('div', 'hint',
+        `需要 <b>${fmt(R.failure.required_gb)} GB</b>，上限 ${fmt(R.failure.available_gb)} GB，`
+        + `超 <b>${fmt(R.failure.required_gb - R.failure.available_gb)} GB</b>`));
+    }
+    if (R.failure.raw) v.appendChild(el('div', 'hint', md2(String(R.failure.raw))));
+    if (!isOom) {
+      v.appendChild(el('div', 'hint',
+        '<b>这不是显存问题</b> —— 降 batch 没用。先把上面这条解决掉再谈装不装得下。'));
+      // 给下一步动作，别只给一堵解释墙。这两类失败都有确定的适配办法。
+      if (FK === 'cpu_unsupported_kernel' || FK === 'config_error') {
+        const row = el('div', 'presets');
+        row.style.marginTop = '10px';
+        const btn = el('div', 'p');
+        btn.innerHTML = '<b>改成 AOT 可验版本</b><div class="d">'
+          + '把没有 CPU 实现的 kernel 换成 native，删掉本镜像不认的字段，然后重跑。'
+          + '<br>⚠️ 改完的显存数字<b>不等于原配方的结论</b> —— 原配方要在真机上验。</div>';
+        btn.onclick = () => adaptForAot();
+        row.appendChild(btn);
+        v.appendChild(row);
+      }
+    }
   }
   if (R.note) v.appendChild(el('div', 'hint', esc(R.note)));
   const m = R.metrics || {};
@@ -467,14 +847,33 @@ function renderRep() {
     const k = el('div', 'kpis');
     const kp = (n, l, cls) => { const d = el('div', 'kpi' + (cls ? ' ' + cls : ''));
       d.appendChild(el('div', 'n', n)); d.appendChild(el('div', 'l', l)); return d; };
-    if (m.peak_hbm_gb) k.appendChild(kp(fmt(m.peak_hbm_gb) + ' <span style="font-size:12px">GB</span>', 'HBM 峰值 / device'));
-    if (m.hbm_pct) k.appendChild(kp(m.hbm_pct + '%', '容量占用',
+    // ⚠️ 这个数是 **HLO 临时缓冲**（激活 + 中间结果），**不含参数与优化器状态**
+    //    —— 那些在 argument buffer 里，另算一栏。叫它「HBM 峰值」会让人以为含权重，
+    //    然后看到「64 卡和 256 卡几乎一样」就怀疑拓扑没生效（实测被这么怀疑过）。
+    //    XLA 判 OOM 用的正是这个量 vs 可用 HBM，所以阈值逻辑是对的，错的只是标签。
+    if (m.peak_hbm_gb) k.appendChild(kp(fmt(m.peak_hbm_gb) + ' <span style="font-size:12px">GB</span>',
+      'HLO 临时缓冲 / device'));
+    if (m.argument_gb) k.appendChild(kp(fmt(m.argument_gb) + ' <span style="font-size:12px">GB</span>',
+      '参数+优化器 / device'));
+    if (m.hbm_pct) k.appendChild(kp(m.hbm_pct + '%', '临时缓冲占可用 HBM',
       m.hbm_pct > 100 ? 'over' : m.hbm_pct > 95 ? 'hot' : ''));
     if (m.global_batch) k.appendChild(kp(m.global_batch.toLocaleString(), 'global batch（条）'));
     if (m.fsdp) k.appendChild(kp(m.fsdp, 'FSDP 宽度'));
     if (m.end_to_end_s) k.appendChild(kp(m.end_to_end_s + ' s', 'AOT 耗时'));
     if (R.invalid) k.querySelectorAll('.kpi').forEach(x => x.classList.add('struck'));
     v.appendChild(k);
+  }
+  if (m.peak_hbm_gb) {
+    const note = el('div', 'hint');
+    note.style.marginTop = '10px';
+    note.innerHTML =
+      '「HLO 临时缓冲」是激活和中间结果，<b>不含参数与优化器状态</b>（那些在右边那栏）。'
+      + 'XLA 判 OOM 比的就是这个量 vs 可用 HBM ' + HBM_CAP_TXT + '。<br>'
+      + '<b>加卡不会让它变小</b> —— FSDP 分片的是权重，激活是每 device 各一份，'
+      + '只跟 <code>per_device_batch_size × seq</code> 走。'
+      + '同一份配置 64 卡和 256 卡这一栏几乎一样是<b>正常的</b>，'
+      + '真正变薄的是「参数+优化器」那栏。';
+    v.appendChild(note);
   }
   const badge = el('div', 'hint');
   badge.style.marginTop = '12px';
@@ -500,7 +899,10 @@ function renderRep() {
   if (A.collectives) p.appendChild(cardCollectives(A.collectives.data));
   if (A.compile_time) p.appendChild(cardCompile(A.compile_time.data));
   if (A.hlo) p.appendChild(cardHlo(A.hlo.data));
-  p.appendChild(cardHloDeep(R));
+  // 编译失败（非 OOM）时不推销 HLO 深挖 —— 那份 dump 是编译**中断前**落的盘，
+  // 拿它算显存排行会得出一份残缺结论，而界面不会告诉你它残缺。
+  // OOM 的 dump 反而有用：它是走完编译才发现放不下的。
+  if (!(R.ok === false && !isOom)) p.appendChild(cardHloDeep(R));
   if (A.llo) p.appendChild(cardLlo(A.llo.data));
   if (R.artifacts && Object.keys(R.artifacts).length) p.appendChild(cardArtifacts(R.artifacts));
 }
@@ -1073,6 +1475,92 @@ function renderMetal() {
 }
 
 /* ── 渲染：历史 ───────────────────────────────────────────── */
+let onlyRun = false;
+
+/* 会话列表。**每次改配置都已经在存了** —— 缺的从来不是持久化，
+   是回去的入口。没有列表，一按「新会话」上一场就等于蒸发了。 */
+async function renderSess() {
+  const p = $('#pane-sess'); p.innerHTML = '<div class="hint">载入中…</div>';
+  let list = [];
+  try { list = (await api('/api/sessions?limit=300')).sessions; }
+  catch (e) { p.innerHTML = `<div class="hint">读不到会话列表：${esc(e.message)}</div>`; return; }
+  p.innerHTML = '';
+  const c = el('div', 'card');
+  c.appendChild(el('h3', null, '会话'));
+  c.appendChild(el('div', 'hint',
+    '每动一个参数、每点一个 flag 都会即时存下来 —— 切走再切回来是原样。'
+    + '<b>会话名跟着模型走</b>，手动改过就不再自动覆盖。'));
+
+  // ⚠️ 默认**按时间倒序全给**，不要拿「跑过 AOT」当门槛 —— 刚建的会话必然
+  //    0 份报告，一过滤就把你正在用的那场藏了，正是「上一场蒸发了」的观感。
+  //    筛选是可选项，不是默认。当前这场无论如何都得在。
+  const withRes = list.filter(x => x.n_results);
+  let shown = onlyRun ? withRes : list.slice(0, 40);
+  if (S.session_id && !shown.some(x => x.id === S.session_id)) {
+    const me = list.find(x => x.id === S.session_id);
+    if (me) shown = [me, ...shown];
+  }
+  const bar = el('div', 'listbar');
+  bar.appendChild(el('span', null,
+    `${list.length} 场会话 · ${withRes.length} 场跑过 AOT`
+    + (!onlyRun && list.length > 40 ? ` · 显示最近 ${shown.length} 场` : '')));
+  bar.appendChild(el('span', 'spacer'));
+  const lb = el('label');
+  const cb = el('input'); cb.type = 'checkbox'; cb.checked = onlyRun;
+  cb.onchange = () => { onlyRun = cb.checked; renderSess(); };
+  lb.append(cb, document.createTextNode('只看跑过 AOT 的'));
+  bar.appendChild(lb);
+  c.appendChild(bar);
+
+  if (!shown.length) {
+    c.appendChild(el('div', 'empty', '<span class="ic">💬</span>还没有会话'));
+    p.appendChild(c); return;
+  }
+  shown.forEach(x => {
+    const r = el('div', 'srow' + (x.id === S.session_id ? ' cur' : ''));
+    const L = el('div');
+    L.appendChild(el('div', 'st', esc(x.title)
+      + (x.id === S.session_id ? ' <span style="color:var(--blue-d);font-size:11px">· 当前</span>' : '')));
+    const bits = [];
+    if (x.topology) bits.push(x.topology);
+    if (x.layers) bits.push(`${x.layers} 层`);
+    if (x.pdbs) bits.push(`pdbs ${x.pdbs}`);
+    bits.push(`${x.n_params} 参 / ${x.n_flags} flag`);
+    if (x.updated_at) bits.push(x.updated_at.replace('T', ' ').slice(5, 16));
+    L.appendChild(el('div', 'sm', esc(bits.join('  ·  '))));
+    r.appendChild(L);
+    const act = el('div', 'sact');
+    if (x.n_results) act.appendChild(el('span', 'badge-r', `${x.n_results} 份报告`));
+    const del = el('button', 'del', '🗑');
+    del.title = '删掉这场会话（AOT 结果按指纹另存，不会跟着没）';
+    del.onclick = async ev => {
+      ev.stopPropagation();
+      try {
+        await fetch('api/session/' + x.id, { method: 'DELETE' });
+        if (x.id === S.session_id) {
+          S = await api('api/session', {});
+          localStorage.setItem(SID_KEY, S.session_id); render();
+        }
+        renderSess(); toast('已删除');
+      } catch (e) { toast('删除失败：' + e.message); }
+    };
+    act.appendChild(del);
+    r.appendChild(act);
+    r.onclick = async () => {
+      if (x.id === S.session_id) { closeSessPop(); return; }
+      setBusy(true);
+      try {
+        S = await api('api/session/' + x.id);
+        localStorage.setItem(SID_KEY, S.session_id);
+        closeSessPop(); switchTab('cfg'); render();
+        toast('切到「' + x.title + '」');
+      } catch (e) { toast('切换失败：' + e.message); } finally { setBusy(false); }
+    };
+    c.appendChild(r);
+  });
+  p.appendChild(c);
+}
+
 async function renderHis() {
   const p = $('#pane-his'); p.innerHTML = '<div class="hint">载入中…</div>';
   let list = [];
@@ -1189,49 +1677,110 @@ function nodeOf(s, depth) {
 }
 
 /* ── 主渲染 ───────────────────────────────────────────────── */
+async function newSession() {
+  S = await api('api/session', {});
+  localStorage.setItem(SID_KEY, S.session_id);
+  switchTab('cfg'); render();
+}
+
+/* 没有会话时的样子。**不自动建** —— 自动建的代价是每次刷新多一场空会话。 */
+function renderEmpty() {
+  document.body.classList.add('nosess');
+  const sn = $('#sess-name'); if (sn) sn.textContent = '未选择会话';
+  ['#pane-cmd', '#pane-rep', '#pane-metal'].forEach(x => { const n = $(x); if (n) n.innerHTML = ''; });
+  const p = $('#pane-cfg'); p.innerHTML = '';
+  const c = el('div', 'card');
+  c.appendChild(el('h3', null, '还没有打开任何会话'));
+  c.appendChild(el('div', 'hint',
+    '刷新页面不会再自动开新会话了 —— 那样每刷一次就多一场空的。<br>'
+    + '从下面三条路挑一条：'));
+  const row = el('div', 'presets');
+  const a = el('div', 'p');
+  a.innerHTML = '<b>新建空会话</b><div class="d">从零开始：选模型、配参数，或者直接把训练命令贴进左边。</div>';
+  a.onclick = () => newSession();
+  const b2 = el('div', 'p');
+  b2.innerHTML = '<b>从存档开一场</b><div class="d">拿官方 ironwood 配方或我们的混元3 当起点，载入即派生新会话。</div>';
+  b2.onclick = () => { drawer.hidden = false; renderHis(); };
+  const c3 = el('div', 'p');
+  c3.innerHTML = '<b>回到之前的会话</b><div class="d">左上角那个切换器里都在，配置和 flag 都是原样。</div>';
+  c3.onclick = () => { sesspop.hidden = false; renderSess(); };
+  row.append(a, b2, c3);
+  c.appendChild(row);
+  p.appendChild(c);
+  ['#b-lint', '#b-rep', '#b-metal'].forEach(x => { const n = $(x); if (n) n.hidden = true; });
+  const bm = $('#btn-metal'); if (bm) bm.disabled = true;
+  const runBtn = $('#btn-run'); if (runBtn) runBtn.disabled = true;
+}
+
 function render() {
+  if (!S || !S.session_id) return renderEmpty();
+  document.body.classList.remove('nosess');
+  const runBtn = $('#btn-run'); if (runBtn) runBtn.disabled = false;
   if (render._fp !== S.fingerprint) { resetHlo(); MEXPLAIN = null; render._fp = S.fingerprint; }
   renderTurns(); renderCfg(); renderCmd(); renderRep(); renderMetal();
   $('#sess-title').textContent = S.session_id;
+  const sn = $('#sess-name');
+  if (sn) sn.textContent = S.title && S.title !== '未命名会话'
+    ? S.title : (S.model?.label || '新会话');
   const fatal = S.lint.filter(f => f.severity === 'fatal').length;
   const warn = S.lint.filter(f => f.severity === 'warn').length;
+  // ★ 每个徽标都得说清自己是什么意思。一个光秃秃的红「!」只会让人问「这啥」——
+  //   数字/符号给一眼的信号，title 给准确的话。
   const b = $('#b-lint');
-  if (fatal || warn) { b.hidden = false; b.textContent = fatal || warn;
-    b.className = 'badge ' + (fatal ? 'red' : 'amber'); } else b.hidden = true;
+  if (fatal || warn) {
+    b.hidden = false; b.textContent = fatal || warn;
+    b.className = 'badge ' + (fatal ? 'red' : 'amber');
+    b.title = fatal ? `${fatal} 条致命问题，跑之前就该改` : `${warn} 条警告`;
+    $('.tab[data-pane="cfg"]').title = fatal
+      ? `配置体检命中 ${fatal} 条致命问题：${S.lint.find(f => f.severity === 'fatal').title}`
+      : `配置体检命中 ${warn} 条警告`;
+  } else {
+    b.hidden = true;
+    $('.tab[data-pane="cfg"]').title = '配置体检没命中已知陷阱';
+  }
   const br = $('#b-rep');
+  const RT = $('.tab[data-pane="rep"]');
   if (S.result) {
+    const V = S.result.verdict;
     br.hidden = false;
-    br.textContent = S.result.invalid ? '⛔' : S.result.ok === false ? '!' : '✓';
+    br.textContent = S.result.invalid ? '⛔'
+      : S.result.ok === false ? (V && !V.is_oom ? '💥' : '!') : '✓';
     br.className = 'badge ' + (S.result.invalid || S.result.ok === false ? 'red'
       : S.result.ok ? 'green' : '');
-    $('.tab[data-pane="rep"]').title = '这份报告对应当前配置';
+    br.title = RT.title = S.result.invalid ? '编译通过但结果已判无效'
+      : V ? V.title + (V.detail ? ' —— ' + V.detail.replace(/\*\*/g, '') : '')
+      : (S.result.ok ? '这套配置 AOT 通过' : 'AOT 没通过');
   } else {
     br.hidden = true; br.textContent = '';
-    $('.tab[data-pane="rep"]').title = '当前配置还没跑过 AOT';
+    RT.title = '当前配置还没跑过 AOT';
   }
+  $('.tab[data-pane="cmd"]').title = '生成的 AOT 命令 + 拷走就能跑的完整 docker 命令 + XLA flag 清单';
   const bm2 = $('#b-mtl');
-  if (S.metal) { bm2.hidden = false; bm2.textContent = '✓'; bm2.className = 'badge teal'; }
-  else { bm2.hidden = true; bm2.textContent = ''; }
-
-  // 顶栏即时指示：不用切到报告页就知道这套配置有没有结论
-  const fs = $('#fpstate');
-  const has = !!S.result;
-  fs.className = 'fpstate ' + (has ? 'has' : 'none');
-  fs.lastElementChild.textContent = has
-    ? (S.cached_from ? '已有报告（调档）' : '已有报告') : '未跑 AOT';
-  fs.title = '配置指纹 ' + (S.fingerprint || '');
+  const MT = $('.tab[data-pane="mtl"]');
+  if (S.metal) {
+    bm2.hidden = false; bm2.textContent = '✓'; bm2.className = 'badge teal';
+    bm2.title = MT.title = '这套配置上过 64 卡，有真机数据';
+  } else {
+    bm2.hidden = true; bm2.textContent = '';
+    MT.title = '这套配置还没上过机 —— AOT 只答装不装得下，多快只有真机能答';
+  }
 
   // 🚀 上机按钮：只有「当前配置的 AOT 编译通过」才点亮。
   //    真机一次几十分钟 + 占共享集群，装不下就上机纯属浪费别人的卡。
   const bm = $('#btn-metal');
+  // ⚠️ **不再拿「集群状态」当门槛。** 那个灯读的是 Kueue 记账（保底额度 − 已用），
+  //    而记账跟真能不能起来是两回事：2026-08-16 它显示「64 卡可用」，实际提交后
+  //    抢占了 8 个别人的任务仍然起不来（cluster-wide tpu7x quota 满）。
+  //    一个会说「可用」而实际拿不到的灯，比没有灯更糟 —— 已整个移除。
+  //    能不能拿到卡，只有提交了才知道；门槛只留「AOT 编译通过」这个我们真能判的。
   const compiled = !!(S.result && S.result.ok === true && !S.result.invalid);
-  const clOk = CLUSTER && CLUSTER.light !== 'red' && CLUSTER.ok;
-  bm.disabled = !(compiled && clOk);
+  bm.disabled = !compiled;
   bm.title = !compiled
     ? (S.result ? 'AOT 说装不下 / 结论无效，先把它跑通' : '这套配置还没跑过 AOT')
-    : !clOk ? '集群现在要不到卡：' + (CLUSTER?.text || '')
-    : `上 64 卡真跑（约 20–40 分钟，占共享集群）\n峰值 ${S.result.metrics?.peak_hbm_gb} GB，已编译通过`;
+    : `上 64 卡真跑（约 20–40 分钟，占共享集群）\n峰值 ${S.result.metrics?.peak_hbm_gb} GB，已编译通过`
+      + '\n⚠️ 能不能拿到卡要提交了才知道 —— 集群满载时会排队，也可能抢占别人的任务';
   if (!drawer.hidden) renderHis();
+  if (!sesspop.hidden) renderSess();
 }
 
 function switchTab(name) {
@@ -1246,9 +1795,21 @@ document.querySelectorAll('.tab').forEach(t => t.onclick = () => switchTab(t.dat
 
 const drawer = $('#drawer');
 $('#btn-hist').onclick = () => { drawer.hidden = false; renderHis(); };
+
+/* 会话切换放在左上角 —— 那儿原来是句标语，占着最好的位置什么也不干。
+   切会话是高频动作，不该埋在档案抽屉的第二层。 */
+const sesspop = $('#sesspop');
+function closeSessPop() { sesspop.hidden = true; }
+$('#btn-sess').onclick = () => {
+  if (!sesspop.hidden) return closeSessPop();
+  sesspop.hidden = false; renderSess();
+};
+sesspop.querySelector('.popmask').onclick = closeSessPop;
 $('#d-close').onclick = () => drawer.hidden = true;
 drawer.querySelector('.dmask').onclick = () => drawer.hidden = true;
-document.addEventListener('keydown', e => { if (e.key === 'Escape') drawer.hidden = true; });
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') { drawer.hidden = true; closeSessPop(); }
+});
 
 async function send() {
   const t = $('#input').value.trim();
@@ -1337,10 +1898,8 @@ $('#btn-metal').onclick = () => {
 };
 
 $('#btn-new').onclick = async () => {
-  if (S && S.turns?.length && !confirm('开一场新对话？当前这场会留在历史里，但不再显示。')) return;
-  S = await api('api/session', {});
-  localStorage.setItem(SID_KEY, S.session_id);
-  switchTab('cfg'); render(); toast('新会话');
+  // 不再问「确定吗」—— 现在有会话列表，上一场随时切回来，不是不可逆操作
+  await newSession(); toast('新会话');
 };
 
 $('#btn-save').onclick = () => {
@@ -1371,19 +1930,6 @@ $('#btn-save').onclick = () => {
     } catch (e) { toast('存档失败：' + e.message); }
   };
 };
-
-async function refreshCluster() {
-  try {
-    CLUSTER = await api('api/cluster?want=64');
-  } catch (e) { CLUSTER = { ok: false, light: 'grey', text: '探测失败', why: String(e) }; }
-  const n = $('#cluster');
-  n.className = 'cl ' + (CLUSTER.light || 'grey');
-  n.lastElementChild.textContent = CLUSTER.text || '';
-  n.title = (CLUSTER.why || '') + (CLUSTER.ok
-    ? `\n保底 ${CLUSTER.quota} · 我们已用 ${CLUSTER.used} · Running pod ${CLUSTER.running_pods}`
-    : '');
-  if (S) render();
-}
 
 /* ── 左右分栏：拖动改比例 / 收起对话 ─────────────────────────
    宽度记进 localStorage —— 每次打开都要重新拖一遍是很烦的事。 */
@@ -1448,24 +1994,34 @@ applyLayout(localStorage.getItem(LW_KEY), !!localStorage.getItem(COL_KEY));
   try {
     const h = await api('/api/health');
     TOPOS = h.topologies || {};
-    FAMILIES = h.families || []; BACKENDS = h.backends || [];
+    FAMILIES = h.families || []; BACKENDS = h.backends || []; FLAGDB = h.flagdb || null; EDITABLE = h.editable || [];
     const dot = $('#envdot');
     const bad = h.store !== 'firestore', replay = h.aot_mode !== 'real';
     dot.className = 'envdot' + (bad ? ' bad' : replay ? ' warn' : '');
     dot.title = `存储 ${h.store === 'firestore' ? 'Firestore' : '本地（降级）'}`
       + ` · AOT ${h.aot_mode === 'real' ? 'real（真编译）' : 'replay（回放实测结论）'}`;
   } catch (e) { /* health 挂了也让页面能开 */ }
-  await refreshCluster();
-  setInterval(refreshCluster, 60000);
 
   // 刷新不该丢现场：先试着接回上次那个会话，接不回来才开新的。
   // 后端会话是内存 + Firestore 双写，所以连后端重启过也能接回来。
+  // 默认打开**上一场正在编辑的会话**，两级回退：
+  //   ① 本浏览器上次那场（localStorage）
+  //   ② 服务端最近改过的那场 —— 换浏览器 / 清了缓存也能接上，这是单人工具
+  //   ③ 一场都没有才空着
+  // ⚠️ 唯独**不会**自动 `POST /api/session`：那样每刷一次就多一场空会话，
+  //    列表几小时就被垃圾淹了。「没有会话」是合法状态，给按钮就行。
   const last = localStorage.getItem(SID_KEY);
   if (last) {
     try { S = await api(`api/session/${last}`); } catch (e) { S = null; }
   }
-  if (!S || !S.session_id) S = await api('api/session', {});
-  localStorage.setItem(SID_KEY, S.session_id);
+  if (!S || !S.session_id) {
+    try {
+      const r = await api('api/sessions?limit=1');
+      if (r.sessions.length) S = await api('api/session/' + r.sessions[0].id);
+    } catch (e) { S = null; }
+  }
+  if (S && S.session_id) localStorage.setItem(SID_KEY, S.session_id);
+  else { S = null; localStorage.removeItem(SID_KEY); }
 
   const tab = localStorage.getItem(TAB_KEY);
   if (tab && document.querySelector(`.tab[data-pane="${tab}"]`)) switchTab(tab);

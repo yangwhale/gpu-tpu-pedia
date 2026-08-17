@@ -6,8 +6,10 @@
 
 from __future__ import annotations
 
+import difflib
 import re
 import shlex
+from pathlib import Path
 
 # ── 目标拓扑：名字里的数字是 device，v7 是 2 device/chip ──────────
 TOPOLOGIES = {
@@ -179,9 +181,15 @@ def fsdp_width(params: dict, target: dict) -> int:
     return devices // other if devices and other else 0
 
 
-def to_aot(parsed: dict) -> dict:
-    """train → train_compile。返回 {cmd, params, dropped, added}"""
-    params = dict(parsed["params"])
+def to_aot(parsed: dict, expand=None) -> dict:
+    """train → train_compile。返回 {cmd, params, dropped, added}
+
+    `expand` 是「工具旋钮名 → 这套代码真吃的字段名」那层翻译（param_map +
+    tile_expand）。**必须传** —— 不传的话页面上展示的命令带着 `gmm_tile_m=512`
+    这种工具内部名，MaxText 根本不认，而右边「拷走就能跑」那条却是对的。
+    同一个页面上两条不一样的命令，比没有命令更糟。
+    """
+    params = expand(parsed["params"]) if expand else dict(parsed["params"])
     dropped, added = {}, {}
 
     for k in list(params):
@@ -230,3 +238,68 @@ def roundtrip_check(aot_cmd: str, expect_params: dict) -> list[dict]:
         if k not in expect_params:
             diffs.append({"param": k, "expected": None, "actual": back[k], "kind": "extra"})
     return diffs
+
+
+# ── 参数名校验：字段表是**收割来的**，不是手写的 ──────────────────
+# MaxText 的 pyconfig 拒绝未知字段时会把 valid_fields 全部列出来。
+# 与其在这边手抄一份（必然过期），不如故意撞一次墙、把它吐的表存下来。
+_FIELDS_FILE = Path(__file__).resolve().parent.parent / "worker" / "maxtext-fields.txt"
+
+
+def maxtext_fields() -> set[str]:
+    try:
+        return {ln.strip() for ln in _FIELDS_FILE.read_text(encoding="utf-8").splitlines()
+                if ln.strip() and not ln.startswith("#")}
+    except OSError:
+        return set()          # 没有字段表就不做这项检查，**不要瞎猜着报错**
+
+
+def unknown_params(params: dict) -> dict:
+    """返回 {不认识的参数名: 最接近的合法名 or ''}。字段表缺失时返回空。"""
+    valid = maxtext_fields()
+    if not valid:
+        return {}
+    out = {}
+    for k in params:
+        if k in valid:
+            continue
+        near = difflib.get_close_matches(k, valid, n=1, cutoff=0.72)
+        out[k] = near[0] if near else ""
+    return out
+
+
+# ── 已确认的错名 → 正确名 ─────────────────────────────────────
+# 这三条是**官方配方里真实存在的错**（AI-Hypercomputer/tpu-recipes，2026-08-17 核对）：
+# 上游 MaxText 里压根没有这些名字，所以那几份配方发布时就跑不起来 ——
+# pyconfig 在解析阶段就 ValueError，`fsdp_shard_on_exp=True` 那行的本意从没生效过。
+KNOWN_RENAMES = {
+    "fsdp_shard_on_exp": "shard_exp_on_fsdp",     # 字序颠倒
+    "output_dir": "base_output_directory",
+}
+_UPSTREAM_FILE = Path(__file__).resolve().parent.parent / "worker" / "maxtext-fields-upstream.txt"
+
+
+def upstream_fields() -> set[str]:
+    try:
+        return {ln.strip() for ln in _UPSTREAM_FILE.read_text(encoding="utf-8").splitlines()
+                if ln.strip() and not ln.startswith("#")}
+    except OSError:
+        return set()
+
+
+def classify_unknown(name: str) -> dict:
+    """把「不认识的字段」分三类。**分错方向的代价很大** —— 我把配方自身的错
+    归成「我们镜像旧」，结论就会变成「升级镜像就好了」，而实际升级也没用。"""
+    up = upstream_fields()
+    if name in KNOWN_RENAMES:
+        return {"cls": "recipe_typo", "correct": KNOWN_RENAMES[name],
+                "why": f"上游 MaxText 里没有这个名字，正确的是 `{KNOWN_RENAMES[name]}`。"
+                       "**配方本身写错了**，换镜像也没用。"}
+    if up and name in up:
+        return {"cls": "version_skew", "correct": "",
+                "why": "上游 MaxText 有这个字段，**我们镜像旧**。升级镜像或先去掉这一项。"}
+    near = difflib.get_close_matches(name, up or set(), n=1, cutoff=0.72)
+    return {"cls": "not_upstream", "correct": near[0] if near else "",
+            "why": ("上游 MaxText 也没有这个字段 —— **多半是配方写错了**"
+                    + (f"，最接近的是 `{near[0]}`。" if near else "。")
+                    + "换镜像解决不了。") if up else "拿不到上游字段表，无法判断是配方错还是镜像旧。"}

@@ -31,6 +31,11 @@ GCS_ROOT = os.environ.get("TPUGURU_METAL_GCS", "gs://chrisya-v7x-us-central1/tpu
 XPROF_LOGDIR = Path(os.environ.get("TPUGURU_XPROF_LOGDIR", str(Path.home() / "fp8-prof")))
 XPROF_BASE = os.environ.get("TPUGURU_XPROF_URL", "https://cc.higcp.com/xprof/data/plugin/profile/")
 PEAK_BF16_PER_CHIP = 2307.0
+# ⚠️ 不要硬编码 `very-high`。2026-08-16 实测它已从集群移除，现存最高是 `medium`(500)。
+#    症状极具误导性：Kueue 连 Workload 都不建，报 `PriorityClass "very-high" not found`，
+#    表面看是「JobSet 一直 suspended」，很容易被诊断成配额不足或要手动 unsuspend
+#    —— 而手动 unsuspend 会绕开 Kueue 直接抢节点，是这个集群明令禁止的。
+PRIORITY_CLASS = os.environ.get("TPUGURU_PRIORITY_CLASS", "medium")
 
 TOPO_NODES = {"tpu7x-8": (1, "2x2x1"), "tpu7x-32": (8, "2x4x4"), "tpu7x-128": (16, "4x4x4"),
               "tpu7x-256": (32, "4x4x8"), "tpu7x-512": (64, "4x8x8")}
@@ -46,6 +51,15 @@ def build_jobset(name: str, params: dict, target: dict, prof: dict, steps: int =
 
     ⚠️ `maxRestarts` 写 3 不写 10：SLICE_FAILURE 反复重试会把 DWS 节点整批烧掉。
     """
+    # ★ 集群拉的镜像跟本机 AOT 的不是一个。缺了就报错，**绝不回退到 prof["image"]**
+    #   —— 回退的后果是 16 个 pod 全 ImagePullBackOff，而且要等到 Kueue admit 之后
+    #   才暴露，看起来像抢不到卡。宁可这里当场失败。
+    image = prof.get("cluster_image")
+    if not image:
+        raise ValueError(
+            "执行档案缺 cluster_image。本机 AOT 的 image 是私有 gcr.io，"
+            "共享集群的节点拉不动（403）。请在 profile 里补 cluster_image。")
+
     topo = target.get("topology", "tpu7x-128")
     nodes, tpu_topo = TOPO_NODES.get(topo, (16, "4x4x4"))
     gcs_out = f"{GCS_ROOT}/{name}"
@@ -105,7 +119,7 @@ spec:
               declared-duration-minutes: "60"
           spec:
             restartPolicy: Never
-            priorityClassName: very-high
+            priorityClassName: {PRIORITY_CLASS}
             hostNetwork: true
             dnsPolicy: ClusterFirstWithHostNet
             nodeSelector:
@@ -116,7 +130,7 @@ spec:
             - operator: Exists
             containers:
             - name: jax-tpu
-              image: {prof["image"]}
+              image: {image}
               securityContext:
                 privileged: true
               resources:

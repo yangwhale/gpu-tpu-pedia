@@ -15,6 +15,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import os
+import shlex
 import shutil
 import time
 from pathlib import Path
@@ -239,28 +240,118 @@ async def run_aot(params: dict, target: dict, aot_cmd: str) -> dict:
     return _run_replay(params, target)
 
 
-async def _run_real(params: dict, target: dict) -> dict:
-    prof = _profile()
+def expand_params(params: dict) -> dict:
+    """{真实字段名: 值}。给**展示用的那条命令**用 —— 它必须跟真跑那条一致，
+    否则页面上那条 `gmm_tile_m=512` 拷下去 MaxText 直接拒绝。"""
+    prof = _profile() or {}
+    pmap = prof.get("param_map", {})
+    tile = prof.get("tile_expand", {})
+    out = {}
+    for k, v in params.items():
+        if k in tile:
+            for real in tile[k]:
+                out[real] = v
+        else:
+            out[pmap.get(k, k)] = v
+    return out
+
+
+def expand_param_names(params: dict) -> dict:
+    """{真实字段名: 它是从哪个旋钮来的}。
+
+    工具里有两层改名：`param_map`（num_decoder_layers → base_num_decoder_layers）
+    和 `tile_expand`（gmm_tile_m → 6 个 wi/wo tile 字段）。
+    **任何拿参数名去校验的地方都必须先过这一层** —— 否则会把工具自己的
+    伪参数误报成「MaxText 没这个字段」，而它们恰恰是最该有的那几个旋钮。
+    """
+    prof = _profile() or {}
+    pmap = prof.get("param_map", {})
+    tile = prof.get("tile_expand", {})
+    out = {}
+    for k in params:
+        if k in tile:
+            for real in tile[k]:
+                out[real] = k
+        else:
+            out[pmap.get(k, k)] = k
+    return out
+
+
+def effective_xla_flags(user_flags: dict) -> dict:
+    """**真正会生效**的 flag，不是用户点了几个。
+
+    一个 flag 都不设时，执行档案的 `default_xla_flags` 照样会传进去 ——
+    所以「0 个 flag」这份配置，编译出来跟「显式设了那 16 个」是同一份。
+    指纹必须按这个算，否则同一次编译会有两个指纹，
+    而且标着「没有 flag」的那个是**假的**。
+    """
+    if user_flags:
+        return {k.lstrip("-"): v for k, v in user_flags.items()}
+    prof = _profile() or {}
+    out = {}
+    for tok in (prof.get("default_xla_flags") or "").split():
+        k, _, v = tok.lstrip("-").partition("=")
+        out[k] = v or "true"
+    return out
+
+
+def _build_args(params: dict, target: dict) -> tuple[dict, dict]:
+    """把表单参数翻成 MaxText 的实参。**真跑和「给你看的命令」共用这一份**
+    —— 分两处拼，迟早会漂成两条不一样的命令，而你拷走的是看得见的那条。"""
+    prof = _profile() or {}
     args = dict(prof.get("fixed_args", {}))
     pmap = prof.get("param_map", {})
     tile_expand = prof.get("tile_expand", {})
     qmap = prof.get("quant_map", {})
-
     for k, v in params.items():
         if k in tile_expand:
             for real in tile_expand[k]:
                 args[real] = v
             continue
         key = pmap.get(k, k)
-        val = v
-        if k == "quantization":
-            val = qmap.get(str(v), v)
+        val = qmap.get(str(v), v) if k == "quantization" else v
         args[key] = "True" if val is True else "False" if val is False else val
-
     if target.get("topology"):
         args["compile_topology"] = target["topology"]
         args["compile_topology_num_slices"] = target.get("slices", 1)
     args.setdefault("compile_xla_flags", prof.get("default_xla_flags", ""))
+    return args, prof
+
+
+DUMP_ENV = 'export XLA_FLAGS="--xla_dump_to=/dump --xla_dump_hlo_as_text"'
+
+
+def _args_body(args: dict) -> str:
+    return " ".join(
+        f'{k}="{v}"' if " " in str(v) or str(v).startswith("--") else f"{k}={v}"
+        for k, v in sorted(args.items()))
+
+
+def shell_command(params: dict, target: dict, dump_dir: str = "/tmp/tpuguru-dump") -> dict:
+    """生成**能直接拷走执行**的命令。跟 `_run_real` 走同一套拼装。
+
+    返回三段，各自标清在哪儿跑 —— 不标清楚的话，拷回去在宿主机上跑
+    `python3 -m MaxText...` 必然 ModuleNotFoundError，然后怀疑是工具坏了。
+    """
+    args, prof = _build_args(params, target)
+    if not prof:
+        return {}
+    body = _args_body(args)
+    inner = f'{prof["preamble"]} && {DUMP_ENV} && python3 -m {prof["entry"]} {prof["config"]} {body} 2>&1'
+    parts = ["docker run --rm", f'--cpus {prof.get("cpus", "12")}', f"-v {dump_dir}:/dump"]
+    for m in prof.get("mounts", []):
+        parts.append(f"-v {os.path.expandvars(m)}")
+    parts.append(prof["image"])
+    docker = " \\\n  ".join(parts) + " \\\n  bash -lc " + shlex.quote(inner)
+    return {"docker": f"mkdir -p {dump_dir}\n" + docker,
+            "in_container": inner.replace(" && ", " && \\\n  "),
+            "image": prof["image"],
+            "xla_flags": args.get("compile_xla_flags", "")}
+
+
+async def _run_real(params: dict, target: dict) -> dict:
+    args, prof = _build_args(params, target)   # ★ 与页面上给你看的命令同一份拼装
+    pmap = prof.get("param_map", {})
 
     # 真跑就真出产物：XLA dump 到宿主机的 run 目录，事后按真实文件名与字节数登记。
     # （宁可没有产物，也不要一份写死的假清单 —— 那会让人以为点开就能下载。）
@@ -273,12 +364,8 @@ async def _run_real(params: dict, target: dict) -> dict:
     #    根子上就错了：dump 是**调试输出**，不是编译选项。
     #    走 XLA_FLAGS 环境变量，绕开 MaxText 的校验器，裸开关也认。
 
-    body = " ".join(
-        f'{k}="{v}"' if " " in str(v) or str(v).startswith("--") else f"{k}={v}"
-        for k, v in sorted(args.items()))
-    dump_env = 'export XLA_FLAGS="--xla_dump_to=/dump --xla_dump_hlo_as_text"'
-    inner = (f'{prof["preamble"]} && {dump_env} && '
-             f'python3 -m {prof["entry"]} {prof["config"]} {body} 2>&1')
+    inner = (f'{prof["preamble"]} && {DUMP_ENV} && '
+             f'python3 -m {prof["entry"]} {prof["config"]} {_args_body(args)} 2>&1')
 
     cmd = ["docker", "run", "--rm", "--cpus", str(prof.get("cpus", "12")),
            "-v", f"{run_dir}:/dump"]
@@ -326,6 +413,43 @@ async def _run_real(params: dict, target: dict) -> dict:
     return res
 
 
+# ── 结论文案：**唯一来源** ────────────────────────────────────
+# 今天栽过两次：同一个结论在对话流和报告页各渲染一份，改了后端那份，
+# 报告页继续说「装不下」。一份事实两处表达 = 改一处就是在制造矛盾。
+FAIL_TITLE = {
+    "hbm_oom_runtime": "❌ 装不下",
+    "hbm_over_cap": "❌ 装不下（编译过了但超上限）",
+    "hbm_oom_compile": "❌ 装不下（编译期就排不下）",
+    "vmem_oom": "❌ VMEM 不够（不是 HBM）",
+    "cpu_unsupported_kernel": "💥 AOT 编不了（kernel 没有 CPU 实现）",
+    "config_error": "💥 配置被 MaxText 拒了",
+    "fp8_block_mismatch": "💥 FP8 块划分不合法",
+    "compile_error": "💥 编译失败",
+}
+OOM_KINDS = {"hbm_oom_runtime", "hbm_oom_compile", "vmem_oom", "hbm_over_cap"}
+
+
+def verdict_of(result: dict) -> dict:
+    """{title, is_oom, kind, detail}。数字只在**真是 OOM 且两个值都在**时才给 ——
+    否则会渲染出「需要 None GB、超 NaN GB」这种不存在的显存数字。"""
+    f = result.get("failure") or {}
+    kind = f.get("kind") or ""
+    ok = result.get("ok")
+    if result.get("invalid"):
+        return {"title": "编译通过，但结果无效", "is_oom": False, "kind": kind, "detail": ""}
+    if ok is True:
+        return {"title": "✅ 编译通过，装得下", "is_oom": False, "kind": "", "detail": ""}
+    if ok is None:
+        return {"title": "❓ 这一档没有记录", "is_oom": False, "kind": "", "detail": ""}
+    is_oom = kind in OOM_KINDS
+    detail = ""
+    req, av = f.get("required_gb"), f.get("available_gb")
+    if is_oom and req and av:
+        detail = f"需要 **{req} GB**，上限 {av} GB，超 **{round(req - av, 2)} GB**"
+    return {"title": FAIL_TITLE.get(kind, "💥 编译失败"), "is_oom": is_oom,
+            "kind": kind, "detail": detail}
+
+
 def _parse_aot_output(text: str, rc: int) -> dict:
     """从真 AOT 输出里抽结论。**两种 OOM 格式都要认** ——
     运行期临时缓冲超（HLO temporaries）和编译期排布放不下（CompileTimeHbmOom）
@@ -359,15 +483,78 @@ def _parse_aot_output(text: str, rc: int) -> dict:
                 "log_tail": tail}
     m = _re.search(r"temp_size_in_bytes=(\d+)", text)
     if m:
-        gb = int(m.group(1)) / 1e9
+        gb = round(int(m.group(1)) / 1e9, 2)
         arg = _re.search(r"argument_size_in_bytes=(\d+)", text)
-        return {"mode": "real", "ok": True,
-                "metrics": {"peak_hbm_gb": round(gb, 2),
-                            "hbm_pct": round(gb / HBM_PER_DEVICE_GB * 100, 1),
-                            "argument_gb": round(int(arg.group(1)) / 1e9, 2) if arg else None},
-                "log_tail": tail}
-    return {"mode": "real", "ok": rc == 0, "log_tail": tail,
-            "note": "编译结束了但没抓到显存统计 —— 看日志尾巴。"}
+        metrics = {"peak_hbm_gb": gb,
+                   "hbm_pct": round(gb / HBM_PER_DEVICE_GB * 100, 1),
+                   "argument_gb": round(int(arg.group(1)) / 1e9, 2) if arg else None}
+        # ★ **编译通过 ≠ 装得下。** AOT（compile_topology 模式）常常不强制 HBM 上限，
+        #   编出来了照样可能远超。实测 gemma4-31b 8k/64 芯片 temp=142.30 GB 编译成功，
+        #   而上限只有 94.74 —— 工具却报「✅ 装得下」。人照着上机就是白占集群。
+        #   这道判断编译器不做，就必须我们做。
+        if gb > HBM_PER_DEVICE_GB:
+            return {"mode": "real", "ok": False, "metrics": metrics, "log_tail": tail,
+                    "failure": {"kind": "hbm_over_cap", "required_gb": gb,
+                                "available_gb": HBM_PER_DEVICE_GB,
+                                "raw": f"**编译通过了，但装不下**：HLO 临时缓冲 {gb} GB "
+                                       f"超出单 device 可用 HBM {HBM_PER_DEVICE_GB} GB "
+                                       f"（超 {round(gb - HBM_PER_DEVICE_GB, 2)} GB）。\n"
+                                       "AOT 在 `compile_topology` 模式下不总是强制这条上限，"
+                                       "**编得出来不等于跑得起来** —— 这一档别上机。"}}
+        return {"mode": "real", "ok": True, "metrics": metrics, "log_tail": tail}
+    # ── 到这儿说明既不是 OOM、也没抓到显存统计 ────────────────────
+    # ★ **失败 ≠ 装不下。** 以前这里直接 `ok = rc == 0` 就返回，前端一律显示
+    #   「❌ 装不下」—— 一个编译错误被报成显存结论。人会照着去降 batch，
+    #   而真因（比如 kernel 没有 CPU 实现）永远找不到。
+    #   编不出来就说编不出来，别替编译器编一个更像话的理由。
+    if rc != 0:
+        # ① kernel 只有 TPU 实现。AOT 在 CPU 上编，这类必然撞
+        m = _re.search(r"NotImplementedError: Not supported on (\w+)\.", text)
+        if m:
+            op = _re.findall(r"File \"[^\"]*/([\w_]+)/api\.py\"|(\w+)\.ragged_dot|"
+                             r"(\w+)\.splash", text)
+            name = next((x for t3 in op for x in t3 if x), "某个 kernel")
+            return {"mode": "real", "ok": False, "log_tail": tail,
+                    "failure": {"kind": "cpu_unsupported_kernel", "device": m.group(1),
+                                "op": name,
+                                "raw": f"`{name}` 没有 {m.group(1)} 实现。**这不是显存问题** —— "
+                                       "AOT 是在 CPU 上编译的（目标硬件靠 compile_topology 声明），"
+                                       "所以只有 TPU 实现的 kernel 编不过。"
+                                       "要 AOT 验这套配置，先换成有 CPU 实现的等价实现"
+                                       "（比如 use_tokamax_gmm=False 走 native megablox），"
+                                       "**换完的显存数字跟原配方会有出入**，别直接当原配方的结论用。"}}
+        # ② FP8 量化 kernel 的块covering 断言。**不要归到「编译错误」** ——
+        #    它是可诊断的：v 是要处理的向量维，bv 是块大小，bv < v 且不整除就断。
+        #    实测两例：混元3 v=1536 bv=1024、deepseek3 v=7168 bv=2048，
+        #    共同点是 **bv 是 2 的幂而 v 不是它的倍数**。
+        m = _re.search(r"AssertionError: v=(\d+) bv=(\d+) s=(\d+)", text)
+        if m:
+            v, bv = int(m.group(1)), int(m.group(2))
+            return {"mode": "real", "ok": False, "log_tail": tail,
+                    "failure": {"kind": "fp8_block_mismatch", "v": v, "bv": bv,
+                                "raw": f"FP8 量化 kernel 断言失败：向量维 **{v}** 配块大小 **{bv}**"
+                                       f"（{v} ÷ {bv} = {v/bv:.2f}，除不尽）。\n"
+                                       "**不是显存问题，也不是配置写错** —— 是这个维度上"
+                                       "没有合法的块划分。常见于 MoE 的 mlp/hidden 维不是 2 的幂"
+                                       "（1536、7168 都是）。\n"
+                                       "真机上走 tokamax 时不会撞（它有自己的分块），"
+                                       "**换成 native 做 AOT 验证才暴露** —— 所以这类配置"
+                                       "AOT 验不了 FP8 那一档，只能验 BF16。"}}
+        # ③ 参数名/取值非法 —— pyconfig 在解析阶段就拒了
+        m = _re.search(r"ValueError: (.{0,180})", text)
+        if m:
+            return {"mode": "real", "ok": False, "log_tail": tail,
+                    "failure": {"kind": "config_error",
+                                "raw": f"配置被 MaxText 拒了：{m.group(1).strip()}"}}
+        # ④ 其它异常：把最后一行异常原文交出去，不加工
+        exc = [l for l in text.splitlines()
+               if _re.match(r"^\w*(Error|Exception|Exit)\b", l.strip())]
+        return {"mode": "real", "ok": False, "log_tail": tail,
+                "failure": {"kind": "compile_error",
+                            "raw": (exc[-1].strip()[:300] if exc
+                                    else f"编译退出码 {rc}，日志里没抓到异常行 —— 看日志尾巴")}}
+    return {"mode": "real", "ok": True, "log_tail": tail,
+            "note": "编译通过了但没抓到显存统计 —— 看日志尾巴。"}
 
 
 def _project_by_layers(params: dict, target: dict) -> dict | None:

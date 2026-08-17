@@ -150,32 +150,84 @@ def effective_shape(params: dict) -> dict:
     out["layers"] = L
     out["layers_overridden"] = L != prod_layers
 
-    # 嵌入层不随层数变，要先扣出来再按层折算 —— 直接按比例缩会把嵌入也缩掉
-    emb_b = (m["vocab"] * m["hidden"] * 2) / 1e9
-    per_layer = max(m["params_b"] - emb_b, 0) / prod_layers
-    out["emb_params_b"] = round(emb_b, 3)
-    out["params_b"] = round(emb_b + per_layer * L, 3)
-    act_per_layer = max(m["act_params_b"] - emb_b, 0) / prod_layers
-    out["act_params_b"] = round(emb_b + act_per_layer * L, 3)
+    out.update(scale_params(m, L))
     out["layer_ratio"] = L / prod_layers if prod_layers else 1.0
     return out
 
 
+def scale_params(m: dict, L: int, vocab=None, hidden=None) -> dict:
+    """按层数折算参数量。**嵌入层不随层数变，要先扣出来** ——
+    直接按比例缩会把嵌入也一起缩掉，小层数配置的参数量会明显偏小。
+
+    这一份是**唯一实现**：会话里改 `num_decoder_layers` 走它，
+    模型配置面板里另存新模型也走它。两处各算一遍迟早对不上，
+    而对不上的表现是「40 层的模型显示 297B 参数」—— 看着像没生效。
+    """
+    prod = m["layers"] or 1
+    v = int(vocab if vocab is not None else m["vocab"])
+    h = int(hidden if hidden is not None else m["hidden"])
+    emb_b = (v * h * 2) / 1e9
+    per_layer = max(m["params_b"] - emb_b, 0) / prod
+    act_per_layer = max(m["act_params_b"] - emb_b, 0) / prod
+    return {"emb_params_b": round(emb_b, 3),
+            "params_b": round(emb_b + per_layer * L, 3),
+            "act_params_b": round(emb_b + act_per_layer * L, 3)}
+
+
+# ── 自定义模型 ──────────────────────────────────────────────────
+# 内置那几个是**只读**的：它们的形状对应真实发布的模型，改了以后
+# 「Hunyuan3-295B」这个名字就不再指那个模型了，而所有实测结论都是挂在
+# 这个名字上的。要改层数 / 专家数就另存一个名字，血缘留在 `derived_from`。
+CUSTOM: dict[str, dict] = {}          # 由 app.py 在启动时从存储灌进来
+
+# 允许改的形状字段（值类型 → 前端据此渲染）
+EDITABLE = [
+    {"k": "layers", "label": "层数", "type": "int",
+     "why": "最常改的一个。层数直接决定参数量、显存和编译时长。"},
+    {"k": "num_experts", "label": "专家数", "type": "int",
+     "why": "MoE 才有。要能被 FSDP 宽度整除，否则专家维分片开不了。"},
+    {"k": "top_k", "label": "top-k", "type": "int", "why": "每个 token 激活几个专家。"},
+    {"k": "hidden", "label": "hidden", "type": "int", "why": "tile 的 embed 维上界看它。"},
+    {"k": "mlp", "label": "mlp", "type": "int", "why": "MoE 单专家的 mlp 维，tile 的 n 维上界。"},
+    {"k": "vocab", "label": "词表", "type": "int",
+     "why": "logits 显存 = batch × seq × 词表，大词表模型这一块常占 peak 的一多半。"},
+    {"k": "params_b", "label": "总参数(B)", "type": "float", "derived": True,
+     "why": "显存估算用。**改层数会自动折算**（嵌入层先扣出来），自己填了就以你填的为准。"},
+    {"k": "act_params_b", "label": "激活参数(B)", "type": "float", "derived": True,
+     "why": "MoE 的实际计算量。同样随层数自动折算。"},
+]
+
+
+def all_models() -> dict:
+    """内置 + 自定义。**自定义不能覆盖内置** —— 同名时内置赢。"""
+    out = dict(CUSTOM)
+    out.update(MODELS)
+    return out
+
+
+def is_builtin(name) -> bool:
+    return str(name or "").lower() in MODELS
+
+
 def get_model(name) -> dict:
-    return MODELS.get(str(name or "").lower(), {})
+    return all_models().get(str(name or "").lower(), {})
 
 
 def catalog() -> dict:
     """给前端的下拉数据：按族分组。"""
     out: dict[str, list] = {}
-    for k, v in MODELS.items():
+    for k, v in all_models().items():
         out.setdefault(v["family"], []).append({
             "id": k, "label": v["label"], "moe": v["moe"],
             "layers": v["layers"], "num_experts": v["num_experts"],
             "hidden": v["hidden"], "mlp": v["mlp"], "params_b": v["params_b"],
             "provenance": v["provenance"], "note": v.get("note", ""),
             "tile_default": v.get("tile_default"),
+            "top_k": v.get("top_k"), "vocab": v.get("vocab"),
+            "act_params_b": v.get("act_params_b"),
+            "builtin": k in MODELS, "derived_from": v.get("derived_from"),
         })
     return {"families": [{"id": f, "label": FAMILY_LABEL.get(f, f), "models": m}
                          for f, m in out.items()],
-            "backends": [{"id": k, **v} for k, v in BACKENDS.items()]}
+            "backends": [{"id": k, **v} for k, v in BACKENDS.items()],
+            "editable": EDITABLE}

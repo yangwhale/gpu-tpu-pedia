@@ -1,34 +1,81 @@
 {
   "name": "hy3-maxtext",
   "image": "gcr.io/chris-pgp-host/chrisya-maxtext-latest:latest",
-  "mounts": ["${HOME}/aot-ablation/work:/w"],
+  "_comment_cluster_image": "⚠️ image 是**本机 docker** 跑 AOT 用的，cluster_image 是**共享集群**拉的，两者不能混。bodaborg 的节点没权限拉我们自己项目的 gcr.io —— 混用的症状是 ImagePullBackOff + 403 Forbidden，而且它先过 Kueue 再失败，所以看起来像「抢到卡了但起不来」，很容易误判成容量问题。集群侧代码不烤进镜像，pod 起来后从 GCS 拉 tarball 注入。",
+  "cluster_image": "us-docker.pkg.dev/cloud-tpu-multipod-dev/gcr.io/chrisya-maxtext-latest:runner",
+  "mounts": [
+    "${HOME}/aot-ablation/work:/w"
+  ],
   "cpus": "11",
   "preamble": "cd /deps && rm -rf src/maxtext && tar xzf /w/hy3-maxtext.tgz && export JAX_PLATFORMS=cpu TF_CPP_MIN_LOG_LEVEL=2",
   "entry": "src.maxtext.trainers.pre_train.train_compile",
   "config": "src/maxtext/configs/base.yml",
   "_comment": "param_map：工具里的参数名 → 这套代码实际吃的名字。不做映射的话 num_decoder_layers 会被 base.yml 默默忽略，跑出来的是生产层数 —— 又是一次「配置改了但没生效」。",
-  "param_map": {"num_decoder_layers": "base_num_decoder_layers"},
+  "param_map": {
+    "num_decoder_layers": "base_num_decoder_layers"
+  },
   "fixed_args": {
-    "run_name": "tpuguru", "base_output_directory": "/tmp/o",
-    "dataset_type": "synthetic", "enable_checkpointing": "False", "steps": "3",
-    "override_model_config": "True", "scan_layers": "True",
-    "allow_split_physical_axes": "True", "tokenizer_type": "tiktoken",
+    "run_name": "tpuguru",
+    "base_output_directory": "/tmp/o",
+    "dataset_type": "synthetic",
+    "enable_checkpointing": "False",
+    "steps": "3",
+    "override_model_config": "True",
+    "scan_layers": "True",
+    "allow_split_physical_axes": "True",
+    "tokenizer_type": "tiktoken",
     "tokenizer_path": "src/maxtext/assets/tokenizer_llama3.tiktoken",
-    "dtype": "bfloat16", "use_iota_embed": "True", "use_qwix_quantization": "True",
-    "opt_type": "adamw", "mu_dtype": "bfloat16", "grad_dtype": "bfloat16",
-    "attention": "flash", "remat_policy": "custom", "decoder_layer_input": "offload",
-    "out_proj": "remat", "use_custom_sort_vjp": "True",
-    "sa_use_fused_bwd_kernel": "True", "use_tokamax_splash": "True",
-    "sa_block_q": "2048", "sa_block_kv": "2048", "sa_block_kv_compute": "2048",
-    "sa_block_q_dkv": "2048", "sa_block_kv_dkv": "2048", "sa_block_kv_dkv_compute": "2048",
-    "sa_block_q_dq": "2048", "sa_block_kv_dq": "2048",
+    "dtype": "bfloat16",
+    "use_iota_embed": "True",
+    "use_qwix_quantization": "True",
+    "opt_type": "adamw",
+    "mu_dtype": "bfloat16",
+    "grad_dtype": "bfloat16",
+    "attention": "flash",
+    "remat_policy": "custom",
+    "decoder_layer_input": "offload",
+    "out_proj": "remat",
+    "use_custom_sort_vjp": "True",
+    "sa_use_fused_bwd_kernel": "True",
+    "use_tokamax_splash": "True",
+    "sa_block_q": "2048",
+    "sa_block_kv": "2048",
+    "sa_block_kv_compute": "2048",
+    "sa_block_q_dkv": "2048",
+    "sa_block_kv_dkv": "2048",
+    "sa_block_kv_dkv_compute": "2048",
+    "sa_block_q_dq": "2048",
+    "sa_block_kv_dq": "2048",
     "ici_tensor_parallelism": "1"
   },
-  "quant_map": {"fp8": "fp8_full"},
+  "quant_map": {
+    "fp8": "fp8_full"
+  },
   "tile_expand": {
-    "gmm_tile_m": ["wi_tile_fwd_batch_seq","wi_tile_dlhs_batch_seq","wi_tile_drhs_batch_seq","wo_tile_fwd_batch_seq","wo_tile_dlhs_batch_seq","wo_tile_drhs_batch_seq"],
-    "gmm_tile_k": ["wi_tile_fwd_embed_dim","wi_tile_dlhs_embed_dim","wi_tile_drhs_embed_dim","wo_tile_fwd_embed_dim","wo_tile_dlhs_embed_dim","wo_tile_drhs_embed_dim"],
-    "gmm_tile_n": ["wi_tile_fwd_mlp_dim","wi_tile_dlhs_mlp_dim","wi_tile_drhs_mlp_dim","wo_tile_fwd_mlp_dim","wo_tile_dlhs_mlp_dim","wo_tile_drhs_mlp_dim"]
+    "gmm_tile_m": [
+      "wi_tile_fwd_batch_seq",
+      "wi_tile_dlhs_batch_seq",
+      "wi_tile_drhs_batch_seq",
+      "wo_tile_fwd_batch_seq",
+      "wo_tile_dlhs_batch_seq",
+      "wo_tile_drhs_batch_seq"
+    ],
+    "gmm_tile_k": [
+      "wi_tile_fwd_embed_dim",
+      "wi_tile_dlhs_embed_dim",
+      "wi_tile_drhs_embed_dim",
+      "wo_tile_fwd_embed_dim",
+      "wo_tile_dlhs_embed_dim",
+      "wo_tile_drhs_embed_dim"
+    ],
+    "gmm_tile_n": [
+      "wi_tile_fwd_mlp_dim",
+      "wi_tile_dlhs_mlp_dim",
+      "wi_tile_drhs_mlp_dim",
+      "wo_tile_fwd_mlp_dim",
+      "wo_tile_dlhs_mlp_dim",
+      "wo_tile_drhs_mlp_dim"
+    ]
   },
   "default_xla_flags": "--xla_tpu_dvfs_p_state=7 --xla_tpu_scoped_vmem_limit_kib=65472 --xla_enable_async_all_gather=true --xla_tpu_enable_sparse_core_reduce_scatter_v2=true --xla_tpu_enable_sparse_core_collective_offload_all_gather=true --xla_tpu_enable_sparse_core_collective_offload_2d_all_gather=true --xla_tpu_enable_sparse_core_collective_offload_all_reduce=true --xla_tpu_enable_sparse_core_collective_offload_reduce_scatter=true --xla_tpu_enable_sparse_core_collective_offload_3d_all_gather=true --xla_tpu_enable_sparse_core_collective_aggregator=true --xla_tpu_use_tc_device_shape_on_sc=True --xla_sc_disable_megacore_partitioning=True --xla_tpu_enable_latency_hiding_layer_scheduler=true --xla_tpu_scheduler_percent_shared_memory_limit=150 --xla_tpu_enable_layer_scheduler_for_dependent_collectives=true --xla_tpu_enable_multi_compute_overlap_in_layer_scheduler=false"
 }

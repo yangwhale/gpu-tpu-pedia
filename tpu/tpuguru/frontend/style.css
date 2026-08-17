@@ -240,6 +240,37 @@ body.resizing iframe { pointer-events: none; }
 .bepros .bad li { color: #a5261d; }
 @media (max-width: 900px) { .bepros { grid-template-columns: 1fr; } }
 
+/* XLA flag 区 —— 这一套是积累，不是配置项列表 */
+.presets { display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 14px; }
+.presets .p { padding: 8px 14px; border-radius: 10px; border: 1px solid rgba(26,115,232,.28);
+  background: rgba(232,240,254,.55); cursor: pointer; font-size: 12.5px; }
+.presets .p.on { border-color: rgba(30,142,62,.5); background: rgba(230,244,234,.6); }
+.presets .p:hover { background: var(--blue); color: #fff; border-color: var(--blue); }
+.presets .p b { display: block; font-size: 13px; font-weight: 500; }
+.presets .p .d { font-size: 11px; opacity: .8; margin-top: 2px; max-width: 260px; line-height: 1.5; }
+
+.fgroup { margin-bottom: 16px; }
+.fgroup > .gh { font-size: 12.5px; font-weight: 500; color: var(--ink-2); margin-bottom: 2px; }
+.fgroup > .gd { font-size: 11.5px; color: var(--muted); margin-bottom: 8px; }
+.fitem { display: grid; grid-template-columns: 1fr 132px; gap: 10px; align-items: start;
+  padding: 9px 11px; border-radius: 9px; border: 1px solid var(--line);
+  background: rgba(255,255,255,.7); margin-bottom: 6px; }
+.fitem.on { border-color: rgba(30,142,62,.35); background: rgba(230,244,234,.4); }
+.fitem .fn { font-family: var(--mono); font-size: 11.5px; word-break: break-all; color: var(--ink-2); }
+.fitem .fw { font-size: 12px; color: var(--muted); margin-top: 3px; line-height: 1.6; }
+.fitem .fe { font-size: 12px; color: #1a6e35; margin-top: 3px; line-height: 1.6; }
+.fitem .fr { font-size: 12px; color: #a5261d; margin-top: 3px; line-height: 1.6; }
+.fitem .fmeta { font-size: 10.5px; color: var(--faint); margin-top: 4px; font-family: var(--mono); }
+.fitem select, .fitem input { font: inherit; font-family: var(--mono); font-size: 12px;
+  padding: 5px 8px; border: 1px solid var(--line); border-radius: 7px; width: 100%;
+  background: rgba(255,255,255,.9); }
+.ev { display: inline-block; font-size: 10px; padding: 0 6px; border-radius: 999px; margin-left: 6px; }
+.ev.measured { background: rgba(230,244,234,.9); color: #1a6e35; }
+.ev.inferred { background: rgba(254,247,224,.9); color: #8a6d00; }
+.rawflags { width: 100%; font-family: var(--mono); font-size: 11.5px; padding: 9px 11px;
+  border: 1px solid var(--line); border-radius: 9px; min-height: 68px; resize: vertical;
+  background: rgba(255,255,255,.9); }
+
 /* lint */
 .lint { display: flex; gap: 10px; padding: 11px 13px; border-radius: 10px; margin-bottom: 10px;
   border: 1px solid; align-items: flex-start; }
@@ -258,6 +289,9 @@ pre.cmd { margin: 0; padding: 14px 16px; border-radius: 10px; overflow-x: auto;
   background: rgba(248, 250, 253, .92); border: 1px solid var(--line);
   font-family: var(--mono); font-size: 12.5px; line-height: 1.75; color: var(--ink-2);
   white-space: pre; }
+/* 可执行命令那条 bash -lc 是一整行、几千字符。横向滚动条里读它没人受得了。
+   换行只影响显示 —— 复制走的是 JS 里的原文，不是选区，不会掺进换行。 */
+pre.cmd.wrap { white-space: pre-wrap; word-break: break-all; }
 pre.cmd .k { color: var(--blue-d); }
 pre.cmd .v { color: var(--green); }
 pre.cmd .add { background: rgba(230, 244, 234, .9); border-radius: 3px; }
@@ -455,13 +489,6 @@ table.t .mono { font-family: var(--mono); }
 #btn-metal:hover:not(:disabled) { background: #0a6c39; }
 
 /* 「这套配置跑过没」—— 顶栏即时指示，不用切到报告页才知道 */
-.fpstate { display: inline-flex; align-items: center; gap: 6px; padding: 3px 11px;
-  border-radius: 999px; font-size: 12px; border: 1px solid var(--line);
-  background: rgba(255, 255, 255, .7); color: var(--muted); }
-.fpstate.has { background: rgba(230, 244, 234, .8); border-color: rgba(30,142,62,.3); color: #1a6e35; }
-.fpstate.none { background: rgba(255, 255, 255, .7); }
-.fpstate .dot { width: 6px; height: 6px; border-radius: 50%; background: var(--faint); }
-.fpstate.has .dot { background: var(--green); }
 
 .cachenote { display: flex; gap: 9px; align-items: flex-start; padding: 10px 13px;
   border-radius: 10px; margin-bottom: 14px; font-size: 12.5px; line-height: 1.65;
@@ -635,3 +662,61 @@ table.t .mono { font-family: var(--mono); }
   header { padding: 10px 14px; gap: 10px; flex-wrap: wrap; }
   header .sub { display: none; }
 }
+
+/* ── 抽屉：会话 / 存档 两页 ────────────────────────────── */
+.dtabs { display: flex; gap: 6px; padding: 0 20px 12px; border-bottom: 1px solid var(--line); }
+.dtab { padding: 7px 15px; border-radius: 9px 9px 0 0; border: 1px solid transparent;
+  background: transparent; cursor: pointer; font: inherit; font-size: 13px; color: var(--muted); }
+.dtab.on { color: var(--blue-d); background: rgba(232,240,254,.6);
+  border-color: var(--line); border-bottom-color: transparent; }
+.srow { display: grid; grid-template-columns: 1fr auto; gap: 10px; align-items: center;
+  padding: 11px 13px; border: 1px solid var(--line); border-radius: 10px;
+  margin-bottom: 7px; background: rgba(255,255,255,.72); cursor: pointer; }
+.srow:hover { border-color: rgba(26,115,232,.4); background: rgba(232,240,254,.4); }
+.srow.cur { border-color: var(--blue); background: rgba(232,240,254,.7); }
+.srow .st { font-size: 13.5px; color: var(--ink); }
+.srow .sm { font-size: 11.5px; color: var(--muted); margin-top: 3px; font-family: var(--mono); }
+.srow .sact { display: flex; gap: 6px; align-items: center; }
+.srow .badge-r { font-size: 10.5px; padding: 2px 7px; border-radius: 999px;
+  background: rgba(230,244,234,.9); color: #1a6e35; }
+.srow .del { border: none; background: transparent; cursor: pointer; color: var(--faint);
+  font-size: 15px; padding: 2px 6px; border-radius: 6px; }
+.srow .del:hover { background: rgba(217,48,37,.1); color: var(--red); }
+
+/* ── 会话切换：从档案抽屉里挪出来，放回主视线 ─────────────── */
+.sesspick { display: flex; align-items: center; gap: 7px; padding: 5px 11px;
+  border: 1px solid var(--line); border-radius: 9px; background: rgba(255,255,255,.6);
+  cursor: pointer; font: inherit; font-size: 13px; color: var(--ink-2);
+  max-width: 320px; }
+.sesspick:hover { border-color: rgba(26,115,232,.45); background: rgba(232,240,254,.6); }
+.sesspick #sess-name { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sesspick .car { color: var(--faint); font-size: 10px; }
+.pop .popmask { position: fixed; inset: 0; z-index: 40; }
+.pop .popbody { position: fixed; top: 56px; left: 148px; z-index: 41; width: 560px;
+  max-height: 74vh; overflow: auto; padding: 6px;
+  background: rgba(255,255,255,.97); border: 1px solid var(--line); border-radius: 14px;
+  box-shadow: 0 12px 40px rgba(32,33,36,.16); backdrop-filter: blur(8px); }
+.pop .popbody .card { border: none; box-shadow: none; background: transparent; margin: 0; }
+
+/* ── 模型配置：平时收着 ─────────────────────────────────── */
+.mcfg { margin-top: 12px; border: 1px solid var(--line); border-radius: 11px;
+  background: rgba(255,255,255,.6); overflow: hidden; }
+.mcfg .mh { display: flex; align-items: center; gap: 9px; padding: 10px 13px;
+  cursor: pointer; font-size: 13px; }
+.mcfg .mh:hover { background: rgba(232,240,254,.45); }
+.mcfg .mh .ar { color: var(--faint); font-size: 11px; width: 10px; }
+.mcfg .mh .sub { color: var(--muted); font-size: 11.5px; margin-left: auto; }
+.mcfg .mb { padding: 4px 13px 14px; border-top: 1px solid var(--line); }
+.mcfg .mgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 11px; margin: 12px 0; }
+.mcfg .field label .chg { color: #b06000; font-size: 10.5px; margin-left: 5px;
+  font-family: var(--mono); }
+.mcfg .mname { display: flex; gap: 8px; align-items: center; margin-top: 4px; }
+.mcfg .mname input { flex: 1; font: inherit; font-size: 12.5px; padding: 7px 10px;
+  border: 1px solid var(--line); border-radius: 8px; }
+.mcfg input.auto { background: rgba(232,240,254,.55); color: var(--blue-d); }
+.mcfg .mderive { margin: -4px 0 10px; }
+
+/* 没有会话时，把只对会话有意义的入口收起来 */
+body.nosess #chat, body.nosess .tabs .tab:not([data-pane="cfg"]),
+body.nosess #btn-save { opacity: .4; pointer-events: none; }

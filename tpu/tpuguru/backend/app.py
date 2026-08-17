@@ -23,12 +23,14 @@ from fastapi.staticfiles import StaticFiles
 from pydantic import BaseModel
 
 from .lint import run_lint
-from .cluster import status as cluster_status
+from . import flags as flagmod
 from . import hlo as hlomod
 from . import metal
+from . import models as modelsmod
 from .models import BACKENDS, MODELS, catalog, detect_backend, get_model
-from .parser import TOPOLOGIES, fsdp_width, parse_command, roundtrip_check, to_aot
-from .worker import docker_available, run_aot
+from .parser import classify_unknown, maxtext_fields, unknown_params, upstream_fields, TOPOLOGIES, fsdp_width, parse_command, roundtrip_check, to_aot
+from .worker import (docker_available, effective_xla_flags, expand_param_names,
+                     expand_params, run_aot, shell_command, verdict_of)
 
 logging.basicConfig(level=logging.INFO,
                     format="%(asctime)s [tpuguru] %(levelname)s %(name)s: %(message)s")
@@ -95,9 +97,36 @@ class Store:
 store = Store()
 
 
+def _load_custom_models():
+    """自定义模型从存储灌回注册表。**内置的永远赢** —— 见 models.all_models()。"""
+    try:
+        for d in store.list("tpuguru_models", limit=300):
+            if d.get("id"):
+                modelsmod.CUSTOM[d["id"]] = d
+        log.info("载入自定义模型 %d 个", len(modelsmod.CUSTOM))
+    except Exception as e:  # noqa: BLE001
+        log.warning("自定义模型载入失败: %s", e)
+
+
+_load_custom_models()
+
+
 def _fingerprint(cur: dict) -> str:
     """配置指纹。改了配置之后旧报告就不再对应当前配置 ——
     没有这个，用户会对着上一次的结论调这一次的参数。"""
+    import hashlib
+    # ★ 按**生效的** flag 算，不是按用户点了几个。空 flag 会被执行档案的
+    #   default_xla_flags 填满 —— 按用户输入算的话，同一次编译会有两个指纹。
+    blob = json.dumps({"p": cur.get("params", {}),
+                       "x": effective_xla_flags(cur.get("xla_flags", {})),
+                       "t": (cur.get("target") or {}).get("topology", "")},
+                      sort_keys=True, ensure_ascii=False, default=str)
+    return hashlib.sha256(blob.encode()).hexdigest()[:12]
+
+
+def _fingerprint_legacy(cur: dict) -> str:
+    """旧算法（按用户输入的 flag 算）。只用来**捞回**改算法之前跑的结果 ——
+    不这么做的话，已经跑过的配置会突然变回「没跑过」。"""
     import hashlib
     blob = json.dumps({"p": cur.get("params", {}), "x": cur.get("xla_flags", {}),
                        "t": (cur.get("target") or {}).get("topology", "")},
@@ -240,11 +269,76 @@ def _recompute(s: dict) -> dict:
     parsed = {"params": cur["params"], "xla_flags": cur["xla_flags"],
               "target": cur["target"], "entrypoint": cur.get("entrypoint", ""),
               "config_yml": cur.get("config_yml", ""), "raw": cur.get("raw_cmd", "")}
-    aot = to_aot(parsed)
+    aot = to_aot(parsed, expand=expand_params)
     findings = run_lint(cur["params"], cur["target"], cur["xla_flags"])
+    # flag 之间的依赖错，编译器要到很后面才报 —— 早点拦住便宜得多
+    # ★ P1：只有 TPU 实现的 kernel，AOT（CPU 编译）必然编不过。
+    #    这条的价值是**省一分钟**：不拦的话 docker 起来、镜像加载完才由 tokamax 抛
+    #    NotImplementedError，而且以前还会被报成「装不下」。
+    _CPU_UNSUPPORTED = {
+        "use_tokamax_gmm": "tokamax 的 ragged_dot（MoE 分组矩阵乘）",
+        "use_tokamax_splash": "tokamax 的 splash attention",
+    }
+    _on = [(k, d) for k, d in _CPU_UNSUPPORTED.items()
+           if str(aot["params"].get(k, "")).lower() in ("true", "1")]
+    if _on:
+        findings.insert(0, {
+            "rule": "P1", "severity": "fatal",
+            "title": "这套配置 AOT 编不了：" + "、".join(f"`{k}=True`" for k, _ in _on),
+            "detail": "AOT 在 **CPU** 上编译（目标硬件靠 `compile_topology` 声明，本机没有 TPU），"
+                      "而 " + "、".join(d for _, d in _on) + " 只有 TPU 实现。\n"
+                      "**这不是显存问题** —— 真机上这套配置可能完全正常。",
+            "fix": "要 AOT 验：`use_tokamax_gmm=False` 走 native megablox（`megablox=True` 保留）。"
+                   "⚠️ 换完的显存数字跟原配方**有出入**（实测混元3 BF16 pdbs12：96.70 vs 文档 91.94 GiB），"
+                   "别把它当原配方的结论。",
+            "evidence": "2026-08-16 实测：tokamax.ragged_dot → NotImplementedError: Not supported on cpu"})
+
+    # ★ P0：参数名 MaxText 认不认，**在拼命令时就能判**，不用等 docker 转一分钟
+    #    再由 pyconfig 抛 ValueError。字段表是从容器自己的报错里收割的，不是手写。
+    # ⚠️ 必须查**展开后**的名字。gmm_tile_m 之类是工具的旋钮，
+    #    经 tile_expand 变成 6 个真实 tile 字段 —— 拿原名去查会把它们全误报成
+    #    「MaxText 没这个字段」，而那正是最该调的几个旋钮。
+    origin = expand_param_names(aot["params"])
+    for bad, near in unknown_params({k: None for k in origin}).items():
+        src = origin.get(bad, bad)
+        shown = bad if src == bad else f"{src} → {bad}"
+        _c = classify_unknown(bad)
+        findings.insert(0, {
+            # ⚠️ 措辞要准：字段表是从**我们这个镜像**收割的，不是「MaxText 通用真理」。
+            #    官方配方常对着更新的 MaxText 写，新字段我们镜像不认 —— 说成
+            #    「MaxText 没有这个字段」会让人以为官方配方错了，方向直接找反。
+            # ★ 三分：配方写错 / 上游有我们没有 / 上游也没有。
+            #   分错方向代价很大 —— 我把配方自身的错归成「我们镜像旧」，
+            #   结论就变成「升级镜像就好」，而升级根本没用（2026-08-17 栽过）。
+            "rule": "P0", "severity": "fatal",
+            "title": ({"recipe_typo": f"配方把字段名写错了：`{shown}`",
+                       "version_skew": f"本镜像的 MaxText 还没有 `{shown}`",
+                       "not_upstream": f"没有 `{shown}` 这个字段"}[_c["cls"]]),
+            "detail": _c["why"] + "\n命令会照样拼出来，但 pyconfig 在解析阶段就 ValueError ——"
+                      "docker 起来、镜像加载完，约一分钟后才报，纯浪费。",
+            "fix": (f"改成 `{_c['correct']}`" if _c["correct"] else
+                    ("升级镜像；或先去掉这一项再验 —— **去掉后的结论不等于原配方的结论**"
+                     if _c["cls"] == "version_skew" else "检查拼写，或去掉这一项")),
+            "evidence": f"本镜像 {len(maxtext_fields())} 个字段（pyconfig 自吐）"
+                        f" · 上游 base.yml {len(upstream_fields())} 个字段（2026-08-17 抓取）"})
+
+    for f in flagmod.lint_flags(cur["xla_flags"]):
+        findings.insert(0 if f["severity"] == "fatal" else len(findings), {
+            "rule": "F1", "severity": f["severity"],
+            "title": f'{f["flag"]} 缺少配套 flag：{f["missing"]}',
+            "detail": f["why"], "fix": f'把 {f["missing"]} 一起加上', "evidence": ""})
     diffs = roundtrip_check(aot["cmd"], aot["params"])
+    # 拷走就能跑的那一份。拼不出来（本机没执行档案）就给 None，前端据此说明白，
+    # **不给一条看着像能跑、实际缺一半的命令**。
+    try:
+        shell = shell_command(cur["params"], cur.get("target") or {})
+    except Exception as e:                                    # noqa: BLE001
+        log.warning("拼可执行命令失败: %s", e)
+        shell = {}
     return {"aot_cmd": aot["cmd"], "dropped": aot["dropped"], "added": aot["added"],
-            "lint": findings, "roundtrip": diffs}
+            "lint": findings, "roundtrip": diffs, "shell": shell or None,
+            "xla_line": " ".join(f"{k}={v}" if not str(k).startswith("--") else f"{k}={v}"
+                                 for k, v in sorted(cur["xla_flags"].items()))}
 
 
 def _state(s: dict) -> dict:
@@ -257,6 +351,20 @@ def _state(s: dict) -> dict:
         res = _lookup_run(fp)
         if res:
             cached_from = res.get("from_cache")
+    if res is not None and "verdict" not in res:
+        # ★ 老结果（跑在 verdict_of 之前）取出来时补一份。
+        #   不补的话前端只能退回泛泛的「编译失败」，具体死因就丢了 ——
+        #   而具体死因正是这条结论唯一有用的部分。
+        res = {**res, "verdict": verdict_of(res)}
+    if res is None:
+        # 改指纹算法之前跑的那些，用旧算法再捞一次
+        lfp = _fingerprint_legacy(s["current"])
+        if lfp != fp:
+            res = (s.get("results") or {}).get(lfp) or _lookup_run(lfp)
+            if res:
+                cached_from = "旧指纹迁移"
+                if "verdict" not in res:
+                    res = {**res, "verdict": verdict_of(res)}
     return {
         "session_id": s["id"], "title": s["title"], "turns": s["turns"],
         "params": s["current"]["params"], "xla_flags": s["current"]["xla_flags"],
@@ -265,6 +373,7 @@ def _state(s: dict) -> dict:
         "backend": detect_backend(s["current"]["params"]),
         "aot_cmd": r["aot_cmd"], "dropped": r["dropped"], "added": r["added"],
         "lint": r["lint"], "roundtrip": r["roundtrip"],
+        "shell": r["shell"], "xla_line": r["xla_line"],
         "run_ids": s["run_ids"], "result": res, "cached_from": cached_from,
         "known_fingerprints": sorted((s.get("results") or {}).keys()),
         "metal": (s.get("metal") or {}).get(fp) or _lookup_metal(fp),
@@ -412,19 +521,176 @@ class SaveIn(BaseModel):
 @app.get("/api/health")
 async def health():
     return {"ok": True, "store": store.backend, "aot_mode": "real" if docker_available() else "replay",
-            "bot_url": BOT_URL, "topologies": TOPOLOGIES, **catalog()}
-
-
-@app.get("/api/cluster")
-async def cluster(want: int = 64):
-    """训练集群状态。**看队列不看节点** —— 这个集群里「0 节点」通常是
-    Kueue 还没 admit，不是抢不到容量。"""
-    return await cluster_status(want)
+            "bot_url": BOT_URL, "topologies": TOPOLOGIES, **catalog(), "flagdb": flagmod.catalog()}
 
 
 @app.post("/api/session")
 async def new_session():
     s = _new_session()
+    _persist(s)
+    return _state(s)
+
+
+def _derive_shape(base: dict, want: dict, touched: set) -> tuple[dict, dict]:
+    """合出新形状。**参数量自动跟着层数走** —— 除非用户自己改过那一栏。
+
+    不自动折算的话，40 层的派生模型会挂着 80 层的 297B 参数量，
+    后面显存估算、能不能装下、batch 上界全部按错的参数量算，而且一声不吭。
+    """
+    shape = dict(base)
+    changed = {}
+    for f in modelsmod.EDITABLE:
+        k = f["k"]
+        if k not in want or want[k] in (None, ""):
+            continue
+        v = float(want[k]) if f["type"] == "float" else int(want[k])
+        if v != base.get(k):
+            changed[k] = {"from": base.get(k), "to": v}
+        shape[k] = v
+    auto = modelsmod.scale_params(base, shape["layers"],
+                                  vocab=shape.get("vocab"), hidden=shape.get("hidden"))
+    for k in ("params_b", "act_params_b"):
+        if k in touched:          # 用户自己填了就听他的
+            continue
+        if abs(auto[k] - (shape.get(k) or 0)) > 1e-6:
+            changed[k] = {"from": base.get(k), "to": auto[k], "auto": True}
+        shape[k] = auto[k]
+    shape["emb_params_b"] = auto["emb_params_b"]
+    return shape, changed
+
+
+@app.post("/api/model/preview")
+async def preview_model(body: dict):
+    """改一栏就重算一次 —— 让面板上看到的就是会存下去的。"""
+    base = modelsmod.get_model(str(body.get("base") or "").lower())
+    if not base:
+        raise HTTPException(400, "没有这个基准模型")
+    shape, changed = _derive_shape(base, body.get("shape") or {},
+                                   set(body.get("touched") or []))
+    return {"shape": {k: shape.get(k) for k in
+                      [f["k"] for f in modelsmod.EDITABLE] + ["emb_params_b"]},
+            "changed": changed}
+
+
+@app.post("/api/model")
+async def save_model(body: dict):
+    """把改过形状的模型**另存为新模型**。
+
+    不允许覆盖内置：`Hunyuan3-295B` 这个名字对应的是真实发布的那个模型，
+    我们所有实测结论都挂在它上面。改了它，历史结论就全部失去指向。
+    """
+    base_id = str(body.get("base") or "").lower()
+    base = modelsmod.get_model(base_id)
+    if not base:
+        raise HTTPException(400, f"没有这个基准模型: {base_id}")
+    label = str(body.get("label") or "").strip()
+    if not label:
+        raise HTTPException(400, "得起个名字")
+    # ⚠️ 别把 CJK 一起洗掉 —— 「混元3 40层」这种名字最常见，
+    #    只留 ASCII 的话 slug 直接变空，报「名字里没有能当 id 的字符」，莫名其妙。
+    #    Firestore 文档 id 收 unicode，只要挡掉 `/` 和空白就行。
+    new_id = re.sub(r"[\s/\\#?\[\]*]+", "-", label.lower()).strip("-.")
+    if not new_id or new_id in (".", ".."):
+        new_id = f"{base_id}-custom"
+    if modelsmod.is_builtin(new_id) or label == base.get("label"):
+        raise HTTPException(409, f"`{label}` 是内置模型，不能覆盖。换个名字，"
+                                 f"比如「{base.get('label')} 40层」。")
+
+    shape, changed = _derive_shape(base, body.get("shape") or {},
+                                   set(body.get("touched") or []))
+    if not changed:
+        raise HTTPException(400, "一个字段都没改 —— 存下来只是个重名副本。")
+
+    shape.update({
+        "id": new_id, "label": label, "derived_from": base_id,
+        "provenance": "derived", "created_at": _now(),
+        # ★ 派生模型**不继承实测结论**。基准那些数字是在原始形状上跑出来的，
+        #   改了层数还挂着「64 芯片 v7 实测」会让人拿旧结论套新形状。
+        "note": (f"从 {base.get('label')} 派生，改了："
+                 + "、".join(f"{k} {c['from']}→{c['to']}" for k, c in changed.items())
+                 + "。**形状是你改的，实测数字不继承。**"),
+    })
+    modelsmod.CUSTOM[new_id] = shape
+    store.put("tpuguru_models", new_id, shape)
+    return {"id": new_id, "label": label, "changed": changed,
+            "catalog": modelsmod.catalog()}
+
+
+@app.delete("/api/model/{mid}")
+async def delete_model(mid: str):
+    if modelsmod.is_builtin(mid):
+        raise HTTPException(403, "内置模型不能删")
+    modelsmod.CUSTOM.pop(mid, None)
+    try:
+        if store.db:
+            store.db.collection("tpuguru_models").document(mid).delete()
+        else:
+            store._f("tpuguru_models", mid).unlink(missing_ok=True)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"删除失败: {e}") from e
+    return {"deleted": mid, "catalog": modelsmod.catalog()}
+
+
+@app.get("/api/sessions")
+async def list_sessions(limit: int = 60):
+    """会话列表。**内存里的和存储里的要合并** —— 只读存储会漏掉刚建还没落盘的，
+    只读内存会漏掉重启前的。以内存为准（它更新）。"""
+    merged: dict[str, dict] = {}
+    for d in store.list("tpuguru_sessions", limit=300):
+        if d.get("id"):
+            merged[d["id"]] = d
+    merged.update(SESSIONS)
+    out = []
+    for d in merged.values():
+        cur = d.get("current") or {}
+        params = cur.get("params") or {}
+        mdl = get_model(params.get("model_name"))
+        # 空会话不进列表：没参数、没 flag、没对话 —— 列出来只会挤掉有用的
+        if not params and not (cur.get("xla_flags") or {}) and not d.get("turns"):
+            continue
+        title = d.get("title") or "未命名会话"
+        # 老会话是在自动命名之前建的。列表里现算一个名字出来，
+        # 不回写存储 —— 展示逻辑不该偷偷改数据。
+        if title == "未命名会话" and mdl:
+            title = mdl["label"]
+        out.append({
+            "id": d["id"], "title": title,
+            "model": mdl["label"] if mdl else None,
+            "updated_at": d.get("updated_at"), "created_at": d.get("created_at"),
+            "n_params": len(params), "n_flags": len(cur.get("xla_flags") or {}),
+            "n_turns": len(d.get("turns") or []),
+            "topology": (cur.get("target") or {}).get("topology"),
+            "layers": params.get("num_decoder_layers"),
+            "pdbs": params.get("per_device_batch_size"),
+            "n_results": len(d.get("results") or {}),
+        })
+    out.sort(key=lambda x: x.get("updated_at") or "", reverse=True)
+    return {"sessions": out[:limit], "total": len(out)}
+
+
+@app.delete("/api/session/{sid}")
+async def delete_session(sid: str):
+    """删会话。**AOT / 真机结果不跟着删** —— 它们按指纹存在 `tpuguru`
+    集合里，跟会话是两回事。删掉一场对话不该让几十分钟的编译结果消失。"""
+    SESSIONS.pop(sid, None)
+    try:
+        if store.db:
+            store.db.collection("tpuguru_sessions").document(sid).delete()
+        else:
+            f = store._f("tpuguru_sessions", sid)
+            f.unlink(missing_ok=True)
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(500, f"删除失败: {e}") from e
+    return {"deleted": sid}
+
+
+@app.post("/api/session/{sid}/rename")
+async def rename_session(sid: str, body: dict):
+    s = _get_session(sid)
+    t = str(body.get("title") or "").strip()
+    if not t:
+        raise HTTPException(400, "标题不能为空")
+    s["title"], s["title_manual"] = t, True
     _persist(s)
     return _state(s)
 
@@ -524,6 +790,49 @@ async def set_param(inp: SetIn):
     if str(_cur if _cur is not None else "") == str(inp.value if inp.value is not None else ""):
         return _state(s)
 
+    if inp.param == "__flag":
+        # value 形如 "flag=值"；值为空表示删掉这个 flag
+        k, _, v = str(inp.value).partition("=")
+        k = k.strip()
+        if not v.strip():
+            s["current"]["xla_flags"].pop("--" + k, None)
+            s["current"]["xla_flags"].pop(k, None)
+            s["turns"].append({"at": _now(), "role": "system", "text": f"你去掉了 `{k}`"})
+        else:
+            s["current"]["xla_flags"]["--" + k] = v.strip()
+            s["turns"].append({"at": _now(), "role": "system", "text": f"你设了 `{k}={v.strip()}`"})
+        _persist(s)
+        return _state(s)
+
+    if inp.param == "__preset":
+        if str(inp.value) == "__none":
+            n = len(s["current"]["xla_flags"])
+            s["current"]["xla_flags"] = {}
+            s["turns"].append({"at": _now(), "role": "system",
+                               "text": f"清空了 {n} 个 flag。⚠️ 执行档案的 "
+                                       "`default_xla_flags` 照样会传进去 —— "
+                                       "「不设」不等于「不生效」。"})
+            _persist(s)
+            return _state(s)
+        ps = next((x for x in flagmod.PRESETS if x["id"] == str(inp.value)), None)
+        if not ps:
+            raise HTTPException(400, f"没有这个套餐: {inp.value}")
+        # ★ 套餐是**替换**不是叠加。叠加的后果：已经有 16 个之后点任何套餐都
+        #   毫无反应（要加的早就在里面了），看起来像按钮坏了。
+        #   但换掉什么必须说清楚 —— 静默丢掉用户手调的 flag 比不生效更糟。
+        cur = s["current"]["xla_flags"]
+        keep = {k.lstrip("-") for k in cur}
+        gone = sorted(keep - set(ps["flags"]))
+        s["current"]["xla_flags"] = {"--" + k: v for k, v in ps["flags"].items()}
+        msg = f'套用 **{ps["label"]}** —— {len(ps["flags"])} 个 flag'
+        if gone:
+            head = "、".join(f"`{x}`" for x in gone[:4])
+            msg += (f'。**换掉了原来的 {len(gone)} 个**：{head}'
+                    + (f' 等' if len(gone) > 4 else ''))
+        s["turns"].append({"at": _now(), "role": "system", "text": msg})
+        _persist(s)
+        return _state(s)
+
     if inp.param == "__backend":
         spec = BACKENDS.get(str(inp.value))
         if not spec:
@@ -539,6 +848,10 @@ async def set_param(inp: SetIn):
         m = get_model(inp.value)
         if m:
             s["current"]["params"]["model_name"] = str(inp.value)
+            # 会话名 = 模型名。会话列表里靠这个认人，"未命名会话" 排一屏没法选。
+            # 用户手动改过就不再自动覆盖。
+            if not s.get("title_manual"):
+                s["title"] = m["label"]
             msg = (f'模型设成 **{m["label"]}** —— {m["layers"]} 层'
                    + (f'、{m["num_experts"]} 专家 top-{m["top_k"]}' if m["moe"] else '、dense')
                    + f'、hidden {m["hidden"]}、mlp {m["mlp"]}。')
@@ -596,12 +909,13 @@ async def run(inp: ChatIn):
     s["last_result"] = entry
     # 进程级缓存里存**带来源**的那份 —— 别的会话取到时要能看出「这是调档，不是刚跑的」
     _FP_CACHE[fp] = {**entry, "from_cache": {"at": doc["created_at"], "run_id": rid}}
-    verdict = ("❌ 装不下" if result.get("ok") is False else
-               "✅ 编译通过" if result.get("ok") else "❓ 这一档没有记录")
-    extra = ""
-    if result.get("failure"):
-        f = result["failure"]
-        extra = f"，需要 **{f.get('required_gb')} GB** / 上限 {f.get('available_gb')} GB"
+    _v = verdict_of(result)          # ★ 结论文案唯一来源，前端也用同一份
+    result["verdict"] = _v
+    entry["verdict"] = _v
+    verdict = _v["title"]
+    extra = f"，{_v['detail']}" if _v["detail"] else ""
+    if result.get("ok") is False and not _v["is_oom"]:
+        extra += "。**这不是显存问题，降 batch 没用。**"
     if fatal:
         extra += f"（注意：跑之前就有 {len(fatal)} 条致命 lint）"
     s["turns"].append({"at": _now(), "role": "guru",
