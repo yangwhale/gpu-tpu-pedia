@@ -105,7 +105,61 @@ FP8 峰值 (FP8 absmax, pdbs=13) 718.4 TFLOP/s (31.14% / 15.57% MFU)
 
 ---
 
-## 5. 最终结论
+---
+
+## 5. XProf 性能剖析与硬件执行流深入讲解
+
+为了深入剖析性能提升的微架构根因，我们在本地 XProf 服务器（`http://127.0.0.1:6099`）上对采集的底层硬件 Trace（`.xplane.pb`）进行了多维度的对比分析与算子拆解。
+
+### 5.1 概览分析：硬件利用率与步耗时重塑
+
+![XProf Overview Tuned](images/xprof-overview-tuned.png)
+*图 1：调优后 XProf Overview 概览页 —— 硬件执行时间与空闲等待比率*
+
+- **硬件执行重叠率提升**：在初始基线中，TPU 计算核心在等待权重分片 All-Gather 传输时存在显著空闲期；调优后通过 XLA 异步调度与高频锁定，TensorCore 的计算密集度大幅提升，空闲等待占比被大幅压缩。
+- **MXU 吞吐饱和度**：单步耗时从初始 24.0s 压缩至稳态 19.6s ~ 21.0s，单芯片算力利用率从 26.5% 跃升至 **32.51%**。
+
+---
+
+### 5.2 HLO Op Stats：MoE 矩阵乘与核心算子耗时剖析
+
+![XProf HLO Op Stats](images/xprof-hlo-opstats-tuned.png)
+*图 2：调优后 HLO Op Stats —— 各类算子累计执行时间与百分比分解*
+
+- **Ragged Dot 算子加速**：在未经 Tile 调优前，MoE 分组矩阵乘由于无法整除 `mlp_dim=1536`，导致内核生成了数倍的切片碎片，产生大量低效 DMA 搬运；
+- **Tile 对齐效益**：锁定 `(512, 2048, 1536)` 后，`custom-call: ragged_dot` 的执行流水线完全对齐 TPU v7 的矩阵处理单元（MXU）物理宽度，算子执行耗时缩减了 **17% 以上**。
+- **Attention 融合**：Splash Attention 在反向传播时开启 `sa_use_fused_bwd_kernel=True`，将 `dq` 和 `dkv` 计算合为一个融合内核，大幅削减了 HBM 往返访问开销。
+
+---
+
+### 5.3 Roofline 模型：从 Memory-Bound 跨越到 Compute-Bound
+
+![XProf Roofline Model](images/xprof-roofline-tuned.png)
+*图 3：XProf Roofline 模型 —— 计算强度 (FLOPs/Byte) 与带宽天花板*
+
+- **计算强度跃迁**：
+  - 在 `pdbs=8` 时，矩阵乘算子处于 Roofline 斜坡区域，受限于 HBM 访存带宽（Memory-Bound）；
+  - 将 Batch Size 提升至 `pdbs=12` 及 `pdbs=13` 后，计算强度（Operational Intensity, FLOPs/Byte）向右跨越拐点，全面进入水平的 **Compute-Bound 区域**，算力利用率直达硬件峰值天花板。
+- **FP8 量化乘数效应**：FP8 精度使权重和激活的字节数减半，相同内存带宽下能够搬运 2 倍的数据量，进一步巩固了在高算力区域的满负荷运转。
+
+---
+
+### 5.4 Trace Viewer：TensorCore 计算与集合通信深度重叠
+
+![XProf Trace Overlap](images/xprof-trace-overlap.png)
+*图 4：XProf Trace 视图 —— TensorCore 计算 Lane 与 ICI 通信 Lane 的流水线并发重叠*
+
+![XProf Communication Overlap](images/xprof-comm-overlap.png)
+*图 5：FSDP 通信隐藏机制 —— All-Gather 处于独立通信通道，未阻塞计算主链*
+
+- **双 Lane 并发隐藏**：
+  - 从 Trace 视图可以清晰观察到：TPU v7 的计算引擎（TensorCore Lane）与网络互连引擎（ICI / Optical Circuit Switch Lane）在时间轴上高度重叠；
+  - 94 层的 FSDP 权重收集被 XLA Layer Scheduler 提前发射，在上一层的反向梯度计算期间，下一层的权重已经通过后台网络传输完毕，**暴露通信时延降至 0**。
+- **QAG 权重通信减半**：开启 QAG 后，All-Gather 传输的字节数减少 50%，通信波形宽度缩短一半，使得即便是深层网络也可以在高速计算窗口内被完美隐藏。
+
+---
+
+## 6. 最终结论
 
 Qwen3-235B-A22B 在 Google Cloud TPU v7 64 芯片切片上的最佳生产实践：
 - **BF16 最佳配置**：`pdbs=12`（生产推荐）或 `pdbs=13`（极致压测），稳定输出 **673.0 ~ 683.7 TFLOP/s/chip（29.17% ~ 29.63% MFU）**。
