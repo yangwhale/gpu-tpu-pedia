@@ -24,17 +24,17 @@ python3 ~/gpu-tpu-pedia/tpu/Hunyuan3-295B-Pretraining/maxtext-hunyuan3/download_
 ```bash
 gcloud storage rsync -r \
   ~/gpu-tpu-pedia/tpu/Hunyuan3-295B-Pretraining/data/fineweb-edu-arrayrecord/ \
-  gs://bodaborg-tpu7x-nap-us-central1/chrisya/datasets/hunyuan3-pretrain/train/fineweb-edu/
+  gs://your-bucket/datasets/hunyuan3-pretrain/train/fineweb-edu/
 ```
 
 ### 步骤 4：在 TPU v7（64 芯片）上启动真实数据预训练（官方 120832 原生词表）
 ```bash
-PLATFORM=v7 GCS_STAGE=gs://bodaborg-tpu7x-nap-us-central1/chrisya/hy3 \
-IMAGE=us-docker.pkg.dev/cloud-tpu-multipod-dev/gcr.io/chrisya-maxtext-latest:runner \
+PLATFORM=v7 GCS_STAGE=gs://your-bucket/hy3 \
+IMAGE=us-docker.pkg.dev/PROJECT/gcr.io/your-maxtext-latest:runner \
 STEPS=1000 PDBS=13 \
 bash ~/gpu-tpu-pedia/tpu/Hunyuan3-295B-Pretraining/maxtext-hunyuan3/run.sh real-data-prod \
   dataset_type=grain \
-  grain_train_files="gs://bodaborg-tpu7x-nap-us-central1/chrisya/datasets/hunyuan3-pretrain/train/fineweb-edu/*.arrayrecord" \
+  grain_train_files="gs://your-bucket/datasets/hunyuan3-pretrain/train/fineweb-edu/*.arrayrecord" \
   tokenizer_type="huggingface" \
   tokenizer_path="src/maxtext/assets/hunyuan3_tokenizer.json" \
   vocab_size=120832 \
@@ -92,7 +92,7 @@ bash ~/gpu-tpu-pedia/tpu/Hunyuan3-295B-Pretraining/maxtext-hunyuan3/run.sh real-
 
 ```
 # 数据集存储桶（纯语料数据分片）
-gs://bodaborg-tpu7x-nap-us-central1/chrisya/datasets/hunyuan3-pretrain/
+gs://your-bucket/datasets/hunyuan3-pretrain/
 └── train/
     └── fineweb-edu/
         ├── fineweb_edu_train_part00-0000.arrayrecord
@@ -100,7 +100,7 @@ gs://bodaborg-tpu7x-nap-us-central1/chrisya/datasets/hunyuan3-pretrain/
         └── fineweb_edu_train_part13-0003.arrayrecord
 
 # 模型资产存储桶（分词器与配置）
-gs://bodaborg-tpu7x-nap-us-central1/chrisya/hy3/
+gs://your-bucket/hy3/
 └── tokenizer/
     ├── config.json
     ├── generation_config.json

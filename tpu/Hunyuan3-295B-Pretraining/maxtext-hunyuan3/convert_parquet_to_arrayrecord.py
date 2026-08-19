@@ -14,8 +14,9 @@ from huggingface_hub import hf_hub_download
 REPO_ID = "HuggingFaceFW/fineweb-edu"
 # sample/10BT 下的 parquet 文件
 SAMPLE_FILE = "sample/10BT/000_00000.parquet"
-LOCAL_RAW_DIR = "/home/chrisya/gpu-tpu-pedia/tpu/Hunyuan3-295B-Pretraining/data/fineweb-edu-raw"
-OUTPUT_DIR = "/home/chrisya/gpu-tpu-pedia/tpu/Hunyuan3-295B-Pretraining/data/fineweb-edu-arrayrecord"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+LOCAL_RAW_DIR = os.path.join(BASE_DIR, "data/fineweb-edu-raw")
+OUTPUT_DIR = os.path.join(BASE_DIR, "data/fineweb-edu-arrayrecord")
 
 def main():
     os.makedirs(LOCAL_RAW_DIR, exist_ok=True)

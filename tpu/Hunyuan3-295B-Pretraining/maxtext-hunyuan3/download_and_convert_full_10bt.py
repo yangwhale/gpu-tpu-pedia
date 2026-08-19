@@ -14,8 +14,9 @@ from array_record.python import array_record_module
 from huggingface_hub import hf_hub_download
 
 REPO_ID = "HuggingFaceFW/fineweb-edu"
-RAW_DIR = "/home/chrisya/gpu-tpu-pedia/tpu/Hunyuan3-295B-Pretraining/data/fineweb-edu-raw"
-OUT_DIR = "/home/chrisya/gpu-tpu-pedia/tpu/Hunyuan3-295B-Pretraining/data/fineweb-edu-arrayrecord"
+BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+RAW_DIR = os.path.join(BASE_DIR, "data/fineweb-edu-raw")
+OUT_DIR = os.path.join(BASE_DIR, "data/fineweb-edu-arrayrecord")
 
 FILES = [f"sample/10BT/{i:03d}_00000.parquet" for i in range(14)]
 
