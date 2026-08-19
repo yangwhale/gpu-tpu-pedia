@@ -143,7 +143,7 @@ and only then start tuning.
 
 | Item | Notes |
 |---|---|
-| Convergence validation on real data | Everything so far is synthetic; it only proves "it computes and does not diverge" |
+| **Real Dataset Validation** | ✅ **Done**: Full FineWeb-Edu 10BT uploaded as ArrayRecord; Grain successfully ran 6 steady-state steps on 64 chips with **655.1 TFLOP/s/chip** (MFU 28.4%), see [DATASET-PREPARATION.en.md](DATASET-PREPARATION.en.md) |
 | HF weights → MaxText Orbax conversion | Not needed for throughput baselines; mandatory for SFT |
 | Push v7 BF16 to 630 | Currently 599 (25.96%), already at the lower edge of the target band |
 | **v7 FP8 + QAG** | ✅ **Converged.** With QAG on at 64 chips: **625** (vs 594 without QAG, +5.3%); the 256-expert exploration reached **645**.<br>⚠️ The earlier note that "the tile on that FP8 kernel path has never been swept, potential ~726" **has been disproven by measurement** — FP8 still routes back into tokamax internally, and the tile monkeypatch has been in effect all along.<br>On 2026-08-05 we additionally swept tile / XLA flags / SparseCore offloading / larger batch, 8 cells in total, with **not a single positive result**: the tuning space is exhausted. Going higher requires more chips, a different model shape, or writing code. See [TUNING-v7 §4.6](TUNING-v7.en.md#46-what-can-be-tuned-and-what-cannot--one-master-table) |
@@ -155,6 +155,7 @@ and only then start tuning.
 
 | Source | Notes |
 |---|---|
+| [Real Dataset Preparation](DATASET-PREPARATION.en.md) | Open-source dataset selection, GCS ArrayRecord storage, Grain integration & hardware benchmarks |
 | [GB300 Hunyuan 3 training doc](../../gpu/a4x-max/07-megatron-training/07f-gb300-hy3-295b-gke/README.en.md) | **Architecture SSOT** plus the GB300 baseline |
 | [GB300 Hunyuan 3 SFT doc](../../gpu/a4x-max/07-megatron-training/07f-gb300-hy3-295b-gke/SFT.md) (zh) | Bridge port, weight conversion, evaluation loop |
 | [DeepSeek V3.2 TPU training](../DeepSeek-V3.2-Training/README.md) (zh) | MaxText operating patterns plus v7 MoE pitfalls |

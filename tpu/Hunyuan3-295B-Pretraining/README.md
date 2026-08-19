@@ -133,7 +133,7 @@ full mesh；16 芯片实测 EP=4 是 **−71%**。**FSDP 宽度固定在 128，�
 
 | 项 | 说明 |
 |---|---|
-| 真实数据集收敛验证 | 目前全是 synthetic，只证明「能算且不发散」 |
+| **真实数据集验证** | ✅ **已完成**：FineWeb-Edu 10BT 全集 ArrayRecord 上云，Grain 跑通 6 步真实语料预训练，稳态 **655.1 TFLOP/s/chip** (MFU 28.4%)，详见 [DATASET-PREPARATION.md](DATASET-PREPARATION.md) |
 | HF 权重 → MaxText Orbax 转换 | 只跑吞吐基线可以不碰；要 SFT 必须做 |
 | ~~v7 BF16 冲到 630~~ ✅ **已超额完成** | 2026-08-15 换 tile 入口后 64 芯片到 **662.3**（`pdbs=13` 时 666.6），顶穿原定 600–630 区间 |
 | **256 芯片按新配方复测** | 256 芯片那列（598.8）仍是旧 tile 入口的数。64 芯片上换入口 +5.1%，256 芯片预期等幅但**没验** |
@@ -146,6 +146,7 @@ full mesh；16 芯片实测 EP=4 是 **−71%**。**FSDP 宽度固定在 128，�
 
 | 来源 | 说明 |
 |---|---|
+| [预训练真实数据准备](DATASET-PREPARATION.md) | 开源数据集选型、GCS 存储、Grain 集成与训练配置 |
 | [GB300 混元 3 训练文档](../../gpu/a4x-max/07-megatron-training/07f-gb300-hy3-295b-gke/README.md) | **架构 SSOT** + GB300 基线 |
 | [GB300 混元 3 SFT 文档](../../gpu/a4x-max/07-megatron-training/07f-gb300-hy3-295b-gke/SFT.md) | Bridge 移植、权重转换、评测闭环 |
 | [DeepSeek V3.2 TPU 训练](../DeepSeek-V3.2-Training/README.md) | MaxText 操作范式 + v7 MoE 踩坑 |

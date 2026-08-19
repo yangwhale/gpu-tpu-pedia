@@ -150,12 +150,19 @@ else
   ANNO="alpha.jobset.sigs.k8s.io/exclusive-topology: cloud.google.com/gke-nodepool"; POOLSEL=""
 fi
 
-kubectl delete jobset "$NAME" --ignore-not-found=true --wait=false >/dev/null 2>&1
+NS=${NAMESPACE:-priority-dev}
+QUEUE=${QUEUE:-multislice-queue}
+PRIO=${PRIORITY_CLASS:-medium}
+
+kubectl delete jobset "$NAME" -n "$NS" --ignore-not-found=true --wait=false >/dev/null 2>&1
 cat <<YAML | kubectl apply -f - >/dev/null
 apiVersion: jobset.x-k8s.io/v1alpha2
 kind: JobSet
 metadata:
   name: $NAME
+  namespace: $NS
+  labels:
+    kueue.x-k8s.io/queue-name: $QUEUE
   annotations: {$ANNO}
 spec:
   ttlSecondsAfterFinished: 7200
@@ -169,7 +176,11 @@ spec:
         completions: $NODES
         backoffLimit: 0
         template:
+          metadata:
+            labels:
+              declared-duration-minutes: "120"
           spec:
+            priorityClassName: $PRIO
             restartPolicy: Never
             nodeSelector:
               cloud.google.com/gke-tpu-accelerator: $ACCEL
