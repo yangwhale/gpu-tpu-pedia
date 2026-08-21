@@ -1,7 +1,8 @@
 # 自己渲 3Blue1Brown 的图 —— 可复现步骤
 
 2026-08-21 在 cc-tw（Ubuntu，无显示器，无 GPU）上跑通。
-**`mlp.py` 全部 10 个场景 100% 成功**，一张 1080p 静帧 3-25 秒，纯 CPU 软件渲染。
+**28 个场景全部渲出**（`mlp` / `attention` / `embedding` / `ml_basics` / `auto_regression` 五个文件），
+一张 1080p 静帧 3-80 秒，纯 CPU 软件渲染。
 
 渲出来的不是截屏，是**原始矢量场景**，所以可以改：换中文标注、换数字、
 挑任意一帧、调颜色、只保留想要的元素。
@@ -22,12 +23,16 @@
 ## 快速开始
 
 ```bash
-./setup-render-env.sh      # 一键搭环境（幂等，可重复跑）
-./render-scenes.sh         # 批量渲 mlp.py 全部 10 个场景
+./setup-render-env.sh          # 一键搭环境（幂等，可重复跑）
+./render-scenes.sh             # 批量渲第一课要用的 28 个场景
+./render-scenes.sh attention   # 只渲名字含 attention 的
 ```
 
+默认路径：venv `~/manim-venv`、场景源码 `~/3b1b-videos`、
+产物 `~/3b1b-render/frames`、日志 `~/3b1b-render/logs`。用同名环境变量可覆盖。
+
 `setup-render-env.sh` 做四件事：装依赖 → 拉场景源码 → **修 manimgl 的一个真 bug**
-→ 补上作者私有素材的本地替身。下面是它背后的细节。
+→ 批量造齐作者私有素材的替身。下面是它背后的细节。
 
 ### 手动做的话
 
@@ -145,31 +150,37 @@ FileNotFoundError: .../data/athlete_sports.txt
 
 ---
 
-## 实测结果 · `mlp.py` 全部 10 个场景
+## 实测结果 · 28 个场景
 
-四轮迭代，每轮修掉一类问题：
+先在 `mlp.py` 上迭代把环境问题挨个清掉，再横向铺开到另外四个文件：
 
-| 轮次 | 环境状态 | 通过 |
+| 轮次 | 环境状态 | `mlp.py` 通过 |
 |---|---|---|
 | 1 | 无 LaTeX | 3 / 10 |
 | 2 | texlive 装到一半 | 6 / 10（其中 1 个是假失败） |
 | 3 | texlive 就绪 | 7 / 10 |
 | 4 | **+ numpy 补丁 + 素材替身** | **10 / 10** ✅ |
 
-| 场景 | 耗时 | 画的是什么 |
-|---|---|---|
-| `BasicMLPWalkThrough` | 24 s | **MLP 全流程 3D 图**：Linear → ReLU → Linear，带 $W_\uparrow\vec{E}+\vec{B}_\uparrow$ 公式 |
-| `BreakDownThreeSteps` | 5 s | **MLP 三步拆解**：升维矩阵行向量 → ReLU → 降维矩阵列向量 |
-| `Superposition` | 5 s | **89°/91° + $\approx \exp(\epsilon \cdot N)$ + N 维空间里的向量束** |
-| `MLPIcon` | 3 s | 经典神经网络图（输入 → 4× 宽中间层 → 输出） |
-| `ShowAngleRange` | 3 s | 角度分布 |
-| `AlmostOrthogonal` | 4 s | 近似垂直向量 |
-| `StackOfVectors` | 5 s | 一摞向量 |
-| `NonlinearityOfLanguage` | 4 s | 语言的非线性 |
-| `ClassicNeuralNetworksPicture` | 4 s | 层与连线示意 |
-| `LastTwoChapters` | 6 s | 上两章回顾（用的是占位缩略图） |
+铺开之后又补掉两类问题（缺 `gensim` / `transformers`；`np.product` 在 numpy 2 已移除），
+最终 **28 张图**：
 
-全部 1920×1080，合计 1.8 MB，已收进 [`教学材料/3b1b图/`](教学材料/3b1b图/)。
+| 文件 | 场景 | 典型耗时 |
+|---|---|---|
+| `mlp.py` | 10 个（含 `BasicMLPWalkThrough` `BreakDownThreeSteps` `Superposition`） | 3-24 s |
+| `attention.py` | 6 个（含 `AttentionPatterns` `ShowMasking` `DescribeAttentionEquation`） | 4-22 s |
+| `embedding.py` | 5 个（`IntroduceEmbeddingMatrix` `DotProducts` 等） | 3-23 s |
+| `ml_basics.py` | 4 个（`TweakedMachine` `ShowGPT3Numbers` `SoftmaxBreakdown` 等） | 11-35 s |
+| `auto_regression.py` | 3 个（`SimpleAutogregression` 要加载 GPT-2，最慢） | 10-79 s |
+
+全部 1920×1080，合计 6.1 MB，已收进 [`教学材料/3b1b图/`](教学材料/3b1b图/)，
+按第一课的五节归好位。
+
+### 两个渲不出来的（原因清楚，不修）
+
+| 场景 | 原因 |
+|---|---|
+| `attention/IntroduceValueMatrix` | **上游场景与当前 manimgl 不兼容** —— `FadeTransform` 里往 VGroup 塞 `ImageMobject`。跟占位素材无关，用作者原图一样会挂 |
+| `embedding/KingQueenExample` | 需要 `gensim.downloader` 拉 1.6 GB 词向量模型，成本不值。`ThreeDSpaceExample` / `ManyIdeasManyDirections` 表达同一个意思 |
 
 ---
 
@@ -177,9 +188,10 @@ FileNotFoundError: .../data/athlete_sports.txt
 
 - [ ] **抓中间帧** —— `-s` 只存最后一帧。Michael Jordan 那个例子在
       `BasicMLPWalkThrough` 的动画中段，要用 `-n <动画序号>` 取。**第一课需要这张。**
-- [ ] 其余章节：`attention.py` 19 个、`embedding.py` 19 个、
-      `ml_basics.py` 12 个、`chm.py` 26 个、`supplements.py` 76 个
+- [ ] **占位素材换成我们自己的图** —— 现在那些标着 placeholder 的方块
+      （`Dalle3_*`、`RiverBank`、`AttentionPaperStill` 等）能让场景跑起来，
+      但上课时得换成真图或干脆裁掉
 - [ ] 渲成 mp4 动画（不加 `-s`）—— 软件渲染下速度未知
-- [ ] 需要 GPT-2 权重的场景（`embedding.py` 里有几个 import `transformers`）
 - [ ] **中文标注** —— manim 的 `Text` 走 pango，理论上支持中文，需装中文字体后实测；
       `tex_templates.yml` 里另有一个 `ctex` 模板走 xelatex
+- [ ] 还没碰的：`chm.py` 26 个、`supplements.py` 76 个、`generation.py`、`network_flow.py`

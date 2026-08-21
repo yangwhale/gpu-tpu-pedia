@@ -45,7 +45,10 @@ say "Python 环境 ($VENV)"
 "$VENV/bin/pip" install -q manimgl "setuptools<81"
 "$VENV/bin/python" -c "import torch" 2>/dev/null || \
   "$VENV/bin/pip" install -q torch --index-url https://download.pytorch.org/whl/cpu
-"$VENV/bin/python" -c "import manimlib, torch; print('  manimgl + torch OK')"
+# 场景代码还会 import 这几个：auto_regression 要 transformers（跑 GPT-2），
+# embedding / attention / ml_basics 顶层 import gensim
+"$VENV/bin/pip" install -q gensim transformers tiktoken openai
+xvfb-run -a "$VENV/bin/python" -c "import manimlib, torch; print('  manimgl + torch OK')"
 
 # ── 3 · 场景源码 ────────────────────────────────────────────────
 say "场景源码 ($REPO)"
@@ -91,35 +94,77 @@ p.write_text(t.replace(old, new)); print("  已修（原文件备份为 .orig）
 PY
 fi
 
-# ── 5 · 私有素材的本地替身 ──────────────────────────────────────
+# ── 5 · 私有素材的本地替身 ────────────────────────────────────
 # 作者的图片与数据放在他自己的 Dropbox 里，不在公开仓库。
-# 这里造两张占位缩略图 + 一份运动员数据，让相关场景能跑起来。
+# 这里按场景代码里出现过的名字批量造占位素材，让相关场景能跑起来。
 say "私有素材替身"
-mkdir -p "$WORK/thumbnails" "$WORK/videos/2024/transformers/data"
+mkdir -p "$WORK/thumbnails" "$WORK/images/raster" "$WORK/images/vector" \
+         "$WORK/videos/2024/transformers/data"
 
-"$VENV/bin/python" - "$WORK/thumbnails" <<'PY'
+"$VENV/bin/python" - "$WORK" <<'PY'
 from PIL import Image, ImageDraw, ImageFont
-import sys, pathlib
-out = pathlib.Path(sys.argv[1])
+import sys, pathlib, textwrap, colorsys
+W = pathlib.Path(sys.argv[1])
+R, V, T = W / "images/raster", W / "images/vector", W / "thumbnails"
 try:
-    f1 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 110)
-    f2 = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 64)
+    fb = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 56)
+    fs = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf", 34)
+    fh = ImageFont.truetype("/usr/share/fonts/truetype/dejavu/DejaVuSans-Bold.ttf", 110)
 except OSError:
-    f1 = f2 = ImageFont.load_default()
+    fb = fs = fh = ImageFont.load_default()
+
+# 名字来自 grep '(ImageMobject|SVGMobject)\(' _2024/transformers/*.py
+RASTER = ["AttentionPaper","AttentionPaperStill","AudioSnippet","BlueFluff","Bot",
+ "CHMTopText","ChatBot","FederalReserve","HumanAIScript","JaggedCurl1","JaggedCurl2",
+ "JohnRFirth","LipMole","MiniEiffelTower1","NetworkEnd","RiverBank","ShrewMole",
+ "SmallFluffCreature","TearOff","VerdantForest","Zoolander","and_gate","comp_worker",
+ "computer_stall","warning","EmbeddingStill","CHM_Exterior","Chapter5_TN3"] + \
+ [f"Dalle3_{w}" for w in ["fluffy","blue","creature","creature_2","verdant","forest"]]
+SVG = ["GenericComputer","History","Museum","OpenAI","gpu_large"]
+
+made = 0
+for n in RASTER:
+    p = R / f"{n}.png"
+    if p.exists(): continue
+    h = (sum(ord(c) for c in n) * 37) % 360
+    r, g, b = [int(x * 130) + 40 for x in colorsys.hsv_to_rgb(h / 360, .45, .85)]
+    im = Image.new("RGB", (1024, 1024), (r, g, b)); d = ImageDraw.Draw(im)
+    d.rounded_rectangle([28, 28, 996, 996], radius=26, outline=(235, 235, 240), width=5)
+    y = 430
+    for line in textwrap.wrap(n.replace("_", " "), 16):
+        w = d.textbbox((0, 0), line, font=fb)[2]
+        d.text(((1024 - w) / 2, y), line, font=fb, fill=(248, 248, 252)); y += 72
+    w = d.textbbox((0, 0), "placeholder", font=fs)[2]
+    d.text(((1024 - w) / 2, 890), "placeholder", font=fs, fill=(215, 215, 225))
+    im.save(p); made += 1
+
+for n in SVG:
+    p = V / f"{n}.svg"
+    if p.exists(): continue
+    p.write_text(f'''<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 240 240" width="240" height="240">
+  <rect x="10" y="10" width="220" height="220" rx="22" fill="none" stroke="#e8e8ee" stroke-width="6"/>
+  <text x="120" y="116" font-family="DejaVu Sans" font-size="22" fill="#e8e8ee" text-anchor="middle">{n}</text>
+  <text x="120" y="150" font-family="DejaVu Sans" font-size="16" fill="#9a9aa6" text-anchor="middle">placeholder</text>
+</svg>'''); made += 1
+
 for name, top, bot in [("Chapter5_TN5", "Chapter 5", "Transformers"),
                        ("Chapter6_TN4", "Chapter 6", "Attention")]:
+    p = T / f"{name}.png"
+    if p.exists(): continue
     im = Image.new("RGB", (1920, 1080), (12, 12, 16)); d = ImageDraw.Draw(im)
     d.rectangle([40, 40, 1880, 1040], outline=(70, 70, 80), width=6)
-    for txt, fnt, y, col in [(top, f2, 420, (150, 150, 160)),
-                             (bot, f1, 520, (240, 240, 245)),
-                             ("placeholder — 原缩略图不在公开仓库中", f2, 900, (90, 90, 100))]:
+    for txt, fnt, y, col in [(top, fs, 420, (150, 150, 160)),
+                             (bot, fh, 500, (240, 240, 245)),
+                             ("placeholder", fs, 900, (90, 90, 100))]:
         w = d.textbbox((0, 0), txt, font=fnt)[2]
         d.text(((1920 - w) / 2, y), txt, font=fnt, fill=col)
-    im.save(out / f"{name}.png")
-print("  占位缩略图 x2")
+    im.save(p); made += 1
+print(f"  新造 {made} 个占位素材")
 PY
 
-cat > "$WORK/videos/2024/transformers/data/athlete_sports.txt" <<'TXT'
+# 场景读的两个数据文件
+D="$WORK/videos/2024/transformers/data"
+[ -f "$D/athlete_sports.txt" ] || cat > "$D/athlete_sports.txt" <<'TXT'
 Michael Jordan plays basketball
 Serena Williams plays tennis
 Lionel Messi plays soccer
@@ -136,9 +181,24 @@ Novak Djokovic plays tennis
 Tom Brady plays football
 Katie Ledecky swims
 TXT
-echo "  athlete_sports.txt"
+[ -f "$D/facts.txt" ] || cat > "$D/facts.txt" <<'TXT'
+Michael Jordan plays basketball
+The Eiffel Tower is in Paris
+Water boils at 100 degrees Celsius
+Shakespeare wrote Hamlet
+The Moon orbits the Earth
+Mount Everest is the tallest mountain
+Python is a programming language
+The Pacific is the largest ocean
+Einstein developed relativity
+Tokyo is the capital of Japan
+TXT
+echo "  数据文件 x2"
 
-# 把缩略图路径从作者的绝对路径改成本地
+# ── 6 · 场景代码的两处本地修正 ─────────────────────────────────
+say "场景代码本地修正"
+
+# (a) 缩略图路径从作者的绝对路径改成本地
 python3 - "$REPO/_2024/transformers/mlp.py" <<'PY'
 import sys, pathlib
 p = pathlib.Path(sys.argv[1]); t = p.read_text()
@@ -149,6 +209,14 @@ if old in t:
 else:
     print("  mlp.py 已改过")
 PY
+
+# (b) np.product 在 numpy 2 已移除，换成 np.prod
+if grep -rq "np\.product(" "$REPO/_2024/transformers/"; then
+  sed -i 's/np\.product(/np.prod(/g' "$REPO/_2024/transformers/"*.py
+  echo "  np.product → np.prod（numpy 2 已移除前者）"
+else
+  echo "  np.product 已修过"
+fi
 
 say "完成 —— 试渲一张："
 echo "  cd $REPO && xvfb-run -a -s '-screen 0 1920x1080x24' \\"
