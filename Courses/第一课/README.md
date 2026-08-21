@@ -306,7 +306,7 @@
 | 官方 config | `教学材料/deepseek-v3-config.json`（已存） |
 | V3 / V3.2 论文 | `~/learning/DeepSeek/`（23 篇全集） |
 | MoE 理论主线 | `~/learning/moe-tour/`（苏剑林 9 篇 + 图） |
-| MLA / KV cache / MoE 等术语 | wiki `concepts/`（`mla` `kv-cache` `moe` `eplb` `noaux-tc` 等约 20 页） |
+| MLA / KV cache / MoE 等术语 | 内部术语页约 20 篇（MLA、KV cache、MoE、EPLB、noaux-tc …） |
 | 我们自己的 V3 实测 | `tpu/DeepSeek-V3.2-Training/`、`tpu/tpu-inference/DeepSeek-V3.2-671B-FP4/` |
 
 **图要自己画。** 数据流图、矩阵尺寸示意、显存占比条形图。

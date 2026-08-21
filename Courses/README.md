@@ -213,7 +213,7 @@ PP/VPP 的调度演进 · EP 家族（EP / ETP / EDP）· 跨 DCN，
 
 | 要什么 | 有什么 | 缺口 |
 |---|---|---|
-| **V3 的架构与论文** | `~/learning/DeepSeek/` 23 篇全集；wiki `concepts/` 约 20 页（mla / moe / eplb / noaux-tc / kv-cache …） | 齐 |
+| **V3 的架构与论文** | `~/learning/DeepSeek/` 23 篇全集；内部术语页约 20 篇（MLA / MoE / EPLB / noaux-tc / KV cache …） | 齐 |
 | **MoE 理论** | `~/learning/moe-tour/` 苏剑林 9 篇 + SVG 图 | 齐 |
 | **逐站精算** | 零散 | 🔴 **真空白，是第一课的核心工作，必须原创** |
 | **我们自己的 V3 实测** | `tpu/DeepSeek-V3.2-Training/`、`tpu/tpu-inference/DeepSeek-V3.2-671B-FP4/` | 需要提炼出能进课的数 |

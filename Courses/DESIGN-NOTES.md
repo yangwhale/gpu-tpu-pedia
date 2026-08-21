@@ -105,16 +105,16 @@ Transformer 里两大块的计算特征是**根本不同**的：
 | 来源 | 规模 |
 |---|---|
 | `gpu-tpu-pedia` 仓库 markdown | **134,242 行**，34 个文件超过 700 行 |
-| wiki `concepts/` | **约 125 页** |
-| wiki `analyses/` | 14 篇对比分析 |
-| wiki `entities/` | 40+ 页（硬件、模型、组织、工具） |
+| 内部术语页 | **约 125 篇** |
+| 内部对比分析 | 14 篇 |
+| 内部实体页 | 40+ 篇（硬件、模型、组织、工具） |
 | `Learning/` | 6 篇论文通俗解读 |
 
 素材不是不够，是**太多且分布极度不均**。
 
 ### 结论一 · 零件级的概念已经很全
 
-wiki `concepts/` 基本把 Transformer 的**零件**都写过了：
+内部术语页基本把 Transformer 的**零件**都写过了：
 
 - 注意力一族：`flash-attention` `mla` `gated-mla` `swa` `attention-sink`
   `linear-attention` `hybrid-attention` `deltanet` `gdn` `kda` `rope`
