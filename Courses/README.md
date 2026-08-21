@@ -2,7 +2,7 @@
 
 [![CC BY-NC-SA 4.0](https://licensebuttons.net/l/by-nc-sa/4.0/88x31.png)](http://creativecommons.org/licenses/by-nc-sa/4.0/)
 
-### 📖 [**在线阅读 · 课程总纲**](https://yangwhale.github.io/gpu-tpu-pedia/Courses/)
+### 📖 [**在线阅读 · 课程总纲**](https://yangwhale.github.io/gpu-tpu-pedia/Courses/WebPages/)
 
 > **你看得懂 DeepSeek V3 的论文。你也知道它有 6710 亿参数。**
 >
@@ -342,9 +342,14 @@ Courses/
 ├── DESIGN-NOTES.md     设计笔记（累积式，含被推翻方案的理由）
 ├── 参考-CS336课程安排.md
 ├── LICENSE.txt
+├── WebPages/           网页版（GitHub Pages 从这里发布）
 ├── 素材/               各专题共用的原始材料
 └── tools/              可复用的工具链
 ```
+
+> 📌 **HTML 一律放 `WebPages/`，不要跟 `.md` 混在目录里** ——
+> 在 GitHub 上点开 `.html` 看到的是一屏源码，没人想看那个。
+> 网页要看就走上面那个在线阅读链接。
 
 三条规矩：素材集中放；每份素材写清哪来的 / 什么许可 / 能不能公开
 （**这个仓库是 public 的**）；产物入不入库看重建成本，
