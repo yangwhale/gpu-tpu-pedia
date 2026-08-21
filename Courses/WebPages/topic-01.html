@@ -68,6 +68,19 @@ code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
 .guess .rev.on{display:block}
 .guess .rev b{color:var(--red)}
 
+/* ── 章节插画带 ───────────────────────── */
+.band{position:relative;height:210px;border-radius:16px;overflow:hidden;margin:0 0 26px;
+      display:flex;align-items:flex-end;background:var(--ink)}
+.band img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:.88}
+.band:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(90deg,rgba(15,18,22,.90) 0%,rgba(15,18,22,.62) 42%,
+                 rgba(15,18,22,.14) 100%)}
+.band .cap{position:relative;z-index:2;padding:0 32px 24px;color:#fff;max-width:660px}
+.band .cap .bn{font:700 11px/1 var(--mono);letter-spacing:.14em;opacity:.72;
+      text-transform:uppercase;display:block;margin-bottom:8px}
+.band .cap .bt{font-size:27px;font-weight:700;letter-spacing:-.02em;display:block;margin-bottom:6px}
+.band .cap .bs{font-size:14.5px;opacity:.82;line-height:1.6}
+
 /* ── 站号标记 ─────────────────────────── */
 .stn{display:flex;align-items:center;gap:14px;margin-bottom:4px}
 .stn .badge{flex:0 0 auto;font:700 12px/1 var(--mono);color:#fff;background:var(--blue);
@@ -76,7 +89,15 @@ code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
 .stn h2{margin:0}
 
 /* ── hero ─────────────────────────────── */
-.hero{padding:76px 0 40px;background:linear-gradient(165deg,var(--blue-l) 0%,#f3f7fe 55%,#fff 100%)}
+.hero{position:relative;padding:76px 0 44px;overflow:hidden;
+      background:linear-gradient(165deg,var(--blue-l) 0%,#f3f7fe 55%,#fff 100%)}
+.hero:before{content:"";position:absolute;inset:0;
+      background:url(img/course-hero-token-journey.webp) center right/cover no-repeat;
+      opacity:.62}
+.hero:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(100deg,#fff 6%,rgba(255,255,255,.94) 34%,
+                 rgba(255,255,255,.55) 58%,rgba(255,255,255,.12) 100%)}
+.hero .wrap{position:relative;z-index:2}
 .crumb{font-size:14px;color:var(--gray);margin-bottom:20px}
 .crumb a{text-decoration:none}
 .hero h1{font-size:50px;font-weight:700;letter-spacing:-.035em;line-height:1.12;margin-bottom:6px}
@@ -208,6 +229,9 @@ footer a{text-decoration:none}
   .journey{padding:12px 14px;gap:12px}
   h2{font-size:25px}.punch{font-size:17px;padding:20px 22px}
   .guess button{padding:11px 16px;font-size:14px}
+  .band{height:160px}.band .cap{padding:0 20px 18px}.band .cap .bt{font-size:21px}
+  .hero:before{opacity:.4}
+  .figpair{grid-template-columns:1fr !important}
   .eq{font-size:12.5px;padding:12px 14px}
 }
 </style>
@@ -606,6 +630,15 @@ footer a{text-decoration:none}
     <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep now"><span>② MLA</span></div><div class="jstep "><span>③ Dense</span></div><div class="jstep "><span>④ MoE</span></div><div class="jstep "><span>⑤ 层间</span></div><div class="jstep "><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
     <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
   </div>
+  <div class="band">
+    <img src="img/course-mla-compression.webp" alt="一团庞大的云雾被压缩成一颗小小的光珠，另有一缕金线绕开压缩独自前行">
+    <div class="cap">
+      <span class="bn">站 2 · 全课最重的一段</span>
+      <span class="bt">MLA：注意力，以及 KV cache 的战争</span>
+      <span class="bs">把一整片云压成一颗珠子存起来，要用时再放回去 ——
+        而那缕带着位置信息的金线，必须绕开压缩单独走。</span>
+    </div>
+  </div>
   <div class="stn big"><span class="badge">站 2 ⭐</span><h2>MLA：注意力，以及 KV cache 的战争</h2></div>
   <p class="lead">整课的重头，也是 V3 最值得讲的地方。<b>建议留 15 分钟给这一站。</b></p>
 
@@ -921,6 +954,15 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep done"><span>② MLA</span></div><div class="jstep done"><span>③ Dense</span></div><div class="jstep now"><span>④ MoE</span></div><div class="jstep "><span>⑤ 层间</span></div><div class="jstep "><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
     <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
   </div>
+  <div class="band">
+    <img src="img/course-moe-gates.webp" alt="一座大殿里排列着数百扇石门，只有九扇亮着金光，一个光之旅者正走向它们">
+    <div class="cap">
+      <span class="bn">站 4 · 全课参数量的 97.8%</span>
+      <span class="bt">MoE：671B 的主体</span>
+      <span class="bs">256 扇门都在那儿，每一扇都占着显存。
+        但每个 token 走过时，只有 9 扇会为它亮起。</span>
+    </div>
+  </div>
   <div class="stn big"><span class="badge">站 4 ⭐</span><h2>MoE：671B 的主体</h2></div>
   <p class="lead">整个模型 96% 的参数都在这 58 层里。</p>
 
@@ -1167,6 +1209,23 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
         ⚠️ MoE 省的是算力（18.3× ），不省显存（0×）</text>
     </svg>
   </figure>
+
+  <div class="figpair" style="display:grid;grid-template-columns:1fr 340px;gap:26px;
+       align-items:center;margin:28px 0">
+    <div>
+      <h4 style="margin-top:0">把这一节压成一句话</h4>
+      <p style="font-size:19px;font-weight:600;line-height:1.65">
+        <b>那座山是显存要扛的，那条溪才是算力要付的。</b></p>
+      <p>671B 的参数像一整座山压在显存上，一块都搬不走；
+      而每个 token 真正淌过的，只有山脚下那条细得几乎看不见的溪流 —— 37B。</p>
+      <p style="margin-bottom:0"><b>MoE 做的事，就是把山和溪分开。</b>
+      在它之前，你想要多大的山，就得付多大的水。</p>
+    </div>
+    <figure style="margin:0">
+      <img src="img/course-671b-vs-37b.webp" alt="巨大的水墨山峦，山脚下一条极细的青色光流"
+           style="width:100%;border-radius:14px;display:block">
+    </figure>
+  </div>
 
   <div class="note danger">
     <span class="t">这个反直觉必须点破</span>
