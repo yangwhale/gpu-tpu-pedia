@@ -6,6 +6,12 @@
 <title>专题一 · 一个 Token 的一生</title>
 <meta property="og:title" content="一个 Token 的一生 · Life Cycle of a Token">
 <meta property="og:description" content="拆开 DeepSeek V3，跟着一个 token 走完全程 —— 每走一步就把账算一遍。全页数字随参数实时联动。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-01.html">
+<meta property="og:image" content="https://gist.higcp.com/Courses/WebPages/img/og-topic-01.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#1a73e8">
 <style>
 :root{
@@ -187,6 +193,36 @@ figcaption{font-size:13.5px;color:var(--gray);margin-top:10px;text-align:center;
 .eq .c{color:var(--gray)}
 .eq .r{color:var(--blue-d);font-weight:700}
 
+/* ── 阅读进度 + 回顶 ─────────────────── */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;background:transparent;
+          pointer-events:none}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#1a73e8,#9334e6);
+            transition:width .1s linear}
+.totop{position:fixed;right:22px;bottom:22px;width:44px;height:44px;border-radius:50%;
+       background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:19px;z-index:55;
+       opacity:0;pointer-events:none;transition:opacity .2s;box-shadow:0 4px 16px rgba(0,0,0,.24)}
+.totop.on{opacity:.88;pointer-events:auto}
+.totop:hover{opacity:1}
+
+/* ── 术语 tooltip ─────────────────────── */
+.gl{border-bottom:1px dashed var(--blue);cursor:help;position:relative;
+    text-decoration:none;color:inherit}
+.gl:after{content:attr(data-t);position:absolute;left:50%;bottom:calc(100% + 9px);
+   transform:translateX(-50%) translateY(4px);background:var(--ink);color:#fff;
+   font:400 13.5px/1.6 "Noto Sans CJK SC",sans-serif;padding:11px 15px;border-radius:9px;
+   width:290px;opacity:0;pointer-events:none;transition:opacity .16s,transform .16s;
+   box-shadow:0 6px 22px rgba(0,0,0,.22);z-index:80;text-align:left;white-space:normal}
+.gl:before{content:"";position:absolute;left:50%;bottom:calc(100% + 3px);
+   transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink);
+   opacity:0;transition:opacity .16s;z-index:81}
+.gl:hover:after,.gl:focus:after{opacity:1;transform:translateX(-50%) translateY(0)}
+.gl.tl:after{left:0;transform:translateX(0) translateY(4px)}
+.gl.tl:hover:after,.gl.tl:focus:after{transform:translateX(0) translateY(0)}
+.gl.tr:after{left:auto;right:0;transform:translateX(0) translateY(4px)}
+.gl.tr:hover:after,.gl.tr:focus:after{transform:translateX(0) translateY(0)}
+.gl:hover:before,.gl:focus:before{opacity:1}
+@media(max-width:860px){.gl:after{width:220px;font-size:12.5px}}
+
 /* ── 讲课计划（折叠） ─────────────────── */
 .plan{border:1px solid var(--line);border-radius:var(--radius);margin:24px 0;background:#fff}
 .plan summary{padding:16px 22px;cursor:pointer;font-size:15px;color:var(--gray);
@@ -259,6 +295,7 @@ footer a{text-decoration:none}
 </div></div>
 
 <!-- ══════════ STICKY 控制台 ══════════ -->
+<div class="progress"><i id="pbar"></i></div>
 <div class="console"><div class="inner">
   <span class="tag">◉ 全页联动</span>
   <div class="ctrl">
@@ -332,6 +369,17 @@ footer a{text-decoration:none}
       <p class="sub">显存、算力、带宽 —— 三个瓶颈，三个答案。
       <b>这正是这门课要建立的那条因果链。</b></p>
     </div>
+  </div>
+
+  <div class="note ok">
+    <span class="t">⭐ 「它是标准」不是一句评价，是可以查证的事实</span>
+    2026 年腾讯开源的混元 3（295B/21B），MoE 那部分<b>是逐字段照着 V3 抄的</b> ——
+    sigmoid 路由、无辅助损失的专家偏置、共享专家、MTP、
+    连「前 k 层保持 dense」这个字段的<b>名字都一样</b>。
+    它只把注意力从 MLA 换成了 GQA。
+    <br><br>
+    <b>这就是为什么这一课拆 V3 而不是拆别的。</b>
+    你把它拆明白了，再去看后面这一批开源模型，看到的是同一套零件的不同排列。
   </div>
 
   <h3>671B 是个什么概念</h3>
@@ -553,6 +601,16 @@ footer a{text-decoration:none}
     <div class="jsteps"><div class="jstep now"><span>① 嵌入</span></div><div class="jstep "><span>② MLA</span></div><div class="jstep "><span>③ Dense</span></div><div class="jstep "><span>④ MoE</span></div><div class="jstep "><span>⑤ 层间</span></div><div class="jstep "><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
     <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
   </div>
+  <div class="band">
+    <img src="img/course-s1-embedding.webp" loading="lazy"
+         alt="一枚金色的光点从古卷上升起，落在墨色湖面，荡开青色涟漪">
+    <div class="cap">
+      <span class="bn">站 1 · 旅程的起点</span>
+      <span class="bt">从文字到向量</span>
+      <span class="bs">一个字离开纸面，变成一串数。这一站什么都没算 ——
+        只是查了一次表，但显存已经掉了一块。</span>
+    </div>
+  </div>
   <div class="stn"><span class="badge">站 1</span><h2>从文字到向量</h2></div>
   <p class="lead">这一站什么都没算，只是<b>查了一次表</b>。但显存已经掉了一块。</p>
 
@@ -631,7 +689,7 @@ footer a{text-decoration:none}
     <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
   </div>
   <div class="band">
-    <img src="img/course-mla-compression.webp" alt="一团庞大的云雾被压缩成一颗小小的光珠，另有一缕金线绕开压缩独自前行">
+    <img src="img/course-mla-compression.webp" loading="lazy" alt="一团庞大的云雾被压缩成一颗小小的光珠，另有一缕金线绕开压缩独自前行">
     <div class="cap">
       <span class="bn">站 2 · 全课最重的一段</span>
       <span class="bt">MLA：注意力，以及 KV cache 的战争</span>
@@ -955,7 +1013,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
   </div>
   <div class="band">
-    <img src="img/course-moe-gates.webp" alt="一座大殿里排列着数百扇石门，只有九扇亮着金光，一个光之旅者正走向它们">
+    <img src="img/course-moe-gates.webp" loading="lazy" alt="一座大殿里排列着数百扇石门，只有九扇亮着金光，一个光之旅者正走向它们">
     <div class="cap">
       <span class="bn">站 4 · 全课参数量的 97.8%</span>
       <span class="bt">MoE：671B 的主体</span>
@@ -1085,8 +1143,12 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
       <tr><td>选几个</td><td><code>top-8</code></td>
         <td>8 个路由 + 1 个共享 = 每 token 过 9 个专家</td></tr>
       <tr><td>负载均衡</td><td><code>noaux_tc</code></td>
-        <td>不靠辅助损失，靠一个可学习的偏置动态调整。
-            辅助损失的问题是<b>它跟主目标打架</b> —— 你在同时优化「答得对」和「分得匀」</td></tr>
+        <td>不靠辅助损失，靠给每个专家挂一个<b>动态偏置</b>：
+            最近接活太多的，偏置调低一点；太闲的，调高一点。<br>
+            ⭐ <b>这个偏置只参与「选谁」，不参与「选完之后按多大权重算」</b> ——
+            所以它能把负载掰匀，却不改变模型的输出。<br>
+            而且它<b>不是梯度学出来的</b>，是按实际负载直接调的，
+            因此完全不进主目标的损失函数。</td></tr>
     </tbody>
   </table></div>
 
@@ -1096,6 +1158,17 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     它们存在的唯一理由是：让一个 token 要去的专家尽量集中在少数几台机器上，
     好让 all-to-all 通信不要跨太多机。
     <b>通信约束被直接写进了模型结构里。</b>
+  </div>
+
+  <div class="note info">
+    <span class="t">为什么这个设计值得单独讲</span>
+    老办法是在损失函数里加一项「分得匀不匀」的惩罚，逼模型均衡。
+    问题是<b>你在让模型同时优化两件不相干的事</b> ——「答得对」和「分得匀」——
+    这两个目标会互相拉扯，最后两头都打折。
+    <br><br>
+    <b>V3 的做法是把「分得匀」整个搬出损失函数。</b>
+    它变成了训练循环外面的一个调度动作，跟模型学什么完全无关。
+    <b>这是一个很好的工程直觉的例子：一个约束如果不属于目标，就别塞进目标里。</b>
   </div>
 
   <p><b>负载不均会怎样。</b> 专家分散在不同卡上。如果某几个专家特别热门，
@@ -1222,7 +1295,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
       在它之前，你想要多大的山，就得付多大的水。</p>
     </div>
     <figure style="margin:0">
-      <img src="img/course-671b-vs-37b.webp" alt="巨大的水墨山峦，山脚下一条极细的青色光流"
+      <img src="img/course-671b-vs-37b.webp" loading="lazy" alt="巨大的水墨山峦，山脚下一条极细的青色光流"
            style="width:100%;border-radius:14px;display:block">
     </figure>
   </div>
@@ -1641,6 +1714,8 @@ x = x + MoE(norm(x))
   <p>本页随 <code>Courses/</code> 采用
     <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>。</p>
 </div></footer>
+
+<button class="totop" id="totop" aria-label="回到顶部">↑</button>
 
 <script>
 "use strict";
@@ -2095,6 +2170,59 @@ function drawCardGrid(r){
     "每个 token 都过它 —— 通用能力不必在 256 个专家里各学一遍"));
 })();
 
+/* ── 术语 tooltip：扫描文本节点，只标首次出现 ── */
+(function glossary(){
+  const G = {
+    "RMSNorm":"一种归一化：把向量整体缩放到合适的尺度，让每一层的输入不至于越来越大或越来越小。比经典的 LayerNorm 少算一步均值，所以更快。",
+    "SwiGLU":"一种带门的激活函数。一路算「内容」，另一路算「开关」，两者相乘 —— 让网络自己决定每个位置放多少信息过去。",
+    "YaRN":"把短上下文训出来的模型外推到长上下文的一种方法。做法是调整位置编码的频率，让模型在没见过的长度上也不至于失效。",
+    "all-to-all":"一种集合通信：每张卡都要给其他每一张卡发一份不同的数据。MoE 里最贵的那一步就是它。",
+    "MXU":"TPU 里那个巨大的矩阵乘法单元。它一次吞一整块矩阵，所以最喜欢规整的大形状，最怕零碎的小操作。",
+    "FlashAttention":"一种注意力实现：永远不把那个巨大的分数矩阵整个物化出来，而是分块算、边算边累加、算完就扔。省的是显存，不只是时间。",
+    "投机解码":"先用便宜的方法猜出接下来几个字，再让主模型一次性验证。猜对了就白赚，猜错了跟原来一样重算，不亏。",
+    "残差流":"贯穿所有层的那条主干向量。每一层从它读一份、算点东西、再加回去 —— 像一条总线，不是一条流水线。",
+    "低秩":"把一个大矩阵拆成两个瘦长矩阵相乘。信息会损失一点，但参数量和存储量能降一大截。",
+    "算术强度":"每从内存搬一个字节，能顺带做多少次计算。这个比值决定了一个操作是被算力卡住，还是被带宽卡住。"
+  };
+  const keys = Object.keys(G).sort((a,b)=>b.length-a.length);
+  const used = new Set();
+  const SKIP = new Set(["SCRIPT","STYLE","CODE","PRE","A","BUTTON","SVG","TEXT","ABBR","SUMMARY","H1","H2","TITLE"]);
+  const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
+    acceptNode(n){
+      let e = n.parentElement;
+      while(e){ if(SKIP.has(e.tagName) || e.classList?.contains("eq")
+                   || e.classList?.contains("gl")) return NodeFilter.FILTER_REJECT;
+                e = e.parentElement; }
+      return n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
+    }});
+  const nodes=[]; let n; while(n = walk.nextNode()) nodes.push(n);
+  nodes.forEach(node=>{
+    for(const k of keys){
+      if(used.has(k)) continue;
+      const i = node.nodeValue.indexOf(k);
+      if(i < 0) continue;
+      used.add(k);
+      const after = node.splitText(i);
+      after.nodeValue = after.nodeValue.slice(k.length);
+      const sp = document.createElement("span");
+      sp.className = "gl"; sp.tabIndex = 0;
+      sp.setAttribute("data-t", G[k]); sp.textContent = k;
+      after.parentNode.insertBefore(sp, after);
+      break;                       // 一个文本节点最多改一处，避免游标失效
+    }
+  });
+  // 靠近视口边缘时把气泡翻到一侧，避免被裁掉
+  document.querySelectorAll(".gl").forEach(g=>{
+    const fix = ()=>{
+      const r = g.getBoundingClientRect(), W = document.documentElement.clientWidth;
+      g.classList.toggle("tr", r.left + 145 > W - 12);
+      g.classList.toggle("tl", r.left - 145 < 12);
+    };
+    g.addEventListener("mouseenter", fix);
+    g.addEventListener("focus", fix);
+  });
+})();
+
 /* ── 猜一猜 ── */
 (function(){
   const box = document.querySelector(".guess"); if(!box) return;
@@ -2106,6 +2234,19 @@ function drawCardGrid(r){
     rev.classList.add("on");
     rev.scrollIntoView({behavior:"smooth", block:"nearest"});
   }));
+})();
+
+/* ── 阅读进度 + 回顶 ── */
+(function(){
+  const bar = document.getElementById("pbar"), top = document.getElementById("totop");
+  const on = ()=>{
+    const h = document.documentElement.scrollHeight - innerHeight;
+    const p = h > 0 ? scrollY / h : 0;
+    bar.style.width = (p*100).toFixed(2) + "%";
+    top.classList.toggle("on", scrollY > 900);
+  };
+  addEventListener("scroll", on, {passive:true}); addEventListener("resize", on); on();
+  top.addEventListener("click", ()=>scrollTo({top:0, behavior:"smooth"}));
 })();
 
 /* ── 绑定 ── */
