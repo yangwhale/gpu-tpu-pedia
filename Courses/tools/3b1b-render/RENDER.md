@@ -1,5 +1,9 @@
 # 自己渲 3Blue1Brown 的图 —— 可复现步骤
 
+> ⚠️ **这套工具当前不在课程主线上。** 课程 2026-08-21 转向拆 DeepSeek V3，
+> 3b1b 那批图讲的是标准 Transformer，跟 MLA / MoE 对不上，已从课程移除。
+> 工具留着是因为它能一条命令重建全部 28 张图，以后要画图时可能还用得上。
+
 2026-08-21 在 cc-tw（Ubuntu，无显示器，无 GPU）上跑通。
 **28 个场景全部渲出**（`mlp` / `attention` / `embedding` / `ml_basics` / `auto_regression` 五个文件），
 一张 1080p 静帧 3-80 秒，纯 CPU 软件渲染。
@@ -24,7 +28,7 @@
 
 ```bash
 ./setup-render-env.sh          # 一键搭环境（幂等，可重复跑）
-./render-scenes.sh             # 批量渲第一课要用的 28 个场景
+./render-scenes.sh             # 批量渲那 28 个场景
 ./render-scenes.sh attention   # 只渲名字含 attention 的
 ```
 
@@ -173,7 +177,7 @@ FileNotFoundError: .../data/athlete_sports.txt
 | `auto_regression.py` | 3 个（`SimpleAutogregression` 要加载 GPT-2，最慢） | 10-79 s |
 
 全部 1920×1080，合计 6.1 MB，已收进 [`教学材料/3b1b图/`](教学材料/3b1b图/)，
-按第一课的五节归好位。
+当时按五节归过位。
 
 ### 两个渲不出来的（原因清楚，不修）
 
@@ -187,7 +191,7 @@ FileNotFoundError: .../data/athlete_sports.txt
 ## 还没做的
 
 - [ ] **抓中间帧** —— `-s` 只存最后一帧。Michael Jordan 那个例子在
-      `BasicMLPWalkThrough` 的动画中段，要用 `-n <动画序号>` 取。**第一课需要这张。**
+      `BasicMLPWalkThrough` 的动画中段，要用 `-n <动画序号>` 取。
 - [ ] **占位素材换成我们自己的图** —— 现在那些标着 placeholder 的方块
       （`Dalle3_*`、`RiverBank`、`AttentionPaperStill` 等）能让场景跑起来，
       但上课时得换成真图或干脆裁掉
