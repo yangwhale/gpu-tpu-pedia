@@ -34,24 +34,28 @@
 抓取方式：`curl https://r.jina.ai/https://3blue1brown.com/lessons/<slug>`，
 末尾的赞助者名单已剔除。**这是原文，不是我们的改写** —— 引用时要转成自己的话。
 
-## 2 · `3b1b图/` — 已渲出的图
+## 2 · `3b1b图/` — 已渲出的图（`mlp.py` 全部 10 个场景）
 
 | 文件 | 画的是什么 | 打算用在 |
 |---|---|---|
+| `BasicMLPWalkThrough.png` | **MLP 全流程 3D 图**：Linear → ReLU → Linear | 第 3 节主图 |
+| `BreakDownThreeSteps.png` | **三步拆解**：升维行向量 → ReLU → 降维列向量 | 第 3 节 |
+| `Superposition.png` | **89°/91° + exp(ε·N) + N 维空间的向量束** | 第 3 节那个必须成对的修正 |
 | `MLPIcon.png` | 经典神经网络图（输入 → 4× 宽中间层 → 输出） | 第 3 节开篇 |
-| `BreakDownThreeSteps.png` | **MLP 三步全图**（升维 → ReLU → 降维） | 第 3 节主图 |
-| `AlmostOrthogonal.png` | 近似垂直的向量 | 第 3 节 superposition |
-| `StackOfVectors.png` | 一摞向量 | 备用 |
 | `NonlinearityOfLanguage.png` | 语言的非线性 | 第 3 节引入 ReLU |
+| `AlmostOrthogonal.png` | 近似垂直的向量 | 第 3 节 |
+| `ShowAngleRange.png` | 角度分布 | 第 3 节 |
+| `StackOfVectors.png` | 一摞向量 | 备用 |
 | `ClassicNeuralNetworksPicture.png` | 层与连线示意 | 备用 |
+| `LastTwoChapters.png` | 上两章回顾 | 备用（缩略图是**自制占位图**） |
 
-全部 1920×1080。渲染步骤见 `../RENDER.md`，脚本 `../render-scenes.sh`。
+全部 1920×1080，合计 1.8 MB。**10/10 全部渲染成功。**
 
-**这些是可以重新生成的产物**，所以不进版本库 —— 改一行代码重渲一遍就是了。
-源头是场景代码，不是这些 PNG。
+复现：`../setup-render-env.sh` 搭环境（含一个必打的 manimgl bug 补丁），
+`../render-scenes.sh` 批量渲。踩过的六个坑见 `../RENDER.md`。
 
-> 还差的图：`BasicMLPWalkThrough`（Michael Jordan 全程）、`Superposition`、
-> `ShowAngleRange` —— 这三个 LaTeX 编译失败，原因未定位，见 `../RENDER.md`。
+> **还差一张**：Michael Jordan 那个例子在 `BasicMLPWalkThrough` 的**动画中段**，
+> 而 `-s` 只存最后一帧。要用 `-n <动画序号>` 取中间帧。第一课需要这张。
 
 ## 3 · CS336 —— 引用，不复制
 
