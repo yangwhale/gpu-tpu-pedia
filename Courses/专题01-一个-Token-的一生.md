@@ -5,7 +5,7 @@
 > **一个 token 走完全程，每走一步就把账算一遍。**
 
 > ✅ **网页版已完成** ——
-> [在线阅读](https://yangwhale.github.io/gpu-tpu-pedia/Courses/WebPages/topic-01.html)（全页数字随序列长度 / batch / 精度实时联动）。
+> [在线阅读](https://gist.higcp.com/Courses/WebPages/topic-01.html)（全页数字随序列长度 / batch / 精度实时联动）。
 > 本文件是它的大纲与讲课节奏。
 
 ---
@@ -394,7 +394,7 @@
 | 要什么 | 在哪 |
 |---|---|
 | ⭐ **算账脚本**（读 config 输出全部表格） | [`tools/token-budget.py`](tools/token-budget.py) |
-| ⭐ **网页版**（全页数字随参数实时联动） | [`WebPages/topic-01.html`](WebPages/topic-01.html) · [在线](https://yangwhale.github.io/gpu-tpu-pedia/Courses/WebPages/topic-01.html) |
+| ⭐ **网页版**（全页数字随参数实时联动） | [`WebPages/topic-01.html`](WebPages/topic-01.html) · [在线](https://gist.higcp.com/Courses/WebPages/topic-01.html) |
 | 官方 config | `素材/deepseek-v3-config.json`（已存） |
 | V3 / V3.2 论文 | `~/learning/DeepSeek/`（23 篇全集） |
 | MoE 理论主线 | `~/learning/moe-tour/`（苏剑林 9 篇 + 图） |

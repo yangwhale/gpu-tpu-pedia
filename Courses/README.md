@@ -2,7 +2,7 @@
 
 [![CC BY-NC-SA 4.0](https://licensebuttons.net/l/by-nc-sa/4.0/88x31.png)](http://creativecommons.org/licenses/by-nc-sa/4.0/)
 
-### 📖 [**在线阅读 · 课程总纲**](https://yangwhale.github.io/gpu-tpu-pedia/Courses/WebPages/)
+### 📖 [**在线阅读 · 课程总纲**](https://gist.higcp.com/Courses/WebPages/)
 
 > **你看得懂 DeepSeek V3 的论文。你也知道它有 6710 亿参数。**
 >
@@ -124,7 +124,7 @@
 
 ## 主线
 
-### ① [一个 Token 的一生](专题01-一个-Token-的一生.md)　📖 [**网页版**](https://yangwhale.github.io/gpu-tpu-pedia/Courses/WebPages/topic-01.html)
+### ① [一个 Token 的一生](专题01-一个-Token-的一生.md)　📖 [**网页版**](https://gist.higcp.com/Courses/WebPages/topic-01.html)
 
 > **不泛讲 Transformer。拆一个真的 ——
 > 跟着一个 token 走完全程，每走一步就把账算一遍。**
