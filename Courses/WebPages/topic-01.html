@@ -166,6 +166,19 @@ figcaption{font-size:13.5px;color:var(--gray);margin-top:10px;text-align:center;
 .eq .c{color:var(--gray)}
 .eq .r{color:var(--blue-d);font-weight:700}
 
+/* ── 讲课计划（折叠） ─────────────────── */
+.plan{border:1px solid var(--line);border-radius:var(--radius);margin:24px 0;background:#fff}
+.plan summary{padding:16px 22px;cursor:pointer;font-size:15px;color:var(--gray);
+              list-style:none;display:flex;align-items:center;gap:8px}
+.plan summary::-webkit-details-marker{display:none}
+.plan summary:before{content:"▸";color:var(--blue);font-size:13px;transition:transform .15s}
+.plan[open] summary:before{transform:rotate(90deg)}
+.plan summary b{color:var(--ink)}
+.plan summary:hover{background:var(--bg2)}
+.plan-body{padding:0 22px 20px;border-top:1px solid var(--line2);margin-top:2px;padding-top:16px}
+.plan-body table{font-size:14px;margin:12px 0}
+.plan-body td.n{text-align:left;color:var(--blue-d)}
+
 /* ── 目录 ─────────────────────────────── */
 .toc{background:var(--bg2);border-radius:var(--radius);padding:22px 26px;margin:24px 0}
 .toc ol{list-style:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,auto);
@@ -182,8 +195,20 @@ footer a{text-decoration:none}
 @media(max-width:860px){
   .hero h1{font-size:34px}.hook{font-size:18px}
   .g2,.g3,.g4,.toc ol{grid-template-columns:1fr}
-  .console .inner{gap:12px;padding:9px 16px}
-  .ctrl input[type=range]{width:88px}
+  .toc ol{grid-auto-flow:row;grid-template-rows:none}
+  .console .inner{gap:10px;padding:9px 16px}
+  .ctrl input[type=range]{width:84px}
+  .presets{margin-left:0;flex-wrap:wrap;gap:5px}
+  .presets span{display:none}
+  .presets button{padding:5px 10px;font-size:11.5px}
+  .console .adv{display:none}            /* 小屏只留序列长度滑块 + 场景预设 */
+  .console .tag{font-size:10px}
+  .ctrl label{font-size:12px}
+  .jmeter{flex-wrap:wrap;gap:6px 14px;font-size:12px;width:100%}
+  .journey{padding:12px 14px;gap:12px}
+  h2{font-size:25px}.punch{font-size:17px;padding:20px 22px}
+  .guess button{padding:11px 16px;font-size:14px}
+  .eq{font-size:12.5px;padding:12px 14px}
 }
 </style>
 </head>
@@ -217,12 +242,12 @@ footer a{text-decoration:none}
     <input type="range" id="seq" min="9" max="20" step="1" value="17">
     <output id="seqOut">128K</output>
   </div>
-  <div class="ctrl">
+  <div class="ctrl adv">
     <label for="bs">batch</label>
     <input type="range" id="bs" min="0" max="6" step="1" value="0">
     <output id="bsOut">1</output>
   </div>
-  <div class="ctrl">
+  <div class="ctrl adv">
     <label for="prec">精度</label>
     <select id="prec">
       <option value="2" selected>bf16 · 2B</option>
@@ -284,6 +309,53 @@ footer a{text-decoration:none}
       <b>这正是这门课要建立的那条因果链。</b></p>
     </div>
   </div>
+
+  <h3>671B 是个什么概念</h3>
+  <p>参数量这个数，单独看没有意义。摆到一起才有。</p>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 300" role="img" aria-label="主流大模型总参数与激活参数对比">
+      <g id="modelbars"></g>
+    </svg>
+    <figcaption><b>深色是总参数（显存要装的），浅色是激活参数（算力要花的）。</b>
+    稠密模型两者相等；MoE 模型把它们<b>掰开了</b> ——
+    这一掰，就是过去两年大模型能一路做大的根本原因。</figcaption>
+  </figure>
+
+  <div class="note info">
+    <span class="t">看这张图要抓的一件事</span>
+    <b>V3 的总参数是 GPT-3 的 3.8 倍，但每个 token 实际的计算量只有它的 0.21 倍。</b>
+    「更大」和「更贵」在 2024 年之后就不是一回事了 ——
+    这门课后面所有的账，都建立在这个分裂之上。
+  </div>
+
+  <details class="plan">
+    <summary>⏱ <b>一小时怎么讲</b> —— 给讲课的人（听众可以跳过）</summary>
+    <div class="plan-body">
+      <p>这一页的信息量<b>大于一小时能讲完的量</b>，这是故意的 ——
+      课上按下面的节奏走主线，细节留在页面上让人回去自己翻。</p>
+      <table>
+        <thead><tr><th>分钟</th><th>讲什么</th><th>这一段的落点</th></tr></thead>
+        <tbody>
+          <tr><td class="n">0–5</td><td><b>开场</b>：先让所有人猜那个数，再亮口径和底牌</td>
+            <td>把「我们要算一笔账」这个框架立住</td></tr>
+          <tr><td class="n">5–12</td><td><b>站 1 · 嵌入</b>：查一次表，1.75 GiB 就没了</td>
+            <td>第一个「坐直」的时刻</td></tr>
+          <tr><td class="n">12–27</td><td>⭐ <b>站 2 · MLA</b>：四代演进 → 压缩怎么做 → 三个爆点</td>
+            <td><b>全课最重的 15 分钟。</b>讲不完别的可以砍，这段不能砍</td></tr>
+          <tr><td class="n">27–40</td><td><b>站 3+4 · Dense → MoE</b>：先讲 dense 的四条好性质，再讲 MoE 拿它们换了什么</td>
+            <td>「MoE 省算力不省显存」这一条要点破</td></tr>
+          <tr><td class="n">40–48</td><td><b>站 5+6 · 层间与出口</b>：残差流是总线；出口 logits 的爆点</td>
+            <td>顺手立住「激活为什么不能全留」这个问题，不答</td></tr>
+          <tr><td class="n">48–60</td><td>⭐ <b>站 7 + 7.5 · 合账 + 我们真跑过</b></td>
+            <td>落到「至少 15 张卡」，然后抛钩子给专题二</td></tr>
+        </tbody>
+      </table>
+      <p><b>现场怎么用这一页</b>：投影时把浏览器开到这一页，讲到哪一站滚到哪。
+      顶上那条控制台<b>随时可以拖</b> —— 讲 attention 平方项那一段，
+      当场把序列长度从 4K 推到 1M，比说十句话都管用。</p>
+    </div>
+  </details>
 
   <div class="toc">
     <ol>
@@ -782,7 +854,20 @@ footer a{text-decoration:none}
   <div class="punch">
     在 <span data-v="seqLabel">128K</span> 下，attention 的平方项吃掉
     <span data-v="attnShare">81.8%</span> 的前向算力。
-    <small>换句话说：这个规模上，「模型有多少参数」已经不是算力的主要矛盾了 —— 序列有多长才是。</small>
+    <small>换句话说：这个规模上，「模型有多少参数」已经不是算力的主要矛盾了 —— 序列有多长才是。
+    把顶上滑块推到 1M 看看，那个数字会变成 97%。</small>
+  </div>
+
+  <div class="note ok">
+    <span class="t">所以后面发生了什么</span>
+    这条曲线一旦被算出来，接下来该做什么就很明显了：<b>如果 attention 吃掉九成算力，
+    那就别让每个 query 都看全部 token。</b>
+    V3.2 的做法是给每个 query 先挑出最相关的几千个 token 再算注意力，
+    128K 下能把这部分算量砍掉一大截。再往后的 V4 更进一步，
+    同一个模型里混用<b>三种</b>不同压缩率的注意力。
+    <br><br>
+    <b>这些方案长什么样、各自在换什么，是<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9807-%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%BC%94%E8%BF%9B.md">专题七</a>的事。</b>
+    这一课只负责把「为什么非改不可」算出来 —— 就是上面这条曲线。
   </div>
 </div></section>
 
@@ -1172,7 +1257,7 @@ x = x + MoE(norm(x))
     残差流每一层进出各一份。如果 61 层的激活<b>全部留着</b>，光这一项就是
     <b><span data-v="actAll61">106.75 GiB</span></b>，已经超过单张卡。
     于是自然冒出一个问题：<b>凭什么要留着？</b>
-    答案在反向传播里 —— 那是<a href="topic-03.html">专题三</a>的事，这里只把问题立住。
+    答案在反向传播里 —— 那是<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9803-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题三</a>的事，这里只把问题立住。
   </div>
 
   <h3>题外一眼：mHC —— V4 换了残差结构</h3>
@@ -1216,9 +1301,15 @@ x = x + MoE(norm(x))
       <p><code>num_nextn_predict_layers = 1</code> —— 除了预测下一个 token，
       还额外预测下下一个。</p>
       <div class="tbl-wrap"><table><tbody>
-        <tr><td><b>训练时</b></td><td>额外的监督信号，逼模型看得更远一点</td></tr>
-        <tr><td><b>推理时</b></td><td>拿来做<b>投机解码</b>的草稿 —— 一次多吐一个字</td></tr>
+        <tr><td><b>训练时</b></td><td>额外的监督信号。只预测下一个字，模型容易学成「顺嘴溜」；
+          逼它同时预测下下个字，等于<b>要求它对更远的地方也有规划</b></td></tr>
+        <tr><td><b>推理时</b></td><td>拿来做<b>投机解码</b>的草稿。
+          先便宜地猜出接下来两个字，再让主模型<b>一次性验证</b> ——
+          猜对了就白赚一个字，猜错了也不亏（跟原来一样重算）</td></tr>
       </tbody></table></div>
+      <p>投机解码为什么划算，得回到<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9805-%E6%8E%A8%E7%90%86.md">专题五</a>那条结论：
+      <b>吐字那一段是被带宽卡住的，不是被算力卡住的。</b>
+      既然读一遍权重的钱已经付了，顺手多验证一个字几乎是免费的。</p>
     </div>
     <div>
       <figure class="fbox" style="margin-top:0">
@@ -1366,7 +1457,7 @@ x = x + MoE(norm(x))
     <div class="card">
       <h4>② 报出来的数不是全部</h4>
       <p class="sub">它只是<b>临时缓冲</b>，参数和优化器状态是另外一笔
-      （见<a href="topic-03.html">专题三</a>）。</p>
+      （见<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9803-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题三</a>）。</p>
       <p class="sub" style="margin-top:10px">而且它<b>不随并行度缩小</b> ——
       切得再宽，临时缓冲该多大还多大。这一点最容易算错。</p>
     </div>
@@ -1387,7 +1478,75 @@ x = x + MoE(norm(x))
 
   <div class="punch dark">
     显存不是模型的属性，是「模型 × 实现 × 编译器」三者的属性。
-    <small>这一条会在<a href="topic-06.html" style="color:#8ab4f8">专题六</a>里反复出现。</small>
+    <small>这一条会在<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9806-%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE.md" style="color:#8ab4f8">专题六</a>里反复出现。</small>
+  </div>
+</div></section>
+
+<!-- ══════════ 带走这几条 ══════════ -->
+<section><div class="wrap">
+  <h2>这一课带走这几条</h2>
+  <p class="lead">数字会忘，<b>这几个反直觉的结论要记住</b> —— 后面每一课都会用到。</p>
+
+  <div class="grid g2">
+    <div class="card" style="border-left:4px solid var(--blue)">
+      <h4>01 · 关于 MoE</h4>
+      <p><b>它省的是算力，不省显存。</b></p>
+      <p class="sub">听到「激活只有 37B」就以为跟 37B 的稠密模型一样好养 —— 完全不是。
+      显存要装的还是 671B，一个字节都少不了。</p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--red)">
+      <h4>02 · 关于长上下文</h4>
+      <p><b>序列一长，瓶颈就从「参数多少」换成「序列多长」。</b></p>
+      <p class="sub">4K 时 attention 只占一成算力，128K 时占八成，1M 时占九成七。
+      同一个模型，换个输入长度，优化的方向完全不同。</p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--yellow)">
+      <h4>03 · 关于「爆炸」</h4>
+      <p><b>最吓人的往往不是权重，是临时张量。</b></p>
+      <p class="sub">注意力分数矩阵、出口的 logits —— 它们连参数都不是，
+      用完就扔，但峰值比任何一层权重都大。<b>算显存只算权重，一定会算错。</b></p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--green)">
+      <h4>04 · 关于结构设计</h4>
+      <p><b>模型结构里有些数字，跟质量无关，是硬件逼出来的。</b></p>
+      <p class="sub">那个「先选 4 个组、再组内选专家」的规则，唯一的目的就是别让通信跨太多台机器。
+      <b>看模型结构时要能分出：哪些是为了聪明，哪些是为了跑得动。</b></p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--purple)">
+      <h4>05 · 关于「专家」</h4>
+      <p><b>它不按领域分工。</b></p>
+      <p class="sub">不是一个管数学一个管医学，而是按 token 类型和语境分，更接近语法层面。
+      每个 token 在 58 层里走出的是一条只属于它自己的路径。</p>
+    </div>
+    <div class="card" style="border-left:4px solid var(--cyan)">
+      <h4>06 · 关于算账这件事本身</h4>
+      <p><b>显存不是模型的属性，是「模型 × 实现 × 编译器」三者的属性。</b></p>
+      <p class="sub">同样的配置，换个算子实现，显存需求就变，而且方向不固定。
+      静态分析能帮你排除掉大部分明显不行的方案，<b>但不替你做最后那个决定。</b></p>
+    </div>
+  </div>
+</div></section>
+
+<!-- ══════════ 下一课 ══════════ -->
+<section><div class="wrap">
+  <div class="punch dark" style="text-align:left;padding:34px 38px">
+    <div style="font-size:13px;opacity:.7;letter-spacing:.1em;margin-bottom:10px">下一课</div>
+    <div style="font-size:26px;margin-bottom:14px">专题二 · TPU 与 GPU</div>
+    <div style="font-size:17px;font-weight:400;line-height:1.8;opacity:.92">
+      这一整课，我们反复拿一个数当尺子量东西：<b style="color:#8ab4f8">94.74 GB</b>。<br>
+      装不下、要 15 张卡、logits 占了 0.36 张 —— 全都是拿它除出来的。<br><br>
+      <b style="color:#fff">但那张卡到底长什么样？为什么偏偏是这个数？</b><br>
+      为什么有的卡叫 GPU、有的叫 TPU，它们看同一个模型的眼光有什么不同？<br><br>
+      <span style="opacity:.75">第一课算出了「要什么」。第二课讲「机器能给什么」。</span><br>
+      <span style="opacity:.6;font-size:14px">（专题二的网页版还在写，下面这个链接先带你看它的大纲）</span>
+    </div>
+    <div style="margin-top:22px">
+      <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9802-TPU-%E4%B8%8E-GPU.md" style="display:inline-block;background:#fff;color:#202124;
+         padding:12px 26px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:600">
+        看专题二的大纲 →</a>
+      <a href="index.html" style="display:inline-block;margin-left:12px;color:#8ab4f8;
+         padding:12px 8px;text-decoration:none;font-size:15px">回课程总纲</a>
+    </div>
   </div>
 </div></section>
 
@@ -1398,16 +1557,16 @@ x = x + MoE(norm(x))
   <div class="grid g2">
     <div class="card"><h4>反向传播与优化器状态</h4>
       <p class="sub">前向的账是事实，反向的账掺着策略，混讲会讲不清 →
-        <a href="topic-03.html">专题三</a></p></div>
+        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9803-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题三</a></p></div>
     <div class="card"><h4>并行策略</h4>
       <p class="sub">本专题只负责把「装不下」这个事实算出来 →
-        <a href="topic-04.html">专题四</a></p></div>
+        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%B9%B6%E8%A1%8C%E7%AD%96%E7%95%A5.md">专题四</a></p></div>
     <div class="card"><h4>FP8 训练</h4>
       <p class="sub">V3 的一大贡献，但那是精度与数值的话题 →
-        <a href="topic-08.html">专题八</a></p></div>
+        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9808-%E7%B2%BE%E5%BA%A6%E4%B8%8E%E9%87%8F%E5%8C%96.md">专题八</a></p></div>
     <div class="card"><h4>推理</h4>
       <p class="sub">prefill / decode 的差异、连续批处理 —— 全程按训练的前向算 →
-        <a href="topic-05.html">专题五</a></p></div>
+        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9805-%E6%8E%A8%E7%90%86.md">专题五</a></p></div>
   </div>
 </div></section>
 
@@ -1581,6 +1740,47 @@ function render(first){
   }
   drawKvBars(r); drawFlopCurve(r); drawMemStack(r); drawCardGrid(r); drawJourney(r);
 }
+
+/* ── 图 0：主流模型总参数 vs 激活参数（静态） ── */
+(function drawModels(){
+  const g = document.getElementById("modelbars"); if(!g) return;
+  const M = [
+    ["GPT-3",            175,  175, "2020 · 稠密"],
+    ["Llama 3.1 405B",   405,  405, "2024 · 稠密"],
+    ["Mixtral 8×7B",    46.7, 12.9, "2023 · MoE 早期"],
+    ["DeepSeek V3",      671, 36.6, "2024 · 细粒度 MoE ⭐"],
+    ["DeepSeek V4",     1600,   49, "2026 · 更稀疏"]
+  ];
+  const max = 1600, X0 = 168, W = 620, H = 26, GAP = 24;
+  M.forEach((m,i)=>{
+    const y = 26 + i*(H+GAP);
+    const hl = m[0].indexOf("V3")>=0;
+    g.appendChild(el("text",{x:158,y:y+13,"text-anchor":"end",class:"svglbl",
+      fill: hl?"#174ea6":"#202124"}, m[0]));
+    g.appendChild(el("text",{x:158,y:y+27,"text-anchor":"end",class:"svgsm"}, m[3]));
+    // 总参数
+    g.appendChild(el("rect",{x:X0,y,width:m[1]/max*W,height:H,rx:3,
+      fill: hl?"#1a73e8":"#9aa0a6"}));
+    // 激活参数
+    g.appendChild(el("rect",{x:X0,y,width:m[2]/max*W,height:H,rx:3,
+      fill: hl?"#0d652d":"#5f6368"}));
+    if(m[1]!==m[2]){
+      g.appendChild(el("line",{x1:X0+m[2]/max*W,y1:y-3,x2:X0+m[2]/max*W,y2:y+H+3,
+        stroke:"#fff","stroke-width":2}));
+      g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+12,class:"svgnum",
+        fill: hl?"#174ea6":"#5f6368"}, `${m[1]} B`));
+      g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+26,class:"svgsm",fill:"#0d652d"},
+        `激活 ${m[2]} B · 稀疏 ${(m[1]/m[2]).toFixed(0)}×`));
+    } else {
+      g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+18,class:"svgnum",fill:"#5f6368"},
+        `${m[1]} B · 全部都要算`));
+    }
+  });
+  g.appendChild(el("rect",{x:X0,y:278,width:12,height:12,rx:2,fill:"#1a73e8"}));
+  g.appendChild(el("text",{x:X0+18,y:288,class:"svgsm"},"总参数 —— 显存要装下它"));
+  g.appendChild(el("rect",{x:X0+230,y:278,width:12,height:12,rx:2,fill:"#0d652d"}));
+  g.appendChild(el("text",{x:X0+248,y:288,class:"svgsm"},"激活参数 —— 算力只花这部分"));
+})();
 
 /* ── 旅程进度：走到每一站的累计消耗 ── */
 function drawJourney(r){
