@@ -221,6 +221,30 @@ figcaption{font-size:13.5px;color:var(--gray);margin-top:10px;text-align:center;
 .gl.tr:after{left:auto;right:0;transform:translateX(0) translateY(4px)}
 .gl.tr:hover:after,.gl.tr:focus:after{transform:translateX(0) translateY(0)}
 .gl:hover:before,.gl:focus:before{opacity:1}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+/* ── 打印 ─────────────────────────────── */
+@media print{
+  .console,.progress,.totop,.presets{display:none !important}
+  .hero:before{opacity:.28}
+  section{padding:22px 0;break-inside:avoid}
+  .band{height:150px;break-inside:avoid}
+  figure,.card,.note,.topic,.punch{break-inside:avoid}
+  .plan{display:none}
+  a[href^="http"]:after{content:" (" attr(href) ")";font-size:10px;color:#666}
+  body{font-size:12px}
+  .punch{background:#eee !important;color:#000 !important}
+  .punch.dark{background:#ddd !important;color:#000 !important}
+}
+
 @media(max-width:860px){.gl:after{width:220px;font-size:12.5px}}
 
 /* ── 讲课计划（折叠） ─────────────────── */
@@ -249,6 +273,30 @@ figcaption{font-size:13.5px;color:var(--gray);margin-top:10px;text-align:center;
 footer{padding:44px 0 60px;color:var(--gray);font-size:14px;line-height:1.8;
        border-top:1px solid var(--line)}
 footer a{text-decoration:none}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+/* ── 打印 ─────────────────────────────── */
+@media print{
+  .console,.progress,.totop,.presets{display:none !important}
+  .hero:before{opacity:.28}
+  section{padding:22px 0;break-inside:avoid}
+  .band{height:150px;break-inside:avoid}
+  figure,.card,.note,.topic,.punch{break-inside:avoid}
+  .plan{display:none}
+  a[href^="http"]:after{content:" (" attr(href) ")";font-size:10px;color:#666}
+  body{font-size:12px}
+  .punch{background:#eee !important;color:#000 !important}
+  .punch.dark{background:#ddd !important;color:#000 !important}
+}
+
 @media(max-width:860px){
   .hero h1{font-size:34px}.hook{font-size:18px}
   .g2,.g3,.g4,.toc ol{grid-template-columns:1fr}
@@ -295,17 +343,19 @@ footer a{text-decoration:none}
 </div></div>
 
 <!-- ══════════ STICKY 控制台 ══════════ -->
-<div class="progress"><i id="pbar"></i></div>
-<div class="console"><div class="inner">
+<div class="progress" role="progressbar" aria-label="阅读进度"><i id="pbar"></i></div>
+<div class="console" role="region" aria-label="全页参数联动控制台"><div class="inner">
   <span class="tag">◉ 全页联动</span>
   <div class="ctrl">
     <label for="seq">序列长度</label>
-    <input type="range" id="seq" min="9" max="20" step="1" value="17">
+    <input type="range" id="seq" min="9" max="20" step="1" value="17"
+           aria-label="序列长度（2 的幂次）">
     <output id="seqOut">128K</output>
   </div>
   <div class="ctrl adv">
     <label for="bs">batch</label>
-    <input type="range" id="bs" min="0" max="6" step="1" value="0">
+    <input type="range" id="bs" min="0" max="6" step="1" value="0"
+           aria-label="batch 大小（2 的幂次）">
     <output id="bsOut">1</output>
   </div>
   <div class="ctrl adv">
@@ -1414,6 +1464,16 @@ x = x + MoE(norm(x))
   <div class="journey" data-j="5">
     <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep done"><span>② MLA</span></div><div class="jstep done"><span>③ Dense</span></div><div class="jstep done"><span>④ MoE</span></div><div class="jstep done"><span>⑤ 层间</span></div><div class="jstep now"><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
     <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
+  </div>
+  <div class="band">
+    <img src="img/course-s6-logits.webp" loading="lazy"
+         alt="一颗金色光点在谷口炸开成漫天飞散的光尘">
+    <div class="cap">
+      <span class="bn">站 6 · 旅程的终点</span>
+      <span class="bt">出口：从向量回到文字</span>
+      <span class="bs">走了 61 层，最后这一下要把一个向量摊开成
+        129,280 个可能 —— 而摊开的那一瞬间，是全程最占地方的时刻。</span>
+    </div>
   </div>
   <div class="stn"><span class="badge">站 6</span><h2>出口：从向量回到文字</h2></div>
   <p class="lead">走完 61 层，手里是一个 7168 维的向量。要把它变回「下一个字是什么」。</p>
