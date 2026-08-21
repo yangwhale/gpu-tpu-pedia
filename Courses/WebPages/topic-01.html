@@ -1,0 +1,1628 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题一 · 一个 Token 的一生</title>
+<meta property="og:title" content="一个 Token 的一生 · Life Cycle of a Token">
+<meta property="og:description" content="拆开 DeepSeek V3，跟着一个 token 走完全程 —— 每走一步就把账算一遍。全页数字随参数实时联动。">
+<meta name="theme-color" content="#1a73e8">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6;
+  --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea;
+  --purple:#9334e6; --cyan:#12b5cb; --orange:#e8710a;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --bg:#fff; --bg2:#f8f9fa;
+  --radius:12px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{background:var(--bg);color:var(--ink);
+  font:400 16px/1.75 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+section{padding:56px 0;border-top:1px solid var(--line)}
+h2{font-size:31px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+h3{font-size:20px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:22px 0 8px}
+p{margin-bottom:14px}
+.lead{color:var(--gray);font-size:17px;margin-bottom:28px}
+b,strong{font-weight:600;color:var(--ink)}
+a{color:var(--blue)}
+code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
+        border-radius:4px;color:var(--blue-d);white-space:nowrap}
+.num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── 站号标记 ─────────────────────────── */
+.stn{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+.stn .badge{flex:0 0 auto;font:700 12px/1 var(--mono);color:#fff;background:var(--blue);
+            border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.stn.big .badge{background:var(--red)}
+.stn h2{margin:0}
+
+/* ── hero ─────────────────────────────── */
+.hero{padding:76px 0 40px;background:linear-gradient(165deg,var(--blue-l) 0%,#f3f7fe 55%,#fff 100%)}
+.crumb{font-size:14px;color:var(--gray);margin-bottom:20px}
+.crumb a{text-decoration:none}
+.hero h1{font-size:50px;font-weight:700;letter-spacing:-.035em;line-height:1.12;margin-bottom:6px}
+.hero .en{font:italic 400 19px/1 var(--mono);color:var(--gray);letter-spacing:.02em;margin-bottom:26px}
+.hook{font-size:21px;line-height:1.6;font-weight:500;border-left:4px solid var(--blue);
+      padding-left:20px;max-width:800px;margin-bottom:22px}
+.hook em{font-style:normal;color:var(--blue-d);font-weight:600}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{font-size:13px;background:#fff;border:1px solid var(--line);border-radius:20px;
+      padding:5px 14px;color:var(--gray)}
+.chip b{color:var(--blue-d)}
+
+/* ── sticky 控制台 ─────────────────────── */
+.console{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);
+         backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+         box-shadow:0 1px 8px rgba(0,0,0,.05)}
+.console .inner{max-width:1080px;margin:0 auto;padding:11px 24px;
+                display:flex;align-items:center;gap:22px;flex-wrap:wrap}
+.console .tag{font:700 11px/1 var(--mono);letter-spacing:.1em;color:var(--blue);
+              text-transform:uppercase;flex:0 0 auto}
+.ctrl{display:flex;align-items:center;gap:9px;font-size:13px;color:var(--gray)}
+.ctrl label{white-space:nowrap;font-weight:500}
+.ctrl input[type=range]{width:128px;accent-color:var(--blue)}
+.ctrl output{font:600 13px/1 var(--mono);color:var(--blue-d);min-width:60px;
+             background:var(--blue-l);padding:5px 8px;border-radius:5px;text-align:center}
+.ctrl select{font:500 13px/1 inherit;padding:5px 8px;border:1px solid var(--line);
+             border-radius:5px;background:#fff;color:var(--ink)}
+.console .reset{margin-left:auto;font-size:12px;color:var(--gray);background:none;
+                border:1px solid var(--line);border-radius:5px;padding:5px 11px;cursor:pointer}
+.console .reset:hover{border-color:var(--blue);color:var(--blue)}
+.live{background:var(--yellow-l);box-shadow:0 0 0 3px var(--yellow-l);
+      border-radius:3px;transition:background .45s,box-shadow .45s}
+
+/* ── 卡片 / 表格 ───────────────────────── */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;background:#fff}
+.card.tint{background:var(--bg2)}
+.card h4{font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.08em;
+         text-transform:uppercase;margin:0 0 8px}
+.stat{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:4px}
+.stat.blue{color:var(--blue-d)}.stat.red{color:var(--red)}
+.stat.green{color:var(--green)}.stat.orange{color:var(--orange)}
+.card .sub{font-size:13.5px;color:var(--gray);line-height:1.55}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
+th{text-align:left;font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.06em;
+   text-transform:uppercase;padding:10px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.6}
+td.n{font-family:var(--mono);font-weight:600;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tr.sum td{border-top:2px solid var(--line);font-weight:700;background:var(--blue-l)}
+tr.sum td.n{color:var(--blue-d)}
+.tbl-wrap{overflow-x:auto}
+
+/* ── 提示块 ───────────────────────────── */
+.note{border-radius:var(--radius);padding:16px 20px;font-size:15px;line-height:1.7;margin:20px 0}
+.note.info{background:var(--blue-l)}
+.note.warn{background:var(--yellow-l);border-left:4px solid var(--yellow)}
+.note.danger{background:var(--red-l);border-left:4px solid var(--red)}
+.note.ok{background:var(--green-l);border-left:4px solid var(--green)}
+.note .t{display:block;font-weight:700;margin-bottom:5px}
+.punch{font-size:20px;font-weight:600;line-height:1.6;text-align:center;padding:26px 30px;
+       background:var(--blue);color:#fff;border-radius:14px;margin:28px 0}
+.punch.dark{background:var(--ink)}
+.punch small{display:block;font-size:14px;font-weight:400;opacity:.8;margin-top:8px}
+
+/* ── 图 ───────────────────────────────── */
+figure{margin:26px 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:13.5px;color:var(--gray);margin-top:10px;text-align:center;line-height:1.6}
+.fbox{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg2)}
+.svgtxt{font:500 13px var(--mono);fill:var(--ink)}
+.svglbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:var(--gray)}
+.svgnum{font:700 14px var(--mono);fill:var(--ink)}
+.svgsm{font:500 10.5px var(--mono);fill:var(--gray2)}
+
+/* ── 公式 ─────────────────────────────── */
+.eq{font-family:var(--mono);font-size:14.5px;background:var(--bg2);border-left:3px solid var(--blue);
+    border-radius:0 8px 8px 0;padding:14px 18px;margin:16px 0;overflow-x:auto;line-height:1.9;
+    white-space:pre-wrap;tab-size:2}
+.eq .c{color:var(--gray)}
+.eq .r{color:var(--blue-d);font-weight:700}
+
+/* ── 目录 ─────────────────────────────── */
+.toc{background:var(--bg2);border-radius:var(--radius);padding:22px 26px;margin:24px 0}
+.toc ol{list-style:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,auto);
+        gap:2px 28px}
+.toc li{padding:6px 0;font-size:15px;display:flex;gap:10px}
+.toc li i{font:700 11px/1.6 var(--mono);color:#fff;background:var(--blue);border-radius:10px;
+          padding:2px 7px;flex:0 0 auto;font-style:normal;letter-spacing:.04em}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:var(--blue)}
+
+footer{padding:44px 0 60px;color:var(--gray);font-size:14px;line-height:1.8;
+       border-top:1px solid var(--line)}
+footer a{text-decoration:none}
+@media(max-width:860px){
+  .hero h1{font-size:34px}.hook{font-size:18px}
+  .g2,.g3,.g4,.toc ol{grid-template-columns:1fr}
+  .console .inner{gap:12px;padding:9px 16px}
+  .ctrl input[type=range]{width:88px}
+}
+</style>
+</head>
+<body>
+
+<!-- ══════════ HERO ══════════ -->
+<div class="hero"><div class="wrap">
+  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题一</div>
+  <h1>一个 Token 的一生</h1>
+  <div class="en">Life Cycle of a Token</div>
+  <div class="hook">
+    不泛讲 Transformer。拆一个真的 ——<br>
+    <em>跟着一个 token 走完全程，每走一步就把账算一遍。</em>
+  </div>
+  <p style="max-width:760px;color:var(--gray)">
+    走完之后，「为什么这个模型需要一个机房」就不是一句口号，<b>而是一串你自己算出来的数</b>。
+  </p>
+  <div class="chips">
+    <span class="chip">标的 <b>DeepSeek V3</b></span>
+    <span class="chip">口径 <b>128K · batch 1 · bf16 · 只算前向</b></span>
+    <span class="chip">参照 <b>TPU v7 单 device 94.74 GB</b></span>
+    <span class="chip">⏱ <b>60 分钟</b></span>
+  </div>
+</div></div>
+
+<!-- ══════════ STICKY 控制台 ══════════ -->
+<div class="console"><div class="inner">
+  <span class="tag">◉ 全页联动</span>
+  <div class="ctrl">
+    <label for="seq">序列长度</label>
+    <input type="range" id="seq" min="9" max="20" step="1" value="17">
+    <output id="seqOut">128K</output>
+  </div>
+  <div class="ctrl">
+    <label for="bs">batch</label>
+    <input type="range" id="bs" min="0" max="6" step="1" value="0">
+    <output id="bsOut">1</output>
+  </div>
+  <div class="ctrl">
+    <label for="prec">精度</label>
+    <select id="prec">
+      <option value="2" selected>bf16 · 2B</option>
+      <option value="1">fp8 · 1B</option>
+      <option value="4">fp32 · 4B</option>
+    </select>
+  </div>
+  <button class="reset" id="reset">复位</button>
+</div></div>
+
+<!-- ══════════ 为什么是 V3 ══════════ -->
+<section style="border-top:none"><div class="wrap">
+  <h2>为什么拆 DeepSeek V3</h2>
+  <p class="lead">早就不是 GPT-3 175B 那个时代了。</p>
+
+  <div class="grid g3">
+    <div class="card">
+      <h4>它是黄金标准</h4>
+      <p class="sub">后来的开源模型基本都从它出发再改。要讲清楚「现在的大模型长什么样」，
+      拆它一个，比泛泛讲十个有用。</p>
+    </div>
+    <div class="card">
+      <h4>三件事一次做成</h4>
+      <p class="sub"><b>MLA</b> 把 KV cache 压下去、<b>细粒度 MoE</b> 把激活参数压下去、
+      <b>FP8</b> 把训练成本压下去。</p>
+    </div>
+    <div class="card tint">
+      <h4>每件都对着一个硬件瓶颈</h4>
+      <p class="sub">显存、算力、带宽 —— 三个瓶颈，三个答案。
+      <b>这正是这门课要建立的那条因果链。</b></p>
+    </div>
+  </div>
+
+  <div class="toc">
+    <ol>
+      <li><i>站 1</i><a href="#s1">从文字到向量</a></li>
+      <li><i>站 2</i><a href="#s2">MLA：KV cache 的战争 ⭐</a></li>
+      <li><i>站 3</i><a href="#s3">Dense MLP：先讲不稀疏的</a></li>
+      <li><i>站 4</i><a href="#s4">MoE：671B 的主体 ⭐</a></li>
+      <li><i>站 5</i><a href="#s5">层间：残差流这条总线</a></li>
+      <li><i>站 6</i><a href="#s6">出口：回到文字</a></li>
+      <li><i>站 7</i><a href="#s7">把账合起来 ⭐</a></li>
+      <li><i>7.5</i><a href="#s75">算出来 vs 量出来</a></li>
+    </ol>
+  </div>
+</div></section>
+
+<!-- ══════════ 口径 + 底牌 ══════════ -->
+<section><div class="wrap">
+  <h2>算账口径</h2>
+  <p class="lead">后面每一站都按这一套算，<b>中途不换</b>。顶上那条控制台可以改，全页数字跟着变。</p>
+
+  <div class="grid g4">
+    <div class="card"><h4>序列长度</h4><div class="stat blue" data-v="seqLabel">128K</div>
+      <p class="sub"><span class="num" data-v="seqRaw">131,072</span> token</p></div>
+    <div class="card"><h4>batch</h4><div class="stat blue" data-v="batch">1</div>
+      <p class="sub">先把单条算清楚，要乘再乘</p></div>
+    <div class="card"><h4>精度</h4><div class="stat blue" data-v="precLabel">bf16</div>
+      <p class="sub">权重与激活都按 <span class="num" data-v="bytes">2</span> 字节</p></div>
+    <div class="card tint"><h4>方向</h4><div class="stat">只算前向</div>
+      <p class="sub">反向与优化器状态留到专题三</p></div>
+  </div>
+
+  <div class="note info">
+    <span class="t">为什么先只算前向</span>
+    前向的账是<b>事实</b>，一步一步能推出来。反向要牵进 recompute 怎么选、优化器状态放哪、
+    梯度要不要累积 —— 那些是<b>决策</b>不是事实，混进来会把主线搅浑。
+  </div>
+
+  <h3>模型底牌</h3>
+  <p>一张表，后面所有计算都从这里取数。全部来自官方 <code>config.json</code>，没有一个是估的。</p>
+
+  <div class="grid g2">
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>骨架</th><th style="text-align:right">值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>hidden_size</code></td><td class="n">7168</td><td>残差流宽度，记作 <i>d</i></td></tr>
+        <tr><td><code>num_hidden_layers</code></td><td class="n">61</td><td></td></tr>
+        <tr><td><code>first_k_dense_replace</code></td><td class="n">3</td><td>前 3 层 dense，<b>后 58 层 MoE</b></td></tr>
+        <tr><td><code>vocab_size</code></td><td class="n">129,280</td><td></td></tr>
+        <tr><td><code>max_position_embeddings</code></td><td class="n">163,840</td><td>YaRN 从 4K 外推来的</td></tr>
+        <tr><td><code>tie_word_embeddings</code></td><td class="n">false</td><td>⚠️ 进出口是<b>两份</b>独立矩阵</td></tr>
+        <tr><td><code>num_nextn_predict_layers</code></td><td class="n">1</td><td>MTP</td></tr>
+      </tbody>
+    </table></div>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>注意力 · MLA</th><th style="text-align:right">值</th><th>说明</th></tr></thead>
+      <tbody>
+        <tr><td><code>num_attention_heads</code></td><td class="n">128</td><td></td></tr>
+        <tr><td><code>q_lora_rank</code></td><td class="n">1536</td><td>Q 也走低秩</td></tr>
+        <tr><td><code>kv_lora_rank</code></td><td class="n">512</td><td>⭐ KV 压到 512 维</td></tr>
+        <tr><td><code>qk_nope_head_dim</code></td><td class="n">128</td><td rowspan="2">每头 QK 实际 <b>192</b> 维</td></tr>
+        <tr><td><code>qk_rope_head_dim</code></td><td class="n">64</td></tr>
+        <tr><td><code>v_head_dim</code></td><td class="n">128</td><td></td></tr>
+      </tbody>
+    </table></div>
+  </div>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>MoE</th><th style="text-align:right">值</th><th>说明</th>
+      <th>MoE</th><th style="text-align:right">值</th><th>说明</th></tr></thead>
+    <tbody>
+      <tr><td><code>n_routed_experts</code></td><td class="n">256</td><td></td>
+          <td><code>moe_intermediate_size</code></td><td class="n">2048</td><td>⭐ 细粒度</td></tr>
+      <tr><td><code>n_shared_experts</code></td><td class="n">1</td><td>每 token 都过</td>
+          <td><code>intermediate_size</code></td><td class="n">18,432</td><td>只有前 3 层 dense 用</td></tr>
+      <tr><td><code>num_experts_per_tok</code></td><td class="n">8</td><td>top-8</td>
+          <td><code>n_group</code> / <code>topk_group</code></td><td class="n">8 / 4</td><td>分组限制路由</td></tr>
+      <tr><td><code>scoring_func</code></td><td class="n">sigmoid</td><td>不是 softmax</td>
+          <td><code>topk_method</code></td><td class="n">noaux_tc</td><td>无辅助损失均衡</td></tr>
+    </tbody>
+  </table></div>
+</div></section>
+
+<!-- ══════════ 路线图 ══════════ -->
+<section><div class="wrap">
+  <h2>路线</h2>
+  <p class="lead">一个 token 从文字进来，从概率分布出去。中间七站。</p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 330" role="img" aria-label="一个 token 走完全程的七站路线图">
+    <defs>
+      <marker id="ar" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L7,3 z" fill="#5f6368"/></marker>
+      <linearGradient id="resid" x1="0" x2="1">
+        <stop offset="0" stop-color="#e8f0fe"/><stop offset="1" stop-color="#c9defc"/>
+      </linearGradient>
+    </defs>
+
+    <!-- 残差流总线 -->
+    <rect x="180" y="150" width="640" height="34" rx="17" fill="url(#resid)"/>
+    <text x="500" y="172" text-anchor="middle" class="svglbl" fill="#174ea6">
+      残差流 · 宽度 d = 7168 · 一路贯穿 61 层</text>
+
+    <!-- 站点 -->
+    <g class="svgtxt">
+      <!-- 输入 -->
+      <rect x="14" y="140" width="112" height="54" rx="9" fill="#fff" stroke="#dadce0"/>
+      <text x="70" y="163" text-anchor="middle" class="svglbl" fill="#202124">文字</text>
+      <text x="70" y="181" text-anchor="middle" class="svgsm">"人工智能"</text>
+      <line x1="128" y1="167" x2="172" y2="167" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <!-- 站1 嵌入 -->
+      <rect x="180" y="66" width="118" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="239" y="88" text-anchor="middle" class="svglbl" fill="#174ea6">① 嵌入</text>
+      <text x="239" y="107" text-anchor="middle" class="svgsm" fill="#174ea6">129,280 × 7168</text>
+      <text x="239" y="121" text-anchor="middle" class="svgsm" fill="#174ea6">查表</text>
+      <line x1="239" y1="130" x2="239" y2="146" stroke="#1a73e8" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <!-- 层循环框 -->
+      <rect x="318" y="40" width="330" height="250" rx="12" fill="none" stroke="#dadce0"
+            stroke-dasharray="5 4"/>
+      <text x="483" y="30" text-anchor="middle" class="svglbl">× 61 层</text>
+
+      <!-- 站2 MLA -->
+      <rect x="338" y="62" width="128" height="70" rx="9" fill="#fce8e6" stroke="#d93025"/>
+      <text x="402" y="84" text-anchor="middle" class="svglbl" fill="#a50e0e">② MLA</text>
+      <text x="402" y="102" text-anchor="middle" class="svgsm" fill="#a50e0e">128 头 · 低秩 KV</text>
+      <text x="402" y="118" text-anchor="middle" class="svgsm" fill="#a50e0e">KV cache 在这</text>
+      <line x1="402" y1="134" x2="402" y2="146" stroke="#d93025" stroke-width="1.4" marker-end="url(#ar)"/>
+      <path d="M402 190 v34 h96" fill="none" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
+
+      <!-- 站3/4 MLP -->
+      <rect x="500" y="62" width="130" height="70" rx="9" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="565" y="84" text-anchor="middle" class="svglbl" fill="#0d652d">③ MLP / ④ MoE</text>
+      <text x="565" y="102" text-anchor="middle" class="svgsm" fill="#0d652d">前 3 层 dense</text>
+      <text x="565" y="118" text-anchor="middle" class="svgsm" fill="#0d652d">后 58 层 256 专家</text>
+      <line x1="565" y1="134" x2="565" y2="146" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#ar)"/>
+      <path d="M498 224 h68 v-32" fill="none" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
+      <text x="483" y="243" text-anchor="middle" class="svgsm">⑤ 残差回写 · norm</text>
+
+      <!-- 站6 出口 -->
+      <rect x="680" y="62" width="130" height="70" rx="9" fill="#fef7e0" stroke="#f9ab00"/>
+      <text x="745" y="84" text-anchor="middle" class="svglbl" fill="#b06000">⑥ lm_head</text>
+      <text x="745" y="102" text-anchor="middle" class="svgsm" fill="#b06000">7168 → 129,280</text>
+      <text x="745" y="118" text-anchor="middle" class="svgsm" fill="#b06000">独立的第二份</text>
+      <line x1="745" y1="146" x2="745" y2="132" stroke="#f9ab00" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <!-- 输出 -->
+      <line x1="822" y1="167" x2="866" y2="167" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="872" y="140" width="114" height="54" rx="9" fill="#fff" stroke="#dadce0"/>
+      <text x="929" y="163" text-anchor="middle" class="svglbl" fill="#202124">概率分布</text>
+      <text x="929" y="181" text-anchor="middle" class="svgsm">129,280 维</text>
+    </g>
+
+    <!-- 底部：四个问题 -->
+    <g>
+      <line x1="14" y1="272" x2="986" y2="272" stroke="#e8eaed"/>
+      <text x="14" y="296" class="svglbl" fill="#202124">每一站问同样四个问题：</text>
+      <text x="196" y="296" class="svgsm" fill="#1a73e8">① 权重多大</text>
+      <text x="300" y="296" class="svgsm" fill="#1a73e8">② 激活多大</text>
+      <text x="404" y="296" class="svgsm" fill="#1a73e8">③ 多少 FLOPs</text>
+      <text x="520" y="296" class="svgsm" fill="#d93025" font-weight="700">④ 有没有什么在这里爆炸 ←往往这个才是重点</text>
+    </g>
+  </svg>
+  <figcaption>七站路线。残差流是贯穿全程的那条总线 —— 每层从它读、往它写。</figcaption>
+  </figure>
+</div></section>
+
+<!-- ══════════ 站 1 · 嵌入 ══════════ -->
+<section id="s1"><div class="wrap">
+  <div class="stn"><span class="badge">站 1</span><h2>从文字到向量</h2></div>
+  <p class="lead">这一站什么都没算，只是<b>查了一次表</b>。但显存已经掉了一块。</p>
+
+  <div class="grid g2">
+    <div>
+      <h4>分词：词表大小的两头权衡</h4>
+      <p>词表 <b>129,280</b>。往大了做，一个词占一个 token，序列变短、算得快；
+      但嵌入矩阵和出口矩阵都跟着变大，而且罕见词的表示学不好。往小了做正相反。
+      <b>129K 是在这两头之间选的一个点</b>，不是什么魔法数字。</p>
+
+      <h4>嵌入：一次查表，仅此而已</h4>
+      <p>没有矩阵乘。拿 token id 去那张 <span class="k">129,280 × 7168</span> 的大表里
+      取出对应的那一行 —— 就这样。</p>
+
+      <div class="eq"><span class="c">// 嵌入矩阵参数量</span>
+129,280 × 7,168 = <span class="r" data-v="embedW">926.68 M</span>  <span class="c">→ <span data-v="embedWBytes">1.73 GiB</span></span>
+
+<span class="c">// 查完表，那个张量多大</span>
+<span data-v="tokens">131,072</span> × 7,168 × <span data-v="bytes">2</span> B = <span class="r" data-v="embedAct">1.75 GiB</span></div>
+    </div>
+    <div>
+      <figure class="fbox" style="margin-top:0">
+      <svg viewBox="0 0 420 300" role="img" aria-label="嵌入查表示意">
+        <text x="10" y="20" class="svglbl">词表矩阵 129,280 × 7168</text>
+        <rect x="10" y="30" width="150" height="200" fill="#f8f9fa" stroke="#dadce0"/>
+        <g stroke="#e8eaed">
+          <line x1="10" y1="60" x2="160" y2="60"/><line x1="10" y1="90" x2="160" y2="90"/>
+          <line x1="10" y1="150" x2="160" y2="150"/><line x1="10" y1="180" x2="160" y2="180"/>
+          <line x1="10" y1="210" x2="160" y2="210"/>
+        </g>
+        <rect x="10" y="120" width="150" height="30" fill="#1a73e8" opacity=".85"/>
+        <text x="85" y="140" text-anchor="middle" class="svgsm" fill="#fff">token #8492 那一行</text>
+        <text x="10" y="248" class="svgsm">↕ 129,280 行</text>
+        <text x="10" y="264" class="svgsm">↔ 7,168 列</text>
+
+        <path d="M168 135 h44" stroke="#1a73e8" stroke-width="1.5" marker-end="url(#ar)"/>
+        <text x="190" y="126" text-anchor="middle" class="svgsm" fill="#1a73e8">查表</text>
+
+        <text x="222" y="20" class="svglbl">残差流张量</text>
+        <rect x="222" y="30" width="188" height="200" fill="#e8f0fe" stroke="#1a73e8"/>
+        <g stroke="#c9defc">
+          <line x1="222" y1="55" x2="410" y2="55"/><line x1="222" y1="80" x2="410" y2="80"/>
+          <line x1="222" y1="105" x2="410" y2="105"/><line x1="222" y1="155" x2="410" y2="155"/>
+          <line x1="222" y1="180" x2="410" y2="180"/><line x1="222" y1="205" x2="410" y2="205"/>
+        </g>
+        <rect x="222" y="130" width="188" height="25" fill="#1a73e8" opacity=".85"/>
+        <text x="316" y="197" text-anchor="middle" class="svgnum" fill="#174ea6"
+              data-v="embedAct">1.75 GiB</text>
+        <text x="222" y="248" class="svgsm">↕ <tspan data-v="seqLabel">128K</tspan> token × batch</text>
+        <text x="222" y="264" class="svgsm">↔ 7,168</text>
+        <text x="222" y="288" class="svgsm" fill="#d93025">此后每一层都要读写它一次</text>
+      </svg>
+      </figure>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="t">第一个让人坐直的数字</span>
+    还没进第一层，光是把 token 变成向量，就已经吃掉 <b><span data-v="embedAct">1.75 GiB</span></b>。
+    而这个张量<b>不是用完就扔</b> —— 它是残差流，61 层里每一层都要读它一次、写它一次。
+  </div>
+</div></section>
+
+<!-- ══════════ 站 2 · MLA ══════════ -->
+<section id="s2"><div class="wrap">
+  <div class="stn big"><span class="badge">站 2 ⭐</span><h2>MLA：注意力，以及 KV cache 的战争</h2></div>
+  <p class="lead">整课的重头，也是 V3 最值得讲的地方。<b>建议留 15 分钟给这一站。</b></p>
+
+  <h3>先看死穴：KV cache 为什么会失控</h3>
+  <p>注意力要让每个 token 看到它前面所有 token。为了不重复计算，前面那些 token 的
+  K 和 V 要<b>存下来</b> —— 这就是 KV cache。它的大小是：</p>
+
+  <div class="eq">KV cache = 序列长度 × <span class="c">层数</span> × 每 token 每层存多少个数 × 精度
+           <span class="c">↑ 线性增长</span>   <span class="c">↑ 线性增长</span></div>
+
+  <p><b>两个线性相乘，就是灾难。</b> 序列从 4K 涨到 128K 是 32 倍，
+  再乘 61 层 —— 这就是为什么长上下文一出现，注意力就必须改。</p>
+
+  <h3>三个旋钮，四代方案</h3>
+  <p>所有注意力变体，拧的都是同样几个旋钮。<b>这一代代下来，改的是「每个 token 存多少」。</b></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 260" role="img" aria-label="MHA MQA GQA MLA 四代注意力的 KV 存储对比">
+    <g>
+      <!-- MHA -->
+      <text x="16" y="22" class="svglbl" fill="#202124">MHA · 每头一份 KV</text>
+      <text x="16" y="40" class="svgsm">2015—2019</text>
+      <g fill="#d93025">
+        <rect x="16" y="52" width="13" height="30" rx="2"/><rect x="33" y="52" width="13" height="30" rx="2"/>
+        <rect x="50" y="52" width="13" height="30" rx="2"/><rect x="67" y="52" width="13" height="30" rx="2"/>
+        <rect x="84" y="52" width="13" height="30" rx="2"/><rect x="101" y="52" width="13" height="30" rx="2"/>
+        <rect x="118" y="52" width="13" height="30" rx="2"/><rect x="135" y="52" width="13" height="30" rx="2"/>
+      </g>
+      <text x="16" y="100" class="svgsm">8 个 Q 头 ↔ 8 份 KV</text>
+      <rect x="16" y="112" width="132" height="26" rx="4" fill="#fce8e6" stroke="#d93025"/>
+      <text x="82" y="130" text-anchor="middle" class="svgnum" fill="#a50e0e">32,768 数</text>
+      <text x="16" y="158" class="svgsm">质量最好</text>
+      <text x="16" y="174" class="svgsm" fill="#d93025">cache 最大</text>
+
+      <!-- MQA -->
+      <text x="256" y="22" class="svglbl" fill="#202124">MQA · 所有头共用一份</text>
+      <text x="256" y="40" class="svgsm">2019</text>
+      <g fill="#f9ab00">
+        <rect x="256" y="52" width="13" height="30" rx="2"/><rect x="273" y="52" width="13" height="30" rx="2"/>
+        <rect x="290" y="52" width="13" height="30" rx="2"/><rect x="307" y="52" width="13" height="30" rx="2"/>
+        <rect x="324" y="52" width="13" height="30" rx="2"/><rect x="341" y="52" width="13" height="30" rx="2"/>
+        <rect x="358" y="52" width="13" height="30" rx="2"/><rect x="375" y="52" width="13" height="30" rx="2"/>
+      </g>
+      <path d="M262 86 L318 100 M279 86 L318 100 M296 86 L318 100 M313 86 L318 100
+               M330 86 L318 100 M347 86 L318 100 M364 86 L318 100 M381 86 L318 100"
+            stroke="#f9ab00" stroke-width=".9" fill="none"/>
+      <text x="256" y="112" class="svgsm">8 个 Q 头 ↔ 1 份 KV</text>
+      <rect x="256" y="118" width="52" height="26" rx="4" fill="#fef7e0" stroke="#f9ab00"/>
+      <text x="282" y="136" text-anchor="middle" class="svgnum" fill="#b06000">÷8</text>
+      <text x="256" y="164" class="svgsm">cache 骤降</text>
+      <text x="256" y="180" class="svgsm" fill="#d93025">质量掉得明显</text>
+
+      <!-- GQA -->
+      <text x="496" y="22" class="svglbl" fill="#202124">GQA · 分组共享</text>
+      <text x="496" y="40" class="svgsm">2023 · Llama 系列</text>
+      <g fill="#1e8e3e">
+        <rect x="496" y="52" width="13" height="30" rx="2"/><rect x="513" y="52" width="13" height="30" rx="2"/>
+        <rect x="530" y="52" width="13" height="30" rx="2"/><rect x="547" y="52" width="13" height="30" rx="2"/>
+        <rect x="564" y="52" width="13" height="30" rx="2"/><rect x="581" y="52" width="13" height="30" rx="2"/>
+        <rect x="598" y="52" width="13" height="30" rx="2"/><rect x="615" y="52" width="13" height="30" rx="2"/>
+      </g>
+      <path d="M502 86 L536 98 M519 86 L536 98 M536 86 L536 98 M553 86 L536 98
+               M570 86 L604 98 M587 86 L604 98 M604 86 L604 98 M621 86 L604 98"
+            stroke="#1e8e3e" stroke-width=".9" fill="none"/>
+      <text x="496" y="112" class="svgsm">8 个 Q 头 ↔ 2 份 KV</text>
+      <rect x="496" y="118" width="70" height="26" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="531" y="136" text-anchor="middle" class="svgnum" fill="#0d652d">÷4</text>
+      <text x="496" y="164" class="svgsm">折中，成了业界默认</text>
+
+      <!-- MLA -->
+      <text x="736" y="22" class="svglbl" fill="#174ea6">MLA · 压成一个隐向量 ⭐</text>
+      <text x="736" y="40" class="svgsm">2024 · DeepSeek</text>
+      <g fill="#1a73e8">
+        <rect x="736" y="52" width="13" height="30" rx="2"/><rect x="753" y="52" width="13" height="30" rx="2"/>
+        <rect x="770" y="52" width="13" height="30" rx="2"/><rect x="787" y="52" width="13" height="30" rx="2"/>
+        <rect x="804" y="52" width="13" height="30" rx="2"/><rect x="821" y="52" width="13" height="30" rx="2"/>
+        <rect x="838" y="52" width="13" height="30" rx="2"/><rect x="855" y="52" width="13" height="30" rx="2"/>
+      </g>
+      <path d="M742 86 L800 98 M759 86 L800 98 M776 86 L800 98 M793 86 L800 98
+               M810 86 L800 98 M827 86 L800 98 M844 86 L800 98 M861 86 L800 98"
+            stroke="#1a73e8" stroke-width=".9" fill="none"/>
+      <text x="736" y="112" class="svgsm">存的不是 KV，是一个压缩向量</text>
+      <rect x="736" y="118" width="34" height="26" rx="4" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="753" y="136" text-anchor="middle" class="svgnum" fill="#174ea6">576</text>
+      <text x="778" y="136" class="svgsm" fill="#174ea6">= 512 压缩 + 64 位置</text>
+      <text x="736" y="164" class="svgsm" fill="#1e8e3e" font-weight="700">cache 小 57 倍，质量还更好</text>
+
+      <!-- 底部箭头 -->
+      <line x1="16" y1="206" x2="960" y2="206" stroke="#dadce0" marker-end="url(#ar)"/>
+      <text x="16" y="228" class="svglbl">越往右，每个 token 要存的东西越少 →</text>
+      <text x="700" y="228" class="svgsm" fill="#d93025">前三代都在「共享」上做文章，MLA 换了个思路：压缩</text>
+    </g>
+  </svg>
+  <figcaption>四代注意力。前三代的思路都是「让多个头共用同一份 KV」——
+  省了显存但丢了表达力。MLA 换了个思路：<b>不共享，改压缩</b>。</figcaption>
+  </figure>
+
+  <h3>MLA 到底怎么做的</h3>
+  <div class="grid g2">
+    <div>
+      <p><b>存的时候压，用的时候升。</b> 一个 token 的 KV 信息，不按 128 个头分别存，
+      而是先压成一个 <span class="k">512</span> 维的隐向量存起来；真要算注意力了，
+      再用一个矩阵把它升回 128 个头。</p>
+      <p><b>位置信息为什么必须单独走一路。</b> RoPE 是把位置编码成一个旋转，
+      它<b>依赖 token 在序列里的绝对位置</b>。如果把带 RoPE 的 K 压进那个隐向量里，
+      升回来的时候旋转就对不上了 —— 数学上不可交换。
+      所以 V3 把每个头拆成两半：<span class="k">128 维</span>不带位置（可以压），
+      <span class="k">64 维</span>带位置（不压，直接存）。</p>
+      <div class="note info" style="margin-top:18px">
+        <span class="t">576 = 512 + 64</span>
+        这就是 MLA 每 token 每层存的全部东西。<b>跟头数无关</b> ——
+        128 个头也好，256 个头也好，存的都是这 576 个数。
+      </div>
+    </div>
+    <div>
+      <figure class="fbox" style="margin-top:0">
+      <svg viewBox="0 0 440 300" role="img" aria-label="MLA 压缩与升维路径">
+        <text x="10" y="18" class="svglbl">输入 h · 7168 维</text>
+        <rect x="10" y="26" width="420" height="22" rx="4" fill="#e8f0fe" stroke="#1a73e8"/>
+
+        <path d="M120 52 v22" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
+        <path d="M330 52 v22" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
+        <text x="66" y="68" class="svgsm">kv_a_proj</text>
+        <text x="340" y="68" class="svgsm">单独一路</text>
+
+        <!-- 压缩路径 -->
+        <rect x="30" y="80" width="180" height="26" rx="4" fill="#1a73e8"/>
+        <text x="120" y="98" text-anchor="middle" class="svgsm" fill="#fff">c_KV · 512 维 · 存进 cache</text>
+
+        <!-- RoPE 路径 -->
+        <rect x="290" y="80" width="80" height="26" rx="4" fill="#f9ab00"/>
+        <text x="330" y="98" text-anchor="middle" class="svgsm" fill="#fff">k_rope · 64</text>
+
+        <text x="10" y="128" class="svglbl" fill="#d93025">↓ 以上 576 个数就是全部要存的</text>
+        <line x1="10" y1="138" x2="430" y2="138" stroke="#d93025" stroke-dasharray="4 3"/>
+        <text x="10" y="156" class="svglbl">↓ 用的时候现场升回来（不进 cache）</text>
+
+        <path d="M120 164 v20" stroke="#1a73e8" stroke-width="1.2" marker-end="url(#ar)"/>
+        <text x="128" y="178" class="svgsm">kv_b_proj</text>
+
+        <rect x="14" y="190" width="212" height="30" rx="4" fill="#e8f0fe" stroke="#1a73e8"/>
+        <text x="120" y="209" text-anchor="middle" class="svgsm" fill="#174ea6">128 头 × (K 128 + V 128)</text>
+
+        <rect x="250" y="190" width="176" height="30" rx="4" fill="#fef7e0" stroke="#f9ab00"/>
+        <text x="338" y="209" text-anchor="middle" class="svgsm" fill="#b06000">128 头共用这 64 维位置</text>
+
+        <text x="14" y="244" class="svgsm">每头 QK 实际维度 = 128 不带位置 + 64 带位置 = <tspan font-weight="700">192</tspan></text>
+
+        <rect x="14" y="256" width="412" height="34" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
+        <text x="220" y="278" text-anchor="middle" class="svgsm" fill="#0d652d">
+          存 576 个数 ←→ 算的时候展开成 128 头 · 用算力换显存</text>
+      </svg>
+      </figure>
+    </div>
+  </div>
+
+  <h3>五个投影矩阵，一层多大</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>矩阵</th><th>形状</th><th style="text-align:right">参数量</th><th>干什么</th></tr></thead>
+    <tbody>
+      <tr><td><code>q_a_proj</code></td><td>7168 × 1536</td><td class="n">11.01 M</td><td>Q 降到低秩 —— 省参数，不省 cache</td></tr>
+      <tr><td><code>q_b_proj</code></td><td>1536 × (128×192)</td><td class="n">37.75 M</td><td>Q 升回 128 头</td></tr>
+      <tr><td><code>kv_a_proj</code></td><td>7168 × 576</td><td class="n">4.13 M</td><td>⭐ 压成 512 + 单出 64 维 RoPE</td></tr>
+      <tr><td><code>kv_b_proj</code></td><td>512 × (128×256)</td><td class="n">16.78 M</td><td>⭐ 升回 128 头的 K 和 V</td></tr>
+      <tr><td><code>o_proj</code></td><td>(128×128) × 7168</td><td class="n">117.44 M</td><td>输出投影 —— 一层里最大的一块</td></tr>
+      <tr class="sum"><td colspan="2">一层合计</td><td class="n">187.11 M</td><td>× 61 层 = <b>11.41 B</b></td></tr>
+    </tbody>
+  </table></div>
+
+  <h3>算账：MLA 到底省了多少</h3>
+  <div class="grid g3">
+    <div class="card"><h4>MLA 的 KV cache</h4>
+      <div class="stat green" data-v="kvMla">8.58 GiB</div>
+      <p class="sub"><span data-v="tokens">131,072</span> token × 61 层 × 576 × <span data-v="bytes">2</span> B</p></div>
+    <div class="card"><h4>同配置换标准 MHA</h4>
+      <div class="stat red" data-v="kvMha">488.00 GiB</div>
+      <p class="sub">每 token 每层要存 32,768 个数</p></div>
+    <div class="card tint"><h4>差距</h4>
+      <div class="stat blue" data-v="kvRatio">56.9×</div>
+      <p class="sub"><b>这个差值就是 MLA 存在的理由。</b></p></div>
+  </div>
+
+  <figure>
+  <div class="fbox">
+    <svg viewBox="0 0 1000 190" role="img" aria-label="四种注意力方案的 KV cache 大小对比">
+      <g id="kvbars"></g>
+      <line x1="192" y1="12" x2="192" y2="168" stroke="#dadce0"/>
+      <line id="hbmline" x1="0" y1="12" x2="0" y2="176" stroke="#d93025" stroke-dasharray="5 4"/>
+      <text id="hbmtext" x="0" y="186" class="svgsm" fill="#d93025" text-anchor="middle">
+        单 device 94.74 GB</text>
+    </svg>
+  </div>
+  <figcaption>同样的序列长度，四种方案的 KV cache。红色虚线是单个 TPU v7 device 的 HBM ——
+  <b>标准 MHA 的 KV cache 一家就要好几张卡才放得下</b>，而模型权重还一个字节都没算进去。</figcaption>
+  </figure>
+
+  <h3>⚠️ 真正的爆点：注意力分数矩阵</h3>
+  <p>上面说的都是「存下来的」。还有一个<b>算的时候临时产生的</b>东西，比 KV cache 吓人得多。</p>
+
+  <div class="grid g2">
+    <div>
+      <p>注意力要算每个 token 对每个 token 的分数，这是一个
+      <span class="k">序列长度 × 序列长度</span> 的方阵，<b>而且每个头一份</b>。</p>
+      <div class="eq">128 头 × <span data-v="seqRaw">131,072</span> × <span data-v="seqRaw">131,072</span> × <span data-v="bytes">2</span> B
+= <span class="r" data-v="attnMatrix">4.00 TiB</span>  <span class="c">← 每层，一次</span></div>
+      <div class="note danger">
+        <span class="t">这就是 FlashAttention 必须存在的原因</span>
+        注意它<b>不是为了快</b>，是为了<b>根本放得下</b>。
+        FlashAttention 的做法是永远不把这个矩阵整个物化出来 ——
+        分块算、边算边累加、算完就扔。省下的不是时间，是这 <span data-v="attnMatrix">4 TiB</span>。
+      </div>
+    </div>
+    <div>
+      <figure class="fbox" style="margin-top:0">
+      <svg viewBox="0 0 440 280" role="img" aria-label="注意力分数矩阵相当于多少张卡">
+        <g id="cardgrid"></g>
+      </svg>
+      <figcaption style="text-align:left;margin-top:4px">
+        每个小方块 = 一个 TPU v7 device（94.74 GB）。
+        <b>这还只是一层、一次、batch 1。</b></figcaption>
+      </figure>
+    </div>
+  </div>
+
+  <h3>FLOPs：平方项什么时候开始吃人</h3>
+  <p>注意力有两处的计算量是<b>序列长度的平方</b>：算分数（QKᵀ）和加权求和（AV）。
+  其他所有部分 —— 投影、MLP、MoE —— 都只是<b>线性</b>的。</p>
+  <p>短序列时平方项微不足道，长序列时它会反过来吃掉一切。<b>拐点在哪，可以算出来。</b></p>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 300" role="img" aria-label="注意力平方项占总算力比例随序列长度的变化">
+      <g id="flopcurve"></g>
+    </svg>
+    <figcaption>横轴序列长度（对数），纵轴 attention 平方项占前向总算力的比例。
+    竖线是当前选定的序列长度 —— <b>拖动顶上的滑块看它怎么移动</b>。</figcaption>
+  </figure>
+
+  <div class="punch">
+    在 <span data-v="seqLabel">128K</span> 下，attention 的平方项吃掉
+    <span data-v="attnShare">81.8%</span> 的前向算力。
+    <small>换句话说：这个规模上，「模型有多少参数」已经不是算力的主要矛盾了 —— 序列有多长才是。</small>
+  </div>
+</div></section>
+
+<!-- ══════════ 站 3 · Dense MLP ══════════ -->
+<section id="s3"><div class="wrap">
+  <div class="stn"><span class="badge">站 3</span><h2>Dense MLP：先把「不稀疏」讲清楚</h2></div>
+  <p class="lead"><code>first_k_dense_replace = 3</code> —— V3 的前 3 层是普通 MLP。
+  <b>先讲这 3 层，因为不理解 dense 就不知道 MoE 在省什么。</b></p>
+
+  <div class="grid g2">
+    <div>
+      <h4>结构：三个矩阵 + 一个门</h4>
+      <div class="eq">gate = <span class="c">W_gate</span> · x     <span class="c">// 7168 → 18432</span>
+up   = <span class="c">W_up</span>   · x     <span class="c">// 7168 → 18432</span>
+h    = SiLU(gate) ⊙ up  <span class="c">// 逐元素相乘</span>
+out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168</span></div>
+      <p>三个矩阵，每个 <span class="k">7168 × 18432</span>，一层
+      <span class="num">396.36 M</span> 参数。三层合计 <span class="num">1.19 B</span>。</p>
+    </div>
+    <div>
+      <h4>它对硬件到底有多友好</h4>
+      <div class="tbl-wrap"><table>
+        <tbody>
+          <tr><td>每个 token 走<b>完全相同</b>的一条路</td><td>→ 形状静态可预测</td></tr>
+          <tr><td>就是一个大矩阵乘</td><td>→ 算力利用率天然高，MXU 最爱</td></tr>
+          <tr><td>不需要任何通信来决定谁算什么</td><td>→ 没有调度开销</td></tr>
+          <tr><td>编译器能提前把一切排好</td><td>→ 无运行时不确定性</td></tr>
+        </tbody>
+      </table></div>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="t">这一条要说透，它是后面所有 MoE 麻烦的对照组</span>
+    上面那四条好性质，MoE <b>一条都没有</b>。所以别把 MoE 理解成「白捡的便宜」——
+    <b>MoE 省下来的算力，是拿这些好性质换的。</b>
+  </div>
+
+  <p><b>为什么最前面几层偏偏不做 MoE？</b> 靠近输入的那几层做的事最通用 ——
+  基本的词法、局部句法，几乎每个 token 都要用。这种活儿没什么可分工的，
+  硬要路由反而是白付通信成本。<b>分工要有意义，得先有分化。</b></p>
+</div></section>
+
+<!-- ══════════ 站 4 · MoE ══════════ -->
+<section id="s4"><div class="wrap">
+  <div class="stn big"><span class="badge">站 4 ⭐</span><h2>MoE：671B 的主体</h2></div>
+  <p class="lead">整个模型 96% 的参数都在这 58 层里。</p>
+
+  <div class="punch dark">
+    护士分诊，专家看病。
+    <small>不是每个医生都给每个病人看一遍 —— 先分诊，再送到对口的少数几个专家那儿。
+    总的诊疗量因此降下来了。</small>
+  </div>
+
+  <h3>4a · 原理：稀疏在哪</h3>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 340" role="img" aria-label="Dense MLP 与 MoE 的结构对比">
+    <!-- 左：dense -->
+    <text x="20" y="20" class="svglbl" fill="#0d652d">Dense MLP · 前 3 层</text>
+    <rect x="20" y="46" width="66" height="150" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
+    <text x="53" y="124" text-anchor="middle" class="svgsm" fill="#0d652d"
+          transform="rotate(-90 53 124)">18,432 宽</text>
+    <text x="20" y="214" class="svgsm" fill="#0d652d">396.36 M · 100% 参与计算</text>
+    <text x="20" y="230" class="svgsm">每 token 都走完整一遍</text>
+    <text x="20" y="246" class="svgsm">形状静态 · 无通信 · MXU 满载</text>
+
+    <line x1="130" y1="30" x2="130" y2="300" stroke="#dadce0"/>
+
+    <!-- 右：MoE -->
+    <text x="160" y="20" class="svglbl" fill="#174ea6">MoE · 后 58 层</text>
+    <text x="160" y="36" class="svgsm">256 个小专家，每个 token 只走 8 个 + 1 个共享</text>
+
+    <!-- 门控 -->
+    <rect x="160" y="52" width="94" height="42" rx="6" fill="#fef7e0" stroke="#f9ab00"/>
+    <text x="207" y="71" text-anchor="middle" class="svgsm" fill="#b06000">门控 · 分诊台</text>
+    <text x="207" y="86" text-anchor="middle" class="svgsm" fill="#b06000">7168 × 256</text>
+    <path d="M258 73 h28" stroke="#f9ab00" stroke-width="1.4" marker-end="url(#ar)"/>
+    <text x="262" y="65" class="svgsm" fill="#b06000">打分</text>
+
+    <!-- 专家网格 16x16 简化为 16列 x 4行 表示 256 -->
+    <g id="expertgrid"></g>
+
+    <text x="300" y="248" class="svgsm" fill="#174ea6">■ 被选中的 8 个（每个 3×7168×2048 = 44.04 M）</text>
+    <text x="580" y="248" class="svgsm" fill="#b06000">■ 共享专家</text>
+    <text x="670" y="248" class="svgsm" fill="#80868b">□ 没被激活的 248 个 —— 参数还在显存里</text>
+
+    <rect x="300" y="262" width="300" height="52" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
+    <text x="450" y="282" text-anchor="middle" class="svgsm" fill="#174ea6">一层全部参数</text>
+    <text x="450" y="302" text-anchor="middle" class="svgnum" fill="#174ea6">11.32 B</text>
+
+    <rect x="620" y="262" width="300" height="52" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+    <text x="770" y="282" text-anchor="middle" class="svgsm" fill="#0d652d">一个 token 实际用到</text>
+    <text x="770" y="302" text-anchor="middle" class="svgnum" fill="#0d652d">396.36 M · 稀疏比 28.6×</text>
+  </svg>
+  <figcaption>左边是 dense，一个大而宽的 MLP；右边是 MoE，256 个窄专家。
+  <b>两边一个 token 实际做的乘法一样多</b> —— 巧的是右边那 9 个小专家加起来正好也是 396.36 M。</figcaption>
+  </figure>
+
+  <div class="note ok">
+    <span class="t">MoE 唯一的、也是全部的价值</span>
+    <b>参数量和计算量解耦了。</b> 参数可以往上堆到 671B（模型知道得更多），
+    而每个 token 的计算量还停在 dense 那个水平（算得起）。
+  </div>
+
+  <h4>为什么被稀疏化的是 MLP，不是 attention</h4>
+  <p>两个原因。一，<b>参数大头在 MLP</b> —— 上面那张表已经看到，MLA 一层 187 M，
+  MLP 一层 396 M，MoE 一层 11.32 B。二，<b>MLP 天然就是「一堆独立的问题」</b> ——
+  它对每个 token 单独作用，token 之间不交互，所以可以放心地让不同 token 走不同的路。
+  attention 的全部意义恰恰是让 token 互相看，切不开。</p>
+
+  <h4>细粒度：为什么专家要做小做多</h4>
+  <div class="grid g3">
+    <div class="card"><h4>dense 中间层</h4><div class="stat">18,432</div>
+      <p class="sub">前 3 层用的宽度</p></div>
+    <div class="card"><h4>每个专家</h4><div class="stat blue">2,048</div>
+      <p class="sub">只有 dense 的 1/9</p></div>
+    <div class="card tint"><h4>能选出的组合数</h4><div class="stat green">C(256,8)</div>
+      <p class="sub">≈ 4×10¹⁴ 种分工方式</p></div>
+  </div>
+  <p>同样的激活预算，<b>专家越小越多，能表达的分工组合就越多</b>。
+  如果只有 8 个大专家选 1 个，那就只有 8 种可能；256 个小专家选 8 个，
+  组合数是个天文数字。<b>这是细粒度 MoE 的全部道理。</b></p>
+
+  <h4>共享专家：省的是冗余</h4>
+  <p>语法、常识这类东西<b>每个 token 都要用</b>。如果不设共享专家，
+  那 256 个路由专家里每一个都得把这些基本功再学一遍 —— <b>同一份知识存了 256 份</b>。
+  V3 的做法是拎出 1 个共享专家专门装这些，所有 token 都过它；
+  路由专家于是可以专心做分工。</p>
+
+  <h3>4b · 路由：怎么选那 8 个</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>设计</th><th>取值</th><th>为什么这么定</th></tr></thead>
+    <tbody>
+      <tr><td>打分函数</td><td><code>sigmoid</code></td>
+        <td>不是 softmax。softmax 逼着 256 个专家的分数<b>互相竞争、加起来等于 1</b>；
+            sigmoid 让每个专家独立打分，专家之间不必零和</td></tr>
+      <tr><td>分组限制</td><td><code>n_group=8</code><br><code>topk_group=4</code></td>
+        <td>⭐ <b>纯粹是硬件逼出来的</b> —— 先选 4 个组，再在组内选专家，
+            限制一个 token 最多要跨多少台机器去取专家</td></tr>
+      <tr><td>选几个</td><td><code>top-8</code></td>
+        <td>8 个路由 + 1 个共享 = 每 token 过 9 个专家</td></tr>
+      <tr><td>负载均衡</td><td><code>noaux_tc</code></td>
+        <td>不靠辅助损失，靠一个可学习的偏置动态调整。
+            辅助损失的问题是<b>它跟主目标打架</b> —— 你在同时优化「答得对」和「分得匀」</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note danger">
+    <span class="t">⭐ 全课主线最锋利的一个例证</span>
+    <code>n_group=8, topk_group=4</code> 这两个数字，<b>跟模型质量毫无关系</b>。
+    它们存在的唯一理由是：让一个 token 要去的专家尽量集中在少数几台机器上，
+    好让 all-to-all 通信不要跨太多机。
+    <b>通信约束被直接写进了模型结构里。</b>
+  </div>
+
+  <p><b>负载不均会怎样。</b> 专家分散在不同卡上。如果某几个专家特别热门，
+  它们所在的卡就要算更多 token，而其他卡在等 ——
+  <b>最慢的那张卡决定整层的时间</b>。这不是效率损失几个百分点的问题，
+  是整个集群按最慢的那张卡的速度走。</p>
+
+  <h3>4c · 分布式：挪 token，还是挪权重</h3>
+  <p><b>这一小节是整课的系统高光。</b> 专家分散在不同卡上，
+  那么一个 token 要用第 137 号专家，怎么办？两条路，<b>真实的二选一</b>。</p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 250" role="img" aria-label="Dispatch/Combine 与 AG-RS 两种 MoE 分布式方案对比">
+    <!-- 左：dispatch/combine -->
+    <text x="20" y="20" class="svglbl" fill="#174ea6">方案 A · Dispatch / Combine —— 把 token 送到专家那儿</text>
+    <g>
+      <rect x="20" y="34" width="80" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="60" y="54" text-anchor="middle" class="svgsm" fill="#174ea6">卡 0</text>
+      <text x="60" y="70" text-anchor="middle" class="svgsm" fill="#174ea6">专家 0-63</text>
+      <rect x="112" y="34" width="80" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="152" y="54" text-anchor="middle" class="svgsm" fill="#174ea6">卡 1</text>
+      <text x="152" y="70" text-anchor="middle" class="svgsm" fill="#174ea6">专家 64-127</text>
+      <rect x="204" y="34" width="80" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="244" y="54" text-anchor="middle" class="svgsm" fill="#174ea6">卡 2</text>
+      <rect x="296" y="34" width="80" height="46" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="336" y="54" text-anchor="middle" class="svgsm" fill="#174ea6">卡 3</text>
+
+      <path d="M60 96 C 100 126, 200 126, 244 96" stroke="#1a73e8" stroke-width="1.3"
+            fill="none" marker-end="url(#ar)"/>
+      <path d="M152 96 C 190 130, 300 130, 336 96" stroke="#1a73e8" stroke-width="1.3"
+            fill="none" marker-end="url(#ar)"/>
+      <path d="M336 110 C 280 150, 110 150, 60 112" stroke="#80868b" stroke-width="1.1"
+            fill="none" stroke-dasharray="3 3" marker-end="url(#ar)"/>
+      <text x="150" y="150" class="svgsm" fill="#1a73e8">all-to-all ×2（送去 + 送回）</text>
+
+      <rect x="20" y="164" width="356" height="66" rx="8" fill="#fff" stroke="#dadce0"/>
+      <text x="32" y="184" class="svgsm">通信量 ∝ <tspan font-weight="700">token 数 × hidden</tspan></text>
+      <text x="32" y="202" class="svgsm" fill="#1e8e3e">✓ token 少的时候便宜（推理 decode）</text>
+      <text x="32" y="220" class="svgsm" fill="#d93025">✗ token 多的时候贵（训练大 batch）</text>
+    </g>
+
+    <line x1="440" y1="14" x2="440" y2="236" stroke="#dadce0"/>
+
+    <!-- 右：AG-RS -->
+    <text x="480" y="20" class="svglbl" fill="#0d652d">方案 B · AG-RS —— 把专家权重取过来，在本地算</text>
+    <g>
+      <rect x="480" y="34" width="80" height="46" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="520" y="60" text-anchor="middle" class="svgsm" fill="#0d652d">卡 0</text>
+      <rect x="572" y="34" width="80" height="46" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="612" y="60" text-anchor="middle" class="svgsm" fill="#0d652d">卡 1</text>
+      <rect x="664" y="34" width="80" height="46" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="704" y="60" text-anchor="middle" class="svgsm" fill="#0d652d">卡 2</text>
+      <rect x="756" y="34" width="80" height="46" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="796" y="60" text-anchor="middle" class="svgsm" fill="#0d652d">卡 3</text>
+
+      <path d="M520 88 v18 h276 v-18" stroke="#1e8e3e" stroke-width="1.3" fill="none"/>
+      <path d="M612 88 v18 M704 88 v18" stroke="#1e8e3e" stroke-width="1.3"/>
+      <text x="560" y="124" class="svgsm" fill="#0d652d">all-gather 权重 → 本地算 → reduce-scatter</text>
+      <text x="560" y="140" class="svgsm">token 一步都不动</text>
+
+      <rect x="480" y="164" width="356" height="66" rx="8" fill="#fff" stroke="#dadce0"/>
+      <text x="492" y="184" class="svgsm">通信量 ∝ <tspan font-weight="700">专家权重大小</tspan>（跟 token 数无关）</text>
+      <text x="492" y="202" class="svgsm" fill="#1e8e3e">✓ token 多的时候摊薄了</text>
+      <text x="492" y="220" class="svgsm" fill="#d93025">✗ token 少的时候纯浪费</text>
+    </g>
+  </svg>
+  <figcaption>没有哪个方案永远对。<b>token 多、权重相对小 → 挪权重划算；
+  token 少（比如推理 decode 一次就几个 token）→ 挪 token 划算。</b>
+  还要看互联拓扑 —— 跨机带宽比机内小得多，前面那个分组限制正是为了让 all-to-all 尽量留在机内。</figcaption>
+  </figure>
+
+  <h4>算一下通信量</h4>
+  <div class="eq"><span class="c">// Dispatch + Combine，一层</span>
+2 × <span data-v="tokens">131,072</span> token × 8 份 × 7,168 × <span data-v="bytes">2</span> B = <span class="r" data-v="a2aLayer">28.00 GiB</span>
+<span class="c">// × 58 层 =</span> <span class="r" data-v="a2aAll">1.59 TiB</span>  <span class="c">← 一次前向要搬这么多</span></div>
+  <p>把它跟这一层的计算量放一起，就得到<b>通信/计算比</b> ——
+  这个比值决定了通信能不能被计算盖住。<b>它是专题六性能工程那一课的地基。</b></p>
+  <p class="lead" style="font-size:15px">顺带提一句名字，不展开：DeepEP（专门优化这个 all-to-all 的通信库）、
+  EPLB（专家负载再平衡）、dropless（不丢弃超载 token 的实现）。</p>
+
+  <h3>4d · 算账：671B 是怎么来的</h3>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>层级</th><th>算式</th><th style="text-align:right">参数量</th><th>占比</th></tr></thead>
+    <tbody>
+      <tr><td>单个专家</td><td>3 × 7168 × 2048</td><td class="n">44.04 M</td><td>—</td></tr>
+      <tr><td>一层（256 路由 + 1 共享 + 门控）</td><td>257 × 44.04 M + 1.84 M</td><td class="n">11.32 B</td><td>—</td></tr>
+      <tr><td><b>58 层 MoE</b></td><td>58 × 11.32 B</td><td class="n">656.57 B</td><td><b>97.8%</b></td></tr>
+      <tr><td>61 层 MLA</td><td>61 × 187.11 M</td><td class="n">11.41 B</td><td>1.7%</td></tr>
+      <tr><td>3 层 dense MLP</td><td>3 × 396.36 M</td><td class="n">1.19 B</td><td>0.2%</td></tr>
+      <tr><td>嵌入 + lm_head</td><td>2 × 926.68 M</td><td class="n">1.85 B</td><td>0.3%</td></tr>
+      <tr class="sum"><td colspan="2">总计</td><td class="n">671.03 B</td><td>官方口径 671B ✓</td></tr>
+    </tbody>
+  </table></div>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 200" role="img" aria-label="671B 总参数与 37B 激活参数的对比">
+      <text x="20" y="22" class="svglbl">全部参数 · 671.03 B · 显存要装下这些</text>
+      <rect x="20" y="32" width="960" height="44" rx="6" fill="#1a73e8"/>
+      <text x="500" y="60" text-anchor="middle" class="svgsm" fill="#fff">
+        MoE 656.57 B（97.8%）· MLA 11.41 B · dense 1.19 B · 进出口 1.85 B</text>
+
+      <text x="20" y="106" class="svglbl">一个 token 实际用到 · 36.62 B · 算力只花这些</text>
+      <rect x="20" y="116" width="52" height="44" rx="6" fill="#1e8e3e"/>
+      <rect x="72" y="116" width="908" height="44" rx="6" fill="#f1f3f4" stroke="#dadce0"
+            stroke-dasharray="4 3"/>
+      <text x="46" y="144" text-anchor="middle" class="svgsm" fill="#fff">37B</text>
+      <text x="526" y="144" text-anchor="middle" class="svgsm" fill="#80868b">
+        这 634 B 参数这一步没参与计算 —— 但它们一个字节都不能从显存里拿走</text>
+
+      <text x="20" y="188" class="svglbl" fill="#d93025">
+        ⚠️ MoE 省的是算力（18.3× ），不省显存（0×）</text>
+    </svg>
+  </figure>
+
+  <div class="note danger">
+    <span class="t">这个反直觉必须点破</span>
+    <b>显存要装 671B，算力只花 37B。</b>
+    很多人听到「激活 37B」就以为 MoE 模型跟 37B 的稠密模型一样好养 —— 完全不是。
+    你需要的显存跟 671B 稠密模型一模一样，省下来的只有算力。
+    <b>MoE 换的是「同样算力下能装更多知识」，不是「同样显存下跑更大模型」。</b>
+  </div>
+</div></section>
+
+<!-- ══════════ 站 5 · 残差流 ══════════ -->
+<section id="s5"><div class="wrap">
+  <div class="stn"><span class="badge">站 5</span><h2>层间：残差流这条总线</h2></div>
+  <p class="lead">前面讲的都是「一层里面」。这一站讲 61 层是怎么串起来的。</p>
+
+  <div class="grid g2">
+    <div>
+      <h4>残差流是一条总线，不是一根管道</h4>
+      <p>常见的误解是把网络想成流水线：数据从第 1 层流到第 2 层再到第 3 层。
+      <b>实际上更像一条总线</b> —— 有一个宽度 7168 的向量一路贯穿全程，
+      每一层从它<b>读</b>一份、算出点东西、再<b>加</b>回去。</p>
+      <div class="eq">x = x + MLA(norm(x))     <span class="c">// 加回去，不是替换</span>
+x = x + MoE(norm(x))
+<span class="c">// ↑ 以上两行 × 61</span></div>
+      <p><b>为什么必须是「加」。</b> 两个理由。梯度上，加法让反向传播有一条直达的高速路，
+      不会在 61 层里衰减殆尽。语义上，<b>它让「什么都不做」成为默认状态</b> ——
+      一层如果暂时没学到有用的东西，输出接近 0，加上去等于没动，不会破坏已有的信息。</p>
+      <h4>RMSNorm 摆在哪</h4>
+      <p>V3 用 <b>pre-norm</b>：先 norm 再进子层，子层输出直接加回主干。
+      现代模型基本都站到了这边 —— post-norm 在深层网络里训不稳。</p>
+    </div>
+    <div>
+      <figure class="fbox" style="margin-top:0">
+      <svg viewBox="0 0 420 400" role="img" aria-label="残差流总线与层的读写关系">
+        <defs><linearGradient id="bus" x1="0" y1="0" x2="0" y2="1">
+          <stop offset="0" stop-color="#1a73e8"/><stop offset="1" stop-color="#9334e6"/>
+        </linearGradient></defs>
+        <rect x="30" y="20" width="26" height="356" rx="13" fill="url(#bus)" opacity=".2"/>
+        <line x1="43" y1="20" x2="43" y2="376" stroke="url(#bus)" stroke-width="3"/>
+        <text x="10" y="14" class="svglbl" fill="#174ea6">残差流 · d = 7168</text>
+
+        <g>
+          <!-- 层 1 -->
+          <rect x="110" y="34" width="180" height="34" rx="6" fill="#fce8e6" stroke="#d93025"/>
+          <text x="200" y="56" text-anchor="middle" class="svgsm" fill="#a50e0e">norm → MLA</text>
+          <path d="M50 44 h56" stroke="#5f6368" stroke-width="1.1" marker-end="url(#ar)"/>
+          <path d="M292 58 h20 v18 h-262 v-18" stroke="#1e8e3e" stroke-width="1.1" fill="none"/>
+          <circle cx="43" cy="76" r="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+          <text x="43" y="80" text-anchor="middle" class="svgsm" fill="#1e8e3e">+</text>
+
+          <rect x="110" y="94" width="180" height="34" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
+          <text x="200" y="116" text-anchor="middle" class="svgsm" fill="#0d652d">norm → MoE</text>
+          <path d="M50 104 h56" stroke="#5f6368" stroke-width="1.1" marker-end="url(#ar)"/>
+          <path d="M292 118 h20 v18 h-262 v-18" stroke="#1e8e3e" stroke-width="1.1" fill="none"/>
+          <circle cx="43" cy="136" r="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+          <text x="43" y="140" text-anchor="middle" class="svgsm" fill="#1e8e3e">+</text>
+          <text x="318" y="90" class="svgsm">第 1 层</text>
+
+          <!-- 层 2 淡 -->
+          <rect x="110" y="158" width="180" height="34" rx="6" fill="#fce8e6" stroke="#d93025" opacity=".45"/>
+          <rect x="110" y="204" width="180" height="34" rx="6" fill="#e6f4ea" stroke="#1e8e3e" opacity=".45"/>
+          <text x="318" y="200" class="svgsm" opacity=".6">第 2 层</text>
+          <path d="M50 168 h56" stroke="#5f6368" stroke-width="1.1" opacity=".45" marker-end="url(#ar)"/>
+          <path d="M50 214 h56" stroke="#5f6368" stroke-width="1.1" opacity=".45" marker-end="url(#ar)"/>
+
+          <text x="200" y="266" text-anchor="middle" class="svglbl">⋮  ×61 层  ⋮</text>
+
+          <rect x="110" y="286" width="180" height="34" rx="6" fill="#e6f4ea" stroke="#1e8e3e" opacity=".45"/>
+          <text x="318" y="308" class="svgsm" opacity=".6">第 61 层</text>
+          <path d="M50 296 h56" stroke="#5f6368" stroke-width="1.1" opacity=".45" marker-end="url(#ar)"/>
+        </g>
+
+        <rect x="16" y="342" width="388" height="34" rx="6" fill="#fef7e0" stroke="#f9ab00"/>
+        <text x="210" y="363" text-anchor="middle" class="svgsm" fill="#b06000">
+          单层激活 <tspan data-v="embedAct" font-weight="700">1.75 GiB</tspan> ×
+          61 层全留着 = <tspan data-v="actAll61" font-weight="700">106.75 GiB</tspan></text>
+      </svg>
+      </figure>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="t">一个只立问题、不给答案的数字</span>
+    残差流每一层进出各一份。如果 61 层的激活<b>全部留着</b>，光这一项就是
+    <b><span data-v="actAll61">106.75 GiB</span></b>，已经超过单张卡。
+    于是自然冒出一个问题：<b>凭什么要留着？</b>
+    答案在反向传播里 —— 那是<a href="topic-03.html">专题三</a>的事，这里只把问题立住。
+  </div>
+
+  <h3>题外一眼：mHC —— V4 换了残差结构</h3>
+  <p>V3 只有一条残差流。DeepSeek 在 V4 上换成了
+  <b>mHC（Manifold-Constrained Hyper-Connections）</b>：<b>4 条</b>残差流，
+  用 Sinkhorn 双随机矩阵约束它们之间怎么混合。</p>
+  <div class="grid g2">
+    <div class="card"><h4>它想解决什么</h4>
+      <p class="sub">单条残差流是所有 61 层共用的<b>一个瓶颈</b> ——
+      信息在里面反复叠加、互相干扰。多条流等于给不同的层开不同的<b>车道</b>，
+      流形约束负责让数值不发散。</p></div>
+    <div class="card tint"><h4>⚠️ 代价要算出来</h4>
+      <p class="sub">残差流变 <b>4 倍宽</b>，激活显存也跟着涨。
+      按这一页的口径，那就是从 <span data-v="embedAct">1.75 GiB</span> 变成
+      <span data-v="embedAct4x">7.00 GiB</span> 每层。
+      <b>没有免费的结构改进。</b></p></div>
+  </div>
+</div></section>
+
+<!-- ══════════ 站 6 · 出口 ══════════ -->
+<section id="s6"><div class="wrap">
+  <div class="stn"><span class="badge">站 6</span><h2>出口：从向量回到文字</h2></div>
+  <p class="lead">走完 61 层，手里是一个 7168 维的向量。要把它变回「下一个字是什么」。</p>
+
+  <div class="grid g2">
+    <div>
+      <h4>反向嵌入</h4>
+      <p>最后一次 RMSNorm，然后一个 <span class="k">7168 → 129,280</span> 的矩阵，
+      给词表里每一个词打一个分。这跟站 1 的嵌入矩阵是<b>镜像</b>关系。</p>
+      <div class="note warn">
+        <span class="t"><code>tie_word_embeddings = false</code></span>
+        很多模型让进出口<b>共享同一份权重</b>（省一份参数，而且「表示一个词」
+        和「预测一个词」直觉上是一回事）。<b>V3 没有共享</b> ——
+        它认为读和写是两个不同的任务，各给一份权重。代价是多 926 M 参数。
+      </div>
+      <h4>MTP：同一个模块，两种用途</h4>
+      <p><code>num_nextn_predict_layers = 1</code> —— 除了预测下一个 token，
+      还额外预测下下一个。</p>
+      <div class="tbl-wrap"><table><tbody>
+        <tr><td><b>训练时</b></td><td>额外的监督信号，逼模型看得更远一点</td></tr>
+        <tr><td><b>推理时</b></td><td>拿来做<b>投机解码</b>的草稿 —— 一次多吐一个字</td></tr>
+      </tbody></table></div>
+    </div>
+    <div>
+      <figure class="fbox" style="margin-top:0">
+      <svg viewBox="0 0 420 320" role="img" aria-label="出口 logits 张量的体积">
+        <text x="10" y="18" class="svglbl">残差流最后一个向量</text>
+        <rect x="10" y="26" width="400" height="20" rx="4" fill="#e8f0fe" stroke="#1a73e8"/>
+        <text x="210" y="41" text-anchor="middle" class="svgsm" fill="#174ea6">7,168</text>
+
+        <path d="M210 52 v20" stroke="#f9ab00" stroke-width="1.4" marker-end="url(#ar)"/>
+        <text x="222" y="66" class="svgsm" fill="#b06000">lm_head · 926.68 M</text>
+
+        <text x="10" y="94" class="svglbl" fill="#d93025">logits 张量 —— 出口这一下</text>
+        <rect x="10" y="102" width="400" height="150" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
+        <g stroke="#f6c7c3">
+          <line x1="10" y1="132" x2="410" y2="132"/><line x1="10" y1="162" x2="410" y2="162"/>
+          <line x1="10" y1="192" x2="410" y2="192"/><line x1="10" y1="222" x2="410" y2="222"/>
+        </g>
+        <text x="210" y="172" text-anchor="middle" class="svgnum" fill="#a50e0e" font-size="19"
+              data-v="logits">31.56 GiB</text>
+        <text x="210" y="194" text-anchor="middle" class="svgsm" fill="#a50e0e">
+          <tspan data-v="seqLabel">128K</tspan> token × 129,280 词 × <tspan data-v="bytes">2</tspan> B</text>
+
+        <rect x="10" y="266" width="400" height="44" rx="6" fill="#fff" stroke="#dadce0"/>
+        <text x="24" y="284" class="svgsm">对照：整个 MLA 权重（61 层）</text>
+        <text x="24" y="300" class="svgsm">22.83 GiB —— <tspan fill="#d93025" font-weight="700">
+          比不过出口这一个临时张量</tspan></text>
+      </svg>
+      </figure>
+    </div>
+  </div>
+
+  <div class="note danger">
+    <span class="t">又一个容易漏掉的爆点</span>
+    logits 张量 <b><span data-v="logits">31.56 GiB</span></b> ——
+    <b>比中间任何一层都吓人</b>，而且它是纯临时的。
+    所以真实实现里 logits 必须<b>分块算</b>、loss 要 <b>fuse 进去</b>，
+    绝不能整个物化出来。这跟 FlashAttention 是同一类手法：
+    <b>不要把中间结果落地。</b>
+  </div>
+</div></section>
+
+<!-- ══════════ 站 7 · 合账 ══════════ -->
+<section id="s7"><div class="wrap">
+  <div class="stn big"><span class="badge">站 7 ⭐</span><h2>把账合起来</h2></div>
+  <p class="lead">七站走完。现在回答三个问题。</p>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>部件</th><th style="text-align:right">权重</th>
+      <th style="text-align:right">显存</th><th style="text-align:right">前向 FLOPs</th><th>备注</th></tr></thead>
+    <tbody>
+      <tr><td>嵌入</td><td class="n">926.68 M</td><td class="n" data-v="embedWBytes">1.73 GiB</td>
+        <td class="n">—</td><td>查表，不是矩阵乘</td></tr>
+      <tr><td>MLA × 61</td><td class="n">11.41 B</td><td class="n">21.26 GiB</td>
+        <td class="n" data-v="mlaFlops">45.61 PFLOP</td><td>含 <span data-v="attnShare">81.8%</span> 的平方项</td></tr>
+      <tr><td>KV cache</td><td class="n">—</td><td class="n" data-v="kvMla">8.58 GiB</td>
+        <td class="n">—</td><td>随序列线性增长</td></tr>
+      <tr><td>Dense MLP × 3</td><td class="n">1.19 B</td><td class="n">2.21 GiB</td>
+        <td class="n" data-v="denseFlops">0.31 PFLOP</td><td></td></tr>
+      <tr><td>MoE × 58</td><td class="n">656.57 B</td><td class="n">1.19 TiB</td>
+        <td class="n" data-v="moeFlops">6.03 PFLOP</td><td>+ all-to-all <span data-v="a2aAll">1.59 TiB</span></td></tr>
+      <tr><td>lm_head</td><td class="n">926.68 M</td><td class="n" data-v="embedWBytes">1.73 GiB</td>
+        <td class="n" data-v="headFlops">0.24 PFLOP</td><td>⚠️ logits <span data-v="logits">31.56 GiB</span></td></tr>
+      <tr class="sum"><td>合计</td><td class="n" data-v="totalW">671.03 B</td>
+        <td class="n" data-v="memResident">1.23 TiB</td>
+        <td class="n" data-v="totalFlops">52.50 PFLOP</td><td>激活参数仅 <span data-v="activeW">36.62 B</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 230" role="img" aria-label="显存构成与单卡容量对比">
+      <g id="memstack"></g>
+    </svg>
+    <figcaption>常驻显存的构成。每一小格是<b>一个 TPU v7 device 的 94.74 GB</b> ——
+    数一数要几个。而这还只是前向、batch=1、不含激活和临时缓冲。</figcaption>
+  </figure>
+
+  <div class="grid g3">
+    <div class="card"><h4>① 一次前向多少算力</h4>
+      <div class="stat blue" data-v="totalFlops">52.50 PFLOP</div>
+      <p class="sub">其中 attention 平方项占 <span data-v="attnShare">81.8%</span></p></div>
+    <div class="card"><h4>② 常驻显存多少</h4>
+      <div class="stat red" data-v="memResident">1.23 TiB</div>
+      <p class="sub">权重 <span data-v="memWeights">1.22 TiB</span> +
+        KV <span data-v="kvMla">8.58 GiB</span></p></div>
+    <div class="card tint"><h4>③ 要多少个 device</h4>
+      <div class="stat orange"><span data-v="devices">14.3</span> 个</div>
+      <p class="sub">对着 94.74 GB 一除。<b>而且这只是下限。</b></p></div>
+  </div>
+
+  <div class="punch">
+    到这里，「为什么需要并行」不用讲了 —— <b>它是算出来的结论。</b>
+    <small>怎么并行、沿哪一维切、通信怎么藏，是专题四的事。
+    这一课的任务只是把「装不下」这个事实<b>算</b>出来，而不是<b>说</b>出来。</small>
+  </div>
+</div></section>
+
+<!-- ══════════ 站 7.5 · AOT ══════════ -->
+<section id="s75"><div class="wrap">
+  <div class="stn"><span class="badge">站 7.5</span><h2>算出来的数，跟机器上量出来的数</h2></div>
+  <p class="lead">前面七站都是推导。这一节只说一件事：<b>这些推导能不能信？</b></p>
+
+  <div class="note ok">
+    <span class="t">能，而且有工具</span>
+    用 <b>AOT 提前编译</b>，可以在<b>不占一张卡</b>的情况下让编译器告诉你这份配置到底装不装得下 ——
+    排队等卡之前就知道答案。对着上面那张表做交叉验证，这是最省钱的一步。
+  </div>
+
+  <p>但真跑过之后会知道三件事。<b>这三条是我们自己踩出来的，不是书上的。</b></p>
+
+  <div class="grid g3">
+    <div class="card">
+      <h4>① 编译过了 ≠ 装得下</h4>
+      <p class="sub">编译成功只说明这张图<b>合法</b>。我们见过编译一路绿灯、
+      但显存需求远超单卡上限的配置。</p>
+      <p class="sub" style="margin-top:10px;color:var(--red)"><b>更麻烦的是报错会误导人</b> ——
+      真正的编译失败常常被报成「装不下」，于是人去调小 batch，
+      <b>方向完全错了</b>。这类「错误的错误信息」比没有信息更危险。</p>
+    </div>
+    <div class="card">
+      <h4>② 报出来的数不是全部</h4>
+      <p class="sub">它只是<b>临时缓冲</b>，参数和优化器状态是另外一笔
+      （见<a href="topic-03.html">专题三</a>）。</p>
+      <p class="sub" style="margin-top:10px">而且它<b>不随并行度缩小</b> ——
+      切得再宽，临时缓冲该多大还多大。这一点最容易算错。</p>
+    </div>
+    <div class="card tint">
+      <h4>③ ⭐ 贴着上限那一带会失灵</h4>
+      <p class="sub">远离上限时 AOT 非常可靠。但<b>逼近上限的那个窄带里，它判不准</b> ——
+      我们判错过，<b>而且错的都落在这一带</b>。</p>
+      <p class="sub" style="margin-top:10px;color:var(--blue-d)"><b>不要把静态分析当神谕。</b>
+      它帮你排除掉大部分明显不行的配置，不替你做最后那个决定。</p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="t">顺带一个反直觉</span>
+    同一个模型、同样的并行配置，<b>只是换了某个算子的实现，显存需求就会变</b> ——
+    而且方向不固定，有的变大有的变小。
+  </div>
+
+  <div class="punch dark">
+    显存不是模型的属性，是「模型 × 实现 × 编译器」三者的属性。
+    <small>这一条会在<a href="topic-06.html" style="color:#8ab4f8">专题六</a>里反复出现。</small>
+  </div>
+</div></section>
+
+<!-- ══════════ 边界 ══════════ -->
+<section><div class="wrap">
+  <h2>这个专题明确不讲</h2>
+  <p class="lead">写清楚是为了让边界清楚，不是遗漏。</p>
+  <div class="grid g2">
+    <div class="card"><h4>反向传播与优化器状态</h4>
+      <p class="sub">前向的账是事实，反向的账掺着策略，混讲会讲不清 →
+        <a href="topic-03.html">专题三</a></p></div>
+    <div class="card"><h4>并行策略</h4>
+      <p class="sub">本专题只负责把「装不下」这个事实算出来 →
+        <a href="topic-04.html">专题四</a></p></div>
+    <div class="card"><h4>FP8 训练</h4>
+      <p class="sub">V3 的一大贡献，但那是精度与数值的话题 →
+        <a href="topic-08.html">专题八</a></p></div>
+    <div class="card"><h4>推理</h4>
+      <p class="sub">prefill / decode 的差异、连续批处理 —— 全程按训练的前向算 →
+        <a href="topic-05.html">专题五</a></p></div>
+  </div>
+</div></section>
+
+<footer><div class="wrap">
+  <p><b>专题一 · 一个 Token 的一生</b> ｜
+    <a href="index.html">← 回课程总纲</a> ｜
+    <a href="https://github.com/yangwhale/gpu-tpu-pedia/tree/main/Courses">GitHub 源</a></p>
+  <p>页面上所有数字由
+    <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/tools/token-budget.py"><code>token-budget.py</code></a>
+    的同一套公式实时算出，输入取自官方 <code>config.json</code>。
+    <b>没有一个数字是抄来的或估的</b> —— 总参数算出 671.03 B、激活 36.62 B，
+    与官方口径 671B / 37B 吻合，这就是公式正确性的验证。</p>
+  <p>本页随 <code>Courses/</code> 采用
+    <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>。</p>
+</div></footer>
+
+<script>
+"use strict";
+/* ─────────────────────────────────────────────────────────────
+   跟 Courses/tools/token-budget.py 是同一套公式。改这里要同步改那里。
+   ───────────────────────────────────────────────────────────── */
+const C = {
+  d:7168, L:61, nDense:3, V:129280, H:128,
+  qLora:1536, kvLora:512, nope:128, rope:64, vDim:128,
+  nExp:256, nShr:1, topK:8, dMoe:2048, dFf:18432
+};
+C.nMoe = C.L - C.nDense;          // 58
+C.qkDim = C.nope + C.rope;        // 192
+const HBM = 94.74e9;              // TPU v7 单 device 可用 HBM（字节）
+const GiB = 1024**3, TiB = 1024**4;
+
+function compute(seq, batch, B, causal=true){
+  const T = seq*batch, r = {seq, batch, B, T};
+  r.embedW  = C.V*C.d;
+  r.embedAct= T*C.d*B;
+
+  const wQa=C.d*C.qLora, wQb=C.qLora*C.H*C.qkDim,
+        wKa=C.d*(C.kvLora+C.rope), wKb=C.kvLora*C.H*(C.nope+C.vDim),
+        wO =C.H*C.vDim*C.d;
+  r.mlaWLayer = wQa+wQb+wKa+wKb+wO;
+  r.mlaWAll   = r.mlaWLayer*C.L;
+
+  r.kvPer   = C.kvLora + C.rope;        // 576
+  r.kvMla   = T*C.L*r.kvPer*B;
+  r.kvMhaPer= 2*C.H*C.vDim;             // 32768
+  r.kvMha   = T*C.L*r.kvMhaPer*B;
+  r.kvMqaPer= 2*C.vDim;                 //   256
+  r.kvMqa   = T*C.L*r.kvMqaPer*B;
+  r.kvGqaPer= 2*8*C.vDim;               //  2048（8 组，业界常见配置）
+  r.kvGqa   = T*C.L*r.kvGqaPer*B;
+  r.kvRatio = r.kvMhaPer/r.kvPer;
+
+  r.attnMatrix = batch*C.H*seq*seq*B;
+
+  const half = causal?0.5:1;
+  r.mlaFlopsProj = 2*T*r.mlaWLayer;
+  r.mlaFlopsAttn = 2*batch*C.H*seq*seq*C.qkDim*half + 2*batch*C.H*seq*seq*C.vDim*half;
+  r.mlaFlops     = (r.mlaFlopsProj + r.mlaFlopsAttn)*C.L;
+
+  r.denseWLayer = 3*C.d*C.dFf;
+  r.denseWAll   = r.denseWLayer*C.nDense;
+  r.denseFlops  = 2*T*r.denseWLayer*C.nDense;
+
+  r.expertW   = 3*C.d*C.dMoe;
+  r.gateW     = C.d*C.nExp;
+  r.moeWLayer = (C.nExp+C.nShr)*r.expertW + r.gateW;
+  r.moeWAll   = r.moeWLayer*C.nMoe;
+  r.moeAct    = (C.topK+C.nShr)*r.expertW;
+  r.moeFlops  = 2*T*r.moeAct*C.nMoe;
+  r.a2aLayer  = 2*T*C.topK*C.d*B;
+  r.a2aAll    = r.a2aLayer*C.nMoe;
+
+  r.headW     = C.V*C.d;
+  r.logits    = T*C.V*B;
+  r.headFlops = 2*T*r.headW;
+
+  r.totalW  = r.embedW + r.mlaWAll + r.denseWAll + r.moeWAll + r.headW;
+  r.activeW = r.mlaWAll + r.denseWAll + (r.moeAct + r.gateW)*C.nMoe + r.headW;
+  r.totalFlops = r.mlaFlops + r.denseFlops + r.moeFlops + r.headFlops;
+  r.attnShare  = r.mlaFlopsAttn*C.L / r.totalFlops;
+
+  r.memWeights  = r.totalW*B;
+  r.memResident = r.memWeights + r.kvMla;
+  r.devices     = r.memResident/HBM;
+  r.actAll61    = r.embedAct*C.L;
+  return r;
+}
+
+/* ── 格式化 ── */
+const bytesH = b => b>=TiB ? (b/TiB).toFixed(2)+" TiB"
+                  : b>=GiB ? (b/GiB).toFixed(2)+" GiB"
+                  : b>=1048576 ? (b/1048576).toFixed(1)+" MiB"
+                  : Math.round(b).toLocaleString()+" B";
+const flopH  = f => f>=1e18 ? (f/1e18).toFixed(2)+" EFLOP"
+                  : f>=1e15 ? (f/1e15).toFixed(2)+" PFLOP"
+                  : f>=1e12 ? (f/1e12).toFixed(2)+" TFLOP"
+                  : (f/1e9).toFixed(1)+" GFLOP";
+const parH   = p => p>=1e12 ? (p/1e12).toFixed(2)+" T"
+                  : p>=1e9  ? (p/1e9).toFixed(2)+" B"
+                  : (p/1e6).toFixed(2)+" M";
+const seqH   = s => s>=1048576 ? (s/1048576)+"M" : s>=1024 ? (s/1024)+"K" : ""+s;
+const SVGNS  = "http://www.w3.org/2000/svg";
+const el = (n,a={},t)=>{const e=document.createElementNS(SVGNS,n);
+  for(const k in a) e.setAttribute(k,a[k]);
+  if(t!==undefined) e.textContent=t; return e;};
+
+/* ── 渲染 ── */
+const PREC = {1:"fp8", 2:"bf16", 4:"fp32"};
+let prev = {};
+
+function render(first){
+  const seq   = 2**(+document.getElementById("seq").value);
+  const batch = 2**(+document.getElementById("bs").value);
+  const B     = +document.getElementById("prec").value;
+  document.getElementById("seqOut").textContent = seqH(seq);
+  document.getElementById("bsOut").textContent  = batch;
+
+  const r = compute(seq, batch, B);
+  const V = {
+    seqLabel: seqH(seq),
+    seqRaw:   seq.toLocaleString(),
+    tokens:   r.T.toLocaleString(),
+    batch:    batch,
+    bytes:    B,
+    precLabel:PREC[B],
+    embedW:      parH(r.embedW),
+    embedWBytes: bytesH(r.embedW*B),
+    embedAct:    bytesH(r.embedAct),
+    embedAct4x:  bytesH(r.embedAct*4),
+    actAll61:    bytesH(r.actAll61),
+    kvMla:    bytesH(r.kvMla),
+    kvMha:    bytesH(r.kvMha),
+    kvRatio:  r.kvRatio.toFixed(1)+"×",
+    attnMatrix: bytesH(r.attnMatrix),
+    attnShare:  (r.attnShare*100).toFixed(1)+"%",
+    a2aLayer: bytesH(r.a2aLayer),
+    a2aAll:   bytesH(r.a2aAll),
+    logits:   bytesH(r.logits),
+    mlaFlops:   flopH(r.mlaFlops),
+    denseFlops: flopH(r.denseFlops),
+    moeFlops:   flopH(r.moeFlops),
+    headFlops:  flopH(r.headFlops),
+    totalFlops: flopH(r.totalFlops),
+    totalW:   parH(r.totalW),
+    activeW:  parH(r.activeW),
+    memWeights:  bytesH(r.memWeights),
+    memResident: bytesH(r.memResident),
+    devices:  r.devices.toFixed(1)
+  };
+  for(const k in V){
+    const s = String(V[k]);
+    document.querySelectorAll(`[data-v="${k}"]`).forEach(n=>{
+      if(n.textContent !== s){
+        n.textContent = s;
+        if(!first && prev[k]!==undefined && n.classList){
+          n.classList.add("live");
+          setTimeout(()=>n.classList.remove("live"), 620);
+        }
+      }
+    });
+    prev[k]=s;
+  }
+  drawKvBars(r); drawFlopCurve(r); drawMemStack(r); drawCardGrid(r);
+}
+
+/* ── 图 1：四种注意力的 KV cache 对比条 ── */
+function drawKvBars(r){
+  const g = document.getElementById("kvbars"); if(!g) return;
+  g.textContent = "";
+  const rows = [
+    ["MHA · 每头一份",  r.kvMha, "#d93025", r.kvMhaPer],
+    ["GQA · 8 组共享",  r.kvGqa, "#f9ab00", r.kvGqaPer],
+    ["MQA · 全部共用",  r.kvMqa, "#e8710a", r.kvMqaPer],
+    ["MLA · 压缩 ⭐",   r.kvMla, "#1a73e8", r.kvPer]
+  ];
+  const max = Math.max(...rows.map(x=>x[1]));
+  const x0 = 200, w = 520;
+  rows.forEach((row,i)=>{
+    const y = 20 + i*36;
+    g.appendChild(el("text",{x:150,y:y+11,"text-anchor":"end",class:"svglbl"},row[0]));
+    g.appendChild(el("text",{x:150,y:y+25,"text-anchor":"end",class:"svgsm"},
+      `${row[3].toLocaleString()} 数/token/层`));
+    const bw = Math.max(2, row[1]/max*w);
+    g.appendChild(el("rect",{x:x0,y,width:bw,height:22,rx:3,fill:row[2]}));
+    g.appendChild(el("text",{x:x0+bw+10,y:y+16,class:"svgnum",fill:row[2]},bytesH(row[1])));
+    if(i===3) g.appendChild(el("text",{x:x0+bw+10,y:y+16,dx:96,class:"svgsm",fill:"#1e8e3e"},
+      `← 比 MHA 小 ${r.kvRatio.toFixed(1)} 倍`));
+  });
+  // 单卡容量参照线
+  const line = document.getElementById("hbmline"),
+        txt  = document.getElementById("hbmtext");
+  const hx = x0 + HBM/max*w;
+  if(hx < x0+w+60){ line.setAttribute("x1",hx); line.setAttribute("x2",hx);
+    line.style.display=""; txt.setAttribute("x",hx); txt.style.display=""; }
+  else { line.style.display="none"; txt.style.display="none"; }
+}
+
+/* ── 图 2：attention 平方项占比随序列长度变化 ── */
+function drawFlopCurve(r){
+  const g = document.getElementById("flopcurve"); if(!g) return;
+  g.textContent = "";
+  const X0=70, X1=960, Y0=250, Y1=30, W=X1-X0, H0=Y0-Y1;
+  const lo=9, hi=20;                       // 512 → 1M
+  const px = e => X0 + (e-lo)/(hi-lo)*W;
+  const py = v => Y0 - v*H0;
+
+  // 网格 + 轴
+  for(let p=0;p<=100;p+=25){
+    const y = py(p/100);
+    g.appendChild(el("line",{x1:X0,y1:y,x2:X1,y2:y,stroke:"#e8eaed"}));
+    g.appendChild(el("text",{x:X0-10,y:y+4,"text-anchor":"end",class:"svgsm"},p+"%"));
+  }
+  for(let e=lo;e<=hi;e++){
+    const x=px(e);
+    g.appendChild(el("line",{x1:x,y1:Y0,x2:x,y2:Y0+5,stroke:"#dadce0"}));
+    if(e%2===1||e===20)
+      g.appendChild(el("text",{x,y:Y0+19,"text-anchor":"middle",class:"svgsm"},seqH(2**e)));
+  }
+  g.appendChild(el("text",{x:X0-42,y:Y1-10,class:"svglbl"},"attention 平方项占前向总算力"));
+  g.appendChild(el("text",{x:X1,y:Y0+19,"text-anchor":"end",class:"svglbl"},"序列长度 →"));
+
+  // 曲线
+  let d="";
+  for(let e=lo;e<=hi;e+=0.1){
+    const s=2**e, q=compute(s, r.batch, r.B);
+    d += (d?"L":"M") + px(e).toFixed(1) + "," + py(q.attnShare).toFixed(1);
+  }
+  g.appendChild(el("path",{d,fill:"none",stroke:"#d93025","stroke-width":2.4}));
+
+  // 50% 分界
+  g.appendChild(el("line",{x1:X0,y1:py(.5),x2:X1,y2:py(.5),stroke:"#d93025",
+    "stroke-dasharray":"5 4","stroke-width":1}));
+  g.appendChild(el("text",{x:X0+8,y:py(.5)-6,class:"svgsm",fill:"#d93025"},
+    "50% —— 过了这条线，attention 就是主要矛盾"));
+
+  // 当前点
+  const e0 = Math.log2(r.seq), x0=px(e0), y0=py(r.attnShare);
+  g.appendChild(el("line",{x1:x0,y1:Y1,x2:x0,y2:Y0,stroke:"#1a73e8","stroke-width":1.4}));
+  g.appendChild(el("circle",{cx:x0,cy:y0,r:6,fill:"#1a73e8",stroke:"#fff","stroke-width":2}));
+  const anchor = x0 > X0+W*0.7 ? "end" : "start", dx = anchor==="end" ? -14 : 14;
+  g.appendChild(el("text",{x:x0+dx,y:y0-14,"text-anchor":anchor,class:"svgnum",fill:"#174ea6"},
+    seqH(r.seq)+" → "+(r.attnShare*100).toFixed(1)+"%"));
+
+  // 注释
+  g.appendChild(el("text",{x:X0+8,y:Y0-14,class:"svgsm",fill:"#5f6368"},
+    "短序列：参数是主要矛盾"));
+  g.appendChild(el("text",{x:X1-8,y:Y1+30,"text-anchor":"end",class:"svgsm",fill:"#d93025"},
+    "长序列：序列长度是主要矛盾"));
+}
+
+/* ── 图 3：显存堆叠 + 单卡刻度 ── */
+function drawMemStack(r){
+  const g = document.getElementById("memstack"); if(!g) return;
+  g.textContent = "";
+  const X0=20, W=960, total=r.memResident;
+  const parts = [
+    ["MoE 权重",  r.moeWAll*r.B,                       "#1a73e8"],
+    ["MLA 权重",  r.mlaWAll*r.B,                       "#9334e6"],
+    ["其余权重",  (r.denseWAll+r.embedW+r.headW)*r.B,  "#12b5cb"],
+    ["KV cache",  r.kvMla,                             "#1e8e3e"]
+  ];
+  g.appendChild(el("text",{x:X0,y:26,class:"svglbl"},
+    `常驻显存合计 ${bytesH(total)}`));
+  g.appendChild(el("text",{x:X0+152,y:26,class:"svgsm"},
+    "下面每一格是一个 TPU v7 device（94.74 GB）"));
+
+  let x = X0;
+  parts.forEach(p=>{
+    const w = p[1]/total*W;
+    g.appendChild(el("rect",{x,y:40,width:Math.max(w,1.5),height:46,fill:p[2]}));
+    x += w;
+  });
+  g.appendChild(el("rect",{x:X0,y:40,width:W,height:46,fill:"none",stroke:"#202124","stroke-width":1.4}));
+
+  // 单卡刻度
+  const n = total/HBM, per = HBM/total*W, N = Math.ceil(n);
+  for(let i=1;i<N;i++){
+    const gx = X0 + i*per;
+    g.appendChild(el("line",{x1:gx,y1:40,x2:gx,y2:86,stroke:"#fff","stroke-width":1.5,opacity:.85}));
+  }
+  for(let i=1;i<=N;i++){
+    const cx = X0 + Math.min((i-.5)*per, W-6);
+    if(per > 22 || i%5===0 || i===N)
+      g.appendChild(el("text",{x:cx,y:101,"text-anchor":"middle",class:"svgsm"},i));
+  }
+
+  // 图例
+  let lx = X0;
+  parts.forEach(p=>{
+    g.appendChild(el("rect",{x:lx,y:118,width:11,height:11,rx:2,fill:p[2]}));
+    g.appendChild(el("text",{x:lx+17,y:128,class:"svgsm"},`${p[0]} ${bytesH(p[1])}`));
+    lx += 32 + (`${p[0]} ${bytesH(p[1])}`).length*6.6;
+  });
+
+  g.appendChild(el("text",{x:X0,y:160,class:"svgnum",fill:"#e8710a","font-size":15},
+    `→ 至少 ${N} 个 device 才装得下`));
+  g.appendChild(el("text",{x:X0,y:182,class:"svgsm",fill:"#d93025"},
+    "⚠️ 而这还只是「权重 + KV cache」—— 激活、临时缓冲、优化器状态都还没算"));
+  g.appendChild(el("text",{x:X0,y:202,class:"svgsm"},
+    `顺带一提：出口那个 logits 临时张量 ${bytesH(r.logits)}，单独就要 ${(r.logits/HBM).toFixed(2)} 张卡`));
+}
+
+/* ── 图 3b：注意力矩阵 = 多少张卡 ── */
+function drawCardGrid(r){
+  const g = document.getElementById("cardgrid"); if(!g) return;
+  g.textContent = "";
+  const n = r.attnMatrix / HBM, N = Math.min(Math.ceil(n), 240);
+  g.appendChild(el("text",{x:10,y:18,class:"svglbl",fill:"#a50e0e"},
+    `注意力分数矩阵 ${bytesH(r.attnMatrix)} —— 一层、一次`));
+  g.appendChild(el("text",{x:10,y:36,class:"svgsm"},
+    `÷ 94.74 GB 一张卡 =`));
+  g.appendChild(el("text",{x:118,y:37,class:"svgnum",fill:"#d93025","font-size":16},
+    n>=1 ? `${Math.ceil(n)} 张卡` : `${(n*100).toFixed(1)}% 一张卡`));
+
+  const cols=20, cw=19, chh=13;
+  for(let i=0;i<N;i++){
+    const c=i%cols, rw=(i/cols)|0;
+    g.appendChild(el("rect",{x:10+c*(cw+2.4), y:52+rw*(chh+3), width:cw, height:chh, rx:2,
+      fill:"#d93025", opacity: 0.32 + 0.68*(1-i/Math.max(N,1))}));
+  }
+  const rows = Math.ceil(N/cols), by = 52 + rows*(chh+3) + 14;
+  if(Math.ceil(n) > 240)
+    g.appendChild(el("text",{x:10,y:by-2,class:"svgsm",fill:"#d93025"},"…（只画了前 240 张）"));
+
+  // 对照
+  const ref = [["KV cache 全量", r.kvMla, "#1a73e8", bytesH(r.kvMla)],
+               ["logits 张量",   r.logits,"#f9ab00", bytesH(r.logits)],
+               ["一张卡 HBM",    HBM,     "#5f6368", "94.74 GB"]];
+  ref.forEach((x,i)=>{
+    const y = by + i*20;
+    g.appendChild(el("rect",{x:10,y:y-9,width:12,height:12,rx:2,fill:x[2]}));
+    g.appendChild(el("text",{x:30,y:y+1,class:"svgsm"},`${x[0]} ${x[3]}`));
+    g.appendChild(el("text",{x:230,y:y+1,class:"svgsm",fill:x[2]},
+      `${(x[1]/r.attnMatrix*100).toFixed(2)}% 它`));
+  });
+}
+
+/* ── 图 4：256 专家网格（静态，画一次） ── */
+(function drawExperts(){
+  const g = document.getElementById("expertgrid"); if(!g) return;
+  const chosen = new Set([3,17,44,71,98,133,180,241]);   // 示意用的 8 个
+  const X0=300, Y0=52, cols=32, cw=19, ch=15, gap=2;
+  for(let i=0;i<256;i++){
+    const c=i%cols, rw=(i/cols)|0;
+    const on = chosen.has(i);
+    g.appendChild(el("rect",{x:X0+c*(cw-cw/3), y:Y0+rw*(ch+gap),
+      width:cw-cw/3-1.5, height:ch, rx:2,
+      fill: on ? "#1a73e8" : "#f1f3f4",
+      stroke: on ? "#174ea6" : "#dadce0", "stroke-width": on?1.4:.7}));
+  }
+  // 共享专家
+  const sy = Y0 + 8*(ch+gap) + 12;
+  g.appendChild(el("rect",{x:X0,y:sy,width:60,height:ch+4,rx:3,fill:"#f9ab00"}));
+  g.appendChild(el("text",{x:X0+30,y:sy+13,"text-anchor":"middle",class:"svgsm",fill:"#fff"},"共享 ×1"));
+  g.appendChild(el("text",{x:X0+72,y:sy+13,class:"svgsm",fill:"#b06000"},
+    "每个 token 都过它 —— 通用能力不必在 256 个专家里各学一遍"));
+})();
+
+/* ── 绑定 ── */
+["seq","bs","prec"].forEach(id=>
+  document.getElementById(id).addEventListener("input", ()=>render(false)));
+document.getElementById("reset").addEventListener("click", ()=>{
+  document.getElementById("seq").value=17;
+  document.getElementById("bs").value=0;
+  document.getElementById("prec").value=2;
+  render(false);
+});
+render(true);
+</script>
+</body>
+</html>
