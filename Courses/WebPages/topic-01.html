@@ -37,6 +37,37 @@ code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
         border-radius:4px;color:var(--blue-d);white-space:nowrap}
 .num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
 
+/* ── 旅程进度条 ─────────────────────── */
+.journey{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
+         padding:14px 18px;margin:0 0 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.jsteps{display:flex;align-items:center;gap:0;flex:1;min-width:280px}
+.jstep{flex:1;height:6px;background:var(--line);position:relative;border-radius:3px;margin-right:3px}
+.jstep.done{background:var(--blue)}
+.jstep.now{background:var(--red)}
+.jstep span{position:absolute;top:-19px;left:0;font:600 10px var(--mono);color:var(--gray2)}
+.jstep.now span{color:var(--red)}
+.jstep.done span{color:var(--blue)}
+.jmeter{display:flex;gap:18px;font-size:13px;white-space:nowrap}
+.jmeter b{font-family:var(--mono);color:var(--blue-d)}
+.jmeter i{font-style:normal;color:var(--gray);margin-right:5px}
+
+/* ── 猜一猜 ───────────────────────────── */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:var(--blue-l)}
+.guess button.right{border-color:var(--green);background:var(--green-l)}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.75}
+.guess .rev.on{display:block}
+.guess .rev b{color:var(--red)}
+
 /* ── 站号标记 ─────────────────────────── */
 .stn{display:flex;align-items:center;gap:14px;margin-bottom:4px}
 .stn .badge{flex:0 0 auto;font:700 12px/1 var(--mono);color:#fff;background:var(--blue);
@@ -73,9 +104,12 @@ code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
              background:var(--blue-l);padding:5px 8px;border-radius:5px;text-align:center}
 .ctrl select{font:500 13px/1 inherit;padding:5px 8px;border:1px solid var(--line);
              border-radius:5px;background:#fff;color:var(--ink)}
-.console .reset{margin-left:auto;font-size:12px;color:var(--gray);background:none;
-                border:1px solid var(--line);border-radius:5px;padding:5px 11px;cursor:pointer}
-.console .reset:hover{border-color:var(--blue);color:var(--blue)}
+.presets{margin-left:auto;display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray)}
+.presets span{margin-right:2px}
+.presets button{font:500 12px/1 inherit;color:var(--gray);background:#fff;
+                border:1px solid var(--line);border-radius:14px;padding:6px 12px;cursor:pointer}
+.presets button:hover{border-color:var(--blue);color:var(--blue)}
+.presets button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
 .live{background:var(--yellow-l);box-shadow:0 0 0 3px var(--yellow-l);
       border-radius:3px;transition:background .45s,box-shadow .45s}
 
@@ -196,8 +230,37 @@ footer a{text-decoration:none}
       <option value="4">fp32 · 4B</option>
     </select>
   </div>
-  <button class="reset" id="reset">复位</button>
+  <div class="presets">
+    <span>场景</span>
+    <button data-p="12,0">短对话 4K</button>
+    <button data-p="17,0" class="on">长文档 128K</button>
+    <button data-p="20,0">百万上下文 1M</button>
+    <button data-p="12,3">训练 8×4K</button>
+  </div>
 </div></div>
+
+<!-- ══════════ 猜一猜 ══════════ -->
+<section style="border-top:none;padding-bottom:24px"><div class="wrap">
+  <div class="guess">
+    <h3>开始之前，先猜一个数</h3>
+    <p class="q">DeepSeek V3，671B 参数。喂给它一篇 <b>128K token</b> 的长文档，
+      只做一次<b>前向</b>推理（不训练、不反向、batch 只有 1）。<br>
+      这一下，<b>要占多少显存？</b></p>
+    <div class="opts">
+      <button data-g="0">约 100 GB</button>
+      <button data-g="1">约 300 GB</button>
+      <button data-g="2">约 700 GB</button>
+      <button data-g="3">1 TB 以上</button>
+    </div>
+    <div class="rev" id="rev">
+      <p>答案是 <b>1.23 TiB</b> —— 需要 <b>15 个</b> TPU v7 device 才装得下，
+        而这还<b>没算</b>激活、临时缓冲和优化器状态。</p>
+      <p style="margin-bottom:0">但重点不是这个数字。重点是 ——
+        <b>你能不能自己把它算出来</b>，以及算的过程中会撞见哪些反直觉的东西。
+        这一课就干这一件事：跟着一个 token 走完全程，<b>每走一步就把账算一遍</b>。</p>
+    </div>
+  </div>
+</div></section>
 
 <!-- ══════════ 为什么是 V3 ══════════ -->
 <section style="border-top:none"><div class="wrap">
@@ -390,6 +453,10 @@ footer a{text-decoration:none}
 
 <!-- ══════════ 站 1 · 嵌入 ══════════ -->
 <section id="s1"><div class="wrap">
+  <div class="journey" data-j="0">
+    <div class="jsteps"><div class="jstep now"><span>① 嵌入</span></div><div class="jstep "><span>② MLA</span></div><div class="jstep "><span>③ Dense</span></div><div class="jstep "><span>④ MoE</span></div><div class="jstep "><span>⑤ 层间</span></div><div class="jstep "><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
+    <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
+  </div>
   <div class="stn"><span class="badge">站 1</span><h2>从文字到向量</h2></div>
   <p class="lead">这一站什么都没算，只是<b>查了一次表</b>。但显存已经掉了一块。</p>
 
@@ -399,6 +466,14 @@ footer a{text-decoration:none}
       <p>词表 <b>129,280</b>。往大了做，一个词占一个 token，序列变短、算得快；
       但嵌入矩阵和出口矩阵都跟着变大，而且罕见词的表示学不好。往小了做正相反。
       <b>129K 是在这两头之间选的一个点</b>，不是什么魔法数字。</p>
+
+      <h4>为什么宽度是 7168</h4>
+      <p>这个数不是拍脑袋定的，它是一串约束的交集：<b>要能被注意力头数整除</b>
+      （7168 = 128 头 × 56）、<b>要对齐硬件的矩阵单元</b>（是 128 的整数倍）、
+      <b>还要跟层数配平</b> —— 同样的参数预算，是做宽一点还是做深一点，
+      这个取舍在每个模型上都要重做一次。</p>
+      <p>记住这个 <b>d = 7168</b>，后面每一站都会用到它。
+      <b>它是这个模型的「主干道宽度」。</b></p>
 
       <h4>嵌入：一次查表，仅此而已</h4>
       <p>没有矩阵乘。拿 token id 去那张 <span class="k">129,280 × 7168</span> 的大表里
@@ -455,6 +530,10 @@ footer a{text-decoration:none}
 
 <!-- ══════════ 站 2 · MLA ══════════ -->
 <section id="s2"><div class="wrap">
+  <div class="journey" data-j="1">
+    <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep now"><span>② MLA</span></div><div class="jstep "><span>③ Dense</span></div><div class="jstep "><span>④ MoE</span></div><div class="jstep "><span>⑤ 层间</span></div><div class="jstep "><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
+    <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
+  </div>
   <div class="stn big"><span class="badge">站 2 ⭐</span><h2>MLA：注意力，以及 KV cache 的战争</h2></div>
   <p class="lead">整课的重头，也是 V3 最值得讲的地方。<b>建议留 15 分钟给这一站。</b></p>
 
@@ -558,9 +637,17 @@ footer a{text-decoration:none}
       <p><b>存的时候压，用的时候升。</b> 一个 token 的 KV 信息，不按 128 个头分别存，
       而是先压成一个 <span class="k">512</span> 维的隐向量存起来；真要算注意力了，
       再用一个矩阵把它升回 128 个头。</p>
-      <p><b>位置信息为什么必须单独走一路。</b> RoPE 是把位置编码成一个旋转，
-      它<b>依赖 token 在序列里的绝对位置</b>。如果把带 RoPE 的 K 压进那个隐向量里，
-      升回来的时候旋转就对不上了 —— 数学上不可交换。
+      <div class="note info" style="margin:14px 0">
+        <span class="t">先说清楚 RoPE 是什么</span>
+        注意力本身<b>看不见顺序</b> —— 把句子里的词打乱，算出来是一样的。
+        所以必须额外告诉它「谁在前谁在后」。RoPE 的做法很巧：
+        <b>不给向量加东西，而是按位置把它「转一个角度」</b> ——
+        第 1 个 token 转 1 度，第 100 个转 100 度。
+        两个向量做点积时，<b>结果自然就带上了它们的角度差，也就是相对距离</b>。
+      </div>
+      <p><b>位置信息为什么必须单独走一路。</b> 麻烦就出在这个「转角度」上。
+      它<b>依赖 token 在序列里的绝对位置</b>。如果把已经转过角度的 K 压进隐向量里，
+      升回来的时候角度就对不上了 —— <b>压缩和旋转这两件事，数学上不能交换次序</b>。
       所以 V3 把每个头拆成两半：<span class="k">128 维</span>不带位置（可以压），
       <span class="k">64 维</span>带位置（不压，直接存）。</p>
       <div class="note info" style="margin-top:18px">
@@ -701,6 +788,10 @@ footer a{text-decoration:none}
 
 <!-- ══════════ 站 3 · Dense MLP ══════════ -->
 <section id="s3"><div class="wrap">
+  <div class="journey" data-j="2">
+    <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep done"><span>② MLA</span></div><div class="jstep now"><span>③ Dense</span></div><div class="jstep "><span>④ MoE</span></div><div class="jstep "><span>⑤ 层间</span></div><div class="jstep "><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
+    <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
+  </div>
   <div class="stn"><span class="badge">站 3</span><h2>Dense MLP：先把「不稀疏」讲清楚</h2></div>
   <p class="lead"><code>first_k_dense_replace = 3</code> —— V3 的前 3 层是普通 MLP。
   <b>先讲这 3 层，因为不理解 dense 就不知道 MoE 在省什么。</b></p>
@@ -741,6 +832,10 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
 <!-- ══════════ 站 4 · MoE ══════════ -->
 <section id="s4"><div class="wrap">
+  <div class="journey" data-j="3">
+    <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep done"><span>② MLA</span></div><div class="jstep done"><span>③ Dense</span></div><div class="jstep now"><span>④ MoE</span></div><div class="jstep "><span>⑤ 层间</span></div><div class="jstep "><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
+    <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
+  </div>
   <div class="stn big"><span class="badge">站 4 ⭐</span><h2>MoE：671B 的主体</h2></div>
   <p class="lead">整个模型 96% 的参数都在这 58 层里。</p>
 
@@ -800,6 +895,30 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <b>参数量和计算量解耦了。</b> 参数可以往上堆到 671B（模型知道得更多），
     而每个 token 的计算量还停在 dense 那个水平（算得起）。
   </div>
+
+  <div class="note danger">
+    <span class="t">⚠️ 「专家」这个名字，是整个 MoE 里最容易误导人的地方</span>
+    听到「256 个专家」，几乎所有人的第一反应都是：一个管数学、一个管代码、一个管医学。
+    <b>不是这样的。</b> 打开训好的模型去看，专家的分工更接近
+    <b>语法和 token 类型层面</b> —— 比如某个专家总是处理标点，某个总是接在数字后面。
+    <b>它们的「专长」是「在什么语境下处理什么样的 token」，不是「懂哪个领域」。</b>
+    <br><br>
+    所以「护士分诊、专家看病」这个比喻，<b>用来理解「为什么总计算量降下来了」是对的</b>，
+    但别顺着它推出「所以有个专家懂医学」—— 那一步是错的。
+  </div>
+
+  <h4>⭐ 一个 token 的路径，是它自己的</h4>
+  <p>这才是「一个 token 的一生」这个说法真正的意思。<b>58 个 MoE 层，每一层都重新分诊一次</b> ——
+  于是每个 token 都走出一条<b>只属于它自己</b>的路径。</p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 300" role="img" aria-label="不同 token 在 MoE 层里走出不同的路径">
+    <g id="pathfig"></g>
+  </svg>
+  <figcaption>示意：三个 token 穿过若干 MoE 层。<b>每一层各自分诊，路径互不相同。</b>
+  真实情况是 58 层、每层从 256 个里选 8 个 ——
+  可能的路径数是个天文数字，而模型的容量就藏在这些组合里。</figcaption>
+  </figure>
 
   <h4>为什么被稀疏化的是 MLP，不是 attention</h4>
   <p>两个原因。一，<b>参数大头在 MLP</b> —— 上面那张表已经看到，MLA 一层 187 M，
@@ -975,6 +1094,10 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
 <!-- ══════════ 站 5 · 残差流 ══════════ -->
 <section id="s5"><div class="wrap">
+  <div class="journey" data-j="4">
+    <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep done"><span>② MLA</span></div><div class="jstep done"><span>③ Dense</span></div><div class="jstep done"><span>④ MoE</span></div><div class="jstep now"><span>⑤ 层间</span></div><div class="jstep "><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
+    <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
+  </div>
   <div class="stn"><span class="badge">站 5</span><h2>层间：残差流这条总线</h2></div>
   <p class="lead">前面讲的都是「一层里面」。这一站讲 61 层是怎么串起来的。</p>
 
@@ -1071,6 +1194,10 @@ x = x + MoE(norm(x))
 
 <!-- ══════════ 站 6 · 出口 ══════════ -->
 <section id="s6"><div class="wrap">
+  <div class="journey" data-j="5">
+    <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep done"><span>② MLA</span></div><div class="jstep done"><span>③ Dense</span></div><div class="jstep done"><span>④ MoE</span></div><div class="jstep done"><span>⑤ 层间</span></div><div class="jstep now"><span>⑥ 出口</span></div><div class="jstep "><span>⑦ 合账</span></div></div>
+    <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
+  </div>
   <div class="stn"><span class="badge">站 6</span><h2>出口：从向量回到文字</h2></div>
   <p class="lead">走完 61 层，手里是一个 7168 维的向量。要把它变回「下一个字是什么」。</p>
 
@@ -1135,6 +1262,10 @@ x = x + MoE(norm(x))
 
 <!-- ══════════ 站 7 · 合账 ══════════ -->
 <section id="s7"><div class="wrap">
+  <div class="journey" data-j="6">
+    <div class="jsteps"><div class="jstep done"><span>① 嵌入</span></div><div class="jstep done"><span>② MLA</span></div><div class="jstep done"><span>③ Dense</span></div><div class="jstep done"><span>④ MoE</span></div><div class="jstep done"><span>⑤ 层间</span></div><div class="jstep done"><span>⑥ 出口</span></div><div class="jstep now"><span>⑦ 合账</span></div></div>
+    <div class="jmeter"><span><i>走到这里累计</i><b data-j-w>—</b> 权重</span><span><b data-j-m>—</b> 显存</span><span><b data-j-f>—</b> 算力</span></div>
+  </div>
   <div class="stn big"><span class="badge">站 7 ⭐</span><h2>把账合起来</h2></div>
   <p class="lead">七站走完。现在回答三个问题。</p>
 
@@ -1179,6 +1310,28 @@ x = x + MoE(norm(x))
     <div class="card tint"><h4>③ 要多少个 device</h4>
       <div class="stat orange"><span data-v="devices">14.3</span> 个</div>
       <p class="sub">对着 94.74 GB 一除。<b>而且这只是下限。</b></p></div>
+  </div>
+
+  <h3>再换个感觉：这些算力是多长时间</h3>
+  <p>PFLOP 是个没有体感的单位。除以硬件的算力，就变成秒了 ——
+  单个 TPU v7 device 的 bf16 峰值大约 <b>1153 TFLOP/s</b>（一颗芯片 2307，芯片里有两个 device）。</p>
+  <div class="grid g3">
+    <div class="card"><h4>理论极限（100% 利用率）</h4>
+      <div class="stat blue"><span data-v="timeIdeal">45.5 秒</span></div>
+      <p class="sub">一个 device 跑完这一次前向。<b>现实里达不到。</b></p></div>
+    <div class="card"><h4>现实一点（35% 利用率）</h4>
+      <div class="stat orange"><span data-v="timeReal">130 秒</span></div>
+      <p class="sub">大模型训练的实际利用率通常就在这个量级</p></div>
+    <div class="card tint"><h4>摊到装得下它的那些卡上</h4>
+      <div class="stat green"><span data-v="timeMulti">8.7 秒</span></div>
+      <p class="sub">按 <span data-v="devices">14.3</span> 个 device、35% 利用率、
+        <b>且假设并行完美无损</b>。<b>后面那半句是这门课剩下的全部内容。</b></p></div>
+  </div>
+  <div class="note warn">
+    <span class="t">「假设并行完美无损」这七个字，是整门课的入口</span>
+    把活分给 15 张卡，绝不等于快 15 倍 —— 它们要互相传数据、要等最慢的那个、
+    要为了省显存重算一部分。<b>那道差距有多大、从哪来、怎么缩小，
+    就是专题四和专题六要回答的。</b>
   </div>
 
   <div class="punch">
@@ -1284,6 +1437,8 @@ const C = {
 C.nMoe = C.L - C.nDense;          // 58
 C.qkDim = C.nope + C.rope;        // 192
 const HBM = 94.74e9;              // TPU v7 单 device 可用 HBM（字节）
+const PEAK = 1153.5e12;           // TPU v7 单 device bf16 峰值 FLOP/s（一颗芯片 2307，2 device/chip）
+const MFU  = 0.35;                // 大模型训练常见的实际利用率量级
 const GiB = 1024**3, TiB = 1024**4;
 
 function compute(seq, batch, B, causal=true){
@@ -1356,6 +1511,10 @@ const parH   = p => p>=1e12 ? (p/1e12).toFixed(2)+" T"
                   : p>=1e9  ? (p/1e9).toFixed(2)+" B"
                   : (p/1e6).toFixed(2)+" M";
 const seqH   = s => s>=1048576 ? (s/1048576)+"M" : s>=1024 ? (s/1024)+"K" : ""+s;
+const fmtT = t => t>=3600 ? (t/3600).toFixed(1)+" 小时"
+                : t>=60   ? (t/60).toFixed(1)+" 分钟"
+                : t>=1    ? t.toFixed(1)+" 秒"
+                : (t*1000).toFixed(0)+" 毫秒";
 const SVGNS  = "http://www.w3.org/2000/svg";
 const el = (n,a={},t)=>{const e=document.createElementNS(SVGNS,n);
   for(const k in a) e.setAttribute(k,a[k]);
@@ -1402,7 +1561,10 @@ function render(first){
     activeW:  parH(r.activeW),
     memWeights:  bytesH(r.memWeights),
     memResident: bytesH(r.memResident),
-    devices:  r.devices.toFixed(1)
+    devices:  r.devices.toFixed(1),
+    timeIdeal: fmtT(r.totalFlops/PEAK),
+    timeReal:  fmtT(r.totalFlops/PEAK/MFU),
+    timeMulti: fmtT(r.totalFlops/PEAK/MFU/Math.ceil(r.devices))
   };
   for(const k in V){
     const s = String(V[k]);
@@ -1417,7 +1579,30 @@ function render(first){
     });
     prev[k]=s;
   }
-  drawKvBars(r); drawFlopCurve(r); drawMemStack(r); drawCardGrid(r);
+  drawKvBars(r); drawFlopCurve(r); drawMemStack(r); drawCardGrid(r); drawJourney(r);
+}
+
+/* ── 旅程进度：走到每一站的累计消耗 ── */
+function drawJourney(r){
+  // 每一站「新增」的三笔账，累加得到「走到这里为止」
+  const add = [
+    [r.embedW,     r.embedW*r.B + r.embedAct,  0],              // ① 嵌入
+    [r.mlaWAll,    r.mlaWAll*r.B + r.kvMla,    r.mlaFlops],     // ② MLA
+    [r.denseWAll,  r.denseWAll*r.B,            r.denseFlops],   // ③ Dense
+    [r.moeWAll,    r.moeWAll*r.B,              r.moeFlops],     // ④ MoE
+    [0,            0,                          0],              // ⑤ 层间（不新增权重）
+    [r.headW,      r.headW*r.B + r.logits,     r.headFlops],    // ⑥ 出口
+    [0,            0,                          0]               // ⑦ 合账
+  ];
+  let w=0, m=0, f=0; const cum=[];
+  add.forEach(a=>{ w+=a[0]; m+=a[1]; f+=a[2]; cum.push([w,m,f]); });
+
+  document.querySelectorAll(".journey").forEach(node=>{
+    const i = +node.dataset.j, c = cum[i];
+    node.querySelector("[data-j-w]").textContent = parH(c[0]);
+    node.querySelector("[data-j-m]").textContent = bytesH(c[1]);
+    node.querySelector("[data-j-f]").textContent = c[2] ? flopH(c[2]) : "—";
+  });
 }
 
 /* ── 图 1：四种注意力的 KV cache 对比条 ── */
@@ -1592,6 +1777,44 @@ function drawCardGrid(r){
   });
 }
 
+/* ── 图 3c：token 路径（静态） ── */
+(function drawPaths(){
+  const g = document.getElementById("pathfig"); if(!g) return;
+  const L=12, E=16, X0=76, Y0=34, cw=72, ch=11, gp=2.0;
+  // 背景专家格
+  for(let l=0;l<L;l++) for(let e=0;e<E;e++)
+    g.appendChild(el("rect",{x:X0+l*cw, y:Y0+e*(ch+gp), width:cw-8, height:ch, rx:2,
+      fill:"#f1f3f4", stroke:"#e8eaed", "stroke-width":.6}));
+  for(let l=0;l<L;l++)
+    g.appendChild(el("text",{x:X0+l*cw+(cw-8)/2, y:Y0-9, "text-anchor":"middle", class:"svgsm"},
+      l===L-1 ? "…第 58 层" : "第 "+(l+1)+" 层"));
+  g.appendChild(el("text",{x:10,y:Y0+8,class:"svgsm"},"专家"));
+  g.appendChild(el("text",{x:10,y:Y0+22,class:"svgsm"},"↓ 256 个"));
+
+  // 三条路径（每层各选两个格子示意 top-k）
+  const toks = [
+    {c:"#1a73e8", n:'token「模型」', p:[2,9,4,14,7,1,11,5,13,3,8,6]},
+    {c:"#d93025", n:'token「，」',   p:[13,3,12,2,15,10,0,9,4,12,1,14]},
+    {c:"#1e8e3e", n:'token「训练」', p:[6,6,8,7,3,13,5,15,9,7,12,2]}
+  ];
+  toks.forEach((t,ti)=>{
+    let d="";
+    t.p.forEach((e,l)=>{
+      const cx = X0+l*cw+(cw-8)/2, cy = Y0+e*(ch+gp)+ch/2;
+      g.appendChild(el("rect",{x:X0+l*cw, y:Y0+e*(ch+gp), width:cw-8, height:ch, rx:2,
+        fill:t.c, opacity:.9}));
+      d += (d?"L":"M") + cx + "," + cy;
+    });
+    g.appendChild(el("path",{d, fill:"none", stroke:t.c, "stroke-width":1.6,
+      opacity:.55, "stroke-dasharray":"4 3"}));
+    // 图例
+    g.appendChild(el("rect",{x:X0+ti*200, y:276, width:12, height:12, rx:2, fill:t.c}));
+    g.appendChild(el("text",{x:X0+ti*200+18, y:286, class:"svgsm", fill:t.c}, t.n));
+  });
+  g.appendChild(el("text",{x:990, y:286, "text-anchor":"end", class:"svgsm", fill:"#5f6368"},
+    "每层各自分诊 → 三条完全不同的路"));
+})();
+
 /* ── 图 4：256 专家网格（静态，画一次） ── */
 (function drawExperts(){
   const g = document.getElementById("expertgrid"); if(!g) return;
@@ -1613,15 +1836,37 @@ function drawCardGrid(r){
     "每个 token 都过它 —— 通用能力不必在 256 个专家里各学一遍"));
 })();
 
+/* ── 猜一猜 ── */
+(function(){
+  const box = document.querySelector(".guess"); if(!box) return;
+  const rev = document.getElementById("rev");
+  box.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
+    box.querySelectorAll("button").forEach(x=>x.classList.remove("picked","right"));
+    b.classList.add("picked");
+    box.querySelector('[data-g="3"]').classList.add("right");
+    rev.classList.add("on");
+    rev.scrollIntoView({behavior:"smooth", block:"nearest"});
+  }));
+})();
+
 /* ── 绑定 ── */
 ["seq","bs","prec"].forEach(id=>
   document.getElementById(id).addEventListener("input", ()=>render(false)));
-document.getElementById("reset").addEventListener("click", ()=>{
-  document.getElementById("seq").value=17;
-  document.getElementById("bs").value=0;
-  document.getElementById("prec").value=2;
-  render(false);
-});
+document.querySelectorAll(".presets button").forEach(b=>
+  b.addEventListener("click", ()=>{
+    const [q,n] = b.dataset.p.split(",");
+    document.getElementById("seq").value = q;
+    document.getElementById("bs").value  = n;
+    document.querySelectorAll(".presets button").forEach(x=>x.classList.remove("on"));
+    b.classList.add("on");
+    render(false);
+  }));
+// 手动拖滑块时取消预设高亮
+["seq","bs"].forEach(id=>document.getElementById(id).addEventListener("input",()=>{
+  const key = document.getElementById("seq").value+","+document.getElementById("bs").value;
+  document.querySelectorAll(".presets button").forEach(x=>
+    x.classList.toggle("on", x.dataset.p===key));
+}));
 render(true);
 </script>
 </body>
