@@ -2,6 +2,8 @@
 
 [![CC BY-NC-SA 4.0](https://licensebuttons.net/l/by-nc-sa/4.0/88x31.png)](http://creativecommons.org/licenses/by-nc-sa/4.0/)
 
+### 📖 [**在线阅读 · 课程总纲**](https://yangwhale.github.io/gpu-tpu-pedia/Courses/)
+
 > **你看得懂 DeepSeek V3 的论文。你也知道它有 6710 亿参数。**
 >
 > **现在给你 64 张卡，让你把它跑起来 —— 你从哪一步开始？**
@@ -88,7 +90,7 @@
 ```
  主线（必修）
  ┌──────────────────────────────────────────────────────┐
- │  ①  拆开 DeepSeek V3      一个 token 走完全程，边走边算  │
+ │  ①  一个 Token 的一生     跟着它走完全程，边走边算       │
  │        ↓   结论：装不进任何一块卡                        │
  │  ②  TPU 与 GPU            那，卡到底长什么样？           │
  │        ↓                                              │
@@ -122,7 +124,7 @@
 
 ## 主线
 
-### ① [拆开 DeepSeek V3](专题01-拆开-DeepSeek-V3.md)
+### ① [一个 Token 的一生](专题01-一个-Token-的一生.md)
 
 > **不泛讲 Transformer。拆一个真的 ——
 > 跟着一个 token 走完全程，每走一步就把账算一遍。**

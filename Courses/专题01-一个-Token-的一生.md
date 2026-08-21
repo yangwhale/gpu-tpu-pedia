@@ -1,4 +1,6 @@
-# 专题一 · 拆开 DeepSeek V3
+# 专题一 · 一个 Token 的一生
+
+> *Life Cycle of a Token*
 
 > **一个 token 走完全程，每走一步就把账算一遍。**
 
