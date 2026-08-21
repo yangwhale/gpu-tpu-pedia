@@ -270,6 +270,74 @@ python3 -c "import jax; print(len(jax.devices()))"'
 
 （`run-config.sh` 的 `single` 模式已内置这组变量，直接用即可。）
 
+### 4.1 也可以两台一组，切成 2 个 8 chip 环境
+
+不是只有「1 台」和「4 台」两种。两台能组 `2x2x2` = **8 chip / 16 device**，
+2026-08-19 在 `chrisya-v7x-v3 / hy3-v7-16-dws-2` 上实测通过。
+
+**⚠️ 哪两台能配对，节点标签直接写着 —— 不要按名字猜，也不要自己推 z 坐标。**
+
+```bash
+kubectl get nodes -l cloud.google.com/gke-nodepool=<池名> \
+  -L cloud.google.com/gke-tpu-partition-2x2x2-id
+```
+
+GKE 给每种合法子切片都打了一个 id，同 id 的节点才连得起来：
+
+| 标签 | 含义 |
+|---|---|
+| `gke-tpu-partition-2x2x1-id` | 每台一个（拆单机用的那种） |
+| **`gke-tpu-partition-2x2x2-id`** | **两台共享一个 → 这两台能组 8 chip** |
+| `gke-tpu-partition-2x2x4-id` | 4 台同一个（完整切片） |
+
+实测那次的配对是 `b9pb + v0c9` 和 `j4b1 + wrdr` —— **按名字顺序猜会配错**
+（`b9pb` 的搭档不是 `j4b1`）。ICI 是物理链路，配错了组不起来。
+
+**跟拆单机相反，这次是「要组队」**，所以：
+
+| 变量 | 4 台整片 | 两台一组 | 拆单机 |
+|---|---|---|---|
+| `TPU_HOST_BOUNDS` | `1,1,4` | **`1,1,2`** | `1,1,1` |
+| `TPU_ACCELERATOR_TYPE` | `tpu7x-32` | **`tpu7x-16`** | `tpu7x-8` |
+| `TPU_TOPOLOGY` | `2x2x4` | **`2x2x2`** | `2x2x1` |
+| `TPU_CHIPS_PER_HOST_BOUNDS` | `2,2,1` | `2,2,1` | `2,2,1` |
+| `TPU_PROCESS_ADDRESSES` | 4 个 | **那两台的真实地址** | `localhost:8471` |
+| `TPU_MULTIHOST_BACKEND` | 保留 | **保留** | `unset` |
+
+```bash
+# 两台都设，地址表与顺序必须完全一致（用 IP 比 headless DNS 名稳）
+export TPU_PROCESS_ADDRESSES=<ipA>:8471,<ipB>:8471
+export TPU_WORKER_HOSTNAMES=<ipA>,<ipB>
+export TPU_HOST_BOUNDS=1,1,2 TPU_CHIPS_PER_HOST_BOUNDS=2,2,1
+export TPU_ACCELERATOR_TYPE=tpu7x-16 TPU_TOPOLOGY=2x2x2
+
+# 只有这个每台不同：**等于自己在地址表里的下标**
+export TPU_WORKER_ID=0        # 另一台写 1
+```
+
+验证不能只看 `len(jax.devices())` —— 那个数在没真连上时也可能对。
+**要跑一次跨机规约**：
+
+```python
+import jax, jax.numpy as jnp
+d = jax.devices()
+print(len(d), jax.process_count(), jax.process_index())   # 16 2 0/1
+x = jnp.ones((len(d), 128))
+print(float(jax.jit(lambda a: a.sum())(x)))               # 2048.0 = 16×128
+```
+
+| 返回 | 含义 |
+|---|---|
+| **16 / process_count=2 / 和 2048** | 对了，两台真的连起来了 |
+| 8 | 没组上队，还在单机视图 |
+| 卡住 | 地址表两边不一致，或 `TPU_WORKER_ID` 撞了 |
+
+> **在别人的占位 pod 上测怎么做到不打扰**：那 16 颗当时全被一个
+> `sleep infinity` 的 holder 占着（`ubuntu:24.04`，没有 python）。
+> 没有删 pod、没有改 Job —— 直接
+> `apt install python3 && pip install jax[tpu]` 装进容器，
+> 只动容器文件系统，重启即清干净。**DWS 节点最怕的就是被误删后拿不回来。**
+
 ---
 
 ## 5. 跑 benchmark
