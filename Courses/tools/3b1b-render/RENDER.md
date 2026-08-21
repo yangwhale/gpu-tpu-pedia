@@ -20,7 +20,7 @@
 | manim（渲染引擎） | [3b1b/manim](https://github.com/3b1b/manim) | MIT |
 | 场景代码（= 那些图） | [3b1b/videos](https://github.com/3b1b/videos) `_2024/transformers/` | CC BY-NC-SA 4.0 |
 
-本课程整体采用同一许可，见 [`../LICENSE.txt`](../LICENSE.txt)。
+本课程整体采用同一许可，见 [`Courses/LICENSE.txt`](../../LICENSE.txt)。
 
 ---
 
