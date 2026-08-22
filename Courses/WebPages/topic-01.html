@@ -2094,6 +2094,119 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   </div>
 
   <h3>4b · 路由：怎么选那 8 个</h3>
+
+  <!-- 这张图存在的唯一理由是让「偏置只挑不算」一眼可见。
+       那句话写成文字要三行，而且读完还是会有人以为偏置参与了加权。
+       图里用两样东西钉死它：① 红色虚线框把偏置的作用域圈起来，
+       框在 top-8 之后就结束了；② 绿色旁路从 sigmoid 那一步直接走到最下面，
+       中途不经过任何一个蓝框。两条路径在视觉上完全不相交。 -->
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 570" role="img"
+       aria-label="路由数据流：gate 矩阵打分后分成两条路，带偏置的一条只负责选出 8 个编号，不带偏置的原始分数直接旁路到最后用于加权">
+    <defs>
+      <marker id="arr" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L7,3 z" fill="#5f6368"/></marker>
+      <marker id="arg" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L7,3 z" fill="#1e8e3e"/></marker>
+      <marker id="arb" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L7,3 z" fill="#1a73e8"/></marker>
+    </defs>
+
+    <!-- ① 输入 -->
+    <rect x="270" y="22" width="430" height="44" rx="10" fill="#f1f3f4" stroke="#dadce0"/>
+    <text x="485" y="50" text-anchor="middle" class="svglbl">残差流上的这个 token · 7,168 维</text>
+    <path d="M485 66 V88" stroke="#5f6368" stroke-width="1.6" marker-end="url(#arr)"/>
+
+    <!-- ② gate 矩阵 -->
+    <rect x="270" y="92" width="430" height="56" rx="10" fill="#f1f3f4" stroke="#9aa0a6"/>
+    <text x="485" y="116" text-anchor="middle" class="svglbl">gate 矩阵　7,168 × 256</text>
+    <text x="485" y="136" text-anchor="middle" class="svgsm" fill="#5f6368">
+      184 万参数 —— 只占这一层 11.32 B 的 0.016%</text>
+    <path d="M485 148 V170" stroke="#5f6368" stroke-width="1.6" marker-end="url(#arr)"/>
+
+    <!-- ③ sigmoid：分叉点 -->
+    <rect x="270" y="174" width="430" height="50" rx="10" fill="#fef7e0" stroke="#f9ab00"/>
+    <text x="485" y="197" text-anchor="middle" class="svglbl">sigmoid（不是 softmax）</text>
+    <text x="485" y="215" text-anchor="middle" class="svgsm" fill="#7a5900">
+      256 个独立分数 s，彼此不竞争、加起来也不等于 1</text>
+
+    <!-- 绿色旁路：原始分数 s 从这里直接走到最下面，不碰任何蓝框 -->
+    <path d="M700 199 H830 V512 H700" fill="none" stroke="#1e8e3e" stroke-width="2.4"
+          marker-end="url(#arg)"/>
+    <circle cx="700" cy="199" r="4.5" fill="#1e8e3e"/>
+    <text x="844" y="330" class="svgsm" fill="#0d652d" font-weight="700">原始分数 s</text>
+    <text x="844" y="348" class="svgsm" fill="#0d652d">原封不动</text>
+    <text x="844" y="366" class="svgsm" fill="#0d652d">带到最后</text>
+
+    <path d="M485 224 V250" stroke="#5f6368" stroke-width="1.6" marker-end="url(#arr)"/>
+
+    <!-- 偏置的作用域：红色虚线框，到 top-8 为止 -->
+    <rect x="248" y="238" width="474" height="234" rx="14" fill="none"
+          stroke="#d93025" stroke-width="1.6" stroke-dasharray="6 5"/>
+    <text x="722" y="256" text-anchor="end" class="svgsm" fill="#a50e0e" font-weight="700">
+      ↓ 偏置只在这个框里起作用 ↓</text>
+
+    <!-- 偏置输入 -->
+    <rect x="24" y="268" width="196" height="62" rx="10" fill="#e8f0fe" stroke="#1a73e8"/>
+    <text x="122" y="291" text-anchor="middle" class="svglbl" fill="#174ea6">偏置 b</text>
+    <text x="122" y="309" text-anchor="middle" class="svgsm" fill="#174ea6">每个专家一个</text>
+    <text x="122" y="324" text-anchor="middle" class="svgsm" fill="#5f6368">按负载直接调，不学</text>
+    <path d="M220 299 H268" stroke="#1a73e8" stroke-width="2" marker-end="url(#arb)"/>
+
+    <!-- ④ 加偏置 -->
+    <rect x="270" y="272" width="430" height="54" rx="10" fill="#e8f0fe" stroke="#1a73e8"/>
+    <text x="485" y="295" text-anchor="middle" class="svglbl" fill="#174ea6">竞选分 = s + b</text>
+    <text x="485" y="314" text-anchor="middle" class="svgsm" fill="#174ea6">
+      吃太饱的调低，一直没人选的调高</text>
+    <path d="M485 326 V348" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#arb)"/>
+
+    <!-- ⑤ 分组限制 -->
+    <rect x="270" y="352" width="430" height="58" rx="10" fill="#e8f0fe" stroke="#1a73e8"/>
+    <text x="485" y="375" text-anchor="middle" class="svglbl" fill="#174ea6">
+      256 个分成 8 组，每组 32 个 —— 只准挑 4 组</text>
+    <text x="485" y="395" text-anchor="middle" class="svgsm" fill="#174ea6">
+      组分 = 组内前 2 名之和 · 落选的 4 组整组出局，候选只剩 128 个</text>
+    <path d="M485 410 V432" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#arb)"/>
+
+    <!-- ⑥ top-8 -->
+    <rect x="270" y="436" width="430" height="44" rx="10" fill="#e8f0fe" stroke="#1a73e8"/>
+    <text x="485" y="464" text-anchor="middle" class="svglbl" fill="#174ea6">
+      在 128 个候选里取 top-8 →　只得到 8 个<tspan font-weight="700">编号</tspan></text>
+
+    <!-- 剪断：偏置到此为止 -->
+    <path d="M300 492 H670" stroke="#d93025" stroke-width="1.8" stroke-dasharray="7 5"/>
+    <path d="M485 480 V492" stroke="#1a73e8" stroke-width="1.6"/>
+    <path d="M485 492 V512" stroke="#5f6368" stroke-width="1.6" marker-end="url(#arr)"/>
+    <text x="690" y="507" text-anchor="end" class="svgsm" fill="#a50e0e" font-weight="700">
+      偏置到此为止，不往下走</text>
+
+    <!-- ⑦ 汇合 -->
+    <rect x="270" y="516" width="430" height="46" rx="10" fill="#e6f4ea" stroke="#1e8e3e"/>
+    <text x="485" y="536" text-anchor="middle" class="svglbl" fill="#0d652d">
+      按这 8 个编号，去取<tspan font-weight="700">没加过偏置</tspan>的 s</text>
+    <text x="485" y="554" text-anchor="middle" class="svgsm" fill="#0d652d">
+      归一化到和为 1，再乘 2.5 —— 这才是加权用的权重</text>
+  </svg>
+  <figcaption><b>两条路径在图上完全不相交。</b>
+  蓝色那条带着偏置，但它走到「8 个编号」就被剪断了；
+  绿色那条从 sigmoid 直接旁路到最后，一路没碰过偏置。
+  <b>所以偏置能把负载掰匀，却一个字节都没改变模型的输出。</b></figcaption>
+  </figure>
+
+  <div class="note ok">
+    <span class="t">⭐ 这一处值得单独记：调度归调度，不污染输出</span>
+    <b>负载均衡是一个「调度」问题，模型质量是一个「学习」问题。
+    V3 把它们放在两条互不相交的路径上。</b><br><br>
+    <b>后果有三条，都很实在：</b>
+    <b>①</b> 偏置可以任意大力地掰 —— 掰得再狠，输出也不失真；
+    <b>②</b> 它不参与反向传播，因此不跟主目标抢梯度；
+    <b>③</b> 它是训练循环<em>外面</em>的一个动作，想改策略不用动模型。
+    <br><br>
+    <span class="sub">（源码上的判据很直接：加了偏置的那份分数只喂给 top-k 选择，
+    最后 <code>gather</code> 取权重时用的是另一份没加偏置的。
+    <b>两份分数，两条路。</b>）</span>
+  </div>
+
   <div class="tbl-wrap"><table>
     <thead><tr><th>设计</th><th>取值</th><th>为什么这么定</th></tr></thead>
     <tbody>
