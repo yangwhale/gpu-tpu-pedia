@@ -1751,6 +1751,116 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     </div>
   </div>
 
+  <!-- 「为什么是三个矩阵」是真实被问出来的第一个问题 —— 直觉上 up + down 两个就够了。
+       图里刻意让三根张量条的高度按真实宽度成比例（7168 : 18,432 = 1 : 2.57），
+       所以「撑宽再压回」是看出来的，不是读出来的。 -->
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 400" role="img"
+       aria-label="SwiGLU 数据流：x 分成 gate 和 up 两路各撑宽到 18432，gate 过 SiLU 后与 up 逐元素相乘，再由 down 压回 7168">
+    <defs>
+      <marker id="ar3" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L7,3 z" fill="#5f6368"/></marker>
+    </defs>
+
+    <!-- 门控区：gate + SiLU + up + 乘法，这一整块才是「SwiGLU」 -->
+    <rect x="156" y="60" width="440" height="260" rx="12" fill="none"
+          stroke="#dadce0" stroke-dasharray="5 4"/>
+    <text x="376" y="50" text-anchor="middle" class="svglbl">SwiGLU · 门控 = 两条路 + 一个乘法</text>
+
+    <!-- 张量条：高度 ∝ 宽度。7168 → 58px，18,432 → 149px -->
+    <rect x="40"  y="161" width="30" height="58"  rx="6" fill="#f1f3f4" stroke="#dadce0"/>
+    <text x="55"  y="150" text-anchor="middle" class="svglbl" fill="#202124">输入 x</text>
+    <text x="55"  y="234" text-anchor="middle" class="svgsm">7168</text>
+
+    <rect x="612" y="116" width="30" height="149" rx="6" fill="#f1f3f4" stroke="#dadce0"/>
+    <text x="627" y="106" text-anchor="middle" class="svglbl" fill="#202124">工作空间</text>
+    <text x="627" y="280" text-anchor="middle" class="svgsm">18,432</text>
+    <text x="627" y="295" text-anchor="middle" class="svgsm" fill="#b06000">撑宽 2.57×</text>
+
+    <rect x="922" y="161" width="30" height="58"  rx="6" fill="#f1f3f4" stroke="#dadce0"/>
+    <text x="937" y="150" text-anchor="middle" class="svglbl" fill="#202124">输出</text>
+    <text x="937" y="234" text-anchor="middle" class="svgsm">7168</text>
+
+    <!-- 分叉：同一个 x 同时喂给两个矩阵 -->
+    <path d="M70 190 H118 V104 H168" fill="none" stroke="#5f6368" stroke-width="1.3" marker-end="url(#ar3)"/>
+    <path d="M70 190 H118 V276 H168" fill="none" stroke="#5f6368" stroke-width="1.3" marker-end="url(#ar3)"/>
+    <circle cx="118" cy="190" r="3.5" fill="#5f6368"/>
+
+    <!-- 上路：gate_proj → SiLU → 阀门 -->
+    <rect x="172" y="76" width="136" height="56" rx="9" fill="#e8f0fe" stroke="#1a73e8"/>
+    <text x="240" y="98"  text-anchor="middle" class="svglbl" fill="#174ea6">gate_proj</text>
+    <text x="240" y="115" text-anchor="middle" class="svgsm"  fill="#174ea6">7168 → 18,432</text>
+    <line x1="308" y1="104" x2="352" y2="104" stroke="#1a73e8" stroke-width="1.3" marker-end="url(#ar3)"/>
+
+    <rect x="356" y="82" width="84" height="44" rx="9" fill="#e8f0fe" stroke="#1a73e8"/>
+    <text x="398" y="109" text-anchor="middle" class="svglbl" fill="#174ea6">SiLU</text>
+    <path d="M440 104 H556 V166" fill="none" stroke="#1a73e8" stroke-width="1.3" marker-end="url(#ar3)"/>
+    <text x="548" y="94" text-anchor="end" class="svgsm" fill="#174ea6">阀门：每个通道开多大</text>
+
+    <!-- 下路：up_proj 原样过去 -->
+    <rect x="172" y="248" width="136" height="56" rx="9" fill="#e6f4ea" stroke="#1e8e3e"/>
+    <text x="240" y="270" text-anchor="middle" class="svglbl" fill="#0d652d">up_proj</text>
+    <text x="240" y="287" text-anchor="middle" class="svgsm"  fill="#0d652d">7168 → 18,432</text>
+    <path d="M308 276 H556 V214" fill="none" stroke="#1e8e3e" stroke-width="1.3" marker-end="url(#ar3)"/>
+    <text x="330" y="266" class="svgsm" fill="#0d652d">水流：不过非线性，原样的值</text>
+
+    <!-- 合流 -->
+    <circle cx="556" cy="190" r="22" fill="#fef7e0" stroke="#f9ab00"/>
+    <text x="556" y="198" text-anchor="middle" font-size="19" font-weight="700" fill="#b06000">⊙</text>
+    <text x="528" y="194" text-anchor="end" class="svgsm" fill="#b06000">逐元素相乘</text>
+    <line x1="578" y1="190" x2="608" y2="190" stroke="#5f6368" stroke-width="1.3" marker-end="url(#ar3)"/>
+
+    <!-- 压回 -->
+    <line x1="642" y1="190" x2="736" y2="190" stroke="#5f6368" stroke-width="1.3" marker-end="url(#ar3)"/>
+    <rect x="740" y="162" width="136" height="56" rx="9" fill="#fce8e6" stroke="#d93025"/>
+    <text x="808" y="184" text-anchor="middle" class="svglbl" fill="#a50e0e">down_proj</text>
+    <text x="808" y="201" text-anchor="middle" class="svgsm"  fill="#a50e0e">18,432 → 7168</text>
+    <line x1="876" y1="190" x2="918" y2="190" stroke="#5f6368" stroke-width="1.3" marker-end="url(#ar3)"/>
+
+    <text x="500" y="360" text-anchor="middle" class="svglbl" fill="#5f6368">
+      三根灰条的高度是按真实宽度画的 —— 撑宽 2.57 倍，再原样压回来</text>
+    <text x="500" y="380" text-anchor="middle" class="svgsm">
+      每个矩阵 7168 × 18,432 · 一层 396.36 M 参数 · 前 3 层合计 1.19 B</text>
+  </svg>
+  <figcaption><b>三个矩阵的分工：两个撑宽，一个压回。</b>
+  上面那条过 SiLU 变成<b>阀门</b>，下面那条原样当<b>水流</b>，两者逐元素相乘。
+  经典 MLP 只有 up 和 down —— 多出来的那个矩阵，买到的是
+  <b>「阀门开多大，由这个 token 自己决定」</b>。</figcaption>
+  </figure>
+
+  <h4>为什么是三个矩阵？两个不是就够了吗</h4>
+  <p>这是这一节最常被打断的地方，而且问得对 —— <b>经典 MLP 确实只有两个</b>：
+  撑宽、过一个固定的非线性、压回。问题在于那个非线性是<b>死的</b>，
+  不管什么输入、哪个通道，都按同一个规则压一遍。</p>
+
+  <p>SwiGLU 把「撑宽」这一步做了<b>两份</b>：一份过 SiLU 当阀门，一份原样当水流，
+  再逐元素相乘。于是「哪些通道该放行、放多少」变成了
+  <b>学出来的、而且跟着输入变</b>的东西。
+  还有一层更本质的 —— 两份都是 <code>x</code> 的线性函数，
+  <b>一相乘就产生了 <code>x</code> 的二次项</b>。乘法本身就是一种交互，
+  单个激活函数造不出这种表达力。</p>
+
+  <div class="note ok">
+    <span class="t">但三个矩阵并没有更贵 —— 中间宽度是照着「参数量持平」挑的</span>
+    <div class="tbl-wrap"><table>
+      <thead><tr><th>写法</th><th>中间宽度</th><th>矩阵数</th><th>一层参数</th></tr></thead>
+      <tbody>
+        <tr><td>经典 MLP（惯例撑到 4×）</td><td>28,672</td><td>2</td><td>411.04 M</td></tr>
+        <tr><td><b>V3 的 SwiGLU</b></td><td><b>18,432</b>（2.57×）</td><td><b>3</b></td>
+            <td><b>396.36 M</b></td></tr>
+      </tbody>
+    </table></div>
+    多了一个矩阵，参数反而<b>少 3.57%</b>。所以 <code>18,432</code> 这个数不是随手定的，
+    是<b>照着「跟经典写法花一样多」反推出来的</b>。门控那点表达力，等于白送。
+  </div>
+
+  <div class="note info">
+    <span class="t">这个结构后面还会原样出现一次</span>
+    MoE 的每个专家用的就是<b>一模一样</b>的三矩阵 SwiGLU，只是中间宽度从
+    <code>18,432</code> 缩到 <code>2,048</code>（<code>moe_intermediate_size</code>）。
+    <b>下一步不用重新学结构 —— 只要盯着宽度和数量怎么变。</b>
+  </div>
+
   <div class="note warn">
     <span class="t">这一条要说透，它是后面所有 MoE 麻烦的对照组</span>
     上面那四条好性质，MoE <b>一条都没有</b>。所以别把 MoE 理解成「白捡的便宜」——
@@ -3637,7 +3747,11 @@ function drawCardGrid(r){
   const walk = document.createTreeWalker(document.body, NodeFilter.SHOW_TEXT, {
     acceptNode(n){
       let e = n.parentElement;
-      while(e){ if(SKIP.has(e.tagName) || e.classList?.contains("eq")
+      // tagName 要 toUpperCase 再比：HTML 元素返回大写，**SVG 元素返回原样的小写**
+      // （"svg" / "text"）。原来直接拿大写常量比，等于 SVG 这道闸门从来没关上过 ——
+      // 术语被包进 HTML <span>，而 <span> 在 SVG 里不渲染，那个词就**整个消失**。
+      // 只在「某个术语第一次出现恰好落在图里」时发作，所以很难撞见。
+      while(e){ if(SKIP.has((e.tagName||"").toUpperCase()) || e.classList?.contains("eq")
                    || e.classList?.contains("gl")) return NodeFilter.FILTER_REJECT;
                 e = e.parentElement; }
       return n.nodeValue.trim() ? NodeFilter.FILTER_ACCEPT : NodeFilter.FILTER_REJECT;
