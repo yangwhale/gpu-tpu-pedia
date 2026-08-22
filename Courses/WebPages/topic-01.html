@@ -794,7 +794,7 @@ footer a{text-decoration:none}
     <g>
       <!-- MHA -->
       <text x="16" y="22" class="svglbl" fill="#202124">MHA · 每头一份 KV</text>
-      <text x="16" y="40" class="svgsm">2015—2019</text>
+      <text x="16" y="40" class="svgsm">2017 · Transformer 原版</text>
       <g fill="#d93025">
         <rect x="16" y="52" width="13" height="30" rx="2"/><rect x="33" y="52" width="13" height="30" rx="2"/>
         <rect x="50" y="52" width="13" height="30" rx="2"/><rect x="67" y="52" width="13" height="30" rx="2"/>
@@ -809,7 +809,7 @@ footer a{text-decoration:none}
 
       <!-- MQA -->
       <text x="256" y="22" class="svglbl" fill="#202124">MQA · 所有头共用一份</text>
-      <text x="256" y="40" class="svgsm">2019</text>
+      <text x="256" y="40" class="svgsm">2019 · Shazeer</text>
       <g fill="#f9ab00">
         <rect x="256" y="52" width="13" height="30" rx="2"/><rect x="273" y="52" width="13" height="30" rx="2"/>
         <rect x="290" y="52" width="13" height="30" rx="2"/><rect x="307" y="52" width="13" height="30" rx="2"/>
@@ -827,7 +827,7 @@ footer a{text-decoration:none}
 
       <!-- GQA -->
       <text x="496" y="22" class="svglbl" fill="#202124">GQA · 分组共享</text>
-      <text x="496" y="40" class="svgsm">2023 · Llama 系列</text>
+      <text x="496" y="40" class="svgsm">2023 · Ainslie 等</text>
       <g fill="#1e8e3e">
         <rect x="496" y="52" width="13" height="30" rx="2"/><rect x="513" y="52" width="13" height="30" rx="2"/>
         <rect x="530" y="52" width="13" height="30" rx="2"/><rect x="547" y="52" width="13" height="30" rx="2"/>
@@ -1623,7 +1623,7 @@ x = x + MoE(norm(x))
 
   <h3>再换个感觉：这些算力是多长时间</h3>
   <p>PFLOP 是个没有体感的单位。除以硬件的算力，就变成秒了 ——
-  单个 TPU v7 device 的 bf16 峰值大约 <b>1153 TFLOP/s</b>（一颗芯片 2307，芯片里有两个 device）。</p>
+  单个 TPU v7 device 的 bf16 峰值大约 <b>1153 TFLOP/s</b> —— 官方给的是<b>每颗芯片 2307 BF16 TFLOPS</b>，而一颗芯片里有两个 device，除以二得来。</p>
   <div class="grid g3">
     <div class="card"><h4>理论极限（100% 利用率）</h4>
       <div class="stat blue"><span data-v="timeIdeal">45.5 秒</span></div>
@@ -1837,7 +1837,7 @@ function compute(seq, batch, B, causal=true){
   r.kvMha   = T*C.L*r.kvMhaPer*B;
   r.kvMqaPer= 2*C.vDim;                 //   256
   r.kvMqa   = T*C.L*r.kvMqaPer*B;
-  r.kvGqaPer= 2*8*C.vDim;               //  2048（8 组，业界常见配置）
+  r.kvGqaPer= 2*8*C.vDim;               //  2048 —— 按 Llama 系列常见的 8 个 KV 头折算，不是 V3 的配置
   r.kvGqa   = T*C.L*r.kvGqaPer*B;
   r.kvRatio = r.kvMhaPer/r.kvPer;
 
@@ -1990,7 +1990,7 @@ function render(first){
       g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+12,class:"svgnum",
         fill: hl?"#174ea6":"#5f6368"}, `${m[1]} B`));
       g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+26,class:"svgsm",fill:"#0d652d"},
-        `激活 ${m[2]} B · 稀疏 ${(m[1]/m[2]).toFixed(0)}×`));
+        `激活 ${m[2]} B · 稀疏 ${(m[1]/m[2]).toFixed(1)}×`));
     } else {
       g.appendChild(el("text",{x:X0+m[1]/max*W+10,y:y+18,class:"svgnum",fill:"#5f6368"},
         `${m[1]} B · 全部都要算`));
@@ -2031,7 +2031,7 @@ function drawKvBars(r){
   g.textContent = "";
   const rows = [
     ["MHA · 每头一份",  r.kvMha, "#d93025", r.kvMhaPer],
-    ["GQA · 8 组共享",  r.kvGqa, "#f9ab00", r.kvGqaPer],
+    ["GQA · 8 组（举例）", r.kvGqa, "#f9ab00", r.kvGqaPer],
     ["MQA · 全部共用",  r.kvMqa, "#e8710a", r.kvMqaPer],
     ["MLA · 压缩 ⭐",   r.kvMla, "#1a73e8", r.kvPer]
   ];
