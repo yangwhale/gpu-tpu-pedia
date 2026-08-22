@@ -24,6 +24,7 @@
   --line:#dadce0; --line2:#e8eaed; --bg:#fff; --bg2:#f8f9fa;
   --radius:12px;
   --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --tokmul:"";              /* batch≠1 时由 render() 写入，如 "128K × 64 条" */
 }
 *{box-sizing:border-box;margin:0;padding:0}
 html{scroll-behavior:smooth;scroll-padding-top:96px}
@@ -42,6 +43,17 @@ a{color:var(--blue)}
 code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
         border-radius:4px;color:var(--blue-d);white-space:nowrap}
 .num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── batch ≠ 1 的防误读标记 ───────────────
+   「token 总数」= 序列长度 × batch。batch=1 时两者相等，看不出区别；
+   一旦 batch>1，这个数就不再是序列长度了，最容易被当成「输入变长了」。
+   下面两条规则在 batch=1 时完全不匹配 —— 默认口径下页面一个字都不会多。 */
+body.batched [data-v="tokens"]::after{
+  content:" (" var(--tokmul) ")";
+  font:600 .78em/1.4 var(--mono);color:var(--orange);letter-spacing:0}
+.ctrl.hot output{color:var(--orange);background:var(--yellow-l);
+  border-radius:5px;padding:2px 7px;box-shadow:0 0 0 1px var(--yellow) inset}
+.ctrl.hot label{color:var(--orange);font-weight:600}
 
 /* ── 旅程进度条 ─────────────────────── */
 .journey{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
@@ -350,7 +362,8 @@ footer a{text-decoration:none}
   </p>
   <div class="chips">
     <span class="chip">标的 <b>DeepSeek V3</b></span>
-    <span class="chip">口径 <b>128K · batch 1 · bf16 · 只算前向</b></span>
+    <span class="chip">口径 <b><span data-v="seqLabel">128K</span> · batch <span data-v="batch">1</span>
+      · <span data-v="precLabel">bf16</span> · 只算前向</b></span>
     <span class="chip">参照 <b>TPU v7 单 device 94.74 GB</b></span>
     <span class="chip">⏱ <b>60 分钟</b></span>
   </div>
@@ -516,7 +529,7 @@ footer a{text-decoration:none}
     <div class="card"><h4>序列长度</h4><div class="stat blue" data-v="seqLabel">128K</div>
       <p class="sub"><span class="num" data-v="seqRaw">131,072</span> token</p></div>
     <div class="card"><h4>batch</h4><div class="stat blue" data-v="batch">1</div>
-      <p class="sub">先把单条算清楚，要乘再乘</p></div>
+      <p class="sub" data-v="batchNote">先把单条算清楚，要乘再乘</p></div>
     <div class="card"><h4>精度</h4><div class="stat blue" data-v="precLabel">bf16</div>
       <p class="sub">权重与激活都按 <span class="num" data-v="bytes">2</span> 字节</p></div>
     <div class="card tint"><h4>方向</h4><div class="stat">只算前向</div>
@@ -2386,6 +2399,14 @@ function render(first){
   document.getElementById("seqOut").textContent = seqH(seq);
   document.getElementById("bsOut").textContent  = batch;
 
+  // batch ≠ 1 时把「token 总数」的来源标出来，并点亮控制台上的 batch 那一栏。
+  // 不这样做的话，8,388,608 会被读成「输入变成 8M 长」，而它其实是 128K × 64 条。
+  const batched = batch !== 1;
+  document.body.classList.toggle("batched", batched);
+  document.body.style.setProperty("--tokmul",
+    batched ? JSON.stringify(seqH(seq) + " × " + batch + " 条") : '""');
+  document.getElementById("bs").closest(".ctrl").classList.toggle("hot", batched);
+
   const r = compute(seq, batch, B);
   const V = {
     seqLabel: seqH(seq),
@@ -2393,6 +2414,8 @@ function render(first){
     tokens:   r.T.toLocaleString(),
     seqLbl:   seqH(r.seq),
     batch:    batch,
+    batchNote: batched ? `同时算 ${batch} 条，每条仍是 ${seqH(seq)}`
+                       : "先把单条算清楚，要乘再乘",
     bytes:    B,
     precLabel:PREC[B],
     embedW:      parH(r.embedW),
