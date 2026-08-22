@@ -332,9 +332,99 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 <section class="lec" id="L1">
   <div class="lh"><span class="no">01</span><h2>模型底牌：那张表怎么读</h2>
     <span class="t">⏱ 2 分钟</span></div>
-  <div class="todo-box"><b>待写。</b> 要点：不逐行念表，只挑出后面反复要用的四个数
-    —— <code>d=7168</code>、<code>61 层</code>、<code>前 3 层 dense</code>、
-    <code>tie_word_embeddings=false</code>。其余的等用到再回头指。</div>
+
+  <div class="goal">
+    <span class="k">这一讲要留下什么</span>
+    <b>这张表里每一个数都来自官方公开的配置文件 —— 没有一个是估的，也没有一个是我们测的。</b>
+    这句话决定了台下信不信你后面算出来的东西，<b>必须说出口</b>。
+  </div>
+
+  <h3 class="sec">讲稿</h3>
+  <div class="say">
+    <span class="board">滚到「模型底牌」那三张表。</span>
+
+    <p><em>这张表有二十多行，但千万别逐行念</em> —— 念完人就走神了，
+    而且这些数一次也记不住。</p>
+
+    <p>整张表你<b>只需要当场挑出四个数</b>，其余的等用到再回头指。</p>
+
+    <span class="pause">下面四个数，边说边用鼠标在表上点出来。</span>
+
+    <p><b>第一个，<code>hidden_size</code> 等于 7168。</b>
+    这是残差流的宽度 —— 也就是那条贯穿全程的<b>主干道有多宽</b>。
+    后面每一站算激活，都是拿 token 数乘以它。
+    <em>如果台下只能记住一个数，就让他们记这个。</em></p>
+
+    <p><b>第二个，61 层。</b> 这个数本身不稀奇。稀奇的是紧挨着它的那一行 ——
+    <code>first_k_dense_replace</code> 等于 3。意思是<b>前 3 层是普通的 MLP，
+    从第 4 层开始才是 MoE</b>。所以准确说是「3 层 dense 加 58 层 MoE」。
+    这个 3 和 58，后面算参数量的时候要反复用。</p>
+
+    <p><b>第三个数其实是个 false。</b> <code>tie_word_embeddings = false</code>。
+    这个字段的意思是：进门那张查词表的大矩阵，和出门那张把向量变回词的大矩阵，
+    <em>不共享权重，是两份独立的</em>。
+    很多模型选择共享，省一份参数；V3 选择不共享，代价是多出九亿多个参数。</p>
+
+    <span class="board">这里埋一个钩子，别答。</span>
+
+    <p>可以顺口问一句：「<b>为什么有的模型共享，有的不共享？</b>」——
+    然后说「这个留到最后一站，我们走到出口的时候再说」。<em>不要现在答。</em></p>
+
+    <p><b>第四个不是一个数，是一句话，而且是这一讲最重要的一句：</b></p>
+
+    <p><em>这张表里的每一个数，都来自 DeepSeek 官方公开的配置文件。
+    没有一个是估的，也没有一个是我们自己测的。</em>
+    后面所有的推导，都从这张表出发。</p>
+
+    <p>这句话必须说，因为<b>它决定了台下信不信你后面算出来的东西</b>。
+    等到最后合账那一步，我们算出总参数六千七百一十亿、激活三百六十六亿 ——
+    刚好对上官方公布的口径，那一刻这句话就兑现了。</p>
+  </div>
+
+  <h3 class="sec">可能被问到</h3>
+  <div class="qa">
+    <details><summary>7168 这个宽度是怎么定出来的？</summary>
+      <div class="a">
+        <p><b>它是一串约束的交集，不是拍脑袋。</b> 要能被注意力头数整除
+        （7168 = 128 头 × 56）、要对齐硬件的矩阵单元（是 128 的整数倍）、
+        还要跟层数配平 —— 同样的参数预算，做宽一点还是做深一点。</p>
+        <p><b>最后那条取舍每个模型都要重做一次</b>，没有标准答案。</p>
+      </div></details>
+    <details><summary>词表 129,280 为什么是这么个怪数？</summary>
+      <div class="a">
+        <p>词表大小是训练分词器时定的，通常会<b>凑到某个对齐边界</b>方便硬件处理。
+        往大做，一个词占一个 token，序列变短算得快，但进出口两张大矩阵都跟着变大；
+        往小做正相反。</p>
+        <p><b>129,280 是在这两头之间选的一个点，不是什么魔法数字。</b></p>
+      </div></details>
+    <details><summary>MTP 那一行是什么？</summary>
+      <div class="a">
+        <p><code>num_nextn_predict_layers = 1</code>，意思是除了预测下一个 token，
+        还额外预测下下一个。<b>这里提一句就够，站 6 会展开</b> ——
+        它在训练和推理里的用途完全不同，那才是有意思的地方。</p>
+      </div></details>
+    <details><summary>为什么前 3 层不做 MoE？</summary>
+      <div class="a">
+        <p><b>好问题，但先压住。</b> 一句话答案：靠近输入的几层做的事最通用，
+        没什么可分工的，硬要路由是白付通信成本。</p>
+        <p><b>完整的解释在站 3</b>，那时候讲完 dense 的四条好性质，这个问题会自然消解。</p>
+      </div></details>
+  </div>
+
+  <h3 class="sec">别讲什么</h3>
+  <div class="warn">
+    <span class="k">这一讲最容易跑偏的两个方向</span>
+    <b>① 别逐行解释每个字段。</b> 尤其是 MLA 那六个字段
+    （<code>q_lora_rank</code>、<code>kv_lora_rank</code> 那些）——
+    <b>它们要在站 2 才有意义</b>，现在讲等于讲两遍，而且第一遍必然讲不明白。<br>
+    <b>② 别解释 YaRN。</b> <code>max_position_embeddings</code> 那一行有人会好奇，
+    答「靠一种外推方法从 4K 撑到 16 万，专题七讲」就走。
+  </div>
+  <div class="tip">
+    <span class="k">节奏提示</span>
+    <b>两分钟。</b> 这一讲的功能是「发一份底牌给大家，让后面有据可查」，
+    不是「把模型讲一遍」。<b>讲超过三分钟就是跑偏了。</b>
+  </div>
 </section>
 
 <section class="lec" id="L2">
