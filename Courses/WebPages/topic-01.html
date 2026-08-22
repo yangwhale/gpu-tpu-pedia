@@ -2431,8 +2431,142 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <em>它的价值在于告诉你「这两个方案在同一个数量级上」——
     这才是「二选一」成立的前提。</em>
   </div>
-  <p class="lead" style="font-size:15px">顺带提一句名字，不展开：DeepEP（专门优化这个 all-to-all 的通信库）、
-  EPLB（专家负载再平衡）、dropless（不丢弃超载 token 的实现）。</p>
+  <h4>⭐ dropless：静态形状是怎么丢的，又是怎么抢回来的</h4>
+
+  <p class="lead">回到 <b>dense MLP 的第一条好性质：形状是静态的</b>。
+  编译器在开跑之前就知道每个矩阵多大、每块内存放在哪，才能把整张图排好。</p>
+
+  <p class="lead"><b>MoE 一来，这条就断了。</b>
+  <em>这一批里有多少个 token 落到第 37 号专家头上，只有把路由跑完才知道，
+  而且下一批就变了。</em>
+  <b>可硬件要的是「开跑前就定死」。</b></p>
+
+  <p class="lead">老办法很直接：<b>给每个专家发一个固定大小的盒子</b>，
+  形状就又静态了。<em>代价是盒子装不下的要扔掉、没装满的要拿零去填。</em></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 400" role="img"
+       aria-label="左边：给每个专家固定容量的盒子，超出的 token 被丢弃、没装满的用填充浪费算力；右边：dropless 不设盒子，按实际到达量计算">
+    <defs>
+      <pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+        <path d="M0 0 V7" stroke="#bdc1c6" stroke-width="2.4"/>
+      </pattern>
+    </defs>
+
+    <!-- ── 左：容量盒子 ── -->
+    <text x="55" y="32" class="svglbl" fill="#202124">① 老办法：给每个专家一个固定大小的盒子</text>
+    <text x="55" y="52" class="svgsm" fill="#5f6368">形状静态了，代价是两头都在赔</text>
+
+    <!-- 容量上限 -->
+    <path d="M52 184 H440" stroke="#d93025" stroke-width="1.5" stroke-dasharray="6 5"/>
+    <text x="446" y="188" class="svgsm" fill="#a50e0e" font-weight="700">容量上限</text>
+
+    <!-- 专家 A：来了 6 个，装 4 丢 2 -->
+    <g>
+      <rect x="70" y="271" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+      <rect x="70" y="242" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+      <rect x="70" y="213" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+      <rect x="70" y="184" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+      <rect x="70" y="155" width="90" height="26" rx="4" fill="#fce8e6" stroke="#d93025"
+            stroke-width="1.6" stroke-dasharray="5 4"/>
+      <rect x="70" y="126" width="90" height="26" rx="4" fill="#fce8e6" stroke="#d93025"
+            stroke-width="1.6" stroke-dasharray="5 4"/>
+      <text x="115" y="173" text-anchor="middle" class="svgsm" fill="#a50e0e" font-weight="700">✕</text>
+      <text x="115" y="144" text-anchor="middle" class="svgsm" fill="#a50e0e" font-weight="700">✕</text>
+    </g>
+    <text x="70" y="96" class="svgsm" fill="#a50e0e" font-weight="700">丢掉这 2 个</text>
+    <text x="70" y="112" class="svgsm" fill="#a50e0e">它们这一层的输出被置零，只剩残差穿过去</text>
+
+    <!-- 专家 B：刚好 4 个 -->
+    <g>
+      <rect x="195" y="271" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+      <rect x="195" y="242" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+      <rect x="195" y="213" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+      <rect x="195" y="184" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+    </g>
+
+    <!-- 专家 C：来了 1 个，填 3 个空 -->
+    <g>
+      <rect x="320" y="271" width="90" height="26" rx="4" fill="#1a73e8" opacity="0.9"/>
+      <rect x="320" y="242" width="90" height="26" rx="4" fill="url(#hatch)" stroke="#bdc1c6" stroke-width="1"/>
+      <rect x="320" y="213" width="90" height="26" rx="4" fill="url(#hatch)" stroke="#bdc1c6" stroke-width="1"/>
+      <rect x="320" y="184" width="90" height="26" rx="4" fill="url(#hatch)" stroke="#bdc1c6" stroke-width="1"/>
+    </g>
+    <text x="365" y="140" text-anchor="middle" class="svgsm" fill="#5f6368" font-weight="700">这 3 格是零</text>
+    <text x="365" y="156" text-anchor="middle" class="svgsm" fill="#5f6368">照样占算力和显存</text>
+
+    <path d="M52 300 H440" stroke="#9aa0a6" stroke-width="1.4"/>
+    <g class="svgsm" fill="#5f6368" text-anchor="middle">
+      <text x="115" y="320">专家 A · 来了 6 个</text>
+      <text x="240" y="320">专家 B · 来了 4 个</text>
+      <text x="365" y="320">专家 C · 来了 1 个</text>
+    </g>
+
+    <!-- 分隔 -->
+    <path d="M500 40 V330" stroke="#e8eaed" stroke-width="1.6"/>
+
+    <!-- ── 右：dropless ── -->
+    <text x="575" y="32" class="svglbl" fill="#0d652d">② dropless：不要盒子，来多少算多少</text>
+    <text x="575" y="52" class="svgsm" fill="#5f6368">把整层重写成 block-sparse 矩阵乘，形状不齐也能一次算完</text>
+
+    <g fill="#1e8e3e" opacity="0.9">
+      <rect x="590" y="271" width="90" height="26" rx="4"/><rect x="590" y="242" width="90" height="26" rx="4"/>
+      <rect x="590" y="213" width="90" height="26" rx="4"/><rect x="590" y="184" width="90" height="26" rx="4"/>
+      <rect x="590" y="155" width="90" height="26" rx="4"/><rect x="590" y="126" width="90" height="26" rx="4"/>
+      <rect x="715" y="271" width="90" height="26" rx="4"/><rect x="715" y="242" width="90" height="26" rx="4"/>
+      <rect x="715" y="213" width="90" height="26" rx="4"/><rect x="715" y="184" width="90" height="26" rx="4"/>
+      <rect x="840" y="271" width="90" height="26" rx="4"/>
+    </g>
+    <text x="960" y="136" text-anchor="end" class="svgsm" fill="#0d652d" font-weight="700">没有 ✕，也没有斜线格</text>
+    <text x="960" y="152" text-anchor="end" class="svgsm" fill="#5f6368">不丢 token，也不白算</text>
+
+    <path d="M572 300 H948" stroke="#9aa0a6" stroke-width="1.4"/>
+    <g class="svgsm" fill="#5f6368" text-anchor="middle">
+      <text x="635" y="320">6 个</text><text x="760" y="320">4 个</text><text x="885" y="320">1 个</text>
+    </g>
+
+    <text x="500" y="358" text-anchor="middle" class="svgsm" fill="#5f6368">
+      <tspan font-weight="700" fill="#202124">容量系数</tspan>就是「盒子开多大」的那个旋钮 ——
+      开小了丢 token，开大了白算。它是一个必须手调的超参数。</text>
+    <text x="500" y="380" text-anchor="middle" class="svgsm" fill="#5f6368">
+      dropless 的价值在于：<tspan font-weight="700" fill="#0d652d">这个旋钮直接不存在了</tspan>。</text>
+  </svg>
+  <figcaption><b>左边这张图里，同一个 MoE 层同时在两头赔钱：
+  热门专家那边丢掉真数据，冷门专家那边拿零去凑算力。</b>
+  而丢与不丢，取决于这一批数据碰巧怎么分 —— <b>这也是为什么 4b 那个负载均衡偏置
+  不只是「让卡别闲着」，它还在防止 token 凭空消失。</b></figcaption>
+  </figure>
+
+  <div class="note info">
+    <span class="t">三个来自 MegaBlocks 论文的数字（arXiv 2211.15841）</span>
+    <b>① 丢 token 是真的伤质量。</b>
+    <em>同一组对照实验里，容量系数取 1（会丢）的 MoE 只把验证损失降了 0.15；
+    完全不丢的那版降了 0.26 —— <b>是前者的 1.73 倍</b>。</em><br>
+    <b>② 靠「把盒子开大」来不丢，很贵。</b>
+    <em>在那个例子里，为了不丢 token，MoE 层的算量涨了<b>两倍多</b>。</em><br>
+    <b>③ 而且你不知道该开多大。</b>
+    <em>论文引 Tutel 的观察：有的模型容量系数要开到 <b>11</b> 才不丢，
+    还有的模型这个值会在训练中途<b>毫无征兆地飙上去</b>。</em><br>
+    <b>所以这不是「调个参数就行」的事</b> ——
+    <em>它是一个你既不知道该设多少、设错了两个方向都赔的超参数。
+    dropless 把这个参数整个删掉了。</em>
+  </div>
+
+  <div class="note ok">
+    <span class="t">DeepSeek V3 在这件事上是怎么说的</span>
+    <b>技术报告里写得很直白：因为负载在整个训练过程中一直保持得不错，
+    所以 V3 训练时不丢弃任何 token。</b>
+    <em>换句话说，它给出的理由是「负载被掰得足够匀」——
+    这正好回接到 4b 那个负载均衡偏置：那套机制不只是让卡别闲着，
+    它还在防止 token 凭空消失。</em><br>
+    <b>要留意的边界</b>：<em>报告说明的是<b>结果</b>（不丢 token）和它归因的
+    <b>原因</b>（负载均衡好）。至于它自己的训练算子内部还留不留「容量」这个概念，
+    我没有在公开资料里查到。</em>
+    <b>所以「V3 训练不丢 token」可以讲，「V3 用的是 dropless 算子」不要讲。</b>
+  </div>
+
+  <p class="lead" style="font-size:15px">另外两个名字顺带一提，不展开：DeepEP（专门优化这个 all-to-all 的通信库）、
+  EPLB（专家负载再平衡）。</p>
 
   <h3>4d · 算账：671B 是怎么来的</h3>
   <div class="tbl-wrap"><table>
