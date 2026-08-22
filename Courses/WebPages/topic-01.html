@@ -987,20 +987,38 @@ footer a{text-decoration:none}
   </div>
 
   <h3>⭐ 一个容易想当然的地方：7,168 和 16,384</h3>
-  <p>几乎所有人第一次看这份配置都会做一个心算：<b>7,168 ÷ 128 个头 = 56</b>，
-  于是以为每个头是 56 维。<b>这是错的</b> —— V3 每个头是 <span class="k">128</span> 维，
-  128 个头拼起来是 <span class="k">16,384</span>，<b>是残差流宽度的 2.29 倍</b>。</p>
+  <p>几乎所有人第一次看这份配置都会做一个心算：<b>7,168 ÷ 128 个头 = 56</b>。
+  这个除法背后其实藏着<b>两个误解，而且第二个比第一个更根本</b>。</p>
 
-  <p>会算错，是因为脑子里有一条<b>其实并不存在的约束</b>。</p>
+  <div class="note danger">
+    <span class="t">误解一：以为 V3 每个头是 56 维</span>
+    <b>不是。V3 每个头是 128 维</b>，128 个头拼起来是 <b>16,384</b>，
+    <b>是残差流宽度的 2.29 倍</b> —— 这两个数在 V3 上根本不相等。
+  </div>
+
+  <div class="note danger">
+    <span class="t">误解二：以为「切成 128 份，每份 56」—— 这个更要命</span>
+    <b>输入从来没有被切开。</b> 128 个头<b>各自都读入完整的 7,168 维</b>，
+    每个头有<b>自己的一个 <code>7,168 × 每头维度</code> 的投影矩阵</b>，
+    把这完整的 7,168 压到自己的工作空间里。<br>
+    <b>「切」发生在输出侧，不在输入侧</b> —— 是 128 个头各自的输出拼在一起，
+    <b>拼出来的总宽</b>才是那个 7,168 或 16,384。<br>
+    <em>所以哪怕在最标准的模型里，那个除法也只是在说
+    「拼起来正好等于输入宽度」，不是在说「输入被分掉了」。</em>
+  </div>
+
+  <p>这一点是整节的地基 —— <b>看懂了它，「为什么可以撑宽」根本不需要解释</b>：
+  既然每个头的矩阵是 <code>7,168 × d</code>，那个 <code>d</code> 从来就是自由的。</p>
 
   <figure class="fbox">
-    <svg viewBox="0 0 1000 484" role="img"
-         aria-label="标准 MHA 的等宽直筒与 V3 的中间鼓起，以及 KV cache 与注意力宽度的绑定关系">
+    <svg viewBox="0 0 1000 640" role="img"
+         aria-label="每个头都读入完整的残差流，各自投影后再拼接；等宽取值与 V3 撑宽的对比">
       <g id="widthpipe"></g>
     </svg>
-    <figcaption>上下两条都是「一层注意力」的横截面。<b>左右两端都是 7,168 —— 残差流的宽度是固定的</b>，
-    差别全在中段。<b>老做法把中段也压成 7,168，V3 让它鼓到 16,384</b>，
-    最后靠 <code>o_proj</code> 收回来。右边是各自要为此付的 KV cache。</figcaption>
+    <figcaption><b>注意左边那把扇子</b> —— 每个头都从完整的 7,168 里取信息，
+    没有谁只拿到一段。上下两条的差别<b>不在输入，在每个头输出多宽</b>：
+    老取值让 128 个头拼起来正好 7,168，<b>V3 让它们拼出 16,384</b>，
+    最后靠 <code>o_proj</code> 收回残差流。右边是各自要为此付的 KV cache。</figcaption>
   </figure>
 
   <div class="grid g2">
@@ -1023,8 +1041,8 @@ footer a{text-decoration:none}
     <div>
       <h4 style="margin-bottom:8px">V3 为什么敢把它撑开</h4>
       <p>因为在<b>标准注意力里，把头做宽是要付 cache 的</b>：
-      每 token 每层要存 <code>2 × 头数 × 每头维度</code> 个数 ——
-      <b>头一宽，cache 就跟着线性变大</b>。这两件事是锁在一起的。</p>
+      每个头的 K 和 V 都要各存一份，<code>2 × 头数 × 每头维度</code> 个数 ——
+      <b>头一宽，每份就变大，cache 跟着线性涨</b>。这两件事是锁在一起的。</p>
       <p><b>MLA 把这把锁剪断了。</b> MLA 论文里写得很清楚：
       推理时只需要缓存那个压缩向量，<b>cache 的元素个数是
       <code>d_c × 层数</code></b> —— 这个式子里<b>没有头数，也没有每头维度</b>。</p>
@@ -1040,13 +1058,51 @@ footer a{text-decoration:none}
     </div>
   </div>
 
+  <h4>代价：撑宽要付三笔钱，V3 只付了两笔</h4>
+  <p>只讲好处不叫讲清楚。<b>把头撑宽，账面上要多付三笔</b> ——
+  有意思的是<b>第三笔被另一个设计抵消掉了</b>，而那正是 <code>q_lora_rank</code> 存在的理由。</p>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>代价</th><th>等宽取值</th><th>V3 撑宽后</th>
+      <th style="text-align:right">结果</th></tr></thead>
+    <tbody>
+      <tr><td><b>① 注意力算力</b></td><td>基准</td><td>工作维度 2.29 倍</td>
+        <td class="n" style="color:#a50e0e">真的多付了</td></tr>
+      <tr><td><b>② <code>o_proj</code> 权重</b><br>
+        <span class="sub">要跨 16,384 → 7,168 这道口子</span></td>
+        <td>7,168 × 7,168<br><span class="sub">51.38 M</span></td>
+        <td>16,384 × 7,168<br><span class="sub">117.44 M</span></td>
+        <td class="n" style="color:#a50e0e">2.29×<br>
+          <span class="sub">占一层的 63%</span></td></tr>
+      <tr><td><b>③ Q 投影权重</b><br>
+        <span class="sub">128 个头各要一个 7,168 × d 的矩阵</span></td>
+        <td>7,168 × (128×56)<br><span class="sub">51.38 M</span></td>
+        <td>若直投 7,168 × (128×192)<br><span class="sub">176.16 M</span></td>
+        <td class="n" style="color:#a50e0e">本该 3.43×</td></tr>
+      <tr class="sum"><td colspan="2"><b>③ 的实际做法：走 <code>q_lora</code> 绕一下</b><br>
+        <span class="sub">7,168 → 1,536 → 128×192，中间掐一个窄腰</span></td>
+        <td>11.01 M + 37.75 M<br><span class="sub">= 48.76 M</span></td>
+        <td class="n" style="color:#0d652d">比直投省 3.61×<br>
+          <span class="sub">比等宽还小 5.1%</span></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note ok">
+    <span class="t">于是 q_lora_rank 这个字段的意思就清楚了</span>
+    <b>V3 把注意力撑宽了 2.29 倍，而 Q 投影的参数量反而比等宽做法还少一点。</b>
+    <em>撑宽的账，被那个 1,536 的窄腰吃掉了。</em><br>
+    这也点明了两个 LoRA 的分工完全不同：<br>
+    <b><code>kv_lora_rank = 512</code> 省的是 KV cache</b>（因为存的就是它）；<br>
+    <b><code>q_lora_rank = 1536</code> 省的是权重</b> —— <b>Q 根本不进 cache</b>，
+    它压缩纯粹是为了让「把头做宽」这件事在参数上付得起。<br>
+    <em>下面那张五行表里 <code>q_a_proj</code> 那行写着「省参数，不省 cache」，说的就是这件事。</em>
+  </div>
+
   <div class="note warn">
-    <span class="t">代价这一栏也要说清楚，别只讲好处</span>
-    <b>撑开是有代价的，只是代价换了个地方付。</b>
-    中段鼓到 2.29 倍，意味着<b>这一层的注意力计算量也跟着涨</b> ——
-    原论文当年设 <code>d_model/h</code> 图的就是省这笔算力。<br>
-    还有 <code>o_proj</code>：它要跨 <b>16,384 → 7,168</b> 这道口子，
-    单矩阵 <b>117.44 M</b>，<b>占一层 MLA 权重的 63%</b>，是一层里最大的一块。
+    <span class="t">但第 ① 笔是真的，跑不掉</span>
+    <b>注意力的计算量确实跟着涨了</b> —— 原论文当年设 <code>d_model/h</code>，
+    图的就是省这笔算力。<b>V3 是明确地拿算力换了表达力</b>，不是免费午餐。<br>
+    ② 也是真的：<code>o_proj</code> <b>117.44 M，一层 MLA 权重里最大的一块</b>。
     <b>下面那张五行表里它为什么最大，答案就在这儿。</b>
   </div>
 
@@ -2166,90 +2222,94 @@ function drawJourney(r){
    regardless of the storage precision），也就不受精度选择影响。 */
 (function drawWidthPipe(){
   const g = document.getElementById("widthpipe"); if(!g) return;
-  const S = 100/16384, IN = 7168*S;                    // 16,384 → 100px
-  const X1=110, X2=196, X3=250, X4=520, X5=578, X6=664;
+  const S = 170/16384, IN = 7168*S;                  // 16,384 → 170px
+  const X1=104, X2=184, X3=306, X4=528, X5=602, X6=672, NG=5;
   const rows = [
-    {cy:104, mid:7168,  col:"#9aa0a6", fill:"#f1f3f4", stroke:"#bdc1c6",
-     ttl:"教科书里的默认做法 · 中段和两端一样宽",
-     head:"每头 7,168 ÷ 128 = 56 维", locked:true},
-    {cy:318, mid:16384, col:"#1a73e8", fill:"#e8f0fe", stroke:"#1a73e8",
-     ttl:"DeepSeek V3 实际 · 中段鼓到 2.29 倍",
-     head:"每头 128 维 × 128 个头 = 16,384", locked:false}
+    {cy:130, tot:7168,  hd:56,  col:"#9aa0a6", fill:"#f1f3f4", bd:"#bdc1c6", ink:"#5f6368",
+     ttl:"教科书里的默认取值 · 拼起来正好等于 7,168", locked:true},
+    {cy:420, tot:16384, hd:128, col:"#1a73e8", fill:"#e8f0fe", bd:"#1a73e8", ink:"#174ea6",
+     ttl:"DeepSeek V3 实际 · 拼起来是 16,384，2.29 倍", locked:false}
   ];
 
   rows.forEach(r=>{
-    const cy=r.cy, M=r.mid*S, a=IN/2, b=M/2;
-    // 行标题
-    g.appendChild(el("text",{x:30,y:cy-b-34,class:"svglbl",fill:r.col==="#9aa0a6"?"#5f6368":"#174ea6",
-      "font-size":"15"}, r.ttl));
+    const cy=r.cy, a=IN/2, T=r.tot*S, b=T/2;
+    g.appendChild(el("text",{x:26,y:cy-b-42,class:"svglbl",fill:r.ink,"font-size":"15"}, r.ttl));
 
-    // 管道轮廓：两端 7,168，中段 r.mid
-    g.appendChild(el("path",{d:
-      `M${X1} ${cy-a} L${X2} ${cy-a} L${X3} ${cy-b} L${X4} ${cy-b} L${X5} ${cy-a} L${X6} ${cy-a}`+
-      `L${X6} ${cy+a} L${X5} ${cy+a} L${X4} ${cy+b} L${X3} ${cy+b} L${X2} ${cy+a} L${X1} ${cy+a} Z`,
-      fill:r.fill,stroke:r.stroke,"stroke-width":1.4}));
+    // 入口 / 出口：完整的残差流
+    [[X1,X2,"残差流"],[X5,X6,"回到残差流"]].forEach(([xa,xb,lbl])=>{
+      g.appendChild(el("rect",{x:xa,y:cy-a,width:xb-xa,height:IN,rx:3,
+        fill:"#fff",stroke:"#5f6368","stroke-width":1.4}));
+      g.appendChild(el("text",{x:(xa+xb)/2,y:cy+4,"text-anchor":"middle",class:"svgnum",
+        "font-size":"12"},"7,168"));
+      g.appendChild(el("text",{x:(xa+xb)/2,y:cy+a+16,"text-anchor":"middle",class:"svgsm"},lbl));
+    });
 
-    // 中段：128 个头（示意 16 个格子）
-    const N=16, gw=(X4-X3)/N;
-    for(let i=0;i<N;i++)
-      g.appendChild(el("rect",{x:X3+i*gw+1.5,y:cy-b+3,width:gw-3,height:M-6,rx:1.5,
-        fill:r.col,opacity:i%2?".5":".7"}));
+    // 每个头一条，扇形连线 = 每个头都读入完整的 7,168
+    const gap=3, gh=(T-gap*(NG-1))/NG;
+    for(let i=0;i<NG;i++){
+      const gy = cy-b + i*(gh+gap);
+      for(const t of [0,.5,1])
+        g.appendChild(el("path",{d:`M${X2} ${cy-a+IN*t} L${X3} ${gy+gh/2}`,
+          stroke:r.col,"stroke-width":.7,opacity:".45",fill:"none"}));
+      g.appendChild(el("rect",{x:X3,y:gy,width:X4-X3,height:gh,rx:2,
+        fill:r.fill,stroke:r.bd,"stroke-width":1}));
+      g.appendChild(el("text",{x:(X3+X4)/2,y:gy+gh/2+4,"text-anchor":"middle",
+        class:"svgnum",fill:r.ink,"font-size":gh<16?"10":"12"},`头 ${i+1}　7,168 × ${r.hd}`));
+    }
+    g.appendChild(el("text",{x:(X2+X3)/2,y:cy-b-9,"text-anchor":"middle",class:"svgsm",
+      fill:r.ink},"每个头都读入完整的 7,168"));
+    g.appendChild(el("text",{x:(X3+X4)/2,y:cy+b+16,"text-anchor":"middle",class:"svgsm"},
+      `⋮ 共 128 个头（图示 ${NG} 个），每头输出 ${r.hd} 维`));
 
-    // 竖直尺寸标注：入口 7,168 / 中段
-    g.appendChild(el("path",{d:`M${X1-19} ${cy-a} L${X1-9} ${cy-a} M${X1-14} ${cy-a} L${X1-14} ${cy+a}`+
-      ` M${X1-19} ${cy+a} L${X1-9} ${cy+a}`,stroke:"#5f6368","stroke-width":1.2,fill:"none"}));
+    // 拼接高度尺寸线 + o_proj
+    g.appendChild(el("path",{d:`M${X4+7} ${cy-b} L${X4+15} ${cy-b} M${X4+11} ${cy-b} L${X4+11} ${cy+b}`+
+      ` M${X4+7} ${cy+b} L${X4+15} ${cy+b}`,stroke:r.ink,"stroke-width":1.2,fill:"none"}));
+    g.appendChild(el("path",{d:`M${X4+20} ${cy-b} L${X5} ${cy-a} L${X5} ${cy+a} L${X4+20} ${cy+b} Z`,
+      fill:r.fill,stroke:r.bd,"stroke-width":1.2,opacity:".9"}));
+    g.appendChild(el("text",{x:(X4+X5)/2+10,y:cy-b-24,"text-anchor":"middle",class:"svgsm",
+      fill:r.ink},"o_proj"));
+    g.appendChild(el("text",{x:(X4+X5)/2+10,y:cy-b-9,"text-anchor":"middle",class:"svgnum",
+      "font-size":"10",fill:r.ink},`${r.tot.toLocaleString()} × 7,168`));
 
-    // 段落说明
-    g.appendChild(el("text",{x:(X1+X2)/2,y:cy+a+17,"text-anchor":"middle",class:"svgsm"},"残差流"));
-    g.appendChild(el("text",{x:(X1+X2)/2,y:cy+a+30,"text-anchor":"middle",class:"svgnum",
-      "font-size":"11"},"7,168"));
-    g.appendChild(el("text",{x:(X3+X4)/2,y:cy-b-13,"text-anchor":"middle",class:"svgsm",
-      fill:r.col==="#9aa0a6"?"#5f6368":"#174ea6"}, r.head));
-    g.appendChild(el("text",{x:(X5+X6)/2,y:cy+a+25,"text-anchor":"middle",class:"svgsm"},
-      "o_proj 收回来"));
-    g.appendChild(el("text",{x:X6+8,y:cy+4,class:"svgnum","font-size":"11",fill:"#5f6368"},"7,168"));
-
-    // 链条：中段宽度 ↔ KV cache
-    const lx=(X3+X4)/2, y0=cy+b+6, y1=cy+b+32;
+    // 链条：拼接宽度 ↔ KV cache，从头堆叠区垂直下来
+    const lx=(X3+X4)/2, y0=cy+b+24, y1=cy+b+48;
     if(r.locked){
       g.appendChild(el("path",{d:`M${lx} ${y0} L${lx} ${y1}`,stroke:"#d93025","stroke-width":1.8}));
-      [.35,.65].forEach(t=>g.appendChild(el("circle",{cx:lx,cy:y0+(y1-y0)*t,r:3.4,
+      [.32,.68].forEach(t=>g.appendChild(el("circle",{cx:lx,cy:y0+(y1-y0)*t,r:3.4,
         fill:"none",stroke:"#d93025","stroke-width":1.6})));
-
     } else {
-      g.appendChild(el("path",{d:`M${lx} ${y0} L${lx} ${y0+8} M${lx} ${y1-8} L${lx} ${y1}`,
-        stroke:"#1e8e3e","stroke-width":1.8,"stroke-dasharray":"3 3"}));
       const my=(y0+y1)/2;
+      g.appendChild(el("path",{d:`M${lx} ${y0} L${lx} ${y0+6} M${lx} ${y1-6} L${lx} ${y1}`,
+        stroke:"#1e8e3e","stroke-width":1.8,"stroke-dasharray":"3 3"}));
       g.appendChild(el("path",{d:`M${lx-6} ${my-6} L${lx+6} ${my+6} M${lx+6} ${my-6} L${lx-6} ${my+6}`,
         stroke:"#1e8e3e","stroke-width":2.2}));
-
     }
+
+    // 右侧一句话
+    g.appendChild(el("text",{x:706,y:cy-8,class:"svgsm",fill:r.locked?"#5f6368":"#0d652d"},
+      "表达力 与 缓存成本"));
+    g.appendChild(el("text",{x:706,y:cy+10,class:"svglbl",fill:r.locked?"#5f6368":"#0d652d"},
+      r.locked?"是同一个旋钮":"拆成了两个旋钮"));
   });
 
-  // 两行各自的 KV cache 结论框
-  g.appendChild(el("rect",{x:250,y:162,width:430,height:50,rx:6,fill:"#fce8e6",
+  // KV cache 结论框，各自挂在管道下方
+  g.appendChild(el("rect",{x:306,y:216,width:366,height:52,rx:8,fill:"#fce8e6",
     stroke:"#d93025","stroke-width":1.2}));
-  g.appendChild(el("text",{x:268,y:182,class:"svglbl",fill:"#a50e0e"},
-    "锁在一起：头一宽，cache 就跟着涨"));
-  g.appendChild(el("text",{x:268,y:201,class:"svgnum",fill:"#a50e0e","font-size":"12"},
+  g.appendChild(el("text",{x:324,y:237,class:"svglbl",fill:"#a50e0e"},
+    "锁在一起：拼得越宽，cache 越大"));
+  g.appendChild(el("text",{x:324,y:257,class:"svgnum",fill:"#a50e0e","font-size":"11.5"},
     "2 × 128 头 × 56 = 14,336 个数 / token / 层"));
 
-  g.appendChild(el("rect",{x:250,y:406,width:430,height:66,rx:6,fill:"#e6f4ea",
+  g.appendChild(el("rect",{x:306,y:554,width:366,height:70,rx:8,fill:"#e6f4ea",
     stroke:"#1e8e3e","stroke-width":1.2}));
-  g.appendChild(el("text",{x:268,y:426,class:"svglbl",fill:"#0d652d"},
-    "这条链断了：cache 跟头数、头宽都无关"));
-  const strike = el("text",{x:268,y:445,class:"svgsm",fill:"#80868b"},
-    "若照老存法 2 × 128 × 128 = 32,768（宽 2.29 倍，cache 也涨 2.29 倍）");
-  strike.setAttribute("text-decoration","line-through");
-  g.appendChild(strike);
-  g.appendChild(el("text",{x:268,y:464,class:"svgnum",fill:"#0d652d","font-size":"12"},
-    "MLA 实际只存 512 + 64 = 576　—— 少 56.9 倍"));
-
-  // 右侧：一句话结论
-  g.appendChild(el("text",{x:726,y:96,class:"svgsm",fill:"#5f6368"},"表达力 与 缓存成本"));
-  g.appendChild(el("text",{x:726,y:112,class:"svglbl",fill:"#5f6368"},"是同一个旋钮"));
-  g.appendChild(el("text",{x:726,y:310,class:"svgsm",fill:"#0d652d"},"表达力 与 缓存成本"));
-  g.appendChild(el("text",{x:726,y:326,class:"svglbl",fill:"#0d652d"},"拆成了两个旋钮"));
+  g.appendChild(el("text",{x:324,y:575,class:"svglbl",fill:"#0d652d"},
+    "这条关系断了：cache 跟头数、头宽都无关"));
+  const st = el("text",{x:324,y:594,class:"svgsm",fill:"#80868b","font-size":"11.5"},
+    "老存法本该 2 × 128 × 128 = 32,768");
+  st.setAttribute("text-decoration","line-through");
+  g.appendChild(st);
+  g.appendChild(el("text",{x:324,y:614,class:"svgnum",fill:"#0d652d","font-size":"11.5"},
+    "MLA 只存 512 + 64 = 576　—— 少 56.9 倍"));
 })();
 
 /* ── 图 0b：账是怎么堆起来的（对数阶梯） ──
