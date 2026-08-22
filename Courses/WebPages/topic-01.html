@@ -1106,6 +1106,138 @@ footer a{text-decoration:none}
     <b>下面那张五行表里它为什么最大，答案就在这儿。</b>
   </div>
 
+  <h3>⭐ 完整的 shape 变换链：从 <code>[128K, 7168]</code> 走到 Q / K / V</h3>
+  <p>上面讲清了「为什么可以撑宽」。<b>下面是这一层实际发生的每一步。</b>
+  一批 <span data-v="tokens">131,072</span> 个 token 进来，是一个
+  <code>[<span data-v="seqLbl">128K</span>, 7168]</code> 的矩阵；
+  出去的时候还是同样形状。<b>中间它被拆成了三样东西 —— Q、K、V ——
+  而这三样各自走的路完全不同</b>，尤其是 RoPE 只走其中两条支路的一小段。</p>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 760" role="img"
+         aria-label="MLA 从 hidden_states 到 query_states / key_states / value_states 的完整形状变换链">
+      <g id="shapechain"></g>
+    </svg>
+    <figcaption><b>每个方块 = 一次变换</b>，方块里三行分别是<b>做什么 / 权重形状 / 出来是什么 shape</b>。
+    金色虚线框住的两块<b>就是推理时唯一被缓存的东西</b>：
+    <code>512 + 64 = 576</code> 个数 / token / 层。
+    <b>注意 <code>k_pe</code> 只有 1 个头</b> —— 128 个头共用同一份，所以它只贡献 64 而不是 128×64。<br>
+    <span class="sub">两点画法说明：① <code>kv_a_proj</code> 的输出实际顺序是
+    <code>[c_KV 512 | k_pe 64]</code>，图里把 <code>k_pe</code> 画在左边，
+    只是为了让它和 <code>k_nope</code> 相邻、拼接那一步不用交叉连线；
+    ② 权重按 <code>[输入维, 输出维]</code> 写，跟代码里 <code>nn.Linear(in, out)</code> 一致。</span></figcaption>
+  </figure>
+
+  <div class="grid g2">
+    <div>
+      <h4 style="margin-bottom:8px">① Q 路：降下去，再升回来</h4>
+      <p><b>Q 走的是「两级投影 + 中间掐一个窄腰」。</b>
+      7,168 先被 <code>q_a_proj</code> 压到 <b>1,536</b> —— 这就是 Q 的潜空间；
+      过一层 RMSNorm 之后，<code>q_b_proj</code> 把它升到 <b>24,576</b>，
+      <code>view</code> 一下就是 <b>128 个头 × 192</b>。</p>
+      <div class="note warn">
+        <span class="t">一个容易记错的数：这里是 24,576，不是 12,288</span>
+        <b>每个头是 192 维，不是 96 也不是 128</b> ——
+        <code>192 = 128（不转的）+ 64（要转的）</code>。<br>
+        所以 <code>q_b_proj</code> 的形状是 <code>[1536, 128×192] = [1536, 24576]</code>。
+        <em>那个 <code>128×128 = 16,384</code> 是<b>输出侧</b>的宽度
+        （<code>v_head_dim</code> × 头数），它出现在 <code>o_proj</code> 的入口，不在这里。</em>
+      </div>
+      <p>接着 <b>每个头的 192 维被切成两段</b>：前 128 维（<code>q_nope</code>）原样不动，
+      后 64 维（<code>q_pe</code>）拿去转 RoPE。转完再拼回 192 维，
+      <b><code>query_states</code> 定型：<code>[128K, 128, 192]</code></b>。</p>
+      <p class="sub"><b>Q 一个字节都不进 cache</b> ——
+      它压缩纯粹是为了省权重和训练时的激活值，这一点上面那张代价表已经算过。</p>
+    </div>
+    <div>
+      <h4 style="margin-bottom:8px">② KV 路：只存 576，其余全是现算的</h4>
+      <p><b>K 和 V 共用一次下投影。</b> <code>kv_a_proj_with_mqa</code>
+      一把把 7,168 压成 <b>576</b>，然后当场切开：
+      <b>前 512 是 <code>c_KV</code></b>（K 和 V 共享的压缩表示），
+      <b>后 64 是 <code>k_pe</code></b>（专门用来扛位置信息的那一小条）。</p>
+      <div class="note ok">
+        <span class="t">⭐ 全篇最关键的一句</span>
+        <b>存进 KV cache 的，就只有这两块 —— 512 + 64 = 576。</b>
+        再往下的 <code>k_nope</code>、<code>value</code>、<code>key_states</code>
+        <b>全部是用的时候现算出来的</b>，一个都不存。<br>
+        <em>MLA 论文把这件事写成了一个式子：cache 的元素个数是
+        <code>(d_c + d_h^R) × 层数</code> —— 里面没有头数，也没有每头维度。</em>
+      </div>
+      <p><code>c_KV</code> 过 RMSNorm 后由 <code>kv_b_proj</code> 升到 <b>32,768</b>，
+      <code>view</code> 成 <b>128 个头 × 256</b>，再切成两半：
+      前 128 是 <code>k_nope</code>，后 128 <b>直接就是 V</b> ——
+      <b><code>value_states</code> 定型：<code>[128K, 128, 128]</code></b>，
+      它<b>全程不碰 RoPE</b>。</p>
+      <p>而 <code>k_pe</code> 转完 RoPE 之后，<b>同一份广播给全部 128 个头</b>，
+      跟每个头自己的 <code>k_nope</code> 拼在一起：
+      <b><code>key_states</code> 定型：<code>[128K, 128, 192]</code></b>，
+      正好和 Q 对齐。</p>
+    </div>
+  </div>
+
+  <h4>③ RoPE 为什么非得单独切出一条 64 维的支路</h4>
+  <p>这是整个 MLA 里<b>最绕、也最容易被跳过</b>的一处。
+  直觉上位置编码应该均匀地作用在整个向量上，为什么要单开一小条？
+  <b>因为如果不这么做，前面省下来的 cache 会当场还回去。</b></p>
+
+  <div class="grid g2">
+    <div>
+      <div class="note danger">
+        <span class="t">如果整个 K 都带 RoPE，会发生什么</span>
+        推理时本来有一个漂亮的省法：<b>把「K 的升维矩阵」提前乘进「Q 的矩阵」里</b>，
+        这样连 K 都不用算出来，直接拿 Q 去和缓存里那个 512 维的
+        <code>c_KV</code> 打分就行。<br>
+        <b>但 RoPE 是跟位置有关的旋转</b> —— 它会夹在这两个矩阵中间。
+        <b>矩阵乘法不满足交换律，夹在中间的东西挪不走</b>，这个合并就做不成了。<br>
+        后果很直接：<b>每生成一个字，都得把前面所有 token 的 K 重新算一遍。</b>
+      </div>
+      <div class="note info">
+        <span class="t">论文原话（DeepSeek-V2 · 2.1.3 节）</span>
+        「<em>RoPE is incompatible with low-rank KV compression … W^UK cannot be
+        absorbed into W^Q any more during inference, since a RoPE matrix related to
+        the currently generating token will lie between W^Q and W^UK and matrix
+        multiplication does not obey a commutative law. As a result, we must
+        recompute the keys for all the prefix tokens during inference.</em>」
+      </div>
+    </div>
+    <div>
+      <h4 style="margin-bottom:8px">于是他们把位置信息「隔离」到一条小路上</h4>
+      <p>做法是<b>把每个头的向量劈成两半，各管一件事</b>：</p>
+      <div class="tbl-wrap"><table>
+        <thead><tr><th>那一段</th><th>宽度</th><th>转 RoPE 吗</th><th>负责</th></tr></thead>
+        <tbody>
+          <tr><td><code>q_nope</code> / <code>k_nope</code></td><td class="n">128</td>
+            <td>❌ 不转</td><td>内容 —— 保住「矩阵能合并」这个性质</td></tr>
+          <tr><td><code>q_pe</code> / <code>k_pe</code></td><td class="n">64</td>
+            <td>✅ 转</td><td>位置 —— 位置信息全塞在这 64 维里</td></tr>
+          <tr class="sum"><td>拼起来打分</td><td class="n">192</td><td>—</td>
+            <td>分数 = 内容项 + 位置项，一次点积同时算完</td></tr>
+        </tbody>
+      </table></div>
+      <p><b>点积天然可加</b>：<code>[a;b]·[c;d] = a·c + b·d</code>。
+      所以拼起来做一次 192 维点积，等价于
+      <b>「内容相似度」和「位置相关性」两项分别算完再相加</b> ——
+      互不干扰，各自那一半的数学性质都保住了。</p>
+      <div class="note ok">
+        <span class="t">代价小到几乎白送</span>
+        位置那条只有 <b>64 维、而且全部 128 个头共用同一份</b>
+        （所以图里它的 shape 是 <code>[128K, 1, 64]</code>）。<br>
+        <b>cache 上多付 64 个数，换回「K 不用重算」</b> —— 这是 576 里的那个 64 的全部来历。<br>
+        <em>顺带一提，如果它不共享、每个头一份，就要多存 <code>128 × 64 = 8,192</code>，
+        cache 直接从 576 涨到 8,704，MLA 就白做了。</em>
+      </div>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="t">一句诚实的补充：上面那个「合并矩阵」是推理优化，不是模型定义</span>
+    公开的参考实现（HuggingFace 那份 <code>modeling_deepseek.py</code>）
+    <b>是老老实实把 K 和 V 都算出来再做注意力的</b> ——
+    图里画的就是这条路径，因为它才是模型在数学上的定义。<br>
+    <b>「把升维矩阵吸收进 Q / 吸收进 <code>o_proj</code>」是高性能推理引擎才会做的一步等价变形。</b>
+    <em>但正因为要给这一步留出可能性，RoPE 才必须被隔离出去 —— 架构在设计阶段就为它让了路。</em>
+  </div>
+
   <h3>五个投影矩阵，一层多大</h3>
   <div class="tbl-wrap"><table>
     <thead><tr><th>矩阵</th><th>形状</th><th style="text-align:right">参数量</th><th>干什么</th></tr></thead>
@@ -2095,6 +2227,7 @@ function render(first){
     seqLabel: seqH(seq),
     seqRaw:   seq.toLocaleString(),
     tokens:   r.T.toLocaleString(),
+    seqLbl:   seqH(r.seq),
     batch:    batch,
     bytes:    B,
     precLabel:PREC[B],
@@ -2148,7 +2281,7 @@ function render(first){
     });
     prev[k]=s;
   }
-  drawKvLadder(r); drawKvFlare(r);
+  drawKvLadder(r); drawKvFlare(r); drawShapeChain(r);
   drawKvBars(r); drawFlopCurve(r); drawMemStack(r); drawCardGrid(r); drawJourney(r);
 }
 
@@ -2311,6 +2444,135 @@ function drawJourney(r){
   g.appendChild(el("text",{x:324,y:614,class:"svgnum",fill:"#0d652d","font-size":"11.5"},
     "MLA 只存 512 + 64 = 576　—— 少 56.9 倍"));
 })();
+
+/* ── 图：MLA 的完整 shape 变换链 ──
+   从 [T, 7168] 出发，Q / K / V 各自要走几步、每一步之后是什么形状。
+   所有维度都来自 config；只有最左边那个 token 维随控制台的序列长度联动。
+   两处刻意的画法说明（都在 figcaption 里交代了）：
+   ① kv_a_proj 的输出实际是 [c_KV 512 | k_pe 64]，图里把 k_pe 画在左边，
+      纯粹是为了让它和 k_nope 相邻、concat 那一步不用交叉连线；
+   ② 权重形状按 [输入, 输出] 写，跟 config 里的 nn.Linear(in, out) 一致。 */
+function drawShapeChain(r){
+  const g = document.getElementById("shapechain"); if(!g) return;
+  g.textContent = "";
+  const N = seqH(r.seq);
+  const BL="#1a73e8", BLF="#e8f0fe", BLI="#174ea6";
+  const GY="#bdc1c6", GYI="#3c4043";
+  const AM="#f9ab00", AMF="#fef7e0", AMI="#b06000";
+  const GR="#1e8e3e", GRF="#e6f4ea", GRI="#0d652d";
+  const RD="#d93025", RDF="#fce8e6", RDI="#a50e0e";
+  const H = 54, R = [96,174,252,330,408,486,564];
+
+  const blk = (x,w,y,o)=>{
+    const a = {x,y,width:w,height:H,rx:6,fill:o.f||"#fff",
+               stroke:o.s||GY,"stroke-width":o.bw||1.3};
+    if(o.dash) a["stroke-dasharray"]="5 4";
+    g.appendChild(el("rect",a));
+    const cx = x+w/2, ink = o.i||GYI;
+    g.appendChild(el("text",{x:cx,y:y+18,"text-anchor":"middle",class:"svglbl",
+      fill:ink,"font-size":"12.5"}, o.t));
+    if(o.sub) g.appendChild(el("text",{x:cx,y:y+33,"text-anchor":"middle",class:"svgsm"}, o.sub));
+    g.appendChild(el("text",{x:cx,y:o.sub?y+48:y+41,"text-anchor":"middle",class:"svgnum",
+      fill:ink,"font-size":o.of||"12"}, o.o));
+  };
+  const arw = (x1,y1,x2,y2,c,lbl,side)=>{
+    c = c||"#9aa0a6";
+    g.appendChild(el("path",{d:`M${x1} ${y1} L${x2} ${y2-7}`,stroke:c,
+      "stroke-width":1.4,fill:"none"}));
+    g.appendChild(el("path",{d:`M${x2-4.5} ${y2-7} L${x2+4.5} ${y2-7} L${x2} ${y2} Z`,fill:c}));
+    if(lbl) g.appendChild(el("text",{x:(x1+x2)/2+(side===-1?-8:8),y:(y1+y2)/2+4,
+      "text-anchor":side===-1?"end":"start",class:"svgsm",fill:c},lbl));
+  };
+  const vpass = (x,y0,y1,c,lbl)=>{               // 这一段什么都不做，直通
+    const my=(y0+y1)/2;
+    g.appendChild(el("path",{d:`M${x} ${y0} L${x} ${my-11} M${x} ${my+11} L${x} ${y1-7}`,
+      stroke:c,"stroke-width":1.4,"stroke-dasharray":"4 4",fill:"none"}));
+    g.appendChild(el("path",{d:`M${x-4.5} ${y1-7} L${x+4.5} ${y1-7} L${x} ${y1} Z`,fill:c}));
+    g.appendChild(el("text",{x,y:my+4,"text-anchor":"middle",class:"svgsm",fill:c},lbl));
+  };
+
+  /* 入口：这一层的残差流 */
+  blk(400,200,14,{t:"hidden_states",sub:"这一层的输入（残差流）",
+    o:`[${N}, 7168]`,s:"#5f6368",bw:1.8,i:"#202124"});
+  arw(450,68,200,R[0]); arw(550,68,695,R[0]);
+
+  g.appendChild(el("text",{x:40,y:88,class:"svglbl",fill:BLI,"font-size":"13"},
+    "① Q 路"));
+  g.appendChild(el("text",{x:960,y:88,"text-anchor":"end",class:"svglbl",fill:GRI,
+    "font-size":"13"},"② KV 路　—— 压成 576 存起来，用的时候再升回来"));
+
+  /* ── Q 路 ── */
+  const QL=40, QR=360, QW=320, QA=[40,154], QB=[206,154];
+  blk(QL,QW,R[0],{t:"q_a_proj",sub:"权重 7,168 × 1,536",o:`[${N}, 1536]`,f:BLF,s:BL,i:BLI});
+  blk(QL,QW,R[1],{t:"q_a_layernorm",sub:"RMSNorm(1536)",o:`[${N}, 1536]`});
+  blk(QL,QW,R[2],{t:"q_b_proj",sub:"权重 1,536 × 24,576",o:`[${N}, 24576]`,f:BLF,s:BL,i:BLI});
+  blk(QL,QW,R[3],{t:"view　拆成 128 个头",sub:"24,576 = 128 × 192",o:`[${N}, 128, 192]`});
+  blk(QA[0],QA[1],R[4],{t:"q_nope",sub:"每头前 128 维",o:`[${N}, 128, 128]`,of:"11"});
+  blk(QB[0],QB[1],R[4],{t:"q_pe",sub:"每头后 64 维",o:`[${N}, 128, 64]`,of:"11",f:AMF,s:AM,i:AMI});
+  blk(QB[0],QB[1],R[5],{t:"RoPE ↻",sub:"按 token 位置旋转",o:`[${N}, 128, 64]`,of:"11",
+    f:AMF,s:AM,i:AMI,bw:1.8});
+  blk(QL,QW,R[6],{t:"concat　128 + 64",o:`query_states　[${N}, 128, 192]`,of:"12.5",
+    f:BLF,s:BL,i:BLI,bw:2.6});
+  for(let i=0;i<3;i++) arw(200,R[i]+H,200,R[i+1]);
+  arw(160,R[3]+H,117,R[4],"#9aa0a6","切 128",-1);
+  arw(240,R[3]+H,283,R[4],AM,"切 64");
+  arw(283,R[4]+H,283,R[5],AM);
+  vpass(117,R[4]+H,R[6],"#9aa0a6","不转");
+  arw(283,R[5]+H,283,R[6],AM);
+
+  /* ── KV 路 ── */
+  const PL=430, PW=166, CL=608, CW=352;          // k_pe 列 / c_KV 列
+  const KN=[608,176], VV=[796,164];
+  blk(PL,530,R[0],{t:"kv_a_proj_with_mqa",sub:"权重 7,168 × 576",o:`[${N}, 576]`,
+    f:BLF,s:BL,i:BLI});
+  g.appendChild(el("rect",{x:424,y:166,width:542,height:70,rx:10,fill:"none",
+    stroke:AM,"stroke-width":2,"stroke-dasharray":"6 4"}));
+  blk(PL,PW,R[1],{t:"⭐ k_pe",sub:"后 64 维 · 只有 1 个头",o:`[${N}, 1, 64]`,of:"11",
+    f:AMF,s:AM,i:AMI});
+  blk(CL,CW,R[1],{t:"⭐ c_KV　压缩后的潜向量",sub:"前 512 维",o:`[${N}, 512]`,
+    f:AMF,s:AM,i:AMI});
+  arw(513,R[0]+H,513,R[1],AM);      // 分支说明写在两个方块的副标题里，
+  arw(784,R[0]+H,784,R[1],AM);      // 这里不再挂标签，免得压到金色虚线框
+  blk(PL,PW,R[2],{t:"RoPE ↻",sub:"按 token 位置旋转",o:`[${N}, 1, 64]`,of:"11",
+    f:AMF,s:AM,i:AMI,bw:1.8});
+  blk(CL,CW,R[2],{t:"kv_a_layernorm",sub:"RMSNorm(512)",o:`[${N}, 512]`});
+  blk(PL,PW,R[3],{t:"broadcast → 128 头",sub:"同一份复制给每个头",o:`[${N}, 128, 64]`,of:"11",
+    f:AMF,s:AM,i:AMI,dash:true});
+  blk(CL,CW,R[3],{t:"kv_b_proj",sub:"权重 512 × 32,768",o:`[${N}, 32768]`,f:BLF,s:BL,i:BLI});
+  blk(CL,CW,R[4],{t:"view　拆成 128 个头",sub:"32,768 = 128 × 256",o:`[${N}, 128, 256]`});
+  blk(KN[0],KN[1],R[5],{t:"k_nope",sub:"每头前 128 维",o:`[${N}, 128, 128]`,of:"11"});
+  blk(VV[0],VV[1],R[5],{t:"value",sub:"每头后 128 维",o:`[${N}, 128, 128]`,of:"11",
+    f:GRF,s:GR,i:GRI});
+  blk(PL,784-PL,R[6],{t:"concat　128 + 64",o:`key_states　[${N}, 128, 192]`,of:"12.5",
+    f:BLF,s:BL,i:BLI,bw:2.6});
+  blk(VV[0],VV[1],R[6],{t:"value_states",sub:"不拼 RoPE",o:`[${N}, 128, 128]`,of:"11",
+    f:GRF,s:GR,i:GRI,bw:2.6});
+  arw(513,R[1]+H,513,R[2],AM); arw(513,R[2]+H,513,R[3],AM);
+  arw(784,R[1]+H,784,R[2]); arw(784,R[2]+H,784,R[3],BL); arw(784,R[3]+H,784,R[4],BL);
+  arw(740,R[4]+H,696,R[5],"#9aa0a6","切 128",-1);
+  arw(830,R[4]+H,878,R[5],GR,"切 128");
+  vpass(513,R[3]+H,R[6],AM,"每头都用同一份");
+  arw(696,R[5]+H,696,R[6]);
+  arw(878,R[5]+H,878,R[6],GR);
+
+  /* ── 出口：打分 → 加权求和 → 回到残差流 ── */
+  const F=666;
+  blk(60,410,F,{t:"打分　Q · Kᵀ ÷ √192",sub:"192 = 128 不转 + 64 转过",
+    o:`[128 头, ${N}, ${N}]`,f:RDF,s:RD,i:RDI,bw:1.8});
+  blk(500,260,F,{t:"softmax → 加权求和 × V",sub:"再把 128 个头拼起来",
+    o:`[${N}, 16384]`,of:"11.5"});
+  blk(790,170,F,{t:"o_proj",sub:"权重 16,384 × 7,168",o:`[${N}, 7168]`,of:"11.5",
+    f:BLF,s:BL,i:BLI,bw:2.6});
+  arw(200,R[6]+H,200,F,BL); arw(607,R[6]+H,400,F,BL); arw(878,R[6]+H,700,F,GR);
+  g.appendChild(el("path",{d:`M470 ${F+H/2} L493 ${F+H/2}`,stroke:"#9aa0a6","stroke-width":1.4}));
+  g.appendChild(el("path",{d:`M493 ${F+H/2-4.5} L500 ${F+H/2} L493 ${F+H/2+4.5} Z`,fill:"#9aa0a6"}));
+  g.appendChild(el("path",{d:`M760 ${F+H/2} L783 ${F+H/2}`,stroke:"#9aa0a6","stroke-width":1.4}));
+  g.appendChild(el("path",{d:`M783 ${F+H/2-4.5} L790 ${F+H/2} L783 ${F+H/2+4.5} Z`,fill:"#9aa0a6"}));
+  g.appendChild(el("text",{x:265,y:F+H+20,"text-anchor":"middle",class:"svgsm",fill:RDI},
+    "⚠️ 这一块就是那个平方项 —— 它不进 cache，但要占显存"));
+  g.appendChild(el("text",{x:875,y:F+H+20,"text-anchor":"middle",class:"svgsm",fill:BLI},
+    "回到残差流的宽度，交给 MoE"));
+}
 
 /* ── 图 0b：账是怎么堆起来的（对数阶梯） ──
    一个 token 一层 → ×61 层 → ×T 个 token。跨度近 800 万倍，
