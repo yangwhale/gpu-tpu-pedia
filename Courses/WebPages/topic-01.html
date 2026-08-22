@@ -2322,6 +2322,115 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 <span class="c">// × 58 层 =</span> <span class="r" data-v="a2aAll">1.59 TiB</span>  <span class="c">← 一次前向要搬这么多</span></div>
   <p>把它跟这一层的计算量放一起，就得到<b>通信/计算比</b> ——
   这个比值决定了通信能不能被计算盖住。<b>它是专题七性能工程那一课的地基。</b></p>
+
+  <!-- 上面那个 28.00 GiB 是一个点，这张图是那个点所在的整条线。
+       两条线的斜率不同（1 和 0），所以必然相交 —— 「二选一」这件事
+       是从几何上看出来的，不是靠我说「要看场景」。
+       拐点 98,688 = 21.08 GiB ÷ 224 KiB，两个数上面都给了，可以自己除。 -->
+  <h4>⭐ 为什么这是真正的二选一：两条斜率不同的线</h4>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 430" role="img"
+       aria-label="双对数图：方案 A 的通信量随 token 数线性增长，方案 B 是一条水平线，两条线在约 98,688 个 token 处相交">
+    <defs>
+      <marker id="arx" markerWidth="8" markerHeight="8" refX="6" refY="2.6" orient="auto">
+        <path d="M0,0 L0,5.2 L6,2.6 z" fill="#5f6368"/></marker>
+    </defs>
+
+    <!-- 纵向网格：token 数 1 / 10 / … / 10M -->
+    <g stroke="#eceff1" stroke-width="1">
+      <path d="M110 40 V330"/><path d="M227 40 V330"/><path d="M344 40 V330"/>
+      <path d="M462 40 V330"/><path d="M579 40 V330"/><path d="M696 40 V330"/>
+      <path d="M813 40 V330"/><path d="M930 40 V330"/>
+    </g>
+    <!-- 横向网格：1 MiB / 1 GiB / 1 TiB -->
+    <g stroke="#eceff1" stroke-width="1">
+      <path d="M110 329 H930"/><path d="M110 204 H930"/><path d="M110 80 H930"/>
+    </g>
+
+    <!-- 坐标轴 -->
+    <path d="M110 330 H938" stroke="#9aa0a6" stroke-width="1.4" marker-end="url(#arx)"/>
+    <path d="M110 330 V34" stroke="#9aa0a6" stroke-width="1.4" marker-end="url(#arx)"/>
+    <g class="svgsm" fill="#5f6368" text-anchor="middle">
+      <text x="110" y="348">1</text><text x="227" y="348">10</text>
+      <text x="344" y="348">100</text><text x="462" y="348">1K</text>
+      <text x="579" y="348">10K</text><text x="696" y="348">100K</text>
+      <text x="813" y="348">1M</text><text x="930" y="348">10M</text>
+    </g>
+    <text x="524" y="370" text-anchor="middle" class="svgsm" fill="#5f6368">
+      一个 step / 一次前向里的 token 数（对数）</text>
+    <g class="svgsm" fill="#5f6368" text-anchor="end">
+      <text x="104" y="333">1 MiB</text><text x="104" y="208">1 GiB</text><text x="104" y="84">1 TiB</text>
+    </g>
+    <text x="30" y="190" class="svgsm" fill="#5f6368" transform="rotate(-90 30 190)"
+          text-anchor="middle">一层的通信量（对数）</text>
+
+    <!-- 方案 B：水平线，跟 token 数无关 -->
+    <path d="M110 150 H930" stroke="#1e8e3e" stroke-width="3"/>
+    <text x="120" y="140" class="svglbl" fill="#0d652d">方案 B · 挪权重</text>
+    <text x="120" y="176" class="svgsm" fill="#0d652d">
+      21.08 GiB —— 水平线，跟 token 数<tspan font-weight="700">完全无关</tspan></text>
+
+    <!-- 方案 A：斜率 1 -->
+    <path d="M185 330 L930 66" stroke="#1a73e8" stroke-width="3"/>
+    <!-- ⚠ 这张图所有文字标注都必须整体落在斜线的同一侧。斜线是斜的，
+         横排文字只要跨过它就必然被穿过 —— 排版时按 y = 330 − (x−185)/745 × 264
+         把标签两端的线高都算出来再放，别只看中点。 -->
+    <text x="620" y="262" text-anchor="end" class="svglbl" fill="#174ea6">方案 A · 挪 token</text>
+    <text x="620" y="282" text-anchor="end" class="svgsm" fill="#174ea6">
+      每个 token 224 KiB —— 线性增长</text>
+
+    <!-- 拐点 -->
+    <circle cx="696" cy="150" r="7" fill="#fff" stroke="#a50e0e" stroke-width="2.6"/>
+    <path d="M696 150 V330" stroke="#a50e0e" stroke-width="1.3" stroke-dasharray="4 4"/>
+    <text x="686" y="126" text-anchor="end" class="svgnum" font-size="15" fill="#a50e0e">拐点 ≈ 98,688 token</text>
+    <text x="686" y="144" text-anchor="end" class="svgsm" fill="#a50e0e">21.08 GiB ÷ 224 KiB</text>
+
+    <!-- 三个真实工况的落点 -->
+    <circle cx="322" cy="282" r="5" fill="#1a73e8"/>
+    <path d="M324 287 L334 297" stroke="#9aa0a6" stroke-width="1"/>
+    <text x="338" y="304" class="svgsm" fill="#174ea6">decode 一步（几十个 token）<tspan
+      fill="#5f6368"> → 远在拐点左边，挪 token</tspan></text>
+
+    <circle cx="709" cy="144" r="4.5" fill="#1a73e8"/>
+    <path d="M712 148 L738 198" stroke="#9aa0a6" stroke-width="1"/>
+    <text x="744" y="212" class="svgsm" fill="#174ea6">一次 128K prefill = 131,072 token</text>
+    <text x="744" y="230" class="svgsm" fill="#5f6368">28.00 GiB —— 刚过拐点</text>
+
+    <circle cx="886" cy="82" r="5" fill="#1a73e8"/>
+    <path d="M884 77 L876 66" stroke="#9aa0a6" stroke-width="1"/>
+    <text x="890" y="58" text-anchor="end" class="svgsm" fill="#174ea6">训练一个 step（百万级 token）<tspan
+      fill="#5f6368"> → 远在右边，挪权重</tspan></text>
+
+    <!-- 拐点会移动 -->
+    <path d="M706 314 H840" stroke="#f9ab00" stroke-width="2.4" marker-end="url(#arx)"/>
+    <text x="706" y="306" class="svgsm" fill="#7a5900">
+      专家摊在更多卡上 → A 被分摊 → 拐点往右移</text>
+
+    <text x="524" y="400" text-anchor="middle" class="svgsm" fill="#5f6368">
+      粗口径：只比「每层要搬多少字节」，没算 all-to-all 和 all-gather 的效率差异</text>
+  </svg>
+  <figcaption><b>两条线的斜率不一样（1 和 0），所以它们一定相交 ——
+  「要看场景」这句话，是从几何上看出来的，不是一句和稀泥。</b>
+  拐点两边分别住着推理 decode 和训练，这就是为什么这两件事在这道题上
+  给出了<b>相反</b>的答案。</figcaption>
+  </figure>
+
+  <div class="note info">
+    <span class="t">拐点那个数是怎么来的，两步就能自己验</span>
+    <div class="eq"><span class="c">// A：每个 token 每层要搬的字节（送去 + 送回）</span>
+2 × 8 份 × 7,168 × 2 B          = <span class="r">224 KiB</span>
+<span class="c">// B：一层专家权重（256 路由 + 1 共享，三矩阵 SwiGLU）</span>
+257 × 3 × 7,168 × 2,048 × 2 B   = <span class="r">21.08 GiB</span>
+<span class="c">// 相等时的 token 数</span>
+21.08 GiB ÷ 224 KiB             = <span class="r">98,688</span></div>
+    <b>要留意的边界</b>：这是把两者都简化成「每层要搬多少字节」来比的
+    <b>粗口径</b>。<em>真实系统里 all-to-all 和 all-gather 的效率不一样，
+    还要看专家摊在几张卡上 —— 摊得越开，A 的量被分摊得越薄，拐点越往右。</em><br>
+    <b>所以不要把 98,688 当成一个工程门槛去用。</b>
+    <em>它的价值在于告诉你「这两个方案在同一个数量级上」——
+    这才是「二选一」成立的前提。</em>
+  </div>
   <p class="lead" style="font-size:15px">顺带提一句名字，不展开：DeepEP（专门优化这个 all-to-all 的通信库）、
   EPLB（专家负载再平衡）、dropless（不丢弃超载 token 的实现）。</p>
 
