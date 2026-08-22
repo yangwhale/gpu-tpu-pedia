@@ -1,0 +1,461 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题一 · 讲义（授课稿）</title>
+<meta property="og:title" content="一个 Token 的一生 · 讲义">
+<meta property="og:description" content="老师的草稿：15 讲的逐字讲稿、该指哪张图、可能被问到什么、别讲什么。">
+<meta property="og:image" content="https://gist.higcp.com/Courses/WebPages/img/og-topic-01.jpg">
+<meta name="theme-color" content="#5f6368">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6; --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea; --purple:#9334e6;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --paper:#fdfcfa; --bg2:#f6f5f2;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:78px}
+body{background:var(--paper);color:var(--ink);
+  font:400 16px/1.8 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--blue)}
+b,strong{font-weight:600}
+code{font:600 .88em/1.4 var(--mono);background:#eeece7;padding:2px 6px;border-radius:4px;
+     color:var(--blue-d);white-space:nowrap}
+
+/* ── 顶栏 + tab ─────────────────────── */
+.top{position:sticky;top:0;z-index:50;background:rgba(253,252,250,.95);
+     backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1240px;margin:0 auto;padding:10px 24px;display:flex;
+         align-items:center;gap:18px;flex-wrap:wrap}
+.top .who{font-size:14px;color:var(--gray);white-space:nowrap}
+.top .who b{color:var(--ink)}
+.tabs{display:flex;gap:4px;background:#eeece7;padding:3px;border-radius:9px}
+.tabs a{font-size:13.5px;font-weight:600;padding:7px 16px;border-radius:7px;
+        text-decoration:none;color:var(--gray)}
+.tabs a.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.tabs a:hover:not(.on){color:var(--ink)}
+.top .meta{margin-left:auto;font:600 12px var(--mono);color:var(--gray2)}
+
+/* ── 布局 ───────────────────────────── */
+.shell{max-width:1240px;margin:0 auto;padding:0 24px;display:grid;
+       grid-template-columns:238px 1fr;gap:44px;align-items:start}
+.side{position:sticky;top:78px;padding:28px 0 40px;max-height:calc(100vh - 78px);overflow-y:auto}
+.side h4{font:700 11px/1 var(--mono);letter-spacing:.12em;color:var(--gray2);
+         text-transform:uppercase;margin:0 0 12px}
+.side ol{list-style:none}
+.side li{margin-bottom:1px}
+.side a{display:flex;gap:9px;padding:6px 10px;border-radius:7px;font-size:13.5px;
+        text-decoration:none;color:var(--gray);line-height:1.45}
+.side a:hover{background:#eeece7;color:var(--ink)}
+.side a.on{background:var(--blue-l);color:var(--blue-d);font-weight:600}
+.side a i{font:700 10.5px/1.5 var(--mono);font-style:normal;color:var(--gray2);flex:0 0 20px}
+.side a.on i{color:var(--blue)}
+.side a.todo{opacity:.5}
+.side .grp{font:700 10.5px/1 var(--mono);letter-spacing:.1em;color:var(--gray2);
+           margin:16px 0 7px;padding-left:10px;text-transform:uppercase}
+main{padding:28px 0 90px;min-width:0}
+
+/* ── 讲次 ───────────────────────────── */
+.lec{border-top:1px solid var(--line);padding:36px 0 12px}
+.lec:first-child{border-top:none;padding-top:8px}
+.lh{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.lh .no{font:700 12px/1 var(--mono);color:#fff;background:var(--ink);
+        border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.lh h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.lh .t{margin-left:auto;font:600 12px var(--mono);color:var(--gray2);
+       background:var(--bg2);padding:5px 11px;border-radius:6px;white-space:nowrap}
+.goal{background:var(--green-l);border-left:4px solid var(--green);border-radius:0 10px 10px 0;
+      padding:14px 18px;margin:16px 0;font-size:16px;line-height:1.7}
+.goal b{color:#0b6b30}
+.goal .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#0b6b30;
+         text-transform:uppercase;margin-bottom:5px}
+
+h3.sec{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--gray2);
+       text-transform:uppercase;margin:26px 0 10px;display:flex;align-items:center;gap:9px}
+h3.sec:after{content:"";flex:1;height:1px;background:var(--line2)}
+
+/* 讲稿 */
+.say{background:#fff;border:1px solid var(--line);border-radius:12px;padding:4px 24px 18px;
+     margin:12px 0;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.say p{margin:14px 0;font-size:16.5px;line-height:1.95}
+.say p:first-child{margin-top:18px}
+.say em{font-style:normal;background:linear-gradient(transparent 62%,#ffe9a8 62%);
+        font-weight:600;padding:0 1px}
+.say .pause{display:block;font:600 12px var(--mono);color:var(--gray2);margin:18px 0;
+            padding-left:2px;letter-spacing:.04em}
+.say .pause:before{content:"⏸ "}
+.say .board{display:block;background:var(--blue-l);border-radius:8px;padding:10px 14px;
+            font-size:14px;color:var(--blue-d);margin:14px 0;line-height:1.7}
+.say .board:before{content:"🖥 屏幕　";font-weight:700}
+
+/* 问答 */
+.qa{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0}
+.qa details{border-top:1px solid var(--line2)}
+.qa details:first-child{border-top:none}
+.qa summary{padding:13px 18px;cursor:pointer;font-size:15px;font-weight:600;
+            list-style:none;display:flex;gap:9px;background:#fff}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary:before{content:"Q";font:700 11px/1.5 var(--mono);color:#fff;background:var(--purple);
+                   border-radius:50%;width:19px;height:19px;text-align:center;flex:0 0 19px;
+                   margin-top:3px}
+.qa summary:hover{background:var(--bg2)}
+.qa .a{padding:2px 18px 16px 46px;font-size:15px;line-height:1.85;color:#3c4043;background:#fff}
+.qa .a p{margin:10px 0}
+
+/* 边界 / 提示 */
+.warn{background:var(--red-l);border-left:4px solid var(--red);border-radius:0 10px 10px 0;
+      padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.warn .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#a50e0e;
+         text-transform:uppercase;margin-bottom:5px}
+.tip{background:var(--yellow-l);border-left:4px solid var(--yellow);border-radius:0 10px 10px 0;
+     padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.tip .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#8a5a00;
+        text-transform:uppercase;margin-bottom:5px}
+
+.num{font-family:var(--mono);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:14px 0}
+th{text-align:left;font-size:11.5px;font-weight:700;color:var(--gray2);letter-spacing:.06em;
+   text-transform:uppercase;padding:9px 12px;border-bottom:2px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.7}
+td.n{font-family:var(--mono);font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+
+.todo-box{border:1px dashed var(--line);border-radius:12px;padding:22px 24px;
+          color:var(--gray);font-size:15px;background:#fff}
+.todo-box b{color:var(--ink)}
+
+.plan{background:var(--bg2);border-radius:14px;padding:24px 26px;margin:0 0 8px}
+.plan h2{font-size:22px;margin-bottom:6px}
+.plan p{font-size:15px;color:var(--gray);margin-bottom:16px}
+.plan table{margin:0}
+.plan td:first-child{width:44px;font:700 11px var(--mono);color:var(--gray2)}
+
+footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);font-size:14px;
+       line-height:1.8;grid-column:1/-1}
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr;gap:0}
+  .side{position:static;max-height:none;padding:18px 0 4px;
+        border-bottom:1px solid var(--line)}
+  .side ol{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .lh h2{font-size:21px}.lh .t{margin-left:0}
+  .say{padding:2px 16px 14px}.say p{font-size:15.5px}
+  .qa .a{padding-left:18px}
+}
+</style>
+</head>
+<body>
+
+<div class="top"><div class="in">
+  <span class="who">专题一 · <b>一个 Token 的一生</b></span>
+  <nav class="tabs">
+    <a href="topic-01.html">课件</a>
+    <a href="topic-01-lecture.html" class="on">讲义</a>
+  </nav>
+  <span class="meta" id="meta">15 讲 · 60 分钟</span>
+</div></div>
+
+<div class="shell">
+
+<aside class="side">
+  <h4>讲次</h4>
+  <ol id="toc">
+    <div class="grp">开场 · 5 分钟</div>
+    <li><a href="#L0"><i>00</i><span>先定尺子：这门课怎么算账</span></a></li>
+    <li><a href="#L1"><i>01</i><span>模型底牌：那张表怎么读</span></a></li>
+    <div class="grp">站 1 · 7 分钟</div>
+    <li><a href="#L2"><i>02</i><span>一个字怎么变成一串数</span></a></li>
+    <div class="grp">站 2 · 15 分钟 ⭐</div>
+    <li><a href="#L3"><i>03</i><span>KV cache 为什么会失控</span></a></li>
+    <li><a href="#L4"><i>04</i><span>三个旋钮，四代方案</span></a></li>
+    <li><a href="#L5"><i>05</i><span>MLA 怎么做的 · RoPE 为什么单独走</span></a></li>
+    <li><a href="#L6"><i>06</i><span>三个爆点：省了多少 · 矩阵多大 · 算力去哪了</span></a></li>
+    <div class="grp">站 3 + 4 · 13 分钟 ⭐</div>
+    <li><a href="#L7"><i>07</i><span>Dense MLP 的四条好性质</span></a></li>
+    <li><a href="#L8"><i>08</i><span>MoE 原理 · 「专家」不是那种专家</span></a></li>
+    <li><a href="#L9"><i>09</i><span>路由：怎么选那 8 个</span></a></li>
+    <li><a href="#L10"><i>10</i><span>挪 token 还是挪权重</span></a></li>
+    <li><a href="#L11"><i>11</i><span>671B 与 37B：山和溪</span></a></li>
+    <div class="grp">站 5 + 6 · 8 分钟</div>
+    <li><a href="#L12"><i>12</i><span>残差流是总线不是管道</span></a></li>
+    <li><a href="#L13"><i>13</i><span>出口：最吓人的临时张量</span></a></li>
+    <div class="grp">收尾 · 12 分钟 ⭐</div>
+    <li><a href="#L14"><i>14</i><span>合账 · 算出来 vs 量出来 · 抛钩子</span></a></li>
+  </ol>
+</aside>
+
+<main>
+
+<div class="plan">
+  <h2>这份讲义怎么用</h2>
+  <p>这是<b>老师的草稿</b>，不是给学员的材料。学员看
+    <a href="topic-01.html">课件</a>，你看这一份。</p>
+  <table>
+    <tbody>
+      <tr><td>🎯</td><td><b>这一讲要留下什么</b>　讲完之后学员脑子里应该剩的那一句话。
+        <b>只有一句</b> —— 讲散了就是没讲到。</td></tr>
+      <tr><td>🗣</td><td><b>讲稿</b>　接近逐字，可以照着念。<em>黄底</em>的是必须说出口的原话，
+        其余可以按自己的语感改。</td></tr>
+      <tr><td>🖥</td><td><b>屏幕</b>　这一段该滚到课件的哪里、要不要动顶上那条滑块。</td></tr>
+      <tr><td>❓</td><td><b>可能被问到</b>　真实会被问的问题 + 答法。答不上来的也写清楚
+        「这个我不确定」比编一个强。</td></tr>
+      <tr><td>⚠️</td><td><b>别讲什么</b>　这一讲最容易跑偏的方向。<b>时间就是被这些吃掉的。</b></td></tr>
+    </tbody>
+  </table>
+</div>
+
+<!-- ═════════ 第 00 讲 ═════════ -->
+<section class="lec" id="L0">
+  <div class="lh"><span class="no">00</span><h2>先定尺子：这门课怎么算账</h2>
+    <span class="t">⏱ 3 分钟</span></div>
+
+  <div class="goal">
+    <span class="k">这一讲要留下什么</span>
+    <b>先定尺子，再量东西，中途不换。</b>
+    学员要接受一件事：这一课不给结论，只算账；而算账之前必须把口径钉死。
+  </div>
+
+  <h3 class="sec">讲稿</h3>
+  <div class="say">
+    <span class="board">课件停在首屏，先不往下滚。</span>
+
+    <p>先说这一课的方法，因为它跟大多数讲大模型的材料不太一样。</p>
+
+    <p>市面上的材料，绝大多数是在给你<b>结论</b> —— 告诉你 MoE 省算力、
+    MLA 省显存、FlashAttention 更快。这些话都对，但它们是<b>听来的</b>。
+    听来的东西有个问题：换一个场景你就不知道它还成不成立。</p>
+
+    <p><em>这一课只做一件事：算账。</em></p>
+
+    <p>具体怎么算？拿 DeepSeek V3 这个真实的模型，让一个 token 从进去到出来走完全程。
+    它每经过一个部件，我们就当场问同样的四个问题 ——
+    这一步的<b>权重</b>有多大、产生的<b>激活</b>有多大、要做多少次<b>乘法</b>，
+    还有第四个，也是最重要的一个：<em>有没有什么东西在这里爆炸。</em></p>
+
+    <p>你会发现，最后那个问题往往才是重点。</p>
+
+    <span class="pause">停一拍。下面这段是这一讲真正的内容。</span>
+
+    <p>但要算账，就得先有尺子。<em>算账最容易出的问题不是算错，是中途换了尺子。</em>
+    所以我们先把口径钉死，后面一路不改。</p>
+
+    <span class="board">滚到「算账口径」那四张卡片。</span>
+
+    <p>五条。第一，<b>序列长度取 128K</b>，也就是十三万一千零七十二个 token ——
+    差不多是一本小书。第二，<b>batch 等于一</b>，先把单独一条算清楚，要乘再乘。
+    第三，<b>精度按 bf16</b>，每个数占两个字节。第四，<b>只算前向，不算反向</b>。
+    第五，参照物是<b>一个 TPU v7 device 的九十四点七四个 GB</b> ——
+    所有算出来的数，最后都要拿它去除一下，不然没有感觉。</p>
+
+    <p>这五条里，最需要解释的是第四条。<em>为什么只算前向？</em></p>
+
+    <span class="pause">这里可以问一句「有人猜到为什么吗」，然后自己答。</span>
+
+    <p>因为<em>前向的账是事实，反向的账掺着决策</em>。</p>
+
+    <p>前向就是一步一步的矩阵乘，每一步多大是确定的，<b>没得选</b>。
+    但反向不一样 —— 你得先决定：算完的中间结果要不要留着、还是等用到时重算；
+    优化器状态放哪张卡；梯度要不要攒几步再更新一次。
+    <b>这些都是策略</b>，不同的人选不同，算出来的数就完全不一样。</p>
+
+    <p>把决策混进事实里，这笔账就说不清了。所以这一课只算
+    <b>所有人都必须付的那部分</b>。反向留到专题三单独讲，那时候我们已经会算账了，
+    再谈策略才谈得动。</p>
+
+    <span class="board">如果台下有人显得不耐烦，直接跳到「先猜一个数」那块互动，
+      让他们先猜完再回来补口径。</span>
+
+    <p>好，尺子立完了。下面从第一站开始 —— 一个字，是怎么变成一串数的。</p>
+  </div>
+
+  <h3 class="sec">可能被问到</h3>
+  <div class="qa">
+    <details><summary>为什么是 128K？不是 4K 或者 1M？</summary>
+      <div class="a">
+        <p><b>因为 128K 是当下的常态，而且它刚好在拐点上。</b>
+        4K 的时候很多问题看不出来 —— 后面会算到，4K 下注意力只吃掉一成算力，
+        一切都很太平。到了 128K，注意力吃掉八成，整个瓶颈换了个地方。</p>
+        <p>而且课件顶上那条滑块随时可以改。<b>讲到关键处当场拖给他们看</b>，
+        比解释十句管用。</p>
+      </div></details>
+    <details><summary>batch 只有 1，是不是太不真实了？</summary>
+      <div class="a">
+        <p><b>是不真实，这是故意的。</b> batch 是一个乘数，
+        它会把每一项都放大同样的倍数，反而让人看不清各项之间的比例。</p>
+        <p>先用 batch=1 把结构看清楚，要看真实场景就把滑块拨到 8 —— 顶上就有。</p>
+      </div></details>
+    <details><summary>bf16 是什么？为什么不用 fp32 或者 fp8？</summary>
+      <div class="a">
+        <p>简单说，<b>bf16 是现在训练和推理的默认精度</b>，一个数两个字节。
+        fp32 是四个字节，精度更高但贵一倍；fp8 是一个字节，更省但有数值风险。</p>
+        <p><b>这一讲不展开</b> —— 精度这件事本身够讲一整课，在专题八。
+        这里只要知道「一个数占两个字节」就够算账了。</p>
+      </div></details>
+    <details><summary>九十四点七四这个数，是怎么来的？</summary>
+      <div class="a">
+        <p>这是<b>一个 TPU v7 device 实际能用的 HBM 容量</b>，
+        是硬件常数，不是我们测出来的。</p>
+        <p>如果有人追问「为什么是这个数、卡内部长什么样」——
+        <b>那正是专题二要讲的，先记下来别展开</b>，这里会把时间吃光。</p>
+      </div></details>
+    <details><summary>那反向大概要多少？能先说个数吗？</summary>
+      <div class="a">
+        <p>可以给一个方向性的答案压住场：<b>算力大约变成三倍，
+        显存里最大的一块其实是优化器状态，比模型本身还大。</b></p>
+        <p>但<b>到此为止，不要展开</b>。这句话的作用是让他们知道「后面有账等着」，
+        不是现在就把专题三讲了。</p>
+      </div></details>
+  </div>
+
+  <h3 class="sec">别讲什么</h3>
+  <div class="warn">
+    <span class="k">这一讲最容易跑偏的三个方向</span>
+    <b>① 别开始讲 Transformer 是什么。</b> 台下如果有人不熟，
+    也是靠后面「跟着 token 走」这条线自然补上的，不要在开场做前置知识扫盲 ——
+    一讲就是十分钟，整节课的节奏全毁。<br>
+    <b>② 别解释 bf16 的位布局。</b> 提一句「两个字节」就走。<br>
+    <b>③ 别在「为什么是 94.74」上停留。</b> 那是专题二。
+  </div>
+  <div class="tip">
+    <span class="k">节奏提示</span>
+    这一讲<b>三分钟必须讲完</b>。它是地基，但地基不是房子 ——
+    学员真正会被抓住的是站 1 那个「还没进第一层，显存已经掉一块」的瞬间。
+    <b>早点走到那儿。</b>
+  </div>
+</section>
+
+<!-- ═════════ 待写的讲次 ═════════ -->
+<section class="lec" id="L1">
+  <div class="lh"><span class="no">01</span><h2>模型底牌：那张表怎么读</h2>
+    <span class="t">⏱ 2 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 要点：不逐行念表，只挑出后面反复要用的四个数
+    —— <code>d=7168</code>、<code>61 层</code>、<code>前 3 层 dense</code>、
+    <code>tie_word_embeddings=false</code>。其余的等用到再回头指。</div>
+</section>
+
+<section class="lec" id="L2">
+  <div class="lh"><span class="no">02</span><h2>一个字怎么变成一串数</h2>
+    <span class="t">⏱ 7 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>还没进第一层，显存已经掉了一块。</b>
+    要讲透「查表」这个动作有多朴素，以及那个张量此后每层都要读写一次。</div>
+</section>
+
+<section class="lec" id="L3">
+  <div class="lh"><span class="no">03</span><h2>KV cache 为什么会失控</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>两个线性相乘就是灾难</b> ——
+    随序列长、随层数长。这一讲要让人自己意识到「这东西非改不可」。</div>
+</section>
+
+<section class="lec" id="L4">
+  <div class="lh"><span class="no">04</span><h2>三个旋钮，四代方案</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>前三代都在「共享」上做文章，MLA 换了思路：压缩。</b></div>
+</section>
+
+<section class="lec" id="L5">
+  <div class="lh"><span class="no">05</span><h2>MLA 怎么做的 · RoPE 为什么必须单独走</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>存 576 个数，用的时候现场展开成 128 个头</b> ——
+    拿算力换显存。RoPE 那一路要讲透「压缩和旋转不能交换次序」。</div>
+</section>
+
+<section class="lec" id="L6">
+  <div class="lh"><span class="no">06</span><h2>三个爆点</h2>
+    <span class="t">⏱ 3 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 三个：省了 57 倍 / 注意力矩阵等于 47 张卡 /
+    128K 下平方项吃掉八成算力。<b>最后那个当场拖滑块演示。</b></div>
+</section>
+
+<section class="lec" id="L7">
+  <div class="lh"><span class="no">07</span><h2>Dense MLP 的四条好性质</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>MoE 省下的算力，是拿这四条性质换的。</b>
+    不先讲清楚这四条，MoE 就变成白捡的便宜了。</div>
+</section>
+
+<section class="lec" id="L8">
+  <div class="lh"><span class="no">08</span><h2>MoE 原理 ·「专家」不是那种专家</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 两个落点：参数量和计算量<b>解耦</b>了；
+    以及那条必须当场纠正的 —— <b>专家不按领域分工。</b></div>
+</section>
+
+<section class="lec" id="L9">
+  <div class="lh"><span class="no">09</span><h2>路由：怎么选那 8 个</h2>
+    <span class="t">⏱ 3 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>分组限制那两个数字跟模型质量无关，
+    是通信逼出来的。</b>这是全课主线最锋利的例证。</div>
+</section>
+
+<section class="lec" id="L10">
+  <div class="lh"><span class="no">10</span><h2>挪 token 还是挪权重</h2>
+    <span class="t">⏱ 2 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>这是真实的二选一，答案取决于场景。</b>
+    训练挪权重划算，推理 decode 挪 token 划算。</div>
+</section>
+
+<section class="lec" id="L11">
+  <div class="lh"><span class="no">11</span><h2>671B 与 37B：山和溪</h2>
+    <span class="t">⏱ 3 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>MoE 省的是算力，不省显存。</b>
+    这一条必须点破，它是全课被误解最多的地方。</div>
+</section>
+
+<section class="lec" id="L12">
+  <div class="lh"><span class="no">12</span><h2>残差流是总线不是管道</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：一条贯穿 61 层的总线，每层从它读、往它写。
+    顺手立住「激活为什么不能全留」这个问题，<b>但不答</b>。</div>
+</section>
+
+<section class="lec" id="L13">
+  <div class="lh"><span class="no">13</span><h2>出口：最吓人的临时张量</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 落点：<b>logits 比整个 MLA 权重还大，
+    而且它是纯临时的。</b>算显存只算权重一定会算错。</div>
+</section>
+
+<section class="lec" id="L14">
+  <div class="lh"><span class="no">14</span><h2>合账 · 算出来 vs 量出来 · 抛钩子</h2>
+    <span class="t">⏱ 12 分钟</span></div>
+  <div class="todo-box"><b>待写。</b> 三段：合账落到「至少 15 张卡」；
+    AOT 那三条实战教训；最后把 94.74 这个数抛给专题二。</div>
+</section>
+
+<footer>
+  <p><b>专题一 · 讲义</b> ｜ <a href="topic-01.html">← 看课件</a> ｜
+    <a href="index.html">课程总纲</a> ｜
+    <a href="https://github.com/yangwhale/gpu-tpu-pedia/tree/main/Courses">GitHub 源</a></p>
+  <p>这是授课草稿，会随着每次试讲不断改。
+    发现哪一讲现场讲不通，<b>直接改这里</b>，别改课件。</p>
+</footer>
+
+</main>
+</div>
+
+<script>
+// 侧栏跟随滚动高亮
+const secs = [...document.querySelectorAll(".lec")];
+const links = new Map([...document.querySelectorAll(".side a")].map(a=>[a.getAttribute("href").slice(1), a]));
+const io = new IntersectionObserver(es=>{
+  es.forEach(e=>{
+    const a = links.get(e.target.id); if(!a) return;
+    if(e.isIntersecting){ links.forEach(x=>x.classList.remove("on")); a.classList.add("on"); }
+  });
+}, {rootMargin:"-78px 0px -70% 0px", threshold:0});
+secs.forEach(s=>io.observe(s));
+// 未写完的讲次淡显
+document.querySelectorAll(".lec").forEach(s=>{
+  if(s.querySelector(".todo-box")) links.get(s.id)?.classList.add("todo");
+});
+// 顶栏统计
+const done = secs.filter(s=>!s.querySelector(".todo-box")).length;
+document.getElementById("meta").textContent = `${secs.length} 讲 · 已写 ${done} · 60 分钟`;
+</script>
+</body>
+</html>

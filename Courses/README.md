@@ -127,7 +127,9 @@
 
 ## 主线
 
-### ① [一个 Token 的一生](专题01-一个-Token-的一生.md)　📖 [**网页版**](https://gist.higcp.com/Courses/WebPages/topic-01.html)
+### ① [一个 Token 的一生](专题01-一个-Token-的一生.md)
+
+📖 [**课件**](https://gist.higcp.com/Courses/WebPages/topic-01.html)　📝 [**讲义（授课稿）**](https://gist.higcp.com/Courses/WebPages/topic-01-lecture.html)
 
 > **不泛讲 Transformer。拆一个真的 ——
 > 跟着一个 token 走完全程，每走一步就把账算一遍。**

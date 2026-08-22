@@ -8,7 +8,9 @@
 > [在线阅读](https://gist.higcp.com/Courses/WebPages/topic-01.html)。
 > 顶部控制台改序列长度 / batch / 精度，**全页数字与所有图实时联动**；
 > 四个场景预设一键切换（短对话 4K / 长文档 128K / 百万上下文 1M / 训练 8×4K）。
-> 本文件是它的大纲与讲课节奏。
+> 📝 **[讲义（授课稿）](https://gist.higcp.com/Courses/WebPages/topic-01-lecture.html)** ——
+> 15 讲，每讲写清：要留下哪一句话、逐字讲稿、屏幕滚到哪、可能被问什么、别讲什么。
+> 本文件是大纲，那一份是上台用的。
 
 ---
 
