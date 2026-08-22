@@ -986,6 +986,70 @@ footer a{text-decoration:none}
     </div>
   </div>
 
+  <h3>⭐ 一个容易想当然的地方：7,168 和 16,384</h3>
+  <p>几乎所有人第一次看这份配置都会做一个心算：<b>7,168 ÷ 128 个头 = 56</b>，
+  于是以为每个头是 56 维。<b>这是错的</b> —— V3 每个头是 <span class="k">128</span> 维，
+  128 个头拼起来是 <span class="k">16,384</span>，<b>是残差流宽度的 2.29 倍</b>。</p>
+
+  <p>会算错，是因为脑子里有一条<b>其实并不存在的约束</b>。</p>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 484" role="img"
+         aria-label="标准 MHA 的等宽直筒与 V3 的中间鼓起，以及 KV cache 与注意力宽度的绑定关系">
+      <g id="widthpipe"></g>
+    </svg>
+    <figcaption>上下两条都是「一层注意力」的横截面。<b>左右两端都是 7,168 —— 残差流的宽度是固定的</b>，
+    差别全在中段。<b>老做法把中段也压成 7,168，V3 让它鼓到 16,384</b>，
+    最后靠 <code>o_proj</code> 收回来。右边是各自要为此付的 KV cache。</figcaption>
+  </figure>
+
+  <div class="grid g2">
+    <div>
+      <h4 style="margin-bottom:8px">那条约束从哪来的</h4>
+      <p>它来自 2017 年 Transformer 原论文的<b>一个选择，不是一条定义</b>。
+      原文第 3.2.2 节把输出投影写成 <code>W^O ∈ R^(h·d_v × d_model)</code> ——
+      <b>形状上这两个数从一开始就不必相等</b>。</p>
+      <p>紧接着那句是：「<em>In this work we employ h = 8 … we use
+      d_k = d_v = d_model/h = 64</em>」。<b>「In this work」四个字说明它是个取值，不是个规律。</b>
+      而给出的理由也写得很直白：</p>
+      <div class="note info">
+        <span class="t">原文给的理由（Vaswani et al., 2017 · arXiv 1706.03762）</span>
+        「<em>Due to the reduced dimension of each head, the total computational cost
+        is similar to that of single-head attention with full dimensionality.</em>」<br>
+        <b>—— 理由是算力预算，不是数学必要。</b>
+      </div>
+      <p>八年下来，这个取值被抄成了直觉。<b>但它从来只是个惯例。</b></p>
+    </div>
+    <div>
+      <h4 style="margin-bottom:8px">V3 为什么敢把它撑开</h4>
+      <p>因为在<b>标准注意力里，把头做宽是要付 cache 的</b>：
+      每 token 每层要存 <code>2 × 头数 × 每头维度</code> 个数 ——
+      <b>头一宽，cache 就跟着线性变大</b>。这两件事是锁在一起的。</p>
+      <p><b>MLA 把这把锁剪断了。</b> MLA 论文里写得很清楚：
+      推理时只需要缓存那个压缩向量，<b>cache 的元素个数是
+      <code>d_c × 层数</code></b> —— 这个式子里<b>没有头数，也没有每头维度</b>。</p>
+      <div class="note ok">
+        <span class="t">于是出现了一个新的自由度</span>
+        <b>注意力想做多宽就做多宽，KV cache 一个字节都不涨。</b>
+        表达力和缓存成本，第一次不再是同一个旋钮。
+      </div>
+      <p class="sub"><b>佐证：</b>MLA 首次出现的 DeepSeek-V2，
+      残差流只有 5,120，注意力内部同样是 128 × 128 = 16,384 ——
+      <b>3.2 倍</b>，比 V3 还激进。<em>（DeepSeek 没有明说这是刻意的因果，
+      但两代都这么配，很难当成巧合。）</em></p>
+    </div>
+  </div>
+
+  <div class="note warn">
+    <span class="t">代价这一栏也要说清楚，别只讲好处</span>
+    <b>撑开是有代价的，只是代价换了个地方付。</b>
+    中段鼓到 2.29 倍，意味着<b>这一层的注意力计算量也跟着涨</b> ——
+    原论文当年设 <code>d_model/h</code> 图的就是省这笔算力。<br>
+    还有 <code>o_proj</code>：它要跨 <b>16,384 → 7,168</b> 这道口子，
+    单矩阵 <b>117.44 M</b>，<b>占一层 MLA 权重的 63%</b>，是一层里最大的一块。
+    <b>下面那张五行表里它为什么最大，答案就在这儿。</b>
+  </div>
+
   <h3>五个投影矩阵，一层多大</h3>
   <div class="tbl-wrap"><table>
     <thead><tr><th>矩阵</th><th>形状</th><th style="text-align:right">参数量</th><th>干什么</th></tr></thead>
@@ -2095,6 +2159,98 @@ function drawJourney(r){
     node.querySelector("[data-j-f]").textContent = c[2] ? flopH(c[2]) : "—";
   });
 }
+
+/* ── 图 0a：残差流宽度 vs 注意力内部宽度 ──
+   静态图。刻意用「元素个数」而不是字节数，跟 MLA 论文的口径一致
+   （论文：the amount of KV cache is measured by the number of elements,
+   regardless of the storage precision），也就不受精度选择影响。 */
+(function drawWidthPipe(){
+  const g = document.getElementById("widthpipe"); if(!g) return;
+  const S = 100/16384, IN = 7168*S;                    // 16,384 → 100px
+  const X1=110, X2=196, X3=250, X4=520, X5=578, X6=664;
+  const rows = [
+    {cy:104, mid:7168,  col:"#9aa0a6", fill:"#f1f3f4", stroke:"#bdc1c6",
+     ttl:"教科书里的默认做法 · 中段和两端一样宽",
+     head:"每头 7,168 ÷ 128 = 56 维", locked:true},
+    {cy:318, mid:16384, col:"#1a73e8", fill:"#e8f0fe", stroke:"#1a73e8",
+     ttl:"DeepSeek V3 实际 · 中段鼓到 2.29 倍",
+     head:"每头 128 维 × 128 个头 = 16,384", locked:false}
+  ];
+
+  rows.forEach(r=>{
+    const cy=r.cy, M=r.mid*S, a=IN/2, b=M/2;
+    // 行标题
+    g.appendChild(el("text",{x:30,y:cy-b-34,class:"svglbl",fill:r.col==="#9aa0a6"?"#5f6368":"#174ea6",
+      "font-size":"15"}, r.ttl));
+
+    // 管道轮廓：两端 7,168，中段 r.mid
+    g.appendChild(el("path",{d:
+      `M${X1} ${cy-a} L${X2} ${cy-a} L${X3} ${cy-b} L${X4} ${cy-b} L${X5} ${cy-a} L${X6} ${cy-a}`+
+      `L${X6} ${cy+a} L${X5} ${cy+a} L${X4} ${cy+b} L${X3} ${cy+b} L${X2} ${cy+a} L${X1} ${cy+a} Z`,
+      fill:r.fill,stroke:r.stroke,"stroke-width":1.4}));
+
+    // 中段：128 个头（示意 16 个格子）
+    const N=16, gw=(X4-X3)/N;
+    for(let i=0;i<N;i++)
+      g.appendChild(el("rect",{x:X3+i*gw+1.5,y:cy-b+3,width:gw-3,height:M-6,rx:1.5,
+        fill:r.col,opacity:i%2?".5":".7"}));
+
+    // 竖直尺寸标注：入口 7,168 / 中段
+    g.appendChild(el("path",{d:`M${X1-19} ${cy-a} L${X1-9} ${cy-a} M${X1-14} ${cy-a} L${X1-14} ${cy+a}`+
+      ` M${X1-19} ${cy+a} L${X1-9} ${cy+a}`,stroke:"#5f6368","stroke-width":1.2,fill:"none"}));
+
+    // 段落说明
+    g.appendChild(el("text",{x:(X1+X2)/2,y:cy+a+17,"text-anchor":"middle",class:"svgsm"},"残差流"));
+    g.appendChild(el("text",{x:(X1+X2)/2,y:cy+a+30,"text-anchor":"middle",class:"svgnum",
+      "font-size":"11"},"7,168"));
+    g.appendChild(el("text",{x:(X3+X4)/2,y:cy-b-13,"text-anchor":"middle",class:"svgsm",
+      fill:r.col==="#9aa0a6"?"#5f6368":"#174ea6"}, r.head));
+    g.appendChild(el("text",{x:(X5+X6)/2,y:cy+a+25,"text-anchor":"middle",class:"svgsm"},
+      "o_proj 收回来"));
+    g.appendChild(el("text",{x:X6+8,y:cy+4,class:"svgnum","font-size":"11",fill:"#5f6368"},"7,168"));
+
+    // 链条：中段宽度 ↔ KV cache
+    const lx=(X3+X4)/2, y0=cy+b+6, y1=cy+b+32;
+    if(r.locked){
+      g.appendChild(el("path",{d:`M${lx} ${y0} L${lx} ${y1}`,stroke:"#d93025","stroke-width":1.8}));
+      [.35,.65].forEach(t=>g.appendChild(el("circle",{cx:lx,cy:y0+(y1-y0)*t,r:3.4,
+        fill:"none",stroke:"#d93025","stroke-width":1.6})));
+
+    } else {
+      g.appendChild(el("path",{d:`M${lx} ${y0} L${lx} ${y0+8} M${lx} ${y1-8} L${lx} ${y1}`,
+        stroke:"#1e8e3e","stroke-width":1.8,"stroke-dasharray":"3 3"}));
+      const my=(y0+y1)/2;
+      g.appendChild(el("path",{d:`M${lx-6} ${my-6} L${lx+6} ${my+6} M${lx+6} ${my-6} L${lx-6} ${my+6}`,
+        stroke:"#1e8e3e","stroke-width":2.2}));
+
+    }
+  });
+
+  // 两行各自的 KV cache 结论框
+  g.appendChild(el("rect",{x:250,y:162,width:430,height:50,rx:6,fill:"#fce8e6",
+    stroke:"#d93025","stroke-width":1.2}));
+  g.appendChild(el("text",{x:268,y:182,class:"svglbl",fill:"#a50e0e"},
+    "锁在一起：头一宽，cache 就跟着涨"));
+  g.appendChild(el("text",{x:268,y:201,class:"svgnum",fill:"#a50e0e","font-size":"12"},
+    "2 × 128 头 × 56 = 14,336 个数 / token / 层"));
+
+  g.appendChild(el("rect",{x:250,y:406,width:430,height:66,rx:6,fill:"#e6f4ea",
+    stroke:"#1e8e3e","stroke-width":1.2}));
+  g.appendChild(el("text",{x:268,y:426,class:"svglbl",fill:"#0d652d"},
+    "这条链断了：cache 跟头数、头宽都无关"));
+  const strike = el("text",{x:268,y:445,class:"svgsm",fill:"#80868b"},
+    "若照老存法 2 × 128 × 128 = 32,768（宽 2.29 倍，cache 也涨 2.29 倍）");
+  strike.setAttribute("text-decoration","line-through");
+  g.appendChild(strike);
+  g.appendChild(el("text",{x:268,y:464,class:"svgnum",fill:"#0d652d","font-size":"12"},
+    "MLA 实际只存 512 + 64 = 576　—— 少 56.9 倍"));
+
+  // 右侧：一句话结论
+  g.appendChild(el("text",{x:726,y:96,class:"svgsm",fill:"#5f6368"},"表达力 与 缓存成本"));
+  g.appendChild(el("text",{x:726,y:112,class:"svglbl",fill:"#5f6368"},"是同一个旋钮"));
+  g.appendChild(el("text",{x:726,y:310,class:"svgsm",fill:"#0d652d"},"表达力 与 缓存成本"));
+  g.appendChild(el("text",{x:726,y:326,class:"svglbl",fill:"#0d652d"},"拆成了两个旋钮"));
+})();
 
 /* ── 图 0b：账是怎么堆起来的（对数阶梯） ──
    一个 token 一层 → ×61 层 → ×T 个 token。跨度近 800 万倍，
