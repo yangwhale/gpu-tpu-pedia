@@ -84,7 +84,12 @@ body.batched [data-v="tokens"]::after{
 .guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
             font-size:16px;line-height:1.75}
 .guess .rev.on{display:block}
-.guess .rev b{color:var(--red)}
+.guess .rev>p>b{color:var(--red)}          /* 只有直属段落的粗体标红，表格和说明框不受影响 */
+.guess .qs{font-size:15px;line-height:1.7;color:var(--gray)}
+.guess .qs b{color:var(--ink)}
+.guess .qs em{font-style:normal;color:var(--gray2);font-size:14px}
+.guess .rvt{font-size:14px;margin:4px 0 14px}
+.guess .rvt b{color:var(--ink)}
 
 /* ── 章节插画带 ───────────────────────── */
 .band{position:relative;height:210px;border-radius:16px;overflow:hidden;margin:0 0 26px;
@@ -431,19 +436,102 @@ footer a{text-decoration:none}
   <div class="guess">
     <h3>开始之前，先猜一个数</h3>
     <p class="q">DeepSeek V3，671B 参数。喂给它一篇 <b>128K token</b> 的长文档，
-      只做一次<b>前向</b>推理（不训练、不反向、batch 只有 1）。<br>
-      这一下，<b>要占多少显存？</b></p>
+      只做一次<b>前向</b>（不训练、不反向、batch 只有 1）。<br>
+      <span class="qs">权重本身占多少，这个不用猜 —— 671B × 2 字节 =
+      <span class="num" data-v="memWeights">1.22 TiB</span>，一乘就出来了。<br>
+      问的是另一半：<b>权重以外，还要多少？</b></span></p>
     <div class="opts">
-      <button data-g="0">约 100 GB</button>
-      <button data-g="1">约 300 GB</button>
-      <button data-g="2">约 700 GB</button>
-      <button data-g="3">1 TB 以上</button>
+      <button data-g="0">约 10 GB</button>
+      <button data-g="1" data-right>约 40 GB</button>
+      <button data-g="2">约 500 GB</button>
+      <button data-g="3">4 TB 以上</button>
     </div>
     <div class="rev" id="rev">
-      <p>答案是 <b>1.23 TiB</b> —— 需要 <b>15 个</b> TPU v7 device 才装得下，
-        而这还<b>没算</b>激活、临时缓冲和优化器状态。</p>
-      <p style="margin-bottom:0">但重点不是这个数字。重点是 ——
-        <b>你能不能自己把它算出来</b>，以及算的过程中会撞见哪些反直觉的东西。
+      <p>答案是 <b><span data-v="nonWeight">41.89 GiB</span></b> ——
+        只有权重的 <b><span data-v="nwShare">3.4%</span></b>。<br>
+        <span class="qs">而另外三个选项<b>每一个都是真数字</b>，只是算的口径不一样 ——
+        这门课要讲的东西，基本都藏在这三个「错」里。</span></p>
+
+      <div class="tbl-wrap"><table class="rvt">
+        <thead><tr><th>选项</th><th>它其实是什么</th><th style="text-align:right">值</th></tr></thead>
+        <tbody>
+          <tr><td>约 10 GB</td><td>只算了 <b>KV cache</b>，忘了激活</td>
+              <td class="n" data-v="kvMla">8.58 GiB</td></tr>
+          <tr class="sum"><td>约 40 GB ✓</td><td>KV cache <b>＋</b> 最胖那一层的激活</td>
+              <td class="n" data-v="nonWeight">41.89 GiB</td></tr>
+          <tr><td>约 500 GB</td><td>KV 如果按 <b>老办法（MHA）</b>存 —— MLA 把它压掉了
+              <span data-v="kvRatio">56.9×</span></td>
+              <td class="n" data-v="kvMha">488.00 GiB</td></tr>
+          <tr><td>4 TB 以上</td><td>把那张<b>注意力分数矩阵</b>整个存下来 ——
+              现实中不会物化它，但它真有这么大</td>
+              <td class="n" data-v="attnMatrix">4.00 TiB</td></tr>
+        </tbody>
+      </table></div>
+
+      <p class="qs" style="margin-bottom:10px"><b>先把两个总被混着说的词分清楚，后面全靠它：</b></p>
+      <div class="grid g2" style="margin-bottom:14px">
+        <div class="note warn" style="margin:0">
+          <span class="t">KV cache＝要留下来的</span>
+          生成第 n+1 个字的时候，<b>还要用前面 n 个字的 K 和 V</b>。
+          所以它的寿命是<b>整段对话</b>，而且<b>随长度线性长大、中途不释放</b>。<br>
+          <b>它跟层数相乘</b> —— 61 层各存各的。
+        </div>
+        <div class="note ok" style="margin:0">
+          <span class="t">激活＝算完就扔的</span>
+          第 3 层的中间结果，进了第 4 层就没用了。寿命是<b>一层之内</b>。<br>
+          <b>所以它不跟层数相乘</b> —— 只看<b>最胖的那一层有多胖</b>。
+          这就是为什么 61 层的模型，激活峰值只有几十 GB。
+        </div>
+      </div>
+      <p class="qs"><b>一句话判据：问「下一个 token 还要不要用它」。</b>
+        要 → KV cache；不要 → 激活。<br>
+        <em>（训练时不一样：激活要留着做反向，于是反过来由激活主导显存。
+        这门课只算前向，所以能把它们干净地分开。）</em></p>
+
+      <p class="qs" style="margin-bottom:8px"><b>这 40 GB 是怎么凑出来的</b>
+        —— 激活不累加，取三个候选峰值里最大的那个：</p>
+      <div class="tbl-wrap"><table class="rvt">
+        <thead><tr><th>峰值出现在哪一步</th><th>里面有什么</th><th style="text-align:right">合计</th></tr></thead>
+        <tbody>
+          <tr><td>MLA 那一层</td><td>KV <span data-v="kvMla">8.58 GiB</span>
+              ＋ Q/K 各 <span data-v="actQ">6.00 GiB</span>
+              ＋ V/输出各 <span data-v="actV">4.00 GiB</span> ＋ 残差流 ×2</td>
+              <td class="n" data-v="peakMla">32.08 GiB</td></tr>
+          <tr><td>MoE 那一层</td><td>KV ＋ dispatch/combine 缓冲
+              <span data-v="a2aLayer">28.00 GiB</span> ＋ 残差流 ×2</td>
+              <td class="n" data-v="peakMoe">40.08 GiB</td></tr>
+          <tr class="sum"><td>出口那一下 ← 最大</td><td>KV ＋ logits
+              <span data-v="logits">31.56 GiB</span> ＋ 残差流</td>
+              <td class="n" data-v="peakHead">41.89 GiB</td></tr>
+        </tbody>
+      </table></div>
+      <p class="qs"><b>最吓人的一项不在注意力，在出口</b> ——
+        那个跟 12.9 万词表相乘出来的 logits，比整段 KV cache 还大三倍多。
+        <em>（这一栏是按「算全部位置的 logits」估的；纯生成时只需要最后一个位置，可以忽略。
+        激活这一侧跟实现关系很大，这里给的是量级，不是精确值。）</em></p>
+
+      <p class="qs" style="margin-bottom:8px"><b>顺带把四代注意力的 KV 摆在一起</b>
+        —— 同样 <span data-v="seqLabel">128K</span>、61 层、bf16：</p>
+      <div class="tbl-wrap"><table class="rvt">
+        <thead><tr><th>存法</th><th>每 token 每层</th><th style="text-align:right">128K 全长</th>
+          <th style="text-align:right">相对 MHA</th></tr></thead>
+        <tbody>
+          <tr><td>MHA · 每头一份</td><td class="n">32,768</td>
+              <td class="n" data-v="kvMha">488.00 GiB</td><td class="n">1×</td></tr>
+          <tr><td>GQA · 8 组</td><td class="n">2,048</td>
+              <td class="n" data-v="kvGqa">30.50 GiB</td><td class="n">16×</td></tr>
+          <tr class="sum"><td>MLA · DeepSeek</td><td class="n">576</td>
+              <td class="n" data-v="kvMla">8.58 GiB</td><td class="n">56.9×</td></tr>
+          <tr><td>MQA · 全部共用</td><td class="n">256</td>
+              <td class="n" data-v="kvMqa">3.81 GiB</td><td class="n">128×</td></tr>
+        </tbody>
+      </table></div>
+      <p class="qs"><b>注意 MLA 落在 GQA 和 MQA 中间，但质量比两个都好</b> ——
+        这是站 2 的主线。<em>（GQA 那行按 Llama 系列常见的 8 组折算，不是 V3 的配置；
+        线性注意力和窗口注意力不在这张表里，它们改的不是「每 token 存多少」而是「存不存」。）</em></p>
+
+      <p style="margin-bottom:0">但重点不是这几个数字。重点是 ——
+        <b>你能不能自己把它们算出来</b>，以及算的过程中会撞见哪些反直觉的东西。
         这一课就干这一件事：跟着一个 token 走完全程，<b>每走一步就把账算一遍</b>。</p>
     </div>
   </div>
@@ -2470,6 +2558,19 @@ function compute(seq, batch, B, causal=true){
   r.memResident = r.memWeights + r.kvMla;
   r.devices     = r.memResident/HBM;
   r.actAll61    = r.embedAct*C.L;
+
+  // ── 权重以外要多少 ──────────────────────────────
+  // 分两类：KV cache 是「要留下来的」，激活是「算完就扔的」。
+  // 激活不累加层数，只看最胖的那一层有多胖 —— 所以取三个候选峰值点的最大值。
+  // 口径：注意力用 FlashAttention（不物化那张分数矩阵）；出口按「算全部位置的 logits」。
+  r.actQ     = T*C.H*C.qkDim*B;              // 128 头 × 192
+  r.actV     = T*C.H*C.vDim*B;               // 128 头 × 128
+  r.actResid = r.embedAct;                   // 残差流一份
+  r.peakMla  = r.kvMla + 2*r.actQ + 2*r.actV + 2*r.actResid;   // Q、K、V、注意力输出
+  r.peakMoe  = r.kvMla + r.a2aLayer + 2*r.actResid;            // dispatch + combine 缓冲
+  r.peakHead = r.kvMla + r.logits + r.actResid;                // 出口那一下
+  r.nonWeight= Math.max(r.peakMla, r.peakMoe, r.peakHead);
+  r.nwShare  = r.nonWeight / r.memWeights;
   return r;
 }
 
@@ -2533,6 +2634,16 @@ function render(first){
     actAll61:    bytesH(r.actAll61),
     kvMla:    bytesH(r.kvMla),
     kvMha:    bytesH(r.kvMha),
+    kvGqa:    bytesH(r.kvGqa),
+    kvMqa:    bytesH(r.kvMqa),
+    actQ:     bytesH(r.actQ),
+    actV:     bytesH(r.actV),
+    actResid: bytesH(r.actResid),
+    peakMla:  bytesH(r.peakMla),
+    peakMoe:  bytesH(r.peakMoe),
+    peakHead: bytesH(r.peakHead),
+    nonWeight:bytesH(r.nonWeight),
+    nwShare:  (r.nwShare*100).toFixed(1)+"%",
     kvRatio:  r.kvRatio.toFixed(1)+"×",
     kvMhaPerN: r.kvMhaPer.toLocaleString(),
     kvStep1:  bytesH(r.kvStep1),
@@ -3560,7 +3671,7 @@ function drawCardGrid(r){
   box.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
     box.querySelectorAll("button").forEach(x=>x.classList.remove("picked","right"));
     b.classList.add("picked");
-    box.querySelector('[data-g="3"]').classList.add("right");
+    box.querySelector("[data-right]").classList.add("right");
     rev.classList.add("on");
     rev.scrollIntoView({behavior:"smooth", block:"nearest"});
   }));
