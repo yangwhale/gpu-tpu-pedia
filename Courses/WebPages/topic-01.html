@@ -510,6 +510,48 @@ footer a{text-decoration:none}
         <em>（这一栏是按「算全部位置的 logits」估的；纯生成时只需要最后一个位置，可以忽略。
         激活这一侧跟实现关系很大，这里给的是量级，不是精确值。）</em></p>
 
+      <!-- 这两个说明是真实被问出来的：上面那张表里「残差流 ×2」和 logits 的量级
+           是最容易卡住的两处。都是「看着像笔误、其实各有原因」的那类。 -->
+      <p class="qs" style="margin-bottom:10px"><b>上面这张表里，两个最容易卡住的地方：</b></p>
+      <div class="grid g2" style="margin-bottom:14px">
+        <div class="note info" style="margin:0">
+          <span class="t">「×2」出现了三次，是三件不同的事</span>
+          <b>Q/K 各一份</b> —— 两个一样大的张量，都是 128 头 × 192。<br>
+          <b>V/输出各一份</b> —— 也是两个一样大的，都是 128 头 × 128。<br>
+          <b>残差流 ×2 就不一样了。</b> 一层开头先把进来的 x 原样存一份，
+          因为这一层的最后一步是「<b>把它加回去</b>」，扔不得；
+          然后对 x 做一次 layer norm，norm 出来的是<b>另一块内存</b>。
+          于是从 norm 开始到加法做完，两份同时活着，各
+          <span data-v="actResid">1.75 GiB</span>。<br>
+          MoE 那层是同一个结构再来一遍，所以也 ×2；
+          <b>出口那一下没有「加回去」，所以只有一份。</b>
+        </div>
+        <div class="note info" style="margin:0">
+          <span class="t">logits 的量级：两个「位置」不是一回事</span>
+          出口那张 7168 × 129280 的大矩阵，<b>是权重，只有一份</b>
+          （1.73 GiB，已经算在 671B 里了）。<br>
+          但<b>每一个字</b>都要拿自己那 7168 维去乘它一遍，各自拿到 129280 个分数。
+          所以 logits 是一张<b>表</b>，不是一行：<br>
+          <b>竖着</b> <span data-v="tokens">131,072</span> 行（你喂进去的字数）<b>×
+          横着</b> 129,280 列（词表大小）<b>× 2 字节 =</b>
+          <span data-v="logits">31.56 GiB</span>。<br>
+          换个角度看：前面每一层，一个位置只占 7168 个数；<b>到出口这一下变成 129,280 个，
+          胖了 18 倍</b> —— 这就是它能超过整段 KV cache 的原因。<br>
+          <em>（两个数差不多大纯属巧合：一个是文档长度，一个是词表大小，毫无关系。）</em>
+        </div>
+      </div>
+
+      <p class="qs"><b>再顺一个必然会被问到的：那为什么预训练一般用 4K，不用 128K？</b><br>
+        省的<b>不是 logits</b>。logits 只看 <b>token 总数</b>（＝序列长度 × batch），
+        跟序列本身有多长无关 —— 拿默认口径举例：<b>128K × batch 1</b> 和
+        <b>4K × batch 32</b> 都是 131,072 个 token，logits <b>两边都是 31.56 GiB</b>，一模一样。<br>
+        短序列真正省的是<b>注意力</b>：它的代价是 batch × 序列长度<b>的平方</b>。
+        同样这 131,072 个 token，128K 那种切法要付 4K 切法的 <b>32 倍</b>。<br>
+        <em>（V3 的配置文件里 <code>original_max_position_embeddings</code> 是 4096、
+        YaRN 的 <code>factor</code> 是 40，4096 × 40 = 163840 —— 它本体确实是按 4K 训的，
+        128K 是后面扩出来的。另外训练时 logits 通常还要转 fp32 算 cross entropy，再翻一倍，
+        所以现在普遍用分块的 cross entropy：算一段扔一段，不把整张表物化出来。）</em></p>
+
       <p class="qs" style="margin-bottom:8px"><b>顺带把四代注意力的 KV 摆在一起</b>
         —— 同样 <span data-v="seqLabel">128K</span>、61 层、bf16：</p>
       <div class="tbl-wrap"><table class="rvt">
