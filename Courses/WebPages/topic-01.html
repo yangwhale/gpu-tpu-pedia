@@ -1996,6 +1996,103 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   V3 的做法是拎出 1 个共享专家专门装这些，所有 token 都过它；
   路由专家于是可以专心做分工。</p>
 
+  <!-- 这一段是整节的落点。前面所有的「省」都是比例和倍数，只有这一条是**恒等式** ——
+       8 个路由 + 1 个共享，每个 2,048，加起来正好是 dense 的 18,432。
+       图里刻意让九段的总长度和上面那根 dense 条**像素级相等**，
+       所以「一个 FLOP 都不多」是量出来的，不是我说的。 -->
+  <h4>⭐ 一个恰好相等：MoE 那一层，每个 token 的计算量跟 dense 一模一样</h4>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 326" role="img"
+       aria-label="一根 18,432 宽的 dense 中间层，和 8 个路由专家加 1 个共享专家各 2,048 拼起来，两者长度完全相等">
+    <defs>
+      <marker id="armoe" markerWidth="9" markerHeight="9" refX="7" refY="3" orient="auto">
+        <path d="M0,0 L0,6 L7,3 z" fill="#5f6368"/></marker>
+    </defs>
+
+    <!-- 上：dense 一层的中间宽度 -->
+    <text x="150" y="52" text-anchor="end" class="svglbl">Dense MLP</text>
+    <text x="150" y="72" text-anchor="end" class="svgsm">前 3 层</text>
+    <rect x="170" y="34" width="720" height="46" rx="6" fill="#f1f3f4" stroke="#9aa0a6"/>
+    <text x="530" y="63" text-anchor="middle" class="svgnum" font-size="17">中间宽度 18,432</text>
+
+    <!-- 对齐参考线：两端各一条，证明总长真的相等 -->
+    <path d="M170 26 V202" stroke="#d93025" stroke-width="1.4" stroke-dasharray="4 4"/>
+    <path d="M890 26 V202" stroke="#d93025" stroke-width="1.4" stroke-dasharray="4 4"/>
+
+    <!-- 下：8 个路由专家 + 1 个共享专家，每个 2,048 -->
+    <text x="150" y="168" text-anchor="end" class="svglbl">MoE 一层</text>
+    <text x="150" y="188" text-anchor="end" class="svgsm">这个 token 实际走过的</text>
+
+    <!-- 8 段路由，颜色由深到浅只是为了数得清，没有别的含义 -->
+    <g>
+      <rect x="170" y="150" width="76" height="46" rx="5" fill="#1a73e8" opacity="0.92"/>
+      <rect x="250" y="150" width="76" height="46" rx="5" fill="#1a73e8" opacity="0.84"/>
+      <rect x="330" y="150" width="76" height="46" rx="5" fill="#1a73e8" opacity="0.76"/>
+      <rect x="410" y="150" width="76" height="46" rx="5" fill="#1a73e8" opacity="0.68"/>
+      <rect x="490" y="150" width="76" height="46" rx="5" fill="#1a73e8" opacity="0.60"/>
+      <rect x="570" y="150" width="76" height="46" rx="5" fill="#1a73e8" opacity="0.52"/>
+      <rect x="650" y="150" width="76" height="46" rx="5" fill="#1a73e8" opacity="0.44"/>
+      <rect x="730" y="150" width="76" height="46" rx="5" fill="#1a73e8" opacity="0.36"/>
+      <rect x="810" y="150" width="80" height="46" rx="5" fill="#1e8e3e" opacity="0.85"/>
+    </g>
+    <!-- 分组标签放在条**下面**，不压在色块上 ——
+         中间那几段是浅蓝，白字压上去读不出来（第一版就是这么翻的车）。 -->
+    <path d="M170 204 V210 H806 V204" fill="none" stroke="#1a73e8" stroke-width="1.2"/>
+    <text x="488" y="226" text-anchor="middle" class="svgsm" fill="#174ea6" font-weight="700">
+      8 个路由专家 · 每个 2,048</text>
+    <path d="M810 204 V210 H890 V204" fill="none" stroke="#1e8e3e" stroke-width="1.2"/>
+    <text x="850" y="226" text-anchor="middle" class="svgsm" fill="#0d652d" font-weight="700">
+      共享 · 2,048</text>
+
+    <!-- 底部：那 248 个没被碰的 -->
+    <text x="170" y="258" class="svgsm" fill="#80868b">
+      同一层里还躺着另外 248 个路由专家 —— 这个 token 一个都没碰</text>
+
+    <path d="M170 272 H890" stroke="#e8eaed" stroke-width="10" stroke-linecap="round"/>
+    <path d="M170 272 H196" stroke="#5f6368" stroke-width="10" stroke-linecap="round"/>
+    <text x="900" y="276" class="svgsm" fill="#5f6368">9 / 257 = 3.50%</text>
+
+    <text x="530" y="308" text-anchor="middle" class="svgnum" font-size="16" fill="#a50e0e">
+      8 × 2,048 + 1 × 2,048 = 18,432　　两根条一样长，不是画得像，是相等</text>
+  </svg>
+  <figcaption><b>九段拼起来，正好是上面那根 dense 条。</b>
+  中间宽度决定了三个矩阵的大小，所以宽度相等 ⇒ 参数相等 ⇒ 计算量相等 ——
+  <b>MoE 那一层，每个 token 走过的 FLOPs 跟一层普通 dense MLP 一个都不多。</b></figcaption>
+  </figure>
+
+  <div class="note ok">
+    <span class="t">把它写成两行，自己验一遍</span>
+    <div class="eq"><span class="c">// 一层 dense（前 3 层）</span>
+3 × 7,168 × 18,432                = <span class="r">396,361,728</span>
+<span class="c">// 一层 MoE，这个 token 实际激活的 8 + 1 个专家</span>
+9 × 3 × 7,168 × 2,048             = <span class="r">396,361,728</span></div>
+    <b>不是接近，是同一个数。</b> 因为 <code>9 × 2,048 = 18,432</code>，
+    而中间宽度是唯一的变量 —— 三个矩阵的形状全由它定。
+  </div>
+
+  <div class="punch">
+    同一层里躺着 <b>11.32 B</b> 参数，是 dense 层的 <b>28.6 倍</b>；
+    而每个 token 掏出来算的，<b>是同样的 396 M，一个 FLOP 都不多</b>。
+    <small>这就是「参数量和计算量解耦」这句话的字面意思。
+    模型可以一直变大，而每个字的账单不动 ——
+    代价是那多出来的 28 倍必须<b>全程躺在显存里</b>，这一点在 4d 会算清楚。</small>
+  </div>
+
+  <div class="note info">
+    <span class="t">这个相等是怎么来的，说清楚边界</span>
+    <b>可以确定的</b>：<code>9 × 2,048 = 18,432</code> 是恒等式，
+    上面两行算式都来自 V3 公开的 config（<code>intermediate_size</code>、
+    <code>moe_intermediate_size</code>、<code>num_experts_per_tok</code>、
+    <code>n_shared_experts</code>），谁都能自己对一遍。<br>
+    <b>不能确定的</b>：作者是不是<em>为了</em>让它相等才这样挑参数。
+    公开资料里没有这句话。<b>所以讲的时候说「这两个数相等」，别说「他们特意设计成相等」。</b>
+    <br><br>
+    <b>但相等这件事本身很有用</b> —— 它给了一把现成的尺子：
+    <b>凡是 MoE 比 dense 多付出的，都不在 FLOPs 上</b>。
+    路由、通信、负载不均、显存，后面每一条麻烦都能对回这句话。
+  </div>
+
   <h3>4b · 路由：怎么选那 8 个</h3>
   <div class="tbl-wrap"><table>
     <thead><tr><th>设计</th><th>取值</th><th>为什么这么定</th></tr></thead>
