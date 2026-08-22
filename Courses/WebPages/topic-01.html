@@ -651,7 +651,7 @@ footer a{text-decoration:none}
     <div class="card"><h4>精度</h4><div class="stat blue" data-v="precLabel">bf16</div>
       <p class="sub">权重与激活都按 <span class="num" data-v="bytes">2</span> 字节</p></div>
     <div class="card tint"><h4>方向</h4><div class="stat">只算前向</div>
-      <p class="sub">反向与优化器状态留到专题三</p></div>
+      <p class="sub">反向与优化器状态留到专题四</p></div>
   </div>
 
   <div class="note info">
@@ -1713,7 +1713,7 @@ footer a{text-decoration:none}
     128K 下能把这部分算量砍掉一大截。再往后的 V4 更进一步，
     同一个模型里混用<b>三种</b>不同压缩率的注意力。
     <br><br>
-    <b>这些方案长什么样、各自在换什么，是<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9807-%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%BC%94%E8%BF%9B.md">专题七</a>的事。</b>
+    <b>这些方案长什么样、各自在换什么，是<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9803-%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%BC%94%E8%BF%9B.md">专题三</a>的事。</b>
     这一课只负责把「为什么非改不可」算出来 —— 就是上面这条曲线。
   </div>
 </div></section>
@@ -2111,7 +2111,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 2 × <span data-v="tokens">131,072</span> token × 8 份 × 7,168 × <span data-v="bytes">2</span> B = <span class="r" data-v="a2aLayer">28.00 GiB</span>
 <span class="c">// × 58 层 =</span> <span class="r" data-v="a2aAll">1.59 TiB</span>  <span class="c">← 一次前向要搬这么多</span></div>
   <p>把它跟这一层的计算量放一起，就得到<b>通信/计算比</b> ——
-  这个比值决定了通信能不能被计算盖住。<b>它是专题六性能工程那一课的地基。</b></p>
+  这个比值决定了通信能不能被计算盖住。<b>它是专题七性能工程那一课的地基。</b></p>
   <p class="lead" style="font-size:15px">顺带提一句名字，不展开：DeepEP（专门优化这个 all-to-all 的通信库）、
   EPLB（专家负载再平衡）、dropless（不丢弃超载 token 的实现）。</p>
 
@@ -2255,7 +2255,7 @@ x = x + MoE(norm(x))
     残差流每一层进出各一份。如果 61 层的激活<b>全部留着</b>，光这一项就是
     <b><span data-v="actAll61">106.75 GiB</span></b>，已经超过单张卡。
     于是自然冒出一个问题：<b>凭什么要留着？</b>
-    答案在反向传播里 —— 那是<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9803-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题三</a>的事，这里只把问题立住。
+    答案在反向传播里 —— 那是<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题四</a>的事，这里只把问题立住。
   </div>
 
   <h3>题外一眼：mHC —— V4 换了残差结构</h3>
@@ -2315,7 +2315,7 @@ x = x + MoE(norm(x))
           先便宜地猜出接下来两个字，再让主模型<b>一次性验证</b> ——
           猜对了就白赚一个字，猜错了也不亏（跟原来一样重算）</td></tr>
       </tbody></table></div>
-      <p>投机解码为什么划算，得回到<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9805-%E6%8E%A8%E7%90%86.md">专题五</a>那条结论：
+      <p>投机解码为什么划算，得回到<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9806-%E6%8E%A8%E7%90%86.md">专题六</a>那条结论：
       <b>吐字那一段是被带宽卡住的，不是被算力卡住的。</b>
       既然读一遍权重的钱已经付了，顺手多验证一个字几乎是免费的。</p>
     </div>
@@ -2430,12 +2430,12 @@ x = x + MoE(norm(x))
     <span class="t">「假设并行完美无损」这七个字，是整门课的入口</span>
     把活分给 15 张卡，绝不等于快 15 倍 —— 它们要互相传数据、要等最慢的那个、
     要为了省显存重算一部分。<b>那道差距有多大、从哪来、怎么缩小，
-    就是专题四和专题六要回答的。</b>
+    就是专题五和专题七要回答的。</b>
   </div>
 
   <div class="punch">
     到这里，「为什么需要并行」不用讲了 —— <b>它是算出来的结论。</b>
-    <small>怎么并行、沿哪一维切、通信怎么藏，是专题四的事。
+    <small>怎么并行、沿哪一维切、通信怎么藏，是专题五的事。
     这一课的任务只是把「装不下」这个事实<b>算</b>出来，而不是<b>说</b>出来。</small>
   </div>
 </div></section>
@@ -2465,7 +2465,7 @@ x = x + MoE(norm(x))
     <div class="card">
       <h4>② 报出来的数不是全部</h4>
       <p class="sub">它只是<b>临时缓冲</b>，参数和优化器状态是另外一笔
-      （见<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9803-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题三</a>）。</p>
+      （见<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题四</a>）。</p>
       <p class="sub" style="margin-top:10px">而且它<b>不随并行度缩小</b> ——
       切得再宽，临时缓冲该多大还多大。这一点最容易算错。</p>
     </div>
@@ -2486,7 +2486,7 @@ x = x + MoE(norm(x))
 
   <div class="punch dark">
     显存不是模型的属性，是「模型 × 实现 × 编译器」三者的属性。
-    <small>这一条会在<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9806-%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE.md" style="color:#8ab4f8">专题六</a>里反复出现。</small>
+    <small>这一条会在<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9807-%E6%80%A7%E8%83%BD%E8%B0%83%E4%BC%98%E4%B8%8E%E5%B7%A5%E5%85%B7%E9%93%BE.md" style="color:#8ab4f8">专题七</a>里反复出现。</small>
   </div>
 </div></section>
 
@@ -2565,16 +2565,16 @@ x = x + MoE(norm(x))
   <div class="grid g2">
     <div class="card"><h4>反向传播与优化器状态</h4>
       <p class="sub">前向的账是事实，反向的账掺着策略，混讲会讲不清 →
-        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9803-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题三</a></p></div>
+        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题四</a></p></div>
     <div class="card"><h4>并行策略</h4>
       <p class="sub">本专题只负责把「装不下」这个事实算出来 →
-        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%B9%B6%E8%A1%8C%E7%AD%96%E7%95%A5.md">专题四</a></p></div>
+        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9805-%E5%B9%B6%E8%A1%8C%E7%AD%96%E7%95%A5.md">专题五</a></p></div>
     <div class="card"><h4>FP8 训练</h4>
       <p class="sub">V3 的一大贡献，但那是精度与数值的话题 →
         <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9808-%E7%B2%BE%E5%BA%A6%E4%B8%8E%E9%87%8F%E5%8C%96.md">专题八</a></p></div>
     <div class="card"><h4>推理</h4>
       <p class="sub">prefill / decode 的差异、连续批处理 —— 全程按训练的前向算 →
-        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9805-%E6%8E%A8%E7%90%86.md">专题五</a></p></div>
+        <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9806-%E6%8E%A8%E7%90%86.md">专题六</a></p></div>
   </div>
 </div></section>
 

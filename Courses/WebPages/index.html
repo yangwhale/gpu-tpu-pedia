@@ -163,7 +163,7 @@ footer a{color:var(--blue);text-decoration:none}
   <div class="grid g3" style="margin-bottom:16px">
     <div class="card tint"><h4>讲什么</h4><p>大模型和硬件之间的那层关系 —— 模型为什么长这样、它要什么样的机器、为什么要那么多张卡</p></div>
     <div class="card tint"><h4>给谁</h4><p>工作里跟大模型沾边的人 —— <b>写代码的、做产品的、做判断的</b>，都算</p></div>
-    <div class="card tint"><h4>多长</h4><p>13 个专题，<b>每个一小时</b>。分三层：主线 6 个，其余按需</p></div>
+    <div class="card tint"><h4>多长</h4><p>13 个专题，<b>每个一小时</b>。分三层：主线 7 个，其余按需</p></div>
   </div>
   <div class="grid g2" style="margin-bottom:28px">
     <div class="card tint"><h4>怎么学</h4><p>每个专题独立成篇。看得懂就往下走，卡住了回去补前置</p></div>
@@ -254,20 +254,21 @@ footer a{color:var(--blue);text-decoration:none}
       <div class="step"><div class="n">1</div><div class="t"><b>一个 Token 的一生</b><span>一个 token 走完全程，边走边算</span></div></div>
       <div class="arrow">结论：<b>装不进任何一块卡</b></div>
       <div class="step"><div class="n">2</div><div class="t"><b>TPU 与 GPU</b><span>那，卡到底长什么样？</span></div></div>
-      <div class="arrow">于是要问：<b>还有什么没算进去</b></div>
-      <div class="step"><div class="n">3</div><div class="t"><b>反向与优化器</b><span>账还没算完 —— 大头在这儿</span></div></div>
+      <div class="arrow">对上账发现：<b>长上下文里，注意力吃掉了一切</b></div>
+      <div class="step"><div class="n">3</div><div class="t"><b>注意力演进</b><span>那，大家是怎么绕开的？</span></div></div>
+      <div class="arrow">前向到此算清了：<b>还有什么没算进去</b></div>
+      <div class="step"><div class="n">4</div><div class="t"><b>反向与优化器</b><span>账还没算完 —— 大头在这儿</span></div></div>
       <div class="arrow">结论：<b>必须切开</b></div>
-      <div class="step"><div class="n">4</div><div class="t"><b>并行策略</b><span>那，沿哪一维切？</span></div></div>
+      <div class="step"><div class="n">5</div><div class="t"><b>并行策略</b><span>那，沿哪一维切？</span></div></div>
       <div class="arrow">换个场景：<b>整本账重算一遍</b></div>
-      <div class="step"><div class="n">5</div><div class="t"><b>推理</b><span>约束跟训练几乎处处相反</span></div></div>
+      <div class="step"><div class="n">6</div><div class="t"><b>推理</b><span>约束跟训练几乎处处相反</span></div></div>
       <div class="arrow">跑起来了：<b>慢在哪儿？</b></div>
-      <div class="step"><div class="n">6</div><div class="t"><b>性能调优与工具链</b><span>先定位，再动手</span></div></div>
+      <div class="step"><div class="n">7</div><div class="t"><b>性能调优与工具链</b><span>先定位，再动手</span></div></div>
     </div>
     <div class="branch">
       <div>
         <h4>深入 · 按需，任意顺序</h4>
         <ul>
-          <li><span class="k">7</span><a href="#t7">注意力演进</a></li>
           <li><span class="k">8</span><a href="#t8">精度与量化</a></li>
           <li><span class="k">9</span><a href="#t9">最新开源模型对比</a></li>
           <li><span class="k">10</span><a href="#t10">后训练与 RL</a></li>
@@ -298,7 +299,7 @@ footer a{color:var(--blue);text-decoration:none}
     <div class="head"><span class="num">01</span><span class="name">一个 Token 的一生</span><span class="en">Life Cycle of a Token</span></div>
     <div class="quote">不泛讲 Transformer。拆一个真的 —— 跟着一个 token 走完全程，每走一步就把账算一遍。</div>
     <dl>
-      <dt>讲什么</dt><dd>从分词开始，经过 MLA、MoE、61 层堆叠，一直到出口。七站，每站问同样四个问题：权重多大、激活多大、多少算力、<b>有没有什么东西在这里爆炸</b>。</dd>
+      <dt>讲什么</dt><dd>从分词开始，经过 MLA、MoE、61 层堆叠，一直到出口。七步，每步问同样四个问题：权重多大、激活多大、多少算力、<b>有没有什么东西在这里爆炸</b>。</dd>
       <dt>为什么先讲</dt><dd>所有的硬件需求，都是模型的形状决定的。先知道要什么，才谈得上机器怎么给。而且拆一个真实的、当下的模型，比泛讲十个抽象概念有用得多。</dd>
       <dt>垫了什么</dt><dd>一个<b>算出来</b>的结论：它装不进任何一块卡。后面所有的课，都在回答这个结论提出的问题。</dd>
     </dl>
@@ -315,7 +316,17 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="topic main" id="t3">
-    <div class="head"><span class="num">03</span><span class="name">反向与优化器</span></div>
+    <div class="head"><span class="num">03</span><span class="name">注意力演进</span></div>
+    <div class="quote">MLA、GQA、SWA、DSA、线性注意力…… 名词多到像各搞各的。但它们在解同一道题，而且只有三个旋钮可以拧。</div>
+    <dl>
+      <dt>讲什么</dt><dd>先把两条动机分开 —— <b>硬件账</b>（KV cache 会比权重还大，不解决上不了线）和<b>信息账</b>（那张注意力矩阵本来就极其稀疏，算了也是白算）。然后一张表把所有名词收进三个旋钮：<b>每个 token 存多少 · 每个 query 看多少 · 换一套数学</b>。</dd>
+      <dt>为什么排第三</dt><dd>第一课算出过一条曲线：4K 长度时注意力只占 12% 算力，128K 时是 <b>82%</b>，1M 时是 <b>97%</b>。<b>模型一个字没变，只是输入变长，瓶颈就整个换了地方。</b>第一课只负责把「为什么非改不可」算出来 —— 这一课回答「那大家是怎么改的」。紧接着讲，趁账还热。</dd>
+      <dt>垫了什么</dt><dd>后面每一课都要用：并行策略里的序列维怎么切、推理里 prefill 和 decode 为什么瓶颈相反、开源模型对比里那一列「注意力方案」怎么读 —— 都从这三个旋钮长出来。</dd>
+    </dl>
+  </div>
+
+  <div class="topic main" id="t4">
+    <div class="head"><span class="num">04</span><span class="name">反向与优化器</span></div>
     <div class="quote">第一课只算了前向。真实要付的比那多得多 —— 而最大的一块，既不是权重，也不是激活。</div>
     <dl>
       <dt>讲什么</dt><dd>反向要多少算力（答案：让总量变成三倍）。激活为什么不能算完就扔。以及那个出人意料的答案：<b>显存里最大的一块是优化器状态</b>，模型本身反而最小。</dd>
@@ -324,58 +335,53 @@ footer a{color:var(--blue);text-decoration:none}
     </dl>
   </div>
 
-  <div class="topic main" id="t4">
-    <div class="head"><span class="num">04</span><span class="name">并行策略</span></div>
+  <div class="topic main" id="t5">
+    <div class="head"><span class="num">05</span><span class="name">并行策略</span></div>
     <div class="quote">用一种通信，换一份显存或一份算力。选策略，就是在选你愿意付哪一种通信。</div>
     <dl>
       <dt>讲什么</dt><dd>一张按「切哪一维」分类的地图：batch、隐藏维、序列、层、专家、跨数据中心。每一行填四格：通信原语、通信量、<b>频率</b>、代价。</dd>
-      <dt>为什么在这</dt><dd>前三课算出了「装不下」，这一课回答「那怎么切」。</dd>
+      <dt>为什么在这</dt><dd>前面几课算出了「装不下」，这一课回答「那怎么切」。</dd>
       <dt>垫了什么</dt><dd>通信是后面所有性能问题的源头。而且有条规律会反复用到：<b>频率决定一个维度能放在多慢的链路上</b>。</dd>
     </dl>
   </div>
 
-  <div class="topic main" id="t5">
-    <div class="head"><span class="num">05</span><span class="name">推理</span></div>
+  <div class="topic main" id="t6">
+    <div class="head"><span class="num">06</span><span class="name">推理</span></div>
     <div class="quote">训练把模型造出来，推理把它用起来 —— 而这两件事的约束几乎处处相反。</div>
     <dl>
       <dt>讲什么</dt><dd>推理内部是分裂的：吞下 prompt 那一段吃算力，一个字一个字往外吐那一段吃带宽。<b>两个阶段的瓶颈相反</b> —— 推理系统全部的复杂性都从这儿来。以及围着 KV cache 展开的一整套工程。</dd>
-      <dt>为什么在这</dt><dd>大多数人先上推理再上训练。而且它是同一套账在另一个约束下重算一遍 —— 最能检验前四课学扎实没有。</dd>
+      <dt>为什么在这</dt><dd>大多数人先上推理再上训练。而且它是同一套账在另一个约束下重算一遍 —— 最能检验前面几课学扎实没有。</dd>
       <dt>垫了什么</dt><dd>调优、量化、RL 都会回到这一课的两阶段模型。</dd>
     </dl>
   </div>
 
-  <div class="topic main" id="t6">
-    <div class="head"><span class="num">06</span><span class="name">性能调优与工具链</span></div>
+  <div class="topic main" id="t7">
+    <div class="head"><span class="num">07</span><span class="name">性能调优与工具链</span></div>
     <div class="quote">模型跑起来了，MFU 只有 20%。剩下那 80%，去哪了？</div>
     <dl>
       <dt>讲什么</dt><dd>先定位，再动手 —— 顺序不能反。一套判据（屋顶线、算术强度）、一套工具（profile 怎么看）、一个固定的排查顺序，以及手段按代价从低到高排。</dd>
-      <dt>为什么最后</dt><dd>前五课教你算<b>应该多快</b>，这一课教你查<b>为什么没那么快</b>。没有前面那些账，profile 是看不懂的。</dd>
+      <dt>为什么最后</dt><dd>前六课教你算<b>应该多快</b>，这一课教你查<b>为什么没那么快</b>。没有前面那些账，profile 是看不懂的。</dd>
       <dt>垫了什么</dt><dd>主线到此闭环 —— <b>你已经能独立判断一个方案好不好了</b>。</dd>
     </dl>
   </div>
 
   <div class="sechead"><b>深入</b><span>按需 · 任意顺序</span></div>
 
-  <div class="topic opt" id="t7">
-    <div class="head"><span class="num">07</span><span class="name">注意力演进</span><span class="pre">前置 01 · 05</span></div>
-    <div class="quote">MLA、GQA、SWA、DSA、线性注意力…… 名词多到像各搞各的。但它们在解同一道题，而且只有三个旋钮可以拧。</div>
-    <dl><dt>学完能</dt><dd>看到任何一个新变体，立刻说出：它拧的是哪个旋钮、省了什么、赔了什么。</dd></dl>
-  </div>
 
   <div class="topic opt" id="t8">
-    <div class="head"><span class="num">08</span><span class="name">精度与量化</span><span class="pre">前置 03 · 05</span></div>
+    <div class="head"><span class="num">08</span><span class="name">精度与量化</span><span class="pre">前置 04 · 06</span></div>
     <div class="quote">每往下压一档精度，就省一半的显存和带宽。代价是数值上的安全边际 —— 这一课讲这条边界具体在哪。</div>
     <dl><dt>顺带回答</dt><dd>一个反直觉的问题：优化器里那份权重，为什么<b>必须</b>是高精度的。</dd></dl>
   </div>
 
   <div class="topic opt" id="t9">
-    <div class="head"><span class="num">09</span><span class="name">最新开源模型对比</span><span class="pre">前置 01 · 07</span></div>
+    <div class="head"><span class="num">09</span><span class="name">最新开源模型对比</span><span class="pre">前置 01 · 03</span></div>
     <div class="quote">同一张表看完当下所有主流开源模型 —— 哪些设计已经成了定论，哪些还在激烈分叉。</div>
     <dl><dt>怎么读</dt><dd>收敛的照做就行，<b>分叉的才值得深挖</b>。</dd></dl>
   </div>
 
   <div class="topic opt" id="t10">
-    <div class="head"><span class="num">10</span><span class="name">后训练与 RL</span><span class="pre">前置 03 · 05</span></div>
+    <div class="head"><span class="num">10</span><span class="name">后训练与 RL</span><span class="pre">前置 04 · 06</span></div>
     <div class="quote">RL 把推理引擎塞进了训练循环。</div>
     <dl><dt>难点在哪</dt><dd>一套 RL 系统里同时住着训练框架和推理引擎，共享权重、抢同一批卡 —— 所有难点都从这一句话来。</dd></dl>
   </div>
