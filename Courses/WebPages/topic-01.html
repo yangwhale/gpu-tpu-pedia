@@ -786,6 +786,55 @@ footer a{text-decoration:none}
   <p><b>两个线性相乘，就是灾难。</b> 序列从 4K 涨到 128K 是 32 倍，
   再乘 61 层 —— 这就是为什么长上下文一出现，注意力就必须改。</p>
 
+  <p>但「灾难」两个字太虚。<b>把账一步一步堆出来看。</b></p>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 330" role="img"
+         aria-label="KV cache 的账怎么从一个 token 一层堆到全序列全模型">
+      <g id="kvladder"></g>
+    </svg>
+    <figcaption><b>纵轴是对数刻度，每一格是 10 倍</b> —— 必须这样，
+    否则第一根柱子细到看不见。<b>从最左边到最右边，跨了 <span data-v="kvSpan">800 万</span>倍</b>，
+    而中间只做了两件极普通的事：乘层数，乘 token 数。
+    <b>右边那根蓝柱是同一件事换 MLA 来做。</b></figcaption>
+  </figure>
+
+  <div class="grid g3">
+    <div class="card"><h4>① 一个 token，一层</h4>
+      <div class="stat" data-v="kvStep1">64.0 KiB</div>
+      <p class="sub"><span data-v="kvMhaPerN">32,768</span> 个数 ×
+        <span data-v="bytes">2</span> B　<b>微不足道</b></p></div>
+    <div class="card"><h4>② 一个 token，走完 61 层</h4>
+      <div class="stat yellow" data-v="kvStep2">3.81 MiB</div>
+      <p class="sub">× 61　<b>还是不痛不痒</b></p></div>
+    <div class="card tint"><h4>③ <span data-v="tokens">131,072</span> 个 token</h4>
+      <div class="stat red" data-v="kvMha">488.00 GiB</div>
+      <p class="sub">× <span data-v="tokens">131,072</span>　<b>光这一项就占 <span data-v="kvCards">5.2 张卡</span></b></p></div>
+  </div>
+
+  <div class="note danger">
+    <span class="t">最刺眼的一句话，可以直接背下来</span>
+    照这个存法，<b>一段 <span data-v="mhaBreak">23,699</span> 个 token 的对话，
+    光缓存就吃满一整张 TPU v7（94.74 GB）</b> —— 模型权重还一个字节都没放进去，
+    而且这只是<b>一个用户</b>。<br>
+    换成 MLA，同一张卡能撑到 <b><span data-v="mlaBreak">1,348,190</span> 个 token</b>。
+  </div>
+
+  <h3>喇叭口：为什么长上下文一来就绷不住</h3>
+  <p>把序列长度当横轴，KV cache 当纵轴，<b>两种存法各画一条线</b>。
+  两条都是直线 —— 因为都是线性的。<b>但斜率差 <span data-v="kvRatio">56.9×</span>，
+  于是它们从同一个原点出发，越走越张开。</b></p>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 340" role="img"
+         aria-label="KV cache 随序列长度张开的喇叭口，MHA 与 MLA 对比">
+      <g id="kvflare"></g>
+    </svg>
+    <figcaption>横轴序列长度，纵轴 KV cache，<b>两轴都是线性刻度，没有做任何视觉压缩</b>。
+    红色区域就是「换一种存法能省下来的」—— <b>它不是一个固定的数，是一个随长度张开的口子</b>。
+    拖动顶上的滑块，看这个口子怎么撑开。</figcaption>
+  </figure>
+
   <h3>三个旋钮，四代方案</h3>
   <p>所有注意力变体，拧的都是同样几个旋钮。<b>这一代代下来，改的是「每个 token 存多少」。</b></p>
 
@@ -1841,6 +1890,16 @@ function compute(seq, batch, B, causal=true){
   r.kvGqa   = T*C.L*r.kvGqaPer*B;
   r.kvRatio = r.kvMhaPer/r.kvPer;
 
+  // 账是怎么堆起来的：一个 token 一层 → 一个 token 全模型 → 全序列
+  r.kvStep1    = r.kvMhaPer*B;              // 一个 token、一层
+  r.kvStep2    = r.kvStep1*C.L;             // 一个 token、走完 61 层
+  r.kvMlaStep2 = r.kvPer*B*C.L;             // 同上，MLA 版
+  // 撞满单个 device 需要多少 token（KV cache 一项就吃满，不含权重）
+  r.kvSpan   = r.kvMha/r.kvStep1;          // 最左到最右跨了多少倍
+  r.kvCards  = r.kvMha/HBM;                // 光 KV cache 就占几张卡
+  r.mhaBreak = HBM/r.kvStep2;
+  r.mlaBreak = HBM/r.kvMlaStep2;
+
   r.attnMatrix = batch*C.H*seq*seq*B;
 
   const half = causal?0.5:1;
@@ -1881,6 +1940,7 @@ function compute(seq, batch, B, causal=true){
 const bytesH = b => b>=TiB ? (b/TiB).toFixed(2)+" TiB"
                   : b>=GiB ? (b/GiB).toFixed(2)+" GiB"
                   : b>=1048576 ? (b/1048576).toFixed(1)+" MiB"
+                  : b>=1024 ? (b/1024).toFixed(1)+" KiB"
                   : Math.round(b).toLocaleString()+" B";
 const flopH  = f => f>=1e18 ? (f/1e18).toFixed(2)+" EFLOP"
                   : f>=1e15 ? (f/1e15).toFixed(2)+" PFLOP"
@@ -1926,6 +1986,16 @@ function render(first){
     kvMla:    bytesH(r.kvMla),
     kvMha:    bytesH(r.kvMha),
     kvRatio:  r.kvRatio.toFixed(1)+"×",
+    kvMhaPerN: r.kvMhaPer.toLocaleString(),
+    kvStep1:  bytesH(r.kvStep1),
+    kvStep2:  bytesH(r.kvStep2),
+    kvSpan:   r.kvSpan>=1e8 ? (r.kvSpan/1e8).toFixed(1)+" 亿"
+              : r.kvSpan>=1e4 ? (r.kvSpan/1e4).toFixed(0)+" 万"
+              : Math.round(r.kvSpan).toLocaleString(),
+    kvCards:  r.kvCards>=1 ? r.kvCards.toFixed(1)+" 张卡"
+              : "一张卡的 "+(r.kvCards*100).toFixed(0)+"%",
+    mhaBreak: Math.round(r.mhaBreak).toLocaleString(),
+    mlaBreak: Math.round(r.mlaBreak).toLocaleString(),
     attnMatrix: bytesH(r.attnMatrix),
     attnShare:  (r.attnShare*100).toFixed(1)+"%",
     a2aLayer: bytesH(r.a2aLayer),
@@ -1958,6 +2028,7 @@ function render(first){
     });
     prev[k]=s;
   }
+  drawKvLadder(r); drawKvFlare(r);
   drawKvBars(r); drawFlopCurve(r); drawMemStack(r); drawCardGrid(r); drawJourney(r);
 }
 
@@ -2022,6 +2093,157 @@ function drawJourney(r){
     node.querySelector("[data-j-w]").textContent = parH(c[0]);
     node.querySelector("[data-j-m]").textContent = bytesH(c[1]);
     node.querySelector("[data-j-f]").textContent = c[2] ? flopH(c[2]) : "—";
+  });
+}
+
+/* ── 图 0b：账是怎么堆起来的（对数阶梯） ──
+   一个 token 一层 → ×61 层 → ×T 个 token。跨度近 800 万倍，
+   线性刻度第一根柱子会细到看不见，所以纵轴取 log10。 */
+function drawKvLadder(r){
+  const g = document.getElementById("kvladder"); if(!g) return;
+  g.textContent = "";
+  const steps = [
+    ["1 个 token\n1 层",       r.kvStep1, "#f9ab00", `${r.kvMhaPer.toLocaleString()} 个数 × ${r.B} B`],
+    ["1 个 token\n走完 61 层",  r.kvStep2, "#e8710a", "× 61 层"],
+    [`${r.T.toLocaleString()} 个 token\n61 层`, r.kvMha, "#d93025", `× ${r.T.toLocaleString()} token`]
+  ];
+  const Y0 = 262, Y1 = 46, HMAX = Y0-Y1;          // 柱子基线与顶
+  const all = [...steps.map(s=>s[1]), r.kvMla];
+  const lgMin = Math.log10(Math.min(...all)), lgMax = Math.log10(Math.max(...all));
+  const hi  = lgMax + .05, lo = lgMin - (hi-lgMin)*.16;   // 最矮的柱子占约 14% 高
+  const h   = v => Math.max(10, (Math.log10(v)-lo)/(hi-lo)*HMAX);
+
+  const BW = 132, xs = [92, 330, 568];
+  steps.forEach((s,i)=>{
+    const x = xs[i], bh = h(s[1]), y = Y0-bh;
+    g.appendChild(el("rect",{x,y,width:BW,height:bh,rx:4,fill:s[2]}));
+    // 数值贴在柱顶
+    g.appendChild(el("text",{x:x+BW/2,y:y-10,"text-anchor":"middle",class:"svgnum",
+      fill:s[2],"font-size":"16"}, bytesH(s[1])));
+    // 两行标签
+    s[0].split("\n").forEach((t,k)=>
+      g.appendChild(el("text",{x:x+BW/2,y:Y0+20+k*15,"text-anchor":"middle",
+        class:k?"svgsm":"svglbl"}, t)));
+    g.appendChild(el("text",{x:x+BW/2,y:Y0+52,"text-anchor":"middle",class:"svgsm",
+      fill:"#80868b"}, s[3]));
+    // 台阶之间的乘号箭头
+    if(i){
+      const xa = xs[i-1]+BW+10, xb = x-10, ym = Y0-h(steps[i-1][1])-34;
+      g.appendChild(el("path",{d:`M${xa} ${ym} L${xb} ${ym}`,stroke:"#5f6368",
+        "stroke-width":1.4,fill:"none","marker-end":"url(#ar)"}));
+      g.appendChild(el("text",{x:(xa+xb)/2,y:ym-8,"text-anchor":"middle",class:"svgnum",
+        fill:"#202124"}, i===1?"× 61 层":`× ${r.T.toLocaleString()}`));
+    }
+  });
+
+  // 分隔 + MLA 对照柱
+  g.appendChild(el("line",{x1:730,y1:30,x2:730,y2:Y0+58,stroke:"#dadce0",
+    "stroke-dasharray":"4 4"}));
+  const mx = 790, mbh = h(r.kvMla), my = Y0-mbh;
+  g.appendChild(el("rect",{x:mx,y:my,width:BW,height:mbh,rx:4,fill:"#1a73e8"}));
+  g.appendChild(el("text",{x:mx+BW/2,y:my-10,"text-anchor":"middle",class:"svgnum",
+    fill:"#1a73e8","font-size":"16"}, bytesH(r.kvMla)));
+  g.appendChild(el("text",{x:mx+BW/2,y:Y0+20,"text-anchor":"middle",class:"svglbl",
+    fill:"#174ea6"},"同样这些 token"));
+  g.appendChild(el("text",{x:mx+BW/2,y:Y0+35,"text-anchor":"middle",class:"svgsm",
+    fill:"#174ea6"},"改用 MLA 存"));
+  g.appendChild(el("text",{x:mx+BW/2,y:Y0+52,"text-anchor":"middle",class:"svgsm",
+    fill:"#1e8e3e","font-weight":"700"}, `小 ${r.kvRatio.toFixed(1)} 倍`));
+
+  // 单卡容量参照线（横穿全图）
+  if(HBM > Math.min(...all) && HBM < Math.max(...all)*4){
+    const hy = Y0-h(HBM);
+    g.appendChild(el("line",{x1:60,y1:hy,x2:940,y2:hy,stroke:"#d93025",
+      "stroke-dasharray":"6 4","stroke-width":1.2}));
+    g.appendChild(el("text",{x:60,y:hy-8,class:"svgsm",fill:"#d93025"},
+      "单个 TPU v7 device 的全部显存 94.74 GB"));
+  }
+  g.appendChild(el("text",{x:60,y:24,class:"svgsm",fill:"#80868b"},
+    "纵轴：对数刻度（每一格 10 倍）"));
+}
+
+/* ── 图 0c：喇叭口 —— 两条线性直线，斜率差 57 倍 ──
+   两轴都用线性刻度。对数轴上这两条线是平行的（比值恒定），
+   张不开口子，也就讲不出「越长越绷不住」这件事。 */
+function drawKvFlare(r){
+  const g = document.getElementById("kvflare"); if(!g) return;
+  g.textContent = "";
+  const X0=86, X1=938, Y0=272, Y1=34, W=X1-X0, H0=Y0-Y1;
+  const xmax = r.seq*2;                        // 当前长度正好落在中点，刻度也成整数
+  const perTokMha = r.kvStep2*r.batch,         // 每个序列位置的字节数（含 batch）
+        perTokMla = r.kvMlaStep2*r.batch;
+  const ymax = perTokMha*xmax;
+  const px = t => X0 + t/xmax*W;
+  const py = v => Y0 - v/ymax*H0;
+
+  // 坐标轴
+  g.appendChild(el("line",{x1:X0,y1:Y0,x2:X1,y2:Y0,stroke:"#dadce0"}));
+  g.appendChild(el("line",{x1:X0,y1:Y0,x2:X0,y2:Y1-6,stroke:"#dadce0"}));
+  for(let i=1;i<=4;i++){                       // 纵轴刻度
+    const v = ymax*i/4, y = py(v);
+    g.appendChild(el("line",{x1:X0,y1:y,x2:X1,y2:y,stroke:"#f1f3f4"}));
+    const lbl = v>=TiB ? (v/TiB).toFixed(2)+" TiB"
+              : v>=100*GiB ? Math.round(v/GiB)+" GiB" : bytesH(v);
+    g.appendChild(el("text",{x:X0-8,y:y+4,"text-anchor":"end",class:"svgsm"},lbl));
+  }
+  for(let i=1;i<=4;i++){                       // 横轴刻度
+    const t = xmax*i/4, x = px(t);
+    g.appendChild(el("text",{x,y:Y0+18,"text-anchor":"middle",class:"svgsm"}, seqH(t)));
+  }
+  g.appendChild(el("text",{x:(X0+X1)/2,y:Y0+38,"text-anchor":"middle",class:"svgsm",
+    fill:"#5f6368"},"序列长度（token）"));
+
+  // 喇叭口本体：两条直线之间的区域
+  g.appendChild(el("path",{
+    d:`M${X0} ${Y0} L${px(xmax)} ${py(ymax)} L${px(xmax)} ${py(perTokMla*xmax)} Z`,
+    fill:"#fce8e6",opacity:".85"}));
+  g.appendChild(el("path",{d:`M${X0} ${Y0} L${px(xmax)} ${py(ymax)}`,
+    stroke:"#d93025","stroke-width":2.4,fill:"none"}));
+  g.appendChild(el("path",{d:`M${X0} ${Y0} L${px(xmax)} ${py(perTokMla*xmax)}`,
+    stroke:"#1a73e8","stroke-width":2.4,fill:"none"}));
+
+  // 喇叭口中间的说明
+  g.appendChild(el("text",{x:px(xmax*.56),y:py(perTokMha*xmax*.30),class:"svglbl",
+    fill:"#a50e0e"},"这个口子就是「省下来的」"));
+  g.appendChild(el("text",{x:px(xmax*.56),y:py(perTokMha*xmax*.30)+17,class:"svgsm",
+    fill:"#a50e0e"},"它随长度张开 —— 不是一个固定的数"));
+
+  // 两条线的标注
+  g.appendChild(el("text",{x:px(xmax)-6,y:py(ymax)-10,"text-anchor":"end",
+    class:"svglbl",fill:"#d93025"},"MHA · 每头一份"));
+  g.appendChild(el("text",{x:px(xmax)-6,y:py(perTokMla*xmax)-10,"text-anchor":"end",
+    class:"svglbl",fill:"#1a73e8"},"MLA · 压成一个隐向量"));
+
+  // 单卡容量线 + 撞线点
+  const hy = py(HBM);
+  if(hy>Y1 && hy<Y0){
+    const hx2 = X0+W*.70;
+    g.appendChild(el("line",{x1:X0,y1:hy,x2:hx2,y2:hy,stroke:"#d93025",
+      "stroke-dasharray":"6 4","stroke-width":1.2}));
+    g.appendChild(el("text",{x:hx2,y:hy-8,"text-anchor":"end",class:"svgsm",fill:"#d93025"},
+      "单个 device 的全部显存 94.74 GB"));
+    const bt = HBM/perTokMha;                  // MHA 撞线的 token 数
+    if(bt<xmax){
+      const bx = px(bt);
+      g.appendChild(el("line",{x1:bx,y1:hy,x2:bx,y2:Y0,stroke:"#d93025",
+        "stroke-dasharray":"3 3"}));
+      g.appendChild(el("circle",{cx:bx,cy:hy,r:5,fill:"#d93025"}));
+      g.appendChild(el("text",{x:bx+9,y:hy+18,class:"svgnum",fill:"#a50e0e"},
+        `${Math.round(bt).toLocaleString()} token`));
+      g.appendChild(el("text",{x:bx+9,y:hy+33,class:"svgsm",fill:"#a50e0e"},
+        "就吃满一整张卡"));
+    }
+  }
+
+  // 当前选定的序列长度
+  const cx = px(r.seq);
+  g.appendChild(el("line",{x1:cx,y1:Y1-6,x2:cx,y2:Y0,stroke:"#5f6368",
+    "stroke-dasharray":"4 4"}));
+  g.appendChild(el("text",{x:cx,y:Y1-12,"text-anchor":"middle",class:"svgnum"},
+    `现在：${seqH(r.seq)}`));
+  [[perTokMha*r.seq,"#d93025",4,10],[perTokMla*r.seq,"#1a73e8",15,18]].forEach(([v,c,dy,dx])=>{
+    g.appendChild(el("circle",{cx,cy:py(v),r:4.5,fill:c,stroke:"#fff","stroke-width":1.6}));
+    g.appendChild(el("text",{x:cx+dx,y:py(v)+dy,class:"svgnum",fill:c},bytesH(v)));
   });
 }
 
