@@ -1238,6 +1238,170 @@ footer a{text-decoration:none}
     <em>但正因为要给这一步留出可能性，RoPE 才必须被隔离出去 —— 架构在设计阶段就为它让了路。</em>
   </div>
 
+  <h4>④ 顺带回答一个问题：这「128 个头」是真的存在吗</h4>
+  <p>看完上面这条链子，很容易生出一个疑问：<b>从头到尾权重都是几个大矩阵，
+  <code>view</code> 一个数都没动过 —— 那 128 个头是不是只是个记账方式？</b></p>
+  <div class="grid g2">
+    <div>
+      <div class="note ok">
+        <span class="t">在「投影」这一段：是的，纯粹是记账</span>
+        <code>q_b_proj</code> 是<b>一整块</b> 1,536 × 24,576，
+        <code>kv_b_proj</code> 是<b>一整块</b> 512 × 32,768，
+        <code>o_proj</code> 是<b>一整块</b> 16,384 × 7,168。<br>
+        <b>没有 128 个小矩阵，就是三个大的。</b>
+        <code>view</code> / <code>reshape</code> 只是换了个读法，<b>零数据移动、零计算</b>。<br>
+        <em>所谓「第 i 个头的投影矩阵」，就是那块大矩阵里的第 i 段列。</em>
+      </div>
+    </div>
+    <div>
+      <div class="note danger">
+        <span class="t">在「打分」这一段：头是物理的，而且合并不了</span>
+        <b>假如真的不分头</b>，拿完整的 24,576 维 Q 和 K 做一次点积 ——
+        每一对 token 得到<b>一个</b>分数。<br>
+        <b>分成 128 个头</b>，每一对 token 得到 <b>128 个</b>分数，
+        <em>然后各自 softmax、各自加权自己那份 V</em>。<br>
+        <b>这两件事结果完全不同，而且后者写不成一次大矩阵乘</b> ——
+        因为 <b>softmax 是非线性的</b>，它在每个头内部单独做。
+        <em>线性的东西怎么摆都能合并，非线性一旦按组切开，就再也拼不回去。</em>
+      </div>
+    </div>
+  </div>
+  <p>所以准确的说法是：<b>「头」有生命周期。</b>
+  它在 <code>view</code> 那一刻<b>只是拿到一个名字</b>；
+  在<b>打分和 softmax 那一段真正活着</b>；
+  在 <code>o_proj</code> 那一刻<b>死掉</b> —— 那块 16,384 × 7,168 的大矩阵
+  <b>是 128 个头唯一一次互相交换信息的地方</b>。
+  <em>前后两头都是一整块，只有中间那一小段是真的。</em></p>
+  <p class="sub"><b>硬件上也看得出来</b>：投影那几步是又大又规整的矩阵乘，加速器最喜欢；
+  打分那一步是 batch × 128 个小矩阵乘批在一起，
+  <b>算术强度天然低一截 —— 这也是注意力长期是性能瓶颈的原因之一。</b></p>
+
+  <h3>⭐ 凭什么能压这么狠：那个 32,768 从来就不存在</h3>
+  <p><b>56.9 倍听起来像魔术</b>，而魔术总有障眼法。
+  这一节把它拆开 —— <b>拆完你会发现，其中一大半根本不是压缩，是「别犯傻」。</b></p>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 400" role="img"
+         aria-label="56.9 倍拆成两刀：4.57 倍纯冗余 + 12.44 倍真压缩">
+      <g id="twocuts"></g>
+    </svg>
+    <figcaption><b>条长按元素个数线性画。</b>
+    最下面那根只有 12 像素 —— <b>不是画错了，就是这个比例。</b><br>
+    <span class="sub">⚠️ <b>这个「两刀」拆法是本课的推导，论文没有这么写。</b>
+    但两个因子都能自己验算：<code>32,768 ÷ 7,168 = 4.57</code>，
+    <code>7,168 ÷ 576 = 12.44</code>，<code>4.57 × 12.44 = 56.9</code>。</span></figcaption>
+  </figure>
+
+  <h4>第一刀：那 32,768 个数里，只有 7,168 个自由度</h4>
+  <p>标准 MHA 每 token 每层要存 <code>2 × 128 头 × 128 维 = 32,768</code> 个数。
+  <b>但这 32,768 个数是从哪儿来的？</b></p>
+  <p><b>全都是那 7,168 维的输入乘出来的。</b>
+  K 是一个 <code>7,168 × 16,384</code> 的矩阵作用在 <code>h</code> 上，V 也一样。
+  <b>而一个 <code>7,168 × 16,384</code> 的矩阵，秩最多只能是 7,168。</b></p>
+  <div class="note ok">
+    <span class="t">这句话是可以证明的，不是感觉</span>
+    那个 32,768 维的向量，<b>永远只在一个不超过 7,168 维的子空间里打转</b>。<br>
+    <b>所以你只要把那 7,168 个数（也就是输入本身）存下来，
+    就能把 K 和 V 一个 bit 不差地还原出来。</b><br>
+    <em>也就是说：标准存法里，有 4.57 倍是纯冗余 —— 砍掉它不叫压缩，叫别犯傻。</em>
+  </div>
+  <div class="note warn">
+    <span class="t">那为什么以前没人只存输入？</span>
+    <b>因为要重算。</b> 只存 <code>h</code> 的话，
+    <em>每生成一个字，都得把前面所有 token 的 K 和 V 重新乘一遍</em> ——
+    <b>省了显存，赔了算力。</b><br>
+    <b>MLA 真正的贡献，是让这个「重算」几乎不用真的发生</b>（靠矩阵吸收），
+    <em>于是这 4.57 倍才第一次变成可以拿走的。</em>
+  </div>
+
+  <h4>第二刀：把「秩」限制到 576 —— 这才是真压缩</h4>
+  <p>剩下的 <code>7,168 → 576</code>，<b>12.44 倍，这一刀是真的、是有损的。</b>
+  但它压的<b>不是「数」，是「秩」</b>。</p>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 460" role="img"
+         aria-label="MHA 每个头直连 h，秩上限 7168；MLA 所有头共用一条 512 的总线，k_pe 从 h 旁路">
+      <g id="rankbus"></g>
+    </svg>
+    <figcaption><b>把 <code>c_KV</code> 想成一条信息总线。</b>
+    128 个头都挂在这条 512 宽的总线上取数据 ——
+    <b>每个头用自己的矩阵去取，取出来的东西各不相同</b>（头之间的差异性一点没丢），
+    <b>但总线上没有的东西，谁也拿不到</b>。<br>
+    <span class="sub">注意那条金色虚线：<code>k_pe</code> 那 64 维<b>是从 <code>h</code> 直接旁路出去的，
+    不经过总线</b> —— 论文式 (15) 写的就是 <code>k^R = RoPE(W^KR · h)</code>。
+    <b>位置信息不能被压进这条共享总线，原因就是前面那一节讲的矩阵吸收。</b></span></figcaption>
+  </figure>
+
+  <p>所以 MLA 押的赌注可以写成一句话：
+  <b>128 个头真正需要的信息通道，加起来不超过 512 种。</b></p>
+
+  <h4>论文凭什么这么说？—— 它没说，它只给了实验</h4>
+  <div class="note danger">
+    <span class="t">先把话说清楚：这一点上论文是「先做后说」的</span>
+    <b>DeepSeek-V2 论文 2.1.2 节从头到尾没有给任何理论证明</b> ——
+    没有秩分析，没有信息论论证，就是「我们这么做」。
+    <em>上面那套「两刀 / 总线」的解释是本课的推导，不要当成论文的说法。</em><br>
+    <b>论文给的是硬碰硬的消融实验</b>，在附录 D。<b>那份数据才是真正的答案。</b>
+  </div>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>Benchmark</th>
+      <th style="text-align:right">小号 MoE<br>MHA</th><th style="text-align:right">小号 MoE<br>MLA</th>
+      <th style="text-align:right">大号 MoE<br>MHA</th><th style="text-align:right">大号 MoE<br>MLA</th></tr></thead>
+    <tbody>
+      <tr><td>总参数</td><td class="n">15.8 B</td><td class="n">15.7 B</td>
+        <td class="n">250.8 B</td><td class="n">247.4 B</td></tr>
+      <tr><td><b>KV cache / token</b><br><span class="sub">元素个数</span></td>
+        <td class="n">110.6 K</td><td class="n" style="color:#0d652d">15.6 K</td>
+        <td class="n">860.2 K</td><td class="n" style="color:#0d652d"><b>34.6 K</b><br>
+          <span class="sub">= MHA 的 4%</span></td></tr>
+      <tr><td>BBH</td><td class="n">37.9</td><td class="n" style="color:#0d652d">39.0</td>
+        <td class="n">46.6</td><td class="n" style="color:#0d652d"><b>50.7</b></td></tr>
+      <tr><td>MMLU</td><td class="n">48.7</td><td class="n" style="color:#0d652d">50.0</td>
+        <td class="n">57.5</td><td class="n" style="color:#0d652d"><b>59.0</b></td></tr>
+      <tr><td>C-Eval</td><td class="n">51.6</td><td class="n" style="color:#a50e0e">50.9</td>
+        <td class="n">57.9</td><td class="n" style="color:#0d652d"><b>59.2</b></td></tr>
+      <tr><td>CMMLU</td><td class="n">52.3</td><td class="n" style="color:#0d652d">53.4</td>
+        <td class="n">60.7</td><td class="n" style="color:#0d652d"><b>62.5</b></td></tr>
+    </tbody>
+  </table></div>
+  <p class="sub"><b>数据出处：DeepSeek-V2 论文 Table 9。</b>
+  同规模、同架构，<b>只换注意力机制</b>。小号在 1.33T token 上训，大号在 420B token 上训。
+  <b>大号四项全赢，小号三胜一负</b>（C-Eval 51.6 → 50.9，<em>这一格要老实讲出来</em>）。</p>
+
+  <div class="note ok">
+    <span class="t">而且它打败的是最强的那个基线，不是软柿子</span>
+    同一篇论文的 Table 8 先做了另一组对照：<b>7B 稠密模型，MHA vs GQA(8 组) vs MQA</b>。<br>
+    MMLU：<b>MHA 45.2</b> ＞ GQA 41.2 ＞ MQA 37.9；
+    C-Eval：<b>MHA 42.9</b> ＞ GQA 37.7 ＞ MQA 30.0。<br>
+    <b>结论：省 cache 的传统办法（GQA / MQA）是真的会掉质量的。</b>
+    <em>MLA 越过的，是那个「不省 cache、质量最好」的 MHA。</em>
+  </div>
+
+  <h4>最难受的一问：压了 57 倍，质量为什么反而更好？</h4>
+  <div class="note warn">
+    <span class="t">论文没有解释。以下两条是推测，请按推测听</span>
+    <b>推测一 · 低秩瓶颈本身是一种正则化。</b>
+    强迫所有头把信息挤过一个窄口，可能反而逼出更干净、更共享的表示。
+    <em>这个现象在别处也见过，但这里没有对照实验支持。</em><br>
+    <b>推测二 · 省下的预算被花在了别处，所以对比并不是「压缩 vs 不压缩」。</b>
+    MLA 省出来的 cache，让他们敢把注意力内部撑到 <code>128 × 128 = 16,384</code>
+    —— <b>残差流的 2.29 倍</b>。<em>所以真实的对比更像是
+    「窄瓶颈 + 超宽头」对「无瓶颈 + 常规头」。</em><br>
+    <b>不要替 DeepSeek 声称他们没说过的因果。</b>
+    <em>能确定的只有一件事：在他们自己的对照实验里，这笔交易是赚的。</em>
+  </div>
+
+  <div class="note info">
+    <span class="t">最后把 512 这个数字的三重身份收一下</span>
+    它同时决定了三件事，而且是<b>同一个旋钮</b>：<br>
+    <b>① cache 多大</b> —— 存的就是它；<br>
+    <b>② 模型能表达多少</b> —— 从 <code>h</code> 到 K/V 的秩上限就是它；<br>
+    <b>③ 「不用真算 K」那个优化划不划算</b> ——
+    <em>总线越窄，吸收出来的合并矩阵就越小</em>。<br>
+    <b>而 RoPE 那 64 维之所以必须待在总线外面，正是为了保住第 ③ 条。</b>
+  </div>
+
   <h3>五个投影矩阵，一层多大</h3>
   <div class="tbl-wrap"><table>
     <thead><tr><th>矩阵</th><th>形状</th><th style="text-align:right">参数量</th><th>干什么</th></tr></thead>
@@ -2443,6 +2607,151 @@ function drawJourney(r){
   g.appendChild(st);
   g.appendChild(el("text",{x:324,y:614,class:"svgnum",fill:"#0d652d","font-size":"11.5"},
     "MLA 只存 512 + 64 = 576　—— 少 56.9 倍"));
+})();
+
+/* ── 图：56.9 倍是怎么来的 —— 两刀拆开 ──
+   第一刀是纯冗余（可证明无损），第二刀才是真压缩。
+   横向条长度按元素个数线性画，576 那根只有 12 px —— 这个"细到看不见"就是本图要说的话。
+   注意：本图的拆法是本课的推导，论文没有这么写；每一步都能验算。 */
+(function drawTwoCuts(){
+  const g = document.getElementById("twocuts"); if(!g) return;
+  const S = 700/32768, X0 = 210;
+  const W1 = 32768*S, W2 = 7168*S, W3 = 576*S;
+  const Y = [56,170,284], BH = 48;
+
+  // 第一行：标准 MHA 的 32,768，里面只有 7,168 是自由度
+  g.appendChild(el("rect",{x:X0,y:Y[0],width:W2,height:BH,rx:3,
+    fill:"#d2e3fc",stroke:"#1a73e8","stroke-width":1.4}));
+  g.appendChild(el("rect",{x:X0+W2,y:Y[0],width:W1-W2,height:BH,rx:3,
+    fill:"#f1f3f4",stroke:"#bdc1c6","stroke-width":1.2,"stroke-dasharray":"5 4"}));
+  g.appendChild(el("text",{x:X0+W2/2,y:Y[0]+29,"text-anchor":"middle",class:"svgsm",
+    fill:"#174ea6","font-size":"10"},"≤ 7,168 自由度"));
+  g.appendChild(el("text",{x:X0+W2+(W1-W2)/2,y:Y[0]+29,"text-anchor":"middle",class:"svglbl",
+    fill:"#5f6368"},"另外 25,600 个数 —— 全都是那 7,168 乘出来的，一个新信息都没有"));
+
+  // 第二行：只存输入本身
+  g.appendChild(el("rect",{x:X0,y:Y[1],width:W2,height:BH,rx:3,
+    fill:"#d2e3fc",stroke:"#1a73e8","stroke-width":1.6}));
+  g.appendChild(el("text",{x:X0+W2+14,y:Y[1]+29,class:"svglbl",fill:"#174ea6"},
+    "K 和 V 可以一个 bit 不差地还原出来 —— 这一步零损失"));
+
+  // 第三行：MLA 实际存的
+  g.appendChild(el("rect",{x:X0,y:Y[2],width:W3,height:BH,rx:2,
+    fill:"#fef7e0",stroke:"#f9ab00","stroke-width":2}));
+  g.appendChild(el("text",{x:X0+W3+14,y:Y[2]+22,class:"svglbl",fill:"#b06000"},
+    "⭐ c_KV 512 + k_pe 64 —— 整张图里就这么一小条会被缓存"));
+  g.appendChild(el("text",{x:X0+W3+14,y:Y[2]+40,class:"svgsm"},
+    "12 像素不是画错了，就是这个比例"));
+
+  // 左侧行标
+  [["标准 MHA 存法","32,768 个数","#5f6368"],
+   ["只存输入本身","7,168 个数","#174ea6"],
+   ["MLA 实际存","576 个数","#b06000"]].forEach(([a,b,c],i)=>{
+    g.appendChild(el("text",{x:196,y:Y[i]+21,"text-anchor":"end",class:"svglbl",fill:c},a));
+    g.appendChild(el("text",{x:196,y:Y[i]+40,"text-anchor":"end",class:"svgnum",
+      fill:c,"font-size":"13"},b));
+  });
+
+  // 两刀：漏斗 + 说明
+  g.appendChild(el("path",{d:`M${X0} ${Y[0]+BH} L${X0+W1} ${Y[0]+BH} L${X0+W2} ${Y[1]} L${X0} ${Y[1]} Z`,
+    fill:"#f1f3f4",opacity:".85"}));
+  g.appendChild(el("text",{x:X0+340,y:Y[0]+BH+26,class:"svglbl",fill:"#3c4043","font-size":"13"},
+    "第一刀　÷ 4.57"));
+  g.appendChild(el("text",{x:X0+340,y:Y[0]+BH+44,class:"svgsm"},
+    "纯冗余，不是压缩 —— 可以证明，一点信息都没丢"));
+
+  g.appendChild(el("path",{d:`M${X0} ${Y[1]+BH} L${X0+W2} ${Y[1]+BH} L${X0+W3} ${Y[2]} L${X0} ${Y[2]} Z`,
+    fill:"#e8f0fe",opacity:".9"}));
+  g.appendChild(el("text",{x:X0+180,y:Y[1]+BH+26,class:"svglbl",fill:"#174ea6","font-size":"13"},
+    "第二刀　÷ 12.44"));
+  g.appendChild(el("text",{x:X0+180,y:Y[1]+BH+44,class:"svgsm"},
+    "这才是真压缩 —— 从 h 到 K/V 这条映射的秩，被硬性限制在 576"));
+
+  g.appendChild(el("rect",{x:X0,y:352,width:700,height:34,rx:7,fill:"#e6f4ea",
+    stroke:"#1e8e3e","stroke-width":1.2}));
+  g.appendChild(el("text",{x:X0+16,y:374,class:"svgnum",fill:"#0d652d","font-size":"12.5"},
+    "4.57 × 12.44 = 56.9 倍　　（32,768 ÷ 576 = 56.9，对得上）"));
+})();
+
+/* ── 图：秩约束 —— 128 个头共用一条 512 的总线 ──
+   MHA：每个头直接从 h 投影，这条映射的秩上限是 7,168。
+   MLA：所有头必须先过一个 512 的窄口；k_pe 那 64 维是从 h 直接旁路出去的
+        （论文式 15：k^R = RoPE(W^KR · h)，不经过 c_KV）。 */
+(function drawRankBus(){
+  const g = document.getElementById("rankbus"); if(!g) return;
+  const S = 130/7168, HH = 7168*S, BUS = 512*S;      // 512 只有 9.3 px
+  const HX=[50,112], NG=5, GH=20, GP=5, TOT=NG*GH+(NG-1)*GP;
+  const GX=[648,950];
+
+  const heads = (cy,col,fill)=>{
+    for(let i=0;i<NG;i++){
+      const y = cy-TOT/2 + i*(GH+GP);
+      g.appendChild(el("rect",{x:GX[0],y,width:GX[1]-GX[0],height:GH,rx:3,
+        fill,stroke:col,"stroke-width":1}));
+      g.appendChild(el("text",{x:(GX[0]+GX[1])/2,y:y+14,"text-anchor":"middle",
+        class:"svgsm",fill:col},`头 ${i+1}　K 128 ＋ V 128`));
+    }
+    g.appendChild(el("text",{x:(GX[0]+GX[1])/2,y:cy+TOT/2+16,"text-anchor":"middle",
+      class:"svgsm"},"⋮ 共 128 个头（图示 5 个）"));
+  };
+  const hblk = cy=>{
+    g.appendChild(el("rect",{x:HX[0],y:cy-HH/2,width:HX[1]-HX[0],height:HH,rx:3,
+      fill:"#fff",stroke:"#5f6368","stroke-width":1.5}));
+    g.appendChild(el("text",{x:(HX[0]+HX[1])/2,y:cy+4,"text-anchor":"middle",
+      class:"svgnum","font-size":"11"},"7,168"));
+    g.appendChild(el("text",{x:(HX[0]+HX[1])/2,y:cy+HH/2+16,"text-anchor":"middle",
+      class:"svgsm"},"h"));
+  };
+
+  /* ── 上：MHA ── */
+  const c1 = 118;
+  g.appendChild(el("text",{x:50,y:38,class:"svglbl",fill:"#5f6368","font-size":"13"},
+    "标准 MHA　每个头直接从 h 投影 —— 中间没有任何窄口"));
+  hblk(c1);
+  g.appendChild(el("path",{d:`M${HX[1]} ${c1-HH/2} L${GX[0]} ${c1-TOT/2} L${GX[0]} ${c1+TOT/2} L${HX[1]} ${c1+HH/2} Z`,
+    fill:"#f1f3f4",opacity:".8"}));
+  for(let i=0;i<NG;i++){
+    const y = c1-TOT/2 + i*(GH+GP) + GH/2;
+    for(const t of [0,.5,1])
+      g.appendChild(el("path",{d:`M${HX[1]} ${c1-HH/2+HH*t} L${GX[0]} ${y}`,
+        stroke:"#9aa0a6","stroke-width":.6,opacity:".5",fill:"none"}));
+  }
+  heads(c1,"#5f6368","#f8f9fa");
+  g.appendChild(el("text",{x:(HX[1]+GX[0])/2,y:c1+HH/2+18,"text-anchor":"middle",
+    class:"svglbl",fill:"#3c4043"},"秩上限 = 7,168　（中间没有窄口）"));
+
+  /* ── 下：MLA ── */
+  const c2 = 326, BX=[398,498];
+  g.appendChild(el("text",{x:50,y:246,class:"svglbl",fill:"#174ea6","font-size":"13"},
+    "MLA　所有头必须先挤过一条 512 宽的总线"));
+  hblk(c2);
+  g.appendChild(el("path",{d:`M${HX[1]} ${c2-HH/2} L${BX[0]} ${c2-BUS/2} L${BX[0]} ${c2+BUS/2} L${HX[1]} ${c2+HH/2} Z`,
+    fill:"#fef7e0",opacity:".9",stroke:"#f9ab00","stroke-width":.8}));
+  g.appendChild(el("path",{d:`M${BX[1]} ${c2-BUS/2} L${GX[0]} ${c2-TOT/2} L${GX[0]} ${c2+TOT/2} L${BX[1]} ${c2+BUS/2} Z`,
+    fill:"#e8f0fe",opacity:".85"}));
+  g.appendChild(el("rect",{x:BX[0],y:c2-BUS/2,width:BX[1]-BX[0],height:BUS,
+    fill:"#f9ab00",stroke:"#b06000","stroke-width":1}));
+  g.appendChild(el("text",{x:(BX[0]+BX[1])/2,y:c2-BUS/2-9,"text-anchor":"middle",
+    class:"svgnum",fill:"#b06000","font-size":"12"},"⭐ c_KV　512"));
+  g.appendChild(el("text",{x:(BX[0]+BX[1])/2,y:c2+BUS/2+16,"text-anchor":"middle",
+    class:"svglbl",fill:"#b06000"},"秩上限 = 512"));
+  g.appendChild(el("text",{x:(BX[0]+BX[1])/2,y:c2+BUS/2+32,"text-anchor":"middle",
+    class:"svgsm",fill:"#b06000"},"缓存的就是这一条"));
+  for(let i=0;i<NG;i++){
+    const y = c2-TOT/2 + i*(GH+GP) + GH/2;
+    g.appendChild(el("path",{d:`M${BX[1]} ${c2} L${GX[0]} ${y}`,
+      stroke:"#1a73e8","stroke-width":.7,opacity:".55",fill:"none"}));
+  }
+  heads(c2,"#174ea6","#e8f0fe");
+
+  // k_pe 旁路：从 h 直接出去，不进总线
+  g.appendChild(el("path",{d:`M${HX[1]} ${c2+HH/2-6} C 300 ${c2+96}, 520 ${c2+96}, ${GX[0]} ${c2+TOT/2+30}`,
+    stroke:"#f9ab00","stroke-width":1.6,"stroke-dasharray":"6 4",fill:"none"}));
+  g.appendChild(el("text",{x:400,y:c2+112,"text-anchor":"middle",class:"svglbl",fill:"#b06000"},
+    "k_pe 64　从 h 直接旁路出去，不进总线"));
+
+  g.appendChild(el("text",{x:950,y:c2-TOT/2-14,"text-anchor":"end",class:"svgsm",fill:"#174ea6"},
+    "每个头从总线上取什么，仍然各自独立"));
 })();
 
 /* ── 图：MLA 的完整 shape 变换链 ──
