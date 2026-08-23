@@ -2561,7 +2561,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     </div>
   </div>
   <div class="stn big"><span class="badge">第 4 步 ⭐</span><h2>MoE：671B 的主体</h2></div>
-  <p class="lead">整个模型 96% 的参数都在这 58 层里。</p>
+  <p class="lead">整个模型 <b>97.8%</b> 的参数都在这 58 层里。</p>
 
   <div class="punch dark">
     护士分诊，专家看病。
@@ -2623,13 +2623,79 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   <div class="note danger">
     <span class="t">⚠️ 「专家」这个名字，是整个 MoE 里最容易误导人的地方</span>
     「专家」这个词太容易让人想到分科：一个管数学、一个管代码、一个管医学。
-    <b>实际不是这样分的。</b> 打开训好的模型去看，专家的分工更接近
-    <b>语法和 token 类型层面</b> —— 比如某个专家总是处理标点，某个总是接在数字后面。
-    <b>它们的「专长」是「在什么语境下处理什么样的 token」，不是「懂哪个领域」。</b>
+    <b>这件事被真的量过，答案是：不这么分。</b>
     <br><br>
     所以「护士分诊、专家看病」这个比喻，<b>用来理解「为什么总计算量降下来了」是对的</b>，
-    但别顺着它推出「所以有个专家懂医学」—— 那一步是错的。
+    但别顺着它推出「所以有个专家懂医学」—— <b>那一步是错的，而且是有实测反驳的。</b>
   </div>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 386" role="img"
+       aria-label="Mixtral 路由分析的两个结果：按领域看专家分布几乎一样，说明不按学科分工；按相邻 token 看，第 0 层接近随机 14.1%，第 15 层升到 26.4%，第 31 层 22.7%，说明路由跟的是局部语法结构">
+    <text x="20" y="24" class="svglbl">有人把训好的 MoE 拆开数过路由 —— 两个结果，一个否定一个肯定</text>
+
+    <!-- 左：按领域 -->
+    <rect x="20" y="42" width="440" height="222" rx="12" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+    <text x="40" y="70" class="svgnum" fill="#a50e0e">✗ 不是按学科分的</text>
+    <text x="40" y="94" class="svgsm" fill="#a50e0e">把不同领域的文本喂进去，看专家分布 ——</text>
+    <text x="40" y="112" class="svgsm" fill="#a50e0e">数学论文、生物摘要、哲学论文，三条分布几乎重合</text>
+
+    <!-- 三条几乎一样的分布小图 -->
+    <g>
+      <text x="40" y="146" class="svgsm" fill="#5f6368">ArXiv</text>
+      <rect x="118" y="136" width="26" height="12" fill="#d93025" opacity="0.75"/><rect x="150" y="133" width="26" height="15" fill="#d93025" opacity="0.75"/><rect x="182" y="137" width="26" height="11" fill="#d93025" opacity="0.75"/><rect x="214" y="134" width="26" height="14" fill="#d93025" opacity="0.75"/><rect x="246" y="136" width="26" height="12" fill="#d93025" opacity="0.75"/><rect x="278" y="135" width="26" height="13" fill="#d93025" opacity="0.75"/><rect x="310" y="137" width="26" height="11" fill="#d93025" opacity="0.75"/><rect x="342" y="134" width="26" height="14" fill="#d93025" opacity="0.75"/>
+      <text x="40" y="178" class="svgsm" fill="#5f6368">PubMed</text>
+      <rect x="118" y="167" width="26" height="13" fill="#d93025" opacity="0.55"/><rect x="150" y="165" width="26" height="15" fill="#d93025" opacity="0.55"/><rect x="182" y="169" width="26" height="11" fill="#d93025" opacity="0.55"/><rect x="214" y="166" width="26" height="14" fill="#d93025" opacity="0.55"/><rect x="246" y="168" width="26" height="12" fill="#d93025" opacity="0.55"/><rect x="278" y="167" width="26" height="13" fill="#d93025" opacity="0.55"/><rect x="310" y="169" width="26" height="11" fill="#d93025" opacity="0.55"/><rect x="342" y="167" width="26" height="13" fill="#d93025" opacity="0.55"/>
+      <text x="40" y="210" class="svgsm" fill="#5f6368">哲学</text>
+      <rect x="118" y="199" width="26" height="13" fill="#d93025" opacity="0.35"/><rect x="150" y="197" width="26" height="15" fill="#d93025" opacity="0.35"/><rect x="182" y="201" width="26" height="11" fill="#d93025" opacity="0.35"/><rect x="214" y="198" width="26" height="14" fill="#d93025" opacity="0.35"/><rect x="246" y="200" width="26" height="12" fill="#d93025" opacity="0.35"/><rect x="278" y="199" width="26" height="13" fill="#d93025" opacity="0.35"/><rect x="310" y="201" width="26" height="11" fill="#d93025" opacity="0.35"/><rect x="342" y="199" width="26" height="13" fill="#d93025" opacity="0.35"/>
+      <text x="380" y="178" class="svgsm" fill="#a50e0e">← 形状</text>
+      <text x="380" y="194" class="svgsm" fill="#a50e0e">一样</text>
+    </g>
+    <text x="40" y="242" class="svgsm" fill="#5f6368">原文：<tspan font-style="italic">“we do not observe obvious patterns</tspan></text>
+    <text x="40" y="258" class="svgsm" fill="#5f6368"><tspan font-style="italic">in the assignment of experts based on the topic”</tspan></text>
+
+    <!-- 右：按相邻 token -->
+    <rect x="480" y="42" width="500" height="222" rx="12" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+    <text x="500" y="70" class="svgnum" fill="#0d652d">✓ 是按局部语法结构分的</text>
+    <text x="500" y="94" class="svgsm" fill="#0d652d">判据：相邻两个 token 选中同一个专家的比例</text>
+
+    <line x1="560" y1="228" x2="960" y2="228" stroke="#9aa0a6" stroke-width="1.2"/>
+    <line x1="556" y1="178" x2="964" y2="178" stroke="#d93025" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <text x="500" y="182" class="svgsm" fill="#a50e0e" font-weight="700">随机 12.5%</text>
+
+    <rect x="590" y="172" width="60" height="56" rx="3" fill="#81c995"/>
+    <text x="620" y="164" text-anchor="middle" class="svgnum" fill="#0d652d">14.1%</text>
+    <text x="620" y="246" text-anchor="middle" class="svgsm" fill="#5f6368">第 0 层</text>
+    <text x="620" y="260" text-anchor="middle" class="svgsm" fill="#5f6368">≈ 随机</text>
+
+    <rect x="710" y="122" width="60" height="106" rx="3" fill="#1e8e3e"/>
+    <text x="740" y="114" text-anchor="middle" class="svgnum" fill="#0d652d">26.4%</text>
+    <text x="740" y="246" text-anchor="middle" class="svgsm" fill="#5f6368">第 15 层</text>
+    <text x="740" y="260" text-anchor="middle" class="svgsm" fill="#0d652d" font-weight="700">是随机的 2 倍</text>
+
+    <rect x="830" y="137" width="60" height="91" rx="3" fill="#1e8e3e" opacity="0.75"/>
+    <text x="860" y="129" text-anchor="middle" class="svgnum" fill="#0d652d">22.7%</text>
+    <text x="860" y="246" text-anchor="middle" class="svgsm" fill="#5f6368">第 31 层</text>
+
+    <text x="20" y="296" class="svgsm" fill="#5f6368">
+      论文举的例子很具体：Python 里的 <tspan font-weight="700">self</tspan>、英文里的
+      <tspan font-weight="700">Question</tspan> 总是走同一个专家，哪怕它们是好几个 token；
+      代码的缩进 token「总是」被分给同一批专家</text>
+    <text x="20" y="320" class="svgnum" fill="#b06000">
+      ⭐ 而这件事直接变成系统问题 —— 这是这门课最关心的一步</text>
+    <text x="20" y="342" class="svgsm" fill="#b06000">
+      原文点破了两面：局部性高 → 做专家并行时<tspan font-weight="700">更容易把某几个专家挤爆</tspan>（over-subscription）；
+      但反过来，<tspan font-weight="700">局部性也可以拿来做缓存</tspan></text>
+    <text x="20" y="366" class="svgsm" fill="#5f6368">
+      同一个性质，既是负载均衡的敌人，又是缓存的朋友 —— 取决于你站在哪一侧看它</text>
+  </svg>
+  <figcaption><b>出处：<em>Mixtral of Experts</em>，arXiv 2401.04088 第 5 节 Routing analysis
+  与 Table 5。</b> 右边三根条是 8 个领域的<b>平均值</b>（第 0 层 13.6–14.9%，
+  第 15 层 23.6–28.4%，第 31 层 19.7–26.3%）。<br>
+  <b>适用范围要说清楚：Mixtral 是 8 专家 top-2，V3 是 256 专家 top-8，两者不能直接换算。</b>
+  <em>它能支撑的是那个<b>否定</b>结论 ——「专家按学科分工」这个直觉在实测里没有出现；
+  至于 V3 的 256 个专家具体怎么分，公开资料里我没有查到同等力度的分析。</em></figcaption>
+  </figure>
 
   <h4>⭐ 一个 token 的路径，是它自己的</h4>
   <p>这才是「一个 token 的一生」这个说法真正的意思。<b>58 个 MoE 层，每一层都重新分诊一次</b> ——
@@ -2731,7 +2797,10 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   </svg>
   <figcaption><b>九段拼起来，正好是上面那根 dense 条。</b>
   中间宽度决定了三个矩阵的大小，所以宽度相等 ⇒ 参数相等 ⇒ 计算量相等 ——
-  <b>MoE 那一层，每个 token 走过的 FLOPs 跟一层普通 dense MLP 一个都不多。</b></figcaption>
+  <b>MoE 那一层，每个 token 在<em>专家</em>上走过的 FLOPs 跟一层普通 dense MLP 严格相等。</b><br>
+  <span class="sub">（<b>唯一的小尾巴</b>：MoE 还得先跑一遍门控矩阵，
+  <code>7,168 × 256 = 1.84 M</code>，相对 396.36 M 是 <b>0.46%</b>。
+  <em>所以是「专家那部分一个都不多，外加千分之五的分诊费」。</em>）</span></figcaption>
   </figure>
 
   <div class="note ok">
@@ -2746,7 +2815,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
   <div class="punch">
     同一层里躺着 <b>11.32 B</b> 参数，是 dense 层的 <b>28.6 倍</b>；
-    而每个 token 掏出来算的，<b>是同样的 396 M，一个 FLOP 都不多</b>。
+    而每个 token 掏出来算的，<b>是同样的 396 M，外加千分之五的分诊费</b>。
     <small>这就是「参数量和计算量解耦」这句话的字面意思。
     模型可以一直变大，而每个字的账单不动 ——
     代价是那多出来的 28 倍必须<b>全程躺在显存里</b>，这一点在 4d 会算清楚。</small>
@@ -2875,10 +2944,35 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <b>②</b> 它不参与反向传播，因此不跟主目标抢梯度；
     <b>③</b> 它是训练循环<em>外面</em>的一个动作，想改策略不用动模型。
     <br><br>
-    <span class="sub">（源码上的判据很直接：加了偏置的那份分数只喂给 top-k 选择，
-    最后 <code>gather</code> 取权重时用的是另一份没加偏置的。
-    <b>两份分数，两条路。</b>）</span>
+    <span class="sub">（<b>这不用从源码推，论文里有一句现成的</b>：
+    <em>“Note that the bias term is <b>only used for routing</b>. The gating value,
+    which will be multiplied with the FFN output, is still derived from
+    <b>the original affinity score</b>.”</em>
+    —— arXiv 2412.19437 第 2.1.2 节。<b>两份分数，两条路。</b>）</span>
   </div>
+
+  <details class="more"><summary>展开：sigmoid「加起来不等于 1」，可最后那 8 个权重又归一化到 1 —— 这不矛盾吗<span class="why">—— 会被问到的一个点</span></summary>
+  <div class="body">
+  <p><b>不矛盾，因为这是两个时刻的事。</b>
+  <em>「不等于 1」说的是<b>打分那一刻</b>：256 个分数各算各的，谁高谁低不影响别人。
+  「归一化到 1」说的是<b>选完之后</b>：只在选中的那 8 个之间重新分配比例。</em></p>
+  <div class="eq"><span class="c">// ① 打分：256 个独立的 sigmoid，互不相干，总和是多少都行</span>
+s_i = sigmoid(u · e_i)            <span class="c">i = 1 … 256</span>
+<span class="c">// ② 选：加偏置只为排序，选出 8 个编号（偏置到此为止）</span>
+<span class="c">// ③ 定权重：只在这 8 个里归一化，再乘 routed_scaling_factor</span>
+g_i = s_i / Σ(选中的 8 个 s)  × <span class="r">2.5</span></div>
+  <p class="sub"><b>那 sigmoid 换成 softmax 到底差在哪？</b>
+  <em>差在第 ① 步。softmax 的分母是全部 256 个，所以<b>抬高任何一个专家的分，
+  就等于压低其余 255 个</b> —— 专家之间被迫零和竞争。
+  sigmoid 没有这个分母，每个专家可以独立地说「这个 token 我很在行」。</em><br>
+  <b>换句话说：竞争关系被推迟到了「排序取前 8」这一步，而不是烤进打分函数里。</b>
+  <em>V2 用的是 softmax，V3 换成了 sigmoid —— 论文里明写了这处改动。</em></p>
+  <p class="sub"><b>那个 2.5 是哪来的</b>：config 里的 <code>routed_scaling_factor</code>。
+  <em>归一化会把 8 个权重的总和摁成 1，而共享专家那一路的系数是 1，
+  两边加起来相对残差流就偏小了；乘一个大于 1 的常数把整支路的幅度抬回去。</em>
+  <b>这是我们的读法 —— 论文的公式里没有出现这个系数，它只在开源 config 和实现里。</b></p>
+  </div>
+  </details>
 
   <div class="tbl-wrap"><table>
     <thead><tr><th>设计</th><th>取值</th><th>为什么这么定</th></tr></thead>
@@ -2887,17 +2981,20 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
         <td>不是 softmax。softmax 逼着 256 个专家的分数<b>互相竞争、加起来等于 1</b>；
             sigmoid 让每个专家独立打分，专家之间不必零和</td></tr>
       <tr><td>分组限制</td><td><code>n_group=8</code><br><code>topk_group=4</code></td>
-        <td>⭐ <b>纯粹是硬件逼出来的</b> —— 先选 4 个组，再在组内选专家，
-            限制一个 token 最多要跨多少台机器去取专家</td></tr>
+        <td>⭐ <b>纯粹是硬件逼出来的。</b> 论文管它叫 <em>node-limited routing</em>，
+            一句话原文：<em>「我们保证每个 token 最多被送到 M 个节点。」</em>
+            这里 <code>M = 4</code>，<b>组就是节点</b> ——
+            限制一个 token 最多要跨几台机器去取专家</td></tr>
       <tr><td>选几个</td><td><code>top-8</code></td>
         <td>8 个路由 + 1 个共享 = 每 token 过 9 个专家</td></tr>
       <tr><td>负载均衡</td><td><code>noaux_tc</code></td>
-        <td>不靠辅助损失，靠给每个专家挂一个<b>动态偏置</b>：
-            最近接活太多的，偏置调低一点；太闲的，调高一点。<br>
+        <td><b>主力机制是给每个专家挂一个动态偏置</b>：
+            最近接活太多的调低一点，太闲的调高一点。<br>
             ⭐ <b>这个偏置只参与「选谁」，不参与「选完之后按多大权重算」</b> ——
-            所以它能把负载掰匀，却不改变模型的输出。<br>
-            而且它<b>不是梯度学出来的</b>，是按实际负载直接调的，
-            因此完全不进主目标的损失函数。</td></tr>
+            所以它能把负载掰匀，却不改变模型的输出。
+            而且它<b>不是梯度学出来的</b>，是按实际负载直接调的。<br>
+            <b>但「完全不用辅助损失」是说过头了</b> ——
+            V3 另外还留了一个<b>极小</b>的序列级均衡损失兜底，见下方那个框。</td></tr>
     </tbody>
   </table></div>
 
@@ -2909,21 +3006,156 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <b>通信约束被直接写进了模型结构里。</b>
   </div>
 
+  <details class="more"><summary>展开：这条规则在论文里长什么样，以及「组内前 2 名」这个 2 是从哪来的<span class="why">—— 一个能自己算出来的数</span></summary>
+  <div class="body">
+  <div class="note ok">
+    <span class="t">论文原话</span>
+    <em>“Like the device-limited routing used by DeepSeek-V2, DeepSeek-V3 also uses a
+    restricted routing mechanism to limit communication costs during training. In short,
+    we ensure that each token will be sent to at most <b>M</b> nodes, which are selected
+    according to the <b>sum of the highest K<sub>r</sub>/M affinity scores</b> of the
+    experts distributed on each node.”</em><br>
+    <span class="sub">—— DeepSeek-V3 Technical Report，arXiv 2412.19437 第 2.1.2 节。
+    <b>注意它给的理由是一个字都不含糊的 “to limit communication costs”。</b></span>
+  </div>
+  <p><b>那个「前 2 名」不是拍的，是代进去算出来的。</b>
+  <em>论文写的是 K<sub>r</sub>/M</em> —— K<sub>r</sub> 是激活的路由专家数，M 是最多能跨的节点数：</p>
+  <div class="eq"><span class="c">// K_r = num_experts_per_tok = 8　　M = topk_group = 4</span>
+K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每组取前 2 名求和」当组分</span></div>
+  <p class="sub"><b>这条规则的形状很讲道理</b>：<em>如果一个 token 最多只能去 4 个节点、总共要选 8 个专家，
+  那么平均每个节点得贡献 2 个。</em>
+  <b>用「组内前 2 名之和」给组打分，等于在问「假如我选了这个节点，它最好的那 2 个能给我多少」</b> ——
+  正好对上后面要从它这儿拿走的份额。</p>
+  <div class="note info">
+    <span class="t">顺带一个很能说明问题的数：这套通信设计其实还有富余</span>
+    <b>论文原话：</b><em>「虽然 DeepSeek-V3 实际只选 8 个路由专家，
+    但在<b>通信代价不变</b>的前提下，这个数可以一路加到最多 13 个
+    （4 个节点 × 平均每节点 3.2 个专家）。」</em>
+    <em>同一段还提到，这套 IB / NVLink 重叠的方案只需要占用 <b>20 个 SM</b>。</em><br>
+    <b>读法：先按机器的形状定下「最多跨 4 个节点」，再在这个盒子里看能塞多少专家 ——
+    最后填了 8，盒子其实能装 13。</b>
+    <em>这就是「硬件先划线、模型再在线内选参数」最直白的一个样子。</em>
+  </div>
+  </div>
+  </details>
+
   <div class="note info">
     <span class="t">为什么这个设计值得单独讲</span>
     老办法是在损失函数里加一项「分得匀不匀」的惩罚，逼模型均衡。
     问题是<b>你在让模型同时优化两件不相干的事</b> ——「答得对」和「分得匀」——
     这两个目标会互相拉扯，最后两头都打折。
+    <b>论文自己就是这么说的</b>：<em>「辅助损失太大会损害模型性能。」</em>
     <br><br>
-    <b>V3 的做法是把「分得匀」整个搬出损失函数。</b>
-    它变成了训练循环外面的一个调度动作，跟模型学什么完全无关。
-    <b>这是一个很好的工程直觉的例子：一个约束如果不属于目标，就别塞进目标里。</b>
+    <b>V3 的做法是把「分得匀」这件事的<em>主要负担</em>搬出损失函数。</b>
+    它变成了训练循环外面的一个调度动作，跟模型学什么无关。
+    <b>这是一个很好的工程直觉的例子：一个约束如果不属于目标，就尽量别塞进目标里。</b>
   </div>
 
-  <p><b>负载不均会怎样。</b> 专家分散在不同卡上。如果某几个专家特别热门，
-  它们所在的卡就要算更多 token，而其他卡在等 ——
-  <b>最慢的那张卡决定整层的时间</b>。这不是效率损失几个百分点的问题，
-  是整个集群按最慢的那张卡的速度走。</p>
+  <div class="note warn">
+    <span class="t">⚠️ 「auxiliary-loss-free」这个名字，比实情干净</span>
+    <b>课件之前写的是「不靠辅助损失」。翻回论文，这句话说过头了。</b>
+    <em>原文是：「虽然 DeepSeek-V3 主要依赖 auxiliary-loss-free 策略来做负载均衡，
+    <b>为了防止任何单条序列内出现极端失衡，我们同时还使用了一个补充的序列级均衡损失</b>。」</em>
+    论文接着说，这个损失的系数 α <em>「会被赋一个极小的值」</em>。<br>
+    <b>所以准确的说法是：主力是偏置，另有一个极小的辅助损失兜底。</b>
+    <em>不是「一点都没有」。</em>
+  </div>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 268" role="img"
+       aria-label="两套均衡机制的分工：偏置管跨 batch 的长期均衡，是主力；极小的序列级辅助损失管单条序列内部的极端失衡，是兜底">
+    <text x="20" y="24" class="svglbl">V3 其实有<tspan font-weight="700">两套</tspan>均衡机制，管的是两个不同尺度的问题</text>
+
+    <rect x="20" y="42" width="470" height="150" rx="12" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+    <text x="40" y="70" class="svgnum" fill="#174ea6">主力 · 动态偏置 b</text>
+    <text x="40" y="94" class="svgsm" fill="#174ea6">尺度：<tspan font-weight="700">整个 batch，跨步累积</tspan></text>
+    <text x="40" y="114" class="svgsm" fill="#174ea6">每步结束看一遍负载，超载的减 γ，欠载的加 γ</text>
+    <text x="40" y="134" class="svgsm" fill="#0d652d">✓ 不进损失函数，不抢梯度</text>
+    <text x="40" y="154" class="svgsm" fill="#0d652d">✓ 只影响「选谁」，不影响输出</text>
+    <text x="40" y="176" class="svgsm" fill="#5f6368">解决的是：某几个专家长期吃太饱</text>
+
+    <rect x="510" y="42" width="470" height="150" rx="12" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+    <text x="530" y="70" class="svgnum" fill="#b06000">兜底 · 序列级均衡损失（α 极小）</text>
+    <text x="530" y="94" class="svgsm" fill="#b06000">尺度：<tspan font-weight="700">一条序列内部</tspan></text>
+    <text x="530" y="114" class="svgsm" fill="#b06000">同一条序列里，别让 token 全挤到少数专家</text>
+    <text x="530" y="134" class="svgsm" fill="#a50e0e">✗ 它<tspan font-weight="700">确实</tspan>进了损失函数</text>
+    <text x="530" y="154" class="svgsm" fill="#5f6368">但系数被论文明说「取一个极小的值」</text>
+    <text x="530" y="176" class="svgsm" fill="#5f6368">解决的是：单条序列内的极端失衡</text>
+
+    <text x="20" y="222" class="svgsm" fill="#a50e0e">
+      ⭐ 为什么偏置管不了右边那个：偏置是<tspan font-weight="700">每步结束才调一次</tspan>的全局量，
+      它对「这一条序列碰巧全挤在一起」无能为力 —— 那是发生在一步<tspan font-weight="700">内部</tspan>的事</text>
+    <text x="20" y="248" class="svgsm" fill="#5f6368">
+      读法：左边是策略，右边是保险丝。名字里的「free」说的是左边那件事是主力，不是右边不存在</text>
+  </svg>
+  <figcaption><b>两套机制不是重复，是尺度不同。</b>
+  <em>偏置在「步与步之间」把长期负载掰匀；那个极小的辅助损失在「一步之内」防单条序列崩掉。</em>
+  <b>这也解释了为什么它可以取极小值 —— 它不需要驱动均衡，只需要在偏置够不着的地方兜一下。</b><br>
+  <span class="sub">（<b>边界</b>：「两套机制、各管一个尺度」是论文原文直接说的；
+  「所以 α 才能取那么小」是一个合理的读法，论文没有这样解释过。）</span></figcaption>
+  </figure>
+
+  <h4>⭐ 负载不均会怎样：一张卡忙，全场陪着等</h4>
+  <p><b>专家分散在不同卡上。</b>如果某几个专家特别热门，它们所在的卡就要算更多 token，
+  而其他卡只能干等 —— <b>这一层什么时候结束，由最慢的那张卡说了算。</b></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 372" role="img"
+       aria-label="示意图：四张卡负载不均时，最忙那张卡决定整层耗时，其余三张卡的空转时间被浪费；把负载掰匀之后整层耗时下降">
+    <text x="20" y="24" class="svglbl">同一个 MoE 层，四张卡，百分比是这张卡分到的 token 占比。<tspan font-weight="700">条长 = 它要算多久</tspan></text>
+
+    <!-- 上：不均 -->
+    <text x="20" y="58" class="svgnum" fill="#a50e0e">失衡时</text>
+    <line x1="620" y1="46" x2="620" y2="212" stroke="#d93025" stroke-width="2"/>
+    <text x="628" y="60" class="svgnum" fill="#a50e0e">整层在这里才结束</text>
+    <text x="628" y="78" class="svgsm" fill="#a50e0e">= 最忙那张卡的时间</text>
+
+    <g>
+      <text x="106" y="90" text-anchor="end" class="svgsm" fill="#a50e0e" font-weight="700">卡 0 · 40%</text>
+      <rect x="118" y="76" width="502" height="22" rx="3" fill="#1a73e8"/>
+      <text x="130" y="92" class="svgsm" fill="#fff">一直在算</text>
+
+      <text x="106" y="120" text-anchor="end" class="svgsm" fill="#5f6368">卡 1 · 20%</text>
+      <rect x="118" y="106" width="251" height="22" rx="3" fill="#1a73e8" opacity="0.8"/>
+      <rect x="369" y="106" width="251" height="22" rx="3" fill="url(#hatch)" stroke="#bdc1c6"/>
+      <text x="495" y="122" text-anchor="middle" class="svgsm" fill="#5f6368">干等</text>
+
+      <text x="106" y="150" text-anchor="end" class="svgsm" fill="#5f6368">卡 2 · 25%</text>
+      <rect x="118" y="136" width="314" height="22" rx="3" fill="#1a73e8" opacity="0.8"/>
+      <rect x="432" y="136" width="188" height="22" rx="3" fill="url(#hatch)" stroke="#bdc1c6"/>
+      <text x="526" y="152" text-anchor="middle" class="svgsm" fill="#5f6368">干等</text>
+
+      <text x="106" y="180" text-anchor="end" class="svgsm" fill="#5f6368">卡 3 · 15%</text>
+      <rect x="118" y="166" width="188" height="22" rx="3" fill="#1a73e8" opacity="0.8"/>
+      <rect x="306" y="166" width="314" height="22" rx="3" fill="url(#hatch)" stroke="#bdc1c6"/>
+      <text x="463" y="182" text-anchor="middle" class="svgsm" fill="#5f6368">干等</text>
+    </g>
+    <text x="118" y="206" class="svgsm" fill="#a50e0e">
+      斜线部分是<tspan font-weight="700">买了但没用上的算力</tspan> —— 这里占了全部四张卡的 <tspan font-weight="700">37.5%</tspan></text>
+
+    <!-- 下：均衡 -->
+    <text x="20" y="252" class="svgnum" fill="#0d652d">掰匀之后</text>
+    <line x1="432" y1="240" x2="432" y2="330" stroke="#1e8e3e" stroke-width="2"/>
+    <text x="440" y="254" class="svgnum" fill="#0d652d">提前这么多结束</text>
+    <text x="440" y="272" class="svgsm" fill="#0d652d">同样的总工作量，整层快 1.6 倍</text>
+
+    <g fill="#1e8e3e">
+      <rect x="118" y="264" width="314" height="14" rx="3"/>
+      <rect x="118" y="282" width="314" height="14" rx="3"/>
+      <rect x="118" y="300" width="314" height="14" rx="3"/>
+      <rect x="118" y="318" width="314" height="14" rx="3"/>
+    </g>
+    <text x="106" y="302" text-anchor="end" class="svgsm" fill="#5f6368">四张卡各 25%</text>
+
+    <text x="20" y="356" class="svgsm" fill="#5f6368">
+      <tspan font-weight="700" fill="#202124">示意图，比例是编的</tspan> ——
+      40/20/25/15 只是为了让「谁在等」看得见。真实失衡程度取决于数据和路由，不是一个固定的数</text>
+  </svg>
+  <figcaption><b>这不是「效率损失几个百分点」，是整个集群按最慢那张卡的速度走。</b>
+  <em>而且它每一层都重来一次 —— 58 层，每层都要等齐。</em><br>
+  <b>回头看 4b 那个偏置：它做的事就是把上面那张图掰成下面那张图。</b>
+  <em>「让卡别闲着」听起来像个运维指标，其实它直接乘在整个训练的时间和账单上。</em></figcaption>
+  </figure>
 
   <h3>4c · 分布式：挪 token，还是挪权重</h3>
   <p><b>这一小节是整课的系统高光。</b> 专家分散在不同卡上，
@@ -3216,7 +3448,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <em>同一组对照实验里，容量系数取 1（会丢）的 MoE 只把验证损失降了 0.15；
     完全不丢的那版降了 0.26 —— <b>是前者的 1.73 倍</b>。</em><br>
     <b>② 靠「把盒子开大」来不丢，很贵。</b>
-    <em>在那个例子里，为了不丢 token，MoE 层的算量涨了<b>两倍多</b>。</em><br>
+    <em>原文：为了不丢 token，MoE 层的数学运算量涨了<b>两倍多</b>。</em><br>
     <b>③ 而且你不知道该开多大。</b>
     <em>论文引 Tutel 的观察：有的模型容量系数要开到 <b>11</b> 才不丢，
     还有的模型这个值会在训练中途<b>毫无征兆地飙上去</b>。</em><br>
@@ -3225,17 +3457,59 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     dropless 把这个参数整个删掉了。</em>
   </div>
 
+  <details class="more"><summary>展开：这三个数是在什么设置下量的<span class="why">—— 用之前先知道它的适用范围</span></summary>
+  <div class="body">
+  <p><b>不是 671B，也不是 top-8。</b>
+  <em>那组实验跑的是一个 Transformer-Small 规模的 decoder-only 模型，
+  每个 FFN 换成 <b>64 个专家、top-1</b> 路由，在 The Pile 上训 100 亿 token，单张 A100。</em></p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>维度</th><th>MegaBlocks 那组实验</th><th>DeepSeek V3</th></tr></thead>
+    <tbody>
+      <tr><td>专家数</td><td class="n">64</td><td class="n">256 + 1 共享</td></tr>
+      <tr><td>每 token 选几个</td><td class="n"><b>top-1</b></td><td class="n"><b>top-8</b></td></tr>
+      <tr><td>模型规模</td><td>Transformer-Small 量级</td><td class="n">671 B</td></tr>
+      <tr><td>均衡机制</td><td>常规辅助损失</td><td>动态偏置 + 极小辅助损失</td></tr>
+    </tbody>
+  </table></div>
+  <p class="sub"><b>差别最大的是 top-1 这一条。</b>
+  <em>top-1 意味着每个 token 只押一个专家，一旦这个专家满了就整个丢掉；
+  top-8 天然摊得开一些，同样的失衡程度下丢得没那么惨。</em><br>
+  <b>所以这三个数字能证明的是「容量系数这个旋钮本身是个麻烦」，
+  不能直接换算成「V3 如果丢 token 会掉多少分」。</b>
+  <em>课上就按前者讲。</em></p>
+  <p class="sub"><b>顺带记两个它的正面结果</b>（同样来自摘要，同一套设置）：
+  <em>相比用 padding 硬凑的做法，端到端训练快 1.38× / 2.0× / 4.35×（三个规模）；
+  相比同质量的稠密 Transformer 快 1.8×–2.4×。</em></p>
+  </div>
+  </details>
+
   <div class="note ok">
-    <span class="t">DeepSeek V3 在这件事上是怎么说的</span>
-    <b>技术报告里写得很直白：因为负载在整个训练过程中一直保持得不错，
-    所以 V3 训练时不丢弃任何 token。</b>
-    <em>换句话说，它给出的理由是「负载被掰得足够匀」——
-    这正好回接到 4b 那个负载均衡偏置：那套机制不只是让卡别闲着，
-    它还在防止 token 凭空消失。</em><br>
-    <b>要留意的边界</b>：<em>报告说明的是<b>结果</b>（不丢 token）和它归因的
-    <b>原因</b>（负载均衡好）。至于它自己的训练算子内部还留不留「容量」这个概念，
-    我没有在公开资料里查到。</em>
-    <b>所以「V3 训练不丢 token」可以讲，「V3 用的是 dropless 算子」不要讲。</b>
+    <span class="t">DeepSeek V3 在这件事上是怎么说的 —— 训练和推理，两句话</span>
+    <b>技术报告里那一小段标题就叫 “No Token-Dropping”，两句话：</b>
+    <em>「由于负载均衡策略有效，DeepSeek-V3 在整个训练过程中都保持了良好的负载，
+    因此<b>训练时不丢弃任何 token</b>。此外，我们还实现了专门的部署策略来保证推理时的负载均衡，
+    所以 DeepSeek-V3 <b>推理时也不丢 token</b>。」</em><br>
+    <b>它给出的理由是「负载被掰得足够匀」</b> ——
+    <em>这正好回接到 4b：那套偏置机制不只是让卡别闲着，它还在防止 token 凭空消失。</em>
+  </div>
+
+  <div class="note info">
+    <span class="t">「推理时也不丢」靠的是另一套东西：冗余专家</span>
+    <b>训练时靠偏置把负载掰匀；上线之后没有训练循环了，靠的是搬专家。</b>
+    <em>报告写的是：把观测到的高负载专家<b>复制一份</b>额外部署
+    （prefill 阶段设 <b>32 个冗余专家</b>，每张卡除了原本的 8 个再多带 1 个），
+    热点是<b>根据线上统计</b>检测出来的，而且<b>每隔一段时间（比如 10 分钟）重新调整一次</b>。</em><br>
+    <b>值得记的是这个动作的性质：它是在节点内部重排，明确避免增加跨节点 all-to-all 的开销。</b>
+    <em>又一次 —— 先认拓扑，再谈优化。</em>
+  </div>
+
+  <div class="note warn">
+    <span class="t">这里有一句不要讲</span>
+    <b>「V3 训练不丢 token」可以讲，「V3 用的是 dropless 算子」不要讲。</b>
+    <em>报告说明的是<b>结果</b>（不丢）和它归因的<b>原因</b>（负载均衡好）。
+    至于它的训练算子内部还留不留「容量」这个概念，我没有在公开资料里查到。</em><br>
+    <span class="sub">（<b>这两件事差别很大</b>：「靠均衡好到没触发容量上限」和
+    「压根没有容量上限」，在系统实现上是两回事，在台上却很容易被说成同一句。）</span>
   </div>
 
   <p class="lead" style="font-size:15px">另外两个名字顺带一提，不展开：DeepEP（专门优化这个 all-to-all 的通信库）、
@@ -3285,8 +3559,10 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   <b>参数量和计算量是两本账，连排序都不一样。</b></figcaption>
   </figure>
 
+  <details class="more"><summary>展开：顺带一个反直觉的小发现 —— MLA 里最大的矩阵不是压缩用的那几个<span class="why">—— 第 2 步那笔账的另一面</span></summary>
+  <div class="body">
   <div class="note info">
-    <span class="t">顺带一个反直觉的小发现：MLA 里最大的矩阵不是压缩用的那几个</span>
+    <span class="t">187.11 M 是怎么分的</span>
     <div class="eq">q 降维 7168 × 1536              = 11.01 M
 q 升维 1536 × (128 × 192)       = 37.75 M
 kv 降维 7168 × (512 + 64)       =  4.13 M
@@ -3299,6 +3575,8 @@ o_proj (128 × 128) × 7168       = <span class="r">117.44 M ← 占 62.8%</span
     <em>这不矛盾 —— MLA 压的是<b>每个 token 要存多少</b>（那是显存账），
     不是<b>这一层有多少参数</b>（这是参数账）。又一次：不同的账，不同的答案。</em>
   </div>
+  </div>
+  </details>
 
   <figure class="fbox">
     <svg viewBox="0 0 1000 200" role="img" aria-label="671B 总参数与 37B 激活参数的对比">
@@ -3320,8 +3598,10 @@ o_proj (128 × 128) × 7168       = <span class="r">117.44 M ← 占 62.8%</span
     </svg>
   </figure>
 
+  <details class="more"><summary>展开：「37B」这个数，边界在哪<span class="why">—— 官方口径和逐项加出来的数对不上，差在哪</span></summary>
+  <div class="body">
   <div class="note info">
-    <span class="t">「37B」这个数，边界在哪</span>
+    <span class="t">两个都能算出来的数，官方那个落在中间</span>
     <b>按上面那张表逐项加，一个 token 真正参与计算的是 36.62 B</b>
     <em>（58 层各 9 个专家 + 全部 61 层 MLA + 3 层 dense + 出口那个大矩阵）。
     如果把嵌入表也算成「激活」，是 37.55 B。</em><br>
@@ -3330,6 +3610,8 @@ o_proj (128 × 128) × 7168       = <span class="r">117.44 M ← 占 62.8%</span
     所以这门课统一用 36.62 B，需要跟官方对齐时就说「约 37B」。</em>
     <b>差的这不到 1 B 不影响任何结论：18 倍还是 18 倍。</b>
   </div>
+  </div>
+  </details>
 
   <div class="figpair" style="display:grid;grid-template-columns:1fr 340px;gap:26px;
        align-items:center;margin:28px 0">
