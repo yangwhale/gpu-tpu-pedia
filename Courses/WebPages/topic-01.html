@@ -1399,9 +1399,9 @@ footer a{text-decoration:none}
       <p>因为在<b>标准注意力里，把头做宽是要付 cache 的</b>：
       每个头的 K 和 V 都要各存一份，<code>2 × 头数 × 每头维度</code> 个数 ——
       <b>头一宽，每份就变大，cache 跟着线性涨</b>。这两件事是锁在一起的。</p>
-      <p><b>MLA 把这把锁剪断了。</b> MLA 论文里写得很清楚：
-      推理时只需要缓存那个压缩向量，<b>cache 的元素个数是
-      <code>d_c × 层数</code></b> —— 这个式子里<b>没有头数，也没有每头维度</b>。</p>
+      <p><b>MLA 把这把锁剪断了。</b> MLA 论文的 Table 1 直接把四代的 cache 写成公式，
+      MLA 那一行是 <b><code>(d_c + d_h^R) × 层数</code></b> ——
+      <b>这个式子里没有头数，也没有每头维度。</b></p>
       <div class="note ok">
         <span class="t">于是出现了一个新的自由度</span>
         <b>注意力想做多宽就做多宽，KV cache 一个字节都不涨。</b>
@@ -1416,8 +1416,55 @@ footer a{text-decoration:none}
 
   <h4>代价：撑宽要付三笔钱，V3 只付了两笔</h4>
   <p>只讲好处不叫讲清楚。<b>把头撑宽，账面上要多付三笔</b> ——
-  有意思的是<b>第三笔被另一个设计抵消掉了</b>，而那正是 <code>q_lora_rank</code> 存在的理由。</p>
+  有意思的是<b>第三笔被另一个设计抵消掉了</b>。<em>看这张图，三根条对着同一条 1.00 倍基准线。</em></p>
 
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 322" role="img"
+       aria-label="撑宽的三笔代价，以等宽做法为 1.00 倍：算力 2.29 倍、o_proj 权重 2.29 倍、Q 投影若直投 3.43 倍但实际走 q_lora 只有 0.95 倍">
+    <g>
+      <text x="250" y="26" class="svglbl">以「等宽做法」为 <tspan font-weight="700">1.00 倍</tspan>，看撑宽之后各付了多少</text>
+
+      <text x="240" y="66" text-anchor="end" class="svgnum" fill="#a50e0e">① 注意力算力</text>
+      <rect x="250" y="48" width="458" height="26" rx="3" fill="#fce8e6" stroke="#d93025"/>
+      <text x="264" y="66" class="svgnum" fill="#a50e0e">2.29×</text>
+      <text x="330" y="66" class="svgsm" fill="#a50e0e">工作维度从 7,168 撑到 16,384　—— 这笔跑不掉</text>
+
+      <text x="240" y="122" text-anchor="end" class="svgnum" fill="#a50e0e">② o_proj 权重</text>
+      <rect x="250" y="104" width="458" height="26" rx="3" fill="#fce8e6" stroke="#d93025"/>
+      <text x="264" y="122" class="svgnum" fill="#a50e0e">2.29×</text>
+      <text x="330" y="122" class="svgsm" fill="#a50e0e">51.38 M → 117.44 M　—— 这笔也跑不掉</text>
+
+      <text x="240" y="178" text-anchor="end" class="svgnum" fill="#5f6368">③ Q 投影 · 若直投</text>
+      <rect x="250" y="160" width="686" height="26" rx="3" fill="#fef7e0" stroke="#f9ab00"
+            stroke-dasharray="5 4"/>
+      <text x="264" y="178" class="svgnum" fill="#b06000">3.43×</text>
+      <text x="330" y="178" class="svgsm" fill="#b06000">51.38 M → 176.16 M　7,168 × (128×192)　—— 本该是这样</text>
+
+      <text x="240" y="222" text-anchor="end" class="svgnum" fill="#0d652d">③ Q 投影 · 实际</text>
+      <rect x="250" y="204" width="190" height="26" rx="3" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="264" y="222" class="svgnum" fill="#0d652d">0.95×</text>
+      <text x="462" y="222" class="svgsm" fill="#0d652d">48.76 M　走 q_lora：7,168 → 1,536 → 24,576　<tspan font-weight="700">比等宽还小 5.1%</tspan></text>
+
+      <g stroke="#d93025" stroke-width="1.2" stroke-dasharray="5 4">
+        <line x1="450" y1="36" x2="450" y2="48"/>
+        <line x1="450" y1="74" x2="450" y2="104"/>
+        <line x1="450" y1="130" x2="450" y2="160"/>
+        <line x1="450" y1="186" x2="450" y2="204"/>
+        <line x1="450" y1="230" x2="450" y2="242"/>
+      </g>
+      <text x="450" y="258" text-anchor="middle" class="svglbl" fill="#d93025">↑ 等宽做法 = 1.00×</text>
+
+      <text x="40" y="292" class="svgsm" fill="#0d652d">⭐ 三笔里前两笔真付了，第三笔被 q_lora 那个 1,536 的窄腰整个吃掉 —— 撑宽 2.29 倍，Q 的参数量反而降了</text>
+      <text x="40" y="312" class="svgsm">这就是 q_lora_rank 这个字段存在的理由之一：它省的不是 KV cache（Q 根本不进 cache），是权重</text>
+    </g>
+  </svg>
+  <figcaption><b>三根条对着同一条 1.00 倍基准线，长度按倍数线性画。</b>
+  <b>黄色那根是虚线</b> —— 它是<em>「如果直接投会怎样」</em>，V3 没走那条路。
+  <b>真正落地的是下面那根绿的。</b></figcaption>
+  </figure>
+
+  <details class="more"><summary>展开：这三笔账的完整算式<span class="why">—— 图上四个倍数怎么来的</span></summary>
+  <div class="body">
   <div class="tbl-wrap"><table>
     <thead><tr><th>代价</th><th>等宽取值</th><th>V3 撑宽后</th>
       <th style="text-align:right">结果</th></tr></thead>
@@ -1442,6 +1489,12 @@ footer a{text-decoration:none}
           <span class="sub">比等宽还小 5.1%</span></td></tr>
     </tbody>
   </table></div>
+  <p class="sub"><b>验算：</b><code>7168×7168 = 51,380,224</code>（注意 <code>128×56 = 7,168</code>，
+  所以等宽时 Q 投影和 <code>o_proj</code> 一样大）；<code>7168×24576 = 176,160,768</code>；
+  <code>176.16 ÷ 51.38 = 3.43</code>；<code>11.01 + 37.75 = 48.76</code>；
+  <code>176.16 ÷ 48.76 = 3.61</code>；<code>48.76 ÷ 51.38 = 0.949</code>。</p>
+  </div>
+  </details>
 
   <div class="note ok">
     <span class="t">于是 q_lora_rank 这个字段的意思就清楚了</span>
@@ -1550,14 +1603,21 @@ footer a{text-decoration:none}
         <b>矩阵乘法不满足交换律，夹在中间的东西挪不走</b>，这个合并就做不成了。<br>
         后果很直接：<b>每生成一个字，都得把前面所有 token 的 K 重新算一遍。</b>
       </div>
-      <div class="note info">
-        <span class="t">论文原话（DeepSeek-V2 · 2.1.3 节）</span>
+      <details class="more"><summary>展开：论文原话<span class="why">—— DeepSeek-V2 · 2.1.3 节</span></summary>
+      <div class="body">
+        <div class="note info">
         「<em>RoPE is incompatible with low-rank KV compression … W^UK cannot be
         absorbed into W^Q any more during inference, since a RoPE matrix related to
         the currently generating token will lie between W^Q and W^UK and matrix
         multiplication does not obey a commutative law. As a result, we must
         recompute the keys for all the prefix tokens during inference.</em>」
+        </div>
+        <p><b>注意最后那句 <code>we must recompute the keys</code></b> ——
+        <em>论文说的是「必须重算」，不是「会算错」。</em>
+        <b>坏掉的是效率，不是正确性。</b> 这个区别在讲台上很值钱：
+        说成「算出来会错」，懂行的人会当场纠正你。</p>
       </div>
+      </details>
     </div>
     <div>
       <h4 style="margin-bottom:8px">于是他们把位置信息「隔离」到一条小路上</h4>
@@ -1586,8 +1646,9 @@ footer a{text-decoration:none}
         cache 直接从 576 涨到 8,704，MLA 就白做了。</em>
       </div>
 
+      <details class="more"><summary>展开：那个自然的追问 —— Q 那 64 维为什么不也共用一份<span class="why">—— 不是数学要求的，是成本决定的</span></summary>
+      <div class="body">
       <div class="note info">
-        <span class="t">⭐ 那个自然的追问：Q 那 64 维为什么不也共用一份</span>
         <b>位置是 token 的属性，跟哪个头无关 —— 旋转角度确实每个头都一样。</b>
         那为什么 <b>K 那边共用一份，Q 那边却是 128 份</b>（128 × 64 = 8,192）？<br>
         <b>因为那 64 维不是纯位置。</b> 论文式 (14) 写的是
@@ -1605,6 +1666,8 @@ footer a{text-decoration:none}
         <b>K 要进 cache，共用能把 8,192 压成 64</b> —— 那笔损失才值得认。<br>
         <em>所以这个不对称<b>不是数学要求的，是成本决定的</b>：哪一侧花钱，哪一侧才做妥协。</em>
       </div>
+      </div>
+      </details>
     </div>
   </div>
 
@@ -1614,10 +1677,15 @@ footer a{text-decoration:none}
     <b>是老老实实把 K 和 V 都算出来再做注意力的</b> ——
     图里画的就是这条路径，因为它才是模型在数学上的定义。<br>
     <b>「把升维矩阵吸收进 Q / 吸收进 <code>o_proj</code>」是高性能推理引擎才会做的一步等价变形。</b>
-    <em>但正因为要给这一步留出可能性，RoPE 才必须被隔离出去 —— 架构在设计阶段就为它让了路。</em>
+    <em>但正因为要给这一步留出可能性，RoPE 才必须被隔离出去 —— 架构在设计阶段就为它让了路。</em><br>
+    <span class="sub"><b>论文自己也是这么说的</b>（V2 附录 C 末尾）：「<em>due to the associative law of
+    matrix multiplication, we can absorb <code>W^UK</code> into <code>W^UQ</code>, and
+    <code>W^UV</code> into <code>W^O</code>. Therefore, we do not need to compute keys and
+    values out for each query.</em>」</span>
   </div>
 
-  <h4>④ 顺带回答一个问题：这「128 个头」是真的存在吗</h4>
+  <details class="more"><summary>展开：这「128 个头」是真的存在，还是只是个记账方式<span class="why">—— 答案是「头有生命周期」</span></summary>
+  <div class="body">
   <p>看完上面这条链子，很容易生出一个疑问：<b>从头到尾权重都是几个大矩阵，
   <code>view</code> 一个数都没动过 —— 那 128 个头是不是只是个记账方式？</b></p>
   <div class="grid g2">
@@ -1655,6 +1723,8 @@ footer a{text-decoration:none}
        多算出一截布局溢出（952 → 1063），把整页 scrollWidth 撑到 1087，
        在 925–1090px 窗口下出现横向滚动条。段落也保持写成一行。 -->
   <p class="sub"><b>硬件上也看得出来</b>：投影那几步是又大又规整的矩阵乘，加速器最喜欢；打分那一步是 batch × 128 个小矩阵乘批在一起，<b>算术强度天然低一截 —— 这也是注意力长期是性能瓶颈的原因之一。</b></p>
+  </div>
+  </details>
 
   <h3>⭐ 凭什么能压这么狠：那个 32,768 从来就不存在</h3>
   <p><b>56.9 倍听起来像魔术</b>，而魔术总有障眼法。
@@ -1715,7 +1785,16 @@ footer a{text-decoration:none}
   <p>所以 MLA 押的赌注可以写成一句话：
   <b>128 个头真正需要的信息通道，加起来不超过 512 种。</b></p>
 
-  <h4>论文凭什么这么说？—— 它没说，它只给了实验</h4>
+  <div class="note ok">
+    <span class="t">⭐ 论文凭什么这么说？—— 它没说，它只给了实验，而实验赢得很干净</span>
+    <b>同规模、同架构，只换注意力机制</b>（V2 论文附录 D，250 B 的大号 MoE）：<br>
+    <b>KV cache 从 860.2 K 掉到 34.6 K —— <span class="k">只有 MHA 的 4%</span>；
+    BBH、MMLU、C-Eval、CMMLU <span class="k">四项全赢</span>。</b><br>
+    <em>而它越过的 MHA，正是「不省 cache、质量最好」的那个基线。</em>
+  </div>
+
+  <details class="more"><summary>展开：那两张消融表的完整数据，以及「压了 57 倍质量反而更好」怎么解释<span class="why">—— 有一格是输的，要老实讲</span></summary>
+  <div class="body">
   <div class="note danger">
     <span class="t">先把话说清楚：这一点上论文是「先做后说」的</span>
     <b>DeepSeek-V2 论文 2.1.2 节从头到尾没有给任何理论证明</b> ——
@@ -1771,6 +1850,8 @@ footer a{text-decoration:none}
     <b>不要替 DeepSeek 声称他们没说过的因果。</b>
     <em>能确定的只有一件事：在他们自己的对照实验里，这笔交易是赚的。</em>
   </div>
+  </div>
+  </details>
 
   <div class="note info">
     <span class="t">最后把 512 这个数字的三重身份收一下</span>
@@ -1817,8 +1898,10 @@ footer a{text-decoration:none}
     </div>
   </div>
 
+  <details class="more"><summary>展开：关于「除以 √192」的两个细节<span class="why">—— 讲的时候可以跳，但不能讲错</span></summary>
+  <div class="body">
   <div class="note info">
-    <span class="t">两个值得较真的细节（讲的时候可以跳，但不能讲错）</span>
+    <span class="t">两个值得较真的细节</span>
     <b>① 原始论文对这一步的措辞是「我们怀疑」，不是「我们证明」。</b>
     <em>Attention Is All You Need §3.2.1 的原话是 “We suspect that for large values of
     d_k, the dot products grow large in magnitude, pushing the softmax function into
@@ -1826,12 +1909,20 @@ footer a{text-decoration:none}
     脚注里给的是一个直觉论证：假设各分量独立、均值 0 方差 1，点积的方差就是 d_k，
     所以除以 √d_k 把标准差拉回 1。<b>这是个很好用的直觉，但它是猜想不是定理。</b><br>
     <b>② V3 实际代码里这个系数不等于 1/√192。</b>
-    因为开了 YaRN 把 4K 外推到 128K，缩放系数还要再乘一个 <code>mscale²</code>：<br>
+    因为开了 YaRN 做长度外推（<code>original_max_position_embeddings = 4096</code>，
+    <code>factor = 40</code>，<b>4,096 × 40 = 163,840</b>），
+    缩放系数还要再乘一个 <code>mscale²</code>：<br>
     <span class="num">mscale = 0.1 × ln(40) + 1 = 1.3689</span>，
     <span class="num">1/√192 × 1.3689² = 0.1352</span> ——
     <b>而不是 0.0722，差了 1.87 倍。</b>
-    <em>原理完全不变，只是这个常数跟长上下文外推是绑在一起的。</em>
+    <em>原理完全不变，只是这个常数跟长上下文外推是绑在一起的。</em><br>
+    <span class="sub">出处是参考实现 <code>modeling_deepseek.py</code> 里
+    <code>softmax_scale = q_head_dim^(-0.5)</code> 之后那个
+    <code>* mscale * mscale</code>，以及 <code>yarn_get_mscale()</code> 的定义。
+    <b>另外注意 163,840 才是配置里的位置上限，128K 是对外宣称的可用长度</b>，两个数不一样。</span>
   </div>
+  </div>
+  </details>
 
   <div class="grid g2">
     <div class="note danger">
@@ -1866,6 +1957,52 @@ footer a{text-decoration:none}
   </div>
 
   <h3>五个投影矩阵，一层多大</h3>
+  <p>一层 MLA 只有五块权重。<b>五块里有一块自己就占了六成</b> ——
+  <em>看条长就够了，数字在下面展开里。</em></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 330" role="img"
+       aria-label="一层 MLA 五个投影矩阵的参数量对比，o_proj 117.44 M 占 62.8%，其余四块加起来不到四成">
+    <g>
+      <text x="150" y="26" class="svglbl">条长按参数量线性画　·　一层合计 187.11 M</text>
+
+      <text x="140" y="58" text-anchor="end" class="svgnum" fill="#174ea6">o_proj</text>
+      <rect x="150" y="42" width="754" height="24" rx="3" fill="#1a73e8"/>
+      <text x="163" y="59" class="svgsm" fill="#fff">117.44 M　　62.8%　—— 一块顶其余四块加起来还多</text>
+      <text x="140" y="74" text-anchor="end" class="svgsm">16,384 × 7,168</text>
+
+      <text x="140" y="106" text-anchor="end" class="svgnum" fill="#5f6368">q_b_proj</text>
+      <rect x="150" y="90" width="242" height="24" rx="3" fill="#c9defc"/>
+      <text x="402" y="107" class="svgsm">37.75 M　20.2%</text>
+      <text x="140" y="122" text-anchor="end" class="svgsm">1,536 × 24,576</text>
+
+      <text x="140" y="154" text-anchor="end" class="svgnum" fill="#5f6368">kv_b_proj</text>
+      <rect x="150" y="138" width="108" height="24" rx="3" fill="#c9defc"/>
+      <text x="268" y="155" class="svgsm">16.78 M　9.0%</text>
+      <text x="140" y="170" text-anchor="end" class="svgsm">512 × 32,768</text>
+
+      <text x="140" y="202" text-anchor="end" class="svgnum" fill="#5f6368">q_a_proj</text>
+      <rect x="150" y="186" width="71" height="24" rx="3" fill="#c9defc"/>
+      <text x="231" y="203" class="svgsm">11.01 M　5.9%</text>
+      <text x="140" y="218" text-anchor="end" class="svgsm">7,168 × 1,536</text>
+
+      <text x="140" y="250" text-anchor="end" class="svgnum" fill="#b06000">kv_a_proj</text>
+      <rect x="150" y="234" width="27" height="24" rx="3" fill="#f9ab00"/>
+      <text x="187" y="251" class="svgsm" fill="#b06000">4.13 M　2.2%　⭐ 唯一决定 KV cache 的那块，却是最小的一块</text>
+      <text x="140" y="266" text-anchor="end" class="svgsm">7,168 × 576</text>
+
+      <line x1="150" y1="284" x2="904" y2="284" stroke="#dadce0"/>
+      <text x="150" y="306" class="svgsm" fill="#174ea6">⭐ o_proj 大，是因为它跨着 16,384 → 7,168 那道口子，两头都宽</text>
+      <text x="150" y="322" class="svgsm" fill="#b06000">⭐ kv_a_proj 小，是因为它只往 576 里写 —— 而全部 KV cache 就是这 576</text>
+    </g>
+  </svg>
+  <figcaption>一层 MLA 的五块权重，<b>条长按参数量线性画</b>。
+  <b>最大的那块和最小的那块差 28 倍</b>，而<em>决定显存账的恰恰是最小的那块</em>。
+  <b>× 61 层 = 11.41 B</b>，这就是 671 B 里注意力占的全部。</figcaption>
+  </figure>
+
+  <details class="more"><summary>展开：五个矩阵各自的形状和分工<span class="why">—— 图上那五个数字的出处</span></summary>
+  <div class="body">
   <div class="tbl-wrap"><table>
     <thead><tr><th>矩阵</th><th>形状</th><th style="text-align:right">参数量</th><th>干什么</th></tr></thead>
     <tbody>
@@ -1877,6 +2014,12 @@ footer a{text-decoration:none}
       <tr class="sum"><td colspan="2">一层合计</td><td class="n">187.11 M</td><td>× 61 层 = <b>11.41 B</b></td></tr>
     </tbody>
   </table></div>
+  <p class="sub"><b>验算：</b><code>16384×7168 = 117,440,512</code>；
+  <code>1536×24576 = 37,748,736</code>；<code>512×32768 = 16,777,216</code>；
+  <code>7168×1536 = 11,010,048</code>；<code>7168×576 = 4,128,768</code>。
+  合计 <code>187,105,280 = 187.11 M</code>，<code>117.44 / 187.11 = 62.76%</code>。</p>
+  </div>
+  </details>
 
   <h3>算账：MLA 到底省了多少</h3>
   <div class="grid g3">
@@ -1957,9 +2100,17 @@ footer a{text-decoration:none}
     <span class="t">所以后面发生了什么</span>
     这条曲线一旦被算出来，接下来该做什么就很明显了：<b>如果 attention 吃掉九成算力，
     那就别让每个 query 都看全部 token。</b>
-    V3.2 的做法是给每个 query 先挑出最相关的几千个 token 再算注意力，
-    128K 下能把这部分算量砍掉一大截。再往后的 V4 更进一步，
-    同一个模型里混用<b>三种</b>不同压缩率的注意力。
+    <b>V3.2 的做法叫 DSA</b>：给每个 query 先挑出最相关的
+    <b>2,048 个</b> token 再算注意力（<code>index_topk = 2048</code>，
+    <em>它写在 V3.2 自己的 config 里</em>）—— 128K 下这是 <b>1.6%</b>，
+    平方项当场变成线性。<br>
+    <b>再往后的 V4 是一个混合架构，两种注意力配着用</b>：
+    <em>Compressed Sparse Attention</em>（压缩 + 稀疏挑选）和
+    <em>Heavily Compressed Attention</em>（压得更狠，但不挑选，看全局）。
+    <b>结果是 100 万 token 上下文下，V4-Pro 的单 token 推理算力只要 V3.2 的 27%，
+    KV cache 只要 10%。</b>
+    <span class="sub">（DeepSeek-V4 论文摘要，arXiv 2606.19348。
+    <b>注意是两种，不是三种</b> —— 这一处本课之前写错过。）</span>
     <br><br>
     <b>这些方案长什么样、各自在换什么，是<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9803-%E6%B3%A8%E6%84%8F%E5%8A%9B%E6%BC%94%E8%BF%9B.md">专题三</a>的事。</b>
     这一课只负责把「为什么非改不可」算出来 —— 就是上面这条曲线。
@@ -3611,6 +3762,13 @@ const el = (n,a={},t)=>{const e=document.createElementNS(SVGNS,n);
   for(const k in a) e.setAttribute(k,a[k]);
   if(t!==undefined) e.textContent=t; return e;};
 
+/* 色块能用的颜色，文字未必能用。#f9ab00 在白底上对比度只有约 1.9:1、
+   #9aa0a6 约 2.6:1，都低于 WCAG AA 的 4.5:1 —— 投影仪上基本看不见。
+   凡是「用线条/色块的颜色去染文字」的地方都过一道 INK，换成同色系的深色。
+   （注意：分数矩阵里被掩码那格的 −∞ 故意保持浅灰，淡本身就是信息，不走 INK。）*/
+const INK_MAP = {"#f9ab00":"#b06000", "#9aa0a6":"#5f6368"};
+const INK = c => INK_MAP[c] || c;
+
 /* ── 渲染 ── */
 const PREC = {1:"fp8", 2:"bf16", 4:"fp32"};
 let prev = {};
@@ -4155,14 +4313,14 @@ function drawShapeChain(r){
       "stroke-width":1.4,fill:"none"}));
     g.appendChild(el("path",{d:`M${x2-4.5} ${y2-7} L${x2+4.5} ${y2-7} L${x2} ${y2} Z`,fill:c}));
     if(lbl) g.appendChild(el("text",{x:(x1+x2)/2+(side===-1?-8:8),y:(y1+y2)/2+4,
-      "text-anchor":side===-1?"end":"start",class:"svgsm",fill:c},lbl));
+      "text-anchor":side===-1?"end":"start",class:"svgsm",fill:INK(c)},lbl));
   };
   const vpass = (x,y0,y1,c,lbl)=>{               // 这一段什么都不做，直通
     const my=(y0+y1)/2;
     g.appendChild(el("path",{d:`M${x} ${y0} L${x} ${my-11} M${x} ${my+11} L${x} ${y1-7}`,
       stroke:c,"stroke-width":1.4,"stroke-dasharray":"4 4",fill:"none"}));
     g.appendChild(el("path",{d:`M${x-4.5} ${y1-7} L${x+4.5} ${y1-7} L${x} ${y1} Z`,fill:c}));
-    g.appendChild(el("text",{x,y:my+4,"text-anchor":"middle",class:"svgsm",fill:c},lbl));
+    g.appendChild(el("text",{x,y:my+4,"text-anchor":"middle",class:"svgsm",fill:INK(c)},lbl));
   };
 
   /* 入口：这一层的残差流 */
@@ -4271,7 +4429,7 @@ function drawKvLadder(r){
     g.appendChild(el("rect",{x,y,width:BW,height:bh,rx:4,fill:s[2]}));
     // 数值贴在柱顶
     g.appendChild(el("text",{x:x+BW/2,y:y-10,"text-anchor":"middle",class:"svgnum",
-      fill:s[2],"font-size":"16"}, bytesH(s[1])));
+      fill:INK(s[2]),"font-size":"16"}, bytesH(s[1])));
     // 两行标签
     s[0].split("\n").forEach((t,k)=>
       g.appendChild(el("text",{x:x+BW/2,y:Y0+20+k*15,"text-anchor":"middle",
@@ -4418,7 +4576,7 @@ function drawKvBars(r){
       `${row[3].toLocaleString()} 数/token/层`));
     const bw = Math.max(2, row[1]/max*w);
     g.appendChild(el("rect",{x:x0,y,width:bw,height:22,rx:3,fill:row[2]}));
-    g.appendChild(el("text",{x:x0+bw+10,y:y+16,class:"svgnum",fill:row[2]},bytesH(row[1])));
+    g.appendChild(el("text",{x:x0+bw+10,y:y+16,class:"svgnum",fill:INK(row[2])},bytesH(row[1])));
     if(i===3) g.appendChild(el("text",{x:x0+bw+10,y:y+16,dx:96,class:"svgsm",fill:"#1e8e3e"},
       `← 比 MHA 小 ${r.kvRatio.toFixed(1)} 倍`));
   });
@@ -4566,7 +4724,7 @@ function drawCardGrid(r){
     const y = by + i*20;
     g.appendChild(el("rect",{x:10,y:y-9,width:12,height:12,rx:2,fill:x[2]}));
     g.appendChild(el("text",{x:30,y:y+1,class:"svgsm"},`${x[0]} ${x[3]}`));
-    g.appendChild(el("text",{x:230,y:y+1,class:"svgsm",fill:x[2]},
+    g.appendChild(el("text",{x:230,y:y+1,class:"svgsm",fill:INK(x[2])},
       `${(x[1]/r.attnMatrix*100).toFixed(2)}% 它`));
   });
 }
