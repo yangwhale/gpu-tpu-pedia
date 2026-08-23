@@ -3035,6 +3035,19 @@ x = x + MoE(norm(x))
       <p class="sub">对着 94.74 GB 一除。<b>而且这只是下限。</b></p></div>
   </div>
 
+  <div class="note warn">
+    <span class="t">⚠️「<span data-v="devices">14.3</span> 张卡」是最乐观的可能值，不是答案</span>
+    这个数建立在五个假设上，而<b>每一个在真实训练里都不成立</b>：
+    只算前向、batch = 1、不含激活、不含临时缓冲、还假设权重能完美打包。<br>
+    把峰值激活 <b><span data-v="nonWeight">41.89 GiB</span></b> 也加进去，
+    <span data-v="devices">14.3</span> 变成 <b><span data-v="devicesAct">14.7</span></b> ——
+    这一步还好。<b>但换成训练就不是一个量级了</b>：
+    每参数 16 字节（权重 + 梯度 + fp32 主权重 + 两个动量），
+    671 B 就是 <b>10.74 TB</b>，<b>约 113 张卡</b> —— 比这里多将近<b>八倍</b>。
+    <em>这笔账在<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题四</a>。</em><br>
+    <b>所以正确的读法是：连最省的口径都要 15 张，而真实训练要八倍于此。</b>
+  </div>
+
   <h3>再换个感觉：这些算力是多长时间</h3>
   <p>PFLOP 是个没有体感的单位。除以硬件的算力，就变成秒了 ——
   单个 TPU v7 device 的 bf16 峰值大约 <b>1153 TFLOP/s</b> —— 官方给的是<b>每颗芯片 2307 BF16 TFLOPS</b>，而一颗芯片里有两个 device，除以二得来。</p>
@@ -3323,6 +3336,7 @@ function compute(seq, batch, B, causal=true){
   r.peakHead = r.kvMla + r.logits + r.actResid;                // 出口那一下
   r.nonWeight= Math.max(r.peakMla, r.peakMoe, r.peakHead);
   r.nwShare  = r.nonWeight / r.memWeights;
+  r.devicesAct = (r.memResident + r.nonWeight)/HBM;   // 把峰值激活也算进去
   return r;
 }
 
@@ -3428,6 +3442,7 @@ function render(first){
     memWeights:  bytesH(r.memWeights),
     memResident: bytesH(r.memResident),
     devices:  r.devices.toFixed(1),
+    devicesAct: r.devicesAct.toFixed(1),
     timeIdeal: fmtT(r.totalFlops/PEAK),
     timeReal:  fmtT(r.totalFlops/PEAK/MFU),
     timeMulti: fmtT(r.totalFlops/PEAK/MFU/Math.ceil(r.devices))
