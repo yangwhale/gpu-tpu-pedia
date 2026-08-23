@@ -1115,10 +1115,14 @@ footer a{text-decoration:none}
         第 1 个 token 转 1 度，第 100 个转 100 度。
         两个向量做点积时，<b>结果自然就带上了它们的角度差，也就是相对距离</b>。
       </div>
-      <p><b>位置信息为什么必须单独走一路。</b> 麻烦就出在这个「转角度」上。
-      它<b>依赖 token 在序列里的绝对位置</b>。如果把已经转过角度的 K 压进隐向量里，
-      升回来的时候角度就对不上了 —— <b>压缩和旋转这两件事，数学上不能交换次序</b>。
-      所以 V3 把每个头拆成两半：<span class="k">128 维</span>不带位置（可以压），
+      <p><b>位置信息为什么必须单独走一路。</b> 麻烦就出在这个「转角度」上 ——
+      <b>转多少度，取决于这个 token 排在第几位</b>。
+      如果先转角度、再压进隐向量，那这个隐向量里就<b>掺进了位置</b>；
+      而这个旋转会<b>夹在两个矩阵中间，挪不走 —— 矩阵乘法不满足交换律</b>。</p>
+      <p><em>这里有一句要说准：<b>坏掉的不是正确性</b> —— 那样做模型照样能训、照样能跑。</em>
+      <b>坏掉的是推理时一个很值钱的省法</b>，代价是<b>每生成一个字，都得把前面所有 token 的 K
+      重算一遍</b>。<em>是哪个省法，留到下面的 shape 变换链那一节讲透。</em></p>
+      <p>所以 V3 把每个头拆成两半：<span class="k">128 维</span>不带位置（可以压），
       <span class="k">64 维</span>带位置（不压，直接存）。</p>
       <div class="note info" style="margin-top:18px">
         <span class="t">576 = 512 + 64</span>
@@ -1134,7 +1138,7 @@ footer a{text-decoration:none}
 
         <path d="M120 52 v22" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
         <path d="M330 52 v22" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
-        <text x="66" y="68" class="svgsm">kv_a_proj</text>
+        <text x="112" y="68" text-anchor="end" class="svgsm">kv_a_proj</text>
         <text x="340" y="68" class="svgsm">单独一路</text>
 
         <!-- 压缩路径 -->
@@ -1275,9 +1279,12 @@ footer a{text-decoration:none}
     <em>撑宽的账，被那个 1,536 的窄腰吃掉了。</em><br>
     这也点明了两个 LoRA 的分工完全不同：<br>
     <b><code>kv_lora_rank = 512</code> 省的是 KV cache</b>（因为存的就是它）；<br>
-    <b><code>q_lora_rank = 1536</code> 省的是权重</b> —— <b>Q 根本不进 cache</b>，
-    它压缩纯粹是为了让「把头做宽」这件事在参数上付得起。<br>
-    <em>下面那张五行表里 <code>q_a_proj</code> 那行写着「省参数，不省 cache」，说的就是这件事。</em>
+    <b><code>q_lora_rank = 1536</code> 省的不是 cache</b> —— <b>Q 根本不进 cache</b>。<br>
+    <em>下面那张五行表里 <code>q_a_proj</code> 那行写着「省参数，不省 cache」，说的就是这件事。</em><br>
+    <b>⚠️ 但这里要分清出处。</b>上面那笔「省权重」的账是<b>这张表自己算出来的，论文没这么讲</b>。
+    <b>论文给的理由是另一个：「为了降低训练时的激活显存」</b>（V2 论文 2.1.2 节末尾），
+    而且特意补了一句 —— <em>即便它并不能减少 KV cache</em>。
+    <b>两个说法都成立，但别把我们的推导安到论文头上。</b>
   </div>
 
   <div class="note warn">
