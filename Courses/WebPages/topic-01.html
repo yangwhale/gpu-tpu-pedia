@@ -2935,8 +2935,9 @@ x = x + MoE(norm(x))
 
         <rect x="10" y="266" width="400" height="44" rx="6" fill="#fff" stroke="#dadce0"/>
         <text x="24" y="284" class="svgsm">对照：整个 MLA 权重（61 层）</text>
-        <text x="24" y="300" class="svgsm">22.83 GiB —— <tspan fill="#d93025" font-weight="700">
-          比不过出口这一个临时张量</tspan></text>
+        <text x="24" y="300" class="svgsm"><tspan data-v="mlaWBytes">21.26 GiB</tspan>
+          —— <tspan fill="#d93025" font-weight="700">
+          比不过出口这一个临时张量（<tspan data-v="logitsVsMla">1.48×</tspan>）</tspan></text>
       </svg>
       </figure>
     </div>
@@ -2949,6 +2950,36 @@ x = x + MoE(norm(x))
     所以真实实现里 logits 必须<b>分块算</b>、loss 要 <b>fuse 进去</b>，
     绝不能整个物化出来。这跟 FlashAttention 是同一类手法：
     <b>不要把中间结果落地。</b>
+  </div>
+
+  <h4>⭐ 三个让它更难堪的细节</h4>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>角度</th><th>数</th><th>为什么值得说</th></tr></thead>
+    <tbody>
+      <tr><td><b>算力小得离谱</b></td>
+        <td class="n"><span data-v="headShare">0.46%</span></td>
+        <td>lm_head 只花 <span data-v="headFlops">242.92 TFLOP</span>，
+          占整个前向 <span data-v="totalFlops">52.50 PFLOP</span> 的千分之五。
+          <b>全程算力最少的一步，产出了全程最大的张量</b></td></tr>
+      <tr><td><b>loss 还要 fp32</b></td>
+        <td class="n"><span data-v="logitsFp32">63.13 GiB</span></td>
+        <td>cross-entropy 在 bf16 下数值不稳，logits 通常要提到 fp32 再算。
+          于是这个<b>纯临时</b>的张量吃掉单卡 <b><span data-v="logitsCard">72%</span></b></td></tr>
+      <tr><td><b>训练 vs 推理</b></td>
+        <td class="n"><span data-v="logitsLast">252.5 KiB</span></td>
+        <td>训练每个位置都要算 loss，所以要全部；
+          推理 prefill <b>只要最后一个位置</b>。
+          同一个算子，两边差 <span data-v="tokens">131,072</span> 倍</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note ok">
+    <span class="t">这已经是第三次撞上同一件事</span>
+    <b>第 2 步</b>是 KV cache，<b>第 5 步</b>是激活，<b>现在</b>是 logits。
+    三次的形状一模一样：<em>一个在参数表上根本不存在的东西，
+    体积超过了参数本身。</em><br>
+    <b>所以这一步真正的收获不是 31.56 这个数，是那句
+    ——「算显存只算权重，一定会算错」。</b>
   </div>
 </div></section>
 
@@ -2976,7 +3007,7 @@ x = x + MoE(norm(x))
       <tr><td>MoE × 58</td><td class="n">656.57 B</td><td class="n">1.19 TiB</td>
         <td class="n" data-v="moeFlops">6.03 PFLOP</td><td>+ all-to-all <span data-v="a2aAll">1.59 TiB</span></td></tr>
       <tr><td>lm_head</td><td class="n">926.68 M</td><td class="n" data-v="embedWBytes">1.73 GiB</td>
-        <td class="n" data-v="headFlops">0.24 PFLOP</td><td>⚠️ logits <span data-v="logits">31.56 GiB</span></td></tr>
+        <td class="n" data-v="headFlops">242.92 TFLOP</td><td>⚠️ logits <span data-v="logits">31.56 GiB</span></td></tr>
       <tr class="sum"><td>合计</td><td class="n" data-v="totalW">671.03 B</td>
         <td class="n" data-v="memResident">1.23 TiB</td>
         <td class="n" data-v="totalFlops">52.50 PFLOP</td><td>激活参数仅 <span data-v="activeW">36.62 B</span></td></tr>
@@ -3259,11 +3290,21 @@ function compute(seq, batch, B, causal=true){
   r.headW     = C.V*C.d;
   r.logits    = T*C.V*B;
   r.headFlops = 2*T*r.headW;
+  // 出口那一下的三个「更吓人」的角度：
+  //   ① cross-entropy 通常要把 logits 提到 fp32，所以真实峰值是这个而不是 r.logits
+  //   ② 推理 prefill 只要最后一个位置的 logits —— 训练要全部，差 T 倍
+  //   ③ 它的算力占比极小，跟它的体积完全不成比例
+  r.logitsFp32 = T*C.V*4;
+  r.logitsLast = C.V*B;
+  r.logitsCard = r.logitsFp32/HBM;
 
   r.totalW  = r.embedW + r.mlaWAll + r.denseWAll + r.moeWAll + r.headW;
   r.activeW = r.mlaWAll + r.denseWAll + (r.moeAct + r.gateW)*C.nMoe + r.headW;
   r.totalFlops = r.mlaFlops + r.denseFlops + r.moeFlops + r.headFlops;
   r.attnShare  = r.mlaFlopsAttn*C.L / r.totalFlops;
+  r.headShare  = r.headFlops / r.totalFlops;
+  r.mlaWBytes  = r.mlaWAll*B;                 // 61 层 MLA 权重占多少字节（跟 logits 对照用）
+  r.logitsVsMla= r.logits / r.mlaWBytes;
 
   r.memWeights  = r.totalW*B;
   r.memResident = r.memWeights + r.kvMla;
@@ -3371,6 +3412,12 @@ function render(first){
     a2aLayer: bytesH(r.a2aLayer),
     a2aAll:   bytesH(r.a2aAll),
     logits:   bytesH(r.logits),
+    logitsFp32: bytesH(r.logitsFp32),
+    logitsLast: bytesH(r.logitsLast),
+    logitsCard: (r.logitsCard*100).toFixed(0)+"%",
+    logitsVsMla:r.logitsVsMla.toFixed(2)+"×",
+    mlaWBytes:  bytesH(r.mlaWBytes),
+    headShare:  (r.headShare*100).toFixed(2)+"%",
     mlaFlops:   flopH(r.mlaFlops),
     denseFlops: flopH(r.denseFlops),
     moeFlops:   flopH(r.moeFlops),

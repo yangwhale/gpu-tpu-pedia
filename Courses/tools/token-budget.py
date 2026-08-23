@@ -14,6 +14,7 @@ token-budget.py — 专题一《一个 Token 的一生》的算账脚本。
     python3 token-budget.py --json               # 机器可读
 """
 import argparse, json, pathlib, sys
+from decimal import Decimal, ROUND_HALF_UP
 
 CFG = pathlib.Path(__file__).resolve().parent.parent / "素材" / "deepseek-v3-config.json"
 HBM_PER_DEVICE = 94.74 * 1e9      # TPU v7 单 device 可用 HBM（字节，厂商 GB）
@@ -26,7 +27,10 @@ def human(b):
     """字节 → 人类可读（二进制单位）"""
     for u, s in ((TiB, "TiB"), (GiB, "GiB"), (1024**2, "MiB"), (1024, "KiB")):
         if abs(b) >= u:
-            return f"{b/u:,.2f} {s}"
+            # 半进位向上，跟网页那边 JS 的 toFixed(2) 对齐。
+            # Python 默认是银行家舍入，正好落在 .xx5 时会跟网页差一位
+            # （例：logits fp32 = 63.125 → py 63.12 / js 63.13）。
+            return f"{Decimal(b/u).quantize(Decimal('0.01'), ROUND_HALF_UP):,} {s}"
     return f"{b:,.0f} B"
 
 
@@ -127,6 +131,13 @@ def compute(c, seq, batch, bytes_per_el=2, causal=True):
     r["head_w"]     = V * d                      # tie_word_embeddings = false → 独立第二份
     r["logits"]     = T * V * B                  # ⚠️ 爆点
     r["head_flops"] = 2 * T * r["head_w"]
+    # 出口那一下的三个「更吓人」的角度：
+    #   ① cross-entropy 通常要把 logits 提到 fp32，真实峰值是这个而不是 r["logits"]
+    #   ② 推理 prefill 只要最后一个位置的 logits —— 训练要全部，差 T 倍
+    #   ③ 它的算力占比极小，跟它的体积完全不成比例（head_share，见站 7）
+    r["logits_fp32"] = T * V * 4
+    r["logits_last"] = V * B
+    r["logits_card"] = r["logits_fp32"] / HBM_PER_DEVICE
 
     # ── 站 7 · 合账 ───────────────────────────────────────────────
     r["total_w"] = (r["embed_w"] + r["mla_w_all"] + r["dense_w_all"]
@@ -138,6 +149,9 @@ def compute(c, seq, batch, bytes_per_el=2, causal=True):
     r["total_flops"] = (r["mla_flops_all"] + r["dense_flops_all"]
                         + r["moe_flops_all"] + r["head_flops"])
     r["attn_share"] = r["mla_flops_attn"] * L / r["total_flops"]
+    r["head_share"] = r["head_flops"] / r["total_flops"]
+    r["mla_w_bytes"]  = r["mla_w_all"] * B
+    r["logits_vs_mla"] = r["logits"] / r["mla_w_bytes"]
 
     r["mem_weights"] = r["total_w"] * B
     r["mem_resident"] = r["mem_weights"] + r["kv_total"]      # 常驻：权重 + KV
@@ -191,6 +205,14 @@ def report(r):
     P(f"  lm_head       {params_h(r['head_w'])}   ⚠️ tie_word_embeddings=false，是独立的第二份")
     P(f"  logits 张量   {c['tokens']:,} × {c['V']:,} × {c['bytes']}B = {human(r['logits'])}"
       f"   ← 比中间任何一层都吓人")
+    P(f"  对照 61 层 MLA 全部权重 {human(r['mla_w_bytes'])}"
+      f"   → logits 是它的 {r['logits_vs_mla']:.2f}×")
+    P(f"  loss 要 fp32  {human(r['logits_fp32'])}"
+      f"   ← 单卡 {HBM_PER_DEVICE/1e9:.2f} GB 的 {r['logits_card']*100:.0f}%")
+    P(f"  推理只要末位  {human(r['logits_last'])}"
+      f"   ← 训练要全部，差 {c['tokens']:,} 倍")
+    P(f"  算力占比      {r['head_share']*100:.2f}%"
+      f"   ← 全程算力最少的一步，产出全程最大的张量")
 
     P(f"\n【站 7】合账")
     P(f"  {'总参数':<14}{params_h(r['total_w']):>12}      官方口径 671B")
