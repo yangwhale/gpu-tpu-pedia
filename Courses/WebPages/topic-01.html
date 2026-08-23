@@ -201,6 +201,7 @@ body.batched [data-v="tokens"]::after{
 .stat{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:4px}
 .stat.blue{color:var(--blue-d)}.stat.red{color:var(--red)}
 .stat.green{color:var(--green)}.stat.orange{color:var(--orange)}
+.sub{font-size:.92em;color:var(--gray)}
 .card .sub{font-size:13.5px;color:var(--gray);line-height:1.55}
 
 table{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
@@ -967,7 +968,40 @@ footer a{text-decoration:none}
   </figure>
 
   <h3>三个旋钮，四代方案</h3>
-  <p>所有注意力变体，拧的都是同样几个旋钮。<b>这一代代下来，改的是「每个 token 存多少」。</b></p>
+  <p>所有注意力变体，拧的都是同样几个旋钮。<b>这一代代下来，改的是「每个 token 存多少」。</b>
+  把上面那个公式里的<b>「每 token 每层存多少个数」再拆开一层</b>，旋钮就露出来了：</p>
+
+  <div class="eq">每 token 每层 = <span class="r">2</span> × <span class="r">KV 头数</span> × <span class="r">每头维度</span>   <span class="c">// 2 = K 和 V 各一份，动不了</span>
+
+<span class="c">// V3 如果用最传统的存法：2 × 128 × 128 = </span><span class="r" data-v="kvMhaPerN">32,768</span></div>
+
+  <div class="tbl-wrap"><table>
+    <colgroup><col style="width:16%"><col><col style="width:15%"></colgroup>
+    <thead><tr><th>旋钮</th><th>拧下去会怎样</th><th>谁在拧</th></tr></thead>
+    <tbody>
+      <tr><td><b>① 存几份</b><br><em>KV 头数</em></td>
+        <td>128 → 8 → 1，<b>直接除下去，三个里最猛的</b>。代价是多个 Q 头被迫共用同一份 K/V，
+          <b>表达力是真丢了，而且找不回来</b></td>
+        <td>MQA、GQA</td></tr>
+      <tr><td><b>② 每份多宽</b><br><em>每头维度</em></td>
+        <td>几乎没人动，业界基本钉在 128。它决定<b>单个头能装多少信息</b>，砍窄了每个头都变笨；
+          而且 kernel 只对几个固定宽度优化过，太奇怪的宽度<b>省了显存却跑不快</b></td>
+        <td>——</td></tr>
+      <tr><td><b>③ 存几层</b><br><em>层数</em></td>
+        <td>让相邻几层共用同一份 KV，或者只让部分层看全长（滑动窗口）。
+          <b>它改的是「存不存」，不是「存多少」</b> —— 所以不在四代那张表里</td>
+        <td>跨层共享<br>窗口注意力</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note ok">
+    <span class="t">⭐ 先把结论放在这儿：MLA 一个旋钮都没拧</span>
+    <b>128 个头还是 128 个头，每头还是 128 维，61 层一层不少。</b>
+    它换的是<b>「存什么」</b> —— 不存展开后的 K 和 V，
+    改存一个 512 维的压缩向量，外加 64 维单独走的位置信息，一共 <b>576</b> 个数。<br>
+    <b>所以四代对照里，MLA 的 576 卡在 GQA 的 2,048 和 MQA 的 256 中间，质量却比两个都好。</b>
+    <em>在同一根轴上这不可能 —— 它做得到，正是因为它根本不在那根轴上。</em>
+  </div>
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 260" role="img" aria-label="MHA MQA GQA MLA 四代注意力的 KV 存储对比">
@@ -1049,6 +1083,23 @@ footer a{text-decoration:none}
   <figcaption>四代注意力。前三代的思路都是「让多个头共用同一份 KV」——
   省了显存但丢了表达力。MLA 换了个思路：<b>不共享，改压缩</b>。</figcaption>
   </figure>
+
+  <div class="note ok">
+    <span class="t">⭐ 这一段真正的落点：换掉的不是数字，是「拿什么去换」</span>
+    <b>前三代拿质量换显存</b> —— 共用一份 KV，丢掉的表达力找不回来。<br>
+    <b>MLA 拿算力换显存</b> —— 存的时候压成 576，用的时候<b>现场展开成 128 个头</b>。
+    信息没丢，只是换了个存法，代价是每次用都要多算一遍。<br>
+    <em>这个形状后面还会再见一次：训练里的「重计算」也是不存中间结果、要用时重算一遍。
+    <b>某种意义上，MLA 就是对 KV cache 做重计算。</b></em>
+  </div>
+
+  <div class="note warn">
+    <span class="t">⚠️ 但「MLA 省显存」这句话，只在推理侧成立</span>
+    训练的前向里，那份展开成 128 个头的 K 和 V <b>照样要留下来给反向用</b> ——
+    每 token 每层还是 32,768 个数，<b>压缩在这里不生效</b>。<br>
+    <b>所以别让人带走「MLA 让训练也省显存」这个印象。</b>
+    <em>训练那笔账是另一个专题的事，这里只把边界说清楚。</em>
+  </div>
 
   <h3>MLA 到底怎么做的</h3>
   <div class="grid g2">
