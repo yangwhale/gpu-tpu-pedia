@@ -1317,7 +1317,7 @@ footer a{text-decoration:none}
 
         <!-- RoPE 路径 -->
         <rect x="290" y="80" width="80" height="26" rx="4" fill="#f9ab00"/>
-        <text x="330" y="98" text-anchor="middle" class="svgsm" fill="#fff">k_rope · 64</text>
+        <text x="330" y="98" text-anchor="middle" class="svgsm" fill="#5c3d00">k_rope · 64</text>
 
         <text x="10" y="128" class="svglbl" fill="#d93025">↓ 以上 576 个数就是全部要存的</text>
         <line x1="10" y1="138" x2="430" y2="138" stroke="#d93025" stroke-dasharray="4 3"/>
@@ -2130,12 +2130,24 @@ footer a{text-decoration:none}
   <div class="grid g2">
     <div>
       <h4>结构：三个矩阵 + 一个门</h4>
+      <p><b>撑宽、开一个阀门、再压回来。</b>
+      <em>三个矩阵，每个 <span class="k">7,168 × 18,432</span></em> ——
+      一层 <span class="num">396.36 M</span> 参数，三层合计 <span class="num">1.19 B</span>。</p>
+      <p class="sub"><b>这一步的形状是完全固定的</b>，
+      跟输入内容、跟序列多长都没有关系。<em>下面那四条好处，全都是从这一句长出来的。</em></p>
+
+      <details class="more"><summary>展开：四行公式<span class="why">—— 图上那条金色的乘号，写出来是什么</span></summary>
+      <div class="body">
       <div class="eq">gate = <span class="c">W_gate</span> · x     <span class="c">// 7168 → 18432</span>
 up   = <span class="c">W_up</span>   · x     <span class="c">// 7168 → 18432</span>
 h    = SiLU(gate) ⊙ up  <span class="c">// 逐元素相乘</span>
 out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168</span></div>
-      <p>三个矩阵，每个 <span class="k">7168 × 18432</span>，一层
-      <span class="num">396.36 M</span> 参数。三层合计 <span class="num">1.19 B</span>。</p>
+      <p class="sub"><code>⊙</code> 是逐元素相乘，不是矩阵乘 ——
+      <b>两个 18,432 维的向量对位相乘，出来还是 18,432 维。</b>
+      <code>SiLU(z) = z · σ(z)</code>，<em>config 里那个字段就叫
+      <code>hidden_act: "silu"</code></em>。</p>
+      </div>
+      </details>
     </div>
     <div>
       <h4>它对硬件到底有多友好</h4>
@@ -2234,24 +2246,237 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
   <p>SwiGLU 把「撑宽」这一步做了<b>两份</b>：一份过 SiLU 当阀门，一份原样当水流，
   再逐元素相乘。于是「哪些通道该放行、放多少」变成了
-  <b>学出来的、而且跟着输入变</b>的东西。
-  还有一层更本质的 —— 两份都是 <code>x</code> 的线性函数，
-  <b>一相乘就产生了 <code>x</code> 的二次项</b>。乘法本身就是一种交互，
-  单个激活函数造不出这种表达力。</p>
+  <b>学出来的、而且跟着输入变</b>的东西。</p>
+
+  <p><b>关键不在 SiLU，在那个乘号。</b>
+  同一篇论文里还有一个叫 <em>Bilinear</em> 的变体 ——
+  <b>两条路都不过任何激活函数，直接相乘</b>，
+  这时候输出就是 <code>x</code> 的严格二次型。
+  <em>而它照样赢过所有「只换激活函数」的写法。</em>
+  <b>说明买到表达力的是「两个线性变换相乘」，不是某个激活函数更聪明。</b></p>
+
+  <p><b>这句话有实验撑着，而且是同一张表里读出来的。</b>
+  <em>八个写法，全部对齐参数量和算力，训一样多的步数 —— 看它们分成了哪两堆。</em></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 382" role="img"
+       aria-label="GLU 变体消融：只换激活函数没有收益，加一个乘号才有收益。ReLU 基线 1.677，GELU 1.679、Swish 1.683 都更差；GLU 1.663、Bilinear 1.648、ReGLU 1.645、SwiGLU 1.636、GEGLU 1.633 都更好">
+    <g>
+      <text x="20" y="24" class="svglbl">条长 = 比 ReLU 基线好多少（heldout log-perplexity，越小越好）　·　八个写法全部对齐参数量与算力</text>
+
+      <text x="250" y="58" text-anchor="end" class="svgnum" fill="#a50e0e">只换激活函数</text>
+      <text x="262" y="58" class="svgsm" fill="#a50e0e">还是两个矩阵 —— 这一组一个都没赢</text>
+
+      <text x="250" y="88" text-anchor="end" class="svglbl">GELU</text>
+      <rect x="340" y="72" width="20" height="22" rx="3" fill="#fce8e6" stroke="#d93025"/>
+      <text x="372" y="88" class="svgsm" fill="#a50e0e">1.679　比基线还差一点</text>
+
+      <text x="250" y="122" text-anchor="end" class="svglbl">Swish</text>
+      <rect x="300" y="106" width="60" height="22" rx="3" fill="#fce8e6" stroke="#d93025"/>
+      <text x="372" y="122" class="svgsm" fill="#a50e0e">1.683　差得更多</text>
+
+      <text x="250" y="162" text-anchor="end" class="svgnum" fill="#174ea6">加一个乘号</text>
+      <text x="262" y="162" class="svgsm" fill="#174ea6">三个矩阵，中间宽度按 2/3 缩过 —— 这一组全都赢</text>
+
+      <text x="250" y="190" text-anchor="end" class="svglbl">GLU</text>
+      <rect x="360" y="174" width="140" height="22" rx="3" fill="#c9defc"/>
+      <text x="510" y="190" class="svgsm" fill="#174ea6">1.663</text>
+
+      <text x="250" y="220" text-anchor="end" class="svgnum" fill="#b06000">⭐ Bilinear</text>
+      <rect x="360" y="204" width="290" height="22" rx="3" fill="#f9ab00"/>
+      <text x="372" y="220" class="svgsm" fill="#5c3d00">连激活函数都没有，纯粹两条线性路相乘</text>
+      <text x="660" y="220" class="svgnum" fill="#b06000">1.648</text>
+
+      <text x="250" y="250" text-anchor="end" class="svglbl">ReGLU</text>
+      <rect x="360" y="234" width="320" height="22" rx="3" fill="#c9defc"/>
+      <text x="690" y="250" class="svgsm" fill="#174ea6">1.645</text>
+
+      <text x="250" y="280" text-anchor="end" class="svgnum" fill="#174ea6">SwiGLU</text>
+      <rect x="360" y="264" width="410" height="22" rx="3" fill="#1a73e8"/>
+      <text x="372" y="280" class="svgsm" fill="#fff">V3 用的就是这个</text>
+      <text x="780" y="280" class="svgnum" fill="#174ea6">1.636</text>
+
+      <text x="250" y="310" text-anchor="end" class="svglbl">GEGLU</text>
+      <rect x="360" y="294" width="440" height="22" rx="3" fill="#c9defc"/>
+      <text x="810" y="310" class="svgsm" fill="#174ea6">1.633　<tspan font-weight="700">全场最好</tspan></text>
+
+      <line x1="360" y1="66" x2="360" y2="322" stroke="#5f6368" stroke-dasharray="4 4"/>
+      <text x="360" y="340" text-anchor="middle" class="svglbl" fill="#5f6368">↑ ReLU 基线 1.677</text>
+
+      <text x="20" y="362" class="svgsm" fill="#b06000">⭐ 两组之间的差距，比组内任何两个的差距都大 —— 分界线是「有没有那个乘号」，不是「用了哪个激活函数」</text>
+      <text x="20" y="378" class="svgsm">四个 GLU 变体的区别只在门用什么函数：GLU 用 sigmoid，ReGLU 用 ReLU，GEGLU 用 GELU，SwiGLU 用 SiLU。Bilinear 干脆不装门</text>
+    </g>
+  </svg>
+  <figcaption><b>出处：<em>GLU Variants Improve Transformer</em>，arXiv 2002.05202 的 Table 1。</b>
+  T5 规模的 span-filling 任务，八个写法<b>全部对齐参数量与算力</b>，训练 524,288 步。<br>
+  <b>读法只有一句：换激活函数（上面两根）没用甚至更差，加乘号（下面五根）全都有用。</b>
+  <em>而 SwiGLU 1.636 和 GEGLU 1.633 基本打平 —— V3 选 SwiGLU，不是因为它是最好的那个。</em></figcaption>
+  </figure>
+
+  <div class="note warn">
+    <span class="t">这里必须诚实：连提出 SwiGLU 的人都说不出为什么它好</span>
+    这篇论文的结论段原话是：<em>“We offer no explanation as to why these architectures
+    seem to work; we attribute their success, as all else, to divine benevolence.”</em><br>
+    <b>翻成人话：我们没法解释它为什么行，就当是老天赏饭。</b>
+    <em>所以上面那句「乘法带来交互项」是一个说得通的直觉，不是被证明的因果。</em>
+    <b>这张表能支撑的只有一件事：门控这一组确实赢，而且赢的不是激活函数。</b>
+  </div>
+
+  <details class="more"><summary>展开：那张表的完整数据，以及它能不能推广到 671 B<span class="why">—— 图上只画了一列，还有一列</span></summary>
+  <div class="body">
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>写法</th><th>矩阵数</th>
+      <th style="text-align:right">65,536 步</th><th style="text-align:right">524,288 步</th></tr></thead>
+    <tbody>
+      <tr><td>FFN<sub>ReLU</sub>　<span class="sub">基线</span></td><td>2</td>
+        <td class="n">1.997</td><td class="n">1.677</td></tr>
+      <tr><td>FFN<sub>GELU</sub></td><td>2</td>
+        <td class="n">1.983</td><td class="n" style="color:#a50e0e">1.679</td></tr>
+      <tr><td>FFN<sub>Swish</sub></td><td>2</td>
+        <td class="n">1.994</td><td class="n" style="color:#a50e0e">1.683</td></tr>
+      <tr><td>FFN<sub>GLU</sub></td><td>3</td>
+        <td class="n">1.982</td><td class="n" style="color:#0d652d">1.663</td></tr>
+      <tr><td>FFN<sub>Bilinear</sub>　<span class="sub">⭐ 无激活函数</span></td><td>3</td>
+        <td class="n">1.960</td><td class="n" style="color:#0d652d">1.648</td></tr>
+      <tr><td>FFN<sub>ReGLU</sub></td><td>3</td>
+        <td class="n">1.953</td><td class="n" style="color:#0d652d">1.645</td></tr>
+      <tr><td><b>FFN<sub>SwiGLU</sub></b>　<span class="sub">V3 用的</span></td><td>3</td>
+        <td class="n">1.944</td><td class="n" style="color:#0d652d"><b>1.636</b></td></tr>
+      <tr><td>FFN<sub>GEGLU</sub></td><td>3</td>
+        <td class="n"><b>1.942</b></td><td class="n" style="color:#0d652d"><b>1.633</b></td></tr>
+    </tbody>
+  </table></div>
+  <p class="sub"><b>heldout log-perplexity，越小越好。</b>
+  两列分别是训练 65,536 步和 524,288 步。<b>两列的分组结论完全一致</b> ——
+  <em>不是只在某个训练量上成立。</em></p>
+
+  <div class="note warn">
+    <span class="t">这张表的适用范围，要说清楚</span>
+    <b>它跑在 T5 规模的 span-filling 任务上，不是 671 B 的因果语言模型。</b>
+    <em>严格说，它证明的是「在那个设置下，门控这一组赢」。</em><br>
+    <b>能支持我们的是另一件事：翻开今天主流模型的 config，全都在 GLU 家族里。</b>
+    <em>这是很强的共识信号，但它是共识，不是这张表的直接外推。</em>
+  </div>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>模型</th><th><code>hidden_act</code></th><th>写法</th>
+      <th style="text-align:right">中间宽度 ÷ 残差流</th></tr></thead>
+    <tbody>
+      <tr><td>Llama 3 8B</td><td><code>silu</code></td><td>SwiGLU</td><td class="n">3.50×</td></tr>
+      <tr><td>Mistral 7B</td><td><code>silu</code></td><td>SwiGLU</td><td class="n">3.50×</td></tr>
+      <tr><td>Qwen3 8B</td><td><code>silu</code></td><td>SwiGLU</td><td class="n">3.00×</td></tr>
+      <tr><td>Gemma 2 9B</td><td><code>gelu_pytorch_tanh</code></td><td>GEGLU</td><td class="n">4.00×</td></tr>
+      <tr class="sum"><td><b>DeepSeek V3</b>（前 3 层）</td><td><code>silu</code></td><td>SwiGLU</td>
+        <td class="n"><b>2.57×</b></td></tr>
+    </tbody>
+  </table></div>
+  <p class="sub"><b>都是从各自 config.json 里读的。</b>
+  <em>顺带看出一件本来不明显的事：那条「乘 2/3」的规则（4× → 2.67×）今天并没有被普遍遵守</em> ——
+  <b>Llama 3 和 Mistral 是 3.5×，Gemma 2 干脆 4×，都比规则宽得多。</b>
+  <em>反倒是 V3 的 2.57× 最接近原始规则，也是这几个里最省的。</em>
+  <b>所以「V3 照着参数持平反推 18,432」是一个说得通的解读，但那是我们的解读</b> ——
+  <em>同样遵循这条规则的模型，今天已经是少数。</em></p>
+  </div>
+  </details>
+
+  <h4>多一个矩阵，为什么没多花钱</h4>
+  <p>第二个必被问到的问题。<b>答案是中间宽度被缩过</b> ——
+  <em>而且缩多少，是那篇论文里写死的一条规则。</em></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 310" role="img"
+       aria-label="三种写法的一层参数量对比：经典两矩阵 4 倍宽 411.04 M，三矩阵按 2/3 规则缩到 19115 宽也是 411.04 M，V3 实际用 18432 宽只有 396.36 M">
+    <g>
+      <text x="20" y="26" class="svglbl">每一小格 = 一个权重矩阵，格子长度 = 它的参数量　·　三行总长直接可比</text>
+
+      <text x="216" y="86" text-anchor="end" class="svgnum" fill="#5f6368">经典 MLP</text>
+      <text x="216" y="102" text-anchor="end" class="svgsm">2 个矩阵 · 宽 28,672（4×）</text>
+      <rect x="230" y="72" width="318" height="34" rx="4" fill="#f1f3f4" stroke="#9aa0a6"/>
+      <text x="389" y="94" text-anchor="middle" class="svgsm">up　205.52 M</text>
+      <rect x="550" y="72" width="318" height="34" rx="4" fill="#f1f3f4" stroke="#9aa0a6"/>
+      <text x="709" y="94" text-anchor="middle" class="svgsm">down　205.52 M</text>
+      <text x="880" y="94" class="svgnum" fill="#5f6368">411.04 M</text>
+
+      <text x="216" y="156" text-anchor="end" class="svgnum" fill="#174ea6">论文的 2/3 规则</text>
+      <text x="216" y="172" text-anchor="end" class="svgsm" fill="#174ea6">3 个矩阵 · 宽 19,115</text>
+      <rect x="230" y="142" width="211" height="34" rx="4" fill="#e8f0fe" stroke="#1a73e8"
+            stroke-dasharray="5 4"/>
+      <text x="335" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">gate　137.01 M</text>
+      <rect x="443" y="142" width="211" height="34" rx="4" fill="#e8f0fe" stroke="#1a73e8"
+            stroke-dasharray="5 4"/>
+      <text x="548" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">up　137.01 M</text>
+      <rect x="657" y="142" width="211" height="34" rx="4" fill="#e8f0fe" stroke="#1a73e8"
+            stroke-dasharray="5 4"/>
+      <text x="762" y="164" text-anchor="middle" class="svgsm" fill="#174ea6">down　137.01 M</text>
+      <text x="880" y="164" class="svgnum" fill="#174ea6">411.04 M</text>
+
+      <text x="216" y="226" text-anchor="end" class="svgnum" fill="#0d652d">V3 实际</text>
+      <text x="216" y="242" text-anchor="end" class="svgsm" fill="#0d652d">3 个矩阵 · 宽 18,432（2.57×）</text>
+      <rect x="230" y="212" width="204" height="34" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="332" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">gate　132.12 M</text>
+      <rect x="436" y="212" width="204" height="34" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="538" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">up　132.12 M</text>
+      <rect x="642" y="212" width="204" height="34" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="744" y="234" text-anchor="middle" class="svgsm" fill="#0d652d">down　132.12 M</text>
+      <text x="880" y="234" class="svgnum" fill="#0d652d">396.36 M</text>
+
+      <line x1="870" y1="46" x2="870" y2="256" stroke="#d93025" stroke-dasharray="5 4"/>
+      <text x="870" y="40" text-anchor="middle" class="svglbl" fill="#d93025">参数持平线</text>
+      <path d="M846 252 V264 M870 252 V264 M846 258 H870" stroke="#1e8e3e" stroke-width="1.6"/>
+      <text x="838" y="263" text-anchor="end" class="svgnum" fill="#0d652d">V3 少 3.57%　↘</text>
+
+      <text x="20" y="294" class="svgsm">⭐ 2/3 是论文里写死的规则：三矩阵写法把中间宽度乘 2/3，参数量和算力就跟两矩阵写法完全持平。V3 又比它低一点（0.643 而不是 0.667）</text>
+    </g>
+  </svg>
+  <figcaption><b>三行总长直接可比。</b>多一个矩阵不等于多花钱 ——
+  <b>中间宽度缩了，总长反而更短。</b>
+  <em>门控那点表达力，在参数账上是白送的，V3 甚至还省了 3.57%。</em></figcaption>
+  </figure>
 
   <div class="note ok">
-    <span class="t">但三个矩阵并没有更贵 —— 中间宽度是照着「参数量持平」挑的</span>
-    <div class="tbl-wrap"><table>
-      <thead><tr><th>写法</th><th>中间宽度</th><th>矩阵数</th><th>一层参数</th></tr></thead>
-      <tbody>
-        <tr><td>经典 MLP（惯例撑到 4×）</td><td>28,672</td><td>2</td><td>411.04 M</td></tr>
-        <tr><td><b>V3 的 SwiGLU</b></td><td><b>18,432</b>（2.57×）</td><td><b>3</b></td>
-            <td><b>396.36 M</b></td></tr>
-      </tbody>
-    </table></div>
-    多了一个矩阵，参数反而<b>少 3.57%</b>。所以 <code>18,432</code> 这个数不是随手定的，
-    是<b>照着「跟经典写法花一样多」反推出来的</b>。门控那点表达力，等于白送。
+    <span class="t">「乘 2/3」不是我们凑的，是论文里明写的</span>
+    <em>“All of these layers have three weight matrices, as opposed to two for the
+    original FFN. To keep the number of parameters and the amount of computation
+    constant, we reduce the number of hidden units d<sub>ff</sub> … by a factor of
+    2/3 when comparing these layers to the original two-matrix version.”</em><br>
+    <span class="sub">—— GLU Variants Improve Transformer，arXiv 2002.05202 第 2 节。
+    <b>上面那张消融表也是在这条规则下跑的</b>，所以那八个写法才真的可比。</span>
   </div>
+
+  <details class="more"><summary>展开：18,432 这个数同时卡在三条线上<span class="why">—— 哪一条是真正的理由，论文没说</span></summary>
+  <div class="body">
+  <p><b>这个数字很干净，而且它同时满足三件事。三件都能验算，但没有一件被论文认领过。</b></p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>约束</th><th>验算</th><th>吻合程度</th></tr></thead>
+    <tbody>
+      <tr><td><b>① 正好是 9 个专家</b><br>
+        <span class="sub">= 8 个路由 + 1 个共享</span></td>
+        <td><code>9 × 2,048 = 18,432</code></td>
+        <td style="color:#0d652d"><b>完全相等</b><br>
+          <span class="sub">一层 dense ＝ 一层 MoE 每个 token 真正激活的量</span></td></tr>
+      <tr><td>② 对齐加速器的矩阵单元</td>
+        <td><code>18,432 ÷ 256 = 72</code></td>
+        <td style="color:#0d652d">整除<br>
+          <span class="sub">但 2/3 规则给的 19,114.67 连整数都不是</span></td></tr>
+      <tr><td>③ 论文的 2/3 规则</td>
+        <td><code>28,672 × 2/3 = 19,114.67</code></td>
+        <td style="color:#b06000">接近但没踩上<br>
+          <span class="sub">V3 是 0.643 倍，规则是 0.667 倍</span></td></tr>
+    </tbody>
+  </table></div>
+  <p><b>① 那条最值得注意，因为它不是巧合能解释的量级。</b>
+  <em>它意味着：V3 前三层每个 token 走的 MLP，和后面 58 层里每个 token 激活的那 9 个专家，
+  参数量与算力<b>逐个矩阵地相等</b>。</em>
+  <b>整个模型从头到尾，每个 token 走的 MLP 算力几乎是一条平线。</b></p>
+  <p class="sub"><b>「几乎」这两个字要留着</b>：MoE 层还多一个路由器，
+  <code>7,168 × 256 = 1.84 M</code>，<em>相对 396.36 M 是 0.46%</em>。
+  <b>所以准确的说法是「专家那部分严格相等，加上路由多 0.46%」，不是「一个都不多」。</b></p>
+  <p class="sub"><b>但请注意措辞。</b>「相等」是能验算的事实；
+  <em>「所以他们是照着这个定的」是解读</em> ——
+  <b>V3 论文只写了 <code>intermediate_size</code> 和 <code>moe_intermediate_size</code>
+  这两个数，没有写它们之间的关系是有意的。</b></p>
+  </div>
+  </details>
 
   <div class="note info">
     <span class="t">这个结构后面还会原样出现一次</span>
@@ -2266,9 +2491,58 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
     <b>MoE 省下来的算力，是拿这些好性质换的。</b>
   </div>
 
-  <p><b>为什么最前面几层偏偏不做 MoE？</b> 靠近输入的那几层做的事最通用 ——
-  基本的词法、局部句法，几乎每个 token 都要用。这种活儿没什么可分工的，
-  硬要路由反而是白付通信成本。<b>分工要有意义，得先有分化。</b></p>
+  <h4>为什么最前面几层偏偏不做 MoE</h4>
+  <p>这个问题有一个流传很广的答案：<em>「靠近输入的层做的是通用活儿，没什么可分工的。」</em>
+  <b>听起来很顺，但那不是 DeepSeek 给的理由。</b>
+  <em>去翻论文，会发现真实情况是一条链，而且最后一环是断的。</em></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 262" role="img"
+       aria-label="三代论文对前几层保持 dense 的说法：DeepSeekMoE 给了负载均衡收敛慢的理由，V2 只说沿用，V3 改成前三层但没有给理由">
+    <g>
+      <text x="20" y="26" class="svglbl">同一个设计，三篇论文各说了什么　·　按时间从上往下</text>
+
+      <rect x="30" y="44" width="300" height="86" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="46" y="66" class="svgnum" fill="#0d652d">DeepSeekMoE · 2024</text>
+      <text x="46" y="84" class="svgsm" fill="#0d652d">前 1 层保持 dense</text>
+      <text x="46" y="106" class="svgsm" fill="#0d652d">✅ 给了理由：</text>
+      <text x="46" y="122" class="svgsm" fill="#0d652d">第一层的负载均衡收敛得特别慢</text>
+
+      <path d="M330 87 H366" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar3)"/>
+
+      <rect x="370" y="44" width="270" height="86" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="386" y="66" class="svgnum" fill="#174ea6">DeepSeek-V2 · 2024</text>
+      <text x="386" y="84" class="svgsm" fill="#174ea6">前 1 层保持 dense</text>
+      <text x="386" y="106" class="svgsm" fill="#174ea6">↩ 只说「沿用上一篇」</text>
+      <text x="386" y="122" class="svgsm" fill="#174ea6">（原文：Following Dai et al. 2024）</text>
+
+      <path d="M640 87 H676" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar3)"/>
+
+      <rect x="680" y="44" width="290" height="86" rx="8" fill="#fef7e0" stroke="#f9ab00"
+            stroke-width="2"/>
+      <text x="696" y="66" class="svgnum" fill="#b06000">DeepSeek-V3 · 2024</text>
+      <text x="696" y="84" class="svgnum" fill="#b06000">前 3 层保持 dense</text>
+      <text x="696" y="106" class="svgsm" fill="#b06000">❓ 只陈述事实，没有给理由</text>
+      <text x="696" y="122" class="svgsm" fill="#b06000">为什么从 1 变成 3 —— 论文没写</text>
+
+      <line x1="30" y1="152" x2="970" y2="152" stroke="#dadce0"/>
+
+      <text x="20" y="180" class="svgnum" fill="#0d652d">能说的</text>
+      <text x="96" y="180" class="svgsm" fill="#0d652d">「保留前几层 dense」这个做法，最初的公开理由是<tspan font-weight="700">训练稳定性</tspan>（负载均衡收敛慢），不是「通用 vs 专用」</text>
+
+      <text x="20" y="206" class="svgnum" fill="#b06000">不能说的</text>
+      <text x="96" y="206" class="svgsm" fill="#b06000">「V3 选 3 层是因为前三层最通用」——<tspan font-weight="700">这是我们的猜测，论文里没有任何依据</tspan></text>
+
+      <text x="20" y="232" class="svgnum" fill="#174ea6">顺带一提</text>
+      <text x="96" y="232" class="svgsm" fill="#174ea6">V3 的部署方案里，浅层这几个 dense MLP 是单独按 1-way 张量并行摆的 —— 为了省掉那部分通信</text>
+
+      <text x="96" y="252" class="svgsm">这一条反过来印证了左边那张「四条好性质」表：dense 的好，是能在部署上兑现成真钱的</text>
+    </g>
+  </svg>
+  <figcaption><b>这是一条能查证的链，也是一个能查证的缺口。</b>
+  <em>把「负载均衡收敛慢」讲成「前几层比较通用」，是把一个训练现象换成了一个语义故事</em> ——
+  <b>两者都可能对，但只有前者写在论文里。</b></figcaption>
+  </figure>
 </div></section>
 
 <!-- ══════════ 第 4 步 · MoE ══════════ -->
@@ -4783,7 +5057,7 @@ function drawCardGrid(r){
   // 共享专家
   const sy = Y0 + 8*(ch+gap) + 12;
   g.appendChild(el("rect",{x:X0,y:sy,width:60,height:ch+4,rx:3,fill:"#f9ab00"}));
-  g.appendChild(el("text",{x:X0+30,y:sy+13,"text-anchor":"middle",class:"svgsm",fill:"#fff"},"共享 ×1"));
+  g.appendChild(el("text",{x:X0+30,y:sy+13,"text-anchor":"middle",class:"svgsm",fill:"#5c3d00"},"共享 ×1"));
   g.appendChild(el("text",{x:X0+72,y:sy+13,class:"svgsm",fill:"#b06000"},
     "每个 token 都过它 —— 通用能力不必在 256 个专家里各学一遍"));
 })();
