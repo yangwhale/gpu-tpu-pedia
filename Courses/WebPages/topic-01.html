@@ -2693,6 +2693,90 @@ o_proj (128 × 128) × 7168       = <span class="r">117.44 M ← 占 62.8%</span
   <div class="stn"><span class="badge">第 5 步</span><h2>层间：残差流这条总线</h2></div>
   <p class="lead">前面讲的都是「一层里面」。这一步讲 61 层是怎么串起来的。</p>
 
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 344" role="img"
+       aria-label="左边是常见的错误图像：61 层串成一根管道；右边是实际结构：一条贯穿全程的残差流总线，每层从它读一份再加回去">
+    <defs>
+      <marker id="ard2" markerWidth="8" markerHeight="8" refX="6" refY="2.6" orient="auto">
+        <path d="M0,0 L0,5.2 L6,2.6 z" fill="#9aa0a6"/></marker>
+      <marker id="arr" markerWidth="8" markerHeight="8" refX="6" refY="2.6" orient="auto">
+        <path d="M0,0 L0,5.2 L6,2.6 z" fill="#9aa0a6"/></marker>
+      <marker id="arl" markerWidth="8" markerHeight="8" refX="6" refY="2.6" orient="auto">
+        <path d="M0,0 L0,5.2 L6,2.6 z" fill="#1e8e3e"/></marker>
+    </defs>
+
+    <!-- ══ 左：管道（错） ══ -->
+    <text x="30" y="26" class="svglbl" fill="#a50e0e">✗ 常见的错误图像：一根管道</text>
+    <text x="30" y="46" class="svgsm" fill="#5f6368">数据从第 1 层流到第 2 层，再流到第 3 层</text>
+
+    <g>
+      <rect x="100" y="72" width="176" height="32" rx="6" fill="#f1f3f4" stroke="#9aa0a6"/>
+      <text x="188" y="93" text-anchor="middle" class="svgsm" fill="#3c4043">嵌入</text>
+      <path d="M188 104 V114" stroke="#9aa0a6" stroke-width="1.4" marker-end="url(#ard2)"/>
+
+      <rect x="100" y="120" width="176" height="32" rx="6" fill="#f1f3f4" stroke="#9aa0a6"/>
+      <text x="188" y="141" text-anchor="middle" class="svgsm" fill="#3c4043">第 1 层</text>
+      <path d="M188 152 V162" stroke="#9aa0a6" stroke-width="1.4" marker-end="url(#ard2)"/>
+
+      <rect x="100" y="168" width="176" height="32" rx="6" fill="#f1f3f4" stroke="#9aa0a6"/>
+      <text x="188" y="189" text-anchor="middle" class="svgsm" fill="#3c4043">第 2 层</text>
+      <path d="M188 200 V210" stroke="#9aa0a6" stroke-width="1.4" marker-end="url(#ard2)"/>
+
+      <text x="188" y="228" text-anchor="middle" class="svgsm" fill="#9aa0a6">⋮</text>
+      <path d="M188 234 V244" stroke="#9aa0a6" stroke-width="1.4" marker-end="url(#ard2)"/>
+
+      <rect x="100" y="250" width="176" height="32" rx="6" fill="#f1f3f4" stroke="#9aa0a6"/>
+      <text x="188" y="271" text-anchor="middle" class="svgsm" fill="#3c4043">第 61 层</text>
+    </g>
+    <text x="30" y="308" class="svgsm" fill="#a50e0e" font-weight="700">每一层只看得见上一层的输出</text>
+    <text x="30" y="326" class="svgsm" fill="#a50e0e">第 30 层一旦坏了，后面 31 层全废</text>
+
+    <!-- 分隔 -->
+    <path d="M500 16 V332" stroke="#e8eaed" stroke-width="1.6"/>
+
+    <!-- ══ 右：总线（对） ══ -->
+    <text x="530" y="26" class="svglbl" fill="#0d652d">✓ 实际的样子：一条总线</text>
+    <text x="530" y="46" class="svgsm" fill="#5f6368">一个 7,168 维的向量一路贯穿，每层从它读、往它加</text>
+
+    <rect x="545" y="60" width="24" height="210" rx="5" fill="#1a73e8" opacity="0.9"/>
+    <text x="534" y="165" class="svgsm" fill="#174ea6" font-weight="700"
+          transform="rotate(-90 534 165)" text-anchor="middle">残差流 · d = 7,168</text>
+
+    <rect x="700" y="68" width="176" height="44" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+    <text x="788" y="87" text-anchor="middle" class="svgsm" fill="#174ea6" font-weight="700">第 1 层</text>
+    <text x="788" y="104" text-anchor="middle" class="svgsm" fill="#5f6368">norm → MLA</text>
+    <path d="M572 82 H694" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+    <path d="M694 102 H572" stroke="#1e8e3e" stroke-width="1.8" marker-end="url(#arl)"/>
+    <circle cx="557" cy="102" r="9" fill="#fff" stroke="#1e8e3e" stroke-width="2"/>
+    <text x="557" y="106" text-anchor="middle" class="svgsm" fill="#0d652d" font-weight="700">+</text>
+    <rect x="700" y="136" width="176" height="44" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+    <text x="788" y="155" text-anchor="middle" class="svgsm" fill="#174ea6" font-weight="700">第 2 层</text>
+    <text x="788" y="172" text-anchor="middle" class="svgsm" fill="#5f6368">norm → MoE</text>
+    <path d="M572 150 H694" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+    <path d="M694 170 H572" stroke="#1e8e3e" stroke-width="1.8" marker-end="url(#arl)"/>
+    <circle cx="557" cy="170" r="9" fill="#fff" stroke="#1e8e3e" stroke-width="2"/>
+    <text x="557" y="174" text-anchor="middle" class="svgsm" fill="#0d652d" font-weight="700">+</text>
+    <rect x="700" y="204" width="176" height="44" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+    <text x="788" y="223" text-anchor="middle" class="svgsm" fill="#174ea6" font-weight="700">第 61 层</text>
+    <text x="788" y="240" text-anchor="middle" class="svgsm" fill="#5f6368">norm → MoE</text>
+    <path d="M572 218 H694" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="5 4" marker-end="url(#arr)"/>
+    <path d="M694 238 H572" stroke="#1e8e3e" stroke-width="1.8" marker-end="url(#arl)"/>
+    <circle cx="557" cy="238" r="9" fill="#fff" stroke="#1e8e3e" stroke-width="2"/>
+    <text x="557" y="242" text-anchor="middle" class="svgsm" fill="#0d652d" font-weight="700">+</text>
+    <text x="788" y="192" text-anchor="middle" class="svgsm" fill="#9aa0a6">⋮</text>
+
+    <text x="898" y="82" class="svgsm" fill="#5f6368">读</text>
+    <text x="898" y="106" class="svgsm" fill="#0d652d" font-weight="700">加回去</text>
+
+    <text x="530" y="308" class="svgsm" fill="#0d652d" font-weight="700">每一层读到的是「到此为止的全部」</text>
+    <text x="530" y="326" class="svgsm" fill="#0d652d">某一层输出 0 → 只是少一份贡献，别人照跑</text>
+  </svg>
+  <figcaption><b>差别不在画法，在「加」这个字。</b>
+  管道是<b>替换</b> —— 这一层的输出取代上一层的；总线是<b>累加</b> ——
+  这一层只往公共的那个向量上添一笔。<b>所以「什么都不做」是免费的默认状态，
+  而这正是能把网络堆到 61 层的前提。</b></figcaption>
+  </figure>
+
   <div class="grid g2">
     <div>
       <h4>残差流是一条总线，不是一根管道</h4>
