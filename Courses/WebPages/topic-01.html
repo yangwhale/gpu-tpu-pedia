@@ -3744,9 +3744,34 @@ x = x + MoE(norm(x))
       <p><b>为什么必须是「加」。</b> 两个理由。梯度上，加法让反向传播有一条直达的高速路，
       不会在 61 层里衰减殆尽。语义上，<b>它让「什么都不做」成为默认状态</b> ——
       一层如果暂时没学到有用的东西，输出接近 0，加上去等于没动，不会破坏已有的信息。</p>
-      <h4>RMSNorm 摆在哪</h4>
-      <p>V3 用 <b>pre-norm</b>：先 norm 再进子层，子层输出直接加回主干。
-      现代模型基本都站到了这边 —— post-norm 在深层网络里训不稳。</p>
+      <h4>RMSNorm 摆在哪 —— 一个字的位置，决定了要不要 warm-up</h4>
+      <p>V3 用 <b>pre-norm</b>：先 norm 再进子层，子层输出<b>直接</b>加回主干。
+      另一种摆法是 post-norm：先加，再对加完的结果做 norm ——
+      <b>那样 norm 就横在总线上，上图那条「直达的高速路」被切断了。</b></p>
+      <p class="sub"><b>这不是审美问题，是有人证明过的</b> ——
+      而且证据的形式比「训不稳」这个说法具体得多。</p>
+      <details class="more"><summary>展开：「post-norm 训不稳」这句话，可验证的版本长什么样<span class="why">—— 结论是「要不要 warm-up」，不是「能不能收敛」</span></summary>
+      <div class="body">
+        <p>出处是 Xiong 等 2020 年那篇
+        <em>On Layer Normalization in the Transformer Architecture</em>（arXiv 2002.04745）。
+        他们做的事是<b>分析两种摆法在「初始化那一刻」的梯度</b>，然后得到两条并列的结论：</p>
+        <div class="tbl-wrap"><table><tbody>
+          <tr><td><b>post-norm</b></td><td>初始化时<b>靠近输出层的梯度很大</b>。
+            论文的说法是：这解释了<em>「why the learning rate warm-up stage is essential
+            in training the Post-LN Transformer」</em> —— <b>warm-up 不是调参技巧，是必需品</b></td></tr>
+          <tr><td><b>pre-norm</b></td><td>梯度是良态的。论文自称<em>「the first to show that the
+            learning-rate warm-up stage can be removed for the Pre-LN Transformer」</em> ——
+            <b>可以把 warm-up 整个删掉</b></td></tr>
+        </tbody></table></div>
+        <p><b>注意这个结论的形状：它说的不是「post-norm 训不出来」，是「post-norm 多了一个必须调对的东西」。</b>
+        <em>一个必须调对、调不对就炸、而且随深度越来越难调的东西 —— 在几十上百层的规模上，
+        这跟「训不稳」在实践中是一回事。但转述的时候，说清楚是哪一回事更好。</em></p>
+        <p class="sub"><b>还有一个常被忽略的连带好处：</b>pre-norm 把 norm 挪出主干之后，
+        <b>残差流上就是一路纯加法</b>，反向的梯度可以原样直达第 1 层。
+        <em>上面那张「总线 vs 管道」的图，画的其实就是这条通路 ——
+        post-norm 会在每一段总线上插一个 norm，通路就不纯了。</em></p>
+      </div>
+      </details>
     </div>
     <div>
       <figure class="fbox" style="margin-top:0">
@@ -3799,28 +3824,148 @@ x = x + MoE(norm(x))
   </div>
 
   <div class="note warn">
-    <span class="t">一个只立问题、不给答案的数字</span>
-    残差流每一层进出各一份。如果 61 层的激活<b>全部留着</b>，光这一项就是
-    <b><span data-v="actAll61">106.75 GiB</span></b>，已经超过单张卡。
-    于是自然冒出一个问题：<b>凭什么要留着？</b>
-    答案在反向传播里 —— 那是<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题四</a>的事，这里只把问题立住。
+    <span class="t">一个立住问题、只给半个答案的数字</span>
+    在每一层的<b>边界</b>上把残差流存一份。61 个边界存满，光这一项就是
+    <b><span data-v="actAll61">106.75 GiB</span></b> —— <em>已经超过单张卡，而这还没算层内部的任何中间量。</em>
+    于是自然冒出一个问题：<b>凭什么要留着？</b><br>
+    <b>半个答案就在 V3 论文里，而且它选择的是「不留」。</b>
+    <em>原文：「We recompute all RMSNorm operations and MLA up-projections during back-propagation,
+    thereby eliminating the need to persistently store their output activations.」</em>
+    <b>存不下就别存，反向的时候拿算力换回来</b> —— 这是<b>拿时间换空间</b>，不是免费的。
+    另外半个答案（为什么反向非要这些中间量、这笔交换怎么定价）在
+    <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题四</a>。
+    <b>这里要留下的是这个反射：看到一个「装不下」的激活数字，先问的不是「怎么加卡」，是「这份非存不可吗」。</b>
   </div>
 
-  <h3>题外一眼：mHC —— V4 换了残差结构</h3>
-  <p>V3 只有一条残差流。DeepSeek 在 V4 上换成了
-  <b>mHC（Manifold-Constrained Hyper-Connections）</b>：<b>4 条</b>残差流，
-  用 Sinkhorn 双随机矩阵约束它们之间怎么混合。</p>
-  <div class="grid g2">
-    <div class="card"><h4>它想解决什么</h4>
-      <p class="sub">单条残差流是所有 61 层共用的<b>一个瓶颈</b> ——
-      信息在里面反复叠加、互相干扰。多条流等于给不同的层开不同的<b>车道</b>，
-      流形约束负责让数值不发散。</p></div>
-    <div class="card tint"><h4>⚠️ 代价要算出来</h4>
-      <p class="sub">残差流变 <b>4 倍宽</b>，激活显存也跟着涨。
-      按这一页的口径，那就是从 <span data-v="embedAct">1.75 GiB</span> 变成
-      <span data-v="embedAct4x">7.00 GiB</span> 每层。
-      <b>没有免费的结构改进。</b></p></div>
+  <h3>题外一眼：mHC —— V4 把这条总线加宽了</h3>
+  <p>这一整节讲的是「一条 7,168 维的总线」。<b>那条总线本身，也是可以改的设计</b> ——
+  DeepSeek 在 V4 上就把它换掉了，换成
+  <b>mHC（Manifold-Constrained Hyper-Connections）</b>。
+  <em>这是这一节唯一一处越过 V3 的地方，放在这里是因为：只有先把总线讲清楚，
+  才看得懂「加宽总线」是在改什么。</em></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 348" role="img"
+       aria-label="上排是 V3 的单条残差流，下排是 V4 的 mHC 四条残差流：X 先被 A 压回 7168 维进层，层的输出再被 C 写回四条流，另有一个 4×4 双随机矩阵 B 负责流之间的混合">
+    <!-- ══ 上排：V3 ══ -->
+    <text x="20" y="24" class="svglbl" fill="#174ea6">V3 · 一条残差流</text>
+    <text x="168" y="24" class="svgsm" fill="#5f6368">x<tspan dy="3" font-size="10">ℓ+1</tspan><tspan dy="-3"> = x</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> + F</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">(norm(x</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">))</tspan></text>
+
+    <rect x="24" y="52" width="122" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+    <text x="85" y="70" text-anchor="middle" class="svgsm" fill="#174ea6" font-weight="700">x<tspan dy="3" font-size="10">ℓ</tspan></text>
+    <text x="85" y="86" text-anchor="middle" class="svgsm" fill="#5f6368">7,168</text>
+
+    <path d="M146 72 H772" stroke="#1a73e8" stroke-width="2.4"/>
+    <path d="M300 72 V104 H352" stroke="#9aa0a6" stroke-width="1.3" fill="none" marker-end="url(#ar)"/>
+    <rect x="356" y="84" width="212" height="40" rx="6" fill="#f1f3f4" stroke="#9aa0a6"/>
+    <text x="462" y="108" text-anchor="middle" class="svgsm" fill="#3c4043">norm → F<tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">（MLA / MoE）</tspan></text>
+    <path d="M568 104 H740 V84" stroke="#1e8e3e" stroke-width="1.6" fill="none" marker-end="url(#ar)"/>
+    <circle cx="740" cy="72" r="11" fill="#fff" stroke="#1e8e3e" stroke-width="2"/>
+    <text x="740" y="77" text-anchor="middle" class="svgsm" fill="#0d652d" font-weight="700">+</text>
+    <rect x="826" y="52" width="122" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+    <text x="887" y="70" text-anchor="middle" class="svgsm" fill="#174ea6" font-weight="700">x<tspan dy="3" font-size="10">ℓ+1</tspan></text>
+    <text x="887" y="86" text-anchor="middle" class="svgsm" fill="#5f6368">7,168</text>
+    <path d="M752 72 H820" stroke="#1a73e8" stroke-width="2.4" marker-end="url(#ar)"/>
+
+    <path d="M20 146 H980" stroke="#e8eaed" stroke-width="1.6"/>
+
+    <!-- ══ 下排：V4 mHC ══ -->
+    <text x="20" y="176" class="svglbl" fill="#7627bb">V4 · mHC，n<tspan dy="3" font-size="10">hc</tspan><tspan dy="-3"> = 4</tspan></text>
+    <text x="190" y="176" class="svgsm" fill="#5f6368">X<tspan dy="3" font-size="10">ℓ+1</tspan><tspan dy="-3"> = B</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">X</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> + C</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">F</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">(A</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">X</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">)</tspan></text>
+
+    <rect x="24" y="200" width="122" height="72" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.4"/>
+    <g stroke="#d7aefb"><line x1="24" y1="218" x2="146" y2="218"/><line x1="24" y1="236" x2="146" y2="236"/><line x1="24" y1="254" x2="146" y2="254"/></g>
+    <text x="85" y="196" text-anchor="middle" class="svgsm" fill="#7627bb" font-weight="700">X<tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> · 4 × 7,168</tspan></text>
+
+    <!-- 上支：B -->
+    <path d="M146 212 H188" stroke="#9334e6" stroke-width="2" marker-end="url(#ar)"/>
+    <rect x="192" y="194" width="96" height="36" rx="5" fill="#fff" stroke="#9334e6" stroke-width="1.4"/>
+    <text x="240" y="209" text-anchor="middle" class="svgsm" fill="#7627bb" font-weight="700">B<tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> · 4×4</tspan></text>
+    <text x="240" y="223" text-anchor="middle" class="svgsm" fill="#7627bb">双随机</text>
+    <path d="M288 212 H740 V228" stroke="#9334e6" stroke-width="2" fill="none"/>
+
+    <!-- 下支：A → F → C -->
+    <path d="M146 258 H188" stroke="#9aa0a6" stroke-width="1.3" marker-end="url(#ar)"/>
+    <rect x="192" y="242" width="68" height="32" rx="5" fill="#fff" stroke="#9aa0a6"/>
+    <text x="226" y="262" text-anchor="middle" class="svgsm" fill="#3c4043">A<tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> · 1×4</tspan></text>
+    <path d="M260 258 H316" stroke="#9aa0a6" stroke-width="1.3" marker-end="url(#ar)"/>
+    <rect x="320" y="240" width="248" height="36" rx="6" fill="#f1f3f4" stroke="#9aa0a6"/>
+    <text x="444" y="262" text-anchor="middle" class="svgsm" fill="#3c4043">norm → F<tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">　</tspan><tspan fill="#0d652d" font-weight="700">还是 7,168 维</tspan></text>
+    <path d="M568 258 H616" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#ar)"/>
+    <rect x="620" y="242" width="68" height="32" rx="5" fill="#fff" stroke="#1e8e3e"/>
+    <text x="654" y="262" text-anchor="middle" class="svgsm" fill="#0d652d">C<tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> · 4×1</tspan></text>
+    <path d="M688 258 H740" stroke="#1e8e3e" stroke-width="1.6" fill="none"/>
+
+    <circle cx="740" cy="240" r="11" fill="#fff" stroke="#9334e6" stroke-width="2"/>
+    <text x="740" y="245" text-anchor="middle" class="svgsm" fill="#7627bb" font-weight="700">+</text>
+    <path d="M752 240 H820" stroke="#9334e6" stroke-width="2.4" marker-end="url(#ar)"/>
+    <rect x="826" y="204" width="122" height="72" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.4"/>
+    <g stroke="#d7aefb"><line x1="826" y1="222" x2="948" y2="222"/><line x1="826" y1="240" x2="948" y2="240"/><line x1="826" y1="258" x2="948" y2="258"/></g>
+    <text x="887" y="196" text-anchor="middle" class="svgsm" fill="#7627bb" font-weight="700">X<tspan dy="3" font-size="10">ℓ+1</tspan></text>
+
+    <text x="20" y="308" class="svgsm" fill="#0d652d" font-weight="700">
+      ⭐ 变宽的是<tspan fill="#7627bb" text-decoration="underline">总线</tspan>，不是<tspan fill="#a50e0e">车间</tspan> ——
+      A<tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3">X</tspan><tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> 仍然是 7,168 维，所以 MLA、MoE 内部一个字节都不用改</tspan></text>
+    <text x="20" y="332" class="svgsm" fill="#5f6368">
+      论文原话：「the expanded residual width does not influence the design of the inner layers」。
+      mHC 的贡献不是 B<tspan dy="3" font-size="10">ℓ</tspan><tspan dy="-3"> 这个矩阵，是<tspan font-weight="700">把它约束在双随机矩阵上</tspan></tspan></text>
+  </svg>
+  <figcaption><b>加宽残差流这件事不是 DeepSeek 起的头</b> ——
+  Hyper-Connections（Zhu 等，2025）先做的，把残差流从 <code>d</code> 拓宽成 <code>n×d</code>，
+  确实有收益，<b>但它破坏了残差连接原本的恒等映射性质，堆深了就训不稳</b>。
+  <em>mHC 的那一下，是把上图里的 B<sub>ℓ</sub> 约束到<b>双随机矩阵</b>（Birkhoff 多胞形）上：
+  行和、列和都是 1，谱范数因此被压在 1 以内，信号既不放大也不消失。</em>
+  <b>所以 mHC 不是「更宽」，是「让更宽这件事变得能训」。</b></figcaption>
+  </figure>
+
+  <div class="grid g3">
+    <div class="card"><h4>① 它到底改了什么</h4>
+      <p class="sub">残差状态从 <code>R<sup>d</sup></code> 变成 <code>R<sup>4×d</sup></code>。
+      <b>但层的输入输出仍然是 d 维</b> —— 上图那句「还是 7,168 维」是重点。
+      <b>宽度这条轴，被从 hidden size 里解耦出来了</b>，成了一个新的可调旋钮。</p></div>
+    <div class="card"><h4>② 「双随机」是干嘛的</h4>
+      <p class="sub">行和列都加起来等于 1，意味着混合是一次<b>凸组合</b> ——
+      特征均值守恒、范数受控。而且双随机矩阵<b>乘起来还是双随机</b>，
+      这条性质正是「堆 61 层也不炸」的依据。<b>用 Sinkhorn-Knopp 迭代把矩阵投影上去，V4 迭 20 次。</b></p></div>
+    <div class="card tint"><h4>③ ⚠️ 代价：不在你以为的地方</h4>
+      <p class="sub"><b>直觉会说「4 倍宽 → 激活显存 4 倍」，那是没读工程章节的算法。</b>
+      V4 论文明说 mHC 同时抬高了<b>激活显存</b>和<b>流水线级间通信</b>，
+      于是他们上了 fused kernel、<b>选择性重算</b>、改 DualPipe 重叠 ——
+      最后把 mHC 的墙钟开销压到 <b>6.7%</b>。</p></div>
   </div>
+
+  <details class="more"><summary>展开：这一段每个数字的出处，以及为什么 V4-Pro 的账能跟这一页直接对<span class="why">—— 61 层、7,168 维，跟 V3 一模一样</span></summary>
+  <div class="body">
+    <p><b>先说一个巧合，它让这一节的数字直接可比。</b>
+    V4 有两个型号，<b>V4-Pro</b> 是 61 层、hidden 7,168 —— <em>跟 V3 逐字相同</em>；
+    <b>V4-Flash</b> 是 43 层、hidden 4,096。<b>两个型号的 n<sub>hc</sub> 都是 4，Sinkhorn-Knopp 都迭 20 次。</b>
+    所以上面那条 1.75 GiB 的总线，在 V4-Pro 上就是同一条。</p>
+    <div class="eq"><span class="c">// 出处：DeepSeek-V4 技术报告（arXiv 2606.19348）§4.2.1 模型配置</span>
+V4-Pro    layers = 61   d = 7168   n_hc = <span class="r">4</span>   s_max = 20   1.6 T 总 / 49 B 激活
+V4-Flash  layers = 43   d = 4096   n_hc = <span class="r">4</span>   s_max = 20   284 B 总 / 13 B 激活
+<span class="c">// 出处：mHC 论文（arXiv 2512.24880）实验设置</span>
+HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
+    <p><b>那「4 倍宽」到底涨了多少显存？这门课不给这个数，因为给不出来。</b>
+    <em>naive 的算法是 <code>1.75 GiB × 4 = 7.00 GiB</code> 每层</em> ——
+    但那是<b>假设四条流的每层激活全部原样留着</b>。V4 论文对这一点的原话是：
+    「we recompute most hidden states between layers and all normalized layer inputs,
+    while avoiding recomputation of compute-intensive operations」。
+    <b>也就是说，层间的大部分 hidden state 根本不存，反向时重算。</b>
+    <em>存多少、重算多少，是一个工程档位，不是一个由架构决定的常数 ——
+    所以真实增量取决于他们怎么调这个档位，论文没有给出显存的绝对数。</em></p>
+    <p><b>论文唯一给了绝对数的代价是时间：</b>
+    <em>「Collectively, these optimizations constrain the wall-time overhead of mHC
+    to only 6.7% of the overlapped 1F1B pipeline stage.」</em>
+    注意这个 6.7% 的分母是<b>重叠后的 1F1B 流水线级</b>，不是整个训练时间 ——
+    <b>引用这个数的时候要连分母一起引，否则就是断章取义。</b></p>
+    <div class="note warn">
+      <span class="t">⚠️ 这一条以前是这么讲的，现在改了</span>
+      <b>课件先前写的是「4 倍宽 → 1.75 GiB 变 7.00 GiB 每层」。</b>
+      那句话孤立看没错，但它把一个<b>被工程手段大幅抵消掉的上界</b>，讲成了实际付出的代价。
+      <em>真实增量取决于重算档位，论文没给绝对数；给了绝对数的是那个 6.7% 的墙钟开销。</em>
+    </div>
+  </div>
+  </details>
 </div></section>
 
 <!-- ══════════ 第 6 步 · 出口 ══════════ -->
@@ -3848,24 +3993,35 @@ x = x + MoE(norm(x))
       <p>最后一次 RMSNorm，然后一个 <span class="k">7168 → 129,280</span> 的矩阵，
       给词表里每一个词打一个分。这跟第 1 步的嵌入矩阵是<b>镜像</b>关系。</p>
       <div class="note warn">
-        <span class="t"><code>tie_word_embeddings = false</code></span>
+        <span class="t"><code>tie_word_embeddings = false</code> —— 但另有一处是真共享的</span>
         很多模型让进出口<b>共享同一份权重</b>（省一份参数，而且「表示一个词」
         和「预测一个词」直觉上是一回事）。<b>V3 没有共享</b> ——
-        它认为读和写是两个不同的任务，各给一份权重。代价是多 926 M 参数。
+        它认为读和写是两个不同的任务，各给一份权重。代价是多 926 M 参数。<br>
+        <b>容易混的是：V3 里确实有一处「共享 output head」，但共享的对象不是嵌入表，是 MTP 模块。</b>
+        <em>论文把最浅的几层（含嵌入）和最深的几层（含 output head）摆在同一个流水线 rank 上，
+        让 MTP 模块和主模型<b>物理上共用</b>这两份参数和梯度。</em>
+        <b>所以下面 MTP 那一段，不要再往总账里加一份 926 M。</b>
       </div>
-      <h4>MTP：同一个模块，两种用途</h4>
-      <p><code>num_nextn_predict_layers = 1</code> —— 除了预测下一个 token，
-      还额外预测下下一个。</p>
+      <h4>MTP：为训练造的东西，被推理捡了便宜</h4>
+      <p><code>num_nextn_predict_layers = 1</code> —— <b>深度 1，就是额外多预测<em>一个</em>字</b>
+      （下下一个）。<em>不是两个 —— 这个数就是 depth。</em></p>
       <div class="tbl-wrap"><table><tbody>
-        <tr><td><b>训练时</b></td><td>额外的监督信号。只预测下一个字，模型容易学成「顺嘴溜」；
-          逼它同时预测下下个字，等于<b>要求它对更远的地方也有规划</b></td></tr>
-        <tr><td><b>推理时</b></td><td>拿来做<b>投机解码</b>的草稿。
-          先便宜地猜出接下来两个字，再让主模型<b>一次性验证</b> ——
-          猜对了就白赚一个字，猜错了也不亏（跟原来一样重算）</td></tr>
+        <tr><td><b>为什么造它<br>（训练）</b></td><td>额外的监督信号。只预测下一个字，模型容易学成「顺嘴溜」；
+          逼它同时预测下下个字，等于<b>要求它对更远的地方也有规划</b>。
+          <em>V3 论文把这条写成 MTP 的<b>主要目的</b>：「we utilize MTP to improve training」</em></td></tr>
+        <tr><td><b>推理时它可以<br>直接不要</b></td><td><em>「during inference, we can directly discard the MTP modules
+          and the main model can function independently and normally」</em> ——
+          <b>它是训练期的脚手架，拆掉不影响主模型。</b>消融实验也正是这么做的，
+          所以对比双方的推理成本完全一样</td></tr>
+        <tr><td><b>但拆掉太可惜<br>（投机解码）</b></td><td>留着当<b>草稿模型</b>：先便宜地猜出下下个字，
+          主模型<b>一次性验证两个位置</b>。猜对白赚一个字，猜错也不亏。<br>
+          <b>V3 实测：第二个字的接受率 <span class="k">85%–90%</span>，端到端吐字速度 <span class="k">1.8×</span> TPS</b></td></tr>
       </tbody></table></div>
       <p>投机解码为什么划算，得回到<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9806-%E6%8E%A8%E7%90%86.md">专题六</a>那条结论：
       <b>吐字那一段是被带宽卡住的，不是被算力卡住的。</b>
-      既然读一遍权重的钱已经付了，顺手多验证一个字几乎是免费的。</p>
+      既然读一遍权重的钱已经付了，顺手多验证一个字几乎是免费的。
+      <em>85%–90% 这个接受率之所以能这么高，是因为草稿不是另一个小模型 ——
+      它读的是主模型自己的隐状态。</em></p>
     </div>
     <div>
       <figure class="fbox" style="margin-top:0">
@@ -3914,12 +4070,15 @@ x = x + MoE(norm(x))
       <tr><td><b>算力小得离谱</b></td>
         <td class="n"><span data-v="headShare">0.46%</span></td>
         <td>lm_head 只花 <span data-v="headFlops">242.92 TFLOP</span>，
-          占整个前向 <span data-v="totalFlops">52.50 PFLOP</span> 的千分之五。
+          <b>不到</b>整个前向 <span data-v="totalFlops">52.50 PFLOP</span> 的<b>千分之五</b>。
           <b>全程算力最少的一步，产出了全程最大的张量</b></td></tr>
       <tr><td><b>loss 还要 fp32</b></td>
         <td class="n"><span data-v="logitsFp32">63.13 GiB</span></td>
         <td>cross-entropy 在 bf16 下数值不稳，logits 通常要提到 fp32 再算。
-          于是这个<b>纯临时</b>的张量吃掉单卡 <b><span data-v="logitsCard">72%</span></b></td></tr>
+          于是这个<b>纯临时</b>的张量吃掉单卡 <b><span data-v="logitsCard">72%</span></b>。<br>
+          <em>⚠️ 这里有个单位陷阱：63.13 <b>GiB</b> 对 94.74 <b>GB</b>，直接相除会得到 67%，是错的。
+          换成同一进制才对得上 —— 63.13 GiB = 67.78 GB，67.78 ÷ 94.74 = 72%。
+          <b>页面上的百分比一律是按字节算的，不是按显示出来的那两个数算的。</b></em></td></tr>
       <tr><td><b>训练 vs 推理</b></td>
         <td class="n"><span data-v="logitsLast">252.5 KiB</span></td>
         <td>训练每个位置都要算 loss，所以要全部；
@@ -3927,6 +4086,54 @@ x = x + MoE(norm(x))
           同一个算子，两边差 <span data-v="tokens">131,072</span> 倍</td></tr>
     </tbody>
   </table></div>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 346" role="img"
+       aria-label="训练与推理 prefill 的 logits 体积对比：训练是一整块 31.56 GiB 的板，推理只需要最后一个位置的 252.5 KiB，按比例细到画不出来">
+    <!-- 左：训练 -->
+    <text x="24" y="24" class="svglbl" fill="#a50e0e">训练 · 每个位置都要算 loss</text>
+    <text x="24" y="44" class="svgsm" fill="#5f6368">131,072 个位置，一个都不能少</text>
+    <rect x="24" y="58" width="404" height="170" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
+    <g stroke="#f6c7c3">
+      <line x1="24" y1="92" x2="428" y2="92"/><line x1="24" y1="126" x2="428" y2="126"/>
+      <line x1="24" y1="160" x2="428" y2="160"/><line x1="24" y1="194" x2="428" y2="194"/></g>
+    <text x="226" y="138" text-anchor="middle" class="svgnum" fill="#a50e0e" font-size="26"
+          data-v="logits">31.56 GiB</text>
+    <text x="226" y="162" text-anchor="middle" class="svgsm" fill="#a50e0e">
+      131,072 × 129,280 × 2 B</text>
+    <text x="24" y="252" class="svgsm" fill="#a50e0e" font-weight="700">bf16 就这么大；提到 fp32 算 loss 还要翻倍</text>
+
+    <path d="M488 60 V250" stroke="#e8eaed" stroke-width="1.6"/>
+
+    <!-- 右：推理 prefill -->
+    <text x="530" y="24" class="svglbl" fill="#0d652d">推理 prefill · 只要最后一个位置</text>
+    <text x="530" y="44" class="svgsm" fill="#5f6368">前面 131,071 个位置的 logits，一个都不需要</text>
+    <rect x="530" y="58" width="404" height="170" rx="5" fill="none"
+          stroke="#dadce0" stroke-width="1.4" stroke-dasharray="6 5"/>
+    <text x="732" y="130" text-anchor="middle" class="svgsm" fill="#bdc1c6">
+      （虚线是「如果照训练那样全算」的体积）</text>
+    <rect x="530" y="225" width="404" height="3" fill="#1e8e3e"/>
+    <path d="M948 226 H962" stroke="#1e8e3e" stroke-width="1.4"/>
+    <text x="530" y="252" class="svgsm" fill="#0d652d" font-weight="700">
+      ↑ 就这一条 · <tspan data-v="logitsLast">252.5 KiB</tspan></text>
+    <text x="530" y="272" class="svgsm" fill="#5f6368">
+      <tspan font-weight="700" fill="#a50e0e">这条线是骗你的</tspan> ——
+      真实比例只有虚线框的 1/131,072 高，</text>
+    <text x="530" y="288" class="svgsm" fill="#5f6368">
+      <tspan font-weight="700">合 0.0013 像素</tspan>。为了画得出来，它放大了约 1,000 倍</text>
+
+    <rect x="24" y="300" width="910" height="34" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+    <text x="479" y="322" text-anchor="middle" class="svgsm" fill="#174ea6">
+      同一个算子、同一份 <tspan font-weight="700">926.68 M</tspan> 权重、同一行代码 ——
+      <tspan font-weight="700">两边差 131,072 倍。</tspan>
+      「训练贵」和「推理省」在这里说的是<tspan font-weight="700">同一个 lm_head</tspan></text>
+  </svg>
+  <figcaption><b>这张图有一半是画不出来的，而画不出来本身就是结论。</b>
+  <em>lm_head 是全程算力最少的一步，却在训练侧产出全程最大的张量；
+  换到推理侧，同一步瞬间退化成一条几乎不占地方的细线。</em>
+  <b>所以「这个算子贵不贵」这个问题，脱离了「训练还是推理」根本没法回答</b> ——
+  这也是为什么专题六要单独讲推理，而不是当成前向的一个特例带过。</figcaption>
+  </figure>
 
   <div class="note ok">
     <span class="t">这已经是第三次撞上同一件事</span>
@@ -4003,6 +4210,60 @@ x = x + MoE(norm(x))
     <b>所以正确的读法是：连最省的口径都要 15 张，而真实训练要八倍于此。</b>
   </div>
 
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 300" role="img"
+       aria-label="三种口径下 671B 模型需要的 TPU v7 device 数：只算前向权重 14.3 个、加上峰值激活 14.7 个、换成训练 113 张；第三条按每参数 16 字节拆成权重、梯度、fp32 主权重和两个动量">
+    <text x="24" y="22" class="svglbl">同一个模型，换一个口径，就换一个数量级。<tspan font-weight="700">条长 = 要几个 TPU v7 device</tspan></text>
+
+    <text x="212" y="72" text-anchor="end" class="svgsm" fill="#3c4043">① 前向 · batch=1 · 只算权重</text>
+    <rect x="220" y="56" width="81" height="24" rx="3" fill="#8ab4f8"/>
+    <text x="311" y="73" class="svgsm" fill="#174ea6" font-weight="700"><tspan data-v="devices">14.3</tspan> 个</text>
+
+    <text x="212" y="118" text-anchor="end" class="svgsm" fill="#3c4043">② 再加上峰值激活 <tspan data-v="nonWeight">41.89 GiB</tspan></text>
+    <rect x="220" y="102" width="83" height="24" rx="3" fill="#5b9bf5"/>
+    <text x="313" y="119" class="svgsm" fill="#174ea6" font-weight="700"><tspan data-v="devicesAct">14.7</tspan> 个</text>
+    <text x="378" y="119" class="svgsm" fill="#5f6368">← 跟①几乎看不出区别</text>
+
+    <text x="212" y="167" text-anchor="end" class="svgsm" fill="#a50e0e" font-weight="700">③ 换成训练 · 每参数 16 字节</text>
+    <rect x="220" y="148" width="80" height="30" fill="#1a73e8"/>
+    <rect x="300" y="148" width="80" height="30" fill="#1e8e3e"/>
+    <rect x="380" y="148" width="161" height="30" fill="#f9ab00"/>
+    <rect x="541" y="148" width="160" height="30" fill="#9334e6"/>
+    <rect x="701" y="148" width="160" height="30" fill="#d93025"/>
+    <text x="260" y="168" text-anchor="middle" class="svgsm" fill="#fff" font-weight="700">2 B</text>
+    <text x="340" y="168" text-anchor="middle" class="svgsm" fill="#fff" font-weight="700">2 B</text>
+    <text x="460" y="168" text-anchor="middle" class="svgsm" fill="#3c4043" font-weight="700">4 B</text>
+    <text x="621" y="168" text-anchor="middle" class="svgsm" fill="#fff" font-weight="700">4 B</text>
+    <text x="781" y="168" text-anchor="middle" class="svgsm" fill="#fff" font-weight="700">4 B</text>
+    <text x="871" y="167" class="svgsm" fill="#a50e0e" font-weight="700">约 113 个</text>
+
+    <text x="260" y="194" text-anchor="middle" class="svgsm" fill="#5f6368">bf16 权重</text>
+    <text x="340" y="194" text-anchor="middle" class="svgsm" fill="#5f6368">梯度</text>
+    <text x="460" y="194" text-anchor="middle" class="svgsm" fill="#5f6368">fp32 主权重</text>
+    <text x="621" y="194" text-anchor="middle" class="svgsm" fill="#5f6368">动量 m</text>
+    <text x="781" y="194" text-anchor="middle" class="svgsm" fill="#5f6368">动量 v</text>
+
+    <path d="M220 208 H861" stroke="#9aa0a6" stroke-width="1"/>
+    <path d="M220 204 V212 M861 204 V212" stroke="#9aa0a6" stroke-width="1"/>
+    <text x="540" y="228" text-anchor="middle" class="svgsm" fill="#3c4043">
+      671.03 B × 16 B = <tspan font-weight="700">10.74 TB</tspan> ÷ 94.74 GB/device</text>
+
+    <rect x="24" y="244" width="910" height="46" rx="6" fill="#fef7e0" stroke="#f9ab00"/>
+    <text x="44" y="264" class="svgsm" fill="#b06000" font-weight="700">
+      ⭐ 这张图真正要说的不是「113」，是<tspan fill="#a50e0e">前两条几乎一样长、第三条长了八倍</tspan>这个形状</text>
+    <text x="44" y="282" class="svgsm" fill="#5f6368">
+      橙紫红那三段（fp32 主权重 + 两个动量，共 12 B）<tspan font-weight="700" fill="#3c4043">全是优化器的</tspan> ——
+      模型本身只占最左边那 2 B。<tspan font-weight="700" fill="#3c4043">这三段怎么砍，就是专题四的全部内容</tspan></text>
+  </svg>
+  <figcaption><b>①②③ 的区别不在精度，在<em>问的是什么问题</em>。</b>
+  ① 问「权重放得下吗」，② 问「跑一次前向放得下吗」，③ 问「能不能训」。
+  <b>三个问题的答案差了一个数量级，而它们常常被同一句「这个模型要几张卡」混在一起问。</b>
+  <em>下次听到这句话，先反问一句是哪个口径。</em><br>
+  <b>⚠️ 顺带把单位钉死：本页说的「个」「张」一律指 <code>device</code>，因为 94.74 GB 是<b>每 device</b> 的容量。
+  TPU v7 一颗<b>芯片</b>里有<b>两个</b> device</b> —— <em>所以 113 个 device 换算成芯片是 57 颗，
+  两个数都对，但说的不是一回事。这个 1:2 在后面几门课里会反复咬人。</em></figcaption>
+  </figure>
+
   <h3>再换个感觉：这些算力是多长时间</h3>
   <p>PFLOP 是个没有体感的单位。除以硬件的算力，就变成秒了 ——
   单个 TPU v7 device 的 bf16 峰值大约 <b>1153 TFLOP/s</b> —— 官方给的是<b>每颗芯片 2307 BF16 TFLOPS</b>，而一颗芯片里有两个 device，除以二得来。</p>
@@ -4015,7 +4276,8 @@ x = x + MoE(norm(x))
       <p class="sub">大模型训练的实际利用率通常就在这个量级</p></div>
     <div class="card tint"><h4>摊到装得下它的那些卡上</h4>
       <div class="stat green"><span data-v="timeMulti">8.7 秒</span></div>
-      <p class="sub">按 <span data-v="devices">14.3</span> 个 device、35% 利用率、
+      <p class="sub">按 <span data-v="devicesCeil">15</span> 个 device（<span data-v="devices">14.3</span>
+        <b>向上取整 —— 卡不能切一半</b>）、35% 利用率、
         <b>且假设并行完美无损</b>。<b>后面那半句是这门课剩下的全部内容。</b></p></div>
   </div>
   <div class="note warn">
@@ -4038,9 +4300,13 @@ x = x + MoE(norm(x))
   <p class="lead">前面七步都是推导。这一节只说一件事：<b>这些推导能不能信？</b></p>
 
   <div class="note ok">
-    <span class="t">能，而且有工具</span>
-    用 <b>AOT 提前编译</b>，可以在<b>不占一张卡</b>的情况下让编译器告诉你这份配置到底装不装得下 ——
-    排队等卡之前就知道答案。对着上面那张表做交叉验证，这是最省钱的一步。
+    <span class="t">能验证，而且不用占一张卡</span>
+    编译器本身就是一个<b>静态分析器</b>：把模型和并行配置喂给它<b>提前编译</b>一次
+    （这条路子一般叫 <b>AOT</b>），它会在<b>不申请任何加速卡</b>的前提下报出这份配置要多少显存 ——
+    <b>排队等卡之前就能拿到答案。</b>对着上面那张表交叉验证，这是最省钱的一步。<br>
+    <em>下面三条不是 AOT 的使用说明 —— 这门课不讲怎么跑它。
+    <b>下面三条讲的是：一个「不用跑就能告诉你答案」的工具，该信到什么程度。</b>
+    这个问题跟工具无关，你换成任何一个性能模型、任何一份容量估算表，结论都一样。</em>
   </div>
 
   <p>但真跑过之后会知道三件事。<b>这三条是我们自己踩出来的，不是书上的。</b></p>
@@ -4063,12 +4329,54 @@ x = x + MoE(norm(x))
     </div>
     <div class="card tint">
       <h4>③ ⭐ 贴着上限那一带会失灵</h4>
-      <p class="sub">远离上限时 AOT 非常可靠。但<b>逼近上限的那个窄带里，它判不准</b> ——
+      <p class="sub">远离上限时它非常可靠。但<b>逼近上限的那个窄带里，它判不准</b> ——
       我们判错过，<b>而且错的都落在这一带</b>。</p>
       <p class="sub" style="margin-top:10px;color:var(--blue-d)"><b>不要把静态分析当神谕。</b>
       它帮你排除掉大部分明显不行的配置，不替你做最后那个决定。</p>
     </div>
   </div>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 268" role="img"
+       aria-label="静态分析的可信区间：远离单卡上限的两侧判得准，紧贴上限的那条窄带判不准，而真正值得一试的配置恰好都挤在那条窄带里">
+    <text x="24" y="24" class="svglbl">横轴 = 这份配置要的显存 ÷ 单卡上限。<tspan font-weight="700">颜色 = 静态分析在这一段可不可信</tspan></text>
+
+    <rect x="80" y="72" width="549" height="44" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+    <rect x="629" y="72" width="129" height="44" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
+    <rect x="758" y="72" width="162" height="44" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+
+    <line x1="726" y1="58" x2="726" y2="140" stroke="#202124" stroke-width="1.6" stroke-dasharray="5 4"/>
+    <text x="726" y="52" text-anchor="middle" class="svgsm" fill="#202124" font-weight="700">单卡上限</text>
+
+    <text x="354" y="100" text-anchor="middle" class="svgsm" fill="#0d652d" font-weight="700">远离上限 —— 判得准</text>
+    <text x="839" y="100" text-anchor="middle" class="svgsm" fill="#0d652d" font-weight="700">明显超了 —— 也判得准</text>
+    <text x="693" y="136" text-anchor="middle" class="svgsm" fill="#a50e0e" font-weight="700">⚠️ 判不准</text>
+
+    <line x1="80" y1="156" x2="920" y2="156" stroke="#9aa0a6" stroke-width="1"/>
+    <g stroke="#9aa0a6" stroke-width="1">
+      <line x1="80" y1="152" x2="80" y2="160"/><line x1="403" y1="152" x2="403" y2="160"/>
+      <line x1="726" y1="152" x2="726" y2="160"/><line x1="920" y1="152" x2="920" y2="160"/></g>
+    <text x="80" y="174" text-anchor="middle" class="svgsm" fill="#5f6368">0</text>
+    <text x="403" y="174" text-anchor="middle" class="svgsm" fill="#5f6368">0.5×</text>
+    <text x="726" y="174" text-anchor="middle" class="svgsm" fill="#5f6368">1.0×</text>
+    <text x="920" y="174" text-anchor="middle" class="svgsm" fill="#5f6368">1.3×</text>
+
+    <path d="M629 194 V186 H758 V194" stroke="#d93025" stroke-width="1.4" fill="none"/>
+    <path d="M693 186 V204" stroke="#d93025" stroke-width="1.4" marker-end="url(#ar)"/>
+    <text x="693" y="222" text-anchor="middle" class="svgsm" fill="#a50e0e" font-weight="700">
+      而真正值得一试的配置，几乎全挤在这一带</text>
+    <text x="693" y="240" text-anchor="middle" class="svgsm" fill="#5f6368">
+      —— 谁会花时间去试一个明显装不下、或者明显浪费的配置？</text>
+
+    <text x="24" y="262" class="svgsm" fill="#202124" font-weight="700">
+      ⭐ 所以：<tspan fill="#a50e0e">静态分析最不可靠的那一段，恰好就是你最需要它的那一段。</tspan>
+      这不是工具的 bug，是它的性质 —— 换个工具也一样</text>
+  </svg>
+  <figcaption><b>红带的宽度是示意的，位置不是。</b>
+  <em>它确实贴着上限、确实很窄，但「窄到几个百分点」这种话我们给不出可复现的数
+  —— 那取决于模型、实现和编译器版本。</em>
+  <b>能负责任说的只有形状：两侧可信，中间不可信，而中间正是决策发生的地方。</b></figcaption>
+  </figure>
 
   <div class="note warn">
     <span class="t">顺带一个反直觉</span>
@@ -4114,9 +4422,12 @@ x = x + MoE(norm(x))
     </div>
     <div class="card" style="border-left:4px solid var(--purple)">
       <h4>05 · 关于「专家」</h4>
-      <p><b>它不按领域分工。</b></p>
-      <p class="sub">不是一个管数学一个管医学，而是按 token 类型和语境分，更接近语法层面。
-      每个 token 在 58 层里走出的是一条只属于它自己的路径。</p>
+      <p><b>目前唯一被公开测过的模型里，它不按领域分工。</b></p>
+      <p class="sub">Mixtral 的作者试着按学科去找规律，结论是「没看出明显模式」；
+      反倒是同一个 token 连着两次选中同一个专家的比例，中层能到 26.4%，
+      远高于随机的 12.5%。<b>看起来更贴语法和 token 本身，不是学科。</b><br>
+      <b>⚠️ 但那是 8 选 2 的 Mixtral，V3 是 256 选 8 —— 不能直接搬。</b>
+      <em>能确定的只有一条：每个 token 在 58 层里走的，是一条只属于它自己的路径。</em></p>
     </div>
     <div class="card" style="border-left:4px solid var(--cyan)">
       <h4>06 · 关于算账这件事本身</h4>
@@ -4404,6 +4715,7 @@ function render(first){
     memWeights:  bytesH(r.memWeights),
     memResident: bytesH(r.memResident),
     devices:  r.devices.toFixed(1),
+    devicesCeil: String(Math.ceil(r.devices)),   // 卡不能切一半，向上取整
     devicesAct: r.devicesAct.toFixed(1),
     timeIdeal: fmtT(r.totalFlops/PEAK),
     timeReal:  fmtT(r.totalFlops/PEAK/MFU),
