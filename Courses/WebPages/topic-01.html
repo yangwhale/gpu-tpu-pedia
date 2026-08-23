@@ -227,15 +227,36 @@ tr.sum td.n{color:var(--blue-d)}
 .punch.dark{background:var(--ink)}
 .punch small{display:block;font-size:14px;font-weight:400;opacity:.8;margin-top:8px}
 
+/* ── 默认收起的详情块 ─────────────────── */
+details.more{border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2);
+             margin:18px 0;overflow:hidden}
+details.more>summary{list-style:none;cursor:pointer;padding:11px 18px;font-size:14.5px;
+                     font-weight:600;color:var(--blue-d);user-select:none;
+                     display:flex;align-items:baseline;gap:9px;transition:background .15s}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"▸";display:inline-block;font-size:11px;color:var(--gray2);
+                             transition:transform .18s;flex:none}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary:hover{background:var(--line2)}
+details.more[open]>summary{border-bottom:1px solid var(--line2)}
+details.more>summary .why{font-weight:400;color:var(--gray);font-size:13px}
+details.more .body{padding:2px 20px 14px}
+details.more .body>:first-child{margin-top:14px}
+details.more .body>:last-child{margin-bottom:0}
+details.more .body .note{margin:14px 0}
+
 /* ── 图 ───────────────────────────────── */
 figure{margin:26px 0}
 figure svg{display:block;width:100%;height:auto}
 figcaption{font-size:13.5px;color:var(--gray);margin-top:10px;text-align:center;line-height:1.6}
 .fbox{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg2)}
-.svgtxt{font:500 13px var(--mono);fill:var(--ink)}
-.svglbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:var(--gray)}
-.svgnum{font:700 14px var(--mono);fill:var(--ink)}
-.svgsm{font:500 10.5px var(--mono);fill:var(--gray2)}
+/* ⚠️ fill 用 :not([fill]) 兜底：SVG 的 fill= 呈现属性优先级低于 class 选择器，
+   直接写 .svgsm{fill:...} 会把元素上显式写的颜色全部盖掉（本文件曾有 398 处被静默盖成灰色）。
+   拆成「没写 fill 才给默认色」，写了 fill= 的就让它生效 —— 也自动覆盖 JS 后生成的节点。 */
+.svgtxt{font:500 13px var(--mono)}   .svgtxt:not([fill]){fill:var(--ink)}
+.svglbl{font:600 12px "Noto Sans CJK SC",sans-serif}   .svglbl:not([fill]){fill:var(--gray)}
+.svgnum{font:700 14px var(--mono)}   .svgnum:not([fill]){fill:var(--ink)}
+.svgsm{font:500 10.5px var(--mono)}   .svgsm:not([fill]){fill:var(--gray2)}
 
 /* ── 公式 ─────────────────────────────── */
 .eq{font-family:var(--mono);font-size:14.5px;background:var(--bg2);border-left:3px solid var(--blue);
@@ -292,6 +313,8 @@ figcaption{font-size:13.5px;color:var(--gray);margin-top:10px;text-align:center;
   section{padding:22px 0;break-inside:avoid}
   .band{height:150px;break-inside:avoid}
   figure,.card,.note,.topic,.punch{break-inside:avoid}
+  details.more{border-color:#ccc;background:#fff}
+  details.more>summary{color:#000}
   a[href^="http"]:after{content:" (" attr(href) ")";font-size:10px;color:#666}
   body{font-size:12px}
   .punch{background:#eee !important;color:#000 !important}
@@ -810,47 +833,136 @@ footer a{text-decoration:none}
   <div class="stn"><span class="badge">第 1 步</span><h2>从文字到向量</h2></div>
   <p class="lead">这一步什么都没算，只是<b>查了一次表</b>。但显存已经掉了一块。</p>
 
+  <h3>分词：129,280 是怎么来的</h3>
+  <p>先看它落在哪 —— <b>把同代几个模型的词表放到同一根轴上，这个数一点都不特别。</b></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 392" role="img"
+       aria-label="词表大小的两头拉扯：往大做序列变短、罕见词不被切碎，但两张表变大、罕见词学不好、出口 softmax 变贵；主流模型词表从 2023 年的 32K 涨到今天的 128K 到 256K">
+    <path d="M40 22 H900 L960 62 L900 102 H40 Z" fill="#e6f4ea" stroke="#1e8e3e"/>
+    <text x="66" y="48" class="svglbl" fill="#0d652d" font-size="13">词表往大做 —— 赚的（越往右越赚）</text>
+    <text x="66" y="72" class="svgsm" fill="#0d652d">· 同一句话切成更少的 token　→　序列变短，attention 里那个平方项立刻跟着掉</text>
+    <text x="66" y="90" class="svgsm" fill="#0d652d">· 罕见词不再被拆成碎片　→　专有名词、代码符号、生僻字能整块进模型</text>
+
+    <g stroke="#dadce0" stroke-width="1">
+      <line x1="90" y1="196" x2="90" y2="206"/><line x1="363" y1="196" x2="363" y2="206"/>
+      <line x1="637" y1="196" x2="637" y2="206"/><line x1="910" y1="196" x2="910" y2="206"/>
+    </g>
+    <text x="90" y="222" text-anchor="middle" class="svgsm">32K</text>
+    <text x="363" y="222" text-anchor="middle" class="svgsm">64K</text>
+    <text x="637" y="222" text-anchor="middle" class="svgsm">128K</text>
+    <text x="910" y="222" text-anchor="middle" class="svgsm">256K</text>
+    <line x1="60" y1="200" x2="946" y2="200" stroke="#5f6368" stroke-width="1.4"
+          marker-end="url(#ar)"/>
+    <text x="60" y="240" class="svgsm">词表大小（<tspan font-weight="700">对数刻度</tspan>，每走一格是 2 倍）</text>
+
+    <g fill="#5f6368">
+      <circle cx="90" cy="200" r="4"/><circle cx="704" cy="200" r="4"/>
+      <circle cx="815" cy="200" r="4"/><circle cx="910" cy="200" r="4"/>
+      <circle cx="637" cy="200" r="4"/>
+    </g>
+    <text x="72" y="186" class="svgsm" fill="#5f6368">Llama 2　32,000</text>
+    <text x="628" y="186" text-anchor="end" class="svgsm" fill="#5f6368">Llama 3　128,256</text>
+    <text x="818" y="186" text-anchor="middle" class="svgsm" fill="#5f6368">gpt-oss　201,088</text>
+    <text x="706" y="168" class="svgsm" fill="#5f6368">Qwen3　151,936</text>
+    <text x="944" y="168" text-anchor="end" class="svgsm" fill="#5f6368">Gemma 2　256,000</text>
+
+    <line x1="640" y1="196" x2="640" y2="150" stroke="#1a73e8" stroke-width="1.6"/>
+    <circle cx="640" cy="200" r="6" fill="#1a73e8"/>
+    <rect x="516" y="118" width="248" height="32" rx="6" fill="#1a73e8"/>
+    <text x="640" y="139" text-anchor="middle" class="svgnum" fill="#fff">DeepSeek V3　129,280</text>
+
+    <path d="M960 254 H100 L40 300 L100 346 H960 Z" fill="#fce8e6" stroke="#d93025"/>
+    <text x="126" y="280" class="svglbl" fill="#a50e0e" font-size="13">词表往大做 —— 赔的（越往右越赔）</text>
+    <text x="126" y="302" class="svgsm" fill="#a50e0e">· 嵌入表和出口表都跟着变大　→　但对 V3 这个体量几乎可以忽略，见下方展开</text>
+    <text x="126" y="320" class="svgsm" fill="#a50e0e">· 每个罕见词分到的训练样本变少　→　学不好，极端情况成为「一碰就出乱码」的死词</text>
+    <text x="126" y="338" class="svgsm" fill="#a50e0e">· 出口那一层要在整张词表上算一遍 softmax　→　词表越大这笔越贵</text>
+
+    <text x="40" y="380" class="svgsm" fill="#0d652d">⭐ 两年多里主流词表涨了 4 到 8 倍　——　129,280 就落在当下这一代的主流区间里，不是魔法数字</text>
+  </svg>
+  <figcaption>轴上六个数字<b>全部取自各模型公开的 <code>config.json</code> 的 <code>vocab_size</code></b>。
+  <b>Llama 3 的 128,256 和 V3 的 129,280 几乎是同一个点</b> —— 图上那两个标记本来就叠在一起。</figcaption>
+  </figure>
+
+  <details class="more"><summary>展开：那笔「两张表变大」的钱，到底有多少<span class="why">—— 为什么 V3 敢做 129K，小模型不敢</span></summary>
+  <div class="body">
+    <p><b>词表矩阵的大小只跟「词表 × d」有关，跟层数一点关系都没有。</b>
+    所以模型越深越大，这笔钱占比越小。</p>
+    <div class="eq"><span class="c">// V3：嵌入表 + 出口表（两张表没有共享权重，tie_word_embeddings = false）</span>
+129,280 × 7,168 × 2 = 1.853 B  <span class="c">→ 占 671 B 的 </span><span class="r">0.28%</span>
+
+<span class="c">// 反例：同一张 129,280 词表，塞进一个 d = 2,048、12 层的小模型</span>
+129,280 × 2,048 × 2 = 529 M    <span class="c">// 两张表</span>
+12 × 12 × 2,048²     = 604 M    <span class="c">// 模型主体，按每层 12d² 估，只用来说明量级</span>
+                                <span class="c">→ 词表占掉快一半</span></div>
+    <p>所以这张图上「往大做要赔钱」那一条，<b>在 V3 身上几乎不构成阻力</b> ——
+    真正拉住它的是另外两条：<b>罕见词学不好</b>，以及<b>出口 softmax 变贵</b>。</p>
+    <div class="note info">
+      <span class="t">研究是怎么说的</span>
+      有一篇专门做词表缩放律的工作（<em>Scaling Laws with Vocabulary: Larger Models Deserve
+      Larger Vocabularies</em>, NeurIPS 2024, arXiv 2407.13623）给出的结论是
+      <b>「大多数 LLM 的词表都偏小」</b>：按它拟合的公式，Llama2-70B 的最优词表应该在
+      <b>21.6 万</b> 以上，而它实际只有 3.2 万；同样算力预算下把词表从 32K 提到 43K，
+      ARC-Challenge 从 <b>29.1 提到 32.0</b>。<br>
+      <b>⚠️ 但这条要留一个边界：</b>那篇文章是在 <b>33 M 到 3 B 的 dense 模型</b>上拟合的，
+      <em>直接外推到 671 B 的 MoE 上没有依据</em>。它能说明「方向是往大走」，
+      <b>不能用来论证 129,280 就是 V3 的最优解</b>。<br>
+      至于「罕见词学成死词」，那类现象有个专门的名字叫
+      <em>under-trained / glitch token</em>（arXiv 2405.05417，就是著名的
+      <code>SolidGoldMagikarp</code> 那一类）。
+    </div>
+  </div>
+  </details>
+
+  <h3>为什么宽度是 7,168</h3>
+  <p>记住这个 <b>d = 7,168</b>，<b>它是这个模型的「主干道宽度」</b>，后面每一步都会用到它。
+  一句话解释这个数：<span class="k">7,168 = 128 × 56 = 256 × 28</span> ——
+  <b>两边都整除，所以在 TPU 和 GPU 上都不会因为补齐而白算。</b></p>
+
+  <details class="more"><summary>展开：哪一半是硬约束，哪一半是没人能替 DeepSeek 回答的<span class="why">—— 这里很容易把两件事讲成一件</span></summary>
+  <div class="body">
+    <p><b>约束（硬的）：它必须对齐硬件的矩阵单元。</b>
+    TPU 的 MXU 是一块脉动阵列，<b>v6e 和 TPU7x 上是 256 × 256，更早的世代是 128 × 128</b>；
+    NVIDIA 那边的对齐建议是 FP16 下维度取 <b>8 的倍数</b>，A100 上取 <b>64 的倍数</b>。
+    7,168 对 128 和 256 都整除，两边都不会有补齐浪费。
+    <em>这条不管谁来定这个数都躲不掉。</em></p>
+    <p><b>取舍（软的）：同样的参数预算，做宽一点还是做深一点。</b>
+    这个在每个模型上都要重做一次，<b>而 DeepSeek 从没公开说过 7,168 是怎么定的</b>。</p>
+    <div class="note warn">
+      <span class="t">别把约束讲成理由</span>
+      「对齐」只解释了<b>为什么不会是 7,000 或 7,200</b>，
+      <b>没有解释为什么不是 6,144 或 8,192</b> —— 那两个也一样整除。
+      <em>讲台上把这两件事混成一句「所以他们选了 7168」，懂行的人会当场追问。</em>
+    </div>
+  </div>
+  </details>
+
+  <h3>嵌入：一次查表，仅此而已</h3>
   <div class="grid g2">
     <div>
-      <h4>分词：词表大小的两头权衡</h4>
-      <p>词表 <b>129,280</b>。往大了做，一个词占一个 token，序列变短、算得快；
-      但嵌入矩阵和出口矩阵都跟着变大，而且罕见词的表示学不好。往小了做正相反。
-      <b>129K 是在这两头之间选的一个点</b>，不是什么魔法数字。</p>
-
-      <h4>为什么宽度是 7168</h4>
-      <p>两条硬约束：<b>要对齐硬件的矩阵单元</b>（7168 是 128 的整数倍），
-      <b>要跟层数配平</b> —— 同样的参数预算，是做宽一点还是做深一点，
-      这个取舍在每个模型上都要重做一次。</p>
-      <p>记住这个 <b>d = 7168</b>，后面每一步都会用到它。
-      <b>它是这个模型的「主干道宽度」。</b></p>
-
-      <div class="note warn">
-        <span class="t">⚠️ 一个容易想当然的地方：d 跟头数没有整除关系</span>
-        在标准 MHA 里，<code>hidden = 头数 × 每头维度</code> 是<b>必须成立</b>的等式 ——
-        因为多个头的输出拼起来就直接是残差流。<br>
-        <b>V3 不成立。</b> 它有 128 个头、每头 128 维，注意力内部拼起来是
-        <b>16,384</b> 维 —— 足足是残差流 7168 的 <b>2.29 倍</b>。
-        最后靠 <code>o_proj</code> 那个 16384 × 7168 的矩阵压回来。<br><br>
-        <b>这正是 <code>o_proj</code> 是 MLA 一层里最大那块权重的原因</b>
-        （117.44 M，占一层的 63%）—— 它跨着这道口子。<br>
-        <em>MLA 解除了「注意力内部宽度必须等于残差流宽度」这条老约束</em>，
-        所以头数和 d 可以各自按各自的道理定。
-      </div>
-
-      <h4>嵌入：一次查表，仅此而已</h4>
-      <p>没有矩阵乘。拿 token id 去那张 <span class="k">129,280 × 7168</span> 的大表里
-      取出对应的那一行 —— 就这样。</p>
+      <p>没有矩阵乘。拿 token id 去那张 <span class="k">129,280 × 7,168</span> 的大表里
+      取出对应的那一行 —— 就这样。<b>这一步在算力账上是 0。</b></p>
 
       <div class="eq"><span class="c">// 嵌入矩阵参数量</span>
 129,280 × 7,168 = <span class="r" data-v="embedW">926.68 M</span>  <span class="c">→ <span data-v="embedWBytes">1.73 GiB</span></span>
 
 <span class="c">// 查完表，那个张量多大</span>
 <span data-v="tokens">131,072</span> × 7,168 × <span data-v="bytes">2</span> B = <span class="r" data-v="embedAct">1.75 GiB</span></div>
+
+      <details class="more"><summary>展开：「没有矩阵乘」这句话要说多准<span class="why">—— 数学上它确实是个乘法</span></summary>
+      <div class="body">
+        <p>它在数学上<b>等价于</b>「one-hot 向量 × 嵌入矩阵」，
+        但<b>没有任何实现真去做那个乘法</b> ——
+        那是拿 129,280 次乘加去换 1 个数。<b>实现上一律是按 id 直接取行。</b></p>
+        <p>所以这一步的算力是 0，<b>不是「算得快」，是压根没算</b>。
+        <em>但显存不是 0</em>：那张表本身要常驻，取出来的张量也要占地方 —— 见右边的图。</p>
+      </div>
+      </details>
     </div>
     <div>
       <figure class="fbox" style="margin-top:0">
       <svg viewBox="0 0 420 300" role="img" aria-label="嵌入查表示意">
-        <text x="10" y="20" class="svglbl">词表矩阵 129,280 × 7168</text>
+        <text x="10" y="20" class="svglbl">词表矩阵 129,280 × 7,168</text>
         <rect x="10" y="30" width="150" height="200" fill="#f8f9fa" stroke="#dadce0"/>
         <g stroke="#e8eaed">
           <line x1="10" y1="60" x2="160" y2="60"/><line x1="10" y1="90" x2="160" y2="90"/>
@@ -882,6 +994,64 @@ footer a{text-decoration:none}
       </figure>
     </div>
   </div>
+
+  <h3>⚠️ 一个容易想当然的地方：d 跟头数没有整除关系</h3>
+  <p>在标准 MHA 里，<code>hidden = 头数 × 每头维度</code> 是<b>必须成立</b>的等式。
+  <b>V3 不成立</b> —— 而且差得不是一点点。</p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 372" role="img"
+       aria-label="标准 MHA 的头宽正好等于残差流，V3 的注意力内部宽度是残差流的 2.29 倍，靠 o_proj 收口">
+    <g>
+      <text x="40" y="30" class="svglbl" fill="#0d652d">① 标准 MHA　—— 头数 × 每头维度 <tspan font-weight="700">正好等于</tspan> d</text>
+      <rect x="40" y="40" width="380" height="30" rx="3" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <g stroke="#1e8e3e" stroke-width=".8" opacity=".55">
+        <line x1="87.5" y1="40" x2="87.5" y2="70"/><line x1="135" y1="40" x2="135" y2="70"/>
+        <line x1="182.5" y1="40" x2="182.5" y2="70"/><line x1="230" y1="40" x2="230" y2="70"/>
+        <line x1="277.5" y1="40" x2="277.5" y2="70"/><line x1="325" y1="40" x2="325" y2="70"/>
+        <line x1="372.5" y1="40" x2="372.5" y2="70"/>
+      </g>
+      <text x="40" y="88" class="svgsm">8 个头 × 每头 d/8　—— 拼起来一个字节不多不少，「头」只是把残差流切开</text>
+
+      <text x="40" y="124" class="svglbl" fill="#174ea6">② V3 的 MLA　—— 128 个头 × 每头输出 128 维 = <tspan font-weight="700">16,384</tspan></text>
+      <rect x="40" y="134" width="868" height="30" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+      <rect x="420" y="134" width="488" height="30" fill="#fce8e6" opacity=".8" stroke="#d93025"/>
+      <text x="664" y="154" text-anchor="middle" class="svgnum" fill="#a50e0e">比残差流宽出 1.29 倍</text>
+      <text x="40" y="182" class="svgsm">16,384 是注意力内部的宽度 —— 它跟 7,168 之间没有任何整除关系</text>
+
+      <path d="M900 192 C884 246, 700 268, 446 275" stroke="#f9ab00" stroke-width="2.2"
+            fill="none" marker-end="url(#ar)"/>
+      <rect x="56" y="200" width="344" height="54" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+      <text x="228" y="222" text-anchor="middle" class="svgnum" fill="#b06000">o_proj　16,384 × 7,168</text>
+      <text x="228" y="242" text-anchor="middle" class="svgsm" fill="#b06000">117.44 M　一层 MLA 权重里最大的一块（63%）</text>
+      <text x="640" y="248" text-anchor="middle" class="svgsm" fill="#b06000">↙ 把多出来的那 1.29 倍收回去</text>
+
+      <rect x="40" y="280" width="380" height="28" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="230" y="299" text-anchor="middle" class="svgnum" fill="#174ea6">回到残差流 7,168</text>
+
+      <line x1="420" y1="34" x2="420" y2="320" stroke="#d93025" stroke-width="1.2" stroke-dasharray="5 4"/>
+      <text x="428" y="334" class="svglbl" fill="#d93025">↑ d = 7,168　两行共用这条基准线，长度按真实比例画</text>
+
+      <text x="40" y="360" class="svgsm" fill="#0d652d">⭐ MLA 解除了「注意力内部宽度必须等于残差流宽度」这条老约束 —— 代价就是中间那块 117.44 M 的收口</text>
+    </g>
+  </svg>
+  <figcaption>两行共用同一条 <b>d = 7,168</b> 基准线，<b>长度按真实比例画，没有压缩</b>。
+  上面一行是老规矩：头拼起来正好填满残差流。下面一行是 V3：
+  <b>注意力内部先撑到 16,384，再由 <code>o_proj</code> 收回 7,168</b>。</figcaption>
+  </figure>
+
+  <details class="more"><summary>展开：这张图顺带解释了一件后面会反复撞到的事<span class="why">—— o_proj 为什么是一层里最大的一块</span></summary>
+  <div class="body">
+    <p><b><code>o_proj</code> 是 MLA 一层里最大的那块权重（117.44 M，占一层的 63%）</b> ——
+    <em>不是它本身有什么特殊，纯粹是因为它跨着上图那道口子</em>：
+    输入 16,384、输出 7,168，两头都很宽。</p>
+    <div class="eq">o_proj = 16,384 × 7,168 = <span class="r">117.44 M</span>
+一层 MLA 权重合计       = 187.11 M
+                          <span class="c">→ 117.44 / 187.11 = </span><span class="r">62.76%</span></div>
+    <p><b>更要紧的是这道口子放开之后的后果：头数和 d 从此可以各按各的道理定</b>，
+    不必再互相迁就 —— <em>这是后面第 2 步能把 128 个头全部保留下来的前提。</em></p>
+  </div>
+  </details>
 
   <div class="note warn">
     <span class="t">第一个让人坐直的数字</span>
@@ -4564,6 +4734,16 @@ document.querySelectorAll(".presets button").forEach(b=>
     x.classList.toggle("on", x.dataset.p===key));
 }));
 render(true);
+
+/* 打印 / 导出 PDF 时把所有折叠详情展开，打完还原 —— 讲课收起，存档要全 */
+(()=>{
+  let reopened = [];
+  addEventListener("beforeprint", ()=>{
+    reopened = [...document.querySelectorAll("details.more:not([open])")];
+    reopened.forEach(d=>d.open = true);
+  });
+  addEventListener("afterprint", ()=>{ reopened.forEach(d=>d.open = false); reopened = []; });
+})();
 </script>
 </body>
 </html>
