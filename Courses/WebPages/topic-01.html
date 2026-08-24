@@ -454,142 +454,80 @@ footer a{text-decoration:none}
 <section style="border-top:none;padding-bottom:24px"><div class="wrap">
   <div class="guess">
     <h3>开始之前，先猜一个数</h3>
-    <p class="q">DeepSeek V3，671B 参数。喂给它一篇 <b>128K token</b> 的长文档，
-      只做一次<b>前向</b>（不训练、不反向、batch 只有 1）。<br>
-      <span class="qs">权重本身占多少，这个不用猜 —— 671B × 2 字节 =
-      <span class="num" data-v="memWeights">1.22 TiB</span>，一乘就出来了。<br>
-      问的是另一半：<b>权重以外，还要多少？</b></span></p>
+    <p class="q">DeepSeek V3。喂给它一篇 <b>128K token</b> 的长文档，做一次 <b>prefill</b> ——
+      把整篇读进去，还没开始往外吐字。<br>
+      <span class="qs">读完这一遍，有一样东西<b>必须留在显存里</b>：
+      后面每生成一个字，都要回头用到前面每一个字、在<b>每一层</b>算出来的 K 和 V。
+      这就是 <b>KV cache</b>。<br>
+      问的就是它：<b>这一次 prefill，留下了多大一份 KV cache？</b><br>
+      参照物 —— 一个 TPU v7 device 可用 HBM 约 <b>94.74 GB</b>。</span></p>
     <div class="opts">
-      <button data-g="0">约 10 GB</button>
-      <button data-g="1" data-right>约 40 GB</button>
-      <button data-g="2">约 500 GB</button>
-      <button data-g="3">4 TB 以上</button>
+      <button data-g="0">约 4 GB</button>
+      <button data-g="1" data-right>约 9 GB</button>
+      <button data-g="2">约 30 GB</button>
+      <button data-g="3">约 500 GB</button>
     </div>
     <div class="rev" id="rev">
-      <p>答案是 <b><span data-v="nonWeight">41.89 GiB</span></b> ——
-        只有权重的 <b><span data-v="nwShare">3.4%</span></b>。<br>
-        <span class="qs">而另外三个选项<b>每一个都是真数字</b>，只是算的口径不一样 ——
-        这门课要讲的东西，基本都藏在这三个「错」里。</span></p>
+      <p>答案是 <b><span data-v="kvMla">8.58 GiB</span></b> ——
+        <b><span data-v="kvMlaCards">一张卡的 10%</span></b>。<br>
+        <span class="qs">另外三个选项<b>每一个也都是真数字</b>，只是换了一种存法。
+        这四个数其实就是<b>四代注意力</b>：同一个模型、同一篇文档，
+        只因为「每个 token 每层存几个数」不一样，答案就跨了 <b>128 倍</b>。
+        <b>第 2 步整节要讲的，全在这四个数的差距里。</b></span></p>
 
-      <div class="tbl-wrap"><table class="rvt">
-        <thead><tr><th>选项</th><th>它其实是什么</th><th style="text-align:right">值</th></tr></thead>
-        <tbody>
-          <tr><td>约 10 GB</td><td>只算了 <b>KV cache</b>，忘了激活</td>
-              <td class="n" data-v="kvMla">8.58 GiB</td></tr>
-          <tr class="sum"><td>约 40 GB ✓</td><td>KV cache <b>＋</b> 最胖那一层的激活</td>
-              <td class="n" data-v="nonWeight">41.89 GiB</td></tr>
-          <tr><td>约 500 GB</td><td>KV 如果按 <b>老办法（MHA）</b>存 —— MLA 把它压掉了
-              <span data-v="kvRatio">56.9×</span></td>
-              <td class="n" data-v="kvMha">488.00 GiB</td></tr>
-          <tr><td>4 TB 以上</td><td>把那张<b>注意力分数矩阵</b>整个存下来 ——
-              现实中不会物化它，但它真有这么大</td>
-              <td class="n" data-v="attnMatrix">4.00 TiB</td></tr>
-        </tbody>
-      </table></div>
-
-      <p class="qs" style="margin-bottom:10px"><b>先把两个总被混着说的词分清楚，后面全靠它：</b></p>
-      <div class="grid g2" style="margin-bottom:14px">
-        <div class="note warn" style="margin:0">
-          <span class="t">KV cache＝要留下来的</span>
-          生成第 n+1 个字的时候，<b>还要用前面 n 个字的 K 和 V</b>。
-          所以它的寿命是<b>整段对话</b>，而且<b>随长度线性长大、中途不释放</b>。<br>
-          <b>它跟层数相乘</b> —— 61 层各存各的。
-        </div>
-        <div class="note ok" style="margin:0">
-          <span class="t">激活＝算完就扔的</span>
-          第 3 层的中间结果，进了第 4 层就没用了。寿命是<b>一层之内</b>。<br>
-          <b>所以它不跟层数相乘</b> —— 只看<b>最胖的那一层有多胖</b>。
-          这就是为什么 61 层的模型，激活峰值只有几十 GB。
-        </div>
-      </div>
-      <p class="qs"><b>一句话判据：问「下一个 token 还要不要用它」。</b>
-        要 → KV cache；不要 → 激活。<br>
-        <em>（训练时不一样：激活要留着做反向，于是反过来由激活主导显存。
-        这门课只算前向，所以能把它们干净地分开。）</em></p>
-
-      <p class="qs" style="margin-bottom:8px"><b>这 40 GB 是怎么凑出来的</b>
-        —— 激活不累加，取三个候选峰值里最大的那个：</p>
-      <div class="tbl-wrap"><table class="rvt">
-        <thead><tr><th>峰值出现在哪一步</th><th>里面有什么</th><th style="text-align:right">合计</th></tr></thead>
-        <tbody>
-          <tr><td>MLA 那一层</td><td>KV <span data-v="kvMla">8.58 GiB</span>
-              ＋ Q/K 各 <span data-v="actQ">6.00 GiB</span>
-              ＋ V/输出各 <span data-v="actV">4.00 GiB</span> ＋ 残差流 ×2</td>
-              <td class="n" data-v="peakMla">32.08 GiB</td></tr>
-          <tr><td>MoE 那一层</td><td>KV ＋ dispatch/combine 缓冲
-              <span data-v="a2aLayer">28.00 GiB</span> ＋ 残差流 ×2</td>
-              <td class="n" data-v="peakMoe">40.08 GiB</td></tr>
-          <tr class="sum"><td>出口那一下 ← 最大</td><td>KV ＋ logits
-              <span data-v="logits">31.56 GiB</span> ＋ 残差流</td>
-              <td class="n" data-v="peakHead">41.89 GiB</td></tr>
-        </tbody>
-      </table></div>
-      <p class="qs"><b>最吓人的一项不在注意力，在出口</b> ——
-        那个跟 12.9 万词表相乘出来的 logits，比整段 KV cache 还大三倍多。
-        <em>（这一栏是按「算全部位置的 logits」估的；纯生成时只需要最后一个位置，可以忽略。
-        激活这一侧跟实现关系很大，这里给的是量级，不是精确值。）</em></p>
-
-      <!-- 这两个说明是真实被问出来的：上面那张表里「残差流 ×2」和 logits 的量级
-           是最容易卡住的两处。都是「看着像笔误、其实各有原因」的那类。 -->
-      <p class="qs" style="margin-bottom:10px"><b>上面这张表里，两个最容易卡住的地方：</b></p>
-      <div class="grid g2" style="margin-bottom:14px">
-        <div class="note info" style="margin:0">
-          <span class="t">「×2」出现了三次，是三件不同的事</span>
-          <b>Q/K 各一份</b> —— 两个一样大的张量，都是 128 头 × 192。<br>
-          <b>V/输出各一份</b> —— 也是两个一样大的，都是 128 头 × 128。<br>
-          <b>残差流 ×2 就不一样了。</b> 一层开头先把进来的 x 原样存一份，
-          因为这一层的最后一步是「<b>把它加回去</b>」，扔不得；
-          然后对 x 做一次 layer norm，norm 出来的是<b>另一块内存</b>。
-          于是从 norm 开始到加法做完，两份同时活着，各
-          <span data-v="actResid">1.75 GiB</span>。<br>
-          MoE 那层是同一个结构再来一遍，所以也 ×2；
-          <b>出口那一下没有「加回去」，所以只有一份。</b>
-        </div>
-        <div class="note info" style="margin:0">
-          <span class="t">logits 的量级：两个「位置」不是一回事</span>
-          出口那张 7168 × 129280 的大矩阵，<b>是权重，只有一份</b>
-          （1.73 GiB，已经算在 671B 里了）。<br>
-          但<b>每一个字</b>都要拿自己那 7168 维去乘它一遍，各自拿到 129280 个分数。
-          所以 logits 是一张<b>表</b>，不是一行：<br>
-          <b>竖着</b> <span data-v="tokens">131,072</span> 行（你喂进去的字数）<b>×
-          横着</b> 129,280 列（词表大小）<b>× 2 字节 =</b>
-          <span data-v="logits">31.56 GiB</span>。<br>
-          换个角度看：前面每一层，一个位置只占 7168 个数；<b>到出口这一下变成 129,280 个，
-          胖了 18 倍</b> —— 这就是它能超过整段 KV cache 的原因。<br>
-          <em>（两个数差不多大纯属巧合：一个是文档长度，一个是词表大小，毫无关系。）</em>
-        </div>
+      <p class="qs" style="margin-bottom:10px"><b>8.58 GiB 是怎么来的 —— 三步，每步只乘一个数：</b></p>
+      <div class="grid g3" style="margin-bottom:14px">
+        <div class="card"><h4>① 一个 token，一层</h4>
+          <div class="stat" data-v="kvMlaStep1">1.1 KiB</div>
+          <p class="sub"><b>576</b> 个数 × <span data-v="bytes">2</span> B<br>
+            <em>576 ＝ 512（压缩后的 KV）＋ 64（RoPE 那一截）</em></p></div>
+        <div class="card"><h4>② 一个 token，走完 61 层</h4>
+          <div class="stat orange" data-v="kvMlaStep2">68.6 KiB</div>
+          <p class="sub">× 61　<b>每层各存各的，躲不掉</b></p></div>
+        <div class="card tint"><h4>③ <span data-v="tokens">131,072</span> 个 token</h4>
+          <div class="stat green" data-v="kvMla">8.58 GiB</div>
+          <p class="sub">× <span data-v="tokens">131,072</span>　
+            <b><span data-v="kvMlaCards">一张卡的 10%</span></b></p></div>
       </div>
 
-      <p class="qs"><b>再顺一个必然会被问到的：那为什么预训练一般用 4K，不用 128K？</b><br>
-        省的<b>不是 logits</b>。logits 只看 <b>token 总数</b>（＝序列长度 × batch），
-        跟序列本身有多长无关 —— 拿默认口径举例：<b>128K × batch 1</b> 和
-        <b>4K × batch 32</b> 都是 131,072 个 token，logits <b>两边都是 31.56 GiB</b>，一模一样。<br>
-        短序列真正省的是<b>注意力</b>：它的代价是 batch × 序列长度<b>的平方</b>。
-        同样这 131,072 个 token，128K 那种切法要付 4K 切法的 <b>32 倍</b>。<br>
-        <em>（V3 的配置文件里 <code>original_max_position_embeddings</code> 是 4096、
-        YaRN 的 <code>factor</code> 是 40，4096 × 40 = 163840 —— 它本体确实是按 4K 训的，
-        128K 是后面扩出来的。另外训练时 logits 通常还要转 fp32 算 cross entropy，再翻一倍，
-        所以现在普遍用分块的 cross entropy：算一段扔一段，不把整张表物化出来。）</em></p>
+      <div class="note warn">
+        <span class="t">为什么它非得乘层数 —— 这是 KV cache 跟别的东西最不一样的地方</span>
+        中间结果算完就能扔：第 3 层的激活进了第 4 层就没用了，<b>寿命只有一层</b>，
+        所以<b>不跟层数相乘</b>。<br>
+        <b>KV cache 不行。</b> 生成第 n+1 个字的时候，前面 n 个字在<b>每一层</b>的 K 和 V 都还要再用一遍。
+        于是它<b>寿命是整段对话</b>、<b>跟 61 层相乘</b>、<b>随长度线性长大且中途不释放</b>。<br>
+        <b>一句话判据：问「下一个 token 还要不要用它」。</b>要 → KV cache；不要 → 算完就扔。
+      </div>
 
-      <p class="qs" style="margin-bottom:8px"><b>顺带把四代注意力的 KV 摆在一起</b>
-        —— 同样 <span data-v="seqLabel">128K</span>、61 层、bf16：</p>
+      <p class="qs" style="margin-bottom:8px"><b>那四个选项，其实是四种存法</b>
+        —— 同样 <span data-v="seqLabel">128K</span>、61 层、<span data-v="precLabel">bf16</span>：</p>
       <div class="tbl-wrap"><table class="rvt">
-        <thead><tr><th>存法</th><th>每 token 每层</th><th style="text-align:right">128K 全长</th>
-          <th style="text-align:right">相对 MHA</th></tr></thead>
+        <thead><tr><th>选项</th><th>存法</th><th style="text-align:right">每 token 每层</th>
+          <th style="text-align:right">全长</th><th style="text-align:right">相对 MHA</th></tr></thead>
         <tbody>
-          <tr><td>MHA · 每头一份</td><td class="n">32,768</td>
+          <tr><td>约 500 GB</td><td><b>MHA</b> · 每个头各存一份（最传统）</td><td class="n">32,768</td>
               <td class="n" data-v="kvMha">488.00 GiB</td><td class="n">1×</td></tr>
-          <tr><td>GQA · 8 组</td><td class="n">2,048</td>
+          <tr><td>约 30 GB</td><td><b>GQA</b> · 8 个头共用一份（Llama 那一类）</td><td class="n">2,048</td>
               <td class="n" data-v="kvGqa">30.50 GiB</td><td class="n">16×</td></tr>
-          <tr class="sum"><td>MLA · DeepSeek</td><td class="n">576</td>
-              <td class="n" data-v="kvMla">8.58 GiB</td><td class="n">56.9×</td></tr>
-          <tr><td>MQA · 全部共用</td><td class="n">256</td>
+          <tr class="sum"><td>约 9 GB ✓</td><td><b>MLA</b> · 压成一个 512 维的潜向量（V3）</td><td class="n">576</td>
+              <td class="n" data-v="kvMla">8.58 GiB</td><td class="n" data-v="kvRatio">56.9×</td></tr>
+          <tr><td>约 4 GB</td><td><b>MQA</b> · 所有头共用一份（最省）</td><td class="n">256</td>
               <td class="n" data-v="kvMqa">3.81 GiB</td><td class="n">128×</td></tr>
         </tbody>
       </table></div>
-      <p class="qs"><b>注意 MLA 落在 GQA 和 MQA 中间，但质量比两个都好</b> ——
-        这是第 2 步的主线。<em>（GQA 那行按 Llama 系列常见的 8 组折算，不是 V3 的配置；
-        线性注意力和窗口注意力不在这张表里，它们改的不是「每 token 存多少」而是「存不存」。）</em></p>
+      <p class="qs"><b>MLA 落在 GQA 和 MQA 中间，但质量比这两个都好</b> ——
+        MQA 更省，可它是靠<b>让所有头共用一份</b>省出来的，表达力是真丢了、找不回来；
+        MLA 省得几乎一样多，却<b>没让任何一个头做出牺牲</b>。<b>这就是第 2 步的主线。</b>
+        <em>（GQA 那行按 Llama 系列常见的 8 组折算，不是 V3 的配置；
+        线性注意力和窗口注意力不在这张表里 —— 它们改的不是「每 token 存多少」而是「存不存」。）</em></p>
+
+      <div class="note danger">
+        <span class="t">这 <span data-v="kvRatio">56.9×</span> 不是省了点显存，是换了一个量级</span>
+        488 GiB 意味着<b>光 KV cache 就要 <span data-v="kvCards">5.5 张卡</span></b> ——
+        模型权重还一个字节都没放，而且这只是<b>一个用户</b>。<br>
+        8.58 GiB 则是<b><span data-v="kvMlaCards">一张卡的 10%</span></b>。<br>
+        <b>一个是「先想办法凑机器」，一个是「顺手就放下了」。</b>
+      </div>
 
       <p style="margin-bottom:0">但重点不是这几个数字。重点是 ——
         <b>你能不能自己把它们算出来</b>，以及算的过程中会撞见哪些反直觉的东西。
@@ -1117,7 +1055,7 @@ footer a{text-decoration:none}
       <p class="sub">× 61　<b>还是不痛不痒</b></p></div>
     <div class="card tint"><h4>③ <span data-v="tokens">131,072</span> 个 token</h4>
       <div class="stat red" data-v="kvMha">488.00 GiB</div>
-      <p class="sub">× <span data-v="tokens">131,072</span>　<b>光这一项就占 <span data-v="kvCards">5.2 张卡</span></b></p></div>
+      <p class="sub">× <span data-v="tokens">131,072</span>　<b>光这一项就占 <span data-v="kvCards">5.5 张卡</span></b></p></div>
   </div>
 
   <div class="note danger">
@@ -4216,6 +4154,66 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
     <b>所以正确的读法是：连最省的口径都要 15 张，而真实训练要八倍于此。</b>
   </div>
 
+  <h3>那 <span data-v="nonWeight">41.89 GiB</span> 峰值激活，是怎么凑出来的</h3>
+  <p>开场那一问只算了 KV cache，因为<b>那笔账是确定的</b> —— 存什么、存多久，一步不含糊。
+  <b>激活这笔账得等一个 token 真的走完全程才有得算</b>，现在走完了，可以补上。</p>
+
+  <div class="note ok">
+    <span class="t">先把两个总被混着说的词分清楚</span>
+    <b>KV cache ＝ 要留下来的。</b> 生成第 n+1 个字时还要用前面 n 个字的 K 和 V，
+    寿命是<b>整段对话</b>，<b>跟层数相乘</b>，随长度线性长大、中途不释放。<br>
+    <b>激活 ＝ 算完就扔的。</b> 第 3 层的中间结果进了第 4 层就没用了，寿命<b>只有一层之内</b>。
+    <b>所以它不跟层数相乘</b> —— 只看<b>最胖的那一层有多胖</b>。
+    这就是为什么 61 层的模型，激活峰值只有几十 GB。<br>
+    <em>（训练时不一样：激活要留着做反向，于是反过来由激活主导显存。
+    这门课只算前向，所以能把它们干净地分开。）</em>
+  </div>
+
+  <p><b>激活不累加，取三个候选峰值里最大的那个：</b></p>
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>峰值出现在哪一步</th><th>里面有什么</th><th style="text-align:right">合计</th></tr></thead>
+    <tbody>
+      <tr><td>MLA 那一层</td><td>KV <span data-v="kvMla">8.58 GiB</span>
+          ＋ Q/K 各 <span data-v="actQ">6.00 GiB</span>
+          ＋ V/输出各 <span data-v="actV">4.00 GiB</span> ＋ 残差流 ×2</td>
+          <td class="n" data-v="peakMla">32.08 GiB</td></tr>
+      <tr><td>MoE 那一层</td><td>KV ＋ dispatch/combine 缓冲
+          <span data-v="a2aLayer">28.00 GiB</span> ＋ 残差流 ×2</td>
+          <td class="n" data-v="peakMoe">40.08 GiB</td></tr>
+      <tr class="sum"><td>出口那一下 ← 最大</td><td>KV ＋ logits
+          <span data-v="logits">31.56 GiB</span> ＋ 残差流</td>
+          <td class="n" data-v="peakHead">41.89 GiB</td></tr>
+    </tbody>
+  </table></div>
+  <p><b>最吓人的一项不在注意力，在出口</b> ——
+    那个跟 12.9 万词表相乘出来的 logits，比整段 KV cache 还大三倍多。
+    <em>（这一栏是按「算全部位置的 logits」估的；纯生成时只需要最后一个位置，可以忽略。
+    激活这一侧跟实现关系很大，这里给的是量级，不是精确值。）</em></p>
+
+  <div class="note info">
+    <span class="t">表里那个「×2」出现了三次，是三件不同的事</span>
+    <b>Q/K 各一份</b> —— 两个一样大的张量，都是 128 头 × 192。<br>
+    <b>V/输出各一份</b> —— 也是两个一样大的，都是 128 头 × 128。<br>
+    <b>残差流 ×2 就不一样了。</b> 一层开头先把进来的 x 原样存一份，
+    因为这一层的最后一步是「<b>把它加回去</b>」，扔不得；
+    然后对 x 做一次 layer norm，norm 出来的是<b>另一块内存</b>。
+    于是从 norm 开始到加法做完，两份同时活着，各
+    <span data-v="actResid">1.75 GiB</span>。<br>
+    MoE 那层是同一个结构再来一遍，所以也 ×2；
+    <b>出口那一下没有「加回去」，所以只有一份。</b>
+  </div>
+
+  <p><b>再顺一个必然会被问到的：那为什么预训练一般用 4K，不用 128K？</b><br>
+    省的<b>不是 logits</b>。logits 只看 <b>token 总数</b>（＝序列长度 × batch），
+    跟序列本身有多长无关 —— 拿默认口径举例：<b>128K × batch 1</b> 和
+    <b>4K × batch 32</b> 都是 131,072 个 token，logits <b>两边都是 31.56 GiB</b>，一模一样。<br>
+    短序列真正省的是<b>注意力</b>：它的代价是 batch × 序列长度<b>的平方</b>。
+    同样这 131,072 个 token，128K 那种切法要付 4K 切法的 <b>32 倍</b>。<br>
+    <em>（V3 的配置文件里 <code>original_max_position_embeddings</code> 是 4096、
+    YaRN 的 <code>factor</code> 是 40，4096 × 40 = 163840 —— 它本体确实是按 4K 训的，
+    128K 是后面扩出来的。另外训练时 logits 通常还要转 fp32 算 cross entropy，再翻一倍，
+    所以现在普遍用分块的 cross entropy：算一段扔一段，不把整张表物化出来。）</em></p>
+
   <figure class="fbox">
   <svg viewBox="0 0 1000 300" role="img"
        aria-label="三种口径下 671B 模型需要的 TPU v7 device 数：只算前向权重 14.3 个、加上峰值激活 14.7 个、换成训练 113 张；第三条按每参数 16 字节拆成权重、梯度、fp32 主权重和两个动量">
@@ -4545,10 +4543,12 @@ function compute(seq, batch, B, causal=true){
   // 账是怎么堆起来的：一个 token 一层 → 一个 token 全模型 → 全序列
   r.kvStep1    = r.kvMhaPer*B;              // 一个 token、一层
   r.kvStep2    = r.kvStep1*C.L;             // 一个 token、走完 61 层
+  r.kvMlaStep1 = r.kvPer*B;                 // 一个 token、一层，MLA 版
   r.kvMlaStep2 = r.kvPer*B*C.L;             // 同上，MLA 版
   // 撞满单个 device 需要多少 token（KV cache 一项就吃满，不含权重）
   r.kvSpan   = r.kvMha/r.kvStep1;          // 最左到最右跨了多少倍
   r.kvCards  = r.kvMha/HBM;                // 光 KV cache 就占几张卡
+  r.kvMlaCards = r.kvMla/HBM;              // MLA 版：通常不到一张卡
   r.mhaBreak = HBM/r.kvStep2;
   r.mlaBreak = HBM/r.kvMlaStep2;
 
@@ -4698,6 +4698,10 @@ function render(first){
               : Math.round(r.kvSpan).toLocaleString(),
     kvCards:  r.kvCards>=1 ? r.kvCards.toFixed(1)+" 张卡"
               : "一张卡的 "+(r.kvCards*100).toFixed(0)+"%",
+    kvMlaStep1: bytesH(r.kvMlaStep1),
+    kvMlaStep2: bytesH(r.kvMlaStep2),
+    kvMlaCards: r.kvMlaCards>=1 ? r.kvMlaCards.toFixed(1)+" 张卡"
+              : "一张卡的 "+(r.kvMlaCards*100).toFixed(0)+"%",
     mhaBreak: Math.round(r.mhaBreak).toLocaleString(),
     mlaBreak: Math.round(r.mlaBreak).toLocaleString(),
     attnMatrix: bytesH(r.attnMatrix),
