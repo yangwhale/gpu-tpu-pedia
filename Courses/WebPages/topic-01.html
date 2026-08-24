@@ -4700,8 +4700,10 @@ function render(first){
               : "一张卡的 "+(r.kvCards*100).toFixed(0)+"%",
     kvMlaStep1: bytesH(r.kvMlaStep1),
     kvMlaStep2: bytesH(r.kvMlaStep2),
+    // 短序列下 KV 只占千分之几，toFixed(0) 会显示成「一张卡的 0%」——
+    // 读起来像「不占地方」，其实是「占得少但不是零」。小于 1% 时保留一位小数。
     kvMlaCards: r.kvMlaCards>=1 ? r.kvMlaCards.toFixed(1)+" 张卡"
-              : "一张卡的 "+(r.kvMlaCards*100).toFixed(0)+"%",
+              : "一张卡的 "+(r.kvMlaCards*100).toFixed(r.kvMlaCards<0.01?1:0)+"%",
     mhaBreak: Math.round(r.mhaBreak).toLocaleString(),
     mlaBreak: Math.round(r.mlaBreak).toLocaleString(),
     attnMatrix: bytesH(r.attnMatrix),
