@@ -290,17 +290,25 @@ figcaption{font-size:13.5px;color:var(--gray);margin-top:10px;text-align:center;
    scrollWidth 顶出两三百像素，在 940 / 360 这类窗口下出现横向滚动条。
    实测：关掉这两个伪元素，940px 下 scrollWidth 从 1211 直接回到 940。
    代价是没有淡入动画，换来的是彻底不参与布局。 */
-.gl:after{content:attr(data-t);display:none;position:absolute;left:50%;bottom:calc(100% + 9px);
-   transform:translateX(-50%);background:var(--ink);color:#fff;
+/* ⚠️ 气泡必须 position:fixed，不能用 absolute。
+   absolute 时它会被任何一个「overflow 不是 visible」的祖先裁掉 ——
+   本页 10 个术语里有 6 个躺在 .tbl-wrap（overflow-x:auto）或 .more（hidden）里面。
+   注意 overflow-x:auto 会把 overflow-y 从 visible 提升成 auto，
+   所以横向滚动的表格同样会**纵向**裁切，气泡顶上那一截就这么没的。
+   fixed 之后坐标由 JS 在 mouseenter / focus 时写进 --tx/--ty，见下方 glossary()。 */
+.gl:after{content:attr(data-t);display:none;position:fixed;
+   left:var(--tx,-9999px);top:var(--ty,-9999px);
+   background:var(--ink);color:#fff;
    font:400 13.5px/1.6 "Noto Sans CJK SC",sans-serif;padding:11px 15px;border-radius:9px;
    width:290px;pointer-events:none;
    box-shadow:0 6px 22px rgba(0,0,0,.22);z-index:80;text-align:left;white-space:normal}
-.gl:before{content:"";display:none;position:absolute;left:50%;bottom:calc(100% + 3px);
+.gl:before{content:"";display:none;position:fixed;
+   left:var(--ax,-9999px);top:var(--ay,-9999px);
    transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink);
-   z-index:81}
+   z-index:81;pointer-events:none}
+/* 上方放不下时整个翻到词的下方，箭头也要跟着掉个头 */
+.gl.below:before{border-top-color:transparent;border-bottom-color:var(--ink)}
 .gl:hover:after,.gl:focus:after{display:block}
-.gl.tl:after{left:0;transform:translateX(0)}
-.gl.tr:after{left:auto;right:0;transform:translateX(0)}
 .gl:hover:before,.gl:focus:before{display:block}
 /* ── 无障碍 ───────────────────────────── */
 :focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
@@ -5713,18 +5721,38 @@ function drawCardGrid(r){
       break;                       // 一个文本节点最多改一处，避免游标失效
     }
   });
-  // 靠近视口边缘时把气泡翻到一侧，避免被裁掉。
-  // 只需在 mouseenter / focus 时算：气泡平时是 display:none，不存在也就不会撑页面
-  // （见 CSS 里 .gl:after 那段注释 —— 那才是横向滚动条的真正来源）。
+  // 气泡是 fixed 的，所以坐标必须自己算：横向以词为中心、撞到视口边就贴边，
+  // 纵向默认在词上方、上方装不下就翻到下方。
+  // 尺寸从 ::after 的 computed style 读 —— 伪元素**不吃** *{box-sizing:border-box}
+  // （那条规则没带 ::before/::after），所以 width/height 是内容盒，padding 要自己加回去。
+  // TOPM 要把顶上那条 sticky 控制台（46px）让出来 —— 气泡 z-index 80 > 它的 50，
+  // 盖上去不会被遮，但盖住滑块就没法边讲边拖了，不如让它翻到词的下方。
+  const M = 12, TOPM = 58, GAP = 9, ARROW = 12;
+  let hot = null;
+  const place = g => {
+    const r  = g.getBoundingClientRect();
+    const cs = getComputedStyle(g, "::after");
+    const w  = parseFloat(cs.width)  + parseFloat(cs.paddingLeft) + parseFloat(cs.paddingRight);
+    const h  = parseFloat(cs.height) + parseFloat(cs.paddingTop)  + parseFloat(cs.paddingBottom);
+    const vw = document.documentElement.clientWidth, cx = r.left + r.width/2;
+    const x  = Math.min(Math.max(cx - w/2, M), Math.max(M, vw - w - M));
+    const below = r.top - GAP - h < TOPM;      // 上方（扣掉控制台）塞不下就翻下去
+    g.classList.toggle("below", below);
+    g.style.setProperty("--tx", x + "px");
+    g.style.setProperty("--ty", (below ? r.bottom + GAP : r.top - GAP - h) + "px");
+    g.style.setProperty("--ax", cx + "px");
+    g.style.setProperty("--ay", (below ? r.bottom + GAP - ARROW : r.top - GAP) + "px");
+  };
   document.querySelectorAll(".gl").forEach(g=>{
-    const fix = ()=>{
-      const r = g.getBoundingClientRect(), W = document.documentElement.clientWidth;
-      g.classList.toggle("tr", r.left + 145 > W - 12);
-      g.classList.toggle("tl", r.left - 145 < 12);
-    };
-    g.addEventListener("mouseenter", fix);
-    g.addEventListener("focus", fix);
+    const on = ()=>{ hot = g; place(g); };
+    g.addEventListener("mouseenter", on);
+    g.addEventListener("focus", on);
+    g.addEventListener("mouseleave", ()=>{ if(hot===g) hot=null; });
+    g.addEventListener("blur",      ()=>{ if(hot===g) hot=null; });
   });
+  // fixed 定位不跟着滚 —— 悬停中滚动页面的话得重算，否则气泡会脱离那个词
+  addEventListener("scroll", ()=>{ if(hot) place(hot); }, {passive:true});
+  addEventListener("resize", ()=>{ if(hot) place(hot); });
 })();
 
 /* ── 猜一猜 ── */
