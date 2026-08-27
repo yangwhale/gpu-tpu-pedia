@@ -472,13 +472,13 @@ cd /ram/tbd && PUBLISH_REPORTS=0 bash scripts/daily_benchmark.sh --only dp-decod
 | `images/20260827-single-request-ttft.png` | 图 2 · 单请求 TTFT vs 输入长度（§3.8.3） |
 | `images/20260827-speed-bench.png` | 图 3 · SPEED-Bench 变长负载（§3.8.6） |
 | `images/20260827-baseline-reconciliation.png` | 图 4 · 20 项指标对账（本节全部） |
-| `data/20260827-results.json` | 七格全部实测值 + 基线值，机器可读 |
-| `data/make-charts.py` | 上面四张图的生成脚本（读同目录 JSON，matplotlib） |
+| `benchmark-data/20260827-results.json` | 七格全部实测值 + 基线值，机器可读 |
+| `benchmark-data/make-charts.py` | 上面四张图的生成脚本（读同目录 JSON，matplotlib） |
 
 重画四张图：
 
 ```bash
-cd tpu/vllm-torchtpu/data
+cd tpu/vllm-torchtpu/benchmark-data
 cp 20260827-results.json EXTRACT.json   # 脚本按这个名字找数据
 python3 make-charts.py                  # 输出 c1..c4 四个 PNG
 ```
