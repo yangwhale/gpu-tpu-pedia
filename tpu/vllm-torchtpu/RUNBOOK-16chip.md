@@ -464,6 +464,30 @@ cd /ram/tbd && PUBLISH_REPORTS=0 bash scripts/daily_benchmark.sh --only dp-decod
 | PCP8 prefill | 3.8.5 / 3.8.3 / 3.8.6 | 同上三个 workload，换并行策略 |
 | 横向 | 3.8.4 / 3.8.7 | 为什么留 PCP8 / 三类负载结论矛盾时信哪个 |
 
+**图表与原始数据**（都在本仓库里，可直接复现）：
+
+| 文件 | 内容 |
+|---|---|
+| `images/20260827-prefill-throughput.png` | 图 1 · Prefill 吞吐 vs 并发（§3.8.2 / §3.8.5） |
+| `images/20260827-single-request-ttft.png` | 图 2 · 单请求 TTFT vs 输入长度（§3.8.3） |
+| `images/20260827-speed-bench.png` | 图 3 · SPEED-Bench 变长负载（§3.8.6） |
+| `images/20260827-baseline-reconciliation.png` | 图 4 · 20 项指标对账（本节全部） |
+| `data/20260827-results.json` | 七格全部实测值 + 基线值，机器可读 |
+| `data/make-charts.py` | 上面四张图的生成脚本（读同目录 JSON，matplotlib） |
+
+重画四张图：
+
+```bash
+cd tpu/vllm-torchtpu/data
+cp 20260827-results.json EXTRACT.json   # 脚本按这个名字找数据
+python3 make-charts.py                  # 输出 c1..c4 四个 PNG
+```
+
+![20 项指标与已发布基线的逐项对账](images/20260827-baseline-reconciliation.png)
+
+**20 项指标对账全景。** 绿色 = 偏差 <1%（18 项），黄色 = 1–3%（2 项，都是 SPEED-Bench）。
+中位偏差 0.22%，最大 +2.47%。灰色带是 ±1% 参考线。
+
 #### 3.8.1 DP8 C256 decode
 
 这一格回答的是：**8 个 DP rank 全部塞满、上下文拉到 64K 的时候，这台机器每秒能吐多少 token，每个用户感觉有多快。** 它不是「某个延迟约束下的最大吞吐」——并发被钉死在 256，吞吐和 TPOT 是并列报出的两个数（口径见 §3.6）。
@@ -615,6 +639,11 @@ Highest total token throughput: 57735.75 tok/s (concurrency=32)
 
 服务侧对照：`Loading weights took 40.61 seconds`。六个并发点的 `Benchmark duration` 加起来 512.5 s（约 8 分 32 秒），编译和起服务的时间不算在内。
 
+![DP8 与 PCP8 的 prefill 吞吐随并发变化](images/20260827-prefill-throughput.png)
+
+*两条曲线一起看：PCP8 并发 16 就压到 54.3K 走平，DP8 要爬到 C32 才追上并反超到 57.7K。
+PCP8 那条线在 §3.8.5，放在一张图里是因为它俩的形状差异才是重点（解释在 §3.8.7）。*
+
 **实测值 vs 发布基线**
 
 | 并发 | 总吞吐 (tok/s) | 相对峰值 | median TTFT | P99 TTFT | 用时 (s) |
@@ -691,6 +720,11 @@ BENCHMARK_CONFIG=pcp8 bash scripts/bench_prefill_ttft.sh "$RUN_DIR"
 | 数据集 | `random`，`--random-range-ratio 0` | 长度精确，不浮动 |
 | 确定性 | `--temperature 0`、`--seed 42`、prefix caching 关 | |
 | 统计量 | **median TTFT** | 不用 mean，理由见下 |
+
+![单请求 TTFT vs 输入长度，DP8 与 PCP8 对比](images/20260827-single-request-ttft.png)
+
+*双对数坐标。绿色标注是 PCP8 的领先倍数 —— 它随输入长度单调上升，
+252K 时 DP8 要等 64 秒，PCP8 只要 9.8 秒。*
 
 **实测值**
 
@@ -885,6 +919,11 @@ cd /ram/tbd && PUBLISH_REPORTS=0 bash scripts/daily_benchmark.sh \
 > 🔎 **数据集完整性是硬校验，不是提示。** `bench_speed_bench_mix.sh` 会先比
 > artifact SHA-256、解压后再比内容 SHA-256，任一不符**直接 exit 1**。
 > 换句话说：只要这一步跑过去了，你和基线吃的就是**同一批 1,000 条请求**。
+
+![SPEED-Bench 变长负载：吞吐与 TTFT 分位](images/20260827-speed-bench.png)
+
+*左：input tok/s，C8 与 C64 的排序发生反转。右：TTFT 分位数，
+PCP8 的柱子明显更矮更齐 —— 尾延迟才是它在变长负载下的真正卖点。*
 
 **实测值：input tok/s**
 
