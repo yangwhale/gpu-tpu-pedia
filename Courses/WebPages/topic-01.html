@@ -889,11 +889,12 @@ footer a{text-decoration:none}
   </div>
   </details>
 
-  <h3>嵌入：一次查表，仅此而已</h3>
+  <h3>嵌入：一次查表 —— 至少默认是</h3>
   <div class="grid g2">
     <div>
-      <p>没有矩阵乘。拿 token id 去那张 <span class="k">129,280 × 7,168</span> 的大表里
-      取出对应的那一行 —— 就这样。<b>这一步在算力账上是 0。</b></p>
+      <p>拿 token id 去那张 <span class="k">129,280 × 7,168</span> 的大表里
+      取出对应的那一行 —— 就这样。<b>这条路径在算力账上是 0。</b>
+      不过「一定是查表」这个直觉在真实框架里并不成立，展开看。</p>
 
       <div class="eq"><span class="c">// 嵌入矩阵参数量</span>
 129,280 × 7,168 = <span class="r" data-v="embedW">926.68 M</span>  <span class="c">→ <span data-v="embedWBytes">1.73 GiB</span></span>
@@ -901,13 +902,38 @@ footer a{text-decoration:none}
 <span class="c">// 查完表，那个张量多大</span>
 <span data-v="tokens">131,072</span> × 7,168 × <span data-v="bytes">2</span> B = <span class="r" data-v="embedAct">1.75 GiB</span></div>
 
-      <details class="more"><summary>展开：「没有矩阵乘」这句话要说多准<span class="why">—— 数学上它确实是个乘法</span></summary>
+      <details class="more"><summary>展开：「查表不是矩阵乘」这句话要说多准<span class="why">—— 生产配置里它经常真的是矩阵乘</span></summary>
       <div class="body">
-        <p>它在数学上<b>等价于</b>「one-hot 向量 × 嵌入矩阵」，
-        但<b>没有任何实现真去做那个乘法</b> ——
-        那是拿 129,280 次乘加去换 1 个数。<b>实现上一律是按 id 直接取行。</b></p>
-        <p>所以这一步的算力是 0，<b>不是「算得快」，是压根没算</b>。
-        <em>但显存不是 0</em>：那张表本身要常驻，取出来的张量也要占地方 —— 见右边的图。</p>
+        <p>它在数学上<b>等价于</b>「one-hot 向量 × 嵌入矩阵」。直觉上没人会真去做那个乘法 ——
+        那是拿 129,280 次乘加去换 1 个数。<b>但两条路在真实训练框架里都在跑，而且是一个显式开关。</b></p>
+
+        <div class="eq"><span class="c">// MaxText layers/embeddings.py — 两个分支都在源码里</span>
+if cfg.use_iota_embed:
+    iota    = lax.iota(jnp.int32, self.num_embeddings)
+    one_hot = jnp.array(inputs[..., None] == iota, dtype=self.dtype)
+    output  = jnp.dot(one_hot, embedding)     <span class="c">// ← 真的做那个矩阵乘</span>
+else:
+    output  = embedding.at[inputs].get()      <span class="c">// ← gather，算力 0</span></div>
+
+        <p><code>base.yml</code> 里这个开关默认是 <code>false</code>，也就是走 gather。
+        <b>但仓库里 34 份实跑配置显式把它打开，没有一份显式关掉</b> —— 而且不只是 TPU，
+        连 GPU 那批模型配置（llama3、mixtral）也是打开的。默认值和实际用法是反的。</p>
+
+        <div class="note info"><b>打开之后这一步值多少算力？</b>
+        跟本页最后那张总表里的 <b>lm_head 一模一样</b> —— 因为它们本就是同一个形状的矩阵，
+        一个 <span class="k">129,280 → 7,168</span>，一个 <span class="k">7,168 → 129,280</span>，
+        文档后面把这叫「镜像」。查表时这个镜像只在参数量上成立，
+        走 matmul 时它在算力上也成立了：
+        <div class="eq" style="margin:8px 0 0">2 × 129,280 × 7,168 = <span class="r">1.85 GFLOP</span> <span class="c">/ 每个 token</span>
+<span class="c">// 全序列合计 = </span><span class="r" data-v="headFlops">242.92 TFLOP</span><span class="c">，占整步 </span><span data-v="totalFlops">52.50 PFLOP</span><span class="c"> 的 </span><span class="r">0.46%</span></div></div>
+
+        <p>所以准确的说法是：<b>「算力是 0」只对 gather 那条路成立</b>。
+        换条编译路径它就不是 0，只是分母够大，那 0.46% 淹没在噪声里。
+        至于为什么值得多花这笔算力 —— 它把一次不规则的稀疏取行变成了一个规整的、
+        能沿词表维切分的稠密矩阵乘，反向也随之变成矩阵乘。
+        <b>但这只是最合理的解释，不是公开资料里写明的理由</b>，别当结论用。</p>
+
+        <p><em>显存两条路一样</em>：那张表本身要常驻，取出来的张量也要占地方 —— 见右边的图。</p>
       </div>
       </details>
     </div>
@@ -3951,7 +3977,8 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
     <div>
       <h4>反向嵌入</h4>
       <p>最后一次 RMSNorm，然后一个 <span class="k">7168 → 129,280</span> 的矩阵，
-      给词表里每一个词打一个分。这跟第 1 步的嵌入矩阵是<b>镜像</b>关系。</p>
+      给词表里每一个词打一个分。这跟第 1 步的嵌入矩阵是<b>镜像</b>关系 ——
+      而且一旦第 1 步也编译成 matmul（见那一节的展开），两边连 FLOP 都一样。</p>
       <div class="note warn">
         <span class="t"><code>tie_word_embeddings = false</code> —— 但另有一处是真共享的</span>
         很多模型让进出口<b>共享同一份权重</b>（省一份参数，而且「表示一个词」
@@ -4119,7 +4146,7 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
       <th style="text-align:right">显存</th><th style="text-align:right">前向 FLOPs</th><th>备注</th></tr></thead>
     <tbody>
       <tr><td>嵌入</td><td class="n">926.68 M</td><td class="n" data-v="embedWBytes">1.73 GiB</td>
-        <td class="n">—</td><td>查表，不是矩阵乘</td></tr>
+        <td class="n">—</td><td>查表则为 0；编译成 matmul 则同 lm_head</td></tr>
       <tr><td>MLA × 61</td><td class="n">11.41 B</td><td class="n">21.26 GiB</td>
         <td class="n" data-v="mlaFlops">45.61 PFLOP</td><td>含 <span data-v="attnShare">81.8%</span> 的平方项</td></tr>
       <tr><td>KV cache</td><td class="n">—</td><td class="n" data-v="kvMla">8.58 GiB</td>
