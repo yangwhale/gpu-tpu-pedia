@@ -1406,7 +1406,7 @@ else:
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 322" role="img"
-       aria-label="撑宽的三笔代价，以等宽做法为 1.00 倍：算力 2.86 倍、o_proj 权重 2.29 倍、Q 投影若直投 3.43 倍（其中撑宽 2.29 倍、MLA 分离 RoPE 再乘 1.5 倍）但实际走 q_lora 只有 0.95 倍">
+       aria-label="撑宽的三笔代价，以等宽做法为 1.00 倍：算力 2.86 倍、o_proj 权重 2.29 倍、Q 投影若一步投到位 3.43 倍（其中撑宽 2.29 倍、MLA 分离 RoPE 再乘 1.5 倍）但实际走 q_lora 只有 0.95 倍">
     <g>
       <text x="250" y="26" class="svglbl">以「等宽做法」为 <tspan font-weight="700">1.00 倍</tspan>，看撑宽之后各付了多少</text>
 
@@ -1420,7 +1420,7 @@ else:
       <text x="264" y="122" class="svgnum" fill="#a50e0e">2.29×</text>
       <text x="330" y="122" class="svgsm" fill="#a50e0e">51.38 M → 117.44 M　—— 这笔也跑不掉</text>
 
-      <text x="240" y="178" text-anchor="end" class="svgnum" fill="#5f6368">③ Q 投影 · 若直投</text>
+      <text x="240" y="178" text-anchor="end" class="svgnum" fill="#5f6368">③ Q 投影 · 一步投到位</text>
       <rect x="250" y="160" width="686" height="26" rx="3" fill="#fef7e0" stroke="#f9ab00"
             stroke-dasharray="5 4"/>
       <line x1="708" y1="160" x2="708" y2="186" stroke="#f9ab00" stroke-width="1.2"/>
@@ -1447,19 +1447,22 @@ else:
     </g>
   </svg>
   <figcaption><b>三根条对着同一条 1.00 倍基准线，长度按倍数线性画。</b>
-  <b>黄色那根是虚线</b> —— 它是<em>「如果直接投会怎样」</em>，V3 没走那条路。
-  <b>真正落地的是下面那根绿的。</b><br>
+  <b>黄色那根是虚线</b> —— 它是<em>「还是 V3 这个形状，但不掐 <code>q_lora</code> 那个窄腰」</em>，
+  <b>不是</b>「换成别的注意力」。<b>真正落地的是下面那根绿的。</b><br>
   <b>黄条中间那道竖线要看清</b>：3.43 倍是<em>两个独立决策乘出来的</em> ——
   左边 2.29 倍是撑宽的账，右边那 1.5 倍（<code>192 ÷ 128</code>）
-  是 <b>MLA 把 RoPE 单独拎出 64 维</b>造成的。<b>不走 MLA 就没有右边那一截</b>：
-  一个普通 MHA 直接把 RoPE 转在完整的 128 维上，Q 投影是
-  <code>7,168 × (128×128) = 117.44 M</code>，跟 <code>o_proj</code> 一样是 2.29 倍。</figcaption>
+  是 <b>MLA 把 RoPE 单独拎出 64 维</b>造成的。<br>
+  <b>⚠️ 别把两个「如果」搞混</b>：右边那一截<b>只有 MLA 才有</b>。
+  如果 V3 压根不用 MLA、就用一个普通 MHA，RoPE 直接转在完整的 128 维上，
+  <b>根本不会出现 192 这个数</b> —— Q 投影就是
+  <code>7,168 × (128×128) = 117.44 M</code>，跟 <code>o_proj</code> 一样是 2.29 倍，
+  <b>黄条走到竖线那儿就该结束了。</b></figcaption>
   </figure>
 
   <details class="more"><summary>展开：这三笔账的完整算式<span class="why">—— 图上四个倍数怎么来的</span></summary>
   <div class="body">
   <div class="tbl-wrap"><table>
-    <thead><tr><th>代价</th><th>等宽取值</th><th>V3 撑宽后</th>
+    <thead><tr><th>代价</th><th>等宽取值</th><th>撑宽之后</th>
       <th style="text-align:right">结果</th></tr></thead>
     <tbody>
       <tr><td><b>① 注意力算力</b><br>
@@ -1477,19 +1480,22 @@ else:
       <tr><td><b>③ Q 投影权重</b><br>
         <span class="sub">128 个头各要一个 7,168 × d 的矩阵</span></td>
         <td>7,168 × (128×56)<br><span class="sub">51.38 M</span></td>
-        <td>若是普通 MHA 直投<br>7,168 × (128×<b>128</b>)<br>
-          <span class="sub">117.44 M —— RoPE 就转在这 128 维上</span></td>
+        <td><b>如果只是撑宽</b>（普通 MHA）<br>7,168 × (128×<b>128</b>)<br>
+          <span class="sub">117.44 M —— RoPE 就转在这 128 维里，
+          <b>没有 192 这个数</b></span></td>
         <td class="n" style="color:#a50e0e">2.29×<br>
           <span class="sub">纯撑宽的账</span></td></tr>
-      <tr><td><span class="sub">③ 续：MLA 还要给 RoPE 单开 64 维</span></td>
+      <tr><td><span class="sub">③ 续：<b>但 V3 用的是 MLA</b> ——
+        RoPE 不转在那 128 维里，另开 64 维走</span></td>
         <td>—</td>
-        <td>若直投 7,168 × (128×<b>192</b>)<br><span class="sub">176.16 M</span></td>
+        <td><b>V3 的真实形状</b>，一步投到位<br>7,168 × (128×<b>192</b>)<br>
+          <span class="sub">176.16 M</span></td>
         <td class="n" style="color:#a50e0e">再 ×1.5<br>
           <span class="sub">合计本该 3.43×</span></td></tr>
       <tr class="sum"><td colspan="2"><b>③ 的实际做法：走 <code>q_lora</code> 绕一下</b><br>
         <span class="sub">7,168 → 1,536 → 128×192，中间掐一个窄腰</span></td>
         <td>11.01 M + 37.75 M<br><span class="sub">= 48.76 M</span></td>
-        <td class="n" style="color:#0d652d">比直投省 3.61×<br>
+        <td class="n" style="color:#0d652d">比一步投到位省 3.61×<br>
           <span class="sub">比等宽还小 5.1%</span></td></tr>
     </tbody>
   </table></div>
