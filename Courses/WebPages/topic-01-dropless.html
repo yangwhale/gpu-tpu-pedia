@@ -2228,8 +2228,8 @@ AG-RS  : (EP − 1) × (2 + 2) = <span class="r">4 × (EP − 1)</span>
           第 L+1 层的权重已经在路上了</em></td></tr>
       <tr><td><b>MoE 的 all-to-all</b></td>
         <td>依赖<b>这一层 router 刚算出来的结果</b></td>
-        <td class="r"><b>不能。</b><em>它卡在 router 和 GEMM 中间，
-          是纯暴露延迟</em></td></tr>
+        <td class="r"><b>不能<em>预取</em>。</b><em>它卡在 router 和 GEMM 中间
+          —— 但<b>能用别的办法盖住</b>，见下面那条</em></td></tr>
     </tbody>
   </table>
   <p>再叠上拓扑：<b>ICI 是 3D torus</b>，
@@ -2248,6 +2248,83 @@ EP = 4（半 batch，16 芯片）  <span class="r">−71.36%</span></div>
     <b>所以「97% 参数在专家里，所以 EP 是主旋钮」这句话，
     <em>对 GPU 成立，对 TPU 不成立</em>。</b>
     <em>这是把一种硬件的经验直接搬到另一种上的典型翻车。</em>
+  </div>
+
+
+  <h3>那 A2A 就真的藏不住吗 —— 藏得住，但不是靠预取</h3>
+  <div class="note w">
+    <span class="t">把上面那个「不能」收窄一点</span>
+    <b>A2A 不能<em>预取</em>，但可以用<em>另一个 micro-batch 的计算</em>去盖住它。</b><br>
+    <em>DeepSeek-V3 的 <b>DualPipe</b> 做的就是这件事：双向流水线，
+    官方仓库的说法是 <em>“achieves full overlap of forward and backward
+    computation-communication phases”</em>。
+    代价也写在报告里 —— 专门划出 <b>20 个 SM</b> 跑手写 PTX 的通信 kernel。</em><br><br>
+    <b>所以真正的差别不是「能不能藏」，是「藏起来要花多少工程量」：</b>
+    <ul style="margin:8px 0 0">
+      <li><b>FSDP all-gather</b> —— 改一行（预取下一层），编译器自己就会做</li>
+      <li><b>MoE all-to-all</b> —— <b>要重排整个 pipeline 调度</b>，
+        还得给通信留出计算单元</li>
+    </ul>
+    <em>MaxText 那边同一招的小号版本叫 <code>num_moe_token_chunks</code>：
+    把本卡 token 切成 N 块，让第 c+1 块的通信跟第 c 块的 GMM 重叠。</em>
+  </div>
+
+  <h3>先别拿字节数当选路依据 —— 包括我上面那三笔账</h3>
+  <p><b>把上面①和③摆平，能解出一个「每卡要多少 token，FSDP 才在字节上打平」。</b></p>
+  <div class="eq"><span class="c">// ① A2A     : T × k × h × 3      （fp8 dispatch 1 B ＋ bf16 combine 2 B）</span>
+<span class="c">// ③ FSDP    : P × 2              （P = 一层的全部专家参数 = 112.7 亿）</span>
+
+相等 ⇒ T = <span class="r">2P ÷ (3 k h)</span> = 2×112.7亿 ÷ (3 × 8 × 7168) ≈ <span class="y">131,000</span> token / 卡</div>
+
+  <div class="note w">
+    <span class="t">而 TPU 那份配方只有每卡 32,768 个 token</span>
+    <b>也就是说：<em>在 TPU 上，FSDP 按字节算依然亏四倍。它照样赢了。</em></b><br><br>
+    <b>所以上面那三笔账算得没错，但<em>不能拿它选路</em>。</b>
+    <em>如果谁只看字节数，会得出「两个平台都该用 EP」的结论 ——
+    而这跟实测正好相反。<b>把这条写在这儿，就是防止这张表被那样用。</b></em>
+  </div>
+
+  <p>字节数不是依据，那依据是什么？<b>两条，上面讲了一条，这里补另一条。</b></p>
+  <ol>
+    <li><b>同一个 collective，在两种 fabric 上代价天差地别。</b>
+      <em>（就是上一小节 —— NVLink 全连接域里 all-to-all 每一对都有直连，
+      接近最优；3D torus 上它多跳又拥塞。而 all-gather 反过来。）</em></li>
+    <li><b>内存：EP 是「切了就不用还原」的切分，FSDP 是「切了还得还原」的切分。</b>
+      <em>这一条上面没说，但它才是 GPU 那边的决定性理由。</em></li>
+  </ol>
+
+  <table>
+    <thead><tr><th></th><th>算这一层时，卡上要放多少专家权重</th><th class="r">V3 一层的量</th></tr></thead>
+    <tbody>
+      <tr><td><b>EP</b><br><em>切了不还原</em></td>
+        <td>永远只有<b>本地那 4 个专家</b> —— <em>从头到尾不摊开</em></td>
+        <td class="r"><b>336 MiB</b></td></tr>
+      <tr class="hl"><td><b>FSDP</b><br><em>切了必须还原</em></td>
+        <td><b>整层全部 256 个专家</b>，<em>而且要为预取留双缓冲</em></td>
+        <td class="r"><b>21 GiB × 2<br>≈ 42 GiB</b></td></tr>
+    </tbody>
+  </table>
+  <p><b>H100 一共 80 GB。</b><em>42 GiB 摊在那儿，激活基本没地方放了 ——
+  这就是 GPU 侧「不能只用 FSDP」最硬的那条。
+  TPU v7 每 device 有 94.7 GiB，同一件事才勉强做得下。</em></p>
+
+  <div class="note d">
+    <span class="t">推理那边更是没得选</span>
+    <b>FSDP 的成本跟 batch <em>无关</em>。</b>
+    <em>decode 一次就一两百个 token，你却要为这一层搬 21 GiB 的权重进来 ——
+    完全说不通。</em><br>
+    <b>所以 vLLM / SGLang / TensorRT-LLM 的 MoE 推理路径全都是 EP ＋ A2A，
+    没有一个走 FSDP。</b>
+  </div>
+
+  <div class="note g">
+    <span class="t">一句话的判据</span>
+    <div class="eq" style="margin:8px 0"><span class="y">FSDP</span> 的成本 ∝ <b>专家参数量</b>，<span class="r">跟 batch 无关</span>
+<span class="y">A2A </span> 的成本 ∝ <b>每卡 token 数</b>，<span class="r">跟 EP 度数无关</span></div>
+    <b>token 多就偏 FSDP，token 少就偏 EP。</b>
+    <em>训练 token 多 ＋ 环面偏爱 all-gather ＋ HBM 够大 ⇒ TPU 敢用 FSDP；
+    GPU 训练 token 也多，但卡在<b>内存</b>和「NVLink 让 A2A 本来就便宜」这两条上；
+    <b>推理 token 少，两个平台都只能 EP。</b></em>
   </div>
 
   <h3>代价：EP ＝ 1 会把段数顶上去</h3>
