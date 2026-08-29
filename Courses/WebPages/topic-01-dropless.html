@@ -131,7 +131,8 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
     <li><a href="#s9">补齐到 128，跟 chunked prefill、PagedAttention 是一回事吗？</a></li>
     <li><a href="#s11">TPU 上是不是也这么干？</a></li>
     <li><a href="#s12">TPU 上 MXU 怎么被喂饱的？HBM → VMEM → VREG 的流水</a></li>
-    <li><a href="#s13">V3 是真 dropless 还是近似的？</a></li>
+    <li><a href="#s13">三条路一个骨架：上界开在哪，「省」发生在哪</a></li>
+    <li><a href="#s14">V3 是真 dropless 还是近似的？</a></li>
   </ol>
 </div>
 
@@ -1285,7 +1286,7 @@ metadata_ref.gm_id_to_m_offset[tm_id] = curr_m_offset</div>
     <span class="t">所以 MegaBlocks 的历史地位该怎么讲</span>
     <b>它的贡献不是「发明了分组矩阵乘」。</b>
     <em>它的贡献是第一次把「MoE 可以完全不丢 token」做成一个能跑满硬件的实现，
-    并且用一组对照实验证明了这件事值得做</em>（见 §14 的三个数）。<br>
+    并且用一组对照实验证明了这件事值得做</em>（见 §15 的三个数）。<br>
     <b>但接口层面，今天大家用的不是它那套 block-sparse 编码，而是更直白的 grouped GEMM。</b>
     <em>讲课时可以说「MegaBlocks 把这条路走通了」，
     不要说「今天的 dropless 都是 MegaBlocks 那套」——不是。</em>
@@ -1866,9 +1867,152 @@ acc  = <span class="r">where(mask, acc, 0)</span>                              <
     双缓冲、三缓冲、按 MXU 边长切列面板、fp32 累加器住 VMEM、循环顺序让三个单元并行。</em>
   </div>
 </section>
-<!-- ══════════ 13 · V3 ══════════ -->
+<!-- ══════════ 13 · 三条路一个骨架 ══════════ -->
 <section id="s13">
-  <h2><span class="n">§13</span>V3 到底是真 dropless 还是近似的</h2>
+  <h2><span class="n">§13</span>三条路，同一个骨架<br>—— 上界开在哪，「省」发生在哪</h2>
+  <p class="lead">走到这儿，前面十二节其实一直在同一个模式上打转。
+  <b>把这个模式抽出来，剩下所有的差别都只是参数。</b></p>
+
+  <div class="note d">
+    <span class="t">骨架就三句话</span>
+    <ol style="margin:8px 0 0">
+      <li><b>形状按一个<em>上界</em>开死</b> —— 让编译器 / CUDA graph 满意</li>
+      <li><b>真实长度以<em>数据</em>的形式进到 kernel 里</b> —— 不穿过 CPU</li>
+      <li><b>真正的「省」发生在 <em>kernel 内部</em></b> ——
+        上界只决定形状，<b>不决定算力</b></li>
+    </ol>
+    <p style="margin:12px 0 0"><b>第三句是全部的重点。</b>
+    <em><a href="#s2">§2</a> 那个老办法之所以非要丢 token，
+    病根就在它把第三句做反了 —— 它让上界<b>直接进了算力账</b>。
+    上界进算力账，上界就只能开小；开小，就必须丢。</em></p>
+  </div>
+
+  <h3>关键的那条不对称：上界只花内存，不花算力</h3>
+
+  <figure>
+  <svg viewBox="0 0 1000 300" role="img"
+       aria-label="对照两种记账方式：老办法容量系数 1.5 时，内存和算力都是 98,304 行，两条一样长；新办法即使把上界开得一样大，真正计算的只有 65,792 行，算力那条短了三分之一。">
+    <text x="20" y="26" class="svgtb" fill="#202124">同一个上界，两种记账 —— 差别全在「算力」那一条</text>
+
+    <!-- A -->
+    <text x="20" y="66" class="svgtb" fill="#a50e0e">A · 老办法（容量系数 1.5）</text>
+    <text x="20" y="98" class="svgt" fill="#5f6368">内存</text>
+    <rect x="90" y="82" width="800" height="22" fill="#80868b" opacity=".35" stroke="#80868b"/>
+    <text x="900" y="98" class="svgsm" fill="#5f6368">98,304 行</text>
+    <text x="20" y="132" class="svgt" fill="#5f6368">算力</text>
+    <rect x="90" y="116" width="800" height="22" fill="#d93025" opacity=".8"/>
+    <rect x="90" y="116" width="533" height="22" fill="none" stroke="#fff" stroke-width="1.4" stroke-dasharray="5 4"/>
+    <text x="356" y="132" text-anchor="middle" class="svgk" fill="#fff">真数据 65,536</text>
+    <text x="757" y="132" text-anchor="middle" class="svgk" fill="#fff">补零 32,768</text>
+    <text x="900" y="132" class="svgsm" fill="#a50e0e">98,304 行</text>
+    <text x="90" y="156" class="svgt" fill="#a50e0e">
+      <tspan font-weight="700">两条一样长</tspan> —— 盒子开多大就算多大，
+      <tspan font-weight="700">上界直接进算力账</tspan>。而且这还没算被丢掉的那些 token。</text>
+
+    <line x1="20" y1="176" x2="980" y2="176" stroke="#e8eaed" stroke-width="1.4"/>
+
+    <!-- B -->
+    <text x="20" y="208" class="svgtb" fill="#0d652d">B · 新办法（上界<tspan font-style="italic">故意</tspan>开得一样大）</text>
+    <text x="20" y="240" class="svgt" fill="#5f6368">内存</text>
+    <rect x="90" y="224" width="800" height="22" fill="#80868b" opacity=".35" stroke="#80868b" stroke-dasharray="6 4"/>
+    <text x="900" y="240" class="svgsm" fill="#5f6368">开多大都行</text>
+    <text x="20" y="274" class="svgt" fill="#5f6368">算力</text>
+    <rect x="90" y="258" width="535" height="22" fill="#188038" opacity=".85"/>
+    <text x="357" y="274" text-anchor="middle" class="svgk" fill="#fff">实收 65,536 ＋ 对齐 256</text>
+    <path d="M631 269 H884" stroke="#188038" stroke-width="1.6" stroke-dasharray="4 3"/>
+    <path d="M884 269 L876 265 M884 269 L876 273" stroke="#188038" stroke-width="1.6"/>
+    <text x="757" y="264" text-anchor="middle" class="svgt" fill="#0d652d" font-weight="700">这一截根本没跑 · 省 33%</text>
+  </svg>
+  <figcaption><b>上界开在哪不重要，重要的是它进不进算力账。</b>
+  <em>B 里那条灰虚线可以随便加宽 —— 它只是一块预留内存。
+  真正被执行的，永远是实收的那些行（<a href="#s12">§12</a> 里那个
+  「trip count 由设备端现算」就是这句话的实现）。</em></figcaption>
+  </figure>
+
+  <table>
+    <thead><tr><th></th><th>上界是什么</th><th>超出会怎样</th><th class="r">进算力账吗</th></tr></thead>
+    <tbody>
+      <tr><td><b>老办法</b><br><em>capacity factor</em></td>
+        <td><b>每个专家</b>一个盒子</td>
+        <td><b>token 被丢掉</b> —— <em>这是个质量事件，不是资源事件</em></td>
+        <td class="r"><b>进</b></td></tr>
+      <tr><td><b>contiguous</b><br><em>训练 / prefill</em></td>
+        <td><b>一张卡的接收缓冲区</b><br><code>num_max_tokens_per_rank</code></td>
+        <td>缓冲区不够，属于配置错误，必须避免</td>
+        <td class="r"><b>不进</b></td></tr>
+      <tr class="hl"><td><b>masked</b><br><em>decode</em></td>
+        <td><b>每个专家</b>一个等大的槽 <span class="k">max_m</span></td>
+        <td>同上</td>
+        <td class="r"><b>不进</b><em>（见下）</em></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note w">
+    <span class="t">那 decode 为什么还是贵 —— 贵的不是 max_m</span>
+    <b>masked 布局的 <code>max_m</code> 同样不进算力账</b> ——
+    DeepGEMM 的说法是 <em>“By providing a mask tensor, the kernel computes only
+    the valid portions.”</em><br>
+    <em><b>decode 贵在另一个地方：每个专家至少要占一个完整的 tile。</b>
+    训练时一个专家收一万六千行，128 的下限微不足道；
+    decode 时一个专家可能只收三十几行，同一个 128 立刻变成 4 倍浪费。
+    <b>贵的是「粒度下限」，不是「上界」</b>（<a href="#s10">§10</a> 算过这笔账）。</em>
+  </div>
+
+  <h3>上界开在哪一层，决定它能贴多紧</h3>
+  <p>这是老办法和 contiguous 之间一条不太被提起、但很实在的差别：</p>
+  <ul>
+    <li><b>老办法把上界开在「每个专家」头上。</b>
+      <em>单个专家的负载起伏很大 —— <a href="#s1">§1</a> 那张表里，
+      这一步的热点就是均值的 1.33 倍。所以盒子得留 1.2 到 1.5 倍才敢用。</em></li>
+    <li><b>contiguous 把上界开在「一整张卡的总量」上。</b>
+      <em>四个专家的起伏会互相抵消一部分，所以<b>总量的相对波动，小于任何单个专家</b>
+      —— 这是求和的一般性质（若四份独立，相对标准差按 1/√4 收缩）。
+      <b>真实路由是有相关性的，不会这么理想，但方向是对的。</b></em></li>
+    <li><b>masked 又退回「每个专家」。</b>
+      <em>所以 decode 这边拿不到这个红利 —— 这跟上一条的粒度问题是两回事，但方向一致。</em></li>
+  </ul>
+
+  <h3>三条路，一张表看完</h3>
+  <table>
+    <thead><tr><th></th><th>左矩阵形状</th><th>上界开在哪</th>
+      <th>变长信息长什么样</th><th>谁编译 / 捕获</th><th>「省」发生在哪</th></tr></thead>
+    <tbody>
+      <tr><td><b>TPU / XLA</b><br><em>训练</em></td>
+        <td><span class="k">[M上界, K]</span><br>一整条</td>
+        <td>一张卡的总量</td>
+        <td><span class="k">group_sizes</span> 设备数组<br>→ 前缀和 → 段边界</td>
+        <td><b>整步一个 XLA 程序</b></td>
+        <td>kernel 内部：<b>grid 步数由设备端现算</b>，尾巴不进循环</td></tr>
+      <tr><td><b>GPU · contiguous</b><br><em>训练 / prefill</em></td>
+        <td><span class="k">[M实收, K]</span><br>一整条</td>
+        <td>接收缓冲区</td>
+        <td>host 已知 M ＋ 每行的段号</td>
+        <td><b>不捕获</b>（eager）</td>
+        <td>M 本来就是实收 —— 没有需要省的</td></tr>
+      <tr class="hl"><td><b>GPU · masked</b><br><em>decode</em></td>
+        <td><span class="k">[E, max_m, K]</span><br><b>分层，不拼接</b></td>
+        <td>每个专家一个槽</td>
+        <td>一个 mask 数组<br>（每层前多少行是真的）</td>
+        <td><b>CUDA graph 捕在 max_m 上</b></td>
+        <td>kernel 内部：只算 valid portion</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note g">
+    <span class="t">最后一句，也是这一整篇最该带走的</span>
+    <b>注意第三行：decode 那条路<em>根本没有拼接</em>。</b>
+    <em>左矩阵是四层分开的槽，中间全是空的。
+    但它仍然是<b>一次</b> kernel 调用，仍然<b>一个 token 都不丢</b>。</em><br><br>
+    <b>所以「拼成一条」从来不是必须的 —— 必须的是上面那三句骨架。</b>
+    <em>「grouped matmul」这个名字容易让人以为重点在「拼」。
+    重点其实在：<b>把形状从 CPU 的控制流里搬进设备的数据流里，
+    并且让上界只花内存、不花算力。</b>
+    做到这两条，「变长」就从一个必须先解决掉的障碍，退化成一个普通的输入参数。</em>
+  </div>
+</section>
+<!-- ══════════ 14 · V3 ══════════ -->
+<section id="s14">
+  <h2><span class="n">§14</span>V3 到底是真 dropless 还是近似的</h2>
   <p class="lead">这个问题要拆成两问，答案不一样。</p>
 
   <h3>问一：token 层面，丢不丢？</h3>
@@ -1930,8 +2074,8 @@ acc  = <span class="r">where(mask, acc, 0)</span>                              <
 </section>
 
 <!-- ══════════ 9 · MegaBlocks 的数字 ══════════ -->
-<section id="s14">
-  <h2><span class="n">§14</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
+<section id="s15">
+  <h2><span class="n">§15</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
 
   <ol>
     <li><b>丢 token 是真的伤质量。</b>同一组对照里，容量系数取 1（会丢）的 MoE
@@ -1967,8 +2111,8 @@ acc  = <span class="r">where(mask, acc, 0)</span>                              <
 </section>
 
 <!-- ══════════ 10 · 收 ══════════ -->
-<section id="s15">
-  <h2><span class="n">§15</span>回到主线</h2>
+<section id="s16">
+  <h2><span class="n">§16</span>回到主线</h2>
   <p>专题一从头到尾在讲一件事：<b>硬件的形状会渗进模型的定义里</b>。</p>
   <p>分组路由那一节是最赤裸的一例 —— <code>topk_group = 4</code> 跟模型质量毫无关系，
   它的存在只是为了让 all-to-all 少跨机。<b>硬件划线，模型让步。</b></p>
