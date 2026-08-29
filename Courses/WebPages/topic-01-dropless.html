@@ -1041,6 +1041,89 @@ for e in range(4):
     这就是为什么这个问题的答案，跟 dropless 是同一个答案。</em>
   </div>
 
+  <h4>接着追一句：那 kernel 自己怎么分得开</h4>
+  <p class="lead">这才是机制的核心。<b>答案是：CPU 从头到尾只需要知道<em>一个</em>数
+  —— 「要派多少份活」。别的什么都不用知道。</b></p>
+
+  <p>因为 kernel launch 是 CPU 发出去的，<b>grid 大小是 launch 接口的参数</b>。
+  除此之外，kernel 一旦跑起来，读显存是它的自由。所以真正的分界线在这儿：</p>
+
+  <table>
+    <thead><tr><th></th><th>CPU 必须知道吗</th><th>为什么</th></tr></thead>
+    <tbody>
+      <tr><td><b>一共要派多少份活</b></td><td class="r"><b>必须</b></td>
+        <td>这是 launch 的参数，而 launch 是 CPU 发的</td></tr>
+      <tr class="hl"><td><b>第 i 份活该干什么</b></td><td class="r"><b>完全不用</b></td>
+        <td><em>那时候 kernel 已经在设备上跑了，自己查表就行</em></td></tr>
+    </tbody>
+  </table>
+
+  <p><b>于是全部差别就落在第一行那个数上：</b></p>
+  <div class="eq"><span class="c">// 分四次：那个数是 m_e —— 一个变量，只有设备知道</span>
+grid_e = ceil(<span class="r">m_e</span> / 128)          <span class="c">→ 想发这次 launch，CPU 就得先问设备要 m_e</span>
+
+<span class="c">// 合一次：那个数是总行数 —— 一个恒等式</span>
+grid   = ceil(<span class="y">65,536</span> / 128) (+ 边界余量)
+         ↑
+         65,536 = 8,192 tokens × top-8，<span class="y">编译期就知道</span>，跟路由怎么分毫无关系</div>
+
+  <div class="note d">
+    <span class="t">这就是「4 合 1 之后 CPU 就不用参与了」的全部原因</span>
+    <b><a href="#s1">§1</a> 那个恒等式在这里第二次发挥作用 ——
+    <em>「和」是确定的，「怎么分」才是数据。</em></b><br>
+    <em>你只要不把它拆开，那个不确定性就永远不用穿过 CPU 这道门。
+    一拆，四份不确定性全都得穿过去一次。</em>
+  </div>
+
+  <h4>那 kernel 内部到底靠什么「区分」</h4>
+  <p><b>它不需要区分 —— 它是继承的。</b></p>
+  <p>token 是被 dispatch 的 all-to-all <b>按专家号</b>送到这张卡上的。
+  <em>换句话说，<b>到达的先后顺序本身就已经把专家号编码进去了</b>。</em>
+  分组这件事不是矩阵乘 kernel 做的，<b>是通信做的</b> ——
+  kernel 只是继承了通信留下的那个顺序（这也是
+  <a href="#s5">§5</a>「配对靠顺序」那一段说的事）。</p>
+
+  <p>所以剩下需要传递的信息，就只有<b>每段多长</b>：</p>
+  <div class="eq">group_sizes  = [21733, 15004, 17982, 10817]   <span class="c">// 4 个 int32，路由算出来的，在设备上</span>
+      ↓  前缀和（设备上，几十个周期）
+group_offsets = [0, 21733, 36737, 54719, <span class="y">65536</span>]  <span class="c">// 5 个 int32</span>
+      ↓  查表
+第 i 份活覆盖第几行 → 落在哪两个边界之间 → <span class="r">就是第几个专家</span></div>
+
+  <p><b>整个「掩码」的信息量就是这五个整数。</b>
+  <em>而最后那个 65,536 甚至不是算出来的，它是那个恒等式 —— 所以真正的自由度只有四个数。</em></p>
+
+  <details><summary>这段前缀和跑在哪儿：TPU 那份代码可以直接读<span class="why">—— trip count 是 kernel 自己在 prologue 里算的，CPU 只给了「专家数」这个编译期常数</span></summary>
+  <div class="body">
+  <p>公开那份 Pallas GMM kernel 里，元数据是在 kernel 的<b>序言</b>里现算的
+  （<a href="#s12">§12</a> 讲过它落在 SMEM）：</p>
+  <div class="eq"><span class="c">// 静态上界：只跟「专家数」有关，是编译期常数</span>
+max_num_group = group_offset + <span class="y">size_group</span>
+
+<span class="c">// 真实 trip count：kernel 自己在设备上跑一遍循环算出来</span>
+num_gm, _ = lax.fori_loop(0, max_num_group, outer_group_loop, (0, 0))
+                                            ↑
+        循环体里读的是 <span class="r">lhs_group_sizes_ref[...]</span> —— 路由的输出，在设备上
+
+<span class="c">// 同一个循环顺手把两张表填进 SMEM</span>
+metadata_ref.gm_id_to_group_id[tm_id] = group_id
+metadata_ref.gm_id_to_m_offset[tm_id] = curr_m_offset</div>
+  <p><b>注意这里的分工：</b>CPU 给的是 <code>max_num_group</code>（＝专家数，常数），
+  设备算的是 <code>num_gm</code>（＝真实要跑多少步）。
+  <em><b>CPU 从头到尾没有见过任何一个 <code>m_e</code>。</b></em></p>
+  <p>GPU 那边把同一件事做得更彻底：常见做法是
+  <b>persistent kernel</b> —— grid 干脆等于计算单元的数量，<em>跟问题尺寸完全无关</em>，
+  每个 block 起来之后自己去设备上的计数器领下一个 tile。
+  <em>这样连「总行数」都不用告诉 CPU 了。</em></p>
+  </div>
+  </details>
+
+  <div class="note g">
+    <span class="t">两句话</span>
+    <b>一、CPU 唯一需要知道的是「派多少份活」。合起来之后这个数是恒等式，分开之后是变量 —— 差别只有这一处。</b><br>
+    <b>二、kernel 内部不需要「区分」谁是谁，因为 all-to-all 已经按专家号排好序送过来了；
+      它只需要四个段长做一次前缀和。</b>
+  </div>
   <h4>② 「拼在一起」这件事本身，既不花钱，也不是好处的来源</h4>
   <p>这里有个很容易混掉的地方，值得拆开：</p>
   <table>
