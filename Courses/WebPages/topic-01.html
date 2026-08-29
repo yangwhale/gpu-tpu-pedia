@@ -2169,15 +2169,18 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
       </details>
     </div>
     <div>
-      <h4>它对硬件到底有多友好</h4>
+      <h4 id="dense4">dense 的四条好性质 —— 它对硬件到底有多友好</h4>
       <div class="tbl-wrap"><table>
         <tbody>
-          <tr><td>每个 token 走<b>完全相同</b>的一条路</td><td>→ 形状静态可预测</td></tr>
-          <tr><td>就是一个大矩阵乘</td><td>→ 算力利用率天然高，MXU 最爱</td></tr>
-          <tr><td>不需要任何通信来决定谁算什么</td><td>→ 没有调度开销</td></tr>
-          <tr><td>编译器能提前把一切排好</td><td>→ 无运行时不确定性</td></tr>
+          <tr><td><b>①</b> 每个 token 走<b>完全相同</b>的一条路</td><td>→ 形状静态可预测</td></tr>
+          <tr><td><b>②</b> 就是一个大矩阵乘</td><td>→ 算力利用率天然高，MXU 最爱</td></tr>
+          <tr><td><b>③</b> 不需要任何通信来决定谁算什么</td><td>→ 没有调度开销</td></tr>
+          <tr><td><b>④</b> 编译器能提前把一切排好</td><td>→ 无运行时不确定性</td></tr>
         </tbody>
       </table></div>
+      <p class="sub" style="margin-top:8px"><b>这四条后面会被一条一条拿回来说 —— 因为 MoE 一条都保不住。</b>
+      <em>①②③④ 到第 4 步分别变成：形状要等路由跑完才知道（dropless 那一节就是在抢它）、
+      一个大矩阵碎成 257 个小的、多出两趟 all-to-all、编译器只能按最坏情况留位置。</em></p>
     </div>
   </div>
 
@@ -2506,8 +2509,14 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
   <div class="note warn">
     <span class="t">这一条要说透，它是后面所有 MoE 麻烦的对照组</span>
-    上面那四条好性质，MoE <b>一条都没有</b>。所以别把 MoE 理解成「白捡的便宜」——
-    <b>MoE 省下来的算力，是拿这些好性质换的。</b>
+    <b>别把 MoE 理解成「白捡的便宜」。</b>
+    本步开头列过 dense 的<a href="#dense4">四条好性质</a>，MoE <b>一条都没有</b> ——
+    这里再摆一遍，因为第 4 步的每一个麻烦都能对回其中一条：<br>
+    <b>①</b> 形状静态可预测 → <em>要等路由跑完才知道谁去哪，而且下一批就变</em><br>
+    <b>②</b> 一个大矩阵乘、MXU 最爱 → <em>碎成 257 个小矩阵，单个都喂不饱 MXU</em><br>
+    <b>③</b> 不需要通信来决定谁算什么 → <em>每层多两趟 all-to-all，送去再送回</em><br>
+    <b>④</b> 编译器能提前把一切排好 → <em>只能按最坏情况预留，留少了就得丢 token</em><br>
+    <b>MoE 省下来的算力，买单的就是这四条。</b>
   </div>
 
   <h4>为什么最前面几层偏偏不做 MoE</h4>
@@ -2557,7 +2566,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
       <text x="20" y="232" class="svgnum" fill="#174ea6">顺带一提</text>
       <text x="96" y="232" class="svgsm" fill="#174ea6">V3 的部署方案里，浅层这几个 dense MLP 是单独按 1-way 张量并行摆的 —— 为了省掉那部分通信</text>
 
-      <text x="96" y="252" class="svgsm">这一条反过来印证了左边那张「四条好性质」表：dense 的好，是能在部署上兑现成真钱的</text>
+      <text x="96" y="252" class="svgsm">这一条反过来印证了第 ③ 条好性质（dense 不需要通信来决定谁算什么）：dense 的好，是能在部署上兑现成真钱的</text>
     </g>
   </svg>
   <figcaption><b>这是一条能查证的链，也是一个能查证的缺口。</b>
