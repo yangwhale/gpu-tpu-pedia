@@ -132,7 +132,8 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
     <li><a href="#s11">TPU 上是不是也这么干？</a></li>
     <li><a href="#s12">TPU 上 MXU 怎么被喂饱的？HBM → VMEM → VREG 的流水</a></li>
     <li><a href="#s13">三条路一个骨架：上界开在哪，「省」发生在哪</a></li>
-    <li><a href="#s14">V3 是真 dropless 还是近似的？</a></li>
+    <li><a href="#s14">token 怎么见到它的专家：A2A / AG-RS / 不用 EP</a></li>
+    <li><a href="#s15">V3 是真 dropless 还是近似的？</a></li>
   </ol>
 </div>
 
@@ -1403,7 +1404,7 @@ metadata_ref.gm_id_to_m_offset[tm_id] = curr_m_offset</div>
     <span class="t">所以 MegaBlocks 的历史地位该怎么讲</span>
     <b>它的贡献不是「发明了分组矩阵乘」。</b>
     <em>它的贡献是第一次把「MoE 可以完全不丢 token」做成一个能跑满硬件的实现，
-    并且用一组对照实验证明了这件事值得做</em>（见 §15 的三个数）。<br>
+    并且用一组对照实验证明了这件事值得做</em>（见 §16 的三个数）。<br>
     <b>但接口层面，今天大家用的不是它那套 block-sparse 编码，而是更直白的 grouped GEMM。</b>
     <em>讲课时可以说「MegaBlocks 把这条路走通了」，
     不要说「今天的 dropless 都是 MegaBlocks 那套」——不是。</em>
@@ -2127,9 +2128,157 @@ acc  = <span class="r">where(mask, acc, 0)</span>                              <
     做到这两条，「变长」就从一个必须先解决掉的障碍，退化成一个普通的输入参数。</em>
   </div>
 </section>
-<!-- ══════════ 14 · V3 ══════════ -->
+<!-- ══════════ 14 · token 怎么见到它的专家 ══════════ -->
 <section id="s14">
-  <h2><span class="n">§14</span>V3 到底是真 dropless 还是近似的</h2>
+  <h2><span class="n">§14</span>换一个轴：token 是<em>怎么</em>见到它的专家的<br>
+  —— A2A / AG-RS / 干脆不用 EP</h2>
+  <p class="lead">前面十三节全都在回答同一个问题：
+  <b>这些行已经躺在这张卡上了，接下来怎么乘。</b>
+  这一节换一个正交的轴 —— <b>这些行当初是怎么到这张卡上来的。</b>
+  <em>它跟 <a href="#s13">§13</a> 那三条路不是同一件事，别叠在一起看。</em></p>
+
+  <div class="note w">
+    <span class="t">先把一个特别容易混的术语钉死</span>
+    <b><code>AG-RS</code>（all-gather ＋ reduce-scatter）搬的是 <em>token</em>，不是权重。</b><br>
+    <em>这个词在 MoE 语境里指的是「all-to-all 的替代品」，
+    而 all-to-all 搬的从来就是 token，所以它的替代品搬的也是 token。
+    三个互相独立的实现口径一致：</em>
+    <ul style="margin:8px 0 0">
+      <li>Megatron-Core 的开关叫 <code>--moe-token-dispatcher-type</code>，
+        两个取值就是 <code>allgather</code> 和 <code>alltoall</code> ——
+        <b>两个都是 <em>token</em> dispatcher</b></li>
+      <li>TensorRT-LLM 的文档写得最直白：
+        <em>“AllGather brings all tokens to every rank. AlltoAll sends each token
+        only to the ranks that own its routed experts.”</em></li>
+      <li>MaxText 里这条路叫 <b>ring of experts</b>，代码注释：
+        <em>“The ring-of-experts strategy first duplicates the <b>inputs</b> to all
+        expert shards, and then routes within each shard.”</em></li>
+    </ul>
+    <br>
+    <b>所以「把专家权重全 all-gather 到每张卡」<em>不是</em> AG-RS。</b>
+    <em>那件事真实存在、而且在 TPU 上是对的选择，但它的名字是
+    <b>「EP ＝ 1 ＋ FSDP」</b>，或者干脆就叫「不用专家并行」。
+    两条路的唯一共同点，只是都不做 all-to-all。</em>
+  </div>
+
+  <h3>三条路，机制上差在哪</h3>
+  <table>
+    <thead><tr><th></th><th>谁在动</th><th>一张卡看到什么</th><th>怎么把多余的去掉</th></tr></thead>
+    <tbody>
+      <tr><td><b>A2A</b><br><em>expert parallel</em></td>
+        <td><b>token</b></td>
+        <td>只收到<b>选了本地专家</b>的那些行</td>
+        <td>不需要去 —— <em>收到的每一行都要算</em></td></tr>
+      <tr><td><b>AG-RS</b><br><em>ring of experts</em></td>
+        <td><b>token</b>（复制给所有人）</td>
+        <td><b>全部</b> token，一个不落</td>
+        <td>本地路由一遍，<b>mask 掉不属于自己专家的行</b>，
+          算完 reduce-scatter 回去</td></tr>
+      <tr class="hl"><td><b>EP ＝ 1 ＋ FSDP</b><br><em>TPU 上的实际选择</em></td>
+        <td><b>权重</b></td>
+        <td>只有<b>自己原本那批</b> token<br>＋ <b>全部</b>专家的权重</td>
+        <td>不需要去 —— <em>全部专家都在本地，谁都不用找</em></td></tr>
+    </tbody>
+  </table>
+
+  <h3>通信量：三笔账，每卡每层</h3>
+  <p>还是 <a href="#s1">§1</a> 那个口径 ——
+  <span class="k">h = 7168</span>、每卡 <span class="k">8,192</span> 个 token、
+  <span class="k">top-8</span>、<span class="k">256</span> 个专家、
+  <span class="k">64</span> 张卡。</p>
+
+  <div class="eq"><span class="c">// ① A2A —— 每个 token 只走一趟，走到它该去的地方</span>
+dispatch  8,192 × 8 = <span class="y">65,536</span> 行 × 7168 × <span class="r">1 B</span> (fp8)   = 448 MiB
+combine                65,536 行 × 7168 × <span class="r">2 B</span> (bf16)  = 896 MiB
+                                                    合计 ≈ <span class="y">1.31 GiB</span>
+<span class="c">// 关键性质：跟 EP 度数无关。EP 开到 8 还是 64，这个数不变。</span>
+
+<span class="c">// ② AG-RS —— 每个 token 复制给所有人</span>
+all-gather      (64−1) × 8,192 × 7168 × 2 B = 6.89 GiB
+reduce-scatter                        同上   = 6.89 GiB
+                                    合计 ≈ <span class="y">13.8 GiB</span>
+<span class="c">// 关键性质：正比于 EP 度数。EP 越大越亏。</span>
+
+<span class="c">// ③ EP=1 + FSDP —— token 一个字节都不动，动的是权重</span>
+256 专家 × 3 个矩阵 × 7168 × 2048 = 112.7 亿参数
+                     × 2 B (bf16) = <span class="y">21.0 GiB</span>  <span class="c">每层每卡</span>
+<span class="c">// 关键性质：跟 token 数无关 —— batch 越大越摊得开。</span></div>
+
+  <div class="note i">
+    <span class="t">①②之间的交叉点可以直接解出来</span>
+    <b>两边都是「行数 × h × 字节」，把 h 和每卡 token 数约掉就剩：</b>
+    <div class="eq" style="margin:8px 0">A2A    : k × (1 + 2) = 8 × 3 = <span class="y">24</span>
+AG-RS  : (EP − 1) × (2 + 2) = <span class="r">4 × (EP − 1)</span>
+
+相等   ⇒  EP − 1 = 6  ⇒  <span class="y">EP ≈ 7</span></div>
+    <b>也就是说 EP 超过七八路，AG-RS 就打不过 all-to-all 了。</b>
+    <em>这跟 Megatron 文档那句话正好对上：<code>allgather</code> 这条
+    「achieves better performance and efficiency <b>when only tensor parallelism
+    is used</b>」—— 也就是 EP 很小的时候。</em>
+  </div>
+
+  <h3>那 TPU 为什么反而选字节最多的第三条</h3>
+  <p><b>因为便宜的不是字节，是「字节能不能藏起来」。</b></p>
+  <table>
+    <thead><tr><th></th><th>这笔通信依赖什么</th><th class="r">能不能提前发</th></tr></thead>
+    <tbody>
+      <tr class="hl"><td><b>FSDP all-gather 权重</b></td>
+        <td>只依赖<b>走到第几层</b> —— <em>编译期就知道</em></td>
+        <td class="r"><b>能。</b><em>第 L 层在算的时候，
+          第 L+1 层的权重已经在路上了</em></td></tr>
+      <tr><td><b>MoE 的 all-to-all</b></td>
+        <td>依赖<b>这一层 router 刚算出来的结果</b></td>
+        <td class="r"><b>不能。</b><em>它卡在 router 和 GEMM 中间，
+          是纯暴露延迟</em></td></tr>
+    </tbody>
+  </table>
+  <p>再叠上拓扑：<b>ICI 是 3D torus</b>，
+  64 路 all-to-all 要横穿整个环面，<em>没有 NVLink 那种全连接域</em>；
+  而 all-gather 是规则的近邻通信，在 TPU 上还能<b>整体卸载到 SparseCore</b>，
+  跟 TensorCore 的矩阵乘重叠。</p>
+
+  <div class="note d">
+    <span class="t">实测：这不是推演，是量过的</span>
+    <b>同一个 295B MoE，v7 上把 <code>ici_expert_parallelism</code> 从 1 打开：</b>
+    <div class="eq" style="margin:8px 0">EP = 2（64 芯片）           <span class="r">−39.6%</span>
+EP = 4（半 batch，16 芯片）  <span class="r">−71.36%</span></div>
+    <em>v5p 那边官方 DeepSeek3-671B 的 256 芯片配方，
+    <code>ici_expert_parallelism</code> 直接写 <b>1</b> ——
+    192 个专家全靠 FSDP 沿 <code>embed</code> 维切开，all-gather 走 SparseCore。</em><br><br>
+    <b>所以「97% 参数在专家里，所以 EP 是主旋钮」这句话，
+    <em>对 GPU 成立，对 TPU 不成立</em>。</b>
+    <em>这是把一种硬件的经验直接搬到另一种上的典型翻车。</em>
+  </div>
+
+  <h3>代价：EP ＝ 1 会把段数顶上去</h3>
+  <p>不用 EP 意味着<b>所有专家都在本地</b>。
+  于是 <a href="#s11">§11</a> 那个「tile 被访问两次」的边界开销，
+  乘数从「几个专家」变成「一两百个专家」：</p>
+  <div class="eq"><span class="c">// §11 的界：tiles_m ≤ 实际 tile 数 ≤ tiles_m + 段数 − 1</span>
+边界重访开销（最坏） ≈ <span class="r">(段数 − 1) ÷ (总行数 ÷ tile_m)</span>
+
+<span class="c">// 每卡 8,192 token（GPU 那个口径）、256 专家、tile_m = 512</span>
+总行数 65,536 ÷ 512 = 128 块，段数 256 → 最坏 <span class="r">+199%</span>   <span class="c">← 顶不住</span>
+
+<span class="c">// 每卡 32,768 token（TPU 那份配方）、192 专家、tile_m = 512</span>
+总行数 262,144 ÷ 512 = 512 块，段数 192 → 最坏 <span class="y">+37%</span>，均值约 +19%</div>
+
+  <div class="note g">
+    <span class="t">所以那份配方为什么要把每卡 token 数拉大八倍</span>
+    <b>不是为了吞吐好看，是为了让 EP ＝ 1 这条路成立。</b>
+    <em>段数被专家数钉死了，你唯一能动的是分母 ——
+    每个专家分到的行数够多，边界那点开销才摊得掉。
+    <b>大 batch 在这里不是调优，是前提。</b></em><br><br>
+    <b>回头看，这又是 <a href="#s13">§13</a> 那句话的一个实例：开销不会消失，只会换账本。</b>
+    <em>A2A 把它放在通信量上，AG-RS 放在「通信量随 EP 增长」上，
+    EP ＝ 1 放在段数、也就是 tile 粒度上。
+    三条路，三本账，<b>你挑的其实是「让哪一本最好平」</b>。</em>
+  </div>
+</section>
+
+<!-- ══════════ 15 · V3 ══════════ -->
+<section id="s15">
+  <h2><span class="n">§15</span>V3 到底是真 dropless 还是近似的</h2>
   <p class="lead">这个问题要拆成两问，答案不一样。</p>
 
   <h3>问一：token 层面，丢不丢？</h3>
@@ -2191,8 +2340,8 @@ acc  = <span class="r">where(mask, acc, 0)</span>                              <
 </section>
 
 <!-- ══════════ 9 · MegaBlocks 的数字 ══════════ -->
-<section id="s15">
-  <h2><span class="n">§15</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
+<section id="s16">
+  <h2><span class="n">§16</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
 
   <ol>
     <li><b>丢 token 是真的伤质量。</b>同一组对照里，容量系数取 1（会丢）的 MoE
@@ -2228,8 +2377,8 @@ acc  = <span class="r">where(mask, acc, 0)</span>                              <
 </section>
 
 <!-- ══════════ 10 · 收 ══════════ -->
-<section id="s16">
-  <h2><span class="n">§16</span>回到主线</h2>
+<section id="s17">
+  <h2><span class="n">§17</span>回到主线</h2>
   <p>专题一从头到尾在讲一件事：<b>硬件的形状会渗进模型的定义里</b>。</p>
   <p>分组路由那一节是最赤裸的一例 —— <code>topk_group = 4</code> 跟模型质量毫无关系，
   它的存在只是为了让 all-to-all 少跨机。<b>硬件划线，模型让步。</b></p>
