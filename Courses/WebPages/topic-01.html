@@ -2830,12 +2830,16 @@ especially slower for the first layer</b>.</div>
   于是每个 token 都走出一条<b>只属于它自己</b>的路径。</p>
 
   <figure class="fbox">
-  <svg viewBox="0 0 1000 300" role="img" aria-label="不同 token 在 MoE 层里走出不同的路径">
+  <svg viewBox="0 0 1000 356" role="img"
+       aria-label="三个 token 穿过若干 MoE 层：上半部分是路由专家网格，每个 token 每层点亮几格且各不相同，形成三条互不重合的锯齿路径；下面单独一条黄色的共享专家带，三个 token 每一层都经过它，是唯一一条直线">
     <g id="pathfig"></g>
   </svg>
   <figcaption>示意：三个 token 穿过若干 MoE 层。<b>每一层各自分诊，路径互不相同。</b>
-  真实情况是 58 层、每层从 256 个里选 8 个 ——
-  可能的路径数是个天文数字，而模型的容量就藏在这些组合里。</figcaption>
+  <b>注意下面那条黄带 —— 共享专家不参与路由，每个 token 每一层都过它</b>，
+  所以它是图里唯一一条直线；上面三条锯齿才是 top-8 选出来的。<br>
+  <em>比例是缩过的：背景 16 行代表 256 个路由专家，每层点亮 3 格代表选中的 8 个。
+  真实情况是 58 层、每层从 256 个里选 8 个，外加 1 个共享 ——
+  可能的路径数是个天文数字，而模型的容量就藏在这些组合里。</em></figcaption>
   </figure>
 
   <h4>为什么被稀疏化的是 MLP，不是 attention</h4>
@@ -5794,42 +5798,74 @@ function drawCardGrid(r){
   });
 }
 
-/* ── 图 3c：token 路径（静态） ── */
+/* ── 图 3c：token 路径（静态） ──
+   旧版每层每个 token 只点亮 1 个格子（注释还写着「两个」，代码只画了一个），
+   跟正文「8 个路由 + 1 个共享」对不上。重画的三个要点：
+   ① 每层点亮 3 格示意 top-8 —— 背景只有 16 行代表 256 个专家，本来就是缩比例的，
+      画满 8 格会占掉半列，路径感全丢；比例是示意的，caption 里说清楚。
+   ② 三个 token 各占一条竖泳道，否则撞格子时后画的会盖掉先画的，
+      看上去像「这一层只有两个 token」。
+   ③ 共享专家单拉一条黄带 —— 它是唯一一条直线，跟上面三条锯齿形成对照，
+      「每个 token 每层都过它」这句话不用文字解释。 */
 (function drawPaths(){
   const g = document.getElementById("pathfig"); if(!g) return;
-  const L=12, E=16, X0=76, Y0=34, cw=72, ch=11, gp=2.0;
-  // 背景专家格
+  const L=12, E=16, X0=86, Y0=40, cw=72, cwE=64, ch=11, gp=2.0;
+  const laneW=20, laneGap=2, K=3;             // K = 每层点亮几格（示意 top-8）
+  const yOf = e => Y0 + e*(ch+gp);
+  const lx  = (l,ti) => X0 + l*cw + ti*(laneW+laneGap);
+  const shY = Y0 + E*(ch+gp) + 18;            // 共享专家条的 y
+
+  // 背景：路由专家格（16 行代表 256 个）
   for(let l=0;l<L;l++) for(let e=0;e<E;e++)
-    g.appendChild(el("rect",{x:X0+l*cw, y:Y0+e*(ch+gp), width:cw-8, height:ch, rx:2,
+    g.appendChild(el("rect",{x:X0+l*cw, y:yOf(e), width:cwE, height:ch, rx:2,
       fill:"#f1f3f4", stroke:"#e8eaed", "stroke-width":.6}));
   for(let l=0;l<L;l++)
-    g.appendChild(el("text",{x:X0+l*cw+(cw-8)/2, y:Y0-9, "text-anchor":"middle", class:"svgsm"},
+    g.appendChild(el("text",{x:X0+l*cw+cwE/2, y:Y0-9, "text-anchor":"middle", class:"svgsm"},
       l===L-1 ? "…第 58 层" : "第 "+(l+1)+" 层"));
-  g.appendChild(el("text",{x:10,y:Y0+8,class:"svgsm"},"专家"));
-  g.appendChild(el("text",{x:10,y:Y0+22,class:"svgsm"},"↓ 256 个"));
+  g.appendChild(el("text",{x:X0-8,y:Y0+8,"text-anchor":"end",class:"svgsm"},"路由专家"));
+  g.appendChild(el("text",{x:X0-8,y:Y0+22,"text-anchor":"end",class:"svgsm"},"↓ 256 个"));
+  g.appendChild(el("text",{x:X0-8,y:Y0+36,"text-anchor":"end",class:"svgsm",fill:"#80868b"},"（画 16 行）"));
 
-  // 三条路径（每层各选两个格子示意 top-k）
+  // 共享专家条：每层一格，所有 token 必过
+  for(let l=0;l<L;l++)
+    g.appendChild(el("rect",{x:X0+l*cw, y:shY, width:cwE, height:ch, rx:2,
+      fill:"#fef7e0", stroke:"#f9ab00", "stroke-width":.9}));
+  g.appendChild(el("text",{x:X0-8,y:shY+9,"text-anchor":"end",class:"svgsm",fill:"#b06000"},"共享专家 ×1"));
+
+  // 确定性伪随机：同一份图每次刷新都一样，不用手写 108 个下标
+  const pickK = (seed,l) => {
+    const out=[]; let h=(seed*7919 + l*104729)>>>0;
+    while(out.length<K){ h=(h*1103515245+12345)>>>0; const e=(h>>>16)%E; if(out.indexOf(e)<0) out.push(e); }
+    return out.sort((a,b)=>a-b);
+  };
   const toks = [
-    {c:"#1a73e8", n:'token「模型」', p:[2,9,4,14,7,1,11,5,13,3,8,6]},
-    {c:"#d93025", n:'token「，」',   p:[13,3,12,2,15,10,0,9,4,12,1,14]},
-    {c:"#1e8e3e", n:'token「训练」', p:[6,6,8,7,3,13,5,15,9,7,12,2]}
+    {c:"#1a73e8", n:'token「模型」', s:3},
+    {c:"#d93025", n:'token「，」',   s:11},
+    {c:"#1e8e3e", n:'token「训练」', s:23}
   ];
   toks.forEach((t,ti)=>{
-    let d="";
-    t.p.forEach((e,l)=>{
-      const cx = X0+l*cw+(cw-8)/2, cy = Y0+e*(ch+gp)+ch/2;
-      g.appendChild(el("rect",{x:X0+l*cw, y:Y0+e*(ch+gp), width:cw-8, height:ch, rx:2,
+    let d="", ds="";
+    for(let l=0;l<L;l++){
+      const es = pickK(t.s,l);
+      es.forEach(e => g.appendChild(el("rect",{x:lx(l,ti), y:yOf(e),
+        width:laneW, height:ch, rx:2, fill:t.c, opacity:.9})));
+      const cx = lx(l,ti)+laneW/2;
+      d  += (d?"L":"M")  + cx + "," + (yOf(es[1])+ch/2);   // 拿中间那格当路径锚点
+      ds += (ds?"L":"M") + cx + "," + (shY+ch/2);
+      // 竖向内缩 3px，让底下那条黄带透出来 —— 「三个 token 挤在同一个专家里」要看得见
+      g.appendChild(el("rect",{x:lx(l,ti), y:shY+3, width:laneW, height:ch-6, rx:1.5,
         fill:t.c, opacity:.9}));
-      d += (d?"L":"M") + cx + "," + cy;
-    });
+    }
     g.appendChild(el("path",{d, fill:"none", stroke:t.c, "stroke-width":1.6,
-      opacity:.55, "stroke-dasharray":"4 3"}));
-    // 图例
-    g.appendChild(el("rect",{x:X0+ti*200, y:276, width:12, height:12, rx:2, fill:t.c}));
-    g.appendChild(el("text",{x:X0+ti*200+18, y:286, class:"svgsm", fill:t.c}, t.n));
+      opacity:.5, "stroke-dasharray":"4 3"}));
+    g.appendChild(el("path",{d:ds, fill:"none", stroke:t.c, "stroke-width":1.4, opacity:.45}));
+    g.appendChild(el("rect",{x:X0+ti*196, y:shY+40, width:12, height:12, rx:2, fill:t.c}));
+    g.appendChild(el("text",{x:X0+ti*196+18, y:shY+50, class:"svgsm", fill:t.c}, t.n));
   });
-  g.appendChild(el("text",{x:990, y:286, "text-anchor":"end", class:"svgsm", fill:"#5f6368"},
-    "每层各自分诊 → 三条完全不同的路"));
+  g.appendChild(el("text",{x:X0, y:shY+26, class:"svgsm", fill:"#5f6368"},
+    "每个 token 在每层占一条竖道 · 点亮 3 格示意 top-8（真实是 256 选 8）"));
+  g.appendChild(el("text",{x:990, y:shY+50, "text-anchor":"end", class:"svgsm", fill:"#b06000"},
+    "上面三条锯齿各走各的 · 下面那条直线是所有 token 共用的"));
 })();
 
 /* ── 图 4：256 专家网格（静态，画一次） ── */
