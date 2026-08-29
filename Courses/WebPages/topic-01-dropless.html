@@ -1,0 +1,737 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Dropless 与分组矩阵乘 · 专题一 附录</title>
+<!-- 🦀 CloseCrab 标识。刻意不放图片文件 —— 内联一个 SVG，让每台机器
+     用自己的 emoji 字体现画。烤成 PNG 会把某一家的字形固定下来。 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+<meta property="og:title" content="Dropless 与分组矩阵乘">
+<meta property="og:description" content="一个超参数是怎么被删掉的 —— 站在一张卡上，把 capacity factor、MegaBlocks、grouped GEMM 一步一步走完。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-01-dropless.html">
+<meta name="theme-color" content="#1a73e8">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6;
+  --yellow:#f9ab00; --yellow-l:#fef7e0; --yellow-d:#b06000;
+  --green:#1e8e3e; --green-d:#0d652d; --green-l:#e6f4ea;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --bg:#fff; --bg2:#f8f9fa;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:24px}
+body{background:var(--bg);color:var(--ink);
+  font:400 16px/1.75 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:980px;margin:0 auto;padding:0 24px 96px}
+header{background:linear-gradient(135deg,#1a73e8,#174ea6);color:#fff;padding:52px 24px 40px}
+header .in{max-width:980px;margin:0 auto}
+header .crumb{font-size:14px;opacity:.85;margin-bottom:14px}
+header .crumb a{color:#fff;text-decoration:none;border-bottom:1px solid rgba(255,255,255,.4)}
+header h1{font-size:33px;font-weight:600;letter-spacing:-.02em;margin-bottom:10px}
+header .sub{font-size:16px;opacity:.92;max-width:760px}
+header .tags{margin-top:20px;display:flex;flex-wrap:wrap;gap:9px}
+header .tags span{background:rgba(255,255,255,.16);border-radius:6px;padding:4px 12px;font-size:13px}
+section{padding:44px 0;border-top:1px solid var(--line)}
+section:first-of-type{border-top:none}
+h2{font-size:26px;font-weight:700;letter-spacing:-.02em;margin-bottom:8px}
+h2 .n{color:var(--gray2);font-family:var(--mono);font-size:20px;margin-right:10px}
+h3{font-size:19px;font-weight:600;margin:30px 0 10px}
+h4{font-size:16px;font-weight:600;margin:22px 0 8px}
+p{margin-bottom:14px}
+.lead{color:var(--gray);font-size:17px;margin-bottom:24px}
+b,strong{font-weight:600}
+em{color:var(--gray);font-style:italic}
+a{color:var(--blue)}
+code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
+        border-radius:4px;color:var(--blue-d);white-space:nowrap}
+.n0{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+ul,ol{margin:0 0 14px 22px}
+li{margin:6px 0}
+table{width:100%;border-collapse:collapse;margin:18px 0;font-size:14.5px;
+  border:1px solid var(--line);border-radius:10px;overflow:hidden}
+th{background:var(--bg2);text-align:left;padding:11px 13px;font-weight:600;color:var(--gray);
+  border-bottom:1px solid var(--line);white-space:nowrap}
+td{padding:10px 13px;border-bottom:1px solid var(--line2);vertical-align:top}
+tr:last-child td{border-bottom:none}
+td.r,th.r{text-align:right;font-family:var(--mono);font-variant-numeric:tabular-nums}
+tbody tr.hl{background:var(--green-l)}
+tbody tr.bad{background:var(--red-l)}
+.note{border-left:4px solid;border-radius:0 10px 10px 0;padding:14px 18px;margin:18px 0}
+.note .t{display:block;font-weight:700;margin-bottom:6px}
+.note.i{border-color:var(--blue);background:var(--blue-l)}
+.note.w{border-color:var(--yellow);background:var(--yellow-l)}
+.note.d{border-color:var(--red);background:var(--red-l)}
+.note.g{border-color:var(--green);background:var(--green-l)}
+.eq{font:500 13.5px/1.9 var(--mono);background:#202124;color:#e8eaed;
+  border-radius:10px;padding:16px 18px;overflow-x:auto;white-space:pre;margin:16px 0}
+.eq .c{color:#9aa0a6}
+.eq .r{color:#8ab4f8;font-weight:600}
+.eq .y{color:#fdd663}
+figure{margin:24px 0;background:var(--bg2);border:1px solid var(--line);
+  border-radius:12px;padding:18px}
+figure svg{width:100%;display:block}
+figcaption{font-size:13.5px;color:var(--gray);margin-top:12px;line-height:1.7}
+.svglbl{font:600 13px var(--mono)}
+.svgsm{font:400 12px var(--mono)}
+.svgnum{font:700 14px var(--mono)}
+details{background:var(--bg2);border:1px solid var(--line);border-radius:10px;
+  padding:12px 16px;margin:16px 0}
+details[open]{padding-bottom:6px}
+summary{cursor:pointer;font-weight:600;color:var(--blue-d);font-size:15px}
+summary .why{font-weight:400;color:var(--gray);font-size:13.5px;margin-left:8px}
+details .body{padding-top:12px}
+blockquote{border-left:3px solid var(--line);padding-left:16px;margin:14px 0;
+  color:var(--gray);font-size:14.5px;line-height:1.8}
+footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font-size:13.5px}
+.tocbox{background:var(--bg2);border:1px solid var(--line);border-radius:12px;
+  padding:18px 22px;margin:28px 0 0}
+.tocbox b{display:block;margin-bottom:8px;font-size:14px;color:var(--gray)}
+.tocbox ol{margin:0 0 0 20px;font-size:14.5px}
+.tocbox a{text-decoration:none}
+.tocbox a:hover{text-decoration:underline}
+</style>
+</head>
+<body>
+
+<header><div class="in">
+  <div class="crumb">加速器系统课程 ／ <a href="topic-01.html">专题一 · 一个 Token 的一生</a> ／ 附录</div>
+  <h1>Dropless 与分组矩阵乘</h1>
+  <p class="sub">一个超参数是怎么被删掉的 —— 从「为什么会丢 token」开始，
+  站在<b>一张卡</b>上，用真实量级的数字把 capacity factor、MegaBlocks、
+  grouped GEMM 一步一步走完。</p>
+  <div class="tags">
+    <span>标的 DeepSeek V3</span>
+    <span>口径 一张卡 · 4 个路由专家</span>
+    <span>参照 MegaBlocks arXiv 2211.15841</span>
+    <span>⏱ 20 分钟</span>
+  </div>
+</div></header>
+
+<div class="wrap">
+
+<div class="tocbox">
+  <b>这一篇要回答的五个问题</b>
+  <ol>
+    <li><a href="#s1">token 为什么会被丢掉？是谁要求的？</a></li>
+    <li><a href="#s3">MegaBlocks 到底改了什么？</a></li>
+    <li><a href="#s5">这个能力的名字到底叫 block-sparse 还是 grouped GEMM？</a></li>
+    <li><a href="#s6">补齐到 128，跟 chunked prefill、PagedAttention 是一回事吗？</a></li>
+    <li><a href="#s8">V3 是真 dropless 还是近似的？</a></li>
+  </ol>
+</div>
+
+<!-- ══════════ 0 · 一句话 ══════════ -->
+<section id="s0">
+  <div class="note g">
+    <span class="t">如果只记一句</span>
+    <b>token dropping 从来不是一个建模决定，它是矩阵乘法的形状约束漏进模型里的。</b>
+    <em>有人把那个约束在 kernel 里解决掉之后，「容量系数」这个超参数就自己消失了 ——
+    不是被调好了，是不存在了。</em>
+  </div>
+  <p>下面这一整篇，本质上就是把这句话拆开验一遍。</p>
+</section>
+
+<!-- ══════════ 1 · 口径 ══════════ -->
+<section id="s1">
+  <h2><span class="n">§1</span>先把口径钉死：站在一张卡上数</h2>
+  <p class="lead">所有「某个专家收到多少 token」的计数，<b>都是某一张卡上的局部计数</b>。
+  不钉死这一点，后面每个数字都会差好几个量级。</p>
+
+  <p>专家并行（EP）的意思是：<b>专家被拆开摆在不同的卡上</b>。V3 的论文写得很明确 ——
+  256 个路由专家<b>均匀部署在 64 张 GPU、8 个节点上</b>，
+  所以<b>一张卡上住 4 个专家</b>，一个节点上住 32 个。</p>
+
+  <p>那么「专家 #37 这一步收到多少个 token」，问的是：
+  <em>住着 #37 的那张卡，从全网收到了多少行要交给 #37 算</em>。
+  它跟这张卡自己手里原本有几个 token 是两回事。</p>
+
+  <h3>把这张卡这一步的工作量算出来</h3>
+  <p>取 DeepEP 仓库自己给的口径（<em>「Following V3's configuration, we tested with
+  8K tokens per batch, 7168 hidden dimensions, top 8 experts」</em>）：</p>
+
+  <div class="eq"><span class="c">// 一张卡（rank）手里的 token</span>
+8,192
+
+<span class="c">// EP 组一共 64 张卡 → 这一批全网的 token</span>
+8,192 × 64                = <span class="r">524,288</span>
+
+<span class="c">// 每个 token 选 8 个路由专家 → 「token-专家」配对总数</span>
+524,288 × 8               = <span class="r">4,194,304</span>
+
+<span class="c">// 均摊到 256 个专家 → 每个专家平均要算多少行</span>
+4,194,304 ÷ 256           = <span class="r">16,384</span>
+
+<span class="c">// 一张卡上住 4 个专家 → 这张卡这一层要算多少行</span>
+16,384 × 4                = <span class="r">65,536</span>
+
+<span class="c">// 自检：65,536 ÷ 8,192 = 8 = top-k ✓</span>
+<span class="c">//   每张卡收进来的行数，恰好等于它自己发出去的 token 数 × top-k ——</span>
+<span class="c">//   因为配对总数就是「token 总数 × top-k」，再均摊回 64 张卡。</span></div>
+
+  <div class="note i">
+    <span class="t">记住 16,384 这个数，它是后面所有判断的分母</span>
+    <b>一个专家在一张卡上，一步大约收到一万六千行。</b>
+    <em>后面会看到「补齐到 128 的倍数」——
+    128 之所以便宜，全靠它跟这个 16,384 比起来很小。
+    换一个场景（比如推理 decode，一个专家可能只收到几十行），同一个 128 立刻就变贵了。</em>
+  </div>
+
+  <h3>真实的一步长什么样：不均匀</h3>
+  <p>如果四个专家各收 16,384 行，这篇文档就不用写了 —— 形状本来就是齐的。
+  麻烦在于<b>它永远不齐</b>。取一组有代表性的实际分布（合计仍是 65,536）：</p>
+
+  <table>
+    <thead><tr><th>这张卡上的专家</th><th class="r">实收行数</th><th class="r">相对均值</th></tr></thead>
+    <tbody>
+      <tr><td>专家 <span class="k">e0</span> —— 这一步的热点</td><td class="r">21,733</td><td class="r">1.33×</td></tr>
+      <tr><td>专家 <span class="k">e1</span></td><td class="r">15,004</td><td class="r">0.92×</td></tr>
+      <tr><td>专家 <span class="k">e2</span></td><td class="r">17,982</td><td class="r">1.10×</td></tr>
+      <tr><td>专家 <span class="k">e3</span> —— 这一步的冷门</td><td class="r">10,817</td><td class="r">0.66×</td></tr>
+      <tr class="hl"><td><b>合计</b></td><td class="r"><b>65,536</b></td><td class="r">—</td></tr>
+    </tbody>
+  </table>
+
+  <p><b>而且下一步就换一组数。</b>
+  <em>这四个数是路由算完才知道的，谁也没法提前告诉编译器。
+  这就是第 3 步里说的「dense 的第一条好性质：形状静态可预测」在 MoE 上断掉的地方。</em></p>
+</section>
+
+<!-- ══════════ 2 · 老办法 ══════════ -->
+<section id="s2">
+  <h2><span class="n">§2</span>老办法：为了把形状凑齐，两头都赔</h2>
+  <p class="lead">四步走完，你就知道 capacity factor 是从哪儿冒出来的了。</p>
+
+  <h3>第 ① 步 · 重排（permute）</h3>
+  <p>token 进来时是按<b>句子顺序</b>排的：第 0 行、第 1 行、第 2 行……
+  而 <span class="k">e0</span> 要处理的那些 token 散落在各处。</p>
+  <p>要做矩阵乘，<b>同一个专家的行必须在内存里连续</b>。
+  所以第一步是<b>物理搬家</b>：按专家把行重新分组，复制出一个新的缓冲区。
+  <em>这一步无论哪种方案都跑不掉，它不是问题所在。</em></p>
+
+  <h3>第 ② 步 · 定一个盒子高度</h3>
+  <p>问题出在这儿。下一步要用 <b>batched matmul</b> 一次算完四个专家 ——
+  而 batched matmul <b>要求这一批里每个矩阵的形状完全相同</b>。</p>
+  <p>四个专家 21,733 / 15,004 / 17,982 / 10,817 行，高度不一样，
+  <b>这个 kernel 直接用不了</b>。于是倒过来要求模型：
+  <em>每个专家一律按同一个高度处理</em>。这个高度就是 <b>expert capacity</b>，
+  写成 <code>capacity_factor × 平均值</code>。</p>
+
+  <details><summary>为什么 batched matmul 非要形状一样<span class="why">—— 一句话的物理原因</span></summary>
+  <div class="body">
+  <p>batched matmul 说白了是<b>「同一个矩阵乘法，重复 B 遍，每遍在内存里往前跳一个固定的步长」</b>。
+  它靠一组固定的 stride 来定位第 <em>i</em> 个矩阵在哪儿。</p>
+  <p>高度不一样 → 步长不固定 → 这套定位方式失效。
+  <b>约束不在数学里，在寻址里。</b></p>
+  <p>MegaBlocks 论文图 3(A) 画的就是这件事：现有实现用 batched matmul 并行算所有专家，
+  由此引入两条约束 —— <em>“all experts are assigned the same number of tokens”</em>
+  和 <em>“all experts have the same shape”</em>。</p>
+  </div>
+  </details>
+
+  <h3>第 ③ 步 · 多的丢掉，少的补零</h3>
+  <p>取 <code>capacity_factor = 1.0</code>，盒子高度 = 16,384：</p>
+
+  <figure>
+  <svg viewBox="0 0 1000 330" role="img"
+       aria-label="四个专家的柱状图：容量线画在 16384，e0 和 e2 超出的部分被丢弃，e1 和 e3 不足的部分补零，丢弃总数 6947 恰好等于补零总数 6947">
+    <defs><pattern id="hatch" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+      <line x1="0" y1="0" x2="0" y2="7" stroke="#f9ab00" stroke-width="3.2"/></pattern></defs>
+
+    <!-- 比例：1 行 = 0.0092 px，21733 行 ≈ 200 px -->
+    <!-- 基线 y=270，容量线 = 270 - 16384*0.0092 = 119.3 -->
+    <line x1="60" y1="270" x2="960" y2="270" stroke="#9aa0a6" stroke-width="1.4"/>
+    <line x1="60" y1="119" x2="900" y2="119" stroke="#d93025" stroke-width="2" stroke-dasharray="7 5"/>
+    <text x="906" y="115" class="svgnum" fill="#d93025">容量线</text>
+    <text x="906" y="132" class="svgsm" fill="#d93025">16,384</text>
+
+    <!-- e0 21733 → 200px；超出 5349 → 49.2px -->
+    <rect x="110" y="119" width="120" height="151" fill="#1a73e8" opacity=".85"/>
+    <rect x="110" y="70" width="120" height="49" fill="#fce8e6" stroke="#d93025" stroke-width="1.8" stroke-dasharray="5 4"/>
+    <text x="170" y="98" text-anchor="middle" class="svgnum" fill="#d93025">丢 5,349</text>
+    <text x="170" y="290" text-anchor="middle" class="svglbl" fill="#174ea6">e0</text>
+    <text x="170" y="307" text-anchor="middle" class="svgsm" fill="#5f6368">实收 21,733</text>
+
+    <!-- e1 15004 → 138px；缺 1380 → 12.7px -->
+    <rect x="290" y="132" width="120" height="138" fill="#1a73e8" opacity=".85"/>
+    <rect x="290" y="119" width="120" height="13" fill="url(#hatch)" stroke="#f9ab00" stroke-width="1.4"/>
+    <text x="350" y="110" text-anchor="middle" class="svgnum" fill="#b06000">补 1,380</text>
+    <text x="350" y="290" text-anchor="middle" class="svglbl" fill="#174ea6">e1</text>
+    <text x="350" y="307" text-anchor="middle" class="svgsm" fill="#5f6368">实收 15,004</text>
+
+    <!-- e2 17982 → 165px；超出 1598 → 14.7px -->
+    <rect x="470" y="119" width="120" height="151" fill="#1a73e8" opacity=".85"/>
+    <rect x="470" y="104" width="120" height="15" fill="#fce8e6" stroke="#d93025" stroke-width="1.8" stroke-dasharray="5 4"/>
+    <text x="530" y="95" text-anchor="middle" class="svgnum" fill="#d93025">丢 1,598</text>
+    <text x="530" y="290" text-anchor="middle" class="svglbl" fill="#174ea6">e2</text>
+    <text x="530" y="307" text-anchor="middle" class="svgsm" fill="#5f6368">实收 17,982</text>
+
+    <!-- e3 10817 → 99.5px；缺 5567 → 51.2px -->
+    <rect x="650" y="170" width="120" height="100" fill="#1a73e8" opacity=".85"/>
+    <rect x="650" y="119" width="120" height="51" fill="url(#hatch)" stroke="#f9ab00" stroke-width="1.4"/>
+    <text x="710" y="149" text-anchor="middle" class="svgnum" fill="#b06000">补 5,567</text>
+    <text x="710" y="290" text-anchor="middle" class="svglbl" fill="#174ea6">e3</text>
+    <text x="710" y="307" text-anchor="middle" class="svgsm" fill="#5f6368">实收 10,817</text>
+
+    <text x="60" y="36" class="svglbl" fill="#202124">capacity_factor = 1.0 —— 同一张卡上，两头同时在赔</text>
+    <text x="60" y="55" class="svgsm" fill="#d93025">红色虚框 = 真数据被扔掉，这一层输出置零，只剩残差穿过去</text>
+    <text x="500" y="55" class="svgsm" fill="#b06000">斜纹 = 补进去的零，照样占算力和显存</text>
+  </svg>
+  <figcaption><b>丢掉 5,349 + 1,598 = 6,947 行，补零 1,380 + 5,567 = 6,947 行 —— 两个数一模一样。</b>
+  <em>这不是巧合：<code>cf = 1.0</code> 时盒子总容量恰好等于真实总行数，
+  所以热门那边溢出多少，冷门那边就空出多少。
+  你在同一张卡上、同一个时刻，一边扔掉真数据，一边拿零去凑算力。</em></figcaption>
+  </figure>
+
+  <h3>第 ④ 步 · 现在形状齐了，可以 batched matmul 了</h3>
+  <p>四个 <span class="k">16,384 × 7,168</span> 的矩阵摞成一个三维张量，
+  一次算完。<b>代价刚才已经付过了。</b></p>
+
+  <h3>那把盒子开大一点行不行</h3>
+  <p>行。<code>capacity_factor = 1.5</code>，盒子 24,576 行 —— 最热的 e0 只有 21,733，装得下，<b>一个都不丢</b>。</p>
+  <p>代价是这张卡要算 <span class="n0">24,576 × 4 = 98,304</span> 行，
+  而真数据只有 <span class="n0">65,536</span> 行 —— <b>比真实多算 50%</b>。</p>
+
+  <div class="note d">
+    <span class="t">真正难受的不是 50%，是你不知道该填多少</span>
+    这一步 1.5 够了，<b>下一步不一定</b> —— 那四个数每一步都在变。<br>
+    MegaBlocks 引 Tutel 的观察：<em>有的模型容量系数要开到 <b>11</b> 才不丢，
+    还有的模型这个值会在训练中途毫无征兆地飙上去。</em><br>
+    <b>所以它不是「调个参数就行」的事。它是一个你既不知道该设多少、设错了两个方向都赔的超参数</b>
+    —— 设小了丢真数据，设大了烧算力和显存。
+  </div>
+</section>
+
+<!-- ══════════ 3 · 新办法 ══════════ -->
+<section id="s3">
+  <h2><span class="n">§3</span>新办法：不设盒子，只补齐到 128 的倍数</h2>
+  <p class="lead">同一张卡、同一组数字，重走一遍。</p>
+
+  <h3>第 ① 步 · 重排 —— 一模一样</h3>
+  <p>还是按专家把行分组搬到一起。<b>这一步没有任何变化。</b></p>
+
+  <h3>第 ② 步 · 不定盒子，只做对齐</h3>
+  <p>e0 收了 21,733 行就摆 21,733 行，e3 收了 10,817 就摆 10,817。
+  唯一的加工是：<b>每一段往上补齐到 128 的整数倍</b>。</p>
+
+  <table>
+    <thead><tr><th>专家</th><th class="r">实收</th><th class="r">补齐到</th><th class="r">补了几行</th><th class="r">丢了几个</th></tr></thead>
+    <tbody>
+      <tr><td><span class="k">e0</span></td><td class="r">21,733</td><td class="r">21,760</td><td class="r">27</td><td class="r">0</td></tr>
+      <tr><td><span class="k">e1</span></td><td class="r">15,004</td><td class="r">15,104</td><td class="r">100</td><td class="r">0</td></tr>
+      <tr><td><span class="k">e2</span></td><td class="r">17,982</td><td class="r">18,048</td><td class="r">66</td><td class="r">0</td></tr>
+      <tr><td><span class="k">e3</span></td><td class="r">10,817</td><td class="r">10,880</td><td class="r">63</td><td class="r">0</td></tr>
+      <tr class="hl"><td><b>合计</b></td><td class="r"><b>65,536</b></td><td class="r"><b>65,792</b></td>
+          <td class="r"><b>256</b></td><td class="r"><b>0</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note g">
+    <span class="t">为什么「一个都不丢」是结构性的，不是运气好</span>
+    <b>补齐这个动作只会往上加行，永远不会减行。</b>
+    <em>没有任何一步在做「装不下就扔」的判断 —— 因为压根没有「装不下」这个概念。</em><br>
+    这就是 dropless 的全部含义，没有别的玄机。
+    <b>它的对立面不是「丢得少」，是「有没有一个上限」。</b>
+  </div>
+
+  <p>白算 <span class="n0">256</span> 行，占真实 <span class="n0">65,536</span> 行的
+  <b>0.39%</b>。上界也很好算：<em>每个专家最多补 127 行，四个专家最多 508 行 = 0.78%</em>。</p>
+
+  <h3>第 ③ 步 · 高度还是不齐，那怎么乘？</h3>
+  <p>这才是真正的技术内容。<b>答案是：不再一个专家一个专家地乘。</b></p>
+
+  <p>把这张卡上四个专家的权重<b>横着拼成一整块</b>：
+  每个专家的第一个矩阵是 <span class="k">7,168 × 2,048</span>，
+  四个拼起来就是 <span class="k">7,168 × 8,192</span>。</p>
+
+  <p>现在设想拿 65,792 行 token 去乘这一整块：结果是
+  <span class="k">65,792 × 8,192</span> —— <b>每个 token 都跟四个专家算了一遍，四倍的浪费</b>。</p>
+
+  <p><b>但你是知道谁该找谁的。</b>
+  e0 那 21,760 行只需要拼接矩阵里 e0 那一竖条，e1 的行只要 e1 那条。
+  所以结果矩阵里<b>真正需要算的格子，排成一条阶梯</b>，其余全是不用碰的。</p>
+
+  <figure>
+  <svg viewBox="0 0 1000 400" role="img"
+       aria-label="阶梯示意：左边是按专家分段并补齐到 128 倍数的 token 矩阵，右边是四个专家横向拼接的权重矩阵，中间结果矩阵里只有对角线上的四个块需要计算，每一级的高度不同">
+    <!-- token 矩阵 -->
+    <text x="30" y="30" class="svglbl" fill="#174ea6">① token 按专家分段</text>
+    <rect x="30" y="46" width="86" height="286" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+    <!-- 四段，高度按 21760/15104/18048/10880 比例（总 65792 → 286px） -->
+    <rect x="30" y="46"  width="86" height="95" fill="#1a73e8" opacity=".82"/>
+    <rect x="30" y="141" width="86" height="66" fill="#1a73e8" opacity=".66"/>
+    <rect x="30" y="207" width="86" height="78" fill="#1a73e8" opacity=".82"/>
+    <rect x="30" y="285" width="86" height="47" fill="#1a73e8" opacity=".66"/>
+    <text x="73" y="99"  text-anchor="middle" class="svgsm" fill="#fff">e0 · 21,760</text>
+    <text x="73" y="179" text-anchor="middle" class="svgsm" fill="#fff">e1 · 15,104</text>
+    <text x="73" y="250" text-anchor="middle" class="svgsm" fill="#fff">e2 · 18,048</text>
+    <text x="73" y="313" text-anchor="middle" class="svgsm" fill="#fff">e3 · 10,880</text>
+    <text x="18" y="196" class="svgsm" fill="#5f6368" transform="rotate(-90 18 196)" text-anchor="middle">7,168 维宽</text>
+    <text x="73" y="352" text-anchor="middle" class="svgsm" fill="#b06000">每段已补齐到</text>
+    <text x="73" y="368" text-anchor="middle" class="svgsm" fill="#b06000">128 的倍数</text>
+
+    <text x="132" y="196" class="svgnum" fill="#5f6368">×</text>
+
+    <!-- 权重矩阵 -->
+    <text x="230" y="30" class="svglbl" fill="#0d652d">② 四个专家的权重，横着拼成一块</text>
+    <rect x="160" y="46" width="280" height="70" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+    <line x1="230" y1="46" x2="230" y2="116" stroke="#1e8e3e" stroke-width="1.2"/>
+    <line x1="300" y1="46" x2="300" y2="116" stroke="#1e8e3e" stroke-width="1.2"/>
+    <line x1="370" y1="46" x2="370" y2="116" stroke="#1e8e3e" stroke-width="1.2"/>
+    <text x="195" y="86" text-anchor="middle" class="svgsm" fill="#0d652d">e0</text>
+    <text x="265" y="86" text-anchor="middle" class="svgsm" fill="#0d652d">e1</text>
+    <text x="335" y="86" text-anchor="middle" class="svgsm" fill="#0d652d">e2</text>
+    <text x="405" y="86" text-anchor="middle" class="svgsm" fill="#0d652d">e3</text>
+    <text x="300" y="136" text-anchor="middle" class="svgsm" fill="#5f6368">7,168 × (4 × 2,048)</text>
+
+    <text x="470" y="196" class="svgnum" fill="#5f6368">=</text>
+
+    <!-- 结果矩阵：阶梯 -->
+    <text x="510" y="30" class="svglbl" fill="#202124">③ 结果里只有这四块要算 —— 每级高度都不一样</text>
+    <rect x="510" y="46" width="280" height="286" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.4"/>
+    <line x1="580" y1="46" x2="580" y2="332" stroke="#e8eaed"/>
+    <line x1="650" y1="46" x2="650" y2="332" stroke="#e8eaed"/>
+    <line x1="720" y1="46" x2="720" y2="332" stroke="#e8eaed"/>
+    <line x1="510" y1="141" x2="790" y2="141" stroke="#e8eaed"/>
+    <line x1="510" y1="207" x2="790" y2="207" stroke="#e8eaed"/>
+    <line x1="510" y1="285" x2="790" y2="285" stroke="#e8eaed"/>
+    <rect x="510" y="46"  width="70" height="95" fill="#1a73e8" opacity=".85"/>
+    <rect x="580" y="141" width="70" height="66" fill="#1a73e8" opacity=".85"/>
+    <rect x="650" y="207" width="70" height="78" fill="#1a73e8" opacity=".85"/>
+    <rect x="720" y="285" width="70" height="47" fill="#1a73e8" opacity=".85"/>
+    <text x="800" y="98"  class="svgsm" fill="#174ea6">← 170 个 128 行的块</text>
+    <text x="800" y="178" class="svgsm" fill="#174ea6">← 118 个</text>
+    <text x="800" y="250" class="svgsm" fill="#174ea6">← 141 个</text>
+    <text x="800" y="313" class="svgsm" fill="#174ea6">← 85 个</text>
+    <text x="650" y="360" text-anchor="middle" class="svgsm" fill="#5f6368">
+      灰色区域一次都不碰 —— 不是算出来是零，是根本没进 kernel</text>
+    <text x="650" y="380" text-anchor="middle" class="svgsm" fill="#b06000">
+      每一级的高度 = 那个专家实收行数补齐到 128 —— 级和级之间不必相等，这就是全部的解放</text>
+  </svg>
+  <figcaption><b>关键的转变：从「同一个形状重复四遍」变成「告诉 kernel 算哪些格子」。</b>
+  <em>前者要求四遍的形状一致；后者只要求你能把「哪些格子」这件事描述清楚 ——
+  而每个格子的位置和大小，跟别的格子完全无关。整齐这个要求就是在这里消失的。</em></figcaption>
+  </figure>
+
+  <h3>第 ④ 步 · 收回来</h3>
+  <p>第二个矩阵乘反过来：拿刚才那个稀疏的中间结果，乘上四个专家<b>竖着拼</b>的第二个权重矩阵，
+  得到一个稠密的 <span class="k">65,792 × 7,168</span>。
+  <em>每一行只会累加到自己那个专家的那一段，因为别的段结构上就是空的。</em></p>
+  <p>最后把补进去的那 256 行扔掉，按原顺序还原，乘上路由权重。<b>完。</b></p>
+</section>
+
+<!-- ══════════ 4 · 三方对照 ══════════ -->
+<section id="s4">
+  <h2><span class="n">§4</span>trade-off：一张表看完</h2>
+  <p class="lead">同一张卡、同一步、同一组实收行数（65,536 行真数据）。</p>
+
+  <table>
+    <thead><tr><th>方案</th><th class="r">这张卡要算</th><th class="r">丢掉</th>
+      <th class="r">白算</th><th>要不要猜参数</th></tr></thead>
+    <tbody>
+      <tr class="bad"><td><b>盒子 · cf = 1.0</b></td><td class="r">65,536</td>
+        <td class="r">6,947</td><td class="r">6,947 <em>(10.6%)</em></td>
+        <td>要 —— 而且这次猜错了</td></tr>
+      <tr class="bad"><td><b>盒子 · cf = 1.5</b></td><td class="r">98,304</td>
+        <td class="r">0</td><td class="r">32,768 <em>(多算 50%)</em></td>
+        <td>要 —— 这次够了，下一步不保证</td></tr>
+      <tr class="hl"><td><b>分组矩阵乘 · 补齐 128</b></td><td class="r">65,792</td>
+        <td class="r">0</td><td class="r">256 <em>(多算 0.39%)</em></td>
+        <td><b>不要 —— 这个参数不存在</b></td></tr>
+    </tbody>
+  </table>
+
+  <h3>那付出的是什么</h3>
+  <p>三条，都很实在：</p>
+  <ol>
+    <li><b>现成的 batched matmul 用不了了</b>，得有一个能吃「变长分段」的 kernel。
+      <em>这是真活儿 —— 所以它是一篇论文，不是一个配置开关。</em></li>
+    <li><b>每一步都要现算一份「哪些块要算、在哪儿」的元数据</b>，
+      而且反向传播还要按<b>转置的顺序</b>再遍历一遍同一张图。
+      <em>MegaBlocks 的办法是不搬数据、只多存一份按转置序排好的块偏移索引 ——
+      论文自己打的比方是「数据库的二级索引」。之所以划算，是因为块够大，
+      元数据比真实数据便宜好几个量级。</em></li>
+    <li><b>你被锁在块粒度上。</b>某个专家只收到 1 行，你照样得算满 128 行。
+      <em>这条在训练时无关痛痒，在 decode 时会要命 —— 见 §7。</em></li>
+  </ol>
+
+  <div class="note w">
+    <span class="t">⭐ 真正的旋钮不是「丢不丢」，是块开多大</span>
+    <b>块越大</b>，越接近密集矩阵乘的速度，<b>但补零浪费越多</b>；<br>
+    <b>块越小</b>，浪费越少，<b>但矩阵乘越碎、跑不满算力</b>。<br>
+    <em>128 是这条曲线上的甜点 —— MegaBlocks 专门测了不同 tile 尺寸，
+    结论是 128×128 「consistently on-par or better than other configurations」。</em><br>
+    <b>而这套东西对 MoE 特别管用，原因只有一条：</b>
+    <em>一个专家一步收到上万行，128 相对它很小。
+    如果每个专家只有一百行，这招立刻失效。</em>
+  </div>
+</section>
+
+<!-- ══════════ 5 · 名字 ══════════ -->
+<section id="s5">
+  <h2><span class="n">§5</span>这个能力到底叫什么：block-sparse 还是 grouped GEMM</h2>
+  <p class="lead">同一件事，两代人用了两个名字。<b>今天该用后一个。</b></p>
+
+  <p>把 §3 第 ③ 步那个能力抽象出来，它是一句话：</p>
+  <div class="note i">
+    <b>一次 kernel 调用，解决一串 M 各不相同、N 和 K 相同的矩阵乘法。</b>
+  </div>
+
+  <p>这个东西的通用名字就是 <b>grouped GEMM（分组矩阵乘）</b>。
+  MegaBlocks 在 2022 年<b>没有用这个名字</b> —— 它用的是 <b>block-sparse matmul</b>：
+  把这一串矩阵摆成一个块对角矩阵，然后说「我只算对角线上那些块」。</p>
+
+  <p><b>两种说法描述的是同一个计算。</b>
+  区别在于你把「哪些块要算」这件事，是编码成一个稀疏矩阵的拓扑，
+  还是编码成一个「每段多高」的长度列表。</p>
+
+  <table>
+    <thead><tr><th></th><th>MegaBlocks（2022）</th><th>今天的实现</th></tr></thead>
+    <tbody>
+      <tr><td>叫法</td><td>block-sparse matmul，dMoE</td><td><b>grouped GEMM</b></td></tr>
+      <tr><td>怎么描述「算哪些」</td><td>稀疏矩阵拓扑<br><em>（Blocked-CSR-COO 编码）</em></td>
+          <td>一个长度列表<br><em>每个专家收到多少行</em></td></tr>
+      <tr><td>代表</td><td>MegaBlocks / stk</td>
+          <td>CUTLASS grouped GEMM、<b>DeepGEMM</b></td></tr>
+    </tbody>
+  </table>
+
+  <p>DeepGEMM 的文档把这层意思写得最直白：</p>
+  <blockquote>“Unlike traditional grouped GEMMs in CUTLASS, DeepGEMM groups only the M-axis,
+  while N and K must remain fixed. <b>This design is tailored for scenarios where experts
+  in an MoE model share the same shape.</b>”</blockquote>
+
+  <div class="note g">
+    <span class="t">所以 MegaBlocks 的历史地位该怎么讲</span>
+    <b>它的贡献不是「发明了分组矩阵乘」。</b>
+    <em>它的贡献是第一次把「MoE 可以完全不丢 token」做成一个能跑满硬件的实现，
+    并且用一组对照实验证明了这件事值得做</em>（见 §9 的三个数）。<br>
+    <b>但接口层面，今天大家用的不是它那套 block-sparse 编码，而是更直白的 grouped GEMM。</b>
+    <em>讲课时可以说「MegaBlocks 把这条路走通了」，
+    不要说「今天的 dropless 都是 MegaBlocks 那套」——不是。</em>
+  </div>
+</section>
+
+<!-- ══════════ 6 · 128 是什么族 ══════════ -->
+<section id="s6">
+  <h2><span class="n">§6</span>补齐到 128，跟 chunked prefill 是一回事吗</h2>
+  <p class="lead">同一族思想，<b>但更贴切的对照是 PagedAttention 的 page，不是 chunked prefill。</b></p>
+
+  <p>共同的那句话是：</p>
+  <div class="note i">
+    <b>一个变长的东西，要交给只认固定形状的下游去处理，就得先量化成固定大小的块。</b><br>
+    <em>代价是最多浪费一个块；收益是下游从「处理不了」变成「高效处理」。</em>
+  </div>
+
+  <table>
+    <thead><tr><th></th><th>切的是什么</th><th>块大小定在哪</th><th>为了迁就谁</th><th>最多浪费</th></tr></thead>
+    <tbody>
+      <tr class="hl"><td><b>专家分段补齐</b></td><td>矩阵的<b>行数</b></td><td>GEMM 的 tile 高度</td>
+        <td><b>矩阵乘 kernel</b></td><td>一个块（127 行）</td></tr>
+      <tr><td><b>PagedAttention</b></td><td>KV cache 的<b>长度</b></td><td>一个 page 的 token 数</td>
+        <td><b>显存分配器</b></td><td>一个 page</td></tr>
+      <tr><td><b>chunked prefill</b></td><td>一次前向的<b>工作量</b></td><td>一个 chunk 的 token 数</td>
+        <td><b>调度器</b></td><td>—— 见下</td></tr>
+    </tbody>
+  </table>
+
+  <p><b>为什么 PagedAttention 更像。</b>
+  两者都是<b>空间上的量化</b>：一段连续的东西长度不定，切成固定大小的格子来放，
+  尾巴上那格没填满就是浪费，浪费的上界就是<b>一个格子</b>。
+  <em>「专家收到 21,733 行 → 占 170 个 128 行的块，最后一块只用了 101 行」
+  跟「一个序列 21,733 个 token → 占 N 个 page，最后一页没填满」，是同构的。</em></p>
+
+  <p><b>chunked prefill 差在哪。</b>
+  它切的是<b>时间轴上的工作量</b>，目的是<b>调度</b> ——
+  让长 prefill 不要一口气霸占住卡，好跟 decode 交错、把延迟毛刺压下去。
+  <em>它的收益是延迟和公平性，不是「让一个 kernel 能跑」。
+  分块本身不产生填充浪费（最后一个 chunk 短就短了，照算），
+  它的代价在别处：KV 要反复读、attention 被切成几段。</em></p>
+
+  <div class="note w">
+    <span class="t">一句话分辨</span>
+    <b>补齐 128 和 PagedAttention 是「为了放得下 / 算得动」而量化，浪费在<em>填充</em>；</b><br>
+    <b>chunked prefill 是「为了排得开」而量化，代价在<em>重复读取</em>。</b><br>
+    <em>都是「变长 → 定长」，但迁就的对象和赔的东西不一样。</em>
+  </div>
+</section>
+
+<!-- ══════════ 7 · decode ══════════ -->
+<section id="s7">
+  <h2><span class="n">§7</span>为什么 decode 要换一套：128 在那儿就贵了</h2>
+  <p class="lead">§1 埋的那个伏笔在这里兑现 —— 128 便宜与否，取决于分母。</p>
+
+  <p>训练和 prefill 时，一个专家一步收上万行，补 127 行是 0.8%。
+  <b>decode 时分母塌下来了。</b></p>
+
+  <p>按同样的口径推一遍（假设每张卡同时服务 <em>B</em> 条序列，
+  decode 每步每条序列出一个 token）：</p>
+
+  <div class="eq"><span class="c">// 全网这一步的 token</span>
+B × 64
+
+<span class="c">// × top-8 ÷ 256 个专家 → 每个专家收到</span>
+B × 64 × 8 ÷ 256          = <span class="r">2B</span>
+
+<span class="c">// 训练那一步代进去自检：B = 8,192 → 16,384 ✓ 跟 §1 对上</span>
+
+<span class="c">// B = 512 → 每个专家 1,024 行　补齐 128 → </span>正好整除，不浪费
+<span class="c">// B =  64 → 每个专家   128 行　补齐 128 → </span>正好一个块
+<span class="c">// B =  16 → 每个专家    32 行　补齐 128 → </span><span class="y">算 4 倍的量</span>
+<span class="c">// B =   4 → 每个专家     8 行　补齐 128 → </span><span class="y">算 16 倍的量</span></div>
+
+  <p><b>同一个 128，在训练时是 0.8% 的税，在小批量 decode 时是几倍的浪费。</b></p>
+
+  <p>所以 DeepGEMM 给 decode 准备的是<b>另一套布局</b>。文档原话：</p>
+  <blockquote>“During the inference decoding phase, when CUDA graph is enabled and the CPU is
+  unaware of the number of tokens each expert receives, we support <b>masked grouped GEMMs</b>.
+  By providing a mask tensor, <b>the kernel computes only the valid portions</b>.”</blockquote>
+
+  <p><em>思路反过来了：不再把每段补齐到块边界，而是开一个固定大小的缓冲区，
+  再用一个 mask 告诉 kernel 哪些行是真的。</em>
+  <b>这样既满足了 CUDA graph 要求形状固定，又不用为对齐付整块的钱。</b></p>
+
+  <div class="note i">
+    <span class="t">两套布局，两个约束</span>
+    <b>contiguous 布局</b>（训练前向 / prefill）：段长可变、补齐到块 —— 因为<em>行数很多，对齐很便宜</em>。<br>
+    <b>masked 布局</b>（decode）：形状固定、用 mask 标有效 —— 因为<em>行数很少，对齐会翻好几倍</em>。<br>
+    <em>两者都不丢 token。「dropless」这件事跟用哪套布局无关。</em>
+  </div>
+</section>
+
+<!-- ══════════ 8 · V3 ══════════ -->
+<section id="s8">
+  <h2><span class="n">§8</span>V3 到底是真 dropless 还是近似的</h2>
+  <p class="lead">这个问题要拆成两问，答案不一样。</p>
+
+  <h3>问一：token 层面，丢不丢？</h3>
+  <p><b>不丢，而且是结构性的不丢。</b>整条链路上没有任何一处存在「容量上限」这个概念 ——
+  没有上限，就没有「超出」，也就没有「丢弃」这个动作可执行。</p>
+
+  <p>三处证据，都可公开核验：</p>
+  <table>
+    <thead><tr><th>来源</th><th>说了什么</th></tr></thead>
+    <tbody>
+      <tr><td><b>V3 技术报告</b><br><em>标题就叫 No Token-Dropping</em></td>
+        <td>训练全程不丢任何 token（归因于负载均衡策略有效）；
+            推理也不丢（靠专门的部署策略）。<b>只给结果，没说机制。</b></td></tr>
+      <tr><td><b>DeepEP</b><br><em>dispatch/combine 通信库</em></td>
+        <td><code>dispatch</code> 的参数里有 <code>expert_alignment</code>（默认 1），
+            返回的 handle 带 <code>num_recv_tokens_per_expert_list</code> ——
+            <b>每个专家实收多少，是运行时才知道的一个变长列表，不是一个固定盒子。</b>
+            全库<b>没有 capacity 这个概念</b>。</td></tr>
+      <tr><td><b>DeepGEMM</b><br><em>矩阵乘库</em></td>
+        <td>contiguous 布局明写：训练前向和 prefill 时
+            <em>“each expert may process a varying number of tokens”</em>，
+            拼成一个张量，每段对齐到 GEMM 的 M block size。
+            <b>同样没有 capacity。</b></td></tr>
+    </tbody>
+  </table>
+
+  <p><b>这三处拼起来，结构跟 §3 走的那一遍完全一致</b>：
+  变长分段 → 对齐补齐 → 分组矩阵乘。</p>
+
+  <h3>问二：算力层面，有没有浪费？</h3>
+  <p><b>有，但性质完全不同。</b></p>
+  <ul>
+    <li>盒子方案的浪费是<b>「按容量对齐」</b> —— 每个专家都补到同一个高度，浪费跟失衡程度成正比，可以到几十个百分点。</li>
+    <li>分组方案的浪费是<b>「按块对齐」</b> —— 每个专家最多补一个块，浪费有一个跟失衡无关的硬上界。</li>
+  </ul>
+  <p><b>所以「dropless」指的是前者那件事被解决了，不是「一点算力都不浪费」。</b>
+  <em>这两件事经常被混为一谈。MegaBlocks 论文自己在 §5.2 也说得很清楚：
+  kernel 要求每个专家的 token 数是块大小的倍数，所以「we pad each group of tokens with zeros
+  to the nearest multiple of 128」——
+  而且它还补了一句，这个约束<b>是可以去掉的</b>，只要支持边缘的不完整块，只是当时没做。</em></p>
+
+  <div class="note d">
+    <span class="t">⚠️ 这里有一句不能说过头</span>
+    <b>可以说</b>：V3 训练和推理都不丢 token（报告明写）；
+    DeepSeek 自己开源的算子栈里<b>没有 capacity 这个概念</b>，
+    它按每个专家的实收行数分段（DeepEP + DeepGEMM 的文档可核）。<br>
+    <b>不能说</b>：「V3 预训练那次跑的就是 DeepGEMM 这套 kernel」。<br>
+    <em>DeepGEMM 和 DeepEP 都是 2025 年才开源的，两个 README 里
+    <b>没有任何一句</b>把它们钉到 V3 那次预训练上。这是很强的旁证，不是直接证据。</em><br>
+    <b>差别很大：「靠均衡好到没触发上限」和「压根没有上限」，在系统实现上是两回事。</b>
+  </div>
+
+  <h3>顺带：推理侧不丢，靠的是另一套东西</h3>
+  <p>训练时靠动态偏置把负载掰匀；上线之后没有训练循环了，靠的是<b>搬专家</b> ——
+  把观测到的高负载专家复制一份额外部署（prefill 阶段设 32 个冗余专家，
+  每张卡除原本的 8 个再多带 1 个），热点根据线上统计检测，每隔一段时间重新调整一次。</p>
+  <p><em>值得记的是这个动作的性质：它明确是在<b>节点内部</b>重排，避免增加跨节点 all-to-all 的开销。
+  又一次 —— 先认拓扑，再谈优化。</em></p>
+</section>
+
+<!-- ══════════ 9 · MegaBlocks 的数字 ══════════ -->
+<section id="s9">
+  <h2><span class="n">§9</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
+
+  <ol>
+    <li><b>丢 token 是真的伤质量。</b>同一组对照里，容量系数取 1（会丢）的 MoE
+      只把验证损失降了 <span class="n0">0.15</span>；完全不丢的那版降了
+      <span class="n0">0.26</span> —— <b>1.73 倍</b>。</li>
+    <li><b>靠「把盒子开大」来不丢，很贵。</b>原文：为了不丢 token，
+      MoE 层的数学运算量涨了 <b>两倍多</b>。</li>
+    <li><b>而且你不知道该开多大。</b>论文引 Tutel 的观察：有的模型容量系数要开到
+      <b>11</b> 才不丢，还有的模型这个值会在训练中途<b>毫无征兆地飙上去</b>。</li>
+  </ol>
+
+  <p>正面结果（同一套设置）：相比用 padding 硬凑的做法，端到端训练快
+  <b>1.38× / 2.0× / 4.35×</b>（三个规模）；相比同质量的稠密 Transformer 快 <b>1.8×–2.4×</b>。
+  <em>显存那边同样明显：padding 方案把最大微批量压掉了 2× / 4× / 8×。</em></p>
+
+  <div class="note w">
+    <span class="t">用之前先知道它的适用范围 —— 这不是 671B 的实验</span>
+    <table style="margin:10px 0 0">
+      <thead><tr><th>维度</th><th>MegaBlocks 那组实验</th><th>DeepSeek V3</th></tr></thead>
+      <tbody>
+        <tr><td>专家数</td><td>64</td><td>256 + 1 共享</td></tr>
+        <tr><td>每 token 选几个</td><td><b>top-1</b></td><td><b>top-8</b></td></tr>
+        <tr><td>模型规模</td><td>Transformer-Small 量级</td><td>671 B</td></tr>
+        <tr><td>均衡机制</td><td>常规辅助损失</td><td>动态偏置 + 极小辅助损失</td></tr>
+      </tbody>
+    </table>
+    <p style="margin:12px 0 0"><b>差别最大的是 top-1。</b>
+    <em>top-1 意味着每个 token 只押一个专家，这个专家满了就整个丢掉；
+    top-8 天然摊得开，同样的失衡下丢得没那么惨。</em><br>
+    <b>所以这三个数能证明的是「容量系数这个旋钮本身是个麻烦」，
+    不能直接换算成「V3 如果丢 token 会掉多少分」。</b></p>
+  </div>
+</section>
+
+<!-- ══════════ 10 · 收 ══════════ -->
+<section id="s10">
+  <h2><span class="n">§10</span>回到主线</h2>
+  <p>专题一从头到尾在讲一件事：<b>硬件的形状会渗进模型的定义里</b>。</p>
+  <p>分组路由那一节是最赤裸的一例 —— <code>topk_group = 4</code> 跟模型质量毫无关系，
+  它的存在只是为了让 all-to-all 少跨机。<b>硬件划线，模型让步。</b></p>
+  <p><b>这一篇是那件事的镜像。</b>
+  capacity factor 曾经也长得像一个模型超参数，人们认真地给它调参、写进论文的消融表。
+  而它其实只是 batched matmul 的形状约束换了身衣服。
+  <em>有人回头把 kernel 那一侧修好之后，这个「超参数」就自己脱落了。</em></p>
+  <div class="note g">
+    <span class="t">留给学员的一句</span>
+    <b>看到一个说不出物理意义的超参数，先问一句：它到底是模型需要的，还是某个 kernel 的限制伪装成的？</b>
+    <em>前者要调，后者该拆。</em>
+  </div>
+</section>
+
+<footer>
+  <p><b>专题一 · 附录</b> ｜ <a href="topic-01.html">← 回课件</a>
+  ｜ <a href="topic-01-lecture.html">讲义</a></p>
+  <p style="margin-top:8px">出处：MegaBlocks（arXiv 2211.15841，§4 / §5.2 / Figure 3 / Figure 4）、
+  DeepSeek-V3 Technical Report（arXiv 2412.19437，§2.1.2 / §3.2.2 / No Token-Dropping）、
+  DeepGEMM 与 DeepEP 仓库 README。<br>
+  <em>§1 的量级由公开口径推导而来（DeepEP README 的 8K token/rank + V3 论文的 EP=64），
+  推导链写在正文里，不是实测数据；§1 那四个专家的实收行数是为讲解构造的一组代表性数字，
+  合计对齐到推导出的 65,536。</em></p>
+</footer>
+
+</div>
+</body>
+</html>
