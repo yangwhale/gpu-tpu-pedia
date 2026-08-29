@@ -584,6 +584,110 @@ cf=1.5 98,304 行           = <span class="y">8.659 TFLOP</span>   <span class="
     <b>专家越多这个倍数越大</b> —— 一张卡上住 8 个专家就是 8×。
     <em>这也解释了为什么 EP 度数越高（每卡专家越少），这件事越好办。</em>
   </div>
+
+  <h3>那这一步占多少显存</h3>
+  <p class="lead">上面那笔账算的是<b>算力</b>。但 <span class="k">× 8</span> 这个乘数
+  不只出现在 FLOP 里 —— <b>它同样原样出现在字节里</b>，而这一笔平时很少有人算。</p>
+
+  <p>把上面那张表里的大张量按 bf16 折成字节：</p>
+  <div class="eq"><span class="c">// 进这一层的时候，本卡的激活其实很小</span>
+x            8,192 × 7,168 × 2 B = <span class="y">0.11 GiB</span>
+
+<span class="c">// 排完序（或者 dispatch 落地）之后，行数变成 8 倍</span>
+recv_x      65,792 × 7,168 × 2 B = <span class="r">0.88 GiB</span>   <span class="c">← 步骤 6</span>
+h (gate+up) 65,792 × 4,096 × 2 B = <span class="r">0.50 GiB</span>   <span class="c">← 步骤 7</span>
+h (SwiGLU)  65,792 × 2,048 × 2 B = <span class="r">0.25 GiB</span>   <span class="c">← 步骤 8</span>
+y           65,792 × 7,168 × 2 B = <span class="r">0.88 GiB</span>   <span class="c">← 步骤 9</span></div>
+
+  <p><b>一个 0.11 GiB 的张量，进了 MoE 层就变成 0.88 GiB。</b>
+  <em>整整 8 倍，一个字节都没少 —— 因为 top-8 就是 top-8。</em></p>
+
+  <div class="note w">
+    <span class="t">那它是「真复制」还是「一个 view」</span>
+    <b>是真复制。分组矩阵乘要的是<em>同一个专家的行在物理上连着</em>，
+    view 给不了这个。</b><br>
+    <em>在 <a href="#s14">§14</a> 的 A2A 那条路上这一点很显然 ——
+    那 65,536 行是从网络上收下来的，本来就得落地。
+    但在「EP ＝ 1 ＋ FSDP」那条路上，这个缓冲区是本地
+    gather 出来的，很自然会指望它是个视图。<b>它不是。</b></em><br><br>
+    <b>而且默认路径还不止一份。</b>
+    <em>MaxText 里默认是先 <code>repeat</code> 再 <code>sort</code> ——
+    等于连着开了两个「行数 × 8」的数组。</em>
+  </div>
+
+  <p><b>所以代码里有三个专门省这一块的东西，各省各的：</b></p>
+  <table>
+    <thead><tr><th>开关</th><th>省掉的是哪一份</th><th>代价</th></tr></thead>
+    <tbody>
+      <tr><td><span class="k">moe_use_direct<br>_token_gather</span></td>
+        <td><b>中间那份 <code>repeat</code></b> —— <em>一次 gather 直接从「行数」跳到
+          排好序的「行数 × 8」。docstring 的原话是
+          <em>“Groups token activations by expert without materializing Top-K copies.”</em></em></td>
+        <td><em>走的是通用 JAX 反向，不是那个融合的 Mosaic gather-reduce kernel
+          （后者<b>写死了要求正好 8 个专家</b>）—— 可能是拿显存换时间</em></td></tr>
+      <tr class="hl"><td><span class="k">use_custom<br>_sort_vjp</span></td>
+        <td><b>反向要留的那一份。</b><em>那个排序挂了自定义 vjp，
+          前向存下来的 residual <b>只有 <code>sort_indices</code></b> ——
+          「行数 × 8」个<b>整数</b>，不是「行数 × 8 × 7,168」个 float。
+          反向直接拿 <code>argsort</code> 反着排回去。</em></td>
+        <td><em>几乎没有 —— 反向多一次排序而已</em></td></tr>
+      <tr><td><span class="k">num_moe<br>_token_chunks</span></td>
+        <td><b>把峰值摊开。</b><em>本卡 token 切成 N 块，同一时刻只有 1/N 的缓冲区活着</em></td>
+        <td><em>无 —— 而且它<b>一招两用</b>，
+          <a href="#s14">§14</a> 里同一个开关是拿来重叠通信的</em></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note i">
+    <span class="t">再叠上 remat，峰值就是<em>一层</em>的量</span>
+    <b>上面那几个数是<em>一层</em>的瞬时值，不是全模型的。</b>
+    <em>大 MoE 训练一定开重算，所以这些中间张量算完就还，
+    真正常驻的是每层的那个 checkpoint。</em>
+  </div>
+
+  <h4>换一个真实配置算一遍 —— 顺便看两个特别容易踩的坑</h4>
+  <p>上面用的是 V3 的口径。换一个不同形状的 295B 级 MoE
+  （<code>base_emb_dim</code> <b>4,096</b>、<code>base_moe_mlp_dim</code> 1,536、
+  192 个专家、top-8），在 TPU 上跑
+  <span class="k">max_target_length = 4,096</span>、
+  <span class="k">per_device_batch_size = 12</span>：</p>
+
+  <div class="eq">每 device 的 token  4,096 × 12        = <span class="y">49,152</span>
+排序后的行数        49,152 × 8         = <span class="y">393,216</span>
+
+排序缓冲区   393,216 × <span class="r">4,096</span> × 2 B = <span class="y">3.00 GiB</span>   <span class="c">正好三个 G</span>
+gate+up      393,216 × 3,072 × 2 B = <span class="y">2.25 GiB</span>
+层输入 x      49,152 × 4,096 × 2 B = 0.375 GiB</div>
+
+  <div class="note d">
+    <span class="t">两个坑，都会让你把这个数<em>高估</em></span>
+    <ol style="margin:8px 0 0">
+      <li><b>把 hidden dim 拿错。</b>
+        <em>本文全篇用的 <span class="k">7,168</span> 是 V3 的。
+        这个模型是 <span class="k">4,096</span>。
+        同样 128K 行，7,168 下是 1.75 GiB，4,096 下正好 1.00 GiB ——
+        <b>光这一项就差 1.75 倍</b>。<b>换模型必须换 h，不能沿用别家的口径。</b></em></li>
+      <li><b>把倍数估错。</b>
+        <em>393,216 是 393K，不是 320K；
+        对着 128K 的锚点应该是 <b>3 倍</b>，不是 4 倍。</em></li>
+    </ol>
+    <p style="margin:12px 0 0"><b>这两个错会<em>相乘</em>：</b></p>
+    <div class="eq" style="margin:8px 0">1.75 <span class="c">(h 拿错)</span> × 1.33 <span class="c">(倍数估错)</span> = <span class="r">2.33</span>
+3.00 GiB × 2.33 = <span class="r">7.0 GiB</span>   <span class="c">← 一个看着很合理、但大了两倍多的答案</span></div>
+    <b>估算翻车通常不是因为公式错，是因为往公式里塞了别家的常数。</b>
+    <em>这也是<b>反过来验算</b>值得做的原因 —— 错的答案能被干净地分解成两个可指认的因子，
+    说明你找到的是真错误，不是编了个说得通的理由。</em>
+  </div>
+
+  <div class="note w">
+    <span class="t">别急着说「三个 G 而已」—— 在真实预算里它一点都不小</span>
+    <b>同一份配方实测：<code>pdbs = 12</code> 峰值 <b>91.94 G</b>，
+    余量只剩 <b>2.8 G</b>，<code>pdbs = 14</code> 直接 OOM。</b><br>
+    <em>也就是说 —— <b>光这一个排序缓冲区（3.00 GiB），就比整张卡剩下的全部余量还大。</b>
+    它当然早就算在那 91.94 里了，但这正说明：
+    「行数 × 8」不是一个可以忽略的常数项，<b>它是 batch 上限的直接组成部分</b>。</em>
+  </div>
+
 </section>
 
 <!-- ══════════ 5 · 元数据 ══════════ -->
@@ -912,6 +1016,86 @@ for i in <span class="y">我认领到的 tile</span>:
     <em>CPU 从头到尾不需要知道任何一个专家收了多少行。</em><br>
     <b>这一点是整件事能成立的地基</b> —— §7 会讲为什么它比 kernel 本身还关键。
   </div>
+
+  <h3>把上面那段伪代码换成真的：grid 其实是三层</h3>
+  <p>前面那段骨架为了讲清楚，写成了「一层 tile 循环 ＋ 一层 k 累加」。
+  <b>真的 kernel 是三层。</b>
+  把 TPU 上 megablox 那个 Pallas 实现的 grid 抄出来：</p>
+
+  <div class="eq"><span class="c">// Pallas 按行主序走 grid —— 最后一维变化最快</span>
+grid = (<span class="y">num_n</span>, <span class="r">num_gm</span>, <span class="y">num_k</span>)
+          ↑        ↑        ↑
+        最外层   中间层   最内层</div>
+
+  <table>
+    <thead><tr><th>层</th><th>它在数什么</th><th>为什么在这个位置</th></tr></thead>
+    <tbody>
+      <tr><td><b><code>n</code></b><br><em>最外</em></td>
+        <td>输出的<b>列</b>切片 —— <em>把 2,048 那个中间维切成几块</em></td>
+        <td><em>换得最慢，所以整个 LHS 会被走 <code>num_n</code> 遍</em></td></tr>
+      <tr class="hl"><td><b><code>gm</code></b><br><em>中间</em></td>
+        <td><b>「专家」和「行块」被压成了<em>一个</em>一维索引</b></td>
+        <td><b>这就是关键的那一步</b> —— <em>见下</em></td></tr>
+      <tr><td><b><code>k</code></b><br><em>最内</em></td>
+        <td>在 <span class="k">7,168</span> 上做累加</td>
+        <td><em>输出的累加器整个 <code>k</code> 循环都留在片上，不落地</em></td></tr>
+    </tbody>
+  </table>
+
+  <p><b>那个 <code>gm</code> 轴怎么解回「哪个专家、哪些行」——两张查找表，
+  就是<a href="#s5">记法三</a>那两张：</b></p>
+  <div class="eq"><span class="r">gm_id_to_group_id</span>[gm_id]  <span class="c">→ 这块 tile 该用哪个专家的权重</span>
+<span class="r">gm_id_to_m_offset</span>[gm_id]  <span class="c">→ 这块 tile 盖住排序后的哪一段行</span>
+
+<span class="c">// 三个 index map 长这样（TPU megablox 源码，只改了排版）</span>
+rhs_weight_index_map(n_id, gm_id, k_id) = (<span class="r">group_id</span>, k_id, n_id)
+lhs_index_map       (_   , gm_id, k_id) = (rows(gm_id), 0, k_id)
+out_index_map       (n_id, gm_id, <span class="y">_</span>   ) = (rows(gm_id), 0, n_id)
+                                  <span class="y">↑ 不含 k —— 所以累加器整轮不落地</span></div>
+
+  <div class="note d">
+    <span class="t">所以「先 load 一个专家扫所有 token」还是「先 load 一个 token 扫所有专家」</span>
+    <b>都不是。<em>专家根本不是一层循环，它是一次查表。</em></b><br>
+    <em>循环走的是<b>输出 tile</b>；至于这块 tile 归哪个专家，是拿 tile 编号去
+    <code>gm_id_to_group_id</code> 里查出来的。</em><br><br>
+    <b>硬要说最接近「专家在外层」的，是这一条：</b>
+    <em><code>gm</code> 这一轴是<b>按专家顺序铺开</b>的，
+    所以连着几个 tile 通常同属一个专家，权重换得很慢。
+    <b>但那是数据的排列，不是循环的结构。</b></em>
+  </div>
+
+  <div class="note w">
+    <span class="t">顺带钉死右矩阵的形状 —— 它是<em>三维</em>的</span>
+    <b>很容易把 RHS 想成「把 256 个专家横着拼成一个很宽的二维矩阵」。不是。</b><br>
+    <em>看 <code>rhs_weight_index_map</code> 返回的
+    <code>(group_id, k_id, n_id)</code> —— <b>第一个轴就是专家号</b>。
+    专家是一个<b>独立的轴</b>，不是被拼进列方向的。</em><br><br>
+    <b>这个区别不是抠字眼，它就是 <a href="#s4">§4</a> 最后那行 23.18 TFLOP 的分水岭：</b>
+    <em>拼成宽矩阵，你每一行都得跟全部专家乘一遍，付 4×（或者专家数那么多倍）；
+    留成独立的轴，一块 tile 一辈子只读一片权重。</em>
+  </div>
+
+  <h4>最后一个细节，它一头连着 §7，一头连着 §11</h4>
+  <p><code>num_gm</code> —— 也就是「这一层一共有多少块 tile 要算」——
+  <b>是在<em>设备上</em>数出来的</b>。源码里是一个 <code>fori_loop</code> 扫过所有专家，
+  每个专家往总数里加一笔：</p>
+  <div class="eq">curr_num_gm = <span class="r">cdiv</span>(aligned_group_size, tile_m)   <span class="c">// 向上取整</span>
+num_gm     += curr_num_gm                        <span class="c">// 在设备上累加</span></div>
+
+  <div class="note g">
+    <span class="t">这两行小代码，把全文两条线接上了</span>
+    <ul style="margin:8px 0 0">
+      <li><b>「在设备上数出来」</b> —— 就是 <a href="#s7">§7</a>
+        那条时间线里最后一公里的那个能力。<em>tile 总数是<b>数据</b>，
+        host 从头到尾不知道它是多少。少了这一条，你就得回去做一次
+        device-to-host 同步 —— 正是要躲开的那个东西。</em></li>
+      <li><b>那个向上取整</b> —— 就是 <a href="#s11">§11</a>
+        那笔边界账的出处。<em>每个专家都<b>单独</b>向上取整到整块 tile，
+        所以段数越多、每段越短，浪费越大。它不在某个公式里，
+        它就在这一行 <code>cdiv</code> 上。</em></li>
+    </ul>
+  </div>
+
 
   <h3>顺带回答：硬件需要「能跳过空块」的能力吗</h3>
   <div class="note d">
