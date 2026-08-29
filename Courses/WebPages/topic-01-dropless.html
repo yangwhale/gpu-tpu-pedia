@@ -80,6 +80,9 @@ figcaption{font-size:13.5px;color:var(--gray);margin-top:12px;line-height:1.7}
 .svglbl{font:600 13px var(--mono)}
 .svgsm{font:400 12px var(--mono)}
 .svgnum{font:700 14px var(--mono)}
+.svgt{font:400 13px "Noto Sans CJK SC","PingFang SC",sans-serif}
+.svgtb{font:700 14px "Noto Sans CJK SC","PingFang SC",sans-serif}
+.svgk{font:600 12px var(--mono)}
 details{background:var(--bg2);border:1px solid var(--line);border-radius:10px;
   padding:12px 16px;margin:16px 0}
 details[open]{padding-bottom:6px}
@@ -511,7 +514,120 @@ cf=1.5 98,304 行           = <span class="y">8.659 TFLOP</span>   <span class="
   <p class="lead">「掩码矩阵是怎么弄出来的」——
   答案是<b>它通常根本不是一个矩阵</b>，而是几个很小的一维数组。</p>
 
-  <p>要让一个 kernel 干这活，你只需要告诉它一件事：
+  <p>在讲编码之前，先把<b>三种布局下 LHS 和 RHS 各自长什么样</b>摆出来 ——
+  很多说不清的地方，看一眼图就没了。</p>
+
+  <figure>
+  <svg viewBox="0 0 1000 720" role="img"
+       aria-label="三种布局的操作数对照：批量矩阵乘的 LHS 是四片等高的盒子；contiguous 分组的 LHS 摊平成一张二维、四段高度不同；masked 分组的 LHS 回到固定高度的盒子并配一个 masked_m 数组。三种布局的 RHS 完全相同，都是四块同形状的权重。">
+    <!-- ═══ 行 1：batched ═══ -->
+    <text x="40" y="46" class="svgtb" fill="#a50e0e">① 批量矩阵乘（batched）—— 老办法</text>
+    <rect x="40" y="70"  width="120" height="35" fill="#1a73e8" opacity=".85"/>
+    <rect x="40" y="111" width="120" height="35" fill="#12b5cb" opacity=".85"/>
+    <rect x="40" y="152" width="120" height="35" fill="#9334e6" opacity=".85"/>
+    <rect x="40" y="193" width="120" height="35" fill="#e8710a" opacity=".85"/>
+    <text x="100" y="92"  text-anchor="middle" class="svgk" fill="#fff">e0 · 16,384</text>
+    <text x="100" y="133" text-anchor="middle" class="svgk" fill="#fff">e1 · 16,384</text>
+    <text x="100" y="174" text-anchor="middle" class="svgk" fill="#fff">e2 · 16,384</text>
+    <text x="100" y="215" text-anchor="middle" class="svgk" fill="#fff">e3 · 16,384</text>
+    <text x="172" y="155" text-anchor="middle" class="svgnum" fill="#5f6368">×</text>
+    <rect x="196" y="114" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="228" y="114" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="260" y="114" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="292" y="114" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <text x="332" y="155" text-anchor="middle" class="svgnum" fill="#5f6368">=</text>
+    <rect x="356" y="70"  width="48" height="35" fill="#1a73e8" opacity=".45"/>
+    <rect x="356" y="111" width="48" height="35" fill="#12b5cb" opacity=".45"/>
+    <rect x="356" y="152" width="48" height="35" fill="#9334e6" opacity=".45"/>
+    <rect x="356" y="193" width="48" height="35" fill="#e8710a" opacity=".45"/>
+    <text x="440" y="92"  class="svgk" fill="#202124">LHS [4, 16384, 7168]　RHS [4, 7168, 2048]　OUT [4, 16384, 2048]</text>
+    <text x="440" y="118" class="svgt" fill="#5f6368">三个都是<tspan font-weight="700" fill="#202124">三维盒子</tspan>，第一维就是 batch = 4。</text>
+    <text x="440" y="142" class="svgt" fill="#a50e0e" font-weight="700">❗ 四片必须一样高 —— capacity factor 就是从这一条长出来的。</text>
+    <text x="440" y="166" class="svgt" fill="#5f6368">那个「一样高」到底填多少，就是你要猜的那个超参数。</text>
+    <text x="440" y="212" class="svgt" fill="#5f6368">（这里按 cf = 1.0 画，所以 16,384 —— e0 超出的部分已经被丢掉了）</text>
+
+    <!-- ═══ 行 2：contiguous ═══ -->
+    <line x1="40" y1="256" x2="960" y2="256" stroke="#e8eaed" stroke-width="1.4"/>
+    <text x="40" y="290" class="svgtb" fill="#0d652d">② 分组矩阵乘 · contiguous 布局 —— 训练前向 / prefill</text>
+    <rect x="40" y="313" width="120" height="47" fill="#1a73e8" opacity=".85"/>
+    <rect x="40" y="360" width="120" height="32" fill="#12b5cb" opacity=".85"/>
+    <rect x="40" y="392" width="120" height="39" fill="#9334e6" opacity=".85"/>
+    <rect x="40" y="431" width="120" height="23" fill="#e8710a" opacity=".85"/>
+    <rect x="40" y="313" width="120" height="141" fill="none" stroke="#202124" stroke-width="1.6"/>
+    <text x="100" y="342" text-anchor="middle" class="svgk" fill="#fff">e0 · 21,760</text>
+    <text x="100" y="381" text-anchor="middle" class="svgk" fill="#fff">e1 · 15,104</text>
+    <text x="100" y="416" text-anchor="middle" class="svgk" fill="#fff">e2 · 18,048</text>
+    <text x="100" y="447" text-anchor="middle" class="svgk" fill="#fff">e3 · 10,880</text>
+    <text x="172" y="390" text-anchor="middle" class="svgnum" fill="#5f6368">×</text>
+    <rect x="196" y="348" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="228" y="348" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="260" y="348" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="292" y="348" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <text x="332" y="390" text-anchor="middle" class="svgnum" fill="#5f6368">=</text>
+    <rect x="356" y="313" width="48" height="47" fill="#1a73e8" opacity=".45"/>
+    <rect x="356" y="360" width="48" height="32" fill="#12b5cb" opacity=".45"/>
+    <rect x="356" y="392" width="48" height="39" fill="#9334e6" opacity=".45"/>
+    <rect x="356" y="431" width="48" height="23" fill="#e8710a" opacity=".45"/>
+    <rect x="356" y="313" width="48" height="141" fill="none" stroke="#202124" stroke-width="1.6"/>
+    <text x="440" y="330" class="svgk" fill="#202124">LHS [65792, 7168]　　RHS [4, 7168, 2048]　OUT [65792, 2048]</text>
+    <text x="440" y="356" class="svgt" fill="#5f6368">LHS 和 OUT <tspan font-weight="700" fill="#202124">摊平成二维</tspan>，四段各自多高就是多高。</text>
+    <text x="440" y="380" class="svgt" fill="#0d652d" font-weight="700">✓ RHS 一个字都没改 —— 还是那四块，形状完全一样。</text>
+    <text x="440" y="406" class="svgt" fill="#5f6368">每段补齐到 128 的倍数，所以段边界永远落在 tile 边界上。</text>
+    <text x="440" y="430" class="svgt" fill="#5f6368">灰框提醒你：它现在是<tspan font-weight="700" fill="#202124">一个</tspan>张量，不是四个。</text>
+
+    <!-- ═══ 行 3：masked ═══ -->
+    <line x1="40" y1="484" x2="960" y2="484" stroke="#e8eaed" stroke-width="1.4"/>
+    <text x="40" y="518" class="svgtb" fill="#174ea6">③ 分组矩阵乘 · masked 布局 —— 推理 decode</text>
+    <rect x="40" y="540" width="120" height="35" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+    <rect x="40" y="581" width="120" height="35" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+    <rect x="40" y="622" width="120" height="35" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+    <rect x="40" y="663" width="120" height="35" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+    <rect x="40" y="540" width="120" height="22" fill="#1a73e8" opacity=".85"/>
+    <rect x="40" y="581" width="120" height="30" fill="#12b5cb" opacity=".85"/>
+    <rect x="40" y="622" width="120" height="14" fill="#9334e6" opacity=".85"/>
+    <rect x="40" y="663" width="120" height="26" fill="#e8710a" opacity=".85"/>
+    <text x="100" y="556" text-anchor="middle" class="svgk" fill="#fff">m₀ 行有效</text>
+    <text x="100" y="601" text-anchor="middle" class="svgk" fill="#fff">m₁ 行有效</text>
+    <text x="100" y="633" text-anchor="middle" class="svgk" fill="#fff">m₂</text>
+    <text x="100" y="681" text-anchor="middle" class="svgk" fill="#fff">m₃ 行有效</text>
+    <text x="172" y="620" text-anchor="middle" class="svgnum" fill="#5f6368">×</text>
+    <rect x="196" y="584" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="228" y="584" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="260" y="584" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <rect x="292" y="584" width="28" height="70" fill="#1e8e3e" opacity=".8"/>
+    <text x="332" y="620" text-anchor="middle" class="svgnum" fill="#5f6368">=</text>
+    <rect x="356" y="540" width="48" height="35" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+    <rect x="356" y="581" width="48" height="35" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+    <rect x="356" y="622" width="48" height="35" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+    <rect x="356" y="663" width="48" height="35" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+    <rect x="356" y="540" width="48" height="22" fill="#1a73e8" opacity=".45"/>
+    <rect x="356" y="581" width="48" height="30" fill="#12b5cb" opacity=".45"/>
+    <rect x="356" y="622" width="48" height="14" fill="#9334e6" opacity=".45"/>
+    <rect x="356" y="663" width="48" height="26" fill="#e8710a" opacity=".45"/>
+    <text x="440" y="557" class="svgk" fill="#202124">LHS [4, M_max, 7168]　RHS [4, 7168, 2048]　OUT [4, M_max, 2048]</text>
+    <text x="440" y="583" class="svgt" fill="#5f6368">形状<tspan font-weight="700" fill="#202124">回到固定盒子</tspan> —— CUDA graph 要的就是这个。</text>
+    <text x="440" y="607" class="svgt" fill="#174ea6" font-weight="700">但盒子高度是「上限」，不是「配额」—— 装不下不会丢，只会不够快。</text>
+    <text x="440" y="631" class="svgt" fill="#5f6368">深色 = 真数据；浅灰 = 盒子里没用到的部分，kernel 不碰。</text>
+    <text x="440" y="655" class="svgt" fill="#5f6368">有效行数由 <tspan class="svgk" fill="#174ea6">masked_m</tspan> 给出 —— 一个长度 4 的整数数组：</text>
+    <rect x="440" y="666" width="34" height="22" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
+    <rect x="476" y="666" width="34" height="22" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
+    <rect x="512" y="666" width="34" height="22" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
+    <rect x="548" y="666" width="34" height="22" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
+    <text x="457" y="682" text-anchor="middle" class="svgk" fill="#174ea6">m₀</text>
+    <text x="493" y="682" text-anchor="middle" class="svgk" fill="#174ea6">m₁</text>
+    <text x="529" y="682" text-anchor="middle" class="svgk" fill="#174ea6">m₂</text>
+    <text x="565" y="682" text-anchor="middle" class="svgk" fill="#174ea6">m₃</text>
+    <text x="596" y="682" class="svgt" fill="#5f6368">← 全部的「掩码」就这么大</text>
+  </svg>
+  <figcaption><b>把三行的中间那一列（RHS）盖住对比看 —— 它一模一样。</b>
+  <em>四块权重，每块 <span class="k">7,168 × 2,048</span>，从头到尾没被碰过。
+  三种布局的差别<b>全部</b>发生在 LHS 和 OUT 的 M 轴上。</em><br>
+  <b>DeepGEMM 那句话说的就是这件事：</b>
+  <em>“DeepGEMM groups only the M-axis, while N and K must remain fixed.”</em>
+  —— <b>所谓 grouped，只 group 了一根轴。</b></figcaption>
+  </figure>
+
+  <p>看完图再回到编码问题。要让一个 kernel 干这活，你只需要告诉它一件事：
   <b>第 <em>i</em> 个待算的块，属于哪个专家、落在哪些行上。</b>
   三套主流实现给出了三种编码，信息量完全一样。</p>
 
@@ -874,6 +990,74 @@ B × 64 × 8 ÷ 256          = <span class="r">2B</span>
     <li>两次结果<b>累加</b>进同一个输出块 ——
       kernel 里靠「这个 tile 的专家号跟上一个 tile 不一样吗」来决定要不要清零累加器</li>
   </ul>
+
+  <figure>
+  <svg viewBox="0 0 1000 430" role="img"
+       aria-label="放大 e0 与 e1 的边界：GPU 补齐方案里 tile 169 的末尾 27 行是补进去的零，每个 tile 只属于一个专家；TPU 方案里 tile 169 前 101 行属于 e0、后 27 行属于 e1，这个 tile 被排两次班，分别用两份权重计算并累加。">
+    <text x="20" y="30" class="svgtb" fill="#202124">放大 e0 → e1 的那条边界（M 轴横过来画，每格 = 一个 128 行的 tile）</text>
+    <text x="20" y="52" class="svgt" fill="#5f6368">e0 实收 21,733 行。21,733 = 128 × 169 + 101 —— 边界正好落在第 169 个 tile 的第 101 行处。</text>
+
+    <text x="100" y="88" class="svgsm" fill="#80868b">tile 167</text>
+    <text x="258" y="88" class="svgsm" fill="#80868b">tile 168</text>
+    <text x="416" y="88" class="svgsm" fill="#80868b">tile 169　← 边界在这格里</text>
+    <text x="732" y="88" class="svgsm" fill="#80868b">tile 170 / 171</text>
+
+    <!-- ── A：GPU 补齐 ── -->
+    <text x="20" y="118" class="svgtb" fill="#0d652d">A · 补齐（DeepGEMM）</text>
+    <rect x="100" y="130" width="150" height="56" fill="#1a73e8" opacity=".85"/>
+    <rect x="258" y="130" width="150" height="56" fill="#1a73e8" opacity=".85"/>
+    <rect x="416" y="130" width="118" height="56" fill="#1a73e8" opacity=".85"/>
+    <rect x="534" y="130" width="32"  height="56" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+    <rect x="574" y="130" width="150" height="56" fill="#12b5cb" opacity=".85"/>
+    <rect x="732" y="130" width="150" height="56" fill="#12b5cb" opacity=".85"/>
+    <text x="175" y="163" text-anchor="middle" class="svgk" fill="#fff">e0</text>
+    <text x="333" y="163" text-anchor="middle" class="svgk" fill="#fff">e0</text>
+    <text x="475" y="163" text-anchor="middle" class="svgk" fill="#fff">e0 · 101 行</text>
+    <text x="550" y="205" text-anchor="middle" class="svgsm" fill="#b06000">补 27 行零</text>
+    <text x="649" y="163" text-anchor="middle" class="svgk" fill="#fff">e1</text>
+    <text x="807" y="163" text-anchor="middle" class="svgk" fill="#fff">e1</text>
+    <text x="900" y="150" class="svgt" fill="#0d652d" font-weight="700">每格只属于</text>
+    <text x="900" y="168" class="svgt" fill="#0d652d" font-weight="700">一个专家</text>
+    <text x="100" y="222" class="svgt" fill="#5f6368">
+      补零把 e0 撑到 tile 边界 → <tspan font-weight="700" fill="#202124">段边界 = tile 边界</tspan>，
+      一个 tile 从头到尾只加载一份权重。这 5 格执行 <tspan font-weight="700" fill="#202124">5 次</tspan>。</text>
+
+    <!-- ── B：TPU 重复访问 ── -->
+    <line x1="20" y1="248" x2="980" y2="248" stroke="#e8eaed" stroke-width="1.4"/>
+    <text x="20" y="280" class="svgtb" fill="#174ea6">B · 重复访问（JAX megablox）</text>
+    <rect x="100" y="292" width="150" height="56" fill="#1a73e8" opacity=".85"/>
+    <rect x="258" y="292" width="150" height="56" fill="#1a73e8" opacity=".85"/>
+    <rect x="416" y="292" width="118" height="56" fill="#1a73e8" opacity=".85"/>
+    <rect x="534" y="292" width="32"  height="56" fill="#12b5cb" opacity=".85"/>
+    <rect x="416" y="292" width="150" height="56" fill="none" stroke="#d93025" stroke-width="2.4"/>
+    <rect x="574" y="292" width="150" height="56" fill="#12b5cb" opacity=".85"/>
+    <rect x="732" y="292" width="150" height="56" fill="#12b5cb" opacity=".85"/>
+    <text x="175" y="325" text-anchor="middle" class="svgk" fill="#fff">e0</text>
+    <text x="333" y="325" text-anchor="middle" class="svgk" fill="#fff">e0</text>
+    <text x="475" y="325" text-anchor="middle" class="svgk" fill="#fff">e0 · 101</text>
+    <text x="550" y="369" text-anchor="middle" class="svgsm" fill="#12b5cb">e1 · 27</text>
+    <text x="649" y="325" text-anchor="middle" class="svgk" fill="#fff">e1</text>
+    <text x="807" y="325" text-anchor="middle" class="svgk" fill="#fff">e1</text>
+    <text x="900" y="312" class="svgt" fill="#a50e0e" font-weight="700">这一格</text>
+    <text x="900" y="330" class="svgt" fill="#a50e0e" font-weight="700">跨了两家</text>
+
+    <path d="M491 348 V386" stroke="#d93025" stroke-width="1.6" stroke-dasharray="4 3"/>
+    <rect x="416" y="386" width="118" height="18" fill="#1a73e8" opacity=".85"/>
+    <rect x="416" y="386" width="150" height="18" fill="none" stroke="#dadce0"/>
+    <text x="580" y="399" class="svgt" fill="#202124">
+      <tspan font-weight="700">执行 ①</tspan> 用 e0 的权重，只算左边 101 行</text>
+    <rect x="416" y="408" width="118" height="18" fill="#f8f9fa" stroke="#dadce0"/>
+    <rect x="534" y="408" width="32"  height="18" fill="#12b5cb" opacity=".85"/>
+    <text x="580" y="421" class="svgt" fill="#202124">
+      <tspan font-weight="700">执行 ②</tspan> 用 e1 的权重，只算右边 27 行，<tspan font-weight="700" fill="#a50e0e">累加进同一个输出块</tspan></text>
+    <text x="100" y="399" text-anchor="end" class="svgt" fill="#5f6368">这 5 格</text>
+    <text x="100" y="421" text-anchor="end" class="svgt" fill="#5f6368">执行 6 次</text>
+  </svg>
+  <figcaption><b>同一条边界，两种付法：A 多出 27 行零，B 多执行 1 个 tile。</b>
+  <em>B 里那两次执行不是浪费在「算零」上 —— 它们算的全是真数据，
+  只是同一块输出被写了两遍（第二遍累加）。
+  kernel 靠「这个 tile 的专家号跟上一个一样吗」来决定要不要先清零累加器。</em></figcaption>
+  </figure>
 
   <p>代价因此换了一种形式，而且源码注释直接把上界写出来了：</p>
   <div class="eq"><span class="c">// 要执行的 tile 总数，夹在这两个数之间</span>
