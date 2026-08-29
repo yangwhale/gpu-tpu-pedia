@@ -180,8 +180,24 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
 16,384 × 4                = <span class="r">65,536</span>
 
 <span class="c">// 自检：65,536 ÷ 8,192 = 8 = top-k ✓</span>
-<span class="c">//   每张卡收进来的行数，恰好等于它自己发出去的 token 数 × top-k ——</span>
-<span class="c">//   因为配对总数就是「token 总数 × top-k」，再均摊回 64 张卡。</span></div>
+<span class="c">//   注意这一步是「均摊」，不是守恒律 —— 见下面那条警告。</span></div>
+
+  <div class="note w">
+    <span class="t">⚠️ 65,536 是<em>均值</em>，不是定值 —— 这一条很容易看漏</span>
+    <p><b>这张卡<em>发出去</em>的配对数才是定值：</b>
+    <span class="k">8,192 × 8 = 65,536</span>。
+    <em>它手里就 8,192 个 token，每个选 8 个专家，跟路由怎么选毫无关系。</em></p>
+    <p><b>但它<em>收进来</em>多少行，是全网 64 张卡的路由结果共同决定的，完全可能不等于 65,536。</b>
+    <em>这一步哪几个专家火，火的那几个又恰好住在哪张卡上 —— 这些都是数据。
+    热门专家扎堆的那张卡就是会多收。</em></p>
+    <p><b>全网守恒的只有总量：</b><span class="k">4,194,304</span> 行分给 64 张卡。
+    <em><b>和守恒，每一份都不守恒</b> —— 而且这里连「每张卡」这一份都不守恒，
+    不只是「每个专家」那一份。</em></p>
+    <p style="margin-bottom:0"><b>本文后面一律拿 65,536 当基准，是为了让所有百分比有一个稳定的分母；
+    下面那张表四个数合计正好 65,536，也是我凑的。</b>
+    <em>真实系统里这个总数每一步都在动 —— 所以接收缓冲区是按一个<b>申报的上界</b>分配的
+    （DeepEP 的 <code>num_max_tokens_per_rank</code>），不是按实际值。</em></p>
+  </div>
 
   <div class="note i">
     <span class="t">记住 16,384 这个数，它是后面所有判断的分母</span>
@@ -1025,7 +1041,9 @@ for e in range(4):
   它们由这一步的路由结果决定，算在设备上。于是只剩两条路：</p>
   <ul>
     <li><b>拷回 CPU 再发四次调用</b> —— 每层一次设备到主机的同步，流水线当场断掉。
-      <em>这正是 <a href="#s7">§7</a> 那个「①」，也是当年所有人绕开 for 循环的头号理由。</em></li>
+      <em>这也是当年所有人绕开 for 循环的头号理由。</em>
+      <b>⚠️ 但今天的 GPU 训练路径其实<em>已经</em>付了这次同步</b> ——
+      <em>所以在那条路上「分四次」并不会多同步一次。下一小节的表格里有更新后的完整说法。</em></li>
     <li><b>让每次调用自己去设备上读形状</b> —— 那你就得有：
       设备端的元数据、间接寻址、一个能按元数据认领 tile 的调度器。
       <em><b>这份清单跟 grouped matmul 需要的一模一样。</b></em></li>
@@ -1058,21 +1076,64 @@ for e in range(4):
     </tbody>
   </table>
 
-  <p><b>于是全部差别就落在第一行那个数上：</b></p>
-  <div class="eq"><span class="c">// 分四次：那个数是 m_e —— 一个变量，只有设备知道</span>
-grid_e = ceil(<span class="r">m_e</span> / 128)          <span class="c">→ 想发这次 launch，CPU 就得先问设备要 m_e</span>
+  <p><b>于是全部差别就落在第一行那个数上。而这里有个陷阱，值得单独拆开：</b></p>
+  <div class="eq"><span class="c">// 分四次：那个数是 m_e —— 一个变量</span>
+grid_e = ceil(<span class="r">m_e</span> / 128)
 
-<span class="c">// 合一次：那个数是总行数 —— 一个恒等式</span>
-grid   = ceil(<span class="y">65,536</span> / 128) (+ 边界余量)
-         ↑
-         65,536 = 8,192 tokens × top-8，<span class="y">编译期就知道</span>，跟路由怎么分毫无关系</div>
+<span class="c">// 合一次：那个数是 m_total —— 也是一个变量！</span>
+grid   = ceil(<span class="r">m_total</span> / 128) (+ 边界余量)
+
+<span class="c">// 唯一真正静态的，是你自己申报的那个上界</span>
+<span class="y">num_max_tokens_per_rank</span>              <span class="c">← DeepEP 按它分配接收缓冲区</span></div>
+
+  <div class="note w">
+    <span class="t">⚠️ 这里我原先写错了，改过来</span>
+    <b>我一开始写的是「合起来之后那个数是恒等式，等于 tokens × top-k」。<em>不对。</em></b>
+    <em>那是<b>发出去</b>的配对数（<a href="#s1">§1</a> 已修正）。
+    <b>收进来</b>多少行是数据，合起来也一样是数据。</em><br><br>
+    <b>所以真正的问题不是「合起来之后那个数变常数了吗」，而是
+    <em>「那个数，CPU 到底知不知道」</em> —— 答案分三种情况，而且互不相同。</b>
+  </div>
+
+  <table>
+    <thead><tr><th>场景</th><th>CPU 知道每份多大吗</th><th>依据</th><th>分四次可行吗</th></tr></thead>
+    <tbody>
+      <tr><td><b>GPU · 训练 / prefill</b></td><td class="r"><b>知道</b></td>
+        <td>DeepEP 的 <code>handle.num_recv_tokens_per_expert_list</code> 是个
+          <b>Python list</b> —— 说明已经拷回主机了。<em>而 decode 那条路径的注释写着
+          “Reuse cached handle: skip layout recomputation <b>and CPU sync</b>”，
+          反过来正好证明非缓存路径是要同步的。</em></td>
+        <td><b>可行</b></td></tr>
+      <tr><td><b>GPU · decode + CUDA graph</b></td><td class="r"><b>不知道</b></td>
+        <td>DeepGEMM 原话：masked 布局存在的理由就是
+          <em>“when CUDA graph is enabled and <b>the CPU is unaware of the number of
+          tokens each expert receives</b>”</em></td>
+        <td><b>不可行</b></td></tr>
+      <tr class="hl"><td><b>TPU / XLA</b></td><td class="r"><b>永远不知道</b></td>
+        <td>jit 出来的是<b>静态形状</b>的程序。<code>group_sizes</code> 是设备数组，
+          整个训练步不出编译边界 —— <em>没有任何一个时刻，主机有机会看到它</em></td>
+        <td><b>不可行</b></td></tr>
+    </tbody>
+  </table>
 
   <div class="note d">
-    <span class="t">这就是「4 合 1 之后 CPU 就不用参与了」的全部原因</span>
-    <b><a href="#s1">§1</a> 那个恒等式在这里第二次发挥作用 ——
-    <em>「和」是确定的，「怎么分」才是数据。</em></b><br>
-    <em>你只要不把它拆开，那个不确定性就永远不用穿过 CPU 这道门。
-    一拆，四份不确定性全都得穿过去一次。</em>
+    <span class="t">于是「为什么非得合成一次」的准确答案是这样</span>
+    <p><b>我上一小节说的「合起来 CPU 就不用参与了」，
+    <em>在 GPU 训练路径上不成立</em></b> ——
+    <em>那条路本来就有一次设备到主机的拷贝，而且是 <b>dispatch 那一步</b>付的，
+    跟后面的 GEMM 分不分开无关。分四次并不会多一次同步，只会多三次 launch。</em></p>
+    <p><b>站得住的是这三条，而且理由各不相同：</b></p>
+    <ul>
+      <li><b>TPU / XLA 上是<em>结构性</em>的。</b>
+        <em>静态形状编译，形状根本没有机会离开设备。「分四次」不是慢，是<b>写不出来</b>
+        —— 除非退回固定盒子，那就是丢 token。</em></li>
+      <li><b>GPU decode 上也是<em>结构性</em>的。</b>
+        <em>CUDA graph 一开，主机就被蒙住了。<b>masked 布局就是为这个造的</b>。</em></li>
+      <li><b>GPU 训练上只是<em>性能性</em>的。</b>
+        <em>尾巴（上面算过，约 2.4%）＋ 4 倍 launch。真实，但不是「不得不」。</em></li>
+    </ul>
+    <p style="margin-bottom:0"><b>而下面「kernel 内部靠什么区分」那一段完全不受影响</b> ——
+    <em>顺序继承自 all-to-all、四个段长做前缀和，这一套在三种情况下一模一样。</em></p>
   </div>
 
   <h4>那 kernel 内部到底靠什么「区分」</h4>
