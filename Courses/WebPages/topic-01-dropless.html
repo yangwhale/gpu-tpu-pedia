@@ -975,6 +975,52 @@ for e in range(4):
     「补零凑齐」的浪费也就没那么显眼。</em>
   </div>
 
+  <h3>再往回追一层：那个「形状必须一样」，最早是谁定的</h3>
+  <p><a href="#s2">§2</a> 是从机械上讲 capacity factor 怎么冒出来的。
+  但如果去翻 MoE 最早那批论文，会看到一件更有意思的事 ——
+  <b>没有人「选择」过这个代价，它是<em>写法自带</em>的。</b></p>
+
+  <p>GShard（2020 年 6 月）把整个 MoE 层写成了一串 einsum：</p>
+  <div class="eq"><span class="c">// GShard 论文 Algorithm 2 里的核心两行</span>
+expert_outputs = einsum(<span class="y">"EGCH,EHM-&gt;GECM"</span>, h, wo)
+outputs        = einsum(<span class="y">"GSEC,GECM-&gt;GSM"</span>, combine_weights, expert_outputs)
+                             <span class="r">↑</span>
+                    E = 专家数    <span class="r">C = 「容量」—— 它是张量的一个轴</span></div>
+
+  <p><b>einsum 要求张量是矩形的。</b>
+  矩形就意味着每个专家必须占<b>一样多</b>的行。
+  <em>那个数需要一个名字，于是它被叫做 expert capacity。</em></p>
+
+  <div class="note w">
+    <span class="t">所以「丢 token」从来不是一个算法设计</span>
+    <b>它是「张量得是方的」这件事的副产品。</b>
+    <em>而且论文里是把它当成 <b>feature</b> 写的 ——</em><br>
+    <em>“To ensure the load is balanced, we enforce that the number of tokens
+    processed by one expert is below some uniform threshold, which we define as
+    <b>expert capacity</b>.”</em><br><br>
+    <b>注意开头那半句：<em>To ensure the load is balanced</em>。</b>
+    <em>在原文的叙述里，容量是「保证均衡的手段」，
+    不是「为了迁就形状而做的妥协」。溢出的 token 怎么办，同一段写得很干脆：
+    门控输出退化成零向量，token 靠 residual connection 直接跳到下一层。</em>
+  </div>
+
+  <p>而 GShard 是长在 TPU ＋ XLA 上的。同一篇文章里还有一句更硬的话，
+  出现在讲 SPMD 分区的那一节：</p>
+  <div class="eq">“<span class="y">XLA requires tensor shapes to be static.</span>”
+   <span class="c">脚注：“The limited dynamism in the intermediate representation is</span>
+   <span class="c">        often necessary to efficiently target accelerators.”</span></div>
+  <p><em>这不是 MoE 的特殊规定，这是<b>整个编译器的底线</b>。
+  MoE 只是恰好第一次撞上它。</em></p>
+
+  <div class="note d">
+    <span class="t">一句话</span>
+    <b><code>capacity factor</code> 是一个<em>编译器约束</em>，
+    被提拔成了一个<em>模型超参数</em>。</b><br>
+    <em>之后所有围着它长出来的东西 —— 辅助均衡损失、容量系数调参、
+    溢出走 residual —— 都是在<b>修补这一个决定的下游后果</b>。
+    这也是为什么它后来那么难被拿掉：它已经不在 kernel 里了，它在模型定义里。</em>
+  </div>
+
   <h3>那后来到底变了什么</h3>
   <p><b>不是想法变了，是三件工程做成了。</b></p>
   <ol>
@@ -1004,6 +1050,77 @@ for e in range(4):
   «一个矩阵乘要多大才能喂饱它» 的门槛一直在涨。
   <em>于是「每个专家单独调一次」这个方案，会随着硬件变强而<b>相对变得更差</b>；
   而「合成一次调用」的收益只增不减。</em></p>
+
+  <h3>一条时间线：这个原语其实一直躺在货架上</h3>
+  <p>上面讲的都是「为什么难」。但还有一件比「难」更尴尬的事实 ——
+  <b>grouped GEMM 不是为 MoE 发明的，它比 MoE 需要它早了两年就已经在库里了。</b></p>
+
+  <table>
+    <thead><tr><th>时间</th><th>发生了什么</th><th>说明什么</th></tr></thead>
+    <tbody>
+      <tr><td><span class="k">2020-06</span></td>
+        <td>GShard：MoE 层写成 einsum，<b>容量 C 成了张量的一个轴</b></td>
+        <td><em>丢 token 的出身</em></td></tr>
+      <tr class="hl"><td><span class="k">2021-11</span></td>
+        <td>CUTLASS 2.8 带上了 grouped GEMM 示例
+          （<code>examples/24_gemm_grouped</code>）</td>
+        <td><b>原语已经存在</b> —— <em>当时面向的是「一堆大小各不相同的小矩阵乘」
+          这种通用场景，跟 MoE 毫无关系</em></td></tr>
+      <tr><td><span class="k">2022-11</span></td>
+        <td>MegaBlocks 提出 dropless MoE —— <b>但走的是 block-sparse，不是 grouped GEMM</b></td>
+        <td><em>2022 年真能做出来的那条路，不是这一条</em></td></tr>
+      <tr><td><span class="k">2023-09</span></td>
+        <td>一个很薄的 <code>grouped_gemm</code> CUTLASS 封装出现，
+          成为 MegaBlocks 的<b>可选</b>依赖</td>
+        <td><em>到这时才有人把这个原语接到 MoE 上</em></td></tr>
+      <tr><td><span class="k">2024-06</span></td>
+        <td>cuBLAS 12.5 把 grouped GEMM 做进官方 API</td>
+        <td><em>从「论文里的东西」变成「调一下就有」</em></td></tr>
+      <tr class="hl"><td><span class="k">2026-02</span></td>
+        <td>CUTLASS 4.4.0：grouped GEMM 示例开始支持
+          <b>纯设备端</b>的 problem shape</td>
+        <td><b>最后一公里，刚补上没多久</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note i">
+    <span class="t">这张表里最该看的是第二行和最后一行</span>
+    <b>原语 2021 年就在了，但在之后很长一段时间里，
+    那个尺寸数组仍然得由 host 拼好、再拷到设备上。</b><br>
+    <em>对 MoE 来说这等于说：<b>想调用它，先做一次 device-to-host 同步</b>
+    —— 正好是你想躲开的那个东西。</em><br><br>
+    <b>所以「有这个原语」和「能用它做 dropless MoE」之间，
+    隔着的从来不是矩阵乘，是那一次同步。</b>
+    <em>这也解释了第三行：MegaBlocks 到今天仍然把 block-sparse 那套
+    （<code>stanford-stk</code>）列为<b>必需</b>依赖，
+    <code>grouped_gemm</code> 只是一个可选 extra。同一个作者、两条路，
+    先做出来的是 block-sparse 那条。</em>
+  </div>
+
+  <div class="note g">
+    <span class="t">那么到底是什么变了 —— 三条，没有一条是矩阵乘本身</span>
+    <ol style="margin:8px 0 0">
+      <li><b>犯错的代价涨了。</b>
+        <em>上面那条注解说过，2021–22 年这个代价看着便宜。
+        今天是 256 选 8、每张卡上放好几个专家，
+        单专家负载抖得厉害（<a href="#s1">§1</a> 那张表里热点是均值的 1.33 倍）。
+        同样一个 1.5 的容量系数，现在是<b>三分之一的算力</b>。
+        <b>浪费是跟着专家数一起长大的。</b></em></li>
+      <li><b>推理来了 —— 这一条最硬。</b>
+        <em>训练时丢一个 token，你还能把它说成正则化；
+        服务时丢的是<b>用户的</b> token，这话没法交代。
+        MoE 进了生产之后，dropless 就从一个<b>性能问题</b>
+        变成了一个<b>正确性问题</b>。</em></li>
+      <li><b>配套修好了。</b>
+        <em>上面那三件工程，再加上一个「按专家落地」的 all-to-all
+        （<a href="#s5">§5</a>「配对靠顺序」）。两头齐了，中间那个改动才显得小。</em></li>
+    </ol>
+    <p style="margin:12px 0 0"><b>一句话收掉这一节：
+    这件事不是被<em>想出来</em>的，是被<em>允许</em>的。</b>
+    <em>数学上它一天都没有难过；难的一直是「形状归谁管」。
+    而那个答案，是编译器、通信库、kernel 三边一起改出来的 ——
+    没有哪一边单独能把它改掉。</em></p>
+  </div>
 
   <h3>硬件要求到底差在哪：一张表</h3>
   <table>
