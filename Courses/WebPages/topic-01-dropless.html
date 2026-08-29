@@ -130,7 +130,8 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
     <li><a href="#s8">这个能力的名字到底叫 block-sparse 还是 grouped GEMM？</a></li>
     <li><a href="#s9">补齐到 128，跟 chunked prefill、PagedAttention 是一回事吗？</a></li>
     <li><a href="#s11">TPU 上是不是也这么干？</a></li>
-    <li><a href="#s12">V3 是真 dropless 还是近似的？</a></li>
+    <li><a href="#s12">TPU 上 MXU 怎么被喂饱的？HBM → VMEM → VREG 的流水</a></li>
+    <li><a href="#s13">V3 是真 dropless 还是近似的？</a></li>
   </ol>
 </div>
 
@@ -1051,7 +1052,7 @@ for e in range(4):
     <span class="t">所以 MegaBlocks 的历史地位该怎么讲</span>
     <b>它的贡献不是「发明了分组矩阵乘」。</b>
     <em>它的贡献是第一次把「MoE 可以完全不丢 token」做成一个能跑满硬件的实现，
-    并且用一组对照实验证明了这件事值得做</em>（见 §13 的三个数）。<br>
+    并且用一组对照实验证明了这件事值得做</em>（见 §14 的三个数）。<br>
     <b>但接口层面，今天大家用的不是它那套 block-sparse 编码，而是更直白的 grouped GEMM。</b>
     <em>讲课时可以说「MegaBlocks 把这条路走通了」，
     不要说「今天的 dropless 都是 MegaBlocks 那套」——不是。</em>
@@ -1276,9 +1277,365 @@ tiles_m = 65,536 ÷ 128     = 512
   </div>
 </section>
 
-<!-- ══════════ 12 · V3 ══════════ -->
+<!-- ══════════ 12 · MXU 视角 ══════════ -->
 <section id="s12">
-  <h2><span class="n">§12</span>V3 到底是真 dropless 还是近似的</h2>
+  <h2><span class="n">§12</span>再往下一层：MXU 是怎么被喂饱的<br>—— HBM → VMEM → VREG 的那条流水</h2>
+  <p class="lead">前面十一节，「tile」一直是最小的砖。<b>但 tile 不是硬件概念，是软件概念。</b>
+  真正的硬件里有四层各自认死了形状的东西，一个 tile 得逐层换装才能走到乘法器面前。
+  这一节把那条流水拆开 —— 用的是<b>能公开读到的那份 TPU kernel 源码</b>
+  （Apache-2.0，<code>MaxText/kernels/megablox/pallas_mosaic_tpu_v2_gmm_kernel.py</code>，
+  文件头写明 forked from <code>openxla/tokamax</code>）。</p>
+
+  <div class="note w">
+    <span class="t">先说清楚：这是第二代 kernel，跟 §5 §11 讲的不是同一份</span>
+    <b><a href="#s5">§5</a> 和 <a href="#s11">§11</a> 讲的是公开 JAX 里
+    <code>pallas/ops/tpu/megablox</code> 那一版</b>（三张索引表、跨界 tile 执行两次）。
+    <em>这一节读的是更新的一版，思路一脉相承，但把边界粒度从「128 行」细化到了
+    「一条 sublane」—— 那正好是硬件真正的最小单位。两版都在跑，不冲突。</em>
+  </div>
+
+  <h3>四层，每层认一种形状</h3>
+  <p>这条链上最反直觉的一点：<b>它们的单位互不整除，也互不让步。</b>
+  一个数据块每下一层，都要重新按下一层的形状裁一次。</p>
+
+  <table>
+    <thead><tr><th>层</th><th>它认什么形状</th><th>谁负责把东西搬进来</th><th>这个 kernel 在这一层放什么</th></tr></thead>
+    <tbody>
+      <tr><td><b>HBM</b><br><em>片外主存</em></td>
+        <td>随便，但按 DMA 描述符成批搬</td>
+        <td>DMA 引擎（描述符由标量单元发）</td>
+        <td>整个 <span class="k">lhs[65536, 7168]</span>、
+          <span class="k">rhs[4, 7168, 2048]</span>、输出</td></tr>
+      <tr><td><b>VMEM</b><br><em>片上 SRAM</em></td>
+        <td>末两维必须是 <b>8 的倍数 × 128 的倍数</b>（或正好等于整维）</td>
+        <td>DMA，由 Pallas 的流水线自动排</td>
+        <td>当前几个 tile + 累加器 + 一个跨界残片</td></tr>
+      <tr><td><b>VREG</b><br><em>向量寄存器</em></td>
+        <td><b>8 sublane × 128 lane</b>，每格一个 32 位值</td>
+        <td>向量 load / store 指令</td>
+        <td>正在参与这一次乘法的那一小片</td></tr>
+      <tr><td><b>MXU</b><br><em>脉动阵列</em></td>
+        <td>固定边长的方阵，<b>v7 上是 256 × 256</b></td>
+        <td>—— 数据从两边流进去</td>
+        <td>一次吃 <span class="k">[tile_m, k] × [k, 256]</span></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note i">
+    <span class="t">这些数字 kernel 自己不写死 —— 它当场去问硬件</span>
+    <b>源码里到处是 <code>pltpu.get_tpu_info()</code>：</b>
+    <code>.mxu_column_size</code>（MXU 边长）、<code>.num_lanes</code>（128）、
+    <code>.vmem_capacity_bytes</code>（VMEM 容量）、
+    <code>.get_sublane_tiling(dtype)</code>（一条 sublane 装几个逻辑行）。<br>
+    <em>所以同一份 kernel 在 v5p / v6e / v7 上会自动切出不同的 tile。
+    下文凡是给具体数字的地方，都是<b>代入 v7</b>（MXU 256）之后的结果，不是源码里的常量。</em>
+  </div>
+
+  <figure>
+  <svg viewBox="0 0 1000 620" role="img"
+       aria-label="grouped matmul 在 TPU 上的四层数据流水：元数据先由标量预取进 SMEM，标量单元读它算出 HBM 地址；DMA 把 lhs tile 双缓冲、rhs 权重三缓冲地搬进 VMEM；向量 load 把数据装进 8x128 的向量寄存器；MXU 按 256 宽的列面板逐块吃进去，结果在 float32 累加后写回 VMEM 的累加器。">
+    <defs>
+      <marker id="ar12" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#5f6368"/>
+      </marker>
+      <marker id="ar12b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto">
+        <path d="M0 0 L10 5 L0 10 z" fill="#d93025"/>
+      </marker>
+    </defs>
+
+    <text x="20" y="28" class="svgtb" fill="#202124">一个 tile 从主存走到乘法器，中间换了四次装</text>
+
+    <!-- SMEM -->
+    <rect x="40" y="46" width="560" height="66" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+    <text x="58" y="70" class="svglbl" fill="#a50e0e">SMEM · 标量内存</text>
+    <text x="58" y="92" class="svgsm" fill="#5f6368">gm_id_to_group_id[ ]　gm_id_to_m_offset[ ]　—— 两个 int32 小数组</text>
+    <text x="58" y="106" class="svgsm" fill="#a50e0e">grid 还没开始它就已经在这儿了（标量预取）</text>
+    <text x="620" y="72" class="svgt" fill="#a50e0e" font-weight="700">整套「掩码」的物理形态</text>
+    <text x="620" y="92" class="svgt" fill="#5f6368">就是这两个数组。标量单元读一次，</text>
+    <text x="620" y="108" class="svgt" fill="#5f6368">得到一个 DMA 源地址 —— 仅此而已</text>
+
+    <path d="M120 112 V150" stroke="#d93025" stroke-width="2" marker-end="url(#ar12b)"/>
+    <text x="134" y="136" class="svgsm" fill="#a50e0e">标量单元据此算地址</text>
+
+    <!-- HBM -->
+    <rect x="40" y="156" width="560" height="80" rx="8" fill="#f1f3f4" stroke="#80868b" stroke-width="1.8"/>
+    <text x="58" y="180" class="svglbl" fill="#3c4043">HBM · 片外主存</text>
+    <rect x="58" y="192" width="150" height="30" fill="#1a73e8" opacity=".22" stroke="#1a73e8"/>
+    <text x="133" y="212" text-anchor="middle" class="svgsm" fill="#174ea6">lhs [65536, 7168]</text>
+    <rect x="220" y="192" width="150" height="30" fill="#9334e6" opacity=".22" stroke="#9334e6"/>
+    <text x="295" y="212" text-anchor="middle" class="svgsm" fill="#6a1b9a">rhs [4, 7168, 2048]</text>
+    <rect x="382" y="192" width="120" height="30" fill="#e8710a" opacity=".22" stroke="#e8710a"/>
+    <text x="442" y="212" text-anchor="middle" class="svgsm" fill="#b06000">out [65536, 2048]</text>
+    <text x="620" y="196" class="svgt" fill="#5f6368">三个张量整个都在这儿，kernel 声明</text>
+    <text x="620" y="214" class="svgt" fill="#5f6368">它们 <tspan class="svgk" fill="#202124">memory_space=HBM</tspan></text>
+    <text x="620" y="232" class="svgt" fill="#5f6368">＝「别自动搬，我自己排流水」</text>
+
+    <path d="M120 236 V282" stroke="#5f6368" stroke-width="2" marker-end="url(#ar12)"/>
+    <text x="134" y="256" class="svgsm" fill="#3c4043">DMA · lhs 双缓冲</text>
+    <text x="134" y="272" class="svgsm" fill="#6a1b9a">DMA · 权重<tspan font-weight="700">三</tspan>缓冲</text>
+
+    <!-- VMEM -->
+    <rect x="40" y="288" width="560" height="110" rx="8" fill="#e6f4ea" stroke="#188038" stroke-width="1.8"/>
+    <text x="58" y="312" class="svglbl" fill="#0d652d">VMEM · 片上 SRAM</text>
+    <rect x="58" y="324" width="120" height="26" fill="#1a73e8" opacity=".3" stroke="#1a73e8"/>
+    <text x="118" y="342" text-anchor="middle" class="svgsm" fill="#174ea6">lhs tile ×2</text>
+    <rect x="190" y="324" width="120" height="26" fill="#9334e6" opacity=".3" stroke="#9334e6"/>
+    <text x="250" y="342" text-anchor="middle" class="svgsm" fill="#6a1b9a">rhs tile ×3</text>
+    <rect x="322" y="324" width="120" height="26" fill="#e8710a" opacity=".3" stroke="#e8710a"/>
+    <text x="382" y="342" text-anchor="middle" class="svgsm" fill="#b06000">out tile ×2</text>
+    <rect x="58" y="356" width="200" height="26" fill="#f9ab00" opacity=".3" stroke="#f9ab00"/>
+    <text x="158" y="374" text-anchor="middle" class="svgsm" fill="#b06000">acc [tile_m, tile_n] fp32</text>
+    <rect x="270" y="356" width="220" height="26" fill="#d93025" opacity=".22" stroke="#d93025"/>
+    <text x="380" y="374" text-anchor="middle" class="svgsm" fill="#a50e0e">partial_out [sublane, tile_n]</text>
+    <text x="620" y="316" class="svgt" fill="#5f6368">tile 多大不是猜的：先按 VMEM 容量的</text>
+    <text x="620" y="334" class="svgt" fill="#5f6368">90% 反解，缩 tile_n 缩到不能再缩，</text>
+    <text x="620" y="352" class="svgt" fill="#5f6368">还不够才切 K 轴</text>
+    <text x="620" y="378" class="svgt" fill="#a50e0e" font-weight="700">下限＝ MXU 边长 ×2</text>
+
+    <path d="M120 398 V444" stroke="#5f6368" stroke-width="2" marker-end="url(#ar12)"/>
+    <text x="134" y="424" class="svgsm" fill="#3c4043">向量 load（源码里就是那句 <tspan class="svgk">ref[...]</tspan>）</text>
+
+    <!-- VREG -->
+    <rect x="40" y="450" width="560" height="76" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+    <text x="58" y="474" class="svglbl" fill="#174ea6">VREG · 向量寄存器</text>
+    <g>
+      <rect x="58" y="484" width="256" height="32" fill="none" stroke="#1a73e8" stroke-width="1.2"/>
+      <line x1="90"  y1="484" x2="90"  y2="516" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="122" y1="484" x2="122" y2="516" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="154" y1="484" x2="154" y2="516" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="186" y1="484" x2="186" y2="516" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="218" y1="484" x2="218" y2="516" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="250" y1="484" x2="250" y2="516" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="282" y1="484" x2="282" y2="516" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="58" y1="492" x2="314" y2="492" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="58" y1="500" x2="314" y2="500" stroke="#1a73e8" stroke-width=".6"/>
+      <line x1="58" y1="508" x2="314" y2="508" stroke="#1a73e8" stroke-width=".6"/>
+    </g>
+    <text x="326" y="496" class="svgsm" fill="#174ea6">8 sublane × 128 lane</text>
+    <text x="326" y="512" class="svgsm" fill="#5f6368">每格一个 32 位值</text>
+    <text x="620" y="480" class="svgt" fill="#5f6368">这个形状是<tspan font-weight="700" fill="#202124">一切对齐要求的源头</tspan> ——</text>
+    <text x="620" y="498" class="svgt" fill="#5f6368">VMEM 里的排布长得跟寄存器一样，</text>
+    <text x="620" y="516" class="svgt" fill="#5f6368">才能搬过来直接用，不用现场重排</text>
+
+    <path d="M120 526 V566" stroke="#5f6368" stroke-width="2" marker-end="url(#ar12)"/>
+
+    <!-- MXU -->
+    <rect x="40" y="572" width="560" height="40" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.8"/>
+    <text x="58" y="597" class="svglbl" fill="#b06000">MXU · 256 × 256 脉动阵列（v7）</text>
+    <text x="330" y="597" class="svgsm" fill="#5f6368">一次吃一个 256 宽的列面板，fp32 累加</text>
+    <text x="620" y="590" class="svgt" fill="#b06000" font-weight="700">n 轴的循环步长就是 256</text>
+    <text x="620" y="608" class="svgt" fill="#5f6368">—— 源码里字面写着 <tspan class="svgk" fill="#202124">range(0, tile_n, mxu_size)</tspan></text>
+  </svg>
+  <figcaption><b>整条链上，「哪个专家」这件事只在最顶上那一层出现过一次。</b>
+  <em>标量单元从 SMEM 读一个组号，把它变成一个 HBM 地址。从 DMA 往下的每一层
+  —— VMEM、VREG、MXU —— 都完全不知道 MoE 的存在，它们看到的只是一对稠密小矩阵。</em></figcaption>
+  </figure>
+
+  <h3>第 0 层 · 元数据必须比数据先到</h3>
+  <p>整套机制的起点是 Pallas 的<b>标量预取</b>：</p>
+  <div class="eq"><span class="c">// 外层 pallas_call</span>
+grid_spec = <span class="r">PrefetchScalarGridSpec</span>(num_scalar_prefetch=2, ...)
+
+<span class="c">// scratch 里给元数据留的位置 —— 注意 memory space 是 SMEM 不是 VMEM</span>
+gm_id_to_group_id = <span class="r">pltpu.SMEM</span>((max_num_gm,),     jnp.int32)
+gm_id_to_m_offset = <span class="r">pltpu.SMEM</span>((max_num_gm + 1,), jnp.int32)</div>
+
+  <p><b>为什么非得是 SMEM。</b>因为读它的不是向量单元，是<b>标量单元</b>，
+  而标量单元干的活是<em>算地址</em>。公开 JAX 文档把这条规矩写得很直白：
+  <em>“any data used to perform control-flow decisions should be placed in SMEM”</em>。</p>
+
+  <p>然后这段就是全篇的题眼 —— 三个 index map，各自决定「这一步该从 HBM 的哪里搬」：</p>
+  <div class="eq"><span class="c">// 权重该取哪一块？读一次 SMEM 就知道了</span>
+def rhs_weight_index_map(n_id, gm_id, k_id):
+    group_id = <span class="r">metadata_ref.gm_id_to_group_id[gm_id]</span>   <span class="c">← 全部的「选专家」就在这一行</span>
+    return (group_id, k_id, n_id)
+
+<span class="c">// 这一步该搬 lhs 的哪些行？</span>
+def lhs_index_map(_, gm_id, k_id):
+    m_start = metadata_ref.gm_id_to_m_offset[gm_id]
+    m_end   = metadata_ref.gm_id_to_m_offset[gm_id + 1]
+    row_start = m_start // <span class="y">size_lhs_sublane</span>          <span class="c">← 注意除的是 sublane，不是 128</span>
+    row_end   = cdiv(m_end, <span class="y">size_lhs_sublane</span>)
+    return (<span class="r">pl.ds(row_start, row_end - row_start)</span>, 0, k_id)</div>
+
+  <div class="note g">
+    <span class="t">上一节那个问题，在这里有了物理答案</span>
+    <b>你问「怎么保证第 k 段只跟第 k 个专家相乘」——
+    答案是一次 SMEM 标量读，结果被拿去当 DMA 描述符的源地址。</b><br>
+    <em>不匹配的那些组合，<b>权重从来没有被搬进 VMEM 过</b>。
+    不是算了再丢，是那条 DMA 压根没被发出去。「掩码」在这个层面上的物理形态，
+    就是一个 int32。</em>
+  </div>
+
+  <h3>第 1 层 · HBM → VMEM：双缓冲，权重开三层</h3>
+  <p>外层把三个张量全声明成 <code>memory_space=pltpu.HBM</code> ——
+  这在 Pallas 里的意思是<b>「别帮我自动搬，我自己排流水」</b>。
+  真正的搬运交给 <code>pltpu.emit_pipeline</code>，grid 是三层
+  <span class="k">(num_n, num_gm, num_k)</span>。</p>
+
+  <p>缓冲深度是不对称的，而且能从 VMEM 预算函数里直接读出来：</p>
+  <div class="eq"><span class="c">// _gmm_vmem_estimate() 的实际构成</span>
+lhs_vmem = <span class="r">2</span> * tile_m * tile_k * bytes        <span class="c">// 双缓冲</span>
+rhs_vmem = <span class="r">3</span> * tile_k * tile_n * bytes        <span class="c">// 三缓冲 ← 只有它是 3</span>
+acc_vmem =     tile_m * tile_n * 4                <span class="c">// 累加器，fp32</span>
+out_vmem = <span class="r">2</span> * tile_m * tile_n * bytes        <span class="c">// 双缓冲</span>
+partial_out = <span class="y">size_lhs_sublane</span> * tile_n * bytes  <span class="c">// 跨界残片，下面讲</span>
+
+<span class="c">// 而 block spec 上写得明明白白</span>
+rhs_weight_spec = pl.BlockSpec(..., pipeline_mode=<span class="r">pl.Buffered(buffer_count=3)</span>)</div>
+
+  <p><b>为什么只有权重开三层？</b>源码没写理由，我的推断是形状：
+  RHS tile 是 <span class="k">tile_k × tile_n</span>，
+  而 tile_n 至少是 MXU 边长的两倍（v7 上 ≥ 512），
+  LHS tile 才 <span class="k">128 × tile_k</span> —— <b>权重那一块通常大好几倍，
+  DMA 要跑更久，得多一层缓冲才追得上计算。</b>
+  <em>这是我从两边的尺寸推的，不是源码里的说法。</em></p>
+
+  <h4>tile 多大，是解出来的不是拍的</h4>
+  <div class="eq">vmem_limit = <span class="r">get_tpu_info().vmem_capacity_bytes * 0.9</span>
+
+<span class="c">// 先把 tile_n 往下缩，直到装得进 VMEM</span>
+while estimate(tile_n, tile_k) &gt; vmem_limit and tile_n &gt; <span class="r">tile_n_limit</span>:
+    tile_n = ...  <span class="c">// 切得更碎</span>
+
+<span class="c">// 那个下限是硬的，源码注释写明了原因：</span>
+<span class="c">//   "To avoid stalling MXU, we add some buffer room where</span>
+<span class="c">//    tile_n cannot go smaller than 2x of mxu_column_size."</span>
+tile_n_limit = <span class="r">mxu_column_size * 2</span>       <span class="c">// v7 上 = 512</span></div>
+
+  <p><b>这条下限值得停一下。</b>为什么 tile_n 不能只有一个 MXU 那么宽？
+  因为下一节要讲的重叠 —— <b>只剩一个 256 宽的面板时，就没有「下一块」可以拿来跟当前这块的收尾动作重叠了。</b>
+  流水线需要至少两节车厢。</p>
+
+  <h3>第 2 层 · VMEM → VREG → MXU：按 256 宽切列面板</h3>
+  <p>进到 kernel 内部，第一句就是 VMEM → VREG：</p>
+  <div class="eq">tiled_lhs = tiled_lhs_ref.reshape(-1, tile_k)<span class="r">[...]</span>   <span class="c">← 这个 [...] 就是向量 load</span></div>
+
+  <p>然后是真正喂 MXU 的那两层循环。<b>外层步长正好是 MXU 的边长</b>：</p>
+  <div class="eq">mxu_size = get_tpu_info().<span class="r">mxu_column_size</span>          <span class="c">// v7 = 256</span>
+
+for start_n in range(0, rhs_tile_n, <span class="r">mxu_size</span>):        <span class="c">// 一次一个 256 宽的列面板</span>
+    acc_n = zeros((tile_m, 256))
+    for start_k in ...:
+        acc_n += jnp.matmul(
+            tiled_lhs[:, k0:k1],
+            tiled_rhs[k0:k1, start_n:start_n+256],
+            preferred_element_type=<span class="y">jnp.float32</span>)       <span class="c">// 累加恒为 fp32</span>
+    acc_list.append(acc_n)</div>
+
+  <div class="note i">
+    <span class="t">为什么 n 在外、k 在内 —— 源码把理由完整写出来了</span>
+    <em>“Without n outer loop, result of quantized matmul becomes available only at the
+    last iteration of the loop. This means [tile_m, tile_n] value needs to be stored until
+    the last iteration. <b>By adding n outer loop, result of [tile_m, mxu_size] becomes
+    available at the end of every k inner loop, which can be used to pipeline subsequent
+    VPU or VST ops with MXU ops for the next [tile_m, mxu_size].</b>”</em>
+    <p style="margin:12px 0 0"><b>翻译成人话：</b>如果 k 在外、n 在内，那要等整个
+    <span class="k">[tile_m, tile_n]</span> 全算完才有第一个能用的结果，中间这一大块只能干等着占寄存器。
+    <em>把 n 提到外层之后，<b>每跑完一轮 k，就立刻攒够一个 256 宽的完整结果</b> ——
+    这块可以马上交给向量单元做后处理、交给存储单元写回，
+    <b>而 MXU 同时已经在啃下一个 256 宽的面板了</b>。</em></p>
+    <p style="margin:10px 0 0"><b>这就是「vreg 层的流水」最具体的样子</b> ——
+    循环顺序不是风格问题，它决定了 MXU、VPU、存储三个单元能不能同时忙。</p>
+  </div>
+
+  <h4>累加器住在 VMEM，不在寄存器里</h4>
+  <p>K 轴要跑 7,168 长，一个 tile 装不下，所以得跨步累加。
+  但累加器 <span class="k">[tile_m, tile_n]</span> 用 fp32 存
+  —— 代进 v7：128 × 512 × 4 B = <b>256 KB</b>，寄存器堆装不下这个量级。
+  于是它被显式声明成一块 VMEM scratch：</p>
+  <div class="eq">acc_ref = <span class="r">pltpu.VMEM</span>((tile_m, acc_cols), acc_dtype)
+
+<span class="c">// 于是 K 轴每一步的收尾动作，取决于它在 K 上的位置</span>
+if not is_first_k_step:  acc += acc_ref[...]     <span class="c">// 中间步：读回来接着加</span>
+if     is_last_k_step:   ...写出去...             <span class="c">// 末步：不必再写 acc_ref</span>
+else:                    acc_ref[...] = acc      <span class="c">// 否则存回去</span></div>
+  <p>源码为此写了<b>四个 matmul 变体</b>
+  （<code>first_last</code> / <code>first</code> / <code>last</code> / 普通），
+  运行时用 <code>lax.cond</code> 按 k 的位置挑一个。
+  <em>目的很朴素：首步别做那次无意义的读，末步别做那次无意义的写。
+  在一个跑几十万次的内层循环里，这两次访存值得单独写四份代码。</em></p>
+
+  <h3>回到 MoE：那条参差的边界，在硬件这一层长什么样</h3>
+  <p class="lead">现在可以回答一个前面绕过去的问题了 ——
+  <b><a href="#s11">§11</a> 说 TPU 靠「重复访问一个 128 行的 tile」来对付跨界。
+  但 128 是软件挑的 tile 高度，硬件真正的最小单位是什么？</b></p>
+
+  <p>是 <b>一条 sublane</b>。这一版 kernel 把 LHS 重新看成三维：</p>
+  <div class="eq"><span class="c">// [m, k] 被 reshape 成 [m / sublane, sublane, k]</span>
+lhs_in = lhs_ref.reshape(-1, <span class="y">size_lhs_sublane</span>, k)
+
+<span class="c">// 于是动态起点的粒度 = 一条 sublane</span>
+size_lhs_sublane = get_tpu_info().<span class="r">get_sublane_tiling</span>(lhs.dtype)
+<span class="c">//   32 位类型：8 行（就是 VREG 的 8 sublane）</span>
+<span class="c">//   更窄的类型会把多个逻辑行压进同一条物理 sublane，这个数更大</span></div>
+
+  <p><b>所以边界的浪费从「不到 128 行」缩到了「不到 8 行」（窄类型下略多）。</b>
+  §11 那张图里那个「多执行一个 128 行 tile」的代价，在这一版里小了一个数量级。</p>
+
+  <div class="note d">
+    <span class="t">你直觉里的那个「掩码」，在这里真的出现了 —— 但它掩的不是专家</span>
+    <b>它掩的是「同一条物理 sublane 里，不属于本组的那几行」。</b>
+    <em>而且它只在 K 轴的最后一步才施加：</em>
+    <div class="eq" style="margin:12px 0 0">m_offset      = m_start - m_start % size_lhs_sublane   <span class="c">// 退到 sublane 边界</span>
+m_start_local = m_start - m_offset
+m_end_local   = m_end   - m_offset
+
+iota = broadcasted_iota(int32, acc.shape, <span class="r">0</span>)             <span class="c">// 沿行方向数 0,1,2,...</span>
+mask = (m_start_local &lt;= iota) &amp; (iota &lt; m_end_local)
+acc  = <span class="r">where(mask, acc, 0)</span>                              <span class="c">// 不属于本组的行清零</span></div>
+    <p style="margin:12px 0 0"><b>注意它的形状：这是一个<em>一维</em>的行区间判断，
+    不是一张二维布尔表。</b>
+    <em>而且它作用在 <b>acc</b> 上（结果），范围只有一条 sublane 的两端 ——
+    <b>跟「四个专家」没有任何关系</b>。专家那件事，在四层之前就已经由 SMEM 里那个
+    int32 解决掉了。</em></p>
+  </div>
+
+  <h4>两个组共用一条 sublane 怎么办：partial_out</h4>
+  <p>既然边界可以落在 sublane 内部，就会出现「一条物理 sublane 里坐着两个组的行」。
+  两个组分属两次执行、用两份权重，但它们要写进<b>同一条 sublane</b>。
+  源码用一块 <span class="k">[size_lhs_sublane, tile_n]</span> 的 scratch 接住这个残片，
+  注释里那张小图画得比什么都清楚：</p>
+
+  <div class="eq"><span class="c">// 假设一条 sublane 装 4 行，数字是组号，| 是 sublane 边界</span>
+| <span class="r">0 0</span> <span class="y">1</span> 2 | 2 2 2 2 | 3 3 4 4 |
+    ↑         ↑
+    │         └─ 组 2 正好填满整条 → partial_out 清零，免得污染组 3
+    └─ 组 1 只占 1 行，填不满 → 把这条残片存进 partial_out，
+       下一步（组 2）读回来<span class="r">累加</span>到同一条 sublane 上</div>
+
+  <p><em>这就是 <a href="#s11">§11</a> 说的「跨界 tile 执行两次、结果累加」
+  在最细粒度上的实现 —— 只不过「两次」发生在一条 sublane 上，不是一个 128 行的 tile 上。</em></p>
+
+  <details><summary>顺带一个只有在这一层才看得见的细节：MXU 边长决定了量化怎么做<span class="why">—— 反量化放在乘法前还是乘法后，是 mxu_column_size 说了算</span></summary>
+  <div class="body">
+  <p>FP8 权重要配一个 scale。乘完再乘 scale（省事）还是先还原成宽类型再乘（费事）？
+  源码里的判据只有一行：</p>
+  <div class="eq">should_dequantize_before_matmul = (<span class="r">quant_block_size &lt; mxu_size</span>)</div>
+  <p><b>意思是：如果量化块比 MXU 还窄，就必须在 VMEM 里先反量化。</b>
+  源码给的理由是 <em>“to avoid small contracting dimensions”</em> ——
+  <em>因为「乘完再乘 scale」要求同一个 scale 覆盖整段收缩维；
+  如果 scale 每 128 个元素换一次，而 MXU 一口吃 256，
+  那就只能把 matmul 切成 128 长的小段 —— <b>脉动阵列立刻只装了一半</b>。</em></p>
+  <p><b>这是一个很好的例子：一个看起来纯属数值格式的选择（量化块多大），
+  实际由脉动阵列的物理边长决定。</b>
+  <em>也解释了 <a href="#s3">§3</a> 里 128 这个数在 GPU 那边的地位，
+  在 TPU 这边为什么会变成 256。</em></p>
+  </div>
+  </details>
+
+  <div class="note g">
+    <span class="t">这一节的一句话</span>
+    <b>「哪个专家」这个问题，在标量单元上就被解决掉了；
+    从 DMA 往下的所有硬件，跑的都是一次普普通通的稠密矩阵乘。</b><br>
+    <em>整条流水里唯一跟 MoE 有关的东西，是 SMEM 里那两个 int32 数组，
+    以及边界那条 sublane 上不到 8 行的清零。<b>其余全是常规 matmul 的功夫</b> ——
+    双缓冲、三缓冲、按 MXU 边长切列面板、fp32 累加器住 VMEM、循环顺序让三个单元并行。</em>
+  </div>
+</section>
+<!-- ══════════ 13 · V3 ══════════ -->
+<section id="s13">
+  <h2><span class="n">§13</span>V3 到底是真 dropless 还是近似的</h2>
   <p class="lead">这个问题要拆成两问，答案不一样。</p>
 
   <h3>问一：token 层面，丢不丢？</h3>
@@ -1340,8 +1697,8 @@ tiles_m = 65,536 ÷ 128     = 512
 </section>
 
 <!-- ══════════ 9 · MegaBlocks 的数字 ══════════ -->
-<section id="s13">
-  <h2><span class="n">§13</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
+<section id="s14">
+  <h2><span class="n">§14</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
 
   <ol>
     <li><b>丢 token 是真的伤质量。</b>同一组对照里，容量系数取 1（会丢）的 MoE
@@ -1377,8 +1734,8 @@ tiles_m = 65,536 ÷ 128     = 512
 </section>
 
 <!-- ══════════ 10 · 收 ══════════ -->
-<section id="s14">
-  <h2><span class="n">§14</span>回到主线</h2>
+<section id="s15">
+  <h2><span class="n">§15</span>回到主线</h2>
   <p>专题一从头到尾在讲一件事：<b>硬件的形状会渗进模型的定义里</b>。</p>
   <p>分组路由那一节是最赤裸的一例 —— <code>topk_group = 4</code> 跟模型质量毫无关系，
   它的存在只是为了让 all-to-all 少跨机。<b>硬件划线，模型让步。</b></p>
