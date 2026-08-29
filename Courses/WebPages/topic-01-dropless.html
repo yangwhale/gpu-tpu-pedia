@@ -209,6 +209,51 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
     换一个场景（比如推理 decode，一个专家可能只收到几十行），同一个 128 立刻就变贵了。</em>
   </div>
 
+  <div class="note w">
+    <span class="t">还有一个专家没算进来 —— 第 9 个，它<em>故意</em>不在这本账里</span>
+    <b>V3 的每个 token 实际上会经过 <em>9</em> 个专家：8 个路由专家 ＋ <em>1 个共享专家</em>。</b>
+    <em>MaxText 的 <code>deepseek3-671b.yml</code> 写得很直白：</em>
+    <div class="eq" style="margin:8px 0">num_experts:         256
+num_experts_per_tok:   8
+<span class="y">shared_experts:        1</span>   <span class="c">← 每个 token 都要过它</span>
+
+base_emb_dim:       7168
+base_moe_mlp_dim:   2048
+base_num_decoder_layers: 61
+first_num_dense_layers:   3   <span class="c">→ 61 − 3 = 58 层 MoE，本文一直用的就是这个 58</span></div>
+    <b>但上面那笔账乘的是 8，不是 9 —— 这不是漏了，是因为
+    <em>共享专家根本不走分组矩阵乘那条路</em>。</b><br><br>
+    <em>MaxText 里这个 block 的主体就四行，两条路各走各的：</em>
+    <div class="eq" style="margin:8px 0">routed_experts = <span class="r">self.routed_moe(inputs, ...)</span>       <span class="c">// 排序 → grouped GEMM</span>
+shared_experts = <span class="y">self.shared_experts(inputs, ...)</span>   <span class="c">// 一个普通 MlpBlock</span>
+return routed_experts + shared_experts</div>
+    <b>注意第二行读的是 <code>inputs</code> —— <em>原始的那块 [T, h]</em>，
+    不是排过序的那个缓冲区。</b>
+    <em>没有 permute、没有复制、没有 <code>group_sizes</code>。</em>
+  </div>
+
+  <div class="note d">
+    <span class="t">为什么共享专家可以「不用分组」</span>
+    <b>因为<em>每个 token 都去</em>。</b>
+    <em>没有「谁去谁不去」，就没有长短不一的段；没有变长的段，
+    就没有任何需要 grouped GEMM 来解决的问题 ——
+    它退化成一个规规矩矩的稠密矩阵乘。</em><br><br>
+    <b>所以两本账要分开记：</b>
+    <ul style="margin:8px 0 0">
+      <li><b>左矩阵的行数</b>：<span class="k">T × 8</span> ——
+        <em>只有路由专家进这个数</em></li>
+      <li><b>这一层的总算力</b>：按 <span class="k">9</span> 算 ——
+        <em>共享专家的中间维同样是 2048，跟一个路由专家等宽，
+        所以它往上加 <b>1/8 ＝ 12.5%</b></em></li>
+    </ul>
+    <br>
+    <b>顺带纠一个很自然的直觉：「一个 token 被复制成 9 份」并不准确。</b>
+    <em>路由那 8 份在 permute 时确实会落成 8 行
+    （MaxText 还有 <code>moe_use_direct_token_gather</code> 这个开关，
+    用索引直接取、连这 8 份都不物化）；
+    <b>而共享那一份一个字节都不复制</b>，它读的就是原来那块激活。</em>
+  </div>
+
   <h3>真实的一步长什么样：不均匀</h3>
   <p>如果四个专家各收 16,384 行，这篇文档就不用写了 —— 形状本来就是齐的。
   麻烦在于<b>它永远不齐</b>。取一组有代表性的实际分布（合计仍是 65,536）：</p>
