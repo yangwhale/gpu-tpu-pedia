@@ -2513,7 +2513,9 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   <h4>为什么最前面几层偏偏不做 MoE</h4>
   <p>这个问题有一个流传很广的答案：<em>「靠近输入的层做的是通用活儿，没什么可分工的。」</em>
   <b>听起来很顺，但那不是 DeepSeek 给的理由。</b>
-  <em>去翻论文，会发现真实情况是一条链，而且最后一环是断的。</em></p>
+  <em>去翻论文，会发现真实情况是一条链，而且最后一环是断的。</em>
+  <b>翻完 DeepSeek 自己这条链，再横着看一眼同期别家</b> ——
+  <em>你会发现这件事连共识都算不上。</em></p>
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 262" role="img"
@@ -2562,6 +2564,104 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
   <em>把「负载均衡收敛慢」讲成「前几层比较通用」，是把一个训练现象换成了一个语义故事</em> ——
   <b>两者都可能对，但只有前者写在论文里。</b></figcaption>
   </figure>
+
+  <details class="more"><summary>展开：那句「唯一的理由」，原文长什么样<span class="why">—— 一共就一句话</span></summary>
+  <div class="body">
+    <p>整条链上<b>只有 DeepSeekMoE 那一篇给了理由</b>，而且就是一句话（原文）：</p>
+    <div class="eq"><span class="c">// DeepSeekMoE (arXiv:2401.06066), §5.1 Experimental Setup</span>
+We substitute all FFNs <b>except for the first layer</b> with MoE layers,
+since we observe that <b>the load balance status converges
+especially slower for the first layer</b>.</div>
+    <p>请注意措辞是 <code>we observe</code> —— <b>这是一条实验观察，不是理论推导</b>。
+    论文没有解释「为什么偏偏是第一层」，后面两代也再没展开过。</p>
+    <p class="sub">同一篇里 145B 那版也是同样处理，但没有重复给理由；
+    <code>DeepSeek-V2</code> 的原文是 <em>Following Dai et al. (2024), we substitute
+    all FFNs except for the first layer</em>；<code>DeepSeek-V3</code> 的原文是
+    <em>We substitute all FFNs except for the first three layers</em> ——
+    <b>1 变成 3 这件事，前后没有一个字的说明。</b></p>
+  </div>
+  </details>
+
+  <h4>横着看一眼：这远不是共识</h4>
+  <p>上面那条链只是 DeepSeek 一家的谱系。<b>把同期几个主流 MoE 的
+  <code>config.json</code> 拉下来对一眼，分歧大得出乎意料</b> ——
+  <em>有人留 3 层，有人留 1 层，还有一大批干脆一层都不留。</em></p>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>模型</th><th class="n">层数</th>
+      <th class="n">前面留几层 dense</th><th>依据</th></tr></thead>
+    <tbody>
+      <tr><td>DeepSeekMoE 16B</td><td class="n">28</td><td class="n">1</td>
+        <td>论文原文 —— <b>唯一给了理由的那篇</b></td></tr>
+      <tr><td>DeepSeek-V2</td><td class="n">—</td><td class="n">1</td>
+        <td>论文原文「沿用上一篇」</td></tr>
+      <tr><td>DeepSeek-V2-Lite</td><td class="n">27</td><td class="n">1</td>
+        <td><code>first_k_dense_replace: 1</code></td></tr>
+      <tr><td><b>DeepSeek-V3</b></td><td class="n">61</td><td class="n"><b>3</b></td>
+        <td><code>first_k_dense_replace: 3</code> —— 无解释</td></tr>
+      <tr><td>GLM-4.5</td><td class="n">92</td><td class="n">3</td>
+        <td><code>first_k_dense_replace: 3</code> —— 跟 V3 一致</td></tr>
+      <tr style="background:#fef7e0"><td><b>Kimi K2</b> ⭐</td><td class="n">61</td>
+        <td class="n"><b>1</b></td>
+        <td><code>first_k_dense_replace: <b>1</b></code> ——
+          <b>架构照抄 V3，唯独把这个改回去了</b></td></tr>
+      <tr><td>Qwen3-235B-A22B</td><td class="n">94</td><td class="n">0</td>
+        <td><code>mlp_only_layers: []</code> —— <b>94 层全是 MoE</b></td></tr>
+      <tr><td>Mixtral 8x7B</td><td class="n">32</td><td class="n">0</td>
+        <td>压根没有这个字段</td></tr>
+      <tr><td>MiniMax-M2</td><td class="n">62</td><td class="n">0</td>
+        <td>没有 dense 前缀，<code>shared_intermediate_size: 0</code>
+          <span class="sub">连共享专家都不要了</span></td></tr>
+    </tbody>
+  </table></div>
+  <p class="sub">除 DeepSeekMoE 16B 与 DeepSeek-V2 两行取自论文正文外，
+  其余每一行都是从各自 Hugging Face 仓库的 <code>config.json</code> 直接读的。
+  <b>V2 本体没读到 config，层数留空，不猜。</b></p>
+
+  <div class="note warn">
+    <span class="t">Kimi K2 那一行值得单独看三十秒</span>
+    它的 <code>architectures</code> 字段写的就是 <code>DeepseekV3ForCausalLM</code>，
+    并且 <code>hidden_size 7168</code>、<code>intermediate_size 18432</code>、
+    <code>moe_intermediate_size 2048</code>、<code>q_lora_rank 1536</code>、
+    <code>kv_lora_rank 512</code>、<code>qk_nope 128</code>、<code>qk_rope 64</code>、
+    <code>num_hidden_layers 61</code> —— <b>本页讲过的形状它一个没改</b>。<br>
+    <b>偏偏把 <code>first_k_dense_replace</code> 从 3 改回了 1。</b>
+    一个抄到这个程度的团队专门动了这个参数，
+    <em>说明它不是架构上的必然，而是各家自己试出来的经验值。</em>
+  </div>
+
+  <details class="more"><summary>展开：机制上为什么会是第一层<span class="why">—— 这段是推测，我标清楚</span></summary>
+  <div class="body">
+    <p><b>先说清楚：下面这套解释论文里没有，是我们的推断。</b></p>
+    <p>router 说到底就是拿 hidden state 做一次线性投影再取 top-k ——
+    <b>hidden state 像的 token，必然被分到同一批专家</b>。
+    而第一层的 hidden state 还没被 attention 混合过，它基本就是
+    <em>embedding 加个位置信息</em>：同一个词不管出现在什么上下文里，长得几乎一样。</p>
+    <p>于是 router 在第一层会退化成<b>「按词典 ID 分配」</b>。
+    语言里高频词占绝对多数 —— 逗号、<code>the</code>、「的」——
+    这些词会成批涌向同一个专家。<em>负载自然平不了，而且它平不了的原因是数据分布本身，
+    aux loss 要跟这个分布对着拧，收敛慢就不奇怪。</em></p>
+    <div class="note danger">
+      <span class="t">⚠️ 但有反证，所以别把它当定律</span>
+      也有实测工作报告的是<b>相反方向</b>：早期层路由还算均衡，
+      反而是<b>深层出现专家坍缩</b>、少数专家吃掉大部分 token。<br>
+      两边都是实测，说明<b>「哪一层难平衡」不是普遍规律</b>，
+      跟模型、数据、aux loss 系数都有关系。
+      <em>这也正好解释了为什么各家留的层数从 0 到 3 都有 —— 大家试出来的结果本来就不一样。</em>
+    </div>
+  </div>
+  </details>
+
+  <div class="note ok">
+    <span class="t">给这一节收个尾：这个设计到底是为了啥</span>
+    <b>①</b> 唯一的公开起点是一条实验观察 ——「第一层负载均衡收敛特别慢」，出自 DeepSeekMoE。<br>
+    <b>②</b> 机制为什么如此，<b>没人给过解释</b>；V3 从 1 加到 3，<b>也没给过解释</b>。<br>
+    <b>③</b> 它<b>远不是共识</b>：同期至少三个主流模型一层 dense 都不留。<br>
+    <b>④</b> 但它有一个白捡的好处 —— 浅层 dense 不需要 all-to-all，
+    部署时能单独按 1-way 张量并行摆，省通信。<br>
+    <em>所以最诚实的说法是：这是一个有实证起点、缺机制解释、且尚未收敛成共识的工程选择。
+    留 0 层到 3 层之间怎么选，目前只能靠试。</em>
+  </div>
 </div></section>
 
 <!-- ══════════ 第 4 步 · MoE ══════════ -->
