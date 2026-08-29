@@ -3295,7 +3295,7 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
   那么一个 token 要用第 137 号专家，怎么办？两条路，<b>真实的二选一</b>。</p>
 
   <figure class="fbox">
-  <svg viewBox="0 0 1000 250" role="img" aria-label="Dispatch/Combine 与 AG-RS 两种 MoE 分布式方案对比">
+  <svg viewBox="0 0 1000 250" role="img" aria-label="Dispatch/Combine 与 EP=1+FSDP 两种 MoE 分布式方案对比">
     <!-- 左：dispatch/combine -->
     <text x="20" y="20" class="svglbl" fill="#174ea6">方案 A · Dispatch / Combine —— 把 token 送到专家那儿</text>
     <g>
@@ -3326,8 +3326,8 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
 
     <line x1="440" y1="14" x2="440" y2="236" stroke="#dadce0"/>
 
-    <!-- 右：AG-RS -->
-    <text x="480" y="20" class="svglbl" fill="#0d652d">方案 B · AG-RS —— 把专家权重取过来，在本地算</text>
+    <!-- 右：EP = 1 + FSDP -->
+    <text x="480" y="20" class="svglbl" fill="#0d652d">方案 B · EP ＝ 1 ＋ FSDP —— 把专家权重取过来，在本地算</text>
     <g>
       <rect x="480" y="34" width="80" height="46" rx="6" fill="#e6f4ea" stroke="#1e8e3e"/>
       <text x="520" y="60" text-anchor="middle" class="svgsm" fill="#0d652d">卡 0</text>
@@ -3340,7 +3340,7 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
 
       <path d="M520 88 v18 h276 v-18" stroke="#1e8e3e" stroke-width="1.3" fill="none"/>
       <path d="M612 88 v18 M704 88 v18" stroke="#1e8e3e" stroke-width="1.3"/>
-      <text x="560" y="124" class="svgsm" fill="#0d652d">all-gather 权重 → 本地算 → reduce-scatter</text>
+      <text x="560" y="124" class="svgsm" fill="#0d652d">all-gather 权重 → 本地算</text>
       <text x="560" y="140" class="svgsm">token 一步都不动</text>
 
       <rect x="480" y="164" width="356" height="66" rx="8" fill="#fff" stroke="#dadce0"/>
@@ -3351,8 +3351,25 @@ K_r / M = 8 / 4 = <span class="r">2</span>   <span class="c">← 所以是「每
   </svg>
   <figcaption>没有哪个方案永远对。<b>token 多、权重相对小 → 挪权重划算；
   token 少（比如推理 decode 一次就几个 token）→ 挪 token 划算。</b>
-  还要看互联拓扑 —— 跨机带宽比机内小得多，前面那个分组限制正是为了让 all-to-all 尽量留在机内。</figcaption>
+  还要看互联拓扑 —— 跨机带宽比机内小得多，前面那个分组限制正是为了让 all-to-all 尽量留在机内。<br>
+  <em>方案 B 图里只画了前向。反向还要再 all-gather 一次权重，
+  并且把梯度 <b>reduce-scatter</b> 回各自的分片 —— 那是 FSDP 的标准动作，不在这张图里。</em></figcaption>
   </figure>
+
+  <div class="note warn">
+    <span class="t">⚠️ 一个特别容易叫错的名字：方案 B <em>不叫</em> AG-RS</span>
+    <b>「把专家权重 all-gather 到每张卡」这件事真实存在、而且在 TPU 上是对的选择 ——
+    但它的名字是<b>「EP ＝ 1 ＋ FSDP」</b>，或者干脆叫「不用专家并行」。</b><br>
+    <em>MoE 语境里的 <code>AG-RS</code> 指的是<b>另一件事</b>：它是 all-to-all 的替代品，
+    搬的同样是 <b>token</b> —— 把全部 token 复制给每张卡，本地路由一遍，
+    算完再 reduce-scatter 回去。三个互相独立的实现口径一致：
+    Megatron-Core 的开关叫 <code>--moe-token-dispatcher-type</code>，两个取值
+    <code>allgather</code> / <code>alltoall</code> <b>都是 token dispatcher</b>；
+    MaxText 里这条路叫 <b>ring of experts</b>。</em><br><br>
+    <b>所以「挪 token 还是挪权重」这个二分是对的，只是第二条的标签之前写错了。</b>
+    <em>三条路的机制、通信量、以及为什么 TPU 反而选字节最多的那条，
+    在附录里有一整节：<a href="topic-01-dropless.html#s14">§14 token 是怎么见到它的专家的 →</a></em>
+  </div>
 
   <h4>算一下通信量</h4>
   <div class="eq"><span class="c">// Dispatch + Combine，一层</span>
