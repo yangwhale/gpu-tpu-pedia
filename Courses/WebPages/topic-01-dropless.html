@@ -426,6 +426,20 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
   而每个格子的位置和大小，跟别的格子完全无关。整齐这个要求就是在这里消失的。</em></figcaption>
   </figure>
 
+  <div class="note d">
+    <span class="t">⚠️ 上面这张图画的是<b>概念</b>，不是<b>内存</b> —— 这里必须说清楚</span>
+    <b>那个灰色的大矩形，在真实系统里<em>从来没有被分配过</em>，
+    更没有「先全算一遍再拿掩码盖掉」这回事。</b><br>
+    <em>画成一个大矩形，是为了让「阶梯」这个结构看得见 ——
+    这也是 MegaBlocks 论文的语言（一个块稀疏矩阵，只有对角线上的块非零）。
+    但「稀疏矩阵」是一个<b>逻辑形状</b>：物理上只存非零块，灰色部分不占一个字节。</em><br>
+    <b>而今天的 grouped GEMM 干脆连那根轴都不要了</b> ——
+    <em>输出直接就是 <span class="k">65,792 × 2,048</span>，
+    专家号只活在权重张量上（<a href="#s5">§5 的图</a>画的是这一版）。</em><br>
+    <b>两种写法的数值完全相同</b>：<em>把对角块压紧，就是后者。</em>
+    详细的机制在 <a href="#s5">§5</a>。
+  </div>
+
   <h3>第 ④ 步 · 收回来</h3>
   <p>第二个矩阵乘反过来：拿刚才那个稀疏的中间结果，乘上四个专家<b>竖着拼</b>的第二个权重矩阵，
   得到一个稠密的 <span class="k">65,792 × 7,168</span>。
@@ -701,6 +715,96 @@ cf=1.5 98,304 行           = <span class="y">8.659 TFLOP</span>   <span class="
   <p>知道了配对靠顺序，再来看具体怎么编码。要让 kernel 干活，它需要的信息只有一句：
   <b>第 <em>i</em> 个待算的块，落在哪些行上、因此该用哪块权重。</b>
   三套主流实现给出了三种写法，信息量完全一样。</p>
+
+  <h3>会不会「先全算一遍，再拿掩码盖掉」</h3>
+  <p class="lead"><b>不会。而且这一点是整件事最容易想歪的地方。</b></p>
+
+  <p>直觉上很自然会这么想：LHS 源源不断喂进去，RHS 也源源不断喂进去，
+  那前面那批 token 岂不是要跟四个专家都乘一遍？<b>那不就得有个掩码把多余的盖掉？</b></p>
+
+  <div class="note d">
+    <span class="t">思路要反过来：kernel 不是「按输入流」组织的，是<b>「按输出格子」</b>组织的</span>
+    <b>它手上是一张待办清单：输出有 515 个格子要填，第 <em>i</em> 个格子归谁、读哪段、用哪块权重。</b><br>
+    <em>它从来不是「让所有 LHS 流过所有 RHS，再挑结果」。</em><br>
+    <b>所以「跳过」根本不是一个动作 —— 那些组合从一开始就没上过清单。</b>
+    <em>没上清单的东西，不需要被跳过。</em>
+  </div>
+
+  <p>把 kernel 的骨架写出来，这件事就一目了然了：</p>
+  <div class="eq"><span class="c">// 每个计算单元认领一批 tile，各干各的</span>
+for i in <span class="y">我认领到的 tile</span>:
+
+    e  = group_ids[i]              <span class="c">// 这一格归哪个专家 ← 全部的「掩码」就在这</span>
+    m0 = m_tile_ids[i] * 128       <span class="c">// 这一格覆盖输出的哪 128 行</span>
+
+    W  = RHS[<span class="r">e</span>]                    <span class="c">// ← 只取这一块。另外三块这一格从没读过</span>
+
+    acc = 0
+    for k in range(0, 7168, tile_k):
+        acc += LHS[m0 : m0+128, k : k+tile_k] @ W[k : k+tile_k, :]
+
+    OUT[m0 : m0+128, :] = acc      <span class="c">// 跨界的那一格改成累加（§11）</span></div>
+
+  <p><b>看那一行 <code>W = RHS[e]</code>。</b>
+  <em>「前面的 token 会不会跟四个专家都乘」这个担心，就消灭在这一行 ——
+  这一格的整个生命周期里，只有一块权重被读进来过。</em></p>
+
+  <div class="note g">
+    <span class="t">所以「掩码」的真身是什么</span>
+    <b>它不是一张贴在结果上的布尔表，它是一张<em>排班表</em>。</b>
+    <em>作用发生在工作被分配<b>之前</b>，不是结果算出来<b>之后</b>。</em><br>
+    <b>而且它只有一维。</b>
+    <em>因为「一行属于哪个专家」是个单选题 —— 一行不可能同时属于两个专家。
+    单选题的答案就是一个分段，分段只需要几个边界数字。</em>
+  </div>
+
+  <h3>跟 splash attention 对照一下 —— 你的直觉方向是对的</h3>
+  <p>这个套路和稀疏 attention 是<b>同一家</b>的：
+  <em>先算清楚「哪些块真的需要算」，再只对那些块派活，其余的连排班都不排。</em>
+  <b>差别在于「哪些块」这件事本身有多复杂。</b></p>
+
+  <table>
+    <thead><tr><th></th><th>splash / 稀疏 attention</th><th>分组矩阵乘</th></tr></thead>
+    <tbody>
+      <tr><td>输出是什么形状</td><td><span class="k">[查询, 键]</span> 的方阵</td>
+          <td><span class="k">[行, 特征]</span> —— <b>没有「专家 × 专家」这种维度</b></td></tr>
+      <tr><td>稀疏模式的维数</td><td><b>二维</b>：哪个 q 块要看哪个 kv 块</td>
+          <td><b>一维</b>：哪一行属于哪个专家</td></tr>
+      <tr><td>因此需要什么</td><td>一个真正的<b>块掩码结构</b>（哪些块对存在）</td>
+          <td><b>几个边界整数</b>就够了</td></tr>
+      <tr class="hl"><td>边缘上的「半块」</td>
+          <td>比如因果掩码切过的那些块 —— <b>这些块要真的贴一个元素级掩码</b></td>
+          <td>跨了专家边界的那一格 —— <b>TPU 的做法是拆成两次执行（§11）</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note i">
+    <span class="t">一句话收束</span>
+    <b>两边都遵守同一条纪律：<em>能在排班阶段解决的，绝不留到算完再修</em>。</b><br>
+    <em>attention 的稀疏是二维的，所以它必须带一个块掩码；
+    MoE 的稀疏是一维的，所以它退化成了「四个整数 + 一次前缀和」。</em><br>
+    <b>你会觉得需要掩码，是因为你脑子里画的是那张<a href="#s3">阶梯图</a>（二维）——
+    而实现层面它其实是一维的。</b>
+  </div>
+
+  <details><summary>那 MegaBlocks 里到底有没有一个「掩码」<span class="why">—— 有，但它是输出规格，不是过滤器</span></summary>
+  <div class="body">
+  <p>论文的伪代码写成两步：先 <code>sdd(x, w1, topology)</code>，再 <code>dsd(..., w2)</code>。
+  <em><b>sdd</b> = sparse ← dense × dense，<b>dsd</b> = dense ← sparse × dense。</em></p>
+  <p>那个 <code>topology</code> 参数，就是你直觉里的「掩码」——
+  <b>它是三者里最接近的一个</b>。但有两处关键差别：</p>
+  <ul>
+    <li><b>它是<em>块级</em>的索引结构，不是元素级的布尔矩阵。</b>
+      <em>编码方式叫 Blocked-CSR-COO —— 一堆块坐标，不是一张跟结果同样大的表。</em></li>
+    <li><b>它是<em>输出规格</em>，不是事后过滤器。</b>
+      <em>它告诉 kernel「请生产这些块」，而不是「算完之后把这些扔掉」。
+      方向完全相反 —— 这也是为什么灰色区域不占算力也不占内存。</em></li>
+  </ul>
+  <p>到了 grouped GEMM 这一代，<b>连这个都不需要了</b> ——
+  因为一维的分段用段边界就能完整描述，不必绕道稀疏矩阵。
+  <em>这就是 <a href="#s8">§8</a> 说的「同一件事的两种记法」，在这里能看到最具体的差别。</em></p>
+  </div>
+  </details>
 
   <h3>记法一 · 对齐 + 段长（DeepGEMM 的 contiguous 布局）</h3>
   <p>既然每段都已经对齐到 tile 高度，那<b>一个 tile 里的行必然同属一个专家</b>。
