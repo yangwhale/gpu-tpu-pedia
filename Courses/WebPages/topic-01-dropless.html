@@ -109,20 +109,25 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
     <span>标的 DeepSeek V3</span>
     <span>口径 一张卡 · 4 个路由专家</span>
     <span>参照 MegaBlocks arXiv 2211.15841</span>
-    <span>⏱ 20 分钟</span>
+    <span>含 GPU / TPU 两种实现对照</span>
+    <span>⏱ 35 分钟</span>
   </div>
 </div></header>
 
 <div class="wrap">
 
 <div class="tocbox">
-  <b>这一篇要回答的五个问题</b>
+  <b>这一篇要回答的问题</b>
   <ol>
     <li><a href="#s1">token 为什么会被丢掉？是谁要求的？</a></li>
     <li><a href="#s3">MegaBlocks 到底改了什么？</a></li>
-    <li><a href="#s5">这个能力的名字到底叫 block-sparse 还是 grouped GEMM？</a></li>
-    <li><a href="#s6">补齐到 128，跟 chunked prefill、PagedAttention 是一回事吗？</a></li>
-    <li><a href="#s8">V3 是真 dropless 还是近似的？</a></li>
+    <li><a href="#s4">一层 MoE 从头到尾，每一步张量是什么形状？烧多少算力？</a></li>
+    <li><a href="#s5">那个「掩码」到底是怎么弄出来的？硬件需要会跳过空块吗？</a></li>
+    <li><a href="#s7">为什么原来非得批量矩阵乘？现在这么算，创新在哪？</a></li>
+    <li><a href="#s8">这个能力的名字到底叫 block-sparse 还是 grouped GEMM？</a></li>
+    <li><a href="#s9">补齐到 128，跟 chunked prefill、PagedAttention 是一回事吗？</a></li>
+    <li><a href="#s11">TPU 上是不是也这么干？</a></li>
+    <li><a href="#s12">V3 是真 dropless 还是近似的？</a></li>
   </ol>
 </div>
 
@@ -425,9 +430,157 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
   <p>最后把补进去的那 256 行扔掉，按原顺序还原，乘上路由权重。<b>完。</b></p>
 </section>
 
-<!-- ══════════ 4 · 三方对照 ══════════ -->
+<!-- ══════════ 4 · 流水账 ══════════ -->
 <section id="s4">
-  <h2><span class="n">§4</span>trade-off：一张表看完</h2>
+  <h2><span class="n">§4</span>完整流水账：一层 MoE，每一步张量长什么样</h2>
+  <p class="lead">前面讲的是道理，这一节是<b>形状</b>。
+  从这张卡拿到 8,192 个 token 开始，到它把结果交回去为止，一步不跳。</p>
+
+  <table>
+    <thead><tr><th>步</th><th>做什么</th><th>出来的张量</th><th class="r">形状</th></tr></thead>
+    <tbody>
+      <tr><td class="r">1</td><td>进这一层<br><em>还是句子顺序</em></td><td><span class="k">x</span></td>
+          <td class="r">8,192 × 7,168</td></tr>
+      <tr><td class="r">2</td><td>路由打分<br><em>一个小矩阵乘，7,168 → 256</em></td><td><span class="k">logits</span></td>
+          <td class="r">8,192 × 256</td></tr>
+      <tr><td class="r">3</td><td>取 top-8</td><td><span class="k">idx</span> / <span class="k">w</span></td>
+          <td class="r">8,192 × 8</td></tr>
+      <tr><td class="r">4</td><td>看这 8 个专家落在几个<b>节点</b><br>
+          <em>分组路由限死最多 4 个 → 决定往外发几份</em></td><td>—</td><td class="r">≤ 4 份 / token</td></tr>
+      <tr class="hl"><td class="r">5</td><td><b>dispatch（all-to-all）</b><br>
+          <em>收进来的是<b>全网</b>要交给我这 4 个专家算的行</em></td>
+          <td><span class="k">recv_x</span><br><span class="k">counts</span></td>
+          <td class="r">65,536 × 7,168<br>4</td></tr>
+      <tr><td class="r">6</td><td>补齐：每段凑到 128 的倍数</td><td><span class="k">recv_x</span></td>
+          <td class="r">65,792 × 7,168</td></tr>
+      <tr class="hl"><td class="r">7</td><td><b>grouped GEMM ①</b><br>
+          <em>gate 和 up 拼成一个 7,168 → 4,096</em></td><td><span class="k">h</span></td>
+          <td class="r">65,792 × 4,096</td></tr>
+      <tr><td class="r">8</td><td>SwiGLU（逐元素）</td><td><span class="k">h</span></td>
+          <td class="r">65,792 × 2,048</td></tr>
+      <tr class="hl"><td class="r">9</td><td><b>grouped GEMM ②</b><br><em>down：2,048 → 7,168</em></td>
+          <td><span class="k">y</span></td><td class="r">65,792 × 7,168</td></tr>
+      <tr><td class="r">10</td><td>扔掉补的 256 行</td><td><span class="k">y</span></td>
+          <td class="r">65,536 × 7,168</td></tr>
+      <tr><td class="r">11</td><td><b>combine（all-to-all 回程）</b><br>
+          <em>每个 token 的 8 份结果按路由权重加权求和</em></td><td><span class="k">out</span></td>
+          <td class="r">8,192 × 7,168</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note i">
+    <span class="t">第 5 步有一个容易漏掉的好处：排序是<b>顺路</b>做的</span>
+    <b>没有「先收下来、再排一次序」这个额外步骤。</b>
+    <em>DeepEP 的 <code>dispatch</code> 直接就把行按专家分好段吐出来，
+    还顺手返回 <code>num_recv_tokens_per_expert_list</code> —— 每个专家实收多少。
+    它的参数表里就有 <code>expert_alignment</code>（默认 1），
+    <b>补齐到 128 这件事也是在通信里顺手做的</b>，不用事后再搬一趟内存。</em><br>
+    <b>所以「重排」在真实系统里不是一个独立开销</b> —— 它藏在 all-to-all 的落地写入里。
+  </div>
+
+  <h3>那这一步烧掉多少算力</h3>
+  <p>一个专家对一行 token 要做三次矩阵乘（gate、up、down），
+  每次都是 <span class="k">7,168 × 2,048</span> 量级：</p>
+
+  <div class="eq"><span class="c">// 每一行 token 在一个专家里的 FLOP</span>
+2 × 7,168 × 2,048 × 3     = <span class="r">88.08 MFLOP</span>
+
+<span class="c">// 这张卡这一层，四种记账方式</span>
+真实   65,536 行           = <span class="r">5.772 TFLOP</span>   <span class="c">← 分母</span>
+补齐   65,792 行           = <span class="r">5.795 TFLOP</span>   <span class="c">+0.39%</span>
+cf=1.5 98,304 行           = <span class="y">8.659 TFLOP</span>   <span class="c">+50.0%</span>
+不分组 65,792 行 × 4 专家   = <span class="y">23.180 TFLOP</span>  <span class="c">4.00× ← 见下</span>
+
+<span class="c">// 通信那一侧（dispatch，FP8）</span>
+65,536 × 7,168 × 1 B      = <span class="r">448 MiB</span>  <span class="c">每卡每层</span></div>
+
+  <div class="note w">
+    <span class="t">最后那行 23.18 TFLOP 是理解整件事的钥匙</span>
+    <b>如果你把 65,792 行直接乘上「四个专家横着拼起来」的那块大权重，
+    数学上完全成立，一次矩阵乘搞定，形状还特别整齐 —— 但你要付 4 倍的算力。</b><br>
+    <em>分组矩阵乘存在的全部意义，就是把这 4× 砍回 1×，
+    同时<b>不</b>退回到「四个小矩阵乘分四次调用」。</em><br>
+    <b>专家越多这个倍数越大</b> —— 一张卡上住 8 个专家就是 8×。
+    <em>这也解释了为什么 EP 度数越高（每卡专家越少），这件事越好办。</em>
+  </div>
+</section>
+
+<!-- ══════════ 5 · 元数据 ══════════ -->
+<section id="s5">
+  <h2><span class="n">§5</span>kernel 怎么知道该算哪些块：三种记法，一件事</h2>
+  <p class="lead">「掩码矩阵是怎么弄出来的」——
+  答案是<b>它通常根本不是一个矩阵</b>，而是几个很小的一维数组。</p>
+
+  <p>要让一个 kernel 干这活，你只需要告诉它一件事：
+  <b>第 <em>i</em> 个待算的块，属于哪个专家、落在哪些行上。</b>
+  三套主流实现给出了三种编码，信息量完全一样。</p>
+
+  <h3>记法一 · 对齐 + 段长（DeepGEMM 的 contiguous 布局）</h3>
+  <p>既然每段都已经对齐到 tile 高度，那<b>一个 tile 里的行必然同属一个专家</b>。
+  于是「哪个 tile 归谁」就是一道除法，连查表都省了。</p>
+  <div class="note i">
+    <b>这才是「必须对齐」的真正原因</b> ——
+    <em>不是因为对齐了算得快，是因为对齐之后，
+    kernel 在一个 tile 的整个生命周期里只需要加载<b>一份</b>权重矩阵。
+    如果一个 tile 横跨两个专家，它就得中途换权重，内层循环立刻变复杂。</em>
+  </div>
+
+  <h3>记法二 · 掩码（DeepGEMM 的 masked 布局，decode 用）</h3>
+  <p>形状固定成 <span class="k">[专家数, 最大行数, K]</span>，
+  另给一个长度等于专家数的小数组，说明每个专家<b>前多少行是真的</b>。
+  README 的原话是 <em>“By providing a mask tensor, the kernel computes only the valid portions.”</em></p>
+  <p><b>所以「掩码」是一个长度为 4 的整数数组，不是一张 65,792 × 4 的布尔表。</b>
+  <em>它甚至不参与运算 —— kernel 读它来决定循环跑到哪儿停。</em></p>
+
+  <h3>记法三 · 三张索引表（TPU 上的 megablox）</h3>
+  <p>JAX 里那个 Pallas 实现走的是第三条路：输入就是一个
+  <span class="k">group_sizes</span>（长度 = 专家数，<b>放在设备上</b>），
+  由一段预处理算出三张表：</p>
+  <table>
+    <thead><tr><th>表</th><th class="r">长度</th><th>含义</th></tr></thead>
+    <tbody>
+      <tr><td><span class="k">group_offsets</span></td><td class="r">专家数 + 1</td>
+        <td>每个专家从第几行开始 —— <em>就是 <code>group_sizes</code> 的前缀和</em></td></tr>
+      <tr><td><span class="k">group_ids</span></td><td class="r">tile 数 + 专家数</td>
+        <td><b>第 i 个 tile 归哪个专家</b></td></tr>
+      <tr><td><span class="k">m_tile_ids</span></td><td class="r">tile 数 + 专家数</td>
+        <td><b>第 i 个 tile 落在输出的第几块</b></td></tr>
+    </tbody>
+  </table>
+  <p>源码注释自己点破了血缘：<em>“This metadata is similar to row offsets in a CSR matrix.”</em>
+  —— <b>正是 MegaBlocks 那套 Blocked-CSR 的 JAX 版本。</b>
+  （这段代码在公开 JAX 的 <code>pallas/ops/tpu/megablox</code> 里，可以直接读。）</p>
+
+  <div class="note g">
+    <span class="t">三种记法的共同点，才是本质</span>
+    <b>它们全都是几百字节的小数组，而且全都待在<em>设备</em>上。</b>
+    <em>CPU 从头到尾不需要知道任何一个专家收了多少行。</em><br>
+    <b>这一点是整件事能成立的地基</b> —— §7 会讲为什么它比 kernel 本身还关键。
+  </div>
+
+  <h3>顺带回答：硬件需要「能跳过空块」的能力吗</h3>
+  <div class="note d">
+    <span class="t">不需要。一点都不需要。</span>
+    <b>真正被算的每一个块，都是一次<em>普普通通的稠密</em>小矩阵乘。</b>
+    <em>MXU / tensor core 从头到尾不知道外面那个大矩阵是稀疏的 ——
+    它收到的就是一对稠密小矩阵，照常乘。</em><br><br>
+    <b>「跳过」发生在<em>排班</em>层，不是<em>算术</em>层。</b>
+    <em>那些空白块不是「算出来是零」，也不是「被硬件跳过了」——
+    是 kernel 的 tile scheduler <b>压根没给它们派活</b>。</em><br><br>
+    <b>要跟真正的硬件稀疏分清楚：</b>
+    <em>2:4 structured sparsity 那种才需要专门的 sparse tensor core、需要权重满足特定模式。
+    <b>这里跟那个毫无关系</b>，同一批算术单元、同一条指令。</em>
+  </div>
+  <p>唯一真正需要的新能力是这一条 ——
+  <b>kernel 得能在设备端读一小段元数据，并据此决定每个 tile 干什么。</b>
+  <em>GPU 上靠 persistent kernel 里的 tile scheduler；
+  TPU 上靠 Pallas 的<b>标量预取</b>（把那三张索引表提前搬进标量内存，让 kernel 逐 tile 查）。</em>
+  <b>这是编程模型的能力，不是算术单元的能力。</b></p>
+</section>
+
+<!-- ══════════ 6 · 三方对照 ══════════ -->
+<section id="s6">
+  <h2><span class="n">§6</span>trade-off：一张表看完</h2>
   <p class="lead">同一张卡、同一步、同一组实收行数（65,536 行真数据）。</p>
 
   <table>
@@ -457,7 +610,7 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
       论文自己打的比方是「数据库的二级索引」。之所以划算，是因为块够大，
       元数据比真实数据便宜好几个量级。</em></li>
     <li><b>你被锁在块粒度上。</b>某个专家只收到 1 行，你照样得算满 128 行。
-      <em>这条在训练时无关痛痒，在 decode 时会要命 —— 见 §7。</em></li>
+      <em>这条在训练时无关痛痒，在 decode 时会要命 —— 见 §10。</em></li>
   </ol>
 
   <div class="note w">
@@ -472,9 +625,106 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
   </div>
 </section>
 
-<!-- ══════════ 5 · 名字 ══════════ -->
-<section id="s5">
-  <h2><span class="n">§5</span>这个能力到底叫什么：block-sparse 还是 grouped GEMM</h2>
+<!-- ══════════ 7 · 为什么原来非得 bmm ══════════ -->
+<section id="s7">
+  <h2><span class="n">§7</span>「把不同长度的段接起来连着乘」——<br>这么朴素的想法，为什么以前没人这么干</h2>
+  <p class="lead">先把话说明白：<b>你的直觉是对的，这里数学上一点创新都没有。</b>
+  真正的问题不是「想不到」，是「做出来打不过 <code>bmm</code>」。</p>
+
+  <h3>先看被淘汰的那个方案：for 循环</h3>
+  <p>「不同长度就分别算呗」——这个方案一直都存在，写出来五行：</p>
+  <div class="eq"><span class="c">// 谁都能写出来的版本</span>
+for e in range(4):
+    seg = x[offset[e] : offset[e+1]]      <span class="c">// 这个专家的那些行</span>
+    out[offset[e] : offset[e+1]] = seg @ W[e]</div>
+  <p><b>它是对的，而且它很慢。</b>三个原因，第一个是致命的：</p>
+
+  <table>
+    <thead><tr><th></th><th>问题</th><th>为什么致命</th></tr></thead>
+    <tbody>
+      <tr class="bad"><td><b>①</b></td><td><b>那个 <code>offset</code> 在 GPU 上</b></td>
+        <td>它是路由算出来的。要让 Python 的 <code>for</code> 用上它，
+        <b>必须把它取回 CPU</b> —— 一次 device-to-host 同步。<br>
+        <em>每层两次、58 层，整条流水线被砍成 116 段，GPU 每次都得等 CPU。
+        而且 <b>CUDA graph 直接用不了</b>，因为图要求形状固定。</em></td></tr>
+      <tr><td><b>②</b></td><td>kernel 启动次数</td>
+        <td>4 个专家 × 2 次 GEMM × 58 层 = <b>464 次 / 卡 / 步</b>，反向还要翻倍。
+        <em>每次几微秒，加起来是实打实的一块。</em></td></tr>
+      <tr><td><b>③</b></td><td>单个 GEMM 喂不饱卡</td>
+        <td>把一块几百上千个计算单元的加速器，
+        用一个只有一万多行的矩阵乘去填，尾巴上总有一批单元闲着。
+        <em>分四次，就闲四次。</em></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note w">
+    <span class="t">所以 <code>bmm</code> 当年是一笔<b>好交易</b>，不是一个错误</span>
+    <b>它一次 launch 解决全部四个专家，CPU 全程不用知道任何形状，
+    GPU 塞得满满的。代价只有一个：形状必须一样。</b><br>
+    <em>而在 2021–2022 年，这个代价看起来很便宜 ——
+    那时候 MoE 还是少数派架构，专家数少、多半是 top-1 或 top-2，
+    「补零凑齐」的浪费也就没那么显眼。</em>
+  </div>
+
+  <h3>那后来到底变了什么</h3>
+  <p><b>不是想法变了，是三件工程做成了。</b></p>
+  <ol>
+    <li><b>形状留在设备上，CPU 不再参与。</b>
+      <em>段长、段偏移、掩码全是 device tensor，kernel 自己读（§5 那三种记法）。
+      DeepEP 描述 decode 路径时那句 <em>“the layout is reused without CPU synchronization”</em>
+      说的就是这件事。</em>
+      <b>这一条直接干掉了 for 循环方案的①，也是全部收益里最大的一块。</b></li>
+    <li><b>一次 launch 干完所有 tile。</b>
+      <em>kernel 用固定的 grid 启动，内部有个调度器循环认领
+      「第 i 个 tile」，查表得知它属于哪个专家、要用哪块权重。
+      launch 次数从 464 回到跟 <code>bmm</code> 一样。</em></li>
+    <li><b>用一纸「契约」保住内层循环。</b>
+      <em>不管是 GPU 那边「每段对齐到 tile 高度」，
+      还是 TPU 那边「允许一个 tile 被访问两次」（§11），
+      目的都一样 —— <b>保证最内层还是一次纯粹的稠密小矩阵乘</b>。
+      这样几十年积累的 GEMM 内层优化一行都不用改。</em></li>
+  </ol>
+
+  <h3>还有一个不那么技术、但同样真实的原因</h3>
+  <p><b>值不值得。</b>写一个变长分组、还要打平 cuBLAS 的 kernel，是几个人月的活。
+  <em>2022 年 MoE 是少数派，这笔投入很难论证 —— 所以它当年是<b>一篇论文</b>，
+  而不是一个库里的默认选项。</em>
+  到了今天 MoE 成了大模型的主流形态，同一件事的性价比彻底翻转。</p>
+
+  <p>硬件趋势还在同一个方向上推：<b>加速器一代比一代宽</b>，
+  «一个矩阵乘要多大才能喂饱它» 的门槛一直在涨。
+  <em>于是「每个专家单独调一次」这个方案，会随着硬件变强而<b>相对变得更差</b>；
+  而「合成一次调用」的收益只增不减。</em></p>
+
+  <h3>硬件要求到底差在哪：一张表</h3>
+  <table>
+    <thead><tr><th></th><th>批量矩阵乘（bmm）</th><th>分组矩阵乘（grouped GEMM）</th></tr></thead>
+    <tbody>
+      <tr><td>形状什么时候知道</td><td>启动前，CPU 知道</td>
+          <td><b>运行时，而且只有设备知道</b></td></tr>
+      <tr><td>第 i 个矩阵在哪</td><td><code>base + i × 固定步长</code></td>
+          <td><b>查一张偏移表</b></td></tr>
+      <tr><td>怎么分派工作</td><td>grid 按形状算好，一个 tile 一个 block</td>
+          <td><b>固定 grid，kernel 内部逐个认领 tile</b></td></tr>
+      <tr><td>要不要 CPU 同步</td><td>不要</td><td>不要（<em>这是设计目标，不是附带</em>）</td></tr>
+      <tr class="hl"><td><b>算术单元</b></td><td>tensor core / MXU</td>
+          <td><b>完全一样，一条指令都没多</b></td></tr>
+      <tr><td>需要的新能力</td><td>—</td>
+          <td>设备端读元数据 + 间接寻址 + tile 调度器</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note g">
+    <span class="t">一句话回答「有什么创新」</span>
+    <b>创新不在矩阵乘法里，在<em>谁在什么时候知道形状</em>这件事上。</b>
+    <em>把「形状」从 CPU 的控制流里搬进 GPU 的数据流里 —— 就这一下，
+    「变长」从一个必须先解决掉的障碍，变成了一个普通的输入参数。</em>
+  </div>
+</section>
+
+<!-- ══════════ 8 · 名字 ══════════ -->
+<section id="s8">
+  <h2><span class="n">§8</span>这个能力到底叫什么：block-sparse 还是 grouped GEMM</h2>
   <p class="lead">同一件事，两代人用了两个名字。<b>今天该用后一个。</b></p>
 
   <p>把 §3 第 ③ 步那个能力抽象出来，它是一句话：</p>
@@ -510,7 +760,7 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
     <span class="t">所以 MegaBlocks 的历史地位该怎么讲</span>
     <b>它的贡献不是「发明了分组矩阵乘」。</b>
     <em>它的贡献是第一次把「MoE 可以完全不丢 token」做成一个能跑满硬件的实现，
-    并且用一组对照实验证明了这件事值得做</em>（见 §9 的三个数）。<br>
+    并且用一组对照实验证明了这件事值得做</em>（见 §13 的三个数）。<br>
     <b>但接口层面，今天大家用的不是它那套 block-sparse 编码，而是更直白的 grouped GEMM。</b>
     <em>讲课时可以说「MegaBlocks 把这条路走通了」，
     不要说「今天的 dropless 都是 MegaBlocks 那套」——不是。</em>
@@ -518,8 +768,8 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
 </section>
 
 <!-- ══════════ 6 · 128 是什么族 ══════════ -->
-<section id="s6">
-  <h2><span class="n">§6</span>补齐到 128，跟 chunked prefill 是一回事吗</h2>
+<section id="s9">
+  <h2><span class="n">§9</span>补齐到 128，跟 chunked prefill 是一回事吗</h2>
   <p class="lead">同一族思想，<b>但更贴切的对照是 PagedAttention 的 page，不是 chunked prefill。</b></p>
 
   <p>共同的那句话是：</p>
@@ -562,8 +812,8 @@ footer{border-top:1px solid var(--line);padding:24px 0 0;color:var(--gray2);font
 </section>
 
 <!-- ══════════ 7 · decode ══════════ -->
-<section id="s7">
-  <h2><span class="n">§7</span>为什么 decode 要换一套：128 在那儿就贵了</h2>
+<section id="s10">
+  <h2><span class="n">§10</span>为什么 decode 要换一套：128 在那儿就贵了</h2>
   <p class="lead">§1 埋的那个伏笔在这里兑现 —— 128 便宜与否，取决于分母。</p>
 
   <p>训练和 prefill 时，一个专家一步收上万行，补 127 行是 0.8%。
@@ -604,9 +854,72 @@ B × 64 × 8 ÷ 256          = <span class="r">2B</span>
   </div>
 </section>
 
-<!-- ══════════ 8 · V3 ══════════ -->
-<section id="s8">
-  <h2><span class="n">§8</span>V3 到底是真 dropless 还是近似的</h2>
+<!-- ══════════ 11 · TPU ══════════ -->
+<section id="s11">
+  <h2><span class="n">§11</span>TPU 那边不补齐 —— 同一个问题的另一种解法</h2>
+  <p class="lead">前面十节都默认「补齐到块」是唯一出路。<b>不是的。</b>
+  JAX 里那个 TPU 实现走了另一条，值得单独看，因为它正好补上了 MegaBlocks 论文留的那个口子。</p>
+
+  <p>MegaBlocks 在 §5.2 说了两句话：一是「我们把每组补齐到 128 的倍数」，
+  二是<b>「这个约束是可以去掉的，只要支持边缘的不完整块」</b>——
+  当时没做。<em>JAX 的 megablox 做了。</em></p>
+
+  <h3>它是怎么绕过补齐的</h3>
+  <p>核心就一句：<b>允许一个 tile 被访问两次。</b></p>
+  <p>假设 tile 高度 128，而专家 e1 从第 21,733 行开始 ——
+  这一行落在第 169 个 tile 的中间。那么这个 tile 会被排两次班：</p>
+  <ul>
+    <li>第一次算它属于 <b>e0</b> 的那部分（第 21,632–21,732 行），用 e0 的权重</li>
+    <li>第二次算它属于 <b>e1</b> 的那部分（第 21,733 行往后），用 e1 的权重</li>
+    <li>两次结果<b>累加</b>进同一个输出块 ——
+      kernel 里靠「这个 tile 的专家号跟上一个 tile 不一样吗」来决定要不要清零累加器</li>
+  </ul>
+
+  <p>代价因此换了一种形式，而且源码注释直接把上界写出来了：</p>
+  <div class="eq"><span class="c">// 要执行的 tile 总数，夹在这两个数之间</span>
+tiles_m  ≤  实际执行的 tile 数  ≤  tiles_m + <span class="r">专家数 − 1</span>
+
+<span class="c">// 代进我们这张卡（65,536 行、tile 高 128、4 个专家）</span>
+tiles_m = 65,536 ÷ 128     = 512
+四段起点 0 / 21,733 / 36,737 / 54,719
+         后三个都不在 128 的边界上 → <span class="r">3 次额外访问</span>
+
+实际执行 515 个 tile        = 等效 <span class="r">65,920 行</span>
+                            = 多算 <span class="r">0.59%</span>
+
+<span class="c">// 对照 GPU 那条路（补齐到 65,792 行）</span>
+                            = 多算 <span class="r">0.39%</span></div>
+
+  <div class="note i">
+    <span class="t">两条路，同一个量级，赔的东西不一样</span>
+    <table style="margin:10px 0 0">
+      <thead><tr><th></th><th>补齐（DeepGEMM 的 contiguous）</th><th>重复访问（JAX megablox）</th></tr></thead>
+      <tbody>
+        <tr><td>段长要不要动</td><td>要，往上凑到块的整数倍</td><td><b>不动，原样就是实收行数</b></td></tr>
+        <tr><td>浪费的形式</td><td>补进去的<b>零行</b></td><td>跨界 tile 的<b>重复执行</b></td></tr>
+        <tr><td>上界</td><td>每专家 &lt; 一个块</td><td>总共 &lt; 专家数 − 1 个块</td></tr>
+        <tr><td>内层循环</td><td>最简单：一个 tile 一份权重</td><td>要处理「块内换专家」和累加器清零</td></tr>
+        <tr class="hl"><td>这个例子里</td><td>+0.39%</td><td>+0.59%</td></tr>
+      </tbody>
+    </table>
+    <p style="margin:12px 0 0"><b>谁更好取决于专家数和 tile 高度的比例，不存在通用答案。</b>
+    <em>专家多、每个专家行数少的时候，「补齐」的上界（专家数 × 127 行）会迅速变难看，
+    「重复访问」的上界（专家数 × 1 个 tile）其实同阶 —— 真正的差别在内层循环的复杂度，
+    以及要不要在通信阶段动数据布局。</em></p>
+  </div>
+
+  <div class="note g">
+    <span class="t">一个很好的旁证</span>
+    <b>那份 JAX 代码的注释里，把这套元数据形容成
+    <em>“similar to row offsets in a CSR matrix”</em>。</b><br>
+    <em>而 MegaBlocks 论文的编码就叫 Blocked-CSR-COO。同一个血统，隔了三年，
+    在另一种加速器上、用另一种语言重写了一遍，还顺手把当年没做的那件事做了。</em>
+  </div>
+</section>
+
+<!-- ══════════ 12 · V3 ══════════ -->
+<section id="s12">
+  <h2><span class="n">§12</span>V3 到底是真 dropless 还是近似的</h2>
   <p class="lead">这个问题要拆成两问，答案不一样。</p>
 
   <h3>问一：token 层面，丢不丢？</h3>
@@ -668,8 +981,8 @@ B × 64 × 8 ÷ 256          = <span class="r">2B</span>
 </section>
 
 <!-- ══════════ 9 · MegaBlocks 的数字 ══════════ -->
-<section id="s9">
-  <h2><span class="n">§9</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
+<section id="s13">
+  <h2><span class="n">§13</span>MegaBlocks 论文的三个数，以及它们能证明什么</h2>
 
   <ol>
     <li><b>丢 token 是真的伤质量。</b>同一组对照里，容量系数取 1（会丢）的 MoE
@@ -705,8 +1018,8 @@ B × 64 × 8 ÷ 256          = <span class="r">2B</span>
 </section>
 
 <!-- ══════════ 10 · 收 ══════════ -->
-<section id="s10">
-  <h2><span class="n">§10</span>回到主线</h2>
+<section id="s14">
+  <h2><span class="n">§14</span>回到主线</h2>
   <p>专题一从头到尾在讲一件事：<b>硬件的形状会渗进模型的定义里</b>。</p>
   <p>分组路由那一节是最赤裸的一例 —— <code>topk_group = 4</code> 跟模型质量毫无关系，
   它的存在只是为了让 all-to-all 少跨机。<b>硬件划线，模型让步。</b></p>
@@ -726,7 +1039,10 @@ B × 64 × 8 ÷ 256          = <span class="r">2B</span>
   ｜ <a href="topic-01-lecture.html">讲义</a></p>
   <p style="margin-top:8px">出处：MegaBlocks（arXiv 2211.15841，§4 / §5.2 / Figure 3 / Figure 4）、
   DeepSeek-V3 Technical Report（arXiv 2412.19437，§2.1.2 / §3.2.2 / No Token-Dropping）、
-  DeepGEMM 与 DeepEP 仓库 README。<br>
+  DeepGEMM 与 DeepEP 仓库 README、
+  JAX <code>jax/experimental/pallas/ops/tpu/megablox/gmm.py</code>（<code>make_group_metadata</code> 的文档字符串与注释）。<br>
+  <em>§7 里 for 循环那三条代价、以及硬件变宽会让它相对更差的那个判断，
+  是从公开材料推出来的因果链，不是哪份文档的原话 —— 推导写在正文里，请当作论证而不是引用。</em><br>
   <em>§1 的量级由公开口径推导而来（DeepEP README 的 8K token/rank + V3 论文的 EP=64），
   推导链写在正文里，不是实测数据；§1 那四个专家的实收行数是为讲解构造的一组代表性数字，
   合计对齐到推导出的 65,536。</em></p>
