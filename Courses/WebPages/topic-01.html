@@ -4776,6 +4776,122 @@ fp32   49,152 × 129,280 × 4 B = <span class="r">23.67 GiB</span>   <span class
     这就是预训练和蒸馏的分工。</em>
   </div>
 
+
+  <h4>⑤ 展开讲讲蒸馏 —— 它凭什么比 one-hot 快，以及快多少</h4>
+
+  <p class="lead">上面说了 one-hot 在期望上是对的。<b>它唯一的毛病是慢。</b>
+  蒸馏做的事只有一件：<b>把那个硬标签换成老师模型输出的完整分布。</b>
+  就这一下，换来的东西超乎直觉 —— 下面的数字全部出自
+  Hinton / Vinyals / Dean 2015，<em>Distilling the Knowledge in a Neural Network</em>
+  （arXiv:1503.02531）。</p>
+
+  <div class="note info">
+    <span class="t">第一层：老师真正教的，是那些「小到没意义」的概率之间的比值</span>
+    <em>「one version of a 2 may be given a probability of 10<sup>−6</sup> of being a 3
+    and 10<sup>−9</sup> of being a 7 whereas for another version it may be the other
+    way around. <b>This is valuable information that defines a rich similarity
+    structure over the data</b>.」</em><br>
+    百万分之一和十亿分之一都小到不值一提，<b>但它们的比值有意义</b> ——
+    它说的是「这个 2 写得偏 3，不偏 7」。
+    <em>这就是后来大家说的 dark knowledge：老师在答案之外，
+    还顺带交出了一张「谁像谁」的关系图。</em><br>
+    <b>one-hot 把这张图整个扔了。</b>
+  </div>
+
+  <div class="eq"><span class="c">// 同一个位置，两种标签下的梯度</span>
+one-hot   ∂L/∂logit<sub>i</sub> = p<sub>i</sub> − y<sub>i</sub>   <span class="c">y 是 0/1 → 那 129,279 个错词的目标全是 0，</span>
+                                <span class="c">   而模型本来就给它们 ~0 ⇒ <span class="r">这一步它们几乎没有梯度</span></span>
+
+软标签    ∂L/∂logit<sub>i</sub> = p<sub>i</sub> − q<sub>i</sub>   <span class="c">q 是老师给的值 ⇒ <span class="r">每个跟老师不一致的词都拿到推力</span></span>
+                                <span class="c">   有的往上推、有的往下压，不是只有一个赢家</span></div>
+
+  <div class="note warn">
+    <span class="t">第二层：one-hot 是抽样，所以它抖 —— 老师的分布不抖</span>
+    <em>「When the soft targets have high entropy, they provide <b>much more
+    information per training case</b> than hard targets and <b>much less variance
+    in the gradient between training cases</b>, so the small model can often be
+    trained on <b>much less data</b> than the original cumbersome model and using
+    <b>a much higher learning rate</b>.」</em><br>
+    回到上一节那个硬币比喻：<b>one-hot 是每次抛一次硬币</b>，同一个前缀
+    这次抽到「不错」、下次抽到「很好」，梯度方向来回晃，只能靠海量样本平均掉。
+    <em>老师直接把那枚硬币的偏向报给你 —— 每次都一样，没有噪声要平均。</em><br>
+    <b>论文里那句「可以用高得多的学习率」，就是这么来的。</b>
+  </div>
+
+  <div class="note ok">
+    <span class="t">顺带算一笔信息账（这段是我按词表大小推的，不是论文原文）</span>
+    <div class="eq">one-hot 每个位置最多携带  log<sub>2</sub>(129,280) ≈ <span class="r">17 bit</span>   <span class="c">// 「是这 12.9 万个词里的哪一个」</span>
+软分布 每个位置携带      整条 <span class="r">129,280 维</span> 的形状       <span class="c">// 每一维都是一条约束</span></div>
+    <b>同样跑一次 forward、同样付那 31.56 GiB 的 logits，拿回来的监督信号完全不是一个量级。</b>
+    <em>算力一分没多花，信息多了几个数量级 —— 这就是「快」的来源。</em>
+  </div>
+
+  <h4>那到底快多少倍 —— 三组实测</h4>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>实验</th><th>硬标签</th><th>软标签（蒸馏）</th><th>结论</th></tr></thead>
+    <tbody>
+      <tr class="hl"><td><b>语音识别 · 只给 3% 数据</b><br><span class="sub">论文 Table 5</span></td>
+        <td>测试帧准确率 <b>44.5%</b><br><span class="sub">严重过拟合，只能早停</span></td>
+        <td>测试帧准确率 <b>57.0%</b><br><span class="sub">没early stop，自己收敛</span></td>
+        <td><b>全量数据的基线是 58.9%</b> ——<br><b>1/33 的数据，只差 1.9 个点</b></td></tr>
+      <tr><td><b>MNIST</b><br><span class="sub">大网 1200 单元 / 小网 800 单元</span></td>
+        <td>小网自己训 <b>146 个错</b><br><span class="sub">大网 67 个错</span></td>
+        <td>小网学软标签（T=20）<br><b>74 个错</b></td>
+        <td>差距 146−67 = 79 个，<br>蒸馏补回 146−74 = 72 个<br><b>= 91%</b> <span class="sub">（这一步是我算的）</span></td></tr>
+      <tr><td><b>10 个模型的 ensemble</b><br><span class="sub">语音，帧分类准确率</span></td>
+        <td colspan="2">把 ensemble 的收益蒸进单个模型</td>
+        <td>原文：<b>「More than 80% of the
+          improvement … is transferred」</b></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note danger">
+    <span class="t">最硬的那个数字：33 倍的数据效率</span>
+    <b>百分之三的数据 = 三十三分之一。</b>
+    同样的模型、同样的 3% 数据，<b>换标签这一件事</b>把测试准确率从
+    <b>44.5%</b> 抬到 <b>57.0%</b>，逼近拿了三十三倍数据的那条基线（58.9%）。
+    <em>注意训练准确率反而是硬标签那组更高（67.3% vs 65.4%）——
+    它不是学不动，是在背那 3% 的数据。</em><br>
+    <b>所以蒸馏省的不是算力，是数据；换来的不是拟合，是泛化。</b>
+  </div>
+
+  <div class="note ok">
+    <span class="t">🪄 最反直觉的一个实验：让它学一个从没见过的类</span>
+    <b>把训练集里的数字 3 全部删掉</b> —— 对蒸馏出来的那个模型来说，
+    3 是一个传说中的数字，一次都没见过。
+    <div class="eq">直接测      206 个错，其中 133 个错在那 1,010 个 3 上
+<span class="c">// 错因是 3 这一类的 bias 学得太低（它从没被正例推高过）</span>
+bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
+         → <span class="r">98.6%</span> 的 3 认对了，<b>而它从没见过一个 3</b></div>
+    <b>老师从来没有直接教过 3。</b>但它在教 8、教 5 的时候，
+    每一次都顺带说了一句「这个有点像 3」——<em>那张关系图里，
+    3 的位置是被周围所有类挤出来的。</em>
+  </div>
+
+  <div class="note warn">
+    <span class="t">⚠️ 温度必须调高，否则等于没蒸</span>
+    老师自己也是拿 one-hot 训出来的，所以它在 T=1 时的输出<b>同样接近 one-hot</b> ——
+    那些 10<sup>−6</sup> 和 10<sup>−9</sup> 全被压在地板上，你什么都学不到。
+    <b>升温就是把地板上的东西照亮。</b>
+    <div class="eq"><span class="c">// 高温极限下，蒸馏退化成直接对齐 logits（论文 Eq. 4，要求 logits 逐样本零均值）</span>
+∂C/∂z<sub>i</sub> ≈ (1 / N·T²) · (z<sub>i</sub> − v<sub>i</sub>)
+<span class="c">// 推论：梯度按 1/T² 衰减 ⇒ 软硬两个损失混用时，软的那项要乘回 T² 才不会被压没</span></div>
+    <b>有多要紧？论文里提到另一组人也做蒸馏，但用的是 T=1</b> ——
+    他们只补回了大小模型差距的 <b>28%</b>，而升温之后是 <b>80% 以上</b>。
+    <em>同一个方法，温度选错，收益掉到三分之一。</em>
+  </div>
+
+  <div class="note info">
+    <span class="t">但别忘了蒸馏的前提：要先有一个老师</span>
+    <b>软标签的信息不是凭空出现的，是老师当年用海量 one-hot 一点点平均出来的。</b>
+    蒸馏做的是<em>把那份已经平均好的结果直接交出去</em>，省掉重走一遍的成本。<br>
+    <b>所以预训练仍然是唯一能「无中生有」的那一步 ——
+    它慢，但它不需要老师。</b>
+    <em>这也解释了为什么 V3 这一级的模型自己是拿 one-hot 硬训出来的，
+    而它的小尺寸版本可以蒸。</em>
+  </div>
+
   <div class="note ok">
     <span class="t">顺带：lm_head 里的 LM 是什么</span>
     <b>LM = Language Model</b>，语言模型。<b>head（头）</b>是骨干网络上面接的
