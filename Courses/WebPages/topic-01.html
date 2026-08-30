@@ -514,7 +514,7 @@ footer a{text-decoration:none}
         <thead><tr><th>选项</th><th>存法</th><th style="text-align:right">每 token 每层</th>
           <th style="text-align:right">全长</th><th style="text-align:right">相对 MHA</th></tr></thead>
         <tbody>
-          <tr><td>约 500 GB</td><td><b>MHA</b> · 每个头各存一份（最传统）</td><td class="n">32,768</td>
+          <tr><td>约 500 GB</td><td><b>MHA</b> · <b>128 个头</b>各存一份（最传统）</td><td class="n">32,768</td>
               <td class="n" data-v="kvMha">488.00 GiB</td><td class="n">1×</td></tr>
           <tr><td>约 30 GB</td><td><b>GQA</b> · 128 个头分 <b>8 组</b>，每 16 个共用一份（Llama 那一类）</td><td class="n">2,048</td>
               <td class="n" data-v="kvGqa">30.50 GiB</td><td class="n">16×</td></tr>
@@ -990,7 +990,7 @@ else:
         <line x1="277.5" y1="40" x2="277.5" y2="70"/><line x1="325" y1="40" x2="325" y2="70"/>
         <line x1="372.5" y1="40" x2="372.5" y2="70"/>
       </g>
-      <text x="40" y="88" class="svgsm">8 个头 × 每头 d/8　—— 拼起来一个字节不多不少，「头」只是把残差流切开</text>
+      <text x="40" y="88" class="svgsm">头数 × 每头维度 = d　—— 拼起来一个字节不多不少，「头」只是把残差流切开（这里画 8 个只是示意，画几个都成立）</text>
 
       <text x="40" y="124" class="svglbl" fill="#174ea6">② V3 的 MLA　—— 128 个头 × 每头输出 128 维 = <tspan font-weight="700">16,384</tspan></text>
       <rect x="40" y="134" width="868" height="30" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
@@ -1153,80 +1153,101 @@ else:
   </div>
 
   <figure class="fbox">
-  <svg viewBox="0 0 1000 260" role="img" aria-label="MHA MQA GQA MLA 四代注意力的 KV 存储对比">
+  <svg viewBox="0 0 1000 288" role="img" aria-label="MHA MQA GQA MLA 四代注意力的 KV 存储对比，全部按 128 个头计算">
     <g>
       <!-- MHA -->
       <text x="16" y="22" class="svglbl" fill="#202124">MHA · 每头一份 KV</text>
       <text x="16" y="40" class="svgsm">2017 · Transformer 原版</text>
-      <g fill="#d93025">
-        <rect x="16" y="52" width="13" height="30" rx="2"/><rect x="33" y="52" width="13" height="30" rx="2"/>
-        <rect x="50" y="52" width="13" height="30" rx="2"/><rect x="67" y="52" width="13" height="30" rx="2"/>
-        <rect x="84" y="52" width="13" height="30" rx="2"/><rect x="101" y="52" width="13" height="30" rx="2"/>
-        <rect x="118" y="52" width="13" height="30" rx="2"/><rect x="135" y="52" width="13" height="30" rx="2"/>
-      </g>
-      <text x="16" y="100" class="svgsm">8 个 Q 头 ↔ 8 份 KV</text>
-      <rect x="16" y="112" width="132" height="26" rx="4" fill="#fce8e6" stroke="#d93025"/>
-      <text x="82" y="130" text-anchor="middle" class="svgnum" fill="#a50e0e">32,768 数</text>
-      <text x="16" y="158" class="svgsm">质量最好</text>
-      <text x="16" y="174" class="svgsm" fill="#d93025">cache 最大</text>
+      <rect x="16" y="52" width="148" height="22" rx="4" fill="#d93025"/>
+      <text x="90" y="67" text-anchor="middle" class="svgsm" fill="#fff">128 个 Q 头</text>
+      <line x1="25" y1="74" x2="25" y2="96" stroke="#d93025" stroke-width=".9"/>
+      <line x1="43.5" y1="74" x2="43.5" y2="96" stroke="#d93025" stroke-width=".9"/>
+      <line x1="62" y1="74" x2="62" y2="96" stroke="#d93025" stroke-width=".9"/>
+      <line x1="80.5" y1="74" x2="80.5" y2="96" stroke="#d93025" stroke-width=".9"/>
+      <line x1="99" y1="74" x2="99" y2="96" stroke="#d93025" stroke-width=".9"/>
+      <line x1="117.5" y1="74" x2="117.5" y2="96" stroke="#d93025" stroke-width=".9"/>
+      <line x1="136" y1="74" x2="136" y2="96" stroke="#d93025" stroke-width=".9"/>
+      <line x1="154.5" y1="74" x2="154.5" y2="96" stroke="#d93025" stroke-width=".9"/>
+      <rect x="16" y="96" width="148" height="20" rx="3" fill="#fce8e6" stroke="#d93025"/>
+      <line x1="34.5" y1="96" x2="34.5" y2="116" stroke="#d93025" stroke-width=".7"/>
+      <line x1="53" y1="96" x2="53" y2="116" stroke="#d93025" stroke-width=".7"/>
+      <line x1="71.5" y1="96" x2="71.5" y2="116" stroke="#d93025" stroke-width=".7"/>
+      <line x1="90" y1="96" x2="90" y2="116" stroke="#d93025" stroke-width=".7"/>
+      <line x1="108.5" y1="96" x2="108.5" y2="116" stroke="#d93025" stroke-width=".7"/>
+      <line x1="127" y1="96" x2="127" y2="116" stroke="#d93025" stroke-width=".7"/>
+      <line x1="145.5" y1="96" x2="145.5" y2="116" stroke="#d93025" stroke-width=".7"/>
+      <text x="16" y="132" class="svgsm">128 个 Q 头 ↔ 128 份 KV</text>
+      <rect x="16" y="140" width="148" height="26" rx="4" fill="#fce8e6" stroke="#d93025"/>
+      <text x="56" y="158" text-anchor="middle" class="svgnum" fill="#a50e0e">32,768 数</text>
+      <text x="156" y="158" text-anchor="end" class="svgnum" fill="#a50e0e">1×</text>
+      <text x="16" y="180" class="svgsm">488.00 GiB / 128K 上下文</text>
+      <text x="16" y="198" class="svgsm">质量最好</text>
+      <text x="16" y="214" class="svgsm" fill="#d93025">cache 最大</text>
 
       <!-- MQA -->
       <text x="256" y="22" class="svglbl" fill="#202124">MQA · 所有头共用一份</text>
       <text x="256" y="40" class="svgsm">2019 · Shazeer</text>
-      <g fill="#f9ab00">
-        <rect x="256" y="52" width="13" height="30" rx="2"/><rect x="273" y="52" width="13" height="30" rx="2"/>
-        <rect x="290" y="52" width="13" height="30" rx="2"/><rect x="307" y="52" width="13" height="30" rx="2"/>
-        <rect x="324" y="52" width="13" height="30" rx="2"/><rect x="341" y="52" width="13" height="30" rx="2"/>
-        <rect x="358" y="52" width="13" height="30" rx="2"/><rect x="375" y="52" width="13" height="30" rx="2"/>
-      </g>
-      <path d="M262 86 L318 100 M279 86 L318 100 M296 86 L318 100 M313 86 L318 100
-               M330 86 L318 100 M347 86 L318 100 M364 86 L318 100 M381 86 L318 100"
-            stroke="#f9ab00" stroke-width=".9" fill="none"/>
-      <text x="256" y="112" class="svgsm">8 个 Q 头 ↔ 1 份 KV</text>
-      <rect x="256" y="118" width="52" height="26" rx="4" fill="#fef7e0" stroke="#f9ab00"/>
-      <text x="282" y="136" text-anchor="middle" class="svgnum" fill="#b06000">÷8</text>
-      <text x="256" y="164" class="svgsm">cache 骤降</text>
-      <text x="256" y="180" class="svgsm" fill="#d93025">质量掉得明显</text>
+      <rect x="256" y="52" width="148" height="22" rx="4" fill="#f9ab00"/>
+      <text x="330" y="67" text-anchor="middle" class="svgsm" fill="#fff">128 个 Q 头</text>
+      <polygon points="256,74 404,74 338,96 322,96" fill="#fef7e0" stroke="#f9ab00" stroke-width=".8"/>
+      <rect x="322" y="96" width="16" height="20" rx="3" fill="#fef7e0" stroke="#f9ab00"/>
+      <text x="256" y="132" class="svgsm">128 个 Q 头 ↔ 1 份 KV</text>
+      <rect x="256" y="140" width="148" height="26" rx="4" fill="#fef7e0" stroke="#f9ab00"/>
+      <text x="296" y="158" text-anchor="middle" class="svgnum" fill="#b06000">256 数</text>
+      <text x="396" y="158" text-anchor="end" class="svgnum" fill="#b06000">÷128</text>
+      <text x="256" y="180" class="svgsm">约 3.81 GiB</text>
+      <text x="256" y="198" class="svgsm">cache 骤降</text>
+      <text x="256" y="214" class="svgsm" fill="#d93025">质量掉得明显</text>
 
       <!-- GQA -->
       <text x="496" y="22" class="svglbl" fill="#202124">GQA · 分组共享</text>
       <text x="496" y="40" class="svgsm">2023 · Ainslie 等</text>
-      <g fill="#1e8e3e">
-        <rect x="496" y="52" width="13" height="30" rx="2"/><rect x="513" y="52" width="13" height="30" rx="2"/>
-        <rect x="530" y="52" width="13" height="30" rx="2"/><rect x="547" y="52" width="13" height="30" rx="2"/>
-        <rect x="564" y="52" width="13" height="30" rx="2"/><rect x="581" y="52" width="13" height="30" rx="2"/>
-        <rect x="598" y="52" width="13" height="30" rx="2"/><rect x="615" y="52" width="13" height="30" rx="2"/>
-      </g>
-      <path d="M502 86 L536 98 M519 86 L536 98 M536 86 L536 98 M553 86 L536 98
-               M570 86 L604 98 M587 86 L604 98 M604 86 L604 98 M621 86 L604 98"
-            stroke="#1e8e3e" stroke-width=".9" fill="none"/>
-      <text x="496" y="112" class="svgsm">8 个 Q 头 ↔ 2 份 KV</text>
-      <rect x="496" y="118" width="70" height="26" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
-      <text x="531" y="136" text-anchor="middle" class="svgnum" fill="#0d652d">÷4</text>
-      <text x="496" y="164" class="svgsm">折中，成了业界默认</text>
+      <rect x="496" y="52" width="148" height="22" rx="4" fill="#1e8e3e"/>
+      <text x="570" y="67" text-anchor="middle" class="svgsm" fill="#fff">128 个 Q 头</text>
+      <polygon points="496,74 514.5,74 509,96 496,96" fill="#e6f4ea" stroke="#1e8e3e" stroke-width=".7"/>
+      <rect x="496" y="96" width="13" height="20" rx="2" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <polygon points="514.5,74 533,74 528,96 515,96" fill="#e6f4ea" stroke="#1e8e3e" stroke-width=".7"/>
+      <rect x="515" y="96" width="13" height="20" rx="2" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <polygon points="533,74 551.5,74 547,96 534,96" fill="#e6f4ea" stroke="#1e8e3e" stroke-width=".7"/>
+      <rect x="534" y="96" width="13" height="20" rx="2" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <polygon points="551.5,74 570,74 566,96 553,96" fill="#e6f4ea" stroke="#1e8e3e" stroke-width=".7"/>
+      <rect x="553" y="96" width="13" height="20" rx="2" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <polygon points="570,74 588.5,74 585,96 572,96" fill="#e6f4ea" stroke="#1e8e3e" stroke-width=".7"/>
+      <rect x="572" y="96" width="13" height="20" rx="2" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <polygon points="588.5,74 607,74 604,96 591,96" fill="#e6f4ea" stroke="#1e8e3e" stroke-width=".7"/>
+      <rect x="591" y="96" width="13" height="20" rx="2" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <polygon points="607,74 625.5,74 623,96 610,96" fill="#e6f4ea" stroke="#1e8e3e" stroke-width=".7"/>
+      <rect x="610" y="96" width="13" height="20" rx="2" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <polygon points="625.5,74 644,74 642,96 629,96" fill="#e6f4ea" stroke="#1e8e3e" stroke-width=".7"/>
+      <rect x="629" y="96" width="13" height="20" rx="2" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="496" y="132" class="svgsm">128 个 Q 头 ↔ 8 份 KV（每 16 个共用）</text>
+      <rect x="496" y="140" width="148" height="26" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="536" y="158" text-anchor="middle" class="svgnum" fill="#0d652d">2,048 数</text>
+      <text x="636" y="158" text-anchor="end" class="svgnum" fill="#0d652d">÷16</text>
+      <text x="496" y="180" class="svgsm">30.50 GiB</text>
+      <text x="496" y="198" class="svgsm">折中，成了业界默认</text>
 
       <!-- MLA -->
       <text x="736" y="22" class="svglbl" fill="#174ea6">MLA · 压成一个隐向量 ⭐</text>
       <text x="736" y="40" class="svgsm">2024 · DeepSeek</text>
-      <g fill="#1a73e8">
-        <rect x="736" y="52" width="13" height="30" rx="2"/><rect x="753" y="52" width="13" height="30" rx="2"/>
-        <rect x="770" y="52" width="13" height="30" rx="2"/><rect x="787" y="52" width="13" height="30" rx="2"/>
-        <rect x="804" y="52" width="13" height="30" rx="2"/><rect x="821" y="52" width="13" height="30" rx="2"/>
-        <rect x="838" y="52" width="13" height="30" rx="2"/><rect x="855" y="52" width="13" height="30" rx="2"/>
-      </g>
-      <path d="M742 86 L800 98 M759 86 L800 98 M776 86 L800 98 M793 86 L800 98
-               M810 86 L800 98 M827 86 L800 98 M844 86 L800 98 M861 86 L800 98"
-            stroke="#1a73e8" stroke-width=".9" fill="none"/>
-      <text x="736" y="112" class="svgsm">存的不是 KV，是一个压缩向量</text>
-      <rect x="736" y="118" width="34" height="26" rx="4" fill="#e8f0fe" stroke="#1a73e8"/>
-      <text x="753" y="136" text-anchor="middle" class="svgnum" fill="#174ea6">576</text>
-      <text x="778" y="136" class="svgsm" fill="#174ea6">= 512 压缩 + 64 位置</text>
-      <text x="736" y="164" class="svgsm" fill="#1e8e3e" font-weight="700">cache 小 57 倍，质量还更好</text>
+      <rect x="736" y="52" width="148" height="22" rx="4" fill="#1a73e8"/>
+      <text x="810" y="67" text-anchor="middle" class="svgsm" fill="#fff">128 个 Q 头</text>
+      <polygon points="736,74 884,74 835,96 785,96" fill="#e8f0fe" stroke="#1a73e8" stroke-width=".8"/>
+      <rect x="785" y="96" width="50" height="20" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="810" y="111" text-anchor="middle" class="svgsm" fill="#174ea6">压缩向量</text>
+      <text x="736" y="132" class="svgsm">128 个 Q 头 ↔ 1 个压缩向量</text>
+      <rect x="736" y="140" width="148" height="26" rx="4" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="776" y="158" text-anchor="middle" class="svgnum" fill="#174ea6">576 数</text>
+      <text x="876" y="158" text-anchor="end" class="svgnum" fill="#174ea6">÷57</text>
+      <text x="736" y="180" class="svgsm">8.58 GiB</text>
+      <text x="736" y="198" class="svgsm" fill="#174ea6">= 512 压缩 + 64 位置</text>
+      <text x="736" y="214" class="svgsm" fill="#1e8e3e">cache 小 57 倍，质量还更好</text>
 
       <!-- 底部箭头 -->
-      <line x1="16" y1="206" x2="960" y2="206" stroke="#dadce0" marker-end="url(#ar)"/>
-      <text x="16" y="228" class="svglbl">越往右，每个 token 要存的东西越少 →</text>
-      <text x="700" y="228" class="svgsm" fill="#d93025">前三代都在「共享」上做文章，MLA 换了个思路：压缩</text>
+      <line x1="16" y1="234" x2="960" y2="234" stroke="#dadce0" marker-end="url(#ar)"/>
+      <text x="16" y="256" class="svglbl">越往右，每个 token 要存的东西越少 →</text>
+      <text x="16" y="274" class="svgsm">四栏一律按 <tspan font-weight="700">128 个头 × 每头 128 维 × K 和 V 两份 = 32,768</tspan> 起算，跟本节开头那张表同一套口径</text>
+      <text x="700" y="256" class="svgsm" fill="#d93025">前三代都在「共享」上做文章，MLA 换了个思路：压缩</text>
     </g>
   </svg>
   <figcaption>四代注意力。前三代的思路都是「让多个头共用同一份 KV」——
