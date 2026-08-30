@@ -143,5 +143,5 @@
 <text x="34" y="832" class="xs">MaxText 有一个开关 <tspan class="mono" fill="#1967d2">use_iota_embed</tspan>。打开时，查表被写成<tspan font-weight="700" fill="#202124">「把 token id 展成 one-hot，再和整张词表做一次矩阵乘」</tspan> —— 一条 <tspan class="mono" fill="#1967d2">dot</tspan>，跑在 MXU 上。关掉才是真的 <tspan class="mono" fill="#1967d2">gather</tspan>。<tspan font-weight="700" fill="#d93025">上游默认是关的，但仓库里 34 份配置显式打开、0 份显式关闭</tspan>，包括那几份给 GPU 用</text>
 <text x="34" y="850" class="xs">的配置。</text>
 <text x="34" y="870" class="xs">代价算得清楚：Hunyuan3 那个尺寸下，这条 matmul 是 28.38 TFLOP/device，占一步的 <tspan font-weight="700" fill="#202124">0.62%</tspan>，约 24.6 ms；同样的事用 gather 只要约 1.0 ms —— <tspan font-weight="700" fill="#d93025">matmul 慢约 24 倍</tspan>。所以不要说「反正 MXU 闲着，用算力换带宽很划算」，算术直接否掉了：它不省时间，它花</text>
-<text x="34" y="888" class="xs">时间。成立的唯一理由是<tspan font-weight="700" fill="#202124">分母够大</tspan>，而真实动机（最可能是反向传播里 scatter-add 在分片下难做）我没查实，不写成结论。</text>
+<text x="34" y="888" class="xs">时间。成立的唯一理由是<tspan font-weight="700" fill="#202124">分母够大</tspan>，而真实动机（最可能是反向传播里 scatter-add 在分片下难做）<tspan fill="#9aa0a6">我没查实，不写成结论</tspan>。</text>
 </svg>

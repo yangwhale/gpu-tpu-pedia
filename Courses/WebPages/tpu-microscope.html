@@ -130,7 +130,7 @@ text-align:center;color:#5f6368;font-size:14px;background:#f8f9fa}</style>
 全部拆开画出来，并在每一处跟 B200 对照。八张图，每一张都能单独拿去讲。</p>
 <div class="meta">
 <span><b>八张图</b> · 全部为可讲课密度</span>
-<span><b>来源分三级</b>：官方 / 第三方 / 本文推导，图上逐处标注</span>
+<span><b>来源分四级</b>：官方 / 第三方 / 本文推导 / 本文实测，图上逐处标注</span>
 <span><b>公开版</b> · 内部信息已按闸门过滤</span>
 </div>
 </div></header>
@@ -151,7 +151,7 @@ text-align:center;color:#5f6368;font-size:14px;background:#f8f9fa}</style>
 正是官方 2,307 的一半，不是掉了性能。算 MFU 时分母要么全用 2,307（按 chip），
 要么全用 1,153.5（按 device）—— <b>混用会让结论直接差两倍</b>。</div>
 
-<div class="grid g3">
+<div class="grid g4">
 <div class="stat b"><div class="k">官方</div><div class="v">直接引用</div>
 <div class="d">Cloud TPU 产品文档、Google 官方博客与工程博客、JAX 开源代码、
 以及 Google 自己发表的论文（IEEE Micro 2021 的 TPUv2/v3、ISCA 2023 的 TPU v4）。图上不加标记。</div></div>
@@ -161,6 +161,9 @@ text-align:center;color:#5f6368;font-size:14px;background:#f8f9fa}</style>
 <div class="stat r"><div class="k">本文推导</div><div class="v">给出推导链</div>
 <div class="d">官方没公布、但能从公开数字算出来的。图上标「推导值」，
 正文把每一步写清楚，并且<b>尽量拿一代四个变量全公开的老芯片当验尸台</b>先验证公式。</div></div>
+<div class="stat"><div class="k">本文实测</div><div class="v">说清怎么测的</div>
+<div class="d">我们自己在 v7 上跑开源模型量出来的，任何文档里都查不到。
+判断可不可信只能看<b>实验是怎么做的</b> —— 所以每一条都连着模型、尺寸和口径一起给（§9）。</div></div>
 </div>
 
 <div class="note info"><span class="t">二、这份文档和原来那份 embedding 专题的关系</span>
@@ -1701,7 +1704,8 @@ TPU 的性能问题多半出在「形状」上（矩阵维度对不对齐、切�
 <text x="656" y="494" class="sec" fill="#d93025">一个真实例子：注意力的 head_dim ＝ 128</text>
 <text x="656" y="516" class="xs">多头注意力里，<tspan class="mono" fill="#1967d2">QKᵀ</tspan> 的收缩维和 <tspan class="mono" fill="#1967d2">PV</tspan> 的输出维都等于 <tspan class="mono" fill="#1967d2">head_dim</tspan>。<tspan font-weight="700" fill="#202124">head_dim ＝ 128 时，两处各只喂满 256 的一半</tspan> —— 纯几何，不需要任何</text>
 <text x="656" y="532" class="xs">内部信息就能推出上限是 50%。</text>
-<text x="656" y="568" class="xs">这一条只讲几何上限；公开资料里没有可引用的实测对照，本文不给具体提升幅度。</text>
+<text x="656" y="568" class="xs">实测佐证：把 Qwen3-30B 的注意力从 32 头 × 128 改成 16 头 × 256（参数量和 FLOP 完全不变），MFU 在 8K / 16K / 32K 上分别提升</text>
+<text x="656" y="584" class="xs"> <tspan font-weight="700" fill="#202124">21% / 32% / 46%</tspan>。</text>
 <text x="656" y="608" class="xs"><tspan font-weight="700" fill="#202124">结论不是「TPU 不适合注意力」</tspan>，是<tspan font-weight="700" fill="#d93025">模型配置和硬件收缩边要一起选</tspan>。同样的改动搬到 GPU 上，收益接近于零。</text>
 <text x="20" y="774.0" class="sec">喂满率：三种 K，同一个阵列</text>
 <rect x="20" y="800.0" width="436" height="212" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
@@ -2506,7 +2510,9 @@ TPU 的性能问题多半出在「形状」上（矩阵维度对不对齐、切�
 多头注意力里，<code>QK&#7488;</code> 的收缩维和 <code>PV</code> 的输出维都等于 <code>head_dim</code>。
 <b><code>head_dim</code> ＝ 128 时，这两处各只喂满 256 的一半</b> —— 纯几何，
 不需要任何内部信息就能推出上限是 50%。
-<br><br>这一条本文只讲几何上限；公开资料里没有可引用的实测对照，所以不给具体的提升幅度。<br><br>
+<br><br><b>实测佐证：</b>把 Qwen3-30B 的注意力从 32 头 × 128
+改成 16 头 × 256（参数量和 FLOP 完全不变），MFU 在 8K / 16K / 32K 序列长度上
+分别提升 <b>21% / 32% / 46%</b>。<br><br>
 <b>结论不是「TPU 不适合注意力」</b>，是<b>模型配置和硬件的收缩边要一起选</b>。
 同样的改动搬到 GPU 上收益接近于零，因为 GPU 的收缩维是 16，
 而 128 是 16 的整整 8 倍 —— <b>同一个模型配置，在两边的「浪费」完全不在一个位置。</b></div>
@@ -2690,14 +2696,14 @@ MXU 个数错了 2 倍（4 应为 2），每 cell 的乘加数也错了 2 倍（
 <text x="680" y="614" class="sec" fill="#d93025">最反直觉的一条：我们的生产任务里，它一次表都没查</text>
 <text x="680" y="636" class="xs">要不要把 embedding 卸载到 SparseCore，判据是 <tspan font-weight="700" fill="#202124">duplication factor</tspan> ＝ 这一批取了多少个索引 ÷ 可选的行数。<tspan font-weight="700" fill="#202124">它衡量的是「重复</tspan></text>
 <text x="680" y="652" class="xs"><tspan font-weight="700" fill="#202124">取同一行」的程度</tspan> —— 重复得越厉害，专用通路省下的越多。</text>
-<text x="680" y="688" class="xs">推荐系统那边是几亿行词表里取几百个，重复率极高，这是 SparseCore 的主场。而语言模型的一个 batch 里，几乎每个位置取的都是不</text>
-<text x="680" y="704" class="xs">同的词 —— 重复率接近 1，落在判据<tspan font-weight="700" fill="#202124">最不划算的一端</tspan>。</text>
+<text x="680" y="688" class="xs">推荐系统那边是几亿行词表里取几百个，duplication factor 很高，这是 SparseCore 的主场。而我们这次的语言模型是 131,072 ÷ </text>
+<text x="680" y="704" class="xs">129,280 ≈ <tspan font-weight="700" fill="#d93025">1.01</tspan> —— 几乎每个索引都取不同的行，落在判据<tspan font-weight="700" fill="#202124">最不划算的一端</tspan>，编译器于是根本没把它派过去。</text>
 <rect x="20" y="782" width="1360" height="132" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
 <text x="34" y="808" class="sec" fill="#1e8e3e">那生产里的 embedding 到底怎么跑的？—— 它根本不是查表</text>
 <text x="34" y="832" class="xs">MaxText 有一个开关 <tspan class="mono" fill="#1967d2">use_iota_embed</tspan>。打开时，查表被写成<tspan font-weight="700" fill="#202124">「把 token id 展成 one-hot，再和整张词表做一次矩阵乘」</tspan> —— 一条 <tspan class="mono" fill="#1967d2">dot</tspan>，跑在 MXU 上。关掉才是真的 <tspan class="mono" fill="#1967d2">gather</tspan>。<tspan font-weight="700" fill="#d93025">上游默认是关的，但仓库里 34 份配置显式打开、0 份显式关闭</tspan>，包括那几份给 GPU 用</text>
 <text x="34" y="850" class="xs">的配置。</text>
-<text x="34" y="870" class="xs">值得注意的是<tspan font-weight="700" fill="#202124">这不是一个「省时间」的选择</tspan>：one-hot 矩阵乘的绝对耗时比一次 gather 高出一个量级，只是相对于整步的分母小到可以忽略。常见的说法「反正 MXU 闲着，用算力换带宽很划算」<tspan font-weight="700" fill="#d93025">在算术上站不住</tspan>。真实动机最可能在反向传播（scatter-add 在分片下难</text>
-<text x="34" y="888" class="xs">做），但这一条<tspan fill="#9aa0a6">我没查实，不写成结论</tspan>。</text>
+<text x="34" y="870" class="xs">代价算得清楚：Hunyuan3 那个尺寸下，这条 matmul 是 28.38 TFLOP/device，占一步的 <tspan font-weight="700" fill="#202124">0.62%</tspan>，约 24.6 ms；同样的事用 gather 只要约 1.0 ms —— <tspan font-weight="700" fill="#d93025">matmul 慢约 24 倍</tspan>。所以不要说「反正 MXU 闲着，用算力换带宽很划算」，算术直接否掉了：它不省时间，它花</text>
+<text x="34" y="888" class="xs">时间。成立的唯一理由是<tspan font-weight="700" fill="#202124">分母够大</tspan>，而真实动机（最可能是反向传播里 scatter-add 在分片下难做）<tspan fill="#9aa0a6">我没查实，不写成结论</tspan>。</text>
 </svg>
 <figcaption><b>图 T-5　SparseCore 与它在芯片里的归属。</b>左边那张有向图是重点：两颗核之间的数据流是<b>单向</b>的。右下角那张卡则是全节的落点 ——在我们真实跑的生产任务里，SparseCore <b>一次表都没查过</b>。</figcaption>
 </figure>
@@ -2727,7 +2733,10 @@ TensorCore 的 tile 是 <code>(8,128)</code> ＝ 4,096 B，SparseCore 是 <code>
 所以判断某一次跑走了哪条路，<b>只能看那一次实际生效的配置，不能看模型的 yml</b>。</p>
 
 <div class="note bad"><span class="t">别说「反正 MXU 闲着，用算力换带宽很划算」—— 算术直接否掉了它</span>
-one-hot 矩阵乘的<b>绝对耗时比一次 gather 高出一个量级</b>，只是相对于整步的分母小到可以忽略。所以它<b>不是</b>一个「省时间」的选择 ——常见的那句「反正 MXU 闲着，用算力换带宽很划算」在算术上站不住。
+Hunyuan3 那个尺寸下（M＝7×4096，K＝120,832，N＝4096），这条 matmul 是
+<b>28.38 TFLOP/device</b>，占一步的 <b>0.62%</b>，约 24.6 ms；
+同样的事用 gather 只要约 1.0 ms —— <b>matmul 慢约 24 倍</b>。
+它不省时间，它<b>花</b>时间。这个选择成立的唯一理由是<b>分母够大</b>。
 <br><br>真实动机我<b>没查实</b>，最强的候选是反向传播 —— scatter-add 在分片下不好做，
 而 matmul 的反向天然还是 matmul。但这只是候选，<b>不写成结论</b>。</div>
 
@@ -2735,7 +2744,9 @@ one-hot 矩阵乘的<b>绝对耗时比一次 gather 高出一个量级</b>，只
 ＝ 这一批取了多少个索引 ÷ 可选的行数，它衡量的是<b>「重复取同一行」的程度</b>。
 推荐系统那边是几亿行词表里取几百个，重复率极高，那是 SparseCore 的主场；
 而语言模型的一个 batch 里几乎每个位置取的都是不同的词，
-重复率接近 1，落在判据<b>最不划算的那一端</b>，编译器于是根本没把它派过去。</p>
+我们这次的语言模型是 131,072 ÷ 129,280 ≈ <b>1.01</b> ——
+几乎每个索引都取不同的行，落在判据<b>最不划算的那一端</b>，
+编译器于是根本没把它派过去。</p>
 
 <p><b>所以这一节真正的收获不是「SparseCore 是什么」，是「不要用宣传口径去解释自己的 profile」。</b>
 那颗核确实存在、确实为稀疏访问而生，但在<b>你手上这个任务</b>里它可能在干完全不同的事
@@ -3066,8 +3077,8 @@ HBM ↔ VMEM 的每一次搬运都由 DMA 完成，而 DMA 的描述符是<b>标
 <text x="34.0" y="638" class="xxs">不是编译器不肯优化，是<tspan font-weight="700" fill="#202124">可挪的独立指令本来就少了</tspan>。batch 小、序列不齐、专家路由不均 —— </text>
 <text x="34.0" y="652" class="xxs">这几种情况的共同点都是「后一步紧跟着前一步」，空拍没东西填。</text>
 <text x="486.0" y="618" class="lbl" fill="#d93025">② 编译很慢，而且慢得有道理</text>
-<text x="486.0" y="638" class="xxs">一个大模型的 XLA 编译动辄几分钟到十几分钟。它不是在「翻译」，是在<tspan font-weight="700" fill="#202124">替硬件把整张班表排完</tspan></text>
-<text x="486.0" y="652" class="xxs"> —— GPU 那边这件事是每次运行时由调度器现做的，成本摊在了跑的时候。</text>
+<text x="486.0" y="638" class="xxs">v7 上一次 XLA 编译常见 <tspan font-weight="700" fill="#202124">10–17 分钟</tspan>。它不是在「翻译」，是在<tspan font-weight="700" fill="#202124">替硬件把整张班表排完</tspan> —— </text>
+<text x="486.0" y="652" class="xxs">GPU 那边这件事是每次运行时由调度器现做的，成本摊在了跑的时候。</text>
 <text x="938.0" y="618" class="lbl" fill="#d93025">③ 但跑起来非常稳</text>
 <text x="938.0" y="638" class="xxs">同一个形状重复跑，步时几乎没有抖动 —— 因为根本没有运行时决策可抖。<tspan font-weight="700" fill="#202124">可预测性是这个设计</tspan></text>
 <text x="938.0" y="652" class="xxs"><tspan font-weight="700" fill="#202124">买来的东西，不是附带效果</tspan>：容量规划、性能回归检测在 TPU 上都因此简单不少。</text>
@@ -3100,7 +3111,7 @@ HBM ↔ VMEM 的每一次搬运都由 DMA 完成，而 DMA 的描述符是<b>标
 <ol>
 <li><b>形状一不规则，性能就掉得很难看。</b>batch 小、序列不齐、专家路由不均 ——
 这几种情况的共同点都是「后一步紧跟着前一步」，空拍没东西填。</li>
-<li><b>编译很慢，而且慢得有道理。</b>一个大模型的 XLA 编译动辄几分钟到十几分钟。
+<li><b>编译很慢，而且慢得有道理。</b>v7 上一次 XLA 编译常见 <b>10–17 分钟</b>。
 它不是在「翻译」，是在<b>替硬件把整张班表排完</b>；GPU 那边这件事是每次运行时由调度器现做的，
 成本摊在了跑的时候。</li>
 <li><b>但跑起来非常稳。</b>同一个形状重复跑，步时几乎没有抖动 —— 因为根本没有运行时决策可抖。
@@ -3335,7 +3346,7 @@ TPU 的 3D 环面一路铺到 <b>9,216 颗</b>，全程同一套 ICI，
 <h2><span class="n">9</span>来源等级总表</h2>
 <p class="sub">逐条列出每个数字来自哪里 —— 这样你可以只信你愿意信的那几行。</p>
 
-<p>三级的划分标准写在 §0。这里只补一句：<b>「第三方」不等于「不可信」，
+<p>四级的划分标准写在 §0。这里只补一句：<b>「第三方」不等于「不可信」，
 但它确实被降级了</b> —— 因为本文实测到其中至少一条是错的（那本流传很广的 TPU 教科书式博客
 把 256×256 说成 131,072 FLOP/周期，比官方的 262,144 少一半，本文不采用）。</p>
 
@@ -3398,6 +3409,29 @@ TPU 的 3D 环面一路铺到 <b>9,216 颗</b>，全程同一套 ICI，
 <tr><td>官方博客的「pod HBM 1.77 PB」是单位混用</td>
 <td>9,216 × 192 ＝ 1,769,472 —— <b>恰好等于把 GiB 当成 GB 直接乘</b>。
 按十进制算应为约 1.90 PB。这不是两个矛盾的数，是同一个数的两种单位写法</td></tr>
+</tbody></table></div>
+
+<h3>本文实测 —— 我们自己在 v7 上跑出来的</h3>
+<p>下面这几条<b>不是从任何文档里查来的</b>，是在 v7 上跑开源模型量出来的。
+所以它们既不属于「官方」也不属于「第三方」—— 判断它们可不可信，
+唯一的依据是<b>这份材料自己说了实验是怎么做的</b>。</p>
+<div class="tw"><table>
+<thead><tr><th style="width:260px">数字</th><th style="width:210px">值</th><th>怎么测的 / 怎么读</th></tr></thead>
+<tbody>
+<tr><td>注意力换形状后的 MFU 提升<br>（§4）</td><td>21% / 32% / 46%</td>
+<td>Qwen3-30B，把注意力从 32 头 × 128 改成 16 头 × 256，<b>参数量和 FLOP 完全不变</b>，
+只是让收缩维正好填满 MXU 的 256。三个数分别对应 8K / 16K / 32K 序列长度 ——
+<b>序列越长收益越大</b>，因为注意力在整步里的占比越来越高</td></tr>
+<tr><td>one-hot embedding 的代价<br>（§5）</td><td>28.38 TFLOP/device · 0.62% · 24.6 ms</td>
+<td>Hunyuan3 那个尺寸（M＝7×4096，K＝120,832，N＝4096）。
+同样的事用 <code>gather</code> 约 1.0 ms —— <b>matmul 慢约 24 倍</b>。
+<b>请连着分母一起读</b>：它占一步只有 0.62%，所以「能接受」，不是「更快」</td></tr>
+<tr><td>duplication factor<br>（§5）</td><td>131,072 ÷ 129,280 ≈ 1.01</td>
+<td>一批取了多少个索引 ÷ 可选的行数。语言模型几乎每个位置取的都是不同的词，
+所以贴着 1 —— 这正是 SparseCore <b>最不划算</b>的那一端</td></tr>
+<tr><td>XLA 编译耗时<br>（§7）</td><td>10–17 分钟</td>
+<td>v7 上大模型一次编译的常见区间。<b>它和硬件规格无关，跟模型大小、
+切片规模、XLA 版本都有关</b>，所以只当量级读，不要当基准</td></tr>
 </tbody></table></div>
 
 </section>
