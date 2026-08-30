@@ -4558,6 +4558,118 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
   这也是为什么专题六要单独讲推理，而不是当成前向的一个特例带过。</figcaption>
   </figure>
 
+  <h4>⭐ 三个几乎人人都卡在这儿的问题</h4>
+
+  <div class="note info">
+    <span class="t">① 训练的 logits 凭什么大十三万倍 —— 大的是「位置数」，不是词表</span>
+    <b>词表两边一模一样，都是 129,280。差的是「要为多少个位置各算一份」。</b><br>
+    <em>训练是 teacher forcing：整条序列一次喂进去，
+    <b>每一个位置同时都是一个预测点</b> —— 第 5 个位置的向量预测第 6 个字，
+    第 6 个预测第 7 个，全部并行，一次前向算出 131,072 个 loss。一个都不能省。</em><br>
+    <b>推理只在最后一个位置采样</b>，前面 131,071 个位置的 logits 一个都不需要。
+    <b>131,072 : 1 —— 差的就是这个。</b>
+  </div>
+
+  <div class="note ok">
+    <span class="t">顺手一个特别好记的比例：logits 就是「18 层残差流叠在一起」</span>
+    <div class="eq"><span class="c">// 出口这一下，宽度突然从 7,168 变成 129,280</span>
+129,280 ÷ 7,168 = <span class="r">18.04</span>
+
+<span class="c">// 于是</span>
+单层残差流 1.75 GiB × 18.04 = <span class="r">31.56 GiB</span>   <span class="c">← 正好是上面那个数</span></div>
+    <b>模型里所有别的东西都是「位置数 × 7,168」，只有出口这一步是「位置数 × 129,280」。</b>
+    <em>同样的位置数，18 倍的宽度 —— 这就是它显得那么突兀的全部原因。</em>
+  </div>
+
+  <div class="note warn">
+    <span class="t">② 那推理常用的 top-k 呢 —— 反正小的那些也选不上</span>
+    <b>观察是对的，但有个先后顺序：你必须先把 129,280 个分全算出来，才知道哪 64 个最大。</b>
+    <em>top-k 是算完之后的挑选，不是省掉计算的手段。</em><br>
+    推理这边本来也不需要省 —— 一个位置的完整 logits 才 <b>252.5 KiB</b>。<br>
+    <b>真正有压力的是训练侧，而训练侧不能用 top-k</b> ——
+    cross-entropy 的分母是<b>全词表</b>求和，少算一项分母就错了。
+    <em>（历史上有 sampled softmax / hierarchical softmax 这类近似，代价是梯度有偏。）</em><br>
+    <b>现代做法是分块：一次只算一小段位置的 logits，算完 loss 立刻扔。
+    这是精确的，不是近似的 —— 省的是显存峰值，不是计算量。</b>
+  </div>
+
+  <h4>「下一个字」到底是从哪来的 —— 一个几乎所有人都问过的问题</h4>
+
+  <p class="lead">第 0 层的时候，那个向量确实就是<b>当前这个 token</b> 的嵌入。
+  那它凭什么走完 61 层，就变成了<b>下一个</b> token？
+  这个「往后错一位」的规则，是写在 lm_head 的参数里吗？</p>
+
+  <div class="note danger">
+    <span class="t">不在。它在损失函数里 —— 架构里没有任何一处在做位移</span>
+    <b>lm_head 做的事朴素得可怜：它就是一张表，每个词一行，
+    每行是 7,168 维空间里的一个方向。打分就是做点积。</b>
+    <div class="eq">lm_head 的第 w 行 = 词 w 在 7,168 维空间里的<span class="r">一个方向</span>
+第 i 个位置给词 w 的分  = 顶层向量ᵢ · 第 w 行     <span class="c">// 就是个点积</span>
+                        <span class="c">↑ 谁的方向最贴近，谁分高</span></div>
+    <em>所以 lm_head 里存的只是「每个词长什么样」。
+    它对「下一个」这三个字一无所知。</em><br>
+    <b>猜测发生在下面那 61 层</b> —— 注意力让第 i 个位置看得到前面所有位置，
+    于是走到顶上，那个向量已经不是「第 i 个字长什么样」，
+    而是<b>「读完前 i 个字之后，接下来该是什么」</b>。<br>
+    <b>而「接下来」这三个字，是训练时把标签往后挪了一格挪出来的。</b>
+  </div>
+
+  <div class="eq"><span class="c">// 语料：今 天 天 气 不 错</span>
+位置        1      2      3      4      5
+输入       今     天     天     气     不      <span class="c">← 永远来自语料</span>
+            ↓      ↓      ↓      ↓      ↓
+          61 层 + lm_head，每个位置各打一份分
+            ↓      ↓      ↓      ↓      ↓
+标签       天     天     气     不     错      <span class="r">← 同一行，往左错一格</span></div>
+
+  <div class="note ok">
+    <span class="t">最好的证据：MTP 把标签挪两格，什么代码都没改</span>
+    上面讲的 MTP 模块，预测的是<b>下下个</b>字。
+    <em>同一套结构、同一种打分方式 —— 唯一的区别是标签往后挪了两格。</em>
+    <b>如果「错一位」真的长在架构里，这件事不可能这么便宜。</b>
+  </div>
+
+  <div class="note warn">
+    <span class="t">③ 那训练时，中间每个 token 是取概率最高的那个来算 loss 吗</span>
+    <b>不是 —— 训练时既不采样，也不取 argmax。它根本不「选」一个 token。</b><br>
+    <em>它拿语料里真实的下一个字，看模型给<b>这个字</b>打了多少概率，
+    loss 就是 −log(那个概率)。模型自己觉得哪个字最像，完全不影响 loss 怎么算。</em><br>
+    <b>更关键的是：模型自己的预测，一次都不会被喂回去。</b>
+    第 i+1 个位置的输入是语料里真实的第 i+1 个字，
+    不管第 i 个位置猜成了什么 —— 这就是 <b>teacher forcing</b> 这个名字的由来：
+    老师在每一步都把你掰回正轨。
+  </div>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>为什么非这么做不可</th><th>不这么做会怎样</th></tr></thead>
+    <tbody>
+      <tr><td><b>并行性</b> —— 131,072 个位置能在<b>一次</b>前向里全算完</td>
+        <td>要是把自己的预测喂回去，位置 i+1 就得等位置 i，
+          训练退化成串行，慢 131,072 倍</td></tr>
+      <tr><td><b>可微性</b> —— cross-entropy 对整个分布光滑</td>
+        <td>argmax 不可导，反向传播根本过不去</td></tr>
+      <tr class="hl"><td><b>梯度覆盖全词表</b> —— 把真实那个词的分往上推，
+          把其余 129,279 个往下压</td>
+        <td>只看 argmax 的话，分母就不需要了 ——
+          <em>这正好回答了上面 ② 为什么不能 top-k</em></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note info">
+    <span class="t">代价：exposure bias</span>
+    <b>训练时模型看到的前缀永远是正确的，推理时看到的是自己刚吐出来的（可能是错的）。</b>
+    <em>这个落差有个名字叫 exposure bias。</em>
+    历史上有 scheduled sampling 之类的办法去缓解；
+    现在的大模型主要靠后训练阶段（模型真的自己 rollout）来补这一课。
+  </div>
+
+  <div class="note ok">
+    <span class="t">顺带：lm_head 里的 LM 是什么</span>
+    <b>LM = Language Model</b>，语言模型。<b>head（头）</b>是骨干网络上面接的
+    <b>任务专用输出层</b> —— 换个头就能干别的活：分类头、打分头、奖励模型头。
+    <em>lm_head 就是干「预测下一个词」这份活的那个头。</em>
+  </div>
+
   <div class="note ok">
     <span class="t">这已经是第三次撞上同一件事</span>
     <b>第 2 步</b>是 KV cache，<b>第 5 步</b>是激活，<b>现在</b>是 logits。
