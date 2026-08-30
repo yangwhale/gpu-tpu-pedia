@@ -10,9 +10,9 @@ from common import Fig, para, _wlen, BL, RD, YL, GN, PU, TL, INK, SUB, GREY, FIL
 W = 1400
 TOP = 84
 
-BW, BH, GAPX, X0 = 176, 104, 110, 40
+BW, BH, GAPX, X0 = 176, 134, 110, 40
 XS = [X0 + i * (BW + GAPX) for i in range(5)]      # 40 326 612 898 1184
-SUBY = 150
+SUBY = 178
 MAINY = 26                                          # band 与主链之间的留白（给角标腾地方）                                          # 支线相对主链的下沉量
 KEYW = XS[3] - X0 - 28                              # 要点条宽度（支线左边的空白）
 
@@ -35,7 +35,7 @@ def build():
     f.title("一个数走完全程　—— 从 HBM 到乘加单元，中间几站、<tspan fill=\"#8430ce\">每站谁在搬</tspan>")
     f.legend([(OFF, "片外内存"), (HW, "硬件自动管：有 tag、会 miss"),
               (SW, "软件/编译器显式管：不会 miss，也没有兜底"),
-              (GREY, "官方未公开")])
+              (GREY, "官方只给容量、没给带宽")])
 
     _gpu(f)
     _tpu(f)
@@ -45,16 +45,35 @@ def build():
 
 # ══════════════════════════════════════════════════════════════════════
 def _stop(f, x, y, c, name, cap, sub, note=None, dim=False):
-    """一个站台盒。dim=True → 灰虚框，表示这一格的数官方没公开。"""
+    """一个站台盒。
+
+    c 传 ((左色, 左名), (右色, 右名)) 时画成左右分色 —— 专给「同一块硅、
+    两种身份」的 L1＋共享内存那一站用：左半硬件管、右半软件管。
+    这一格如果只涂一种颜色，全图的论点就自相矛盾了（见 G-2 对同一块硅的判定）。
+    dim=True → 灰虚框，表示这一格的数官方没公开。
+    """
+    if isinstance(c, tuple):
+        (cl, nl), (cr, nr) = c
+        f.rect(x, y, BW, BH, "#fff", SUB, 1.8, 9)
+        for i, (cc_, nn) in enumerate(((cl, nl), (cr, nr))):
+            f.rect(x + i * BW / 2, y, BW / 2, 24, FILL[cc_], rx=9)
+            f.rect(x + i * BW / 2, y + 15, BW / 2, 9, FILL[cc_], rx=0)
+            f.t(x + i * BW / 2 + 9, y + 17, nn, "lbl", cc_)
+        f.line(x + BW / 2, y, x + BW / 2, y + BH, SUB, 1.2, dash="3,2")
+        yy = para(f, x + 12, y + 42, BW - 24, cap, "lbl", 16)
+        yy = para(f, x + 12, yy + 3, BW - 24, sub, "xs", 14)
+        if note:
+            para(f, x + 12, yy + 4, BW - 24, note, "xxs", 12)
+        return
     cc = GREY if dim else c
     f.rect(x, y, BW, BH, "#fff", cc, 1.8, 9, "4,3" if dim else None)
     f.rect(x, y, BW, 24, FILL[cc], rx=9)
     f.rect(x, y + 15, BW, 9, FILL[cc], rx=0)
     f.t(x + 12, y + 17, name, "box", cc)
     yy = para(f, x + 12, y + 42, BW - 24, cap, "lbl", 16)
-    yy = para(f, x + 12, yy + 3, BW - 24, sub, "xs", 13)
+    yy = para(f, x + 12, yy + 3, BW - 24, sub, "xs", 14)
     if note:
-        para(f, x + 12, yy + 4, BW - 24, note, "xxs", 11)
+        para(f, x + 12, yy + 4, BW - 24, note, "xxs", 12)
 
 
 def _arrow(f, xi, y, c, top, bottom=None):
@@ -103,18 +122,19 @@ def _keys(f, y, c, ttl, items):
 # ══════════════════════════════════════════════════════════════════════
 def _gpu(f):
     _band(f, G_T - 30, BL, "NVIDIA B200",
-          "五站。中间两站是缓存 —— 命中不命中，要到运行时才知道。")
+          "五站。中间的 L2 和 L1 是缓存 —— 命中不命中，要到运行时才知道。")
     y = G_T + MAINY
 
-    _stop(f, XS[0], y, OFF, "HBM3e", "186 GB", "8.0 TB/s", "片外 · 官方数字")
-    _stop(f, XS[1], y, HW, "L2 缓存", "126 MB", "两个 die 各 63 MB，全局一致",
+    _stop(f, XS[0], y, OFF, "HBM3e", "192 GB", "8.0 TB/s", "片外 · 官方数字")
+    _stop(f, XS[1], y, HW, "L2 缓存", "126 MB", "4 个分区，每 die 2 个",
           "<g>本分区实测 21 TB/s、跨 die 16.8 —— 第三方</g>")
     # 全图最重要的一处对照：多出来的那一站就在这儿
     f.rect(XS[1] + BW - 104, y - 24, 104, 19, "#fff", RD, 1.4, 9)
     f.t(XS[1] + BW - 52, y - 11, "TPU 没有这一站", "xxs", RD, "middle")
     f.line(XS[1] + BW - 52, y - 5, XS[1] + BW - 52, y, RD, 1.4)
-    _stop(f, XS[2], y, HW, "L1 ＋ 共享内存", "256 KiB / SM", "同一块硅，两种身份",
-          "共享部分最多 227 KiB / 线程块 · <g>命中约 39 周期</g>")
+    _stop(f, XS[2], y, ((HW, "L1"), (SW, "共享内存")), None, "256 KiB / SM",
+          "<b>同一块硅，两种身份</b>：左半硬件管、右半软件管",
+          "共享部分最多 227 KiB / 线程块 · <g>L1 命中约 39 周期</g>")
     _stop(f, XS[3], y, SW, "寄存器堆", "256 KiB / SM", "64K 个 32-bit",
           "每线程最多 255 个 · 编译期分配")
     _stop(f, XS[4], y, SW, "CUDA Core", "128 / SM", "FP32 ／ INT32", "向量通路")
@@ -136,8 +156,9 @@ def _gpu(f):
     _arrow(f, 3, sy, PU, "直接喂", "不过寄存器")
 
     _keys(f, sy, BL, "这条链上最该记住的三件事", [
-        "<b>中间两站是缓存，不是暂存。</b>它们要存 tag、要做替换 —— "
-        "相当一部分硅面积和功耗，花在「猜你接下来要什么」上。",
+        "<b>中间是「一站半」缓存。</b>L2 和 L1 要存 tag、要做替换，一部分硅面积"
+        "和功耗花在「猜你接下来要什么」上；<r>共享内存不用</r> —— 它是暂存，"
+        "和 TPU 的 VMEM 同一类东西，只是小两个数量级。GPU 两种都留着。",
         "<b>猜错了怎么办？</b>换一个 warp 上来接着算。GPU 的延迟不是被消除的，"
         "是被<r>别人的工作盖住</r>的 —— 这就是它要塞 64 个 warp 的原因。",
         "<b>Tensor Core 那条支线是新东西。</b>Blackwell 之前，矩阵操作数"
@@ -152,8 +173,8 @@ def _tpu(f):
 
     _stop(f, XS[0], y, OFF, "HBM3e", "192 GiB", "7.4 TB/s / chip",
           "片外 · 官方数字 · 96 GiB / device")
-    _stop(f, XS[1], y, SW, "VMEM", "官方未公开", "片上暂存，MXU 只从这里取数",
-          "<b>没有 tag、不会 miss</b>，也没有兜底", dim=True)
+    _stop(f, XS[1], y, SW, "VMEM", "64 MiB / core", "片上暂存，MXU 只从这里取数",
+          "<b>没有 tag、不会 miss</b> · <g>容量见 JAX 源码；带宽未公开</g>")
     _stop(f, XS[2], y, SW, "向量寄存器", "官方未公开", "形状是 8 × 128 的二维块",
           "<g>数量未公开；8×128 见于 Pallas 文档</g>", dim=True)
     _stop(f, XS[3], y, SW, "VPU", "向量单元", "逐元素算子都在这儿",
@@ -173,8 +194,8 @@ def _tpu(f):
     _branch(f, 1, y, GN,
             "<b>权重与数据直接推进阵列</b>：<r>从来就不经过向量寄存器</r>"
             " —— 这一点 GPU 到 Blackwell 才追上")
-    _stop(f, XS[3], sy, SW, "MXU", "256 × 256", "2 个 / core，2 core / chip",
-          "65,536 个乘加单元，一条指令喂满")
+    _stop(f, XS[3], sy, SW, "MXU", "256 × 256", "65,536 个乘加单元，一条指令喂满",
+          "<g>每 chip 几个：官方文档自相矛盾，见 G-8</g>")
     _stop(f, XS[4], sy, SW, "累加器", "1 MiB / MXU", "128 × (8×256) × 4 B",
           "结果攒在这儿，不回寄存器")
     _arrow(f, 3, sy, GN, "算完直接落")
@@ -198,11 +219,12 @@ def _diff(f):
          "代价是要存 tag、要做替换、要维护一致性，而且<r>时间不可预测</r>。"
          "TPU 的 VMEM 是<b>暂存</b>：编译器显式发 DMA 把数据搬进来，没有 tag、"
          "没有 miss、时间可预测 —— 代价是编译器算错了就是真的慢，没有兜底。"),
-        (RD, "谁来盖住延迟", "这才是两边架构分岔的根",
-         "取一次数要几百个周期，两边都躲不掉。GPU 的答案是<b>换人</b>：一个 SM 挂着最多 "
-         "64 个 warp，谁卡住就换下一个上 —— 所以它需要 256 KiB/SM 这么大的寄存器堆，"
-         "才装得下所有人的现场。TPU 的答案是<b>排班</b>：编译器把 DMA 提前发出去，"
-         "数到的时候正好算完上一块。<r>一个用硬件换，一个用编译器换。</r>"),
+        (RD, "谁发起这次搬运", "同样是「把数弄过来」，发令的人不一样",
+         "GPU 侧：计算单元自己发一条 <b>load</b>，地址是它算的，什么时候到不知道 —— "
+         "搬运是<b>取数指令的副作用</b>。TPU 侧：搬运是一条独立的 <b>DMA</b>，"
+         "描述符里写清「从哪到哪、多大、什么步长」，由专门的引擎执行，"
+         "计算单元完全不参与。<r>一边是「我要，你给我找」，一边是「你先搬好，我到点来取」。</r>"
+         "谁来盖住这中间的几百个周期 —— 那是下一张图的事。"),
         (PU, "GPU 正在往这边挪一步", "TMEM 是个信号",
          "Blackwell 新加的 TMEM，是一块<b>只给 Tensor Core 用、由指令显式搬进搬出、"
          "不参与缓存机制</b>的片上 SRAM —— 这个描述几乎就是 TPU 的 VMEM。方向很清楚："

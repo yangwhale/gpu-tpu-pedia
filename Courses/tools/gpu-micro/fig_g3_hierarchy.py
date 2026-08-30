@@ -12,11 +12,11 @@ C2X, C2W = 388, 396
 C3X, C3W = 800, 580
 
 TOP = 84
-ROWH, RGAP = 82, 8
+ROWH, RGAP = 68, 8
 ROWS_T = TOP + 30
 NROW = 6
 TPU_T = ROWS_T + NROW * (ROWH + RGAP) + 26
-TPU_ROWH = 46
+TPU_ROWH = 58
 H = TPU_T + 40 + 5 * TPU_ROWH + 30
 
 LV = [
@@ -119,11 +119,12 @@ def _tpu(f):
          "<b>没有对应物。</b>TPU 是显式向量机：一条向量指令直接吃一整个 8×128 的向量寄存器，没有「32 个线程」这层皮",
          "GPU 靠「很多 warp 轮流上」来藏访存延迟；TPU 没有这个机制，延迟必须在<b>编译期</b>排流水藏掉"),
         ("warp 组 warpgroup",
-         "<b>没有对应物。</b>TPU 的 VLIW bundle 是一拍 9 个槽同时发，哪条指令进哪个槽，编译期就钉死了",
+         "<b>没有对应物。</b>TPU 的 VLIW bundle 一拍 9 个发射槽同时发，哪条指令进哪个槽，编译期就钉死了"
+         "<g>（9 槽是 v2/v3 的公开数字，v7 未公布）</g>",
          "GPU 在<b>运行时</b>挑指令，TPU 在<b>编译期</b>排指令 —— 这是两边最根本的分工差别"),
         ("线程块 ＋ 共享内存",
-         "一个 TensorCore ＋ 它私有的 <b>64 MiB VMEM</b>",
-         "容量差 <r>256 倍</r>（227 KiB vs 64 MiB）。TPU 的片上暂存大到能整块放下权重，GPU 只能一小片一小片地流"),
+         "一个 TensorCore ＋ 它私有的 <b>64 MiB VMEM</b><g>（JAX 开源代码，非官方规格页）</g>",
+         "容量差 <r>289 倍</r>（227 KiB vs 64 MiB）。TPU 的片上暂存大到能整块放下权重，GPU 只能一小片一小片地流"),
         ("cluster",
          "<b>没有对应物。</b>TPU 一个 chip 只有 2 个 TensorCore，本来也不需要「一组核共享暂存」这层",
          "GPU 要发明 cluster，恰恰是因为它有 148 个 SM 要协调；核少反而省掉一层抽象"),

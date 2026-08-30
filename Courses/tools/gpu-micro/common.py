@@ -15,8 +15,8 @@ DEFS = """<defs><style>
 .box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
 .lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
 .sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
-.xs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
-.xxs{font:400 9px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
 .num{font:700 12px "Roboto Mono",monospace}
 .numb{font:700 14px "Roboto Mono",monospace}
 .mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
@@ -178,7 +178,8 @@ def _emit(chars):
     return "".join(out)
 
 
-_PX = {"sec": 15, "box": 13, "lbl": 12, "sm": 11, "xs": 10, "xxs": 9}
+# 投影到大屏时 9/10 px 基本读不出来 —— 这份材料是讲课用的，不是屏幕上放大看的。
+_PX = {"sec": 15, "box": 13, "lbl": 12, "sm": 11, "xs": 11, "xxs": 10}
 
 
 def para(f, x, y, maxw, text, cls="xs", lh=None, fill=None, max_lines=None,

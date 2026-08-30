@@ -20,13 +20,15 @@ SMTOP = 82
 ICACHE_Y = 116
 SUB_T = 168
 SUB_B = SUB_T + SUBH                     # 614
-SMEM_Y = SUB_B + 12                      # 626
+PAIR_Y = SUB_B + 10                      # 「两个 SM 配对」是 SM 之间的事，画在处理块外面
+PAIR_H = 40
+SMEM_Y = PAIR_Y + PAIR_H + 10
 SMEM_H = 84
-TMA_Y = SMEM_Y + SMEM_H + 8              # 700
+TMA_Y = SMEM_Y + SMEM_H + 8
 TMA_H = 50
-SMBOT = TMA_Y + TMA_H + 14               # 764
-SUMY = SMBOT + 26                        # 790
-H = SUMY + 176                           # 966
+SMBOT = TMA_Y + TMA_H + 14
+SUMY = SMBOT + 26
+H = SUMY + 158
 
 
 def build():
@@ -55,7 +57,15 @@ def build():
 
     for i, x in enumerate(COLS):
         f.line(x + COLW / 2, ICACHE_Y + 40, x + COLW / 2, SUB_T - 2, PU, 1.6, "aP")
-        _subcore(f, x, SUB_T, i)
+        _subcore(f, x, SUB_T, i, full=(i == 0))
+
+    # 四块完全对称 —— 说明文字只写一次，右边三块靠这条横幅认领
+    f.rect(COLS[1], SUB_T - 16, COLS[3] + COLW - COLS[1], 13, FILL[SUB], SUB, 1, 6)
+    f.t((COLS[1] + COLS[3] + COLW) / 2, SUB_T - 6,
+        "↑ 与 0 号处理块<tspan font-weight=\"700\" fill=\"#202124\">完全对称</tspan>，"
+        "说明文字不再重复；只有 TMEM 的 lane 编号各不相同", "xxs", None, "middle")
+
+    _pair(f)
 
     # ── 底部共享：L1 / 共享内存 ────────────────────────────────────────
     f.rect(36, SMEM_Y, 1328, SMEM_H, FILL[GN], GN, 1.8, 8)
@@ -83,7 +93,7 @@ def build():
         "一条指令搬一整块多维张量：软件填一个<tspan font-weight=\"700\" fill=\"#202124\">描述符</tspan>（基址 · 各维长度 · 各维步长 · 分块形状），"
         "硬件自己算地址、自己搬。", "xs")
     f.t(210, TMA_Y + 34,
-        "这就是 GPU 版的 DMA 引擎，和 TPU 那 17 条 DMA 通道是同一类东西 —— 都是"
+        "这就是 GPU 版的 DMA 引擎，和 TPU 的 DMA 引擎是同一类东西 —— 都是"
         "「把地址生成从计算单元手里拿走」。Hopper 引入，Blackwell 沿用。", "xs")
     f.rect(1030, TMA_Y + 10, 150, 30, "#fff", SUB, 1.2, 5)
     f.t(1105, TMA_Y + 29, "纹理 / 采样单元", "xs", SUB, "middle")
@@ -96,7 +106,13 @@ def build():
 
 
 # ══════════════════════════════════════════════════════════════════════
-def _subcore(f, x, T, idx):
+def _subcore(f, x, T, idx, full=True):
+    """full=False 时只画结构，不重复说明文字。
+
+    四个处理块在硬件上确实一模一样 —— 但把同一段解释誊四遍，
+    读者付出的是四倍的阅读量，换回的信息是零。图要靠形状说「一样」，
+    不是靠文字说四遍。
+    """
     xi, wi = x + 11, COLW - 22
 
     f.rect(x, T, COLW, SUBH, "#fff", INK, 1.6, 9)
@@ -117,33 +133,39 @@ def _subcore(f, x, T, idx):
     y, h = T + SCH[0], SCH[1]
     f.rect(xi, y, wi, h, FILL[PU], PU, 1.5, 5)
     f.t(xi + 8, y + 15, "Warp 调度器 ×1　＋　分发单元", "lbl", PU)
-    f.t(xi + 8, y + 30, "每周期从驻留 warp 里挑 1 个就绪的，发 1 条指令", "xs")
+    if full:
+        f.t(xi + 8, y + 30, "每周期从驻留 warp 里挑 1 个就绪的，发 1 条指令", "xs")
 
     # 驻留 warp 槽
     y, h = T + SLOT[0], SLOT[1]
     f.rect(xi, y, wi, h, "#fff", PU, 1.1, 5, "3,2")
     f.t(xi + 8, y + 14, "驻留 warp 槽 ×16", "lbl", PU)
-    f.t(xi + 118, y + 14, "＝ 64 warp/SM ÷ 4", "xs")
+    if full:
+        f.t(xi + 128, y + 14, "深＝已驻留　白＝空槽", "xs")
+    # 深＝已驻留、白＝空槽。上一版这里是 (r*8+c) % 3，纯装饰性花纹却长得像有含义
     for r in range(2):
         for c in range(8):
             f.rect(xi + 8 + c * 36, y + 20 + r * 12, 33, 10,
-                   FILL[PU] if (r * 8 + c) % 3 else "#fff", PU, 0.7, 2)
+                   FILL[PU] if r * 8 + c < 12 else "#fff", PU, 0.7, 2)
 
     # 寄存器堆
     y, h = T + RF[0], RF[1]
     f.rect(xi, y, wi, h, FILL[BL], BL, 1.5, 5)
     f.t(xi + 8, y + 15, "寄存器堆　16,384 × 32 bit ＝ 64 KiB", "lbl", BL)
-    f.t(xi + 8, y + 30, "＝ 64K 寄存器/SM ÷ 4　·　单线程上限 255 个", "xs")
+    if full:
+        f.t(xi + 8, y + 30, "＝ 64K 寄存器/SM ÷ 4　·　单线程上限 255 个", "xs")
 
     # CUDA Core ×32
     y, h = T + CUDA[0], CUDA[1]
     f.rect(xi, y, wi, h, "#fff", BL, 1.5, 5)
     f.t(xi + 8, y + 15, "CUDA Core ×32", "lbl", BL)
-    f.t(xi + 108, y + 15, "FP32 / INT32 统一单元", "xs")
+    if full:
+        f.t(xi + 108, y + 15, "FP32 / INT32 统一单元", "xs")
     for r in range(4):
         for c in range(8):
             f.rect(xi + 8 + c * 36, y + 21 + r * 13, 33, 11, FILL[BL], BL, 0.7, 2)
-    f.t(xi + 8, y + 86, "一条指令 → 32 条 lane 同时算 ＝ 一个 warp 一拍做完", "xs")
+    if full:
+        f.t(xi + 8, y + 86, "一条指令 → 32 条 lane 同时算 ＝ 一个 warp 一拍做完", "xs")
 
     # Tensor Core
     y, h = T + TC[0], TC[1]
@@ -151,26 +173,47 @@ def _subcore(f, x, T, idx):
     f.t(xi + 8, y + 17, "Tensor Core ×1　（第 5 代）", "box", RD)
     f.rect(xi + 8, y + 24, wi - 16, 22, "#fff", RD, 1, 4)
     f.t(xi + 15, y + 39, "1,024 次乘加 / 周期", "numb", RD)
-    f.t(xi + 178, y + 40, "← 推导值，链见图末", "xs")
-    f.t(xi + 8, y + 60, "操作数<tspan font-weight=\"700\" fill=\"#202124\">不走寄存器堆</tspan>，走下面的 TMEM", "xs")
-    f.t(xi + 8, y + 74, "支持两个 SM 配对做<tspan font-weight=\"700\" fill=\"#202124\">同一次</tspan> MMA，共用操作数", "xs")
-    f.t(xi + 8, y + 87, "吃的最小矩阵只有 K=16 —— 从来不是 128×128", "xs", RD)
+    if full:
+        f.t(xi + 178, y + 40, "← 官方口径，见下", "xs")
+        f.t(xi + 8, y + 60, "操作数<tspan font-weight=\"700\" fill=\"#202124\">不走寄存器堆</tspan>，走下面的 TMEM", "xs")
+        f.t(xi + 8, y + 74, "一次只吃<tspan font-weight=\"700\" fill=\"#202124\">很薄的一片</tspan>矩阵，"
+                            "不是想象中的大方阵", "xs")
+        f.t(xi + 8, y + 87, "薄到什么程度、怎么攒成大矩阵 —— 见图 G-4", "xs", RD)
 
     # TMEM 分区
     y, h = T + TMEM[0], TMEM[1]
     f.rect(xi, y, wi, h, "#fff", RD, 1.5, 5, "3,2")
-    f.t(xi + 8, y + 15, f"TMEM 分区　512 列 × 32 lane ＝ 64 KiB", "lbl", RD)
+    f.t(xi + 8, y + 15, "TMEM 分区　512 列 × 32 lane ＝ 64 KiB", "lbl", RD)
     f.t(xi + 8, y + 31,
-        f"全 SM 256 KiB 的 1/4　·　只有本块的 warp 能碰 lane {idx*32}–{idx*32+31}", "xs")
+        (f"全 SM 256 KiB 的 1/4　·　本块的 warp 只能碰 lane {idx*32}–{idx*32+31}"
+         if full else f"只能碰 lane <tspan font-weight=\"700\" fill=\"#202124\">{idx*32}–{idx*32+31}</tspan>"),
+        "xs")
 
     # 访存 / 特殊函数
     y, h = T + LDST[0], LDST[1]
     f.rect(xi, y, (wi - 6) / 2, h, FILL[YL], YL, 1.3, 5)
     f.t(xi + 7, y + 15, "LD / ST <tspan fill=\"#9aa0a6\">×8</tspan>", "lbl", "#b06000")
-    f.t(xi + 7, y + 29, "访存单元", "xxs", GREY)
     f.rect(xi + (wi + 6) / 2, y, (wi - 6) / 2, h, FILL[YL], YL, 1.3, 5)
     f.t(xi + (wi + 6) / 2 + 7, y + 15, "SFU <tspan fill=\"#9aa0a6\">×4</tspan>", "lbl", "#b06000")
-    f.t(xi + (wi + 6) / 2 + 7, y + 29, "exp · rcp · rsqrt", "xxs", GREY)
+    if full:
+        f.t(xi + 7, y + 29, "访存单元", "xxs", GREY)
+        f.t(xi + (wi + 6) / 2 + 7, y + 29, "exp · rcp · rsqrt", "xxs", GREY)
+
+
+def _pair(f):
+    """两个 SM 配对做同一次 MMA —— 这是 SM 之间的事，画在处理块盒子里是层级错位。
+
+    上一版把这句话写在每个 sub-core 的 Tensor Core 卡片上，读者顺着位置会
+    以为「配对」发生在处理块之间。它实际发生在整块 SM 与隔壁那块 SM 之间。
+    """
+    f.rect(36, PAIR_Y, 1328, PAIR_H, "#fff", RD, 1.6, 8, "5,3")
+    f.t(50, PAIR_Y + 17, "两个 SM 配对　cta_group::2", "box", RD)
+    f.t(268, PAIR_Y + 17,
+        "这块 SM 的 4 个 Tensor Core，可以和<tspan font-weight=\"700\" fill=\"#202124\">隔壁那块 SM</tspan> 的 4 个"
+        "一起做<tspan font-weight=\"700\" fill=\"#202124\">同一次</tspan> MMA，共用一份操作数。", "xs")
+    f.t(268, PAIR_Y + 32,
+        "<tspan font-weight=\"700\" fill=\"#d93025\">注意层级</tspan>：配对发生在 SM 与 SM 之间，"
+        "不是上面四个处理块之间 —— 处理块之间连 TMEM 都是切开各管各的。", "xs")
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -196,20 +239,15 @@ def _summary(f):
         f.t(x + 10, y + 54, d, "xxs")
 
     y2 = y + 74
-    f.rect(20, y2, 1360, 84, FILL[RD], RD, 1.8, 9)
-    f.t(34, y2 + 20, "唯一一个不是官方直接给出的数：Tensor Core 每周期 1,024 次乘加", "box", RD)
+    f.rect(20, y2, 1360, 66, FILL[RD], RD, 1.8, 9)
+    f.t(34, y2 + 20, "「1,024 次乘加 / 周期」这个数从哪来", "box", RD)
     f.t(34, y2 + 38,
-        "<tspan class=\"mono\" fill=\"#202124\">每 SM 每周期张量 FLOP ＝ 峰值 FLOPS ÷ SM 数 ÷ 时钟</tspan>"
-        "　—— 拿两个规格全公开的老世代先验模型：", "xs")
+        "A100 白皮书原话：四个 Tensor Core <tspan font-weight=\"700\" fill=\"#202124\">合计每周期 1,024 次</tspan> FP16 乘加"
+        "（＝每核 256）。H100 官方称「张量吞吐 2× A100」，Blackwell 再 2× → "
+        "<tspan font-weight=\"700\" fill=\"#d93025\">每核 1,024</tspan>。", "xs")
     f.t(34, y2 + 55,
-        "<tspan class=\"mono\" fill=\"#202124\">A100：312 TF ÷ 108 SM ÷ 1.410 GHz ＝ 2,048.9</tspan>"
-        "　　<tspan class=\"mono\" fill=\"#202124\">H100：989.4 TF ÷ 132 SM ÷ 1.830 GHz ＝ 4,095.9</tspan>"
-        "　　两个都精确落在 2 的幂上 → 模型成立。", "xs")
-    f.t(34, y2 + 72,
-        "顺着推 Blackwell ＝ <tspan font-weight=\"700\" fill=\"#d93025\">8,192 FLOP/周期/SM</tspan>"
-        "，除以 4 个 Tensor Core、再除以 2（一次乘加算 2 个 FLOP）"
-        "＝ <tspan font-weight=\"700\" fill=\"#d93025\">1,024 次乘加/周期/Tensor Core</tspan>。"
-        "代回 B200：8,192 × 148 SM × 1.83 GHz ＝ 2.22 PFLOPS，官方口径 2.25 —— 差 1.4%，缺的是官方没公布的确切时钟。", "xs")
+        "代回 B200 对账：1,024 × 2 FLOP × 4 核 × 148 SM × 1.83 GHz ＝ 2.22 PFLOPS，官方 2.25 —— "
+        "差 <tspan font-weight=\"700\" fill=\"#d93025\">1.4%</tspan>，缺口就是官方没公布的确切时钟。完整对账表见正文 §2。", "xs")
 
 
 if __name__ == "__main__":
