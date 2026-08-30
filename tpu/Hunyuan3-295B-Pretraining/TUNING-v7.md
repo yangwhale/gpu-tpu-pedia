@@ -910,7 +910,7 @@ else:                jax.lax.ragged_dot(...)
    应为 18；monkeypatch 路径**必须加计数器**。
 3. **用 AOT 免费筛掉编不过的** —— `embed_dim=4096` 撞 VMEM，AOT 在 CPU 上 2 分钟
    复现同样的 `Ran out of memory in memory space vmem`。
-   **但 AOT 给不出能编过的那几档的排序**（它们 `temp` 完全相同，都 80.48 G）。
+   **但 AOT 给不出能编过的那几档的排序**（它们 `temp` 完全相同，都 74.95 GiB）。
 4. **真机只扫少数几点** —— 每维取当前值的 ×2 / ÷2 三点即可判断是否已在峰上。
    `tile_n` 不用扫，被 `base_moe_mlp_dim` 钉死。
 

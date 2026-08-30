@@ -149,7 +149,14 @@ PDBS=12 GCS_STAGE=... IMAGE=... bash maxtext-hunyuan3/aot.sh probe-p12
 Memory analysis: CompiledMemoryStats(... temp_size_in_bytes=80477396448 ...)
 ```
 
-`temp_size ÷ 1e9` 与 **94.74 GB/device** 比。留 10 GB 余量比较稳。
+`temp_size ÷ 2**30` 与 **94.74 GiB/device** 比。留 10 GiB 余量比较稳。
+
+> [!important] 单位：本页一律用 **GiB**
+> 编译器报错串里的 `G` 是 **GiB**（`95.38G − 94.74G = 656.93M` 只有按 1024 才对得上），
+> 而 `CompiledMemoryStats` 给的是**字节**。两者必须换算到同一进制再比 ——
+> 早期版本把字节按 `÷ 1e9` 记成十进制 GB，和报错串的 GiB 混在同一张表里，**差 7.4%**。
+> pass／fail 的结论没错（十进制那侧偏保守），但派生出来的余量和百分比全都偏小。
+> **2026-08-22 已统一换算成 GiB。**
 失败时编译器直接告诉你差多少：
 
 ```
@@ -159,10 +166,10 @@ RESOURCE_EXHAUSTED: HLO temporaries (100.13G) exceeds available HBM (94.74G)
 > [!warning] 判 OOM 不要把 argument 加进去
 > 早期版本写的是「单 device HBM ≈ argument + temp + generated_code = 96.97 GiB」。
 > **这个公式偏保守，会把可行配置误判成 OOM。**
-> 编译器卡的就是 `temp_size` 这一项，阈值 **94.74 GB/device**
-> （v7 每芯片 192 GB ÷ 2 device，扣掉开销）。
+> 编译器卡的就是 `temp_size` 这一项，阈值 **94.74 GiB/device**
+> （v7 每芯片 192 GiB ÷ 2 device = 95.93，再扣掉约 1.19 GiB runtime 自留）。
 > `argument_size` 有相当部分被别名/donate 掉了，不与 temp 简单相加 ——
-> 证据是 64 芯片那次 arg+temp 算出 104 GB，而真机峰值只有 91.94 G。
+> 证据是 64 芯片那次 arg+temp 算出 96.70 GiB，而真机峰值只有 91.94 G。
 
 ## Step 3 · 存下编译产物（可选）
 
@@ -363,36 +370,36 @@ if config.compiled_trainstep_file != "":
 
 | `pdbs` | global batch | `temp` | 结论 |
 |---:|---:|---:|---|
-| 12（原生产） | 1536 | 80.48 GB | ✅ |
-| **13** | **1664** | **78.50 GB** | ✅ **比 12 还省 2 GB** |
-| 14 | 1792 | 96.53 GB | ❌ 差 1.79 GB |
-| 15 / 16 | — | 102.59 GB (16) | ❌ 差得更远 |
+| 12（原生产） | 1536 | 74.95 GiB | ✅ |
+| **13** | **1664** | **73.11 GiB** | ✅ **比 12 还省 1.84 GiB** |
+| 14 | 1792 | 96.53 GiB | ❌ 差 1.79 GiB |
+| 15 / 16 | — | 102.59 GiB (16) | ❌ 差得更远 |
 
 > **`pdbs=13` 比 `pdbs=12` 占用更少 —— 反直觉，但复现了两次、
 > 字节级一致（78,503,516,064）。** 机制没查明，多半是编译器在这个形状上
 > 选了另一套调度/切分。**记在这里是因为它可执行，不是因为它被解释清楚了。**
 
-p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1.06 GB）、
+p14 只差 1.79 GiB，试了三种省法都补不上：`out_proj=offload`（省 0.99 GiB）、
 再叠 `mlpwi=offload`、把 splash block 从 2048 砍到 1024 —— **全部仍然 OOM**。
 
 **天花板对带 tile 的生产配置同样成立**：把 18 个 tile 参数加进 AOT 重扫一遍，
-`temp` 一字未变（p12 仍 80.48、p13 仍 78.50、p14 仍 OOM）。
+`temp` 一字未变（p12 仍 74.95、p13 仍 73.11、p14 仍 OOM）。
 **tile 对显存的影响是 0** —— 真机峰值 HBM 也印证了这点（带不带都是 91.94 G）。
 
 ## remat 一松就崩，没有中间地带
 
-| 配置 | 需要的 `temp` | vs 94.74 GB |
+| 配置 | 需要的 `temp` | vs 94.74 GiB |
 |---|---:|---|
-| 生产 `custom` + `decoder_layer_input=offload` | 80.48 GB | ✅ |
-| `out_proj=device` | 118.05 GB | ❌ 超 25% |
-| `decoder_layer_input=device` | 115.08 GB | ❌ |
-| `remat_policy=full` | 115.08 GB | ❌ **与上一行一模一样** |
-| `mlpwo=device` | 323.45 GB | ❌ 超 3.4 倍 |
-| `remat_policy=minimal` | 562.58 GB | ❌ 超 5.9 倍 |
+| 生产 `custom` + `decoder_layer_input=offload` | 74.95 GiB | ✅ |
+| `out_proj=device` | 118.05 GiB | ❌ 超 25% |
+| `decoder_layer_input=device` | 115.08 GiB | ❌ |
+| `remat_policy=full` | 115.08 GiB | ❌ **与上一行一模一样** |
+| `mlpwo=device` | 323.45 GiB | ❌ 超 3.4 倍 |
+| `remat_policy=minimal` | 562.58 GiB | ❌ 超 5.9 倍 |
 
 - **`remat_policy=full` 与 `decoder_layer_input=device` 的账完全相同** ——
   这个模型下 `full` 的实际效果就是把 decoder layer input 放回 device。
-- **`qkv_proj=device` 和 `mlpwi=device` 对显存的影响是 0**（仍 80.48 GB，
+- **`qkv_proj=device` 和 `mlpwi=device` 对显存的影响是 0**（仍 74.95 GiB，
   与基线一字不差）—— 这两个旋钮在本模型的 custom remat 路径上**根本没被读到**。
   **改了没反应 ≠ 改对了，这正是 AOT 能替你发现的那类事。**
 
@@ -400,13 +407,13 @@ p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1
 
 | flag 子集 | `temp` | 结果 |
 |---|---:|---|
-| 带生产 flag（16 个） | **80.48 GB** | ✅ 还剩 14 GB |
-| 完全不带 | 95.01 GB | ❌ 超上限 —— **只差 0.3%** |
-| 只 `scoped_vmem_limit` | 94.81 GB | ❌ 几乎没省 |
-| 只 **SparseCore 卸载那 9 个** | **95.01 GB** | ❌ **与不带 flag 一模一样** |
-| **`scoped_vmem_limit` + 调度器组** | **80.48 GB** | ✅ |
+| 带生产 flag（16 个） | **74.95 GiB** | ✅ 还剩 19.8 GiB |
+| 完全不带 | 95.01 GiB | ❌ 超上限 —— **只差 0.3%** |
+| 只 `scoped_vmem_limit` | 94.81 GiB | ❌ 几乎没省 |
+| 只 **SparseCore 卸载那 9 个** | **95.01 GiB** | ❌ **与不带 flag 一模一样** |
+| **`scoped_vmem_limit` + 调度器组** | **74.95 GiB** | ✅ |
 
-- **这组 flag 把峰值临时空间压低 15.3%**，正好是「能跑」和「跑不了」的分界
+- **这组 flag 把峰值临时空间压低 21%**（95.01 → 74.95 GiB），正好是「能跑」和「跑不了」的分界
 - **SparseCore 卸载那 9 个对显存的贡献是 0** —— 与 [TUNING-v7](TUNING-v7.md)
   里「SparseCore 卸载在 v7 上性能收益也是 0」互相印证，**两头都不给**
 - **调度器组和 vmem 上限必须成对出现**：只开调度器不提 vmem 撞
@@ -415,7 +422,7 @@ p14 只差 1.79 GB，试了三种省法都补不上：`out_proj=offload`（省 1
   latency hiding scheduler 直接报错）。**精简 flag 等于体检了另一个配置。**
 
 > 这五档 2026-08-15 在另一台机器上**独立重跑过一遍，数字逐位相同**
-> （95.01 / 94.81 / 95.01 / VMEM 爆 / 80.48）。
+> （95.01 / 94.81 / 95.01 / VMEM 爆 / 74.95）。
 > 起因是原始日志随消融用的 C4 机器一起删了，而消融 CSV 里没有 `temp` 这一列 ——
 > **结论一度只剩文档里这张表、没有可查的证据。** 与其加免责声明，不如重跑一遍补回来。
 

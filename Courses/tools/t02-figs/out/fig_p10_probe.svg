@@ -1,0 +1,151 @@
+<svg viewBox="0 0 1400 822" width="1400" height="822" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="用 AOT 在 CPU 上扫配置空间的三类发现：batch 天花板、remat 策略对显存的影响、以及一组 XLA flag 是能否跑通的分界">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">体检工具变成搜索器　—— <tspan font-weight="700" fill="#1a73e8">29 组探针，一张卡都没占</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">装得下</text>
+<rect x="93.5" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="110.5" y="58" class="sm">装不下</text>
+<line x1="232" y1="54" x2="262" y2="54" stroke="#202124" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text x="268" y="58" class="sm">判据：需要的 temp vs 94.74 GiB／device</text>
+<rect x="20" y="124" width="446" height="512" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="36" y="150" class="sec">甲　·　天花板在哪</text>
+<text x="36" y="170" class="xs"><tspan fill="#9aa0a6">从想要的 batch 往上加，装不下就退回来。</tspan></text>
+<rect x="36" y="202" width="414" height="54" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="50" y="225" class="box" fill="#1e8e3e">pdbs = 12</text>
+<text x="50" y="244" class="xxs" fill="#5f6368">global batch 1,536</text>
+<text x="436" y="227" class="num" fill="#1e8e3e" text-anchor="end">74.95 GiB</text>
+<text x="436" y="245" class="xxs" fill="#1e8e3e" text-anchor="end">✅ 装得下</text>
+<text x="188" y="245" class="xxs">原来的生产配置</text>
+<rect x="36" y="264" width="414" height="54" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="50" y="287" class="box" fill="#1e8e3e">pdbs = 13</text>
+<text x="50" y="306" class="xxs" fill="#5f6368">global batch 1,664</text>
+<text x="436" y="289" class="num" fill="#1e8e3e" text-anchor="end">73.11 GiB</text>
+<text x="436" y="307" class="xxs" fill="#1e8e3e" text-anchor="end">✅ 装得下</text>
+<text x="188" y="307" class="xxs"><tspan font-weight="700" fill="#d93025">比 12 还省 1.8 GiB</tspan></text>
+<rect x="36" y="326" width="414" height="54" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="50" y="349" class="box" fill="#d93025">pdbs = 14</text>
+<text x="50" y="368" class="xxs" fill="#5f6368">global batch 1,792</text>
+<text x="436" y="351" class="num" fill="#d93025" text-anchor="end">96.53 GiB</text>
+<text x="436" y="369" class="xxs" fill="#d93025" text-anchor="end">❌ 装不下</text>
+<text x="188" y="369" class="xxs">只差 1.79 GiB</text>
+<rect x="36" y="388" width="414" height="54" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="50" y="411" class="box" fill="#d93025">pdbs = 16</text>
+<text x="50" y="430" class="xxs" fill="#5f6368">global batch 2,048</text>
+<text x="436" y="413" class="num" fill="#d93025" text-anchor="end">102.59 GiB</text>
+<text x="436" y="431" class="xxs" fill="#d93025" text-anchor="end">❌ 装不下</text>
+<text x="188" y="431" class="xxs">15 也试过，同样装不下</text>
+<rect x="36" y="504" width="414" height="116" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="50" y="526" class="xs"><tspan font-weight="700" fill="#d93025">13 比 12 更省，这是反直觉的。</tspan>复现过两次、<tspan font-weight="700" fill="#202124">字节级一致</tspan>。机制没查明 —— <tspan font-weight="700" fill="#202124">记</tspan></text>
+<text x="50" y="542" class="xs"><tspan font-weight="700" fill="#202124">在这里是因为它可执行，不是因为它被解释清楚了。</tspan></text>
+<text x="50" y="561" class="xs"><tspan fill="#9aa0a6">14 只差 1.79 GiB，试了三种省法都补不上。</tspan></text>
+<text x="50" y="580" class="xs"><tspan font-weight="700" fill="#202124">⚠️ 但别把它当神谕。</tspan>专题一提醒过：<tspan font-weight="700" fill="#202124">贴着上限那一带它判不准，我们判错过</tspan>。</text>
+<text x="50" y="596" class="xs"><tspan font-weight="700" fill="#202124">14 这种「只差 1.79」的，仍然要真机确认。</tspan></text>
+<rect x="477" y="124" width="446" height="512" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="493" y="150" class="sec">乙　·　旋钮灵不灵</text>
+<text x="493" y="170" class="xs"><tspan fill="#9aa0a6">横轴是</tspan><tspan font-weight="700" fill="#202124">倍数</tspan>（需要的 temp ÷ 94.74 GiB）—— 这样 <tspan font-weight="700" fill="#202124">1.0× 那条线本身就是判据</tspan>，一</text>
+<text x="493" y="186" class="xs">眼看出过没过。每根条右边仍标原始 GiB。</text>
+<text x="547.0625" y="236" class="xxs" fill="#202124">上限 1.0×</text>
+<text x="493" y="250" class="xxs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">生产配置：custom ＋ 一处 offload</tspan></text>
+<rect x="493" y="258" width="38.813957937513194" height="11" rx="3" fill="#1e8e3e"/>
+<line x1="542.0625" y1="255" x2="542.0625" y2="272" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="268" class="num" fill="#1e8e3e">0.79×</text>
+<text x="907" y="268" class="xxs" fill="#5f6368" text-anchor="end">74.95 GiB</text>
+<text x="493" y="284" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">out_proj 放回 device</tspan></text>
+<rect x="493" y="292" width="61.13392574414186" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="289" x2="542.0625" y2="306" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="302" class="num" fill="#d93025">1.25×</text>
+<text x="907" y="302" class="xxs" fill="#5f6368" text-anchor="end">118.05 GiB</text>
+<text x="493" y="318" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">decoder_layer_input 放回 device</tspan></text>
+<rect x="493" y="326" width="59.5958676377454" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="323" x2="542.0625" y2="340" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="336" class="num" fill="#d93025">1.21×</text>
+<text x="907" y="336" class="xxs" fill="#5f6368" text-anchor="end">115.08 GiB</text>
+<text x="493" y="352" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">remat_policy=full</tspan>　<tspan font-weight="700" fill="#d93025">跟上一行一字不差</tspan></text>
+<rect x="493" y="360" width="59.5958676377454" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="357" x2="542.0625" y2="374" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="370" class="num" fill="#d93025">1.21×</text>
+<text x="907" y="370" class="xxs" fill="#5f6368" text-anchor="end">115.08 GiB</text>
+<text x="493" y="386" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">mlpwo 放回 device</tspan></text>
+<rect x="493" y="394" width="167.50333148617267" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="391" x2="542.0625" y2="408" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="404" class="num" fill="#d93025">3.41×</text>
+<text x="907" y="404" class="xxs" fill="#5f6368" text-anchor="end">323.45 GiB</text>
+<text x="493" y="420" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">remat_policy=minimal</tspan></text>
+<rect x="493" y="428" width="291.3403129617902" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="425" x2="542.0625" y2="442" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="438" class="num" fill="#d93025">5.94×</text>
+<text x="907" y="438" class="xxs" fill="#5f6368" text-anchor="end">562.58 GiB</text>
+<text x="493" y="454" class="xxs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">qkv_proj 放回 device</tspan>　<tspan font-weight="700" fill="#d93025">改了没反应</tspan></text>
+<rect x="493" y="462" width="38.813957937513194" height="11" rx="3" fill="#1e8e3e"/>
+<line x1="542.0625" y1="459" x2="542.0625" y2="476" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="472" class="num" fill="#1e8e3e">0.79×</text>
+<text x="907" y="472" class="xxs" fill="#5f6368" text-anchor="end">74.95 GiB</text>
+<text x="493" y="488" class="xxs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">mlpwi 放回 device</tspan>　<tspan font-weight="700" fill="#d93025">改了没反应</tspan></text>
+<rect x="493" y="496" width="38.813957937513194" height="11" rx="3" fill="#1e8e3e"/>
+<line x1="542.0625" y1="493" x2="542.0625" y2="510" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="506" class="num" fill="#1e8e3e">0.79×</text>
+<text x="907" y="506" class="xxs" fill="#5f6368" text-anchor="end">74.95 GiB</text>
+<rect x="493" y="548" width="414" height="72" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="507" y="570" class="xs"><tspan font-weight="700" fill="#d93025">最后两行改了完全没反应</tspan> —— 这两个旋钮在本模型的 custom remat 路径上<tspan font-weight="700" fill="#202124">根</tspan></text>
+<text x="507" y="586" class="xs"><tspan font-weight="700" fill="#202124">本没被读到</tspan>。<tspan font-weight="700" fill="#202124">改了没反应 ≠ 改对了。</tspan></text>
+<rect x="934" y="124" width="446" height="512" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="950" y="150" class="sec">丙　·　哪些是承重墙</text>
+<text x="950" y="170" class="xs"><tspan fill="#9aa0a6">同一份配置，只改带哪些 XLA flag。</tspan></text>
+<rect x="950" y="202" width="414" height="50" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="964" y="222" class="xs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">生产那 16 个都带上</tspan></text>
+<text x="1350" y="224" class="num" fill="#1e8e3e" text-anchor="end">74.95</text>
+<text x="1350" y="242" class="xxs" fill="#1e8e3e" text-anchor="end">✅</text>
+<text x="964" y="242" class="xxs">还剩约 19.8 GiB 余量</text>
+<rect x="950" y="258" width="414" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="278" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">一个都不带</tspan></text>
+<text x="1350" y="280" class="num" fill="#d93025" text-anchor="end">95.01</text>
+<text x="1350" y="298" class="xxs" fill="#d93025" text-anchor="end">❌</text>
+<text x="964" y="298" class="xxs"><tspan font-weight="700" fill="#d93025">只超 0.3%</tspan></text>
+<rect x="950" y="314" width="414" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="334" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">只带 vmem 上限那一个</tspan></text>
+<text x="1350" y="336" class="num" fill="#d93025" text-anchor="end">94.81</text>
+<text x="1350" y="354" class="xxs" fill="#d93025" text-anchor="end">❌</text>
+<text x="964" y="354" class="xxs">几乎没省</text>
+<rect x="950" y="370" width="414" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="390" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">只带 SparseCore 卸载那 9 个</tspan></text>
+<text x="1350" y="392" class="num" fill="#d93025" text-anchor="end">95.01</text>
+<text x="1350" y="410" class="xxs" fill="#d93025" text-anchor="end">❌</text>
+<text x="964" y="410" class="xxs"><tspan font-weight="700" fill="#d93025">跟一个都不带一模一样</tspan></text>
+<rect x="950" y="426" width="414" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="446" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">只带调度器组</tspan></text>
+<text x="1350" y="448" class="num" fill="#d93025" text-anchor="end">—</text>
+<text x="1350" y="466" class="xxs" fill="#d93025" text-anchor="end">❌</text>
+<text x="964" y="466" class="xxs"><tspan font-weight="700" fill="#d93025">换了一种崩法：VMEM 爆，不是 HBM</tspan></text>
+<rect x="950" y="482" width="414" height="50" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="964" y="502" class="xs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">vmem 上限 ＋ 调度器组</tspan></text>
+<text x="1350" y="504" class="num" fill="#1e8e3e" text-anchor="end">74.95</text>
+<text x="1350" y="522" class="xxs" fill="#1e8e3e" text-anchor="end">✅</text>
+<text x="964" y="522" class="xxs"><tspan font-weight="700" fill="#202124">这两组才是承重的</tspan></text>
+<rect x="950" y="548" width="414" height="72" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="964" y="570" class="xs"><tspan font-weight="700" fill="#202124">这组 flag 把峰值临时空间从 95.01 压到 74.95 GiB，低 21%</tspan> —— <tspan font-weight="700" fill="#d93025">正好跨过</tspan></text>
+<text x="964" y="586" class="xs"><tspan font-weight="700" fill="#d93025"> 94.74 那条线。</tspan></text>
+<text x="964" y="604" class="xs"><tspan fill="#9aa0a6">而且必须成对：单开哪一个都崩，只是崩法不同。</tspan></text>
+<rect x="20" y="664" width="1360" height="130" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="692" class="sec">三条发现里，只有一条明年还成立</text>
+<text x="38" y="718" class="xs"><tspan font-weight="700" fill="#202124">甲和丙是数字，换个模型、换代硬件就都变了。</tspan><tspan font-weight="700" fill="#d93025">乙是一句能带走的话：改了没反应 ≠ 改对了。</tspan><tspan font-weight="700" fill="#202124">在能免费重扫之前，「这个旋钮根本没被读到」和「调对了但不明显」长得一模一样</tspan> —— 而真机上想分开这两者，要花一轮抢卡。</text>
+<text x="38" y="741" class="xs"><tspan font-weight="700" fill="#d93025">⚠️ 但它也有看不见的东西：</tspan><tspan font-weight="700" fill="#202124">AOT 体检的是「配置文件描述的那个程序」。</tspan>在容器里现场打的补丁，它看不见。<tspan fill="#9aa0a6">我们就撞过一次：一个调 tile 的补丁照常打印「已生效」，加了计数器才发现</tspan><tspan font-weight="700" fill="#202124">它一次都没被调用</tspan> —— 补丁没写错，是打在了另一条 kernel 路径上，而生产走</text>
+<text x="38" y="760" class="xs">的不是那条。</text>
+<text x="1380" y="810" class="xxs" fill="#9aa0a6" text-anchor="end">实测：与 P-9 同一批 · 29 组配置探针 / 一台机器 3 并发 · 丙格那五档消融在另一台机器上独立复跑过，数字逐位相同</text>
+</svg>

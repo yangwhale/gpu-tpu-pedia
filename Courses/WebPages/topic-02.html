@@ -2053,7 +2053,7 @@ footer a{text-decoration:none}
     <b>① 两套节号不要混。</b>搬自两份《显微镜》的图，图上写「§N」指的是<b>那两份文档</b>里的节号；
     本课自己的节一律写成「<b>第 N 节</b>」。同一屏上两种记法都会出现。
     <br><b>② 不是每张图都有出处。</b>大部分搬自《显微镜》，右下角有链接；
-    <b>另有六张是本课自己画的，右下角没有出处 —— 那不是漏了，是本来就没有第三方出处可挂</b>，
+    <b>另有十一张是本课自己画的，右下角没有出处 —— 那不是漏了，是本来就没有第三方出处可挂</b>，
     硬安一个比不写更糟。
     <br><b>建议按顺序讲</b>：从整颗芯片开始，一层层往里，最后落到「谁做决定」。</div>
 
@@ -8897,14 +8897,364 @@ footer a{text-decoration:none}
     <b>先问口径，再看数字。</b>数字明年会变，提问习惯不会。</div>
 
   <div class="note ok"><span class="t">这三笔钱买到了什么 —— 下一小节讲</span>
-    这一节从头到尾在算价钱，<b>但账单只有一半：付出去的东西总要换回来点什么。</b>
-    静态换回来的那样，GPU 侧没有对应物 ——
-    <b>装不装得下、要多少 HBM、能不能<u>不占一张卡</u>就先算出来。</b>
-    它直接回答专题一里那堵墙。
-    <br><br><b>⚠️ 注意这不是「所以扯平了」。</b>是同一件事的两面：
-    把决定挪到编译期，<b>代价是编译期要收费，红利是编译期能回答问题</b> ——
-    <b>还是那句话：复杂度没有消失，只是换了个地方；
-    而换地方这件事，账单和红利是一起来的。</b></div>
+    <b>这一节从头到尾在算价钱，而账单只有一半。</b></div>
+
+  <h3>5.6　后果四：静态换回来的那一样</h3>
+  <p>上一节整节在算价钱，<b>而账单只有一半</b>。付出去的东西总要换回来点什么 ——
+    这一节讲换回来的那一样，而它在 GPU 侧<b>没有对应物</b>。</p>
+
+  <div class="note info"><span class="t">先把它跟专题一接上，别讲成一个新工具</span>
+    <b>专题一 §7.5 已经点过这条路了</b>，而且点得很克制：
+    「编译器本身就是一个静态分析器⋯它会在不申请任何加速卡的前提下报出这份配置要多少显存」，
+    紧接着给了三条限制 ——&nbsp;<b>① 编译过了 ≠ 装得下　② 报出来的数不是全部
+    ③ ⭐ 贴着上限那一带会失灵，我们判错过</b>。
+    <br><br><b>所以这一节不是介绍工具，是补两件专题一没讲的事</b>：
+    它到底<b>能算到多准</b>（下面第一张图），
+    以及准到那个程度之后<b>能拿它干什么</b>（第二张图）。
+    <b>第三条限制这一节要一路带着走 —— 它会在第二张图里正面咬人一次。</b></div>
+
+<figure class="fbox fwide" id="ms-p9">
+<svg viewBox="0 0 1400 966" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AOT 提前编译：在普通 CPU 上为手上没有的 TPU 拓扑编译训练步，得到每个 device 的显存分解，并与真机打印的数字逐位吻合">
+<text x="20" y="26" class="ttl">静态换回来的那一样　—— <tspan font-weight="700" fill="#1e8e3e">不占一张卡，先把账算清楚</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">真的走了一遍</text>
+<rect x="128.0" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="145.0" y="58" class="sm">被替换掉的那一环／要盯的那个数</text>
+<rect x="20" y="124" width="636" height="460" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="150" class="sec">甲　·　凭什么不用卡</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">四环里</tspan><tspan font-weight="700" fill="#202124">只有一环是假的</tspan>，其余三环跟真机上一模一样。</text>
+<rect x="38" y="186" width="600" height="50" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="52" y="207" class="box" fill="#1e8e3e">配置文件</text>
+<text x="230" y="207" class="xs">模型、并行策略、batch、remat、XLA flag ——</text>
+<text x="230" y="222" class="xs">跟真会跑的那份<tspan font-weight="700" fill="#202124">一字不差</tspan></text>
+<line x1="338.0" y1="236" x2="338.0" y2="256" stroke="#5f6368" stroke-width="1.4" marker-end="url(#aK)"/>
+<rect x="38" y="256" width="600" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="52" y="277" class="box" fill="#d93025">一副假的设备网格</text>
+<text x="230" y="277" class="xs">唯一被替换掉的一环。</text>
+<text x="230" y="292" class="xs"><tspan font-weight="700" fill="#202124">告诉编译器「有 64 芯片、拓扑长这样」</tspan></text>
+<line x1="338.0" y1="306" x2="338.0" y2="326" stroke="#5f6368" stroke-width="1.4" marker-end="url(#aK)"/>
+<rect x="38" y="326" width="600" height="50" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="52" y="347" class="box" fill="#1e8e3e">只造形状，不造张量</text>
+<text x="230" y="347" class="xs"><tspan font-weight="700" fill="#202124">编译这一步本来就只看形状和 dtype</tspan>，值不参与 ——</text>
+<text x="230" y="362" class="xs">所以这一环<tspan font-weight="700" fill="#202124">跟真机一模一样</tspan>，省掉的只是把数填进去</text>
+<line x1="338.0" y1="376" x2="338.0" y2="396" stroke="#5f6368" stroke-width="1.4" marker-end="url(#aK)"/>
+<rect x="38" y="396" width="600" height="50" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="52" y="417" class="box" fill="#1e8e3e">XLA 完整走一遍</text>
+<text x="230" y="417" class="xs">图优化、降到机器码、分配显存 ——</text>
+<text x="230" y="432" class="xs"><tspan font-weight="700" fill="#202124">这一步没有任何东西是假的</tspan></text>
+<rect x="38" y="470" width="600" height="86" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="52" y="496" class="xs"><tspan font-weight="700" fill="#202124">这就是 5.5 那句话的正面。</tspan>那一节说「形状是编译期常量，所以换形状要收费」；<tspan font-weight="700" fill="#202124">反过来，编译期既然什么都知道，</tspan></text>
+<text x="52" y="512" class="xs"><tspan font-weight="700" fill="#202124">编译期就能回答问题。</tspan><tspan font-weight="700" fill="#d93025">代价和红利是同一件事的两面。</tspan></text>
+<rect x="676" y="124" width="704" height="460" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="694" y="150" class="sec">乙　·　算出来的是<tspan font-weight="700" fill="#d93025">每个 device 的一本账</tspan></text>
+<text x="694" y="170" class="xs"><tspan fill="#9aa0a6">单位 </tspan><tspan font-weight="700" fill="#202124">GiB</tspan> —— <tspan font-weight="700" fill="#202124">跟编译器报 OOM 那条 94.74 同一个口径，可以直接比</tspan>。</text>
+<line x1="1151.8004" y1="188" x2="1151.8004" y2="372" stroke="#202124" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text x="1157.8004" y="200" class="num" fill="#202124">94.74</text>
+<text x="1157.8004" y="214" class="xxs" fill="#202124">GiB／device</text>
+<text x="694" y="209" class="lbl" fill="#202124">argument_size</text>
+<rect x="824" y="199" width="75.255" height="15" rx="3" fill="#5f6368"/>
+<text x="907.255" y="211" class="num" fill="#5f6368">21.75</text>
+<text x="694" y="225" class="xxs"><tspan fill="#9aa0a6">输入：权重 ＋ 优化器状态的本地分片</tspan></text>
+<text x="694" y="253" class="lbl" fill="#202124">output_size</text>
+<rect x="824" y="243" width="75.255" height="15" rx="3" fill="#5f6368"/>
+<text x="907.255" y="255" class="num" fill="#5f6368">21.75</text>
+<text x="694" y="269" class="xxs"><tspan fill="#9aa0a6">输出</tspan></text>
+<text x="694" y="297" class="lbl" fill="#d93025">temp_size</text>
+<rect x="824" y="287" width="259.327" height="15" rx="3" fill="#d93025"/>
+<text x="1091.327" y="299" class="num" fill="#d93025">74.95</text>
+<text x="694" y="313" class="xxs"><tspan fill="#9aa0a6">临时／scratch —— </tspan><tspan font-weight="700" fill="#202124">判 OOM 只看这一项</tspan></text>
+<text x="694" y="341" class="lbl" fill="#202124">generated_code</text>
+<rect x="824" y="331" width="2" height="15" rx="3" fill="#5f6368"/>
+<text x="832.9342" y="343" class="num" fill="#5f6368">0.27</text>
+<text x="694" y="357" class="xxs"><tspan fill="#9aa0a6">代码本身</tspan></text>
+<line x1="694" y1="366" x2="1362" y2="366" stroke="#dadce0" stroke-width="1"/>
+<text x="694" y="385" class="lbl" fill="#202124">host_temp_size</text>
+<rect x="824" y="375" width="102.4852" height="15" rx="3" fill="#fff" stroke="#5f6368" stroke-width="1"/>
+<text x="934.4852" y="387" class="num" fill="#5f6368">29.62</text>
+<text x="694" y="401" class="xxs"><tspan fill="#9aa0a6">host 侧临时（offload 用）—— </tspan><tspan font-weight="700" fill="#202124">不占 device HBM，不受上面那条线管</tspan></text>
+<rect x="694" y="420" width="668" height="104" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="708" y="444" class="xs"><tspan font-weight="700" fill="#d93025">判 OOM 只看 temp_size，别把 argument 加进去。</tspan>早期那个「argument ＋ temp ＋ 代码」的公式<tspan font-weight="700" fill="#202124">偏保守，会把跑得动的配置</tspan></text>
+<text x="708" y="460" class="xs"><tspan font-weight="700" fill="#202124">误判成 OOM</tspan>。<tspan font-weight="700" fill="#202124">原因是 argument 里有 21.75 GiB 跟输出是同一块内存（别名）</tspan>，两笔不能相加。</text>
+<text x="708" y="480" class="xs"><tspan font-weight="700" fill="#202124">temp 是 argument 的 3.4 倍</tspan> —— 这个配置的显存大头<tspan font-weight="700" fill="#202124">不是权重，是激活和 scratch</tspan>。<tspan fill="#9aa0a6">想省显存该动 remat 和 batch，不是去</tspan></text>
+<text x="708" y="496" class="xs"><tspan fill="#9aa0a6">切权重。</tspan></text>
+<rect x="694" y="534" width="668" height="38" rx="8" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="708" y="556" class="xs"><tspan font-weight="700" fill="#202124">⚠️ 这本账里没有「跑多快」。</tspan><tspan fill="#9aa0a6">AOT 只回答装不装得下、编不编得过，一个吞吐数字都给不了。</tspan></text>
+<rect x="20" y="612" width="1360" height="190" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="38" y="638" class="sec">丙　·　凭什么信它　—— <tspan font-weight="700" fill="#1e8e3e">在真机打印的精度内完全吻合</tspan></text>
+<text x="38" y="658" class="xs"><tspan fill="#9aa0a6">同一份配置：左边是 CPU 上算出来的，右边是 64 芯片真跑起来之后自己打印的。</tspan><tspan font-weight="700" fill="#202124">左边这几个数就是乙格那本账</tspan>，同一个口径（GiB）—— 所以丙格证的不是「又量了一遍」，是<tspan font-weight="700" fill="#202124">「AOT 算的 ＝ 真机得到的」</tspan>。</text>
+<rect x="38" y="696" width="316" height="62" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="52" y="716" class="lbl" fill="#202124">temp（pdbs=12）</text>
+<text x="52" y="744" class="xxs" fill="#5f6368">AOT 算的</text>
+<text x="134" y="746" class="numb" fill="#202124">74.95</text>
+<text x="206" y="744" class="xxs" fill="#5f6368">真机打的</text>
+<text x="288" y="746" class="numb" fill="#1e8e3e">75.0</text>
+<rect x="366" y="696" width="316" height="62" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="380" y="716" class="lbl" fill="#202124">temp（pdbs=13）</text>
+<text x="380" y="744" class="xxs" fill="#5f6368">AOT 算的</text>
+<text x="462" y="746" class="numb" fill="#202124">73.11</text>
+<text x="534" y="744" class="xxs" fill="#5f6368">真机打的</text>
+<text x="616" y="746" class="numb" fill="#1e8e3e">73.1</text>
+<rect x="694" y="696" width="316" height="62" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="708" y="716" class="lbl" fill="#202124">argument</text>
+<text x="708" y="744" class="xxs" fill="#5f6368">AOT 算的</text>
+<text x="790" y="746" class="numb" fill="#202124">21.75</text>
+<text x="862" y="744" class="xxs" fill="#5f6368">真机打的</text>
+<text x="944" y="746" class="numb" fill="#1e8e3e">21.7</text>
+<rect x="1022" y="696" width="316" height="62" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="1036" y="716" class="lbl" fill="#202124">host temp</text>
+<text x="1036" y="744" class="xxs" fill="#5f6368">AOT 算的</text>
+<text x="1118" y="746" class="numb" fill="#202124">29.62</text>
+<text x="1190" y="744" class="xxs" fill="#5f6368">真机打的</text>
+<text x="1272" y="746" class="numb" fill="#1e8e3e">29.6</text>
+<text x="38" y="782" class="xs"><tspan font-weight="700" fill="#202124">它给的不是估算，就是编译器在真机上会得到的同一份账</tspan><tspan fill="#9aa0a6">（因为算这份账的本来就是同一个编译器）。⚠️ 但能说的只到这儿 —— </tspan><tspan font-weight="700" fill="#202124">真机那栏只打三位有效数字</tspan>，推不出「一个字节都不差」。真正的字节级证据是另一组：同一份配置在两台机器上编，产物 md5 一模一样。</text>
+<rect x="20" y="830" width="1360" height="108" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="38" y="858" class="sec">⚠️ 讲这张图最容易讲错的一句：它不是用来省编译时间的</text>
+<text x="38" y="884" class="xs">「提前编译」这四个字会把人往那儿引，但账不是那么算的：<tspan font-weight="700" fill="#202124">64 芯片上真机编译只要 46 秒</tspan>，而启动到第一步一共 227 秒 —— <tspan font-weight="700" fill="#d93025">编译只占 1/5</tspan>。<tspan font-weight="700" fill="#202124">带上预编译产物：227 秒 → 175.6 秒，省 51 秒</tspan><tspan fill="#9aa0a6">（编译本体 46 秒换成加载 400 MB 产物的 2.15 秒；余下约 8 秒源记录</tspan></text>
+<text x="38" y="903" class="xs"><tspan fill="#9aa0a6">没拆，这里也不硬凑）</tspan>。</text>
+<text x="38" y="926" class="xs"><tspan font-weight="700" fill="#202124">它真正省掉的是这个循环：排队 → 抢到 64 张卡 → 跑起来发现装不下 → 退出 → 重排队。</tspan><tspan font-weight="700" fill="#d93025">那是小时级的，而且占着别人的容量。</tspan><tspan font-weight="700" fill="#202124">一次探针约两分钟、一台普通 CPU 机器 —— 每换一次配置就跑一遍，没有理由省。</tspan></text>
+<text x="1380" y="954" class="xxs" fill="#9aa0a6" text-anchor="end">实测：Hunyuan3-295B-A21B（80 层）· 目标 64 芯片 · 一台普通 CPU 机器 · 单个探针约 2 分钟；含存产物上传的全流程约 5 分钟</text>
+</svg>
+<figcaption><b>5.5 整节在算代价，这张图是账单的另一半</b>，也是回来还专题一那笔账的地方 ——那一课讲显存墙时留下的「到底装不装得下」，在这里第一次有了不用占卡的答法。<b>三格缺一格论点就塌</b>：没有甲就没理由信它不用卡，没有丙就只是个估算器。<b>讲的时候把时间花在图里那条黄带上</b> —— 它打掉的是这张图最容易被讲错的一句。</figcaption>
+</figure>
+
+  <div class="note warn"><span class="t">讲法建议：那个数留给台下猜，别直接给</span>
+    「提前编译」这四个字会把人往「省编译时间」上引，<b>而且这个误解特别顽固</b>，
+    因为它听起来完全合理。<b>所以先问一句：「提前编译，你觉得省下了多少？」</b>
+    房间里多数人会答「大头」。<b>让他们答完，再翻图上那条黄带。</b>
+    <br><br>这门课里「名字把人带偏」已经不是第一次了 ——&nbsp;
+    第 0 节的 94.74、第 4 节的 NVL72 都是。
+    <b>解法每次都一样：不要读名字，去读它实际替掉了哪一步。</b></div>
+
+  <div class="note q"><span class="t">这一节最该抄走的一句，是关于单位的</span>
+    图里那条上限 <b>94.74 是 GiB</b>，第 0 节推过那三步（192 GiB/chip ÷ 2 device，
+    再扣掉约 1.2 GiB runtime 自留）。
+    <b>但我们自己的原始记录里，那本显存账是按十进制 GB 记的</b>
+    （字节 ÷ 10⁹，temp 写作 80.48），
+    <b>而编译不过时编译器报的那个数又是 GiB</b> ——&nbsp;
+    <b>同一张表里两种单位，差 7.4%。</b>
+    <br><br>照着原始记录直接比，pass／fail 的结论不会错（那一侧偏保守），
+    <b>但派生出来的数会错</b>：余量算成 14 而不是 19.8 GiB、
+    flag 的收益算成 15.3% 而不是 21%。<b>下面两张图都已经统一换算成 GiB。</b>
+    <br><br>——&nbsp;上一节我们刚在「窗口到底是 53、55 还是 60 分钟」上绊过一次。
+    <b>隔一节又来一次，这不是巧合，是这类工作的常态。</b></div>
+
+  <p><b>到这里为止，它还只是个体检工具。</b>
+    但一次探针约两分钟、不占一张卡 ——&nbsp;
+    <b>便宜到这个程度，它就不再是体检了，而是搜索器</b>：
+    先在 CPU 上把配置空间扫一遍，只问「装不装得下」，
+    <b>把真机额度留给活下来的那少数几个。</b></p>
+
+<figure class="fbox fwide" id="ms-p10">
+<svg viewBox="0 0 1400 822" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="用 AOT 在 CPU 上扫配置空间的三类发现：batch 天花板、remat 策略对显存的影响、以及一组 XLA flag 是能否跑通的分界">
+<text x="20" y="26" class="ttl">体检工具变成搜索器　—— <tspan font-weight="700" fill="#1a73e8">29 组探针，一张卡都没占</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">装得下</text>
+<rect x="93.5" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="110.5" y="58" class="sm">装不下</text>
+<line x1="232" y1="54" x2="262" y2="54" stroke="#202124" stroke-width="1.6" stroke-dasharray="5 4"/>
+<text x="268" y="58" class="sm">判据：需要的 temp vs 94.74 GiB／device</text>
+<rect x="20" y="124" width="446" height="512" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="36" y="150" class="sec">甲　·　天花板在哪</text>
+<text x="36" y="170" class="xs"><tspan fill="#9aa0a6">从想要的 batch 往上加，装不下就退回来。</tspan></text>
+<rect x="36" y="202" width="414" height="54" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="50" y="225" class="box" fill="#1e8e3e">pdbs = 12</text>
+<text x="50" y="244" class="xxs" fill="#5f6368">global batch 1,536</text>
+<text x="436" y="227" class="num" fill="#1e8e3e" text-anchor="end">74.95 GiB</text>
+<text x="436" y="245" class="xxs" fill="#1e8e3e" text-anchor="end">✅ 装得下</text>
+<text x="188" y="245" class="xxs">原来的生产配置</text>
+<rect x="36" y="264" width="414" height="54" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="50" y="287" class="box" fill="#1e8e3e">pdbs = 13</text>
+<text x="50" y="306" class="xxs" fill="#5f6368">global batch 1,664</text>
+<text x="436" y="289" class="num" fill="#1e8e3e" text-anchor="end">73.11 GiB</text>
+<text x="436" y="307" class="xxs" fill="#1e8e3e" text-anchor="end">✅ 装得下</text>
+<text x="188" y="307" class="xxs"><tspan font-weight="700" fill="#d93025">比 12 还省 1.8 GiB</tspan></text>
+<rect x="36" y="326" width="414" height="54" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="50" y="349" class="box" fill="#d93025">pdbs = 14</text>
+<text x="50" y="368" class="xxs" fill="#5f6368">global batch 1,792</text>
+<text x="436" y="351" class="num" fill="#d93025" text-anchor="end">96.53 GiB</text>
+<text x="436" y="369" class="xxs" fill="#d93025" text-anchor="end">❌ 装不下</text>
+<text x="188" y="369" class="xxs">只差 1.79 GiB</text>
+<rect x="36" y="388" width="414" height="54" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="50" y="411" class="box" fill="#d93025">pdbs = 16</text>
+<text x="50" y="430" class="xxs" fill="#5f6368">global batch 2,048</text>
+<text x="436" y="413" class="num" fill="#d93025" text-anchor="end">102.59 GiB</text>
+<text x="436" y="431" class="xxs" fill="#d93025" text-anchor="end">❌ 装不下</text>
+<text x="188" y="431" class="xxs">15 也试过，同样装不下</text>
+<rect x="36" y="504" width="414" height="116" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="50" y="526" class="xs"><tspan font-weight="700" fill="#d93025">13 比 12 更省，这是反直觉的。</tspan>复现过两次、<tspan font-weight="700" fill="#202124">字节级一致</tspan>。机制没查明 —— <tspan font-weight="700" fill="#202124">记</tspan></text>
+<text x="50" y="542" class="xs"><tspan font-weight="700" fill="#202124">在这里是因为它可执行，不是因为它被解释清楚了。</tspan></text>
+<text x="50" y="561" class="xs"><tspan fill="#9aa0a6">14 只差 1.79 GiB，试了三种省法都补不上。</tspan></text>
+<text x="50" y="580" class="xs"><tspan font-weight="700" fill="#202124">⚠️ 但别把它当神谕。</tspan>专题一提醒过：<tspan font-weight="700" fill="#202124">贴着上限那一带它判不准，我们判错过</tspan>。</text>
+<text x="50" y="596" class="xs"><tspan font-weight="700" fill="#202124">14 这种「只差 1.79」的，仍然要真机确认。</tspan></text>
+<rect x="477" y="124" width="446" height="512" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="493" y="150" class="sec">乙　·　旋钮灵不灵</text>
+<text x="493" y="170" class="xs"><tspan fill="#9aa0a6">横轴是</tspan><tspan font-weight="700" fill="#202124">倍数</tspan>（需要的 temp ÷ 94.74 GiB）—— 这样 <tspan font-weight="700" fill="#202124">1.0× 那条线本身就是判据</tspan>，一</text>
+<text x="493" y="186" class="xs">眼看出过没过。每根条右边仍标原始 GiB。</text>
+<text x="547.0625" y="236" class="xxs" fill="#202124">上限 1.0×</text>
+<text x="493" y="250" class="xxs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">生产配置：custom ＋ 一处 offload</tspan></text>
+<rect x="493" y="258" width="38.813957937513194" height="11" rx="3" fill="#1e8e3e"/>
+<line x1="542.0625" y1="255" x2="542.0625" y2="272" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="268" class="num" fill="#1e8e3e">0.79×</text>
+<text x="907" y="268" class="xxs" fill="#5f6368" text-anchor="end">74.95 GiB</text>
+<text x="493" y="284" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">out_proj 放回 device</tspan></text>
+<rect x="493" y="292" width="61.13392574414186" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="289" x2="542.0625" y2="306" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="302" class="num" fill="#d93025">1.25×</text>
+<text x="907" y="302" class="xxs" fill="#5f6368" text-anchor="end">118.05 GiB</text>
+<text x="493" y="318" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">decoder_layer_input 放回 device</tspan></text>
+<rect x="493" y="326" width="59.5958676377454" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="323" x2="542.0625" y2="340" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="336" class="num" fill="#d93025">1.21×</text>
+<text x="907" y="336" class="xxs" fill="#5f6368" text-anchor="end">115.08 GiB</text>
+<text x="493" y="352" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">remat_policy=full</tspan>　<tspan font-weight="700" fill="#d93025">跟上一行一字不差</tspan></text>
+<rect x="493" y="360" width="59.5958676377454" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="357" x2="542.0625" y2="374" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="370" class="num" fill="#d93025">1.21×</text>
+<text x="907" y="370" class="xxs" fill="#5f6368" text-anchor="end">115.08 GiB</text>
+<text x="493" y="386" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">mlpwo 放回 device</tspan></text>
+<rect x="493" y="394" width="167.50333148617267" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="391" x2="542.0625" y2="408" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="404" class="num" fill="#d93025">3.41×</text>
+<text x="907" y="404" class="xxs" fill="#5f6368" text-anchor="end">323.45 GiB</text>
+<text x="493" y="420" class="xxs" fill="#d93025"><tspan font-weight="700" fill="#202124">remat_policy=minimal</tspan></text>
+<rect x="493" y="428" width="291.3403129617902" height="11" rx="3" fill="#d93025"/>
+<line x1="542.0625" y1="425" x2="542.0625" y2="442" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="438" class="num" fill="#d93025">5.94×</text>
+<text x="907" y="438" class="xxs" fill="#5f6368" text-anchor="end">562.58 GiB</text>
+<text x="493" y="454" class="xxs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">qkv_proj 放回 device</tspan>　<tspan font-weight="700" fill="#d93025">改了没反应</tspan></text>
+<rect x="493" y="462" width="38.813957937513194" height="11" rx="3" fill="#1e8e3e"/>
+<line x1="542.0625" y1="459" x2="542.0625" y2="476" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="472" class="num" fill="#1e8e3e">0.79×</text>
+<text x="907" y="472" class="xxs" fill="#5f6368" text-anchor="end">74.95 GiB</text>
+<text x="493" y="488" class="xxs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">mlpwi 放回 device</tspan>　<tspan font-weight="700" fill="#d93025">改了没反应</tspan></text>
+<rect x="493" y="496" width="38.813957937513194" height="11" rx="3" fill="#1e8e3e"/>
+<line x1="542.0625" y1="493" x2="542.0625" y2="510" stroke="#202124" stroke-width="1.5" stroke-dasharray="4 3"/>
+<text x="813" y="506" class="num" fill="#1e8e3e">0.79×</text>
+<text x="907" y="506" class="xxs" fill="#5f6368" text-anchor="end">74.95 GiB</text>
+<rect x="493" y="548" width="414" height="72" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="507" y="570" class="xs"><tspan font-weight="700" fill="#d93025">最后两行改了完全没反应</tspan> —— 这两个旋钮在本模型的 custom remat 路径上<tspan font-weight="700" fill="#202124">根</tspan></text>
+<text x="507" y="586" class="xs"><tspan font-weight="700" fill="#202124">本没被读到</tspan>。<tspan font-weight="700" fill="#202124">改了没反应 ≠ 改对了。</tspan></text>
+<rect x="934" y="124" width="446" height="512" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="950" y="150" class="sec">丙　·　哪些是承重墙</text>
+<text x="950" y="170" class="xs"><tspan fill="#9aa0a6">同一份配置，只改带哪些 XLA flag。</tspan></text>
+<rect x="950" y="202" width="414" height="50" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="964" y="222" class="xs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">生产那 16 个都带上</tspan></text>
+<text x="1350" y="224" class="num" fill="#1e8e3e" text-anchor="end">74.95</text>
+<text x="1350" y="242" class="xxs" fill="#1e8e3e" text-anchor="end">✅</text>
+<text x="964" y="242" class="xxs">还剩约 19.8 GiB 余量</text>
+<rect x="950" y="258" width="414" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="278" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">一个都不带</tspan></text>
+<text x="1350" y="280" class="num" fill="#d93025" text-anchor="end">95.01</text>
+<text x="1350" y="298" class="xxs" fill="#d93025" text-anchor="end">❌</text>
+<text x="964" y="298" class="xxs"><tspan font-weight="700" fill="#d93025">只超 0.3%</tspan></text>
+<rect x="950" y="314" width="414" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="334" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">只带 vmem 上限那一个</tspan></text>
+<text x="1350" y="336" class="num" fill="#d93025" text-anchor="end">94.81</text>
+<text x="1350" y="354" class="xxs" fill="#d93025" text-anchor="end">❌</text>
+<text x="964" y="354" class="xxs">几乎没省</text>
+<rect x="950" y="370" width="414" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="390" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">只带 SparseCore 卸载那 9 个</tspan></text>
+<text x="1350" y="392" class="num" fill="#d93025" text-anchor="end">95.01</text>
+<text x="1350" y="410" class="xxs" fill="#d93025" text-anchor="end">❌</text>
+<text x="964" y="410" class="xxs"><tspan font-weight="700" fill="#d93025">跟一个都不带一模一样</tspan></text>
+<rect x="950" y="426" width="414" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="446" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">只带调度器组</tspan></text>
+<text x="1350" y="448" class="num" fill="#d93025" text-anchor="end">—</text>
+<text x="1350" y="466" class="xxs" fill="#d93025" text-anchor="end">❌</text>
+<text x="964" y="466" class="xxs"><tspan font-weight="700" fill="#d93025">换了一种崩法：VMEM 爆，不是 HBM</tspan></text>
+<rect x="950" y="482" width="414" height="50" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="964" y="502" class="xs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">vmem 上限 ＋ 调度器组</tspan></text>
+<text x="1350" y="504" class="num" fill="#1e8e3e" text-anchor="end">74.95</text>
+<text x="1350" y="522" class="xxs" fill="#1e8e3e" text-anchor="end">✅</text>
+<text x="964" y="522" class="xxs"><tspan font-weight="700" fill="#202124">这两组才是承重的</tspan></text>
+<rect x="950" y="548" width="414" height="72" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="964" y="570" class="xs"><tspan font-weight="700" fill="#202124">这组 flag 把峰值临时空间从 95.01 压到 74.95 GiB，低 21%</tspan> —— <tspan font-weight="700" fill="#d93025">正好跨过</tspan></text>
+<text x="964" y="586" class="xs"><tspan font-weight="700" fill="#d93025"> 94.74 那条线。</tspan></text>
+<text x="964" y="604" class="xs"><tspan fill="#9aa0a6">而且必须成对：单开哪一个都崩，只是崩法不同。</tspan></text>
+<rect x="20" y="664" width="1360" height="130" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="692" class="sec">三条发现里，只有一条明年还成立</text>
+<text x="38" y="718" class="xs"><tspan font-weight="700" fill="#202124">甲和丙是数字，换个模型、换代硬件就都变了。</tspan><tspan font-weight="700" fill="#d93025">乙是一句能带走的话：改了没反应 ≠ 改对了。</tspan><tspan font-weight="700" fill="#202124">在能免费重扫之前，「这个旋钮根本没被读到」和「调对了但不明显」长得一模一样</tspan> —— 而真机上想分开这两者，要花一轮抢卡。</text>
+<text x="38" y="741" class="xs"><tspan font-weight="700" fill="#d93025">⚠️ 但它也有看不见的东西：</tspan><tspan font-weight="700" fill="#202124">AOT 体检的是「配置文件描述的那个程序」。</tspan>在容器里现场打的补丁，它看不见。<tspan fill="#9aa0a6">我们就撞过一次：一个调 tile 的补丁照常打印「已生效」，加了计数器才发现</tspan><tspan font-weight="700" fill="#202124">它一次都没被调用</tspan> —— 补丁没写错，是打在了另一条 kernel 路径上，而生产走</text>
+<text x="38" y="760" class="xs">的不是那条。</text>
+<text x="1380" y="810" class="xxs" fill="#9aa0a6" text-anchor="end">实测：与 P-9 同一批 · 29 组配置探针 / 一台机器 3 并发 · 丙格那五档消融在另一台机器上独立复跑过，数字逐位相同</text>
+</svg>
+<figcaption><b>上一张证明「算得准」，这一张是那句话的推论：既然准且免费，就别只用它体检。</b>三格的性质刻意不同 —— 一个是边界、一个是死旋钮、一个是承重墙。<b>讲的时候把重量压在中间那格</b>：另外两格明年换个模型就过期，中间那格不会。</figcaption>
+</figure>
+
+  <div class="note danger"><span class="t">⭐ 「改了没反应」是一个假阴性，不是一个阴性</span>
+    图里中间那格的最后两行值得单独拎出来讲，因为它是一类<b>极难自己发现的错误</b>。
+    <br><br><b>在真机上，「这个旋钮根本没被读到」和「调对了但收益不明显」
+    长得一模一样</b>：都是跑一轮、看数字、没变化。要分开这两者得再花一轮做对照 ——&nbsp;
+    <b>而多数人不会花这一轮，于是把「没接上线」记成了「这条路没用」，
+    然后这条路就被永久划掉了。</b>
+    <br><br><b>这才是零成本重扫真正买到的东西</b>：不是省时间，
+    是<b>让一类原本会被误判成「结论」的东西，暴露成「没接上」</b>。</div>
+
+  <p><b>最后一件事：这套扫法到底换回了什么。</b>
+    这一步不能含糊 ——&nbsp;<b>它换回来的和它换不回来的，必须放在同一屏上说</b>。</p>
+
+<figure class="fbox fwide" id="ms-p11">
+<svg viewBox="0 0 1400 612" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AOT 配置搜索最终兑现的收益：per-chip 630 → 666.6 TFLOP/s，以及同一组配置上 AOT temp 与真机峰值 HBM 排序相反的边界案例">
+<text x="20" y="26" class="ttl">所以呢　—— <tspan font-weight="700" fill="#1e8e3e">这套先在 CPU 上搜，最后换回了 5.8%</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">真机实测的收益</text>
+<rect x="139.5" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="156.5" y="58" class="sm">工具够不到的那一格</text>
+<rect x="20" y="124" width="792" height="340" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="150" class="sec">甲　·　它换回来的收益</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">不画条形图：630 → 666.6 只差 5.8%，从 0 起画看不见，把轴从 600 起画又是在放大差异。</tspan><tspan font-weight="700" fill="#202124">数字本身就是刻度。</tspan></text>
+<rect x="38" y="200" width="756" height="52" rx="8" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="52" y="231" class="box" fill="#202124">此前最优</text>
+<text x="350" y="233" class="numb" fill="#202124" text-anchor="end">630</text>
+<text x="360" y="233" class="xxs" fill="#5f6368">TFLOP/s per-chip</text>
+<text x="560" y="233" class="lbl" fill="#202124">MFU 27.31%</text>
+<line x1="80" y1="252" x2="80" y2="268" stroke="#5f6368" stroke-width="1.4" marker-end="url(#aK)"/>
+<text x="100" y="264" class="xxs"><tspan font-weight="700" fill="#202124">+32.2</tspan>　<tspan fill="#9aa0a6">反向那两条路也被 tile 了</tspan></text>
+<rect x="38" y="272" width="756" height="52" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="52" y="303" class="box" fill="#1e8e3e">＋ 18 个 tile 参数</text>
+<text x="350" y="305" class="numb" fill="#1e8e3e" text-anchor="end">662.2</text>
+<text x="360" y="305" class="xxs" fill="#5f6368">TFLOP/s per-chip</text>
+<text x="560" y="305" class="lbl" fill="#1e8e3e">MFU 28.70%</text>
+<line x1="80" y1="324" x2="80" y2="340" stroke="#5f6368" stroke-width="1.4" marker-end="url(#aK)"/>
+<text x="100" y="336" class="xxs"><tspan font-weight="700" fill="#202124">+4.4</tspan>　<tspan fill="#9aa0a6">就是 AOT 扫出来的那个反直觉档</tspan></text>
+<rect x="38" y="344" width="756" height="52" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="52" y="375" class="box" fill="#1e8e3e">＋ pdbs 12 → 13</text>
+<text x="350" y="377" class="numb" fill="#1e8e3e" text-anchor="end">666.6</text>
+<text x="360" y="377" class="xxs" fill="#5f6368">TFLOP/s per-chip</text>
+<text x="560" y="377" class="lbl" fill="#1e8e3e">MFU 28.89%</text>
+<rect x="38" y="410" width="756" height="40" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="52" y="432" class="xs"><tspan font-weight="700" fill="#d93025">但这 5.8% 不是 AOT 测出来的。</tspan><tspan font-weight="700" fill="#202124">AOT 只说了一句「13 装得下、14 装不下」</tspan>，<tspan fill="#9aa0a6">把真机额度省到该花的地方 —— 性能数字全部来自真机。</tspan></text>
+<rect x="824" y="124" width="556" height="340" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="842" y="150" class="sec">乙　·　它给不了的那一格</text>
+<text x="842" y="170" class="xs"><tspan fill="#9aa0a6">同一组配置，pdbs 从 12 换到 13，两个指标</tspan><tspan font-weight="700" fill="#202124">方向相反</tspan>。</text>
+<rect x="842" y="198" width="520" height="78" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="856" y="220" class="lbl" fill="#202124">AOT 算的 temp</text>
+<text x="856" y="236" class="xxs" fill="#5f6368">GiB（口径明确）</text>
+<text x="864" y="262" class="xxs" fill="#5f6368">pdbs 12</text>
+<text x="944" y="264" class="numb" fill="#202124">74.95</text>
+<text x="1014" y="262" class="xxs" fill="#5f6368">→</text>
+<text x="1038" y="262" class="xxs" fill="#5f6368">pdbs 13</text>
+<text x="1118" y="264" class="numb" fill="#202124">73.11</text>
+<text x="1348" y="264" class="numb" fill="#1e8e3e" text-anchor="end">↓ 1.84</text>
+<rect x="842" y="286" width="520" height="78" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="856" y="308" class="lbl" fill="#202124">真机打印的峰值 HBM</text>
+<text x="856" y="324" class="xxs" fill="#5f6368">源记录只写「G」，没写清口径</text>
+<text x="864" y="350" class="xxs" fill="#5f6368">pdbs 12</text>
+<text x="944" y="352" class="numb" fill="#202124">91.94</text>
+<text x="1014" y="350" class="xxs" fill="#5f6368">→</text>
+<text x="1038" y="350" class="xxs" fill="#5f6368">pdbs 13</text>
+<text x="1118" y="352" class="numb" fill="#202124">92.57</text>
+<text x="1348" y="352" class="numb" fill="#d93025" text-anchor="end">↑ 0.63</text>
+<rect x="842" y="410" width="520" height="40" rx="8" fill="#fff" stroke="#202124" stroke-width="1.2"/>
+<text x="856" y="432" class="xs"><tspan font-weight="700" fill="#202124">两个都没错。</tspan><tspan fill="#9aa0a6">temp 是判 OOM 的那一项，</tspan><tspan font-weight="700" fill="#202124">从来不是「谁更省显存」的排名。</tspan></text>
+<rect x="20" y="492" width="1360" height="92" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="520" class="sec">这两格必须一起看</text>
+<text x="38" y="546" class="xs"><tspan font-weight="700" fill="#202124">只看左边，会以为「AOT 帮我们提了 5.8%」—— 它一个性能数字都给不了。只看右边，又像在说这工具不可靠。</tspan><tspan font-weight="700" fill="#d93025">合起来才是真话：它回答的是「装不装得下」，而它的价值是把有限的真机额度省到该花的地方。</tspan><tspan fill="#9aa0a6">用一个指标去回答它没被设计来回答的问题 —— 这是这门课里</tspan></text>
+<text x="38" y="565" class="xs"><tspan fill="#9aa0a6">反复出现的同一种错。</tspan></text>
+<text x="1380" y="600" class="xxs" fill="#9aa0a6" text-anchor="end">实测：Hunyuan3-295B-A21B · 64 芯片 4x4x4 · per-chip = 日志 per-device × 2 · MFU = per-chip ÷ 2307</text>
+</svg>
+<figcaption><b>上一张停在「我们扫了 29 组配置」—— 那是过程，不是落点。</b>这张回答「所以呢」，而且把收益和边界摆在同一屏 ——<b>因为分开摆，两边都会被听成假话</b>。它也是第 5 节的收尾：<b>整节讲的「复杂度换了个地方」，到这里才看得见换来的是什么、以及换不来的是什么。</b></figcaption>
+</figure>
 
   <div class="note danger"><span class="t">⭐ 全课的落点：两个「128 倍」出现在完全不同的位置</span>
     <b>第 3 节那个 128 倍在芯片内部</b>：一颗 B200 里有 592 个 Tensor Core，
@@ -8913,8 +9263,10 @@ footer a{text-decoration:none}
     <b>TPU 的协调主要发生在芯片之间。</b>
     <br><br>这不是巧合，是同一个设计取向的两个侧面：
     <b>一边把复杂度收进一颗芯片里由硬件消化，另一边把复杂度摊到芯片之间由软件面对。</b>
-    <br>而这一节说明<b>那份复杂度并没有消失</b> ——
+    <br>而<b>第 5 节整节</b>说明<b>那份复杂度并没有消失</b> ——
     它从硬件流到了编译器，又从编译器流到了框架、流到了你写 kernel 的那只手上。
+    <br><b>5.6 补的是这趟流动的对价</b>：复杂度收进编译期，
+    编译期就能回答那些原本得占一张卡才问得出口的问题。
     <br><b>整门课从头到尾说的都是这同一件事：不是谁更强，是把同一份复杂度放在了不同的地方。</b></div>
 </div></section>
 
