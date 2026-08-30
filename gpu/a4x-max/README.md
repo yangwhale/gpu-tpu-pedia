@@ -36,7 +36,9 @@ GB300 NVL72 (A4X MAX) 部署指南，基于 GB200 (A4X) 实战经验 + GCP 官�
 | RDMA 网卡 | CX-7 VF, 挂在 CPU 上 | CX-8 SuperNIC PF, 直连 GPU (GPUDirect) | 延迟更低 |
 | RDMA 网络接口数 | 4 (单端口) | 8 (CX-8 双端口, 8-way rail) | 子网翻倍 |
 | 总网络接口数 | 6 | 10 (2 IDPF + 8 MRDMA) | VM 创建命令 |
-| 网络带宽 | 2,000 Gbps | 3,200 Gbps | — |
+| RDMA 带宽/节点 | 4 × CX-7 × 400 = **1,600 Gbps** | 4 × CX-8 × 800(双端口) = **3,200 Gbps** | 翻倍 |
+| 管理网带宽/节点 | 400 Gbps | 400 Gbps | 不变 |
+| **节点合计** | **2,000 Gbps** | **3,600 Gbps** | ⚠️ 原表此行两个数口径不一致（2000 含管理网、3200 不含），已拆开 |
 | 网络栈 | IPv4 | IPv6-only | 重大变更，影响全栈 |
 | Boot Disk | pd-balanced 或 hyperdisk-balanced | 仅 hyperdisk-balanced | — |
 | NVL72 拓扑 | 18 节点/域, 1x72 | 18 节点/域, 1x72 | 不变 |
