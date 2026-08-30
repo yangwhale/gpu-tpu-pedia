@@ -1196,12 +1196,12 @@ footer a{text-decoration:none}
   </figure>
 
   <div class="note danger"><span class="t">🔑 记住这一条，后面三节都在还这笔账</span>
-    <b>TPU 上数组是按 8 × 128 的块存的</b>。这意味着：
-    <br>· 一个 <code>[8, 128]</code> 的矩阵，正好一块，完美；
-    <br>· 一个 <code>[8, 129]</code> 的矩阵，占<b>两块</b> —— 第二块里 128 列有 127 列是空的，
-    但它<b>照样占 VMEM、照样过 MXU、照样被搬运</b>；
-    <br>· 一个 <code>[1, 128]</code> 的向量，占一块 —— <b>8 个 sublane 里只有 1 个有数据，浪费 87.5%</b>。
-    <br>下一片会讲这笔账在真实模型里能大到什么程度（剧透：<b>16 倍</b>）。</div>
+    <b>TPU 上数组是按 8 × 128 的块存的</b>，而且<b>「内存里怎么存」和「计算时怎么算」是两笔不同的账</b>：
+    <br>· <b>内存这笔</b>有优惠 —— 次内维只有 1 或 2 时，XLA 改用 <code>2×128</code> 的小块；3 或 4 时用 <code>4×128</code>。
+    所以一个 <code>[1, 128]</code> 的向量在内存里<b>只浪费一半</b>，不是 87.5%。
+    <br>· <b>计算这笔</b>没有优惠 —— 所有向量运算<b>一律补齐到 8 × 128</b>。同一个 <code>[1, 128]</code>，
+    算的时候就是<b>浪费 87.5%</b>。
+    <br>下一片把这两笔账并排摆出来算，并给出官方文档里那个更狠的例子：<b>1,024 倍</b>。</div>
 
   <h3>2.3　主例：Flash 家族</h3>
   <p>现在把上面两件事放到一个真实算子上。选注意力，是因为它<b>同时压中这两件事</b>：
@@ -1336,17 +1336,490 @@ footer a{text-decoration:none}
     不是调度问题。<b>没有哪个编译器会替你发明一个新算法。</b>
     <br>这条会在第 5 节展开：<b>编译器的边界，恰好就在「算法」和「调度」之间。</b></div>
 
+  <h3>2.5　那笔账：形状对不齐，到底要付多少钱</h3>
+  <p>上一片埋了个伏笔。现在把账算出来 —— <b>而且要先拆成两笔</b>，因为它们的数不一样，
+    混在一起讲会把人讲糊涂。</p>
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 508" width="100%" role="img" aria-label="形状对不齐要付两笔账：内存侧按小块省一点，计算侧一律补齐到 8x128">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">形状对不齐，要付<tspan font-weight="700">两笔</tspan>账 —— 而且这两笔的数不一样</text>
+<text class="svgsm" x="0" y="35">来源：OpenXLA 官方「Tiled layout」页（内存侧规则）＋ JAX Pallas TPU 官方文档（计算侧规则）</text>
+<rect x="0" y="48" width="486" height="52" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="14" y="68" fill="#1a73e8">账一 · 内存：XLA 会挑小块省一点</text>
+<text class="svgsm" x="14" y="88" fill="#174ea6">次内维 1–2 用 <tspan font-family="ui-monospace,monospace">2×128</tspan>，3–4 用 <tspan font-family="ui-monospace,monospace">4×128</tspan>，其余 <tspan font-family="ui-monospace,monospace">8×128</tspan></text>
+<rect x="496" y="48" width="486" height="52" rx="6" fill="#fce8e6" stroke="#d93025"/>
+<text class="svglbl" x="510" y="68" fill="#d93025">账二 · 计算：一律补齐到整块，没有优惠</text>
+<text class="svgsm" x="510" y="88" fill="#a50e0e">所有向量运算按 <tspan font-family="ui-monospace,monospace">8×128</tspan> 结算 —— 补出来的零照样过一遍</text>
+<text class="svgsm" x="0" y="134" text-anchor="start" fill="#5f6368">数组形状</text>
+<text class="svgsm" x="150" y="134" text-anchor="start" fill="#5f6368"></text>
+<text class="svgsm" x="320" y="134" text-anchor="start" fill="#5f6368">内存用的块</text>
+<text class="svgsm" x="452" y="134" text-anchor="start" fill="#5f6368">内存里占</text>
+<text class="svgsm" x="590" y="134" text-anchor="end" fill="#5f6368">内存浪费</text>
+<text class="svgsm" x="700" y="134" text-anchor="start" fill="#5f6368">计算按</text>
+<text class="svgsm" x="860" y="134" text-anchor="end" fill="#5f6368">计算浪费</text>
+<path d="M0 142 h982" stroke="#dadce0"/>
+<rect x="0" y="140" width="982" height="34" fill="#fff"/>
+<text class="svgsm" x="0" y="161" font-family="ui-monospace,monospace" fill="#202124">[8, 128]</text>
+<text class="svgsm" x="150" y="161" fill="#5f6368">刚好一块</text>
+<text class="svgsm" x="320" y="161" font-family="ui-monospace,monospace" fill="#1a73e8">8×128</text>
+<text class="svgsm" x="452" y="161" fill="#1a73e8">1,024 个位置</text>
+<text class="svgnum" x="590" y="161" text-anchor="end" fill="#1e8e3e" style="font-size:12px">0.0%</text>
+<text class="svgsm" x="700" y="161" fill="#d93025">1,024 个位置</text>
+<text class="svgnum" x="860" y="161" text-anchor="end" fill="#1e8e3e" style="font-size:12px">0.0%</text>
+<text class="svgsm" x="982" y="161" text-anchor="end" fill="#5f6368">有效 1,024</text>
+<rect x="0" y="174" width="982" height="34" fill="#f8f9fa"/>
+<text class="svgsm" x="0" y="195" font-family="ui-monospace,monospace" fill="#202124">[1, 128]</text>
+<text class="svgsm" x="150" y="195" fill="#5f6368">只有一行</text>
+<text class="svgsm" x="320" y="195" font-family="ui-monospace,monospace" fill="#1a73e8">2×128</text>
+<text class="svgsm" x="452" y="195" fill="#1a73e8">256 个位置</text>
+<text class="svgnum" x="590" y="195" text-anchor="end" fill="#1a73e8" style="font-size:12px">50.0%</text>
+<text class="svgsm" x="700" y="195" fill="#d93025">1,024 个位置</text>
+<text class="svgnum" x="860" y="195" text-anchor="end" fill="#d93025" style="font-size:12px">87.5%</text>
+<text class="svgsm" x="982" y="195" text-anchor="end" fill="#5f6368">有效 128</text>
+<rect x="0" y="208" width="982" height="34" fill="#fff"/>
+<text class="svgsm" x="0" y="229" font-family="ui-monospace,monospace" fill="#202124">[8, 129]</text>
+<text class="svgsm" x="150" y="229" fill="#5f6368">多出一列</text>
+<text class="svgsm" x="320" y="229" font-family="ui-monospace,monospace" fill="#1a73e8">8×128</text>
+<text class="svgsm" x="452" y="229" fill="#1a73e8">2,048 个位置</text>
+<text class="svgnum" x="590" y="229" text-anchor="end" fill="#1a73e8" style="font-size:12px">49.6%</text>
+<text class="svgsm" x="700" y="229" fill="#d93025">2,048 个位置</text>
+<text class="svgnum" x="860" y="229" text-anchor="end" fill="#d93025" style="font-size:12px">49.6%</text>
+<text class="svgsm" x="982" y="229" text-anchor="end" fill="#5f6368">有效 1,032</text>
+<rect x="0" y="242" width="982" height="34" fill="#f8f9fa"/>
+<text class="svgsm" x="0" y="263" font-family="ui-monospace,monospace" fill="#202124">[4, 100]</text>
+<text class="svgsm" x="150" y="263" fill="#5f6368">两边都不对</text>
+<text class="svgsm" x="320" y="263" font-family="ui-monospace,monospace" fill="#1a73e8">4×128</text>
+<text class="svgsm" x="452" y="263" fill="#1a73e8">512 个位置</text>
+<text class="svgnum" x="590" y="263" text-anchor="end" fill="#1a73e8" style="font-size:12px">21.9%</text>
+<text class="svgsm" x="700" y="263" fill="#d93025">1,024 个位置</text>
+<text class="svgnum" x="860" y="263" text-anchor="end" fill="#d93025" style="font-size:12px">60.9%</text>
+<text class="svgsm" x="982" y="263" text-anchor="end" fill="#5f6368">有效 400</text>
+<rect x="0" y="290" width="982" height="62" rx="8" fill="#fce8e6" stroke="#d93025"/>
+<text class="svglbl" x="16" y="312" fill="#d93025">⚠️ 官方文档给的极端例子，比上表狠得多</text>
+<text class="svgsm" x="16" y="331" fill="#a50e0e">「加两个 <tspan font-family="ui-monospace,monospace">1×1</tspan> 的数组，跟加两个 <tspan font-family="ui-monospace,monospace">8×128</tspan> 的数组一样贵。加两个 <tspan font-family="ui-monospace,monospace">8×128×1×1</tspan> 的数组，是加两个 <tspan font-family="ui-monospace,monospace">8×128</tspan> 的 <tspan font-weight="700">1,024 倍</tspan>贵」</text>
+<text class="svgsm" x="16" y="346" fill="#a50e0e">因为 <tspan font-family="ui-monospace,monospace">8×128×1×1</tspan> 会被补成 <tspan font-family="ui-monospace,monospace">8×128×8×128</tspan> —— ⚠️ <tspan font-weight="700">最后两维出现 1，是 TPU 上最贵的形状错误</tspan>。</text>
+<rect x="0" y="364" width="982" height="138" rx="8" fill="#f3e8fd" stroke="#9334e6"/>
+<text class="svglbl" x="16" y="386" fill="#9334e6">那 bf16 呢？——「8×128 变成 16×128」这个直觉，方向对、写法不对</text>
+<text class="svgsm" x="16" y="408" fill="#5b1a8c">bf16 的官方 tiling 是 <tspan font-family="ui-monospace,monospace" font-weight="700">(8,128)(2,1)</tspan> —— 两层。外层还是 8×128，内层的 (2,1) 把<tspan font-weight="700">偶数行和奇数行、同一列</tspan>的两个 bf16 拼成一个 32 位。</text>
+<text class="svgsm" x="16" y="427" fill="#5b1a8c">为什么按列拼不按行拼？官方给的理由：TPU 原生就是 32 位机器，而<tspan font-weight="700">跨次内维搬数据比跨最内维便宜</tspan>。int8 同理，是 (8,128)(4,1)。</text>
+<text class="svgsm" x="16" y="446" fill="#5b1a8c">⭐ 这条不是纸上谈兵：JAX 的 ragged paged attention kernel 里，折叠维度前会先检查次内维能否被 packing 整除，<tspan font-weight="700">不能整除就先升成 fp32 再折</tspan> —— 否则会打散那个配对。</text>
+</svg>
+  <figcaption>看第一行和第三行的对比：<code>[8, 128]</code> 一分不浪费，只多一列变成 <code>[8, 129]</code>，
+    <b>两笔账立刻都跳到 50%</b>。⭐ 讲课时可以停在这里问一句：<b>你的 d_ff 是多少？</b></figcaption>
+  </figure>
+
+  <div class="note warn"><span class="t">最后两维出现 1，是 TPU 上最贵的形状错误</span>
+    官方文档那个 <b>1,024 倍</b>的例子值得逐字念一遍：<code>8×128×1×1</code> 会被补成 <code>8×128×8×128</code>。
+    <br>为什么这种形状会出现？<b>因为它在数学上太自然了</b> —— 你想给每一行留一个标量
+    （比如 softmax 的最大值、比如一个缩放系数），顺手就写成了最后一维是 1。
+    <br>在 GPU 上这么写最多是没吃满带宽；<b>在 TPU 上这是三个数量级的差别</b>。</div>
+
+  <h3>2.6　这个约束不会停在硬件层</h3>
+  <p>到这里可能会觉得，8 × 128 是个 kernel 作者才要操心的细节。<b>不是的。</b>
+    它会一层一层往上传，最后落到<b>你写在模型配置文件里的那几个数</b>。</p>
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 576" width="100%" role="img" aria-label="八乘一百二十八这个形状约束从寄存器一路传到模型超参">
+<defs><marker id="ar" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#5f6368"/></marker></defs>
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">这个约束不会停在硬件层 —— 它一路往上传，最后管到你的<tspan font-weight="700">模型配置文件</tspan></text>
+<text class="svgsm" x="0" y="35">每一层都只是「照着下一层的形状办事」，但五层叠起来，就变成了对模型架构的硬约束</text>
+<rect x="0" y="66" width="982" height="54" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<rect x="0" y="66" width="118" height="54" rx="8" fill="#1a73e8"/>
+<rect x="108" y="66" width="10" height="54" fill="#1a73e8"/>
+<text class="svglbl" x="59" y="90" text-anchor="middle" fill="#fff">硬件</text>
+<text class="svgsm" x="59" y="107" text-anchor="middle" fill="#ffffffcc">第 1 层</text>
+<text class="svglbl" x="134" y="90" fill="#202124">向量寄存器 8 × 128（32 位）</text>
+<text class="svgsm" x="134" y="108" fill="#5f6368">8 个 sublane × 128 个 lane —— 这是一切的源头</text>
+<path d="M491 120 v14" stroke="#5f6368" stroke-width="1.6" marker-end="url(#ar)"/>
+<rect x="0" y="140" width="982" height="54" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<rect x="0" y="140" width="118" height="54" rx="8" fill="#1a73e8"/>
+<rect x="108" y="140" width="10" height="54" fill="#1a73e8"/>
+<text class="svglbl" x="59" y="164" text-anchor="middle" fill="#fff">内存布局</text>
+<text class="svgsm" x="59" y="181" text-anchor="middle" fill="#ffffffcc">第 2 层</text>
+<text class="svglbl" x="134" y="164" fill="#202124">数组按 (8,128) 分块存；bf16 是 (8,128)(2,1)</text>
+<text class="svgsm" x="134" y="182" fill="#5f6368">XLA 故意让内存形状 = 寄存器形状，搬进来就能用</text>
+<path d="M491 194 v14" stroke="#5f6368" stroke-width="1.6" marker-end="url(#ar)"/>
+<rect x="0" y="214" width="982" height="54" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
+<rect x="0" y="214" width="118" height="54" rx="8" fill="#9334e6"/>
+<rect x="108" y="214" width="10" height="54" fill="#9334e6"/>
+<text class="svglbl" x="59" y="238" text-anchor="middle" fill="#fff">kernel 接口</text>
+<text class="svgsm" x="59" y="255" text-anchor="middle" fill="#ffffffcc">第 3 层</text>
+<text class="svglbl" x="134" y="238" fill="#202124">Pallas 的 block 最后两维必须是 8 和 128 的倍数</text>
+<text class="svgsm" x="134" y="256" fill="#5f6368">写不出不对齐的 kernel —— 编译器直接报错</text>
+<path d="M491 268 v14" stroke="#5f6368" stroke-width="1.6" marker-end="url(#ar)"/>
+<rect x="0" y="288" width="982" height="54" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<rect x="0" y="288" width="118" height="54" rx="8" fill="#e8710a"/>
+<rect x="108" y="288" width="10" height="54" fill="#e8710a"/>
+<text class="svglbl" x="59" y="312" text-anchor="middle" fill="#fff">矩阵单元</text>
+<text class="svgsm" x="59" y="329" text-anchor="middle" fill="#ffffffcc">第 4 层</text>
+<text class="svglbl" x="134" y="312" fill="#202124">v7 的 MXU 是 256 × 256，收缩维要 256 的倍数才吃满</text>
+<text class="svgsm" x="134" y="330" fill="#5f6368">官方原话：head_dim 是 256 的倍数才能吃满 MXU</text>
+<path d="M491 342 v14" stroke="#5f6368" stroke-width="1.6" marker-end="url(#ar)"/>
+<rect x="0" y="362" width="982" height="54" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<rect x="0" y="362" width="118" height="54" rx="8" fill="#d93025"/>
+<rect x="108" y="362" width="10" height="54" fill="#d93025"/>
+<text class="svglbl" x="59" y="386" text-anchor="middle" fill="#fff">模型超参</text>
+<text class="svgsm" x="59" y="403" text-anchor="middle" fill="#ffffffcc">第 5 层</text>
+<text class="svglbl" x="134" y="386" fill="#202124">head_dim / d_ff / 词表 / 专家数 —— 你写在配置文件里的那些数</text>
+<text class="svgsm" x="134" y="404" fill="#5f6368">⭐ 一个寄存器的形状，最后管到了你的模型配置</text>
+<rect x="0" y="438" width="982" height="128" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+<text class="svglbl" x="16" y="460" fill="#7a5000">⭐ 一个当场就能算的例子：head_dim = 128 撞上 256×256 的 MXU</text>
+<text class="svgsm" x="16" y="482" fill="#7a5000">官方说法：head_dim 是 <tspan font-weight="700">256 的倍数</tspan>才能吃满 MXU；head_dim 是 <tspan font-weight="700">128 或 64</tspan> 时，flash attention 里的 QK 那一步会有 <tspan font-weight="700">50% 甚至更多</tspan>的 MXU 利用率损失。</text>
+<text class="svgsm" x="16" y="499" fill="#7a5000">⚠️ 但注意：<tspan font-weight="700">不是浪费 3/4，是浪费 1/2</tspan>。很多人第一反应是「只用了角上 128×128 的一块」，那样才是 3/4。</text>
+<text class="svgsm" x="16" y="516" fill="#7a5000">真相是：<tspan font-weight="700">head_dim 每次只占矩阵乘的一条边</tspan>。算 Q·Kᵀ 时它是收缩维（128 填进 256，一半）；另外两条边是 block_q 和 block_kv ——</text>
+<text class="svgsm" x="16" y="533" fill="#7a5000">那是 kernel 作者自己挑的块大小，代码里强制必须是 128 的倍数，实际会调到 512 以上。<tspan font-weight="700">两条边里只有一条被钉死，所以是一半。</tspan></text>
+<text class="svgsm" x="16" y="550" fill="#7a5000">算「注意力 × V」时正好反过来：收缩维变成 kv 块大小（很大），head_dim 变成输出边 —— 这就是为什么官方那句话<tspan font-weight="700">只点名 QK 那一步</tspan>。</text>
+</svg>
+  <figcaption>五层里每一层都只是「照着下一层的形状办事」，但叠起来就成了对<b>模型架构</b>的硬约束。
+    <b>这张图是本节想让同学带走的第一件事。</b></figcaption>
+  </figure>
+
+  <div class="note info"><span class="t">这条链子在 GPU 那边是断的 —— 断在第 3 层</span>
+    GPU 也有形状偏好：warp 是 32 个线程、Tensor Core 有自己的 tile 尺寸、访存要合并。
+    <b>但那些是「对齐了更快」，不是「对不齐编译不过」</b>。
+    <br>TPU 这条链子的第 3 层是<b>硬的</b>：Pallas 的 block 最后两维必须是 8 和 128 的倍数，
+    写错了直接报错。<b>硬约束会一路往上传，软偏好传两层就衰减没了</b> ——
+    这就是为什么 TPU 用户会去改模型超参，而 GPU 用户通常不会。</div>
+
+  <h3>2.7　Splash 的第二招：整块跳过</h3>
+  <p>2.3 讲的 Flash 是「不落地」。TPU 上生产环境用的那个叫 <b>Splash</b>，
+    它比 Flash 多了一层，而且这一层<b>正好把本节的两条主线缝在一起</b>：
+    编译期算准（哪些块能跳，跑之前就知道）＋ 片上容量（这张表得放得下）。</p>
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 480" width="100%" role="img" aria-label="Splash 的第二招：因果 mask 下把全零的块整块跳过，元信息存在 SMEM 里还要缩类型">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">Splash 比普通 Flash 多的那一层：<tspan font-weight="700">整块跳过</tspan>（这才是名字里 sparse 的意思）</text>
+<text class="svgsm" x="0" y="35">来源：JAX 公开源码 splash_attention_mask_info.py 里 MaskInfo 的字段说明</text>
+<text class="svglbl" x="0" y="82" fill="#5f6368">q 块 × kv 块的网格，跑之前先给每一格打分</text>
+<rect x="580" y="96" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="591.5" y="112" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="605" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="616.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="630" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="641.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="655" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="666.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="680" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="691.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="705" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="716.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="730" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="741.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="755" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="766.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="780" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="791.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="805" y="96" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="112" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="121" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="137" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="121" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="616.5" y="137" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="630" y="121" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="641.5" y="137" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="655" y="121" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="666.5" y="137" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="680" y="121" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="691.5" y="137" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="705" y="121" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="716.5" y="137" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="730" y="121" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="741.5" y="137" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="755" y="121" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="766.5" y="137" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="780" y="121" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="791.5" y="137" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="805" y="121" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="137" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="146" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="162" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="146" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="616.5" y="162" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="630" y="146" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="641.5" y="162" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="655" y="146" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="666.5" y="162" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="680" y="146" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="691.5" y="162" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="705" y="146" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="716.5" y="162" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="730" y="146" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="741.5" y="162" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="755" y="146" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="766.5" y="162" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="780" y="146" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="791.5" y="162" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="805" y="146" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="162" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="171" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="187" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="171" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="616.5" y="187" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="630" y="171" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="641.5" y="187" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="655" y="171" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="666.5" y="187" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="680" y="171" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="691.5" y="187" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="705" y="171" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="716.5" y="187" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="730" y="171" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="741.5" y="187" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="755" y="171" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="766.5" y="187" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="780" y="171" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="791.5" y="187" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="805" y="171" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="187" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="196" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="212" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="196" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="616.5" y="212" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="630" y="196" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="641.5" y="212" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="655" y="196" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="666.5" y="212" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="680" y="196" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="691.5" y="212" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="705" y="196" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="716.5" y="212" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="730" y="196" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="741.5" y="212" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="755" y="196" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="766.5" y="212" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="780" y="196" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="791.5" y="212" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="805" y="196" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="212" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="221" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="237" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="221" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="616.5" y="237" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="630" y="221" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="641.5" y="237" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="655" y="221" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="666.5" y="237" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="680" y="221" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="691.5" y="237" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="705" y="221" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="716.5" y="237" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="730" y="221" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="741.5" y="237" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="755" y="221" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="766.5" y="237" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="780" y="221" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="791.5" y="237" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="805" y="221" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="237" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="246" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="262" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="246" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="616.5" y="262" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="630" y="246" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="641.5" y="262" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="655" y="246" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="666.5" y="262" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="680" y="246" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="691.5" y="262" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="705" y="246" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="716.5" y="262" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="730" y="246" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="741.5" y="262" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="755" y="246" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="766.5" y="262" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="780" y="246" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="791.5" y="262" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="805" y="246" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="262" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="271" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="287" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="271" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="616.5" y="287" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="630" y="271" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="641.5" y="287" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="655" y="271" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="666.5" y="287" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="680" y="271" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="691.5" y="287" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="705" y="271" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="716.5" y="287" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="730" y="271" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="741.5" y="287" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="755" y="271" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="766.5" y="287" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="780" y="271" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="791.5" y="287" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="805" y="271" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="287" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="296" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="312" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="296" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="616.5" y="312" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="630" y="296" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="641.5" y="312" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="655" y="296" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="666.5" y="312" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="680" y="296" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="691.5" y="312" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="705" y="296" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="716.5" y="312" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="730" y="296" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="741.5" y="312" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="755" y="296" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="766.5" y="312" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="780" y="296" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="791.5" y="312" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<rect x="805" y="296" width="23" height="23" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="0.8"/>
+<text x="816.5" y="312" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:9px">0</text>
+<rect x="580" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="591.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="605" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="616.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="630" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="641.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="655" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="666.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="680" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="691.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="705" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="716.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="730" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="741.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="755" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="766.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="780" y="321" width="23" height="23" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="0.8"/>
+<text x="791.5" y="337" text-anchor="middle" class="svgsm" fill="#0d652d" style="font-size:9px">2</text>
+<rect x="805" y="321" width="23" height="23" rx="2" fill="#fef7e0" stroke="#f9ab00" stroke-width="0.8"/>
+<text x="816.5" y="337" text-anchor="middle" class="svgsm" fill="#7a5000" style="font-size:9px">1</text>
+<text class="svgsm" x="570" y="110" text-anchor="end" fill="#5f6368">q 块 →</text>
+<text class="svgsm" x="580" y="92" fill="#5f6368">kv 块 →</text>
+<rect x="0" y="104" width="20" height="20" rx="3" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text x="10" y="118" text-anchor="middle" class="svgsm" fill="#1e8e3e" style="font-size:10px">2</text>
+<text class="svglbl" x="28" y="113" fill="#1e8e3e">全是 1（完全没遮挡）　<tspan class="svgsm" fill="#5f6368">45 格 · 45%</tspan></text>
+<text class="svgsm" x="28" y="128" fill="#5f6368">照常算，但<tspan font-weight='700'>跳过贴 mask 那一步</tspan></text>
+<rect x="0" y="134" width="20" height="20" rx="3" fill="#fef7e0" stroke="#f9ab00"/>
+<text x="10" y="148" text-anchor="middle" class="svgsm" fill="#f9ab00" style="font-size:10px">1</text>
+<text class="svglbl" x="28" y="143" fill="#f9ab00">半掩半开　<tspan class="svgsm" fill="#5f6368">10 格 · 10%</tspan></text>
+<text class="svgsm" x="28" y="158" fill="#5f6368">取一块真实的布尔 mask 出来贴上</text>
+<rect x="0" y="164" width="20" height="20" rx="3" fill="#f1f3f4" stroke="#5f6368"/>
+<text x="10" y="178" text-anchor="middle" class="svgsm" fill="#5f6368" style="font-size:10px">0</text>
+<text class="svglbl" x="28" y="173" fill="#5f6368">全是 0（整块被遮掉）　<tspan class="svgsm" fill="#5f6368">45 格 · 45%</tspan></text>
+<text class="svgsm" x="28" y="188" fill="#5f6368"><tspan font-weight='700'>根本不去访问</tspan> —— 不搬 K、不搬 V、不算矩阵乘</text>
+<text class="svgsm" x="0" y="208" fill="#d93025">序列越长，0 的占比越逼近 <tspan font-weight="700">50%</tspan> ——</text>
+<text class="svgsm" x="0" y="225" fill="#d93025">因果注意力有<tspan font-weight="700">一半的计算根本不存在</tspan>，</text>
+<text class="svgsm" x="0" y="242" fill="#d93025">前提是你得有人告诉 kernel 「哪些能跳」。</text>
+<rect x="0" y="362" width="982" height="112" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="16" y="384" fill="#1a73e8">这张表存在哪？—— 存在 SMEM 里，而 SMEM 只有 1 MiB（第 1 节那张图上标过）</text>
+<text class="svgsm" x="16" y="406" fill="#174ea6">算一笔：序列 128K、block_q 512、block_kv 1024 → 256 × 128 的网格，三个数组（block_mask / data_next / mask_next）共 <tspan font-weight="700">98,304</tspan> 项。</text>
+<text class="svgsm" x="16" y="424" fill="#174ea6">用 int32 存要 <tspan font-weight="700">384 KiB</tspan>，占掉 SMEM 的 <tspan font-weight="700">38%</tspan>；缩成 int16 只要 192 KiB，int8 只要 96 KiB。</text>
+<text class="svgsm" x="16" y="442" fill="#174ea6">所以源码里专门写了一段「把整数类型往小了缩」的逻辑，注释直说 SMEM 是稀缺资源。⭐ <tspan font-weight="700">跳过整块省下的时间，是拿 SMEM 的容量换来的</tspan> —— 天下没有白跳的块。</text>
+<text class="svgsm" x="16" y="460" fill="#174ea6">还有个 data_next 数组，记「下一个该预取哪个 kv 块」—— 因为跳过之后块号不连续了，得有人告诉 DMA 去哪儿取。</text>
+</svg>
+  <figcaption>名字里的 <b>sparse</b> 不是稀疏矩阵，是<b>整块跳过</b>。
+    ⭐ 注意下面那笔 SMEM 的账 —— <b>跳过整块省下的时间，是拿片上容量换来的</b>。</figcaption>
+  </figure>
+
+  <div class="note ok"><span class="t">顺带回收一个 2.2 的伏笔：一个标量，占满 128 条 lane</span>
+    online softmax 要维护两个数：running max 和 running sum。<b>逻辑上每行就一个标量。</b>
+    <br>但在公开的 kernel 源码里，它们的形状写的是 <code>(block_q, 128)</code> ——
+    <b>整整一个 lane 维度，只装一个有效值</b>。另一个 TPU 注意力 kernel 里的注释说得更直白：
+    「这里用 128 而不是 1，是因为编译器不支持不对齐的切片」。
+    <br>这就是 2.5 那笔「计算浪费 87.5%」在<b>真实生产代码</b>里的样子 ——
+    不是教科书例子，是没得选。</div>
+
+  <h3>2.8　收尾：把讲过的算子全部放回一根轴</h3>
+  <p>最后一张图。<b>如果这一节只能记住一张，就记这张。</b></p>
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 488" width="100%" role="img" aria-label="本节四个算子回到 312 这根轴上：embedding 和 softmax 在最左，朴素注意力 64，Flash 和 MLP 在右边">
+<defs><marker id="a2" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M8 0 L0 4 L8 8 z" fill="#9334e6"/></marker></defs>
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">本节收尾：把讲过的算子<tspan font-weight="700">全部放回同一根轴</tspan> —— 一眼看出谁该救、该怎么救</text>
+<text class="svgsm" x="0" y="35">横轴是算术强度（FLOP / byte，对数）。312 这条线两边的<tspan font-weight="700">优化动作完全不同</tspan>。</text>
+<path d="M264.6666666666667 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="264.6666666666667" y="324" text-anchor="middle" fill="#5f6368">1</text>
+<path d="M338.0 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="338.0" y="324" text-anchor="middle" fill="#5f6368">4</text>
+<path d="M411.33333333333337 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="411.33333333333337" y="324" text-anchor="middle" fill="#5f6368">16</text>
+<path d="M484.66666666666663 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="484.66666666666663" y="324" text-anchor="middle" fill="#5f6368">64</text>
+<path d="M558.0 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="558.0" y="324" text-anchor="middle" fill="#5f6368">256</text>
+<path d="M631.3333333333333 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="631.3333333333333" y="324" text-anchor="middle" fill="#5f6368">1,024</text>
+<path d="M704.6666666666666 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="704.6666666666666" y="324" text-anchor="middle" fill="#5f6368">4,096</text>
+<path d="M778.0 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="778.0" y="324" text-anchor="middle" fill="#5f6368">16,384</text>
+<path d="M851.3333333333334 306 v6" stroke="#9aa0a6"/>
+<text class="svgsm" x="851.3333333333334" y="324" text-anchor="middle" fill="#5f6368">65,536</text>
+<path d="M198 306 h700" stroke="#9aa0a6" stroke-width="1.2"/>
+<rect x="198" y="88" width="370.5663788307844" height="218" fill="#fce8e6" opacity="0.35"/>
+<rect x="568.5663788307844" y="88" width="329.4336211692156" height="218" fill="#e6f4ea" opacity="0.35"/>
+<path d="M568.5663788307844 88 v218" stroke="#f9ab00" stroke-width="2.4" stroke-dasharray="6 4"/>
+<text class="svglbl" x="568.5663788307844" y="66" text-anchor="middle" fill="#7a5000">312 —— 硬件的分水岭</text>
+<text class="svgsm" x="554.5663788307844" y="84" text-anchor="end" fill="#d93025">← 带宽受限：减少搬运</text>
+<text class="svgsm" x="582.5663788307844" y="84" fill="#1e8e3e">算力受限：提高利用率 →</text>
+<text class="svglbl" x="184" y="124" text-anchor="end" fill="#9334e6">embedding 查表</text>
+<path d="M204 120 h-14" stroke="#9334e6" stroke-width="2.4" marker-end="url(#a2)"/>
+<circle cx="210" cy="120" r="6" fill="#9334e6"/>
+<text class="svgnum" x="210" y="106" text-anchor="middle" fill="#9334e6" style="font-size:12px">0</text>
+<text class="svgsm" x="228" y="124" fill="#5f6368">纯搬运，一次乘加都没有 —— 算术强度<tspan font-weight='700'>就是 0</tspan>，画不到轴上</text>
+<text class="svglbl" x="184" y="162" text-anchor="end" fill="#e8710a">出口 softmax</text>
+<path d="M204 158 H264.6666666666667" stroke="#e8710a" stroke-width="1.3" stroke-dasharray="3 3" opacity="0.45"/>
+<circle cx="264.6666666666667" cy="158" r="6" fill="#e8710a"/>
+<text class="svgnum" x="264.6666666666667" y="144" text-anchor="middle" fill="#e8710a" style="font-size:12px">1</text>
+<text class="svgsm" x="278.6666666666667" y="162" text-anchor="start" fill="#5f6368">逐元素：每个元素约 4 次运算，进 2 B 出 2 B</text>
+<text class="svglbl" x="184" y="200" text-anchor="end" fill="#d93025">朴素注意力</text>
+<path d="M204 196 H484.66666666666663" stroke="#d93025" stroke-width="1.3" stroke-dasharray="3 3" opacity="0.45"/>
+<circle cx="484.66666666666663" cy="196" r="6" fill="#d93025"/>
+<text class="svgnum" x="484.66666666666663" y="182" text-anchor="middle" fill="#d93025" style="font-size:12px">64</text>
+<text class="svgsm" x="498.66666666666663" y="200" text-anchor="start" fill="#5f6368">中间矩阵在 HBM 里走了个来回</text>
+<text class="svglbl" x="184" y="238" text-anchor="end" fill="#1e8e3e">Flash 注意力</text>
+<path d="M204 234 H851.3333333333334" stroke="#1e8e3e" stroke-width="1.3" stroke-dasharray="3 3" opacity="0.45"/>
+<circle cx="851.3333333333334" cy="234" r="6" fill="#1e8e3e"/>
+<text class="svgnum" x="851.3333333333334" y="220" text-anchor="middle" fill="#1e8e3e" style="font-size:12px">65,536</text>
+<text class="svgsm" x="837.3333333333334" y="238" text-anchor="end" fill="#5f6368">理想上界；真实值更低，但仍在右边</text>
+<text class="svglbl" x="184" y="276" text-anchor="end" fill="#1a73e8">Dense MLP 矩阵乘</text>
+<path d="M204 272 H697.6030138087788" stroke="#1a73e8" stroke-width="1.3" stroke-dasharray="3 3" opacity="0.45"/>
+<circle cx="697.6030138087788" cy="272" r="6" fill="#1a73e8"/>
+<text class="svgnum" x="697.6030138087788" y="258" text-anchor="middle" fill="#1a73e8" style="font-size:12px">3,584</text>
+<text class="svgsm" x="683.6030138087788" y="276" text-anchor="end" fill="#5f6368">M=8,192 K=8,192 N=28,672，bf16</text>
+<rect x="0" y="340" width="486" height="112" rx="8" fill="#fce8e6" stroke="#d93025"/>
+<text class="svglbl" x="16" y="362" fill="#d93025">左边这三个：买再强的算力都没用</text>
+<text class="svgsm" x="16" y="382" fill="#a50e0e">· embedding：查表没有乘加，<tspan font-weight="700">强度是 0</tspan>。TPU 上还多一层麻烦 ——</text>
+<text class="svgsm" x="16" y="399" fill="#a50e0e">　数组按 8×128 分块存，所以<tspan font-weight="700">「一行」在内存里并不连续</tspan>。</text>
+<text class="svgsm" x="16" y="416" fill="#a50e0e">· 出口 softmax：逐元素，而 VPU 峰值比 MXU 低两个数量级。</text>
+<text class="svgsm" x="16" y="433" fill="#a50e0e">· 朴素注意力：唯一能救的是<tspan font-weight="700">别把中间矩阵写回去</tspan> —— 这就是 Flash。</text>
+<rect x="496" y="340" width="486" height="112" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="512" y="362" fill="#1e8e3e">右边这两个：该操心的是利用率</text>
+<text class="svgsm" x="512" y="382" fill="#0d652d">· 已经在算力这一侧了，减少搬运<tspan font-weight="700">不再有收益</tspan>。</text>
+<text class="svgsm" x="512" y="399" fill="#0d652d">· 该做的是对齐形状、避免补零、换更低的精度。</text>
+<text class="svgsm" x="512" y="416" fill="#0d652d">· head_dim = 128 撞 256×256 的 MXU，就属于这一类 ——</text>
+<text class="svgsm" x="512" y="433" fill="#0d652d">　强度够高，但<tspan font-weight="700">一半的乘加单元在算零</tspan>。</text>
+<text class="svgsm" x="0" y="470" fill="#5f6368">⚠️ MoE 没画在这根轴上 —— 它的位置<tspan font-weight="700">取决于补了多少零</tspan>，而补多少零是运行时数据决定的。这正是第 3 节要讲的事。</text>
+</svg>
+  <figcaption>五个算子，一根轴。<b>左边和右边的优化动作完全不同</b> ——
+    在左边谈算力、在右边谈带宽，都是白费力气。</figcaption>
+  </figure>
+
+  <div class="note danger"><span class="t">⭐ 本节最大的一个反直觉：head_dim = 128 浪费的是 1/2，不是 3/4</span>
+    v7 的 MXU 是 <code>256 × 256</code>，而绝大多数模型的 head_dim 是 128。
+    第一反应通常是「那我只用了角上 <code>128 × 128</code> 的一块，浪费 3/4」。<b>错。</b>
+    <br><b>head_dim 每次只占矩阵乘的一条边。</b> 算 Q·Kᵀ 时它是收缩维，128 填进 256 —— 一半；
+    另外两条边是 <code>block_q</code> 和 <code>block_kv</code>，那是 kernel 作者自己挑的块大小，
+    实际会调到 512 以上，<b>填得满满的</b>。两条边里只有一条被钉死，所以是 <b>1/2</b>。
+    <br>算「注意力 × V」时正好反过来：收缩维变成 kv 块大小（很大），head_dim 变成输出边。
+    <b>这就是为什么官方那句话只点名 QK 那一步</b> —— 不是随口写的。
+    <br>⚠️ 判断「浪费多少」的正确方法：<b>先问 head_dim 落在哪条边上</b>，再数那条边填了几分之几。</div>
+
   <div class="note ok"><span class="t">这一节讲完，听众该带走什么</span>
     ① <b>数决策点</b>：GPU 路上 5 个运行时决策点，TPU 0 个 —— 这是「有没有 cache」的真正含义；<br>
-    ② <b>8 × 128</b>：TPU 上数组按块存，形状对不齐要付真金白银，下一片给出那笔账；<br>
-    ③ <b>312 是个可操作的判据</b>：先定位在线的哪一边，再决定优化方向；<br>
-    ④ <b>编译器管调度，不管算法</b> —— Flash 两边都得手写。</div>
+    ② <b>两笔账</b>：内存那笔有小块优惠，计算那笔一律补齐；最后两维出现 1 最贵，官方例子是 1,024 倍；<br>
+    ③ <b>约束会往上传</b>：8 × 128 从寄存器一路管到你的 head_dim 和 d_ff —— 因为它是硬约束不是软偏好；<br>
+    ④ <b>312 是个可操作的判据</b>：先定位在线的哪一边，再决定优化方向；<br>
+    ⑤ <b>编译器管调度，不管算法</b> —— Flash 两边都得手写，Splash 的跳块表也是人算好喂进去的。</div>
 </div></section>
 
 <section><div class="wrap">
   <div class="note info"><span class="t">🚧 后面还在写</span>
-    第 2 节还有下半片（形状对不齐要付多少钱 · MoE 的不规则 · 出口的 logits · embedding），
-    第 3–5 节的内容正在逐节补上。
+    第 3–5 节的内容正在逐节补上（计算单元 · 互联与集合通信 · 编译器与 kernel）。
     大纲见 <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9802-TPU-%E4%B8%8E-GPU.md">GitHub 上的专题二大纲</a>。</div>
 </div></section>
 
