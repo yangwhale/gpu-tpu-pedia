@@ -3841,6 +3841,161 @@ o_proj (128 × 128) × 7168       = <span class="r">117.44 M ← 占 62.8%</span
     你需要的显存跟 671B 稠密模型一模一样，省下来的只有算力。
     <b>MoE 换的是「同样算力下能装更多知识」，不是「同样显存下跑更大模型」。</b>
   </div>
+
+  <h3>4e · 稀疏是每个 token 的事，稠密是这一批的事</h3>
+
+  <p class="lead">上面那句「算力只花 37B」，还得再拧一道。
+  因为它是<b>每个 token</b> 的账 —— 而机器一次不处理一个 token。</p>
+
+  <div class="note info">
+    <span class="t">两句话都对，但它们说的是两件事</span>
+    <b>单个 token：</b>只过 9 个专家，不是 257 个 —— 这是<b>稀疏</b>。<br>
+    <b>一批 token：</b>批量够大时，256 个专家<b>全都</b>会被点亮 ——
+    这是<b>稠密</b>。<br>
+    <em>不是某个 token 激活了所有专家，是这一批 token 合起来激活了所有专家。</em><br>
+    所以「MoE 其实也是全激活」这个直觉 ——
+    <b>在「权重字节要不要读」这根轴上完全正确，在「做了多少次乘法」这根轴上完全错误。</b>
+    671B 的权重一个字节都少不了地要过 HBM；而 FLOPs 确实只有 9/257。
+  </div>
+
+  <h4>把「稠密」变成一个能算的数</h4>
+
+  <p>稠密到什么程度，不是形容词，是一个除法。每个专家分到多少行，
+  决定了它那次矩阵乘长什么样：</p>
+
+  <div class="eq"><span class="c">// 一个专家在这一步收到多少行</span>
+每专家行数 = 参与这一步的 token 总数 × 8 ÷ 256
+          = <span class="r">token 总数 ÷ 32</span>
+
+<span class="c">// 而「token 总数」由什么撑起来</span>
+训练 / prefill  = batch × sequence length   <span class="c">← 两个都算数</span>
+decode          = batch × 1                 <span class="c">← 序列长度这条腿没了</span></div>
+
+  <div class="note warn">
+    <span class="t">32 这个数，是这套配置的「稀释倍数」</span>
+    256 个专家、每个 token 挑 8 个 —— 于是每个专家只看得到全部 token 的 1/32。
+    <b>你喂进去多少 token，专家实际拿到的只有三十二分之一。</b>
+    专家越多、top-k 越小，这个稀释越狠：
+    换成 384 选 8，稀释倍数就变成 48。
+  </div>
+
+  <h4>硬件那头的门槛：128 行</h4>
+
+  <p>矩阵乘不是按行做的，是按块做的。TPU 上那个 grouped matmul kernel，
+  bf16 情况下每块的高度是 <b>128 行</b> —— 这是公开源码里写死的常数：</p>
+
+  <div class="eq"><span class="c">// JAX / MaxText 的 megablox Pallas kernel，_get_tile_sizes()</span>
+bf16_bf16_tile_m = <span class="r">128</span>
+<span class="c">// 注释原话：「128 is the largest tile_m value that is safe to use
+//            for most scenarios」（低位宽会往上调）</span></div>
+
+  <p>于是「每专家 16,384 行」和「每专家 8 行」，对硬件是两个完全不同的世界 ——
+  前者是 128 个满块，后者连一个块都填不满。</p>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>场景</th><th style="text-align:right">这一步的 token</th>
+      <th style="text-align:right">每专家行数</th>
+      <th style="text-align:right">相当于几块</th><th>状态</th></tr></thead>
+    <tbody>
+      <tr><td>训练 · 64 卡 · 每卡 8,192 token</td><td style="text-align:right">524,288</td>
+        <td style="text-align:right"><b>16,384</b></td><td style="text-align:right">128 块</td>
+        <td>✅ 喂饱</td></tr>
+      <tr><td>推理 prefill · 一个 8K chunk</td><td style="text-align:right">8,192</td>
+        <td style="text-align:right">256</td><td style="text-align:right">2 块</td>
+        <td>⚠️ 勉强</td></tr>
+      <tr class="hl"><td>推理 decode · 256 个并发请求</td><td style="text-align:right">256</td>
+        <td style="text-align:right"><b>8</b></td><td style="text-align:right">填不满 1 块</td>
+        <td>❌ 塌了</td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note danger">
+    <span class="t">decode 那一行是 MoE 推理全部痛苦的来源</span>
+    要让 decode 也拿到训练那样的 16,384 行，需要
+    <b>16,384 × 32 = 524,288 个并发请求</b>同时在解码。这不是工程能凑出来的数。<br>
+    <em>序列长度在 decode 阶段是彻底失效的 —— 每个请求每步只吐一个 token，
+    你有再长的上下文也不多贡献一行。唯一的杠杆只剩并发数，而它远远不够。</em><br>
+    <b>所以同一个模型，训练时算力受限，decode 时带宽受限 —— 换了一种物理约束。</b>
+  </div>
+
+  <h4>回头看 4c：EP 换的不是通信，是段长</h4>
+
+  <p>这条账还解释了一件 4c 里没讲透的事。把两种方案的每卡工作量摆出来
+  —— 会发现<b>行数一模一样</b>：</p>
+
+  <div class="eq"><span class="c">// A · 用 EP：每卡 4 个专家，token 从 64 张卡 all-to-all 汇过来</span>
+每卡行数 = 16,384 × 4     = <span class="r">65,536</span>   <span class="c">分成 4 段，每段 16,384 行</span>
+
+<span class="c">// B · 不用 EP（EP=1 + FSDP）：每卡拿全部 256 个专家，只算自己那 8,192 个 token</span>
+每卡行数 = 8,192 × 8      = <span class="r">65,536</span>   <span class="c">分成 256 段，每段 256 行</span>
+
+<span class="c">// 完全相同的 65,536 行 —— 差的只有「切成几段」</span></div>
+
+  <figure class="fbox">
+    <svg viewBox="0 0 1000 200" role="img"
+         aria-label="同样 65,536 行，EP 切成 4 段与 FSDP 切成 256 段的对比">
+      <defs>
+        <pattern id="seams4e" width="7" height="26" patternUnits="userSpaceOnUse">
+          <line x1="0" y1="0" x2="0" y2="26" stroke="#d93025" stroke-width="1.1" opacity=".5"/>
+        </pattern>
+      </defs>
+
+      <text x="20" y="20" class="svglbl">同一条 M 轴 · 65,536 行 = 512 个 128 行的块</text>
+
+      <text x="20" y="54" class="svglbl" fill="#1e8e3e">A · 用 EP —— 4 段</text>
+      <text x="980" y="54" text-anchor="end" class="svgsm" fill="#1e8e3e">
+        3 条内部缝 → 最多多跑 3 个块 → +0.59%</text>
+      <rect x="20" y="62" width="960" height="26" rx="4" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <line x1="260" y1="62" x2="260" y2="88" stroke="#1e8e3e" stroke-width="2"/>
+      <line x1="500" y1="62" x2="500" y2="88" stroke="#1e8e3e" stroke-width="2"/>
+      <line x1="740" y1="62" x2="740" y2="88" stroke="#1e8e3e" stroke-width="2"/>
+
+      <text x="20" y="128" class="svglbl" fill="#d93025">B · 不用 EP —— 256 段</text>
+      <text x="980" y="128" text-anchor="end" class="svgsm" fill="#d93025">
+        255 条内部缝 → 最多多跑 255 个块 → 上界 +49.8%</text>
+      <rect x="20" y="136" width="960" height="26" rx="4" fill="#fce8e6" stroke="#d93025"/>
+      <rect x="21" y="137" width="958" height="24" fill="url(#seams4e)"/>
+
+      <text x="20" y="192" class="svglbl">
+        ⭐ 同样 65,536 行、同样的 FLOPs —— 贵的不是活，是缝</text>
+      <text x="980" y="192" text-anchor="end" class="svgsm">下面那条的缝为示意，实际 255 条</text>
+    </svg>
+  </figure>
+
+  <div class="note ok">
+    <span class="t">为什么「缝」要花钱：TPU 这条路不补零，它重复访问</span>
+    段边界很少正好落在 128 的整数倍上。GPU 那条路的解法是<b>补零</b>把段撑到块边界；
+    TPU 的 megablox 选了另一条 —— <b>让跨界的那个块被执行两次</b>，
+    一次用左边专家的权重、一次用右边的，累加进同一个输出。<br>
+    <em>所以代价的形式变了：不是「每段补 &lt; 127 行零」，是「总共多跑 &lt; 段数 − 1 个块」。
+    源码注释直接给了上界。</em>
+    机制细节见附录 <a href="topic-01-dropless.html#s11">§11 · TPU 那边不补齐</a>。
+  </div>
+
+  <div class="eq"><span class="c">// 上界：tiles_m ≤ 实际执行块数 ≤ tiles_m + 段数 − 1</span>
+tiles_m = 65,536 ÷ 128 = 512
+
+A · EP     ≤ 512 +   3 = 515 块  → <span class="r">+0.59%</span>
+B · FSDP   ≤ 512 + 255 = 767 块  → <span class="r">+49.8%</span>  <span class="c">← 上界</span></div>
+
+  <div class="note warn">
+    <span class="t">这个 49.8% 是上界，不是必然 —— 但 dropless 的前提就是它躲不掉</span>
+    如果 256 段每段都正好 256 行，边界全落在 128 的倍数上，额外开销是 <b>0</b>。
+    <b>可是「每段正好相等」恰恰是 dropless 放弃的那个假设</b> ——
+    段长本来就参差不齐，绝大多数边界都会错开。
+    <em>所以实际值靠近上界，而不是靠近 0。</em>
+  </div>
+
+  <div class="note danger">
+    <span class="t">这一节要带走的那句话</span>
+    <b>EP 的第一价值不是省通信，是把段拼长。</b>
+    它把散在 64 张卡上、属于同一个专家的 token 重新聚成一堆，
+    让每段从 256 行长回 16,384 行 —— <b>64 倍的段长</b>。<br>
+    <em>（注意：64 倍的是段长，不是效率。效率差是 0.59% 对上界 49.8%，
+    大约 1.5 倍 —— 段长的改善远大于效率的改善，因为块内浪费本来就有上界。）</em><br>
+    而 FSDP 那条路真正致命的代价在别处：每卡要凑齐全部 256 个专家的权重，
+    <b>一层就是 22.5 GB</b>（256 × 44.04 M × 2 B），EP 那边只要 352 MB。
+  </div>
 </div></section>
 
 <!-- ══════════ 第 5 步 · 残差流 ══════════ -->
