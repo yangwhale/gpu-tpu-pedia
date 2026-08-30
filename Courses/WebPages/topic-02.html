@@ -566,10 +566,13 @@ footer a{text-decoration:none}
     再除以每颗 chip 的核数。</p>
 
   <div class="note warn"><span class="t">⚠️ 最值得讲的细节：混用进制不是谁粗心，是这个领域的常态</span>
-    同一个源文件里，<b>两种进制紧挨着</b> ——
-    VMEM 写的是 <code>64 * 1024 * 1024</code>（二进制），
-    HBM 写的是 <code>206_000_000_000</code>（十进制）。
-    <br>所以「查过源码」并不等于「不会错」。<b>你还得知道每一行是按哪套口径写的。</b></div>
+    <b>官方产品文档里就有现成的例子。</b>Google Cloud 的 TPU7x 页面上，
+    规格表那一行写的是「HBM capacity per chip (<b>GiB</b>)：192」，
+    而正文那一段写的是「each chip is equipped with 192 <b>GB</b> of HBM」——
+    <b>同一个页面、同一个数、两种单位</b>。
+    <br>源码里也一样：VMEM 写成 <code>64 * 1024 * 1024</code>（二进制），
+    HBM 写成 <code>206_000_000_000</code>（十进制），两行紧挨着。
+    <br>所以「我查了官方文档」并不等于「不会错」。<b>你还得知道每一行是按哪套口径写的。</b></div>
 
   <div class="punch">落笔前的三个自问
     <small>① 二进制还是十进制？　② per chip / per device / per core？　③ 物理量还是可用量？</small></div>
@@ -635,9 +638,344 @@ footer a{text-decoration:none}
     ③ <b>两条出身</b> —— 接下来无论看到什么差别，先问「这是不是那条假设的后果」。</div>
 </div></section>
 
+
+<!-- ══════════ §1 ══════════ -->
+<section id="s1"><div class="wrap">
+  <div class="stn big"><span class="badge">第 1 节</span><h2>一张图：先建两套坐标</h2></div>
+  <p class="lead">后面四节所有东西都要挂在这两套坐标上。
+    <b>这一节不背参数，只建立「哪一层对哪一层」的对应关系</b> —— 以及，
+    哪一层<b>只有一边有</b>。</p>
+
+  <h3>1.1　TPU v7 一颗芯片</h3>
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 470" width="100%" role="img" aria-label="TPU v7 芯片全景：一颗芯片两个 chiplet，每个 chiplet 一个 TensorCore、两个 SparseCore、96 GB HBM">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">TPU v7（Ironwood）一颗 chip —— 双 chiplet，两个 chiplet 各有独立的内存空间</text>
+<text class="svgsm" x="0" y="35">来源：Google Cloud 官方 TPU7x 文档（结构与容量）＋ JAX 公开源码里的芯片信息表（片上尺寸）</text>
+<rect x="0" y="48" width="1000" height="318" rx="12" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>
+<text class="svgsm" x="14" y="66">一颗 chip</text>
+<rect x="16" y="76" width="468" height="276" rx="10" fill="#f8f9fa" stroke="#1a73e8"/>
+<text class="svglbl" x="32" y="98" fill="#1a73e8">chiplet 1　=　JAX 眼里的 device 0</text>
+<rect x="32" y="108" width="330" height="130" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="44" y="128" fill="#1a73e8">TensorCore ×1</text>
+<rect x="44" y="138" width="140" height="20" rx="4" fill="#1a73e8"/>
+<text class="svgsm" x="52" y="152" fill="#fff">MXU ×2</text>
+<text class="svgsm" x="194" y="152">256 × 256 脉动阵列</text>
+<rect x="44" y="162" width="140" height="20" rx="4" fill="#9334e6"/>
+<text class="svgsm" x="52" y="176" fill="#fff">VPU</text>
+<text class="svgsm" x="194" y="176">逐元素 · 约占核算力 3%</text>
+<rect x="44" y="186" width="140" height="20" rx="4" fill="#9334e6"/>
+<text class="svgsm" x="52" y="200" fill="#fff">XLU</text>
+<text class="svgsm" x="194" y="200">转置 / 归约 / 排列</text>
+<rect x="44" y="210" width="140" height="20" rx="4" fill="#d93025"/>
+<text class="svgsm" x="52" y="224" fill="#fff">标量单元 ×1</text>
+<text class="svgsm" x="194" y="224">产生所有地址 —— 只有一个</text>
+<rect x="370" y="108" width="98" height="130" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+<text class="svglbl" x="380" y="128" fill="#7a5000">SparseCore</text>
+<text class="svgnum" x="380" y="150" fill="#7a5000">× 2</text>
+<text class="svgsm" x="380" y="168" fill="#7a5000">16 subcore</text>
+<text class="svgsm" x="380" y="185" fill="#7a5000">× 16 lane</text>
+<text class="svgsm" x="380" y="202" fill="#7a5000">VMEM 512 KiB</text>
+<text class="svgsm" x="380" y="219" fill="#7a5000">无 MXU</text>
+<rect x="32" y="248" width="436" height="22" rx="4" fill="#fff" stroke="#1e8e3e"/>
+<text class="svglbl" x="42" y="263" fill="#1e8e3e">VMEM</text>
+<text class="svgsm" x="112" y="263" fill="#1e8e3e">64 MiB · 编译器显式管</text>
+<rect x="32" y="274" width="436" height="22" rx="4" fill="#fff" stroke="#5f6368"/>
+<text class="svglbl" x="42" y="289" fill="#5f6368">SMEM</text>
+<text class="svgsm" x="112" y="289" fill="#5f6368">1 MiB</text>
+<rect x="32" y="300" width="436" height="22" rx="4" fill="#fff" stroke="#d93025" stroke-dasharray="4 3"/>
+<text class="svglbl" x="42" y="315" fill="#d93025">CMEM</text>
+<text class="svgsm" x="112" y="315" fill="#d93025">0 —— 没有这一层</text>
+<rect x="32" y="326" width="436" height="18" rx="4" fill="#9334e6"/>
+<text class="svgsm" x="42" y="339" fill="#fff">HBM 96 GB —— 这个 chiplet 私有，不与另一个共享地址空间</text>
+<rect x="516" y="76" width="468" height="276" rx="10" fill="#f8f9fa" stroke="#1a73e8"/>
+<text class="svglbl" x="532" y="98" fill="#1a73e8">chiplet 2　=　JAX 眼里的 device 1</text>
+<rect x="532" y="108" width="330" height="130" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="544" y="128" fill="#1a73e8">TensorCore ×1</text>
+<rect x="544" y="138" width="140" height="20" rx="4" fill="#1a73e8"/>
+<text class="svgsm" x="552" y="152" fill="#fff">MXU ×2</text>
+<text class="svgsm" x="694" y="152">256 × 256 脉动阵列</text>
+<rect x="544" y="162" width="140" height="20" rx="4" fill="#9334e6"/>
+<text class="svgsm" x="552" y="176" fill="#fff">VPU</text>
+<text class="svgsm" x="694" y="176">逐元素 · 约占核算力 3%</text>
+<rect x="544" y="186" width="140" height="20" rx="4" fill="#9334e6"/>
+<text class="svgsm" x="552" y="200" fill="#fff">XLU</text>
+<text class="svgsm" x="694" y="200">转置 / 归约 / 排列</text>
+<rect x="544" y="210" width="140" height="20" rx="4" fill="#d93025"/>
+<text class="svgsm" x="552" y="224" fill="#fff">标量单元 ×1</text>
+<text class="svgsm" x="694" y="224">产生所有地址 —— 只有一个</text>
+<rect x="870" y="108" width="98" height="130" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+<text class="svglbl" x="880" y="128" fill="#7a5000">SparseCore</text>
+<text class="svgnum" x="880" y="150" fill="#7a5000">× 2</text>
+<text class="svgsm" x="880" y="168" fill="#7a5000">16 subcore</text>
+<text class="svgsm" x="880" y="185" fill="#7a5000">× 16 lane</text>
+<text class="svgsm" x="880" y="202" fill="#7a5000">VMEM 512 KiB</text>
+<text class="svgsm" x="880" y="219" fill="#7a5000">无 MXU</text>
+<rect x="532" y="248" width="436" height="22" rx="4" fill="#fff" stroke="#1e8e3e"/>
+<text class="svglbl" x="542" y="263" fill="#1e8e3e">VMEM</text>
+<text class="svgsm" x="612" y="263" fill="#1e8e3e">64 MiB · 编译器显式管</text>
+<rect x="532" y="274" width="436" height="22" rx="4" fill="#fff" stroke="#5f6368"/>
+<text class="svglbl" x="542" y="289" fill="#5f6368">SMEM</text>
+<text class="svgsm" x="612" y="289" fill="#5f6368">1 MiB</text>
+<rect x="532" y="300" width="436" height="22" rx="4" fill="#fff" stroke="#d93025" stroke-dasharray="4 3"/>
+<text class="svglbl" x="542" y="315" fill="#d93025">CMEM</text>
+<text class="svgsm" x="612" y="315" fill="#d93025">0 —— 没有这一层</text>
+<rect x="532" y="326" width="436" height="18" rx="4" fill="#9334e6"/>
+<text class="svgsm" x="542" y="339" fill="#fff">HBM 96 GB —— 这个 chiplet 私有，不与另一个共享地址空间</text>
+<rect x="486" y="200" width="30" height="46" rx="5" fill="#e8710a"/>
+<text class="svgsm" x="501" y="219" text-anchor="middle" fill="#fff">D2D</text>
+<text class="svgsm" x="501" y="234" text-anchor="middle" fill="#fff">×6</text>
+<text class="svglbl" x="0" y="392" fill="#202124">整颗 chip 对外：</text>
+<text class="svgsm" x="112" y="392" fill="#1a73e8">HBM</text>
+<text class="svgsm" x="146" y="392">192（官方表写 GiB、正文写 GB）· 7,380 GB/s</text>
+<text class="svgsm" x="412" y="392" fill="#1a73e8">ICI</text>
+<text class="svgsm" x="446" y="392">1,200 GB/s 双向 · 每轴 200 GB/s · 3D torus</text>
+<text class="svgsm" x="712" y="392" fill="#1a73e8">算力</text>
+<text class="svgsm" x="746" y="392">BF16 2,307 TFLOPS ｜ FP8 4,614 TFLOPS</text>
+<line x1="0" y1="404" x2="1000" y2="404" stroke="#e8eaed"/>
+<text class="svgsm" x="0" y="424" fill="#202124">① 一颗 chip = 2 个 device。所有框架日志按 device 报 —— 容量除以 2 才是你的额度</text>
+<text class="svgsm" x="0" y="441" fill="#202124">② 两个 chiplet 各有独立地址空间（不再是上代的统一 MegaCore）。跨 chiplet 要走 D2D + 集合通信，不是随手读写 —— 好在 D2D 比一条 1D ICI 链路快 6 倍</text>
+<text class="svgsm" x="0" y="458" fill="#d93025">③ 片上 SRAM 全是显式管理的，CMEM = 0 —— 这一整层在 GPU 那边叫 cache，在这里根本不存在（§2）</text>
+</svg>
+  <figcaption>三条批注是后面反复要用的。特别是第 ③ 条 ——
+    <b><code>CMEM = 0</code> 不是「小」，是「没有」</b>。</figcaption>
+  </figure>
+
+  <div class="note info"><span class="t">v7 相对上一代最容易被忽略的一个变化</span>
+    v4 / v5p 是 <b>MegaCore</b>：一颗芯片上两个核共用一个统一地址空间。
+    <b>v7 不是</b> —— 官方文档写得很清楚，两个 chiplet
+    「each with its own dedicated memory space」，各带 96 GB HBM。
+    <br>所以在 v7 上，<b>「跨核」这件事的成本，跟你在上一代的直觉不一样</b>：
+    它要走 D2D 接口加集合通信，而不是随手读一下对方的内存。
+    好消息是那条 D2D 比一条 1D ICI 链路快 6 倍。</div>
+
+  <h3>1.2　GB200：这一侧要画三层</h3>
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 404" width="100%" role="img" aria-label="GB200 的三层：GPU、节点、NVL72 域，其中域内 72 卡但训练实际用 64 卡">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">GB200 要画三层 —— 而「一台机器」这个词在第三层已经失效了</text>
+<text class="svgsm" x="0" y="35">来源：NVIDIA 官方 GB200 NVL72 规格表 ＋ CUDA Blackwell 调优指南</text>
+<rect x="0" y="50" width="336" height="196" rx="10" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="16" y="72" fill='#1a73e8'>① 一张 B200 GPU</text>
+<text class="svgsm" x="16" y="92" fill="#1a73e8">SM</text>
+<text class="svgsm" x="106" y="92">148 个（第三方拆解，官方未公布）</text>
+<text class="svgsm" x="16" y="111" fill="#1a73e8">每 SM</text>
+<text class="svgsm" x="106" y="111">128 CUDA core · 4 Tensor Core</text>
+<text class="svgsm" x="16" y="130" fill="#1a73e8">每 SM 并发</text>
+<text class="svgsm" x="106" y="130">最多 64 个 warp</text>
+<text class="svgsm" x="16" y="149" fill="#1a73e8">寄存器堆</text>
+<text class="svgsm" x="106" y="149">64K × 32 bit = 256 KB / SM</text>
+<text class="svgsm" x="16" y="168" fill="#1a73e8">shared</text>
+<text class="svgsm" x="106" y="168">最多 228 KB / SM（含 L1 共 256 KB）</text>
+<text class="svgsm" x="16" y="187" fill="#1a73e8">L2</text>
+<text class="svgsm" x="106" y="187">126 MB · 全 GPU 共享 · 自动管</text>
+<text class="svgsm" x="16" y="206" fill="#1a73e8">HBM3e</text>
+<text class="svgsm" x="106" y="206">186 GB · 8.0 TB/s</text>
+<text class="svgsm" x="16" y="225" fill="#1a73e8">算力 dense</text>
+<text class="svgsm" x="106" y="225">BF16 2.5 ｜ FP8 5 PFLOPS</text>
+<rect x="352" y="50" width="204" height="196" rx="10" fill="#f3e8fd" stroke="#9334e6"/>
+<text class="svglbl" x="366" y="72" fill="#9334e6">② 一个节点</text>
+<text class="svgsm" x="366" y="90">Grace ARM64</text>
+<text class="svgsm" x="366" y="105">+ 4 × B200</text>
+<text class="svgsm" x="366" y="120">（a4x-highgpu-4g）</text>
+<text class="svgsm" x="366" y="135"></text>
+<text class="svgsm" x="366" y="150">744 GB GPU 显存</text>
+<text class="svgsm" x="366" y="165"></text>
+<text class="svgsm" x="366" y="180">RDMA 4 × CX-7 × 400</text>
+<text class="svgsm" x="366" y="195">　= 1,600 Gbps</text>
+<text class="svgsm" x="366" y="210">管理网 400 Gbps</text>
+<text class="svgsm" x="366" y="225">合计 2,000 Gbps</text>
+<rect x="572" y="50" width="428" height="196" rx="10" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="588" y="72" fill="#1e8e3e">③ 一个 NVL72 域　←　新的「一台机器」</text>
+<text class="svgsm" x="588" y="92">18 节点 × 4 = 72 GPU，NVSwitch 5 全互联，不走网络</text>
+<text class="svgsm" x="588" y="110">域内 NVLink 总带宽 130 TB/s ｜ 每 GPU 1.8 TB/s</text>
+<rect x="588" y="122" width="396" height="66" rx="6" fill="#fce8e6" stroke="#d93025"/>
+<text class="svglbl" x="600" y="141" fill="#d93025">⚠️ 72 是物理规模，能进训练任务的是 64</text>
+<text class="svgsm" x="600" y="158" fill="#d93025">16 节点 = 64 卡进任务，剩 2 节点 / 8 卡热备</text>
+<text class="svgsm" x="600" y="175" fill="#d93025">64 正好是 2 的幂 —— 跟第 0 节「物理量还是可用量」同一个自问</text>
+<text class="svgsm" x="588" y="206">按 72 卡（物理域）</text>
+<text class="svgnum" x="588" y="228" fill="#5f6368">13.4 TB 显存</text>
+<text class="svgsm" x="788" y="206">按 64 卡（可训练）</text>
+<text class="svgnum" x="788" y="228" fill="#1e8e3e">11.9 TB 显存</text>
+<path d="M336 148 h20" stroke="#5f6368" stroke-width="1.5" marker-end="url(#m1)"/>
+<path d="M556 148 h20" stroke="#5f6368" stroke-width="1.5" marker-end="url(#m1)"/>
+<defs><marker id="m1" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#5f6368"/></marker></defs>
+<line x1="0" y1="266" x2="1000" y2="266" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="290" fill="#202124">⭐ 跟 TPU 对齐着看：两边的三层完全不在同一个位置</text>
+<text class="svgsm" x="0" y="314" fill="#1a73e8">TPU v7</text>
+<text class="svgsm" x="70" y="314">TensorCore　→　chip（2 个 device）　→　切片（3D torus，最大 9,216 chip）</text>
+<text class="svgsm" x="0" y="334" fill="#1e8e3e">GB200</text>
+<text class="svgsm" x="70" y="334">GPU　→　节点（4 GPU）　→　NVL72 域（72 卡，可训练 64）→ 跨域走 RDMA</text>
+<text class="svgsm" x="0" y="362" fill="#d93025">TPU 侧「切片」是一个可以从 4 chip 一路开到 9,216 chip 的连续谱；GPU 侧「域」是一个 72 卡的硬边界，出了它就换一套物理链路。</text>
+<text class="svgsm" x="0" y="380" fill="#d93025">这条差别是 §4 全部内容的来源 —— 一个是「距离逐渐变远」，一个是「到某一点突然掉下去」。</text>
+</svg>
+  <figcaption>两边的第三层<b>根本不是同一种东西</b> ——
+    一个是可以从 4 颗一路开到 9,216 颗的连续谱，一个是 72 卡的硬边界。</figcaption>
+  </figure>
+
+  <h3>1.3　⭐ 把两边挂在同一根纵轴上</h3>
+  <p>前面两张图各说各的。<b>真正有用的是这一张</b> ——
+    同一个高度代表同一个层级，于是「谁缺一层、谁多一块」自己就跳出来了。</p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 594" width="100%" role="img" aria-label="TPU v7 与 B200 的存储层级对照，共用一根纵轴，空格子表示该层不存在">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">把两边挂在同一根纵轴上 —— 同一高度＝同一层级，空格子就是「这边没有这一层」</text>
+<text class="svgsm" x="0" y="35">纵轴含义：离计算单元由近到远</text>
+<text class="svglbl" x="168" y="60" fill="#1a73e8">TPU v7（每个 TensorCore）</text>
+<text class="svglbl" x="592" y="60" fill="#1e8e3e">B200（每个 SM / 每 GPU）</text>
+<line x1="154" y1="70" x2="154" y2="490" stroke="#dadce0"/>
+<text class="svglbl" x="142" y="92" text-anchor="end" fill="#202124">寄存器</text>
+<text class="svgsm" x="142" y="108" text-anchor="end">离计算单元最近</text>
+<rect x="168" y="70" width="404" height="70" rx="7" fill="#f8f9fa" stroke="#1a73e8"/>
+<text class="svgsm" x="182" y="92" fill="#202124">向量寄存器 8 × 128 × 32 bit = 4 KiB／个</text>
+<text class="svgsm" x="182" y="109" fill="#202124">累加器 128 个</text>
+<rect x="592" y="70" width="408" height="70" rx="7" fill="#f8f9fa" stroke="#1e8e3e"/>
+<text class="svgsm" x="606" y="92" fill="#202124">寄存器堆 64K × 32 bit = 256 KB／SM</text>
+<text class="svgsm" x="606" y="109" fill="#202124">每线程最多 255 个</text>
+<text class="svglbl" x="142" y="176" text-anchor="end" fill="#202124">片上 · 显式管</text>
+<text class="svgsm" x="142" y="192" text-anchor="end">谁放什么，由人或编译器决定</text>
+<rect x="168" y="154" width="404" height="70" rx="7" fill="#f8f9fa" stroke="#1a73e8"/>
+<text class="svgsm" x="182" y="176" fill="#202124">VMEM 64 MiB／核</text>
+<text class="svgsm" x="182" y="193" fill="#202124">SMEM 1 MiB</text>
+<text class="svgsm" x="182" y="210" fill="#202124">—— 编译器排布，没有自动行为</text>
+<rect x="592" y="154" width="408" height="70" rx="7" fill="#f8f9fa" stroke="#1e8e3e"/>
+<text class="svgsm" x="606" y="176" fill="#202124">shared memory 最多 228 KB／SM</text>
+<text class="svgsm" x="606" y="193" fill="#202124">—— 写 kernel 的人用 __shared__ 手工搬</text>
+<text class="svglbl" x="142" y="260" text-anchor="end" fill="#202124">片上 · 自动管</text>
+<text class="svgsm" x="142" y="276" text-anchor="end">硬件替你决定放什么</text>
+<rect x="168" y="238" width="404" height="70" rx="7" fill="#fff" stroke="#1a73e8" stroke-dasharray="5 4"/>
+<text class="svgnum" x="370.0" y="268" text-anchor="middle" fill="#d93025">CMEM = 0</text>
+<text class="svgsm" x="370.0" y="288" text-anchor="middle" fill="#d93025">GPU 那边整整一层，在这里根本不存在</text>
+<rect x="592" y="238" width="408" height="70" rx="7" fill="#f8f9fa" stroke="#1e8e3e"/>
+<text class="svgsm" x="606" y="260" fill="#202124">L1（与 shared 合计上限 256 KB／SM）</text>
+<text class="svgsm" x="606" y="277" fill="#202124">L2 126 MB／GPU</text>
+<text class="svgsm" x="606" y="294" fill="#202124">—— 全自动，你只能提示不能指定</text>
+<text class="svglbl" x="142" y="344" text-anchor="end" fill="#202124">专用协处理器</text>
+<text class="svgsm" x="142" y="360" text-anchor="end">矩阵单元干不了的活</text>
+<rect x="168" y="322" width="404" height="70" rx="7" fill="#f8f9fa" stroke="#1a73e8"/>
+<text class="svgsm" x="182" y="344" fill="#202124">SparseCore × 4／chip</text>
+<text class="svgsm" x="182" y="361" fill="#202124">可编程：前缀和 · 排序 · 计数 · scatter</text>
+<rect x="592" y="322" width="408" height="70" rx="7" fill="#fff" stroke="#1e8e3e" stroke-dasharray="5 4"/>
+<text class="svgnum" x="796.0" y="352" text-anchor="middle" fill="#d93025">（没有对应物）</text>
+<text class="svgsm" x="796.0" y="372" text-anchor="middle" fill="#d93025">矩阵单元干不了的活，只能回到 CUDA core 手写</text>
+<text class="svglbl" x="142" y="428" text-anchor="end" fill="#202124">芯片外</text>
+<text class="svgsm" x="142" y="444" text-anchor="end">HBM</text>
+<rect x="168" y="406" width="404" height="70" rx="7" fill="#f8f9fa" stroke="#1a73e8"/>
+<text class="svgsm" x="182" y="428" fill="#202124">96 GB／chiplet</text>
+<text class="svgsm" x="182" y="445" fill="#202124">整 chip 7,380 GB/s</text>
+<rect x="592" y="406" width="408" height="70" rx="7" fill="#f8f9fa" stroke="#1e8e3e"/>
+<text class="svgsm" x="606" y="428" fill="#202124">186 GB／GPU</text>
+<text class="svgsm" x="606" y="445" fill="#202124">8,000 GB/s</text>
+<line x1="0" y1="502" x2="1000" y2="502" stroke="#e8eaed"/>
+<rect x="0" y="514" width="1000" height="66" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+<text class="svglbl" x="18" y="536" fill="#7a5000">⭐ 片上 SRAM 的总量几乎一样，归属完全相反：B200 的 L2 是 126 MB，v7 的 VMEM 是 64 MiB × 2 核 = 128 MiB</text>
+<text class="svgsm" x="18" y="555" fill="#7a5000">一边全部落在「自动管」那一格，一边全部落在「显式管」那一格 —— 同样一百多 MB 的片上 SRAM，一个替你适应，一个让你安排。</text>
+<text class="svgsm" x="18" y="572" fill="#7a5000">这就是第 0 节那两条出身，第一次以数字的形式出现。</text>
+</svg>
+  <figcaption>两个虚线空格子是这张图的全部价值：<b>TPU 没有「自动管」那一层，
+    GPU 没有「专用协处理器」那一层</b>。</figcaption>
+  </figure>
+
+  <h3>1.4　⭐⭐ 本节压轴：算力除以带宽，两边落在同一个数上</h3>
+  <p>上面全是「长得不一样」。这一张反过来 —— <b>在一个关键比值上，两边几乎完全一样。</b></p>
+
+  <figure class="fbox">
+  <svg viewBox="0 0 1000 430" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">两家公司、两套架构、两种设计哲学 —— 算力除以带宽，落在同一个数上</text>
+<text class="svgsm" x="0" y="35">全部由两张官方规格表现算，推导链写在图里</text>
+<rect x="0" y="50" width="470" height="196" rx="10" fill="#f8f9fa" stroke="#1a73e8"/>
+<text class="svglbl" x="18" y="74" fill="#1a73e8" style="font-size:14px">TPU v7（每 chip）</text>
+<text class="svgsm" x="18" y="106">BF16</text>
+<text class="svgtxt" x="18" y="128" style="font-size:12.5px">2,307 TFLOPS</text>
+<line x1="18" y1="134" x2="250" y2="134" stroke="#1a73e8"/>
+<text class="svgtxt" x="18" y="150" style="font-size:12.5px">7.38 TB/s</text>
+<text class="svgnum" x="452" y="136" text-anchor="end" fill="#1a73e8" style="font-size:22px">312.6</text>
+<text class="svgsm" x="452" y="152" text-anchor="end" fill="#1a73e8">FLOP / byte</text>
+<text class="svgsm" x="18" y="168">FP8</text>
+<text class="svgtxt" x="18" y="190" style="font-size:12.5px">4,614 TFLOPS</text>
+<line x1="18" y1="196" x2="250" y2="196" stroke="#1a73e8"/>
+<text class="svgtxt" x="18" y="212" style="font-size:12.5px">7.38 TB/s</text>
+<text class="svgnum" x="452" y="198" text-anchor="end" fill="#1a73e8" style="font-size:22px">625.2</text>
+<text class="svgsm" x="452" y="214" text-anchor="end" fill="#1a73e8">FLOP / byte</text>
+<text class="svgsm" x="18" y="238">来源：Google Cloud 官方 TPU7x 规格表，直接给的就是 per chip</text>
+<rect x="530" y="50" width="470" height="196" rx="10" fill="#f8f9fa" stroke="#1e8e3e"/>
+<text class="svglbl" x="548" y="74" fill="#1e8e3e" style="font-size:14px">B200（每 GPU，dense）</text>
+<text class="svgsm" x="548" y="106">BF16</text>
+<text class="svgtxt" x="548" y="128" style="font-size:12.5px">2,500 TFLOPS</text>
+<line x1="548" y1="134" x2="780" y2="134" stroke="#1e8e3e"/>
+<text class="svgtxt" x="548" y="150" style="font-size:12.5px">8.0 TB/s</text>
+<text class="svgnum" x="982" y="136" text-anchor="end" fill="#1e8e3e" style="font-size:22px">312.5</text>
+<text class="svgsm" x="982" y="152" text-anchor="end" fill="#1e8e3e">FLOP / byte</text>
+<text class="svgsm" x="548" y="168">FP8</text>
+<text class="svgtxt" x="548" y="190" style="font-size:12.5px">5,000 TFLOPS</text>
+<line x1="548" y1="196" x2="780" y2="196" stroke="#1e8e3e"/>
+<text class="svgtxt" x="548" y="212" style="font-size:12.5px">8.0 TB/s</text>
+<text class="svgnum" x="982" y="198" text-anchor="end" fill="#1e8e3e" style="font-size:22px">625.0</text>
+<text class="svgsm" x="982" y="214" text-anchor="end" fill="#1e8e3e">FLOP / byte</text>
+<text class="svgsm" x="548" y="238">来源：NVIDIA 官方 GB200 NVL72 域级数字 ÷ 72，稀疏值取一半得 dense</text>
+<rect x="0" y="260" width="1000" height="56" rx="8" fill="#1a73e8"/>
+<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">BF16　312.6　对　312.5　　｜　　FP8　625.2　对　625.0　　—— 差千分之三</text>
+<text class="svgsm" x="500" y="306" text-anchor="middle" fill="#ffffffcc">这不是巧合能解释的。两边被同一批负载和同一代 HBM 技术钉在了同一个比值上</text>
+<text class="svglbl" x="0" y="342" fill="#202124">这个数到底是什么意思</text>
+<text class="svgsm" x="0" y="362" fill="#202124">· 它是硬件的「胃口」：每从 HBM 搬一个字节，硬件配套能做约 312 次 BF16 运算。喂不满，算力就在空转</text>
+<text class="svgsm" x="0" y="379" fill="#202124">· 于是每个算子只剩一个问题：它自己的算术强度，比 312 高还是低？高就是算力受限，低就是带宽受限</text>
+<text class="svgsm" x="0" y="396" fill="#d93025">· 专题一那八步里，① embedding 的算术强度是 0 —— 差了三个数量级。这就是 §2 要处理的东西</text>
+<text class="svgsm" x="0" y="413" fill="#d93025">· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是 §3 的战场。同一颗芯片，两种完全不同的困境</text>
+</svg>
+  <figcaption>两个数都是从官方规格表现算的，推导链写在图里。
+    <b>BF16 差千分之三，FP8 差千分之零点三。</b></figcaption>
+  </figure>
+
+  <div class="punch">312 不是谁选的，是被钉死的
+    <small>两家公司、两套架构、完全不同的设计哲学 ——
+      它们买的是同一代 HBM，跑的是同一批模型</small></div>
+
+  <p>这个数一旦立住，后面两节就有了统一的判据。<b>每个算子只剩一个问题：
+    它的算术强度比 312 高还是低？</b>
+    高 → 算力受限，去看 §3；低 → 带宽受限，去看 §2。
+    专题一那八步会整整齐齐地分到两边去。</p>
+
+  <div class="note danger"><span class="t">⚠️ 这张图不能拿去比「谁更强」</span>
+    <b>比值相同不代表绝对值相同，更不代表实际性能相同。</b>
+    这张图说的只有一件事：<b>两边的「胃口」是一样的</b>，
+    所以同一个算子在两边会遇到同一类困境。
+    至于谁跑得快，取决于这个胃口能不能被喂满 —— 那是 §6 的话题，而且要靠实测，不能靠算。</div>
+
+  <h3>1.5　一张对照表（本节落点）</h3>
+  <div class="tbl-wrap">
+  <table>
+    <thead><tr><th>层</th><th>TPU v7</th><th>GB200 / B200</th><th>差别的本质</th></tr></thead>
+    <tbody>
+      <tr><td><b>矩阵单元</b></td><td>MXU 256 × 256，每核 2 个</td>
+          <td>Tensor Core（第 5 代），每 SM 4 个</td><td>粒度：一块大的 vs 很多小的</td></tr>
+      <tr><td><b>标量 / 地址</b></td><td>每核<b>只有一个</b>标量单元</td>
+          <td>每 SM 128 个 CUDA core，148 个 SM</td><td>不规则访问谁来发地址（§3）</td></tr>
+      <tr><td><b>片上 · 显式</b></td><td><b>VMEM 64 MiB</b> / 核 · 编译器管</td>
+          <td>shared memory 最多 <b>228 KB</b> / SM · 人管</td><td>谁决定块开多大（§2）</td></tr>
+      <tr><td><b>片上 · 自动</b></td><td class="n"><b>CMEM = 0</b>（没有）</td>
+          <td>L1 + <b>L2 126 MB</b></td><td>⭐ 整整一层只有一边有</td></tr>
+      <tr><td><b>协处理器</b></td><td>SparseCore × 4 / chip</td><td>（没有对应物）</td>
+          <td>⭐ 另一层只有另一边有</td></tr>
+      <tr><td><b>HBM</b></td><td>96 GB / chiplet；整 chip 7,380 GB/s</td>
+          <td>186 GB / GPU；8,000 GB/s</td><td>同一代 HBM，量级相同</td></tr>
+      <tr><td><b>算力（每 chip / 每 GPU）</b></td><td>BF16 2,307 ｜ FP8 4,614 TFLOPS</td>
+          <td>BF16 2,500 ｜ FP8 5,000 TFLOPS（dense）</td><td>同一量级</td></tr>
+      <tr class="sum"><td><b>算力 ÷ 带宽</b></td><td class="n"><b>312.6</b> FLOP/byte</td>
+          <td class="n"><b>312.5</b> FLOP/byte</td><td>⭐⭐ 几乎完全相同</td></tr>
+      <tr><td><b>卡间</b></td><td>ICI 1,200 GB/s 双向 · 3D torus · 最大 9,216 chip</td>
+          <td>NVLink 1.8 TB/s / GPU · NVL72 域 · 72 卡（可训练 64）</td>
+          <td>连续谱 vs 硬边界（§4）</td></tr>
+    </tbody>
+  </table>
+  </div>
+
+  <div class="note ok"><span class="t">这一节讲完，听众该带走什么</span>
+    ① <b>两套坐标</b>，后面每讲一个部件都能说出「它在对面对应谁」；<br>
+    ② <b>两个空格子</b> —— TPU 没有 cache 层，GPU 没有 SparseCore，这两个空格分别是 §2 和 §3 的主线；<br>
+    ③ <b>312 这个判据</b> —— 从这里开始，每个算子都要先回答「我比 312 高还是低」。</div>
+</div></section>
+
 <section><div class="wrap">
   <div class="note info"><span class="t">🚧 后面还在写</span>
-    第 1 节（一张图：v7 芯片全景 vs GB200 三层）、第 2–5 节的内容正在逐节补上。
+    第 2–5 节的内容正在逐节补上。
     大纲见 <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9802-TPU-%E4%B8%8E-GPU.md">GitHub 上的专题二大纲</a>。</div>
 </div></section>
 
