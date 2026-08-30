@@ -429,6 +429,46 @@ footer a{text-decoration:none}
 .mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
 .mscard > b{display:block;font-size:16px;margin-bottom:6px}
 .mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+
+/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
+/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
+.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+.fwide svg{display:block}
+.msfrom{color:var(--gray);font-size:12.5px}
+.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
+.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
+  color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
+.mscard > b{display:block;font-size:16px;margin-bottom:6px}
+.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+/* `.note.q` 在页面基础样式里**根本没有定义** —— 只有 `.guess .q`，
+   而那条被 `.guess` 限定住了，落不到这里。于是这几块「适合展开问答」的提示
+   一直是**没有底色、没有左边框**的裸文本，和正文段落长得一模一样：
+   浏览器不报错，渲染也不塌，只是那个「这里停一下」的视觉信号从来没出现过。
+   语义值得保留（它和 info/warn/danger 说的不是一件事），所以补一条规则，
+   用紫色 —— 全课里紫色一直代表「人的领地」。 */
+.note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
+
+/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
+/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
+.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+.fwide svg{display:block}
+.note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
+.msfrom{color:var(--gray);font-size:12.5px}
+.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
+.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
+  color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
+.mscard > b{display:block;font-size:16px;margin-bottom:6px}
+.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
 </style>
 </head>
 <body>
@@ -2005,14 +2045,17 @@ footer a{text-decoration:none}
 
 <section><div class="wrap">
   <div class="stn big"><span class="badge">第 3 节</span><h2>拆开看：同一份复杂度，两边放在了不同的地方</h2></div>
-  <p class="lead">第 2 节数的是<b>决策点</b>，这一节数的是<b>份数</b>。
-    同样一块矩阵乘的活，两边被切成的份数差 <b>128 倍</b> ——
+  <p class="lead">第 2 节数的是<b>决策点</b>，这一节数的是<b>粒度</b>。
+    同样一块矩阵乘的活，两边<b>一条指令吃下的块大小差 128 倍</b> ——
     这个数字一旦记住，后面「为什么这个优化在那边不管用」大半都能自己推出来。</p>
 
-  <div class="note info"><span class="t">下面十六张图的读法</span>
-    这一节起的图都搬自两份《显微镜》文档，<b>图上的「§N」指的是那两份文档里的节号，
-    不是本课的节号</b>。每张图右下角都标了出处，点进去就是对应那一节。
-    <b>建议按顺序讲</b>：从整颗芯片开始，一层层往里，最后落到「谁做决定」。</div>
+  <div class="note info"><span class="t">下面这批图的读法（两条，都会影响你怎么讲）</span>
+    <b>① 两套节号不要混。</b>搬自两份《显微镜》的图，图上写「§N」指的是<b>那两份文档</b>里的节号；
+    本课自己的节一律写成「<b>第 N 节</b>」。同一屏上两种记法都会出现。
+    <br><b>② 不是每张图都有出处。</b>大部分搬自《显微镜》，右下角有链接；
+    <b>另有六张是本课自己画的，右下角没有出处 —— 那不是漏了，是本来就没有第三方出处可挂</b>，
+    硬安一个比不写更糟。
+    <br><b>建议按顺序讲</b>：从整颗芯片开始，一层层往里，最后落到「谁做决定」。</div>
 
   <h3>3.1　先看整颗，再谈内部</h3>
   <p>两颗芯片<b>都是双 die 封装</b>，这是先讲全景的理由 ——
@@ -3521,7 +3564,7 @@ footer a{text-decoration:none}
 <text x="1364" y="629" class="lbl" fill="#1e8e3e" text-anchor="end">128 MiB</text>
 <text x="934" y="652" class="xs">B200 一整颗的共享内存合计</text>
 <rect x="934" y="658" width="82.34375" height="16" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
-<text x="1364" y="671" class="lbl" fill="#1a73e8" text-anchor="end">约 34 MB　<g>第三方</g></text>
+<text x="1364" y="671" class="lbl" fill="#1a73e8" text-anchor="end">约 34 MB　<tspan fill="#9aa0a6">第三方</tspan></text>
 <text x="934" y="696" class="xxs">口径是<tspan font-weight="700" fill="#202124">软件可控的暂存</tspan>，不含 B200 那 126 MB 的 L2 缓存。</text>
 <rect x="20" y="738" width="1360" height="124" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
 <text x="34" y="764" class="sec" fill="#1a73e8">这张图想让你记住的一句话</text>
@@ -4626,7 +4669,7 @@ footer a{text-decoration:none}
   <p>TPU 这边的收缩边是 <b>256</b>，正好是上面那个数的 16 倍。
     图上第三张卡把 <code>head_dim = 128</code> 那个例子算完了。</p>
 <figure class="fbox fwide" id="ms-t4">
-<svg viewBox="0 0 1400 1032.0" width="1400" height="1032.0" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 MXU 脉动阵列：权重驻留、激活横向流入、部分和纵向下移；同一条反对角线上的单元在同一拍工作">
+<svg viewBox="0 0 1400 1032.0" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 MXU 脉动阵列：权重驻留、激活横向流入、部分和纵向下移；同一条反对角线上的单元在同一拍工作">
 <text x="20" y="26" class="ttl">MXU　—— 256×256 的阵列里，数是斜着穿过去的</text>
 <rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
 <text x="37" y="58" class="sm">乘加单元（权重驻留其中）</text>
@@ -6530,18 +6573,14 @@ footer a{text-decoration:none}
     <br><br>而这正是第 2 节里「GPU 五个红框、TPU 零个」的来历：
     <b>那五个红框不是随手圈的，就是沿着这条路径一站一站数出来的。</b>
     到这里第 2 节那张图才算真的讲完了。</div>
-</div></section>
 
-<section><div class="wrap">
-  <div class="stn big"><span class="badge">第 4 节</span><h2>卡间说话：连得多远，比连得多快更要紧</h2></div>
-  <p class="lead">这一节只有一对图，但它是整门课里<b>差距最大的一处</b>。
-    而且要先把话说公道：<b>差的不是带宽。</b></p>
-  <p>先看 GPU 这边的边界在哪 ——</p>
+  <h3>3.7　压轴：把这一节的账合起来</h3>
+  <p>前面六小节都是<b>局部</b>。最后这一张把整节的账合成一张图 ——
+    <b>两个方块的面积按每周期乘加单元总数等比画，内部按真实单元数切开</b>。
+    它要回答的是本节开篇那句话：<b>总量差不多，那差的到底是什么。</b></p>
 <figure class="fbox fwide" id="ms-g8">
-<svg viewBox="0 0 1400 936.0" width="1400" height="936.0" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="B200 与 TPU v7 每周期乘加单元总数的等面积对照：总量相差 1.16 倍，但 B200 切成 592 个 Tensor Core，TPU v7 只切成 4 个 MXU，单元粒度相差 128 倍">
+<svg viewBox="0 0 1400 968.0" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="B200 与 TPU v7 每周期乘加单元总数的等面积对照：总量相差 1.16 倍，但 B200 切成 592 个 Tensor Core，TPU v7 只切成 4 个 MXU，单元粒度相差 128 倍">
 <text x="20" y="26" class="ttl">同一把尺子上　—— 两个方块面积等比，<tspan fill="#5f6368">总量几乎一样</tspan>，<tspan fill="#1a73e8">切分粒度差 128 倍</tspan></text>
-<rect x="1281" y="10" width="100%" rx="11" fill="#d93025"/>
-<text x="1330.5" y="25" class="lbl" fill="#fff" text-anchor="middle">本图为全文结论</text>
 <rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
 <text x="37" y="58" class="sm">B200：一个 Tensor Core</text>
 <rect x="194.70000000000002" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
@@ -7211,7 +7250,7 @@ footer a{text-decoration:none}
 <text x="1112" y="358" class="xs">＝ 单元大小差 128 ×</text>
 <text x="1262" y="358" class="num" fill="#1e8e3e">自洽</text>
 <line x1="800" y1="390" x2="1370" y2="390" stroke="#e8eaed" stroke-width="1"/>
-<text x="806" y="410" class="xs">公布的峰值</text>
+<text x="806" y="410" class="xs">公布的峰值 ˟</text>
 <text x="962" y="410" class="xs">2,250 TFLOPS  FP16</text>
 <text x="1112" y="410" class="xs">2,307 TFLOPS  BF16</text>
 <text x="1262" y="410" class="num" fill="#1e8e3e">1.03 ×</text>
@@ -7223,52 +7262,77 @@ footer a{text-decoration:none}
 <text x="1112" y="476" class="xs">周期 × 2.2 GHz，<tspan font-weight="700" fill="#202124">三个数全</tspan></text>
 <text x="1112" y="490" class="xs"><tspan font-weight="700" fill="#202124">是官方的</tspan></text>
 <text x="1262" y="462" class="num" fill="#1e8e3e">官方</text>
-<rect x="800" y="516" width="570" height="96" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<rect x="800" y="516" width="570" height="128" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
 <text x="812" y="534" class="xs"><tspan font-weight="700" fill="#202124">右边这一列不是推导，是官方的。</tspan>Google 工程博客逐字给出：<tspan font-weight="700" fill="#d93025">262,144 FLOP/周期/MXU × 2.2 GHz × 4 MXU</tspan></text>
 <text x="812" y="548" class="xs"><tspan font-weight="700" fill="#d93025"> ＝ 2,307 TFLOPS</tspan>。</text>
 <text x="812" y="566" class="xs">　→ 262,144 ÷ 2 ÷ (256×256) ＝ <tspan font-weight="700" fill="#202124">每 cell 每周期 2 次乘加</tspan></text>
 <text x="812" y="580" class="xs">　但 128×128 那几代（v3/v4/v5e/v5p）全部还原成<tspan font-weight="700" fill="#202124">每 cell 1 次</tspan></text>
 <text x="812" y="597" class="xs"><tspan font-weight="700" fill="#202124">所以这个常数是分代的。</tspan>本文上一版把老架构上验过的「每 cell 1 次」顺手套到了 256×256 上，算出 8 个 </text>
 <text x="812" y="610" class="xs">MXU —— <tspan font-weight="700" fill="#d93025">错了，返工记录见正文 §8</tspan>。</text>
-<text x="20" y="662.0" class="sec">这 128 倍意味着什么　—— 三个方向，没有哪边天然更好</text>
-<rect x="20.0" y="676.0" width="444.0" height="152" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
-<rect x="20.0" y="676.0" width="444.0" height="48" rx="10" fill="#e8f0fe"/>
-<rect x="20.0" y="715.0" width="444.0" height="9" rx="0" fill="#e8f0fe"/>
-<text x="34.0" y="696.0" class="box" fill="#1a73e8">GPU 为什么必须切碎</text>
-<text x="34.0" y="713.0" class="xs">细粒度买来的是「什么都能跑」</text>
-<text x="34.0" y="744.0" class="xs">一颗 B200 上同时挂着许多互不相干的线程块，谁先算完谁先走。要让通用调度器管</text>
-<text x="34.0" y="760.0" class="xs">得住，单元就得小到<tspan font-weight="700" fill="#202124">一个 warp 就能独占一个</tspan>。代价是这 592 份里每一份都要自带</text>
-<text x="34.0" y="776.0" class="xs">操作数通路、累加器和控制逻辑 —— <tspan font-weight="700" fill="#d93025">控制的开销乘了 592 遍</tspan>。</text>
-<rect x="478.0" y="676.0" width="444.0" height="152" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1.8"/>
-<rect x="478.0" y="676.0" width="444.0" height="48" rx="10" fill="#e6f4ea"/>
-<rect x="478.0" y="715.0" width="444.0" height="9" rx="0" fill="#e6f4ea"/>
-<text x="492.0" y="696.0" class="box" fill="#1e8e3e">TPU 为什么敢切粗</text>
-<text x="492.0" y="713.0" class="xs">粗粒度买来的是「几乎没有开销」</text>
-<text x="492.0" y="744.0" class="xs">一个 MXU 一条指令就吃满 65,536 个 cell（131,072 乘加 / 周期），这意味着</text>
-<text x="492.0" y="760.0" class="xs">取指、译码、控制这些开销<tspan font-weight="700" fill="#202124">被摊到六万多个乘法上，趋近于零</tspan>。但它只有在「确实有</text>
-<text x="492.0" y="776.0" class="xs">这么大一块矩阵要算」时才成立 —— 而这件事得由<tspan font-weight="700" fill="#d93025">编译器在编译期保证</tspan>，做不到就空</text>
-<text x="492.0" y="792.0" class="xs">转。</text>
-<rect x="936.0" y="676.0" width="444.0" height="152" rx="10" fill="#fff" stroke="#d93025" stroke-width="1.8"/>
-<rect x="936.0" y="676.0" width="444.0" height="48" rx="10" fill="#fce8e6"/>
-<rect x="936.0" y="715.0" width="444.0" height="9" rx="0" fill="#fce8e6"/>
-<text x="950.0" y="696.0" class="box" fill="#d93025">所以什么形状喂得满</text>
-<text x="950.0" y="713.0" class="xs">回到图 G-4 那个例子</text>
-<text x="950.0" y="744.0" class="xs">GPU 的收缩维 K 一直是 16，几乎什么形状都是它的整数倍，喂满很容易。TPU 的 </text>
-<text x="950.0" y="760.0" class="xs">MXU 收缩边是 256 —— 注意力里常见的 <tspan class="mono" fill="#1967d2">head_dim=128</tspan> 只能喂满一半。<tspan font-weight="700" fill="#202124">同一个模</tspan></text>
-<text x="950.0" y="776.0" class="xs"><tspan font-weight="700" fill="#202124">型配置，在两边的「浪费」完全不在同一个位置</tspan>，这就是为什么调优经验不能直接搬。</text>
-<rect x="20" y="842.0" width="1360" height="76" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
-<rect x="20" y="842.0" width="7" height="76" rx="3" fill="#8430ce"/>
-<text x="40" y="864.0" class="box" fill="#8430ce">别把这张图读成排名　—— 它是一张取舍图，不是分数表</text>
-<text x="40" y="886.0" class="xs">总量接近、峰值接近，说明两家在同一代工艺上做出的<tspan font-weight="700" fill="#202124">算力密度是可比的</tspan>。真正的分歧在前面几张图里：<tspan font-weight="700" fill="#202124">谁来知道数在哪</tspan>（G-6）、<tspan font-weight="700" fill="#202124">谁来盖住延迟</tspan>（G-7）、<tspan font-weight="700" fill="#202124">切多细</tspan>（本图）。这三个选择互相咬合 —— <tspan font-weight="700" fill="#d93025">换掉任何一个，另外两个都得跟着换</tspan>：切得细就必须有大寄存器堆去养替</text>
-<text x="40" y="901.0" class="xs">补，养了替补就不需要编译期排班，不排班就只能靠 cache 兜住不确定的延迟。反过来那条链同样成立。</text>
+<text x="812" y="629" class="xs"><tspan fill="#9aa0a6">˟ 2,250 是 </tspan><tspan font-weight="700" fill="#202124">HGX B200</tspan> 的口径。<tspan font-weight="700" fill="#202124">NVL72 里那颗 GB200 更高</tspan> —— 每 GPU dense BF16 约 <tspan font-weight="700" fill="#202124">2,500</tspan>。<tspan font-weight="700" fill="#202124">比域内算力</tspan></text>
+<text x="812" y="642" class="xs"><tspan font-weight="700" fill="#202124">时要用后者</tspan>，别混 SKU。</text>
+<text x="20" y="694.0" class="sec">这 128 倍意味着什么　—— 三个方向，没有哪边天然更好</text>
+<rect x="20.0" y="708.0" width="444.0" height="152" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
+<rect x="20.0" y="708.0" width="444.0" height="48" rx="10" fill="#e8f0fe"/>
+<rect x="20.0" y="747.0" width="444.0" height="9" rx="0" fill="#e8f0fe"/>
+<text x="34.0" y="728.0" class="box" fill="#1a73e8">GPU 为什么必须切碎</text>
+<text x="34.0" y="745.0" class="xs">细粒度买来的是「什么都能跑」</text>
+<text x="34.0" y="776.0" class="xs">一颗 B200 上同时挂着许多互不相干的线程块，谁先算完谁先走。要让通用调度器管</text>
+<text x="34.0" y="792.0" class="xs">得住，单元就得小到<tspan font-weight="700" fill="#202124">一个 warp 就能独占一个</tspan>。代价是这 592 份里每一份都要自带</text>
+<text x="34.0" y="808.0" class="xs">操作数通路、累加器和控制逻辑 —— <tspan font-weight="700" fill="#d93025">控制的开销乘了 592 遍</tspan>。</text>
+<rect x="478.0" y="708.0" width="444.0" height="152" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1.8"/>
+<rect x="478.0" y="708.0" width="444.0" height="48" rx="10" fill="#e6f4ea"/>
+<rect x="478.0" y="747.0" width="444.0" height="9" rx="0" fill="#e6f4ea"/>
+<text x="492.0" y="728.0" class="box" fill="#1e8e3e">TPU 为什么敢切粗</text>
+<text x="492.0" y="745.0" class="xs">粗粒度买来的是「几乎没有开销」</text>
+<text x="492.0" y="776.0" class="xs">一个 MXU 一条指令就吃满 65,536 个 cell（131,072 乘加 / 周期），这意味着</text>
+<text x="492.0" y="792.0" class="xs">取指、译码、控制这些开销<tspan font-weight="700" fill="#202124">被摊到六万多个乘法上，趋近于零</tspan>。但它只有在「确实有</text>
+<text x="492.0" y="808.0" class="xs">这么大一块矩阵要算」时才成立 —— 而这件事得由<tspan font-weight="700" fill="#d93025">编译器在编译期保证</tspan>，做不到就空</text>
+<text x="492.0" y="824.0" class="xs">转。</text>
+<rect x="936.0" y="708.0" width="444.0" height="152" rx="10" fill="#fff" stroke="#d93025" stroke-width="1.8"/>
+<rect x="936.0" y="708.0" width="444.0" height="48" rx="10" fill="#fce8e6"/>
+<rect x="936.0" y="747.0" width="444.0" height="9" rx="0" fill="#fce8e6"/>
+<text x="950.0" y="728.0" class="box" fill="#d93025">所以什么形状喂得满</text>
+<text x="950.0" y="745.0" class="xs">回到图 G-4 那个例子</text>
+<text x="950.0" y="776.0" class="xs">GPU 的收缩维 K 一直是 16，几乎什么形状都是它的整数倍，喂满很容易。TPU 的 </text>
+<text x="950.0" y="792.0" class="xs">MXU 收缩边是 256 —— 注意力里常见的 <tspan class="mono" fill="#1967d2">head_dim=128</tspan> 只能喂满一半。<tspan font-weight="700" fill="#202124">同一个模</tspan></text>
+<text x="950.0" y="808.0" class="xs"><tspan font-weight="700" fill="#202124">型配置，在两边的「浪费」完全不在同一个位置</tspan>，这就是为什么调优经验不能直接搬。</text>
+<rect x="20" y="874.0" width="1360" height="76" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="20" y="874.0" width="7" height="76" rx="3" fill="#8430ce"/>
+<text x="40" y="896.0" class="box" fill="#8430ce">别把这张图读成排名　—— 它是一张取舍图，不是分数表</text>
+<text x="40" y="918.0" class="xs">总量接近、峰值接近，说明两家在同一代工艺上做出的<tspan font-weight="700" fill="#202124">算力密度是可比的</tspan>。真正的分歧在前面几张图里：<tspan font-weight="700" fill="#202124">谁来知道数在哪</tspan>（G-6）、<tspan font-weight="700" fill="#202124">谁来盖住延迟</tspan>（G-7）、<tspan font-weight="700" fill="#202124">切多细</tspan>（本图）。这三个选择互相咬合 —— <tspan font-weight="700" fill="#d93025">换掉任何一个，另外两个都得跟着换</tspan>：切得细就必须有大寄存器堆去养替</text>
+<text x="40" y="933.0" class="xs">补，养了替补就不需要编译期排班，不排班就只能靠 cache 兜住不确定的延迟。反过来那条链同样成立。</text>
 </svg>
-<figcaption><b>NVLink 域到 72 颗就是边界。</b>再往外换 InfiniBand 或以太网，带宽掉一个量级，<b>而且集合通信要重写</b>。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b>把第 3 节这一路的账合起来看：总量几乎一样，切法完全不同。</b>两个方块<b>面积等比</b>，内部按真实单元数切 —— 每周期乘加总数只差 1.16 倍，但 B200 切成 <b>592</b> 个 Tensor Core、v7 只切成 <b>4</b> 个 MXU。<b>注意这里有两个比值，别混</b>：<b>份数</b>差 148 倍，<b>单个单元多大</b>差 <b>128</b> 倍（1,024 对 131,072 乘加/周期）—— 3.4 那个 128 倍说的是后者。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <p>再看 TPU 这边能铺多远。<b>务必提醒听众横轴是对数刻度</b> ——
+  <div class="note warn"><span class="t">⭐ 讲这张图务必把两个比值分开，否则听众会当场算出第三个数</span>
+    图上同时给了两个比值，<b>它们完全不是一回事</b>：
+    <br><b>份数</b> 592 ÷ 4 ＝ <b>148 倍</b>；<b>单个单元多大</b> 131,072 ÷ 1,024 ＝ <b>128 倍</b>。
+    <br><br><b>本课反复说的那个「128 倍」指的是后者</b>，也就是 3.4 里「一条指令吃多大一块」。
+    如果只说「差 128 倍」而屏幕上摆着 592 和 4，
+    <b>台下会自己做除法，得到 148，然后开始怀疑你别的数</b>。
+    <br><br>顺带一提，这张图在原文档里是压轴，
+    但它压的是<b>那份文档</b>的轴 —— 在本课它只收第 3 节这一节的口。
+    <b>第 4 节还有另一个 128 倍，位置完全不同，别提前混在一起讲。</b></div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="stn big"><span class="badge">第 4 节</span><h2>卡间说话：连得多远，比连得多快更要紧</h2></div>
+  <p class="lead">第 3 节拆到最后一站，人还在<b>一颗芯片里</b>。
+    但专题一那笔账是摊到 <b>14 个 device</b> 上的 —— <b>只要不止一颗，就有这一节。</b>
+    这也是专题一那张需求清单的<b>第三条回答</b>：摊开之后，它们怎么通信。</p>
+  <p class="lead">这是全课两边<b>形状差得最远</b>的一节。但要先把话说公道：<b>差的不是带宽。</b>
+    四步走 —— 先摆对边界，再各看一眼两边的边界长什么样，
+    然后数清楚<b>到底有几种通信</b>，最后拿一组我们自己跑的数收尾。</p>
+  <p class="lead"><b>本节只讲拓扑的形状和物理性质。</b>
+    「怎么拿这个形状去切模型」是专题五的事，这里不提前借。</p>
+
+  <h3>4.1　先把边界摆对</h3>
+  <p>一张图同时画了两边。<b>务必提醒听众横轴是对数刻度</b> ——
     线性轴会把 72 和 9,216 压成一个点和一条线，那一刀就看不见了。</p>
 <figure class="fbox fwide" id="ms-t8">
-<svg viewBox="0 0 1400 1070" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 从一颗芯片扩展到一个 pod：6 条 ICI 链路组成 3D 环面，9,216 颗芯片全程同一套互联，不换协议">
+<svg viewBox="0 0 1400 1090" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 从一颗芯片扩展到一个 pod：6 条 ICI 链路组成 3D 环面，9,216 颗芯片全程同一套互联，不换协议">
 <text x="20" y="26" class="ttl">从一颗到一个 pod　—— 关键不是能连多少，是在哪儿被迫换一套编程模型</text>
 <rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
 <text x="37" y="58" class="sm">TPU v7：ICI</text>
@@ -7391,8 +7455,8 @@ footer a{text-decoration:none}
 <text x="804" y="243" class="lbl" fill="#1e8e3e">全程同一套 ICI，3D 环面一路铺到底</text>
 <rect x="1326.322671487088" y="218" width="33.67732851291203" height="40" rx="6" fill="#fff" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="4,3"/>
 <text x="1334.322671487088" y="243" class="xxs" fill="#9aa0a6">DCN</text>
-<line x1="832.5714285714286" y1="218" x2="832.5714285714286" y2="258" stroke="#fff" stroke-width="1.4"/>
-<text x="836.5714285714286" y="271" class="xxs" fill="#1e8e3e">1 chip</text>
+<line x1="792.0" y1="218" x2="792.0" y2="258" stroke="#fff" stroke-width="1.4"/>
+<text x="796.0" y="271" class="xxs" fill="#1e8e3e">1 chip</text>
 <line x1="873.1428571428571" y1="218" x2="873.1428571428571" y2="258" stroke="#fff" stroke-width="1.4"/>
 <text x="877.1428571428571" y="271" class="xxs" fill="#1e8e3e">1 台主机</text>
 <line x1="1035.4285714285713" y1="218" x2="1035.4285714285713" y2="258" stroke="#fff" stroke-width="1.4"/>
@@ -7404,17 +7468,19 @@ footer a{text-decoration:none}
 <rect x="792" y="314" width="250.3226714870882" height="40" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
 <text x="804" y="339" class="lbl" fill="#1a73e8">NVLink 域</text>
 <rect x="1042.3226714870882" y="314" width="317.6773285129118" height="40" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="4,3"/>
-<text x="1054.3226714870882" y="339" class="xxs" fill="#1a73e8">InfiniBand ／ 以太网　—— 带宽掉一个量级，而且集合通信要重写</text>
+<text x="1054.3226714870882" y="339" class="xxs" fill="#1a73e8">RoCE ／ RDMA</text>
 <line x1="913.7142857142857" y1="314" x2="913.7142857142857" y2="354" stroke="#fff" stroke-width="1.4"/>
-<text x="917.7142857142857" y="367" class="xxs" fill="#1a73e8">1 台机器</text>
+<text x="917.7142857142857" y="367" class="xxs" fill="#1a73e8">1 台机器（上一代 HGX）</text>
 <line x1="1042.3226714870882" y1="314" x2="1042.3226714870882" y2="354" stroke="#fff" stroke-width="1.4"/>
 <text x="1046.3226714870882" y="367" class="xxs" fill="#1a73e8">1 个机柜</text>
 <line x1="1042.3226714870882" y1="188" x2="1042.3226714870882" y2="380" stroke="#d93025" stroke-width="2.0" stroke-dasharray="6,4"/>
 <text x="1050.3226714870882" y="182" class="lbl" fill="#d93025">换协议就在这儿</text>
 <text x="700" y="400" class="xs"><tspan font-weight="700" fill="#202124">128 倍的差距不在带宽上，在「不换协议能连多远」上。</tspan>9,216 ÷ 72 ＝ 128 —— 而且这两个数量级之间，TPU 那一侧<tspan font-weight="700" fill="#d93025">集合通信的写法</tspan></text>
-<text x="700" y="416" class="xs"><tspan font-weight="700" fill="#d93025">一个字都不用改</tspan>。</text>
-<text x="700" y="446" class="xs">反过来说也别夸大：<tspan font-weight="700" fill="#202124">单颗算力两边几乎打平</tspan>（B200 约 2,250 TFLOP/s BF16，TPU v7 一颗 chip 2,307），而且在 72 颗以内 </text>
-<text x="700" y="462" class="xs"><tspan font-weight="700" fill="#d93025">NVLink 的每颗带宽还更高</tspan>（1.8 TB/s 对 1.2 TB/s）。<tspan fill="#9aa0a6">这张图比的是拓扑能延展多远，不是单芯片谁快。</tspan></text>
+<text x="700" y="416" class="xs"><tspan font-weight="700" fill="#d93025">一个字都不用改</tspan>（<tspan fill="#9aa0a6">这句只在一个 pod 之内成立，跨 pod 走 DCN 时并行配置照样要改</tspan>）。越过红线那一侧，实测 all-reduce 从<tspan font-weight="700" fill="#202124">约 </tspan></text>
+<text x="700" y="432" class="xs"><tspan font-weight="700" fill="#202124">840 掉到约 325 GB/s</tspan>（<tspan font-weight="700" fill="#202124">2.6 倍</tspan>，不是一个量级），而且<tspan font-weight="700" fill="#202124">通信库要换一条实现路径</tspan>。</text>
+<text x="700" y="458" class="xs">反过来说也别夸大：<tspan font-weight="700" fill="#202124">单颗算力两边几乎打平</tspan>（NVL72 里那颗 <tspan font-weight="700" fill="#202124">GB200</tspan> 每 GPU dense BF16 约 2,500 TFLOP/s，TPU v7 一颗 chip 2,</text>
+<text x="700" y="474" class="xs">307 —— <tspan fill="#9aa0a6">注意别拿 HGX B200 的 2,250 来比，那是另一个 SKU</tspan>），而且在 72 颗以内 <tspan font-weight="700" fill="#d93025">NVLink 的每颗带宽还更高</tspan>（1.8 TB/s 对 </text>
+<text x="700" y="490" class="xs">1.2 TB/s）。<tspan fill="#9aa0a6">这张图比的是拓扑能延展多远，不是单芯片谁快。</tspan></text>
 <rect x="20" y="724" width="670.0" height="186" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.8"/>
 <text x="36" y="750" class="sec" fill="#f9ab00">口径警告：「pod」有两个官方定义</text>
 <text x="36" y="772" class="xs">同一批官方材料里，「pod」既被用来指 <tspan font-weight="700" fill="#202124">9,216 颗芯片的整机规模</tspan>，也被用来指<tspan font-weight="700" fill="#202124">一个 256 颗的可售单元</tspan>。两个都是官方说法，<tspan font-weight="700" fill="#d93025">互</tspan></text>
@@ -7430,22 +7496,389 @@ footer a{text-decoration:none}
 <text x="716" y="566" class="xs">官方正文写的是「每<tspan font-weight="700" fill="#202124">轴</tspan>双向 200 GB/s」。可是三个轴 × 200 ＝ 600，对不上同一页表格里的 <tspan font-weight="700" fill="#202124">1,200</tspan>。</text>
 <text x="716" y="608" class="xs">只有把它读成「每条<tspan font-weight="700" fill="#202124">链路</tspan> 200」才自洽：6 条 × 200 ＝ 1,200。<tspan font-weight="700" fill="#d93025">本文按这个读法画</tspan>，并且在这里写明原文是另一种措辞 —— <tspan font-weight="700" fill="#202124">遇到官</tspan></text>
 <text x="716" y="624" class="xs"><tspan font-weight="700" fill="#202124">方文档自相矛盾，正确做法是标出来，不是挑一个顺手的悄悄用。</tspan></text>
-<rect x="20" y="930" width="1360" height="120" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<rect x="20" y="930" width="1360" height="140" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
 <text x="34" y="956" class="sec" fill="#1e8e3e">两份文档合起来的那一句话</text>
-<text x="34" y="982" class="xs">GPU 那份的最后一张图讲的是：一颗 B200 里有 <tspan font-weight="700" fill="#202124">592 个 Tensor Core</tspan>，而一颗 TPU v7 里只有 <tspan font-weight="700" fill="#202124">4 个 MXU</tspan> —— 同样一块矩阵乘的活，两边被切成的份数差 <tspan font-weight="700" fill="#202124">128 倍</tspan>。<tspan font-weight="700" fill="#d93025">GPU 的协调主要发生在芯片内部。</tspan></text>
-<text x="34" y="1016" class="xs">这张图讲的是另一半：TPU 一颗芯片里只有两个核要协调，但<tspan font-weight="700" fill="#202124">不换协议能一路连到 9,216 颗</tspan>，而 GPU 在 72 颗上就得换。<tspan font-weight="700" fill="#d93025">TPU 的协调主要发生在芯片之间。</tspan>　<tspan font-weight="700" fill="#202124">两边不是「谁更强」，是把同一份复杂度放在了不同的地方 —— 这也是这整份材料从头到尾在说的同一件事。</tspan></text>
+<text x="34" y="982" class="xs">GPU 那份的最后一张图讲的是：一颗 B200 里有 <tspan font-weight="700" fill="#202124">592 个 Tensor Core</tspan>，而一颗 TPU v7 里只有 <tspan font-weight="700" fill="#202124">4 个 MXU</tspan> —— 同样一块矩阵乘的活，<tspan font-weight="700" fill="#202124">份数</tspan>差 148 倍，而<tspan font-weight="700" fill="#202124">单个单元多大</tspan>差 <tspan font-weight="700" fill="#202124">128</tspan> 倍 —— <tspan fill="#9aa0a6">本文反复说的那个 128 指的是后者，别顺口说成 592 对 4</tspan>。<tspan font-weight="700" fill="#d93025">GPU 的协调主要发生在芯</tspan></text>
+<text x="34" y="1002" class="xs"><tspan font-weight="700" fill="#d93025">片内部。</tspan></text>
+<text x="34" y="1030" class="xs">这张图讲的是另一半：TPU 一颗芯片里只有两个核要协调，但<tspan font-weight="700" fill="#202124">不换协议能一路连到 9,216 颗</tspan>，而 GPU 在 72 颗上就得换。<tspan font-weight="700" fill="#d93025">TPU 的协调主要发生在芯片之间。</tspan>　<tspan font-weight="700" fill="#202124">两边不是「谁更强」，是把同一份复杂度放在了不同的地方 —— 这也是这整份材料从头到尾在说的同一件事。</tspan></text>
 </svg>
-<figcaption><b>3D 环面一路铺到 9,216 颗，全程同一套 ICI。</b>横轴是<b>对数刻度</b> —— 关键不是谁能连更多，是<b>在哪个规模上你被迫换一套编程模型</b>。9,216 ÷ 72 ＝ <b>128</b>。但别夸大：单颗算力两边几乎打平，72 颗以内 NVLink 每颗带宽还更高。<b>这里比的是拓扑能延展多远。</b>　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b>3D 环面一路铺到 9,216 颗，全程同一套 ICI。</b>9,216 ÷ 72 ＝ <b>128</b> —— 但这个数<b>只衡量拓扑能延展多远</b>，不衡量谁跑得快（图右上角那段专门按住这个误读，讲的时候直接指过去）。关键不是谁能连更多，是<b>在哪个规模上你被迫换一套编程模型</b>。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <div class="note ok"><span class="t">讲这一对图时，最容易被听众抓住的一个反问</span>
-    「那不就是 TPU 互联更强吗？」—— <b>不是。</b>单颗算力两边几乎打平
-    （B200 约 2,250 TFLOP/s BF16，v7 一颗 chip 2,307），
-    而且在 72 颗以内，<b>NVLink 的每颗带宽还更高</b>（1.8 TB/s 对 1.2 TB/s）。
-    <br><br>差别只出现在<b>越过 72 颗那一刻</b>：一边要换协议、换传输层、
-    <b>还要重写集合通信</b>，另一边通信代码一个字不动。
-    <b>所以这 128 倍衡量的是「拓扑能延展多远」，不是「谁跑得快」</b> ——
-    这个区分不讲清楚，整节课就会被听成厂商对比。</div>
+  <div class="note ok"><span class="t">讲这张图时最容易被抓住的一个反问，以及一个必须当场再钉一次的单位</span>
+    <b>反问：「那不就是 TPU 互联更强吗？」</b>
+    <b>图右上角那一段就是给这一问准备的，讲的时候直接指过去念</b> ——
+    单颗算力、72 颗以内的每颗带宽，两个数都在上面。
+    结论是：<b>这 128 倍衡量的是「拓扑能延展多远」，不是「谁跑得快」。</b>
+    这个区分不讲清楚，整节课会被听成厂商对比。
+    <br><br><b>单位：这里的「每颗」是每 chip，不是每 device。</b>
+    本课从第 1 节起一直在钉 <b>chip : device ＝ 1 : 2</b>，
+    <b>这个地方要当场再钉一次</b> —— 否则听众回去自己按 device 算，会差一倍。
+    <br><br>还有一句要按住：越过 72 颗那一刻，
+    另一边的通信代码<b>（在一个 pod 之内）</b>一个字不动。
+    <b>跨 pod 走 DCN 时并行配置照样要改</b>，别把这句说满。</div>
+
+  <h3>4.2　GPU 侧往里一层：域里面还有一层结构</h3>
+  <p>上面那张图给的是「域有多大」。<b>域内部还有一层结构，而且那层结构里埋着两个
+    非常典型的读数错误</b>。这一小节值得多花时间 ——
+    它要改的是一个<b>上一代的</b>常识。</p>
+  <p>顺带在这儿把 GPU 侧的三个词铺完，<b>后面两小节都要用</b>：
+    <b>①</b> 跨域用的通信库是 <b>NCCL</b>，MoE 那一族另有 <b>DeepEP</b>——4.5 那组数就是拿它跑的；
+    <b>②</b> 跨域走 <b>RDMA</b>，而 RDMA 有一条语义等下要拿来对照 ——
+    <b>要写进对方内存，那块内存必须先被对方注册过</b>，
+    <b>发送方不能凭空写进对方的任意地址</b>。</p>
+<figure class="fbox fwide" id="ms-p4">
+<svg viewBox="0 0 1400 902" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NVL72 域层级示意，以及两个容易读错的口径：72 张是物理规模而可训练是 64 张，节点合计 2000 Gbps 含 400 Gbps 管理网">
+<text x="20" y="26" class="ttl">NVL72 把「一台机器」这个词废掉了　—— 顺便埋了<tspan font-weight="700" fill="#d93025">两个口径陷阱</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="37" y="58" class="sm">新的边界：NVL72 域</text>
+<rect x="165.95" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="182.95" y="58" class="sm">旧的边界：一个节点</text>
+<rect x="308.45" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="325.45" y="58" class="sm">读错了就会一路错下去的地方</text>
+<rect x="20" y="124" width="1360" height="276" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="151" class="sec">先把边界摆对　—— 上一代的常识（机内 8 卡、出机器掉网络）在这一代已经不成立</text>
+<rect x="38" y="168" width="1324" height="216" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.3"/>
+<text x="52" y="193" class="lbl" fill="#202124">跨域　·　RoCE / RDMA</text>
+<text x="398" y="193" class="xs">出了这个域才掉到网络。实测 all-reduce <tspan font-weight="700" fill="#202124">约 840 → 约 325 GB/s</tspan>（<tspan font-weight="700" fill="#202124">2.6 倍</tspan>，本仓库 gpu/a4x/04-nccl-test），<tspan font-weight="700" fill="#202124">而且通信库要换一条实现路径</tspan>。</text>
+<rect x="64" y="210" width="1272" height="160" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="78" y="235" class="lbl" fill="#202124">NVL72 域　·　18 节点 ＝ 72 GPU，NVSwitch 5 全互联</text>
+<text x="398" y="235" class="xs"><tspan font-weight="700" fill="#d93025">新的边界在这里。</tspan>域内任意两张卡之间都是 NVLink，<tspan font-weight="700" fill="#202124">不是网络</tspan>。</text>
+<rect x="90" y="252" width="1220" height="104" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text x="104" y="277" class="lbl" fill="#202124">节点　·　2 × Grace ARM64 ＋ 4 × Blackwell GPU</text>
+<text x="398" y="277" class="xs"><tspan fill="#9aa0a6">「一台机器」原来的边界 —— 现在这条线基本不重要了。</tspan></text>
+<rect x="116" y="294" width="1168" height="48" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.3"/>
+<text x="130" y="319" class="lbl" fill="#202124">一张 B200</text>
+<rect x="20" y="446" width="670" height="268" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="472" class="sec">陷阱一　·　物理规模 ≠ 可用规模</text>
+<text x="38" y="492" class="xs"><tspan fill="#9aa0a6">跟第 0 节里 192 / 96 / 94.74 那三层是同一种病</tspan></text>
+<rect x="38" y="506" width="634" height="38" rx="6" fill="#f1f3f4"/>
+<text x="52" y="530" class="lbl" fill="#202124">问题</text>
+<text x="236" y="530" class="xs">「一个 NVL72 域有多少显存？」</text>
+<rect x="38" y="546" width="634" height="38" rx="6" fill="#fff"/>
+<text x="52" y="570" class="lbl" fill="#202124">按 72 卡（物理规模）</text>
+<text x="236" y="570" class="xs"><tspan font-weight="700" fill="#202124">13.4 TB</tspan>　—— 这个数<tspan font-weight="700" fill="#d93025">不能拿去规划任务</tspan></text>
+<rect x="38" y="586" width="634" height="38" rx="6" fill="#fff"/>
+<text x="52" y="610" class="lbl" fill="#202124">按 64 卡（我们的编排口径）</text>
+<text x="236" y="610" class="xs"><tspan font-weight="700" fill="#202124">11.9 TB</tspan>　—— 16 节点上阵，<tspan font-weight="700" fill="#202124">2 节点 8 卡做热备</tspan></text>
+<rect x="38" y="626" width="634" height="38" rx="6" fill="#fff"/>
+<text x="52" y="650" class="lbl" fill="#202124">为什么让出 8 卡</text>
+<text x="236" y="650" class="xs">这批集群 <tspan font-weight="700" fill="#202124">auto-repair 是关的</tspan>，坏一台要靠换标签顶上</text>
+<rect x="38" y="666" width="634" height="38" rx="6" fill="#fff"/>
+<text x="52" y="690" class="lbl" fill="#202124">⚠️ 所以 64 不是平台限制</text>
+<text x="236" y="690" class="xs">是<tspan font-weight="700" fill="#202124">我们自愿让出 11% 容量</tspan>换稳定 —— <tspan font-weight="700" fill="#d93025">换个人运维就是别的数</tspan></text>
+<rect x="710" y="446" width="670" height="268" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="728" y="472" class="sec">陷阱二　·　合计里混进了不该算的东西</text>
+<text x="728" y="492" class="xs"><tspan fill="#9aa0a6">跟第 0 节里 GiB 和 GB 混用是同一类错</tspan></text>
+<rect x="728" y="506" width="634" height="38" rx="6" fill="#f1f3f4"/>
+<text x="742" y="530" class="lbl" fill="#202124">问题</text>
+<text x="926" y="530" class="xs">「一个节点的网络带宽是多少？」</text>
+<rect x="728" y="546" width="634" height="38" rx="6" fill="#fff"/>
+<text x="742" y="570" class="lbl" fill="#202124">RDMA（GPU 跨域通信）</text>
+<text x="926" y="570" class="xs">CX-7 × 4 × 400 Gbps ＝ <tspan font-weight="700" fill="#202124">1,600 Gbps</tspan>　←　<tspan font-weight="700" fill="#202124">算 all-to-all 用这个</tspan></text>
+<rect x="728" y="586" width="634" height="38" rx="6" fill="#fff"/>
+<text x="742" y="610" class="lbl" fill="#202124">管理网</text>
+<text x="926" y="610" class="xs">GVNIC　<tspan font-weight="700" fill="#202124">400 Gbps</tspan>　—— 跟 GPU 通信没关系</text>
+<rect x="728" y="626" width="634" height="38" rx="6" fill="#fff"/>
+<text x="742" y="650" class="lbl" fill="#202124">常见的报法</text>
+<text x="926" y="650" class="xs"><tspan font-weight="700" fill="#d93025">「节点合计 2,000 Gbps」</tspan>　—— 它把管理网算进来了</text>
+<rect x="20" y="744" width="1360" height="142" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="772" class="sec">拿这个数回头看专题一 —— 「域」才是新的「一台机器」</text>
+<text x="38" y="798" class="xs">专题一算过：那个模型常驻权重 <tspan font-weight="700" fill="#202124">1.23 TiB ＝ 约 1.35 TB</tspan>（<tspan fill="#9aa0a6">这一步换算别省 —— 这张图刚说完 GiB / GB 不能混，自己更不能踩</tspan>）。一个域按 64 卡算有 <tspan font-weight="700" fill="#202124">11.9 TB</tspan>，权重只占约 <tspan font-weight="700" fill="#202124">11%</tspan> —— <tspan font-weight="700" fill="#202124">余量足够再放下相当规模的 KV cache</tspan>（具体多少取决于并发与序列长度，本节不</text>
+<text x="38" y="817" class="xs">展开）。</text>
+<text x="38" y="840" class="xs">也就是说，对这一档模型，<tspan font-weight="700" fill="#d93025">「跨域断崖」这件事在推理时根本不必发生</tspan>。<tspan font-weight="700" fill="#202124">但这个结论踩在两个前提上，两个都得说出来</tspan>：一是<tspan font-weight="700" fill="#202124">按 64 不是 72</tspan>；二是 <tspan font-weight="700" fill="#d93025">11.9 TB 本身也还是物理量</tspan> —— 实际可用还要扣激活、优化器状态与框架开销。<tspan font-weight="700" fill="#202124">左边那格批评的病，这句话同样要防。</tspan></text>
+</svg>
+<figcaption><b>新的边界不在「一台机器」上，在 NVL72 域上。</b>下半张的两张红卡才是这一小节的教学价值 —— <b>它们要装进听众脑子里的不是数字，是两个提问习惯</b>。数字明年就变了，提问习惯不会。</figcaption>
+</figure>
+
+  <div class="note danger"><span class="t">⭐ 这两张红卡才是本小节的教学价值，不是那个 72</span>
+    听众记住「一个域 72 张卡」没有用，明年数字就变了。
+    <b>要让他们带走的是两个提问习惯</b> ——
+    <b>①「这是物理量还是可用量？」　②「这个合计里混了什么进来？」</b>
+    卡上的具体数字讲的时候指图念，不用背。
+    <br><br><b>这两条一路管到最后</b>：下面 4.5 那组实测，
+    如果拿卡上那个被划掉的合计去算理论上限，结论会整个歪掉。</div>
+
+  <h3>4.3　TPU 侧：跨芯片寻址长什么样</h3>
+  <p>TPU 这边机内机间是<b>同一套 ICI</b>，构成 2D / 3D 环面 —— T-8 已经讲完了。
+    这里只补一件容易被跳过、但很能说明问题的事：<b>它是怎么寻址的。</b></p>
+  <div class="note info"><span class="t">发送方给的不是地址，是「哪颗芯片 ＋ 哪个段 ＋ 偏移」</span>
+    <b>「段」＝ 接收方事先划出来、并且把编号告诉了发送方的一块存储。</b>
+    发送方只知道编号，<b>不知道它在对方 HBM 的哪个物理位置</b> ——
+    段的物理基址握在接收方手里。
+    <br><br>拿它和刚才铺的 RDMA 语义并排看：<b>站在使用者这一侧，两边给出的约束是同一条 ——
+    发送方不能凭空写进对方的任意地址。</b>
+    至于两边是不是出于同一个设计动机（安全？地址虚拟化？多租户隔离？）——
+    <b>这是我的推断，没有哪份文档这么写。</b>
+    <br><br>⚠️ <b>出处说明</b>：上面这段寻址机制，
+    <b>我没有找到可以公开引用的出处</b>。本课的规矩是查不到就明写查不到，
+    所以这一段<b>按「未标注来源」对待</b> —— 讲可以讲，但不要当成可引证的事实往外传。
+    RDMA 那一半是公开语义，没有这个问题。
+    <br><br>另有一处差别值得点一句：<b>TPU 这边没有面向用户的独立通信库</b>——
+    你不会 import 一个通信库，也不会调它的 API；<b>通信是编译器生成的</b>。
+    这一条会在第 5 节被重新捡起来。</div>
+  <p>到这儿两边的形状齐了，而且可以用一句话对上 ——
+    <b>GPU 那边是一台交换机（NVSwitch），域内任意两点之间没有「距离」这个概念；
+    TPU 这边是一张环面（也就是图上写的 torus），相邻一跳、对角要绕好几跳。</b>
+    下一小节数通信种类的时候，<b>这个差别只在一个原语上炸开。</b></p>
+
+  <h3>4.4　到底有几种通信 —— 而且分别是谁产生的</h3>
+  <p>讲到这里必须防一件事：<b>不要把这一小节讲成通信库教程。</b>
+    听众不关心 API，关心的是「<b>我这个模型为什么会产生这种通信</b>」。</p>
+<figure class="fbox fwide" id="ms-p5">
+<svg viewBox="0 0 1400 914" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="四个集合通信原语的来源与拓扑敏感度对照：all-gather、reduce-scatter、all-reduce 都可拆成环形通信，只有 all-to-all 要求任意两点直连">
+<text x="20" y="26" class="ttl">四个集合通信原语　—— 分别是<tspan font-weight="700" fill="#1a73e8">谁产生的</tspan>，以及<tspan font-weight="700" fill="#d93025">谁对拓扑敏感</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">能拆成「沿环走一圈」</text>
+<rect x="174.0" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="191.0" y="58" class="sm">每一对都要直接说话：环形算法要走很多轮</text>
+<rect x="431.5" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="448.5" y="58" class="sm">小图里的点＝一张卡，线＝一次通信</text>
+<rect x="20" y="128" width="1360" height="38" rx="8" fill="#f1f3f4"/>
+<text x="34" y="152" class="lbl" fill="#202124">原语</text>
+<text x="244" y="152" class="lbl" fill="#202124">谁产生它（★ ＝ 专题一讲过）</text>
+<text x="714" y="152" class="lbl" fill="#202124">通信形状</text>
+<text x="1014" y="152" class="lbl" fill="#202124">对拓扑敏感吗</text>
+<line x1="20" y1="166" x2="1380" y2="166" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="200" class="box" fill="#1e8e3e">all-gather</text>
+<text x="244" y="196" class="xs"><tspan font-weight="700" fill="#202124">★ 专题一「AG-RS」那条路的前半</tspan>：不送 token，改<tspan font-weight="700" fill="#202124">把专家权重取过来</tspan>，在本地算。</text>
+<text x="244" y="217" class="xs">取之前要先把切开的权重收齐 —— 这一步就是 all-gather。</text>
+<line x1="857.2811529493745" y1="210.29006727063228" x2="875.0547686046607" y2="223.20335492061952" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="879.5547686046607" y1="237.05293083790818" x2="872.7658515273185" y2="257.9470691620918" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="860.9846985779441" y1="266.5065778087482" x2="839.0153014220559" y2="266.5065778087482" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="827.2341484726815" y1="257.9470691620918" x2="820.4452313953393" y2="237.05293083790818" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="824.9452313953393" y1="223.20335492061952" x2="842.7188470506255" y2="210.29006727063228" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<circle cx="850.0" cy="205.0" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="882.3" cy="228.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="870.0" cy="266.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="830.0" cy="266.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="817.7" cy="228.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="850.0" y="297.0" class="xxs" fill="#5f6368" text-anchor="middle">5 个点，5 条边</text>
+<text x="1014" y="198" class="xs">一般。<tspan font-weight="700" fill="#202124">拆成「沿环走一圈」就行</tspan> —— 每一跳只跟邻居说话，<tspan font-weight="700" fill="#d93025">torus 上天</tspan></text>
+<text x="1014" y="215" class="xs"><tspan font-weight="700" fill="#d93025">然舒服</tspan>。</text>
+<rect x="20" y="312" width="1360" height="146" rx="0" fill="#fafafa"/>
+<line x1="20" y1="312" x2="1380" y2="312" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="346" class="box" fill="#1e8e3e">reduce-scatter</text>
+<text x="244" y="342" class="xs"><tspan font-weight="700" fill="#202124">★ 同一条路的后半</tspan>：本地算完，再<tspan font-weight="700" fill="#202124">一边归约、一边把结果切回各卡</tspan>。</text>
+<text x="244" y="363" class="xs"><tspan fill="#9aa0a6">这两行合起来 ＝ 专题一那张表的第二行。</tspan></text>
+<line x1="857.2811529493745" y1="356.2900672706323" x2="875.0547686046607" y2="369.2033549206195" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="879.5547686046607" y1="383.0529308379082" x2="872.7658515273185" y2="403.9470691620918" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="860.9846985779441" y1="412.5065778087482" x2="839.0153014220559" y2="412.5065778087482" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="827.2341484726815" y1="403.9470691620918" x2="820.4452313953393" y2="383.0529308379082" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="824.9452313953393" y1="369.2033549206195" x2="842.7188470506255" y2="356.2900672706323" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<circle cx="850.0" cy="351.0" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="882.3" cy="374.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="870.0" cy="412.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="830.0" cy="412.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="817.7" cy="374.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="850.0" y="443.0" class="xxs" fill="#5f6368" text-anchor="middle">5 个点，5 条边</text>
+<text x="1014" y="344" class="xs">一般。<tspan font-weight="700" fill="#202124">同样是沿环走一圈</tspan>，只是每跳多做一次加法。</text>
+<line x1="20" y1="458" x2="1380" y2="458" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="492" class="box" fill="#1e8e3e">all-reduce</text>
+<text x="244" y="488" class="xs"><tspan fill="#9aa0a6">专题一没讲过它 —— 那是一堂推理课，没有反向传播。</tspan></text>
+<text x="244" y="509" class="xs">它 ＝ reduce-scatter ＋ all-gather，<tspan font-weight="700" fill="#202124">两圈</tspan>。<tspan font-weight="700" fill="#202124">这里只为把四个凑齐，展开留给专题五。</tspan></text>
+<line x1="857.2811529493745" y1="502.2900672706323" x2="875.0547686046607" y2="515.2033549206195" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="879.5547686046607" y1="529.0529308379081" x2="872.7658515273185" y2="549.9470691620919" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="860.9846985779441" y1="558.5065778087483" x2="839.0153014220559" y2="558.5065778087483" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="827.2341484726815" y1="549.9470691620919" x2="820.4452313953393" y2="529.0529308379081" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<line x1="824.9452313953393" y1="515.2033549206195" x2="842.7188470506255" y2="502.2900672706323" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#aG)"/>
+<circle cx="850.0" cy="531.0" r="21.0" fill="none" stroke="#1e8e3e" stroke-width="1.1" stroke-dasharray="4 4"/>
+<circle cx="850.0" cy="497.0" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="882.3" cy="520.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="870.0" cy="558.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="830.0" cy="558.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="817.7" cy="520.5" r="6.5" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="850.0" y="589.0" class="xxs" fill="#5f6368" text-anchor="middle">5 个点，走两圈</text>
+<text x="1014" y="490" class="xs">一般。<tspan font-weight="700" fill="#202124">两圈还是圈</tspan>，拓扑友好度和上面两个一样。</text>
+<rect x="20" y="604" width="1360" height="146" rx="0" fill="#fafafa"/>
+<rect x="20" y="604" width="1360" height="146" rx="0" fill="#fce8e6"/>
+<line x1="20" y1="604" x2="1380" y2="604" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="638" class="box" fill="#d93025">all-to-all</text>
+<text x="244" y="634" class="xs"><tspan font-weight="700" fill="#d93025">★ 专题一「Dispatch / Combine」那条路</tspan>：<tspan font-weight="700" fill="#202124">把 token 送到专家那儿</tspan>，算完送回。</text>
+<text x="244" y="655" class="xs">而那个专家<tspan font-weight="700" fill="#202124">可能在任意一张卡上</tspan>。<tspan fill="#9aa0a6">—— 和上面 AG-RS 那条是</tspan><tspan font-weight="700" fill="#202124">二选一</tspan>，不是并列。</text>
+<line x1="850.0" y1="643.0" x2="882.3359215540352" y2="666.4934221912517" stroke="#d93025" stroke-width="1.1"/>
+<line x1="850.0" y1="643.0" x2="869.9846985779441" y2="704.5065778087483" stroke="#d93025" stroke-width="1.1"/>
+<line x1="850.0" y1="643.0" x2="830.0153014220559" y2="704.5065778087483" stroke="#d93025" stroke-width="1.1"/>
+<line x1="850.0" y1="643.0" x2="817.6640784459648" y2="666.4934221912517" stroke="#d93025" stroke-width="1.1"/>
+<line x1="882.3359215540352" y1="666.4934221912517" x2="869.9846985779441" y2="704.5065778087483" stroke="#d93025" stroke-width="1.1"/>
+<line x1="882.3359215540352" y1="666.4934221912517" x2="830.0153014220559" y2="704.5065778087483" stroke="#d93025" stroke-width="1.1"/>
+<line x1="882.3359215540352" y1="666.4934221912517" x2="817.6640784459648" y2="666.4934221912517" stroke="#d93025" stroke-width="1.1"/>
+<line x1="869.9846985779441" y1="704.5065778087483" x2="830.0153014220559" y2="704.5065778087483" stroke="#d93025" stroke-width="1.1"/>
+<line x1="869.9846985779441" y1="704.5065778087483" x2="817.6640784459648" y2="666.4934221912517" stroke="#d93025" stroke-width="1.1"/>
+<line x1="830.0153014220559" y1="704.5065778087483" x2="817.6640784459648" y2="666.4934221912517" stroke="#d93025" stroke-width="1.1"/>
+<circle cx="850.0" cy="643.0" r="6.5" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<circle cx="882.3" cy="666.5" r="6.5" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<circle cx="870.0" cy="704.5" r="6.5" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<circle cx="830.0" cy="704.5" r="6.5" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<circle cx="817.7" cy="666.5" r="6.5" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text x="850.0" y="735.0" class="xxs" fill="#d93025" text-anchor="middle">5 个点，10 条边</text>
+<text x="1014" y="636" class="xs"><tspan font-weight="700" fill="#d93025">极其敏感。</tspan><tspan font-weight="700" fill="#202124">它天生要求「任意两点直接说话」。</tspan>环形算法不是不能用，<tspan font-weight="700" fill="#202124">但</tspan></text>
+<text x="1014" y="653" class="xs"><tspan font-weight="700" fill="#202124">要走很多轮，而且代价被 bisection 带宽卡死</tspan> —— <tspan font-weight="700" fill="#202124">这是四个里唯一一</tspan></text>
+<text x="1014" y="670" class="xs"><tspan font-weight="700" fill="#202124">个会因为拓扑不同而差出数量级的。</tspan></text>
+<rect x="20" y="128" width="1360" height="622" rx="8" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="20" y="784" width="1360" height="114" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="812" class="sec">一句话记住区别 —— 顺便把 MoE 那件事接上</text>
+<text x="38" y="838" class="xs"><tspan font-weight="700" fill="#202124">前三个都能拆成「沿着某个环走一圈」，所以在 torus 上也很舒服。</tspan>只有 all-to-all 天生要求任意两点直接说话 —— <tspan font-weight="700" fill="#d93025">它是唯一一个会因为拓扑不同而表现出数量级差异的原语。</tspan></text>
+<text x="38" y="861" class="xs">这就把两件事接上了：<tspan font-weight="700" fill="#202124">为什么 MoE 是 TPU 上最难的那类负载</tspan>，以及<tspan font-weight="700" fill="#202124">为什么分组限制路由不是省算力的技巧，是省拓扑的技巧</tspan> —— 它限制的正是「一个 token 最多能跑到几台机器上去」。</text>
+</svg>
+<figcaption><b>四个原语，看小图就够了。</b>前三个是「5 个点 5 条边」，all-to-all 是「5 个点 <b>10 条边</b>」——<b>边数从 5 跳到 10，比任何一句「它对拓扑敏感」都管用</b>。这也是分组限制路由的真正理由：它压的是这张完全图的边数。</figcaption>
+</figure>
+
+  <div class="note warn"><span class="t">一条可以直接拿回去改配置的推论</span>
+    既然分组限制路由压的是那张完全图的边数，而两种拓扑对边数的敏感度完全不同 ——
+    <b>同一个模型结构，在两种拓扑上的「最优路由配置」可以完全不同。</b>
+    这一条图上没有，是这一小节唯一需要你补充的话。</div>
+
+  <h3>4.5　最后一步：你实际能拿到多少</h3>
+  <p>前面四小节讲的都是<b>拓扑能提供什么</b>。最后这一小节讲<b>你实际能拿到多少</b>。
+    下面这组数测的<b>就是上一张表里最后那一行</b> ——
+    唯一一个拆不成环的原语（<b>DeepEP 就是专门跑 MoE 这套 dispatch / combine 的库</b>），
+    在一个理论上处处均匀的域里，实际表现成什么样。<b>数是我们自己跑的。</b></p>
+<figure class="fbox fwide" id="ms-p6">
+<svg viewBox="0 0 1400 966" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DeepEP 在 8、16、32 GPU 三档的实测带宽，以 8 GPU 为基准归一化：Copy 基本持平，Reduce 降约 18%，Dispatch 降约 9%，Combine 降约 19%">
+<text x="20" y="26" class="ttl">实测：规模一大，<tspan font-weight="700" fill="#d93025">all-to-all 就掉</tspan>　—— 以及一个<tspan font-weight="700" fill="#d93025">塌掉的对照项</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">Copy（源文档标注：节点内）</text>
+<rect x="210.79999999999998" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="227.79999999999998" y="58" class="sm">Reduce（同样标注：节点内）</text>
+<rect x="402.75" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="419.75" y="58" class="sm">Dispatch（跨节点）</text>
+<rect x="549.85" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="566.85" y="58" class="sm">Combine（跨节点）</text>
+<rect x="690.625" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="707.625" y="58" class="sm">纵轴＝相对 8 GPU 的百分比，不是绝对带宽</text>
+<text x="20" y="116" class="sec">主图以 8 GPU 为 100%　—— 画绝对值会把后三条压成贴地直线</text>
+<rect x="20" y="152" width="636" height="406" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<line x1="76" y1="454.0" x2="636" y2="454.0" stroke="#eceff1" stroke-width="1" stroke-dasharray="3 4"/>
+<text x="64" y="458.0" class="xxs" fill="#5f6368" text-anchor="end">80%</text>
+<line x1="76" y1="399.0" x2="636" y2="399.0" stroke="#eceff1" stroke-width="1" stroke-dasharray="3 4"/>
+<text x="64" y="403.0" class="xxs" fill="#5f6368" text-anchor="end">85%</text>
+<line x1="76" y1="344.0" x2="636" y2="344.0" stroke="#eceff1" stroke-width="1" stroke-dasharray="3 4"/>
+<text x="64" y="348.0" class="xxs" fill="#5f6368" text-anchor="end">90%</text>
+<line x1="76" y1="289.0" x2="636" y2="289.0" stroke="#eceff1" stroke-width="1" stroke-dasharray="3 4"/>
+<text x="64" y="293.0" class="xxs" fill="#5f6368" text-anchor="end">95%</text>
+<line x1="76" y1="234.0" x2="636" y2="234.0" stroke="#dadce0" stroke-width="1"/>
+<text x="64" y="238.0" class="xxs" fill="#5f6368" text-anchor="end">100%</text>
+<line x1="76" y1="179.0" x2="636" y2="179.0" stroke="#eceff1" stroke-width="1" stroke-dasharray="3 4"/>
+<text x="64" y="183.0" class="xxs" fill="#5f6368" text-anchor="end">105%</text>
+<text x="169.33333333333331" y="522" class="lbl" fill="#202124" text-anchor="middle">8 GPU</text>
+<text x="169.33333333333331" y="540" class="xxs" fill="#5f6368" text-anchor="middle">（2 节点）</text>
+<text x="356.0" y="522" class="lbl" fill="#202124" text-anchor="middle">16 GPU</text>
+<text x="356.0" y="540" class="xxs" fill="#5f6368" text-anchor="middle">（4 节点）</text>
+<text x="542.6666666666667" y="522" class="lbl" fill="#202124" text-anchor="middle">32 GPU</text>
+<text x="542.6666666666667" y="540" class="xxs" fill="#5f6368" text-anchor="middle">（8 节点）</text>
+<path d="M169.3,234.0 L356.0,253.6 L542.7,214.4" stroke="#1e8e3e" stroke-width="2.4" fill="none"/>
+<circle cx="169.3" cy="234.0" r="5" fill="#fff" stroke="#1e8e3e" stroke-width="2.2"/>
+<circle cx="356.0" cy="253.6" r="5" fill="#fff" stroke="#1e8e3e" stroke-width="2.2"/>
+<circle cx="542.7" cy="214.4" r="5" fill="#fff" stroke="#1e8e3e" stroke-width="2.2"/>
+<text x="556.6666666666667" y="218.35714285714278" class="num" fill="#1e8e3e">+2%</text>
+<path d="M169.3,234.0 L356.0,354.5 L542.7,427.8" stroke="#8430ce" stroke-width="2.4" fill="none"/>
+<circle cx="169.3" cy="234.0" r="5" fill="#fff" stroke="#8430ce" stroke-width="2.2"/>
+<circle cx="356.0" cy="354.5" r="5" fill="#fff" stroke="#8430ce" stroke-width="2.2"/>
+<circle cx="542.7" cy="427.8" r="5" fill="#fff" stroke="#8430ce" stroke-width="2.2"/>
+<text x="556.6666666666667" y="418.8095238095238" class="num" fill="#8430ce">-18%</text>
+<path d="M169.3,234.0 L356.0,296.9 L542.7,334.6" stroke="#f9ab00" stroke-width="2.4" fill="none"/>
+<circle cx="169.3" cy="234.0" r="5" fill="#fff" stroke="#f9ab00" stroke-width="2.2"/>
+<circle cx="356.0" cy="296.9" r="5" fill="#fff" stroke="#f9ab00" stroke-width="2.2"/>
+<circle cx="542.7" cy="334.6" r="5" fill="#fff" stroke="#f9ab00" stroke-width="2.2"/>
+<text x="556.6666666666667" y="338.57142857142856" class="num" fill="#f9ab00">-9%</text>
+<path d="M169.3,234.0 L356.0,296.3 L542.7,437.6" stroke="#d93025" stroke-width="2.4" fill="none"/>
+<circle cx="169.3" cy="234.0" r="5" fill="#fff" stroke="#d93025" stroke-width="2.2"/>
+<circle cx="356.0" cy="296.3" r="5" fill="#fff" stroke="#d93025" stroke-width="2.2"/>
+<circle cx="542.7" cy="437.6" r="5" fill="#fff" stroke="#d93025" stroke-width="2.2"/>
+<text x="556.6666666666667" y="441.59116022099454" class="num" fill="#d93025">-19%</text>
+<text x="76" y="142" class="lbl" fill="#202124">相对 8 GPU 的带宽保持率</text>
+<text x="700" y="116" class="sec">怎么读　—— 先讲我们错在哪，再讲能确定什么</text>
+<rect x="700" y="152" width="680" height="100" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<text x="716" y="177" class="box">① 我们本来挑了 Copy 当对照项　→　<tspan font-weight="700" fill="#d93025">它走错了路</tspan></text>
+<text x="716" y="197" class="xs">原打算：Copy 不掉 → 链路够用 → 掉的只能是别的原因。<tspan font-weight="700" fill="#202124">但源文档写明 Copy 是「节点内 GPU 间拷贝」</tspan> —— <tspan font-weight="700" fill="#d93025">它不走 dispatch / </tspan></text>
+<text x="716" y="214" class="xs"><tspan font-weight="700" fill="#d93025">combine 走的那条跨节点路。</tspan>一个不出节点的量，对「出节点那条路够不够」没有信息。</text>
+<rect x="700" y="262" width="680" height="96" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.3"/>
+<text x="716" y="287" class="box">② 能确定的只有现象：目标数从 7 变成 31</text>
+<text x="716" y="307" class="xs">8 卡时每张卡把 token 分给 <tspan font-weight="700" fill="#202124">7</tspan> 个目标，32 卡时分给 <tspan font-weight="700" fill="#202124">31</tspan> 个。<tspan font-weight="700" fill="#202124">单笔消息必然变小</tspan>，而小块分散写的链路利用率低于大块连续传输。</text>
+<text x="716" y="324" class="xs"><tspan fill="#9aa0a6">源文档那个「每目标约 100 / 22 GB/s」是拿总带宽除目标数</tspan><tspan font-weight="700" fill="#202124">倒算</tspan>出来的，不是独立测量 —— 拿它解释掉幅属于循环论证，这里不用。</text>
+<rect x="700" y="368" width="680" height="92" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<text x="716" y="393" class="box">③ Combine 掉得更快，但<tspan font-weight="700" fill="#d93025">不是因为「归约变深」</tspan></text>
+<text x="716" y="413" class="xs">每个 token 只把 <tspan font-weight="700" fill="#202124">topk ＝ 6</tspan> 份部分结果加回去，<tspan font-weight="700" fill="#202124">这个宽度是配置死的，与规模无关</tspan>，8 卡和 32 卡都是 6 份。更站得住的说法是：</text>
+<text x="716" y="430" class="xs"><tspan font-weight="700" fill="#202124">要等齐的对端从 7 个变成 31 个</tspan>，归约必须等齐才能收尾，等的人越多，最慢那个的影响越大。</text>
+<rect x="700" y="470" width="680" height="84" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.3"/>
+<text x="716" y="495" class="box">④ <tspan font-weight="700" fill="#d93025">而且 Reduce 也掉了 18%</tspan>　—— 它同样标着「节点内」</text>
+<text x="716" y="515" class="xs">紫线和红线在图上几乎叠在一起。<tspan font-weight="700" fill="#202124">要么这条「节点内」标注不准，要么「节点内不受规模影响」这句话本身要打折。</tspan><tspan font-weight="700" fill="#d93025">这处我们没查清，</tspan></text>
+<text x="716" y="532" class="xs"><tspan font-weight="700" fill="#d93025">标出来。</tspan></text>
+<text x="20" y="582" class="sec">绝对值另附　—— 单位 GB/s，出处：本仓库 gpu/a4x/06-deepep-test/</text>
+<rect x="20" y="594" width="1360" height="34" rx="8" fill="#f1f3f4"/>
+<text x="34" y="617" class="lbl" fill="#202124">操作</text>
+<text x="534" y="617" class="lbl" fill="#202124">8 GPU / 2 节点</text>
+<text x="814" y="617" class="lbl" fill="#202124">16 GPU / 4 节点</text>
+<text x="1094" y="617" class="lbl" fill="#202124">32 GPU / 8 节点</text>
+<line x1="20" y1="628" x2="1380" y2="628" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="650" class="xs">Copy　　　源文档标注：节点内</text>
+<text x="534" y="650" class="num" fill="#202124">5,600</text>
+<text x="814" y="650" class="num" fill="#202124">5,500</text>
+<text x="1094" y="650" class="num" fill="#1e8e3e">5,700</text>
+<rect x="20" y="662" width="1360" height="34" rx="0" fill="#fafafa"/>
+<line x1="20" y1="662" x2="1380" y2="662" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="684" class="xs">Reduce　　源文档标注：节点内</text>
+<text x="534" y="684" class="num" fill="#202124">2,100</text>
+<text x="814" y="684" class="num" fill="#202124">1,870</text>
+<text x="1094" y="684" class="num" fill="#8430ce">1,730</text>
+<line x1="20" y1="696" x2="1380" y2="696" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="718" class="xs">Dispatch　跨节点 all-to-all</text>
+<text x="534" y="718" class="num" fill="#202124">700</text>
+<text x="814" y="718" class="num" fill="#202124">660</text>
+<text x="1094" y="718" class="num" fill="#f9ab00">636</text>
+<rect x="20" y="730" width="1360" height="34" rx="0" fill="#fafafa"/>
+<line x1="20" y1="730" x2="1380" y2="730" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="752" class="xs">Combine　 跨节点 all-to-all ＋ reduce</text>
+<text x="534" y="752" class="num" fill="#202124">724</text>
+<text x="814" y="752" class="num" fill="#202124">683</text>
+<text x="1094" y="752" class="num" fill="#d93025">590</text>
+<rect x="20" y="594" width="1360" height="170" rx="8" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="20" y="798" width="1360" height="152" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="38" y="826" class="sec">⭐⭐ 本节落点，以及一条比结论更值钱的方法论</text>
+<text x="38" y="852" class="xs"><tspan font-weight="700" fill="#202124">能确定的：规模一大，all-to-all 这类通信就掉，而且掉幅跟「要面对多少个对端」同向。</tspan><tspan font-weight="700" fill="#d93025">不能确定的：掉幅里有多少来自消息变小、多少来自跨节点链路上的竞争。</tspan><tspan font-weight="700" fill="#202124">本图分不开这两者</tspan> —— 唯一的对照项 Copy 不出节点，而跨节点那条路我们没有独立的对照项。</text>
+<text x="38" y="875" class="xs"><tspan font-weight="700" fill="#202124">方法论（这一条比上面的数据更该被带走）：</tspan>挑对照项时，第一个要问的不是「它稳不稳」，是<tspan font-weight="700" fill="#d93025">「它跟被测对象走的是不是同一条路」</tspan>。<tspan font-weight="700" fill="#202124">一个走错路的对照项比没有对照项更危险</tspan> —— 它会让你以为自己排除了什么。</text>
+<text x="38" y="898" class="xs"><tspan fill="#9aa0a6">｜　源文档对 16 卡那次下降写的是「RDMA 竞争加剧」、对 32 卡写的是「碎片化」。这两条其实不矛盾：跨节点确实走 RDMA（部署要点里 NCCL_NET=gIB，8 节点那次的失败根因就是 ibv_modify_qp），两个因素同时在，只是本图分不开。　｜　主图归一化的理由：</tspan></text>
+<text x="38" y="917" class="xs"><tspan fill="#9aa0a6">Copy 5,600、Dispatch 只有 700，画在同一根绝对值轴上，后三条会被压成贴地直线，而「掉了多少」恰恰是全部论点。</tspan></text>
+</svg>
+<figcaption><b>本节落点，而且是我们自己跑的数。</b>同一个 NVL72 域里从 8 卡到 32 卡，<b>Dispatch 掉 9%、Combine 掉 19%</b>。<b>但这张图更值得讲的是它的反面</b> —— 图最下面那条橙带写着我们<b>没能</b>分清什么，以及为什么分不清。<b>一组承认了自己边界的数据，比一个干净的结论有用。</b></figcaption>
+</figure>
+
+  <div class="note danger"><span class="t">⭐ 这张图最值钱的不是那两条下降曲线，是最下面那条橙带</span>
+    <b>那条带写的是我们没能分清什么，以及为什么分不清 —— 讲课时千万别跳过。</b>
+    故事是这样的：我们本来挑了 Copy 当对照项，想用「Copy 不掉」去证明
+    「链路够用，掉的只能是别的原因」。<b>后来发现 Copy 是节点内操作</b> ——
+    它根本不走 dispatch / combine 走的那条跨节点路。
+    <br><br><b>于是那个漂亮的排除法当场失效了。</b>
+    一个不出节点的量，对「出节点那条路够不够」<b>零信息量</b>。
+    <br><br><b>这才是这一小节真正要教的方法论</b>，而且比原来那条更硬：
+    <b>选对照项的时候，第一个要问的不是「它稳不稳」，是「它跟被测对象走的是不是同一条路」。</b>
+    一个走错路的对照项<b>比没有对照项更危险</b> —— 它会让你以为自己排除了什么。
+    <br><br>所以听众如果得出「NVSwitch 不够用」——
+    正确的回应不是「完全错」，而是<b>「这个结论从这组数里下不出来」</b>。同样，
+    「链路够用」也下不出来。<b>这组数能确定的只有现象，确定不了归因。</b>
+    <br><br>⚠️ <b>还有一个缺口要当场承认：这组数只在 NVLink 域里测过。</b>
+    TPU 侧同一批原语在环面上的实测我们还没有 ——
+    所以「域内均匀 ≠ 集合通信均匀」这条<b>目前只在 GPU 侧被验证过</b>，
+    别说成两边通用。它在 TPU 上大概率也成立（消息变小、要等的对端变多都不是 NVLink 特有的），
+    但<b>那是推论，不是我们测出来的</b>。</div>
+
+  <div class="note info"><span class="t">补一句「保质期」：下一代变了什么，以及什么没变</span>
+    这一小节刚说完「记住 72 这个数没用，明年就变了」，
+    那就得把话说完 —— <b>到 GB300 这一代，单卡显存和算力都往上走了，
+    但 72 卡一个域、18 节点这个拓扑没变。</b>
+    <br><br>这件事对本节的意义只有一条，但很关键：
+    <b>4.5 那个结论不会随着换代过期。</b>
+    「消息变小」和「要等的对端变多」都只跟<b>参与者数量</b>有关，
+    跟单卡多强、显存多大没关系 —— <b>拓扑没变，这条就照样成立。</b></div>
+
+  <div class="note ok"><span class="t">第 4 节讲完，听众该带走的五条</span>
+    <b>①</b> <b>边界变了</b>：GPU 那边「一台机器」已经不是边界，域才是；TPU 那边压根没有这条线。
+    <br><b>②</b> <b>两个提问习惯</b>：这是物理量还是可用量？这个合计里混了什么进来？
+    <br><b>③</b> <b>四个原语，三个能拆成环、一个不能</b> —— 两边的差别只在那一个上炸开。
+    <br><b>④</b> <b>拓扑给上限，负载决定你吃到多少</b> —— 中间隔着消息大小和要等的对端数。
+    <br><b>⑤</b> <b>而「你怎么切模型」这件事，在 TPU 上根本不是你写的 ——
+      是编译器替你写的。下一节就从这儿接。</b></div>
 </div></section>
 
 <section><div class="wrap">
@@ -8178,6 +8611,301 @@ footer a{text-decoration:none}
     前面四节讲的都是硬件事实，听众只能听；
     <b>到了这一节才轮到经验，而经验是可以被追问的。</b></div>
 
+  <h3>5.5　后果三：推理引擎的移植难点</h3>
+  <p>前面两个后果都在训练侧。<b>推理是同一个分岔口上最尖锐的地方</b> ——
+    因为训练的形状基本是你自己定的，而<b>推理的形状是用户给的</b>。
+    vLLM 和 SGLang 都起于 GPU，现在都在往 TPU 上移。
+    这一节讲的是<b>移的过程里真正卡住的地方</b>，不是「支持了哪些模型」。</p>
+
+  <p><b>顺带，这一小节是回来还第 0 节欠的那笔账。</b>那张图的最后一行写着：
+    「当假设成立，TPU 赢在省下来的面积；<b>当假设不成立（变长序列、MoE 路由），
+    代价也全在那儿</b>。」下面第一张图的四个动态性来源里，
+    <b>变长序列是第 ①、MoE 路由是第 ④</b> ——
+    <b>那句话到这里才有资格兑现，而且是拿实测兑现的。</b></p>
+
+  <div class="note info"><span class="t">先把一个词对齐，否则下面每个数字都会被听小一个量级</span>
+    GPU 上说「编译」，多半指 nvcc，或者一次 kernel 级的 JIT ——
+    <b>单位是一个 kernel，耗时以毫秒计，热一遍就过去了</b>。
+    <br><b>TPU 上说「编译」不是这个意思。</b>单位是<b>整张图</b>，
+    而<b>形状是编译期常量</b> —— 换一个形状，就是换一个程序，整张重来。
+    <br><br>下面所有以「分钟」为单位的数字，都是从这一句来的。
+    <b>它也决定了后面那三笔账里，哪一笔是能修好的、哪一笔修不掉。</b></div>
+
+  <div class="note warn"><span class="t">先把一句半对的话拆开，再打掉错的那半</span>
+    这句话我自己讲过很多遍：<b>「TPU 要静态形状，GPU 不用。」</b>
+    <b>前半句是对的，后半句不是</b> —— 而错的那半特别难自己发现，
+    <b>因为它听起来像常识</b>。
+    <br><br><b>讲课建议：这句话由你自己说出口，别让台下说。</b>
+    然后翻下面这张图，两栏各来自我们自己的一份日志。
+    <br><b>更稳的一种开法</b>（房间偏资深、或者对外讲的时候）：不立错话，
+    直接把两行分桶日志并排贴出来，问一句 ——
+    <b>「一行来自 GPU，一行来自 TPU，你能分出哪行是哪边吗？」</b>
+    答案是分不出来。<b>拆掉的是同一个误解，但没有任何人需要先答错。</b></div>
+<figure class="fbox fwide" id="ms-p7">
+<svg viewBox="0 0 1400 952" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="推理动态性的四个来源，以及 GPU 与 TPU 两侧对形状变化的不同处置：两边都做分桶，区别在于桶未命中时一边退回原路执行、一边触发重新编译">
+<text x="20" y="26" class="ttl">推理天生是动态的　—— <tspan font-weight="700" fill="#d93025">两边都在分桶</tspan>，也都有关掉它的开关，区别在<tspan font-weight="700" fill="#d93025">退路的标价</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">GPU 侧　·　SGLang on GB300</text>
+<rect x="220.0" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="237.0" y="58" class="sm">TPU 侧　·　vLLM-TorchTPU on v7</text>
+<rect x="20" y="124" width="1360" height="230" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="151" class="sec">动态性从哪来　—— 四个来源，<tspan font-weight="700" fill="#d93025">没有一个能在编译期知道</tspan></text>
+<rect x="38.0" y="168" width="319.0" height="170" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="52.0" y="190" class="lbl"><tspan font-weight="700" fill="#202124">① prompt 有多长，是用户给的</tspan></text>
+<text x="52.0" y="228" class="xs">同一个服务，这一秒来 200 个 token，下一秒来一万两千</text>
+<text x="52.0" y="245" class="xs">个。<tspan font-weight="700" fill="#202124">prefill 这一路的形状，每个请求都不一样。</tspan></text>
+<rect x="52.0" y="280" width="209.51999999999998" height="9" rx="4" fill="#9aa0a6"/>
+<rect x="52.0" y="294" width="87.3" height="9" rx="4" fill="#9aa0a6"/>
+<rect x="52.0" y="308" width="276.45" height="9" rx="4" fill="#9aa0a6"/>
+<rect x="373.0" y="168" width="319.0" height="170" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="387.0" y="190" class="lbl"><tspan font-weight="700" fill="#202124">② batch 的成员每一步都在换</tspan></text>
+<text x="387.0" y="228" class="xs">连续批处理：谁生成完了就退出，队列里的新请求立刻补上。</text>
+<text x="387.0" y="245" class="xs"><tspan font-weight="700" fill="#202124">batch 这一维每一步都在动。</tspan></text>
+<rect x="387.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="412.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="437.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="462.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<text x="387.0" y="313" class="xxs">第 t 步</text>
+<rect x="516.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="541.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="566.0" y="280" width="20" height="20" rx="4" fill="#fff" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="3 3"/>
+<rect x="591.0" y="280" width="20" height="20" rx="4" fill="#fff" stroke="#202124" stroke-width="1.6"/>
+<text x="516.0" y="313" class="xxs">第 t＋1 步：虚线退出，空心补上</text>
+<line x1="490.0" y1="290.0" x2="510.0" y2="290.0" stroke="#5f6368" stroke-width="1.4" marker-end="url(#aK)"/>
+<rect x="708.0" y="168" width="319.0" height="170" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="722.0" y="190" class="lbl"><tspan font-weight="700" fill="#202124">③ KV cache 一格一格地长</tspan></text>
+<text x="722.0" y="228" class="xs">每生成一个 token，它就长一格。<tspan font-weight="700" fill="#202124">这个形状是时间的函数</tspan> —</text>
+<text x="722.0" y="245" class="xs">— 而时间只有跑起来才存在。</text>
+<rect x="722.0" y="306" width="43.5" height="8" rx="3" fill="#9aa0a6"/>
+<rect x="771.5" y="301" width="43.5" height="13" rx="3" fill="#9aa0a6"/>
+<rect x="821.0" y="296" width="43.5" height="18" rx="3" fill="#9aa0a6"/>
+<rect x="870.5" y="291" width="43.5" height="23" rx="3" fill="#9aa0a6"/>
+<rect x="920.0" y="286" width="43.5" height="28" rx="3" fill="#9aa0a6"/>
+<rect x="969.5" y="281" width="43.5" height="33" rx="3" fill="#9aa0a6"/>
+<rect x="1043.0" y="168" width="319.0" height="170" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="1057.0" y="190" class="lbl"><tspan font-weight="700" fill="#202124">④ 哪个专家收几个 token，数据说了算</tspan></text>
+<text x="1057.0" y="228" class="xs">同一批 token，这一次和下一次分给各个专家的分法完全不</text>
+<text x="1057.0" y="245" class="xs">同。<tspan font-weight="700" fill="#202124">要算到路由那一层才知道。</tspan></text>
+<rect x="1057.0" y="303" width="32.0" height="11" rx="3" fill="#9aa0a6"/>
+<rect x="1094.0" y="282" width="32.0" height="32" rx="3" fill="#9aa0a6"/>
+<rect x="1131.0" y="308" width="32.0" height="6" rx="3" fill="#9aa0a6"/>
+<rect x="1168.0" y="290" width="32.0" height="24" rx="3" fill="#9aa0a6"/>
+<rect x="1205.0" y="297" width="32.0" height="17" rx="3" fill="#9aa0a6"/>
+<rect x="1242.0" y="311" width="32.0" height="3" rx="3" fill="#9aa0a6"/>
+<rect x="1279.0" y="285" width="32.0" height="29" rx="3" fill="#9aa0a6"/>
+<rect x="1316.0" y="301" width="32.0" height="13" rx="3" fill="#9aa0a6"/>
+<rect x="20" y="396" width="1360" height="40" rx="8" fill="#f1f3f4"/>
+<text x="34" y="421" class="lbl" fill="#202124">同一个问题</text>
+<text x="214" y="421" class="lbl" fill="#d93025">GPU 侧　·　SGLang on GB300</text>
+<text x="810" y="421" class="lbl" fill="#1e8e3e">TPU 侧　·　vLLM-TorchTPU on v7</text>
+<line x1="20" y1="436" x2="1380" y2="436" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="466" class="lbl"><tspan font-weight="700" fill="#202124">形状变了，</tspan></text>
+<text x="34" y="483" class="lbl"><tspan font-weight="700" fill="#202124">第一反应是什么</tspan></text>
+<text x="34" y="500" class="lbl"><tspan fill="#9aa0a6">（这一行是平台性质）</tspan></text>
+<rect x="200" y="450" width="3" height="68" rx="2" fill="#d93025"/>
+<text x="216" y="468" class="xs"><tspan font-weight="700" fill="#d93025">能不静态，就不静态。</tspan>prompt 每次长度不同，CUDA graph 复用不了 —— SGLang <tspan font-weight="700" fill="#202124">直接把 prefill 的 graph </tspan></text>
+<text x="216" y="485" class="xs"><tspan font-weight="700" fill="#202124">关掉</tspan>，照跑。</text>
+<text x="216" y="505" class="xs"><tspan fill="#9aa0a6">日志里就是那一行 </tspan><tspan class="mono" fill="#1967d2">Disable prefill CUDA graph</tspan>。</text>
+<rect x="796" y="450" width="3" height="68" rx="2" fill="#1e8e3e"/>
+<text x="812" y="468" class="xs"><tspan font-weight="700" fill="#202124">同样的开关，这边也有</tspan>：<tspan class="mono" fill="#1967d2">--enforce-eager</tspan> 关掉全图编译，照跑。</text>
+<text x="812" y="488" class="xs"><tspan fill="#9aa0a6">我们那一整批 TPU 推理验证，</tspan><tspan font-weight="700" fill="#202124">默认就是开着它跑出来的</tspan>。</text>
+<rect x="20" y="532" width="1360" height="96" rx="0" fill="#fafafa"/>
+<line x1="20" y1="532" x2="1380" y2="532" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="562" class="lbl"><tspan font-weight="700" fill="#202124">关掉之后，</tspan></text>
+<text x="34" y="579" class="lbl"><tspan font-weight="700" fill="#202124">代价是什么</tspan></text>
+<text x="34" y="596" class="lbl"><tspan fill="#9aa0a6">（这一行是各自的取舍）</tspan></text>
+<rect x="200" y="546" width="3" height="68" rx="2" fill="#d93025"/>
+<text x="216" y="564" class="xs"><tspan font-weight="700" fill="#202124">关了就永久关着，没人回头调它。</tspan>少掉的只是「消 CPU 启动开销」那点收益 —— <tspan font-weight="700" fill="#202124">便宜到可以直接写进默认配置。</tspan></text>
+<rect x="796" y="546" width="3" height="68" rx="2" fill="#1e8e3e"/>
+<text x="812" y="564" class="xs">标价写在我们自己文档里：关着全图编译，<tspan font-weight="700" fill="#202124">「预期开了能再快 2-3x」</tspan>。</text>
+<text x="812" y="584" class="xs">而它被列进了<tspan font-weight="700" fill="#202124">待办项</tspan> —— <tspan font-weight="700" fill="#202124">这是技术债，不是默认配置。</tspan></text>
+<rect x="20" y="396" width="1360" height="232" rx="8" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="20" y="656" width="1360" height="158" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="682" class="sec">那不关呢：<tspan font-weight="700" fill="#d93025">两侧各自的准备成本</tspan>　—— 各看各的，<tspan font-weight="700" fill="#d93025">不要并排读</tspan></text>
+<text x="38" y="702" class="xs"><tspan fill="#9aa0a6">两块之间没有分栏线，是故意的。</tspan><tspan font-weight="700" fill="#202124">能比的是「取舍的形状」，不是「快多少」这个数量。</tspan></text>
+<rect x="38" y="718" width="640" height="82" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="52" y="738" class="lbl" fill="#d93025">GPU 侧</text>
+<text x="120" y="738" class="xs">capture <tspan font-weight="700" fill="#202124">52 个 batch size，从 1 到 512</tspan>，graph capture ＋ warmup <tspan font-weight="700" fill="#202124">约 2–3 分钟</tspan>。</text>
+<text x="120" y="757" class="xs"><tspan fill="#9aa0a6">这是 1P1D 8 卡那一档。同一份 runlog 写着，换到更大的拓扑会涨到十分钟以上 —— </tspan><tspan font-weight="700" fill="#202124">规模是第四个变量。</tspan></text>
+<rect x="722" y="718" width="640" height="82" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="736" y="738" class="lbl" fill="#1e8e3e">TPU 侧</text>
+<text x="804" y="738" class="xs">token 数走<tspan font-weight="700" fill="#202124">指数分桶</tspan>，每个桶各编一张图。<tspan font-weight="700" fill="#202124">编译到 server ready：约 7 ／ 约 15 ／ 19 分钟</tspan>（0.6B ／ </text>
+<text x="804" y="755" class="xs">35B ／ 397B）。</text>
+<text x="804" y="774" class="xs"><tspan fill="#9aa0a6">行名是「到 server ready」，不是「纯编译」。</tspan><tspan font-weight="700" fill="#202124">不按参数量线性外推</tspan> —— 397B 只比 35B 多 4 分钟。</text>
+<rect x="20" y="840" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="868" class="sec">落点 —— 以及一笔这里没算的账</text>
+<text x="38" y="894" class="xs"><tspan font-weight="700" fill="#202124">「TPU 要静态形状，GPU 不用」—— 前半句对，后半句不对。</tspan>两边都在分桶，两边也都有关掉它的开关。<tspan font-weight="700" fill="#d93025">真正的区别是退路的标价：</tspan>GPU 那条便宜到可以永久走着；TPU 那条标价<tspan font-weight="700" fill="#202124">吞吐 2–3 倍</tspan>，所以它在待办列表里，不在默认配置里。<tspan font-weight="700" fill="#202124">约束没消失，它换了个形状 —— 要么</tspan></text>
+<text x="38" y="913" class="xs"><tspan font-weight="700" fill="#202124">预付编译，要么长期付吞吐。</tspan></text>
+<text x="38" y="936" class="xs"><tspan font-weight="700" fill="#d93025">⚠️ 还有一笔这里没算：</tspan>「补齐到桶」意味着<tspan font-weight="700" fill="#202124">补上去的那部分 token 是白算的</tspan>。<tspan font-weight="700" fill="#202124">这一笔我们没量，先记在账上</tspan> —— 留白会被读成「不存在」，明写「没量」不会。</text>
+</svg>
+<figcaption><b>5.1 问的是「谁在安排」。到这一节，那个被安排的东西有了名字：形状。</b>训练里形状是你自己定的，所以在 5.3／5.4 它只是个风格问题；<b>推理里形状是用户定的，编译期够不到</b> —— 同一个分岔口，到这儿才开始收费。两栏各来自我们自己跑的一份日志，<b>所以这一节不用讲道理，摆出来就行</b>。</figcaption>
+</figure>
+
+  <div class="note info"><span class="t">这张图真正要交出去的东西，不是那几个数</span>
+    听众三个月后不会记得 52 个桶、也不会记得 19 分钟。<b>要他们带走的是一个提问顺序</b>：
+    以后再碰到「某某平台要不要静态形状」，<b>先别答要不要</b>，先问两句 ——
+    <br><b>①</b> 形状没命中的时候，<b>有没有一条「不编译也能跑」的退路</b>？
+    <br><b>②</b> 那条退路<b>标价多少</b>？
+    <br><br>第一问几乎总是「有」——&nbsp;这正是那句常识错的地方。
+    <b>真正分开两边的是第二问</b>：GPU 侧 prefill 那条退路便宜到可以永久走着，
+    没人回头调它；TPU 侧那条标价<b>吞吐 2–3 倍</b>，所以它躺在待办列表里，
+    不在默认配置里。<b>约束没有消失，它换了个形状 ——
+    从「不许动」变成「要么预付编译，要么长期付吞吐」。</b>
+    <br><br><b>这两句话可以原样搬去问任何一个新加速器。</b></div>
+
+  <div class="note q"><span class="t">口径提醒：下面这些数不全来自同一条路</span>
+    TPU 上跑 vLLM <b>有两条并行的技术路线</b>，我们两条都试过 ——
+    一条走 PyTorch，一条是 JAX 原生实现。<b>它们不是替代关系</b>，
+    仓库里那句话写得很直白：「两条不同的技术路线，不是替代关系」。
+    <br><br><b>上面那两个准备时间、下面那三笔账，全部出自 PyTorch 那条路；
+    而再往下那张「跑通了哪些模型」的清单，出自 JAX 原生那条路。</b>
+    混着讲不会得出错误结论，但会让人以为它们是同一套东西的两个侧面 ——
+    <b>不是。先说清楚，比事后补一句强。</b></div>
+
+  <p><b>难在哪讲完了，接下来是多难 —— 这一步不能靠形容词。</b>
+    下面三笔都是我们自己付过的，每一笔都有日志兜底。
+    <b>看的时候盯住每一笔的复发周期，不是盯住金额</b> ——
+    三笔的金额明年都会变，周期不会。</p>
+
+<figure class="fbox fwide" id="ms-p8">
+<svg viewBox="0 0 1400 934" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="静态形状带来的三笔实测成本：每次启动的编译时间、缓存读不回来导致的重复编译、以及按五个维度穷举的 block size 调参表，其中调参表是算法本身的 2.15 倍">
+<text x="20" y="26" class="ttl">静态化之后，账单长什么样　—— <tspan font-weight="700" fill="#d93025">三笔钱，和一个不会过期的比例 2.15×</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">还要付的</text>
+<rect x="105.0" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="122.0" y="58" class="sm">已经省掉的</text>
+<rect x="201.5" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="218.5" y="58" class="sm">只能人来做（沿用第 3 节的约定）</text>
+<rect x="20" y="124" width="796" height="340" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="150" class="sec">第一笔　·　编译时间　<tspan font-weight="700" fill="#d93025">【每次启动付】</tspan>　—— 它不是「等一会儿」，是「这次实验做不做得成」</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">Qwen3.5-397B-A17B-FP8，v7 4 芯片。跑完一个 benchmark cell 要 26 分 42 秒，而机器有使用时间窗口。</tspan><tspan font-weight="700" fill="#d93025">这个窗口多长，我们自己文档里有三个读</tspan></text>
+<text x="38" y="186" class="xs"><tspan font-weight="700" fill="#d93025">数（53 ／ 55 ／ 60）</tspan>—— <tspan font-weight="700" fill="#202124">所以下面画的是一条带，不是一条线。</tspan><tspan fill="#9aa0a6">　讲了一路的「先问口径」，我们自己也没能幸免。</tspan></text>
+<rect x="654.2727272727273" y="194" width="65.54545454545462" height="132" rx="0" fill="#eceff1"/>
+<line x1="654.2727272727273" y1="194" x2="654.2727272727273" y2="326" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="5 4"/>
+<line x1="719.8181818181819" y1="194" x2="719.8181818181819" y2="326" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="687.0454545454545" y="186" class="lbl" fill="#202124" text-anchor="middle">使用窗口 53～60</text>
+<text x="38" y="236" class="box" fill="#202124">冷启动</text>
+<rect x="158.0" y="216" width="177.90909090909088" height="28" rx="5" fill="#d93025"/>
+<text x="246.95454545454544" y="235" class="lbl" fill="#fff" text-anchor="middle">编译到 server ready 19 分</text>
+<rect x="335.9090909090909" y="216" width="93.63636363636368" height="28" rx="5" fill="#9aa0a6"/>
+<text x="382.72727272727275" y="235" class="xxs" fill="#fff" text-anchor="middle">其余 10 分</text>
+<rect x="429.54545454545456" y="216" width="250.00909090909084" height="28" rx="5" fill="none" stroke="#d93025" stroke-width="1.4"/>
+<text x="554.55" y="235" class="lbl" fill="#d93025" text-anchor="middle">跑一个 cell</text>
+<text x="38" y="262" class="xs">19 ＋ 10 ＋ 26′42″ ＝ <tspan font-weight="700" fill="#d93025">55′42″ —— 落在灰带里，「跑不跑得完」取决于你信哪个读数</tspan></text>
+<text x="38" y="294" class="box" fill="#202124">热启动</text>
+<rect x="158.0" y="274" width="168.5454545454545" height="28" rx="5" fill="#9aa0a6"/>
+<text x="242.27272727272725" y="293" class="lbl" fill="#fff" text-anchor="middle">准备 18 分　·　这一段我们没拆</text>
+<rect x="326.5454545454545" y="274" width="250.0090909090909" height="28" rx="5" fill="none" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="451.55" y="293" class="lbl" fill="#1e8e3e" text-anchor="middle">跑一个 cell</text>
+<text x="38" y="320" class="xs"><tspan fill="#9aa0a6">（编译缓存已就位）</tspan>18 ＋ 26′42″ ＝ <tspan font-weight="700" fill="#202124">44′42″，三个读数都塞得进</tspan></text>
+<line x1="158.0" y1="330" x2="158.0" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="158.0" y="349" class="xxs" fill="#5f6368" text-anchor="middle">0 分</text>
+<line x1="298.4545454545455" y1="330" x2="298.4545454545455" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="298.4545454545455" y="349" class="xxs" fill="#5f6368" text-anchor="middle">15 分</text>
+<line x1="438.90909090909093" y1="330" x2="438.90909090909093" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="438.90909090909093" y="349" class="xxs" fill="#5f6368" text-anchor="middle">30 分</text>
+<line x1="579.3636363636364" y1="330" x2="579.3636363636364" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="579.3636363636364" y="349" class="xxs" fill="#5f6368" text-anchor="middle">45 分</text>
+<line x1="719.8181818181819" y1="330" x2="719.8181818181819" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="719.8181818181819" y="349" class="xxs" fill="#5f6368" text-anchor="middle">60 分</text>
+<rect x="38" y="370" width="760" height="82" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="52" y="390" class="xs"><tspan font-weight="700" fill="#202124">「编译到 server ready」：0.6B 约 7 分 ／ 35B 约 15 分 ／ 397B 19 分。增长比想象中温和</tspan> —— 397B 只比 35B 多 4 分钟，<tspan font-weight="700" fill="#d93025">但「温和」不</tspan></text>
+<text x="52" y="407" class="xs"><tspan font-weight="700" fill="#d93025">等于「不要紧」</tspan>：要紧的是它落在窗口的哪一边。</text>
+<text x="52" y="427" class="xs"><tspan fill="#9aa0a6">顺带一个我们答不上来的：热启动那 18 分，比冷启动扣掉编译后剩的 10 分还多 8 分钟。第二笔那 16 次重编是头号嫌疑 —— </tspan><tspan font-weight="700" fill="#202124">但没量过就是没量过。</tspan></text>
+<rect x="836" y="124" width="544" height="340" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="854" y="150" class="sec">第二笔　·　缓存救不全　<tspan font-weight="700" fill="#d93025">【修好之前每次白付】</tspan></text>
+<text x="854" y="172" class="xs">把编译产物放持久盘之后，<tspan font-weight="700" fill="#202124">88 个正常读回</tspan>；另有 <tspan font-weight="700" fill="#d93025">16 次读不回来、退化成重新编译</tspan>。<tspan fill="#9aa0a6">8 个 worker 各</tspan></text>
+<text x="854" y="189" class="xs"><tspan fill="#9aa0a6">中招 2 次 —— 4 芯片 ＝ 8 个 device，一个 worker 一个。</tspan></text>
+<rect x="854" y="244" width="508" height="62" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="868" y="264" class="lbl" fill="#202124">最顺手的那个判据</text>
+<text x="868" y="283" class="mono" fill="#9aa0a6">Compiling a graph for compile range</text>
+<text x="1348" y="266" class="numb" fill="#9aa0a6" text-anchor="end">0</text>
+<text x="1348" y="296" class="lbl" fill="#9aa0a6" text-anchor="end">看起来全命中</text>
+<rect x="854" y="314" width="508" height="62" rx="7" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="868" y="334" class="lbl" fill="#202124">真正该查的那个</text>
+<text x="868" y="353" class="mono" fill="#d93025">Compiling model again</text>
+<text x="1348" y="336" class="numb" fill="#d93025" text-anchor="end">16</text>
+<text x="1348" y="366" class="lbl" fill="#d93025" text-anchor="end">读不回来，退化成重编</text>
+<rect x="854" y="390" width="508" height="28" rx="6" fill="#fff" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="866" y="408" class="xs"><tspan font-weight="700" fill="#202124">这是个 bug，不是设计如此</tspan> —— 上游修好它就消失。<tspan fill="#9aa0a6">（值多少分钟，我们没量）</tspan></text>
+<rect x="20" y="494" width="1360" height="258" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
+<text x="38" y="520" class="sec">第三笔　·　调参表　<tspan font-weight="700" fill="#d93025">【每多一个组合付一次】</tspan>　—— 写 kernel 只是一半工作，另一半是<tspan font-weight="700" fill="#8430ce">按五个维度穷举</tspan></text>
+<text x="38" y="542" class="xs"><tspan fill="#9aa0a6">取样：</tspan><tspan class="mono" fill="#1967d2">ragged_paged_attention/v3/</tspan> 这一个目录 —— kernel 目录里最大的一块（10,744 行）。</text>
+<text x="60" y="585" class="lbl" fill="#202124">kernel.py　　　　算法本身　<tspan fill="#9aa0a6">（编译器打交道的对象）</tspan></text>
+<rect x="60" y="592" width="205.73181818181817" height="18" rx="4" fill="#1a73e8"/>
+<text x="275.7318181818182" y="606" class="num" fill="#1a73e8">1,926 行</text>
+<text x="60" y="631" class="lbl" fill="#202124">tuned_block_sizes.py　v3 的调参表</text>
+<rect x="60" y="638" width="442.975" height="18" rx="4" fill="#8430ce"/>
+<text x="512.975" y="652" class="num" fill="#8430ce">4,147 行</text>
+<text x="60" y="677" class="lbl" fill="#202124">tuned_block_sizes.py　v2 的那份　<tspan fill="#9aa0a6">—— 上一代芯片的表，一行都不能复用</tspan></text>
+<rect x="60" y="684" width="159.47954545454544" height="18" rx="4" fill="#8430ce"/>
+<text x="229.47954545454544" y="698" class="num" fill="#8430ce">1,493 行</text>
+<text x="60" y="720" class="xs"><tspan font-weight="700" fill="#d93025">算法只有 1,926 行，配套的调参表 4,147 行 —— 是它的 2.15 倍。</tspan><tspan font-weight="700" fill="#202124">三笔里唯一不会过期的就是这个比值。</tspan></text>
+<text x="700" y="584" class="lbl" fill="#202124">那 4,147 行是一张五层嵌套的表：</text>
+<rect x="700" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="708" y="614" class="xs"><tspan font-weight="700" fill="#202124">芯片代</tspan></text>
+<line x1="819" y1="616" x2="826" y2="616" stroke="#8430ce" stroke-width="1.3" marker-end="url(#aP)"/>
+<rect x="828" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="836" y="614" class="xs"><tspan font-weight="700" fill="#202124">page size</tspan></text>
+<line x1="947" y1="616" x2="954" y2="616" stroke="#8430ce" stroke-width="1.3" marker-end="url(#aP)"/>
+<rect x="956" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="964" y="614" class="xs"><tspan font-weight="700" fill="#202124">q／kv 精度组合</tspan></text>
+<line x1="1075" y1="616" x2="1082" y2="616" stroke="#8430ce" stroke-width="1.3" marker-end="url(#aP)"/>
+<rect x="1084" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="1092" y="614" class="xs"><tspan font-weight="700" fill="#202124">head 配置</tspan></text>
+<line x1="1203" y1="616" x2="1210" y2="616" stroke="#8430ce" stroke-width="1.3" marker-end="url(#aP)"/>
+<rect x="1212" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="1220" y="614" class="xs"><tspan font-weight="700" fill="#202124">上下文长度</tspan></text>
+<text x="759.0" y="652" class="xxs" fill="#8430ce" text-anchor="middle">（左边 v2 那根柱子，就是这一维的实证）</text>
+<line x1="1020.0" y1="640" x2="1020.0" y2="666" stroke="#8430ce" stroke-width="1.4" marker-end="url(#aP)"/>
+<rect x="700" y="668" width="630" height="34" rx="7" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="712" y="689" class="xs">⇒ 两个数：<tspan class="mono" fill="#1967d2">num_kv_pages_per_block</tspan> · <tspan class="mono" fill="#1967d2">num_queries_per_block</tspan></text>
+<text x="700" y="720" class="xs"><tspan font-weight="700" fill="#d93025">任何一维变了都要重调，而且没人能替你做。</tspan><tspan font-weight="700" fill="#202124">估「支持一个新模型要多久」的时候，这个比例得直接算进排期。</tspan></text>
+<rect x="20" y="782" width="1360" height="124" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="810" class="sec">两句话</text>
+<text x="38" y="836" class="xs"><tspan font-weight="700" fill="#d93025">这三笔，一笔都不会出现在任何一张「TPU 支持 vLLM 吗」的对照表里。</tspan><tspan font-weight="700" fill="#202124">对照表回答的是「能不能」，账单回答的是「要多少」</tspan> —— 评估一条移植路线的时候，<tspan font-weight="700" fill="#202124">后者才是你真正要签字的那个数</tspan>。</text>
+<text x="38" y="859" class="xs"><tspan font-weight="700" fill="#d93025">⚠️ 而查账本身也会骗人：</tspan><tspan font-weight="700" fill="#202124">查了一盏不会亮的灯，然后把「没亮」当成「没问题」。</tspan><tspan fill="#9aa0a6">（这门课第二次遇到它 —— 第 4 节我们拿一个走错路的对照项，证明了链路够用。）</tspan></text>
+<text x="1380" y="922" class="xxs" fill="#9aa0a6" text-anchor="end">数字出处：tpu/vllm-torchtpu/ 的 QUICKSTART.md（时间、缓存）与 README.md（行数）</text>
+</svg>
+<figcaption><b>5.4 说编译器有一条边界，边界那一侧只能人来做。这张图是那句话的账单。</b>三笔里唯一不会随硬件换代过期的是最后那个比例 —— <b>调参表比算法本身长 2.15 倍</b>，而它量的正是「复杂度流到人手上」之后有多重。<b>看的时候盯住每一笔的复发周期，不是盯住金额</b> —— 金额明年都会变，周期不会。</figcaption>
+</figure>
+
+
+  <div class="note danger"><span class="t">⭐ 移植进度不能用「跑通了吗」来读 —— 要用「绕过了什么」来读</span>
+    我们在 TPU 上部署过的那一批模型（DeepSeek R1／V3.2、GLM-5.1、Kimi K2.6、
+    Qwen3.5、Qwen3-Coder、MiMo），<b>推理验证全部通过</b>。
+    但同一份文档里还挂着另一张表，标题叫<b>「已绕过特性说明」</b>：
+    <br><br><b>①</b> <b>MTP（多 token 预测）在 TPU 推理侧没启用</b>
+    <span class="msfrom">（这一条只涉及其中三个模型）</span> ——
+    代价写得很清楚：<b>decode 吞吐 30–50% 的提升没吃到</b>。
+    <br><b>②</b> <b>稀疏注意力那条路没生效</b>
+    <span class="msfrom">（只涉及两个模型）</span> ——
+    一个模型上是<b>那几个专用权重被跳过</b>；另一个模型上是
+    <b>「先跑一小段、挑出该看哪些 token」的那一段本来就是 GPU 专用路径</b>，
+    TPU 上根本不走。长文本那部分优化因此没打开。
+    <br><b>③</b> <b>多模态被显式关掉</b>
+    <span class="msfrom">（只涉及两个带视觉的模型）</span> ——
+    启动参数里把每个 prompt 的图片、视频数量限成 0。
+    <br><b>④</b> <b>而且这一整批数，是关着 XLA 全图编译量出来的</b> ——
+    也就是上面那张图里 TPU 那条退路。
+    <b>「跑通」这个结论本身，就是走着退路拿到的。</b>
+    <br><br>这四条<b>一条都不影响「跑通」这个结论</b>，
+    <b>但每一条都在结论后面挂了一个折扣</b>。
+    <br><br><b>所以评估一条移植路线，正确的问法不是「支持吗」，
+    而是「支持到哪一档、绕过了什么、绕过的那部分值多少」。</b>
+    ——&nbsp;这跟第 4 节那张 NVL72 图教的是<b>同一个提问习惯</b>：
+    <b>先问口径，再看数字。</b>数字明年会变，提问习惯不会。</div>
+
+  <div class="note ok"><span class="t">这三笔钱买到了什么 —— 下一小节讲</span>
+    这一节从头到尾在算价钱，<b>但账单只有一半：付出去的东西总要换回来点什么。</b>
+    静态换回来的那样，GPU 侧没有对应物 ——
+    <b>装不装得下、要多少 HBM、能不能<u>不占一张卡</u>就先算出来。</b>
+    它直接回答专题一里那堵墙。
+    <br><br><b>⚠️ 注意这不是「所以扯平了」。</b>是同一件事的两面：
+    把决定挪到编译期，<b>代价是编译期要收费，红利是编译期能回答问题</b> ——
+    <b>还是那句话：复杂度没有消失，只是换了个地方；
+    而换地方这件事，账单和红利是一起来的。</b></div>
+
   <div class="note danger"><span class="t">⭐ 全课的落点：两个「128 倍」出现在完全不同的位置</span>
     <b>第 3 节那个 128 倍在芯片内部</b>：一颗 B200 里有 592 个 Tensor Core，
     一颗 v7 里只有 4 个 MXU。<b>GPU 的协调主要发生在芯片内部。</b>
@@ -8192,7 +8920,8 @@ footer a{text-decoration:none}
 
 <section><div class="wrap">
   <div class="stn"><span class="badge">深入</span><h2>想再往下挖一层的同学</h2></div>
-  <p class="lead">上面这十六张图都搬自两份「显微镜」文档。
+  <p class="lead">上面那十六张<b>标了「出自⋯」的图</b>，都搬自两份「显微镜」文档
+    （其余几张是这门课自己画的）。
     那两份把镜头拉得更近 —— <b>每一个数字都标了来源等级，查不到的地方明写「查不到」</b>。
     课上讲不完的推导链，以及作者自己犯过又改回来的两次错，都在里面。</p>
   <div class="msdeep">

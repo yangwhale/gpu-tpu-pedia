@@ -33,6 +33,12 @@ def esc(t):
     return t.replace("&", "&amp;").replace("<", "&lt;").replace(">", "&gt;")
 
 
+import re as _re
+
+# para() 认得的四个行内标记。它们在 SVG 里都是未知元素。
+_BADMARK = _re.compile(r"</?(?:b|r|g|code)>")
+
+
 class Fig:
     """极薄的 SVG 拼装器 —— 有意不做布局引擎：所有坐标手算，改图时所见即所得。"""
 
@@ -52,6 +58,15 @@ class Fig:
         self.p.append(s + extra + "/>")
 
     def t(self, x, y, s, cls="xs", fill=None, anchor=None, weight=None):
+        # `t()` 把 s 原样塞进 <text>，**不解析行内标记** —— 那是 para() 的活。
+        # 于是 `f.t(..., "<b>16</b>")` 会写出 `<text><b>16</b></text>`：
+        # `<b>` 不是 SVG 元素，浏览器把它**连同里面的 16 一起丢掉**。
+        # 不报错、不警告，只是那个数字凭空消失 —— 除非盯着渲染图找它，否则发现不了。
+        # （P-8 的两个关键计数就是这么没的。）
+        # `<tspan>` 是合法 SVG，title() 一直靠它上色，所以只挡 para 那四个标记。
+        assert not _BADMARK.search(str(s)), (
+            "f.t() 不解析行内标记，<b>/<r>/<g>/<code> 会连内容一起被浏览器丢掉；"
+            "要强调请改用 para()，只要换颜色就传 fill 参数：%r" % s)
         a = f' text-anchor="{anchor}"' if anchor else ""
         f = f' fill="{fill}"' if fill else ""
         wt = f' font-weight="{weight}"' if weight else ""

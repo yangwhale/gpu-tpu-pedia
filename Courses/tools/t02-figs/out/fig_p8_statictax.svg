@@ -1,0 +1,117 @@
+<svg viewBox="0 0 1400 934" width="1400" height="934" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="静态形状带来的三笔实测成本：每次启动的编译时间、缓存读不回来导致的重复编译、以及按五个维度穷举的 block size 调参表，其中调参表是算法本身的 2.15 倍">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">静态化之后，账单长什么样　—— <tspan font-weight="700" fill="#d93025">三笔钱，和一个不会过期的比例 2.15×</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">还要付的</text>
+<rect x="105.0" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="122.0" y="58" class="sm">已经省掉的</text>
+<rect x="201.5" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="218.5" y="58" class="sm">只能人来做（沿用第 3 节的约定）</text>
+<rect x="20" y="124" width="796" height="340" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="150" class="sec">第一笔　·　编译时间　<tspan font-weight="700" fill="#d93025">【每次启动付】</tspan>　—— 它不是「等一会儿」，是「这次实验做不做得成」</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">Qwen3.5-397B-A17B-FP8，v7 4 芯片。跑完一个 benchmark cell 要 26 分 42 秒，而机器有使用时间窗口。</tspan><tspan font-weight="700" fill="#d93025">这个窗口多长，我们自己文档里有三个读</tspan></text>
+<text x="38" y="186" class="xs"><tspan font-weight="700" fill="#d93025">数（53 ／ 55 ／ 60）</tspan>—— <tspan font-weight="700" fill="#202124">所以下面画的是一条带，不是一条线。</tspan><tspan fill="#9aa0a6">　讲了一路的「先问口径」，我们自己也没能幸免。</tspan></text>
+<rect x="654.2727272727273" y="194" width="65.54545454545462" height="132" rx="0" fill="#eceff1"/>
+<line x1="654.2727272727273" y1="194" x2="654.2727272727273" y2="326" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="5 4"/>
+<line x1="719.8181818181819" y1="194" x2="719.8181818181819" y2="326" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text x="687.0454545454545" y="186" class="lbl" fill="#202124" text-anchor="middle">使用窗口 53～60</text>
+<text x="38" y="236" class="box" fill="#202124">冷启动</text>
+<rect x="158.0" y="216" width="177.90909090909088" height="28" rx="5" fill="#d93025"/>
+<text x="246.95454545454544" y="235" class="lbl" fill="#fff" text-anchor="middle">编译到 server ready 19 分</text>
+<rect x="335.9090909090909" y="216" width="93.63636363636368" height="28" rx="5" fill="#9aa0a6"/>
+<text x="382.72727272727275" y="235" class="xxs" fill="#fff" text-anchor="middle">其余 10 分</text>
+<rect x="429.54545454545456" y="216" width="250.00909090909084" height="28" rx="5" fill="none" stroke="#d93025" stroke-width="1.4"/>
+<text x="554.55" y="235" class="lbl" fill="#d93025" text-anchor="middle">跑一个 cell</text>
+<text x="38" y="262" class="xs">19 ＋ 10 ＋ 26′42″ ＝ <tspan font-weight="700" fill="#d93025">55′42″ —— 落在灰带里，「跑不跑得完」取决于你信哪个读数</tspan></text>
+<text x="38" y="294" class="box" fill="#202124">热启动</text>
+<rect x="158.0" y="274" width="168.5454545454545" height="28" rx="5" fill="#9aa0a6"/>
+<text x="242.27272727272725" y="293" class="lbl" fill="#fff" text-anchor="middle">准备 18 分　·　这一段我们没拆</text>
+<rect x="326.5454545454545" y="274" width="250.0090909090909" height="28" rx="5" fill="none" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="451.55" y="293" class="lbl" fill="#1e8e3e" text-anchor="middle">跑一个 cell</text>
+<text x="38" y="320" class="xs"><tspan fill="#9aa0a6">（编译缓存已就位）</tspan>18 ＋ 26′42″ ＝ <tspan font-weight="700" fill="#202124">44′42″，三个读数都塞得进</tspan></text>
+<line x1="158.0" y1="330" x2="158.0" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="158.0" y="349" class="xxs" fill="#5f6368" text-anchor="middle">0 分</text>
+<line x1="298.4545454545455" y1="330" x2="298.4545454545455" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="298.4545454545455" y="349" class="xxs" fill="#5f6368" text-anchor="middle">15 分</text>
+<line x1="438.90909090909093" y1="330" x2="438.90909090909093" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="438.90909090909093" y="349" class="xxs" fill="#5f6368" text-anchor="middle">30 分</text>
+<line x1="579.3636363636364" y1="330" x2="579.3636363636364" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="579.3636363636364" y="349" class="xxs" fill="#5f6368" text-anchor="middle">45 分</text>
+<line x1="719.8181818181819" y1="330" x2="719.8181818181819" y2="335" stroke="#9aa0a6" stroke-width="1"/>
+<text x="719.8181818181819" y="349" class="xxs" fill="#5f6368" text-anchor="middle">60 分</text>
+<rect x="38" y="370" width="760" height="82" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="52" y="390" class="xs"><tspan font-weight="700" fill="#202124">「编译到 server ready」：0.6B 约 7 分 ／ 35B 约 15 分 ／ 397B 19 分。增长比想象中温和</tspan> —— 397B 只比 35B 多 4 分钟，<tspan font-weight="700" fill="#d93025">但「温和」不</tspan></text>
+<text x="52" y="407" class="xs"><tspan font-weight="700" fill="#d93025">等于「不要紧」</tspan>：要紧的是它落在窗口的哪一边。</text>
+<text x="52" y="427" class="xs"><tspan fill="#9aa0a6">顺带一个我们答不上来的：热启动那 18 分，比冷启动扣掉编译后剩的 10 分还多 8 分钟。第二笔那 16 次重编是头号嫌疑 —— </tspan><tspan font-weight="700" fill="#202124">但没量过就是没量过。</tspan></text>
+<rect x="836" y="124" width="544" height="340" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="854" y="150" class="sec">第二笔　·　缓存救不全　<tspan font-weight="700" fill="#d93025">【修好之前每次白付】</tspan></text>
+<text x="854" y="172" class="xs">把编译产物放持久盘之后，<tspan font-weight="700" fill="#202124">88 个正常读回</tspan>；另有 <tspan font-weight="700" fill="#d93025">16 次读不回来、退化成重新编译</tspan>。<tspan fill="#9aa0a6">8 个 worker 各</tspan></text>
+<text x="854" y="189" class="xs"><tspan fill="#9aa0a6">中招 2 次 —— 4 芯片 ＝ 8 个 device，一个 worker 一个。</tspan></text>
+<rect x="854" y="244" width="508" height="62" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="868" y="264" class="lbl" fill="#202124">最顺手的那个判据</text>
+<text x="868" y="283" class="mono" fill="#9aa0a6">Compiling a graph for compile range</text>
+<text x="1348" y="266" class="numb" fill="#9aa0a6" text-anchor="end">0</text>
+<text x="1348" y="296" class="lbl" fill="#9aa0a6" text-anchor="end">看起来全命中</text>
+<rect x="854" y="314" width="508" height="62" rx="7" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="868" y="334" class="lbl" fill="#202124">真正该查的那个</text>
+<text x="868" y="353" class="mono" fill="#d93025">Compiling model again</text>
+<text x="1348" y="336" class="numb" fill="#d93025" text-anchor="end">16</text>
+<text x="1348" y="366" class="lbl" fill="#d93025" text-anchor="end">读不回来，退化成重编</text>
+<rect x="854" y="390" width="508" height="28" rx="6" fill="#fff" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="866" y="408" class="xs"><tspan font-weight="700" fill="#202124">这是个 bug，不是设计如此</tspan> —— 上游修好它就消失。<tspan fill="#9aa0a6">（值多少分钟，我们没量）</tspan></text>
+<rect x="20" y="494" width="1360" height="258" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
+<text x="38" y="520" class="sec">第三笔　·　调参表　<tspan font-weight="700" fill="#d93025">【每多一个组合付一次】</tspan>　—— 写 kernel 只是一半工作，另一半是<tspan font-weight="700" fill="#8430ce">按五个维度穷举</tspan></text>
+<text x="38" y="542" class="xs"><tspan fill="#9aa0a6">取样：</tspan><tspan class="mono" fill="#1967d2">ragged_paged_attention/v3/</tspan> 这一个目录 —— kernel 目录里最大的一块（10,744 行）。</text>
+<text x="60" y="585" class="lbl" fill="#202124">kernel.py　　　　算法本身　<tspan fill="#9aa0a6">（编译器打交道的对象）</tspan></text>
+<rect x="60" y="592" width="205.73181818181817" height="18" rx="4" fill="#1a73e8"/>
+<text x="275.7318181818182" y="606" class="num" fill="#1a73e8">1,926 行</text>
+<text x="60" y="631" class="lbl" fill="#202124">tuned_block_sizes.py　v3 的调参表</text>
+<rect x="60" y="638" width="442.975" height="18" rx="4" fill="#8430ce"/>
+<text x="512.975" y="652" class="num" fill="#8430ce">4,147 行</text>
+<text x="60" y="677" class="lbl" fill="#202124">tuned_block_sizes.py　v2 的那份　<tspan fill="#9aa0a6">—— 上一代芯片的表，一行都不能复用</tspan></text>
+<rect x="60" y="684" width="159.47954545454544" height="18" rx="4" fill="#8430ce"/>
+<text x="229.47954545454544" y="698" class="num" fill="#8430ce">1,493 行</text>
+<text x="60" y="720" class="xs"><tspan font-weight="700" fill="#d93025">算法只有 1,926 行，配套的调参表 4,147 行 —— 是它的 2.15 倍。</tspan><tspan font-weight="700" fill="#202124">三笔里唯一不会过期的就是这个比值。</tspan></text>
+<text x="700" y="584" class="lbl" fill="#202124">那 4,147 行是一张五层嵌套的表：</text>
+<rect x="700" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="708" y="614" class="xs"><tspan font-weight="700" fill="#202124">芯片代</tspan></text>
+<line x1="819" y1="616" x2="826" y2="616" stroke="#8430ce" stroke-width="1.3" marker-end="url(#aP)"/>
+<rect x="828" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="836" y="614" class="xs"><tspan font-weight="700" fill="#202124">page size</tspan></text>
+<line x1="947" y1="616" x2="954" y2="616" stroke="#8430ce" stroke-width="1.3" marker-end="url(#aP)"/>
+<rect x="956" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="964" y="614" class="xs"><tspan font-weight="700" fill="#202124">q／kv 精度组合</tspan></text>
+<line x1="1075" y1="616" x2="1082" y2="616" stroke="#8430ce" stroke-width="1.3" marker-end="url(#aP)"/>
+<rect x="1084" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="1092" y="614" class="xs"><tspan font-weight="700" fill="#202124">head 配置</tspan></text>
+<line x1="1203" y1="616" x2="1210" y2="616" stroke="#8430ce" stroke-width="1.3" marker-end="url(#aP)"/>
+<rect x="1212" y="596" width="118" height="40" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="1220" y="614" class="xs"><tspan font-weight="700" fill="#202124">上下文长度</tspan></text>
+<text x="759.0" y="652" class="xxs" fill="#8430ce" text-anchor="middle">（左边 v2 那根柱子，就是这一维的实证）</text>
+<line x1="1020.0" y1="640" x2="1020.0" y2="666" stroke="#8430ce" stroke-width="1.4" marker-end="url(#aP)"/>
+<rect x="700" y="668" width="630" height="34" rx="7" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="712" y="689" class="xs">⇒ 两个数：<tspan class="mono" fill="#1967d2">num_kv_pages_per_block</tspan> · <tspan class="mono" fill="#1967d2">num_queries_per_block</tspan></text>
+<text x="700" y="720" class="xs"><tspan font-weight="700" fill="#d93025">任何一维变了都要重调，而且没人能替你做。</tspan><tspan font-weight="700" fill="#202124">估「支持一个新模型要多久」的时候，这个比例得直接算进排期。</tspan></text>
+<rect x="20" y="782" width="1360" height="124" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="810" class="sec">两句话</text>
+<text x="38" y="836" class="xs"><tspan font-weight="700" fill="#d93025">这三笔，一笔都不会出现在任何一张「TPU 支持 vLLM 吗」的对照表里。</tspan><tspan font-weight="700" fill="#202124">对照表回答的是「能不能」，账单回答的是「要多少」</tspan> —— 评估一条移植路线的时候，<tspan font-weight="700" fill="#202124">后者才是你真正要签字的那个数</tspan>。</text>
+<text x="38" y="859" class="xs"><tspan font-weight="700" fill="#d93025">⚠️ 而查账本身也会骗人：</tspan><tspan font-weight="700" fill="#202124">查了一盏不会亮的灯，然后把「没亮」当成「没问题」。</tspan><tspan fill="#9aa0a6">（这门课第二次遇到它 —— 第 4 节我们拿一个走错路的对照项，证明了链路够用。）</tspan></text>
+<text x="1380" y="922" class="xxs" fill="#9aa0a6" text-anchor="end">数字出处：tpu/vllm-torchtpu/ 的 QUICKSTART.md（时间、缓存）与 README.md（行数）</text>
+</svg>

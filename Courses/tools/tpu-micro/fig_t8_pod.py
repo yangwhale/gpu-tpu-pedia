@@ -40,7 +40,7 @@ RC_Y = BAR_Y + BAR_GAP + BAR_H + 164   # 右栏空档：对数轴那两段说明
 CARD_Y = max(LBOT, RC_Y + 178) + 20
 CARD_H = 186
 BAND_Y = CARD_Y + CARD_H + 20
-H = BAND_Y + 140
+H = BAND_Y + 160
 
 
 def lx(n):
@@ -157,7 +157,7 @@ def _ladder(f):
     f.t(LOGX + 12, y + 25, "全程同一套 ICI，3D 环面一路铺到底", "lbl", GN)
     f.rect(lx(9216), y, lx(LOGMAX) - lx(9216), BAR_H, "#fff", GREY, 1.4, 6, "4,3")
     f.t(lx(9216) + 8, y + 25, "DCN", "xxs", GREY)
-    for v, lab in ((2, "1 chip"), (4, "1 台主机"), (64, "1 个 cube 4×4×4"), (9216, "1 个 pod")):
+    for v, lab in ((1, "1 chip"), (4, "1 台主机"), (64, "1 个 cube 4×4×4"), (9216, "1 个 pod")):
         x = lx(v)
         f.line(x, y, x, y + BAR_H, "#fff", 1.4)
         f.t(x + 4, y + BAR_H + 13, lab, "xxs", GN)
@@ -169,9 +169,8 @@ def _ladder(f):
     f.rect(LOGX, y2, lx(72) - LOGX, BAR_H, FILL[BL], BL, 1.8, 6)
     f.t(LOGX + 12, y2 + 25, "NVLink 域", "lbl", BL)
     f.rect(lx(72), y2, lx(LOGMAX) - lx(72), BAR_H, "#fff", BL, 1.4, 6, "4,3")
-    f.t(lx(72) + 12, y2 + 25, "InfiniBand ／ 以太网　—— 带宽掉一个量级，"
-        "而且集合通信要重写", "xxs", BL)
-    for v, lab in ((8, "1 台机器"), (72, "1 个机柜")):
+    f.t(lx(72) + 12, y2 + 25, "RoCE ／ RDMA", "xxs", BL)
+    for v, lab in ((8, "1 台机器（上一代 HGX）"), (72, "1 个机柜")):
         x = lx(v)
         f.line(x, y2, x, y2 + BAR_H, "#fff", 1.4)
         f.t(x + 4, y2 + BAR_H + 13, lab, "xxs", BL)
@@ -181,13 +180,18 @@ def _ladder(f):
     f.line(xr, BAR_Y - 30, xr, y2 + BAR_H + 26, RD, 2.0, dash="6,4")
     f.t(xr + 8, BAR_Y - 36, "换协议就在这儿", "lbl", RD)
 
-    para(f, RX, y2 + BAR_H + 46, 660,
+    _y = para(f, RX, y2 + BAR_H + 46, 660,
          "<b>128 倍的差距不在带宽上，在「不换协议能连多远」上。</b>"
          "9,216 ÷ 72 ＝ 128 —— 而且这两个数量级之间，TPU 那一侧"
-         "<r>集合通信的写法一个字都不用改</r>。", "xs", 16)
-    para(f, RX, y2 + BAR_H + 92, 660,
-         "反过来说也别夸大：<b>单颗算力两边几乎打平</b>（B200 约 2,250 TFLOP/s BF16，"
-         "TPU v7 一颗 chip 2,307），而且在 72 颗以内 <r>NVLink 的每颗带宽还更高</r>"
+         "<r>集合通信的写法一个字都不用改</r>（<g>这句只在一个 pod 之内成立，"
+         "跨 pod 走 DCN 时并行配置照样要改</g>）。越过红线那一侧，实测 all-reduce 从"
+         "<b>约 840 掉到约 325 GB/s</b>（<b>2.6 倍</b>，不是一个量级），"
+         "而且<b>通信库要换一条实现路径</b>。", "xs", 16)
+    para(f, RX, _y + 10, 660,
+         "反过来说也别夸大：<b>单颗算力两边几乎打平</b>（NVL72 里那颗 <b>GB200</b> "
+         "每 GPU dense BF16 约 2,500 TFLOP/s，TPU v7 一颗 chip 2,307 —— "
+         "<g>注意别拿 HGX B200 的 2,250 来比，那是另一个 SKU</g>），"
+         "而且在 72 颗以内 <r>NVLink 的每颗带宽还更高</r>"
          "（1.8 TB/s 对 1.2 TB/s）。<g>这张图比的是拓扑能延展多远，不是单芯片谁快。</g>", "xs", 16)
 
 
@@ -234,13 +238,15 @@ def _cards(f):
 
 # ══════════════════════════════════════════════════════════════════════
 def _band(f):
-    f.rect(20, BAND_Y, 1360, 120, FILL[GN], GN, 1.6, 10)
+    f.rect(20, BAND_Y, 1360, 140, FILL[GN], GN, 1.6, 10)
     f.t(34, BAND_Y + 26, "两份文档合起来的那一句话", "sec", GN)
-    para(f, 34, BAND_Y + 52, 1330,
+    _y = para(f, 34, BAND_Y + 52, 1330,
          "GPU 那份的最后一张图讲的是：一颗 B200 里有 <b>592 个 Tensor Core</b>，"
          "而一颗 TPU v7 里只有 <b>4 个 MXU</b> —— 同样一块矩阵乘的活，"
-         "两边被切成的份数差 <b>128 倍</b>。<r>GPU 的协调主要发生在芯片内部。</r>", "xs", 20)
-    para(f, 34, BAND_Y + 86, 1330,
+         "<b>份数</b>差 148 倍，而<b>单个单元多大</b>差 <b>128</b> 倍 —— "
+         "<g>本文反复说的那个 128 指的是后者，别顺口说成 592 对 4</g>。"
+         "<r>GPU 的协调主要发生在芯片内部。</r>", "xs", 20)
+    para(f, 34, _y + 8, 1330,
          "这张图讲的是另一半：TPU 一颗芯片里只有两个核要协调，"
          "但<b>不换协议能一路连到 9,216 颗</b>，而 GPU 在 72 颗上就得换。"
          "<r>TPU 的协调主要发生在芯片之间。</r>　"

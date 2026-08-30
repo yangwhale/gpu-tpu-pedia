@@ -188,7 +188,11 @@ def _absent(f):
     for c, name, v, lab in bars:
         f.t(RX + 14, by, name, "xs")
         f.rect(RX + 14, by + 6, v / 128.0 * (RW - 150), 16, FILL[c], c, 1.2, 3)
-        f.t(RX + RW - 16, by + 19, lab, "lbl", c, "end")
+        # 这里原本是 f.t()，而 lab 里带着 `<g>第三方</g>` —— t() 不解析行内标记，
+        # 浏览器把未知元素 <g> 连同「第三方」三个字一起丢掉了。
+        # 于是这份**逐个数字标来源等级**的文档里，恰好是那个来源等级标签隐形了。
+        # 换 para()（它会解析），并在 t() 里加了断言防复发。
+        para(f, RX + RW - 16, by + 19, 240, lab, "lbl", 15, c, 1, "end")
         by += 42
     para(f, RX + 14, by + 2, RW - 28,
          "口径是<b>软件可控的暂存</b>，不含 B200 那 126 MB 的 L2 缓存。", "xxs", 13)

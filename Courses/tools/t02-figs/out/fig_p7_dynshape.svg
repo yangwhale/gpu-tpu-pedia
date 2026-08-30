@@ -1,0 +1,114 @@
+<svg viewBox="0 0 1400 952" width="1400" height="952" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="推理动态性的四个来源，以及 GPU 与 TPU 两侧对形状变化的不同处置：两边都做分桶，区别在于桶未命中时一边退回原路执行、一边触发重新编译">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">推理天生是动态的　—— <tspan font-weight="700" fill="#d93025">两边都在分桶</tspan>，也都有关掉它的开关，区别在<tspan font-weight="700" fill="#d93025">退路的标价</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">GPU 侧　·　SGLang on GB300</text>
+<rect x="220.0" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="237.0" y="58" class="sm">TPU 侧　·　vLLM-TorchTPU on v7</text>
+<rect x="20" y="124" width="1360" height="230" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="151" class="sec">动态性从哪来　—— 四个来源，<tspan font-weight="700" fill="#d93025">没有一个能在编译期知道</tspan></text>
+<rect x="38.0" y="168" width="319.0" height="170" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="52.0" y="190" class="lbl"><tspan font-weight="700" fill="#202124">① prompt 有多长，是用户给的</tspan></text>
+<text x="52.0" y="228" class="xs">同一个服务，这一秒来 200 个 token，下一秒来一万两千</text>
+<text x="52.0" y="245" class="xs">个。<tspan font-weight="700" fill="#202124">prefill 这一路的形状，每个请求都不一样。</tspan></text>
+<rect x="52.0" y="280" width="209.51999999999998" height="9" rx="4" fill="#9aa0a6"/>
+<rect x="52.0" y="294" width="87.3" height="9" rx="4" fill="#9aa0a6"/>
+<rect x="52.0" y="308" width="276.45" height="9" rx="4" fill="#9aa0a6"/>
+<rect x="373.0" y="168" width="319.0" height="170" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="387.0" y="190" class="lbl"><tspan font-weight="700" fill="#202124">② batch 的成员每一步都在换</tspan></text>
+<text x="387.0" y="228" class="xs">连续批处理：谁生成完了就退出，队列里的新请求立刻补上。</text>
+<text x="387.0" y="245" class="xs"><tspan font-weight="700" fill="#202124">batch 这一维每一步都在动。</tspan></text>
+<rect x="387.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="412.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="437.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="462.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<text x="387.0" y="313" class="xxs">第 t 步</text>
+<rect x="516.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="541.0" y="280" width="20" height="20" rx="4" fill="#9aa0a6"/>
+<rect x="566.0" y="280" width="20" height="20" rx="4" fill="#fff" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="3 3"/>
+<rect x="591.0" y="280" width="20" height="20" rx="4" fill="#fff" stroke="#202124" stroke-width="1.6"/>
+<text x="516.0" y="313" class="xxs">第 t＋1 步：虚线退出，空心补上</text>
+<line x1="490.0" y1="290.0" x2="510.0" y2="290.0" stroke="#5f6368" stroke-width="1.4" marker-end="url(#aK)"/>
+<rect x="708.0" y="168" width="319.0" height="170" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="722.0" y="190" class="lbl"><tspan font-weight="700" fill="#202124">③ KV cache 一格一格地长</tspan></text>
+<text x="722.0" y="228" class="xs">每生成一个 token，它就长一格。<tspan font-weight="700" fill="#202124">这个形状是时间的函数</tspan> —</text>
+<text x="722.0" y="245" class="xs">— 而时间只有跑起来才存在。</text>
+<rect x="722.0" y="306" width="43.5" height="8" rx="3" fill="#9aa0a6"/>
+<rect x="771.5" y="301" width="43.5" height="13" rx="3" fill="#9aa0a6"/>
+<rect x="821.0" y="296" width="43.5" height="18" rx="3" fill="#9aa0a6"/>
+<rect x="870.5" y="291" width="43.5" height="23" rx="3" fill="#9aa0a6"/>
+<rect x="920.0" y="286" width="43.5" height="28" rx="3" fill="#9aa0a6"/>
+<rect x="969.5" y="281" width="43.5" height="33" rx="3" fill="#9aa0a6"/>
+<rect x="1043.0" y="168" width="319.0" height="170" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="1057.0" y="190" class="lbl"><tspan font-weight="700" fill="#202124">④ 哪个专家收几个 token，数据说了算</tspan></text>
+<text x="1057.0" y="228" class="xs">同一批 token，这一次和下一次分给各个专家的分法完全不</text>
+<text x="1057.0" y="245" class="xs">同。<tspan font-weight="700" fill="#202124">要算到路由那一层才知道。</tspan></text>
+<rect x="1057.0" y="303" width="32.0" height="11" rx="3" fill="#9aa0a6"/>
+<rect x="1094.0" y="282" width="32.0" height="32" rx="3" fill="#9aa0a6"/>
+<rect x="1131.0" y="308" width="32.0" height="6" rx="3" fill="#9aa0a6"/>
+<rect x="1168.0" y="290" width="32.0" height="24" rx="3" fill="#9aa0a6"/>
+<rect x="1205.0" y="297" width="32.0" height="17" rx="3" fill="#9aa0a6"/>
+<rect x="1242.0" y="311" width="32.0" height="3" rx="3" fill="#9aa0a6"/>
+<rect x="1279.0" y="285" width="32.0" height="29" rx="3" fill="#9aa0a6"/>
+<rect x="1316.0" y="301" width="32.0" height="13" rx="3" fill="#9aa0a6"/>
+<rect x="20" y="396" width="1360" height="40" rx="8" fill="#f1f3f4"/>
+<text x="34" y="421" class="lbl" fill="#202124">同一个问题</text>
+<text x="214" y="421" class="lbl" fill="#d93025">GPU 侧　·　SGLang on GB300</text>
+<text x="810" y="421" class="lbl" fill="#1e8e3e">TPU 侧　·　vLLM-TorchTPU on v7</text>
+<line x1="20" y1="436" x2="1380" y2="436" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="466" class="lbl"><tspan font-weight="700" fill="#202124">形状变了，</tspan></text>
+<text x="34" y="483" class="lbl"><tspan font-weight="700" fill="#202124">第一反应是什么</tspan></text>
+<text x="34" y="500" class="lbl"><tspan fill="#9aa0a6">（这一行是平台性质）</tspan></text>
+<rect x="200" y="450" width="3" height="68" rx="2" fill="#d93025"/>
+<text x="216" y="468" class="xs"><tspan font-weight="700" fill="#d93025">能不静态，就不静态。</tspan>prompt 每次长度不同，CUDA graph 复用不了 —— SGLang <tspan font-weight="700" fill="#202124">直接把 prefill 的 graph </tspan></text>
+<text x="216" y="485" class="xs"><tspan font-weight="700" fill="#202124">关掉</tspan>，照跑。</text>
+<text x="216" y="505" class="xs"><tspan fill="#9aa0a6">日志里就是那一行 </tspan><tspan class="mono" fill="#1967d2">Disable prefill CUDA graph</tspan>。</text>
+<rect x="796" y="450" width="3" height="68" rx="2" fill="#1e8e3e"/>
+<text x="812" y="468" class="xs"><tspan font-weight="700" fill="#202124">同样的开关，这边也有</tspan>：<tspan class="mono" fill="#1967d2">--enforce-eager</tspan> 关掉全图编译，照跑。</text>
+<text x="812" y="488" class="xs"><tspan fill="#9aa0a6">我们那一整批 TPU 推理验证，</tspan><tspan font-weight="700" fill="#202124">默认就是开着它跑出来的</tspan>。</text>
+<rect x="20" y="532" width="1360" height="96" rx="0" fill="#fafafa"/>
+<line x1="20" y1="532" x2="1380" y2="532" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="562" class="lbl"><tspan font-weight="700" fill="#202124">关掉之后，</tspan></text>
+<text x="34" y="579" class="lbl"><tspan font-weight="700" fill="#202124">代价是什么</tspan></text>
+<text x="34" y="596" class="lbl"><tspan fill="#9aa0a6">（这一行是各自的取舍）</tspan></text>
+<rect x="200" y="546" width="3" height="68" rx="2" fill="#d93025"/>
+<text x="216" y="564" class="xs"><tspan font-weight="700" fill="#202124">关了就永久关着，没人回头调它。</tspan>少掉的只是「消 CPU 启动开销」那点收益 —— <tspan font-weight="700" fill="#202124">便宜到可以直接写进默认配置。</tspan></text>
+<rect x="796" y="546" width="3" height="68" rx="2" fill="#1e8e3e"/>
+<text x="812" y="564" class="xs">标价写在我们自己文档里：关着全图编译，<tspan font-weight="700" fill="#202124">「预期开了能再快 2-3x」</tspan>。</text>
+<text x="812" y="584" class="xs">而它被列进了<tspan font-weight="700" fill="#202124">待办项</tspan> —— <tspan font-weight="700" fill="#202124">这是技术债，不是默认配置。</tspan></text>
+<rect x="20" y="396" width="1360" height="232" rx="8" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="20" y="656" width="1360" height="158" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="682" class="sec">那不关呢：<tspan font-weight="700" fill="#d93025">两侧各自的准备成本</tspan>　—— 各看各的，<tspan font-weight="700" fill="#d93025">不要并排读</tspan></text>
+<text x="38" y="702" class="xs"><tspan fill="#9aa0a6">两块之间没有分栏线，是故意的。</tspan><tspan font-weight="700" fill="#202124">能比的是「取舍的形状」，不是「快多少」这个数量。</tspan></text>
+<rect x="38" y="718" width="640" height="82" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="52" y="738" class="lbl" fill="#d93025">GPU 侧</text>
+<text x="120" y="738" class="xs">capture <tspan font-weight="700" fill="#202124">52 个 batch size，从 1 到 512</tspan>，graph capture ＋ warmup <tspan font-weight="700" fill="#202124">约 2–3 分钟</tspan>。</text>
+<text x="120" y="757" class="xs"><tspan fill="#9aa0a6">这是 1P1D 8 卡那一档。同一份 runlog 写着，换到更大的拓扑会涨到十分钟以上 —— </tspan><tspan font-weight="700" fill="#202124">规模是第四个变量。</tspan></text>
+<rect x="722" y="718" width="640" height="82" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="736" y="738" class="lbl" fill="#1e8e3e">TPU 侧</text>
+<text x="804" y="738" class="xs">token 数走<tspan font-weight="700" fill="#202124">指数分桶</tspan>，每个桶各编一张图。<tspan font-weight="700" fill="#202124">编译到 server ready：约 7 ／ 约 15 ／ 19 分钟</tspan>（0.6B ／ </text>
+<text x="804" y="755" class="xs">35B ／ 397B）。</text>
+<text x="804" y="774" class="xs"><tspan fill="#9aa0a6">行名是「到 server ready」，不是「纯编译」。</tspan><tspan font-weight="700" fill="#202124">不按参数量线性外推</tspan> —— 397B 只比 35B 多 4 分钟。</text>
+<rect x="20" y="840" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="868" class="sec">落点 —— 以及一笔这里没算的账</text>
+<text x="38" y="894" class="xs"><tspan font-weight="700" fill="#202124">「TPU 要静态形状，GPU 不用」—— 前半句对，后半句不对。</tspan>两边都在分桶，两边也都有关掉它的开关。<tspan font-weight="700" fill="#d93025">真正的区别是退路的标价：</tspan>GPU 那条便宜到可以永久走着；TPU 那条标价<tspan font-weight="700" fill="#202124">吞吐 2–3 倍</tspan>，所以它在待办列表里，不在默认配置里。<tspan font-weight="700" fill="#202124">约束没消失，它换了个形状 —— 要么</tspan></text>
+<text x="38" y="913" class="xs"><tspan font-weight="700" fill="#202124">预付编译，要么长期付吞吐。</tspan></text>
+<text x="38" y="936" class="xs"><tspan font-weight="700" fill="#d93025">⚠️ 还有一笔这里没算：</tspan>「补齐到桶」意味着<tspan font-weight="700" fill="#202124">补上去的那部分 token 是白算的</tspan>。<tspan font-weight="700" fill="#202124">这一笔我们没量，先记在账上</tspan> —— 留白会被读成「不存在」，明写「没量」不会。</text>
+</svg>
