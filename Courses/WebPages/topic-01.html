@@ -4593,6 +4593,42 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
     这是精确的，不是近似的 —— 省的是显存峰值，不是计算量。</b>
   </div>
 
+  <h4>换一个真实配置算一遍 —— 顺便看清为什么非分块不可</h4>
+
+  <p>上面那个 31.56 GiB 用的是课程口径的 128K。换成一个更常见的训练形状
+  ——<b>序列 4,096、每 device batch 12</b>：</p>
+
+  <div class="eq"><span class="c">// 这一步要算 logits 的位置数</span>
+4,096 × 12 = <span class="r">49,152</span>
+
+<span class="c">// logits 张量本身</span>
+bf16   49,152 × 129,280 × 2 B = <span class="r">11.84 GiB</span>
+fp32   49,152 × 129,280 × 4 B = <span class="r">23.67 GiB</span>   <span class="c">← cross-entropy 数值不稳，通常要提到 fp32</span>
+
+<span class="c">// 对照：同样位置数的一层残差流</span>
+       49,152 ×   7,168 × 2 B = <span class="r"> 0.66 GiB</span>   <span class="c">← 又是那个 18 倍</span></div>
+
+  <div class="note danger">
+    <span class="t">放到一张卡上看：这一个纯临时的张量吃掉四分之一显存</span>
+    以单 device <b>94.74 GiB</b> 的 HBM 算 ——
+    bf16 的 logits 占 <b>12.5%</b>，提到 fp32 算 loss 就是 <b>25.0%</b>。
+    <em>而它在参数表上不存在，在算力账上只占 0.46%，
+    并且下一步就被丢掉。</em>
+  </div>
+
+  <div class="note ok">
+    <span class="t">分块为什么行得通：各个位置之间没有任何耦合</span>
+    <b>loss 是各位置独立求和的</b> —— 位置 i 的 logits 跟位置 j 一点关系都没有。
+    <em>所以可以流式过一遍：算一小段的 logits → 立刻算完 loss → 扔掉 → 下一段。</em>
+    <div class="eq">切成 1,024 一段  →  峰值 1,024 × 129,280 × 2 B = <span class="r">252 MiB</span>
+<span class="c">// 11.84 GiB → 252 MiB，降到 1/48</span></div>
+    <b>而且省的是双份。</b>反向要用的那个梯度张量跟 logits 一样大
+    （梯度就是 <span class="k">p − y</span>，逐元素，形状完全相同）——
+    融合之后它也不落地：在这一小段里当场算出来，当场收缩回
+    「1,024 × 7,168」的隐状态梯度。<br>
+    <em>代价几乎为零 —— lm_head 只占全程算力的 0.46%，需要时重算一遍根本不心疼。</em>
+  </div>
+
   <h4>「下一个字」到底是从哪来的 —— 一个几乎所有人都问过的问题</h4>
 
   <p class="lead">第 0 层的时候，那个向量确实就是<b>当前这个 token</b> 的嵌入。
@@ -4661,6 +4697,83 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
     <em>这个落差有个名字叫 exposure bias。</em>
     历史上有 scheduled sampling 之类的办法去缓解；
     现在的大模型主要靠后训练阶段（模型真的自己 rollout）来补这一课。
+  </div>
+
+
+  <h4>④ 那个 0 / 1 的标签，跟真实的概率分布差太远了吧</h4>
+
+  <p class="lead">「今天天气」后面，「不错」「很好」「真好」都说得通。
+  凭什么标签说其中一个的概率是 <b>1</b>，另外两个是 <b>0</b>？
+  <b>这个质疑完全成立 —— 单看一条样本，标签确实是错的。</b></p>
+
+  <div class="note info">
+    <span class="t">关键一句：标签不是「对分布的断言」，是「从分布里抽的一个样本」</span>
+    <b>抛硬币。每一次抛出来都是 0 或 1，从来不会是 0.5。</b>
+    <em>但你抛一万次取平均，它就收敛到 0.5。</em><br>
+    语料里「今天天气」这个前缀出现很多次 ——
+    有些次后面跟「不错」，有些次跟「很好」，有些次跟「真好」。
+    <b>每一次各推各的，梯度平均下来就是经验频率。</b>
+    <em>单条标签是硬的，但它们的和是软的。</em>
+  </div>
+
+  <div class="eq"><span class="c">// 为什么这个目标在期望上是对的</span>
+最小化  E<sub>(x,y)~数据</sub> [ −log p<sub>θ</sub>(y|x) ]
+   ≡   最小化  KL( P<sub>数据</sub>(·|x) ‖ p<sub>θ</sub>(·|x) )  +  H( P<sub>数据</sub>(·|x) )
+                                                        <span class="c">↑ 常数，跟 θ 无关</span>
+<span class="c">// 所以最优解正好落在</span>
+   p<sub>θ</sub> = <span class="r">P<sub>数据</sub></span>   <span class="c">← 真实的条件分布，不是 one-hot</span></div>
+
+  <div class="note ok">
+    <span class="t">推论一：模型永远到不了 1，而且是梯度下降主动拦着它</span>
+    <b>假设模型真的在「今天天气」之后把「不错」输出成概率 1。</b>
+    <em>那么在同一前缀后面跟「很好」的那些样本上，它的 loss 是 −log(0) = ∞。</em><br>
+    <b>所以「压到 0 / 推到 1」这个动作，被同一个前缀的其他出现互相拽住了。</b>
+    平衡点不在 one-hot，就在经验分布上。
+  </div>
+
+  <div class="note warn">
+    <span class="t">推论二：训练 loss 的地板不是 0，是语言本身的熵</span>
+    上面那个式子里，KL 项最好能降到 0，但 <b>H(P<sub>数据</sub>) 那一项降不掉</b> ——
+    它跟参数无关。
+    <em>所以 loss 曲线停在一个大于零的地方，不是训练失败，
+    是「下一个词本来就有多种合理答案」这件事的量化值。</em><br>
+    <b>反过来说：如果 loss 真的趋近 0，那说明模型在背语料，不是在学语言。</b>
+  </div>
+
+  <p><b>那如果我手上真有更好的软标签呢？</b>有两条路，而且它们的存在本身
+  就承认了 one-hot 丢信息这件事：</p>
+
+  <div class="tbl-wrap"><table>
+    <thead><tr><th>办法</th><th>做什么</th><th>代价 / 现状</th></tr></thead>
+    <tbody>
+      <tr><td><b>label smoothing</b></td>
+        <td>把 1 换成 1−ε，ε 摊到其余词上，人为把标签变软</td>
+        <td>Transformer 原论文用 ε=0.1。<b>现代 LLM 预训练一般不用</b> ——
+          它损害的正是生成时要靠的那个概率校准</td></tr>
+      <tr class="hl"><td><b>知识蒸馏</b></td>
+        <td>直接拿老师模型输出的<b>完整分布</b>当标签 —— 真正意义上的软标签</td>
+        <td>要先有一个更强的老师。<b>蒸馏之所以数据效率高，
+          正是因为把 one-hot 丢掉的那部分补回来了</b></td></tr>
+    </tbody>
+  </table></div>
+
+  <div class="note info">
+    <span class="t">原论文自己就说了这笔交易换的是什么</span>
+    <em>「During training, we employed label smoothing of value ε<sub>ls</sub> = 0.1.
+    <b>This hurts perplexity, as the model learns to be more unsure</b>,
+    but improves accuracy and BLEU score.」</em>
+    —— Vaswani 等 2017，<em>Attention Is All You Need</em> §5.4<br>
+    <b>「让模型变得更不确定」这句话，正好说反了你担心的那件事：</b>
+    one-hot 的问题不是把模型教得太糊涂，而是<b>把它教得太自信</b>。
+    label smoothing 是在往回拉。
+  </div>
+
+  <div class="note ok">
+    <span class="t">一句话收尾</span>
+    <b>one-hot 每一条只告诉模型「这次是这个词」。</b>
+    老师的软分布还额外告诉它「猫有点像狗，完全不像汽车」。<br>
+    <em>前者靠海量样本平均出后者 —— 慢，但不需要老师。
+    这就是预训练和蒸馏的分工。</em>
   </div>
 
   <div class="note ok">
