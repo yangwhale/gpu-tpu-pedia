@@ -7450,9 +7450,13 @@ footer a{text-decoration:none}
 
 <section><div class="wrap">
   <div class="stn big"><span class="badge">第 5 节</span><h2>谁做决定：运行时，还是编译期</h2></div>
-  <p class="lead">前面四节每一节都指向同一个分岔口，这一节把它正面画出来。
-    <b>延迟是物理事实，两边都躲不掉，区别只在于谁负责把它盖住。</b></p>
-  <p>GPU 的办法是<b>换一个跑</b> ——</p>
+  <p class="lead">前面四节每一节都指向同一个分岔口，这一节把它正面画出来 ——
+    <b>而且要一路讲到它在软件栈上长成了什么样</b>。
+    先在硬件层看一眼，再看心智模型，最后看它变成的两个具体后果。</p>
+
+  <h3>5.1　先看硬件层：延迟归谁管</h3>
+  <p><b>延迟是物理事实，两边都躲不掉</b>，区别只在于谁负责把它盖住。
+    GPU 的办法是<b>换一个跑</b> ——</p>
 <figure class="fbox fwide" id="ms-g7">
 <svg viewBox="0 0 1400 931" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 与 TPU 的延迟隐藏机制对照：GPU 靠多个 warp 轮流占用同一个单元，TPU 靠编译期把不同功能单元的起止时刻排在一起">
 <text x="20" y="26" class="ttl">延迟怎么被藏起来　—— GPU 让<tspan fill="#1a73e8">很多人轮流用同一个单元</tspan>，TPU 让<tspan fill="#1e8e3e">不同单元同时开工</tspan></text>
@@ -7927,6 +7931,253 @@ footer a{text-decoration:none}
 <figcaption><b>TPU 怎么藏延迟：编译器提前把班排好。</b>灰格子是真的空着，而且<b>不会有任何东西自动顶上来</b>。上面那排 bundle 构成是<b>公开论文里 v2/v3 的</b>，下面的甘特图是<b>示意，不是实测 trace</b>。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
+  <div class="note info"><span class="t">这一对图为什么放在这一节的开头，而不是第 3 节</span>
+    因为它是<b>整条链上最后一个硬件事实，同时又是第一个软件事实</b>。
+    往上看，它是前面四节所有差异的物理收口；往下看，
+    <b>接下来所有软件栈的差别，都是从「谁来填这些格子」这一个问题长出来的。</b>
+    <br><br>讲的时候在这里停一下，问听众一句：
+    <b>「如果排班这件事从跑的时候挪到编译的时候，写代码的方式会怎么变？」</b>
+    下面三小节就是这个问题的三个答案。</div>
+
+  <h3>5.2　同一件事，两种写法</h3>
+  <p>把上面那个问题落到代码上。<b>不要用形容词描述差别，看代码本身。</b></p>
+<figure class="fbox fwide" id="ms-p1">
+<svg viewBox="0 0 1400 936" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="两种心智模型对照：CUDA 描述单个线程的行为，XLA 描述整个数组的变换，由此分出静态编译的代价与红利">
+<text x="20" y="26" class="ttl">同一件事，两种写法　—— 你描述<tspan font-weight="700" fill="#d93025">一个线程</tspan>，还是描述<tspan font-weight="700" fill="#1e8e3e">整个数组</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">GPU / CUDA：SIMT，单线程视角</text>
+<rect x="228.05" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="245.05" y="58" class="sm">TPU / XLA：SPMD，整张图视角</text>
+<rect x="429.775" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="446.775" y="58" class="sm">灰底＝这一侧付出的代价</text>
+<rect x="20" y="84" width="676" height="268" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="110" class="sec">GPU · CUDA　—— 写一个 kernel，描述<tspan font-weight="700" fill="#202124">一个线程</tspan>干什么</text>
+<rect x="38" y="126" width="640" height="108" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
+<text x="52" y="148" class="mono" fill="#202124">__global__ void add(float* a, float* b, float* c, int n) {</text>
+<text x="52" y="170" class="mono" fill="#202124">    int i = blockIdx.x * blockDim.x + threadIdx.x;</text>
+<text x="52" y="192" class="mono" fill="#202124">    if (i &lt; n) c[i] = a[i] + b[i];</text>
+<text x="52" y="214" class="mono" fill="#202124">}</text>
+<text x="38" y="252" class="xs">看这段代码里出现了什么：<tspan font-weight="700" fill="#d93025">blockIdx</tspan>、<tspan font-weight="700" fill="#d93025">threadIdx</tspan>、还有一句 <tspan class="mono" fill="#1967d2">if</tspan> 边界判断。<tspan font-weight="700" fill="#202124">「我是第几号、我负责哪一格」写在代码里</tspan>，所以切</text>
+<text x="38" y="270" class="xs">分方式是你决定的 —— 也只能由你决定。</text>
+<rect x="38" y="294" width="640" height="38" rx="6" fill="#f1f3f4"/>
+<text x="50" y="318" class="xs">换个形状、换张卡，这段代码<tspan font-weight="700" fill="#202124">照样跑</tspan>，但快不快就不好说了。</text>
+<rect x="724" y="84" width="656" height="268" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="742" y="110" class="sec">TPU · JAX / XLA　—— 写整张图，描述<tspan font-weight="700" fill="#202124">整个数组</tspan>怎么变换</text>
+<rect x="742" y="126" width="620" height="108" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
+<text x="756" y="148" class="mono" fill="#202124">c = a + b</text>
+<text x="756" y="170" class="mono" fill="#202124"></text>
+<text x="756" y="192" class="mono" fill="#202124">c = jax.lax.with_sharding_constraint(</text>
+<text x="756" y="214" class="mono" fill="#202124">        c, NamedSharding(mesh, P('data', 'model')))</text>
+<text x="742" y="252" class="xs">这段里<tspan font-weight="700" fill="#202124">一个下标都没有</tspan>。你没说「谁算哪一格」，只说了<tspan font-weight="700" fill="#202124">「这个数组按哪根轴切」</tspan> —— 剩下的切分、通信、重叠，全由编译器生</text>
+<text x="742" y="270" class="xs">成。</text>
+<rect x="742" y="294" width="620" height="38" rx="6" fill="#f1f3f4"/>
+<text x="754" y="318" class="xs">换个形状，<tspan font-weight="700" fill="#d93025">整张图要重编译</tspan>。v7 上实测<tspan font-weight="700" fill="#202124">十到十七分钟</tspan>。</text>
+<text x="20" y="380" class="sec">把差别摊成四行　—— 每一行都是上面那个选择的直接后果</text>
+<rect x="20" y="392" width="1360" height="36" rx="8" fill="#f1f3f4"/>
+<text x="34" y="415" class="lbl" fill="#202124">问的是同一个问题</text>
+<text x="246" y="415" class="lbl" fill="#202124">GPU / CUDA</text>
+<text x="826" y="415" class="lbl" fill="#202124">TPU / XLA</text>
+<line x1="20" y1="428" x2="1380" y2="428" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="458" class="xs"><tspan font-weight="700" fill="#202124">形状什么时候定</tspan></text>
+<text x="246" y="452" class="xs">运行时可变。同一份 kernel 喂什么形状都能跑</text>
+<text x="826" y="452" class="xs"><tspan font-weight="700" fill="#202124">编译期必须确定</tspan>。形状一变就重新编译</text>
+<rect x="20" y="478" width="1360" height="50" rx="0" fill="#fafafa"/>
+<line x1="20" y1="478" x2="1380" y2="478" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="508" class="xs"><tspan font-weight="700" fill="#202124">控制流</tspan></text>
+<text x="246" y="502" class="xs">随便写。<tspan class="mono" fill="#1967d2">if</tspan> / <tspan class="mono" fill="#1967d2">while</tspan> 想怎么分支怎么分支</text>
+<text x="826" y="502" class="xs">数据相关的分支<tspan font-weight="700" fill="#202124">很贵</tspan>。MoE 路由这类写起来别扭</text>
+<line x1="20" y1="528" x2="1380" y2="528" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="558" class="xs"><tspan font-weight="700" fill="#202124">优化发生在哪</tspan></text>
+<text x="246" y="552" class="xs">人写 kernel ＋ 调库。<tspan font-weight="700" fill="#202124">优化是一处一处做的</tspan></text>
+<text x="826" y="552" class="xs">编译器看得到整张图，<tspan font-weight="700" fill="#202124">做全局优化</tspan></text>
+<rect x="20" y="578" width="1360" height="50" rx="0" fill="#fafafa"/>
+<line x1="20" y1="578" x2="1380" y2="578" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="608" class="xs"><tspan font-weight="700" fill="#202124">出问题怎么查</tspan></text>
+<text x="246" y="602" class="xs">打印、单步、profiler，<tspan font-weight="700" fill="#202124">看得见每一行</tspan></text>
+<text x="826" y="602" class="xs">读编译产物、读 profile。<tspan font-weight="700" fill="#202124">看得见结果，看不见过程</tspan></text>
+<rect x="20" y="392" width="1360" height="236" rx="8" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="20" y="670" width="676" height="132" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="696" class="sec">静态的代价</text>
+<text x="38" y="720" class="xs"><tspan font-weight="700" fill="#202124">形状一变就重编译。</tspan>v7 上实测 10–17 分钟 —— 交互式调试基本别想。</text>
+<text x="38" y="746" class="xs"><tspan font-weight="700" fill="#202124">变长序列只能绕。</tspan>分桶 ＋ padding，桶分粗了浪费算力，分细了编译次数爆炸。</text>
+<text x="38" y="772" class="xs"><tspan font-weight="700" fill="#202124">数据相关的操作很别扭。</tspan>MoE 路由、动态 KV 分配，都要改写成静态形状。</text>
+<rect x="724" y="670" width="656" height="132" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="742" y="696" class="sec">静态的红利</text>
+<text x="742" y="720" class="xs"><tspan font-weight="700" fill="#202124">编译器看得到整张图。</tspan>跨算子融合、通信与计算重叠、内存复用，这三样不用你操心，也<tspan font-weight="700" fill="#202124">不写在你的代码里</tspan>。</text>
+<text x="742" y="746" class="xs"><tspan font-weight="700" fill="#202124">显存规划是确定的。</tspan>所以能<tspan font-weight="700" fill="#d93025">不占卡就提前算出会不会 OOM</tspan> —— 这一条 GPU 侧没有对应物，5.5 会单讲。</text>
+<text x="742" y="772" class="xs"><tspan font-weight="700" fill="#202124">而且这三样是免费的。</tspan>你什么都不做就已经吃到了 —— 代价是<tspan font-weight="700" fill="#d93025">不想要的时候也关不掉</tspan>。</text>
+<rect x="20" y="828" width="1360" height="92" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="856" class="sec">一句话记住这一节</text>
+<text x="38" y="882" class="xs"><tspan font-weight="700" fill="#202124">CUDA 把控制权交给你，XLA 把控制权交给编译器。</tspan>所以两边的痛苦完全不是同一种：一边是<tspan font-weight="700" fill="#d93025">「我写不出足够快的 kernel」</tspan>，一边是<tspan font-weight="700" fill="#d93025">「编译器不听话，而我插不上手」</tspan>。</text>
+<text x="38" y="905" class="xs">注意这里<tspan font-weight="700" fill="#202124">没有哪一种痛苦更轻</tspan> —— 它们只是落在了不同的人身上：前者要求你队里有人能写 kernel，后者要求你队里有人读得懂编译产物。</text>
+</svg>
+<figcaption><b>同一件事，两种写法。</b>左边那段 CUDA 里有 <code>threadIdx</code>，右边那段 JAX <b>一个下标都没有</b> —— <b>差别写在代码里，不在形容词里</b>。下半部分代价和红利各一栏，<b>刻意一样长</b>：这是取舍，不是优劣。</figcaption>
+</figure>
+
+  <div class="note warn"><span class="t">给听众一个当场能用的判据 —— 图上没有这一条</span>
+    图里说了「这是取舍不是优劣」，但听众下一句一定会问「那我该选哪个」。
+    <b>给他们一个判据：你的形状变不变？</b>
+    形状固定、跑很久的训练，重编译那 10–17 分钟摊到几天里等于零；
+    而在线推理每来一种新的序列长度就重编一次，那就是灾难。
+    <b>同一条性质，在两个场景里一个是白送，一个是致命。</b></div>
+
+  <h3>5.3　后果一：训练框架</h3>
+  <p>心智模型的差别不会停在心智里。<b>它会原样长进框架的形状。</b>
+    最干净的看法是<b>追一个通信原语</b> —— 同一个 all-reduce，
+    在两条链路上分别是谁放进去的。</p>
+<figure class="fbox fwide" id="ms-p2">
+<svg viewBox="0 0 1400 946" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="追踪同一个 all-reduce 在 Megatron 与 MaxText 两条链路上分别由谁插入，说明手工切分与声明式切分的差别">
+<text x="20" y="26" class="ttl">同一个 all-reduce，两边是怎么<tspan font-weight="700" fill="#d93025">出现</tspan>的　—— 追一个通信原语，比对比两张特性表有用得多</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">你写的（人负责）</text>
+<rect x="151.0" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="168.0" y="58" class="sm">编译器生成的（工具负责）</text>
+<rect x="328.0" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="345.0" y="58" class="sm">通信真正发生的那一步</text>
+<rect x="20" y="84" width="676" height="414" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="111" class="sec">Megatron-LM　·　GPU</text>
+<rect x="38" y="128" width="640" height="76" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
+<text x="52" y="152" class="box" fill="#202124">① 你选一个并行模块</text>
+<text x="52" y="172" class="xs"><tspan class="mono" fill="#1967d2">ColumnParallelLinear</tspan> / <tspan class="mono" fill="#1967d2">RowParallelLinear</tspan> —— 选哪个，等于你已经决定了这一层按行切还是按列切。</text>
+<line x1="358.0" y1="208" x2="358.0" y2="230" stroke="#d93025" stroke-width="1.6" marker-end="url(#aR)"/>
+<rect x="38" y="234" width="640" height="76" rx="8" fill="#fff" stroke="#f9ab00" stroke-width="1.3"/>
+<text x="52" y="258" class="box" fill="#202124">② 你在 forward 里写下通信</text>
+<text x="52" y="278" class="xs">行切的那一半算完只是<tspan font-weight="700" fill="#202124">部分和</tspan>，所以模块的 <tspan class="mono" fill="#1967d2">forward</tspan> 末尾<tspan font-weight="700" fill="#202124">显式调</tspan> <tspan class="mono" fill="#1967d2">all_reduce</tspan>。<tspan font-weight="700" fill="#d93025">这一行是你写的。</tspan></text>
+<line x1="358.0" y1="314" x2="358.0" y2="336" stroke="#d93025" stroke-width="1.6" marker-end="url(#aR)"/>
+<rect x="38" y="340" width="640" height="76" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
+<text x="52" y="364" class="box" fill="#202124">③ 换个并行度，回到 ①</text>
+<text x="52" y="384" class="xs">切法变了，通信位置就变了 —— <tspan font-weight="700" fill="#202124">要你自己重新想一遍</tspan>。</text>
+<rect x="38" y="430" width="640" height="46" rx="6" fill="#f1f3f4"/>
+<text x="52" y="452" class="xs"><tspan font-weight="700" fill="#202124">整条链上没有任何一步是自动的。</tspan>好处是每一步都在你眼皮底下，坏处是<tspan font-weight="700" fill="#d93025">每一步都得由你想对</tspan>。</text>
+<rect x="724" y="84" width="656" height="414" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="742" y="111" class="sec">MaxText　·　TPU</text>
+<rect x="742" y="128" width="620" height="76" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.3"/>
+<text x="756" y="152" class="box" fill="#202124">① 你只标注切分意图</text>
+<text x="756" y="172" class="xs">给张量挂上 <tspan class="mono" fill="#1967d2">PartitionSpec</tspan>，说清它<tspan font-weight="700" fill="#202124">按哪根轴切</tspan>。至于要不要通信，你没说，也不用说。</text>
+<line x1="1052.0" y1="208" x2="1052.0" y2="230" stroke="#1e8e3e" stroke-width="1.6" marker-end="url(#aG)"/>
+<rect x="742" y="234" width="620" height="76" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.3"/>
+<text x="756" y="258" class="box" fill="#202124">② 编译器推导整张图</text>
+<text x="756" y="278" class="xs">sharding 沿着算子传播；发现某个算子的输入切法<tspan font-weight="700" fill="#202124">对不上</tspan>时，<tspan font-weight="700" fill="#202124">自己插一个集合通信</tspan>补齐。</text>
+<line x1="1052.0" y1="314" x2="1052.0" y2="336" stroke="#1e8e3e" stroke-width="1.6" marker-end="url(#aG)"/>
+<rect x="742" y="340" width="620" height="76" rx="8" fill="#fff" stroke="#f9ab00" stroke-width="1.3"/>
+<text x="756" y="364" class="box" fill="#202124">③ all-reduce 出现在编译产物里</text>
+<text x="756" y="384" class="xs"><tspan font-weight="700" fill="#d93025">你的源码里从头到尾没有这个词。</tspan>它在 HLO 里，也在 profile 里。</text>
+<rect x="742" y="430" width="620" height="46" rx="6" fill="#f1f3f4"/>
+<text x="756" y="452" class="xs"><tspan font-weight="700" fill="#202124">整条链上你只做了第一步。</tspan>好处是并行度一改重编一次就行，坏处是<tspan font-weight="700" fill="#d93025">它插在哪儿、插得好不好，你只能事后去读</tspan>。</text>
+<text x="20" y="530" class="sec">看完机制再看代价　—— 这四行都是上面那条链的直接后果，不是两个团队的口味差异</text>
+<rect x="20" y="542" width="1360" height="36" rx="8" fill="#f1f3f4"/>
+<text x="34" y="565" class="lbl" fill="#202124">问的是同一个问题</text>
+<text x="246" y="565" class="lbl" fill="#202124">Megatron-LM（GPU）</text>
+<text x="826" y="565" class="lbl" fill="#202124">MaxText（TPU）</text>
+<line x1="20" y1="578" x2="1380" y2="578" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="610" class="xs"><tspan font-weight="700" fill="#202124">并行怎么表达</tspan></text>
+<text x="246" y="604" class="xs"><tspan font-weight="700" fill="#202124">手工切</tspan>。张量并行、流水并行各有一套模块，通信写在模块的 <tspan class="mono" fill="#1967d2">forward</tspan> 里</text>
+<text x="826" y="604" class="xs"><tspan font-weight="700" fill="#202124">声明式</tspan>。给张量标 sharding，通信由编译器按 mesh 生成</text>
+<rect x="20" y="632" width="1360" height="54" rx="0" fill="#fafafa"/>
+<line x1="20" y1="632" x2="1380" y2="632" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="664" class="xs"><tspan font-weight="700" fill="#202124">心智负担在哪</tspan></text>
+<text x="246" y="658" class="xs">要知道<tspan font-weight="700" fill="#202124">每一处 all-reduce 在哪</tspan>、为什么在那儿</text>
+<text x="826" y="658" class="xs">要理解 <tspan class="mono" fill="#1967d2">mesh</tspan> 和 <tspan class="mono" fill="#1967d2">PartitionSpec</tspan>，以及它们怎么传播</text>
+<line x1="20" y1="686" x2="1380" y2="686" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="718" class="xs"><tspan font-weight="700" fill="#202124">出问题的时候</tspan></text>
+<text x="246" y="712" class="xs"><tspan font-weight="700" fill="#202124">看得见每一步</tspan>。加个打印就知道谁慢</text>
+<text x="826" y="712" class="xs"><tspan font-weight="700" fill="#d93025">要会读编译产物</tspan>。代码里没有的东西，profile 里有</text>
+<rect x="20" y="740" width="1360" height="54" rx="0" fill="#fafafa"/>
+<line x1="20" y1="740" x2="1380" y2="740" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="772" class="xs"><tspan font-weight="700" fill="#202124">配置复杂度</tspan></text>
+<text x="246" y="766" class="xs">参数极多，但<tspan font-weight="700" fill="#202124">错一个通常只影响一处</tspan></text>
+<text x="826" y="766" class="xs">参数少，但<tspan font-weight="700" fill="#d93025">一个 sharding 标错全盘皆输</tspan> —— 而且可能只表现为「慢」，不报错</text>
+<rect x="20" y="542" width="1360" height="252" rx="8" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="20" y="828" width="1360" height="102" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="856" class="sec">这不是两个团队风格不同，是同一条基因</text>
+<text x="38" y="882" class="xs">把这张图和上一张并排看：<tspan font-weight="700" fill="#202124">「谁在安排」这个问题，在框架层原样复现了一遍。</tspan>硬件上是「谁决定数据什么时候搬」，框架上就是「谁决定通信插在哪」——<tspan font-weight="700" fill="#202124">同一个选择，换了一层皮。</tspan></text>
+<text x="38" y="905" class="xs">所以选框架的时候真正要问的不是「哪个更快」，而是<tspan font-weight="700" fill="#d93025">「我这个队，是更有人能想对每一处通信，还是更有人读得懂编译产物」</tspan>。</text>
+</svg>
+<figcaption><b>追一个 all-reduce，看它是在哪一步、由谁放进去的。</b>左边它出现在<b>你写的第二步</b>，右边你从头到尾没写过它、它出现在<b>编译产物里</b>。<b>「谁在安排」这个问题，在框架层原样复现了一遍。</b></figcaption>
+</figure>
+
+  <h3>5.4　后果二：手写 kernel —— 顺便给编译器钉一个边界</h3>
+  <p>上一节讲完「编译器替你插通信」，很容易留下一个过头的印象：那都交给它就行了。
+    <b>这一节专门把这个印象按回去。</b></p>
+<figure class="fbox fwide" id="ms-p3">
+<svg viewBox="0 0 1400 976" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="编译器能力边界示意：左侧是编排类优化，编译器可以自动完成；右侧是算法层面的改写，必须由人完成，Flash Attention 属于右侧">
+<text x="20" y="26" class="ttl">编译器能替你做什么，<tspan font-weight="700" fill="#d93025">做不到什么</tspan>　—— Flash Attention 是最诚实的那个例子</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="37" y="58" class="sm">编排：编译器能自动做</text>
+<rect x="174.0" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="191.0" y="58" class="sm">算法：只能人来做</text>
+<rect x="305.0" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="322.0" y="58" class="sm">两边都得手写的那一格</text>
+<rect x="20" y="126" width="796" height="296" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="153" class="sec">编译器领地　·　把<tspan font-weight="700">已有的算子</tspan>编排好</text>
+<rect x="38.0" y="170" width="371.0" height="84" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.1"/>
+<text x="52.0" y="194" class="box" fill="#202124">算子融合</text>
+<text x="52.0" y="214" class="xs">把相邻的小算子并成一个 kernel，中间结果不落回 HBM。</text>
+<rect x="427.0" y="170" width="371.0" height="84" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.1"/>
+<text x="441.0" y="194" class="box" fill="#202124">通信与计算重叠</text>
+<text x="441.0" y="214" class="xs">看得到整张图，就知道哪段通信能藏在哪段计算底下。</text>
+<rect x="38.0" y="268" width="371.0" height="84" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.1"/>
+<text x="52.0" y="292" class="box" fill="#202124">内存复用</text>
+<text x="52.0" y="312" class="xs">谁和谁生命期不重叠，就让它们共用同一块地址。</text>
+<rect x="427.0" y="268" width="371.0" height="84" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.1"/>
+<text x="441.0" y="292" class="box" fill="#202124">布局与切分选择</text>
+<text x="441.0" y="312" class="xs">同一个矩阵摆成什么形状、按哪根轴切，编译期试着挑。</text>
+<rect x="38" y="366" width="760" height="40" rx="6" fill="#f1f3f4"/>
+<text x="52" y="390" class="xs">这四样的共同点：<tspan font-weight="700" fill="#202124">它们都不改变「算的是什么」，只改变「怎么排」</tspan>。所以编译器有资格自己决定 —— 排错了顶多慢，不会错。</text>
+<line x1="836" y1="120" x2="836" y2="428" stroke="#d93025" stroke-width="2.2" stroke-dasharray="7 5"/>
+<rect x="806" y="242.0" width="60" height="64" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="836" y="266.0" class="box" fill="#d93025" text-anchor="middle">边</text>
+<text x="836" y="286.0" class="box" fill="#d93025" text-anchor="middle">界</text>
+<rect x="856" y="126" width="524" height="296" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
+<text x="874" y="153" class="sec">人的领地　·　<tspan font-weight="700">换一个算法</tspan></text>
+<rect x="874" y="170" width="488" height="92" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.1"/>
+<text x="888" y="194" class="box" fill="#202124">改变数学上的计算顺序</text>
+<text x="888" y="214" class="xs">Flash 把 softmax 拆成可增量合并的形式，于是注意力矩阵<tspan font-weight="700" fill="#202124">根本不必整个存在</tspan>。这不是把已</text>
+<text x="888" y="231" class="xs">有算子排得更好，<tspan font-weight="700" fill="#d93025">这是换了一个算法</tspan>。</text>
+<rect x="874" y="276" width="488" height="92" rx="7" fill="#fff" stroke="#8430ce" stroke-width="1.1"/>
+<text x="888" y="300" class="box" fill="#202124">发明一个不存在的算子</text>
+<text x="888" y="320" class="xs">编译器只能编排它<tspan font-weight="700" fill="#202124">认识</tspan>的东西。一个从没有人写过的 kernel，它没有理由凭空想出来。</text>
+<text x="874" y="400" class="xs"><tspan font-weight="700" fill="#202124">越过这条线，编译器就帮不上忙了</tspan> —— 两边都一样。</text>
+<rect x="20" y="474" width="1360" height="196" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="38" y="502" class="sec">Flash Attention　—— 一个两边都失效的反例，比任何一边的成功案例都更能定义边界</text>
+<rect x="38" y="520" width="420" height="104" rx="8" fill="#fff" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="54" y="546" class="box" fill="#202124">GPU 侧</text>
+<text x="128" y="546" class="num" fill="#1a73e8">CUTLASS / Triton</text>
+<text x="54" y="568" class="xs">手写。<tspan font-weight="700" fill="#202124">NVIDIA 的编译器没有自己想出 Flash</tspan>，是研究者写出来、再被库收编的。</text>
+<rect x="478" y="520" width="420" height="104" rx="8" fill="#fff" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="494" y="546" class="box" fill="#202124">TPU 侧</text>
+<text x="568" y="546" class="num" fill="#1a73e8">Pallas</text>
+<text x="494" y="568" class="xs">同样手写。<tspan font-weight="700" fill="#202124">XLA 也没有自己想出 Flash</tspan>，Splash 那一支同样是人一行行写的。</text>
+<rect x="918" y="520" width="444" height="104" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="934" y="546" class="box"><tspan font-weight="700" fill="#d93025">没有任何一侧的编译器自己长出了它。</tspan></text>
+<text x="934" y="570" class="xs">Flash 改的是<tspan font-weight="700" fill="#202124">数学上的计算顺序</tspan> —— 分块算、增量合并 softmax、注意力矩阵不落 </text>
+<text x="934" y="587" class="xs">HBM。那是算法，不是编排。<tspan font-weight="700" fill="#202124">算法永远是人的活。</tspan></text>
+<text x="38" y="646" class="xs"><tspan font-weight="700" fill="#202124">讲到这里要防一个误解</tspan>：这不是说编译器没用。上面左边那四样，在 GPU 侧同样是 Triton / CUTLASS 这些工具在替人做 —— <tspan font-weight="700" fill="#202124">区别只在于自动化的程度，不在于有没有边界。</tspan>边界两边都有，位置也差不多。</text>
+<rect x="20" y="700" width="1360" height="138" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="727" class="sec">那越过边界之后，两边拿什么写　—— Triton 与 Pallas 定位几乎一样，差别在底下</text>
+<rect x="38" y="742" width="650" height="80" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="54" y="766" class="box" fill="#202124">Triton　·　GPU</text>
+<text x="54" y="786" class="xs">用 Python 写 kernel，编译到 <tspan class="mono" fill="#1967d2">PTX</tspan>。你操作的心智单位是<tspan font-weight="700" fill="#202124">一个 program（一组线程）处理一块</tspan>，共享内存和同步要自己安排。</text>
+<rect x="712" y="742" width="650" height="80" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="728" y="766" class="box" fill="#202124">Pallas　·　TPU</text>
+<text x="728" y="786" class="xs">同样用 Python 写 kernel，编译到 <tspan class="mono" fill="#1967d2">Mosaic</tspan>。你操作的心智单位是<tspan font-weight="700" fill="#202124">一块 tile 在 VMEM 里进出</tspan>，搬运由 <tspan class="mono" fill="#1967d2">BlockSpec</tspan> 描述，</text>
+<text x="728" y="803" class="xs">不是自己写 load/store。</text>
+<rect x="20" y="864" width="1360" height="96" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="892" class="sec">给「把控制权交给编译器」钉一个边界</text>
+<text x="38" y="918" class="xs"><tspan font-weight="700" fill="#202124">编排是编译器的活，算法永远是人的活。</tspan>这条线两边都存在，位置也差不多 —— 所以「TPU 要手写 kernel」不是 TPU 的缺点，<tspan font-weight="700" fill="#d93025">GPU 上同样要写，只是写的人多、库更厚</tspan>。</text>
+<text x="38" y="941" class="xs">真正的差别在<tspan font-weight="700" fill="#202124">越过边界之后有多少现成的东西可抄</tspan>。这一条 GPU 侧目前确实占优，但它是<tspan font-weight="700" fill="#202124">生态差距，不是架构差距</tspan> —— 两者会随时间收敛，别把它们混成一件事讲。</text>
+</svg>
+<figcaption><b>编译器的边界在哪。</b>左边四样是「编排」——不改变算什么，只改变怎么排，所以编译器有资格自己决定。右边是「换算法」，越过这条线它就帮不上忙。<b>Flash Attention 落在右边，而且两边都得手写</b> —— 一个两边都失效的反例，比任何一边的成功案例都更能定义边界。</figcaption>
+</figure>
+
+  <div class="note q"><span class="t">这一条我们有第一手经验，讲的时候可以摊开</span>
+    图上那条边界是从原理推出来的，<b>而我们是真的越过去过</b>：
+    TPU 侧的 kernel 我们自己写过，Flash / Splash 那一支也调过。
+    <b>所以这一节可以不停在「理论上要手写」，而是直接讲写的时候撞到了什么。</b>
+    <br><br>课上如果时间够，这里是全课<b>最适合展开问答的一节</b> ——
+    前面四节讲的都是硬件事实，听众只能听；
+    <b>到了这一节才轮到经验，而经验是可以被追问的。</b></div>
+
   <div class="note danger"><span class="t">⭐ 全课的落点：两个「128 倍」出现在完全不同的位置</span>
     <b>第 3 节那个 128 倍在芯片内部</b>：一颗 B200 里有 592 个 Tensor Core，
     一颗 v7 里只有 4 个 MXU。<b>GPU 的协调主要发生在芯片内部。</b>
@@ -7934,8 +8185,9 @@ footer a{text-decoration:none}
     <b>TPU 的协调主要发生在芯片之间。</b>
     <br><br>这不是巧合，是同一个设计取向的两个侧面：
     <b>一边把复杂度收进一颗芯片里由硬件消化，另一边把复杂度摊到芯片之间由软件面对。</b>
-    <br>整门课从头到尾说的都是这同一件事 ——
-    <b>不是谁更强，是把同一份复杂度放在了不同的地方。</b></div>
+    <br>而这一节说明<b>那份复杂度并没有消失</b> ——
+    它从硬件流到了编译器，又从编译器流到了框架、流到了你写 kernel 的那只手上。
+    <br><b>整门课从头到尾说的都是这同一件事：不是谁更强，是把同一份复杂度放在了不同的地方。</b></div>
 </div></section>
 
 <section><div class="wrap">

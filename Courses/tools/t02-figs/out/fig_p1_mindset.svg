@@ -1,0 +1,87 @@
+<svg viewBox="0 0 1400 936" width="1400" height="936" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="两种心智模型对照：CUDA 描述单个线程的行为，XLA 描述整个数组的变换，由此分出静态编译的代价与红利">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">同一件事，两种写法　—— 你描述<tspan font-weight="700" fill="#d93025">一个线程</tspan>，还是描述<tspan font-weight="700" fill="#1e8e3e">整个数组</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">GPU / CUDA：SIMT，单线程视角</text>
+<rect x="228.05" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="245.05" y="58" class="sm">TPU / XLA：SPMD，整张图视角</text>
+<rect x="429.775" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="446.775" y="58" class="sm">灰底＝这一侧付出的代价</text>
+<rect x="20" y="84" width="676" height="268" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="110" class="sec">GPU · CUDA　—— 写一个 kernel，描述<tspan font-weight="700" fill="#202124">一个线程</tspan>干什么</text>
+<rect x="38" y="126" width="640" height="108" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
+<text x="52" y="148" class="mono" fill="#202124">__global__ void add(float* a, float* b, float* c, int n) {</text>
+<text x="52" y="170" class="mono" fill="#202124">    int i = blockIdx.x * blockDim.x + threadIdx.x;</text>
+<text x="52" y="192" class="mono" fill="#202124">    if (i &lt; n) c[i] = a[i] + b[i];</text>
+<text x="52" y="214" class="mono" fill="#202124">}</text>
+<text x="38" y="252" class="xs">看这段代码里出现了什么：<tspan font-weight="700" fill="#d93025">blockIdx</tspan>、<tspan font-weight="700" fill="#d93025">threadIdx</tspan>、还有一句 <tspan class="mono" fill="#1967d2">if</tspan> 边界判断。<tspan font-weight="700" fill="#202124">「我是第几号、我负责哪一格」写在代码里</tspan>，所以切</text>
+<text x="38" y="270" class="xs">分方式是你决定的 —— 也只能由你决定。</text>
+<rect x="38" y="294" width="640" height="38" rx="6" fill="#f1f3f4"/>
+<text x="50" y="318" class="xs">换个形状、换张卡，这段代码<tspan font-weight="700" fill="#202124">照样跑</tspan>，但快不快就不好说了。</text>
+<rect x="724" y="84" width="656" height="268" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="742" y="110" class="sec">TPU · JAX / XLA　—— 写整张图，描述<tspan font-weight="700" fill="#202124">整个数组</tspan>怎么变换</text>
+<rect x="742" y="126" width="620" height="108" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
+<text x="756" y="148" class="mono" fill="#202124">c = a + b</text>
+<text x="756" y="170" class="mono" fill="#202124"></text>
+<text x="756" y="192" class="mono" fill="#202124">c = jax.lax.with_sharding_constraint(</text>
+<text x="756" y="214" class="mono" fill="#202124">        c, NamedSharding(mesh, P('data', 'model')))</text>
+<text x="742" y="252" class="xs">这段里<tspan font-weight="700" fill="#202124">一个下标都没有</tspan>。你没说「谁算哪一格」，只说了<tspan font-weight="700" fill="#202124">「这个数组按哪根轴切」</tspan> —— 剩下的切分、通信、重叠，全由编译器生</text>
+<text x="742" y="270" class="xs">成。</text>
+<rect x="742" y="294" width="620" height="38" rx="6" fill="#f1f3f4"/>
+<text x="754" y="318" class="xs">换个形状，<tspan font-weight="700" fill="#d93025">整张图要重编译</tspan>。v7 上实测<tspan font-weight="700" fill="#202124">十到十七分钟</tspan>。</text>
+<text x="20" y="380" class="sec">把差别摊成四行　—— 每一行都是上面那个选择的直接后果</text>
+<rect x="20" y="392" width="1360" height="36" rx="8" fill="#f1f3f4"/>
+<text x="34" y="415" class="lbl" fill="#202124">问的是同一个问题</text>
+<text x="246" y="415" class="lbl" fill="#202124">GPU / CUDA</text>
+<text x="826" y="415" class="lbl" fill="#202124">TPU / XLA</text>
+<line x1="20" y1="428" x2="1380" y2="428" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="458" class="xs"><tspan font-weight="700" fill="#202124">形状什么时候定</tspan></text>
+<text x="246" y="452" class="xs">运行时可变。同一份 kernel 喂什么形状都能跑</text>
+<text x="826" y="452" class="xs"><tspan font-weight="700" fill="#202124">编译期必须确定</tspan>。形状一变就重新编译</text>
+<rect x="20" y="478" width="1360" height="50" rx="0" fill="#fafafa"/>
+<line x1="20" y1="478" x2="1380" y2="478" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="508" class="xs"><tspan font-weight="700" fill="#202124">控制流</tspan></text>
+<text x="246" y="502" class="xs">随便写。<tspan class="mono" fill="#1967d2">if</tspan> / <tspan class="mono" fill="#1967d2">while</tspan> 想怎么分支怎么分支</text>
+<text x="826" y="502" class="xs">数据相关的分支<tspan font-weight="700" fill="#202124">很贵</tspan>。MoE 路由这类写起来别扭</text>
+<line x1="20" y1="528" x2="1380" y2="528" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="558" class="xs"><tspan font-weight="700" fill="#202124">优化发生在哪</tspan></text>
+<text x="246" y="552" class="xs">人写 kernel ＋ 调库。<tspan font-weight="700" fill="#202124">优化是一处一处做的</tspan></text>
+<text x="826" y="552" class="xs">编译器看得到整张图，<tspan font-weight="700" fill="#202124">做全局优化</tspan></text>
+<rect x="20" y="578" width="1360" height="50" rx="0" fill="#fafafa"/>
+<line x1="20" y1="578" x2="1380" y2="578" stroke="#e8eaed" stroke-width="1"/>
+<text x="34" y="608" class="xs"><tspan font-weight="700" fill="#202124">出问题怎么查</tspan></text>
+<text x="246" y="602" class="xs">打印、单步、profiler，<tspan font-weight="700" fill="#202124">看得见每一行</tspan></text>
+<text x="826" y="602" class="xs">读编译产物、读 profile。<tspan font-weight="700" fill="#202124">看得见结果，看不见过程</tspan></text>
+<rect x="20" y="392" width="1360" height="236" rx="8" fill="none" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="20" y="670" width="676" height="132" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="696" class="sec">静态的代价</text>
+<text x="38" y="720" class="xs"><tspan font-weight="700" fill="#202124">形状一变就重编译。</tspan>v7 上实测 10–17 分钟 —— 交互式调试基本别想。</text>
+<text x="38" y="746" class="xs"><tspan font-weight="700" fill="#202124">变长序列只能绕。</tspan>分桶 ＋ padding，桶分粗了浪费算力，分细了编译次数爆炸。</text>
+<text x="38" y="772" class="xs"><tspan font-weight="700" fill="#202124">数据相关的操作很别扭。</tspan>MoE 路由、动态 KV 分配，都要改写成静态形状。</text>
+<rect x="724" y="670" width="656" height="132" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="742" y="696" class="sec">静态的红利</text>
+<text x="742" y="720" class="xs"><tspan font-weight="700" fill="#202124">编译器看得到整张图。</tspan>跨算子融合、通信与计算重叠、内存复用，这三样不用你操心，也<tspan font-weight="700" fill="#202124">不写在你的代码里</tspan>。</text>
+<text x="742" y="746" class="xs"><tspan font-weight="700" fill="#202124">显存规划是确定的。</tspan>所以能<tspan font-weight="700" fill="#d93025">不占卡就提前算出会不会 OOM</tspan> —— 这一条 GPU 侧没有对应物，5.5 会单讲。</text>
+<text x="742" y="772" class="xs"><tspan font-weight="700" fill="#202124">而且这三样是免费的。</tspan>你什么都不做就已经吃到了 —— 代价是<tspan font-weight="700" fill="#d93025">不想要的时候也关不掉</tspan>。</text>
+<rect x="20" y="828" width="1360" height="92" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="856" class="sec">一句话记住这一节</text>
+<text x="38" y="882" class="xs"><tspan font-weight="700" fill="#202124">CUDA 把控制权交给你，XLA 把控制权交给编译器。</tspan>所以两边的痛苦完全不是同一种：一边是<tspan font-weight="700" fill="#d93025">「我写不出足够快的 kernel」</tspan>，一边是<tspan font-weight="700" fill="#d93025">「编译器不听话，而我插不上手」</tspan>。</text>
+<text x="38" y="905" class="xs">注意这里<tspan font-weight="700" fill="#202124">没有哪一种痛苦更轻</tspan> —— 它们只是落在了不同的人身上：前者要求你队里有人能写 kernel，后者要求你队里有人读得懂编译产物。</text>
+</svg>
