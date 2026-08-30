@@ -16,7 +16,7 @@ for k,x in enumerate([16,516]):
     # TensorCore
     p.append(f'<rect x="{x+16}" y="108" width="330" height="130" rx="8" fill="#e8f0fe" stroke="{BL}"/>')
     p.append(f'<text class="svglbl" x="{x+28}" y="128" fill="{BL}">TensorCore ×1</text>')
-    for j,(t,s,c) in enumerate([("MXU ×2","256 × 256 脉动阵列",BL),("VPU","逐元素 · 约占核算力 3%",PU),
+    for j,(t,s,c) in enumerate([("MXU ×2","256 × 256 脉动阵列",BL),("VPU","逐元素 · 峰值低 2 个数量级",PU),
                                 ("XLU","转置 / 归约 / 排列",PU),("标量单元 ×1","产生所有地址 —— 只有一个",RD)]):
         yy=138+j*24
         p.append(f'<rect x="{x+28}" y="{yy}" width="140" height="20" rx="4" fill="{c}"/>')
