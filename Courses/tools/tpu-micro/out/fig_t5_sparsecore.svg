@@ -1,0 +1,147 @@
+<svg viewBox="0 0 1400 934" width="1400" height="934" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 SparseCore 与 TensorCore 的分工：核间数据流单向，SparseCore 可直推 TensorCore 暂存，反向不存在">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">SparseCore　—— 第二种核，以及它在生产里到底在干什么</text>
+<rect x="1259" y="10" width="121" height="22" rx="11" fill="#d93025"/>
+<text x="1319.5" y="25" class="lbl" fill="#fff" text-anchor="middle">第 5 / 8 张</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">TensorCore 侧</text>
+<rect x="140.075" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="157.075" y="58" class="sm">SparseCore 侧</text>
+<rect x="260.15" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="277.15" y="58" class="sm">存在的数据通路</text>
+<rect x="379.65" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="396.65" y="58" class="sm">硬件上不存在的方向</text>
+<text x="20" y="110" class="sec">两颗核之间怎么传数　—— 注意它是单向的</text>
+<text x="20" y="130" class="xs">一颗 device 里有 <tspan font-weight="700" fill="#202124">1 个 TensorCore</tspan> 和 <tspan font-weight="700" fill="#202124">2 个 SparseCore</tspan>。它们<tspan font-weight="700" fill="#d93025">不共享地址空间、也没有缓存一致性</tspan> —— 跨核只有 DMA 一</text>
+<text x="20" y="145" class="xs">条路，而 DMA 的落点可以直接是对方的私有 SRAM，不必绕 HBM。</text>
+<rect x="40" y="176" width="520" height="30" rx="6" fill="#e0f2f0" stroke="#12786f" stroke-width="1.4"/>
+<text x="52" y="196" class="lbl" fill="#12786f">ICI　—— 出芯片，去邻居（见 §8）</text>
+<rect x="40" y="434" width="520" height="30" rx="6" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.4"/>
+<text x="52" y="454" class="lbl" fill="#202124">HBM　96 GiB / device　—— 两颗核共用同一个控制器</text>
+<rect x="40" y="248" width="200" height="142" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="2"/>
+<text x="52" y="272" class="box" fill="#1e8e3e">TensorCore ×1</text>
+<rect x="52" y="282" width="176" height="46" rx="5" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="62" y="300" class="lbl" fill="#1e8e3e">VMEM　64 MiB</text>
+<text x="62" y="318" class="xxs" fill="#1e8e3e">最小一块 tile (8,128)</text>
+<text x="52" y="344" class="xxs">2 个 MXU ＋ 1 个 VPU。<tspan font-weight="700" fill="#202124">矩阵乘只在</tspan></text>
+<text x="52" y="357" class="xxs"><tspan font-weight="700" fill="#202124">这里发生。</tspan></text>
+<rect x="360" y="248" width="200" height="142" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="2"/>
+<text x="372" y="272" class="box" fill="#8430ce">SparseCore ×2</text>
+<rect x="372" y="282" width="176" height="46" rx="5" fill="#fff" stroke="#8430ce" stroke-width="1.2"/>
+<text x="382" y="300" class="lbl" fill="#8430ce">私有 SRAM　512 KiB</text>
+<text x="382" y="318" class="xxs" fill="#8430ce">最小一块 (8,)</text>
+<text x="372" y="344" class="xxs">16 个向量子核 ＋ 1 个标量子核。<tspan font-weight="700" fill="#d93025">没</tspan></text>
+<text x="372" y="357" class="xxs"><tspan font-weight="700" fill="#d93025">有 MXU</tspan>。</text>
+<line x1="90" y1="432" x2="90" y2="396" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#aB)"/>
+<text x="97" y="418.0" class="xxs" fill="#1a73e8" text-anchor="start">通道 2：HBM → VMEM</text>
+<line x1="410" y1="432" x2="410" y2="396" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#aB)"/>
+<text x="417" y="418.0" class="xxs" fill="#1a73e8" text-anchor="start">通道 6：HBM → SC 私有 SRAM</text>
+<line x1="192" y1="246" x2="192" y2="212" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#aB)"/>
+<text x="185" y="233.0" class="xxs" fill="#1a73e8" text-anchor="end">通道 1：VMEM → ICI</text>
+<line x1="512" y1="246" x2="512" y2="212" stroke="#1a73e8" stroke-width="1.8" marker-end="url(#aB)"/>
+<text x="505" y="233.0" class="xxs" fill="#1a73e8" text-anchor="end">通道 8：SC → ICI</text>
+<text x="300.0" y="266" class="box" fill="#8430ce" text-anchor="middle">① 能：SC → TC</text>
+<line x1="358" y1="292" x2="246" y2="292" stroke="#8430ce" stroke-width="2.6" marker-end="url(#aP)"/>
+<text x="300.0" y="310" class="xxs" fill="#8430ce" text-anchor="middle">通道 9：直写 VMEM</text>
+<text x="300.0" y="338" class="box" fill="#d93025" text-anchor="middle">② 不能</text>
+<line x1="242" y1="364" x2="354" y2="364" stroke="#d93025" stroke-width="1.8" stroke-dasharray="5,4"/>
+<text x="300.0" y="382" class="xxs" fill="#d93025" text-anchor="middle">TC → SC</text>
+<text x="20" y="490" class="xs">端点一共 8 个，两两连通该有约 50 条有向路线，<tspan font-weight="700" fill="#202124">实际只有 17 条</tspan> —— 这不是一个全交叉开关，是<tspan font-weight="700" fill="#d93025">手挑出来的清单</tspan>。让 </text>
+<text x="20" y="506" class="xs">SparseCore 能写进 VMEM 实打实占掉了其中一条编号通道，不是「顺便允许」。</text>
+<text x="20" y="542" class="xs"><tspan font-weight="700" fill="#202124">缺的那条（②）是 TensorCore → SparseCore</tspan>：SparseCore 能把结果推给 TensorCore，TensorCore 却推不回去，要给它</text>
+<text x="20" y="558" class="xs">送数据只能经 HBM 绕一圈。硬件把「谁是生产者、谁是消费者」直接焊进了连线里。</text>
+<rect x="20" y="582" width="620" height="168" rx="10" fill="#fff" stroke="#f9ab00" stroke-width="1.8"/>
+<text x="34" y="608" class="sec" fill="#f9ab00">「细 128 倍」指的是 tile 形状，不是 DMA 更快</text>
+<text x="36" y="638" class="lbl" fill="#1e8e3e">TensorCore 的最小一块</text>
+<rect x="36" y="646" width="208" height="52" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="140" y="668" class="numb" fill="#1e8e3e" text-anchor="middle">(8, 128)</text>
+<text x="140" y="686" class="xxs" fill="#1e8e3e" text-anchor="middle">= 4,096 B</text>
+<text x="286" y="638" class="lbl" fill="#8430ce">SparseCore 的最小一块</text>
+<rect x="286" y="646" width="208" height="52" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1.0"/>
+<rect x="286" y="646" width="13.625" height="52" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+<text x="394" y="668" class="numb" fill="#8430ce" text-anchor="middle">(8,) = 32 B</text>
+<text x="394" y="686" class="xxs" fill="#8430ce" text-anchor="middle">同一张图上按比例画就是左边的 1/128</text>
+<text x="36" y="712" class="xs"><tspan font-weight="700" fill="#202124">32 B 是 HBM 通道宽度，两颗核完全一样。</tspan>SparseCore 并没有更快的搬运器，它只是允许你<tspan font-weight="700" fill="#d93025">按 32 B 为单位去要</tspan>；</text>
+<text x="36" y="728" class="xs">TensorCore 一开口就是一个 4 KB 的 tile。散落在词表里的几百行，用左边那种块去取，取回来的绝大部分都会被扔</text>
+<text x="36" y="744" class="xs">掉。</text>
+<text x="664" y="110" class="sec">两种核逐项对照</text>
+<rect x="664" y="120" width="716" height="320" rx="10" fill="#fff" stroke="#202124" stroke-width="1.8"/>
+<rect x="664" y="120" width="716" height="32" rx="10" fill="#f1f3f4"/>
+<rect x="664" y="142" width="716" height="10" rx="0" fill="#f1f3f4"/>
+<text x="678" y="141" class="box">问的是同一件事</text>
+<text x="874" y="141" class="box" fill="#1e8e3e">TensorCore</text>
+<text x="1106" y="141" class="box" fill="#8430ce">SparseCore</text>
+<line x1="860" y1="120" x2="860" y2="440" stroke="#e8eaed" stroke-width="1"/>
+<line x1="1092" y1="120" x2="1092" y2="440" stroke="#e8eaed" stroke-width="1"/>
+<text x="678" y="168" class="xs">每颗 chip 几个</text>
+<text x="874" y="168" class="xxs" fill="#1e8e3e">2 个 TensorCore</text>
+<text x="1106" y="168" class="xxs" fill="#8430ce">4 个 SparseCore</text>
+<line x1="672" y1="188" x2="1372" y2="188" stroke="#e8eaed" stroke-width="1"/>
+<text x="678" y="204" class="xs">每个 device 几个</text>
+<text x="874" y="204" class="xxs" fill="#1e8e3e">1</text>
+<text x="1106" y="204" class="xxs" fill="#8430ce">2</text>
+<line x1="672" y1="224" x2="1372" y2="224" stroke="#e8eaed" stroke-width="1"/>
+<text x="678" y="240" class="xs">一条向量指令多宽</text>
+<text x="874" y="240" class="xxs" fill="#1e8e3e">8 × 128 ＝ 1,024 格</text>
+<text x="1106" y="240" class="xxs" fill="#8430ce">16 条 lane</text>
+<line x1="672" y1="260" x2="1372" y2="260" stroke="#e8eaed" stroke-width="1"/>
+<text x="678" y="276" class="xs">私有 SRAM</text>
+<text x="874" y="276" class="xxs" fill="#1e8e3e">VMEM 64 MiB ＋ SMEM 1 MiB</text>
+<text x="1106" y="276" class="xxs" fill="#8430ce">512 KiB / 子核</text>
+<line x1="672" y1="296" x2="1372" y2="296" stroke="#e8eaed" stroke-width="1"/>
+<text x="678" y="312" class="xs">DMA 最小粒度</text>
+<text x="874" y="312" class="xxs" fill="#1e8e3e">32 B（通道宽度）</text>
+<text x="1106" y="312" class="xxs" fill="#8430ce">32 B（同上）</text>
+<rect x="1290" y="304" width="80" height="20" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.0"/>
+<text x="1330" y="318" class="xxs" fill="#9a6a00" text-anchor="middle">两边一样</text>
+<line x1="672" y1="332" x2="1372" y2="332" stroke="#e8eaed" stroke-width="1"/>
+<text x="678" y="348" class="xs">最小可寻址的一块</text>
+<text x="874" y="348" class="xxs" fill="#1e8e3e">tile (8, 128) ＝ 4,096 B</text>
+<text x="1106" y="348" class="xxs" fill="#8430ce">(8,) ＝ 32 B</text>
+<rect x="1290" y="340" width="80" height="20" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.0"/>
+<text x="1330" y="354" class="xxs" fill="#9a6a00" text-anchor="middle">差 128 倍</text>
+<line x1="672" y1="368" x2="1372" y2="368" stroke="#e8eaed" stroke-width="1"/>
+<text x="678" y="384" class="xs">有没有矩阵乘单元</text>
+<text x="874" y="384" class="xxs" fill="#1e8e3e">2 个 MXU，256×256</text>
+<text x="1106" y="384" class="xxs" fill="#8430ce">没有</text>
+<line x1="672" y1="404" x2="1372" y2="404" stroke="#e8eaed" stroke-width="1"/>
+<text x="678" y="420" class="xs">bf16 峰值</text>
+<text x="874" y="420" class="xxs" fill="#1e8e3e">≈1,155 TFLOP/s / device</text>
+<text x="1106" y="420" class="xxs" fill="#8430ce">整颗 chip 4 个合计约 MXU 的 1%</text>
+<rect x="1290" y="412" width="80" height="20" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.0"/>
+<text x="1330" y="426" class="xxs" fill="#9a6a00" text-anchor="middle">量级差两位</text>
+<rect x="664" y="458" width="716" height="118" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<text x="680" y="484" class="sec" fill="#8430ce">它是一颗真的核，不是一台搬运机</text>
+<text x="680" y="506" class="xs">公开的 <tspan class="mono" fill="#1967d2">pallas.tpu_sc</tspan> 里能直接看到它的指令面：<tspan class="mono" fill="#1967d2">cumsum</tspan>、<tspan class="mono" fill="#1967d2">sort_key_val</tspan>、<tspan class="mono" fill="#1967d2">fetch_and_add</tspan>、<tspan class="mono" fill="#1967d2">addupdate_scatter</tspan>、</text>
+<text x="680" y="522" class="xs"><tspan class="mono" fill="#1967d2">load_gather</tspan> —— 全是<tspan font-weight="700" fill="#202124">不规则访存 ＋ 归约</tspan>这一类活。</text>
+<text x="680" y="546" class="xs"><tspan font-weight="700" fill="#202124">但整份接口里没有任何矩阵乘原语。</tspan>所以它不是「小一号的 TensorCore」，是另一种形状的核。</text>
+<rect x="664" y="588" width="716" height="162" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+<text x="680" y="614" class="sec" fill="#d93025">最反直觉的一条：我们的生产任务里，它一次表都没查</text>
+<text x="680" y="636" class="xs">要不要把 embedding 卸载到 SparseCore，判据是 <tspan font-weight="700" fill="#202124">duplication factor</tspan> ＝ 这一批取了多少个索引 ÷ 可选的行数。<tspan font-weight="700" fill="#202124">它衡量的是「重复</tspan></text>
+<text x="680" y="652" class="xs"><tspan font-weight="700" fill="#202124">取同一行」的程度</tspan> —— 重复得越厉害，专用通路省下的越多。</text>
+<text x="680" y="688" class="xs">推荐系统那边是几亿行词表里取几百个，duplication factor 很高，这是 SparseCore 的主场。而我们这次的语言模型是 131,072 ÷ </text>
+<text x="680" y="704" class="xs">129,280 ≈ <tspan font-weight="700" fill="#d93025">1.01</tspan> —— 几乎每个索引都取不同的行，落在判据<tspan font-weight="700" fill="#202124">最不划算的一端</tspan>，编译器于是根本没把它派过去。</text>
+<rect x="20" y="782" width="1360" height="132" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="34" y="808" class="sec" fill="#1e8e3e">那生产里的 embedding 到底怎么跑的？—— 它根本不是查表</text>
+<text x="34" y="832" class="xs">MaxText 有一个开关 <tspan class="mono" fill="#1967d2">use_iota_embed</tspan>。打开时，查表被写成<tspan font-weight="700" fill="#202124">「把 token id 展成 one-hot，再和整张词表做一次矩阵乘」</tspan> —— 一条 <tspan class="mono" fill="#1967d2">dot</tspan>，跑在 MXU 上。关掉才是真的 <tspan class="mono" fill="#1967d2">gather</tspan>。<tspan font-weight="700" fill="#d93025">上游默认是关的，但仓库里 34 份配置显式打开、0 份显式关闭</tspan>，包括那几份给 GPU 用</text>
+<text x="34" y="850" class="xs">的配置。</text>
+<text x="34" y="870" class="xs">代价算得清楚：Hunyuan3 那个尺寸下，这条 matmul 是 28.38 TFLOP/device，占一步的 <tspan font-weight="700" fill="#202124">0.62%</tspan>，约 24.6 ms；同样的事用 gather 只要约 1.0 ms —— <tspan font-weight="700" fill="#d93025">matmul 慢约 24 倍</tspan>。所以不要说「反正 MXU 闲着，用算力换带宽很划算」，算术直接否掉了：它不省时间，它花</text>
+<text x="34" y="888" class="xs">时间。成立的唯一理由是<tspan font-weight="700" fill="#202124">分母够大</tspan>，而真实动机（最可能是反向传播里 scatter-add 在分片下难做）我没查实，不写成结论。</text>
+</svg>

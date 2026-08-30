@@ -1,0 +1,288 @@
+<svg viewBox="0 0 1400 876" width="1400" height="876" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 一个 TensorCore 的内部构成：2 个 MXU、1 个 VPU、标量单元、VMEM 与 SMEM；与 GPU SM 相比缺少调度器、线程上下文、自动缓存与乱序执行">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">把一个 TensorCore 拆开　—— 值得数的不是它有什么，是它「少了」什么</text>
+<rect x="1259" y="10" width="121" height="22" rx="11" fill="#d93025"/>
+<text x="1319.5" y="25" class="lbl" fill="#fff" text-anchor="middle">第 2 / 8 张</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">矩阵乘</text>
+<rect x="93.5" y="48" width="11" height="11" rx="2" fill="#12786f"/>
+<text x="110.5" y="58" class="sm">向量／标量</text>
+<rect x="190.0" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="207.0" y="58" class="sm">片上存储</text>
+<rect x="275.0" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="292.0" y="58" class="sm">对外搬运</text>
+<rect x="360.0" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="377.0" y="58" class="sm">灰色虚线 ＝ 官方未公开</text>
+<defs><pattern id="mxucell2" width="3" height="3" patternUnits="userSpaceOnUse"><rect width="3" height="3" fill="#e6f4ea"/><rect width="1.6" height="1.6" x="0.2" y="0.2" fill="#1e8e3e" opacity="0.34"/></pattern></defs>
+<rect x="20" y="118" width="880" height="598" rx="12" fill="#fff" stroke="#1a73e8" stroke-width="2.2"/>
+<text x="36" y="146" class="sec" fill="#1a73e8">一个 TensorCore　（＝ 一个 JAX device 的全部算力）</text>
+<text x="884" y="146" class="lbl" fill="#1a73e8" text-anchor="end">@ 2.2 GHz</text>
+<rect x="34" y="162" width="852" height="72" rx="8" fill="#e0f2f0" stroke="#12786f" stroke-width="1.6"/>
+<text x="46" y="182" class="box" fill="#12786f">控制：标量单元发射 VLIW 指令包</text>
+<text x="46" y="200" class="xs">一拍发出一整包指令，包里各个槽<tspan font-weight="700" fill="#202124">同时</tspan>喂给下面不同的单元。谁在第几拍动、数据什么时候到位，</text>
+<text x="46" y="215" class="xs"><tspan font-weight="700" fill="#d93025">全部由编译器在编译期排好</tspan>。</text>
+<rect x="554" y="178" width="16" height="22" rx="3" fill="#e0f2f0" stroke="#12786f" stroke-width="1.1"/>
+<rect x="573" y="178" width="16" height="22" rx="3" fill="#e0f2f0" stroke="#12786f" stroke-width="1.1"/>
+<text x="554" y="212" class="xxs" fill="#12786f">标量</text>
+<rect x="602" y="178" width="16" height="22" rx="3" fill="#e0f2f0" stroke="#12786f" stroke-width="1.1"/>
+<rect x="621" y="178" width="16" height="22" rx="3" fill="#e0f2f0" stroke="#12786f" stroke-width="1.1"/>
+<rect x="640" y="178" width="16" height="22" rx="3" fill="#e0f2f0" stroke="#12786f" stroke-width="1.1"/>
+<rect x="659" y="178" width="16" height="22" rx="3" fill="#e0f2f0" stroke="#12786f" stroke-width="1.1"/>
+<text x="602" y="212" class="xxs" fill="#12786f">向量</text>
+<rect x="688" y="178" width="16" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.1"/>
+<rect x="707" y="178" width="16" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.1"/>
+<text x="688" y="212" class="xxs" fill="#1e8e3e">矩阵</text>
+<rect x="736" y="178" width="16" height="22" rx="3" fill="#f1f3f4" stroke="#5f6368" stroke-width="1.1"/>
+<text x="736" y="212" class="xxs" fill="#5f6368">杂项</text>
+<text x="554" y="174" class="xxs" fill="#5f6368">9 个发射槽</text>
+<text x="874" y="226" class="xxs" fill="#9aa0a6" text-anchor="end">槽位构成是 v2/v3 论文的公开数字，v7 官方未公布</text>
+<rect x="34" y="246" width="222" height="226" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="46" y="268" class="box" fill="#1e8e3e">MXU</text>
+<text x="244" y="268" class="lbl" fill="#1e8e3e" text-anchor="end">256 × 256</text>
+<rect x="46" y="278" width="198" height="116" rx="3" fill="url(#mxucell2)" stroke="#1e8e3e" stroke-width="1.1"/>
+<text x="46" y="414" class="xs">65,536 个 cell</text>
+<text x="46" y="430" class="xs">× 每 cell 每周期 2 次乘加</text>
+<line x1="46" y1="438" x2="244" y2="438" stroke="#e8eaed" stroke-width="1"/>
+<text x="46" y="454" class="lbl" fill="#1e8e3e">＝ 131,072 乘加 / 周期</text>
+<text x="244" y="454" class="xxs" fill="#1e8e3e" text-anchor="end">官方</text>
+<rect x="266" y="246" width="222" height="226" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="278" y="268" class="box" fill="#1e8e3e">MXU</text>
+<text x="476" y="268" class="lbl" fill="#1e8e3e" text-anchor="end">256 × 256</text>
+<rect x="278" y="278" width="198" height="116" rx="3" fill="url(#mxucell2)" stroke="#1e8e3e" stroke-width="1.1"/>
+<text x="278" y="414" class="xs">65,536 个 cell</text>
+<text x="278" y="430" class="xs">× 每 cell 每周期 2 次乘加</text>
+<line x1="278" y1="438" x2="476" y2="438" stroke="#e8eaed" stroke-width="1"/>
+<text x="278" y="454" class="lbl" fill="#1e8e3e">＝ 131,072 乘加 / 周期</text>
+<text x="476" y="454" class="xxs" fill="#1e8e3e" text-anchor="end">官方</text>
+<rect x="514" y="246" width="210" height="226" rx="8" fill="#fff" stroke="#12786f" stroke-width="1.8"/>
+<text x="526" y="268" class="box" fill="#12786f">VPU　向量单元</text>
+<text x="526" y="286" class="xs" fill="#12786f">8 sublane × 128 lane</text>
+<rect x="528.0" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="539.6" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="551.2" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="562.8" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="574.4" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="586.0" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="597.6" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="609.2" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="620.8" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="632.4" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="644.0" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="655.6" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="667.2" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="678.8" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="690.4" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="702.0" y="296.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="528.0" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="539.6" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="551.2" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="562.8" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="574.4" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="586.0" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="597.6" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="609.2" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="620.8" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="632.4" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="644.0" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="655.6" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="667.2" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="678.8" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="690.4" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="702.0" y="305.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="528.0" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="539.6" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="551.2" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="562.8" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="574.4" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="586.0" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="597.6" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="609.2" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="620.8" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="632.4" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="644.0" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="655.6" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="667.2" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="678.8" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="690.4" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="702.0" y="314.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="528.0" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="539.6" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="551.2" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="562.8" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="574.4" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="586.0" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="597.6" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="609.2" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="620.8" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="632.4" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="644.0" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="655.6" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="667.2" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="678.8" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="690.4" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="702.0" y="324.2" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="528.0" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="539.6" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="551.2" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="562.8" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="574.4" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="586.0" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="597.6" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="609.2" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="620.8" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="632.4" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="644.0" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="655.6" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="667.2" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="678.8" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="690.4" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="702.0" y="333.6" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="528.0" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="539.6" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="551.2" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="562.8" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="574.4" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="586.0" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="597.6" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="609.2" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="620.8" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="632.4" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="644.0" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="655.6" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="667.2" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="678.8" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="690.4" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="702.0" y="343.0" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="528.0" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="539.6" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="551.2" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="562.8" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="574.4" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="586.0" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="597.6" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="609.2" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="620.8" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="632.4" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="644.0" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="655.6" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="667.2" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="678.8" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="690.4" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="702.0" y="352.4" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="528.0" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="539.6" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="551.2" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="562.8" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="574.4" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="586.0" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="597.6" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="609.2" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="620.8" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="632.4" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="644.0" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="655.6" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="667.2" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="678.8" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="690.4" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<rect x="702.0" y="361.8" width="9.6" height="7.6" rx="1" fill="#e0f2f0"/>
+<text x="526" y="388" class="xs">一拍处理 1,024 个元素</text>
+<text x="526" y="410" class="xxs">激活、归一化、逐元素运算、归约 —— <tspan font-weight="700" fill="#202124">矩</tspan></text>
+<text x="526" y="423" class="xxs"><tspan font-weight="700" fill="#202124">阵乘之外的活都归它</tspan>。后面 §3 讲的 </text>
+<text x="526" y="436" class="xxs">lane / sublane，物理来源就是这张 8×</text>
+<text x="526" y="449" class="xxs">128 的网格。</text>
+<rect x="734" y="246" width="152" height="226" rx="8" fill="#fff" stroke="#12786f" stroke-width="1.8"/>
+<text x="746" y="268" class="box" fill="#12786f">跨 lane 单元</text>
+<text x="874" y="268" class="lbl" fill="#12786f" text-anchor="end">×2</text>
+<rect x="748" y="286" width="124" height="14" rx="2" fill="#e0f2f0" stroke="#12786f" stroke-width="0.8"/>
+<rect x="748" y="308" width="124" height="14" rx="2" fill="#e0f2f0" stroke="#12786f" stroke-width="0.8"/>
+<rect x="748" y="330" width="124" height="14" rx="2" fill="#e0f2f0" stroke="#12786f" stroke-width="0.8"/>
+<rect x="748" y="352" width="124" height="14" rx="2" fill="#e0f2f0" stroke="#12786f" stroke-width="0.8"/>
+<path d="M758 296 C814 296 804 358 860 358" stroke="#d93025" stroke-width="1.6" fill="none" marker-end="url(#aR)"/>
+<text x="746" y="394" class="xxs">转置、跨 lane 归约、</text>
+<text x="746" y="407" class="xxs">shuffle。VPU 的 128 条 </text>
+<text x="746" y="420" class="xxs">lane <tspan font-weight="700" fill="#202124">各干各的</tspan>，数据要横着</text>
+<text x="746" y="433" class="xxs">走就得经过这里。</text>
+<text x="746" y="460" class="xxs" fill="#9aa0a6">个数出自内部设备表</text>
+<text x="34" y="496" class="sec">片上存储　—— 容量出自 JAX 开源代码，带宽官方未公开</text>
+<rect x="34" y="508" width="290" height="100" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="46" y="530" class="box" fill="#202124">VMEM</text>
+<text x="312" y="530" class="numb" fill="#f9ab00" text-anchor="end">64 MiB</text>
+<text x="46" y="550" class="xxs">软件显式搬进搬出的暂存。<tspan font-weight="700" fill="#202124">不是缓存</tspan> ——没有自动填充、没</text>
+<text x="46" y="563" class="xxs">有替换策略、命不命中这件事不存在</text>
+<rect x="334" y="508" width="160" height="100" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="346" y="530" class="box" fill="#202124">SMEM</text>
+<text x="482" y="530" class="numb" fill="#f9ab00" text-anchor="end">1 MiB</text>
+<text x="346" y="550" class="xxs">标量数据与 DMA 描述符</text>
+<rect x="504" y="508" width="200" height="100" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="516" y="530" class="box" fill="#202124">累加器</text>
+<text x="692" y="530" class="numb" fill="#1e8e3e" text-anchor="end">128 个</text>
+<text x="516" y="550" class="xxs">每个形状 (8, 256)、32 bit，<tspan font-weight="700" fill="#202124">挂在每</tspan></text>
+<text x="516" y="563" class="xxs"><tspan font-weight="700" fill="#202124">个 MXU 上</tspan></text>
+<rect x="714" y="508" width="180" height="100" rx="8" fill="#fff" stroke="#9aa0a6" stroke-width="1.6" stroke-dasharray="5,3"/>
+<text x="726" y="530" class="box" fill="#9aa0a6">向量寄存器</text>
+<text x="882" y="530" class="numb" fill="#9aa0a6" text-anchor="end">查不到</text>
+<text x="726" y="550" class="xxs">v2/v3 论文说每 sublane 32 深；</text>
+<text x="726" y="563" class="xxs"><tspan font-weight="700" fill="#202124">v7 没有公开</tspan></text>
+<rect x="34" y="622" width="852" height="72" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="46" y="642" class="box" fill="#d93025">对外：DMA 引擎</text>
+<text x="46" y="660" class="xs">HBM ↔ VMEM 的搬运由 DMA 完成，而<tspan font-weight="700" fill="#202124">描述符是标量单元发出来的</tspan> —— 也就是说「什么时候搬、搬多少」同样写在</text>
+<text x="46" y="675" class="xs">指令流里，不是硬件自己决定的。</text>
+<rect x="634" y="634" width="240" height="48" rx="6" fill="#fff" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="5,3"/>
+<text x="646" y="652" class="xxs"><tspan fill="#9aa0a6">一个 TensorCore 到底有几个 DMA 引擎：查不</tspan></text>
+<text x="646" y="665" class="xxs"><tspan fill="#9aa0a6">到。所以这里只画一个盒子，不标数量。</tspan></text>
+<rect x="920" y="118" width="460" height="390" rx="10" fill="#fff" stroke="#d93025" stroke-width="1.8"/>
+<text x="934" y="144" class="sec" fill="#d93025">一个 GPU SM 里有，而这里「没有」</text>
+<text x="934" y="162" class="xs">先数清楚少了什么，再问省下的硅去了哪</text>
+<rect x="934" y="180" width="432" height="60" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.1"/>
+<text x="946" y="200" class="box" fill="#d93025">✕</text>
+<text x="966" y="200" class="lbl" fill="#202124">4 个 warp 调度器</text>
+<text x="966" y="218" class="xxs">指令由谁选、什么时候发 —— 这里没有「选」这个动作</text>
+<rect x="934" y="244" width="432" height="60" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.1"/>
+<text x="946" y="264" class="box" fill="#d93025">✕</text>
+<text x="966" y="264" class="lbl" fill="#202124">64 个 warp 槽（2,048 个线程上下文）</text>
+<text x="966" y="282" class="xxs">没有线程概念，也就没有「切换到别的线程」这条退路</text>
+<rect x="934" y="308" width="432" height="60" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.1"/>
+<text x="946" y="328" class="box" fill="#d93025">✕</text>
+<text x="966" y="328" class="lbl" fill="#202124">256 KB 寄存器堆</text>
+<text x="966" y="346" class="xxs">GPU 那么大的寄存器堆主要是<tspan font-weight="700" fill="#202124">为了同时装下几十份上下文</tspan></text>
+<rect x="934" y="372" width="432" height="60" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.1"/>
+<text x="946" y="392" class="box" fill="#d93025">✕</text>
+<text x="966" y="392" class="lbl" fill="#202124">L1 / 共享内存的自动填充</text>
+<text x="966" y="410" class="xxs">VMEM 是纯暂存：<tspan font-weight="700" fill="#d93025">谁搬谁负责</tspan>，没有命中率这回事</text>
+<rect x="934" y="436" width="432" height="60" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.1"/>
+<text x="946" y="456" class="box" fill="#d93025">✕</text>
+<text x="966" y="456" class="lbl" fill="#202124">记分板 / 乱序发射</text>
+<text x="966" y="474" class="xxs">全部前移到编译期。代价见 §7 —— 算错了没有兜底</text>
+<rect x="920" y="522" width="460" height="194" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="934" y="548" class="sec" fill="#1e8e3e">省下的硅去了哪：软件能直接指挥的暂存</text>
+<text x="934" y="568" class="xs">TPU v7 一颗 chip 上的 VMEM 是 <tspan font-weight="700" fill="#202124">128 MiB</tspan>（两个 core 各 64 MiB），而且<tspan font-weight="700" fill="#202124">每一个字</tspan></text>
+<text x="934" y="583" class="xs"><tspan font-weight="700" fill="#202124">节都由编译器显式安排</tspan>。</text>
+<text x="934" y="610" class="xs">TPU v7 一颗 chip 的 VMEM</text>
+<rect x="934" y="616" width="310.0" height="16" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="1364" y="629" class="lbl" fill="#1e8e3e" text-anchor="end">128 MiB</text>
+<text x="934" y="652" class="xs">B200 一整颗的共享内存合计</text>
+<rect x="934" y="658" width="82.34375" height="16" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="1364" y="671" class="lbl" fill="#1a73e8" text-anchor="end">约 34 MB　<g>第三方</g></text>
+<text x="934" y="696" class="xxs">口径是<tspan font-weight="700" fill="#202124">软件可控的暂存</tspan>，不含 B200 那 126 MB 的 L2 缓存。</text>
+<rect x="20" y="738" width="1360" height="124" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text x="34" y="764" class="sec" fill="#1a73e8">这张图想让你记住的一句话</text>
+<text x="34" y="786" class="xs"><tspan font-weight="700" fill="#202124">GPU 的 SM 里，大部分晶体管不是在算数，是在「决定接下来算什么」</tspan> —— 调度器、上下文、记分板、缓存控制，全都是为了在运行时动态地藏住延迟和分支。TPU 把这一整套<tspan font-weight="700" fill="#d93025">前移到了编译期</tspan>，于是这些部件可以整个不要。</text>
+<text x="34" y="826" class="xs">省下的面积去了两个地方：<tspan font-weight="700" fill="#202124">更大的乘加阵列</tspan>（一个 MXU 一条指令吃满 65,536 个 cell）和<tspan font-weight="700" fill="#202124">更大的软件可控暂存</tspan>（128 MiB VMEM）。这不是「TPU 更简单」，是<tspan font-weight="700" fill="#202124">把复杂度换了个地方放</tspan> —— 从硅上换到了编译器里。</text>
+</svg>

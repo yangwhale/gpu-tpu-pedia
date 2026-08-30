@@ -1,0 +1,143 @@
+<svg viewBox="0 0 1400 892" width="1400" height="892" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 数据通路：HBM 经 DMA 进 VMEM，再进 MXU，结果落进累加器；每一步都由编译器在编译期决定">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">一个数走完全程　—— 中间那一站是「暂存」，不是「缓存」</text>
+<rect x="1259" y="10" width="121" height="22" rx="11" fill="#d93025"/>
+<text x="1319.5" y="25" class="lbl" fill="#fff" text-anchor="middle">第 6 / 8 张</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#5f6368"/>
+<text x="37" y="58" class="sm">片外：HBM</text>
+<rect x="112.475" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="129.475" y="58" class="sm">片上暂存</text>
+<rect x="197.475" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="214.475" y="58" class="sm">计算</text>
+<rect x="259.475" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="276.475" y="58" class="sm">搬运（DMA，由编译器发起）</text>
+<rect x="443.95000000000005" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="460.95000000000005" y="58" class="sm">灰色虚线 ＝ 官方未公开</text>
+<text x="20" y="110" class="sec">五站，每一站只问一个问题：这一步是谁决定的</text>
+<text x="20" y="130" class="xs">容量和带宽是每份 TPU 材料都会列的东西。真正决定你写代码时会撞上什么的，是下面那一整行 <tspan font-weight="700" fill="#202124">「谁决定搬」</tspan> —— 从头到尾没有一站的答案是「硬件自己看着办」。</text>
+<rect x="20" y="178" width="240" height="262" rx="10" fill="#f1f3f4" stroke="#5f6368" stroke-width="2"/>
+<text x="34" y="204" class="box" fill="#202124">① HBM</text>
+<text x="246" y="204" class="xxs" text-anchor="end">片外主存</text>
+<rect x="32" y="216" width="216" height="46" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.2"/>
+<text x="42" y="244" class="numb" fill="#202124">96 GiB</text>
+<text x="238" y="244" class="xxs" text-anchor="end">3,433 GiB/s / core</text>
+<text x="34" y="286" class="lbl" fill="#202124">谁决定搬</text>
+<text x="34" y="302" class="xxs">编译器插一条 DMA 指令，<tspan font-weight="700" fill="#202124">描述符由标量单元发</tspan></text>
+<text x="34" y="315" class="xxs"><tspan font-weight="700" fill="#202124">出</tspan></text>
+<text x="34" y="348" class="lbl" fill="#202124">一次多少</text>
+<text x="34" y="364" class="xxs">描述符说了算，最小 32 B</text>
+<text x="34" y="397" class="lbl" fill="#202124">落空了怎么办</text>
+<text x="34" y="413" class="xxs"><tspan font-weight="700" fill="#202124">没有「命中／未命中」这回事</tspan> —— 只有「到了」</text>
+<text x="34" y="426" class="xxs">和「还没到」</text>
+<rect x="300" y="178" width="240" height="262" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="2"/>
+<text x="314" y="204" class="box" fill="#202124">② VMEM</text>
+<text x="526" y="204" class="xxs" text-anchor="end">片上暂存（不是缓存）</text>
+<rect x="312" y="216" width="216" height="46" rx="6" fill="#fff" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="322" y="244" class="numb" fill="#202124">64 MiB</text>
+<text x="518" y="244" class="xxs" text-anchor="end">/ core</text>
+<text x="314" y="286" class="lbl" fill="#f9ab00">谁决定搬</text>
+<text x="314" y="302" class="xxs"><tspan font-weight="700" fill="#d93025">编译器静态分配</tspan>，像分配寄存器一样，运行时不</text>
+<text x="314" y="315" class="xxs">会变</text>
+<text x="314" y="348" class="lbl" fill="#f9ab00">一次多少</text>
+<text x="314" y="364" class="xxs">一块 tile ＝ (8, 128) ＝ 4,096 B</text>
+<text x="314" y="397" class="lbl" fill="#f9ab00">落空了怎么办</text>
+<text x="314" y="413" class="xxs">放不下在<tspan font-weight="700" fill="#202124">编译期</tspan>就知道 —— 要么自动分块，要么</text>
+<text x="314" y="426" class="xxs">编译失败</text>
+<rect x="580" y="178" width="240" height="262" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="2" stroke-dasharray="5,4"/>
+<text x="594" y="204" class="box" fill="#9aa0a6">③ 向量寄存器</text>
+<text x="806" y="204" class="xxs" text-anchor="end">MXU 的输入端</text>
+<rect x="592" y="216" width="216" height="46" rx="6" fill="#fff" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="5,4"/>
+<text x="602" y="244" class="numb" fill="#9aa0a6">查不到</text>
+<text x="798" y="244" class="xxs" text-anchor="end">v7 的深度与个数</text>
+<text x="594" y="286" class="lbl" fill="#9aa0a6">谁决定搬</text>
+<text x="594" y="302" class="xxs">编译器分配（VLIW 的槽位里直接写死用哪几个）</text>
+<text x="594" y="335" class="lbl" fill="#9aa0a6">一次多少</text>
+<text x="594" y="351" class="xxs">一条向量指令 ＝ 8 × 128 ＝ 1,024 个元素</text>
+<text x="594" y="384" class="lbl" fill="#9aa0a6">为什么画成虚线</text>
+<text x="594" y="400" class="xxs"><tspan fill="#9aa0a6">v2/v3 的论文给的是每 sublane 32 深；v7 </tspan></text>
+<text x="594" y="413" class="xxs"><tspan fill="#9aa0a6">这一层官方没有公开，本文不拿旧代的数字顶替。</tspan></text>
+<rect x="860" y="178" width="240" height="262" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="2"/>
+<text x="874" y="204" class="box" fill="#1e8e3e">④ MXU 阵列</text>
+<text x="1086" y="204" class="xxs" text-anchor="end">256 × 256，权重驻留</text>
+<rect x="872" y="216" width="216" height="46" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="882" y="244" class="numb" fill="#202124">65,536</text>
+<text x="1078" y="244" class="xxs" text-anchor="end">个乘加单元 / MXU</text>
+<text x="874" y="286" class="lbl" fill="#1e8e3e">谁决定搬</text>
+<text x="874" y="302" class="xxs">不需要「决定」—— 权重整趟驻留，激活按拍推</text>
+<text x="874" y="315" class="xxs">进（见 §4）</text>
+<text x="874" y="348" class="lbl" fill="#1e8e3e">一次多少</text>
+<text x="874" y="364" class="xxs">每拍吃一列 256 个激活，吐一列部分和</text>
+<text x="874" y="397" class="lbl" fill="#1e8e3e">落空了怎么办</text>
+<text x="874" y="413" class="xxs">喂不满就是空转，<tspan font-weight="700" fill="#202124">没有别的活能顶上来</tspan>（见 §3）</text>
+<rect x="1140" y="178" width="240" height="262" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="2"/>
+<text x="1154" y="204" class="box" fill="#d93025">⑤ 累加器</text>
+<text x="1366" y="204" class="xxs" text-anchor="end">结果的落脚点</text>
+<rect x="1152" y="216" width="216" height="46" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="1162" y="244" class="numb" fill="#202124">1 MiB</text>
+<text x="1358" y="244" class="xxs" text-anchor="end">/ MXU（推导见下）</text>
+<text x="1154" y="286" class="lbl" fill="#d93025">谁决定搬</text>
+<text x="1154" y="302" class="xxs">硬件自动累加；K 超过 256 时<tspan font-weight="700" fill="#202124">连续几趟都不落</tspan></text>
+<text x="1154" y="315" class="xxs"><tspan font-weight="700" fill="#202124">地</tspan></text>
+<text x="1154" y="348" class="lbl" fill="#d93025">一次多少</text>
+<text x="1154" y="364" class="xxs">128 个 × 形状 (8, 256) × 32 bit</text>
+<text x="1154" y="397" class="lbl" fill="#d93025">1 MiB 是怎么来的</text>
+<text x="1154" y="413" class="xxs">128 × 8 × 256 × 4 B ＝ <tspan font-weight="700" fill="#202124">1,048,576 B</tspan> —— </text>
+<text x="1154" y="426" class="xxs">正好 1 MiB</text>
+<line x1="264" y1="238" x2="296" y2="238" stroke="#1a73e8" stroke-width="2.4" marker-end="url(#aB)"/>
+<text x="280.0" y="230" class="xxs" fill="#1a73e8" text-anchor="middle">DMA</text>
+<line x1="544" y1="238" x2="576" y2="238" stroke="#1a73e8" stroke-width="2.4" marker-end="url(#aB)"/>
+<text x="560.0" y="230" class="xxs" fill="#1a73e8" text-anchor="middle">载入</text>
+<line x1="824" y1="238" x2="856" y2="238" stroke="#1a73e8" stroke-width="2.4" marker-end="url(#aB)"/>
+<text x="840.0" y="230" class="xxs" fill="#1a73e8" text-anchor="middle">喂入</text>
+<line x1="1104" y1="238" x2="1136" y2="238" stroke="#1a73e8" stroke-width="2.4" marker-end="url(#aB)"/>
+<text x="1120.0" y="230" class="xxs" fill="#1a73e8" text-anchor="middle">落地</text>
+<line x1="1360" y1="476" x2="40" y2="476" stroke="#1a73e8" stroke-width="2.4" marker-end="url(#aB)"/>
+<rect x="310" y="462" width="700" height="28" rx="14" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="326" y="481" class="xs" fill="#1a73e8">回程：累加器 → VMEM → HBM，同一套 DMA、同一批描述符 —— 回程同样是编译期排好的，不是算完了「顺手写回去」</text>
+<rect x="20" y="522" width="660" height="214" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.8"/>
+<text x="34" y="548" class="sec" fill="#f9ab00">「暂存」和「缓存」差在哪 —— 这是全图最要紧的一格</text>
+<text x="34" y="576" class="lbl">问题</text>
+<text x="234" y="576" class="lbl" fill="#1a73e8">GPU 的 L1 / L2（缓存）</text>
+<text x="444" y="576" class="lbl" fill="#f9ab00">TPU 的 VMEM（暂存）</text>
+<line x1="34" y1="584" x2="666" y2="584" stroke="#e0c060" stroke-width="1"/>
+<text x="34" y="604" class="xxs">放什么进去</text>
+<text x="234" y="604" class="xxs" fill="#1a73e8">硬件按访问历史猜</text>
+<text x="444" y="604" class="xxs">编译器写死</text>
+<text x="34" y="634" class="xxs">有没有命中率</text>
+<text x="234" y="634" class="xxs" fill="#1a73e8">有，而且是主要调优指标</text>
+<text x="444" y="634" class="xxs"><tspan font-weight="700" fill="#d93025">没有这个概念</tspan></text>
+<text x="34" y="664" class="xxs">猜错 / 排错的后果</text>
+<text x="234" y="664" class="xxs" fill="#1a73e8">变慢（多跑一趟内存）</text>
+<text x="444" y="664" class="xxs"><tspan font-weight="700" fill="#d93025">停住（没有别的活可切）</tspan></text>
+<text x="34" y="694" class="xxs">你能控制到什么程度</text>
+<text x="234" y="694" class="xxs" fill="#1a73e8">间接：改访问顺序去哄它</text>
+<text x="444" y="694" class="xxs">直接：改分片和 tile 形状</text>
+<rect x="700" y="522" width="680" height="214" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="714" y="548" class="sec" fill="#1a73e8">搬运不是「后台自动发生」的 —— 它占着指令流</text>
+<text x="714" y="570" class="xs">HBM ↔ VMEM 的每一次搬运都由 DMA 完成，而 <tspan font-weight="700" fill="#202124">DMA 的描述符是标量单元写出来的</tspan>。也就是说「什么时候搬、搬多少、搬到哪」跟乘</text>
+<text x="714" y="586" class="xs">加指令一样，<tspan font-weight="700" fill="#d93025">占着同一条指令流里的槽位</tspan>。</text>
+<text x="714" y="626" class="xs">这解释了 §2 里那个看起来很怪的设计：为什么标量单元在一颗以矩阵乘为业的芯片上还这么重要 —— 它不算数，它<tspan font-weight="700" fill="#202124">安排搬运</tspan>。</text>
+<text x="714" y="668" class="xs">带宽落差是这条通路的真正约束：<tspan font-weight="700" fill="#202124">VMEM 约 34,428 GiB/s，是 HBM 那 3,433 的 10 倍。</tspan>所以「尽量让数在 VMEM 里多待一会儿」</text>
+<text x="714" y="684" class="xs">不是风格建议，是一个整整一位数的差距。</text>
+<rect x="20" y="756" width="1360" height="116" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="34" y="782" class="sec" fill="#1e8e3e">这张图想让你记住的一句话</text>
+<text x="34" y="806" class="xs"><tspan font-weight="700" fill="#202124">这条通路上没有任何一步是硬件在运行时决定的。</tspan>搬什么、搬多少、什么时候搬、放在暂存的哪个位置 —— 全部在编译期写进指令流里。</text>
+<text x="34" y="836" class="xs">所以 TPU 上的性能问题几乎不长成「缓存没命中」的样子，而是长成<tspan font-weight="700" fill="#d93025">「形状不对，编译器排不出好班」</tspan>的样子。这也是为什么 §7 那张图必须存在：把决定权全交给编译期，就得看看编译期到底能排出什么。</text>
+</svg>
