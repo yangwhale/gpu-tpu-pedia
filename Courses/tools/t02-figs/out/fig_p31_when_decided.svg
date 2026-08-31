@@ -1,0 +1,100 @@
+<svg viewBox="0 0 1400 1050" width="1400" height="1050" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 六层并行抽象里，分组方式在核跑起来之前就全部定死；真正留到运行时的只有两个决定：启动时把块放到哪个 SM，以及每个周期挑哪个 warp 发射">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">那六层，到底<tspan font-weight="700">什么时候</tspan>定下来　—— 划分全在开跑之前，<tspan font-weight="700">运行时只剩两个决定</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">开跑之前就定死</text>
+<rect x="139.5" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="156.5" y="58" class="sm">启动那一下定一次</text>
+<rect x="270.5" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="287.5" y="58" class="sm">每个时钟周期都在定</text>
+<rect x="20" y="84" width="1360" height="100" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text x="38" y="110" class="sec" fill="#1a73e8">🔍 先把「什么时候定的」拆成两个问题 —— 混着问一定得出错结论</text>
+<text x="38" y="134" class="xs"><tspan font-weight="700" fill="#202124">问题一：这一组是怎么划出来的？</tspan>（谁跟谁算一组）　　<tspan font-weight="700" fill="#202124">问题二：它什么时候落到硬件上、谁挑它执行？</tspan>（这一组什么时候真的开跑）</text>
+<text x="38" y="154" class="xs">混着问，会得出「GPU 反正都是运行时」这种印象。<tspan font-weight="700" fill="#d93025">拆开看完全不是</tspan> —— <tspan font-weight="700" fill="#202124">问题一在下表里六行全是绿的</tspan>：要么是硬件写死的规则，要么是启动前主机给定的参数 —— <tspan font-weight="700" fill="#202124">没有一行是芯片在运行时自己决定的</tspan>。</text>
+<rect x="20" y="206" width="1360" height="396" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.6"/>
+<text x="38" y="232" class="sec">📋 六层 × 两个问题　（底色＝时机）</text>
+<rect x="34" y="250" width="1326" height="34" rx="4" fill="#f1f3f4"/>
+<text x="46" y="272" class="box" fill="#5f6368">这一层</text>
+<text x="262" y="272" class="box" fill="#5f6368">① 这一组是怎么划出来的</text>
+<text x="754" y="272" class="box" fill="#5f6368">② 什么时候落到硬件上 · 谁挑它执行</text>
+<text x="46" y="310" class="box" fill="#202124">线程</text>
+<text x="46" y="326" class="xxs" fill="#9aa0a6">thread</text>
+<rect x="250" y="292" width="480" height="40" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="260" y="310" class="xs"><tspan font-weight="700" fill="#202124">硬件写死的规则</tspan>：线程号到 lane 的对应是算出来的，不由谁分配</text>
+<rect x="742" y="292" width="622" height="40" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="752" y="310" class="xs"><tspan fill="#9aa0a6">不单独调度</tspan> —— 它跟着自己所在的 warp 走，没有自己的命运</text>
+<line x1="34" y1="338" x2="1360" y2="338" stroke="#eef0f2" stroke-width="1.0"/>
+<text x="46" y="360" class="box" fill="#202124">warp</text>
+<text x="46" y="376" class="xxs" fill="#9aa0a6">warp</text>
+<rect x="250" y="342" width="480" height="40" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="260" y="360" class="xs"><tspan font-weight="700" fill="#202124">硬件写死的规则</tspan>：连号的 32 个线程打成一包，改不了</text>
+<rect x="742" y="342" width="622" height="40" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text x="752" y="360" class="xs"><tspan font-weight="700" fill="#202124">每个时钟周期都在挑</tspan>：调度器从驻留的几十个 warp 里，挑一个<tspan font-weight="700" fill="#202124">数据已经到位</tspan>的发射出去</text>
+<line x1="34" y1="388" x2="1360" y2="388" stroke="#eef0f2" stroke-width="1.0"/>
+<text x="46" y="410" class="box" fill="#202124">warp 组</text>
+<text x="46" y="426" class="xxs" fill="#9aa0a6">warpgroup</text>
+<rect x="250" y="392" width="480" height="40" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="260" y="410" class="xs"><tspan font-weight="700" fill="#202124">硬件写死的规则</tspan>：连号的 4 个 warp，Hopper 起给矩阵指令用</text>
+<rect x="742" y="392" width="622" height="40" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="752" y="410" class="xs"><tspan fill="#9aa0a6">不单独调度</tspan> —— 跟着组成它的那几个 warp</text>
+<line x1="34" y1="438" x2="1360" y2="438" stroke="#eef0f2" stroke-width="1.0"/>
+<text x="46" y="460" class="box" fill="#202124">线程块</text>
+<text x="46" y="476" class="xxs" fill="#9aa0a6">block / CTA</text>
+<rect x="250" y="442" width="480" height="40" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="260" y="460" class="xs"><tspan font-weight="700" fill="#202124">启动参数给定</tspan>：一块多少线程由主机传进来，<tspan font-weight="700" fill="#202124">跑起来就不再变</tspan></text>
+<rect x="742" y="442" width="622" height="40" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.0"/>
+<text x="752" y="460" class="xs"><tspan font-weight="700" fill="#202124">启动那一下，硬件分发器挑一个 SM 放进去</tspan> —— <tspan font-weight="700" fill="#202124">程序员指定不了</tspan>，落下之后也不迁走</text>
+<line x1="34" y1="488" x2="1360" y2="488" stroke="#eef0f2" stroke-width="1.0"/>
+<text x="46" y="510" class="box" fill="#202124">cluster</text>
+<text x="46" y="526" class="xxs" fill="#9aa0a6">thread block cluster</text>
+<rect x="250" y="492" width="480" height="40" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="260" y="510" class="xs"><tspan font-weight="700" fill="#202124">启动参数给定</tspan>：簇里几块由主机传进来，之后不变</text>
+<rect x="742" y="492" width="622" height="40" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.0"/>
+<text x="752" y="510" class="xs">启动时，硬件在<tspan font-weight="700" fill="#202124">同一个 GPC 里</tspan>挑出那几个 SM</text>
+<line x1="34" y1="538" x2="1360" y2="538" stroke="#eef0f2" stroke-width="1.0"/>
+<text x="46" y="560" class="box" fill="#202124">grid</text>
+<text x="46" y="576" class="xxs" fill="#9aa0a6">grid</text>
+<rect x="250" y="542" width="480" height="40" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="260" y="560" class="xs"><tspan font-weight="700" fill="#202124">启动参数给定</tspan>：一共几块由主机传进来，之后不变</text>
+<rect x="742" y="542" width="622" height="40" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.0"/>
+<text x="752" y="560" class="xs">启动时铺开。<tspan font-weight="700" fill="#202124">块与块之间的先后顺序，规范里明说不作保证</tspan></text>
+<line x1="34" y1="588" x2="1360" y2="588" stroke="#eef0f2" stroke-width="1.0"/>
+<rect x="20" y="624" width="668" height="150" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="36" y="650" class="box" fill="#f9ab00">决定一　·　这个块放哪个 SM</text>
+<text x="672" y="650" class="xxs" fill="#5f6368" text-anchor="end">启动时，一次</text>
+<text x="36" y="676" class="xs">整个 kernel 启动的时候发生一次，之后这块就钉在那儿不动了。</text>
+<line x1="36" y1="700" x2="672" y2="700" stroke="#f9ab00" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="36" y="720" class="xs">代价很小：<tspan font-weight="700" fill="#202124">一个工作分发器，加上每个 SM 的一本资源账</tspan>（还剩多少寄存器、多少共享内存）。<tspan fill="#9aa0a6">频率低，硬件不必为它常备什么。</tspan></text>
+<rect x="712" y="624" width="668" height="150" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="728" y="650" class="box" fill="#d93025">决定二　·　下一拍发哪个 warp</text>
+<text x="1364" y="650" class="xxs" fill="#5f6368" text-anchor="end">每个周期，永不停</text>
+<text x="728" y="676" class="xs">只要核在跑，这个决定<tspan font-weight="700" fill="#202124">每个时钟周期都要做一次</tspan>，而且要在一拍之内做完。</text>
+<line x1="728" y1="700" x2="1364" y2="700" stroke="#d93025" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="728" y="720" class="xs"><tspan font-weight="700" fill="#d93025">代价是全部：</tspan>要<tspan font-weight="700" fill="#202124">记分板</tspan>盯着谁的数据到了，要<tspan font-weight="700" fill="#202124">几十个 warp 槽</tspan>让人排队，要<tspan font-weight="700" fill="#202124">所有上下文常驻在寄存器里</tspan>不能换出 —— <tspan font-weight="700" fill="#202124">不然「立刻切</tspan></text>
+<text x="728" y="738" class="xs"><tspan font-weight="700" fill="#202124">一个」就无从谈起。</tspan></text>
+<rect x="20" y="796" width="1360" height="112" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="38" y="824" class="sec" fill="#1e8e3e">⭐ TPU 的答案：两个决定都不做 —— 于是为它们服务的部件同时失去存在理由</text>
+<text x="38" y="850" class="xs"><tspan font-weight="700" fill="#202124">决定一没有</tspan>：哪条指令在哪个周期发、用哪个部件，<tspan font-weight="700" fill="#202124">编译期就写死在指令包里</tspan>，没有「放到哪儿」这个问题。　　<tspan font-weight="700" fill="#202124">决定二没有</tspan>：<tspan font-weight="700" fill="#d93025">卡住就是真的空转</tspan>，没有别的活可以顶上来。</text>
+<text x="38" y="871" class="xs"><tspan font-weight="700" fill="#202124">所以下一张表里 TPU 那一栏的两个红格子，就是这两个决定。</tspan>省下来的面积变成了更多 MXU 和更大的 VMEM —— 代价是<tspan font-weight="700" fill="#202124">编译器排错了，运行时没有人会来救场</tspan>。</text>
+<rect x="20" y="930" width="1360" height="100" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="956" class="sec">⚠️ 哪些是查到的，哪些是我归纳的</text>
+<text x="38" y="980" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：块到 SM 的分配由硬件负责、程序员指定不了、块间执行顺序不作保证；调度器每周期从驻留 warp 里挑一个能发的 —— 都是 CUDA 编程模型的公开说法。</text>
+<text x="38" y="1000" class="xxs"><tspan font-weight="700" fill="#d93025">我归纳的</tspan>：<tspan font-weight="700" fill="#202124">「运行时只剩两个决定」这句话是我从上表读出来的结论</tspan>，不是谁的原话。它成立的前提是把「划分」和「调度」拆开看 —— 换个拆法可能会数出不一样的数目。</text>
+</svg>
