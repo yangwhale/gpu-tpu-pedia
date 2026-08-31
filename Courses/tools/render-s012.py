@@ -36,7 +36,7 @@ OUT = "/tmp/s012-png"
 # 硬 import 要走 importlib.util.spec_from_file_location，为一张表不值得。
 # ⛔ 改了那边记得改这边 —— 两处漂了的话，症状是「渲染出来的不是页面里那张」。
 SCRIPTS = {
-    "topic02-figs-map-origin.py":            ["figA", "figC"],
+    "topic02-figs-map-origin.py":            ["figA", "figB", "figC"],
     "topic02-fig-9474-waterfall.py":         ["fig0-1"],
     "topic02-figs-s1-panorama.py":           ["fig1-1", "fig1-2"],
     "topic02-figs-s1-hierarchy-intensity.py": ["fig1-3", "fig1-4"],

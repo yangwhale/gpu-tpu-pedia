@@ -4,29 +4,37 @@ GiB=2**30; HBM=206_000_000_000
 CHIP=HBM/GiB; DEV=CHIP/2; ALLOC=94.74; RES=DEV-ALLOC
 
 # ════════════════════════════════════════════════════════
-# 图 A · 本课地图：专题一算出来的每条结论 → 撞在哪个硬件部件 → 本课第几节
+# 图 A · 开场：清单上只有四个问题　｜　图 B · 完整对照（手册用）
 # ════════════════════════════════════════════════════════
-# ⭐ 这张图重画过一次。旧版是左右两栏 + 八条贝塞尔曲线（左：专题一的八个
-#    「步骤」，右：本课四节），有三个毛病，Chris 在 2026-08-31 全指出来了：
+# ⭐ **这一段重画过两次，两次的病因不一样，都记在这儿。**
 #
-#    ① **接不上专题一。** 左栏抄的是步骤名，不是专题一**算出来的结论**。
-#       学生刚花一小时算出一串数，这张图一个数都没接过来 —— 那就不叫承接，
-#       叫重新列一遍目录。现在左栏每一条都必须带一个专题一原文里的数。
-#    ② **看不出跟硬件有什么关系。** 中间是空的，只有八条曲线飞过去。
-#       现在中间那栏就是**硬件部件本身**（HBM 带宽 / 矩阵单元 / 卡间链路 …），
-#       「这图跟硬件什么关系」这个问题在图上直接有答案。
-#    ③ **两条映射是错的**，而且专题一原文早就写对了：
-#       · 注意力：旧图只画了「中间量 → 内存」。可专题一算的是
-#         「128K 下 attention 的平方项吃掉 81.8% 的前向算力」—— 它在长序列
-#         下首先是个**算力**问题。现在拆成两行（见底部注解）。
-#       · MoE：旧图画成「路由 → 算得动」。可专题一的原话是
-#         「MoE 省的是算力（18.3×），**不省显存（0×）**」，那 634 B 参数
-#         这一步不参与计算、但一个字节都不能从显存里拿走 —— 它首先是个
-#         **内存**问题。旧图整条漏了。
+# 【第一次】原版是左右两栏 + 八条贝塞尔曲线（左：专题一的八个「步骤」，
+#   右：本课四节）。Chris 2026-08-31 指出三个毛病：
+#     ① **接不上专题一** —— 左栏抄的是步骤名，不是专题一**算出来的结论**。
+#        学生刚花一小时算出一串数，这张图一个都没接过来，那不叫承接，
+#        叫重新列一遍目录。现在每一条都必须带一个专题一原文里的数。
+#     ② **看不出跟硬件有什么关系** —— 中间是空的，只有曲线飞过去。
+#     ③ **两条映射是错的**，而专题一原文早就写对了：
+#        · 注意力在长序列下首先是**算力**问题（「128K 下吃掉 81.8% 的前向算力」），
+#          不是内存问题；朴素实现才是内存问题。所以它要**拆成两行**。
+#        · MoE 首先是**内存**问题（「省的是算力 18.3×，**不省显存 0×**」，
+#          那 634 B 不参与计算但一个字节都拿不走），旧图整条漏了。
 #
-#    另外曲线换成了按节排序的表格：十条连线互相穿插，正是「一会东一会西」
-#    的来源。排好序之后连线全是水平的，思路是一条直线。
-#    60 分钟时间轴也从这里搬走了 —— 那是给台上看的脚手架，不该占学生图。
+# 【第二次 —— 就是现在这一版】上面那三条改完，得到的是一张十行三列的表。
+#   内容对了，但 Chris 当天下午看了一眼就说：**「太复杂了，一开场大家就看不懂，
+#   听众全给弄跑了。」** 而且**中间那一栏不同的功能颜色还一样** —— 因为那一栏
+#   染的是「第几节」的色，于是「HBM 带宽」和「HBM 容量」同蓝、「矩阵单元」和
+#   「向量单元」同紫，看上去像在说废话。
+#
+#   诊断：**那张表本身没错，错在拿它当开场。**十行三列是一张**查得清的对照表**，
+#   不是一张**十秒钟看得懂的开场图**。开场要回答的只有一句「这课讲什么」。
+#
+#   所以拆成两张，用的正是本页 §1.5 已经在用的那个分工 ——
+#   **「台上讲的」和「发下去查的」是两张图**：
+#     · **图 A**＝四张卡，一个问题一张，一张卡一个颜色一个部件。
+#       颜色歧义随之消失：一张卡只对一个部件，不存在两个功能同色。
+#     · **图 B**＝原来那张十行表，挪到这一节末尾，明写「手册用，台上不念」。
+#   十秒钟看得懂的在前面，查得清的在后面，两个需求都不用让步。
 ANS=[("第 2 节","放得下","内存","#1a73e8"),
      ("第 3 节","算得动","计算单元","#9334e6"),
      ("第 4 节","卡间说话","互联","#e8710a"),
@@ -59,23 +67,76 @@ CNT=[sum(1 for r in ROWS if r[0]==i) for i in range(4)]
 assert CNT==[4,3,2,1], "行数变了，底部那句「四条撞内存、三条撞计算单元」要跟着改：%s" % CNT
 assert [r[0] for r in ROWS]==sorted(r[0] for r in ROWS), "ROWS 必须按节排好序，否则连线又会交叉"
 
-RH=40; GAP=10; TOP=132
+# ── 图 A · 四张卡 ────────────────────────────────────────
+# ⛔ 这张图的唯一任务是「十秒钟让人知道这课讲什么」。任何想往里加的东西，
+#    先问一句：**它是不是必须在开场的头十秒出现？** 不是就去图 B。
+#    一张卡只准有一个部件 —— 这是上一版颜色歧义的根治办法，别再往回加。
+# （节次, 问题, 部件, 上一课的证据两行, 时长, 颜色）
+CARD=[("第 2 节","放得下吗","HBM　容量 + 带宽",
+       ("上一课结尾撞的那堵墙：","一个 device 只有 <b>94.74 GiB</b>"),"15 分钟","#1a73e8"),
+      ("第 3 节","算得动吗","矩阵单元 · 向量单元",
+       ("128K 下，attention 的平方项","吃掉 <b>81.8%</b> 的前向算力"),"10 分钟","#9334e6"),
+      ("第 4 节","卡之间怎么说话","卡间链路",
+       ("MoE 每个 token 要跨卡找","8 个专家 —— <b>all-to-all</b>"),"5 分钟","#e8710a"),
+      ("第 5 节","谁在做决定","（没有对应的部件）",
+       ("选哪 8 个专家，","<b>运行时才知道</b>"),"5 分钟","#1e8e3e")]
+CW=239; CG=(1000-CW*4)//3; Y0=76; CH=210
+a=[f'<svg viewBox="0 0 1000 406" width="100%" role="img" '
+   f'aria-label="开场地图：上一课那张需求清单只有四个问题，每一个撞在一个部件上，就是本课的四节">']
+a.append('<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
+         '上一课交出的是一张<tspan font-weight="700">需求清单</tspan>。'
+         '这一课不逐个介绍硬件参数 —— <tspan font-weight="700">拿着那张清单，一条一条去硬件上找答案</tspan></text>')
+a.append('<text class="svgsm" x="0" y="36">'
+         '清单上只有四个问题。每一个都撞在一个具体的部件上 —— <tspan font-weight="700">撞在哪，就是哪一节</tspan>。</text>')
+a.append('<text class="svgsm" x="0" y="60" fill="#9aa0a6">'
+         '每张卡下面那两行，是<tspan font-weight="700">上一课他们自己算出来的数</tspan> —— 这一课只负责告诉他们该去撞哪儿</text>')
+for i,(tag,ques,part,(e1,e2),mins,col) in enumerate(CARD):
+    x=i*(CW+CG); last=(i==3)
+    a.append(f'<rect x="{x}" y="{Y0}" width="{CW}" height="{CH}" rx="10" fill="#fff" stroke="{col}" stroke-width="1.6"/>')
+    a.append(f'<path d="M{x} {Y0+10} a10 10 0 0 1 10 -10 h{CW-20} a10 10 0 0 1 10 10 v40 h{-CW} z" fill="{col}"/>')
+    a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+20}" fill="#ffffffcc">{tag}</text>')
+    a.append(f'<text class="svgnum" x="{x+16}" y="{Y0+42}" fill="#fff" style="font-size:17px">{ques}</text>')
+    a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+76}" fill="#9aa0a6">上一课算出来的</text>')
+    a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+95}" fill="#202124">{B(e1)}</text>')
+    a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+113}" fill="#202124">{B(e2)}</text>')
+    a.append(f'<line x1="{x+16}" y1="{Y0+131}" x2="{x+CW-16}" y2="{Y0+131}" stroke="#e8eaed"/>')
+    a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+151}" fill="#9aa0a6">于是撞在</text>')
+    # ⭐ 第四张卡故意没有部件 —— 那个空格就是第 5 节的全部内容，用虚线画出来
+    a.append(f'<rect x="{x+16}" y="{Y0+159}" width="{CW-32}" height="26" rx="13" fill="{col}22" '
+             f'stroke="{col}" stroke-width="1.4"{" stroke-dasharray=\"4 3\"" if last else ""}/>')
+    a.append(f'<text class="svglbl" x="{x+CW/2}" y="{Y0+177}" text-anchor="middle" fill="{col}">{part}</text>')
+    a.append(f'<text class="svgsm" x="{x+CW-16}" y="{Y0+201}" text-anchor="end" fill="#9aa0a6">⏱ {mins}</text>')
+# ⛔ 这条打底/验账带**必须两行**。挤成一行会在 1000 宽处被截掉尾巴，
+#    而 SVG 文本溢出不会报错、渲染时也看不出来是「掉了字」还是「本来就这么写」。
+YS=Y0+CH+16
+a.append(f'<rect x="0" y="{YS}" width="1000" height="42" rx="4" fill="#f1f3f4" stroke="#dadce0"/>')
+a.append(f'<text class="svgsm" x="12" y="{YS+16}" fill="#5f6368">'
+         f'<tspan font-weight="700">打底</tspan>（不回答清单上的问题，但后面每节都要用）：{TIER_TOP}</text>')
+a.append(f'<text class="svgsm" x="12" y="{YS+33}" fill="#5f6368">'
+         f'<tspan font-weight="700">验账</tspan>（上面这些说法凭什么信）：{TIER_BOT}</text>')
+a.append(f'<text class="svglbl" x="0" y="{YS+70}" fill="#7a5000">'
+         f'⭐ 四节的长短不是我排的，是那张清单排的 —— 十条结论里'
+         f'<tspan font-weight="700">四条撞内存、三条撞计算单元</tspan>，所以第 2 节最长</text>')
+a.append(f'<text class="svgsm" x="0" y="{YS+89}" fill="#9aa0a6">'
+         f'十条逐条对到哪个部件，在本节最后那张对照表里 —— 那张是发下去查的，台上不用讲</text>')
+a.append('</svg>')
+io.open('figA.svg','w',encoding='utf-8').write('\n'.join(a)); print('figA 406 · 4 张卡')
+
+# ── 图 B · 完整对照（手册用，台上不念）─────────────────────
+RH=40; GAP=10; TOP=110
 LX=0;   LW=386
 MX=400; MW=178
 RX=596; RW=404
 TBL_H=RH*len(ROWS)+GAP*3
-H=TOP+TBL_H+142
+H=TOP+TBL_H+120
 p=[f'<svg viewBox="0 0 1000 {H}" width="100%" role="img" '
-   f'aria-label="本课地图：专题一算出来的每条结论各撞在哪个硬件部件上，以及对应本课第几节">']
+   f'aria-label="完整对照：专题一算出来的十条结论各撞在哪个硬件部件上，以及对应本课第几节">']
 p.append('<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
-         '本课地图 —— 专题一交出的是一张<tspan font-weight="700">需求清单</tspan>；'
-         '每一条都撞在硬件的某一个部件上，<tspan font-weight="700">撞在哪，就在哪一节讲</tspan></text>')
+         '完整对照（手册用，台上不念）—— 上一课那<tspan font-weight="700">十条结论</tspan>，'
+         '逐条对到部件和节次</text>')
 p.append('<text class="svgsm" x="0" y="36">'
-         '所以这一课不逐个介绍硬件参数 —— 是拿着上一课自己算出来的数，一条一条去硬件上找那堵墙</text>')
-# 打底条
-p.append(f'<rect x="0" y="52" width="1000" height="22" rx="4" fill="#f1f3f4" stroke="#dadce0"/>')
-p.append(f'<text class="svgsm" x="12" y="67" fill="#5f6368">'
-         f'<tspan font-weight="700">打底</tspan>（不回答清单上的问题，但后面每节都要用）　　{TIER_TOP}</text>')
+         '开场那四张卡每张只举了一个例子。这张是把十条全摆出来 —— '
+         '<tspan font-weight="700">「为什么第 2 节最长」在这里能数出来</tspan>。</text>')
 # 列头
 for x,t in ((LX,"专题一算出来的结论"),(MX,"它撞在哪个部件上"),(RX,"本课第几节 · 讲这个部件")):
     p.append(f'<text class="svgsm" x="{x}" y="{TOP-10}" fill="#9aa0a6">{t}</text>')
@@ -103,22 +164,19 @@ for i,(tag,name,sub,col) in enumerate(ANS):
         p.append(f'<path d="M{LX+LW} {cy-2} H{MX}" stroke="{col}" stroke-width="1.4" opacity=".45"/>')
         p.append(f'<path d="M{MX+MW} {cy-2} H{RX}" stroke="{col}" stroke-width="1.4" opacity=".45"/>')
     gi+=n; y+=blk+GAP
-yb=y-GAP+10
-p.append(f'<rect x="0" y="{yb}" width="1000" height="22" rx="4" fill="#f1f3f4" stroke="#dadce0"/>')
-p.append(f'<text class="svgsm" x="12" y="{yb+15}" fill="#5f6368">'
-         f'<tspan font-weight="700">怎么验</tspan>（上面这些说法凭什么信）　　{TIER_BOT}</text>')
-yn=yb+46
-p.append(f'<text class="svglbl" x="0" y="{yn}" fill="#7a5000">'
-         f'⭐ 四节的顺序和长短不是我排的，是这张清单排的 —— '
-         f'十条里<tspan font-weight="700">四条撞内存、三条撞计算单元</tspan>，所以第 2 节最长</text>')
-p.append(f'<text class="svgsm" x="0" y="{yn+20}" fill="#5f6368">'
+yn=y-GAP+34
+p.append(f'<text class="svgsm" x="0" y="{yn}" fill="#5f6368">'
          f'⚠️ <tspan font-weight="700">注意力出现了两次，不是笔误</tspan>：朴素实现被带宽卡住（强度 64），'
          f'把中间量省掉之后才轮到算力（81.8%）—— 这一条正好就是第 2 节和第 3 节的分界线。</text>')
-p.append(f'<text class="svgsm" x="0" y="{yn+38}" fill="#5f6368">'
+p.append(f'<text class="svgsm" x="0" y="{yn+20}" fill="#5f6368">'
          f'⚠️ <tspan font-weight="700">MoE 出现了三次</tspan>：权重撞内存、路由撞范式、dispatch 撞互联 —— '
          f'全表唯一横跨三节的一条。「MoE 是算力优化」是个常见误读，专题一那句原话是「省的是算力，不省显存」。</text>')
+p.append(f'<text class="svgsm" x="0" y="{yn+38}" fill="#9aa0a6">'
+         f'⚠️ 中间那一栏染的是<tspan font-weight="700">节次的色</tspan>，不是部件的色 —— '
+         f'所以「HBM 带宽」和「HBM 容量」同蓝、「矩阵单元」和「向量单元」同紫。'
+         f'看这一栏认字，不要认颜色。</text>')
 p.append('</svg>')
-io.open('figA.svg','w',encoding='utf-8').write('\n'.join(p)); print('figA',H,CNT)
+io.open('figB.svg','w',encoding='utf-8').write('\n'.join(p)); print('figB',H,CNT)
 
 # ════════════════════════════════════════════════════════
 # 图 C · 两条出身 → 四个后果

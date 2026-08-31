@@ -36,7 +36,7 @@ PAGE = os.path.join(HERE, "..", "WebPages", "topic-02.html")
 
 # 脚本 → 它吐出来的 svg 文件名 → 页面上的 figure id
 SCRIPTS = {
-    "topic02-figs-map-origin.py":        {"figA.svg": "figA", "figC.svg": "figC"},
+    "topic02-figs-map-origin.py":        {"figA.svg": "figA", "figB.svg": "figB", "figC.svg": "figC"},
     "topic02-fig-9474-waterfall.py":     {"fig0-1.svg": "fig0-1"},
     "topic02-figs-s1-panorama.py":       {"fig1-1.svg": "fig1-1", "fig1-2.svg": "fig1-2"},
     "topic02-fig-s1-landing.py":          {"fig1-5.svg": "fig1-5"},
