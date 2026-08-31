@@ -4,113 +4,121 @@ GiB=2**30; HBM=206_000_000_000
 CHIP=HBM/GiB; DEV=CHIP/2; ALLOC=94.74; RES=DEV-ALLOC
 
 # ════════════════════════════════════════════════════════
-# 图 A · 本课地图：专题一那八步 → 各撞哪堵墙 → 本课四个答案
+# 图 A · 本课地图：专题一算出来的每条结论 → 撞在哪个硬件部件 → 本课第几节
 # ════════════════════════════════════════════════════════
+# ⭐ 这张图重画过一次。旧版是左右两栏 + 八条贝塞尔曲线（左：专题一的八个
+#    「步骤」，右：本课四节），有三个毛病，Chris 在 2026-08-31 全指出来了：
+#
+#    ① **接不上专题一。** 左栏抄的是步骤名，不是专题一**算出来的结论**。
+#       学生刚花一小时算出一串数，这张图一个数都没接过来 —— 那就不叫承接，
+#       叫重新列一遍目录。现在左栏每一条都必须带一个专题一原文里的数。
+#    ② **看不出跟硬件有什么关系。** 中间是空的，只有八条曲线飞过去。
+#       现在中间那栏就是**硬件部件本身**（HBM 带宽 / 矩阵单元 / 卡间链路 …），
+#       「这图跟硬件什么关系」这个问题在图上直接有答案。
+#    ③ **两条映射是错的**，而且专题一原文早就写对了：
+#       · 注意力：旧图只画了「中间量 → 内存」。可专题一算的是
+#         「128K 下 attention 的平方项吃掉 81.8% 的前向算力」—— 它在长序列
+#         下首先是个**算力**问题。现在拆成两行（见底部注解）。
+#       · MoE：旧图画成「路由 → 算得动」。可专题一的原话是
+#         「MoE 省的是算力（18.3×），**不省显存（0×）**」，那 634 B 参数
+#         这一步不参与计算、但一个字节都不能从显存里拿走 —— 它首先是个
+#         **内存**问题。旧图整条漏了。
+#
+#    另外曲线换成了按节排序的表格：十条连线互相穿插，正是「一会东一会西」
+#    的来源。排好序之后连线全是水平的，思路是一条直线。
+#    60 分钟时间轴也从这里搬走了 —— 那是给台上看的脚手架，不该占学生图。
 ANS=[("第 2 节","放得下","内存","#1a73e8"),
      ("第 3 节","算得动","计算单元","#9334e6"),
      ("第 4 节","卡间说话","互联","#e8710a"),
      ("第 5 节","谁做决定","范式","#1e8e3e")]
-# 三层里的另外两层：连线只连中间那层（八步各撞哪堵墙），
-# 上下两层不接连线 —— 它们不回答「这一步卡在哪」，但课上真实存在。
-TIER_TOP=[("第 0 节","把 94.74 还清楚 ＋ 立那条假设"),
-          ("第 1 节","两边的硬件全景（不回答问题，但后面每节都要用）")]
-TIER_BOT=[("第 6 节","怎么比才不算耍赖"),
-          ("第 7 节","两边的实测"),
-          ("第 8–9 节","数是怎么核的 ＋ 收尾")]
-# 时间预算：全课 60 分钟。这是**建议值不是实测**，写出来是为了让台上
-# 知道超了要砍哪儿 —— 不写的话必然在第 2 节讲嗨了，后面全部挤掉。
-BUDGET=[("地图",2),("第 0 节",6),("第 1 节",8),("第 2 节",15),("第 3 节",10),
-        ("第 4 节",5),("第 5 节",5),("第 6 节",3),("第 7 节",4),
-        ("第 8 节",0),("第 9 节",2)]
-assert sum(m for _,m in BUDGET)==60, "预算加起来不是 60 分钟"
-STEPS=[  # (步骤, 它到底卡在哪, 目标索引)
- ("① 入口 · embedding 查表","算术强度为零，纯搬运",0),
- ("② 注意力 · 中间量","seq×seq 大到不该落 HBM",0),
- ("③ 注意力 · softmax","逐元素，矩阵单元用不上",1),
- ("④ Dense MLP","大矩阵乘 —— 但形状要对齐",1),
- ("⑤ MoE 路由 · top-k","数据相关，不规则",1),
- ("⑥ MoE dispatch / combine","all-to-all，每对都要说话",2),
- ("⑦ 层间 / 数据并行","all-gather · reduce-scatter",2),
- ("⑧ 出口 · logits","巨大的短命中间量",0),
+TIER_TOP="第 0 节　把 94.74 还清楚 ＋ 立那条假设　　·　　第 1 节　两边的硬件全景"
+TIER_BOT="第 6 节　怎么比才不算耍赖　　·　　第 7 节　两边的实测　　·　　第 8–9 节　数是怎么核的 ＋ 收尾"
+# (节索引, 专题一这一步, 专题一算出来的那个数, 撞在哪个部件)
+# ⛔ 第三列**必须**是专题一原文里出现过的数 —— 这一列是这张图存在的理由。
+ROWS=[
+ (0,"入口 · embedding 查表",      "算术强度 <b>0</b> —— 一次乘加都没有",              "HBM 带宽"),
+ (0,"注意力 · 朴素实现",          "seq×seq 中间量落 HBM，强度只有 <b>64</b>",         "HBM 带宽"),
+ (0,"MoE · 那 634 B 没参与计算的权重","省的是算力（<b>18.3×</b>），不省显存（<b>0×</b>）","HBM 容量"),
+ (0,"出口 · logits",              "<b>31.56 GiB</b> 的短命张量",                      "HBM 容量"),
+ (1,"注意力 · 省掉中间量之后",     "128K 下吃掉 <b>81.8%</b> 的前向算力",              "矩阵单元"),
+ (1,"Dense MLP",                  "强度 <b>3,584</b> —— 又大又规整",                  "矩阵单元"),
+ (1,"softmax",                    "逐元素，强度约 <b>1</b>，矩阵单元用不上",           "向量单元"),
+ (2,"MoE · dispatch / combine",   "all-to-all，每对卡都要说话",                        "卡间链路"),
+ (2,"层间 · 数据并行",            "all-gather · reduce-scatter",                       "卡间链路"),
+ (3,"MoE · 路由 top-k",           "每个 token 选哪 8 个专家，<b>运行时才知道</b>",     "形状谁来定"),
 ]
-RH=46; TOP=126; LX=0; LW=330; RX=690; RW=300
-H=TOP+RH*len(STEPS)+346   # 底部还要塞一条 60 分钟时间轴
-p=[f'<svg viewBox="0 0 1000 {H}" width="100%" role="img" aria-label="本课地图：专题一每一步各撞哪堵硬件墙">']
+def B(s):
+    """把 <b> 换成 SVG 认得的 <tspan>。
+
+    ⛔ SVG 的 <text> 里**没有** <b>。写了不会报错，浏览器会把它当未知元素、
+       提前结束当前 text，于是那一行之后的内容全部掉到图底变成裸字 ——
+       症状是「整张图只画出第一行，底下多出一长条黑字」。踩过一次，别再写 <b>。"""
+    return s.replace("<b>", '<tspan font-weight="700">').replace("</b>", "</tspan>")
+
+CNT=[sum(1 for r in ROWS if r[0]==i) for i in range(4)]
+assert CNT==[4,3,2,1], "行数变了，底部那句「四条撞内存、三条撞计算单元」要跟着改：%s" % CNT
+assert [r[0] for r in ROWS]==sorted(r[0] for r in ROWS), "ROWS 必须按节排好序，否则连线又会交叉"
+
+RH=40; GAP=10; TOP=132
+LX=0;   LW=386
+MX=400; MW=178
+RX=596; RW=404
+TBL_H=RH*len(ROWS)+GAP*3
+H=TOP+TBL_H+142
+p=[f'<svg viewBox="0 0 1000 {H}" width="100%" role="img" '
+   f'aria-label="本课地图：专题一算出来的每条结论各撞在哪个硬件部件上，以及对应本课第几节">']
 p.append('<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
-         '本课地图 —— 不逐个介绍硬件，而是拿专题一那张需求清单，一条一条去硬件上找答案</text>')
-p.append('<text class="svgsm" x="0" y="36">左边是上一课走过的每一步，右边是这一课的四节。连线颜色 = 这一步的账最后算到哪一节</text>')
-p.append(f'<text class="svgsm" x="{LX}" y="{TOP-12}">专题一 · 一个 token 走过的路</text>')
-p.append(f'<text class="svgsm" x="{RX}" y="{TOP-12}">专题二 · 中间这四节回答上面八步（另有六节在上下两端）</text>')
+         '本课地图 —— 专题一交出的是一张<tspan font-weight="700">需求清单</tspan>；'
+         '每一条都撞在硬件的某一个部件上，<tspan font-weight="700">撞在哪，就在哪一节讲</tspan></text>')
+p.append('<text class="svgsm" x="0" y="36">'
+         '所以这一课不逐个介绍硬件参数 —— 是拿着上一课自己算出来的数，一条一条去硬件上找那堵墙</text>')
+# 打底条
+p.append(f'<rect x="0" y="52" width="1000" height="22" rx="4" fill="#f1f3f4" stroke="#dadce0"/>')
+p.append(f'<text class="svgsm" x="12" y="67" fill="#5f6368">'
+         f'<tspan font-weight="700">打底</tspan>（不回答清单上的问题，但后面每节都要用）　　{TIER_TOP}</text>')
+# 列头
+for x,t in ((LX,"专题一算出来的结论"),(MX,"它撞在哪个部件上"),(RX,"本课第几节 · 讲这个部件")):
+    p.append(f'<text class="svgsm" x="{x}" y="{TOP-10}" fill="#9aa0a6">{t}</text>')
 
-# 右侧四个答案块（按连线数分配高度）
-cnt=[sum(1 for s in STEPS if s[2]==i) for i in range(4)]
-ry=TOP; rpos=[]
+y=TOP; gi=0
 for i,(tag,name,sub,col) in enumerate(ANS):
-    hgt=max(52, RH*cnt[i]-10) if cnt[i] else 52
-    p.append(f'<rect x="{RX}" y="{ry}" width="{RW}" height="{hgt}" rx="8" fill="{col}"/>')
-    p.append(f'<text class="svgnum" x="{RX+16}" y="{ry+hgt/2-2}" fill="#fff">{tag} · {name}</text>')
-    p.append(f'<text class="svgsm" x="{RX+16}" y="{ry+hgt/2+15}" fill="#ffffffcc">{sub}</text>')
-    rpos.append(ry+hgt/2); ry+=hgt+10
-# §5 没有直连步骤时给它一条来自⑤的虚线
-for i,(name,why,t) in enumerate(STEPS):
-    y=TOP+i*RH+RH/2-4
-    col=ANS[t][3]
-    p.append(f'<rect x="{LX}" y="{y-17}" width="{LW}" height="34" rx="6" fill="#fff" stroke="#dadce0"/>')
-    p.append(f'<text class="svglbl" x="{LX+12}" y="{y-1}" fill="#202124">{name}</text>')
-    p.append(f'<text class="svgsm" x="{LX+12}" y="{y+13}">{why}</text>')
-    x1,x2=LX+LW,RX; ym=rpos[t]
-    p.append(f'<path d="M{x1} {y} C{x1+120} {y} {x2-120} {ym} {x2} {ym}" fill="none" '
-             f'stroke="{col}" stroke-width="1.8" opacity=".55"/>')
-    p.append(f'<circle cx="{x1}" cy="{y}" r="3" fill="{col}"/>')
-# ⑤ 额外连到 §5
-y5=TOP+4*RH+RH/2-4
-p.append(f'<path d="M{LX+LW} {y5} C{LX+LW+150} {y5+40} {RX-150} {rpos[3]} {RX} {rpos[3]}" fill="none" '
-         f'stroke="{ANS[3][3]}" stroke-width="1.6" stroke-dasharray="5 4" opacity=".7"/>')
-# ── 右栏上下两层（不接连线）────────────────────────────────────────
-TB_Y=TOP-52
-for i,(tag,txt) in enumerate(TIER_TOP):
-    p.append(f'<rect x="{RX}" y="{TB_Y+i*22}" width="{RW}" height="20" rx="4" '
-             f'fill="#f1f3f4" stroke="#dadce0"/>')
-    p.append(f'<text class="svgsm" x="{RX+10}" y="{TB_Y+i*22+14}" fill="#5f6368">'
-             f'<tspan font-weight="700">{tag}</tspan>　{txt}</text>')
-BB_Y=ry+6
-for i,(tag,txt) in enumerate(TIER_BOT):
-    p.append(f'<rect x="{RX}" y="{BB_Y+i*22}" width="{RW}" height="20" rx="4" '
-             f'fill="#f1f3f4" stroke="#dadce0"/>')
-    p.append(f'<text class="svgsm" x="{RX+10}" y="{BB_Y+i*22+14}" fill="#5f6368">'
-             f'<tspan font-weight="700">{tag}</tspan>　{txt}</text>')
-p.append(f'<text class="svgsm" x="{RX}" y="{TB_Y-6}" fill="#9aa0a6">打底 —— 不回答问题，但后面每节都要用</text>')
-p.append(f'<text class="svgsm" x="{RX}" y="{BB_Y+len(TIER_BOT)*22+12}" fill="#9aa0a6">怎么验 —— 上面那些说法凭什么信</text>')
-
-yb=max(TOP+RH*len(STEPS)+14, BB_Y+len(TIER_BOT)*22+26)
-p.append(f'<line x1="0" y1="{yb}" x2="1000" y2="{yb}" stroke="#e8eaed"/>')
-p.append(f'<text class="svglbl" x="0" y="{yb+26}" fill="#d93025">'
-         f'⚠️ 注意左边有八行 —— 这一课不能只拿 ① embedding 当例子</text>')
-p.append(f'<text class="svgsm" x="0" y="{yb+46}">'
-         f'它是八步里唯一算术强度为零的一步。只用它，整课会听起来像「TPU 的问题都是访存布局」，而真实的账不是这样</text>')
-# ── 图底：60 分钟时间轴 ──────────────────────────────────────────────
-TLY=yb+72
-p.append(f'<text class="svglbl" x="0" y="{TLY-8}" fill="#202124">建议时间分配（共 60 分钟）</text>')
-p.append(f'<text class="svgsm" x="1000" y="{TLY-8}" text-anchor="end" fill="#d93025">'
-         f'⚠️ 建议值不是实测 —— 第 2 节光图注就压着 15 分钟，超了先砍图 2-2 和 2-5</text>')
-TLW=1000; xx=0.0
-SHADE={0:"#9aa0a6",1:"#9aa0a6"}
-for i,(tag,m) in enumerate(BUDGET):
-    w=TLW*m/60.0
-    if m:
-        c = ANS[i-2][3] if 2 <= i <= 5 else "#9aa0a6"
-        p.append(f'<rect x="{xx:.1f}" y="{TLY}" width="{w-2:.1f}" height="24" rx="3" fill="{c}"/>')
-        p.append(f'<text class="svgsm" x="{xx+w/2:.1f}" y="{TLY+16}" text-anchor="middle" '
-                 f'fill="#fff" style="font-size:9.5px">{m}</text>')
-        p.append(f'<text class="svgsm" x="{xx+w/2:.1f}" y="{TLY+38}" text-anchor="middle" '
-                 f'fill="#5f6368" style="font-size:9.5px">{tag.replace(" 节","")}</text>')
-    xx+=w
-p.append(f'<text class="svgsm" x="0" y="{TLY+56}" fill="#5f6368">'
-         f'第 8 节（数是怎么核的）<tspan font-weight="700">不占时间</tspan> —— 发下去自己看。'
-         f'中间四段带颜色的就是上面右栏那四个答案，'
-         f'<tspan font-weight="700">它们合起来 35 分钟，占了一多半</tspan>。</text>')
+    n=CNT[i]; blk=RH*n-4
+    # 右：本节（跨它管的那几行）
+    p.append(f'<rect x="{RX}" y="{y}" width="{RW}" height="{blk}" rx="8" fill="{col}"/>')
+    p.append(f'<text class="svgnum" x="{RX+18}" y="{y+blk/2-1}" fill="#fff">{tag} · {name}</text>')
+    p.append(f'<text class="svgsm" x="{RX+18}" y="{y+blk/2+16}" fill="#ffffffcc">{sub}</text>')
+    for k in range(n):
+        r=ROWS[gi+k]; ry=y+k*RH
+        cy=ry+RH/2-2
+        p.append(f'<rect x="{LX}" y="{ry}" width="{LW}" height="{RH-6}" rx="6" '
+                 f'fill="#fff" stroke="#dadce0"/>')
+        p.append(f'<text class="svglbl" x="{LX+12}" y="{cy-3}" fill="#202124">{r[1]}</text>')
+        p.append(f'<text class="svgsm" x="{LX+12}" y="{cy+12}">{B(r[2])}</text>')
+        # 中：硬件部件本身 —— 这一列是「这图跟硬件什么关系」的答案
+        p.append(f'<rect x="{MX}" y="{ry+4}" width="{MW}" height="{RH-14}" rx="{(RH-14)/2}" '
+                 f'fill="#fff" stroke="{col}" stroke-width="1.6"/>')
+        p.append(f'<text class="svglbl" x="{MX+MW/2}" y="{cy+2}" text-anchor="middle" '
+                 f'fill="{col}">{r[3]}</text>')
+        # 排过序，所以连线全是水平的 —— 没有一根交叉
+        p.append(f'<path d="M{LX+LW} {cy-2} H{MX}" stroke="{col}" stroke-width="1.4" opacity=".45"/>')
+        p.append(f'<path d="M{MX+MW} {cy-2} H{RX}" stroke="{col}" stroke-width="1.4" opacity=".45"/>')
+    gi+=n; y+=blk+GAP
+yb=y-GAP+10
+p.append(f'<rect x="0" y="{yb}" width="1000" height="22" rx="4" fill="#f1f3f4" stroke="#dadce0"/>')
+p.append(f'<text class="svgsm" x="12" y="{yb+15}" fill="#5f6368">'
+         f'<tspan font-weight="700">怎么验</tspan>（上面这些说法凭什么信）　　{TIER_BOT}</text>')
+yn=yb+46
+p.append(f'<text class="svglbl" x="0" y="{yn}" fill="#7a5000">'
+         f'⭐ 四节的顺序和长短不是我排的，是这张清单排的 —— '
+         f'十条里<tspan font-weight="700">四条撞内存、三条撞计算单元</tspan>，所以第 2 节最长</text>')
+p.append(f'<text class="svgsm" x="0" y="{yn+20}" fill="#5f6368">'
+         f'⚠️ <tspan font-weight="700">注意力出现了两次，不是笔误</tspan>：朴素实现被带宽卡住（强度 64），'
+         f'把中间量省掉之后才轮到算力（81.8%）—— 这一条正好就是第 2 节和第 3 节的分界线。</text>')
+p.append(f'<text class="svgsm" x="0" y="{yn+38}" fill="#5f6368">'
+         f'⚠️ <tspan font-weight="700">MoE 出现了三次</tspan>：权重撞内存、路由撞范式、dispatch 撞互联 —— '
+         f'全表唯一横跨三节的一条。「MoE 是算力优化」是个常见误读，专题一那句原话是「省的是算力，不省显存」。</text>')
 p.append('</svg>')
-io.open('figA.svg','w',encoding='utf-8').write('\n'.join(p)); print('figA',H)
+io.open('figA.svg','w',encoding='utf-8').write('\n'.join(p)); print('figA',H,CNT)
 
 # ════════════════════════════════════════════════════════
 # 图 C · 两条出身 → 四个后果
