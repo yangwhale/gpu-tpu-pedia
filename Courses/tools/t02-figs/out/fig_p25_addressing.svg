@@ -1,0 +1,59 @@
+<svg viewBox="0 0 1400 636" width="1400" height="636" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 的 RDMA 与 TPU 的 ICI 在跨卡寻址上的对照：两边给使用者的约束是同一条，发送方都不能凭空写进对方的任意地址">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">跨卡写一个字节，<tspan font-weight="700">发送方交出去的是什么</tspan>　—— 两种长相，同一条约束</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="37" y="58" class="sm">GPU · RDMA（公开语义）</text>
+<rect x="191.25" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="208.25" y="58" class="sm">TPU · ICI（未标注来源）</text>
+<rect x="367.675" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="384.675" y="58" class="sm">两边落到同一句话的那一格</text>
+<rect x="20" y="130" width="672" height="248" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="157" class="sec" fill="#1a73e8">GPU 侧　·　RDMA</text>
+<text x="38" y="176" class="xs" fill="#5f6368">跨域写远端内存</text>
+<rect x="560" y="144" width="114" height="22" rx="11" fill="#fff" stroke="#5f6368" stroke-width="1.1"/>
+<text x="617" y="159" class="xxs" fill="#5f6368" text-anchor="middle">公开语义</text>
+<rect x="38" y="190" width="636" height="114" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.1"/>
+<text x="52" y="214" class="xxs" fill="#9aa0a6">单子上写的是</text>
+<text x="52" y="232" class="xs">对方的<tspan font-weight="700" fill="#202124">内存地址</tspan></text>
+<text x="52" y="259" class="xxs" fill="#9aa0a6">但这个地址不是随便挑的</text>
+<text x="52" y="277" class="xs">那块内存必须<tspan font-weight="700" fill="#202124">先被对方注册过</tspan>（memory registration）—— 没注册过的地址写不进去。</text>
+<rect x="38" y="318" width="636" height="44" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="52" y="344" class="sm" fill="#202124">发送方<tspan font-weight="700" fill="#202124">不能</tspan>凭空写进对方的任意地址。</text>
+<rect x="708" y="130" width="672" height="248" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="726" y="157" class="sec" fill="#1e8e3e">TPU 侧　·　ICI</text>
+<text x="726" y="176" class="xs" fill="#5f6368">机内机间同一套，2D / 3D 环面</text>
+<rect x="1248" y="144" width="114" height="22" rx="11" fill="#fff" stroke="#d93025" stroke-width="1.1"/>
+<text x="1305" y="159" class="xxs" fill="#d93025" text-anchor="middle">未标注来源</text>
+<rect x="726" y="190" width="636" height="114" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.1"/>
+<text x="740" y="214" class="xxs" fill="#9aa0a6">单子上写的是</text>
+<text x="740" y="232" class="xs"><tspan font-weight="700" fill="#202124">哪颗芯片　＋　哪个段　＋　偏移</tspan></text>
+<text x="740" y="259" class="xxs" fill="#9aa0a6">「段」是什么</text>
+<text x="740" y="277" class="xs">接收方<tspan font-weight="700" fill="#202124">事先划出来、并且把编号告诉了发送方</tspan>的一块存储。发送方<tspan font-weight="700" fill="#202124">只知道编号</tspan>，不知道它落在对方 HBM 的哪个物理位置 —— </text>
+<text x="740" y="294" class="xs"><tspan font-weight="700" fill="#202124">段的物理基址握在接收方手里</tspan>。</text>
+<rect x="726" y="318" width="636" height="44" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="740" y="344" class="sm" fill="#202124">发送方<tspan font-weight="700" fill="#202124">不能</tspan>凭空写进对方的任意地址。</text>
+<rect x="20" y="408" width="1360" height="82" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="38" y="436" class="sec">⭐ 两栏底下那句话是逐字相同的 —— 这张图要的就是这个</text>
+<text x="38" y="462" class="xs">一边给地址、一边给段号，看着是两套东西；但<tspan font-weight="700" fill="#202124">它们对使用者施加的约束是同一条</tspan>。至于两边是不是出于同一个设计动机（安全？地址虚拟化？多租户隔离？）—— <tspan font-weight="700" fill="#202124">这是推断，没有哪份文档这么写。</tspan></text>
+<rect x="20" y="516" width="1360" height="104" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="544" class="sec">⚠️ 这张图左右两半的证据等级不一样，别一起往外传</text>
+<text x="38" y="570" class="xs"><tspan font-weight="700" fill="#202124">RDMA 那一半是公开语义</tspan>，没有问题。<tspan font-weight="700" fill="#202124">ICI 寻址这一半我没有找到可以公开引用的出处</tspan> —— 本课的规矩是查不到就明写查不到，所以它按<tspan font-weight="700" fill="#202124">「未标注来源」</tspan>对待：可以讲，但不要当成可引证的事实往外传。</text>
+<text x="38" y="593" class="xs">另有一处差别顺带记下：<tspan font-weight="700" fill="#202124">TPU 这边没有面向用户的独立通信库</tspan> —— 你不会 import 一个通信库，也不会调它的 API，<tspan font-weight="700" fill="#202124">通信是编译器生成的</tspan>。这一条第 5 节会重新捡起来。</text>
+</svg>
