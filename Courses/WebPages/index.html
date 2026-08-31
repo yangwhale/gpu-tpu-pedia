@@ -183,8 +183,20 @@ footer a{color:var(--blue);text-decoration:none}
 #kickoff .turn p{font-size:clamp(15px,2.3vh,26px);line-height:1.8;color:#e8eaed}
 #kickoff .turn .b{color:#f6c453;font-weight:600}
 #kickoff .turn.veil{opacity:0}      /* 预留位置再隐藏 —— 翻面时画面不跳 */
-#kickoff .hint{position:fixed;right:18px;bottom:14px;font-size:12px;
-  color:#5f6368;letter-spacing:.05em}
+/* 继续按钮。第一版把它做成了右下角 12px 的灰字提示（#5f6368 压在 #0a0e1a 上），
+   结果是「投影仪上根本看不见，人不知道该点哪」——
+   虽然整屏任意位置都能点，但**看不见的可点区域等于不可点**。
+   现在是屏幕正中一个金色胶囊，还带一圈呼吸光晕，隔着会议室也认得出来。 */
+#kickoff .kbtn{margin-top:.6vh;font:600 clamp(14px,2vh,20px)/1 inherit;
+  color:#f6c453;background:transparent;border:2px solid #f6c453;border-radius:999px;
+  padding:1.4vh 3.2vw;cursor:pointer;letter-spacing:.04em;
+  animation:kpulse 2.4s ease-in-out infinite;transition:background .2s,color .2s}
+#kickoff .kbtn:hover{background:#f6c453;color:#0a0e1a;animation:none}
+@keyframes kpulse{
+  0%,100%{box-shadow:0 0 0 0 rgba(246,196,83,.45)}
+  70%    {box-shadow:0 0 0 14px rgba(246,196,83,0)}
+}
+@media(prefers-reduced-motion:reduce){#kickoff .kbtn{animation:none}}
 </style>
 </head>
 <body>
@@ -203,7 +215,9 @@ footer a{color:var(--blue);text-decoration:none}
     <p>接下来我们要做的，就是<span class="b">把这颗蛋敲开</span> ——
        看看里面到底装了什么，以及它为什么非得长成这个样子。</p>
   </div>
-  <div class="hint" id="kickoff-hint">点一下 / 空格</div>
+  <!-- 不给它单独绑 click：它在 #kickoff 里面，点击会冒泡到外层那个 handler。
+       再绑一次就会一下翻两页。 -->
+  <button class="kbtn" id="kickoff-btn" type="button">点这里，或按空格 →</button>
 </div>
 
 <!-- ══ HERO ══ -->
@@ -549,7 +563,7 @@ footer a{color:var(--blue);text-decoration:none}
   var box  = document.getElementById('kickoff');
   var img  = document.getElementById('kickoff-img');
   var turn = document.getElementById('kickoff-turn');
-  var hint = document.getElementById('kickoff-hint');
+  var btn  = document.getElementById('kickoff-btn');
   var step = 0;
 
   function open() {
@@ -564,7 +578,7 @@ footer a{color:var(--blue);text-decoration:none}
     if (step === 1) {                          // 翻面：亮出落点
       step = 2;
       turn.classList.remove('veil');
-      hint.textContent = '再按一次 · 进入总纲';
+      btn.textContent = '进入课程总纲 ↓';
     } else if (step === 2) {                   // 退场，并把 hash 抹掉，
       step = 3;                                // 免得他中途把带 #kickoff 的链接分享出去
       box.classList.add('out');
