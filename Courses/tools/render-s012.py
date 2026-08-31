@@ -65,7 +65,7 @@ svg{display:block;width:100%;height:auto;background:#f8f9fa}
 .svgsm{font:500 10.5px var(--mono)}  .svgsm:not([fill]){fill:var(--gray2)}
 """
 
-PX = 1100          # 页面正文栏差不多这么宽
+PX = 1720          # = 页面 .fwide 的宽度上限，跟 topic-02.html 保持一致
 
 
 def render(names):

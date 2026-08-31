@@ -39,7 +39,7 @@ ANS=[("第 2 节","放得下","内存","#1a73e8"),
      ("第 3 节","算得动","计算单元","#9334e6"),
      ("第 4 节","卡间说话","互联","#e8710a"),
      ("第 5 节","谁做决定","范式","#1e8e3e")]
-TIER_TOP="第 0 节　把 94.74 还清楚 ＋ 立那条假设　　·　　第 1 节　两边的硬件全景"
+TIER_TOP="第 0 节　立那条假设：两条出身不同　　·　　第 1 节　两边的硬件全景"
 TIER_BOT="第 6 节　怎么比才不算耍赖　　·　　第 7 节　两边的实测　　·　　第 8–9 节　数是怎么核的 ＋ 收尾"
 # (节索引, 专题一这一步, 专题一算出来的那个数, 撞在哪个部件)
 # ⛔ 第三列**必须**是专题一原文里出现过的数 —— 这一列是这张图存在的理由。
@@ -170,8 +170,8 @@ a.append(f'<text class="svgsm" x="0" y="{YS+89}" fill="#9aa0a6">'
 YT=YS+104
 a.append(f'<rect x="0" y="{YT}" width="1000" height="46" rx="4" fill="#fef7e0" stroke="#f9ab00"/>')
 a.append(f'<text class="svglbl" x="14" y="{YT+19}" fill="#7a5000" style="font-size:12.5px">'
-         f'⏱ <tspan font-weight="700">全课 60 分钟</tspan>　地图 2　·　第 0 节 4　·　第 1 节 10　·　'
-         f'<tspan font-weight="700">第 2 节 15</tspan>　·　第 3 节 10　·　第 4 节 5　·　第 5 节 5</text>')
+         f'⏱ <tspan font-weight="700">全课 60 分钟</tspan>　地图 2　·　第 0 节 2　·　第 1 节 10　·　'
+         f'<tspan font-weight="700">第 2 节 17</tspan>　·　第 3 节 10　·　第 4 节 5　·　第 5 节 5</text>')
 a.append(f'<text class="svglbl" x="14" y="{YT+37}" fill="#7a5000" style="font-size:12.5px">'
          f'　　第 6 节 3　·　第 7 节 4　·　第 8 节 0（发下去自己看）　·　第 9 节 2　　'
          f'——　<tspan font-weight="700">超了先砍图 2-2 和 2-5</tspan></text>')
