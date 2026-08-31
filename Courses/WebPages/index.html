@@ -115,6 +115,10 @@ tbody tr:hover{background:var(--bg2)}
 .topic .name a{color:inherit;text-decoration:none}
 .topic .name a:hover{color:var(--blue)}
 .topic .en{font-size:13.5px;color:var(--gray);letter-spacing:.02em;font-style:italic}
+/* 「正文已完成」徽章。只给真的写完、能点进去读的专题挂 ——
+   页面上十四张卡长得一模一样，读者没法一眼分出哪些能读、哪些还只是一段介绍。 */
+.topic .rdy{font-size:12px;font-weight:600;color:#0d652d;background:#e6f4ea;
+            border:1px solid #ceead6;padding:2px 10px;border-radius:20px;letter-spacing:.02em}
 .topic .pre{margin-left:auto;font-size:13px;color:var(--gray);background:var(--bg2);
             padding:3px 10px;border-radius:6px;white-space:nowrap}
 .topic .quote{border-left:3px solid var(--yellow);padding:2px 0 2px 16px;margin-bottom:16px;
@@ -260,7 +264,7 @@ footer a{color:var(--blue);text-decoration:none}
       <div class="step"><div class="n">1</div><div class="t"><b>一个 Token 的一生</b><span>一个 token 走完全程，边走边算</span></div></div>
       <div class="arrow">结论：<b>装不进任何一块卡</b></div>
       <div class="step"><div class="n">2</div><div class="t"><b>TPU 与 GPU</b><span>那，卡到底长什么样？</span></div></div>
-      <div class="arrow">对上账发现：<b>长上下文里，注意力吃掉了一切</b></div>
+      <div class="arrow">量到那条分水岭：<b>算术强度 312</b> —— 而朴素注意力只有 64</div>
       <div class="step"><div class="n">3</div><div class="t"><b>注意力演进</b><span>那，大家是怎么绕开的？</span></div></div>
       <div class="arrow">前向到此算清了：<b>还有什么没算进去</b></div>
       <div class="step"><div class="n">4</div><div class="t"><b>反向与优化器</b><span>账还没算完 —— 大头在这儿</span></div></div>
@@ -303,7 +307,7 @@ footer a{color:var(--blue);text-decoration:none}
   <div class="sechead"><b>主线</b><span>必修 · 按顺序</span></div>
 
   <div class="topic main" id="t1">
-    <div class="head"><span class="num">01</span><span class="name"><a href="topic-01.html">一个 Token 的一生</a></span><span class="en">Life Cycle of a Token</span></div>
+    <div class="head"><span class="num">01</span><span class="name"><a href="topic-01.html">一个 Token 的一生</a></span><span class="en">Life Cycle of a Token</span><span class="rdy">正文已完成</span></div>
     <div class="quote">不泛讲 Transformer。拆一个真的 —— 跟着一个 token 走完全程，每走一步就把账算一遍。</div>
     <dl>
       <dt>讲什么</dt><dd>从分词开始，经过 MLA、MoE、61 层堆叠，一直到出口。七步，每步问同样四个问题：权重多大、激活多大、多少算力、<b>有没有什么东西在这里爆炸</b>。</dd>
@@ -318,14 +322,15 @@ footer a{color:var(--blue);text-decoration:none}
   </div>
 
   <div class="topic main" id="t2">
-    <div class="head"><span class="num">02</span><span class="name">TPU 与 GPU</span></div>
-    <div class="quote">一个从游戏显卡长出来，一个一开始就是为矩阵乘造的。出发点不同，之后每一层的差别都是这个出发点的回声。</div>
+    <div class="head"><span class="num">02</span><span class="name"><a href="topic-02.html">TPU 与 GPU</a></span><span class="en">Two Ways to Build the Same Machine</span><span class="rdy">正文已完成</span></div>
+    <div class="quote">一个从游戏显卡长出来，一个一开始就是为矩阵乘造的。但真到了参数表上，两边几乎一样 —— 差别不在那儿。</div>
     <dl>
-      <dt>讲什么</dt><dd>不罗列参数。从出身讲起 —— GPU 的基因是「大量独立小核 + 运行时灵活调度」，TPU 的基因是「少数巨大矩阵单元 + 编译期把一切排好」。这条差别一路贯穿到内存层次、互联拓扑、编程范式、整个软件栈。</dd>
-      <dt>为什么排第二</dt><dd>第一课刚算出「装不下」—— 那张卡到底是什么？为什么是这个容量？现在正是回答的时候。</dd>
-      <dt>垫了什么</dt><dd>后面每一次说「这个优化在 TPU 上不管用」或者「这里必须静态形状」，都指回这一课。</dd>
+      <dt>讲什么</dt><dd>不罗列参数 —— 参数表恰恰是这一课第一个要拆穿的东西。算力、HBM 带宽、片上 SRAM 三项都在 <b>10% 以内</b>，两边的「算力 ÷ 带宽」甚至撞在同一个数上（<b>312.6 对 312.5</b>）。真正的差别是<b>各缺对方整整一层</b>：TPU 没有硬件自动管的片上缓存，GPU 没有可编程的专用协处理器。缺的不是容量，是「<b>谁做决定</b>」—— 一个交给运行时，一个交给编译期。这条差别再一路展开到访存、计算单元、互联和整个软件栈。</dd>
+      <dt>为什么排第二</dt><dd>第一课刚算出「装不下」。这一课开场先把上一课欠的那个数<b>还清</b>（一张卡到底能用多少 HBM、剩下的去哪了），再往下拆那张卡。</dd>
+      <dt>垫了什么</dt><dd>一把尺子和一个判据。尺子是<b>算术强度 312 这条分水岭</b> —— 左边买算力没用，右边省搬运没用；判据是<b>「这个优化改的是谁做决定，还是改搬多少」</b>。后面每一次说「这个优化在 TPU 上不管用」或者「这里必须静态形状」，都指回这一课。</dd>
     </dl>
     <div class="docs">
+      <a class="pri" href="topic-02.html">课件 →</a>
       <a href="gpu-microscope.html">🔬 GPU 显微镜 · 八张图拆开一颗 B200</a>
       <a href="tpu-microscope.html">🔬 TPU 显微镜 · 八张图拆开一颗 v7</a>
     </div>
@@ -454,7 +459,7 @@ footer a{color:var(--blue);text-decoration:none}
 </div></section>
 
 <footer><div class="wrap">
-  <p><b>加速器系统课程</b> · 大纲阶段，正文陆续补充</p>
+  <p><b>加速器系统课程</b> · <b>专题 01、02 正文已完成</b>（带课件与全部插图），其余十二个专题目前只有大纲，陆续补充</p>
   <p style="margin-top:10px"><b>Chris Yang</b> · Google Cloud AI Infra 架构师　——
      文中观点与数据均为个人整理，不代表所属机构。</p>
   <p style="margin-top:10px">本课程采用 <a href="http://creativecommons.org/licenses/by-nc-sa/4.0/">CC BY-NC-SA 4.0</a>
