@@ -822,7 +822,7 @@ footer a{text-decoration:none}
 <rect x="168" y="406" width="404" height="70" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="0.8"/>
 <text class="svgsm" x="182" y="428" fill="#202124">XLU 跨 lane 单元 × 2（公开资料，未标代次）</text>
 <text class="svgsm" x="182" y="445" fill="#202124">转置 · 跨 lane 归约 · shuffle —— 公开资料明写「慢且贵」</text>
-<text class="svgsm" x="182" y="462" fill="#202124">⚠️ 超越函数（exp / tanh / sin）归哪个部件，公开资料没说</text>
+<text class="svgsm" x="182" y="462" fill="#202124">⚠️ 超越函数<tspan font-weight="700">另算一类</tspan>：Pallas 成本模型里 transcendentals ≠ flops</text>
 <rect x="592" y="406" width="408" height="70" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="0.8"/>
 <text class="svgsm" x="606" y="428" fill="#202124">SFU × 4／处理块（个数沿用 Hopper 画法）</text>
 <text class="svgsm" x="606" y="445" fill="#202124">exp · rcp · rsqrt 等超越函数</text>
@@ -841,7 +841,7 @@ footer a{text-decoration:none}
 <text class="svgsm" x="18" y="639" fill="#7a5000">一边全部落在「自动管」那一格，一边全部落在「显式管」那一格 —— 同样一百多 MB 的片上 SRAM，一个替你适应，一个让你安排。</text>
 <text class="svgsm" x="18" y="656" fill="#7a5000">这就是第 0 节那两条出身，第一次以数字的形式出现。</text>
 </svg>
-  <figcaption>两个灰的空格才是这张表的内容：<b>TPU 没有「硬件自动管的缓存」那一层，GPU 没有「可编程的专用协处理器」那一层。</b>第五行不是空格，但要一起看：<b>两边各点名了一个小帮手，而对方那一项都没说</b> ——&nbsp;TPU 点名的是「数据横着走」的 XLU，GPU 点名的是「算超越函数」的 SFU；反过来，GPU 怎么跨 lane、TPU 拿什么算超越函数，两家<b>都没写进公开资料</b>。⚠️ 口径逐行不同 —— VMEM 是每核、SparseCore 是每 chip、HBM 是每 device。</figcaption>
+  <figcaption>两个灰的空格才是这张表的内容：<b>TPU 没有「硬件自动管的缓存」那一层，GPU 没有「可编程的专用协处理器」那一层。</b>第五行不是空格，但要一起看：<b>两边各点名了一个小帮手，而对方那一项都没说</b> ——&nbsp;TPU 点名的是「数据横着走」的 XLU，GPU 点名的是「算超越函数」的 SFU；反过来，GPU 怎么跨 lane、TPU 拿什么算超越函数，两家都<b>没写进规格表</b> ——&nbsp;TPU 那一项只在<b>工具链的成本模型</b>里露出一角。⚠️ 口径逐行不同 —— VMEM 是每核、SparseCore 是每 chip、HBM 是每 device。</figcaption>
   </figure>
 
   <h3>1.4　⭐⭐ 本节压轴：算力除以带宽，两边落在同一个数上</h3>
@@ -994,7 +994,7 @@ footer a{text-decoration:none}
           <td>（<b>没有可编程的</b>）<br><span class="sub">TMA 是固定功能搬运，不是这一类</span></td>
           <td>⭐ 另一层只有另一边有</td></tr>
       <tr><td><b>零碎活的小单元</b></td>
-          <td>XLU 跨 lane 单元 × 2<sup>†</sup><br><span class="sub">转置 · 跨 lane 归约 · shuffle。超越函数（<code>exp</code> / <code>tanh</code> / <code>sin</code>）<b>归哪个部件，公开资料没说</b><sup>§</sup></span></td>
+          <td>XLU 跨 lane 单元 × 2<sup>†</sup><br><span class="sub">转置 · 跨 lane 归约 · shuffle。超越函数（<code>exp</code> / <code>tanh</code>）<b>是单独一类资源</b><sup>§</sup> ——&nbsp;Pallas 的成本模型里 <code>transcendentals</code> 跟 <code>flops</code> 平级单开一栏；但<b>部件叫什么、几个，公开资料没有</b></span></td>
           <td>SFU × 4 / 处理块<sup>‡</sup><br><span class="sub">exp · rcp · rsqrt 等超越函数。跨 lane 靠 warp shuffle 指令，官方没单列成部件</span></td>
           <td>⚠️ 两边<b>各点名了一个</b>，又<b>各自不说另一个</b></td></tr>
       <tr><td><b>HBM</b></td><td>96 GiB / device（＝ 192 GiB ÷ 2）；整 chip 7,380 GB/s</td>
@@ -1017,23 +1017,30 @@ footer a{text-decoration:none}
   （v7 是 2 个 256×256），说明那句没有标代次，所以这个 2 只当「有不止一个」用。
   <br><sup>‡</sup> SFU <b>存在</b>是 NVIDIA 官方明写的（Blackwell SM 构成里列了
   Special Function Units），但<b>个数官方框图没标</b>，这里的 ×4 是沿用 Hopper 的画法。
-  <br><sup>§</sup> <b>「没有单列」不等于「没有」——&nbsp;这一格值得多说两句</b>，因为
-  「一颗算神经网络的芯片，总得有块硬件负责 <code>exp</code> / <code>tanh</code> /
-  <code>sin</code>」是个很自然的直觉，而且它<b>曾经是对的</b>：
-  <b>初代 TPU 的框图里确实有一个独立的 Activation 单元</b>，2017 年那篇论文的正文
-  也提到芯片上有一块「<i>nonlinear function logic</i>」。
-  <br>但<b>从 v2 起，公开资料就不再单列这一项了</b>。TPU v4 的 ISCA 论文对一个
-  TensorCore 的完整描述只有一句：「四个 128×128 MXU，一个<b>带 128 条 lane、
-  每 lane 16 个 ALU</b> 的 VPU，以及 16 MiB VMEM」——&nbsp;<b>那 16 个 ALU 里有没有
-  专算超越函数的，论文没有拆</b>。Google Cloud 的 TPU 架构文档、JAX 官方的 Pallas
-  硬件参考页、以及 JAX 里那张机器可读的芯片规格表，三处口径一致：
-  <b>都只列 MXU / 向量单元 / 标量单元 / SparseCore，没有把「超越函数单元」列出来</b>。
-  至于 NVIDIA SFU 那套「查表 + 插值」的实现方式，TPU 侧同样找不到公开说明。
-  <br><b>但请注意这句话的边界：这些文档「没有列出」，不等于芯片上「没有」。</b>
-  规格表本来就只列它想让你据以选型的东西 ——&nbsp;上面那张表连 XLU 都没列，
-  而 XLU 是确实存在的。再考虑到<b>初代明确有过这类硬件</b>，
-  「没披露」比「没有」是概率高得多的解释。
-  <br>所以本课在这一格写的是<b>「公开资料没说」</b>，不是「没有」——&nbsp;这两句话差得很远，<b>后者是在替对方宣布一件我并不知道的事</b>。</p>
+  <br><sup>§</sup> <b>这一格值得单独讲，因为它是全课少见的「证据分三级」的例子。</b>
+  「一颗专算神经网络的芯片，总得有块硬件负责 <code>exp</code> / <code>tanh</code> /
+  <code>sin</code>」——&nbsp;这个直觉是对的，但<b>能公开证明到哪一步，跟直觉走得多远，是两回事</b>：
+  <br><b>① 曾经有过，白纸黑字。</b>初代 TPU 的框图里就有一个独立的
+  <b>Activation 单元</b>，2017 年那篇论文的正文也提到芯片上有一块
+  「<i>nonlinear function logic</i>」。所以这类硬件在 TPU 上不是新鲜事。
+  <br><b>② 到今天它仍然是「单独一类资源」，这条有正面证据。</b>开源 JAX 里
+  Pallas 给 TPU kernel 报成本的接口是
+  <code>CostEstimate(flops, transcendentals, bytes_accessed, …)</code> ——&nbsp;
+  <b><code>transcendentals</code> 跟 <code>flops</code> 平级，单开一栏</b>。
+  这一点很说明问题：<b>如果超越函数只是「用普通 ALU 多跑几条指令」，
+  它就该被算进 <code>flops</code> 里，没有理由单开一栏计数。</b>
+  <br><b>③ 但部件叫什么、有几个、怎么实现，公开资料确实没有。</b>
+  TPU v4 的 ISCA 论文对一个 TensorCore 的完整描述只有「四个 128×128 MXU，
+  一个<b>带 128 条 lane、每 lane 16 个 ALU</b> 的 VPU，以及 16 MiB VMEM」——&nbsp;
+  那 16 个 ALU 里有没有专算超越函数的，论文没拆。Google Cloud 的架构文档、
+  JAX 官方的 Pallas 硬件参考页、JAX 里那张机器可读的芯片规格表，
+  三处都只列 MXU / 向量单元 / 标量单元 / SparseCore。
+  至于 NVIDIA SFU 那套「查表 + 插值」的实现方式，TPU 侧也找不到公开说明。
+  <br><b>⚠️ 最后一句最重要：规格表「没有列出」，不等于芯片上「没有」。</b>
+  现成的反例就在同一批文档里 ——&nbsp;<b>XLU 也没被任何官方规格表列过，
+  而它确实存在</b>（它是从另一份公开材料里查到的）。规格表只列它想让你据以选型的东西。
+  所以本课这一格写的是<b>「是单独一类资源，但部件未公开」</b>，
+  <b>既不写「没有」，也不写我拿不出公开出处的细节</b>。</p>
 
   <div class="note ok"><span class="t">这一节的三个落点</span>
     ① <b>两套坐标</b>，后面每讲一个部件都能说出「它在对面对应谁」；<br>
