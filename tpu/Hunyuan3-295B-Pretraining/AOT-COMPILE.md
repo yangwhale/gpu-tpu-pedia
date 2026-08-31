@@ -54,12 +54,16 @@ INVALID_ARGUMENT: Error: unexpected worker hostname ... TPU_WORKER_HOSTNAMES
 
 ## Step −1 · 版本对齐（**最容易被忽略、代价最大的一步**）
 
-编译产物里**刻着编译器的源码版本号**。我从 395 MB 的产物里 grep 出来的原文：
+编译产物里**刻着编译器的源码版本号**。我从 395 MB 的产物里 grep 出来的，
+形状是这样（构建路径已打码，那串数字就是 libtpu 的 changelist）：
 
 ```
-googlefile:/google_src/files/948136882/depot/g3      ← libtpu 的 changelist
-TPU7x                                                 ← 目标设备型号
+<构建系统路径>/<9 位 changelist>/…      ← libtpu 是哪一版编译器
+TPU7x                                    ← 目标设备型号
 ```
+
+自己找的话：`strings <产物>.pb | grep -iE 'changelist|/files/[0-9]{6,}'`,
+第一条命中就是它。**要对齐的是那串数字，不是路径本身。**
 
 所以它绑死三样东西，**任意一样对不上，缓存就是废的**：
 

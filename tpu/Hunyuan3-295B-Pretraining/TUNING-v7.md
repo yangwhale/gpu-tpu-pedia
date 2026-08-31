@@ -254,7 +254,7 @@ python3 maxtext-hunyuan3/analyze-trace.py t.json
 >
 > ```bash
 > GOOGLE_CLOUD_PROJECT=<project> \
->   /google/src/head/depot/google3/cloud/tpu/tools/c2xprof/bin/c2xprof.par \
+>   <c2xprof 可执行文件的路径> \
 >   --gcs_path=gs://<bucket>/<run>/tensorboard/plugins/profile/<ts>/<host>.xplane.pb
 > ```
 

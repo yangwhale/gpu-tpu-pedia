@@ -98,7 +98,10 @@ def audit_report():
 import re
 
 _FORBIDDEN = [
-    (r"\bb/\d{6,}\b",              "Buganizer bug 号"),
+    # 位数是 8 不是 6：`topic-01.html` 里有一句 JS 写着 `(b/1048576).toFixed(1)+" MiB"`
+    # —— 字节换 MiB。6 位阈值会把它当成 bug 号报出来。真实 bug 号是 9 位。
+    # **一个总在误报的闸门，等于没有闸门**，所以宁可收紧。
+    (r"\bb/\d{8,}\b",              "Buganizer bug 号"),
     (r"\bgo/[a-z0-9\-/]+",         "内部 go/ 链接"),
     (r"corp\.google\.com",         "内部域名"),
     (r"cc\.higcp\.com",            "内部站点"),
@@ -106,7 +109,19 @@ _FORBIDDEN = [
     (r"内部设备表",                 "内部来源署名"),
     (r"内部资料|内部文档|内部源码",   "内部来源署名"),
     (r"/google/(bin|src)/",        "内部路径"),
+    # ⛔ 下面这两条是 2026-08-31 补的。原先只有上面那条 `/google/(bin|src)/`，
+    # 而真正漏出去的那一条长的是 `/google_src/files/…` —— **中间是下划线不是斜杠**，
+    # 一条都没匹配上，在公开仓库里躺了很久。
+    # 教训跟 marker 白名单同类：**规则写得像对的，不等于它覆盖了真实的写法。**
+    (r"/google_src/",              "内部路径（下划线写法）"),
+    (r"\bgooglefile:",             "内部文件系统前缀"),
 ]
+
+
+# 这几类**只在「生成出来的公开页面」上算问题**，在生成器源码里是必要的：
+# `build_doc.py` 得能说出「这个数来自内部资料，公开版要换掉」，
+# 那句话本身不是泄漏。仓库级闸门（scripts/public-repo-guard.py）按这个集合放行。
+PAGE_ONLY = {"内部来源署名"}
 
 
 def lint_public(html):

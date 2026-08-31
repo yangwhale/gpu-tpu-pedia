@@ -16,7 +16,7 @@
 
 > **2026-05-15 [PR #2577](https://github.com/vllm-project/tpu-inference/pull/2577) (commit `04077875`) 已修复 chat 死循环 bug**，当前部署支持完整 chat / batch eval / few-shot completion。
 >
-> **历史 bug**: 缺 PR #2577 时 chat 输出 `about about about...` / `\n/**\n/**` 死循环 / 语言错乱（客户报告 b/510441006）
+> **历史 bug**: 缺 PR #2577 时 chat 输出 `about about about...` / `\n/**\n/**` 死循环 / 语言错乱（客户报告，工单号从略）
 > - **根因**: GDN (Gated Linear Attention) recurrent scan kernel 在 bf16 精度下数值不稳定，导致 token logits 退化
 > - **修复**: `recurrent_scan_v2.py` 关键计算 upcast 到 fp32 (5 处) + `gdn_attention.py` chunk_size 64→32
 > - **影响范围**: TP=8 / DP attention 全部受益（非 DP only）
@@ -75,7 +75,7 @@ kubectl exec $POD -- bash -c "
 | Patch | 修复内容 | 缺失症状 |
 |---|---|---|
 | **PR #2366**（KV cache allocator） | TPU `jax.Array` strongly typed 必须 duplicate per-layer，vLLM hybrid allocator 默认 4 layers 共享 1 `KVCacheTensor` → block_id pool ~3.5× 过大 → 越界 → JAX `dynamic_update_slice_in_dim` silently clip → 多 request 状态塌陷 | **gibberish output / OOM / EngineCore crash** |
-| **PR #2577**（GDN bf16 数值稳定）⭐ 2026-05-15 | GDN (Gated Linear Attention) recurrent scan kernel 在 bf16 精度下数值不稳定，token logits 退化 → `recurrent_scan_v2.py` 关键计算 upcast fp32 (5 处) + `gdn_attention.py` chunk_size 64→32 | **chat 输出 `about about about...` / `\n/**\n/**` 死循环 / 语言错乱**（客户报告 b/510441006） |
+| **PR #2577**（GDN bf16 数值稳定）⭐ 2026-05-15 | GDN (Gated Linear Attention) recurrent scan kernel 在 bf16 精度下数值不稳定，token logits 退化 → `recurrent_scan_v2.py` 关键计算 upcast fp32 (5 处) + `gdn_attention.py` chunk_size 64→32 | **chat 输出 `about about about...` / `\n/**\n/**` 死循环 / 语言错乱**（客户报告，工单号从略） |
 
 **修复**：用 main branch ≥ **2026-05-15** (含 commit `04077875`)。两个 patch 都从 main branch cp 到 pod，见 [Step 2](#step-2-应用-patches-如未-patch)。
 
@@ -712,7 +712,9 @@ gcloud container node-pools delete np-tpu7x-spot-mh-qwen35 \
 
 ### Multi-host 部署完整 dogfood 详记
 
-完整 8 次 test iteration + 6 层 root cause 链 + 3 patches deep dive + 经验教训见**内部 dogfood HTML**（[最下方附录](#-内部文档dogfood-历程--深度分析)）。
+完整 8 次 test iteration + 6 层 root cause 链 + 3 patches deep dive + 经验教训写在
+dogfood HTML 里（[最下方那张表](#-dogfood-历程这几份不在公开仓库里)）——
+**那几份不在这个仓库里**，结论已经提炼进本节正文。
 
 ---
 
@@ -898,14 +900,17 @@ kubectl --context="$CTX" exec qwen35-mh-0 -- bash -c "
 - [Qwen3.5-397B-A17B-FP8 HuggingFace](https://huggingface.co/Qwen/Qwen3.5-397B-A17B-FP8)
 - 同体系 README: [DeepSeek R1 FP4](../DeepSeek-R1-671B-FP4/README.md) · [GLM-5.1 FP4](../GLM-5.1-754B-FP4/README.md) · [Kimi K2.6](../Kimi-K2.6/README.md) · [Qwen3-Coder 480B](../Qwen3-Coder-480B/README.md)
 
-### 📚 内部文档（dogfood 历程 + 深度分析）
+### 📚 dogfood 历程（这几份不在公开仓库里）
 
-按时间顺序，4 个互补的 HTML 文档记录了从初次部署到 PD 分离的完整 dogfood：
+按时间顺序，5 份 HTML 记录了从初次部署到 PD 分离的完整 dogfood。
+**它们放在一个需要登录的内部站点上，所以这里只列标题、不放链接** ——
+放了外面的人也打不开，只会变成一串 404。
+真正有用的结论已经提炼进上面的正文；下面这张表的作用是让内部同事知道去找哪一份。
 
 | 日期 | 主题 | 详情 |
 |---|---|---|
-| 2026-04-24 | [部署与优化指南 v1.5](https://cc.higcp.com/assets/qwen35-397b-tpu-inference-plan-20260424.html) | 完整部署 + 优化决策（108 KB）|
-| 2026-04-25 | [⭐ 单机推理踩坑记 — 4 小时弯路 vs 14 分钟正确路](https://cc.higcp.com/assets/qwen35-397b-debug-story-20260425.html) | 单机部署踩坑全记录（45 KB）|
-| 2026-04-26 | [README 可复现性验证报告](https://cc.higcp.com/assets/qwen35-readme-verification-20260426.html) | 按 README 步骤盲跑 + 验证（23 KB）|
-| 2026-04-26 | [⭐ PD 分离部署 Dogfood 详记](https://cc.higcp.com/assets/qwen35-pd-disagg-dogfood-20260426.html) | PD 全流程 + HMA root cause + 6 lessons（24 KB）|
-| 2026-04-26 | [⭐ Multi-host TP=16 Dogfood 详记](https://cc.higcp.com/assets/qwen35-multihost-dogfood-20260426.html) | 5 次 test 揭露 4 层 root cause 链 + 单机/多机对比（27 KB）|
+| 2026-04-24 | 部署与优化指南 v1.5 | 完整部署 + 优化决策（108 KB）|
+| 2026-04-25 | ⭐ 单机推理踩坑记 — 4 小时弯路 vs 14 分钟正确路 | 单机部署踩坑全记录（45 KB）|
+| 2026-04-26 | README 可复现性验证报告 | 按 README 步骤盲跑 + 验证（23 KB）|
+| 2026-04-26 | ⭐ PD 分离部署 Dogfood 详记 | PD 全流程 + HMA root cause + 6 lessons（24 KB）|
+| 2026-04-26 | ⭐ Multi-host TP=16 Dogfood 详记 | 5 次 test 揭露 4 层 root cause 链 + 单机/多机对比（27 KB）|
