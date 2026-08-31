@@ -31,12 +31,12 @@ q.append('<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5
          '整门课只有一个根：两条出身不同，于是每一层都不同</text>')
 cols=[(0,   "#1a73e8","#e8f0fe","GPU","图形处理器",
        ["要伺候大量互不相干的小任务","形状、访问模式、控制流全都无法预知",
-        "→ 只能把面积花在「适应」上","cache 层次 · warp 调度 · 海量并发线程"],
-       "什么都不能假设"),
+        "→ 面积大半花在「应付各种情况」上","cache 层次 · warp 调度 · 海量并发线程"],
+       "不知道你要跑什么　→　处处留一手"),
       (512,"#1e8e3e","#e6f4ea","TPU","为矩阵乘定做的 ASIC",
        ["从第一天就只服务神经网络","形状规则、访问可预测、控制流静态",
         "→ 省下的面积全给计算单元","无 cache · 编译期定布局 · 巨大的 MXU"],
-       "可以大胆假设")]
+       "早就知道你要跑什么　→　一手都不留")]
 for x,col,lite,name,birth,lines,claim in cols:
     q.append(f'<rect x="{x}" y="34" width="488" height="196" rx="10" fill="{lite}" stroke="{col}"/>')
     q.append(f'<text class="svgnum" x="{x+20}" y="62" fill="{col}" style="font-size:17px">{name}</text>')
@@ -44,8 +44,8 @@ for x,col,lite,name,birth,lines,claim in cols:
     for k,t in enumerate(lines):
         q.append(f'<text class="svgsm" x="{x+20}" y="{108+k*20}" fill="#202124" '
                  f'style="font-size:11.5px">{t}</text>')
-    q.append(f'<rect x="{x+20}" y="192" width="200" height="26" rx="13" fill="{col}"/>')
-    q.append(f'<text class="svglbl" x="{x+120}" y="209" text-anchor="middle" fill="#fff">{claim}</text>')
+    q.append(f'<rect x="{x+20}" y="192" width="292" height="26" rx="13" fill="{col}"/>')
+    q.append(f'<text class="svglbl" x="{x+166}" y="209" text-anchor="middle" fill="#fff">{claim}</text>')
 q.append('<text class="svgsm" x="500" y="140" text-anchor="middle" fill="#80868b" '
          'style="font-size:15px">vs</text>')
 
@@ -65,7 +65,7 @@ OUT=[("第 2 节　放得下吗","内存 —— 有 cache　vs　无 cache","#1a
      ("第 4 节　连得上吗","互联 —— NVLink 域　vs　ICI 环面","#e8710a"),
      ("第 5 节　谁说了算","范式 —— 人决定　vs　编译器决定","#1e8e3e")]
 q.append('<text class="svglbl" x="0" y="308" fill="#202124">'
-         '这一条假设的四个后果 —— 不是「两种风格」，是同一条基因的四次显形</text>')
+         '留不留这一手，后面就分出四个后果 —— 不是「两种风格」，是同一个决定的四次显形</text>')
 for i,(t,sub,c) in enumerate(OUT):
     x=i*252
     q.append(f'<path d="M500 282 C500 300 {x+118} 300 {x+118} 320" fill="none" stroke="{c}" '
@@ -74,7 +74,7 @@ for i,(t,sub,c) in enumerate(OUT):
     q.append(f'<text class="svgnum" x="{x+16}" y="346" fill="{c}">{t}</text>')
     q.append(f'<text class="svgsm" x="{x+16}" y="366">{sub}</text>')
 q.append('<text class="svgsm" x="0" y="398" fill="#80868b">'
-         '第 5 节回过头验证这条假设：成立时 TPU 赢在省下来的面积；不成立时（变长序列、MoE 路由），代价也全在那儿</text>')
+         '第 5 节回过头验这个赌注：赌对了，TPU 赢在省下来的那片面积；赌错了（变长序列、MoE 路由），它没有后路</text>')
 
 # ── 底带：这门课是两段 ────────────────────────────────────
 q.append('<rect x="0" y="416" width="1000" height="76" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')

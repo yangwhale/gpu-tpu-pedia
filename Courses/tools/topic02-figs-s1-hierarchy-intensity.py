@@ -13,7 +13,7 @@ ROWS=[  # (层名, 副注, TPU 内容, GPU 内容, TPU空?, GPU空?)
   "L1（与 shared 合计上限 256 KB／SM）<TAB>L2 126 MB／GPU<TAB>—— 全自动，你只能提示不能指定",1,0),
  ("专用协处理器","矩阵单元干不了的活","SparseCore × 4／chip（＝ 2／device）<TAB>可编程：前缀和 · 排序 · 计数 · scatter","（没有对应物）",0,1),
  # 官方正文写「96 GB」是十进制，而同一张表的 192 GiB ÷ 2 = 96 GiB —— 本课统一用 GiB，
- # 理由和第 0 节那个 94.74 GiB 是同一条：判 OOM 的分母必须是二进制的。
+ # 理由和附录 A 那个 94.74 GiB 是同一条：判 OOM 的分母必须是二进制的。
  ("芯片外","HBM","96 GiB／device（＝ 192 GiB ÷ 2）<TAB>整 chip 7,380 GB/s","186 GB／GPU<TAB>8,000 GB/s",0,0),
 ]
 RH,TOP,LX,LW,RX,RW=84,70,168,404,592,408
@@ -67,7 +67,7 @@ W('fig1-3.svg',p+['</svg>'])
 # ══════════ 图 1-4 · 压轴：312 FLOP/byte ══════════
 V7B,V7BW,V7F=2307,7.380,4614     # TFLOPS / TB·s⁻¹ / TFLOPS  官方 per chip
 B2B,B2BW,B2F=2500,8.000,5000     # dense per GPU，由官方域级数字除 72 得到
-H2=454
+H2=471
 q=[f'<svg viewBox="0 0 1000 {H2}" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    '两家公司、两套架构、两种设计哲学 —— 算力除以带宽，落在同一个数上</text>',
@@ -111,10 +111,11 @@ q.append('<text class="svgsm" x="500" y="326" text-anchor="middle" fill="#ffffff
 q.append(f'<text class="svglbl" x="0" y="366" fill="#202124">这个数到底是什么意思</text>')
 for i,t in enumerate([
   "· 它是硬件的「胃口」：每从 HBM 搬一个字节，硬件配套能做约 312 次 BF16 运算。喂不满，算力就在空转",
-  "· 于是每个算子只剩一个问题：它自己的算术强度，比 312 高还是低？高就是算力受限，低就是带宽受限",
+  "· 算子那头是同一个单位：它每搬一个字节，需要做几次运算 —— 这就是它的算术强度",
+  "· 于是每个算子只剩一个问题：它的算术强度比 312 高还是低？高就是算力受限，低就是带宽受限",
   "· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（第 2.8 节）。这就是第 2 节要处理的东西",
   "· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是第 3 节的战场。同一颗芯片，两种完全不同的困境"]):
-    q.append(f'<text class="svgsm" x="0" y="{386+i*17}" fill="{RD if i>=2 else "#202124"}">{t}</text>')
+    q.append(f'<text class="svgsm" x="0" y="{386+i*17}" fill="{RD if i>=3 else "#202124"}">{t}</text>')
 W('fig1-4.svg',q+['</svg>'])
 print('1-3 / 1-4 ok  ratios:',
       round(V7B/1000/V7BW*1000,1), round(B2B/1000/B2BW*1000,1),
