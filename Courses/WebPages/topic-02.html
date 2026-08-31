@@ -4193,7 +4193,7 @@ footer a{text-decoration:none}
     这个质疑<b>完全正确</b>，而且顺着它往下走，正好能把前面所有说法收口 ——&nbsp;
     因为答案不是「线真有那么多」，而是<b>那些线根本不需要汇合到一起</b>。</p>
 <figure class="fbox fwide" id="ms-p29">
-<svg viewBox="0 0 1400 830" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 的向量寄存器堆在版图上被切成 128 条，每条紧贴自己那条 lane 的 ALU；跨 lane 才需要真正的长线，所以才有独立的 XLU">
+<svg viewBox="0 0 1400 866" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 的向量寄存器堆在版图上被切成 128 条，每条紧贴自己那条 lane 的 ALU；跨 lane 才需要真正的长线，所以才有独立的 XLU">
 <text x="20" y="26" class="ttl">版图上它是<tspan font-weight="700">碎的</tspan>　—— 一个 vreg 不用扯 32,768 根线出去，因为那些线<tspan font-weight="700">从来不汇合</tspan></text>
 <rect x="20" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
 <text x="37" y="58" class="sm">vreg 存储（切片）</text>
@@ -4357,15 +4357,17 @@ footer a{text-decoration:none}
 <text x="802" y="276" class="xs">128 份加起来确实是 32,768 根，<tspan font-weight="700" fill="#d93025">但它们从来不汇合</tspan>。所以「128 宽」是 <tspan font-weight="700" fill="#202124">128 份并行的硬件</tspan>，不是一条粗 128 </text>
 <text x="802" y="294" class="xs">倍的线。</text>
 <text x="802" y="320" class="xs"><tspan font-weight="700" fill="#202124">「顶多一百多根」这个直觉是对的</tspan> —— 那是每条 lane 的局部数，被当成了全局数。</text>
-<rect x="20" y="494" width="438" height="178" rx="9" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
+<rect x="20" y="494" width="438" height="214" rx="9" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
 <text x="34" y="518" class="box" fill="#8430ce">① vreg ↔ 其他 63 个 vreg</text>
 <text x="444" y="518" class="xxs" fill="#5f6368" text-anchor="end">完全不连</text>
 <text x="34" y="542" class="xs"><tspan font-weight="700" fill="#202124">它们之间没有任何直接通路。</tspan>要把 vreg 3 挪到 vreg 7，唯一的办法是<tspan font-weight="700" fill="#202124">读出来、过</tspan></text>
 <text x="34" y="560" class="xs"><tspan font-weight="700" fill="#202124">一遍 ALU、再写回去</tspan>。</text>
 <line x1="34" y1="584" x2="444" y2="584" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
-<text x="34" y="604" class="xs">它们共用的是<tspan font-weight="700" fill="#202124">位线</tspan>：一条切片里 64 行共用一组线，靠选通挑一行。<tspan font-weight="700" fill="#202124">「时分复用」在</tspan></text>
-<text x="34" y="622" class="xs"><tspan font-weight="700" fill="#202124">这儿是真的</tspan> —— 只是范围是「64 挑 1」，不是全核抢总线。</text>
-<rect x="476" y="494" width="438" height="178" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="34" y="604" class="xs">它们共用<tspan font-weight="700" fill="#202124">位线</tspan>：一条切片里 64 行共用一组线，靠<tspan font-weight="700" fill="#202124">地址</tspan>挑一行。<tspan font-weight="700" fill="#d93025">但这不是轮转排队</tspan> </text>
+<text x="34" y="622" class="xs">—— 你要哪一行就是哪一行，<tspan font-weight="700" fill="#202124">当周期就到</tspan>，不存在「等 64 个周期才轮到我」。共用</text>
+<text x="34" y="640" class="xs">的代价是<tspan font-weight="700" fill="#202124">一条端口一个周期只能送一行</tspan>：想同时送 8 行，就得有 8 条端口 —— <tspan font-weight="700" fill="#202124">真</tspan></text>
+<text x="34" y="658" class="xs"><tspan font-weight="700" fill="#202124">正的预算是端口数，不是 64。</tspan></text>
+<rect x="476" y="494" width="438" height="214" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
 <text x="490" y="518" class="box" fill="#1e8e3e">② vreg ↔ VPU</text>
 <text x="900" y="518" class="xxs" fill="#5f6368" text-anchor="end">贴着，几微米</text>
 <text x="490" y="542" class="xs">根本不用「扯出去」。<tspan font-weight="700" fill="#202124">vreg 的 lane 5 和 ALU 的 lane 5 在芯片上是挨着的</tspan>，</text>
@@ -4373,7 +4375,7 @@ footer a{text-decoration:none}
 <line x1="490" y1="584" x2="900" y2="584" stroke="#1e8e3e" stroke-width="0.8" stroke-dasharray="3 3"/>
 <text x="490" y="604" class="xs"><tspan font-weight="700" fill="#202124">这就是逐元素算子便宜的物理原因</tspan>：它走的是全芯片最短的一条路，而且 128 条同</text>
 <text x="490" y="622" class="xs">时在走。</text>
-<rect x="932" y="494" width="438" height="178" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<rect x="932" y="494" width="438" height="214" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
 <text x="946" y="518" class="box" fill="#d93025">③ vreg ↔ MXU / XLU</text>
 <text x="1356" y="518" class="xxs" fill="#5f6368" text-anchor="end">真的要扯出去</text>
 <text x="946" y="542" class="xs">MXU 是个<tspan font-weight="700" fill="#202124">独立的块</tspan>，阵列比 lane 轴还宽，一口喂不满；XLU 更是<tspan font-weight="700" fill="#202124">必须同时够到全</tspan></text>
@@ -4381,13 +4383,13 @@ footer a{text-decoration:none}
 <line x1="946" y1="584" x2="1356" y2="584" stroke="#d93025" stroke-width="0.8" stroke-dasharray="3 3"/>
 <text x="946" y="604" class="xs"><tspan font-weight="700" fill="#d93025">所以只有这两条是真正的长路。</tspan>它们因此各自配了进料口、结果队列，而且<tspan font-weight="700" fill="#202124">全核只有</tspan></text>
 <text x="946" y="622" class="xs"><tspan font-weight="700" fill="#202124">一两个</tspan> —— 长而宽的路，芯片不会多铺。</text>
-<rect x="20" y="694" width="1360" height="116" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
-<text x="38" y="720" class="sec">⚠️ 「按 lane 切片」这件事是推出来的，不是查到的版图</text>
-<text x="38" y="744" class="xs">推导链有两条。<tspan font-weight="700" fill="#202124">一</tspan>：4,096 个 ALU 不可能靠一个集中的寄存器堆去喂，布线在物理上过不去。<tspan font-weight="700" fill="#202124">二</tspan>：如果寄存器堆是集中的，那个交叉开关本来就在那儿了，跨 lane 就不该特别贵 —— <tspan font-weight="700" fill="#202124">而它特别贵，还专门做了一个独立单元。「XLU 存在」这件事本身，就是版图按 lane </tspan></text>
-<text x="38" y="762" class="xs"><tspan font-weight="700" fill="#202124">切的证据。</tspan></text>
-<text x="38" y="782" class="xs"><tspan font-weight="700" fill="#d93025">没查到的：具体的 bank 怎么划、位线怎么排、真实 floorplan —— 公开资料没有。</tspan>上面讲的是<tspan font-weight="700" fill="#202124">数量级和拓扑</tspan>，不是版图图纸。</text>
+<rect x="20" y="730" width="1360" height="116" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="38" y="756" class="sec">⚠️ 「按 lane 切片」这件事是推出来的，不是查到的版图</text>
+<text x="38" y="780" class="xs">推导链有两条。<tspan font-weight="700" fill="#202124">一</tspan>：4,096 个 ALU 不可能靠一个集中的寄存器堆去喂，布线在物理上过不去。<tspan font-weight="700" fill="#202124">二</tspan>：如果寄存器堆是集中的，那个交叉开关本来就在那儿了，跨 lane 就不该特别贵 —— <tspan font-weight="700" fill="#202124">而它特别贵，还专门做了一个独立单元。「XLU 存在」这件事本身，就是版图按 lane </tspan></text>
+<text x="38" y="798" class="xs"><tspan font-weight="700" fill="#202124">切的证据。</tspan></text>
+<text x="38" y="818" class="xs"><tspan font-weight="700" fill="#d93025">没查到的：具体的 bank 怎么划、位线怎么排、真实 floorplan —— 公开资料没有。</tspan>上面讲的是<tspan font-weight="700" fill="#202124">数量级和拓扑</tspan>，不是版图图纸。</text>
 </svg>
-<figcaption>P-28 说「每条端口本身就是 128 宽」，最较真的追问紧接着就来：<b>一个 vreg 才 4 KB，它怎么可能扯出去那么多根线？</b>这个质疑<b>完全正确</b> —— 而且答案不是「线真有那么多」，是<b>「它们根本不需要汇合」</b>。先纠单位：一根走线传<b>一个 bit</b>，所以一个 vreg 是 8 × 128 × 32 ＝ <b>32,768 根</b>，不是 128 根。荒唐 → 所以它不是一整块：<b>整条数据通路按 lane 切成 128 份，存储就贴在自己那条 lane 的 ALU 旁边</b>，每份只要 <b>256 根线、走几微米</b>。于是三个问题一次答完：<b>64 个 vreg 之间完全不连</b>（只共用位线，「64 挑 1」那一层的时分复用是真的）；<b>到 VPU 是贴着的</b>；<b>只有 MXU 和 XLU 才真的要扯长线</b> —— 这也正是它们要队列、要共享的原因。⚠️ 红带那条必须念：<b>「按 lane 切片」是推的，不是查到的版图</b>，具体 bank 划分与 floorplan 公开资料没有。</figcaption>
+<figcaption>P-28 说「每条端口本身就是 128 宽」，最较真的追问紧接着就来：<b>一个 vreg 才 4 KB，它怎么可能扯出去那么多根线？</b>这个质疑<b>完全正确</b> —— 而且答案不是「线真有那么多」，是<b>「它们根本不需要汇合」</b>。先纠单位：一根走线传<b>一个 bit</b>，所以一个 vreg 是 8 × 128 × 32 ＝ <b>32,768 根</b>，不是 128 根。荒唐 → 所以它不是一整块：<b>整条数据通路按 lane 切成 128 份，存储就贴在自己那条 lane 的 ALU 旁边</b>，每份只要 <b>256 根线、走几微米</b>。于是三个问题一次答完：<b>64 个 vreg 之间完全不连</b>（只共用位线，而且是<b>按地址选通、当周期就到</b>，<b>不是轮转排队</b> —— 共用的代价是「一条端口一周期只送一行」，不是「等 64 个周期」）；<b>到 VPU 是贴着的</b>；<b>只有 MXU 和 XLU 才真的要扯长线</b> —— 这也正是它们要队列、要共享的原因。⚠️ 红带那条必须念：<b>「按 lane 切片」是推的，不是查到的版图</b>，具体 bank 划分与 floorplan 公开资料没有。</figcaption>
 </figure>
 
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
