@@ -38,7 +38,7 @@ for k,x in enumerate([16,516]):
         p.append(f'<text class="svgsm" x="{x+96}" y="{yy+15}" fill="{c}">{v}</text>')
     # HBM
     p.append(f'<rect x="{x+16}" y="326" width="436" height="18" rx="4" fill="{PU}"/>')
-    p.append(f'<text class="svgsm" x="{x+26}" y="339" fill="#fff">HBM 96 GB —— 这个 chiplet 私有，不与另一个共享地址空间</text>')
+    p.append(f'<text class="svgsm" x="{x+26}" y="339" fill="#fff">HBM 96 GiB／device —— 这个 chiplet 私有，不与另一个共享地址空间</text>')
 # D2D
 p.append(f'<rect x="486" y="200" width="30" height="46" rx="5" fill="{OR}"/>')
 p.append('<text class="svgsm" x="501" y="219" text-anchor="middle" fill="#fff">D2D</text>')
@@ -53,7 +53,7 @@ for i,(t,v) in enumerate([("HBM","192（官方表写 GiB、正文写 GB）· 7,3
 p.append('<line x1="0" y1="404" x2="1000" y2="404" stroke="#e8eaed"/>')
 for i,(n,t) in enumerate([("①","一颗 chip = 2 个 device。所有框架日志按 device 报 —— 容量除以 2 才是你的额度"),
     ("②","两个 chiplet 各有独立地址空间（不再是上代的统一 MegaCore）。跨 chiplet 要走 D2D + 集合通信，不是随手读写 —— 好在 D2D 比一条 1D ICI 链路快 6 倍"),
-    ("③","片上 SRAM 全是显式管理的，CMEM = 0 —— 这一整层在 GPU 那边叫 cache，在这里根本不存在（§2）")]):
+    ("③","片上 SRAM 全是显式管理的，CMEM = 0 —— 这一整层在 GPU 那边叫 cache，在这里根本不存在（第 2 节）")]):
     p.append(f'<text class="svgsm" x="0" y="{424+i*17}" fill="{RD if i==2 else "#202124"}">'
              f'{n} {t}</text>')
 W('fig1-1.svg',p+['</svg>'])
@@ -63,8 +63,13 @@ q=['<svg viewBox="0 0 1000 404" width="100%" role="img" aria-label="GB200 的三
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">GB200 要画三层 —— 而「一台机器」这个词在第三层已经失效了</text>',
    '<text class="svgsm" x="0" y="35">来源：NVIDIA 官方 GB200 NVL72 规格表 ＋ CUDA Blackwell 调优指南</text>']
 # 第一层 GPU
-q.append(f'<rect x="0" y="50" width="336" height="196" rx="10" fill="#e8f0fe" stroke="{BL}"/>')
-q.append(f'<text class="svglbl" x="16" y="72" fill={BL!r}>① 一张 B200 GPU</text>')
+q.append(f'<rect x="0" y="50" width="336" height="215" rx="10" fill="#e8f0fe" stroke="{BL}"/>')
+# ⛔ 这一格从前写「① 一张 B200 GPU」，而给的是 186 GB / 2,500 的口径 ——
+# 那是 **NVL72 里那颗 GB200** 的数。叫「B200」的卡（HGX B200 板上的）是
+# 180 GB / 2,250，差 11.1%。两者都叫 Blackwell，光看架构名分辨不出来。
+# 本课 §8 已经把「套错机型」立成了教案，§1 自己不能再犯。
+q.append(f'<text class="svglbl" x="16" y="72" fill={BL!r}>① 一张 GB200 GPU　'
+         f'<tspan style="font-size:10px" fill="{GY}">（NVL72 里的那颗）</tspan></text>')
 for j,(t,v) in enumerate([("SM","148 个（第三方拆解，官方未公布）"),("每 SM","128 CUDA core · 4 Tensor Core"),
                           ("每 SM 并发","最多 64 个 warp"),("寄存器堆","64K × 32 bit = 256 KB / SM"),
                           ("shared","最多 228 KB / SM（含 L1 共 256 KB）"),
@@ -73,23 +78,40 @@ for j,(t,v) in enumerate([("SM","148 个（第三方拆解，官方未公布）"
                           ("算力 dense","BF16 2.5 ｜ FP8 5 PFLOPS")]):
     q.append(f'<text class="svgsm" x="16" y="{92+j*19}" fill="{BL}">{t}</text>')
     q.append(f'<text class="svgsm" x="106" y="{92+j*19}">{v}</text>')
+# 「别混」这两行不能挂在右列 —— 右列只有 230px 宽，这句话会横着穿出框、
+# 被隔壁 ② 号框盖掉半截（渲染出来才看得见，改完必须再截一次图）。
+# 所以让它独占整框宽度。
+q.append(f'<text class="svgsm" x="16" y="244" fill="{RD}">'
+         f'⚠️ 别混：HGX 板上的 B200 是 180 GB / BF16 2.25</text>')
+q.append(f'<text class="svgsm" x="16" y="258" fill="{RD}">'
+         f'同代不同封装差 11.1%，光看「Blackwell」分不出来</text>')
 # 第二层 节点
-q.append(f'<rect x="352" y="50" width="204" height="196" rx="10" fill="#f3e8fd" stroke="{PU}"/>')
+q.append(f'<rect x="352" y="50" width="204" height="215" rx="10" fill="#f3e8fd" stroke="{PU}"/>')
 q.append(f'<text class="svglbl" x="366" y="72" fill="{PU}">② 一个节点</text>')
-for j,t in enumerate(["Grace ARM64","+ 4 × B200","（a4x-highgpu-4g）","","744 GB GPU 显存","",
-                      "RDMA 4 × CX-7 × 400","　= 1,600 Gbps","管理网 400 Gbps","合计 2,000 Gbps"]):
+# 2 颗 Grace 不是 1 颗：superchip = 1 Grace + 2 GPU，一个节点 4 GPU ⇒ 2 Grace。
+# 18 节点 × 2 = 36 Grace，与官方的「36 Grace + 72 Blackwell」对得上；写 1 颗对不上。
+for j,t in enumerate(["2 × Grace ARM64","+ 4 × GB200","（a4x-highgpu-4g）","","744 GB GPU 显存","",
+                      "RDMA 4 × CX-7 × 400","　= 1,600 Gbps　← 算通信用这个","管理网 400 Gbps"]):
     q.append(f'<text class="svgsm" x="366" y="{90+j*15}">{t}</text>')
+# 「合计 2,000」故意划掉而不是删掉 —— 它是外面最常见的报法，
+# 台下多半见过。删了他们下次还会照抄，划掉才记得住为什么不能用。（§4 陷阱二）
+q.append(f'<text class="svgsm" x="366" y="225" fill="{RD}" text-decoration="line-through">合计 2,000 Gbps</text>')
+q.append(f'<text class="svgsm" x="366" y="239" fill="{RD}" style="font-size:10px">管理网跟 GPU 通信无关，</text>')
+q.append(f'<text class="svgsm" x="366" y="252" fill="{RD}" style="font-size:10px">不能加进来（第 4 节陷阱二）</text>')
 # 第三层 域
-q.append(f'<rect x="572" y="50" width="428" height="196" rx="10" fill="#e6f4ea" stroke="{GR}"/>')
+q.append(f'<rect x="572" y="50" width="428" height="215" rx="10" fill="#e6f4ea" stroke="{GR}"/>')
 q.append(f'<text class="svglbl" x="588" y="72" fill="{GR}">③ 一个 NVL72 域　←　新的「一台机器」</text>')
 q.append(f'<text class="svgsm" x="588" y="92">18 节点 × 4 = 72 GPU，NVSwitch 5 全互联，不走网络</text>')
 q.append(f'<text class="svgsm" x="588" y="110">域内 NVLink 总带宽 130 TB/s ｜ 每 GPU 1.8 TB/s</text>')
 # 64 vs 72
 q.append(f'<rect x="588" y="122" width="396" height="66" rx="6" fill="#fce8e6" stroke="{RD}"/>')
-q.append(f'<text class="svglbl" x="600" y="141" fill="{RD}">⚠️ 72 是物理规模，能进训练任务的是 64</text>')
-q.append(f'<text class="svgsm" x="600" y="158" fill="{RD}">16 节点 = 64 卡进任务，剩 2 节点 / 8 卡热备</text>')
-q.append(f'<text class="svgsm" x="600" y="175" fill="{RD}">64 正好是 2 的幂 —— 跟第 0 节「物理量还是可用量」同一个自问</text>')
-for j,(a,b) in enumerate([("按 72 卡（物理域）","13.4 TB 显存"),("按 64 卡（可训练）","11.9 TB 显存")]):
+# ⛔ 从前这里写「能进训练任务的是 64」，读起来像平台限制。它不是 ——
+# §4 自己写着「64 不是平台限制，是我们自愿让出 11% 容量换稳定，换个人运维就是别的数」。
+# 一张 §1 的图不能把运维选择讲成硬件事实。
+q.append(f'<text class="svglbl" x="600" y="141" fill="{RD}">⚠️ 72 是物理规模；我们这批集群按 64 编排</text>')
+q.append(f'<text class="svgsm" x="600" y="158" fill="{RD}">16 节点上阵，剩 2 节点 / 8 卡热备（auto-repair 关着，坏了要人顶）</text>')
+q.append(f'<text class="svgsm" x="600" y="175" fill="{RD}">这是<tspan font-weight="700">编排口径不是平台限制</tspan> —— 换个人运维就是别的数（第 4 节）</text>')
+for j,(a,b) in enumerate([("按 72 卡（物理域）","13.4 TB 显存"),("按 64 卡（本课编排口径）","11.9 TB 显存")]):
     q.append(f'<text class="svgsm" x="{588+j*200}" y="206">{a}</text>')
     q.append(f'<text class="svgnum" x="{588+j*200}" y="228" fill="{GR if j else GY}">{b}</text>')
 for x in (336,556):
@@ -98,12 +120,14 @@ q.append('<defs><marker id="m1" viewBox="0 0 8 8" refX="4" refY="4" markerWidth=
 q.append('<line x1="0" y1="266" x2="1000" y2="266" stroke="#e8eaed"/>')
 q.append(f'<text class="svglbl" x="0" y="290" fill="#202124">⭐ 跟 TPU 对齐着看：两边的三层完全不在同一个位置</text>')
 for j,(a,b,c) in enumerate([("TPU v7","TensorCore　→　chip（2 个 device）　→　切片（3D torus，最大 9,216 chip）",BL),
-                            ("GB200","GPU　→　节点（4 GPU）　→　NVL72 域（72 卡，可训练 64）→ 跨域走 RDMA",GR)]):
+                            ("GB200","GPU　→　节点（4 GPU）　→　NVL72 域（72 卡，本课按 64 编排）→ 跨域走 RDMA",GR)]):
     q.append(f'<text class="svgsm" x="0" y="{314+j*20}" fill="{c}">{a}</text>')
     q.append(f'<text class="svgsm" x="70" y="{314+j*20}">{b}</text>')
 q.append(f'<text class="svgsm" x="0" y="362" fill="{RD}">'
-         f'TPU 侧「切片」是一个可以从 4 chip 一路开到 9,216 chip 的连续谱；GPU 侧「域」是一个 72 卡的硬边界，出了它就换一套物理链路。</text>')
+         f'TPU 侧<tspan font-weight="700">同一套 ICI 一路铺到 9,216 chip</tspan>（形状受限：超过 64 颗要按 4×4×4 的 cube 拼）；'
+         f'GPU 侧出了 72 卡这个域<tspan font-weight="700">就换一套物理链路</tspan>。</text>')
 q.append(f'<text class="svgsm" x="0" y="380" fill="{RD}">'
-         f'这条差别是 §4 全部内容的来源 —— 一个是「距离逐渐变远」，一个是「到某一点突然掉下去」。</text>')
+         f'⚠️ 差别不在「连不连续」（两边都是离散的），在<tspan font-weight="700">换不换协议</tspan> —— '
+         f'一个是「距离逐渐变远」，一个是「到某一点突然掉下去」。这是第 4 节全部内容的来源。</text>')
 W('fig1-2.svg',q+['</svg>'])
 print('1-1 / 1-2 ok')

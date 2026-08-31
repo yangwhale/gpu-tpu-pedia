@@ -1,0 +1,60 @@
+<svg viewBox="0 0 1000 404" width="100%" role="img" aria-label="GB200 的三层：GPU、节点、NVL72 域，其中域内 72 卡但训练实际用 64 卡">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">GB200 要画三层 —— 而「一台机器」这个词在第三层已经失效了</text>
+<text class="svgsm" x="0" y="35">来源：NVIDIA 官方 GB200 NVL72 规格表 ＋ CUDA Blackwell 调优指南</text>
+<rect x="0" y="50" width="336" height="215" rx="10" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="16" y="72" fill='#1a73e8'>① 一张 GB200 GPU　<tspan style="font-size:10px" fill="#5f6368">（NVL72 里的那颗）</tspan></text>
+<text class="svgsm" x="16" y="92" fill="#1a73e8">SM</text>
+<text class="svgsm" x="106" y="92">148 个（第三方拆解，官方未公布）</text>
+<text class="svgsm" x="16" y="111" fill="#1a73e8">每 SM</text>
+<text class="svgsm" x="106" y="111">128 CUDA core · 4 Tensor Core</text>
+<text class="svgsm" x="16" y="130" fill="#1a73e8">每 SM 并发</text>
+<text class="svgsm" x="106" y="130">最多 64 个 warp</text>
+<text class="svgsm" x="16" y="149" fill="#1a73e8">寄存器堆</text>
+<text class="svgsm" x="106" y="149">64K × 32 bit = 256 KB / SM</text>
+<text class="svgsm" x="16" y="168" fill="#1a73e8">shared</text>
+<text class="svgsm" x="106" y="168">最多 228 KB / SM（含 L1 共 256 KB）</text>
+<text class="svgsm" x="16" y="187" fill="#1a73e8">L2</text>
+<text class="svgsm" x="106" y="187">126 MB · 全 GPU 共享 · 自动管</text>
+<text class="svgsm" x="16" y="206" fill="#1a73e8">HBM3e</text>
+<text class="svgsm" x="106" y="206">186 GB · 8.0 TB/s</text>
+<text class="svgsm" x="16" y="225" fill="#1a73e8">算力 dense</text>
+<text class="svgsm" x="106" y="225">BF16 2.5 ｜ FP8 5 PFLOPS</text>
+<text class="svgsm" x="16" y="244" fill="#1a73e8">⚠️ 别混</text>
+<text class="svgsm" x="106" y="244">HGX 板上的 B200 是 180 GB / BF16 2.25 —— 同代不同封装差 11.1%</text>
+<rect x="352" y="50" width="204" height="215" rx="10" fill="#f3e8fd" stroke="#9334e6"/>
+<text class="svglbl" x="366" y="72" fill="#9334e6">② 一个节点</text>
+<text class="svgsm" x="366" y="90">2 × Grace ARM64</text>
+<text class="svgsm" x="366" y="105">+ 4 × GB200</text>
+<text class="svgsm" x="366" y="120">（a4x-highgpu-4g）</text>
+<text class="svgsm" x="366" y="135"></text>
+<text class="svgsm" x="366" y="150">744 GB GPU 显存</text>
+<text class="svgsm" x="366" y="165"></text>
+<text class="svgsm" x="366" y="180">RDMA 4 × CX-7 × 400</text>
+<text class="svgsm" x="366" y="195">　= 1,600 Gbps　← 算通信用这个</text>
+<text class="svgsm" x="366" y="210">管理网 400 Gbps</text>
+<text class="svgsm" x="366" y="225" fill="#d93025" text-decoration="line-through">合计 2,000 Gbps</text>
+<text class="svgsm" x="366" y="240" fill="#d93025" style="font-size:10px">管理网跟 GPU 通信无关，不能加进来（§4 陷阱二）</text>
+<rect x="572" y="50" width="428" height="196" rx="10" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="588" y="72" fill="#1e8e3e">③ 一个 NVL72 域　←　新的「一台机器」</text>
+<text class="svgsm" x="588" y="92">18 节点 × 4 = 72 GPU，NVSwitch 5 全互联，不走网络</text>
+<text class="svgsm" x="588" y="110">域内 NVLink 总带宽 130 TB/s ｜ 每 GPU 1.8 TB/s</text>
+<rect x="588" y="122" width="396" height="66" rx="6" fill="#fce8e6" stroke="#d93025"/>
+<text class="svglbl" x="600" y="141" fill="#d93025">⚠️ 72 是物理规模；我们这批集群按 64 编排</text>
+<text class="svgsm" x="600" y="158" fill="#d93025">16 节点上阵，剩 2 节点 / 8 卡热备（auto-repair 关着，坏了要人顶）</text>
+<text class="svgsm" x="600" y="175" fill="#d93025">这是<tspan font-weight="700">编排口径不是平台限制</tspan> —— 换个人运维就是别的数（第 4 节）</text>
+<text class="svgsm" x="588" y="206">按 72 卡（物理域）</text>
+<text class="svgnum" x="588" y="228" fill="#5f6368">13.4 TB 显存</text>
+<text class="svgsm" x="788" y="206">按 64 卡（本课编排口径）</text>
+<text class="svgnum" x="788" y="228" fill="#1e8e3e">11.9 TB 显存</text>
+<path d="M336 148 h20" stroke="#5f6368" stroke-width="1.5" marker-end="url(#m1)"/>
+<path d="M556 148 h20" stroke="#5f6368" stroke-width="1.5" marker-end="url(#m1)"/>
+<defs><marker id="m1" viewBox="0 0 8 8" refX="4" refY="4" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#5f6368"/></marker></defs>
+<line x1="0" y1="266" x2="1000" y2="266" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="290" fill="#202124">⭐ 跟 TPU 对齐着看：两边的三层完全不在同一个位置</text>
+<text class="svgsm" x="0" y="314" fill="#1a73e8">TPU v7</text>
+<text class="svgsm" x="70" y="314">TensorCore　→　chip（2 个 device）　→　切片（3D torus，最大 9,216 chip）</text>
+<text class="svgsm" x="0" y="334" fill="#1e8e3e">GB200</text>
+<text class="svgsm" x="70" y="334">GPU　→　节点（4 GPU）　→　NVL72 域（72 卡，本课按 64 编排）→ 跨域走 RDMA</text>
+<text class="svgsm" x="0" y="362" fill="#d93025">TPU 侧<tspan font-weight="700">同一套 ICI 一路铺到 9,216 chip</tspan>（形状受限：超过 64 颗要按 4×4×4 的 cube 拼）；GPU 侧出了 72 卡这个域<tspan font-weight="700">就换一套物理链路</tspan>。</text>
+<text class="svgsm" x="0" y="380" fill="#d93025">⚠️ 差别不在「连不连续」（两边都是离散的），在<tspan font-weight="700">换不换协议</tspan> —— 一个是「距离逐渐变远」，一个是「到某一点突然掉下去」。这是第 4 节全部内容的来源。</text>
+</svg>

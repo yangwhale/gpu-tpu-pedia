@@ -108,7 +108,7 @@ for i,(nm,v,c) in enumerate([("朴素注意力",ai_naive,RD),("Flash",ai_flash,G
     r.append(f'<circle cx="{x}" cy="{y+8}" r="7" fill="{c}"/>')
     r.append(f'<text class="svgnum" x="{x}" y="{y-6}" text-anchor="middle" fill="{c}" style="font-size:12px">{v:,.0f}</text>')
 # 轴下两条说明
-for i,(c,t) in enumerate([(RD,'朴素：每算 1 FLOP 只搬得起 1/64 byte —— 落在分水岭左边，算力空转，卡在带宽上'),
+for i,(c,t) in enumerate([(RD,'朴素：每算 1 FLOP 就得搬 1/64 byte，而硬件只供得起 1/312 —— 多要了近 5 倍，卡在带宽上'),
                           (GR,'Flash：同样的 FLOP，搬的字节少了 1,024 倍 —— 跨到右边，卡在算力上（这才是该卡的地方）')]):
     r.append(f'<rect x="{X0-140}" y="{YA+156+i*22}" width="10" height="10" rx="2" fill="{c}"/>')
     r.append(f'<text class="svgsm" x="{X0-124}" y="{YA+165+i*22}" fill="{c}">{t}</text>')

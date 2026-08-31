@@ -6,7 +6,7 @@ BL,PU,OR,GR,RD,GY,YL="#1a73e8","#9334e6","#e8710a","#1e8e3e","#d93025","#5f6368"
 # ══════════ 图 2-1 · 一次访存，两条路 ══════════
 GPU=[("一个 warp 的 32 个线程各给出一个地址","",0),
      ("这些地址能合并成几条 cache line？","◆ 决策点 · coalescing",1),
-     ("落在同一个 bank 上吗？","◆ 决策点 · bank conflict",1),
+     ("⇢ 落在同一个 bank 上吗？","支路 · bank conflict",4),
      ("L1 命中吗？（与 shared 合计 256 KB／SM）","◆ 决策点 · 命中 / 未命中",1),
      ("L2 命中吗？（126 MB，全 GPU 共享）","◆ 决策点 · 命中 / 未命中",1),
      ("换出谁？","◆ 决策点 · 替换策略",1),
@@ -18,7 +18,7 @@ TPU=[("编译期：XLA 决定每个数组切成 8 × 128 的块","☑ 已定死"
      ("运行时：向量单元直接取，形状必须已经对","",0),
      ("（没有这一层）","CMEM = 0",3),
      ("HBM","",0)]
-RH,TOP=44,86
+RH,TOP=48,86
 H=TOP+RH*7+150
 p=[f'<svg viewBox="0 0 1000 {H}" width="100%" role="img" aria-label="同一次访存在 GPU 与 TPU 上经过的路径对比：GPU 有五个运行时决策点，TPU 一个都没有">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
@@ -35,16 +35,28 @@ def col(x,w,rows,base):
         if kind==1: col_,fill=(RD,'#fce8e6')
         if kind==2: col_,fill=(GR,'#e6f4ea')
         if kind==3: col_,fill=(GY,'#fff')
-        dash=' stroke-dasharray="5 4"' if kind==3 else ''
-        p.append(f'<rect x="{x}" y="{y}" width="{w}" height="32" rx="6" fill="{fill}" stroke="{col_}"{dash}/>')
-        p.append(f'<text class="svgsm" x="{x+12}" y="{y+20}" fill="{"#5f6368" if kind==3 else "#202124"}">{t}</text>')
-        if tag: p.append(f'<text class="svgsm" x="{x+w-12}" y="{y+20}" text-anchor="end" fill="{col_}">{tag}</text>')
+        # kind==4 = 支路：白底 + 红虚线框 + 一行小字说明它不在这条路上。
+        # 试过把它整体右缩画成真正的分叉，但主干竖线正好从框中间穿过、
+        # 横向引线只剩几像素 —— 反而更乱。所以退回同列，靠样式和文字区分。
+        if kind==4: col_,fill=(RD,'#fff')
+        dash=' stroke-dasharray="5 4"' if kind in (3,4) else ''
+        hh = 44 if kind==4 else 32
+        p.append(f'<rect x="{x}" y="{y}" width="{w}" height="{hh}" rx="6" fill="{fill}" stroke="{col_}"{dash}/>')
+        p.append(f'<text class="svgsm" x="{x+12}" y="{y+18}" fill="{"#5f6368" if kind==3 else "#202124"}">{t}</text>')
+        if tag: p.append(f'<text class="svgsm" x="{x+w-12}" y="{y+18}" text-anchor="end" fill="{col_}">{tag}</text>')
+        if kind==4:
+            p.append(f'<text class="svgsm" x="{x+12}" y="{y+35}" fill="{RD}">'
+                     f'⚠️ bank 是 <tspan font-weight="700">shared memory</tspan> 的分区机制，'
+                     f'<tspan font-weight="700">不在 global load 这条路上</tspan></text>')
         if i<len(rows)-1:
-            p.append(f'<path d="M{x+w/2} {y+32} v{RH-32}" stroke="#dadce0" stroke-width="1.4"/>')
+            p.append(f'<path d="M{x+w/2} {y+hh} v{RH-hh}" stroke="#dadce0" stroke-width="1.4" '
+                     f'{"stroke-dasharray=\"4 3\"" if kind==4 else ""}/>')
 col(0,470,GPU,BL); col(512,470,TPU,GR)
 yb=TOP+RH*7+4
 p.append(f'<rect x="0" y="{yb}" width="470" height="40" rx="6" fill="{RD}"/>')
-p.append(f'<text class="svglbl" x="235" y="{yb+18}" text-anchor="middle" fill="#fff">路上 5 个运行时决策点</text>')
+# 数要拆开写：主路 4 个，bank conflict 是走 shared memory 才有的第 5 个。
+# 把它算进主路，那个「5」就是虚的 —— 而这门课后面一直拿这个数跟 TPU 的 0 对照。
+p.append(f'<text class="svglbl" x="235" y="{yb+18}" text-anchor="middle" fill="#fff">主路 4 个运行时决策点（＋走 shared 再加 1 个）</text>')
 p.append(f'<text class="svgsm" x="235" y="{yb+33}" text-anchor="middle" fill="#ffffffcc">你能做的是「让硬件更容易猜对」：访问连续、避开 bank、手工 tiling</text>')
 p.append(f'<rect x="512" y="{yb}" width="470" height="40" rx="6" fill="{GR}"/>')
 p.append(f'<text class="svglbl" x="747" y="{yb+18}" text-anchor="middle" fill="#fff">路上 0 个运行时决策点</text>')
