@@ -2604,7 +2604,7 @@ kubectl logs -f job/hy3-myrun-slice-job-0 -c jax-tpu
 | 平台 | 规模 | 状态 | 成绩 | 对标 |
 |---|---|---|---|---|
 | v5p | 4 chips（dev pool） | ✅ 20 轮迭代闭环 | — | 用于快速验证代码路径 |
-| v5p | 256 chips | ✅ **当前可复现水位** | **160.98 TFLOP/s/chip · MFU 35.07%** | 超过 GB300 的 31.6% |
+| v5p | 256 chips | ✅ **当前可复现水位** | **160.98 TFLOP/s/chip · MFU 35.07%** | 略高于 GB300 的 34.2%（仅 0.9pp） |
 | v5p | 256 chips | 📜 历史最好（旧栈，产物已删） | 168.6 TFLOP/s/chip · MFU 36.72% · 281,488 tok/s | 15 倍调优路径的终点，见 §7.3 战线一 |
 | v7 Ironwood | 64 chips | 🔄 13 轮，仍在调 | **445.1 TFLOP/s/chip · MFU 19.29% · 205,314 tok/s** | 目标 612.7 / 26.6%（DSV3 实测水位） |
 

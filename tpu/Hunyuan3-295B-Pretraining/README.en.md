@@ -24,7 +24,7 @@ them into a new `decoder_block: "hunyuan3"`; the only new code is assembly logic
 | Parameters (as reported) | 298.786 B | 298.786 B | 298.786 B | — |
 | Steady-state step | 63.2 s | 23.5 s | 30.4 s | — |
 | **TFLOP/s per unit** | 161.0 | **580.0** | **598.8** | 854.0 |
-| **MFU** | **35.07%** | 25.14% | **25.96%** | 31.60% |
+| **MFU** | **35.07%** | 25.14% | **25.96%** | 34.20% ⚠️ |
 | **Cluster token throughput** | 265,588 tok/s | 267,284 tok/s | **1,103,757 tok/s** | 399,488 tok/s |
 | **Per-unit token throughput** | 1,037 | **4,176** | **4,312** | 6,242 |
 | Best recipe | Official DSV3 v5p recipe | `DP1×FSDP128`<br>tile + pdbs 12 | `DP2×FSDP256`<br>tile + pdbs 16 | — |
@@ -43,6 +43,12 @@ cluster throughput scales with the number of units and is not comparable.
 > setting, and **any multiple computed against it is an overestimate**.
 > **The v7 ↔ GB300 pair is strictly aligned (both 4096) and can be compared directly.**
 
+> ⚠️ **The GB300 column's MFU had its denominator corrected on 2026-08-31.**
+> It used to read 31.60% against a peak of 2,700 TFLOP/s/GPU — but **2,700 was GB200's figure
+> scaled by 1.2, and NVIDIA never published it**. GB300 NVL72's official dense BF16 peak is the
+> same as GB200 NVL72's, **2,500**, so the same 854.0 works out to **34.20%**.
+> See [EXPERIMENT-LOG §7.2](EXPERIMENT-LOG.md).
+
 Three ways to read this table:
 
 1. **v7 delivers roughly 4.16× the per-chip throughput of v5p** (4,312 vs 1,037,
@@ -51,8 +57,19 @@ Three ways to read this table:
    while HBM bandwidth only grew 2.64× and ICI only 2×.
    **Falling MFU alongside a large absolute throughput gain is the expected consequence of
    that hardware imbalance, not a sign of poor tuning.**
-2. **v7 has closed to 69.1% of GB300's per-GPU throughput** (4,312 vs 6,242), up from 51.4%
-   before tuning.
+2. **v7's FP8 per-chip throughput reaches 77–84% of GB300's — it has not overtaken it.**
+   The production recipe (`absmax`, pdbs 11, step 18.656 s) gives **4,830 tok/s/chip = 77.4% of
+   6,242**; the peak recipe (`fixed`, pdbs 13, step 20.342 s) gives 5,235 = 83.9%, but it damages
+   convergence and is not shippable. Before tuning it was 51.4%.
+   ⚠️ **Corrected 2026-08-31, and the reason is worth recording**: this used to read "has
+   overtaken it (7,308 vs 6,242, +17%)", and that **7,308 was converted from the retracted
+   1,014.8 TFLOP/s/chip**. When 1,014.8 was withdrawn on 2026-08-16
+   ([TUNING §3.4.10](TUNING-v7.md) — the native path skipped an all-gather and only computed
+   3 of 192 experts), every TFLOP/s figure got struck through, **but the tok/s derived from it
+   was missed** — so a dead number lived on for two more weeks in a different unit.
+   **Retract a number and you must retract everything computed from it.**
+   ⚠️ **Scope note**: v7's two figures are FP8, 6,242 is GB300's BF16. The tok/s values are
+   comparable as such, but the precisions differ — do not read this as a same-precision comparison.
 3. **v5p's 35.07% edges out GB300's 34.2%** — a 256-chip 3D torus plus SparseCore
    collective offloading hides MoE's fine-grained communication even more cleanly than an
    NVLink domain does.
