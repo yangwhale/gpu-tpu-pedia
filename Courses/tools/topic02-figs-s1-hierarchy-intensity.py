@@ -11,7 +11,12 @@ ROWS=[  # (层名, 副注, TPU 内容, GPU 内容, TPU空?, GPU空?)
   "shared memory 最多 228 KB／SM<TAB>—— 写 kernel 的人用 __shared__ 手工搬",0,0),
  ("片上 · 自动管","硬件替你决定放什么","CMEM = 0",
   "L1（与 shared 合计上限 256 KB／SM）<TAB>L2 126 MB／GPU<TAB>—— 全自动，你只能提示不能指定",1,0),
- ("专用协处理器","矩阵单元干不了的活","SparseCore × 4／chip（＝ 2／device）<TAB>可编程：前缀和 · 排序 · 计数 · scatter","（没有对应物）",0,1),
+ # ⚠️ 这一行的行名从「专用协处理器」改成「可编程协处理器」，空格子也从「没有对应物」
+ # 改成「没有可编程的」—— 少了「可编程」三个字，这一格就是错的：GPU 上有 TMA
+ # （Hopper 引入、Blackwell 沿用的张量搬运引擎），读到这里的人会立刻想到它。
+ # 但 TMA 是**固定功能**的搬运器，而且 TPU 那边同样有 DMA 引擎 —— 它是两边都有的东西，
+ # 根本不在这一格里。这一格说的是「能跑自己那段程序」的协处理器。
+ ("可编程协处理器","矩阵单元干不了的活","SparseCore × 4／chip（＝ 2／device）<TAB>可编程：前缀和 · 排序 · 计数 · scatter","（没有可编程的）",0,1),
  # 官方正文写「96 GB」是十进制，而同一张表的 192 GiB ÷ 2 = 96 GiB —— 本课统一用 GiB，
  # 理由和附录 A 那个 94.74 GiB 是同一条：判 OOM 的分母必须是二进制的。
  ("芯片外","HBM","96 GiB／device（＝ 192 GiB ÷ 2）<TAB>整 chip 7,380 GB/s","186 GB／GPU<TAB>8,000 GB/s",0,0),
@@ -42,8 +47,11 @@ def cell(x,w,y,txt,col,empty,note=""):
         p.append(f'<rect x="{x}" y="{y}" width="{w}" height="{RH-14}" rx="7" '
                  f'fill="#fff" stroke="{col}" stroke-width="0.8"/>')
     if empty:
-        p.append(f'<text class="svgnum" x="{x+w/2}" y="{y+30}" text-anchor="middle" fill="{RD}">{txt}</text>')
-        p.append(f'<text class="svgsm" x="{x+w/2}" y="{y+50}" text-anchor="middle" fill="{RD}">{note}</text>')
+        # note 也吃 <TAB> 分行：「没有可编程的」这一格光说「没有」不够，
+        # 还得挡住读者立刻会想到的 TMA，一行塞不下。
+        p.append(f'<text class="svgnum" x="{x+w/2}" y="{y+26}" text-anchor="middle" fill="{RD}">{txt}</text>')
+        for k,t in enumerate(note.split('<TAB>')):
+            p.append(f'<text class="svgsm" x="{x+w/2}" y="{y+45+k*16}" text-anchor="middle" fill="{RD}">{t}</text>')
     else:
         for k,t in enumerate(txt.split('<TAB>')):
             p.append(f'<text class="svgsm" x="{x+14}" y="{y+22+k*17}" fill="#202124">{t}</text>')
@@ -52,7 +60,9 @@ for i,(lay,sub,tp,gp,te,ge) in enumerate(ROWS):
     p.append(f'<text class="svglbl" x="{LX-26}" y="{y+22}" text-anchor="end" fill="#202124">{lay}</text>')
     p.append(f'<text class="svgsm" x="{LX-26}" y="{y+38}" text-anchor="end">{sub}</text>')
     cell(LX,LW,y,tp,GR,te,"GPU 那边整整一层，在这里根本不存在")
-    cell(RX,RW,y,gp,BL,ge,"矩阵单元干不了的活，只能回到 CUDA core 手写")
+    cell(RX,RW,y,gp,BL,ge,
+         "矩阵单元干不了的活，只能回到 CUDA core 手写<TAB>"
+         "TMA 是固定功能搬运，TPU 也有 DMA 引擎 —— 不算这一格")
 yb=TOP+RH*len(ROWS)+12
 p.append(f'<line x1="0" y1="{yb}" x2="1000" y2="{yb}" stroke="#e8eaed"/>')
 p.append(f'<rect x="0" y="{yb+12}" width="1000" height="66" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')
