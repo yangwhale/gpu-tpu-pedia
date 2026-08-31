@@ -36,7 +36,7 @@ PAGE = os.path.join(HERE, "..", "WebPages", "topic-02.html")
 
 # 脚本 → 它吐出来的 svg 文件名 → 页面上的 figure id
 SCRIPTS = {
-    "topic02-figs-map-origin.py":        {"figA.svg": "figA", "figB.svg": "figB", "figC.svg": "figC"},
+    "topic02-figs-map-origin.py":        {"figC.svg": "figC"},
     "topic02-fig-9474-waterfall.py":     {"fig0-1.svg": "fig0-1"},
     "topic02-figs-s1-panorama.py":       {"fig1-1.svg": "fig1-1", "fig1-2.svg": "fig1-2"},
     "topic02-fig-s1-landing.py":          {"fig1-5.svg": "fig1-5"},
@@ -52,7 +52,7 @@ SCRIPTS = {
 
 def _svg_span(html, fid):
     """返回该 figure 里 <svg …> … </svg> 的 (start, end)。"""
-    anchor = '<figure class="fbox fwide" id="s012-%s">' % fid
+    anchor = '<figure class="fbox" id="s012-%s">' % fid
     i = html.find(anchor)
     assert i >= 0, "页面上找不到 %s —— id 被人改掉了？" % anchor
     s = html.find("<svg", i)
@@ -106,7 +106,7 @@ def main():
     # 期望值从 SCRIPTS 推，别写死 —— 写死过一次 15，加第十六张图时它就报
     # 「注入把页面结构改坏了」，而结构其实好好的。自检误报会让人去绕过自检。
     want = sum(len(m) for m in SCRIPTS.values())
-    n = len(re.findall(r'<figure class="fbox fwide" id="s012-', html))
+    n = len(re.findall(r'<figure class="fbox" id="s012-', html))
     assert n == want, "页面上有 %d 个 s012 figure，脚本这边有 %d 个 —— 对不上" % (n, want)
 
     io.open(PAGE, "w", encoding="utf-8").write(html)
