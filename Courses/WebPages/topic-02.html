@@ -4137,8 +4137,8 @@ footer a{text-decoration:none}
 <text x="94" y="586" class="xs"><tspan fill="#9aa0a6">不用</tspan></text>
 <line x1="34" y1="606" x2="332" y2="606" stroke="#1e8e3e" stroke-width="0.8" stroke-dasharray="3 3"/>
 <text x="34" y="626" class="xs">最短的一条路：从 vreg 出来，进本 lane 的 ALU，回 </text>
-<text x="34" y="643" class="xs">vreg。全程没离开那一竖条。<tspan fill="#9aa0a6">逐元素算子便宜，真正的原因</tspan></text>
-<text x="34" y="660" class="xs"><tspan fill="#9aa0a6">就是它一步都没有出去。</tspan></text>
+<text x="34" y="643" class="xs">vreg。全程没离开那一竖条。<tspan font-weight="700" fill="#202124">逐元素算子便宜，真正的原因</tspan></text>
+<text x="34" y="660" class="xs"><tspan font-weight="700" fill="#202124">就是它一步都没有出去。</tspan></text>
 <rect x="364" y="470" width="326" height="250" rx="9" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
 <text x="378" y="494" class="box" fill="#8430ce">超越函数单元</text>
 <text x="676" y="494" class="xxs" fill="#5f6368" text-anchor="end">竖着，但深</text>
@@ -4181,6 +4181,209 @@ footer a{text-decoration:none}
 <text x="38" y="817" class="xs"><tspan font-weight="700" fill="#d93025">GPU 正相反：靠运行时的记分板和 warp 调度器现场决定。</tspan>这就是这门课一直在回的那条分水岭 —— <tspan font-weight="700" fill="#202124">谁在运行时挑活。</tspan></text>
 </svg>
 <figcaption>上一张图说「各开一个门」，紧接着最自然的追问是：那不就是 128 条车道大家串在一起、时分复用吗？<b>一半对，一半错，而错的那一半最要紧</b>：争用确实有，但争的不是一条共享总线，是<b>端口和发射位</b> —— <b>128 是每条通路的宽度，不是要分给大家的份额</b>。四张卡把四个单元的接法摊开对比，机关在「要不要队列」那一栏：<b>三个都要，理由两两不同</b>（超越函数是因为慢，XLU 是因为共享，MXU 是因为一口喂不满）。落点那条最值得记：<b>撞车不是被解决的，是被编译期提前排掉、根本没机会发生</b> —— GPU 靠运行时记分板现场决定，这正是全课那条分水岭。⚠️ 端口那个「约 9 读 7 写」<b>是推的不是原话</b>，图上写了推导链。</figcaption>
+</figure>
+
+  <p><b>还有一层没讲：真正光刻在硅片上的走线。</b>
+    这里最容易卡住的是一笔账 ——&nbsp;一个 vreg 才 4 KB，
+    <b>它怎么可能扯出去那么多根线？顶多一百多根吧。</b>
+    这个质疑<b>完全正确</b>，而且顺着它往下走，正好能把前面所有说法收口 ——&nbsp;
+    因为答案不是「线真有那么多」，而是<b>那些线根本不需要汇合到一起</b>。</p>
+<figure class="fbox fwide" id="ms-p29">
+<svg viewBox="0 0 1400 830" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 的向量寄存器堆在版图上被切成 128 条，每条紧贴自己那条 lane 的 ALU；跨 lane 才需要真正的长线，所以才有独立的 XLU">
+<text x="20" y="26" class="ttl">版图上它是<tspan font-weight="700">碎的</tspan>　—— 一个 vreg 不用扯 32,768 根线出去，因为那些线<tspan font-weight="700">从来不汇合</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="37" y="58" class="sm">vreg 存储（切片）</text>
+<rect x="159.625" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="176.625" y="58" class="sm">本 lane 的 ALU</text>
+<rect x="284.875" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="301.875" y="58" class="sm">256 根短线，几微米</text>
+<rect x="429.675" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="446.675" y="58" class="sm">真正要扯出去的只有这两条</text>
+<rect x="20" y="84" width="1360" height="92" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="38" y="110" class="sec">🔢 先纠一个单位：<tspan font-weight="700">一根走线传的是一个 bit，不是一个数</tspan></text>
+<text x="38" y="134" class="xs">一个 vreg ＝ 8 sublane × 128 lane × 32 bit ＝ <tspan font-weight="700" fill="#202124">32,768 bit</tspan>　→　<tspan font-weight="700" fill="#202124">要一次整个读出来，就是 32,768 根线</tspan>，不是 128 根。</text>
+<text x="38" y="154" class="xs"><tspan font-weight="700" fill="#d93025">「那也太荒唐了」—— 对，所以它不是一整块。</tspan>下面这张图就是它真实的样子。</text>
+<rect x="20" y="198" width="1360" height="274" rx="10" fill="#fff" stroke="#8430ce" stroke-width="1.6"/>
+<rect x="40" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="47" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="47" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="47" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="47" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="47" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="47" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="47" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="69.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="69.0" y1="364" x2="69.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="40" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="69.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="69.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="69.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 0</text>
+<rect x="104" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="111" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="111" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="111" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="111" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="111" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="111" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="111" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="133.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="133.0" y1="364" x2="133.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="104" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="133.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="133.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="133.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 1</text>
+<rect x="168" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="175" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="175" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="175" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="175" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="175" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="175" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="175" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="197.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="197.0" y1="364" x2="197.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="168" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="197.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="197.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="197.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 2</text>
+<rect x="232" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="239" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="239" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="239" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="239" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="239" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="239" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="239" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="261.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="261.0" y1="364" x2="261.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="232" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="261.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="261.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="261.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 3</text>
+<rect x="296" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="303" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="303" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="303" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="303" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="303" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="303" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="303" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="325.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="325.0" y1="364" x2="325.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="296" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="325.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="325.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="325.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 4</text>
+<rect x="360" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="367" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="367" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="367" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="367" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="367" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="367" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="367" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="389.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="389.0" y1="364" x2="389.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="360" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="389.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="389.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="389.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 5</text>
+<rect x="424" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="431" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="431" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="431" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="431" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="431" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="431" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="431" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="453.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="453.0" y1="364" x2="453.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="424" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="453.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="453.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="453.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 6</text>
+<rect x="488" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="495" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="495" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="495" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="495" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="495" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="495" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="495" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="517.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="517.0" y1="364" x2="517.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="488" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="517.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="517.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="517.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 7</text>
+<rect x="552" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="559" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="559" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="559" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="559" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="559" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="559" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="559" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="581.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="581.0" y1="364" x2="581.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="552" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="581.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="581.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="581.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 8</text>
+<text x="638" y="374" class="ttl" fill="#5f6368" text-anchor="middle">…</text>
+<rect x="662" y="244" width="58" height="120" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<rect x="669" y="254" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="669" y="268" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="669" y="282" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="669" y="296" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="669" y="310" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="669" y="324" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<rect x="669" y="338" width="44" height="9" rx="1" fill="#fff" stroke="#8430ce" stroke-width="0.6"/>
+<text x="691.0" y="358" class="xxs" fill="#5f6368" text-anchor="middle">…64 行</text>
+<line x1="691.0" y1="364" x2="691.0" y2="394" stroke="#9aa0a6" stroke-width="5.0"/>
+<rect x="662" y="394" width="58" height="42" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="691.0" y="412" class="xxs" fill="#1e8e3e" text-anchor="middle">ALU</text>
+<text x="691.0" y="427" class="xxs" fill="#5f6368" text-anchor="middle">×4</text>
+<text x="691.0" y="452" class="xxs" fill="#5f6368" text-anchor="middle">lane 127</text>
+<line x1="40" y1="228" x2="720" y2="228" stroke="#8430ce" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text x="380.0" y="222" class="xxs" fill="#8430ce" text-anchor="middle">同一个 vreg 的 128 个切片　—— 它们并排，但彼此不相连</text>
+<text x="79.0" y="383.0" class="xxs" fill="#202124">256 根</text>
+<rect x="786" y="228" width="574" height="176" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="802" y="250" class="xs"><tspan font-weight="700" fill="#202124">每一条切片只要 8 × 32 ＝ 256 根线</tspan>，而且存储就<tspan font-weight="700" fill="#202124">贴在</tspan>自己那条 lane 的 ALU 上 —— 走几微米。</text>
+<text x="802" y="276" class="xs">128 份加起来确实是 32,768 根，<tspan font-weight="700" fill="#d93025">但它们从来不汇合</tspan>。所以「128 宽」是 <tspan font-weight="700" fill="#202124">128 份并行的硬件</tspan>，不是一条粗 128 </text>
+<text x="802" y="294" class="xs">倍的线。</text>
+<text x="802" y="320" class="xs"><tspan font-weight="700" fill="#202124">「顶多一百多根」这个直觉是对的</tspan> —— 那是每条 lane 的局部数，被当成了全局数。</text>
+<rect x="20" y="494" width="438" height="178" rx="9" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
+<text x="34" y="518" class="box" fill="#8430ce">① vreg ↔ 其他 63 个 vreg</text>
+<text x="444" y="518" class="xxs" fill="#5f6368" text-anchor="end">完全不连</text>
+<text x="34" y="542" class="xs"><tspan font-weight="700" fill="#202124">它们之间没有任何直接通路。</tspan>要把 vreg 3 挪到 vreg 7，唯一的办法是<tspan font-weight="700" fill="#202124">读出来、过</tspan></text>
+<text x="34" y="560" class="xs"><tspan font-weight="700" fill="#202124">一遍 ALU、再写回去</tspan>。</text>
+<line x1="34" y1="584" x2="444" y2="584" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="34" y="604" class="xs">它们共用的是<tspan font-weight="700" fill="#202124">位线</tspan>：一条切片里 64 行共用一组线，靠选通挑一行。<tspan font-weight="700" fill="#202124">「时分复用」在</tspan></text>
+<text x="34" y="622" class="xs"><tspan font-weight="700" fill="#202124">这儿是真的</tspan> —— 只是范围是「64 挑 1」，不是全核抢总线。</text>
+<rect x="476" y="494" width="438" height="178" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="490" y="518" class="box" fill="#1e8e3e">② vreg ↔ VPU</text>
+<text x="900" y="518" class="xxs" fill="#5f6368" text-anchor="end">贴着，几微米</text>
+<text x="490" y="542" class="xs">根本不用「扯出去」。<tspan font-weight="700" fill="#202124">vreg 的 lane 5 和 ALU 的 lane 5 在芯片上是挨着的</tspan>，</text>
+<text x="490" y="560" class="xs">中间就是那 256 根短线。</text>
+<line x1="490" y1="584" x2="900" y2="584" stroke="#1e8e3e" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="490" y="604" class="xs"><tspan font-weight="700" fill="#202124">这就是逐元素算子便宜的物理原因</tspan>：它走的是全芯片最短的一条路，而且 128 条同</text>
+<text x="490" y="622" class="xs">时在走。</text>
+<rect x="932" y="494" width="438" height="178" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="946" y="518" class="box" fill="#d93025">③ vreg ↔ MXU / XLU</text>
+<text x="1356" y="518" class="xxs" fill="#5f6368" text-anchor="end">真的要扯出去</text>
+<text x="946" y="542" class="xs">MXU 是个<tspan font-weight="700" fill="#202124">独立的块</tspan>，阵列比 lane 轴还宽，一口喂不满；XLU 更是<tspan font-weight="700" fill="#202124">必须同时够到全</tspan></text>
+<text x="946" y="560" class="xs"><tspan font-weight="700" fill="#202124">部 128 条 lane</tspan>。</text>
+<line x1="946" y1="584" x2="1356" y2="584" stroke="#d93025" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="946" y="604" class="xs"><tspan font-weight="700" fill="#d93025">所以只有这两条是真正的长路。</tspan>它们因此各自配了进料口、结果队列，而且<tspan font-weight="700" fill="#202124">全核只有</tspan></text>
+<text x="946" y="622" class="xs"><tspan font-weight="700" fill="#202124">一两个</tspan> —— 长而宽的路，芯片不会多铺。</text>
+<rect x="20" y="694" width="1360" height="116" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="38" y="720" class="sec">⚠️ 「按 lane 切片」这件事是推出来的，不是查到的版图</text>
+<text x="38" y="744" class="xs">推导链有两条。<tspan font-weight="700" fill="#202124">一</tspan>：4,096 个 ALU 不可能靠一个集中的寄存器堆去喂，布线在物理上过不去。<tspan font-weight="700" fill="#202124">二</tspan>：如果寄存器堆是集中的，那个交叉开关本来就在那儿了，跨 lane 就不该特别贵 —— <tspan font-weight="700" fill="#202124">而它特别贵，还专门做了一个独立单元。「XLU 存在」这件事本身，就是版图按 lane </tspan></text>
+<text x="38" y="762" class="xs"><tspan font-weight="700" fill="#202124">切的证据。</tspan></text>
+<text x="38" y="782" class="xs"><tspan font-weight="700" fill="#d93025">没查到的：具体的 bank 怎么划、位线怎么排、真实 floorplan —— 公开资料没有。</tspan>上面讲的是<tspan font-weight="700" fill="#202124">数量级和拓扑</tspan>，不是版图图纸。</text>
+</svg>
+<figcaption>P-28 说「每条端口本身就是 128 宽」，最较真的追问紧接着就来：<b>一个 vreg 才 4 KB，它怎么可能扯出去那么多根线？</b>这个质疑<b>完全正确</b> —— 而且答案不是「线真有那么多」，是<b>「它们根本不需要汇合」</b>。先纠单位：一根走线传<b>一个 bit</b>，所以一个 vreg 是 8 × 128 × 32 ＝ <b>32,768 根</b>，不是 128 根。荒唐 → 所以它不是一整块：<b>整条数据通路按 lane 切成 128 份，存储就贴在自己那条 lane 的 ALU 旁边</b>，每份只要 <b>256 根线、走几微米</b>。于是三个问题一次答完：<b>64 个 vreg 之间完全不连</b>（只共用位线，「64 挑 1」那一层的时分复用是真的）；<b>到 VPU 是贴着的</b>；<b>只有 MXU 和 XLU 才真的要扯长线</b> —— 这也正是它们要队列、要共享的原因。⚠️ 红带那条必须念：<b>「按 lane 切片」是推的，不是查到的版图</b>，具体 bank 划分与 floorplan 公开资料没有。</figcaption>
 </figure>
 
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
