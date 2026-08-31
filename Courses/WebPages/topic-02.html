@@ -994,7 +994,7 @@ footer a{text-decoration:none}
           <td>（<b>没有可编程的</b>）<br><span class="sub">TMA 是固定功能搬运，不是这一类</span></td>
           <td>⭐ 另一层只有另一边有</td></tr>
       <tr><td><b>零碎活的小单元</b></td>
-          <td>XLU 跨 lane 单元 × 2<sup>†</sup><br><span class="sub">转置 · 跨 lane 归约 · shuffle。<b>超越函数没有单列的单元</b>，exp / tanh 这类归 VPU</span></td>
+          <td>XLU 跨 lane 单元 × 2<sup>†</sup><br><span class="sub">转置 · 跨 lane 归约 · shuffle。<b>超越函数没有单列的单元</b><sup>§</sup>，exp / tanh 这类归 VPU</span></td>
           <td>SFU × 4 / 处理块<sup>‡</sup><br><span class="sub">exp · rcp · rsqrt 等超越函数。跨 lane 靠 warp shuffle 指令，官方没单列成部件</span></td>
           <td>⚠️ 两边<b>都</b>加了个小帮手，<b>但补的不是同一件事</b></td></tr>
       <tr><td><b>HBM</b></td><td>96 GiB / device（＝ 192 GiB ÷ 2）；整 chip 7,380 GB/s</td>
@@ -1016,7 +1016,20 @@ footer a{text-decoration:none}
   4 个 MXU、<b>2 个 XLU</b> 和多个 DMA 引擎」。⚠️ <b>同一句里的「4 个 MXU」对不上 v7</b>
   （v7 是 2 个 256×256），说明那句没有标代次，所以这个 2 只当「有不止一个」用。
   <br><sup>‡</sup> SFU <b>存在</b>是 NVIDIA 官方明写的（Blackwell SM 构成里列了
-  Special Function Units），但<b>个数官方框图没标</b>，这里的 ×4 是沿用 Hopper 的画法。</p>
+  Special Function Units），但<b>个数官方框图没标</b>，这里的 ×4 是沿用 Hopper 的画法。
+  <br><sup>§</sup> <b>「没有单列」不等于「没有」——&nbsp;这一格值得多说两句</b>，因为
+  「一颗算神经网络的芯片，总得有块硬件负责 <code>exp</code> / <code>tanh</code> /
+  <code>sin</code>」是个很自然的直觉，而且它<b>曾经是对的</b>：
+  <b>初代 TPU 的框图里确实有一个独立的 Activation 单元</b>，2017 年那篇论文的正文
+  也提到芯片上有一块「<i>nonlinear function logic</i>」。
+  <br>但<b>从 v2 起，公开资料就不再单列这一项了</b>。TPU v4 的 ISCA 论文对一个
+  TensorCore 的完整描述只有一句：「四个 128×128 MXU，一个<b>带 128 条 lane、
+  每 lane 16 个 ALU</b> 的 VPU，以及 16 MiB VMEM」——&nbsp;<b>那 16 个 ALU 里有没有
+  专算超越函数的，论文没有拆</b>。Google Cloud 的 TPU 架构文档、JAX 官方的 Pallas
+  硬件参考页、以及 JAX 里那张机器可读的芯片规格表，三处口径一致：
+  只有 MXU / 向量单元 / 标量单元 / SparseCore，<b>没有「超越函数单元」这一项</b>。
+  <br>至于 NVIDIA SFU 那套「查表 + 插值」的实现方式，<b>TPU 侧找不到任何公开说明</b>。
+  所以本课在这一格上<b>既不写「有」也不写「没有」</b>，只写公开资料的实际状态。</p>
 
   <div class="note ok"><span class="t">这一节的三个落点</span>
     ① <b>两套坐标</b>，后面每讲一个部件都能说出「它在对面对应谁」；<br>
