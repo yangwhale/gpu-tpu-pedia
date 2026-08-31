@@ -17,9 +17,18 @@ import argparse, json, pathlib, sys
 from decimal import Decimal, ROUND_HALF_UP
 
 CFG = pathlib.Path(__file__).resolve().parent.parent / "素材" / "deepseek-v3-config.json"
-HBM_PER_DEVICE = 94.74 * 1e9      # TPU v7 单 device 可用 HBM（字节，厂商 GB）
-
 GiB = 1024**3
+
+# ⛔ 这里原先写的是 `94.74 * 1e9`，注释还写着「厂商 GB」—— **错了 7.4%**。
+# 94.74 是 **GiB**，证据是编译器自己的报错串能对上算术：
+# `95.38G − 94.74G = 656.93M`，只有按 1024 才成立（按 1000 是 640M）。
+# 出处 `tpu/Hunyuan3-295B-Pretraining/AOT-COMPILE.md:159`。
+#
+# 这个 bug 尤其难堪：本脚本上面所有显存都用 `human()` 打成 GiB/TiB（二进制），
+# 只有分母是十进制 —— **同一个除法里两种单位**。
+# 而这门课的检查表第二句正是「二进制还是十进制？」。
+# 改之后「光放权重」从 14.2 个 device 变成 13.3 个。
+HBM_PER_DEVICE = 94.74 * GiB      # TPU v7 单 device 可用 HBM（字节）
 TiB = 1024**4
 
 
@@ -223,7 +232,7 @@ def report(r):
     P(f"  {'权重显存':<13}{human(r['mem_weights']):>12}")
     P(f"  {'+ KV cache':<12}{human(r['kv_total']):>12}")
     P(f"  {'= 常驻':<14}{human(r['mem_resident']):>12}")
-    P(f"\n  对着 TPU v7 单 device 94.74 GB 一除：")
+    P(f"\n  对着 TPU v7 单 device 94.74 GiB 一除：")
     P(f"    光放权重      需要 {r['devices_weights']:.1f} 个 device")
     P(f"    权重 + KV     需要 {r['devices_resident']:.1f} 个 device")
     P(f"    ⚠️ 这还只是前向、batch=1、不含激活和临时缓冲")

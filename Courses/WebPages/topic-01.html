@@ -419,7 +419,7 @@ footer a{text-decoration:none}
     <span class="chip">标的 <b>DeepSeek V3</b></span>
     <span class="chip">口径 <b><span data-v="seqLabel">128K</span> · batch <span data-v="batch">1</span>
       · <span data-v="precLabel">bf16</span> · 只算前向</b></span>
-    <span class="chip">参照 <b>TPU v7 单 device 94.74 GB</b></span>
+    <span class="chip">参照 <b>TPU v7 单 device 94.74 GiB</b></span>
     <span class="chip">⏱ <b>60 分钟</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -469,7 +469,7 @@ footer a{text-decoration:none}
       后面每生成一个字，都要回头用到前面每一个字、在<b>每一层</b>算出来的 K 和 V。
       这就是 <b>KV cache</b>。<br>
       问的就是它：<b>这一次 prefill，留下了多大一份 KV cache？</b><br>
-      参照物 —— 一个 TPU v7 device 可用 HBM 约 <b>94.74 GB</b>。</span></p>
+      参照物 —— 一个 TPU v7 device 可用 HBM 约 <b>94.74 GiB</b>。</span></p>
     <div class="opts">
       <button data-g="0">约 4 GB</button>
       <button data-g="1" data-right>约 9 GB</button>
@@ -1096,7 +1096,7 @@ else:
   <div class="note danger">
     <span class="t">最刺眼的一句话，可以直接背下来</span>
     照这个存法，<b>一段 <span data-v="mhaBreak">23,699</span> 个 token 的对话，
-    光缓存就吃满一整张 TPU v7（94.74 GB）</b> —— 模型权重还一个字节都没放进去，
+    光缓存就吃满一整张 TPU v7（94.74 GiB）</b> —— 模型权重还一个字节都没放进去，
     而且这只是<b>一个用户</b>。<br>
     换成 MLA，同一张卡能撑到 <b><span data-v="mlaBreak">1,348,190</span> 个 token</b>。
   </div>
@@ -2082,7 +2082,7 @@ else:
       <line x1="192" y1="12" x2="192" y2="168" stroke="#dadce0"/>
       <line id="hbmline" x1="0" y1="12" x2="0" y2="176" stroke="#d93025" stroke-dasharray="5 4"/>
       <text id="hbmtext" x="0" y="186" class="svgsm" fill="#d93025" text-anchor="middle">
-        单 device 94.74 GB</text>
+        单 device 94.74 GiB</text>
     </svg>
   </div>
   <figcaption>同样的序列长度，四种方案的 KV cache。红色虚线是单个 TPU v7 device 的 HBM ——
@@ -2111,7 +2111,7 @@ else:
         <g id="cardgrid"></g>
       </svg>
       <figcaption style="text-align:left;margin-top:4px">
-        每个小方块 = 一个 TPU v7 device（94.74 GB）。
+        每个小方块 = 一个 TPU v7 device（94.74 GiB）。
         <b>这还只是一层、一次、batch 1。</b></figcaption>
       </figure>
     </div>
@@ -4520,9 +4520,16 @@ HC 与 mHC 的 expansion rate n 均设为 4，主实验模型 27 B</div>
         <td class="n"><span data-v="logitsFp32">63.13 GiB</span></td>
         <td>cross-entropy 在 bf16 下数值不稳，logits 通常要提到 fp32 再算。
           于是这个<b>纯临时</b>的张量吃掉单卡 <b><span data-v="logitsCard">72%</span></b>。<br>
-          <em>⚠️ 这里有个单位陷阱：63.13 <b>GiB</b> 对 94.74 <b>GB</b>，直接相除会得到 67%，是错的。
-          换成同一进制才对得上 —— 63.13 GiB = 67.78 GB，67.78 ÷ 94.74 = 72%。
-          <b>页面上的百分比一律是按字节算的，不是按显示出来的那两个数算的。</b></em></td></tr>
+          <em>⚠️ <b>这一格曾经把单位讲反了，留在这里当反面教材。</b>
+          旧版写的是：「63.13 GiB 对 94.74 <b>GB</b>，直接相除得 67% 是错的，
+          换算成 67.78 GB ÷ 94.74 = 72% 才对。」
+          <b>实际上 94.74 本来就是 GiB</b>（编译器报错串 <code>95.38G − 94.74G = 656.93M</code>
+          只有按 1024 才对得上），所以两个数本来就同进制，
+          <b>63.13 ÷ 94.74 = 67% 才是对的，被「纠正」成的 72% 反而是错的</b>。
+          <br>这个错误的形状值得记：<b>它不是不知道有单位陷阱，恰恰是知道、然后往错的方向修了一次</b> ——
+          先认定分母是十进制，再把分子换过去。<b>检查单位的时候，第一件事是确认分母到底是哪一进制，
+          而不是急着换算分子。</b>
+          <br>页面上的百分比一律按字节算，不按显示出来的那两个数算。</em></td></tr>
       <tr><td><b>训练 vs 推理</b></td>
         <td class="n"><span data-v="logitsLast">252.5 KiB</span></td>
         <td>训练每个位置都要算 loss，所以要全部；
@@ -4965,7 +4972,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <svg viewBox="0 0 1000 230" role="img" aria-label="显存构成与单卡容量对比">
       <g id="memstack"></g>
     </svg>
-    <figcaption>常驻显存的构成。每一小格是<b>一个 TPU v7 device 的 94.74 GB</b> ——
+    <figcaption>常驻显存的构成。每一小格是<b>一个 TPU v7 device 的 94.74 GiB</b> ——
     数一数要几个。而这还只是前向、batch=1、不含激活和临时缓冲。</figcaption>
   </figure>
 
@@ -4979,7 +4986,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
         KV <span data-v="kvMla">8.58 GiB</span></p></div>
     <div class="card tint"><h4>③ 要多少个 device</h4>
       <div class="stat orange"><span data-v="devices">14.3</span> 个</div>
-      <p class="sub">对着 94.74 GB 一除。<b>而且这只是下限。</b></p></div>
+      <p class="sub">对着 94.74 GiB 一除。<b>而且这只是下限。</b></p></div>
   </div>
 
   <div class="note warn">
@@ -4990,9 +4997,9 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <span data-v="devices">14.3</span> 变成 <b><span data-v="devicesAct">14.7</span></b> ——
     这一步还好。<b>但换成训练就不是一个量级了</b>：
     每参数 16 字节（权重 + 梯度 + fp32 主权重 + 两个动量），
-    671 B 就是 <b>10.74 TB</b>，<b>约 113 张卡</b> —— 比这里多将近<b>八倍</b>。
+    671 B 就是 <b>9.77 TiB</b>，<b>约 105 张卡</b> —— 比这里多将近<b>八倍</b>。
     <em>这笔账在<a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9804-%E5%8F%8D%E5%90%91%E4%B8%8E%E4%BC%98%E5%8C%96%E5%99%A8.md">专题四</a>。</em><br>
-    <b>所以正确的读法是：连最省的口径都要 15 张，而真实训练要八倍于此。</b>
+    <b>所以正确的读法是：连最省的口径都要 14 张，而真实训练要八倍于此。</b>
   </div>
 
   <h3>那 <span data-v="nonWeight">41.89 GiB</span> 峰值激活，是怎么凑出来的</h3>
@@ -5057,7 +5064,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 300" role="img"
-       aria-label="三种口径下 671B 模型需要的 TPU v7 device 数：只算前向权重 14.3 个、加上峰值激活 14.7 个、换成训练 113 张；第三条按每参数 16 字节拆成权重、梯度、fp32 主权重和两个动量">
+       aria-label="三种口径下 671B 模型需要的 TPU v7 device 数：只算前向权重 14.3 个、加上峰值激活 14.7 个、换成训练 105 张；第三条按每参数 16 字节拆成权重、梯度、fp32 主权重和两个动量">
     <text x="24" y="22" class="svglbl">同一个模型，换一个口径，就换一个数量级。<tspan font-weight="700">条长 = 要几个 TPU v7 device</tspan></text>
 
     <text x="212" y="72" text-anchor="end" class="svgsm" fill="#3c4043">① 前向 · batch=1 · 只算权重</text>
@@ -5080,7 +5087,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <text x="460" y="168" text-anchor="middle" class="svgsm" fill="#3c4043" font-weight="700">4 B</text>
     <text x="621" y="168" text-anchor="middle" class="svgsm" fill="#fff" font-weight="700">4 B</text>
     <text x="781" y="168" text-anchor="middle" class="svgsm" fill="#fff" font-weight="700">4 B</text>
-    <text x="871" y="167" class="svgsm" fill="#a50e0e" font-weight="700">约 113 个</text>
+    <text x="871" y="167" class="svgsm" fill="#a50e0e" font-weight="700">约 105 个</text>
 
     <text x="260" y="194" text-anchor="middle" class="svgsm" fill="#5f6368">bf16 权重</text>
     <text x="340" y="194" text-anchor="middle" class="svgsm" fill="#5f6368">梯度</text>
@@ -5091,11 +5098,11 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <path d="M220 208 H861" stroke="#9aa0a6" stroke-width="1"/>
     <path d="M220 204 V212 M861 204 V212" stroke="#9aa0a6" stroke-width="1"/>
     <text x="540" y="228" text-anchor="middle" class="svgsm" fill="#3c4043">
-      671.03 B × 16 B = <tspan font-weight="700">10.74 TB</tspan> ÷ 94.74 GB/device</text>
+      671.03 B × 16 B = <tspan font-weight="700">9.77 TiB</tspan> ÷ 94.74 GiB/device <tspan fill="#5f6368">（两边都是二进制，可以直接除）</tspan></text>
 
     <rect x="24" y="244" width="910" height="46" rx="6" fill="#fef7e0" stroke="#f9ab00"/>
     <text x="44" y="264" class="svgsm" fill="#b06000" font-weight="700">
-      ⭐ 这张图真正要说的不是「113」，是<tspan fill="#a50e0e">前两条几乎一样长、第三条长了八倍</tspan>这个形状</text>
+      ⭐ 这张图真正要说的不是「105」，是<tspan fill="#a50e0e">前两条几乎一样长、第三条长了八倍</tspan>这个形状</text>
     <text x="44" y="282" class="svgsm" fill="#5f6368">
       橙紫红那三段（fp32 主权重 + 两个动量，共 12 B）<tspan font-weight="700" fill="#3c4043">全是优化器的</tspan> ——
       模型本身只占最左边那 2 B。<tspan font-weight="700" fill="#3c4043">这三段怎么砍，就是专题四的全部内容</tspan></text>
@@ -5104,8 +5111,8 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
   ① 问「权重放得下吗」，② 问「跑一次前向放得下吗」，③ 问「能不能训」。
   <b>三个问题的答案差了一个数量级，而它们常常被同一句「这个模型要几张卡」混在一起问。</b>
   <em>下次听到这句话，先反问一句是哪个口径。</em><br>
-  <b>⚠️ 顺带把单位钉死：本页说的「个」「张」一律指 <code>device</code>，因为 94.74 GB 是<b>每 device</b> 的容量。
-  TPU v7 一颗<b>芯片</b>里有<b>两个</b> device</b> —— <em>所以 113 个 device 换算成芯片是 57 颗，
+  <b>⚠️ 顺带把单位钉死：本页说的「个」「张」一律指 <code>device</code>，因为 94.74 GiB 是<b>每 device</b> 的容量。
+  TPU v7 一颗<b>芯片</b>里有<b>两个</b> device</b> —— <em>所以 105 个 device 换算成芯片是 53 颗，
   两个数都对，但说的不是一回事。这个 1:2 在后面几门课里会反复咬人。</em></figcaption>
   </figure>
 
@@ -5127,7 +5134,7 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
   </div>
   <div class="note warn">
     <span class="t">「假设并行完美无损」这七个字，是整门课的入口</span>
-    把活分给 15 张卡，绝不等于快 15 倍 —— 它们要互相传数据、要等最慢的那个、
+    把活分给 14 张卡，绝不等于快 14 倍 —— 它们要互相传数据、要等最慢的那个、
     要为了省显存重算一部分。<b>那道差距有多大、从哪来、怎么缩小，
     就是专题五和专题七要回答的。</b>
   </div>
@@ -5289,17 +5296,19 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <div style="font-size:13px;opacity:.7;letter-spacing:.1em;margin-bottom:10px">下一课</div>
     <div style="font-size:26px;margin-bottom:14px">专题二 · TPU 与 GPU</div>
     <div style="font-size:17px;font-weight:400;line-height:1.8;opacity:.92">
-      这一整课，我们反复拿一个数当尺子量东西：<b style="color:var(--blue-d)">94.74 GB</b>。<br>
-      装不下、要 15 张卡、logits 占了 0.36 张 —— 全都是拿它除出来的。<br><br>
+      这一整课，我们反复拿一个数当尺子量东西：<b style="color:var(--blue-d)">94.74 GiB</b>。<br>
+      装不下、要 14 张卡、logits 占了 0.33 张 —— 全都是拿它除出来的。<br><br>
       <b style="color:var(--ink)">但那张卡到底长什么样？为什么偏偏是这个数？</b><br>
       为什么有的卡叫 GPU、有的叫 TPU，它们看同一个模型的眼光有什么不同？<br><br>
       <span style="opacity:.75">第一课算出了「要什么」。第二课讲「机器能给什么」。</span><br>
-      <span style="opacity:.6;font-size:14px">（专题二的网页版还在写，下面这个链接先带你看它的大纲）</span>
+      <span style="opacity:.6;font-size:14px">（专题二的网页版已经写完了，四十张图；旁边那个链接是它的大纲）</span>
     </div>
     <div style="margin-top:22px">
-      <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9802-TPU-%E4%B8%8E-GPU.md" style="display:inline-block;background:var(--blue);color:#fff;
+      <a href="topic-02.html" style="display:inline-block;background:var(--blue);color:#fff;
          padding:12px 26px;border-radius:8px;text-decoration:none;font-size:15px;font-weight:600">
-        看专题二的大纲 →</a>
+        去上专题二 →</a>
+      <a href="https://github.com/yangwhale/gpu-tpu-pedia/blob/main/Courses/%E4%B8%93%E9%A2%9802-TPU-%E4%B8%8E-GPU.md" style="display:inline-block;margin-left:12px;color:var(--blue-d);
+         padding:12px 18px;text-decoration:none;font-size:15px">看它的大纲</a>
       <a href="index.html" style="display:inline-block;margin-left:12px;color:var(--blue-d);
          padding:12px 8px;text-decoration:none;font-size:15px">回课程总纲</a>
     </div>
@@ -5357,7 +5366,14 @@ const C = {
 };
 C.nMoe = C.L - C.nDense;          // 58
 C.qkDim = C.nope + C.rope;        // 192
-const HBM = 94.74e9;              // TPU v7 单 device 可用 HBM（字节）
+/* ⛔ 这里原先写的是 94.74e9 —— 当成了十进制 GB，**整页所有除以 HBM 的数都少算了 7.4%**。
+   94.74 是 GiB。证据是编译器自己的报错串能对上算术：
+   `95.38G − 94.74G = 656.93M`，只有按 1024 才成立（按 1000 得 640M）。
+   出处 tpu/Hunyuan3-295B-Pretraining/AOT-COMPILE.md:159。
+   这一页所有显存都用 GiB/TiB 打印，只有分母是十进制 —— 同一个除法里两种单位。
+   而这一页自己就有一段在讲单位陷阱（往上找「单位陷阱」四个字），
+   **那一段的方向讲反了，因为它是按这个错常量倒推出来的。** 已一并改。*/
+const HBM = 94.74 * 1024**3;      // TPU v7 单 device 可用 HBM（字节；94.74 GiB）
 const PEAK = 1153.5e12;           // TPU v7 单 device bf16 峰值 FLOP/s（一颗芯片 2307，2 device/chip）
 const MFU  = 0.35;                // 大模型训练常见的实际利用率量级
 const GiB = 1024**3, TiB = 1024**4;
@@ -6195,7 +6211,7 @@ function drawKvLadder(r){
     g.appendChild(el("line",{x1:60,y1:hy,x2:940,y2:hy,stroke:"#d93025",
       "stroke-dasharray":"6 4","stroke-width":1.2}));
     g.appendChild(el("text",{x:60,y:hy-8,class:"svgsm",fill:"#d93025"},
-      "单个 TPU v7 device 的全部显存 94.74 GB"));
+      "单个 TPU v7 device 的全部显存 94.74 GiB"));
   }
   g.appendChild(el("text",{x:60,y:24,class:"svgsm",fill:"#80868b"},
     "纵轴：对数刻度（每一格 10 倍）"));
@@ -6260,7 +6276,7 @@ function drawKvFlare(r){
     g.appendChild(el("line",{x1:X0,y1:hy,x2:hx2,y2:hy,stroke:"#d93025",
       "stroke-dasharray":"6 4","stroke-width":1.2}));
     g.appendChild(el("text",{x:hx2,y:hy-8,"text-anchor":"end",class:"svgsm",fill:"#d93025"},
-      "单个 device 的全部显存 94.74 GB"));
+      "单个 device 的全部显存 94.74 GiB"));
     const bt = HBM/perTokMha;                  // MHA 撞线的 token 数
     if(bt<xmax){
       const bx = px(bt);
@@ -6385,7 +6401,7 @@ function drawMemStack(r){
   g.appendChild(el("text",{x:X0,y:26,class:"svglbl"},
     `常驻显存合计 ${bytesH(total)}`));
   g.appendChild(el("text",{x:X0+152,y:26,class:"svgsm"},
-    "下面每一格是一个 TPU v7 device（94.74 GB）"));
+    "下面每一格是一个 TPU v7 device（94.74 GiB）"));
 
   let x = X0;
   parts.forEach(p=>{
@@ -6431,7 +6447,7 @@ function drawCardGrid(r){
   g.appendChild(el("text",{x:10,y:18,class:"svglbl",fill:"#a50e0e"},
     `注意力分数矩阵 ${bytesH(r.attnMatrix)} —— 一层、一次`));
   g.appendChild(el("text",{x:10,y:36,class:"svgsm"},
-    `÷ 94.74 GB 一张卡 =`));
+    `÷ 94.74 GiB 一张卡 =`));
   g.appendChild(el("text",{x:118,y:37,class:"svgnum",fill:"#d93025","font-size":16},
     n>=1 ? `${Math.ceil(n)} 张卡` : `${(n*100).toFixed(1)}% 一张卡`));
 
@@ -6448,7 +6464,7 @@ function drawCardGrid(r){
   // 对照
   const ref = [["KV cache 全量", r.kvMla, "#1a73e8", bytesH(r.kvMla)],
                ["logits 张量",   r.logits,"#f9ab00", bytesH(r.logits)],
-               ["一张卡 HBM",    HBM,     "#5f6368", "94.74 GB"]];
+               ["一张卡 HBM",    HBM,     "#5f6368", "94.74 GiB"]];
   ref.forEach((x,i)=>{
     const y = by + i*20;
     g.appendChild(el("rect",{x:10,y:y-9,width:12,height:12,rx:2,fill:x[2]}));
