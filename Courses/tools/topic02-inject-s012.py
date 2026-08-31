@@ -39,6 +39,7 @@ SCRIPTS = {
     "topic02-figs-map-origin.py":        {"figA.svg": "figA", "figC.svg": "figC"},
     "topic02-fig-9474-waterfall.py":     {"fig0-1.svg": "fig0-1"},
     "topic02-figs-s1-panorama.py":       {"fig1-1.svg": "fig1-1", "fig1-2.svg": "fig1-2"},
+    "topic02-fig-s1-landing.py":          {"fig1-5.svg": "fig1-5"},
     "topic02-figs-s1-hierarchy-intensity.py":
                                          {"fig1-3.svg": "fig1-3", "fig1-4.svg": "fig1-4"},
     "topic02-figs-s2-access-lane.py":    {"fig2-1.svg": "fig2-1", "fig2-2.svg": "fig2-2"},
@@ -88,7 +89,7 @@ def main():
             changed += 1
 
     # ── 写盘前自检 ────────────────────────────────────────────────
-    # ① 十五张一张都不能少（漏一张而报「成功」是最危险的失败）
+    # ① 一张都不能少（漏一张而报「成功」是最危险的失败）
     miss = sorted(set(f for m in SCRIPTS.values() for f in m.values())
                   - set(got))
     assert not miss, "这几张没生成：%s" % miss
@@ -102,8 +103,11 @@ def main():
     bad = lint_public(html)
     assert not bad, "公开页面里出现内部词，已中止写盘：%s" % bad
     # ③ 页面上真的还剩这么多 figure（防止 span 算错把别的吃掉）
+    # 期望值从 SCRIPTS 推，别写死 —— 写死过一次 15，加第十六张图时它就报
+    # 「注入把页面结构改坏了」，而结构其实好好的。自检误报会让人去绕过自检。
+    want = sum(len(m) for m in SCRIPTS.values())
     n = len(re.findall(r'<figure class="fbox" id="s012-', html))
-    assert n == 15, "figure 数变成了 %d，注入把页面结构改坏了" % n
+    assert n == want, "页面上有 %d 个 s012 figure，脚本这边有 %d 个 —— 对不上" % (n, want)
 
     io.open(PAGE, "w", encoding="utf-8").write(html)
     print("ok  注入 %d/%d 张（其余与页面已一致）  topic-02.html %s 字符"

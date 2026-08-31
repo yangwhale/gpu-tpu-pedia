@@ -40,6 +40,7 @@ SCRIPTS = {
     "topic02-fig-9474-waterfall.py":         ["fig0-1"],
     "topic02-figs-s1-panorama.py":           ["fig1-1", "fig1-2"],
     "topic02-figs-s1-hierarchy-intensity.py": ["fig1-3", "fig1-4"],
+    "topic02-fig-s1-landing.py":             ["fig1-5"],
     "topic02-figs-s2-access-lane.py":        ["fig2-1", "fig2-2"],
     "topic02-figs-s2-flash-intensity.py":    ["fig2-3", "fig2-4"],
     "topic02-fig-s2-three-wastes.py":        ["fig2-5"],
