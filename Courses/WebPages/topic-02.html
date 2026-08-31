@@ -3590,31 +3590,292 @@ footer a{text-decoration:none}
     <br><br>而第 2 节那五个红框，就是答「要」之后的必然产物。
     <b>「有没有 cache」和「有没有 warp 调度器」不是两件事，是同一个决定的两个面。</b></div>
 
-  <div class="note danger"><span class="t">⭐ 图里那个「跨 lane 单元」—— 第 1 节欠下的那笔账，在这里还</span>
-    先立一张画面。VPU 的一个向量寄存器是 <b>8 × 128</b>：8 个 sublane、128 条 lane。
-    <b>把它想成一张座位表 —— 8 行，128 列。</b>
-    <br>要紧的是：<b>列不是画出来的，是真的硬件</b>。每一条 lane 是一整套自己的 ALU
-    （v4 论文的说法是每 lane 16 个）。同一列上下那 8 个数，落在同一套硬件里；
-    <b>隔壁那一列，是另一套硬件。</b>
-    <br><br><b>于是「上下」和「左右」根本不是一回事：</b>
-    <br>· <b>纵向（8 那个轴）很便宜。</b>硬件有一条 shuffle 能沿这个轴滚一格，
-      公开资料说约一个周期。把 8 个数加起来只要三步 ——&nbsp;
-      错 4 位加一次、错 2 位加一次、错 1 位加一次，完事。
-    <br>· <b>横向（128 那个轴）没有这条路。</b>数据要跨 lane，就得交给 <b>XLU</b>，
-      而且往往还要绕一趟 VMEM，不是在寄存器里就地完成。
-      同一份公开材料对它的形容是<b>「慢，而且贵」</b>。
-    <br><br><b>而这间「传达室」很窄</b>：按那份材料的描述，一个标量核管着
-    一个 VPU（几千个 ALU）、多个 MXU、<b>2 个 XLU</b> 和多个 DMA 引擎。
-    <b>需求侧几千，供给侧个位数。</b>
-    <br><br><b>⭐ 为什么这件事对大模型格外要命。</b>
-    张量的<b>最后一维默认铺在 lane 方向</b>上。而 <code>softmax</code> 沿最后一维求和，
-    <code>RMSNorm</code> 也沿最后一维求和 ——&nbsp;
-    <b>神经网络里最常见的那两个归约，方向恰好都撞在最贵的那条路上。</b>
-    <br>这就是为什么在 TPU 上，attention 里 softmax 那一段
-    <b>经常比你按 FLOP 算出来的贵得多</b>：贵的不是算，是<b>把数横着挪</b>。
-    <br><br>⚠️ <b>划一条边界</b>：「列与列之间没有直连通路」是<b>我为「它为什么贵」给的解释</b>。
-    公开资料只说 XLU 是个独立单元、而且慢，<b>没有描述它的内部电路</b>。
-    机制这一层我是在推，不是查到的。</div>
+  <p><b>还有第 1 节欠下的那笔账 —— 图里那个「跨 lane 单元」。</b>
+    先把画面立起来：VPU 的一个向量寄存器是 <b>8 × 128</b>，8 个 sublane、128 条 lane
+    ——&nbsp;<b>想成一张座位表，8 行 128 列</b>。要紧的是<b>列不是画出来的，是真的硬件</b>：
+    每一条 lane 是一整套自己的 ALU。于是同一批数，
+    <b>上下走和横着走根本不是一回事</b> ——&nbsp;</p>
+<figure class="fbox fwide" id="ms-p26">
+<svg viewBox="0 0 1400 882" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器 8×128 的方向不对称：沿 sublane 轴归约三步就完，沿 lane 轴归约必须经过 XLU，而公开资料称它慢且贵">
+<text x="20" y="26" class="ttl">同一张 8 × 128 的座位表　—— <tspan font-weight="700">上下走三步就完，横着走要另找一个单元</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">纵向 · 沿 sublane 轴（8）</text>
+<rect x="210.225" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="227.225" y="58" class="sm">横向 · 跨 lane（128）</text>
+<rect x="376.29999999999995" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="393.29999999999995" y="58" class="sm">神经网络最常见的两个归约，恰好都在横向</text>
+<rect x="20" y="84" width="1360" height="252" rx="10" fill="#fff" stroke="#5f6368" stroke-width="1.2"/>
+<text x="38" y="110" class="sec">一个向量寄存器就是这么一张表：8 行（sublane）× 128 列（lane）</text>
+<text x="416.0" y="126" class="lbl" fill="#5f6368" text-anchor="middle">128 条 lane　→</text>
+<text x="191.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">0</text>
+<text x="221.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">1</text>
+<text x="251.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">2</text>
+<text x="281.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">3</text>
+<text x="311.0" y="144" class="xxs" fill="#d93025" text-anchor="middle">4</text>
+<text x="341.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">5</text>
+<text x="371.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">6</text>
+<text x="401.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">7</text>
+<text x="431.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">8</text>
+<text x="461.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">9</text>
+<text x="491.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">10</text>
+<text x="521.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">11</text>
+<text x="551.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">12</text>
+<text x="581.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">⋯</text>
+<text x="611.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">126</text>
+<text x="641.0" y="144" class="xxs" fill="#9aa0a6" text-anchor="middle">127</text>
+<text x="162" y="126" class="xxs" fill="#5f6368" text-anchor="end">8 个</text>
+<text x="162" y="140" class="xxs" fill="#5f6368" text-anchor="end">sublane</text>
+<text x="162" y="164" class="xxs" fill="#9aa0a6" text-anchor="end">0</text>
+<rect x="176" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="206" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="236" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="266" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="296" y="152" width="28" height="15" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="356" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="386" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="416" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="446" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="476" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="506" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="536" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="566" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="596" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="626" y="152" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<text x="162" y="181" class="xxs" fill="#9aa0a6" text-anchor="end">1</text>
+<rect x="176" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="206" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="236" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="266" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="296" y="169" width="28" height="15" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="356" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="386" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="416" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="446" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="476" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="506" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="536" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="566" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="596" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="626" y="169" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<text x="162" y="198" class="xxs" fill="#9aa0a6" text-anchor="end">2</text>
+<rect x="176" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="206" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="236" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="266" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="296" y="186" width="28" height="15" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="356" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="386" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="416" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="446" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="476" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="506" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="536" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="566" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="596" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="626" y="186" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<text x="162" y="215" class="xxs" fill="#9aa0a6" text-anchor="end">3</text>
+<rect x="176" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="206" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="236" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="266" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="296" y="203" width="28" height="15" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="356" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="386" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="416" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="446" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="476" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="506" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="536" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="566" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="596" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="626" y="203" width="28" height="15" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text x="162" y="232" class="xxs" fill="#9aa0a6" text-anchor="end">4</text>
+<rect x="176" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="206" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="236" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="266" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="296" y="220" width="28" height="15" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="356" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="386" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="416" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="446" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="476" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="506" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="536" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="566" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="596" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="626" y="220" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<text x="162" y="249" class="xxs" fill="#9aa0a6" text-anchor="end">5</text>
+<rect x="176" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="206" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="236" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="266" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="296" y="237" width="28" height="15" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="356" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="386" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="416" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="446" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="476" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="506" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="536" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="566" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="596" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="626" y="237" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<text x="162" y="266" class="xxs" fill="#9aa0a6" text-anchor="end">6</text>
+<rect x="176" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="206" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="236" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="266" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="296" y="254" width="28" height="15" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="356" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="386" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="416" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="446" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="476" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="506" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="536" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="566" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="596" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="626" y="254" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<text x="162" y="283" class="xxs" fill="#9aa0a6" text-anchor="end">7</text>
+<rect x="176" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="206" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="236" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="266" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="296" y="271" width="28" height="15" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="356" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="386" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="416" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="446" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="476" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="506" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="536" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="566" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="596" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="626" y="271" width="28" height="15" rx="2" fill="#fff" stroke="#e4e6e8" stroke-width="1.0"/>
+<rect x="176" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="206" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="236" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="266" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="296" y="296" width="28" height="12" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="326" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="356" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="386" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="416" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="446" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="476" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="506" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="536" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="566" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="596" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="626" y="296" width="28" height="12" rx="2" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<text x="162" y="306" class="xxs" fill="#9aa0a6" text-anchor="end">ALU</text>
+<text x="176" y="326" class="xxs" fill="#5f6368">每一列底下是一整套自己的 ALU（v4 论文：每 lane 16 个）</text>
+<text x="702" y="140" class="sm"><tspan font-weight="700" fill="#202124">⭐ 列不是画出来的，是真的硬件。</tspan>同一列上下那 8 个数，落在<tspan font-weight="700" fill="#202124">同一套硬件</tspan>里；隔壁那一列，是<tspan font-weight="700" fill="#202124">另一套硬件</tspan>。</text>
+<rect x="702" y="159" width="12" height="12" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="722" y="170" class="lbl" fill="#1e8e3e">绿色这一列</text>
+<text x="810" y="170" class="xs">沿它<tspan font-weight="700" fill="#202124">上下</tspan>求和 —— 数就在自己这套硬件里，不用出门。</text>
+<rect x="702" y="184" width="12" height="12" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="722" y="195" class="lbl" fill="#d93025">红色这一行</text>
+<text x="810" y="195" class="xs">沿它<tspan font-weight="700" fill="#202124">横着</tspan>求和 —— 要跨 128 套互不相通的硬件。</text>
+<text x="702" y="226" class="xs" fill="#202124"><tspan font-weight="700" fill="#202124">于是「上下」和「左右」根本不是一回事。</tspan>下面两格分别走一遍。</text>
+<rect x="20" y="360" width="672" height="262" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="38" y="387" class="sec" fill="#1e8e3e">纵向　·　沿 sublane 轴（8 个）</text>
+<text x="38" y="406" class="xs" fill="#5f6368">硬件自带一条 shuffle 能沿这个轴滚一格，公开资料说约一个周期</text>
+<rect x="66" y="426" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="66" y="441" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="66" y="456" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="66" y="471" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="66" y="486" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="66" y="501" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="66" y="516" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="66" y="531" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="83.0" y="562" class="xxs" fill="#9aa0a6" text-anchor="middle">原始</text>
+<rect x="212" y="426" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="212" y="441" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="212" y="456" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="212" y="471" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="212" y="486" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="212" y="501" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="212" y="516" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="212" y="531" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<text x="229.0" y="562" class="xxs" fill="#202124" text-anchor="middle">错 4 位加一次</text>
+<line x1="148" y1="482" x2="198" y2="482" stroke="#1e8e3e" stroke-width="1.6" marker-end="url(#aG)"/>
+<rect x="358" y="426" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="358" y="441" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="358" y="456" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="358" y="471" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="358" y="486" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="358" y="501" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="358" y="516" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="358" y="531" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<text x="375.0" y="562" class="xxs" fill="#202124" text-anchor="middle">错 2 位加一次</text>
+<line x1="294" y1="482" x2="344" y2="482" stroke="#1e8e3e" stroke-width="1.6" marker-end="url(#aG)"/>
+<rect x="504" y="426" width="34" height="13" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<rect x="504" y="441" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="504" y="456" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="504" y="471" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="504" y="486" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="504" y="501" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="504" y="516" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<rect x="504" y="531" width="34" height="13" rx="2" fill="#fff" stroke="#dadce0" stroke-width="0.8"/>
+<text x="521.0" y="562" class="xxs" fill="#202124" text-anchor="middle">错 1 位加一次</text>
+<line x1="440" y1="482" x2="490" y2="482" stroke="#1e8e3e" stroke-width="1.6" marker-end="url(#aG)"/>
+<text x="578" y="478" class="numb" fill="#1e8e3e">= Σ</text>
+<text x="578" y="500" class="lbl" fill="#1e8e3e">三步</text>
+<text x="38" y="578" class="sm" fill="#202124"><tspan font-weight="700" fill="#202124">8 → 4 → 2 → 1，三步，全程在寄存器里就地完成</tspan> —— 数一次都没有离开自己那套硬件。这就是「便宜」的全部含义。</text>
+<rect x="708" y="360" width="672" height="262" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="726" y="387" class="sec" fill="#d93025">横向　·　跨 lane（128 条）</text>
+<text x="726" y="406" class="xs" fill="#5f6368">没有这条 shuffle —— 数据要横着走，只能交出去</text>
+<rect x="734" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="759" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="784" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="809" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="834" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="859" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="884" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="909" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="934" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="959" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="984" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="1009" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="1034" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<rect x="1059" y="428" width="22" height="20" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text x="1094" y="442" class="xxs" fill="#5f6368">…… 128 条</text>
+<path d="M774 452 C774 474 884 474 884 478" stroke="#d93025" stroke-width="1.6" fill="none" marker-end="url(#aR)"/>
+<path d="M984 452 C984 474 904 474 904 478" stroke="#d93025" stroke-width="1.6" fill="none" marker-end="url(#aR)"/>
+<rect x="734" y="480" width="210" height="46" rx="8" fill="#fff" stroke="#12786f" stroke-width="1.8"/>
+<text x="746" y="500" class="box" fill="#12786f">XLU　跨 lane 单元</text>
+<text x="746" y="517" class="xxs" fill="#5f6368">转置 · 跨 lane 归约 · shuffle</text>
+<line x1="944" y1="503" x2="996" y2="503" stroke="#9aa0a6" stroke-width="1.4" marker-end="url(#aK)" stroke-dasharray="4 3"/>
+<rect x="1000" y="486" width="96" height="34" rx="6" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="1048" y="507" class="lbl" fill="#5f6368" text-anchor="middle">VMEM</text>
+<text x="1000" y="536" class="xxs" fill="#5f6368">往往还要绕这一趟 —— 不是在寄存器里就地完成</text>
+<rect x="1116" y="478" width="236" height="50" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="1128" y="500" class="xs">公开资料对它的形容：<tspan font-weight="700" fill="#d93025">「慢，而且贵」</tspan></text>
+<rect x="726" y="540" width="636" height="44" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="740" y="560" class="xs">一个标量核管着：一个 VPU（<tspan font-weight="700" fill="#202124">几千个 ALU</tspan>）· 多个 MXU · <tspan font-weight="700" fill="#d93025">2 个 XLU</tspan> · 多个 DMA 引擎</text>
+<text x="740" y="578" class="xxs" fill="#5f6368">需求侧几千，供给侧个位数 —— 这就是那间传达室有多窄</text>
+<text x="726" y="606" class="xxs" fill="#9aa0a6">「2 个」出自公开资料，但那句话没标代次 —— 只当「不止一个」用</text>
+<rect x="20" y="648" width="1360" height="100" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="38" y="676" class="sec">⭐ 麻烦的是：神经网络最常做的那两个归约，方向恰好都是横的</text>
+<text x="38" y="702" class="xs">张量的<tspan font-weight="700" fill="#202124">最后一维默认铺在 lane 方向</tspan>上。而 <tspan class="mono" fill="#1967d2">softmax</tspan> 沿最后一维求和，<tspan class="mono" fill="#1967d2">RMSNorm</tspan> 也沿最后一维求和 —— <tspan font-weight="700" fill="#202124">两个最常见的算子，都撞在上面那条最贵的路上。</tspan></text>
+<text x="38" y="725" class="sm" fill="#202124">这就是为什么在 TPU 上，attention 里 softmax 那一段<tspan font-weight="700" fill="#202124">经常比你按 FLOP 算出来的贵得多</tspan>：<tspan font-weight="700" fill="#d93025">贵的不是算，是把数横着挪。</tspan></text>
+<rect x="20" y="770" width="1360" height="92" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="798" class="sec">⚠️ 这张图里有一处是我在推，不是查到的</text>
+<text x="38" y="824" class="xs"><tspan font-weight="700" fill="#202124">「列与列之间没有直连通路」是我为「它为什么贵」给的解释。</tspan>公开资料只说 XLU 是个独立单元、而且慢，<tspan font-weight="700" fill="#202124">没有描述它的内部电路</tspan>。</text>
+<text x="38" y="845" class="xs">查到的那几条是：<tspan font-weight="700" fill="#202124">沿 8 那个轴的 shuffle 约一个周期</tspan>、<tspan font-weight="700" fill="#202124">跨 lane 要经过 XLU</tspan>、<tspan font-weight="700" fill="#202124">XLU「慢且贵」</tspan>、<tspan font-weight="700" fill="#202124">一个标量核配 2 个 XLU</tspan>（未标代次）。<tspan font-weight="700" fill="#202124">机制这一层没有出处。</tspan></text>
+</svg>
+<figcaption>整张图就一件事：<b>同一个寄存器、同一批数，换个方向，代价完全不同</b>。绿的那一列是<b>纵向</b> —— 8 → 4 → 2 → 1，三步，全程没离开自己那套 ALU；红的那一行是<b>横向</b> —— 128 条 lane 各是一套硬件，数要横着走只能交给 <b>XLU</b>，而且往往还得绕一趟 VMEM。<b>黄带才是这张图真正要落的地方</b>：<code>softmax</code> 和 <code>RMSNorm</code> 都沿最后一维求和，而最后一维默认就铺在 lane 方向上 —— <b>最常做的那两个归约，恰好都撞在最贵的方向</b>。⚠️ 底带那条不能跳过：<b>「列与列之间没有直连通路」是我给的解释，不是查到的</b>。</figcaption>
+</figure>
 
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
   <p>上一节说的「运行时换任务」，具体是在哪一层发生的？把两边的层级摆开对照。
