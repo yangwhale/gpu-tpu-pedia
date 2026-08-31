@@ -3878,7 +3878,7 @@ footer a{text-decoration:none}
 <text x="38" y="950" class="xs">这张图早先的版本写着「列与列之间没有直连通路」——那是想当然，已经删掉。公开资料的说法是：跨 lane <tspan font-weight="700" fill="#202124">至少要过一趟 VMEM／XLU／SMEM</tspan> ——<tspan font-weight="700" fill="#d93025">贵在「出一趟寄存器堆」这个往返，不在缺一根线。</tspan></text>
 <text x="38" y="971" class="xs">下一张图把这个往返画出来。<tspan font-weight="700" fill="#202124">XLU 的内部电路仍然没有出处</tspan> ——公开资料只说它是个独立单元、而且慢，没说它里面长什么样。</text>
 </svg>
-<figcaption>整张图就一件事：<b>同一个寄存器、同一批数，换个方向，代价完全不同</b>。绿的那一列是<b>纵向</b> —— 8 → 4 → 2 → 1，三步，全程没离开自己那套 ALU；红的那一行是<b>横向</b> —— 128 条 lane 各是一套硬件，数要横着走只能交给 <b>XLU</b>，而且往往还得绕一趟 VMEM。<b>黄带才是这张图真正要落的地方</b>：<code>softmax</code> 和 <code>RMSNorm</code> 都沿最后一维求和，而最后一维默认就铺在 lane 方向上 —— <b>最常做的那两个归约，恰好都撞在最贵的方向</b>。⚠️ 底带那条不能跳过：<b>「列与列之间没有直连通路」是我给的解释，不是查到的</b>。</figcaption>
+<figcaption>整张图就一件事：<b>同一个寄存器、同一批数，换个方向，代价完全不同</b>。绿的那一列是<b>纵向</b> —— 8 → 4 → 2 → 1，三步，全程没离开自己那套 ALU；红的那一行是<b>横向</b> —— 128 条 lane 各是一套硬件，数要横着走只能交给 <b>XLU</b>，而且往往还得绕一趟 VMEM。<b>黄带才是这张图真正要落的地方</b>：<code>softmax</code> 和 <code>RMSNorm</code> 都沿最后一维求和，而最后一维默认就铺在 lane 方向上 —— <b>最常做的那两个归约，恰好都撞在最贵的方向</b>。⚠️ 底带那条不能跳过，<b>它记的是一次收回</b>：「贵是因为列与列之间没有连线」——<b>这个说法是错的，已经撤掉</b>。公开资料的说法是跨 lane <b>至少要过一趟 VMEM／XLU／SMEM</b>，所以<b>贵在「出一趟寄存器堆再回来」这个往返，不在缺一根线</b>。（这一句是后面三张图共同的地基，别看漏。）</figcaption>
 </figure>
 
   <p><b>讲到这儿一定会有人问：那这些部件到底是怎么连的？</b>
@@ -4366,10 +4366,10 @@ footer a{text-decoration:none}
 <text x="34" y="568" class="xs"><tspan font-weight="700" fill="#202124">它们之间没有任何直接通路。</tspan>要把 vreg 3 挪到 vreg 7，唯一的办法是<tspan font-weight="700" fill="#202124">读出来、过</tspan></text>
 <text x="34" y="586" class="xs"><tspan font-weight="700" fill="#202124">一遍 ALU、再写回去</tspan>。</text>
 <line x1="34" y1="610" x2="444" y2="610" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
-<text x="34" y="630" class="xs">它们共用<tspan font-weight="700" fill="#202124">位线</tspan>：一条切片里 64 行共用一组线，靠<tspan font-weight="700" fill="#202124">地址</tspan>挑一行。<tspan font-weight="700" fill="#d93025">但这不是轮转排队</tspan> </text>
-<text x="34" y="648" class="xs">—— 你要哪一行就是哪一行，<tspan font-weight="700" fill="#202124">当周期就到</tspan>，不存在「等 64 个周期才轮到我」。共用</text>
-<text x="34" y="666" class="xs">的代价是<tspan font-weight="700" fill="#202124">一条端口一个周期只能送一行</tspan>：想同时送 8 行，就得有 8 条端口 —— <tspan font-weight="700" fill="#202124">真</tspan></text>
-<text x="34" y="684" class="xs"><tspan font-weight="700" fill="#202124">正的预算是端口数，不是 64。</tspan></text>
+<text x="34" y="630" class="xs">它们共用<tspan font-weight="700" fill="#202124">位线</tspan>（<tspan fill="#9aa0a6">就是把数据送出去的那组竖线，下一张图拆开画</tspan>）：一条切片里 64 </text>
+<text x="34" y="648" class="xs">行共用一组线，靠<tspan font-weight="700" fill="#202124">地址</tspan>挑一行。<tspan font-weight="700" fill="#d93025">但这不是轮转排队</tspan> —— 你要哪一行就是哪一行，<tspan font-weight="700" fill="#202124">当周</tspan></text>
+<text x="34" y="666" class="xs"><tspan font-weight="700" fill="#202124">期就到</tspan>，不存在「等 64 个周期才轮到我」。共用的代价是<tspan font-weight="700" fill="#202124">一条端口一个周期只能送</tspan></text>
+<text x="34" y="684" class="xs"><tspan font-weight="700" fill="#202124">一行</tspan>：想同时送 8 行，就得有 8 条端口 —— <tspan font-weight="700" fill="#202124">真正的预算是端口数，不是 64。</tspan></text>
 <rect x="476" y="520" width="438" height="214" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
 <text x="490" y="544" class="box" fill="#1e8e3e">② vreg ↔ VPU</text>
 <text x="900" y="544" class="xxs" fill="#5f6368" text-anchor="end">贴着，几微米</text>
@@ -4399,7 +4399,9 @@ footer a{text-decoration:none}
   <p><b>「位线」这个词已经用了好几次，但一直没画出来 ——&nbsp;它其实就是一张田字格。</b>
     值得单独画一张，是因为不画就一定会误解成「大家轮流用一条总线」：
     <b>那样推下去，64 个 vreg 岂不是要 64 个周期才轮到一回？</b>
-    而公开资料明说一个周期就能到 VPU。<b>两句话对不上，对不上的是那个比喻，不是硬件。</b></p>
+    可公开资料给的数是：<b>每个周期都发得出 4 条向量指令，每条读 2 个 vreg</b> ——&nbsp;
+    也就是说<b>每一个周期都在从 vreg 取数，从来没有谁在等号</b>。
+    <b>两句话对不上，对不上的是那个比喻，不是硬件。</b></p>
 <figure class="fbox fwide" id="ms-p30">
 <svg viewBox="0 0 1400 1022" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器堆的位线结构：横向字线按地址选中一行，纵向位线把那一行的数据送出去；一个端口就是一整套这样的线">
 <text x="20" y="26" class="ttl">位线是一张<tspan font-weight="700">田字格</tspan>　—— 横的选行，竖的送数据，<tspan font-weight="700">一个端口就是一整套线</tspan></text>
@@ -4608,6 +4610,18 @@ footer a{text-decoration:none}
 </svg>
 <figcaption>「位线」这个词前面用了好几次，但一直没画。它其实就是一张<b>田字格</b>：<b>横着的是字线，一行一根，管「选中谁」；竖着的是位线，一位一根，管「把数据送出去」</b>。给一个 6 位地址，译码器点亮一根字线，那一行的 256 个单元同时接上位线 —— <b>当周期就到，没有排队这回事</b>。所以「64 个共用位线」的真面目是<b>按地址 64 挑 1</b>，<b>不是轮流用 64 个周期</b>。这张图顺带把「端口」落到实处：<b>一个端口 ＝ 译码器 ＋ 一组字线 ＋ 一组位线 ＋ 读出电路</b>，多端口就是在同一批单元上并排铺好几套线 —— 于是「多开几个端口」代价是<b>面积按端口数的平方涨</b>。⭐ 最值得看的是绿带那个对账：<b>64 × 256 × 128 ÷ 8 ＝ 256 KiB，正好等于公开资料说的「每核约 256 kB vreg」</b> —— 两条独立路径撞出同一个数，前面整套模型才算立住。</figcaption>
 </figure>
+
+  <div class="note ok"><span class="t">五张图走完了，串起来其实只有一句话</span>
+    从<b>方向</b>（P-26）到<b>一套 vreg 三个门</b>（P-27）到<b>端口不是总线</b>（P-28）
+    到<b>版图上按 lane 切碎</b>（P-29）再到<b>位线是一张田字格</b>（P-30）——
+    每一层都在回答同一个问题的更下一层：<b>数据从哪儿到哪儿，代价是多少。</b>
+    <br><br>而五层的答案指向同一个结论：<b>TPU 把「谁什么时候走哪条路」全部搬到了编译期</b>。
+    端口有几条是固定的，发射位有几个是固定的，跨 lane 只有那一两个 XLU ——
+    <b>正因为全都是固定的，编译器才排得出来；也正因为编译器排得出来，芯片上才不需要仲裁器。</b>
+    <br><br><b>这就是这门课从第 1 节起一直在回的那条分水岭</b>：
+    GPU 把这些决定留到运行时，所以要 warp 调度器、要记分板、要几十份常驻上下文；
+    TPU 把它们提前定死，于是那五样东西<b>同时</b>失去存在理由 ——
+    省下来的面积，就变成了更多的 MXU 和更大的 VMEM。</div>
 
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
   <p>上一节说的「运行时换任务」，具体是在哪一层发生的？把两边的层级摆开对照。
