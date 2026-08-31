@@ -79,6 +79,12 @@ class Fig:
         assert not _BADMARK.search(str(s)), (
             "f.t() 不解析行内标记，<b>/<r>/<g>/<code> 会连内容一起被浏览器丢掉；"
             "要强调请改用 para()，只要换颜色就传 fill 参数：%r" % s)
+        # `&nbsp;` 是 HTML 实体，**XML/SVG 里没有定义**。它不会报错，也不会变成空格 ——
+        # 浏览器把这六个字符原样画出来。写正文 HTML 写顺手了就会漏进来（P-26、P-27
+        # 各中一次），而且只有盯着渲染图才看得见。要不断行的空格用 U+00A0 本身。
+        assert "&nbsp;" not in str(s), (
+            "&nbsp; 在 SVG 里不是实体，会原样显示成字面量；"
+            "直接写空格，或用 U+00A0 字符本身：%r" % s)
         a = f' text-anchor="{anchor}"' if anchor else ""
         f = f' fill="{fill}"' if fill else ""
         wt = f' font-weight="{weight}"' if weight else ""
