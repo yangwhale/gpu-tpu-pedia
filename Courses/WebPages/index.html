@@ -197,6 +197,15 @@ footer a{color:var(--blue);text-decoration:none}
   70%    {box-shadow:0 0 0 14px rgba(246,196,83,0)}
 }
 @media(prefers-reduced-motion:reduce){#kickoff .kbtn{animation:none}}
+/* 总纲上进开场屏的入口。放在 hero 右上角，讲课时一眼能找到，
+   但做得足够素 —— 陌生人看到只会当成一个普通小链接，不影响第一印象。
+   不做成隐藏快捷键：讲台上想不起快捷键的概率比想得起来高。 */
+.hero .wrap{position:relative}
+.kick-entry{position:absolute;top:6px;right:24px;font:500 13px/1 inherit;
+  color:var(--gray);background:#fff;border:1px solid var(--line);border-radius:999px;
+  padding:7px 14px;cursor:pointer;transition:.15s}
+.kick-entry:hover{color:var(--blue);border-color:var(--blue)}
+@media(max-width:820px){.kick-entry{position:static;margin-bottom:16px}}
 </style>
 </head>
 <body>
@@ -222,6 +231,8 @@ footer a{color:var(--blue);text-decoration:none}
 
 <!-- ══ HERO ══ -->
 <div class="hero"><div class="wrap">
+  <button class="kick-entry" id="kick-entry" type="button"
+          title="讲课用：先放一屏开场图，点两下回到这里">▸ 开场屏</button>
   <div class="dots"><i></i><i></i><i></i><i></i></div>
   <h1>加速器系统课程</h1>
   <!-- ⭐ 开篇这三层是刻意分工的，改的时候别把它们挤回一句里：
@@ -562,40 +573,51 @@ footer a{color:var(--blue);text-decoration:none}
 (function () {
   var box  = document.getElementById('kickoff');
   var img  = document.getElementById('kickoff-img');
-  var turn = document.getElementById('kickoff-turn');
-  var btn  = document.getElementById('kickoff-btn');
-  var step = 0;
+  var turn  = document.getElementById('kickoff-turn');
+  var btn   = document.getElementById('kickoff-btn');
+  var entry = document.getElementById('kick-entry');
+  var step  = 0;                               // 0=关着 1=只有梗 2=落点已翻出
 
-  function open() {
+  function show() {
     if (step) return;
     step = 1;
     if (!img.src) img.src = img.dataset.src;   // 250 KB 只在讲课时才下
+    box.classList.remove('out');
     box.classList.add('on');
     box.setAttribute('aria-hidden', 'false');
     document.body.style.overflow = 'hidden';
   }
+  function close() {
+    box.classList.add('out');
+    document.body.style.overflow = '';
+    // 把 hash 抹掉：免得讲到一半把带 #kickoff 的链接分享出去
+    if (location.hash) history.replaceState(null, '', location.pathname);
+    setTimeout(function () {
+      box.classList.remove('on');
+      box.setAttribute('aria-hidden', 'true');
+      turn.classList.add('veil');              // ⭐ 复位，不是销毁 ——
+      btn.textContent = '点这里，或按空格 →';   //   点错了还能从头再放一遍
+      step = 0;
+    }, 460);
+  }
   function next() {
-    if (step === 1) {                          // 翻面：亮出落点
-      step = 2;
-      turn.classList.remove('veil');
-      btn.textContent = '进入课程总纲 ↓';
-    } else if (step === 2) {                   // 退场，并把 hash 抹掉，
-      step = 3;                                // 免得他中途把带 #kickoff 的链接分享出去
-      box.classList.add('out');
-      document.body.style.overflow = '';
-      history.replaceState(null, '', location.pathname);
-      setTimeout(function () { box.classList.remove('on'); }, 460);
-    }
+    if (step === 1) { step = 2; turn.classList.remove('veil'); btn.textContent = '进入课程总纲 ↓'; }
+    else if (step === 2) { step = 3; close(); }   // 3 是过渡态，close() 里再归 0
   }
 
-  if (location.hash === '#kickoff') open();
+  if (location.hash === '#kickoff') show();
   window.addEventListener('hashchange', function () {
-    if (location.hash === '#kickoff') open();  // 地址栏里现敲也能拉起来，不用刷新
+    if (location.hash === '#kickoff') show();  // 地址栏里现敲也能拉起来，不用刷新
+  });
+  // 入口按钮走 hash 而不是直接 show()：这样地址栏上是可分享、可刷新重放的状态
+  entry.addEventListener('click', function () {
+    if (location.hash === '#kickoff') show(); else location.hash = 'kickoff';
   });
   box.addEventListener('click', next);
   document.addEventListener('keydown', function (e) {
-    if (step === 0 || step === 3) return;
+    if (!step || step === 3) return;
     if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); next(); }
+    else if (e.key === 'Escape') { step = 3; close(); }   // 讲错了想立刻跳过
   });
 })();
 </script>
