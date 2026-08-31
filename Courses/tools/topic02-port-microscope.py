@@ -1402,8 +1402,15 @@ def main():
     # 上一版是先写后检 —— 那样内部词一旦漏进来，等 assert 喊出声时，
     # 它已经落在这个**公开仓库**的文件里了，接下来只要有人 commit 就出去了。
     # 「检查失败」和「文件没被污染」得是同一件事，不能分成两步。
-    bad = [w for w in ("Ghostfish", "34,428", "119.2 GiB", "内部设备表",
-                       "cc.higcp.com", "go/") if w in html]
+    # ⛔ 禁字表**不在这里**，在 tpu-micro/gate.py 的 `_FORBIDDEN`。
+    #    这里曾经自己抄了一份，两件坏事一起来：① 两份表会漂，一处补了另一处
+    #    没补，还以为有两道防线；② 仓库级闸门扫到这个文件时会命中**这份表自己**，
+    #    永远误报，而一个总在误报的闸门等于没有闸门。
+    #    目录名带连字符，不能当包 import —— 直接把它加进 sys.path。
+    sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)),
+                                    "tpu-micro"))
+    from gate import lint_public
+    bad = lint_public(html)
     assert not bad, "公开页面里出现内部词，已中止写盘：%s" % bad
 
     # 数**页面上真有的**，不是数采集到的。这两个数一度差了 6 ——
