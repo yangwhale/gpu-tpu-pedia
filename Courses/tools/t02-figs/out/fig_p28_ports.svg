@@ -86,7 +86,8 @@
 <line x1="808" y1="275" x2="1010" y2="275" stroke="#1a73e8" stroke-width="0.7"/>
 <text x="1024" y="274" class="xxs" fill="#1a73e8">装填口</text>
 <text x="1068" y="274" class="xxs" fill="#5f6368">← 便签本</text>
-<text x="674" y="316" class="xs"><tspan font-weight="700" fill="#202124">每一条端口本身就是 128 lane 宽</tspan> —— 128 不是要分给大家用的车道，<tspan font-weight="700" fill="#202124">它是每条通路的宽度</tspan>。真正有限的是<tspan font-weight="700" fill="#202124">端口有几条</tspan>。</text>
+<text x="674" y="316" class="xs"><tspan font-weight="700" fill="#202124">每一条端口本身就是 128 lane 宽</tspan> —— 128 不是要分给大家用的车道，<tspan font-weight="700" fill="#202124">它是每条通路的宽度</tspan>。真正有限的是<tspan font-weight="700" fill="#202124">端口有几条</tspan>。<tspan fill="#9aa0a6">（端口具体是什么</tspan></text>
+<text x="674" y="334" class="xs"><tspan fill="#9aa0a6">线、为什么加不起 —— P-30 拆开画。）</tspan></text>
 <rect x="20" y="352" width="1360" height="96" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
 <text x="38" y="378" class="sec">🔢 那到底有几条？公开资料没直说 —— 但给了能推的两个数</text>
 <text x="38" y="402" class="xs">① 每周期发 <tspan font-weight="700" fill="#202124">4 条</tspan>向量指令，每条<tspan font-weight="700" fill="#202124">吃 2 个 vreg、写 1 个</tspan>　→　读 8、写 4。　　② 每周期从便签本<tspan font-weight="700" fill="#202124">装 3 个</tspan> vreg、<tspan font-weight="700" fill="#202124">写回 1 个</tspan>　→　再加写 3、读 1。　　<tspan font-weight="700" fill="#202124">合计约 9 读、7 写。</tspan></text>
@@ -138,8 +139,9 @@
 <text x="1066" y="586" class="xxs" fill="#5f6368">队列</text>
 <text x="1126" y="586" class="xs"><tspan font-weight="700" fill="#202124">要</tspan>　←　进料和出料<tspan font-weight="700" fill="#202124">都要</tspan></text>
 <line x1="1066" y1="606" x2="1364" y2="606" stroke="#d93025" stroke-width="0.8" stroke-dasharray="3 3"/>
-<text x="1066" y="626" class="xs">一个 vreg 是 8 × 128，阵列比这大得多，<tspan font-weight="700" fill="#202124">一口喂不满 —— </tspan></text>
-<text x="1066" y="643" class="xs"><tspan font-weight="700" fill="#202124">得连推好几个进去</tspan>。所以它有自己的进料口。</text>
+<text x="1066" y="626" class="xs">一次运算是 <tspan font-weight="700" fill="#202124">8×128 乘 128×128</tspan>。左边那个正好是一个 vreg，</text>
+<text x="1066" y="643" class="xs">可<tspan font-weight="700" fill="#202124">权重那一侧有 128 行，一个 vreg 只给得出 8 行</tspan> —— <tspan font-weight="700" fill="#202124">差</tspan></text>
+<text x="1066" y="660" class="xs"><tspan font-weight="700" fill="#202124"> 16 倍</tspan>，只能分好多趟送。</text>
 <rect x="20" y="742" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
 <text x="38" y="770" class="sec" fill="#1a73e8">⭐ 那「撞车」呢？—— 它不存在，因为它在编译期就被消灭了</text>
 <text x="38" y="796" class="xs">TPU 是 <tspan font-weight="700" fill="#202124">VLIW</tspan>：一个指令包里，<tspan font-weight="700" fill="#202124">每类操作有几个固定的位置</tspan>，编译器往里填。填不下就多排一个周期。<tspan font-weight="700" fill="#202124">芯片上没有一个运行时的仲裁器在现场商量谁先走</tspan> —— 冲突不是被解决的，是被<tspan font-weight="700" fill="#202124">提前排掉、根本没机会发生</tspan>。</text>

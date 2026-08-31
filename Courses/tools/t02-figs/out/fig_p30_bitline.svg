@@ -1,4 +1,4 @@
-<svg viewBox="0 0 1400 978" width="1400" height="978" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器堆的位线结构：横向字线按地址选中一行，纵向位线把那一行的数据送出去；一个端口就是一整套这样的线">
+<svg viewBox="0 0 1400 1022" width="1400" height="1022" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器堆的位线结构：横向字线按地址选中一行，纵向位线把那一行的数据送出去；一个端口就是一整套这样的线">
 <defs><style>
 .ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
 .sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
@@ -211,12 +211,13 @@
 <text x="992" y="522" class="xs"><tspan font-weight="700" fill="#202124">多端口 ＝ 在同一批存储单元上，并排铺好几套线。</tspan></text>
 <text x="992" y="562" class="xs">同一个单元被<tspan font-weight="700" fill="#202124">好几根字线</tspan>横着穿过、被<tspan font-weight="700" fill="#202124">好几根位线</tspan>竖着穿过。于是它可以<tspan font-weight="700" fill="#202124">同</tspan></text>
 <text x="992" y="580" class="xs"><tspan font-weight="700" fill="#202124">时被不同的端口读到</tspan> —— 这就是「一个周期读 8 个 vreg」的物理实现。</text>
-<rect x="20" y="714" width="1360" height="112" rx="10" fill="#e0f2f0" stroke="#12786f" stroke-width="1.6"/>
+<rect x="20" y="714" width="1360" height="156" rx="10" fill="#e0f2f0" stroke="#12786f" stroke-width="1.6"/>
 <text x="38" y="742" class="sec" fill="#12786f">⭐ 那「多开几个端口不就行了」？—— 又一个平方，而且这次是面积</text>
 <text x="38" y="768" class="xs">每加一个端口，每个单元<tspan font-weight="700" fill="#202124">横向多一根字线、纵向多一根位线</tspan> —— <tspan font-weight="700" fill="#202124">单元在两个方向上同时变大，面积按端口数的平方涨</tspan>。端口翻倍，寄存器堆的面积大约变成四倍。</text>
-<text x="38" y="789" class="xs"><tspan font-weight="700" fill="#d93025">所以端口是全芯片最稀缺的预算之一，不是想加就加。</tspan><tspan fill="#9aa0a6">⚠️ 平方关系是数字设计通则；TPU 具体用什么单元、几个端口，公开资料没有。</tspan></text>
-<rect x="20" y="848" width="1360" height="110" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
-<text x="38" y="876" class="sec" fill="#1e8e3e">✅ 对账：这张格子图能不能跟公开数字对上？</text>
-<text x="38" y="902" class="xs">一条 lane 切片 <tspan font-weight="700" fill="#202124">64 行 × 256 位 ＝ 16,384 个单元</tspan>；全核 <tspan font-weight="700" fill="#202124">× 128 条 lane ＝ 2,097,152 个单元</tspan>；换成字节 <tspan font-weight="700" fill="#202124">÷ 8 ＝ 262,144 B ＝ 256 KiB</tspan>。</text>
-<text x="38" y="923" class="xs"><tspan font-weight="700" fill="#202124">而公开资料写的是「每核约 256 kB 的 vreg」—— 正好对上。</tspan><tspan fill="#9aa0a6">一个孤立的数不能信，但两条独立路径撞出同一个数，整套模型就立住了。</tspan></text>
+<text x="38" y="789" class="xs"><tspan font-weight="700" fill="#d93025">所以端口是全芯片最稀缺的预算之一，不是想加就加。</tspan><tspan font-weight="700" fill="#202124">这也把 P-28 那个「约 9 读 7 写」的口径钉住了</tspan>：真要铺 16 套线，面积会离谱到不可能 —— <tspan font-weight="700" fill="#202124">那是「同时访问数的上限」，不是「真的铺了 16 套」。</tspan></text>
+<text x="38" y="810" class="xs">真实设计一定会<tspan font-weight="700" fill="#202124">分体</tspan>：把 64 行拆成几组，各组自己一套端口，同时访问落在不同组里就不用真的加线。<tspan fill="#9aa0a6">⚠️ 平方关系与分体都是数字设计通则；TPU 具体用什么单元、几个端口、怎么分组，公开资料没有。</tspan></text>
+<rect x="20" y="892" width="1360" height="110" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="38" y="920" class="sec" fill="#1e8e3e">✅ 对账：这张格子图能不能跟公开数字对上？</text>
+<text x="38" y="946" class="xs">一条 lane 切片 <tspan font-weight="700" fill="#202124">64 行 × 256 位 ＝ 16,384 个单元</tspan>；全核 <tspan font-weight="700" fill="#202124">× 128 条 lane ＝ 2,097,152 个单元</tspan>；换成字节 <tspan font-weight="700" fill="#202124">÷ 8 ＝ 262,144 B ＝ 256 KiB</tspan>。</text>
+<text x="38" y="967" class="xs"><tspan font-weight="700" fill="#202124">而公开资料写的是「每核约 256 kB 的 vreg」—— 正好对上。</tspan><tspan fill="#9aa0a6">一个孤立的数不能信，但两条独立路径撞出同一个数，整套模型就立住了。</tspan></text>
 </svg>

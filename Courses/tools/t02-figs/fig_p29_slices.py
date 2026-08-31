@@ -25,7 +25,7 @@ from common import Fig, para, BL, GN, RD, YL, PU, TL, INK, SUB, GREY, FILL
 W = 1400
 
 CNT_Y, CNT_H = 84, 92           # ① 先把线数算出来
-SLC_Y, SLC_H = CNT_Y + CNT_H + 22, 274   # ② 主图：128 条切片
+SLC_Y, SLC_H = CNT_Y + CNT_H + 22, 300   # ② 主图：128 条切片
 Q_Y, Q_H = SLC_Y + SLC_H + 22, 214       # ③ 三个问题的答案
 BND_Y, BND_H = Q_Y + Q_H + 22, 116       # ④ 边界：哪些是推的
 H = BND_Y + BND_H + 20
@@ -87,7 +87,7 @@ def _slices(f):
         # ALU
         f.rect(x, ay, SLW, ALU_H, FILL[gc], gc, 1.2, 4)
         f.t(x + SLW / 2, ay + 18, "ALU", "xxs", gc, anchor="middle")
-        f.t(x + SLW / 2, ay + 33, "×4", "xxs", SUB, anchor="middle")
+        f.t(x + SLW / 2, ay + 33, "×32", "xxs", SUB, anchor="middle")
         f.t(x + SLW / 2, ay + ALU_H + 16, label, "xxs", SUB, anchor="middle")
 
     for i in range(NSL):
@@ -95,6 +95,12 @@ def _slices(f):
     ex = SX0 + NSL * PITCH
     f.t(ex + 22, ay - 20, "…", "ttl", SUB, anchor="middle")
     one(ex + 46, "lane 127")
+    # ⚠️ 这个 32 必须写出来。P-27 给的是「每个 (lane, sublane) 位置 4 个 ALU」，
+    #    一条 lane 有 8 个 sublane，所以一条 lane 底下是 8 × 4 ＝ 32 个 ——
+    #    早先这里写 ×4，跟全课那个 4,096 差了整整 8 倍。
+    f.t((SX0 + ex + 46 + SLW) / 2, ay + ALU_H + 36,
+        "每条 lane 底下 8 × 4 ＝ 32 个 ALU　→　128 × 32 ＝ 4,096，"
+        "这就是公开资料那个数", "xxs", SUB, anchor="middle")
 
     # 顶部一条括号，说明这一整排就是「一个 vreg」
     bx0, bx1 = SX0, ex + 46 + SLW
@@ -136,7 +142,9 @@ QA = [
      "<b>这就是逐元素算子便宜的物理原因</b>：它走的是全芯片最短的一条路，"
      "而且 128 条同时在走。"),
     (RD, "③ vreg ↔ MXU / XLU", "真的要扯出去",
-     "MXU 是个<b>独立的块</b>，阵列比 lane 轴还宽，一口喂不满；"
+     "MXU 是个<b>独立的块</b>：一次运算吃 <b>8×128 乘 128×128</b>。"
+     "左边正好一个 vreg，可<b>权重那侧有 128 行，一个 vreg 只给 8 行</b> —— "
+     "<b>差 16 倍</b>，喂不满；"
      "XLU 更是<b>必须同时够到全部 128 条 lane</b>。",
      "<r>所以只有这两条是真正的长路。</r>它们因此各自配了进料口、结果队列，"
      "而且<b>全核只有一两个</b> —— 长而宽的路，芯片不会多铺。"),
