@@ -80,55 +80,88 @@ CNT=[sum(1 for r in ROWS if r[0]==i) for i in range(4)]
 assert CNT==[4,3,2,1], "行数变了，底部那句「四条撞内存、三条撞计算单元」要跟着改：%s" % CNT
 assert [r[0] for r in ROWS]==sorted(r[0] for r in ROWS), "ROWS 必须按节排好序，否则连线又会交叉"
 
-# ── 图 A · 四张卡 ────────────────────────────────────────
+# ── 图 A · 三张卡 ＋ 一条贯穿带 ─────────────────────────
 # ⛔ 这张图的唯一任务是「十秒钟让人知道这课讲什么」。任何想往里加的东西，
 #    先问一句：**它是不是必须在开场的头十秒出现？** 不是就去图 B。
-#    一张卡只准有一个部件 —— 这是上一版颜色歧义的根治办法，别再往回加。
+#    一张卡只准有一个部件 —— 这是颜色歧义的根治办法，别再往回加。
+#
+# ⭐ **为什么第 5 节不是第四张卡**（2026-08-31，Chris：「谁在做决定
+#    这个跟前三个感觉不是一个维度的呀」）。他是对的，而且这个错藏得很深：
+#      · 前三张问的都是**「够不够」** —— 内存够不够、算力够不够、链路够不够。
+#        同一个句式、同一个量纲，是一组**资源**问题。
+#      · 第 5 节问的是**「谁说了算」**。它不是第四种资源，
+#        它是**前三种资源在两边为什么长得不一样的原因** ——
+#        也就是第 0 节那两次赌注落到范式上的那一步。
+#    排成四张并列的卡，等于宣称它跟前三个同级；用一条**横贯三张卡底下的带**，
+#    才画出它真正的位置。原来那个「虚线空框」是在同一张卡里暗示这件事，
+#    暗示不如画出来。
+#
+# ⭐ **第 4 节为什么不叫「传得快吗」**（Chris 当时的提法）。句式他改对了 ——
+#    「卡之间怎么说话」跟「放得下吗 / 算得动吗」不押韵，是我原来没排齐。
+#    但**不能用「快」**：第 4 节自己的标题就是
+#    **「连得多远，比连得多快更要紧」**，落点恰恰是带宽不是主角。
+#    写成「传得快吗」会在开场就把这一节的结论说反。所以取「连得上吗」。
 # （节次, 问题, 部件, 上一课的证据两行, 时长, 颜色）
 CARD=[("第 2 节","放得下吗","HBM　容量 + 带宽",
        ("上一课结尾撞的那堵墙：","一个 device 只有 <b>94.74 GiB</b>"),"15 分钟","#1a73e8"),
       ("第 3 节","算得动吗","矩阵单元 · 向量单元",
        ("128K 下，attention 的平方项","吃掉 <b>81.8%</b> 的前向算力"),"10 分钟","#9334e6"),
-      ("第 4 节","卡之间怎么说话","卡间链路",
-       ("MoE 每个 token 要跨卡找","8 个专家 —— <b>all-to-all</b>"),"5 分钟","#e8710a"),
-      ("第 5 节","谁在做决定","（没有对应的部件）",
-       ("选哪 8 个专家，","<b>运行时才知道</b>"),"5 分钟","#1e8e3e")]
-CW=239; CG=(1000-CW*4)//3; Y0=76; CH=210
-a=[f'<svg viewBox="0 0 1000 470" width="100%" role="img" '
-   f'aria-label="开场地图：上一课那张需求清单只有四个问题，每一个撞在一个部件上，就是本课的四节">']
+      ("第 4 节","连得上吗","卡间链路",
+       ("MoE 每个 token 要跨卡找","8 个专家 —— <b>all-to-all</b>"),"5 分钟","#e8710a")]
+GRN="#1e8e3e"
+CW=320; CG=(1000-CW*3)//2; Y0=76; CH=210
+a=[f'<svg viewBox="0 0 1000 548" width="100%" role="img" '
+   f'aria-label="开场地图：上一课那张需求清单只有三个「够不够」的问题，各撞在一个部件上；第 5 节问的是谁说了算，横贯这三节">']
 a.append('<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
          '上一课交出的是一张<tspan font-weight="700">需求清单</tspan>。'
          '这一课不逐个介绍硬件参数 —— <tspan font-weight="700">拿着那张清单，一条一条去硬件上找答案</tspan></text>')
 a.append('<text class="svgsm" x="0" y="36">'
-         '清单上只有四个问题。每一个都撞在一个具体的部件上 —— <tspan font-weight="700">撞在哪，就是哪一节</tspan>。</text>')
+         '清单上只有三个<tspan font-weight="700">「够不够」</tspan>的问题。'
+         '每一个都撞在一个具体的部件上 —— <tspan font-weight="700">撞在哪，就是哪一节</tspan>。</text>')
 a.append('<text class="svgsm" x="0" y="60" fill="#9aa0a6">'
          '每张卡下面那两行，是<tspan font-weight="700">上一课他们自己算出来的数</tspan> —— 这一课只负责告诉他们该去撞哪儿</text>')
 for i,(tag,ques,part,(e1,e2),mins,col) in enumerate(CARD):
-    x=i*(CW+CG); last=(i==3)
+    x=i*(CW+CG)
     a.append(f'<rect x="{x}" y="{Y0}" width="{CW}" height="{CH}" rx="10" fill="#fff" stroke="{col}" stroke-width="1.6"/>')
     a.append(f'<path d="M{x} {Y0+10} a10 10 0 0 1 10 -10 h{CW-20} a10 10 0 0 1 10 10 v40 h{-CW} z" fill="{col}"/>')
     a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+20}" fill="#ffffffcc">{tag}</text>')
-    a.append(f'<text class="svgnum" x="{x+16}" y="{Y0+42}" fill="#fff" style="font-size:17px">{ques}</text>')
+    a.append(f'<text class="svgnum" x="{x+16}" y="{Y0+42}" fill="#fff" style="font-size:18px">{ques}</text>')
     a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+76}" fill="#9aa0a6">上一课算出来的</text>')
     a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+95}" fill="#202124">{B(e1)}</text>')
     a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+113}" fill="#202124">{B(e2)}</text>')
     a.append(f'<line x1="{x+16}" y1="{Y0+131}" x2="{x+CW-16}" y2="{Y0+131}" stroke="#e8eaed"/>')
     a.append(f'<text class="svgsm" x="{x+16}" y="{Y0+151}" fill="#9aa0a6">于是撞在</text>')
-    # ⭐ 第四张卡故意没有部件 —— 那个空格就是第 5 节的全部内容，用虚线画出来
-    a.append(f'<rect x="{x+16}" y="{Y0+159}" width="{CW-32}" height="26" rx="13" fill="{col}22" '
-             f'stroke="{col}" stroke-width="1.4"{" stroke-dasharray=\"4 3\"" if last else ""}/>')
-    a.append(f'<text class="svglbl" x="{x+CW/2}" y="{Y0+177}" text-anchor="middle" fill="{col}">{part}</text>')
+    a.append(f'<rect x="{x+16}" y="{Y0+159}" width="{CW-32}" height="26" rx="13" fill="{col}"/>')
+    a.append(f'<text class="svglbl" x="{x+CW/2}" y="{Y0+177}" text-anchor="middle" fill="#fff">{part}</text>')
     a.append(f'<text class="svgsm" x="{x+CW-16}" y="{Y0+201}" text-anchor="end" fill="#9aa0a6">⏱ {mins}</text>')
+# ── 第 5 节：横贯三张卡底下的一条带，不是第四张卡 ──────────
+# 三个小三角从每张卡底部指下来，画出「上面三节的答案都由它决定」。
+Y5=Y0+CH+12
+for i in range(3):
+    cx=i*(CW+CG)+CW/2
+    a.append(f'<path d="M{cx-6} {Y5-11} h12 l-6 9 z" fill="{GRN}" opacity=".55"/>')
+a.append(f'<rect x="0" y="{Y5}" width="1000" height="76" rx="10" fill="#e6f4ea" stroke="{GRN}" stroke-width="1.6"/>')
+a.append(f'<rect x="0" y="{Y5}" width="6" height="76" rx="3" fill="{GRN}"/>')
+a.append(f'<text class="svgsm" x="20" y="{Y5+20}" fill="{GRN}">第 5 节　·　横贯上面三节，不是第四个问题</text>')
+a.append(f'<text class="svgnum" x="20" y="{Y5+42}" fill="{GRN}" style="font-size:18px">谁说了算</text>')
+a.append(f'<text class="svgsm" x="150" y="{Y5+41}" fill="#202124">'
+         f'上面三个问<tspan font-weight="700">硬件够不够</tspan>；这一个问<tspan font-weight="700">形状由谁来定</tspan>'
+         f'　——　选哪 8 个专家，<tspan font-weight="700">运行时才知道</tspan></text>')
+a.append(f'<text class="svgsm" x="150" y="{Y5+61}" fill="#5f6368">'
+         f'所以它<tspan font-weight="700">没有对应的部件</tspan>：它决定的不是哪个部件不够用，'
+         f'而是<tspan font-weight="700">上面那三个部件由谁来编排</tspan> —— '
+         f'也就是第 0 节那两次赌注，落到范式上的那一步</text>')
+a.append(f'<text class="svgsm" x="984" y="{Y5+20}" text-anchor="end" fill="{GRN}">⏱ 5 分钟</text>')
 # ⛔ 这条打底/验账带**必须两行**。挤成一行会在 1000 宽处被截掉尾巴，
 #    而 SVG 文本溢出不会报错、渲染时也看不出来是「掉了字」还是「本来就这么写」。
-YS=Y0+CH+16
+YS=Y5+76+14
 a.append(f'<rect x="0" y="{YS}" width="1000" height="42" rx="4" fill="#f1f3f4" stroke="#dadce0"/>')
 a.append(f'<text class="svgsm" x="12" y="{YS+16}" fill="#5f6368">'
          f'<tspan font-weight="700">打底</tspan>（不回答清单上的问题，但后面每节都要用）：{TIER_TOP}</text>')
 a.append(f'<text class="svgsm" x="12" y="{YS+33}" fill="#5f6368">'
          f'<tspan font-weight="700">验账</tspan>（上面这些说法凭什么信）：{TIER_BOT}</text>')
 a.append(f'<text class="svglbl" x="0" y="{YS+70}" fill="#7a5000">'
-         f'⭐ 四节的长短不是我排的，是那张清单排的 —— 十条结论里'
+         f'⭐ 前三节的长短不是我排的，是那张清单排的 —— 十条结论里'
          f'<tspan font-weight="700">四条撞内存、三条撞计算单元</tspan>，所以第 2 节最长</text>')
 a.append(f'<text class="svgsm" x="0" y="{YS+89}" fill="#9aa0a6">'
          f'十条逐条对到哪个部件，在本节最后那张对照表里 —— 那张是发下去查的，台上不用讲</text>')
@@ -142,8 +175,9 @@ a.append(f'<text class="svglbl" x="14" y="{YT+19}" fill="#7a5000" style="font-si
 a.append(f'<text class="svglbl" x="14" y="{YT+37}" fill="#7a5000" style="font-size:12.5px">'
          f'　　第 6 节 3　·　第 7 节 4　·　第 8 节 0（发下去自己看）　·　第 9 节 2　　'
          f'——　<tspan font-weight="700">超了先砍图 2-2 和 2-5</tspan></text>')
+assert YT+46 <= 548, "viewBox 高度不够，底下会被截掉：%s" % (YT+46)
 a.append('</svg>')
-io.open('figA.svg','w',encoding='utf-8').write('\n'.join(a)); print('figA 406 · 4 张卡')
+io.open('figA.svg','w',encoding='utf-8').write('\n'.join(a)); print('figA 548 · 3 张卡 + 第 5 节贯穿带')
 
 # ── 图 B · 完整对照（手册用，台上不念）─────────────────────
 RH=40; GAP=10; TOP=110
