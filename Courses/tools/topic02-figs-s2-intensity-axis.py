@@ -20,10 +20,13 @@ X0,XW,YA=228,660,112
 lo,hi=math.log10(0.5),math.log10(2**17)
 def px(v): return X0+XW*(math.log10(v)-lo)/(hi-lo)
 H=YA+len(PTS)*38+186
+# 与图 2-4 是同一根轴、同样的朴素/Flash 两个点 —— 那次是为了讲「Flash 换了一边」，
+# 这次是为了把它当判据交出去。不写清关系，第二次出现就是一次重复。
 p=[f'<svg viewBox="0 0 1000 {H}" width="100%" role="img" aria-label="本节四个算子回到 312 这根轴上：embedding 和 softmax 在最左，朴素注意力 64，Flash 和 MLP 在右边">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    '本节收尾：把讲过的算子<tspan font-weight="700">全部放回同一根轴</tspan> —— 一眼看出谁该救、该怎么救</text>',
-   '<text class="svgsm" x="0" y="35">横轴是算术强度（FLOP / byte，对数）。312 这条线两边的<tspan font-weight="700">优化动作完全不同</tspan>。</text>']
+   '<text class="svgsm" x="0" y="35">横轴是算术强度（FLOP / byte，对数）。312 这条线两边的<tspan font-weight="700">优化动作完全不同</tspan>。</text>',
+   '<text class="svgsm" x="1000" y="16" text-anchor="end" fill="#9aa0a6">这根轴第 2.3 节出现过，那次只有朴素和 Flash 两个点 —— 这次是完整的五个</text>']
 ax=YA+len(PTS)*38+4
 for t in [1,4,16,64,256,1024,4096,16384,65536]:
     x=px(t)

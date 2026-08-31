@@ -10,49 +10,82 @@ p=['<svg viewBox="0 0 1000 470" width="100%" role="img" aria-label="TPU v7 芯�
    '<text class="svgsm" x="0" y="35">来源：Google Cloud 官方 TPU7x 文档（结构与容量）＋ JAX 公开源码里的芯片信息表（片上尺寸）</text>']
 p.append('<rect x="0" y="48" width="1000" height="318" rx="12" fill="#fff" stroke="#dadce0" stroke-width="1.5"/>')
 p.append('<text class="svgsm" x="14" y="66">一颗 chip</text>')
-for k,x in enumerate([16,516]):
-    p.append(f'<rect x="{x}" y="76" width="468" height="276" rx="10" fill="#f8f9fa" stroke="{BL}"/>')
-    p.append(f'<text class="svglbl" x="{x+16}" y="98" fill="{BL}">chiplet {k+1}　=　JAX 眼里的 device {k}</text>')
-    # TensorCore
-    p.append(f'<rect x="{x+16}" y="108" width="330" height="130" rx="8" fill="#e8f0fe" stroke="{BL}"/>')
-    p.append(f'<text class="svglbl" x="{x+28}" y="128" fill="{BL}">TensorCore ×1</text>')
-    for j,(t,s,c) in enumerate([("MXU ×2","256 × 256 脉动阵列",BL),("VPU","逐元素 · 峰值低 2 个数量级",PU),
-                                ("XLU","转置 / 归约 / 排列",PU),("标量单元 ×1","产生所有地址 —— 只有一个",RD)]):
-        yy=138+j*24
-        p.append(f'<rect x="{x+28}" y="{yy}" width="140" height="20" rx="4" fill="{c}"/>')
-        p.append(f'<text class="svgsm" x="{x+36}" y="{yy+14}" fill="#fff">{t}</text>')
-        p.append(f'<text class="svgsm" x="{x+178}" y="{yy+14}">{s}</text>')
-    # SparseCore
-    p.append(f'<rect x="{x+354}" y="108" width="98" height="130" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')
-    p.append(f'<text class="svglbl" x="{x+364}" y="128" fill="#7a5000">SparseCore</text>')
-    p.append(f'<text class="svgnum" x="{x+364}" y="150" fill="#7a5000">× 2</text>')
-    for j,t in enumerate(["16 subcore","× 16 lane","VMEM 512 KiB","无 MXU"]):
-        p.append(f'<text class="svgsm" x="{x+364}" y="{168+j*17}" fill="#7a5000">{t}</text>')
-    # 片上存储
-    for j,(t,v,c) in enumerate([("VMEM","64 MiB · 编译器显式管",GR),("SMEM","1 MiB",GY),
-                                ("CMEM","0 —— 没有这一层",RD)]):
-        yy=248+j*26
-        p.append(f'<rect x="{x+16}" y="{yy}" width="436" height="22" rx="4" fill="#fff" '
-                 f'stroke="{c}"{" stroke-dasharray=\"4 3\"" if j==2 else ""}/>')
-        p.append(f'<text class="svglbl" x="{x+26}" y="{yy+15}" fill="{c}">{t}</text>')
-        p.append(f'<text class="svgsm" x="{x+96}" y="{yy+15}" fill="{c}">{v}</text>')
-    # HBM
-    p.append(f'<rect x="{x+16}" y="326" width="436" height="18" rx="4" fill="{PU}"/>')
-    p.append(f'<text class="svgsm" x="{x+26}" y="339" fill="#fff">HBM 96 GiB／device —— 这个 chiplet 私有，不与另一个共享地址空间</text>')
+# ⛔ 这张图原来把两个 chiplet **一模一样地画了两遍**，右半边没有任何新信息，
+#    占掉将近一半的墨。而两个 chiplet 之间真正要讲的那件事 ——
+#    「它们各有独立地址空间，跨过去要走 D2D」—— 反倒只有一行小字。
+#    改成：左边画全，右边只留一个「同上」的窄条，腾出来的中间地带专门讲那件事。
+x=16
+p.append(f'<rect x="{x}" y="76" width="468" height="276" rx="10" fill="#f8f9fa" stroke="{GR}"/>')
+p.append(f'<text class="svglbl" x="{x+16}" y="98" fill="{GR}">chiplet 1　=　JAX 眼里的 device 0</text>')
+# TensorCore
+p.append(f'<rect x="{x+16}" y="108" width="330" height="130" rx="8" fill="#e6f4ea" stroke="{GR}"/>')
+p.append(f'<text class="svglbl" x="{x+28}" y="128" fill="{GR}">TensorCore ×1</text>')
+for j,(t,sb,c) in enumerate([("MXU ×2","256 × 256 脉动阵列",GR),("VPU","逐元素 · 峰值低两个数量级",PU),
+                             ("XLU","转置 / 归约 / 排列",PU),("标量单元 ×1","产生所有地址 —— 只有一个",RD)]):
+    yy=138+j*24
+    p.append(f'<rect x="{x+28}" y="{yy}" width="140" height="20" rx="4" fill="{c}"/>')
+    p.append(f'<text class="svgsm" x="{x+36}" y="{yy+14}" fill="#fff">{t}</text>')
+    p.append(f'<text class="svgsm" x="{x+178}" y="{yy+14}">{sb}</text>')
+# SparseCore
+p.append(f'<rect x="{x+354}" y="108" width="98" height="130" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')
+p.append(f'<text class="svglbl" x="{x+364}" y="128" fill="#7a5000">SparseCore</text>')
+p.append(f'<text class="svgnum" x="{x+364}" y="150" fill="#7a5000">× 2</text>')
+for j,t in enumerate(["16 subcore","× 16 lane","VMEM 512 KiB","无 MXU"]):
+    p.append(f'<text class="svgsm" x="{x+364}" y="{168+j*17}" fill="#7a5000">{t}</text>')
+# 片上存储
+for j,(t,v,c) in enumerate([("VMEM","64 MiB · 编译器显式管",GR),("SMEM","1 MiB",GY),
+                            ("CMEM","0 —— 没有这一层",RD)]):
+    yy=248+j*26
+    p.append(f'<rect x="{x+16}" y="{yy}" width="436" height="22" rx="4" fill="#fff" '
+             f'stroke="{c}"{" stroke-dasharray=\"4 3\"" if j==2 else ""}/>')
+    p.append(f'<text class="svglbl" x="{x+26}" y="{yy+15}" fill="{c}">{t}</text>')
+    p.append(f'<text class="svgsm" x="{x+96}" y="{yy+15}" fill="{c}">{v}</text>')
+p.append(f'<rect x="{x+16}" y="326" width="436" height="18" rx="4" fill="{PU}"/>')
+p.append(f'<text class="svgsm" x="{x+26}" y="339" fill="#fff">HBM 96 GiB／device —— 这个 chiplet 私有，不与另一个共享地址空间</text>')
+
+# ── chiplet 2：只留一个「同上」的窄条 ────────────────────────────────
+x2=830
+p.append(f'<rect x="{x2}" y="76" width="154" height="276" rx="10" fill="#f8f9fa" stroke="{GR}" stroke-dasharray="6 4"/>')
+p.append(f'<text class="svglbl" x="{x2+14}" y="98" fill="{GR}">chiplet 2</text>')
+p.append(f'<text class="svgsm" x="{x2+14}" y="114" fill="{GR}">= device 1</text>')
+p.append(f'<text class="svgnum" x="{x2+77}" y="196" text-anchor="middle" fill="{GY}" style="font-size:26px">同上</text>')
+for j,t in enumerate(["结构与左边","逐项相同 ——","这里不再画一遍"]):
+    p.append(f'<text class="svgsm" x="{x2+77}" y="{216+j*16}" text-anchor="middle" fill="{GY}">{t}</text>')
+p.append(f'<rect x="{x2+14}" y="326" width="126" height="18" rx="4" fill="{PU}"/>')
+p.append(f'<text class="svgsm" x="{x2+77}" y="339" text-anchor="middle" fill="#fff">另一块 96 GiB</text>')
+
+# ── 腾出来的中间地带：讲两个 chiplet 之间真正要讲的那件事 ──────────────
+p.append(f'<rect x="500" y="108" width="314" height="244" rx="10" fill="#fff8f0" stroke="{OR}"/>')  # 244 才装得下底下那条橙带
+p.append(f'<text class="svglbl" x="516" y="130" fill="{OR}">⭐ 这张图真正要讲的是这中间</text>')
+for j,t in enumerate([
+  "两个 chiplet <tspan font-weight=\"700\">各有独立的地址空间</tspan>，",
+  "不再是上代 v4 / v5p 那种统一 MegaCore。",
+  "",
+  "于是「另一半的数据」<tspan font-weight=\"700\">不能随手读写</tspan> ——",
+  "要走 D2D，而且是一次集合通信，",
+  "在代码里是显式的一步。",
+  "",
+  "⚠️ 直接后果：框架日志报的是 <tspan font-weight=\"700\">device</tspan>，",
+  "所以 192 GiB 的芯片，你的额度是 96 GiB。"]):
+    if t: p.append(f'<text class="svgsm" x="516" y="{152+j*17}">{t}</text>')
+p.append(f'<rect x="516" y="{152+9*17+4}" width="282" height="34" rx="6" fill="{OR}"/>')
+p.append(f'<text class="svgsm" x="657" y="{152+9*17+18}" text-anchor="middle" fill="#fff">好消息：D2D 比一条 1D ICI 链路快 6 倍</text>')
+p.append(f'<text class="svgsm" x="657" y="{152+9*17+31}" text-anchor="middle" fill="#ffffffcc">所以跨 chiplet 贵，但不是灾难</text>')
 # D2D
 p.append(f'<rect x="486" y="200" width="30" height="46" rx="5" fill="{OR}"/>')
 p.append('<text class="svgsm" x="501" y="219" text-anchor="middle" fill="#fff">D2D</text>')
 p.append('<text class="svgsm" x="501" y="234" text-anchor="middle" fill="#fff">×6</text>')
+p.append(f'<path d="M814 223 h16" stroke="{OR}" stroke-width="1.6"/>')
 # 芯片级
 p.append(f'<text class="svglbl" x="0" y="392" fill="#202124">整颗 chip 对外：</text>')
 for i,(t,v) in enumerate([("HBM","192（官方表写 GiB、正文写 GB）· 7,380 GB/s"),
                           ("ICI","1,200 GB/s 双向 · 每轴 200 GB/s · 3D torus"),
                           ("算力","BF16 2,307 TFLOPS ｜ FP8 4,614 TFLOPS")]):
-    p.append(f'<text class="svgsm" x="{112+i*300}" y="392" fill="{BL}">{t}</text>')
+    p.append(f'<text class="svgsm" x="{112+i*300}" y="392" fill="{GR}">{t}</text>')
     p.append(f'<text class="svgsm" x="{146+i*300}" y="392">{v}</text>')
 p.append('<line x1="0" y1="404" x2="1000" y2="404" stroke="#e8eaed"/>')
 for i,(n,t) in enumerate([("①","一颗 chip = 2 个 device。所有框架日志按 device 报 —— 容量除以 2 才是你的额度"),
-    ("②","两个 chiplet 各有独立地址空间（不再是上代的统一 MegaCore）。跨 chiplet 要走 D2D + 集合通信，不是随手读写 —— 好在 D2D 比一条 1D ICI 链路快 6 倍"),
+    ("②","VPU 那行的「低两个数量级」是<tspan font-weight=\"700\">上界</tspan>：按每 lane 每周期一次乘加算，位置数之比是 1:128，真实差距只会更大"),
     ("③","片上 SRAM 全是显式管理的，CMEM = 0 —— 这一整层在 GPU 那边叫 cache，在这里根本不存在（第 2 节）")]):
     p.append(f'<text class="svgsm" x="0" y="{424+i*17}" fill="{RD if i==2 else "#202124"}">'
              f'{n} {t}</text>')
