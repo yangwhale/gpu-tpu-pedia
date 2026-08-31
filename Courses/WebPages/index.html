@@ -149,9 +149,62 @@ footer a{color:var(--blue);text-decoration:none}
   .g2,.g3,.yesno,.branch{grid-template-columns:1fr}
   .topic .pre{margin-left:0}
 }
+
+/* ══ 开场屏（讲课用）══════════════════════════════════════════════
+   ⭐ 默认**完全不出现**，只有链接带 #kickoff 才拉起来：
+       裸链接 https://…/Courses/WebPages/          → 干净的总纲，陌生人看到的
+       带片段 https://…/Courses/WebPages/#kickoff  → 先是这一屏，讲课时用
+   为什么要这么绕：这个页面同时服务两种人 —— 台下等着被暖场的同学，
+   和随手点进来的陌生人。前者需要一条戴草帽的金龙，后者第一眼看到金龙
+   会以为这是个段子号，把后面十四个专题攒的严肃感一次性抵消掉。
+   硬选一边都要牺牲另一边，所以让**入口带状态**，两边都不用迁就。
+
+   图也是按需加载的：src 是 JS 在拉起这一屏时才填的，
+   所以裸链接的访客连那 250 KB 都不会下。 */
+#kickoff{position:fixed;inset:0;z-index:999;display:none;
+  background:#0a0e1a;color:#e8eaed;cursor:pointer;overflow:auto;
+  flex-direction:column;align-items:center;justify-content:center;
+  padding:2.4vh 3vw;gap:1.8vh;transition:opacity .45s ease}
+#kickoff.on{display:flex}
+#kickoff.out{opacity:0;pointer-events:none}
+#kickoff .eyebrow{font-size:clamp(11px,1.25vh,15px);letter-spacing:.22em;
+  color:#9aa0a6;text-transform:uppercase}
+#kickoff h2{font-size:clamp(24px,4.6vh,56px);font-weight:700;letter-spacing:-.02em;
+  color:#f6c453;line-height:1.15;text-align:center;margin:0}
+#kickoff figure{width:min(100%,1180px);line-height:0}
+#kickoff img{width:100%;height:auto;max-height:52vh;object-fit:contain;
+  border-radius:14px;box-shadow:0 12px 48px rgba(0,0,0,.6)}
+#kickoff .cap{max-width:min(100%,1000px);text-align:center;font-style:italic;
+  font-size:clamp(13px,1.9vh,20px);line-height:1.85;color:#c9ccd1;
+  font-family:"Noto Serif CJK SC","Songti SC",serif}
+/* 落点：一条金线 + 一段大字。整屏只有这里是亮的，视线自然落过来。 */
+#kickoff .turn{max-width:min(100%,1000px);text-align:center;
+  border-top:2px solid #f6c453;padding-top:2.2vh;transition:opacity .5s ease}
+#kickoff .turn p{font-size:clamp(15px,2.3vh,26px);line-height:1.8;color:#e8eaed}
+#kickoff .turn .b{color:#f6c453;font-weight:600}
+#kickoff .turn.veil{opacity:0}      /* 预留位置再隐藏 —— 翻面时画面不跳 */
+#kickoff .hint{position:fixed;right:18px;bottom:14px;font-size:12px;
+  color:#5f6368;letter-spacing:.05em}
 </style>
 </head>
 <body>
+
+<!-- ══ 开场屏 · 只在 #kickoff 时出现，详见 <style> 里那段说明 ══ -->
+<div id="kickoff" aria-hidden="true">
+  <div class="eyebrow">加速器系统课程 · 开场</div>
+  <h2>大模王我当定了！</h2>
+  <figure><img id="kickoff-img" alt="一条戴草帽的金龙，在满天 GPU 芯片之间敲开一颗金蛋"
+    data-src="img/kickoff-dragon.webp"></figure>
+  <p class="cap">天地灵气沉寂亿万年。灵脉初通之日，万物懵懂。<br>
+    直到有人将半个世纪的天地智元灌入一颗混沌兽卵 —— 卵裂，光生，神兽破壳而出。<br>
+    从此，修仙界再无宁日。</p>
+  <div class="turn veil" id="kickoff-turn">
+    <p>现实版本没这么玄。<span class="b">灌进去的是 6710 亿个参数，和一屋子发烫的芯片。</span></p>
+    <p>接下来我们要做的，就是<span class="b">把这颗蛋敲开</span> ——
+       看看里面到底装了什么，以及它为什么非得长成这个样子。</p>
+  </div>
+  <div class="hint" id="kickoff-hint">点一下 / 空格</div>
+</div>
 
 <!-- ══ HERO ══ -->
 <div class="hero"><div class="wrap">
@@ -486,6 +539,52 @@ footer a{color:var(--blue);text-decoration:none}
      许可（署名 · 非商业 · 相同方式共享）——
      部分材料来自同为该许可的开源项目，我们从开放的知识里拿，就照样开放地给回去。</p>
 </div></footer>
+
+<script>
+/* 开场屏的全部逻辑。两段式：先只有梗，点一下才翻出落点，再点一下退场。
+   梗先落地、等笑完再翻面，比两句话同时摁在屏幕上有力得多。
+   注意这段脚本坏掉的后果是「开场屏不出现」，不是「总纲打不开」——
+   #kickoff 那个 div 默认 display:none，是 JS 主动去开它，不是去关它。 */
+(function () {
+  var box  = document.getElementById('kickoff');
+  var img  = document.getElementById('kickoff-img');
+  var turn = document.getElementById('kickoff-turn');
+  var hint = document.getElementById('kickoff-hint');
+  var step = 0;
+
+  function open() {
+    if (step) return;
+    step = 1;
+    if (!img.src) img.src = img.dataset.src;   // 250 KB 只在讲课时才下
+    box.classList.add('on');
+    box.setAttribute('aria-hidden', 'false');
+    document.body.style.overflow = 'hidden';
+  }
+  function next() {
+    if (step === 1) {                          // 翻面：亮出落点
+      step = 2;
+      turn.classList.remove('veil');
+      hint.textContent = '再按一次 · 进入总纲';
+    } else if (step === 2) {                   // 退场，并把 hash 抹掉，
+      step = 3;                                // 免得他中途把带 #kickoff 的链接分享出去
+      box.classList.add('out');
+      document.body.style.overflow = '';
+      history.replaceState(null, '', location.pathname);
+      setTimeout(function () { box.classList.remove('on'); }, 460);
+    }
+  }
+
+  if (location.hash === '#kickoff') open();
+  window.addEventListener('hashchange', function () {
+    if (location.hash === '#kickoff') open();  // 地址栏里现敲也能拉起来，不用刷新
+  });
+  box.addEventListener('click', next);
+  document.addEventListener('keydown', function (e) {
+    if (step === 0 || step === 3) return;
+    if (e.key === ' ' || e.key === 'Enter' || e.key === 'ArrowRight') { e.preventDefault(); next(); }
+  });
+})();
+</script>
 
 </body>
 </html>
