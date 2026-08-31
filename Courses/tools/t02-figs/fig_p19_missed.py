@@ -128,7 +128,7 @@ def _col(f, x, w, ln):
         f.t(x + 32, y + 34, big, "numb" if big[0].isdigit() else "box", INK)
         f.t(x + w - 32, y + 34, unit, "xxs", SUB, "end")
         if j < len(nodes) - 1:
-            f.line(x + 46, y + 52, x + 46, y + 68, SUB, 1.6, "aS")
+            f.line(x + 46, y + 52, x + 46, y + 68, SUB, 1.6, "aK")
         y += 68
 
     # ── 撤回那一步做了什么 ──

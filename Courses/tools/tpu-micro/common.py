@@ -38,6 +38,18 @@ import re as _re
 # para() 认得的四个行内标记。它们在 SVG 里都是未知元素。
 _BADMARK = _re.compile(r"</?(?:b|r|g|code)>")
 
+# DEFS 里真实存在的 marker id。引用一个不存在的（比如手滑写成 "aE"），
+# SVG 规范要求渲染器**静默忽略** —— 线照画、箭头就是没有，不报错也不警告。
+# 跟 <b> 塞进 f.t() 是同一类失败：引用不存在的东西，被默默吃掉。
+# P-19 的两条血缘箭头就这么丢了，直到画 P-24 时才发现。
+_MARKERS = frozenset(_re.findall(r'<marker id="([^"]+)"', DEFS))
+
+
+def _ckmark(m):
+    assert m is None or m in _MARKERS, (
+        "marker %r 不存在，SVG 会静默不画箭头。可用的只有：%s"
+        % (m, ", ".join(sorted(_MARKERS))))
+
 
 class Fig:
     """极薄的 SVG 拼装器 —— 有意不做布局引擎：所有坐标手算，改图时所见即所得。"""
@@ -73,11 +85,13 @@ class Fig:
         self.p.append(f'<text x="{x}" y="{y}" class="{cls}"{f}{a}{wt}>{s}</text>')
 
     def line(self, x1, y1, x2, y2, c=SUB, sw=1.5, marker=None, dash=None):
+        _ckmark(marker)
         m = f' marker-end="url(#{marker})"' if marker else ""
         d = f' stroke-dasharray="{dash}"' if dash else ""
         self.p.append(f'<line x1="{x1}" y1="{y1}" x2="{x2}" y2="{y2}" stroke="{c}" stroke-width="{sw}"{m}{d}/>')
 
     def path(self, d, c=SUB, sw=1.5, fill="none", marker=None, dash=None):
+        _ckmark(marker)
         m = f' marker-end="url(#{marker})"' if marker else ""
         ds = f' stroke-dasharray="{dash}"' if dash else ""
         self.p.append(f'<path d="{d}" stroke="{c}" stroke-width="{sw}" fill="{fill}"{m}{ds}/>')
