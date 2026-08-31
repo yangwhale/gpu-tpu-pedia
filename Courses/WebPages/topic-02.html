@@ -2381,7 +2381,7 @@ footer a{text-decoration:none}
 <text x="949.3333333333334" y="840" class="xs">· 要点对点直传仍需显式 cudaDeviceEnablePeerAccess</text>
 <text x="949.3333333333334" y="860" class="xs">· Gen6 ×16 双向合计 256 GB/s —— 约为 NVLink 5 的 <tspan font-weight="700" fill="#202124">1/7</tspan></text>
 </svg>
-<figcaption><b>一颗 B200 的全景。</b>两颗 die 用 NV-HBI 缝成「一个 GPU」—— 对软件完全透明，代价是那道缝还在：L2 跨 die 从约 21 TB/s 掉到 16.8 TB/s，<b>而这件事不出现在任何 API 里</b>。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b>一颗 B200 的全景。</b>两颗 die 用 NV-HBI 缝成「一个 GPU」—— 对软件完全透明，代价是那道缝还在：L2 跨 die 从约 21 TB/s 掉到 16.8 TB/s（<b>这两个数是第三方压测，NVIDIA 没有公布</b>），<b>而这件事不出现在任何 API 里</b>。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>再看 v7。<b>物理构造几乎一样，对软件的呈现完全相反。</b></p>
@@ -7256,12 +7256,12 @@ footer a{text-decoration:none}
 <text x="1262" y="410" class="num" fill="#1e8e3e">1.03 ×</text>
 <line x1="800" y1="442" x2="1370" y2="442" stroke="#e8eaed" stroke-width="1"/>
 <text x="806" y="462" class="xs">这些数怎么来的</text>
-<text x="962" y="462" class="xs">148×4 官方；每核 1,024 </text>
-<text x="962" y="476" class="xs">官方 + 推导</text>
+<text x="962" y="462" class="xs">148 <tspan font-weight="700" fill="#202124">第三方拆解</tspan>，×4 官方；</text>
+<text x="962" y="476" class="xs">每核 1,024 官方 + 推导</text>
 <text x="1112" y="462" class="xs">4 MXU × 262,144 FLOP/</text>
 <text x="1112" y="476" class="xs">周期 × 2.2 GHz，<tspan font-weight="700" fill="#202124">三个数全</tspan></text>
 <text x="1112" y="490" class="xs"><tspan font-weight="700" fill="#202124">是官方的</tspan></text>
-<text x="1262" y="462" class="num" fill="#1e8e3e">官方</text>
+<text x="1262" y="462" class="num" fill="#f9ab00">见左</text>
 <rect x="800" y="516" width="570" height="128" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
 <text x="812" y="534" class="xs"><tspan font-weight="700" fill="#202124">右边这一列不是推导，是官方的。</tspan>Google 工程博客逐字给出：<tspan font-weight="700" fill="#d93025">262,144 FLOP/周期/MXU × 2.2 GHz × 4 MXU</tspan></text>
 <text x="812" y="548" class="xs"><tspan font-weight="700" fill="#d93025"> ＝ 2,307 TFLOPS</tspan>。</text>
@@ -9675,7 +9675,7 @@ footer a{text-decoration:none}
 <text x="38" y="632" class="sec">⚠️ 换一个单位，倍数就变 —— 而变掉的那 1.5% 正好是第 6 节讲的那件事</text>
 <text x="38" y="658" class="xs"><tspan font-weight="700" fill="#202124">按 TFLOP/s 算，GB300 是 v7 的 1.29 倍；按 tok/s 算，是 1.31 倍</tspan><tspan fill="#9aa0a6">（6,242 ÷ 4,770）。两个数都对，差在</tspan><tspan font-weight="700" fill="#202124">分子那条公式</tspan> ——同一个模型、同一条 token，两边的分析式 FLOP 公式给出的答案<tspan font-weight="700" fill="#202124">差 1.5%</tspan>。<tspan font-weight="700" fill="#202124">差多少不重要，差本身才重要。</tspan></text>
 <text x="38" y="681" class="xs"><tspan font-weight="700" fill="#202124">token 是能数出来的，TFLOP/s 里还夹着一条公式。</tspan><tspan fill="#9aa0a6">所以两个都报的时候，把 tok/s 放在前面。</tspan><tspan font-weight="700" fill="#202124">这不是吹毛求疵：1.5% 在这里无关紧要，但它证明了那条公式确实是两边各写各的</tspan> ——下一次遇到的不一定还是 1.5%，而 P-13 甲格里那个漏白名单的例子是 5 倍。</text>
-<text x="1380" y="744" class="xxs" fill="#9aa0a6" text-anchor="end">同一个 Hunyuan3-295B-A21B（80 层 · 192 专家）· seq 4096 · 合成数据 · 两边都不落盘 checkpoint（但重算策略不同，见 P-18 第 ⑤ 条）· 两边都是我们自己跑的</text>
+<text x="1380" y="744" class="xxs" fill="#9aa0a6" text-anchor="end">同一个 Hunyuan3-295B-A21B（80 层 · 192 专家）· seq 4096 · 合成数据 · 两边都不落盘 checkpoint（但重算策略不同，见 P-18 第 ③ 条）· 两边都是我们自己跑的</text>
 </svg>
 <figcaption><b>这是全课唯一一张两边真数并排的图，所以它也是最容易被截图转走的一张。</b><b>用手挡住那两个大字号的数，让台下先看下面那两段红色</b> ——&nbsp;它们在图上一样长。等有人说出「可是比例差很多」，再把手放开。<b>然后念乙格右下那个红框，一个字都别改</b> ——&nbsp;那是全课唯一一处我们承认自己的图证明不了自己的结论。</figcaption>
 </figure>
@@ -10007,11 +10007,535 @@ footer a{text-decoration:none}
 </div></section>
 
 <section><div class="wrap">
+  <div class="stn big"><span class="badge">第 8 节</span><h2>这一课的数我是怎么核的</h2></div>
+  <p class="lead">前七节一直在要求「每个数都得能被回查」。
+    <b>这一节把这门课自己的账摊开：撤回过八笔，每一笔活了多久、往哪边偏。</b>
+    ——&nbsp;它<b>不含任何硬件知识</b>，六十分钟的版本里是第一个该砍的；
+    但如果这门课的目的是让你以后能自己判断一份对比报告，
+    <b>它是全课迁移性最强的一节</b>。前七节讲的是这两块硬件，
+    这一节讲的是<b>怎么读任何一份把两块硬件放在一起的材料</b>。</p>
+
+  <div class="note q"><span class="t">为什么一份课件要花一整节讲自己错在哪</span>
+    因为第 6 节和第 7 节反复要求的那件事，<b>如果对自己不做一遍，就只是一句口号</b>。
+    <br><br>更实际的理由是：<b>这一节里的每一个错，都不是「不小心」型的错。</b>
+    它们全都发生在有人认真核对之后 ——&nbsp;
+    有的甚至发生在<b>刚刚为同一个错误写完更正的当天</b>。
+    <br>所以它们能告诉你一件靠「要仔细」学不到的事：
+    <b>哪一类数字，天生就不会有人去复查它。</b></div>
+
+  <h3>8.1　同一个漏法，两次</h3>
+
+  <p>八笔撤回里，有两笔属于同一种故障：<b>上游撤了，从它算出来的那个数还挂着</b>。
+    两次的代价差 15 倍，<b>而原因不是「第二次更小心」</b>。</p>
+<figure class="fbox fwide" id="ms-p19">
+<svg viewBox="0 0 1400 728" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="两次漏改的真实机制：文件就在手上，改了别处，跳过了它 ——不是搜索能力问题，是注意力问题">
+<text x="20" y="26" class="ttl">同一个漏法，两次　—— <tspan font-weight="700" fill="#d93025">而两次都不是「搜不到」</tspan></text>
+<rect x="1270" y="10" width="110" height="22" rx="11" fill="#d93025"/>
+<text x="1325.0" y="25" class="lbl" fill="#fff" text-anchor="middle">撤源数，漏派生数</text>
+<rect x="20" y="124" width="676" height="442" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="20" y="124" width="5" height="442" rx="3" fill="#f9ab00"/>
+<text x="40" y="151" class="sec" fill="#f9ab00">血缘一　·　代价 15 天</text>
+<rect x="40" y="168" width="636" height="52" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+<text x="52" y="183" class="xxs" fill="#f9ab00">源数　·　自己测错了</text>
+<text x="52" y="202" class="numb" fill="#202124">1,014.8</text>
+<text x="664" y="202" class="xxs" fill="#5f6368" text-anchor="end">TFLOP/s/chip　·　生 08-15，08-16 撤回</text>
+<line x1="66" y1="220" x2="66" y2="236" stroke="#5f6368" stroke-width="1.6" marker-end="url(#aS)"/>
+<rect x="40" y="236" width="636" height="52" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.5"/>
+<text x="52" y="251" class="xxs" fill="#8430ce">派生数　·　÷ 138.9 GFLOP/token</text>
+<text x="52" y="270" class="numb" fill="#202124">7,308</text>
+<text x="664" y="270" class="xxs" fill="#5f6368" text-anchor="end">tok/s/chip</text>
+<line x1="66" y1="288" x2="66" y2="304" stroke="#5f6368" stroke-width="1.6" marker-end="url(#aS)"/>
+<rect x="40" y="304" width="636" height="52" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.5"/>
+<text x="52" y="319" class="xxs" fill="#8430ce">它撑起的那句话</text>
+<text x="52" y="338" class="box" fill="#202124">「v7 的 FP8 已反超 GB300 +17%」</text>
+<text x="664" y="338" class="xxs" fill="#5f6368" text-anchor="end">7,308 对 6,242</text>
+<rect x="40" y="372" width="636" height="112" rx="8" fill="#fcfcfd" stroke="#dadce0" stroke-width="1.2"/>
+<text x="52" y="392" class="lbl">08-16　<tspan class="mono" fill="#1967d2">8c46582</tspan>　标题：「清掉<tspan font-weight="700" fill="#202124">全部</tspan>失效的 1,014.8」</text>
+<text x="52" y="419" class="xxs"><tspan fill="#9aa0a6">它</tspan><tspan font-weight="700" fill="#202124">做到了标题说的事</tspan> —— 正文列的四处表格行都清掉了。</text>
+<text x="52" y="444" class="xxs"><tspan font-weight="700" fill="#202124">但它改的是 </tspan><tspan class="mono" fill="#1967d2">README.md</tspan> 的第 26 行和第 137 行。</text>
+<text x="52" y="469" class="xxs"><tspan fill="#9aa0a6">而那句「已反超」就在</tspan><tspan font-weight="700" fill="#202124">同一个文件的第 51 行</tspan> —— 第 52 行还挂着一条 ⚠️「口径提醒：7,308 是 v7 的 FP8……」。</text>
+<rect x="40" y="496" width="636" height="50" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="54" y="520" class="numb" fill="#d93025">孤儿期 15 天</text>
+<text x="662" y="520" class="xxs" fill="#5f6368" text-anchor="end">08-16 上游撤 → 08-31 它才撤</text>
+<text x="54" y="536" class="xxs" fill="#5f6368">上游已经撤了、它还挂着的那段时间</text>
+<rect x="704" y="124" width="676" height="442" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="704" y="124" width="5" height="442" rx="3" fill="#d93025"/>
+<text x="724" y="151" class="sec" fill="#d93025">血缘二　·　代价不到 1 天</text>
+<rect x="724" y="168" width="636" height="52" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
+<text x="736" y="183" class="xxs" fill="#d93025">源数　·　从来没有出处</text>
+<text x="736" y="202" class="numb" fill="#202124">2,700 / 5,400</text>
+<text x="1348" y="202" class="xxs" fill="#5f6368" text-anchor="end">GB300 峰值　·　生 07-12，08-31 撤回</text>
+<line x1="750" y1="220" x2="750" y2="236" stroke="#5f6368" stroke-width="1.6" marker-end="url(#aS)"/>
+<rect x="724" y="236" width="636" height="52" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.5"/>
+<text x="736" y="251" class="xxs" fill="#8430ce">派生数　·　拿它当分母（只有 BF16 那个 2,700）</text>
+<text x="736" y="270" class="numb" fill="#202124">31.60%</text>
+<text x="1348" y="270" class="xxs" fill="#5f6368" text-anchor="end">GB300 的 MFU</text>
+<line x1="750" y1="288" x2="750" y2="304" stroke="#5f6368" stroke-width="1.6" marker-end="url(#aS)"/>
+<rect x="724" y="304" width="636" height="52" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.5"/>
+<text x="736" y="319" class="xxs" fill="#8430ce">它进了哪儿</text>
+<text x="736" y="338" class="box" fill="#202124">跟 v7 并排的对照表</text>
+<text x="1348" y="338" class="xxs" fill="#5f6368" text-anchor="end">并排比了 26 天</text>
+<rect x="724" y="372" width="636" height="112" rx="8" fill="#fcfcfd" stroke="#dadce0" stroke-width="1.2"/>
+<text x="736" y="392" class="lbl">08-31　<tspan class="mono" fill="#1967d2">483128b</tspan>　标题：「修正 GB300 峰值」</text>
+<text x="736" y="419" class="xxs"><tspan fill="#9aa0a6">峰值改对了，一共动了</tspan><tspan font-weight="700" fill="#202124">十个文件</tspan>。</text>
+<text x="736" y="444" class="xxs"><tspan font-weight="700" fill="#202124">那十个里，正好包含含 31.60% 的那三个</tspan> —— <tspan class="mono" fill="#1967d2">EXPERIMENT-LOG.md</tspan>、<tspan class="mono" fill="#1967d2">README.md</tspan>、<tspan class="mono" fill="#1967d2">README.en.md</tspan>。</text>
+<text x="736" y="469" class="xxs"><tspan fill="#9aa0a6">三处一个都没改到。</tspan><tspan font-weight="700" fill="#202124">同日 </tspan><tspan class="mono" fill="#1967d2">e2d0dc4</tspan> 才补上。</text>
+<rect x="724" y="496" width="636" height="50" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.6"/>
+<text x="738" y="520" class="numb" fill="#202124">孤儿期 不到 1 天</text>
+<text x="1346" y="520" class="xxs" fill="#5f6368" text-anchor="end">08-31 上游撤 → 同日补齐</text>
+<text x="738" y="536" class="xxs" fill="#5f6368">上游已经撤了、它还挂着的那段时间</text>
+<rect x="20" y="590" width="1360" height="114" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="618" class="sec">⭐ 两次都不是「搜不到」—— 文件就在手上，改了别处，跳过了它</text>
+<text x="38" y="644" class="xs"><tspan fill="#9aa0a6">所以「撤回后记得搜一遍下游」这条规矩</tspan><tspan font-weight="700" fill="#202124">是废话</tspan>：<tspan font-weight="700" fill="#202124">搜索从来不是瓶颈，注意力才是。</tspan>改上游的人视线锁在要改的那一处，<tspan font-weight="700" fill="#202124">同一个文件里隔二十几行的下游数照样看不见</tspan>。</text>
+<text x="38" y="665" class="xs"><tspan font-weight="700" fill="#202124">⭐ 所以把负担挪到落笔时：一个数如果是算出来的，就把算式写在它旁边</tspan><tspan fill="#9aa0a6"> —— </tspan><tspan class="mono" fill="#1967d2">7,308 = 1,014.8e12 ÷ 138.9e9</tspan>。这样改上游的人<tspan font-weight="700" fill="#202124">在同一屏上就能看见它</tspan>。<tspan font-weight="700" fill="#202124">另外：第二次代价小，不是因为更仔细，是因为撤回和复查在同一天</tspan> —— 缩短这两者的间隔能安排，「更仔细」</text>
+<text x="38" y="683" class="xs">不能。</text>
+<text x="1380" y="716" class="xxs" fill="#9aa0a6" text-anchor="end">两条血缘的 diff 行号、文件清单均已对本仓库 git 历史逐条核对</text>
+</svg>
+<figcaption><b>这张先只讲左边那一列，右边用手挡住。</b>讲完血缘一问一句：「08-16 那次清理，标题写着『清掉<b>全部</b>失效的 1,014.8』，你觉得干净了吗」——&nbsp;多半有人说干净了。<b>这时候再露右边</b>：那是写这一课的当天，刚吃过一次亏的人又犯了一遍。<b>落点只念一句</b>：两次都不是搜不到，文件就在手上，改了别处、跳过了它 ——&nbsp;所以规矩不是「撤回后记得搜下游」，是<b>「算出来的数，把算式写在它旁边」</b>。</figcaption>
+</figure>
+
+  <div class="note danger"><span class="t">⛔ 这一格的第一版把机制写错了，而且错法正是这一节自己在批的那一种</span>
+    第一版给的解释是：那次清理<b>按字符串走</b>，而 <code>7,308</code> 里
+    没有「1,014.8」这几个字，所以搜不到。
+    <b>听起来极其合理 ——&nbsp;然后审计去查了 diff。</b>
+    <br><br><code>8c46582</code>（标题<b>「清掉<u>全部</u>失效的 1,014.8」</b>）
+    改的是 <code>README.md</code> 的<b>第 26 行和第 137 行</b>；
+    而那句「v7 的 FP8 已反超 GB300 +17%」就在<b>同一个文件的第 51 行</b>，
+    第 52 行还挂着一条 ⚠️「口径提醒：<code>7,308</code> 是 v7 的 FP8……」。
+    <br>第二次也一样：撤 GB300 峰值那个 commit 动了十个文件，
+    <b>正好包含含 <code>31.60%</code> 的那三个</b>，三处一个都没改到。
+    <br><br><b>两次都不是搜不到。文件就在手上，改了别处，跳过了它。</b>
+    「按字符串走」是从结果倒推出来的机制，<b>全仓没有任何证据支撑</b> ——&nbsp;
+    一节在教「推出来的要标成『估』」的附录，第一版自己就把推的当成了测的。
+    <br><br>⭐ <b>改对之后，这一节的规矩也跟着换了，而且换成了更管用的一条。</b>
+    原来的落点是「撤回后记得搜一遍下游」。<b>既然搜索从来不是瓶颈，这条就是废话。</b>
+    真正的瓶颈是注意力：改上游的人视线锁在要改的那一处，
+    <b>同一个文件里隔二十几行的下游数照样看不见</b>。
+    <br>所以负担要挪到<b>落笔时</b>而不是撤回时：
+    <b>一个数如果是算出来的，就把算式写在它旁边</b> ——&nbsp;
+    <code>7,308 = 1,014.8e12 ÷ 138.9e9</code>。
+    这样改上游的人<b>在同一屏上就能看见它</b>。</div>
+
+  <div class="note info"><span class="t">顺带解释一个反直觉的排序：错得越显眼，死得越快</span>
+    <code>1,014.8</code> 只活了一天，<b>恰恰因为它可疑</b> ——&nbsp;
+    一个 +49.9% 的跃升，本来就会引来复算。
+    而 <code>2,700</code> 那种「长得像官方规格」的数<b>没有任何一处会报错</b>，
+    它活了 <b>50 天</b>；活得最久的 <code>2,250</code> 更彻底 ——&nbsp;
+    <b>那是一个真实存在的官方峰值，只是属于另一块卡</b>，活了 63 天。
+    <br><b>越像「已经处理过」，活得越久。</b>
+    而这也说明为什么下面那张台账不能只按「哪个数上游动过」去查：
+    <b>活得最久的两笔，根本没有上游。</b></div>
+
+  <h3>8.2　八笔撤回的台账</h3>
+
+  <p>把八笔摆成一张表，能看见两件光看单笔看不见的事：
+    <b>「上游撤了下游没跟着撤」其实只发生过一次</b>（但那一次就是 15 天），
+    以及 ——&nbsp;<b>它们朝哪边偏。</b></p>
+<figure class="fbox fwide" id="ms-p20">
+<svg viewBox="0 0 1400 912" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="八笔撤回的台账：只有一笔真的经历过「上游撤了它还挂着」，而偏向是六比二不是八比零">
+<text x="20" y="26" class="ttl">八笔撤回，按活了多久排　—— <tspan font-weight="700" fill="#d93025">第一版只记了五笔，漏掉的三笔恰好方向相反</tspan></text>
+<rect x="1292" y="10" width="88" height="22" rx="11" fill="#d93025"/>
+<text x="1336.0" y="25" class="lbl" fill="#fff" text-anchor="middle">上一张的台账</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#c8ccd0"/>
+<text x="37" y="58" class="sm">条上灰段＝上游还立着（或它自己就是源头），没人去看它</text>
+<rect x="358.0" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="375.0" y="58" class="sm">条上红段＝上游已撤、它还挂着，真正的「漏改」</text>
+<rect x="650.0" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="667.0" y="58" class="sm">右侧绿牌＝撤回前利于 TPU（六笔）</text>
+<rect x="875.3" y="48" width="11" height="11" rx="2" fill="#f6c7c4"/>
+<text x="892.3" y="58" class="sm">右侧红牌＝撤回前利于 GB300（两笔）· 与 P-18 同一套配色</text>
+<rect x="20" y="124" width="1360" height="590" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="150" class="xxs" fill="#9aa0a6">这一课撤回过的</text>
+<text x="288" y="150" class="xxs" fill="#9aa0a6">活了多久（灰=没人看它 · 红=上游撤了它还挂着）</text>
+<text x="624" y="150" class="xxs" fill="#9aa0a6">总寿命</text>
+<text x="716" y="150" class="xxs" fill="#9aa0a6">改成了</text>
+<text x="872" y="150" class="xxs" fill="#9aa0a6">撤回前偏向</text>
+<text x="996" y="150" class="xxs" fill="#9aa0a6">怎么被发现的</text>
+<line x1="38" y1="158" x2="1362" y2="158" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="38" y="166" width="1324" height="56" rx="4" fill="#fcfcfd"/>
+<rect x="38" y="166" width="4" height="56" rx="2" fill="#d93025"/>
+<text x="52" y="187" class="lbl" fill="#202124">2,250 / 4,500</text>
+<rect x="224" y="175" width="44" height="16" rx="7" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="246" y="187" class="xxs" fill="#d93025" text-anchor="middle">套错</text>
+<text x="52" y="204" class="xxs" fill="#5f6368">A4X 那页三张 MFU 表的分母</text>
+<rect x="288" y="178" width="316" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="288" y="178" width="292.7647058823529" height="18" rx="3" fill="#e8eaed" stroke="#c8ccd0" stroke-width="1.4"/>
+<text x="288" y="210" class="xxs" fill="#9aa0a6">06-29 → 08-31</text>
+<text x="624" y="196" class="num" fill="#202124">63 天</text>
+<rect x="716" y="180" width="146" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="724" y="195" class="xxs"><tspan fill="#9aa0a6">→ </tspan><tspan font-weight="700" fill="#202124">2,500 / 5,000</tspan></text>
+<rect x="872" y="180" width="106" height="22" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="925" y="195" class="xxs" fill="#d93025" text-anchor="middle">利于 GB300</text>
+<text x="996" y="186" class="xxs">画 P-12「先问分母」时<tspan font-weight="700" fill="#202124">回查 A4X 到底是哪个 SKU</tspan> —— 2,250 是 HGX B200 </text>
+<text x="996" y="199" class="xxs">的，这些 run 跑在 GB200 NVL72 上</text>
+<rect x="38" y="222" width="4" height="56" rx="2" fill="#8430ce"/>
+<text x="52" y="243" class="lbl" fill="#202124">22.4% 与 11.2%</text>
+<rect x="224" y="231" width="44" height="16" rx="7" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<text x="246" y="243" class="xxs" fill="#8430ce" text-anchor="middle">口径</text>
+<text x="52" y="260" class="xxs" fill="#5f6368">同一次 FP8 run 的两个 MFU</text>
+<rect x="288" y="234" width="316" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="288" y="234" width="288.11764705882354" height="18" rx="3" fill="#e8eaed" stroke="#c8ccd0" stroke-width="1.4"/>
+<text x="288" y="266" class="xxs" fill="#9aa0a6">06-30 → 08-31</text>
+<text x="624" y="252" class="num" fill="#202124">62 天</text>
+<rect x="716" y="236" width="146" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="724" y="251" class="xxs"><tspan fill="#9aa0a6">→ </tspan><tspan font-weight="700" fill="#202124">并列 20.1 / 10.1</tspan></text>
+<rect x="872" y="236" width="106" height="22" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="925" y="251" class="xxs" fill="#d93025" text-anchor="middle">利于 GB300</text>
+<text x="996" y="242" class="xxs">画 P-13「同一次 run 的四个 MFU」时，把表体和表注<tspan font-weight="700" fill="#202124">摆进同一个 2×2</tspan> —— 主</text>
+<text x="996" y="255" class="xxs">报的是大的那个</text>
+<rect x="38" y="278" width="1324" height="56" rx="4" fill="#fcfcfd"/>
+<rect x="38" y="278" width="4" height="56" rx="2" fill="#d93025"/>
+<text x="52" y="299" class="lbl" fill="#202124">2,700 / 5,400</text>
+<rect x="224" y="287" width="44" height="16" rx="7" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="246" y="299" class="xxs" fill="#d93025" text-anchor="middle">编的</text>
+<text x="52" y="316" class="xxs" fill="#5f6368">GB300 的 BF16 / FP8 峰值</text>
+<rect x="288" y="290" width="316" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="288" y="290" width="232.35294117647058" height="18" rx="3" fill="#e8eaed" stroke="#c8ccd0" stroke-width="1.4"/>
+<text x="288" y="322" class="xxs" fill="#9aa0a6">07-12 → 08-31</text>
+<text x="624" y="308" class="num" fill="#202124">50 天</text>
+<rect x="716" y="292" width="146" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="724" y="307" class="xxs"><tspan fill="#9aa0a6">→ </tspan><tspan font-weight="700" fill="#202124">2,500 / 5,000</tspan></text>
+<rect x="872" y="292" width="106" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="925" y="307" class="xxs" fill="#1e8e3e" text-anchor="middle">利于 TPU</text>
+<text x="996" y="298" class="xxs">写这一课时<tspan font-weight="700" fill="#202124">回查官方规格表</tspan> —— 它从来没有出处，一处都不会报错</text>
+<rect x="38" y="334" width="4" height="56" rx="2" fill="#8430ce"/>
+<text x="52" y="355" class="lbl" fill="#202124">31.60%</text>
+<rect x="224" y="343" width="44" height="16" rx="7" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<text x="246" y="355" class="xxs" fill="#8430ce" text-anchor="middle">派生</text>
+<text x="52" y="372" class="xxs" fill="#5f6368">GB300 的 MFU</text>
+<rect x="288" y="346" width="316" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="288" y="346" width="118.96470588235294" height="18" rx="3" fill="#e8eaed" stroke="#c8ccd0" stroke-width="1.4"/>
+<rect x="406.964705882353" y="346" width="4" height="18" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="418.964705882353" y="359" class="xxs" fill="#d93025">← 同日补齐</text>
+<text x="288" y="378" class="xxs" fill="#9aa0a6">08-05 → 08-31</text>
+<text x="624" y="364" class="num" fill="#202124">26 天</text>
+<rect x="716" y="348" width="146" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="724" y="363" class="xxs"><tspan fill="#9aa0a6">→ </tspan><tspan font-weight="700" fill="#202124">34.16%</tspan></text>
+<rect x="872" y="348" width="106" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="925" y="363" class="xxs" fill="#1e8e3e" text-anchor="middle">利于 TPU</text>
+<text x="996" y="354" class="xxs">改上游峰值时<tspan font-weight="700" fill="#202124">顺带发现</tspan> —— 这个百分数本身从没被动过</text>
+<rect x="38" y="390" width="1324" height="56" rx="4" fill="#fcfcfd"/>
+<rect x="38" y="390" width="4" height="56" rx="2" fill="#8430ce"/>
+<text x="52" y="411" class="lbl" fill="#202124">+50%</text>
+<rect x="224" y="399" width="44" height="16" rx="7" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<text x="246" y="411" class="xxs" fill="#8430ce" text-anchor="middle">归类</text>
+<text x="52" y="428" class="xxs" fill="#5f6368">v7 调优收益（含 dvfs 频率档）</text>
+<rect x="288" y="402" width="316" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="288" y="402" width="92.94117647058823" height="18" rx="3" fill="#e8eaed" stroke="#c8ccd0" stroke-width="1.4"/>
+<text x="288" y="434" class="xxs" fill="#9aa0a6">08-11 → 08-31</text>
+<text x="624" y="420" class="num" fill="#202124">20 天</text>
+<rect x="716" y="404" width="146" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="724" y="419" class="xxs"><tspan fill="#9aa0a6">→ </tspan><tspan font-weight="700" fill="#202124">剥出频率档 → +38%</tspan></text>
+<rect x="872" y="404" width="106" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="925" y="419" class="xxs" fill="#1e8e3e" text-anchor="middle">利于 TPU</text>
+<text x="996" y="410" class="xxs">P-14 落点<tspan font-weight="700" fill="#202124">两轮审计</tspan> —— 锁频是硬件工作点，不是软件调优</text>
+<rect x="38" y="446" width="4" height="56" rx="2" fill="#8430ce"/>
+<text x="52" y="467" class="lbl" fill="#202124">7,308</text>
+<rect x="224" y="455" width="44" height="16" rx="7" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.2"/>
+<text x="246" y="467" class="xxs" fill="#8430ce" text-anchor="middle">派生</text>
+<text x="52" y="484" class="xxs" fill="#5f6368">v7 FP8 的 tok/s/chip</text>
+<rect x="288" y="458" width="316" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="288" y="458" width="4.647058823529412" height="18" rx="3" fill="#e8eaed" stroke="#c8ccd0" stroke-width="1.4"/>
+<rect x="292.6470588235294" y="458" width="69.70588235294117" height="18" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="370.35294117647055" y="471" class="xxs" fill="#d93025">← 漏改 15 天</text>
+<text x="288" y="490" class="xxs" fill="#9aa0a6">08-15 → 08-31</text>
+<text x="624" y="476" class="num" fill="#202124">16 天</text>
+<rect x="716" y="460" width="146" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="724" y="475" class="xxs"><tspan fill="#9aa0a6">→ </tspan><tspan font-weight="700" fill="#202124">4,830</tspan></text>
+<rect x="872" y="460" width="106" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="925" y="475" class="xxs" fill="#1e8e3e" text-anchor="middle">利于 TPU</text>
+<text x="996" y="466" class="xxs"><tspan font-weight="700" fill="#202124">反推它的换算关系</tspan>：7,308 × 138.9 GFLOP ≈ 已撤回的 1,014.8</text>
+<rect x="38" y="502" width="1324" height="56" rx="4" fill="#fcfcfd"/>
+<rect x="38" y="502" width="4" height="56" rx="2" fill="#f9ab00"/>
+<text x="52" y="523" class="lbl" fill="#202124">1,014.8</text>
+<rect x="224" y="511" width="44" height="16" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="246" y="523" class="xxs" fill="#f9ab00" text-anchor="middle">测的</text>
+<text x="52" y="540" class="xxs" fill="#5f6368">v7 FP8 的 TFLOP/s/chip</text>
+<rect x="288" y="514" width="316" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="288" y="514" width="4.647058823529412" height="18" rx="3" fill="#e8eaed" stroke="#c8ccd0" stroke-width="1.4"/>
+<text x="288" y="546" class="xxs" fill="#9aa0a6">08-15 → 08-16</text>
+<text x="624" y="532" class="num" fill="#202124">1 天</text>
+<rect x="716" y="516" width="146" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="724" y="531" class="xxs"><tspan fill="#9aa0a6">→ </tspan><tspan font-weight="700" fill="#202124">637.0</tspan></text>
+<rect x="872" y="516" width="106" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="925" y="531" class="xxs" fill="#1e8e3e" text-anchor="middle">利于 TPU</text>
+<text x="996" y="522" class="xxs"><tspan font-weight="700" fill="#202124">自己复算专家数</tspan> —— 192 个里只算了 3 个</text>
+<rect x="38" y="558" width="4" height="56" rx="2" fill="#9aa0a6"/>
+<text x="52" y="579" class="lbl" fill="#202124">「软件效率之比」</text>
+<rect x="224" y="567" width="44" height="16" rx="7" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="246" y="579" class="xxs" fill="#9aa0a6" text-anchor="middle">推的</text>
+<text x="52" y="596" class="xxs" fill="#5f6368">P-15 乙格第二段的命名</text>
+<rect x="288" y="570" width="316" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="288" y="570" width="4" height="18" rx="3" fill="#e8eaed" stroke="#c8ccd0" stroke-width="1.4"/>
+<text x="288" y="602" class="xxs" fill="#9aa0a6">08-31 → 08-31</text>
+<text x="624" y="588" class="num" fill="#202124">不到 1 天</text>
+<rect x="716" y="572" width="146" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="724" y="587" class="xxs"><tspan fill="#9aa0a6">→ </tspan><tspan font-weight="700" fill="#202124">改叫「峰值以外」</tspan></text>
+<rect x="872" y="572" width="106" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="925" y="587" class="xxs" fill="#1e8e3e" text-anchor="middle">利于 TPU</text>
+<text x="996" y="578" class="xxs">审计 —— <tspan font-weight="700" fill="#202124">它错的不是数，是把一个恒等式当成了发现</tspan></text>
+<line x1="38" y1="616" x2="1362" y2="616" stroke="#dadce0" stroke-width="1.0"/>
+<text x="52" y="638" class="xs"><tspan font-weight="700" fill="#202124">⭐ 同一个正确值，错了两次，方向相反。</tspan><tspan class="mono" fill="#1967d2">2,500 / 5,000</tspan> 既是 2,700 改过来的，也是 2,250 改过来的 —— 写这一课（主角是 v7）时<tspan font-weight="700" fill="#202124">猜高</tspan>，写 GPU 那页（主角是 A4X）时<tspan font-weight="700" fill="#202124">套错机型</tspan>（官方同代不同封装差 11.1%）。</text>
+<text x="52" y="658" class="xs"><tspan font-weight="700" fill="#202124">⭐ 只有一根条有红段。</tspan><tspan fill="#9aa0a6">「上游撤了、下游没跟着撤」八笔里只发生过一次 —— </tspan><tspan font-weight="700" fill="#202124">不是常见故障，但那一次就是 15 天。</tspan></text>
+<text x="52" y="678" class="xs"><tspan font-weight="700" fill="#202124">⚠️ 没有任何一个动作能抓到全部八笔。</tspan><tspan fill="#9aa0a6">2,700 没有上游，靠回查规格表；7,308 有上游，靠反推换算；「归类」那笔靠的是审计。</tspan><tspan font-weight="700" fill="#202124">这就是下一张要按来源分级的原因。</tspan></text>
+<rect x="20" y="738" width="1360" height="150" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="766" class="sec">⚠️ 这张图的第三个错就在台账本身 ——「五笔全部利于 TPU」是一个按图的边界记出来的账，不是按事实记出来的账</text>
+<rect x="38" y="780" width="322.0" height="74" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="50" y="799" class="lbl" fill="#d93025">① 第一版：5/5 全偏一边</text>
+<text x="50" y="815" class="xxs"><tspan fill="#9aa0a6">我当时把它当成一个</tspan><tspan font-weight="700" fill="#202124">需要辩护的发现</tspan>，为它写了整整三步辩护。</text>
+<rect x="372.0" y="780" width="322.0" height="74" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="384.0" y="799" class="lbl" fill="#d93025">② 审计：漏了三笔</text>
+<text x="384.0" y="815" class="xxs"><tspan fill="#9aa0a6">§6 正文自己写着「</tspan><tspan font-weight="700" fill="#202124">这几处是回查时自己发现并改掉的</tspan>」—— 三笔一</text>
+<text x="384.0" y="828" class="xxs">笔没进台账。<tspan font-weight="700" fill="#202124">理由是它们在 §6 不在 §8。</tspan></text>
+<rect x="706.0" y="780" width="322.0" height="74" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="718.0" y="799" class="lbl" fill="#1e8e3e">③ 补上就是 6 : 2</text>
+<text x="718.0" y="815" class="xxs"><tspan fill="#9aa0a6">而且那两笔不是勉强算的：一笔把 GB200 一整页 MFU 抬高 11%，</tspan></text>
+<text x="718.0" y="828" class="xxs"><tspan fill="#9aa0a6">一笔让 FP8 run 用 </tspan><tspan font-weight="700" fill="#202124">BF16 分母</tspan> —— <tspan font-weight="700" fill="#202124">恰好是 v7 侧的反口径</tspan>（v7 </text>
+<text x="718.0" y="841" class="xxs">的 FP8 一律按 4,614 报）。</text>
+<rect x="1040.0" y="780" width="322.0" height="74" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="1052.0" y="799" class="lbl" fill="#1a73e8">④ 所以偏向跟的是「主角」</text>
+<text x="1052.0" y="815" class="xxs"><tspan fill="#9aa0a6">不是「我想要的结论」，是</tspan><tspan font-weight="700" fill="#202124">这份文档在给谁做</tspan>。<tspan font-weight="700" fill="#202124">换个主角重读一遍</tspan></text>
+<text x="1052.0" y="828" class="xxs"><tspan font-weight="700" fill="#202124">自己的数</tspan> —— 比「保持客观」可执行。</text>
+<text x="38" y="874" class="xs"><tspan font-weight="700" fill="#202124">⑤ 原来那句「利于 GB300 的错没人有动机去找」也被自己的记录证伪了两次</tspan><tspan fill="#9aa0a6"> —— 已知的不是一处是三处，而 R-6a / R-6b 确实是自己找出来改掉的。能说的只剩更弱但为真的一句：</tspan><tspan font-weight="700" fill="#202124">这类错更容易被放着</tspan>（P-18 的 882.3 至今没复测）。</text>
+<text x="1380" y="900" class="xxs" fill="#9aa0a6" text-anchor="end">「改成了」那一列的每个值都能在仓库里查到 —— 一份台账不给正确值，读者就没法回查</text>
+</svg>
+<figcaption><b>先只念台账，别翻底带。</b>让台下自己盯「撤回前偏向」那一列，<b>等有人问出「怎么大半偏一边」再翻</b>。（没人问就自己说，但要说成「我第一版也是这么想的」。）<b>底带的重点不是那三步辩护，是第 ②③ 张卡</b>：这份台账第一版只记了五笔，而漏掉的三笔恰好方向相反 ——&nbsp;<b>按图的边界记账，不是按事实记账</b>。最后指第 ④ 张：同一个 2,500&nbsp;/&nbsp;5,000，写 v7 那边猜高、写 GPU 那页套错机型，<b>偏向跟的是「这份文档的主角是谁」</b>。</figcaption>
+</figure>
+
+  <div class="note danger"><span class="t">⛔ 这张台账的第一版只记了五笔，而漏掉的三笔恰好方向相反</span>
+    第一版的整张底带建立在一个观察上：<b>「五笔撤回全部利于 TPU」</b>，
+    并为此写了一套三步辩护。<b>审计去数了一遍 ——&nbsp;<code>5/5</code> 这个数据本身是选出来的。</b>
+    <br><br>第 6 节的正文自己写着：那三张图里的反面例子
+    「<b>全部来自本仓库自己的文档</b>……<b>这几处是回查时自己发现并改掉的</b>」。
+    <b>三笔已经公开承认过的撤回，一笔都没进台账。</b>
+    理由是「它们属于第 6 节，不属于这一节」——&nbsp;
+    也就是<b>按图的边界记账，而不是按事实记账</b>。
+    <br>补上之后是 <b>八笔：利于 TPU 六笔，利于 GB300 两笔。</b>
+    而那两笔不是勉强算的：一笔把 GB200 一整页的 MFU 抬高 11%，
+    一笔让一个 FP8 run 的头条 MFU 用 <b>BF16 分母</b> ——&nbsp;
+    <b>恰好是 v7 侧同类数字的反口径</b>（v7 的 FP8 一律按分母 4,614 报）。
+    <br><br>⭐ <b>修正之后，反而拿到了一个比原来那套辩护强得多的答案。</b>
+    <br>同一个正确值 <code>2,500 / 5,000</code>，这份仓库<b>错了两次，方向相反</b>：
+    写这一课（主角是 v7）时<b>猜高</b>成 2,700；
+    写 GPU 那一页（主角是 A4X）时<b>套错机型</b>，
+    用了 HGX B200 的 2,250（官方同代不同封装差 11.1%）。
+    <br><b>所以偏向跟的不是「我想要的结论」，是「这份文档的主角是谁」。</b>
+    乐观总是朝着当前在写的那一侧偏。
+    这个说法比「立场」更机械，也因此更好防 ——&nbsp;
+    <b>换个主角把自己的数重读一遍</b>，比「保持客观」可执行。
+    <br><br>顺带，原来那句「利于 GB300 的错没人有动机去找」也被自己的记录证伪了两次：
+    已知的不是一处是三处，其中两处<b>确实是自己找出来并改掉的</b>。
+    能说的只剩更弱、但为真的一句：<b>这类错更容易被放着</b> ——&nbsp;
+    第 7 节里 GB300 那个 <code>882.3</code> 至今没复测，
+    而它<b>会让差距更大</b>，这就是那一节所有倍数都写成「下限」的原因。</div>
+
+  <h3>8.3　落笔之前</h3>
+
+  <p>前两张讲的是<b>错了之后怎么办</b>。这一张讲的是<b>写下之前怎么办</b> ——&nbsp;
+    三张必须连着出，否则前两张只是一份自我批评，<b>没有可以带走的东西</b>。</p>
+<figure class="fbox fwide" id="ms-p21">
+<svg viewBox="0 0 1400 858" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="一个数该配多少话：五级来源分级、落笔前的三句自问、以及这一课查完仍然没有答案的六处">
+<text x="20" y="26" class="ttl">落笔之前　—— <tspan font-weight="700" fill="#1a73e8">一个数该配多少话，取决于它是哪儿来的</tspan></text>
+<rect x="1193" y="10" width="187" height="22" rx="11" fill="#1a73e8"/>
+<text x="1286.5" y="25" class="lbl" fill="#fff" text-anchor="middle">P-19 / P-20 的对页</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">实心点＝这一级在本课坏过一笔（台账共八笔，散在四级上）</text>
+<rect x="369.5" y="48" width="11" height="11" rx="2" fill="#e8eaed"/>
+<text x="386.5" y="58" class="sm">空心圈＝这一级本课没犯过 —— 不代表它安全</text>
+<rect x="640.8" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="657.8" y="58" class="sm">乙格三句都是单位问题，30 秒能查完</text>
+<rect x="20" y="114" width="812" height="502" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="140" class="sec">甲　·　来源分级 —— 越往下，越要把过程写出来</text>
+<text x="38" y="162" class="xs"><tspan fill="#9aa0a6">P-20 台账「类型」那一列的六个词就落在这五级上：</tspan><tspan font-weight="700" fill="#202124">编的 / 套错→①、测的→②、派生 / 口径 / 归类→④、推的→⑤</tspan>，<tspan font-weight="700" fill="#202124">③ 一次都没用上</tspan>。</text>
+<text x="56" y="190" class="xxs" fill="#9aa0a6">等级</text>
+<text x="172" y="190" class="xxs" fill="#9aa0a6">这一课的实例</text>
+<text x="330" y="190" class="xxs" fill="#9aa0a6">该怎么写</text>
+<text x="560" y="190" class="xxs" fill="#9aa0a6">它是怎么坏的</text>
+<text x="782" y="190" class="xxs" fill="#9aa0a6" text-anchor="middle">犯过</text>
+<line x1="38" y1="197" x2="814" y2="197" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="38" y="204" width="776" height="70" rx="4" fill="#fcfcfd"/>
+<rect x="38" y="204" width="4" height="70" rx="2" fill="#1e8e3e"/>
+<text x="56" y="230" class="lbl" fill="#1e8e3e">① 官方规格</text>
+<text x="56" y="248" class="xxs" fill="#1e8e3e">编的 / 套错</text>
+<text x="172" y="228" class="xs"><tspan font-weight="700" fill="#202124">2,500 / 2,307</tspan><tspan fill="#9aa0a6"> dense BF16</tspan></text>
+<text x="330" y="228" class="xxs">给出<tspan font-weight="700" fill="#202124">口径</tspan>：dense 还是含稀疏、每 chip 还是每</text>
+<text x="330" y="242" class="xxs"> device</text>
+<text x="560" y="228" class="xxs"><tspan font-weight="700" fill="#202124">两种坏法，方向相反</tspan><tspan fill="#9aa0a6"> —— 2,700 没出处（猜</tspan></text>
+<text x="560" y="242" class="xxs"><tspan fill="#9aa0a6">高）；2,250 规格是真的，</tspan><tspan font-weight="700" fill="#202124">套错机型</tspan>（猜低）</text>
+<circle cx="774.5" cy="232.0" r="5.5" fill="#d93025"/>
+<circle cx="789.5" cy="232.0" r="5.5" fill="#d93025"/>
+<text x="782" y="258" class="xxs" fill="#d93025" text-anchor="middle">2 笔</text>
+<rect x="38" y="274" width="4" height="70" rx="2" fill="#1e8e3e"/>
+<text x="56" y="300" class="lbl" fill="#1e8e3e">② 自己实测</text>
+<text x="56" y="318" class="xxs" fill="#1e8e3e">测的</text>
+<text x="172" y="298" class="xs"><tspan font-weight="700" fill="#202124">854.0 / 662.3</tspan><tspan fill="#9aa0a6"> TFLOP/s</tspan></text>
+<text x="330" y="298" class="xxs">连 <tspan font-weight="700" fill="#202124">step time + 配置 + 规模</tspan> 一起给，缺一样</text>
+<text x="330" y="312" class="xxs">就不可复现</text>
+<text x="560" y="298" class="xxs"><tspan font-weight="700" fill="#202124">测量本身错了</tspan><tspan fill="#9aa0a6"> —— 1,014.8 漏 all-gather</tspan></text>
+<circle cx="782.0" cy="302.0" r="5.5" fill="#d93025"/>
+<text x="782" y="328" class="xxs" fill="#d93025" text-anchor="middle">1 笔</text>
+<rect x="38" y="344" width="776" height="70" rx="4" fill="#fcfcfd"/>
+<rect x="38" y="344" width="4" height="70" rx="2" fill="#1a73e8"/>
+<text x="56" y="370" class="lbl" fill="#1a73e8">③ 他人实测</text>
+<text x="56" y="388" class="xxs" fill="#9aa0a6">（台账里没有）</text>
+<text x="172" y="368" class="xs"><tspan font-weight="700" fill="#202124">707.2</tspan><tspan fill="#9aa0a6"> 厂商官方 recipe</tspan></text>
+<text x="330" y="368" class="xxs">注明<tspan font-weight="700" fill="#202124">谁跑的、什么配置</tspan>，以及能不能跟自己的对</text>
+<text x="330" y="382" class="xxs">齐</text>
+<text x="560" y="368" class="xxs"><tspan font-weight="700" fill="#202124">配置对不齐却并排放</tspan><tspan fill="#9aa0a6"> —— 本课没犯过</tspan></text>
+<circle cx="782.0" cy="372" r="5.5" fill="#fff" stroke="#9aa0a6" stroke-width="1.6"/>
+<text x="782" y="394" class="xxs" fill="#9aa0a6" text-anchor="middle">0 笔</text>
+<rect x="38" y="414" width="4" height="70" rx="2" fill="#f9ab00"/>
+<text x="56" y="440" class="lbl" fill="#f9ab00">④ 算出来的</text>
+<text x="56" y="458" class="xxs" fill="#f9ab00">派生 / 口径 / 归类</text>
+<text x="172" y="438" class="xs"><tspan font-weight="700" fill="#202124">MFU</tspan>、<tspan font-weight="700" fill="#202124">tok/s/chip</tspan></text>
+<text x="330" y="438" class="xxs"><tspan font-weight="700" fill="#202124">把算式写在它旁边</tspan>：tok/s/chip = pdbs × </text>
+<text x="330" y="452" class="xxs">8192 ÷ step</text>
+<text x="560" y="438" class="xxs"><tspan font-weight="700" fill="#202124">八笔里独占一半</tspan><tspan fill="#9aa0a6"> —— 上游撤了没跟着撤（7,</tspan></text>
+<text x="560" y="452" class="xxs"><tspan fill="#9aa0a6">308、31.60%）、分母没交代、加数里混进不</tspan></text>
+<text x="560" y="466" class="xxs"><tspan fill="#9aa0a6">该加的项</tspan></text>
+<circle cx="774.5" cy="435.0" r="5.5" fill="#d93025"/>
+<circle cx="789.5" cy="435.0" r="5.5" fill="#d93025"/>
+<circle cx="774.5" cy="449.0" r="5.5" fill="#d93025"/>
+<circle cx="789.5" cy="449.0" r="5.5" fill="#d93025"/>
+<text x="782" y="468" class="xxs" fill="#d93025" text-anchor="middle">4 笔</text>
+<rect x="38" y="484" width="776" height="70" rx="4" fill="#fcfcfd"/>
+<rect x="38" y="484" width="4" height="70" rx="2" fill="#d93025"/>
+<text x="56" y="510" class="lbl" fill="#d93025">⑤ 推出来的</text>
+<text x="56" y="528" class="xxs" fill="#d93025">推的</text>
+<text x="172" y="508" class="xs">没有直接测量的一切</text>
+<text x="330" y="508" class="xxs">写清<tspan font-weight="700" fill="#202124">推导链</tspan>，明确标成「估」——别给它一个像结</text>
+<text x="330" y="522" class="xxs">论的名字</text>
+<text x="560" y="508" class="xxs"><tspan font-weight="700" fill="#202124">换个名字就当成发现</tspan><tspan fill="#9aa0a6"> —— 「软件效率之比」</tspan></text>
+<circle cx="782.0" cy="512.0" r="5.5" fill="#d93025"/>
+<text x="782" y="538" class="xxs" fill="#d93025" text-anchor="middle">1 笔</text>
+<rect x="38" y="562" width="776" height="46" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="52" y="580" class="xxs"><tspan font-weight="700" fill="#202124">八笔不是一级一笔：④ 独占四笔（一半），③ 零笔。</tspan><tspan fill="#9aa0a6"> ④ 危险恰恰因为</tspan><tspan font-weight="700" fill="#202124">它有出处</tspan>（出处是 ① 或 ②），看上去已经处理过了。</text>
+<text x="52" y="596" class="xxs"><tspan fill="#9aa0a6">而 ③ 的零笔</tspan><tspan font-weight="700" fill="#202124">什么都证明不了</tspan> —— 这一课总共只引用过<tspan font-weight="700" fill="#202124">一个</tspan>他人实测的数，<tspan font-weight="700" fill="#202124">样本 1 里出 0 个错</tspan>。</text>
+<rect x="844" y="114" width="536" height="502" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="862" y="140" class="sec">乙　·　落笔前的三句自问</text>
+<text x="862" y="162" class="xs"><tspan fill="#9aa0a6">三句都是</tspan><tspan font-weight="700" fill="#202124">单位问题</tspan>，不是态度问题 ——「要仔细」不可执行。</text>
+<rect x="862" y="198" width="500" height="100" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="862" y="198" width="4" height="100" rx="2" fill="#1a73e8"/>
+<text x="878" y="222" class="lbl" fill="#1a73e8">①</text>
+<text x="900" y="222" class="box" fill="#202124">二进制还是十进制？</text>
+<text x="878" y="242" class="xxs">官方 HBM 那一栏是<tspan font-weight="700" fill="#202124">十进制</tspan>。206 GB 就是 192 GiB，差 <tspan font-weight="700" fill="#202124">7.4%</tspan> —— 足够把「刚好装下」变成 OOM。</text>
+<rect x="878" y="268" width="466" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="886" y="282" class="xxs"><tspan fill="#9aa0a6">本课取值：</tspan>判 OOM 一律用 <tspan font-weight="700" fill="#202124">94.74 GiB/device</tspan></text>
+<rect x="862" y="308" width="500" height="100" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="862" y="308" width="4" height="100" rx="2" fill="#1a73e8"/>
+<text x="878" y="332" class="lbl" fill="#1a73e8">②</text>
+<text x="900" y="332" class="box" fill="#202124">per chip、per device、还是 per core？</text>
+<text x="878" y="352" class="xxs">v7 是 <tspan font-weight="700" fill="#202124">2 device / chip</tspan>，而框架日志按 device 报。<tspan font-weight="700" fill="#d93025">这一步错，结论差一倍。</tspan></text>
+<rect x="878" y="378" width="466" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="886" y="392" class="xxs"><tspan fill="#9aa0a6">本课取值：</tspan>per-chip = 日志读数 <tspan font-weight="700" fill="#202124">× 2</tspan></text>
+<rect x="862" y="418" width="500" height="100" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="862" y="418" width="4" height="100" rx="2" fill="#1a73e8"/>
+<text x="878" y="442" class="lbl" fill="#1a73e8">③</text>
+<text x="900" y="442" class="box" fill="#202124">这是物理量，还是可用量？</text>
+<text x="878" y="462" class="xxs">94.74 GiB 是<tspan font-weight="700" fill="#202124">可用的</tspan>不是标称的；2,500 是 <tspan font-weight="700" fill="#202124">dense 的</tspan>不是含稀疏的。两边必须用同一种。</text>
+<rect x="878" y="488" width="466" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="886" y="502" class="xxs"><tspan fill="#9aa0a6">本课取值：</tspan>全课统一：可用 HBM + dense 峰值</text>
+<rect x="862" y="532" width="500" height="50" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
+<text x="876" y="552" class="xxs"><tspan font-weight="700" fill="#202124">④ 已经由 P-19 给了：</tspan><tspan fill="#9aa0a6">这个数的上游，最近有东西动过吗？</tspan></text>
+<text x="876" y="568" class="xxs"><tspan font-weight="700" fill="#202124">四句合起来才是完整的检查表。</tspan></text>
+<rect x="20" y="640" width="1360" height="194" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="668" class="sec">⚠️ 这一课查完仍然没有答案的六处 —— 写出来，才使得前面那些有答案的部分可信</text>
+<text x="38" y="690" class="xs"><tspan fill="#9aa0a6">两种「查不到」不是一回事：</tspan><tspan font-weight="700" fill="#202124">外部</tspan>＝官方没公布，我们查不到；<tspan font-weight="700" fill="#202124">自己没做</tspan>＝没人拦着，是我们没去做。<tspan font-weight="700" fill="#202124">后一种更该写出来</tspan><tspan fill="#9aa0a6"> —— 尤其最后一条，2.06 倍是全课最大的那个数，而它现在挂的两条限制都只是「口径」。</tspan></text>
+<rect x="38.0" y="712" width="433.3333333333333" height="54" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="50.0" y="730" class="lbl" fill="#d93025">B200 到底几个 SM</text>
+<rect x="421.3333333333333" y="718" width="38" height="16" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<text x="440.3333333333333" y="730" class="xxs" fill="#9aa0a6" text-anchor="middle">外部</text>
+<text x="50.0" y="745" class="xxs"><tspan fill="#9aa0a6">第三方拆解一致给 148（物理 160），</tspan><tspan font-weight="700" fill="#202124">NVIDIA 官方文档从未写过</tspan></text>
+<text x="50.0" y="759" class="xxs">→ 148 / 592 及派生<tspan font-weight="700" fill="#202124">一律注「第三方拆解」</tspan></text>
+<rect x="483.3333333333333" y="712" width="433.3333333333333" height="54" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="495.3333333333333" y="730" class="lbl" fill="#d93025">138.9 与 137.2 差 1.2%</text>
+<rect x="866.6666666666666" y="718" width="38" height="16" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<text x="885.6666666666666" y="730" class="xxs" fill="#9aa0a6" text-anchor="middle">外部</text>
+<text x="495.3333333333333" y="745" class="xxs"><tspan fill="#9aa0a6">同一个 GFLOP/token，两条推导链对不上，未定位</tspan></text>
+<text x="495.3333333333333" y="759" class="xxs">→ P-15 图上<tspan font-weight="700" fill="#202124">索性不提这个数</tspan></text>
+<rect x="928.6666666666666" y="712" width="433.3333333333333" height="54" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="940.6666666666666" y="730" class="lbl" fill="#d93025">B300 是不是双 die 封装</text>
+<rect x="1312.0" y="718" width="38" height="16" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<text x="1331.0" y="730" class="xxs" fill="#9aa0a6" text-anchor="middle">外部</text>
+<text x="940.6666666666666" y="745" class="xxs"><tspan fill="#9aa0a6">本课只考据过 B200 是双 die，B300 没查到</tspan></text>
+<text x="940.6666666666666" y="759" class="xxs">→ P-18 ⑥ <tspan font-weight="700" fill="#202124">只按 device 抽象说</tspan></text>
+<rect x="38.0" y="772" width="433.3333333333333" height="54" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="50.0" y="790" class="lbl" fill="#d93025">GB300 的 EP16 没复测</text>
+<rect x="399.3333333333333" y="778" width="60" height="16" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text x="429.3333333333333" y="790" class="xxs" fill="#d93025" text-anchor="middle">自己没做</text>
+<text x="50.0" y="805" class="xxs"><tspan fill="#9aa0a6">882.3 是扫点表自己标的 BF16 最优，没跟进</tspan></text>
+<text x="50.0" y="819" class="xxs">→ §7 所有倍数<tspan font-weight="700" fill="#202124">都写成下限</tspan></text>
+<rect x="483.3333333333333" y="772" width="433.3333333333333" height="54" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="495.3333333333333" y="790" class="lbl" fill="#d93025">软件成熟度差多少</text>
+<rect x="844.6666666666666" y="778" width="60" height="16" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text x="874.6666666666666" y="790" class="xxs" fill="#d93025" text-anchor="middle">自己没做</text>
+<text x="495.3333333333333" y="805" class="xxs"><tspan fill="#9aa0a6">只能看出方向，没有能量化它的实验</tspan></text>
+<text x="495.3333333333333" y="819" class="xxs">→ P-18 ④ <tspan font-weight="700" fill="#202124">只定性写「会变」</tspan></text>
+<rect x="928.6666666666666" y="772" width="433.3333333333333" height="54" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="940.6666666666666" y="790" class="lbl" fill="#d93025">GB300 那条 FP8 路的收敛</text>
+<rect x="1290.0" y="778" width="60" height="16" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text x="1320.0" y="790" class="xxs" fill="#d93025" text-anchor="middle">自己没做</text>
+<text x="940.6666666666666" y="805" class="xxs"><tspan fill="#9aa0a6">v7 侧因伤收敛剔掉了 </tspan><tspan class="mono" fill="#1967d2">fixed</tspan>，<tspan font-weight="700" fill="#202124">同一把尺子没量过对面</tspan></text>
+<text x="940.6666666666666" y="819" class="xxs">→ P-17 甲② 的 2.06 倍<tspan font-weight="700" fill="#202124">要加第三条限制</tspan></text>
+<text x="1380" y="846" class="xxs" fill="#9aa0a6" text-anchor="end">③ 那一格是空的 —— 凑个例子会更整齐，但那正是这一节反对的事</text>
+</svg>
+<figcaption><b>乙格三句一定要现场问一遍</b>，尤其第 ②：让台下自己说出「v7 是 2 device 一个 chip」，这一句错了结论差一倍。<b>甲格只念「犯过」那一列</b>：④ 独占四笔（八笔里的一半），③ 是个空心圈 ——&nbsp;顺手问一句「零笔说明这一级安全吗」，答案是这一课总共只引用过<b>一个</b>他人实测的数。<b>红带别跳过</b>，它是整节落点；念的时候把「外部」和「自己没做」分开 ——&nbsp;<b>后一种才是真正该道歉的那种</b>。</figcaption>
+</figure>
+
+  <div class="note ok"><span class="t">⭐ 甲格那张表跟一般的「引用规范」差在哪</span>
+    「要标注来源」这句话谁都会说，也谁都不照做 ——&nbsp;
+    <b>因为它没有说清不标注的代价长什么样。</b>
+    所以那张表的最后一列不是「否则会不严谨」，
+    而是<b>八笔账一笔一笔对号入座</b>。
+    <br><br>⛔ <b>这一列的第一版写的是「五种失败模式一一对应五个来源等级，这不是巧合」——&nbsp;
+    数一下就知道不对。</b>
+    八笔散在四级上：<b>「算出来的」独占四笔，整整一半</b>；
+    「他人实测」<b>零笔</b>。「一一对应」是先有了「工整」这个愿望、再回头凑数字。
+    <b>这一节因此在同一处栽了三次</b>：第一次编机制、第二次编结构、第三次选择性记账
+    ——&nbsp;<b>三次都是「先有形状，再找证据」</b>。
+    <br><br>而如实报数之后，这一列反而说出了两件真的事：
+    <br><b>①「算出来的」最危险，恰恰因为它有出处</b>（出处是官方规格或自己实测），
+    所以看上去已经处理过了，撤上游时没人觉得还要再查它一遍。
+    <br><b>② 那个零笔什么都证明不了</b> ——&nbsp;
+    这一课总共只引用过<b>一个</b>他人实测的数（V4-Pro recipe 的 707.2）。
+    <b>样本 1 里出 0 个错</b>，跟「这一级安全」没有关系。
+    <br>⚠️ 所以那一格写的是<b>「本课没犯过」</b>，不是「本课不会犯」。
+    凑一个例子出来会让这张表更整齐，<b>而那正是这一节反对的事</b>。</div>
+
+  <div class="note warn"><span class="t">讲法建议：要压缩的话，砍哪些、留哪些</span>
+    真要压缩，<b>保留 P-21 乙格那三句自问，其余全砍</b>。
+    那三句都是<b>单位问题不是态度问题</b>，所以可执行：
+    二进制还是十进制、per chip 还是 per device、物理量还是可用量。
+    <b>加上 P-19 给的第四句「这个数上游有东西动过吗」，四句合起来就是完整的检查表。</b>
+    （⚠️ 别把这三句跟第 6 节那三处自曝错误搞混 ——&nbsp;
+    那三处是<b>案例</b>，这三句是<b>动作</b>。）
+    <br><br>⚠️ <b>但有一样东西不能砍：那条红色的「查不到的六处」。</b>
+    它不是免责声明 ——&nbsp;那六条<b>跟前面所有内容一样都被核过</b>，
+    区别只在于核完之后仍然没有答案。
+    <br>而且六条里有两种「查不到」，念的时候要分开：
+    <b>「外部」＝官方没公布</b>（比如 B200 到底几个 SM，第三方拆解一致给 148，
+    NVIDIA 官方文档从未写过）；
+    <b>「自己没做」＝没人拦着，是我们没去做</b>。
+    <b>后一种才是真正该道歉的那种</b> ——&nbsp;
+    尤其最后一条：第 7 节那个 2.06 倍是全课最大的数，
+    而<b>我们只审了自己一侧的收敛</b>。
+    <br><br><b>把这些写出来，才使得前面那些有答案的部分可信。</b>
+    一份从头到尾没有「不知道」的材料，<b>不是查得更全，是没在查。</b></div>
+
+  <p><b>八节到这里，两块硬件已经从封装拆到了实测，规矩也立完了、验过了。</b>
+    但还有一个问题一直没正面回答 ——&nbsp;<b>从第 1 节起就有人在等它：
+    那到底「各自擅长什么」？</b>
+    <br>之所以拖到现在，是因为<b>这个问题在第 1 节回答不了</b>：
+    那时候手上还没有任何能支撑它的东西。
+    <b>现在有了 ——&nbsp;下一节把它答完，而每一句都必须能指回前面某一节。</b></p>
+</div></section>
+
+<section><div class="wrap">
   <div class="stn"><span class="badge">深入</span><h2>想再往下挖一层的同学</h2></div>
   <p class="lead">上面那十六张<b>标了「出自⋯」的图</b>，都搬自两份「显微镜」文档
     （其余几张是这门课自己画的）。
     那两份把镜头拉得更近 —— <b>每一个数字都标了来源等级，查不到的地方明写「查不到」</b>。
-    课上讲不完的推导链，以及作者自己犯过又改回来的两次错，都在里面。</p>
+    课上讲不完的推导链，以及作者自己撤回过的那八笔，都在里面。</p>
   <div class="msdeep">
     <a class="mscard" href="gpu-microscope.html">
       <b>🔬 GPU 显微镜</b>

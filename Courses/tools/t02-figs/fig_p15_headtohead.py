@@ -150,7 +150,7 @@ def build():
     _band(f)
     f.t(W - 20, H - 12,
         "同一个 Hunyuan3-295B-A21B（80 层 · 192 专家）· seq 4096 · 合成数据 · "
-        "两边都不落盘 checkpoint（但重算策略不同，见 P-18 第 ⑤ 条）· "
+        "两边都不落盘 checkpoint（但重算策略不同，见 P-18 第 ③ 条）· "
         "两边都是我们自己跑的",
         "xxs", GREY, "end")
     return f.out()
