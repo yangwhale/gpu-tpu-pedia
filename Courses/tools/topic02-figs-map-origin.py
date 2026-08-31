@@ -63,6 +63,19 @@ def B(s):
        症状是「整张图只画出第一行，底下多出一长条黑字」。踩过一次，别再写 <b>。"""
     return s.replace("<b>", '<tspan font-weight="700">').replace("</b>", "</tspan>")
 
+# ⛔ 中间那一栏**按部件染色，不按节次染色**。
+#    2026-08-31 之前染的是节次色，于是「HBM 带宽 / HBM 容量」同蓝、
+#    「矩阵单元 / 向量单元」同紫 —— 两个不同的东西长成一个样，比不上色更糟。
+#    当时的补救是在图底写一行「看这一栏认字，不要认颜色」，那是**给病贴张纸**，
+#    Chris 一眼就看穿了。真正的修法只有一个：**不同的部件给不同的颜色。**
+#    只有 2、3 两节各管两个部件需要区分；4、5 两节各只有一个，沿用节次色即可。
+PART={"HBM 带宽":"#1a73e8", "HBM 容量":"#12786f",      # 第 2 节 —— 蓝 / 青
+      "矩阵单元":"#9334e6", "向量单元":"#d01884",      # 第 3 节 —— 紫 / 品红
+      "卡间链路":"#e8710a", "形状谁来定":"#1e8e3e"}
+assert {r[3] for r in ROWS} == set(PART), "ROWS 里出现了 PART 没有配色的部件：%s" % (
+    {r[3] for r in ROWS} ^ set(PART))
+assert len(set(PART.values()))==len(PART), "两个部件撞色了，这正是要修的那个毛病"
+
 CNT=[sum(1 for r in ROWS if r[0]==i) for i in range(4)]
 assert CNT==[4,3,2,1], "行数变了，底部那句「四条撞内存、三条撞计算单元」要跟着改：%s" % CNT
 assert [r[0] for r in ROWS]==sorted(r[0] for r in ROWS), "ROWS 必须按节排好序，否则连线又会交叉"
@@ -81,7 +94,7 @@ CARD=[("第 2 节","放得下吗","HBM　容量 + 带宽",
       ("第 5 节","谁在做决定","（没有对应的部件）",
        ("选哪 8 个专家，","<b>运行时才知道</b>"),"5 分钟","#1e8e3e")]
 CW=239; CG=(1000-CW*4)//3; Y0=76; CH=210
-a=[f'<svg viewBox="0 0 1000 406" width="100%" role="img" '
+a=[f'<svg viewBox="0 0 1000 470" width="100%" role="img" '
    f'aria-label="开场地图：上一课那张需求清单只有四个问题，每一个撞在一个部件上，就是本课的四节">']
 a.append('<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
          '上一课交出的是一张<tspan font-weight="700">需求清单</tspan>。'
@@ -119,6 +132,16 @@ a.append(f'<text class="svglbl" x="0" y="{YS+70}" fill="#7a5000">'
          f'<tspan font-weight="700">四条撞内存、三条撞计算单元</tspan>，所以第 2 节最长</text>')
 a.append(f'<text class="svgsm" x="0" y="{YS+89}" fill="#9aa0a6">'
          f'十条逐条对到哪个部件，在本节最后那张对照表里 —— 那张是发下去查的，台上不用讲</text>')
+# ⏱ 预算原来写在图注里（灰色 13px），没人看。搬进图里、用正常字号。
+# ⛔ 同样必须两行：一行排不下 1000 宽，而 SVG 溢出是静默截断。
+YT=YS+104
+a.append(f'<rect x="0" y="{YT}" width="1000" height="46" rx="4" fill="#fef7e0" stroke="#f9ab00"/>')
+a.append(f'<text class="svglbl" x="14" y="{YT+19}" fill="#7a5000" style="font-size:12.5px">'
+         f'⏱ <tspan font-weight="700">全课 60 分钟</tspan>　地图 2　·　第 0 节 4　·　第 1 节 10　·　'
+         f'<tspan font-weight="700">第 2 节 15</tspan>　·　第 3 节 10　·　第 4 节 5　·　第 5 节 5</text>')
+a.append(f'<text class="svglbl" x="14" y="{YT+37}" fill="#7a5000" style="font-size:12.5px">'
+         f'　　第 6 节 3　·　第 7 节 4　·　第 8 节 0（发下去自己看）　·　第 9 节 2　　'
+         f'——　<tspan font-weight="700">超了先砍图 2-2 和 2-5</tspan></text>')
 a.append('</svg>')
 io.open('figA.svg','w',encoding='utf-8').write('\n'.join(a)); print('figA 406 · 4 张卡')
 
@@ -138,7 +161,8 @@ p.append('<text class="svgsm" x="0" y="36">'
          '开场那四张卡每张只举了一个例子。这张是把十条全摆出来 —— '
          '<tspan font-weight="700">「为什么第 2 节最长」在这里能数出来</tspan>。</text>')
 # 列头
-for x,t in ((LX,"专题一算出来的结论"),(MX,"它撞在哪个部件上"),(RX,"本课第几节 · 讲这个部件")):
+for x,t in ((LX,"专题一算出来的结论"),(MX,"它撞在哪个部件上（一色一部件）"),
+            (RX,"本课第几节 · 讲这个部件")):
     p.append(f'<text class="svgsm" x="{x}" y="{TOP-10}" fill="#9aa0a6">{t}</text>')
 
 y=TOP; gi=0
@@ -155,26 +179,27 @@ for i,(tag,name,sub,col) in enumerate(ANS):
                  f'fill="#fff" stroke="#dadce0"/>')
         p.append(f'<text class="svglbl" x="{LX+12}" y="{cy-3}" fill="#202124">{r[1]}</text>')
         p.append(f'<text class="svgsm" x="{LX+12}" y="{cy+12}">{B(r[2])}</text>')
-        # 中：硬件部件本身 —— 这一列是「这图跟硬件什么关系」的答案
+        # 中：硬件部件本身 —— 这一列是「这图跟硬件什么关系」的答案。
+        #     染 pcol（部件色）不是 col（节次色）：一个颜色只代表一个部件。
+        pcol=PART[r[3]]
         p.append(f'<rect x="{MX}" y="{ry+4}" width="{MW}" height="{RH-14}" rx="{(RH-14)/2}" '
-                 f'fill="#fff" stroke="{col}" stroke-width="1.6"/>')
+                 f'fill="{pcol}"/>')
         p.append(f'<text class="svglbl" x="{MX+MW/2}" y="{cy+2}" text-anchor="middle" '
-                 f'fill="{col}">{r[3]}</text>')
-        # 排过序，所以连线全是水平的 —— 没有一根交叉
-        p.append(f'<path d="M{LX+LW} {cy-2} H{MX}" stroke="{col}" stroke-width="1.4" opacity=".45"/>')
-        p.append(f'<path d="M{MX+MW} {cy-2} H{RX}" stroke="{col}" stroke-width="1.4" opacity=".45"/>')
+                 f'fill="#fff">{r[3]}</text>')
+        # 排过序，所以连线全是水平的 —— 没有一根交叉。
+        # 左半段跟着部件色，右半段跟着节次色：颜色在药丸处换一次，
+        # 换的那一下就是这张图要说的事 —— 这个部件归那一节管。
+        p.append(f'<path d="M{LX+LW} {cy-2} H{MX}" stroke="{pcol}" stroke-width="1.4" opacity=".55"/>')
+        p.append(f'<path d="M{MX+MW} {cy-2} H{RX}" stroke="{col}" stroke-width="1.4" opacity=".55"/>')
     gi+=n; y+=blk+GAP
 yn=y-GAP+34
-p.append(f'<text class="svgsm" x="0" y="{yn}" fill="#5f6368">'
+# 这两条是**结论**不是补充说明，所以用正常字号（12.5px 深色），不是 10.5px 灰。
+p.append(f'<text class="svglbl" x="0" y="{yn}" fill="#3c4043" style="font-size:12.5px">'
          f'⚠️ <tspan font-weight="700">注意力出现了两次，不是笔误</tspan>：朴素实现被带宽卡住（强度 64），'
-         f'把中间量省掉之后才轮到算力（81.8%）—— 这一条正好就是第 2 节和第 3 节的分界线。</text>')
-p.append(f'<text class="svgsm" x="0" y="{yn+20}" fill="#5f6368">'
+         f'省掉中间量之后才轮到算力（81.8%）—— 这条正好是第 2 节和第 3 节的分界线。</text>')
+p.append(f'<text class="svglbl" x="0" y="{yn+22}" fill="#3c4043" style="font-size:12.5px">'
          f'⚠️ <tspan font-weight="700">MoE 出现了三次</tspan>：权重撞内存、路由撞范式、dispatch 撞互联 —— '
-         f'全表唯一横跨三节的一条。「MoE 是算力优化」是个常见误读，专题一那句原话是「省的是算力，不省显存」。</text>')
-p.append(f'<text class="svgsm" x="0" y="{yn+38}" fill="#9aa0a6">'
-         f'⚠️ 中间那一栏染的是<tspan font-weight="700">节次的色</tspan>，不是部件的色 —— '
-         f'所以「HBM 带宽」和「HBM 容量」同蓝、「矩阵单元」和「向量单元」同紫。'
-         f'看这一栏认字，不要认颜色。</text>')
+         f'全表唯一横跨三节的一条（「MoE 是算力优化」是常见误读）。</text>')
 p.append('</svg>')
 io.open('figB.svg','w',encoding='utf-8').write('\n'.join(p)); print('figB',H,CNT)
 
