@@ -434,7 +434,7 @@ B200 的 NVLink 域是 <b>72 颗</b>，再往外就得换 InfiniBand 或以太�
 TPU 的 3D 环面一路铺到 <b>9,216 颗</b>，全程同一套 ICI，
 这两个数量级之间<b>通信代码一个字都不用改</b>。9,216 ÷ 72 ＝ <b>128</b>。
 <br><br>
-<b>但也别夸大。</b>单颗算力两边几乎打平（B200 约 2,250 TFLOP/s BF16，TPU v7 一颗 chip 2,307），
+<b>但也别夸大。</b>单颗算力两边几乎打平（<b>HGX B200</b> 约 2,250 TFLOP/s BF16 dense，TPU v7 一颗 chip 2,307 —— <b>换成 NVL72 里那颗 GB200 是 2,500，反过来略高</b>），
 而且在 72 颗以内，<b>NVLink 的每颗带宽还更高</b>（1.8 TB/s 对 1.2 TB/s）。
 这里比的是<b>拓扑能延展多远</b>，不是单芯片谁快。</div>
 
@@ -494,8 +494,8 @@ TPU 的 3D 环面一路铺到 <b>9,216 颗</b>，全程同一套 ICI，
 <tr class="dim"><td>B200 的 SM 数与每 SM 构成</td><td>148 SM × 4 Tensor Core</td>
 <td>非官方拆解；本文只用它做数量级对照</td></tr>
 <tr class="dim"><td>B200 共享内存合计</td><td>约 34 MB</td><td>同上</td></tr>
-<tr class="dim"><td>B200 峰值与 NVLink</td><td>约 2,250 TF/s BF16 · 1.8 TB/s</td>
-<td>厂商规格页，口径（dense / sparse）需自行核对</td></tr>
+<tr class="dim"><td>B200 峰值与 NVLink</td><td>约 2,250 TF/s BF16 dense · 1.8 TB/s</td>
+<td>厂商规格页；<b>这是 HGX B200 的口径</b>，NVL72 里的 GB200 为 2,500 —— 用前先确认是哪个 SKU</td></tr>
 <tr class="miss"><td>「256×256 每周期 131,072 FLOP」</td><td>131,072</td>
 <td><b>与官方的 262,144 差 2 倍。本文不采用，并在此明确标出。</b></td></tr>
 </tbody></table></div>

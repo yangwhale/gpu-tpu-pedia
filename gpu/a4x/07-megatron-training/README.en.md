@@ -447,26 +447,26 @@ Use hostNetwork mode (bypasses the DRANET GID issue) + ComputeDomain channel (IM
 
 - `s/iter`: training time per step
 - `TFLOPS/GPU`: per-GPU throughput
-- `MFU`: TFLOPS/GPU ÷ peak compute (GB200 FP8 ~4500 TFLOP/s → MFU% = TFLOPS/GPU ÷ 4500)
+- `MFU`: TFLOPS/GPU ÷ peak compute. **A4X is GB200 NVL72**; the official Superchip spec (FP16/BF16 10 PFLOPS, FP8 20 PFLOPS) is quoted **in sparse**, so halve it for dense and then divide by the 2 GPUs per Superchip → **dense BF16 2,500 / FP8 5,000 TFLOP/s per GPU**. (Cross-check: a full rack is 360 PFLOPS sparse ÷ 72 GPUs ÷ 2 = 2.5 PFLOPS ✓)
 - `all-to-all time`: EP communication time fraction (if available from the profiler)
 
 ### Benchmark Results
 
 | Test | GPU | EP | MBS | GBS | TFLOP/s/GPU | MFU | vs Test 1 | Notes |
 |---|---|---|---|---|---|---|---|---|
-| 1 (old) | 4 | 4 | 1 | 64 | ~356 | ~7.9% | — | Old baseline, MBS=1, seq=16K, 128 Experts |
-| 2 (old) | 8 | 8 | 1 | 64 | ~274 | ~6.1% | -23% | Old baseline, MBS=1, 128 Experts |
-| 1a | 4 | 4 | 1 | 64 | **~178** | ~4.0% | — | 64 Experts, MBS=1, FusedAttn |
-| 1b | 4 | 4 | 2 | 64 | **~475** | **~10.6%** | +167% vs 1a | 64 Experts, MBS=2, FusedAttn |
+| 1 (old) | 4 | 4 | 1 | 64 | ~356 | ~7.1% | — | Old baseline, MBS=1, seq=16K, 128 Experts |
+| 2 (old) | 8 | 8 | 1 | 64 | ~274 | ~5.5% | -23% | Old baseline, MBS=1, 128 Experts |
+| 1a | 4 | 4 | 1 | 64 | **~178** | ~3.6% | — | 64 Experts, MBS=1, FusedAttn |
+| 1b | 4 | 4 | 2 | 64 | **~475** | **~9.5%** | +167% vs 1a | 64 Experts, MBS=2, FusedAttn |
 | 1c | 4 | 4 | 4 | 64 | OOM | — | — | 64 Experts, MBS=4 exceeds memory |
-| 2a (old) | 8 | 8 | 2 | 64 | **~116** | **~2.6%** | -76% vs 1b | 12-layer 64E, MBS=2, MNNVL, steady state iters 10-15 |
-| 2b (old) | 8 | 8 | 4 | 256 | **~200** | **~4.4%** | -58% vs 1b | 12-layer 64E, MBS=4, MNNVL, steady state iters 3-10 |
-| 2c (old) | 8 | 8 | 1 | 64 | **~105** | **~2.3%** | — | Full 48-layer 128E, MBS=1, MNNVL, memory 149/184GB |
+| 2a (old) | 8 | 8 | 2 | 64 | **~116** | **~2.3%** | -76% vs 1b | 12-layer 64E, MBS=2, MNNVL, steady state iters 10-15 |
+| 2b (old) | 8 | 8 | 4 | 256 | **~200** | **~4.0%** | -58% vs 1b | 12-layer 64E, MBS=4, MNNVL, steady state iters 3-10 |
+| 2c (old) | 8 | 8 | 1 | 64 | **~105** | **~2.1%** | — | Full 48-layer 128E, MBS=1, MNNVL, memory 149/184GB |
 | 2d (old) | 8 | 8 | 2 | 128 | OOM | — | — | Full 48-layer 128E, MBS=2 OOM (activation exceeds limit) |
 | 2e TP=2 | 8 | 4 | 1 | 16 | OOM | — | — | Full 48-layer, TP=2 EP=4, 32E per GPU, more OOM |
 | 2f FSDP | 8 | 8 | 1 | 64 | crash | — | — | megatron-fsdp ZeRO-2/3 DTensor incompatible (crashes even in BF16) |
-| 2g correct config | 8 | 8 | 4 | 256 | **~140** | **~6.2%** | — | Correct 30B (HF config), BF16, recompute, mock data |
-| 2h real data | 8 | 8 | 2 | 128 | **~98** | **~4.3%** | — | Correct 30B, BF16, NFS real data, loss 12.0→9.7 |
+| 2g correct config | 8 | 8 | 4 | 256 | **~140** | **~5.6%** | — | Correct 30B (HF config), BF16, recompute, mock data |
+| 2h real data | 8 | 8 | 2 | 128 | **~98** | **~3.9%** | — | Correct 30B, BF16, NFS real data, loss 12.0→9.7 |
 
 ### Benchmark Results v2 (mcore v0.17.0 + standardized methodology)
 
@@ -484,15 +484,17 @@ The old results above used the NGC megatron image (mcore r0.16.0) + a non-standa
 
 | Config | EP | MBS | GBS | Recompute | Dtype | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| A1 | 8 | 1 | 256 | none | BF16 | **~492** | **21.9%** | 60 | EP=8 baseline |
-| A2 | 8 | 2 | 256 | none | BF16 | **~527** | **23.4%** | 102 | **Best configuration** |
-| A3 | 8 | 2 | 256 | none | FP8 | **~503** | 22.4% | 93 | FP8 is actually 5% slower (MoE grouped GEMM FP8 overhead) |
-| A4 | 8 | 2 | 256 | selective | BF16 | **~480** | 21.3% | 105 | recompute overhead ~9% |
+| A1 | 8 | 1 | 256 | none | BF16 | **~492** | **19.7%** | 60 | EP=8 baseline |
+| A2 | 8 | 2 | 256 | none | BF16 | **~527** | **21.1%** | 102 | **Best configuration** |
+| A3 | 8 | 2 | 256 | none | FP8 | **~503** | 20.1% | 93 | FP8 is actually 5% slower (MoE grouped GEMM FP8 overhead) |
+| A4 | 8 | 2 | 256 | selective | BF16 | **~480** | 19.2% | 105 | recompute overhead ~9% |
 | A5 | 8 | 4 | 256 | selective | BF16 | OOM | — | — | MBS=4 OOMs even with selective recompute enabled |
-| A6 | 4 | 1 | 256 | none | BF16 | **~463** | 20.6% | 63 | EP=4 DP=2, trading communication for parallelism |
-| A7 | 4 | 2 | 256 | none | BF16 | **~524** | 23.3% | 105 | EP=4 close to the EP=8 best |
+| A6 | 4 | 1 | 256 | none | BF16 | **~463** | 18.5% | 63 | EP=4 DP=2, trading communication for parallelism |
+| A7 | 4 | 2 | 256 | none | BF16 | **~524** | 21.0% | 105 | EP=4 close to the EP=8 best |
 
-> MFU is computed based on the GB200 BF16 peak of 2,250 TFLOP/s. If FP8 MFU is based on the FP8 peak of 4,500 TFLOP/s, it would be 11.2%.
+> MFU is computed against the **GB200 dense BF16 peak of 2,500 TFLOP/s per GPU** (derivation in "Performance metrics" above). A3 is an FP8 run; against the FP8 peak of 5,000 it would be **10.1%**.
+>
+> ⚠️ **Corrected 2026-08-31**: all three tables on this page previously divided by 2,250 / 4,500 — those are the peaks of **HGX B200 (A4 High)**, not A4X. The two cards share a generation and an architecture name but their official dense BF16 peaks differ by 11.1%, so every MFU here used to be ~11% too high (the best config A2 was recorded as 23.4%; it is actually 21.1%). **The TFLOP/s column is unaffected** — only the denominator was wrong.
 
 **Key findings**:
 1. **MBS=2 is the sweet spot**: MBS=1→2 gives a 7% improvement; MBS=4 OOMs. HBM jumps from 60 GiB to 102 GiB
@@ -507,10 +509,10 @@ Extending from the 12-layer benchmark to the full 48-layer model. Environment is
 
 | Config | Layers | EP | MBS | GBS | Recompute | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | Notes |
 |---|---|---|---|---|---|---|---|---|---|
-| B1 | 48 | 32 | 1 | 256 | none | **~446** | **19.8%** | 147 | **Best configuration** — full model without recompute |
+| B1 | 48 | 32 | 1 | 256 | none | **~446** | **17.8%** | 147 | **Best configuration** — full model without recompute |
 | B2 | 48 | 32 | 2 | 256 | none | OOM | — | 165 | MoE dispatch buffer OOM |
-| B3 | 48 | 32 | 2 | 256 | full | **~372** | 16.5% | 67 | recompute saves 80 GiB but is 17% slower |
-| B4 | 48 | 32 | 4 | 128 | full | **~375** | 16.7% | 113 | MBS doubled but TFLOP/s does not increase |
+| B3 | 48 | 32 | 2 | 256 | full | **~372** | 14.9% | 67 | recompute saves 80 GiB but is 17% slower |
+| B4 | 48 | 32 | 4 | 128 | full | **~375** | 15.0% | 113 | MBS doubled but TFLOP/s does not increase |
 | B5 | 48 | 32 | 8 | 256 | full | OOM | — | — | vocab logits [16384,8,128K] FP32 = 62.7 GiB |
 | B6 | 48 | 32 | 2 | 256 | selective | OOM | — | — | selective doesn't save enough, NCCL CUDA error |
 | B7-FSDP | 48 | 32 | 2 | 256 | none | NCCL hang | — | — | `--use-megatron-fsdp` deadlocks with EP=32 |
@@ -694,7 +696,7 @@ Selected backend = UnfusedDotProductAttention
 - MBS=1: ~178 TFLOP/s/GPU (low tensor core utilization)
 - MBS=2: **~475 TFLOP/s/GPU** (+167%, significant compute efficiency improvement)
 - MBS=4: OOM (Expert FFN linear_fc2 activation exceeds memory)
-- Maximum usable MBS=2, corresponding to MFU=10.6% (based on the GB200 FP8 peak of 4500 TFLOP/s)
+- Maximum usable MBS=2, corresponding to MFU=9.5% (based on the GB200 dense FP8 peak of 5,000 TFLOP/s per GPU)
 
 > **Impact of MBS=1 vs MBS=16/32**: At MBS=1, the GPU's tensor core utilization is low—the batch dimension of each GEMM is too small, so kernel launch overhead dominates. Increasing MBS enlarges the GEMM batch dimension, significantly improving compute efficiency. MBS=16 is expected to improve TFLOP/s by 30-50% relative to MBS=1. The old baseline (MBS=1) should not be used as a formal reference; only the results from the new tests, with MBS fully utilizing the memory, constitute a valid benchmark.
 

@@ -447,26 +447,26 @@ export NCCL_CUMEM_ENABLE=1
 
 - `s/iter`：每步训练时间
 - `TFLOPS/GPU`：单卡吞吐
-- `MFU`：TFLOPS/GPU ÷ 峰值算力（GB200 FP8 ~4500 TFLOP/s → MFU% = TFLOPS/GPU ÷ 4500）
+- `MFU`：TFLOPS/GPU ÷ 峰值算力。**A4X 是 GB200 NVL72**，官方 Superchip 规格 FP16/BF16 10 PFLOPS、FP8 20 PFLOPS 均为 sparse，dense 减半、再除以每 Superchip 的 2 颗 GPU → **dense BF16 2,500 / FP8 5,000 TFLOP/s per GPU**。（交叉验证：整机柜 360 PFLOPS sparse ÷ 72 GPU ÷ 2 = 2.5 PFLOPS ✓）
 - `all-to-all time`：EP 通信时间占比（如可从 profiler 获取）
 
 ### Benchmark 结果
 
 | Test | GPU | EP | MBS | GBS | TFLOP/s/GPU | MFU | vs Test 1 | 备注 |
 |---|---|---|---|---|---|---|---|---|
-| 1 (旧) | 4 | 4 | 1 | 64 | ~356 | ~7.9% | — | 旧 baseline, MBS=1, seq=16K, 128 Expert |
-| 2 (旧) | 8 | 8 | 1 | 64 | ~274 | ~6.1% | -23% | 旧 baseline, MBS=1, 128 Expert |
-| 1a | 4 | 4 | 1 | 64 | **~178** | ~4.0% | — | 64 Expert, MBS=1, FusedAttn |
-| 1b | 4 | 4 | 2 | 64 | **~475** | **~10.6%** | +167% vs 1a | 64 Expert, MBS=2, FusedAttn |
+| 1 (旧) | 4 | 4 | 1 | 64 | ~356 | ~7.1% | — | 旧 baseline, MBS=1, seq=16K, 128 Expert |
+| 2 (旧) | 8 | 8 | 1 | 64 | ~274 | ~5.5% | -23% | 旧 baseline, MBS=1, 128 Expert |
+| 1a | 4 | 4 | 1 | 64 | **~178** | ~3.6% | — | 64 Expert, MBS=1, FusedAttn |
+| 1b | 4 | 4 | 2 | 64 | **~475** | **~9.5%** | +167% vs 1a | 64 Expert, MBS=2, FusedAttn |
 | 1c | 4 | 4 | 4 | 64 | OOM | — | — | 64 Expert, MBS=4 超出显存 |
-| 2a (旧) | 8 | 8 | 2 | 64 | **~116** | **~2.6%** | -76% vs 1b | 12层 64E, MBS=2, MNNVL, 稳态 iter 10-15 |
-| 2b (旧) | 8 | 8 | 4 | 256 | **~200** | **~4.4%** | -58% vs 1b | 12层 64E, MBS=4, MNNVL, 稳态 iter 3-10 |
-| 2c (旧) | 8 | 8 | 1 | 64 | **~105** | **~2.3%** | — | 完整48层 128E, MBS=1, MNNVL, 显存149/184GB |
+| 2a (旧) | 8 | 8 | 2 | 64 | **~116** | **~2.3%** | -76% vs 1b | 12层 64E, MBS=2, MNNVL, 稳态 iter 10-15 |
+| 2b (旧) | 8 | 8 | 4 | 256 | **~200** | **~4.0%** | -58% vs 1b | 12层 64E, MBS=4, MNNVL, 稳态 iter 3-10 |
+| 2c (旧) | 8 | 8 | 1 | 64 | **~105** | **~2.1%** | — | 完整48层 128E, MBS=1, MNNVL, 显存149/184GB |
 | 2d (旧) | 8 | 8 | 2 | 128 | OOM | — | — | 完整48层 128E, MBS=2 OOM (activation 超限) |
 | 2e TP=2 | 8 | 4 | 1 | 16 | OOM | — | — | 完整48层, TP=2 EP=4, 每卡32E更多 OOM |
 | 2f FSDP | 8 | 8 | 1 | 64 | 崩溃 | — | — | megatron-fsdp ZeRO-2/3 DTensor 不兼容（BF16 也崩） |
-| 2g 正确配置 | 8 | 8 | 4 | 256 | **~140** | **~6.2%** | — | 正确30B（HF config），BF16, recompute, mock data |
-| 2h 真实数据 | 8 | 8 | 2 | 128 | **~98** | **~4.3%** | — | 正确30B, BF16, NFS真实数据, loss 12.0→9.7 |
+| 2g 正确配置 | 8 | 8 | 4 | 256 | **~140** | **~5.6%** | — | 正确30B（HF config），BF16, recompute, mock data |
+| 2h 真实数据 | 8 | 8 | 2 | 128 | **~98** | **~3.9%** | — | 正确30B, BF16, NFS真实数据, loss 12.0→9.7 |
 
 ### Benchmark 结果 v2（mcore v0.17.0 + 标准化方法）
 
@@ -484,15 +484,17 @@ export NCCL_CUMEM_ENABLE=1
 
 | Config | EP | MBS | GBS | Recompute | Dtype | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | 备注 |
 |---|---|---|---|---|---|---|---|---|---|
-| A1 | 8 | 1 | 256 | none | BF16 | **~492** | **21.9%** | 60 | EP=8 baseline |
-| A2 | 8 | 2 | 256 | none | BF16 | **~527** | **23.4%** | 102 | **最佳配置** |
-| A3 | 8 | 2 | 256 | none | FP8 | **~503** | 22.4% | 93 | FP8 反而慢 5%（MoE grouped GEMM FP8 开销） |
-| A4 | 8 | 2 | 256 | selective | BF16 | **~480** | 21.3% | 105 | recompute 开销 ~9% |
+| A1 | 8 | 1 | 256 | none | BF16 | **~492** | **19.7%** | 60 | EP=8 baseline |
+| A2 | 8 | 2 | 256 | none | BF16 | **~527** | **21.1%** | 102 | **最佳配置** |
+| A3 | 8 | 2 | 256 | none | FP8 | **~503** | 20.1% | 93 | FP8 反而慢 5%（MoE grouped GEMM FP8 开销） |
+| A4 | 8 | 2 | 256 | selective | BF16 | **~480** | 19.2% | 105 | recompute 开销 ~9% |
 | A5 | 8 | 4 | 256 | selective | BF16 | OOM | — | — | MBS=4 即使开 selective recompute 也 OOM |
-| A6 | 4 | 1 | 256 | none | BF16 | **~463** | 20.6% | 63 | EP=4 DP=2，通信换并行 |
-| A7 | 4 | 2 | 256 | none | BF16 | **~524** | 23.3% | 105 | EP=4 接近 EP=8 最佳 |
+| A6 | 4 | 1 | 256 | none | BF16 | **~463** | 18.5% | 63 | EP=4 DP=2，通信换并行 |
+| A7 | 4 | 2 | 256 | none | BF16 | **~524** | 21.0% | 105 | EP=4 接近 EP=8 最佳 |
 
-> MFU 基于 GB200 BF16 峰值 2,250 TFLOP/s 计算。FP8 MFU 若基于 FP8 峰值 4,500 TFLOP/s 则为 11.2%。
+> MFU 基于 **GB200 dense BF16 峰值 2,500 TFLOP/s per GPU** 计算（口径推导见上文「性能指标采集」）。A3 是 FP8 run，若改用 FP8 峰值 5,000 则为 **10.1%**。
+>
+> ⚠️ **2026-08-31 更正**：此前本页三张表一律除以 2,250 / 4,500 —— 那是 **HGX B200（A4 High）** 的峰值，不是 A4X 的。两张卡同代同架构，官方 dense BF16 差 11.1%，于是原先所有 MFU 都偏高约 11%（例如最佳配置 A2 原记 23.4%，实为 21.1%）。**TFLOP/s 一栏未受影响** —— 错的只有分母。
 
 **关键发现**：
 1. **MBS=2 是甜点**：MBS=1→2 提升 7%，MBS=4 OOM。HBM 从 60 GiB 跳到 102 GiB
@@ -507,10 +509,10 @@ export NCCL_CUMEM_ENABLE=1
 
 | Config | Layers | EP | MBS | GBS | Recompute | TFLOP/s/GPU | MFU (BF16) | HBM Peak (GiB) | 备注 |
 |---|---|---|---|---|---|---|---|---|---|
-| B1 | 48 | 32 | 1 | 256 | none | **~446** | **19.8%** | 147 | **最佳配置** — 完整模型无 recompute |
+| B1 | 48 | 32 | 1 | 256 | none | **~446** | **17.8%** | 147 | **最佳配置** — 完整模型无 recompute |
 | B2 | 48 | 32 | 2 | 256 | none | OOM | — | 165 | MoE dispatch buffer OOM |
-| B3 | 48 | 32 | 2 | 256 | full | **~372** | 16.5% | 67 | recompute 省 80 GiB 但慢 17% |
-| B4 | 48 | 32 | 4 | 128 | full | **~375** | 16.7% | 113 | MBS 翻倍但 TFLOP/s 不涨 |
+| B3 | 48 | 32 | 2 | 256 | full | **~372** | 14.9% | 67 | recompute 省 80 GiB 但慢 17% |
+| B4 | 48 | 32 | 4 | 128 | full | **~375** | 15.0% | 113 | MBS 翻倍但 TFLOP/s 不涨 |
 | B5 | 48 | 32 | 8 | 256 | full | OOM | — | — | vocab logits [16384,8,128K] FP32 = 62.7 GiB |
 | B6 | 48 | 32 | 2 | 256 | selective | OOM | — | — | selective 省不够，NCCL CUDA error |
 | B7-FSDP | 48 | 32 | 2 | 256 | none | NCCL hang | — | — | `--use-megatron-fsdp` 与 EP=32 死锁 |
@@ -694,7 +696,7 @@ Selected backend = UnfusedDotProductAttention
 - MBS=1: ~178 TFLOP/s/GPU（tensor core 利用率低）
 - MBS=2: **~475 TFLOP/s/GPU**（+167%，计算效率大幅提升）
 - MBS=4: OOM（Expert FFN linear_fc2 activation 超出显存）
-- 最大可用 MBS=2，对应 MFU=10.6%（基于 GB200 FP8 峰值 4500 TFLOP/s）
+- 最大可用 MBS=2，对应 MFU=9.5%（基于 GB200 dense FP8 峰值 5,000 TFLOP/s per GPU）
 
 > **MBS=1 vs MBS=16/32 的影响**：MBS=1 时 GPU 的 tensor core 利用率低——每个 GEMM 的 batch 维度太小，kernel launch overhead 占比高。调大 MBS 后 GEMM 的 batch 维度增大，计算效率显著提升。预期 MBS=16 相对 MBS=1 提升 30-50% TFLOP/s。旧 baseline（MBS=1）不作为正式参考，新测试的 MBS 充分利用显存后的结果才是有效 benchmark。
 

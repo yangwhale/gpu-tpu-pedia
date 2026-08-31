@@ -2053,7 +2053,7 @@ footer a{text-decoration:none}
     <b>① 两套节号不要混。</b>搬自两份《显微镜》的图，图上写「§N」指的是<b>那两份文档</b>里的节号；
     本课自己的节一律写成「<b>第 N 节</b>」。同一屏上两种记法都会出现。
     <br><b>② 不是每张图都有出处。</b>大部分搬自《显微镜》，右下角有链接；
-    <b>另有十一张是本课自己画的，右下角没有出处 —— 那不是漏了，是本来就没有第三方出处可挂</b>，
+    <b>另有十四张是本课自己画的，右下角没有出处 —— 那不是漏了，是本来就没有第三方出处可挂</b>，
     硬安一个比不写更糟。
     <br><b>建议按顺序讲</b>：从整颗芯片开始，一层层往里，最后落到「谁做决定」。</div>
 
@@ -9256,7 +9256,7 @@ footer a{text-decoration:none}
 <figcaption><b>上一张停在「我们扫了 29 组配置」—— 那是过程，不是落点。</b>这张回答「所以呢」，而且把收益和边界摆在同一屏 ——<b>因为分开摆，两边都会被听成假话</b>。它也是第 5 节的收尾：<b>整节讲的「复杂度换了个地方」，到这里才看得见换来的是什么、以及换不来的是什么。</b></figcaption>
 </figure>
 
-  <div class="note danger"><span class="t">⭐ 全课的落点：两个「128 倍」出现在完全不同的位置</span>
+  <div class="note danger"><span class="t">⭐ 第 3–5 节的落点：两个「128 倍」出现在完全不同的位置</span>
     <b>第 3 节那个 128 倍在芯片内部</b>：一颗 B200 里有 592 个 Tensor Core，
     一颗 v7 里只有 4 个 MXU。<b>GPU 的协调主要发生在芯片内部。</b>
     <br><b>第 4 节那个 128 倍在芯片之间</b>：GPU 72 颗就得换协议，TPU 一路 9,216 颗。
@@ -9267,7 +9267,302 @@ footer a{text-decoration:none}
     它从硬件流到了编译器，又从编译器流到了框架、流到了你写 kernel 的那只手上。
     <br><b>5.6 补的是这趟流动的对价</b>：复杂度收进编译期，
     编译期就能回答那些原本得占一张卡才问得出口的问题。
-    <br><b>整门课从头到尾说的都是这同一件事：不是谁更强，是把同一份复杂度放在了不同的地方。</b></div>
+    <br><b>前五节从头到尾说的都是这同一件事：不是谁更强，是把同一份复杂度放在了不同的地方。</b>
+    <br><br><b>到这里，「两边有什么不一样」讲完了。</b>
+    剩下的问题只有一个，而且是全课最容易讲砸的一个 ——&nbsp;
+    <b>那到底哪边更好？</b>下一节先不回答它，先把「怎么比」这件事本身立起来。</div>
+</div></section>
+
+<section><div class="wrap">
+  <div class="stn big"><span class="badge">第 6 节</span><h2>怎么比才有意义</h2></div>
+  <p class="lead">前五节回答的是<b>「两边有什么不一样」</b>。这一节回答
+    <b>「那怎么比」</b> ——&nbsp;而它比前五节都容易讲砸，
+    因为<b>这一节的错误全都长得像正确答案</b>：一个百分比、一张对照表、一句「快 X 倍」。
+    <b>它们没有一个会报错。</b></p>
+
+  <div class="note q"><span class="t">这是这门课第三次讲「口径」，而这一次没有安全网</span>
+    <b>第 0 节</b>问的是「一块内存到底有多大」，<b>5.6</b> 问的是「这个数的单位是什么」，
+    <b>这一节</b>问的是「这个百分比是拿什么除出来的」——&nbsp;
+    <b>同一个问题的三种形态，一次比一次抽象。</b>
+    <br><br>但真正的区别不在抽象程度，在<b>出错以后会发生什么</b>：
+    <br><b>前两次算错，装不下就是装不下</b> ——&nbsp;编译器或者运行时会当场把你拦下来。
+    <br><b>这一次算错，什么都不会发生。</b>
+    你会得到一个完全正常的百分比，它能进汇报、能做容量规划、能被引用一年，
+    <b>而唯一能发现它的方式，是有人回头去查你当初除的是哪个数。</b>
+    <br><br>——&nbsp;所以这一节讲的不是「怎么算对」，是<b>「怎么让它半年后还能被查」</b>。</div>
+
+  <div class="note info"><span class="t">这一节要拿我们自己开刀，先说清为什么</span>
+    下面三张图里的反面例子，<b>全部来自本仓库自己的文档</b> ——&nbsp;
+    一份 MFU 表整页偏高 11%、一次 run 同时挂着两个百分比、
+    一条调优收益里混着一项不属于调优的东西。
+    <br><br><b>这不是因为我们比别人更容易错，是因为只有自己的文档能逐行回查。</b>
+    换句话说：<b>这几处是回查时自己发现并改掉的，而回查靠的正是这一节要讲的那几句话。</b>
+    自曝不是坦白，是<b>这套方法确实跑得动的证据</b> ——&nbsp;
+    真正危险的是那些没人能回查、于是永远显得没有错的对比。</div>
+
+  <h3>6.1　先说怎么比不对</h3>
+
+  <div class="note warn"><span class="t">讲法建议：开场用台下自己的数，别从我们的例子讲起</span>
+    先问一句：<b>「你们最近一次报出去的 MFU 是多少？」</b>把那个数记在白板上。
+    再问第二句：<b>「分母是多少，哪来的？」</b>
+    <br><br><b>房间里能当场答上第二句的，通常一个都没有。</b>
+    <b>然后再翻下面这两张图</b> ——&nbsp;效果比先讲结论强得多，
+    因为他们刚刚亲身演示了一遍这个问题。
+    <br><br><b>⚠️ 紧接着要补一句，否则这段会变成嘲讽</b>：
+    这不是说那些 MFU 都算错了，<b>大多数是对的</b>。真正的问题是
+    <b>「对」这件事当时没有被记下来</b> ——&nbsp;
+    半年后没有任何人能重新验证它，包括当初算它的那个人。</div>
+
+  <p>先立一条规矩，否则后面的实测数没法读：
+    <b>MFU 是一个分数，而分数的上下两头都是选出来的。</b>
+    先看下面那一头 ——&nbsp;<b>它看起来最像「客观事实」，所以最容易被跳过。</b></p>
+<figure class="fbox fwide" id="ms-p12">
+<svg viewBox="0 0 1400 678" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MFU 的分母是选出来的：GB200 与 HGX B200 两个官方 BF16 峰值差 11%，TPU v7 的 per-chip 与 per-device 两个口径差 2 倍">
+<text x="20" y="26" class="ttl">比之前先问分母　—— <tspan font-weight="700" fill="#d93025">这四个数全有出处，而它们互相不等</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#202124"/>
+<text x="37" y="58" class="sm">数字一律中性：光看数字分辨不出该用哪个</text>
+<rect x="277.5" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="294.5" y="58" class="sm">决定该用哪个的是这一行</text>
+<rect x="20" y="124" width="836" height="398" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="150" class="sec">甲　·　同一代 GPU，两个 SKU</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">两张卡同一代、同一个架构名，官方峰值差 </tspan><tspan font-weight="700" fill="#202124">11%</tspan>。<tspan font-weight="700" fill="#202124">画在同一根轴上，差的那一段单独描出来。</tspan></text>
+<text x="838" y="174" class="xxs" fill="#5f6368" text-anchor="end">横轴：TFLOP/s（BF16 dense）　满程 = 2,500</text>
+<text x="50" y="236" class="box" fill="#202124">GB200 的 GPU</text>
+<text x="50" y="255" class="xxs" fill="#d93025">机型 a4x-highgpu-4g（A4X）</text>
+<rect x="320" y="220" width="372" height="28" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="320" y="220" width="372.0" height="28" rx="4" fill="#dadce0" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="704.0" y="240" class="numb" fill="#202124">2,500</text>
+<text x="320" y="268" class="xxs"><tspan font-weight="700" fill="#202124">▸</tspan>　官方 Superchip 栏 10 PFLOPS(sparse) ÷ 2 dense ÷ 2 GPU</text>
+<text x="320" y="283" class="xxs"><tspan fill="#9aa0a6">✓　交叉验证：整机柜 360 PFLOPS(sparse) ÷ 72 ÷ 2 = 2.5 ✓</tspan></text>
+<text x="50" y="342" class="box" fill="#202124">HGX B200</text>
+<text x="50" y="361" class="xxs" fill="#d93025">机型 a4-highgpu-8g（A4 High）</text>
+<rect x="320" y="326" width="372" height="28" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="320" y="326" width="334.8" height="28" rx="4" fill="#dadce0" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="666.8" y="346" class="numb" fill="#202124">2,250</text>
+<text x="320" y="374" class="xxs"><tspan font-weight="700" fill="#202124">▸</tspan>　官方八卡栏 36 PFLOPS(sparse) ÷ 2 dense ÷ 8 GPU</text>
+<text x="320" y="389" class="xxs"><tspan fill="#9aa0a6">✓　交叉验证：同页 FP8 72 ÷ 2 ÷ 8 = 4.5，与 BF16 正好 2:1 ✓</tspan></text>
+<rect x="654.8" y="220" width="37.200000000000045" height="28" rx="0" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<line x1="654.8" y1="212" x2="692" y2="212" stroke="#d93025" stroke-width="1.4"/>
+<line x1="654.8" y1="212" x2="654.8" y2="354" stroke="#d93025" stroke-width="1.0" stroke-dasharray="3 3"/>
+<text x="673.4" y="206" class="num" fill="#d93025" text-anchor="middle">11%</text>
+<rect x="38" y="424" width="800" height="82" rx="8" fill="#fff" stroke="#202124" stroke-width="1.2"/>
+<text x="52" y="446" class="xs"><tspan font-weight="700" fill="#202124">2,500 ÷ 2,250 = 1.111。</tspan><tspan font-weight="700" fill="#d93025">这 11% 会一比一地转移到 MFU 上</tspan> —— <tspan fill="#9aa0a6">硬件没变、代码没变、跑出来的 TFLOP/s 没变，只是除数换了一个。</tspan></text>
+<text x="52" y="467" class="xs"><tspan font-weight="700" fill="#202124">而它不会报错。</tspan><tspan fill="#9aa0a6">选错分母算出来的仍然是一个完全正常的百分比 —— 能进汇报、能做容量规划，</tspan><tspan font-weight="700" fill="#202124">除非有人回头去查你除的是哪个数。</tspan></text>
+<rect x="868" y="124" width="512" height="398" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="886" y="150" class="sec">乙　·　同一颗 TPU，两个口径</text>
+<text x="886" y="170" class="xs"><tspan fill="#9aa0a6">这一边不是两个 SKU，是</tspan><tspan font-weight="700" fill="#202124">同一颗芯片</tspan>。v7 一颗芯片里有 <tspan font-weight="700" fill="#202124">2 个 device</tspan> —— 第二条正好半长。</text>
+<text x="1362" y="208" class="xxs" fill="#5f6368" text-anchor="end">横轴同上　满程 = 2,307</text>
+<text x="898" y="240" class="box" fill="#202124">per chip</text>
+<rect x="1044" y="224" width="262" height="24" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="1044" y="224" width="262.0" height="24" rx="4" fill="#dadce0" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="1316.0" y="242" class="numb" fill="#202124">2,307</text>
+<text x="898" y="264" class="xxs">官方规格表只给这一栏</text>
+<text x="898" y="304" class="box" fill="#202124">per device</text>
+<rect x="1044" y="288" width="262" height="24" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="1044" y="288" width="131.0" height="24" rx="4" fill="#dadce0" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="1185.0" y="306" class="numb" fill="#202124">1,153.5</text>
+<text x="898" y="328" class="xxs"><tspan font-weight="700" fill="#202124">= 2,307 ÷ 2　框架日志只按这个报</tspan></text>
+<rect x="886" y="352" width="476" height="62" rx="8" fill="#fff" stroke="#202124" stroke-width="1.2"/>
+<text x="900" y="374" class="xs"><tspan font-weight="700" fill="#202124">上一代是 1 chip = 1 device，这一代是 1 : 2。</tspan><tspan font-weight="700" fill="#d93025">跨代照抄公式，分母就差一倍，而且不</tspan></text>
+<text x="900" y="390" class="xs"><tspan font-weight="700" fill="#d93025">报错。</tspan><tspan fill="#9aa0a6">第 0 节那张瀑布图问过同一个问题 —— 那次量的是 HBM，这次是算力。</tspan></text>
+<rect x="886" y="424" width="476" height="80" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="900" y="446" class="xs"><tspan font-weight="700" fill="#202124">⚠️ 还有第三件事要交代：2,307 是最高频率档下的峰值。</tspan></text>
+<text x="900" y="464" class="xs"><tspan fill="#9aa0a6">我们自己的 v7 记录里，只把频率档从默认锁到最高，</tspan><tspan font-weight="700" fill="#202124">什么都没改就白拿 8.6%</tspan> —— 说明默</text>
+<text x="900" y="480" class="xs">认档并不跑在那个频率上。<tspan font-weight="700" fill="#202124">分母写 2,307 的时候，顺带说一句跑的是哪一档。</tspan></text>
+<rect x="20" y="550" width="1360" height="100" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="38" y="578" class="sec">⭐ 这个坑我们自己就在里面 —— 而且是同一个数字，一次对一次错</text>
+<text x="38" y="604" class="xs"><tspan font-weight="700" fill="#202124">本仓库有两份文档都写着「BF16 峰值 2,250 TFLOP/s」。</tspan><tspan fill="#9aa0a6">一份跑在 A4 High（HGX B200）上 —— </tspan><tspan font-weight="700" fill="#202124">对的</tspan>；<tspan font-weight="700" fill="#d93025">另一份跑在 A4X（GB200 NVL72）上 —— 那台机器的官方峰值是 2,500，于是</tspan><tspan font-weight="700" fill="#202124">那一页三张表里的每一个 MFU 都偏高约 11%</tspan>（最佳配置 23.4% 应为 21.1%）。<tspan font-weight="700" fill="#202124">两份</tspan></text>
+<text x="38" y="623" class="xs"><tspan font-weight="700" fill="#202124">文档写的是同一个数，差别不在数字里，在跑它的那台机器上。</tspan>　—— <tspan font-weight="700" fill="#202124">而这还只是分母。下一张把分子补上。</tspan></text>
+<text x="1380" y="666" class="xxs" fill="#9aa0a6" text-anchor="end">来源：NVIDIA GB200 NVL72 与 HGX 平台官方规格表（均按其脚注换算成 dense）· TPU v7 取自 Google Cloud 官方 TPU7x 规格表，与第 1 节同源</text>
+</svg>
+<figcaption><b>第 1 节那张全景表里，两边的峰值是并排放着的两个数。</b>这一节要做的第一件事，就是把其中一个数拆开看看它到底是什么。</figcaption>
+</figure>
+
+  <p>分母讲完了。<b>分子那一头更隐蔽</b> ——&nbsp;因为它长得像「实测值」，
+    而它其实也是算出来的。<b>把两头放在一起，问题才完整。</b></p>
+<figure class="fbox fwide" id="ms-p13">
+<svg viewBox="0 0 1400 672" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MFU 的分子与分母各有若干合法选择：同一次实测只换分母就能合法报出 10.1% 到 22.4% 四个不同的 MFU，跨度 2.2 倍">
+<text x="20" y="26" class="ttl">MFU 是一个分数　—— <tspan font-weight="700" fill="#d93025">上下两头都是选择，而且都不会报错</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">能把结果改一倍以上</text>
+<rect x="162.5" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="179.5" y="58" class="sm">改得少，但同样要交代</text>
+<rect x="316.5" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="333.5" y="58" class="sm">这一列才是这台机器该用的</text>
+<rect x="20" y="124" width="424" height="372" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="36" y="150" class="sec">甲　·　分子：我算出来的那个数</text>
+<text x="36" y="170" class="xs"><tspan fill="#9aa0a6">框架日志里那个 TFLOP/s </tspan><tspan font-weight="700" fill="#202124">不是量出来的，是一条公式算出来的</tspan> —— 而公式有版</text>
+<text x="36" y="186" class="xs">本。</text>
+<rect x="36" y="212" width="392" height="92" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="50" y="234" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">算力公式漏了一个白名单</tspan></text>
+<text x="414" y="236" class="num" fill="#d93025" text-anchor="end">约 5×</text>
+<text x="50" y="256" class="xxs">算力统计函数<tspan font-weight="700" fill="#202124">按模型家族分叉</tspan>。漏加模型名时<tspan font-weight="700" fill="#202124">它不报错</tspan> —— 只是用错误的宽度去量</text>
+<text x="50" y="270" class="xxs">专家、并漏掉共享专家。<tspan font-weight="700" fill="#d93025">我们移植时中过这一枪。</tspan></text>
+<rect x="36" y="314" width="392" height="92" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="50" y="336" class="xs" fill="#f9ab00"><tspan font-weight="700" fill="#202124">重算的 FLOP 算不算</tspan></text>
+<text x="414" y="338" class="num" fill="#f9ab00" text-anchor="end">4/3</text>
+<text x="50" y="358" class="xxs">算进去叫 HFU，不算叫 MFU。<tspan fill="#9aa0a6">全量重算下前向被算两遍，两者相差 </tspan><tspan font-weight="700" fill="#202124">4/3 ≈ 1.33×</tspan></text>
+<text x="50" y="372" class="xxs"> —— 这是定义推出来的，不是测出来的。<tspan font-weight="700" fill="#202124">主流框架报的都是 MFU 口径。</tspan></text>
+<rect x="36" y="416" width="392" height="54" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="50" y="438" class="xs" fill="#f9ab00"><tspan font-weight="700" fill="#202124">attention 平方项按 causal 折半吗</tspan></text>
+<text x="414" y="440" class="num" fill="#f9ab00" text-anchor="end">看序列长度</text>
+<text x="50" y="460" class="xxs"><tspan fill="#9aa0a6">短序列上无所谓；128K 那一档它就是大头。</tspan></text>
+<rect x="456" y="124" width="452" height="372" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="472" y="150" class="sec">中　·　同一次 run，四个 MFU</text>
+<text x="472" y="170" class="xs"><tspan font-weight="700" fill="#202124">实测 503 TFLOP/s/GPU，一行代码没改。</tspan><tspan fill="#9aa0a6">下面四个格子只是换了除数。</tspan></text>
+<text x="655.0" y="224" class="lbl" fill="#d93025" text-anchor="middle">2,250 / 4,500</text>
+<text x="655.0" y="240" class="xxs" fill="#5f6368" text-anchor="middle">HGX B200 的峰值</text>
+<text x="821.0" y="224" class="lbl" fill="#1e8e3e" text-anchor="middle">2,500 / 5,000</text>
+<text x="821.0" y="240" class="xxs" fill="#5f6368" text-anchor="middle">GB200 —— 实际跑的这台</text>
+<line x1="472" y1="250" x2="900" y2="250" stroke="#dadce0" stroke-width="1.0"/>
+<text x="476" y="292" class="box" fill="#202124">÷ BF16 峰值</text>
+<rect x="576" y="258" width="158" height="58" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="655.0" y="290" class="ttl" fill="#d93025" text-anchor="middle">22.4%</text>
+<text x="655.0" y="307" class="xxs" fill="#5f6368" text-anchor="middle">← 那份文档主报</text>
+<rect x="742" y="258" width="158" height="58" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="821.0" y="290" class="ttl" fill="#1e8e3e" text-anchor="middle">20.1%</text>
+<text x="476" y="358" class="box" fill="#202124">÷ FP8 峰值</text>
+<rect x="576" y="324" width="158" height="58" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="655.0" y="356" class="ttl" fill="#d93025" text-anchor="middle">11.2%</text>
+<text x="655.0" y="373" class="xxs" fill="#5f6368" text-anchor="middle">← 表注里又给了</text>
+<rect x="742" y="324" width="158" height="58" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="821.0" y="356" class="ttl" fill="#1e8e3e" text-anchor="middle">10.1%</text>
+<line x1="478" y1="408" x2="894" y2="408" stroke="#202124" stroke-width="2.0"/>
+<line x1="478" y1="403" x2="478" y2="413" stroke="#202124" stroke-width="2.0"/>
+<line x1="894" y1="403" x2="894" y2="413" stroke="#202124" stroke-width="2.0"/>
+<text x="478" y="398" class="num" fill="#202124">10.1%</text>
+<text x="894" y="398" class="num" fill="#d93025" text-anchor="end">22.4%</text>
+<text x="682.0" y="428" class="box" fill="#d93025" text-anchor="middle">2.2 倍　·　而这四个格子只动了分母</text>
+<rect x="472" y="438" width="420" height="52" rx="8" fill="#fff" stroke="#202124" stroke-width="1.2"/>
+<text x="486" y="458" class="xs"><tspan font-weight="700" fill="#202124">甲那三个、乙那四个，一次都没动，而且能叠乘。</tspan><tspan font-weight="700" fill="#d93025">2.2 倍是</tspan><tspan font-weight="700" fill="#202124">下限</tspan>。</text>
+<rect x="932" y="124" width="448" height="372" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="948" y="150" class="sec">乙　·　分母：我选的那个峰值</text>
+<text x="948" y="170" class="xs"><tspan fill="#9aa0a6">四个都有官方出处。</tspan><tspan font-weight="700" fill="#202124">难的不是找到一个，是说清用了哪一个。</tspan></text>
+<rect x="948" y="212" width="416" height="62" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="962" y="234" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">dense 还是 sparse</tspan></text>
+<text x="1350" y="236" class="num" fill="#d93025" text-anchor="end">2×</text>
+<text x="962" y="254" class="xxs">官方脚注写着 <tspan font-weight="700" fill="#202124">sparse 是 dense 的两倍</tspan>。<tspan font-weight="700" fill="#d93025">头条数字默认给 sparse。</tspan></text>
+<rect x="948" y="284" width="416" height="46" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="962" y="306" class="xs" fill="#f9ab00"><tspan font-weight="700" fill="#202124">哪一个 SKU</tspan></text>
+<text x="1350" y="308" class="num" fill="#f9ab00" text-anchor="end">1.11×</text>
+<text x="962" y="326" class="xxs"><tspan fill="#9aa0a6">见上一张图。</tspan></text>
+<rect x="948" y="340" width="416" height="46" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="962" y="362" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">per chip 还是 per device</tspan></text>
+<text x="1350" y="364" class="num" fill="#d93025" text-anchor="end">2×</text>
+<text x="962" y="382" class="xxs"><tspan fill="#9aa0a6">见上一张图。</tspan></text>
+<rect x="948" y="396" width="416" height="62" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="962" y="418" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">拿哪一种精度的峰值</tspan></text>
+<text x="1350" y="420" class="num" fill="#d93025" text-anchor="end">2×</text>
+<text x="962" y="438" class="xxs"><tspan font-weight="700" fill="#202124">一次 FP8 的 run，用 BF16 峰值量还是 FP8 峰值量。</tspan><tspan fill="#9aa0a6">两种都有人做，都说得通。</tspan></text>
+<text x="948" y="486" class="xxs" fill="#5f6368">↖ 中间那张表只演示了其中两条：「哪个 SKU」和「哪种精度」。</text>
+<rect x="20" y="524" width="1360" height="120" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="552" class="sec">⭐ 所以报 MFU 的时候，把这一整行一起报出来 —— 这是这一节唯一要带走的动作</text>
+<text x="38" y="578" class="xs"><tspan font-weight="700" fill="#202124">MFU 20.1% ＝ 503 TFLOP/s ÷ 2,500（GB200 · BF16 · dense · per GPU）· 分子：框架内建公式，不含重算 · 公式版本＝当时那个 commit</tspan><tspan fill="#9aa0a6">　—— 一行，抄走就能用。</tspan></text>
+<text x="38" y="601" class="xs"><tspan font-weight="700" fill="#d93025">写不出这一行，就别报百分比。</tspan><tspan fill="#9aa0a6">退一步报</tspan><tspan font-weight="700" fill="#202124">吞吐本身</tspan>（tokens/s，或者「跑完一步要几秒」）—— 那个数虽然也有口径，但至少<tspan font-weight="700" fill="#202124">台下能直接感觉到快慢</tspan>，而百分比不行。<tspan font-weight="700" fill="#202124">下一张讲的就是：什么时候该退这一步。</tspan></text>
+<text x="1380" y="660" class="xxs" fill="#9aa0a6" text-anchor="end">实测：A4X（GB200 NVL72）2 节点 8 GPU · Qwen3 类 MoE · seq 16384 · FP8 训练，实测 503 TFLOP/s/GPU · 峰值口径见上一张图</text>
+</svg>
+<figcaption><b>5.6 刚在「这个数的单位是什么」上绊过一次。</b>这一张是同一个问题换了一层：单位没错，除数错了。</figcaption>
+</figure>
+
+  <h3>6.2　该怎么比</h3>
+  <p>说完怎么比是错的，得给正面答案。<b>而正面答案不是一个方法，是四个</b> ——&nbsp;
+    一个比一个贵，也一个比一个说得上话。<b>关键是别只读结论那一栏。</b></p>
+<figure class="fbox fwide" id="ms-p14">
+<svg viewBox="0 0 1400 760" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="跨平台对比的四个档次：比峰值、比 MFU、同模型两边各自调到最好、每美元每瓦，各自的代价与能证明的结论">
+<text x="20" y="26" class="ttl">该怎么比　—— <tspan font-weight="700" fill="#1e8e3e">一种比一种贵，也一种比一种说得上话</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="37" y="58" class="sm">不花钱</text>
+<rect x="93.5" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="110.5" y="58" class="sm">一次实验</text>
+<rect x="178.5" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="195.5" y="58" class="sm">数周量级</text>
+<rect x="20" y="124" width="900" height="480" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="150" class="sec">四档比法　·　代价与结论必须一起读</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">只看右边那一栏会以为该直接跳到第 ④ 档。</tspan><tspan font-weight="700" fill="#202124">但每往下一档，代价是跳着涨的 —— 大多数场合停在 ② 就够，只是必须承认它证明的是什么。</tspan></text>
+<text x="60" y="214" class="lbl" fill="#5f6368">比法</text>
+<text x="408" y="214" class="lbl" fill="#5f6368">代价（对数示意）</text>
+<text x="586" y="214" class="lbl" fill="#5f6368">能证明什么 ／ 别忘了什么</text>
+<line x1="38" y1="224" x2="902" y2="224" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="38" y="236" width="864" height="78" rx="8" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="58" y="270" class="numb" fill="#202124">①</text>
+<text x="92" y="264" class="xs" fill="#202124"><tspan font-weight="700" fill="#202124">比峰值</tspan></text>
+<rect x="408" y="256" width="156" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="408" y="256" width="6.24" height="18" rx="3" fill="#eceff1" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="408" y="290" class="xs" fill="#202124" font-weight="600">零成本</text>
+<text x="586" y="264" class="xs"><tspan font-weight="700" fill="#d93025">几乎什么都证明不了。</tspan></text>
+<text x="586" y="280" class="xxs"><tspan fill="#9aa0a6">峰值只是分母，而且</tspan><tspan font-weight="700" fill="#202124">口径地雷全埋在这一层</tspan>：dense/sparse、哪个</text>
+<text x="586" y="293" class="xxs"> SKU、per chip / per device。</text>
+<rect x="38" y="322" width="864" height="78" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="58" y="356" class="numb" fill="#f9ab00">②</text>
+<text x="92" y="350" class="xs" fill="#202124"><tspan font-weight="700" fill="#202124">比 MFU</tspan></text>
+<rect x="408" y="342" width="156" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="408" y="342" width="24.96" height="18" rx="3" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="408" y="376" class="xs" fill="#f9ab00" font-weight="600">两边各跑一次</text>
+<text x="586" y="350" class="xs"><tspan font-weight="700" fill="#202124">这套软件栈把这块硬件用掉了多少。</tspan></text>
+<text x="586" y="366" class="xxs"><tspan fill="#9aa0a6">分子分母都是选择（前两张图）。</tspan><tspan font-weight="700" fill="#d93025">而且 MFU 高不等于跑得快 —— </tspan></text>
+<text x="586" y="379" class="xxs"><tspan font-weight="700" fill="#d93025">见右格。</tspan></text>
+<rect x="38" y="408" width="864" height="78" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="58" y="442" class="numb" fill="#d93025">③</text>
+<text x="92" y="436" class="xs" fill="#202124"><tspan font-weight="700" fill="#202124">同模型同规模，两边各自调到最好</tspan></text>
+<rect x="408" y="428" width="156" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="408" y="428" width="96.72" height="18" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="408" y="462" class="xs" fill="#d93025" font-weight="600">数周 ＋ 两边的卡</text>
+<text x="586" y="436" class="xs"><tspan font-weight="700" fill="#202124">最接近真话的一档。</tspan><tspan fill="#9aa0a6">⭐ 我们做的是这一档。</tspan></text>
+<text x="586" y="452" class="xxs"><tspan fill="#9aa0a6">贵在</tspan><tspan font-weight="700" fill="#202124">两边都得有人会调</tspan>。<tspan font-weight="700" fill="#d93025">只调一边，比出来的是调参投入的差距。</tspan></text>
+<rect x="38" y="494" width="864" height="78" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="58" y="528" class="numb" fill="#d93025">④</text>
+<text x="92" y="522" class="xs" fill="#202124"><tspan font-weight="700" fill="#202124">每美元 / 每瓦</tspan></text>
+<rect x="408" y="514" width="156" height="18" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="408" y="514" width="148.2" height="18" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text x="408" y="548" class="xs" fill="#d93025" font-weight="600">③ ＋ 两个新口径</text>
+<text x="586" y="522" class="xs"><tspan font-weight="700" fill="#202124">采购真正要的那个答案。</tspan></text>
+<text x="586" y="538" class="xxs"><tspan fill="#9aa0a6">价格是</tspan><tspan font-weight="700" fill="#202124">谈出来的</tspan>，不是牌价；功耗要问清<tspan font-weight="700" fill="#202124">是芯片、是整机、还是含</tspan></text>
+<text x="586" y="551" class="xxs"><tspan font-weight="700" fill="#202124">冷却</tspan>。</text>
+<rect x="932" y="124" width="448" height="480" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="950" y="150" class="sec">⚠️　MFU 高 ≠ 跑得快</text>
+<text x="950" y="170" class="xs"><tspan fill="#9aa0a6">第 ② 档最常见的误用。不是经验之谈 —— 一条恒等式直接推出来的。</tspan></text>
+<rect x="950" y="206" width="412" height="42" rx="8" fill="#fff" stroke="#202124" stroke-width="1.4"/>
+<text x="1156.0" y="233" class="box" fill="#202124" text-anchor="middle">吞吐  =  MFU  ×  峰值</text>
+<text x="950" y="272" class="lbl" fill="#5f6368">一个算例　·　槽长＝峰值，填充＝实际吞吐</text>
+<text x="952" y="304" class="box" fill="#202124">卡 A</text>
+<rect x="1016" y="288" width="134.0" height="24" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="1016" y="288" width="53.6" height="24" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="1024" y="305" class="num" fill="#1a73e8">400</text>
+<text x="952" y="322" class="xxs" fill="#5f6368">峰值 1,000 · MFU 40%</text>
+<text x="952" y="358" class="box" fill="#202124">卡 B</text>
+<rect x="1016" y="342" width="268.0" height="24" rx="4" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="1016" y="342" width="67.0" height="24" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="1024" y="359" class="num" fill="#1e8e3e">500</text>
+<text x="952" y="376" class="xxs" fill="#5f6368">峰值 2,000 · MFU 25%</text>
+<rect x="950" y="396" width="412" height="40" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="964" y="414" class="xs"><tspan font-weight="700" fill="#202124">卡 B 的 MFU 低了 15 个点，却快 25%。</tspan></text>
+<text x="950" y="456" class="xs"><tspan fill="#9aa0a6">MFU 回答的是「</tspan><tspan font-weight="700" fill="#202124">这套栈把手上这块硬件用满了没有</tspan>」——它是<tspan font-weight="700" fill="#202124">效率</tspan>指标，不是<tspan font-weight="700" fill="#202124">速度</tspan>指标。</text>
+<text x="950" y="473" class="xs"><tspan font-weight="700" fill="#d93025">所以它适合</tspan><tspan font-weight="700" fill="#202124">纵向</tspan>比：同一块硬件，我这周比上周调好了多少。</text>
+<text x="950" y="498" class="xs"><tspan font-weight="700" fill="#202124">横向比谁更快，只能看吞吐本身</tspan><tspan fill="#9aa0a6">—— 优先用 tokens/s 或「跑完一步几秒」，它们比</tspan></text>
+<text x="950" y="515" class="xs"><tspan fill="#9aa0a6"> TFLOP/s 少一层公式（见上一张图的甲格）。</tspan></text>
+<rect x="950" y="540" width="412" height="52" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="964" y="560" class="xs"><tspan font-weight="700" fill="#202124">两个都报最省事</tspan>：<tspan fill="#9aa0a6">吞吐说明谁快，MFU 说明还剩多少没榨出来。</tspan></text>
+<rect x="20" y="632" width="1360" height="100" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="660" class="sec">⭐ 第 ③ 档为什么贵：只调一边，比出来的是调参投入的差距</text>
+<text x="38" y="686" class="xs"><tspan font-weight="700" fill="#202124">同一个模型、同一个规模，v7 上从 445 调到 666.6 TFLOP/s/chip —— +50%。</tspan><tspan fill="#9aa0a6">（这里面有 </tspan><tspan font-weight="700" fill="#202124">8.6% 是把频率档从默认锁到最高</tspan>换来的，属于硬件工作点不是调优，剥掉约 <tspan font-weight="700" fill="#202124">+38%</tspan>；起点另有一份文档记的是 457，那样算 <tspan font-weight="700" fill="#202124">+45.9%</tspan>。<tspan font-weight="700" fill="#202124">三个数都列出来，正是这一节在讲的事。</tspan>）</text>
+<text x="38" y="705" class="xs"><tspan font-weight="700" fill="#d93025">这个幅度比很多「硬件对比」结论本身都大 —— 只调了一边的对比，读者看到的是「哪一边的人更熟」。</tspan><tspan font-weight="700" fill="#202124">⚠️ 而我们 GPU 侧的调优记录只到一次 7 组配置的 sweep（492 → 527，+7.1%）—— 所以下一节那组数，我们自己也只把它挂在 ③ 档的下沿。</tspan></text>
+<text x="1380" y="748" class="xxs" fill="#9aa0a6" text-anchor="end">第 ③ 档的实测在下一节 · 代价条为对数示意，非测量值 · v7 与 GPU 侧调优幅度均取自本仓库的调优记录</text>
+</svg>
+<figcaption><b>这是第 7 节的入场券 ——</b> 下一节要摆两边的实测，而这张图决定了那组数该被当成什么。</figcaption>
+</figure>
+
+  <div class="note info"><span class="t">反过来用：读别人的对比时，三句就能问穿</span>
+    前面讲的是<b>你自己报数时该交代什么</b>。反过来同样好用 ——&nbsp;
+    <b>拿到一份别人的对比，问这三句</b>：
+    <br><b>①　分母是多少，出处在哪。</b>答不上来，那个百分比只能当趋势看，不能当水位看。
+    <br><b>②　两边都调过吗，各调了多久。</b>没有这一条，它就是上图的第 ① 档。
+    <br><b>③　报的是吞吐还是 MFU。</b>只有 MFU、没有吞吐的，回答不了「谁更快」——&nbsp;见上图右格。
+    <br><br><b>这三句不需要你懂那两块硬件</b>，所以它们也是这一节最容易带走的东西。</div>
+
+  <p><b>规矩立完了，下一步是把它用在真数上。</b>
+    我们手上正好有第 ③ 档那种东西 ——&nbsp;
+    <b>同一个模型、同一个规模，两边都跑过、两边都调过</b>。
+    <b>网上讲 TPU 与 GPU 的文章，绝大多数停在第 ① 档。</b></p>
 </div></section>
 
 <section><div class="wrap">
