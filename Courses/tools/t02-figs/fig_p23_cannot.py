@@ -61,11 +61,12 @@
     P-17 乙格 ⚠️ 行（算力翻倍而 HBM 带宽没翻倍，那是硅片）／
     P-7 落点（「留白会被读成『不存在』，明写『没量』不会」）／P-8／P-10 甲格
   · ③ P-17 甲③（第三根条、末端打问号）／P-14 第 ④ 档（「价格是谈出来的，不是牌价」）／
-    P-20 底带（软件成熟度、FLOP 公式 1.2%）
+    P-21 丙格（软件成熟度、138.9 vs 137.2 的 1.2%）
+    ⛔ 不是 P-20 —— 这两条写在 `fig_p21_checklist.py:150,159`，上一版指错了图。
   · ④ §4.3 note（「查不到就明写查不到」）／`topic02-verified-specs.md`（148 未能官方核实）／
     P-18 ⑥ 注（没考据过 GB300 用的 B300）／大纲「还没想清楚的」两条
 """
-from common import Fig, para, BL, RD, YL, PU, INK, SUB, LINE, GREY, FILL
+from common import Fig, para, BL, RD, GN, YL, PU, INK, SUB, LINE, GREY, FILL
 
 W = 1400
 TOP = 84
@@ -99,12 +100,12 @@ CATS = [
         ("热启动 18 分里多出来的 8 分钟", "P-8", False),
         ("pdbs 13 比 12 更省显存的机制", "P-10 甲", False),
     ]),
-    ("③ 缺可比口径", YL, "补法：先定义，再测", "口径没对齐，测出来也不能比", [
+    ("③ 缺可比口径", GN, "补法：先定义，再测", "口径没对齐，测出来也不能比", [
         ("每美元性能", "P-17 甲③", False),
         ("每瓦性能", "P-14 ④", False),
         ("总拥有成本（TCO）", "本节首次承认", True),
-        ("软件成熟度差多少", "P-20 底带", False),
-        ("两边 FLOP 公式差 1.2%", "P-20 底带", False),
+        ("软件成熟度差多少", "P-21 丙", False),
+        ("138.9 与 137.2 差 1.2%，未定位", "P-21 丙", False),
     ]),
     ("④ 查不到出处", GREY, "补法：等公开，或找到可引用的", "这一类不由我们决定", [
         ("TPU 跨芯片寻址机制", "§4.3", False),
@@ -122,13 +123,15 @@ def build():
     f.title("这门课答不了的　—— <tspan font-weight=\"700\" fill=\"#d93025\">"
             "二十条：十六条课件上写过，两条只写在作者备忘里，两条从来没想到"
             "</tspan>", "全课收尾 · 二", BL)
-    f.legend([(BL, "跑一次就有"), (PU, "要设计对照组"), (YL, "先定义才能比"),
-              (GREY, "不由我们决定"), (RD, "红格＝从来没想到"),
-              ("#fde293", "黄格＝想到了，但只写在备忘里")])
+    # 上一版六个方块长得一模一样，看不出前四个说的是「列」、后两个说的是「格」；
+    # 而且「黄格」那项写死成 #fde293，是图上第三种黄。两处一起修。
+    f.legend([(BL, "列：跑一次就有"), (PU, "列：要设计对照组"),
+              (GN, "列：先定义才能比"), (GREY, "列：不由我们决定"),
+              (RD, "格：从来没想到 · 2 条"), (YL, "格：备忘里明写「没查证，先别讲」的那两条 · 2 条")])
 
     _axis(f)
     for i, cat in enumerate(CATS):
-        _col(f, X0 + i * (CW + GAP), cat)
+        _col(f, X0 + i * (CW + GAP), cat, i)
     _band(f)
 
     f.t(W - 20, H - 12,
@@ -145,7 +148,7 @@ def _axis(f):
         "越往右，越不是「多干点活」就能补上的", "xs", SUB, "middle")
 
 
-def _col(f, x, cat):
+def _col(f, x, cat, ci=0):
     ttl, c, how, note, items = cat
     body = "#f1f3f4" if c == GREY else FILL[c]
     edge = c
@@ -153,12 +156,15 @@ def _col(f, x, cat):
     f.rect(x, R1_Y, CW, R1_H, "#fff", LINE, 1.2, 10)
     f.rect(x, R1_Y, CW, HDR, body, None, 0, 10)
     f.rect(x, R1_Y + HDR - 10, CW, 10, body, None, 0, 0)
-    f.rect(x, R1_Y, 5, R1_H, edge, None, 0, 3)
+    # 色轨粗细按列递减：轴上那句话不能只靠一根箭头承担
+    f.rect(x, R1_Y, (8, 6, 4, 2)[ci], R1_H, edge, None, 0, 3)
     f.line(x, R1_Y + HDR, x + CW, R1_Y + HDR, LINE, 1.2)
 
     f.t(x + 18, R1_Y + 24, ttl, "box", INK if c == GREY else c)
     f.t(x + 18, R1_Y + 44, how, "lbl", INK if c == GREY else c)
     f.t(x + 18, R1_Y + 61, note, "xxs", SUB)
+    who = ("我们，现在", "我们，但要先想清楚", "行业", "厂商")[ci]
+    f.t(x + CW - 18, R1_Y + 24, "谁能决定：" + who, "xxs", SUB, "end")
 
     y = R1_Y + HDR + 8
     for name, ref, first in items:
@@ -184,11 +190,28 @@ def _item(f, x, y, name, ref, first, c):
     f.t(x + 32, yy + 18, ref, "xxs", cc if cc != GREY else SUB)
 
 
+def _tally(f):
+    """二十格 —— 16 / 2 / 2 是本节最强的一句话，上一版它只是标题里的文字。
+       台下要自己在四列里数红黄格才知道各有两条；一排方格是零成本的计数编码。"""
+    gx, gy = 1024, BAND_Y + 18
+    f.t(gx - 12, gy + 11, "二十条：", "xxs", SUB, "end")
+    for i in range(20):
+        fc, sc = ("#fff", LINE)
+        if i >= 18:
+            fc, sc = FILL[RD], RD
+        elif i >= 16:
+            fc, sc = FILL[YL], YL
+        f.rect(gx + i * 17, gy, 13, 13, fc, sc, 1.2, 2)
+    # 三种颜色各是什么，图例里已经带着条数写清楚了 —— 这里不再重复一遍，
+    # 否则标签会压到下面那段正文上（上一版就压了）。
+
+
 # ══════════════════════════════════════════════════════════════════════
 def _band(f):
     f.rect(20, BAND_Y, 1360, 144, FILL[RD], RD, 1.4, 10)
     f.t(38, BAND_Y + 28,
         "⭐ 两组没写进课件的空白，成因完全不同 —— 而台下看到的是同一片空白", "sec")
+    _tally(f)
 
     yy = para(f, 38, BAND_Y + 54, 1324,
               "<r><b>① 从来没想到（两条）：「哪个更适合推理」和「TCO」。</b></r>"
