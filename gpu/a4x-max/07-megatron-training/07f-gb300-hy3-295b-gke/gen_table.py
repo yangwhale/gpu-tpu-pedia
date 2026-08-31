@@ -47,6 +47,23 @@ def delta(r):
     return f"**{p:+.1f}%**" if abs(p) >= 1 else f"{p:+.1f}%"
 
 
+PEAK_BF16, PEAK_FP8 = 2500.0, 5000.0
+
+
+def mfu(r):
+    """从 tflops_median 现算 MFU —— 不读 results.csv 的 mfu_pct 那一列。
+
+    那一列是 2026-07-26 用已撤回的 2,700 / 5,400 算的，至今没重算。
+    读它就会把撤回的数原样写回文档，正是 08-31 刚清理掉的那批。
+    """
+    try:
+        v = float(r["tflops_median"])
+    except (KeyError, ValueError, TypeError):
+        return "—"
+    peak = PEAK_FP8 if "fp8" in r["name"].lower() else PEAK_BF16
+    return f"{v / peak * 100:.1f}%"
+
+
 def main():
     rows = load()
     ok = [r for r in rows if r["status"] == "OK"]
@@ -58,7 +75,10 @@ def main():
           "等稳态 → 采集指标 → 写 [`results.csv`](results.csv)。\n")
     print("**采集口径**：TFLOP/s 取稳态末 5 步中位数（首步含 graph capture，已排除）；"
           "HBM 取全程 `nvidia-smi` 峰值；tok/s/GPU = `GBS × seq_len / step_time / 64`；")
-    print("MFU = Model TFLOP/s ÷ 硬件峰值（**BF16 按 2,700，FP8 按 5,400**）。\n")
+    print("MFU = Model TFLOP/s ÷ 硬件峰值（**BF16 按 2,500，FP8 按 5,000** —— "
+          "GB300 NVL72 官方 dense 值；2026-08-31 前本文件写的 2,700 / 5,400 "
+          "从来不是官方数，已撤回）。**本列由 tflops_median 现算，"
+          "不读 `results.csv` 的 `mfu_pct`（那一列还是旧分母）。**\n")
     print(f"> 基准 **A1 = 854.0 TFLOP/s**（BF16 冠军配置），`vs A1` 列为相对增减量。\n")
 
     for tag, title, desc in GROUPS:
@@ -73,7 +93,7 @@ def main():
             eid = r["name"].split("_")[0]
             star = " 🏆" if r is best else ""
             print(f"| **{eid}** {name}{star} | {STATUS_ICON[r['status']]} | "
-                  f"{cell(r,'tflops_median')} | {delta(r)} | {cell(r,'mfu_pct','%')} | "
+                  f"{cell(r,'tflops_median')} | {delta(r)} | {mfu(r)} | "
                   f"{cell(r,'hbm_gb',' GB')} | {cell(r,'tokens_per_s_per_gpu')} | "
                   f"{cell(r,'step_time_s','s')} |")
         print()

@@ -9562,7 +9562,448 @@ footer a{text-decoration:none}
   <p><b>规矩立完了，下一步是把它用在真数上。</b>
     我们手上正好有第 ③ 档那种东西 ——&nbsp;
     <b>同一个模型、同一个规模，两边都跑过、两边都调过</b>。
-    <b>网上讲 TPU 与 GPU 的文章，绝大多数停在第 ① 档。</b></p>
+    <b>而把这套规矩用在自己的数上，第一个被扣分的会是我们自己。</b></p>
+</div></section>
+
+<section><div class="wrap">
+  <div class="stn big"><span class="badge">第 7 节</span><h2>两边的实测</h2></div>
+  <p class="lead">上一节整节在讲规矩。<b>这一节只做一件事：把规矩用在一组真数上，
+    然后看看还剩下什么能说。</b>
+    ——&nbsp;剩下的比开口之前想说的少得多，<b>而这正是这一节的价值</b>。</p>
+
+  <div class="note q"><span class="t">上一节说「这一次算错，什么都不会发生」。这一节再进一层：这一次连「算」都没有</span>
+    第 6 节把三次「口径」排成一条线，分界画在<b>会不会被当场拦下</b>：
+    前两次算错，装不下就是装不下；<b>第三次算错，你会得到一个完全正常的百分比。</b>
+    <br><br><b>这一节是同一条线上的第四个点，而它连「算」这个动作都没有。</b>
+    「快 1.31 倍」不是任何一次除法的结果 ——&nbsp;
+    它是一次除法<b>被摘掉上下文之后剩下的东西</b>。
+    <br>模型、规模、精度、单位、两边各自调了多久，<b>一个都不在这几个字里</b>，
+    而它们每一个都能把这个数改掉。
+    <br><br>所以这一节的落点不是那个倍数，是<b>倍数外面那一圈</b>。
+    <b>这一圈没人替你写，写不写全看你自己。</b></div>
+
+  <div class="note info"><span class="t">先说清这组数在第 6 节那张阶梯上挂在哪一格</span>
+    上一节把跨平台对比分成四档，说第 ③ 档「同模型同规模、两边各自调到最好」
+    最接近真话、也最贵。<b>下面这组挂在 ③ 档，但只挂在它的下沿</b> ——&nbsp;
+    这不是这一节现编的谦辞，<b>是上一节结尾就已经写下的话</b>。
+    <br><br>共同的部分是真的：同一个 <b>Hunyuan3-295B-A21B</b>（80 层、192 专家）、
+    同样 <b>seq 4096</b>、两边各 <b>64 个计算单元</b>、同样合成数据、
+    <b>两边都是我们自己跑的</b>。
+    <br>不共同的部分也得先说：<b>v7 那一侧确实撞了墙</b>
+    （四个方向 8 组实验无一正收益），<b>GB300 那一侧没有</b> ——&nbsp;
+    它自己的扫点表里还留着一个 +3.3% 没跟进。<b>所以这一节所有的倍数都是下限。</b>
+    <br><br>⚠️ 另外它<b>只有一个模型、一个规模</b>。这句话现在听起来像客气话，
+    <b>四张图之后，最后一张会告诉你换个规模它会往哪边动</b> ——&nbsp;
+    而那个方向，和这一节其它所有偏置都相反。</div>
+
+  <h3>7.1　先把两个数摆出来</h3>
+
+  <p>先说一句可能出乎意料的话：<b>这组数最有意思的地方不是谁更快，
+    是两边的硬件峰值差得比想象中小。</b>
+    第 1 节那张全景表里，两边的峰值是并排的两个数，看上去像隔了一代 ——&nbsp;
+    <b>放到同一根轴上，你会先看见一件跟直觉相反的事，然后才看见差距。</b></p>
+<figure class="fbox fwide" id="ms-p15">
+<svg viewBox="0 0 1400 756" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="同一个模型在 GB300 与 TPU v7 上的实测：854.0 对 662.3 TFLOP/s；1.29 倍的差距里峰值只占 1.084 倍，剩下的 1.19 是余项、不等于软件">
+<text x="20" y="26" class="ttl">两边的实测　—— <tspan font-weight="700" fill="#1e8e3e">同一个模型、同一个规模，两边各自调到目前的水位</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="37" y="58" class="sm">GB300 NVL72 · 64 GPU</text>
+<rect x="185.5" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="202.5" y="58" class="sm">TPU v7 · 64 chips</text>
+<rect x="332.02500000000003" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="349.02500000000003" y="58" class="sm">浅槽＝该平台的 BF16 dense 峰值，深段＝实测</text>
+<rect x="619.425" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="636.425" y="58" class="sm">两段差值，长度几乎相同</text>
+<rect x="20" y="124" width="836" height="452" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="150" class="sec">甲　·　两条共轴的条：槽是峰值，填充是实测</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">同一根绝对刻度的横轴。</tspan><tspan font-weight="700" fill="#202124">下面那两段红色标注是这一格的重点</tspan>，别急着看数字。</text>
+<text x="838" y="174" class="xxs" fill="#5f6368" text-anchor="end">横轴：TFLOP/s（BF16 dense）　满程 = 2,500</text>
+<text x="44" y="236" class="box" fill="#202124">GB300 NVL72　64 GPU</text>
+<text x="44" y="254" class="xxs" fill="#5f6368">机型 a4x-max · 单 NVLink 域 16 节点</text>
+<rect x="260" y="224" width="470.0" height="30" rx="4" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<rect x="260" y="224" width="160.552" height="30" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="430.552" y="244" class="numb" fill="#1a73e8">854.0</text>
+<text x="740.0" y="244" class="xxs" fill="#5f6368">峰值 2,500</text>
+<text x="44" y="276" class="xs"><tspan font-weight="700" fill="#202124">MFU 34.2%</tspan>　·　<tspan font-weight="700" fill="#202124">6,242 tok/s / 计算单元</tspan>　·　step 21.0 s　·　GBS 2048　·　TP1 PP2 VPP8 EP32 · MBS 1</text>
+<text x="44" y="294" class="xxs"><tspan font-weight="700" fill="#202124">⚠️ 这一侧没到顶</tspan><tspan fill="#9aa0a6">：同一张扫点表里 EP 32→16 是 </tspan><tspan font-weight="700" fill="#202124">882.3 / 6,450（+3.3%）</tspan>，未跟进复测。<tspan font-weight="700" fill="#202124">所以下面所有倍数都是下限。</tspan></text>
+<text x="44" y="328" class="box" fill="#202124">TPU v7　64 chips（4x4x4）</text>
+<text x="44" y="346" class="xxs" fill="#5f6368">128 device · 3D torus 一个切片</text>
+<rect x="260" y="316" width="433.716" height="30" rx="4" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<rect x="260" y="316" width="124.5124" height="30" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="394.5124" y="336" class="numb" fill="#1e8e3e">662.3</text>
+<text x="703.716" y="336" class="xxs" fill="#5f6368">峰值 2,307</text>
+<text x="44" y="368" class="xs"><tspan font-weight="700" fill="#202124">MFU 28.71%</tspan>　·　<tspan font-weight="700" fill="#202124">4,770 tok/s / 计算单元</tspan>　·　step 20.61 s　·　等效 GBS 1536　·　DP1×FSDP128 · pdbs 12 · dvfs 7</text>
+<text x="44" y="386" class="xxs"><tspan font-weight="700" fill="#202124">这一侧撞墙了</tspan>：tile、XLA flag、SparseCore 卸载、推 batch 四个方向共 8 格实验，<tspan font-weight="700" fill="#202124">无一正收益</tspan>。</text>
+<rect x="38" y="408" width="800" height="66" rx="8" fill="#f1f3f4" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="384.5124" y1="224" x2="384.5124" y2="430" stroke="#d93025" stroke-width="0.9" stroke-dasharray="2 4"/>
+<line x1="420.552" y1="224" x2="420.552" y2="430" stroke="#d93025" stroke-width="0.9" stroke-dasharray="2 4"/>
+<rect x="384.5124" y="430" width="36.03960000000001" height="18" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="402.5322" y="424" class="num" fill="#d93025" text-anchor="middle">实测差 191.7</text>
+<text x="402.5322" y="464" class="xxs" fill="#5f6368" text-anchor="middle">＝ 662.3 的 29%</text>
+<line x1="693.716" y1="224" x2="693.716" y2="430" stroke="#d93025" stroke-width="0.9" stroke-dasharray="2 4"/>
+<line x1="730" y1="224" x2="730" y2="430" stroke="#d93025" stroke-width="0.9" stroke-dasharray="2 4"/>
+<rect x="693.716" y="430" width="36.28399999999999" height="18" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="711.858" y="424" class="num" fill="#d93025" text-anchor="middle">峰值差 193.0</text>
+<text x="711.858" y="464" class="xxs" fill="#5f6368" text-anchor="middle">＝ 2,307 的 8.4%</text>
+<text x="50" y="444" class="xxs" fill="#5f6368">同一条基线上比长度 →</text>
+<rect x="38" y="486" width="800" height="72" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="52" y="508" class="xs"><tspan font-weight="700" fill="#202124">⭐ 这两段在图上几乎一样长 —— 193.0 对 191.7 TFLOP/s。</tspan><tspan fill="#9aa0a6">但一段是 2,307 的 </tspan><tspan font-weight="700" fill="#202124">8.4%</tspan>，另一段是 662.3 的 <tspan font-weight="700" fill="#202124">29%</tspan>。</text>
+<text x="52" y="529" class="xs"><tspan font-weight="700" fill="#202124">差距要相除，不能相减。</tspan><tspan fill="#9aa0a6">相减出来的两个数一样大，相除出来的差 3.4 倍 —— 而下一格那个 </tspan><tspan font-weight="700" fill="#202124">1.084 × 1.190</tspan> 之所以是乘法，理由就在这里。</text>
+<rect x="868" y="124" width="512" height="452" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="886" y="150" class="sec">乙　·　把这 1.29 倍拆开 —— 只拆得动一半</text>
+<rect x="886" y="168" width="476" height="44" rx="8" fill="#e8f0fe" stroke="#202124" stroke-width="1.4"/>
+<text x="1124.0" y="196" class="box" fill="#202124" text-anchor="middle">854.0 ÷ 662.3  =  1.29  =  1.084 × 1.190</text>
+<rect x="892" y="234" width="146.64513833576837" height="34" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="965.3225691678842" y="256" class="numb" fill="#d93025" text-anchor="middle">1.084</text>
+<rect x="1038.6451383357685" y="234" width="317.3548616642317" height="34" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text x="1197.3225691678842" y="256" class="numb" fill="#1a73e8" text-anchor="middle">1.190</text>
+<text x="892" y="286" class="xxs" fill="#5f6368">↑ 段长按对数切 —— 两项是相乘的，按 0.084 : 0.190 切就是把乘法当成了加法</text>
+<rect x="886" y="310" width="476" height="68" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="900" y="332" class="lbl" fill="#d93025">① 峰值之比　—— 能算清的那段</text>
+<text x="1348" y="332" class="num" fill="#202124" text-anchor="end">2,500 ÷ 2,307</text>
+<text x="900" y="350" class="xxs"><tspan fill="#9aa0a6">官方 dense BF16，两边都按 P-12 的口径取。</tspan><tspan font-weight="700" fill="#202124">这一段不用调，买回来就是它。</tspan></text>
+<rect x="886" y="386" width="476" height="68" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="900" y="408" class="lbl" fill="#1a73e8">② 峰值以外　—— 余项，不等于「软件」</text>
+<text x="1348" y="408" class="num" fill="#202124" text-anchor="end">34.160% ÷ 28.708%</text>
+<text x="900" y="426" class="xxs"><tspan font-weight="700" fill="#202124">这不是量出来的，是除剩下的。</tspan><tspan fill="#9aa0a6">软件在里面，</tspan><tspan font-weight="700" fill="#202124">非峰值的硬件也在里面</tspan>：HBM 带宽、片上 SRAM、MXU </text>
+<text x="900" y="439" class="xxs">收缩维形状、互联拓扑。</text>
+<rect x="886" y="468" width="476" height="96" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="900" y="490" class="xs"><tspan font-weight="700" fill="#202124">⚠️ 这个式子恒成立，所以它不是一个发现。</tspan><tspan fill="#9aa0a6">因为 MFU ≡ 实测 ÷ 峰值，任意两个数都能这</tspan></text>
+<text x="900" y="507" class="xs"><tspan fill="#9aa0a6">么拆。</tspan></text>
+<text x="900" y="526" class="xs"><tspan fill="#9aa0a6">它证明的只有一件事：</tspan><tspan font-weight="700" fill="#202124">这 1.19 倍不来自峰值差</tspan>。至于它有多少来自软件 —— <tspan font-weight="700" fill="#202124">这张图答不了，</tspan></text>
+<text x="900" y="543" class="xs"><tspan font-weight="700" fill="#202124">下一张才答。</tspan></text>
+<rect x="20" y="604" width="1360" height="124" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="38" y="632" class="sec">⚠️ 换一个单位，倍数就变 —— 而变掉的那 1.5% 正好是第 6 节讲的那件事</text>
+<text x="38" y="658" class="xs"><tspan font-weight="700" fill="#202124">按 TFLOP/s 算，GB300 是 v7 的 1.29 倍；按 tok/s 算，是 1.31 倍</tspan><tspan fill="#9aa0a6">（6,242 ÷ 4,770）。两个数都对，差在</tspan><tspan font-weight="700" fill="#202124">分子那条公式</tspan> ——同一个模型、同一条 token，两边的分析式 FLOP 公式给出的答案<tspan font-weight="700" fill="#202124">差 1.5%</tspan>。<tspan font-weight="700" fill="#202124">差多少不重要，差本身才重要。</tspan></text>
+<text x="38" y="681" class="xs"><tspan font-weight="700" fill="#202124">token 是能数出来的，TFLOP/s 里还夹着一条公式。</tspan><tspan fill="#9aa0a6">所以两个都报的时候，把 tok/s 放在前面。</tspan><tspan font-weight="700" fill="#202124">这不是吹毛求疵：1.5% 在这里无关紧要，但它证明了那条公式确实是两边各写各的</tspan> ——下一次遇到的不一定还是 1.5%，而 P-13 甲格里那个漏白名单的例子是 5 倍。</text>
+<text x="1380" y="744" class="xxs" fill="#9aa0a6" text-anchor="end">同一个 Hunyuan3-295B-A21B（80 层 · 192 专家）· seq 4096 · 合成数据 · 两边都不落盘 checkpoint（但重算策略不同，见 P-18 第 ⑤ 条）· 两边都是我们自己跑的</text>
+</svg>
+<figcaption><b>这是全课唯一一张两边真数并排的图，所以它也是最容易被截图转走的一张。</b><b>用手挡住那两个大字号的数，让台下先看下面那两段红色</b> ——&nbsp;它们在图上一样长。等有人说出「可是比例差很多」，再把手放开。<b>然后念乙格右下那个红框，一个字都别改</b> ——&nbsp;那是全课唯一一处我们承认自己的图证明不了自己的结论。</figcaption>
+</figure>
+
+  <div class="note danger"><span class="t">⭐ 这张图承认了一件事，而那句承认是这一节最重要的一句</span>
+    乙格那个 <code>1.084 × 1.190</code> 看着像一个分解，<b>其实它是一个恒等式</b>
+    ——&nbsp;因为 MFU 的定义就是「实测 ÷ 峰值」，<b>任意两个数都能这么拆</b>。
+    式子里唯一的经验内容是「峰值只差 1.084」，<b>剩下那 1.190 是除剩下的余项。</b>
+    <br><br>把余项叫成「软件效率」，再由这个名字推出「差的不是硅片」——&nbsp;
+    <b>那是用命名冒充证明。</b>峰值 dense FLOPs 只是硬件的一根轴，
+    <b>HBM 带宽、片上 SRAM、MXU 收缩维形状、互联拓扑，全都落在那个余项里</b>。
+    <br>最直接的反例就在这门课自己手上：<b>3.4 花了一整小节论证
+    <code>head_dim = 128</code> 在 v7 的 256 收缩维上只喂满一半</b> ——&nbsp;
+    那是纯硅片效应，而它的表现形式恰恰是 MFU 偏低。
+    <br><br>而 4.5 早就立过规矩：<b>「一个走错路的对照项比没有对照项更危险，
+    它会让你以为自己排除了什么。」</b>峰值 FLOPs 就是这样一个对照项。
+    <br><b>所以这张图只证明了「这 1.19 倍不来自峰值差」。</b>
+    至于它有多少来自软件 ——&nbsp;<b>要另一种证据，而那种证据下一张才有。</b></div>
+
+  <p>那种证据长什么样？<b>不是把一个比值拆开，是在同一块硅片上什么都不换、
+    只改软件，看它能涨多少。</b>这个实验我们两边各做过一次，
+    而它顺带回答了另一个问题：<b>「调到最好」这四个字，两边说的是不是同一件事。</b></p>
+<figure class="fbox fwide" id="ms-p16">
+<svg viewBox="0 0 1400 786" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 与 GB300 两条调优爬升曲线：v7 六步从 445 爬到 662，仍低于 GB300 未调优时的 707">
+<text x="20" y="26" class="ttl">这两个数是怎么挣来的　—— <tspan font-weight="700" fill="#d93025">两条爬升曲线，和一个不能比的起点</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="37" y="58" class="sm">GB300 · 四步 · 一个通宵</text>
+<rect x="197.57500000000002" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="214.57500000000002" y="58" class="sm">TPU v7 · 五步 · 约两周</text>
+<rect x="369.975" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="386.975" y="58" class="sm">707.2 —— 只作刻度用，解读见乙格</text>
+<rect x="20" y="124" width="900" height="502" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="150" class="sec">甲　·　两条爬升曲线，同一根纵轴</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">纵轴</tspan><tspan font-weight="700" fill="#202124">从 0 起、没有截断</tspan> —— 这一节整节在讲怎么让数字经得起回查，在自己的图上截轴就没得讲了。</text>
+<line x1="86" y1="482.0" x2="632" y2="482.0" stroke="#dadce0" stroke-width="1.0"/>
+<text x="76" y="486.0" class="xxs" fill="#5f6368" text-anchor="end">0</text>
+<line x1="86" y1="394.6666666666667" x2="632" y2="394.6666666666667" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="3 4"/>
+<text x="76" y="398.6666666666667" class="xxs" fill="#5f6368" text-anchor="end">300</text>
+<line x1="86" y1="307.33333333333337" x2="632" y2="307.33333333333337" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="3 4"/>
+<text x="76" y="311.33333333333337" class="xxs" fill="#5f6368" text-anchor="end">600</text>
+<line x1="86" y1="220.0" x2="632" y2="220.0" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="3 4"/>
+<text x="76" y="224.0" class="xxs" fill="#5f6368" text-anchor="end">900</text>
+<text x="76" y="196" class="xxs" fill="#5f6368" text-anchor="end">TFLOP/s</text>
+<line x1="86" y1="276.12622222222217" x2="632" y2="276.12622222222217" stroke="#9aa0a6" stroke-width="1.0" stroke-dasharray="6 4"/>
+<text x="628" y="268.12622222222217" class="xxs" fill="#9aa0a6" text-anchor="end">707.2　GB300 抄来的起点</text>
+<path d="M120.0,276.1 L239.5,265.4 L359.0,241.3 L478.5,233.3" stroke="#1a73e8" stroke-width="2.4" fill="none"/>
+<rect x="109.0" y="265.12622222222217" width="22" height="22" rx="11" fill="#fff" stroke="#1a73e8" stroke-width="2.0"/>
+<text x="120.0" y="280.12622222222217" class="xxs" fill="#1a73e8" text-anchor="middle">①</text>
+<rect x="228.5" y="254.4133333333333" width="22" height="22" rx="11" fill="#fff" stroke="#1a73e8" stroke-width="2.0"/>
+<text x="239.5" y="269.4133333333333" class="xxs" fill="#1a73e8" text-anchor="middle">②</text>
+<rect x="348.0" y="230.2511111111111" width="22" height="22" rx="11" fill="#fff" stroke="#1a73e8" stroke-width="2.0"/>
+<text x="359.0" y="245.2511111111111" class="xxs" fill="#1a73e8" text-anchor="middle">③</text>
+<rect x="467.5" y="222.2746666666667" width="22" height="22" rx="11" fill="#fff" stroke="#1a73e8" stroke-width="2.0"/>
+<text x="478.5" y="237.2746666666667" class="xxs" fill="#1a73e8" text-anchor="middle">④</text>
+<text x="108.0" y="258.12622222222217" class="lbl" fill="#1a73e8" text-anchor="middle">GB300　707.2</text>
+<text x="494.5" y="237.2746666666667" class="numb" fill="#1a73e8">854.4</text>
+<path d="M120.0,349.0 L239.5,323.9 L359.0,313.2 L478.5,298.6 L598.0,289.2" stroke="#1e8e3e" stroke-width="2.4" fill="none"/>
+<rect x="109.0" y="337.9622222222222" width="22" height="22" rx="11" fill="#fff" stroke="#1e8e3e" stroke-width="2.0"/>
+<text x="120.0" y="352.9622222222222" class="xxs" fill="#1e8e3e" text-anchor="middle">①</text>
+<rect x="228.5" y="312.9266666666667" width="22" height="22" rx="11" fill="#fff" stroke="#1e8e3e" stroke-width="2.0"/>
+<text x="239.5" y="327.9266666666667" class="xxs" fill="#1e8e3e" text-anchor="middle">②</text>
+<rect x="348.0" y="302.15555555555557" width="22" height="22" rx="11" fill="#fff" stroke="#1e8e3e" stroke-width="2.0"/>
+<text x="359.0" y="317.15555555555557" class="xxs" fill="#1e8e3e" text-anchor="middle">③</text>
+<rect x="467.5" y="287.6" width="22" height="22" rx="11" fill="#fff" stroke="#1e8e3e" stroke-width="2.0"/>
+<text x="478.5" y="302.6" class="xxs" fill="#1e8e3e" text-anchor="middle">④</text>
+<rect x="587.0" y="278.1971111111111" width="22" height="22" rx="11" fill="#fff" stroke="#1e8e3e" stroke-width="2.0"/>
+<text x="598.0" y="293.1971111111111" class="xxs" fill="#1e8e3e" text-anchor="middle">⑤</text>
+<text x="108.0" y="330.9622222222222" class="lbl" fill="#1e8e3e" text-anchor="middle">v7　457.0</text>
+<text x="614.0" y="293.1971111111111" class="numb" fill="#1e8e3e">662.3</text>
+<text x="90" y="502" class="xxs" fill="#5f6368">①②③④⑤ ＝ 第几步（不是时间轴）</text>
+<rect x="108" y="366" width="392" height="62" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="122" y="386" class="xs"><tspan font-weight="700" fill="#202124">⭐ v7：硬件一颗没换，457 → 662.3，</tspan><tspan font-weight="700" fill="#d93025">+44.9%</tspan>。</text>
+<text x="122" y="402" class="xxs"><tspan fill="#9aa0a6">剥掉 ④ 那个频率档仍有 </tspan><tspan font-weight="700" fill="#202124">+33.4%</tspan>。<tspan font-weight="700" fill="#202124">这是本节「差距在软件」唯一的直接实验证据</tspan> </text>
+<text x="122" y="415" class="xxs">—— P-15 乙格那个 1.19 是除剩下的，这个是跑出来的。</text>
+<rect x="108" y="436" width="392" height="48" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="122" y="454" class="xxs"><tspan font-weight="700" fill="#202124">⚠️ 别把两条线逐步对齐看。</tspan><tspan fill="#9aa0a6">横轴只是「第几步」，两边一步的含义、耗时、继承</tspan></text>
+<text x="122" y="467" class="xxs"><tspan fill="#9aa0a6">的家底都不同 —— 为什么不能这么看，全在乙格。</tspan></text>
+<rect x="646" y="200" width="256" height="22" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="656" y="216" class="lbl" fill="#1a73e8">GB300 · 一个通宵，四步 · +20.8%</text>
+<text x="656" y="249" class="xxs" fill="#1a73e8">①</text>
+<text x="672" y="249" class="num" fill="#202124">707.2</text>
+<text x="718" y="249" class="xxs">V1：照抄厂商官方 BF16 recipe</text>
+<text x="656" y="279" class="xxs" fill="#1a73e8">②</text>
+<text x="672" y="279" class="num" fill="#202124">744.0</text>
+<text x="718" y="279" class="xxs">关掉 recompute（换 33 GB 显存，+</text>
+<text x="718" y="292" class="xxs">5.2%）</text>
+<text x="656" y="322" class="xxs" fill="#1a73e8">③</text>
+<text x="672" y="322" class="num" fill="#202124">827.0</text>
+<text x="718" y="322" class="xxs">cutedsl + a2a_overlap ← 最大单项</text>
+<text x="718" y="335" class="xxs"> +11.2%</text>
+<text x="656" y="365" class="xxs" fill="#1a73e8">④</text>
+<text x="672" y="365" class="num" fill="#202124">854.4</text>
+<text x="718" y="365" class="xxs">full_iteration graph + paged </text>
+<text x="718" y="378" class="xxs">stash（+3.3%）</text>
+<rect x="646" y="411" width="256" height="22" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="656" y="427" class="lbl" fill="#1e8e3e">TPU v7 · 约两周，五步 · +44.9%</text>
+<text x="656" y="460" class="xxs" fill="#1e8e3e">①</text>
+<text x="672" y="460" class="num" fill="#202124">457.0</text>
+<text x="718" y="460" class="xxs">起点：<tspan class="mono" fill="#1967d2">megablox</tspan> + pdbs 8</text>
+<text x="656" y="490" class="xxs" fill="#1e8e3e">②</text>
+<text x="672" y="490" class="num" fill="#202124">543.0</text>
+<text x="718" y="490" class="xxs">tokamax tile(512,2048,1536) ← </text>
+<text x="718" y="503" class="xxs">全场最大单项 +18.8%</text>
+<text x="656" y="533" class="xxs" fill="#1e8e3e">③</text>
+<text x="672" y="533" class="num" fill="#202124">580.0</text>
+<text x="718" y="533" class="xxs">pdbs 8 → 12（+6.8%）</text>
+<text x="656" y="563" class="xxs" fill="#1e8e3e">④</text>
+<text x="672" y="563" class="num" fill="#202124">630.0</text>
+<text x="718" y="563" class="xxs">锁最高频率档 dvfs_p_state=7（+</text>
+<text x="718" y="576" class="xxs">8.6%）<tspan font-weight="700" fill="#d93025">← 这一步不算软件</tspan></text>
+<text x="656" y="606" class="xxs" fill="#1e8e3e">⑤</text>
+<text x="672" y="606" class="num" fill="#202124">662.3</text>
+<text x="718" y="606" class="xxs">tile 改走 18 个配置参数，不再需要</text>
+<text x="718" y="619" class="xxs"> tokamax 开关（+5.1%）</text>
+<rect x="932" y="124" width="448" height="502" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="950" y="150" class="sec">乙　·　起点不是同一种东西</text>
+<text x="950" y="170" class="xs"><tspan fill="#9aa0a6">看甲格最容易得出的结论是「一边爬得多、一边爬得少」。</tspan><tspan font-weight="700" fill="#202124">但两条线的起点性质不同，</tspan></text>
+<text x="950" y="186" class="xs"><tspan font-weight="700" fill="#202124">这个比较从第一步就不成立。</tspan></text>
+<rect x="950" y="216" width="412" height="86" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="964" y="240" class="box" fill="#1a73e8">GB300 的 707.2</text>
+<text x="964" y="260" class="xs"><tspan font-weight="700" fill="#202124">照抄厂商官方 BF16 recipe 就有。</tspan><tspan fill="#9aa0a6">它不是「没调优」的水位 —— 那份 </tspan></text>
+<text x="964" y="276" class="xs"><tspan fill="#9aa0a6">recipe 背后是别人几个月的工作，只是那部分工时</tspan><tspan font-weight="700" fill="#202124">不出现在我们的记录里</tspan>。</text>
+<rect x="950" y="310" width="412" height="86" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="964" y="334" class="box" fill="#1e8e3e">v7 的 457</text>
+<text x="964" y="354" class="xs"><tspan font-weight="700" fill="#202124">我们自己拼出来的第一版能跑通的配置。</tspan><tspan fill="#9aa0a6">模型是新移植进框架的，没有现成配</tspan></text>
+<text x="964" y="370" class="xs"><tspan fill="#9aa0a6">方可抄 —— 所以这条线的前几步，其实在补别人起点里已经有的东西。</tspan></text>
+<rect x="950" y="408" width="412" height="80" rx="8" fill="#fff" stroke="#202124" stroke-width="1.4"/>
+<text x="964" y="430" class="xs"><tspan font-weight="700" fill="#202124">⭐ 第 6 节说 ③ 档贵在「两边都得有人会调」。</tspan></text>
+<text x="964" y="449" class="xs"><tspan font-weight="700" fill="#202124">这一格是那句话的具体形态：「会调」里有一部分是继承来的，而继承来的那</tspan></text>
+<text x="964" y="466" class="xs"><tspan font-weight="700" fill="#202124">部分不出现在任何工时统计里。</tspan></text>
+<rect x="950" y="498" width="412" height="60" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="964" y="517" class="xs"><tspan font-weight="700" fill="#202124">⚠️ 撞墙的只有 v7 这一边。</tspan></text>
+<text x="964" y="532" class="xxs"><tspan fill="#9aa0a6">v7：四个方向 8 格实验无一正收益。GB300：只有</tspan><tspan font-weight="700" fill="#202124">并行度形状</tspan>那一组（PP/VPP）撞墙</text>
+<text x="964" y="545" class="xxs">落在 852–856；<tspan font-weight="700" fill="#202124">同表 EP 32→16 是 +3.3%，没跟进</tspan>。<tspan font-weight="700" fill="#d93025">所以 GB300 是「没跟进」不是</tspan></text>
+<text x="964" y="558" class="xxs"><tspan font-weight="700" fill="#d93025">「到顶」。</tspan></text>
+<rect x="950" y="568" width="412" height="42" rx="8" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="964" y="585" class="xxs"><tspan font-weight="700" fill="#202124">口径提醒</tspan>：第 6 节讲的「GPU 侧只调过 7 组」是 <tspan font-weight="700" fill="#202124">A4X（GB200）</tspan>上另一个模型的记</text>
+<text x="964" y="598" class="xxs">录，跟本图 <tspan font-weight="700" fill="#202124">A4X Max（GB300）</tspan>这四步是两台机器、两份记录。</text>
+<rect x="20" y="654" width="1360" height="104" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="38" y="682" class="sec">⭐ 这张图真正想让人带走的，不是哪条线更高，是「调优投入」这件事根本没法直接比</text>
+<text x="38" y="708" class="xs"><tspan font-weight="700" fill="#202124">我们在 v7 上花了约两周、五步、几十组配置；在 GB300 上花了一个通宵、四步。</tspan><tspan fill="#9aa0a6">如果只看这两个数字，会得出「GPU 那边随便调调就赢了」——</tspan><tspan font-weight="700" fill="#d93025">而真相是 GB300 的第一步就站在别人几个月的成果上。</tspan><tspan font-weight="700" fill="#202124">所以下次读到「我们两边都调过」的时候，接着问一句：两边的起点分</tspan></text>
+<text x="38" y="727" class="xs"><tspan font-weight="700" fill="#202124">别是谁给的？</tspan><tspan fill="#9aa0a6">　—— 这一句比「各调了多久」有用得多，而且对方通常答得上来。</tspan></text>
+<text x="1380" y="774" class="xxs" fill="#9aa0a6" text-anchor="end">两条曲线的横轴是「第几步」，不是时间 · 纵轴 TFLOP/s / 计算单元，BF16，0 起未截断 · 同一个 295B-A21B</text>
+</svg>
+<figcaption><b>上一张承认拆不动那 1.19 倍，这一张是唯一拆得动的证据。</b>重量在<b>左格那条绿线</b>：硬件一颗没换，457 → 662.3。<b>台下第一句多半不是「GPU 随便调调就赢了」，是更狠的那句 ——&nbsp;「TPU 调了两周，还不如 GPU 没调」。</b> 别辩，<b>直接指右格第一张卡，把那两行念完</b>：707.2 是抄来的，抄的那份背后是别人几个月的工作。</figcaption>
+</figure>
+
+  <h3>7.2　然后是这一节最难的一步：不说过头</h3>
+  <p>两个数有了，来路有了，能拆的也拆完了。<b>剩下的工作全部是减法</b> ——&nbsp;
+    把这个倍数放进几种不同的问法里各试一次，看它还剩多少是稳的。
+    <b>做完减法你会发现，能安全说出口的只有一句话，而且它很长。</b></p>
+<figure class="fbox fwide" id="ms-p17">
+<svg viewBox="0 0 1400 656" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="同一组实测换三种问法得到三个不同答案：同精度 1.31 倍、各自最优精度 2.06 倍、每美元每瓦答不了；以及 FP8 在两边的兑现率一边 +50.6% 一边 +1.3%">
+<text x="20" y="26" class="ttl">这组数能说什么　—— <tspan font-weight="700" fill="#d93025">换一个问法，就换一个倍数</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">口径最接近的一问</text>
+<rect x="151.0" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="168.0" y="58" class="sm">换精度之后</text>
+<rect x="247.5" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="264.5" y="58" class="sm">答不了 —— 而「答不了」也要占一格</text>
+<rect x="20" y="124" width="760" height="372" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="38" y="150" class="sec">甲　·　同一批实测，三个问法</text>
+<text x="38" y="170" class="xs"><tspan fill="#9aa0a6">三根条同一根轴。</tspan><tspan font-weight="700" fill="#202124">分开讲，①② 听起来像互相矛盾的两个结论；并排放，它们只是同一件事的两种问法。</tspan></text>
+<rect x="38" y="212" width="724" height="84" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="52" y="234" class="xs" fill="#1e8e3e"><tspan font-weight="700" fill="#202124">① 都跑 BF16（上一张图那组）</tspan></text>
+<text x="52" y="254" class="xxs"><tspan fill="#9aa0a6">两边同精度、同 seq、同 64 个单元。</tspan><tspan font-weight="700" fill="#202124">口径最接近的一问</tspan>—— 仍有六条边界，见 P-18。</text>
+<rect x="450" y="224" width="244" height="20" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="450" y="224" width="133.18333333333334" height="20" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="593.1833333333334" y="239" class="numb" fill="#1e8e3e">1.31×</text>
+<text x="450" y="264" class="xxs" fill="#5f6368">GB300 6,242  ÷  v7 4,770  tok/s</text>
+<rect x="38" y="304" width="724" height="84" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="52" y="326" class="xs" fill="#d93025"><tspan font-weight="700" fill="#202124">② 两边各自用最擅长的精度</tspan></text>
+<text x="52" y="346" class="xxs"><tspan fill="#9aa0a6">GB300 换 </tspan><tspan class="mono" fill="#1967d2">fp8_mx</tspan>，v7 换 <tspan class="mono" fill="#1967d2">absmax</tspan> 生产配方。<tspan font-weight="700" fill="#202124">倍数从 1.31 跳到 2.06 —— 但这</tspan></text>
+<text x="52" y="360" class="xxs"><tspan font-weight="700" fill="#202124">两个不是同一种 FP8，batch 也差 2.9 倍。</tspan></text>
+<rect x="450" y="316" width="244" height="20" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<rect x="450" y="316" width="209.43333333333334" height="20" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="669.4333333333334" y="331" class="numb" fill="#d93025">2.06×</text>
+<text x="450" y="356" class="xxs" fill="#5f6368">GB300 9,945  ÷  v7 4,830  tok/s</text>
+<rect x="38" y="396" width="724" height="84" rx="8" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="52" y="418" class="xs" fill="#9aa0a6"><tspan font-weight="700" fill="#202124">③ 每美元 / 每瓦</tspan></text>
+<text x="52" y="438" class="xxs"><tspan font-weight="700" fill="#202124">牌价查得到，但采购价是谈出来的；两边的功耗也没有可比口径。</tspan><tspan fill="#9aa0a6">而这两样恰恰是采购</tspan></text>
+<text x="52" y="452" class="xxs"><tspan fill="#9aa0a6">真正要的 —— 见上一节第 ④ 档。</tspan></text>
+<rect x="450" y="408" width="244" height="20" rx="3" fill="#fff" stroke="#dadce0" stroke-width="1.0" stroke-dasharray="4 3"/>
+<text x="572.0" y="423" class="numb" fill="#9aa0a6" text-anchor="middle">？</text>
+<text x="704" y="423" class="numb" fill="#9aa0a6">答不了</text>
+<text x="450" y="448" class="xxs" fill="#5f6368">牌价 ≠ 成交价 · 功耗无可比口径</text>
+<rect x="792" y="124" width="588" height="372" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="810" y="150" class="sec">乙　·　同一张空头支票，两边兑现得完全不同</text>
+<text x="810" y="170" class="xs"><tspan fill="#9aa0a6">浅槽＝峰值，深段＝实测 —— 和 P-15 甲格同一套画法。</tspan><tspan font-weight="700" fill="#202124">两边的 FP8 槽都正好是各自 BF16 槽的 2 倍。</tspan></text>
+<rect x="810" y="212" width="552" height="92" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="824" y="234" class="box" fill="#1a73e8">GB300</text>
+<text x="1348" y="236" class="numb" fill="#1e8e3e" text-anchor="end">+50.6%</text>
+<rect x="824" y="248" width="200.0" height="18" rx="3" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<rect x="824" y="248" width="68.32" height="18" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text x="816" y="261" class="xxs" fill="#5f6368" text-anchor="end">BF16</text>
+<text x="900.3199999999999" y="261" class="xxs" fill="#1a73e8">854.0</text>
+<text x="1032.0" y="261" class="xxs" fill="#9aa0a6">槽 2,500</text>
+<rect x="824" y="274" width="400.0" height="18" rx="3" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<rect x="824" y="274" width="102.87200000000001" height="18" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text x="816" y="287" class="xxs" fill="#5f6368" text-anchor="end">FP8 </text>
+<text x="934.8720000000001" y="287" class="xxs" fill="#1a73e8">1285.9</text>
+<text x="1232.0" y="287" class="xxs" fill="#9aa0a6">槽 5,000</text>
+<rect x="810" y="312" width="552" height="92" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="824" y="334" class="box" fill="#1e8e3e">TPU v7</text>
+<text x="1348" y="336" class="numb" fill="#d93025" text-anchor="end">+1.3%</text>
+<rect x="824" y="348" width="184.56" height="18" rx="3" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<rect x="824" y="348" width="52.984" height="18" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="816" y="361" class="xxs" fill="#5f6368" text-anchor="end">BF16</text>
+<text x="884.984" y="361" class="xxs" fill="#1e8e3e">662.3</text>
+<text x="1016.56" y="361" class="xxs" fill="#9aa0a6">槽 2,307</text>
+<rect x="824" y="374" width="369.12" height="18" rx="3" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.0"/>
+<rect x="824" y="374" width="53.664" height="18" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="816" y="387" class="xxs" fill="#5f6368" text-anchor="end">FP8 </text>
+<text x="885.664" y="387" class="xxs" fill="#1e8e3e">670.8</text>
+<text x="1201.12" y="387" class="xxs" fill="#9aa0a6">槽 4,614</text>
+<rect x="810" y="416" width="552" height="64" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="824" y="435" class="xs"><tspan font-weight="700" fill="#202124">⭐ 支票一样大，一边兑了一半，一边几乎没兑。</tspan><tspan fill="#9aa0a6">（同 GBS 2048 / MBS 1 的 C1；各自最优的 C2 是 +</tspan></text>
+<text x="824" y="450" class="xs"><tspan fill="#9aa0a6">59.3%，但它把 batch 也翻倍了。）</tspan></text>
+<text x="824" y="466" class="xxs"><tspan font-weight="700" fill="#202124">⚠️ 但这不能证明「差的是软件」</tspan><tspan fill="#9aa0a6">：算力翻倍而 HBM 带宽没翻倍，FP8 一样吃不满 —— </tspan><tspan font-weight="700" fill="#202124">那是硅片。我们没有能排除这</tspan></text>
+<text x="824" y="479" class="xxs"><tspan font-weight="700" fill="#202124">一点的数据。</tspan></text>
+<rect x="20" y="520" width="1360" height="112" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="38" y="548" class="sec">⭐ 去掉 P-18 那六条之后，还能说的只剩这一句 —— 抄走就能用</text>
+<text x="38" y="574" class="xs"><tspan font-weight="700" fill="#202124">「在 Hunyuan3-295B-A21B、seq 4096、各 64 个计算单元、</tspan><tspan font-weight="700" fill="#d93025">以 2026 年 8 月两边的软件栈</tspan>，GB300 的每卡吞吐是 v7 每芯片的 <tspan font-weight="700" fill="#d93025">1.31 倍</tspan>（6,242 对 4,770 tok/s）；换成 TFLOP/s 口径是 1.29 倍，其中 <tspan font-weight="700" fill="#d93025">1.084 倍</tspan>来自峰值差（2,500 对 2,307），其余不来自</text>
+<text x="38" y="593" class="xs">峰值。」</text>
+<text x="38" y="614" class="xs"><tspan fill="#9aa0a6">一句话里有</tspan><tspan font-weight="700" fill="#202124">模型 · 规模 · 时间 · 单位 · 分解</tspan>五个槽位，而且分解那一段说的是「不来自峰值」不是「来自软件」—— <tspan font-weight="700" fill="#202124">后者我们没证明。比「GPU 快 30%」长了五倍，但半年后它还能被查。</tspan></text>
+<text x="1380" y="644" class="xxs" fill="#9aa0a6" text-anchor="end">三个问法用的是同一批实测 · tok/s / 计算单元 · 同一个 Hunyuan3-295B-A21B · seq 4096 · 各 64 个单元 · 不能拿它说的话见 P-18</text>
+</svg>
+<figcaption><b>这一节的收尾。放完这张，先别翻页。</b><b>问一句「那你觉得这个倍数还缺什么」，等他们说 ——&nbsp;能说出两到三条。</b>说完了再翻到 P-18 对答案。<b>能自己说出来的边界，才会在下次读别人报告时被想起来；念给他们听的，出门就忘。</b></figcaption>
+</figure>
+
+  <p><b>放完上面这张，先别翻页。</b>那句「抄走就能用」的话之所以立得住，
+    是因为它前面挡着一排边界 ——&nbsp;<b>而那排边界值不值钱，
+    取决于是自己想出来的，还是别人念出来的。</b>
+    先自己数一遍：<b>这个 1.31 倍，还缺什么？</b></p>
+<figure class="fbox fwide" id="ms-p18">
+<svg viewBox="0 0 1400 610" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="六条不能拿 1.31 倍这个结论说的话，每条都标出它把倍数往哪一边推：四条利于 GB300，两条利于 TPU v7">
+<text x="20" y="26" class="ttl">不能拿它说的话　—— <tspan font-weight="700" fill="#d93025">六条，每条都标出它往哪边推</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">这一条把倍数推高（利于 GB300）· 共 4 条</text>
+<rect x="289.57500000000005" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="306.57500000000005" y="58" class="sm">这一条把倍数压低（利于 TPU v7）· 共 2 条</text>
+<rect x="565.475" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="582.475" y="58" class="sm">底带那条没有方向 —— 它是适用范围，不是偏置</text>
+<rect x="20.0" y="128" width="444.0" height="150" rx="9" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<rect x="20.0" y="128" width="444.0" height="30" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<rect x="20.0" y="148" width="444.0" height="10" rx="0" fill="#fce8e6"/>
+<text x="34.0" y="149" class="box" fill="#d93025">①</text>
+<text x="56.0" y="149" class="lbl" fill="#202124">global batch 不一样</text>
+<rect x="356.8" y="168" width="95.2" height="22" rx="11" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="404.4" y="183" class="xxs" fill="#d93025" text-anchor="middle">→ 利于 GB300</text>
+<text x="34.0" y="206" class="xxs"><tspan font-weight="700" fill="#202124">问①</tspan> GB300 每步 <tspan font-weight="700" fill="#202124">2,048</tspan> 条序列，v7 等效 <tspan font-weight="700" fill="#202124">1,536</tspan>；<tspan font-weight="700" fill="#202124">问②</tspan> 更悬殊 —— <tspan font-weight="700" fill="#202124">4,096</tspan> 对 <tspan font-weight="700" fill="#202124">1,408</tspan>，差 <tspan font-weight="700" fill="#202124">2.</tspan></text>
+<text x="34.0" y="220" class="xxs"><tspan font-weight="700" fill="#202124">9 倍</tspan>。<tspan fill="#9aa0a6">大 batch 摊薄固定开销。但 v7 的 batch 是被 </tspan><tspan font-weight="700" fill="#202124">94.74 GiB</tspan> 顶住的，不是被让的 —</text>
+<text x="34.0" y="234" class="xxs">— 这一条本身就是硬件差异。</text>
+<rect x="478.0" y="128" width="444.0" height="150" rx="9" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<rect x="478.0" y="128" width="444.0" height="30" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<rect x="478.0" y="148" width="444.0" height="10" rx="0" fill="#fce8e6"/>
+<text x="492.0" y="149" class="box" fill="#d93025">②</text>
+<text x="514.0" y="149" class="lbl" fill="#202124">64 这个规模是 GPU 的主场</text>
+<rect x="814.8" y="168" width="95.2" height="22" rx="11" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="862.4" y="183" class="xxs" fill="#d93025" text-anchor="middle">→ 利于 GB300</text>
+<text x="492.0" y="206" class="xxs"><tspan font-weight="700" fill="#202124">GB300 的 64 张卡全在一个 NVL72 域内</tspan>（域内没有「距离」），v7 是 4x4x4 环面（对角</text>
+<text x="492.0" y="220" class="xxs">要绕好几跳）。<tspan fill="#9aa0a6">而这个模型吃的正是 </tspan><tspan font-weight="700" fill="#202124">all-to-all</tspan> —— 第 4 节论证过它是唯一在两种拓扑上</text>
+<text x="492.0" y="234" class="xxs"><tspan font-weight="700" fill="#202124">表现分岔</tspan>的原语，而 TPU 的账要过了 72 颗才开始好看。</text>
+<rect x="936.0" y="128" width="444.0" height="150" rx="9" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<rect x="936.0" y="128" width="444.0" height="30" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<rect x="936.0" y="148" width="444.0" height="10" rx="0" fill="#fce8e6"/>
+<text x="950.0" y="149" class="box" fill="#d93025">③</text>
+<text x="972.0" y="149" class="lbl" fill="#202124">重算策略不是同一件事</text>
+<rect x="1272.8" y="168" width="95.2" height="22" rx="11" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="1320.4" y="183" class="xxs" fill="#d93025" text-anchor="middle">→ 利于 GB300</text>
+<text x="950.0" y="206" class="xxs">两边图脚都写「不落盘 checkpoint」，<tspan font-weight="700" fill="#202124">但那说的是不写盘，不是不重算</tspan>。<tspan fill="#9aa0a6">GB300 侧重算</tspan><tspan font-weight="700" fill="#202124">全关</tspan></text>
+<text x="950.0" y="220" class="xxs">（吃到 230 / 288 GB）；v7 侧 <tspan class="mono" fill="#1967d2">remat_policy=custom</tspan> + offload（91.94 / 94.74 </text>
+<text x="950.0" y="234" class="xxs">GiB）。<tspan font-weight="700" fill="#202124">关重算本身就值 +5.2%。</tspan></text>
+<rect x="20.0" y="294" width="444.0" height="150" rx="9" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<rect x="20.0" y="294" width="444.0" height="30" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<rect x="20.0" y="314" width="444.0" height="10" rx="0" fill="#fce8e6"/>
+<text x="34.0" y="315" class="box" fill="#d93025">④</text>
+<text x="56.0" y="315" class="lbl" fill="#202124">两边软件成熟度差很多</text>
+<rect x="310.0" y="334" width="142.0" height="22" rx="11" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="381.0" y="349" class="xxs" fill="#d93025" text-anchor="middle">→ 利于 GB300 · 且会变</text>
+<text x="34.0" y="372" class="xxs"><tspan font-weight="700" fill="#202124">这一条是整节结论最重要的边界，所以必须在清单里而不只在 P-16 里。</tspan><tspan fill="#9aa0a6">如果差距和软件有关，</tspan></text>
+<text x="34.0" y="386" class="xxs"><tspan fill="#9aa0a6">那么</tspan><tspan font-weight="700" fill="#202124">软件会变</tspan> —— 这组数是 2026 年 8 月那两套栈的状态，不是硬件属性。<tspan font-weight="700" fill="#202124">换个季度重测，</tspan></text>
+<text x="34.0" y="400" class="xxs"><tspan font-weight="700" fill="#202124">第一个动的就是它。</tspan></text>
+<rect x="478.0" y="294" width="444.0" height="150" rx="9" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<rect x="478.0" y="294" width="444.0" height="30" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<rect x="478.0" y="314" width="444.0" height="10" rx="0" fill="#e6f4ea"/>
+<text x="492.0" y="315" class="box" fill="#1e8e3e">⑤</text>
+<text x="514.0" y="315" class="lbl" fill="#202124">v7 那 662.3 含一个频率档</text>
+<rect x="831.6" y="334" width="78.4" height="22" rx="11" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="870.8" y="349" class="xxs" fill="#1e8e3e" text-anchor="middle">→ 利于 v7</text>
+<text x="492.0" y="372" class="xxs"><tspan class="mono" fill="#1967d2">dvfs_p_state=7</tspan> 把频率锁到最高，单独值 <tspan font-weight="700" fill="#202124">+8.6%</tspan>；<tspan font-weight="700" fill="#202124">第 6 节的口径认为它属于硬件工作点，</tspan></text>
+<text x="492.0" y="386" class="xxs"><tspan font-weight="700" fill="#202124">不算调优</tspan>。<tspan fill="#9aa0a6">GB300 侧没动过等价旋钮。</tspan><tspan font-weight="700" fill="#202124">这一条对我们自己不利，是我们自己的数。</tspan></text>
+<rect x="936.0" y="294" width="444.0" height="150" rx="9" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<rect x="936.0" y="294" width="444.0" height="30" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<rect x="936.0" y="314" width="444.0" height="10" rx="0" fill="#e6f4ea"/>
+<text x="950.0" y="315" class="box" fill="#1e8e3e">⑥</text>
+<text x="972.0" y="315" class="lbl" fill="#202124">「每芯片对每 GPU」已经是最优待</text>
+<rect x="1289.6" y="334" width="78.4" height="22" rx="11" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="1328.8" y="349" class="xxs" fill="#1e8e3e" text-anchor="middle">→ 利于 v7</text>
+<text x="950.0" y="372" class="xxs">v7 一颗 chip 是 <tspan font-weight="700" fill="#202124">2 个 device</tspan>，GB300 一张卡是 1 个。<tspan fill="#9aa0a6">按 device 比就是「1 颗 v7 </tspan></text>
+<text x="950.0" y="386" class="xxs"><tspan fill="#9aa0a6">die 对 1 整张 GB300」，那样 v7 更吃亏 —— </tspan><tspan font-weight="700" fill="#202124">本课选的这个口径，已经是 v7 能拿到的最</tspan></text>
+<text x="950.0" y="400" class="xxs"><tspan font-weight="700" fill="#202124">好的一个。</tspan>见 P-12 乙格。</text>
+<rect x="20" y="470" width="1360" height="116" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
+<text x="38" y="498" class="sec">⚠️ 还有第七条，它没有方向 —— 只有一个模型、一个规模。而第 7 节说过「三张图之后你会发现它是硬约束」，所以这里得演示它会怎么动</text>
+<text x="38" y="524" class="xs"><tspan font-weight="700" fill="#202124">把规模从 64 推到 72 以上，这个倍数会往哪边动，第 4 节已经答过：</tspan><tspan fill="#9aa0a6">GB300 一侧要</tspan><tspan font-weight="700" fill="#202124">跨出 NVLink 域</tspan>，all-to-all 从「域内无距离」变成「过交换机、过网卡」；v7 的环面则<tspan font-weight="700" fill="#202124">继续线性延伸</tspan>，没有这个台阶。<tspan font-weight="700" fill="#202124">这一节测的 64，正好停在那个分岔点之前。</tspan></text>
+<text x="38" y="545" class="xs"><tspan fill="#9aa0a6">所以「只有一个规模」不是客气话：</tspan><tspan font-weight="700" fill="#202124">它是这组数唯一一条我们能预判方向、却没有数据的边界</tspan> —— 而预判的方向恰好和上面那六条相反。<tspan font-weight="700" fill="#202124">要推翻这一节最省事的办法，不是质疑这 64 个单元上的任何一个数字，是去测 128 个。</tspan></text>
+<text x="1380" y="598" class="xxs" fill="#9aa0a6" text-anchor="end">这一张是 P-17 的续页 —— 讲课时先放 P-17 让台下自己说，再放这一张对答案</text>
+</svg>
+<figcaption><b>这是上一张的答案页，所以不要提前放。</b><b>讲法只有一件事要做：让台下自己数方向</b> ——&nbsp;四条红的、两条绿的。<b>数完再说那句「所以这 1.31 倍是一个下限」</b>，他们会记住这个动作，而不是记住这六条的内容。</figcaption>
+</figure>
+
+  <div class="note warn"><span class="t">讲法建议：这一节留最后三分钟讲「所以不能说什么」，不要讲超</span>
+    这一节的四张图<b>只有那一句长句是要背下来的</b>，前面全是它的推导。
+    如果时间不够，<b>宁可跳过调优阶梯的细节，也要把那一句念完</b> ——&nbsp;
+    因为台下带走一个「1.31 倍」而没带走它的边界，<b>这一节就是净负收益</b>：
+    你亲手给了他们一个更精确、因而更容易被误引的数字。
+    <br><br><b>⚠️ 还有一句必须说，否则整节会被听成站队。</b>
+    我们能说的是<b>「这 1.19 倍不来自峰值差」</b>，
+    以及<b>「v7 上不换硬件、只改软件涨了 44.9%」</b> ——&nbsp;这两句都有据。
+    <b>但「所以差距全在软件」这一句，我们没有证明，也不打算说。</b>
+    <br>而即使是能说的那两句，也都带着日期：<b>这组数是 2026 年 8 月、
+    这一个模型、这一个规模上的</b>，两边的软件栈都还在动。
+    <b>会变的是数字，不会变的是「怎么问」。</b></div>
+
+  <p><b>第 6 节给了方法，第 7 节给了一组按这个方法做出来的数。</b>
+    但整节从头到尾都在要求同一件事：<b>每一个数字都得能被回查。</b>
+    <br>——&nbsp;那就把这门课自己的账也摊开：<b>下一节把这一课里每一个数的来路，
+    连同查不到的那几处，一条条列出来。</b></p>
 </div></section>
 
 <section><div class="wrap">
