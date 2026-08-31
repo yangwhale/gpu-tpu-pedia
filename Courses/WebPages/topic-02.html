@@ -4392,6 +4392,218 @@ footer a{text-decoration:none}
 <figcaption>P-28 说「每条端口本身就是 128 宽」，最较真的追问紧接着就来：<b>一个 vreg 才 4 KB，它怎么可能扯出去那么多根线？</b>这个质疑<b>完全正确</b> —— 而且答案不是「线真有那么多」，是<b>「它们根本不需要汇合」</b>。先纠单位：一根走线传<b>一个 bit</b>，所以一个 vreg 是 8 × 128 × 32 ＝ <b>32,768 根</b>，不是 128 根。荒唐 → 所以它不是一整块：<b>整条数据通路按 lane 切成 128 份，存储就贴在自己那条 lane 的 ALU 旁边</b>，每份只要 <b>256 根线、走几微米</b>。于是三个问题一次答完：<b>64 个 vreg 之间完全不连</b>（只共用位线，而且是<b>按地址选通、当周期就到</b>，<b>不是轮转排队</b> —— 共用的代价是「一条端口一周期只送一行」，不是「等 64 个周期」）；<b>到 VPU 是贴着的</b>；<b>只有 MXU 和 XLU 才真的要扯长线</b> —— 这也正是它们要队列、要共享的原因。⚠️ 红带那条必须念：<b>「按 lane 切片」是推的，不是查到的版图</b>，具体 bank 划分与 floorplan 公开资料没有。</figcaption>
 </figure>
 
+  <p><b>「位线」这个词已经用了好几次，但一直没画出来 ——&nbsp;它其实就是一张田字格。</b>
+    值得单独画一张，是因为不画就一定会误解成「大家轮流用一条总线」：
+    <b>那样推下去，64 个 vreg 岂不是要 64 个周期才轮到一回？</b>
+    而公开资料明说一个周期就能到 VPU。<b>两句话对不上，对不上的是那个比喻，不是硬件。</b></p>
+<figure class="fbox fwide" id="ms-p30">
+<svg viewBox="0 0 1400 978" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器堆的位线结构：横向字线按地址选中一行，纵向位线把那一行的数据送出去；一个端口就是一整套这样的线">
+<text x="20" y="26" class="ttl">位线是一张<tspan font-weight="700">田字格</tspan>　—— 横的选行，竖的送数据，<tspan font-weight="700">一个端口就是一整套线</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">字线：横着，一行一根，选中谁</text>
+<rect x="220.0" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="237.0" y="58" class="sm">位线：竖着，一位一根，送数据</text>
+<rect x="420.0" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="437.0" y="58" class="sm">存储单元</text>
+<rect x="505.0" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="522.0" y="58" class="sm">被选中的那一行</text>
+<rect x="20" y="84" width="1360" height="360" rx="10" fill="#fff" stroke="#8430ce" stroke-width="1.6"/>
+<text x="38" y="114" class="sec" fill="#8430ce">一条 lane 切片里的寄存器堆：64 行 × 256 位的格子</text>
+<line x1="232.0" y1="162" x2="232.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="272.0" y1="162" x2="272.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="312.0" y1="162" x2="312.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="352.0" y1="162" x2="352.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="392.0" y1="162" x2="392.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="432.0" y1="162" x2="432.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="472.0" y1="162" x2="472.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="512.0" y1="162" x2="512.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="552.0" y1="162" x2="552.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="592.0" y1="162" x2="592.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="632.0" y1="162" x2="632.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="672.0" y1="162" x2="672.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="712.0" y1="162" x2="712.0" y2="414" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="472.0" y="154" class="xxs" fill="#1a73e8" text-anchor="middle">位线　·　竖着走，一位一根　→　共 256 根</text>
+<line x1="208" y1="189.0" x2="740" y2="189.0" stroke="#d93025" stroke-width="1.2"/>
+<rect x="224.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="264.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="304.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="344.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="384.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="424.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="464.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="504.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="544.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="584.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="624.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="664.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="704.0" y="182.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<text x="202" y="193.0" class="xxs" fill="#5f6368" text-anchor="end">vreg 0</text>
+<line x1="208" y1="215.0" x2="740" y2="215.0" stroke="#d93025" stroke-width="1.2"/>
+<rect x="224.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="264.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="304.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="344.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="384.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="424.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="464.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="504.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="544.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="584.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="624.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="664.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="704.0" y="208.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<text x="202" y="219.0" class="xxs" fill="#5f6368" text-anchor="end">vreg 1</text>
+<line x1="208" y1="241.0" x2="740" y2="241.0" stroke="#d93025" stroke-width="1.2"/>
+<rect x="224.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="264.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="304.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="344.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="384.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="424.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="464.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="504.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="544.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="584.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="624.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="664.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="704.0" y="234.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<text x="202" y="245.0" class="xxs" fill="#5f6368" text-anchor="end">vreg 2</text>
+<line x1="208" y1="267.0" x2="740" y2="267.0" stroke="#1e8e3e" stroke-width="2.2"/>
+<rect x="224.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="264.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="304.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="344.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="384.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="424.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="464.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="504.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="544.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="584.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="624.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="664.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="704.0" y="260.0" width="16" height="14" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="202" y="271.0" class="xxs" fill="#1e8e3e" text-anchor="end">vreg 3</text>
+<line x1="208" y1="293.0" x2="740" y2="293.0" stroke="#d93025" stroke-width="1.2"/>
+<rect x="224.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="264.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="304.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="344.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="384.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="424.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="464.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="504.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="544.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="584.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="624.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="664.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="704.0" y="286.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<text x="202" y="297.0" class="xxs" fill="#5f6368" text-anchor="end">vreg 4</text>
+<line x1="208" y1="319.0" x2="740" y2="319.0" stroke="#d93025" stroke-width="1.2"/>
+<rect x="224.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="264.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="304.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="344.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="384.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="424.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="464.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="504.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="544.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="584.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="624.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="664.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="704.0" y="312.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<text x="202" y="323.0" class="xxs" fill="#5f6368" text-anchor="end">vreg 5</text>
+<line x1="208" y1="345.0" x2="740" y2="345.0" stroke="#d93025" stroke-width="1.2"/>
+<rect x="224.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="264.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="304.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="344.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="384.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="424.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="464.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="504.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="544.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="584.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="624.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="664.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="704.0" y="338.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<text x="202" y="349.0" class="xxs" fill="#5f6368" text-anchor="end">vreg 6</text>
+<line x1="208" y1="371.0" x2="740" y2="371.0" stroke="#d93025" stroke-width="1.2"/>
+<rect x="224.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="264.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="304.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="344.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="384.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="424.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="464.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="504.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="544.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="584.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="624.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="664.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="704.0" y="364.0" width="16" height="14" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<text x="202" y="375.0" class="xxs" fill="#5f6368" text-anchor="end">vreg 63</text>
+<text x="746" y="271.0" class="xxs" fill="#1e8e3e">← 选中</text>
+<text x="472.0" y="430" class="xxs" fill="#5f6368" text-anchor="middle">…… 中间省略，实际 64 行 × 256 列</text>
+<rect x="30" y="246.0" width="100" height="68" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="40" y="270.0" class="lbl" fill="#d93025">地址译码器</text>
+<text x="40" y="288.0" class="xxs" fill="#5f6368">6 位地址</text>
+<text x="40" y="303.0" class="xxs" fill="#5f6368">→ 选 1 行</text>
+<path d="M 130 280 L 142 280 L 142 267" stroke="#1e8e3e" stroke-width="1.6" fill="none" marker-end="url(#aG)"/>
+<rect x="212" y="392" width="520" height="20" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
+<text x="472.0" y="406" class="xxs" fill="#1a73e8" text-anchor="middle">读出电路　→　这一行的 256 bit 一起出去</text>
+<rect x="792" y="146" width="588" height="172" rx="8" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="808" y="170" class="xs"><tspan font-weight="700" fill="#202124">横的叫字线，一行一根，管「选中谁」。竖的叫位线，一位一根，管「把数据送出去」。</tspan></text>
+<text x="808" y="196" class="xs">给一个 6 位地址，译码器<tspan font-weight="700" fill="#202124">点亮一根字线</tspan>，那一行的 256 个单元同时接上位线 —— <tspan font-weight="700" fill="#d93025">当周期就到，没有排队这回事。</tspan></text>
+<text x="808" y="222" class="xs">所以「64 个共用位线」的真面目是<tspan font-weight="700" fill="#202124">「按地址 64 挑 1」</tspan>，<tspan font-weight="700" fill="#d93025">不是「轮流用 64 个周期」</tspan>。</text>
+<text x="808" y="248" class="xs"><tspan font-weight="700" fill="#202124">那共用到底代价在哪？</tspan>就在这张图上：<tspan font-weight="700" fill="#202124">这一整套线，一个周期只能送一行出去</tspan>。想同时送 8 行 —— 只能<tspan font-weight="700" fill="#202124">再铺 7 套</tspan>。</text>
+<text x="808" y="266" class="xs">这就是下一格要说的「端口」。</text>
+<rect x="20" y="466" width="1360" height="226" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+<text x="38" y="494" class="sec" fill="#8430ce">那「端口」到底是什么？—— <tspan font-weight="700">一整套线，不是一个比喻</tspan></text>
+<rect x="38" y="522" width="14" height="14" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text x="60" y="534" class="lbl" fill="#d93025">① 地址译码器</text>
+<text x="196" y="534" class="xs" fill="#5f6368">把 6 位地址变成「点亮第几根字线」</text>
+<rect x="38" y="552" width="14" height="14" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
+<text x="60" y="564" class="lbl" fill="#d93025">② 一组字线</text>
+<text x="196" y="564" class="xs" fill="#5f6368">64 根，横着穿过所有单元</text>
+<rect x="38" y="582" width="14" height="14" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text x="60" y="594" class="lbl" fill="#1a73e8">③ 一组位线</text>
+<text x="196" y="594" class="xs" fill="#5f6368">256 根，竖着穿过所有单元</text>
+<rect x="38" y="612" width="14" height="14" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.0"/>
+<text x="60" y="624" class="lbl" fill="#1a73e8">④ 读出／写入电路</text>
+<text x="196" y="624" class="xs" fill="#5f6368">把位线上的电平变成能用的数</text>
+<text x="38" y="658" class="xs"><tspan font-weight="700" fill="#202124">凑齐这四件，才算一个端口。</tspan></text>
+<rect x="660" y="518" width="300" height="132" rx="6" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="810.0" y="510" class="xxs" fill="#5f6368" text-anchor="middle">放大看同一个存储单元</text>
+<line x1="668" y1="552" x2="952" y2="552" stroke="#d93025" stroke-width="1.6"/>
+<text x="950" y="548" class="xxs" fill="#5f6368" text-anchor="end">字线1</text>
+<line x1="668" y1="574" x2="952" y2="574" stroke="#f28b82" stroke-width="1.6"/>
+<text x="950" y="570" class="xxs" fill="#5f6368" text-anchor="end">字线2</text>
+<line x1="668" y1="596" x2="952" y2="596" stroke="#fbbc04" stroke-width="1.6"/>
+<text x="950" y="592" class="xxs" fill="#5f6368" text-anchor="end">字线3</text>
+<line x1="730" y1="528" x2="730" y2="640" stroke="#1a73e8" stroke-width="1.6"/>
+<text x="730" y="648" class="xxs" fill="#5f6368" text-anchor="middle">位线1</text>
+<line x1="778" y1="528" x2="778" y2="640" stroke="#78a9f7" stroke-width="1.6"/>
+<text x="778" y="648" class="xxs" fill="#5f6368" text-anchor="middle">位线2</text>
+<line x1="826" y1="528" x2="826" y2="640" stroke="#12786f" stroke-width="1.6"/>
+<text x="826" y="648" class="xxs" fill="#5f6368" text-anchor="middle">位线3</text>
+<rect x="760" y="562" width="40" height="34" rx="4" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+<text x="780" y="583" class="xxs" fill="#8430ce" text-anchor="middle">1 bit</text>
+<text x="992" y="522" class="xs"><tspan font-weight="700" fill="#202124">多端口 ＝ 在同一批存储单元上，并排铺好几套线。</tspan></text>
+<text x="992" y="562" class="xs">同一个单元被<tspan font-weight="700" fill="#202124">好几根字线</tspan>横着穿过、被<tspan font-weight="700" fill="#202124">好几根位线</tspan>竖着穿过。于是它可以<tspan font-weight="700" fill="#202124">同</tspan></text>
+<text x="992" y="580" class="xs"><tspan font-weight="700" fill="#202124">时被不同的端口读到</tspan> —— 这就是「一个周期读 8 个 vreg」的物理实现。</text>
+<rect x="20" y="714" width="1360" height="112" rx="10" fill="#e0f2f0" stroke="#12786f" stroke-width="1.6"/>
+<text x="38" y="742" class="sec" fill="#12786f">⭐ 那「多开几个端口不就行了」？—— 又一个平方，而且这次是面积</text>
+<text x="38" y="768" class="xs">每加一个端口，每个单元<tspan font-weight="700" fill="#202124">横向多一根字线、纵向多一根位线</tspan> —— <tspan font-weight="700" fill="#202124">单元在两个方向上同时变大，面积按端口数的平方涨</tspan>。端口翻倍，寄存器堆的面积大约变成四倍。</text>
+<text x="38" y="789" class="xs"><tspan font-weight="700" fill="#d93025">所以端口是全芯片最稀缺的预算之一，不是想加就加。</tspan><tspan fill="#9aa0a6">⚠️ 平方关系是数字设计通则；TPU 具体用什么单元、几个端口，公开资料没有。</tspan></text>
+<rect x="20" y="848" width="1360" height="110" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="38" y="876" class="sec" fill="#1e8e3e">✅ 对账：这张格子图能不能跟公开数字对上？</text>
+<text x="38" y="902" class="xs">一条 lane 切片 <tspan font-weight="700" fill="#202124">64 行 × 256 位 ＝ 16,384 个单元</tspan>；全核 <tspan font-weight="700" fill="#202124">× 128 条 lane ＝ 2,097,152 个单元</tspan>；换成字节 <tspan font-weight="700" fill="#202124">÷ 8 ＝ 262,144 B ＝ 256 KiB</tspan>。</text>
+<text x="38" y="923" class="xs"><tspan font-weight="700" fill="#202124">而公开资料写的是「每核约 256 kB 的 vreg」—— 正好对上。</tspan><tspan fill="#9aa0a6">一个孤立的数不能信，但两条独立路径撞出同一个数，整套模型就立住了。</tspan></text>
+</svg>
+<figcaption>「位线」这个词前面用了好几次，但一直没画。它其实就是一张<b>田字格</b>：<b>横着的是字线，一行一根，管「选中谁」；竖着的是位线，一位一根，管「把数据送出去」</b>。给一个 6 位地址，译码器点亮一根字线，那一行的 256 个单元同时接上位线 —— <b>当周期就到，没有排队这回事</b>。所以「64 个共用位线」的真面目是<b>按地址 64 挑 1</b>，<b>不是轮流用 64 个周期</b>。这张图顺带把「端口」落到实处：<b>一个端口 ＝ 译码器 ＋ 一组字线 ＋ 一组位线 ＋ 读出电路</b>，多端口就是在同一批单元上并排铺好几套线 —— 于是「多开几个端口」代价是<b>面积按端口数的平方涨</b>。⭐ 最值得看的是绿带那个对账：<b>64 × 256 × 128 ÷ 8 ＝ 256 KiB，正好等于公开资料说的「每核约 256 kB vreg」</b> —— 两条独立路径撞出同一个数，前面整套模型才算立住。</figcaption>
+</figure>
+
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
   <p>上一节说的「运行时换任务」，具体是在哪一层发生的？把两边的层级摆开对照。
     <b>GPU 这边有四层</b>，注意哪几层是启动之后才知道的 ——</p>
