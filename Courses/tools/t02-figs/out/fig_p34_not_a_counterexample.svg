@@ -1,0 +1,68 @@
+<svg viewBox="0 0 1400 776" width="1400" height="776" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CUDA Graph 不构成反例：它自身要求形状静态、它补的是 TPU 架构上不存在的问题、而且它一个晶体管也省不掉">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">那为什么这<tspan font-weight="700">不算反例</tspan>　—— 三条理由，指向同一个方向</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="37" y="58" class="sm">① 它自己也交静态税</text>
+<rect x="163.64999999999998" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="180.64999999999998" y="58" class="sm">② TPU 不需要它</text>
+<rect x="286.59999999999997" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="303.59999999999997" y="58" class="sm">③ 硬件一点没省</text>
+<rect x="20" y="84" width="438" height="266" rx="9" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="36" y="110" class="box" fill="#f9ab00">① 它自己也在交静态税</text>
+<text x="442" y="110" class="xxs" fill="#5f6368" text-anchor="end">跟 TPU 交的是同一笔</text>
+<text x="36" y="136" class="xs"><tspan font-weight="700" fill="#202124">CUDA Graph 要求形状静态。</tspan>shape 一变，capture 的那张图就不能用了，得重新</text>
+<text x="36" y="154" class="xs">录一遍。</text>
+<text x="36" y="182" class="xs">于是在线推理只能<tspan font-weight="700" fill="#202124">按 batch size 分桶、把序列 padding 到桶边界</tspan>，或者为每个</text>
+<text x="36" y="200" class="xs">常见形状各录一张图。</text>
+<line x1="36" y1="226" x2="442" y2="226" stroke="#f9ab00" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="36" y="246" class="xs"><tspan font-weight="700" fill="#d93025">这正是这门课一路在说的那笔静态税</tspan> —— 5.5 那本移植账单上的科目，<tspan font-weight="700" fill="#202124">GPU 想要这</tspan></text>
+<text x="36" y="264" class="xs"><tspan font-weight="700" fill="#202124">份速度，也得开始交。</tspan></text>
+<rect x="476" y="84" width="438" height="266" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text x="492" y="110" class="box" fill="#1e8e3e">② TPU 压根不需要它</text>
+<text x="898" y="110" class="xxs" fill="#5f6368" text-anchor="end">被补的那个问题，那边不存在</text>
+<text x="492" y="136" class="xs">TPU 上 XLA <tspan font-weight="700" fill="#202124">本来就把整个 step 编译成一个程序</tspan>，从来没有「主机一条一条发 </text>
+<text x="492" y="154" class="xs">kernel」这回事。</text>
+<text x="492" y="182" class="xs"><tspan font-weight="700" fill="#202124">所以 TPU 没有 CUDA Graph 这种东西，也不需要</tspan> —— 它一直就在那个模式里。</text>
+<line x1="492" y1="208" x2="898" y2="208" stroke="#1e8e3e" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="492" y="228" class="xs"><tspan font-weight="700" fill="#202124">CUDA Graph 是 GPU 在补一个自己架构带来的问题。</tspan><tspan fill="#9aa0a6">补得很漂亮，但「需要补」这</tspan></text>
+<text x="492" y="246" class="xs"><tspan fill="#9aa0a6">件事本身就说明问题存在过。</tspan></text>
+<rect x="932" y="84" width="438" height="266" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text x="948" y="110" class="box" fill="#d93025">③ 晶体管一个都省不掉</text>
+<text x="1354" y="110" class="xxs" fill="#5f6368" text-anchor="end">这条最要紧</text>
+<text x="948" y="136" class="xs"><tspan font-weight="700" fill="#202124">硬件成本由「它必须支持的最坏情况」决定，不由「你实际跑的情况」决定。</tspan></text>
+<text x="948" y="164" class="xs">哪怕你<tspan font-weight="700" fill="#202124">百分之百</tspan>的负载都开 graph，SM 里那套 warp 调度器、记分板、几十个 </text>
+<text x="948" y="182" class="xs">warp 槽、全部常驻的上下文寄存器 —— <tspan font-weight="700" fill="#d93025">一个都省不掉。</tspan></text>
+<line x1="948" y1="208" x2="1354" y2="208" stroke="#d93025" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="948" y="228" class="xs">因为 graph 里每个节点<tspan font-weight="700" fill="#202124">仍然是一次正常的 kernel 启动</tspan>（P-33 第 ②③ 层）。<tspan font-weight="700" fill="#202124">灵</tspan></text>
+<text x="948" y="246" class="xs"><tspan font-weight="700" fill="#202124">活性的代价躲不掉，哪怕你根本没用那份灵活性。</tspan></text>
+<rect x="20" y="372" width="1360" height="118" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<text x="38" y="400" class="sec" fill="#8430ce">⚠️ 一条必须写进去的更新：graph 里现在真的可以有分支了</text>
+<text x="38" y="426" class="xs"><tspan font-weight="700" fill="#202124">CUDA 12.4 起，graph 支持 conditional 节点：IF 和 WHILE</tspan>；<tspan font-weight="700" fill="#202124">12.8 又加了 IF/ELSE 和 SWITCH</tspan>。条件在 GPU 上判、不回主机。<tspan font-weight="700" fill="#d93025">所以「开了 graph 就是一条道跑到黑」这句话，严格讲已经不准确了。</tspan></text>
+<text x="38" y="447" class="xs"><tspan font-weight="700" fill="#202124">但要看清它在哪一层</tspan>：这些分支的粒度是<tspan font-weight="700" fill="#202124">整个子图</tspan>，落在 P-33 的第 ① 层。跟第 ③ 层那种「每个周期从几十个 warp 里挑一个」<tspan font-weight="700" fill="#202124">仍然差着三到四个数量级</tspan> —— <tspan font-weight="700" fill="#202124">能选的东西变多了，选的颗粒没变细。</tspan></text>
+<rect x="20" y="512" width="1360" height="130" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="540" class="sec" fill="#1a73e8">⭐ 落点：GPU 想要这份性能时，办法是让自己更像 TPU</text>
+<text x="38" y="566" class="xs"><tspan font-weight="700" fill="#202124">把三条并起来看，方向非常清楚</tspan>：当 GPU 想要接近 TPU 那种效率，它采取的办法就是<tspan font-weight="700" fill="#202124">把决定往前挪、并且要求形状固定下来</tspan> —— <tspan font-weight="700" fill="#202124">这正是 TPU 一开始就选的那条路。</tspan></text>
+<text x="38" y="587" class="xs"><tspan font-weight="700" fill="#d93025">而它能往前挪的只有最上面那一层。</tspan>下面两层挪不动 —— <tspan font-weight="700" fill="#202124">挪得动的话，那些晶体管早就省下来了。</tspan></text>
+<text x="38" y="608" class="xs"><tspan font-weight="700" fill="#202124">所以这个反驳不是前五节的反例，是前五节最好的一个佐证</tspan>：<tspan font-weight="700" fill="#202124">同一份复杂度并没有消失，只是被搬到了不同的地方 —— 而搬得动多少，是由架构决定的。</tspan></text>
+<rect x="20" y="664" width="1360" height="92" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="38" y="690" class="sec">⚠️ 出处分层</text>
+<text x="38" y="714" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：CUDA 12.4 引入 conditional IF / WHILE 节点，12.8 增加 IF/ELSE 与 SWITCH —— 出自 NVIDIA 开发者博客。「块分发由硬件、warp 每周期挑」出自 CUDA 编程模型。</text>
+<text x="38" y="734" class="xxs"><tspan font-weight="700" fill="#d93025">我论证的</tspan>：三条理由都是<tspan font-weight="700" fill="#202124">推理，不是引用</tspan>。<tspan fill="#9aa0a6">其中第 ③ 条最强也最该被挑战 —— 它的前提是「graph 节点仍是正常 kernel 启动」，这一条要是哪天不成立了，整条论证就得重写。</tspan></text>
+</svg>

@@ -1,0 +1,90 @@
+<svg viewBox="0 0 1400 1020" width="1400" height="1020" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CUDA Graph 冻结的是主机编排层；kernel 的块分发与 warp 发射两层完全没有变化。TPU 的编译器则把三层全部冻结，并精确到时钟周期">
+<defs><style>
+.ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.box{font:700 13px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.lbl{font:600 12px "Noto Sans CJK SC",sans-serif;fill:#202124}
+.sm{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xs{font:400 11px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.xxs{font:400 10px "Noto Sans CJK SC",sans-serif;fill:#5f6368}
+.num{font:700 12px "Roboto Mono",monospace}
+.numb{font:700 14px "Roboto Mono",monospace}
+.mono{font:400 11px "Roboto Mono",monospace;fill:#5f6368}
+</style>
+<marker id="aB" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1a73e8"/></marker>
+<marker id="aR" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#d93025"/></marker>
+<marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
+<marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
+<marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+</defs>
+<text x="20" y="26" class="ttl">冻结发生在<tspan font-weight="700">哪一层</tspan>　—— CUDA Graph 冻的是最上面那层，TPU 编译器<tspan font-weight="700">冻到底</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="37" y="58" class="sm">这一层是静态的（跑之前就定死）</text>
+<rect x="231.5" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="248.5" y="58" class="sm">这一层是活的（芯片在运行时决定）</text>
+<text x="24" y="168" class="xxs" fill="#202124">① 编排层</text>
+<text x="24" y="186" class="xxs" fill="#9aa0a6">下一个 kernel 是什么、</text>
+<text x="24" y="199" class="xxs" fill="#9aa0a6">什么时候提交</text>
+<text x="24" y="272" class="xxs" fill="#202124">② 落地层</text>
+<text x="24" y="290" class="xxs" fill="#9aa0a6">这个 kernel 的块，放</text>
+<text x="24" y="303" class="xxs" fill="#9aa0a6">到哪个 SM 上</text>
+<text x="24" y="376" class="xxs" fill="#202124">③ 发射层</text>
+<text x="24" y="394" class="xxs" fill="#9aa0a6">核在跑的时候，下一拍</text>
+<text x="24" y="407" class="xxs" fill="#9aa0a6">执行哪条指令</text>
+<rect x="140" y="84" width="408" height="404" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.8"/>
+<text x="156" y="112" class="sec" fill="#9aa0a6">GPU · 不开 graph</text>
+<text x="532" y="112" class="xxs" fill="#5f6368" text-anchor="end">三层全是活的</text>
+<rect x="152" y="146" width="384" height="96" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="164" y="168" class="box" fill="#d93025">运行时</text>
+<text x="164" y="188" class="xs"><tspan font-weight="700" fill="#202124">CPU 每次现发一条</tspan>。发得慢，GPU 就闲着。</text>
+<rect x="152" y="250" width="384" height="96" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="164" y="272" class="box" fill="#d93025">运行时</text>
+<text x="164" y="292" class="xs"><tspan font-weight="700" fill="#202124">硬件分发器启动时挑一个 SM</tspan>，程序员指定不了。</text>
+<rect x="152" y="354" width="384" height="96" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="164" y="376" class="box" fill="#d93025">每个周期</text>
+<text x="164" y="396" class="xs"><tspan font-weight="700" fill="#202124">warp 调度器每拍挑一个数据到位的发</tspan>。</text>
+<rect x="556" y="84" width="408" height="404" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="572" y="112" class="sec" fill="#1a73e8">GPU · 开 CUDA Graph</text>
+<text x="948" y="112" class="xxs" fill="#5f6368" text-anchor="end">只冻住了最上面一层</text>
+<rect x="568" y="146" width="384" height="96" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="580" y="168" class="box" fill="#1e8e3e">capture 时定死</text>
+<text x="580" y="188" class="xs"><tspan font-weight="700" fill="#202124">整张 DAG 在 capture 那一下固定</tspan>，之后只发一条 replay。<tspan font-weight="700" fill="#202124">这一层确实</tspan></text>
+<text x="580" y="204" class="xs"><tspan font-weight="700" fill="#202124">变成静态的了。</tspan></text>
+<rect x="568" y="250" width="384" height="96" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="580" y="272" class="box" fill="#d93025">运行时</text>
+<text x="580" y="292" class="xs"><tspan font-weight="700" fill="#d93025">一点没变。</tspan>graph 里每个节点仍然是一次正常的 kernel 启动，块照样由</text>
+<text x="580" y="308" class="xs">硬件现场分发。</text>
+<rect x="568" y="354" width="384" height="96" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="580" y="376" class="box" fill="#d93025">每个周期</text>
+<text x="580" y="396" class="xs"><tspan font-weight="700" fill="#d93025">一点没变。</tspan>调度器、记分板、warp 槽、常驻上下文 —— <tspan font-weight="700" fill="#202124">全都还在，而且</tspan></text>
+<text x="580" y="412" class="xs"><tspan font-weight="700" fill="#202124">全都还在工作。</tspan></text>
+<rect x="972" y="84" width="408" height="404" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="988" y="112" class="sec" fill="#1e8e3e">TPU · XLA 编译</text>
+<text x="1364" y="112" class="xxs" fill="#5f6368" text-anchor="end">三层全冻，而且冻到周期</text>
+<rect x="984" y="146" width="384" height="96" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="996" y="168" class="box" fill="#1e8e3e">编译期</text>
+<text x="996" y="188" class="xs"><tspan font-weight="700" fill="#202124">整个 step 编成一个程序</tspan>。<tspan fill="#9aa0a6">本来就没有「主机一条条发」这回事 —— 不需</tspan></text>
+<text x="996" y="204" class="xs"><tspan fill="#9aa0a6">要 graph。</tspan></text>
+<rect x="984" y="250" width="384" height="96" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="996" y="272" class="box" fill="#1e8e3e">编译期</text>
+<text x="996" y="292" class="xs">没有「放到哪儿」这个问题：<tspan font-weight="700" fill="#202124">用哪个部件写在指令里。</tspan></text>
+<rect x="984" y="354" width="384" height="96" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="996" y="376" class="box" fill="#1e8e3e">编译期</text>
+<text x="996" y="396" class="xs"><tspan font-weight="700" fill="#202124">VLIW：哪条指令、第几个周期、哪个发射槽，全排死。</tspan><tspan font-weight="700" fill="#d93025">卡住就是真的空转。</tspan></text>
+<rect x="20" y="510" width="1360" height="112" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="38" y="536" class="sec">🧳 一个能记住的说法：行程单 vs 航班内部</text>
+<text x="38" y="560" class="xs"><tspan font-weight="700" fill="#202124">CUDA Graph 相当于把整趟旅行的行程单提前打印好</tspan> —— 先坐哪班飞机、再转哪趟车，一条一条都定死了，不用到了机场再现查。<tspan font-weight="700" fill="#202124">省下来的就是「每一段都要现查一次」的那些时间。</tspan></text>
+<text x="38" y="581" class="xs"><tspan font-weight="700" fill="#d93025">但每一班飞机内部一点没变</tspan>：怎么排队、谁先登机、空乘怎么调度，还是现场决定。<tspan font-weight="700" fill="#202124">TPU 编译器管的恰恰是这一层</tspan> —— 它连「第几分钟谁走哪条通道」都提前排好了。</text>
+<rect x="20" y="644" width="1360" height="112" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
+<text x="38" y="670" class="sec" fill="#8430ce">📏 两边冻结的「颗粒」，差着三到四个数量级</text>
+<text x="38" y="694" class="xs"><tspan font-weight="700" fill="#202124">CUDA Graph 冻结的最小单位是「一个 kernel」</tspan> —— 典型是<tspan font-weight="700" fill="#202124">微秒</tspan>量级。　　<tspan font-weight="700" fill="#202124">TPU 编译器冻结的最小单位是「一个时钟周期」</tspan> —— <tspan font-weight="700" fill="#202124">纳秒</tspan>量级。</text>
+<text x="38" y="715" class="xs">微秒除以纳秒，<tspan font-weight="700" fill="#202124">中间差着三到四个数量级</tspan>。<tspan fill="#9aa0a6">（这一条是我拿两个量级相除推的，不是谁给的数。）</tspan><tspan font-weight="700" fill="#202124">所以「都是静态的」这句话，掩盖掉的正是这三四个数量级。</tspan></text>
+<rect x="20" y="778" width="1360" height="108" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="806" class="sec" fill="#1a73e8">⭐ 落点：那句反驳对了一层，错了两层 —— 而错的那两层最贵</text>
+<text x="38" y="832" class="xs"><tspan font-weight="700" fill="#202124">对的那一层</tspan>：编排层确实被冻住了，而且收益是真的（P-32 那笔账）。　　<tspan font-weight="700" fill="#202124">错的那两层</tspan>：落地层和发射层<tspan font-weight="700" fill="#202124">一点都没变</tspan>。</text>
+<text x="38" y="853" class="xs"><tspan font-weight="700" fill="#d93025">而恰恰是这两层在耗硅片面积。</tspan>既然它们没变，为它们服务的那批部件就一个都省不掉 —— <tspan font-weight="700" fill="#202124">下一张图把这笔账算完。</tspan></text>
+<rect x="20" y="908" width="1360" height="92" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="38" y="934" class="sec">⚠️ 出处分层</text>
+<text x="38" y="958" class="xs"><tspan font-weight="700" fill="#202124">三层这个切法是我定的讲法，不是谁的术语</tspan> —— 换个切法可能切成两层或四层。但每一层里「谁在决定」这件事是有出处的：块分发由硬件、warp 每周期挑、VLIW 编译期排槽。</text>
+<text x="38" y="978" class="xxs"><tspan font-weight="700" fill="#d93025">「差三到四个数量级」是推的</tspan>：kernel 的微秒量级 ÷ 时钟周期的纳秒量级。<tspan fill="#9aa0a6">两个量级都不是精确规格，所以这里只说数量级，不给具体倍数。</tspan></text>
+</svg>
