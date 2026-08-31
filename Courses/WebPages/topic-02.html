@@ -3596,7 +3596,7 @@ footer a{text-decoration:none}
     每一条 lane 是一整套自己的 ALU。于是同一批数，
     <b>上下走和横着走根本不是一回事</b> ——&nbsp;</p>
 <figure class="fbox fwide" id="ms-p26">
-<svg viewBox="0 0 1400 882" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器 8×128 的方向不对称：沿 sublane 轴归约三步就完，沿 lane 轴归约必须经过 XLU，而公开资料称它慢且贵">
+<svg viewBox="0 0 1400 1008" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器 8×128 的方向不对称：沿 sublane 轴归约三步就完，沿 lane 轴归约必须经过 XLU，而公开资料称它慢且贵">
 <text x="20" y="26" class="ttl">同一张 8 × 128 的座位表　—— <tspan font-weight="700">上下走三步就完，横着走要另找一个单元</tspan></text>
 <rect x="20" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
 <text x="37" y="58" class="sm">纵向 · 沿 sublane 轴（8）</text>
@@ -3869,10 +3869,14 @@ footer a{text-decoration:none}
 <text x="38" y="676" class="sec">⭐ 麻烦的是：神经网络最常做的那两个归约，方向恰好都是横的</text>
 <text x="38" y="702" class="xs">张量的<tspan font-weight="700" fill="#202124">最后一维默认铺在 lane 方向</tspan>上。而 <tspan class="mono" fill="#1967d2">softmax</tspan> 沿最后一维求和，<tspan class="mono" fill="#1967d2">RMSNorm</tspan> 也沿最后一维求和 —— <tspan font-weight="700" fill="#202124">两个最常见的算子，都撞在上面那条最贵的路上。</tspan></text>
 <text x="38" y="725" class="sm" fill="#202124">这就是为什么在 TPU 上，attention 里 softmax 那一段<tspan font-weight="700" fill="#202124">经常比你按 FLOP 算出来的贵得多</tspan>：<tspan font-weight="700" fill="#d93025">贵的不是算，是把数横着挪。</tspan></text>
-<rect x="20" y="770" width="1360" height="92" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
-<text x="38" y="798" class="sec">⚠️ 一个说法要收回：贵不是因为「没有连线」</text>
-<text x="38" y="824" class="xs">这张图早先的版本写着「列与列之间没有直连通路」——那是想当然，已经删掉。公开资料的说法是：跨 lane <tspan font-weight="700" fill="#202124">至少要过一趟 VMEM／XLU／SMEM</tspan> ——<tspan font-weight="700" fill="#d93025">贵在「出一趟寄存器堆」这个往返，不在缺一根线。</tspan></text>
-<text x="38" y="845" class="xs">下一张图把这个往返画出来。<tspan font-weight="700" fill="#202124">仍然没有出处的只剩一件事：XLU 的内部电路</tspan> ——公开资料只说它是个独立单元、而且慢，没说它里面长什么样。</text>
+<rect x="20" y="770" width="1360" height="104" rx="10" fill="#e0f2f0" stroke="#12786f" stroke-width="1.6"/>
+<text x="38" y="798" class="sec" fill="#12786f">⭐ 那为什么 8 那个方向便宜、128 那个方向就得专门做个单元？—— 差的是一个平方</text>
+<text x="38" y="824" class="xs">要让一组数<tspan font-weight="700" fill="#202124">任意互换位置</tspan>，需要的开关数按 <tspan font-weight="700" fill="#202124">N²</tspan> 涨。sublane 方向 <tspan font-weight="700" fill="#202124">8 见方 ＝ 64</tspan>；lane 方向 <tspan font-weight="700" fill="#202124">128 见方 ＝ 16,384</tspan> —— <tspan font-weight="700" fill="#d93025">差 256 倍。</tspan></text>
+<text x="38" y="847" class="xs">所以 8 那个网络<tspan font-weight="700" fill="#202124">小到可以摊进每一条 lane 里</tspan>，一个周期就转完；128 那个<tspan font-weight="700" fill="#202124">只能全核共享一两个</tspan>，还得排队。<tspan fill="#9aa0a6">⚠️ N² 是数字设计通则，不是 TPU 的公开规格 —— 这里用它解释数量级。</tspan></text>
+<rect x="20" y="896" width="1360" height="92" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="38" y="924" class="sec">⚠️ 一个说法要收回：贵不是因为「没有连线」</text>
+<text x="38" y="950" class="xs">这张图早先的版本写着「列与列之间没有直连通路」——那是想当然，已经删掉。公开资料的说法是：跨 lane <tspan font-weight="700" fill="#202124">至少要过一趟 VMEM／XLU／SMEM</tspan> ——<tspan font-weight="700" fill="#d93025">贵在「出一趟寄存器堆」这个往返，不在缺一根线。</tspan></text>
+<text x="38" y="971" class="xs">下一张图把这个往返画出来。<tspan font-weight="700" fill="#202124">仍然没有出处的只剩一件事：XLU 的内部电路</tspan> ——公开资料只说它是个独立单元、而且慢，没说它里面长什么样。</text>
 </svg>
 <figcaption>整张图就一件事：<b>同一个寄存器、同一批数，换个方向，代价完全不同</b>。绿的那一列是<b>纵向</b> —— 8 → 4 → 2 → 1，三步，全程没离开自己那套 ALU；红的那一行是<b>横向</b> —— 128 条 lane 各是一套硬件，数要横着走只能交给 <b>XLU</b>，而且往往还得绕一趟 VMEM。<b>黄带才是这张图真正要落的地方</b>：<code>softmax</code> 和 <code>RMSNorm</code> 都沿最后一维求和，而最后一维默认就铺在 lane 方向上 —— <b>最常做的那两个归约，恰好都撞在最贵的方向</b>。⚠️ 底带那条不能跳过：<b>「列与列之间没有直连通路」是我给的解释，不是查到的</b>。</figcaption>
 </figure>
@@ -9221,7 +9225,7 @@ footer a{text-decoration:none}
 <rect x="38" y="126" width="640" height="108" rx="6" fill="#fff" stroke="#e0e0e0" stroke-width="1"/>
 <text x="52" y="148" class="mono" fill="#202124">__global__ void add(float* a, float* b, float* c, int n) {</text>
 <text x="52" y="170" class="mono" fill="#202124">    int i = blockIdx.x * blockDim.x + threadIdx.x;</text>
-<text x="52" y="192" class="mono" fill="#202124">    if (i &lt; n) c[i] = a[i] + b[i];</text>
+<text x="52" y="192" class="mono" fill="#202124">    if (i < n) c[i] = a[i] + b[i];</text>
 <text x="52" y="214" class="mono" fill="#202124">}</text>
 <text x="38" y="252" class="xs">看这段代码里出现了什么：<tspan font-weight="700" fill="#d93025">blockIdx</tspan>、<tspan font-weight="700" fill="#d93025">threadIdx</tspan>、还有一句 <tspan class="mono" fill="#1967d2">if</tspan> 边界判断。<tspan font-weight="700" fill="#202124">「我是第几号、我负责哪一格」写在代码里</tspan>，所以切</text>
 <text x="38" y="270" class="xs">分方式是你决定的 —— 也只能由你决定。</text>

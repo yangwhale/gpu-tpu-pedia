@@ -85,7 +85,10 @@ def _col(f, x, w, c, head, code, note, cost):
     ch = 22 * len(code) + 20
     f.rect(x + 18, TOP + 42, w - 36, ch, "#fff", "#e0e0e0", 1, 6)
     for i, ln in enumerate(code):
-        f.t(x + 32, TOP + 64 + i * 22, ln.replace("<", "&lt;"), "mono", INK)
+        # f.t() 内部已经 escape 过了，这里再手动转一次会变成 `&amp;lt;`，
+        # 屏幕上显示的就是字面的 `&lt;`。2026-08-31 由 common.py 新加的
+        # 实体自检抓出来 —— 在此之前它一直是错的。
+        f.t(x + 32, TOP + 64 + i * 22, ln, "mono", INK)
 
     y = para(f, x + 18, TOP + 60 + ch, w - 36, note, "xs", 18)
 

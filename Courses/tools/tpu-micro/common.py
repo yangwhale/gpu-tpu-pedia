@@ -79,12 +79,15 @@ class Fig:
         assert not _BADMARK.search(str(s)), (
             "f.t() 不解析行内标记，<b>/<r>/<g>/<code> 会连内容一起被浏览器丢掉；"
             "要强调请改用 para()，只要换颜色就传 fill 参数：%r" % s)
-        # `&nbsp;` 是 HTML 实体，**XML/SVG 里没有定义**。它不会报错，也不会变成空格 ——
-        # 浏览器把这六个字符原样画出来。写正文 HTML 写顺手了就会漏进来（P-26、P-27
-        # 各中一次），而且只有盯着渲染图才看得见。要不断行的空格用 U+00A0 本身。
-        assert "&nbsp;" not in str(s), (
-            "&nbsp; 在 SVG 里不是实体，会原样显示成字面量；"
-            "直接写空格，或用 U+00A0 字符本身：%r" % s)
+        # **任何 `&...;` 写法都别用。** 两种都会原样显示成字面量，而且都不报错：
+        #   · `&nbsp;` 这类命名实体 —— XML/SVG 里根本没定义（P-26、P-27 各中一次）
+        #   · `&#8194;` 这类数字引用 —— 本来是合法 XML，但 para() 会先把 `&`
+        #     转义成 `&amp;`，于是照样变成字面量（P-26 的 N² 带中过一次）
+        # 两次都只有盯着渲染图才看得出来。要特殊空格就直接写那个字符本身
+        # （U+00A0 不断行空格、U+2002 半角空格），要转义符号用 escape() 处理过的原字符。
+        assert not _re.search(r"&(?:[a-zA-Z]+|#\d+|#[xX][0-9a-fA-F]+);", str(s)), (
+            "SVG 里不要写 &...; ——命名实体没定义，数字引用会被二次转义，"
+            "两种都会原样显示成字面量；直接写那个字符本身：%r" % s)
         a = f' text-anchor="{anchor}"' if anchor else ""
         f = f' fill="{fill}"' if fill else ""
         wt = f' font-weight="{weight}"' if weight else ""
