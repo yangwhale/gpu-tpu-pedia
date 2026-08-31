@@ -878,7 +878,7 @@ python eval_sft.py --compare /raid/eval_before.json /raid/eval_after.json
 | 数据 | mock / 随机 token | 22,144 条真实 ChatML |
 | 优化目标 | **算力** TFLOP/s / MFU | **行为改变** 三条判据 |
 | 存储需求 | 只需权重 | 权重 + checkpoint + 导出，**每节点 ~1.8 TB** |
-| 结果 | ✅ 1360 TFLOP/s / MFU 25.2% | ✅ 链路跑通 / ❌ 知识注入未成功 |
+| 结果 | ✅ 1360 TFLOP/s / MFU 27.2% | ✅ 链路跑通 / ❌ 知识注入未成功 |
 
 **最大的认知差异**：预训练只关心形状，所以「没有共享存储」完全不是问题；
 SFT 要加载和导出真实权重，**「没有共享存储」就成了贯穿始终的主要矛盾** ——

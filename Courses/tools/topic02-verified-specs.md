@@ -28,6 +28,26 @@
 - NVFP4：1440 稀疏 → dense 720 → 每 GPU dense 10 PFLOPS
 - CPU：2592 Neoverse V2 核（每 superchip 72）；17 TB LPDDR5X | 14 TB/s
 
+## GB300 NVL72 — 来源：nvidia.com/en-us/data-center/gb300-nvl72（官方规格表，2026-08-31 核）
+- 72 Blackwell Ultra GPU + 36 Grace CPU；GPU 显存 20 TB | 最高 576 TB/s（整域）→ 每 GPU 约 288 GB
+- FP16/BF16 Tensor Core：**360 PFLOPS**（稀疏）→ dense 180 → **每 GPU dense 2,500 TFLOP/s**
+- FP8/FP6 Tensor Core：**720 PFLOPS**（稀疏）→ dense 360 → **每 GPU dense 5,000 TFLOP/s**
+- FP4 Tensor Core：`1440 | 1080²`，脚注 2 = without sparsity → 每 GPU dense **15 PFLOPS**
+- 脚注 1 原文：`All Tensor Core specifications are with sparsity unless otherwise noted.`
+- NVLink 整域 130 TB/s；CPU 2592 Neoverse V2 核
+- ⭐ **BF16 / FP8 与 GB200 NVL72 完全相同**。Blackwell Ultra 提升的是 dense FP4（10 → 15 PFLOPS/GPU，
+  官方文案「1.5x more dense FP4」）与 attention（2×），**不是** BF16/FP8。
+  → 本仓曾按「GB200 × 1.2」写成 2,700 / 5,400，**官方无此数**，2026-08-31 已全仓更正。
+
+## HGX B200 / HGX B300 — 来源：nvidia.com/en-us/data-center/hgx（官方规格表，2026-08-31 核）
+- 均为 8 GPU 一板。脚注 2：`Specification in Sparse. Dense is ½ sparse spec shown.`
+- FP16/BF16：两者都是 **36 PFLOPS**（稀疏）→ dense 18 → **每 GPU 2,250 TFLOP/s**
+- FP8/FP6：两者都是 **72 PFLOPS**（稀疏）→ dense 36 → **每 GPU 4,500 TFLOP/s**
+- FP4（脚注 1 `Sparse | Dense`）：B300 `144 | 144`… B200 `108 | 72`
+- ⭐ **同代不同封装差 11.1%**：NVL72 里的 GPU 是 2,500，HGX 板上的是 2,250。
+  两者都叫 Blackwell / Blackwell Ultra，**光看架构名分辨不出该用哪个**。
+  机型对应：`a4x-highgpu-4g` = GB200 NVL72 ｜ `a4x-max` = GB300 NVL72 ｜ `a4-highgpu-8g` = HGX B200
+
 ## B200 芯片内部 — 来源：docs.nvidia.com/cuda/blackwell-tuning-guide（官方）
 - compute capability 10.0
 - 每 SM 最大并发 warp：64（Hopper 是 48）

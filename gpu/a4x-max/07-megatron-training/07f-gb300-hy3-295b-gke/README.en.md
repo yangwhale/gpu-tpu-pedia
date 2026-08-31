@@ -293,7 +293,7 @@ Every file in the official repo was checked, and they agree:
 
 ### 3.2 Does FP8 actually help MoE — measurements from this repo on GB200
 
-Intuition says GB300 FP8 peak 5400 vs BF16 2700 = 2×, but **MoE models do not cash that in**. Our own measurements:
+Intuition says GB300 FP8 peak 5,000 vs BF16 2,500 = 2×, but **MoE models do not cash that in**. Our own measurements:
 
 | Source | Config | BF16 | FP8 / MXFP8 | Delta |
 |---|---|---|---|---|
@@ -877,7 +877,12 @@ Hy3's hidden 4096 is only 57% of DSV3's, so the GEMM shapes are small and arithm
 each group auto-clears zombie CUDA contexts (rebuilding the pod if that fails) → distribute → start 16 pods → wait for steady state → collect metrics → append to [`results.csv`](results.csv).
 
 **Measurement convention**: TFLOP/s is the median of the last 5 steady-state steps (the first step includes graph capture and is excluded); HBM is the whole-run `nvidia-smi` peak; tok/s/GPU = `GBS × seq_len / step_time / 64`;
-MFU = model TFLOP/s ÷ hardware peak (**2,700 for BF16, 5,400 for FP8**).
+MFU = model TFLOP/s ÷ hardware peak (**2,500 for BF16, 5,000 for FP8**).
+
+> ⚠️ **Corrected 2026-08-31**: this page previously divided by **2,700 / 5,400**, which was obtained by scaling GB200's numbers by 1.2 — **NVIDIA never published either figure**. The official GB300 NVL72 spec table lists `FP16/BF16 Tensor Core 360 PFLOPS` and `FP8/FP6 Tensor Core 720 PFLOPS`, with footnote 1 stating "All Tensor Core specifications are with sparsity unless otherwise noted" —
+> halve for dense, divide by 72 GPUs → **BF16 2,500 / FP8 5,000 TFLOP/s per GPU**, **identical to GB200 NVL72** (Blackwell Ultra raises dense FP4 by 1.5× and attention by 2×, not BF16/FP8).
+> Cross-check: the same table lists `FP4 1440 | 1080²` (footnote 2 = without sparsity); 1080 ÷ 72 = 15 PFLOPS/GPU dense FP4 ✓.
+> **Every MFU on this page has been recomputed; TFLOP/s and tok/s are unaffected.**
 
 > Baseline **A1 = 854.0 TFLOP/s** (the BF16 champion config); the `vs A1` column is the relative delta.
 
@@ -887,17 +892,17 @@ Starting from the A1 champion config, flip exactly one switch at a time to isola
 
 | Run | Status | TFLOP/s | vs A1 | MFU | HBM | tok/s/GPU | Step |
 |---|---|---|---|---|---|---|---|
-| **A1** V4_champion | ✅ | 854.0 | +0.0% | 31.6% | 225 GB | 6242 | 21.00s |
+| **A1** V4_champion | ✅ | 854.0 | +0.0% | 34.2% | 225 GB | 6242 | 21.00s |
 | **A2** no_cutedsl | ❌ CRASH | — | — | — | 212 GB | — | — |
-| **A3** no_a2a_overlap | ✅ | 718.6 | **-15.9%** | 26.6% | 219 GB | 5253 | 24.95s |
+| **A3** no_a2a_overlap | ✅ | 718.6 | **-15.9%** | 28.7% | 219 GB | 5253 | 24.95s |
 | **A4** no_paged_stash | ❌ CRASH | — | — | — | 186 GB | — | — |
-| **A5** no_router_fusion | ✅ | 843.1 | **-1.3%** | 31.2% | 226 GB | 6162 | 21.27s |
-| **A6** no_permute_fusion | ✅ | 854.2 | +0.0% | 31.6% | 225 GB | 6244 | 20.99s |
+| **A5** no_router_fusion | ✅ | 843.1 | **-1.3%** | 33.7% | 226 GB | 6162 | 21.27s |
+| **A6** no_permute_fusion | ✅ | 854.2 | +0.0% | 34.2% | 225 GB | 6244 | 20.99s |
 | **A7** dispatcher_alltoall | ❌ CRASH | — | — | — | 0 GB | — | — |
-| **A8** graph_none | ✅ | 572.5 | **-33.0%** | 21.2% | 187 GB | 4185 | 31.32s |
-| **A9** graph_TE | ✅ | 827.7 | **-3.1%** | 30.7% | 193 GB | 6049 | 21.67s |
+| **A8** graph_none | ✅ | 572.5 | **-33.0%** | 22.9% | 187 GB | 4185 | 31.32s |
+| **A9** graph_TE | ✅ | 827.7 | **-3.1%** | 33.1% | 193 GB | 6049 | 21.67s |
 | **A10** no_force_lb | ⚠️ HANG | — | — | — | 219 GB | — | — |
-| **A11** recompute_selective | ✅ | 853.5 | -0.1% | 31.6% | 225 GB | 6239 | 21.01s |
+| **A11** recompute_selective | ✅ | 853.5 | -0.1% | 34.1% | 225 GB | 6239 | 21.01s |
 
 ### Group B · parallelism and batch size
 
@@ -905,14 +910,14 @@ Chasing whether the gap between 854 and Qwen3-235B's 1360 comes from the paralle
 
 | Run | Status | TFLOP/s | vs A1 | MFU | HBM | tok/s/GPU | Step |
 |---|---|---|---|---|---|---|---|
-| **B1** vpp2 | ✅ | 852.1 | -0.2% | 31.6% | 243 GB | 6230 | 21.04s |
-| **B2** vpp4 | ✅ | 854.0 | +0.0% | 31.6% | 231 GB | 6242 | 21.00s |
-| **B3** pp4_ep16 | ✅ | 855.7 | +0.2% | 31.7% | 230 GB | 6253 | 20.96s |
-| **B4** ep16 | ✅ | 882.3 | **+3.3%** | 32.7% | 241 GB | 6450 | 20.32s |
+| **B1** vpp2 | ✅ | 852.1 | -0.2% | 34.1% | 243 GB | 6230 | 21.04s |
+| **B2** vpp4 | ✅ | 854.0 | +0.0% | 34.2% | 231 GB | 6242 | 21.00s |
+| **B3** pp4_ep16 | ✅ | 855.7 | +0.2% | 34.2% | 230 GB | 6253 | 20.96s |
+| **B4** ep16 | ✅ | 882.3 | **+3.3%** | 35.3% | 241 GB | 6450 | 20.32s |
 | **B5** mbs2_TEgraph | ⚠️ HANG | — | — | — | 277 GB | — | — |
 | **B6** mbs2_pp4 | ❌ OOM | — | — | — | 105 GB | — | — |
-| **B7** gbs4096_TEgraph | ✅ | 834.2 | **-2.3%** | 30.9% | 194 GB | 6098 | 42.99s |
-| **B8** gbs1024 | ✅ | 845.7 | -1.0% | 31.3% | 223 GB | 6183 | 10.60s |
+| **B7** gbs4096_TEgraph | ✅ | 834.2 | **-2.3%** | 33.4% | 194 GB | 6098 | 42.99s |
+| **B8** gbs1024 | ✅ | 845.7 | -1.0% | 33.8% | 223 GB | 6183 | 10.60s |
 
 ### Group C · precision
 
@@ -920,8 +925,8 @@ BF16 vs FP8_MX, measured against Qwen3's MXFP8 convention directly.
 
 | Run | Status | TFLOP/s | vs A1 | MFU | HBM | tok/s/GPU | Step |
 |---|---|---|---|---|---|---|---|
-| **C1** fp8_mx | ✅ | 1285.9 | **+50.6%** | 23.8% | 195 GB | 9396 | 13.95s |
-| **C2** fp8_mx_mbs2 🏆 | ✅ | 1360.4 | **+59.3%** | 25.2% | 276 GB | 9945 | 26.36s |
+| **C1** fp8_mx | ✅ | 1285.9 | **+50.6%** | 25.7% | 195 GB | 9396 | 13.95s |
+| **C2** fp8_mx_mbs2 🏆 | ✅ | 1360.4 | **+59.3%** | 27.2% | 276 GB | 9945 | 26.36s |
 
 ### Group D · isolating scale
 
@@ -929,10 +934,10 @@ Halving the layer count halves the weights, testing the hypothesis "weights crow
 
 | Run | Status | TFLOP/s | vs A1 | MFU | HBM | tok/s/GPU | Step |
 |---|---|---|---|---|---|---|---|
-| **D1** 40layer_bf16 | ✅ | 846.4 | -0.9% | 31.3% | 123 GB | 12114 | 10.82s |
-| **D2** 40layer_bf16_mbs2 | ✅ | 892.7 | **+4.5%** | 33.1% | 201 GB | 12775 | 20.52s |
+| **D1** 40layer_bf16 | ✅ | 846.4 | -0.9% | 33.9% | 123 GB | 12114 | 10.82s |
+| **D2** 40layer_bf16_mbs2 | ✅ | 892.7 | **+4.5%** | 35.7% | 201 GB | 12775 | 20.52s |
 | **D3** 40layer_bf16_mbs4 | ❌ OOM | — | — | — | 276 GB | — | — |
-| **D4** 40layer_fp8 | ✅ | 1272.3 | **+49.0%** | 23.6% | 105 GB | 18204 | 7.20s |
+| **D4** 40layer_fp8 | ✅ | 1272.3 | **+49.0%** | 25.4% | 105 GB | 18204 | 7.20s |
 | **D5** fp8_ep16_mbs2 | ⚠️ HANG | — | — | — | 277 GB | — | — |
 | **D6** fp8_mbs4 | ⏭ skipped | — | — | — | — | — | — |
 
@@ -983,19 +988,19 @@ hybridep dispatcher         ← swap to alltoall (A7) and it CRASHes
 
 | Config | Precision | MBS | GPUs | Model TFLOP/s | MFU | tok/s/GPU |
 |---|---|---|---|---|---|---|
-| A1 Hy3 champion | BF16 | 1 | 64 | 854.0 | **31.6%** | 6,242 |
-| C1 Hy3 | **FP8_MX** | 1 | 64 | 1,285.9 | 23.8% | 9,396 |
-| **C2 Hy3** | **FP8_MX** | **2** | **64** | **1,360.4** | **25.2%** | **9,945** |
-| *Qwen3-235B (official reference)* | *MXFP8* | *2* | ***256*** | *1,360* | *25.2%* | *—* |
-| *DSV3 671B (official reference)* | *MXFP8* | *1* | *256* | *1,658* | *30.7%* | *—* |
+| A1 Hy3 champion | BF16 | 1 | 64 | 854.0 | **34.2%** | 6,242 |
+| C1 Hy3 | **FP8_MX** | 1 | 64 | 1,285.9 | 25.7% | 9,396 |
+| **C2 Hy3** | **FP8_MX** | **2** | **64** | **1,360.4** | **27.2%** | **9,945** |
+| *Qwen3-235B (official reference)* | *MXFP8* | *2* | ***256*** | *1,360* | *27.2%* | *—* |
+| *DSV3 671B (official reference)* | *MXFP8* | *1* | *256* | *1,658* | *33.2%* | *—* |
 
-**C2's 1360.4 / MFU 25.2% coincides exactly with Qwen3-235B's 1360 / 25.2% on 256 GPUs — and we used only 64.**
+**C2's 1360.4 / MFU 27.2% coincides exactly with Qwen3-235B's 1360 / 27.2% on 256 GPUs — and we used only 64.**
 
 ### Two causes, and they are coupled
 
 **① The precision convention (dominant, +50.6%)**
 The numerator of Model TFLOP/s is the model's mathematical FLOPs (precision-independent); the denominator is **the hardware peak at that precision**.
-GB300 peaks at 2,700 BF16 and 5,400 FP8. Running BF16, the arithmetic ceiling is half to begin with.
+GB300 peaks at 2,500 BF16 and 5,000 FP8. Running BF16, the arithmetic ceiling is half to begin with.
 
 **② The memory FP8 frees unlocks MBS=2 (+5.8%)**
 This is the crucial link, and it confirms the "weights are too big to grow the batch" diagnosis:
@@ -1065,12 +1070,12 @@ python hy3_pretrain.py \
 # env: NUM_OF_HYBRID_EP_RANKS_PER_NVLINK_DOMAIN=32
 ```
 
-**1,360.4 TFLOP/s/GPU · MFU 25.2% · 26.36 s/step · 276 GB/GPU · 9,945 tok/s/GPU**
+**1,360.4 TFLOP/s/GPU · MFU 27.2% · 26.36 s/step · 276 GB/GPU · 9,945 tok/s/GPU**
 
 > At 276 GB memory is already near the 288 GB ceiling, so **there is no headroom to stack EP16 or MTP on top** (D5 measured: stacking all three hangs).
 > To run MTP as well, fall back to MBS=1 (the C1 config, 1,285.9) or scale out to 128 GPUs.
 
-**The BF16 optimum** (if precision-alignment requirements force BF16): **B4 = EP16, 882.3 TFLOP/s / MFU 32.7%**.
+**The BF16 optimum** (if precision-alignment requirements force BF16): **B4 = EP16, 882.3 TFLOP/s / MFU 35.3%**.
 
 ---
 
@@ -1358,7 +1363,7 @@ Designed around the three insights above. **Baseline E1 = Qwen3's own 256-GPU pa
 | Metric | How collected | Comparison against 64 GPU |
 |---|---|---|
 | **Model TFLOP/s/GPU** | median of the last 5 steady-state steps | directly comparable (already per-GPU) |
-| **MFU** | ÷ 2,700 (BF16) or 5,400 (FP8) | directly comparable |
+| **MFU** | ÷ 2,500 (BF16) or 5,000 (FP8) | directly comparable |
 | **Aggregate throughput** | `TFLOP/s × 256` vs `× 64` | 4× linear is ideal |
 | tokens/s/GPU | `GBS × seq / step / N` | directly comparable |
 | HBM peak | whole-run `nvidia-smi` max | should be ~39 GB lower than 64 GPU (optimizer) |
@@ -1442,7 +1447,7 @@ One phase table per experiment, finally rolled up into a "config × phase durati
 |---|---|
 | Status | ✅ **OK, zero NCCL errors** |
 | **TFLOPS** | **1,267.3** Model TFLOP/s/GPU |
-| **MFU** | **23.5%** (against the FP8 peak of 5,400) |
+| **MFU** | **25.3%** (against the FP8 peak of 5,000) |
 | **Throughput** | **9,263** tokens/s/GPU (~2.37 M tokens/s aggregate) |
 | Step time | 14.15 s |
 | HBM peak | 272 GB |

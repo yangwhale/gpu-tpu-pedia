@@ -53,9 +53,13 @@ Three ways to read this table:
    that hardware imbalance, not a sign of poor tuning.**
 2. **v7 has closed to 69.1% of GB300's per-GPU throughput** (4,312 vs 6,242), up from 51.4%
    before tuning.
-3. **v5p's 35.07% still beats GB300's 31.6%** — a 256-chip 3D torus plus SparseCore
+3. **v5p's 35.07% edges out GB300's 34.2%** — a 256-chip 3D torus plus SparseCore
    collective offloading hides MoE's fine-grained communication even more cleanly than an
    NVLink domain does.
+   ⚠️ **The margin is only 0.9 points, so do not lean on it.** That GB300 figure used to read
+   31.6% against a peak of 2,700, but 2,700 was GB200's number scaled by 1.2 and NVIDIA never
+   published it. Against the official 2,500 the gap shrinks to 0.9pp — within what the
+   remaining configuration differences (global batch, sequence packing) can account for.
 
 > **v7 lands at the same water line on 64 chips and on 256 chips** (580 vs 580, with peak
 > HBM identical to the byte). The extra 3.3% at 256 chips comes from *having a wider FSDP
