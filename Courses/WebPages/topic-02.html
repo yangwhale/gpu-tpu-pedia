@@ -4045,6 +4045,144 @@ footer a{text-decoration:none}
 <figcaption>上一张图留了个问题：这些部件到底怎么连。<b>答案是中间那个盒子只有一个</b> —— VPU、MXU、XLU 取的是<b>同一批 vreg</b>，各开一个门；既不是各有各的寄存器，也不是挂总线抢带宽。于是「横着走贵」有了更准的说法：<b>贵在要把整个 vreg 交出去、绕一趟、再收回来</b>，不是缺一根线。<b>蓝带那组换算是这门课最该记的一句</b>：一个 ALU ≈ 一个 CUDA core，一条 lane ≈ 一个 warp scheduler ——&nbsp;两边差的从来不是有没有这些部件，是<b>谁在运行时挑活</b>。⚠️ 图里的数<b>书里标的是 v5p</b>（v4 只有 32 个 vreg），别当 v7 规格表用。</figcaption>
 </figure>
 
+  <p><b>「各开一个门」还不够，因为下一个问题必然是：那门后面的线怎么走？</b>
+    最常见的想法是 ——&nbsp;128 条车道，vreg、VPU、MXU 全串在上面，
+    大家时分复用、商量好谁开谁关，不然就撞车。
+    <b>这个想法有一半是对的</b>：争用确实存在，也确实要排。
+    但<b>争的不是一条共享总线</b>，而且<b>「商量」根本不发生在运行时</b> ——&nbsp;</p>
+<figure class="fbox fwide" id="ms-p28">
+<svg viewBox="0 0 1400 874" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 核内的数据搬运：不是所有部件挂在一条 128 位总线上时分复用，而是寄存器堆开出有限条各自 128 宽的端口">
+<text x="20" y="26" class="ttl">数据到底怎么搬　—— <tspan font-weight="700">128 是每条通路的宽度，不是一条总线的车道数</tspan></text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
+<text x="37" y="58" class="sm">① 常见的错模型：共享总线</text>
+<rect x="198.15" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="215.15" y="58" class="sm">② 实际：端口</text>
+<rect x="307.3" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="324.3" y="58" class="sm">lane 内</text>
+<rect x="389.425" y="48" width="11" height="11" rx="2" fill="#12786f"/>
+<text x="406.425" y="58" class="sm">跨 lane</text>
+<rect x="471.55" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="488.55" y="58" class="sm">攒够才算</text>
+<rect x="20" y="84" width="604" height="246" rx="10" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.4" stroke-dasharray="5 4"/>
+<text x="38" y="112" class="sec" fill="#5f6368">❌ 很自然、但不对的那张图：一条总线，大家挂上面</text>
+<line x1="50" y1="192" x2="594" y2="192" stroke="#9aa0a6" stroke-width="7.0"/>
+<text x="594" y="180" class="xxs" fill="#5f6368" text-anchor="end">「128 条车道」</text>
+<line x1="110" y1="192" x2="110" y2="158" stroke="#9aa0a6" stroke-width="1.6"/>
+<rect x="72" y="130" width="76" height="28" rx="5" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="110" y="149" class="xxs" fill="#5f6368" text-anchor="middle">vreg 0</text>
+<line x1="214" y1="192" x2="214" y2="158" stroke="#9aa0a6" stroke-width="1.6"/>
+<rect x="176" y="130" width="76" height="28" rx="5" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="214" y="149" class="xxs" fill="#5f6368" text-anchor="middle">vreg 1</text>
+<line x1="318" y1="192" x2="318" y2="158" stroke="#9aa0a6" stroke-width="1.6"/>
+<rect x="280" y="130" width="76" height="28" rx="5" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="318" y="149" class="xxs" fill="#5f6368" text-anchor="middle">…共 64</text>
+<line x1="422" y1="192" x2="422" y2="158" stroke="#9aa0a6" stroke-width="1.6"/>
+<rect x="384" y="130" width="76" height="28" rx="5" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="422" y="149" class="xxs" fill="#5f6368" text-anchor="middle">VPU</text>
+<line x1="526" y1="192" x2="526" y2="158" stroke="#9aa0a6" stroke-width="1.6"/>
+<rect x="488" y="130" width="76" height="28" rx="5" fill="#fff" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="526" y="149" class="xxs" fill="#5f6368" text-anchor="middle">MXU</text>
+<text x="38" y="222" class="xs">这张图会推出两个结论：<tspan font-weight="700" fill="#202124">同一周期只能有一个人说话</tspan>，而且<tspan font-weight="700" fill="#202124">芯片上得有个仲裁器在现场协调谁开谁关</tspan>。</text>
+<text x="38" y="244" class="xs"><tspan font-weight="700" fill="#d93025">两个结论都不成立。</tspan>寄存器堆从来不是这么接的 —— 它开的是<tspan font-weight="700" fill="#202124">端口</tspan>，不是挂总线。</text>
+<text x="38" y="268" class="xs">这张图之所以看着对，是因为「128」这个数确实到处都在。<tspan font-weight="700" fill="#202124">但它在每一处都是「宽度」，不是「份额」</tspan> —— 没有谁</text>
+<text x="38" y="286" class="xs">需要从这 128 里分一块走。</text>
+<rect x="656" y="84" width="724" height="246" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<text x="674" y="112" class="sec" fill="#8430ce">✅ 实际：一个寄存器堆，开出有限条端口</text>
+<rect x="676" y="132" width="118" height="168" rx="8" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<text x="735.0" y="158" class="box" fill="#8430ce" text-anchor="middle">vreg 堆</text>
+<text x="735.0" y="178" class="xxs" fill="#5f6368" text-anchor="middle">64 个</text>
+<rect x="694" y="192" width="82" height="12" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="694" y="209" width="82" height="12" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="694" y="226" width="82" height="12" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="694" y="243" width="82" height="12" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="694" y="260" width="82" height="12" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="694" y="277" width="82" height="12" rx="2" fill="#f3e8fd" stroke="#8430ce" stroke-width="0.7"/>
+<rect x="802" y="140" width="214" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<line x1="808" y1="145" x2="1010" y2="145" stroke="#1e8e3e" stroke-width="0.7"/>
+<line x1="808" y1="150" x2="1010" y2="150" stroke="#1e8e3e" stroke-width="0.7"/>
+<line x1="808" y1="155" x2="1010" y2="155" stroke="#1e8e3e" stroke-width="0.7"/>
+<text x="1024" y="154" class="xxs" fill="#1e8e3e">读口</text>
+<text x="1068" y="154" class="xxs" fill="#5f6368">→ VPU</text>
+<rect x="802" y="180" width="214" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<line x1="808" y1="185" x2="1010" y2="185" stroke="#1e8e3e" stroke-width="0.7"/>
+<line x1="808" y1="190" x2="1010" y2="190" stroke="#1e8e3e" stroke-width="0.7"/>
+<line x1="808" y1="195" x2="1010" y2="195" stroke="#1e8e3e" stroke-width="0.7"/>
+<text x="1024" y="194" class="xxs" fill="#1e8e3e">读口</text>
+<text x="1068" y="194" class="xxs" fill="#5f6368">→ VPU</text>
+<rect x="802" y="220" width="214" height="20" rx="4" fill="#e0f2f0" stroke="#12786f" stroke-width="1.2"/>
+<line x1="808" y1="225" x2="1010" y2="225" stroke="#12786f" stroke-width="0.7"/>
+<line x1="808" y1="230" x2="1010" y2="230" stroke="#12786f" stroke-width="0.7"/>
+<line x1="808" y1="235" x2="1010" y2="235" stroke="#12786f" stroke-width="0.7"/>
+<text x="1024" y="234" class="xxs" fill="#12786f">写口</text>
+<text x="1068" y="234" class="xxs" fill="#5f6368">← 结果回填</text>
+<rect x="802" y="260" width="214" height="20" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
+<line x1="808" y1="265" x2="1010" y2="265" stroke="#1a73e8" stroke-width="0.7"/>
+<line x1="808" y1="270" x2="1010" y2="270" stroke="#1a73e8" stroke-width="0.7"/>
+<line x1="808" y1="275" x2="1010" y2="275" stroke="#1a73e8" stroke-width="0.7"/>
+<text x="1024" y="274" class="xxs" fill="#1a73e8">装填口</text>
+<text x="1068" y="274" class="xxs" fill="#5f6368">← 便签本</text>
+<text x="674" y="316" class="xs"><tspan font-weight="700" fill="#202124">每一条端口本身就是 128 lane 宽</tspan> —— 128 不是要分给大家用的车道，<tspan font-weight="700" fill="#202124">它是每条通路的宽度</tspan>。真正有限的是<tspan font-weight="700" fill="#202124">端口有几条</tspan>。</text>
+<rect x="20" y="352" width="1360" height="96" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="38" y="378" class="sec">🔢 那到底有几条？公开资料没直说 —— 但给了能推的两个数</text>
+<text x="38" y="402" class="xs">① 每周期发 <tspan font-weight="700" fill="#202124">4 条</tspan>向量指令，每条<tspan font-weight="700" fill="#202124">吃 2 个 vreg、写 1 个</tspan>　→　读 8、写 4。　　② 每周期从便签本<tspan font-weight="700" fill="#202124">装 3 个</tspan> vreg、<tspan font-weight="700" fill="#202124">写回 1 个</tspan>　→　再加写 3、读 1。　　<tspan font-weight="700" fill="#202124">合计约 9 读、7 写。</tspan></text>
+<text x="38" y="422" class="xxs"><tspan font-weight="700" fill="#d93025">⚠️ 这是推的，不是原话</tspan> —— 两个乘数都出自公开资料，加法是我做的。而且真实硬件常靠<tspan font-weight="700" fill="#202124">分体</tspan>省端口，具体怎么分公开资料没说。</text>
+<rect x="20" y="470" width="326" height="250" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="34" y="494" class="box" fill="#1e8e3e">VPU　·　逐元素</text>
+<text x="332" y="494" class="xxs" fill="#5f6368" text-anchor="end">就地</text>
+<text x="34" y="526" class="xxs" fill="#5f6368">横向？</text>
+<text x="94" y="526" class="xs">不需要，lane 内自己算自己</text>
+<text x="34" y="556" class="xxs" fill="#5f6368">延迟</text>
+<text x="94" y="556" class="xs">约 2 周期</text>
+<text x="34" y="586" class="xxs" fill="#5f6368">队列</text>
+<text x="94" y="586" class="xs"><tspan fill="#9aa0a6">不用</tspan></text>
+<line x1="34" y1="606" x2="332" y2="606" stroke="#1e8e3e" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="34" y="626" class="xs">最短的一条路：从 vreg 出来，进本 lane 的 ALU，回 </text>
+<text x="34" y="643" class="xs">vreg。全程没离开那一竖条。<tspan fill="#9aa0a6">逐元素算子便宜，真正的原因</tspan></text>
+<text x="34" y="660" class="xs"><tspan fill="#9aa0a6">就是它一步都没有出去。</tspan></text>
+<rect x="364" y="470" width="326" height="250" rx="9" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.4"/>
+<text x="378" y="494" class="box" fill="#8430ce">超越函数单元</text>
+<text x="676" y="494" class="xxs" fill="#5f6368" text-anchor="end">竖着，但深</text>
+<text x="378" y="526" class="xxs" fill="#5f6368">横向？</text>
+<text x="438" y="526" class="xs">不需要，也是 lane 内</text>
+<text x="378" y="556" class="xxs" fill="#5f6368">延迟</text>
+<text x="438" y="556" class="xs"><tspan font-weight="700" fill="#d93025">几十周期</tspan>，流水线深</text>
+<text x="378" y="586" class="xxs" fill="#5f6368">队列</text>
+<text x="438" y="586" class="xs"><tspan font-weight="700" fill="#202124">要</tspan>　←　因为<tspan font-weight="700" fill="#202124">慢</tspan></text>
+<line x1="378" y1="606" x2="676" y2="606" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="378" y="626" class="xs">exp、rsqrt 这类。它跟 VPU 一样是竖着接的，<tspan font-weight="700" fill="#202124">但不能占着</tspan></text>
+<text x="378" y="643" class="xs"><tspan font-weight="700" fill="#202124">发射位干等</tspan>：推进去，先干别的，好了再捞。</text>
+<rect x="708" y="470" width="326" height="250" rx="9" fill="#e0f2f0" stroke="#12786f" stroke-width="1.4"/>
+<text x="722" y="494" class="box" fill="#12786f">XLU　·　跨 lane</text>
+<text x="1020" y="494" class="xxs" fill="#5f6368" text-anchor="end">横着，且共享</text>
+<text x="722" y="526" class="xxs" fill="#5f6368">横向？</text>
+<text x="782" y="526" class="xs"><tspan font-weight="700" fill="#d93025">要</tspan>，这是唯一横着走的门</text>
+<text x="722" y="556" class="xxs" fill="#5f6368">延迟</text>
+<text x="782" y="556" class="xs"><tspan font-weight="700" fill="#d93025">几十周期</tspan> ＋ <tspan font-weight="700" fill="#d93025">排队</tspan></text>
+<text x="722" y="586" class="xxs" fill="#5f6368">队列</text>
+<text x="782" y="586" class="xs"><tspan font-weight="700" fill="#202124">要</tspan>　←　因为<tspan font-weight="700" fill="#202124">共享</tspan></text>
+<line x1="722" y1="606" x2="1020" y2="606" stroke="#12786f" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="722" y="626" class="xs">全核只有一两个，谁都得从这儿过。<tspan font-weight="700" fill="#d93025">贵的是「出一趟再回来」</tspan></text>
+<text x="722" y="643" class="xs"><tspan font-weight="700" fill="#d93025">这个往返，不是那一次加法。</tspan></text>
+<rect x="1052" y="470" width="326" height="250" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text x="1066" y="494" class="box" fill="#d93025">MXU　·　矩阵乘</text>
+<text x="1364" y="494" class="xxs" fill="#5f6368" text-anchor="end">喂不满，要攒</text>
+<text x="1066" y="526" class="xxs" fill="#5f6368">横向？</text>
+<text x="1126" y="526" class="xs">阵列自带，不占 XLU</text>
+<text x="1066" y="556" class="xxs" fill="#5f6368">延迟</text>
+<text x="1126" y="556" class="xs">攒够了才乘一次</text>
+<text x="1066" y="586" class="xxs" fill="#5f6368">队列</text>
+<text x="1126" y="586" class="xs"><tspan font-weight="700" fill="#202124">要</tspan>　←　进料和出料<tspan font-weight="700" fill="#202124">都要</tspan></text>
+<line x1="1066" y1="606" x2="1364" y2="606" stroke="#d93025" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="1066" y="626" class="xs">一个 vreg 是 8 × 128，阵列比这大得多，<tspan font-weight="700" fill="#202124">一口喂不满 —— </tspan></text>
+<text x="1066" y="643" class="xs"><tspan font-weight="700" fill="#202124">得连推好几个进去</tspan>。所以它有自己的进料口。</text>
+<rect x="20" y="742" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="770" class="sec" fill="#1a73e8">⭐ 那「撞车」呢？—— 它不存在，因为它在编译期就被消灭了</text>
+<text x="38" y="796" class="xs">TPU 是 <tspan font-weight="700" fill="#202124">VLIW</tspan>：一个指令包里，<tspan font-weight="700" fill="#202124">每类操作有几个固定的位置</tspan>，编译器往里填。填不下就多排一个周期。<tspan font-weight="700" fill="#202124">芯片上没有一个运行时的仲裁器在现场商量谁先走</tspan> —— 冲突不是被解决的，是被<tspan font-weight="700" fill="#202124">提前排掉、根本没机会发生</tspan>。</text>
+<text x="38" y="817" class="xs"><tspan font-weight="700" fill="#d93025">GPU 正相反：靠运行时的记分板和 warp 调度器现场决定。</tspan>这就是这门课一直在回的那条分水岭 —— <tspan font-weight="700" fill="#202124">谁在运行时挑活。</tspan></text>
+</svg>
+<figcaption>上一张图说「各开一个门」，紧接着最自然的追问是：那不就是 128 条车道大家串在一起、时分复用吗？<b>一半对，一半错，而错的那一半最要紧</b>：争用确实有，但争的不是一条共享总线，是<b>端口和发射位</b> —— <b>128 是每条通路的宽度，不是要分给大家的份额</b>。四张卡把四个单元的接法摊开对比，机关在「要不要队列」那一栏：<b>三个都要，理由两两不同</b>（超越函数是因为慢，XLU 是因为共享，MXU 是因为一口喂不满）。落点那条最值得记：<b>撞车不是被解决的，是被编译期提前排掉、根本没机会发生</b> —— GPU 靠运行时记分板现场决定，这正是全课那条分水岭。⚠️ 端口那个「约 9 读 7 写」<b>是推的不是原话</b>，图上写了推导链。</figcaption>
+</figure>
+
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
   <p>上一节说的「运行时换任务」，具体是在哪一层发生的？把两边的层级摆开对照。
     <b>GPU 这边有四层</b>，注意哪几层是启动之后才知道的 ——</p>
