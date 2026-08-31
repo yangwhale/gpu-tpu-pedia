@@ -18,20 +18,23 @@ x=16
 p.append(f'<rect x="{x}" y="76" width="468" height="276" rx="10" fill="#f8f9fa" stroke="{GR}"/>')
 p.append(f'<text class="svglbl" x="{x+16}" y="98" fill="{GR}">chiplet 1　=　JAX 眼里的 device 0</text>')
 # TensorCore
-p.append(f'<rect x="{x+16}" y="108" width="330" height="130" rx="8" fill="#e6f4ea" stroke="{GR}"/>')
+p.append(f'<rect x="{x+16}" y="108" width="300" height="130" rx="8" fill="#e6f4ea" stroke="{GR}"/>')
 p.append(f'<text class="svglbl" x="{x+28}" y="128" fill="{GR}">TensorCore ×1</text>')
 for j,(t,sb,c) in enumerate([("MXU ×2","256 × 256 脉动阵列",GR),("VPU","逐元素 · 峰值低两个数量级",PU),
-                             ("XLU","转置 / 归约 / 排列",PU),("标量单元 ×1","产生所有地址 —— 只有一个",RD)]):
+                             ("XLU","转置 · 跨 lane 归约 —— 慢",PU),("标量单元 ×1","产生所有地址 —— 只有一个",RD)]):
     yy=138+j*24
-    p.append(f'<rect x="{x+28}" y="{yy}" width="140" height="20" rx="4" fill="{c}"/>')
+    p.append(f'<rect x="{x+28}" y="{yy}" width="112" height="20" rx="4" fill="{c}"/>')
     p.append(f'<text class="svgsm" x="{x+36}" y="{yy+14}" fill="#fff">{t}</text>')
-    p.append(f'<text class="svgsm" x="{x+178}" y="{yy+14}">{sb}</text>')
+    p.append(f'<text class="svgsm" x="{x+150}" y="{yy+14}">{sb}</text>')
 # SparseCore
-p.append(f'<rect x="{x+354}" y="108" width="98" height="130" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')
-p.append(f'<text class="svglbl" x="{x+364}" y="128" fill="#7a5000">SparseCore</text>')
-p.append(f'<text class="svgnum" x="{x+364}" y="150" fill="#7a5000">× 2</text>')
-for j,t in enumerate(["16 subcore","× 16 lane","VMEM 512 KiB","无 MXU"]):
-    p.append(f'<text class="svgsm" x="{x+364}" y="{168+j*17}" fill="#7a5000">{t}</text>')
+p.append(f'<rect x="{x+324}" y="108" width="128" height="130" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')
+# 个数并进标题 —— 原来「× 2」单占一行，跟下面第一条只差 8px，挤在一起像重影。
+p.append(f'<text class="svglbl" x="{x+334}" y="128" fill="#7a5000">SparseCore × 2</text>')
+# 后三行是「它到底能干嘛」。只写 subcore 数和 VMEM 大小，读者知道它存在、
+# 不知道它有什么用 —— 而下一句「GPU 没有可编程协处理器」就没有分量了。
+for j,t in enumerate(["16 subcore","× 16 lane","VMEM 512 KiB",
+                      "跑自己的程序：","前缀和 · 排序 · 计数","gather / scatter"]):
+    p.append(f'<text class="svgsm" x="{x+334}" y="{148+j*15}" fill="#7a5000">{t}</text>')
 # 片上存储
 for j,(t,v,c) in enumerate([("VMEM","64 MiB · 编译器显式管",GR),("SMEM","1 MiB",GY),
                             ("CMEM","0 —— 没有这一层",RD)]):
@@ -103,7 +106,7 @@ q.append(f'<rect x="0" y="50" width="336" height="215" rx="10" fill="#e8f0fe" st
 # 本课 §8 已经把「套错机型」立成了教案，§1 自己不能再犯。
 q.append(f'<text class="svglbl" x="16" y="72" fill={BL!r}>① 一张 GB200 GPU　'
          f'<tspan style="font-size:10px" fill="{GY}">（NVL72 里的那颗）</tspan></text>')
-for j,(t,v) in enumerate([("SM","148 个（第三方拆解，官方未公布）"),("每 SM","128 CUDA core · 4 Tensor Core"),
+for j,(t,v) in enumerate([("SM","148 个（第三方拆解，官方未公布）"),("每 SM","128 CUDA core · 4 Tensor Core · SFU"),
                           ("每 SM 并发","最多 64 个 warp"),("寄存器堆","64K × 32 bit = 256 KB / SM"),
                           ("shared","最多 228 KB / SM（含 L1 共 256 KB）"),
                           ("L2","126 MB · 全 GPU 共享 · 自动管"),
