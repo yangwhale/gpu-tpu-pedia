@@ -1439,6 +1439,10 @@ def sections(F):
 
 
 # ══════════════════════════════════════════════════════════════════════
+# 这一行既是注释也是锚点：注入前用它找到上一份 CSS 的起点，整段替换。
+# **不要改它的字面** —— 改了就找不到历史上那几份，又会开始累积。
+CSS_MARK = "/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */"
+
 CSS = '''
 /* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
 /* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
@@ -1446,6 +1450,12 @@ CSS = '''
 .fwide{margin-left:50%;transform:translateX(-50%);
   width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
 .fwide svg{display:block}
+/* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
+   figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
+   看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
+   fwide 的图有 1440px 宽，图注全跟着就成了一行一百多字，所以这里
+   **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
+.fwide figcaption{max-width:1080px;margin-left:0}
 .note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
 /* ---- 旁白折叠块 ----
    有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
@@ -1488,8 +1498,18 @@ def main():
 
     html = io.open(PAGE, encoding="utf-8").read()
 
-    if CSS not in html:
-        html = html.replace("</style>", CSS + "</style>", 1)
+    # 幂等注入 CSS。**曾经写的是 `if CSS not in html`，那是个假幂等** ——
+    # 只要改一个字，旧块就通不过 `not in` 测试，于是又追加一份，旧的还留着。
+    # 实际累积到了 5 份（`.fwide{margin-left:50%` 在页面里出现 5 次）。
+    # 现在改成：先把「第一个标记 → </style>」之间整段铲掉，再插当前这份。
+    # 铲的范围天然覆盖历史上所有版本，无论它们各自长什么样。
+    i = html.find(CSS_MARK)
+    if i >= 0:
+        # rstrip 掉标记前的空白：CSS 常量自己是 '\n/* ---- */...' 开头的，
+        # 如果只从标记位置开始删，那个前导换行每轮都会剩一个下来 —— 文件
+        # 于是「每跑一次多一个空行」，看着像不幂等，其实只差这一下。
+        html = html[:i].rstrip() + html[html.index("</style>", i):]
+    html = html.replace("</style>", CSS + "</style>", 1)
 
     block = "\n".join([
         BEG,

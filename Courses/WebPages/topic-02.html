@@ -255,7 +255,7 @@ details.more .body .note{margin:14px 0}
 /* ── 图 ───────────────────────────────── */
 figure{margin:26px 0}
 figure svg{display:block;width:100%;height:auto}
-figcaption{font-size:15px;color:#3c4043;margin-top:11px;line-height:1.65;text-align:left;max-width:74ch;margin-left:auto;margin-right:auto}
+figcaption{font-size:15px;color:#3c4043;margin-top:11px;line-height:1.65;text-align:left;max-width:none;margin-left:0;margin-right:0}
 .fbox{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg2)}
 /* ⚠️ fill 用 :not([fill]) 兜底：SVG 的 fill= 呈现属性优先级低于 class 选择器，
    直接写 .svgsm{fill:...} 会把元素上显式写的颜色全部盖掉（本文件曾有 398 处被静默盖成灰色）。
@@ -398,85 +398,18 @@ footer a{text-decoration:none}
   .figpair{grid-template-columns:1fr !important}
   .eq{font-size:12.5px;padding:12px 14px}
 }
-
 /* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
 /* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
    讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
 .fwide{margin-left:50%;transform:translateX(-50%);
   width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
 .fwide svg{display:block}
-.msfrom{color:var(--gray);font-size:12.5px}
-.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
-@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
-.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
-  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
-  color:var(--ink);transition:border-color .15s,box-shadow .15s}
-.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
-.mscard b{display:block;font-size:16px;margin-bottom:6px}
-.mscard span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
-
-/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
-/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
-   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
-.fwide{margin-left:50%;transform:translateX(-50%);
-  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
-.fwide svg{display:block}
-.msfrom{color:var(--gray);font-size:12.5px}
-.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
-@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
-.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
-  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
-  color:var(--ink);transition:border-color .15s,box-shadow .15s}
-.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
-.mscard > b{display:block;font-size:16px;margin-bottom:6px}
-.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
-
-/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
-/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
-   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
-.fwide{margin-left:50%;transform:translateX(-50%);
-  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
-.fwide svg{display:block}
-.msfrom{color:var(--gray);font-size:12.5px}
-.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
-@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
-.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
-  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
-  color:var(--ink);transition:border-color .15s,box-shadow .15s}
-.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
-.mscard > b{display:block;font-size:16px;margin-bottom:6px}
-.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
-/* `.note.q` 在页面基础样式里**根本没有定义** —— 只有 `.guess .q`，
-   而那条被 `.guess` 限定住了，落不到这里。于是这几块「适合展开问答」的提示
-   一直是**没有底色、没有左边框**的裸文本，和正文段落长得一模一样：
-   浏览器不报错，渲染也不塌，只是那个「这里停一下」的视觉信号从来没出现过。
-   语义值得保留（它和 info/warn/danger 说的不是一件事），所以补一条规则，
-   用紫色 —— 全课里紫色一直代表「人的领地」。 */
-.note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
-
-/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
-/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
-   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
-.fwide{margin-left:50%;transform:translateX(-50%);
-  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
-.fwide svg{display:block}
-.note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
-.msfrom{color:var(--gray);font-size:12.5px}
-.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
-@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
-.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
-  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
-  color:var(--ink);transition:border-color .15s,box-shadow .15s}
-.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
-.mscard > b{display:block;font-size:16px;margin-bottom:6px}
-.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
-
-/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
-/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
-   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
-.fwide{margin-left:50%;transform:translateX(-50%);
-  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
-.fwide svg{display:block}
+/* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
+   figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
+   看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
+   fwide 的图有 1440px 宽，图注全跟着就成了一行一百多字，所以这里
+   **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
+.fwide figcaption{max-width:1080px;margin-left:0}
 .note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
 /* ---- 旁白折叠块 ----
    有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
@@ -740,7 +673,8 @@ details.aside b{color:var(--ink);font-weight:600}
   <figcaption>两个 chiplet 各有<b>独立地址空间</b>，跨过去要走 D2D、是显式的一步 —— 直接后果是「192 GiB 的芯片，一个 device 的额度只有 96 GiB」。另外三处后面要用：<b>标量单元只有一个</b>（第 3 节），<b><code>CMEM = 0</code> 不是「小」是「没有」</b>（第 2 节），以及核里那两个容易被当成装饰的小盒子 ——&nbsp;<b><code>XLU</code></b> 管「数据横着走」（慢，第 3 节要算这笔账）、<b><code>SparseCore</code></b> 是能跑自己程序的小处理器（GPU 那边没有这一层）。</figcaption>
   </figure>
 
-  <div class="note info"><span class="t">图里「VPU 峰值低 2 个数量级」是跟谁比、怎么来的</span>
+  <details class="aside"><summary>旁白：图里「VPU 峰值低 2 个数量级」是怎么推出来的（推导链，可跳过）</summary>
+    <div class="body">
     <b>这是推出来的，不是查到的，所以推导链摆在这儿</b>：
     MXU 是 <code>2 × (256 × 256)</code> = 131,072 个乘加位置；
     VPU 是 <code>8 个 sublane × 128 条 lane</code> = 1,024 个算术位置。
@@ -751,15 +685,16 @@ details.aside b{color:var(--ink);font-weight:600}
     拿位置数反推官方峰值是对不上的 —— 2,307 TFLOPS ÷（4 个 MXU × 65,536 × 2 FLOP）
     要 4.4 GHz，TPU 不可能跑这个频率。所以位置数只能用来说
     <b>「两者不在一个量级」</b>，<b>不能</b>拿来算精确倍数。
-    <br>结论不受影响：<b>逐元素运算在 TPU 上是很贵的</b> —— 这是 第 3 节 讲 softmax 的伏笔。</div>
+    <br>结论不受影响：<b>逐元素运算在 TPU 上是很贵的</b> —— 这是 第 3 节 讲 softmax 的伏笔。</div></details>
 
-  <div class="note info"><span class="t">v7 相对上一代最容易被忽略的一个变化</span>
+  <details class="aside"><summary>旁白：v7 跟上一代 MegaCore 的区别（背景，只有从 v4/v5p 迁过来才需要）</summary>
+    <div class="body">
     v4 / v5p 是 <b>MegaCore</b>：一颗芯片上两个核共用一个统一地址空间。
     <b>v7 不是</b> —— 官方文档写得很清楚，两个 chiplet
     「each with its own dedicated memory space」，各带 96 GB HBM。
     <br>所以在 v7 上，<b>「跨核」这件事的成本，跟你在上一代的直觉不一样</b>：
     它要走 D2D 接口加集合通信，而不是随手读一下对方的内存。
-    好消息是那条 D2D 比一条 1D ICI 链路快 6 倍。</div>
+    好消息是那条 D2D 比一条 1D ICI 链路快 6 倍。</div></details>
 
   <h3>1.2　GB200：这一侧要画三层</h3>
   <p>GPU 这边一颗画不完，要画三层：一颗 GPU、一个节点、再到 NVL72。
@@ -8670,8 +8605,8 @@ details.aside b{color:var(--ink);font-weight:600}
   <p>现在把两边并起来，让 FlashAttention 同时在两条路上往前推 ——
     <b>一行是同一站，左边是什么，右边是什么。这是本节的主图，横着读。</b></p>
 <figure class="fbox fwide" id="ms-p39">
-<svg viewBox="0 0 1400 1094" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FlashAttention 在 GPU 与 TPU 两条内存通路上的逐站对照：片外主存、硬件缓存、片上暂存、操作数缓冲、计算单元、以及谁来安排矩阵单元与向量单元之间的切换">
-<text x="20" y="26" class="ttl">同一个 FlashAttention，<tspan font-weight="700">两边并排走完全程</tspan>　—— 横着读，一站一站对</text>
+<svg viewBox="0 0 1400 1344" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FlashAttention 在 GPU 与 TPU 两条内存通路上的逐站对照。两条竖直管道并排：片外主存、硬件缓存（TPU 这一站是空的）、片上暂存、操作数缓冲、计算单元，以及谁来安排矩阵单元与向量单元之间的切换">
+<text x="20" y="26" class="ttl">同一个 FlashAttention，<tspan font-weight="700">两条路并排走完</tspan>　—— 竖着看走向，横着看差别</text>
 <rect x="1292" y="10" width="88" height="22" rx="11" fill="#d93025"/>
 <text x="1336.0" y="25" class="lbl" fill="#fff" text-anchor="middle">3.6 主图</text>
 <rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
@@ -8679,102 +8614,518 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="122.25" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
 <text x="139.25" y="58" class="sm">TPU v7</text>
 <rect x="199.2" y="48" width="11" height="11" rx="2" fill="#d93025"/>
-<text x="216.2" y="58" class="sm">两边结构上真正不同的地方</text>
-<rect x="20" y="84" width="246" height="38" rx="7" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.4"/>
-<text x="36" y="109" class="sec" fill="#202124">这一站</text>
-<rect x="276" y="84" width="556" height="38" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
-<text x="292" y="109" class="sec" fill="#1a73e8">GPU　·　B200</text>
-<rect x="842" y="84" width="538" height="38" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
-<text x="858" y="109" class="sec" fill="#1e8e3e">TPU　·　v7</text>
-<rect x="20" y="126" width="246" height="82" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
-<text x="34" y="148" class="box" fill="#202124">① 片外主存</text>
-<text x="34" y="168" class="xxs">只有 Q / K / V / O 住这儿。<tspan font-weight="700" fill="#202124">S 从来不出现在</tspan></text>
-<text x="34" y="183" class="xxs"><tspan font-weight="700" fill="#202124">这一层 —— 省下的就是它。</tspan></text>
-<rect x="280" y="126" width="548" height="82" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
-<text x="292" y="148" class="box" fill="#1a73e8">HBM3e</text>
-<text x="816" y="148" class="xxs" fill="#5f6368" text-anchor="end">192 GB · 8.0 TB/s</text>
-<text x="292" y="168" class="xs">官方数字。<tspan font-weight="700" fill="#202124">整颗芯片共用。</tspan></text>
-<rect x="846" y="126" width="530" height="82" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
-<text x="858" y="148" class="box" fill="#1e8e3e">HBM3e</text>
-<text x="1364" y="148" class="xxs" fill="#5f6368" text-anchor="end">192 GiB · 7.4 TB/s / chip</text>
-<text x="858" y="168" class="xs">官方数字。<tspan font-weight="700" fill="#202124">96 GiB / device</tspan>（v7 是 2 device / chip）。</text>
-<rect x="20" y="216" width="246" height="96" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
-<text x="34" y="238" class="box" fill="#202124">② 硬件缓存</text>
-<text x="34" y="258" class="xxs"><tspan font-weight="700" fill="#d93025">这一行是全图最大的结构差异。</tspan>有没有这一层，</text>
-<text x="34" y="273" class="xxs">决定了写 kernel 的人在跟什么打交道。</text>
-<rect x="280" y="216" width="548" height="96" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
-<text x="292" y="238" class="box" fill="#1a73e8">L2 缓存</text>
-<text x="816" y="238" class="xxs" fill="#5f6368" text-anchor="end">126 MB · 4 个分区</text>
-<text x="292" y="258" class="xs"><tspan font-weight="700" fill="#202124">硬件自动，有命中率。</tspan>程序管不着它留什么、赶走什么。</text>
-<rect x="846" y="216" width="530" height="96" rx="7" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
-<text x="858" y="238" class="box" fill="#d93025">没有这一站</text>
-<text x="1364" y="238" class="xxs" fill="#5f6368" text-anchor="end">—</text>
-<text x="858" y="258" class="xs"><tspan font-weight="700" fill="#202124">HBM 直接进片上暂存。</tspan><tspan fill="#9aa0a6">省下的不只是面积，还有「不知道会不会命中」这件事本身。</tspan></text>
-<rect x="20" y="320" width="246" height="96" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
-<text x="34" y="342" class="box" fill="#202124">③ 片上暂存</text>
-<text x="34" y="362" class="xxs"><tspan font-weight="700" fill="#202124">这是 FlashAttention 的主战场。</tspan>tile 就住这</text>
-<text x="34" y="377" class="xxs">儿，块能开多大由这一格的容量决定。</text>
-<rect x="280" y="320" width="548" height="96" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
-<text x="292" y="342" class="box" fill="#1a73e8">L1 ／ 共享内存</text>
-<text x="816" y="342" class="xxs" fill="#5f6368" text-anchor="end">256 KiB / SM · 共享部分 ≤ 227 KiB / 线程块</text>
-<text x="292" y="362" class="xs"><tspan font-weight="700" fill="#202124">同一块硅，两种身份</tspan>：左半是硬件管的 L1，右半是软件管的共享内存。<tspan font-weight="700" fill="#d93025">FlashAttention 的 tile 住在右</tspan></text>
-<text x="292" y="379" class="xs"><tspan font-weight="700" fill="#d93025">半边 —— 是 kernel 作者亲手搬进去的。</tspan></text>
-<rect x="846" y="320" width="530" height="96" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
-<text x="858" y="342" class="box" fill="#1e8e3e">VMEM</text>
-<text x="1364" y="342" class="xxs" fill="#5f6368" text-anchor="end">64 MiB / core</text>
-<text x="858" y="362" class="xs"><tspan font-weight="700" fill="#202124">编译器静态分配，没有 tag、不会 miss。</tspan>Pallas 里用 <tspan class="mono" fill="#1967d2">BlockSpec</tspan> 声明每块搬多大，<tspan font-weight="700" fill="#d93025">剩下的编译器</tspan></text>
-<text x="858" y="379" class="xs"><tspan font-weight="700" fill="#d93025">排 —— 不是 kernel 作者亲手搬。</tspan></text>
-<rect x="20" y="424" width="246" height="86" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
-<text x="34" y="446" class="box" fill="#202124">④ 操作数缓冲</text>
-<text x="34" y="466" class="xxs">矩阵操作数在进计算单元之前，要不要先落一次</text>
-<text x="34" y="481" class="xxs">寄存器。</text>
-<rect x="280" y="424" width="548" height="86" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
-<text x="292" y="446" class="box" fill="#1a73e8">寄存器堆 ＋ TMEM 支线</text>
-<text x="816" y="446" class="xxs" fill="#5f6368" text-anchor="end">寄存器 256 KiB / SM · TMEM 256 KiB / SM</text>
-<text x="292" y="466" class="xs">Blackwell 之前<tspan font-weight="700" fill="#202124">矩阵操作数必须先落寄存器堆</tspan>；现在 TMA／<tspan class="mono" fill="#1967d2">tcgen05.cp</tspan> 异步整块搬进 TMEM，<tspan font-weight="700" fill="#d93025">把寄存器</tspan></text>
-<text x="292" y="483" class="xs"><tspan font-weight="700" fill="#d93025">整条绕过去</tspan>。</text>
-<rect x="846" y="424" width="530" height="86" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
-<text x="858" y="446" class="box" fill="#1e8e3e">向量寄存器（个数未公开）</text>
-<text x="1364" y="446" class="xxs" fill="#5f6368" text-anchor="end">形状是 8 × 128 的二维块</text>
-<text x="858" y="466" class="xs"><tspan font-weight="700" fill="#202124">MXU 那条支线从来不经过向量寄存器</tspan> —— 权重与数据直接推进阵列。<tspan fill="#9aa0a6">这一点 GPU 到 Blackwell 才追</tspan></text>
-<text x="858" y="483" class="xs"><tspan fill="#9aa0a6">上。</tspan></text>
-<rect x="20" y="518" width="246" height="96" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
-<text x="34" y="540" class="box" fill="#202124">⑤ 算：两种单元轮流上</text>
-<text x="34" y="560" class="xxs"><tspan font-weight="700" fill="#202124">FlashAttention 一直在两种单元之间跳</tspan>：矩阵</text>
-<text x="34" y="575" class="xxs">乘两次、中间夹一次 softmax。</text>
-<rect x="280" y="518" width="548" height="96" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
-<text x="292" y="540" class="box" fill="#1a73e8">Tensor Core ＋ CUDA Core</text>
-<text x="816" y="540" class="xxs" fill="#5f6368" text-anchor="end">矩阵：4 / SM　·　向量：128 / SM</text>
-<text x="292" y="560" class="xs"><tspan class="mono" fill="#1967d2">QKᵀ</tspan> 和 <tspan class="mono" fill="#1967d2">PV</tspan> 走 Tensor Core；<tspan font-weight="700" fill="#202124">online softmax（取最大、求指数、累加）走 CUDA Core。</tspan></text>
-<rect x="846" y="518" width="530" height="96" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
-<text x="858" y="540" class="box" fill="#1e8e3e">MXU ＋ VPU</text>
-<text x="1364" y="540" class="xxs" fill="#5f6368" text-anchor="end">矩阵：256 × 256　·　向量：VPU</text>
-<text x="858" y="560" class="xs"><tspan class="mono" fill="#1967d2">QKᵀ</tspan> 和 <tspan class="mono" fill="#1967d2">PV</tspan> 走 MXU，结果落进累加器；<tspan font-weight="700" fill="#202124">online softmax 走 VPU。</tspan></text>
-<rect x="20" y="622" width="246" height="86" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
-<text x="34" y="644" class="box" fill="#202124">⑥ 谁安排这个来回</text>
-<text x="34" y="664" class="xxs"><tspan font-weight="700" fill="#d93025">这一行是第 5 节那条主线，在一个具体 kernel</tspan></text>
-<text x="34" y="679" class="xxs"><tspan font-weight="700" fill="#d93025"> 上的样子。</tspan></text>
-<rect x="280" y="622" width="548" height="86" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
-<text x="292" y="644" class="box" fill="#1a73e8">warp 调度器</text>
-<text x="816" y="644" class="xxs" fill="#5f6368" text-anchor="end">每个周期挑一次</text>
-<text x="292" y="664" class="xs"><tspan font-weight="700" fill="#202124">运行时</tspan>：从几十个 warp 里挑一个数据到位的发。算得慢就换一个上来 —— <tspan font-weight="700" fill="#202124">延迟是被别人的工作盖住的。</tspan></text>
-<rect x="846" y="622" width="530" height="86" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
-<text x="858" y="644" class="box" fill="#1e8e3e">编译器 ＋ VLIW 槽</text>
-<text x="1364" y="644" class="xxs" fill="#5f6368" text-anchor="end">编译期排死，精确到周期</text>
-<text x="858" y="664" class="xs"><tspan font-weight="700" fill="#202124">编译期</tspan>：哪条指令、第几个周期、哪个发射槽，全排好。<tspan font-weight="700" fill="#d93025">没有第二个任务可以顶班 —— 排错了就是真的</tspan></text>
-<text x="858" y="681" class="xs"><tspan font-weight="700" fill="#d93025">停住。</tspan></text>
-<rect x="20" y="734" width="1360" height="96" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
-<text x="38" y="760" class="sec">📌 顺便统一一个口径：TPU 到底几站？—— 本课此前两处数法不一样，两个都对</text>
-<text x="38" y="782" class="xs">图 T-6 沿 <tspan font-weight="700" fill="#202124">MXU 那条支线</tspan>数：HBM ／ VMEM ／ 向量寄存器 ／ MXU ／ 累加器，<tspan font-weight="700" fill="#202124">五站</tspan>。图 G-6 沿 <tspan font-weight="700" fill="#202124">VPU 那条主路</tspan>数：HBM ／ VMEM ／ 向量寄存器 ／ VPU，<tspan font-weight="700" fill="#202124">四站</tspan>。</text>
-<text x="38" y="802" class="xs"><tspan font-weight="700" fill="#d93025">数的是两条不同的路，所以不该报一个总数。</tspan><tspan font-weight="700" fill="#202124">这张图改成按功能对齐 —— 问的不是「几站」，是「谁在这一层、谁没有这一层」。</tspan></text>
-<rect x="20" y="852" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
-<text x="38" y="880" class="sec" fill="#1a73e8">⭐ 落点：这张表里只有两行是结构性的，其余都是参数</text>
-<text x="38" y="906" class="xs"><tspan font-weight="700" fill="#202124">第 ② 行</tspan>：GPU 有一整层硬件缓存，TPU 没有。　　<tspan font-weight="700" fill="#202124">第 ⑥ 行</tspan>：切换由谁安排，一边每周期现挑，一边编译期排死。<tspan font-weight="700" fill="#d93025">剩下四行都是「同一件事，两边各有一个部件」，只是容量和名字不同。</tspan></text>
-<text x="38" y="927" class="xs"><tspan font-weight="700" fill="#202124">而这两行恰好决定了 FlashAttention 在两边是两种不同性质的工作</tspan> —— 下一张图专门收这个口。<tspan fill="#9aa0a6">顺带记一个数：第 ③ 行两边的容量差 64 MiB ÷ 227 KiB ≈ </tspan><tspan font-weight="700" fill="#202124">288 倍</tspan>，这直接决定块能开多大。</text>
-<rect x="20" y="986" width="1360" height="88" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
-<text x="38" y="1012" class="sec">⚠️ 出处分层</text>
-<text x="38" y="1034" class="xs"><tspan font-weight="700" fill="#202124">沿用图 G-6 / T-6 的标注</tspan>，包括那里已写明的成色：L2 带宽是第三方实测、TPU 片上带宽与向量寄存器个数<tspan font-weight="700" fill="#202124">官方未公开</tspan>、Tensor Core 每周期 1,024 乘加是推导值。</text>
-<text x="38" y="1053" class="xxs"><tspan font-weight="700" fill="#202124">本图当场算的</tspan>：64 MiB ÷ 227 KiB ≈ 288 倍。<tspan fill="#9aa0a6">「tile 住在共享内存那半边、由 kernel 作者亲手搬」是公开实现的通行做法；「Pallas 用 BlockSpec 声明块大小」出自 Pallas 文档。</tspan></text>
+<text x="216.2" y="58" class="sm">结构上真正不同的地方</text>
+<rect x="353.2" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
+<text x="370.2" y="58" class="sm">FlashAttention 在这一站做的事</text>
+<rect x="699.0" y="98" width="2" height="612" rx="1" fill="#e3e5e8"/>
+<rect x="620" y="114" width="160" height="66" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="685.0" y="121" width="30" height="20" rx="10" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.1"/>
+<text x="700.0" y="135" class="lbl" fill="#202124" text-anchor="middle">①</text>
+<text x="700.0" y="157" class="box" fill="#202124" text-anchor="middle">片外主存</text>
+<text x="700.0" y="173" class="xxs" text-anchor="middle">只有 Q / K / V / O 住这儿。</text>
+<text x="700.0" y="186" class="xxs" text-anchor="middle"><tspan font-weight="700" fill="#202124">S 从来不出现。</tspan></text>
+<rect x="620" y="210" width="160" height="78" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="685.0" y="217" width="30" height="20" rx="10" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.1"/>
+<text x="700.0" y="231" class="lbl" fill="#202124" text-anchor="middle">②</text>
+<text x="700.0" y="253" class="box" fill="#202124" text-anchor="middle">硬件缓存</text>
+<text x="700.0" y="269" class="xxs" text-anchor="middle"><tspan font-weight="700" fill="#d93025">全图最大的结构差异</tspan></text>
+<text x="700.0" y="282" class="xxs" text-anchor="middle">就在这一层。</text>
+<rect x="620" y="318" width="160" height="134" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="685.0" y="325" width="30" height="20" rx="10" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.1"/>
+<text x="700.0" y="339" class="lbl" fill="#202124" text-anchor="middle">③</text>
+<text x="700.0" y="361" class="box" fill="#202124" text-anchor="middle">片上暂存</text>
+<text x="700.0" y="377" class="xxs" text-anchor="middle"><tspan font-weight="700" fill="#202124">主战场。</tspan>tile 住这儿，</text>
+<text x="700.0" y="390" class="xxs" text-anchor="middle">块能开多大看它的容量。</text>
+<rect x="620" y="482" width="160" height="76" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="685.0" y="489" width="30" height="20" rx="10" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.1"/>
+<text x="700.0" y="503" class="lbl" fill="#202124" text-anchor="middle">④</text>
+<text x="700.0" y="525" class="box" fill="#202124" text-anchor="middle">操作数缓冲</text>
+<text x="700.0" y="541" class="xxs" text-anchor="middle">进计算单元之前，</text>
+<text x="700.0" y="554" class="xxs" text-anchor="middle">要不要先落一次寄存器。</text>
+<rect x="620" y="588" width="160" height="106" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<rect x="685.0" y="595" width="30" height="20" rx="10" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.1"/>
+<text x="700.0" y="609" class="lbl" fill="#202124" text-anchor="middle">⑤</text>
+<text x="700.0" y="631" class="box" fill="#202124" text-anchor="middle">计算单元</text>
+<text x="700.0" y="647" class="xxs" text-anchor="middle"><tspan font-weight="700" fill="#202124">一直在两种单元间跳</tspan>：</text>
+<text x="700.0" y="660" class="xxs" text-anchor="middle">矩阵乘两次，夹一次 softmax。</text>
+<text x="46" y="99" class="sec" fill="#1a73e8">GPU　·　B200</text>
+<rect x="40" y="114" width="560" height="66" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M49,114 h-5 a4,4 0 0 0 -4,4 v58 a4,4 0 0 0 4,4 h5 z" fill="#1a73e8"/>
+<rect x="45" y="114" width="4" height="66" fill="#1a73e8"/>
+<text x="60" y="139" class="box" fill="#1a73e8">HBM3e</text>
+<text x="584" y="139" class="xxs" fill="#5f6368" text-anchor="end">192 GB · 8.0 TB/s</text>
+<text x="60" y="156" class="xs">官方数字。<tspan font-weight="700" fill="#202124">整颗芯片共用。</tspan></text>
+<rect x="311.0" y="180" width="18" height="19" rx="3" fill="#1a73e8" opacity=".42"/>
+<path d="M306.0,198 L320.0,208 L334.0,198 z" stroke="#1a73e8" stroke-width="0" fill="#1a73e8"/>
+<text x="340.0" y="196" class="xxs" fill="#5f6368">8.0 TB/s</text>
+<rect x="40" y="210" width="560" height="78" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M49,210 h-5 a4,4 0 0 0 -4,4 v70 a4,4 0 0 0 4,4 h5 z" fill="#1a73e8"/>
+<rect x="45" y="210" width="4" height="78" fill="#1a73e8"/>
+<text x="60" y="235" class="box" fill="#1a73e8">L2 缓存</text>
+<text x="584" y="235" class="xxs" fill="#5f6368" text-anchor="end">126 MB · 4 个分区</text>
+<text x="60" y="252" class="xs"><tspan font-weight="700" fill="#202124">硬件自动，有命中率。</tspan>程序管不着它留什么、赶走什么。</text>
+<rect x="311.0" y="288" width="18" height="19" rx="3" fill="#1a73e8" opacity=".42"/>
+<path d="M306.0,306 L320.0,316 L334.0,306 z" stroke="#1a73e8" stroke-width="0" fill="#1a73e8"/>
+<rect x="40" y="318" width="560" height="134" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M49,318 h-5 a4,4 0 0 0 -4,4 v126 a4,4 0 0 0 4,4 h5 z" fill="#1a73e8"/>
+<rect x="45" y="318" width="4" height="134" fill="#1a73e8"/>
+<text x="60" y="343" class="box" fill="#1a73e8">L1 ／ 共享内存</text>
+<text x="584" y="343" class="xxs" fill="#5f6368" text-anchor="end">256 KiB / SM · 共享 ≤ 227 KiB / 线程块</text>
+<rect x="60" y="364" width="254.0" height="28" rx="6" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.2"/>
+<text x="187.0" y="382" class="xxs" fill="#5f6368" text-anchor="middle">左半：硬件管的 L1</text>
+<rect x="326.0" y="364" width="254.0" height="28" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="453.0" y="382" class="xxs" fill="#202124" text-anchor="middle">右半：软件管的共享内存</text>
+<rect x="334.0" y="400" width="12" height="8" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="349.0" y="400" width="12" height="8" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="364.0" y="400" width="12" height="8" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="379.0" y="400" width="12" height="8" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="394.0" y="400" width="12" height="8" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="409.0" y="400" width="12" height="8" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="334.0" y="411" width="12" height="8" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="349.0" y="411" width="12" height="8" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="364.0" y="411" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="379.0" y="411" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="394.0" y="411" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="409.0" y="411" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="334.0" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="349.0" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="364.0" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="379.0" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="394.0" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<rect x="409.0" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#f9ab00" stroke-width="0.9"/>
+<text x="436.0" y="408" class="xxs"><tspan font-weight="700" fill="#d93025">tile 住这半边 —— 作者亲手</tspan></text>
+<text x="436.0" y="421" class="xxs"><tspan font-weight="700" fill="#d93025">搬进去。</tspan></text>
+<path d="M96,418 a26,11 0 1 0 52,0" stroke="#f9ab00" stroke-width="1.6" fill="none"/>
+<path d="M143,411 L150,419 L140,422 z" stroke="#f9ab00" stroke-width="0" fill="#f9ab00"/>
+<text x="158" y="422" class="xxs" fill="#f9ab00">每块循环一次</text>
+<rect x="313.0" y="452" width="14" height="19" rx="3" fill="#1a73e8" opacity=".42"/>
+<path d="M308.0,470 L320.0,480 L332.0,470 z" stroke="#1a73e8" stroke-width="0" fill="#1a73e8"/>
+<rect x="40" y="482" width="560" height="76" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M49,482 h-5 a4,4 0 0 0 -4,4 v68 a4,4 0 0 0 4,4 h5 z" fill="#1a73e8"/>
+<rect x="45" y="482" width="4" height="76" fill="#1a73e8"/>
+<text x="60" y="507" class="box" fill="#1a73e8">寄存器堆 ＋ TMEM 支线</text>
+<text x="584" y="507" class="xxs" fill="#5f6368" text-anchor="end">各 256 KiB / SM</text>
+<text x="60" y="524" class="xs">Blackwell 之前<tspan font-weight="700" fill="#202124">矩阵操作数必须先落寄存器堆</tspan>；现在 TMA／<tspan class="mono" fill="#1967d2">tcgen05.cp</tspan> 整块搬进 TMEM，<tspan font-weight="700" fill="#d93025">把寄存器绕过</tspan></text>
+<text x="60" y="539" class="xs"><tspan font-weight="700" fill="#d93025">去</tspan>。</text>
+<rect x="313.0" y="558" width="14" height="19" rx="3" fill="#1a73e8" opacity=".42"/>
+<path d="M308.0,576 L320.0,586 L332.0,576 z" stroke="#1a73e8" stroke-width="0" fill="#1a73e8"/>
+<rect x="40" y="588" width="560" height="106" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M49,588 h-5 a4,4 0 0 0 -4,4 v98 a4,4 0 0 0 4,4 h5 z" fill="#1a73e8"/>
+<rect x="45" y="588" width="4" height="106" fill="#1a73e8"/>
+<text x="60" y="613" class="box" fill="#1a73e8">算：两种单元轮流上</text>
+<rect x="60.0" y="626" width="218.0" height="54" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="169.0" y="646" class="box" fill="#202124" text-anchor="middle">Tensor Core</text>
+<text x="169.0" y="662" class="xxs" fill="#5f6368" text-anchor="middle">4 / SM</text>
+<text x="169.0" y="676" class="xxs" fill="#1a73e8" text-anchor="middle">QKᵀ ／ PV</text>
+<rect x="362.0" y="626" width="218.0" height="54" rx="7" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="471.0" y="646" class="box" fill="#202124" text-anchor="middle">CUDA Core</text>
+<text x="471.0" y="662" class="xxs" fill="#5f6368" text-anchor="middle">128 / SM</text>
+<text x="471.0" y="676" class="xxs" fill="#5f6368" text-anchor="middle">online softmax</text>
+<path d="M294.0,646 L342.0,646" stroke="#1a73e8" stroke-width="1.8" fill="none"/>
+<path d="M347.0,646 L337.0,641 L337.0,651 z" stroke="#1a73e8" stroke-width="0" fill="#1a73e8"/>
+<path d="M298.0,664 L346.0,664" stroke="#1a73e8" stroke-width="1.8" fill="none"/>
+<path d="M293.0,664 L303.0,659 L303.0,669 z" stroke="#1a73e8" stroke-width="0" fill="#1a73e8"/>
+<text x="320.0" y="634" class="xxs" fill="#1a73e8" text-anchor="middle">来回</text>
+<text x="806" y="99" class="sec" fill="#1e8e3e">TPU　·　v7</text>
+<rect x="800" y="114" width="560" height="66" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M809,114 h-5 a4,4 0 0 0 -4,4 v58 a4,4 0 0 0 4,4 h5 z" fill="#1e8e3e"/>
+<rect x="805" y="114" width="4" height="66" fill="#1e8e3e"/>
+<text x="820" y="139" class="box" fill="#1e8e3e">HBM3e</text>
+<text x="1344" y="139" class="xxs" fill="#5f6368" text-anchor="end">192 GiB · 7.4 TB/s / chip</text>
+<text x="820" y="156" class="xs">官方数字。<tspan font-weight="700" fill="#202124">96 GiB / device</tspan>（v7 是 2 device / chip）。</text>
+<rect x="800" y="210" width="560" height="78" rx="9" fill="none" stroke="#d93025" stroke-width="2.0" stroke-dasharray="7,5"/>
+<text x="820" y="237" class="box" fill="#d93025">没有这一站</text>
+<text x="820" y="258" class="xs"><tspan font-weight="700" fill="#202124">HBM 直接进片上暂存。</tspan></text>
+<text x="1108.0" y="242" class="xxs"><tspan fill="#9aa0a6">省下的不只是面积，还有「不知道会不会命中」这件</tspan></text>
+<text x="1108.0" y="256" class="xxs"><tspan fill="#9aa0a6">事本身。</tspan></text>
+<rect x="1071.0" y="180" width="18" height="128" rx="3" fill="#1e8e3e" opacity=".42"/>
+<path d="M1066.0,307 L1080.0,317 L1094.0,307 z" stroke="#1e8e3e" stroke-width="0" fill="#1e8e3e"/>
+<text x="1102.0" y="196" class="xxs" fill="#1e8e3e">一步到位</text>
+<rect x="800" y="318" width="560" height="134" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M809,318 h-5 a4,4 0 0 0 -4,4 v126 a4,4 0 0 0 4,4 h5 z" fill="#1e8e3e"/>
+<rect x="805" y="318" width="4" height="134" fill="#1e8e3e"/>
+<text x="820" y="343" class="box" fill="#1e8e3e">VMEM</text>
+<text x="1344" y="343" class="xxs" fill="#5f6368" text-anchor="end">64 MiB / core</text>
+<rect x="820" y="364" width="520" height="28" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="1080.0" y="382" class="xxs" fill="#202124" text-anchor="middle">整块都是软件管的 —— 没有 tag，不会 miss</text>
+<rect x="828" y="400" width="12" height="8" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="843" y="400" width="12" height="8" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="858" y="400" width="12" height="8" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="873" y="400" width="12" height="8" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="888" y="400" width="12" height="8" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="903" y="400" width="12" height="8" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="828" y="411" width="12" height="8" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="843" y="411" width="12" height="8" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="858" y="411" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="873" y="411" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="888" y="411" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="903" y="411" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="828" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="843" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="858" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="873" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="888" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<rect x="903" y="422" width="12" height="8" rx="2" fill="#fff" stroke="#1e8e3e" stroke-width="0.9"/>
+<text x="938" y="408" class="xxs">Pallas 用 <tspan class="mono" fill="#1967d2">BlockSpec</tspan> 声明每块搬多大，<tspan font-weight="700" fill="#d93025">剩下的编译器排 —— 不是作者亲手搬。</tspan></text>
+<path d="M846,442 a26,11 0 1 0 52,0" stroke="#1e8e3e" stroke-width="1.6" fill="none"/>
+<path d="M893,435 L900,443 L890,446 z" stroke="#1e8e3e" stroke-width="0" fill="#1e8e3e"/>
+<text x="908" y="446" class="xxs" fill="#1e8e3e">每块循环一次</text>
+<rect x="1073.0" y="452" width="14" height="19" rx="3" fill="#1e8e3e" opacity=".42"/>
+<path d="M1068.0,470 L1080.0,480 L1092.0,470 z" stroke="#1e8e3e" stroke-width="0" fill="#1e8e3e"/>
+<rect x="800" y="482" width="560" height="76" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M809,482 h-5 a4,4 0 0 0 -4,4 v68 a4,4 0 0 0 4,4 h5 z" fill="#1e8e3e"/>
+<rect x="805" y="482" width="4" height="76" fill="#1e8e3e"/>
+<text x="820" y="507" class="box" fill="#1e8e3e">向量寄存器</text>
+<text x="1344" y="507" class="xxs" fill="#5f6368" text-anchor="end">8 × 128 的二维块 · 个数未公开</text>
+<text x="820" y="524" class="xs"><tspan font-weight="700" fill="#202124">MXU 那条支线从来不经过它</tspan> —— 权重与数据直接推进阵列。<tspan fill="#9aa0a6">这点 GPU 到 Blackwell 才追上。</tspan></text>
+<rect x="1073.0" y="558" width="14" height="19" rx="3" fill="#1e8e3e" opacity=".42"/>
+<path d="M1068.0,576 L1080.0,586 L1092.0,576 z" stroke="#1e8e3e" stroke-width="0" fill="#1e8e3e"/>
+<rect x="800" y="588" width="560" height="106" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M809,588 h-5 a4,4 0 0 0 -4,4 v98 a4,4 0 0 0 4,4 h5 z" fill="#1e8e3e"/>
+<rect x="805" y="588" width="4" height="106" fill="#1e8e3e"/>
+<text x="820" y="613" class="box" fill="#1e8e3e">算：两种单元轮流上</text>
+<rect x="820.0" y="626" width="218.0" height="54" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="929.0" y="646" class="box" fill="#202124" text-anchor="middle">MXU</text>
+<text x="929.0" y="662" class="xxs" fill="#5f6368" text-anchor="middle">256 × 256</text>
+<text x="929.0" y="676" class="xxs" fill="#1e8e3e" text-anchor="middle">QKᵀ ／ PV</text>
+<rect x="1122.0" y="626" width="218.0" height="54" rx="7" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="1231.0" y="646" class="box" fill="#202124" text-anchor="middle">VPU</text>
+<text x="1231.0" y="662" class="xxs" fill="#5f6368" text-anchor="middle">向量单元</text>
+<text x="1231.0" y="676" class="xxs" fill="#5f6368" text-anchor="middle">online softmax</text>
+<path d="M1054.0,646 L1102.0,646" stroke="#1e8e3e" stroke-width="1.8" fill="none"/>
+<path d="M1107.0,646 L1097.0,641 L1097.0,651 z" stroke="#1e8e3e" stroke-width="0" fill="#1e8e3e"/>
+<path d="M1058.0,664 L1106.0,664" stroke="#1e8e3e" stroke-width="1.8" fill="none"/>
+<path d="M1053.0,664 L1063.0,659 L1063.0,669 z" stroke="#1e8e3e" stroke-width="0" fill="#1e8e3e"/>
+<text x="1080.0" y="634" class="xxs" fill="#1e8e3e" text-anchor="middle">来回</text>
+<rect x="40" y="726" width="1320" height="112" rx="12" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<text x="58" y="752" class="sec" fill="#8430ce">⑥　那个「来回」是谁安排的　—— 第 5 节那条主线，落在一个具体 kernel 上</text>
+<rect x="58" y="764" width="630" height="60" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M66,764 h-5 a3,3 0 0 0 -3,3 v54 a3,3 0 0 0 3,3 h5 z" fill="#1a73e8"/>
+<rect x="63" y="764" width="3" height="60" fill="#1a73e8"/>
+<text x="74" y="784" class="lbl" fill="#1a73e8">GPU：warp 调度器</text>
+<text x="676" y="784" class="xxs" fill="#5f6368" text-anchor="end">每个周期挑一次</text>
+<text x="74" y="802" class="xxs"><tspan font-weight="700" fill="#202124">运行时</tspan>从几十个 warp 里挑一个数据到位的发。算得慢就换一个上来 —— <tspan font-weight="700" fill="#202124">延迟是被别人的工作盖住的</tspan>。</text>
+<rect x="712" y="764" width="630" height="60" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M720,764 h-5 a3,3 0 0 0 -3,3 v54 a3,3 0 0 0 3,3 h5 z" fill="#1e8e3e"/>
+<rect x="717" y="764" width="3" height="60" fill="#1e8e3e"/>
+<text x="728" y="784" class="lbl" fill="#1e8e3e">TPU：编译器 ＋ VLIW 槽</text>
+<text x="1330" y="784" class="xxs" fill="#5f6368" text-anchor="end">编译期排死，精确到周期</text>
+<text x="728" y="802" class="xxs"><tspan font-weight="700" fill="#202124">编译期</tspan>定好哪条指令、第几周期、哪个发射槽。<tspan font-weight="700" fill="#d93025">没有第二个任务顶班 —— 排错了就是真的停住。</tspan></text>
+<rect x="40" y="862" width="1320" height="216" rx="12" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.8"/>
+<text x="58" y="888" class="sec">📐 第 ③ 站两边差多少 —— 与其写个数字，不如画成面积</text>
+<rect x="68.0" y="908.0" width="6.5" height="6.5" rx="1" fill="#1a73e8" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="908.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="915.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="923.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="931.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="939.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="947.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="954.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="962.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="970.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="978.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="986.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="993.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="1001.6" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="1009.4" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="1017.2" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="1025.0" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="68.0" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="75.8" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="83.6" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="91.4" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="99.2" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="107.0" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="114.8" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="122.6" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="130.4" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="138.2" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="146.0" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="153.8" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="161.6" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="169.39999999999998" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="177.2" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="185.0" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="192.8" y="1032.8" width="6.5" height="6.5" rx="1" fill="#fff" stroke="#1a73e8" stroke-width="0.5"/>
+<rect x="64" y="904" width="137.6" height="137.6" rx="3" fill="none" stroke="#1e8e3e" stroke-width="2.4"/>
+<rect x="65.4" y="905.4" width="11.8" height="11.8" rx="2" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<rect x="72" y="1056.6" width="9" height="9" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="0.8"/>
+<text x="87" y="1064.6" class="xxs" fill="#1a73e8">＝ GPU 共享内存 227 KiB（左上角那一格）</text>
+<rect x="252.6" y="906" width="540" height="150" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M261.6,906 h-5 a4,4 0 0 0 -4,4 v142 a4,4 0 0 0 4,4 h5 z" fill="#1e8e3e"/>
+<rect x="257.6" y="906" width="4" height="150" fill="#1e8e3e"/>
+<text x="270.6" y="930" class="box" fill="#1e8e3e">绿框整片 ＝ TPU VMEM 64 MiB</text>
+<text x="270.6" y="954" class="xs">64 MiB ÷ 227 KiB ≈ <tspan font-weight="700" fill="#202124">288 倍</tspan>。左边那 <tspan font-weight="700" fill="#202124">289</tspan> 个小格里，<tspan font-weight="700" fill="#202124">GPU 只占蓝色那一格</tspan>。</text>
+<text x="270.6" y="980" class="xs"><tspan font-weight="700" fill="#202124">这直接决定块能开多大</tspan> —— 块越大，K/V 要重复读的趟数越少。</text>
+<rect x="816.6" y="906" width="525.4" height="150" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<path d="M825.6,906 h-5 a4,4 0 0 0 -4,4 v142 a4,4 0 0 0 4,4 h5 z" fill="#d93025"/>
+<rect x="821.6" y="906" width="4" height="150" fill="#d93025"/>
+<text x="834.6" y="930" class="box" fill="#d93025">⚠️ 顺带统一一个口径</text>
+<text x="834.6" y="954" class="xxs">本课此前一处写 TPU「五站」、一处写「四站」——<tspan font-weight="700" fill="#202124">两个都对</tspan>：一处沿 MXU 支线数，一处沿 VPU 主路数。<tspan font-weight="700" fill="#d93025">数的</tspan></text>
+<text x="834.6" y="970" class="xxs"><tspan font-weight="700" fill="#d93025">是两条不同的路，所以这张图不报总数</tspan>，只问谁在这一层。</text>
+<rect x="40" y="1100" width="1320" height="116" rx="12" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="58" y="1128" class="sec" fill="#1a73e8">⭐ 落点：这两条路上只有两处是结构性的，其余都是参数</text>
+<text x="58" y="1154" class="xs"><tspan font-weight="700" fill="#202124">第 ② 站</tspan>：GPU 有一整层硬件缓存，TPU 那里是个窟窿。　　<tspan font-weight="700" fill="#202124">第 ⑥ 项</tspan>：那个来回由谁安排 —— 一边每周期现挑，一边编译期排死。<tspan font-weight="700" fill="#d93025">其余三站都是「同一件事，两边各有一个部件」，只是容量和名字不同。</tspan></text>
+<text x="58" y="1175" class="xs"><tspan font-weight="700" fill="#202124">而这两处恰好决定了 FlashAttention 在两边是两种性质的工作</tspan> —— <tspan fill="#9aa0a6">下一张图专门收这个口。</tspan></text>
+<rect x="40" y="1236" width="1320" height="88" rx="12" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text x="58" y="1262" class="sec">⚠️ 出处分层</text>
+<text x="58" y="1284" class="xs"><tspan font-weight="700" fill="#202124">沿用图 G-6 / T-6 的标注</tspan>，含那里已写明的成色：L2 带宽是第三方实测、TPU 片上带宽与向量寄存器个数<tspan font-weight="700" fill="#202124">官方未公开</tspan>。</text>
+<text x="58" y="1303" class="xxs"><tspan font-weight="700" fill="#202124">本图当场算的</tspan>：64 MiB ÷ 227 KiB ≈ 288 倍。<tspan fill="#9aa0a6">格阵取 17×17 ＝ 289，是为了凑成方阵好数，差的那一格不是数据误差。</tspan></text>
 </svg>
 <figcaption><b>这一节的主图：同一个 FlashAttention，两边一站一站并排走完。</b>横着读，每一行是同一站。<b>六行里只有两行是结构性的</b> —— 第 ② 行（GPU 有一整层硬件缓存，TPU 没有）和第 ⑥ 行（切换由谁安排）。中间那条黄带顺手统一了本课此前不一致的「TPU 到底几站」：<b>两处数的是两条不同的路，所以不该报总数。</b></figcaption>
 </figure>
