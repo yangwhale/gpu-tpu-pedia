@@ -620,13 +620,68 @@ details.aside b{color:var(--ink);font-weight:600}
 
 <section id="s1"><div class="wrap">
   <div class="stn big"><span class="badge">第 1 节</span><h2>先架量具：两边的胃口一样大</h2></div>
-  <p class="lead">在比任何东西之前，得先有一把尺子。这一节只做两件事：
-    <b>把两边的部件挂在同一根纵轴上</b>，然后<b>算出一个数</b> ——&nbsp;
-    后面每一个算子都要拿这个数问一次。</p>
+  <p class="lead">在比任何东西之前，得先有一把尺子。这一节只做一件事：<b>把尺子架起来</b>。
+    架完了，后面每遇到一个算子都拿它量一下 ——&nbsp;<b>这一节本身不给任何结论。</b></p>
 
-  <h3>1.1　九行对照，真正要看的只有三格</h3>
-  <p>并排列九行的坏处是每一行看起来一样重。所以先按<b>「硬度」</b>压成三格：
-    <b>哪些是只有一边有的、哪些只是数字不同、哪些纯属巧合。</b></p>
+  <h3>1.1　⭐ 算力除以带宽：两家算出来是同一个数</h3>
+  <p>两边的官方规格表都给了两个数：<b>每秒能算多少次</b>，和<b>每秒能搬多少字节</b>。
+    各自除一下 ——&nbsp;这个比值的意思是「<b>每搬一个字节，硬件配套能算几次</b>」。</p>
+<figure class="fbox" id="s012-fig1-4">
+  <svg viewBox="0 0 1000 471" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">两家公司、两套架构、两种设计哲学 —— 算力除以带宽，落在同一个数上</text>
+<text class="svgsm" x="0" y="35">全部由两张官方规格表现算，推导链写在图里</text>
+<rect x="0" y="50" width="470" height="196" rx="10" fill="#f8f9fa" stroke="#1e8e3e"/>
+<text class="svglbl" x="18" y="74" fill="#1e8e3e" style="font-size:14px">TPU v7（每 chip）</text>
+<text class="svgsm" x="18" y="106">BF16</text>
+<text class="svgtxt" x="18" y="128" style="font-size:12.5px">2,307 TFLOPS</text>
+<line x1="18" y1="134" x2="250" y2="134" stroke="#1e8e3e"/>
+<text class="svgtxt" x="18" y="150" style="font-size:12.5px">7.38 TB/s</text>
+<text class="svgnum" x="452" y="136" text-anchor="end" fill="#1e8e3e" style="font-size:22px">312.6</text>
+<text class="svgsm" x="452" y="152" text-anchor="end" fill="#1e8e3e">FLOP / byte</text>
+<text class="svgsm" x="18" y="168">FP8</text>
+<text class="svgtxt" x="18" y="190" style="font-size:12.5px">4,614 TFLOPS</text>
+<line x1="18" y1="196" x2="250" y2="196" stroke="#1e8e3e"/>
+<text class="svgtxt" x="18" y="212" style="font-size:12.5px">7.38 TB/s</text>
+<text class="svgnum" x="452" y="198" text-anchor="end" fill="#1e8e3e" style="font-size:22px">625.2</text>
+<text class="svgsm" x="452" y="214" text-anchor="end" fill="#1e8e3e">FLOP / byte</text>
+<text class="svgsm" x="18" y="238">来源：Google Cloud 官方 TPU7x 规格表，直接给的就是 per chip</text>
+<rect x="530" y="50" width="470" height="196" rx="10" fill="#f8f9fa" stroke="#1a73e8"/>
+<text class="svglbl" x="548" y="74" fill="#1a73e8" style="font-size:14px">GB200（NVL72 里那颗 · 每 GPU · dense）</text>
+<text class="svgsm" x="548" y="106">BF16</text>
+<text class="svgtxt" x="548" y="128" style="font-size:12.5px">2,500 TFLOPS</text>
+<line x1="548" y1="134" x2="780" y2="134" stroke="#1a73e8"/>
+<text class="svgtxt" x="548" y="150" style="font-size:12.5px">8.0 TB/s</text>
+<text class="svgnum" x="982" y="136" text-anchor="end" fill="#1a73e8" style="font-size:22px">312.5</text>
+<text class="svgsm" x="982" y="152" text-anchor="end" fill="#1a73e8">FLOP / byte</text>
+<text class="svgsm" x="548" y="168">FP8</text>
+<text class="svgtxt" x="548" y="190" style="font-size:12.5px">5,000 TFLOPS</text>
+<line x1="548" y1="196" x2="780" y2="196" stroke="#1a73e8"/>
+<text class="svgtxt" x="548" y="212" style="font-size:12.5px">8.0 TB/s</text>
+<text class="svgnum" x="982" y="198" text-anchor="end" fill="#1a73e8" style="font-size:22px">625.0</text>
+<text class="svgsm" x="982" y="214" text-anchor="end" fill="#1a73e8">FLOP / byte</text>
+<text class="svgsm" x="548" y="238">来源：NVIDIA 官方 GB200 NVL72 域级数字 ÷ 72，稀疏值取一半得 dense</text>
+<rect x="0" y="260" width="1000" height="80" rx="8" fill="#202124"/>
+<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">BF16　312.6　对　312.5　　｜　　FP8　625.2　对　625.0　　—— 相对差都是 0.03%</text>
+<text class="svgsm" x="500" y="306" text-anchor="middle" fill="#ffffffcc">⚠️ 换成 HGX 板上的 B200 就是 2,250 ÷ 8.0 ＝ 281.3，离 312 差 11% —— 「都落在 312」的前提是拿 NVL72 里那颗 GB200 比</text>
+<text class="svgsm" x="500" y="326" text-anchor="middle" fill="#ffffff99">推断（没有出处，别当结论讲）：两边都在拿 HBM 带宽去配矩阵算力，比值撞在一起并不奇怪 —— 但没有哪一家这么解释过</text>
+<text class="svglbl" x="0" y="366" fill="#202124">这个数到底是什么意思</text>
+<text class="svgsm" x="0" y="386" fill="#202124">· 它是硬件的「胃口」：每从 HBM 搬一个字节，硬件配套能做约 312 次 BF16 运算。喂不满，算力就在空转</text>
+<text class="svgsm" x="0" y="403" fill="#202124">· 算子那头是同一个单位：它每搬一个字节，需要做几次运算 —— 这就是它的算术强度</text>
+<text class="svgsm" x="0" y="420" fill="#202124">· 于是每个算子只剩一个问题：它的算术强度比 312 高还是低？高就是算力受限，低就是带宽受限</text>
+<text class="svgsm" x="0" y="437" fill="#d93025">· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（第 2.8 节）。这就是第 2 节要处理的东西</text>
+<text class="svgsm" x="0" y="454" fill="#d93025">· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是第 3 节的战场。同一颗芯片，两种完全不同的困境</text>
+</svg>
+  <figcaption>算力除以带宽，两边落在同一个数上：<b>312.6 对 312.5，相对差 0.03%</b>，BF16 和 FP8 完全一样。⚠️ 「为什么一样」<b>是推断，没有出处</b>；而且换成 HGX 板上的 B200 就是 281.3，差 11%。</figcaption>
+  </figure>
+
+  <p>黑带里那两行小字<b>不是免责声明，是这个数的使用说明</b> ——&nbsp;
+    本课后面每次拿 312 当判据，用的都是<b>那个带限定的版本</b>，
+    往外引的时候<b>不能把限定甩掉只留数字</b>。</p>
+
+  <h3>1.2　那完整的九行呢：真正要看的只有三格</h3>
+  <p>比值一样，<b>可能只是分子分母凑巧成了比例</b>。所以把两边完整的九行摊开再验一遍。
+    ——&nbsp;但九行并排有个坏处：<b>每一行看起来一样重</b>，看不出该先记哪条。
+    所以下面这张先替你按<b>「值不值得花时间」</b>压成了三格。</p>
 <figure class="fbox" id="s012-fig1-5">
   <svg viewBox="0 0 1000 476" width="100%" role="img" aria-label="第 1 节的落点：只有一边有的、两边量级相同的、以及算力除带宽撞在同一个数上">
 <text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">第 1 节的落点 —— 那张九行的表，真正要讲的只有这三格</text>
@@ -684,11 +739,10 @@ details.aside b{color:var(--ink);font-weight:600}
   <figcaption>那张九行表按「硬度」分成三格：<b>① 只有一边有的（结构性差别）、② 两边量级相同的（都在 10% 以内）、③ 撞在同一个数上的</b>。按参数表这是同一类芯片 —— 真正的差别全在第 ① 格：<b>各缺对方整整一层</b>，缺的不是容量，是「谁做决定」。</figcaption>
   </figure>
 
-  <p>这张图的用法是：<b>后面每看到一个差别，先回来判它属于哪一格。</b>
-    落在第 ② 格的（数字不同）<b>不值得花时间</b> ——&nbsp;下一代就变了；
-    落在第 ① 格的才是这门课要讲的，<b>因为它十年不变</b>。
-    ——&nbsp;顺带说一句反直觉的：<b>第 ② 格恰恰证明这两颗芯片是同一类东西</b>，
-    差别根本不在参数表上。</p>
+  <p>两张图连起来看，才是这一节真正的意外：上一张说<b>比值</b>一样，
+    这一张说<b>分子分母各自</b>也一样 ——&nbsp;<b>凑巧成比例这条路被堵死了</b>。</p>
+  <p>所以这张图往后是当<b>筛子</b>用的：每看到一个差别，先判它落在哪一格。
+    第 ② 格的<b>不值得花时间</b>（下一代就变了），第 ① 格的才要讲，<b>因为它十年不变</b>。</p>
 <details class="aside"><summary>完整九行对照表 —— 回查用的手册（含表上 <code>*</code> <code>†</code> <code>‡</code> <code>§</code> 四条脚注的出处说明）</summary>
     <div class="body">
   <div class="tbl-wrap">
@@ -756,62 +810,12 @@ details.aside b{color:var(--ink);font-weight:600}
   所以本课这一格写的是<b>「是单独一类资源，但部件未公开」</b>，
   <b>既不写「没有」，也不写我拿不出公开出处的细节</b>。</p></div></details>
 
-  <h3>1.2　⭐ 压轴：算力除以带宽，两边落在同一个数上</h3>
-  <p>第 ② 格里那两个「差 8%」，除一下会得到这一节唯一需要背下来的数。</p>
-<figure class="fbox" id="s012-fig1-4">
-  <svg viewBox="0 0 1000 471" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算">
-<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">两家公司、两套架构、两种设计哲学 —— 算力除以带宽，落在同一个数上</text>
-<text class="svgsm" x="0" y="35">全部由两张官方规格表现算，推导链写在图里</text>
-<rect x="0" y="50" width="470" height="196" rx="10" fill="#f8f9fa" stroke="#1e8e3e"/>
-<text class="svglbl" x="18" y="74" fill="#1e8e3e" style="font-size:14px">TPU v7（每 chip）</text>
-<text class="svgsm" x="18" y="106">BF16</text>
-<text class="svgtxt" x="18" y="128" style="font-size:12.5px">2,307 TFLOPS</text>
-<line x1="18" y1="134" x2="250" y2="134" stroke="#1e8e3e"/>
-<text class="svgtxt" x="18" y="150" style="font-size:12.5px">7.38 TB/s</text>
-<text class="svgnum" x="452" y="136" text-anchor="end" fill="#1e8e3e" style="font-size:22px">312.6</text>
-<text class="svgsm" x="452" y="152" text-anchor="end" fill="#1e8e3e">FLOP / byte</text>
-<text class="svgsm" x="18" y="168">FP8</text>
-<text class="svgtxt" x="18" y="190" style="font-size:12.5px">4,614 TFLOPS</text>
-<line x1="18" y1="196" x2="250" y2="196" stroke="#1e8e3e"/>
-<text class="svgtxt" x="18" y="212" style="font-size:12.5px">7.38 TB/s</text>
-<text class="svgnum" x="452" y="198" text-anchor="end" fill="#1e8e3e" style="font-size:22px">625.2</text>
-<text class="svgsm" x="452" y="214" text-anchor="end" fill="#1e8e3e">FLOP / byte</text>
-<text class="svgsm" x="18" y="238">来源：Google Cloud 官方 TPU7x 规格表，直接给的就是 per chip</text>
-<rect x="530" y="50" width="470" height="196" rx="10" fill="#f8f9fa" stroke="#1a73e8"/>
-<text class="svglbl" x="548" y="74" fill="#1a73e8" style="font-size:14px">GB200（NVL72 里那颗 · 每 GPU · dense）</text>
-<text class="svgsm" x="548" y="106">BF16</text>
-<text class="svgtxt" x="548" y="128" style="font-size:12.5px">2,500 TFLOPS</text>
-<line x1="548" y1="134" x2="780" y2="134" stroke="#1a73e8"/>
-<text class="svgtxt" x="548" y="150" style="font-size:12.5px">8.0 TB/s</text>
-<text class="svgnum" x="982" y="136" text-anchor="end" fill="#1a73e8" style="font-size:22px">312.5</text>
-<text class="svgsm" x="982" y="152" text-anchor="end" fill="#1a73e8">FLOP / byte</text>
-<text class="svgsm" x="548" y="168">FP8</text>
-<text class="svgtxt" x="548" y="190" style="font-size:12.5px">5,000 TFLOPS</text>
-<line x1="548" y1="196" x2="780" y2="196" stroke="#1a73e8"/>
-<text class="svgtxt" x="548" y="212" style="font-size:12.5px">8.0 TB/s</text>
-<text class="svgnum" x="982" y="198" text-anchor="end" fill="#1a73e8" style="font-size:22px">625.0</text>
-<text class="svgsm" x="982" y="214" text-anchor="end" fill="#1a73e8">FLOP / byte</text>
-<text class="svgsm" x="548" y="238">来源：NVIDIA 官方 GB200 NVL72 域级数字 ÷ 72，稀疏值取一半得 dense</text>
-<rect x="0" y="260" width="1000" height="80" rx="8" fill="#202124"/>
-<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">BF16　312.6　对　312.5　　｜　　FP8　625.2　对　625.0　　—— 相对差都是 0.03%</text>
-<text class="svgsm" x="500" y="306" text-anchor="middle" fill="#ffffffcc">⚠️ 换成 HGX 板上的 B200 就是 2,250 ÷ 8.0 ＝ 281.3，离 312 差 11% —— 「都落在 312」的前提是拿 NVL72 里那颗 GB200 比</text>
-<text class="svgsm" x="500" y="326" text-anchor="middle" fill="#ffffff99">推断（没有出处，别当结论讲）：两边都在拿 HBM 带宽去配矩阵算力，比值撞在一起并不奇怪 —— 但没有哪一家这么解释过</text>
-<text class="svglbl" x="0" y="366" fill="#202124">这个数到底是什么意思</text>
-<text class="svgsm" x="0" y="386" fill="#202124">· 它是硬件的「胃口」：每从 HBM 搬一个字节，硬件配套能做约 312 次 BF16 运算。喂不满，算力就在空转</text>
-<text class="svgsm" x="0" y="403" fill="#202124">· 算子那头是同一个单位：它每搬一个字节，需要做几次运算 —— 这就是它的算术强度</text>
-<text class="svgsm" x="0" y="420" fill="#202124">· 于是每个算子只剩一个问题：它的算术强度比 312 高还是低？高就是算力受限，低就是带宽受限</text>
-<text class="svgsm" x="0" y="437" fill="#d93025">· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（第 2.8 节）。这就是第 2 节要处理的东西</text>
-<text class="svgsm" x="0" y="454" fill="#d93025">· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是第 3 节的战场。同一颗芯片，两种完全不同的困境</text>
-</svg>
-  <figcaption>算力除以带宽，两边落在同一个数上：<b>312.6 对 312.5，相对差 0.03%</b>，BF16 和 FP8 完全一样。⚠️ 「为什么一样」<b>是推断，没有出处</b>；而且换成 HGX 板上的 B200 就是 281.3，差 11%。</figcaption>
-  </figure>
-
-  <div class="note ok"><span class="t">这一节留下的两样东西</span>
-    ① <b>两套坐标</b> ——&nbsp;后面每讲一个部件，都能说出「它在对面对应谁」；<br>
-    ② <b>312 这个判据</b> ——&nbsp;<b>每搬 1 个字节，硬件供得起 312 次浮点运算。</b>
+  <div class="note ok"><span class="t">这把尺子有两个刻度</span>
+    ① <b>312 这个判据</b> ——&nbsp;<b>每搬 1 个字节，硬件供得起 312 次浮点运算。</b>
     从这里开始，看到任何一个算子先问一句：<b>我比 312 高，还是低？</b>
-    <br>——&nbsp;高，说明它算得多搬得少，硬件喂得饱；低，说明它卡在搬运上，
-    <b>算力再翻倍也没用。</b></div>
+    高，说明它算得多搬得少，硬件喂得饱；低，说明它卡在搬运上，<b>算力再翻倍也没用</b>。<br>
+    ② <b>三格分类法</b> ——&nbsp;判一个差别值不值得讲。
+    <b>这两样后面每一节都会用到</b>，第 1 节的全部产出就是它们。</div>
 </div></section>
 
 <section id="s2"><div class="wrap">
