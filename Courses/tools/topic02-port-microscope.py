@@ -439,7 +439,8 @@ def sections(F):
     <b>它们量的不是同一件事</b>，混起来就会推出一个不存在的结论。</p>''')
     a(F("p35"))
     a('''
-  <div class="note ok"><span class="t">这张图是本课自查出来的一个错，留在这儿当例子</span>
+  <details class="aside"><summary>旁白：这张图是本课自查出来的一个错，留着当例子（跟硬件无关，可跳过）</summary>
+    <div class="body">
     3.4 这一节的标题原本写的是「这里出那个 128 倍」——
     <b>可整节从头到尾只产出 16 倍</b>，128 在 3.7 的账表里，
     是「单个单元每周期多少乘加」那一行（131,072 ÷ 1,024）。
@@ -447,7 +448,7 @@ def sections(F):
     <br><br>更值得记的是它<b>怎么被发现的</b>：不是有人去查出处，
     是<b>照着从头讲了一遍，发现标题承诺的那个数一次都没讲到</b>。
     <b>「讲一遍，看每个承诺兑现没有」是这类错唯一有效的检查方式</b> ——
-    它们读起来完全通顺，静态看是看不出来的。</div>
+    它们读起来完全通顺，静态看是看不出来的。</div></details>
 
   <h3>3.5　各自多出来的那一块</h3>
   <p>两边在主力矩阵乘之外都各自多准备了一样东西，<b>而且方向正好相反</b>：
@@ -473,7 +474,8 @@ def sections(F):
     把这一点摆正之后，上面那两个坑还会露出一个共同的形状。</p>''')
     a(F("p37"))
     a('''
-  <div class="note ok"><span class="t">⭐ 这一节的自查：对称是修辞，不是证据</span>
+  <details class="aside"><summary>旁白：这一节的自查 —— 对称是修辞，不是证据（方法论，可跳过）</summary>
+    <div class="body">
     「两边各挂一块、方向相反」是个很顺口的句式 —— <b>顺口正是它的危险之处</b>。
     为了凑齐对称，它把一个<b>指令变体</b>说成了<b>独立部件</b>，
     而这门课从第 1 节起就在强调「部件在哪一层」是判断力的地基。
@@ -481,7 +483,7 @@ def sections(F):
     两个坑摆到一起，形状是一样的 —— <b>能力都真的存在，
     但通往它的路上各有一道只写在细则里的门槛</b>。
     GPU 那道是<b>你手上是哪颗 die</b>，TPU 那道是<b>你的 duplication factor 是多少</b>。
-    <b>看到「支持 X」，先去找那道门槛在哪一行；找不到，就当它不适用于你。</b></div>
+    <b>看到「支持 X」，先去找那道门槛在哪一行；找不到，就当它不适用于你。</b></div></details>
 
   <h3>3.6　高潮：FlashAttention 在两条路上各走一遍</h3>
   <p>前面五小节拆的都是<b>部件</b>，这一小节拆的是<b>路</b> ——
@@ -519,12 +521,15 @@ def sections(F):
     <b>GPU 侧有两站答「硬件，运行时才知道」，TPU 侧一站都没有。</b>
     <br><br>而这正是第 2 节里「GPU 五个红框、TPU 零个」的来历：
     <b>那五个红框不是随手圈的，就是沿着这条路径一站一站数出来的。</b>
-    到这里第 2 节那张图才算真的讲完了。
-    <br><br>顺带，这张图还收掉了本课自己的一处不一致：
-    <b>此前一处写 TPU「五站」、另一处写「四站」。</b>
-    两个都对 —— 一处沿 MXU 那条支线数，一处沿 VPU 那条主路数。
-    <b>数的是两条不同的路，所以本来就不该报一个总数</b>，
-    改成按功能对齐之后这个矛盾自己就没了。</div>
+    到这里第 2 节那张图才算真的讲完了。</div>
+
+  <details class="aside"><summary>旁白：顺带收掉的一处口径不一致 —— TPU 到底几站（图上已说明，可跳过）</summary>
+    <div class="body">
+    本课此前<b>一处写 TPU「五站」、另一处写「四站」</b>。
+    两个都对 —— 一处沿 MXU 那条支线数（HBM／VMEM／向量寄存器／MXU／累加器），
+    一处沿 VPU 那条主路数（HBM／VMEM／向量寄存器／VPU）。
+    <b>数的是两条不同的路，所以本来就不该报一个总数。</b>
+    改成按功能对齐 —— 问「谁在这一层、谁没有这一层」——之后，这个矛盾自己就没了。</div></details>
 
   <p>走到这里还剩最后一个问题，而它恰好是<b>整门课的那条主线</b>：
     第 ③ 行说「tile 住在片上暂存里」—— <b>那么，是谁把它搬进去的？</b></p>''')
@@ -1442,6 +1447,21 @@ CSS = '''
   width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
 .fwide svg{display:block}
 .note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
+/* ---- 旁白折叠块 ----
+   有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
+   但作为方法论又值得留着。折起来：想看的人点开，讲课时直接跳过。
+   注意 open 属性一个都不要加，默认全收。 */
+details.aside{margin:18px 0;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--bg2);font-size:14px;color:var(--gray)}
+details.aside > summary{cursor:pointer;padding:11px 16px;list-style:none;
+  font-size:13.5px;color:var(--gray);user-select:none}
+details.aside > summary::-webkit-details-marker{display:none}
+details.aside > summary::before{content:"▸ ";color:var(--gray)}
+details.aside[open] > summary::before{content:"▾ "}
+details.aside > summary:hover{color:var(--ink)}
+details.aside[open] > summary{border-bottom:1px solid var(--line)}
+details.aside .body{padding:14px 16px 16px;line-height:1.75}
+details.aside b{color:var(--ink);font-weight:600}
 .msfrom{color:var(--gray);font-size:12.5px}
 .msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
 @media(max-width:860px){.msdeep{grid-template-columns:1fr}}
