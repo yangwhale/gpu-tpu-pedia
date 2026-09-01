@@ -24,7 +24,7 @@ them into a new `decoder_block: "hunyuan3"`; the only new code is assembly logic
 | Parameters (as reported) | 298.786 B | 298.786 B | 298.786 B | — |
 | Steady-state step | 63.2 s | 23.5 s | 30.4 s | — |
 | **TFLOP/s per unit** | 161.0 | **580.0** | **598.8** | 854.0 |
-| **MFU** | **35.07%** | 25.14% | **25.96%** | 34.20% ⚠️ |
+| **MFU** | **35.07%** | 25.14% | **25.96%** | 34.16% ⚠️ |
 | **Cluster token throughput** | 265,588 tok/s | 267,284 tok/s | **1,103,757 tok/s** | 399,488 tok/s |
 | **Per-unit token throughput** | 1,037 | **4,176** | **4,312** | 6,242 |
 | Best recipe | Official DSV3 v5p recipe | `DP1×FSDP128`<br>tile + pdbs 12 | `DP2×FSDP256`<br>tile + pdbs 16 | — |
@@ -46,7 +46,8 @@ cluster throughput scales with the number of units and is not comparable.
 > ⚠️ **The GB300 column's MFU had its denominator corrected on 2026-08-31.**
 > It used to read 31.60% against a peak of 2,700 TFLOP/s/GPU — but **2,700 was GB200's figure
 > scaled by 1.2, and NVIDIA never published it**. GB300 NVL72's official dense BF16 peak is the
-> same as GB200 NVL72's, **2,500**, so the same 854.0 works out to **34.20%**.
+> same as GB200 NVL72's, **2,500**, so the same 854.0 works out to **34.16%**.
+> ⚠️ **Fixed again 2026-09-01**: this previously read 34.20%, but `854.0 / 2,500 = 34.16%`; 34.20% back-solves to 855.0, which contradicts the 854.0 used everywhere else.
 > See [EXPERIMENT-LOG §7.2](EXPERIMENT-LOG.md).
 
 Three ways to read this table:
