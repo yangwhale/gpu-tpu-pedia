@@ -398,6 +398,31 @@ footer a{text-decoration:none}
   .figpair{grid-template-columns:1fr !important}
   .eq{font-size:12.5px;padding:12px 14px}
 }
+/* ── 支线小节（整个 h3 折起来）─────────────────────────────
+   跟 details.aside 的区别：aside 装一段旁白，branch 装**一整个小节**
+   （标题 ＋ 正文 ＋ 图）。判据是故事线：说不出「这段在旅程的哪一站」就折。
+
+   ⚠️ 展开后的内容区**不能有水平 padding、不能有边框背景**。里面的图是
+   .fwide（margin-left:50% ＋ translateX(-50%)，突破 1080 版心到 1440），
+   它按父容器算中心 —— 一旦 .body 有 padding，图就整体偏移；有边框的话
+   图还会从框里溢出去，很怪。所以只有 summary 那条灰条带样式。
+
+   ⚠️ 这几条也必须留在下面 CSS_MARK 之前，理由同上面故事线那段。 */
+details.branch{margin:26px 0}
+details.branch > summary{cursor:pointer;list-style:none;user-select:none;
+  padding:13px 18px;background:var(--bg2);border:1px solid var(--line);
+  border-left:3px solid var(--gray2);border-radius:0 10px 10px 0;
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-size:16px;font-weight:600;color:var(--ink)}
+details.branch > summary::-webkit-details-marker{display:none}
+details.branch > summary::before{content:"▸";color:var(--gray2);font-weight:400}
+details.branch[open] > summary::before{content:"▾"}
+details.branch > summary:hover{border-left-color:var(--blue)}
+details.branch .tag{font-size:11px;font-weight:700;letter-spacing:.08em;color:#fff;
+  background:var(--gray2);border-radius:10px;padding:2px 9px;white-space:nowrap}
+details.branch summary em{font-style:normal;font-weight:400;font-size:13.5px;
+  color:var(--gray)}
+details.branch > .body{padding:20px 0 4px}
 /* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
 /* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
    讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
@@ -1668,7 +1693,8 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <div class="note warn"><span class="t">第 ② 笔为什么值得单独讲：它是「写法」惹的祸，不是「模型」惹的祸</span>VPU 是逐元素单元，它跟 <code>head_dim</code>、跟任何一个语义维度都没关系 —— 它只认<b>数组的形状</b>。一条向量指令吃掉一整个 vreg（<code>8×128</code>），装没装满都一样贵。<br>所以真正的触发条件是：<b>最后两维出现了 1</b>。而这种形状在数学上太自然了 —— 你想给每一行留一个标量（softmax 的行最大值、一个缩放系数），顺手就写成最后一维是 1。官方文档那个 <b>1,024 倍</b>的例子就是它的极端形态：<code>8×128×1×1</code> 会被补成 <code>8×128×8×128</code>。<br><b>真正的 kernel 是怎么应对的</b>：splash attention 的作者干脆<b>顺着硬件写</b> —— online softmax 的行最大值 <code>m</code> 和行和 <code>l</code>，逻辑上是 <code>(bq, 1)</code>，源码里直接开成 <code>(bq, 128)</code> 的 scratch，128 份里 127 份是同一个数的副本。理由很直白：<code>(bq, 1)</code> 照样要占满一整块 tile，一分钱没省，摊开反而省掉了每次用它之前的那次广播。<br>但也别把这笔账夸大 —— 它落在<b>小算子</b>上。注意力里 VPU 真正的大头是那个 <code>exp</code>，铺满整个 <code>bq × bkv</code> 的块，一分不亏。<b>这是结构性的冗余，不是性能大坑</b>；真正吃掉一半算力的是第 ③ 笔。</div>
 
-  <h3>2.6　这个约束不会停在硬件层</h3>
+  <details class="branch"><summary><span class="tag">支线</span>2.6　这个约束不会停在硬件层<em>　—— 讲的是这个约束怎么往软件层蔓延，不是硬件差异本身</em></summary>
+    <div class="body">
   <p>到这里可能会觉得，8 × 128 是个 kernel 作者才要操心的细节。<b>不是的。</b>
     它会一层一层往上传，最后落到<b>你写在模型配置文件里的那几个数</b>。</p>
   <figure class="fbox" id="s012-fig2-6">
@@ -1733,7 +1759,10 @@ details.aside b{color:var(--ink);font-weight:600}
     写错了直接报错。<b>硬约束会一路往上传，软偏好传两层就衰减没了</b> ——
     这就是为什么 TPU 用户会去改模型超参，而 GPU 用户通常不会。</div>
 
-  <h3>2.7　Splash 的第二招：整块跳过</h3>
+    </div></details>
+
+  <details class="branch"><summary><span class="tag">支线</span>2.7　Splash 的第二招：整块跳过<em>　—— 块级掩码是算法侧的优化，省的是 FLOPs 不是搬运</em></summary>
+    <div class="body">
   <p>2.3 讲的 Flash 是「不落地」。TPU 上生产环境用的那个叫 <b>Splash</b>，
     它比 Flash 多了一层，而且这一层<b>正好把本节的两条主线缝在一起</b>：
     编译期算准（哪些块能跳，跑之前就知道）＋ 片上容量（这张表得放得下）。</p>
@@ -1975,6 +2004,8 @@ details.aside b{color:var(--ink);font-weight:600}
     另一个 TPU 注意力 kernel 的注释把理由写得更直白：
     「这里用 128 而不是 1，<b>是因为编译器不支持不对齐的切片</b>」。
     <br>两个维度都躲不掉，而两次都跟 <code>head_dim</code> 无关。</div>
+
+    </div></details>
 
   <h3>2.8　收尾：把讲过的算子全部放回一根轴</h3>
   <p>最后一张图。<b>如果这一节只能记住一张，就记这张。</b></p>
@@ -11367,7 +11398,8 @@ details.aside b{color:var(--ink);font-weight:600}
     前面四节的内容只能接受，
     <b>而经验是可以被追问、也可以被推翻的。</b></div>
 
-  <h3>5.5　后果三：推理引擎的移植难点</h3>
+  <details class="branch"><summary><span class="tag">支线</span>5.5　后果三：推理引擎的移植难点<em>　—— 推理引擎移植是软件工程的账，FlashAttention 不在这条路上</em></summary>
+    <div class="body">
   <p>前面两个后果都在训练侧。<b>推理是同一个分岔口上最尖锐的地方</b> ——
     因为训练的形状基本是你自己定的，而<b>推理的形状是用户给的</b>。
     vLLM 和 SGLang 都起于 GPU，现在都在往 TPU 上移。
@@ -11655,7 +11687,10 @@ details.aside b{color:var(--ink);font-weight:600}
   <div class="note ok"><span class="t">这三笔钱买到了什么 —— 下一小节讲</span>
     <b>这一节从头到尾在算价钱，而账单只有一半。</b></div>
 
-  <h3>5.6　后果四：静态换回来的那一样</h3>
+    </div></details>
+
+  <details class="branch"><summary><span class="tag">支线</span>5.6　后果四：静态换回来的那一样<em>　—— 提前编译是一件顺手拿到的工具，不是硬件差异本身</em></summary>
+    <div class="body">
   <p>上一节整节在算价钱，<b>而账单只有一半</b>。付出去的东西总要换回来点什么 ——
     这一节讲换回来的那一样，而它在 GPU 侧<b>没有对应物</b>。</p>
 
@@ -12010,6 +12045,8 @@ details.aside b{color:var(--ink);font-weight:600}
 </svg>
 <figcaption><b>上一张停在「扫了 29 组配置」，那是过程。这张回答「所以呢」。</b>收益和边界摆在同一屏 —— 分开摆，两边都会被听成假话。</figcaption>
 </figure>
+
+    </div></details>
 
   <h3>5.7　回头接那句反驳：CUDA Graph 不就是 GPU 也编译期了吗</h3>
   <p>5.2 结尾记下的那句话，现在来还。<b>先把它原样摆出来，不要弱化它</b> ——&nbsp;</p>
