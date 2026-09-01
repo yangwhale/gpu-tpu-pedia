@@ -5405,6 +5405,28 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>128 GiB 全花在路上，一次乘法都没做。</b>序列 128K 时注意力矩阵 S ＝ <b>32 GiB</b>，朴素写法要写 S／读 S／写 P／读 P 四趟；而 Q/K/V/O 加起来只有 128 MiB。<b>FlashAttention 的全部内容就是把这一项删掉</b> —— <b>FLOPs 一个都没省</b>。右边那张黄卡如实标了代价：K/V 要按 Q 的分块重复读，不是零。</figcaption>
 </figure>
 
+  <!-- ⭐⭐⭐ 2026-09-01 补。**发现的问题：整个 3.6 段里「融合」出现 0 次。**
+       这是本课 top-1 的贯穿主线，而 3.6 是它唯一真正落地的地方 ——
+       图里把事做完了（S 不落 HBM），却始终没有把那个词说出口。
+       ⛔ 后果不是「少了个术语」：学员走完全程会记住「FlashAttention 省了搬运」，
+          却带不走「我下次遇到别的算子该怎么想」。**名字就是可迁移的那部分。**
+       ⭐ 放在 p38 之后、两条路各走之前，位置是刻意的：
+          p38 刚把「要删的是哪一项」摆明，此刻命名，定义是从画面里长出来的，
+          不是先给定义再找例子。 -->
+  <div class="note ok"><span class="t">⭐ 先把名字说出口：你刚看完的这张图，讲的就是<u>算子融合</u></span>
+    <b>融合的定义，就是上面那张图右半边做的事</b> ——&nbsp;
+    <b>把本来要分几步、每步都往 HBM 走一趟的算子，合成一步，让中间产物留在片上、根本不生成。</b>
+    <br>朴素写法是四个算子（<code>QKᵀ</code> ／ softmax ／ 缩放 ／ <code>PV</code>），
+    每步之间那个 32 GiB 的 S 都要落一次 HBM；
+    FlashAttention 把这四步<b>融成一个 kernel</b>，S 就<b>整项消失</b>了。
+    <br><br>⭐ <b>所以那三笔账的形状，是所有融合共有的，不是 FlashAttention 独有的</b>：
+    <b>FLOPs 一分不省，省的全在「中间产物不落地」这一行。</b>
+    <em>——&nbsp;这就是为什么第 1 节说「算力除以带宽」是这门课的总闸门：
+    融合是<b>唯一一种不改数学、只改数据走法</b>就能往屋脊线右边挪的手段。</em>
+    <br><br>⚠️ <b>也正因为它不改数学，它的天花板不由算法定，由硬件定</b> ——&nbsp;
+    <b>能融多大，取决于片上放不放得下。</b>接下来两条路要走的，
+    说到底就是同一个融合在两块硬件上<b>各能融到多大</b>。</div>
+
   <p>要删掉哪一项清楚了，接下来看两边各自怎么删。<b>先各走各的，走完再并排</b> ——&nbsp;
     这个顺序有意为之：直接看对照表会以为两边处处不同，
     <b>各走一遍才看得出绝大多数站是一样的。</b></p>
@@ -6270,7 +6292,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <path d="M261.6,906 h-5 a4,4 0 0 0 -4,4 v142 a4,4 0 0 0 4,4 h5 z" fill="#1e8e3e"/>
 <rect x="257.6" y="906" width="4" height="150" fill="#1e8e3e"/>
 <text x="270.6" y="930" class="box" fill="#1e8e3e">绿框整片 ＝ TPU VMEM 64 MiB</text>
-<text x="270.6" y="954" class="xs">64 MiB ÷ 227 KiB ≈ <tspan font-weight="700" fill="#202124">288 倍</tspan>。左边那 <tspan font-weight="700" fill="#202124">289</tspan> 个小格里，<tspan font-weight="700" fill="#202124">GPU 只占蓝色那一格</tspan>。</text>
+<text x="270.6" y="954" class="xs">64 MiB ÷ 227 KiB ≈ <tspan font-weight="700" fill="#202124">289 倍</tspan>。左边那 <tspan font-weight="700" fill="#202124">289</tspan> 个小格里，<tspan font-weight="700" fill="#202124">GPU 只占蓝色那一格</tspan>。</text>
 <text x="270.6" y="980" class="xs"><tspan font-weight="700" fill="#202124">这直接决定块能开多大</tspan> —— 块越大，K/V 要重复读的趟数越少。</text>
 <rect x="816.6" y="906" width="525.4" height="150" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
 <path d="M825.6,906 h-5 a4,4 0 0 0 -4,4 v142 a4,4 0 0 0 4,4 h5 z" fill="#d93025"/>
@@ -6285,10 +6307,36 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="40" y="1236" width="1320" height="88" rx="12" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
 <text x="58" y="1262" class="sec">⚠️ 出处分层</text>
 <text x="58" y="1284" class="xs"><tspan font-weight="700" fill="#202124">沿用图 G-6 / T-6 的标注</tspan>，含那里已写明的成色：L2 带宽是第三方实测、TPU 片上带宽与向量寄存器个数<tspan font-weight="700" fill="#202124">官方未公开</tspan>。</text>
-<text x="58" y="1303" class="xxs"><tspan font-weight="700" fill="#202124">本图当场算的</tspan>：64 MiB ÷ 227 KiB ≈ 288 倍。<tspan fill="#9aa0a6">格阵取 17×17 ＝ 289，是为了凑成方阵好数，差的那一格不是数据误差。</tspan></text>
+<text x="58" y="1303" class="xxs"><tspan font-weight="700" fill="#202124">本图当场算的</tspan>：64 MiB ÷ 227 KiB ＝ 288.7 ≈ 289 倍。<tspan fill="#9aa0a6">格阵 17×17 恰好 289 格，一格不多一格不少。</tspan></text>
 </svg>
 <figcaption><b>这一节的主图：同一个 FlashAttention，两边一站一站并排走完。</b>横着读，每一行是同一站。<b>六行里只有两行是结构性的</b> —— 第 ② 行（GPU 有一整层硬件缓存，TPU 没有）和第 ⑥ 行（切换由谁安排）。中间那条黄带顺手统一了本课此前不一致的「TPU 到底几站」：<b>两处数的是两条不同的路，所以不该报总数。</b></figcaption>
 </figure>
+
+  <!-- ⭐⭐ 2026-09-01 补：兑现 §3.4 结尾那句许诺。
+       那里写的是「一次融合能融多大，由两个数共同卡死 —— 工作台多大 ＋ 粒度多粗，
+       3.6 并排走的时候这两个数会同时出现在切块那一步」。
+       ⛔ 但建出来的 3.6 里，227 KiB : 64 MiB 只在 P-39 的格阵图里出现（讲容量），
+          16 : 256 那个粒度**一次都没再出现** —— 许诺只兑现了一半。
+       ⭐ 补在 P-39 之后、P-40 之前：P-39 刚把「块能开多大」画成面积，
+          此刻把第二个数接上，两个约束才成一对。
+       ⚠️ 只写能自己算的：三块 128×128 bf16 tile ＝ 96 KiB 是当场算的；
+          **没有写任何具体的 Splash 块大小** —— 那要么是内部实测、要么没核过，
+          按第一原则宁可不给数，只说「这一侧卡住它的不是容量」。 -->
+  <div class="note warn"><span class="t">⭐ 回到 3.4 结尾那句：能融多大，是被<u>两个</u>数一起卡死的</span>
+    <b>第一个数刚在上图里画成了面积 ——&nbsp;工作台多大。</b>
+    GPU 一个线程块最多 <b>227 KiB</b>：装三块 <code>128×128</code> 的 bf16 tile
+    （Q／K／V）就是 <code>3 × 128 × 128 × 2 B ＝ 96 KiB</code>，
+    再留出双缓冲，<b>基本就到顶了</b> ——&nbsp;<b>块开多大这件事，在 GPU 上是被容量直接顶住的。</b>
+    <em>TPU 那边 64 MiB 是它的 289 倍，容量在这一侧根本不是那个卡住人的东西。</em>
+    <br><br><b>第二个数是 3.4 那个粒度 ——&nbsp;一条指令吃多宽。</b>
+    <b>GPU 收缩维 16，TPU 是 256。</b>
+    所以同一个 <code>head_dim=128</code>：在 GPU 上是 16 的整 8 倍，怎么切都齐；
+    在 TPU 上<b>只填满 256 那条边的一半</b>。
+    <br>——&nbsp;<b>这就是两个约束的分工</b>：
+    <b>GPU 被「工作台太小」卡住，所以块必须切碎、K/V 反复重读；
+    TPU 工作台绰绰有余，卡它的换成了「一口吃太宽，形状对不齐就浪费半条边」。</b>
+    <em>同一个融合，两边撞的是不同那堵墙 ——&nbsp;
+    这也是为什么 3.4 说这两个数要一起看，单看哪个都会得出错的结论。</em></div>
 
   <p>最后一张收账。<b>不看站点，只看「你要写多少东西」</b> ——&nbsp;
     这是这趟旅程留给写代码的人的那一面。</p>
