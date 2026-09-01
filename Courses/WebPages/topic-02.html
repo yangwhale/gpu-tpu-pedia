@@ -7626,8 +7626,8 @@ footer a{text-decoration:none}
     它们读起来完全通顺，静态看是看不出来的。</div>
 
   <h3>3.5　各自多出来的那一块</h3>
-  <p>两边都在主计算单元之外挂了点别的东西，<b>但挂的方向正好相反</b>：
-    GPU 往「更细的数据类型」走 ——</p>
+  <p>两边在主力矩阵乘之外都各自多准备了一样东西，<b>而且方向正好相反</b>：
+    GPU 往「<b>更细的缩放粒度</b>」走 —— 它要解决的是「怎么让 FP4 这种极窄的类型真的能用」。</p>
 <figure class="fbox fwide" id="ms-g5">
 <svg viewBox="0 0 1400 582" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="块量化粒度对照：整张量、每 32 个元素、每 16 个元素各一个缩放因子，以及这些能力挂在哪条 PTX 指令上">
 <text x="20" y="26" class="ttl">块量化　—— 「多细的一撮数共享一个缩放因子」，Blackwell 把它做进了硬件</text>
@@ -8030,6 +8030,98 @@ footer a{text-decoration:none}
       语言模型落在<b>最不划算的那一端</b>，编译器根本没往那儿派。
     <br><br><b>共同的教训是同一条：看 trace，不要看宣传页。</b>
     这两个坑被问到的频率极高，而且都是「说法没错、但用它解释自己的 profile 就会全错」。</div>
+
+  <p>但上面那句开场白其实<b>不准确，得当场收回一半</b>。我说「两边都在主力之外多准备了一样东西」——
+    <b>TPU 那半句成立</b>，SparseCore 确实是一颗物理上独立的核；
+    <b>GPU 那半句不成立</b>：块量化根本不在 Tensor Core 外面，<b>它就在里面</b>，
+    是同一条 MMA 指令的一个变体，缩放因子甚至跟操作数一起住在 TMEM。
+    把这一点摆正之后，上面那两个坑还会露出一个共同的形状。</p>
+<figure class="fbox fwide" id="ms-p37">
+<svg viewBox="0 0 1400 872" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 的块量化是 MMA 指令的一个变体，位于 Tensor Core 数据通路内部；TPU 的 SparseCore 是一颗物理上独立的核。两者能不能用，分别取决于目标架构和 duplication factor">
+<text x="20" y="26" class="ttl">两块「多出来的」<tspan font-weight="700">不在同一层</tspan>　—— 而两道门槛都不在宣传页上</text>
+<rect x="1281" y="10" width="99" height="22" rx="11" fill="#d93025"/>
+<text x="1330.5" y="25" class="lbl" fill="#fff" text-anchor="middle">3.5 的自查</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="37" y="58" class="sm">在指令里（同一条数据通路）</text>
+<rect x="208.5" y="48" width="11" height="11" rx="2" fill="#8430ce"/>
+<text x="225.5" y="58" class="sm">是独立的核</text>
+<rect x="305.0" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="322.0" y="58" class="sm">门槛：宣传页不会写的那一句</text>
+<rect x="20" y="84" width="674" height="318" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="112" class="sec" fill="#1a73e8">GPU　·　块量化</text>
+<text x="38" y="134" class="xxs" fill="#5f6368">它换的是指令，不是硬件模块</text>
+<rect x="46" y="154" width="622" height="158" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="2.2"/>
+<text x="60" y="178" class="box" fill="#1a73e8">一个 Tensor Core（同一套硅）</text>
+<rect x="60" y="192" width="300" height="44" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="72" y="214" class="mono" fill="#202124">mma.sync ／ tcgen05.mma</text>
+<text x="72" y="229" class="xxs" fill="#5f6368">普通版：只有 A、B、累加器</text>
+<rect x="60" y="246" width="300" height="50" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.6" stroke-dasharray="4,3"/>
+<text x="72" y="268" class="mono" fill="#d93025">…….block_scale</text>
+<text x="72" y="284" class="xxs" fill="#5f6368">带块量化的<tspan font-weight="700" fill="#d93025">同一条指令</tspan>，多两个缩放操作数</text>
+<rect x="382" y="200" width="190" height="96" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+<text x="392" y="222" class="box" fill="#f9ab00">缩放因子</text>
+<text x="392" y="240" class="xxs">tcgen05 这条上，<tspan font-weight="700" fill="#202124">缩放因子跟操作数</tspan></text>
+<text x="392" y="254" class="xxs"><tspan font-weight="700" fill="#202124">一起放在 TMEM</tspan>。</text>
+<text x="46" y="342" class="xs"><tspan font-weight="700" fill="#d93025">所以它不是「挂在主计算单元之外」的东西。</tspan>同一套硅，换一条指令变体就有了 —— <tspan font-weight="700" fill="#202124">差别在指令集，不在框图上多一个方块。</tspan></text>
+<rect x="706" y="84" width="674" height="318" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<text x="724" y="112" class="sec" fill="#8430ce">TPU　·　SparseCore</text>
+<text x="724" y="134" class="xxs" fill="#5f6368">这才是「主计算单元之外」的那种多出来</text>
+<rect x="732" y="154" width="300" height="118" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="2.2"/>
+<text x="746" y="178" class="box" fill="#1e8e3e">TensorCore</text>
+<text x="1022" y="178" class="xxs" fill="#5f6368" text-anchor="end">有 MXU</text>
+<text x="746" y="200" class="xs">矩阵乘主力。<tspan font-weight="700" fill="#202124">本课前六小节拆的都是它。</tspan></text>
+<line x1="882" y1="272" x2="882" y2="296" stroke="#1e8e3e" stroke-width="1.6" marker-end="url(#aB)"/>
+<rect x="1054" y="154" width="300" height="118" rx="8" fill="#fff" stroke="#8430ce" stroke-width="2.2"/>
+<text x="1068" y="178" class="box" fill="#8430ce">SparseCore</text>
+<text x="1344" y="178" class="xxs" fill="#d93025" text-anchor="end">没有 MXU</text>
+<text x="1068" y="200" class="xs">为<tspan font-weight="700" fill="#202124">不规则访存</tspan>准备的：一次搬 (8,) 而不是 (8,128)。</text>
+<line x1="1204" y1="272" x2="1204" y2="296" stroke="#8430ce" stroke-width="1.6" marker-end="url(#aB)"/>
+<rect x="732" y="296" width="622" height="30" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.4"/>
+<text x="742" y="316" class="xs" fill="#5f6368">HBM　·　共用控制器，通道宽度也一样 —— 差的是一次搬多小，不是能搬多快</text>
+<text x="732" y="348" class="xs"><tspan font-weight="700" fill="#202124">两个方块，两颗核。</tspan><tspan fill="#9aa0a6">它们之间连线的方向公开资料没有列出，所以这张图不画那根箭头 —— 这里只主张一件事：它是独立的核，</tspan></text>
+<text x="732" y="365" class="xs"><tspan fill="#9aa0a6">不是一条指令。</tspan></text>
+<text x="20" y="418" class="sec" fill="#d93025">两块多出来的能力，各自都有一道门槛　—— 而两道门槛都不写在宣传页上</text>
+<rect x="20.0" y="424" width="670.0" height="180" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
+<rect x="20.0" y="424" width="670.0" height="32" rx="10" fill="#e8f0fe"/>
+<rect x="20.0" y="447" width="670.0" height="9" rx="0" fill="#e8f0fe"/>
+<text x="34.0" y="446" class="box" fill="#1a73e8">GPU 那道门槛：你手上是哪颗 die</text>
+<rect x="34.0" y="466" width="642.0" height="26" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="46.0" y="484" class="xs" fill="#202124">宣传口径：「B200 支持 FP4」</text>
+<text x="34.0" y="514" class="xs"><tspan font-weight="700" fill="#202124">块量化有两条通路，不在同一颗 die 上。</tspan>warp 级的 <tspan class="mono" fill="#1967d2">mma.sync…block_scale</tspan> 要 <tspan font-weight="700" fill="#202124">sm_120a</tspan>（消费级 Blackwell，RTX 50 / </text>
+<text x="34.0" y="531" class="xs">RTX PRO）；<tspan class="mono" fill="#1967d2">tcgen05…block_scale</tspan> 要 <tspan font-weight="700" fill="#202124">sm_100a</tspan>。</text>
+<line x1="34.0" y1="554" x2="676.0" y2="554" stroke="#1a73e8" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="34.0" y="574" class="xs"><tspan font-weight="700" fill="#d93025">B200 只有后面那一条。</tspan>所以这句宣传语没说错，错的是听的人默认「两条都有」。<tspan font-weight="700" fill="#202124">先问是哪一条，再问能不能用。</tspan></text>
+<rect x="710.0" y="424" width="670.0" height="180" rx="10" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="710.0" y="424" width="670.0" height="32" rx="10" fill="#f3e8fd"/>
+<rect x="710.0" y="447" width="670.0" height="9" rx="0" fill="#f3e8fd"/>
+<text x="724.0" y="446" class="box" fill="#8430ce">TPU 那道门槛：你的 duplication factor 是多少</text>
+<rect x="724.0" y="466" width="642.0" height="26" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
+<text x="736.0" y="484" class="xs" fill="#202124">宣传口径：「TPU 有个专门查 embedding 表的核」</text>
+<text x="724.0" y="514" class="xs"><tspan font-weight="700" fill="#202124">判据是 duplication factor</tspan> ＝ 这批取了多少索引 ÷ 可选的行数，衡量「重复取同一行」的程度。推荐系统几亿行里取几百个，</text>
+<text x="724.0" y="531" class="xs">很高，那是它的主场。</text>
+<line x1="724.0" y1="554" x2="1366.0" y2="554" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="724.0" y="574" class="xs"><tspan font-weight="700" fill="#d93025">而语言模型是 131,072 ÷ 129,280 ≈ 1.01</tspan> —— 落在最不划算的一端，<tspan font-weight="700" fill="#202124">编译器根本没往那儿派，生产任务里它一次表都没查过。</tspan></text>
+<rect x="20" y="626" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="654" class="sec" fill="#1a73e8">⭐ 落点：两句宣传语都没说错 —— 错的是把「支持」读成「我的负载用得上」</text>
+<text x="38" y="680" class="xs"><tspan font-weight="700" fill="#202124">这两个坑是同一个形状</tspan>：能力确实存在，但通往它的路上有一道<tspan font-weight="700" fill="#202124">只在文档细则里的条件</tspan>。宣传页只负责说「有」，不负责说「你够不够格」。</text>
+<text x="38" y="701" class="xs"><tspan font-weight="700" fill="#202124">能带走的一条动作</tspan>：<tspan font-weight="700" fill="#d93025">看到一个「支持 X」，先去找那道门槛在哪一行。</tspan><tspan fill="#9aa0a6">找不到就当它不适用于你 —— 然后去看 trace。这两条都不是本课特有的技巧，是所有硬件宣传语的通用读法。</tspan></text>
+<rect x="20" y="760" width="1360" height="92" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="38" y="786" class="sec">⚠️ 出处分层</text>
+<text x="38" y="810" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：sm_120a 与 sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；duplication factor 的判据与 131,072 ÷ 129,280 这个算式出自本课图 T-5。</text>
+<text x="38" y="830" class="xxs"><tspan font-weight="700" fill="#202124">不主张的</tspan>：两颗核之间连线的方向，<tspan font-weight="700" fill="#d93025">公开资料没有列出</tspan>，所以这张图不画那根箭头。<tspan fill="#9aa0a6">「块量化在数据通路里」是从「它是 MMA 指令的一个变体、缩放因子与操作数同住 TMEM」推的。</tspan></text>
+</svg>
+<figcaption><b>两块「多出来的」不在同一层。</b>块量化<b>就在 Tensor Core 的数据通路里</b>，是同一条 MMA 指令的一个变体；SparseCore 才是物理上独立的核。<b>下半张是这张图真正的增量</b>：两个坑其实是同一个形状 —— 能力都真的存在，但各自有一道<b>只写在细则里的门槛</b>（哪颗 die／duplication factor）。</figcaption>
+</figure>
+
+  <div class="note ok"><span class="t">⭐ 这一节的自查：对称是修辞，不是证据</span>
+    「两边各挂一块、方向相反」是个很顺口的句式 —— <b>顺口正是它的危险之处</b>。
+    为了凑齐对称，它把一个<b>指令变体</b>说成了<b>独立部件</b>，
+    而这门课从第 1 节起就在强调「部件在哪一层」是判断力的地基。
+    <br><br>收回那半句之后反而多赚了一条：
+    两个坑摆到一起，形状是一样的 —— <b>能力都真的存在，
+    但通往它的路上各有一道只写在细则里的门槛</b>。
+    GPU 那道是<b>你手上是哪颗 die</b>，TPU 那道是<b>你的 duplication factor 是多少</b>。
+    <b>看到「支持 X」，先去找那道门槛在哪一行；找不到，就当它不适用于你。</b></div>
 
   <h3>3.6　最后把一个数从内存送到计算单元</h3>
   <p>前面五小节拆的都是<b>部件</b>，这一小节走的是<b>路径</b> ——

@@ -1,0 +1,187 @@
+# -*- coding: utf-8 -*-
+"""图 P-37 —— 两块「多出来的」不在同一层；而两道门槛都不在宣传页上。
+
+**这张图修的是 3.5 开场那句话。** 原文写的是「两边都在<b>主计算单元之外</b>
+挂了点别的东西，但挂的方向正好相反」。<b>TPU 那半句成立</b> —— SparseCore
+确实是一颗物理上独立的核。<b>GPU 那半句不成立</b>：块量化不在 Tensor Core
+外面，它<b>就在 Tensor Core 的数据通路里</b>，是 MMA 指令的一个变体，
+缩放因子跟操作数一起放在 TMEM。图 G-5 自己的小标题写的就是
+「这套能力挂在<b>哪条指令</b>上」—— <b>图是对的，正文的框架是错的。</b>
+
+**这个错的性质值得单独记一笔：它听起来对称，所以显得可信。**
+「两边各挂一块、方向相反」是个漂亮句式，代价是把一个指令变体说成了独立部件。
+<b>对称是修辞，不是证据。</b>
+
+**改完之后这一节还多了一样东西。** 两个坑（「B200 支持 FP4」「TPU 有个查表核」）
+原本是两条孤立的警告，摆到一起才看得出<b>它们是同一个形状</b>：
+两块多出来的能力各自都有<b>一道门槛</b>，而<b>两道门槛都不写在宣传页上</b> ——
+GPU 那道是「你手上是哪颗 die」，TPU 那道是「你的 duplication factor 是多少」。
+
+**⚠️ 出处口径。** sm_120a / sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；
+duplication factor 的判据与 1.01 那个算式出自本课 T-5。
+<b>两颗核之间连线的方向，公开资料没有列出 —— 所以这里只画「它们是两颗核」，
+不画箭头。</b>
+"""
+from common import Fig, para, BL, GN, RD, YL, PU, TL, INK, SUB, GREY, FILL
+
+W = 1400
+
+LAY_Y, LAY_H = 84, 318
+GATE_Y, GATE_H = LAY_Y + LAY_H + 22, 180
+LAND_Y, LAND_H = GATE_Y + GATE_H + 22, 112
+SRC_Y, SRC_H = LAND_Y + LAND_H + 22, 92
+H = SRC_Y + SRC_H + 20
+
+L_X, L_W = 20, 674
+R_X, R_W = 706, 674
+
+
+def build():
+    f = Fig(W, H, "GPU 的块量化是 MMA 指令的一个变体，位于 Tensor Core 数据通路内部；"
+                  "TPU 的 SparseCore 是一颗物理上独立的核。两者能不能用，"
+                  "分别取决于目标架构和 duplication factor")
+    f.title("两块「多出来的」<tspan font-weight=\"700\">不在同一层</tspan>"
+            "　—— 而两道门槛都不在宣传页上", "3.5 的自查")
+    f.legend([(BL, "在指令里（同一条数据通路）"), (PU, "是独立的核"),
+              (RD, "门槛：宣传页不会写的那一句")])
+    _gpu(f)
+    _tpu(f)
+    _gates(f)
+    _land(f)
+    _src(f)
+    return f.out()
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 左：块量化住在 Tensor Core 里面 —— 画成「盒子里的盒子」，位置本身就是论点。
+def _gpu(f):
+    f.rect(L_X, LAY_Y, L_W, LAY_H, FILL[BL], BL, 1.8, 10)
+    f.t(L_X + 18, LAY_Y + 28, "GPU　·　块量化", "sec", BL)
+    f.t(L_X + 18, LAY_Y + 50, "它换的是指令，不是硬件模块", "xxs", SUB)
+
+    # 外框 ＝ Tensor Core 本体
+    ox, oy, ow, oh = L_X + 26, LAY_Y + 70, L_W - 52, 158
+    f.rect(ox, oy, ow, oh, "#fff", BL, 2.2, 8)
+    f.t(ox + 14, oy + 24, "一个 Tensor Core（同一套硅）", "box", BL)
+
+    f.rect(ox + 14, oy + 38, 300, 44, FILL[BL], BL, 1.4, 5)
+    f.t(ox + 26, oy + 60, "mma.sync ／ tcgen05.mma", "mono", INK)
+    f.t(ox + 26, oy + 75, "普通版：只有 A、B、累加器", "xxs", SUB)
+
+    f.rect(ox + 14, oy + 92, 300, 50, "#fff", RD, 1.6, 5, "4,3")
+    f.t(ox + 26, oy + 114, "…….block_scale", "mono", RD)
+    f.t(ox + 26, oy + 130, "带块量化的<tspan font-weight=\"700\" fill=\"#d93025\">"
+                           "同一条指令</tspan>，多两个缩放操作数", "xxs", SUB)
+
+    f.rect(ox + 336, oy + 46, 190, 96, FILL[YL], YL, 1.5, 6)
+    f.t(ox + 346, oy + 68, "缩放因子", "box", YL)
+    para(f, ox + 346, oy + 86, 170,
+         "tcgen05 这条上，<b>缩放因子跟操作数一起放在 TMEM</b>。", "xxs", 14,
+         max_lines=4)
+
+    para(f, L_X + 26, LAY_Y + 258, L_W - 52,
+         "<r>所以它不是「挂在主计算单元之外」的东西。</r>"
+         "同一套硅，换一条指令变体就有了 —— <b>差别在指令集，不在框图上多一个方块。</b>",
+         "xs", 17, max_lines=3)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 右：SparseCore 是真的第二颗核 —— 两个并排的盒子，中间不画箭头（见下注）。
+def _tpu(f):
+    f.rect(R_X, LAY_Y, R_W, LAY_H, FILL[PU], PU, 1.8, 10)
+    f.t(R_X + 18, LAY_Y + 28, "TPU　·　SparseCore", "sec", PU)
+    f.t(R_X + 18, LAY_Y + 50, "这才是「主计算单元之外」的那种多出来", "xxs", SUB)
+
+    for i, (c, ttl, sub, subc, body) in enumerate([
+        (GN, "TensorCore", "有 MXU", SUB, "矩阵乘主力。<b>本课前六小节拆的都是它。</b>"),
+        (PU, "SparseCore", "没有 MXU", RD, "为<b>不规则访存</b>准备的："
+                                              "一次搬 (8,) 而不是 (8,128)。"),
+    ]):
+        x = R_X + 26 + i * 322
+        f.rect(x, LAY_Y + 70, 300, 118, "#fff", c, 2.2, 8)
+        f.t(x + 14, LAY_Y + 94, ttl, "box", c)
+        f.t(x + 290, LAY_Y + 94, sub, "xxs", subc, anchor="end")
+        para(f, x + 14, LAY_Y + 116, 272, body, "xs", 16, max_lines=3)
+        f.line(x + 150, LAY_Y + 188, x + 150, LAY_Y + 212, c, 1.6, marker="aB")
+
+    f.rect(R_X + 26, LAY_Y + 212, R_W - 52, 30, "#fff", SUB, 1.4, 5)
+    f.t(R_X + 36, LAY_Y + 232, "HBM　·　共用控制器，通道宽度也一样 —— "
+                               "差的是一次搬多小，不是能搬多快", "xs", SUB)
+
+    # ⚠️ 两颗核之间那条连线的方向，只在内部资料里有依据。这里一根箭头都不画。
+    para(f, R_X + 26, LAY_Y + 264, R_W - 52,
+         "<b>两个方块，两颗核。</b>"
+         "<g>它们之间连线的方向公开资料没有列出，所以这张图不画那根箭头 —— "
+         "这里只主张一件事：它是独立的核，不是一条指令。</g>", "xs", 17, max_lines=3)
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 这一带才是这张图真正的增量：把两个孤立的坑对齐成同一个形状。
+def _gates(f):
+    f.t(20, GATE_Y - 6, "两块多出来的能力，各自都有一道门槛　—— "
+                        "而两道门槛都不写在宣传页上", "sec", RD)
+    cards = [
+        (BL, "GPU 那道门槛：你手上是哪颗 die",
+         "「B200 支持 FP4」",
+         "<b>块量化有两条通路，不在同一颗 die 上。</b>"
+         "warp 级的 <code>mma.sync…block_scale</code> 要 <b>sm_120a</b>"
+         "（消费级 Blackwell，RTX 50 / RTX PRO）；"
+         "<code>tcgen05…block_scale</code> 要 <b>sm_100a</b>。",
+         "<r>B200 只有后面那一条。</r>所以这句宣传语没说错，"
+         "错的是听的人默认「两条都有」。<b>先问是哪一条，再问能不能用。</b>"),
+        (PU, "TPU 那道门槛：你的 duplication factor 是多少",
+         "「TPU 有个专门查 embedding 表的核」",
+         "<b>判据是 duplication factor</b> ＝ 这批取了多少索引 ÷ 可选的行数，"
+         "衡量「重复取同一行」的程度。推荐系统几亿行里取几百个，很高，那是它的主场。",
+         "<r>而语言模型是 131,072 ÷ 129,280 ≈ 1.01</r> —— 落在最不划算的一端，"
+         "<b>编译器根本没往那儿派，生产任务里它一次表都没查过。</b>"),
+    ]
+    cw = (1360 - 20) / 2
+    for i, (c, ttl, claim, why, land) in enumerate(cards):
+        x = 20 + i * (cw + 20)
+        f.rect(x, GATE_Y, cw, GATE_H, "#fff", c, 1.8, 10)
+        f.rect(x, GATE_Y, cw, 32, FILL[c], rx=10)
+        f.rect(x, GATE_Y + 23, cw, 9, FILL[c], rx=0)
+        f.t(x + 14, GATE_Y + 22, ttl, "box", c)
+        f.rect(x + 14, GATE_Y + 42, cw - 28, 26, FILL[YL], YL, 1.2, 5)
+        f.t(x + 26, GATE_Y + 60, "宣传口径：" + claim, "xs", INK)
+        y = para(f, x + 14, GATE_Y + 90, cw - 28, why, "xs", 17, max_lines=4)
+        f.line(x + 14, y + 6, x + cw - 14, y + 6, c, 0.8, dash="3 3")
+        para(f, x + 14, y + 26, cw - 28, land, "xs", 17, max_lines=4)
+
+
+# ══════════════════════════════════════════════════════════════════════
+def _land(f):
+    f.rect(20, LAND_Y, 1360, LAND_H, FILL[BL], BL, 1.8, 10)
+    f.t(38, LAND_Y + 28, "⭐ 落点：两句宣传语都没说错 —— "
+                         "错的是把「支持」读成「我的负载用得上」", "sec", BL)
+    y = para(f, 38, LAND_Y + 54, 1324,
+             "<b>这两个坑是同一个形状</b>：能力确实存在，但通往它的路上有一道"
+             "<b>只在文档细则里的条件</b>。宣传页只负责说「有」，不负责说「你够不够格」。",
+             "xs", 19)
+    para(f, 38, y + 2, 1324,
+         "<b>能带走的一条动作</b>：<r>看到一个「支持 X」，先去找那道门槛在哪一行。</r>"
+         "<g>找不到就当它不适用于你 —— 然后去看 trace。"
+         "这两条都不是本课特有的技巧，是所有硬件宣传语的通用读法。</g>", "xs", 19)
+
+
+# ══════════════════════════════════════════════════════════════════════
+def _src(f):
+    f.rect(20, SRC_Y, 1360, SRC_H, "#fff", GREY, 1.4, 10)
+    f.t(38, SRC_Y + 26, "⚠️ 出处分层", "sec")
+    y = para(f, 38, SRC_Y + 50, 1324,
+             "<b>查到的</b>：sm_120a 与 sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；"
+             "duplication factor 的判据与 131,072 ÷ 129,280 这个算式出自本课图 T-5。",
+             "xs", 18)
+    para(f, 38, y + 2, 1324,
+         "<b>不主张的</b>：两颗核之间连线的方向，<r>公开资料没有列出</r>，"
+         "所以这张图不画那根箭头。"
+         "<g>「块量化在数据通路里」是从「它是 MMA 指令的一个变体、"
+         "缩放因子与操作数同住 TMEM」推的。</g>", "xxs", 17)
+
+
+if __name__ == "__main__":
+    import io
+    io.open("out/fig_p37_extras_layer.svg", "w",
+            encoding="utf-8").write(build())
+    print("ok fig_p37_extras_layer")
