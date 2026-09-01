@@ -1,0 +1,504 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题二 L200 · 讲义（授课稿）</title>
+<!-- 🦀 CloseCrab 标识。刻意不放图片文件 —— 内联一个 SVG，让每台机器
+     用自己的 emoji 字体现画；烤成 PNG 会把某一家的字形固定下来。 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+<meta property="og:title" content="TPU 与 GPU · L200 讲义">
+<meta property="og:description" content="老师的草稿：逐字讲稿、该指哪张图、可能被问到什么、别讲什么。">
+<meta name="theme-color" content="#5f6368">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6; --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea; --purple:#9334e6;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --paper:#fdfcfa; --bg2:#f6f5f2;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:78px}
+body{background:var(--paper);color:var(--ink);
+  font:400 16px/1.8 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--blue)}
+b,strong{font-weight:600}
+code{font:600 .88em/1.4 var(--mono);background:#eeece7;padding:2px 6px;border-radius:4px;
+     color:var(--blue-d);white-space:nowrap}
+
+/* ── 顶栏 + tab ─────────────────────── */
+.top{position:sticky;top:0;z-index:50;background:rgba(253,252,250,.95);
+     backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1240px;margin:0 auto;padding:10px 24px;display:flex;
+         align-items:center;gap:18px;flex-wrap:wrap}
+.top .who{font-size:14px;color:var(--gray);white-space:nowrap}
+.top .who b{color:var(--ink)}
+.tabs{display:flex;gap:4px;background:#eeece7;padding:3px;border-radius:9px}
+.tabs a{font-size:13.5px;font-weight:600;padding:7px 16px;border-radius:7px;
+        text-decoration:none;color:var(--gray)}
+.tabs a.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.tabs a:hover:not(.on){color:var(--ink)}
+.top .meta{margin-left:auto;font:600 12px var(--mono);color:var(--gray2)}
+
+/* ── 布局 ───────────────────────────── */
+.shell{max-width:1240px;margin:0 auto;padding:0 24px;display:grid;
+       grid-template-columns:238px 1fr;gap:44px;align-items:start}
+.side{position:sticky;top:78px;padding:28px 0 40px;max-height:calc(100vh - 78px);overflow-y:auto}
+.side h4{font:700 11px/1 var(--mono);letter-spacing:.12em;color:var(--gray2);
+         text-transform:uppercase;margin:0 0 12px}
+.side ol{list-style:none}
+.side li{margin-bottom:1px}
+.side a{display:flex;gap:9px;padding:6px 10px;border-radius:7px;font-size:13.5px;
+        text-decoration:none;color:var(--gray);line-height:1.45}
+.side a:hover{background:#eeece7;color:var(--ink)}
+.side a.on{background:var(--blue-l);color:var(--blue-d);font-weight:600}
+.side a i{font:700 10.5px/1.5 var(--mono);font-style:normal;color:var(--gray2);flex:0 0 20px}
+.side a.on i{color:var(--blue)}
+.side a.todo{opacity:.5}
+.side .grp{font:700 10.5px/1 var(--mono);letter-spacing:.1em;color:var(--gray2);
+           margin:16px 0 7px;padding-left:10px;text-transform:uppercase}
+main{padding:28px 0 90px;min-width:0}
+
+/* ── 讲次 ───────────────────────────── */
+.lec{border-top:1px solid var(--line);padding:36px 0 12px}
+.lec:first-child{border-top:none;padding-top:8px}
+.lh{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.lh .no{font:700 12px/1 var(--mono);color:#fff;background:var(--ink);
+        border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.lh h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.lh .t{margin-left:auto;font:600 12px var(--mono);color:var(--gray2);
+       background:var(--bg2);padding:5px 11px;border-radius:6px;white-space:nowrap}
+.goal{background:var(--green-l);border-left:4px solid var(--green);border-radius:0 10px 10px 0;
+      padding:14px 18px;margin:16px 0;font-size:16px;line-height:1.7}
+.goal b{color:#0b6b30}
+.goal .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#0b6b30;
+         text-transform:uppercase;margin-bottom:5px}
+
+h3.sec{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--gray2);
+       text-transform:uppercase;margin:26px 0 10px;display:flex;align-items:center;gap:9px}
+h3.sec:after{content:"";flex:1;height:1px;background:var(--line2)}
+
+/* 讲稿 */
+.say{background:#fff;border:1px solid var(--line);border-radius:12px;padding:4px 24px 18px;
+     margin:12px 0;box-shadow:0 1px 2px rgba(0,0,0,.03)}
+.say p{margin:14px 0;font-size:16.5px;line-height:1.95}
+.say p:first-child{margin-top:18px}
+.say h4{margin:26px 0 2px;font-size:15px;color:var(--blue);
+  border-left:3px solid var(--blue);padding-left:10px}
+.say em{font-style:normal;background:linear-gradient(transparent 62%,#ffe9a8 62%);
+        font-weight:600;padding:0 1px}
+.say .pause{display:block;font:600 12px var(--mono);color:var(--gray2);margin:18px 0;
+            padding-left:2px;letter-spacing:.04em}
+.say .pause:before{content:"⏸ "}
+.say .board{display:block;background:var(--blue-l);border-radius:8px;padding:10px 14px;
+            font-size:14px;color:var(--blue-d);margin:14px 0;line-height:1.7}
+.say .board:before{content:"🖥 屏幕　";font-weight:700}
+
+/* 问答 */
+.qa{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0}
+.qa details{border-top:1px solid var(--line2)}
+.qa details:first-child{border-top:none}
+.qa summary{padding:13px 18px;cursor:pointer;font-size:15px;font-weight:600;
+            list-style:none;display:flex;gap:9px;background:#fff}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary:before{content:"Q";font:700 11px/1.5 var(--mono);color:#fff;background:var(--purple);
+                   border-radius:50%;width:19px;height:19px;text-align:center;flex:0 0 19px;
+                   margin-top:3px}
+.qa summary:hover{background:var(--bg2)}
+.sub{font-size:.92em;color:var(--gray)}
+.qa .a{padding:2px 18px 16px 46px;font-size:15px;line-height:1.85;color:#3c4043;background:#fff}
+.qa .a p{margin:10px 0}
+
+/* 边界 / 提示 */
+.warn{background:var(--red-l);border-left:4px solid var(--red);border-radius:0 10px 10px 0;
+      padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.warn .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#a50e0e;
+         text-transform:uppercase;margin-bottom:5px}
+.tip{background:var(--yellow-l);border-left:4px solid var(--yellow);border-radius:0 10px 10px 0;
+     padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.tip .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#8a5a00;
+        text-transform:uppercase;margin-bottom:5px}
+
+.num{font-family:var(--mono);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:14px 0}
+th{text-align:left;font-size:11.5px;font-weight:700;color:var(--gray2);letter-spacing:.06em;
+   text-transform:uppercase;padding:9px 12px;border-bottom:2px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.7}
+td.n{font-family:var(--mono);font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+
+.todo-box{border:1px dashed var(--line);border-radius:12px;padding:22px 24px;
+          color:var(--gray);font-size:15px;background:#fff}
+.todo-box b{color:var(--ink)}
+
+.plan{background:var(--bg2);border-radius:14px;padding:24px 26px;margin:0 0 8px}
+.plan h2{font-size:22px;margin-bottom:6px}
+.plan p{font-size:15px;color:var(--gray);margin-bottom:16px}
+.plan table{margin:0}
+.plan td:first-child{width:44px;font:700 11px var(--mono);color:var(--gray2)}
+/* 时间表要比上面那张图例表宽一点的首列（"12–27" 塞不进 44px），单独覆盖 */
+.plan .sched{margin:10px 0 0}
+.plan .sched td:first-child{width:64px;font:700 12.5px var(--mono);color:var(--blue)}
+.plan h3{font-size:16px;margin:22px 0 2px}
+
+footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);font-size:14px;
+       line-height:1.8;grid-column:1/-1}
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr;gap:0}
+  .side{position:static;max-height:none;padding:18px 0 4px;
+        border-bottom:1px solid var(--line)}
+  .side ol{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .lh h2{font-size:21px}.lh .t{margin-left:0}
+  .say{padding:2px 16px 14px}.say p{font-size:15.5px}
+  .qa .a{padding-left:18px}
+}
+</style>
+</head>
+<body>
+
+<!-- ⛔ 这个文件由 Courses/tools/topic02-build-L200-lecture.py 生成，不要手改。
+     加一讲 = 往那个脚本的 LEC 里加一个 dict，侧栏和计数会自动跟上。 -->
+
+<div class="top"><div class="in">
+  <span class="who">专题二 · <b>TPU 与 GPU</b>　<span style="opacity:.6">L200</span></span>
+  <nav class="tabs">
+    <a href="topic-02-L200.html">课件 L200</a>
+    <a href="topic-02-L200-lecture.html" class="on">讲义</a>
+    <a href="topic-02.html">完整版 L300</a>
+  </nav>
+  <span class="meta" id="meta"></span>
+</div></div>
+
+<div class="shell">
+
+<aside class="side">
+  <h4>讲次</h4>
+  <ol id="toc">
+    <div class="grp">开场 · 4 分钟</div>
+    <li><a href="#L0"><i>00</i><span>开场：两条出身，一条主线</span></a></li>
+    <div class="grp">立尺子 · 4 分钟</div>
+    <li><a href="#L1"><i>01</i><span>先架量具：胃口一样大</span></a></li>
+    <div class="grp">分岔点 · 7 分钟</div>
+    <li><a href="#L2"><i>02</i><span>⭐ 分岔在这里</span></a></li>
+    <div class="grp">拆开看 · 24 分钟（全课最重）</div>
+    <li><a href="#L3"><i>03</i><span>⭐⭐ 拆开看 + FlashAttention 走一遍</span></a></li>
+    <div class="grp">岔路 · 3 分钟（时间不够整节跳过）</div>
+    <li><a href="#L4"><i>04</i><span>岔路：一张卡装不下（可跳）</span></a></li>
+    <div class="grp">收束 · 9 分钟</div>
+    <li><a href="#L5"><i>05</i><span>⭐ 分岔的本质</span></a></li>
+    <div class="grp">落地 · 11 分钟</div>
+    <li><a href="#L6"><i>06</i><span>跑完之后：能不能比</span></a></li>
+    <li><a href="#L9"><i>09</i><span>收尾：各自擅长什么</span></a></li>
+  </ol>
+</aside>
+
+<main>
+
+<div class="plan">
+  <h2>这份讲义怎么用</h2>
+  <p>这是<b>老师的草稿</b>，不是给学员的材料。学员看
+    <a href="topic-02-L200.html">课件 L200</a>，你看这一份。<br>
+    课程作者 <b>Chris Yang</b> · Google Cloud AI Infra 架构师。</p>
+  <table>
+    <tbody>
+      <tr><td>🎯</td><td><b>这一讲要留下什么</b>　讲完之后学员脑子里应该剩的那一句话。
+        <b>只有一句</b> —— 讲散了就是没讲到。</td></tr>
+      <tr><td>🗣</td><td><b>讲稿</b>　接近逐字，可以照着念。<em>黄底</em>的是必须说出口的原话，
+        其余按自己的语感改。</td></tr>
+      <tr><td>🖥</td><td><b>屏幕</b>　这一段该滚到课件的哪里、该指哪张图的哪一格。</td></tr>
+      <tr><td>❓</td><td><b>可能被问到</b>　真实会被问的问题 + 答法。
+        <b>答不上来的就写「这个我不确定」</b> —— 讲义里编一个，现场你会照着念。</td></tr>
+      <tr><td>⚠️</td><td><b>别讲什么</b>　这一讲最容易跑偏的方向。<b>时间就是被这些吃掉的。</b></td></tr>
+    </tbody>
+  </table>
+
+  <h3>一小时怎么分</h3>
+  <p>L200 全篇 33 张图。下面这张表是<b>计划</b>，不是实测 ——&nbsp;
+    每讲过一遍，回到生成脚本里把真实分钟数改回去。</p>
+  <table class="sched">
+    <thead><tr><th>分钟</th><th>讲什么</th><th>这一段的落点</th></tr></thead>
+    <tbody>
+      <tr><td>0–4</td><td><b>开场</b>：两条出身 ＋ 那张地图</td>
+        <td>把「差别只有一处」这个论点立住。<b>它现在只是论点，不是结论</b></td></tr>
+      <tr><td>4–8</td><td><b>第 1 节 · 架量具</b>：算力 ÷ 带宽，两边撞在同一个数上</td>
+        <td>第一个「坐直」的时刻：<b>312.6 对 312.5</b>。参数表在这里被拆穿</td></tr>
+      <tr><td>8–15</td><td>⭐ <b>第 2 节 · 分岔点</b>：同一次访存，一边有 cache，一边没有</td>
+        <td>论点第一次变成可看见的东西</td></tr>
+      <tr><td>15–39</td><td>⭐⭐ <b>第 3 节 · 拆开看</b>：整颗 → 一个核 → 一条指令 →
+        <b>FlashAttention 两边并排走完一遍</b></td>
+        <td><b>全课最重的 24 分钟，14 张图。</b>讲不完别的可以砍，这段不能砍</td></tr>
+      <tr><td>（39–42）</td><td><b>第 4 节 · 岔路</b>：一张卡装不下的时候</td>
+        <td><b>时间不够整节跳过</b>，对第 5 节零影响。课件里它本来就是折叠的</td></tr>
+      <tr><td>42–51</td><td>⭐ <b>第 5 节 · 分岔的本质</b>：运行时，还是编译期</td>
+        <td>开场那个论点在这里<b>收口</b> —— 三次出场合成一件事</td></tr>
+      <tr><td>51–58</td><td><b>第 6 节 · 跑完之后</b>：两个数摆上桌，能不能比</td>
+        <td>产出不是那个倍数，是<b>「这个数往哪边都有理由」</b></td></tr>
+      <tr><td>58–62</td><td><b>第 9 节 · 收尾</b>：那到底各自擅长什么</td>
+        <td>回到最开始那句：不比谁强，只说由谁决定</td></tr>
+    </tbody>
+  </table>
+  <h3>讲不完的时候先砍哪个</h3>
+  <p>顺序是固定的，<b>临场别现想</b>：①&nbsp;第 4 节整节跳过（−3）；
+    ②&nbsp;第 6 节只留那张两个数的实测图，边界那张压成一句（−4）；
+    ③&nbsp;第 3 节前三小节各砍一张图（−4）。<br>
+    <b>⛔ 第 3.6（FlashAttention 并排走那一段）和第 5 节，任何情况下都不能砍</b> ——&nbsp;
+    砍掉它们，这节课就退回成「两块硬件参数对比」，
+    而那正是开场第一句话说了不做的事。</p>
+</div>
+
+<section class="lec" id="L0">
+  <div class="lh"><span class="no">00</span><h2>开场：两条出身，一条主线</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+
+  <div class="goal">
+    <span class="k">这一讲要留下什么</span>
+    <b>两边的差别不是十几处，是一处。</b>
+    那一处是「把一块数据从 HBM 搬进片上，<b>谁来安排</b>」——&nbsp;
+    一边交给运行时，一边交给编译期。整节课其余部分都是在验证这一句。
+  </div>
+
+  <h3 class="sec">讲稿</h3>
+  <div class="say">
+    <span class="board">课件停在首屏，先不往下滚。</span>
+
+    <p>好，我们开始。这一讲叫「TPU 与 GPU」，但我先说清楚，
+    <em>这门课不给你念参数表。</em>参数表恰恰是我们第一个要拆穿的东西。</p>
+
+    <p>整节课就<b>两个问题，一条路线</b>。第一个问题，这两块硬件在硬件层面
+    到底哪儿不一样。第二个问题，我们拿同一个算子，从头到尾跑一遍，
+    看那些不一样<b>分别在哪一步冒出来</b>。那个算子就是 FlashAttention。</p>
+
+    <span class="board">往下滚一屏，停在第 0 节那张地图（figC）。
+      这张图后面会反复回来指，先让它在屏幕上多待一会儿。</span>
+
+    <p>现在看第一张图。这张图有点特殊 ——&nbsp;
+    <b>它既是我们的目录，也是全课唯一的前提。</b></p>
+
+    <p><b>先看上半部分。</b>左边 GPU，出身是图形处理器。它从第一天起要伺候的，
+    就是一大堆<b>互不相干的小任务</b> ——&nbsp;形状不知道，访问模式不知道，
+    控制流也不知道。所以它的芯片面积，<b>大半花在「应付各种情况」上</b>。
+    cache 层次、warp 调度器、海量并发线程，全是为了这个。</p>
+
+    <p>右边 TPU，出身是<b>为矩阵乘定做的专用芯片</b>。它从第一天就只服务神经网络。
+    形状是规则的，访问是可预测的，控制流是静态的。所以省下来的面积，
+    <b>全给了计算单元</b>。没有 cache，布局在编译期就定死，换来一个巨大的 MXU。</p>
+
+    <span class="pause">停一拍。下面这两句是这一讲要背下来的。</span>
+
+    <p><em>一个是「不知道你要跑什么，所以处处留一手」；
+    另一个是「早就知道你要跑什么，所以一手都不留」。</em></p>
+
+    <p><b>再看下半部分。</b>那是我们这一小时要走的六站。出发前先算一笔账，
+    中间四站往下拆，最后一站拿到两个数看能不能比。</p>
+
+    <p>中间有一个格子是<b>红的、加粗描边</b> ——&nbsp;那是<b>第 2 节，分岔点</b>。
+    我特意用颜色把它顶出来了。</p>
+
+    <span class="board">手指或鼠标点一下那个红格子，再往下划到最底部那个红框。
+      这两处是同一件事的两个位置，要连着指。</span>
+
+    <p>因为这门课真正的结论，在最底下那个红框里。<em>两边的差别，不是十几处，是一处。</em>
+    就是把一块数据从 HBM 搬进片上的时候，<b>谁来安排</b>。
+    GPU 那边有 cache 在运行时替你猜；TPU 那边没有，编译期就排死了。</p>
+
+    <p>形状要对齐到 8 乘 128、一条指令吃多大、kernel 谁来写、
+    连一台机器要付什么代价 ——&nbsp;<b>全都是从这一处长出来的</b>。</p>
+
+    <span class="pause">这里语速放慢。这句话是整节课的论点，
+      后面每一节都在给它找证据。说太快，学员会当成一句口号听过去。</span>
+
+    <p>开课前还有一句话我要说死：<em>这门课不比谁强。</em>
+    两条出身<b>各自都是当年的正确决定，代价也各自都还在</b>。
+    所以整节课你不会听到「谁更好」这种句子，
+    只会听到<b>「这件事在这一边由谁决定」</b>。</p>
+
+    <p>好，地图立完了。下面从第 1 节开始 ——&nbsp;先架量具。</p>
+  </div>
+
+  <h3 class="sec">可能被问到</h3>
+  <div class="qa">
+    <details><summary>「差别只有一处」是不是说得太绝对了？明明处处都不一样。</summary>
+      <div class="a">
+        <p><b>现象上确实是十几处，「一处」说的是因果上的一处。</b>
+        cache、形状对齐、kernel 谁写、互联怎么连 ——&nbsp;这些都是真的不一样，
+        但它们<b>不是并列的十几个事实</b>，是同一个决定往下长出来的十几个后果。</p>
+        <p>这句话在开场是<b>一个论点，不是一个已证的结论</b>。
+        可以坦白说：「你现在完全可以不信，第 3 节和第 5 节我会分别验证它。」
+        ——&nbsp;<b>这样比硬撑更有说服力</b>，而且给了他们一个听下去的理由。</p>
+      </div></details>
+
+    <details><summary>TPU 真的一点 cache 都没有？那 VMEM 是什么？</summary>
+      <div class="a">
+        <p><b>准确的说法是：TPU 没有「硬件自动管的缓存」那一层。</b>
+        片上存储是有的，而且不小 ——&nbsp;但它是<b>软件管理的 scratchpad</b>：
+        什么时候搬进来、放哪儿、什么时候倒掉，全部由编译器在编译期写死，
+        运行时没有任何东西会替你做决定。</p>
+        <p>这个区别正是本课的主线，所以<b>被问到是好事</b>，顺势就能接：
+        「对，缺的不是容量，是『谁做决定』。」<br>
+        ⚠️ 但<b>别在开场展开讲 VMEM 有多大、分几块</b> ——&nbsp;第 3 节有专门的图。</p>
+      </div></details>
+
+    <details><summary>为什么拿 FlashAttention 当主角？换个 GEMM 或者跑一整个模型不行吗？</summary>
+      <div class="a">
+        <p><b>因为它同时满足两个很难同时满足的条件。</b></p>
+        <p>一是<b>单卡就跑得完</b> ——&nbsp;不用把卡间通信拽进来，
+        故事能一条线走到底（这也是第 4 节被画成岔路的原因）。</p>
+        <p>二是它<b>一次压到四件事</b>：访存、形状、片上容量、kernel 怎么写。
+        纯 GEMM 太干净，压不到后面三件；跑一整个模型又太杂，
+        每一步都在换话题，最后什么都没讲透。</p>
+      </div></details>
+
+    <details><summary>第 4 节为什么画成岔路？卡间通信不重要吗？</summary>
+      <div class="a">
+        <p><b>重要，但它不在这条主线上。</b>判据很硬：
+        第 4 节的正文里 FlashAttention 出现 <b>0 次</b>（grep 过的）——&nbsp;
+        它单卡就跑完了，<b>根本撞不到卡间</b>。</p>
+        <p>与其让人读到那儿觉得「怎么突然跑题了」，不如<b>在地图上就标成岔路</b>。
+        L200 里这一节是折叠的，主线时间不够可以整节跳过，
+        对第 5 节完全没有影响。</p>
+      </div></details>
+  </div>
+
+  <h3 class="sec">别讲什么</h3>
+  <div class="warn">
+    <span class="k">这一讲最容易跑偏的四个方向</span>
+    <b>① 别在开场比参数。</b> 算力、带宽、SRAM 那三组数是<b>第 1 节的包袱</b> ——&nbsp;
+    「两边几乎一样」这个意外，得等到量具架好了才炸得响。开场先说了，第 1 节就白讲了。<br>
+    <b>② 别讲两家的历史年表。</b> 出身只需要两句话（「不知道你要跑什么」／「早就知道」），
+    多一句都是在花时间。<br>
+    <b>③ 别在这儿解释 MXU 是什么、warp 是什么。</b> 第 3 节有八张显微镜图专门拆。
+    <b>开场做术语扫盲是最贵的一种跑偏</b> ——&nbsp;一开口就是十分钟。<br>
+    <b>④ 别说「谁更好」。</b> 一旦有人把话题带到选型，直接用课件上那句挡回去：
+    「这门课只回答『这件事由谁决定』。」
+  </div>
+  <div class="tip">
+    <span class="k">节奏提示</span>
+    这一讲<b>四分钟必须走完</b>，它是地图不是内容。
+    真正让人坐直的时刻在第 1 节末尾（<b>312.6 对 312.5</b>），
+    <b>早点走到那儿。</b><br>
+    如果开场发现台下背景很杂，<b>宁可砍掉出身那两段的细节，也要把最底下那个红框念完</b> ——&nbsp;
+    没有那句话，后面每一节都会变成孤立的知识点。
+  </div>
+</section>
+
+<section class="lec" id="L1">
+  <div class="lh"><span class="no">01</span><h2>先架量具：两边的胃口一样大</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+
+  <div class="todo-box">
+    <b>还没写。</b>这一讲要等实际讲过一遍之后再落笔 ——&nbsp;
+    讲义的价值在于记下<b>现场发现讲不通的地方</b>，
+    照着课件先编一份出来，等于把课件抄了一遍，没有用。<br>
+    课件对应的是 <a href="topic-02-L200.html#s1">L200 第 1 节</a>。
+  </div>
+</section>
+
+<section class="lec" id="L2">
+  <div class="lh"><span class="no">02</span><h2>⭐ 分岔在这里：一个有 cache，一个没有</h2>
+    <span class="t">⏱ 7 分钟</span></div>
+
+  <div class="todo-box">
+    <b>还没写。</b>这一讲要等实际讲过一遍之后再落笔 ——&nbsp;
+    讲义的价值在于记下<b>现场发现讲不通的地方</b>，
+    照着课件先编一份出来，等于把课件抄了一遍，没有用。<br>
+    课件对应的是 <a href="topic-02-L200.html#s2">L200 第 2 节</a>。
+  </div>
+</section>
+
+<section class="lec" id="L3">
+  <div class="lh"><span class="no">03</span><h2>拆开看：形状对不对得齐，以及并排走完全程</h2>
+    <span class="t">⏱ 24 分钟</span></div>
+
+  <div class="todo-box">
+    <b>还没写。</b>这一讲要等实际讲过一遍之后再落笔 ——&nbsp;
+    讲义的价值在于记下<b>现场发现讲不通的地方</b>，
+    照着课件先编一份出来，等于把课件抄了一遍，没有用。<br>
+    课件对应的是 <a href="topic-02-L200.html#s3">L200 第 3 节</a>。
+  </div>
+</section>
+
+<section class="lec" id="L4">
+  <div class="lh"><span class="no">04</span><h2>岔路：一张卡装不下的时候</h2>
+    <span class="t">⏱ 3 分钟</span></div>
+
+  <div class="todo-box">
+    <b>还没写。</b>这一讲要等实际讲过一遍之后再落笔 ——&nbsp;
+    讲义的价值在于记下<b>现场发现讲不通的地方</b>，
+    照着课件先编一份出来，等于把课件抄了一遍，没有用。<br>
+    课件对应的是 <a href="topic-02-L200.html#s4">L200 第 4 节</a>。
+  </div>
+</section>
+
+<section class="lec" id="L5">
+  <div class="lh"><span class="no">05</span><h2>⭐ 分岔的本质：运行时，还是编译期</h2>
+    <span class="t">⏱ 9 分钟</span></div>
+
+  <div class="todo-box">
+    <b>还没写。</b>这一讲要等实际讲过一遍之后再落笔 ——&nbsp;
+    讲义的价值在于记下<b>现场发现讲不通的地方</b>，
+    照着课件先编一份出来，等于把课件抄了一遍，没有用。<br>
+    课件对应的是 <a href="topic-02-L200.html#s5">L200 第 5 节</a>。
+  </div>
+</section>
+
+<section class="lec" id="L6">
+  <div class="lh"><span class="no">06</span><h2>跑完之后：拿到两个数，能不能比</h2>
+    <span class="t">⏱ 7 分钟</span></div>
+
+  <div class="todo-box">
+    <b>还没写。</b>这一讲要等实际讲过一遍之后再落笔 ——&nbsp;
+    讲义的价值在于记下<b>现场发现讲不通的地方</b>，
+    照着课件先编一份出来，等于把课件抄了一遍，没有用。<br>
+    课件对应的是 <a href="topic-02-L200.html#s6">L200 第 6 节</a>。
+  </div>
+</section>
+
+<section class="lec" id="L9">
+  <div class="lh"><span class="no">09</span><h2>那到底各自擅长什么</h2>
+    <span class="t">⏱ 4 分钟</span></div>
+
+  <div class="todo-box">
+    <b>还没写。</b>这一讲要等实际讲过一遍之后再落笔 ——&nbsp;
+    讲义的价值在于记下<b>现场发现讲不通的地方</b>，
+    照着课件先编一份出来，等于把课件抄了一遍，没有用。<br>
+    课件对应的是 <a href="topic-02-L200.html#s9">L200 第 9 节</a>。
+  </div>
+</section>
+
+<footer>
+  <p>讲义随课上的实际反应改。<b>发现哪一讲现场讲不通，改生成脚本
+    <code>Courses/tools/topic02-build-L200-lecture.py</code> 里的 <code>LEC</code>，
+    别改课件</b> —— 课件是学员的材料，讲不通是讲法的问题，不一定是材料的问题。</p>
+</footer>
+
+</main>
+</div>
+
+<script>
+// 侧栏跟随滚动高亮
+const secs = [...document.querySelectorAll(".lec")];
+const links = new Map([...document.querySelectorAll(".side a")].map(a=>[a.getAttribute("href").slice(1), a]));
+const io = new IntersectionObserver(es=>{
+  es.forEach(e=>{
+    const a = links.get(e.target.id); if(!a) return;
+    if(e.isIntersecting){ links.forEach(x=>x.classList.remove("on")); a.classList.add("on"); }
+  });
+}, {rootMargin:"-78px 0px -70% 0px", threshold:0});
+secs.forEach(s=>io.observe(s));
+// 未写完的讲次淡显
+document.querySelectorAll(".lec").forEach(s=>{
+  if(s.querySelector(".todo-box")) links.get(s.id)?.classList.add("todo");
+});
+// 顶栏统计
+const done = secs.filter(s=>!s.querySelector(".todo-box")).length;
+const mins = [...document.querySelectorAll('.lh .t')]
+  .reduce((s,e)=>s+parseFloat((e.textContent.match(/[0-9.]+/)||[0])[0]), 0);
+document.getElementById("meta").textContent =
+  `${secs.length} 讲 · 已写 ${done} · 合计 ${mins} 分钟`;
+</script>
+</body>
+</html>

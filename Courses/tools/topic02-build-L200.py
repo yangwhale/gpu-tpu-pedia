@@ -568,7 +568,8 @@ HERO = '''
 
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题二
-    ／ <b>L200 · 一小时版</b></div>
+    ／ <b>L200 · 一小时版</b>
+    <a class="lecbtn" href="topic-02-L200-lecture.html">📝 讲义（授课稿）</a></div>
   <h1>TPU 与 GPU</h1>
   <div class="en">Two Accelerators, Two Origins</div>
   <div class="hook">
