@@ -124,12 +124,30 @@ class Fig:
             self.t(self.w - 20 - bw / 2, 25, badge, "lbl", "#fff", "middle")
 
     def legend(self, items, y=58, x0=20):
-        """items: [(color, text), ...] —— 与 TPU 图相同的色块图例。"""
+        """items: [(color, text), ...] —— 与 TPU 图相同的色块图例。
+
+        ⛔ 这一行是**一整行铺开的**，写长了就冲出 viewBox ——&nbsp;而 SVG
+        超出 viewBox 的文字是<b>静默裁掉</b>的：渲染图上看不出「被截了」
+        和「本来就短」的区别。P-20 最后一格就这么丢过两条限定
+        （「跑的是 GB200 不是 GB300」「配色不表示好坏」），
+        实测宽 555.8 px 塞进 384 px 的位置，肉眼一直没发现，
+        最后是拿 headless Chrome 量 getComputedTextLength 才逮到的。
+
+        所以下面这条断言必须留着。`11.5 * _wlen` 比实测宽约 10%
+        （实测同一串 555.8 px、估算 610.1 px）——&nbsp;**偏保守是故意的**：
+        宁可在临界处误报让人手动确认，也不能漏掉真的溢出。
+        """
         x = x0
         for c, txt in items:
             self.rect(x, y - 10, 11, 11, fill=c, rx=2)
             self.t(x + 17, y, txt, "sm")
             x += 17 + 11.5 * _wlen(txt) + 22
+        right = x - 22                      # 减掉最后一格多加的那段间距
+        assert right <= self.w - 20, (
+            "图例整行 %.0f px，超出 viewBox 可用宽度 %d px（%.0f px 会被静默裁掉）。"
+            "拆成两行、缩短文字，或把说明挪进图注：\n  %s"
+            % (right - x0, self.w - 20 - x0, right - (self.w - 20),
+               "\n  ".join(t for _, t in items)))
 
     # ── 三个成组原语（一律扁平，见文件头那段 ⛔）────────────────────
     # rect() 画「一块底色」；下面这几个画「一个物件」。

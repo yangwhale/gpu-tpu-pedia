@@ -47,7 +47,7 @@ p = [f'<svg viewBox="0 0 {W} {H}" width="100%" role="img" '
      '<text class="svgsm" x="0" y="35">'
      '按「硬度」分类，不按「层级」分类：谁是结构性差别、谁只是数字不同、谁是巧合</text>',
      '<text class="svgsm" x="0" y="54" fill="#9aa0a6">'
-     '完整九行的对照表在这张图下面 —— 那张是拿来回查的手册</text>']
+     '完整九行的对照表折在这张图下面 —— 那张是拿来回查的手册，主线上记住这三格就够</text>']
 
 for x, (ttl, sub, c, rows, foot) in zip(X, CARDS):
     p.append(f'<rect x="{x}" y="{TOP}" width="{PW}" height="{BH}" rx="10" '
