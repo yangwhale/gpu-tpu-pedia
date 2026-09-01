@@ -8123,10 +8123,125 @@ footer a{text-decoration:none}
     GPU 那道是<b>你手上是哪颗 die</b>，TPU 那道是<b>你的 duplication factor 是多少</b>。
     <b>看到「支持 X」，先去找那道门槛在哪一行；找不到，就当它不适用于你。</b></div>
 
-  <h3>3.6　最后把一个数从内存送到计算单元</h3>
-  <p>前面五小节拆的都是<b>部件</b>，这一小节走的是<b>路径</b> ——
-    一个数从 HBM 出发到进 MXU／Tensor Core，中间要停几站，每一站是谁在做决定。
-    GPU 侧五站，<b>中间两站是缓存</b>：</p>
+  <h3>3.6　高潮：FlashAttention 在两条路上各走一遍</h3>
+  <p>前面五小节拆的都是<b>部件</b>，这一小节拆的是<b>路</b> ——
+    数据从 HBM 出发到进计算单元，中间要停几站，每一站是谁在做决定。
+    <b>但「一个数怎么走完这条路」这个问法太抽象了</b>：
+    你会记住站名，却不知道这些站为什么值得记。
+    <br><br>所以这一节换个走法 —— <b>拿一个真东西来走</b>。
+    <b>FlashAttention</b> 是过去五年最重要的一个 kernel，
+    而它做的事<b>从头到尾只跟这条路有关，跟计算单元一点关系都没有</b>：
+    它没换算法、没减 FLOPs、没用新指令，<b>只是把数据在路上的走法改了一下</b>。
+    先看它要解决的是什么。</p>
+<figure class="fbox fwide" id="ms-p38">
+<svg viewBox="0 0 1400 890" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="序列 128K 时注意力矩阵是 32 GiB，朴素写法要四趟 HBM 往返共 128 GiB；FlashAttention 用 online softmax 让它永远不落 HBM，计算量一点没变">
+<text x="20" y="26" class="ttl">先看这一节要解决的到底是什么　—— <tspan font-weight="700">128 GiB 全花在路上，一次乘法都没做</tspan></text>
+<rect x="1281" y="10" width="99" height="22" rx="11" fill="#d93025"/>
+<text x="1330.5" y="25" class="lbl" fill="#fff" text-anchor="middle">3.6 的引子</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="37" y="58" class="sm">HBM 往返：真正的开销</text>
+<rect x="176.3" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="193.3" y="58" class="sm">留在片上：省下来的</text>
+<rect x="318.8" y="48" width="11" height="11" rx="2" fill="#5f6368"/>
+<text x="335.8" y="58" class="sm">Q / K / V / O：无论如何都要搬的</text>
+<rect x="20" y="84" width="1360" height="112" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+<text x="38" y="112" class="sec" fill="#d93025">一个头、一个样本、序列 128K、head_dim 128、bf16</text>
+<text x="38" y="152" class="numb" fill="#202124">131,072</text>
+<text x="38" y="172" class="xxs" fill="#5f6368">序列长度 n</text>
+<text x="250" y="152" class="numb" fill="#5f6368">×</text>
+<text x="290" y="152" class="numb" fill="#202124">131,072</text>
+<text x="290" y="172" class="xxs" fill="#5f6368">n</text>
+<text x="500" y="152" class="numb" fill="#5f6368">×</text>
+<text x="540" y="152" class="numb" fill="#202124">2 B</text>
+<text x="540" y="172" class="xxs" fill="#5f6368">bf16</text>
+<text x="660" y="152" class="numb" fill="#5f6368">＝</text>
+<text x="710" y="152" class="numb" fill="#202124">32 GiB</text>
+<text x="710" y="172" class="xxs" fill="#5f6368">注意力矩阵 S 一个人就这么大</text>
+<rect x="940" y="124" width="424" height="56" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="954" y="146" class="xs"><tspan font-weight="700" fill="#202124">而 Q / K / V / O 四个加起来只有 128 MiB。</tspan><tspan font-weight="700" fill="#d93025">中间产物比输入输出大 256 倍。</tspan></text>
+<rect x="20" y="218" width="674" height="268" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+<text x="38" y="246" class="sec" fill="#d93025">❌ 朴素写法：S 要在 HBM 里过四趟</text>
+<text x="38" y="268" class="xxs" fill="#5f6368">每一步都是「算完写回去，下一步再读出来」</text>
+<rect x="38" y="294" width="250" height="32" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
+<text x="50" y="315" class="xs" fill="#202124">① 算 S ＝ QKᵀ</text>
+<line x1="292" y1="310" x2="336" y2="310" stroke="#d93025" stroke-width="2.0" marker-end="url(#aB)"/>
+<rect x="340" y="294" width="150" height="32" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<text x="352" y="315" class="xs" fill="#d93025">写 S　→　HBM</text>
+<text x="510" y="315" class="numb" fill="#d93025">32 GiB</text>
+<rect x="38" y="334" width="250" height="32" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
+<text x="50" y="355" class="xs" fill="#202124">② 算 softmax</text>
+<line x1="292" y1="350" x2="336" y2="350" stroke="#d93025" stroke-width="2.0" marker-end="url(#aB)"/>
+<rect x="340" y="334" width="150" height="32" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<text x="352" y="355" class="xs" fill="#d93025">读 S　→　HBM</text>
+<text x="510" y="355" class="numb" fill="#d93025">32 GiB</text>
+<rect x="38" y="374" width="250" height="32" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
+<text x="50" y="395" class="xs" fill="#202124">　</text>
+<line x1="292" y1="390" x2="336" y2="390" stroke="#d93025" stroke-width="2.0" marker-end="url(#aB)"/>
+<rect x="340" y="374" width="150" height="32" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<text x="352" y="395" class="xs" fill="#d93025">写 P　→　HBM</text>
+<text x="510" y="395" class="numb" fill="#d93025">32 GiB</text>
+<rect x="38" y="414" width="250" height="32" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
+<text x="50" y="435" class="xs" fill="#202124">③ 算 O ＝ PV</text>
+<line x1="292" y1="430" x2="336" y2="430" stroke="#d93025" stroke-width="2.0" marker-end="url(#aB)"/>
+<rect x="340" y="414" width="150" height="32" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<text x="352" y="435" class="xs" fill="#d93025">读 P　→　HBM</text>
+<text x="510" y="435" class="numb" fill="#d93025">32 GiB</text>
+<rect x="38" y="458" width="638" height="18" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="50" y="472" class="xs" fill="#d93025">合计 128 GiB 的 HBM 往返 —— 这一大笔里，一次乘法都没有</text>
+<rect x="706" y="218" width="674" height="268" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="724" y="246" class="sec" fill="#1e8e3e">✅ FlashAttention：S 从来不落 HBM</text>
+<text x="724" y="268" class="xxs" fill="#5f6368">分块 ＋ online softmax，一块算完就地更新结果</text>
+<rect x="724" y="290" width="420" height="148" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="2.2" stroke-dasharray="5,4"/>
+<text x="738" y="312" class="box" fill="#1e8e3e">片上暂存（共享内存 ／ VMEM）</text>
+<rect x="738" y="324" width="392" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="750" y="344" class="xs" fill="#202124">① 取一块 K/V ＋ 一块 Q</text>
+<rect x="738" y="360" width="392" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="750" y="380" class="xs" fill="#202124">② 算这一小块的 S，就地做 online softmax</text>
+<rect x="738" y="396" width="392" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="750" y="416" class="xs" fill="#202124">③ 用跑动的最大值和分母，就地更新 O</text>
+<line x1="934" y1="438" x2="934" y2="454" stroke="#1e8e3e" stroke-width="2.0" marker-end="url(#aB)"/>
+<text x="946" y="452" class="xxs" fill="#1e8e3e">循环下一块</text>
+<rect x="1158" y="290" width="204" height="148" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+<text x="1170" y="312" class="box" fill="#f9ab00">代价要说清楚</text>
+<text x="1170" y="330" class="xxs"><tspan font-weight="700" fill="#202124">K/V 要按 Q 的分块重复读若干趟</tspan>，这一</text>
+<text x="1170" y="344" class="xxs">项不是零。<tspan fill="#9aa0a6">所以收益取决于「S 那一项原</tspan></text>
+<text x="1170" y="358" class="xxs"><tspan fill="#9aa0a6">本占多大」—— 序列越长越划算，短序列</tspan></text>
+<text x="1170" y="372" class="xxs"><tspan fill="#9aa0a6">可能不值。</tspan></text>
+<rect x="724" y="458" width="638" height="18" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="736" y="472" class="xs" fill="#1e8e3e">S 那 128 GiB 整项消失 —— 而结果与朴素写法数学等价</text>
+<rect x="20" y="508" width="1360" height="118" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="536" class="sec" fill="#1a73e8">🔢 三笔账，只有一笔变了</text>
+<text x="38" y="566" class="lbl" fill="#5f6368">计算量 FLOPs</text>
+<text x="38" y="590" class="box" fill="#1e8e3e">完全不变</text>
+<text x="38" y="610" class="xxs" fill="#5f6368">一次乘法都没省</text>
+<text x="486" y="566" class="lbl" fill="#5f6368">HBM 读写</text>
+<text x="486" y="590" class="box" fill="#d93025">O(n²) → O(n²/块大小)</text>
+<text x="486" y="610" class="xxs" fill="#5f6368">省的全在这一行</text>
+<text x="934" y="566" class="lbl" fill="#5f6368">显存占用</text>
+<text x="934" y="590" class="box" fill="#d93025">O(n²) → O(n)</text>
+<text x="934" y="610" class="xxs" fill="#5f6368">32 GiB 的中间产物不存在了</text>
+<rect x="20" y="648" width="1360" height="112" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<text x="38" y="676" class="sec" fill="#8430ce">⭐ 落点：这一节问的「一个数怎么从 HBM 走到计算单元」，不是学术问题</text>
+<text x="38" y="702" class="xs"><tspan font-weight="700" fill="#202124">过去五年最重要的那个 kernel，做的事跟计算单元一点关系都没有。</tspan>它没有换算法、没有减 FLOPs、没有用新指令 —— <tspan font-weight="700" fill="#d93025">它只是把数据在路上的走法改了一下。</tspan></text>
+<text x="38" y="723" class="xs"><tspan font-weight="700" fill="#202124">所以接下来要一站一站走完这条路</tspan>，而且两边并排走：<tspan font-weight="700" fill="#202124">同一个 FlashAttention，在 GPU 上和在 TPU 上，每一站分别落在哪、由谁决定。</tspan></text>
+<rect x="20" y="782" width="1360" height="88" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="38" y="808" class="sec">⚠️ 出处分层</text>
+<text x="38" y="830" class="xs"><tspan font-weight="700" fill="#202124">当场算的</tspan>：131,072² × 2 B ＝ 32 GiB；四趟 ＝ 128 GiB；Q/K/V/O ＝ 4 × 131,072 × 128 × 2 B ＝ 128 MiB。式子都写在图上，可以自己复核。</text>
+<text x="38" y="849" class="xxs"><tspan font-weight="700" fill="#202124">公开结论</tspan>：FLOPs 不变、HBM 读写降到 O(n²/块大小)、显存 O(n²)→O(n) —— FlashAttention 原始结论。<tspan fill="#9aa0a6">「短序列可能不划算」也是公开说法，本图不给具体门槛。</tspan></text>
+</svg>
+<figcaption><b>128 GiB 全花在路上，一次乘法都没做。</b>序列 128K 时注意力矩阵 S ＝ <b>32 GiB</b>，朴素写法要写 S／读 S／写 P／读 P 四趟；而 Q/K/V/O 加起来只有 128 MiB。<b>FlashAttention 的全部内容就是把这一项删掉</b> —— <b>FLOPs 一个都没省</b>。右边那张黄卡如实标了代价：K/V 要按 Q 的分块重复读，不是零。</figcaption>
+</figure>
+
+  <div class="note danger"><span class="t">把这张图的三个数记住，后面全靠它们</span>
+    序列 128K、<code>head_dim</code> 128、bf16，<b>注意力矩阵 S 一个人就是 32 GiB</b>；
+    朴素写法要<b>写 S、读 S、写 P、读 P</b> 四趟，<b>128 GiB 的 HBM 往返</b>；
+    而真正的输入输出 Q/K/V/O 加起来只有 <b>128 MiB</b>。
+    <b>中间产物比输入输出大 256 倍，而且全在路上。</b>
+    <br><br>FlashAttention 靠 online softmax 边算边更新，让 S 永远不落 HBM，
+    把这 128 GiB 整项删掉。<b>它一次乘法都没省 —— 省的全是搬运。</b>
+    <br><br>这就是为什么这一节值得讲：<b>真实瓶颈大多数时候不在算，在路上。</b></div>
+
+  <p>要看清它在两边分别怎么走，先各看一眼这条路本身。GPU 侧：</p>
 <figure class="fbox fwide" id="ms-g6">
 <svg viewBox="0 0 1400 1116" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 与 TPU 的片上内存层级对照：一个数从 HBM 到乘加单元经过哪些站，每一站由硬件自动搬运还是由编译器显式搬运">
 <text x="20" y="26" class="ttl">一个数走完全程　—— 从 HBM 到乘加单元，中间几站、<tspan fill="#8430ce">每站谁在搬</tspan></text>
@@ -8356,7 +8471,7 @@ footer a{text-decoration:none}
 <figcaption><b>B200 侧五站，中间两站是缓存。</b>命中不命中要跑起来才知道 —— 这就是 2.1 那五个红框的物理来源。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <p>TPU 侧四站，<b>中间那站不是缓存，是暂存</b> —— 一字之差，性质完全不同。</p>
+  <p>TPU 侧 —— <b>中间那站不是缓存，是暂存</b>，一字之差，性质完全不同：</p>
 <figure class="fbox fwide" id="ms-t6">
 <svg viewBox="0 0 1400 892" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 数据通路：HBM 经 DMA 进 VMEM，再进 MXU，结果落进累加器；每一步都由编译器在编译期决定">
 <text x="20" y="26" class="ttl">一个数走完全程　—— 中间那一站是「暂存」，不是「缓存」</text>
@@ -8484,12 +8599,238 @@ footer a{text-decoration:none}
 <figcaption><b>v7 侧四站，中间那站不是缓存，是暂存。</b>每一站只问一个问题：<b>这一步是谁决定的</b>。从头到尾没有一站的答案是「硬件自己看着办」—— 这张图是 2.1 里「TPU 侧 0 个红框」的逐站展开。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <div class="note ok"><span class="t">这两张图的读法：站名不重要，逐站问「这一步是谁决定的」</span>
+  <p>现在把两边并起来，让 FlashAttention 同时在两条路上往前推 ——
+    <b>一行是同一站，左边是什么，右边是什么。这是本节的主图，横着读。</b></p>
+<figure class="fbox fwide" id="ms-p39">
+<svg viewBox="0 0 1400 1094" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FlashAttention 在 GPU 与 TPU 两条内存通路上的逐站对照：片外主存、硬件缓存、片上暂存、操作数缓冲、计算单元、以及谁来安排矩阵单元与向量单元之间的切换">
+<text x="20" y="26" class="ttl">同一个 FlashAttention，<tspan font-weight="700">两边并排走完全程</tspan>　—— 横着读，一站一站对</text>
+<rect x="1292" y="10" width="88" height="22" rx="11" fill="#d93025"/>
+<text x="1336.0" y="25" class="lbl" fill="#fff" text-anchor="middle">3.6 主图</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="37" y="58" class="sm">GPU · B200</text>
+<rect x="122.25" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="139.25" y="58" class="sm">TPU v7</text>
+<rect x="199.2" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="216.2" y="58" class="sm">两边结构上真正不同的地方</text>
+<rect x="20" y="84" width="246" height="38" rx="7" fill="#f1f3f4" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="36" y="109" class="sec" fill="#202124">这一站</text>
+<rect x="276" y="84" width="556" height="38" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="292" y="109" class="sec" fill="#1a73e8">GPU　·　B200</text>
+<rect x="842" y="84" width="538" height="38" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="858" y="109" class="sec" fill="#1e8e3e">TPU　·　v7</text>
+<rect x="20" y="126" width="246" height="82" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
+<text x="34" y="148" class="box" fill="#202124">① 片外主存</text>
+<text x="34" y="168" class="xxs">只有 Q / K / V / O 住这儿。<tspan font-weight="700" fill="#202124">S 从来不出现在</tspan></text>
+<text x="34" y="183" class="xxs"><tspan font-weight="700" fill="#202124">这一层 —— 省下的就是它。</tspan></text>
+<rect x="280" y="126" width="548" height="82" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="292" y="148" class="box" fill="#1a73e8">HBM3e</text>
+<text x="816" y="148" class="xxs" fill="#5f6368" text-anchor="end">192 GB · 8.0 TB/s</text>
+<text x="292" y="168" class="xs">官方数字。<tspan font-weight="700" fill="#202124">整颗芯片共用。</tspan></text>
+<rect x="846" y="126" width="530" height="82" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
+<text x="858" y="148" class="box" fill="#1e8e3e">HBM3e</text>
+<text x="1364" y="148" class="xxs" fill="#5f6368" text-anchor="end">192 GiB · 7.4 TB/s / chip</text>
+<text x="858" y="168" class="xs">官方数字。<tspan font-weight="700" fill="#202124">96 GiB / device</tspan>（v7 是 2 device / chip）。</text>
+<rect x="20" y="216" width="246" height="96" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
+<text x="34" y="238" class="box" fill="#202124">② 硬件缓存</text>
+<text x="34" y="258" class="xxs"><tspan font-weight="700" fill="#d93025">这一行是全图最大的结构差异。</tspan>有没有这一层，</text>
+<text x="34" y="273" class="xxs">决定了写 kernel 的人在跟什么打交道。</text>
+<rect x="280" y="216" width="548" height="96" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="292" y="238" class="box" fill="#1a73e8">L2 缓存</text>
+<text x="816" y="238" class="xxs" fill="#5f6368" text-anchor="end">126 MB · 4 个分区</text>
+<text x="292" y="258" class="xs"><tspan font-weight="700" fill="#202124">硬件自动，有命中率。</tspan>程序管不着它留什么、赶走什么。</text>
+<rect x="846" y="216" width="530" height="96" rx="7" fill="#fce8e6" stroke="#d93025" stroke-width="1.5"/>
+<text x="858" y="238" class="box" fill="#d93025">没有这一站</text>
+<text x="1364" y="238" class="xxs" fill="#5f6368" text-anchor="end">—</text>
+<text x="858" y="258" class="xs"><tspan font-weight="700" fill="#202124">HBM 直接进片上暂存。</tspan><tspan fill="#9aa0a6">省下的不只是面积，还有「不知道会不会命中」这件事本身。</tspan></text>
+<rect x="20" y="320" width="246" height="96" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
+<text x="34" y="342" class="box" fill="#202124">③ 片上暂存</text>
+<text x="34" y="362" class="xxs"><tspan font-weight="700" fill="#202124">这是 FlashAttention 的主战场。</tspan>tile 就住这</text>
+<text x="34" y="377" class="xxs">儿，块能开多大由这一格的容量决定。</text>
+<rect x="280" y="320" width="548" height="96" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="292" y="342" class="box" fill="#1a73e8">L1 ／ 共享内存</text>
+<text x="816" y="342" class="xxs" fill="#5f6368" text-anchor="end">256 KiB / SM · 共享部分 ≤ 227 KiB / 线程块</text>
+<text x="292" y="362" class="xs"><tspan font-weight="700" fill="#202124">同一块硅，两种身份</tspan>：左半是硬件管的 L1，右半是软件管的共享内存。<tspan font-weight="700" fill="#d93025">FlashAttention 的 tile 住在右</tspan></text>
+<text x="292" y="379" class="xs"><tspan font-weight="700" fill="#d93025">半边 —— 是 kernel 作者亲手搬进去的。</tspan></text>
+<rect x="846" y="320" width="530" height="96" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
+<text x="858" y="342" class="box" fill="#1e8e3e">VMEM</text>
+<text x="1364" y="342" class="xxs" fill="#5f6368" text-anchor="end">64 MiB / core</text>
+<text x="858" y="362" class="xs"><tspan font-weight="700" fill="#202124">编译器静态分配，没有 tag、不会 miss。</tspan>Pallas 里用 <tspan class="mono" fill="#1967d2">BlockSpec</tspan> 声明每块搬多大，<tspan font-weight="700" fill="#d93025">剩下的编译器</tspan></text>
+<text x="858" y="379" class="xs"><tspan font-weight="700" fill="#d93025">排 —— 不是 kernel 作者亲手搬。</tspan></text>
+<rect x="20" y="424" width="246" height="86" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
+<text x="34" y="446" class="box" fill="#202124">④ 操作数缓冲</text>
+<text x="34" y="466" class="xxs">矩阵操作数在进计算单元之前，要不要先落一次</text>
+<text x="34" y="481" class="xxs">寄存器。</text>
+<rect x="280" y="424" width="548" height="86" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="292" y="446" class="box" fill="#1a73e8">寄存器堆 ＋ TMEM 支线</text>
+<text x="816" y="446" class="xxs" fill="#5f6368" text-anchor="end">寄存器 256 KiB / SM · TMEM 256 KiB / SM</text>
+<text x="292" y="466" class="xs">Blackwell 之前<tspan font-weight="700" fill="#202124">矩阵操作数必须先落寄存器堆</tspan>；现在 TMA／<tspan class="mono" fill="#1967d2">tcgen05.cp</tspan> 异步整块搬进 TMEM，<tspan font-weight="700" fill="#d93025">把寄存器</tspan></text>
+<text x="292" y="483" class="xs"><tspan font-weight="700" fill="#d93025">整条绕过去</tspan>。</text>
+<rect x="846" y="424" width="530" height="86" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
+<text x="858" y="446" class="box" fill="#1e8e3e">向量寄存器（个数未公开）</text>
+<text x="1364" y="446" class="xxs" fill="#5f6368" text-anchor="end">形状是 8 × 128 的二维块</text>
+<text x="858" y="466" class="xs"><tspan font-weight="700" fill="#202124">MXU 那条支线从来不经过向量寄存器</tspan> —— 权重与数据直接推进阵列。<tspan fill="#9aa0a6">这一点 GPU 到 Blackwell 才追</tspan></text>
+<text x="858" y="483" class="xs"><tspan fill="#9aa0a6">上。</tspan></text>
+<rect x="20" y="518" width="246" height="96" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
+<text x="34" y="540" class="box" fill="#202124">⑤ 算：两种单元轮流上</text>
+<text x="34" y="560" class="xxs"><tspan font-weight="700" fill="#202124">FlashAttention 一直在两种单元之间跳</tspan>：矩阵</text>
+<text x="34" y="575" class="xxs">乘两次、中间夹一次 softmax。</text>
+<rect x="280" y="518" width="548" height="96" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="292" y="540" class="box" fill="#1a73e8">Tensor Core ＋ CUDA Core</text>
+<text x="816" y="540" class="xxs" fill="#5f6368" text-anchor="end">矩阵：4 / SM　·　向量：128 / SM</text>
+<text x="292" y="560" class="xs"><tspan class="mono" fill="#1967d2">QKᵀ</tspan> 和 <tspan class="mono" fill="#1967d2">PV</tspan> 走 Tensor Core；<tspan font-weight="700" fill="#202124">online softmax（取最大、求指数、累加）走 CUDA Core。</tspan></text>
+<rect x="846" y="518" width="530" height="96" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
+<text x="858" y="540" class="box" fill="#1e8e3e">MXU ＋ VPU</text>
+<text x="1364" y="540" class="xxs" fill="#5f6368" text-anchor="end">矩阵：256 × 256　·　向量：VPU</text>
+<text x="858" y="560" class="xs"><tspan class="mono" fill="#1967d2">QKᵀ</tspan> 和 <tspan class="mono" fill="#1967d2">PV</tspan> 走 MXU，结果落进累加器；<tspan font-weight="700" fill="#202124">online softmax 走 VPU。</tspan></text>
+<rect x="20" y="622" width="246" height="86" rx="7" fill="#f8f9fa" stroke="#9aa0a6" stroke-width="1.3"/>
+<text x="34" y="644" class="box" fill="#202124">⑥ 谁安排这个来回</text>
+<text x="34" y="664" class="xxs"><tspan font-weight="700" fill="#d93025">这一行是第 5 节那条主线，在一个具体 kernel</tspan></text>
+<text x="34" y="679" class="xxs"><tspan font-weight="700" fill="#d93025"> 上的样子。</tspan></text>
+<rect x="280" y="622" width="548" height="86" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+<text x="292" y="644" class="box" fill="#1a73e8">warp 调度器</text>
+<text x="816" y="644" class="xxs" fill="#5f6368" text-anchor="end">每个周期挑一次</text>
+<text x="292" y="664" class="xs"><tspan font-weight="700" fill="#202124">运行时</tspan>：从几十个 warp 里挑一个数据到位的发。算得慢就换一个上来 —— <tspan font-weight="700" fill="#202124">延迟是被别人的工作盖住的。</tspan></text>
+<rect x="846" y="622" width="530" height="86" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
+<text x="858" y="644" class="box" fill="#1e8e3e">编译器 ＋ VLIW 槽</text>
+<text x="1364" y="644" class="xxs" fill="#5f6368" text-anchor="end">编译期排死，精确到周期</text>
+<text x="858" y="664" class="xs"><tspan font-weight="700" fill="#202124">编译期</tspan>：哪条指令、第几个周期、哪个发射槽，全排好。<tspan font-weight="700" fill="#d93025">没有第二个任务可以顶班 —— 排错了就是真的</tspan></text>
+<text x="858" y="681" class="xs"><tspan font-weight="700" fill="#d93025">停住。</tspan></text>
+<rect x="20" y="734" width="1360" height="96" rx="10" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.6"/>
+<text x="38" y="760" class="sec">📌 顺便统一一个口径：TPU 到底几站？—— 本课此前两处数法不一样，两个都对</text>
+<text x="38" y="782" class="xs">图 T-6 沿 <tspan font-weight="700" fill="#202124">MXU 那条支线</tspan>数：HBM ／ VMEM ／ 向量寄存器 ／ MXU ／ 累加器，<tspan font-weight="700" fill="#202124">五站</tspan>。图 G-6 沿 <tspan font-weight="700" fill="#202124">VPU 那条主路</tspan>数：HBM ／ VMEM ／ 向量寄存器 ／ VPU，<tspan font-weight="700" fill="#202124">四站</tspan>。</text>
+<text x="38" y="802" class="xs"><tspan font-weight="700" fill="#d93025">数的是两条不同的路，所以不该报一个总数。</tspan><tspan font-weight="700" fill="#202124">这张图改成按功能对齐 —— 问的不是「几站」，是「谁在这一层、谁没有这一层」。</tspan></text>
+<rect x="20" y="852" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="880" class="sec" fill="#1a73e8">⭐ 落点：这张表里只有两行是结构性的，其余都是参数</text>
+<text x="38" y="906" class="xs"><tspan font-weight="700" fill="#202124">第 ② 行</tspan>：GPU 有一整层硬件缓存，TPU 没有。　　<tspan font-weight="700" fill="#202124">第 ⑥ 行</tspan>：切换由谁安排，一边每周期现挑，一边编译期排死。<tspan font-weight="700" fill="#d93025">剩下四行都是「同一件事，两边各有一个部件」，只是容量和名字不同。</tspan></text>
+<text x="38" y="927" class="xs"><tspan font-weight="700" fill="#202124">而这两行恰好决定了 FlashAttention 在两边是两种不同性质的工作</tspan> —— 下一张图专门收这个口。<tspan fill="#9aa0a6">顺带记一个数：第 ③ 行两边的容量差 64 MiB ÷ 227 KiB ≈ </tspan><tspan font-weight="700" fill="#202124">288 倍</tspan>，这直接决定块能开多大。</text>
+<rect x="20" y="986" width="1360" height="88" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="38" y="1012" class="sec">⚠️ 出处分层</text>
+<text x="38" y="1034" class="xs"><tspan font-weight="700" fill="#202124">沿用图 G-6 / T-6 的标注</tspan>，包括那里已写明的成色：L2 带宽是第三方实测、TPU 片上带宽与向量寄存器个数<tspan font-weight="700" fill="#202124">官方未公开</tspan>、Tensor Core 每周期 1,024 乘加是推导值。</text>
+<text x="38" y="1053" class="xxs"><tspan font-weight="700" fill="#202124">本图当场算的</tspan>：64 MiB ÷ 227 KiB ≈ 288 倍。<tspan fill="#9aa0a6">「tile 住在共享内存那半边、由 kernel 作者亲手搬」是公开实现的通行做法；「Pallas 用 BlockSpec 声明块大小」出自 Pallas 文档。</tspan></text>
+</svg>
+<figcaption><b>这一节的主图：同一个 FlashAttention，两边一站一站并排走完。</b>横着读，每一行是同一站。<b>六行里只有两行是结构性的</b> —— 第 ② 行（GPU 有一整层硬件缓存，TPU 没有）和第 ⑥ 行（切换由谁安排）。中间那条黄带顺手统一了本课此前不一致的「TPU 到底几站」：<b>两处数的是两条不同的路，所以不该报总数。</b></figcaption>
+</figure>
+
+  <div class="note ok"><span class="t">这张表的读法：逐行问「这一步是谁决定的」</span>
     问完会得到一个很干净的结果 ——
     <b>GPU 侧有两站答「硬件，运行时才知道」，TPU 侧一站都没有。</b>
     <br><br>而这正是第 2 节里「GPU 五个红框、TPU 零个」的来历：
     <b>那五个红框不是随手圈的，就是沿着这条路径一站一站数出来的。</b>
-    到这里第 2 节那张图才算真的讲完了。</div>
+    到这里第 2 节那张图才算真的讲完了。
+    <br><br>顺带，这张图还收掉了本课自己的一处不一致：
+    <b>此前一处写 TPU「五站」、另一处写「四站」。</b>
+    两个都对 —— 一处沿 MXU 那条支线数，一处沿 VPU 那条主路数。
+    <b>数的是两条不同的路，所以本来就不该报一个总数</b>，
+    改成按功能对齐之后这个矛盾自己就没了。</div>
+
+  <p>走到这里还剩最后一个问题，而它恰好是<b>整门课的那条主线</b>：
+    第 ③ 行说「tile 住在片上暂存里」—— <b>那么，是谁把它搬进去的？</b></p>
+<figure class="fbox fwide" id="ms-p40">
+<svg viewBox="0 0 1400 932" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="同一个 FlashAttention：GPU 上由 kernel 作者亲手安排搬运与同步，TPU 上由作者声明块形状、编译器在编译期排定 DMA。数学与 FLOPs 完全相同，差别在于安排搬运的机制在运行时还是编译期">
+<text x="20" y="26" class="ttl">同一个算法，<tspan font-weight="700">两种性质的工作</tspan>　—— 一边亲手搬，一边只声明形状</text>
+<rect x="1281" y="10" width="99" height="22" rx="11" fill="#d93025"/>
+<text x="1330.5" y="25" class="lbl" fill="#fff" text-anchor="middle">3.6 的收尾</text>
+<rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
+<text x="37" y="58" class="sm">GPU：写在 kernel 里</text>
+<rect x="174.575" y="48" width="11" height="11" rx="2" fill="#1e8e3e"/>
+<text x="191.575" y="58" class="sm">TPU：写在声明里</text>
+<rect x="301.55" y="48" width="11" height="11" rx="2" fill="#d93025"/>
+<text x="318.55" y="58" class="sm">容易说过头的地方</text>
+<rect x="20" y="84" width="1360" height="94" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<text x="38" y="110" class="sec" fill="#8430ce">先说两边完全一样的部分 —— 不一样的只有最后一行</text>
+<text x="38" y="138" class="lbl" fill="#5f6368">数学</text>
+<text x="38" y="160" class="xs">online softmax，逐块更新最大值与分母</text>
+<text x="410" y="138" class="lbl" fill="#5f6368">FLOPs</text>
+<text x="410" y="160" class="xs">一个都不差，与朴素写法相同</text>
+<text x="782" y="138" class="lbl" fill="#5f6368">结果</text>
+<text x="782" y="160" class="xs">与不分块的注意力<tspan font-weight="700" fill="#202124">数值等价</tspan></text>
+<rect x="1160" y="122" width="202" height="44" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.5"/>
+<text x="1172" y="142" class="xs"><tspan font-weight="700" fill="#d93025">不一样的是：谁来安排搬运。</tspan></text>
+<rect x="20" y="200" width="674" height="332" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="228" class="sec" fill="#1a73e8">GPU　·　手写 CUDA kernel</text>
+<text x="38" y="250" class="xxs" fill="#5f6368">复用被显式搬进软件管的那半边共享内存</text>
+<rect x="38" y="264" width="638" height="165" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<rect x="38" y="264" width="638" height="24" rx="7" fill="#e8f0fe"/>
+<rect x="38" y="280" width="638" height="8" rx="0" fill="#e8f0fe"/>
+<text x="50" y="281" class="lbl" fill="#d93025">你要亲手写的</text>
+<rect x="50" y="295" width="4" height="15" rx="2" fill="#1a73e8"/>
+<text x="62" y="304" class="xs"><tspan font-weight="700" fill="#202124">块开多大</tspan>：算到 Q / K / V 块加中间量刚好塞进 <tspan font-weight="700" fill="#202124">≤ 227 KiB</tspan></text>
+<rect x="50" y="322" width="4" height="15" rx="2" fill="#1a73e8"/>
+<text x="62" y="331" class="xs"><tspan font-weight="700" fill="#202124">发搬运指令</tspan>：<tspan class="mono" fill="#1967d2">cp.async</tspan> ／ TMA 把下一块从 HBM 拉进共享内存</text>
+<rect x="50" y="349" width="4" height="15" rx="2" fill="#1a73e8"/>
+<text x="62" y="358" class="xs"><tspan font-weight="700" fill="#202124">双缓冲</tspan>：搬下一块的同时算这一块，两个缓冲区自己轮换</text>
+<rect x="50" y="376" width="4" height="15" rx="2" fill="#1a73e8"/>
+<text x="62" y="385" class="xs"><tspan font-weight="700" fill="#202124">对齐</tspan>：每次交接一个 <tspan class="mono" fill="#1967d2">__syncthreads()</tspan>，早了读到脏数据、晚了白等</text>
+<rect x="50" y="403" width="4" height="15" rx="2" fill="#1a73e8"/>
+<text x="62" y="412" class="xs"><tspan font-weight="700" fill="#202124">要不要占 L1</tspan>：<tspan class="mono" fill="#1967d2">cp.async</tspan> 的 <tspan class="mono" fill="#1967d2">.ca</tspan> 走 L1＋L2，<tspan class="mono" fill="#1967d2">.cg</tspan> 只走 L2</text>
+<rect x="38" y="443" width="638" height="74" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.6"/>
+<rect x="38" y="443" width="638" height="24" rx="7" fill="#f1f3f4"/>
+<rect x="38" y="459" width="638" height="8" rx="0" fill="#f1f3f4"/>
+<text x="50" y="460" class="lbl" fill="#5f6368">硬件替你兜的</text>
+<rect x="50" y="474" width="4" height="32" rx="2" fill="#9aa0a6"/>
+<text x="62" y="483" class="xs"><tspan font-weight="700" fill="#202124">warp 调度器每周期挑一个数据到位的 warp。</tspan><tspan fill="#9aa0a6">你没搬完的那段延迟，有机会被别的 warp 的计算盖住 —— 所以 GPU 上「</tspan></text>
+<text x="62" y="500" class="xs"><tspan fill="#9aa0a6">搬慢一点」往往不是致命伤。</tspan></text>
+<rect x="706" y="200" width="674" height="332" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+<text x="724" y="228" class="sec" fill="#1e8e3e">TPU　·　Pallas ／ Splash Attention</text>
+<text x="724" y="250" class="xxs" fill="#5f6368">只声明块的形状，搬运的时序交给编译器</text>
+<rect x="724" y="264" width="638" height="84" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<rect x="724" y="264" width="638" height="24" rx="7" fill="#e6f4ea"/>
+<rect x="724" y="280" width="638" height="8" rx="0" fill="#e6f4ea"/>
+<text x="736" y="281" class="lbl" fill="#d93025">你要写的</text>
+<rect x="736" y="295" width="4" height="15" rx="2" fill="#1e8e3e"/>
+<text x="748" y="304" class="xs"><tspan class="mono" fill="#1967d2">BlockSpec</tspan>：每块多大，以及第 i 块取原数组的哪一段（<tspan class="mono" fill="#1967d2">index_map</tspan>）</text>
+<rect x="736" y="322" width="4" height="15" rx="2" fill="#1e8e3e"/>
+<text x="748" y="331" class="xs"><tspan font-weight="700" fill="#202124">grid</tspan>：一共几块，循环怎么套</text>
+<rect x="724" y="362" width="638" height="101" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.6"/>
+<rect x="724" y="362" width="638" height="24" rx="7" fill="#f1f3f4"/>
+<rect x="724" y="378" width="638" height="8" rx="0" fill="#f1f3f4"/>
+<text x="736" y="379" class="lbl" fill="#5f6368">编译器替你做的</text>
+<rect x="736" y="393" width="4" height="15" rx="2" fill="#9aa0a6"/>
+<text x="748" y="402" class="xs"><tspan font-weight="700" fill="#202124">DMA 什么时候发、双缓冲怎么错开、VMEM 怎么分</tspan> —— 全在<tspan font-weight="700" fill="#202124">编译期</tspan>排好，源码里没有对应的那几行。</text>
+<rect x="736" y="420" width="4" height="32" rx="2" fill="#9aa0a6"/>
+<text x="748" y="429" class="xs"><tspan font-weight="700" fill="#202124">顺带白拿一样</tspan>：Splash Attention 支持<tspan font-weight="700" fill="#202124">块级掩码</tspan>。<tspan fill="#9aa0a6">causal ／ sliding window 下整块用不上的，直接不算 —— 省的不</tspan></text>
+<text x="748" y="446" class="xs"><tspan fill="#9aa0a6">是搬运，是 FLOPs。</tspan></text>
+<rect x="724" y="477" width="638" height="37" rx="7" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+<text x="736" y="499" class="xs">⚖️ <tspan font-weight="700" fill="#202124">右栏比左栏短，这件事本身就是结论</tspan>：<tspan font-weight="700" fill="#d93025">少写的那三条没有消失，只是挪进了编译器。</tspan></text>
+<rect x="20" y="554" width="1360" height="104" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+<text x="38" y="580" class="sec" fill="#d93025">⚠️ 这句话只对一半：「FlashAttention 绕开了缓存」</text>
+<text x="38" y="604" class="xs"><tspan font-weight="700" fill="#202124">L2 绕不开</tspan> —— 所有 HBM 访问都要过它，没有哪条指令能跳过。<tspan font-weight="700" fill="#202124">真正能选的只有 L1</tspan>：<tspan class="mono" fill="#1967d2">cp.async</tspan> 的 <tspan class="mono" fill="#1967d2">.ca</tspan> 走 L1＋L2，<tspan class="mono" fill="#1967d2">.cg</tspan> 只走 L2。</text>
+<text x="38" y="624" class="xs"><tspan font-weight="700" fill="#d93025">绕开的不是缓存本身，是对缓存的依赖。</tspan><tspan font-weight="700" fill="#202124">复用被显式安排进共享内存之后，命中率高不高就不再决定性能了</tspan> —— 这才是那句话想说的意思。</text>
+<rect x="20" y="680" width="1360" height="118" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="708" class="sec" fill="#1a73e8">⭐ 落点：第 5 节那条主线，在一个具体 kernel 上长这样</text>
+<text x="38" y="734" class="xs"><tspan font-weight="700" fill="#202124">GPU 上，FlashAttention 是一段和硬件的猜测协商的代码</tspan>：硬件准备了缓存和 warp 调度器来兜住不确定性，而这个 kernel <tspan font-weight="700" fill="#202124">不需要那种兜底</tspan>，于是自己接管了搬运。<tspan font-weight="700" fill="#202124">TPU 上没有可绕开的东西</tspan>，于是只剩下声明形状。</text>
+<text x="38" y="755" class="xs"><tspan font-weight="700" fill="#202124">代价也对称</tspan>：<tspan font-weight="700" fill="#d93025">GPU 的手写 kernel 换一代硬件要重调；TPU 的声明写错了，编译器排出来就是真的停住，没有第二个任务顶班。</tspan><tspan fill="#9aa0a6">同一个算法，两种工程性质 —— 这就是运行时与编译期的分工，落在一个 kernel 上。</tspan></text>
+<rect x="20" y="820" width="1360" height="92" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="38" y="846" class="sec">⚠️ 出处分层</text>
+<text x="38" y="870" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：<tspan class="mono" fill="#1967d2">cp.async</tspan> 的 <tspan class="mono" fill="#1967d2">.ca</tspan> ／ <tspan class="mono" fill="#1967d2">.cg</tspan> 缓存行为出自 PTX ISA；<tspan class="mono" fill="#1967d2">BlockSpec</tspan> ／ <tspan class="mono" fill="#1967d2">index_map</tspan> ／ grid 出自 Pallas 文档；Splash Attention 的块级掩码出自其公开实现。</text>
+<text x="38" y="890" class="xxs"><tspan font-weight="700" fill="#202124">沿用本课已有标注</tspan>：共享内存 ≤ 227 KiB / 线程块出自图 G-6。<tspan fill="#9aa0a6">「FlashAttention 把复用显式放进共享内存」是公开实现的通行做法，不是某一份文档里的原话。</tspan></text>
+</svg>
+<figcaption><b>同一个算法，两种性质的工作。</b>数学、FLOPs、结果三样完全相同，差的只有「谁来安排搬运」：GPU 侧 <b>5 条要 kernel 作者亲手写</b>（块多大、发 <code>cp.async</code>、双缓冲、<code>__syncthreads()</code>、要不要占 L1），TPU 侧只有 <b>2 条声明</b>（<code>BlockSpec</code> 与 grid）。<b>右栏比左栏短，这件事本身就是结论。</b>红带按住了最容易讲过头的那句：<b>L2 绕不开，绕开的是对缓存的依赖。</b></figcaption>
+</figure>
+
+  <div class="note danger"><span class="t">⭐ 同一个算法，在两边是两种性质的工程工作</span>
+    数学一样、FLOPs 一样、结果数值等价，<b>差的只有「谁来安排搬运」</b>。
+    <br><br><b>GPU 上是一段和硬件的猜测协商的代码。</b>
+    硬件准备了缓存和 warp 调度器来兜住「不知道下一步要什么」，
+    可 FlashAttention 的访问模式<b>完全可预测</b>，那套兜底对它没有价值 ——
+    于是它自己接管了搬运：块开多大、什么时候发 <code>cp.async</code>、
+    双缓冲怎么错开、哪一步要 <code>__syncthreads()</code>，全写在 kernel 源码里。
+    <br><br><b>TPU 上没有可绕开的东西</b>，因为本来就没有那一层。
+    于是只剩下声明形状：<code>BlockSpec</code> 说清每块多大、第 i 块取哪一段，
+    剩下的 DMA 时序由编译器在编译期排死。
+    <br><br><b>代价也是对称的</b>：GPU 那份手写 kernel 换一代硬件要重调；
+    TPU 那份声明写错了，编译器排出来就是真的停住，<b>没有第二个任务顶班</b>。
+    <br><br>这就是第 5 节那条主线 —— <b>运行时决定，还是编译期决定</b> ——
+    第一次落在一个具体 kernel 上的样子。</div>
+
+  <div class="note warn"><span class="t">⚠️ 顺手按住一句最容易讲过头的话</span>
+    「FlashAttention 绕开了缓存」这句话只对一半。
+    <b>L2 绕不开</b> —— 所有 HBM 访问都要过它，没有哪条指令能跳过；
+    <b>真正能选的只有 L1</b>（<code>cp.async</code> 的 <code>.ca</code> 走 L1＋L2，
+    <code>.cg</code> 只走 L2）。
+    <br><br><b>绕开的不是缓存本身，是对缓存的依赖</b> ——
+    复用被显式安排进共享内存之后，命中率高不高就不再决定性能了。
+    这才是那句话想说的意思。</div>
 
   <h3>3.7　压轴：把这一节的账合起来</h3>
   <p>前面六小节都是<b>局部</b>。最后这一张把整节的账合成一张图 ——
