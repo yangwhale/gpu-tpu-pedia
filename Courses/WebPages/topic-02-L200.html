@@ -608,7 +608,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="20" y="521" fill="#3c4043" style="font-size:11.5px">把一块数据从 HBM 搬进片上，<tspan font-weight="700">谁来安排</tspan>。GPU 那边有 cache 在运行时替你猜，TPU 那边没有、编译期就排死了。</text>
 <text class="svgsm" x="20" y="540" fill="#3c4043" style="font-size:11.5px">形状要对齐到 8 × 128、一条指令吃多大、kernel 谁来写、连一台机器要付什么代价 ——&#160;<tspan font-weight="700">全都是这一处往下长出来的</tspan>。</text>
 </svg>
-  <figcaption><b>上半是根，下半是路。</b>两条出身<b>不是优劣，是两次不同的赌注</b> ——&nbsp;它回答的是「为什么会分岔」。下半那条主线回答「分岔之后怎么走」：<b>同一个 FlashAttention，两边各跑一遍</b>，六站走完，<b>分岔点只有一处</b>。⭐ <b>这张图就是本课的目录</b>，六个框对应下面六段；第 4 节那条灰色岔路在本版里是折叠的 ——&nbsp;FlashAttention 单卡就跑完了，撞不到卡间。</figcaption>
+  <figcaption><b>上半是根，下半是路。</b>两条出身<b>不是优劣，是两次不同的赌注</b> ——&nbsp;它回答的是「为什么会分岔」。下半那条主线回答「分岔之后怎么走」：<b>同一个 FlashAttention，两边各跑一遍</b>，六站走完，<b>分岔点只有一处</b>。⭐ <b>六个框对应下面六段</b>；第 4 节那条灰色岔路<b>在本版里是折叠的</b>。</figcaption>
   </figure>
 
   <div class="note ok"><span class="t">开课前先把话说死：这门课不比谁强</span>
@@ -683,7 +683,7 @@ details.aside b{color:var(--ink);font-weight:600}
     ——&nbsp;但九行并排有个坏处：<b>每一行看起来一样重</b>，看不出该先记哪条。
     所以下面这张先替你按<b>「值不值得花时间」</b>压成了三格。</p>
 <figure class="fbox" id="s012-fig1-5">
-  <svg viewBox="0 0 1000 476" width="100%" role="img" aria-label="第 1 节的落点：只有一边有的、两边量级相同的、以及算力除带宽撞在同一个数上">
+  <svg viewBox="0 0 1000 494" width="100%" role="img" aria-label="第 1 节的落点：只有一边有的、两边量级相同的、以及算力除带宽撞在同一个数上">
 <text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">第 1 节的落点 —— 那张九行的表，真正要讲的只有这三格</text>
 <text class="svgsm" x="0" y="35">按「硬度」分类，不按「层级」分类：谁是结构性差别、谁只是数字不同、谁是巧合</text>
 <text class="svgsm" x="0" y="54" fill="#9aa0a6">完整九行的对照表折在这张图下面 —— 那张是拿来回查的手册，主线上记住这三格就够</text>
@@ -693,7 +693,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svglbl" x="16" y="97" fill="#fff" style="font-size:13px">① 只有一边有的</text>
 <text class="svgsm" x="16" y="114" fill="#ffffffcc">结构性差别 —— 参数表上看不出来</text>
 <text class="svgsm" x="16" y="150" fill="#5f6368">TPU 没有</text>
-<text class="svgsm" x="16" y="167" fill="#202124">「硬件自动管的片上缓存」这一整层（CMEM = 0）</text>
+<text class="svgsm" x="16" y="167" fill="#202124">「硬件自动管的片上缓存」这一整层（CMEM = 0；GPU 那层是 126 MB L2）</text>
 <text class="svgsm" x="16" y="202" fill="#5f6368">GPU 没有</text>
 <text class="svgsm" x="16" y="219" fill="#202124">「可编程的专用协处理器」这一整层（无 SparseCore）</text>
 <line x1="14" y1="274" x2="306" y2="274" stroke="#e8eaed"/>
@@ -710,12 +710,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="356" y="202" fill="#5f6368">HBM 带宽</text>
 <text class="svgsm" x="356" y="219" fill="#202124">7,380 对 8,000 GB/s</text>
 <text class="svgnum" x="644" y="214" text-anchor="end" fill="#5f6368" style="font-size:17px">差 8%</text>
-<text class="svgsm" x="356" y="254" fill="#5f6368">片上 SRAM</text>
-<text class="svgsm" x="356" y="271" fill="#202124">134 MB 对 126 MB</text>
-<text class="svgnum" x="644" y="266" text-anchor="end" fill="#5f6368" style="font-size:17px">差 6%</text>
 <line x1="354" y1="274" x2="646" y2="274" stroke="#e8eaed"/>
-<text class="svgsm" x="356" y="292" fill="#5f6368" style="font-size:10px">这一格可以直接跳过 ——</text>
-<text class="svgsm" x="356" y="307" fill="#5f6368" style="font-size:10px">三条都在 10% 以内，那不叫差别</text>
+<text class="svgsm" x="356" y="292" fill="#5f6368" style="font-size:10px">这两条可以跳过 ——</text>
+<text class="svgsm" x="356" y="307" fill="#5f6368" style="font-size:10px">都在 10% 以内，那不叫差别</text>
 <rect x="680" y="76" width="320" height="250" rx="10" fill="#fff" stroke="#12786f" stroke-width="1.6"/>
 <rect x="680" y="76" width="320" height="46" rx="10" fill="#12786f"/>
 <rect x="680" y="112" width="320" height="10" fill="#12786f"/>
@@ -730,9 +727,10 @@ details.aside b{color:var(--ink);font-weight:600}
 <line x1="694" y1="274" x2="986" y2="274" stroke="#e8eaed"/>
 <text class="svgsm" x="696" y="292" fill="#12786f" style="font-size:10px">⚠️ 相对差 0.03%，BF16 和 FP8 完全一样。</text>
 <text class="svgsm" x="696" y="307" fill="#12786f" style="font-size:10px">「为什么一样」是推断；换 HGX B200 就是 281.3</text>
-<rect x="0" y="348" width="982" height="86" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+<rect x="0" y="348" width="982" height="104" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
 <text class="svglbl" x="18" y="372" fill="#7a5000">⭐ 第 1 节到此为止，一句话：两边的差别<tspan font-weight="700">不在参数表上</tspan></text>
-<text class="svgsm" x="18" y="393" fill="#7a5000">第 ② 格已经说明了 —— 算力、带宽、片上 SRAM 三项都在 10% 以内，第 ③ 格甚至撞在同一个数上。<tspan font-weight="700">按参数表，这是同一类芯片。</tspan></text>
+<text class="svgsm" x="18" y="393" fill="#7a5000">第 ② 格已经说明了 —— 算力和带宽都在 10% 以内，第 ③ 格甚至撞在同一个数上。<tspan font-weight="700">按参数表，这是同一类芯片。</tspan></text>
+<text class="svgsm" x="18" y="444" fill="#7a5000">⚠️ <tspan font-weight="700">片上 SRAM 不在第 ② 格里</tspan> —— 按总量是 GPU 231 MiB 对 TPU 134 MiB，多 73%，而且 GPU 领先的几乎全是那层 L2。为什么这条不能算「量级相同」，见 3.2b。</text>
 <text class="svgsm" x="18" y="412" fill="#7a5000">真正的差别全在第 ① 格：<tspan font-weight="700">各缺对方整整一层</tspan>。那一层缺的不是容量，是「<tspan font-weight="700">谁做决定</tspan>」——一个交给硬件，一个交给编译器。</text>
 <text class="svgsm" x="18" y="428" fill="#7a5000">第 2 节就从这一格开始：同一次访存，两边路上各有几个「运行时决策点」。</text>
 </svg>
@@ -765,7 +763,7 @@ details.aside b{color:var(--ink);font-weight:600}
           <td>SFU × 4 / 处理块<sup>‡</sup><br><span class="sub">exp · rcp · rsqrt 等超越函数。跨 lane 靠 warp shuffle 指令，官方没单列成部件</span></td>
           <td>⚠️ 两边<b>各点名了一个</b>，又<b>各自不说另一个</b></td></tr>
       <tr><td><b>HBM</b></td><td>96 GiB / device（＝ 192 GiB ÷ 2）；整 chip 7,380 GB/s</td>
-          <td>186 GB / GPU；8,000 GB/s</td><td>同一代 HBM，量级相同</td></tr>
+          <td>186 GB / GPU<span class="sub">（软件可见；物理 192 GB）</span>；8,000 GB/s</td><td>同一代 HBM，量级相同</td></tr>
       <tr><td><b>算力（每 chip / 每 GPU）</b></td><td>BF16 2,307 ｜ FP8 4,614 TFLOPS</td>
           <td>BF16 2,500 ｜ FP8 5,000 TFLOPS（dense，NVL72 里那颗）</td><td>同一量级</td></tr>
       <tr class="sum"><td><b>算力 ÷ 带宽</b></td><td class="n"><b>312.6</b> FLOP/byte</td>
@@ -880,7 +878,7 @@ details.aside b{color:var(--ink);font-weight:600}
       对上矩阵那边的 2,500，<b>差 32.5 倍</b>。
       ⚠️ 那个时钟是<b>推出来的</b>：NVIDIA 没公布 GB200 的 boost 频率，
       这里是从「2,250 TF @ 1.83 GHz」按比例反推的，而 1.83 本身是第三方数。<br>
-      TPU 侧结构上同理：一个 TensorCore 的两个 MXU 合起来<b>一拍 131,072 次乘加</b>，
+      TPU 侧结构上同理：一个 TensorCore 的一个 TensorCore 的<b>两个 MXU 合起来一拍 262,144 次乘加</b>（每个 MXU 131,072），
       VPU <b>一拍处理 1,024 个元素</b> ——&nbsp;两个数不是同一个单位，
       但<b>量级差在两位数以上</b>。</p>
     <p><b>所以严格讲，判 element-wise 算子该用向量那条 roofline</b>：
@@ -1190,8 +1188,8 @@ details.aside b{color:var(--ink);font-weight:600}
   <figcaption>①② 两种写法的<b>乘加次数完全一样</b>，差的全在搬运。③ 是同一个问题的两种交法：<b>GPU 交给 kernel 作者，TPU 交给编译器</b>。</figcaption>
   </figure>
 
-  <p>关键在第 ③ 栏：<b>两种写法的乘加次数一模一样</b>，
-    差的全是搬运 ——&nbsp;<b>而「谁来安排搬运」正是上一张图那个分岔点。</b>
+  <p>关键在第 ③ 栏 ——&nbsp;前两栏图上已经说完了，
+    <b>而「谁来安排搬运」正是上一张图那个分岔点。</b>
     现在把它放回 312 那条线上，看看这笔搬运账到底有多离谱：</p>
 <figure class="fbox" id="s012-fig2-4">
   <svg viewBox="0 0 1000 412" width="100%" role="img" aria-label="朴素注意力的算术强度只有 64，Flash 把它拉到 65536，都以 312 这条脊线为参照">
@@ -1240,11 +1238,8 @@ details.aside b{color:var(--ink);font-weight:600}
   <figcaption>朴素实现<b>每算 1 FLOP 就得搬 1/64 byte，而硬件只供得起 1/312</b> —— 需求比供给多了近 5 倍。所以 Flash 的价值不是「优化了 kernel」，是把这个算子从分水岭的<b>左边换到了右边</b>。</figcaption>
   </figure>
 
-  <div class="note ok"><span class="t">到这里，故事的前提已经齐了</span>
-    <b>① 判据 312</b>：搬 1 字节配 312 次运算。
-    <b>② 朴素 attention 是 1 比 64</b>，比供给多要了近 5 倍。
-    <b>③ 所以必须分块</b>，两边都得改写。
-    <br>——&nbsp;<b>剩下的整门课，就是看这个「改写」在两边分别长什么样。</b></div>
+  <p>——&nbsp;<b>所以必须分块，两边都得改写。剩下的整门课，
+    就是看这个「改写」在两边分别长什么样。</b></p>
 
   <!-- ⭐ 2026-09-01 加：全课主线在 §2 的落点（见本文件头部「全课主线」一节）。
        §1 给融合起了名字，这一节是它第一次有量 —— 而且是**别人已经替我们做完的**
@@ -1393,19 +1388,19 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="178" y="196" class="xs">全片 8 堆栈 ＝ 物理 <tspan class="num" fill="#b06000">192 GB</tspan> · <tspan class="num" fill="#b06000">8.0 TB/s</tspan>　（对软件暴露 186 / 180 GB，随产品形态变）</text>
 <rect x="52.0" y="204" width="143.75" height="38" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
 <text x="123.875" y="221" class="lbl" fill="#b06000" text-anchor="middle">HBM3e</text>
-<text x="123.875" y="235" class="xs" text-anchor="middle">≈23 GB</text>
+<text x="123.875" y="235" class="xs" text-anchor="middle">≈24 GB</text>
 <line x1="123.875" y1="242" x2="123.875" y2="284" stroke="#f9ab00" stroke-width="1.6" marker-end="url(#aK)"/>
 <rect x="208.75" y="204" width="143.75" height="38" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
 <text x="280.625" y="221" class="lbl" fill="#b06000" text-anchor="middle">HBM3e</text>
-<text x="280.625" y="235" class="xs" text-anchor="middle">≈23 GB</text>
+<text x="280.625" y="235" class="xs" text-anchor="middle">≈24 GB</text>
 <line x1="280.625" y1="242" x2="280.625" y2="284" stroke="#f9ab00" stroke-width="1.6" marker-end="url(#aK)"/>
 <rect x="365.5" y="204" width="143.75" height="38" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
 <text x="437.375" y="221" class="lbl" fill="#b06000" text-anchor="middle">HBM3e</text>
-<text x="437.375" y="235" class="xs" text-anchor="middle">≈23 GB</text>
+<text x="437.375" y="235" class="xs" text-anchor="middle">≈24 GB</text>
 <line x1="437.375" y1="242" x2="437.375" y2="284" stroke="#f9ab00" stroke-width="1.6" marker-end="url(#aK)"/>
 <rect x="522.25" y="204" width="143.75" height="38" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
 <text x="594.125" y="221" class="lbl" fill="#b06000" text-anchor="middle">HBM3e</text>
-<text x="594.125" y="235" class="xs" text-anchor="middle">≈23 GB</text>
+<text x="594.125" y="235" class="xs" text-anchor="middle">≈24 GB</text>
 <line x1="594.125" y1="242" x2="594.125" y2="284" stroke="#f9ab00" stroke-width="1.6" marker-end="url(#aK)"/>
 <rect x="52" y="286" width="614" height="50" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
 <line x1="359.0" y1="290" x2="359.0" y2="332" stroke="#1e8e3e" stroke-width="1.2" stroke-dasharray="4,3"/>
@@ -1511,19 +1506,19 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="860" y="196" class="xs">全片 8 堆栈 ＝ 物理 <tspan class="num" fill="#b06000">192 GB</tspan> · <tspan class="num" fill="#b06000">8.0 TB/s</tspan>　（对软件暴露 186 / 180 GB，随产品形态变）</text>
 <rect x="734.0" y="204" width="143.75" height="38" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
 <text x="805.875" y="221" class="lbl" fill="#b06000" text-anchor="middle">HBM3e</text>
-<text x="805.875" y="235" class="xs" text-anchor="middle">≈23 GB</text>
+<text x="805.875" y="235" class="xs" text-anchor="middle">≈24 GB</text>
 <line x1="805.875" y1="242" x2="805.875" y2="284" stroke="#f9ab00" stroke-width="1.6" marker-end="url(#aK)"/>
 <rect x="890.75" y="204" width="143.75" height="38" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
 <text x="962.625" y="221" class="lbl" fill="#b06000" text-anchor="middle">HBM3e</text>
-<text x="962.625" y="235" class="xs" text-anchor="middle">≈23 GB</text>
+<text x="962.625" y="235" class="xs" text-anchor="middle">≈24 GB</text>
 <line x1="962.625" y1="242" x2="962.625" y2="284" stroke="#f9ab00" stroke-width="1.6" marker-end="url(#aK)"/>
 <rect x="1047.5" y="204" width="143.75" height="38" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
 <text x="1119.375" y="221" class="lbl" fill="#b06000" text-anchor="middle">HBM3e</text>
-<text x="1119.375" y="235" class="xs" text-anchor="middle">≈23 GB</text>
+<text x="1119.375" y="235" class="xs" text-anchor="middle">≈24 GB</text>
 <line x1="1119.375" y1="242" x2="1119.375" y2="284" stroke="#f9ab00" stroke-width="1.6" marker-end="url(#aK)"/>
 <rect x="1204.25" y="204" width="143.75" height="38" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.4"/>
 <text x="1276.125" y="221" class="lbl" fill="#b06000" text-anchor="middle">HBM3e</text>
-<text x="1276.125" y="235" class="xs" text-anchor="middle">≈23 GB</text>
+<text x="1276.125" y="235" class="xs" text-anchor="middle">≈24 GB</text>
 <line x1="1276.125" y1="242" x2="1276.125" y2="284" stroke="#f9ab00" stroke-width="1.6" marker-end="url(#aK)"/>
 <rect x="734" y="286" width="614" height="50" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
 <line x1="1041.0" y1="290" x2="1041.0" y2="332" stroke="#1e8e3e" stroke-width="1.2" stroke-dasharray="4,3"/>
@@ -2188,14 +2183,12 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="864" class="xs"><tspan font-weight="700" fill="#202124">chip 和 device 的比例是 1 : 2，而所有框架日志都按 device 报数。</tspan>所以看到「每 device 1,153 TFLOP/s」不要以为掉了一半 —— 那正是 2,307 的一半；看到 <tspan class="mono" fill="#1967d2">tpu7x-128</tspan> 也不要以为是 128 颗芯片，那是 64 颗。算 MFU 时分母要用 2,307（按 chip）或 1,</text>
 <text x="34" y="880" class="xs">153.5（按 device），<tspan font-weight="700" fill="#d93025">两个口径混用会让结论直接差两倍</tspan>。</text>
 </svg>
-<figcaption><b>一颗 TPU v7 的全景，同样两颗 die。</b>但它<b>如实暴露成两个 device</b> —— 缝在明处。<b>这两张图并排看，就是第 0 节那两条出身的第一次具体化</b>：一边把复杂度藏起来，一边把它交给你。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b>一颗 TPU v7 的全景，同样两颗 die。</b>但它<b>如实暴露成两个 device</b> —— 缝在明处。<b>这两张图并排看，是第 2 节那个分岔点在封装这一层的样子</b>：一边把复杂度藏起来，一边把它交给你。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note info"><span class="t">同样的物理构造，两种呈现方式</span>
-    值得记的是<b>代价并没有因为藏起来就消失</b> ——&nbsp;
-    <b>你付了钱，但不知道自己付了。</b>
-    <br>——&nbsp;<b>这个「藏 / 摊」的分工，后面每一层都会再遇到一次。</b>
-    先记住它长什么样，第 5 节会正面讲它的对价。</div>
+    <b>代价不会因为藏起来就消失 ——&nbsp;你付了钱，但不知道自己付了。</b>
+    <br>——&nbsp;<b>这个「藏 / 摊」的分工后面每一层都会再遇到</b>，第 5 节正面算它的对价。</div>
 
   <h3>3.2　把一个核拆开：少掉的那五样，是同一个决定的五个后果</h3>
   <p>往里一层。<b>先看 GPU 这边有什么</b>，再看 TPU 那边<b>没有什么</b> ——&nbsp;
@@ -2983,15 +2976,8 @@ details.aside b{color:var(--ink);font-weight:600}
     ⭐ <b>所以这三种口径不是并列的，得看你在问什么：</b>
     问「这颗芯片一共有多少 SRAM」用 ①；
     问「<b>我能把中间结果放在哪儿不落 HBM</b>」——&nbsp;<b>只有 ③ 算数。</b>
-    <em>而后面这个问题，正是算子融合每一次都要回答的那个问题。</em></div>
-
-  <div class="note warn"><span class="t">⭐ 这一小节其实是融合那条线又冒了一次头</span>
-    融合的全部收益来自「中间结果不落 HBM」，所以它必然要问一句：<b>那放哪儿？</b>
-    <br>——&nbsp;GPU 上答案是 <b>227 KiB</b>（一个线程块能独占的最大连续空间），
-    TPU 上是 <b>64 MiB</b>。差 289 倍。
-    <br><b>这就是为什么同一个融合，在两边能融的范围根本不一样大</b> ——&nbsp;
-    不是谁的编译器更聪明，是工作台差了近三百倍。
-    <em>3.6 并排走 FlashAttention 的时候，这个数会直接决定两边的块切多大。</em></div>
+    <em>而后面这个问题，正是算子融合每一次都要回答的那个 ——&nbsp;
+    <b>3.6 并排走 FlashAttention 时，这个 289 倍会直接决定两边把块切多大。</b></em></div>
 
   <!-- ⭐⭐ 2026-09-01 加。3.2b 只回答了「有多大、归谁管」，Chris 立刻追问
        「那速度呢？L2 到底多快？VMEM 相当于 GPU 哪一级？」——
@@ -3087,9 +3073,8 @@ details.aside b{color:var(--ink);font-weight:600}
     这一层的可预测性是<b>买来的，不是白送的</b>。<br>
     <b>② GPU 那 37 MiB 寄存器堆 ＋ 37 MiB TMEM 看着「没用在数据上」，它买的是别的东西</b>：
     <b>形状不规则、长度会变、分支不确定的活，照样能跑得不太难看。</b>
-    <em>TPU 上同样的活，得先把形状固定下来 ——&nbsp;这笔账第 5 节会正面算。</em><br>
-    <b>③ 而且比总量，GPU 到现在还是赢的</b>：231 MiB 对 134 MiB。
-    <em>它只是把这些硅花在了别的地方。</em>
+    <em>TPU 上同样的活，得先把形状固定下来 ——&nbsp;这笔账第 5 节会正面算。</em>
+    <br>——&nbsp;<b>而且比总量，GPU 到现在还是赢的：231 对 134，多出 73%。多出来的硅就是花在这儿的。</b>
     <br><br>
     ⭐ <b>所以这两小节真正的结论不是「谁的片上存储更好」，是这一句：</b>
     <b>两边都在处理同一个东西 ——&nbsp;不确定性，只是把它放在了不同的地方。</b>
@@ -5196,7 +5181,7 @@ details.aside b{color:var(--ink);font-weight:600}
     最大那条 <code>tcgen05.mma</code>（128×256×16）是 <code>524,288</code> 次乘加，
     一个 SM 每周期 4,096 次 →&nbsp;<b>要 128 个周期</b>；两个 SM 配对就是 64 个。<br>
     <b>③ 对一下账就通了</b>：<code>4,096 × 2 FLOP × 148 SM × 1.83 GHz ＝ 2,218 TFLOPS</code>，
-    官方 2,250，差 1.41 ——&nbsp;<em>那点缺口来自时钟不确定，不是公式错。</em>
+    官方 2,250，差 1.4% ——&nbsp;<em>那点缺口来自时钟不确定，不是公式错。</em>
     <br><br>
     ⭐ <b>所以指令形状决定的是「一次交代多少活」</b>，也就是控制开销能摊多薄；
     <b>每周期能做多少乘加是另一件事，由阵列大小定。</b>
@@ -5249,7 +5234,15 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>两边的硅在同一个量级上，只是一个切成 592 小份，一个切成 4 大份。</b>
     <em>这两件事一旦分开，3.6 里为什么两边要切不同大小的块，就是自明的。</em></div>
 
-  <div class="note warn"><span class="t">⚠️ 搭这个模型时有三个坑，每一个都「听起来很合理」</span>
+  <div class="note danger"><span class="t">⚠️ 一条必须带走的跨代警告</span>
+    <b>TPU 那 131,072 里，有一半来自「每个 cell 每周期做 2 次乘加」</b>，
+    这是 256×256 这几代才有的；<b>128×128 的老几代（v3 / v4 / v5e / v5p）都是每 cell 1 次</b>。
+    <em>跨代沿用这个常数会直接错一倍。</em>
+    <br><span class="sub">另外三个「听起来很合理」的坑折在下面，回查用。</span></div>
+
+  <details><summary>搭这个模型时的三个坑<em>（回查用 · 讲的时候跳过）</em></summary>
+  <div class="body">
+  <div class="note warn"><span class="t">⚠️ 三个坑，每一个都「听起来很合理」</span>
     <b>① 那个 16 不是 GPU 阵列的宽度，是<u>指令的收缩深度</u>。</b>
     <em>Tensor Core 每周期做 1,024 次乘加是确定的；但它物理上排成几乘几，
     公开资料没有说。</em>——&nbsp;<b>所以不能拿 16 去平方当「面积」，那是把两个不同量纲的东西套进同一个公式。</b><br>
@@ -5258,9 +5251,8 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>③ SM 数是 148，不是 128。</b> <em>两个数长得像，但一个是「有多少份」，
     一个是「每份差多大」 ——&nbsp;<b>它们接近正是上面那条抵消成立的原因，
     但不是同一个数。</b></em>
-    <br>——&nbsp;<b>顺带：TPU 那 131,072 里，有一半来自「每个 cell 每周期做 2 次乘加」</b>，
-    这是 256×256 这几代才有的；128×128 的老几代（v3 / v4 / v5e / v5p）都是每 cell 1 次。
-    <em>跨代沿用这个常数会直接错一倍。</em></div>
+    </div>
+  </div></details>
 
   <div class="note warn"><span class="t">⚠️ 为什么空着的那半边没人来填 —— 答案在第 2 节</span>
     「找点别的活填进空档」这件事，<b>正是第 2 节里 TPU 那一侧不做的事</b>：
@@ -5869,7 +5861,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="806" class="xs"><tspan font-weight="700" fill="#202124">这条通路上没有任何一步是硬件在运行时决定的。</tspan>搬什么、搬多少、什么时候搬、放在暂存的哪个位置 —— 全部在编译期写进指令流里。</text>
 <text x="34" y="836" class="xs">所以 TPU 上的性能问题几乎不长成「缓存没命中」的样子，而是长成<tspan font-weight="700" fill="#d93025">「形状不对，编译器排不出好班」</tspan>的样子。这也是为什么 §7 那张图必须存在：把决定权全交给编译期，就得看看编译期到底能排出什么。</text>
 </svg>
-<figcaption><b>v7 侧四站，中间那站不是缓存，是暂存。</b>每一站只问一个问题：<b>这一步是谁决定的</b>。从头到尾没有一站的答案是「硬件自己看着办」—— 这张图是 2.1 里「TPU 侧 0 个红框」的逐站展开。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b>v7 侧这条路（到累加器为止），中间那站不是缓存，是暂存。</b>每一站只问一个问题：<b>这一步是谁决定的</b>。从头到尾没有一站的答案是「硬件自己看着办」—— 这张图是 2.1 里「TPU 侧 0 个红框」的逐站展开。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>两条路各走完了，<b>现在把它们并排放在一起</b> ——&nbsp;这是本课的主图。</p>
@@ -6403,13 +6395,9 @@ details.aside b{color:var(--ink);font-weight:600}
        但它只报了**行号**（第 ② 行、第 ⑥ 行），没说那两行到底是什么事。
        口头讲的时候 Chris 就是在这儿掉队的。这里用大白话把那两处说一遍 ——
        ⛔ 不是重复图注，是把「② 和 ⑥」翻译成「留东西谁说了算」「换手谁说了算」。 -->
-  <div class="note ok"><span class="t">⭐ 上面那张图，用大白话说就是两句</span>
-    <b>两边其实大同小异 ——&nbsp;真正不一样的只有两处。</b>
-    <br><br><b>一、GPU 中间多一层「自动缓存」。</b>
-    它会自动帮你留东西，<b>但留什么、扔什么，你说了不算</b> ——&nbsp;
-    得跑起来才知道有没有留对。<b>TPU 没有这一层，从主存直接上灶台。</b>
-    <em>（这就是图里 TPU 那个画成虚线的窟窿。）</em>
-    <br><br><b>二、谁决定什么时候换手。</b>
+  <div class="note ok"><span class="t">⭐ 上面那张图，用大白话说就是一句</span>
+    <b>图注点名的第 ② 行（多一层自动缓存）前面三小节已经讲透了。真正没展开过的是第 ⑥ 行 ——
+    谁决定什么时候换手。</b>
     这道菜要在两种炉子之间来回跳 ——&nbsp;<b>矩阵那个炉子和向量那个炉子</b>。
     <b>GPU 是干活的时候临场挑，谁空了上谁；TPU 是提前排好班，几点几分谁上，一分不差。</b>
     <em>——&nbsp;这一条就是第 5 节的全部主题，这里先埋个头。</em></div>
@@ -6435,10 +6423,9 @@ details.aside b{color:var(--ink);font-weight:600}
     所以同一个 <code>head_dim=128</code>：在 GPU 上是 16 的整 8 倍，怎么切都齐；
     在 TPU 上<b>只填满 256 那条边的一半</b>。
     <br>——&nbsp;<b>这就是两个约束的分工</b>：
-    <b>GPU 被「工作台太小」卡住，所以块必须切碎、K/V 反复重读；
-    TPU 工作台绰绰有余，卡它的换成了「一口吃太宽，形状对不齐就浪费半条边」。</b>
-    <br><br>🍳 <b>回到比方，这两堵墙就是一句话</b>：
-    <b>GPU 是灶台太小</b>，只能一小块一小块地做，同一批料要反复往上端；
+    🍳 <b>回到比方，这两堵墙就是一句话</b>：
+    <b>GPU 是灶台太小</b>，只能一小块一小块地做，同一批料要反复往上端
+    （<b>K/V 就是这样被重读的</b>）；
     <b>TPU 灶台大得根本用不完，它的问题换成了刀太宽</b> ——&nbsp;
     <b>一刀二百五十六宽，你的料只有一百二十八宽，砍下去半条刀刃是空的。</b>
     <br><em>同一件事，两边撞的是不同那堵墙 ——&nbsp;
@@ -6553,12 +6540,12 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>一边是 592 把小刀，一边是 4 把大刀。</b>
 
     <br><br>⭐ <b>所以这一节从头到尾在讲的，不是「谁的算力大」，是「同样多的算力，切成几把刀」。</b>
-    <b>而刀有多宽，就是 3.4 说的那个卡住融合上限的数 ——&nbsp;它在这里是 128 倍。</b>
-    <br><em>下面三个框分别回答：GPU 为什么必须切碎、TPU 为什么敢切粗、
-    以及什么形状能把刀喂满。<b>三个是一组取舍，不是三条优点。</b></em></div>
-  <p>看图的时候盯住右边那张账，顺便按住一个最常见的混读。</p>
+    <b>而刀有多宽，就是 3.4 那个收缩维：16 对 256。</b>
+    <em>（这张图上的 128 倍是另一个量 ——&nbsp;每个单元一拍能做多少次乘加。别把两个数混成一个。）</em>
+    <br><em><b>下面三个方向是一组取舍，不是三条优点。</b></em></div>
+  <p>看图的时候盯住右边那张账。</p>
 <figure class="fbox fwide" id="ms-g8">
-<svg viewBox="0 0 1400 968.0" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="B200 与 TPU v7 每周期乘加单元总数的等面积对照：总量相差 1.16 倍，但 B200 切成 592 个 Tensor Core，TPU v7 只切成 4 个 MXU，单元粒度相差 128 倍">
+<svg viewBox="0 0 1400 968.0" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="B200 与 TPU v7 每周期乘加次数的等面积对照：总量相差 1.16 倍，但 B200 切成 592 个 Tensor Core，TPU v7 只切成 4 个 MXU，单元粒度相差 128 倍">
 <text x="20" y="26" class="ttl">同一把尺子上　—— 两个方块面积等比，<tspan fill="#5f6368">总量几乎一样</tspan>，<tspan fill="#1a73e8">切分粒度差 128 倍</tspan></text>
 <rect x="20" y="48" width="11" height="11" rx="2" fill="#1a73e8"/>
 <text x="37" y="58" class="sm">B200：一个 Tensor Core</text>
@@ -7208,7 +7195,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="1112" y="180" class="lbl" fill="#202124">TPU v7 chip</text>
 <text x="1262" y="180" class="lbl" fill="#202124">倍数</text>
 <line x1="800" y1="182" x2="1370" y2="182" stroke="#e8eaed" stroke-width="1"/>
-<text x="806" y="202" class="xs">每周期乘加单元总数</text>
+<text x="806" y="202" class="xs">每周期乘加 · 总量</text>
 <text x="962" y="202" class="xs">606,208</text>
 <text x="1112" y="202" class="xs">524,288</text>
 <text x="1262" y="202" class="num" fill="#5f6368">1.16 ×</text>
@@ -7282,7 +7269,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="40" y="918.0" class="xs">总量接近、峰值接近，说明两家在同一代工艺上做出的<tspan font-weight="700" fill="#202124">算力密度是可比的</tspan>。真正的分歧在前面几张图里：<tspan font-weight="700" fill="#202124">谁来知道数在哪</tspan>（G-6）、<tspan font-weight="700" fill="#202124">谁来盖住延迟</tspan>（G-7）、<tspan font-weight="700" fill="#202124">切多细</tspan>（本图）。这三个选择互相咬合 —— <tspan font-weight="700" fill="#d93025">换掉任何一个，另外两个都得跟着换</tspan>：切得细就必须有大寄存器堆去养替</text>
 <text x="40" y="933.0" class="xs">补，养了替补就不需要编译期排班，不排班就只能靠 cache 兜住不确定的延迟。反过来那条链同样成立。</text>
 </svg>
-<figcaption><b>总量几乎一样，切法完全不同。</b>两个方块面积等比，内部按真实单元数切。<b>两个比值别混</b>：份数差 148 倍，单个单元多大差 <b>128</b> 倍 —— 3.4 说的是后者。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b>总量几乎一样，切法完全不同。</b>两个方块面积按每周期乘加次数等比，内部按真实单元数切。<b>两个比值别混</b>：份数差 148 倍，单个单元多大差 <b>128</b> 倍 —— 3.4 说的是后者。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
 </div></section>
@@ -8238,8 +8225,7 @@ details.aside b{color:var(--ink);font-weight:600}
 </figure>
 
   <div class="note danger"><span class="t">⭐ 注意 FlashAttention 落在哪一边</span>
-    <b>它在右边，而且两边都得手写。</b>编译器能替你做的是<b>「编排」</b>
-    ——&nbsp;什么时候搬、搬多大、跟谁重叠；<b>换算法</b>它做不了。
+    <b>它在右边，而且两边都得手写。</b>
     <br>——&nbsp;这句话把第 3.6 节那张对照表的意思补全了：
     <b>TPU 那边少写的是搬运，不是算法。</b>
     <span class="sub">推理引擎移植要付的完整账单、以及 AOT 编译能提前算出什么，
@@ -8260,8 +8246,7 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>你刚才可能已经绊了一下</b>：上图左边第一格明明写着「算子融合」是编译器的领地，
     落点却说 FlashAttention 编译器做不到。<b>两句都对 ——&nbsp;因为那是两种融合。</b>
     <br><br><b>① 不用改数学的融合 ——&nbsp;编译器替你做。</b>
-    把相邻的小算子接成一个 kernel，中间结果不落回 HBM。
-    <em>算的还是原来那些式子，只是不再走一趟冷库。</em>
+    <em>就是上图左上那一格：算的还是原来那些式子，只是不再走一趟冷库。</em>
     <b>这一类你一行都不用写</b>，两边的编译器都在默默做。
     <br><b>② 要改数学才能成立的融合 ——&nbsp;永远归人。</b>
     FlashAttention 之所以能融，是因为<b>先把 softmax 重写成了可以逐块增量合并的形式</b>；
@@ -8546,8 +8531,6 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><code>HFU ÷ MFU ＝ (前向 1 ＋ 重做的前向 1 ＋ 反向 2) ÷ (前向 1 ＋ 反向 2)
     ＝ 4 ÷ 3 ≈ 1.33×</code><br>
     <em>——&nbsp;这是从定义推出来的，不是测出来的。</em></div>
-  <p><b>那该看哪一个？看你在问什么</b> ——&nbsp;上面那两条已经答完了。</p>
-
   <!-- ⭐ 2026-09-01 加。Chris：「算屋顶线的时候肯定是拿 HFU 那个来算的…否则
        一个算子有 30% 是重算的话，按有效算力去算屋顶线，很可能 200 多就已经
        越过屋顶线了。」——&nbsp;**判断完全正确，连数都估准了**：
@@ -8556,7 +8539,7 @@ details.aside b{color:var(--ink);font-weight:600}
           上面那两问答的是「该报哪个数」，这一条答的是「该拿哪个数去做判断」。
           没有它，学员会拿框架报的那个 MFU 数直接往第 1 节那把尺子上套 ——
           **而那个方向的错是单向的：只会让你以为还有余量。** -->
-  <div class="note danger"><span class="t">⭐ 还有第三个问题，而且它最容易搞错：<b>画屋顶线该用哪个分子</b></span>
+  <div class="note danger"><span class="t">⭐ 上面那两个问题答完了，还有第三个，而且它最容易搞错：<b>画屋顶线该用哪个分子</b></span>
     问<b>「我会不会撞到屋顶」</b>——&nbsp;<b>必须用 HFU 那一侧的分子</b>，
     也就是<b>含重算、含补零的那个数</b>。<br>
     道理很硬：<em>那些重算出来的运算，是真的要占矩阵单元的周期的</em>
@@ -8666,12 +8649,9 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <p>最难的一步在后面：<b>不把这个数说过头。</b>
     这个 1.31 倍还缺什么？——&nbsp;<b>先自己列一遍，再看下面这张对答案。</b>
-    <br><span class="sub">⚠️ <b>先对一下口径</b>：上图给的 <b>1.29</b> 是按
-    <b>每芯片 TFLOP/s</b> 算的（854.0 ÷ 662.3）；这里的 <b>1.31</b> 是按
-    <b>每芯片 token/s</b> 算的（6,242 ÷ 4,770）。
-    <b>同一次实测，换个单位就差了 1.5 个百分点</b> ——&nbsp;
-    这正是上图那句「换一个单位，倍数就变」在说的事。
-    下文一律用 token/s 口径的 1.31。</span></p>
+    <br><span class="sub">⚠️ <b>先对一下口径</b>：上图的 <b>1.29</b> 是每芯片
+    <b>TFLOP/s</b>（854.0 ÷ 662.3），下文一律用每芯片 <b>token/s</b> 的
+    <b>1.31</b>（6,242 ÷ 4,770）——&nbsp;差的就是图里那 1.5%。</span></p>
 <figure class="fbox fwide" id="ms-p18">
 <svg viewBox="0 0 1400 610" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="六条不能拿 1.31 倍这个结论说的话，每条都标出它把倍数往哪一边推：四条利于 GB300，两条利于 TPU v7">
 <text x="20" y="26" class="ttl">不能拿它说的话　—— <tspan font-weight="700" fill="#d93025">六条，每条都标出它往哪边推</tspan></text>
@@ -8885,7 +8865,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="662" y="775" class="xxs" fill="#202124" text-anchor="end">GB300</text>
 <rect x="690" y="758" width="672" height="26" rx="5" fill="#fcfcfd" stroke="#dadce0" stroke-width="1.0"/>
 <text x="700" y="775" class="xxs" fill="#5f6368">§1.4 那个 312 FLOP/byte 的拐点，换到 GB300 仍然成立</text>
-<text x="1352" y="775" class="xxs" fill="#202124" text-anchor="end">2,500 ÷ 8.0 ＝ 312.5　分子分母都与 B200 相同　⚠️ 8.0 ＝ 576 ÷ 72 是推的，官方写的是「最高 576」</text>
+<text x="1352" y="775" class="xxs" fill="#202124" text-anchor="end">2,500 ÷ 8.0 ＝ 312.5　分子分母都与 GB200 NVL72 相同（HGX B200 是 2,250 → 281.3）　⚠️ 8.0 ＝ 576 ÷ 72 是推的，官方写的是「最高 576」</text>
 <rect x="20" y="806" width="1360" height="148" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
 <text x="38" y="834" class="sec">⛔ 这张表里「两边同口径实测」那一档是空的 —— 而这门课唯一的一组两边实测，跑的是「TPU 的赌注该成立」<tspan font-weight="700" fill="#d93025">最近的那一侧 —— 但也只近了一半</tspan></text>
 <rect x="38" y="848" width="640" height="92" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>

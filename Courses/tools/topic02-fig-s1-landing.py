@@ -21,19 +21,18 @@ BL, PU, OR, GR, RD, GY, YL, TL = ("#1a73e8", "#9334e6", "#e8710a", "#1e8e3e",
 W, PW, GAP = 1000, 320, 20
 X = [i * (PW + GAP) for i in range(3)]
 TOP, BH = 76, 250
-H = TOP + BH + 150
+H = TOP + BH + 168
 
 CARDS = [
     # 这一格没有「大数字」—— 它讲的正是「没有」。第三项留空，画的时候跳过。
     ("① 只有一边有的", "结构性差别 —— 参数表上看不出来", RD, [
-        ("TPU 没有", "「硬件自动管的片上缓存」这一整层（CMEM = 0）", ""),
+        ("TPU 没有", "「硬件自动管的片上缓存」这一整层（CMEM = 0；GPU 那层是 126 MB L2）", ""),
         ("GPU 没有", "「可编程的专用协处理器」这一整层（无 SparseCore）", ""),
     ], ["⭐ 这两格是空的，不是小 ——", "第 2、3 节全从这儿长出来"]),
     ("② 两边都有、量级相同", "数字接近，不构成差别", GY, [
         ("算力", "2,307 对 2,500 TFLOPS", "差 8%"),
         ("HBM 带宽", "7,380 对 8,000 GB/s", "差 8%"),
-        ("片上 SRAM", "134 MB 对 126 MB", "差 6%"),
-    ], ["这一格可以直接跳过 ——", "三条都在 10% 以内，那不叫差别"]),
+    ], ["这两条可以跳过 ——", "都在 10% 以内，那不叫差别"]),
     ("③ 撞在同一个数上", "第 1 节唯一要背下来的", TL, [
         ("TPU v7", "2,307 ÷ 7.38", "312.6"),
         ("GB200", "2,500 ÷ 8.00", "312.5"),
@@ -72,13 +71,17 @@ for x, (ttl, sub, c, rows, foot) in zip(X, CARDS):
                  f'style="font-size:10px">{t}</text>')
 
 YB = TOP + BH + 22
-p.append(f'<rect x="0" y="{YB}" width="{W-18}" height="86" rx="8" '
+p.append(f'<rect x="0" y="{YB}" width="{W-18}" height="104" rx="8" '
          f'fill="#fef7e0" stroke="{YL}"/>')
 p.append(f'<text class="svglbl" x="18" y="{YB+24}" fill="#7a5000">'
          f'⭐ 第 1 节到此为止，一句话：两边的差别<tspan font-weight="700">不在参数表上</tspan></text>')
 p.append(f'<text class="svgsm" x="18" y="{YB+45}" fill="#7a5000">'
-         f'第 ② 格已经说明了 —— 算力、带宽、片上 SRAM 三项都在 10% 以内，'
+         f'第 ② 格已经说明了 —— 算力和带宽都在 10% 以内，'
          f'第 ③ 格甚至撞在同一个数上。<tspan font-weight="700">按参数表，这是同一类芯片。</tspan></text>')
+p.append(f'<text class="svgsm" x="18" y="{YB+96}" fill="#7a5000">'
+         f'⚠️ <tspan font-weight="700">片上 SRAM 不在第 ② 格里</tspan> —— 按总量是 '
+         f'GPU 231 MiB 对 TPU 134 MiB，多 73%，而且 GPU 领先的几乎全是那层 L2。'
+         f'为什么这条不能算「量级相同」，见 3.2b。</text>')
 p.append(f'<text class="svgsm" x="18" y="{YB+64}" fill="#7a5000">'
          f'真正的差别全在第 ① 格：<tspan font-weight="700">各缺对方整整一层</tspan>。'
          f'那一层缺的不是容量，是「<tspan font-weight="700">谁做决定</tspan>」——'

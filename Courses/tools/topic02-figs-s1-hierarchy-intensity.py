@@ -38,7 +38,7 @@ ROWS=[  # (层名, 副注, TPU 内容, GPU 内容, TPU空?, GPU空?)
   "<TAB>⚠️ 跨 lane 靠 warp shuffle 指令，官方没把它单列成部件",0,0),
  # 官方正文写「96 GB」是十进制，而同一张表的 192 GiB ÷ 2 = 96 GiB —— 本课统一用 GiB，
  # 理由和附录 A 那个 94.74 GiB 是同一条：判 OOM 的分母必须是二进制的。
- ("芯片外","HBM","96 GiB／device（＝ 192 GiB ÷ 2）<TAB>整 chip 7,380 GB/s","186 GB／GPU<TAB>8,000 GB/s",0,0),
+ ("芯片外","HBM","96 GiB／device（＝ 192 GiB ÷ 2）<TAB>整 chip 7,380 GB/s","186 GB／GPU（软件可见；物理 192 GB）<TAB>8,000 GB/s",0,0),
 ]
 RH,TOP,LX,LW,RX,RW=84,70,168,404,592,408
 H=TOP+RH*len(ROWS)+104

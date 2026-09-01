@@ -107,7 +107,7 @@ def _die(f, dx, k):
         x = dx + 12 + i * (sw + 13)
         f.rect(x, HBM_T, sw, HBM_H - 18, FILL[YL], YL, 1.4, 5)
         f.t(x + sw / 2, HBM_T + 17, "HBM3e", "lbl", "#b06000", "middle")
-        f.t(x + sw / 2, HBM_T + 31, "≈23 GB", "xs", None, "middle")
+        f.t(x + sw / 2, HBM_T + 31, "≈24 GB", "xs", None, "middle")
         f.line(x + sw / 2, HBM_T + HBM_H - 18, x + sw / 2, L2_T - 2, YL, 1.6, "aK")
 
     # L2 分区
