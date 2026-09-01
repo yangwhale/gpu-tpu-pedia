@@ -818,6 +818,57 @@ def body():
     下面这张换了个排法，一眼就看得出为什么。</p>''')
     a(fig("ms-t3"))
     a('''
+  <!-- ⭐⭐ 2026-09-01 加。Chris 看完 T-3 直接问：「warp、block、thread、
+       warp group 这些，彼此到底怎么个包含关系？」
+       ⛔ 这是 T-3 **刻意不回答**的东西 —— 它的设计原则写在标题上：
+          「按问题对齐，不按名词对齐」。那个选择是对的（名词对名词会排出
+          一张漂亮但假的翻译表），但**副作用是：只想知道「谁装在谁里面」
+          的人，在这一节里没有落脚点**。
+       ⭐ 所以补一张纯包含关系的简表，但**不重造轮子**：
+          权威版是 GPU 显微镜的 G-3（六层 ＋ 每层钉在哪块硅上 ＋ 怎么同步），
+          这里只给「包含关系 ＋ 谁定的」两列，其余指过去。
+       📌 三个「不对齐」是这张表真正的信息量 —— 光背包含关系不会用。 -->
+  <div class="note info"><span class="t">📖 顺手补一张纯包含关系表 ——&nbsp;上图刻意不按名词排，这里补上</span>
+    <b>CUDA 这套抽象是六层，从小到大套娃</b>：
+    <code>thread → warp →（warp group）→ block → cluster → grid</code>。</div>
+  <div class="tbl-wrap"><table>
+    <tr><th>层</th><th>有多大</th><th>谁定的</th><th>落在哪块硬件上</th></tr>
+    <tr><td><b>thread</b> 线程</td><td>1 个</td><td>——</td>
+        <td>一个处理块里的 <b>1 条 lane</b></td></tr>
+    <tr><td><b>warp</b></td><td><b>32 个 thread</b></td>
+        <td><b>硬件写死</b>，不是你选的</td>
+        <td>一个 SM 四个<b>处理块</b>（sub-core）中的一个</td></tr>
+    <tr><td><b>warp group</b></td><td><b>4 个 warp ＝ 128 thread</b></td>
+        <td><b>指令集写死</b></td>
+        <td>一个 SM 的四个处理块<b>各出一个 warp</b></td></tr>
+    <tr><td><b>block</b> 线程块<br><em>（＝ CTA）</em></td>
+        <td>≤ <b>1,024</b> thread ＝ ≤ 32 warp</td>
+        <td><b>你写代码时定</b></td>
+        <td><b>整块钉死在一个 SM 上</b>，落下就不迁走</td></tr>
+    <tr><td><b>cluster</b></td><td>≤ <b>8</b> 个 block<br><em>B200 可 opt-in 到 16</em></td>
+        <td><b>你定，可选</b>（Hopper 才有）</td>
+        <td>同一个 <b>GPC</b> 内的若干 SM</td></tr>
+    <tr><td><b>grid</b></td><td>一次 kernel 的全部 block</td>
+        <td><b>你定</b></td><td><b>整颗 GPU</b>（B200 是跨两 die 的 148 个 SM）</td></tr>
+  </table></div>
+
+  <div class="note danger"><span class="t">⭐ 光背包含关系不会用 ——&nbsp;真正要记的是三处「不对齐」</span>
+    <b>① 一个 SM 上住的不止一个 block。</b>
+    block 上限是 32 个 warp，而一个 SM 有 <b>64 个 warp 槽</b>（＝2,048 线程）——&nbsp;
+    <b>所以同一个 SM 上会同时住好几个 block，它们互相看不见对方的共享内存。</b>
+    <em>5.1 说的「占用率」，量的就是这 64 个槽填了几个。</em>
+    <br><b>② warp group 不是调度单位，是<u>指令</u>单位。</b>
+    没有「一个 warp group 被调度上去」这回事 ——&nbsp;
+    它是 <code>wgmma</code>／TMEM 这类指令<b>要求四个连续 warp 一起发</b>才凑得出的形状。
+    <em>这就是 3.4 那五代矩阵指令「动员多少线程」越来越多的那条线。</em>
+    <br><b>③ cluster 是后加的一层，加它的理由 3.2c 已经说过。</b>
+    148 个 SM 之间<b>除了 L2 没有别的路</b>；cluster 让同一个 GPC 里的块
+    <b>直接读写对方的共享内存</b>，绕开 L2。
+    <em>——&nbsp;TPU 不需要这一层，因为它一颗 chip 上只有两个 TensorCore。</em>
+    <br><br>⭐ <b>一句话记法：前三层的边界是硬件定死的，后三层的大小是你写代码时定的。</b>
+    <em>——&nbsp;每一层「能共享什么、怎么同步」的完整版在
+    <a href="gpu-microscope.html">GPU 显微镜</a> 图 G-3。</em></div>
+
   <h3>3.4　一条指令吃多大一块 —— 收缩维差 16 倍</h3>
   <p>回到粒度。矩阵乘一条指令吃下的块，两边不是同一个量级 ——&nbsp;
     <b>而这个差别会直接决定「你的 head_dim 选多少不吃亏」。</b></p>''')
