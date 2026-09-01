@@ -26,7 +26,19 @@ DEFS = """<defs><style>
 <marker id="aG" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#1e8e3e"/></marker>
 <marker id="aP" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#8430ce"/></marker>
 <marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
+
 </defs>"""
+
+# ⛔ 2026-09-01：这里一度加过渐变／柔和阴影／径向光晕（"Console 质感"），
+#    当天就被否掉了 —— **教学图的问题从来不是不够精致，是字太多。**
+#    加质感只会让一张信息过载的图变成一张精致的信息过载的图。
+#    下面几个函数名保留（有图在用），但一律画成扁平：纯色浅底 ＋ 细描边。
+#    **不要再往回加。**
+
+
+def grad(c):
+    """曾经返回渐变，现在返回平涂浅底。保留是为了不用改所有调用点。"""
+    return FILL.get(c, "#fff")
 
 
 def esc(t):
@@ -119,6 +131,36 @@ class Fig:
             self.rect(x, y - 10, 11, 11, fill=c, rx=2)
             self.t(x + 17, y, txt, "sm")
             x += 17 + 11.5 * _wlen(txt) + 22
+
+    # ── 三个成组原语（一律扁平，见文件头那段 ⛔）────────────────────
+    # rect() 画「一块底色」；下面这几个画「一个物件」。
+    # 判断标准：它在画面里是不是一个可以被指着说「这个」的东西？
+
+    def card(self, x, y, w, h, c=None, rx=8, elev=1, accent=None, aw=4,
+             fill=None):
+        """一个白底方块 ＋ 细描边。accent 是左侧那条竖色带。
+
+        c      描边色（None → 用极淡的灰线，免得整张图糊成一片）
+        elev   保留参数，已无效果（原来是阴影层级）
+        """
+        self.rect(x, y, w, h, fill or "#fff", c or LINE, 1.2, rx)
+        if accent:
+            # 只圆左边两个角：右边要跟卡片内容齐平，圆了会露出白缝
+            self.p.append(
+                f'<path d="M{x + rx},{y} h-{rx - aw} a{aw},{aw} 0 0 0 -{aw},{aw} '
+                f'v{h - 2 * aw} a{aw},{aw} 0 0 0 {aw},{aw} h{rx - aw} z" fill="{accent}"/>')
+            self.p.append(
+                f'<rect x="{x + rx - aw}" y="{y}" width="{aw}" height="{h}" fill="{accent}"/>')
+
+    def glow(self, *a, **k):
+        """曾经是雾化光晕，现在什么都不画。保留是为了不用改所有调用点。"""
+
+    def panel(self, x, y, w, h, c, rx=12, grid=False):
+        """一块区域底：主色平涂浅底 ＋ 同色描边。"""
+        self.rect(x, y, w, h, FILL.get(c, "#fff"), c, 1.6, rx)
+
+    def bg(self):
+        """曾经铺页面渐变，现在什么都不画。"""
 
     def out(self):
         return (f'<svg viewBox="0 0 {self.w} {self.h}" width="{self.w}" height="{self.h}" '
