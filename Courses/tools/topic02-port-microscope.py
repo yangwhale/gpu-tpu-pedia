@@ -277,7 +277,7 @@ def sections(F):
 
     # ── §3 计算单元 ──────────────────────────────────────────────
     a('''
-<section><div class="wrap">
+<section id="s3"><div class="wrap">
   <div class="stn big"><span class="badge">第 3 节</span><h2>拆开看：同一份复杂度，两边放在了不同的地方</h2></div>
   <p class="lead">第 2 节数的是<b>决策点</b>，这一节数的是<b>粒度</b>。
     同样一块矩阵乘的活，两边<b>一条指令吃下的块大小差 128 倍</b> ——
@@ -595,7 +595,7 @@ def sections(F):
     #    正是 `ibv_modify_qp failed`，RDMA 实实在在在路径上。
     #    **拿想当然的架构常识去推翻自己的实测，是这门课反复警告的那种错。**
     a('''
-<section><div class="wrap">
+<section id="s4"><div class="wrap">
   <div class="stn big"><span class="badge">第 4 节</span><h2>卡间说话：连得多远，比连得多快更要紧</h2></div>
   <p class="lead">第 3 节拆到最后一站，人还在<b>一颗芯片里</b>。
     但专题一那笔账是摊到 <b>14 个 device</b> 上的 —— <b>只要不止一颗，就有这一节。</b>
@@ -706,7 +706,7 @@ def sections(F):
 
     # ── §5 范式 ──────────────────────────────────────────────────
     a('''
-<section><div class="wrap">
+<section id="s5"><div class="wrap">
   <div class="stn big"><span class="badge">第 5 节</span><h2>谁做决定：运行时，还是编译期</h2></div>
   <p class="lead">前面四节每一节都指向同一个分岔口，这一节把它正面画出来 ——
     <b>而且要一路讲到它在软件栈上长成了什么样</b>。
@@ -988,7 +988,7 @@ def sections(F):
 
     # ── §6 怎么比才有意义 ────────────────────────────────────────
     a('''
-<section><div class="wrap">
+<section id="s6"><div class="wrap">
   <div class="stn big"><span class="badge">第 6 节</span><h2>怎么比才有意义</h2></div>
   <p class="lead">前五节回答的是<b>「两边有什么不一样」</b>。这一节回答
     <b>「那怎么比」</b> ——&nbsp;而它比前五节都容易讲砸，
@@ -1057,7 +1057,7 @@ def sections(F):
 
     # ── §7 两边的实测 ────────────────────────────────────────────
     a('''
-<section><div class="wrap">
+<section id="s7"><div class="wrap">
   <div class="stn big"><span class="badge">第 7 节</span><h2>两边的实测</h2></div>
   <p class="lead">上一节整节在讲规矩。<b>这一节只做一件事：把规矩用在一组真数上，
     然后看看还剩下什么能说。</b>
@@ -1150,7 +1150,7 @@ def sections(F):
 
     # ── §8 这一课的数我是怎么核的 ────────────────────────────────
     a('''
-<section><div class="wrap">
+<section id="s8"><div class="wrap">
   <div class="stn big"><span class="badge">第 8 节</span><h2>这一课的数我是怎么核的</h2></div>
   <p class="lead">前七节一直在要求「每个数都得能被回查」。
     <b>这一节把这门课自己的账摊开：撤回过八笔，每一笔活了多久、往哪边偏。</b>
@@ -1247,7 +1247,7 @@ def sections(F):
 
     # ── §9 各自擅长什么 + 总落点 ─────────────────────────────────
     a('''
-<section><div class="wrap">
+<section id="s9"><div class="wrap">
   <div class="stn big"><span class="badge">第 9 节</span><h2>那到底各自擅长什么</h2></div>
   <p class="lead">这是第 1 节起就有人在等的那个问题。
     拖到最后才答，是因为<b>它在第 1 节答不了</b>——&nbsp;
@@ -1424,7 +1424,7 @@ def sections(F):
 
     # ── 深入阅读 ─────────────────────────────────────────────────
     a('''
-<section><div class="wrap">
+<section id="deep"><div class="wrap">
   <div class="stn"><span class="badge">深入</span><h2>想再往下挖一层的同学</h2></div>
   <p class="lead">上面那十六张<b>标了「出自⋯」的图</b>，都搬自两份「显微镜」文档
     （其余几张是这门课自己画的）。
@@ -1499,7 +1499,7 @@ details.aside b{color:var(--ink);font-weight:600}
 '''
 
 TODO = re.compile(
-    r'<section><div class="wrap">\s*<div class="note info">'
+    r'<section[^>]*><div class="wrap">\s*<div class="note info">'
     r'<span class="t">🚧 后面还在写</span>.*?</section>', re.S)
 
 
