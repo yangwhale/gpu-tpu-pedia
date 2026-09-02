@@ -92,7 +92,9 @@ Chris 的原话：「算子融合是 top1 最重要、比任何事情都重要�
 import io
 import os
 import re
+import subprocess
 import sys
+import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "WebPages", "topic-02-L300.html")
@@ -178,6 +180,34 @@ CAP_OVERRIDE = {
 }
 
 
+# ── 图的 L200 专版 ────────────────────────────────────────────────────
+# 绝大多数图两版通用（L200 的价值在于**少讲**，不在于**另画**）。
+# 这里列的是少数几张：同一张图在 L300 是回查装置、在 L200 投到屏幕上是噪音。
+#
+#   s012-fig1-5  底部那条黄带在 L300 里把「按参数表这是同一类芯片」连同两条
+#                边界一次讲死 —— 那是**给人回查的**。投影时它五行小字读不清，
+#                却面积最大、颜色最跳。三条结论在 L200 各有归宿（图注两条、
+#                产出框一条、SRAM 那条折在图后），砍掉的是重复不是内容。
+#
+# 实现：跑一次那张图的生成器（在临时目录里，不碰仓库），
+# 拿它吐出的第二个文件把 lift 过来的 <svg> 整段换掉。
+SVG_L200 = {"s012-fig1-5": ("topic02-fig-s1-landing.py", "fig1-5-l200.svg")}
+_svg_cache = {}
+
+
+def _l200_svg(key):
+    if key not in _svg_cache:
+        script, fn = SVG_L200[key]
+        d = tempfile.mkdtemp(prefix="l200fig-")
+        r = subprocess.run([sys.executable, os.path.join(HERE, script)],
+                           cwd=d, capture_output=True, text=True)
+        assert r.returncode == 0, "%s 跑挂了：\n%s" % (script, r.stderr)
+        path = os.path.join(d, fn)
+        assert os.path.isfile(path), "%s 没有吐出 %s" % (script, fn)
+        _svg_cache[key] = io.open(path, encoding="utf-8").read().strip()
+    return _svg_cache[key]
+
+
 _FIG_SEEN = []
 
 
@@ -204,6 +234,11 @@ def fig(key, wide=None):
         new = CAP_OVERRIDE[key] + ("　" + src_tail.group(0) if src_tail else "")
         block = re.sub(r"<figcaption>.*?</figcaption>",
                        lambda _: "<figcaption>%s</figcaption>" % new, block, flags=re.S)
+
+    if key in SVG_L200:
+        i0 = block.index("<svg")
+        i1 = block.index("</svg>") + len("</svg>")
+        block = block[:i0] + _l200_svg(key) + block[i1:]
 
     if wide is True and "fwide" not in block[:120]:
         block = block.replace('class="fbox"', 'class="fbox fwide"', 1)
@@ -290,7 +325,21 @@ def body():
   <!-- ⛔ R3 删掉这里原有的「所以这张图往后是当筛子用的…」两行。
        它和本节末尾「这把尺子有两个刻度」框的第 ② 条讲的是同一件事，
        中间只隔着一个**默认收起**的折叠块 —— 投出来就是紧挨着的两遍，
-       而且重复那次比总结那次信息还多。规则挪进产出框里去讲。 -->''')
+       而且重复那次比总结那次信息还多。规则挪进产出框里去讲。 -->
+
+  <!-- ⚠️ 2026-09-03 这条原来印在图底那条黄带上。L200 版的图砍了黄带（见
+       SVG_L200 那段注释），而这一条**不能跟着丢** —— 它挡的是一个很容易犯的
+       误判：SRAM 两边都有、数字也只差 73%，看着就该进第 ② 格，
+       可它恰恰是第 ① 格的核心。折起来是因为完整交代在 3.2b，
+       这儿只要在人可能踩错的**那一刻**把牌子立上。 -->
+  <details class="aside"><summary>⚠️ 片上 SRAM 看着像第 ② 格，其实是第 ① 格
+    <span class="why">—— 一个很容易犯的误判</span></summary>
+    <div class="body">
+  <p>按总量是 <b>GPU 231 MiB 对 TPU 134 MiB</b>，多 73% ——&nbsp;
+    按「都在一个量级」这条标准，它该进第 ② 格。<b>但不能这么归。</b>
+    GPU 领先的那部分<b>几乎全是 L2</b>，而 L2 正是 TPU 整层没有的东西：
+    差的不是容量，是这块地<b>由谁说了算</b>。<em>完整的三个口径在 3.2b。</em></p>
+  </div></details>''')
     a(lift('<details class="aside"><summary>完整十行对照表',
            '</p></div></details>'))
     a('''
