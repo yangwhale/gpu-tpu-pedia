@@ -599,25 +599,14 @@ details.aside b{color:var(--ink);font-weight:600}
     哪一层对哪一层，以及哪一层<b>只有一边有</b>。</p>
 
   <h3>1.1　TPU v7 一颗芯片</h3>
-  <p>先看 TPU 这一颗。<b>三件事后面要反复用</b>：
-    <br><b>①</b> 它是<b>两个 chiplet 拼起来的，而这两半各管各的内存</b>。
-    所以规格表写 192 GiB，可写代码的时候，<b>一个 device 的额度只有 96</b> ——&nbsp;
-    想用对面那一半，得走 D2D、是显式的一步，不是随手读一下。
-    <br><b>②</b> 整个核里，<b>标量单元只有一个</b>（第 3 节要用）。
-    <br><b>③</b> <code>CMEM = 0</code> ——&nbsp;<b>注意这不是「小」，是「没有」</b>。
-    整整一层，TPU 这边空着，第 2 节整节都在讲这个空格。</p>
-
-  <p>图上还有两个盒子容易被当成装饰，其实<b>后面两节都要用</b>：
-    <br><b><code>XLU</code>（跨 lane 单元）。</b>VPU 那 128 条 lane <b>各干各的</b>：
-    每条 lane 处理自己那一列，互相不说话。所以「上下方向」的求和很便宜
-    ——&nbsp;一次 shuffle 就完事；<b>可数据一旦要横着走</b>（转置、跨 lane 求和），
-    就只能经过 XLU，而<b>公开资料对它的形容是「慢，而且贵」</b>。
-    softmax、layernorm 这类沿最后一维求和的算子，方向恰好就是横着的
-    ——&nbsp;第 3 节会回来算这笔账。
-    <br><b><code>SparseCore</code>。</b>它不是搬运器，是<b>一颗能跑自己那段程序的小处理器</b>：
-    前缀和、排序、计数、gather / scatter ——&nbsp;全是<b>矩阵单元干不了的那类零碎活</b>。
-    <b>GPU 那边没有这一层</b>，同样的活得退回 CUDA core 手写。这是 1.3 那张表里
-    第二个空格子。</p>
+  <!-- ⭐ 2026-09-02 这里原来是两段共约 380 字的**图前预告**，逐条讲 chiplet /
+       标量单元 / CMEM=0 / XLU / SparseCore —— 而这五条**图注里一条不落地全有**。
+       ⛔ 查重闸门没抓到，因为它只查 14 字以上的逐字重复，这两处是同义改写。
+       屏幕上的后果：读者还没看到图，先吃 380 字讲图上有什么，看完图再读一遍图注。
+       现在压成一句引子；XLU / SparseCore 那两条图注没有的机制细节，
+       折到图后（它们是第 3 节的伏笔，不是这一节要背的东西）。 -->
+  <p>先看 TPU 这一颗。<b>图上有三处后面会反复用，还有两个容易被当成装饰的小盒子</b>
+    ——&nbsp;图注里逐条点了名，以及各自用在第几节。</p>
 
   <figure class="fbox" id="s012-fig1-1">
   <svg viewBox="0 0 1000 940" width="100%" role="img" aria-label="TPU v7 芯片全景：一颗 chip 两个对称的 chiplet，各有一个 TensorCore、两个 SparseCore、64 MiB VMEM 与 96 GiB 私有 HBM，中间用 D2D 相连">
@@ -731,6 +720,19 @@ details.aside b{color:var(--ink);font-weight:600}
 </svg>
   <figcaption>两个 chiplet 各有<b>独立地址空间</b>，跨过去要走 D2D、是显式的一步 —— 直接后果是「192 GiB 的芯片，一个 device 的额度只有 96 GiB」。另外三处后面要用：<b>标量单元只有一个</b>（第 3 节），<b><code>CMEM = 0</code> 不是「小」是「没有」</b>（第 2 节），以及核里那两个容易被当成装饰的小盒子 ——&nbsp;<b><code>XLU</code></b> 管「数据横着走」（慢，第 3 节要算这笔账）、<b><code>SparseCore</code></b> 是能跑自己程序的小处理器（GPU 那边没有这一层）。</figcaption>
   </figure>
+
+  <details class="aside"><summary>旁白：XLU 和 SparseCore 具体干什么（第 3 节的伏笔）</summary>
+    <div class="body">
+    <b><code>XLU</code>（跨 lane 单元）——&nbsp;数据「横着走」的唯一通道。</b>
+    VPU 那 128 条 lane 各干各的，一条 lane 处理一列、互相不说话，
+    所以沿列方向求和很便宜，一次 shuffle 就完事。
+    一旦要转置、要跨 lane 求和，就只能过 XLU，而公开资料对它的形容是「慢，而且贵」。
+    <br>softmax、layernorm 这类沿最后一维求和的算子，方向恰好就是横着的
+    ——&nbsp;<b>第 3 节回来算这笔账。</b>
+    <br><br><b><code>SparseCore</code> ——&nbsp;不是搬运器，是能跑自己那段程序的小处理器。</b>
+    前缀和、排序、计数、gather / scatter，全是矩阵单元干不了的零碎活。
+    GPU 那边没有这一层，同样的活得退回 CUDA core 手写
+    ——&nbsp;<b>1.3 那张表里的第二个空格子。</b></div></details>
 
   <details class="aside"><summary>旁白：图里「VPU 峰值低 2 个数量级」是怎么推出来的（推导链，可跳过）</summary>
     <div class="body">
