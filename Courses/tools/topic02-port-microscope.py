@@ -22,7 +22,7 @@
 import io, os, re, sys, subprocess
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PAGE = os.path.join(HERE, "..", "WebPages", "topic-02.html")
+PAGE = os.path.join(HERE, "..", "WebPages", "topic-02-L300.html")
 
 BEG = "<!-- ▼▼ 由 topic02-port-microscope.py 生成，不要手改 ▼▼ -->"
 END = "<!-- ▲▲ 生成区结束 ▲▲ -->"
@@ -1559,7 +1559,7 @@ def sections(F):
 
     # ── 附录 A ───────────────────────────────────────────────────
     #
-    # ⚠️ 这一段 2026-08-31 曾经**只写在 topic-02.html 里**，位置落在生成区
+    # ⚠️ 这一段 2026-08-31 曾经**只写在 topic-02-L300.html 里**，位置落在生成区
     # （BEG…END）之内 —— 于是下一次跑这个脚本时被整段覆盖掉，无声无息。
     # 生成区里的任何东西都必须由这个脚本产出，手写的活不过下一次 build。
     #
@@ -1749,7 +1749,7 @@ def main():
     assert not miss, "这几张采集了却没摆上页面：%s" % miss
 
     io.open(PAGE, "w", encoding="utf-8").write(html)
-    print("ok  topic-02.html  %s 字符  移植 %d 张图  禁字自检通过"
+    print("ok  topic-02-L300.html  %s 字符  移植 %d 张图  禁字自检通过"
           % (format(len(html), ","), len(placed)))
 
     # 生成区里有一个 id="s012-fig0-1" 的**空壳 svg**（附录 A 那张瀑布图），

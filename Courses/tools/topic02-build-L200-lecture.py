@@ -4,7 +4,7 @@
 ════════════════════════════════════════════════════════════════
 这份东西是什么
 ════════════════════════════════════════════════════════════════
-课件（topic-02-L200.html）是**给学员看的**；这一份是**老师的草稿** ——
+课件（topic-02.html）是**给学员看的**；这一份是**老师的草稿** ——
 逐字讲稿、该滚到哪张图、真会被问到什么、以及最要紧的「别讲什么」。
 
 版式和 CSS 整套沿用专题一的讲义（topic-01-lecture.html）：`_css()` 直接
@@ -47,8 +47,8 @@ WEB = os.path.join(HERE, "..", "WebPages")
 CSS_SRC = os.path.join(WEB, "topic-01-lecture.html")
 OUT = os.path.join(WEB, "topic-02-L200-lecture.html")
 
-DECK = "topic-02-L200.html"        # 学员看的课件（L200）
-FULL = "topic-02.html"             # 完整版 L300
+DECK = "topic-02.html"        # 学员看的课件（L200）
+FULL = "topic-02-L300.html"             # 完整版 L300
 
 
 def _css():

@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""把 §0–§2 那十五张图重新生成并注入 topic-02.html。
+"""把 §0–§2 那十五张图重新生成并注入 topic-02-L300.html。
 
 ⭐ **为什么需要这个脚本。**
 
@@ -32,7 +32,7 @@ import sys
 import tempfile
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-PAGE = os.path.join(HERE, "..", "WebPages", "topic-02.html")
+PAGE = os.path.join(HERE, "..", "WebPages", "topic-02-L300.html")
 
 # 脚本 → 它吐出来的 svg 文件名 → 页面上的 figure id
 SCRIPTS = {
@@ -110,7 +110,7 @@ def main():
     assert n == want, "页面上有 %d 个 s012 figure，脚本这边有 %d 个 —— 对不上" % (n, want)
 
     io.open(PAGE, "w", encoding="utf-8").write(html)
-    print("ok  注入 %d/%d 张（其余与页面已一致）  topic-02.html %s 字符"
+    print("ok  注入 %d/%d 张（其余与页面已一致）  topic-02-L300.html %s 字符"
           % (changed, len(got), format(len(html), ",")))
 
 

@@ -1,7 +1,7 @@
 # -*- coding: utf-8 -*-
 """专题二 · L200 —— 一小时版，从 L300 蒸馏出来。
 
-L300（topic-02.html）是 31,389 字主线 + 72 张图，讲完要两个小时。
+L300（topic-02-L300.html）是 31,389 字主线 + 72 张图，讲完要两个小时。
 L200 是同一个故事的一小时版：**33 张图，目标 15,000 字左右。**
 
 ════════════════════════════════════════════════════════════════
@@ -95,10 +95,10 @@ import re
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-SRC = os.path.join(HERE, "..", "WebPages", "topic-02.html")
-OUT = os.path.join(HERE, "..", "WebPages", "topic-02-L200.html")
+SRC = os.path.join(HERE, "..", "WebPages", "topic-02-L300.html")
+OUT = os.path.join(HERE, "..", "WebPages", "topic-02.html")
 
-L300_URL = "topic-02.html"
+L300_URL = "topic-02-L300.html"
 # ⚠️ 用到 `''' % L300_URL` 的那几段字符串里，**所有百分号都要写成 %%**。
 #    2026-09-01 在 §6 写「30% 的运算是重算」时炸过一次，报的是
 #    `unsupported format character` 加一个字节偏移量 —— 完全看不出是哪一行。
@@ -1725,8 +1725,8 @@ def main():
         'content="TPU 与 GPU · 两种加速器，两条出身"',
         'content="TPU 与 GPU · 一小时版（L200）"')
     head = head.replace(
-        'content="https://gist.higcp.com/Courses/WebPages/topic-02.html"',
-        'content="https://gist.higcp.com/Courses/WebPages/topic-02-L200.html"')
+        'content="https://gist.higcp.com/Courses/WebPages/topic-02-L300.html"',
+        'content="https://gist.higcp.com/Courses/WebPages/topic-02.html"')
 
     html = head + HERE_MARK + HERO + _shared_defs() + "\n" + "\n".join(body()) \
         + "\n\n" + _tail()
@@ -1788,7 +1788,7 @@ def main():
     fold = re.findall(r"<details.*?</details>",
                       re.sub(r"<svg.*?</svg>", "", html, flags=re.S), flags=re.S)
     foldn = sum(len(_prose(f)) for f in fold)
-    print("ok  topic-02-L200.html  %s 字符　%d 张图" % (f"{len(html):,}", len(_FIG_SEEN)))
+    print("ok  topic-02.html  %s 字符　%d 张图" % (f"{len(html):,}", len(_FIG_SEEN)))
     print("    正文 %d 字（其中折叠 %d）→ 主线 %d 字　禁字自检通过"
           % (len(txt), foldn, len(txt) - foldn))
 
@@ -1799,7 +1799,7 @@ HERE_MARK = '''
 <!-- ══════════════════════════════════════════════════════════════
      专题二 · L200（一小时版）
      ⛔ 这个文件是 Courses/tools/topic02-build-L200.py 生成的，**不要手改**。
-        图是从 L300（topic-02.html）里抽的，改图去改图的生成器；
+        图是从 L300（topic-02-L300.html）里抽的，改图去改图的生成器；
         改正文去改 topic02-build-L200.py 的 body()。
         节号跟 L300 一致（§0–§9，第 8 节整节没有），这是故意的 —— 理由见脚本头。
      ══════════════════════════════════════════════════════════════ -->
