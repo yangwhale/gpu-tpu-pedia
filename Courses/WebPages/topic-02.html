@@ -965,7 +965,7 @@ details.aside b{color:var(--ink);font-weight:600}
     <small>两家公司、两套架构、完全不同的设计哲学 ——
       它们买的是同一代 HBM，跑的是同一批模型</small></div>
 
-  <p>这个数是硬件的<b>胃口</b> ——&nbsp;<b>每从内存搬进来一个字节，芯片配套能做大约 312 次运算</b>。
+  <p>这个数是硬件的<b>胃口</b> ——&nbsp;每从内存搬进来一个字节，芯片配套能做大约 312 次运算。
     喂不满，算力就在空转。
     <br>而算子那头是<b>同一个单位</b>：它每搬一个字节，需要做几次运算 ——&nbsp;
     这就是它的<b>算术强度</b>。<b>两个数单位一样，所以能直接比。</b></p>
@@ -1130,7 +1130,7 @@ details.aside b{color:var(--ink);font-weight:600}
     GPU 上你负责让硬件容易猜对，TPU 上你负责让编译器算得准。</p>
 
   <h3>2.1　同一次访存，两条路</h3>
-  <p>先不谈优化，只做一件事：<b>数一数一次访存路上有几个「运行时才知道结果」的决策点</b>。
+  <p>先不谈优化，只做一件事：<b>数一数这条路上有几个岔口是硬件临场决定的</b>。
     这个数字决定了后面所有事情。</p>
   <figure class="fbox" id="s012-fig2-1">
   <svg viewBox="0 0 1000 572" width="100%" role="img" aria-label="同一次访存在 GPU 与 TPU 上经过的路径对比：GPU 有五个运行时决策点，TPU 一个都没有">
@@ -4129,9 +4129,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption>上一张图留了个问题：这些部件到底怎么连。<b>答案是中间那个盒子只有一个</b> —— VPU、MXU、XLU 取的是<b>同一批 vreg</b>，各开一个门 —— <b>不是各有各的寄存器</b>（「那到底怎么连的」这个问题下一张图专门答）。于是「横着走贵」有了更准的说法：<b>贵在要把整个 vreg 交出去、绕一趟、再收回来</b>，不是缺一根线。<b>蓝带那组换算是这门课最该记的一句</b>：一个 ALU ≈ 一个 CUDA core，一条 lane ≈ 一个 warp scheduler ——&nbsp;两边差的从来不是有没有这些部件，是<b>谁在运行时挑活</b>。⚠️ 图里的数<b>书里标的是 v5p</b>（v4 只有 32 个 vreg），别当 v7 规格表用。</figcaption>
 </figure>
 
-  <p>「各开一个门」还不够，下一个问题必然是：门后面的线怎么走？
-    最常见的想法是把 vreg、VPU、MXU 全串在 128 条车道上时分复用。
-    <b>这个想法有一半对</b> ——&nbsp;而错的那一半正是这张图要纠的。</p>
+  <p>上一张开完门，下一个问题就是门后面的线。<b>直觉的那个答案只对一半</b>
+    ——&nbsp;要紧的恰恰是错的那半。</p>
 <figure class="fbox fwide" id="ms-p28">
 <svg viewBox="0 0 1400 874" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 核内的数据搬运：不是所有部件挂在一条 128 位总线上时分复用，而是寄存器堆开出有限条各自 128 宽的端口">
 <text x="20" y="26" class="ttl">数据到底怎么搬　—— <tspan font-weight="700">128 是每条通路的宽度，不是一条总线的车道数</tspan></text>
@@ -4843,7 +4842,7 @@ details.aside b{color:var(--ink);font-weight:600}
     但带宽差距的大头在距离。）</em>
     <br>——&nbsp;<b>所以真正快的那两块，恰好都是软件说了算的那一类。</b></div>
 
-  <p class="tbl-note"><b>那 VMEM 相当于 GPU 的哪一级？——&nbsp;哪一级都不是。</b>
+  <p class="tbl-note">那 VMEM 相当于 GPU 的哪一级？——&nbsp;哪一级都不是。
     按性格它是共享内存（软件显式搬、没有 tag、不会 miss），
     按容量它是 L2 那一级（<code>128 MiB vs 126 MB</code>，几乎一样大，而共享内存全片才 37 MiB）。
     ——&nbsp;<b>最准的说法是：TPU 把「共享内存那种性格」的东西做到了「L2 那么大」，
@@ -7776,8 +7775,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>同一个 head_dim ＝ 128，打 TPU 不打 GPU。</b>它在 <code>QKᵀ</code> 是收缩维、在 <code>PV</code> 是输出维，<b>各堵 MXU 的一条边</b>，上限 50% 是纯几何推的。<b>但别读成「GPU 不挑食」</b> —— 它挑的是 16 的倍数，只是那条边窄得多。</figcaption>
 </figure>
 
-  <p>最后收个口。这一节算出来的比值只有一个 ——&nbsp;<b>收缩维差 16 倍</b>。
-    但课里还流传着另外两个数，都对，<b>却量的不是同一件事</b>。</p>
+  <p>最后收个口。<b>课里一共出现过三个倍数，都对</b>
+    ——&nbsp;但只有一个是这里算出来的。</p>
 <figure class="fbox fwide" id="ms-p35">
 <svg viewBox="0 0 1400 840" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="同一对硬件的三个比值：收缩维差 16 倍、单个计算单元的每周期吞吐差 128 倍、一条指令的输出块最多差 512 倍。三者量的不是同一件事">
 <text x="20" y="26" class="ttl">同一对硬件，<tspan font-weight="700">三把尺子</tspan>　—— 16 倍、128 倍、512 倍，量的是三件不同的事</text>
@@ -8362,11 +8361,9 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>看到「支持 X」，先去找那道门槛在哪一行；找不到，就当它不适用于你。</b></div></details>
 
   <h3>3.6　高潮：FlashAttention 在两条路上各走一遍</h3>
-  <p>前面五小节拆的都是部件，这一小节拆的是<b>路</b>。
-    可「一个数怎么走完这条路」太抽象，所以换个走法 ——&nbsp;拿一个真东西来走。
-    <br>FlashAttention 是过去五年最重要的一个 kernel，
-    而它<b>没换算法、没减 FLOPs、没用新指令，只把数据在路上的走法改了一下</b>。
-    先看它要解决的是什么。</p>
+  <p>前面五小节拆的都是部件，这一小节拆的是<b>路</b> ——&nbsp;拿一个真东西来走。
+    <br>FlashAttention <b>没换算法、没减 FLOPs、没用新指令，只改了数据在路上的走法</b>。
+    先看它要解决什么。</p>
 <figure class="fbox fwide" id="ms-p38">
 <svg viewBox="0 0 1400 890" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="序列 128K 时注意力矩阵是 32 GiB，朴素写法要四趟 HBM 往返共 128 GiB；FlashAttention 用 online softmax 让它永远不落 HBM，计算量一点没变">
 <text x="20" y="26" class="ttl">先看这一节要解决的到底是什么　—— <tspan font-weight="700">128 GiB 全花在路上，一次乘法都没做</tspan></text>
@@ -8705,7 +8702,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>B200 侧五站，中间两站是缓存。</b>命中不命中要跑起来才知道 —— 这就是 2.1 主路那 4 个红框的物理来源。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <p>TPU 侧 —— <b>中间那站不是缓存，是暂存</b>，一字之差，性质完全不同：</p>
+  <p>TPU 侧 ——&nbsp;注意中间那一站的名字，<b>一字之差，性质完全不同</b>：</p>
 <figure class="fbox fwide" id="ms-t6">
 <svg viewBox="0 0 1400 892" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 数据通路：HBM 经 DMA 进 VMEM，再进 MXU，结果落进累加器；每一步都由编译器在编译期决定">
 <text x="20" y="26" class="ttl">一个数走完全程　—— 中间那一站是「暂存」，不是「缓存」</text>
@@ -10459,7 +10456,7 @@ details.aside b{color:var(--ink);font-weight:600}
   <h3>4.2　GPU 侧往里一层：域里面还有一层结构</h3>
   <p>上面那张图给的是「域有多大」。<b>域内部还有一层结构，而且那层结构里埋着两个
     非常典型的读数错误</b>。这一小节值得多花时间 ——
-    它要改的是一个<b>上一代的</b>常识。</p>
+    它要改的是一个上一代的常识。</p>
   <p>顺带把 GPU 侧的三个词铺完，后面两小节都要用：
     ① 跨域的通信库是 <code>NCCL</code>，MoE 那一族另有 <code>DeepEP</code>，4.5 那组数就是拿它跑的；
     ② 跨域走 RDMA，而 RDMA 有一条语义等下要对照 ——&nbsp;
@@ -10847,8 +10844,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <section id="s5"><div class="wrap">
   <div class="stn big"><span class="badge">第 5 节</span><h2>谁做决定：运行时，还是编译期</h2></div>
   <p class="lead">前面四节每一节都指向同一个分岔口，这一节把它正面画出来 ——
-    <b>而且要一路讲到它在软件栈上长成了什么样</b>。
-    先在硬件层看一眼，再看心智模型，然后是<b>四个后果</b>：
+    而且要一路讲到它在软件栈上长成了什么样。
+    先在硬件层看一眼，再看心智模型，然后是四个后果：
     前两个改的是<b>写法</b>（训练框架、手写 kernel），
     后两个是<b>真金白银的账单</b>（推理引擎移植、提前编译）——&nbsp;
     <b>这一节比别的节长，长在后两个上。</b></p>
@@ -12487,8 +12484,8 @@ details.aside b{color:var(--ink);font-weight:600}
 
 <section id="s6"><div class="wrap">
   <div class="stn big"><span class="badge">第 6 节</span><h2>怎么比才有意义</h2></div>
-  <p class="lead">前五节回答的是<b>「两边有什么不一样」</b>。这一节回答
-    <b>「那怎么比」</b> ——&nbsp;而它比前五节都容易讲砸，
+  <p class="lead">前五节回答的是「两边有什么不一样」。这一节回答
+    「那怎么比」 ——&nbsp;而它比前五节都容易讲砸，
     因为<b>这一节的错误全都长得像正确答案</b>：一个百分比、一张对照表、一句「快 X 倍」。
     <b>它们没有一个会报错。</b></p>
 
@@ -12677,10 +12674,10 @@ details.aside b{color:var(--ink);font-weight:600}
        算子的实际值。⛔ 缺了实际值，「开了重算」这四个字就没法落到具体数上，
        而 §7 的实测表恰恰是在开着 FlashAttention 的前提下测的。
        ⭐ 两个数相差正好一倍，这本身才是要点：光说「开了重算」什么都没说。 -->
-  <p class="tbl-note"><b>那到底能差多少 ——&nbsp;先拿本课这个算子算。</b>
-    FlashAttention 反向要重算一次前向的 S，于是<b>整层 7 次矩阵乘里有 1 次是白做的</b>
+  <p class="tbl-note">那到底能差多少 ——&nbsp;先拿本课这个算子算。
+    FlashAttention 反向要重算一次前向的 S，于是整层 7 次矩阵乘里有 1 次是白做的
     （前向 2 ＋ 反向 4 ＋ 重算 1）：<code>7 ÷ 6 ≈ 1.167×</code>，<b>有用的占 85.7%</b>。
-    <br><b>再看上界</b> ——&nbsp;整层全量重算就是图里那个
+    <br>再看上界 ——&nbsp;整层全量重算就是图里那个
     <code>(1 ＋ 1 ＋ 2) ÷ (1 ＋ 2) ＝ 4 ÷ 3 ≈ 1.33×</code>。
     <br><em>两个数都是从定义推出来的，不是测出来的 ——&nbsp;
     <b>而它们相差一倍，正说明「开了重算」这四个字本身说明不了任何事。</b>
@@ -13043,7 +13040,7 @@ details.aside b{color:var(--ink);font-weight:600}
 </figure>
 
   <h3>7.2　然后是这一节最难的一步：不说过头</h3>
-  <p>两个数有了，来路有了，能拆的也拆完了。<b>剩下的工作全部是减法</b> ——&nbsp;
+  <p>两个数有了，来路有了，能拆的也拆完了。剩下的工作全部是减法 ——&nbsp;
     把这个倍数放进几种不同的问法里各试一次，看它还剩多少是稳的。
     <b>做完减法你会发现，能安全说出口的只有一句话，而且它很长。</b></p>
 <figure class="fbox fwide" id="ms-p17">
@@ -13126,7 +13123,7 @@ details.aside b{color:var(--ink);font-weight:600}
 </figure>
 
   <p>那句「抄走就能用」之所以立得住，是因为它前面挡着一排边界 ——&nbsp;
-    <b>而那排边界值不值钱，取决于是自己数出来的，还是照单收下的。</b>
+    而那排边界值不值钱，取决于是自己数出来的，还是照单收下的。
     所以下一张之前先自己数一遍：<b>这个 1.31 倍，还缺什么？</b></p>
 <figure class="fbox fwide" id="ms-p18">
 <svg viewBox="0 0 1400 610" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="六条不能拿 1.31 倍这个结论说的话，每条都标出它把倍数往哪一边推：四条利于 GB300，两条利于 TPU v7">
@@ -13226,10 +13223,10 @@ details.aside b{color:var(--ink);font-weight:600}
   <div class="stn big"><span class="badge">第 8 节</span><h2>这一课的数我是怎么核的</h2></div>
   <p class="lead">前七节一直在要求「每个数都得能被回查」。
     <b>这一节把这门课自己的账摊开：撤回过八笔，每一笔活了多久、往哪边偏。</b>
-    ——&nbsp;它<b>不含任何硬件知识</b>，六十分钟的版本里是第一个该砍的；
+    ——&nbsp;它不含任何硬件知识，六十分钟的版本里是第一个该砍的；
     但如果这门课的目的是让你以后能自己判断一份对比报告，
     <b>它是全课迁移性最强的一节</b>。前七节讲的是这两块硬件，
-    这一节讲的是<b>怎么读任何一份把两块硬件放在一起的材料</b>。</p>
+    这一节讲的是怎么读任何一份把两块硬件放在一起的材料。</p>
 
   <div class="note q"><span class="t">为什么一份课件要花一整节讲自己错在哪</span>
     因为第 6 节和第 7 节反复要求的那件事，<b>如果对自己不做一遍，就只是一句口号</b>。
@@ -13725,11 +13722,11 @@ details.aside b{color:var(--ink);font-weight:600}
 <section id="s9"><div class="wrap">
   <div class="stn big"><span class="badge">第 9 节</span><h2>那到底各自擅长什么</h2></div>
   <p class="lead">这是第 1 节起就有人在等的那个问题。
-    拖到最后才答，是因为<b>它在第 1 节答不了</b>——&nbsp;
+    拖到最后才答，是因为它在第 1 节答不了——&nbsp;
     那时候「擅长」只能靠印象，而这门课花了八节，就是为了让这一节的每一句
-    <b>都能指回前面某一处具体的东西</b>。
+    都能指回前面某一处具体的东西。
     <br><b>所以这一节有一条硬规矩：说不出指回哪儿的话，一句都不写。</b>
-    ——&nbsp;它同时也决定了这一节会显得比你预期的<b>短</b>。</p>
+    ——&nbsp;它同时也决定了这一节会显得比你预期的短。</p>
 
   <div class="note q"><span class="t">先说清楚这一节不做什么</span>
     它<b>不给结论说谁更好</b>，也<b>不给选型建议</b>。
@@ -14106,7 +14103,7 @@ details.aside b{color:var(--ink);font-weight:600}
 </figure>
 
   <p>底带那两句是这一节最难堪的部分，图上写全了，这里只补一句机制：
-    <b>自曝清单只能列出你撞到过的坑。</b>那十六条全是在做事的过程中撞出来的；
+    自曝清单只能列出你撞到过的坑。那十六条全是在做事的过程中撞出来的；
     <b>推理对比和 TCO 从来没有开过工，所以从来没有机会暴露自己。</b></p>
 
   <h3>9.3　落点</h3>
@@ -14316,7 +14313,7 @@ details.aside b{color:var(--ink);font-weight:600}
 
 <section id="deep"><div class="wrap">
   <div class="stn"><span class="badge">深入</span><h2>想再往下挖一层的同学</h2></div>
-  <p class="lead">上面那十六张<b>标了「出自⋯」的图</b>，都搬自两份「显微镜」文档
+  <p class="lead">上面那十六张标了「出自⋯」的图，都搬自两份「显微镜」文档
     （其余几张是这门课自己画的）。
     那两份把镜头拉得更近 —— <b>每一个数字都标了来源等级，查不到的地方明写「查不到」</b>。
     这门课容不下的推导链，以及作者自己撤回过的那八笔，都在里面。</p>

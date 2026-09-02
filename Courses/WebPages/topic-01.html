@@ -890,9 +890,9 @@ footer a{text-decoration:none}
   </details>
 
   <h3>为什么宽度是 7,168</h3>
-  <p>记住这个 <b>d = 7,168</b>，<b>它是这个模型的「主干道宽度」</b>，后面每一步都会用到它。
-  一句话解释这个数：<span class="k">7,168 = 128 × 56 = 256 × 28</span> ——
-  <b>两边都整除，所以在 TPU 和 GPU 上都不会因为补齐而白算。</b></p>
+  <p>记住这个 <b>d = 7,168</b> ——&nbsp;它是这个模型的「主干道宽度」，后面每一步都会用到。
+  一句话解释这个数：<span class="k">7,168 = 128 × 56 = 256 × 28</span>，
+  <b>两边都整除，在 TPU 和 GPU 上都不会因为补齐而白算。</b></p>
 
   <details class="more"><summary>展开：哪一半是硬约束，哪一半是没人能替 DeepSeek 回答的<span class="why">—— 这里很容易把两件事讲成一件</span></summary>
   <div class="body">
@@ -1124,9 +1124,8 @@ else:
   </div>
 
   <h3>喇叭口：为什么长上下文一来就绷不住</h3>
-  <p>把序列长度当横轴，KV cache 当纵轴，<b>两种存法各画一条线</b>。
-  两条都是直线 —— 因为都是线性的。<b>但斜率差 <span data-v="kvRatio">56.9×</span>，
-  于是它们从同一个原点出发，越走越张开。</b></p>
+  <p>把序列长度当横轴，KV cache 当纵轴，两种存法各画一条线。两条都是直线，
+  <b>但斜率差 <span data-v="kvRatio">56.9×</span> ——&nbsp;同一个原点出发，越走越张开。</b></p>
 
   <figure class="fbox">
     <svg viewBox="0 0 1000 340" role="img"
@@ -1315,10 +1314,10 @@ else:
         第 1 个 token 转 1 度，第 100 个转 100 度。
         两个向量做点积时，<b>结果自然就带上了它们的角度差，也就是相对距离</b>。
       </div>
-      <p><b>位置信息为什么必须单独走一路。</b> 麻烦就出在这个「转角度」上 ——
-      <b>转多少度，取决于这个 token 排在第几位</b>。
-      如果先转角度、再压进隐向量，那这个隐向量里就<b>掺进了位置</b>；
-      而这个旋转会<b>夹在两个矩阵中间，挪不走 —— 矩阵乘法不满足交换律</b>。</p>
+      <p><b>位置信息为什么必须单独走一路。</b>麻烦就出在这个「转角度」上 ——&nbsp;
+      转多少度，取决于这个 token 排在第几位。
+      先转角度、再压进隐向量，隐向量里就掺进了位置；
+      而这个旋转夹在两个矩阵中间挪不走 ——&nbsp;矩阵乘法不满足交换律。</p>
       <p><em>这里有一句要说准：<b>坏掉的不是正确性</b> —— 那样做模型照样能训、照样能跑。</em>
       <b>坏掉的是推理时一个很值钱的省法</b>，代价是<b>每生成一个字，都得把前面所有 token 的 K
       重算一遍</b>。<em>是哪个省法，留到下面的 shape 变换链那一节讲透。</em></p>
@@ -1411,8 +1410,8 @@ else:
     <div>
       <h4 style="margin-bottom:8px">那条约束从哪来的</h4>
       <p>它来自 2017 年 Transformer 原论文的<b>一个选择，不是一条定义</b>。
-      原文第 3.2.2 节把输出投影写成 <code>W^O ∈ R^(h·d_v × d_model)</code> ——
-      <b>形状上这两个数从一开始就不必相等</b>。</p>
+      原文第 3.2.2 节把输出投影写成 <code>W^O ∈ R^(h·d_v × d_model)</code> ——&nbsp;
+      形状上这两个数从一开始就不必相等。</p>
       <p>紧接着那句是：「<em>In this work we employ h = 8 … we use
       d_k = d_v = d_model/h = 64</em>」。<b>「In this work」四个字说明它是个取值，不是个规律。</b>
       而给出的理由也写得很直白：</p>
@@ -1429,8 +1428,8 @@ else:
       <p>因为在<b>标准注意力里，把头做宽是要付 cache 的</b>：
       每个头的 K 和 V 都要各存一份，<code>2 × 头数 × 每头维度</code> 个数 ——
       <b>头一宽，每份就变大，cache 跟着线性涨</b>。这两件事是锁在一起的。</p>
-      <p><b>MLA 把这把锁剪断了。</b> MLA 论文的 Table 1 直接把四代的 cache 写成公式，
-      MLA 那一行是 <b><code>(d_c + d_h^R) × 层数</code></b> ——
+      <p><b>MLA 把这把锁剪断了。</b>MLA 论文的 Table 1 直接把四代的 cache 写成公式，
+      MLA 那一行是 <code>(d_c + d_h^R) × 层数</code> ——&nbsp;
       <b>这个式子里没有头数，也没有每头维度。</b></p>
       <div class="note ok">
         <span class="t">于是出现了一个新的自由度</span>
@@ -1445,8 +1444,8 @@ else:
   </div>
 
   <h4>代价：撑宽要付三笔钱，V3 只付了两笔</h4>
-  <p>只讲好处不叫讲清楚。<b>把头撑宽，账面上要多付三笔</b> ——
-  有意思的是<b>第三笔被另一个设计抵消掉了</b>。<em>看这张图，三根条对着同一条 1.00 倍基准线。</em></p>
+  <p>只讲好处不叫讲清楚。<b>把头撑宽，账面上要多付三笔</b> ——&nbsp;
+  有意思的是<b>第三笔被另一个设计抵消掉了</b>。</p>
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 322" role="img"
@@ -1582,11 +1581,9 @@ else:
   </div>
 
   <h3>⭐ 完整的 shape 变换链：从 <code>[128K, 7168]</code> 走到 Q / K / V</h3>
-  <p>上面讲清了「为什么可以撑宽」。<b>下面是这一层实际发生的每一步。</b>
-  一批 <span data-v="tokens">131,072</span> 个 token 进来，是一个
-  <code>[<span data-v="seqLbl">128K</span>, 7168]</code> 的矩阵；
-  出去的时候还是同样形状。<b>中间它被拆成了三样东西 —— Q、K、V ——
-  而这三样各自走的路完全不同</b>，尤其是 RoPE 只走其中两条支路的一小段。</p>
+  <p>上面讲清了「为什么可以撑宽」。<b>下面是这一层实际发生的每一步</b> ——&nbsp;
+  进去和出来都是 <code>[<span data-v="seqLbl">128K</span>, 7168]</code>，
+  中间拆成 Q、K、V 三条路，而这三条走得完全不同。</p>
 
   <figure class="fbox">
     <svg viewBox="0 0 1000 760" role="img"
@@ -1790,8 +1787,8 @@ else:
   </details>
 
   <h3>⭐ 凭什么能压这么狠：那个 32,768 从来就不存在</h3>
-  <p><b>56.9 倍听起来像魔术</b>，而魔术总有障眼法。
-  这一节把它拆开 —— <b>拆完你会发现，其中一大半根本不是压缩，是「别犯傻」。</b></p>
+  <p>56.9 倍听起来像魔术，而魔术总有障眼法。这一节把它拆开 ——&nbsp;
+  <b>拆完你会发现，其中一大半根本不是压缩，是「别犯傻」。</b></p>
 
   <figure class="fbox">
     <svg viewBox="0 0 1000 400" role="img"
@@ -2565,10 +2562,7 @@ out  = <span class="c">W_down</span> · h     <span class="c">// 18432 → 7168<
 
   <h4>为什么最前面几层偏偏不做 MoE</h4>
   <p>这个问题有一个流传很广的答案：<em>「靠近输入的层做的是通用活儿，没什么可分工的。」</em>
-  <b>听起来很顺，但那不是 DeepSeek 给的理由。</b>
-  <em>去翻论文，会发现真实情况是一条链，而且最后一环是断的。</em>
-  <b>翻完 DeepSeek 自己这条链，再横着看一眼同期别家</b> ——
-  <em>你会发现这件事连共识都算不上。</em></p>
+  <b>听起来很顺，但那不是 DeepSeek 给的理由</b> ——&nbsp;真实情况是一条链，而且最后一环是断的。</p>
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 262" role="img"
@@ -4303,11 +4297,9 @@ x = x + MoE(norm(x))
   </div>
 
   <h3>题外一眼：mHC —— V4 把这条总线加宽了</h3>
-  <p>这一整节讲的是「一条 7,168 维的总线」。<b>那条总线本身，也是可以改的设计</b> ——
-  DeepSeek 在 V4 上就把它换掉了，换成
-  <b>mHC（Manifold-Constrained Hyper-Connections）</b>。
-  <em>这是这一节唯一一处越过 V3 的地方，放在这里是因为：只有先把总线讲清楚，
-  才看得懂「加宽总线」是在改什么。</em></p>
+  <p>这一整节讲的是「一条 7,168 维的总线」。<b>那条总线本身也是可以改的设计</b> ——&nbsp;
+  DeepSeek 在 V4 上换成了 <b>mHC</b>（Manifold-Constrained Hyper-Connections）。
+  <em>唯一一处越过 V3 的地方，放这儿是因为要先讲清总线才看得懂它在改什么。</em></p>
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 348" role="img"
@@ -4394,9 +4386,9 @@ x = x + MoE(norm(x))
       这条性质正是「堆 61 层也不炸」的依据。<b>用 Sinkhorn-Knopp 迭代把矩阵投影上去，V4 迭 20 次。</b></p></div>
     <div class="card tint"><h4>③ ⚠️ 代价：不在你以为的地方</h4>
       <p class="sub"><b>直觉会说「4 倍宽 → 激活显存 4 倍」，那是没读工程章节的算法。</b>
-      V4 论文明说 mHC 同时抬高了<b>激活显存</b>和<b>流水线级间通信</b>，
-      于是他们上了 fused kernel、<b>选择性重算</b>、改 DualPipe 重叠 ——
-      最后把 mHC 的墙钟开销压到 <b>6.7%</b>。</p></div>
+      V4 论文明说 mHC 同时抬高了激活显存和流水线级间通信，
+      于是他们上了 fused kernel、选择性重算、改 DualPipe 重叠 ——&nbsp;
+      最后把墙钟开销压到 <b>6.7%</b>。</p></div>
   </div>
 
   <details class="more"><summary>展开：这一段每个数字的出处，以及为什么 V4-Pro 的账能跟这一页直接对<span class="why">—— 61 层、7,168 维，跟 V3 一模一样</span></summary>
@@ -5073,16 +5065,18 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <b>出口那一下没有「加回去」，所以只有一份。</b>
   </div>
 
-  <p><b>再顺一个必然会被问到的：那为什么预训练一般用 4K，不用 128K？</b><br>
-    省的<b>不是 logits</b>。logits 只看 <b>token 总数</b>（＝序列长度 × batch），
-    跟序列本身有多长无关 —— 拿默认口径举例：<b>128K × batch 1</b> 和
-    <b>4K × batch 32</b> 都是 131,072 个 token，logits <b>两边都是 31.56 GiB</b>，一模一样。<br>
-    短序列真正省的是<b>注意力</b>：它的代价是 batch × 序列长度<b>的平方</b>。
-    同样这 131,072 个 token，128K 那种切法要付 4K 切法的 <b>32 倍</b>。<br>
-    <em>（V3 的配置文件里 <code>original_max_position_embeddings</code> 是 4096、
-    YaRN 的 <code>factor</code> 是 40，4096 × 40 = 163840 —— 它本体确实是按 4K 训的，
+  <details class="more"><summary>顺带：那为什么预训练一般用 4K，不用 128K<span class="why">—— 省的不是 logits，是注意力</span></summary>
+  <div class="body">
+    <p>省的<b>不是 logits</b>。logits 只看 token 总数（＝序列长度 × batch），跟序列本身多长无关
+    ——&nbsp;<b>128K × batch 1</b> 和 <b>4K × batch 32</b> 都是 131,072 个 token，
+    logits 两边都是 31.56 GiB，一模一样。</p>
+    <p>短序列真正省的是<b>注意力</b>：它的代价是 batch × 序列长度<b>的平方</b>。
+    同样这 131,072 个 token，128K 那种切法要付 4K 切法的 <b>32 倍</b>。</p>
+    <p><em>V3 的配置文件里 <code>original_max_position_embeddings</code> 是 4096、
+    YaRN 的 <code>factor</code> 是 40，4096 × 40 = 163840 ——&nbsp;它本体确实是按 4K 训的，
     128K 是后面扩出来的。另外训练时 logits 通常还要转 fp32 算 cross entropy，再翻一倍，
-    所以现在普遍用分块的 cross entropy：算一段扔一段，不把整张表物化出来。）</em></p>
+    所以现在普遍用分块的 cross entropy：算一段扔一段，不把整张表物化出来。</em></p>
+  </div></details>
 
   <figure class="fbox">
   <svg viewBox="0 0 1000 300" role="img"
@@ -5151,8 +5145,8 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     <div class="card tint"><h4>摊到装得下它的那些卡上</h4>
       <div class="stat green"><span data-v="timeMulti">8.7 秒</span></div>
       <p class="sub">按 <span data-v="devicesCeil">15</span> 个 device（<span data-v="devices">14.3</span>
-        <b>向上取整 —— 卡不能切一半</b>）、35% 利用率、
-        <b>且假设并行完美无损</b>。<b>后面那半句是这门课剩下的全部内容。</b></p></div>
+        向上取整，卡不能切一半）、35% 利用率、<b>且假设并行完美无损</b>
+        ——&nbsp;最后那半句是这门课剩下的全部内容。</p></div>
   </div>
   <div class="note warn">
     <span class="t">「假设并行完美无损」这七个字，是整门课的入口</span>
@@ -5203,8 +5197,8 @@ bias +3.5   109 个错，其中 <span class="r">只有 14 个</span>错在 3 上
     </div>
     <div class="card tint">
       <h4>③ ⭐ 贴着上限那一带会失灵</h4>
-      <p class="sub">远离上限时它非常可靠。但<b>逼近上限的那个窄带里，它判不准</b> ——
-      我们判错过，<b>而且错的都落在这一带</b>。</p>
+      <p class="sub">远离上限时它非常可靠。但<b>逼近上限的那个窄带里，它判不准</b> ——&nbsp;
+      我们判错过，而且错的都落在这一带。</p>
       <p class="sub" style="margin-top:10px;color:var(--blue-d)"><b>不要把静态分析当神谕。</b>
       它帮你排除掉大部分明显不行的配置，不替你做最后那个决定。</p>
     </div>
