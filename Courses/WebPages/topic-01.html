@@ -703,53 +703,70 @@ footer a{text-decoration:none}
     </defs>
 
     <!-- 残差流总线 -->
-    <rect x="180" y="150" width="640" height="34" rx="17" fill="url(#resid)"/>
-    <text x="500" y="172" text-anchor="middle" class="svglbl" fill="#174ea6">
+    <!-- ⭐ 2026-09-02 改两处（Chris 当场指出）：
+         ① **缺了分词**。原图 文字 → ① 嵌入 直接连，把「文字怎么变成 token id」
+            这一步吃掉了。补一个 **分词** 盒子，样式跟「文字」「概率分布」一样是白底 ——
+            **这是有意的**：分词不在模型里，没有权重、没有 FLOPs，它是喂进 ① 之前的事。
+            用颜色把「模型的步骤」和「模型外的预处理」分开，比加个序号更准。
+         ② **④ 看不见**。原来「③ MLP / ④ MoE」挤在一行里，扫一眼是 ① ② ③ ⑥，
+            台下会以为跳号了。拆成两行、各自带号。**但仍然是一个盒子** ——
+            ③ 和 ④ 在一层里是二选一（前 3 层 dense、后 58 层 MoE），
+            拆成两个并排盒子会变成「先过 MLP 再过 MoE」，那是错的。 -->
+    <rect x="264" y="150" width="556" height="34" rx="17" fill="url(#resid)"/>
+    <text x="542" y="172" text-anchor="middle" class="svglbl" fill="#174ea6">
       残差流 · 宽度 d = 7168 · 一路贯穿 61 层</text>
 
     <!-- 步骤 -->
     <g class="svgtxt">
       <!-- 输入 -->
-      <rect x="14" y="140" width="112" height="54" rx="9" fill="#fff" stroke="#dadce0"/>
-      <text x="70" y="163" text-anchor="middle" class="svglbl" fill="#202124">文字</text>
-      <text x="70" y="181" text-anchor="middle" class="svgsm">"人工智能"</text>
-      <line x1="128" y1="167" x2="172" y2="167" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="8" y="140" width="92" height="54" rx="9" fill="#fff" stroke="#dadce0"/>
+      <text x="54" y="163" text-anchor="middle" class="svglbl" fill="#202124">文字</text>
+      <text x="54" y="181" text-anchor="middle" class="svgsm">"人工智能"</text>
+      <line x1="102" y1="167" x2="126" y2="167" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar)"/>
+
+      <!-- 分词（模型之外） -->
+      <rect x="130" y="138" width="106" height="58" rx="9" fill="#fff" stroke="#dadce0"/>
+      <text x="183" y="161" text-anchor="middle" class="svglbl" fill="#202124">分词</text>
+      <text x="183" y="179" text-anchor="middle" class="svgsm">切成 subword</text>
+      <text x="183" y="192" text-anchor="middle" class="svgsm">查出 token id</text>
+      <text x="183" y="212" text-anchor="middle" class="svgsm" fill="#9aa0a6">不在模型里 · 无权重无 FLOPs</text>
+      <line x1="238" y1="167" x2="258" y2="167" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar)"/>
 
       <!-- 第1步 嵌入 -->
-      <rect x="180" y="66" width="118" height="62" rx="9" fill="#e8f0fe" stroke="#1a73e8"/>
-      <text x="239" y="88" text-anchor="middle" class="svglbl" fill="#174ea6">① 嵌入</text>
-      <text x="239" y="107" text-anchor="middle" class="svgsm" fill="#174ea6">129,280 × 7168</text>
-      <text x="239" y="121" text-anchor="middle" class="svgsm" fill="#174ea6">查表</text>
-      <line x1="239" y1="130" x2="239" y2="146" stroke="#1a73e8" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="264" y="62" width="112" height="70" rx="9" fill="#e8f0fe" stroke="#1a73e8"/>
+      <text x="320" y="84" text-anchor="middle" class="svglbl" fill="#174ea6">① 嵌入</text>
+      <text x="320" y="102" text-anchor="middle" class="svgsm" fill="#174ea6">129,280 × 7168</text>
+      <text x="320" y="118" text-anchor="middle" class="svgsm" fill="#174ea6">拿 id 查表</text>
+      <line x1="320" y1="134" x2="320" y2="146" stroke="#1a73e8" stroke-width="1.4" marker-end="url(#ar)"/>
 
       <!-- 层循环框 -->
-      <rect x="318" y="40" width="330" height="250" rx="12" fill="none" stroke="#dadce0"
+      <rect x="392" y="40" width="272" height="212" rx="12" fill="none" stroke="#dadce0"
             stroke-dasharray="5 4"/>
-      <text x="483" y="30" text-anchor="middle" class="svglbl">× 61 层</text>
+      <text x="528" y="30" text-anchor="middle" class="svglbl">× 61 层</text>
 
       <!-- 第2步 MLA -->
-      <rect x="338" y="62" width="128" height="70" rx="9" fill="#fce8e6" stroke="#d93025"/>
-      <text x="402" y="84" text-anchor="middle" class="svglbl" fill="#a50e0e">② MLA</text>
-      <text x="402" y="102" text-anchor="middle" class="svgsm" fill="#a50e0e">128 头 · 低秩 KV</text>
-      <text x="402" y="118" text-anchor="middle" class="svgsm" fill="#a50e0e">KV cache 在这</text>
-      <line x1="402" y1="134" x2="402" y2="146" stroke="#d93025" stroke-width="1.4" marker-end="url(#ar)"/>
-      <path d="M402 190 v34 h96" fill="none" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
+      <rect x="402" y="62" width="120" height="70" rx="9" fill="#fce8e6" stroke="#d93025"/>
+      <text x="462" y="84" text-anchor="middle" class="svglbl" fill="#a50e0e">② MLA</text>
+      <text x="462" y="102" text-anchor="middle" class="svgsm" fill="#a50e0e">128 头 · 低秩 KV</text>
+      <text x="462" y="118" text-anchor="middle" class="svgsm" fill="#a50e0e">KV cache 在这</text>
+      <line x1="462" y1="134" x2="462" y2="146" stroke="#d93025" stroke-width="1.4" marker-end="url(#ar)"/>
+      <path d="M462 190 v30 h58" fill="none" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
 
-      <!-- 第3、4步 MLP -->
-      <rect x="500" y="62" width="130" height="70" rx="9" fill="#e6f4ea" stroke="#1e8e3e"/>
-      <text x="565" y="84" text-anchor="middle" class="svglbl" fill="#0d652d">③ MLP / ④ MoE</text>
-      <text x="565" y="102" text-anchor="middle" class="svgsm" fill="#0d652d">前 3 层 dense</text>
-      <text x="565" y="118" text-anchor="middle" class="svgsm" fill="#0d652d">后 58 层 256 专家</text>
-      <line x1="565" y1="134" x2="565" y2="146" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#ar)"/>
-      <path d="M498 224 h68 v-32" fill="none" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
-      <text x="483" y="243" text-anchor="middle" class="svgsm">⑤ 残差回写 · norm</text>
+      <!-- 第3、4步 MLP：同一个位置，二选一 -->
+      <rect x="534" y="62" width="120" height="70" rx="9" fill="#e6f4ea" stroke="#1e8e3e"/>
+      <text x="594" y="82" text-anchor="middle" class="svgsm" fill="#0d652d">这一格二选一</text>
+      <text x="594" y="102" text-anchor="middle" class="svglbl" fill="#0d652d">③ MLP　前 3 层</text>
+      <text x="594" y="122" text-anchor="middle" class="svglbl" fill="#0d652d">④ MoE　后 58 层</text>
+      <line x1="594" y1="134" x2="594" y2="146" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#ar)"/>
+      <path d="M520 220 h74 v-30" fill="none" stroke="#5f6368" stroke-width="1.2" marker-end="url(#ar)"/>
+      <text x="528" y="240" text-anchor="middle" class="svgsm">⑤ 残差回写 · norm</text>
 
       <!-- 第6步 出口 -->
-      <rect x="680" y="62" width="130" height="70" rx="9" fill="#fef7e0" stroke="#f9ab00"/>
-      <text x="745" y="84" text-anchor="middle" class="svglbl" fill="#b06000">⑥ lm_head</text>
-      <text x="745" y="102" text-anchor="middle" class="svgsm" fill="#b06000">7168 → 129,280</text>
-      <text x="745" y="118" text-anchor="middle" class="svgsm" fill="#b06000">独立的第二份</text>
-      <line x1="745" y1="146" x2="745" y2="132" stroke="#f9ab00" stroke-width="1.4" marker-end="url(#ar)"/>
+      <rect x="692" y="62" width="122" height="70" rx="9" fill="#fef7e0" stroke="#f9ab00"/>
+      <text x="753" y="84" text-anchor="middle" class="svglbl" fill="#b06000">⑥ lm_head</text>
+      <text x="753" y="102" text-anchor="middle" class="svgsm" fill="#b06000">7168 → 129,280</text>
+      <text x="753" y="118" text-anchor="middle" class="svgsm" fill="#b06000">独立的第二份</text>
+      <line x1="753" y1="146" x2="753" y2="132" stroke="#f9ab00" stroke-width="1.4" marker-end="url(#ar)"/>
 
       <!-- 输出 -->
       <line x1="822" y1="167" x2="866" y2="167" stroke="#5f6368" stroke-width="1.4" marker-end="url(#ar)"/>
@@ -768,7 +785,7 @@ footer a{text-decoration:none}
       <text x="520" y="296" class="svgsm" fill="#d93025" font-weight="700">④ 有没有什么在这里爆炸 ←往往这个才是重点</text>
     </g>
   </svg>
-  <figcaption>七步路线。残差流是贯穿全程的那条总线 —— 每层从它读、往它写。</figcaption>
+  <figcaption>七步路线。残差流是贯穿全程的那条总线 —— 每层从它读、往它写。<br><b>最左边那两个白盒子不在模型里</b> ——&nbsp;分词把文字切成 subword、查出 token id，<b>没有权重、不算 FLOPs</b>，它是喂给 ① 之前的事（第 1 步里会讲这张词表为什么是 129,280）。<br><b>③ 和 ④ 共用一格，是二选一不是先后</b>：前 3 层走 dense MLP，后 58 层走 MoE。</figcaption>
   </figure>
 </div></section>
 
