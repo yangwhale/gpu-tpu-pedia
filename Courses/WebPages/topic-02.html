@@ -605,8 +605,7 @@ details.aside b{color:var(--ink);font-weight:600}
        屏幕上的后果：读者还没看到图，先吃 380 字讲图上有什么，看完图再读一遍图注。
        现在压成一句引子；XLU / SparseCore 那两条图注没有的机制细节，
        折到图后（它们是第 3 节的伏笔，不是这一节要背的东西）。 -->
-  <p>先看 TPU 这一颗。<b>图上有三处后面会反复用，还有两个容易被当成装饰的小盒子</b>
-    ——&nbsp;图注里逐条点了名，以及各自用在第几节。</p>
+  <p>先看 TPU 这一颗 ——&nbsp;<b>图上有五处后面会反复用</b>，图注逐条点了名。</p>
 
   <figure class="fbox" id="s012-fig1-1">
   <svg viewBox="0 0 1000 940" width="100%" role="img" aria-label="TPU v7 芯片全景：一颗 chip 两个对称的 chiplet，各有一个 TensorCore、两个 SparseCore、64 MiB VMEM 与 96 GiB 私有 HBM，中间用 D2D 相连">
@@ -767,9 +766,7 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <h3>1.2　GB200：这一侧要画三层</h3>
   <p>GPU 这边一颗画不完，要画三层：一颗 GPU、一个节点、再到 NVL72。
-    <b>重点在第三层</b> ——&nbsp;到了 NVL72，<b>「一台机器」这个词就失效了</b>：
-    72 张卡在同一个 NVLink 域里，域里面随便通信；出了这个域，<b>换协议</b>。
-    <br>所以两边的差别不在连不连续（都是离散的），在<b>换不换协议</b>。</p>
+    <b>重点在第三层</b> ——&nbsp;那一层上，「一台机器」这个词已经不成立了。</p>
 
   <figure class="fbox" id="s012-fig1-2">
   <svg viewBox="0 0 1000 552" width="100%" role="img" aria-label="GB200 的三层：一张 GPU、一个节点、一个 NVL72 域。域内 72 卡是物理规模，本课这批集群按 64 卡编排">
@@ -839,11 +836,9 @@ details.aside b{color:var(--ink);font-weight:600}
   </figure>
 
   <h3>1.3　⭐ 把两边挂在同一根纵轴上</h3>
-  <p>光看两张各说各的图没用。<b>真正有用的是这一张</b> ——&nbsp;
-    同一个高度代表同一个层级。这么一挂，<b>两个灰色的空格自己就跳出来了</b>：
-    TPU 没有「硬件自动管的缓存」那一层，GPU 没有「可编程的专用协处理器」那一层。
-    <br><b>各缺对方整整一层。而缺的不是容量，是「谁做决定」</b> ——&nbsp;
-    这一句是后面四节的钥匙。</p>
+  <p>光看两张各说各的图没用。这一张把两边挂到同一根高度轴上，
+    一挂，两个灰格子自己就跳出来 ——&nbsp;各缺对方整整一层。
+    <br><b>而缺的不是容量，是「谁做决定」。这一句是后面四节的钥匙。</b></p>
 
   <figure class="fbox" id="s012-fig1-3">
   <svg viewBox="0 0 1000 678" width="100%" role="img" aria-label="TPU v7 与 B200 的存储层级对照，共用一根纵轴，空格子表示该层不存在">
@@ -3397,7 +3392,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>一个 SM 拆开。</b>warp 调度器、256 KB 寄存器堆、228 KB L1／共享内存、记分板 ——<b>这些部件加起来只干一件事：在运行时动态地藏住延迟和分支。</b>　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <p>再看 TPU 这边。<b>这张图的信息量在右边那一栏</b>，上面那些部件在这里一样都没有。</p>
+  <p>再看 TPU 这边 ——&nbsp;<b>这张图的信息量全在右边那一栏。</b></p>
 <figure class="fbox fwide" id="ms-t2">
 <svg viewBox="0 0 1400 876" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 一个 TensorCore 的内部构成：2 个 MXU、1 个 VPU、标量单元、VMEM 与 SMEM；与 GPU SM 相比缺少调度器、线程上下文、自动缓存与乱序执行">
 <text x="20" y="26" class="ttl">把一个 TensorCore 拆开　—— 值得数的不是它有什么，是它「少了」什么</text>
@@ -3677,11 +3672,10 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><br>而第 2 节主路那 4 个红框，就是答「要」之后的必然产物。
     <b>「有没有 cache」和「有没有 warp 调度器」不是两件事，是同一个决定的两个面。</b></div>
 
-  <p><b>还有第 1 节欠下的那笔账 —— 图里那个「跨 lane 单元」。</b>
-    先把画面立起来：VPU 的一个向量寄存器是 <b>8 × 128</b>，8 个 sublane、128 条 lane
-    ——&nbsp;<b>想成一张座位表，8 行 128 列</b>。要紧的是<b>列不是画出来的，是真的硬件</b>：
-    每一条 lane 是一整套自己的 ALU。于是同一批数，
-    <b>上下走和横着走根本不是一回事</b> ——&nbsp;</p>
+  <p>还有第 1 节欠下的那笔账 ——&nbsp;图里那个「跨 lane 单元」。
+    先把画面立起来：一个向量寄存器是 8 个 sublane × 128 条 lane，
+    像一张 8 行 128 列的座位表；每条 lane 是一整套自己的 ALU，列不是画出来的。
+    <b>于是同一批数，上下走和横着走根本不是一回事</b> ——&nbsp;</p>
 <figure class="fbox fwide" id="ms-p26">
 <svg viewBox="0 0 1400 1008" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器 8×128 的方向不对称：沿 sublane 轴归约三步就完，沿 lane 轴归约必须经过 XLU，而公开资料称它慢且贵">
 <text x="20" y="26" class="ttl">同一张 8 × 128 的座位表　—— <tspan font-weight="700">上下走三步就完，横着走要另找一个单元</tspan></text>
@@ -3968,10 +3962,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption>整张图就一件事：<b>同一个寄存器、同一批数，换个方向，代价完全不同</b>。绿的那一列是<b>纵向</b> —— 8 → 4 → 2 → 1，三步，全程没离开自己那套 ALU；红的那一行是<b>横向</b> —— 128 条 lane 各是一套硬件，数要横着走只能交给 <b>XLU</b>，而且往往还得绕一趟 VMEM。<b>黄带才是这张图真正要落的地方</b>：<code>softmax</code> 和 <code>RMSNorm</code> 都沿最后一维求和，而最后一维默认就铺在 lane 方向上 —— <b>最常做的那两个归约，恰好都撞在最贵的方向</b>。⚠️ 底带那条不能跳过，<b>它记的是一次收回</b>：「贵是因为列与列之间没有连线」——<b>这个说法是错的，已经撤掉</b>。公开资料的说法是跨 lane <b>至少要过一趟 VMEM／XLU／SMEM</b>，所以<b>贵在「出一趟寄存器堆再回来」这个往返，不在缺一根线</b>。（这一句是后面三张图共同的地基，别看漏。）</figcaption>
 </figure>
 
-  <p><b>讲到这儿一定会有人问：那这些部件到底是怎么连的？</b>
-    是 VPU 一套寄存器、MXU 另一套，还是全都挂在一条总线上、想去哪去哪？
-    ——&nbsp;<b>都不是。核里只有一套 vreg，谁都从这里取，各开一个门。</b>
-    这张图顺带把上一张欠的那句话补正了：<b>横着走贵，贵在这趟往返。</b></p>
+  <p>讲到这儿一定会有人问：这些部件之间到底怎么连？
+    <b>答案跟「各自一套寄存器」和「共用一条总线」都不一样</b>
+    ——&nbsp;而它顺带补正了上一张欠的那句：横着走贵，贵在哪一趟。</p>
 <figure class="fbox fwide" id="ms-p27">
 <svg viewBox="0 0 1400 726" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 核内的向量寄存器堆是 VPU、MXU、XLU 共用的：不是每个单元一套寄存器，也不是挂在一条总线上">
 <text x="20" y="26" class="ttl">核里只有<tspan font-weight="700">一套 vreg</tspan>　—— VPU、MXU、XLU 都从这里取，各开一个门</text>
@@ -4136,11 +4129,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption>上一张图留了个问题：这些部件到底怎么连。<b>答案是中间那个盒子只有一个</b> —— VPU、MXU、XLU 取的是<b>同一批 vreg</b>，各开一个门 —— <b>不是各有各的寄存器</b>（「那到底怎么连的」这个问题下一张图专门答）。于是「横着走贵」有了更准的说法：<b>贵在要把整个 vreg 交出去、绕一趟、再收回来</b>，不是缺一根线。<b>蓝带那组换算是这门课最该记的一句</b>：一个 ALU ≈ 一个 CUDA core，一条 lane ≈ 一个 warp scheduler ——&nbsp;两边差的从来不是有没有这些部件，是<b>谁在运行时挑活</b>。⚠️ 图里的数<b>书里标的是 v5p</b>（v4 只有 32 个 vreg），别当 v7 规格表用。</figcaption>
 </figure>
 
-  <p><b>「各开一个门」还不够，因为下一个问题必然是：那门后面的线怎么走？</b>
-    最常见的想法是 ——&nbsp;128 条车道，vreg、VPU、MXU 全串在上面，
-    大家时分复用、商量好谁开谁关，不然就撞车。
-    <b>这个想法有一半是对的</b>：争用确实存在，也确实要排。
-    但<b>争的不是一条共享总线</b>，而且<b>「商量」根本不发生在运行时</b> ——&nbsp;</p>
+  <p>「各开一个门」还不够，下一个问题必然是：门后面的线怎么走？
+    最常见的想法是把 vreg、VPU、MXU 全串在 128 条车道上时分复用。
+    <b>这个想法有一半对</b> ——&nbsp;而错的那一半正是这张图要纠的。</p>
 <figure class="fbox fwide" id="ms-p28">
 <svg viewBox="0 0 1400 874" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 核内的数据搬运：不是所有部件挂在一条 128 位总线上时分复用，而是寄存器堆开出有限条各自 128 宽的端口">
 <text x="20" y="26" class="ttl">数据到底怎么搬　—— <tspan font-weight="700">128 是每条通路的宽度，不是一条总线的车道数</tspan></text>
@@ -4276,11 +4267,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption>上一张图说「各开一个门」，紧接着最自然的追问是：那不就是 128 条车道大家串在一起、时分复用吗？<b>一半对，一半错，而错的那一半最要紧</b>：争用确实有，但争的不是一条共享总线，是<b>端口和发射位</b> —— <b>128 是每条通路的宽度，不是要分给大家的份额</b>。四张卡把四个单元的接法摊开对比，机关在「要不要队列」那一栏：<b>三个都要，理由两两不同</b>（超越函数是因为慢，XLU 是因为共享，MXU 是因为一口喂不满）。落点那条最值得记：<b>撞车不是被解决的，是被编译期提前排掉、根本没机会发生</b> —— GPU 靠运行时记分板现场决定，这正是全课那条分水岭。⚠️ 端口那个「约 9 读 7 写」<b>是推的不是原话</b>，图上写了推导链。</figcaption>
 </figure>
 
-  <p><b>还有一层没讲：真正光刻在硅片上的走线。</b>
-    这里最容易卡住的是一笔账 ——&nbsp;一个 vreg 才 4 KB，
-    <b>它怎么可能扯出去那么多根线？顶多一百多根吧。</b>
-    这个质疑<b>完全正确</b>，而且顺着它往下走，正好能把前面所有说法收口 ——&nbsp;
-    因为答案不是「线真有那么多」，而是<b>那些线根本不需要汇合到一起</b>。</p>
+  <p>还有一层没讲：真正光刻在硅片上的走线。
+    顺着上一张图最较真的那个追问往下走，<b>正好能把前面所有说法收口</b>。</p>
 <figure class="fbox fwide" id="ms-p29">
 <svg viewBox="0 0 1400 892" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 的向量寄存器堆在版图上被切成 128 条，每条紧贴自己那条 lane 的 ALU；跨 lane 才需要真正的长线，所以才有独立的 XLU">
 <text x="20" y="26" class="ttl">版图上它是<tspan font-weight="700">碎的</tspan>　—— 一个 vreg 不用扯 32,768 根线出去，因为那些线<tspan font-weight="700">从来不汇合</tspan></text>
@@ -4483,12 +4471,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption>P-28 说「每条端口本身就是 128 宽」，最较真的追问紧接着就来：<b>一个 vreg 才 4 KB，它怎么可能扯出去那么多根线？</b>这个质疑<b>完全正确</b> —— 而且答案不是「线真有那么多」，是<b>「它们根本不需要汇合」</b>。先纠单位：一根走线传<b>一个 bit</b>，所以一个 vreg 是 8 × 128 × 32 ＝ <b>32,768 根</b>，不是 128 根。荒唐 → 所以它不是一整块：<b>整条数据通路按 lane 切成 128 份，存储就贴在自己那条 lane 的 ALU 旁边</b>，每份只要 <b>256 根线、走几微米</b>。于是三个问题一次答完：<b>64 个 vreg 之间完全不连</b>（只共用位线，而且是<b>按地址选通、当周期就到</b>，<b>不是轮转排队</b> —— 共用的代价是「一条端口一周期只送一行」，不是「等 64 个周期」）；<b>到 VPU 是贴着的</b>；<b>只有 MXU 和 XLU 才真的要扯长线</b> —— 这也正是它们要队列、要共享的原因。⚠️ 红带那条必须念：<b>「按 lane 切片」是推的，不是查到的版图</b>，具体 bank 划分与 floorplan 公开资料没有。</figcaption>
 </figure>
 
-  <p><b>「位线」这个词已经用了好几次，但一直没画出来 ——&nbsp;它其实就是一张田字格。</b>
-    值得单独画一张，是因为不画就一定会误解成「大家轮流用一条总线」：
-    <b>那样推下去，64 个 vreg 岂不是要 64 个周期才轮到一回？</b>
-    可公开资料给的数是：<b>每个周期都发得出 4 条向量指令，每条读 2 个 vreg</b> ——&nbsp;
-    也就是说<b>每一个周期都在从 vreg 取数，从来没有谁在等号</b>。
-    <b>两句话对不上，对不上的是那个比喻，不是硬件。</b></p>
+  <p>「位线」用了好几次却一直没画。不画就会误解成「大家轮流用一条总线」，
+    而那个比喻会推出一个跟公开资料对不上的结论 ——&nbsp;
+    <b>对不上的是比喻，不是硬件。</b></p>
 <figure class="fbox fwide" id="ms-p30">
 <svg viewBox="0 0 1400 1022" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU 向量寄存器堆的位线结构：横向字线按地址选中一行，纵向位线把那一行的数据送出去；一个端口就是一整套这样的线">
 <text x="20" y="26" class="ttl">位线是一张<tspan font-weight="700">田字格</tspan>　—— 横的选行，竖的送数据，<tspan font-weight="700">一个端口就是一整套线</tspan></text>
@@ -4810,9 +4795,9 @@ details.aside b{color:var(--ink);font-weight:600}
     <tr><td><b>TPU VMEM</b></td><td colspan="2"><b>官方未公开 ——&nbsp;公开资料只说得到「比 HBM 高约一个数量级」</b></td>
         <td>只给量级，原因见下</td></tr>
   </table></div>
-  <p class="tbl-note">⚠️ <b>≈ 35 TB/s 是推导值，而且 128 B/周期是上限不是保证</b>
-    ——&nbsp;B200 时钟本身也不确定，所以这里写 ≈ 35 而不是一个精确数。
-    <b>推导链、第三方实测背书与两个限定，折在下面。</b></p>
+  <p class="tbl-note">⚠️ <b>≈ 35 TB/s 是推导值，128 B/周期是上限不是保证</b>
+    ——&nbsp;B200 时钟本身也不确定，所以写 ≈ 35 而不是一个精确数。
+    推导链、第三方实测背书与两个限定，折在下面。</p>
 
   <details><summary>这一行怎么来的，以及为什么现在敢写<em>（溯源）</em></summary>
   <div class="body"><p>
@@ -4888,11 +4873,9 @@ details.aside b{color:var(--ink);font-weight:600}
     <em>第 5 节整节都在算这笔保险费到底多少钱。</em></div>
 
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
-  <p>上一节说的「运行时换任务」，具体是在哪一层发生的？把两边的层级摆开对照。
-    <b>GPU 这边一共六层</b> ——&nbsp;课本上常说的是四层
-    （thread / warp / block / grid），但 Hopper 加了 <b>warp 组</b>、
-    又加了 <b>cluster</b>，而且这两层<b>都各自对应一条真的硬件边界</b>。
-    先把六层是什么、各自钉在哪块硅上看清楚 ——</p>
+  <p>上一节说的「运行时换任务」，具体在哪一层发生？把两边的层级摆开对照。
+    <b>GPU 这边一共六层</b>，比课本上常说的四层多两层 ——&nbsp;
+    先看清六层是什么、各自钉在哪块硅上。</p>
 <figure class="fbox fwide" id="ms-g3">
 <svg viewBox="0 0 1400 956" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="CUDA 线程层级与硬件归属对照：thread、warp、warpgroup、线程块、cluster、grid 各自钉在哪一级硬件上">
 <text x="20" y="26" class="ttl">线程层级 ↔ 硬件归属　—— 每一层抽象都精确对应一条硬件边界，不是纯软件约定</text>
@@ -5105,10 +5088,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>GPU 的四层：thread → warp → block → grid。</b>注意 block 和 warp 调度器都是<b>运行时</b>概念 —— 有几个 block、落在哪个 SM，启动才知道。这两层就是 GPU 藏延迟的全部本钱。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <p><b>六层摆完，本节标题那个问题才问得出口：这里头哪几层是「运行时才定的」？</b>
-    这个问题<b>不能直接答</b>，因为它把两件事混在了一起 ——&nbsp;
-    <b>「这一组是怎么划出来的」和「它什么时候落到硬件上、谁挑它执行」</b>。
-    混着问，答案听上去就是「GPU 反正都是运行时」；拆开看完全不是那么回事 ——&nbsp;</p>
+  <p>六层摆完，本节标题那问题才问得出口：哪几层是「运行时才定的」？
+    <b>这个问题不能直接答 ——&nbsp;得先把它拆成两个。</b></p>
 <figure class="fbox fwide" id="ms-p31">
 <svg viewBox="0 0 1400 1050" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 六层并行抽象里，分组方式在核跑起来之前就全部定死；真正留到运行时的只有两个决定：启动时把块放到哪个 SM，以及每个周期挑哪个 warp 发射">
 <text x="20" y="26" class="ttl">那六层，到底<tspan font-weight="700">什么时候</tspan>定下来　—— 划分全在开跑之前，<tspan font-weight="700">运行时只剩两个决定</tspan></text>
@@ -5196,13 +5177,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption>3.3 的标题问「哪几层是运行时才定的」，这张图专门来答。<b>关键是先把问题拆成两个</b>：① 这一组<b>怎么划出来的</b>；② 它<b>什么时候落到硬件上、谁挑它执行</b>。混着问会得出「GPU 反正都是运行时」，拆开看完全不是 —— <b>第①栏六行全绿</b>，要么是硬件写死的规则，要么是启动前主机给定的参数，<b>没有一行是芯片在运行时自己决定的</b>。<b>真正留到运行时的只有两个决定，而且性质完全不同</b>：「这块放哪个 SM」<b>启动时发生一次</b>，代价只是一个分发器加一本资源账；「下一拍发哪个 warp」<b>每个时钟周期都要做一次</b>，<b>代价才是那一整套 —— 记分板、几十个 warp 槽、全部上下文常驻</b>。⭐ 这就是 3.2 和 3.3 是同一件事的接缝：上一节说 TPU 核里少掉的那批部件，<b>全部是为第二个决定服务的</b>，决定没了它们同时失去存在理由。⚠️ 底带那条：「运行时只剩两个决定」<b>是我从表里归纳的，不是原话</b>。</figcaption>
 </figure>
 
-  <p><b>知道了运行时只剩那两个决定，再看 TPU 那张表就有落点了。</b>
-    注意它<b>刻意按问题排，不按名词排</b> ——&nbsp;
-    <b>名词对名词的版本你刚才已经看过一张了</b>：上面那张图底下那半截，
-    左边一列写着 GPU 的层名，右边挨个说 TPU 上对应什么。那种排法能排得很整齐，
-    <b>可它逼着你为每个名词找一个对应物</b>。
-    换成按问题排，同样的内容才看得见<b>有两行是空的</b> ——&nbsp;
-    <b>而空的那两行，恰好就是刚才那两个运行时决定。</b></p>
+  <p>知道了运行时只剩那两个决定，再看 TPU 那张表就有落点了。
+    <b>注意它排的顺序 ——&nbsp;换一种排法，才看得见那两个决定留下的空位。</b></p>
 <figure class="fbox fwide" id="ms-t3">
 <svg viewBox="0 0 1400 938" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 与 TPU 并行层级逐层对照：TPU 缺少「共享暂存的线程组」与「运行时调度」这两层，而这两层正是 GPU 用来隐藏延迟的">
 <text x="20" y="26" class="ttl">并行层级逐层对照　—— 按问题对齐，不按名词对齐</text>
@@ -7204,11 +7180,10 @@ details.aside b{color:var(--ink);font-weight:600}
     在 GPU 上调它收益接近于零，在 TPU 上是实打实的。
     <b>这也是为什么跨平台照搬调优经验特别容易翻车。</b></div>
 
-  <p>上面那条结论值得单独摆开看一次 —— 它是整门课里<b>唯一一个「只改模型配置、
-    参数量和 FLOP 一个都不动，就能换来两位数 MFU」</b>的例子。
-    关键在于 <code>head_dim</code> 在两个矩阵乘里<b>落在不同的维上</b>：
-    在 <code>QKᵀ</code> 是收缩维，堵的是 MXU 那 256 行；
-    在 <code>PV</code> 是输出维，堵的是那 256 列。<b>都是一半，堵的却不是同一条边。</b></p>
+  <p>上面那条结论值得单独摆开看一次 ——&nbsp;<b>整门课里唯一一个「只改模型配置、
+    参数量和 FLOP 一个都不动，就换来两位数 MFU」的例子</b>。
+    关键在 <code>head_dim</code> 在两个矩阵乘里落在不同的维上：
+    <code>QKᵀ</code> 是收缩维、堵 MXU 那 256 行，<code>PV</code> 是输出维、堵那 256 列。</p>
 <figure class="fbox fwide" id="ms-p36">
 <svg viewBox="0 0 1400 860" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="head_dim 等于 128 时，TPU 的 MXU 在 QK 转置处只用到一半的行、在 PV 处只用到一半的列，两处上限都是 50%；GPU 侧收缩维 16 与输出维 128 都整除，没有浪费">
 <text x="20" y="26" class="ttl"><tspan font-weight="700">head_dim ＝ 128</tspan> 这笔账　—— 同一个数字，打 TPU 不打 GPU</text>
@@ -7801,9 +7776,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>同一个 head_dim ＝ 128，打 TPU 不打 GPU。</b>它在 <code>QKᵀ</code> 是收缩维、在 <code>PV</code> 是输出维，<b>各堵 MXU 的一条边</b>，上限 50% 是纯几何推的。<b>但别读成「GPU 不挑食」</b> —— 它挑的是 16 的倍数，只是那条边窄得多。</figcaption>
 </figure>
 
-  <p>最后要收一个口。这一节从头到尾算出来的比值只有一个 —— <b>收缩维差 16 倍</b>。
-    但这门课里还流传着另外两个数，都跟这一对硬件有关，而且都对。
-    <b>它们量的不是同一件事</b>，混起来就会推出一个不存在的结论。</p>
+  <p>最后收个口。这一节算出来的比值只有一个 ——&nbsp;<b>收缩维差 16 倍</b>。
+    但课里还流传着另外两个数，都对，<b>却量的不是同一件事</b>。</p>
 <figure class="fbox fwide" id="ms-p35">
 <svg viewBox="0 0 1400 840" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="同一对硬件的三个比值：收缩维差 16 倍、单个计算单元的每周期吞吐差 128 倍、一条指令的输出块最多差 512 倍。三者量的不是同一件事">
 <text x="20" y="26" class="ttl">同一对硬件，<tspan font-weight="700">三把尺子</tspan>　—— 16 倍、128 倍、512 倍，量的是三件不同的事</text>
@@ -8296,11 +8270,9 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><br><b>共同的教训是同一条：看 trace，不要看宣传页。</b>
     这两个坑被问到的频率极高，而且都是「说法没错、但用它解释自己的 profile 就会全错」。</div>
 
-  <p>但上面那句开场白其实<b>不准确，得当场收回一半</b>。我说「两边都在主力之外多准备了一样东西」——
-    <b>TPU 那半句成立</b>，SparseCore 确实是一颗物理上独立的核；
-    <b>GPU 那半句不成立</b>：块量化根本不在 Tensor Core 外面，<b>它就在里面</b>，
-    是同一条 MMA 指令的一个变体，缩放因子甚至跟操作数一起住在 TMEM。
-    把这一点摆正之后，上面那两个坑还会露出一个共同的形状。</p>
+  <p>但上面那句开场白得当场收回一半。我说「两边都在主力之外多准备了一样东西」——&nbsp;
+    <b>TPU 那半句成立，GPU 那半句不成立</b>：块量化不在 Tensor Core 外面，就在里面。
+    摆正之后，那两个坑会露出一个共同的形状。</p>
 <figure class="fbox fwide" id="ms-p37">
 <svg viewBox="0 0 1400 872" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 的块量化是 MMA 指令的一个变体，位于 Tensor Core 数据通路内部；TPU 的 SparseCore 是一颗物理上独立的核。两者能不能用，分别取决于目标架构和 duplication factor">
 <text x="20" y="26" class="ttl">两块「多出来的」<tspan font-weight="700">不在同一层</tspan>　—— 而两道门槛都不在宣传页上</text>
@@ -8390,14 +8362,10 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>看到「支持 X」，先去找那道门槛在哪一行；找不到，就当它不适用于你。</b></div></details>
 
   <h3>3.6　高潮：FlashAttention 在两条路上各走一遍</h3>
-  <p>前面五小节拆的都是<b>部件</b>，这一小节拆的是<b>路</b> ——
-    数据从 HBM 出发到进计算单元，中间要停几站，每一站是谁在做决定。
-    <b>但「一个数怎么走完这条路」这个问法太抽象了</b>：
-    你会记住站名，却不知道这些站为什么值得记。
-    <br><br>所以这一节换个走法 —— <b>拿一个真东西来走</b>。
-    <b>FlashAttention</b> 是过去五年最重要的一个 kernel，
-    而它做的事<b>从头到尾只跟这条路有关，跟计算单元一点关系都没有</b>：
-    它没换算法、没减 FLOPs、没用新指令，<b>只是把数据在路上的走法改了一下</b>。
+  <p>前面五小节拆的都是部件，这一小节拆的是<b>路</b>。
+    可「一个数怎么走完这条路」太抽象，所以换个走法 ——&nbsp;拿一个真东西来走。
+    <br>FlashAttention 是过去五年最重要的一个 kernel，
+    而它<b>没换算法、没减 FLOPs、没用新指令，只把数据在路上的走法改了一下</b>。
     先看它要解决的是什么。</p>
 <figure class="fbox fwide" id="ms-p38">
 <svg viewBox="0 0 1400 890" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="序列 128K 时注意力矩阵是 32 GiB，朴素写法要四趟 HBM 往返共 128 GiB；FlashAttention 用 online softmax 让它永远不落 HBM，计算量一点没变">
@@ -8865,8 +8833,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>v7 侧这条路（到累加器为止），中间那站不是缓存，是暂存。</b>每一站只问一个问题：<b>这一步是谁决定的</b>。从头到尾没有一站的答案是「硬件自己看着办」—— 这张图是 2.1 里「TPU 侧 0 个红框」的逐站展开。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <p>现在把两边并起来，让 FlashAttention 同时在两条路上往前推 ——
-    <b>一行是同一站，左边是什么，右边是什么。这是本节的主图，横着读。</b></p>
+  <p>现在把两边并起来，让 FlashAttention 同时在两条路上往前推：
+    一行是同一站，左边是什么、右边是什么。<b>这是本节的主图，横着读。</b></p>
 <figure class="fbox fwide" id="ms-p39">
 <svg viewBox="0 0 1400 1344" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="FlashAttention 在 GPU 与 TPU 两条内存通路上的逐站对照。两条竖直管道并排：片外主存、硬件缓存（TPU 这一站是空的）、片上暂存、操作数缓冲、计算单元，以及谁来安排矩阵单元与向量单元之间的切换">
 <text x="20" y="26" class="ttl">同一个 FlashAttention，<tspan font-weight="700">两条路并排走完</tspan>　—— 竖着看走向，横着看差别</text>
@@ -9518,9 +9486,8 @@ details.aside b{color:var(--ink);font-weight:600}
     这才是那句话想说的意思。</div>
 
   <h3>3.7　压轴：把这一节的账合起来</h3>
-  <p>前面六小节都是<b>局部</b>。最后这一张把整节的账合成一张图 ——
-    <b>两个方块的面积按每周期乘加次数等比画，内部按真实单元数切开</b>。
-    它要回答的是本节开篇那句话：<b>总量差不多，那差的到底是什么。</b></p>
+  <p>前面六小节都是局部。最后这一张把整节的账合成一张图 ——&nbsp;
+    <b>回答本节开篇那句：总量差不多，那差的到底是什么。</b></p>
 <figure class="fbox fwide" id="ms-g8">
 <svg viewBox="0 0 1400 968.0" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="B200 与 TPU v7 每周期乘加次数的等面积对照：总量相差 1.16 倍，但 B200 切成 592 个 Tensor Core，TPU v7 只切成 4 个 MXU，单元粒度相差 128 倍">
 <text x="20" y="26" class="ttl">同一把尺子上　—— 两个方块面积等比，<tspan fill="#5f6368">总量几乎一样</tspan>，<tspan fill="#1a73e8">切分粒度差 128 倍</tspan></text>
@@ -10493,11 +10460,10 @@ details.aside b{color:var(--ink);font-weight:600}
   <p>上面那张图给的是「域有多大」。<b>域内部还有一层结构，而且那层结构里埋着两个
     非常典型的读数错误</b>。这一小节值得多花时间 ——
     它要改的是一个<b>上一代的</b>常识。</p>
-  <p>顺带在这儿把 GPU 侧的三个词铺完，<b>后面两小节都要用</b>：
-    <b>①</b> 跨域用的通信库是 <b>NCCL</b>，MoE 那一族另有 <b>DeepEP</b>——4.5 那组数就是拿它跑的；
-    <b>②</b> 跨域走 <b>RDMA</b>，而 RDMA 有一条语义等下要拿来对照 ——
-    <b>要写进对方内存，那块内存必须先被对方注册过</b>，
-    <b>发送方不能凭空写进对方的任意地址</b>。</p>
+  <p>顺带把 GPU 侧的三个词铺完，后面两小节都要用：
+    ① 跨域的通信库是 <code>NCCL</code>，MoE 那一族另有 <code>DeepEP</code>，4.5 那组数就是拿它跑的；
+    ② 跨域走 RDMA，而 RDMA 有一条语义等下要对照 ——&nbsp;
+    <b>要写进对方内存，那块内存必须先被对方注册过。</b></p>
 <figure class="fbox fwide" id="ms-p4">
 <svg viewBox="0 0 1400 902" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NVL72 域层级示意，以及两个容易读错的口径：72 张是物理规模而可训练是 64 张，节点合计 2000 Gbps 含 400 Gbps 管理网">
 <text x="20" y="26" class="ttl">NVL72 把「一台机器」这个词废掉了　—— 顺便埋了<tspan font-weight="700" fill="#d93025">两个口径陷阱</tspan></text>
@@ -10619,13 +10585,13 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption>两栏回答的是<b>同一个问题</b>：发送方手里那张单子上写着什么。一边写<b>对方的内存地址</b>（但那块内存必须先被对方注册过），一边写<b>哪颗芯片＋哪个段＋偏移</b>（段的物理基址握在接收方手里）—— 而<b>落到底下那句话是逐字相同的</b>。⚠️ 左右证据等级不同：RDMA 是公开语义，ICI 这半<b>未标注来源</b>。</figcaption>
 </figure>
 
-  <p>到这儿两边的形状齐了，而且可以用一句话对上 ——
-    <b>GPU 那边是一台交换机（NVSwitch），域内任意两点之间没有「距离」这个概念；
-    TPU 这边是一张环面（也就是图上写的 torus），相邻一跳、对角要绕好几跳。</b>
-    下一小节数通信种类的时候，<b>这个差别只在一个原语上炸开。</b></p>
+  <p>到这儿两边的形状齐了，而且可以用一句话对上：
+    GPU 那边是一台交换机（NVSwitch），域内任意两点之间没有「距离」这个概念；
+    TPU 这边是一张环面（图上写的 torus），相邻一跳、对角要绕好几跳。
+    <br><b>下一小节数通信种类时，这个差别只在一个原语上炸开。</b></p>
 
   <h3>4.4　到底有几种通信 —— 而且分别是谁产生的</h3>
-  <p>这一小节问的不是 API，而是「<b>我这个模型为什么会产生这种通信</b>」——
+  <p>这一小节问的不是 API，而是「我这个模型为什么会产生这种通信」——
     <b>通信种类是模型结构的后果，不是通信库的功能列表。</b></p>
 <figure class="fbox fwide" id="ms-p5">
 <svg viewBox="0 0 1400 914" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="四个集合通信原语的来源与拓扑敏感度对照：all-gather、reduce-scatter、all-reduce 都可拆成环形通信，只有 all-to-all 要求任意两点直连">
@@ -10732,10 +10698,9 @@ details.aside b{color:var(--ink);font-weight:600}
     这一条图上没有，是这一小节唯一需要你补充的话。</div>
 
   <h3>4.5　最后一步：你实际能拿到多少</h3>
-  <p>前面四小节讲的都是<b>拓扑能提供什么</b>。最后这一小节讲<b>你实际能拿到多少</b>。
-    下面这组数测的<b>就是上一张表里最后那一行</b> ——
-    唯一一个拆不成环的原语（<b>DeepEP 就是专门跑 MoE 这套 dispatch / combine 的库</b>），
-    在一个理论上处处均匀的域里，实际表现成什么样。<b>数是我们自己跑的。</b></p>
+  <p>前面四小节讲的是拓扑能提供什么，这一小节讲<b>你实际能拿到多少</b>。
+    下面这组数测的就是上一张表最后那一行 ——&nbsp;唯一一个拆不成环的原语，
+    在一个理论上处处均匀的域里实际表现成什么样。</p>
 <figure class="fbox fwide" id="ms-p6">
 <svg viewBox="0 0 1400 966" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DeepEP 在 8、16、32 GPU 三档的实测带宽，以 8 GPU 为基准归一化：Copy 基本持平，Reduce 降约 18%，Dispatch 降约 9%，Combine 降约 19%">
 <text x="20" y="26" class="ttl">实测：规模一大，<tspan font-weight="700" fill="#d93025">all-to-all 就掉</tspan>　—— 以及一个<tspan font-weight="700" fill="#d93025">塌掉的对照项</tspan></text>
@@ -11229,8 +11194,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>GPU 怎么藏延迟：一个 warp 卡住就换下一个。</b>藏得住的前提是<b>同时驻留的 warp 够多</b> —— 这就是「占用率」这个词的全部含义。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <p>TPU 的办法是<b>提前把班排好</b>。灰格子是真的空着，
-    而且不会有任何东西自动顶上来。</p>
+  <p>TPU 的办法是<b>提前把班排好</b> ——</p>
 <figure class="fbox fwide" id="ms-t7">
 <svg viewBox="0 0 1400 878" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU VLIW 指令包与编译期排班：一拍发出多个槽位，延迟必须由编译器提前用独立指令填上，填不上就是真空转">
 <text x="20" y="26" class="ttl">延迟怎么被藏起来　—— 班表在编译期就排好了，跑的时候改不了</text>
@@ -11626,11 +11590,10 @@ details.aside b{color:var(--ink);font-weight:600}
     vLLM 和 SGLang 都起于 GPU，现在都在往 TPU 上移。
     这一节讲的是<b>移的过程里真正卡住的地方</b>，不是「支持了哪些模型」。</p>
 
-  <p><b>顺带，这一小节是回来还第 0 节欠的那笔账。</b>那张图的最后一行写着：
-    「当假设成立，TPU 赢在省下来的面积；<b>当假设不成立（变长序列、MoE 路由），
-    代价也全在那儿</b>。」下面第一张图的四个动态性来源里，
-    <b>变长序列是第 ①、MoE 路由是第 ④</b> ——
-    <b>那句话到这里才有资格兑现，而且是拿实测兑现的。</b></p>
+  <p>顺带，这一小节是回来还第 0 节欠的那笔账。那张图最后一行写着：
+    「当假设成立，TPU 赢在省下来的面积；当假设不成立（变长序列、MoE 路由），
+    代价也全在那儿。」下面第一张图的四个动态性来源里，变长序列是第 ①、MoE 路由是第 ④。
+    <br><b>那句话到这里才有资格兑现 ——&nbsp;而且是拿实测兑现的。</b></p>
 
   <div class="note info"><span class="t">先把一个词对齐，否则下面每个数字都会被听小一个量级</span>
     GPU 上说「编译」，多半指 nvcc，或者一次 kernel 级的 JIT ——
@@ -12049,11 +12012,10 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><br>——&nbsp;上一节我们刚在「窗口到底是 53、55 还是 60 分钟」上绊过一次。
     <b>隔一节又来一次，这不是巧合，是这类工作的常态。</b></div>
 
-  <p><b>到这里为止，它还只是个体检工具。</b>
-    但一次探针约两分钟、不占一张卡 ——&nbsp;
-    <b>便宜到这个程度，它就不再是体检了，而是搜索器</b>：
+  <p>到这里为止，它还只是个体检工具。但一次探针约两分钟、不占一张卡 ——&nbsp;
+    <b>便宜到这个程度，它就不再是体检，而是搜索器</b>：
     先在 CPU 上把配置空间扫一遍，只问「装不装得下」，
-    <b>把真机额度留给活下来的那少数几个。</b></p>
+    把真机额度留给活下来的那少数几个。</p>
 
 <figure class="fbox fwide" id="ms-p10">
 <svg viewBox="0 0 1400 822" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="用 AOT 在 CPU 上扫配置空间的三类发现：batch 天花板、remat 策略对显存的影响、以及一组 XLA flag 是能否跑通的分界">
@@ -12201,8 +12163,8 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><br><b>这才是零成本重扫真正买到的东西</b>：不是省时间，
     是<b>让一类原本会被误判成「结论」的东西，暴露成「没接上」</b>。</div>
 
-  <p><b>最后一件事：这套扫法到底换回了什么。</b>
-    这一步不能含糊 ——&nbsp;<b>它换回来的和它换不回来的，必须放在同一屏上说</b>。</p>
+  <p>最后一件事：这套扫法到底换回了什么。
+    <b>它换回来的和它换不回来的，必须放在同一屏上说。</b></p>
 
 <figure class="fbox fwide" id="ms-p11">
 <svg viewBox="0 0 1400 612" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="AOT 配置搜索最终兑现的收益：per-chip 630 → 666.6 TFLOP/s，以及同一组配置上 AOT temp 与真机峰值 HBM 排序相反的边界案例">
@@ -12561,7 +12523,7 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <p>先立一条规矩，否则后面的实测数没法读：
     <b>MFU 是一个分数，而分数的上下两头都是选出来的。</b>
-    先看下面那一头 ——&nbsp;<b>它看起来最像「客观事实」，所以最容易被跳过。</b></p>
+    先看下面那一头 ——&nbsp;它最像「客观事实」，所以最容易被跳过。</p>
 <figure class="fbox fwide" id="ms-p12">
 <svg viewBox="0 0 1400 678" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="MFU 的分母是选出来的：GB200 与 HGX B200 两个官方 BF16 峰值差 11%，TPU v7 的 per-chip 与 per-device 两个口径差 2 倍">
 <text x="20" y="26" class="ttl">比之前先问分母　—— <tspan font-weight="700" fill="#d93025">这四个数全有出处，而它们互相不等</tspan></text>
@@ -12819,17 +12781,15 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><b>③　报的是吞吐还是 MFU。</b>只有 MFU、没有吞吐的，回答不了「谁更快」——&nbsp;见上图右格。
     <br><br><b>这三句不需要你懂那两块硬件</b>，所以它们也是这一节最容易带走的东西。</div>
 
-  <p><b>规矩立完了，下一步是把它用在真数上。</b>
-    我们手上正好有第 ③ 档那种东西 ——&nbsp;
-    <b>同一个模型、同一个规模，两边都跑过、两边都调过</b>。
-    <b>而把这套规矩用在自己的数上，第一个被扣分的会是我们自己。</b></p>
+  <p>规矩立完了，下一步是把它用在真数上。我们手上正好有第 ③ 档那种东西 ——&nbsp;
+    同一个模型、同一个规模，两边都跑过、两边都调过。
+    <br><b>而把这套规矩用在自己的数上，第一个被扣分的会是我们自己。</b></p>
 </div></section>
 
 <section id="s7"><div class="wrap">
   <div class="stn big"><span class="badge">第 7 节</span><h2>两边的实测</h2></div>
-  <p class="lead">上一节整节在讲规矩。<b>这一节只做一件事：把规矩用在一组真数上，
-    然后看看还剩下什么能说。</b>
-    ——&nbsp;剩下的比开口之前想说的少得多，<b>而这正是这一节的价值</b>。</p>
+  <p class="lead">上一节整节在讲规矩。<b>这一节只做一件事：把规矩用在一组真数上。</b>
+    剩下能说的比开口之前想说的少得多 ——&nbsp;而这正是这一节的价值。</p>
 
   <div class="note q"><span class="t">上一节说「这一次算错，什么都不会发生」。这一节再进一层：这一次连「算」都没有</span>
     第 6 节把三次「口径」排成一条线，分界画在<b>会不会被当场拦下</b>：
@@ -12858,10 +12818,9 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <h3>7.1　先把两个数摆出来</h3>
 
-  <p>先说一句可能出乎意料的话：<b>这组数最有意思的地方不是谁更快，
+  <p>先说一句可能出乎意料的话：<b>这组数最有意思的不是谁更快，
     是两边的硬件峰值差得比想象中小。</b>
-    第 1 节那张全景表里，两边的峰值是并排的两个数，看上去像隔了一代 ——&nbsp;
-    <b>放到同一根轴上，你会先看见一件跟直觉相反的事，然后才看见差距。</b></p>
+    第 1 节那张表里两边的峰值并排，看上去像隔了一代 ——&nbsp;放到同一根轴上就不是了。</p>
 <figure class="fbox fwide" id="ms-p15">
 <svg viewBox="0 0 1400 756" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="同一个模型在 GB300 与 TPU v7 上的实测：854.0 对 662.3 TFLOP/s；1.29 倍的差距里峰值只占 1.084 倍，剩下的 1.19 是余项、不等于软件">
 <text x="20" y="26" class="ttl">两边的实测　—— <tspan font-weight="700" fill="#1e8e3e">同一个模型、同一个规模，两边各自调到目前的水位</tspan></text>
@@ -12955,9 +12914,9 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><b>所以这张图只证明了「这 1.19 倍不来自峰值差」。</b>
     至于它有多少来自软件 ——&nbsp;<b>要另一种证据，而那种证据下一张才有。</b></div>
 
-  <p>那种证据长什么样？<b>不是把一个比值拆开，是在同一块硅片上什么都不换、
-    只改软件，看它能涨多少。</b>这个实验我们两边各做过一次，
-    而它顺带回答了另一个问题：<b>「调到最好」这四个字，两边说的是不是同一件事。</b></p>
+  <p>那种证据长什么样？<b>在同一块硅片上什么都不换，只改软件，看它能涨多少。</b>
+    这个实验我们两边各做过一次 ——&nbsp;它顺带回答了另一个问题：
+    「调到最好」这四个字，两边说的是不是同一件事。</p>
 <figure class="fbox fwide" id="ms-p16">
 <svg viewBox="0 0 1400 786" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="TPU v7 与 GB300 两条调优爬升曲线：v7 六步从 445 爬到 662，仍低于 GB300 未调优时的 707">
 <text x="20" y="26" class="ttl">这两个数是怎么挣来的　—— <tspan font-weight="700" fill="#d93025">两条爬升曲线，和一个不能比的起点</tspan></text>
@@ -13257,10 +13216,10 @@ details.aside b{color:var(--ink);font-weight:600}
     这一个模型、这一个规模上的</b>，两边的软件栈都还在动。
     <b>会变的是数字，不会变的是「怎么问」。</b></div>
 
-  <p><b>第 6 节给了方法，第 7 节给了一组按这个方法做出来的数。</b>
+  <p>第 6 节给了方法，第 7 节给了一组按这个方法做出来的数。
     但整节从头到尾都在要求同一件事：<b>每一个数字都得能被回查。</b>
-    <br>——&nbsp;那就把这门课自己的账也摊开：<b>下一节把这一课里每一个数的来路，
-    连同查不到的那几处，一条条列出来。</b></p>
+    <br>那就把这门课自己的账也摊开 ——&nbsp;下一节把这一课里每个数的来路，
+    连同查不到的那几处，一条条列出来。</p>
 </div></section>
 
 <section id="s8"><div class="wrap">
@@ -13756,12 +13715,11 @@ details.aside b{color:var(--ink);font-weight:600}
 
     </div></details>
 
-  <p><b>八节到这里，两块硬件已经从封装拆到了实测，规矩也立完了、验过了。</b>
-    但还有一个问题一直没正面回答 ——&nbsp;<b>从第 1 节起就有人在等它：
-    那到底「各自擅长什么」？</b>
-    <br>之所以拖到现在，是因为<b>这个问题在第 1 节回答不了</b>：
-    那时候手上还没有任何能支撑它的东西。
-    <b>现在有了 ——&nbsp;下一节把它答完，而每一句都必须能指回前面某一节。</b></p>
+  <p>八节到这里，两块硬件已经从封装拆到实测，规矩也立完了、验过了。
+    但还有一个问题一直没正面回答，从第 1 节起就有人在等它：
+    <b>那到底「各自擅长什么」？</b>
+    <br>拖到现在，是因为这个问题在第 1 节回答不了 ——&nbsp;那时手上还没有能支撑它的东西。
+    现在有了：下一节把它答完，而每一句都必须能指回前面某一节。</p>
 </div></section>
 
 <section id="s9"><div class="wrap">
@@ -13978,10 +13936,7 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <h3>9.2　这门课答不了的</h3>
 
-  <p>上一张表的每一行都指得回去。<b>这一张相反 ——&nbsp;它列的是指不回去的。</b>
-    <br>二十条，按<b>「补起来有多难」</b>排成四类，而不是按主题分 ——&nbsp;
-    <b>因为「跑一次就有」和「不由我们决定」是完全不同的两种空白</b>，
-    混在一起列，读者没法判断哪些是可以催的。</p>
+  <p>上一张表的每一行都指得回去。<b>这一张相反：它列的是指不回去的。</b></p>
 <figure class="fbox fwide" id="ms-p23">
 <svg viewBox="0 0 1400 792" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="这门课答不了的二十条，按「要怎样才补得上」排成一条轴 —— 而漏掉的那两条恰恰是外行第一个会问的">
 <text x="20" y="26" class="ttl">这门课答不了的　—— <tspan font-weight="700" fill="#d93025">二十条：十六条课件上写过，两条只写在作者备忘里，两条从来没想到</tspan></text>
@@ -14156,8 +14111,8 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <h3>9.3　落点</h3>
 
-  <p>八节，两块硬件，从封装拆到实测。<b>如果只带走一句话，是下面这一句</b>——&nbsp;
-    而它不是一句感想，<b>它是前面每一节看到的现象的共同来源</b>。</p>
+  <p>八节，两块硬件，从封装拆到实测。如果只带走一句话，是下面这一句 ——&nbsp;
+    <b>而它不是一句感想，是前面每一节看到的现象的共同来源。</b></p>
 <figure class="fbox fwide" id="ms-p24">
 <svg viewBox="0 0 1400 886" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="全课落点：一个分岔口，八节都是它的后果 —— 两边的差别不是谁更强，是把控制权交给谁">
 <text x="20" y="26" class="ttl">把控制权交给谁　—— <tspan font-weight="700" fill="#1a73e8">这门课看到的所有差别，都是同一个决定的后果</tspan></text>
@@ -14273,9 +14228,8 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>正面那一半，全课一次都没有被数据兑现</b> ——&nbsp;
     把它当已证结论收回来，就是第 8 节那张表里「换个名字就当成发现」的同族错误。</div>
 
-  <p><b>九节讲完了。</b>它没有告诉你该买哪个 ——&nbsp;
-    <b>它试图让你在下一次看到一份「A 比 B 快 N 倍」的材料时，
-    知道该问哪四句话，以及该翻到第几页去找那个分母。</b></p>
+  <p>九节讲完了。它没有告诉你该买哪个 ——&nbsp;它试图让你下次看到一份
+    「A 比 B 快 N 倍」的材料时，<b>知道该问哪四句话，以及翻到第几页去找那个分母</b>。</p>
 </div></section>
 
 <section id="apxA"><div class="wrap">

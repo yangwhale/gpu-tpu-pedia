@@ -46,8 +46,41 @@ def cjk(x):
 
 
 def grams(s, n):
-    s = re.sub(r'[\s，。、；：（）「」【】·…—　]', '', s)
-    return {s[i:i + n] for i in range(len(s) - n + 1)}
+    """只取**纯汉字**的 n-gram。
+
+    ⛔ 第一版没这个限制，于是 <p> 和图注共享一个 `FLOPs` / `kernel` /
+       `all-reduce` 就算一次「复述」——&nbsp;可那是同一个话题下必然共享的术语，
+       不是复述。结果 topic-01 有一条报「17 处复述」，全是英文词的子串。
+       **一个总在误报的闸门等于没有闸门**，所以卡死：连续 5 个汉字才算证据。
+    """
+    s = re.sub(r'[^一-鿿]', ' ', s)
+    return {g for seg in s.split() for g in
+            (seg[i:i + n] for i in range(len(seg) - n + 1))}
+
+
+def merge(gs):
+    """把互相重叠的 n-gram 并成最长片段，长的在前。
+
+    两个 gram 若首尾错一位就能接上（a[1:] == b[:-1]），说明它们本来是同一句话
+    被切开的。反复接到接不动为止，剩下的每一条就是一段真正独立的共享文字。
+    """
+    out = sorted(gs)
+    changed = True
+    while changed:
+        changed = False
+        for a in list(out):
+            for b in list(out):
+                if a is b or a not in out or b not in out:
+                    continue
+                if a.endswith(b[:-1]) and len(b) > 1:          # a 后接 b
+                    out.remove(a); out.remove(b); out.append(a + b[-1])
+                    changed = True
+                    break
+            if changed:
+                break
+    # 被别的片段整个包住的丢掉
+    out = [x for x in out if not any(x != y and x in y for y in out)]
+    return sorted(out, key=len, reverse=True)
 
 
 def scan(path):
@@ -55,6 +88,10 @@ def scan(path):
     # 注释与图内文字都不算正文 —— 注释不渲染，图里的字有自己的版面规则。
     doc = re.sub(r'<!--.*?-->', '', raw, flags=re.S)
     doc = re.sub(r'<svg.*?</svg>', '<svg/>', doc, flags=re.S)
+    # <details> 里的内容默认不在屏幕上 —— 折叠本来就是这四项的**合法解法之一**
+    # （「精简，或者折叠起来」）。把它算进来，等于修完了还在报警，
+    # 而一个改对了也不消失的告警会让人整个不看这份报告。
+    doc = re.sub(r'<details\b.*?</details>', '', doc, flags=re.S)
 
     hits, tot, bold = [], 0, 0
 
@@ -88,10 +125,15 @@ def scan(path):
         if n >= W3_PREFIG:
             hits.append(('W3', n, '图前预告 %d 字（图 %s）' % (n, tag), pt[:46]))
         if cap:
-            same = grams(pt, W4_NGRAM) & grams(text(cap.group(1)), W4_NGRAM)
+            # ⛔ 第二版直接数共享 5-gram 的个数，于是**一个**共享短语会被拆成
+            #    若干个重叠 gram 反复计数 —— 「重点在第三层」这 6 个字就报「2 处」。
+            #    而它恰恰是**该有的**指路，不是复述。数量级一失真，
+            #    真正的整段复述（8 处）就淹没在一堆 2 处里。
+            #    所以先把重叠的 gram 并回**最长共享片段**，再按片段数计。
+            same = merge(grams(pt, W4_NGRAM) & grams(text(cap.group(1)), W4_NGRAM))
             if len(same) >= W4_HITS:
-                hits.append(('W4', len(same), '图前复述图注 %d 处（图 %s）：%s'
-                             % (len(same), tag, '、'.join(sorted(same)[:3])), pt[:46]))
+                hits.append(('W4', len(same), '图前复述图注 %d 段（图 %s）：%s'
+                             % (len(same), tag, '、'.join(same[:3])), pt[:46]))
 
     return hits, tot, bold
 
