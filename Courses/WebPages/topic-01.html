@@ -583,12 +583,17 @@ footer a{text-decoration:none}
   <p>参数量这个数，单独看没有意义。摆到一起才有。</p>
 
   <figure class="fbox">
-    <svg viewBox="0 0 1000 300" role="img" aria-label="主流大模型总参数与激活参数对比">
+    <svg viewBox="0 0 1000 352" role="img" aria-label="主流大模型总参数与激活参数对比">
       <g id="modelbars"></g>
     </svg>
     <figcaption><b>深色是总参数（显存要装的），浅色是激活参数（算力要花的）。</b>
     稠密模型两者相等；MoE 模型把它们<b>掰开了</b> ——
-    这一掰，就是过去两年大模型能一路做大的根本原因。</figcaption>
+    这一掰，就是过去两年大模型能一路做大的根本原因。
+    <br>⚠️ 最上面那条 <b>Kimi K3 总参数第一（2.8T），但稀疏比不是第一</b>：
+    <code>2800 ÷ 104 = 26.9×</code>，反而<b>低于</b> V4 的 32.7×。
+    它把「更稀疏」花在了<b>专家粒度</b>上 ——&nbsp;896 个专家里选 16，
+    <b>只点亮 1.8%</b>（V3 是 256 选 8，3.1%）。
+    <b>「总参数」「稀疏比」「专家粒度」是三个数，谁第一要分开说。</b></figcaption>
   </figure>
 
   <div class="note info">
@@ -5623,9 +5628,16 @@ function render(first){
     ["Llama 3.1 405B",   405,  405, "2024 · 稠密"],
     ["Mixtral 8×7B",    46.7, 12.9, "2023 · MoE 早期"],
     ["DeepSeek V3",      671, 36.6, "2024 · 细粒度 MoE ⭐"],
-    ["DeepSeek V4",     1600,   49, "2026 · 更稀疏"]
+    ["DeepSeek V4",     1600,   49, "2026 · 更稀疏"],
+    // Kimi K3：数字全部来自 HuggingFace moonshotai/Kimi-K3 的 model card
+    // （Total 2.8T / Activated 104B / 896 experts / top-16 / 2 shared）
+    // 与 config.json 对得上：num_experts=896、num_experts_per_token=16、
+    // num_shared_experts=2、num_hidden_layers=93、routed_expert_hidden_size=3584。
+    // ⚠️ 别顺口说「稀疏比创新高」—— 2800 ÷ 104 = 26.9×，**低于** V4 的 32.7×。
+    //    K3 破的是总参数和专家粒度（896 选 16 ＝ 1.8%），不是这个比值。
+    ["Kimi K3",         2800,  104, "2026 · 896 选 16"]
   ];
-  const max = 1600, X0 = 168, W = 620, H = 26, GAP = 24;
+  const max = 2800, X0 = 168, W = 620, H = 26, GAP = 24;
   M.forEach((m,i)=>{
     const y = 26 + i*(H+GAP);
     const hl = m[0].indexOf("V3")>=0;
@@ -5650,10 +5662,10 @@ function render(first){
         `${m[1]} B · 全部都要算`));
     }
   });
-  g.appendChild(el("rect",{x:X0,y:278,width:12,height:12,rx:2,fill:"#1a73e8"}));
-  g.appendChild(el("text",{x:X0+18,y:288,class:"svgsm"},"总参数 —— 显存要装下它"));
-  g.appendChild(el("rect",{x:X0+230,y:278,width:12,height:12,rx:2,fill:"#0d652d"}));
-  g.appendChild(el("text",{x:X0+248,y:288,class:"svgsm"},"激活参数 —— 算力只花这部分"));
+  g.appendChild(el("rect",{x:X0,y:330,width:12,height:12,rx:2,fill:"#1a73e8"}));
+  g.appendChild(el("text",{x:X0+18,y:340,class:"svgsm"},"总参数 —— 显存要装下它"));
+  g.appendChild(el("rect",{x:X0+230,y:330,width:12,height:12,rx:2,fill:"#0d652d"}));
+  g.appendChild(el("text",{x:X0+248,y:340,class:"svgsm"},"激活参数 —— 算力只花这部分"));
 })();
 
 /* ── 旅程进度：走到每一步的累计消耗 ── */
