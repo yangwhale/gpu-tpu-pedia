@@ -6055,6 +6055,67 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>而它们不在同一颗 die 上 ——&nbsp;B200 只有其中一条。</b>
     <span class="sub">（哪条对哪颗 die，图上写了。）</span></p>
 
+  <!-- ⭐⭐ 2026-09-03 Chris 追问：NVFP4 和 MXFP4 在 B200 上硬件是怎么实现的、
+       HBM 里放的是 FP4 还是 FP8、量化是谁做的、硬件能存多少、流水线怎么走。
+       原来正文只说了「两条通路不在同一颗 die 上」，机制一个字没有。
+       ⚠️ 公开仓库，出处全部公开：NVIDIA 开发者博客（NVFP4 把 group size
+          从 32 降到 16）、PTX / CUTLASS 的 tcgen05 文档、Colfax 那篇
+          hardware-supported block scaling、以及 TMEM 256 KB / 128 lane ×
+          512 column 的公开微基准。⛔ 不写任何内部数字。
+       ⛔ 最关键的一条别写反：**硬件负责「用」scale，不负责「算」scale**。 -->
+  <details class="aside"><summary>那块量化在硬件上到底怎么跑的？——&nbsp;NVFP4 与 MXFP4
+    <em>（想知道机制再展开）</em></summary>
+    <div class="body">
+    <p><b>两个格式的数值部分是同一个东西</b>：<code>E2M1</code> ——&nbsp;
+      1 位符号 ＋ 2 位指数 ＋ 1 位尾数。<em>四个 bit 能表示的绝对值只有八个数。</em>
+      <b>光靠它没法用，全靠外面套的那个 scale。</b></p>
+
+    <p><b>两个格式的差别，全在那个 scale 上：</b></p>
+    <ul>
+      <li><b>MXFP4</b>（OCP 的开放标准）：每 <b>32</b> 个数共享一个 <code>E8M0</code>
+        的 scale ——&nbsp;<em>纯指数，没有尾数，所以缩放倍数<b>只能是 2 的整数次幂</b>。</em></li>
+      <li><b>NVFP4</b>（NVIDIA 自家）：每 <b>16</b> 个数共享一个 <code>E4M3</code>
+        的 scale（就是 FP8）——&nbsp;<em>有尾数，不再被卡在 2 的幂上；</em>
+        <b>外面再套一个整张量共用的 FP32 scale</b>，两级。</li>
+    </ul>
+    <p class="sub">NVIDIA 自己的说法就是这两条：把 group 从 32 缩到 16、把 scale 换成 FP8，
+      于是缩放更细也更准。<b>代价是每个值的平均位宽</b> ——&nbsp;
+      NVFP4 是 4 ＋ 8/16 ＝ <b>4.5 bit</b>，MXFP4 是 4 ＋ 8/32 ＝ <b>4.25 bit</b>。</p>
+
+    <p><b>HBM 里放的是 FP4，不是 FP8。</b>
+      <em>存的就是打包好的 E2M1，外加那一串 scale。</em>
+      <b>省下来的一半就是这么省的</b> ——&nbsp;scale 那点开销已经算进上面那个 4.5 了。</p>
+
+    <p><b>量化本身不是硬件做的。</b>
+      <em>这一条最容易搞反：<b>硬件负责「用」scale，不负责「算」scale。</b></em><br>
+      权重是<b>离线</b>量化好、直接以 FP4 存进去的；
+      激活是<b>运行时由 kernel 算</b>的 ——&nbsp;通常就融在上一步的收尾里，
+      用 Blackwell 的转换指令把 FP32 结果压成 E2M1 并算出每块的 scale。</p>
+
+    <p><b>硬件做的是那条乘法。</b>指令是 <code>tcgen05.mma</code> 的
+      block-scale 变体（B200 走这条）和 warp 级的 <code>mma.sync…block_scale</code>
+      （消费级那颗 die 走这条）。<br>
+      A、B 是 FP4；<b>两串 scale 叫 SFA／SFB，必须先躺进 TMEM</b>
+      ——&nbsp;<em>路径是 显存 → 共享内存 → TMEM。</em>
+      <b>然后 Tensor Core 一边读 E2M1、一边把 scale 乘进去，累加仍然是 FP32。</b></p>
+
+    <p><b>「硬件能存多少」——&nbsp;瓶颈在 TMEM。</b>
+      <em>每个 SM 一块 <b>256 KiB</b> 的 TMEM，组织成 128 lane × 512 column、每格 32 bit。</em>
+      它装的是<b>累加器和 scale</b>，<b>不是 FP4 操作数本身</b>（那些主要从共享内存流进来）。<br>
+      <b>算一笔就知道有多紧</b>：一个 128×256 的 FP32 累加器
+      ＝ 128 × 256 × 4 B ＝ <b>128 KiB</b> ——&nbsp;<em>正好吃掉一半。</em>
+      <b>这就是为什么 scale 的摆放要那么讲究</b>：它得挤在剩下那半里，还不能撞 bank。</p>
+
+    <p><b>所以一层的来回是这样一圈</b>：<br>
+      ① 上一层的结果在 TMEM 里是 <b>FP32</b> 累加值 →&nbsp;
+      ② 收尾时<b>就地量化</b>成 FP4 ＋ scale，写出去 →&nbsp;
+      ③ 下一层把 FP4 搬进共享内存、scale 搬进 TMEM →&nbsp;
+      ④ <b>Tensor Core 边读边乘 scale，累加又回到 FP32</b> →&nbsp;回到 ①。</p>
+
+    <p>⭐ <b>一句话</b>：<b>存的是 4 bit，算的是 32 bit。</b>
+      <em>进来那一下的换算由硬件顺手做，出去那一下的换算由软件在收尾里做。</em></p>
+    </div></details>
+
   <p>第二个例子在 TPU 这边，叫 <b>SparseCore</b> ——&nbsp;一颗专门查嵌入表的核。
     宣传口径是「TPU 有个专门查 embedding 表的核」。</p>
 
