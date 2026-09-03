@@ -40,6 +40,7 @@ SCRIPTS = {
     "topic02-fig-9474-waterfall.py":     {"fig0-1.svg": "fig0-1"},
     "topic02-figs-s1-panorama.py":       {"fig1-1.svg": "fig1-1", "fig1-2.svg": "fig1-2"},
     "topic02-fig-s1-landing.py":          {"fig1-5.svg": "fig1-5"},
+    "topic02-fig-s3-why-layers.py":      {"fig3-1.svg": "fig3-1"},
     "topic02-figs-s1-hierarchy-intensity.py":
                                          {"fig1-3.svg": "fig1-3", "fig1-4.svg": "fig1-4"},
     "topic02-figs-s2-access-lane.py":    {"fig2-1.svg": "fig2-1", "fig2-2.svg": "fig2-2"},
@@ -52,9 +53,13 @@ SCRIPTS = {
 
 def _svg_span(html, fid):
     """返回该 figure 里 <svg …> … </svg> 的 (start, end)。"""
-    anchor = '<figure class="fbox" id="s012-%s">' % fid
-    i = html.find(anchor)
-    assert i >= 0, "页面上找不到 %s —— id 被人改掉了？" % anchor
+    # class 允许带 fwide（宽版图突破版心，见 port-microscope 里 .fwide 那段注释）
+    i = -1
+    for cls in ('fbox', 'fbox fwide'):
+        i = html.find('<figure class="%s" id="s012-%s">' % (cls, fid))
+        if i >= 0:
+            break
+    assert i >= 0, "页面上找不到 id=s012-%s 的 figure —— id 被人改掉了？" % fid
     s = html.find("<svg", i)
     assert s >= 0, "%s 里没有 <svg" % fid
     # 允许嵌套（defs 里不会有，但别赌）
@@ -106,7 +111,7 @@ def main():
     # 期望值从 SCRIPTS 推，别写死 —— 写死过一次 15，加第十六张图时它就报
     # 「注入把页面结构改坏了」，而结构其实好好的。自检误报会让人去绕过自检。
     want = sum(len(m) for m in SCRIPTS.values())
-    n = len(re.findall(r'<figure class="fbox" id="s012-', html))
+    n = len(re.findall(r'<figure class="fbox(?: fwide)?" id="s012-', html))
     assert n == want, "页面上有 %d 个 s012 figure，脚本这边有 %d 个 —— 对不上" % (n, want)
 
     io.open(PAGE, "w", encoding="utf-8").write(html)

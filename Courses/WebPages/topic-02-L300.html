@@ -5087,7 +5087,100 @@ details.aside b{color:var(--ink);font-weight:600}
 <figcaption><b>GPU 的四层：thread → warp → block → grid。</b>注意 block 和 warp 调度器都是<b>运行时</b>概念 —— 有几个 block、落在哪个 SM，启动才知道。这两层就是 GPU 藏延迟的全部本钱。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
-  <p>六层摆完，本节标题那问题才问得出口：哪几层是「运行时才定的」？
+  <!-- ⭐⭐ 2026-09-03 新增 fig3-1 ＋ 下面那个折叠。
+       起因：讲这一节时被现场追问「warp group 是干嘛的」「CTA 又是什么」。
+       ⛔ 这两个问题 §3.3 原来**答不了** —— 三张图各答一个角度
+          （G-3 钉在哪块硅上 / P-31 什么时候定的 / T-3 两边对照），
+          **共同没有回答「这六层为什么要长成六层」**。
+          回查确认：`逼出来` / `Cooperative Thread Array` / `为什么是 32`
+          在全套文档里一次都没出现过 —— 是真缺，不是我记漏了。
+       ⭐ 所以只补因果那一列，**其余一概指过去**，不重造已有的三张表。
+       名字来历放折叠：它是词源不是机制，讲课时跳过，但被问到要能立刻翻出来。 -->
+  <p>六层摆完了，紧接着一定会有人问：<b>那为什么偏偏是六层？</b>
+    ——&nbsp;下面这张只答这一个问题，<em>一行一个「被什么逼出来的」。</em></p>
+
+  <figure class="fbox fwide" id="s012-fig3-1">
+  <svg viewBox="0 0 1400 608" width="100%" role="img" aria-label="CUDA 六层线程组织，每一层是被什么硬件麻烦逼出来的，以及 TPU 一层都没有">
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">那六层为什么是六层 ——&#160;<tspan font-weight="700">每一层都是被一个具体的麻烦逼出来的</tspan></text>
+<text class="svgsm" x="0" y="37">包含关系与「谁定的」看那张折叠全表，每层钉在哪块硅上看《GPU 显微镜》G-3 ——&#160;这张只答一个问题：为什么要有这一层</text>
+<text class="svgsm" x="0" y="74" fill="#5f6368">层</text>
+<text class="svgsm" x="190" y="74" fill="#5f6368">有多大</text>
+<text class="svgsm" x="410" y="74" fill="#5f6368">它保证了什么</text>
+<text class="svglbl" x="790" y="74" fill="#e8710a" style="font-size:12px">⚡ 为什么会有这一层</text>
+<rect x="774" y="56" width="626" height="402" rx="10" fill="#fef7e0"/>
+<rect x="0" y="100" width="3" height="36" rx="1.5" fill="#1a73e8" opacity="0.25"/>
+<text class="svglbl" x="12" y="113" fill="#202124" style="font-size:13px">grid</text>
+<text class="svgsm" x="12" y="130" fill="#5f6368">grid</text>
+<text class="svgsm" x="190" y="113" fill="#202124">整个 kernel 的全部 block</text>
+<text class="svgsm" x="410" y="113" fill="#5f6368">只剩 L2 和 HBM ——&#160;没有片上快捷通道</text>
+<text class="svgsm" x="790" y="113" fill="#bba15a">——&#160;它是边界，不是被逼出来的</text>
+<line x1="0" y1="148" x2="1400" y2="148" stroke="#e8eaed"/>
+<rect x="7" y="162" width="3" height="36" rx="1.5" fill="#1a73e8" opacity="0.38"/>
+<text class="svglbl" x="19" y="175" fill="#202124" style="font-size:13px">cluster</text>
+<text class="svgsm" x="19" y="192" fill="#5f6368">thread block cluster</text>
+<text class="svgsm" x="190" y="175" fill="#202124">≤ 8 块（B200 可 opt-in 到 16）</text>
+<text class="svgsm" x="410" y="175" fill="#5f6368">同一个 GPC 内，能直接读写别的块的 shared memory</text>
+<text class="svgsm" x="790" y="175" fill="#7a5000">一个 SM 那 227 KiB 不够用了。代价：邻居的暂存要走 GPC 网络，比自己那块慢</text>
+<line x1="0" y1="210" x2="1400" y2="210" stroke="#e8eaed"/>
+<rect x="14" y="224" width="3" height="36" rx="1.5" fill="#1a73e8" opacity="0.51"/>
+<text class="svglbl" x="26" y="237" fill="#202124" style="font-size:13px">线程块</text>
+<text class="svgsm" x="26" y="254" fill="#5f6368">CTA / block</text>
+<text class="svgsm" x="190" y="237" fill="#202124">≤ 1,024 线程 ＝ ≤ 32 warp</text>
+<text class="svgsm" x="410" y="237" fill="#5f6368">保证落在同一个 SM：共享 shared memory、能 __syncthreads</text>
+<text class="svgsm" x="790" y="237" fill="#7a5000">「谁跟谁能共用暂存、能对齐脚步」需要一条边界 ——&#160;CTA 就是这个作用域</text>
+<line x1="0" y1="272" x2="1400" y2="272" stroke="#e8eaed"/>
+<rect x="21" y="286" width="3" height="36" rx="1.5" fill="#1a73e8" opacity="0.64"/>
+<text class="svglbl" x="33" y="299" fill="#202124" style="font-size:13px">warp 组</text>
+<text class="svgsm" x="33" y="316" fill="#5f6368">warpgroup</text>
+<text class="svgsm" x="190" y="299" fill="#202124">4 个 warp ＝ 128 线程</text>
+<text class="svgsm" x="410" y="299" fill="#5f6368">一条 wgmma 由这 128 个线程整体发出</text>
+<text class="svgsm" x="790" y="299" fill="#7a5000">Tensor Core 大到一个 warp 的寄存器喂不饱了，发指令的单位只好往上抬一级</text>
+<line x1="0" y1="334" x2="1400" y2="334" stroke="#e8eaed"/>
+<rect x="28" y="348" width="3" height="36" rx="1.5" fill="#1a73e8" opacity="0.77"/>
+<text class="svglbl" x="40" y="361" fill="#202124" style="font-size:13px">warp</text>
+<text class="svgsm" x="40" y="378" fill="#5f6368">warp</text>
+<text class="svgsm" x="190" y="361" fill="#202124">32 个线程</text>
+<text class="svgsm" x="410" y="361" fill="#5f6368">共用一条指令流、天然锁步；分支分歧只在这一层内发生</text>
+<text class="svgsm" x="790" y="361" fill="#7a5000">取指译码太贵。取一次、译一次、32 份数据一起算 ——&#160;管理成本摊薄 32 倍</text>
+<line x1="0" y1="396" x2="1400" y2="396" stroke="#e8eaed"/>
+<rect x="35" y="410" width="3" height="36" rx="1.5" fill="#1a73e8" opacity="0.90"/>
+<text class="svglbl" x="47" y="423" fill="#202124" style="font-size:13px">线程</text>
+<text class="svgsm" x="47" y="440" fill="#5f6368">thread</text>
+<text class="svgsm" x="190" y="423" fill="#202124">1 个</text>
+<text class="svgsm" x="410" y="423" fill="#5f6368">自己的寄存器。没有自己的命运 ——&#160;跟着所在的 warp 走</text>
+<text class="svgsm" x="790" y="423" fill="#bba15a">——&#160;它是边界，不是被逼出来的</text>
+<rect x="0" y="476" width="1400" height="52" rx="8" fill="#fff" stroke="#d93025"/>
+<text class="svgsm" x="16" y="497" fill="#d93025">⚠️ 两个最容易混成一个的数：<tspan font-weight="700">1,024 是「一个 block 的上限」</tspan>（＝32 warp），不是一个 SM 的上限。</text>
+<text class="svgsm" x="16" y="515" fill="#d93025">一个 SM 同时驻留 <tspan font-weight="700">64 个 warp ＝ 2,048 线程</tspan>（B200 / H100 / A100；Turing 只有一半）——&#160;这才是「有没有别的活可切」的本钱。</text>
+<rect x="0" y="538" width="1400" height="70" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="16" y="561" fill="#0b6b30">⭐ 这六层没有一层是为了「让程序好写」加的</text>
+<text class="svgsm" x="16" y="581" fill="#0b6b30">它们合起来，就是<tspan font-weight="700">「运行时适应」这个赌注的组织成本</tspan>——&#160;要在运行时换人、分工、组队，就得把这些层级做进硬件，再配上调度器、记分板、常驻的巨大寄存器堆。</text>
+<text class="svgsm" x="16" y="599" fill="#0b6b30"><tspan font-weight="700">✕ TPU 这一整列是空的。</tspan>它不做「运行时换人」这个决定，于是这六层同时失去存在的理由 ——&#160;T-3 那张对照表上的两个空格，就是这一列不存在时的样子。</text>
+</svg>
+  <figcaption>六层里只有 <b>grid</b> 和 <b>thread</b> 是边界，其余四层每一层都对应一个具体的硬件麻烦：取指译码太贵，于是 32 个线程共用一条指令流；Tensor Core 大到一个 warp 喂不饱，于是发指令的单位抬到 4 个 warp；共享暂存需要一条作用域边界，于是有了 CTA；一个 SM 的 227 KiB 不够用，于是允许跨 SM 组簇。<b>它们合起来就是「运行时适应」这个赌注的组织成本</b> —— 而 TPU 不做那个决定，这一整列同时失去存在的理由。</figcaption>
+  </figure>
+
+  <details class="aside"><summary>三个名字的来历 ——&nbsp;warp / CTA / warpgroup
+    <span class="why">（是词源不是机制，讲课时可跳过）</span></summary>
+    <div class="body">
+  <p><b>warp</b> 这个词来自织布 ——&nbsp;织布机上纵向绷紧、被一起拉动的那一排线叫经线，
+    英文就是 warp（NVIDIA 自己在早期架构论文里点过这个出处）。取的就是
+    <b>「一排并排绷着、一起动」</b>的意象。中文标准译法是<b>线程束</b>，
+    「束」这个字抓到了重点：它们是被捆在一起的，不是各走各的。</p>
+  <p><b>那为什么是 32？</b>这是个权衡：越宽，取指译码摊得越薄，
+    但<b>分支分歧的惩罚越重、访存合并的粒度越粗</b>。
+    AMD 早年用 64（叫 wavefront），新架构也退回了 32。</p>
+  <p><b>CTA</b> 全称 <b>Cooperative Thread Array</b>，
+    <b>它就是 CUDA 里的 thread block</b> ——&nbsp;同一个东西的两个名字：
+    CUDA 那一层叫 block，到了 PTX 和硬件那一层叫 CTA。看到两个词别当成两层。</p>
+  <p><b>warpgroup</b> 除了发 <code>wgmma</code>，还带来一种写法叫
+    <b>warp 分工</b>（warp specialization）：让一个 warpgroup 专门发 TMA 拷贝、
+    只负责把数据从 HBM 拉进 shared memory，另外几个专门发矩阵指令 ——&nbsp;
+    <b>搬的和算的分开，流水线自然叠起来</b>。
+    <em>FlashAttention-3 和 CUTLASS 3.x 的 Hopper kernel 都建在这套上。</em></p>
+  </div></details>
+
+  <p>知道了六层各自为什么存在，本节标题那问题才问得出口：哪几层是「运行时才定的」？
     <b>这个问题不能直接答 ——&nbsp;得先把它拆成两个。</b></p>
 <figure class="fbox fwide" id="ms-p31">
 <svg viewBox="0 0 1400 1050" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 六层并行抽象里，分组方式在核跑起来之前就全部定死；真正留到运行时的只有两个决定：启动时把块放到哪个 SM，以及每个周期挑哪个 warp 发射">
