@@ -895,6 +895,135 @@ def sections(F):
        操作 VMEM 还是 HBM、最小粒度多少」——&nbsp;原来全课只有这个名字没有机制。
        图由 topic02-fig-s3-sparsecore.py 生成，按 id 锚点 s012-fig3-5 注入。
        ⛔ 图里那句「(8,128) 不是 DMA 粒度」是在纠正我自己讲错过的说法，别删。 -->
+  <!-- ⭐⭐⭐ 2026-09-03 这一整块是 Chris 连问六轮的蒸馏产物，**L300 是它的唯一源**，
+       L200 用 lift() 把这段整体搬过去 —— 不要在 L200 那边另抄一份。
+       ⛔ 顺序是重排过的，不是问答的先后。原来它按追问顺序堆了六段，
+          结果「为什么需要 scale」排在所有硬件细节后面，读者读到一半不知道在看什么。
+       ⭐ 现在的骨架是一个问题往下长：
+          四个 bit 只有八个数 → 靠外面那层 scale → scale 多密决定能不能用（粒度阶梯）
+          → 这件事的四个名字 → 两个格式只差在 scale → 所以 HBM 里是 FP4
+          → 硬件加了什么（三处，没有协处理器，GB10 反例）→ 分工：硬件用、软件算
+          → scale 住 TMEM 不住 Tensor Core → 不占算力但三笔代价 → 一层的一圈 → 收口。
+       ⛔ 三处**曾经重复过**，删掉了，别再加回来：「不占算力」（原来出现两次）、
+          TMEM 那笔账（原来「能存多少」和「三笔代价」各算一遍）、
+          「没有协处理器」（原来中间和结尾各说一次）。
+       ⚠️ 公开仓库。出处全部公开：NVIDIA 开发者博客（NVFP4 把 group 从 32 降到 16）、
+          PTX / CUTLASS 的 tcgen05 文档、Colfax 那篇 hardware-supported block scaling、
+          TMEM 256 KiB / 128 lane × 512 column 的公开微基准、
+          以及 NVIDIA 开发者论坛上关于 GB10 的实测报告（已标明不是规格书）。
+          ⛔ 不写任何内部数字。 -->
+  <details class="aside"><summary>那块量化在硬件上到底怎么跑的？——&nbsp;NVFP4 与 MXFP4
+    <em>（想知道机制再展开）</em></summary>
+    <div class="body">
+
+    <p><b>先把这一段的问题问出来：<code>E2M1</code> 一共四个 bit，
+      能表示的绝对值只有八个 ——&nbsp;这怎么可能算得准？</b></p>
+
+    <p><b>答案不在那四个 bit 上，在外面套的那层 scale。</b>
+      <em>四个 bit 只负责「形状」，量级由 scale 给。</em>
+      <b>所以真正决定它能不能用的，是那个 scale 有多密。</b></p>
+
+    <p><b>密到什么程度算够？拿一个真尺寸走一遍</b> ——&nbsp;
+      <em>设某层权重是 7,168 × 18,432。</em></p>
+    <ul>
+      <li><b>per-tensor</b>：<b>整块一个 scale</b> ——&nbsp;
+        <em>一亿三千多万个数共用一个数。</em></li>
+      <li><b>per-channel（按行／列）</b>：一行 7,168 个数共用一个 ——&nbsp;
+        <em>INT8 时代常见的一档。</em></li>
+      <li><b>NVFP4</b>：沿<b>收缩那一维</b>每 <b>16</b> 个数一个 ——&nbsp;
+        <b>那 7,168 会被切成 448 段。</b></li>
+    </ul>
+    <p class="sub">⚠️ <b>「一个 tensor」是整块矩阵，不是它的某一条边</b> ——&nbsp;
+      per-tensor 不等于「按 7,168 量化」，后者是 per-channel。</p>
+
+    <p><b>上一代 FP8 就是最粗的那一档</b>：整张量一个 scale，
+      而且还得<b>靠软件盯着历史极值去猜</b>它。
+      <em>一个离群值就把整张量的 scale 拽跑，剩下那些小数全被压进同一个格子。</em>
+      <b>FP8 有 256 个可表示值，还忍得住；FP4 只有八个，这么干直接崩。</b></p>
+
+    <p><b>所以 Blackwell 干的事只有一件：把共用 scale 的范围从「整张量」缩到「十六个数」。</b>
+      <em>这一小撮就叫一个 micro-tensor。</em></p>
+
+    <p>⚠️ <b>这件事有四个名字，别以为是四件事</b>：
+      <em>NVIDIA 叫 <b>micro-tensor scaling</b>，OCP 标准叫 <b>microscaling（MX）</b>
+      （MXFP4 的 MX 就是它），写 kernel 的人叫 <b>block scaling</b>，
+      本课叫<b>块量化</b>。</em></p>
+
+    <p><b>两个格式的数值部分完全一样，差别全在 scale 上：</b></p>
+    <ul>
+      <li><b>MXFP4</b>：每 <b>32</b> 个数一个 <code>E8M0</code> 的 scale ——&nbsp;
+        <em>纯指数没有尾数，所以倍数<b>只能是 2 的整数次幂</b>。</em></li>
+      <li><b>NVFP4</b>：每 <b>16</b> 个数一个 <code>E4M3</code>（就是 FP8）——&nbsp;
+        <em>有尾数，不再卡在 2 的幂上；</em><b>外面再套一个整张量共用的 FP32</b>，两级。</li>
+    </ul>
+    <p class="sub">代价是平均位宽：NVFP4 是 4 ＋ 8/16 ＝ <b>4.5 bit</b>，
+      MXFP4 是 4 ＋ 8/32 ＝ <b>4.25 bit</b>。</p>
+
+    <p><b>所以 HBM 里放的是 FP4，不是 FP8</b> ——&nbsp;
+      <em>打包好的 E2M1 加那一串 scale，省下的一半就是这么省的。</em></p>
+
+    <p><b>那「硬件支持 FP4」到底加了什么？——&nbsp;没有协处理器。</b>
+      <em>加的是三样，分布在三个不同的地方：</em></p>
+    <ul>
+      <li><b>① 乘法阵列本身认 4 bit。</b>第五代 Tensor Core 原生支持 FP4 与 FP6
+        ——&nbsp;<em>这是「能算」。</em></li>
+      <li><b>② MMA 数据通路里内嵌一级「乘 scale」。</b>
+        <em>这就是反量化 ——&nbsp;<b>不是独立部件，是流水线里的一步</b>。</em></li>
+      <li><b>③ 通用核那边新增转换指令</b>（把 FP32 打包成 E2M1 那类）。
+        <em>这是「量化」——&nbsp;<b>跑在普通 CUDA Core 上，不是专用引擎</b>。</em></li>
+    </ul>
+
+    <p><b>有一个反例能把 ① 和 ③ 是两块独立硬件钉死</b>：
+      <em>桌面那颗 GB10 <b>有 FP4 的 Tensor Core 指令，却缺那条转换指令</b>
+      ——&nbsp;能拿 FP4 算矩阵乘，却没法把数转成 FP4。</em>
+      <b>同一颗芯片上，一个有一个没有。</b>
+      <span class="sub">（出自 NVIDIA 开发者论坛的实测报告，不是官方规格书。）</span></p>
+
+    <p><b>于是分工很清楚：硬件负责「用」scale，软件负责「算」scale。</b>
+      <em>权重是离线量化好、直接以 FP4 存进去的；激活是运行时由 kernel 在上一步收尾里算的。</em></p>
+
+    <p><b>硬件那条乘法长这样</b>：指令是 <code>tcgen05.mma</code> 的 block-scale 变体
+      （<b>B200 走这条</b>）和 warp 级的 <code>mma.sync…block_scale</code>
+      （<b>消费级那颗 die 走这条</b>）——&nbsp;<em>这正是上面那道门槛的来处。</em><br>
+      A、B 是 FP4，两串 scale 叫 <b>SFA／SFB</b>，
+      <b>Tensor Core 一边读 E2M1 一边把 scale 乘进去，累加仍是 FP32。</b></p>
+
+    <p>⚠️ <b>scale 不是「放进 Tensor Core 里」，是放进 <code>TMEM</code>。</b>
+      <em>TMEM 是 SM 上的一块内存 ——&nbsp;每 SM <b>256 KiB</b>，
+      128 lane × 512 column、每格 32 bit，路径是 显存 → 共享内存 → TMEM。</em>
+      <b>它装的是累加器和 scale，不是 FP4 操作数本身</b>（那些从共享内存流进来）。</p>
+
+    <p><b>⭐ 「乘 scale 不额外消耗算力」这句对</b> ——&nbsp;
+      <em>那一乘是流水线里的一级，不占发射槽，也不吃 FP4 的峰值。</em>
+      <b>但「不花钱」是另一回事，代价有三笔，只是都不算在 FLOPs 头上：</b></p>
+    <ul>
+      <li><b>① 占 TMEM。</b><em>一个 128×256 的 FP32 累加器就是
+        128 × 256 × 4 B ＝ <b>128 KiB</b>，那 256 KiB 一下去掉一半，
+        scale 得挤在剩下那半里还不能撞 bank。</em>
+        <b>真正卡住你能开多大 tile 的，往往是这一笔。</b></li>
+      <li><b>② 多一路搬运。</b><em>那串 scale 自己占 TMA 管线和共享内存，
+        而且<b>必须摆成一种交错布局</b> ——&nbsp;天真按 K 排好的那种得先重排。</em></li>
+      <li><b>③ 量化那一头是真花时间的。</b><em>算每块的最大值、压成 E2M1，
+        跑在通用核上 ——&nbsp;<b>不进 MMA 的账，但进墙钟的账</b>。</em>
+        <b>只比 MMA 就会把这一段漏掉。</b></li>
+    </ul>
+
+    <p><b>连起来，一层的来回是这样一圈</b>：<br>
+      ① 上一层的结果在 TMEM 里是 <b>FP32</b> 累加值 →&nbsp;
+      ② 收尾时<b>就地量化</b>成 FP4 ＋ scale，写出去 →&nbsp;
+      ③ 下一层把 FP4 搬进共享内存、scale 搬进 TMEM →&nbsp;
+      ④ <b>Tensor Core 边读边乘 scale，累加又回到 FP32</b> →&nbsp;回到 ①。</p>
+
+    <p>⭐ <b>一句话：存的是 4 bit，算的是 32 bit。</b>
+      <em>进来那一下的换算<b>焊在 MMA 流水线里</b>，出去那一下
+      <b>是普通核跑一条新指令</b>。</em></p>
+
+    <p class="sub">⚠️ 最后澄清一个名字：<b>「Transformer Engine」不是物理部件</b> ——&nbsp;
+      它是「支持块缩放的 Tensor Core ＋ 决定怎么选 scale 的软件库」的合称，
+      <b>芯片版图上找不到它</b>。所谓第二代，差别就是上面那条：
+      <em>第一代整张量、软件猜；第二代每十六个一个、硬件乘。</em></p>
+    </div></details>
+
   <p>那「处理不规则访存」到底是怎么处理的？——&nbsp;<b>把这颗核拆开看一眼</b>。</p>
 
   <figure class="fbox fwide" id="s012-fig3-5">
