@@ -92,14 +92,14 @@ for i,col in enumerate([
     for j,t in enumerate(col):
         p.append(f'<text class="svgsm" x="{20+i*330}" y="{636+j*21}" {SM}>{t}</text>')
 p.append(f'<rect x="20" y="704" width="960" height="20" rx="5" fill="{OR}"/>')
-p.append(f'<text class="svgsm" x="500" y="718" text-anchor="middle" fill="#fff" {SM}>好消息：D2D 比一条 1D ICI 链路快 6 倍 —— 所以跨 chiplet 贵，但不是灾难</text>')
+p.append(f'<text class="svgsm" x="500" y="718" text-anchor="middle" fill="#fff" {SM}>好消息：D2D 比一条 1D ICI 链路快 6 倍 —— 跨 chiplet 贵，但不是灾难。⚠️ 6 倍的基数是「一条链路 200 GB/s」，不是整颗 chip 那 1,200</text>')
 
 # ── 芯片级 ＋ 三条脚注 ──────────────────────────────────────────
 # 这三项**必须竖排**：横着并列时每列只有 300px，而 11.5px 下最长那项
 # 要 262px，加上标签就溢出列宽 —— 「7,380 GB/s」会压到下一列的「ICI」上。
 p.append(f'<text class="svglbl" x="0" y="766" fill="#202124" {LB}>整颗 chip 对外：</text>')
 for i,(t,v) in enumerate([("HBM","192（官方表写 GiB、正文写 GB）· 7,380 GB/s"),
-                          ("ICI","1,200 GB/s 双向 · 每轴 200 GB/s · 3D torus"),
+                          ("ICI","整颗 1,200 GB/s 双向；官方另给「每轴 200 GB/s 双向」—— D2D 那个 6 倍比的是后者 · 3D torus"),
                           ("算力","BF16 2,307 TFLOPS ｜ FP8 4,614 TFLOPS")]):
     p.append(f'<text class="svgsm" x="116" y="{766+i*21}" fill="{GR}" {SM}>{t}</text>')
     p.append(f'<text class="svgsm" x="156" y="{766+i*21}" {SM}>{v}</text>')
