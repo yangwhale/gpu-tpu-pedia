@@ -99,7 +99,7 @@ p.append(f'<text class="svgsm" x="500" y="718" text-anchor="middle" fill="#fff" 
 # 要 262px，加上标签就溢出列宽 —— 「7,380 GB/s」会压到下一列的「ICI」上。
 p.append(f'<text class="svglbl" x="0" y="766" fill="#202124" {LB}>整颗 chip 对外：</text>')
 for i,(t,v) in enumerate([("HBM","192（官方表写 GiB、正文写 GB）· 7,380 GB/s"),
-                          ("ICI","整颗 1,200 GB/s 双向；官方另给「每轴 200 GB/s 双向」—— D2D 那个 6 倍比的是后者 · 3D torus"),
+                          ("ICI","整颗 1,200 GB/s（双向合计）· 每轴 200 GB/s ＝ 收发各约 100、同时跑 · D2D 那 6 倍比的是这条 200 · 3D torus"),
                           ("算力","BF16 2,307 TFLOPS ｜ FP8 4,614 TFLOPS")]):
     p.append(f'<text class="svgsm" x="116" y="{766+i*21}" fill="{GR}" {SM}>{t}</text>')
     p.append(f'<text class="svgsm" x="156" y="{766+i*21}" {SM}>{v}</text>')
