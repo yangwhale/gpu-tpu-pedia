@@ -41,6 +41,8 @@ SCRIPTS = {
     "topic02-figs-s1-panorama.py":       {"fig1-1.svg": "fig1-1", "fig1-2.svg": "fig1-2"},
     "topic02-fig-s1-landing.py":          {"fig1-5.svg": "fig1-5"},
     "topic02-fig-s3-why-layers.py":      {"fig3-1.svg": "fig3-1"},
+    "topic02-fig-s3-sm-inside.py":        {"fig3-2.svg": "fig3-2"},
+    "topic02-fig-s3-thread-is-a-lane.py": {"fig3-3.svg": "fig3-3"},
     "topic02-figs-s1-hierarchy-intensity.py":
                                          {"fig1-3.svg": "fig1-3", "fig1-4.svg": "fig1-4"},
     "topic02-figs-s2-access-lane.py":    {"fig2-1.svg": "fig2-1", "fig2-2.svg": "fig2-2"},
@@ -113,6 +115,25 @@ def main():
     want = sum(len(m) for m in SCRIPTS.values())
     n = len(re.findall(r'<figure class="fbox(?: fwide)?" id="s012-', html))
     assert n == want, "页面上有 %d 个 s012 figure，脚本这边有 %d 个 —— 对不上" % (n, want)
+    # ④ 图里不许出现方位词。
+    #    ⛔ 2026-09-03 一天之内踩了三次，每次都是同一个机理：这些 SVG 是
+    #       **两份文档共用的**（L200 的 fig() 把整个 <figure> 原样搬过去），
+    #       而两份文档里同一张图的**前后邻居不一样**。于是「下面 T-3」在 L300
+    #       成立、在 L200 是反的；「上一张图那六层」两边同时指错。
+    #    ⚠️ 三次都是渲染出来盯着看才发现的 —— 它不报错、不缺字、排版也正常，
+    #       只是**指错了地方**。这类错误人眼扫一遍很容易滑过去，必须机器查。
+    #    ✅ 正确写法：按名字指（「那六层为什么是六层」那张 / 见 G-3），不按位置指。
+    bad_dir = []
+    for m in re.finditer(r'<figure[^>]*id="(s012-[^"]+)"[^>]*>(.*?)</figure>', html, re.S):
+        svg = re.search(r"<svg.*?</svg>", m.group(2), re.S)
+        if not svg:
+            continue
+        txt = re.sub(r"<[^>]+>", "", svg.group(0))
+        for w in ("上一张", "下一张", "上面那张", "下面那张", "前面那张", "后面那张"):
+            if w in txt:
+                bad_dir.append("%s 里的「%s」" % (m.group(1), w))
+    assert not bad_dir, ("图内出现方位词，而这些图是两份文档共用的 —— "
+                         "换成按名字指：%s" % "、".join(bad_dir))
 
     io.open(PAGE, "w", encoding="utf-8").write(html)
     print("ok  注入 %d/%d 张（其余与页面已一致）  topic-02-L300.html %s 字符"

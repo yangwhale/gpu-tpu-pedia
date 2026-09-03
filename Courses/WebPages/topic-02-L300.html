@@ -5181,6 +5181,180 @@ details.aside b{color:var(--ink);font-weight:600}
     <em>FlashAttention-3 和 CUTLASS 3.x 的 Hopper kernel 都建在这套上。</em></p>
   </div></details>
 
+  <!-- ⭐⭐ 2026-09-03 第二轮追问，四个问题一口气来的：
+       「干嘛不把 warp 做成 128」「一个线程要多少资源」「100 个线程占没了资源
+       是不是就起不了 2,000 个」「一个 SM 128 CUDA Core、一个 Tensor Core 吧」。
+       ⛔ 最后那个是错的（4 个），前三个共用同一把钥匙：**一个 SM 是四个格子**。
+          这个画面 G-3 和《显微镜》里都有，但**散在折叠里，从没单独当图讲过** ——
+          所以读者拿不到它，于是这四个问题必然重现。
+       ⭐ fig3-2 把画面立起来，顺带把「占用率」这个词第一次讲实。 -->
+  <p>再往里一层。<b>「一个 SM」在这门课里到此为止一直是个黑盒</b> ——&nbsp;
+    <em>拆开它，上面那些数才不是背下来的。</em></p>
+
+  <figure class="fbox fwide" id="s012-fig3-2">
+  <svg viewBox="0 0 1400 690" width="100%" role="img" aria-label="一个 SM 拆成四个处理块，以及决定它能驻留多少线程的三个闸门">
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">一个 SM 拆开看 ——&#160;<tspan font-weight="700">它不是一整块，是四个格子</tspan></text>
+<text class="svgsm" x="0" y="37">warp 为什么是 32、住得下多少人、换 warp 为什么不要钱 ——&#160;这三个问题的答案都在这个画面里</text>
+<rect x="0" y="56" width="830" height="196" rx="8" fill="#f8f9fa" stroke="#dadce0"/>
+<text class="svglbl" x="14" y="78" fill="#202124" style="font-size:13px">1 个 SM<tspan fill="#5f6368">（B200 全片 148 个）</tspan></text>
+<rect x="14" y="90" width="196" height="116" rx="8" fill="#fff" stroke="#1a73e8"/>
+<text class="svglbl" x="26" y="110" fill="#1a73e8" style="font-size:12px">处理块 0</text>
+<text class="svgsm" x="26" y="126" fill="#5f6368">sub-core / quadrant</text>
+<text class="svgsm" x="26" y="146" fill="#202124">1 个 warp scheduler</text>
+<text class="svgsm" x="26" y="161" fill="#202124"><tspan font-weight="700">32 个 CUDA Core</tspan></text>
+<text class="svgsm" x="26" y="176" fill="#202124"><tspan font-weight="700">1 个 Tensor Core</tspan></text>
+<text class="svgsm" x="26" y="191" fill="#202124">64 KiB 寄存器 · 16 个 warp 槽</text>
+<rect x="218" y="90" width="196" height="116" rx="8" fill="#fff" stroke="#dadce0"/>
+<text class="svglbl" x="230" y="110" fill="#1a73e8" style="font-size:12px">处理块 1</text>
+<text class="svgsm" x="230" y="126" fill="#5f6368">sub-core / quadrant</text>
+<text class="svgsm" x="230" y="146" fill="#202124">1 个 warp scheduler</text>
+<text class="svgsm" x="230" y="161" fill="#202124"><tspan font-weight="700">32 个 CUDA Core</tspan></text>
+<text class="svgsm" x="230" y="176" fill="#202124"><tspan font-weight="700">1 个 Tensor Core</tspan></text>
+<text class="svgsm" x="230" y="191" fill="#202124">64 KiB 寄存器 · 16 个 warp 槽</text>
+<rect x="422" y="90" width="196" height="116" rx="8" fill="#fff" stroke="#dadce0"/>
+<text class="svglbl" x="434" y="110" fill="#1a73e8" style="font-size:12px">处理块 2</text>
+<text class="svgsm" x="434" y="126" fill="#5f6368">sub-core / quadrant</text>
+<text class="svgsm" x="434" y="146" fill="#202124">1 个 warp scheduler</text>
+<text class="svgsm" x="434" y="161" fill="#202124"><tspan font-weight="700">32 个 CUDA Core</tspan></text>
+<text class="svgsm" x="434" y="176" fill="#202124"><tspan font-weight="700">1 个 Tensor Core</tspan></text>
+<text class="svgsm" x="434" y="191" fill="#202124">64 KiB 寄存器 · 16 个 warp 槽</text>
+<rect x="626" y="90" width="196" height="116" rx="8" fill="#fff" stroke="#dadce0"/>
+<text class="svglbl" x="638" y="110" fill="#1a73e8" style="font-size:12px">处理块 3</text>
+<text class="svgsm" x="638" y="126" fill="#5f6368">sub-core / quadrant</text>
+<text class="svgsm" x="638" y="146" fill="#202124">1 个 warp scheduler</text>
+<text class="svgsm" x="638" y="161" fill="#202124"><tspan font-weight="700">32 个 CUDA Core</tspan></text>
+<text class="svgsm" x="638" y="176" fill="#202124"><tspan font-weight="700">1 个 Tensor Core</tspan></text>
+<text class="svgsm" x="638" y="191" fill="#202124">64 KiB 寄存器 · 16 个 warp 槽</text>
+<text class="svgsm" x="14" y="226" fill="#202124">四个格子共用：<tspan font-weight="700">228 KB 的 L1 ＋ 共享内存</tspan>（单个线程块最多要走 227 KiB）· TMA 搬运引擎 · 通往 L2 的出口</text>
+<text class="svgsm" x="14" y="243" fill="#d93025">⛔ 一个 warp 一旦被分到某个格子，就在那儿待到死 ——&#160;不迁走。这条「钉死」是后面所有「除以 4」的前提。</text>
+<rect x="850" y="56" width="550" height="196" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="866" y="78" fill="#174ea6" style="font-size:13px">四格加起来 ＝ 整个 SM</text>
+<text class="svgsm" x="866" y="102" fill="#174ea6"><tspan font-weight="700">128 个</tspan></text>
+<text class="svgsm" x="950" y="102" fill="#174ea6">CUDA Core</text>
+<text class="svgsm" x="866" y="121" fill="#174ea6"><tspan font-weight="700">4 个</tspan></text>
+<text class="svgsm" x="950" y="121" fill="#174ea6">Tensor Core ——&#160;不是 1 个</text>
+<text class="svgsm" x="866" y="140" fill="#174ea6"><tspan font-weight="700">65,536 个</tspan></text>
+<text class="svgsm" x="950" y="140" fill="#174ea6">32-bit 寄存器 ＝ 256 KiB</text>
+<text class="svgsm" x="866" y="159" fill="#174ea6"><tspan font-weight="700">64 个</tspan></text>
+<text class="svgsm" x="950" y="159" fill="#174ea6">warp 槽 ＝ 2,048 个线程</text>
+<text class="svgsm" x="866" y="178" fill="#174ea6"><tspan font-weight="700">最多 32 个</tspan></text>
+<text class="svgsm" x="950" y="178" fill="#174ea6">线程块</text>
+<text class="svgsm" x="866" y="213" fill="#174ea6">⭐ 寄存器堆 256 KiB，<tspan font-weight="700">比它旁边那块 L1 ＋ 共享内存（228 KB）还大</tspan>。</text>
+<text class="svgsm" x="866" y="231" fill="#174ea6">一块芯片上最贵的 SRAM，最大的一份拿去当了「让人待命」的本钱。</text>
+<text class="svglbl" x="0" y="266" fill="#202124" style="font-size:13px">住得下多少人？<tspan font-weight="700">三个闸门，谁先卡住算谁</tspan>——&#160;这就是「占用率」这个词量的东西</text>
+<rect x="0" y="280" width="452" height="158" rx="8" fill="#fff" stroke="#e8710a"/>
+<text class="svglbl" x="14" y="302" fill="#e8710a" style="font-size:12px">① 寄存器 ——&#160;最常先卡住的那个</text>
+<text class="svgsm" x="14" y="322" fill="#202124"><tspan font-weight="700">65,536 ÷ 2,048 ＝ 32</tspan>　每线程只能用 32 个，才住得满</text>
+<text class="svgsm" x="24" y="344" fill="#5f6368">每线程 32 个</text>
+<text class="svgsm" x="190" y="344" fill="#202124">→　2,048 线程</text>
+<text class="svgsm" x="330" y="344" fill="#1e8e3e">占用率 100%</text>
+<text class="svgsm" x="24" y="363" fill="#5f6368">每线程 64 个</text>
+<text class="svgsm" x="190" y="363" fill="#202124">→　1,024 线程</text>
+<text class="svgsm" x="330" y="363" fill="#e8710a">占用率 50%</text>
+<text class="svgsm" x="24" y="382" fill="#5f6368">每线程 128 个</text>
+<text class="svgsm" x="190" y="382" fill="#202124">→　512 线程</text>
+<text class="svgsm" x="330" y="382" fill="#e8710a">占用率 25%</text>
+<text class="svgsm" x="24" y="401" fill="#5f6368">每线程 255 个（上限）</text>
+<text class="svgsm" x="190" y="401" fill="#202124">→　256 线程</text>
+<text class="svgsm" x="330" y="401" fill="#e8710a">占用率 12.5%</text>
+<text class="svgsm" x="14" y="424" fill="#d93025">⛔ 循环展开、把中间结果留在寄存器里 ——&#160;都在削减能待命的人数。</text>
+<rect x="464" y="280" width="452" height="158" rx="8" fill="#fff" stroke="#dadce0"/>
+<text class="svglbl" x="478" y="302" fill="#202124" style="font-size:12px">② 共享内存</text>
+<text class="svgsm" x="478" y="324" fill="#202124">一个 SM 一共 <tspan font-weight="700">228 KB</tspan>，单个线程块最多要走 227 KiB。</text>
+<text class="svgsm" x="478" y="344" fill="#202124">你的 block 要 100 KiB ——&#160;<tspan font-weight="700">这个 SM 就只住得下 2 个 block</tspan>，</text>
+<text class="svgsm" x="478" y="362" fill="#202124">寄存器还剩多少都没用了。</text>
+<text class="svgsm" x="478" y="388" fill="#1e8e3e">⭐ 你问的「100 个线程把资源占没」——&#160;真会发生的是这一条。</text>
+<text class="svgsm" x="478" y="406" fill="#1e8e3e">一个 block 独吞 227 KiB，整个 SM 就只剩它一家，最多 1,024 个线程。</text>
+<rect x="928" y="280" width="472" height="158" rx="8" fill="#fff" stroke="#dadce0"/>
+<text class="svglbl" x="942" y="302" fill="#202124" style="font-size:12px">③ 槽位本身</text>
+<text class="svgsm" x="942" y="324" fill="#202124">最多 <tspan font-weight="700">64 个 warp</tspan>、最多 <tspan font-weight="700">32 个 block</tspan>。</text>
+<text class="svgsm" x="942" y="346" fill="#202124">block 开得太小也吃亏：每块只有 32 个线程时，</text>
+<text class="svgsm" x="942" y="364" fill="#202124">32 块 × 1 warp ＝ 32 个 warp，</text>
+<text class="svgsm" x="942" y="382" fill="#202124"><tspan font-weight="700">64 个槽只填得满一半</tspan>。</text>
+<text class="svgsm" x="942" y="408" fill="#5f6368">资源一点没超，人就是招不满。</text>
+<rect x="0" y="456" width="1400" height="122" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+<text class="svglbl" x="14" y="478" fill="#7a5000" style="font-size:13px">⚡ 那为什么不干脆把 warp 做成 128，省得四个凑一堆？</text>
+<text class="svgsm" x="14" y="500" fill="#7a5000"><tspan font-weight="700">先把问题翻译一下</tspan>：32 就是一个格子的宽度，128 就是四个格子各出一个 warp。所以「把 warp 做成 128」＝「<tspan font-weight="700">把四个格子合成一个</tspan>」。</text>
+<text class="svgsm" x="14" y="522" fill="#7a5000">① 合成一个就只剩一个 warp scheduler。现在四个格子能同时跑四条毫不相干的指令流 ——&#160;合并了这个能力就没了。</text>
+<text class="svgsm" x="14" y="540" fill="#7a5000">② 绝大多数指令根本不需要 128 宽（访存、整数、分支、超越函数）。只有 wgmma 那一类要。为它加宽，等于让全部代码替矩阵乘付账。</text>
+<text class="svgsm" x="14" y="558" fill="#7a5000">③ 32 × 4 B ＝ 128 B ＝ 正好一条 cache line；而分支发散的惩罚随宽度线性变重 ——&#160;一个 if 走岔，整组都得两边各走一遍。</text>
+<rect x="0" y="588" width="1400" height="70" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="14" y="611" fill="#0b6b30" style="font-size:13px">⭐ 换 warp 是零成本的 ——&#160;而这张图就是那张账单</text>
+<text class="svgsm" x="14" y="631" fill="#0b6b30">CPU 换线程要把寄存器存下来再恢复；GPU <tspan font-weight="700">从来不搬</tspan> ——&#160;2,048 个线程的寄存器<tspan font-weight="700">一直物理占着</tspan>，谁的数据到了就发谁。</text>
+<text class="svgsm" x="14" y="649" fill="#0b6b30"><tspan font-weight="700">代价就是那 256 KiB。</tspan>「运行时才知道数据什么时候到」这个赌注，最贵的一项不是调度器，是这堆养着待命者的寄存器。</text>
+</svg>
+  <figcaption>四个格子这个画面一立起来，三件事同时有了答案：<b>32 是一个格子的宽度</b>，
+    128 是四格各出一个 warp；<b>能住多少人由三个闸门里最紧的那个说了算</b>，
+    而最常卡住的是寄存器 ——&nbsp;65,536 ÷ 2,048 ＝ 每线程只能用 32 个才住得满；
+    最后，<b>换 warp 之所以零成本，是因为那 2,048 份寄存器根本不搬</b>。
+    <em>最后这一条是「运行时适应」账单上最贵的一项 ——&nbsp;256 KiB，比旁边的 L1 加共享内存还大。</em></figcaption>
+  </figure>
+
+  <!-- ⭐⭐ 2026-09-03 现场自己想出来的判断，原话：「这一个线程好像跟平时应用级
+       编程时候那个线程的概念不太一样，就只能处理一个 lane 上的数据；这个跟 TPU
+       那边一个 lane 是一条处理总线是一个概念。」
+       ⭐ 硬件层面完全对，而且是自己推出来的 —— 值得正式讲，不能停在「感觉」。
+       ⛔ 但它在**编程模型层面断掉了**，断口恰好是本课主线：GPU 的 lane 有名字
+          （threadIdx），TPU 的没有。所以图做成三列而不是两列 ——
+          中间那列两头都沾，左右柱子立起来，它的怪异才看得见。 -->
+  <p>最后回到最底下那一格。<b>CUDA 说的「线程」，跟你平时写的那个线程不是一回事</b> ——&nbsp;
+    <em>而它究竟是什么，得把左右两边都摆上才说得清。</em></p>
+
+  <figure class="fbox fwide" id="s012-fig3-3">
+  <svg viewBox="0 0 1400 668" width="100%" role="img" aria-label="操作系统线程、CUDA thread、TPU 的一个 lane 位置，三者逐项对照">
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">三个都叫「线程」——&#160;<tspan font-weight="700">中间那个两头都沾：写法像左边，硬件像右边</tspan></text>
+<text class="svgsm" x="0" y="37">CUDA 的 thread 借了操作系统线程的名字和写法，骨子里却是一条 SIMD lane ——&#160;把左右两根柱子立起来，中间那根的怪异才看得见</text>
+<rect x="540" y="62" width="490" height="478" rx="10" fill="#e8f0fe"/>
+<text class="svglbl" x="232" y="82" fill="#5f6368" style="font-size:12px">操作系统的线程</text>
+<text class="svglbl" x="556" y="82" fill="#1a73e8" style="font-size:12px">CUDA 的 thread</text>
+<text class="svglbl" x="1046" y="82" fill="#e8710a" style="font-size:12px">TPU 上对应的位置</text>
+<text class="svglbl" x="0" y="122" fill="#202124" style="font-size:12px">有没有自己的取指、发射</text>
+<text class="svgsm" x="232" y="122" fill="#5f6368">有，完全独立的控制流</text>
+<text class="svgsm" x="556" y="122" fill="#174ea6">有自己的 PC（Volta 起），但<tspan font-weight="700">发射单位始终是 warp</tspan></text>
+<text class="svgsm" x="556" y="139" fill="#174ea6">——&#160;所以它不能自己决定下一条指令是什么</text>
+<text class="svgsm" x="1046" y="122" fill="#7a3e00">没有。它是一条向量指令覆盖到的一个位置</text>
+<line x1="0" y1="170" x2="1400" y2="170" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="196" fill="#202124" style="font-size:12px">有没有「名字」</text>
+<text class="svgsm" x="232" y="196" fill="#5f6368">有 ——&#160;<tspan font-weight="700">pthread_self()</tspan></text>
+<text class="svgsm" x="556" y="196" fill="#174ea6"><tspan font-weight="700">有 ——&#160;threadIdx。这是 GPU 最特别的一点</tspan></text>
+<text class="svgsm" x="556" y="213" fill="#174ea6">你能写「第 37 号线程去干点别的」，而且它真的会去</text>
+<text class="svgsm" x="1046" y="196" fill="#7a3e00"><tspan font-weight="700">没有。</tspan>你写不出「第 37 号 lane 干点别的」</text>
+<text class="svgsm" x="1046" y="213" fill="#7a3e00">——&#160;能写的只有整块整块的操作</text>
+<line x1="0" y1="244" x2="1400" y2="244" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="270" fill="#202124" style="font-size:12px">换人要多少钱</text>
+<text class="svgsm" x="232" y="270" fill="#5f6368">把寄存器存下来再恢复 ——&#160;微秒级</text>
+<text class="svgsm" x="556" y="270" fill="#174ea6"><tspan font-weight="700">零。</tspan>寄存器物理常驻，从来不搬</text>
+<text class="svgsm" x="556" y="287" fill="#174ea6">代价是那 256 KiB 一直占着 ——&#160;见「一个 SM 拆开看」那张</text>
+<text class="svgsm" x="1046" y="270" fill="#7a3e00">不存在「换人」这回事 ——&#160;顺序编译期就排死了</text>
+<line x1="0" y1="318" x2="1400" y2="318" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="344" fill="#202124" style="font-size:12px">一次处理多宽</text>
+<text class="svgsm" x="232" y="344" fill="#5f6368">你的代码说了算</text>
+<text class="svgsm" x="556" y="344" fill="#174ea6"><tspan font-weight="700">一条 32-bit lane。</tspan>访存可向量化到 128-bit，fp16 一拍两个</text>
+<text class="svgsm" x="556" y="361" fill="#174ea6">但基本盘就是一格 ——&#160;跟你的直觉一致</text>
+<text class="svgsm" x="1046" y="344" fill="#7a3e00">8 sublane × 128 lane 那张网格里的<tspan font-weight="700">一格</tspan></text>
+<line x1="0" y1="392" x2="1400" y2="392" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="418" fill="#202124" style="font-size:12px">谁决定它什么时候跑</text>
+<text class="svgsm" x="232" y="418" fill="#5f6368">操作系统调度器，会被抢占</text>
+<text class="svgsm" x="556" y="418" fill="#174ea6"><tspan font-weight="700">warp scheduler，运行时挑</tspan>——&#160;谁的操作数到了就发谁</text>
+<text class="svgsm" x="1046" y="418" fill="#7a3e00"><tspan font-weight="700">编译器，编译期排死</tspan>。没有调度器</text>
+<line x1="0" y1="466" x2="1400" y2="466" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="492" fill="#202124" style="font-size:12px">有多少个</text>
+<text class="svgsm" x="232" y="492" fill="#5f6368">几十到几百</text>
+<text class="svgsm" x="556" y="492" fill="#174ea6">一个 SM 驻留 <tspan font-weight="700">2,048</tspan>，全片 148 个 SM ＝ 约 <tspan font-weight="700">30 万</tspan></text>
+<text class="svgsm" x="1046" y="492" fill="#7a3e00">一条向量指令一次盖住 <tspan font-weight="700">1,024</tspan> 格</text>
+<rect x="0" y="556" width="1400" height="94" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="16" y="580" fill="#0b6b30" style="font-size:13px">⭐ 一句话：CUDA 的 thread 是「<tspan text-decoration="underline">有名字的 SIMD lane</tspan>」</text>
+<text class="svgsm" x="16" y="600" fill="#0b6b30">你按操作系统线程的写法去写它 ——&#160;标量代码、if、循环，全都成立；但它<tspan font-weight="700">没有自己的取指</tspan>，三十二个一起听同一句口令。</text>
+<text class="svgsm" x="16" y="618" fill="#0b6b30"><tspan font-weight="700">而这个「有名字」，就是两边的分界线。</tspan>GPU 把 lane 暴露给你，代价是它得配调度器、记分板、和那堆养着待命者的寄存器；</text>
+<text class="svgsm" x="16" y="636" fill="#0b6b30">TPU 把 lane 藏在编译器后面，于是省掉那一整套 ——&#160;但你也就<tspan font-weight="700">再没有「单独指挥某一条 lane」这个动作</tspan>了。<tspan fill="#5f6368">「那六层为什么是六层」那张，讲的是同一件事的另一半。</tspan></text>
+</svg>
+  <figcaption>它<b>没有自己的取指</b>，三十二个一起听同一句口令 ——&nbsp;这一头像 TPU 的 lane；
+    可它<b>有名字</b>，你能写「第 37 号线程去干点别的」而且真的会去 ——&nbsp;这一头像操作系统线程。
+    <b>「有名字」就是两边的分界线</b>：GPU 把 lane 暴露给你，代价是配齐调度器、记分板、
+    和上一张图里那堆养着待命者的寄存器；TPU 把它藏在编译器后面，省掉这一整套，
+    <em>也就此没有了「单独指挥某一条 lane」这个动作。</em></figcaption>
+  </figure>
+
   <p>知道了六层各自为什么存在，本节标题那问题才问得出口：哪几层是「运行时才定的」？
     <b>这个问题不能直接答 ——&nbsp;得先把它拆成两个。</b></p>
 <figure class="fbox fwide" id="ms-p31">
