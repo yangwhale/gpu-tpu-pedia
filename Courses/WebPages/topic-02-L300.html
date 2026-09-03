@@ -9997,7 +9997,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="914" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：<tspan class="mono" fill="#1967d2">cp.async</tspan> 的 <tspan class="mono" fill="#1967d2">.ca</tspan> ／ <tspan class="mono" fill="#1967d2">.cg</tspan> 缓存行为出自 PTX ISA；<tspan class="mono" fill="#1967d2">BlockSpec</tspan> ／ <tspan class="mono" fill="#1967d2">index_map</tspan> ／ grid 出自 Pallas 文档；Splash Attention 的块级掩码出自其公开实现。</text>
 <text x="38" y="934" class="xxs"><tspan font-weight="700" fill="#202124">沿用本课已有标注</tspan>：共享内存 ≤ 227 KiB / 线程块出自图 G-6。<tspan fill="#9aa0a6">「FlashAttention 把复用显式放进共享内存」是公开实现的通行做法，不是某一份文档里的原话。</tspan></text>
 </svg>
-<figcaption><b>同一个算法，两种性质的工作。</b>数学、FLOPs、结果三样完全相同，差的只有「谁来安排搬运」：GPU 侧 <b>6 条要 kernel 作者亲手写</b>（块多大、发 <code>cp.async</code>／TMA、双缓冲、warp 分工、对齐、要不要占 L1），TPU 侧只有 <b>2 条声明</b>（<code>BlockSpec</code> 与 grid）。<b>右栏比左栏短，这件事本身就是结论。</b>红带按住了最容易讲过头的那句：<b>L2 绕不开，绕开的是对缓存的依赖。</b></figcaption>
+<figcaption><b>同一个算法，两种性质的工作。</b>数学、FLOPs、结果三样完全相同 —— 差的只有<b>「谁来安排搬运」</b>。<br>GPU 侧 <b>6 条要 kernel 作者亲手写</b>：块多大、发 <code>cp.async</code>／TMA、双缓冲、warp 分工、对齐、要不要占 L1。<br>TPU 侧只有 <b>2 条声明</b>：<code>BlockSpec</code> 与 grid。<b>右栏比左栏短，这件事本身就是结论。</b>红带按住了最容易讲过头的那句：<b>L2 绕不开，绕开的是对缓存的依赖。</b></figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 同一个算法，在两边是两种性质的工程工作</span>

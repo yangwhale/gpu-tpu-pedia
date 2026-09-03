@@ -1008,12 +1008,12 @@ details.aside b{color:var(--ink);font-weight:600}
   </figure>
 
   <div class="note danger"><span class="t">⭐ 全课那个决定，就是这张图上的「4 对 0」</span>
-    红框的意思不是「慢」，是<b>「跑起来才知道」</b> ——&nbsp;
-    命中没命中、要不要换页、排在谁后面，这些答案在编译时都不存在。
+    红框的意思不是「慢」，是<b>「跑起来才知道」</b>。
+    命中没命中、要不要换页、排在谁后面 ——&nbsp;这些答案在编译时都不存在。
     <br>绿的意思也不是「快」，是<b>「写代码的时候就已经定死了」</b>。
-    <br><br>所以两边的分工从这里就定了：
-    <b>GPU 那一侧把这几个决定交给硬件在运行时处理 —— 也就是交给了人（写 kernel 的那只手）；
-    TPU 那一侧交给编译器在编译期算准 —— 也就是接受它的脾气。</b>
+    <br><br>两边的分工从这里定死：<br>
+    <b>GPU</b> 把这几个决定交给硬件在运行时处理 ——&nbsp;<em>也就是交给了人，交给写 kernel 的那只手。</em><br>
+    <b>TPU</b> 交给编译器在编译期算准 ——&nbsp;<em>也就是接受它的脾气。</em>
     <br>——&nbsp;<b>后面第 3、5 节看到的每一样东西，都是这一句的后果。</b></div>
 
   <h3>2.2　顺便纠一个几乎人人第一次都搞反的词</h3>
@@ -1149,8 +1149,9 @@ details.aside b{color:var(--ink);font-weight:600}
   </figure>
 
   <h3>2.3　主例登场：为什么是 FlashAttention</h3>
-  <p>判据有了、坐标有了，现在挑一个算子把它跑到底。挑 FlashAttention 的理由很实际：
-    每个大模型都要跑它，而且它<b>正好卡在 312 那条线的错误一侧</b> ——&nbsp;两边都必须动手。</p>
+  <p>判据有了，坐标有了。现在挑一个算子把它跑到底。
+    挑 FlashAttention 的理由很实际：<b>每个大模型都要跑它</b>。
+    而且它<b>正好卡在 312 那条线的错误一侧</b> ——&nbsp;两边都必须动手。</p>
 <figure class="fbox" id="s012-fig2-3">
   <svg viewBox="0 0 1000 414" width="100%" role="img" aria-label="朴素注意力把 seq×seq 的中间矩阵写回 HBM，Flash 让它在片上生死，一次都不落地">
 <text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">Flash 到底 flash 在哪 —— 那个 seq × seq 的矩阵，一次都不许落到 HBM</text>
@@ -1265,13 +1266,12 @@ details.aside b{color:var(--ink);font-weight:600}
        那一次融合。⛔ 只补「这就是刚才那件事」这一句，不要在这儿再解释一遍
        融合是什么：那张图和上一节都说过了，重说就是三个载体讲同一件事。 -->
   <div class="note warn"><span class="t">⭐ 回头看一眼：刚才这就是一次算子融合</span>
-    上一节那条线的用途，在这里第一次落到实处。<b>Flash 做的事，就是把
-    「算分数 → softmax → 再乘 V」这一串合成一个 kernel</b> ——&nbsp;
+    上一节那条线的用途，在这里第一次落到实处。<br>
+    Flash 做的事，就是把「算分数 → softmax → 再乘 V」这一串<b>合成一个 kernel</b>。
     那个 32 GiB 的中间矩阵因此根本不用写出去。<br>
-    ⭐ 而它<b>连一次乘加都没有省</b>：图上第 ①② 栏是一样的。
-    <b>省的全在分母。</b>这就是上一节说的「把算子往右推」——&nbsp;
-    只不过这一推的幅度，是<b>一千倍</b>。<br>
-    ——&nbsp;<b>所以真正的问题不是「要不要融合」，是「这个融合谁来做」。</b>
+    ⭐ 而它<b>连一次乘加都没有省</b> ——&nbsp;图上第 ①② 栏是一样的。<b>省的全在分母。</b><br>
+    这就是上一节说的「把算子往右推」。只不过这一推的幅度，是<b>一千倍</b>。<br>
+    ——&nbsp;<b>所以真正的问题不是「要不要融合」，是「这个融合谁来做」。</b><br>
     Flash 这一次，是人写出来的。<b>第 5 节要问的是：非得靠人吗。</b></div>
 
   <!-- ⭐ 2026-09-01 加。Chris 问：「用算法减少搬运，肯定会增加计算量的需求，
@@ -1369,10 +1369,10 @@ details.aside b{color:var(--ink);font-weight:600}
 
 <section id="s3"><div class="wrap">
   <div class="stn big"><span class="badge">第 3 节</span><h2>拆开看：形状对不对得齐，以及并排走完全程</h2></div>
-  <p class="lead">第 2 节数的是决策点（4 个对 0 个），这一节数的是粒度：
-    <b>同样一块矩阵乘的活，两边一条指令吃下的块大小差 16 倍。</b>
-    这个数记住了，后面「为什么这个优化在那边不管用」大半能自己推出来。
-    本节最后，两边并排把 FlashAttention 走完一遍。</p>
+  <p class="lead">第 2 节数的是<b>决策点</b>，4 个对 0 个。这一节数的是<b>粒度</b>。<br>
+    同样一块矩阵乘的活，两边一条指令吃下的块大小<b>差 16 倍</b>。
+    这个数记住了，后面「为什么这个优化在那边不管用」大半能自己推出来。<br>
+    <em>本节最后，两边并排把 FlashAttention 走完一遍。</em></p>
 
   <h3>3.1　先看整颗：一边把缝藏起来，一边把缝交给你</h3>
   <p>两颗芯片<b>都是双 die 封装</b> ——&nbsp;先看这一层，是因为有个差别
@@ -2898,10 +2898,10 @@ details.aside b{color:var(--ink);font-weight:600}
 </figure>
 
   <div class="note ok"><span class="t">这是全课最值得停一下的一张对照</span>
-    TPU 少掉的那五样<b>不是省出来的，是不需要了</b>：
-    <b>一旦决定「不在运行时换任务」，warp 调度器、记分板、几十个 warp 槽、
-    常驻上下文、动态分支处理，同时失去存在理由。</b>
-    <br>——&nbsp;省下的面积去哪了？<b>全给了计算单元。</b>下一小节量的就是这件事。</div>
+    TPU 少掉的那五样<b>不是省出来的，是不需要了</b>。<br>
+    一旦决定「不在运行时换任务」——&nbsp;warp 调度器、记分板、几十个 warp 槽、
+    常驻上下文、动态分支处理，<b>同时失去存在理由</b>。<br>
+    省下的面积去哪了？<b>全给了计算单元。</b><em>下一小节量的就是这件事。</em></div>
 
   <!-- ⭐ 2026-09-01 加。Chris 问：「你打算啥时候讲 warp 调度器、线程单元、
        SM 里的寄存器怎么用、L2 怎么用、SM 之间怎么协同？」
@@ -2933,12 +2933,11 @@ details.aside b{color:var(--ink);font-weight:600}
   </div></details>
 
   <div class="note warn"><span class="t">⚠️ 顺手澄清一个很容易记混的数 ——&nbsp;下一节的表马上要用</span>
-    B200 的 <b>L2 是 126 MB</b>（每个 die 63 MB，
-    全片 4 个分区），<b>不是三十几 MB</b>。三十几 MB 的那个是另一样东西 ——&nbsp;
-    <b>全片共享内存合计</b>：<code>148 个 SM × 228 KiB = 33,744 KiB</code>，
-    也就是 <b>约 33 MiB / 34 MB</b>（十进制）。
-    <em>这两个数差着近四倍，而且性质正好就是本课那个决定：
-    <b>L2 是硬件自动管的（你只能间接影响它），那 33 MiB 是软件说了算的。</b></em></div>
+    B200 的 <b>L2 是 126 MB</b>（每个 die 63 MB，全片 4 个分区）。<b>不是三十几 MB。</b><br>
+    三十几 MB 的那个是另一样东西 ——&nbsp;全片共享内存合计：
+    <code>148 个 SM × 228 KiB = 33,744 KiB</code>，约 <b>33 MiB</b>。<br>
+    两个数差着近四倍。而且它们的性质<em>正好就是本课那个决定</em>：
+    <b>L2 是硬件自动管的，那 33 MiB 是软件说了算的。</b></div>
 
   <!-- ⭐⭐ 2026-09-01 加，这一段是被问出来的，而且问得对。
        Chris：「你说 TPU 省下面积放更多片上存储 —— 可 GPU 有 126 MB L2
@@ -3822,9 +3821,10 @@ details.aside b{color:var(--ink);font-weight:600}
     <em>却从没说过它是什么。先把这笔还上。</em></p>
 
   <div class="note info"><span class="t">⭐ 记分板：调度器凭什么知道哪个 warp「就绪」</span>
-    <b>这名字不是 NVIDIA 起的，是从 1964 年的 CDC 6600 借来的</b> ——&nbsp;
-    那台机器第一次做到指令不按顺序完成，就需要一张集中的表记着哪个单元忙着、
-    哪个寄存器正等人往里写，<b>那个部件的正式名字就叫 Scoreboard</b>。
+    <b>这名字不是 NVIDIA 起的</b>，它来自 <b>1964 年的 CDC 6600</b>。<br>
+    那台机器第一次做到指令<b>不按顺序完成</b> ——&nbsp;于是需要一张集中的表，
+    记着哪个单元忙着、哪个寄存器正等人往里写。<br>
+    <em>那个部件的正式名字，就叫 Scoreboard。</em>
     <br><br>回到 GPU。NVIDIA 先按一条线把指令劈成两半 ——&nbsp;<em>编译器知不知道它要跑多久。</em>
     <br><b>定长的那一半根本不用硬件管</b>：浮点乘加几拍出结果是固定的，
     编译器直接在指令里写一个「停几拍」的数，硬件照做。
@@ -5732,8 +5732,9 @@ details.aside b{color:var(--ink);font-weight:600}
          ⛔ 第 ③ 条的对账算式**必须留在主线** —— R3 删掉 3.4 那张四行表之后，
             它是 GPU 侧峰值链在正文里的唯一落点。 -->
     <b>最容易犯的推法是</b>：「一条指令才 16 深，一个 SM 一个 Tensor Core，
-    乘一乘怎么也凑不出 2,250 TFLOPS」——&nbsp;<b>两个环节全错</b>
-    （<em>数错部件、把指令形状当每周期吞吐 —— 完整推法折在下面</em>）。<br>
+    乘一乘怎么也凑不出 2,250 TFLOPS。」<br>
+    <b>两个环节全错</b>：数错了部件，又把<b>指令形状</b>当成了<b>每周期吞吐</b>。
+    <em>完整推法折在下面。</em><br>
     <b>对一下账就通了</b>：<code>4,096 × 2 FLOP × 148 SM × 1.83 GHz ＝ 2,218 TFLOPS</code>，
     官方 2,250，差 1.4% ——&nbsp;<em>那点缺口来自时钟不确定，不是公式错。</em>
     <br><br>
@@ -5768,9 +5769,9 @@ details.aside b{color:var(--ink);font-weight:600}
           GPU 侧对账（4,096 × 2 × 148 × 1.83 ＝ 2,218）配成一对 ——
           本课承诺「每个数都能顺着链条查回去」，两条不能同时没有。 -->
   <div class="note ok"><span class="t">⭐ 顺手把 TPU 侧的峰值链也对一下 —— 和上面那条 GPU 的配成一对</span>
-    TPU 那边的峰值链是官方逐字给出的：
-    <code>262,144 FLOP/周期/MXU × 2.2 GHz × 4 个 MXU ＝ 2,307 TFLOP/s</code>，
-    <b>官方公布 2,307，一分不差</b>。
+    TPU 那边的峰值链是<b>官方逐字给出的</b>：<br>
+    <code>262,144 FLOP/周期/MXU × 2.2 GHz × 4 个 MXU ＝ 2,307 TFLOP/s</code><br>
+    官方公布 <b>2,307，一分不差</b>。
     <em>——&nbsp;两边都能从「一拍多少次乘加」一路乘到公布峰值，这一节的数就都站得住了。</em>
     <br><br>⭐ <b>至于「592 份小的」和「4 份大的」这笔总账怎么合起来，是 3.7 的事</b>
     ——&nbsp;<em>这一节只要记住一个数：收缩维 16 对 256。</em>
@@ -7010,9 +7011,10 @@ details.aside b{color:var(--ink);font-weight:600}
           按第一原则宁可不给数，只说「这一侧卡住它的不是容量」。 -->
   <div class="note warn"><span class="t">⭐ 回到 3.4 结尾那句：能融多大，是被<u>两个</u>数一起卡死的</span>
     <b>第一个数刚在上图里画成了面积 ——&nbsp;工作台多大。</b>
-    GPU 一个线程块最多 <b>227 KiB</b>：装三块 <code>128×128</code> 的 bf16 tile
-    （Q／K／V）就是 <code>3 × 128 × 128 × 2 B ＝ 96 KiB</code>，
-    再留出双缓冲，<b>基本就到顶了</b> ——&nbsp;<b>块开多大这件事，在 GPU 上是被容量直接顶住的。</b>
+    GPU 一个线程块最多 <b>227 KiB</b>。<br>
+    装三块 <code>128×128</code> 的 bf16 tile（Q／K／V）＝
+    <code>3 × 128 × 128 × 2 B ＝ 96 KiB</code>，再留出双缓冲，<b>基本就到顶了</b>。<br>
+    <b>块开多大这件事，在 GPU 上是被容量直接顶住的。</b>
     <em>TPU 那边 64 MiB 是它的 289 倍，容量在这一侧根本不是那个卡住人的东西。</em>
     <br><br><b>第二个数是 3.4 那个粒度 ——&nbsp;一条指令吃多宽。</b>
     <b>GPU 收缩维 16，TPU 是 256。</b>
@@ -7124,7 +7126,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="914" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：<tspan class="mono" fill="#1967d2">cp.async</tspan> 的 <tspan class="mono" fill="#1967d2">.ca</tspan> ／ <tspan class="mono" fill="#1967d2">.cg</tspan> 缓存行为出自 PTX ISA；<tspan class="mono" fill="#1967d2">BlockSpec</tspan> ／ <tspan class="mono" fill="#1967d2">index_map</tspan> ／ grid 出自 Pallas 文档；Splash Attention 的块级掩码出自其公开实现。</text>
 <text x="38" y="934" class="xxs"><tspan font-weight="700" fill="#202124">沿用本课已有标注</tspan>：共享内存 ≤ 227 KiB / 线程块出自图 G-6。<tspan fill="#9aa0a6">「FlashAttention 把复用显式放进共享内存」是公开实现的通行做法，不是某一份文档里的原话。</tspan></text>
 </svg>
-<figcaption><b>同一个算法，两种性质的工作。</b>数学、FLOPs、结果三样完全相同，差的只有「谁来安排搬运」：GPU 侧 <b>6 条要 kernel 作者亲手写</b>（块多大、发 <code>cp.async</code>／TMA、双缓冲、warp 分工、对齐、要不要占 L1），TPU 侧只有 <b>2 条声明</b>（<code>BlockSpec</code> 与 grid）。<b>右栏比左栏短，这件事本身就是结论。</b>红带按住了最容易讲过头的那句：<b>L2 绕不开，绕开的是对缓存的依赖。</b></figcaption>
+<figcaption><b>同一个算法，两种性质的工作。</b>数学、FLOPs、结果三样完全相同 —— 差的只有<b>「谁来安排搬运」</b>。<br>GPU 侧 <b>6 条要 kernel 作者亲手写</b>：块多大、发 <code>cp.async</code>／TMA、双缓冲、warp 分工、对齐、要不要占 L1。<br>TPU 侧只有 <b>2 条声明</b>：<code>BlockSpec</code> 与 grid。<b>右栏比左栏短，这件事本身就是结论。</b>红带按住了最容易讲过头的那句：<b>L2 绕不开，绕开的是对缓存的依赖。</b></figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 走完一遍之后，第 0 节那句话兑现了</span>
@@ -8717,11 +8719,13 @@ details.aside b{color:var(--ink);font-weight:600}
          「5.1 说的『占用率』，量的就是这 64 个槽填了几个」，**而 5.1 正文里
          这三个字一次都没出现过** —— occupancy 只活在 G-7 图注的小字里。
          钩子指向空处。这里只插一个同位语，不新增句子、不动图。 -->
-    <b>GPU 那套在「备选不够」时失效</b>：负载一变得寄存器吃紧、
-    能同时驻留的任务变少 ——&nbsp;<b>「同时驻留了几个」就是 occupancy（占用率）</b>
-    ——&nbsp;延迟就藏不住了（这也是为什么调优第一步常常是砍寄存器用量）。
-    <b>TPU 那套在「算不准」时失效</b>：形状是动态的、访问位置要跑起来才知道，
-    编译期排的班就成了空班。
+    <b>GPU 那套在「备选不够」时失效。</b><br>
+    负载一变得寄存器吃紧，能同时驻留的任务就变少 ——&nbsp;
+    而「同时驻留了几个」，就是 <b>occupancy（占用率）</b>。
+    备选一少，延迟就藏不住了。
+    <em>调优第一步常常是砍寄存器用量，原因就在这。</em><br>
+    <b>TPU 那套在「算不准」时失效。</b><br>
+    形状是动态的、访问位置要跑起来才知道 ——&nbsp;编译期排的班就成了空班。
     <br>——&nbsp;<b>所以两边怕的东西正好相反：一边怕资源紧，一边怕不确定。</b>
     记住这句，<a href="topic-02-L300.html#s5">L300 5.5</a> 那本移植账单就不用背了，能自己推出来。</div>
 
@@ -9734,10 +9738,13 @@ details.aside b{color:var(--ink);font-weight:600}
           一句 L300 去处留在明面（它是有用的下一步），节号勘误折起来 ——
           需要它的人一定是正拿着两版对照翻，那种人会去点开。 -->
   <div class="note info"><span class="t">这一版是 L200 · 一小时</span>
-    完整版 <b>L300</b>（两小时，72 张图）多出来的是：芯片封装全景与十行完整对照、
-    寄存器堆到位线的五张深挖、四种通信原语与域内结构、推理引擎移植账单与 AOT、
-    <b>以及「这一课的数我是怎么核的」整节自曝</b>（八笔撤回的台账、
-    同一个漏法犯两次、二十条这门课答不了的）。
+    完整版 <b>L300</b>（两小时，72 张图）多出来的是四组深挖：<br>
+    ·芯片封装全景与十行完整对照<br>
+    ·寄存器堆到位线的五张图<br>
+    ·四种通信原语与域内结构<br>
+    ·推理引擎移植账单与 AOT<br>
+    <b>以及「这一课的数我是怎么核的」整节自曝</b> ——&nbsp;
+    八笔撤回的台账、同一个漏法犯两次、二十条这门课答不了的。
     <br>——&nbsp;<b><a href="topic-02-L300.html">去看 L300 完整版 →</a></b></div>
 
   <details class="aside"><summary>两版对照着翻时：哪些节号一致、哪些不一致（只在对照 L300 时需要）</summary>
