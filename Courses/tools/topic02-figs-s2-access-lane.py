@@ -76,37 +76,39 @@ CW,CH,NC=40,18,12       # 只画 12 列，后面省略号
 # 空格子不用填东西 —— 它们本来就该是空的，只是不该那么大。
 X0,Y0=234,102
 H2=Y0+8*CH+206
-q=[f'<svg viewBox="0 0 1000 {H2}" width="100%" role="img" aria-label="向量寄存器是 8 个 sublane 乘 128 个 lane，sublane 比 lane 大 128 倍">',
+q=[f'<svg viewBox="0 0 1000 {H2}" width="100%" role="img" aria-label="向量寄存器是横着的一条 128 格、叠 8 条；横向叫 lane，第几条叫 sublane">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    'lane 和 sublane 是<tspan font-weight="700">寄存器</tspan>的形状 —— 不是内存的概念，也不是「大小」的概念</text>',
    '<text class="svgsm" x="0" y="35">来源：JAX 公开源码中 v7 那一支的 num_lanes = 128 / num_sublanes = 8</text>',
    f'<text class="svglbl" x="0" y="{Y0-14}" fill="{BL}">一个向量寄存器</text>']
-# 第 0 行整行 = 一个 sublane（绿底）；其中第 0 格 = 一个 lane（红底）
+# 第 0 行整行 = 一个 sublane（绿底）；第 0 列整列 = 一条 lane（红底）
+# ⛔ 红色以前只涂 (0,0) 一格，那等于说「lane = 一个格子」—— 错的，见文件头注释。
 q.append(f'<rect x="{X0-4}" y="{Y0-4}" width="{NC*CW+30}" height="{CH+6}" rx="4" fill="#e6f4ea" stroke="{GR}" stroke-width="1.6"/>')
 for r in range(8):
     for c in range(NC):
         f = "#fff" if r else "#e6f4ea"
         st = BL
-        if r==0 and c==0: f,st = RD,RD
+        if c==0: f,st = ("#fce8e6", RD)
         q.append(f'<rect x="{X0+c*CW}" y="{Y0+r*CH}" width="{CW-2}" height="{CH-2}" rx="2" '
                  f'fill="{f}" stroke="{st}" stroke-width="0.7"/>')
     q.append(f'<text class="svgsm" x="{X0+NC*CW+14}" y="{Y0+r*CH+17}" fill="{GR if r==0 else GY}">…</text>')
 q.append(f'<text class="svgsm" x="{X0+NC*CW+40}" y="{Y0+CH-8}" fill="{GR}">共 128 列</text>')
 # lane 标注
 q.append(f'<path d="M{X0+CW/2} {Y0-14} v10" stroke="{RD}" stroke-width="1.6"/>')
-q.append(f'<text class="svglbl" x="{X0+CW/2}" y="{Y0-34}" text-anchor="middle" fill="{RD}">1 个 lane</text>')
-q.append(f'<text class="svgsm" x="{X0+CW/2}" y="{Y0-20}" text-anchor="middle" fill="{RD}">= 4 B（红色这一格）</text>')
+q.append(f'<text class="svglbl" x="{X0+CW/2}" y="{Y0-34}" text-anchor="middle" fill="{RD}">1 条 lane</text>')
+q.append(f'<text class="svgsm" x="{X0+CW/2}" y="{Y0-20}" text-anchor="middle" fill="{RD}">红色这一竖条，自己一套 ALU</text>')
 # sublane 标注
-q.append(f'<text class="svglbl" x="{X0-20}" y="{Y0+8}" text-anchor="end" fill="{GR}">1 个 sublane = 绿色这一整行</text>')
-q.append(f'<text class="svgsm" x="{X0-20}" y="{Y0+23}" text-anchor="end" fill="{GR}">= 128 个 lane = 512 B</text>')
+q.append(f'<text class="svglbl" x="{X0-20}" y="{Y0+8}" text-anchor="end" fill="{GR}">1 个 sublane = 横着的一整条</text>')
+q.append(f'<text class="svgsm" x="{X0-20}" y="{Y0+23}" text-anchor="end" fill="{GR}">128 格那么长 = 512 B</text>')
 q.append(f'<text class="svgsm" x="{X0-18}" y="{Y0+8*CH-4}" text-anchor="end">共 8 行</text>')
 yq=Y0+8*CH+16
 q.append(f'<text class="svgnum" x="{X0}" y="{yq+4}" fill="{BL}">整个寄存器 = 8 × 128 × 32 bit = 4,096 B = 4 KiB</text>')
 q.append(f'<rect x="0" y="{yq+18}" width="982" height="56" rx="8" fill="#fce8e6" stroke="{RD}"/>')
 q.append(f'<text class="svglbl" x="18" y="{yq+40}" fill="{RD}">'
-         f'⚠️ 「sub」是「第二维」的意思，不是「更小」—— 一个 sublane 是 512 B，比一个 lane 大 128 倍</text>')
+         f'⚠️ 「sub」不是「更小」—— sublane 不是 lane 的一小段，它是横跨全部 128 条 lane 的一整条</text>')
 q.append(f'<text class="svgsm" x="18" y="{yq+59}" fill="{RD}">'
-         f'几乎所有人第一次都会理解反。记法：<tspan font-family="ui-monospace,monospace">最内维 → lane，次内维 → sublane</tspan>，跟大小无关。</text>')
+         f'立画面只要两步：<tspan font-weight="700">先只看一条 —— 128 格那么长；再叠 8 条 —— 就是一个寄存器。</tspan>'
+         f'　记法：<tspan font-family="ui-monospace,monospace">最内维 → lane，次内维 → sublane</tspan>。</text>')
 q.append(f'<rect x="0" y="{yq+84}" width="982" height="88" rx="8" fill="#e6f4ea" stroke="{GR}"/>')
 q.append(f'<text class="svglbl" x="18" y="{yq+106}" fill="{GR}">'
          f'⭐ 然后 XLA 故意把内存布局做成同一个形状</text>')
