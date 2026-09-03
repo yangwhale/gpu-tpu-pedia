@@ -99,7 +99,7 @@ W('fig1-3.svg',p+['</svg>'])
 # ══════════ 图 1-4 · 压轴：312 FLOP/byte ══════════
 V7B,V7BW,V7F=2307,7.380,4614     # TFLOPS / TB·s⁻¹ / TFLOPS  官方 per chip
 B2B,B2BW,B2F=2500,8.000,5000     # dense per GPU，由官方域级数字除 72 得到
-H2=792          # 471 是原来只讲 HBM 一层时的高度，下面那段阶梯把它撑到 786
+H2=810          # 471 是原来只讲 HBM 一层时的高度；下面那段阶梯 ＋ 两行口径说明撑到 804
 q=[f'<svg viewBox="0 0 1000 {H2}" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算；并列出 GB200 上 HBM、L2、共享内存三层各自的兑换比 312 / 119 / 64">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    '两家公司、两套架构、两种设计哲学 —— 算力除以带宽，落在同一个数上</text>',
@@ -195,8 +195,17 @@ for i,(lay,who,formula,val) in enumerate(LADDER):
              f'fill="{BL if i<2 else PU}"/>')
     q.append(f'<text class="svgnum" x="1000" y="{y+21}" text-anchor="end" '
              f'fill="{BL if i<2 else PU}" style="font-size:20px">{val:.0f}</text>')
+# ⛔ 2026-09-03 这行原来写「条越短，越容易撞到带宽那一侧」——&nbsp;**方向反了**。
+#    Roofline 的屋脊点 I* ＝ 峰值算力 ÷ 带宽：算子强度 I < I* 才是带宽受限。
+#    I* 越小，门槛越低，算子**越容易**越过它变成算力受限 —— 这是好事。
+#    （经典 roofline 的标准表述就是「ridge point 越靠左越容易达到峰值」。）
+#    ⚠️ 那为什么黄框又说「融合做过头会在这条线上重新撞墙」？不矛盾 ——&nbsp;
+#       门槛从 312 降到 64 只降了 5 倍，而融合把 HBM 流量转成片上流量，
+#       片上搬的字节数可能涨几十倍。**撞墙不是因为门槛变高，是因为分母变大。**
+#    这个错是 Chris 追问「算术强度是不是按所有 SM 加总算的」时顺带钓出来的。
 q.append(f'<text class="svgsm" x="1000" y="{LY+2*(LH+14)+34}" text-anchor="end" fill="{GY}">'
-         'FLOP / byte　—— 条越短，越容易撞到带宽那一侧</text>')
+         'FLOP / byte　—— 每一层各自的门槛。'
+         '<tspan font-weight="700">条越短门槛越低，算子越容易在这一层变成算力受限</tspan></text>')
 q.append('<rect x="0" y="650" width="1000" height="86" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')
 q.append('<text class="svglbl" x="18" y="672" fill="#7a5000">'
          '⭐ 从 HBM 爬到共享内存，这条线只降了约 5 倍 ——&#160;'
@@ -217,8 +226,14 @@ q.append(f'<text class="svgsm" x="0" y="750" fill="{GY}">'
          '64 的出处：分子 8,192 FLOP/周期/SM 见图 G-2；分母 128 B/周期/SM 有三处一致的公开测量'
          '（Hopper 微基准实测 127.9 · SemiAnalysis · Chips and Cheese），硬件上是 32 bank × 4 B。</text>')
 q.append(f'<text class="svgsm" x="0" y="768" fill="{GY}">'
-         '它<tspan font-weight="700">不含时钟也不含 SM 数</tspan>，是纯架构比值。'
-         '反推校验：2,500 ÷ 64 ＝ 39 TB/s 全片，再 ÷（148 SM × 128 B）得时钟 ≈ 2.06 GHz，与 B200 对得上。</text>')
+         '⚠️ 三条线口径不同：上两条是<tspan font-weight="700">整颗芯片</tspan>'
+         '（2,500 TFLOPS ÷ 全片带宽），第三条是<tspan font-weight="700">单个 SM 每周期</tspan>。'
+         '换算过去比值不变 ——&#160;148 和时钟同时出现在分子分母，约掉了，'
+         '<tspan font-weight="700">这是恒等不是近似</tspan>。</text>')
+q.append(f'<text class="svgsm" x="0" y="786" fill="{GY}">'
+         '反推校验：2,500 ÷ 64 ＝ 39 TB/s 全片，再 ÷（148 SM × 128 B）得时钟 ≈ 2.06 GHz，与 B200 对得上。'
+         '⭐ 真正的差别不在算法，在<tspan font-weight="700">可达性</tspan>：'
+         'HBM 那 8 TB/s 是 148 个 SM 抢的，共享内存这 128 B/周期是每个 SM 自己的。</text>')
 W('fig1-4.svg',q+['</svg>'])
 print('1-3 / 1-4 ok  ratios:',
       round(V7B/1000/V7BW*1000,1), round(B2B/1000/B2BW*1000,1),
