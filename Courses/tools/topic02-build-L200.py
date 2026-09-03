@@ -881,7 +881,7 @@ def body():
       <em>这正是 3.1 说的「你付了钱，但不知道自己付了」的具体形态。
       TPU 反过来 ——&nbsp;两半直接暴露成 2 个 device，想用对面得自己写一步。</em></p>
     <p><b>② SM 之间换数据分三档，档与档之间差别很大：</b>
-      <b>同一个 cluster 内</b>（≤ 8 个线程块、B200 可 opt-in 到 16，须在同一个 GPC）——&nbsp;
+      <b>同一个 cluster 内</b>（≤ 8 个线程块、H100 起可 opt-in 到 16，须在同一个 GPC）——&nbsp;
       <b>分布式共享内存</b>，直接读写别人的共享内存，<b>不走 L2</b>；
       Blackwell 还多一档更紧的 <code>cta_group::2</code>，两个 SM 的 Tensor Core 配对干同一次矩阵乘。
       <b>出了 cluster，就只剩 L2 和 HBM</b> ——&nbsp;片上再没有快捷通道，同步只能靠原子操作、协作组或者拆 kernel。</p>
@@ -942,7 +942,7 @@ def body():
         <td>≤ <b>1,024</b> thread ＝ ≤ 32 warp</td>
         <td><b>你写代码时定</b></td>
         <td><b>整块钉死在一个 SM 上</b>，落下就不迁走</td></tr>
-    <tr><td><b>cluster</b></td><td>≤ <b>8</b> 个 block<br><em>B200 可 opt-in 到 16</em></td>
+    <tr><td><b>cluster</b></td><td>≤ <b>8</b> 个 block<br><em>H100 起可 opt-in 到 16</em></td>
         <td><b>你定，可选</b>（Hopper 才有）</td>
         <td>同一个 <b>GPC</b> 内的若干 SM</td></tr>
     <tr><td><b>grid</b></td><td>一次 kernel 的全部 block</td>

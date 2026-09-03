@@ -37,7 +37,7 @@ LV = [
      "<b>整块钉死在一个 SM 上</b>，一旦落下就不迁走",
      "<b>共享内存</b>（≤227 KiB）—— 这是 CUDA 里最重要的一层作用域",
      "<code>__syncthreads()</code>；一个 SM 最多同时驻留 32 块"),
-    (YL, "cluster", "thread block cluster", "≤ 8 块（B200 可 opt-in 到 16）",
+    (YL, "cluster", "thread block cluster", "≤ 8 块（H100 起可 opt-in 到 16）",
      "同一个 <b>GPC</b> 内的若干 SM",
      "<b>分布式共享内存</b>：能直接读写同 cluster 里别的块的共享内存",
      "cluster 级 barrier；Hopper 引入，Blackwell 沿用"),

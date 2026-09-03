@@ -39,7 +39,7 @@ RH, TOP = 62, 86                            # 行高 / 表体起点
 ROWS = [
     ("grid", "grid", "整个 kernel 的全部 block",
      "只剩 L2 和 HBM ——&#160;没有片上快捷通道", None),
-    ("cluster", "thread block cluster", "≤ 8 块（B200 可 opt-in 到 16）",
+    ("cluster", "thread block cluster", "≤ 8 块（H100 起可 opt-in 到 16）",
      "同一个 GPC 内，能直接读写别的块的 shared memory",
      "一个 SM 那 227 KiB 不够用了。代价：邻居的暂存要走 GPC 网络，比自己那块慢"),
     ("线程块", "CTA / block", "≤ 1,024 线程 ＝ ≤ 32 warp",
@@ -49,13 +49,15 @@ ROWS = [
      "一条 wgmma 由这 128 个线程整体发出",
      "Tensor Core 大到一个 warp 的寄存器喂不饱了，发指令的单位只好往上抬一级"),
     ("warp", "warp", "32 个线程",
-     "共用一条指令流、天然锁步；分支分歧只在这一层内发生",
+     "共用一条指令流；分支分歧只在这一层内发生",
      "取指译码太贵。取一次、译一次、32 份数据一起算 ——&#160;管理成本摊薄 32 倍"),
     ("线程", "thread", "1 个",
      "自己的寄存器。没有自己的命运 ——&#160;跟着所在的 warp 走", None),
 ]
 
-H = TOP + len(ROWS) * RH + 150
+# 尾部 168 = 红框(18 间隔 + 70) + 绿带(10 间隔 + 70)。⚠️ 红框从两行加到三行时
+# 忘了同步这个数，绿带最后一行直接被 viewBox 切掉 —— 而脚本照样 exit 0。
+H = TOP + len(ROWS) * RH + 168
 
 p = [f'<svg viewBox="0 0 {W} {H}" width="100%" role="img" '
      f'aria-label="CUDA 六层线程组织，每一层是被什么硬件麻烦逼出来的，以及 TPU 一层都没有">',
@@ -97,16 +99,27 @@ for i, (zh, en, size, keeps, why) in enumerate(ROWS):
                  f'——&#160;它是边界，不是被逼出来的</text>')
 
 YB = TOP + len(ROWS) * RH + 18
-p.append(f'<rect x="0" y="{YB}" width="{W}" height="52" rx="8" '
+p.append(f'<rect x="0" y="{YB}" width="{W}" height="70" rx="8" '
          f'fill="#fff" stroke="{RD}"/>')
 p.append(f'<text class="svgsm" x="16" y="{YB+21}" fill="{RD}">'
-         f'⚠️ 两个最容易混成一个的数：<tspan font-weight="700">1,024 是「一个 block 的上限」</tspan>'
+         f'⚠️ 三个最容易记错的点：<tspan font-weight="700">1,024 是「一个 block 的上限」</tspan>'
          f'（＝32 warp），不是一个 SM 的上限。</text>')
 p.append(f'<text class="svgsm" x="16" y="{YB+39}" fill="{RD}">'
          f'一个 SM 同时驻留 <tspan font-weight="700">64 个 warp ＝ 2,048 线程</tspan>'
-         f'（B200 / H100 / A100；Turing 只有一半）——&#160;这才是「有没有别的活可切」的本钱。</text>')
+         f'（B200 / H100 / A100 这几代如此，消费级和 Turing 更少）'
+         f'——&#160;这才是「有没有别的活可切」的本钱。</text>')
+# ⛔ 第三条是 2026-09-03 自审时查出来的**真错**，不是补充说明。
+#    原来 warp 那一行写的是「共用一条指令流、天然锁步」——「天然锁步」在 Volta
+#    之前成立，Volta 起的 independent thread scheduling 给了每个线程独立的 PC，
+#    warp 内**不再保证**锁步，这正是 __syncwarp() 和那批 _sync 后缀 intrinsic
+#    存在的理由（NVIDIA Hopper Tuning Guide / CUDA Handbook 7.5）。
+#    ⚠️ 这条正是「听起来像常识的架构关系，老约束在新架构上已被解除」那一类 ——
+#       写进教材会让学生照着写 warp-synchronous 代码，然后在真机上偶发错。
+p.append(f'<text class="svgsm" x="16" y="{YB+57}" fill="{RD}">'
+         f'warp 内<tspan font-weight="700">「天然锁步」是 Volta 之前的事</tspan>'
+         f'——&#160;现在每个线程有独立的 PC，要对齐得显式写 __syncwarp()。</text>')
 
-GB = YB + 62
+GB = YB + 80
 p.append(f'<rect x="0" y="{GB}" width="{W}" height="70" rx="8" '
          f'fill="#e6f4ea" stroke="{GR}"/>')
 p.append(f'<text class="svglbl" x="16" y="{GB+23}" fill="#0b6b30">'

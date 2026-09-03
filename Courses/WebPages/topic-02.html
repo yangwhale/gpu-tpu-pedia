@@ -3143,7 +3143,7 @@ details.aside b{color:var(--ink);font-weight:600}
       <em>这正是 3.1 说的「你付了钱，但不知道自己付了」的具体形态。
       TPU 反过来 ——&nbsp;两半直接暴露成 2 个 device，想用对面得自己写一步。</em></p>
     <p><b>② SM 之间换数据分三档，档与档之间差别很大：</b>
-      <b>同一个 cluster 内</b>（≤ 8 个线程块、B200 可 opt-in 到 16，须在同一个 GPC）——&nbsp;
+      <b>同一个 cluster 内</b>（≤ 8 个线程块、H100 起可 opt-in 到 16，须在同一个 GPC）——&nbsp;
       <b>分布式共享内存</b>，直接读写别人的共享内存，<b>不走 L2</b>；
       Blackwell 还多一档更紧的 <code>cta_group::2</code>，两个 SM 的 Tensor Core 配对干同一次矩阵乘。
       <b>出了 cluster，就只剩 L2 和 HBM</b> ——&nbsp;片上再没有快捷通道，同步只能靠原子操作、协作组或者拆 kernel。</p>
@@ -3474,7 +3474,7 @@ details.aside b{color:var(--ink);font-weight:600}
         <td>≤ <b>1,024</b> thread ＝ ≤ 32 warp</td>
         <td><b>你写代码时定</b></td>
         <td><b>整块钉死在一个 SM 上</b>，落下就不迁走</td></tr>
-    <tr><td><b>cluster</b></td><td>≤ <b>8</b> 个 block<br><em>B200 可 opt-in 到 16</em></td>
+    <tr><td><b>cluster</b></td><td>≤ <b>8</b> 个 block<br><em>H100 起可 opt-in 到 16</em></td>
         <td><b>你定，可选</b>（Hopper 才有）</td>
         <td>同一个 <b>GPC</b> 内的若干 SM</td></tr>
     <tr><td><b>grid</b></td><td>一次 kernel 的全部 block</td>
@@ -3508,7 +3508,7 @@ details.aside b{color:var(--ink);font-weight:600}
           有了它，3.4 讲「一条指令吃多大」才接得上 —— 那是同一笔账的下一项。 -->
   <p>最后一个问题，也是这一节真正的落点：<b>为什么偏偏是六层？</b></p>
 <figure class="fbox fwide" id="s012-fig3-1">
-  <svg viewBox="0 0 1400 608" width="100%" role="img" aria-label="CUDA 六层线程组织，每一层是被什么硬件麻烦逼出来的，以及 TPU 一层都没有">
+  <svg viewBox="0 0 1400 626" width="100%" role="img" aria-label="CUDA 六层线程组织，每一层是被什么硬件麻烦逼出来的，以及 TPU 一层都没有">
 <text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">那六层为什么是六层 ——&#160;<tspan font-weight="700">每一层都是被一个具体的麻烦逼出来的</tspan></text>
 <text class="svgsm" x="0" y="37">包含关系与「谁定的」看那张折叠全表，每层钉在哪块硅上看《GPU 显微镜》G-3 ——&#160;这张只答一个问题：为什么要有这一层</text>
 <text class="svgsm" x="0" y="74" fill="#5f6368">层</text>
@@ -3526,7 +3526,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="7" y="162" width="3" height="36" rx="1.5" fill="#1a73e8" opacity="0.38"/>
 <text class="svglbl" x="19" y="175" fill="#202124" style="font-size:13px">cluster</text>
 <text class="svgsm" x="19" y="192" fill="#5f6368">thread block cluster</text>
-<text class="svgsm" x="190" y="175" fill="#202124">≤ 8 块（B200 可 opt-in 到 16）</text>
+<text class="svgsm" x="190" y="175" fill="#202124">≤ 8 块（H100 起可 opt-in 到 16）</text>
 <text class="svgsm" x="410" y="175" fill="#5f6368">同一个 GPC 内，能直接读写别的块的 shared memory</text>
 <text class="svgsm" x="790" y="175" fill="#7a5000">一个 SM 那 227 KiB 不够用了。代价：邻居的暂存要走 GPC 网络，比自己那块慢</text>
 <line x1="0" y1="210" x2="1400" y2="210" stroke="#e8eaed"/>
@@ -3548,7 +3548,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svglbl" x="40" y="361" fill="#202124" style="font-size:13px">warp</text>
 <text class="svgsm" x="40" y="378" fill="#5f6368">warp</text>
 <text class="svgsm" x="190" y="361" fill="#202124">32 个线程</text>
-<text class="svgsm" x="410" y="361" fill="#5f6368">共用一条指令流、天然锁步；分支分歧只在这一层内发生</text>
+<text class="svgsm" x="410" y="361" fill="#5f6368">共用一条指令流；分支分歧只在这一层内发生</text>
 <text class="svgsm" x="790" y="361" fill="#7a5000">取指译码太贵。取一次、译一次、32 份数据一起算 ——&#160;管理成本摊薄 32 倍</text>
 <line x1="0" y1="396" x2="1400" y2="396" stroke="#e8eaed"/>
 <rect x="35" y="410" width="3" height="36" rx="1.5" fill="#1a73e8" opacity="0.90"/>
@@ -3557,13 +3557,14 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="190" y="423" fill="#202124">1 个</text>
 <text class="svgsm" x="410" y="423" fill="#5f6368">自己的寄存器。没有自己的命运 ——&#160;跟着所在的 warp 走</text>
 <text class="svgsm" x="790" y="423" fill="#bba15a">——&#160;它是边界，不是被逼出来的</text>
-<rect x="0" y="476" width="1400" height="52" rx="8" fill="#fff" stroke="#d93025"/>
-<text class="svgsm" x="16" y="497" fill="#d93025">⚠️ 两个最容易混成一个的数：<tspan font-weight="700">1,024 是「一个 block 的上限」</tspan>（＝32 warp），不是一个 SM 的上限。</text>
-<text class="svgsm" x="16" y="515" fill="#d93025">一个 SM 同时驻留 <tspan font-weight="700">64 个 warp ＝ 2,048 线程</tspan>（B200 / H100 / A100；Turing 只有一半）——&#160;这才是「有没有别的活可切」的本钱。</text>
-<rect x="0" y="538" width="1400" height="70" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
-<text class="svglbl" x="16" y="561" fill="#0b6b30">⭐ 这六层没有一层是为了「让程序好写」加的</text>
-<text class="svgsm" x="16" y="581" fill="#0b6b30">它们合起来，就是<tspan font-weight="700">「运行时适应」这个赌注的组织成本</tspan>——&#160;要在运行时换人、分工、组队，就得把这些层级做进硬件，再配上调度器、记分板、常驻的巨大寄存器堆。</text>
-<text class="svgsm" x="16" y="599" fill="#0b6b30"><tspan font-weight="700">✕ TPU 这一整列是空的。</tspan>它不做「运行时换人」这个决定，于是这六层同时失去存在的理由 ——&#160;T-3 那张对照表上的两个空格，就是这一列不存在时的样子。</text>
+<rect x="0" y="476" width="1400" height="70" rx="8" fill="#fff" stroke="#d93025"/>
+<text class="svgsm" x="16" y="497" fill="#d93025">⚠️ 三个最容易记错的点：<tspan font-weight="700">1,024 是「一个 block 的上限」</tspan>（＝32 warp），不是一个 SM 的上限。</text>
+<text class="svgsm" x="16" y="515" fill="#d93025">一个 SM 同时驻留 <tspan font-weight="700">64 个 warp ＝ 2,048 线程</tspan>（B200 / H100 / A100 这几代如此，消费级和 Turing 更少）——&#160;这才是「有没有别的活可切」的本钱。</text>
+<text class="svgsm" x="16" y="533" fill="#d93025">warp 内<tspan font-weight="700">「天然锁步」是 Volta 之前的事</tspan>——&#160;现在每个线程有独立的 PC，要对齐得显式写 __syncwarp()。</text>
+<rect x="0" y="556" width="1400" height="70" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="16" y="579" fill="#0b6b30">⭐ 这六层没有一层是为了「让程序好写」加的</text>
+<text class="svgsm" x="16" y="599" fill="#0b6b30">它们合起来，就是<tspan font-weight="700">「运行时适应」这个赌注的组织成本</tspan>——&#160;要在运行时换人、分工、组队，就得把这些层级做进硬件，再配上调度器、记分板、常驻的巨大寄存器堆。</text>
+<text class="svgsm" x="16" y="617" fill="#0b6b30"><tspan font-weight="700">✕ TPU 这一整列是空的。</tspan>它不做「运行时换人」这个决定，于是这六层同时失去存在的理由 ——&#160;T-3 那张对照表上的两个空格，就是这一列不存在时的样子。</text>
 </svg>
   <figcaption>六层里只有 <b>grid</b> 和 <b>thread</b> 是边界，其余四层每一层都对应一个具体的硬件麻烦：取指译码太贵，于是 32 个线程共用一条指令流；Tensor Core 大到一个 warp 喂不饱，于是发指令的单位抬到 4 个 warp；共享暂存需要一条作用域边界，于是有了 CTA；一个 SM 的 227 KiB 不够用，于是允许跨 SM 组簇。<b>它们合起来就是「运行时适应」这个赌注的组织成本</b> —— 而 TPU 不做那个决定，这一整列同时失去存在的理由。</figcaption>
   </figure>
