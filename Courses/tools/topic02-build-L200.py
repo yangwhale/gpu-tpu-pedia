@@ -1687,6 +1687,20 @@ def body():
       <b>同一颗芯片上，一个有一个没有。</b>
       <span class="sub">（这条出自 NVIDIA 开发者论坛上的实测报告，不是官方规格书。）</span></p>
 
+    <!-- ⭐ 2026-09-03 Chris 问「micro-tensor scaling 是什么」。
+         它就是这一节从头讲到尾的那件事，只是换了个名字 ——&nbsp;
+         同一个东西在四个地方有四个叫法，不列一张对照表，读者会以为是四件事。 -->
+    <p>⚠️ <b>同一件事有四个名字，别被绕晕</b>：
+      <em>NVIDIA 叫它 <b>micro-tensor scaling</b>，OCP 标准叫 <b>microscaling（MX）</b>，
+      写 kernel 的人叫 <b>block scaling</b>，本课叫<b>块量化</b>。</em>
+      <b>指的都是上面这一件事：让一小撮数共用一个 scale。</b></p>
+
+    <p><b>「micro」是相对「per-tensor」说的。</b>
+      <em>上一代 FP8 的做法是<b>整张量共用一个 scale</b>，还得靠软件盯着历史极值去猜它
+      ——&nbsp;一个离群值就会把整张量的 scale 拽跑，剩下那些小数全被压进同一个格子。</em><br>
+      <b>把共用范围从「整张量」缩到「十六个数」，scale 就能跟着局部的动态范围走。</b>
+      <em>这才是 FP4 只有八个可表示值却还能用的原因。</em></p>
+
     <p>⚠️ <b>顺便澄清一个名字</b>：<b>「Transformer Engine」不是一个物理部件。</b>
       <em>它是「支持块缩放的 Tensor Core ＋ 决定怎么选 scale 的软件库」的合称。</em>
       <b>你在芯片图上找不到它。</b></p>
