@@ -6126,7 +6126,7 @@ details.aside b{color:var(--ink);font-weight:600}
         ——&nbsp;<em>这是「能算」。</em></li>
       <li><b>② MMA 数据通路里多了一级「乘 scale」。</b>
         <em>这就是反量化 ——&nbsp;<b>它不是一个独立部件，是流水线里内嵌的一步</b>，
-        所以不额外花时间。</em>配套新增的是 <b>TMEM</b>，用来放 scale 和累加器。</li>
+        <b>不占算力</b>。</em>配套新增的是 <b>TMEM</b>，用来放 scale 和累加器。</li>
       <li><b>③ 通用核那边新增了转换指令</b>（把 FP32 打包成 E2M1 那类）。
         <em>这是「量化」——&nbsp;<b>跑在普通 CUDA Core 上，不是什么专用引擎</b>。</em></li>
     </ul>
@@ -6170,6 +6170,26 @@ details.aside b{color:var(--ink);font-weight:600}
     <p>⚠️ <b>顺便澄清一个名字</b>：<b>「Transformer Engine」不是一个物理部件。</b>
       <em>它是「支持块缩放的 Tensor Core ＋ 决定怎么选 scale 的软件库」的合称。</em>
       <b>你在芯片图上找不到它。</b></p>
+
+    <!-- ⭐ 2026-09-03 Chris 复述确认「缩放因子放进 Tensor Core，不额外增加 FLOPs」。
+         ⭐ 结论对，但「不花钱」是错的 —— 三笔代价都不是 FLOPs，所以特别容易漏掉。
+         ⛔ 别把这段删成一句「几乎零成本」：TMEM 那一笔是真正卡 tile 大小的东西。 -->
+    <p><b>⭐ 「乘 scale 不额外消耗算力」——&nbsp;这句对。</b>
+      <em>那一乘是 MMA 流水线里的一级，不占发射槽，也不吃 FP4 的峰值。</em>
+      <b>但「不花钱」是另一回事：代价有三笔，只是都不算在 FLOPs 头上。</b></p>
+    <ul>
+      <li><b>① 占 TMEM。</b><em>scale 必须躺在 TMEM 里，而 TMEM 一共只有 256 KiB，
+        一个 128×256 的 FP32 累加器就吃掉一半。</em>
+        <b>真正卡住你能开多大 tile 的，往往是这一笔。</b></li>
+      <li><b>② 多一路搬运。</b><em>那串 scale 得从显存经共享内存进 TMEM，
+        自己占 TMA 的管线和共享内存；而且它<b>必须摆成一种交错布局</b>，
+        天真地按 K 排好的那种得先重排。</em></li>
+      <li><b>③ 量化那一头是真花时间的。</b><em>算每块的最大值、压成 E2M1
+        ——&nbsp;这些跑在通用核上，<b>不进 MMA 的账，但进墙钟的账</b>。</em></li>
+    </ul>
+    <p><em>⚠️ 顺带纠一个说法：scale 不是「放进 Tensor Core 里」，
+      是<b>放进 TMEM</b> ——&nbsp;<b>TMEM 是 SM 上的一块内存</b>，
+      Tensor Core 从那儿读。这个区别在算 tile 大小的时候很要紧。</em></p>
 
     <p>⭐ <b>一句话</b>：<b>存的是 4 bit，算的是 32 bit。</b>
       <em>进来那一下的换算<b>焊在 MMA 流水线里</b>，出去那一下的换算
