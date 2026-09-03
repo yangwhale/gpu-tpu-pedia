@@ -914,7 +914,7 @@ details.aside b{color:var(--ink);font-weight:600}
     <br>拿算力除以带宽：<b>TPU 是 312.6，GB200 是 312.5</b>，相对差万分之三，BF16 和 FP8 都一样。</p>
 
   <figure class="fbox" id="s012-fig1-4">
-  <svg viewBox="0 0 1000 471" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算">
+  <svg viewBox="0 0 1000 792" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算；并列出 GB200 上 HBM、L2、共享内存三层各自的兑换比 312 / 119 / 64">
 <text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">两家公司、两套架构、两种设计哲学 —— 算力除以带宽，落在同一个数上</text>
 <text class="svgsm" x="0" y="35">全部由两张官方规格表现算，推导链写在图里</text>
 <rect x="0" y="50" width="470" height="196" rx="10" fill="#f8f9fa" stroke="#1e8e3e"/>
@@ -957,8 +957,34 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="0" y="420" fill="#202124">· 于是每个算子只剩一个问题：它的算术强度比 312 高还是低？高就是算力受限，低就是带宽受限</text>
 <text class="svgsm" x="0" y="437" fill="#d93025">· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（第 2.8 节）。这就是第 2 节要处理的东西</text>
 <text class="svgsm" x="0" y="454" fill="#d93025">· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是第 3 节的战场。同一颗芯片，两种完全不同的困境</text>
+<line x1="0" y1="468" x2="1000" y2="468" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="494" fill="#202124" style="font-size:13.5px">⚠️ 但这条线不止一条 ——&#160;<tspan font-weight="700">每往计算靠近一层，它就往下掉一截</tspan></text>
+<text class="svgsm" x="0" y="513">同一个除法，在每一层各做一次。下面三个数都只对 GB200 那一颗成立，推导链写在每一行上</text>
+<text class="svglbl" x="0" y="546" fill="#202124">HBM3e</text>
+<text class="svgsm" x="0" y="562" fill="#5f6368">片外</text>
+<text class="svgsm" x="150" y="548" fill="#202124">2,500 TFLOPS ÷ 8.0 TB/s</text>
+<rect x="396" y="528" width="430" height="26" rx="4" fill="#1a73e8"/>
+<text class="svgnum" x="1000" y="549" text-anchor="end" fill="#1a73e8" style="font-size:20px">312</text>
+<text class="svglbl" x="0" y="586" fill="#202124">L2</text>
+<text class="svgsm" x="0" y="602" fill="#5f6368">硬件自动管</text>
+<text class="svgsm" x="150" y="588" fill="#202124">2,500 TFLOPS ÷ 21 TB/s</text>
+<rect x="396" y="568" width="164" height="26" rx="4" fill="#1a73e8"/>
+<text class="svgnum" x="1000" y="589" text-anchor="end" fill="#1a73e8" style="font-size:20px">119</text>
+<text class="svglbl" x="0" y="626" fill="#202124">共享内存 / L1</text>
+<text class="svgsm" x="0" y="642" fill="#5f6368">软件显式管</text>
+<text class="svgsm" x="150" y="628" fill="#202124">8,192 FLOP ÷ 128 B　（都按每 SM 每周期）</text>
+<rect x="396" y="608" width="88" height="26" rx="4" fill="#9334e6"/>
+<text class="svgnum" x="1000" y="629" text-anchor="end" fill="#9334e6" style="font-size:20px">64</text>
+<text class="svgsm" x="1000" y="642" text-anchor="end" fill="#5f6368">FLOP / byte　—— 条越短，越容易撞到带宽那一侧</text>
+<rect x="0" y="650" width="1000" height="86" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
+<text class="svglbl" x="18" y="672" fill="#7a5000">⭐ 从 HBM 爬到共享内存，这条线只降了约 5 倍 ——&#160;<tspan font-weight="700">片上不是无限快的</tspan></text>
+<text class="svgsm" x="18" y="692" fill="#7a5000">算子融合减掉的是 <tspan font-weight="700">HBM 那一层</tspan>的搬运；可那批数据总得在片上落脚 ——&#160;<tspan font-weight="700">账没有消失，它挪到了下面这条线上</tspan>。</text>
+<text class="svgsm" x="18" y="710" fill="#7a5000">所以融合之后要拿新的强度去跟 <tspan font-weight="700">64</tspan> 比，不能再跟 312 比 ——&#160;融合<tspan font-weight="700">做过头，会在新的这条线上重新撞墙</tspan>。</text>
+<text class="svgsm" x="18" y="726" fill="#7a5000">⛔ 只画了 GB200 一侧：TPU 的 VMEM 带宽官方没公开，那条线存在但给不出数。</text>
+<text class="svgsm" x="0" y="750" fill="#5f6368">64 的出处：分子 8,192 FLOP/周期/SM 见图 G-2；分母 128 B/周期/SM 有三处一致的公开测量（Hopper 微基准实测 127.9 · SemiAnalysis · Chips and Cheese），硬件上是 32 bank × 4 B。</text>
+<text class="svgsm" x="0" y="768" fill="#5f6368">它<tspan font-weight="700">不含时钟也不含 SM 数</tspan>，是纯架构比值。反推校验：2,500 ÷ 64 ＝ 39 TB/s 全片，再 ÷（148 SM × 128 B）得时钟 ≈ 2.06 GHz，与 B200 对得上。</text>
 </svg>
-  <figcaption>算力除以带宽，两边落在同一个数上：<b>312.6 对 312.5，相对差 0.03%</b>，BF16 和 FP8 完全一样。⚠️ 「为什么一样」<b>是推断，没有出处</b>；而且换成 HGX 板上的 B200 就是 281.3，差 11%。</figcaption>
+  <figcaption>算力除以带宽，两边落在同一个数上：<b>312.6 对 312.5，相对差 0.03%</b>，BF16 和 FP8 完全一样。⚠️ 「为什么一样」<b>是推断，没有出处</b>；而且换成 HGX 板上的 B200 就是 281.3，差 11%。<br>⭐ <b>图下半段</b>：同一个除法在每一层各做一次 ——&nbsp;<b>HBM 312、L2 119、共享内存 64</b>。越靠近计算，这条线越低，但只低约 5 倍。</figcaption>
   </figure>
 
   <div class="punch">312 不是谁选的，是被钉死的
@@ -975,7 +1001,55 @@ details.aside b{color:var(--ink);font-weight:600}
     <br>比 312 <b>低</b>，说明<b>搬得多、算得少</b>，卡在带宽上 —— 去看 第 2 节。
     <br>专题一那八步会整整齐齐地分到两边去。</p>
 
-  <div class="note danger"><span class="t">⚠️ 这张图不能拿去比「谁更强」</span>
+<!-- ⭐ 2026-09-03 补。这一段是被问出来的：「你讲算术强度基本上只讲了 HBM 带宽跟
+     Tensor Core 的比。可 L1 和 shared memory 是同一块 227 KB、分割比可调 ——
+     它的算术强度是多少？做算子融合的时候，本来要访问 HBM 的数据就暂存在那 227 KB 里，
+     等于把那个箱子换成这个箱子，你要考虑这个事。」
+     ⛔ 这一问指出的是**一个真的窟窿**：整门课把「算术强度」默认成了「对 HBM 的强度」，
+        而全课主线（算子融合）干的事恰恰是把流量从 HBM 挪到片上 —— 挪完之后
+        再拿 312 去比，比的就是错的对象。
+     📌 64 的推导链一个字都不能省，理由见 CLAUDE.md 第一原則。 -->
+<h4>1.4b　⚠️ 那条线不止一条：312 只是 HBM 那一层的答案</h4>
+
+<p>上面那句「每搬一个字节」，<b>搬的是从哪儿到哪儿？</b>
+——&nbsp;是<b>从 HBM 搬进芯片</b>。312 是<b>那一层</b>的兑换比，不是芯片的通用常数。
+<em>而同一个除法，在每一层都能做一次。</em></p>
+
+<p>拿 GB200 一侧算完是这样：<b>HBM 312 · L2 119 · 共享内存 64</b>。
+前两个是「算力 ÷ 该层带宽」，第三个换了个更稳的算法 ——&nbsp;
+<b>分子分母都取「每 SM 每周期」</b>：一个 SM 每周期出 8,192 个 FLOP（见图 G-2），
+共享内存每 SM 每周期供得起 128 字节，<b>8,192 ÷ 128 ＝ 64</b>。
+<em>这个写法不含时钟、也不含 SM 数，所以它比另外两个更稳 ——&nbsp;换个 SKU 也还是 64。</em></p>
+
+<div class="note info"><span class="t">128 B / 周期 / SM 的出处，以及为什么敢用</span>
+  三处公开测量互相对得上：<b>①</b> Hopper 微基准论文实测 127.9 / 128.0 / 127.9
+  （arXiv 2402.13499）；<b>②</b> SemiAnalysis 拆 Blackwell 张量核：
+  「SMEM bandwidth is 128 B/clk」；<b>③</b> Chips and Cheese 写 Blackwell
+  「per-SM throughput 没有越过 128 B/cycle」。硬件上的道理是
+  <b>32 个 bank × 每 bank 每周期 4 字节</b>。<br>
+  <b>外部锚点校验</b>：2,500 TFLOPS ÷ 64 ＝ <b>39 TB/s</b> 全片，
+  再 ÷（148 SM × 128 B）反推时钟 <b>≈ 2.06 GHz</b> ——&nbsp;跟 B200 对得上。
+  <em>孤立算出来的数不敢用，能对上外部锚点才敢写进课里。</em></div>
+
+<p>这三个数摆在一起，最该注意的不是它们不同，是它们<b>只差约 5 倍</b>。
+爬到片上，那条线并没有掉到零 ——&nbsp;<em>片上不是无限快的。</em></p>
+
+<p>于是算子融合这件事要换一个说法。融合减掉的是 <b>HBM 那一层</b>的搬运；
+可那批中间结果<b>总得在片上落脚</b>，于是账<b>挪到了下面那条线上</b>，并没有消失。
+<em>融合之后要拿新的强度跟 64 对，而不是继续跟 312 对 ——&nbsp;
+做过头，会在新的这条线上重新撞墙。</em></p>
+
+<p>那为什么不干脆<b>留在寄存器里</b>、连片上暂存都不落？
+——&nbsp;<b>大多数时候做不到。</b>一个 SM 的寄存器堆总共 256 KiB，跟共享内存一边大；
+而且它是<b>占用率的本钱</b>：每线程多占一份，能同时待命的 warp 就少一批，
+延迟就没人替你盖住了。<em>这笔账在第 3 节那张 SM 拆解图上有完整的表。</em></p>
+
+<div class="note danger"><span class="t">⛔ 这一小节只有 GPU 一侧的数</span>
+  <b>TPU 的 VMEM 带宽官方没有公开。</b>那条线一定存在，而且同样比 HBM 那条低
+  ——&nbsp;但具体是多少，<b>本课不给</b>。<em>这跟第 3 节那张「一个数走完全程」
+  为什么不做带宽对比是同一个理由：宁可留白，不拿推测填。</em></div>
+
+<div class="note danger"><span class="t">⚠️ 这张图不能拿去比「谁更强」</span>
     <b>比值相同不代表绝对值相同，更不代表实际性能相同。</b>
     这张图说的只有一件事：<b>两边的「胃口」是一样的</b>，
     所以同一个算子在两边会遇到同一类困境。
@@ -8742,7 +8816,7 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <p>要看清它在两边分别怎么走，先各看一眼这条路本身。GPU 侧：</p>
 <figure class="fbox fwide" id="ms-g6">
-<svg viewBox="0 0 1400 1116" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 与 TPU 的片上内存层级对照：一个数从 HBM 到乘加单元经过哪些站，每一站由硬件自动搬运还是由编译器显式搬运">
+<svg viewBox="0 0 1400 1172" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 与 TPU 的片上内存层级对照：一个数从 HBM 到乘加单元经过哪些站，每一站由硬件自动搬运还是由编译器显式搬运">
 <text x="20" y="26" class="ttl">一个数走完全程　—— 从 HBM 到乘加单元，中间几站、<tspan fill="#8430ce">每站谁在搬</tspan></text>
 <rect x="20" y="48" width="11" height="11" rx="2" fill="#f9ab00"/>
 <text x="37" y="58" class="sm">片外内存</text>
@@ -8755,14 +8829,14 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="20" y="88" width="1360" height="26" rx="6" fill="#e8f0fe"/>
 <text x="34" y="106" class="box" fill="#1a73e8">NVIDIA B200</text>
 <text x="128.65" y="106" class="sm">五站。中间的 L2 和 L1 是缓存 —— 命中不命中，要到运行时才知道。</text>
-<rect x="40" y="144" width="176" height="134" rx="9" fill="#fff" stroke="#f9ab00" stroke-width="1.8"/>
+<rect x="40" y="144" width="176" height="148" rx="9" fill="#fff" stroke="#f9ab00" stroke-width="1.8"/>
 <rect x="40" y="144" width="176" height="24" rx="9" fill="#fef7e0"/>
 <rect x="40" y="159" width="176" height="9" rx="0" fill="#fef7e0"/>
 <text x="52" y="161" class="box" fill="#f9ab00">HBM3e</text>
 <text x="52" y="186" class="lbl">192 GB</text>
 <text x="52" y="205" class="xs">8.0 TB/s</text>
 <text x="52" y="223" class="xxs">片外 · 官方数字</text>
-<rect x="326" y="144" width="176" height="134" rx="9" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
+<rect x="326" y="144" width="176" height="148" rx="9" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
 <rect x="326" y="144" width="176" height="24" rx="9" fill="#e8f0fe"/>
 <rect x="326" y="159" width="176" height="9" rx="0" fill="#e8f0fe"/>
 <text x="338" y="161" class="box" fill="#1a73e8">L2 缓存</text>
@@ -8773,20 +8847,22 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="398" y="120" width="104" height="19" rx="9" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
 <text x="450" y="133" class="xxs" fill="#d93025" text-anchor="middle">TPU 没有这一站</text>
 <line x1="450" y1="139" x2="450" y2="144" stroke="#d93025" stroke-width="1.4"/>
-<rect x="612" y="144" width="176" height="134" rx="9" fill="#fff" stroke="#5f6368" stroke-width="1.8"/>
+<rect x="612" y="144" width="176" height="148" rx="9" fill="#fff" stroke="#5f6368" stroke-width="1.8"/>
 <rect x="612.0" y="144" width="88.0" height="24" rx="9" fill="#e8f0fe"/>
 <rect x="612.0" y="159" width="88.0" height="9" rx="0" fill="#e8f0fe"/>
 <text x="621.0" y="161" class="lbl" fill="#1a73e8">L1</text>
 <rect x="700.0" y="144" width="88.0" height="24" rx="9" fill="#f3e8fd"/>
 <rect x="700.0" y="159" width="88.0" height="9" rx="0" fill="#f3e8fd"/>
 <text x="709.0" y="161" class="lbl" fill="#8430ce">共享内存</text>
-<line x1="700.0" y1="144" x2="700.0" y2="278" stroke="#5f6368" stroke-width="1.2" stroke-dasharray="3,2"/>
+<line x1="700.0" y1="144" x2="700.0" y2="292" stroke="#5f6368" stroke-width="1.2" stroke-dasharray="3,2"/>
 <text x="624" y="186" class="lbl">256 KiB / SM</text>
 <text x="624" y="205" class="xs"><tspan font-weight="700" fill="#202124">同一块硅，两种身份</tspan>：左半硬</text>
 <text x="624" y="219" class="xs">件管、右半软件管</text>
 <text x="624" y="237" class="xxs">共享部分最多 227 KiB / 线程块</text>
-<text x="624" y="249" class="xxs"> · <tspan fill="#9aa0a6">L1 命中约 39 周期</tspan></text>
-<rect x="898" y="144" width="176" height="134" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<text x="624" y="249" class="xxs"> · <tspan fill="#9aa0a6">128 B / 周期 / SM（三处</tspan></text>
+<text x="624" y="261" class="xxs"><tspan fill="#9aa0a6">公开测量一致）· L1 命中约 39</tspan></text>
+<text x="624" y="273" class="xxs"><tspan fill="#9aa0a6"> 周期</tspan></text>
+<rect x="898" y="144" width="176" height="148" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
 <rect x="898" y="144" width="176" height="24" rx="9" fill="#f3e8fd"/>
 <rect x="898" y="159" width="176" height="9" rx="0" fill="#f3e8fd"/>
 <text x="910" y="161" class="box" fill="#8430ce">寄存器堆</text>
@@ -8794,178 +8870,178 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="910" y="205" class="xs">64K 个 32-bit</text>
 <text x="910" y="223" class="xxs">每线程最多 255 个 · 编译期分</text>
 <text x="910" y="235" class="xxs">配</text>
-<rect x="1184" y="144" width="176" height="134" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="1184" y="144" width="176" height="148" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
 <rect x="1184" y="144" width="176" height="24" rx="9" fill="#f3e8fd"/>
 <rect x="1184" y="159" width="176" height="9" rx="0" fill="#f3e8fd"/>
 <text x="1196" y="161" class="box" fill="#8430ce">CUDA Core</text>
 <text x="1196" y="186" class="lbl">128 / SM</text>
 <text x="1196" y="205" class="xs">FP32 ／ INT32</text>
 <text x="1196" y="223" class="xxs">向量通路</text>
-<line x1="222" y1="211.0" x2="318" y2="211.0" stroke="#1a73e8" stroke-width="2" marker-end="url(#aB)"/>
-<text x="220" y="199.0" class="xxs">硬件自动</text>
-<text x="220" y="231.0" class="xxs">miss 才往下走</text>
-<line x1="508" y1="211.0" x2="604" y2="211.0" stroke="#1a73e8" stroke-width="2" marker-end="url(#aB)"/>
-<text x="506" y="199.0" class="xxs">硬件自动</text>
-<text x="506" y="231.0" class="xxs">程序管不着</text>
-<line x1="794" y1="211.0" x2="890" y2="211.0" stroke="#8430ce" stroke-width="2" marker-end="url(#aP)"/>
-<text x="792" y="199.0" class="xxs"><tspan font-weight="700" fill="#202124">要写指令</tspan></text>
-<text x="792" y="231.0" class="xxs">ld.shared</text>
-<line x1="1080" y1="211.0" x2="1176" y2="211.0" stroke="#8430ce" stroke-width="2" marker-end="url(#aP)"/>
-<text x="1078" y="199.0" class="xxs">直接读</text>
-<text x="1078" y="231.0" class="xxs">零延迟</text>
-<path d="M762 278 L762 300 L924 300 L924 316" stroke="#8430ce" stroke-width="2" fill="none" marker-end="url(#aP)"/>
-<text x="750" y="296" class="xs" text-anchor="end"><tspan font-weight="700" fill="#202124">TMA ／ tcgen05.cp 异步搬运</tspan>：整块搬进 TMEM，<tspan font-weight="700" fill="#d93025">绕开寄存器堆</tspan>，搬运期间这个 SM 可以接着干别的活</text>
-<rect x="898" y="322" width="176" height="134" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
-<rect x="898" y="322" width="176" height="24" rx="9" fill="#f3e8fd"/>
-<rect x="898" y="337" width="176" height="9" rx="0" fill="#f3e8fd"/>
-<text x="910" y="339" class="box" fill="#8430ce">TMEM</text>
-<text x="910" y="364" class="lbl">256 KiB / SM</text>
-<text x="910" y="383" class="xs">128 lane × 512 列</text>
-<text x="910" y="401" class="xxs"><tspan font-weight="700" fill="#202124">Blackwell 新加的一层</tspan> · 只有 </text>
-<text x="910" y="413" class="xxs">Tensor Core 用得到</text>
-<rect x="1184" y="322" width="176" height="134" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
-<rect x="1184" y="322" width="176" height="24" rx="9" fill="#f3e8fd"/>
-<rect x="1184" y="337" width="176" height="9" rx="0" fill="#f3e8fd"/>
-<text x="1196" y="339" class="box" fill="#8430ce">Tensor Core</text>
-<text x="1196" y="364" class="lbl">4 / SM</text>
-<text x="1196" y="383" class="xs">1,024 乘加 / 周期</text>
-<text x="1196" y="401" class="xxs"><tspan fill="#9aa0a6">← 推导值，推导链见图 G-2</tspan></text>
-<line x1="1080" y1="389.0" x2="1176" y2="389.0" stroke="#8430ce" stroke-width="2" marker-end="url(#aP)"/>
-<text x="1078" y="377.0" class="xxs">直接喂</text>
-<text x="1078" y="409.0" class="xxs">不过寄存器</text>
-<rect x="40" y="322" width="830" height="134" rx="9" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
-<rect x="40" y="322" width="830" height="22" rx="9" fill="#e8f0fe"/>
-<rect x="40" y="335" width="830" height="9" rx="0" fill="#e8f0fe"/>
-<text x="52" y="338" class="box" fill="#1a73e8">这条链上最该记住的三件事</text>
-<rect x="52.0" y="354" width="3" height="10" rx="1.5" fill="#1a73e8"/>
-<text x="62.0" y="362" class="xs"><tspan font-weight="700" fill="#202124">中间是「一站半」缓存。</tspan>L2 和 L1 要存 tag、要</text>
-<text x="62.0" y="376" class="xs">做替换，一部分硅面积和功耗花在「猜你接下来要</text>
-<text x="62.0" y="390" class="xs">什么」上；<tspan font-weight="700" fill="#d93025">共享内存不用</tspan> —— 它是暂存，和 TPU </text>
-<text x="62.0" y="404" class="xs">的 VMEM 同一类东西，只是小两个数量级。GPU </text>
-<text x="62.0" y="418" class="xs">两种都留着。</text>
-<rect x="325.3333333333333" y="354" width="3" height="10" rx="1.5" fill="#1a73e8"/>
-<text x="335.3333333333333" y="362" class="xs"><tspan font-weight="700" fill="#202124">猜错了怎么办？</tspan>换一个 warp 上来接着算。GPU </text>
-<text x="335.3333333333333" y="376" class="xs">的延迟不是被消除的，是被<tspan font-weight="700" fill="#d93025">别人的工作盖住</tspan>的 —— </text>
-<text x="335.3333333333333" y="390" class="xs">这就是它要塞 64 个 warp 的原因。</text>
-<rect x="598.6666666666666" y="354" width="3" height="10" rx="1.5" fill="#1a73e8"/>
-<text x="608.6666666666666" y="362" class="xs"><tspan font-weight="700" fill="#202124">Tensor Core 那条支线是新东西。</tspan>Blackwell 之</text>
-<text x="608.6666666666666" y="376" class="xs">前，矩阵操作数必须先落进寄存器堆；TMEM 让它</text>
-<text x="608.6666666666666" y="390" class="xs">整条绕过去了。</text>
-<rect x="20" y="488" width="1360" height="26" rx="6" fill="#e6f4ea"/>
-<text x="34" y="506" class="box" fill="#1e8e3e">TPU v7</text>
-<text x="92.9" y="506" class="sm">四站，而且中间那站不是缓存 —— 什么时候搬什么，编译期就钉死了。</text>
-<rect x="40" y="544" width="176" height="134" rx="9" fill="#fff" stroke="#f9ab00" stroke-width="1.8"/>
-<rect x="40" y="544" width="176" height="24" rx="9" fill="#fef7e0"/>
-<rect x="40" y="559" width="176" height="9" rx="0" fill="#fef7e0"/>
-<text x="52" y="561" class="box" fill="#f9ab00">HBM3e</text>
-<text x="52" y="586" class="lbl">192 GiB</text>
-<text x="52" y="605" class="xs">7.4 TB/s / chip</text>
-<text x="52" y="623" class="xxs">片外 · 官方数字 · 96 GiB / </text>
-<text x="52" y="635" class="xxs">device</text>
-<rect x="326" y="544" width="176" height="134" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
-<rect x="326" y="544" width="176" height="24" rx="9" fill="#f3e8fd"/>
-<rect x="326" y="559" width="176" height="9" rx="0" fill="#f3e8fd"/>
-<text x="338" y="561" class="box" fill="#8430ce">VMEM</text>
-<text x="338" y="586" class="lbl">64 MiB / core</text>
-<text x="338" y="605" class="xs">片上暂存，MXU 只从这里取数</text>
-<text x="338" y="623" class="xxs"><tspan font-weight="700" fill="#202124">没有 tag、不会 miss</tspan> · <tspan fill="#9aa0a6">容量见</tspan></text>
-<text x="338" y="635" class="xxs"><tspan fill="#9aa0a6"> JAX 源码；带宽未公开</tspan></text>
-<rect x="612" y="544" width="176" height="134" rx="9" fill="#fff" stroke="#9aa0a6" stroke-width="1.8" stroke-dasharray="4,3"/>
-<rect x="612" y="544" width="176" height="24" rx="9" fill="#f1f3f4"/>
-<rect x="612" y="559" width="176" height="9" rx="0" fill="#f1f3f4"/>
-<text x="624" y="561" class="box" fill="#9aa0a6">向量寄存器</text>
-<text x="624" y="586" class="lbl">官方未公开</text>
-<text x="624" y="605" class="xs">形状是 8 × 128 的二维块</text>
-<text x="624" y="623" class="xxs"><tspan fill="#9aa0a6">数量未公开；8×128 见于 Pallas</tspan></text>
-<text x="624" y="635" class="xxs"><tspan fill="#9aa0a6"> 文档</tspan></text>
-<rect x="898" y="544" width="176" height="134" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
-<rect x="898" y="544" width="176" height="24" rx="9" fill="#f3e8fd"/>
-<rect x="898" y="559" width="176" height="9" rx="0" fill="#f3e8fd"/>
-<text x="910" y="561" class="box" fill="#8430ce">VPU</text>
-<text x="910" y="586" class="lbl">向量单元</text>
-<text x="910" y="605" class="xs">逐元素算子都在这儿</text>
-<text x="910" y="623" class="xxs">激活、归约、缩放</text>
-<rect x="1184" y="544" width="176" height="134" rx="9" fill="#fff" stroke="#5f6368" stroke-width="1.8"/>
-<rect x="1184" y="544" width="176" height="24" rx="9" fill="#f1f3f4"/>
-<rect x="1184" y="559" width="176" height="9" rx="0" fill="#f1f3f4"/>
-<text x="1196" y="561" class="box" fill="#5f6368">结果的回程</text>
-<text x="1196" y="586" class="lbl">→ VMEM → HBM</text>
-<text x="1196" y="605" class="xs">还是 DMA，还是编译期排好</text>
-<text x="1196" y="623" class="xxs"><tspan font-weight="700" fill="#202124">对照：</tspan>GPU 的回程要穿过 L2</text>
-<line x1="222" y1="611.0" x2="318" y2="611.0" stroke="#1e8e3e" stroke-width="2" marker-end="url(#aG)"/>
-<text x="220" y="599.0" class="xxs"><tspan font-weight="700" fill="#202124">DMA 引擎</tspan></text>
-<text x="220" y="631.0" class="xxs">编译期排好班</text>
-<line x1="508" y1="611.0" x2="604" y2="611.0" stroke="#1e8e3e" stroke-width="2" marker-end="url(#aG)"/>
-<text x="506" y="599.0" class="xxs">向量 load</text>
-<line x1="794" y1="611.0" x2="890" y2="611.0" stroke="#1e8e3e" stroke-width="2" marker-end="url(#aG)"/>
-<text x="792" y="599.0" class="xxs">直接读</text>
-<line x1="1080" y1="611.0" x2="1176" y2="611.0" stroke="#5f6368" stroke-width="2" marker-end="url(#aK)"/>
-<text x="1078" y="599.0" class="xxs">算完往回</text>
-<path d="M476 678 L476 700 L924 700 L924 716" stroke="#1e8e3e" stroke-width="2" fill="none" marker-end="url(#aG)"/>
-<text x="464" y="696" class="xs" text-anchor="end"><tspan font-weight="700" fill="#202124">权重与数据直接推进阵列</tspan>：<tspan font-weight="700" fill="#d93025">从来就不经过向量寄存器</tspan> —— 这一点 GPU 到 Blackwell 才追上</text>
-<rect x="898" y="722" width="176" height="134" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
-<rect x="898" y="722" width="176" height="24" rx="9" fill="#f3e8fd"/>
-<rect x="898" y="737" width="176" height="9" rx="0" fill="#f3e8fd"/>
-<text x="910" y="739" class="box" fill="#8430ce">MXU</text>
-<text x="910" y="764" class="lbl">256 × 256</text>
-<text x="910" y="783" class="xs">65,536 个乘加单元，一条指</text>
-<text x="910" y="797" class="xs">令喂满</text>
-<text x="910" y="815" class="xxs"><tspan fill="#9aa0a6">每 chip 几个：官方文档自相矛</tspan></text>
-<text x="910" y="827" class="xxs"><tspan fill="#9aa0a6">盾，见 G-8</tspan></text>
-<rect x="1184" y="722" width="176" height="134" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
-<rect x="1184" y="722" width="176" height="24" rx="9" fill="#f3e8fd"/>
-<rect x="1184" y="737" width="176" height="9" rx="0" fill="#f3e8fd"/>
-<text x="1196" y="739" class="box" fill="#8430ce">累加器</text>
-<text x="1196" y="764" class="lbl">1 MiB / MXU</text>
-<text x="1196" y="783" class="xs">128 × (8×256) × 4 B</text>
-<text x="1196" y="801" class="xxs">结果攒在这儿，不回寄存器</text>
-<line x1="1080" y1="789.0" x2="1176" y2="789.0" stroke="#1e8e3e" stroke-width="2" marker-end="url(#aG)"/>
-<text x="1078" y="777.0" class="xxs">算完直接落</text>
-<rect x="40" y="722" width="830" height="134" rx="9" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
-<rect x="40" y="722" width="830" height="22" rx="9" fill="#e6f4ea"/>
-<rect x="40" y="735" width="830" height="9" rx="0" fill="#e6f4ea"/>
-<text x="52" y="738" class="box" fill="#1e8e3e">同一位置，TPU 的三件事</text>
-<rect x="52.0" y="754" width="3" height="10" rx="1.5" fill="#1e8e3e"/>
-<text x="62.0" y="762" class="xs"><tspan font-weight="700" fill="#202124">少一整层。</tspan>HBM 直接进 VMEM，中间没有 L2。省</text>
-<text x="62.0" y="776" class="xs">下来的不只是面积，还有「不知道会不会命中」这</text>
-<text x="62.0" y="790" class="xs">件事本身。</text>
-<rect x="325.3333333333333" y="754" width="3" height="10" rx="1.5" fill="#1e8e3e"/>
-<text x="335.3333333333333" y="762" class="xs"><tspan font-weight="700" fill="#202124">没有 warp 可以换。</tspan>猜错了没人替你顶班 —— 所</text>
-<text x="335.3333333333333" y="776" class="xs">以 TPU 不能猜，必须由<tspan font-weight="700" fill="#d93025">编译器在编译期算准</tspan>每一</text>
-<text x="335.3333333333333" y="790" class="xs">拍的数在哪。</text>
-<rect x="598.6666666666666" y="754" width="3" height="10" rx="1.5" fill="#1e8e3e"/>
-<text x="608.6666666666666" y="762" class="xs"><tspan font-weight="700" fill="#202124">片上容量和带宽官方没公开</tspan>，所以这里不填数字。</text>
-<text x="608.6666666666666" y="776" class="xs">能确定的是层级结构和搬运方式 —— 那才是这张图</text>
-<text x="608.6666666666666" y="790" class="xs">要讲的。</text>
-<text x="20" y="898" class="sec">把两条链叠起来看　—— 差别不在快慢，在「谁负责知道数在哪」</text>
-<rect x="20.0" y="912" width="442.6666666666667" height="164" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
-<rect x="20.0" y="912" width="442.6666666666667" height="46" rx="10" fill="#e8f0fe"/>
-<rect x="20.0" y="949" width="442.6666666666667" height="9" rx="0" fill="#e8f0fe"/>
-<text x="34.0" y="932" class="box" fill="#1a73e8">缓存 vs 暂存</text>
-<text x="34.0" y="949" class="xs">同样是片上 SRAM，性格完全不同</text>
-<text x="34.0" y="976" class="xs">GPU 的 L1/L2 是<tspan font-weight="700" fill="#202124">缓存</tspan>：你只管发访存指令，命中不命中它自己处理 —— 代价是要存</text>
-<text x="34.0" y="992" class="xs"> tag、要做替换、要维护一致性，而且<tspan font-weight="700" fill="#d93025">时间不可预测</tspan>。TPU 的 VMEM 是<tspan font-weight="700" fill="#202124">暂存</tspan>：编译</text>
-<text x="34.0" y="1008" class="xs">器显式发 DMA 把数据搬进来，没有 tag、没有 miss、时间可预测 —— 代价是编译</text>
-<text x="34.0" y="1024" class="xs">器算错了就是真的慢，没有兜底。</text>
-<rect x="478.6666666666667" y="912" width="442.6666666666667" height="164" rx="10" fill="#fff" stroke="#d93025" stroke-width="1.8"/>
-<rect x="478.6666666666667" y="912" width="442.6666666666667" height="46" rx="10" fill="#fce8e6"/>
-<rect x="478.6666666666667" y="949" width="442.6666666666667" height="9" rx="0" fill="#fce8e6"/>
-<text x="492.6666666666667" y="932" class="box" fill="#d93025">谁发起这次搬运</text>
-<text x="492.6666666666667" y="949" class="xs">同样是「把数弄过来」，发令的人不一样</text>
-<text x="492.6666666666667" y="976" class="xs">GPU 侧：计算单元自己发一条 <tspan font-weight="700" fill="#202124">load</tspan>，地址是它算的，什么时候到不知道 —— 搬运是</text>
-<text x="492.6666666666667" y="992" class="xs"><tspan font-weight="700" fill="#202124">取数指令的副作用</tspan>。TPU 侧：搬运是一条独立的 <tspan font-weight="700" fill="#202124">DMA</tspan>，描述符里写清「从哪到哪、多</text>
-<text x="492.6666666666667" y="1008" class="xs">大、什么步长」，由专门的引擎执行，计算单元完全不参与。<tspan font-weight="700" fill="#d93025">一边是「我要，你给我</tspan></text>
-<text x="492.6666666666667" y="1024" class="xs"><tspan font-weight="700" fill="#d93025">找」，一边是「你先搬好，我到点来取」。</tspan>谁来盖住这中间的几百个周期 —— 那是下</text>
-<text x="492.6666666666667" y="1040" class="xs">一张图的事。</text>
-<rect x="937.3333333333334" y="912" width="442.6666666666667" height="164" rx="10" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
-<rect x="937.3333333333334" y="912" width="442.6666666666667" height="46" rx="10" fill="#f3e8fd"/>
-<rect x="937.3333333333334" y="949" width="442.6666666666667" height="9" rx="0" fill="#f3e8fd"/>
-<text x="951.3333333333334" y="932" class="box" fill="#8430ce">GPU 正在往这边挪一步</text>
-<text x="951.3333333333334" y="949" class="xs">TMEM 是个信号</text>
-<text x="951.3333333333334" y="976" class="xs">Blackwell 新加的 TMEM，是一块<tspan font-weight="700" fill="#202124">只给 Tensor Core 用、由指令显式搬进搬出、不</tspan></text>
-<text x="951.3333333333334" y="992" class="xs"><tspan font-weight="700" fill="#202124">参与缓存机制</tspan>的片上 SRAM —— 这个描述几乎就是 TPU 的 VMEM。方向很清楚：在矩</text>
-<text x="951.3333333333334" y="1008" class="xs">阵这条路上，「让硬件猜」的收益越来越小，不如把控制权交回给编译器和 kernel </text>
-<text x="951.3333333333334" y="1024" class="xs">作者。</text>
+<line x1="222" y1="218.0" x2="318" y2="218.0" stroke="#1a73e8" stroke-width="2" marker-end="url(#aB)"/>
+<text x="220" y="206.0" class="xxs">硬件自动</text>
+<text x="220" y="238.0" class="xxs">miss 才往下走</text>
+<line x1="508" y1="218.0" x2="604" y2="218.0" stroke="#1a73e8" stroke-width="2" marker-end="url(#aB)"/>
+<text x="506" y="206.0" class="xxs">硬件自动</text>
+<text x="506" y="238.0" class="xxs">程序管不着</text>
+<line x1="794" y1="218.0" x2="890" y2="218.0" stroke="#8430ce" stroke-width="2" marker-end="url(#aP)"/>
+<text x="792" y="206.0" class="xxs"><tspan font-weight="700" fill="#202124">要写指令</tspan></text>
+<text x="792" y="238.0" class="xxs">ld.shared</text>
+<line x1="1080" y1="218.0" x2="1176" y2="218.0" stroke="#8430ce" stroke-width="2" marker-end="url(#aP)"/>
+<text x="1078" y="206.0" class="xxs">直接读</text>
+<text x="1078" y="238.0" class="xxs">零延迟</text>
+<path d="M762 292 L762 314 L924 314 L924 330" stroke="#8430ce" stroke-width="2" fill="none" marker-end="url(#aP)"/>
+<text x="750" y="310" class="xs" text-anchor="end"><tspan font-weight="700" fill="#202124">TMA ／ tcgen05.cp 异步搬运</tspan>：整块搬进 TMEM，<tspan font-weight="700" fill="#d93025">绕开寄存器堆</tspan>，搬运期间这个 SM 可以接着干别的活</text>
+<rect x="898" y="336" width="176" height="148" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="898" y="336" width="176" height="24" rx="9" fill="#f3e8fd"/>
+<rect x="898" y="351" width="176" height="9" rx="0" fill="#f3e8fd"/>
+<text x="910" y="353" class="box" fill="#8430ce">TMEM</text>
+<text x="910" y="378" class="lbl">256 KiB / SM</text>
+<text x="910" y="397" class="xs">128 lane × 512 列</text>
+<text x="910" y="415" class="xxs"><tspan font-weight="700" fill="#202124">Blackwell 新加的一层</tspan> · 只有 </text>
+<text x="910" y="427" class="xxs">Tensor Core 用得到</text>
+<rect x="1184" y="336" width="176" height="148" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="1184" y="336" width="176" height="24" rx="9" fill="#f3e8fd"/>
+<rect x="1184" y="351" width="176" height="9" rx="0" fill="#f3e8fd"/>
+<text x="1196" y="353" class="box" fill="#8430ce">Tensor Core</text>
+<text x="1196" y="378" class="lbl">4 / SM</text>
+<text x="1196" y="397" class="xs">1,024 乘加 / 周期</text>
+<text x="1196" y="415" class="xxs"><tspan fill="#9aa0a6">← 推导值，推导链见图 G-2</tspan></text>
+<line x1="1080" y1="410.0" x2="1176" y2="410.0" stroke="#8430ce" stroke-width="2" marker-end="url(#aP)"/>
+<text x="1078" y="398.0" class="xxs">直接喂</text>
+<text x="1078" y="430.0" class="xxs">不过寄存器</text>
+<rect x="40" y="336" width="830" height="148" rx="9" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+<rect x="40" y="336" width="830" height="22" rx="9" fill="#e8f0fe"/>
+<rect x="40" y="349" width="830" height="9" rx="0" fill="#e8f0fe"/>
+<text x="52" y="352" class="box" fill="#1a73e8">这条链上最该记住的三件事</text>
+<rect x="52.0" y="368" width="3" height="10" rx="1.5" fill="#1a73e8"/>
+<text x="62.0" y="376" class="xs"><tspan font-weight="700" fill="#202124">中间是「一站半」缓存。</tspan>L2 和 L1 要存 tag、要</text>
+<text x="62.0" y="390" class="xs">做替换，一部分硅面积和功耗花在「猜你接下来要</text>
+<text x="62.0" y="404" class="xs">什么」上；<tspan font-weight="700" fill="#d93025">共享内存不用</tspan> —— 它是暂存，和 TPU </text>
+<text x="62.0" y="418" class="xs">的 VMEM 同一类东西，只是小两个数量级。GPU </text>
+<text x="62.0" y="432" class="xs">两种都留着。</text>
+<rect x="325.3333333333333" y="368" width="3" height="10" rx="1.5" fill="#1a73e8"/>
+<text x="335.3333333333333" y="376" class="xs"><tspan font-weight="700" fill="#202124">猜错了怎么办？</tspan>换一个 warp 上来接着算。GPU </text>
+<text x="335.3333333333333" y="390" class="xs">的延迟不是被消除的，是被<tspan font-weight="700" fill="#d93025">别人的工作盖住</tspan>的 —— </text>
+<text x="335.3333333333333" y="404" class="xs">这就是它要塞 64 个 warp 的原因。</text>
+<rect x="598.6666666666666" y="368" width="3" height="10" rx="1.5" fill="#1a73e8"/>
+<text x="608.6666666666666" y="376" class="xs"><tspan font-weight="700" fill="#202124">Tensor Core 那条支线是新东西。</tspan>Blackwell 之</text>
+<text x="608.6666666666666" y="390" class="xs">前，矩阵操作数必须先落进寄存器堆；TMEM 让它</text>
+<text x="608.6666666666666" y="404" class="xs">整条绕过去了。</text>
+<rect x="20" y="516" width="1360" height="26" rx="6" fill="#e6f4ea"/>
+<text x="34" y="534" class="box" fill="#1e8e3e">TPU v7</text>
+<text x="92.9" y="534" class="sm">四站，而且中间那站不是缓存 —— 什么时候搬什么，编译期就钉死了。</text>
+<rect x="40" y="572" width="176" height="148" rx="9" fill="#fff" stroke="#f9ab00" stroke-width="1.8"/>
+<rect x="40" y="572" width="176" height="24" rx="9" fill="#fef7e0"/>
+<rect x="40" y="587" width="176" height="9" rx="0" fill="#fef7e0"/>
+<text x="52" y="589" class="box" fill="#f9ab00">HBM3e</text>
+<text x="52" y="614" class="lbl">192 GiB</text>
+<text x="52" y="633" class="xs">7.4 TB/s / chip</text>
+<text x="52" y="651" class="xxs">片外 · 官方数字 · 96 GiB / </text>
+<text x="52" y="663" class="xxs">device</text>
+<rect x="326" y="572" width="176" height="148" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="326" y="572" width="176" height="24" rx="9" fill="#f3e8fd"/>
+<rect x="326" y="587" width="176" height="9" rx="0" fill="#f3e8fd"/>
+<text x="338" y="589" class="box" fill="#8430ce">VMEM</text>
+<text x="338" y="614" class="lbl">64 MiB / core</text>
+<text x="338" y="633" class="xs">片上暂存，MXU 只从这里取数</text>
+<text x="338" y="651" class="xxs"><tspan font-weight="700" fill="#202124">没有 tag、不会 miss</tspan> · <tspan fill="#9aa0a6">容量见</tspan></text>
+<text x="338" y="663" class="xxs"><tspan fill="#9aa0a6"> JAX 源码；带宽未公开</tspan></text>
+<rect x="612" y="572" width="176" height="148" rx="9" fill="#fff" stroke="#9aa0a6" stroke-width="1.8" stroke-dasharray="4,3"/>
+<rect x="612" y="572" width="176" height="24" rx="9" fill="#f1f3f4"/>
+<rect x="612" y="587" width="176" height="9" rx="0" fill="#f1f3f4"/>
+<text x="624" y="589" class="box" fill="#9aa0a6">向量寄存器</text>
+<text x="624" y="614" class="lbl">官方未公开</text>
+<text x="624" y="633" class="xs">形状是 8 × 128 的二维块</text>
+<text x="624" y="651" class="xxs"><tspan fill="#9aa0a6">数量未公开；8×128 见于 Pallas</tspan></text>
+<text x="624" y="663" class="xxs"><tspan fill="#9aa0a6"> 文档</tspan></text>
+<rect x="898" y="572" width="176" height="148" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="898" y="572" width="176" height="24" rx="9" fill="#f3e8fd"/>
+<rect x="898" y="587" width="176" height="9" rx="0" fill="#f3e8fd"/>
+<text x="910" y="589" class="box" fill="#8430ce">VPU</text>
+<text x="910" y="614" class="lbl">向量单元</text>
+<text x="910" y="633" class="xs">逐元素算子都在这儿</text>
+<text x="910" y="651" class="xxs">激活、归约、缩放</text>
+<rect x="1184" y="572" width="176" height="148" rx="9" fill="#fff" stroke="#5f6368" stroke-width="1.8"/>
+<rect x="1184" y="572" width="176" height="24" rx="9" fill="#f1f3f4"/>
+<rect x="1184" y="587" width="176" height="9" rx="0" fill="#f1f3f4"/>
+<text x="1196" y="589" class="box" fill="#5f6368">结果的回程</text>
+<text x="1196" y="614" class="lbl">→ VMEM → HBM</text>
+<text x="1196" y="633" class="xs">还是 DMA，还是编译期排好</text>
+<text x="1196" y="651" class="xxs"><tspan font-weight="700" fill="#202124">对照：</tspan>GPU 的回程要穿过 L2</text>
+<line x1="222" y1="646.0" x2="318" y2="646.0" stroke="#1e8e3e" stroke-width="2" marker-end="url(#aG)"/>
+<text x="220" y="634.0" class="xxs"><tspan font-weight="700" fill="#202124">DMA 引擎</tspan></text>
+<text x="220" y="666.0" class="xxs">编译期排好班</text>
+<line x1="508" y1="646.0" x2="604" y2="646.0" stroke="#1e8e3e" stroke-width="2" marker-end="url(#aG)"/>
+<text x="506" y="634.0" class="xxs">向量 load</text>
+<line x1="794" y1="646.0" x2="890" y2="646.0" stroke="#1e8e3e" stroke-width="2" marker-end="url(#aG)"/>
+<text x="792" y="634.0" class="xxs">直接读</text>
+<line x1="1080" y1="646.0" x2="1176" y2="646.0" stroke="#5f6368" stroke-width="2" marker-end="url(#aK)"/>
+<text x="1078" y="634.0" class="xxs">算完往回</text>
+<path d="M476 720 L476 742 L924 742 L924 758" stroke="#1e8e3e" stroke-width="2" fill="none" marker-end="url(#aG)"/>
+<text x="464" y="738" class="xs" text-anchor="end"><tspan font-weight="700" fill="#202124">权重与数据直接推进阵列</tspan>：<tspan font-weight="700" fill="#d93025">从来就不经过向量寄存器</tspan> —— 这一点 GPU 到 Blackwell 才追上</text>
+<rect x="898" y="764" width="176" height="148" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="898" y="764" width="176" height="24" rx="9" fill="#f3e8fd"/>
+<rect x="898" y="779" width="176" height="9" rx="0" fill="#f3e8fd"/>
+<text x="910" y="781" class="box" fill="#8430ce">MXU</text>
+<text x="910" y="806" class="lbl">256 × 256</text>
+<text x="910" y="825" class="xs">65,536 个乘加单元，一条指</text>
+<text x="910" y="839" class="xs">令喂满</text>
+<text x="910" y="857" class="xxs"><tspan fill="#9aa0a6">每 chip 几个：官方文档自相矛</tspan></text>
+<text x="910" y="869" class="xxs"><tspan fill="#9aa0a6">盾，见 G-8</tspan></text>
+<rect x="1184" y="764" width="176" height="148" rx="9" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="1184" y="764" width="176" height="24" rx="9" fill="#f3e8fd"/>
+<rect x="1184" y="779" width="176" height="9" rx="0" fill="#f3e8fd"/>
+<text x="1196" y="781" class="box" fill="#8430ce">累加器</text>
+<text x="1196" y="806" class="lbl">1 MiB / MXU</text>
+<text x="1196" y="825" class="xs">128 × (8×256) × 4 B</text>
+<text x="1196" y="843" class="xxs">结果攒在这儿，不回寄存器</text>
+<line x1="1080" y1="838.0" x2="1176" y2="838.0" stroke="#1e8e3e" stroke-width="2" marker-end="url(#aG)"/>
+<text x="1078" y="826.0" class="xxs">算完直接落</text>
+<rect x="40" y="764" width="830" height="148" rx="9" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
+<rect x="40" y="764" width="830" height="22" rx="9" fill="#e6f4ea"/>
+<rect x="40" y="777" width="830" height="9" rx="0" fill="#e6f4ea"/>
+<text x="52" y="780" class="box" fill="#1e8e3e">同一位置，TPU 的三件事</text>
+<rect x="52.0" y="796" width="3" height="10" rx="1.5" fill="#1e8e3e"/>
+<text x="62.0" y="804" class="xs"><tspan font-weight="700" fill="#202124">少一整层。</tspan>HBM 直接进 VMEM，中间没有 L2。省</text>
+<text x="62.0" y="818" class="xs">下来的不只是面积，还有「不知道会不会命中」这</text>
+<text x="62.0" y="832" class="xs">件事本身。</text>
+<rect x="325.3333333333333" y="796" width="3" height="10" rx="1.5" fill="#1e8e3e"/>
+<text x="335.3333333333333" y="804" class="xs"><tspan font-weight="700" fill="#202124">没有 warp 可以换。</tspan>猜错了没人替你顶班 —— 所</text>
+<text x="335.3333333333333" y="818" class="xs">以 TPU 不能猜，必须由<tspan font-weight="700" fill="#d93025">编译器在编译期算准</tspan>每一</text>
+<text x="335.3333333333333" y="832" class="xs">拍的数在哪。</text>
+<rect x="598.6666666666666" y="796" width="3" height="10" rx="1.5" fill="#1e8e3e"/>
+<text x="608.6666666666666" y="804" class="xs"><tspan font-weight="700" fill="#202124">片上容量和带宽官方没公开</tspan>，所以这里不填数字。</text>
+<text x="608.6666666666666" y="818" class="xs">能确定的是层级结构和搬运方式 —— 那才是这张图</text>
+<text x="608.6666666666666" y="832" class="xs">要讲的。</text>
+<text x="20" y="954" class="sec">把两条链叠起来看　—— 差别不在快慢，在「谁负责知道数在哪」</text>
+<rect x="20.0" y="968" width="442.6666666666667" height="164" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.8"/>
+<rect x="20.0" y="968" width="442.6666666666667" height="46" rx="10" fill="#e8f0fe"/>
+<rect x="20.0" y="1005" width="442.6666666666667" height="9" rx="0" fill="#e8f0fe"/>
+<text x="34.0" y="988" class="box" fill="#1a73e8">缓存 vs 暂存</text>
+<text x="34.0" y="1005" class="xs">同样是片上 SRAM，性格完全不同</text>
+<text x="34.0" y="1032" class="xs">GPU 的 L1/L2 是<tspan font-weight="700" fill="#202124">缓存</tspan>：你只管发访存指令，命中不命中它自己处理 —— 代价是要存</text>
+<text x="34.0" y="1048" class="xs"> tag、要做替换、要维护一致性，而且<tspan font-weight="700" fill="#d93025">时间不可预测</tspan>。TPU 的 VMEM 是<tspan font-weight="700" fill="#202124">暂存</tspan>：编译</text>
+<text x="34.0" y="1064" class="xs">器显式发 DMA 把数据搬进来，没有 tag、没有 miss、时间可预测 —— 代价是编译</text>
+<text x="34.0" y="1080" class="xs">器算错了就是真的慢，没有兜底。</text>
+<rect x="478.6666666666667" y="968" width="442.6666666666667" height="164" rx="10" fill="#fff" stroke="#d93025" stroke-width="1.8"/>
+<rect x="478.6666666666667" y="968" width="442.6666666666667" height="46" rx="10" fill="#fce8e6"/>
+<rect x="478.6666666666667" y="1005" width="442.6666666666667" height="9" rx="0" fill="#fce8e6"/>
+<text x="492.6666666666667" y="988" class="box" fill="#d93025">谁发起这次搬运</text>
+<text x="492.6666666666667" y="1005" class="xs">同样是「把数弄过来」，发令的人不一样</text>
+<text x="492.6666666666667" y="1032" class="xs">GPU 侧：计算单元自己发一条 <tspan font-weight="700" fill="#202124">load</tspan>，地址是它算的，什么时候到不知道 —— 搬运是</text>
+<text x="492.6666666666667" y="1048" class="xs"><tspan font-weight="700" fill="#202124">取数指令的副作用</tspan>。TPU 侧：搬运是一条独立的 <tspan font-weight="700" fill="#202124">DMA</tspan>，描述符里写清「从哪到哪、多</text>
+<text x="492.6666666666667" y="1064" class="xs">大、什么步长」，由专门的引擎执行，计算单元完全不参与。<tspan font-weight="700" fill="#d93025">一边是「我要，你给我</tspan></text>
+<text x="492.6666666666667" y="1080" class="xs"><tspan font-weight="700" fill="#d93025">找」，一边是「你先搬好，我到点来取」。</tspan>谁来盖住这中间的几百个周期 —— 那是下</text>
+<text x="492.6666666666667" y="1096" class="xs">一张图的事。</text>
+<rect x="937.3333333333334" y="968" width="442.6666666666667" height="164" rx="10" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
+<rect x="937.3333333333334" y="968" width="442.6666666666667" height="46" rx="10" fill="#f3e8fd"/>
+<rect x="937.3333333333334" y="1005" width="442.6666666666667" height="9" rx="0" fill="#f3e8fd"/>
+<text x="951.3333333333334" y="988" class="box" fill="#8430ce">GPU 正在往这边挪一步</text>
+<text x="951.3333333333334" y="1005" class="xs">TMEM 是个信号</text>
+<text x="951.3333333333334" y="1032" class="xs">Blackwell 新加的 TMEM，是一块<tspan font-weight="700" fill="#202124">只给 Tensor Core 用、由指令显式搬进搬出、不</tspan></text>
+<text x="951.3333333333334" y="1048" class="xs"><tspan font-weight="700" fill="#202124">参与缓存机制</tspan>的片上 SRAM —— 这个描述几乎就是 TPU 的 VMEM。方向很清楚：在矩</text>
+<text x="951.3333333333334" y="1064" class="xs">阵这条路上，「让硬件猜」的收益越来越小，不如把控制权交回给编译器和 kernel </text>
+<text x="951.3333333333334" y="1080" class="xs">作者。</text>
 </svg>
 <figcaption><b>B200 侧五站，中间两站是缓存。</b>命中不命中要跑起来才知道 —— 这就是 2.1 主路那 4 个红框的物理来源。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
