@@ -6,7 +6,7 @@ P-38 说清了要解决什么（128 GiB 全在路上），P-39 把两条路一�
 剩下最后一个问题：<b>同样是「把 tile 搬进片上暂存」，这件事是谁写的？</b>
 
 **GPU 侧：kernel 作者亲手搬。** 块开多大、什么时候发 <code>cp.async</code>、
-双缓冲怎么错开、哪一步要 <code>__syncthreads()</code> —— 全在 kernel 源码里。
+双缓冲怎么错开、哪一组 warp 专管搬运、屏障放在哪 —— 全在 kernel 源码里。
 <b>硬件那层缓存在这个 kernel 里帮不上忙</b>：访问模式完全可预测，
 「猜下次要什么」这件事没有价值，所以 FlashAttention 把复用显式搬到
 软件管的那半边共享内存里。
@@ -25,12 +25,15 @@ P-38 说清了要解决什么（128 GiB 全在路上），P-39 把两条路一�
 Splash Attention 的块级掩码出自其公开实现。
 <b>「共享内存 ≤ 227 KiB／线程块」沿用图 G-6 的标注。</b>
 """
-from common import Fig, para, BL, GN, RD, YL, PU, TL, INK, SUB, GREY, FILL
+from common import (Fig, para, wrap, plain, BL, GN, RD, YL, PU, TL, INK,
+                    SUB, GREY, FILL)
 
 W = 1400
 
 HEAD_Y, HEAD_H = 84, 94
-PAN_Y, PAN_H = HEAD_Y + HEAD_H + 22, 332
+# PAN_H 的账：左栏 = 64（标题）+ 209（「你要亲手写的」七行）+ 14 + 74
+# （「硬件替你兜的」）＝ 361，再留 15 底边。左栏多一行就要把这个数加 17。
+PAN_Y, PAN_H = HEAD_Y + HEAD_H + 22, 376
 OVER_Y, OVER_H = PAN_Y + PAN_H + 22, 104
 LAND_Y, LAND_H = OVER_Y + OVER_H + 22, 118
 SRC_Y, SRC_H = LAND_Y + LAND_H + 22, 92
@@ -44,8 +47,16 @@ GPU_MINE = [
     ("<b>块开多大</b>：算到 Q / K / V 块加中间量刚好塞进 <b>≤ 227 KiB</b>", 1),
     ("<b>发搬运指令</b>：<code>cp.async</code> ／ TMA 把下一块从 HBM 拉进共享内存", 1),
     ("<b>双缓冲</b>：搬下一块的同时算这一块，两个缓冲区自己轮换", 1),
-    ("<b>对齐</b>：每次交接一个 <code>__syncthreads()</code>，"
-     "早了读到脏数据、晚了白等", 1),
+    # ⭐ 2026-09-03 补。原来只写了 __syncthreads() —— 那是 **Ampere 的写法**。
+    #    Hopper 起真正在用的是 mbarrier ＋ warp 分工，而这两条恰恰**加强**本图论点：
+    #    左栏又长了两行，右栏一个字没变。（缘由见 §3.3「三个名字的来历」那个折叠。）
+    # ⚠️ 这一条实测 560 / 可用 598，只剩 38 px 余量 —— 再加两个字就翻行。
+    #    行数写错不会报错、只会静默丢字，所以 _list 里加了逐条对账的断言。
+    ("<b>warp 分工</b>：一组 warp 专发 TMA 当生产者，另几组专发 "
+     "<code>wgmma</code> 当消费者 <g>—— 搬的和算的分开，流水线才叠得起来</g>", 1),
+    ("<b>对齐</b>：Ampere 上是 <code>__syncthreads()</code>；"
+     "<b>Hopper 起换成 <code>mbarrier</code> 异步屏障</b> "
+     "<g>—— 搬完第 k 块就报到，算的那组等到就开工，同时搬 k＋1</g>", 2),
     ("<b>要不要占 L1</b>：<code>cp.async</code> 的 <code>.ca</code> 走 L1＋L2，"
      "<code>.cg</code> 只走 L2", 1),
 ]
@@ -116,6 +127,14 @@ def _list(f, x, y, w, c, head, items, headc=None):
     f.t(x + 12, y + 17, head, "lbl", headc or c)
     yy = y + 40
     for txt, n in items:
+        # ⛔ items 里那个行数是**手写**的，而 para 的 max_lines 是**静默截断**：
+        #    写少了多出来的行直接丢（不报错、不留省略号），写多了则凭空留一道空行。
+        #    两种都不会让脚本失败，所以这里逐条对账，要求分毫不差。
+        #    ⚠️ 别放宽成 `<=`：写多了同样是错，而且更难看出来。
+        need = len(wrap(txt, w - 40, 11))
+        assert need == n, ("「%s…」实际 %d 行，items 里写的是 %d —— "
+                           "改成 %d，并把 PAN_H 加减 %d"
+                           % (plain(txt)[:16], need, n, need, abs(need - n) * 17))
         f.rect(x + 12, yy - 9, 4, n * 17 - 2, c, rx=2)
         para(f, x + 24, yy, w - 40, txt, "xs", 17, max_lines=n)
         yy += n * 17 + 10
@@ -134,7 +153,7 @@ def _panel(f, x, w, c, ttl, sub, h1, l1, h2, l2):
                FILL[YL], YL, 1.5, 7)
         para(f, x + 30, y + 36, w - 60,
              "⚖️ <b>右栏比左栏短，这件事本身就是结论</b>："
-             "<r>少写的那三条没有消失，只是挪进了编译器。</r>", "xs", 16,
+             "<r>少写的那四条没有消失，只是挪进了编译器。</r>", "xs", 16,
              max_lines=2)
 
 
