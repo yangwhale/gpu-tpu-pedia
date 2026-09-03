@@ -23,13 +23,16 @@ CHIP=HBM/GiB; DEV=CHIP/2; ALLOC=94.74; RES=DEV-ALLOC
 # 画了出来。清单能回答「这门课覆盖了什么」，但回答不了「我为什么要按这个顺序读」。
 # 于是读者每一节都在换个部件重讲一遍两边差别，读完不知道刚才在走一条什么路。
 #
-# 第三版换成**一条路**：同一个 FlashAttention，两边各跑一遍，看它从哪儿分岔。
+# 第三版换成**一条路**：同一个 FlashAttention，两边各跑一遍，看它是从哪一步开始不同的。
 # 三个设计决定：
-#   ① **出身层原样保留**。出身回答「为什么会分岔」，旅程回答「分岔之后怎么走」,
-#      两层不重复。删掉出身，后面那个分岔点就成了一个没来由的事实。
-#   ② **分岔点必须只有一个**，而且要用颜色顶出来。这门课真正的结论是
-#      「两边的差别不是十几处，是一处」—— 画成四个并列的后果框，恰好把
-#      这句话的反面画了出来。
+#   ① **出身层原样保留**。出身回答「为什么会走不同的路」，旅程回答「走岔之后怎么走」,
+#      两层不重复。删掉出身，后面那个「不同」就成了一个没来由的事实。
+#   ② **走岔的那一步必须只有一个**，而且要用颜色顶出来。
+#      ⛔ 2026-09-03 改口径。原来写的是「两边的差别不是十几处，是一处」——
+#      **这句话字面上是错的**，两边确实处处都不同，读者一眼就能举出反例，
+#      而我把纠正折进了讲义的一个问答里，正文那句照样在骗人。
+#      现在改成「处处都不同，但全是同一个决定的后果」：不否认现象，
+#      因果那股劲儿一点没少 —— 而且跟红框第三行本来就顺。
 #   ③ **第 4 节画成旁支，不画进主线**。grep 过：那一节里 FlashAttention
 #      出现 0 次（§2 二十五次、§3 二十一次、§5 九次）—— 它单卡就跑完了，
 #      撞不到卡间。与其让人读到那儿觉得跑题，不如在地图上就标成岔路。
@@ -39,7 +42,7 @@ CHIP=HBM/GiB; DEV=CHIP/2; ALLOC=94.74; RES=DEV-ALLOC
 W=1000; H=560
 q=[f'<svg viewBox="0 0 {W} {H}" width="100%" role="img" '
    'aria-label="GPU 与 TPU 的两条出身，以及这门课的主线：'
-   '同一个 FlashAttention 在两边各跑一遍，分岔点只有一处">']
+   '同一个 FlashAttention 在两边各跑一遍，走岔的只有一步">']
 # 这张图是独立 SVG（不走显微镜那套共用 defs），箭头 marker 得自带一个。
 q.append('<defs><marker id="mapArrow" markerWidth="8" markerHeight="8" refX="6.5" '
          'refY="4" orient="auto"><path d="M0,0.8 L8,4 L0,7.2 z" fill="#9aa0a6"/>'
@@ -70,7 +73,7 @@ q.append('<text class="svgsm" x="500" y="140" text-anchor="middle" fill="#80868b
 q.append('<path d="M500 232 v14" stroke="#80868b" stroke-width="1.2"/>')
 q.append('<text class="svglbl" x="0" y="266" fill="#202124" style="font-size:13px">'
          '于是这门课只做一件事：<tspan font-weight="700" fill="#d93025">'
-         '同一个 FlashAttention，两边各跑一遍，看它从哪儿开始分岔</tspan></text>')
+         '同一个 FlashAttention，两边各跑一遍，看它是从哪一步开始不同的</tspan></text>')
 
 # 六站。SW/GAP 让六个框正好铺满 1000：6×153 + 5×16.4 = 1000。
 # ⚠️ 框宽 153、内边距 12 → 正文只剩 129px，10.5px 的中文一行放得下 12 个字。
@@ -78,19 +81,19 @@ q.append('<text class="svglbl" x="0" y="266" fill="#202124" style="font-size:13p
 SW, SX = 153, 169.4
 STOP=[("出发前","为什么是它","#5f6368",
        ["S 矩阵 32 GiB","两边都放不下","→ 别把 S 写出来"]),
-      ("第 0–1 节","先架量具","#1a73e8",
+      ("第 0–1 节","先定分界线","#1a73e8",
        ["算力 ÷ 带宽","312.6 对 312.5","两边胃口一样"]),
-      ("第 2 节","⭐ 分岔在这里","#d93025",
+      ("第 2 节","⭐ 从这儿开始不同","#d93025",
        ["同一次访存","一边有 cache","一边没有"]),
       ("第 3 节","形状对不对得齐","#9334e6",
        ["一条指令吃多大","两边差 16 倍","并排走完全程"]),
-      ("第 5 节","分岔的本质","#1e8e3e",
+      ("第 5 节","为什么会不同","#1e8e3e",
        ["搬运谁来安排","运行时 · 编译期","三次出场合一"]),
       ("第 6–9 节","跑完之后","#e8710a",
        ["拿到两个数","能不能比？","以及我算错的"])]
 for i,(n,t,c,body) in enumerate(STOP):
     x=round(i*SX,1)
-    fork = (c=="#d93025")                       # 分岔点那一格：加粗描边 ＋ 浅红底
+    fork = (c=="#d93025")                       # 走岔那一格：加粗描边 ＋ 浅红底
     q.append(f'<rect x="{x}" y="282" width="{SW}" height="92" rx="10" '
              f'fill="{"#fce8e6" if fork else "#fff"}" stroke="{c}" '
              f'stroke-width="{2.2 if fork else 1.2}"/>')
@@ -105,7 +108,7 @@ for i,(n,t,c,body) in enumerate(STOP):
 
 # ── 旁支：第 4 节 ─────────────────────────────────────────
 # 虚线 ＋ 灰底，形状上就跟主线六个框分开 —— 「这是岔路」要靠版式说，
-# 写一行小字说没人看（这条经验沿用上一版那个量具带）。
+# 写一行小字说没人看（这条经验沿用上一版那条分界线带）。
 q.append(f'<path d="M{round(3*SX+SW/2,1)} 374 v14 h-120 v14" fill="none" '
          'stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="4 3"/>')
 q.append('<rect x="0" y="402" width="1000" height="54" rx="8" fill="#f1f3f4" '
@@ -119,12 +122,12 @@ q.append('<text class="svgsm" x="16" y="444" fill="#5f6368">'
          'FlashAttention 在这一节不在场：它单卡就跑完了，撞不到卡间。主角换成 MoE 的 dispatch / combine '
          '—— 只想跟着主线走，这一节可以先跳过，第 5 节回主线</text>')
 
-# ── 落点：只有一个分岔点 ──────────────────────────────────
+# ── 落点：处处都不同，但只有一个成因 ──────────────────────
 q.append('<rect x="0" y="474" width="1000" height="80" rx="10" fill="#fce8e6" '
          'stroke="#d93025" stroke-width="1.6"/>')
 q.append('<text class="svglbl" x="20" y="500" fill="#a50e0e" style="font-size:13px">'
-         '⭐ 如果只记一件事：两边的差别不是十几处，'
-         '<tspan font-weight="700">是一处</tspan></text>')
+         '⭐ 如果只记一件事：两边<tspan font-weight="700">处处都不同</tspan>，'
+         '但这些不同<tspan font-weight="700">全是同一个决定的后果</tspan></text>')
 q.append('<text class="svgsm" x="20" y="521" fill="#3c4043" style="font-size:11.5px">'
          '把一块数据从 HBM 搬进片上，<tspan font-weight="700">谁来安排</tspan>。'
          'GPU 那边有 cache 在运行时替你猜，TPU 那边没有、编译期就排死了。</text>')
