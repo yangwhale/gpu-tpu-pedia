@@ -6027,10 +6027,41 @@ details.aside b{color:var(--ink);font-weight:600}
        学员看到图上这个词会卡住 —— 它是全课唯一「出现即用、从未定义」的术语。
        ⛔ 只给白话释义，**不写那条判据公式** —— 公式的出处是内部材料，
           而这个仓库是公开的（T-5 那张图在公开模式下也是这么处理的）。 -->
-  <p>前面数的都是「一边有、另一边没有」。还有两块是各自额外长出来的，
-    而它们不在同一层 ——&nbsp;这一点比它们各自是什么更要紧。
-    <br><span class="sub">⚠️ 图上那个 <code>duplication factor</code>，说的是
-    <b>同一批行被反复查了多少次</b> ——&nbsp;查得越重复，越值得交给它。</span></p>
+  <!-- ⭐ 2026-09-03 按 3.3/3.4 那套叙事重排。⛔ 原来这一节正文只有一段：
+       先甩结论「它们不在同一层」，再挂一条 duplication factor 的术语注，
+       然后就交给图。**这一节真正值钱的那句（两句宣传语都没说错，
+       错的是把「支持」读成「我的负载用得上」）整个不在正文里** ——
+       只活在图注和讲稿里。跟 3.4 犯的是同一个病。
+       ⭐ 现在：立问题 → 两块各是什么 → 才说「不在同一层」→ 两道门槛 → 落点。
+       术语注取消，duplication factor 挪到它被用到的那一句旁边。 -->
+  <p>前面五小节数的都是「一边有、另一边没有」。<b>还有两块，是各自额外长出来的。</b></p>
+
+  <p>先别急着记它们叫什么。<b>先问一句：这两块东西，在不在同一层？</b></p>
+
+  <p><b>GPU 那块叫块量化。</b>它<b>就在 Tensor Core 的数据通路里</b> ——&nbsp;
+    <em>是同一条矩阵指令的一个变体。换的是指令，不是硬件模块。</em></p>
+
+  <p><b>TPU 那块叫 SparseCore。</b>它<b>是物理上独立的一颗核</b>，专门查嵌入表。</p>
+
+  <p>所以「两边各多出一块」这句话本身就有点误导 ——&nbsp;
+    <em>一个是一条指令的变体，一个是一整颗核。<b>根本不在同一层。</b></em></p>
+
+  <p>不过这一节真正值钱的不是这个分类。<b>是这两块东西有一个共同点。</b></p>
+
+  <p><b>两边的宣传页都写着「支持」，而两边都有一道只写在细则里的门槛。</b></p>
+
+  <p>宣传页写「B200 支持 FP4」——&nbsp;<b>真的，但要看你手上是哪颗 die。</b><br>
+    宣传页写「TPU 有个专门查嵌入表的核」——&nbsp;<b>也真的，但要看你的重复查询有多重。</b>
+    <span class="sub">（图上那个 <code>duplication factor</code> 就是这个意思：
+    <b>同一批行被反复查了多少次</b> ——&nbsp;查得越重复，越值得交给它。）</span></p>
+
+  <p><b>而对这屋里的人来说，第二道门槛基本是关着的。</b>
+    <em>语言模型的重复度大约是 1.01 ——&nbsp;<b>一行几乎只查一次</b>，
+    落在最不划算的那一端。</em>
+    <span class="sub">（这个数怎么来的、编译器为什么根本不往那儿派，图上有。）</span></p>
+
+  <p><b>两句宣传语都没说错。</b>
+    <em>错的是把「支持」读成「我的负载用得上」。</em></p>
 <figure class="fbox fwide" id="ms-p37">
 <svg viewBox="0 0 1400 872" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 的块量化是 MMA 指令的一个变体，位于 Tensor Core 数据通路内部；TPU 的 SparseCore 是一颗物理上独立的核。两者能不能用，分别取决于目标架构和 duplication factor">
 <text x="20" y="26" class="ttl">两块「多出来的」<tspan font-weight="700">不在同一层</tspan>　—— 而两道门槛都不在宣传页上</text>
@@ -6105,7 +6136,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="810" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：sm_120a 与 sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；duplication factor 的判据与 131,072 ÷ 129,280 这个算式出自本课图 T-5。</text>
 <text x="38" y="830" class="xxs"><tspan font-weight="700" fill="#202124">不主张的</tspan>：两颗核之间连线的方向，<tspan font-weight="700" fill="#d93025">公开资料没有列出</tspan>，所以这张图不画那根箭头。<tspan fill="#9aa0a6">「块量化在数据通路里」是从「它是 MMA 指令的一个变体、缩放因子与操作数同住 TMEM」推的。</tspan></text>
 </svg>
-<figcaption><b>两块「多出来的」不在同一层。</b>块量化<b>就在 Tensor Core 的数据通路里</b>，是同一条 MMA 指令的一个变体；SparseCore 才是物理上独立的核。<b>下半张是这张图真正的增量</b>：两个坑其实是同一个形状 —— 能力都真的存在，但各自有一道<b>只写在细则里的门槛</b>（哪颗 die／duplication factor）。</figcaption>
+<figcaption><b>上半张看「在哪一层」，下半张才是这张图的增量</b> ——&nbsp;<em>两道门槛并排放在一起，形状是一样的。</em></figcaption>
 </figure>
 
   <h3>3.6　⭐ 高潮：同一个 FlashAttention，两边并排走完一遍</h3>
