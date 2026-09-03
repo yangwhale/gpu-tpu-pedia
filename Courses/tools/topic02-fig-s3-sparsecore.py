@@ -59,7 +59,7 @@ def box(x, y, w, h, fill="#fff", stroke="#dadce0", r=8):
              % (x, y, w, h, r, fill, stroke))
 
 
-p.append('<svg viewBox="0 0 %d 730" width="100%%" role="img" aria-label="'
+p.append('<svg viewBox="0 0 %d 796" width="100%%" role="img" aria-label="'
          'SparseCore 拆开看：十六个向量子核各自带 VMEM，一个标量子核发 DMA，'
          '大表在 HBM；以及它与 TensorCore 在最小搬运粒度上的差别">' % W)
 t(0, 17, 'SparseCore 拆开看 ——&#160;<tspan font-weight="700">'
@@ -166,7 +166,7 @@ t(724, YG + 130, '⭐ 所以回答「能不能不搬 (8,128)」：'
 
 # ══ 下：gather 长什么样 ════════════════════════════════════════════
 YQ = YG + 160
-box(0, YQ, W, 92, "#f8f9fa")
+box(0, YQ, W, 158, "#f8f9fa")
 t(14, YQ + 24, '一次 gather 在这张图上怎么走', "svglbl", "#202124", size=13)
 t(14, YQ + 46, '① <tspan font-weight="700">索引</tspan>放在 SparseCore 自己的 VMEM 里 '
                '→ ② <tspan font-weight="700">标量子核</tspan>照着索引发一堆 DMA '
@@ -176,9 +176,25 @@ t(14, YQ + 66, 'Pallas 里就是一行：<tspan font-family="ui-monospace,monosp
                'sync_copy(data_ref.at[indices_ref], target_ref)</tspan>'
                '——&#160;<tspan fill="%s">data 在 HBM，indices 在 VMEM。'
                'scatter 是同一条路反着走。</tspan>' % GY, fill="#202124")
+t(14, YQ + 86, '⭐ <tspan font-weight="700">这条路不只用来查 embedding</tspan>：'
+               'Ironwood 上 Qwen 3.5 那篇公开调优记录里，'
+               'SparseCore 干的是<tspan font-weight="700">按路由索引把 token '
+               '从 HBM 间接 gather 出来</tspan>，', fill="#202124")
+t(14, YQ + 104, '直接喂给 TensorCore 做 GMM ——&#160;'
+                '<tspan font-weight="700">同一个形状，换到稀疏注意力上'
+                '就是「把 top-k 那批零碎的 KV 取回来」</tspan>。', fill="#202124")
+t(14, YQ + 124, '⚠️ <tspan font-weight="700">取回来之后落在哪，公开资料没有明写。</tspan>'
+                '那篇只说「写进一块连续的虚拟缓冲，'
+                '<tspan font-style="italic">绕开了在 HBM 里物化中间张量</tspan>」'
+                '——&#160;绕开 HBM 是明写的，', fill=GY)
+t(14, YQ + 141, '但<tspan font-weight="700">是不是直接落进 TensorCore 的 VMEM，'
+                '没有一处公开文档这么说</tspan>；'
+                '而 OpenXLA 那篇讲 embedding 的又说 SC 与 TC 之间'
+                '「frequently involves HBM as an intermediary buffer」。'
+                '<tspan font-weight="700">两处口径不一致，这里不下结论。</tspan>', fill=GY)
 
 # ══ 落点 ══════════════════════════════════════════════════════════
-YB = YQ + 106
+YB = YQ + 172
 box(0, YB, W, 96, "#e6f4ea", GR)
 t(16, YB + 24, '⭐ 它扛延迟的方式，不是让每一次取数变快 ——&#160;'
                '<tspan font-weight="700">是同时欠着很多次取数</tspan>',

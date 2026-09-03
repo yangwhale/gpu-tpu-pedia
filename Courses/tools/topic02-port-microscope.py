@@ -898,7 +898,7 @@ def sections(F):
   <p>那「处理不规则访存」到底是怎么处理的？——&nbsp;<b>把这颗核拆开看一眼</b>。</p>
 
   <figure class="fbox fwide" id="s012-fig3-5">
-  <svg viewBox="0 0 1400 730" width="100%"></svg>
+  <svg viewBox="0 0 1400 796" width="100%"></svg>
   <figcaption>⭐ <b>难点有两处，它对着两处各配了一个解法</b>：
     地址由数据算出来 → <b>原生支持数据相关的控制流与访存</b>；
     要的只是散落的几行 → <b>粒度做细</b>（v7 上 DMA granule <b>64 字节</b>，
