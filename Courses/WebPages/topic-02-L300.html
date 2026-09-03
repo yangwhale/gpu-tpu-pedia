@@ -8812,6 +8812,104 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><br><b>共同的教训是同一条：看 trace，不要看宣传页。</b>
     这两个坑被问到的频率极高，而且都是「说法没错、但用它解释自己的 profile 就会全错」。</div>
 
+  <!-- ⭐⭐ 2026-09-03 新增。Chris 追问「处理不规则访存到底是怎么处理的、
+       操作 VMEM 还是 HBM、最小粒度多少」——&nbsp;原来全课只有这个名字没有机制。
+       图由 topic02-fig-s3-sparsecore.py 生成，按 id 锚点 s012-fig3-5 注入。
+       ⛔ 图里那句「(8,128) 不是 DMA 粒度」是在纠正我自己讲错过的说法，别删。 -->
+  <p>那「处理不规则访存」到底是怎么处理的？——&nbsp;<b>把这颗核拆开看一眼</b>。</p>
+
+  <figure class="fbox fwide" id="s012-fig3-5">
+  <svg viewBox="0 0 1400 730" width="100%" role="img" aria-label="SparseCore 拆开看：十六个向量子核各自带 VMEM，一个标量子核发 DMA，大表在 HBM；以及它与 TensorCore 在最小搬运粒度上的差别">
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">SparseCore 拆开看 ——&#160;<tspan font-weight="700">「处理不规则访存」处理的是什么</tspan></text>
+<text class="svgsm" x="0" y="37">地址由数据算出来、编译期不知道 ——&#160;这件事难在两处，而这颗核对着这两处各配了一个解法</text>
+<rect x="0" y="56" width="470" height="214" rx="8" fill="#f8f9fa" stroke="#dadce0"/>
+<text class="svglbl" x="14" y="80" fill="#202124" style="font-size:13px">TensorCore</text>
+<text class="svgsm" x="14" y="98" fill="#5f6368">本课前六小节拆的都是它</text>
+<rect x="14" y="110" width="200" height="62" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="26" y="132" fill="#174ea6" style="font-size:12px">MXU × 4</text>
+<text class="svgsm" x="26" y="150" fill="#174ea6">256×256 脉动阵列</text>
+<rect x="226" y="110" width="230" height="62" rx="8" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svglbl" x="238" y="132" fill="#174ea6" style="font-size:12px">VPU</text>
+<text class="svgsm" x="238" y="150" fill="#174ea6">向量寄存器 8 sublane × 128 lane</text>
+<rect x="14" y="182" width="442" height="48" rx="8" fill="#fff" stroke="#1a73e8"/>
+<text class="svglbl" x="26" y="202" fill="#174ea6" style="font-size:12px">VMEM</text>
+<text class="svgsm" x="88" y="202" fill="#174ea6">——&#160;<tspan font-weight="700">TensorCore 专用</tspan>。SparseCore 不直接管它</text>
+<text class="svgsm" x="14" y="250" fill="#d93025">⛔ 它是编译期就排死的机器：地址得提前知道</text>
+<rect x="486" y="56" width="914" height="214" rx="8" fill="#fef7e0" stroke="#e8710a"/>
+<text class="svglbl" x="500" y="80" fill="#7a5000" style="font-size:13px">SparseCore</text>
+<text class="svgsm" x="500" y="98" fill="#7a5000">按 device 看 2 颗（物理 4 颗／chip）·  占的面积很小</text>
+<rect x="500" y="110" width="214" height="120" rx="8" fill="#fff" stroke="#e8710a"/>
+<text class="svglbl" x="512" y="132" fill="#7a5000" style="font-size:12px">标量子核 × 1</text>
+<text class="svgsm" x="512" y="152" fill="#7a5000">· 标量运算</text>
+<text class="svgsm" x="512" y="169" fill="#7a5000">· <tspan font-weight="700">动态索引</tspan></text>
+<text class="svgsm" x="512" y="186" fill="#7a5000">· <tspan font-weight="700">发起 DMA 和 stream</tspan></text>
+<text class="svgsm" x="512" y="203" fill="#7a5000">· 自带 SMEM</text>
+<rect x="726" y="110" width="480" height="120" rx="8" fill="#fff" stroke="#e8710a"/>
+<text class="svglbl" x="738" y="132" fill="#7a5000" style="font-size:12px">向量子核 × 16<tspan fill="#5f6368">（文档里也叫 tile）</tspan></text>
+<rect x="738" y="144" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="795" y="144" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="852" y="144" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="909" y="144" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="966" y="144" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="1023" y="144" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="1080" y="144" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="1137" y="144" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="738" y="166" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="795" y="166" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="852" y="166" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="909" y="166" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="966" y="166" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="1023" y="166" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="1080" y="166" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="1137" y="166" width="50" height="17" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<text class="svgsm" x="738" y="204" fill="#7a5000"><tspan font-weight="700">每个子核自带 VMEM ＋ SMEM，数据流各走各的</tspan></text>
+<text class="svgsm" x="738" y="221" fill="#7a5000">SIMD 宽度 16（F32）／32（BF16）——&#160;一次动的是十几个数，不是一千个</text>
+<rect x="1218" y="110" width="168" height="120" rx="8" fill="#fff" stroke="#e8710a"/>
+<text class="svglbl" x="1230" y="132" fill="#7a5000" style="font-size:12px">共享 VMEM</text>
+<text class="svgsm" x="1230" y="152" fill="#7a5000">OpenXLA 文档里</text>
+<text class="svgsm" x="1230" y="168" fill="#7a5000">叫它 <tspan font-weight="700">SPMEM</tspan></text>
+<text class="svgsm" x="1230" y="190" fill="#7a5000">很小、很快、</text>
+<text class="svgsm" x="1230" y="206" fill="#7a5000">编译器显式管，不是缓存</text>
+<text class="svgsm" x="500" y="250" fill="#7a5000">⭐ 它原生支持<tspan font-weight="700">数据相关的控制流和访存</tspan>——&#160;地址可以是刚算出来的</text>
+<rect x="0" y="282" width="1400" height="58" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="16" y="306" fill="#0b6b30" style="font-size:13px">HBM</text>
+<text class="svgsm" x="70" y="306" fill="#0b6b30">——&#160;192 GiB（v7）。<tspan font-weight="700">大表、中间结果都在这儿。两颗核都直接连它</tspan></text>
+<text class="svgsm" x="16" y="326" fill="#0b6b30">⭐ 所以「操作 VMEM 还是 HBM」这个二选一本身是个陷阱：<tspan font-weight="700">两块都碰</tspan>——&#160;只是它碰的那块 VMEM 是<tspan font-weight="700">它自己的</tspan>，不是 TensorCore 那块。</text>
+<text class="svglbl" x="0" y="372" fill="#202124" style="font-size:13px">那「最小粒度」到底是多少 ——&#160;<tspan font-weight="700">先把两件被混为一谈的事分开</tspan></text>
+<rect x="0" y="384" width="690" height="116" rx="8" fill="#fff" stroke="#1a73e8"/>
+<text class="svglbl" x="14" y="406" fill="#174ea6" style="font-size:12px">TensorCore 那个 (8,128)</text>
+<text class="svgsm" x="14" y="426" fill="#174ea6"><tspan font-weight="700">它是向量寄存器的形状</tspan>（8 sublane × 128 lane ＝ 1,024 格）,</text>
+<text class="svgsm" x="14" y="443" fill="#174ea6">也是 VMEM 里的布局单位 ——&#160;fp32 下一块 4 KiB。</text>
+<text class="svgsm" x="14" y="466" fill="#d93025">⛔ <tspan font-weight="700">它不是「DMA 的最小粒度」</tspan>。把这两件事说成一件，是我讲这一段时犯过的错。</text>
+<text class="svgsm" x="14" y="486" fill="#5f6368">但方向是对的：你要的若只是散落的几行，按这个单位对齐取数就会付冤枉钱。</text>
+<rect x="710" y="384" width="690" height="116" rx="8" fill="#fef7e0" stroke="#e8710a"/>
+<text class="svglbl" x="724" y="406" fill="#7a5000" style="font-size:12px">SparseCore 的 DMA 粒度</text>
+<text class="svglbl" x="724" y="430" fill="#7a5000" style="font-size:30px">64</text>
+<text class="svglbl" x="772" y="430" fill="#7a5000" style="font-size:14px">字节</text>
+<text class="svgsm" x="830" y="422" fill="#7a5000">——&#160;这是<tspan font-weight="700">可执行的官方口径</tspan>，不是文档里的形容词：</text>
+<text class="svgsm" x="830" y="440" fill="#7a5000"><tspan font-family="ui-monospace,monospace">pltpu.get_tpu_info().sparse_core</tspan> 在 TPU 7x 上报</text>
+<text class="svgsm" x="830" y="457" fill="#7a5000"><tspan font-family="ui-monospace,monospace">num_cores=2, num_subcores=16, num_lanes=16, dma_granule_size_bytes=<tspan font-weight="700">64</tspan></tspan></text>
+<text class="svgsm" x="724" y="486" fill="#7a5000">⭐ 所以回答「能不能不搬 (8,128)」：<tspan font-weight="700">这个问题问的是两台机器的两套单位</tspan>——&#160;它按 64 字节走。</text>
+<rect x="0" y="516" width="1400" height="92" rx="8" fill="#f8f9fa" stroke="#dadce0"/>
+<text class="svglbl" x="14" y="540" fill="#202124" style="font-size:13px">一次 gather 在这张图上怎么走</text>
+<text class="svgsm" x="14" y="562" fill="#202124">① <tspan font-weight="700">索引</tspan>放在 SparseCore 自己的 VMEM 里 → ② <tspan font-weight="700">标量子核</tspan>照着索引发一堆 DMA → ③ 十六个向量子核<tspan font-weight="700">各追各的地址</tspan>，从 <tspan font-weight="700">HBM</tspan> 里取回来</text>
+<text class="svgsm" x="14" y="582" fill="#202124">Pallas 里就是一行：<tspan font-family="ui-monospace,monospace">sync_copy(data_ref.at[indices_ref], target_ref)</tspan>——&#160;<tspan fill="#5f6368">data 在 HBM，indices 在 VMEM。scatter 是同一条路反着走。</tspan></text>
+<rect x="0" y="622" width="1400" height="96" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="16" y="646" fill="#0b6b30" style="font-size:13px">⭐ 它扛延迟的方式，不是让每一次取数变快 ——&#160;<tspan font-weight="700">是同时欠着很多次取数</tspan></text>
+<text class="svgsm" x="16" y="666" fill="#0b6b30">散乱访存的痛点从来不是带宽，是<tspan font-weight="700">每一次都得等</tspan>。十六个子核各自独立的数据流，就是为了把一大把请求同时抛出去、各自回来。</text>
+<text class="svgsm" x="16" y="684" fill="#0b6b30"><tspan font-weight="700">换个说法：TPU 把 TensorCore 上砍掉的「运行时才知道地址」那套能力，单独做了一颗小的放在旁边。</tspan>主核保持纯静态、拿满算力；需要动态的时候，交给它。</text>
+<text class="svgsm" x="16" y="704" fill="#5f6368">⚠️ 规格出自 JAX Pallas SparseCore 文档与 OpenXLA SparseCore 文档；「为什么这套本事也适合卸载 collective」<tspan font-weight="700">是推的，官方没有公开解释</tspan>。</text>
+</svg>
+  <figcaption>⭐ <b>难点有两处，它对着两处各配了一个解法</b>：
+    地址由数据算出来 → <b>原生支持数据相关的控制流与访存</b>；
+    要的只是散落的几行 → <b>粒度做细</b>（v7 上 DMA granule <b>64 字节</b>，
+    出自 <code>pltpu.get_tpu_info().sparse_core</code>）。
+    ⚠️ <b>「操作 VMEM 还是 HBM」是个陷阱二选一</b> ——&nbsp;两块都碰，
+    但它碰的那块 VMEM 是<b>它自己的</b>（每个子核一份 ＋ 一份共享，
+    OpenXLA 文档里叫 SPMEM），<b>不是 TensorCore 那块</b>。
+    ⭐ 它扛延迟靠的不是每次更快，是<b>十六路各追各的地址、同时欠着很多次取数</b>。</figcaption>
+  </figure>
+
   <p>但上面那句开场白得当场收回一半。我说「两边都在主力之外多准备了一样东西」——&nbsp;
     <b>TPU 那半句成立，GPU 那半句不成立</b>：块量化不在 Tensor Core 外面，就在里面。
     摆正之后，那两个坑会露出一个共同的形状。</p>

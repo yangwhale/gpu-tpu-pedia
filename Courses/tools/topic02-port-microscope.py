@@ -891,6 +891,24 @@ def sections(F):
     <br><br><b>共同的教训是同一条：看 trace，不要看宣传页。</b>
     这两个坑被问到的频率极高，而且都是「说法没错、但用它解释自己的 profile 就会全错」。</div>
 
+  <!-- ⭐⭐ 2026-09-03 新增。Chris 追问「处理不规则访存到底是怎么处理的、
+       操作 VMEM 还是 HBM、最小粒度多少」——&nbsp;原来全课只有这个名字没有机制。
+       图由 topic02-fig-s3-sparsecore.py 生成，按 id 锚点 s012-fig3-5 注入。
+       ⛔ 图里那句「(8,128) 不是 DMA 粒度」是在纠正我自己讲错过的说法，别删。 -->
+  <p>那「处理不规则访存」到底是怎么处理的？——&nbsp;<b>把这颗核拆开看一眼</b>。</p>
+
+  <figure class="fbox fwide" id="s012-fig3-5">
+  <svg viewBox="0 0 1400 730" width="100%"></svg>
+  <figcaption>⭐ <b>难点有两处，它对着两处各配了一个解法</b>：
+    地址由数据算出来 → <b>原生支持数据相关的控制流与访存</b>；
+    要的只是散落的几行 → <b>粒度做细</b>（v7 上 DMA granule <b>64 字节</b>，
+    出自 <code>pltpu.get_tpu_info().sparse_core</code>）。
+    ⚠️ <b>「操作 VMEM 还是 HBM」是个陷阱二选一</b> ——&nbsp;两块都碰，
+    但它碰的那块 VMEM 是<b>它自己的</b>（每个子核一份 ＋ 一份共享，
+    OpenXLA 文档里叫 SPMEM），<b>不是 TensorCore 那块</b>。
+    ⭐ 它扛延迟靠的不是每次更快，是<b>十六路各追各的地址、同时欠着很多次取数</b>。</figcaption>
+  </figure>
+
   <p>但上面那句开场白得当场收回一半。我说「两边都在主力之外多准备了一样东西」——&nbsp;
     <b>TPU 那半句成立，GPU 那半句不成立</b>：块量化不在 Tensor Core 外面，就在里面。
     摆正之后，那两个坑会露出一个共同的形状。</p>''')
