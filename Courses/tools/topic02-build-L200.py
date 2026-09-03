@@ -2014,7 +2014,12 @@ HERO = '''
          （砍掉一节之后，要回头看看被砍的那节在别处留了什么钩子。） -->
     <span class="chip">GPU 侧 <b>拆 B200</b>　<span style="opacity:.7">实测 GB300 NVL72</span></span>
     <span class="chip">规格来源 <b>公开源码 + 自有实测</b></span>
-    <span class="chip">⏱ <b>60 分钟 · 33 张图</b></span>
+    <!-- ⛔ 这两个数**不要手写**。原来写死的是「60 分钟 · 33 张图」，
+         到 2026-09-03 真值已经是 80 分钟 · 36 张图 —— 两个都错，
+         而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
+         ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
+         （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
+    <span class="chip">⏱ <b>__DUR__ 分钟 · __NFIG__ 张图</b></span>
     <span class="chip">完整版 <a href="%s"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -2031,6 +2036,32 @@ def _tail():
     return _src[i:]
 
 
+def _lecture_minutes():
+    """主线分钟数 ——&nbsp;从讲义脚本里读回来，这边不留第二份。
+
+    ⛔ 为什么不直接写个数：这个仓库已经演过两遍「两处并存必漂」——
+       render-s012 和 inject 的图表漂过一次，开篇这个 chip 漂过一次
+       （写着 60 分钟的时候真值是 80）。**漂了都不报错，只是安静地错。**
+
+    读的是讲义脚本里 `lec("Lx", "nn", "标题", 分钟, ...)` 的第四个参数，
+    并按讲义自己的口径把 `opt=True` 那一讲排除在主线之外。
+    ⚠️ 读不到就 raise，不给默认值 ——&nbsp;有个兜底数就等于又有了第二份拷贝。
+    """
+    p = os.path.join(HERE, "topic02-build-L200-lecture.py")
+    src = io.open(p, encoding="utf-8").read()
+    calls = list(re.finditer(r'^lec\("(L\d+)",\s*"\d+",\s*"[^"]*",\s*(\d+),',
+                             src, re.M))
+    assert calls, "讲义脚本里一个 lec(...) 都没读到 —— 它的签名是不是改了？"
+    total = 0
+    for k, m in enumerate(calls):
+        end = calls[k + 1].start() if k + 1 < len(calls) else len(src)
+        if "opt=True" in src[m.end():end]:      # 可跳过的那一讲不计入主线
+            continue
+        total += int(m.group(2))
+    assert total > 0, "算出来主线 0 分钟，不对"
+    return total
+
+
 def main():
     head = _head()
     # L200 自己的 title / og，其余 meta 沿用 L300。
@@ -2045,6 +2076,12 @@ def main():
 
     html = head + HERE_MARK + HERO + _shared_defs() + "\n" + "\n".join(body()) \
         + "\n\n" + _tail()
+
+    # 开篇 chip 上那两个数：图数现数，分钟数从讲义脚本读。都不许手写。
+    for tok, val in (("__DUR__", _lecture_minutes()),
+                     ("__NFIG__", len(_FIG_SEEN))):
+        assert html.count(tok) == 1, "%s 占位符不见了或出现多次" % tok
+        html = html.replace(tok, str(val))
 
     # ── 自检（全部跑在写盘之前）───────────────────────────────
     # ⚠️ 2026-09-01 之前这里是**先写盘、后自检**。那样禁字一旦漏进来，
