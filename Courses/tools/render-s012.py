@@ -45,6 +45,15 @@ SCRIPTS = {
     "topic02-fig-s2-three-wastes.py":        ["fig2-5"],
     "topic02-figs-s2-chain-splash.py":       ["fig2-6", "fig2-7"],
     "topic02-figs-s2-intensity-axis.py":     ["fig2-8"],
+    # ⛔ 下面这四张 2026-09-03 才补进来 —— 它们 09-01/09-03 就进了 inject 那张表，
+    #    这边一直漏着。症状正是文件头警告的那种：`--all` 报「全部渲染完成」，
+    #    而 §3 那几张**根本没被渲染过**，看图的人以为自己看全了。
+    #    ⭐ 教训：两张表并存时，「漏一项」不会报错，只会**静默地少做一件事**。
+    #       加图时两处一起改，别指望事后 diff 能看出来。
+    "topic02-fig-s3-why-layers.py":          ["fig3-1"],
+    "topic02-fig-s3-sm-inside.py":           ["fig3-2"],
+    "topic02-fig-s3-thread-is-a-lane.py":    ["fig3-3"],
+    "topic02-fig-s3-runtime-bill.py":        ["fig3-4"],
 }
 WHERE = {f: s for s, fs in SCRIPTS.items() for f in fs}
 

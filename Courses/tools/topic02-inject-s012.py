@@ -42,6 +42,7 @@ SCRIPTS = {
     "topic02-fig-s3-why-layers.py":      {"fig3-1.svg": "fig3-1"},
     "topic02-fig-s3-sm-inside.py":        {"fig3-2.svg": "fig3-2"},
     "topic02-fig-s3-thread-is-a-lane.py": {"fig3-3.svg": "fig3-3"},
+    "topic02-fig-s3-runtime-bill.py":     {"fig3-4.svg": "fig3-4"},
     "topic02-figs-s1-hierarchy-intensity.py":
                                          {"fig1-3.svg": "fig1-3", "fig1-4.svg": "fig1-4"},
     "topic02-figs-s2-access-lane.py":    {"fig2-1.svg": "fig2-1", "fig2-2.svg": "fig2-2"},

@@ -5772,6 +5772,201 @@ details.aside b{color:var(--ink);font-weight:600}
     然后你会用它去解释 profile，然后每一次都解释错。
     <b>跨平台学习翻车，八成翻在这儿，不是翻在记错参数。</b></div>
 
+  <!-- ⭐⭐ 2026-09-03 第三轮追问，Chris 一口气问了四个硬件实现层的问题：
+       「① 记分板到底是干什么的？② a 一个 block 里的同步机制怎么做的？
+         b cluster 之间访问别的 SM 的数据，硬件上怎么做到的？
+         c 数据搬运走哪个单元，还是直接内存访问？」
+       ⛔ 四个课程一个都没答 —— 而「记分板」这个词**课程自己已经在用了**：
+          g2 的图注、p31 的图注、fig3-1 与 fig3-3 的图里都点过它的名，
+          从没定义过。这是最坏的一种缺口：读者会以为是自己漏听了。
+       ⭐ 只有第 c 个问题画成了图（fig3-4）—— 它本身就是一条数据通路，
+          是**机器的图**。记分板和 barrier 画出来只会是一张自己发明的分类账，
+          那正是 fig1-5 被删掉的理由。所以它们走正文和折叠块，不占图。
+       ⛔ 这一节的 figure 只放空壳 svg，真图由 topic02-inject-s012.py
+          按 id 锚点 s012-fig3-4 注入 —— 跟附录 A 的 fig0-1 是同一套规矩。
+       ⛔ 注释里**不要写带尖括号的标签名、也不要写 id= 加引号的锚点串**。
+          这条注释原本两样都犯了，捅出两个不同的洞：
+          ① 带尖括号的 figure 让标签配平自检报「75 开 74 闭」（HTML 没坏，
+             坏的是所有拿正则数标签的检查）；
+          ② 那个加引号的 id 串更阴 —— L200 的 fig() 当时是全文找第一处
+             id=…，直接命中注释，把整节正文都搬进了 topic-02.html，
+             不报错、图还在，只是文件无端胖了 28 KB。fig() 已经改成认完整开标签。 -->
+  <h3>3.3b　「运行时适应」在硬件上是三套电路 ——&nbsp;把账单打开</h3>
+  <p>回到那两个留到运行时的决定 ——&nbsp;<b>「这块放哪个 SM」和「下一拍发哪个 warp」</b>。
+    到这里为止它们还只是编程模型层面的说法。往硬件里再走一步，这笔账落地成三套具体的电路，
+    各自回答一个很窄的问题：<em>谁现在能发指令、谁跟谁怎么对齐、
+    数据怎么在不占用线程的前提下就位。</em></p>
+  <p>第一个问题这门课其实<b>欠了一笔账</b>：「记分板」这个词前面已经点过好几次名 ——&nbsp;
+    拆 SM 的时候、算「下一拍发哪个 warp」代价的时候，
+    <em>却从没说过它是什么。先把这笔还上。</em></p>
+
+  <div class="note info"><span class="t">⭐ 记分板：调度器凭什么知道哪个 warp「就绪」</span>
+    调度器每周期要从驻留的 warp 里挑一个就绪的发指令。<b>「就绪」是怎么判定的？</b>
+    NVIDIA 先按一条线把指令劈成两半 ——&nbsp;<em>编译器知不知道它要跑多久。</em>
+    <br><br><b>定长的那一半根本不用硬件管。</b>
+    浮点乘加这类几拍出结果是固定的，编译器直接在指令里写一个「停几拍」的数，硬件照做。
+    <em>——&nbsp;这就是 SASS 里每条指令前面挂着一串控制位的原因。</em>
+    <br><b>变长的那一半才是记分板管的。</b>
+    访存、特殊函数、矩阵指令，跑多久编译期不知道。机制是：每个 warp 六个计数器
+    （<code>SB0</code>–<code>SB5</code>，各能数到 63）；生产者指令<b>发出时加一、写回时减一</b>；
+    消费者指令身上带一个六位掩码，写明它要等哪几号归零。
+    <br><br>⭐ 所以它不是「哪个寄存器脏了」的一张大表，而是<b>六个很小的计数器，
+    加上编译器提前埋在指令里的标记</b>。它只回答一个问题 ——&nbsp;这个 warp 现在能不能发指令。
+    <em>而这一个问题正是延迟隐藏的地基：没有它，就没有「换一个 warp 上来」这个动作。</em>
+    <br><br>📌 <b>顺手带走一条判据</b>：Nsight 里的 long / short scoreboard，
+    分界线是<b>等的那个东西出没出 SM</b> ——&nbsp;共享内存、特殊函数、矩阵指令算 short，
+    全局内存加载算 long。<em>访存瓶颈的 kernel，long scoreboard 一定是最大那一项。</em>
+    <br><span class="sub">⚠️ 出处：六个计数器与控制位的格式出自第三方微基准反推
+    （<em>Analyzing Modern NVIDIA GPU cores</em>, 2025），<b>不是 NVIDIA 官方文档</b>；
+    long / short 的分界出自 Nsight 自己的口径。</span></div>
+
+  <p>第三个问题值一张图 ——&nbsp;<b>带着「哪一列在变、哪几列没变」去看它</b>。</p>
+
+  <figure class="fbox fwide" id="s012-fig3-4">
+  <svg viewBox="0 0 1400 736" width="100%" role="img" aria-label="一块数据从全局内存进到共享内存的四种路径：普通 load/store 经过寄存器、Ampere 的 cp.async 直通、Hopper 的 TMA 引擎按描述符搬运、TPU 从第一代起就用编译器显式发的 DMA">
+<defs><marker id="a34" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#5f6368"/></marker></defs>
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">一块数据怎么进到共享内存 ——&#160;<tspan font-weight="700">GPU 走了三代，TPU 出厂就在终点</tspan></text>
+<text class="svgsm" x="0" y="37">只看两件事：<tspan font-weight="700">数据在半路要不要经过寄存器</tspan>，以及<tspan font-weight="700">地址、跨步、边界是谁算的</tspan>——&#160;这两件事一变，线程就从「搬运工」退成了「发号令的」</text>
+<rect x="338" y="74" width="228" height="392" rx="10" fill="#f1f3f4"/>
+<text class="svgsm" x="452" y="92" fill="#5f6368" text-anchor="middle">中转这一格 ——&#160;<tspan font-weight="700">整张图的差别都在这儿</tspan></text>
+<text class="svglbl" x="866" y="92" fill="#5f6368" style="font-size:12px">地址、跨步、边界谁算</text>
+<text class="svglbl" x="1116" y="92" fill="#5f6368" style="font-size:12px">发起它的线程接下来干什么</text>
+<text class="svglbl" x="0" y="138" fill="#202124" style="font-size:12px">一直都有</text>
+<text class="svgsm" x="0" y="156">普通 <tspan font-weight="700">ld / st</tspan></text>
+<rect x="218" y="120" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="268" y="148" fill="#9aa0a6" text-anchor="middle" font-weight="700">全局内存</text>
+<path d="M318 144 H349" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="352" y="120" width="200" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="452" y="140" fill="#9aa0a6" text-anchor="middle" font-weight="700">寄存器</text>
+<text class="svgsm" x="452" y="156" fill="#5f6368" text-anchor="middle" style="font-size:10px">数据在这儿过一道</text>
+<path d="M552 144 H581" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="584" y="120" width="118" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="643" y="148" fill="#9aa0a6" text-anchor="middle" font-weight="700">共享内存</text>
+<path d="M702 144 H731" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="734" y="120" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="784" y="148" fill="#9aa0a6" text-anchor="middle" font-weight="700">Tensor Core</text>
+<text class="svgsm" x="866" y="140" fill="#3c4043">线程<tspan font-weight="700">自己算</tspan>，自己跑循环</text>
+<text class="svgsm" x="1116" y="140" fill="#3c4043"><tspan font-weight="700">被占住</tspan> ——&#160;搬完才轮到算</text>
+<line x1="0" y1="188" x2="1400" y2="188" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="230" fill="#1a73e8" style="font-size:12px">Ampere 起</text>
+<text class="svgsm" x="0" y="248"><tspan font-weight="700">cp.async</tspan>（SASS：LDGSTS）</text>
+<rect x="218" y="212" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="268" y="240" fill="#9aa0a6" text-anchor="middle" font-weight="700">全局内存</text>
+<path d="M318 236 H349" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="352" y="212" width="200" height="48" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="1.3"/>
+<text class="svgsm" x="452" y="232" fill="#1a73e8" text-anchor="middle" font-weight="700">直通</text>
+<text class="svgsm" x="452" y="248" fill="#5f6368" text-anchor="middle" style="font-size:10px">不落寄存器</text>
+<path d="M552 236 H581" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="584" y="212" width="118" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="643" y="240" fill="#9aa0a6" text-anchor="middle" font-weight="700">共享内存</text>
+<path d="M702 236 H731" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="734" y="212" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="784" y="240" fill="#9aa0a6" text-anchor="middle" font-weight="700">Tensor Core</text>
+<text class="svgsm" x="866" y="232" fill="#3c4043"><tspan font-weight="700">还是线程自己算</tspan></text>
+<text class="svgsm" x="1116" y="232" fill="#3c4043">省了寄存器这一道，</text>
+<text class="svgsm" x="1116" y="249" fill="#3c4043">地址和循环仍要自己跑</text>
+<line x1="0" y1="280" x2="1400" y2="280" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="322" fill="#1e8e3e" style="font-size:12px">Hopper 起</text>
+<text class="svgsm" x="0" y="340"><tspan font-weight="700">TMA</tspan> ＋ 一张拷贝描述符</text>
+<rect x="218" y="304" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="268" y="332" fill="#9aa0a6" text-anchor="middle" font-weight="700">全局内存</text>
+<path d="M318 328 H349" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="352" y="304" width="200" height="48" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="452" y="324" fill="#1e8e3e" text-anchor="middle" font-weight="700">TMA 引擎</text>
+<text class="svgsm" x="452" y="340" fill="#5f6368" text-anchor="middle" style="font-size:10px">按张量维度＋块坐标</text>
+<path d="M552 328 H581" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="584" y="304" width="118" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="643" y="332" fill="#9aa0a6" text-anchor="middle" font-weight="700">共享内存</text>
+<path d="M702 328 H731" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="734" y="304" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="784" y="332" fill="#9aa0a6" text-anchor="middle" font-weight="700">Tensor Core</text>
+<text class="svgsm" x="866" y="324" fill="#3c4043"><tspan font-weight="700">硬件算</tspan>：跨步、偏移、</text>
+<text class="svgsm" x="866" y="341" fill="#3c4043">边界全由它接管</text>
+<text class="svgsm" x="1116" y="324" fill="#3c4043"><tspan font-weight="700">一个线程发完就走</tspan>；</text>
+<text class="svgsm" x="1116" y="341" fill="#3c4043">搬完引擎自己去 barrier 报数</text>
+<line x1="0" y1="372" x2="1400" y2="372" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="414" fill="#e8710a" style="font-size:12px">TPU：<tspan font-weight="700">出厂就是这样</tspan></text>
+<text class="svgsm" x="0" y="432">编译器显式发的 <tspan font-weight="700">DMA</tspan></text>
+<rect x="218" y="396" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="268" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">HBM</text>
+<path d="M318 420 H349" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="352" y="396" width="200" height="48" rx="7" fill="#fef7e0" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="452" y="416" fill="#e8710a" text-anchor="middle" font-weight="700">DMA 引擎</text>
+<text class="svgsm" x="452" y="432" fill="#5f6368" text-anchor="middle" style="font-size:10px">和上面那行是同一类东西</text>
+<path d="M552 420 H581" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="584" y="396" width="118" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="643" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">VMEM</text>
+<path d="M702 420 H731" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="734" y="396" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="784" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">MXU</text>
+<text class="svgsm" x="866" y="416" fill="#3c4043"><tspan font-weight="700">编译期就排好了</tspan></text>
+<text class="svgsm" x="1116" y="416" fill="#7a3e00"><tspan font-weight="700">这一栏对 TPU 不成立</tspan> ——&#160;</text>
+<text class="svgsm" x="1116" y="433" fill="#7a3e00">这边压根没有「线程」这个角色</text>
+<rect x="0" y="486" width="1400" height="96" rx="9" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="16" y="511" fill="#0b6b30" style="font-size:13px">⭐ 一条线看下来：搬运从「<tspan text-decoration="underline">取数指令的副作用</tspan>」，变成了「<tspan text-decoration="underline">一台按描述符干活的引擎</tspan>」</text>
+<text class="svgsm" x="16" y="532" fill="#0b6b30">GPU 用了三代走到这儿，TPU 第一天就在这儿。<tspan font-weight="700">这不是谁抄谁</tspan> ——&#160;是同一个物理约束逼出来的同一个答案：</text>
+<text class="svgsm" x="16" y="551" fill="#0b6b30"><tspan font-weight="700">矩阵单元越快，喂料这件事就越不能占着算的人</tspan>。两边的分歧不在终点，在<tspan font-weight="700">谁来发这条 DMA</tspan> ——&#160;GPU 是运行时某个线程，TPU 是编译期就排好的一步。</text>
+<text class="svgsm" x="16" y="570" fill="#5f6368">——&#160;「搬运是取数的副作用，还是一条独立的 DMA」这句话，在《GPU 显微镜》图 G-6 里已经出现过；这张图给的是它<tspan font-weight="700">怎么一步步变成现在这样</tspan>。</text>
+<rect x="0" y="598" width="1400" height="82" rx="9" fill="#fef7e0" stroke="#f9ab00"/>
+<text class="svglbl" x="16" y="622" fill="#7a5000" style="font-size:13px">⚠️ 生产者一换人，<tspan font-weight="700">对齐的办法也得跟着换</tspan></text>
+<text class="svgsm" x="16" y="643" fill="#7a5000">第三行那台引擎<tspan font-weight="700">不是线程</tspan>，它不会「到达」，只会「往里放了多少字节」。而 <tspan font-weight="700"><tspan font-family="monospace">__syncthreads()</tspan> 数的是人头</tspan>，对它没用。</text>
+<text class="svgsm" x="16" y="662" fill="#7a5000">所以 Hopper 的 barrier 多了一项本事：<tspan font-weight="700">连字节数一起数</tspan>——&#160;人到齐<tspan font-weight="700">并且</tspan>字节够了，才放行。<tspan fill="#5f6368">这就是「异步事务 barrier」这个名字的来历。</tspan></text>
+<text class="svgsm" x="0" y="708" fill="#9aa0a6">📌 这一张全部出自官方：<tspan font-weight="700">cp.async</tspan> 的直通路径见 CUDA 编程指南；<tspan font-weight="700">TMA 的单线程发起、硬件接管地址生成</tspan>与<tspan font-weight="700">异步事务 barrier 数字节</tspan>，是 Hopper 架构官方博客的原话。</text>
+</svg>
+  <figcaption>⭐ <b>四行里只有中转那一列在变，两头是同一个东西</b>。
+    第一行数据要在寄存器里过一道，而且地址和循环全靠线程自己跑；
+    <code>cp.async</code> 砍掉了寄存器那一道，地址仍要自己算；
+    到 TMA 才把地址生成整个接管过去 ——&nbsp;一个线程填张描述符发出去就走。
+    ⭐ <b>走到这儿，它和 TPU 那条编译器发的 DMA 已经是同一类东西</b>；
+    剩下的分歧只有一个 ——&nbsp;<b>这条 DMA 是运行时某个线程发的，还是编译期就排好的一步</b>。</figcaption>
+  </figure>
+
+  <details><summary>另外两个问题的答案：block 里怎么同步、cluster 怎么读到别的 SM
+    <em>（回查用 · 讲的时候跳过）</em></summary>
+  <div class="body">
+  <p><b>一、block 里怎么同步。</b>
+    <code>__syncthreads()</code> 背后是 SM 里一小组硬件 barrier 资源：
+    block 里的 warp 陆续到达，硬件数人头，数满了全放行。三个容易忽略的点 ——&nbsp;
+    ① 它<b>按 warp 到达，不按线程</b>，因为一个 warp 本来就一起走；
+    ② 它同时兼一个<b>内存栅栏</b>，barrier 之前写进共享内存的东西，之后别人一定读得到，
+    所以你不用另写 fence；
+    ③ 在 barrier 上等着的 warp <b>仍占着它的槽</b> ——&nbsp;不干活，也不腾位子。
+    <em>所以同步密集的 kernel，占用率那本账不会因为「大家都在等」而变好看。</em></p>
+  <p>Ampere 起多了一种<b>异步 barrier</b>：把「到达」和「等待」拆成两个动作。
+    我干完先喊一声「我到了」，这一声不阻塞，接着去干别的独立的活；
+    真需要别人的数据时才去等。<em>早到的人不用干站着。</em>
+    Hopper 又让等待的线程能真的睡过去 ——&nbsp;<em>以前是在共享内存上自旋。</em></p>
+  <p>还有一处差别很实际：<b>两种 barrier 住在不同地方</b>。
+    老的 <code>bar</code> / <code>barrier</code> 是 SM 里固定的一小组资源，
+    每个 CTA 能用的个数有限；新的 <code>mbarrier</code> 是放在共享内存里的对象，
+    <b>你要多少个建多少个，只受共享内存容量限制</b>。
+    <span class="sub">——&nbsp;这句是 PTX 文档自己写的。</span></p>
+  <p><b>二、cluster 怎么读到别的 SM 的共享内存。</b>三件事凑齐才成立 ——&nbsp;
+    ① 同一个 cluster 的 block 被硬件<b>保证同时调度</b>上去，不同时在就谈不上互相读；
+    ② <b>GPC 内部有一条专用的 SM 到 SM 网络</b>，<em>cluster 必须整个落在一个 GPC 里，
+    正是因为这条线只铺到 GPC 边界</em>；
+    ③ 地址怎么表达 ——&nbsp;<code>cluster.map_shared_rank(指针, 目标块编号)</code>
+    还你一个指向对方那块内存的地址（编译成 PTX 的 <code>mapa</code>），
+    有了地址，普通读写指令就发得出去，网络负责路由。</p>
+  <div class="note warn"><span class="t">⚠️ 它有多近，比「能不能」更值得记</span>
+    H100 微基准实测：读自己的共享内存 <b>29 拍</b>；
+    读自己的但走 DSM 这个接口 <b>33 拍</b>（多出的 4 拍是接口本身，一步都没跨出去）；
+    <b>跨到另一个 SM 181 拍</b>，比走 L2 低约三成；
+    而老老实实绕全局内存一趟（一存一取）要 <b>956 拍</b>。
+    <br><br><b>所以 DSMEM 不是「把几个 SM 的共享内存拼成一块大的」</b> ——&nbsp;
+    181 拍是本地那 29 拍的六倍多。
+    <em>它是一条比绕 L2 便宜的近路；用它的理由是省掉那九百多拍，
+    不是因为它跟本地一样快。</em></div>
+  </div></details>
+
+  <div class="note ok"><span class="t">⭐ 三套硬件，同一张账单</span>
+    记分板回答「谁现在能发指令」，barrier 回答「谁跟谁怎么对齐」，
+    TMA 回答「数据怎么不占用线程就位」。
+    <b>三套加起来，就是「跑起来才决定」这条路的明细账。</b>
+    <br><br>TPU 一样都不需要 ——&nbsp;<b>不是它简陋，是这三个问题它在编译期就全回答完了</b>。
+    <em>——&nbsp;这也是 3.2 那五样「少掉的部件」的第二次收账：
+    少掉的不是能力，是这笔账。</em></div>
+
   <h3>3.4　一条指令吃多大一块 —— 收缩维差 16 倍</h3>
   <p>再往里一层，到指令。两边都有专门的矩阵乘单元，要问的只有一句：
     <b>一条指令一次吃进去的矩阵有多大。</b>先看 GPU，记住它的收缩维。</p>
