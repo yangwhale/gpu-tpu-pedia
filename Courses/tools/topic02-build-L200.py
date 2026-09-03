@@ -1614,7 +1614,40 @@ def body():
 
   <p>而<b>语言模型的重复度大约是 1.01</b> ——&nbsp;一行几乎只查一次，
     落在最不划算的那一端。
-    <em>编译器根本不往那儿派，<b>这颗核在语言模型的生产任务里一次都没被用过。</b></em></p>
+    <em>编译器根本不往那儿派，<b>生产任务里它一次表都没查过。</b></em></p>
+
+  <!-- ⛔⛔ 2026-09-03 Chris 当场纠正。原文这里写的是「这颗核在语言模型的
+       生产任务里一次都没被用过」——&nbsp;**这句是错的，而且错得很难堪**：
+       它在语言模型训练里天天都在跑，只是跑的不是查表，是**卸载 collective**。
+       ⭐ 更要命的是，这个错**正是这一节自己在批的那种错** ——&nbsp;
+          我照着宣传口径「查 embedding 的核」去反推它有没有被用，
+          等于把宣传页的分类当成了事实的分类。
+       ⭐ 改完之后这一节反而更强：宣传口径不只会让你**用不上**，
+          还会让你**看不见自己已经在用的那部分**。
+       ⚠️ 公开仓库，只用公开可核的出处：Google Cloud 博客
+          《Training large models on Ironwood TPUs》原话 ——&nbsp;
+          "users can offload collective communication operations—such as
+          All-Gather and Reduce-Scatter—directly to the SparseCore … allows
+          the TensorCores to remain dedicated to primary model computations
+          while communication tasks execute in parallel"；
+          MaxText 公开仓库 benchmarks/xla_flags_library.py 里也有
+          "Enable SparseCore All Gather (SC AG)"。
+          ⛔ 不要在这里写任何内部实测数字。 -->
+  <div class="note danger"><span class="t">⛔ 但「用不上」不等于「没在用」——&nbsp;这颗核你天天在用</span>
+    <b>说「语言模型用不上 SparseCore」是错的。</b>
+    <em>用不上的只是<b>查表</b>这条用途。</em><br><br>
+    它在大模型训练里真正干的活是<b>卸载集合通信</b> ——&nbsp;
+    <b>把 All-Gather、Reduce-Scatter 从 TensorCore 手上接过去</b>，
+    <em>让 TensorCore 专心算，通信在旁边并行跑完。</em>
+    <b>这正是「算和通信重叠」这件事在 TPU 上的落地方式之一。</b><br><br>
+    <span class="sub">出处都是公开的：Google Cloud 博客
+      《Training large models on Ironwood TPUs》把它单列成一条调优手段；
+      MaxText 公开仓库的 XLA flag 库里就有 <code>SparseCore All Gather</code>。</span>
+    <br><br>
+    ⭐ <b>所以这一节的教训还要再狠一层</b>：宣传口径不只会让你
+    <b>用不上它说的那个能力</b>，<em>还会让你<b>看不见你已经在用的那部分</b>
+    ——&nbsp;你会拿「查表的核」这个名字去 profile 里找查表，
+    找不到就以为这颗核在闲着。</em></div>
 
   <p>两个例子摆完，<b>顺带能看出一件事</b>：这两块东西<b>连层级都不一样</b> ——&nbsp;
     <em>块量化是一条指令的变体，换的是指令不是硬件；SparseCore 是物理上独立的一颗核。</em>

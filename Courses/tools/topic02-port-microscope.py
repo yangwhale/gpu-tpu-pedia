@@ -882,6 +882,12 @@ def sections(F):
       你说的是 warp 级那条还是双 SM 那条，能不能用完全不同；
     <br>· 「TPU 有个专门查 embedding 表的核」—— 但判据是 duplication factor，
       语言模型落在<b>最不划算的那一端</b>，编译器根本没往那儿派。
+    <br>&nbsp;&nbsp;⛔ <b>注意别把这条读成「语言模型用不上这颗核」</b> ——&nbsp;
+      用不上的只是<b>查表</b>那条用途。它在大模型训练里真正跑的是
+      <b>集合通信卸载</b>：把 All-Gather / Reduce-Scatter 从 TensorCore 接过去，
+      <b>让计算和通信并行</b>（见 Google Cloud《Training large models on
+      Ironwood TPUs》，以及 MaxText 公开 XLA flag 库里的 SparseCore All Gather）。
+      <em>这个名字本身就是上面那句宣传语的又一个受害者。</em>
     <br><br><b>共同的教训是同一条：看 trace，不要看宣传页。</b>
     这两个坑被问到的频率极高，而且都是「说法没错、但用它解释自己的 profile 就会全错」。</div>
 
