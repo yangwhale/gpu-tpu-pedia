@@ -381,8 +381,24 @@ li{padding:8px 0}
 h3{font-size:23px;margin:44px 0 16px}
 figcaption{line-height:1.8}
 details.aside > summary,details > summary{font-size:16px;padding:10px 0}
-/* 图和正文之间多留一口气 —— 投影时这一条比字号还管用 */
-figure.fbox{margin:30px 0}
+/* 图和正文之间多留一口气 —— 投影时这一条比字号还管用。
+   ⛔⛔ 只准写 margin-top／margin-bottom，**不许写简写 `margin:30px 0`**。
+   2026-09-04 这里写过一次简写，后果是：简写把 margin-left 也设成了 0，
+   而 `figure.fbox`（元素＋类，特异度 0,1,1）压过下面 .fwide（0,1,0）——
+   于是所有宽图的 `margin-left:50%` 失效，只剩 translateX(-50%) 生效，
+   **整张图往左平移 720px，在 1900px 宽的窗口里左边缘跑到 x = −286**。
+   ⭐ 阴险在于：溢出探针查的是 scrollWidth > clientWidth，
+   而「跑到视口左边外面」根本不产生溢出，也不产生滚动条 —— 查不出来，
+   只有人眼看到「图被裁掉一块」。判据已加进 topic02-lint-readability.py。 */
+figure.fbox{margin-top:30px;margin-bottom:30px}
+/* ⭐ 2026-09-04 窄图也放大一档：§0–§2 那批是按 1000 px 画的，
+   塞进 1032 px 的版心等于原生比例 1.0 —— 图里 10.5 px 的字投影上还是 10.5 px。
+   突破到 1240 就等比放大 1.24 倍，跟宽图那条（1400 → 1760，1.26 倍）配成一对。
+   ⚠️ 版心本身**不许动**（38 张图的排版都吊在 1080 上），动的只有 figure。
+   ⚠️ 同时挂 fbox＋fwide 的元素由后面 figure.fwide 覆盖（同特异度、后写赢）。 */
+figure.fbox{width:min(1240px,calc(100vw - 32px));max-width:none;
+  margin-left:50%;transform:translateX(-50%)}
+figure.fbox > figcaption{max-width:1080px;margin-left:0}
 
 /* ⛔ 2026-09-04：上面那条 code 的 white-space:nowrap 是给**行内**代码的，
    但它会一路继承进 <pre> —— nowrap 把换行折成空格，于是多行代码块
@@ -457,14 +473,28 @@ details.branch summary em{font-style:normal;font-weight:400;font-size:13.5px;
 details.branch > .body{padding:20px 0 4px}
 /* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
 /* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
-   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
-.fwide{margin-left:50%;transform:translateX(-50%);
-  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。
+
+   ⭐ 2026-09-04 上限 1440 → 1760。1440 只是「不缩小」，图里 10.5 px 的字
+   投到屏幕上还是 10.5 px，后排看不清。放到 1760，整张图等比放大 1.26 倍，
+   字跟着到 13 px 上下。**一个坐标都不用改、不可能撞车** ——
+   比逐张调字号安全得多（SVG 的 <text> 不换行，调字号会压到隔壁）。
+   窄屏由 calc(100vw - 32px) 兜底，行为不变。
+
+   ⛔⛔ 特异度写成 `figure.fwide`（0,1,1），不要写 `.fwide`（0,1,0）。
+   2026-09-04 页面主 CSS 里有一条 `figure.fbox{margin:30px 0}`（0,1,1），
+   简写把 margin-left 一起设成 0，**压过这里的 margin-left:50%** ——
+   于是只剩 translateX(-50%) 生效，整张宽图往左平移 720 px，
+   在 1900 px 宽的窗口里左边缘落到 x = −286，左边一截被裁掉。
+   ⭐ 而「往左跑」既不产生滚动条、也不让 scrollWidth 变大，
+   原来那个查横向溢出的探针对它恒为 0 —— 判据已加进 topic02-lint-layout.py。 */
+figure.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1760px,calc(100vw - 32px));max-width:none;overflow-x:auto}
 .fwide svg{display:block}
 /* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
    figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
    看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
-   fwide 的图有 1440px 宽，图注全跟着就成了一行一百多字，所以这里
+   fwide 的图有 1760px 宽，图注全跟着就成了一行一百多字，所以这里
    **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
 .fwide figcaption{max-width:1080px;margin-left:0}
 .note.q{background:#f6f0fd;border-left:4px solid var(--purple)}

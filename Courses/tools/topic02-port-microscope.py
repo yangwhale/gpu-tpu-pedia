@@ -2002,14 +2002,28 @@ CSS_MARK = "/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入�
 CSS = '''
 /* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
 /* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
-   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
-.fwide{margin-left:50%;transform:translateX(-50%);
-  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。
+
+   ⭐ 2026-09-04 上限 1440 → 1760。1440 只是「不缩小」，图里 10.5 px 的字
+   投到屏幕上还是 10.5 px，后排看不清。放到 1760，整张图等比放大 1.26 倍，
+   字跟着到 13 px 上下。**一个坐标都不用改、不可能撞车** ——
+   比逐张调字号安全得多（SVG 的 <text> 不换行，调字号会压到隔壁）。
+   窄屏由 calc(100vw - 32px) 兜底，行为不变。
+
+   ⛔⛔ 特异度写成 `figure.fwide`（0,1,1），不要写 `.fwide`（0,1,0）。
+   2026-09-04 页面主 CSS 里有一条 `figure.fbox{margin:30px 0}`（0,1,1），
+   简写把 margin-left 一起设成 0，**压过这里的 margin-left:50%** ——
+   于是只剩 translateX(-50%) 生效，整张宽图往左平移 720 px，
+   在 1900 px 宽的窗口里左边缘落到 x = −286，左边一截被裁掉。
+   ⭐ 而「往左跑」既不产生滚动条、也不让 scrollWidth 变大，
+   原来那个查横向溢出的探针对它恒为 0 —— 判据已加进 topic02-lint-layout.py。 */
+figure.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1760px,calc(100vw - 32px));max-width:none;overflow-x:auto}
 .fwide svg{display:block}
 /* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
    figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
    看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
-   fwide 的图有 1440px 宽，图注全跟着就成了一行一百多字，所以这里
+   fwide 的图有 1760px 宽，图注全跟着就成了一行一百多字，所以这里
    **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
 .fwide figcaption{max-width:1080px;margin-left:0}
 .note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
