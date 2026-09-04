@@ -514,7 +514,7 @@ details.aside b{color:var(--ink);font-weight:600}
          而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
          ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
          （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
-    <span class="chip">⏱ <b>77 分钟 · 37 张图</b></span>
+    <span class="chip">⏱ <b>77 分钟 · 38 张图</b></span>
     <span class="chip">完整版 <a href="topic-02-L300.html"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -6260,6 +6260,370 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
       <br><span class="sub">⚠️ 上面这段推理链是自洽的，但<b>我们没有实测把它坐实</b>
       ——&nbsp;当作理解框架用，别当作定论。</span></div>
     </div></details>
+
+
+
+  <p>这一整串<b>画成了一张图</b> ——&nbsp;
+    <em>三种驻留方式、真尺寸怎么切块、乒乓怎么藏装载、段数怎么换重搬次数，
+    四条带一次走完。</em></p>
+<figure class="fbox fwide" id="s012-fig3-6">
+  <svg viewBox="0 0 1400 1080" width="100%" role="img" aria-label="三种脉动阵列驻留方式、Q 投影的切块、乒乓装载时间线，以及分段数与右矩阵重搬次数的关系">
+<defs><marker id="aG" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker></defs>
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">一块矩阵乘是怎么在 MXU 上跑完的 ——&#160;<tspan font-weight="700">谁驻留、谁流动、以及权重什么时候偷偷装进去</tspan></text>
+<text class="svgsm" x="0" y="37">用一个真尺寸走完：Q 投影 <tspan font-weight="700">M ＝ 128K　K ＝ 7168　N ＝ 1536</tspan>，阵列 256 × 256</text>
+<text class="svglbl" x="0" y="72" fill="#202124" style="font-size:13px">① 三种用法，区别只有一个：<tspan font-weight="700">谁不动</tspan></text>
+<rect x="0" y="84" width="448" height="186" rx="8" fill="#fff" stroke="#1a73e8"/>
+<text class="svglbl" x="14" y="106" fill="#1a73e8" style="font-size:12px">左驻留（IS）</text>
+<text class="svgsm" x="14" y="124" fill="#1a73e8">格子里放 <tspan font-weight="700">A</tspan> 的一块</text>
+<rect x="14" y="136" width="112" height="112" rx="4" fill="#f1f3f4" stroke="#1a73e8"/>
+<line x1="42" y1="136" x2="42" y2="248" stroke="#dadce0"/>
+<line x1="14" y1="164" x2="126" y2="164" stroke="#dadce0"/>
+<line x1="70" y1="136" x2="70" y2="248" stroke="#dadce0"/>
+<line x1="14" y1="192" x2="126" y2="192" stroke="#dadce0"/>
+<line x1="98" y1="136" x2="98" y2="248" stroke="#dadce0"/>
+<line x1="14" y1="220" x2="126" y2="220" stroke="#dadce0"/>
+<text class="svglbl" x="70" y="200" fill="#1a73e8" text-anchor="middle" style="font-size:26px">A</text>
+<text class="svgsm" x="70" y="263" fill="#1a73e8" text-anchor="middle">不动</text>
+<text class="svgsm" x="144" y="154" fill="#5f6368">流进来的：</text>
+<text class="svgsm" x="144" y="172" fill="#202124"><tspan font-weight="700">B 从上面流入</tspan></text>
+<text class="svgsm" x="144" y="196" fill="#5f6368">出去的：</text>
+<text class="svgsm" x="144" y="214" fill="#202124">C 流出</text>
+<text class="svgsm" x="144" y="242" fill="#1a73e8"><tspan font-weight="700">空间 ＝ M × K</tspan></text>
+<text class="svgsm" x="144" y="260" fill="#1a73e8"><tspan font-weight="700">时间 ＝ N</tspan></text>
+<rect x="476" y="84" width="448" height="186" rx="8" fill="#fff" stroke="#e8710a"/>
+<text class="svglbl" x="490" y="106" fill="#e8710a" style="font-size:12px">右驻留（WS）　★ TPU 走这条</text>
+<text class="svgsm" x="490" y="124" fill="#e8710a">格子里放 <tspan font-weight="700">B</tspan> 的一块</text>
+<rect x="490" y="136" width="112" height="112" rx="4" fill="#f1f3f4" stroke="#e8710a"/>
+<line x1="518" y1="136" x2="518" y2="248" stroke="#dadce0"/>
+<line x1="490" y1="164" x2="602" y2="164" stroke="#dadce0"/>
+<line x1="546" y1="136" x2="546" y2="248" stroke="#dadce0"/>
+<line x1="490" y1="192" x2="602" y2="192" stroke="#dadce0"/>
+<line x1="574" y1="136" x2="574" y2="248" stroke="#dadce0"/>
+<line x1="490" y1="220" x2="602" y2="220" stroke="#dadce0"/>
+<text class="svglbl" x="546" y="200" fill="#e8710a" text-anchor="middle" style="font-size:26px">B</text>
+<text class="svgsm" x="546" y="263" fill="#e8710a" text-anchor="middle">不动</text>
+<text class="svgsm" x="620" y="154" fill="#5f6368">流进来的：</text>
+<text class="svgsm" x="620" y="172" fill="#202124"><tspan font-weight="700">A 从左边流入</tspan></text>
+<text class="svgsm" x="620" y="196" fill="#5f6368">出去的：</text>
+<text class="svgsm" x="620" y="214" fill="#202124">C 向下累出</text>
+<text class="svgsm" x="620" y="242" fill="#e8710a"><tspan font-weight="700">空间 ＝ K × N</tspan></text>
+<text class="svgsm" x="620" y="260" fill="#e8710a"><tspan font-weight="700">时间 ＝ M</tspan></text>
+<rect x="952" y="84" width="448" height="186" rx="8" fill="#fff" stroke="#1e8e3e"/>
+<text class="svglbl" x="966" y="106" fill="#1e8e3e" style="font-size:12px">中间累加驻留（OS）</text>
+<text class="svgsm" x="966" y="124" fill="#1e8e3e">格子里放 <tspan font-weight="700">C</tspan> 的一块</text>
+<rect x="966" y="136" width="112" height="112" rx="4" fill="#f1f3f4" stroke="#1e8e3e"/>
+<line x1="994" y1="136" x2="994" y2="248" stroke="#dadce0"/>
+<line x1="966" y1="164" x2="1078" y2="164" stroke="#dadce0"/>
+<line x1="1022" y1="136" x2="1022" y2="248" stroke="#dadce0"/>
+<line x1="966" y1="192" x2="1078" y2="192" stroke="#dadce0"/>
+<line x1="1050" y1="136" x2="1050" y2="248" stroke="#dadce0"/>
+<line x1="966" y1="220" x2="1078" y2="220" stroke="#dadce0"/>
+<text class="svglbl" x="1022" y="200" fill="#1e8e3e" text-anchor="middle" style="font-size:26px">C</text>
+<text class="svgsm" x="1022" y="263" fill="#1e8e3e" text-anchor="middle">不动</text>
+<text class="svgsm" x="1096" y="154" fill="#5f6368">流进来的：</text>
+<text class="svgsm" x="1096" y="172" fill="#202124"><tspan font-weight="700">A 左入 ＋ B 上入</tspan></text>
+<text class="svgsm" x="1096" y="196" fill="#5f6368">出去的：</text>
+<text class="svgsm" x="1096" y="214" fill="#202124">算完整块排出</text>
+<text class="svgsm" x="1096" y="242" fill="#1e8e3e"><tspan font-weight="700">空间 ＝ M × N</tspan></text>
+<text class="svgsm" x="1096" y="260" fill="#1e8e3e"><tspan font-weight="700">时间 ＝ K</tspan></text>
+<rect x="0" y="282" width="1400" height="46" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svgsm" x="16" y="304" fill="#0b6b30">⭐ 三种做法只是在换「哪一维当时间」——&#160;<tspan font-weight="700">空间那两维不够大就有格子空转，时间那一维不够长就摊不动装权重的钱</tspan>。<tspan fill="#5f6368">下面两条带讲的都是右驻留（TPU 的那条）。</tspan></text>
+<text class="svglbl" x="0" y="362" fill="#202124" style="font-size:13px">② 切块：<tspan font-weight="700">右矩阵切 168 块，左矩阵切 64 段</tspan></text>
+<rect x="0" y="374" width="430" height="250" rx="8" fill="#fff" stroke="#e8710a"/>
+<text class="svglbl" x="14" y="396" fill="#7a5000" style="font-size:12px">右矩阵 W ＝ [7168, 1536]</text>
+<text class="svgsm" x="14" y="414" fill="#7a5000">bf16 一共 21 MiB ——&#160;<tspan font-weight="700">一次就全进 VMEM 了</tspan></text>
+<rect x="20" y="426" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="426" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="426" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="426" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="426" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="426" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="433" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="433" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="433" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="433" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="433" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="433" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="440" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="440" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="440" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="440" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="440" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="440" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="447" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="447" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="447" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="447" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="447" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="447" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="454" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="454" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="454" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="454" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="454" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="454" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="461" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="461" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="461" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="461" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="461" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="461" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="468" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="468" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="468" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="468" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="468" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="468" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="475" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="475" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="475" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="475" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="475" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="475" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="482" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="482" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="482" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="482" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="482" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="482" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="489" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="489" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="489" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="489" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="489" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="489" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="496" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="496" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="496" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="496" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="496" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="496" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="503" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="503" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="503" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="503" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="503" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="503" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="510" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="510" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="510" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="510" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="510" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="510" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="517" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="517" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="517" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="517" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="517" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="517" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="524" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="524" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="524" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="524" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="524" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="524" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="531" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="531" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="531" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="531" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="531" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="531" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="538" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="538" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="538" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="538" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="538" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="538" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="545" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="545" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="545" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="545" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="545" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="545" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="552" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="552" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="552" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="552" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="552" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="552" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="559" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="559" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="559" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="559" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="559" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="559" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="566" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="566" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="566" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="566" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="566" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="566" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="573" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="573" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="573" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="573" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="573" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="573" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="580" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="580" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="580" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="580" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="580" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="580" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="587" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="587" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="587" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="587" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="587" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="587" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="594" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="594" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="594" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="594" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="594" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="594" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="601" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="601" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="601" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="601" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="601" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="601" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="20" y="608" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="43" y="608" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="66" y="608" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="89" y="608" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="112" y="608" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="135" y="608" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="20" y="615" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="43" y="615" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="66" y="615" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="89" y="615" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<rect x="112" y="615" width="20" height="5" rx="1" fill="#fdf1cf" stroke="#e8710a"/>
+<rect x="135" y="615" width="20" height="5" rx="1" fill="#fce8b2" stroke="#e8710a"/>
+<text class="svgsm" x="178" y="452" fill="#7a5000">K 方向 7168 ÷ 256</text>
+<text class="svglbl" x="178" y="470" fill="#7a5000" style="font-size:13px">＝ 28 块</text>
+<text class="svgsm" x="178" y="500" fill="#7a5000">N 方向 1536 ÷ 256</text>
+<text class="svglbl" x="178" y="518" fill="#7a5000" style="font-size:13px">＝ 6 块</text>
+<text class="svglbl" x="178" y="550" fill="#d93025" style="font-size:14px">一共 168 块</text>
+<text class="svgsm" x="178" y="568" fill="#7a5000">每块 256×256</text>
+<rect x="452" y="374" width="430" height="250" rx="8" fill="#fff" stroke="#1a73e8"/>
+<text class="svglbl" x="466" y="396" fill="#174ea6" style="font-size:12px">左矩阵 X ＝ [131072, 7168]</text>
+<text class="svgsm" x="466" y="414" fill="#174ea6"><tspan font-weight="700">M 方向按 2048 行切一段</tspan>——&#160;切出 64 段</text>
+<rect x="472" y="430" width="260" height="8" rx="1" fill="#e8f0fe" stroke="#1a73e8"/>
+<rect x="472" y="441" width="260" height="8" rx="1" fill="#d8e6fd" stroke="#1a73e8"/>
+<rect x="472" y="452" width="260" height="8" rx="1" fill="#e8f0fe" stroke="#1a73e8"/>
+<rect x="472" y="463" width="260" height="8" rx="1" fill="#d8e6fd" stroke="#1a73e8"/>
+<rect x="472" y="474" width="260" height="8" rx="1" fill="#e8f0fe" stroke="#1a73e8"/>
+<rect x="472" y="485" width="260" height="8" rx="1" fill="#d8e6fd" stroke="#1a73e8"/>
+<rect x="472" y="496" width="260" height="8" rx="1" fill="#e8f0fe" stroke="#1a73e8"/>
+<rect x="472" y="507" width="260" height="8" rx="1" fill="#d8e6fd" stroke="#1a73e8"/>
+<rect x="472" y="518" width="260" height="8" rx="1" fill="#e8f0fe" stroke="#1a73e8"/>
+<rect x="472" y="529" width="260" height="8" rx="1" fill="#d8e6fd" stroke="#1a73e8"/>
+<rect x="472" y="540" width="260" height="8" rx="1" fill="#e8f0fe" stroke="#1a73e8"/>
+<rect x="472" y="551" width="260" height="8" rx="1" fill="#d8e6fd" stroke="#1a73e8"/>
+<rect x="472" y="562" width="260" height="8" rx="1" fill="#e8f0fe" stroke="#1a73e8"/>
+<rect x="472" y="573" width="260" height="8" rx="1" fill="#d8e6fd" stroke="#1a73e8"/>
+<rect x="472" y="584" width="260" height="8" rx="1" fill="#e8f0fe" stroke="#1a73e8"/>
+<rect x="472" y="595" width="260" height="8" rx="1" fill="#d8e6fd" stroke="#1a73e8"/>
+<text class="svgsm" x="472" y="620" fill="#174ea6">……共 64 段</text>
+<text class="svglbl" x="748" y="450" fill="#174ea6" style="font-size:13px">一段 2048 行</text>
+<text class="svgsm" x="748" y="470" fill="#174ea6">× 256 列（K 的一片）</text>
+<text class="svgsm" x="748" y="498" fill="#5f6368">片上累加器</text>
+<text class="svgsm" x="748" y="516" fill="#174ea6">2048 × 256 × 4 B</text>
+<text class="svglbl" x="748" y="534" fill="#174ea6" style="font-size:13px">＝ 2 MiB</text>
+<rect x="904" y="374" width="496" height="250" rx="8" fill="#fce8e6" stroke="#d93025"/>
+<text class="svglbl" x="918" y="396" fill="#a50e0e" style="font-size:12px">⛔ 为什么 M 不能一口气流完</text>
+<text class="svgsm" x="918" y="422" fill="#a50e0e">那样每个 n 块的累加器要</text>
+<text class="svglbl" x="918" y="442" fill="#a50e0e" style="font-size:13px">131072 × 256 × 4 B</text>
+<text class="svglbl" x="918" y="462" fill="#d93025" style="font-size:18px">＝ 128 MiB</text>
+<text class="svgsm" x="918" y="486" fill="#a50e0e">——&#160;<tspan font-weight="700">比整块 VMEM（64 MB）还大</tspan>。</text>
+<text class="svglbl" x="918" y="514" fill="#a50e0e" style="font-size:13px">所以 M 必须切段。</text>
+<text class="svgsm" x="918" y="534" fill="#a50e0e">而切段就<tspan font-weight="700">必然要重搬右矩阵</tspan>。</text>
+<text class="svgsm" x="918" y="562" fill="#5f6368">⚠️ 这不是实现不好，</text>
+<text class="svgsm" x="918" y="580" fill="#5f6368">是账本身如此。</text>
+<text class="svglbl" x="0" y="658" fill="#202124" style="font-size:13px">③ <tspan font-weight="700">乒乓装载</tspan>：每个格子有两套权重寄存器，<tspan font-weight="700">一套在算、一套在装</tspan></text>
+<rect x="0" y="670" width="1400" height="196" rx="8" fill="#f8f9fa" stroke="#dadce0"/>
+<text class="svglbl" x="14" y="718" fill="#202124" style="font-size:12px">阵列在算</text>
+<text class="svglbl" x="14" y="766" fill="#202124" style="font-size:12px">后台在装</text>
+<text class="svgsm" x="150" y="682" fill="#d93025">⛔ 只有第一块要干等 256 周期，之后全藏住</text>
+<rect x="150" y="748" width="34" height="22" rx="3" fill="#f4c7c3" stroke="#d93025"/>
+<text class="svgsm" x="167" y="764" fill="#a50e0e" text-anchor="middle">B0</text>
+<rect x="150" y="700" width="34" height="22" rx="3" fill="none" stroke="#d93025" stroke-dasharray="3 2"/>
+<text class="svgsm" x="167" y="716" fill="#d93025" text-anchor="middle">空</text>
+<rect x="190" y="700" width="184" height="22" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svgsm" x="282" y="716" fill="#174ea6" text-anchor="middle">算 B0（2048 周期）</text>
+<rect x="190" y="748" width="34" height="22" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<text class="svgsm" x="207" y="764" fill="#7a5000" text-anchor="middle">B1</text>
+<text class="svgsm" x="230" y="764" fill="#5f6368">256 周期</text>
+<line x1="190" y1="724" x2="190" y2="746" stroke="#bdc1c6" stroke-dasharray="2 3"/>
+<rect x="380" y="700" width="184" height="22" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svgsm" x="472" y="716" fill="#174ea6" text-anchor="middle">算 B1（2048 周期）</text>
+<rect x="380" y="748" width="34" height="22" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<text class="svgsm" x="397" y="764" fill="#7a5000" text-anchor="middle">B2</text>
+<text class="svgsm" x="420" y="764" fill="#5f6368">256 周期</text>
+<line x1="380" y1="724" x2="380" y2="746" stroke="#bdc1c6" stroke-dasharray="2 3"/>
+<rect x="570" y="700" width="184" height="22" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svgsm" x="662" y="716" fill="#174ea6" text-anchor="middle">算 B2（2048 周期）</text>
+<rect x="570" y="748" width="34" height="22" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<text class="svgsm" x="587" y="764" fill="#7a5000" text-anchor="middle">B3</text>
+<text class="svgsm" x="610" y="764" fill="#5f6368">256 周期</text>
+<line x1="570" y1="724" x2="570" y2="746" stroke="#bdc1c6" stroke-dasharray="2 3"/>
+<rect x="760" y="700" width="184" height="22" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svgsm" x="852" y="716" fill="#174ea6" text-anchor="middle">算 B3（2048 周期）</text>
+<rect x="760" y="748" width="34" height="22" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<text class="svgsm" x="777" y="764" fill="#7a5000" text-anchor="middle">B4</text>
+<text class="svgsm" x="800" y="764" fill="#5f6368">256 周期</text>
+<line x1="760" y1="724" x2="760" y2="746" stroke="#bdc1c6" stroke-dasharray="2 3"/>
+<rect x="950" y="700" width="184" height="22" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svgsm" x="1042" y="716" fill="#174ea6" text-anchor="middle">算 B4（2048 周期）</text>
+<rect x="950" y="748" width="34" height="22" rx="3" fill="#fce8b2" stroke="#e8710a"/>
+<text class="svgsm" x="967" y="764" fill="#7a5000" text-anchor="middle">B5</text>
+<text class="svgsm" x="990" y="764" fill="#5f6368">256 周期</text>
+<line x1="950" y1="724" x2="950" y2="746" stroke="#bdc1c6" stroke-dasharray="2 3"/>
+<rect x="1140" y="700" width="184" height="22" rx="3" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svgsm" x="1232" y="716" fill="#174ea6" text-anchor="middle">算 B5（2048 周期）</text>
+<text class="svgsm" x="1290" y="716" fill="#5f6368">……</text>
+<text class="svgsm" x="14" y="802" fill="#202124">⭐ <tspan font-weight="700">装一块权重要 256 个周期</tspan>（TPU 初代论文原话），而流一段 2048 行要 2048 个周期 ——&#160;<tspan font-weight="700">装的那 256 完全藏在算的那 2048 里面</tspan>。</text>
+<text class="svgsm" x="14" y="822" fill="#202124">⚠️ 所以藏得住的条件很直白：<tspan font-weight="700">一段的行数要大于 256</tspan>。这里 2048 是它的 8 倍，稳。<tspan fill="#5f6368">（这一条是把两个公开数字放一起推的，不是官方结论。）</tspan></text>
+<text class="svgsm" x="14" y="846" fill="#d93025">⛔ 反例就在隔壁：注意力转置之后 M ＝ 128 ——&#160;<tspan font-weight="700">连 256 这个门槛都够不着，乒乓就藏不住了</tspan>。</text>
+<text class="svglbl" x="0" y="904" fill="#202124" style="font-size:13px">④ 段切得越碎，右矩阵就要<tspan font-weight="700">重搬越多次</tspan>——&#160;而段能开多长，由片上累加器顶住</text>
+<rect x="0" y="916" width="820" height="150" rx="8" fill="#fff" stroke="#dadce0"/>
+<text class="svglbl" x="16" y="940" fill="#5f6368" style="font-size:12px">一段多少行</text>
+<text class="svglbl" x="190" y="940" fill="#5f6368" style="font-size:12px">片上累加器</text>
+<text class="svglbl" x="380" y="940" fill="#5f6368" style="font-size:12px">B 进阵列的总次数</text>
+<text class="svglbl" x="600" y="940" fill="#5f6368" style="font-size:12px">乒乓藏得住吗</text>
+<line x1="0" y1="948" x2="820" y2="948" stroke="#dadce0"/>
+<text class="svgsm" x="16" y="970" fill="#d93025">256</text>
+<text class="svgsm" x="190" y="970" fill="#d93025">0.25 MiB</text>
+<text class="svgsm" x="380" y="970" fill="#d93025">86,016</text>
+<text class="svgsm" x="600" y="970" fill="#d93025">⛔ 藏不住（不大于 256）</text>
+<text class="svgsm" x="16" y="992" fill="#5f6368">512</text>
+<text class="svgsm" x="190" y="992" fill="#5f6368">0.5 MiB</text>
+<text class="svgsm" x="380" y="992" fill="#5f6368">43,008</text>
+<text class="svgsm" x="600" y="992" fill="#5f6368">能</text>
+<text class="svglbl" x="16" y="1014" fill="#202124" style="font-size:13px">2048</text>
+<text class="svglbl" x="190" y="1014" fill="#202124" style="font-size:13px">2 MiB</text>
+<text class="svglbl" x="380" y="1014" fill="#202124" style="font-size:13px">10,752</text>
+<text class="svglbl" x="600" y="1014" fill="#202124" style="font-size:13px">能</text>
+<text class="svgsm" x="16" y="1036" fill="#5f6368">8192</text>
+<text class="svgsm" x="190" y="1036" fill="#5f6368">8 MiB</text>
+<text class="svgsm" x="380" y="1036" fill="#5f6368">2,688</text>
+<text class="svgsm" x="600" y="1036" fill="#5f6368">能</text>
+<rect x="840" y="916" width="560" height="150" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="856" y="940" fill="#0b6b30" style="font-size:13px">⭐ 两头夹的又是同一件事</text>
+<text class="svgsm" x="856" y="966" fill="#0b6b30">段开长 →&#160;右矩阵少搬 →&#160;省搬运</text>
+<text class="svgsm" x="856" y="986" fill="#0b6b30">段开长 →&#160;累加器变大 →&#160;吃片上容量</text>
+<text class="svgsm" x="856" y="1014" fill="#0b6b30"><tspan font-weight="700">所以「一段多少行」这个旋钮，拧到底还是被那口灶台顶住的。</tspan></text>
+<text class="svgsm" x="856" y="1038" fill="#5f6368">——&#160;跟 3.6 里 GPU 那堵墙是同一堵。</text>
+</svg>
+  <figcaption>⭐ <b>四条带，从「谁不动」一路走到「要重搬几次」</b>：
+    ① 三种驻留方式的区别<b>只有一个 ——&nbsp;谁不动</b>，而它直接决定哪两维是空间；
+    ② 右矩阵切 <b>28 × 6 ＝ 168</b> 块，左矩阵按 2048 行切 <b>64 段</b>；
+    ③ <b>乒乓装载</b> ——&nbsp;装一块权重 256 周期，藏在算的那 2048 周期里，
+    <b>只有第一块要干等</b>；
+    ④ 段切得越碎，右矩阵重搬越多次 ——&nbsp;<b>而段能开多长由片上累加器顶住</b>。
+    ⛔ 注意左下角那个反例：<b>注意力转置之后 M＝128，连 256 这个门槛都够不着</b>。</figcaption>
+  </figure>
 
   <!-- ⭐⭐⭐ 2026-09-04 Chris：「咱就说点能算的。Q 投影 M=128K、K=7168、N=1536，
        你给我演示一下右矩阵怎么一块块搬进 MXU、多少周期、什么时候开始流左矩阵、
