@@ -949,6 +949,35 @@ def sections(F):
       （MXFP4 的 MX 就是它），写 kernel 的人叫 <b>block scaling</b>，
       本课叫<b>块量化</b>。</em></p>
 
+    <!-- ⛔⛔ 2026-09-04 Chris 反问：「块量化不就是横着竖着拿一块吗？你说的
+         横着一条那个叫 sub-channel 量化。」——&nbsp;**这是个真的命名碰撞，值得写。**
+         ⭐ 他半对：sub-channel / group-wise 确实是这个形状的名字，
+            而且 Google 自己的 Ironwood 调优文章里就用 "subchannel activation
+            quantization" 这个说法 —— 他在 TPU 那侧见到的多半就是它。
+         ⛔ 但「块」并不蕴含二维：NVIDIA TensorRT 文档给 block quantization 的
+            定义与公式都是**沿一个轴分块**（R 为 blocking axis、B 为 block size，
+            scale 形状 (ceil(R/B), S)）。所以「块量化」是厂商自己的叫法，不是误译。
+         ⭐ 中文这里特别容易踩：「块」在日常语感里就是二维方块。
+            这一段留着，别精简掉 —— 它防的是一个会一路错下去的误解。 -->
+    <p><b>⚠️ 这里有个真的命名碰撞，中文尤其容易踩</b>：
+      <em>「块」在日常语感里像是<b>二维方块</b>，
+      于是很自然会以为块量化是「横着几个、竖着几个」拿一小块。</em></p>
+
+    <p><b>但在这套术语里，「块」不蕴含二维。</b>
+      <em>NVIDIA 自己给 block quantization 的定义就是<b>沿某一个轴</b>按固定长度分块
+      ——&nbsp;文档里连公式带例子：取一个轴当 blocking axis、给一个 block size，
+      另一个轴不分。</em><b>所以一维的那 16 个，厂商就管它叫 block。</b></p>
+
+    <p><b>同一个形状还有别的名字</b>：<b>sub-channel</b>、<b>group-wise</b>
+      ——&nbsp;<em>GPTQ／AWQ 那边的「group size 128」说的就是它；
+      Google 讲 Ironwood 调优的公开文章里也写作
+      <b>subchannel activation quantization</b>。</em>
+      <b>它们和 block scaling 指的是同一件事，只是出身不同的社区。</b></p>
+
+    <p><b>真正的二维块量化是另一回事，而且一般会把维度写出来</b> ——&nbsp;
+      <em>比如 DeepSeek V3 的 FP8 权重是 <b>128×128</b> 的二维块。</em>
+      <b>看到「块量化」而没写维度，默认它是一维的。</b></p>
+
     <p><b>两个格式的数值部分完全一样，差别全在 scale 上：</b></p>
     <ul>
       <li><b>MXFP4</b>：每 <b>32</b> 个数一个 <code>E8M0</code> 的 scale ——&nbsp;
