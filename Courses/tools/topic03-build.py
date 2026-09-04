@@ -45,13 +45,8 @@ head = head.replace("<title>TPU 与 GPU", "<title>注意力演进", 1)
 head += """
 <style>
 ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
-pre { background:#f8f9fa; border:1px solid #e8eaed; border-radius:8px;
-      padding:14px 16px; overflow-x:auto; font-size:13px; line-height:1.6 }
-/* ⛔ 这份 CSS 的 code 带 white-space:nowrap ——&nbsp;nowrap 会把换行折成空格，
-   于是 <pre> 里的多行伪代码全挤成一行。必须在 pre code 上把它扳回来，
-   顺便去掉行内 code 那层底色和内边距（在块里显得很脏）。 */
-pre code { white-space:pre; background:none; border:0; padding:0;
-           font-size:inherit; color:inherit }
+/* ⭐ pre / pre code 的样式**已经修在 L300 的 CSS 源里**了（2026-09-04），
+   这里不再重复一份 —— 重复的 CSS 跟重复的正文是同一类问题。 */
 h4 { margin:18px 0 6px; font-size:15px }
 </style>"""
 

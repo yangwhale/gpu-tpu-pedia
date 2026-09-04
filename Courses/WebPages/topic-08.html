@@ -363,6 +363,17 @@ footer a{text-decoration:none}
 
 
 
+/* ⛔ 2026-09-04：上面那条 code 的 white-space:nowrap 是给**行内**代码的，
+   但它会一路继承进 <pre> —— nowrap 把换行折成空格，于是多行代码块
+   全挤成一行，而且不报错、只是难看。专题二 3.4 那个矩阵例子就这么废过一次。
+   ⭐ 所以块级代码必须单独把它扳回来，顺便去掉行内那层底色和内边距。
+   （这条写在 L300 的 CSS 里，因为 L200／专题三／专题八都从这儿抄 head。） */
+pre{background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;overflow-x:auto;margin:14px 0;
+    font:500 13px/1.65 var(--mono);color:var(--ink)}
+pre code,pre .k{white-space:pre;background:none;padding:0;border-radius:0;
+                color:inherit;font-size:inherit;font-weight:inherit}
+
 /* 超窄屏：code 默认 nowrap，长的行内代码会把页面撑出横向滚动条 */
 @media(max-width:420px){
   code,.k{white-space:normal;word-break:break-word}
