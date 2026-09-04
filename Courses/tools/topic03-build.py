@@ -221,7 +221,10 @@ BODY = '''<section id="x0"><div class="wrap"><div class="stn"><h2>⏱ 一小时�
 <tr><td><code>QKᵀ</code></td><td><code>[q_len, 128] @ [128, kv_len]</code></td><td><b>收缩维</b>只有 128 → 废一半</td></tr>
 <tr><td><code>PV</code></td><td><code>[q_len, kv_len] @ [kv_len, 128]</code></td><td><b>输出维</b>只有 128 → 废一半</td></tr>
 </tbody></table>
-<p><b>两个矩阵乘各撞一次，所以整个算子的 MXU 利用率封顶 50%。</b> Google 侧的结论是明确的：<code>head_dim = 128</code> 时 MXU 利用率无法超过 50%， <b>没有办法绕过</b>。</p>
+<p><b>两个矩阵乘各撞一次，所以整个算子的 MXU 利用率封顶 50%。</b>
+<span class="sub">（⭐ <b>为什么「输出维只有 128」也会浪费一半</b>，
+以及为什么这种浪费<b>能救而收缩维那种救不了</b> ——&nbsp;
+机制在 <a href="topic-02.html">专题二 3.4</a>。）</span> Google 侧的结论是明确的：<code>head_dim = 128</code> 时 MXU 利用率无法超过 50%， <b>没有办法绕过</b>。</p>
 <p><b>③ 为什么连 50% 都到不了 —— 回到 1.3 那条链。</b> 持有 <code>Q@K</code> 输出（也就是<b>整块 <code>S</code></b>，不是那两个 running 值）的寄存器， 在最大值和减法完成前不能释放，于是不断堆积 → 寄存器压力 → <b>spill 到 VMEM</b> → MXU 停在等数据载回。 <b>一句话：VPU 跟不上 MXU。</b></p>
 <div class="note warn"><p>⭐ 这也解释了 1.5 那三堵墙里最反直觉的一堵为什么存在： <b>块开大 → <code>S</code> 那一块跟着变大 → 生命周期更长、更容易 spill。</b> 「装得下」和「跑得快」在这里是两回事。</p>
 <p>⭐ <b>三层叠起来的结论很硬</b>： 形状锁死一半、寄存器压到 35%、记账口径还让它看着比实际好看。 <b>这三层没有一层是配置能救的</b> —— 要么改 head_dim，要么改 kernel 的数据流。 （我们试过的那条出路是把矩阵乘全转置，见 TUNING-v7 的附录。）</p>
