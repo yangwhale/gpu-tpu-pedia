@@ -1,0 +1,1139 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题二 · TPU 与 GPU（L300 · 完整版）</title>
+<!-- 🦀 CloseCrab 标识。刻意不放图片文件 —— 内联一个 SVG，让每台机器
+     用自己的 emoji 字体现画：Mac 上是 Apple 那只红螃蟹，别处是各自的版本。
+     烤成 PNG 反而会把某一家的字形固定下来，在别的系统上看着别扭。
+     不支持 SVG 图标的浏览器会自动回落到根目录的 favicon.ico。 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+<meta property="og:title" content="TPU 与 GPU · 两种加速器，两条出身">
+<meta property="og:description" content="不逐个介绍硬件参数。拿专题一那张需求清单，一条一条去硬件上找答案 —— 每个答案都配一张图和一次实测。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-02.html">
+<meta property="og:image" content="https://gist.higcp.com/Courses/WebPages/img/og-topic-02.jpg">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1a73e8">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6;
+  --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea;
+  --purple:#9334e6; --cyan:#12b5cb; --orange:#e8710a;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --bg:#fff; --bg2:#f8f9fa;
+  --radius:12px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --tokmul:"";              /* batch≠1 时由 render() 写入，如 "128K × 64 条" */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{background:var(--bg);color:var(--ink);
+  font:400 16px/1.75 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+section{padding:56px 0;border-top:1px solid var(--line)}
+h2{font-size:31px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+h3{font-size:20px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:22px 0 8px}
+p{margin-bottom:14px}
+.lead{color:var(--gray);font-size:17px;margin-bottom:28px}
+b,strong{font-weight:600;color:var(--ink)}
+a{color:var(--blue)}
+code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
+        border-radius:4px;color:var(--blue-d);white-space:nowrap}
+.num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── batch ≠ 1 的防误读标记 ───────────────
+   「token 总数」= 序列长度 × batch。batch=1 时两者相等，看不出区别；
+   一旦 batch>1，这个数就不再是序列长度了，最容易被当成「输入变长了」。
+   下面两条规则在 batch=1 时完全不匹配 —— 默认口径下页面一个字都不会多。 */
+body.batched [data-v="tokens"]::after{
+  content:" (" var(--tokmul) ")";
+  font:600 .78em/1.4 var(--mono);color:var(--orange);letter-spacing:0}
+.ctrl.hot output{color:var(--orange);background:var(--yellow-l);
+  box-shadow:0 0 0 1px var(--yellow) inset}
+.ctrl.hot label{color:var(--orange);font-weight:600}
+
+/* ── 旅程进度条 ─────────────────────── */
+.journey{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
+         padding:14px 18px;margin:0 0 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.jsteps{display:flex;align-items:center;gap:0;flex:1;min-width:280px}
+.jstep{flex:1;height:6px;background:var(--line);position:relative;border-radius:3px;margin-right:3px}
+.jstep.done{background:var(--blue)}
+.jstep.now{background:var(--red)}
+.jstep span{position:absolute;top:-19px;left:0;font:600 10px var(--mono);color:var(--gray2)}
+.jstep.now span{color:var(--red)}
+.jstep.done span{color:var(--blue)}
+.jmeter{display:flex;gap:18px;font-size:13px;white-space:nowrap}
+.jmeter b{font-family:var(--mono);color:var(--blue-d)}
+.jmeter i{font-style:normal;color:var(--gray);margin-right:5px}
+
+/* ── 猜一猜 ───────────────────────────── */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:var(--blue-l)}
+.guess button.right{border-color:var(--green);background:var(--green-l)}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.75}
+.guess .rev.on{display:block}
+.guess .rev>p>b{color:var(--red)}          /* 只有直属段落的粗体标红，表格和说明框不受影响 */
+.guess .qs{font-size:15px;line-height:1.7;color:var(--gray)}
+.guess .qs b{color:var(--ink)}
+.guess .qs em{font-style:normal;color:var(--gray2);font-size:14px}
+.guess .rvt{font-size:14px;margin:4px 0 14px}
+.guess .rvt b{color:var(--ink)}
+
+/* ── 章节插画带 ───────────────────────── */
+/* 插画是浅底扁平矢量（Google 四色），所以 :after 的洗白层是「白→透明」，
+   跟深色版正好相反。换图但不换这层，标题会变成白底白字。 */
+.band{position:relative;height:210px;border-radius:16px;overflow:hidden;margin:0 0 26px;
+      display:flex;align-items:flex-end;background:var(--bg2);border:1px solid var(--line2)}
+.band img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.band:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,.93) 40%,
+                 rgba(255,255,255,.55) 72%,rgba(255,255,255,.10) 100%)}
+.band .cap{position:relative;z-index:2;padding:0 32px 24px;color:var(--ink);max-width:660px}
+.band .cap .bn{font:700 11px/1 var(--mono);letter-spacing:.14em;color:var(--blue);
+      text-transform:uppercase;display:block;margin-bottom:8px}
+.band .cap .bt{font-size:27px;font-weight:700;letter-spacing:-.02em;display:block;margin-bottom:6px}
+.band .cap .bs{font-size:14.5px;color:var(--gray);line-height:1.6}
+
+/* ── 步号标记 ─────────────────────────── */
+.stn{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+.stn .badge{flex:0 0 auto;font:700 12px/1 var(--mono);color:#fff;background:var(--blue);
+            border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.stn.big .badge{background:var(--red)}
+.stn h2{margin:0}
+
+/* ── hero ─────────────────────────────── */
+/* 浅色 hero，与 index.html 同一套：blue-l → 白 的竖向底 + 低透明度插画 + 横向洗白层 */
+.hero{position:relative;padding:96px 0 64px;overflow:hidden;
+      background:linear-gradient(180deg,var(--blue-l) 0%,#fff 100%)}
+.hero:before{content:"";position:absolute;inset:0;opacity:.5;
+      background:url(img/hero-token-journey.webp) center/cover no-repeat}
+.hero:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(95deg,rgba(255,255,255,.94) 0%,rgba(255,255,255,.86) 38%,
+                 rgba(255,255,255,.46) 68%,rgba(255,255,255,.12) 100%)}
+.hero .wrap{position:relative;z-index:2}
+.hero h1,.hero .en,.hook{color:var(--ink)}
+.hero .crumb{color:var(--gray)}
+.hero .crumb a{color:var(--blue)}
+.lecbtn{display:inline-block;margin-left:14px;font-size:13px;padding:4px 12px;border-radius:14px;
+        background:#fff;border:1px solid var(--line);color:var(--blue);
+        text-decoration:none}
+.lecbtn:hover{background:var(--blue-l);border-color:var(--blue)}
+.hero .en{color:var(--gray)}
+.hook{border-left-color:var(--blue)}
+.hook em{color:var(--blue-d)}
+.hero p{color:var(--gray)}
+.hero p b{color:var(--ink)}
+.hero .chip{background:#fff;border-color:var(--line);color:var(--gray)}
+.hero .chip b{color:var(--blue-d)}
+.crumb{font-size:14px;color:var(--gray);margin-bottom:20px}
+.crumb a{text-decoration:none}
+.hero h1{font-size:50px;font-weight:700;letter-spacing:-.035em;line-height:1.12;margin-bottom:6px}
+.hero .en{font:italic 400 19px/1 var(--mono);color:var(--gray);letter-spacing:.02em;margin-bottom:26px}
+.hook{font-size:21px;line-height:1.6;font-weight:500;border-left:4px solid var(--blue);
+      padding-left:20px;max-width:800px;margin-bottom:22px}
+.hook em{font-style:normal;color:var(--blue-d);font-weight:600}
+/* 署名行。hero 里单独给色 —— .hero .author（0,2,0）压得过 .hero p（0,1,1） */
+.author{font-size:14.5px;margin-top:20px;line-height:1.7}
+.author b{font-weight:600}
+.author .sep{color:var(--line);margin:0 10px}
+.hero .author{color:var(--gray2)}
+.hero .author b{color:var(--ink)}
+.hero .author .sep{color:var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{font-size:13px;background:#fff;border:1px solid var(--line);border-radius:20px;
+      padding:5px 14px;color:var(--gray)}
+.chip b{color:var(--blue-d)}
+
+/* ── sticky 控制台 ─────────────────────── */
+.console{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);
+         backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+         box-shadow:0 1px 8px rgba(0,0,0,.05)}
+/* 单行布局：它是 sticky 的，每多一行就永久吃掉一条屏幕。
+   所有控件都保留，靠「滑块可压缩、其余固定」把宽度挤出来。 */
+.console .inner{max-width:1080px;margin:0 auto;padding:7px 24px;
+                display:flex;align-items:center;gap:13px;flex-wrap:nowrap}
+.console .tag{font:700 10px/1 var(--mono);letter-spacing:.08em;color:var(--blue);
+              text-transform:uppercase;flex:0 0 auto}
+.ctrl{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--gray);
+      flex:0 1 auto;min-width:0}
+.ctrl label{white-space:nowrap;font-weight:500}
+/* 唯一允许被压缩的东西 —— 窗口变窄时先短滑轨，不动文字和按钮 */
+.ctrl input[type=range]{flex:1 1 96px;min-width:50px;max-width:112px;accent-color:var(--blue)}
+.ctrl output{font:600 12.5px/1 var(--mono);color:var(--blue-d);min-width:44px;
+             background:var(--blue-l);padding:4px 6px;border-radius:5px;text-align:center;
+             flex:0 0 auto}
+.ctrl select{font:500 12.5px/1 inherit;padding:4px 6px;border:1px solid var(--line);
+             border-radius:5px;background:#fff;color:var(--ink);flex:0 0 auto}
+.presets{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11.5px;
+         color:var(--gray);flex:0 0 auto}
+.presets span{margin-right:1px}
+.presets button{font:500 11.5px/1 inherit;color:var(--gray);background:#fff;
+                border:1px solid var(--line);border-radius:13px;padding:5px 10px;
+                cursor:pointer;white-space:nowrap}
+.presets button:hover{border-color:var(--blue);color:var(--blue)}
+.presets button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.live{background:var(--yellow-l);box-shadow:0 0 0 3px var(--yellow-l);
+      border-radius:3px;transition:background .45s,box-shadow .45s}
+
+/* ── 卡片 / 表格 ───────────────────────── */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;background:#fff}
+.card.tint{background:var(--bg2)}
+.card h4{font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.08em;
+         text-transform:uppercase;margin:0 0 8px}
+.stat{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:4px}
+.stat.blue{color:var(--blue-d)}.stat.red{color:var(--red)}
+.stat.green{color:var(--green)}.stat.orange{color:var(--orange)}
+.sub{font-size:.92em;color:var(--gray)}
+.card .sub{font-size:13.5px;color:var(--gray);line-height:1.55}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
+th{text-align:left;font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.06em;
+   text-transform:uppercase;padding:10px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.6}
+td.n{font-family:var(--mono);font-weight:600;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tr.sum td{border-top:2px solid var(--line);font-weight:700;background:var(--blue-l)}
+tr.sum td.n{color:var(--blue-d)}
+.tbl-wrap{overflow-x:auto}
+.tbl-note{font-size:13px;color:var(--gray);margin:8px 2px 0;line-height:1.7}
+
+/* ── 提示块 ───────────────────────────── */
+.note{border-radius:var(--radius);padding:16px 20px;font-size:15px;line-height:1.7;margin:20px 0}
+.note.info{background:var(--blue-l)}
+.note.warn{background:var(--yellow-l);border-left:4px solid var(--yellow)}
+.note.danger{background:var(--red-l);border-left:4px solid var(--red)}
+.note.ok{background:var(--green-l);border-left:4px solid var(--green)}
+.note .t{display:block;font-weight:700;margin-bottom:5px}
+/* 两级强调块：.punch 实心蓝（最强），.punch.soft 浅蓝底（次一级）。
+   原来次一级是近黑底 —— 跟 index.html 的浅色基调不搭，已换成同色系的浅底。 */
+.punch{font-size:20px;font-weight:600;line-height:1.6;text-align:center;padding:26px 30px;
+       background:var(--blue);color:#fff;border-radius:14px;margin:28px 0}
+.punch.soft{background:var(--blue-l);color:var(--ink);border:1px solid #d2e3fc}
+.punch small{display:block;font-size:14px;font-weight:400;opacity:.8;margin-top:8px}
+.punch.soft small{opacity:1;color:var(--gray)}
+
+/* ── 默认收起的详情块 ─────────────────── */
+details.more{border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2);
+             margin:18px 0;overflow:hidden}
+details.more>summary{list-style:none;cursor:pointer;padding:11px 18px;font-size:14.5px;
+                     font-weight:600;color:var(--blue-d);user-select:none;
+                     display:flex;align-items:baseline;gap:9px;transition:background .15s}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"▸";display:inline-block;font-size:11px;color:var(--gray2);
+                             transition:transform .18s;flex:none}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary:hover{background:var(--line2)}
+details.more[open]>summary{border-bottom:1px solid var(--line2)}
+details.more>summary .why{font-weight:400;color:var(--gray);font-size:13px}
+details.more .body{padding:2px 20px 14px}
+details.more .body>:first-child{margin-top:14px}
+details.more .body>:last-child{margin-bottom:0}
+details.more .body .note{margin:14px 0}
+
+/* ── 图 ───────────────────────────────── */
+figure{margin:26px 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:15px;color:#3c4043;margin-top:11px;line-height:1.65;text-align:left;max-width:none;margin-left:0;margin-right:0}
+.fbox{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg2)}
+/* ⚠️ fill 用 :not([fill]) 兜底：SVG 的 fill= 呈现属性优先级低于 class 选择器，
+   直接写 .svgsm{fill:...} 会把元素上显式写的颜色全部盖掉（本文件曾有 398 处被静默盖成灰色）。
+   拆成「没写 fill 才给默认色」，写了 fill= 的就让它生效 —— 也自动覆盖 JS 后生成的节点。 */
+.svgtxt{font:500 13px var(--mono)}   .svgtxt:not([fill]){fill:var(--ink)}
+.svglbl{font:600 12px "Noto Sans CJK SC",sans-serif}   .svglbl:not([fill]){fill:var(--gray)}
+.svgnum{font:700 14px var(--mono)}   .svgnum:not([fill]){fill:var(--ink)}
+.svgsm{font:500 10.5px var(--mono)}   .svgsm:not([fill]){fill:var(--gray2)}
+
+/* ── 公式 ─────────────────────────────── */
+.eq{font-family:var(--mono);font-size:14.5px;background:var(--bg2);border-left:3px solid var(--blue);
+    border-radius:0 8px 8px 0;padding:14px 18px;margin:16px 0;overflow-x:auto;line-height:1.9;
+    white-space:pre-wrap;tab-size:2}
+.eq .c{color:var(--gray)}
+.eq .r{color:var(--blue-d);font-weight:700}
+
+/* ── 阅读进度 + 回顶 ─────────────────── */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;background:transparent;
+          pointer-events:none}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#1a73e8,#9334e6);
+            transition:width .1s linear}
+.totop{position:fixed;right:22px;bottom:22px;width:44px;height:44px;border-radius:50%;
+       background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:19px;z-index:55;
+       opacity:0;pointer-events:none;transition:opacity .2s;box-shadow:0 4px 16px rgba(0,0,0,.24)}
+.totop.on{opacity:.88;pointer-events:auto}
+.totop:hover{opacity:1}
+
+/* ── 术语 tooltip ─────────────────────── */
+.gl{border-bottom:1px dashed var(--blue);cursor:help;position:relative;
+    text-decoration:none;color:inherit}
+/* ⚠️ 气泡默认必须 display:none，不能只靠 opacity:0。
+   它是 290px 宽的绝对定位盒子，opacity:0 时照样占布局 —— 靠右的词会把整页
+   scrollWidth 顶出两三百像素，在 940 / 360 这类窗口下出现横向滚动条。
+   实测：关掉这两个伪元素，940px 下 scrollWidth 从 1211 直接回到 940。
+   代价是没有淡入动画，换来的是彻底不参与布局。 */
+/* ⚠️ 气泡必须 position:fixed，不能用 absolute。
+   absolute 时它会被任何一个「overflow 不是 visible」的祖先裁掉 ——
+   本页 10 个术语里有 6 个躺在 .tbl-wrap（overflow-x:auto）或 .more（hidden）里面。
+   注意 overflow-x:auto 会把 overflow-y 从 visible 提升成 auto，
+   所以横向滚动的表格同样会**纵向**裁切，气泡顶上那一截就这么没的。
+   fixed 之后坐标由 JS 在 mouseenter / focus 时写进 --tx/--ty，见下方 glossary()。 */
+.gl:after{content:attr(data-t);display:none;position:fixed;
+   left:var(--tx,-9999px);top:var(--ty,-9999px);
+   background:var(--ink);color:#fff;
+   font:400 13.5px/1.6 "Noto Sans CJK SC",sans-serif;padding:11px 15px;border-radius:9px;
+   width:290px;pointer-events:none;
+   box-shadow:0 6px 22px rgba(0,0,0,.22);z-index:80;text-align:left;white-space:normal}
+.gl:before{content:"";display:none;position:fixed;
+   left:var(--ax,-9999px);top:var(--ay,-9999px);
+   transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink);
+   z-index:81;pointer-events:none}
+/* 上方放不下时整个翻到词的下方，箭头也要跟着掉个头 */
+.gl.below:before{border-top-color:transparent;border-bottom-color:var(--ink)}
+.gl:hover:after,.gl:focus:after{display:block}
+.gl:hover:before,.gl:focus:before{display:block}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+/* ── 打印 ─────────────────────────────── */
+@media print{
+  .console,.progress,.totop,.presets{display:none !important}
+  .hero:before{opacity:.28}
+  section{padding:22px 0;break-inside:avoid}
+  .band{height:150px;break-inside:avoid}
+  figure,.card,.note,.topic,.punch{break-inside:avoid}
+  details.more{border-color:#ccc;background:#fff}
+  details.more>summary{color:#000}
+  a[href^="http"]:after{content:" (" attr(href) ")";font-size:10px;color:#666}
+  body{font-size:12px}
+  .punch{background:#eee !important;color:#000 !important}
+  .punch.soft{background:#f1f3f4 !important;color:#000 !important}
+}
+
+@media(max-width:860px){.gl:after{width:220px;font-size:12.5px}}
+
+/* ── 目录 ─────────────────────────────── */
+.toc{background:var(--bg2);border-radius:var(--radius);padding:22px 26px;margin:24px 0}
+.toc ol{list-style:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,auto);
+        gap:2px 28px}
+.toc li{padding:6px 0;font-size:15px;display:flex;gap:10px}
+.toc li i{font:700 11px/1.6 var(--mono);color:#fff;background:var(--blue);border-radius:10px;
+          padding:2px 7px;flex:0 0 auto;font-style:normal;letter-spacing:.04em}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:var(--blue)}
+
+footer{padding:44px 0 60px;color:var(--gray);font-size:14px;line-height:1.8;
+       border-top:1px solid var(--line)}
+footer a{text-decoration:none}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+
+
+/* 超窄屏：code 默认 nowrap，长的行内代码会把页面撑出横向滚动条 */
+@media(max-width:420px){
+  code,.k{white-space:normal;word-break:break-word}
+}
+
+/* 中等窗口：还想保住一行，就先把「场景」两个字和按钮内边距让出来 */
+@media(max-width:1020px){
+  .console .inner{gap:10px}
+  .presets span{display:none}
+  .presets button{padding:5px 8px;font-size:11px}
+  .ctrl label{font-size:12px}
+}
+
+@media(max-width:860px){
+  .hero h1{font-size:34px}.hook{font-size:18px}
+  .console .inner{flex-wrap:wrap}       /* 小屏放弃单行，否则会横向溢出 */
+  .g2,.g3,.g4,.toc ol{grid-template-columns:1fr}
+  .toc ol{grid-auto-flow:row;grid-template-rows:none}
+  .console .inner{gap:10px;padding:9px 16px}
+  .ctrl input[type=range]{width:84px}
+  .presets{margin-left:0;flex-wrap:wrap;gap:5px}
+  .presets span{display:none}
+  .presets button{padding:5px 10px;font-size:11.5px}
+  .console .adv{display:none}            /* 小屏只留序列长度滑块 + 场景预设 */
+  .console .tag{font-size:10px}
+  .ctrl label{font-size:12px}
+  .jmeter{flex-wrap:wrap;gap:6px 14px;font-size:12px;width:100%}
+  .journey{padding:12px 14px;gap:12px}
+  h2{font-size:25px}.punch{font-size:17px;padding:20px 22px}
+  .guess button{padding:11px 16px;font-size:14px}
+  .band{height:160px}.band .cap{padding:0 20px 18px}.band .cap .bt{font-size:21px}
+  .hero:before{opacity:.4}
+  .figpair{grid-template-columns:1fr !important}
+  .eq{font-size:12.5px;padding:12px 14px}
+}
+/* ── 支线小节（整个 h3 折起来）─────────────────────────────
+   跟 details.aside 的区别：aside 装一段旁白，branch 装**一整个小节**
+   （标题 ＋ 正文 ＋ 图）。判据是故事线：说不出「这段在旅程的哪一站」就折。
+
+   ⚠️ 展开后的内容区**不能有水平 padding、不能有边框背景**。里面的图是
+   .fwide（margin-left:50% ＋ translateX(-50%)，突破 1080 版心到 1440），
+   它按父容器算中心 —— 一旦 .body 有 padding，图就整体偏移；有边框的话
+   图还会从框里溢出去，很怪。所以只有 summary 那条灰条带样式。
+
+   ⚠️ 这几条也必须留在下面 CSS_MARK 之前，理由同上面故事线那段。 */
+details.branch{margin:26px 0}
+details.branch > summary{cursor:pointer;list-style:none;user-select:none;
+  padding:13px 18px;background:var(--bg2);border:1px solid var(--line);
+  border-left:3px solid var(--gray2);border-radius:0 10px 10px 0;
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-size:16px;font-weight:600;color:var(--ink)}
+details.branch > summary::-webkit-details-marker{display:none}
+details.branch > summary::before{content:"▸";color:var(--gray2);font-weight:400}
+details.branch[open] > summary::before{content:"▾"}
+details.branch > summary:hover{border-left-color:var(--blue)}
+details.branch .tag{font-size:11px;font-weight:700;letter-spacing:.08em;color:#fff;
+  background:var(--gray2);border-radius:10px;padding:2px 9px;white-space:nowrap}
+details.branch summary em{font-style:normal;font-weight:400;font-size:13.5px;
+  color:var(--gray)}
+details.branch > .body{padding:20px 0 4px}
+/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
+/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。 */
+.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1440px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+.fwide svg{display:block}
+/* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
+   figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
+   看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
+   fwide 的图有 1440px 宽，图注全跟着就成了一行一百多字，所以这里
+   **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
+.fwide figcaption{max-width:1080px;margin-left:0}
+.note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
+/* ---- 旁白折叠块 ----
+   有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
+   但作为方法论又值得留着。折起来：想看的人点开，讲课时直接跳过。
+   注意 open 属性一个都不要加，默认全收。 */
+details.aside{margin:18px 0;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--bg2);font-size:14px;color:var(--gray)}
+details.aside > summary{cursor:pointer;padding:11px 16px;list-style:none;
+  font-size:13.5px;color:var(--gray);user-select:none}
+details.aside > summary::-webkit-details-marker{display:none}
+details.aside > summary::before{content:"▸ ";color:var(--gray)}
+details.aside[open] > summary::before{content:"▾ "}
+details.aside > summary:hover{color:var(--ink)}
+details.aside[open] > summary{border-bottom:1px solid var(--line)}
+details.aside .body{padding:14px 16px 16px;line-height:1.75}
+details.aside b{color:var(--ink);font-weight:600}
+.msfrom{color:var(--gray);font-size:12.5px}
+.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
+.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
+  color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
+.mscard > b{display:block;font-size:16px;margin-bottom:6px}
+.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+</style>
+<style>
+ul + p, ul + div.note { margin-top: 14px }
+</style>
+
+</head>
+<body>
+
+<!-- ══════════ HERO ══════════ -->
+<div class="hero"><div class="wrap">
+  <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 深入 ／ 专题八
+    ／ <b>精度与量化</b>
+    <a class="lecbtn" href="topic-08-lecture.html">📝 讲义（授课稿）</a></div>
+  <h1>精度与量化</h1>
+  <div class="en">Precision and Quantization</div>
+  <div class="hook">
+    每往下压一档精度，就省一半的显存和带宽。<br>
+    <em>代价是数值上的安全边际 ——&nbsp;这一课讲这条边界具体在哪。</em>
+  </div>
+  <p style="max-width:820px;color:var(--gray)">
+    「压精度」不是一个开关，是一整套决策：哪些张量能压、缩放因子怎么算、
+    训练和推理为什么是两件事。<b>而这一讲风险最高的地方在于 ——&nbsp;
+    量化出问题往往不报错。</b>
+  </p>
+  <div class="chips">
+    <span class="chip">前置 <b>专题四 · 专题六</b></span>
+    <span class="chip">硬件侧 <b>Blackwell (B200)</b></span>
+    <span class="chip">规格来源 <b>全部公开可核</b></span>
+    <span class="chip">⏱ <b>约 1 小时</b></span>
+  </div>
+  <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
+    AI Infra 架构师</p>
+</div></div>
+
+<div class="wrap">
+  <div class="note warn"><span class="t">🚧 这一讲写了一半，而且哪一半写了是标出来的</span>
+    <b>§3（缩放）、§4 的后半（FP4 训练）、§5（硬件视角）是写完的</b>
+    ——&nbsp;<em>带完整出处，见文末的出处台账。</em><br>
+    <b>§0 §1 §2 §6 还是大纲</b>，页面上按原样列出，<b>没有补写</b>。<br>
+    <em>⭐ 之所以先写中间这三节：它们是讲<b>专题二</b>的时候问出来的 ——&nbsp;
+    材料在讨论中长出来的那一刻就写进它该属于的这一讲，不等轮到它再去收集。</em></div>
+</div>
+
+<section id="s0"><div class="wrap">
+  <div class="stn"><span class="badge">第 0 节</span><h2>这一讲要回答的一个问题</h2></div>
+
+  <p class="lead">FP8 是 DeepSeek V3 的三大贡献之一，FP4 权重已经出现在更新的模型上。
+    <b>所有人都在往下压精度。</b></p>
+
+  <p>但「压精度」不是一个开关，它是一整套决策：</p>
+  <ul>
+    <li>哪些张量可以压、哪些必须保住？</li>
+    <li>缩放因子怎么算？<b>per-tensor 还是 per-block？</b></li>
+    <li>训练时压和推理时压，<b>是完全不同的两件事</b></li>
+    <li><b>压过头会怎样？</b>——&nbsp;<em>不是「精度略降」，是收敛直接毁掉。</em></li>
+  </ul>
+
+  <p><b>目标</b>：看到一个量化方案，<b>能说出它在哪里省、风险在哪、
+    以及怎么验证它没把模型搞坏。</b></p>
+
+  <div class="note ok"><span class="t">⭐ 这一讲分两半，而且分界线是可验证的</span>
+    <b>训练侧和推理侧要分开讲</b> ——&nbsp;依据不是「目标不同」这种软理由，
+    而是一个结构差异：<br>
+    <b>同一个 FP4 格式，推理侧权重按 <u>1×16</u> 一维分块，
+    训练侧权重按 <u>16×16</u> 二维分块。</b><br>
+    <em>原因在 §4 ——&nbsp;而且那个原因跟精度无关。</em></div>
+</div></section>
+
+<section id="s1"><div class="wrap">
+  <div class="stn"><span class="badge">第 1 节</span><h2>🚧 为什么低精度能行</h2></div>
+
+  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>
+    下面是计划要讲的东西，<b>还没有展开</b>。</div>
+
+  <ul>
+    <li>神经网络对<b>单个数</b>的精度并不敏感 ——&nbsp;它敏感的是<b>统计上的分布</b></li>
+    <li>训练本身就带噪声（随机初始化、数据顺序、dropout），
+      量化误差在很多地方可以被当成又一种噪声</li>
+    <li><b>但有些地方不行</b> ——&nbsp;那些地方就是这一讲要找出来的</li>
+  </ul>
+
+  <p><b>两个收益，性质不同</b>（这一条要讲透，否则后面分不清训练和推理）：</p>
+  <ul>
+    <li><b>算力</b>：低精度矩阵乘吞吐更高 ——&nbsp;受益的是<b>算力受限</b>的场景（训练、prefill）</li>
+    <li><b>访存</b>：读写的字节直接减半 ——&nbsp;⭐ 受益的是<b>带宽受限</b>的场景（decode）</li>
+  </ul>
+  <p><em>所以量化在推理侧的收益比训练侧直接得多：
+    decode 读一遍权重就是全部开销，<b>字节减半近似就是快一倍</b>。</em></p>
+</div></section>
+
+<section id="s2"><div class="wrap">
+  <div class="stn"><span class="badge">第 2 节</span><h2>🚧 格式：这些名字到底在说什么</h2></div>
+
+  <div class="note warn"><span class="t">🚧 这一节还是大纲（FP4 那几行已经在 §3 讲透）</span>
+    位布局图还没画 ——&nbsp;<b>BF16 vs FP16 那个对比不画图说不清</b>，已列入待办。</div>
+
+  <p><b>要立的一条主线</b>：<b>范围（指数位）比精度（尾数位）重要。</b></p>
+  <ul>
+    <li><b>BF16 为什么赢了 FP16</b>：它牺牲尾数保住指数位 ——&nbsp;
+      <em>动态范围跟 FP32 一样宽，只是精度粗。</em>
+      <b>溢出是致命的，精度粗一点只是噪声。</b></li>
+    <li>⭐⭐ <b>而这条规律会原样再来一次</b>：MXFP4 的 scale 选了纯指数的
+      <code>E8M0</code>（范围极大、精度极差），NVFP4 选了 <code>E4M3</code>
+      （有尾数、范围只到 448）——&nbsp;<b>同一个取舍，换了个位置又演一遍。</b>
+      <em>见 §3。</em></li>
+    <li>还要讲：<b>subnormal</b> 与 flush-to-zero；累加为什么通常仍是 FP32</li>
+  </ul>
+</div></section>
+
+<section id="s3"><div class="wrap">
+  <div class="stn"><span class="badge">第 3 节</span><h2>⭐ 缩放这件事</h2></div>
+
+  <p class="lead">这一节是整讲的核心。<b>从一个问题往下长：四个 bit 只能表示八个数，
+    这怎么可能算得准？</b></p>
+
+  <div class="note info"><span class="t">这一节的走法</span>
+    <b>① 为什么四个 bit 够用</b>（靠 scale）→&nbsp;
+    <b>② scale 要多密</b>（粒度阶梯）→&nbsp;
+    <b>③ 命名碰撞</b>（「块」不蕴含二维）→&nbsp;
+    <b>④ 两个格式差在哪</b>（scale 的类型）→&nbsp;
+    <b>⑤ 两级 scale 各管什么</b>（外层管范围）→&nbsp;
+    <b>⑥ 那 16 个数怎么排</b>（一维，不是方块）。
+    <br><em>⭐ 只想拿一句话走：<b>四个 bit 只负责形状，量级由 scale 给；
+    scale 有多密，决定这个格式能不能用。</b></em></div>
+
+<p><b>先把这一段的问题问出来：<code>E2M1</code> 一共四个 bit，
+      能表示的绝对值只有八个 ——&nbsp;这怎么可能算得准？</b></p>
+
+    <p><b>答案不在那四个 bit 上，在外面套的那层 scale。</b>
+      <em>四个 bit 只负责「形状」，量级由 scale 给。</em>
+      <b>所以真正决定它能不能用的，是那个 scale 有多密。</b></p>
+
+    <p><b>密到什么程度算够？拿一个真尺寸走一遍</b> ——&nbsp;
+      <em>设某层权重是 7,168 × 18,432。</em></p>
+    <ul>
+      <li><b>per-tensor</b>：<b>整块一个 scale</b> ——&nbsp;
+        <em>一亿三千多万个数共用一个数。</em></li>
+      <li><b>per-channel（按行／列）</b>：一行 7,168 个数共用一个 ——&nbsp;
+        <em>INT8 时代常见的一档。</em></li>
+      <li><b>NVFP4</b>：沿<b>收缩那一维</b>每 <b>16</b> 个数一个 ——&nbsp;
+        <b>那 7,168 会被切成 448 段。</b></li>
+    </ul>
+    <p class="sub">⚠️ <b>「一个 tensor」是整块矩阵，不是它的某一条边</b> ——&nbsp;
+      per-tensor 不等于「按 7,168 量化」，后者是 per-channel。</p>
+
+    <p><b>上一代 FP8 就是最粗的那一档</b>：整张量一个 scale，
+      而且还得<b>靠软件盯着历史极值去猜</b>它。
+      <em>一个离群值就把整张量的 scale 拽跑，剩下那些小数全被压进同一个格子。</em>
+      <b>FP8 有 256 个可表示值，还忍得住；FP4 只有八个，这么干直接崩。</b></p>
+
+    <p><b>所以 Blackwell 干的事只有一件：把共用 scale 的范围从「整张量」缩到「十六个数」。</b>
+      <em>这一小撮就叫一个 micro-tensor。</em></p>
+
+    <p>⚠️ <b>这件事有四个名字，别以为是四件事</b>：
+      <em>NVIDIA 叫 <b>micro-tensor scaling</b>，OCP 标准叫 <b>microscaling（MX）</b>
+      （MXFP4 的 MX 就是它），写 kernel 的人叫 <b>block scaling</b>，
+      本课叫<b>块量化</b>。</em></p>
+
+    <!-- ⛔⛔ 2026-09-04 Chris 反问：「块量化不就是横着竖着拿一块吗？你说的
+         横着一条那个叫 sub-channel 量化。」——&nbsp;**这是个真的命名碰撞，值得写。**
+         ⭐ 他半对：sub-channel / group-wise 确实是这个形状的名字，
+            而且 Google 自己的 Ironwood 调优文章里就用 "subchannel activation
+            quantization" 这个说法 —— 他在 TPU 那侧见到的多半就是它。
+         ⛔ 但「块」并不蕴含二维：NVIDIA TensorRT 文档给 block quantization 的
+            定义与公式都是**沿一个轴分块**（R 为 blocking axis、B 为 block size，
+            scale 形状 (ceil(R/B), S)）。所以「块量化」是厂商自己的叫法，不是误译。
+         ⭐ 中文这里特别容易踩：「块」在日常语感里就是二维方块。
+            这一段留着，别精简掉 —— 它防的是一个会一路错下去的误解。 -->
+    <p><b>⚠️ 这里有个真的命名碰撞，中文尤其容易踩</b>：
+      <em>「块」在日常语感里像是<b>二维方块</b>，
+      于是很自然会以为块量化是「横着几个、竖着几个」拿一小块。</em></p>
+
+    <p><b>但在这套术语里，「块」不蕴含二维。</b>
+      <em>NVIDIA 自己给 block quantization 的定义就是<b>沿某一个轴</b>按固定长度分块
+      ——&nbsp;文档里连公式带例子：取一个轴当 blocking axis、给一个 block size，
+      另一个轴不分。</em><b>所以一维的那 16 个，厂商就管它叫 block。</b></p>
+
+    <p><b>同一个形状还有别的名字</b>：<b>sub-channel</b>、<b>group-wise</b>
+      ——&nbsp;<em>GPTQ／AWQ 那边的「group size 128」说的就是它；
+      Google 讲 Ironwood 调优的公开文章里也写作
+      <b>subchannel activation quantization</b>。</em>
+      <b>它们和 block scaling 指的是同一件事，只是出身不同的社区。</b></p>
+
+    <p><b>真正的二维块量化是另一回事，而且一般会把维度写出来</b> ——&nbsp;
+      <em>比如 DeepSeek V3 的 FP8 权重是 <b>128×128</b> 的二维块。</em>
+      <b>看到「块量化」而没写维度，默认它是一维的。</b></p>
+
+    <p><b>两个格式的数值部分完全一样，差别全在 scale 上：</b></p>
+    <ul>
+      <li><b>MXFP4</b>：每 <b>32</b> 个数一个 <code>E8M0</code> 的 scale ——&nbsp;
+        <em>纯指数没有尾数，所以倍数<b>只能是 2 的整数次幂</b>。</em></li>
+      <li><b>NVFP4</b>：每 <b>16</b> 个数一个 <code>E4M3</code>（就是 FP8）——&nbsp;
+        <em>有尾数，不再卡在 2 的幂上；</em><b>外面再套一个整张量共用的 FP32</b>，两级。</li>
+    </ul>
+    <p class="sub">代价是平均位宽：NVFP4 是 4 ＋ 8/16 ＝ <b>4.5 bit</b>，
+      MXFP4 是 4 ＋ 8/32 ＝ <b>4.25 bit</b>。</p>
+
+    <!-- ⭐ 2026-09-04 Chris 问「scale 是 FP32 还是 BF16」。两个都不是 ——&nbsp;
+         块内那个是 **8 bit**。这个问题问得好，因为答案背后有一条很干净的设计逻辑：
+         **块内 scale 的位宽是要摊到每个值头上的，per-tensor 那个不用摊。**
+         所以精度全砸在便宜的那一级上。把这条写出来，比只报格式名有用得多。
+         📌 UE4M3 这个精确叫法出自 Colfax 的 SM12x 教程（PTX 的 .stype 也写 .ue4m3）。 -->
+    <p><b>⚠️ 那两级 scale 各是什么类型？——&nbsp;差别很大，而且是算出来的，不是随便定的。</b></p>
+    <ul>
+      <li><b>块内那一级：8 bit。</b>
+        <em>NVFP4 用 <code>UE4M3</code>（不带符号位，4 指数 3 尾数）；
+        MXFP4 用 <code>E8M0</code>（纯指数，连尾数都没有）。</em>
+        <b>都不是 FP32，也不是 BF16。</b></li>
+      <li><b>整张量那一级：真的是 FP32，而且真的是 per-tensor</b>
+        ——&nbsp;<em>不是 per-channel。</em>
+        <b>官方原话就是「一个额外的、单一的 per-tensor FP32 缩放因子」。</b>
+        <em>一整张量只有这一个数。</em></li>
+    </ul>
+
+    <p><b>为什么块内那级只能给 8 bit ——&nbsp;因为它要摊到每个值头上。</b>
+      <em>NVFP4 每 16 个值配一个 scale，8 ÷ 16 ＝ <b>每个值多摊 0.5 bit</b>。</em><br>
+      <b>换成 BF16 就是 16 ÷ 16 ＝ 每值多摊 1 bit，4 bit 的格式变成 5 bit；
+      换成 FP32 就是多摊 2 bit，直接变 6 bit</b> ——&nbsp;
+      <em>省下来的那一半全吐回去了，还不如直接用 FP8。</em></p>
+
+    <p><b>而 per-tensor 那一级不用摊</b>，<em>一整张量就一个数，
+      占多少位都约等于零</em> ——&nbsp;<b>所以它可以大方地用 FP32。</b></p>
+
+    <p>⭐ <b>这就是这套格式的设计逻辑：精度砸在不用摊的那一级上。</b></p>
+
+    <!-- ⭐⭐ 2026-09-04 Chris 问「内层外层怎么分？各管多大范围？」
+         ⭐ 这个问题的答案有个很干净的因果链，值得完整写出来：
+            **两级不是「更高级」，是为了补 E4M3 范围窄这个坑。**
+            想让 scale 有尾数 → 只能挑 E4M3 → E4M3 最大只到 448 →
+            盖不住整张量的量级跨度 → 所以必须再加一级 FP32 把张量搬进来。
+            MXFP4 选了纯指数的 E8M0，范围极大，一级就够 —— 所以它没有外层。
+         📌 那条全局 scale 的取法（≈ 最大块的 amax ÷ (6 × 448)）里，
+            6 是 E2M1 能表示的最大值，448 是 E4M3 能表示的最大值 ——&nbsp;
+            两个数都在本折叠前面出现过，能自洽对上。
+         📌 NVIDIA Transformer Engine 文档的原话是 NVFP4 加那一级 per-tensor FP32
+            是 "to avoid overflows" —— 防溢出，不是提精度。这个定性别写反。 -->
+    <p><b>⚠️ 那内层外层到底怎么分工？——&nbsp;
+      外层管<u>范围</u>，内层管<u>局部量级</u>。</b>
+      <em>两级不是「更高级」，是<b>为了补一个坑</b>。</em></p>
+
+    <p><b>坑在这里</b>：<em>NVIDIA 想让块内 scale 带尾数（比 2 的幂更准），
+      于是挑了 <code>E4M3</code>。</em>
+      <b>但 E4M3 自己能表示的最大值只到 448</b> ——&nbsp;
+      <em>而一个真实张量里，不同块之间的量级可以差出好几个数量级，
+      448 那点范围根本盖不住。</em></p>
+
+    <p><b>所以才有外层那一级</b>：<em>先用一个 FP32 的全局 scale
+      把整张量<b>搬进内层能表示的区间</b>，剩下的局部差异再交给每 16 个数的 E4M3。</em>
+      <b>NVIDIA 自己对这一级的定性是「防溢出」，不是「提精度」。</b></p>
+
+    <p><b>范围能算出来</b>：<em>一个值最终 ＝
+      <code>全局 FP32 × 块内 E4M3 × 那个 E2M1</code>。</em>
+      <b>后两级叠满就是 448 × 6 ＝ 2,688</b> ——&nbsp;
+      <em>所以全局那一级大致取<b>「整张量里最大那个块的 amax ÷ 2,688」</b>，
+      正好把最大的块顶到不溢出的位置。</em></p>
+
+    <p><b>⭐ 反过来就能看懂 MXFP4 为什么只有一级</b>：
+      <em><code>E8M0</code> 是纯指数、8 位全给幂次，<b>范围大得离谱</b>
+      ——&nbsp;根本不存在「盖不住」的问题。</em>
+      <b>它不需要外层，代价是那个 scale 只能是 2 的整数次幂，粗。</b><br>
+      <em>一句话：<b>NVFP4 拿「多一级」换「scale 更准」，MXFP4 拿「scale 更粗」换「结构更简单」。</b></em></p>
+
+    <!-- ⭐ 2026-09-04 同一轮追问：「NVFP4 和 MXFP4 怎么区分？」
+         ⛔ 别只答规格差异 —— 更有用的是「机器怎么知道」：三处限定符全写在指令里。
+         📌 NVFP4 那条串是 Colfax SM12x 教程里的原文；MXFP4 那条是按同一族限定符
+            对应过来的（kind / scale_vec / stype 三处各换一个），**不是逐字引用**。
+            4X 与 2X 那个倍数不用查也能对：K＝64 时 64÷16＝4、64÷32＝2。 -->
+    <p><b>⚠️ 那机器怎么知道自己拿到的是哪一种？——&nbsp;写在指令里，三处限定符。</b></p>
+    <ul>
+      <li><b><code>kind</code></b>：NVFP4 是 <code>kind::mxf4nvf4</code>，
+        MXFP4 是 <code>kind::mxf4</code>。</li>
+      <li><b><code>scale_vec</code></b>：NVFP4 是 <code>4X</code>，MXFP4 是 <code>2X</code>
+        ——&nbsp;<em>这个倍数不用查也能对上：一条指令 K＝64，
+        64 ÷ 16 ＝ 4 个 scale，64 ÷ 32 ＝ 2 个。</em></li>
+      <li><b><code>stype</code></b>（scale 的类型）：NVFP4 是 <code>ue4m3</code>，
+        MXFP4 是 <code>ue8m0</code>。</li>
+    </ul>
+    <p class="sub">⚠️ 外层那个 per-tensor FP32 <b>不在指令里</b> ——&nbsp;
+      <em>它是软件在量化和收尾时自己乘进去的，硬件只认块内那一级。</em></p>
+
+    <!-- ⭐⭐⭐ 2026-09-04 Chris 提了一个很自然的猜想：那 16 是不是「横 4 竖 4」的
+         方块，靠「相邻 token 数值相近、相邻 feature 数值相近」这两条假设成立？
+         ⛔ **不是。查实了：1×16，纯一维，沿收缩维。** 判据不用信谁的转述 ——
+            直接读 PTX 那条指令的分片形状：A 是 16×64 而 SFA 是 16×4，
+            64 ÷ 16 ＝ 4，所以一个 scale 盖的是**一行里连续 16 个 K**。
+         ⭐ 更要紧的是**它根本不需要「数值相近」这个假设** ——&nbsp;
+            NVIDIA 自己给的理由从头到尾只有「局部动态范围」，没有任何相关性假设。
+            这个区别值钱：按「相邻相近」去理解，会推出一堆错的优化直觉。
+         ⭐ 「为什么必须沿收缩维」那一段是从指令形状直接读出来的，不是猜的：
+            per-token 的 scale 能整个提出求和号，per-channel 的提不出来。
+         📌 出处（全公开）：Colfax 的 SM12x NVFP4 教程（分片形状与 SFA/SFB）、
+            NVIDIA 开发者博客（「twice as many opportunities to match the local
+            dynamic range」）、cuDNN 前端文档（「16 consecutive elements along K」）。 -->
+    <p><b>⚠️ 那 16 个数是怎么排的？——&nbsp;是一条线，不是一个方块。</b></p>
+
+    <p><em>很自然会猜它是「横 4 竖 4」的小方块。<b>不是。</b>
+      它是<b>一行里沿收缩维连续的 16 个数</b>，<b>完全不跨行</b>。</em></p>
+
+    <p><b>不用信转述，直接读那条指令的分片形状</b>：
+      <em>NVFP4 那条 <code>mma.sync</code> 吃进的 A 片是 <b>16×64</b>（M×K），
+      而它的 scale 片 <b>SFA 是 16×4</b>。</em>
+      <b>64 ÷ 16 ＝ 4</b> ——&nbsp;<b>一行 64 个 K 切成 4 段，每段一个 scale。</b>
+      <em>B 那边同理：B 片 64×8，SFB 是 4×8。</em></p>
+
+    <p><b>所以落到激活上，一个 block ＝ 同一个 token 的连续 16 个特征。</b>
+      <em>它<b>一个 token 都不跨</b>。</em></p>
+
+    <p><b>那为什么非得沿收缩维？</b>
+      <em>因为 <b>scale 必须能从求和号里提出来</b>。</em>
+      沿 K 切成一段一段，每段内 <code>s<sub>A</sub></code>、<code>s<sub>B</sub></code>
+      都是常数，那一段的点积就是
+      <b><code>s<sub>A</sub>·s<sub>B</sub>·Σ(a·b)</code></b> ——&nbsp;
+      <em>一段只要一次额外乘法。</em><br>
+      <b>换成「每个通道一个 scale」就提不出来了</b>
+      ——&nbsp;<em>每一项的系数都不同，求和号里再也拆不开。</em>
+      <b>所以「沿 K 分段」是「仍然能提出来」的前提下能做到的最细粒度。</b></p>
+
+    <p><b>⭐ 最要紧的一点：它不需要「相邻的数值相近」这个假设。</b>
+      <em>NVIDIA 给的理由从头到尾只有一条 ——&nbsp;
+      <b>更多次机会去贴合局部的动态范围</b>。</em><br>
+      <b>要的只是「这 16 个数的量级差得别太远」，不是「它们彼此相似」。</b>
+      <em>而这是个<b>统计性质</b>，跟相不相关无关：
+      十六个数里出一个离群值的概率，远低于一亿三千万个数里出一个；
+      真出了，被拖累的也只有那十五个邻居。</em></p>
+
+    <!-- ⭐⭐⭐ 2026-09-04 第二次改写。上一版说「16×16 怎么落到硬件上」那句
+         **是我推的**；现在扒到了一手论文（Pretraining Large Language Models
+         with NVFP4，arXiv 2509.25149），**逐字确认了**，标记随之改掉。
+         ⭐ 更重要的是拿到了「为什么是二维」的真正理由：**链式法则**。
+            这比「二维更细所以更准」高一个层次 —— 它根本不是精度问题，是
+            **前向和反向必须是同一个函数**的问题。这一段是整个折叠里最值钱的。
+         ⛔ 别把 16×16 说成「精度更高所以用它」——&nbsp;论文自己说 2D 的
+            **粒度更粗**（256 个数共用一个 scale，比 1×16 粗），仍然赢，
+            赢在一致性。这个反直觉点必须留着。
+         📌 论文里确实出现过 4 —— 但那是**随机 Hadamard 变换的矩阵尺寸** d=4，
+            跟块大小不是一回事。d 选了 16（比 4 收敛好，跟 128 差不多）。
+            这两个 16 同值不同物，最容易混，文里点破。 -->
+    <!-- ⛔⛔ 2026-09-04 这一段**改写过一次**，原话是「二维块缩放不是没人做，
+         有研究在试」——&nbsp;**说轻了**。NVIDIA 自己 Transformer Engine 里的
+         NVFP4 **训练** recipe，权重就是 16×16 的二维块（官方文档原话：
+         "a single scaling factor is shared by a 2D block of 16x16 elements"）。
+         ⭐ 所以正确的说法不是「硬件一维、二维只在研究里」，而是
+            **硬件那一层永远是一维 16，二维是叠在它上面的一层约束**。
+         📌 「把一个 16×16 的 scale 复制给那 16 行各自的 1×16」这句是推的 ——&nbsp;
+            官方没写实现方式，但硬件只认一维，逻辑上只能这么落。已在文内标明。 -->
+    <p><b>⚠️ 但要小心，别把「硬件是一维」读成「二维块缩放没人用」。</b></p>
+
+    <p><b>NVIDIA 自己的 NVFP4 <u>训练</u> recipe，权重那一侧就是 16×16 的二维块</b>
+      ——&nbsp;<em>官方文档原话是「一个 scaling factor 由一个 16×16 的二维块共享」，
+      并说这跟 DeepSeek V3 训练里的权重量化是同一路子，只是粒度细得多。</em></p>
+
+    <p><b>这两件事不矛盾，它们在不同层</b>：
+      <em><b>硬件那一层永远是一维 16</b>；<b>二维是叠在它上面的一层约束</b>
+      ——&nbsp;算出一个 16×16 块的 scale 之后，让那 16 行各自的 1×16
+      共用这一个值。</em>
+      <span class="sub">（这一句<b>不是推测</b>：论文原文就是「2D block scales
+      are replicated for each of the 1×16 blocks when being passed into
+      Tensor Cores」。）</span></p>
+
+    <!-- ⭐ 2026-09-04 补两块：一是量化那一步到底怎么算（前面只说了「谁做」，
+         没给步骤和式子）；二是一个线性层三个 GEMM 的图景 ——&nbsp;
+         **没有这个图景，后面「反向会转置权重」那句是听不懂的**。
+         Chris 说「这次没太听懂」，缺的多半就是这一块。 -->
+    
+
+</div></section>
+
+<section id="s4"><div class="wrap">
+  <div class="stn"><span class="badge">第 4 节</span><h2>训练侧：混合精度混了什么</h2></div>
+
+  <div class="note warn"><span class="t">🚧 前半是大纲，后半（FP4 训练）已写完</span>
+    混合精度、主权重、FP8 的 scaling、QAG ——&nbsp;<b>这四块还没展开</b>。<br>
+    <b>「一个线性层三个矩阵乘」和「16×16 与链式法则」是写完的</b>，在下面。</div>
+
+  <p><b>先回到专题四那张 16 字节的表</b>，从精度角度重看一遍：</p>
+  <ul>
+    <li><b>前向／反向用 bf16</b> ——&nbsp;省算力省带宽</li>
+    <li><b>主权重必须用 fp32</b> ——&nbsp;⚠️ bf16 只有 7 位尾数，
+      训练后期的小更新量加上去会被<b>直接舍掉</b>，等于没更新</li>
+    <li><b>优化器状态、累加</b> ——&nbsp;同理，fp32</li>
+  </ul>
+
+  <div class="note warn"><span class="t">🚧 还要讲（都是我们自己踩过的）</span>
+    <b>· FP8 训练的 scaling 怎么定</b>（per-tensor／per-block／动态 vs 静态；
+    V3 用 128×128 分块 ——&nbsp;<em>正好跟下面那个 16×16 是同一路子</em>）<br>
+    <b>· ⚠️ <code>fixed</code> 固定缩放会毁掉收敛</b>，不是「精度略降」，是训坏<br>
+    <b>· ⭐ QAG：量化后再 all-gather</b> ——&nbsp;五道锁、只开一个会<b>静默失效</b>、
+    实测 0.88× → 1.05×</div>
+
+<p><b>⭐ 那量化那一步，具体是怎么算的？</b></p>
+
+    <p><em>拿一个 16 个数的块走一遍（推理侧、NVFP4）：</em></p>
+    <ul>
+      <li><b>① 先在整张量上取一个全局 scale</b> <code>α</code>（FP32）。
+        <em>取法大致是「最大那个块的绝对值最大值 ÷ 2,688」
+        ——&nbsp;<b>2,688 ＝ 448 × 6</b>，就是后两级叠满能表示的上限。</em></li>
+      <li><b>② 在这 16 个数里取绝对值最大值</b> <code>amax</code>。</li>
+      <li><b>③ 块内 scale</b> <code>Δ ＝ amax ÷ 6 ÷ α</code>，
+        <em>再把它<b>round 成 UE4M3</b> 存起来。</em>
+        <span class="sub">（除以 6 是因为 E2M1 最大只能表示 6；除以 α 是把它挪进 E4M3 的量程。）</span></li>
+      <li><b>④ 每个元素</b> <code>q ＝ round( x ÷ (α · Δ) )</code>，
+        <em>结果落进那八个可表示值里，存成 4 bit。</em>
+        <b>权重和激活用就近偶数舍入，梯度用随机舍入。</b></li>
+    </ul>
+
+    <p><b>反量化就是把这条路倒着走</b>：<code>x ≈ α · Δ · q</code>。
+      <em><b>其中 <code>Δ · q</code> 那一步是 Tensor Core 在 MMA 里顺手做的，
+      <code>α</code> 那一步是软件在 FP32 输出上乘回去的。</b></em>
+      <span class="sub">（所以硬件只认两级里的一级 ——&nbsp;这一条前面说过，这里对上了。）</span></p>
+
+    <p><b>⭐ 再补一个图景，不然下一段听不懂：一个线性层其实是三个矩阵乘。</b></p>
+    <ul>
+      <li><b>前向（Fprop）</b>：<code>y ＝ w · x</code></li>
+      <li><b>反向之一（Dgrad）</b>：<code>∂x ＝ wᵀ · ∂y</code>
+        ——&nbsp;<em>算给上一层的梯度。</em></li>
+      <li><b>反向之二（Wgrad）</b>：<code>∂w ＝ ∂y · xᵀ</code>
+        ——&nbsp;<em>算这一层权重自己的梯度。</em></li>
+    </ul>
+    <p><em>三个都在 FP4 上算，<b>输出是 BF16 或 FP32</b>。</em>
+      <b>注意第二个：它用的是 <code>wᵀ</code> ——&nbsp;同一个权重，被转置着又用了一次。</b>
+      <em>下一段整段就是在处理这一件事。</em></p>
+
+    <p><b>⭐ 那 16×16 到底怎么回事？——&nbsp;这是训练侧的事，而且理由不是「更准」。</b></p>
+
+    <p><b>先把配方摆出来</b>（出自 NVIDIA 那篇 NVFP4 预训练论文）：<br>
+      <em><b>权重</b>用 <b>16×16 的二维块</b>，
+      <b>激活和梯度</b>仍然用 <b>1×16 的一维块</b>。</em>
+      <span class="sub">（那 16×16 是「16 个输入通道 × 16 个输出通道」。）</span></p>
+
+    <p><b>为什么权重要特殊照顾？——&nbsp;因为反向传播会把它转置。</b></p>
+
+    <p><em>缩放必须沿点积那一维，这条前面说过。</em>
+      <b>可前向算的是 <code>y ＝ w·x</code>，反向算的是 <code>∂x ＝ wᵀ·∂y</code>
+      ——&nbsp;<u>点积那一维换了</u>。</b><br>
+      <em>于是同一个权重，在前向被沿行切块量化，在反向被沿列切块量化，
+      <b>得到两份不一样的量化结果</b>。</em></p>
+
+    <p><b>⛔ 这不是「精度差一点」，这是<u>链式法则被打破</u>。</b>
+      <em>论文说得很直白：反向传播算的梯度，对应的已经不是前向那个函数了
+      ——&nbsp;<code>w<sub>fprop</sub> ≠ w<sub>bprop</sub></code>，
+      你在给另一个函数求导。</em></p>
+
+    <p><b>16×16 就是来堵这个的：一个正方形的块，转置之后还是同一个块。</b>
+      <em>前向反向拿到的是同一份量化权重，链式法则重新成立。</em></p>
+
+    <p><b>⭐ 最反直觉的一点</b>：<em>16×16 是 256 个数共用一个 scale，
+      <b>比 1×16 粗十六倍</b>。</em>
+      <b>它更粗，却更好</b> ——&nbsp;<em>论文的原话就是「尽管块粒度更大，
+      2D 仍然改善了 loss」。<b>说明这里赢的不是精度，是一致性。</b></em></p>
+
+    <p><b>那硬件在这里干了什么？——&nbsp;什么都没多干。</b></p>
+
+    <p><em>Tensor Core <b>只认沿点积维的一维 scale</b>，这是硬性约束
+      ——&nbsp;论文自己也这么写。</em><br>
+      <b>所以 16×16 是这么落地的：软件按 16×16 算出一个 scale，
+      然后<u>把它复制十六份</u>，当作那 16 行各自的 1×16 scale 喂进 Tensor Core。</b>
+      <em>硬件从头到尾不知道有「二维」这回事，它看到的还是十六个一维块 ——&nbsp;
+      只不过那十六个 scale 的值恰好一样。</em></p>
+
+    <p class="sub">⚠️ <b>所以二维不省存储</b>：喂给硬件的 scale 张量大小跟一维时一模一样，
+      <b>省的不是空间，买的是「转置前后是同一份」。</b>外层那个 per-tensor FP32 照旧。</p>
+
+    <p><b>⚠️ 论文里确实出现过 4，但那是另一个东西。</b>
+      <em>它比较的 <b>d ＝ 4 / 16 / 128</b> 是<b>随机 Hadamard 变换的矩阵尺寸</b>
+      ——&nbsp;用来把离群值打散的那一步，跟块大小不是一回事。</em>
+      <b>结论是 d ＝ 16 比 4 收敛好、跟 128 差不多，所以选了 16。</b>
+      <em>两个 16 同值不同物，最容易混。</em></p>
+
+    <p><b>配方里还有两条跟量化方式直接相关的</b>：
+      <em><b>梯度用随机舍入</b>（去掉量化偏置），
+      <b>权重和激活用就近偶数舍入</b>；
+      <b>数值敏感的层整层留在高精度</b>。</em>
+      <span class="sub">（另外论文发现：训练后段把<b>前向</b>切回 BF16
+      能把 12B 模型的相对误差从 1.5% 拉回 0.5%，而切反向没有同样的收益。）</span></p>
+
+    <p class="sub">同一路子的还有 DeepSeek V3 的 FP8 权重 ——&nbsp;<b>128×128 的二维块</b>。
+      <b>所以判据要改一句</b>：<em>看到「块量化」而没写维度，说的多半是硬件那层的一维；
+      但<b>训练侧的 recipe 很可能在上面又叠了二维</b>，得看具体 recipe。</em></p>
+
+    
+
+</div></section>
+
+<section id="s5"><div class="wrap">
+  <div class="stn"><span class="badge">第 5 节</span><h2>⭐ 硬件视角：Blackwell 到底加了什么</h2></div>
+
+  <p class="lead">这一节接<a href="topic-02.html">专题二</a>。
+    <b>「硬件支持 FP4」这句话，落到硅上到底是什么？</b></p>
+
+<p><b>所以 HBM 里放的是 FP4，不是 FP8</b> ——&nbsp;
+      <em>打包好的 E2M1 加那一串 scale，省下的一半就是这么省的。</em></p>
+
+    <p><b>那「硬件支持 FP4」到底加了什么？——&nbsp;没有协处理器。</b>
+      <em>加的是三样，分布在三个不同的地方：</em></p>
+    <ul>
+      <li><b>① 乘法阵列本身认 4 bit。</b>第五代 Tensor Core 原生支持 FP4 与 FP6
+        ——&nbsp;<em>这是「能算」。</em></li>
+      <li><b>② MMA 数据通路里内嵌一级「乘 scale」。</b>
+        <em>这就是反量化 ——&nbsp;<b>不是独立部件，是流水线里的一步</b>。</em></li>
+      <li><b>③ 通用核那边新增转换指令</b>（把 FP32 打包成 E2M1 那类）。
+        <em>这是「量化」——&nbsp;<b>跑在普通 CUDA Core 上，不是专用引擎</b>。</em></li>
+    </ul>
+
+    <p><b>有一个反例能把 ① 和 ③ 是两块独立硬件钉死</b>：
+      <em>桌面那颗 GB10 <b>有 FP4 的 Tensor Core 指令，却缺那条转换指令</b>
+      ——&nbsp;能拿 FP4 算矩阵乘，却没法把数转成 FP4。</em>
+      <b>同一颗芯片上，一个有一个没有。</b>
+      <span class="sub">（出自 NVIDIA 开发者论坛的实测报告，不是官方规格书。）</span></p>
+
+    <p><b>于是分工很清楚：硬件负责「用」scale，软件负责「算」scale。</b>
+      <em>权重是离线量化好、直接以 FP4 存进去的；激活是运行时由 kernel 在上一步收尾里算的。</em></p>
+
+    <p><b>硬件那条乘法长这样</b>：指令是 <code>tcgen05.mma</code> 的 block-scale 变体
+      （<b>B200 走这条</b>）和 warp 级的 <code>mma.sync…block_scale</code>
+      （<b>消费级那颗 die 走这条</b>）——&nbsp;<em>这正是上面那道门槛的来处。</em><br>
+      A、B 是 FP4，两串 scale 叫 <b>SFA／SFB</b>，
+      <b>Tensor Core 一边读 E2M1 一边把 scale 乘进去，累加仍是 FP32。</b></p>
+
+    <p>⚠️ <b>scale 不是「放进 Tensor Core 里」，是放进 <code>TMEM</code>。</b>
+      <em>TMEM 是 SM 上的一块内存 ——&nbsp;每 SM <b>256 KiB</b>，
+      128 lane × 512 column、每格 32 bit，路径是 显存 → 共享内存 → TMEM。</em>
+      <b>它装的是累加器和 scale，不是 FP4 操作数本身</b>（那些从共享内存流进来）。</p>
+
+    <p><b>⭐ 「乘 scale 不额外消耗算力」这句对</b> ——&nbsp;
+      <em>那一乘是流水线里的一级，不占发射槽，也不吃 FP4 的峰值。</em>
+      <b>但「不花钱」是另一回事，代价有三笔，只是都不算在 FLOPs 头上：</b></p>
+    <ul>
+      <li><b>① 占 TMEM。</b><em>一个 128×256 的 FP32 累加器就是
+        128 × 256 × 4 B ＝ <b>128 KiB</b>，那 256 KiB 一下去掉一半，
+        scale 得挤在剩下那半里还不能撞 bank。</em>
+        <b>真正卡住你能开多大 tile 的，往往是这一笔。</b></li>
+      <li><b>② 多一路搬运。</b><em>那串 scale 自己占 TMA 管线和共享内存，
+        而且<b>必须摆成一种交错布局</b> ——&nbsp;天真按 K 排好的那种得先重排。</em></li>
+      <li><b>③ 量化那一头是真花时间的。</b><em>算每块的最大值、压成 E2M1，
+        跑在通用核上 ——&nbsp;<b>不进 MMA 的账，但进墙钟的账</b>。</em>
+        <b>只比 MMA 就会把这一段漏掉。</b></li>
+    </ul>
+
+    <p><b>连起来，一层的来回是这样一圈</b>：<br>
+      ① 上一层的结果在 TMEM 里是 <b>FP32</b> 累加值 →&nbsp;
+      ② 收尾时<b>就地量化</b>成 FP4 ＋ scale，写出去 →&nbsp;
+      ③ 下一层把 FP4 搬进共享内存、scale 搬进 TMEM →&nbsp;
+      ④ <b>Tensor Core 边读边乘 scale，累加又回到 FP32</b> →&nbsp;回到 ①。</p>
+
+    <p>⭐ <b>一句话：存的是 4 bit，算的是 32 bit。</b>
+      <em>进来那一下的换算<b>焊在 MMA 流水线里</b>，出去那一下
+      <b>是普通核跑一条新指令</b>。</em></p>
+
+    <!-- ⭐⭐ 2026-09-04 Chris 明确要求「数据源和出处也都写」。
+         ⛔ 之前的毛病很实在：**大量出处只写在 HTML 注释里，读者根本看不见**。
+            注释是给维护者的，不是给学员的 —— 这一条以后建新内容时也适用。
+         ⭐ 台账按「哪一条结论 ← 哪一份材料」组织，不按材料列表组织 ——&nbsp;
+            要回查的人手里拿的是结论，不是书目。
+         ⚠️ 全部是公开可访问的资料，公开仓库可以直接给链接。 -->
+    
+
+  <div class="note warn"><span class="t">🚧 这一节还差两块</span>
+    <b>· 各代硬件支持到哪一档</b>（哪一代开始有 FP8、有 FP4）<br>
+    <b>· ⚠️ 低精度的收益有没有真落到 MXU 上</b> ——&nbsp;
+    有时候编译器又把它转回去了，<b>profile 里能看出来</b></div>
+</div></section>
+
+<section id="s6"><div class="wrap">
+  <div class="stn"><span class="badge">第 6 节</span><h2>🚧 一条贯穿的教训：沉默的失败</h2></div>
+
+  <div class="note warn"><span class="t">🚧 这一节还是大纲</span>
+    但它是这一讲<b>风险最高</b>的一节，不能删。</div>
+
+  <p><b>量化出问题往往不报错。</b>已经攒下三类，一类比一类隐蔽：</p>
+  <ul>
+    <li><b>① 编译过了、跑起来了、loss 也在降</b> ——&nbsp;
+      但降得比该有的慢，或者后期崩</li>
+    <li><b>② 开关没生效也不报错</b> ——&nbsp;QAG 那五道锁只开一把就是这样</li>
+    <li>⭐ <b>③ 链式法则被打破</b>（<code>w<sub>fprop</sub> ≠ w<sub>bprop</sub></code>）
+      ——&nbsp;<em>它连「开关没生效」都算不上：<b>一切正常，只是你在给另一个函数求导。</b></em>
+      <b>见 §4。</b></li>
+  </ul>
+
+  <p><b>所以：每一次精度改动都必须有对照实验，而且要跑足够长才看得出差别。</b></p>
+
+  <div class="note danger"><span class="t">⛔ 跟专题七那条是同一类问题</span>
+    「测试全绿不是证据」——&nbsp;<b>在数值这件事上，「没报错」什么都不能说明。</b></div>
+</div></section>
+
+<section id="src"><div class="wrap">
+  <div class="stn"><span class="badge">出处</span><h2>已写部分的出处台账</h2></div>
+
+  <p class="lead">按<b>「结论 ← 材料」</b>排，不按书目排 ——&nbsp;
+    <em>要回查的人手里拿的是结论，不是书单。</em>
+    <b>凡是推的都单独标了。</b></p>
+
+<p><b>⭐ 出处台账 ——&nbsp;上面每一条结论是从哪儿来的</b></p>
+
+    <ul>
+      <li><b>E2M1 那八个可表示值、两级缩放、16 对 32、E4M3 对 E8M0、
+        「更多次机会贴合局部动态范围」</b><br>
+        ←&nbsp;NVIDIA 开发者博客
+        <a href="https://developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference"
+           target="_blank" rel="noopener">Introducing NVFP4 for Efficient and Accurate
+        Low-Precision Inference</a></li>
+
+      <li><b>MX 标准的 k＝32、E8M0</b><br>
+        ←&nbsp;OCP Microscaling 规范及其论文
+        <a href="https://arxiv.org/abs/2310.10537" target="_blank" rel="noopener">
+        Microscaling Data Formats for Deep Learning</a></li>
+
+      <li><b>那 16 个是一维沿 K（A 片 16×64、SFA 片 16×4）、UE4M3 这个精确叫法、
+        NVFP4 那条 PTX 指令串</b><br>
+        ←&nbsp;Colfax Research
+        <a href="https://research.colfax-intl.com/cutlass-tutorial-nvfp4-blockscaled-gemm-on-nvidia-rtx-pro-blackwell-gpus-sm12x"
+           target="_blank" rel="noopener">NVFP4 Blockscaled GEMM on NVIDIA RTX Pro
+        Blackwell GPUs (SM12x)</a>
+        <span class="sub">·「每个 scale 盖 K 方向连续 16 个元素」另见 NVIDIA cuDNN
+        前端关于 scale factor 布局的文档</span></li>
+
+      <li><b>scale 必须进 TMEM、SFA／SFB 的交错布局、显存→共享内存→TMEM 这条路</b><br>
+        ←&nbsp;Colfax Research
+        <a href="https://research.colfax-intl.com/cutlass-tutorial-hardware-supported-block-scaling-with-nvidia-blackwell-gpus"
+           target="_blank" rel="noopener">Hardware-supported Block-scaling with
+        NVIDIA Blackwell GPUs</a>，以及 NVIDIA 的 tcgen05 MMA 文档</li>
+
+      <li><b>TMEM 每 SM 256 KiB、128 lane × 512 column × 32 bit</b><br>
+        ←&nbsp;Colfax 的 TMEM 教程；另有公开微基准论文
+        <a href="https://arxiv.org/abs/2512.02189" target="_blank" rel="noopener">
+        Microbenchmarking NVIDIA's Blackwell Architecture</a> 独立复核</li>
+
+      <li><b>「block quantization ＝ 沿一个轴分块」这个定义（不蕴含二维）</b><br>
+        ←&nbsp;
+        <a href="https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/quantized-types-workflows.html"
+           target="_blank" rel="noopener">NVIDIA TensorRT · Quantization Workflows</a>
+        <span class="sub">（文档里连 blocking axis、block size 和 scale 形状的公式都给了）</span></li>
+
+      <li><b>per-tensor 那一级是「防溢出」不是「提精度」；训练 recipe 的权重用 16×16</b><br>
+        ←&nbsp;
+        <a href="https://nvidia.github.io/TransformerEngine/examples/fp8_primer.html"
+           target="_blank" rel="noopener">NVIDIA Transformer Engine · Using FP8 and FP4</a>
+        <span class="sub">（原话：an additional single per-tensor FP32 scaling factor
+        to avoid overflows；a single scaling factor is shared by a 2D block of
+        16x16 elements）</span></li>
+
+      <li><b>16×16 的真正理由（链式法则）、2D 比 1D 粗却更好、
+        scale 复制成 16 份喂 Tensor Core、Hadamard 的 d＝16、
+        随机舍入、后段切回 BF16 的收益</b><br>
+        ←&nbsp;
+        <a href="https://arxiv.org/abs/2509.25149" target="_blank" rel="noopener">
+        Pretraining Large Language Models with NVFP4</a>（NVIDIA）
+        <span class="sub">·「Tensor Cores require scaling factors along the
+        dot-product dimension」这句硬约束也出自该文</span></li>
+
+      <li><b>GB10 有 FP4 的 MMA 却缺转换指令</b><br>
+        ←&nbsp;NVIDIA 开发者论坛上的实测报告
+        <span class="sub">⚠️ <b>这是论坛帖，不是官方规格书</b> ——&nbsp;
+        本课里它只用来支撑「能算」和「能转」是两块独立硬件这个定性判断，
+        <b>不用它支撑任何数字</b>。</span></li>
+    </ul>
+
+    <p class="sub">⚠️ <b>本段里属于「推的」只有一处</b>，已在原处标明：
+      <em>「集合通信为什么也适合交给 SparseCore」那一句</em>
+      ——&nbsp;那是 3.5 另一半的事，跟 FP4 无关，写在这里只是为了台账完整。
+      <b>FP4 这一段的每一条都能对上上面某一份材料。</b></p>
+
+    <p class="sub">⚠️ 最后澄清一个名字：<b>「Transformer Engine」不是物理部件</b> ——&nbsp;
+      它是「支持块缩放的 Tensor Core ＋ 决定怎么选 scale 的软件库」的合称，
+      <b>芯片版图上找不到它</b>。所谓第二代，差别就是上面那条：
+      <em>第一代整张量、软件猜；第二代每十六个一个、硬件乘。</em></p>
+
+
+</div></section>
+
+<div class="wrap" style="padding:32px 0 64px">
+  <p style="color:var(--gray)">
+    ← 回 <a href="index.html">课程总纲</a>　·
+    这一讲的硬件背景在 <a href="topic-02.html">专题二 · TPU 与 GPU</a>　·
+    <a href="topic-08-lecture.html">📝 讲义</a></p>
+</div>
+
+</body></html>

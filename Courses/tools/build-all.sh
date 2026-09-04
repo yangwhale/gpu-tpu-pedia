@@ -43,13 +43,22 @@ if [ "${1:-}" != "--lint" ]; then
 
   step "专题二 L200 讲义"
   python3 topic02-build-L200-lecture.py
+
+  # ⭐ 专题八在轮到它之前就开工了 —— 材料是讲专题二时问出来的，
+  #    当场写进了它该属于的那一讲。它的 CSS 从专题二 L300 / 专题一讲义抽，
+  #    **所以必须排在那两步之后**。
+  step "专题八 教材"
+  python3 topic08-build.py
+
+  step "专题八 讲义"
+  python3 topic08-build-lecture.py
 fi
 
 step "版面体检（报告为主，不中止）"
 python3 topic02-lint-readability.py
 
 printf '\n\033[1m▸ 产物\033[0m\n'
-for f in topic-01.html topic-02-L300.html topic-02.html \
+for f in topic-01.html topic-02-L300.html topic-02.html topic-08.html \
          gpu-microscope.html tpu-microscope.html; do
   [ -f "$W/$f" ] || continue
   printf '  %-24s %9s  %2d 图\n' "$f" \
