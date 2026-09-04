@@ -72,6 +72,12 @@ python3 topic02-lint-readability.py
 step "版面体检 · 渲染后几何（左跑 / 右撑 / 图内文字撞车）"
 python3 topic02-lint-layout.py
 
+# ⭐ 第三条体检：讲义 ↔ 课件对账。前两条都只看**一个**页面自己是不是自洽，
+# 而这一条看的是**两个页面之间**：讲义说「滚到 X」，X 在课件里还在吗。
+# ⛔ 这类债不报错、不难看，**只在现场翻车** —— 台上照着念、往下滚、框不在了。
+step "讲义 ↔ 课件对账（「滚到 X」的 X 还在不在）"
+python3 topic02-lint-cues.py
+
 printf '\n\033[1m▸ 产物\033[0m\n'
 for f in topic-01.html topic-02-L300.html topic-02.html \
          topic-03.html topic-08.html \
