@@ -9486,10 +9486,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="680" y="546" class="xs"><tspan font-weight="700" fill="#202124">但整份接口里没有任何矩阵乘原语。</tspan>所以它不是「小一号的 TensorCore」，是另一种形状的核。</text>
 <rect x="664" y="588" width="716" height="162" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
 <text x="680" y="614" class="sec" fill="#d93025">最反直觉的一条：我们的生产任务里，它一次表都没查</text>
-<text x="680" y="636" class="xs">要不要把 embedding 卸载到 SparseCore，判据是 <tspan font-weight="700" fill="#202124">duplication factor</tspan> ＝ 这一批取了多少个索引 ÷ 可选的行数。<tspan font-weight="700" fill="#202124">它衡量的是「重复</tspan></text>
-<text x="680" y="652" class="xs"><tspan font-weight="700" fill="#202124">取同一行」的程度</tspan> —— 重复得越厉害，专用通路省下的越多。</text>
-<text x="680" y="688" class="xs">推荐系统那边是几亿行词表里取几百个，duplication factor 很高，这是 SparseCore 的主场。而我们这次的语言模型是 131,072 ÷ </text>
-<text x="680" y="704" class="xs">129,280 ≈ <tspan font-weight="700" fill="#d93025">1.01</tspan> —— 几乎每个索引都取不同的行，落在判据<tspan font-weight="700" fill="#202124">最不划算的一端</tspan>，编译器于是根本没把它派过去。</text>
+<text x="680" y="636" class="xs">要不要把 embedding 卸载到 SparseCore，看的是<tspan font-weight="700" fill="#202124">同一批里「重复取同一行」的程度</tspan> —— 重复得越厉害，专用通路省下的越多。</text>
+<text x="680" y="688" class="xs">推荐系统那边少量热行被反复命中，重复度很高，这是 SparseCore 的主场。而我们这次的语言模型<tspan font-weight="700" fill="#202124">几乎每个索引都取不同的行</tspan>（一批 131,</text>
+<text x="680" y="704" class="xs">072 个 token，词表 129,280 行，重合极少）—— 落在<tspan font-weight="700" fill="#d93025">最不划算的一端</tspan>，编译器于是根本没把它派过去。</text>
 <rect x="20" y="782" width="1360" height="132" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
 <text x="34" y="808" class="sec" fill="#1e8e3e">那生产里的 embedding 到底怎么跑的？—— 它根本不是查表</text>
 <text x="34" y="832" class="xs">MaxText 有一个开关 <tspan class="mono" fill="#1967d2">use_iota_embed</tspan>。打开时，查表被写成<tspan font-weight="700" fill="#202124">「把 token id 展成 one-hot，再和整张词表做一次矩阵乘」</tspan> —— 一条 <tspan class="mono" fill="#1967d2">dot</tspan>，跑在 MXU 上。关掉才是真的 <tspan class="mono" fill="#1967d2">gather</tspan>。<tspan font-weight="700" fill="#d93025">上游默认是关的，但仓库里 34 份配置显式打开、0 份显式关闭</tspan>，包括那几份给 GPU 用</text>
@@ -9504,7 +9503,7 @@ details.aside b{color:var(--ink);font-weight:600}
     它们都<b>不是给通用计算用的</b>，而且都容易被一句宣传话带偏：
     <br>· 「B200 支持 FP4」—— 但两条通路<b>不在同一颗 die 上</b>，
       你说的是 warp 级那条还是双 SM 那条，能不能用完全不同；
-    <br>· 「TPU 有个专门查 embedding 表的核」—— 但判据是 duplication factor，
+    <br>· 「TPU 有个专门查 embedding 表的核」—— 但它只对「同一批行被反复查」的负载划算，
       语言模型落在<b>最不划算的那一端</b>，编译器根本没往那儿派。
     <br>&nbsp;&nbsp;⛔ <b>注意别把这条读成「语言模型用不上这颗核」</b> ——&nbsp;
       用不上的只是<b>查表</b>那条用途。它在大模型训练里真正跑的是
@@ -9635,7 +9634,7 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>TPU 那半句成立，GPU 那半句不成立</b>：块量化不在 Tensor Core 外面，就在里面。
     摆正之后，那两个坑会露出一个共同的形状。</p>
 <figure class="fbox fwide" id="ms-p37">
-<svg viewBox="0 0 1400 872" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 的块量化是 MMA 指令的一个变体，位于 Tensor Core 数据通路内部；TPU 的 SparseCore 是一颗物理上独立的核。两者能不能用，分别取决于目标架构和 duplication factor">
+<svg viewBox="0 0 1400 872" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 的块量化是 MMA 指令的一个变体，位于 Tensor Core 数据通路内部；TPU 的 SparseCore 是一颗物理上独立的核。两者能不能用，分别取决于目标架构和这批数据的取行重复度">
 <text x="20" y="26" class="ttl">两块「多出来的」<tspan font-weight="700">不在同一层</tspan>　—— 而两道门槛都不在宣传页上</text>
 <rect x="1281" y="10" width="99" height="22" rx="11" fill="#d93025"/>
 <text x="1330.5" y="25" class="lbl" fill="#fff" text-anchor="middle">3.5 的自查</text>
@@ -9692,23 +9691,23 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="710.0" y="424" width="670.0" height="180" rx="10" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
 <rect x="710.0" y="424" width="670.0" height="32" rx="10" fill="#f3e8fd"/>
 <rect x="710.0" y="447" width="670.0" height="9" rx="0" fill="#f3e8fd"/>
-<text x="724.0" y="446" class="box" fill="#8430ce">TPU 那道门槛：你的 duplication factor 是多少</text>
+<text x="724.0" y="446" class="box" fill="#8430ce">TPU 那道门槛：这批数据的取行重复度够不够高</text>
 <rect x="724.0" y="466" width="642.0" height="26" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
 <text x="736.0" y="484" class="xs" fill="#202124">宣传口径：「TPU 有个专门查 embedding 表的核」</text>
-<text x="724.0" y="514" class="xs"><tspan font-weight="700" fill="#202124">判据是 duplication factor</tspan> ＝ 这批取了多少索引 ÷ 可选的行数，衡量「重复取同一行」的程度。推荐系统几亿行里取几百个，</text>
-<text x="724.0" y="531" class="xs">很高，那是它的主场。</text>
-<line x1="724.0" y1="554" x2="1366.0" y2="554" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
-<text x="724.0" y="574" class="xs"><tspan font-weight="700" fill="#d93025">而语言模型是 131,072 ÷ 129,280 ≈ 1.01</tspan> —— 落在最不划算的一端，<tspan font-weight="700" fill="#202124">编译器根本没往那儿派，生产任务里它一次表都没查过。</tspan></text>
+<text x="724.0" y="514" class="xs"><tspan font-weight="700" fill="#202124">它只对「同一批行被反复查」的负载划算。</tspan>推荐系统那边少量热行被反复命中，重复度很高，那是它的主场。</text>
+<line x1="724.0" y1="537" x2="1366.0" y2="537" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="724.0" y="557" class="xs"><tspan font-weight="700" fill="#d93025">而语言模型几乎每个索引都取不同的行</tspan>（一批 131,072 个 token，词表 129,280 行，重合极少）—— 落在最不划算的一端，<tspan font-weight="700" fill="#202124">编译</tspan></text>
+<text x="724.0" y="574" class="xs"><tspan font-weight="700" fill="#202124">器根本没往那儿派，生产任务里它一次表都没查过。</tspan></text>
 <rect x="20" y="626" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
 <text x="38" y="654" class="sec" fill="#1a73e8">⭐ 落点：两句宣传语都没说错 —— 错的是把「支持」读成「我的负载用得上」</text>
 <text x="38" y="680" class="xs"><tspan font-weight="700" fill="#202124">这两个坑是同一个形状</tspan>：能力确实存在，但通往它的路上有一道<tspan font-weight="700" fill="#202124">只在文档细则里的条件</tspan>。宣传页只负责说「有」，不负责说「你够不够格」。</text>
 <text x="38" y="701" class="xs"><tspan font-weight="700" fill="#202124">能带走的一条动作</tspan>：<tspan font-weight="700" fill="#d93025">看到一个「支持 X」，先去找那道门槛在哪一行。</tspan><tspan fill="#9aa0a6">找不到就当它不适用于你 —— 然后去看 trace。这两条都不是本课特有的技巧，是所有硬件宣传语的通用读法。</tspan></text>
 <rect x="20" y="760" width="1360" height="92" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
 <text x="38" y="786" class="sec">⚠️ 出处分层</text>
-<text x="38" y="810" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：sm_120a 与 sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；duplication factor 的判据与 131,072 ÷ 129,280 这个算式出自本课图 T-5。</text>
+<text x="38" y="810" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：sm_120a 与 sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；一批 131,072 个 token 与词表 129,280 行，是本课这次训练任务的实际配置。</text>
 <text x="38" y="830" class="xxs"><tspan font-weight="700" fill="#202124">不主张的</tspan>：两颗核之间连线的方向，<tspan font-weight="700" fill="#d93025">公开资料没有列出</tspan>，所以这张图不画那根箭头。<tspan fill="#9aa0a6">「块量化在数据通路里」是从「它是 MMA 指令的一个变体、缩放因子与操作数同住 TMEM」推的。</tspan></text>
 </svg>
-<figcaption><b>两块「多出来的」不在同一层。</b>块量化<b>就在 Tensor Core 的数据通路里</b>，是同一条 MMA 指令的一个变体；SparseCore 才是物理上独立的核。<b>下半张是这张图真正的增量</b>：两个坑其实是同一个形状 —— 能力都真的存在，但各自有一道<b>只写在细则里的门槛</b>（哪颗 die／duplication factor）。</figcaption>
+<figcaption><b>两块「多出来的」不在同一层。</b>块量化<b>就在 Tensor Core 的数据通路里</b>，是同一条 MMA 指令的一个变体；SparseCore 才是物理上独立的核。<b>下半张是这张图真正的增量</b>：两个坑其实是同一个形状 —— 能力都真的存在，但各自有一道<b>只写在细则里的门槛</b>（哪颗 die／取行重复度）。</figcaption>
 </figure>
 
   <details class="aside"><summary>旁白：这一节的自查 —— 对称是修辞，不是证据（方法论，可跳过）</summary>
@@ -9719,7 +9718,7 @@ details.aside b{color:var(--ink);font-weight:600}
     <br><br>收回那半句之后反而多赚了一条：
     两个坑摆到一起，形状是一样的 —— <b>能力都真的存在，
     但通往它的路上各有一道只写在细则里的门槛</b>。
-    GPU 那道是<b>你手上是哪颗 die</b>，TPU 那道是<b>你的 duplication factor 是多少</b>。
+    GPU 那道是<b>你手上是哪颗 die</b>，TPU 那道是<b>这批数据的取行重复度够不够高</b>。
     <b>看到「支持 X」，先去找那道门槛在哪一行；找不到，就当它不适用于你。</b></div></details>
 
   <h3>3.6　高潮：FlashAttention 在两条路上各走一遍</h3>

@@ -7456,8 +7456,12 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
   <!-- ⛔ R3 补一句术语注。图上出现了 <code>duplication factor</code>，而**全课正文
        零次**（grep 过：「块量化」「duplication factor」只在 P-37 这一张图里出现）。
        学员看到图上这个词会卡住 —— 它是全课唯一「出现即用、从未定义」的术语。
-       ⛔ 只给白话释义，**不写那条判据公式** —— 公式的出处是内部材料，
-          而这个仓库是公开的（T-5 那张图在公开模式下也是这么处理的）。 -->
+       ⛔ 只给白话释义，**不写那条判据算式** —— 这个仓库是公开的。
+       ⛔⛔ 2026-09-05 更正：这条注释原来最后还有半句「T-5 那张图在公开模式下
+          也是这么处理的」。**那是假设，不是事实。** 当时只要 grep 一次 T-5
+          就会发现它把算式原样印了出来，而且没走闸门 —— 于是算式跟着渲染进
+          公开产物、推了一版。**「另一个文件已经处理好了」必须当场验证，
+          不能顺手写进注释当结论。** 现在闸门里有判据了，不再靠谁记得。 -->
   <!-- ⭐ 2026-09-03 按 3.3/3.4 那套叙事重排。⛔ 原来这一节正文只有一段：
        先甩结论「它们不在同一层」，再挂一条 duplication factor 的术语注，
        然后就交给图。**这一节真正值钱的那句（两句宣传语都没说错，
@@ -7502,10 +7506,21 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
     宣传口径是「TPU 有个专门查 embedding 表的核」。</p>
 
   <p>这句话也是真的。门槛在于：<b>它只对「同一批行被反复查」的负载划算。</b>
-    <em>图上那个 <code>duplication factor</code> 量的就是这件事 ——&nbsp;
-    取了多少索引，除以可选的行数。</em></p>
+    <em>推荐系统那边少量热行被反复命中，重复度很高 ——&nbsp;那是它的主场。</em></p>
 
-  <p>而<b>语言模型的重复度大约是 1.01</b> ——&nbsp;一行几乎只查一次，
+  <!-- ⛔⛔ 2026-09-05：这里原来印着那条判据的**具体算式**，而讲义里明确写过
+       它不该进对外材料。本仓库是公开仓库，而且已经推过一版。
+       → 对外只留白话与这次任务的实际配置。
+       ⚠️ 顺带，那条算式照字面**算不出它自己的例子**：分母若取整张表的行数，
+          推荐系统「几亿行里取几百个」＝ 极小，反倒比语言模型还小 —— 方向是反的。
+          真正该做分母的是这一批取到的**不重复行数**。
+       ⚠️ 两条操作教训：
+          · HTML 注释也会进公开产物，所以注释本身同样不写来源署名、
+            也不复述被挡住的原文（复述会自己撞上闸门）。
+          · 闸门已加一条判据（gate.py `_FORBIDDEN` 最后一条），
+            这样它不再依赖谁记得这条规矩。 -->
+  <p>而<b>语言模型几乎每个索引都取不同的行</b> ——&nbsp;
+    一批 131,072 个 token，词表 129,280 行，重合极少，
     落在最不划算的那一端。
     <em>编译器根本不往那儿派，<b>生产任务里它一次表都没查过。</b></em></p>
 
@@ -7655,7 +7670,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
   <p>⭐ <b>能带走的一个动作：看到一个「支持 X」，先去找那道门槛写在哪一行。</b>
     <em>找不到，就当它不适用于你。</em></p>
 <figure class="fbox fwide" id="ms-p37">
-<svg viewBox="0 0 1400 872" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 的块量化是 MMA 指令的一个变体，位于 Tensor Core 数据通路内部；TPU 的 SparseCore 是一颗物理上独立的核。两者能不能用，分别取决于目标架构和 duplication factor">
+<svg viewBox="0 0 1400 872" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="GPU 的块量化是 MMA 指令的一个变体，位于 Tensor Core 数据通路内部；TPU 的 SparseCore 是一颗物理上独立的核。两者能不能用，分别取决于目标架构和这批数据的取行重复度">
 <text x="20" y="26" class="ttl">两块「多出来的」<tspan font-weight="700">不在同一层</tspan>　—— 而两道门槛都不在宣传页上</text>
 <rect x="1281" y="10" width="99" height="22" rx="11" fill="#d93025"/>
 <text x="1330.5" y="25" class="lbl" fill="#fff" text-anchor="middle">3.5 的自查</text>
@@ -7712,20 +7727,20 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <rect x="710.0" y="424" width="670.0" height="180" rx="10" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
 <rect x="710.0" y="424" width="670.0" height="32" rx="10" fill="#f3e8fd"/>
 <rect x="710.0" y="447" width="670.0" height="9" rx="0" fill="#f3e8fd"/>
-<text x="724.0" y="446" class="box" fill="#8430ce">TPU 那道门槛：你的 duplication factor 是多少</text>
+<text x="724.0" y="446" class="box" fill="#8430ce">TPU 那道门槛：这批数据的取行重复度够不够高</text>
 <rect x="724.0" y="466" width="642.0" height="26" rx="5" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.2"/>
 <text x="736.0" y="484" class="xs" fill="#202124">宣传口径：「TPU 有个专门查 embedding 表的核」</text>
-<text x="724.0" y="514" class="xs"><tspan font-weight="700" fill="#202124">判据是 duplication factor</tspan> ＝ 这批取了多少索引 ÷ 可选的行数，衡量「重复取同一行」的程度。推荐系统几亿行里取几百个，</text>
-<text x="724.0" y="531" class="xs">很高，那是它的主场。</text>
-<line x1="724.0" y1="554" x2="1366.0" y2="554" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
-<text x="724.0" y="574" class="xs"><tspan font-weight="700" fill="#d93025">而语言模型是 131,072 ÷ 129,280 ≈ 1.01</tspan> —— 落在最不划算的一端，<tspan font-weight="700" fill="#202124">编译器根本没往那儿派，生产任务里它一次表都没查过。</tspan></text>
+<text x="724.0" y="514" class="xs"><tspan font-weight="700" fill="#202124">它只对「同一批行被反复查」的负载划算。</tspan>推荐系统那边少量热行被反复命中，重复度很高，那是它的主场。</text>
+<line x1="724.0" y1="537" x2="1366.0" y2="537" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
+<text x="724.0" y="557" class="xs"><tspan font-weight="700" fill="#d93025">而语言模型几乎每个索引都取不同的行</tspan>（一批 131,072 个 token，词表 129,280 行，重合极少）—— 落在最不划算的一端，<tspan font-weight="700" fill="#202124">编译</tspan></text>
+<text x="724.0" y="574" class="xs"><tspan font-weight="700" fill="#202124">器根本没往那儿派，生产任务里它一次表都没查过。</tspan></text>
 <rect x="20" y="626" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
 <text x="38" y="654" class="sec" fill="#1a73e8">⭐ 落点：两句宣传语都没说错 —— 错的是把「支持」读成「我的负载用得上」</text>
 <text x="38" y="680" class="xs"><tspan font-weight="700" fill="#202124">这两个坑是同一个形状</tspan>：能力确实存在，但通往它的路上有一道<tspan font-weight="700" fill="#202124">只在文档细则里的条件</tspan>。宣传页只负责说「有」，不负责说「你够不够格」。</text>
 <text x="38" y="701" class="xs"><tspan font-weight="700" fill="#202124">能带走的一条动作</tspan>：<tspan font-weight="700" fill="#d93025">看到一个「支持 X」，先去找那道门槛在哪一行。</tspan><tspan fill="#9aa0a6">找不到就当它不适用于你 —— 然后去看 trace。这两条都不是本课特有的技巧，是所有硬件宣传语的通用读法。</tspan></text>
 <rect x="20" y="760" width="1360" height="92" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
 <text x="38" y="786" class="sec">⚠️ 出处分层</text>
-<text x="38" y="810" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：sm_120a 与 sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；duplication factor 的判据与 131,072 ÷ 129,280 这个算式出自本课图 T-5。</text>
+<text x="38" y="810" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：sm_120a 与 sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；一批 131,072 个 token 与词表 129,280 行，是本课这次训练任务的实际配置。</text>
 <text x="38" y="830" class="xxs"><tspan font-weight="700" fill="#202124">不主张的</tspan>：两颗核之间连线的方向，<tspan font-weight="700" fill="#d93025">公开资料没有列出</tspan>，所以这张图不画那根箭头。<tspan fill="#9aa0a6">「块量化在数据通路里」是从「它是 MMA 指令的一个变体、缩放因子与操作数同住 TMEM」推的。</tspan></text>
 </svg>
 <figcaption><b>上半张看「在哪一层」，下半张才是这张图的增量</b> ——&nbsp;<em>两道门槛并排放在一起，形状是一样的。</em></figcaption>
