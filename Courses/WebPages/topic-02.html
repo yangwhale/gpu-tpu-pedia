@@ -10,7 +10,7 @@
      不支持 SVG 图标的浏览器会自动回落到根目录的 favicon.ico。 -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
 <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
-<meta property="og:title" content="TPU 与 GPU · 一小时版（L200）">
+<meta property="og:title" content="TPU 与 GPU · 精讲版（L200）">
 <meta property="og:description" content="不逐个介绍硬件参数。拿专题一那张需求清单，一条一条去硬件上找答案 —— 每个答案都配一张图和一次实测。">
 <meta property="og:type" content="article">
 <meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-02.html">
@@ -524,7 +524,7 @@ details.aside b{color:var(--ink);font-weight:600}
 .mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
 </style>
 <!-- ══════════════════════════════════════════════════════════════
-     专题二 · L200（一小时版）
+     专题二 · L200（精讲版）
      ⛔ 这个文件是 Courses/tools/topic02-build-L200.py 生成的，**不要手改**。
         图是从 L300（topic-02-L300.html）里抽的，改图去改图的生成器；
         改正文去改 topic02-build-L200.py 的 body()。
@@ -535,7 +535,7 @@ details.aside b{color:var(--ink);font-weight:600}
 
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题二
-    ／ <b>L200 · 一小时版</b>
+    ／ <b>L200 · 精讲版</b>
     <a class="lecbtn" href="topic-02-L200-lecture.html">📝 讲义（授课稿）</a></div>
   <h1>TPU 与 GPU</h1>
   <div class="en">Two Accelerators, Two Origins</div>
@@ -565,7 +565,7 @@ details.aside b{color:var(--ink);font-weight:600}
          而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
          ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
          （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
-    <span class="chip">⏱ <b>77 分钟 · 40 张图</b></span>
+    <span class="chip">⏱ <b>37 分钟 · 40 张图</b></span>
     <span class="chip">完整版 <a href="topic-02-L300.html"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -631,6 +631,37 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>「这件事在这一边由谁决定」</b>。<br>
     ——&nbsp;<b>如果只带走一句话，就是这一句：两边处处都不同，但这些不同全是同一个决定的后果。</b>
     <em>那「同一个决定」是什么，第 2 节给答案。</em></div>
+
+  <!-- ⛔⛔ 2026-09-04 加。这是全篇**读者最容易撞上、而页面从来没交代过**的一处。
+       事实：这一版的节号是 0 / 1 / 2 / 3 / 4 / 5 / 6–7 / 9（没有第 8 节，
+       6 和 7 合并），因为它跟完整版 L300 对齐 ——&nbsp;这个决定是对的
+       （听完想深挖的人能拿着号直接翻 L300），**但页面上一个字都没说**。
+       更硬的一处：**七张图（p22 / p18 / g8 / t2 / t3 / t4 / t6）是整块从 L300 搬来的，
+       它们的图内文字写的是 L300 的号** ——&nbsp;比如 p22 上写「§7 两边的实测」，
+       而这一版那节叫 6.3；g8 上写「见正文 §2 / §8」，而这一版没有第 8 节。
+       ⭐ 为什么不改图：图是 L300 的产物，L200 一个字都不改（这条规矩在脚本头，
+          理由是「同一个职责不要两个载体」）。改图等于给每张图开一个 L200 分身，
+          七张图七个分身，下次改 L300 就漂七处。
+       ⭐ 所以正确的解是**说破**：把对照表一次给全，放在第 0 节末尾 ——&nbsp;
+          读者在 §3 第一次撞上「§7」的时候，脑子里已经有过这句话了。
+       ⛔ 折叠，不占主线：需要它的人一定是正拿着两版对照翻。 -->
+  <details class="aside"><summary>⚠️ 先说一句：这一版的节号会跳（没有第 8 节），图上的号是完整版的号<em>（不是你漏读了）</em></summary>
+    <div class="body">
+    <p><b>这一版的节号跟完整版 L300 对齐，不重排。</b>
+      好处是听完想往下挖的人，可以拿着同一个号直接翻 L300 的同一节；
+      代价是<b>这一版会跳号</b>：<b>0 · 1 · 2 · 3 · 4 · 5 · 6–7 · 9</b>
+      ——&nbsp;<em>第 8 节整节只在 L300 里，6 和 7 在这一版合成了一节。</em></p>
+    <p>⚠️ <b>还有一处只在图上：有七张图是整块从 L300 搬来的，图内文字用的是 L300 的号。</b>
+      对照关系就这三条：</p>
+    <ul>
+      <li>图上写 <b>§7（两边的实测）</b> ——&nbsp;在这一版是 <b>6.3</b></li>
+      <li>图上写 <b>§6（怎么比才有意义）</b> ——&nbsp;在这一版是 <b>6.1 / 6.2</b></li>
+      <li>图上写 <b>§8（这一课的数我是怎么核的）</b> ——&nbsp;
+        <b>这一版没有这一节</b>，它整节只在 L300</li>
+    </ul>
+    <p><em>——&nbsp;图不改是故意的：图是 L300 的产物，这一版一个字都不改它，
+      否则同一张图会有两个版本，改了一边另一边就悄悄漂掉。</em></p>
+    </div></details>
 </div></section>
 
 <section id="s1"><div class="wrap">
@@ -1115,138 +1146,13 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>TPU</b> 交给编译器在编译期算准 ——&nbsp;<em>也就是接受它的脾气。</em>
     <br>——&nbsp;<b>后面第 3、5 节看到的每一样东西，都是这一句的后果。</b></div>
 
-  <h3>2.2　顺便纠一个几乎人人第一次都搞反的词</h3>
-  <p>要谈「搬得对不对齐」，得先有 TPU 那边的坐标词。这两个词的字面<b>会骗人</b>：</p>
-<figure class="fbox" id="s012-fig2-2">
-  <svg viewBox="0 0 1000 452" width="100%" role="img" aria-label="向量寄存器是横着的一条 128 格、叠 8 条；横向叫 lane，第几条叫 sublane">
-<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">lane 和 sublane 是<tspan font-weight="700">寄存器</tspan>的形状 —— 不是内存的概念，也不是「大小」的概念</text>
-<text class="svgsm" x="0" y="35">来源：JAX 公开源码中 v7 那一支的 num_lanes = 128 / num_sublanes = 8</text>
-<text class="svglbl" x="0" y="88" fill="#1a73e8">一个向量寄存器</text>
-<rect x="230" y="98" width="510" height="24" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
-<rect x="234" y="102" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
-<rect x="274" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="314" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="354" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="394" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="434" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="474" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="514" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="554" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="594" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="634" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="674" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
-<text class="svgsm" x="728" y="119" fill="#1e8e3e">…</text>
-<rect x="234" y="120" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
-<rect x="274" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="314" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="354" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="394" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="434" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="474" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="514" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="554" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="594" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="634" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="674" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<text class="svgsm" x="728" y="137" fill="#5f6368">…</text>
-<rect x="234" y="138" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
-<rect x="274" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="314" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="354" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="394" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="434" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="474" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="514" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="554" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="594" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="634" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="674" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<text class="svgsm" x="728" y="155" fill="#5f6368">…</text>
-<rect x="234" y="156" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
-<rect x="274" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="314" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="354" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="394" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="434" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="474" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="514" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="554" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="594" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="634" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="674" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<text class="svgsm" x="728" y="173" fill="#5f6368">…</text>
-<rect x="234" y="174" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
-<rect x="274" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="314" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="354" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="394" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="434" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="474" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="514" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="554" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="594" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="634" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="674" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<text class="svgsm" x="728" y="191" fill="#5f6368">…</text>
-<rect x="234" y="192" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
-<rect x="274" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="314" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="354" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="394" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="434" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="474" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="514" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="554" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="594" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="634" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="674" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<text class="svgsm" x="728" y="209" fill="#5f6368">…</text>
-<rect x="234" y="210" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
-<rect x="274" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="314" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="354" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="394" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="434" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="474" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="514" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="554" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="594" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="634" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="674" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<text class="svgsm" x="728" y="227" fill="#5f6368">…</text>
-<rect x="234" y="228" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
-<rect x="274" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="314" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="354" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="394" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="434" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="474" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="514" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="554" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="594" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="634" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<rect x="674" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
-<text class="svgsm" x="728" y="245" fill="#5f6368">…</text>
-<text class="svgsm" x="754" y="112" fill="#1e8e3e">共 128 列</text>
-<path d="M254.0 88 v10" stroke="#d93025" stroke-width="1.6"/>
-<text class="svglbl" x="254.0" y="68" text-anchor="middle" fill="#d93025">1 条 lane</text>
-<text class="svgsm" x="254.0" y="82" text-anchor="middle" fill="#d93025">红色这一竖条，自己一套 ALU</text>
-<text class="svglbl" x="214" y="110" text-anchor="end" fill="#1e8e3e">1 个 sublane = 横着的一整条</text>
-<text class="svgsm" x="214" y="125" text-anchor="end" fill="#1e8e3e">128 格那么长 = 512 B</text>
-<text class="svgsm" x="216" y="242" text-anchor="end">共 8 行</text>
-<text class="svgnum" x="234" y="266" fill="#1a73e8">整个寄存器 = 8 × 128 × 32 bit = 4,096 B = 4 KiB</text>
-<rect x="0" y="280" width="982" height="56" rx="8" fill="#fce8e6" stroke="#d93025"/>
-<text class="svglbl" x="18" y="302" fill="#d93025">⚠️ 「sub」不是「更小」—— sublane 不是 lane 的一小段，它是横跨全部 128 条 lane 的一整条</text>
-<text class="svgsm" x="18" y="321" fill="#d93025">立画面只要两步：<tspan font-weight="700">先只看一条 —— 128 格那么长；再叠 8 条 —— 就是一个寄存器。</tspan>　记法：<tspan font-family="ui-monospace,monospace">最内维 → lane，次内维 → sublane</tspan>。</text>
-<rect x="0" y="346" width="982" height="88" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
-<text class="svglbl" x="18" y="368" fill="#1e8e3e">⭐ 然后 XLA 故意把内存布局做成同一个形状</text>
-<text class="svgsm" x="18" y="387" fill="#0d652d">数组 […, C, D] 落到内存里：最内维 D → lane（128 一组），次内维 C → sublane（8 一组）。</text>
-<text class="svgsm" x="18" y="404" fill="#0d652d">于是一个 [A, B, C, D] 的数组，在内存里是 A × B × ⌈C/8⌉ × ⌈D/128⌉ 个 4 KiB 的块。</text>
-<text class="svgsm" x="18" y="421" fill="#0d652d">直接后果：⚠️ 「一行」在内存里并不连续 —— 它被切碎在一排块里。下一片讲这件事要付多少钱。</text>
-</svg>
-  <figcaption><b>先只看一条 —— 128 格那么长；再叠 8 条 —— 就是一个寄存器。</b><br>lane 量的是长度（第几格，0–127），sublane 量的是第几条（0–7）。<br>⚠️ sublane 不是 lane 的一小段，它是横跨全部 128 条 lane 的一整条 —— 「sub」说的是第二维，不是更小。<br>XLA 故意让<b>内存布局等于寄存器形状</b>，代价是「一行」在内存里不再连续。</figcaption>
-  </figure>
-
+  <!-- ⛔⛔ 2026-09-04 这一小节（lane / sublane 的坐标词）**整块搬到了 3.3 开头**。
+       ⭐ 判据是数出来的，不是感觉：它的引子写着「要谈『搬得对不对齐』，
+          得先有 TPU 那边的坐标词」——&nbsp;**而整个第 2 节 lane 出现 0 次**，
+          第 3 节出现 12 次。也就是说它的理由在本节根本没兑现。
+       ⚠️ 标题里那个「**顺便**」是自供状：一小节如果只能用「顺便」开头，
+          它多半不在这一节的链上。以后看到「顺便 / 另外 / 补充一下」当标题词，
+          先去数一遍它服务的那个东西在哪一节。 -->
   <h3>2.3　主例登场：为什么是 FlashAttention</h3>
   <p>判据有了，坐标有了。现在挑一个算子把它跑到底。
     挑 FlashAttention 的理由很实际：<b>每个大模型都要跑它</b>。
@@ -1515,11 +1421,19 @@ details.aside b{color:var(--ink);font-weight:600}
 </div></section>
 
 <section id="s3"><div class="wrap">
-  <div class="stn big"><span class="badge">第 3 节</span><h2>拆开看：形状对不对得齐，以及并排走完全程</h2></div>
-  <p class="lead">第 2 节数的是<b>决策点</b>，4 个对 0 个。这一节数的是<b>粒度</b>。<br>
-    同样一块矩阵乘的活，两边一条指令吃下的块大小<b>差 16 倍</b>。
-    这个数记住了，后面「为什么这个优化在那边不管用」大半能自己推出来。<br>
-    <em>本节最后，两边并排把 FlashAttention 走完一遍。</em></p>
+  <!-- ⛔⛔ 2026-09-04 §3 拆成上下两篇。原来是一整节：**7,318 字 / 20 图 /
+       11 个子块，占全篇 57% 的字、50% 的图**，而标题带个「以及」——&nbsp;
+       「拆开看，**以及**并排走完全程」。⭐ 标题带「以及」通常就是它该拆成两节。
+       更硬的证据：原来那句 lead 写「这一节数的是粒度」，**而 3.1–3.3b 数的
+       根本不是粒度，是部件和层级** ——&nbsp;那句 lead 其实只覆盖了 3.4。
+       ⛔ 拆的是**呈现**，不是编号：小节号 3.1–3.7 一个都不动
+          （全仓库对「3.6 那张表」「3.7 的账表」这类引用有五百多处，
+          改号是一次全文波及的返工，收益只有好看）。 -->
+  <div class="stn big"><span class="badge">第 3 节 · 上</span><h2>拆开看：同一份复杂度，两边放在了不同的地方</h2></div>
+  <p class="lead">第 2 节数的是<b>决策点</b>，4 个对 0 个。<b>上半节沿着一条路往里拆</b>：
+    整颗芯片 →&nbsp;一个核 →&nbsp;核里那块地 →&nbsp;并行层级 →&nbsp;一条指令吃多大一块。
+    <br>每一层都问同一个问题：<b>这一层两边少了什么、多了什么，是谁的决定造成的。</b>
+    <br><em>拆完之后，下半节把零件装回去 ——&nbsp;两边并排把 FlashAttention 走完一遍。</em></p>
 
   <h3>3.1　先看整颗：一边把缝藏起来，一边把缝交给你</h3>
   <p>两颗芯片<b>都是双 die 封装</b> ——&nbsp;先看这一层，是因为有个差别
@@ -3367,6 +3281,141 @@ details.aside b{color:var(--ink);font-weight:600}
   </details>
 
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
+  <!-- ⭐ 2026-09-04 从 2.2 搬来。lane / sublane 在这一节第一次真正被用上
+       （下面讲「一个线程其实是一条 lane」、3.4 讲 8 × 128 的块形状都要它），
+       所以坐标词就立在用它的地方，不提前一整节。 -->
+  <p>先补一对坐标词 ——&nbsp;下面这一节和 3.4 全靠它们说话，
+    而这两个词的字面<b>会骗人</b>：</p>
+<figure class="fbox" id="s012-fig2-2">
+  <svg viewBox="0 0 1000 452" width="100%" role="img" aria-label="向量寄存器是横着的一条 128 格、叠 8 条；横向叫 lane，第几条叫 sublane">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">lane 和 sublane 是<tspan font-weight="700">寄存器</tspan>的形状 —— 不是内存的概念，也不是「大小」的概念</text>
+<text class="svgsm" x="0" y="35">来源：JAX 公开源码中 v7 那一支的 num_lanes = 128 / num_sublanes = 8</text>
+<text class="svglbl" x="0" y="88" fill="#1a73e8">一个向量寄存器</text>
+<rect x="230" y="98" width="510" height="24" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<rect x="234" y="102" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
+<rect x="274" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="314" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="354" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="394" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="434" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="474" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="514" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="554" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="594" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="634" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="674" y="102" width="38" height="16" rx="2" fill="#e6f4ea" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="728" y="119" fill="#1e8e3e">…</text>
+<rect x="234" y="120" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
+<rect x="274" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="314" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="354" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="394" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="434" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="474" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="514" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="554" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="594" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="634" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="674" y="120" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="728" y="137" fill="#5f6368">…</text>
+<rect x="234" y="138" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
+<rect x="274" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="314" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="354" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="394" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="434" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="474" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="514" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="554" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="594" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="634" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="674" y="138" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="728" y="155" fill="#5f6368">…</text>
+<rect x="234" y="156" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
+<rect x="274" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="314" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="354" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="394" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="434" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="474" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="514" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="554" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="594" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="634" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="674" y="156" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="728" y="173" fill="#5f6368">…</text>
+<rect x="234" y="174" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
+<rect x="274" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="314" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="354" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="394" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="434" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="474" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="514" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="554" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="594" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="634" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="674" y="174" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="728" y="191" fill="#5f6368">…</text>
+<rect x="234" y="192" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
+<rect x="274" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="314" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="354" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="394" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="434" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="474" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="514" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="554" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="594" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="634" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="674" y="192" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="728" y="209" fill="#5f6368">…</text>
+<rect x="234" y="210" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
+<rect x="274" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="314" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="354" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="394" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="434" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="474" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="514" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="554" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="594" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="634" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="674" y="210" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="728" y="227" fill="#5f6368">…</text>
+<rect x="234" y="228" width="38" height="16" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="0.7"/>
+<rect x="274" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="314" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="354" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="394" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="434" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="474" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="514" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="554" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="594" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="634" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="674" y="228" width="38" height="16" rx="2" fill="#fff" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="728" y="245" fill="#5f6368">…</text>
+<text class="svgsm" x="754" y="112" fill="#1e8e3e">共 128 列</text>
+<path d="M254.0 88 v10" stroke="#d93025" stroke-width="1.6"/>
+<text class="svglbl" x="254.0" y="68" text-anchor="middle" fill="#d93025">1 条 lane</text>
+<text class="svgsm" x="254.0" y="82" text-anchor="middle" fill="#d93025">红色这一竖条，自己一套 ALU</text>
+<text class="svglbl" x="214" y="110" text-anchor="end" fill="#1e8e3e">1 个 sublane = 横着的一整条</text>
+<text class="svgsm" x="214" y="125" text-anchor="end" fill="#1e8e3e">128 格那么长 = 512 B</text>
+<text class="svgsm" x="216" y="242" text-anchor="end">共 8 行</text>
+<text class="svgnum" x="234" y="266" fill="#1a73e8">整个寄存器 = 8 × 128 × 32 bit = 4,096 B = 4 KiB</text>
+<rect x="0" y="280" width="982" height="56" rx="8" fill="#fce8e6" stroke="#d93025"/>
+<text class="svglbl" x="18" y="302" fill="#d93025">⚠️ 「sub」不是「更小」—— sublane 不是 lane 的一小段，它是横跨全部 128 条 lane 的一整条</text>
+<text class="svgsm" x="18" y="321" fill="#d93025">立画面只要两步：<tspan font-weight="700">先只看一条 —— 128 格那么长；再叠 8 条 —— 就是一个寄存器。</tspan>　记法：<tspan font-family="ui-monospace,monospace">最内维 → lane，次内维 → sublane</tspan>。</text>
+<rect x="0" y="346" width="982" height="88" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="18" y="368" fill="#1e8e3e">⭐ 然后 XLA 故意把内存布局做成同一个形状</text>
+<text class="svgsm" x="18" y="387" fill="#0d652d">数组 […, C, D] 落到内存里：最内维 D → lane（128 一组），次内维 C → sublane（8 一组）。</text>
+<text class="svgsm" x="18" y="404" fill="#0d652d">于是一个 [A, B, C, D] 的数组，在内存里是 A × B × ⌈C/8⌉ × ⌈D/128⌉ 个 4 KiB 的块。</text>
+<text class="svgsm" x="18" y="421" fill="#0d652d">直接后果：⚠️ 「一行」在内存里并不连续 —— 它被切碎在一排块里。下一片讲这件事要付多少钱。</text>
+</svg>
+  <figcaption><b>先只看一条 —— 128 格那么长；再叠 8 条 —— 就是一个寄存器。</b><br>lane 量的是长度（第几格，0–127），sublane 量的是第几条（0–7）。<br>⚠️ sublane 不是 lane 的一小段，它是横跨全部 128 条 lane 的一整条 —— 「sub」说的是第二维，不是更小。<br>XLA 故意让<b>内存布局等于寄存器形状</b>，代价是「一行」在内存里不再连续。</figcaption>
+  </figure>
+
   <!-- ⭐ 2026-09-01 加这一段过渡。原来 3.2 的收尾和 3.3 的落点是**同一句话**
        （「那个决定的后果」），中间没有台阶，读起来像把上一节又说了一遍。
        ⛔ 查重脚本抓不到这种 —— 它只认 14 字以上的字面重复，
@@ -7290,6 +7339,16 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <figcaption><b>上半张看「在哪一层」，下半张才是这张图的增量</b> ——&nbsp;<em>两道门槛并排放在一起，形状是一样的。</em></figcaption>
 </figure>
 
+</div></section>
+
+<section id="s3b"><div class="wrap">
+  <div class="stn big"><span class="badge">第 3 节 · 下</span><h2>⭐ 装回去：同一个 FlashAttention，两边并排走完一遍</h2></div>
+  <p class="lead">上半节拆出来的零件，现在<b>全部要同时上场</b>。
+    <br>这半节做两件事：<b>先把算子走完一遍</b>（3.6），
+    <b>再回头兑现前面立过的两个说法</b> ——&nbsp;
+    <em>3.6 末尾兑现第 0 节那句「处处不同、只有一个成因」，
+    3.7 兑现第 1 节那个没解释过的巧合：两边峰值为什么在同一量级。</em></p>
+
   <h3>3.6　⭐ 高潮：同一个 FlashAttention，两边并排走完一遍</h3>
   <!-- ⭐ 2026-09-04 按 3.3～3.5 那套叙事把问题提到最前。
        ⛔ 原来开头是「前面五小节都是零件，这一节把零件装回去」——&nbsp;
@@ -8570,7 +8629,22 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
     那两条声明写错一个字，编译器不会替你兜底 ——&nbsp;
     <b>左栏是「你要做很多决定」，右栏是「你只有一次机会做对」。</b></div>
 
-  <h3>3.7　把这一节的账合起来</h3>
+  <!-- ⛔⛔ 2026-09-04 改标题，**位置不动**。
+       我自己提的建议本来是「把 3.7 挪到 3.6 前面」——&nbsp;理由是
+       3.6 的落点是**全课级**兑现（第 0 节那句话），紧跟一个**节级**小结会泄气。
+       ⭐ 动手时发现有更好的解，而且不用碰编号：**3.7 根本不是小结。**
+          它的内容（份数多 148 倍 × 每份小 128 倍 ≈ 抵消）回答的是
+          **第 1 节开场摆出来、却一直没解释过的那件事** ——&nbsp;
+          「两边峰值为什么在同一量级」。
+       ⭐ 所以正确的读法是两级回收，一个接一个反而是加强：
+          **3.6 收第 0 节的立论，3.7 收第 1 节的那个数。**
+          原来的标题「把这一节的账合起来」把它说小了，才显得像泄气。
+       ⛔ 顺带记一条：**改结构之前先问「这块东西到底是什么」** ——&nbsp;
+          它被摆错位置，往往是因为它被贴错了标签，而不是因为顺序错了。 -->
+  <h3>3.7　回到第 1 节那个巧合：两边峰值为什么在同一量级</h3>
+  <p>第 1 节开场把两个峰值并排摆出来（<b>2,307 对 2,500</b>），只说了「同一量级」，
+    <b>没说为什么</b>。走完全程之后，这个「为什么」现在算得出来了 ——&nbsp;
+    <em>而答案恰好是上半节那两个差得最离谱的数，自己把自己抵消了。</em></p>
   <!-- ⭐⭐ 2026-09-01 加。**执行 Chris 20:17 那条反馈的通用版：先给画面，再上数字。**
        G-8 本身是张好图，但它一上来就是 606,208 / 524,288 / 148 / 128 四个数 ——
        跟我口头讲砸的 3.6 是同一个毛病：**信息全对，脑子里立不起画面。**
@@ -9359,7 +9433,13 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 </div></section>
 
 <section id="s4"><div class="wrap">
-  <div class="stn big"><span class="badge">第 4 节 · 岔路</span><h2>一张卡装不下的时候</h2></div>
+  <!-- ⛔ 2026-09-04 视觉降级：`stn big`（红 badge，主线级）→ `stn`（蓝 badge）。
+       ⭐ 理由：这一节主线只有两行字，全部内容都在折叠里，自己还写着
+          「可以直接跳到第 5 节」——&nbsp;**给一个可跳过的东西一个跟主线平级的红标，
+          等于让读者做一次假的进度判断**（「哦还有一整节」）。
+       ⛔ 但节号不摘：它在 L300 里是完整的第 4 节，摘了号就断了对照。
+          降的是**视觉权重**，不是编号。 -->
+  <div class="stn"><span class="badge">第 4 节 · 岔路</span><h2>一张卡装不下的时候</h2></div>
   <p class="lead">这一节<b>不在主线上</b>，只想跟着主线走的<b>可以直接跳到第 5 节</b>
     ——&nbsp;下面这个折叠块留给「一张卡放不下」的场景。</p>
 
@@ -9680,9 +9760,19 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 </div></section>
 
 <section id="s5"><div class="wrap">
-  <div class="stn big"><span class="badge">第 5 节</span><h2>为什么会不同：运行时，还是编译期</h2></div>
-  <p class="lead">前面每一节都停在同一个决定上，只是每次换了个部件。这一节把那件事本身拿出来讲 ——&nbsp;
-    <b>「谁来安排」这个决定，从硬件一路流到你写代码的那只手上。</b></p>
+  <!-- ⛔ 2026-09-04 改标题。原来叫「为什么会不同：运行时，还是编译期」——&nbsp;
+       它读起来像**第一次介绍**这对词，而这对词到这儿已经用过四次了
+       （2.1 的「4 对 0」、3.3「哪几层是运行时才定的」、3.3b「运行时适应是三套电路」、
+       3.6 那六站）。⭐ 落差就出在这儿：台下心里会冒一句「这我不是已经知道了吗」。
+       ⚠️ 原来的 lead 其实说对了（「前面每一节都停在同一个决定上」）——&nbsp;
+          **是标题没跟上 lead。** 现在把「第四次 → 正式拆开」写进标题，
+          并在 lead 里把那四处点名，让读者确认自己确实一路都在看同一件事。 -->
+  <div class="stn big"><span class="badge">第 5 节</span><h2>⭐ 把那个词正式拆开：运行时，还是编译期</h2></div>
+  <p class="lead">这对词你已经见过四次了 ——&nbsp;
+    <b>2.1</b> 那个「4 对 0」、<b>3.3</b>「哪几层是运行时才定的」、
+    <b>3.3b</b> 那三套电路、<b>3.6</b> 六站里两边分岔的那两站。
+    <br><b>前面每一节都停在同一个决定上，只是每次换了个部件。这一节把那件事本身拿出来讲</b>
+    ——&nbsp;<em>「谁来安排」这个决定，从硬件一路流到你写代码的那只手上。</em></p>
 
   <h3>5.1　硬件层：延迟归谁管</h3>
   <p>最底下这一层最能说明问题。<b>取一次数要等几百个周期，这段时间干什么？</b>
@@ -10985,7 +11075,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
   <div class="stn big"><span class="badge">第 9 节</span><h2>那到底各自擅长什么</h2></div>
   <p class="lead">走完全程，最后回答开课时那个没答的问题。<b>先看八行取舍</b> ——&nbsp;
     读它的时候留意一件事：<b>每一行都能指回前面某一节</b>，
-    <b>没有一行是新的</b>。这张表不引入任何东西，它只是把八节收成八句。</p>
+    <b>没有一行是新的</b>。这张表不引入任何东西，它只是把前面每一节收成一句。</p>
 <figure class="fbox fwide" id="ms-p22">
 <svg viewBox="0 0 1400 1004" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="八个问题两种答案：这一课支撑得住的「各自擅长什么」，每一行自带出处和硬度">
 <text x="20" y="26" class="ttl">各自擅长什么　—— <tspan font-weight="700" fill="#1a73e8">八个问题，每个都有两种答案，没有一个有「更好的那种」</tspan></text>
@@ -11130,7 +11220,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
        学员当场分不清哪句才是「那一句」。而两句之间的桥 3.6 已经架好了
        （「走完一遍之后，第 0 节那句话兑现了：六行里四行两边是一样的」），
        s9 却另起炉灶。改成顺着那座桥往下说，签名句式全课只留 §0 那一次。 -->
-  <p>八节，两块硬件，从封装拆到实测。开场说「处处都不同，但只有一个成因」，
+  <p>从封装拆到实测，两块硬件走完了一整趟。开场说「处处都不同，但只有一个成因」，
     3.6 把全程摊开数过，六行里四行两边一样 ——&nbsp;
     <b>现在可以说那个成因到底是什么了。</b></p>
 <figure class="fbox fwide" id="ms-p24">
@@ -11276,7 +11366,13 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
        ⭐ 处理办法不是删（对照 L300 翻页时真需要它），是**分层**：
           一句 L300 去处留在明面（它是有用的下一步），节号勘误折起来 ——
           需要它的人一定是正拿着两版对照翻，那种人会去点开。 -->
-  <div class="note info"><span class="t">这一版是 L200 · 一小时</span>
+  <!-- ⛔ 2026-09-04：这里原来写「这一版是 L200 · 一小时」，而页首那个自动算出来的
+       chip 报的是 37 分钟（当前 77）。**同一页上两个时长，一个手写一个算出来的。**
+       ⭐ 2026-09-03 已经拍板「不砍内容，要一个准点的时段就按 80 分钟要」——&nbsp;
+          所以「一小时」这个标签从那天起就不成立了，只是没人回头改标签。
+       ⭐ 现在版本名只留等级码（L200 · 精讲版），**具体分钟数全篇只出现在
+          页首那个自动算的 chip 上**，一个真源。 -->
+  <div class="note info"><span class="t">这一版是 L200 · 精讲版（主线 37 分钟）</span>
     完整版 <b>L300</b>（两小时，72 张图）多出来的是四组深挖：<br>
     ·芯片封装全景与十行完整对照<br>
     ·寄存器堆到位线的五张图<br>
