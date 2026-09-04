@@ -35,7 +35,7 @@ CMP_ROWS = [
      "打印、单步、profiler，<b>看得见每一行</b>",
      "读编译产物、读 profile。<b>看得见结果，看不见过程</b>"),
 ]
-CMP_HH, CMP_RH = 36, 50
+CMP_HH, CMP_RH = 40, 58
 CMP_H = CMP_HH + len(CMP_ROWS) * CMP_RH
 
 CARD_Y = CMP_Y + CMP_H + 42
@@ -99,22 +99,49 @@ def _col(f, x, w, c, head, code, note, cost):
 
 # ══════════════════════════════════════════════════════════════════════
 def _cmp(f):
+    """中间那张四行对照表。
+
+    ⭐ 2026-09-04 重画。Chris 的原话：**「表面上是图，其实是一个表格，
+       左边一列右边一列，特别单薄，字还那么小。」** 这一张正是那个样子 ——
+       三栏全是灰底细线，读者看不出「哪两栏是一对」。
+
+    改的是三件事，每一件都对应一种层次：
+      ① **身份**：两个答案栏各铺一条通到底的淡红／淡绿色带，
+         跟上半张那两张卡是同一套颜色 ——&nbsp;
+         于是「左红右绿」这个身份在整张图里只需要建立一次。
+      ② **节奏**：斑马纹从 #fafafa 提到 #f6f7f9（原来那档在投影上等于没有），
+         行高 50 → 58，行与行之间靠底色分组，不靠细线。
+      ③ **主次**：问题那一栏加一条 3px 的靛蓝竖轨 ＋ 加粗 ——&nbsp;
+         它是「行的名字」，不该跟答案同一个视觉重量。
+    ⛔ 不要再往里加第四栏：这张表的全部意思就是「同一个问题，两种答案」。
+    """
     cx = [20, 232, 812]
     cw = [206, 574, 568]
     f.t(20, CMP_Y - 12, "把差别摊成四行　—— 每一行都是上面那个选择的直接后果", "sec")
 
-    f.rect(20, CMP_Y, 1360, CMP_HH, "#f1f3f4", None, 0, 8)
-    for i, h in enumerate(["问的是同一个问题", "GPU / CUDA", "TPU / XLA"]):
-        f.t(cx[i] + 14, CMP_Y + 23, h, "lbl", INK)
+    # ① 两条通到底的身份色带，先铺底，后面所有东西压在它上面
+    f.rect(cx[1], CMP_Y, cw[1], CMP_H, "#fdf3f2", None, 0, 0)
+    f.rect(cx[2], CMP_Y, cw[2], CMP_H, "#f1f8f3", None, 0, 0)
+
+    f.rect(20, CMP_Y, 1360, CMP_HH, "#eceff1", None, 0, 8)
+    f.rect(20, CMP_Y + CMP_HH - 8, 1360, 8, "#eceff1", None, 0, 0)
+    for i, (h, c) in enumerate([("问的是同一个问题", SUB),
+                                ("GPU / CUDA", RD), ("TPU / XLA", GN)]):
+        if i:                                   # 表头前面点一个色块，跟色带同色系
+            f.rect(cx[i] + 14, CMP_Y + 13, 9, 9, c, None, 0, 2)
+        f.t(cx[i] + (28 if i else 14), CMP_Y + 23, h, "lbl", c if i else INK)
 
     for r, (q, a, b) in enumerate(CMP_ROWS):
         y = CMP_Y + CMP_HH + r * CMP_RH
-        if r % 2:
-            f.rect(20, y, 1360, CMP_RH, "#fafafa", None, 0, 0)
-        f.line(20, y, 1380, y, "#e8eaed", 1)
-        para(f, cx[0] + 14, y + 30, cw[0] - 28, "<b>%s</b>" % q, "xs")
-        para(f, cx[1] + 14, y + 24, cw[1] - 28, a, "xs", 17)
-        para(f, cx[2] + 14, y + 24, cw[2] - 28, b, "xs", 17)
+        if r % 2:                               # ② 斑马纹：整行压一层，色带也一起压深
+            f.rect(20, y, 1360, CMP_RH, "#00000008", None, 0, 0)
+        if r:
+            f.line(cx[1], y, 1380, y, "#00000012", 1)
+        f.rect(20, y + 9, 3, CMP_RH - 18, BL, None, 0, 2)   # ③ 问题栏的竖轨
+        para(f, cx[0] + 16, y + 34, cw[0] - 30, "<b>%s</b>" % q, "lbl")
+        para(f, cx[1] + 16, y + 28, cw[1] - 32, a, "xs", 18)
+        para(f, cx[2] + 16, y + 28, cw[2] - 32, b, "xs", 18)
+    f.line(cx[2], CMP_Y, cx[2], CMP_Y + CMP_H, "#00000014", 1)
     f.rect(20, CMP_Y, 1360, CMP_H, "none", "#dadce0", 1.2, 8)
 
 

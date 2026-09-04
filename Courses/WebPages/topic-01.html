@@ -6379,7 +6379,10 @@ function drawFlopCurve(r){
       g.appendChild(el("text",{x,y:Y0+19,"text-anchor":"middle",class:"svgsm"},seqH(2**e)));
   }
   g.appendChild(el("text",{x:X0-42,y:Y1-10,class:"svglbl"},"attention 平方项占前向总算力"));
-  g.appendChild(el("text",{x:X1,y:Y0+19,"text-anchor":"end",class:"svglbl"},"序列长度 →"));
+  /* ⛔ 2026-09-04：轴标题原来跟刻度同一行（Y0+19），右端正好压在最后那个
+     「1M」刻度上。⭐ 轴标题和刻度共用一行是通病 —— 只要最后一个刻度落在轴的
+     末端，两者必然抢位。往下挪一行，让刻度那一行只放刻度。 */
+  g.appendChild(el("text",{x:X1,y:Y0+36,"text-anchor":"end",class:"svglbl"},"序列长度 →"));
 
   // 曲线
   let d="";
@@ -6471,7 +6474,9 @@ function drawCardGrid(r){
     `注意力分数矩阵 ${bytesH(r.attnMatrix)} —— 一层、一次`));
   g.appendChild(el("text",{x:10,y:36,class:"svgsm"},
     `÷ 94.74 GiB 一张卡 =`));
-  g.appendChild(el("text",{x:118,y:37,class:"svgnum",fill:"#d93025","font-size":16},
+  /* ⛔ 2026-09-04：x 原来是 118，而左边那句「÷ 94.74 GiB 一张卡 =」
+     量出来 120px 宽（从 x=10 起），两串字压在一起。挪到 138。 */
+  g.appendChild(el("text",{x:138,y:37,class:"svgnum",fill:"#d93025","font-size":16},
     n>=1 ? `${Math.ceil(n)} 张卡` : `${(n*100).toFixed(1)}% 一张卡`));
 
   const cols=20, cw=19, chh=13;

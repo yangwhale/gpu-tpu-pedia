@@ -120,7 +120,8 @@ def _torus(f):
                         (0, 1, "Y−"), (-0.72, -0.72, "Z+"), (0.72, 0.72, "Z−")):
         f.line(cxx + dx * 26, cyy + dy * 20, cxx + dx * 56, cyy + dy * 44, GN, 1.6, marker="aG")
         f.t(cxx + dx * 74, cyy + dy * 52 + 4, lab, "xxs", GN, "middle")
-    f.t(AXX + 104, TGY + 142, "每条 200 GB/s（双向），6 条合计 1,200", "xxs", None, "middle")
+    # ⛔ 2026-09-04：原来在 TGY+142，正压在 Y− 那个轴标上（轴标在 TGY+138）。
+    f.t(AXX + 104, TGY + 164, "每条 200 GB/s（双向），6 条合计 1,200", "xxs", None, "middle")
 
     para(f, 20, TGY + TW_ + 124, 640,
          "<b>直径的差别是实打实的：</b>4×4×4 如果只是网格，最远要走 3+3+3 ＝ 9 跳；"

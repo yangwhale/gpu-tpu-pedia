@@ -65,6 +65,13 @@ fi
 step "版面体检（报告为主，不中止）"
 python3 topic02-lint-readability.py
 
+# ⭐ 这一条是「渲染后量几何」，跟上面那条「扫源码」互补，**两条都要跑**。
+# 2026-09-04 的教训：宽图整张跑出屏幕左边 286px，源码扫不出来、
+# 构建全绿、连横向溢出探针都查不到（往左跑不产生滚动条）——
+# 只有开一个 1900px 的无头浏览器量 getBoundingClientRect 才看得见。
+step "版面体检 · 渲染后几何（左跑 / 右撑 / 图内文字撞车）"
+python3 topic02-lint-layout.py
+
 printf '\n\033[1m▸ 产物\033[0m\n'
 for f in topic-01.html topic-02-L300.html topic-02.html \
          topic-03.html topic-08.html \

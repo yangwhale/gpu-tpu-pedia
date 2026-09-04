@@ -88,9 +88,11 @@ def _scene(f):
         f.rect(bx + i * KW, ty + 63, KW, 18, FILL[BL], BL, 0.9, 2)
     # 同一把尺子：把左边那条终点线原样搬过来，差出来的就是省下的
     f.line(bx + SPAN, ty + 58, bx + SPAN, ty + 92, GREY, 1.2, dash="3 3")
-    f.t(bx + NK * KW - 4, ty + 104, "跑完", "xxs", GN, anchor="end")
-    f.line(bx + NK * KW, ty + 118, bx + SPAN, ty + 118, GN, 2.0)
-    f.t((bx + NK * KW + bx + SPAN) / 2, ty + 134,
+    f.t(bx + NK * KW - 4, ty + 94, "跑完", "xxs", GN, anchor="end")
+    f.line(bx + NK * KW, ty + 98, bx + SPAN, ty + 98, GN, 2.0)
+    # ⛔ 2026-09-04：这句原来在 ty+134，正好落在下面那段正文（SC_Y+222）的第一行上。
+    #    ⭐ 它是那条箭头的**标注**，本来就该贴着箭头，不该往下探到正文那一带。
+    f.t((bx + NK * KW + bx + SPAN) / 2, ty + 112,
         "省下来的全是空等", "xxs", GN, anchor="middle")
 
     para(f, L_X + 18, SC_Y + 222, L_W - 36,

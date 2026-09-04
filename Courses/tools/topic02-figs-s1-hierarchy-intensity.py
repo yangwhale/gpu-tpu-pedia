@@ -99,7 +99,8 @@ W('fig1-3.svg',p+['</svg>'])
 # ══════════ 图 1-4 · 压轴：312 FLOP/byte ══════════
 V7B,V7BW,V7F=2307,7.380,4614     # TFLOPS / TB·s⁻¹ / TFLOPS  官方 per chip
 B2B,B2BW,B2F=2500,8.000,5000     # dense per GPU，由官方域级数字除 72 得到
-H2=810          # 471 是原来只讲 HBM 一层时的高度；下面那段阶梯 ＋ 两行口径说明撑到 804
+H2=828          # 471 是原来只讲 HBM 一层时的高度；下面那段阶梯 ＋ **三行**口径说明撑到 822
+                # （2026-09-04：反推校验那句原来一行 1121px 宽、被 viewBox 裁掉，拆成两行后 +18）
 q=[f'<svg viewBox="0 0 1000 {H2}" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算；并列出 GB200 上 HBM、L2、共享内存三层各自的兑换比 312 / 119 / 64">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    '两家公司、两套架构、两种设计哲学 —— 算力除以带宽，落在同一个数上</text>',
@@ -230,8 +231,13 @@ q.append(f'<text class="svgsm" x="0" y="768" fill="{GY}">'
          '（2,500 TFLOPS ÷ 全片带宽），第三条是<tspan font-weight="700">单个 SM 每周期</tspan>。'
          '换算过去比值不变 ——&#160;148 和时钟同时出现在分子分母，约掉了，'
          '<tspan font-weight="700">这是恒等不是近似</tspan>。</text>')
+# ⛔ 2026-09-04：这一行原来是一整条，量出来 1121px 宽，
+#    而 viewBox 只有 1000 —— **右边 121px 直接被裁掉，末尾那半句谁都没读到**。
+#    ⭐ SVG 的 <text> 不换行，长句必须自己断行；判据进了 topic02-lint-layout.py。
 q.append(f'<text class="svgsm" x="0" y="786" fill="{GY}">'
-         '反推校验：2,500 ÷ 64 ＝ 39 TB/s 全片，再 ÷（148 SM × 128 B）得时钟 ≈ 2.06 GHz，与 B200 对得上。'
+         '反推校验：2,500 ÷ 64 ＝ 39 TB/s 全片，再 ÷（148 SM × 128 B）'
+         '得时钟 ≈ 2.06 GHz，与 B200 对得上。</text>')
+q.append(f'<text class="svgsm" x="0" y="804" fill="{GY}">'
          '⭐ 真正的差别不在算法，在<tspan font-weight="700">可达性</tspan>：'
          'HBM 那 8 TB/s 是 148 个 SM 抢的，共享内存这 128 B/周期是每个 SM 自己的。</text>')
 W('fig1-4.svg',q+['</svg>'])

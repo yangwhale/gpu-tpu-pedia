@@ -149,9 +149,12 @@ t(14, YG + 130, '但方向是对的：你要的若只是散落的几行，'
                 '按这个单位对齐取数就会付冤枉钱。', fill=GY)
 
 box(710, YG + 28, W - 710, 116, "#fef7e0", OR)
-t(724, YG + 50, 'SparseCore 的 DMA 粒度', "svglbl", "#7a5000", size=12)
-t(724, YG + 74, '64', "svglbl", "#7a5000", size=30)
-t(772, YG + 74, '字节', "svglbl", "#7a5000", size=14)
+# ⛔ 2026-09-04：标签原来在 +50、30px 的「64」原来在 +74，两者的
+#    包围盒差 3px 就压上了 —— 大字号的 bbox 比基线高出去很多，
+#    ⭐ 排大数字时**不能按基线间距估行距**，要按字号估。
+t(724, YG + 44, 'SparseCore 的 DMA 粒度', "svglbl", "#7a5000", size=12)
+t(724, YG + 84, '64', "svglbl", "#7a5000", size=30)
+t(772, YG + 84, '字节', "svglbl", "#7a5000", size=14)
 t(830, YG + 66, '——&#160;这是<tspan font-weight="700">可执行的官方口径</tspan>，不是文档里的形容词：',
   fill="#7a5000")
 t(830, YG + 84, '<tspan font-family="ui-monospace,monospace">'

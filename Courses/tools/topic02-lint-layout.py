@@ -62,10 +62,16 @@ JS_FIG = r"""()=>{
     const svg=f.querySelector('svg'); if(!svg) return;
     const vb=(svg.getAttribute('viewBox')||'0 0 0 0').split(' ').map(Number);
     const W=vb[2], H=vb[3], bb=[];
+    // ⚠️ 用 getBoundingClientRect 换算回 viewBox 坐标，**不要用 getBBox**。
+    //    getBBox 给的是**变换之前**的框：旋转 90° 的纵轴标题会报出 x = −21，
+    //    看着像「顶出画布」，其实 transform 早把它放回去了。
+    //    2026-09-04 第一版就是这么误报了专题一那张对数图。
+    const R=svg.getBoundingClientRect(), k=W/R.width;
     for(const t of svg.querySelectorAll('text')){
-      let b; try{b=t.getBBox()}catch(e){continue}
+      const b=t.getBoundingClientRect();
       if(!b.width) continue;
-      bb.push({x:b.x,y:b.y,w:b.width,h:b.height,s:(t.textContent||'').slice(0,24)});
+      bb.push({x:(b.x-R.x)*k, y:(b.y-R.y)*k, w:b.width*k, h:b.height*k,
+               s:(t.textContent||'').slice(0,24)});
     }
     const oob=bb.filter(b=>b.x<-2||b.x+b.w>W+2||b.y<-2||b.y+b.h>H+2).map(b=>b.s);
     const hits=[]; let n=0;
