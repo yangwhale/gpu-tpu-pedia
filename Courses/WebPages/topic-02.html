@@ -624,8 +624,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svglbl" x="532" y="82" fill="#1e8e3e">出身：为矩阵乘定做的 ASIC</text>
 <text class="svgsm" x="532" y="108" fill="#202124" style="font-size:11.5px">从第一天就只服务神经网络</text>
 <text class="svgsm" x="532" y="128" fill="#202124" style="font-size:11.5px">形状规则、访问可预测、控制流静态</text>
-<text class="svgsm" x="532" y="148" fill="#202124" style="font-size:11.5px">→ 省下的面积全给计算单元</text>
-<text class="svgsm" x="532" y="168" fill="#202124" style="font-size:11.5px">无 cache · 编译期定布局 · 巨大的 MXU</text>
+<text class="svgsm" x="532" y="148" fill="#202124" style="font-size:11.5px">→ 省下的是复杂度，不是换来更多算力</text>
+<text class="svgsm" x="532" y="168" fill="#202124" style="font-size:11.5px">无 cache · 无调度器 · 同样的算力只切成 4 大块</text>
 <rect x="532" y="192" width="292" height="26" rx="13" fill="#1e8e3e"/>
 <text class="svglbl" x="678" y="209" text-anchor="middle" fill="#fff">早就知道你要跑什么　→　一手都不留</text>
 <text class="svgsm" x="500" y="140" text-anchor="middle" fill="#80868b" style="font-size:15px">vs</text>
@@ -2988,7 +2988,14 @@ details.aside b{color:var(--ink);font-weight:600}
     TPU 少掉的那五样<b>不是省出来的，是不需要了</b>。<br>
     一旦决定「不在运行时换任务」——&nbsp;warp 调度器、记分板、几十个 warp 槽、
     常驻上下文、动态分支处理，<b>同时失去存在理由</b>。<br>
-    省下的面积去哪了？<b>全给了计算单元。</b><em>下一小节量的就是这件事。</em></div>
+    <br>省下的面积去哪了？——&nbsp;<b>先说它<u>没</u>去哪：没变成更多算力，也没变成更多片上存储。</b>
+    <em>这两条 3.7 和 3.2b 会各用一张表堵死（乘加总量 GPU 反而多 16%，
+    片上 SRAM GPU 多 73%）。</em>
+    <br>它变成的是<b>「不做」本身</b>：整套 cache 与调度机构不做了，
+    同样多的算力只切成 <b>4 大块</b>而不是 592 小块 ——&nbsp;
+    <em>少 148 套控制电路。</em>
+    <span class="sub">⚠️ 这换来了多低的功耗、多好的良率？<b>这门课一个数都没量过</b>，
+    所以只说到「复杂度下降」为止。</span></div>
 
   <!-- ⭐ 2026-09-01 加。Chris 问：「你打算啥时候讲 warp 调度器、线程单元、
        SM 里的寄存器怎么用、L2 怎么用、SM 之间怎么协同？」
@@ -3272,7 +3279,7 @@ details.aside b{color:var(--ink);font-weight:600}
     ⭐ 所以这两小节真正的结论不是「谁的片上存储更好」。<br>
     <b>两边都在处理同一个东西 ——&nbsp;不确定性，只是把它放在了不同的地方。</b><br>
     GPU 花硅去兜住不确定：缓存、替补、调度器。<br>
-    TPU 把不确定性消灭在编译期，省下的硅拿去做算和暂存 ——&nbsp;
+    TPU 把不确定性消灭在编译期，省下的硅**没有**变成更多算力（3.7 会数给你看），变成的是更少的电路 ——&nbsp;
     代价是要求你（或者编译器）提前把话说死。<br>
     ——&nbsp;<b>落到选型上就一句话：形状规整、可预测的活，TPU 这套换算得过来；
     形状不规则、长度动态变的活，GPU 那笔保险费就花得值。</b>
