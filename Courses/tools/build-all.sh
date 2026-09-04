@@ -47,6 +47,14 @@ if [ "${1:-}" != "--lint" ]; then
   # ⭐ 专题八在轮到它之前就开工了 —— 材料是讲专题二时问出来的，
   #    当场写进了它该属于的那一讲。它的 CSS 从专题二 L300 / 专题一讲义抽，
   #    **所以必须排在那两步之后**。
+  # ⭐ 专题三的**源是 md**（Courses/专题03-注意力演进.md），
+  #    页面由 md2course.py 转出来。改内容改那份 md，别改脚本里的字符串。
+  step "专题三 教材（从 md 生成）"
+  python3 topic03-build.py
+
+  step "专题三 讲义"
+  python3 topic03-build-lecture.py
+
   step "专题八 教材"
   python3 topic08-build.py
 
@@ -58,7 +66,8 @@ step "版面体检（报告为主，不中止）"
 python3 topic02-lint-readability.py
 
 printf '\n\033[1m▸ 产物\033[0m\n'
-for f in topic-01.html topic-02-L300.html topic-02.html topic-08.html \
+for f in topic-01.html topic-02-L300.html topic-02.html \
+         topic-03.html topic-08.html \
          gpu-microscope.html tpu-microscope.html; do
   [ -f "$W/$f" ] || continue
   printf '  %-24s %9s  %2d 图\n' "$f" \
