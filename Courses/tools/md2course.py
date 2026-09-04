@@ -49,7 +49,15 @@ def inline(t):
     t = re.sub(r"`([^`]+)`", _stash, t)
     ents = []
     t = _ENT.sub(lambda m: (ents.append(m.group(0)), "\x01%d\x01" % (len(ents) - 1))[1], t)
+    # ⭐ 行内 HTML 直通。md 本来就允许内嵌 HTML，而这门课确实需要
+    #    <u> <span class="sub"> <br> 这些 markdown 给不了的东西。
+    #    ⛔ 不透传的后果很具体：2026-09-04 专题三里那个
+    #       「**标准前向<u>不需要跨块归并</u>**」在页面上直接露出了 <u> 四个字符。
+    tags = []
+    t = re.sub(r"</?[a-zA-Z][a-zA-Z0-9]*(?:\s[^<>]*)?/?>",
+               lambda m: (tags.append(m.group(0)), "\x02%d\x02" % (len(tags) - 1))[1], t)
     t = _html.escape(t, quote=False)
+    t = re.sub(r"\x02(\d+)\x02", lambda m: tags[int(m.group(1))], t)
     t = re.sub(r"\x01(\d+)\x01", lambda m: ents[int(m.group(1))], t)
     t = re.sub(r"\[([^\]]+)\]\(([^)]+)\)", r'<a href="\2">\1</a>', t)
     t = re.sub(r"\*\*([^*]+)\*\*", r"<b>\1</b>", t)
@@ -207,6 +215,21 @@ def convert(md, section_badge="第 %s 节"):
             i = j
             continue
 
+        # ── 块级 HTML 直通 ──────────────────────────────────────
+        # ⭐ 需要表现力的地方（<details> 折叠、<figure> 配图、分栏卡片）
+        #    直接在 md 里写 HTML，这里原样搬。**这是这套流程的表现力上限 ＝ HTML**
+        #    的来源 —— 没有它，md 就成了天花板。
+        # ⛔ 判据只看「这一行是不是以 < 开头」，故意做得笨：
+        #    聪明的判据要解析 HTML，而那是另一个库。
+        if ln.lstrip().startswith("<") and not ln.lstrip().startswith("<!--"):
+            j, buf = i, []
+            while j < n and lines[j].strip() != "":
+                buf.append(lines[j])
+                j += 1
+            out.append("\n".join(buf))
+            i = j
+            continue
+
         # ── 分隔线 / 空行 / 普通段落 ─────────────────────────────
         if ln.strip() == "---":
             out.append("<hr>")
@@ -217,7 +240,8 @@ def convert(md, section_badge="第 %s 节"):
             continue
         j, buf = i, []
         while j < n and lines[j].strip() and not re.match(
-                r"^(#{1,4} |\||>|```|---$|\s*([-*]|\d+\.)\s)", lines[j]):
+                r"^(#{1,4} |\||>|```|---$|\s*([-*]|\d+\.)\s)", lines[j]) and not (
+                j > i and lines[j].lstrip().startswith("<")):
             buf.append(lines[j].strip())
             j += 1
         out.append("<p>%s</p>" % inline(" ".join(buf)))
