@@ -40,6 +40,7 @@ SCRIPTS = {
     "topic02-fig-9474-waterfall.py":     {"fig0-1.svg": "fig0-1"},
     "topic02-figs-s1-panorama.py":       {"fig1-1.svg": "fig1-1", "fig1-2.svg": "fig1-2"},
     "topic02-fig-s1-use-the-line.py":    {"fig1-6.svg": "fig1-6"},
+    "topic02-fig-s4-64chips.py":         {"fig4-1.svg": "fig4-1"},
     "topic02-fig-s3-why-layers.py":      {"fig3-1.svg": "fig3-1"},
     "topic02-fig-s3-sm-inside.py":        {"fig3-2.svg": "fig3-2"},
     "topic02-fig-s3-thread-is-a-lane.py": {"fig3-3.svg": "fig3-3"},
