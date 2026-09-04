@@ -138,12 +138,49 @@ def scan(path):
     return hits, tot, bold
 
 
+# ⛔⛔ 2026-09-04 加这一条，起因是一个**不报错但毁版面**的 bug：
+#     `<li><b>一共 <code>28 × 6 ＝ 168</b> 块。</b></li>`
+#     —— <code> 用 </b> 收了口。浏览器会自作主张把 <code> 一直开着，
+#     而这份 CSS 给 code 的是 white-space:nowrap，于是**从那一行往后
+#     整页文字都不换行**，页面横向被撑到 2986px（视口 1440）。
+#     构建全绿、体检全绿、肉眼扫源码也看不出来 —— 只有量宽度才发现。
+# ⭐ 所以判据要用「数标签」这种笨办法，而不是「看着对不对」。
+TAGS = ('code', 'b', 'em', 'span', 'details', 'figure', 'p', 'div', 'ul', 'li')
+
+
+def tag_balance(path):
+    """返回 [(标签, 开, 闭)]，只报不配平的。
+
+    ⛔ 数之前必须先把**注释、script、style** 整块挖掉 ——&nbsp;第一版没挖，
+       立刻误报两条：专题一有个注释里写着「这里不要包 <b>」（注释里的标签
+       浏览器不认），还有 script 里的 JS 字符串含 "<span"。
+       这跟本文件里「数正文要先删 style/script 内容」是同一类坑。
+    """
+    h = io.open(path, encoding='utf-8').read()
+    h = re.sub(r'<!--.*?-->', '', h, flags=re.S)
+    h = re.sub(r'<script\b.*?</script>', '', h, flags=re.S)
+    h = re.sub(r'<style\b.*?</style>', '', h, flags=re.S)
+    out = []
+    for t in TAGS:
+        o = len(re.findall(r'<%s[ >]' % t, h))
+        c = h.count('</%s>' % t)
+        if o != c:
+            out.append((t, o, c))
+    return out
+
+
 def main(paths):
     bad = 0
     for p in paths:
         if not os.path.exists(p):
             print('跳过（不存在）%s' % p)
             continue
+        for t, o, c in tag_balance(p):
+            print('\n⛔⛔ %s 标签不配平：<%s> 开 %d 闭 %d'
+                  % (os.path.basename(p), t, o, c))
+            print('    —— 这类错**不报错也不难看**，但会让后面的样式一路串下去。'
+                  '先修它，再看别的。')
+            bad += 1
         hits, tot, bold = scan(p)
         hits.sort(key=lambda x: (x[0], -x[1]))
         print('\n══ %s  正文 %d 汉字' % (os.path.basename(p), tot))
