@@ -6060,6 +6060,22 @@ details.aside b{color:var(--ink);font-weight:600}
     <em>（想知道机制再展开）</em></summary>
     <div class="body">
 
+    <!-- ⭐ 2026-09-04 Chris：「这次没太听懂，下次再回顾」。
+         ⛔ 这段已经很长（六轮追问的沉淀），**必须给一张路线图** ——&nbsp;
+            否则读者不知道自己走到哪一步了。别把它当废话删掉。 -->
+    <div class="note info"><span class="t">这一段的走法（长，但是一条线）</span>
+      <b>① 为什么四个 bit 够用</b>（靠 scale）→&nbsp;
+      <b>② scale 要多密</b>（粒度阶梯）→&nbsp;
+      <b>③ 那 16 个数怎么排</b>（一维沿 K，不是方块）→&nbsp;
+      <b>④ 两个格式差在哪</b>（scale 的类型）→&nbsp;
+      <b>⑤ 两级 scale 各管什么</b>（外层管范围）→&nbsp;
+      <b>⑥ 硬件加了什么</b>（三处，没有协处理器）→&nbsp;
+      <b>⑦ 一层的一圈怎么走</b>（存 4 算 32）→&nbsp;
+      <b>⑧ 训练侧那个 16×16</b>（为了链式法则）→&nbsp;
+      <b>⑨ 出处台账</b>。
+      <br><em>⭐ 只想拿一句话走：<b>存的是 4 bit，算的是 32 bit；
+      推理侧一维 16，训练侧权重二维 16×16。</b></em></div>
+
     <p><b>先把这一段的问题问出来：<code>E2M1</code> 一共四个 bit，
       能表示的绝对值只有八个 ——&nbsp;这怎么可能算得准？</b></p>
 
@@ -6294,6 +6310,43 @@ details.aside b{color:var(--ink);font-weight:600}
       are replicated for each of the 1×16 blocks when being passed into
       Tensor Cores」。）</span></p>
 
+    <!-- ⭐ 2026-09-04 补两块：一是量化那一步到底怎么算（前面只说了「谁做」，
+         没给步骤和式子）；二是一个线性层三个 GEMM 的图景 ——&nbsp;
+         **没有这个图景，后面「反向会转置权重」那句是听不懂的**。
+         Chris 说「这次没太听懂」，缺的多半就是这一块。 -->
+    <p><b>⭐ 那量化那一步，具体是怎么算的？</b></p>
+
+    <p><em>拿一个 16 个数的块走一遍（推理侧、NVFP4）：</em></p>
+    <ul>
+      <li><b>① 先在整张量上取一个全局 scale</b> <code>α</code>（FP32）。
+        <em>取法大致是「最大那个块的绝对值最大值 ÷ 2,688」
+        ——&nbsp;<b>2,688 ＝ 448 × 6</b>，就是后两级叠满能表示的上限。</em></li>
+      <li><b>② 在这 16 个数里取绝对值最大值</b> <code>amax</code>。</li>
+      <li><b>③ 块内 scale</b> <code>Δ ＝ amax ÷ 6 ÷ α</code>，
+        <em>再把它<b>round 成 UE4M3</b> 存起来。</em>
+        <span class="sub">（除以 6 是因为 E2M1 最大只能表示 6；除以 α 是把它挪进 E4M3 的量程。）</span></li>
+      <li><b>④ 每个元素</b> <code>q ＝ round( x ÷ (α · Δ) )</code>，
+        <em>结果落进那八个可表示值里，存成 4 bit。</em>
+        <b>权重和激活用就近偶数舍入，梯度用随机舍入。</b></li>
+    </ul>
+
+    <p><b>反量化就是把这条路倒着走</b>：<code>x ≈ α · Δ · q</code>。
+      <em><b>其中 <code>Δ · q</code> 那一步是 Tensor Core 在 MMA 里顺手做的，
+      <code>α</code> 那一步是软件在 FP32 输出上乘回去的。</b></em>
+      <span class="sub">（所以硬件只认两级里的一级 ——&nbsp;这一条前面说过，这里对上了。）</span></p>
+
+    <p><b>⭐ 再补一个图景，不然下一段听不懂：一个线性层其实是三个矩阵乘。</b></p>
+    <ul>
+      <li><b>前向（Fprop）</b>：<code>y ＝ w · x</code></li>
+      <li><b>反向之一（Dgrad）</b>：<code>∂x ＝ wᵀ · ∂y</code>
+        ——&nbsp;<em>算给上一层的梯度。</em></li>
+      <li><b>反向之二（Wgrad）</b>：<code>∂w ＝ ∂y · xᵀ</code>
+        ——&nbsp;<em>算这一层权重自己的梯度。</em></li>
+    </ul>
+    <p><em>三个都在 FP4 上算，<b>输出是 BF16 或 FP32</b>。</em>
+      <b>注意第二个：它用的是 <code>wᵀ</code> ——&nbsp;同一个权重，被转置着又用了一次。</b>
+      <em>下一段整段就是在处理这一件事。</em></p>
+
     <p><b>⭐ 那 16×16 到底怎么回事？——&nbsp;这是训练侧的事，而且理由不是「更准」。</b></p>
 
     <p><b>先把配方摆出来</b>（出自 NVIDIA 那篇 NVFP4 预训练论文）：<br>
@@ -6409,6 +6462,84 @@ details.aside b{color:var(--ink);font-weight:600}
     <p>⭐ <b>一句话：存的是 4 bit，算的是 32 bit。</b>
       <em>进来那一下的换算<b>焊在 MMA 流水线里</b>，出去那一下
       <b>是普通核跑一条新指令</b>。</em></p>
+
+    <!-- ⭐⭐ 2026-09-04 Chris 明确要求「数据源和出处也都写」。
+         ⛔ 之前的毛病很实在：**大量出处只写在 HTML 注释里，读者根本看不见**。
+            注释是给维护者的，不是给学员的 —— 这一条以后建新内容时也适用。
+         ⭐ 台账按「哪一条结论 ← 哪一份材料」组织，不按材料列表组织 ——&nbsp;
+            要回查的人手里拿的是结论，不是书目。
+         ⚠️ 全部是公开可访问的资料，公开仓库可以直接给链接。 -->
+    <p><b>⭐ 出处台账 ——&nbsp;上面每一条结论是从哪儿来的</b></p>
+
+    <p class="sub"><em>按「结论 ← 材料」排，不按书目排。<b>凡是推的都单独标了。</b></em></p>
+
+    <ul>
+      <li><b>E2M1 那八个可表示值、两级缩放、16 对 32、E4M3 对 E8M0、
+        「更多次机会贴合局部动态范围」</b><br>
+        ←&nbsp;NVIDIA 开发者博客
+        <a href="https://developer.nvidia.com/blog/introducing-nvfp4-for-efficient-and-accurate-low-precision-inference"
+           target="_blank" rel="noopener">Introducing NVFP4 for Efficient and Accurate
+        Low-Precision Inference</a></li>
+
+      <li><b>MX 标准的 k＝32、E8M0</b><br>
+        ←&nbsp;OCP Microscaling 规范及其论文
+        <a href="https://arxiv.org/abs/2310.10537" target="_blank" rel="noopener">
+        Microscaling Data Formats for Deep Learning</a></li>
+
+      <li><b>那 16 个是一维沿 K（A 片 16×64、SFA 片 16×4）、UE4M3 这个精确叫法、
+        NVFP4 那条 PTX 指令串</b><br>
+        ←&nbsp;Colfax Research
+        <a href="https://research.colfax-intl.com/cutlass-tutorial-nvfp4-blockscaled-gemm-on-nvidia-rtx-pro-blackwell-gpus-sm12x"
+           target="_blank" rel="noopener">NVFP4 Blockscaled GEMM on NVIDIA RTX Pro
+        Blackwell GPUs (SM12x)</a>
+        <span class="sub">·「每个 scale 盖 K 方向连续 16 个元素」另见 NVIDIA cuDNN
+        前端关于 scale factor 布局的文档</span></li>
+
+      <li><b>scale 必须进 TMEM、SFA／SFB 的交错布局、显存→共享内存→TMEM 这条路</b><br>
+        ←&nbsp;Colfax Research
+        <a href="https://research.colfax-intl.com/cutlass-tutorial-hardware-supported-block-scaling-with-nvidia-blackwell-gpus"
+           target="_blank" rel="noopener">Hardware-supported Block-scaling with
+        NVIDIA Blackwell GPUs</a>，以及 NVIDIA 的 tcgen05 MMA 文档</li>
+
+      <li><b>TMEM 每 SM 256 KiB、128 lane × 512 column × 32 bit</b><br>
+        ←&nbsp;Colfax 的 TMEM 教程；另有公开微基准论文
+        <a href="https://arxiv.org/abs/2512.02189" target="_blank" rel="noopener">
+        Microbenchmarking NVIDIA's Blackwell Architecture</a> 独立复核</li>
+
+      <li><b>「block quantization ＝ 沿一个轴分块」这个定义（不蕴含二维）</b><br>
+        ←&nbsp;
+        <a href="https://docs.nvidia.com/deeplearning/tensorrt/latest/inference-library/quantized-types-workflows.html"
+           target="_blank" rel="noopener">NVIDIA TensorRT · Quantization Workflows</a>
+        <span class="sub">（文档里连 blocking axis、block size 和 scale 形状的公式都给了）</span></li>
+
+      <li><b>per-tensor 那一级是「防溢出」不是「提精度」；训练 recipe 的权重用 16×16</b><br>
+        ←&nbsp;
+        <a href="https://nvidia.github.io/TransformerEngine/examples/fp8_primer.html"
+           target="_blank" rel="noopener">NVIDIA Transformer Engine · Using FP8 and FP4</a>
+        <span class="sub">（原话：an additional single per-tensor FP32 scaling factor
+        to avoid overflows；a single scaling factor is shared by a 2D block of
+        16x16 elements）</span></li>
+
+      <li><b>16×16 的真正理由（链式法则）、2D 比 1D 粗却更好、
+        scale 复制成 16 份喂 Tensor Core、Hadamard 的 d＝16、
+        随机舍入、后段切回 BF16 的收益</b><br>
+        ←&nbsp;
+        <a href="https://arxiv.org/abs/2509.25149" target="_blank" rel="noopener">
+        Pretraining Large Language Models with NVFP4</a>（NVIDIA）
+        <span class="sub">·「Tensor Cores require scaling factors along the
+        dot-product dimension」这句硬约束也出自该文</span></li>
+
+      <li><b>GB10 有 FP4 的 MMA 却缺转换指令</b><br>
+        ←&nbsp;NVIDIA 开发者论坛上的实测报告
+        <span class="sub">⚠️ <b>这是论坛帖，不是官方规格书</b> ——&nbsp;
+        本课里它只用来支撑「能算」和「能转」是两块独立硬件这个定性判断，
+        <b>不用它支撑任何数字</b>。</span></li>
+    </ul>
+
+    <p class="sub">⚠️ <b>本段里属于「推的」只有一处</b>，已在原处标明：
+      <em>「集合通信为什么也适合交给 SparseCore」那一句</em>
+      ——&nbsp;那是 3.5 另一半的事，跟 FP4 无关，写在这里只是为了台账完整。
+      <b>FP4 这一段的每一条都能对上上面某一份材料。</b></p>
 
     <p class="sub">⚠️ 最后澄清一个名字：<b>「Transformer Engine」不是物理部件</b> ——&nbsp;
       它是「支持块缩放的 Tensor Core ＋ 决定怎么选 scale 的软件库」的合称，
