@@ -799,8 +799,67 @@ def body():
     <br>它变成的是<b>「不做」本身</b>：整套 cache 与调度机构不做了，
     同样多的算力只切成 <b>4 大块</b>而不是 592 小块 ——&nbsp;
     <em>少 148 套控制电路。</em>
-    <span class="sub">⚠️ 这换来了多低的功耗、多好的良率？<b>这门课一个数都没量过</b>，
-    所以只说到「复杂度下降」为止。</span></div>
+    <span class="sub">⚠️ 这换来了多低的功耗、多好的良率？<b>这门课一个数都没量过</b> ——&nbsp;
+    但<b>官方替它量过一部分</b>，见下面那个折叠。</span></div>
+
+  <!-- ⭐⭐ 2026-09-04 加。Chris 听完上面那段之后说：「电路简单、功耗低、稳定性这些，
+       应该是 TPU 官方讲过的、有据可查的东西 —— 去搜一下，把它表述清楚。」
+       ⭐ 他是对的，而且出处比我预期的硬：**TPU 初代论文（ISCA 2017）整篇就是这个论证**，
+          连 die 面积的分配都印在 Figure 2 的 floor plan 上。
+       ⛔ 但引的时候有三条边界，一条都不能省，否则就成了这门课自己要拆穿的那种材料：
+          ① 那篇论文比的是 **TPU v1（2015）对 K80（2014）**，不是 v7 对 B200；
+          ② Ironwood 那个 perf/watt 2× 是**对上一代 TPU**，不是对 GPU；
+          ③ **良率／可靠性我没有找到任何出处** ——&nbsp;官方讲的是「确定性」，那是另一件事。
+       ⭐⭐ 而第 ① 条本身就是这一段最值钱的东西：**同一个机制，十年之间结果反过来了。**
+          这正好也是我写错那句话的原因 —— 我脑子里装的是 2017 年那个结论。 -->
+  <details class="aside"><summary>这条有官方出处：TPU 初代论文（ISCA 2017）就是这么论证的 ——&nbsp;以及它十年后为什么不再成立<em>（引文 ＋ 三条边界）</em></summary>
+    <div class="body">
+    <p><b>省掉了哪些东西，论文里是一句话列完的</b>（Jouppi et al., ISCA 2017，
+      <em>In-Datacenter Performance Analysis of a Tensor Processing Unit</em>，
+      arXiv:1704.04760，第 8 页）：</p>
+    <blockquote>the single-threaded TPU has none of the sophisticated
+      microarchitectural features that consume transistors and energy to improve
+      the average case but not the 99th-percentile case:
+      <b>no caches, branch prediction, out-of-order execution, multiprocessing,
+      speculative prefetching, address coalescing, multithreading, context
+      switching</b>, and so forth.
+      <b>Minimalism is a virtue of domain-specific processors.</b></blockquote>
+
+    <p><b>省下来变成了什么，摘要里直说</b>：</p>
+    <blockquote>The lack of such features helps explain why, despite having
+      myriad MACs and a big memory, <b>the TPU is relatively small and low
+      power</b>.</blockquote>
+
+    <p>⭐ <b>最硬的一个数在 Figure 2 那张 floor plan 上</b> ——&nbsp;
+      整颗 die 的面积分配：<b>数据缓冲 37% · 计算 30% · I/O 10% ·
+      <u>控制逻辑只有 2%</u></b>。论文紧接着那句是：</p>
+    <blockquote>Control is much larger (and much more difficult to design)
+      in a CPU or GPU.</blockquote>
+    <p><em>——&nbsp;这就是「简单」在版图上的样子：<b>2%</b>。</em></p>
+
+    <p><b>「稳定性」那一条，官方讲的其实是另一个词</b>：不是良率，是
+      <b>确定性执行（deterministic execution）</b>。论文的论点是 ——&nbsp;
+      CPU / GPU 那些随时间变化的优化（cache、乱序、多线程）
+      <em>提高的是平均吞吐，不是尾延迟</em>；而 TPU 的确定性模型
+      更匹配这类应用 <b>99 分位响应时间</b>的要求。
+      <span class="sub">⚠️ <b>良率／可靠性我没有找到出处</b>，所以这门课不说这一条。</span></p>
+
+    <div class="note danger"><span class="t">⛔⛔ 引这篇论文必须带上的三条边界</span>
+      <b>① 它比的是 TPU v1（2015）对 K80（2014）。</b>那一代省下来确实换成了算力：
+      同样一颗小 die 塞进 <b>25 倍的 MAC</b>、3.5 倍的片上内存，功耗还不到 K80 一半。
+      <br>⭐ <b>但到 v7 对 B200，这个结论反过来了</b> ——&nbsp;
+      3.7 那张账表数出来：乘加总量 <b>606,208 对 524,288，GPU 反而多 16%</b>。
+      <em>同一个机制（minimalism），十年之间结果不一样了。</em>
+      <br><b>所以今天只能说「省下的是复杂度」，不能再说「省下的变成了算力」。</b>
+      <span class="sub">——&nbsp;顺带一提，我这门课的开场原来就写错成后者，
+        因为脑子里装的是 2017 年那个结论。<b>老约束在新一代上已经被解除，
+        而结论会自己留在原地。</b></span>
+      <br><br><b>② Ironwood 官方那个 perf/watt「2×」，比的是上一代 TPU（Trillium），
+      不是 GPU。</b><em>（Google blog，2025-04-09；口径是每芯片 TDP 每瓦的
+      峰值 FP8 flops。）</em>拿它去对 GPU 是换了分母。
+      <br><b>③ 良率、可靠性、die 面积：这门课一个数都没有，官方也没给可比口径。</b>
+      <em>不说。</em></div>
+    </div></details>
 
   <!-- ⭐ 2026-09-01 加。Chris 问：「你打算啥时候讲 warp 调度器、线程单元、
        SM 里的寄存器怎么用、L2 怎么用、SM 之间怎么协同？」
