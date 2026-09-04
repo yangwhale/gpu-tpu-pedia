@@ -1,45 +1,42 @@
 # -*- coding: utf-8 -*-
-"""专题三 · 注意力演进 —— 教材。
+"""专题三 · 注意力演进 —— 教材（HTML 就是源）。
 
 ════════════════════════════════════════════════════════════════
-⭐ 这一讲的源是 md，不是这个脚本
+⛔⛔ 2026-09-04 改过一次路线，别再改回去
 ════════════════════════════════════════════════════════════════
-`Courses/专题03-注意力演进.md` **已经写到成品质量**，
-所以这里不重写一遍正文 ——&nbsp;用 `md2course.py` 把它转成 HTML。
+我一度把这一讲做成「md 是源、脚本转 HTML」。**Chris 明确否掉了**：
 
-⛔ **改内容请改那份 md**，不要改这个脚本里的字符串。
-   这条跟「L300 是源、L200 用 lift」是同一条规矩：
-   同一个职责不要两个载体。
+    「没有人让你把 MD 转成 HTML。那个 MD 只是一个简要的大纲，
+      你也不用次次都去更新 MD。我们要写的是 HTML ——
+      什么东西你都直接写 HTML，HTML 才是教材和讲义。」
+
+所以现在的规矩跟专题一、二一致：
+
+  · `Courses/专题03-注意力演进.md`  = **简要大纲**，随手记，不必与页面同步
+  · 这个文件里的 BODY              = **教材本体**，改内容改这里
+
+⛔ 不要再加 md→HTML 的转换器（`md2course.py` 已删）。理由不是它做不到，
+   是它把「大纲」和「成品」绑成了同一个载体 ——
+   大纲要能随手涂改，成品要能精细排版，**这两件事的自由度本来就不一样**。
 
 ════════════════════════════════════════════════════════════════
-状态：第一节是成品，其余是「大纲已展开」
+状态：第一节是成品，其余是把大纲搬进来的骨架
 ════════════════════════════════════════════════════════════════
-2026-09-04：第一节（FlashAttention）按成品质量写完并提到最前，
-带我们自己在 v7 上的块大小扫描与三层效率天花板。
-其余各节是**详细大纲** ——&nbsp;内容都在、每个数都核过出处，
-但没有逐字打磨成讲稿。页面顶部如实标出来。
+第一节（FlashAttention）按成品质量写完，带我们自己在 v7 上的块大小扫描
+与三层效率天花板。其余各节内容都在、数都核过出处，但没有逐字打磨。
+
+⭐ 往下写就直接在 BODY 里写。想加折叠写 <details>，想加图写 <figure>
+   —— **这里没有语法天花板。**
+⛔ BODY 里有 % 号（百分比），所以它**只能用普通字符串**，
+   不要在它上面做 %-格式化。
 """
 import io
 import os
 
-import md2course
-
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "WebPages")
-SRC_MD = os.path.join(HERE, "..", "专题03-注意力演进.md")
 CSS_SRC = os.path.join(WEB, "topic-02-L300.html")
 OUT = os.path.join(WEB, "topic-03.html")
-
-md = io.open(SRC_MD, encoding="utf-8").read()
-
-# md 顶部那段 blockquote 元信息（起草历史、前置、给后面垫了什么）是给维护者的，
-# ⛔ 不渲染进页面 —— 学员要看的是内容，不是这份文件的修订史。
-i = md.index("## ⏱ 一小时怎么讲")
-body_md = md[i:]
-# 末尾的授权行由页脚统一给
-body_md = body_md.split("> 本目录随 `Courses/`")[0]
-
-body, sections = md2course.convert(body_md)
 
 _src = io.open(CSS_SRC, encoding="utf-8").read()
 head = _src[:_src.index("</style>") + len("</style>")]
@@ -58,17 +55,437 @@ pre code { white-space:pre; background:none; border:0; padding:0;
 h4 { margin:18px 0 6px; font-size:15px }
 </style>"""
 
-# ⛔ 不用 <ol> ——&nbsp;它会在「零一二三」前面再编一遍 1.2.3.，两套序号打架。
+# ⭐ 路线目录：节号与标题写死在这儿，跟正文里的 <section id> 对齐。
+# ⛔ 加节 / 改标题时**两处一起改** —— 这是手写 HTML 的代价，认了。
+SECTIONS = [
+    ("s零", "零", "一切从长上下文说起 —— 两条独立的动机"),
+    ("s一", "一", "先解决一个误会：那个矩阵从来没被存下来过 —— FlashAttention"),
+    ("s二", "二", "分类学：只有三个旋钮"),
+    ("s三", "三", "旋钮①：每个 token 存多少"),
+    ("s四", "四", "旋钮②：每个 query 看多少"),
+    ("s五", "五", "旋钮③：换一套数学 —— 线性注意力"),
+    ("s六", "六", "旋钮④（其实是元旋钮）：混合"),
+    ("s七", "七", "代价：没有免费的午餐"),
+    ("s八", "八", "落到硬件（本专题的落点）"),
+    ("s九", "九", "收尾：把谱系放回时间线"),
+    ("s十", "十", "这个专题明确不讲"),
+]
 toc = "\n".join(
-    '    <li><b>%s</b>　<a href="#%s">%s</a></li>' % (no, a, t)
-    for a, no, t in sections if no)
+    '    <li><b>' + no + '</b>\u3000<a href="#' + a + '">' + t + '</a></li>'
+    for a, no, t in SECTIONS)
+
+
+# ══════════════════════════════════════════════════════════════════
+# 正文 —— **这里就是教材本体，直接改**
+# ⛔ 不要去改 md 再生成回来；md 是大纲，这里是成品。
+# ══════════════════════════════════════════════════════════════════
+BODY = '''<section id="x0"><div class="wrap"><div class="stn"><h2>⏱ 一小时怎么讲</h2></div>
+<p><b>✅ 6 个内容节，一小时够</b></p>
+<table>
+<thead><tr><th>分钟</th><th>讲什么</th></tr></thead><tbody>
+<tr><td>0-8</td><td><b>两条动机线</b>：硬件账（必须省）与信息账（可以省而不太亏）。用 488 GiB 那个数字开场</td></tr>
+<tr><td>8-20</td><td>⭐ <b>FlashAttention</b> —— 先把「那个矩阵根本不用存」讲完，并且讲到它<b>为什么仍然只跑到三成多</b></td></tr>
+<tr><td>20-26</td><td>⭐ <b>三个旋钮</b> —— 整课的骨架，一张表把所有名词收进去</td></tr>
+<tr><td>26-45</td><td><b>逐支展开</b>：把 KV 做小 → 少看一点 → 换一套数学 → 混合</td></tr>
+<tr><td>45-52</td><td><b>代价对照表</b>：四个容易被低估的取舍</td></tr>
+<tr><td>52-60</td><td><b>落到硬件</b> + 用一条时间线把谱系串一遍收尾</td></tr>
+</tbody></table>
+<div class="note warn"><p>⭐ <b>2026-09-04 改了顺序</b>：FlashAttention 从倒数第二节提到第一节。 理由是逻辑更硬 —— 先说清「怎么算」这条路已经走到头， <b>剩下的省法只能去改「算什么」</b>，三个旋钮正是从这句话长出来的。 ⚠️ 而且第一节现在<b>不只讲原理，还讲它的天花板</b>（块大小的三堵墙、 <code>head_dim=128</code> 锁死的 50%、以及为什么连 50% 都到不了）—— <b>这一段是给有经验的人的，别按「科普 FlashAttention」的时长去排。</b></p></div>
+<hr>
+</div></section>
+<section id="x1"><div class="wrap"><div class="stn"><h2>这个专题要回答的一个问题</h2></div>
+<p>MLA、GQA、SWA、DSA、NSA、CSA、HCA、DeltaNet、GDN、KDA、Gated MLA……</p>
+<p>名词多到像是各搞各的。<b>但它们其实在解同一道题，而且只有三个旋钮可以拧。</b></p>
+<p>讲完这个专题，看到任何一个新变体，应该能立刻说出： <b>它在拧哪个旋钮、省了什么、赔了什么。</b></p>
+<div class="note info"><p>这一节的目标<b>不是记住这些名词</b>，是拿到一把尺子。名词一年换一批，尺子不换。</p></div>
+<hr>
+</div></section>
+<section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一切从长上下文说起 —— 两条独立的动机</h2></div>
+<p><b>这两条要分开讲。</b> 它们指向同一批技术，但出发点完全不同， 混在一起讲就变成了名词罗列。</p>
+<h3>0.1 线索 A · 硬件账算不过来</h3>
+<p>上下文一长，<b>KV cache 就爆</b>。</p>
+<p>它的增长是双重的：<b>随序列长度线性增长，又随层数线性增长</b>。 而且它跟参数不一样 —— <b>参数是固定的一次性开销，KV cache 是随用户输入长度涨的</b>。</p>
+<p>用一个大家已经熟悉的形状来砸体感：<b>就用专题一那个 V3</b> （61 层、hidden 7168、128 个头、每头 128 维）。 假设它用的是最朴素的 MHA，128K 上下文，bf16 存：</p>
+<pre><code>每 token 每层    2 × n_h × d_h  = 2 × 128 × 128 = 32,768 个数
+每 token 全模型  × 61 层                        = 1,998,848 个数
+                × 2 字节                        = 3,997,696 B = 3.81 MiB
+128K token       × 131,072                      = 523,986,010,112 B
+                                                 = 488 GiB</code></pre>
+<p><b>一个用户、一段 128K 的输入，KV cache 488 GiB。</b></p>
+<p>摆三个对照，让这个数字站住：</p>
+<table>
+<thead><tr><th>对照物</th><th>数值</th><th>于是</th></tr></thead><tbody>
+<tr><td>一块 TPU v7 device 的 HBM</td><td>94.74 GB ≈ <b>88.23 GiB</b></td><td><b>一个用户的 KV 就要 5.5 个 device 装</b></td></tr>
+<tr><td>V3 的全部权重（671 B × 2 B）</td><td>1.342 TB ≈ <b>1250 GiB</b></td><td>单用户占权重的 <b>39%</b>；<b>三个并发用户就超过权重本身</b></td></tr>
+<tr><td>同样形状换成 GQA-8</td><td><b>30.50 GiB</b></td><td>16 倍，但还是装不进一块卡</td></tr>
+<tr><td>同样形状换成 MLA（V3 真实方案）</td><td><b>8.58 GiB</b></td><td><b>56.9 倍</b></td></tr>
+</tbody></table>
+<div class="note warn"><p>⚠️ <b>这个 488 GiB 是「假如 V3 用 MHA」的反事实数字，不是 V3 的实测值。</b> 而且这里沿用了 V3 论文比较表的口径（K、V 都按 d_h=128 算）； V3 真实的 K 每头是 128+64=192 维，所以严格算 MHA 基线还会更大一点。 <b>讲的时候要说清楚这是自己按公式推的、口径是什么</b> —— 这门课自己的规矩：推出来的数字必须带推导链。</p></div>
+<p><b>推理场景更狠</b>：并发用户越多，KV cache 线性叠加。 权重是所有用户共享的<b>一份</b>，KV cache 是<b>每人一份</b>。 所以 KV cache 不是显存里的一项开销，<b>它直接决定了你能同时服务多少人</b> —— 这一条到<a href="专题06-推理.md">专题六</a>会变成 batch size 的硬上限。</p>
+<div class="note info"><p>这一条是<b>工程账</b>：不解决它，长上下文根本上不了线。</p></div>
+<h3>0.2 线索 B · 信息本身不需要那么多</h3>
+<p>这条更有意思，也更少被讲。</p>
+<p><b>一个 128K 的序列，真的需要 128K 份独立的 KV 吗？</b></p>
+<p>几个可以摆出来的观察：</p>
+<ul><li><b>注意力矩阵实测是极其稀疏的</b> —— 绝大部分权重集中在很少的位置上， 剩下的近乎为零。那么把那些近零的算出来，算的是什么？</li><li><b>Attention sink</b> —— 模型会把大量注意力"停放"在序列最开头的几个 token 上， 跟内容无关。这说明注意力权重里有一部分根本不是在做检索</li><li><b>远近有别</b> —— 邻近几十个 token 的关注是密集、细粒度的； 几万 token 之外的关注是稀疏、粗粒度的。 <b>凭什么用同一套精度去处理这两种？</b></li><li>于是：<b>压缩</b>（远处的多个 token 合并成一个）、 <b>稀疏</b>（只挑相关的看）、<b>分层</b>（近处精细远处粗糙）都变得合理</li></ul>
+<div class="note info"><p>这一条是<b>信息账</b>：即使显存无限，把全部算力花在一个高度冗余的矩阵上也是浪费。</p></div>
+<h3>0.3 两条线的关系</h3>
+<p><b>A 说「必须省」，B 说「可以省而不太亏」。</b></p>
+<p>这两句话缺一不可：</p>
+<ul><li><b>只有 A</b>，你得到的是一堆有损压缩的权宜之计，效果掉了只能认</li><li><b>只有 B</b>，你没有动力去付 kernel 那么难写的代价</li><li><b>两条合起来</b>，才解释了为什么这个方向在过去三年里投入了这么多人 —— 它同时是一件<b>不得不做</b>和<b>做了不太亏</b>的事</li></ul>
+<p><b>所有变体都活在这两条线的交汇处。</b> 一个变体好不好，就看它在 「省了多少（A）」和「亏了多少（B）」之间落在哪。</p>
+<hr>
+</div></section>
+<section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>先解决一个误会：那个矩阵从来没被存下来过 —— FlashAttention</h2></div>
+<div class="note ok"><p>⭐ <b>2026-09-04 从原来的第七节提到这里，并且展开了一大截。</b> 理由：上一节刚算出 488 GiB 和 32 GiB 两个吓人的数， <b>不先说清「那个大家伙根本不落地」，后面所有「怎么少算」的讨论都建在恐慌上。</b> 而且顺序反过来讲，逻辑更硬： <b>「怎么算」这条路已经被走到头了，剩下的省法只能去改「算什么」</b> —— 三个旋钮正是从这句话长出来的。</p></div>
+<h3>1.1 它跟三个旋钮不是一类东西</h3>
+<p>三个旋钮改的都是<b>算什么</b>。FlashAttention <b>一个字都不改数学</b> —— 它改的是<b>怎么算</b>。</p>
+<table>
+<thead><tr><th></th><th>三个旋钮</th><th>FlashAttention</th></tr></thead><tbody>
+<tr><td>改什么</td><td>算什么（模型变了）</td><td>怎么算（模型没变）</td></tr>
+<tr><td>要不要重训</td><td>通常要</td><td><b>完全不用</b></td></tr>
+<tr><td>相互关系</td><td><b>彼此权衡</b>，开了这个就得放弃那个</td><td><b>跟谁都能叠</b>，而且必须叠</td></tr>
+<tr><td>效果由什么决定</td><td>数据、任务、长度</td><td>纯粹是硬件的访存层级</td></tr>
+</tbody></table>
+<div class="note ok"><p>⭐ 一句话定位：<b>三个旋钮解决的是「这个矩阵太大了，能不能少算点」； FlashAttention 解决的是「这个矩阵根本不用存下来」。两条路都要走。</b></p></div>
+<h3>1.2 它删掉的是哪一项</h3>
+<p>朴素写法是<b>三步</b>：① 算 <code>S = QKᵀ</code> ② 对 S 做 softmax 得 P ③ 算 <code>O = PV</code>。</p>
+<p>三步之间，那个 L×L 的 S 每次都要<b>落一趟 HBM</b>： 写 S、读 S、写 P、读 P —— <b>三个步骤，四趟。</b></p>
+<p>而这个 S 有多大：128K 上下文、单个头就是 <code>131072² × 2 B = 32 GiB</code>，一层 128 个头。</p>
+<p><b>FlashAttention 把三步融成一个 kernel</b>：S 分块在片上算完， softmax 用<b>在线归约</b>边走边更新最大值和求和项，<b>S 整项消失</b>。</p>
+<p>⭐ <b>所以三笔账的形状是所有算子融合共有的</b>： <b>FLOPs 一分不省，省的全在「中间产物不落地」这一行。</b></p>
+<h3>1.2b ⭐ 那张经典图：内循环、外循环 —— 以及 FA2 为什么把它掉了个个儿</h3>
+<p>FlashAttention 论文那张图，画的是<b>两层循环</b>： HBM 里躺着 Q、K、V、O，SRAM 是旁边一个小方块； <b>外层循环搬一块进 SRAM，内层循环扫过另一边的所有块。</b></p>
+<p><b>⚠️ 但那张图画的是第一版的顺序，而第二版把它换了过来 ——&nbsp; 这个「换」本身，比图更值得讲。</b></p>
+<p><b>第一版：外层是 K／V，内层是 Q。</b></p>
+<pre><code>for j in K/V 的每一块:              # 外层
+    把 K_j, V_j 搬进 SRAM
+    for i in Q 的每一块:            # 内层
+        把 Q_i、O_i、m_i、ℓ_i 从 HBM 读进来
+        算这一格，更新 O_i、m_i、ℓ_i
+        再把 O_i、m_i、ℓ_i 写回 HBM</code></pre>
+<p>⛔ <b>看内层那三行</b>：<code>O_i</code> 和那两个统计量<b>每一轮外循环都要读进来、写回去一次</b>。 为什么躲不掉？——&nbsp;因为<b>下一块 K／V 还会碰到同一个 Q 块</b>， 它的输出没算完，只能先存回去。</p>
+<p><b>第二版：把两层对调。</b></p>
+<pre><code>for i in Q 的每一块:                # 外层 ← 换成了 Q
+    把 Q_i 搬进 SRAM，O_i、m_i、ℓ_i 就地清零
+    for j in K/V 的每一块:          # 内层
+        搬 K_j, V_j 进来，算，就地累加进 O_i
+    整个内层跑完，才把 O_i 写出去一次</code></pre>
+<p>⭐ <b>两个后果，都很硬：</b></p>
+<ol><li><b><code>O_i</code> 和那两个统计量在整个内层循环里一直待在片上，一次都不落 HBM。</b></li><li><b>不同的 Q 块之间彻底独立</b> ——&nbsp; 可以直接铺到几百个执行单元上，<b>互相不用通信</b>。</li></ol>
+<div class="note ok"><p>⭐ <b>一句话记住它</b>： <b>外循环放谁，谁的中间状态就不用来回搬。</b> 而 attention 里「需要被累加到最后」的是 <code>O</code>，所以<b>外循环必须放 Q</b>。</p></div>
+<h3>1.2c 同一个原则，在 warp 这一层又用了一遍</h3>
+<p>这件事在<b>块内部</b>还发生了第二次 ——&nbsp;而且这一次是官方原话：</p>
+<ul><li><b>第一版</b>：把 <b>K 和 V 切给 4 个 warp</b>，Q 大家共用（叫 sliced-K）。 ⛔ 于是每个 warp 都得<b>把中间结果写进共享内存、同步、再加起来</b> ——&nbsp; 这些读写拖慢了前向。</li><li><b>第二版</b>：反过来，把 <b>Q 切给 4 个 warp</b>，K 和 V 大家共用。 ⭐ 每个 warp 算出自己那一片 <code>QKᵀ</code>，直接乘共享的那片 V 就得到自己那片输出 ——&nbsp;<b>warp 之间完全不需要通信。</b></li></ul>
+<div class="note warn"><p>⭐⭐ <b>两个尺度，同一条判据</b>： <b>切「要被累加的那一维」就得合；切「各自独立出结果的那一维」就不用合。</b> attention 里前者是 K／V（它们在求和号里面），后者是 Q（每行输出各管各的）。</p>
+<p>⚠️ 这条判据的用处远不止 attention ——&nbsp; <b>任何融合 kernel 在分工时，先问一句「我切的这一维在不在求和号里」。</b></p></div>
+<h3>1.3 ⚠️ 在线 softmax 不是免费的 —— 它是后面 35% 那个数的根</h3>
+<p>softmax 要减最大值才数值稳定，而最大值要看完整行才知道。 在线归约的做法是：<b>每来一块就更新一次 running max 和 running sum， 并把已经累好的输出按比例重标定一次。</b></p>
+<div class="note danger"><span class="t">⛔ 这里有个几乎人人都会踩的误会：压力<b>不在</b>那两个 running 值上</span><p>「在线 softmax 只要存一个最大值和一个求和项」——&nbsp;<b>这句话是对的， 而且它们确实很小</b>：每行各一个标量。一个 <code>bq = 512</code> 的 Q 块， 两个加起来也就 <b>4 KB</b> 量级。</p>
+<p><b>真正占地方的是 <code>S = Q@Kᵀ</code> 那一整块。</b> 它的形状是 <code>[bq, bkv]</code> ——&nbsp;<code>512 × 512</code> 的 fp32 就是 <b>1 MB</b>， <code>2048 × 2048</code> 是 <b>16 MB</b>。<b>比那两个 running 值大两三个数量级。</b></p>
+<p>而且它<b>不是存一次就完了</b>：每来一个 KV 块就重新生成一整块。</p></div>
+<p><b>所以卡住的是 <code>S</code> 的生命周期，不是那两个数。</b></p>
+<p>一个 KV 块内，<code>S</code> 要连着走完四步才能扔： <b>① MXU 产出 → ② 沿着行求最大值 → ③ 减掉它再取指数 → ④ 喂给第二个矩阵乘。</b></p>
+<p><b>这四步里它一直是活的。</b> ②③ 是向量单元的活，而 ① ④ 是矩阵单元的活 ——&nbsp; <b>矩阵单元想开始下一块，可它的输出还被 ②③ 占着。</b></p>
+<p>⭐ <b>再加上流水线</b>：要让下一块的矩阵乘和这一块的向量运算重叠， <b>就得同时留住不止一块 <code>S</code>。</b> 于是「一块」变成「好几块」。</p>
+<div class="note info"><p>📌 ② 那一步在 TPU 上还额外贵一点：行方向的最大值是一次<b>跨 lane 归约</b>， 而 lane 正是硬件那 128 的方向。<b>归约越慢，<code>S</code> 活得越久。</b></p></div>
+<p><b>这条链在 1.6 会变成一个具体的数字。</b></p>
+<h3>1.4 块开多大 —— GPU 那边是一堵墙</h3>
+<p>块大小不是调着玩的旋钮，它由片上暂存的容量直接顶死。</p>
+<p><b>GPU 侧</b>：一个线程块最多拿 <b>227 KiB</b> 共享内存。 装三块 <code>128×128</code> 的 bf16 tile（Q／K／V）就是 <code>3 × 128 × 128 × 2 B = 96 KiB</code>， 再留双缓冲，<b>基本到顶</b>。</p>
+<p><b>而块开不大，代价是 K／V 被重复读</b> —— 重读次数 ≈ 序列长度 ÷ Q 块大小。 <b>所以那 227 KiB 不只是「装不下」，它通过块大小间接决定了 HBM 流量。</b></p>
+<div class="note warn"><p>⚠️ 顺带拆掉一个常见误解：<b>标准 FlashAttention 前向<u>不需要跨块归并</u>。</b> 每个执行单元拿走一个 Q 块，自己走完整条 KV 循环，在线 softmax 在块内就闭合了。 需要合的只有两种：<b>KV 也被切开时</b>（长上下文解码那类做法， 要跨切片重新对齐最大值和求和项），以及<b>反向</b>（对 Q 的梯度要跨块累加）。 <b>所以 GPU 的代价在「分」，不在「合」。</b></p></div>
+<h3>1.5 ⭐ TPU 那边是三堵墙 —— 而且「块越大越好」是错的</h3>
+<p>TPU 侧对应的是 <b>Splash Attention</b>。它的灶台看着大得多 （Ironwood 每个 TensorCore <b>64 MB VMEM</b>，一颗 chip 两个核 = 128 MB）， <b>但块反而不能随便开大。</b></p>
+<p>JAX 里 Splash Attention 的<b>默认块是 128 × 128</b>， 而且源码里挂着一句 <code>TODO</code>：「以后按启发式选更好的参数」。</p>
+<p><b>我们自己在 Hunyuan3-295B 上扫过这个参数</b>（<code>seq = 4096</code>，v7 64 芯片， 完整数据见 <a href="../tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md"><code>tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md</code></a>）：</p>
+<table>
+<thead><tr><th>块大小</th><th>KV 方向切出几块</th><th>结果</th></tr></thead><tbody>
+<tr><td><b>2048（甜点）</b></td><td><b>2 块</b></td><td><b>228.4 TFLOP/s/device</b></td></tr>
+<tr><td>4096</td><td>1 块</td><td><b>VMEM 直接爆</b>（爆在反向）</td></tr>
+<tr><td>4096（compute 压回 2048）</td><td>1 块</td><td><b>−11.5%</b></td></tr>
+<tr><td>512（照抄官方长上下文配置）</td><td>8 块</td><td><b>−1.0%</b></td></tr>
+</tbody></table>
+<p><b>三堵墙，方向各不相同：</b></p>
+<ol><li><b>往上是容量墙</b> —— 再开大一档就装不下，<b>而且先爆的是反向那一侧</b></li><li><b>往上还有第二堵，常常比容量更早撞到：并行度</b> —— 块一大，KV 方向只切得出一块，<b>那一维的流水直接塌掉</b>。 ⭐ <b>这一堵最反直觉：装得下，却更慢。</b></li><li><b>往下是碎块开销</b> —— 每块的固定开销（mask 检查、running max/sum 更新、 pipeline stage 切换）摊不动</li></ol>
+<div class="note warn"><span class="t">⚠️ 一条可迁移的教训：块大小要看 <code>block / seq</code> 的比例，不是绝对值</span><p>那个 512 不是我们瞎试的，是<b>官方 tpu7x benchmark 里的值</b> —— 但那份配置是给 <code>max_target_length = 131072</code> 调的： 512 相对 131072 是 <b>1/256</b>；到我们 <code>seq = 4096</code>，512 就成了 <b>1/8</b>。 <b>跨序列长度照抄配置会反向优化。</b></p>
+<p>我们记下的经验规则是「块 ≈ seq/2」，可证伪版本是 「换 <code>seq = 8192</code> 时最优块应当变成 4096」—— ⚠️ <b>这一条尚未验证。</b></p></div>
+<p>⭐ <b>所以两边的墙不是「硬件 vs 调参」，是一面 vs 三面</b>： GPU 那边容量一堵墙顶死，方向反倒清楚 —— 能开多大就开多大； <b>TPU 那边最优往往不在最大处</b>，得在三面之间找那个点。</p>
+<h3>1.6 ⭐ 融合之后，它还是只跑到 35% —— 三层原因，都不是配置问题</h3>
+<p>这是这一节最该带走的一段：<b>FlashAttention 不是终点。</b> 我们在 v7 上量到 splash attention <b>占 23% 的时间、效率只有 35.5%，全场最低</b>。</p>
+<p><b>① 记账口径：报出来的那个百分比，分子是虚高的。</b> XLA 给 splash 记的 FLOP 是<b>不折 causal 的全量</b> <code>4·b·s²·h·d</code>。 所以 32.8–39.0% 这个区间是拿虚高的分子算出来的，<b>真实执行效率比它更低</b>。</p>
+<div class="note warn"><p>⚠️ causal 跳过上三角是<b>节省</b>，不是又一道要乘上去的折扣 —— 它只造成记账错位。这两件事最容易混。</p></div>
+<p><b>② 形状锁死 50%：MXU 是 256×256，而 <code>head_dim = 128</code> 只吃得下一半。</b></p>
+<table>
+<thead><tr><th>matmul</th><th>形状</th><th>浪费在哪</th></tr></thead><tbody>
+<tr><td><code>QKᵀ</code></td><td><code>[q_len, 128] @ [128, kv_len]</code></td><td><b>收缩维</b>只有 128 → 废一半</td></tr>
+<tr><td><code>PV</code></td><td><code>[q_len, kv_len] @ [kv_len, 128]</code></td><td><b>输出维</b>只有 128 → 废一半</td></tr>
+</tbody></table>
+<p><b>两个矩阵乘各撞一次，所以整个算子的 MXU 利用率封顶 50%。</b> Google 侧的结论是明确的：<code>head_dim = 128</code> 时 MXU 利用率无法超过 50%， <b>没有办法绕过</b>。</p>
+<p><b>③ 为什么连 50% 都到不了 —— 回到 1.3 那条链。</b> 持有 <code>Q@K</code> 输出（也就是<b>整块 <code>S</code></b>，不是那两个 running 值）的寄存器， 在最大值和减法完成前不能释放，于是不断堆积 → 寄存器压力 → <b>spill 到 VMEM</b> → MXU 停在等数据载回。 <b>一句话：VPU 跟不上 MXU。</b></p>
+<div class="note warn"><p>⭐ 这也解释了 1.5 那三堵墙里最反直觉的一堵为什么存在： <b>块开大 → <code>S</code> 那一块跟着变大 → 生命周期更长、更容易 spill。</b> 「装得下」和「跑得快」在这里是两回事。</p>
+<p>⭐ <b>三层叠起来的结论很硬</b>： 形状锁死一半、寄存器压到 35%、记账口径还让它看着比实际好看。 <b>这三层没有一层是配置能救的</b> —— 要么改 head_dim，要么改 kernel 的数据流。 （我们试过的那条出路是把矩阵乘全转置，见 TUNING-v7 的附录。）</p>
+<h3>⚠️ 还有一条方法论：同一份 profile，不同工具页的百分比不可混用</h3>
+<p>「HBM 受限占多少」—— 一个工具页说 <b>35.6%</b>，另一个说 <b>19.5%</b>。 破案的钥匙是两者的 self-time 合计正好差 <b>2.00 倍</b>， 而 v7 恰好是 <b>2 device/chip</b>。<b>分母不是同一个东西，分子上的百分比自然对不上。</b> ⇒ 判瓶颈用 roofline 那一页，归因到算子用 op stats 那一页； <b>引用任何百分比都要写清出自哪个工具页。</b></p></div>
+<h3>1.7 这一节留下的那句话</h3>
+<p><b>「怎么算」这条路，到这里基本走到头了。</b></p>
+<p>中间产物已经不落地，块大小已经贴着三堵墙，而算子仍然只跑到三成多 —— <b>剩下的空间不在「怎么算」里，只能去改「算什么」。</b></p>
+<p>⭐ <b>下一节的三个旋钮，就是「改算什么」的全部可能位置。</b></p>
+<hr>
+</div></section>
+<section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>分类学：只有三个旋钮</h2></div>
+<p>这是这个专题的骨架。把所有名词收进一张表：</p>
+<table>
+<thead><tr><th>旋钮</th><th>在改什么</th><th>代表</th></tr></thead><tbody>
+<tr><td><b>① 每个 token 存多少</b></td><td>减少 KV 的<b>份数</b>或<b>维度</b></td><td>MQA → GQA → <b>MLA</b> → Gated MLA</td></tr>
+<tr><td><b>② 每个 query 看多少</b></td><td>限制<b>范围</b>或<b>动态挑选</b></td><td><b>SWA</b> · NSA · <b>DSA</b> · <b>CSA / HCA</b></td></tr>
+<tr><td><b>③ 换一套数学</b></td><td>用<b>固定大小的状态</b>代替不断变长的 KV</td><td>线性注意力：DeltaNet → <b>GDN</b> → <b>KDA</b></td></tr>
+<tr><td><b>①+②+③ 混着来</b></td><td>不同层用不同方案</td><td><b>Hybrid</b>：V4 的 CSA+HCA、K3 的 KDA+Gated MLA</td></tr>
+</tbody></table>
+<div class="note ok"><p>⭐ <b>前两个旋钮省的是同一样东西的两个不同侧面</b>： 旋钮 ① 让每份 KV 更小，旋钮 ② 让读的份数更少。<b>它们可以叠加。</b></p>
+<p>⭐ <b>旋钮 ③ 是换赛道</b>：它不再有"随长度增长的 KV"这个概念， 代价是把无损的检索换成了有损的状态压缩。</p></div>
+<h3>⭐ 为什么恰好是三个</h3>
+<p>不是凑出来的。回到注意力那个式子，一个 query 要做的事只有三步：</p>
+<pre><code>①  从每个位置取出一份 K、一份 V        ← 存什么、存多大
+②  跟哪些位置算，然后加权求和           ← 求和的范围有多大
+③  用 softmax(qKᵀ/√d) 做这个加权        ← 用哪种运算</code></pre>
+<p><b>三个旋钮就是这三步各自可以动的地方。</b> 除此之外没有第四个位置可以动 —— 除非你不改算什么、只改<b>怎么算</b>，那就是 FlashAttention —— 那是<b>第一节</b>刚讲完的事。</p>
+<h3>一张名词收纳表</h3>
+<p>这张表建议做成板书，讲完每个支线回来填一格：</p>
+<table>
+<thead><tr><th>名词</th><th>出处</th><th>旋钮</th><th>一句话</th></tr></thead><tbody>
+<tr><td>MQA</td><td>Shazeer, arXiv 1911.02150</td><td>①</td><td>所有头共用一份 K/V</td></tr>
+<tr><td>GQA</td><td>Ainslie 等, arXiv 2305.13245</td><td>①</td><td>分组共用，MQA 与 MHA 之间的连续旋钮</td></tr>
+<tr><td><b>MLA</b></td><td>DeepSeek-V2 / V3, arXiv 2412.19437</td><td>①</td><td>KV 压成 512 维隐向量，用时再升回 128 头</td></tr>
+<tr><td>Gated MLA</td><td>Kimi K3, arXiv 2607.24653</td><td>①</td><td>MLA 输出端加一个全秩门控</td></tr>
+<tr><td><b>SWA</b></td><td>Mistral 7B, arXiv 2310.06825</td><td>②</td><td>只看前面固定窗口（Mistral 是 4096）</td></tr>
+<tr><td>Attention sink</td><td>StreamingLLM, arXiv 2309.17453</td><td>—（现象）</td><td>开头几个 token 被当作"停车位"，扔了就崩</td></tr>
+<tr><td><b>NSA</b></td><td>arXiv 2502.11089</td><td>②</td><td>压缩 / 选择 / 滑窗三条支路，门控融合，<b>训练时就用</b></td></tr>
+<tr><td><b>DSA</b></td><td>DeepSeek-V3.2, arXiv 2512.02556</td><td>②</td><td>Lightning Indexer 给每个 query 挑 top-k</td></tr>
+<tr><td><b>CSA / HCA</b></td><td>DeepSeek-V4, arXiv 2606.19348</td><td>①+②</td><td>先把 KV 按块压缩，再稀疏挑选；两档压缩率混排</td></tr>
+<tr><td>DeltaNet</td><td>起源 Schlag 等 arXiv 2102.11174；可并行化 arXiv 2406.06484</td><td>③</td><td>状态更新用 delta rule：擦掉旧的再写新的</td></tr>
+<tr><td><b>GDN</b>（Gated DeltaNet）</td><td>arXiv 2412.06464</td><td>③</td><td>在 delta rule 上加遗忘门</td></tr>
+<tr><td><b>KDA</b></td><td>Kimi Linear, arXiv 2510.26692</td><td>③</td><td>遗忘门从标量升级成 <b>per-channel</b> 向量</td></tr>
+<tr><td>FlashAttention</td><td>arXiv 2205.14135</td><td><b>不是旋钮</b></td><td>数学一个字不改，只改访存顺序</td></tr>
+</tbody></table>
+<hr>
+</div></section>
+<section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>旋钮①：每个 token 存多少</h2></div>
+<h3>2.1 MHA → MQA → GQA：一个连续旋钮</h3>
+<ul><li><b>MHA</b>：每个头各存一份 K/V。128 个头就是 128 份</li><li><b>MQA</b>：所有头共用同一份 K/V。省 128 倍，但<b>质量掉</b></li><li><b>GQA</b>：分成 g 组，组内共用。<code>g = n_h</code> 退化成 MHA，<code>g = 1</code> 退化成 MQA</li></ul>
+<p>⭐ <b>值得强调的是「GQA 是一个连续旋钮」这件事本身</b> —— 它不是一个新机制，是把 MHA 和 MQA 之间的空白填上，让你可以按需要选一个点。 这门课后面会反复见到这个套路：<b>把一个二选一变成一个可调的连续量。</b></p>
+<p>代价说清楚：省的是 KV 的<b>份数</b>，赔的是<b>表达能力</b> —— 本来 128 个头可以各自关注不同的东西，现在被迫共享。</p>
+<h3>2.2 MLA：不砍头，改成低秩压缩</h3>
+<ul><li>KV 不再按头存，而是压成<b>一个 512 维的隐向量</b>（<code>d_c = 512</code>）， 用的时候再用上投影矩阵升回 128 个头</li><li>位置信息<b>单独走 64 维一路 RoPE</b>（<code>d_h^R = 64</code>）</li><li>所以每 token 每层只存 <b>512 + 64 = 576</b> 个数 —— 对照 MHA 的 32,768 个，<b>56.9 倍</b></li><li>出处：V3 论文 §4.2 超参一节，<code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code></li></ul>
+<p><b>代价：用计算换显存。</b> 多了一对降维/升维的矩阵乘。 这句话在<a href="专题04-反向与优化器.md">专题四</a> §1.2 会被再打一个折扣 —— ⚠️ <b>MLA 的压缩在训练前向里其实不生效</b>（K/V 会被解压出来算）， 它省的是<b>推理时的 KV cache</b>，不是训练时的激活。这是一个非常常见的误解。</p>
+<div class="note warn"><p>⚠️ <b>落到硬件上有个反直觉的后果</b>：MLA 在推理时可以把上投影矩阵"吸收"进 query 那一侧，从而改变整个计算的形状。<b>同一个数学式子有多种算法实现， 选哪种取决于是 prefill 还是 decode。</b> 这一条留到<a href="专题06-推理.md">专题六</a>。</p></div>
+<h3>2.3 ⚠️ 为什么 RoPE 必须单独走一路</h3>
+<p>这是理解 MLA 的关键一步，也是最容易讲糊的一步。<b>值得花两分钟。</b></p>
+<p>MLA 想做的事是：<b>把上投影矩阵吸收掉，让推理时只需要读那个 512 维的隐向量。</b> 数学上，<code>qᵀ (W_UK c)</code> 可以重写成 <code>(W_UKᵀ q)ᵀ c</code> —— 上投影跑到 q 那边去了， 于是 K 根本不用真的解压出来。</p>
+<p><b>但 RoPE 一插进来这个重写就不成立了。</b> RoPE 是一个跟位置有关的旋转， 它作用在解压之后的 K 上；旋转矩阵夹在中间，<code>W_UK</code> 和 <code>c</code> 就分不开了。</p>
+<p>所以 MLA 的解法是<b>把这两件事拆开走两条路</b>： 一路 512 维不带位置、可以被吸收；另一路 64 维专门扛 RoPE、老老实实存着。 <b>576 = 512（可吸收）+ 64（不可吸收）。</b></p>
+<div class="note ok"><p>⭐ 这个「因为要保留某个代数变换，所以把功能拆成两路」的动作， 在后面还会以别的面貌出现（V4 的部分 RoPE、K3 的 NoPE）。 <b>值得当成一个套路记住，而不是当成 MLA 的一个实现细节。</b></p></div>
+<h3>2.4 Gated MLA</h3>
+<ul><li>在 MLA 的输出端加一个<b>门控</b>：<code>gate = σ(W_g x)</code>，逐元素乘在注意力输出上</li><li>Kimi K3 用的是<b>全秩</b>门控矩阵（K2 那代是低秩的）</li><li>出处：K3 技术报告 §2.1.2</li></ul>
+<p>它的作用不是省显存 —— <b>门控不减少任何 KV</b> —— 而是让模型能学会「这一层这个位置，注意力的输出干脆不要」。 放在旋钮 ① 里是因为它改的是 MLA 这一支的形状，但要讲清楚它<b>省的不是显存</b>。</p>
+<hr>
+</div></section>
+<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>旋钮②：每个 query 看多少</h2></div>
+<h3>3.1 SWA（滑动窗口）</h3>
+<ul><li>每个 token 只看自己前面固定窗口内的（Mistral 7B：<b>4096</b>）</li><li>最简单，KV cache 从随长度增长变成<b>常数</b></li><li>代价很硬：<b>长距离信息只能靠层层传递间接到达</b> —— 第 1 层看 4K，第 2 层能间接摸到 8K，要跨 128K 得堆 32 层</li><li>所以一般<b>不单用</b>，跟全注意力混排（见第六节）</li></ul>
+<h3>3.2 Attention sink —— 一个现象，不是一个方案</h3>
+<p><b>这一段是全课少有的"实验发现改变了工程做法"的例子，值得单独讲。</b></p>
+<p>StreamingLLM（arXiv 2309.17453）的观察：如果你朴素地做滑动窗口， 把开头那几个 token 的 KV 也滑掉，<b>模型立刻崩</b>。</p>
+<p>而它们发现的解法简单到有点荒谬：<b>留住最开头 4 个 token 的 KV 就够了</b> （论文原话：<em>"with just 4 initial tokens sufficing"</em>）， 再加上滑动窗口，Llama-2 / MPT / Falcon / Pythia 就能稳定处理到 <b>400 万 token</b>， 比"滑窗 + 重算"这个可用基线快 <b>22.2×</b>。</p>
+<p>为什么？因为 softmax 强制所有权重加起来等于 1 —— <b>模型有时候什么都不想看， 但它没有"弃权"这个选项</b>，于是它学会了把多余的注意力倾倒在开头几个位置上。 那几个 token 不是在传递信息，<b>它们是停车位</b>。</p>
+<div class="note ok"><p>⭐ <b>两个层次的教训，都要讲：</b></p>
+<ol><li>工程上：任何"扔掉一部分 KV"的方案，都必须先问「有没有扔掉停车位」</li><li>方法上：这个 bug 从公式上完全看不出来，<b>只有把注意力矩阵画出来看才发现</b>。 这是这门课反复要说的那件事 —— <b>量出来的和算出来的，是两回事</b></li></ol>
+<p>后续：DeepSeek-V4 干脆给每个头加了一个<b>可学习的 sink logit</b>， 直接加进 softmax 分母里，于是这一行的注意力总和<b>可以小于 1，甚至接近 0</b>。 <b>把一个模型被迫发明的 hack，变成了架构里的一等公民。</b></p></div>
+<h3>3.3 NSA —— 「native」是什么意思</h3>
+<ul><li>三条支路并行：<b>压缩</b>（粗看全部）/ <b>选择</b>（细看挑出来的）/ <b>滑窗</b>（细看邻近）， 再用一个小 MLP + sigmoid 出的门控分数融合</li><li>效果：64k 长度下，<b>解码快 11.6×、前向快 9.0×、反向快 6.0×</b>（arXiv 2502.11089）</li></ul>
+<p><b>「native」的意思是训练时就这么做，不是训练完再加的推理优化。</b> 这个区别很重要，值得单独说三十秒：</p>
+<table>
+<thead><tr><th></th><th>推理期稀疏</th><th>训练期稀疏（native）</th></tr></thead><tbody>
+<tr><td>模型知不知道自己会被稀疏</td><td><b>不知道</b></td><td>知道，权重是在稀疏条件下学出来的</td></tr>
+<tr><td>掉点</td><td>有，且难预测</td><td>小得多，甚至能反超</td></tr>
+<tr><td>能不能省训练成本</td><td><b>不能</b></td><td>能（上面那个 6.0× 反向）</td></tr>
+<tr><td>代价</td><td>无，随时可开关</td><td><b>要重训</b>，没法给已有模型打补丁</td></tr>
+</tbody></table>
+<div class="note ok"><p>⭐ 这张表解释了后面一个反复出现的现象： <b>为什么这些新注意力方案总是跟新模型一起发布，而不是作为一个推理框架的开关。</b></p></div>
+<h3>3.4 DSA（DeepSeek-V3.2）—— Lightning Indexer</h3>
+<ul><li><b>Lightning Indexer</b>：一个极轻量的打分网络，为每个 query 挑出 top-k 个 KV</li><li>打分式子 <code>I(t,s) = Σ_j w_j · ReLU(q_j · k_s)</code> —— ⭐ <b>用 ReLU 不用 softmax，纯粹是为了吞吐</b>，论文自己这么说的</li><li>头很少，而且跑在 <b>FP8</b> 上</li><li><b>k = 2048</b>。128K 上下文下，参与主注意力的从 128K 降到 2K —— <b>64 倍</b></li><li>复杂度从 O(L²) 变成 <b>O(L·k)</b></li><li>出处：arXiv 2512.02556</li></ul>
+<p>⚠️ <b>两个必须一起讲的细节，不然这个方案听起来像免费午餐：</b></p>
+<ol><li><b>indexer 自己还是 O(L²)。</b> 每个 query 要给所有 KV 打分才能挑 top-k。 省下来的是「主注意力的 O(L²)」，换来的是「一个便宜得多的 O(L²)」。 <b>省的是常数，不是阶。</b></li><li><b>它需要一个专门的训练阶段。</b> 先冻住除 indexer 之外的全部参数， 让 indexer 去<b>拟合主注意力自己的分布</b>（把各头注意力加起来、L1 归一化， 当作 indexer 的学习目标）。<b>稀疏是学出来的，不是规则定出来的。</b></li></ol>
+<h3>3.5 ⭐ CSA + HCA（DeepSeek-V4）—— 压缩率按距离分层</h3>
+<p>这是线索 B「远近有别」最直接的体现，也是这一节的高潮。</p>
+<p><b>CSA</b>（Compressed Sparse Attention）</p>
+<ul><li>每 <b>m = 4</b> 个 token 的 KV 压成 1 个 entry，然后在<b>压缩后的 entry 上</b>做 DSA</li><li>V4-Pro top-k = 1024，V4-Flash top-k = 512</li><li>压缩不是简单平均：用了<b>两套交错的压缩序列</b>（互相错开半个块）， 各带一组可学习的位置偏置，在 2m 个元素上做 softmax。 ⭐ <b>交错是为了不让块边界成为信息断层</b> —— 一个 token 总在某一套里落在块中间</li></ul>
+<p><b>HCA</b>（Heavily Compressed Attention）</p>
+<ul><li>压缩率 <b>m′ = 128</b>，远大于 CSA 的 4</li><li>而且<b>不做稀疏</b>：压完之后在全部 entry 上做<b>密集</b>注意力</li><li>⭐ <b>逻辑很干净</b>：都压了 128 倍了，剩下的条目本来就没几个，再挑就没意义了</li></ul>
+<p><b>两者混排</b>：V4-Pro 前两层用 HCA，之后 HCA 与 CSA 交替； V4-Flash 前两层用纯 SWA。</p>
+<p><b>效果</b>（都是 V4 技术报告自己给的）：</p>
+<table>
+<thead><tr><th>口径</th><th>数字</th></tr></thead><tbody>
+<tr><td>1M 上下文，vs DeepSeek-V3.2</td><td>单 token 推理 FLOPs <b>27%</b>、KV cache <b>10%</b>（V4-Pro）</td></tr>
+<tr><td>同上，V4-Flash</td><td>FLOPs <b>10%</b>、KV cache <b>7%</b></td></tr>
+<tr><td>以 BF16 GQA-8（head dim 128）为基线，1M 上下文</td><td>KV cache 降到约 <b>2%</b></td></tr>
+</tbody></table>
+<p>⭐ <b>最后那个 2% 值得停一下算给学生看</b>：同样形状的 GQA-8 在 1M 下是 <b>244 GiB</b>， 2% 就是 <b>不到 5 GiB</b> —— <b>一百万 token 的上下文，KV 装得进一块卡的零头。</b> 对照本节开头那个 MHA 的 488 GiB（那还只是 128K）。<b>这就是三年的进展。</b></p>
+<div class="note warn"><p>⚠️ 这里还叠了一层跟注意力机制无关的优化：<b>KV 混合精度存储</b> —— RoPE 那几维用 BF16，其余用 FP8，光这一项就"近乎减半"。 <b>报告一个总收益的时候，要能拆出哪几分是机制带来的、哪几分是精度带来的。</b></p></div>
+<h3>3.6 ⭐ 这一支的共同结构</h3>
+<p>讲完四个方案，回头把它们叠在一起，会看到同一个骨架：</p>
+<pre><code>                 ┌─ 一条"粗看"的路：压缩 / 全局，保证不漏
+一个 query 的注意力 ┼─ 一条"细看"的路：挑出来的 top-k，保证准
+                 └─ 一条"近处"的路：滑动窗口，保证局部连贯</code></pre>
+<ul><li><b>NSA</b>：三条都有，显式的三支路 + 门控融合</li><li><b>DSA</b>：主要是中间那条（top-k），配一点局部</li><li><b>CSA/HCA</b>：HCA 是粗看，CSA 是细看，另外还挂了一条 n_win=128 的滑窗支路</li><li><b>SWA 单用</b>：只有第三条 —— 所以它单用不行</li></ul>
+<div class="note ok"><p>⭐ <b>看到一个新的稀疏注意力方案，先问它这三条路各占什么位置。</b> 这比记住它叫什么有用得多。</p></div>
+<hr>
+</div></section>
+<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>旋钮③：换一套数学 —— 线性注意力</h2></div>
+<h3>4.1 基本换法</h3>
+<p>softmax 注意力必须把所有 K 都留着，是因为 softmax 的分母要对<b>所有位置</b>求和 —— 你没法提前把它们合并。</p>
+<p><b>把 softmax 去掉</b>（换成某个可分解的核函数），求和就可以重排：</p>
+<pre><code>softmax 版： out_t = Σ_{s≤t} softmax(q_t·k_s) v_s      ← 必须留下所有 (k_s, v_s)
+线性版：     S_t   = S_{t-1} + k_t v_tᵀ                ← 一个固定大小的状态
+            out_t = q_t S_t</code></pre>
+<p>于是：</p>
+<ul><li>复杂度 O(L²·d) → <b>O(L·d²)</b>，对长序列是数量级的差别</li><li><b>没有随长度增长的 KV cache</b> —— 只有一个 <code>d_k × d_v</code> 的状态矩阵</li><li>推理时它就是一个 <b>RNN</b>：读一个 token、更新一次状态、吐一个输出</li></ul>
+<p><b>代价说死</b>：状态大小固定 → <b>信息必然有损</b>。 序列越长，往同一个矩阵里塞的东西越多，<b>长程精确检索（"第 30 万字提到的那个电话号码"） 会力不从心</b>。这不是实现问题，是这个换法的性质。</p>
+<h3>4.2 谱系：四步，每一步都在修上一步的一个具体毛病</h3>
+<table>
+<thead><tr><th>步</th><th>名字</th><th>补了什么</th><th>出处</th></tr></thead><tbody>
+<tr><td>1</td><td>朴素线性注意力</td><td>把 softmax 拆掉，换来固定状态</td><td>Katharopoulos 等, arXiv 2006.16236</td></tr>
+<tr><td>2</td><td><b>delta rule</b></td><td>状态只加不减 → 写满就糊。改成「<b>先擦掉旧的，再写新的</b>」</td><td>Schlag 等, arXiv <b>2102.11174</b>（2021）</td></tr>
+<tr><td>3</td><td><b>GDN</b>（Gated DeltaNet）</td><td>delta rule 不会主动遗忘 → 加一个<b>遗忘门</b>，让陈年旧事自然衰减</td><td>arXiv <b>2412.06464</b>（2024-12）</td></tr>
+<tr><td>4</td><td><b>KDA</b></td><td>遗忘门是个<b>标量</b>，全部通道同一个速度 → 升级成 <b>per-channel 向量</b></td><td>Kimi Linear, arXiv <b>2510.26692</b>（2025-10）</td></tr>
+</tbody></table>
+<p>⚠️ <b>两处容易记错的出处，讲的时候要说对：</b></p>
+<ul><li><b>delta rule 不是 2024 年的东西</b>，是 Schlag 等 2021 年那篇 <em>Linear Transformers Are Secretly Fast Weight Programmers</em>（可上溯到 1990 年代的 fast weight programmer）。2024 年那篇（arXiv 2406.06484）做的是 <b>把它并行化</b>，这是另一件事、也是很关键的一件事 —— 见 §4.4</li><li><b>KDA 是 2025 年 10 月的 Kimi Linear</b>，不是 2026 年</li></ul>
+<p>⭐ <b>第 4 步为什么值得单独说</b>：标量遗忘门意味着「整个状态一起变旧」。 per-channel 意味着<b>不同特征维度可以有各自的遗忘速度</b> —— 有些通道记语法（该快忘），有些记实体名（该慢忘）。 KDA 还把它做成了一个特殊的 <b>DPLR（对角 + 低秩）</b>形式， 正是因为这个特殊形式，才配得出一个比通用 DPLR 便宜得多的分块并行算法。 <b>表达力和可算性是一起设计的，不是先设计再优化。</b></p>
+<h3>4.3 ⚠️ 它不是「更快的 attention」，是另一个模型</h3>
+<p>这是本节最重要的一句话，也是最容易被听众误解的一句。</p>
+<p>三个旋钮里，只有旋钮 ③ <b>改变了模型能表达什么</b>：</p>
+<ul><li>旋钮 ①②：改的是<b>存法</b>和<b>看多少</b>，理论上你还能指着某个历史 token 说 "注意力权重在这儿"。<b>检索是显式的</b></li><li>旋钮 ③：历史被<b>碾进了一个矩阵</b>。你无法指着状态里的某一块说 "这是第 3 万个 token"。<b>检索是隐式的、有损的</b></li></ul>
+<p>所以：</p>
+<ul><li>它<b>不能</b>给已有模型打补丁，必须<b>从头训</b></li><li>评测上要特别看 <b>needle-in-a-haystack 这类精确检索任务</b>， 平均分好看不代表这一类不塌</li><li>也正因如此，<b>几乎没有人纯用线性注意力</b> —— 全都是混合（第五节）</li></ul>
+<h3>4.4 硬件视角：串行的状态怎么榨出并行度</h3>
+<p><b>这一段是我们的角度，别人的课不会这么讲。</b></p>
+<p><code>S_t = S_{t-1} + ...</code> 是<b>逐 token 串行</b>的。而加速器要的是宽而规整的并行。 训练一个 100 万 token 的序列，串行跑一百万步 —— 直接不用想。</p>
+<p>解法叫 <b>chunkwise parallel</b>：<b>块内并行、块间串行</b>。 把序列切成长为 C 的块，块内用矩阵乘一次算完，块与块之间才传递状态。 于是并行度从 1 变成 C，串行步数从 L 变成 L/C。</p>
+<p>⭐ <b>C 怎么选，是一个纯硬件问题</b>：</p>
+<ul><li>C 太小 → 串行步数多，而且每步的矩阵乘太瘦，算力吃不满</li><li>C 太大 → 块内那个中间矩阵放不进片上内存（SRAM / VMEM），要往 HBM 上倒</li><li><b>所以 chunk 大小是被片上内存容量顶死的</b> —— 跟<a href="专题01-一个-Token-的一生.md">专题一</a> splash attention 的块大小是同一类问题</li></ul>
+<p><b>这条路有多难走，看两个信号：</b></p>
+<ul><li>K3 为了 KDA 专门写了 CUTLASS 的 <b>FlashKDA</b> kernel， 因为块内并行和块间串行<b>交替进行时 SM 会空转</b></li><li>长序列训练还要 <b>KDA Context Parallelism</b> —— 标准的序列并行做法是把各段 局部结果直接相加，<b>但这对 KDA 不成立</b>，因为 delta rule 的状态更新是 token 相关的矩阵连乘，前一段的影响不是简单的加法</li></ul>
+<div class="note ok"><p>⭐ 一句话收：<b>线性注意力在纸上是 O(L)，在硬件上是一场 kernel 战争。</b> 我们在 TPU 上写过 KDA kernel，这里有一手的坑可以摆。</p></div>
+<hr>
+</div></section>
+<section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>旋钮④（其实是元旋钮）：混合</h2></div>
+<h3>5.1 为什么混合几乎是唯一的答案</h3>
+<p>单用任何一个旋钮都有一个致命短板：</p>
+<table>
+<thead><tr><th>单用</th><th>短板</th></tr></thead><tbody>
+<tr><td>SWA</td><td>跨不了长距离</td></tr>
+<tr><td>纯线性</td><td>精确检索塌</td></tr>
+<tr><td>纯全注意力</td><td>KV 和 FLOPs 都爆</td></tr>
+</tbody></table>
+<p>混合的逻辑很朴素：<b>全局层负责精确长程检索，线性/窗口层负责局部与效率，各司其职。</b> 关键在于全局层<b>不需要很多</b> —— 只要有几层能做无损检索， 信息就能沿着残差流传给其余层用。</p>
+<h3>5.2 配比：3:1 是怎么来的，以及它不是定律</h3>
+<table>
+<thead><tr><th>模型</th><th>配比</th><th>出处</th></tr></thead><tbody>
+<tr><td>Kimi Linear</td><td>KDA : 全注意力 MLA = <b>3 : 1</b>（48B 总 / 3B 激活）</td><td>arXiv 2510.26692</td></tr>
+<tr><td><b>Kimi K3</b></td><td>KDA : Gated MLA = <b>3 : 1</b>（<b>69 KDA + 24 MLA = 93 层</b>）</td><td>arXiv 2607.24653 表 1</td></tr>
+<tr><td>Ling-3.0-tiny</td><td>KDA : MLA = 3 : 1</td><td>模型卡</td></tr>
+<tr><td>Ling-3.0-flash</td><td>KDA : MLA = <b>5 : 1</b></td><td>模型卡</td></tr>
+<tr><td>一篇系统性消融</td><td>建议区间 <b>3:1 ～ 6:1</b></td><td>arXiv 2507.06457</td></tr>
+</tbody></table>
+<p>⭐ <b>三件事要讲清楚：</b></p>
+<ol><li><b>3:1 是消融出来的，不是推出来的。</b> Kimi Linear 的消融里， <b>0:1（纯全注意力）反而表现不好</b> —— 这个结果比"3:1 最好"更有意思： <b>加线性层不只是省钱，它可能还带来了别的东西</b></li><li><b>同一家不同规模就换了配比</b>（Ling 的 tiny 3:1 / flash 5:1）—— <b>配比是超参，跟规模和数据有关，不要背下来当常识</b></li><li><b>区间比点值可信。</b> 记 "3:1 到 6:1 这个量级" 就够了</li></ol>
+<h3>5.3 ⭐ K3 的 NoPE —— 混合带来的一个意外红利</h3>
+<p>这是全节最漂亮的一处，值得留三分钟。</p>
+<p>K3 的全注意力（Gated MLA）层<b>完全不加位置编码</b>（NoPE）： 没有 RoPE，没有 YaRN，什么都没有。</p>
+<p><b>为什么敢这么做？</b> 因为它们中间夹着的 KDA 层， 本身就是靠<b>递归的衰减和门控</b>在编码顺序 —— 一个天然带时序的算子。 <b>位置信息由线性层提供，全注意力层只管检索。</b></p>
+<p>三个后果，一个比一个实在：</p>
+<ol><li><b>不用调 RoPE 外推。</b> 模型直接外推到 1M，不需要任何位置编码的重标定 —— 长上下文扩展里最烦人的一块调参，直接消失了</li><li><b>MLA 层在推理时可以退化成纯 MQA。</b> 位置编码没了， §2.3 里那条"不可吸收的 64 维"也就不存在了 —— <b>上投影可以完全吸收</b></li><li><b>KV cache 最多降 75%</b>（Kimi Linear 的数字）， 1M 上下文下 TPOT 从 11.48 ms 降到 1.84 ms，<b>6.3×</b></li></ol>
+<div class="note ok"><p>⭐ <b>这才是"混合"真正的意思</b>：不是"两个方案各跑一半凑合用"， 而是<b>让每一层只做自己擅长的事，然后把别人不用做的事一并省掉</b>。 一个架构选择（混合）解开了另一个看起来完全无关的约束（位置编码）。 <b>这门课想教的就是这种"看见约束之间的连接"的能力。</b></p></div>
+<hr>
+</div></section>
+<section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>代价：没有免费的午餐</h2></div>
+<p>一张表把所有方案摆在一起：</p>
+<table>
+<thead><tr><th></th><th>KV 显存</th><th>计算量</th><th>长程质量</th><th>kernel 复杂度</th><th>能否给已有模型打补丁</th></tr></thead><tbody>
+<tr><td>MHA</td><td>基准</td><td>基准</td><td>基准</td><td>简单</td><td>—</td></tr>
+<tr><td>GQA</td><td>↓↓</td><td>—</td><td>↓</td><td>简单</td><td>需微调</td></tr>
+<tr><td>MLA</td><td>↓↓↓</td><td>↑（训练时）</td><td>≈</td><td>中</td><td>不能</td></tr>
+<tr><td>SWA</td><td>↓↓↓</td><td>↓↓</td><td>↓↓↓</td><td>简单</td><td>勉强（要留 sink）</td></tr>
+<tr><td>DSA</td><td>↓</td><td>↓↓↓</td><td>≈</td><td><b>高</b></td><td>需专门训练阶段</td></tr>
+<tr><td>CSA/HCA</td><td>↓↓↓</td><td>↓↓↓</td><td>≈</td><td><b>很高</b></td><td>不能</td></tr>
+<tr><td>线性（KDA 等）</td><td><b>无 KV</b></td><td>↓↓↓</td><td>↓↓</td><td><b>很高</b></td><td><b>不能，必须从头训</b></td></tr>
+</tbody></table>
+<p>要讲透的<b>四个</b>取舍：</p>
+<ol><li><b>省显存 ≠ 省计算。</b> MLA 省了显存但增加了计算；DSA 省了计算但 KV 还在那儿。 <b>这两个是不同的资源，问"省了多少"之前先问"省的是哪一样"</b></li><li><b>训练时省和推理时省是两回事。</b> MLA 的压缩在训练前向里不生效； NSA 的 native 意味着训练时也省。<b>一个方案属于哪一类，直接决定它能不能被采用</b></li><li><b>不规则访存的代价常常被低估。</b> 稀疏方案在纸面上是 64 倍， 落到硬件上是 gather、是不连续访问、是 kernel 难写 —— <b>实际加速比远小于理论值</b>。这一点我们有实测可以摆</li><li>⭐ <b>收益是有天花板的，因为注意力只是账单的一部分。</b> 把注意力砍到 0，剩下的 MoE、MLP、通信一分钱没省。 <a href="专题01-一个-Token-的一生.md">专题一</a>那条曲线说得很清楚：短上下文下注意力只占 12%， <b>这时候你把它优化到极致，端到端也就快 10%</b>。 <b>所有这些技术的价值都随上下文长度而涨</b> —— 讲的时候必须带上"在多长的上下文下"， 不然那些倍数全是耍流氓</li></ol>
+<hr>
+</div></section>
+<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>落到硬件（本专题的落点）</h2></div>
+<p>回到全课那条主线：<b>每一个变体都是被硬件逼出来的，也都对硬件提出了新要求。</b></p>
+<table>
+<thead><tr><th>变体</th><th>它假设了什么硬件条件</th><th>条件不成立会怎样</th></tr></thead><tbody>
+<tr><td>MLA</td><td>算力相对充裕、显存相对紧张</td><td>算力紧张的机器上，用计算换显存这笔交易不划算</td></tr>
+<tr><td>稀疏（DSA/NSA/CSA）</td><td>gather 不太贵</td><td><b>对规整访存友好的加速器反而吃亏</b> —— 纸面 64 倍拿不到</td></tr>
+<tr><td>线性（KDA）</td><td>片上内存够放下 chunk 的中间量</td><td>chunk 被迫调小 → 并行度掉 → 优势被吃掉</td></tr>
+<tr><td>长上下文 + MoE 同时上</td><td>HBM 带宽够两边分</td><td>all-to-all 与 KV cache <b>抢同一份带宽</b></td></tr>
+</tbody></table>
+<div class="note info"><p><b>一句话收尾</b>：注意力的变体史，就是一部 「在<b>显存</b>、<b>算力</b>、<b>访存规整度</b>三者之间反复搬家」的历史。 早期搬显存（MQA/GQA/MLA），中期搬算力（稀疏）， 现在在搬访存规整度（chunk 化的线性注意力）—— <b>而访存规整度是最难搬的那一样。</b></p></div>
+<hr>
+</div></section>
+<section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>收尾：把谱系放回时间线</h2></div>
+<p><b>前面八节是谱系（可迁移的判断框架），这一节是时间线（记忆的挂钩）。</b> 顺序不能反 —— 先给框架，时间线才有意义；先给时间线，框架就变成了流水账。</p>
+<p>板书画一条线，把上面所有名词按年份钉上去：</p>
+<pre><code>2020  线性注意力          「softmax 拆了会怎样」        —— 想法有了，效果不行
+2021  delta rule          「状态要能擦除」              —— 修了第一个毛病
+2022  FlashAttention      「矩阵根本不用存」            —— 不改数学的那一支分岔
+2023  GQA / SWA / sink    「工程上先把它压下去」        —— 三个简单办法同年出现
+2024  MLA / GDN           「低秩压缩」「遗忘门」        —— 两条支线各自成熟
+2025  NSA / DSA / KDA     「稀疏要在训练时就用」        —— 从推理补丁变成架构
+2026  CSA+HCA / K3        「按距离分层」「混合 + NoPE」  —— 组合拳，1M 成为常规</code></pre>
+<p>⭐ <b>让学生自己读出这条线的形状</b>（讲师不要先说出答案）：</p>
+<ol><li><b>前半段是单点突破，后半段全是组合。</b> 2025 年之后没有哪个模型只用一招</li><li><b>"推理期的补丁"逐年变成"训练期的架构"</b> —— NSA 的 native、DSA 的训练阶段、 K3 的从头混合训练，是同一个趋势的三次出现</li><li><b>每一步都是在修上一步暴露出来的具体毛病</b>，不是凭空发明。 所以<b>下一步大概率也是在修今天这批方案暴露的毛病</b> —— 那么今天这批的毛病是什么？（留给学生，也留给下一版课件）</li></ol>
+<hr>
+</div></section>
+<section id="s十"><div class="wrap"><div class="stn"><span class="badge">第 十 节</span><h2>这个专题明确不讲</h2></div>
+<ul><li><b>MLA 逐步的矩阵推导</b> → 在<a href="专题01-一个-Token-的一生.md">专题一</a>第 2 步。 ⭐ <b>分工是这样定的</b>：<b>专题一讲"V3 这一个模型里它怎么算"， 这里讲"为什么会有它、它在谱系里站哪、它换走了什么"。</b> 这里只用一张图复述结论（576 = 512 + 64），<b>不重讲推导</b> —— 重讲会占掉 5 分钟，而这 5 分钟买不到任何新东西</li><li><b>注意力的 kernel 怎么写</b> → 实现细节在<a href="专题07-性能调优与工具链.md">专题七</a></li><li><b>序列并行 / Context Parallelism 怎么切</b> → <a href="专题05-并行策略.md">专题五</a>。 这里只说"线性注意力的 CP 跟标准 CP 不一样"，不展开</li><li><b>prefill / decode 的形状差异</b> → <a href="专题06-推理.md">专题六</a></li><li><b>各家模型的完整参数表</b> → <a href="专题09-最新开源模型对比.md">专题九</a>。 这里给的每个数字都只为说明一个机制，<b>不做横向评测</b></li><li><b>Mamba / SSM 那一支</b> —— 跟线性注意力是近亲，但它自成体系。 这门课的听众用不上，<b>明确不讲</b>（问到就说一句"同一个思路的另一个分支"）</li></ul>
+<hr>
+</div></section>
+<section id="x13"><div class="wrap"><div class="stn"><h2>素材</h2></div>
+<table>
+<thead><tr><th>要什么</th><th>在哪</th></tr></thead><tbody>
+<tr><td>MQA / GQA</td><td>arXiv <b>1911.02150</b> / <b>2305.13245</b></td></tr>
+<tr><td>MLA</td><td>DeepSeek-V3, arXiv <b>2412.19437</b> §2.1 + §4.2（超参那段给了 <code>n_h/d_h/d_c/d_h^R</code> 的准确值）</td></tr>
+<tr><td>Gated MLA / K3 全貌</td><td>Kimi K3, arXiv <b>2607.24653</b> §2.1.2、表 1（93 层 / 69 KDA + 24 MLA / 2.78T-104.2B）</td></tr>
+<tr><td>SWA</td><td>Mistral 7B, arXiv <b>2310.06825</b>（窗口 4096）</td></tr>
+<tr><td>Attention sink</td><td>StreamingLLM, arXiv <b>2309.17453</b>（4 个 token / 400 万 / 22.2×）</td></tr>
+<tr><td>NSA</td><td>arXiv <b>2502.11089</b>（三支路 + 门控；64k 下 11.6× / 9.0× / 6.0×）</td></tr>
+<tr><td>DSA + Lightning Indexer</td><td>DeepSeek-V3.2, arXiv <b>2512.02556</b>（ReLU 打分 / FP8 / k=2048 / 稠密预热阶段）。<b>我们有一手实测</b></td></tr>
+<tr><td>CSA / HCA</td><td>DeepSeek-V4, arXiv <b>2606.19348</b> §2.3 + §2.3.4（m=4 / m′=128 / top-k / 27%·10% / 2%）</td></tr>
+<tr><td>线性注意力谱系</td><td><b>2006.16236</b>（线性）→ <b>2102.11174</b>（delta rule, 2021）→ <b>2406.06484</b>（可并行化）→ <b>2412.06464</b>（GDN）→ <b>2510.26692</b>（KDA）</td></tr>
+<tr><td>混合配比</td><td><b>2510.26692</b>（3:1 + 消融）、Ling-3.0 模型卡（3:1 / 5:1）、<b>2507.06457</b>（建议 3:1～6:1）</td></tr>
+<tr><td>FlashAttention</td><td>arXiv <b>2205.14135</b> + TPU 侧 Splash Attention 实测（<code>tpu/</code> 下多处）</td></tr>
+<tr><td>我们自己的 kernel 实战</td><td>Tokamax KDA kernel、<code>tpu/</code> 下 DSA 相关</td></tr>
+<tr><td>§0.1 那张 KV cache 对照表</td><td><b>自己按公式推的</b>：<code>2·n_h·d_h·L</code> 与 <code>(d_c+d_h^R)·L</code>，输入全部来自 V3 论文 §4.2。<b>口径（K/V 都按 d_h=128）要在讲的时候声明</b></td></tr>
+</tbody></table>
+<hr>
+</div></section>
+<section id="x14"><div class="wrap"><div class="stn"><h2>还没想清楚的</h2></div>
+<ul><li>[ ] <b>§0.1 要不要把 GQA-8 那一行也画进图里</b> —— 三根柱子（488 / 30.5 / 8.58 GiB）比例太悬殊，第三根几乎看不见。 跟<a href="专题01-一个-Token-的一生.md">专题一</a> §6 那张 logits 图是同一个画图难题， 那边的解法是<b>把"画不出来"本身当成结论</b>，这里也许可以照搬</li><li>[ ] <b>§4.4 的 chunk 大小要不要真的给一个数</b> —— 给了就得说清是哪个硬件、哪个实现，否则会被当成通用常识背下去。 倾向于只给"被片上内存顶死"这个约束，不给数</li><li>[ ] <b>第九节那条时间线的 2026 一行会过时</b> —— 需要一个约定： 每次开课前只更新这一行，前面几行是稳定的</li></ul>
+<hr>
+</div></section>'''
 
 out = [head, '''
 </head>
 <body>
 
-<!-- ⛔ 这个文件由 Courses/tools/topic03-build.py 从
-     Courses/专题03-注意力演进.md 生成。**改内容改那份 md，不要改这里。** -->
+<!-- ⛔ 这个文件由 Courses/tools/topic03-build.py 生成。
+     **正文写在那个脚本的 BODY 常量里** —— 改内容改那里，别改这个产物，
+     也别去改 md 再生成回来（md 只是大纲，2026-09-04 定的）。 -->
 
 <div class="hero"><div class="wrap">
   <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题三
@@ -113,7 +530,7 @@ out = [head, '''
   </ul></div>
 </div>
 
-''', body, '''
+''', BODY, '''
 
 <div class="wrap" style="padding:32px 0 64px">
   <p style="color:var(--gray)">
@@ -122,12 +539,12 @@ out = [head, '''
     量化那一支在 <a href="topic-08.html">专题八 · 精度与量化</a>　·
     <a href="topic-03-lecture.html">📝 讲义</a></p>
   <p style="color:var(--gray);font-size:13px">
-    本页由 <code>Courses/专题03-注意力演进.md</code> 生成 ——&nbsp;
-    <b>改内容改那份 md</b>。本目录采用 CC BY-NC-SA 4.0。</p>
+    本页由 <code>Courses/tools/topic03-build.py</code> 生成 ——&nbsp;
+    <b>正文就写在那个脚本的 BODY 里</b>（md 只是大纲）。本目录采用 CC BY-NC-SA 4.0。</p>
 </div>
 
 </body></html>''']
 
 io.open(OUT, "w", encoding="utf-8").write("\n".join(out))
 print("ok  topic-03.html  %s 字符 · %d 节"
-      % (format(os.path.getsize(OUT), ","), len([s for s in sections if s[1]])))
+      % (format(os.path.getsize(OUT), ","), len(SECTIONS)))
