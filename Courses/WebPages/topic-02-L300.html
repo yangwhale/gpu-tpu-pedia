@@ -972,16 +972,17 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgnum" x="982" y="198" text-anchor="end" fill="#1a73e8" style="font-size:22px">625.0</text>
 <text class="svgsm" x="982" y="214" text-anchor="end" fill="#1a73e8">FLOP / byte</text>
 <text class="svgsm" x="548" y="238">来源：NVIDIA 官方 GB200 NVL72 域级数字 ÷ 72，稀疏值取一半得 dense</text>
-<rect x="0" y="260" width="1000" height="80" rx="8" fill="#202124"/>
-<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">BF16　312.6　对　312.5　　｜　　FP8　625.2　对　625.0　　—— 相对差都是 0.03%</text>
-<text class="svgsm" x="500" y="306" text-anchor="middle" fill="#ffffffcc">⚠️ 换成 HGX 板上的 B200 就是 2,250 ÷ 8.0 ＝ 281.3，离 312 差 11% —— 「都落在 312」的前提是拿 NVL72 里那颗 GB200 比</text>
-<text class="svgsm" x="500" y="326" text-anchor="middle" fill="#ffffff99">推断（没有出处，别当结论讲）：两边都在拿 HBM 带宽去配矩阵算力，比值撞在一起并不奇怪 —— 但没有哪一家这么解释过</text>
-<text class="svglbl" x="0" y="366" fill="#202124">这个数到底是什么意思</text>
-<text class="svgsm" x="0" y="386" fill="#202124">· 它是硬件的「胃口」：每从 HBM 搬一个字节，硬件配套能做约 312 次 BF16 运算。喂不满，算力就在空转</text>
-<text class="svgsm" x="0" y="403" fill="#202124">· 算子那头是同一个单位：它每搬一个字节，需要做几次运算 —— 这就是它的算术强度</text>
-<text class="svgsm" x="0" y="420" fill="#202124">· 于是每个算子只剩一个问题：它的算术强度比 312 高还是低？高就是算力受限，低就是带宽受限</text>
-<text class="svgsm" x="0" y="437" fill="#d93025">· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（第 2.8 节）。这就是第 2 节要处理的东西</text>
-<text class="svgsm" x="0" y="454" fill="#d93025">· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是第 3 节的战场。同一颗芯片，两种完全不同的困境</text>
+<rect x="0" y="260" width="1000" height="98" rx="8" fill="#202124"/>
+<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">BF16　312.6　对　312.5　　｜　　FP8　625.2　对　625.0　　——&#160;<tspan font-weight="700">同一量级</tspan></text>
+<text class="svgsm" x="500" y="304" text-anchor="middle" fill="#ffe08a">⚠️ 别读第三位：GB200 那个「8 TB/s」官方没写口径，十进制还是 8×1024 差 2.4%（见正文折叠）</text>
+<text class="svgsm" x="500" y="324" text-anchor="middle" fill="#ffffffcc">⚠️ 换成 HGX 板上的 B200 就是 2,250 ÷ 8.0 ＝ 281.3，离 312 差 11% —— 「都落在 312」的前提是拿 NVL72 里那颗 GB200 比</text>
+<text class="svgsm" x="500" y="342" text-anchor="middle" fill="#ffffff99">推断（没有出处，别当结论讲）：两边都在拿 HBM 带宽去配矩阵算力，比值撞在一起并不奇怪 —— 但没有哪一家这么解释过</text>
+<text class="svglbl" x="0" y="384" fill="#202124">这个数到底是什么意思</text>
+<text class="svgsm" x="0" y="404" fill="#202124">· 它是硬件的「胃口」：每从 HBM 搬一个字节，硬件配套能做约 312 次 BF16 运算。喂不满，算力就在空转</text>
+<text class="svgsm" x="0" y="421" fill="#202124">· 算子那头是同一个单位：它每搬一个字节，需要做几次运算 —— 这就是它的算术强度</text>
+<text class="svgsm" x="0" y="438" fill="#202124">· 于是每个算子只剩一个问题：它的算术强度比 312 高还是低？高就是算力受限，低就是带宽受限</text>
+<text class="svgsm" x="0" y="455" fill="#d93025">· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（第 2.8 节）。这就是第 2 节要处理的东西</text>
+<text class="svgsm" x="0" y="472" fill="#d93025">· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是第 3 节的战场。同一颗芯片，两种完全不同的困境</text>
 <line x1="0" y1="468" x2="1000" y2="468" stroke="#e8eaed"/>
 <text class="svglbl" x="0" y="494" fill="#202124" style="font-size:13.5px">⚠️ 但这条线不止一条 ——&#160;<tspan font-weight="700">每往计算靠近一层，它就往下掉一截</tspan></text>
 <text class="svgsm" x="0" y="513">同一个除法，在每一层各做一次。下面三个数都只对 GB200 那一颗成立，推导链写在每一行上</text>
