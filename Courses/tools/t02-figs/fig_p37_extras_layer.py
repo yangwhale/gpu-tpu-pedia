@@ -93,7 +93,7 @@ def _tpu(f):
     f.t(R_X + 18, LAY_Y + 50, "这才是「主计算单元之外」的那种多出来", "xxs", SUB)
 
     for i, (c, ttl, sub, subc, body) in enumerate([
-        (GN, "TensorCore", "有 MXU", SUB, "矩阵乘主力。<b>本课前六小节拆的都是它。</b>"),
+        (GN, "TensorCore", "有 MXU", SUB, "矩阵乘主力。<b>本课一路拆下来的都是它。</b>"),
         (PU, "SparseCore", "没有 MXU", RD, "为<b>不规则访存</b>准备的："
                                               "一次搬 (8,) 而不是 (8,128)。"),
     ]):

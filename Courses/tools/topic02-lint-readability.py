@@ -169,6 +169,67 @@ def tag_balance(path):
     return out
 
 
+# ⚠️ 数词里**必须排掉「一」和 1**：「这一节 / 上一节 / 每一节」是指示代词不是计数，
+#    第一版没排，L300 一口气误报十几条 —— 而**误报会把真问题淹掉**
+#    （这跟本仓库那条「一个失效把另一个静音」是同一类）。
+SELFCOUNT = re.compile(
+    r'(?:前面|前)\s*([2-9]|[0-9]{2}|[二三四五六七八九十])\s*(?:个)?\s*(小节|节)')
+CN2N = {c: i + 1 for i, c in enumerate('一二三四五六七八九十')}
+
+
+def self_count(path):
+    """揪出「前面 N 小节 / 前 N 节」里**数错了的**那些。
+
+    ⛔ 2026-09-04 立。当天在 L200／L300／图脚本里扫出五处「前面 N 小节」，
+       **没有一处是对的**（真值 7 / 8 / 8 / 9 / 7）。
+    ⭐ 根因很具体，不是粗心：3.2b / 3.2c / 3.3b 是后来插进去的
+       **带字母后缀的号**，而写「五小节」的人心里数的是 3.1–3.5 这五个整数号。
+       **带字母后缀的编号，人脑一定会漏数**，而且漏了永远不报错 ——
+       它长得像一句正常的话。
+
+    ⚠️ 第一版做成「见到就报」的零容忍规则，结果 L300 那些**数对了的**
+       「前面四节」「前五节」全被报出来（L300 没被重构过，它的数是准的）——
+       **误报会把真问题淹掉**。所以改成真去数：
+       数这句话之前，本节已经出现过几个 <h3>（或全文已经出现过几个 <h2>），
+       **只报对不上的那些**。
+    """
+    h = io.open(path, encoding='utf-8').read()
+    h = re.sub(r'<!--.*?-->', '', h, flags=re.S)
+    h = re.sub(r'<(script|style|svg)\b.*?</\1>', '', h, flags=re.S)
+    # 记下每个 <h2>/<h3> 的位置，之后按字符偏移数「这句话之前有几个」
+    h2 = [m.start() for m in re.finditer(r'<h2\b', h)]
+    h3 = [m.start() for m in re.finditer(r'<h3\b', h)]
+    sec = [m.start() for m in re.finditer(r'<section\b', h)]
+    txtpos = []                     # (纯文本下标 → 原始下标)
+    plain, k = [], 0
+    for m in re.finditer(r'<[^>]+>|[^<]+', h):
+        seg = m.group(0)
+        if seg.startswith('<'):
+            continue
+        for c in seg:
+            plain.append(c); txtpos.append(m.start())
+    plain = ''.join(plain)
+    out = []
+    for m in SELFCOUNT.finditer(plain):
+        raw = txtpos[m.start()]
+        n = int(m.group(1)) if m.group(1).isdigit() else CN2N[m.group(1)]
+        # ⚠️ 两处偏移必须扣，不扣就整页误报（第一版就是这么全红的）：
+        #    ① **这句话自己所在的那个标题**要扣 —— 说「前面 N 小节」的人
+        #       站在第 N+1 小节里，他不数自己。
+        #    ② 章级还要再扣一个 **第 0 节** —— 它编号是 0，
+        #       中文说「前面四节」指的是第 1 到第 4，从不含第 0。
+        if m.group(2) == '小节':
+            beg = max([x for x in sec if x < raw], default=0)
+            real = len([x for x in h3 if beg < x < raw]) - 1
+        else:
+            real = len([x for x in h2 if x < raw]) - 2
+        if real >= 0 and n != real:
+            out.append((re.sub(r'\s+', ' ', plain[max(0, m.start() - 18):
+                                                  m.start() + 32]).strip(),
+                        n, m.group(2), real))
+    return out
+
+
 def main(paths):
     bad = 0
     for p in paths:
@@ -180,6 +241,13 @@ def main(paths):
                   % (os.path.basename(p), t, o, c))
             print('    —— 这类错**不报错也不难看**，但会让后面的样式一路串下去。'
                   '先修它，再看别的。')
+            bad += 1
+        for frag, said, unit, real in self_count(p):
+            print('\n⛔ %s 数自己数错了：说「前面 %s %s」，实际是 %d 个'
+                  % (os.path.basename(p), said, unit, real))
+            print('    …%s…' % frag)
+            print('    ⭐ 改法不是把数改对（下次再插一节又错，而且同样不报错）——'
+                  '是**不数**：换成「上半节」「前面那几小节」这类结构描述。')
             bad += 1
         hits, tot, bold = scan(p)
         hits.sort(key=lambda x: (x[0], -x[1]))
