@@ -3060,8 +3060,21 @@ details.aside b{color:var(--ink);font-weight:600}
       <br><br><b>② Ironwood 官方那个 perf/watt「2×」，比的是上一代 TPU（Trillium），
       不是 GPU。</b><em>（Google blog，2025-04-09；口径是每芯片 TDP 每瓦的
       峰值 FP8 flops。）</em>拿它去对 GPU 是换了分母。
-      <br><b>③ 良率、可靠性、die 面积：这门课一个数都没有，官方也没给可比口径。</b>
-      <em>不说。</em></div>
+      <br><br><b>③ ⛔ 「那面积到底省了多少」——&nbsp;这个问题在公开信息层面<u>答不了</u>。</b>
+      <em>NVIDIA 公布 B200 是 2,080 亿晶体管、两颗 reticle 极限 die（各约 800 mm²）；
+      而 <b>Google 从不公布 TPU 的 die 尺寸和晶体管数</b>。</em>
+      <b>一边公布一边不公布，「谁的 die 更小」就没有可比口径。</b>
+      <br>⭐ <b>但「省在哪几项」可以逐项点名，用的还是本课自己的两张表：</b>
+      <b>L2 整整一层 TPU 没有</b>（B200 侧 126 MB）、
+      <b>线程上下文的寄存器堆 TPU 也没有</b>（B200 侧 37 MiB）——&nbsp;
+      <b>合计 157 MiB 的片上 SRAM，花在 TPU 压根不存在的两样东西上</b>；
+      再加上<b>少 148 套控制接口</b>（592 个 Tensor Core 对 4 个 MXU）。
+      <em>SRAM 和控制接口都是要占面积的 ——&nbsp;
+      <b>省下来的能一项一项点出来，只是「整颗谁大」给不出答案。</b></em>
+      <br><br><b>④ 良率、可靠性：没有任何可引的出处，不说。</b>
+      <em>官方讲的是「确定性执行」，那是尾延迟可预测，跟可靠性不是一回事。</em>
+      <span class="sub">——&nbsp;<b>论文全文摘录</b>（省掉的完整清单、2% 那张 floor plan、
+        v1 时代的全部量化结果）在 L300 §3.2 那个折叠里。</span></div>
     </div></details>
 
   <!-- ⭐ 2026-09-01 加。Chris 问：「你打算啥时候讲 warp 调度器、线程单元、

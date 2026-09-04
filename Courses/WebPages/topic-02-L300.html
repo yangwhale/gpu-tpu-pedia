@@ -5092,6 +5092,100 @@ details.aside b{color:var(--ink);font-weight:600}
     形状不规则、长度动态变的活，GPU 那笔保险费就花得值。</b>
     <em>第 5 节整节都在算这笔保险费到底多少钱。</em></div>
 
+  <!-- ⭐⭐ 2026-09-04 加。Chris 两问：
+       ① 「电路简单、功耗低这些，官方讲过没有？」——&nbsp;讲过，而且 TPU 初代论文
+          整篇就是这个论证。他要求「完完整整记录到文档里」，所以全文摘录放这儿
+          （L200 那边只留短版 ＋ 指过来）。
+       ② 「新一代虽然总算力没 B200 高，但它肯定省了面积和复杂度，
+          只是没做到跟 B200 一边大而已。」
+       ⛔ 第 ② 问的**复杂度**那一半可以逐项列；**面积**那一半我查不到 ——&nbsp;
+          Google 从不公布 TPU 的 die 尺寸和晶体管数，而 NVIDIA 公布。
+          这个**信息不对称本身要写进去**，不能拿推断冒充数据。 -->
+  <details class="aside"><summary>⭐ 「省下的是复杂度」这句有官方出处 ——&nbsp;TPU 初代论文（ISCA 2017）全文摘录，以及它十年后哪几句不再成立<em>（引文 ＋ 边界）</em></summary>
+    <div class="body">
+    <p>出处：Jouppi, Young, Patil, Patterson 等，<em>In-Datacenter Performance
+      Analysis of a Tensor Processing Unit</em>，ISCA 2017，arXiv:1704.04760。
+      <b>以下引文逐字，中文是转述不是翻译。</b></p>
+
+    <p><b>一、省掉了哪些东西 —— 论文一句话列完（第 8 页）</b></p>
+    <blockquote>As compared to CPUs and GPUs, the single-threaded TPU has none of
+      the sophisticated microarchitectural features that consume transistors and
+      energy to improve the average case but not the 99th-percentile case:
+      <b>no caches, branch prediction, out-of-order execution, multiprocessing,
+      speculative prefetching, address coalescing, multithreading, context
+      switching</b>, and so forth.
+      <b>Minimalism is a virtue of domain-specific processors.</b></blockquote>
+    <p><em>⭐ 注意它的措辞：这些特性「消耗晶体管和能量，改善的是平均情况、
+      而不是 99 分位」。<b>省掉它们的理由不是省钱，是这类负载根本用不上。</b></em></p>
+
+    <p><b>二、省下来变成了什么 —— 摘要里直说</b></p>
+    <blockquote>The lack of such features helps explain why, despite having
+      myriad MACs and a big memory, <b>the TPU is relatively small and low
+      power</b>.</blockquote>
+    <p>结论段又说了一遍：</p>
+    <blockquote>…<b>the omission of general-purpose features that enabled a small
+      and low power die</b> despite the larger datapath and memory…</blockquote>
+
+    <p><b>三、⭐ 最硬的一个数：控制逻辑在 die 上只占 2%</b>（Figure 2 floor plan）</p>
+    <blockquote>The light (blue) data buffers are <b>37%</b> of the die, the
+      (yellow) compute is <b>30%</b>, the (green) I/O is <b>10%</b>, and the
+      (red) <b>control is just 2%</b>. <b>Control is much larger (and much more
+      difficult to design) in a CPU or GPU.</b></blockquote>
+    <p><em>——&nbsp;「简单」在版图上的样子就是这两个点。</em></p>
+
+    <p><b>四、「稳定」那一条，官方讲的是<u>确定性</u>，不是可靠性</b></p>
+    <blockquote>The TPU’s deterministic execution model is a better match to the
+      99th-percentile response-time requirement of our NN applications than are
+      the time-varying optimizations of CPUs and GPUs (caches, out-of-order
+      execution, multithreading, multiprocessing, prefetching, …) that help
+      average throughput more than guaranteed latency.</blockquote>
+    <p>⚠️ <b>这说的是尾延迟可预测，不是良率、不是故障率。</b>
+      <em>良率／可靠性这门课没有找到任何可引的出处，所以不说这一条。</em></p>
+
+    <p><b>五、那一代的量化结果（v1 对 K80 / Haswell，2015 年的机器）</b></p>
+    <ul>
+      <li>矩阵单元 <b>256×256 共 65,536 个 8-bit MAC</b>，峰值 <b>92 TOPS</b>；
+        片上 <b>28 MiB 软件管理</b>的内存</li>
+      <li>比 K80 多 <b>25 倍的 MAC</b>（65,536 个 8-bit 对 2,496 个 32-bit）、
+        <b>3.5 倍的片上内存</b>（28 对 8 MiB），<b>而功耗不到 K80 一半</b></li>
+      <li>推理快 <b>15–30 倍</b>，<b>TOPS/Watt 高 30–80 倍</b>；
+        换上 GDDR5 后可到 GPU 的 <b>约 70 倍</b></li>
+      <li><b>TPU die 不到 Haswell die 的一半大</b></li>
+      <li>功耗：每 die 增量 <b>40 W</b>、含主机分摊 <b>118 W</b>。
+        ⚠️ <b>但能耗比例性很差</b> ——&nbsp;10% 负载时仍用 88% 的电
+        （论文自陈：<em>短工期没来得及做省电特性</em>）</li>
+    </ul>
+
+    <div class="note danger"><span class="t">⛔⛔ 这篇论文引到今天，三条必须带的边界</span>
+      <b>① 它比的是 TPU v1（2015）对 K80（2014）。那一代「省下来」确实换成了算力</b>
+      ——&nbsp;25 倍 MAC 就是证据。<b>但到 v7 对 B200 反过来了</b>：
+      §3.7 那张账表数出来乘加总量 <b>606,208 对 524,288，GPU 反而多 16%</b>。
+      <em>同一个机制（minimalism），十年之间结果不一样了。</em>
+      <br><b>所以今天只能说「省下的是复杂度」，不能再说「省下的变成了算力」。</b>
+
+      <br><br><b>② ⛔ 那「面积到底省了多少」？——&nbsp;这个问题在公开信息层面<u>答不了</u>。</b>
+      <em>NVIDIA 公布 B200 是 <b>2,080 亿晶体管、两颗 reticle 极限 die（各约 800 mm²）、
+      TSMC 4NP</b>；而 <b>Google 从不公布 TPU 的 die 尺寸和晶体管数</b>
+      （v7 的制程是第三方供应链报道的 N3P，官方未确认）。</em>
+      <b>一边公布一边不公布，「谁的 die 更小」就没有可比口径。</b>
+      <span class="sub">⭐ 顺带一个值得记的观察：B200 那两颗 die 已经<b>顶在光刻极限上</b>
+        ——&nbsp;它不能再大了。「把面积用到物理上限」和「用多少算多少」是两种不同的做法，
+        <b>但要证实后者比前者省，仍然需要那个不公开的数。</b></span>
+
+      <br><br><b>③ ⭐ 能说的是「省在哪几项」，而这个可以逐项点名 ——&nbsp;
+      本课自己的两张表就够：</b>
+      <br>·&nbsp;<b>L2 整整一层 TPU 没有</b>：B200 侧 <b>126 MB（≈120 MiB）</b>，TPU 侧 0
+      <br>·&nbsp;<b>线程上下文的寄存器堆 TPU 没有</b>：B200 侧 <b>37 MiB</b>，TPU 侧 0
+      <br>·&nbsp;——&nbsp;<b>合计 157 MiB 的片上 SRAM，花在 TPU 压根不存在的两样东西上。
+      SRAM 是要占面积的。</b>（§3.2b 那张表）
+      <br>·&nbsp;<b>控制接口少 148 套</b>：同样多的算力，B200 切成
+      <b>592 个 Tensor Core</b>，v7 只切成 <b>4 个 MXU</b>，每个大 128 倍。
+      <em>每个 Tensor Core 都要自己的操作数通路、发射接口、累加器接线；
+      一个 256×256 的阵列只要一套。</em>（§3.7 那张账表）
+      <br><br><em>——&nbsp;所以准确的说法是：<b>省下来的东西能一项一项点出来，
+      但「整颗 die 谁大」这门课给不出答案，因为有一半的数不公开。</b></em></div>
+    </div></details>
+
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
   <p>上一节说的「运行时换任务」，具体在哪一层发生？把两边的层级摆开对照。
     <b>GPU 这边一共六层</b>，比课本上常说的四层多两层 ——&nbsp;
