@@ -62,11 +62,11 @@ p.append(f'<rect x="512" y="{yb}" width="470" height="40" rx="6" fill="{GR}"/>')
 p.append(f'<text class="svglbl" x="747" y="{yb+18}" text-anchor="middle" fill="#fff">路上 0 个运行时决策点</text>')
 p.append(f'<text class="svgsm" x="747" y="{yb+33}" text-anchor="middle" fill="#ffffffcc">没有 cache，就没有命中、未命中、替换这些概念 —— 也没有补救机会</text>')
 p.append(f'<rect x="0" y="{yb+52}" width="982" height="62" rx="8" fill="#fef7e0" stroke="{YL}"/>')
-p.append(f'<text class="svglbl" x="18" y="{yb+74}" fill="#7a5000">⭐ 这不是「谁更聪明」，是两次不同的赌注</text>')
+p.append(f'<text class="svglbl" x="18" y="{yb+74}" fill="#7a5000">⭐ 这不是「谁更聪明」——&#160;是两条路线，各自靠一样东西</text>')
 p.append(f'<text class="svgsm" x="18" y="{yb+93}" fill="#7a5000">'
-         f'GPU 赌「运行时能适应」—— 赌赢了什么代码都能跑，赌输了 cache 一直未命中，而你只能反复试。</text>')
+         f'GPU 靠<tspan font-weight="700">运行时适应</tspan>：形状对不对都能跑起来；代价是命中率要跑起来才知道，不好的时候只能反复试。</text>')
 p.append(f'<text class="svgsm" x="18" y="{yb+110}" fill="#7a5000">'
-         f'TPU 赌「编译期能算准」—— 赌赢了一个决策周期都不浪费，赌输了运行时无处补救，只能回去改形状。</text>')
+         f'TPU 靠<tspan font-weight="700">编译期算准</tspan>：形状提前定死，一个决策周期都不浪费；代价是运行时没有补救手段，形状不对只能回去改代码。</text>')
 W('fig2-1.svg',p+['</svg>'])
 
 # ══════════ 图 2-2 · lane / sublane 是寄存器的形状 ══════════

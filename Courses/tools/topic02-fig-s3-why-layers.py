@@ -125,7 +125,7 @@ p.append(f'<rect x="0" y="{GB}" width="{W}" height="70" rx="8" '
 p.append(f'<text class="svglbl" x="16" y="{GB+23}" fill="#0b6b30">'
          f'⭐ 这六层没有一层是为了「让程序好写」加的</text>')
 p.append(f'<text class="svgsm" x="16" y="{GB+43}" fill="#0b6b30">'
-         f'它们合起来，就是<tspan font-weight="700">「运行时适应」这个赌注的组织成本</tspan>'
+         f'它们合起来，就是<tspan font-weight="700">「靠运行时适应」这条路线的组织成本</tspan>'
          f'——&#160;要在运行时换人、分工、组队，就得把这些层级做进硬件，'
          f'再配上调度器、记分板、常驻的巨大寄存器堆。</text>')
 p.append(f'<text class="svgsm" x="16" y="{GB+61}" fill="#0b6b30">'

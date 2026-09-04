@@ -638,7 +638,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svglbl" x="678" y="209" text-anchor="middle" fill="#fff">早就知道你要跑什么　→　一手都不留</text>
 <text class="svgsm" x="500" y="140" text-anchor="middle" fill="#80868b" style="font-size:15px">vs</text>
 </svg>
-  <figcaption><b>两条出身不是优劣，是两次不同的赌注</b> ——&nbsp;赌你要跑的东西能不能提前知道。⭐ <b>右边那句「早就知道你要跑什么」是全课的根</b>：后面每一节两边只要不一样，追到底都会回到这一句上。<em>——&nbsp;先带着它往下走，别急着记两边各有什么部件。</em></figcaption>
+  <figcaption><b>两条出身不是优劣，是两条路线</b> ——&nbsp;一条靠运行时现判，一条靠编译期算准。<b>分野只在一件事上：</b>你要跑的东西能不能提前知道。⭐ <b>右边那句「早就知道你要跑什么」是全课的根</b>：后面每一节两边只要不一样，追到底都会回到这一句上。<em>——&nbsp;先带着它往下走，别急着记两边各有什么部件。</em></figcaption>
   </figure>
 
   <div class="note ok"><span class="t">开课前先把话说死：这门课不比谁强</span>
@@ -1281,9 +1281,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svglbl" x="747" y="444" text-anchor="middle" fill="#fff">路上 0 个运行时决策点</text>
 <text class="svgsm" x="747" y="459" text-anchor="middle" fill="#ffffffcc">没有 cache，就没有命中、未命中、替换这些概念 —— 也没有补救机会</text>
 <rect x="0" y="478" width="982" height="62" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
-<text class="svglbl" x="18" y="500" fill="#7a5000">⭐ 这不是「谁更聪明」，是两次不同的赌注</text>
-<text class="svgsm" x="18" y="519" fill="#7a5000">GPU 赌「运行时能适应」—— 赌赢了什么代码都能跑，赌输了 cache 一直未命中，而你只能反复试。</text>
-<text class="svgsm" x="18" y="536" fill="#7a5000">TPU 赌「编译期能算准」—— 赌赢了一个决策周期都不浪费，赌输了运行时无处补救，只能回去改形状。</text>
+<text class="svglbl" x="18" y="500" fill="#7a5000">⭐ 这不是「谁更聪明」——&#160;是两条路线，各自靠一样东西</text>
+<text class="svgsm" x="18" y="519" fill="#7a5000">GPU 靠<tspan font-weight="700">运行时适应</tspan>：形状对不对都能跑起来；代价是命中率要跑起来才知道，不好的时候只能反复试。</text>
+<text class="svgsm" x="18" y="536" fill="#7a5000">TPU 靠<tspan font-weight="700">编译期算准</tspan>：形状提前定死，一个决策周期都不浪费；代价是运行时没有补救手段，形状不对只能回去改代码。</text>
 </svg>
   <figcaption>同一次访存，两条路。红的是<b>运行时才知道结果</b>的，绿的是<b>编译期已经定死</b>的 —— 主路 <b>4 个对 0 个</b>。虚线那个 bank conflict 是支路，它属于 shared memory，不在 global load 这条路上。</figcaption>
   </figure>
@@ -3443,7 +3443,7 @@ details.aside b{color:var(--ink);font-weight:600}
     命中了，你拿到的是 2.6 倍；没命中，你什么都没省还多绕了一圈。
     <br><b>这就是为什么「让它落在 L2 里就好了」不是一个能依赖的策略</b> ——&nbsp;
     收益倍数本来就不大，而且你还没法保证它在。
-    <em>第 2 节那 4 个决策点里的两个，赌的就是这 2.6 倍。</em>
+    <em>第 2 节那 4 个决策点里的两个，押的就是这 2.6 倍 ——&nbsp;而它只有 2.6 倍。</em>
     <br><br><b>为什么慢：L2 是全片共享的。</b>
     共享内存 ≈ 4.3 倍、VMEM 约一个数量级，都比 L2 的 2.6 倍高 ——&nbsp;
     因为它们<b>就贴在计算单元旁边</b>，一个 SM 只读自己那块；
@@ -3756,10 +3756,10 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="16" y="533" fill="#d93025">warp 内<tspan font-weight="700">「天然锁步」是 Volta 之前的事</tspan>——&#160;现在每个线程有独立的 PC，要对齐得显式写 __syncwarp()。</text>
 <rect x="0" y="556" width="1400" height="70" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
 <text class="svglbl" x="16" y="579" fill="#0b6b30">⭐ 这六层没有一层是为了「让程序好写」加的</text>
-<text class="svgsm" x="16" y="599" fill="#0b6b30">它们合起来，就是<tspan font-weight="700">「运行时适应」这个赌注的组织成本</tspan>——&#160;要在运行时换人、分工、组队，就得把这些层级做进硬件，再配上调度器、记分板、常驻的巨大寄存器堆。</text>
+<text class="svgsm" x="16" y="599" fill="#0b6b30">它们合起来，就是<tspan font-weight="700">「靠运行时适应」这条路线的组织成本</tspan>——&#160;要在运行时换人、分工、组队，就得把这些层级做进硬件，再配上调度器、记分板、常驻的巨大寄存器堆。</text>
 <text class="svgsm" x="16" y="617" fill="#0b6b30"><tspan font-weight="700">✕ TPU 这一整列是空的。</tspan>它不做「运行时换人」这个决定，于是这六层同时失去存在的理由 ——&#160;T-3 那张对照表上的两个空格，就是这一列不存在时的样子。</text>
 </svg>
-  <figcaption>六层里只有 <b>grid</b> 和 <b>thread</b> 是边界，其余四层每一层都对应一个具体的硬件麻烦：取指译码太贵，于是 32 个线程共用一条指令流；Tensor Core 大到一个 warp 喂不饱，于是发指令的单位抬到 4 个 warp；共享暂存需要一条作用域边界，于是有了 CTA；一个 SM 的 227 KiB 不够用，于是允许跨 SM 组簇。<b>它们合起来就是「运行时适应」这个赌注的组织成本</b> —— 而 TPU 不做那个决定，这一整列同时失去存在的理由。</figcaption>
+  <figcaption>六层里只有 <b>grid</b> 和 <b>thread</b> 是边界，其余四层每一层都对应一个具体的硬件麻烦：取指译码太贵，于是 32 个线程共用一条指令流；Tensor Core 大到一个 warp 喂不饱，于是发指令的单位抬到 4 个 warp；共享暂存需要一条作用域边界，于是有了 CTA；一个 SM 的 227 KiB 不够用，于是允许跨 SM 组簇。<b>它们合起来就是「靠运行时适应」这条路线的组织成本</b> —— 而 TPU 不做那个决定，这一整列同时失去存在的理由。</figcaption>
   </figure>
 
   <!-- ⛔ 这个落点框只说**来源**，不要再把「＝运行时适应的组织成本」写一遍 ——
@@ -4221,7 +4221,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="0" y="588" width="1400" height="70" rx="8" fill="#e6f4ea" stroke="#1e8e3e"/>
 <text class="svglbl" x="14" y="611" fill="#0b6b30" style="font-size:13px">⭐ 换 warp 是零成本的 ——&#160;而这张图就是那张账单</text>
 <text class="svgsm" x="14" y="631" fill="#0b6b30">CPU 换线程要把寄存器存下来再恢复；GPU <tspan font-weight="700">从来不搬</tspan> ——&#160;2,048 个线程的寄存器<tspan font-weight="700">一直物理占着</tspan>，谁的数据到了就发谁。</text>
-<text class="svgsm" x="14" y="649" fill="#0b6b30"><tspan font-weight="700">代价就是那 256 KiB。</tspan>「运行时才知道数据什么时候到」这个赌注，最贵的一项不是调度器，是这堆养着待命者的寄存器。</text>
+<text class="svgsm" x="14" y="649" fill="#0b6b30"><tspan font-weight="700">代价就是那 256 KiB。</tspan>「运行时才知道数据什么时候到」——&#160;为这一条付的账里，最贵的一项不是调度器，是这堆养着待命者的寄存器。</text>
 </svg>
   <figcaption>四个格子这个画面一立起来，三件事同时有了答案：<b>32 是一个格子的宽度</b>，
     128 是四格各出一个 warp；<b>能住多少人由三个闸门里最紧的那个说了算</b>，
@@ -11380,7 +11380,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <rect x="254" y="172" width="480" height="50" rx="6" fill="#fff" stroke="#fce8e6" stroke-width="1.2"/>
 <text x="264" y="188" class="xxs"><tspan font-weight="700" fill="#202124">硬件，在运行时。</tspan><tspan fill="#9aa0a6">同一次访存</tspan><tspan font-weight="700" fill="#202124">主路上 4 个决策点</tspan>，命中不命中要跑起来才知道。</text>
 <rect x="736" y="172" width="480" height="50" rx="6" fill="#fff" stroke="#e6f4ea" stroke-width="1.2"/>
-<text x="746" y="188" class="xxs"><tspan font-weight="700" fill="#202124">编译器，在编译期。</tspan><tspan fill="#9aa0a6">同一条路上 </tspan><tspan font-weight="700" fill="#202124">0 个</tspan> —— 赌赢了一个周期都不浪费，<tspan font-weight="700" fill="#d93025">赌输了运行时无处补救</tspan>。</text>
+<text x="746" y="188" class="xxs"><tspan font-weight="700" fill="#202124">编译器，在编译期。</tspan><tspan fill="#9aa0a6">同一条路上 </tspan><tspan font-weight="700" fill="#202124">0 个</tspan> —— <tspan font-weight="700" fill="#202124">前提成立</tspan>时一个周期都不浪费，<tspan font-weight="700" fill="#d93025">不成立时运行时无处补救</tspan>。</text>
 <text x="1228" y="190" class="xxs" fill="#5f6368">§2.1 访存逐站图</text>
 <rect x="1228" y="198" width="38" height="17" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.1"/>
 <text x="1247.0" y="210" class="xxs" fill="#1a73e8" text-anchor="middle">机制</text>
@@ -11472,7 +11472,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <text x="948" y="775" class="xxs" fill="#202124">§1.4 那个 312 FLOP/byte 的拐点，换到 GB300 仍然成立</text>
 <text x="38" y="804" class="xxs" fill="#5f6368"><tspan font-weight="700" fill="#202124">2,500 ÷ 8.0 ＝ 312.5</tspan>　分子分母都与 GB200 NVL72 相同（HGX B200 是 2,250 → 281.3）　⚠️ 8.0 ＝ 576 ÷ 72 是推的，官方写的是「最高 576」</text>
 <rect x="20" y="832" width="1360" height="148" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
-<text x="38" y="860" class="sec">⛔ 这张表里「两边同口径实测」那一档是空的 —— 而这门课唯一的一组两边实测，跑的是「TPU 的赌注该成立」<tspan font-weight="700" fill="#d93025">最近的那一侧 —— 但也只近了一半</tspan></text>
+<text x="38" y="860" class="sec">⛔ 这张表里「两边同口径实测」那一档是空的 —— 而这门课唯一的一组两边实测，跑的是「TPU 那个前提该成立」<tspan font-weight="700" fill="#d93025">最近的那一侧 —— 但也只近了一半</tspan></text>
 <rect x="38" y="874" width="640" height="92" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
 <text x="50" y="893" class="lbl" fill="#1a73e8">实测跑的是什么</text>
 <text x="50" y="912" class="xxs"><tspan fill="#9aa0a6">Hunyuan3-295B-A21B 预训练，两边各 64 个计算单元、2026 年 8 月。</tspan><tspan font-weight="700" fill="#202124">这是离「假设成立」最近的一侧 —— 但只近了一半</tspan>：§0 列的两</text>
@@ -11480,7 +11480,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <text x="50" y="940" class="xxs"><tspan fill="#9aa0a6">边界就是靠它立起来的）。</tspan><tspan font-weight="700" fill="#d93025">结果：GB300 快 1.31 倍。</tspan></text>
 <rect x="690" y="874" width="672" height="92" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
 <text x="702" y="893" class="lbl" fill="#1a73e8">所以能说的只有这一句，一个字都不能多</text>
-<text x="702" y="916" class="sec"><tspan font-weight="700" fill="#202124">机制上 TPU 的赌注在这类负载上成立；而在这一组 64 单元的实测里，它没有兑现。</tspan></text>
+<text x="702" y="916" class="sec"><tspan font-weight="700" fill="#202124">机制上 TPU 那个前提在这类负载上成立；而在这一组 64 单元的实测里，它没有兑现。</tspan></text>
 <text x="702" y="942" class="xxs"><tspan font-weight="700" fill="#202124">⚠️ 1.31 只能当一个点，不能当一个界。</tspan><tspan fill="#9aa0a6">它有两个</tspan><tspan font-weight="700" fill="#202124">方向相反</tspan>的修正，而<tspan font-weight="700" fill="#202124">两个都没量过</tspan>：GB300 侧更好的那组（EP16，882.3）没复测 → 差距可能</text>
 <text x="702" y="956" class="xxs">到 <tspan font-weight="700" fill="#202124">1.35</tspan>；P-18 六条边界<tspan font-weight="700" fill="#202124">四条利于 GB300</tspan> → 差距可能更小。最重的两条是<tspan font-weight="700" fill="#202124">「软件成熟度，且会变」</tspan>和<tspan font-weight="700" fill="#202124">「64 是 GPU 的主场」</tspan>。</text>
 <text x="1380" y="992" class="xxs" fill="#9aa0a6" text-anchor="end">▶ ＝ 现场念的三行，其余印在这里供课后回查　·　每一行的出处标号就写在同一行里 —— §9 是最容易被单独截走的一节，边界必须跟结论同框</text>
@@ -11543,7 +11543,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <line x1="520" y1="490" x2="520" y2="532" stroke="#9aa0a6" stroke-width="1.5" marker-end="url(#aK)"/>
 <rect x="36" y="544" width="478" height="52" rx="6" fill="#fce8e6"/>
 <rect x="526" y="544" width="478" height="52" rx="6" fill="#e6f4ea"/>
-<text x="46" y="530" class="lbl" fill="#202124">③ 所以，赌输了怎么办？</text>
+<text x="46" y="530" class="lbl" fill="#202124">③ 所以，前提不成立时怎么办？</text>
 <text x="994" y="530" class="xxs" fill="#9aa0a6" text-anchor="end">§2.1 落点</text>
 <line x1="46" y1="538" x2="994" y2="538" stroke="#dadce0" stroke-width="1.0"/>
 <text x="56" y="558" class="xs"><tspan font-weight="700" fill="#202124">运行时还能换一条路</tspan><tspan fill="#9aa0a6"> —— 硬件自己会绕</tspan></text>
@@ -11587,7 +11587,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <text x="495.3333333333333" y="789" class="xxs"><tspan fill="#9aa0a6">照抄 P-3 的句式，因为它把话说全了：</tspan><tspan font-weight="700" fill="#202124">占优 + 类别 + 时效</tspan>。<tspan font-weight="700" fill="#202124">两者会随时间收敛，别混成</tspan></text>
 <text x="495.3333333333333" y="802" class="xxs"><tspan font-weight="700" fill="#202124">一件事讲</tspan> —— 架构差距不会自己变小，生态差距会。</text>
 <rect x="928.6666666666666" y="752" width="433.3333333333333" height="96" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
-<text x="940.6666666666666" y="771" class="lbl" fill="#d93025">③ TPU 的赌注，这门课从没用数据兑现过</text>
+<text x="940.6666666666666" y="771" class="lbl" fill="#d93025">③ TPU 那个前提，这门课从没用数据兑现过</text>
 <rect x="1272.0" y="758" width="80.0" height="19" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
 <text x="1312.0" y="771" class="xxs" fill="#d93025" text-anchor="middle">我们自己欠的</text>
 <text x="940.6666666666666" y="789" class="xxs"><tspan fill="#9aa0a6">§0 立的是</tspan><tspan font-weight="700" fill="#202124">假设</tspan>（图底那一行）；§5.5 兑现的只是它的<tspan font-weight="700" fill="#202124">反面</tspan>。正面那一半全课一次都没兑现</text>
@@ -11627,7 +11627,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
     <b>一个点，不是一个界</b>（6.3 已经说死）。
     <br>② 「TPU 要手写 kernel」是<b>生态差距，不是架构差距</b> ——&nbsp;
     生态会随时间收敛，架构不会，混成一件事讲就等于在说一个不会变的劣势。
-    <br>③ 机制上 TPU 那个赌注在规整负载上成立，
+    <br>③ 机制上 TPU 那条路线的前提在规整负载上成立，
     <b>但这门课从来没有用数据兑现过它</b>。
     ——&nbsp;这一条是我们自己欠的：第 0 节把它立成了假设，
     正面那一半全课一次都没有被数据兑现。</div>
