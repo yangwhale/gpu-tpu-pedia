@@ -565,7 +565,7 @@ details.aside b{color:var(--ink);font-weight:600}
          而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
          ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
          （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
-    <span class="chip">⏱ <b>77 分钟 · 38 张图</b></span>
+    <span class="chip">⏱ <b>77 分钟 · 39 张图</b></span>
     <span class="chip">完整版 <a href="topic-02-L300.html"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -762,95 +762,131 @@ details.aside b{color:var(--ink);font-weight:600}
     看到任何算子先问一句：<b>比 312 高还是低？</b>低的那些，算力再翻倍也不会快。<br>
     ② <b>一条判据</b>。看到一个差别，先问它是「一边有、另一边整个没有」，
     还是「两边都有、只差个百分之几」。<b>前者才要讲，它十年不变。</b>后者下一代就变了。<br>
-    <em>——&nbsp;① 下面这个框立刻用两次；② 第 2 节那个差别就是前一类里最大的一条，
+    <em>——&nbsp;① 下面那张图立刻用三次；② 第 2 节那个差别就是前一类里最大的一条，
     3.6 走完全程之后还会再用它数一次账。</em></div>
 
-  <!-- ⚠️ 2026-09-01 补。原来 §1 把 312 算出来就结束了，学员手上**一个能立刻
-       上手算的例子都没有** —— 要等到 §2 的 fig2-4 才第一次看到怎么用。
-       数和用法隔着一整节，中间那段路上 312 是个背下来的数，不是个能用的工具。
-       ⛔ 两个例子是**特意避开注意力**挑的（向量加 ＋ 方阵乘）：
-          注意力那一笔 §2 第一张图就要完整推一遍，在这儿先算等于剧透 ＋ 重复。
-       ⛔ 也特意**不画图**：两行算术，画成图反而比读一行字慢，
-          而 L200 的每一张图都要占讲课时间。 -->
-  <!-- ⭐ 重写要点：算子那一侧的算法**得先单独说一句**，再举例。原来这句
-       («数搬几字节、算几次，除一下») 塞在框的最后一行，读者是先看完两个例子
-       才知道刚才在干什么。而它比 312 本身更值钱 ——&nbsp;312 会随硬件换代变，
-       这个算法不会。 -->
-  <div class="note info"><span class="t">先拿这条线判两样东西 —— 两行算术，不用图</span>
-    算子那一侧的数叫<b>算术强度</b>，算法只有一句话：<b>数它搬几个字节，数它算几次，除一下。</b>
-    <em>这句比 312 本身更值钱 ——&nbsp;312 会随硬件换代变，这个算法不会。</em>
-    当场量两个。<br><br>
-    ① <b>向量加</b> <code>y = a + b</code>（bf16）。读 a 两字节，读 b 两字节，写 y 两字节
-    ——&nbsp;搬 <b>6 字节</b>。中间做几次运算？<b>一次加法</b>。强度 = 1 ÷ 6 = <b>0.17</b>。<br>
-    比 312 低了一千八百多倍。这意味着什么 ——&nbsp;这行代码在 GB200 上<b>把 8 TB/s 带宽全部跑满</b>，
-    也只有 1.3 TFLOPS。<em>那颗芯片峰值 2,500，用掉万分之五。</em><br>
-    <b>买更贵的卡能让它变快吗？不能。</b>它压根不在算力那条路上。<br><br>
-    ② <b>方阵乘</b> N×N×N（bf16）。乘加 <b>2N³</b> 次，搬进搬出三个矩阵 <b>6N²</b> 字节。
-    约一下，强度 = <b>N ÷ 3</b>。<br>
-    要够到 312，<b>边长得接近 1,000</b>。边长 256 只有 85，还在带宽那一侧。<br>
-    <b>「矩阵乘＝算力受限」是个错觉。</b>它得够大才算数。<br><br>
-    ——&nbsp;下一节第一件事，就是拿注意力当场走一遍这个流程。</div>
+<figure class="fbox fwide" id="s012-fig1-6">
+  <svg viewBox="0 0 1400 658" width="100%" role="img" aria-label="同一道除法用三次：向量加算出 0.17，方阵乘算出 N 除以 3，算子融合只把分母做小、把点往右推，而落点是片上那条 64 的线">
+<defs><marker id="aR" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#1e8e3e"/></marker></defs>
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:14px">这条线怎么用 ——&#160;<tspan font-weight="700">同一道除法，当场量两个，再看融合动了哪一半</tspan></text>
+<rect x="0" y="30" width="1400" height="62" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svglbl" x="16" y="55" fill="#174ea6" style="font-size:13px">算法只有一句话：</text>
+<text class="svglbl" x="126" y="55" fill="#174ea6" style="font-size:17px">数它搬几个字节　·　数它算几次　·　除一下</text>
+<text class="None" x="506" y="55" fill="#174ea6">——&#160;得到的就是这个算子的<tspan font-weight="700">算术强度</tspan>；跟 1.1 那张规格表算出来的 <tspan font-weight="700">312</tspan> 比大小，就知道它卡在哪一边。</text>
+<text class="None" x="16" y="79" fill="#5f6368">⭐ 这句比 312 本身值钱 ——&#160;312 会随硬件换代变，这个算法不会。下面三栏就是它用三次的样子。</text>
+<rect x="0" y="126" width="442" height="384" rx="10" fill="#fef7f6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svglbl" x="18" y="154" fill="#d93025" style="font-size:16px">① 向量加</text>
+<text class="svglbl" x="118" y="154" fill="#d93025" style="font-size:13px"><tspan font-family="ui-monospace,monospace">y = a + b</tspan>　bf16</text>
+<rect x="18" y="170" width="406" height="112" rx="8" fill="#fff" stroke="#f2c7c2" stroke-width="1.0"/>
+<text class="None" x="34" y="194" fill="#5f6368">读 a</text>
+<text class="svglbl" x="148" y="194" fill="#202124" text-anchor="end" style="font-size:12px">2 字节</text>
+<text class="None" x="34" y="216" fill="#5f6368">读 b</text>
+<text class="svglbl" x="148" y="216" fill="#202124" text-anchor="end" style="font-size:12px">2 字节</text>
+<text class="None" x="34" y="238" fill="#5f6368">写 y</text>
+<text class="svglbl" x="148" y="238" fill="#202124" text-anchor="end" style="font-size:12px">2 字节</text>
+<path d="M34 266 h114" stroke="#f2c7c2"/>
+<text class="None" x="34" y="278" fill="#5f6368">搬</text>
+<text class="svglbl" x="148" y="278" fill="#d93025" text-anchor="end" style="font-size:13px">6 字节</text>
+<text class="None" x="190" y="198" fill="#5f6368">算</text>
+<text class="svglbl" x="190" y="238" fill="#d93025" style="font-size:30px">1</text>
+<text class="svglbl" x="218" y="238" fill="#d93025" style="font-size:13px">次乘加</text>
+<text class="None" x="190" y="268" fill="#5f6368">强度 ＝ 1 ÷ 6 ＝</text>
+<text class="svglbl" x="322" y="268" fill="#d93025" style="font-size:17px">0.17</text>
+<rect x="18" y="294" width="406" height="74" rx="8" fill="#fff" stroke="#f2c7c2" stroke-width="1.0"/>
+<text class="None" x="34" y="318" fill="#5f6368">比 312 低了</text>
+<text class="svglbl" x="128" y="318" fill="#d93025" style="font-size:14px">一千八百多倍</text>
+<text class="None" x="34" y="340" fill="#202124">跑满 GB200 那 8 TB/s，也只有 <tspan font-weight="700">1.3 TFLOPS</tspan></text>
+<text class="None" x="34" y="358" fill="#202124">峰值 2,500 —— <tspan font-weight="700">用掉万分之五</tspan></text>
+<rect x="18" y="380" width="406" height="46" rx="8" fill="#fce8e6" stroke="None" stroke-width="0"/>
+<text class="svglbl" x="34" y="400" fill="#a50e0e" style="font-size:13px">买更贵的卡能让它变快吗？</text>
+<text class="svglbl" x="34" y="418" fill="#a50e0e" style="font-size:14px">不能。它压根不在算力那条路上。</text>
+<text class="None" x="18" y="456" fill="#5f6368">⭐ 这就是「带宽受限」的样子：分母大得离谱，</text>
+<text class="None" x="18" y="474" fill="#5f6368">　 分子小得可怜。<tspan font-weight="700">全世界的算力都救不了它。</tspan></text>
+<rect x="459" y="126" width="442" height="384" rx="10" fill="#f5faf6" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svglbl" x="477" y="154" fill="#1e8e3e" style="font-size:16px">② 方阵乘</text>
+<text class="svglbl" x="577" y="154" fill="#1e8e3e" style="font-size:13px">N × N × N　bf16</text>
+<rect x="477" y="170" width="406" height="112" rx="8" fill="#fff" stroke="#c3e2cc" stroke-width="1.0"/>
+<text class="None" x="493" y="196" fill="#5f6368">算</text>
+<text class="svglbl" x="529" y="200" fill="#1e8e3e" style="font-size:22px">2N³</text>
+<text class="None" x="587" y="196" fill="#5f6368">次乘加</text>
+<text class="None" x="493" y="234" fill="#5f6368">搬</text>
+<text class="svglbl" x="529" y="238" fill="#1e8e3e" style="font-size:22px">6N²</text>
+<text class="None" x="587" y="234" fill="#5f6368">字节（三个矩阵进出）</text>
+<text class="None" x="493" y="266" fill="#5f6368">约一下，强度 ＝</text>
+<text class="svglbl" x="635" y="266" fill="#1e8e3e" style="font-size:17px">N ÷ 3</text>
+<text class="None" x="711" y="266" fill="#5f6368">——&#160;只跟边长有关</text>
+<rect x="477" y="294" width="406" height="74" rx="8" fill="#fff" stroke="#c3e2cc" stroke-width="1.0"/>
+<text class="svglbl" x="493" y="320" fill="#202124" style="font-size:13px">N ＝ 256</text>
+<text class="None" x="599" y="320" fill="#80868b">→</text>
+<text class="svglbl" x="627" y="323" fill="#d93025" style="font-size:17px">85</text>
+<text class="None" x="683" y="320" fill="#d93025">还在带宽那一侧</text>
+<text class="svglbl" x="493" y="350" fill="#202124" style="font-size:13px">N ≈ 1,000</text>
+<text class="None" x="599" y="350" fill="#80868b">→</text>
+<text class="svglbl" x="627" y="353" fill="#1e8e3e" style="font-size:17px">312</text>
+<text class="None" x="683" y="350" fill="#1e8e3e">这才刚够到线上</text>
+<rect x="477" y="380" width="406" height="46" rx="8" fill="#e6f4ea" stroke="None" stroke-width="0"/>
+<text class="svglbl" x="493" y="400" fill="#0d652d" style="font-size:13px">「矩阵乘＝算力受限」是个错觉。</text>
+<text class="svglbl" x="493" y="418" fill="#0d652d" style="font-size:14px">它得够大才算数。</text>
+<text class="None" x="477" y="456" fill="#5f6368">⭐ 两栏合起来才是这条线的用法：</text>
+<text class="None" x="477" y="474" fill="#5f6368">　 <tspan font-weight="700">不看算子叫什么名字，只看它的除法结果。</tspan></text>
+<rect x="918" y="126" width="442" height="384" rx="10" fill="#fffdf5" stroke="#f9ab00" stroke-width="1.6"/>
+<text class="svglbl" x="936" y="154" fill="#7a5000" style="font-size:16px">③ 那怎么救</text>
+<text class="svglbl" x="1068" y="154" fill="#7a5000" style="font-size:13px">——&#160;只有一条路：把分母做小</text>
+<rect x="936" y="170" width="406" height="92" rx="8" fill="#fff" stroke="#f0dfa8" stroke-width="1.0"/>
+<text class="None" x="952" y="194" fill="#202124">把连着的几个算子合成一个 kernel，</text>
+<text class="None" x="952" y="212" fill="#202124">让中间结果<tspan font-weight="700">不落 HBM</tspan> ——&#160;这就是<tspan font-weight="700">算子融合</tspan>。</text>
+<text class="None" x="952" y="238" fill="#a50e0e">⭐ 它<tspan font-weight="700">一个 FLOP 都没省</tspan>：分子分毫不动，</text>
+<text class="None" x="952" y="254" fill="#a50e0e">　 变的只有分母。</text>
+<path d="M958 302 h346" stroke="#9aa0a6" stroke-width="1.2"/>
+<path d="M1186 308 v-30" stroke="#f9ab00" stroke-width="2.2" stroke-dasharray="5 4"/>
+<text class="svglbl" x="1186.3600000000001" y="324" fill="#7a5000" text-anchor="middle" style="font-size:12px">312</text>
+<text class="None" x="958" y="324" fill="#d93025">带宽受限</text>
+<text class="None" x="1304" y="324" fill="#1e8e3e" text-anchor="end">算力受限</text>
+<circle cx="984" cy="288" r="6" fill="#d93025"/>
+<path d="M996 288 H1232" stroke="#1e8e3e" stroke-width="2.4" marker-end="url(#aR)"/>
+<text class="svglbl" x="1108" y="278" fill="#1e8e3e" text-anchor="middle" style="font-size:13px">融合把它往右推</text>
+<rect x="936" y="338" width="406" height="88" rx="8" fill="#fff" stroke="#f0dfa8" stroke-width="1.0"/>
+<text class="svglbl" x="952" y="362" fill="#a50e0e" style="font-size:13px">⚠️ 但「不落 HBM」不等于「不落地」</text>
+<text class="None" x="952" y="382" fill="#202124">它被塞进片上暂存，而片上<tspan font-weight="700">有自己的线：</tspan></text>
+<text class="svglbl" x="952" y="408" fill="#f9ab00" style="font-size:20px">312</text>
+<text class="svglbl" x="1002" y="406" fill="#80868b" style="font-size:15px">→</text>
+<text class="svglbl" x="1034" y="408" fill="#8430ce" style="font-size:20px">64</text>
+<text class="None" x="1076" y="404" fill="#202124">门槛只降 <tspan font-weight="700">4.9 倍</tspan></text>
+<text class="None" x="1076" y="420" fill="#202124">片上流量却能涨<tspan font-weight="700">几十倍</tspan></text>
+<text class="None" x="936" y="456" fill="#5f6368">⭐ 所以融合做过头会在新的这条线上撞墙 ——&#160;</text>
+<text class="None" x="936" y="474" fill="#5f6368">　 <tspan font-weight="700">不是门槛变高，是分母变大。</tspan></text>
+<rect x="0" y="536" width="1400" height="104" rx="10" fill="#f8f9fa" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svglbl" x="20" y="562" fill="#202124" style="font-size:14px">接下来每一节都在这条线上</text>
+<text class="None" x="20" y="590" fill="#202124"><tspan font-weight="700">§2</tspan>　融合前后差一千倍 ——&#160;这条线的主例</text>
+<text class="None" x="472" y="590" fill="#202124"><tspan font-weight="700">§3</tspan>　同一个融合，两块硬件上各是什么样</text>
+<text class="None" x="924" y="590" fill="#202124"><tspan font-weight="700">§5</tspan>　融合这件事，<tspan font-weight="700">该由谁来决定</tspan></text>
+<text class="None" x="20" y="614" fill="#80868b">⛔ 图上每个数都能当场复核：6 ＝ 2＋2＋2；312 ÷ 0.167 ＝ 1,872；8e12 ÷ 6 ＝ 1.33 TFLOPS，占 2,500 的 0.053%</text>
+<text class="None" x="20" y="630" fill="#80868b">　 2N³ ÷ 6N² ＝ N/3，N/3 ＝ 312 → N ＝ 937，N ＝ 256 → 85.3；312 ÷ 64 ＝ 4.9</text>
+</svg>
+  <figcaption>⭐ 同一道除法用三次：向量加 <b>0.17</b>、方阵乘 <b>N ÷ 3</b>，
+    然后融合只把<b>分母</b>做小、把点往右推 ——&nbsp;<b>分子一个 FLOP 都没动</b>。
+    第 ③ 栏那一小段轴是全图唯一的轴：它要说的不是「谁在哪」，
+    而是<b>「往哪边动」</b>。右下角那两个数是这一节最容易被跳过的一句 ——&nbsp;
+    片上换成 <b>64</b> 那条线，门槛只降 4.9 倍，而片上流量能涨几十倍，
+    <b>撞墙不是因为门槛变高，是因为分母变大</b>。</figcaption>
+  </figure>
 
-  <!-- ⭐⭐ 全课的主线名字在这里第一次出现，**这是刻意安排的位置**。
-       算子融合不是一个要「加进来」的话题 —— 它是这门课从头到尾在讲、
-       但一直没起名字的那件事：
-         · §1 那条 312 分界线，唯一的用途就是判一次融合值不值得做
-         · §2 的「朴素 vs Flash」就是融合前后
-         · §3.6 是同一个融合在两边分别怎么落地
-         · §5「运行时还是编译期」问的正是：**融合这件事由谁决定**
-         · §9 收尾也收在这上面
-       所以名字要在**这条线刚画出来、还没用过**的这一刻给出来 ——&nbsp;
-       早了没有支撑（还不知道强度是什么），晚了后面几节就成了一串
-       没有共同名字的技巧。
-       ⛔ 加新内容时先想一遍：这一段跟融合这条线是什么关系？
-          接不上的，多半就是该砍的。 -->
-  <div class="note warn"><span class="t">⭐ 那条线的第一个用途：判一次「算子融合」值不值得做</span>
-    到这儿，可以给这门课真正的主角起名字了。<br>
-    上面两行算术说的是同一件事：一个算子快不快，取决于它每搬一个字节做多少次运算。<br>
-    那想让慢算子变快，就只有一条路 ——&nbsp;<b>把分母做小，少搬</b>。
-    少搬最有效的办法，是把连着的几个算子合成一个 kernel，让中间结果根本不落 HBM。
-    <b>这就是算子融合。</b><br>
-    ⭐ 注意它<b>一个 FLOP 都没省</b>。分子分毫不动，变的只有分母。
-    所以融合的效果是<b>把算子往右推</b>：从带宽那一侧，推到算力那一侧。<br>
-    ——&nbsp;<b>接下来每一节都在这条线上。</b>第 2 节看融合前后差多少
-    （同一个注意力，强度差一千倍）；第 3 节看它在两边分别怎么落地；
-    <b>第 5 节回答那个真正的问题：这件事该由谁来决定。</b></div>
+  <p>这张图把这条线用了三次。<b>两个例子特意避开注意力</b> ——&nbsp;
+    那一笔第 2 节第一张图就要完整推一遍，在这儿先算等于剧透。</p>
 
-  <!-- ⭐⭐ 2026-09-03 补。这一段是**被问出来的**，原话：
-         「你讲算术强度基本上只讲了 HBM 带宽跟 Tensor Core 的比。可 L1 和
-           shared memory 其实是同一块 227 KB、分割比可调 —— 它的算术强度是多少？
-           做算子融合的时候，本来要访问 HBM 的数据就是暂存在那 227 KB 里，
-           等于把那个箱子换成这个箱子，你要考虑这个事。也不会就放在寄存器里
-           就完事，那个大多数时候做不到。」
-       ⛔ 这一问戳的是**上一个框的措辞**。「让中间结果根本不落 HBM」字面没错，
-          但读者会顺势读成「中间结果消失了」—— 它没消失，它换了个地方待着，
-          而那个地方有自己的带宽、自己的容量、自己的分界线。
-          少了这一段，融合在这门课里就成了一个没有代价的动作，
-          而 §3.6 整节讲的恰恰是它的代价。
-       ⚠️ 必须**紧跟**在融合那个框后面，中间不许插东西：它纠正的就是上一个框
-          可能造成的误解，隔开一屏就变成两件不相干的事了。
-       ⛔ 这里不许用「箱子」——&nbsp;本课比方总预算是三个本体（冷库＝HBM、
-          灶台＝片上暂存、刀宽＝指令粒度），而且那套到 §3 才立。
-          在 §1 引第四个比方，等于让台下多背一套映射。这一段直说，不打比方。 -->
-  <div class="note info"><span class="t">⚠️ 「不落 HBM」不等于「不落地」——&nbsp;搬运只是换了一层</span>
-    上面那句「中间结果根本不落 HBM」很容易被读成「中间结果消失了」。<b>它没有消失。</b>
-    它被塞进了片上暂存：GPU 上是那块最多 <b>227 KiB</b> 的共享内存，TPU 上是 VMEM。
-    <em>HBM 那一层确实少搬了。但那批数据总得在片上落脚。</em><br>
-    而片上<b>有它自己的那条线</b>：同一个除法在共享内存上再做一次，得到的是 <b>64</b>
-    ——&nbsp;不是 312（推导链在 1.1 那张图的下半段）。融合之后要拿新的强度跟 64 对。<br>
-    <!-- ⭐⭐ 2026-09-03 补这三句。原文只写「做过头会在新的这条线上重新撞墙」，
-         **没说为什么** ——&nbsp;而 64 比 312 小，读者顺着看只会得出「门槛更低了、
-         更好过」，跟「会撞墙」正面打架。这个洞是 Chris 追问 SM 口径时露出来的，
-         同一轮还在图上钓出一句方向讲反的图例。
-         ⛔ 关键在**门槛和分母是两笔账**：门槛只降 5 倍，分母能涨几十倍。
-            不说破这一句，「融合有代价」在这门课里就只是个断言。 -->
-    ⭐ 门槛从 312 降到 64，<b>是降不是升</b> ——&nbsp;那为什么还会撞墙？
-    因为<b>动的不只是门槛，还有分母</b>：融合把 HBM 那一层的流量转成了片上流量，
-    <b>片上搬的字节数能涨几十倍，而门槛只降了 5 倍</b>。
-    <em>撞墙不是因为门槛变高，是因为分母变大。</em><br>
-    ⛔ 那为什么不干脆<b>留在寄存器里</b>？一个 SM 的寄存器堆总共 256 KiB，
-    跟共享内存一边大；而且你多占一份，能待命的 warp 就少一批。
-    <em>大多数时候真做不到 ——&nbsp;这笔账在 3.2 那张 SM 拆解图上。</em></div>
+  <!-- ⚠️ 图上没有、又必须有个地方待着的两样：片上那块存储各自叫什么，
+       以及「那为什么不干脆留在寄存器里」。两样都是**追问**不是主线 ——&nbsp;
+       主线到「融合会在新的线上撞墙」就收口了。折起来。
+       ⛔ 不要把它们提回正文：提回去 §1 就又变成一节四个框。 -->
+  <details class="aside"><summary>片上那块存储到底是什么，以及「那为什么不干脆留在寄存器里」<em>（两个追问，展开看）</em></summary>
+    <div class="body">
+    <p><b>被塞进去的地方有名字</b>：GPU 上是那块最多 <b>227 KiB</b> 的共享内存，
+      TPU 上是 VMEM。<em>HBM 那一层确实少搬了，但那批数据总得在片上落脚 ——&nbsp;
+      而那儿的兑换比是 64 不是 312（推导链在 1.1 那张图的下半段）。</em></p>
+    <p>⛔ <b>那为什么不干脆留在寄存器里？</b>一个 SM 的寄存器堆总共 256 KiB，
+      跟共享内存一边大；而且你多占一份，能待命的 warp 就少一批。
+      <em>大多数时候真做不到 ——&nbsp;这笔账在 3.2 那张 SM 拆解图上。</em></p>
+    </div></details>
 
   <!-- ⚠️ 这一块是**被问出来的**（2026-09-01 讲第 1 节时的现场提问），不是我想到的：
        「312 的分子只取了矩阵单元的峰值，CUDA Core / VPU 就不算了吗？」
