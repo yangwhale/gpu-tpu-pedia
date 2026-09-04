@@ -433,6 +433,43 @@ def sections(F):
     <em>GPU 那 37 MiB 不是一整块，是 <b>148 个互相看不见的 256 KiB 小岛</b>
     ——&nbsp;而这 256 KiB 里 L1 还占着一部分，<b>一个线程块能显式管到的最多 227 KiB</b>。</em></div>
 
+
+  <!-- ⭐⭐⭐ 2026-09-04 Chris 追问：「你漏了一个维度 —— GPU 的 Tensor Core 是
+       148×4，片上总量是 227 乘以 148；而 TPU 那 128 切成两个 64，64 里还要放
+       别的，能当 cache 的可能也就 32。」
+       ⭐ 三口径本身没错（①②③ 已经分清了），**缺的是「两边的独占都有水分」这一层**：
+          227 KiB 不是「一个 Tensor Core 的工作台」，是一个**线程块**的上限，
+          而那个 SM 上有 4 个 Tensor Core、还可能驻着别的块；
+          64 MB 也不是全归你，它要跟**权重预取**分。
+       ⭐ 加这一条之后，289 这个数的定位才准确：它是**上限比上限**，
+          不是「实际可用比实际可用」。
+       📌 出处（公开）：NVIDIA Blackwell Tuning Guide（每 SM 共享内存档位
+          0/8/16/32/64/100/132/164/196/228 KB）；Google 开发者社区
+          《Optimizing frontier model training on TPU v7x (Ironwood)》
+          （"Ironwood chips have 64 MB of VMEM per tensorcore, which can be
+          split between the current scope (scoped VMEM) and future weight
+          prefetch"，flag 名 xla_tpu_scoped_vmem_limit_kib）。
+       ⛔ 不要在这里写 VMEM 的**带宽**。 -->
+  <div class="note warn"><span class="t">⚠️ 那 289 是<u>上限比上限</u> ——&nbsp;两边的「独占」都有水分</span>
+    <b>GPU 那 227 KiB，不是「一个 Tensor Core 的工作台」。</b>
+    <em>它是<b>一个线程块</b>能申请到的上限；而这个 SM 上有 <b>4 个 Tensor Core</b>，
+    还可能同时驻着别的线程块 ——&nbsp;<b>它们抢的是同一块。</b></em>
+    <span class="sub">（每 SM 的共享内存只能取几个固定档：
+    0／8／16／32／64／100／132／164／196／228 KB。<b>228 是最大档</b>，
+    线程块能显式管到 227。）</span><br>
+    <b>TPU 那 64 MiB，也不是全归你。</b>
+    <em>官方说得很清楚：Ironwood <b>每个 TensorCore 64 MB VMEM</b>
+    （一颗 chip 两个核，所以是 <b>128 MB／chip</b>），
+    而这 64 要在<b>「当前这一步用的」和「预取下一批权重的」之间分</b>。</em>
+    <b>分多少由一个 flag 定（<code>xla_tpu_scoped_vmem_limit_kib</code>）。</b>
+    <span class="sub">⚠️ 默认值官方没公布 ——&nbsp;但官方教程里常见的写法是把它设到
+    <code>65536</code>（＝64 MiB），<b>反过来说明默认低不少</b>。</span>
+    <br><br>⭐ <b>所以 289 的准确读法是</b>：
+    <em>「一个 kernel 实例能独占的连续暂存」的<b>上限之比</b></em>。
+    <b>它仍然是决定「一次能融多大」的那个数</b> ——&nbsp;
+    但<b>别把它读成「TPU 片上存储多两个数量级」</b>，
+    <em>那是口径 ① 的问题，而口径 ① 的答案前面已经说了：<b>GPU 更多。</b></em></div>
+
   <div class="note danger"><span class="t">⭐ 为什么第 ① 条虽然对，却最容易把人带沟里</span>
     <b>GPU 总量领先的 97 MiB，几乎全来自那一行 L2。</b>
     而 L2 是这张表里<b>唯一一格你没法安排的空间</b> ——&nbsp;

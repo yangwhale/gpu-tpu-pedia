@@ -1199,8 +1199,10 @@ NVIDIA 没有公布确切值。反过来说，如果每 SM 确实是 8,192，那
 <text x="800" y="719" class="xs">GPU 在<tspan font-weight="700" fill="#202124">运行时</tspan>挑指令，TPU 在<tspan font-weight="700" fill="#202124">编译期</tspan>排指令 —— 这是两边最根本的分工差别</text>
 <line x1="30" y1="756" x2="1370" y2="756" stroke="#b6dbd6" stroke-width="1"/>
 <text x="40" y="778" class="lbl" fill="#202124">线程块 ＋ 共享内存</text>
-<text x="270" y="777" class="xs">一个 TensorCore ＋ 它私有的 <tspan font-weight="700" fill="#202124">64 MiB VMEM</tspan><tspan fill="#9aa0a6">（JAX 开源代码，非官方规格页）</tspan></text>
-<text x="800" y="777" class="xs">容量差 <tspan font-weight="700" fill="#d93025">289 倍</tspan>（227 KiB vs 64 MiB）。TPU 的片上暂存大到能整块放下权重，GPU 只能一小片一小片地流</text>
+<text x="270" y="777" class="xs">一个 TensorCore ＋ 它私有的 <tspan font-weight="700" fill="#202124">64 MB VMEM</tspan><tspan fill="#9aa0a6">（Google 开发者社区 Ironwood 调优文；一颗 chip 两</tspan></text>
+<text x="270" y="792" class="xs"><tspan fill="#9aa0a6">个核 ＝ 128 MB）</tspan></text>
+<text x="800" y="777" class="xs">容量差 <tspan font-weight="700" fill="#d93025">289 倍</tspan>（227 KiB vs 64 MiB）——&amp;#160;<tspan font-weight="700" fill="#202124">但这是上限比上限</tspan>：227 是<tspan font-weight="700" fill="#202124">一个线程块</tspan>的上限（同一个 SM </text>
+<text x="800" y="792" class="xs">上 4 个 Tensor Core 抢它），64 也要跟<tspan font-weight="700" fill="#202124">权重预取</tspan>分</text>
 <line x1="30" y1="814" x2="1370" y2="814" stroke="#b6dbd6" stroke-width="1"/>
 <text x="40" y="836" class="lbl" fill="#202124">cluster</text>
 <text x="270" y="835" class="xs"><tspan font-weight="700" fill="#202124">没有对应物。</tspan>TPU 一个 chip 只有 2 个 TensorCore，本来也不需要「一组核共享暂存」这层</text>
