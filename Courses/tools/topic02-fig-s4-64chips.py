@@ -111,6 +111,9 @@ t(LX + CW - 20, TOP + 52, '机架里正好 18 台　·　域内非阻塞', None,
 SWY = TOP + 78
 SW_N, SW_W, SW_G = 18, 28, 7
 SW_X0 = LX + (CW - (SW_N * SW_W + (SW_N - 1) * SW_G)) / 2
+# ⭐ 机架外框 —— 让这一排一眼看出是「一个机架里的东西」，不是飘着的十八个方块
+box(SW_X0 - 14, SWY - 12, SW_N * SW_W + (SW_N - 1) * SW_G + 28, 56,
+    "#eef4fe", BL, 8, 1.3)
 for k in range(SW_N):
     x = SW_X0 + k * (SW_W + SW_G)
     box(x, SWY, SW_W, 32, "#d2e3fc", BL, 5, 1.1)
@@ -173,20 +176,36 @@ def proj(i, j, k):
     return OX + (i - j) * U, OY + (i + j) * V - k * WZ
 
 # 先边后点，k 从低到高（低的在下方＝更近，后画压住）
+# ⭐ 2026-09-05：加景深。等轴测点阵如果所有点一样深一样大，看着是平的 ——
+#    远近靠**颜色深浅 ＋ 尺寸**来分，这是等轴测图能不能立起来的关键一步。
+#    depth 定义为「离观察者多远」：i+j 越小、k 越大 ＝ 越靠后。
+def depth(i, j, k):
+    return ((6 - (i + j)) + k * 2) / 12.0      # 0 ＝ 最近，1 ＝ 最远
+
+# 边：先远后近，远的淡
+edges = []
 for k in range(4):
     for j in range(4):
         for i in range(4):
-            x0, y0 = proj(i, j, k)
             for di, dj, dk in ((1, 0, 0), (0, 1, 0), (0, 0, 1)):
                 if i + di < 4 and j + dj < 4 and k + dk < 4:
-                    x1, y1 = proj(i + di, j + dj, k + dk)
-                    line(x0, y0, x1, y1, "#9ccdae", 1.1)
-for k in range(4):
-    for j in range(4):
-        for i in range(4):
-            x0, y0 = proj(i, j, k)
-            p.append('<circle cx="%.1f" cy="%.1f" r="5.5" fill="#e6f4ea" '
-                     'stroke="%s" stroke-width="1.3"/>' % (x0, y0, GR))
+                    edges.append((depth(i, j, k), (i, j, k), (i + di, j + dj, k + dk)))
+for d, aa, bb in sorted(edges, key=lambda e: -e[0]):
+    x0, y0 = proj(*aa); x1, y1 = proj(*bb)
+    p.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" '
+             'stroke-width="%.2f" opacity="%.2f"/>'
+             % (x0, y0, x1, y1, GR, 1.35 - 0.55 * d, 0.75 - 0.42 * d))
+
+nodes = sorted(((depth(i, j, k), i, j, k)
+                for k in range(4) for j in range(4) for i in range(4)),
+               key=lambda n: -n[0])
+for d, i, j, k in nodes:
+    x0, y0 = proj(i, j, k)
+    r = 7.4 - 2.0 * d
+    p.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="2.4" '
+             'fill="%s" stroke="%s" stroke-width="%.2f" opacity="%.2f"/>'
+             % (x0 - r, y0 - r, 2 * r, 2 * r,
+                "#ffffff" if d > .45 else "#d7efdf", GR, 1.5 - 0.5 * d, 1 - 0.28 * d))
 
 # 三条环绕弧：x 方向、y 方向、z 方向各一条
 def wrap(a, b, c0, c1):
