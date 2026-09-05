@@ -10,10 +10,10 @@
      不支持 SVG 图标的浏览器会自动回落到根目录的 favicon.ico。 -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
 <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
-<meta property="og:title" content="TPU 与 GPU · 两种加速器，两条出身">
+<meta property="og:title" content="TPU 与 GPU · 两款芯片，两种出身">
 <meta property="og:description" content="不逐个介绍硬件参数。拿专题一那张需求清单，一条一条去硬件上找答案 —— 每个答案都配一张图和一次实测。">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-02.html">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-02-L300.html">
 <meta property="og:image" content="https://gist.higcp.com/Courses/WebPages/img/og-topic-02.jpg">
 <meta property="og:image:width" content="1200">
 <meta property="og:image:height" content="630">
@@ -622,14 +622,14 @@ details.aside b{color:var(--ink);font-weight:600}
 
 <!-- ══════════ 第 0 节 ══════════ -->
 <section id="s0" style="border-top:none"><div class="wrap">
-  <div class="stn big"><span class="badge">第 0 节</span><h2>先立一个根：两条出身不同</h2></div>
+  <div class="stn big"><span class="badge">第 0 节</span><h2>先立一个前提：两款芯片，出身不一样</h2></div>
   <p class="lead">上面那三个「够不够」，两边给出的答案几乎处处不同 ——&nbsp;
     <b>而不同的原因只有一个。</b>先把它立好，
     <b>第 1 到第 5 节讲的所有差别，都是它的后果。</b></p>
 
   <figure class="fbox" id="s012-figC">
-  <svg viewBox="0 0 1000 240" width="100%" role="img" aria-label="GPU 与 TPU 的两条出身：一边不知道你要跑什么、处处留一手，一边早就知道你要跑什么、一手都不留">
-<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">整门课只有一个根：两条出身不同，于是每一层都不同</text>
+  <svg viewBox="0 0 1000 240" width="100%" role="img" aria-label="GPU 与 TPU 的两种出身：一边不知道你要跑什么、处处留一手，一边早就知道你要跑什么、一手都不留">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">整门课只有一个前提：两款芯片出身不同，于是每一层都不同</text>
 <rect x="0" y="34" width="488" height="196" rx="10" fill="#e8f0fe" stroke="#1a73e8"/>
 <text class="svgnum" x="20" y="62" fill="#1a73e8" style="font-size:17px">GPU</text>
 <text class="svglbl" x="20" y="82" fill="#1a73e8">出身：图形处理器</text>
@@ -650,7 +650,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svglbl" x="678" y="209" text-anchor="middle" fill="#fff">早就知道你要跑什么　→　一手都不留</text>
 <text class="svgsm" x="500" y="140" text-anchor="middle" fill="#80868b" style="font-size:15px">vs</text>
 </svg>
-  <figcaption><b>上半是根，下半是路。</b>两条出身<b>不是优劣，是两条路线</b>——&nbsp;一条靠运行时现判，一条靠编译期算准。它回答的是「为什么会分岔」。下半那条主线回答「分岔之后怎么走」：<b>同一个 FlashAttention，两边各跑一遍</b>，六站走完，<b>分岔点只有一处</b>。第 4 节画成岔路是因为 FlashAttention 单卡就跑完了、撞不到卡间 —— 只跟主线走可以先跳过它。</figcaption>
+  <figcaption><b>上半是前提，下半是路。</b>两款芯片<b>不是优劣之分，是两条路线</b>——&nbsp;一条靠运行时现判，一条靠编译期算准。它回答的是「为什么会分岔」。下半那条主线回答「分岔之后怎么走」：<b>同一个 FlashAttention，两边各跑一遍</b>，六站走完，<b>分岔点只有一处</b>。第 4 节画成岔路是因为 FlashAttention 单卡就跑完了、撞不到卡间 —— 只跟主线走可以先跳过它。</figcaption>
   </figure>
 
   <div class="note ok"><span class="t">这一节的落点，以及往下怎么走</span>
@@ -975,7 +975,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="0" y="598" width="1000" height="66" rx="8" fill="#fef7e0" stroke="#f9ab00"/>
 <text class="svglbl" x="18" y="620" fill="#7a5000">⭐ 片上 SRAM 的量级相当、归属完全相反：B200 的 L2 是 126 MB，v7 的 VMEM 是 64 MiB × 2 核 ＝ 128 MiB ＝ 134 MB（大约 6%）</text>
 <text class="svgsm" x="18" y="639" fill="#7a5000">一边全部落在「自动管」那一格，一边全部落在「显式管」那一格 —— 同样一百多 MB 的片上 SRAM，一个替你适应，一个让你安排。</text>
-<text class="svgsm" x="18" y="656" fill="#7a5000">这就是第 0 节那两条出身，第一次以数字的形式出现。</text>
+<text class="svgsm" x="18" y="656" fill="#7a5000">这就是第 0 节那两种出身，第一次以数字的形式出现。</text>
 </svg>
   <figcaption>两个灰的空格才是这张表的内容：<b>TPU 没有「硬件自动管的缓存」那一层，GPU 没有「可编程的专用协处理器」那一层。</b>第五行不是空格，但要一起看：<b>两边各点名了一个小帮手，而对方那一项都没说</b> ——&nbsp;TPU 点名的是「数据横着走」的 XLU，GPU 点名的是「算超越函数」的 SFU；反过来，GPU 怎么跨 lane、TPU 拿什么算超越函数，两家都<b>没写进规格表</b> ——&nbsp;TPU 那一项只在<b>工具链的成本模型</b>里露出一角。⚠️ 口径逐行不同 —— VMEM 是每核、SparseCore 是每 chip、HBM 是每 device。</figcaption>
   </figure>
@@ -1362,7 +1362,7 @@ details.aside b{color:var(--ink);font-weight:600}
   <figure class="fbox" id="s012-fig2-1">
   <svg viewBox="0 0 1000 572" width="100%" role="img" aria-label="同一次访存在 GPU 与 TPU 上经过的路径对比：GPU 有五个运行时决策点，TPU 一个都没有">
 <text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">同一次访存，两条路 —— 数一数路上有几个「运行时决策点」</text>
-<text class="svgsm" x="0" y="35">这是第 0 节那两条出身第一次变成具体机制</text>
+<text class="svgsm" x="0" y="35">这是第 0 节那两种出身第一次变成具体机制</text>
 <text class="svglbl" x="0" y="74" fill="#1a73e8">GPU：运行时适应</text>
 <text class="svgsm" x="150" y="74">硬件替你决定，你写得随意也能跑</text>
 <text class="svglbl" x="512" y="74" fill="#1e8e3e">TPU：编译期安排</text>

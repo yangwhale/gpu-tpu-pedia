@@ -93,7 +93,7 @@ p.append(f'<text class="svglbl" x="18" y="{yb+34}" fill="#7a5000">'
 p.append(f'<text class="svgsm" x="18" y="{yb+53}" fill="#7a5000">'
          f'一边全部落在「自动管」那一格，一边全部落在「显式管」那一格 —— 同样一百多 MB 的片上 SRAM，一个替你适应，一个让你安排。</text>')
 p.append(f'<text class="svgsm" x="18" y="{yb+70}" fill="#7a5000">'
-         f'这就是第 0 节那两条出身，第一次以数字的形式出现。</text>')
+         f'这就是第 0 节那两种出身，第一次以数字的形式出现。</text>')
 W('fig1-3.svg',p+['</svg>'])
 
 # ══════════ 图 1-4 · 压轴：312 FLOP/byte ══════════

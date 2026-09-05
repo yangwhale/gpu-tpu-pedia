@@ -168,7 +168,7 @@ CAP_OVERRIDE = {
     #    图注跟着重写。原图注开头是「上半是根，下半是路」—— 下半一没，
     #    它就成了一句指着空气说话的话。**改图必须回头看图注**。
     "s012-figC":
-        "<b>两条出身不是优劣，是两条路线</b> ——&nbsp;"
+        "<b>两种出身不是优劣，是两条路线</b> ——&nbsp;"
         "一条靠运行时现判，一条靠编译期算准。<b>分野只在一件事上：</b>"
         "你要跑的东西能不能提前知道。"
         "⭐ <b>右边那句「早就知道你要跑什么」是全课的根</b>："
@@ -380,14 +380,14 @@ def body():
     # ── 第 0 节 ───────────────────────────────────────────────────
     a('''
 <section id="s0" style="border-top:none"><div class="wrap">
-  <div class="stn big"><span class="badge">第 0 节</span><h2>先立一个根：两条出身不同</h2></div>
+  <div class="stn big"><span class="badge">第 0 节</span><h2>先立一个前提：两款芯片，出身不一样</h2></div>
   <p class="lead">正文从下面这张图开始，<b>全课只有这一个前提</b>
     ——&nbsp;看了它，后面每一节你都能自己预判「这里两边应该会不一样」。
     <em>看完就往下走，第 1 节只做一道除法，第 2 节就开始拆硬件。</em></p>''')
     a(fig("s012-figC"))
     a('''
   <div class="note ok"><span class="t">开课前先把话说死：这门课不比谁强</span>
-    两条出身<b>各自都是当年的正确决定</b>，代价也各自都还在。
+    两种出身<b>各自都是当年的正确决定</b>，代价也各自都还在。
     所以全课不会出现「谁更好」这种句子，只会出现
     <b>「这件事在这一边由谁决定」</b>。<br>
     ——&nbsp;<b>如果只带走一句话，就是这一句：两边处处都不同，但这些不同全是同一个决定的后果。</b>
@@ -3773,14 +3773,26 @@ def _lecture_minutes():
 def main():
     head = _head()
     # L200 自己的 title / og，其余 meta 沿用 L300。
-    head = head.replace("<title>专题二 · TPU 与 GPU</title>",
-                        "<title>专题二 · TPU 与 GPU（L200 · 精讲版）</title>")
-    head = head.replace(
-        'content="TPU 与 GPU · 两种加速器，两条出身"',
-        'content="TPU 与 GPU · 精讲版（L200）"')
-    head = head.replace(
-        'content="https://gist.higcp.com/Courses/WebPages/topic-02-L300.html"',
-        'content="https://gist.higcp.com/Courses/WebPages/topic-02.html"')
+    # ⛔⛔ 2026-09-05 这三处 head.replace **必须带断言**。当天真事：
+    #    全仓把「两条出身」批量换成「两种出身」，把这里的**搜索串**也换了，
+    #    而源文件 topic-02-L300.html 的 og:title 没跟着换 ——&nbsp;
+    #    于是 replace 一声不响地什么都没换，L200 顶着 L300 的 og:title 发了出去。
+    #    ⭐ 教训（比这个 bug 本身值钱）：**批量改词会打断「搜索串／被搜索串」
+    #      这类成对的东西，而且两边都不报错。** 凡是把字面量当 key 用的地方，
+    #      改词之后必须有断言替你喊一声。
+    for _o, _n in (
+        # ⚠️ 源标题带「（L300 · 完整版）」。这条搜索串以前写的是不带后缀的版本，
+        #    于是**从 L300 加上后缀那天起就一直没换成过** ——&nbsp;
+        #    L200 那一页的浏览器标签、书签、搜索结果里一直写着「L300 · 完整版」。
+        #    上面那条断言第一次跑就把它逮出来了。
+        ('<title>专题二 · TPU 与 GPU（L300 · 完整版）</title>',
+         '<title>专题二 · TPU 与 GPU（L200 · 精讲版）</title>'),
+        ('content="TPU 与 GPU · 两款芯片，两种出身"',
+         'content="TPU 与 GPU · 精讲版（L200）"'),
+        ('content="https://gist.higcp.com/Courses/WebPages/topic-02-L300.html"',
+         'content="https://gist.higcp.com/Courses/WebPages/topic-02.html"')):
+        assert _o in head, "head 里找不到要替换的字面量，源文件改过了？\n  %s" % _o
+        head = head.replace(_o, _n)
 
     html = head + HERE_MARK + HERO + _shared_defs() + "\n" + "\n".join(body()) \
         + "\n\n" + _tail()

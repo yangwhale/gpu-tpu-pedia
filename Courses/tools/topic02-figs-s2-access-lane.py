@@ -23,7 +23,7 @@ H=TOP+RH*7+150
 p=[f'<svg viewBox="0 0 1000 {H}" width="100%" role="img" aria-label="同一次访存在 GPU 与 TPU 上经过的路径对比：GPU 有五个运行时决策点，TPU 一个都没有">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    '同一次访存，两条路 —— 数一数路上有几个「运行时决策点」</text>',
-   '<text class="svgsm" x="0" y="35">这是第 0 节那两条出身第一次变成具体机制</text>',
+   '<text class="svgsm" x="0" y="35">这是第 0 节那两种出身第一次变成具体机制</text>',
    f'<text class="svglbl" x="0" y="{TOP-12}" fill="{BL}">GPU：运行时适应</text>',
    f'<text class="svgsm" x="150" y="{TOP-12}">硬件替你决定，你写得随意也能跑</text>',
    f'<text class="svglbl" x="512" y="{TOP-12}" fill="{GR}">TPU：编译期安排</text>',
