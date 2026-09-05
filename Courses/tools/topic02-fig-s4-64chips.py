@@ -77,8 +77,9 @@ def path(d, c=GY2, sw=1.2, dash=None, fill="none"):
 
 
 p.append('<svg viewBox="0 0 %d %d" width="100%%" role="img" aria-label="'
-         'GB300 的 64 张卡各出 18 条 NVLink，一条接一台 NVSwitch，共 18 台交换机，'
-         '所以任意两点经一台交换机一跳可达；TPU v7 的 64 颗排成 4×4×4 的三维立方体，'
+         'GB300 的 64 张卡各出 18 条 NVLink，一条接一台 NVSwitch，共 18 台交换机；'
+         '图上点名四颗、各用一种颜色画满 18 条，并高亮其中一台交换机看到四色在它上面汇合；'
+         '交换机彼此不互连，所以是 18 条互不相干的轨，任意两点经一台交换机一跳可达、有 18 条并行路；TPU v7 的 64 颗排成 4×4×4 的三维立方体，'
          '每颗只连六个邻居，三个方向首尾相接成环面，最远 6 跳">' % (W, H))
 
 t(0, 16, '64 颗连在一起 ——&#160;<tspan font-weight="700">同样是 64，两边连的方式不是一回事</tspan>',
@@ -104,10 +105,9 @@ t(W, 36, '哪种通信模式吃亏、EP 为什么对拓扑最挑剔 →&#160;专
 # ⚠️ 64 × 18 ＝ 1,152 条全画是一团糊。标准做法：**一颗画满，其余淡出**。
 box(LX, TOP, CW, CH, "#f7faff", BL, 12, 1.6)
 t(LX + 20, TOP + 30, 'GB300 · NVLink 5 ＋ NVSwitch', "svglbl", BL, 16)
-t(LX + 20, TOP + 52, '<tspan font-weight="700">每颗 GPU 18 条，一条接一台交换机</tspan>',
+t(LX + 20, TOP + 52, '<tspan font-weight="700">每颗 GPU 18 条，一条接一台交换机 ＝ 18 条轨</tspan>',
   None, "#174ea6")
-t(LX + CW - 20, TOP + 52, '9 tray × 2 ＝ 18 颗　·　非阻塞',
-  None, GY2, None, "end")
+t(LX + CW - 20, TOP + 52, '9 tray × 2 ＝ 18 颗', None, GY2, None, "end")
 
 # ⭐⭐ 2026-09-05 第三版：按**真实封装**画，不再是抽象的两排方块。
 #    厂商 deck 画 NVL72 一律是「机架立面」——&nbsp;而机架里真实的分组是：
@@ -129,10 +129,27 @@ for tr in range(TRAY_N):
         box(cx, SWY + 4, 24, 26, "#a8c7fa", BL, 4, 1.0)
         CHIP.append(cx + 12)
 
-GY_ = TOP + 322
+# ⛔⛔ 2026-09-05 第四版。第三版只把**一颗** GPU 的 18 条画满，Chris 当场否掉：
+#    「你就一个节点连 18 条尾，谁能看出来你这 18 条尾又连了谁？
+#      好歹画四个。颜色也得区分。轨与轨之间什么关系，这些都得表示明白。」
+#    他说的是这张图**没有回答自己提出的问题**：
+#    扇出去容易画，扇出去之后**到达了谁**才是拓扑的全部意义。
+#    ⭐ 于是这一版补三样，缺一样这张图就白画：
+#      ① **四颗**同时画满，四种颜色 ——&nbsp;让「每颗都连满 18 台」变成看得见的规律，
+#         而不是「那一颗比较特殊」
+#      ② **点名一台交换机**，把四种颜色在它上面汇合的那四条画粗 ——&nbsp;
+#         这才是「连到谁」：任取一台，四颗（其实全部 64 颗）都在上面
+#      ③ **说清轨与轨的关系**：交换机之间**没有链路**，所以 18 条轨是 18 个
+#         互不相干的平面，每条各自完整连着全部 64 颗 → 任意两颗之间 18 条并行路
+GY_ = TOP + 312
 GT_N, GT_W, GT_G = 8, 72, 8                   # 每排 8 个 compute tray
 GT_X0 = LX + (CW - (GT_N * GT_W + (GT_N - 1) * GT_G)) / 2
-HX = None
+# 被点名的四颗：(排, tray, tray 内序号, 颜色)。
+# ⚠️ 颜色不许用 TPU 绿 #1e8e3e ——&nbsp;全课把绿钉给了 TPU，在 GPU 这半张里
+#    出现绿色会被当成跨平台线索。所以取 蓝／橙／紫／青 四个互不相邻的色相。
+NAMED = [(0, 1, 1, "#1a73e8"), (0, 4, 2, "#e8710a"),
+         (0, 7, 0, "#8430ce"), (1, 3, 2, "#00838f")]
+FAN = []
 for row in range(2):
     for tr in range(GT_N):
         tx = GT_X0 + tr * (GT_W + GT_G)
@@ -140,33 +157,55 @@ for row in range(2):
         box(tx, ty, GT_W, 26, "#eef4fe", BL, 5, 0.9)
         for g in range(4):
             gx = tx + 5 + g * 16
-            on = (row == 0 and tr == 1 and g == 1)
-            box(gx, ty + 5, 13, 16, "#1a73e8" if on else "#cfe0fc", BL, 2,
-                1.3 if on else 0.7)
-            if on:
-                HX = gx + 6.5
-t(LX + CW - 20, GY_ - 8, '16 个 compute tray × 4 颗 ＝ 64', None, GY2, None, "end")
+            col = next((c for r, t_, g_, c in NAMED
+                        if r == row and t_ == tr and g_ == g), None)
+            box(gx, ty + 5, 13, 16, col or "#cfe0fc", col or BL, 2,
+                1.4 if col else 0.7)
+            if col:
+                FAN.append((gx + 6.5, ty + 5, col))
+t(LX + CW - 20, GY_ - 10, '16 个 compute tray × 4 颗 ＝ 64', None, GY2, None, "end")
 
-# 那 18 条：先画淡的，再画高亮那颗的
-for hj in (-1, 1):
-    hx = HX + hj * 190
-    for c in (0, 5, 11, 17):
+# ── 四把扇子。淡画全部 72 条，只把「汇合在同一台」的那四条画实 ──────────
+RAIL = 9                                      # 点名第 10 台交换机（0 起）
+for fx, fy, col in FAN:
+    for c in range(18):
+        if c == RAIL:
+            continue
         p.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" '
-                 'stroke-width="0.8" opacity=".18"/>' % (hx, GY_, CHIP[c], SWY + 30, BL))
-for c in range(18):
-    line(HX, GY_, CHIP[c], SWY + 30, BL, 1.15)
+                 'stroke-width="0.75" opacity=".3"/>' % (fx, fy, CHIP[c], SWY + 30, col))
+for fx, fy, col in FAN:
+    line(fx, fy, CHIP[RAIL], SWY + 30, col, 2.0)
+# 给那台交换机加个圈，否则「汇合」这件事只有画线的人知道
+p.append('<circle cx="%s" cy="%s" r="20" fill="none" stroke="%s" '
+         'stroke-width="2" stroke-dasharray="4 3"/>' % (CHIP[RAIL], SWY + 17, RD))
+box(CHIP[RAIL] + 26, SWY + 40, 214, 38, "#ffffff", "#f6c7c3", 6, 1.0)
+t(CHIP[RAIL] + 36, SWY + 58, '第 10 台交换机 ＝ 第 10 条轨', "svglbl", RD, 12)
+t(CHIP[RAIL] + 36, SWY + 72, '四色都汇到这一台，其余 60 颗也在', None, RD, 11)
 
-t(LX + 20, GY_ + 84, '蓝色那一颗的 18 条画满了；其余 63 颗<tspan font-weight="700">每颗都一样</tspan>'
-                     '（全画出来是 1,152 条，看不清）', None, GY2)
-t(LX + 20, GY_ + 108, '<tspan font-weight="700">64 张卡</tspan>　——&#160;'
-                     '而域的上限是 <tspan font-weight="700">72</tspan>，'
-                     '<tspan font-weight="700">64 整个装得下</tspan>', None, "#202124")
-box(LX + 20, GY_ + 120, CW - 40, 62, "#e8f0fe", None, 8, 0)
-t(LX + 36, GY_ + 142, '⭐ 「任意两点一跳」在这张图上是<tspan font-weight="700">看得见的</tspan>：'
-                      '任何两颗 GPU 都挂在<tspan font-weight="700">同一批交换机</tspan>上，',
+# ⚠️ 这一行 2026-09-05 缩过一次：原句冲出左半栏了。
+#    **版面 lint 只查 SVG 外框，查不到「分栏内溢出」** ——&nbsp;两栏图里的长句要自己数。
+t(LX + 20, GY_ + 84,
+  '四色 ＝ 被点名的四颗，<tspan font-weight="700">每颗都连满 18 台</tspan>；'
+  '其余 60 颗一样（1,152 条全画成一团）', None, GY2)
+
+# ── 轨与轨之间是什么关系 ──────────────────────────────────────────────
+box(LX + 20, GY_ + 96, CW - 40, 78, "#fff8e1", YL, 8, 1.2)
+t(LX + 36, GY_ + 118, '一条轨长什么样，轨与轨之间又是什么关系', "svglbl", "#7a5000", 13)
+t(LX + 36, GY_ + 138, '· <tspan font-weight="700">一条轨 ＝ 一台交换机 ＋ 它到全部 64 颗的链路</tspan>，'
+                      '也就是一张<tspan font-weight="700">完整的星</tspan>', None, "#7a5000")
+t(LX + 36, GY_ + 156, '· <tspan font-weight="700">交换机彼此之间没有链路</tspan>　→　'
+                      '18 条轨互不相干，谁也不经过谁（单层非阻塞）', None, "#7a5000")
+
+box(LX + 20, GY_ + 182, CW - 40, 74, "#e8f0fe", None, 8, 0)
+t(LX + 36, GY_ + 204, '⭐ 于是「任意两点一跳」在图上是<tspan font-weight="700">数出来的</tspan>：'
+                      '任取两颗，它们在<tspan font-weight="700">每一条轨上都碰头</tspan>，',
   "svglbl", "#174ea6", 13)
-t(LX + 36, GY_ + 164, '中间只隔一台 ——&#160;<tspan font-weight="700">谁跟谁都一样，位置无关</tspan>。',
-  "svglbl", "#174ea6", 14)
+t(LX + 36, GY_ + 224, '所以中间永远只隔一台交换机，而且<tspan font-weight="700">有 18 条并行的路</tspan>'
+                      '可选 ——&#160;<tspan font-weight="700">谁跟谁都一样，位置无关</tspan>。',
+  "svglbl", "#174ea6", 13)
+t(LX + 36, GY_ + 244, '<tspan font-weight="700">64 张卡</tspan>，而域的上限是 '
+                      '<tspan font-weight="700">72</tspan> ——&#160;'
+                      '<tspan font-weight="700">64 整个装得下同一个域</tspan>。', None, "#174ea6")
 
 # ══════════════════════════════════════════════════════════════════════
 # 右：4×4×4 —— 标准 2:1 等轴测立方体
