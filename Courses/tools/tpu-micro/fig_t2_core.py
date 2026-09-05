@@ -140,7 +140,7 @@ def _vpu(f, x, y):
 def _xlu(f, x, y):
     f.rect(x, y, 152, 226, "#fff", TL, 1.8, 8)
     f.t(x + 12, y + 22, "跨 lane 单元", "box", TL)
-    f.t(x + 140, y + 22, gate.IP("×2", "?", why="内部设备表：单元个数"), "lbl", TL, "end")
+    f.t(x + 140, y + 22, "×2", "lbl", TL, "end")
     # 一张小示意：数据横着跨过 lane 边界
     for r in range(4):
         f.rect(x + 14, y + 40 + r * 22, 124, 14, FILL[TL], TL, 0.8, 2)
@@ -149,7 +149,7 @@ def _xlu(f, x, y):
     para(f, x + 12, y + 148, 130,
          "转置、跨 lane 归约、shuffle。VPU 的 128 条 lane <b>各干各的</b>，"
          "数据要横着走就得经过这里。", "xxs", 13)
-    f.t(x + 12, y + 214, gate.IP("个数出自内部设备表", "个数官方未公开"),
+    f.t(x + 12, y + 214, "个数未定位到官方公开出处",
         "xxs", GREY)
 
 
