@@ -104,53 +104,68 @@ t(W, 36, '哪种通信模式吃亏、EP 为什么对拓扑最挑剔 →&#160;专
 # ⚠️ 64 × 18 ＝ 1,152 条全画是一团糊。标准做法：**一颗画满，其余淡出**。
 box(LX, TOP, CW, CH, "#f7faff", BL, 12, 1.6)
 t(LX + 20, TOP + 30, 'GB300 · NVLink 5 ＋ NVSwitch', "svglbl", BL, 16)
-t(LX + 20, TOP + 52, '<tspan font-weight="700">每颗 GPU 18 条 NVLink，一条接一台交换机</tspan>',
+t(LX + 20, TOP + 52, '<tspan font-weight="700">每颗 GPU 18 条，一条接一台交换机</tspan>',
   None, "#174ea6")
-t(LX + CW - 20, TOP + 52, '机架里正好 18 台　·　域内非阻塞', None, GY2, None, "end")
+t(LX + CW - 20, TOP + 52, '9 tray × 2 ＝ 18 颗　·　非阻塞',
+  None, GY2, None, "end")
 
+# ⭐⭐ 2026-09-05 第三版：按**真实封装**画，不再是抽象的两排方块。
+#    厂商 deck 画 NVL72 一律是「机架立面」——&nbsp;而机架里真实的分组是：
+#      · 交换层：**9 个 switch tray，每个 2 颗 NVSwitch ＝ 18 颗**
+#      · 计算层：**每个 compute tray 4 颗 GPU**（我们这 64 颗 ＝ 16 个 tray）
+#    把这两层分组画出来，「18」和「64」就不再是两个抽象的数，
+#    而是**你在机架上能数出来的东西**。
 SWY = TOP + 78
-SW_N, SW_W, SW_G = 18, 28, 7
-SW_X0 = LX + (CW - (SW_N * SW_W + (SW_N - 1) * SW_G)) / 2
-# ⭐ 机架外框 —— 让这一排一眼看出是「一个机架里的东西」，不是飘着的十八个方块
-box(SW_X0 - 14, SWY - 12, SW_N * SW_W + (SW_N - 1) * SW_G + 28, 56,
+TRAY_N, TRAY_W, TRAY_G = 9, 62, 8            # 9 个 switch tray
+TR_X0 = LX + (CW - (TRAY_N * TRAY_W + (TRAY_N - 1) * TRAY_G)) / 2
+box(TR_X0 - 14, SWY - 13, TRAY_N * TRAY_W + (TRAY_N - 1) * TRAY_G + 28, 58,
     "#eef4fe", BL, 8, 1.3)
-for k in range(SW_N):
-    x = SW_X0 + k * (SW_W + SW_G)
-    box(x, SWY, SW_W, 32, "#d2e3fc", BL, 5, 1.1)
-    t(x + SW_W / 2, SWY + 21, str(k + 1), "svglbl", "#174ea6", 11, "middle")
+CHIP = []                                     # 18 颗芯片的中心 x
+for tr in range(TRAY_N):
+    tx = TR_X0 + tr * (TRAY_W + TRAY_G)
+    box(tx, SWY - 4, TRAY_W, 42, "#dce9fd", BL, 6, 1.0)
+    for c in range(2):
+        cx = tx + 6 + c * 26
+        box(cx, SWY + 4, 24, 26, "#a8c7fa", BL, 4, 1.0)
+        CHIP.append(cx + 12)
 
-GY_ = TOP + 320                     # GPU 那两排
-GN_, GW, GG = 32, 17, 3
-GX0 = LX + (CW - (GN_ * GW + (GN_ - 1) * GG)) / 2
-HI = 6
-HX = GX0 + HI * (GW + GG) + GW / 2
-# 淡的先画，浓的压上去
-for hj in (HI - 4, HI + 6):
-    hx = GX0 + hj * (GW + GG) + GW / 2
-    for k in (0, 5, 11, 17):
-        sx = SW_X0 + k * (SW_W + SW_G) + SW_W / 2
-        p.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" '
-                 'stroke-width="0.8" opacity=".2"/>' % (hx, GY_, sx, SWY + 32, BL))
-for k in range(SW_N):
-    sx = SW_X0 + k * (SW_W + SW_G) + SW_W / 2
-    line(HX, GY_, sx, SWY + 32, BL, 1.15)
+GY_ = TOP + 322
+GT_N, GT_W, GT_G = 8, 72, 8                   # 每排 8 个 compute tray
+GT_X0 = LX + (CW - (GT_N * GT_W + (GT_N - 1) * GT_G)) / 2
+HX = None
 for row in range(2):
-    for k in range(GN_):
-        x = GX0 + k * (GW + GG)
-        on = (row == 0 and k == HI)
-        box(x, GY_ + row * 26, GW, 20, "#1a73e8" if on else "#e8f0fe", BL, 3,
-            1.4 if on else 0.8)
+    for tr in range(GT_N):
+        tx = GT_X0 + tr * (GT_W + GT_G)
+        ty = GY_ + row * 34
+        box(tx, ty, GT_W, 26, "#eef4fe", BL, 5, 0.9)
+        for g in range(4):
+            gx = tx + 5 + g * 16
+            on = (row == 0 and tr == 1 and g == 1)
+            box(gx, ty + 5, 13, 16, "#1a73e8" if on else "#cfe0fc", BL, 2,
+                1.3 if on else 0.7)
+            if on:
+                HX = gx + 6.5
+t(LX + CW - 20, GY_ - 8, '16 个 compute tray × 4 颗 ＝ 64', None, GY2, None, "end")
 
-t(LX + 20, GY_ + 68, '蓝色那一颗的 18 条画满了；其余 63 颗<tspan font-weight="700">每颗都一样</tspan>'
+# 那 18 条：先画淡的，再画高亮那颗的
+for hj in (-1, 1):
+    hx = HX + hj * 190
+    for c in (0, 5, 11, 17):
+        p.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" '
+                 'stroke-width="0.8" opacity=".18"/>' % (hx, GY_, CHIP[c], SWY + 30, BL))
+for c in range(18):
+    line(HX, GY_, CHIP[c], SWY + 30, BL, 1.15)
+
+t(LX + 20, GY_ + 84, '蓝色那一颗的 18 条画满了；其余 63 颗<tspan font-weight="700">每颗都一样</tspan>'
                      '（全画出来是 1,152 条，看不清）', None, GY2)
-t(LX + 20, GY_ + 92, '<tspan font-weight="700">64 张卡</tspan>　——&#160;'
+t(LX + 20, GY_ + 108, '<tspan font-weight="700">64 张卡</tspan>　——&#160;'
                      '而域的上限是 <tspan font-weight="700">72</tspan>，'
                      '<tspan font-weight="700">64 整个装得下</tspan>', None, "#202124")
-box(LX + 20, GY_ + 104, CW - 40, 62, "#e8f0fe", None, 8, 0)
-t(LX + 36, GY_ + 126, '⭐ 「任意两点一跳」在这张图上是<tspan font-weight="700">看得见的</tspan>：'
+box(LX + 20, GY_ + 120, CW - 40, 62, "#e8f0fe", None, 8, 0)
+t(LX + 36, GY_ + 142, '⭐ 「任意两点一跳」在这张图上是<tspan font-weight="700">看得见的</tspan>：'
                       '任何两颗 GPU 都挂在<tspan font-weight="700">同一批交换机</tspan>上，',
   "svglbl", "#174ea6", 13)
-t(LX + 36, GY_ + 148, '中间只隔一台 ——&#160;<tspan font-weight="700">谁跟谁都一样，位置无关</tspan>。',
+t(LX + 36, GY_ + 164, '中间只隔一台 ——&#160;<tspan font-weight="700">谁跟谁都一样，位置无关</tspan>。',
   "svglbl", "#174ea6", 14)
 
 # ══════════════════════════════════════════════════════════════════════
@@ -206,6 +221,23 @@ for d, i, j, k in nodes:
              'fill="%s" stroke="%s" stroke-width="%.2f" opacity="%.2f"/>'
              % (x0 - r, y0 - r, 2 * r, 2 * r,
                 "#ffffff" if d > .45 else "#d7efdf", GR, 1.5 - 0.5 * d, 1 - 0.28 * d))
+
+# ⭐⭐ 2026-09-05：高亮一颗，把它的 6 条邻居链路画出来。
+#    这是这一版最要紧的一处改动 ——&nbsp;它跟左边那颗「18 条」构成**正面对照**：
+#    左边一颗出 18 条、条条通交换机；右边一颗出 6 条、条条只到邻居。
+#    ⭐ 两个数摆在同一张图的同一个位置上，「交换式的域」和「直连的网」
+#      这两个词就不用解释了。
+HI3 = (1, 1, 1)                                # 取内部那一颗，6 条都是普通链路
+hx0, hy0 = proj(*HI3)
+for di, dj, dk in ((1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)):
+    nb = (HI3[0]+di, HI3[1]+dj, HI3[2]+dk)
+    x1, y1 = proj(*nb)
+    p.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="#0d652d" '
+             'stroke-width="2.4"/>' % (hx0, hy0, x1, y1))
+    p.append('<circle cx="%.1f" cy="%.1f" r="4.6" fill="#0d652d"/>' % (x1, y1))
+p.append('<rect x="%.1f" y="%.1f" width="15" height="15" rx="3" fill="#0d652d"/>'
+         % (hx0 - 7.5, hy0 - 7.5))
+t(hx0 + 16, hy0 - 12, '这一颗的 6 条', "svglbl", "#0d652d", 12)
 
 # 三条环绕弧：x 方向、y 方向、z 方向各一条
 def wrap(a, b, c0, c1):
