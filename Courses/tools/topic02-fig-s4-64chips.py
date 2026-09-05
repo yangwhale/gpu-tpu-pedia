@@ -76,7 +76,10 @@ p.append('<svg viewBox="0 0 %d %d" width="100%%" role="img" aria-label="'
 
 t(0, 16, '64 颗连在一起 ——&#160;<tspan font-weight="700">同样是 64，两边连的方式不是一回事</tspan>',
   "svglbl", "#202124", 14)
-t(0, 36, '这门课那组招牌实测（§6.3）就是 64 对 64。摆那两个数之前，'
+# ⛔ 2026-09-05：这里原来写死「§6.3」。这张图**同时注入 L200 和 L300**，
+#    而两份文档的节号不一样（L200 实测在 6.3，L300 在 7.2）——
+#    一张图进两份文档，**硬编码节号必然有一份是错的**。
+t(0, 36, '这门课那组招牌实测就是 64 对 64。摆那两个数之前，'
          '得先知道这 64 颗<tspan font-weight="700">各自是怎么连起来的</tspan>。')
 t(W, 16, '⛔ 这张图只说结构，不说快慢', "svglbl", RD, 12, "end")
 t(W, 36, '哪种通信模式吃亏、EP 为什么对拓扑最挑剔 →&#160;专题五', None, GY2, None, "end")
@@ -114,58 +117,100 @@ t(RX + 20, TOP + 30, 'TPU v7 · ICI 三维环面', "svglbl", GR, 16)
 t(RX + 20, TOP + 52, '<tspan font-weight="700">没有交换机</tspan>：每颗只连自己的邻居，'
                      '远的要<tspan font-weight="700">一跳一跳走过去</tspan>', None, "#0d652d")
 
-# 画 4×4×4 —— 用四层 4×4 网格并排，层间连线示意第三维
-lay_x, lay_y, s = RX + 44, TOP + 92, 30
+# 画 4×4×4 —— 用四层 4×4 网格并排。
+#
+# ⛔⛔ 2026-09-05 重画。旧版有两个真问题，而且是**同一个问题的两面**：
+#   ① 层与层之间那条长线画成了**虚线**，而图注写着「虚线是环绕连接」——
+#      可它是 z 方向的**相邻**，不是环绕。同一种笔画表示两个含义，图注还挑错了一个。
+#   ② 真正的环绕**几乎没画**：每层只有右下角一个小弯钩，x/y 的其余环绕没有，
+#      z 的环绕（z=3 接回 z=0）一根都没有。
+#   ⭐ 后果很具体：**整张图的「6 跳」结论完全挂在环绕上**
+#      （没有环绕，4 个点一维最远走 3 步，三维就是 9 跳）。
+#      学员照着图数，会数出 9，数不出 6 —— 图自己不支持自己的结论。
+#   → 现在：**实线 ＝ 相邻，虚线短桩 ＝ 环绕**，两种笔画各管一件事；
+#     并且把 z=0 那一层的四条 y 向环绕完整画出来当范例，其余用短桩表示同理。
+lay_x, lay_y, s_ = RX + 44, TOP + 96, 30
 for L in range(4):
     ox = lay_x + L * 160
-    t(ox + 1.5 * s, lay_y - 8, 'z ＝ %d' % L, None, GY2, None, "middle")
+    t(ox + 1.5 * s_, lay_y - 10, 'z ＝ %d' % L, None, GY2, None, "middle")
     for r in range(4):
         for c in range(4):
-            box(ox + c * s, lay_y + r * s, s - 8, s - 8, "#e6f4ea", GR, 3, 0.9)
-    # 层内 x/y 邻接
+            box(ox + c * s_, lay_y + r * s_, s_ - 8, s_ - 8, "#e6f4ea", GR, 3, 0.9)
+    # 层内 x / y 相邻 —— 实线
     for r in range(4):
-        line(ox + 22, lay_y + r * s + 11, ox + 3 * s, lay_y + r * s + 11, GR, 0.7)
+        line(ox + 22, lay_y + r * s_ + 11, ox + 3 * s_, lay_y + r * s_ + 11, GR, 0.8)
     for c in range(4):
-        line(ox + c * s + 11, lay_y + 22, ox + c * s + 11, lay_y + 3 * s, GR, 0.7)
-    # 环绕（wrap）用虚线示意
-    p.append('<path d="M%d %d q 14 -18 0 -30" fill="none" stroke="%s" '
-             'stroke-width="0.9" stroke-dasharray="3 3"/>'
-             % (ox + 3 * s - 8, lay_y + 3 * s + 4, GR))
+        line(ox + c * s_ + 11, lay_y + 22, ox + c * s_ + 11, lay_y + 3 * s_, GR, 0.8)
+    # 环绕短桩 —— 虚线，四个方向都有（表示「接到那一头去」）
+    for r in range(4):
+        cy = lay_y + r * s_ + 11
+        line(ox - 10, cy, ox, cy, GR, 1.0, "2 2")
+        line(ox + 3 * s_ + 22, cy, ox + 3 * s_ + 32, cy, GR, 1.0, "2 2")
+    for c in range(4):
+        cx = ox + c * s_ + 11
+        line(cx, lay_y - 8, cx, lay_y, GR, 1.0, "2 2")
+        line(cx, lay_y + 3 * s_ + 22, cx, lay_y + 3 * s_ + 30, GR, 1.0, "2 2")
+    # 层与层之间 —— 第三维的相邻，实线（旧版这里是虚线，跟环绕混了）
     if L < 3:
-        line(ox + 3 * s + 4, lay_y + 1.5 * s, ox + 160, lay_y + 1.5 * s, GR, 1.1, "4 3")
-t(RX + 20, lay_y + 148, '四层 4×4 并排画的是同一个 <tspan font-weight="700">4×4×4</tspan>；'
-                        '虚线是<tspan font-weight="700">环绕连接</tspan>（首尾相接，所以叫环面）', None, GY2)
+        line(ox + 3 * s_ + 32, lay_y + 1.5 * s_, ox + 160 - 10, lay_y + 1.5 * s_, GR, 1.2)
 
-box(RX + 20, lay_y + 166, CW - 40, 76, "#fff", "#c3e2cc", 8)
-t(RX + 36, lay_y + 190, '每一维 4 个点，环绕之后最远走 <tspan font-weight="700">2 步</tspan>', None, "#202124")
-t(RX + 36, lay_y + 212, '三维加起来：', None, "#202124")
-t(RX + 152, lay_y + 214, '2 ＋ 2 ＋ 2 ＝ 6 跳', "svglbl", GR, 17)
-t(RX + 330, lay_y + 212, '——&#160;这是<tspan font-weight="700">最远</tspan>的一对；'
+# z 方向的环绕：z=3 接回 z=0（旧版完全没画，而 6 跳里有 2 跳靠它）
+ZW = lay_y + 3 * s_ + 44
+p.append('<path d="M%d %d V%d H%d V%d" fill="none" stroke="%s" stroke-width="1.2" '
+         'stroke-dasharray="4 3"/>'
+         % (lay_x + 3 * 160 + 3 * s_ + 32, lay_y + 1.5 * s_, ZW, lay_x - 10, lay_y + 1.5 * s_,
+            GR))
+t(lay_x + 200, ZW + 14, 'z 方向同样首尾相接：z ＝ 3 的邻居就是 z ＝ 0', None, GR)
+
+t(RX + 20, lay_y + 180, '<tspan font-weight="700">实线 ＝ 相邻</tspan>；'
+                        '<tspan font-weight="700">虚线短桩 ＝ 环绕链路</tspan>'
+                        '（接到那一头去，首尾相接，所以叫环面）', None, GY2)
+
+box(RX + 20, lay_y + 198, CW - 40, 96, "#fff", "#c3e2cc", 8)
+t(RX + 36, lay_y + 222, '每一维 4 个点。<tspan font-weight="700">不接环绕</tspan>最远要走 3 步，'
+                        '<tspan font-weight="700">接上环绕</tspan>就只要 2 步', None, "#202124")
+t(RX + 36, lay_y + 244, '三维加起来：', None, "#202124")
+t(RX + 152, lay_y + 246, '2 ＋ 2 ＋ 2 ＝ 6 跳', "svglbl", GR, 17)
+t(RX + 330, lay_y + 244, '——&#160;这是<tspan font-weight="700">最远</tspan>的一对；'
                          '近的邻居 1 跳', None, GY2)
-t(RX + 36, lay_y + 234, '⭐ 也就是说：这一侧<tspan font-weight="700">谁跟谁说话，'
+t(RX + 36, lay_y + 266, '⭐ 也就是说：这一侧<tspan font-weight="700">谁跟谁说话，'
                         '贵不贵取决于离多远</tspan>', "svglbl", "#0d652d", 13)
+# ⚠️ 这行原来还带一句「形状本身是调度的一部分」——&nbsp;文字顶出白框了，
+#    而且那句「从一颗到一个 pod」那张图已经完整讲过（切片必须是连续立方体）。删。
+t(RX + 36, lay_y + 286, '⚠️ 那 6 跳全靠环绕撑着 ——&#160;'
+                        '所以申请的是「一个 4×4×4」，不是「64 颗」', None, RD)
 
-box(RX + 20, lay_y + 250, CW - 40, 46, "#e6f4ea", None, 8, 0)
-t(RX + 36, lay_y + 271, '⭐ 而同一套 ICI 一路铺到 <tspan font-weight="700">9,216 颗</tspan>，'
-                        '中途不换协议', "svglbl", "#0d652d", 13)
-t(RX + 36, lay_y + 289, '⚠️ 9,216 ÷ 72 ＝ 128 <tspan font-weight="700">只衡量能铺多远，'
-                        '不衡量谁跑得快</tspan>', "svglbl", RD, 13)
-
-# ══════════ 底带：链路账 ══════════
+# ══════════ 底带：两个「1 跳」不是一个单位 + 链路账指到下一张 ══════════
+#
+# ⛔⛔ 2026-09-05：这条底带原来是一整笔链路账
+#     （ICI 6 × 200 ＝ 1,200 对 NVLink 18 × 100 ＝ 1,800，
+#      外加一句星标结论「单条反而是 ICI 粗一倍」）。撤掉，原因有两条：
+#   ① **重复。** 紧挨着的下一张图（T-8）从头到尾就在算这笔账，
+#      而且算得更细（每条链路、每轴、pod 上限）。两张图连着说同一件事。
+#   ② **更要命的是没有口径警告。** T-8 有一整个红框写着
+#      「1,200 GB/s 这个数官方自己写拧了」：官方正文写的是每轴双向 200，
+#      三个轴 ＝ 600，对不上同一页表格里的 1,200；只有读成「每条链路 200」才自洽。
+#      而这张图把它当**官方规格**印了出来，还在上面架了个星标结论。
+#      **那句「单条粗一倍」完全建立在有争议的那个读法上** ——
+#      换成官方原文那个读法，单条就是 100，跟 NVLink 一模一样，结论直接反过来。
+#   ⭐ 形状：**推出来的东西被写成了「官方规格」。** 这是第一原则那条最典型的形状 ——
+#     不是编了一个数，是把一个需要限定的读法说成了事实。
+#   → 这一格改成只做本图**独有**的那件事：把两个「1 跳」不是一个单位说破。
+# ⚠️ 指别的图一律**按名字**，不要写「下一张」——&nbsp;这些图 L200 和 L300 共用，
+#    两边的前后顺序不一样（构建期有断言拦这类方位词）。
 box(0, BY, W, 118, "#f8f9fa", "#dadce0", 10, 1.2)
-t(20, BY + 26, '每颗对外的链路账 ——&#160;总量同一个量级，但拆开看结论是反的',
-  "svglbl", "#202124", 14)
-rows = [('TPU v7 · ICI', '6 条链路', '× 每条双向 200 GB/s', '＝ 1,200 GB/s / chip', GR),
-        ('GB300 · NVLink 5', '18 条链路', '× 每条双向 100 GB/s', '＝ 1,800 GB/s / GPU', BL)]
-for i, (nm, n, per, tot, c) in enumerate(rows):
-    y = BY + 52 + i * 24
-    t(20, y, nm, "svglbl", c, 13)
-    t(210, y, n, "svglbl", "#202124", 13)
-    t(320, y, per, None, GY2)
-    t(560, y, tot, "svglbl", c, 13)
-t(20, BY + 106, '⭐ 单条反而是 ICI <tspan font-weight="700">粗一倍</tspan>'
-                '——&#160;NVIDIA 是靠<tspan font-weight="700">条数多三倍</tspan>把总量做到 1.5 倍的。'
-                '　⚠️ 两个数<tspan font-weight="700">都是双向合计</tspan>，别当单链读。', None, "#202124")
+t(20, BY + 26, '⚠️ 两边的「1 跳」不是一个单位 ——&#160;这是这张图最容易被误读的地方',
+  "svglbl", RD, 14)
+t(20, BY + 52, 'GB300 那一跳', "svglbl", BL, 13)
+t(150, BY + 52, '是「卡 →&#160;交换机 →&#160;卡」：两段链路 ＋ 一次交换。'
+                '<tspan font-weight="700">代价与位置无关</tspan>，但它不等于零。', None, "#202124")
+t(20, BY + 76, 'TPU v7 那一跳', "svglbl", GR, 13)
+t(150, BY + 76, '是<tspan font-weight="700">一条直连线</tspan>，没有交换机。'
+                '所以 6 跳指的是「走 6 条线」，<tspan font-weight="700">不是「慢 6 倍」</tspan>。',
+  None, "#202124")
+t(20, BY + 102, '⛔ 因此 <tspan font-weight="700">1 对 6 只能读成结构差别，读不出延迟比</tspan>。'
+                '　每颗几条链路、每条多宽、这个数的官方口径为什么对不上 ——&#160;'
+                '<tspan font-weight="700">「从一颗到一个 pod」那张图专门算这笔账</tspan>。', None, "#202124")
 
 p.append('</svg>')
 io.open('fig4-1.svg', 'w', encoding='utf-8').write('\n'.join(p))
