@@ -311,6 +311,72 @@ def body():
     s = []
     a = s.append
 
+    # ── 开场热身：回顾专题一 ──────────────────────────────────────
+    #
+    # ⭐ 2026-09-05 Chris：「这个课一开始要不要回顾一下专题一？先问同学们几个问题，
+    #    活跃一下气氛。从专题一里讲的重要的又好回答的问题，搞几道选择题，
+    #    就像专题一里边一开始的那样，搞一道就行。」
+    #
+    # ⭐ 挑题的三条判据（下次加题照这个挑，别凭「哪个知识点重要」挑）：
+    #    ① **是专题一自己列进「这一课带走这几条」的**，不是我从正文里现捞的 ——
+    #       复习题问的必须是上一课明确要求记住的东西，否则它在考细节。
+    #       这一道就是专题一收尾清单的第 01 条，原话：「关于 MoE：它省的是算力，
+    #       不省显存。听到『激活只有 37B』就以为跟 37B 的稠密模型一样好养 ——
+    #       完全不是。显存要装的还是 671B，一个字节都少不了。」
+    #    ② **答错的那个选项要有人真的会选**。「两个都省」正是听到「激活 37B」
+    #       之后最自然的误解 —— 一道全场都答对的题活跃不了气氛。
+    #    ③ **答案要能当门推开** ——&nbsp;它把「显存」和「算力」掰成两样东西，
+    #       而这一课要加的正是第三样：**带宽**。第 1 节第一件事就是算「算」和
+    #       「搬」的兑换比。⛔ 不要挑一道答完就完了的题。
+    #
+    # ⚠️ 只放在 L200（要讲的那一版）。L300 是读的，不需要暖场。
+    # ⛔ 只放一道。这是 Chris 明说的「搞一道就行」，也是对的 ——
+    #    开场问三道，第三道的时候气氛已经从热身变成考试了。
+    a("""
+<section style="border-top:none;padding-bottom:8px"><div class="wrap">
+  <div class="guess">
+    <h3>开讲之前，先回一道上一课的题</h3>
+    <p class="q">上一课我们拆了 <b>DeepSeek V3</b>：总参数 <b>671B</b>，
+      但每个 token 只激活 <b>37B</b> ——&nbsp;这就是 <b>MoE</b>。<br>
+      <span class="qs">于是很自然会想：既然只激活 37B，那它是不是就跟一个 37B 的稠密模型一样好养？<br>
+      问的就是这个：<b>MoE 到底省下了什么？</b></span></p>
+    <div class="opts">
+      <button data-g="0">省显存，不省算力</button>
+      <button data-g="1" data-right>省算力，不省显存</button>
+      <button data-g="2">两个都省</button>
+      <button data-g="3">都不省，只是换了个说法</button>
+    </div>
+    <div class="rev" id="rev">
+      <p><b>省算力，不省显存。</b><br>
+        <span class="qs">算的时候只走 37B 那条路，<b>算力是真省了</b>；
+        可 671B 的权重<b>一个字节都不能少放</b> ——&nbsp;
+        你不知道下一个 token 会挑中哪几个专家，所以全都得在显存里待着。
+        <b>「激活 37B」跟「像 37B 一样好养」是两回事。</b></span></p>
+      <p style="margin-bottom:0"><b>⭐ 而这道题真正想让大家听见的，是它背后那件事：</b>
+        <span class="qs"><b>显存和算力是两样东西，会各走各的。</b>
+        上一课整整一课都在分开算这两笔账。<br>
+        <b>这一课要加的是第三样 ——&nbsp;带宽。</b>
+        而且下面马上会看到：这三样里，真正决定一个算子快不快的，
+        常常不是前两样。<em>第 1 节只做一件事，就是把「算」和「搬」的兑换比算出来。</em></span></p>
+    </div>
+  </div>
+</div></section>
+<script>
+(function(){
+  var box=document.querySelector('.guess'); if(!box) return;
+  var rev=document.getElementById('rev');
+  box.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){
+      box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+      b.classList.add('picked');
+      box.querySelector('[data-right]').classList.add('right');
+      rev.classList.add('on');
+      rev.scrollIntoView({behavior:'smooth', block:'nearest'});
+    });
+  });
+})();
+</script>""")
+
     # ── 第 0 节 ───────────────────────────────────────────────────
     a('''
 <section id="s0" style="border-top:none"><div class="wrap">

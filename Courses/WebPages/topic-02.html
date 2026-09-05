@@ -517,6 +517,27 @@ figure.fwide{margin-left:50%;transform:translateX(-50%);
    **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
 .fwide figcaption{max-width:1080px;margin-left:0}
 .note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
+/* ---- 开场热身选择题（.guess）----
+   样式从专题一原样搬（topic-01.html），两课同一个观感 ——&nbsp;
+   学员一眼认得出「又是那个先猜一猜」。改这里要顺手看一眼那边有没有跟着变。
+   ⚠️ 只有 L200 用到；L300 里这几条是死规则，留着无害，别为了「干净」删掉 ——
+      两版共用同一份 CSS，删了下次 L300 若要加就得再抄一遍。 */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px;line-height:1.7}
+.guess .q .qs{font-size:15px}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:#e8f0fe}
+.guess button.right{border-color:var(--green);background:#e6f4ea}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.8}
+.guess .rev .qs{font-size:15px;color:var(--gray)}
+.guess .rev.on{display:block}
 /* ---- 收尾节的 take-away 大字块 ----
    ⛔ 2026-09-05 Chris 读到 §9：「那么多字，抓不住重点，字还那么小。
       是不是给他少整几句 take-away highlight 就行了？」
@@ -606,7 +627,7 @@ details.aside b{color:var(--ink);font-weight:600}
          而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
          ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
          （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
-    <span class="chip">⏱ <b>83 分钟 · 40 张图</b></span>
+    <span class="chip">⏱ <b>85 分钟 · 40 张图</b></span>
     <span class="chip">完整版 <a href="topic-02-L300.html"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -634,6 +655,50 @@ details.aside b{color:var(--ink);font-weight:600}
 <marker id="aK" markerWidth="9" markerHeight="9" refX="7" refY="4.5" orient="auto"><path d="M0,0 L9,4.5 L0,9 z" fill="#5f6368"/></marker>
 </defs>
 </svg>
+
+<section style="border-top:none;padding-bottom:8px"><div class="wrap">
+  <div class="guess">
+    <h3>开讲之前，先回一道上一课的题</h3>
+    <p class="q">上一课我们拆了 <b>DeepSeek V3</b>：总参数 <b>671B</b>，
+      但每个 token 只激活 <b>37B</b> ——&nbsp;这就是 <b>MoE</b>。<br>
+      <span class="qs">于是很自然会想：既然只激活 37B，那它是不是就跟一个 37B 的稠密模型一样好养？<br>
+      问的就是这个：<b>MoE 到底省下了什么？</b></span></p>
+    <div class="opts">
+      <button data-g="0">省显存，不省算力</button>
+      <button data-g="1" data-right>省算力，不省显存</button>
+      <button data-g="2">两个都省</button>
+      <button data-g="3">都不省，只是换了个说法</button>
+    </div>
+    <div class="rev" id="rev">
+      <p><b>省算力，不省显存。</b><br>
+        <span class="qs">算的时候只走 37B 那条路，<b>算力是真省了</b>；
+        可 671B 的权重<b>一个字节都不能少放</b> ——&nbsp;
+        你不知道下一个 token 会挑中哪几个专家，所以全都得在显存里待着。
+        <b>「激活 37B」跟「像 37B 一样好养」是两回事。</b></span></p>
+      <p style="margin-bottom:0"><b>⭐ 而这道题真正想让大家听见的，是它背后那件事：</b>
+        <span class="qs"><b>显存和算力是两样东西，会各走各的。</b>
+        上一课整整一课都在分开算这两笔账。<br>
+        <b>这一课要加的是第三样 ——&nbsp;带宽。</b>
+        而且下面马上会看到：这三样里，真正决定一个算子快不快的，
+        常常不是前两样。<em>第 1 节只做一件事，就是把「算」和「搬」的兑换比算出来。</em></span></p>
+    </div>
+  </div>
+</div></section>
+<script>
+(function(){
+  var box=document.querySelector('.guess'); if(!box) return;
+  var rev=document.getElementById('rev');
+  box.querySelectorAll('button').forEach(function(b){
+    b.addEventListener('click', function(){
+      box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+      b.classList.add('picked');
+      box.querySelector('[data-right]').classList.add('right');
+      rev.classList.add('on');
+      rev.scrollIntoView({behavior:'smooth', block:'nearest'});
+    });
+  });
+})();
+</script>
 
 <section id="s0" style="border-top:none"><div class="wrap">
   <div class="stn big"><span class="badge">第 0 节</span><h2>先立一个根：两条出身不同</h2></div>
@@ -12367,7 +12432,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
           一句 L300 去处留在明面（它是有用的下一步），节号勘误折起来 ——
           需要它的人一定是正拿着两版对照翻，那种人会去点开。 -->
   <!-- ⛔ 2026-09-04：这里原来写「这一版是 L200 · 一小时」，而页首那个自动算出来的
-       chip 报的是 83 分钟（当前 77）。**同一页上两个时长，一个手写一个算出来的。**
+       chip 报的是 85 分钟（当前 77）。**同一页上两个时长，一个手写一个算出来的。**
        ⭐ 2026-09-03 已经拍板「不砍内容，要一个准点的时段就按 80 分钟要」——&nbsp;
           所以「一小时」这个标签从那天起就不成立了，只是没人回头改标签。
        ⭐ 现在版本名只留等级码（L200 · 精讲版），**具体分钟数全篇只出现在
@@ -12380,9 +12445,9 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
           ⚠️ 一个规矩只执行在发现它的那一处，就等于没立。
        ⭐ 现在「讲完了，它没有告诉你该买哪个……」是主线上的最后一句 ——&nbsp;
           那才是这门课要留下的话。L300 的去处折起来，想深挖的人一定会点。 -->
-  <details class="aside"><summary>这一版是 L200 · 精讲版（主线 83 分钟）——&nbsp;完整版 L300 多讲了什么<em>（想往下挖再点开）</em></summary>
+  <details class="aside"><summary>这一版是 L200 · 精讲版（主线 85 分钟）——&nbsp;完整版 L300 多讲了什么<em>（想往下挖再点开）</em></summary>
     <div class="body">
-  <div class="note info"><span class="t">这一版是 L200 · 精讲版（主线 83 分钟）</span>
+  <div class="note info"><span class="t">这一版是 L200 · 精讲版（主线 85 分钟）</span>
     完整版 <b>L300</b>（两小时，72 张图）多出来的是四组深挖：<br>
     ·芯片封装全景与十行完整对照<br>
     ·寄存器堆到位线的五张图<br>
