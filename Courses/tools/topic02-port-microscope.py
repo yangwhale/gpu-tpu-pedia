@@ -2176,6 +2176,25 @@ figure.fwide{margin-left:50%;transform:translateX(-50%);
    **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
 .fwide figcaption{max-width:1080px;margin-left:0}
 .note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
+/* ---- 收尾节的 take-away 大字块 ----
+   ⛔ 2026-09-05 Chris 读到 §9：「那么多字，抓不住重点，字还那么小。
+      是不是给他少整几句 take-away highlight 就行了？」
+   ⭐ 病根是**收尾节用了正文的字号和密度**。正文 14 px 靠信息量取胜，
+      收尾节靠的是「就这三句，记住」——&nbsp;两者需要相反的排版。
+      所以这里不是把字调大一点，是**换一种块**：标题 19 px、留白翻倍、
+      每条一个序号圆点，一屏之内最多三条。
+   ⚠️ 别在这个块里塞第四条。它一旦超过三条就退化成又一段正文。 */
+.tkaway{margin:26px 0;display:grid;gap:14px}
+.tkaway .tk{display:grid;grid-template-columns:30px 1fr;gap:16px;align-items:start;
+  padding:20px 24px;border-radius:12px;background:var(--bg2);
+  border:1px solid var(--line);border-left:5px solid var(--blue)}
+.tkaway .tk .n{width:28px;height:28px;border-radius:50%;background:var(--blue);
+  color:#fff;font-weight:700;font-size:15px;line-height:28px;text-align:center}
+.tkaway .tk b{display:block;font-size:19px;line-height:1.5;color:var(--ink);
+  font-weight:700;margin-bottom:7px}
+.tkaway .tk .d{display:block;font-size:15px;line-height:1.75;color:var(--gray)}
+.tkaway .tk .d b{display:inline;font-size:inherit;color:var(--ink);margin:0}
+@media(max-width:700px){.tkaway .tk{grid-template-columns:1fr}}
 /* ---- 旁白折叠块 ----
    有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
    但作为方法论又值得留着。折起来：想看的人点开，讲课时直接跳过。
