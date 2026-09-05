@@ -383,6 +383,21 @@ def body():
   document.querySelectorAll('.guess').forEach(function(box){
     var rev=box.querySelector('.rev'); if(!rev) return;
     var groups=box.querySelectorAll('.opts');
+    /* ⭐ 2026-09-05 Chris：「展开以后就回不去了，给我一个 Reset 按钮，
+       让我退回去重新开始。」——&nbsp;确实，原来一点就锁死，讲同一份课件
+       连讲两场、或者想再演示一遍都没法归零。
+       ⭐ 按钮**由 JS 生成、塞进答案区**，不写进每道题的 HTML：
+         ① 答案区本身 display:none，所以它天然「答过了才出现」，不用额外状态；
+         ② 以后再加题自动就有，不会漏。 */
+    var rst=document.createElement('div');
+    rst.className='rst';
+    rst.innerHTML='<button type="button">↺ 重来</button>';
+    rst.firstChild.addEventListener('click', function(){
+      box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+      rev.classList.remove('on');
+      box.scrollIntoView({behavior:'smooth', block:'nearest'});
+    });
+    rev.insertBefore(rst, rev.firstChild);
     groups.forEach(function(g){
       g.querySelectorAll('button').forEach(function(b){
         b.addEventListener('click', function(){
