@@ -398,6 +398,9 @@ details.aside > summary,details > summary{font-size:16px;padding:10px 0}
 /* ⭐ 2026-09-04 引原文用。**逐字引用必须看得出是引用** ——&nbsp;
    这门课到处在要求「每个数都能回查」，自己引论文时更不能把原文和转述混在一起。
    等宽 ＋ 灰底 ＋ 左边线，一眼就知道这一段不是作者写的。 */
+b.fno{display:inline-block;font:600 11px/1.5 var(--sans);color:#5f6368;
+  background:var(--bg2);border:1px solid #dadce0;border-radius:4px;
+  padding:1px 7px;vertical-align:1px;letter-spacing:.02em}
 blockquote{margin:14px 0;padding:12px 18px;background:var(--bg2);
   border-left:3px solid var(--gray);border-radius:0 8px 8px 0;
   font:400 15px/1.75 var(--sans);color:var(--ink)}
@@ -2657,7 +2660,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="949.3333333333334" y="840" class="xs">· 要点对点直传仍需显式 cudaDeviceEnablePeerAccess</text>
 <text x="949.3333333333334" y="860" class="xs">· Gen6 ×16 双向合计 256 GB/s —— 约为 NVLink 5 的 <tspan font-weight="700" fill="#202124">1/7</tspan></text>
 </svg>
-<figcaption><b>一颗 B200 的全景。</b>两颗 die 用 NV-HBI 缝成「一个 GPU」，对软件完全透明 —— 代价是那道缝还在（L2 跨 die 从约 21 掉到 16.8 TB/s），<b>而这件事不出现在任何 API 里</b>。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 G-1</b>　<b>一颗 B200 的全景。</b>两颗 die 用 NV-HBI 缝成「一个 GPU」，对软件完全透明 —— 代价是那道缝还在（L2 跨 die 从约 21 掉到 16.8 TB/s），<b>而这件事不出现在任何 API 里</b>。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>再看 v7。<b>物理构造几乎一样，对软件的呈现完全相反。</b></p>
@@ -3163,7 +3166,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="864" class="xs"><tspan font-weight="700" fill="#202124">chip 和 device 的比例是 1 : 2，而所有框架日志都按 device 报数。</tspan>所以看到「每 device 1,153 TFLOP/s」不要以为掉了一半 —— 那正是 2,307 的一半；看到 <tspan class="mono" fill="#1967d2">tpu7x-128</tspan> 也不要以为是 128 颗芯片，那是 64 颗。算 MFU 时分母要用 2,307（按 chip）或 1,</text>
 <text x="34" y="880" class="xs">153.5（按 device），<tspan font-weight="700" fill="#d93025">两个口径混用会让结论直接差两倍</tspan>。</text>
 </svg>
-<figcaption><b>一颗 TPU v7 的全景，同样两颗 die。</b>但它<b>如实暴露成两个 device</b> —— 缝在明处。<b>这两张图并排看，是第 2 节那个决定在封装这一层的样子</b>：一边把复杂度藏起来，一边把它交给你。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 T-1</b>　<b>一颗 TPU v7 的全景，同样两颗 die。</b>但它<b>如实暴露成两个 device</b> —— 缝在明处。<b>这两张图并排看，是第 2 节那个决定在封装这一层的样子</b>：一边把复杂度藏起来，一边把它交给你。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note info"><span class="t">这一对图是全课的缩影，值得在这儿多停一分钟</span>
@@ -3574,7 +3577,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="994" class="xs">A100 白皮书原话：四个 Tensor Core <tspan font-weight="700" fill="#202124">合计每周期 1,024 次</tspan> FP16 乘加（＝每核 256）。H100 官方称「张量吞吐 2× A100」，Blackwell 再 2× → <tspan font-weight="700" fill="#d93025">每核 1,024</tspan>。</text>
 <text x="34" y="1011" class="xs">代回 B200 对账：1,024 × 2 FLOP × 4 核 × 148 SM × 1.83 GHz ＝ 2.22 PFLOPS，官方 2.25 —— 差 <tspan font-weight="700" fill="#d93025">1.4%</tspan>，缺口就是官方没公布的确切时钟。完整对账表见正文 §2。</text>
 </svg>
-<figcaption><b>一个 SM 拆开。</b>warp 调度器、256 KB 寄存器堆、228 KB L1／共享内存、记分板 ——<b>这些部件加起来只干一件事：在运行时动态地藏住延迟和分支。</b>　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 G-2</b>　<b>一个 SM 拆开。</b>warp 调度器、256 KB 寄存器堆、228 KB L1／共享内存、记分板 ——<b>这些部件加起来只干一件事：在运行时动态地藏住延迟和分支。</b>　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>再看 TPU 这边 ——&nbsp;<b>这张图的信息量全在右边那一栏。</b></p>
@@ -3847,7 +3850,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="786" class="xs"><tspan font-weight="700" fill="#202124">GPU 的 SM 里，大部分晶体管不是在算数，是在「决定接下来算什么」</tspan> —— 调度器、上下文、记分板、缓存控制，全都是为了在运行时动态地藏住延迟和分支。TPU 把这一整套<tspan font-weight="700" fill="#d93025">前移到了编译期</tspan>，于是这些部件可以整个不要。</text>
 <text x="34" y="826" class="xs"><tspan font-weight="700" fill="#202124">省下的不是「面积换算力」，是这套机构整个不做了</tspan> —— 电路更简单、功耗更低。<tspan font-weight="700" fill="#d93025">它没有变成更多算力，也没有变成更多片上存储</tspan>（两项 B200 都更多）。这不是「TPU 更简单」，是<tspan font-weight="700" fill="#202124">把复杂度换了个地方放</tspan> —— 从硅上换到了编译器里。</text>
 </svg>
-<figcaption><b>一个 TensorCore 拆开，重点在右边那一栏。</b>上面那五样在这里<b>一样都没有</b>。而它们不是五个独立的取舍，是同一个决定的五个后果：一旦你决定<b>不在运行时换任务</b>，这五样同时失去存在理由。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 T-2</b>　<b>一个 TensorCore 拆开，重点在右边那一栏。</b>上面那五样在这里<b>一样都没有</b>。而它们不是五个独立的取舍，是同一个决定的五个后果：一旦你决定<b>不在运行时换任务</b>，这五样同时失去存在理由。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note info"><span class="t">接回第 2 节：这不是「砍配置」，是同一个决定的连锁反应</span>
@@ -4144,7 +4147,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="950" class="xs">这张图早先的版本写着「列与列之间没有直连通路」——那是想当然，已经删掉。公开资料的说法是：跨 lane <tspan font-weight="700" fill="#202124">至少要过一趟 VMEM／XLU／SMEM</tspan> ——<tspan font-weight="700" fill="#d93025">贵在「出一趟寄存器堆」这个往返，不在缺一根线。</tspan></text>
 <text x="38" y="971" class="xs">下一张图把这个往返画出来。<tspan font-weight="700" fill="#202124">XLU 的内部电路仍然没有出处</tspan> ——公开资料只说它是个独立单元、而且慢，没说它里面长什么样。</text>
 </svg>
-<figcaption>整张图就一件事：<b>同一个寄存器、同一批数，换个方向，代价完全不同</b>。绿的那一列是<b>纵向</b> —— 8 → 4 → 2 → 1，三步，全程没离开自己那套 ALU；红的那一行是<b>横向</b> —— 128 条 lane 各是一套硬件，数要横着走只能交给 <b>XLU</b>，而且往往还得绕一趟 VMEM。<b>黄带才是这张图真正要落的地方</b>：<code>softmax</code> 和 <code>RMSNorm</code> 都沿最后一维求和，而最后一维默认就铺在 lane 方向上 —— <b>最常做的那两个归约，恰好都撞在最贵的方向</b>。⚠️ 底带那条不能跳过，<b>它记的是一次收回</b>：「贵是因为列与列之间没有连线」——<b>这个说法是错的，已经撤掉</b>。公开资料的说法是跨 lane <b>至少要过一趟 VMEM／XLU／SMEM</b>，所以<b>贵在「出一趟寄存器堆再回来」这个往返，不在缺一根线</b>。（这一句是后面三张图共同的地基，别看漏。）</figcaption>
+<figcaption><b class="fno">图 P-26</b>　整张图就一件事：<b>同一个寄存器、同一批数，换个方向，代价完全不同</b>。绿的那一列是<b>纵向</b> —— 8 → 4 → 2 → 1，三步，全程没离开自己那套 ALU；红的那一行是<b>横向</b> —— 128 条 lane 各是一套硬件，数要横着走只能交给 <b>XLU</b>，而且往往还得绕一趟 VMEM。<b>黄带才是这张图真正要落的地方</b>：<code>softmax</code> 和 <code>RMSNorm</code> 都沿最后一维求和，而最后一维默认就铺在 lane 方向上 —— <b>最常做的那两个归约，恰好都撞在最贵的方向</b>。⚠️ 底带那条不能跳过，<b>它记的是一次收回</b>：「贵是因为列与列之间没有连线」——<b>这个说法是错的，已经撤掉</b>。公开资料的说法是跨 lane <b>至少要过一趟 VMEM／XLU／SMEM</b>，所以<b>贵在「出一趟寄存器堆再回来」这个往返，不在缺一根线</b>。（这一句是后面三张图共同的地基，别看漏。）</figcaption>
 </figure>
 
   <p>讲到这儿一定会有人问：这些部件之间到底怎么连？
@@ -4311,7 +4314,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="648" class="sec">⚠️ 这张图讲的是结构，不是 v7 的规格表</text>
 <text x="38" y="674" class="xs">上面每个数（64 个 vreg、每位置 4 个 ALU、每周期 4 条指令、VMEM 每周期 3 读 1 写）<tspan font-weight="700" fill="#202124">都出自公开资料，而书里标的是 v5p</tspan> —— 它自己就说了 v4 只有 32 个 vreg，<tspan font-weight="700" fill="#202124">所以这些数会跨代变</tspan>。<tspan font-weight="700" fill="#202124">v7 没有同口径的公开数，别把这张图当 v7 的规格表用。</tspan></text>
 </svg>
-<figcaption>上一张图留了个问题：这些部件到底怎么连。<b>答案是中间那个盒子只有一个</b> —— VPU、MXU、XLU 取的是<b>同一批 vreg</b>，各开一个门 —— <b>不是各有各的寄存器</b>（「那到底怎么连的」这个问题下一张图专门答）。于是「横着走贵」有了更准的说法：<b>贵在要把整个 vreg 交出去、绕一趟、再收回来</b>，不是缺一根线。<b>蓝带那组换算是这门课最该记的一句</b>：一个 ALU ≈ 一个 CUDA core，一条 lane ≈ 一个 warp scheduler ——&nbsp;两边差的从来不是有没有这些部件，是<b>谁在运行时挑活</b>。⚠️ 图里的数<b>书里标的是 v5p</b>（v4 只有 32 个 vreg），别当 v7 规格表用。</figcaption>
+<figcaption><b class="fno">图 P-27</b>　上一张图留了个问题：这些部件到底怎么连。<b>答案是中间那个盒子只有一个</b> —— VPU、MXU、XLU 取的是<b>同一批 vreg</b>，各开一个门 —— <b>不是各有各的寄存器</b>（「那到底怎么连的」这个问题下一张图专门答）。于是「横着走贵」有了更准的说法：<b>贵在要把整个 vreg 交出去、绕一趟、再收回来</b>，不是缺一根线。<b>蓝带那组换算是这门课最该记的一句</b>：一个 ALU ≈ 一个 CUDA core，一条 lane ≈ 一个 warp scheduler ——&nbsp;两边差的从来不是有没有这些部件，是<b>谁在运行时挑活</b>。⚠️ 图里的数<b>书里标的是 v5p</b>（v4 只有 32 个 vreg），别当 v7 规格表用。</figcaption>
 </figure>
 
   <p>上一张开完门，下一个问题就是门后面的线。<b>直觉的那个答案只对一半</b>
@@ -4448,7 +4451,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="796" class="xs">TPU 是 <tspan font-weight="700" fill="#202124">VLIW</tspan>：一个指令包里，<tspan font-weight="700" fill="#202124">每类操作有几个固定的位置</tspan>，编译器往里填。填不下就多排一个周期。<tspan font-weight="700" fill="#202124">芯片上没有一个运行时的仲裁器在现场商量谁先走</tspan> —— 冲突不是被解决的，是被<tspan font-weight="700" fill="#202124">提前排掉、根本没机会发生</tspan>。</text>
 <text x="38" y="817" class="xs"><tspan font-weight="700" fill="#d93025">GPU 正相反：靠运行时的记分板和 warp 调度器现场决定。</tspan>这就是这门课一直在回的那条分水岭 —— <tspan font-weight="700" fill="#202124">谁在运行时挑活。</tspan></text>
 </svg>
-<figcaption>上一张图说「各开一个门」，紧接着最自然的追问是：那不就是 128 条车道大家串在一起、时分复用吗？<b>一半对，一半错，而错的那一半最要紧</b>：争用确实有，但争的不是一条共享总线，是<b>端口和发射位</b> —— <b>128 是每条通路的宽度，不是要分给大家的份额</b>。四张卡把四个单元的接法摊开对比，机关在「要不要队列」那一栏：<b>三个都要，理由两两不同</b>（超越函数是因为慢，XLU 是因为共享，MXU 是因为一口喂不满）。落点那条最值得记：<b>撞车不是被解决的，是被编译期提前排掉、根本没机会发生</b> —— GPU 靠运行时记分板现场决定，这正是全课那条分水岭。⚠️ 端口那个「约 9 读 7 写」<b>是推的不是原话</b>，图上写了推导链。</figcaption>
+<figcaption><b class="fno">图 P-28</b>　上一张图说「各开一个门」，紧接着最自然的追问是：那不就是 128 条车道大家串在一起、时分复用吗？<b>一半对，一半错，而错的那一半最要紧</b>：争用确实有，但争的不是一条共享总线，是<b>端口和发射位</b> —— <b>128 是每条通路的宽度，不是要分给大家的份额</b>。四张卡把四个单元的接法摊开对比，机关在「要不要队列」那一栏：<b>三个都要，理由两两不同</b>（超越函数是因为慢，XLU 是因为共享，MXU 是因为一口喂不满）。落点那条最值得记：<b>撞车不是被解决的，是被编译期提前排掉、根本没机会发生</b> —— GPU 靠运行时记分板现场决定，这正是全课那条分水岭。⚠️ 端口那个「约 9 读 7 写」<b>是推的不是原话</b>，图上写了推导链。</figcaption>
 </figure>
 
   <p>还有一层没讲：真正光刻在硅片上的走线。
@@ -4652,7 +4655,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="824" class="xs"><tspan font-weight="700" fill="#202124">切的证据。</tspan></text>
 <text x="38" y="844" class="xs"><tspan font-weight="700" fill="#d93025">没查到的：具体的 bank 怎么划、位线怎么排、真实 floorplan —— 公开资料没有。</tspan>上面讲的是<tspan font-weight="700" fill="#202124">数量级和拓扑</tspan>，不是版图图纸。</text>
 </svg>
-<figcaption>P-28 说「每条端口本身就是 128 宽」，最较真的追问紧接着就来：<b>一个 vreg 才 4 KB，它怎么可能扯出去那么多根线？</b>这个质疑<b>完全正确</b> —— 而且答案不是「线真有那么多」，是<b>「它们根本不需要汇合」</b>。先纠单位：一根走线传<b>一个 bit</b>，所以一个 vreg 是 8 × 128 × 32 ＝ <b>32,768 根</b>，不是 128 根。荒唐 → 所以它不是一整块：<b>整条数据通路按 lane 切成 128 份，存储就贴在自己那条 lane 的 ALU 旁边</b>，每份只要 <b>256 根线、走几微米</b>。于是三个问题一次答完：<b>64 个 vreg 之间完全不连</b>（只共用位线，而且是<b>按地址选通、当周期就到</b>，<b>不是轮转排队</b> —— 共用的代价是「一条端口一周期只送一行」，不是「等 64 个周期」）；<b>到 VPU 是贴着的</b>；<b>只有 MXU 和 XLU 才真的要扯长线</b> —— 这也正是它们要队列、要共享的原因。⚠️ 红带那条必须念：<b>「按 lane 切片」是推的，不是查到的版图</b>，具体 bank 划分与 floorplan 公开资料没有。</figcaption>
+<figcaption><b class="fno">图 P-29</b>　P-28 说「每条端口本身就是 128 宽」，最较真的追问紧接着就来：<b>一个 vreg 才 4 KB，它怎么可能扯出去那么多根线？</b>这个质疑<b>完全正确</b> —— 而且答案不是「线真有那么多」，是<b>「它们根本不需要汇合」</b>。先纠单位：一根走线传<b>一个 bit</b>，所以一个 vreg 是 8 × 128 × 32 ＝ <b>32,768 根</b>，不是 128 根。荒唐 → 所以它不是一整块：<b>整条数据通路按 lane 切成 128 份，存储就贴在自己那条 lane 的 ALU 旁边</b>，每份只要 <b>256 根线、走几微米</b>。于是三个问题一次答完：<b>64 个 vreg 之间完全不连</b>（只共用位线，而且是<b>按地址选通、当周期就到</b>，<b>不是轮转排队</b> —— 共用的代价是「一条端口一周期只送一行」，不是「等 64 个周期」）；<b>到 VPU 是贴着的</b>；<b>只有 MXU 和 XLU 才真的要扯长线</b> —— 这也正是它们要队列、要共享的原因。⚠️ 红带那条必须念：<b>「按 lane 切片」是推的，不是查到的版图</b>，具体 bank 划分与 floorplan 公开资料没有。</figcaption>
 </figure>
 
   <p>「位线」用了好几次却一直没画。不画就会误解成「大家轮流用一条总线」，
@@ -4864,7 +4867,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="946" class="xs">一条 lane 切片 <tspan font-weight="700" fill="#202124">64 行 × 256 位 ＝ 16,384 个单元</tspan>；全核 <tspan font-weight="700" fill="#202124">× 128 条 lane ＝ 2,097,152 个单元</tspan>；换成字节 <tspan font-weight="700" fill="#202124">÷ 8 ＝ 262,144 B ＝ 256 KiB</tspan>。</text>
 <text x="38" y="967" class="xs"><tspan font-weight="700" fill="#202124">而公开资料写的是「每核约 256 kB 的 vreg」—— 正好对上。</tspan><tspan fill="#9aa0a6">一个孤立的数不能信，但两条独立路径撞出同一个数，整套模型就立住了。</tspan></text>
 </svg>
-<figcaption>「位线」这个词前面用了好几次，但一直没画。它其实就是一张<b>田字格</b>：<b>横着的是字线，一行一根，管「选中谁」；竖着的是位线，一位一根，管「把数据送出去」</b>。给一个 6 位地址，译码器点亮一根字线，那一行的 256 个单元同时接上位线 —— <b>当周期就到，没有排队这回事</b>。所以「64 个共用位线」的真面目是<b>按地址 64 挑 1</b>，<b>不是轮流用 64 个周期</b>。这张图顺带把「端口」落到实处：<b>一个端口 ＝ 译码器 ＋ 一组字线 ＋ 一组位线 ＋ 读出电路</b>，多端口就是在同一批单元上并排铺好几套线 —— 于是「多开几个端口」代价是<b>面积按端口数的平方涨</b>。⭐ 最值得看的是绿带那个对账：<b>64 × 256 × 128 ÷ 8 ＝ 256 KiB，正好等于公开资料说的「每核约 256 kB vreg」</b> —— 两条独立路径撞出同一个数，前面整套模型才算立住。</figcaption>
+<figcaption><b class="fno">图 P-30</b>　「位线」这个词前面用了好几次，但一直没画。它其实就是一张<b>田字格</b>：<b>横着的是字线，一行一根，管「选中谁」；竖着的是位线，一位一根，管「把数据送出去」</b>。给一个 6 位地址，译码器点亮一根字线，那一行的 256 个单元同时接上位线 —— <b>当周期就到，没有排队这回事</b>。所以「64 个共用位线」的真面目是<b>按地址 64 挑 1</b>，<b>不是轮流用 64 个周期</b>。这张图顺带把「端口」落到实处：<b>一个端口 ＝ 译码器 ＋ 一组字线 ＋ 一组位线 ＋ 读出电路</b>，多端口就是在同一批单元上并排铺好几套线 —— 于是「多开几个端口」代价是<b>面积按端口数的平方涨</b>。⭐ 最值得看的是绿带那个对账：<b>64 × 256 × 128 ÷ 8 ＝ 256 KiB，正好等于公开资料说的「每核约 256 kB vreg」</b> —— 两条独立路径撞出同一个数，前面整套模型才算立住。</figcaption>
 </figure>
 
   <div class="note ok"><span class="t">五张图走完了，串起来其实只有一句话</span>
@@ -5402,7 +5405,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="270" y="893" class="xs">整颗 chip 的 2 个 TensorCore，再往外就是 ICI 3D torus 上的别的芯片</text>
 <text x="800" y="893" class="xs">GPU 的 grid 在<tspan font-weight="700" fill="#202124">一颗</tspan>芯片内部就要协调 148 个 SM；TPU 的协调主要发生在<tspan font-weight="700" fill="#202124">芯片之间</tspan></text>
 </svg>
-<figcaption><b>GPU 的四层：thread → warp → block → grid。</b>注意 block 和 warp 调度器都是<b>运行时</b>概念 —— 有几个 block、落在哪个 SM，启动才知道。这两层就是 GPU 藏延迟的全部本钱。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 G-3</b>　<b>GPU 的四层：thread → warp → block → grid。</b>注意 block 和 warp 调度器都是<b>运行时</b>概念 —— 有几个 block、落在哪个 SM，启动才知道。这两层就是 GPU 藏延迟的全部本钱。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <!-- ⭐⭐ 2026-09-03 新增 fig3-1 ＋ 下面那个折叠。
@@ -5816,7 +5819,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="980" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：块到 SM 的分配由硬件负责、程序员指定不了、块间执行顺序不作保证；调度器每周期从驻留 warp 里挑一个能发的 —— 都是 CUDA 编程模型的公开说法。</text>
 <text x="38" y="1000" class="xxs"><tspan font-weight="700" fill="#d93025">我归纳的</tspan>：<tspan font-weight="700" fill="#202124">「运行时只剩两个决定」这句话是我从上表读出来的结论</tspan>，不是谁的原话。它成立的前提是把「划分」和「调度」拆开看 —— 换个拆法可能会数出不一样的数目。</text>
 </svg>
-<figcaption>3.3 的标题问「哪几层是运行时才定的」，这张图专门来答。<b>关键是先把问题拆成两个</b>：① 这一组<b>怎么划出来的</b>；② 它<b>什么时候落到硬件上、谁挑它执行</b>。混着问会得出「GPU 反正都是运行时」，拆开看完全不是 —— <b>第①栏六行全绿</b>，要么是硬件写死的规则，要么是启动前主机给定的参数，<b>没有一行是芯片在运行时自己决定的</b>。<b>真正留到运行时的只有两个决定，而且性质完全不同</b>：「这块放哪个 SM」<b>启动时发生一次</b>，代价只是一个分发器加一本资源账；「下一拍发哪个 warp」<b>每个时钟周期都要做一次</b>，<b>代价才是那一整套 —— 记分板、几十个 warp 槽、全部上下文常驻</b>。⭐ 这就是 3.2 和 3.3 是同一件事的接缝：上一节说 TPU 核里少掉的那批部件，<b>全部是为第二个决定服务的</b>，决定没了它们同时失去存在理由。⚠️ 底带那条：「运行时只剩两个决定」<b>是我从表里归纳的，不是原话</b>。</figcaption>
+<figcaption><b class="fno">图 P-31</b>　3.3 的标题问「哪几层是运行时才定的」，这张图专门来答。<b>关键是先把问题拆成两个</b>：① 这一组<b>怎么划出来的</b>；② 它<b>什么时候落到硬件上、谁挑它执行</b>。混着问会得出「GPU 反正都是运行时」，拆开看完全不是 —— <b>第①栏六行全绿</b>，要么是硬件写死的规则，要么是启动前主机给定的参数，<b>没有一行是芯片在运行时自己决定的</b>。<b>真正留到运行时的只有两个决定，而且性质完全不同</b>：「这块放哪个 SM」<b>启动时发生一次</b>，代价只是一个分发器加一本资源账；「下一拍发哪个 warp」<b>每个时钟周期都要做一次</b>，<b>代价才是那一整套 —— 记分板、几十个 warp 槽、全部上下文常驻</b>。⭐ 这就是 3.2 和 3.3 是同一件事的接缝：上一节说 TPU 核里少掉的那批部件，<b>全部是为第二个决定服务的</b>，决定没了它们同时失去存在理由。⚠️ 底带那条：「运行时只剩两个决定」<b>是我从表里归纳的，不是原话</b>。</figcaption>
 </figure>
 
   <p>知道了运行时只剩那两个决定，再看 TPU 那张表就有落点了。
@@ -6090,7 +6093,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="880" class="xs">这个区别有个非常实际的后果：<tspan font-weight="700" fill="#202124">GPU 的性能问题多半出在「占用率」上</tspan>（同时驻留的 warp 够不够多，能不能把延迟盖住）；<tspan font-weight="700" fill="#202124">TPU 的性能问题多半出在「形状」上</tspan>（矩阵维度对不对齐、切片切得均不均匀）。两边的调优直觉<tspan font-weight="700" fill="#d93025">不能互相搬运</tspan> —— 这也是为什么 §4 那个 </text>
 <text x="34" y="898" class="xs"><tspan class="mono" fill="#1967d2">head_dim=128</tspan> 打 TPU 却不打 GPU。</text>
 </svg>
-<figcaption><b>TPU 这边刻意按问题对齐，不按名词对齐。</b>名词对名词能排出一张漂亮的翻译表，按问题排才看得见<b>有两行 TPU 那一栏是空的</b>。空的那两行正是 GPU 的 block 和 warp 调度器。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 T-3</b>　<b>TPU 这边刻意按问题对齐，不按名词对齐。</b>名词对名词能排出一张漂亮的翻译表，按问题排才看得见<b>有两行 TPU 那一栏是空的</b>。空的那两行正是 GPU 的 block 和 warp 调度器。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note warn"><span class="t">这张表最容易被误用的方式：拿它当翻译词典</span>
@@ -6919,7 +6922,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="760" y="1114" class="lbl">粒度粗细各有代价。这就是为什么注意力里 <tspan class="mono" fill="#1967d2">head_dim=128</tspan> 这件事<tspan font-weight="700" fill="#d93025">打 TPU 却不打 GPU</tspan>：128 撞上 TPU 的 </text>
 <text x="760" y="1133" class="lbl">256 收缩边，只喂满一半；而 128 是 16 的整数倍，对 GPU 来说刚好切成 8 条指令，一点不浪费。</text>
 </svg>
-<figcaption><b>Tensor Core 一条指令吃多大一块。</b>GPU 的收缩维是 <code>16</code> —— 记住这个数，下一张图要用它。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 G-4</b>　<b>Tensor Core 一条指令吃多大一块。</b>GPU 的收缩维是 <code>16</code> —— 记住这个数，下一张图要用它。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>TPU 这边的收缩边是 <b>256</b>，正好是上面那个数的 16 倍。
@@ -8043,7 +8046,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="1114" y="928.0" class="xxs"><tspan font-weight="700" fill="#202124">这就是「粒度不是上限」的意思</tspan>：大于 256 的维度</text>
 <text x="1114" y="942.0" class="xxs">只是多走几趟，不产生浪费。</text>
 </svg>
-<figcaption><b>MXU 是 256×256，收缩维比 GPU 大 16 倍。</b>同一个 <code>head_dim = 128</code>：GPU 上是 16 的 8 倍，切八条指令不浪费；TPU 上只喂满 256 的一半，<b>而空着的那一半没有别的活能顶上来</b>。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 T-4</b>　<b>MXU 是 256×256，收缩维比 GPU 大 16 倍。</b>同一个 <code>head_dim = 128</code>：GPU 上是 16 的 8 倍，切八条指令不浪费；TPU 上只喂满 256 的一半，<b>而空着的那一半没有别的活能顶上来</b>。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 这一对图直接回答了第 2 节结尾那条反直觉</span>
@@ -8648,7 +8651,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="798" class="xs"><tspan font-weight="700" fill="#202124">纯几何</tspan>：上限 50% ＝ 128 ÷ 256，不需要任何内部信息。　<tspan font-weight="700" fill="#202124">查到的</tspan>：MXU 256×256 出自公开工程博客；wgmma／tcgen05 的合法 N 出自 PTX ISA。</text>
 <text x="38" y="818" class="xxs"><tspan font-weight="700" fill="#202124">实测</tspan>：21% / 32% / 46% 与图 T-4 卡片 C 同源，<tspan font-weight="700" fill="#d93025">是一个模型上的一组数，不是规律</tspan>。<tspan fill="#9aa0a6">「GPU 上收益接近于零」是从整除关系推的，没有配对实测。</tspan></text>
 </svg>
-<figcaption><b>同一个 head_dim ＝ 128，打 TPU 不打 GPU。</b>它在 <code>QKᵀ</code> 是收缩维、在 <code>PV</code> 是输出维，<b>各堵 MXU 的一条边</b>，上限 50% 是纯几何推的。<b>但别读成「GPU 不挑食」</b> —— 它挑的是 16 的倍数，只是那条边窄得多。</figcaption>
+<figcaption><b class="fno">图 P-36</b>　<b>同一个 head_dim ＝ 128，打 TPU 不打 GPU。</b>它在 <code>QKᵀ</code> 是收缩维、在 <code>PV</code> 是输出维，<b>各堵 MXU 的一条边</b>，上限 50% 是纯几何推的。<b>但别读成「GPU 不挑食」</b> —— 它挑的是 16 的倍数，只是那条边窄得多。</figcaption>
 </figure>
 
   <p>最后收个口。<b>课里一共出现过三个倍数，都对</b>
@@ -8725,7 +8728,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="784" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：K ＝ 16 与三条指令的 M×N 出自 PTX ISA；MXU 256×256、262,144 FLOP/周期/MXU 出自公开工程博客。</text>
 <text x="38" y="804" class="xxs"><tspan font-weight="700" fill="#d93025">口径要照搬、不要升级</tspan>：GPU 单核 1,024 乘加/周期在 3.7 的账表里标的是<tspan font-weight="700" fill="#202124">「官方 ＋ 推导」</tspan>，这里沿用同一个标注。<tspan fill="#9aa0a6">它是 128 倍那一行的分母，分母的成色决定整行的成色。</tspan></text>
 </svg>
-<figcaption><b>三个比值全都对，量的却是三件不同的事。</b>收缩维差 <b>16</b> 倍、单个单元每周期吞吐差 <b>128</b> 倍、一条指令的输出块最多差 <b>512</b> 倍。<b>本课反复说的那个 128 倍在第二行 —— 它出自 3.7 的账表，不是这一节算出来的。</b>（3.4 的标题一度写成「这里出那个 128 倍」，这张图就是那次自查的产物。）</figcaption>
+<figcaption><b class="fno">图 P-35</b>　<b>三个比值全都对，量的却是三件不同的事。</b>收缩维差 <b>16</b> 倍、单个单元每周期吞吐差 <b>128</b> 倍、一条指令的输出块最多差 <b>512</b> 倍。<b>本课反复说的那个 128 倍在第二行 —— 它出自 3.7 的账表，不是这一节算出来的。</b>（3.4 的标题一度写成「这里出那个 128 倍」，这张图就是那次自查的产物。）</figcaption>
 </figure>
 
   <details class="aside"><summary>旁白：这张图是本课自查出来的一个错，留着当例子（跟硬件无关，可跳过）</summary>
@@ -9370,7 +9373,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="724.0" y="508" class="xs">· 操作数与累加器都在 <tspan font-weight="700" fill="#202124">TMEM</tspan></text>
 <text x="724.0" y="529" class="xs">· 这条是粗快车道：吞吐最高，但要两个 SM 配合</text>
 </svg>
-<figcaption><b>块量化：多细的一撮数共享一个缩放因子。</b>Blackwell 把它做进了硬件，但两条通路<b>不在同一颗 die 上</b> —— 所以「B200 支持 FP4」这句话要看你说的是哪一条。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 G-5</b>　<b>块量化：多细的一撮数共享一个缩放因子。</b>Blackwell 把它做进了硬件，但两条通路<b>不在同一颗 die 上</b> —— 所以「B200 支持 FP4」这句话要看你说的是哪一条。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>TPU 往「更不规则的访存」走。</p>
@@ -9499,7 +9502,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="870" class="xs">代价算得清楚：Hunyuan3 那个尺寸下，这条 matmul 是 28.38 TFLOP/device，占一步的 <tspan font-weight="700" fill="#202124">0.62%</tspan>，约 24.6 ms；同样的事用 gather 只要约 1.0 ms —— <tspan font-weight="700" fill="#d93025">matmul 慢约 24 倍</tspan>。所以不要说「反正 MXU 闲着，用算力换带宽很划算」，算术直接否掉了：它不省时间，它花</text>
 <text x="34" y="888" class="xs">时间。成立的唯一理由是<tspan font-weight="700" fill="#202124">分母够大</tspan>，而真实动机（最可能是反向传播里 scatter-add 在分片下难做）<tspan fill="#9aa0a6">我没查实，不写成结论</tspan>。</text>
 </svg>
-<figcaption><b>TPU 这边的第二种核，它没有矩阵乘单元。</b>但要小心：<b>「专门查 embedding 表的核」这句话会让你看自己的 profile 时彻底看错</b> —— 生产任务里它可能一次表都没查过。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 T-5</b>　<b>TPU 这边的第二种核，它没有矩阵乘单元。</b>但要小心：<b>「专门查 embedding 表的核」这句话会让你看自己的 profile 时彻底看错</b> —— 生产任务里它可能一次表都没查过。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note warn"><span class="t">这两块「多出来的」有一个共同点</span>
@@ -9711,7 +9714,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="810" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：sm_120a 与 sm_100a 的分野出自 PTX ISA 的 Target ISA Notes；一批 131,072 个 token 与词表 129,280 行，是本课这次训练任务的实际配置。</text>
 <text x="38" y="830" class="xxs"><tspan font-weight="700" fill="#202124">不主张的</tspan>：两颗核之间连线的方向，<tspan font-weight="700" fill="#d93025">公开资料没有列出</tspan>，所以这张图不画那根箭头。<tspan fill="#9aa0a6">「块量化在数据通路里」是从「它是 MMA 指令的一个变体、缩放因子与操作数同住 TMEM」推的。</tspan></text>
 </svg>
-<figcaption><b>两块「多出来的」不在同一层。</b>块量化<b>就在 Tensor Core 的数据通路里</b>，是同一条 MMA 指令的一个变体；SparseCore 才是物理上独立的核。<b>下半张是这张图真正的增量</b>：两个坑其实是同一个形状 —— 能力都真的存在，但各自有一道<b>只写在细则里的门槛</b>（哪颗 die／取行重复度）。</figcaption>
+<figcaption><b class="fno">图 P-37</b>　<b>两块「多出来的」不在同一层。</b>块量化<b>就在 Tensor Core 的数据通路里</b>，是同一条 MMA 指令的一个变体；SparseCore 才是物理上独立的核。<b>下半张是这张图真正的增量</b>：两个坑其实是同一个形状 —— 能力都真的存在，但各自有一道<b>只写在细则里的门槛</b>（哪颗 die／取行重复度）。</figcaption>
 </figure>
 
   <details class="aside"><summary>旁白：这一节的自查 —— 对称是修辞，不是证据（方法论，可跳过）</summary>
@@ -9832,7 +9835,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="864" class="xs"><tspan font-weight="700" fill="#202124">当场算的</tspan>：131,072² × 2 B ＝ 32 GiB；四趟 ＝ 128 GiB；Q/K/V/O ＝ 4 × 131,072 × 128 × 2 B ＝ 128 MiB。式子都写在图上，可以自己复核。</text>
 <text x="38" y="883" class="xxs"><tspan font-weight="700" fill="#202124">公开结论</tspan>：前向 FLOPs 不变、显存 O(n²)→O(n) —— FlashAttention 原始结论。<tspan fill="#9aa0a6">HBM 读写这里写成 O(n²/块大小) 是</tspan><tspan font-weight="700" fill="#202124">简化说法</tspan>，论文原式是 O(N²d²M⁻¹)（M 为片上容量）。<tspan fill="#9aa0a6">「短序列可能不划算」也是公开说法，本图不给具体门槛。</tspan></text>
 </svg>
-<figcaption><b>128 GiB 全花在路上，一次乘法都没做。</b>序列 128K 时注意力矩阵 S ＝ <b>32 GiB</b>，朴素写法要写 S／读 S／写 P／读 P 四趟；而 Q/K/V/O 加起来只有 128 MiB。<b>FlashAttention 的全部内容就是把这一项删掉</b> —— <b>前向的 FLOPs 一个都没省</b>（反向要重算，7 次对 6 次）。图上那四步把 online softmax 拆开了：新块把最大值抬高之后，<b>旧结果先乘 exp(旧 m − 新 m) 缩到同一把尺子上再相加</b> —— 等价性全挂在这一步。右边那张黄卡如实标了代价：K/V 要按 Q 的分块重复读，不是零。</figcaption>
+<figcaption><b class="fno">图 P-38</b>　<b>128 GiB 全花在路上，一次乘法都没做。</b>序列 128K 时注意力矩阵 S ＝ <b>32 GiB</b>，朴素写法要写 S／读 S／写 P／读 P 四趟；而 Q/K/V/O 加起来只有 128 MiB。<b>FlashAttention 的全部内容就是把这一项删掉</b> —— <b>前向的 FLOPs 一个都没省</b>（反向要重算，7 次对 6 次）。图上那四步把 online softmax 拆开了：新块把最大值抬高之后，<b>旧结果先乘 exp(旧 m − 新 m) 缩到同一把尺子上再相加</b> —— 等价性全挂在这一步。右边那张黄卡如实标了代价：K/V 要按 Q 的分块重复读，不是零。</figcaption>
 </figure>
 
   <div class="note danger"><span class="t">把这张图的三个数记住，后面全靠它们</span>
@@ -10074,7 +10077,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="951.3333333333334" y="1064" class="xs">阵这条路上，「让硬件猜」的收益越来越小，不如把控制权交回给编译器和 kernel </text>
 <text x="951.3333333333334" y="1080" class="xs">作者。</text>
 </svg>
-<figcaption><b>B200 侧五站，中间两站是缓存。</b>命中不命中要跑起来才知道 —— 这就是 2.1 主路那 4 个红框的物理来源。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 G-6</b>　<b>B200 侧五站，中间两站是缓存。</b>命中不命中要跑起来才知道 —— 这就是 2.1 主路那 4 个红框的物理来源。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>TPU 侧 ——&nbsp;注意中间那一站的名字，<b>一字之差，性质完全不同</b>：</p>
@@ -10123,7 +10126,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="314" y="426" class="xxs">编译失败</text>
 <rect x="580" y="178" width="240" height="262" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="2" stroke-dasharray="5,4"/>
 <text x="594" y="204" class="box" fill="#9aa0a6">③ 向量寄存器</text>
-<text x="806" y="204" class="xxs" text-anchor="end">MXU 的输入端</text>
+<text x="806" y="204" class="xxs" text-anchor="end">VPU 的输入端</text>
 <rect x="592" y="216" width="216" height="46" rx="6" fill="#fff" stroke="#9aa0a6" stroke-width="1.2" stroke-dasharray="5,4"/>
 <text x="602" y="244" class="numb" fill="#9aa0a6">查不到</text>
 <text x="798" y="244" class="xxs" text-anchor="end">v7 的深度与个数</text>
@@ -10134,6 +10137,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="594" y="384" class="lbl" fill="#9aa0a6">为什么画成虚线</text>
 <text x="594" y="400" class="xxs"><tspan fill="#9aa0a6">v2/v3 的论文给的是每 sublane 32 深；v7 </tspan></text>
 <text x="594" y="413" class="xxs"><tspan fill="#9aa0a6">这一层官方没有公开，本文不拿旧代的数字顶替。</tspan></text>
+<text x="594" y="426" class="xxs"><tspan font-weight="700" fill="#d93025">另外：矩阵操作数是从 VMEM 直接进 MXU、还</tspan></text>
+<text x="594" y="439" class="xxs"><tspan font-weight="700" fill="#d93025">是也要过这一层，公开资料同样没有明写 —— 本</tspan></text>
+<text x="594" y="452" class="xxs"><tspan font-weight="700" fill="#d93025">文不下结论。</tspan></text>
 <rect x="860" y="178" width="240" height="262" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="2"/>
 <text x="874" y="204" class="box" fill="#1e8e3e">④ MXU 阵列</text>
 <text x="1086" y="204" class="xxs" text-anchor="end">256 × 256，权重驻留</text>
@@ -10202,7 +10208,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="806" class="xs"><tspan font-weight="700" fill="#202124">这条通路上没有任何一步是硬件在运行时决定的。</tspan>搬什么、搬多少、什么时候搬、放在暂存的哪个位置 —— 全部在编译期写进指令流里。</text>
 <text x="34" y="836" class="xs">所以 TPU 上的性能问题几乎不长成「缓存没命中」的样子，而是长成<tspan font-weight="700" fill="#d93025">「形状不对，编译器排不出好班」</tspan>的样子。这也是为什么 §7 那张图必须存在：把决定权全交给编译期，就得看看编译期到底能排出什么。</text>
 </svg>
-<figcaption><b>v7 侧这条路（到累加器为止），中间那站不是缓存，是暂存。</b>每一站只问一个问题：<b>这一步是谁决定的</b>。从头到尾没有一站的答案是「硬件自己看着办」—— 这张图是 2.1 里「TPU 侧 0 个红框」的逐站展开。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 T-6</b>　<b>v7 侧这条路（到累加器为止），中间那站不是缓存，是暂存。</b>每一站只问一个问题：<b>这一步是谁决定的</b>。从头到尾没有一站的答案是「硬件自己看着办」—— 这张图是 2.1 里「TPU 侧 0 个红框」的逐站展开。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>现在把两边并起来，让 FlashAttention 同时在两条路上往前推：
@@ -10256,8 +10262,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <path d="M49,114 h-5 a4,4 0 0 0 -4,4 v58 a4,4 0 0 0 4,4 h5 z" fill="#1a73e8"/>
 <rect x="45" y="114" width="4" height="66" fill="#1a73e8"/>
 <text x="60" y="139" class="box" fill="#1a73e8">HBM3e</text>
-<text x="584" y="139" class="xxs" fill="#5f6368" text-anchor="end">192 GB · 8.0 TB/s</text>
-<text x="60" y="156" class="xs">官方数字。<tspan font-weight="700" fill="#202124">整颗芯片共用。</tspan></text>
+<text x="584" y="139" class="xxs" fill="#5f6368" text-anchor="end">192 GiB · 8.0 TB/s</text>
+<text x="60" y="156" class="xs">官方数字。<tspan font-weight="700" fill="#202124">整颗芯片共用。</tspan><tspan fill="#9aa0a6">（厂商表上写 192 GB，物理上是二进制：一颗 stack ＝ 8 层 × 3 GiB ＝ </tspan></text>
+<text x="60" y="172" class="xs"><tspan fill="#9aa0a6">24 GiB，8 颗 ＝ 192 GiB ＝ 206 GB —— 两边同口径。）</tspan></text>
 <rect x="311.0" y="180" width="18" height="19" rx="3" fill="#1a73e8" opacity=".42"/>
 <path d="M306.0,198 L320.0,208 L334.0,198 z" stroke="#1a73e8" stroke-width="0" fill="#1a73e8"/>
 <text x="340.0" y="196" class="xxs" fill="#5f6368">8.0 TB/s</text>
@@ -10380,7 +10387,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="805" y="482" width="4" height="76" fill="#1e8e3e"/>
 <text x="820" y="507" class="box" fill="#1e8e3e">向量寄存器</text>
 <text x="1344" y="507" class="xxs" fill="#5f6368" text-anchor="end">8 × 128 的二维块 · 个数未公开</text>
-<text x="820" y="524" class="xs"><tspan font-weight="700" fill="#202124">MXU 那条支线从来不经过它</tspan> —— 权重与数据直接推进阵列。<tspan fill="#9aa0a6">这点 GPU 到 Blackwell 才追上。</tspan></text>
+<text x="820" y="524" class="xs"><tspan font-weight="700" fill="#d93025">⚠️ 矩阵操作数是从 VMEM 直接进 MXU，还是要过这一层，公开资料没有明写</tspan> —— <tspan fill="#9aa0a6">本课不下结论。（图 </tspan></text>
+<text x="820" y="539" class="xs"><tspan fill="#9aa0a6">T-6 把它画成 MXU 的输入端；那也是一种读法。）</tspan></text>
 <rect x="1073.0" y="558" width="14" height="19" rx="3" fill="#1e8e3e" opacity=".42"/>
 <path d="M1068.0,576 L1080.0,586 L1092.0,576 z" stroke="#1e8e3e" stroke-width="0" fill="#1e8e3e"/>
 <rect x="800" y="588" width="560" height="106" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
@@ -10731,7 +10739,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="58" y="1284" class="xs"><tspan font-weight="700" fill="#202124">沿用图 G-6 / T-6 的标注</tspan>，含那里已写明的成色：L2 带宽是第三方实测、TPU 片上带宽与向量寄存器个数<tspan font-weight="700" fill="#202124">官方未公开</tspan>。</text>
 <text x="58" y="1303" class="xxs"><tspan font-weight="700" fill="#202124">本图当场算的</tspan>：64 MiB ÷ 227 KiB ＝ 288.7 ≈ 289 倍。<tspan fill="#9aa0a6">格阵 17×17 恰好 289 格，一格不多一格不少。</tspan></text>
 </svg>
-<figcaption><b>这一节的主图：同一个 FlashAttention，两边一站一站并排走完。</b>横着读，每一行是同一站。<b>六行里只有两行是结构性的</b> —— 第 ② 行（GPU 有一整层硬件缓存，TPU 没有）和第 ⑥ 行（切换由谁安排）。中间那条黄带顺手统一了本课此前不一致的「TPU 到底几站」：<b>两处数的是两条不同的路，所以不该报总数。</b></figcaption>
+<figcaption><b class="fno">图 P-39</b>　<b>这一节的主图：同一个 FlashAttention，两边一站一站并排走完。</b>横着读，每一行是同一站。<b>六行里只有两行是结构性的</b> —— 第 ② 行（GPU 有一整层硬件缓存，TPU 没有）和第 ⑥ 行（切换由谁安排）。中间那条黄带顺手统一了本课此前不一致的「TPU 到底几站」：<b>两处数的是两条不同的路，所以不该报总数。</b></figcaption>
 </figure>
 
   <div class="note ok"><span class="t">这张表的读法：逐行问「这一步是谁决定的」</span>
@@ -10835,7 +10843,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="914" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：<tspan class="mono" fill="#1967d2">cp.async</tspan> 的 <tspan class="mono" fill="#1967d2">.ca</tspan> ／ <tspan class="mono" fill="#1967d2">.cg</tspan> 缓存行为出自 PTX ISA；<tspan class="mono" fill="#1967d2">BlockSpec</tspan> ／ <tspan class="mono" fill="#1967d2">index_map</tspan> ／ grid 出自 Pallas 文档；Splash Attention 的块级掩码出自其公开实现。</text>
 <text x="38" y="934" class="xxs"><tspan font-weight="700" fill="#202124">沿用本课已有标注</tspan>：共享内存 ≤ 227 KiB / 线程块出自图 G-6。<tspan fill="#9aa0a6">「FlashAttention 把复用显式放进共享内存」是公开实现的通行做法，不是某一份文档里的原话。</tspan></text>
 </svg>
-<figcaption><b>同一个算法，两种性质的工作。</b>数学、FLOPs、结果三样完全相同 —— 差的只有<b>「谁来安排搬运」</b>。<br>GPU 侧 <b>6 条要 kernel 作者亲手写</b>：块多大、发 <code>cp.async</code>／TMA、双缓冲、warp 分工、对齐、要不要占 L1。<br>TPU 侧只有 <b>2 条声明</b>：<code>BlockSpec</code> 与 grid。<b>右栏比左栏短，这件事本身就是结论。</b>红带按住了最容易讲过头的那句：<b>L2 绕不开，绕开的是对缓存的依赖。</b></figcaption>
+<figcaption><b class="fno">图 P-40</b>　<b>同一个算法，两种性质的工作。</b>数学、FLOPs、结果三样完全相同 —— 差的只有<b>「谁来安排搬运」</b>。<br>GPU 侧 <b>6 条要 kernel 作者亲手写</b>：块多大、发 <code>cp.async</code>／TMA、双缓冲、warp 分工、对齐、要不要占 L1。<br>TPU 侧只有 <b>2 条声明</b>：<code>BlockSpec</code> 与 grid。<b>右栏比左栏短，这件事本身就是结论。</b>红带按住了最容易讲过头的那句：<b>L2 绕不开，绕开的是对缓存的依赖。</b></figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 同一个算法，在两边是两种性质的工程工作</span>
@@ -11591,7 +11599,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="40" y="918.0" class="xs">总量接近、峰值接近，说明两家在同一代工艺上做出的<tspan font-weight="700" fill="#202124">算力密度是可比的</tspan>。真正的分歧在前面几张图里：<tspan font-weight="700" fill="#202124">谁来知道数在哪</tspan>（G-6）、<tspan font-weight="700" fill="#202124">谁来盖住延迟</tspan>（G-7）、<tspan font-weight="700" fill="#202124">切多细</tspan>（本图）。这三个选择互相咬合 —— <tspan font-weight="700" fill="#d93025">换掉任何一个，另外两个都得跟着换</tspan>：切得细就必须有大寄存器堆去养替</text>
 <text x="40" y="933.0" class="xs">补，养了替补就不需要编译期排班，不排班就只能靠 cache 兜住不确定的延迟。反过来那条链同样成立。</text>
 </svg>
-<figcaption><b>总量几乎一样，切法完全不同。</b>两个方块面积按每周期乘加次数等比，内部按真实单元数切。<b>两个比值别混</b>：份数差 148 倍，单个单元多大差 <b>128</b> 倍 —— 3.4 说的是后者。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 G-8</b>　<b>总量几乎一样，切法完全不同。</b>两个方块面积按每周期乘加次数等比，内部按真实单元数切。<b>两个比值别混</b>：份数差 148 倍，单个单元多大差 <b>128</b> 倍 —— 3.4 说的是后者。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note warn"><span class="t">⭐ 图上两个比值必须分开看，否则会算出第三个数</span>
@@ -12122,7 +12130,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="1002" class="xs"><tspan font-weight="700" fill="#d93025">片内部。</tspan></text>
 <text x="34" y="1030" class="xs">这张图讲的是另一半：TPU 一颗芯片里只有两个核要协调，但<tspan font-weight="700" fill="#202124">不换协议能一路连到 9,216 颗</tspan>，而 GPU 在 72 颗上就得换。<tspan font-weight="700" fill="#d93025">TPU 的协调主要发生在芯片之间。</tspan>　<tspan font-weight="700" fill="#202124">两边不是「谁更强」，是把同一份复杂度放在了不同的地方 —— 这也是这整份材料从头到尾在说的同一件事。</tspan></text>
 </svg>
-<figcaption><b>3D 环面一路铺到 9,216 颗，全程同一套 ICI。</b>9,216 ÷ 72 ＝ <b>128</b> —— 这个数只衡量拓扑能延展多远，<b>不衡量谁跑得快</b>（图右上角那段专门按住这个误读，直接指过去）。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 T-8</b>　<b>3D 环面一路铺到 9,216 颗，全程同一套 ICI。</b>9,216 ÷ 72 ＝ <b>128</b> —— 这个数只衡量拓扑能延展多远，<b>不衡量谁跑得快</b>（图右上角那段专门按住这个误读，直接指过去）。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note ok"><span class="t">这张图最容易引出的一个反问，以及一个必须钉住的单位</span>
@@ -12207,7 +12215,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="817" class="xs">展开）。</text>
 <text x="38" y="840" class="xs">也就是说，对这一档模型，<tspan font-weight="700" fill="#d93025">「跨域断崖」这件事在推理时根本不必发生</tspan>。<tspan font-weight="700" fill="#202124">但这个结论踩在两个前提上，两个都得说出来</tspan>：一是<tspan font-weight="700" fill="#202124">按 64 不是 72</tspan>；二是 <tspan font-weight="700" fill="#d93025">11.9 TB 本身也还是物理量</tspan> —— 实际可用还要扣激活、优化器状态与框架开销。<tspan font-weight="700" fill="#202124">左边那格批评的病，这句话同样要防。</tspan></text>
 </svg>
-<figcaption><b>新的边界不在「一台机器」上，在 NVL72 域上。</b>下半张那两张红卡要留下的不是数字，<b>是两个提问习惯</b> —— 数字明年就变了，提问习惯不会。</figcaption>
+<figcaption><b class="fno">图 P-4</b>　<b>新的边界不在「一台机器」上，在 NVL72 域上。</b>下半张那两张红卡要留下的不是数字，<b>是两个提问习惯</b> —— 数字明年就变了，提问习惯不会。</figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 这两张红卡才是本小节的教学价值，不是那个 72</span>
@@ -12264,7 +12272,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="570" class="xs"><tspan font-weight="700" fill="#202124">RDMA 那一半是公开语义</tspan>，没有问题。<tspan font-weight="700" fill="#202124">ICI 寻址这一半我没有找到可以公开引用的出处</tspan> —— 本课的规矩是查不到就明写查不到，所以它按<tspan font-weight="700" fill="#202124">「未标注来源」</tspan>对待：可以讲，但不要当成可引证的事实往外传。</text>
 <text x="38" y="593" class="xs">另有一处差别顺带记下：<tspan font-weight="700" fill="#202124">TPU 这边没有面向用户的独立通信库</tspan> —— 你不会 import 一个通信库，也不会调它的 API，<tspan font-weight="700" fill="#202124">通信是编译器生成的</tspan>。这一条第 5 节会重新捡起来。</text>
 </svg>
-<figcaption>两栏回答的是<b>同一个问题</b>：发送方手里那张单子上写着什么。一边写<b>对方的内存地址</b>（但那块内存必须先被对方注册过），一边写<b>哪颗芯片＋哪个段＋偏移</b>（段的物理基址握在接收方手里）—— 而<b>落到底下那句话是逐字相同的</b>。⚠️ 左右证据等级不同：RDMA 是公开语义，ICI 这半<b>未标注来源</b>。</figcaption>
+<figcaption><b class="fno">图 P-25</b>　两栏回答的是<b>同一个问题</b>：发送方手里那张单子上写着什么。一边写<b>对方的内存地址</b>（但那块内存必须先被对方注册过），一边写<b>哪颗芯片＋哪个段＋偏移</b>（段的物理基址握在接收方手里）—— 而<b>落到底下那句话是逐字相同的</b>。⚠️ 左右证据等级不同：RDMA 是公开语义，ICI 这半<b>未标注来源</b>。</figcaption>
 </figure>
 
   <p>到这儿两边的形状齐了，而且可以用一句话对上：
@@ -12371,7 +12379,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="838" class="xs"><tspan font-weight="700" fill="#202124">前三个都能拆成「沿着某个环走一圈」，所以在 torus 上也很舒服。</tspan>只有 all-to-all 天生要求任意两点直接说话 —— <tspan font-weight="700" fill="#d93025">它是唯一一个会因为拓扑不同而表现出数量级差异的原语。</tspan></text>
 <text x="38" y="861" class="xs">这就把两件事接上了：<tspan font-weight="700" fill="#202124">为什么 MoE 是 TPU 上最难的那类负载</tspan>，以及<tspan font-weight="700" fill="#202124">为什么分组限制路由不是省算力的技巧，是省拓扑的技巧</tspan> —— 它限制的正是「一个 token 最多能跑到几台机器上去」。</text>
 </svg>
-<figcaption><b>四个原语，看小图就够了。</b>前三个是「5 个点 5 条边」，all-to-all 是「5 个点 <b>10 条边</b>」——<b>边数从 5 跳到 10，比任何一句「它对拓扑敏感」都管用</b>。</figcaption>
+<figcaption><b class="fno">图 P-5</b>　<b>四个原语，看小图就够了。</b>前三个是「5 个点 5 条边」，all-to-all 是「5 个点 <b>10 条边</b>」——<b>边数从 5 跳到 10，比任何一句「它对拓扑敏感」都管用</b>。</figcaption>
 </figure>
 
   <div class="note warn"><span class="t">一条可以直接拿回去改配置的推论</span>
@@ -12490,7 +12498,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="898" class="xs"><tspan fill="#9aa0a6">｜　源文档对 16 卡那次下降写的是「RDMA 竞争加剧」、对 32 卡写的是「碎片化」。这两条其实不矛盾：跨节点确实走 RDMA（部署要点里 NCCL_NET=gIB，8 节点那次的失败根因就是 ibv_modify_qp），两个因素同时在，只是本图分不开。　｜　主图归一化的理由：</tspan></text>
 <text x="38" y="917" class="xs"><tspan fill="#9aa0a6">Copy 5,600、Dispatch 只有 700，画在同一根绝对值轴上，后三条会被压成贴地直线，而「掉了多少」恰恰是全部论点。</tspan></text>
 </svg>
-<figcaption><b>我们自己跑的数：</b>同一个 NVL72 域从 8 卡到 32 卡，<b>Dispatch 掉 9%、Combine 掉 19%</b>。最下面那条橙带同样重要 —— 它写的是<b>我们没能分清什么，以及为什么分不清</b>。</figcaption>
+<figcaption><b class="fno">图 P-6</b>　<b>我们自己跑的数：</b>同一个 NVL72 域从 8 卡到 32 卡，<b>Dispatch 掉 9%、Combine 掉 19%</b>。最下面那条橙带同样重要 —— 它写的是<b>我们没能分清什么，以及为什么分不清</b>。</figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 这张图最值钱的不是那两条下降曲线，是最下面那条橙带</span>
@@ -12875,7 +12883,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="951.3333333333334" y="844" class="xs">边的编译器长什么样、kernel 怎么写、调优时该盯哪个指标 —— GPU 盯 </text>
 <text x="951.3333333333334" y="859" class="xs">occupancy，TPU 盯的是编译器排出来的时间线有没有空隙。</text>
 </svg>
-<figcaption><b>GPU 怎么藏延迟：一个 warp 卡住就换下一个。</b>藏得住的前提是<b>同时驻留的 warp 够多</b> —— 这就是「占用率」这个词的全部含义。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 G-7</b>　<b>GPU 怎么藏延迟：一个 warp 卡住就换下一个。</b>藏得住的前提是<b>同时驻留的 warp 够多</b> —— 这就是「占用率」这个词的全部含义。　<span class="msfrom">—— 出自《<a href="gpu-microscope.html">GPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <p>TPU 的办法是<b>提前把班排好</b> ——</p>
@@ -13008,7 +13016,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="34" y="792" class="xs">§2 说 TPU「省下了调度器、寄存器堆、记分板那片硅」。<tspan font-weight="700" fill="#202124">这张图是那句话的另一半：省下来的东西并没有消失，它被搬到了编译期。</tspan>调度这件事总得有人做 —— 区别只在于是硬件每次运行时重做一遍，还是编译器一次做完。</text>
 <text x="34" y="822" class="xs">所以「TPU 更简单」是个误解。它<tspan font-weight="700" fill="#d93025">不是把复杂度删掉了，是把复杂度换了个地方放</tspan> —— 从硅上换到了编译器里，也从运行时换到了你写模型配置的那一刻。</text>
 </svg>
-<figcaption><b>TPU 怎么藏延迟：编译器提前把班排好。</b>灰格子是真的空着，而且<b>不会有任何东西自动顶上来</b>。上面那排 bundle 构成是<b>公开论文里 v2/v3 的</b>，下面的甘特图是<b>示意，不是实测 trace</b>。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
+<figcaption><b class="fno">图 T-7</b>　<b>TPU 怎么藏延迟：编译器提前把班排好。</b>灰格子是真的空着，而且<b>不会有任何东西自动顶上来</b>。上面那排 bundle 构成是<b>公开论文里 v2/v3 的</b>，下面的甘特图是<b>示意，不是实测 trace</b>。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
 
   <div class="note info"><span class="t">这一对图为什么放在这一节的开头，而不是第 3 节</span>
@@ -13100,7 +13108,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="918" class="xs"><tspan font-weight="700" fill="#202124">CUDA 把控制权交给你，XLA 把控制权交给编译器。</tspan>所以两边的痛苦完全不是同一种：一边是<tspan font-weight="700" fill="#d93025">「我写不出足够快的 kernel」</tspan>，一边是<tspan font-weight="700" fill="#d93025">「编译器不听话，而我插不上手」</tspan>。</text>
 <text x="38" y="941" class="xs">注意这里<tspan font-weight="700" fill="#202124">没有哪一种痛苦更轻</tspan> —— 它们只是落在了不同的人身上：前者要求你队里有人能写 kernel，后者要求你队里有人读得懂编译产物。</text>
 </svg>
-<figcaption><b>同一件事，两种写法。</b>左边 CUDA 里有 <code>threadIdx</code>，右边 JAX <b>一个下标都没有</b> —— <b>差别写在代码里，不在形容词里</b>。下半两栏<b>刻意一样长</b>：这是取舍，不是优劣。</figcaption>
+<figcaption><b class="fno">图 P-1</b>　<b>同一件事，两种写法。</b>左边 CUDA 里有 <code>threadIdx</code>，右边 JAX <b>一个下标都没有</b> —— <b>差别写在代码里，不在形容词里</b>。下半两栏<b>刻意一样长</b>：这是取舍，不是优劣。</figcaption>
 </figure>
 
   <div class="note warn"><span class="t">一条当场能用的判据 —— 图上没有</span>
@@ -13189,7 +13197,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="882" class="xs">把这张图和上一张并排看：<tspan font-weight="700" fill="#202124">「谁在安排」这个问题，在框架层原样复现了一遍。</tspan>硬件上是「谁决定数据什么时候搬」，框架上就是「谁决定通信插在哪」——<tspan font-weight="700" fill="#202124">同一个选择，换了一层皮。</tspan></text>
 <text x="38" y="905" class="xs">所以选框架的时候真正要问的不是「哪个更快」，而是<tspan font-weight="700" fill="#d93025">「我这个队，是更有人能想对每一处通信，还是更有人读得懂编译产物」</tspan>。</text>
 </svg>
-<figcaption><b>追一个 all-reduce，看它是在哪一步、由谁放进去的。</b>左边它出现在<b>你写的第二步</b>，右边你从头到尾没写过它、它出现在<b>编译产物里</b>。<b>「谁在安排」这个问题，在框架层原样复现了一遍。</b></figcaption>
+<figcaption><b class="fno">图 P-2</b>　<b>追一个 all-reduce，看它是在哪一步、由谁放进去的。</b>左边它出现在<b>你写的第二步</b>，右边你从头到尾没写过它、它出现在<b>编译产物里</b>。<b>「谁在安排」这个问题，在框架层原样复现了一遍。</b></figcaption>
 </figure>
 
   <h3>5.4　后果二：手写 kernel —— 顺便给编译器钉一个边界</h3>
@@ -13263,7 +13271,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="918" class="xs"><tspan font-weight="700" fill="#202124">编排是编译器的活，算法永远是人的活。</tspan>这条线两边都存在，位置也差不多 —— 所以「TPU 要手写 kernel」不是 TPU 的缺点，<tspan font-weight="700" fill="#d93025">GPU 上同样要写，只是写的人多、库更厚</tspan>。</text>
 <text x="38" y="941" class="xs">真正的差别在<tspan font-weight="700" fill="#202124">越过边界之后有多少现成的东西可抄</tspan>。这一条 GPU 侧目前确实占优，但它是<tspan font-weight="700" fill="#202124">生态差距，不是架构差距</tspan> —— 两者会随时间收敛，别把它们混成一件事讲。</text>
 </svg>
-<figcaption><b>编译器的边界在哪。</b>左边四样是「编排」，它有资格自己决定；右边是「换算法」，越过这条线它就帮不上忙。<b>Flash Attention 在右边，而且两边都得手写。</b></figcaption>
+<figcaption><b class="fno">图 P-3</b>　<b>编译器的边界在哪。</b>左边四样是「编排」，它有资格自己决定；右边是「换算法」，越过这条线它就帮不上忙。<b>Flash Attention 在右边，而且两边都得手写。</b></figcaption>
 </figure>
 
   <div class="note q"><span class="t">这一条我们有第一手经验</span>
@@ -13398,7 +13406,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="913" class="xs"><tspan font-weight="700" fill="#202124">预付编译，要么长期付吞吐。</tspan></text>
 <text x="38" y="936" class="xs"><tspan font-weight="700" fill="#d93025">⚠️ 还有一笔这里没算：</tspan>「补齐到桶」意味着<tspan font-weight="700" fill="#202124">补上去的那部分 token 是白算的</tspan>。<tspan font-weight="700" fill="#202124">这一笔我们没量，先记在账上</tspan> —— 留白会被读成「不存在」，明写「没量」不会。</text>
 </svg>
-<figcaption><b>5.1 问「谁在安排」，到这一节那个被安排的东西有了名字：形状。</b>训练里形状是你定的，<b>推理里是用户定的，编译期够不到</b> —— 同一个决定，到这儿才开始收费。</figcaption>
+<figcaption><b class="fno">图 P-7</b>　<b>5.1 问「谁在安排」，到这一节那个被安排的东西有了名字：形状。</b>训练里形状是你定的，<b>推理里是用户定的，编译期够不到</b> —— 同一个决定，到这儿才开始收费。</figcaption>
 </figure>
 
   <div class="note info"><span class="t">这张图真正要交出去的东西，不是那几个数</span>
@@ -13530,7 +13538,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="882" class="xs"><tspan font-weight="700" fill="#202124">⛔ 而这张账单只有 TPU 这一侧。</tspan><tspan fill="#9aa0a6">GPU 侧同样有编译、有缓存、有调参表，</tspan><tspan font-weight="700" fill="#202124">我们一笔都没算过</tspan>。所以它能支撑的是「TPU 侧的移植账单长这样」，<tspan font-weight="700" fill="#202124">不是「TPU 侧比 GPU 侧贵」</tspan> —— 后者要两边同口径各算一遍。</text>
 <text x="1380" y="956" class="xxs" fill="#9aa0a6" text-anchor="end">数字出处：tpu/vllm-torchtpu/ 的 QUICKSTART.md（时间、缓存）与 README.md（行数）</text>
 </svg>
-<figcaption><b>5.4 说编译器有一条边界，边界那一侧只能人来做 —— 这张是那句话的账单。</b><b>盯住每一笔的复发周期，不是金额</b>：金额明年都会变，周期不会。</figcaption>
+<figcaption><b class="fno">图 P-8</b>　<b>5.4 说编译器有一条边界，边界那一侧只能人来做 —— 这张是那句话的账单。</b><b>盯住每一笔的复发周期，不是金额</b>：金额明年都会变，周期不会。</figcaption>
 </figure>
 
 
@@ -13680,7 +13688,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="926" class="xs"><tspan font-weight="700" fill="#202124">它真正省掉的是这个循环：排队 → 抢到 64 张卡 → 跑起来发现装不下 → 退出 → 重排队。</tspan><tspan font-weight="700" fill="#d93025">那是小时级的，而且占着别人的容量。</tspan><tspan font-weight="700" fill="#202124">一次探针约两分钟、一台普通 CPU 机器 —— 每换一次配置就跑一遍，没有理由省。</tspan></text>
 <text x="1380" y="954" class="xxs" fill="#9aa0a6" text-anchor="end">实测：Hunyuan3-295B-A21B（80 层）· 目标 64 芯片 · 一台普通 CPU 机器 · 单个探针约 2 分钟；含存产物上传的全流程约 5 分钟</text>
 </svg>
-<figcaption><b>5.5 整节在算代价，这张是账单的另一半：不用占卡就能回答「装不装得下」。</b>三格缺一格论点就塌，而<b>底下那条黄带是这张图的落点</b>。</figcaption>
+<figcaption><b class="fno">图 P-9</b>　<b>5.5 整节在算代价，这张是账单的另一半：不用占卡就能回答「装不装得下」。</b>三格缺一格论点就塌，而<b>底下那条黄带是这张图的落点</b>。</figcaption>
 </figure>
 
   <div class="note warn"><span class="t">⚠️「提前编译」这个名字会把人带偏</span>
@@ -13842,7 +13850,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="760" class="xs">的不是那条。</text>
 <text x="1380" y="810" class="xxs" fill="#9aa0a6" text-anchor="end">实测：与 P-9 同一批 · 29 组配置探针 / 一台机器 3 并发 · 丙格那五档消融在另一台机器上独立复跑过，数字逐位相同</text>
 </svg>
-<figcaption><b>既然算得准又免费，就别只用它体检。</b>三格的性质刻意不同：边界、死旋钮、承重墙。<b>中间那格最重要</b> —— 另外两格明年换个模型就过期，它不会。</figcaption>
+<figcaption><b class="fno">图 P-10</b>　<b>既然算得准又免费，就别只用它体检。</b>三格的性质刻意不同：边界、死旋钮、承重墙。<b>中间那格最重要</b> —— 另外两格明年换个模型就过期，它不会。</figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 「改了没反应」是一个假阴性，不是一个阴性</span>
@@ -13917,7 +13925,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="565" class="xs"><tspan fill="#9aa0a6">反复出现的同一种错。</tspan></text>
 <text x="1380" y="600" class="xxs" fill="#9aa0a6" text-anchor="end">实测：Hunyuan3-295B-A21B · 64 芯片 4x4x4 · per-chip = 日志 per-device × 2 · MFU = per-chip ÷ 2307</text>
 </svg>
-<figcaption><b>上一张停在「扫了 29 组配置」，那是过程。这张回答「所以呢」。</b>收益和边界摆在同一屏 —— 分开摆，两边都会被听成假话。</figcaption>
+<figcaption><b class="fno">图 P-11</b>　<b>上一张停在「扫了 29 组配置」，那是过程。这张回答「所以呢」。</b>收益和边界摆在同一屏 —— 分开摆，两边都会被听成假话。</figcaption>
 </figure>
 
     </div></details>
@@ -14020,7 +14028,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="816" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：直线型 graph 重复 launch 每节点约省 60 ns；首次 launch 需上传 work description，这笔成本只付一次、图更新时补付一部分 —— 出自 NVIDIA 开发者博客。</text>
 <text x="38" y="836" class="xxs"><tspan font-weight="700" fill="#202124">量级不是规格</tspan>：单次 launch 5–10 微秒会随驱动、CPU、参数个数变。　<tspan font-weight="700" fill="#d93025">我推的</tspan>：「碎 kernel 收益大、大 GEMM 白开」是从机制推的结论。</text>
 </svg>
-<figcaption>反驳的第一步是<b>把「为什么快」讲准</b>，因为最常见的解释是错的 ——<b>不是「没有分支了所以快」</b>。省掉的是 <b>CPU 一条一条发 kernel 的开销</b>：单次 launch 主机端<b>大致 5–10 微秒</b>（量级不是规格），MoE 一个 step <b>上万个 kernel</b>，<b>光是发就是几十毫秒</b>；开 graph 之后这一整笔变成一次 replay。⭐ 图上两条时间轴用的是<b>同一把尺子</b>：<b>两边的蓝格子一样多、一样宽</b> —— <b>kernel 该跑多久还是跑多久，右边省下来的全部是格子之间那段空等</b>。另有一小块在 GPU 侧：直线型 graph 重复 launch 每节点约省 60 ns（NVIDIA 给的数），代价是<b>首次 launch 仍要上传整张图的 work description</b>。⚠️ 由此推出一条能当场去测的结论：<b>kernel 越碎收益越大，一个大 GEMM 开 graph 几乎白开</b>（<b>这条是推的</b>）。</figcaption>
+<figcaption><b class="fno">图 P-32</b>　反驳的第一步是<b>把「为什么快」讲准</b>，因为最常见的解释是错的 ——<b>不是「没有分支了所以快」</b>。省掉的是 <b>CPU 一条一条发 kernel 的开销</b>：单次 launch 主机端<b>大致 5–10 微秒</b>（量级不是规格），MoE 一个 step <b>上万个 kernel</b>，<b>光是发就是几十毫秒</b>；开 graph 之后这一整笔变成一次 replay。⭐ 图上两条时间轴用的是<b>同一把尺子</b>：<b>两边的蓝格子一样多、一样宽</b> —— <b>kernel 该跑多久还是跑多久，右边省下来的全部是格子之间那段空等</b>。另有一小块在 GPU 侧：直线型 graph 重复 launch 每节点约省 60 ns（NVIDIA 给的数），代价是<b>首次 launch 仍要上传整张图的 work description</b>。⚠️ 由此推出一条能当场去测的结论：<b>kernel 越碎收益越大，一个大 GEMM 开 graph 几乎白开</b>（<b>这条是推的</b>）。</figcaption>
 </figure>
 
   <p>省的既然是「喂」这个动作，那问题就落在<b>位置</b>上了 ——&nbsp;</p>
@@ -14097,7 +14105,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="958" class="xs"><tspan font-weight="700" fill="#202124">三层这个切法是我定的讲法，不是谁的术语</tspan> —— 换个切法可能切成两层或四层。但每一层里「谁在决定」这件事是有出处的：块分发由硬件、warp 每周期挑、VLIW 编译期排槽。</text>
 <text x="38" y="978" class="xxs"><tspan font-weight="700" fill="#d93025">「差三到四个数量级」是推的</tspan>：kernel 的微秒量级 ÷ 时钟周期的纳秒量级。<tspan fill="#9aa0a6">两个量级都不是精确规格，所以这里只说数量级，不给具体倍数。</tspan></text>
 </svg>
-<figcaption><b>这是这一小节的核心图。</b>「那不就跟 TPU 一样了吗」就变成一个<b>位置问题：到底哪一层被冻住了</b>。把通路切成三层来看：<b>① 编排层</b>（下一个 kernel 是什么）、<b>② 落地层</b>（块放到哪个 SM）、<b>③ 发射层</b>（下一拍执行哪条指令）。⭐ 中间那一栏就是答案：<b>CUDA Graph 只把 ① 冻住了，②③ 一个都没动</b> ——graph 里每个节点仍然是一次正常的 kernel 启动，调度器、记分板、warp 槽、常驻上下文<b>全都还在工作</b>。而 TPU 是<b>三层全冻，且 ③ 冻到具体哪个周期、哪个发射槽</b>。<b>记住那个比方</b>：CUDA Graph 是把行程单提前打印好，<b>每一班飞机内部怎么排队一点没变</b>；TPU 编译器管的恰恰是飞机内部。⚠️ 三层这个切法<b>是讲法不是术语</b>；「粒度差三到四个数量级」是<b>拿 kernel 的微秒量级除以时钟周期的纳秒量级推的</b>。</figcaption>
+<figcaption><b class="fno">图 P-33</b>　<b>这是这一小节的核心图。</b>「那不就跟 TPU 一样了吗」就变成一个<b>位置问题：到底哪一层被冻住了</b>。把通路切成三层来看：<b>① 编排层</b>（下一个 kernel 是什么）、<b>② 落地层</b>（块放到哪个 SM）、<b>③ 发射层</b>（下一拍执行哪条指令）。⭐ 中间那一栏就是答案：<b>CUDA Graph 只把 ① 冻住了，②③ 一个都没动</b> ——graph 里每个节点仍然是一次正常的 kernel 启动，调度器、记分板、warp 槽、常驻上下文<b>全都还在工作</b>。而 TPU 是<b>三层全冻，且 ③ 冻到具体哪个周期、哪个发射槽</b>。<b>记住那个比方</b>：CUDA Graph 是把行程单提前打印好，<b>每一班飞机内部怎么排队一点没变</b>；TPU 编译器管的恰恰是飞机内部。⚠️ 三层这个切法<b>是讲法不是术语</b>；「粒度差三到四个数量级」是<b>拿 kernel 的微秒量级除以时钟周期的纳秒量级推的</b>。</figcaption>
 </figure>
 
   <p>位置定下来，剩下的是<b>它说明了什么</b>。
@@ -14153,7 +14161,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="714" class="xs"><tspan font-weight="700" fill="#202124">查到的</tspan>：CUDA 12.4 引入 conditional IF / WHILE 节点，12.8 增加 IF/ELSE 与 SWITCH —— 出自 NVIDIA 开发者博客。「块分发由硬件、warp 每周期挑」出自 CUDA 编程模型。</text>
 <text x="38" y="734" class="xxs"><tspan font-weight="700" fill="#d93025">我论证的</tspan>：三条理由都是<tspan font-weight="700" fill="#202124">推理，不是引用</tspan>。<tspan fill="#9aa0a6">其中第 ③ 条最强也最该被挑战 —— 它的前提是「graph 节点仍是正常 kernel 启动」，这一条要是哪天不成立了，整条论证就得重写。</tspan></text>
 </svg>
-<figcaption>收账。三条理由指向同一个方向。<b>①</b> CUDA Graph <b>自己也要求形状静态</b> —— shape 一变就得重录，于是在线推理只能按 batch 分桶、padding 到桶边界，<b>这正是 5.5 那本移植账单上的同一笔静态税</b>。<b>②</b> TPU 压根不需要它：XLA 本来就把整个 step 编成一个程序，<b>CUDA Graph 是 GPU 在补一个自己架构带来的问题</b>。<b>③ 最要紧的一条</b>：<b>硬件成本由「必须支持的最坏情况」决定，不由「你实际跑的情况」决定</b> —— 哪怕百分之百的负载都开 graph，那套调度器、记分板、warp 槽、常驻上下文<b>一个都省不掉</b>。⚠️ 紫带那条更新不能跳过：<b>CUDA 12.4 起 graph 支持 conditional IF / WHILE 节点，12.8 又加了 IF/ELSE 与 SWITCH</b>，所以「一条道跑到黑」严格说已经不准确 ——但那些分支<b>粒度是整个子图</b>，落在第 ① 层，<b>能选的东西变多了，选的颗粒没变细</b>。⭐ 落点：<b>GPU 想要这份性能，办法就是让自己更像 TPU</b>；而它<b>能往前挪的只有最上面那一层，下面两层挪不动 —— 挪得动的话，那些晶体管早就省下来了</b>。</figcaption>
+<figcaption><b class="fno">图 P-34</b>　收账。三条理由指向同一个方向。<b>①</b> CUDA Graph <b>自己也要求形状静态</b> —— shape 一变就得重录，于是在线推理只能按 batch 分桶、padding 到桶边界，<b>这正是 5.5 那本移植账单上的同一笔静态税</b>。<b>②</b> TPU 压根不需要它：XLA 本来就把整个 step 编成一个程序，<b>CUDA Graph 是 GPU 在补一个自己架构带来的问题</b>。<b>③ 最要紧的一条</b>：<b>硬件成本由「必须支持的最坏情况」决定，不由「你实际跑的情况」决定</b> —— 哪怕百分之百的负载都开 graph，那套调度器、记分板、warp 槽、常驻上下文<b>一个都省不掉</b>。⚠️ 紫带那条更新不能跳过：<b>CUDA 12.4 起 graph 支持 conditional IF / WHILE 节点，12.8 又加了 IF/ELSE 与 SWITCH</b>，所以「一条道跑到黑」严格说已经不准确 ——但那些分支<b>粒度是整个子图</b>，落在第 ① 层，<b>能选的东西变多了，选的颗粒没变细</b>。⭐ 落点：<b>GPU 想要这份性能，办法就是让自己更像 TPU</b>；而它<b>能往前挪的只有最上面那一层，下面两层挪不动 —— 挪得动的话，那些晶体管早就省下来了</b>。</figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 第 3–5 节的落点：两个「128 倍」出现在完全不同的位置</span>
@@ -14274,7 +14282,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="623" class="xs"><tspan font-weight="700" fill="#202124">文档写的是同一个数，差别不在数字里，在跑它的那台机器上。</tspan>　—— <tspan font-weight="700" fill="#202124">而这还只是分母。下一张把分子补上。</tspan></text>
 <text x="1380" y="666" class="xxs" fill="#9aa0a6" text-anchor="end">来源：NVIDIA GB200 NVL72 与 HGX 平台官方规格表（均按其脚注换算成 dense）· TPU v7 取自 Google Cloud 官方 TPU7x 规格表，与第 1 节同源</text>
 </svg>
-<figcaption><b>第 1 节那张全景表里，两边的峰值是并排放着的两个数。</b>这一节要做的第一件事，就是把其中一个数拆开看看它到底是什么。</figcaption>
+<figcaption><b class="fno">图 P-12</b>　<b>第 1 节那张全景表里，两边的峰值是并排放着的两个数。</b>这一节要做的第一件事，就是把其中一个数拆开看看它到底是什么。</figcaption>
 </figure>
 
   <p>分母讲完了。<b>分子那一头更隐蔽</b> ——&nbsp;因为它长得像「实测值」，
@@ -14360,7 +14368,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="601" class="xs"><tspan font-weight="700" fill="#d93025">写不出这一行，就别报百分比。</tspan><tspan fill="#9aa0a6">退一步报</tspan><tspan font-weight="700" fill="#202124">吞吐本身</tspan>（tokens/s，或者「跑完一步要几秒」）—— 那个数虽然也有口径，但至少<tspan font-weight="700" fill="#202124">能直接感觉到快慢</tspan>，而百分比不行。<tspan font-weight="700" fill="#202124">下一张讲的就是：什么时候该退这一步。</tspan></text>
 <text x="1380" y="660" class="xxs" fill="#9aa0a6" text-anchor="end">实测：A4X（GB200 NVL72）2 节点 8 GPU · Qwen3 类 MoE · seq 16384 · FP8 训练，实测 503 TFLOP/s/GPU · 峰值口径见上一张图</text>
 </svg>
-<figcaption><b>5.6 刚在「这个数的单位是什么」上绊过一次。</b>这一张是同一个问题换了一层：单位没错，除数错了。</figcaption>
+<figcaption><b class="fno">图 P-13</b>　<b>5.6 刚在「这个数的单位是什么」上绊过一次。</b>这一张是同一个问题换了一层：单位没错，除数错了。</figcaption>
 </figure>
 
   <!-- ⭐⭐ 2026-09-02 从 L200 回填。图 P-13 已经讲了 MFU/HFU 的分野，也给了
@@ -14462,7 +14470,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="724" class="xs"><tspan font-weight="700" fill="#d93025">了一边的对比，读者看到的是「哪一边的人更熟」。</tspan><tspan font-weight="700" fill="#202124">⚠️ 而我们 GPU 侧的调优记录只到一次 7 组配置的 sweep（492 → 527，+7.1%）—— 所以下一节那组数，我们自己也只把它挂在 ③ 档的下沿。</tspan></text>
 <text x="1380" y="748" class="xxs" fill="#9aa0a6" text-anchor="end">第 ③ 档的实测在下一节 · 代价条为对数示意，非测量值 · v7 与 GPU 侧调优幅度均取自本仓库的调优记录</text>
 </svg>
-<figcaption><b>这是第 7 节的入场券 ——</b> 下一节要摆两边的实测，而这张图决定了那组数该被当成什么。</figcaption>
+<figcaption><b class="fno">图 P-14</b>　<b>这是第 7 节的入场券 ——</b> 下一节要摆两边的实测，而这张图决定了那组数该被当成什么。</figcaption>
 </figure>
 
   <div class="note info"><span class="t">反过来用：读别人的对比时，三句就能问穿</span>
@@ -14588,7 +14596,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="681" class="xs"><tspan font-weight="700" fill="#202124">token 是能数出来的，TFLOP/s 里还夹着一条公式。</tspan><tspan fill="#9aa0a6">所以两个都报的时候，把 tok/s 放在前面。</tspan><tspan font-weight="700" fill="#202124">这不是吹毛求疵：1.5% 在这里无关紧要，但它证明了那条公式确实是两边各写各的</tspan> ——下一次遇到的不一定还是 1.5%，而 P-13 甲格里那个漏白名单的例子是 5 倍。</text>
 <text x="1380" y="744" class="xxs" fill="#9aa0a6" text-anchor="end">同一个 Hunyuan3-295B-A21B（80 层 · 192 专家）· seq 4096 · 合成数据 · 两边都不落盘 checkpoint（但重算策略不同，见 P-18 第 ③ 条）· 两边都是我们自己跑的</text>
 </svg>
-<figcaption><b>全课唯一一张两边真数并排的图。</b>下面那两段红色<b>一样长</b>，而两个大数看上去差很多 —— 差的是分母不是本事。<b>乙格右下那个红框是这张图的结论，一个字都不能改。</b></figcaption>
+<figcaption><b class="fno">图 P-15</b>　<b>全课唯一一张两边真数并排的图。</b>下面那两段红色<b>一样长</b>，而两个大数看上去差很多 —— 差的是分母不是本事。<b>乙格右下那个红框是这张图的结论，一个字都不能改。</b></figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⭐ 这张图承认了一件事，而那句承认是这一节最重要的一句</span>
@@ -14731,7 +14739,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="727" class="xs"><tspan font-weight="700" fill="#202124">别是谁给的？</tspan><tspan fill="#9aa0a6">　—— 这一句比「各调了多久」有用得多，而且对方通常答得上来。</tspan></text>
 <text x="1380" y="774" class="xxs" fill="#9aa0a6" text-anchor="end">两条曲线的横轴是「第几步」，不是时间 · 纵轴 TFLOP/s / 计算单元，BF16，0 起未截断 · 同一个 295B-A21B</text>
 </svg>
-<figcaption><b>硬件一颗没换，457 → 662.3</b> —— 这是那个倍数里唯一拆得动的部分。⚠️ 别把它读成「TPU 调了两周还不如 GPU 没调」：<b>707.2 是我们自己跑的，GPU 那侧的 recipe 是厂商现成的</b>，两边投入的工作量本来就不对等。</figcaption>
+<figcaption><b class="fno">图 P-16</b>　<b>硬件一颗没换，457 → 662.3</b> —— 这是那个倍数里唯一拆得动的部分。⚠️ 别把它读成「TPU 调了两周还不如 GPU 没调」：<b>707.2 是我们自己跑的，GPU 那侧的 recipe 是厂商现成的</b>，两边投入的工作量本来就不对等。</figcaption>
 </figure>
 
   <h3>7.2　然后是这一节最难的一步：不说过头</h3>
@@ -14814,7 +14822,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="614" class="xs"><tspan fill="#9aa0a6">一句话里有</tspan><tspan font-weight="700" fill="#202124">模型 · 规模 · 时间 · 单位 · 分解</tspan>五个槽位，而且分解那一段说的是「不来自峰值」不是「来自软件」—— <tspan font-weight="700" fill="#202124">后者我们没证明。比「GPU 快 30%」长了五倍，但半年后它还能被查。</tspan></text>
 <text x="1380" y="644" class="xxs" fill="#9aa0a6" text-anchor="end">三个问法用的是同一批实测 · tok/s / 计算单元 · 同一个 Hunyuan3-295B-A21B · seq 4096 · 各 64 个单元 · 不能拿它说的话见 P-18</text>
 </svg>
-<figcaption>这一节的收尾，也是一道留给读者的题：<b>这个倍数还缺什么？</b>先自己列一遍，再翻下一张对答案 —— <b>自己说出来的边界才记得住。</b></figcaption>
+<figcaption><b class="fno">图 P-17</b>　这一节的收尾，也是一道留给读者的题：<b>这个倍数还缺什么？</b>先自己列一遍，再翻下一张对答案 —— <b>自己说出来的边界才记得住。</b></figcaption>
 </figure>
 
   <p>那句「抄走就能用」之所以立得住，是因为它前面挡着一排边界 ——&nbsp;
@@ -14894,7 +14902,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="545" class="xs"><tspan fill="#9aa0a6">所以「只有一个规模」不是客气话：</tspan><tspan font-weight="700" fill="#202124">它是这组数唯一一条我们能预判方向、却没有数据的边界</tspan> —— 而预判的方向恰好和上面那六条相反。<tspan font-weight="700" fill="#202124">要推翻这一节最省事的办法，不是质疑这 64 个单元上的任何一个数字，是去测 128 个。</tspan></text>
 <text x="1380" y="598" class="xxs" fill="#9aa0a6" text-anchor="end">这一张是 P-17 的续页 —— P-17 问「这个倍数还缺什么」，这一张是答案</text>
 </svg>
-<figcaption>上一张那道题的答案：四条红、两条绿。<b>1.31 是一个点，不是一个界</b> ——两个方向相反的修正，都没量过。</figcaption>
+<figcaption><b class="fno">图 P-18</b>　上一张那道题的答案：四条红、两条绿。<b>1.31 是一个点，不是一个界</b> ——两个方向相反的修正，都没量过。</figcaption>
 </figure>
 
   <div class="note warn"><span class="t">这一节能说什么，不能说什么</span>
@@ -15022,7 +15030,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="743" class="xs"><tspan font-weight="700" fill="#202124">⭐ 把负担挪到落笔时：一个数如果是算出来的，就把算式写在它旁边</tspan><tspan fill="#9aa0a6"> —— </tspan><tspan class="mono" fill="#1967d2">7,308 = 1,014.8e12 ÷ 138.85e9</tspan>。这样改上游的人<tspan font-weight="700" fill="#202124">在同一屏上就能看见它</tspan>。</text>
 <text x="1380" y="788" class="xxs" fill="#9aa0a6" text-anchor="end">⛔ 这一格的机制写错过两次（第一版是编的，第二版查得不够）—— 上面这一版的每个行号都对 git 逐条核过</text>
 </svg>
-<figcaption>同一个漏法出现了两次。<b>左边那次留下 15 天空窗，右边那次 2 分 30 秒就补上了，而差别的原因不是「第二次更小心」。</b>落点只有一句：<b>算出来的数，把算式写在它旁边。</b></figcaption>
+<figcaption><b class="fno">图 P-19</b>　同一个漏法出现了两次。<b>左边那次留下 15 天空窗，右边那次 2 分 30 秒就补上了，而差别的原因不是「第二次更小心」。</b>落点只有一句：<b>算出来的数，把算式写在它旁边。</b></figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⛔ 图上这一格的机制，前两版都是错的 —— 而错的形状一模一样</span>
@@ -15213,7 +15221,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="914" class="xs"><tspan font-weight="700" fill="#202124">⑤ 原来那句「利于 GB300 的错没人有动机去找」被自己的记录证伪了</tspan><tspan fill="#9aa0a6"> —— 已知两处（R-6a / R-6b），</tspan><tspan font-weight="700" fill="#202124">而且两处都是自己找出来改掉的</tspan>。（P-18 那个 882.3 <tspan font-weight="700" fill="#202124">不能算进这一类</tspan>：不采用它是<tspan font-weight="700" fill="#202124">低估</tspan> GB300，方向相反。）能说的只剩更弱但为真的一句：<tspan font-weight="700" fill="#202124">这类错更容易被放着</tspan>。</text>
 <text x="1380" y="940" class="xxs" fill="#9aa0a6" text-anchor="end">「改成了」那一列的每个值都能在仓库里查到 —— 一份台账不给正确值，读者就没法回查</text>
 </svg>
-<figcaption>八笔撤回按活了多久排。<b>那道虚线上面六笔、下面两笔 —— 偏向是六比二，不是八比零。</b>第 ④ 张说明偏向跟的是什么：<b>「这份文档的主角是谁」。</b>⚠️ 两笔红牌<b>跑的是 GB200，不是 GB300</b>；红／绿沿用 P-18 的厂商配色，<b>不表示好坏</b>。</figcaption>
+<figcaption><b class="fno">图 P-20</b>　八笔撤回按活了多久排。<b>那道虚线上面六笔、下面两笔 —— 偏向是六比二，不是八比零。</b>第 ④ 张说明偏向跟的是什么：<b>「这份文档的主角是谁」。</b>⚠️ 两笔红牌<b>跑的是 GB200，不是 GB300</b>；红／绿沿用 P-18 的厂商配色，<b>不表示好坏</b>。</figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⛔ 台账最难防的漏记：不是「我不知道」，是「我知道，但那不归我这张图管」</span>
@@ -15378,7 +15386,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="940.6666666666666" y="819" class="xxs">→ P-17 甲② 的 2.06 倍<tspan font-weight="700" fill="#202124">要加第三条限制</tspan></text>
 <text x="1380" y="846" class="xxs" fill="#9aa0a6" text-anchor="end">③ 那一格原来写着「零笔」，是错的 —— 一格「本课没犯过」都不剩，不是因为凑，是因为查到了</text>
 </svg>
-<figcaption>甲格最左那一列是重点：<b>五个来源等级里，「算出来的」独占四笔</b>。乙格三句是可执行的动作（二进制还是十进制、per chip 还是 per device、物理量还是可用量）。红带里<b>「外部查不到」和「我们没去做」是两回事</b>，不能混着看。</figcaption>
+<figcaption><b class="fno">图 P-21</b>　甲格最左那一列是重点：<b>五个来源等级里，「算出来的」独占四笔</b>。乙格三句是可执行的动作（二进制还是十进制、per chip 还是 per device、物理量还是可用量）。红带里<b>「外部查不到」和「我们没去做」是两回事</b>，不能混着看。</figcaption>
 </figure>
 
   <div class="note ok"><span class="t">⭐ 甲格那张表跟一般的「引用规范」差在哪</span>
@@ -15574,7 +15582,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="702" y="970" class="xxs"><tspan font-weight="700" fill="#202124">变」</tspan>。</text>
 <text x="1380" y="992" class="xxs" fill="#9aa0a6" text-anchor="end">▶ ＝ 现场念的三行，其余印在这里供课后回查　·　每一行的出处标号就写在同一行里 —— §9 是最容易被单独截走的一节，边界必须跟结论同框</text>
 </svg>
-<figcaption>八行取舍，两边各一句。<b>八节下来，两边同口径量过的只有 §7 那 1.31 倍</b> ——而这句话在底带里，不在表里。<b>这张表整张是机制推理，它给不出倍数。</b></figcaption>
+<figcaption><b class="fno">图 P-22</b>　八行取舍，两边各一句。<b>八节下来，两边同口径量过的只有 §7 那 1.31 倍</b> ——而这句话在底带里，不在表里。<b>这张表整张是机制推理，它给不出倍数。</b></figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⚠️ 八行里，两边同口径量过的一行都没有</span>
@@ -15796,7 +15804,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="742" class="xs"><tspan font-weight="700" fill="#202124">⭐ 两个补法防的是不同的东西：「换个外行提问」防想不到；「把决定不写的也写出来」防读者看不见。</tspan><tspan fill="#9aa0a6"> 加上一张图那条</tspan><tspan font-weight="700" fill="#202124">「换个主角重读」防偏向</tspan> —— 三条合起来才是完整的：<tspan font-weight="700" fill="#202124">偏了、漏了、藏了。</tspan></text>
 <text x="1380" y="780" class="xxs" fill="#9aa0a6" text-anchor="end">四类各五条是数出来的，不是凑的 —— 没有为了对称拆条或并条</text>
 </svg>
-<figcaption>二十条答不了的，按<b>「补起来有多难」</b>分四类，不按主题分 ——因为「跑一次就有」和「不由我们决定」是完全不同的两种空白。红格那两条（推理、TCO）是外行第一个会问的问题，<b>这门课从来没想到过</b>。</figcaption>
+<figcaption><b class="fno">图 P-23</b>　二十条答不了的，按<b>「补起来有多难」</b>分四类，不按主题分 ——因为「跑一次就有」和「不由我们决定」是完全不同的两种空白。红格那两条（推理、TCO）是外行第一个会问的问题，<b>这门课从来没想到过</b>。</figcaption>
 </figure>
 
   <p>底带那两句是这一节最难堪的部分，图上写全了，这里只补一句机制：
@@ -15905,7 +15913,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="940.6666666666666" y="802" class="xxs">半全课一次都没兑现过。把它当已证结论回收，<tspan font-weight="700" fill="#202124">就是「用命名冒充证明」的同族错误</tspan>。</text>
 <text x="1380" y="874" class="xxs" fill="#9aa0a6" text-anchor="end">落点那句话本身不值钱 —— 值钱的是它下面那三条限定，那才是这门课挣来的</text>
 </svg>
-<figcaption>中间那个提问框是全课的骨架，右格四句是唯一能带出门、换成别的两块硬件照样用的东西。<b>⚠️ 底带那三条限定一条都不能省</b> —— 落点那句单独出门，就只是一个立场。</figcaption>
+<figcaption><b class="fno">图 P-24</b>　中间那个提问框是全课的骨架，右格四句是唯一能带出门、换成别的两块硬件照样用的东西。<b>⚠️ 底带那三条限定一条都不能省</b> —— 落点那句单独出门，就只是一个立场。</figcaption>
 </figure>
 
   <div class="note danger"><span class="t">⚠️ 那三条限定分别是什么</span>

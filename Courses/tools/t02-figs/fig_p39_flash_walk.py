@@ -144,9 +144,17 @@ def _gpu_pipe(f):
     cx = LX + LW / 2
     f.t(LX + 6, PIPE_Y - 15, "GPU　·　B200", "sec", BL)
 
-    yy = _stop(f, LX, LW, SY[0], STOPS[0][0], BL, "HBM3e", "192 GB · 8.0 TB/s")
-    para(f, LX + 20, yy, LW - 40, "官方数字。<b>整颗芯片共用。</b>", "xs", 16,
-         max_lines=1)
+    yy = _stop(f, LX, LW, SY[0], STOPS[0][0], BL, "HBM3e", "192 GiB · 8.0 TB/s")
+    para(f, LX + 20, yy, LW - 40,
+         "官方数字。<b>整颗芯片共用。</b>"
+         "<g>（厂商表上写 192 GB，物理上是二进制：一颗 stack ＝ 8 层 × 3 GiB ＝ 24 GiB，"
+         "8 颗 ＝ 192 GiB ＝ 206 GB —— 两边同口径。）</g>", "xs", 16,
+         max_lines=2)
+    # ⛔ 2026-09-05：这一行原来写「192 GB」而右栏 TPU 写「192 GiB」，并排摆着，
+    #    中间没有一个字解释 —— 而本课自己的第 ② 句问法就是「二进制还是十进制」。
+    #    物理上两边都是二进制（DRAM 容量本来就是），厂商表上那个「GB」是宽松写法。
+    #    ⭐ 形状：**两边用不同单位写同一个数，比写错更难发现** ——
+    #      因为两个数字长得一模一样，眼睛不会停。
     _arrow(f, cx, SY[0] + STOPS[0][0], BL, "8.0 TB/s", 18)
 
     # ② L2 —— 右边那一格是空的，所以这一格要画得实
@@ -229,8 +237,9 @@ def _tpu_pipe(f):
     yy = _stop(f, RX, RW, SY[3], STOPS[3][0], GN, "向量寄存器",
                "8 × 128 的二维块 · 个数未公开")
     para(f, RX + 20, yy, RW - 40,
-         "<b>MXU 那条支线从来不经过它</b> —— 权重与数据直接推进阵列。"
-         "<g>这点 GPU 到 Blackwell 才追上。</g>", "xs", 15, max_lines=2)
+         "<r>⚠️ 矩阵操作数是从 VMEM 直接进 MXU，还是要过这一层，"
+         "公开资料没有明写</r> —— <g>本课不下结论。"
+         "（图 T-6 把它画成 MXU 的输入端；那也是一种读法。）</g>", "xs", 15, max_lines=3)
     _arrow(f, cx, SY[3] + STOPS[3][0], GN, None, 14)
 
     _units(f, RX, RW, SY[4], STOPS[4][0], GN,

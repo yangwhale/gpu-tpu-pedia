@@ -250,9 +250,17 @@ def figure(key, svg_body):
     src = {"g": '《<a href="%s">GPU 显微镜</a>》' % GPU_URL,
            "t": '《<a href="%s">TPU 显微镜</a>》' % TPU_URL}.get(key[0])
     tail = ('　<span class="msfrom">—— 出自%s</span>' % src) if src else ""
+    # ⛔⛔ 2026-09-05：正文里「P-32 那笔账」「见 P-18 第 ③ 条」这套号出现 20 次，
+    #    而**没有任何一处告诉读者哪张图是 P-12**。学员原话：「这些引用对学员等于不存在。」
+    #    图号一直只活在源码的 key 里，从没渲染出去 —— 而我引用起来毫不犹豫，
+    #    因为我知道它指谁。⭐ **作者脑子里的索引不等于读者手上的索引。**
+    import re as _re
+    _m = _re.match(r'([gtp])(\d+)$', key)
+    badge = ('<b class="fno">图 %s-%s</b>　' % (_m.group(1).upper(), _m.group(2))
+             if _m else "")
     return ('<figure class="fbox fwide" id="ms-%s">\n%s\n'
-            '<figcaption>%s%s</figcaption>\n'
-            '</figure>' % (key, svg_body, CAP[key], tail))
+            '<figcaption>%s%s%s</figcaption>\n'
+            '</figure>' % (key, svg_body, badge, CAP[key], tail))
 
 
 # ══════════════════════════════════════════════════════════════════════
