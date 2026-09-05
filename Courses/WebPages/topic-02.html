@@ -627,7 +627,7 @@ details.aside b{color:var(--ink);font-weight:600}
          而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
          ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
          （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
-    <span class="chip">⏱ <b>85 分钟 · 40 张图</b></span>
+    <span class="chip">⏱ <b>87 分钟 · 40 张图</b></span>
     <span class="chip">完整版 <a href="topic-02-L300.html"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -714,6 +714,37 @@ details.aside b{color:var(--ink);font-weight:600}
   else bind();
 })();
 </script>
+
+<section style="border-top:none;padding-bottom:0"><div class="wrap">
+  <div class="guess">
+    <h3>再猜两个数 ——&nbsp;答案马上给，「为什么」要等到第 3 节</h3>
+    <p class="q">这门课后面会把两颗芯片<b>拆开</b>，一层一层往里看。
+      在开讲之前先猜一下 ——&nbsp;<b>它们各自把算力切成了多少块？</b><br>
+      <span class="qs">B200 上那个单元叫 <b>Tensor Core</b>，v7 上那个叫 <b>MXU</b>，
+      干的是同一件事：矩阵乘加。<br>
+      问的是<b>整颗芯片上各有几个</b>。</span></p>
+    <div class="opts">
+      <button data-g="0">B200 约 150 个　·　v7 约 100 个</button>
+      <button data-g="1">B200 约 600 个　·　v7 约 500 个</button>
+      <button data-g="2" data-right>B200 约 600 个　·　v7 <b>个位数</b></button>
+      <button data-g="3">两边都是个位数</button>
+    </div>
+    <div class="rev">
+      <p><b>B200：592 个。v7：4 个。</b><br>
+        <span class="qs">592 ＝ 148 个 SM × 每个 SM 4 个 Tensor Core；
+        4 ＝ 2 个 TensorCore × 每个核 2 个 MXU。
+        <b>份数差 148 倍。</b></span></p>
+      <p style="margin-bottom:0"><b>⭐ 但真正该惊讶的是下一句：</b>
+        <span class="qs">这两颗芯片<b>一拍能做的乘加总数只差 15%</b>
+        ——&nbsp;B200 是 606,208，v7 是 524,288。
+        <br><b>同样一份算力，一边切成 592 小块，一边切成 4 大块。</b></span></p>
+      <p style="margin-bottom:0"><b>⭐ 数字给你了，「为什么」先欠着 ——&nbsp;揣着这个问号往下听。</b>
+        <span class="qs">为什么份数能差 148 倍、总量却几乎一样？切得碎和切得整，
+        各自要付什么代价？<b>第 3 节整整一节在回答这两个问题。</b>
+        <em>——&nbsp;到那儿的时候，你会自己认出这道题的答案长在哪一张图上。</em></span></p>
+    </div>
+  </div>
+</div></section>
 
 <section id="s0" style="border-top:none"><div class="wrap">
   <div class="stn big"><span class="badge">第 0 节</span><h2>先立一个前提：两款芯片，出身不一样</h2></div>
@@ -1766,35 +1797,6 @@ details.aside b{color:var(--ink);font-weight:600}
       <p>换来的是搬运少了一千零二十四分之一。<b>付 17% 的多算，换掉三个数量级的搬运</b>
         ——&nbsp;<em>所以它不是「优化了 kernel」，是把这个算子挪到了另一个受限区。</em></p>
     </div></details>
-</div></section>
-
-<section style="border-top:none;padding-bottom:0"><div class="wrap">
-  <div class="guess">
-    <h3>下一节开始之前，先猜两个数</h3>
-    <p class="q">下一节我们要把两颗芯片<b>拆开</b>，一层一层往里看。
-      在拆之前先猜一下 ——&nbsp;<b>它们各自把算力切成了多少块？</b><br>
-      <span class="qs">B200 上那个单元叫 <b>Tensor Core</b>，v7 上那个叫 <b>MXU</b>，
-      干的是同一件事：矩阵乘加。<br>
-      问的是<b>整颗芯片上各有几个</b>。</span></p>
-    <div class="opts">
-      <button data-g="0">B200 约 150 个　·　v7 约 100 个</button>
-      <button data-g="1">B200 约 600 个　·　v7 约 500 个</button>
-      <button data-g="2" data-right>B200 约 600 个　·　v7 <b>个位数</b></button>
-      <button data-g="3">两边都是个位数</button>
-    </div>
-    <div class="rev">
-      <p><b>B200：592 个。v7：4 个。</b><br>
-        <span class="qs">592 ＝ 148 个 SM × 每个 SM 4 个 Tensor Core；
-        4 ＝ 2 个 TensorCore × 每个核 2 个 MXU。
-        <b>份数差 148 倍。</b></span></p>
-      <p style="margin-bottom:0"><b>⭐ 但真正该惊讶的是下一句：</b>
-        <span class="qs">这两颗芯片<b>一拍能做的乘加总数只差 15%</b>
-        ——&nbsp;B200 是 606,208，v7 是 524,288。
-        <br><b>同样一份算力，一边切成 592 小块，一边切成 4 大块。</b>
-        <em>下一节整节要回答的就是这一个问题：为什么可以差这么多，又几乎一样多；
-        以及切得碎和切得整，各自要付什么代价。</em></span></p>
-    </div>
-  </div>
 </div></section>
 
 <section id="s3"><div class="wrap">
@@ -12476,7 +12478,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
           一句 L300 去处留在明面（它是有用的下一步），节号勘误折起来 ——
           需要它的人一定是正拿着两版对照翻，那种人会去点开。 -->
   <!-- ⛔ 2026-09-04：这里原来写「这一版是 L200 · 一小时」，而页首那个自动算出来的
-       chip 报的是 85 分钟（当前 77）。**同一页上两个时长，一个手写一个算出来的。**
+       chip 报的是 87 分钟（当前 77）。**同一页上两个时长，一个手写一个算出来的。**
        ⭐ 2026-09-03 已经拍板「不砍内容，要一个准点的时段就按 80 分钟要」——&nbsp;
           所以「一小时」这个标签从那天起就不成立了，只是没人回头改标签。
        ⭐ 现在版本名只留等级码（L200 · 精讲版），**具体分钟数全篇只出现在
@@ -12489,9 +12491,9 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
           ⚠️ 一个规矩只执行在发现它的那一处，就等于没立。
        ⭐ 现在「讲完了，它没有告诉你该买哪个……」是主线上的最后一句 ——&nbsp;
           那才是这门课要留下的话。L300 的去处折起来，想深挖的人一定会点。 -->
-  <details class="aside"><summary>这一版是 L200 · 精讲版（主线 85 分钟）——&nbsp;完整版 L300 多讲了什么<em>（想往下挖再点开）</em></summary>
+  <details class="aside"><summary>这一版是 L200 · 精讲版（主线 87 分钟）——&nbsp;完整版 L300 多讲了什么<em>（想往下挖再点开）</em></summary>
     <div class="body">
-  <div class="note info"><span class="t">这一版是 L200 · 精讲版（主线 85 分钟）</span>
+  <div class="note info"><span class="t">这一版是 L200 · 精讲版（主线 87 分钟）</span>
     完整版 <b>L300</b>（两小时，72 张图）多出来的是四组深挖：<br>
     ·芯片封装全景与十行完整对照<br>
     ·寄存器堆到位线的五张图<br>
