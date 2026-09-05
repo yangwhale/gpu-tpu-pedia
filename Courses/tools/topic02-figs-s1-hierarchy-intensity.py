@@ -133,7 +133,7 @@ panel(530,"GB200（NVL72 里那颗 · 每 GPU · dense）",BL,
 q.append(f'<rect x="0" y="260" width="1000" height="98" rx="8" fill="#202124"/>')
 q.append('<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">'
 # ⛔ ⚠️ 2026-09-04：那个 0.03% 是假精度 —— GB200 侧的 8 TB/s 反推出的引脚速率7.81 Gbps 不是任何一档标称值，十进制／二进制两种读法本身就差 2.4%。结论（同一量级）不变，但别拿第三位当卖点。详见 §1.1 那个折叠。
-         'BF16　312.9　对　312.5　　｜　　FP8　625.2　对　625.0　　——&#160;<tspan font-weight="700">同一量级</tspan></text>')
+         'BF16　312.9　对　312.5　　｜　　FP8　625.8　对　625.0　　——&#160;<tspan font-weight="700">同一量级</tspan></text>')
 # ⛔ 这一行是 2026-09-04 补的，位置紧贴上面那行大字，**必须挨着**：
 #    上面那行给的是三位有效数字，而第三位是假的 —— 隔开就等于没警告。
 q.append('<text class="svgsm" x="500" y="304" text-anchor="middle" fill="#ffe08a">'
