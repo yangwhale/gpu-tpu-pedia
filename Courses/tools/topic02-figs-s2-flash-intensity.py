@@ -83,7 +83,7 @@ H4=412
 r=[f'<svg viewBox="0 0 1000 {H4}" width="100%" role="img" aria-label="朴素注意力的算术强度只有 64，Flash 把它拉到 65536，都以 312 这条脊线为参照">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    '回到第 1 节那条 312 的线 —— Flash 换的到底是什么</text>',
-   '<text class="svgsm" x="1000" y="16" text-anchor="end" fill="#9aa0a6">这根轴第 2.8 节还会回来一次，那时上面会有五个算子 —— 这里先只放两个</text>',
+   '<text class="svgsm" x="1000" y="16" text-anchor="end" fill="#9aa0a6">这根轴在完整版 L300 的 2.8 节还会回来一次，那时上面会有五个算子 —— 这里先只放两个</text>',
    f'<text class="svgsm" x="0" y="35">同一个头（n = 128K，d = {d}）算两次矩阵乘的 FLOP 一模一样，变的只有搬了多少字节</text>']
 # 对数轴
 X0,XW=190,700; YA=90

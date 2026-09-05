@@ -78,6 +78,14 @@ python3 topic02-lint-layout.py
 step "讲义 ↔ 课件对账（「滚到 X」的 X 还在不在）"
 python3 topic02-lint-cues.py
 
+# ⭐ 第四条体检：**同一份文档内部的指路**。跟上一条是一对 ——
+# 那条查「讲义指课件」，这条查「课件指自己」：正文写「§X.Y」，那一节存在吗。
+# ⛔ 同样是不报错、不难看、只在读者手上翻车的一类债。2026-09-05 首次跑出 12 处。
+# 它抓到的最值钱的一条不是编号错，是**没兑现的承诺**：
+# 「这根轴第 2.8 节还会回来一次」—— 而这一版根本没有 2.8，那根轴再没回来过。
+step "跨节指针体检（「§X.Y」那一节真的存在吗）"
+python3 topic02-lint-xref.py
+
 printf '\n\033[1m▸ 产物\033[0m\n'
 for f in topic-01.html topic-02-L300.html topic-02.html \
          topic-03.html topic-08.html \

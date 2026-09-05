@@ -981,7 +981,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="0" y="404" fill="#202124">· 它是硬件的「胃口」：每从 HBM 搬一个字节，硬件配套能做约 312 次 BF16 运算。喂不满，算力就在空转</text>
 <text class="svgsm" x="0" y="421" fill="#202124">· 算子那头是同一个单位：它每搬一个字节，需要做几次运算 —— 这就是它的算术强度</text>
 <text class="svgsm" x="0" y="438" fill="#202124">· 于是每个算子只剩一个问题：它的算术强度比 312 高还是低？高就是算力受限，低就是带宽受限</text>
-<text class="svgsm" x="0" y="455" fill="#d93025">· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（第 2.8 节）。这就是第 2 节要处理的东西</text>
+<text class="svgsm" x="0" y="455" fill="#d93025">· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（完整版 L300 §2.8 收全）。这就是第 2 节要处理的东西</text>
 <text class="svgsm" x="0" y="472" fill="#d93025">· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是第 3 节的战场。同一颗芯片，两种完全不同的困境</text>
 <line x1="0" y1="468" x2="1000" y2="468" stroke="#e8eaed"/>
 <text class="svglbl" x="0" y="494" fill="#202124" style="font-size:13.5px">⚠️ 但这条线不止一条 ——&#160;<tspan font-weight="700">每往计算靠近一层，它就往下掉一截</tspan></text>
@@ -1621,7 +1621,7 @@ details.aside b{color:var(--ink);font-weight:600}
   <figure class="fbox" id="s012-fig2-4">
   <svg viewBox="0 0 1000 412" width="100%" role="img" aria-label="朴素注意力的算术强度只有 64，Flash 把它拉到 65536，都以 312 这条脊线为参照">
 <text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">回到第 1 节那条 312 的线 —— Flash 换的到底是什么</text>
-<text class="svgsm" x="1000" y="16" text-anchor="end" fill="#9aa0a6">这根轴第 2.8 节还会回来一次，那时上面会有五个算子 —— 这里先只放两个</text>
+<text class="svgsm" x="1000" y="16" text-anchor="end" fill="#9aa0a6">这根轴在完整版 L300 的 2.8 节还会回来一次，那时上面会有五个算子 —— 这里先只放两个</text>
 <text class="svgsm" x="0" y="35">同一个头（n = 128K，d = 128）算两次矩阵乘的 FLOP 一模一样，变的只有搬了多少字节</text>
 <path d="M190 202 h700" stroke="#9aa0a6" stroke-width="1.2"/>
 <path d="M190.0 202 v6" stroke="#9aa0a6"/>
@@ -6061,7 +6061,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="286" y="724" class="xxs">一个 NVLink 域。再往外换 InfiniBand／以太网，<tspan font-weight="700" fill="#202124">编程模型也跟着换</tspan>。</text>
 <text x="668" y="706" class="lbl" fill="#1e8e3e">9,216 颗</text>
 <text x="968" y="706" class="xxs" fill="#1e8e3e" text-anchor="end">ICI 4.0</text>
-<text x="668" y="724" class="xxs">3D 环面一路铺到整个 pod，<tspan font-weight="700" fill="#202124">全程同一套 ICI</tspan>。这是 §8 的落点。</text>
+<text x="668" y="724" class="xxs">3D 环面一路铺到整个 pod，<tspan font-weight="700" fill="#202124">全程同一套 ICI</tspan>。这是<tspan font-weight="700" fill="#202124">互联那一节</tspan>的落点。</text>
 <rect x="1050" y="118" width="330" height="652" rx="10" fill="#fff" stroke="#d93025" stroke-width="1.8"/>
 <text x="1064" y="142" class="sec" fill="#d93025">看这张表要看的是空格</text>
 <text x="1064" y="164" class="xs">七行里有<tspan font-weight="700" fill="#202124">两行</tspan> TPU 那一栏是红的。而这两行不是随便哪两行 </text>
@@ -15541,7 +15541,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="1228" y="632" width="60" height="17" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.1"/>
 <text x="1258.0" y="644" class="xxs" fill="#f9ab00" text-anchor="middle">只有方向</text>
 <line x1="38" y1="664" x2="1362" y2="664" stroke="#dadce0" stroke-width="1.0"/>
-<text x="52" y="686" class="xs"><tspan font-weight="700" fill="#202124">⛔ 这张表里没有一行叫「所以 TPU 更适合规整训练」。</tspan><tspan fill="#9aa0a6">§0 立的那句「当假设成立，TPU 赢在省下来的面积」</tspan><tspan font-weight="700" fill="#202124">至今没有被数据兑现过</tspan> —— 第 5 节兑现的只是它的<tspan font-weight="700" fill="#202124">反面</tspan>（变长序列、MoE 路由）。把假设当已证结论回收，就是<tspan font-weight="700" fill="#202124">用命名冒充证明</tspan>，第 7 节为此返工过一次。</text>
+<text x="52" y="686" class="xs"><tspan font-weight="700" fill="#202124">⛔ 这张表里没有一行叫「所以 TPU 更适合规整训练」。</tspan><tspan fill="#9aa0a6">§0 那条根的</tspan><tspan font-weight="700" fill="#202124">正面那一半</tspan>（前提成立时 TPU 能换回什么）<tspan font-weight="700" fill="#202124">至今没有被数据兑现过</tspan> —— 第 5 节兑现的只是它的<tspan font-weight="700" fill="#202124">反面</tspan>（变长序列、MoE 路由）。把假设当已证结论回收，就是<tspan font-weight="700" fill="#202124">用命名冒充证明</tspan>，第 7 节为此返工过一次。</text>
 <rect x="20" y="728" width="1360" height="92" rx="9" fill="#fff" stroke="#f9ab00" stroke-width="1.6"/>
 <text x="38" y="750" class="box" fill="#f9ab00">⚠️ 先钉一个口径：前面六节和第七节，比的不是同一块 GPU</text>
 <rect x="38" y="758" width="560" height="26" rx="5" fill="#fcfcfd" stroke="#dadce0" stroke-width="1.0"/>
@@ -15557,9 +15557,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="860" class="sec">⛔ 这张表里「两边同口径实测」那一档是空的 —— 而这门课唯一的一组两边实测，跑的是「TPU 那个前提该成立」<tspan font-weight="700" fill="#d93025">最近的那一侧 —— 但也只近了一半</tspan></text>
 <rect x="38" y="874" width="640" height="92" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
 <text x="50" y="893" class="lbl" fill="#1a73e8">实测跑的是什么</text>
-<text x="50" y="912" class="xxs"><tspan fill="#9aa0a6">Hunyuan3-295B-A21B 预训练，两边各 64 个计算单元、2026 年 8 月。</tspan><tspan font-weight="700" fill="#202124">这是离「假设成立」最近的一侧 —— 但只近了一半</tspan>：§0 列的两</text>
-<text x="50" y="926" class="xxs">个反例里，形状固定排除了<tspan font-weight="700" fill="#202124">变长序列</tspan>，<tspan font-weight="700" fill="#d93025">而它仍然是个 192 专家的 MoE，另一个反例「MoE 路由」正是这组实测的主体</tspan><tspan fill="#9aa0a6">（P-18 最重的那条</tspan></text>
-<text x="50" y="940" class="xxs"><tspan fill="#9aa0a6">边界就是靠它立起来的）。</tspan><tspan font-weight="700" fill="#d93025">结果：GB300 快 1.31 倍。</tspan></text>
+<text x="50" y="912" class="xxs"><tspan fill="#9aa0a6">Hunyuan3-295B-A21B 预训练，两边各 64 个计算单元、2026 年 8 月。</tspan><tspan font-weight="700" fill="#202124">这是离「前提成立」最近的一侧 —— 但只近了一半</tspan>：第 5 节点</text>
+<text x="50" y="926" class="xxs">名的两个动态性来源里，形状固定排除了<tspan font-weight="700" fill="#202124">变长序列</tspan>，<tspan font-weight="700" fill="#d93025">而它仍然是个 192 专家的 MoE，另一个反例「MoE 路由」正是这组实测的主体</tspan><tspan fill="#9aa0a6">（P-18</tspan></text>
+<text x="50" y="940" class="xxs"><tspan fill="#9aa0a6"> 最重的那条边界就是靠它立起来的）。</tspan><tspan font-weight="700" fill="#d93025">结果：GB300 快 1.31 倍。</tspan></text>
 <rect x="690" y="874" width="672" height="92" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
 <text x="702" y="893" class="lbl" fill="#1a73e8">所以能说的只有这一句，一个字都不能多</text>
 <text x="702" y="916" class="sec"><tspan font-weight="700" fill="#202124">机制上 TPU 那个前提在这类负载上成立；而在这一组 64 单元的实测里，它没有兑现。</tspan></text>
@@ -15894,8 +15894,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="940.6666666666666" y="771" class="lbl" fill="#d93025">③ TPU 那个前提，这门课从没用数据兑现过</text>
 <rect x="1272.0" y="758" width="80.0" height="19" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.0"/>
 <text x="1312.0" y="771" class="xxs" fill="#d93025" text-anchor="middle">我们自己欠的</text>
-<text x="940.6666666666666" y="789" class="xxs"><tspan fill="#9aa0a6">§0 立的是</tspan><tspan font-weight="700" fill="#202124">假设</tspan>（图底那一行）；§5.5 兑现的只是它的<tspan font-weight="700" fill="#202124">反面</tspan>。正面那一半全课一次都没兑现</text>
-<text x="940.6666666666666" y="802" class="xxs">过。把它当已证结论回收，<tspan font-weight="700" fill="#202124">就是「用命名冒充证明」的同族错误</tspan>。</text>
+<text x="940.6666666666666" y="789" class="xxs"><tspan fill="#9aa0a6">§0 立的是</tspan><tspan font-weight="700" fill="#202124">一个前提</tspan>（「早就知道你要跑什么」）；第 5 节兑现的只是它的<tspan font-weight="700" fill="#202124">反面</tspan>。正面那一</text>
+<text x="940.6666666666666" y="802" class="xxs">半全课一次都没兑现过。把它当已证结论回收，<tspan font-weight="700" fill="#202124">就是「用命名冒充证明」的同族错误</tspan>。</text>
 <text x="1380" y="874" class="xxs" fill="#9aa0a6" text-anchor="end">落点那句话本身不值钱 —— 值钱的是它下面那三条限定，那才是这门课挣来的</text>
 </svg>
 <figcaption>中间那个提问框是全课的骨架，右格四句是唯一能带出门、换成别的两块硬件照样用的东西。<b>⚠️ 底带那三条限定一条都不能省</b> —— 落点那句单独出门，就只是一个立场。</figcaption>
