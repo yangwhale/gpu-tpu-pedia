@@ -374,15 +374,25 @@ def body():
    （这个错版面 lint 抓不到，是渲染后点一下才发现的 —— 交互要点过才算验过。） */
 (function(){
   function bind(){
+  /* ⛔ 2026-09-05 第三次改这段：从「一题一组选项」改成「一题 N 组，各选各的」。
+     Chris：「把 B200 和 v7 的选项分开，各选各的 —— 要不然彼此影响，
+     靠猜都能猜出来。」他说的是**配对选项会泄题**：四个组合里只要认出
+     一半，另一半自动跟着定了，等于四选一变成二选一。
+     ⭐ 现在以 .opts 为一组，组内互斥、组间独立；**所有组都选过才展开答案**。
+     单组的题（开场那道 MoE）行为不变。 */
   document.querySelectorAll('.guess').forEach(function(box){
     var rev=box.querySelector('.rev'); if(!rev) return;
-    box.querySelectorAll('button').forEach(function(b){
-      b.addEventListener('click', function(){
-        box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
-        b.classList.add('picked');
-        box.querySelector('[data-right]').classList.add('right');
-        rev.classList.add('on');
-        rev.scrollIntoView({behavior:'smooth', block:'nearest'});
+    var groups=box.querySelectorAll('.opts');
+    groups.forEach(function(g){
+      g.querySelectorAll('button').forEach(function(b){
+        b.addEventListener('click', function(){
+          g.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+          b.classList.add('picked');
+          var r=g.querySelector('[data-right]'); if(r) r.classList.add('right');
+          var done=true;
+          groups.forEach(function(gg){ if(!gg.querySelector('.picked')) done=false; });
+          if(done){ rev.classList.add('on'); rev.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+        });
       });
     });
   });
@@ -426,12 +436,21 @@ def body():
       <span class="qs">B200 上那个单元叫 <b>Tensor Core</b>，v7 上那个叫 <b>MXU</b>，
       干的是同一件事：矩阵乘加。<br>
       问的是<b>整颗芯片上各有几个</b>。</span></p>
+    <div class="oplab">① B200 整颗上有几个 <b>Tensor Core</b>？</div>
     <div class="opts">
-      <button data-g="0">B200 约 150 个　·　v7 约 100 个</button>
-      <button data-g="1">B200 约 600 个　·　v7 约 500 个</button>
-      <button data-g="2" data-right>B200 约 600 个　·　v7 <b>个位数</b></button>
-      <button data-g="3">两边都是个位数</button>
+      <button>4 个</button>
+      <button>148 个</button>
+      <button data-right>592 个</button>
+      <button>2,368 个</button>
     </div>
+    <div class="oplab">② TPU v7 整颗上有几个 <b>MXU</b>？</div>
+    <div class="opts">
+      <button data-right>4 个</button>
+      <button>64 个</button>
+      <button>512 个</button>
+      <button>4,096 个</button>
+    </div>
+    <p class="qs" style="margin:10px 0 0;color:var(--gray)">两边<b>各选各的</b> ——&nbsp;都选完才出答案。</p>
     <div class="rev">
       <p><b>B200：592 个。v7：4 个。</b><br>
         <span class="qs">592 ＝ 148 个 SM × 每个 SM 4 个 Tensor Core；

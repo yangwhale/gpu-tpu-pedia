@@ -2186,6 +2186,8 @@ figure.fwide{margin-left:50%;transform:translateX(-50%);
 .guess h3{margin:0 0 6px;font-size:21px}
 .guess .q{font-size:17px;color:var(--gray);margin-bottom:18px;line-height:1.7}
 .guess .q .qs{font-size:15px}
+.guess .oplab{font-size:15px;color:var(--ink);font-weight:600;margin:14px 0 8px}
+.guess .oplab:first-of-type{margin-top:0}
 .guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
 .guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
               background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
