@@ -1008,7 +1008,7 @@ text-align:center;color:#5f6368;font-size:14px;background:#f8f9fa}</style>
 <rect x="20" y="738" width="1360" height="124" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
 <text x="34" y="764" class="sec" fill="#1a73e8">这张图想让你记住的一句话</text>
 <text x="34" y="786" class="xs"><tspan font-weight="700" fill="#202124">GPU 的 SM 里，大部分晶体管不是在算数，是在「决定接下来算什么」</tspan> —— 调度器、上下文、记分板、缓存控制，全都是为了在运行时动态地藏住延迟和分支。TPU 把这一整套<tspan font-weight="700" fill="#d93025">前移到了编译期</tspan>，于是这些部件可以整个不要。</text>
-<text x="34" y="826" class="xs">省下的面积去了两个地方：<tspan font-weight="700" fill="#202124">更大的乘加阵列</tspan>（一个 MXU 一条指令吃满 65,536 个 cell）和<tspan font-weight="700" fill="#202124">更大的软件可控暂存</tspan>（128 MiB VMEM）。这不是「TPU 更简单」，是<tspan font-weight="700" fill="#202124">把复杂度换了个地方放</tspan> —— 从硅上换到了编译器里。</text>
+<text x="34" y="826" class="xs"><tspan font-weight="700" fill="#202124">省下的不是「面积换算力」，是这套机构整个不做了</tspan> —— 电路更简单、功耗更低。<tspan font-weight="700" fill="#d93025">它没有变成更多算力，也没有变成更多片上存储</tspan>（两项 B200 都更多）。这不是「TPU 更简单」，是<tspan font-weight="700" fill="#202124">把复杂度换了个地方放</tspan> —— 从硅上换到了编译器里。</text>
 </svg>
 <figcaption><b>图 T-2　一个 TensorCore 的显微镜展开。</b>左边是留下的部件，右边是<b>一个 GPU SM 里有、而这里没有</b>的五样东西。这张图的信息量主要在右边 —— 一颗芯片的性格，往往是被它<b>不做</b>的事定义的。</figcaption>
 </figure>
@@ -1695,8 +1695,8 @@ TPU 的性能问题多半出在「形状」上（矩阵维度对不对齐、切�
 <text x="20" y="612.0" class="xs">加器。</text>
 <text x="20" y="640.0" class="xs"><tspan font-weight="700" fill="#202124">延迟和吞吐是两回事。</tspan>一个数从进阵列到出结果要走满 2N−1 拍 —— 对 256×256 就是 <tspan font-weight="700" fill="#202124">511 拍</tspan>。但阵列一旦灌满，<tspan font-weight="700" fill="#d93025">每一拍</tspan></text>
 <text x="20" y="656.0" class="xs"><tspan font-weight="700" fill="#d93025">都有一整列结果落地</tspan>。所以矩阵越大越划算：填满流水线的那 511 拍被摊薄了。</text>
-<text x="20" y="694.0" class="xs">反过来说，<tspan font-weight="700" fill="#d93025">小矩阵在 TPU 上格外亏</tspan>：算一个 256×256×256 的乘法，光是灌满和排空流水线就占掉一半时间。这是 §7 那</text>
-<text x="20" y="710.0" class="xs">条「编译器必须提前排班」的物理根源之一。</text>
+<text x="20" y="694.0" class="xs">反过来说，<tspan font-weight="700" fill="#d93025">小矩阵在 TPU 上格外亏</tspan>：算一个 256×256×256 的乘法，光是灌满和排空流水线就占掉<tspan font-weight="700" fill="#202124">三分之二</tspan>的时间（256 </text>
+<text x="20" y="710.0" class="xs">＋ 511 ＝ 767 拍，其中 511 拍不在稳态）。这是 §7 那条「编译器必须提前排班」的物理根源之一。</text>
 <rect x="640" y="110" width="740" height="176" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
 <text x="656" y="136" class="sec" fill="#1e8e3e">峰值这条链是官方的，不是推的</text>
 <rect x="656" y="148" width="708" height="54" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>

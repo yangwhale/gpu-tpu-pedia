@@ -1054,7 +1054,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svglbl" x="148" y="278" fill="#d93025" text-anchor="end" style="font-size:13px">6 字节</text>
 <text class="None" x="190" y="198" fill="#5f6368">算</text>
 <text class="svglbl" x="190" y="238" fill="#d93025" style="font-size:30px">1</text>
-<text class="svglbl" x="218" y="238" fill="#d93025" style="font-size:13px">次乘加</text>
+<text class="svglbl" x="218" y="238" fill="#d93025" style="font-size:13px">个 FLOP</text>
 <text class="None" x="190" y="268" fill="#5f6368">强度 ＝ 1 ÷ 6 ＝</text>
 <text class="svglbl" x="322" y="268" fill="#d93025" style="font-size:17px">0.17</text>
 <rect x="18" y="294" width="406" height="74" rx="8" fill="#fff" stroke="#f2c7c2" stroke-width="1.0"/>
@@ -1073,7 +1073,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="477" y="170" width="406" height="112" rx="8" fill="#fff" stroke="#c3e2cc" stroke-width="1.0"/>
 <text class="None" x="493" y="196" fill="#5f6368">算</text>
 <text class="svglbl" x="529" y="200" fill="#1e8e3e" style="font-size:22px">2N³</text>
-<text class="None" x="587" y="196" fill="#5f6368">次乘加</text>
+<text class="None" x="587" y="196" fill="#5f6368">个 FLOP</text>
 <text class="None" x="493" y="234" fill="#5f6368">搬</text>
 <text class="svglbl" x="529" y="238" fill="#1e8e3e" style="font-size:22px">6N²</text>
 <text class="None" x="587" y="234" fill="#5f6368">字节（三个矩阵进出）</text>
@@ -3845,7 +3845,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="20" y="738" width="1360" height="124" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
 <text x="34" y="764" class="sec" fill="#1a73e8">这张图想让你记住的一句话</text>
 <text x="34" y="786" class="xs"><tspan font-weight="700" fill="#202124">GPU 的 SM 里，大部分晶体管不是在算数，是在「决定接下来算什么」</tspan> —— 调度器、上下文、记分板、缓存控制，全都是为了在运行时动态地藏住延迟和分支。TPU 把这一整套<tspan font-weight="700" fill="#d93025">前移到了编译期</tspan>，于是这些部件可以整个不要。</text>
-<text x="34" y="826" class="xs">省下的面积去了两个地方：<tspan font-weight="700" fill="#202124">更大的乘加阵列</tspan>（一个 MXU 一条指令吃满 65,536 个 cell）和<tspan font-weight="700" fill="#202124">更大的软件可控暂存</tspan>（128 MiB VMEM）。这不是「TPU 更简单」，是<tspan font-weight="700" fill="#202124">把复杂度换了个地方放</tspan> —— 从硅上换到了编译器里。</text>
+<text x="34" y="826" class="xs"><tspan font-weight="700" fill="#202124">省下的不是「面积换算力」，是这套机构整个不做了</tspan> —— 电路更简单、功耗更低。<tspan font-weight="700" fill="#d93025">它没有变成更多算力，也没有变成更多片上存储</tspan>（两项 B200 都更多）。这不是「TPU 更简单」，是<tspan font-weight="700" fill="#202124">把复杂度换了个地方放</tspan> —— 从硅上换到了编译器里。</text>
 </svg>
 <figcaption><b>一个 TensorCore 拆开，重点在右边那一栏。</b>上面那五样在这里<b>一样都没有</b>。而它们不是五个独立的取舍，是同一个决定的五个后果：一旦你决定<b>不在运行时换任务</b>，这五样同时失去存在理由。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
@@ -5179,7 +5179,7 @@ details.aside b{color:var(--ink);font-weight:600}
       <br>·&nbsp;<b>线程上下文的寄存器堆 TPU 没有</b>：B200 侧 <b>37 MiB</b>，TPU 侧 0
       <br>·&nbsp;——&nbsp;<b>合计 157 MiB 的片上 SRAM，花在 TPU 压根不存在的两样东西上。
       SRAM 是要占面积的。</b>（§3.2b 那张表）
-      <br>·&nbsp;<b>控制接口少 148 套</b>：同样多的算力，B200 切成
+      <br>·&nbsp;<b>控制接口的份数少 148 倍</b>（148 是倍数不是差值，592 − 4 ＝ 588 套）：同样多的算力，B200 切成
       <b>592 个 Tensor Core</b>，v7 只切成 <b>4 个 MXU</b>，每个大 128 倍。
       <em>每个 Tensor Core 都要自己的操作数通路、发射接口、累加器接线；
       一个 256×256 的阵列只要一套。</em>（§3.7 那张账表）
@@ -5557,8 +5557,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="950" y="159" fill="#174ea6">warp 槽 ＝ 2,048 个线程</text>
 <text class="svgsm" x="866" y="178" fill="#174ea6"><tspan font-weight="700">最多 32 个</tspan></text>
 <text class="svgsm" x="950" y="178" fill="#174ea6">线程块</text>
-<text class="svgsm" x="866" y="213" fill="#174ea6">⭐ 寄存器堆 256 KiB，<tspan font-weight="700">比它旁边那块 L1 ＋ 共享内存（228 KB）还大</tspan>。</text>
-<text class="svgsm" x="866" y="231" fill="#174ea6">一块芯片上最贵的 SRAM，最大的一份拿去当了「让人待命」的本钱。</text>
+<text class="svgsm" x="866" y="213" fill="#174ea6">⭐ 寄存器堆 256 KiB，<tspan font-weight="700">和旁边那块 L1 ＋ 共享内存一样大</tspan>（也是 256 KiB，其中最多 228 可划给共享）。</text>
+<text class="svgsm" x="866" y="231" fill="#174ea6">一块芯片上最贵的 SRAM，整整一半拿去当了「让人待命」的本钱。</text>
 <text class="svglbl" x="0" y="266" fill="#202124" style="font-size:13px">住得下多少人？<tspan font-weight="700">三个闸门，谁先卡住算谁</tspan>——&#160;这就是「占用率」这个词量的东西</text>
 <rect x="0" y="280" width="452" height="158" rx="8" fill="#fff" stroke="#e8710a"/>
 <text class="svglbl" x="14" y="302" fill="#e8710a" style="font-size:12px">① 寄存器 ——&#160;最常先卡住的那个</text>
@@ -7221,8 +7221,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="20" y="612.0" class="xs">加器。</text>
 <text x="20" y="640.0" class="xs"><tspan font-weight="700" fill="#202124">延迟和吞吐是两回事。</tspan>一个数从进阵列到出结果要走满 2N−1 拍 —— 对 256×256 就是 <tspan font-weight="700" fill="#202124">511 拍</tspan>。但阵列一旦灌满，<tspan font-weight="700" fill="#d93025">每一拍</tspan></text>
 <text x="20" y="656.0" class="xs"><tspan font-weight="700" fill="#d93025">都有一整列结果落地</tspan>。所以矩阵越大越划算：填满流水线的那 511 拍被摊薄了。</text>
-<text x="20" y="694.0" class="xs">反过来说，<tspan font-weight="700" fill="#d93025">小矩阵在 TPU 上格外亏</tspan>：算一个 256×256×256 的乘法，光是灌满和排空流水线就占掉一半时间。这是 §7 那</text>
-<text x="20" y="710.0" class="xs">条「编译器必须提前排班」的物理根源之一。</text>
+<text x="20" y="694.0" class="xs">反过来说，<tspan font-weight="700" fill="#d93025">小矩阵在 TPU 上格外亏</tspan>：算一个 256×256×256 的乘法，光是灌满和排空流水线就占掉<tspan font-weight="700" fill="#202124">三分之二</tspan>的时间（256 </text>
+<text x="20" y="710.0" class="xs">＋ 511 ＝ 767 拍，其中 511 拍不在稳态）。这是 §7 那条「编译器必须提前排班」的物理根源之一。</text>
 <rect x="640" y="110" width="740" height="176" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
 <text x="656" y="136" class="sec" fill="#1e8e3e">峰值这条链是官方的，不是推的</text>
 <rect x="656" y="148" width="708" height="54" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
@@ -9731,7 +9731,7 @@ details.aside b{color:var(--ink);font-weight:600}
     <br>FlashAttention <b>没换算法、没减 FLOPs、没用新指令，只改了数据在路上的走法</b>。
     先看它要解决什么。</p>
 <figure class="fbox fwide" id="ms-p38">
-<svg viewBox="0 0 1400 890" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="序列 128K 时注意力矩阵是 32 GiB，朴素写法要四趟 HBM 往返共 128 GiB；FlashAttention 用 online softmax 让它永远不落 HBM，计算量一点没变">
+<svg viewBox="0 0 1400 924" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="序列 128K 时注意力矩阵是 32 GiB，朴素写法要四趟 HBM 往返共 128 GiB；FlashAttention 用 online softmax 让它永远不落 HBM，计算量一点没变">
 <text x="20" y="26" class="ttl">先看这一节要解决的到底是什么　—— <tspan font-weight="700">128 GiB 全花在路上，一次乘法都没做</tspan></text>
 <rect x="1281" y="10" width="99" height="22" rx="11" fill="#d93025"/>
 <text x="1330.5" y="25" class="lbl" fill="#fff" text-anchor="middle">3.6 的引子</text>
@@ -9756,7 +9756,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="710" y="172" class="xxs" fill="#5f6368">注意力矩阵 S 一个人就这么大</text>
 <rect x="940" y="124" width="424" height="56" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
 <text x="954" y="146" class="xs"><tspan font-weight="700" fill="#202124">而 Q / K / V / O 四个加起来只有 128 MiB。</tspan><tspan font-weight="700" fill="#d93025">中间产物比输入输出大 256 倍。</tspan></text>
-<rect x="20" y="218" width="674" height="268" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+<rect x="20" y="218" width="674" height="302" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
 <text x="38" y="246" class="sec" fill="#d93025">❌ 朴素写法：S 要在 HBM 里过四趟</text>
 <text x="38" y="268" class="xxs" fill="#5f6368">每一步都是「算完写回去，下一步再读出来」</text>
 <rect x="38" y="294" width="250" height="32" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
@@ -9772,7 +9772,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="352" y="355" class="xs" fill="#d93025">读 S　→　HBM</text>
 <text x="510" y="355" class="numb" fill="#d93025">32 GiB</text>
 <rect x="38" y="374" width="250" height="32" rx="5" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
-<text x="50" y="395" class="xs" fill="#202124">　</text>
+<text x="50" y="395" class="xs" fill="#202124">（还是第 ② 步）</text>
 <line x1="292" y1="390" x2="336" y2="390" stroke="#d93025" stroke-width="2.0" marker-end="url(#aB)"/>
 <rect x="340" y="374" width="150" height="32" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
 <text x="352" y="395" class="xs" fill="#d93025">写 P　→　HBM</text>
@@ -9783,50 +9783,52 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="340" y="414" width="150" height="32" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
 <text x="352" y="435" class="xs" fill="#d93025">读 P　→　HBM</text>
 <text x="510" y="435" class="numb" fill="#d93025">32 GiB</text>
-<rect x="38" y="458" width="638" height="18" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
-<text x="50" y="472" class="xs" fill="#d93025">合计 128 GiB 的 HBM 往返 —— 这一大笔里，一次乘法都没有</text>
-<rect x="706" y="218" width="674" height="268" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
+<rect x="38" y="492" width="638" height="18" rx="4" fill="#fff" stroke="#d93025" stroke-width="1.2"/>
+<text x="50" y="506" class="xs" fill="#d93025">合计 128 GiB 的 HBM 往返 —— 这一大笔里，一次乘法都没有</text>
+<rect x="706" y="218" width="674" height="302" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.8"/>
 <text x="724" y="246" class="sec" fill="#1e8e3e">✅ FlashAttention：S 从来不落 HBM</text>
 <text x="724" y="268" class="xxs" fill="#5f6368">分块 ＋ online softmax，一块算完就地更新结果</text>
-<rect x="724" y="290" width="420" height="148" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="2.2" stroke-dasharray="5,4"/>
+<rect x="724" y="290" width="420" height="182" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="2.2" stroke-dasharray="5,4"/>
 <text x="738" y="312" class="box" fill="#1e8e3e">片上暂存（共享内存 ／ VMEM）</text>
-<rect x="738" y="324" width="392" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
-<text x="750" y="344" class="xs" fill="#202124">① 取一块 K/V ＋ 一块 Q</text>
-<rect x="738" y="360" width="392" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
-<text x="750" y="380" class="xs" fill="#202124">② 算这一小块的 S，就地做 online softmax</text>
-<rect x="738" y="396" width="392" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
-<text x="750" y="416" class="xs" fill="#202124">③ 用跑动的最大值和分母，就地更新 O</text>
-<line x1="934" y1="438" x2="934" y2="454" stroke="#1e8e3e" stroke-width="2.0" marker-end="url(#aB)"/>
-<text x="946" y="452" class="xxs" fill="#1e8e3e">循环下一块</text>
-<rect x="1158" y="290" width="204" height="148" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
+<rect x="738" y="324" width="392" height="28" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="750" y="343" class="xs">① 取一块 K/V ＋ 一块 Q</text>
+<rect x="738" y="358" width="392" height="28" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="750" y="377" class="xs">② 算这块的 S，更新<tspan font-weight="700" fill="#202124">跑动最大值 m</tspan></text>
+<rect x="738" y="392" width="392" height="28" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="750" y="411" class="xs">③ 旧结果先乘 <tspan font-weight="700" fill="#202124">exp(旧 m − 新 m)</tspan> 缩到同一把尺子</text>
+<rect x="738" y="426" width="392" height="28" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="750" y="445" class="xs">④ 再把这块加上去；分母同样跟着缩</text>
+<line x1="934" y1="472" x2="934" y2="488" stroke="#1e8e3e" stroke-width="2.0" marker-end="url(#aB)"/>
+<text x="946" y="486" class="xxs" fill="#1e8e3e">循环下一块；最后除一次分母 —— 与看完整行等价</text>
+<rect x="1158" y="290" width="204" height="182" rx="6" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.5"/>
 <text x="1170" y="312" class="box" fill="#f9ab00">代价要说清楚</text>
 <text x="1170" y="330" class="xxs"><tspan font-weight="700" fill="#202124">K/V 要按 Q 的分块重复读若干趟</tspan>，这一</text>
 <text x="1170" y="344" class="xxs">项不是零。<tspan fill="#9aa0a6">所以收益取决于「S 那一项原</tspan></text>
 <text x="1170" y="358" class="xxs"><tspan fill="#9aa0a6">本占多大」—— 序列越长越划算，短序列</tspan></text>
 <text x="1170" y="372" class="xxs"><tspan fill="#9aa0a6">可能不值。</tspan></text>
-<rect x="724" y="458" width="638" height="18" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
-<text x="736" y="472" class="xs" fill="#1e8e3e">S 那 128 GiB 整项消失 —— 而结果与朴素写法数学等价</text>
-<rect x="20" y="508" width="1360" height="118" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
-<text x="38" y="536" class="sec" fill="#1a73e8">🔢 三笔账，只有一笔变了</text>
-<text x="38" y="566" class="lbl" fill="#5f6368">计算量 FLOPs</text>
-<text x="38" y="590" class="box" fill="#1e8e3e">完全不变</text>
-<text x="38" y="610" class="xxs" fill="#5f6368">一次乘法都没省</text>
-<text x="486" y="566" class="lbl" fill="#5f6368">HBM 读写</text>
-<text x="486" y="590" class="box" fill="#d93025">O(n²) → O(n²/块大小)</text>
-<text x="486" y="610" class="xxs" fill="#5f6368">省的全在这一行</text>
-<text x="934" y="566" class="lbl" fill="#5f6368">显存占用</text>
-<text x="934" y="590" class="box" fill="#d93025">O(n²) → O(n)</text>
-<text x="934" y="610" class="xxs" fill="#5f6368">32 GiB 的中间产物不存在了</text>
-<rect x="20" y="648" width="1360" height="112" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
-<text x="38" y="676" class="sec" fill="#8430ce">⭐ 落点：这一节问的「一个数怎么从 HBM 走到计算单元」，不是学术问题</text>
-<text x="38" y="702" class="xs"><tspan font-weight="700" fill="#202124">过去五年最重要的那个 kernel，做的事跟计算单元一点关系都没有。</tspan>它没有换算法、没有减 FLOPs、没有用新指令 —— <tspan font-weight="700" fill="#d93025">它只是把数据在路上的走法改了一下。</tspan></text>
-<text x="38" y="723" class="xs"><tspan font-weight="700" fill="#202124">所以接下来要一站一站走完这条路</tspan>，而且两边并排走：<tspan font-weight="700" fill="#202124">同一个 FlashAttention，在 GPU 上和在 TPU 上，每一站分别落在哪、由谁决定。</tspan></text>
-<rect x="20" y="782" width="1360" height="88" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
-<text x="38" y="808" class="sec">⚠️ 出处分层</text>
-<text x="38" y="830" class="xs"><tspan font-weight="700" fill="#202124">当场算的</tspan>：131,072² × 2 B ＝ 32 GiB；四趟 ＝ 128 GiB；Q/K/V/O ＝ 4 × 131,072 × 128 × 2 B ＝ 128 MiB。式子都写在图上，可以自己复核。</text>
-<text x="38" y="849" class="xxs"><tspan font-weight="700" fill="#202124">公开结论</tspan>：FLOPs 不变、HBM 读写降到 O(n²/块大小)、显存 O(n²)→O(n) —— FlashAttention 原始结论。<tspan fill="#9aa0a6">「短序列可能不划算」也是公开说法，本图不给具体门槛。</tspan></text>
+<rect x="724" y="492" width="638" height="18" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.2"/>
+<text x="736" y="506" class="xs" fill="#1e8e3e">S 那 128 GiB 整项消失 —— 而结果与朴素写法数学等价</text>
+<rect x="20" y="542" width="1360" height="118" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text x="38" y="570" class="sec" fill="#1a73e8">🔢 三笔账，只有一笔变了</text>
+<text x="38" y="600" class="lbl" fill="#5f6368">计算量 FLOPs</text>
+<text x="38" y="624" class="box" fill="#1e8e3e">前向不变</text>
+<text x="38" y="644" class="xxs" fill="#5f6368">反向多重算一次：7 次对 6 次（见 2.3）</text>
+<text x="486" y="600" class="lbl" fill="#5f6368">HBM 读写</text>
+<text x="486" y="624" class="box" fill="#d93025">O(n²) → O(n²/块大小)</text>
+<text x="486" y="644" class="xxs" fill="#5f6368">省的全在这一行</text>
+<text x="934" y="600" class="lbl" fill="#5f6368">显存占用</text>
+<text x="934" y="624" class="box" fill="#d93025">O(n²) → O(n)</text>
+<text x="934" y="644" class="xxs" fill="#5f6368">32 GiB 的中间产物不存在了</text>
+<rect x="20" y="682" width="1360" height="112" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
+<text x="38" y="710" class="sec" fill="#8430ce">⭐ 落点：这一节问的「一个数怎么从 HBM 走到计算单元」，不是学术问题</text>
+<text x="38" y="736" class="xs"><tspan font-weight="700" fill="#202124">过去五年最重要的那个 kernel，做的事跟计算单元一点关系都没有。</tspan>它没有换算法、没有减前向的 FLOPs、没有用新指令 —— <tspan font-weight="700" fill="#d93025">它只是把数据在路上的走法改了一下。</tspan></text>
+<text x="38" y="757" class="xs"><tspan font-weight="700" fill="#202124">所以接下来要一站一站走完这条路</tspan>，而且两边并排走：<tspan font-weight="700" fill="#202124">同一个 FlashAttention，在 GPU 上和在 TPU 上，每一站分别落在哪、由谁决定。</tspan></text>
+<rect x="20" y="816" width="1360" height="88" rx="10" fill="#fff" stroke="#9aa0a6" stroke-width="1.4"/>
+<text x="38" y="842" class="sec">⚠️ 出处分层</text>
+<text x="38" y="864" class="xs"><tspan font-weight="700" fill="#202124">当场算的</tspan>：131,072² × 2 B ＝ 32 GiB；四趟 ＝ 128 GiB；Q/K/V/O ＝ 4 × 131,072 × 128 × 2 B ＝ 128 MiB。式子都写在图上，可以自己复核。</text>
+<text x="38" y="883" class="xxs"><tspan font-weight="700" fill="#202124">公开结论</tspan>：前向 FLOPs 不变、显存 O(n²)→O(n) —— FlashAttention 原始结论。<tspan fill="#9aa0a6">HBM 读写这里写成 O(n²/块大小) 是</tspan><tspan font-weight="700" fill="#202124">简化说法</tspan>，论文原式是 O(N²d²M⁻¹)（M 为片上容量）。<tspan fill="#9aa0a6">「短序列可能不划算」也是公开说法，本图不给具体门槛。</tspan></text>
 </svg>
-<figcaption><b>128 GiB 全花在路上，一次乘法都没做。</b>序列 128K 时注意力矩阵 S ＝ <b>32 GiB</b>，朴素写法要写 S／读 S／写 P／读 P 四趟；而 Q/K/V/O 加起来只有 128 MiB。<b>FlashAttention 的全部内容就是把这一项删掉</b> —— <b>FLOPs 一个都没省</b>。右边那张黄卡如实标了代价：K/V 要按 Q 的分块重复读，不是零。</figcaption>
+<figcaption><b>128 GiB 全花在路上，一次乘法都没做。</b>序列 128K 时注意力矩阵 S ＝ <b>32 GiB</b>，朴素写法要写 S／读 S／写 P／读 P 四趟；而 Q/K/V/O 加起来只有 128 MiB。<b>FlashAttention 的全部内容就是把这一项删掉</b> —— <b>前向的 FLOPs 一个都没省</b>（反向要重算，7 次对 6 次）。图上那四步把 online softmax 拆开了：新块把最大值抬高之后，<b>旧结果先乘 exp(旧 m − 新 m) 缩到同一把尺子上再相加</b> —— 等价性全挂在这一步。右边那张黄卡如实标了代价：K/V 要按 Q 的分块重复读，不是零。</figcaption>
 </figure>
 
   <div class="note danger"><span class="t">把这张图的三个数记住，后面全靠它们</span>
@@ -10705,9 +10707,10 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="252.6" y="906" width="540" height="150" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
 <path d="M261.6,906 h-5 a4,4 0 0 0 -4,4 v142 a4,4 0 0 0 4,4 h5 z" fill="#1e8e3e"/>
 <rect x="257.6" y="906" width="4" height="150" fill="#1e8e3e"/>
-<text x="270.6" y="930" class="box" fill="#1e8e3e">绿框整片 ＝ TPU VMEM 64 MiB</text>
+<text x="270.6" y="930" class="box" fill="#1e8e3e">绿框整片 ＝ TPU VMEM 64 MiB / core</text>
 <text x="270.6" y="954" class="xs">64 MiB ÷ 227 KiB ≈ <tspan font-weight="700" fill="#202124">289 倍</tspan>。左边那 <tspan font-weight="700" fill="#202124">289</tspan> 个小格里，<tspan font-weight="700" fill="#202124">GPU 只占蓝色那一格</tspan>。</text>
-<text x="270.6" y="980" class="xs"><tspan font-weight="700" fill="#202124">这直接决定块能开多大</tspan> —— 块越大，K/V 要重复读的趟数越少。</text>
+<text x="270.6" y="978" class="xxs">⚠️ 这是<tspan font-weight="700" fill="#202124">每单元</tspan>（一个 core 对一个 SM），<tspan font-weight="700" fill="#202124">不是总量</tspan> —— 按总量比方向相反，见 3.2b。</text>
+<text x="270.6" y="999" class="xs"><tspan font-weight="700" fill="#202124">而块能开多大，看的正是每单元这一格</tspan> —— 块越大，K/V 重复读的趟数越少。</text>
 <rect x="816.6" y="906" width="525.4" height="150" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
 <path d="M825.6,906 h-5 a4,4 0 0 0 -4,4 v142 a4,4 0 0 0 4,4 h5 z" fill="#d93025"/>
 <rect x="821.6" y="906" width="4" height="150" fill="#d93025"/>
@@ -10716,7 +10719,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="834.6" y="970" class="xxs"><tspan font-weight="700" fill="#d93025">是两条不同的路，所以这张图不报总数</tspan>，只问谁在这一层。</text>
 <rect x="40" y="1100" width="1320" height="116" rx="12" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
 <text x="58" y="1128" class="sec" fill="#1a73e8">⭐ 落点：这两条路上只有两处是结构性的，其余都是参数</text>
-<text x="58" y="1154" class="xs"><tspan font-weight="700" fill="#202124">第 ② 站</tspan>：GPU 有一整层硬件缓存，TPU 那里是个窟窿。　　<tspan font-weight="700" fill="#202124">第 ⑥ 项</tspan>：那个来回由谁安排 —— 一边每周期现挑，一边编译期排死。<tspan font-weight="700" fill="#d93025">其余三站都是「同一件事，两边各有一个部件」，只是容量和名字不同。</tspan></text>
+<text x="58" y="1154" class="xs"><tspan font-weight="700" fill="#202124">第 ② 站</tspan>：GPU 有一整层硬件缓存，TPU 那里是个窟窿。　　<tspan font-weight="700" fill="#202124">第 ⑥ 项</tspan>：那个来回由谁安排 —— 一边每周期现挑，一边编译期排死。<tspan font-weight="700" fill="#d93025">其余四站都是「同一件事，两边各有一个部件」，只是容量和名字不同。</tspan></text>
 <text x="58" y="1175" class="xs"><tspan font-weight="700" fill="#202124">而这两处恰好决定了 FlashAttention 在两边是两种性质的工作</tspan> —— <tspan fill="#9aa0a6">下一张图专门收这个口。</tspan></text>
 <rect x="40" y="1236" width="1320" height="88" rx="12" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
 <text x="58" y="1262" class="sec">⚠️ 出处分层</text>
@@ -10757,9 +10760,10 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="20" y="84" width="1360" height="94" rx="10" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.8"/>
 <text x="38" y="110" class="sec" fill="#8430ce">先说两边完全一样的部分 —— 不一样的只有最后一行</text>
 <text x="38" y="138" class="lbl" fill="#5f6368">数学</text>
-<text x="38" y="160" class="xs">online softmax，逐块更新最大值与分母</text>
-<text x="410" y="138" class="lbl" fill="#5f6368">FLOPs</text>
-<text x="410" y="160" class="xs">一个都不差，与朴素写法相同</text>
+<text x="38" y="160" class="xs">online softmax：逐块更新最大值与分母，新块来了先把旧结果按新最</text>
+<text x="38" y="176" class="xs">大值重标定一次</text>
+<text x="410" y="138" class="lbl" fill="#5f6368">FLOPs（前向）</text>
+<text x="410" y="160" class="xs">一个都不差，与朴素写法相同<tspan fill="#9aa0a6">　·　反向要重算，7 次对 6 次（2.3）</tspan></text>
 <text x="782" y="138" class="lbl" fill="#5f6368">结果</text>
 <text x="782" y="160" class="xs">与不分块的注意力<tspan font-weight="700" fill="#202124">数值等价</tspan></text>
 <rect x="1160" y="122" width="202" height="44" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.5"/>
@@ -12761,7 +12765,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="740" y="577" width="18" height="18" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
 <text x="749" y="590" class="xxs" fill="#1e8e3e" text-anchor="middle">2</text>
 <text x="766" y="590" class="lbl" fill="#202124">向量槽同时在动</text>
-<text x="920" y="590" class="xs">VPU 把下一块权重准备进 Result FIFO</text>
+<text x="920" y="590" class="xs">把下一块权重推进权重 FIFO（后台那套权重寄存器）</text>
 <rect x="740" y="601" width="18" height="18" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.2"/>
 <text x="749" y="614" class="xxs" fill="#1a73e8" text-anchor="middle">3</text>
 <text x="766" y="614" class="lbl" fill="#202124">DMA 槽同时在搬</text>
@@ -12790,8 +12794,10 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="478.6666666666667" y="802" width="442.6666666666667" height="9" rx="0" fill="#e6f4ea"/>
 <text x="492.6666666666667" y="801" class="box" fill="#1e8e3e">TPU：把不确定性消灭在编译期</text>
 <text x="492.6666666666667" y="829" class="xs">没有 cache，延迟就是常数；是常数，就能在编译期把每一拍排满。于是不需要替补、</text>
-<text x="492.6666666666667" y="844" class="xs">不需要大寄存器堆、不需要调度器 —— 省下的面积<tspan font-weight="700" fill="#202124">全给了乘加阵列</tspan>。这也解释了图 </text>
-<text x="492.6666666666667" y="859" class="xs">G-8 那个结果：同样一块芯片，TPU 能把更大比例的硅放在真正算数的地方。</text>
+<text x="492.6666666666667" y="844" class="xs">不需要大寄存器堆、不需要调度器 —— <tspan font-weight="700" fill="#202124">省下的是这些电路本身</tspan>，不是把它们换成了更</text>
+<text x="492.6666666666667" y="859" class="xs">多乘加单元。<tspan font-weight="700" fill="#d93025">图 G-8 数的是每周期乘加总量，不是面积占比</tspan> —— 而那张图的结论是</text>
+<text x="492.6666666666667" y="874" class="xs">两边总量同一量级（切法差 148 倍）。<tspan fill="#9aa0a6">「谁的硅用得更值」需要 die 面积，而那个</tspan></text>
+<text x="492.6666666666667" y="889" class="xs"><tspan fill="#9aa0a6">数官方不公布，本课不主张。</tspan></text>
 <rect x="937.3333333333334" y="781" width="442.6666666666667" height="128" rx="10" fill="#fff" stroke="#8430ce" stroke-width="1.8"/>
 <rect x="937.3333333333334" y="781" width="442.6666666666667" height="30" rx="10" fill="#f3e8fd"/>
 <rect x="937.3333333333334" y="802" width="442.6666666666667" height="9" rx="0" fill="#f3e8fd"/>
@@ -15240,7 +15246,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="862" y="198" width="4" height="100" rx="2" fill="#1a73e8"/>
 <text x="878" y="222" class="lbl" fill="#1a73e8">①</text>
 <text x="900" y="222" class="box" fill="#202124">二进制还是十进制？</text>
-<text x="878" y="242" class="xxs">官方 HBM 那一栏是<tspan font-weight="700" fill="#202124">十进制</tspan>。206 GB 就是 192 GiB，差 <tspan font-weight="700" fill="#202124">7.4%</tspan> —— 足够把「刚好装下」变成 OOM。</text>
+<text x="878" y="242" class="xxs">官方 HBM 那一栏写的是 <tspan font-weight="700" fill="#202124">GiB（二进制）</tspan>。192 GiB 换成十进制是 206 GB，差 <tspan font-weight="700" fill="#202124">7.4%</tspan> —— 足够把「刚好</text>
+<text x="878" y="256" class="xxs">装下」变成 OOM。</text>
 <rect x="878" y="268" width="466" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.0"/>
 <text x="886" y="282" class="xxs"><tspan fill="#9aa0a6">本课取值：</tspan>判 OOM 一律用 <tspan font-weight="700" fill="#202124">94.74 GiB/device</tspan></text>
 <rect x="862" y="308" width="500" height="100" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
@@ -15761,7 +15768,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="46" y="338" class="lbl" fill="#202124">① 同一次访存，要在路上做几个决定？</text>
 <text x="994" y="338" class="xxs" fill="#9aa0a6" text-anchor="end">§2.1 · §3.6</text>
 <line x1="46" y1="346" x2="994" y2="346" stroke="#dadce0" stroke-width="1.0"/>
-<text x="56" y="366" class="xs"><tspan font-weight="700" fill="#202124">5 个运行时决策点</tspan><tspan fill="#9aa0a6"> —— 命中不中要跑起来才知道</tspan></text>
+<text x="56" y="366" class="xs"><tspan font-weight="700" fill="#202124">主路 4 个运行时决策点</tspan><tspan fill="#9aa0a6"> —— 命中不中要跑起来才知道</tspan></text>
 <text x="546" y="366" class="xs"><tspan font-weight="700" fill="#202124">0 个</tspan><tspan fill="#9aa0a6"> —— 全在编译期定死，走哪条路是算出来的</tspan></text>
 <line x1="520" y1="394" x2="520" y2="436" stroke="#9aa0a6" stroke-width="1.5" marker-end="url(#aK)"/>
 <rect x="36" y="448" width="478" height="52" rx="6" fill="#fce8e6"/>
@@ -15793,7 +15800,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="1052" y="310" width="312" height="94" rx="8" fill="#fcfcfd" stroke="#dadce0" stroke-width="1.1"/>
 <text x="1064" y="334" class="num" fill="#1a73e8">2.</text>
 <text x="1086" y="334" class="lbl">二进制还是十进制？</text>
-<text x="1086" y="357" class="xxs"><tspan fill="#9aa0a6">官方 HBM 那栏是十进制。</tspan><tspan font-weight="700" fill="#202124">206 GB = 192 GiB，差 7.4%</tspan></text>
+<text x="1086" y="357" class="xxs"><tspan fill="#9aa0a6">官方 HBM 那栏写的是 </tspan><tspan font-weight="700" fill="#202124">GiB（二进制）</tspan>。<tspan font-weight="700" fill="#202124">192 GiB ＝ 206 </tspan></text>
+<text x="1086" y="370" class="xxs"><tspan font-weight="700" fill="#202124">GB，差 7.4%</tspan><tspan fill="#9aa0a6"> —— 别把 192 GiB 当 192 GB 往上乘</tspan></text>
 <text x="1352" y="394" class="xxs" fill="#9aa0a6" text-anchor="end">P-21 乙①</text>
 <rect x="1052" y="410" width="312" height="94" rx="8" fill="#fcfcfd" stroke="#dadce0" stroke-width="1.1"/>
 <text x="1064" y="434" class="num" fill="#1a73e8">3.</text>

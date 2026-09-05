@@ -12,11 +12,20 @@
 而 Q/K/V/O 加起来只有 <b>128 MiB</b>。<b>差三个数量级，而且全在路上。</b>
 
 **FlashAttention 的全部内容就是把这 128 GiB 那一项删掉。** 靠 online softmax
-边算边更新，S 永远不落 HBM。<b>FLOPs 一个都没省 —— 省的全是搬运。</b>
+边算边更新，S 永远不落 HBM。<b>前向的 FLOPs 一个都没省 —— 省的全是搬运。</b>
+
+⛔ 2026-09-05 两处修正：
+① **「FLOPs 完全不变」只对前向成立。** 反向要把 S 和 P 重算，
+   §2.3 那个折叠自己算过：**7 次矩阵乘对 6 次**。这门课通篇讲训练，
+   不加这个限定就跟自家折叠直接打架。
+② **online softmax 以前只是个名词。** 三步里只写「用跑动的最大值和分母就地更新」，
+   读者无从知道「就地更新」凭什么等价。现在拆成四步，把那次
+   `exp(旧 m − 新 m)` 重标定明写出来 —— 等价性全挂在这一步上。
 
 **⚠️ 出处口径。** 32 GiB / 128 GiB / 128 MiB 三个数都是<b>当场算的</b>，
-式子写在图上。「FLOPs 不变、HBM 读写从 O(n²) 降到 O(n²/block)、显存占用
-O(n²)→O(n)」出自 FlashAttention 的公开结论。
+式子写在图上。「前向 FLOPs 不变、显存占用 O(n²)→O(n)」出自 FlashAttention
+的公开结论；<b>HBM 读写那一条本图写成 O(n²/块大小) 是简化说法</b> ——
+论文给的是 O(N²d²M⁻¹)（M 是片上容量），本图不把简化式说成论文原文。
 <b>分块之后 K/V 要重复读，这一项图上如实标了，没有假装它是零。</b>
 """
 from common import Fig, para, BL, GN, RD, YL, PU, TL, INK, SUB, GREY, FILL
@@ -24,7 +33,10 @@ from common import Fig, para, BL, GN, RD, YL, PU, TL, INK, SUB, GREY, FILL
 W = 1400
 
 NUM_Y, NUM_H = 84, 112                      # ① 那个 32 GiB
-FLOW_Y, FLOW_H = NUM_Y + NUM_H + 22, 268    # ② 两种走法并排
+FLOW_Y, FLOW_H = NUM_Y + NUM_H + 22, 302    # ② 两种走法并排
+# ⛔ 2026-09-05 从 268 加到 302：右栏原来只有三步，而 online softmax 最关键的
+#    那一步（新块来了要把旧结果按新最大值重标定）整门课一次都没写出来。
+#    加了一行放它 —— 这是全课主例的核心把戏，不能只出现名词。
 BILL_Y, BILL_H = FLOW_Y + FLOW_H + 22, 118  # ③ 账
 LAND_Y, LAND_H = BILL_Y + BILL_H + 22, 112  # ④ 落点
 SRC_Y, SRC_H = LAND_Y + LAND_H + 22, 88     # ⑤ 出处
@@ -82,7 +94,10 @@ def _naive(f):
 
     steps = [("① 算 S ＝ QKᵀ", "写 S", "32 GiB"),
              ("② 算 softmax", "读 S", "32 GiB"),
-             ("", "写 P", "32 GiB"),
+             # ⛔ 2026-09-05：这一格原来是空字符串，投到屏幕上就是**一个空盒子**。
+             #    三个计算步对四趟 HBM 往返，第 ② 步（softmax）自己占两趟：
+             #    读 S 进来、写 P 回去。空着不是留白，是漏字。
+             ("（还是第 ② 步）", "写 P", "32 GiB"),
              ("③ 算 O ＝ PV", "读 P", "32 GiB")]
     for i, (act, io, amt) in enumerate(steps):
         y = FLOW_Y + 76 + i * 40
@@ -93,8 +108,8 @@ def _naive(f):
         f.t(L_X + 332, y + 21, io + "　→　HBM", "xs", RD)
         f.t(L_X + 490, y + 21, amt, "numb", RD)
 
-    f.rect(L_X + 18, FLOW_Y + 240, L_W - 36, 18, "#fff", RD, 1.2, 4)
-    f.t(L_X + 30, FLOW_Y + 254, "合计 128 GiB 的 HBM 往返 —— "
+    f.rect(L_X + 18, FLOW_Y + 274, L_W - 36, 18, "#fff", RD, 1.2, 4)
+    f.t(L_X + 30, FLOW_Y + 288, "合计 128 GiB 的 HBM 往返 —— "
                                 "这一大笔里，一次乘法都没有", "xs", RD)
 
 
@@ -104,26 +119,33 @@ def _flash(f):
     f.t(R_X + 18, FLOW_Y + 50, "分块 ＋ online softmax，一块算完就地更新结果", "xxs", SUB)
 
     # 片上那个框：三步全在里面
-    f.rect(R_X + 18, FLOW_Y + 72, 420, 148, "#fff", GN, 2.2, 8, "5,4")
+    f.rect(R_X + 18, FLOW_Y + 72, 420, 182, "#fff", GN, 2.2, 8, "5,4")
     f.t(R_X + 32, FLOW_Y + 94, "片上暂存（共享内存 ／ VMEM）", "box", GN)
+    # ⭐ ②③④ 三步合起来才是 online softmax。以前只写「用跑动的最大值和分母，
+    #    就地更新 O」——&nbsp;那是把机制说成了名词：读者不知道「就地更新」凭什么等价。
+    #    等价性全在 ③ 那一次重标定上：旧结果是按旧的最大值减出来的，
+    #    新块把最大值抬高了，就先把旧结果乘 exp(旧 m − 新 m) 拉到同一把尺子上，
+    #    再相加。分母同样跟着缩。最后除一次分母，结果与看完整行一模一样。
     for i, txt in enumerate(["① 取一块 K/V ＋ 一块 Q",
-                             "② 算这一小块的 S，就地做 online softmax",
-                             "③ 用跑动的最大值和分母，就地更新 O"]):
-        f.rect(R_X + 32, FLOW_Y + 106 + i * 36, 392, 30, FILL[GN], GN, 1.2, 5)
-        f.t(R_X + 44, FLOW_Y + 126 + i * 36, txt, "xs", INK)
+                             "② 算这块的 S，更新<b>跑动最大值 m</b>",
+                             "③ 旧结果先乘 <b>exp(旧 m − 新 m)</b> 缩到同一把尺子",
+                             "④ 再把这块加上去；分母同样跟着缩"]):
+        f.rect(R_X + 32, FLOW_Y + 106 + i * 34, 392, 28, FILL[GN], GN, 1.2, 5)
+        # ⚠️ 必须用 para()：f.t() 不解析 <b>，会连内容一起被浏览器丢掉（构建期有断言拦）。
+        para(f, R_X + 44, FLOW_Y + 125 + i * 34, 372, txt, "xs", 15, max_lines=1)
 
-    f.line(R_X + 228, FLOW_Y + 220, R_X + 228, FLOW_Y + 236, GN, 2.0, marker="aB")
-    f.t(R_X + 240, FLOW_Y + 234, "循环下一块", "xxs", GN)
+    f.line(R_X + 228, FLOW_Y + 254, R_X + 228, FLOW_Y + 270, GN, 2.0, marker="aB")
+    f.t(R_X + 240, FLOW_Y + 268, "循环下一块；最后除一次分母 —— 与看完整行等价", "xxs", GN)
 
-    f.rect(R_X + 452, FLOW_Y + 72, 204, 148, FILL[YL], YL, 1.5, 6)
+    f.rect(R_X + 452, FLOW_Y + 72, 204, 182, FILL[YL], YL, 1.5, 6)
     f.t(R_X + 464, FLOW_Y + 94, "代价要说清楚", "box", YL)
     para(f, R_X + 464, FLOW_Y + 112, 184,
          "<b>K/V 要按 Q 的分块重复读若干趟</b>，这一项不是零。"
          "<g>所以收益取决于「S 那一项原本占多大」—— 序列越长越划算，"
          "短序列可能不值。</g>", "xxs", 14, max_lines=8)
 
-    f.rect(R_X + 18, FLOW_Y + 240, R_W - 36, 18, "#fff", GN, 1.2, 4)
-    f.t(R_X + 30, FLOW_Y + 254, "S 那 128 GiB 整项消失 —— "
+    f.rect(R_X + 18, FLOW_Y + 274, R_W - 36, 18, "#fff", GN, 1.2, 4)
+    f.t(R_X + 30, FLOW_Y + 288, "S 那 128 GiB 整项消失 —— "
                                 "而结果与朴素写法数学等价", "xs", GN)
 
 
@@ -131,7 +153,13 @@ def _flash(f):
 def _bill(f):
     f.rect(20, BILL_Y, 1360, BILL_H, FILL[BL], BL, 1.8, 10)
     f.t(38, BILL_Y + 28, "🔢 三笔账，只有一笔变了", "sec", BL)
-    cols = [("计算量 FLOPs", "完全不变", GN, "一次乘法都没省"),
+    # ⛔ 2026-09-05：这一格原来写「计算量 FLOPs / 完全不变 / 一次乘法都没省」。
+    #    **前向确实不变，反向会变多** —— Flash 不存中间矩阵，反向得把 S 和 P 重算，
+    #    §2.3 那个折叠自己算过这笔账：前向 2 次矩阵乘 + 反向 4 次 ＝ 6 次，
+    #    Flash 多重算一次 ＝ **7 次对 6 次**。
+    #    这门课通篇讲的是训练（§6.3 是 Hunyuan3 预训练），反向那一半不能省着不说，
+    #    而且不说的话这张图就跟自家 §2.3 的折叠**直接打架**。
+    cols = [("计算量 FLOPs", "前向不变", GN, "反向多重算一次：7 次对 6 次（见 2.3）"),
             ("HBM 读写", "O(n²) → O(n²/块大小)", RD, "省的全在这一行"),
             ("显存占用", "O(n²) → O(n)", RD, "32 GiB 的中间产物不存在了")]
     for i, (name, val, c, note) in enumerate(cols):
@@ -148,7 +176,7 @@ def _land(f):
                          "不是学术问题", "sec", PU)
     y = para(f, 38, LAND_Y + 54, 1324,
              "<b>过去五年最重要的那个 kernel，做的事跟计算单元一点关系都没有。</b>"
-             "它没有换算法、没有减 FLOPs、没有用新指令 —— "
+             "它没有换算法、没有减前向的 FLOPs、没有用新指令 —— "
              "<r>它只是把数据在路上的走法改了一下。</r>", "xs", 19)
     para(f, 38, y + 2, 1324,
          "<b>所以接下来要一站一站走完这条路</b>，而且两边并排走："
@@ -165,8 +193,9 @@ def _src(f):
              "Q/K/V/O ＝ 4 × 131,072 × 128 × 2 B ＝ 128 MiB。式子都写在图上，可以自己复核。",
              "xs", 17)
     para(f, 38, y + 2, 1324,
-         "<b>公开结论</b>：FLOPs 不变、HBM 读写降到 O(n²/块大小)、显存 O(n²)→O(n) —— "
-         "FlashAttention 原始结论。<g>「短序列可能不划算」也是公开说法，本图不给具体门槛。</g>",
+         "<b>公开结论</b>：前向 FLOPs 不变、显存 O(n²)→O(n) —— FlashAttention 原始结论。"
+         "<g>HBM 读写这里写成 O(n²/块大小) 是<b>简化说法</b>，"
+         "论文原式是 O(N²d²M⁻¹)（M 为片上容量）。</g><g>「短序列可能不划算」也是公开说法，本图不给具体门槛。</g>",
          "xxs", 16)
 
 
