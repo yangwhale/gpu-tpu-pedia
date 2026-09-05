@@ -346,7 +346,7 @@ def body():
       <button data-g="2">两个都省</button>
       <button data-g="3">都不省，只是换了个说法</button>
     </div>
-    <div class="rev" id="rev">
+    <div class="rev">
       <p><b>省算力，不省显存。</b><br>
         <span class="qs">算的时候只走 37B 那条路，<b>算力是真省了</b>；
         可 671B 的权重<b>一个字节都不能少放</b> ——&nbsp;
@@ -362,18 +362,33 @@ def body():
   </div>
 </div></section>
 <script>
+/* ⛔ 2026-09-05 从「一道题」改成「N 道题」。第一版写死了
+   querySelector('.guess') 和 getElementById('rev') —— 加第二道时
+   两道会共用同一个 rev，点第二道会展开第一道的答案。
+   ⭐ 判据：**凡是页面上可能出现第二个的东西，一开始就别用 id 和单数选择器。**
+   现在按 .guess 逐个绑定，答案区用 querySelector('.rev') 就近找。 */
+/* ⛔ 2026-09-05 第二个坑，紧接着上一个：这段脚本**内联在第一道题后面**，
+   它跑的时候第二道题还没被解析出来 —— querySelectorAll 只找到一个，
+   第二道题点了没反应。⭐ 判据：**内联脚本只看得见它上面的 DOM。**
+   凡是「扫全页某一类元素」的绑定，一律等 DOMContentLoaded。
+   （这个错版面 lint 抓不到，是渲染后点一下才发现的 —— 交互要点过才算验过。） */
 (function(){
-  var box=document.querySelector('.guess'); if(!box) return;
-  var rev=document.getElementById('rev');
-  box.querySelectorAll('button').forEach(function(b){
-    b.addEventListener('click', function(){
-      box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
-      b.classList.add('picked');
-      box.querySelector('[data-right]').classList.add('right');
-      rev.classList.add('on');
-      rev.scrollIntoView({behavior:'smooth', block:'nearest'});
+  function bind(){
+  document.querySelectorAll('.guess').forEach(function(box){
+    var rev=box.querySelector('.rev'); if(!rev) return;
+    box.querySelectorAll('button').forEach(function(b){
+      b.addEventListener('click', function(){
+        box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+        b.classList.add('picked');
+        box.querySelector('[data-right]').classList.add('right');
+        rev.classList.add('on');
+        rev.scrollIntoView({behavior:'smooth', block:'nearest'});
+      });
     });
   });
+  }
+  if(document.readyState==='loading') addEventListener('DOMContentLoaded', bind);
+  else bind();
 })();
 </script>""")
 
@@ -1032,6 +1047,51 @@ def body():
     # 这一节是 L200 的主体（14 张图，占全书四成）—— 因为用户的两个目标
     # 都落在这儿：3.1–3.5 是「硬件上有什么不同」，3.6 是「FlashAttention
     # 从头到尾跑一遍」。别的节都能压，这一节不能。
+    # ── 第 3 节之前：猜一猜（预告题）─────────────────────────────
+    #
+    # ⭐ 2026-09-05 Chris：「再来一道猜测本节内容的题，就是猜一下这个 B200 芯片
+    #    有多少个 Tensor Core，然后 v7 有多少个 MXU（括号 Tensor Core）。」
+    #
+    # ⭐ 这道题跟开场那道是**两种题**，别混：
+    #    · 开场那道是**复习题**，问上一课学过的（答案在他们脑子里）
+    #    · 这一道是**预告题**，问这一节要讲的（答案他们不知道，就是要他们猜错）
+    #    ⭐ 预告题好用的前提是**答案本身足够反直觉** ——&nbsp;592 对 4 差 148 倍，
+    #      而这两颗芯片的总乘加数只差 15%。猜完再看这一节，每一张图都是在
+    #      解释「为什么可以差这么多，又几乎一样」。
+    # ⛔ 数字只有一个真源，都在本节正文里：
+    #    · 592 ＝ 148 SM × 4 Tensor Core／SM（3.7 那笔账的分子，见本页 §1 折叠）
+    #    · 4 ＝ 2 TensorCore × 2 MXU／核（整颗 chip）
+    #    改这两个数要连着 3.7 一起改，别只改这儿。
+    a("""
+<section style="border-top:none;padding-bottom:0"><div class="wrap">
+  <div class="guess">
+    <h3>下一节开始之前，先猜两个数</h3>
+    <p class="q">下一节我们要把两颗芯片<b>拆开</b>，一层一层往里看。
+      在拆之前先猜一下 ——&nbsp;<b>它们各自把算力切成了多少块？</b><br>
+      <span class="qs">B200 上那个单元叫 <b>Tensor Core</b>，v7 上那个叫 <b>MXU</b>，
+      干的是同一件事：矩阵乘加。<br>
+      问的是<b>整颗芯片上各有几个</b>。</span></p>
+    <div class="opts">
+      <button data-g="0">B200 约 150 个　·　v7 约 100 个</button>
+      <button data-g="1">B200 约 600 个　·　v7 约 500 个</button>
+      <button data-g="2" data-right>B200 约 600 个　·　v7 <b>个位数</b></button>
+      <button data-g="3">两边都是个位数</button>
+    </div>
+    <div class="rev">
+      <p><b>B200：592 个。v7：4 个。</b><br>
+        <span class="qs">592 ＝ 148 个 SM × 每个 SM 4 个 Tensor Core；
+        4 ＝ 2 个 TensorCore × 每个核 2 个 MXU。
+        <b>份数差 148 倍。</b></span></p>
+      <p style="margin-bottom:0"><b>⭐ 但真正该惊讶的是下一句：</b>
+        <span class="qs">这两颗芯片<b>一拍能做的乘加总数只差 15%</b>
+        ——&nbsp;B200 是 606,208，v7 是 524,288。
+        <br><b>同样一份算力，一边切成 592 小块，一边切成 4 大块。</b>
+        <em>下一节整节要回答的就是这一个问题：为什么可以差这么多，又几乎一样多；
+        以及切得碎和切得整，各自要付什么代价。</em></span></p>
+    </div>
+  </div>
+</div></section>""")
+
     a('''
 <section id="s3"><div class="wrap">
   <!-- ⛔⛔ 2026-09-04 §3 拆成上下两篇。原来是一整节：**7,318 字 / 20 图 /
