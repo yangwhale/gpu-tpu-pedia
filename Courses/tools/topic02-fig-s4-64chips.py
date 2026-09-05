@@ -64,140 +64,161 @@ def line(x1, y1, x2, y2, c=GY2, sw=1.2, dash=None):
 
 
 TOP = 96
-CH = 466
+CH = 580
 CW = 686
 LX, RX = 0, 714
 BY = TOP + CH + 26
 H = BY + 132
 
+
+def path(d, c=GY2, sw=1.2, dash=None, fill="none"):
+    p.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%s"%s/>'
+             % (d, fill, c, sw, ' stroke-dasharray="%s"' % dash if dash else ''))
+
+
 p.append('<svg viewBox="0 0 %d %d" width="100%%" role="img" aria-label="'
-         '同样是 64 颗，GB300 的 64 张卡整个落在一个 NVL72 域内任意两点一跳，'
-         'TPU v7 的 64 颗是 4×4×4 三维环面最远 6 跳">' % (W, H))
+         'GB300 的 64 张卡各出 18 条 NVLink，一条接一台 NVSwitch，共 18 台交换机，'
+         '所以任意两点经一台交换机一跳可达；TPU v7 的 64 颗排成 4×4×4 的三维立方体，'
+         '每颗只连六个邻居，三个方向首尾相接成环面，最远 6 跳">' % (W, H))
 
 t(0, 16, '64 颗连在一起 ——&#160;<tspan font-weight="700">同样是 64，两边连的方式不是一回事</tspan>',
   "svglbl", "#202124", 14)
 # ⛔ 2026-09-05：这里原来写死「§6.3」。这张图**同时注入 L200 和 L300**，
-#    而两份文档的节号不一样（L200 实测在 6.3，L300 在 7.2）——
-#    一张图进两份文档，**硬编码节号必然有一份是错的**。
+#    而两份文档的节号不一样 ——&nbsp;硬编码节号必然有一份是错的。
 t(0, 36, '这门课那组招牌实测就是 64 对 64。摆那两个数之前，'
          '得先知道这 64 颗<tspan font-weight="700">各自是怎么连起来的</tspan>。')
 t(W, 16, '⛔ 这张图只说结构，不说快慢', "svglbl", RD, 12, "end")
 t(W, 36, '哪种通信模式吃亏、EP 为什么对拓扑最挑剔 →&#160;专题五', None, GY2, None, "end")
 
-# ══════════ 左：NVL72 域 ══════════
+# ══════════════════════════════════════════════════════════════════════
+# 左：NVL72 —— 二部图，这才是这套拓扑的标准画法
+#
+# ⛔⛔ 2026-09-05 重画。上一版把交换层画成一根横条 ＋ 八根虚线，下面摆 64 个方块。
+#    Chris：「这个画的太垃圾，网上都有非常经典的图，左边至少应该画出 18 条、配 18 台交换机。」
+#    旧版**把这套拓扑最要紧的事实画丢了**：
+#      · 每颗 GPU 有 **18 条 NVLink**，**一条接一台不同的 NVSwitch**
+#      · 机架里一共 **18 颗 NVSwitch 芯片**（9 个 switch tray × 2）
+#    出处：NVIDIA NVL72 参考架构文档原话 ——&nbsp;
+#    "Each GPU has 18 NVLink Fifth-Generation links, **one per in-rack NVSwitch**"。
+#    ⭐ 这么画之后，「任意两点一跳」不再是标语，是**图上看得见的事**。
+# ⚠️ 64 × 18 ＝ 1,152 条全画是一团糊。标准做法：**一颗画满，其余淡出**。
 box(LX, TOP, CW, CH, "#f7faff", BL, 12, 1.6)
 t(LX + 20, TOP + 30, 'GB300 · NVLink 5 ＋ NVSwitch', "svglbl", BL, 16)
-t(LX + 20, TOP + 52, '一个<tspan font-weight="700">交换式的域</tspan>：域内任意两点，'
-                     '经过交换机<tspan font-weight="700">一跳可达</tspan>', None, "#174ea6")
+t(LX + 20, TOP + 52, '<tspan font-weight="700">每颗 GPU 18 条 NVLink，一条接一台交换机</tspan>',
+  None, "#174ea6")
+t(LX + CW - 20, TOP + 52, '机架里正好 18 台　·　域内非阻塞', None, GY2, None, "end")
 
-# 交换层
-box(LX + 60, TOP + 78, CW - 120, 40, "#e8f0fe", BL, 8, 1.4)
-t(LX + CW / 2, TOP + 103, 'NVSwitch　·　域内非阻塞', "svglbl", BL, 14, "middle")
+SWY = TOP + 78
+SW_N, SW_W, SW_G = 18, 28, 7
+SW_X0 = LX + (CW - (SW_N * SW_W + (SW_N - 1) * SW_G)) / 2
+for k in range(SW_N):
+    x = SW_X0 + k * (SW_W + SW_G)
+    box(x, SWY, SW_W, 32, "#d2e3fc", BL, 5, 1.1)
+    t(x + SW_W / 2, SWY + 21, str(k + 1), "svglbl", "#174ea6", 11, "middle")
 
-# 64 个方块：8 × 8
-gx, gy, cell, gap = LX + 60, TOP + 142, 64, 8
-for r in range(8):
-    for c in range(8):
-        x = gx + c * (cell + gap) / 1.0 * 0.98
-        y = gy + r * 30
-        box(x, y, 56, 22, "#e8f0fe", BL, 4, 0.9)
-for c in range(8):
-    line(gx + c * 70.6 + 28, TOP + 118, gx + c * 70.6 + 28, gy, BL, 0.8, "3 3")
-t(LX + 20, gy + 254, '<tspan font-weight="700">64 张卡</tspan>　——&#160;'
+GY_ = TOP + 320                     # GPU 那两排
+GN_, GW, GG = 32, 17, 3
+GX0 = LX + (CW - (GN_ * GW + (GN_ - 1) * GG)) / 2
+HI = 6
+HX = GX0 + HI * (GW + GG) + GW / 2
+# 淡的先画，浓的压上去
+for hj in (HI - 4, HI + 6):
+    hx = GX0 + hj * (GW + GG) + GW / 2
+    for k in (0, 5, 11, 17):
+        sx = SW_X0 + k * (SW_W + SW_G) + SW_W / 2
+        p.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" '
+                 'stroke-width="0.8" opacity=".2"/>' % (hx, GY_, sx, SWY + 32, BL))
+for k in range(SW_N):
+    sx = SW_X0 + k * (SW_W + SW_G) + SW_W / 2
+    line(HX, GY_, sx, SWY + 32, BL, 1.15)
+for row in range(2):
+    for k in range(GN_):
+        x = GX0 + k * (GW + GG)
+        on = (row == 0 and k == HI)
+        box(x, GY_ + row * 26, GW, 20, "#1a73e8" if on else "#e8f0fe", BL, 3,
+            1.4 if on else 0.8)
+
+t(LX + 20, GY_ + 68, '蓝色那一颗的 18 条画满了；其余 63 颗<tspan font-weight="700">每颗都一样</tspan>'
+                     '（全画出来是 1,152 条，看不清）', None, GY2)
+t(LX + 20, GY_ + 92, '<tspan font-weight="700">64 张卡</tspan>　——&#160;'
                      '而域的上限是 <tspan font-weight="700">72</tspan>，'
                      '<tspan font-weight="700">64 整个装得下</tspan>', None, "#202124")
-box(LX + 20, gy + 264, CW - 40, 46, "#e8f0fe", None, 8, 0)
-t(LX + 36, gy + 285, '⭐ 所以在 64 这个规模上，GB300 这一侧', "svglbl", "#174ea6", 13)
-t(LX + 36, gy + 303, '谁跟谁说话都是<tspan font-weight="700">一跳、同样的带宽</tspan>'
-                     '——&#160;位置无关', "svglbl", "#174ea6", 14)
+box(LX + 20, GY_ + 104, CW - 40, 62, "#e8f0fe", None, 8, 0)
+t(LX + 36, GY_ + 126, '⭐ 「任意两点一跳」在这张图上是<tspan font-weight="700">看得见的</tspan>：'
+                      '任何两颗 GPU 都挂在<tspan font-weight="700">同一批交换机</tspan>上，',
+  "svglbl", "#174ea6", 13)
+t(LX + 36, GY_ + 148, '中间只隔一台 ——&#160;<tspan font-weight="700">谁跟谁都一样，位置无关</tspan>。',
+  "svglbl", "#174ea6", 14)
 
-# ══════════ 右：4×4×4 环面 ══════════
+# ══════════════════════════════════════════════════════════════════════
+# 右：4×4×4 —— 标准 2:1 等轴测立方体
+#
+# ⛔⛔ 上一版摊成四层 4×4 并排 ——&nbsp;那是四张二维图，不是一个三维体。
+#    Chris：「右边这个它至少是 3D 的一个立方体。」
+# ⚠️ 第一次重画时用了 i 和 k 都往右的斜投影，**结点大面积重叠**，糊成一片。
+#    换成标准 2:1 等轴测：x 向右下、y 向左下、z 向上。
+#    ⭐ 这套投影下不会重合，可以证：设 u=46 v=26 w=44，
+#      两点同位需 13·Δ(i+j) ＝ 22·Δk，而 Δ(i+j) 必为偶数 ——&nbsp;只有全零解。
+# ⚠️ 环绕链路**只画三条**（每个方向一条）——&nbsp;学术画法的通行做法，全画会糊死。
 box(RX, TOP, CW, CH, "#f5faf6", GR, 12, 1.6)
 t(RX + 20, TOP + 30, 'TPU v7 · ICI 三维环面', "svglbl", GR, 16)
-t(RX + 20, TOP + 52, '<tspan font-weight="700">没有交换机</tspan>：每颗只连自己的邻居，'
-                     '远的要<tspan font-weight="700">一跳一跳走过去</tspan>', None, "#0d652d")
+t(RX + 20, TOP + 52, '<tspan font-weight="700">没有交换机</tspan>：每颗只连六个邻居'
+                     '（±x ±y ±z）', None, "#0d652d")
+t(RX + 20, TOP + 74, '<tspan fill="#d93025" font-weight="700">红色虚线 ＝ 环绕链路</tspan>'
+                     '（每个方向画一条示意，实际三个方向都首尾相接）', None, GY2)
 
-# 画 4×4×4 —— 用四层 4×4 网格并排。
-#
-# ⛔⛔ 2026-09-05 重画。旧版有两个真问题，而且是**同一个问题的两面**：
-#   ① 层与层之间那条长线画成了**虚线**，而图注写着「虚线是环绕连接」——
-#      可它是 z 方向的**相邻**，不是环绕。同一种笔画表示两个含义，图注还挑错了一个。
-#   ② 真正的环绕**几乎没画**：每层只有右下角一个小弯钩，x/y 的其余环绕没有，
-#      z 的环绕（z=3 接回 z=0）一根都没有。
-#   ⭐ 后果很具体：**整张图的「6 跳」结论完全挂在环绕上**
-#      （没有环绕，4 个点一维最远走 3 步，三维就是 9 跳）。
-#      学员照着图数，会数出 9，数不出 6 —— 图自己不支持自己的结论。
-#   → 现在：**实线 ＝ 相邻，虚线短桩 ＝ 环绕**，两种笔画各管一件事；
-#     并且把 z=0 那一层的四条 y 向环绕完整画出来当范例，其余用短桩表示同理。
-lay_x, lay_y, s_ = RX + 44, TOP + 96, 30
-for L in range(4):
-    ox = lay_x + L * 160
-    t(ox + 1.5 * s_, lay_y - 10, 'z ＝ %d' % L, None, GY2, None, "middle")
-    for r in range(4):
-        for c in range(4):
-            box(ox + c * s_, lay_y + r * s_, s_ - 8, s_ - 8, "#e6f4ea", GR, 3, 0.9)
-    # 层内 x / y 相邻 —— 实线
-    for r in range(4):
-        line(ox + 22, lay_y + r * s_ + 11, ox + 3 * s_, lay_y + r * s_ + 11, GR, 0.8)
-    for c in range(4):
-        line(ox + c * s_ + 11, lay_y + 22, ox + c * s_ + 11, lay_y + 3 * s_, GR, 0.8)
-    # 环绕短桩 —— 虚线，四个方向都有（表示「接到那一头去」）
-    for r in range(4):
-        cy = lay_y + r * s_ + 11
-        line(ox - 10, cy, ox, cy, GR, 1.0, "2 2")
-        line(ox + 3 * s_ + 22, cy, ox + 3 * s_ + 32, cy, GR, 1.0, "2 2")
-    for c in range(4):
-        cx = ox + c * s_ + 11
-        line(cx, lay_y - 8, cx, lay_y, GR, 1.0, "2 2")
-        line(cx, lay_y + 3 * s_ + 22, cx, lay_y + 3 * s_ + 30, GR, 1.0, "2 2")
-    # 层与层之间 —— 第三维的相邻，实线（旧版这里是虚线，跟环绕混了）
-    if L < 3:
-        line(ox + 3 * s_ + 32, lay_y + 1.5 * s_, ox + 160 - 10, lay_y + 1.5 * s_, GR, 1.2)
+U, V, WZ = 46, 30, 44   # ⚠️ 同列最小间隔 |60m−44k| ＝ 12px > 直径 11
+OX, OY = RX + CW / 2, TOP + 232
+def proj(i, j, k):
+    return OX + (i - j) * U, OY + (i + j) * V - k * WZ
 
-# z 方向的环绕：z=3 接回 z=0（旧版完全没画，而 6 跳里有 2 跳靠它）
-ZW = lay_y + 3 * s_ + 44
-p.append('<path d="M%d %d V%d H%d V%d" fill="none" stroke="%s" stroke-width="1.2" '
-         'stroke-dasharray="4 3"/>'
-         % (lay_x + 3 * 160 + 3 * s_ + 32, lay_y + 1.5 * s_, ZW, lay_x - 10, lay_y + 1.5 * s_,
-            GR))
-t(lay_x + 200, ZW + 14, 'z 方向同样首尾相接：z ＝ 3 的邻居就是 z ＝ 0', None, GR)
+# 先边后点，k 从低到高（低的在下方＝更近，后画压住）
+for k in range(4):
+    for j in range(4):
+        for i in range(4):
+            x0, y0 = proj(i, j, k)
+            for di, dj, dk in ((1, 0, 0), (0, 1, 0), (0, 0, 1)):
+                if i + di < 4 and j + dj < 4 and k + dk < 4:
+                    x1, y1 = proj(i + di, j + dj, k + dk)
+                    line(x0, y0, x1, y1, "#9ccdae", 1.1)
+for k in range(4):
+    for j in range(4):
+        for i in range(4):
+            x0, y0 = proj(i, j, k)
+            p.append('<circle cx="%.1f" cy="%.1f" r="5.5" fill="#e6f4ea" '
+                     'stroke="%s" stroke-width="1.3"/>' % (x0, y0, GR))
 
-t(RX + 20, lay_y + 180, '<tspan font-weight="700">实线 ＝ 相邻</tspan>；'
-                        '<tspan font-weight="700">虚线短桩 ＝ 环绕链路</tspan>'
-                        '（接到那一头去，首尾相接，所以叫环面）', None, GY2)
+# 三条环绕弧：x 方向、y 方向、z 方向各一条
+def wrap(a, b, c0, c1):
+    """两端各给一个控制点偏移，画一条绕到体外的环绕弧。"""
+    (x0, y0), (x1, y1) = a, b
+    path('M%.1f %.1f C %.1f %.1f, %.1f %.1f, %.1f %.1f'
+         % (x0, y0, x0 + c0[0], y0 + c0[1], x1 + c1[0], y1 + c1[1], x1, y1),
+         RD, 1.7, "5 4")
+wrap(proj(3, 0, 3), proj(0, 0, 3), (52, -46), (-52, -46))     # x 环绕（顶层后缘）
+wrap(proj(0, 3, 3), proj(0, 0, 3), (-52, -34), (-52, 34))     # y 环绕
+wrap(proj(3, 3, 3), proj(3, 3, 0), (66, -8), (66, 8))         # z 环绕
+t(RX + CW - 24, TOP + 108, 'x 环绕', "svglbl", RD, 11, "end")
+t(RX + 26, TOP + 238, 'y 环绕', "svglbl", RD, 11)
+t(RX + CW - 24, TOP + 340, 'z 环绕', "svglbl", RD, 11, "end")
 
-box(RX + 20, lay_y + 198, CW - 40, 96, "#fff", "#c3e2cc", 8)
-t(RX + 36, lay_y + 222, '每一维 4 个点。<tspan font-weight="700">不接环绕</tspan>最远要走 3 步，'
-                        '<tspan font-weight="700">接上环绕</tspan>就只要 2 步', None, "#202124")
-t(RX + 36, lay_y + 244, '三维加起来：', None, "#202124")
-t(RX + 152, lay_y + 246, '2 ＋ 2 ＋ 2 ＝ 6 跳', "svglbl", GR, 17)
-t(RX + 330, lay_y + 244, '——&#160;这是<tspan font-weight="700">最远</tspan>的一对；'
-                         '近的邻居 1 跳', None, GY2)
-t(RX + 36, lay_y + 266, '⭐ 也就是说：这一侧<tspan font-weight="700">谁跟谁说话，'
-                        '贵不贵取决于离多远</tspan>', "svglbl", "#0d652d", 13)
-# ⚠️ 这行原来还带一句「形状本身是调度的一部分」——&nbsp;文字顶出白框了，
-#    而且那句「从一颗到一个 pod」那张图已经完整讲过（切片必须是连续立方体）。删。
-t(RX + 36, lay_y + 286, '⚠️ 那 6 跳全靠环绕撑着 ——&#160;'
-                        '所以申请的是「一个 4×4×4」，不是「64 颗」', None, RD)
+RBY = TOP + 424
+box(RX + 20, RBY, CW - 40, 80, "#fff", "#c3e2cc", 8)
+t(RX + 36, RBY + 24, '每一维 4 个点。<tspan font-weight="700">不接环绕</tspan>最远走 3 步，'
+                     '<tspan font-weight="700">接上环绕</tspan>只要 2 步', None, "#202124")
+t(RX + 36, RBY + 46, '三维加起来：', None, "#202124")
+t(RX + 152, RBY + 48, '2 ＋ 2 ＋ 2 ＝ 6 跳', "svglbl", GR, 17)
+t(RX + 330, RBY + 46, '——&#160;最远的一对；近邻 1 跳', None, GY2)
+t(RX + 36, RBY + 68, '⭐ 这一侧<tspan font-weight="700">谁跟谁说话，贵不贵取决于离多远</tspan>',
+  "svglbl", "#0d652d", 13)
+box(RX + 20, RBY + 90, CW - 40, 52, "#e6f4ea", None, 8, 0)
+t(RX + 36, RBY + 112, '⚠️ 那 6 跳全靠环绕撑着 ——&#160;'
+                      '所以申请的是「一个 4×4×4」，不是「64 颗」', "svglbl", RD, 13)
+t(RX + 36, RBY + 132, '⭐ 同一套 ICI 一路铺到 9,216 颗，中途不换协议',
+  "svglbl", "#0d652d", 13)
 
-# ══════════ 底带：两个「1 跳」不是一个单位 + 链路账指到下一张 ══════════
-#
-# ⛔⛔ 2026-09-05：这条底带原来是一整笔链路账
-#     （ICI 6 × 200 ＝ 1,200 对 NVLink 18 × 100 ＝ 1,800，
-#      外加一句星标结论「单条反而是 ICI 粗一倍」）。撤掉，原因有两条：
-#   ① **重复。** 紧挨着的下一张图（T-8）从头到尾就在算这笔账，
-#      而且算得更细（每条链路、每轴、pod 上限）。两张图连着说同一件事。
-#   ② **更要命的是没有口径警告。** T-8 有一整个红框写着
-#      「1,200 GB/s 这个数官方自己写拧了」：官方正文写的是每轴双向 200，
-#      三个轴 ＝ 600，对不上同一页表格里的 1,200；只有读成「每条链路 200」才自洽。
-#      而这张图把它当**官方规格**印了出来，还在上面架了个星标结论。
-#      **那句「单条粗一倍」完全建立在有争议的那个读法上** ——
-#      换成官方原文那个读法，单条就是 100，跟 NVLink 一模一样，结论直接反过来。
-#   ⭐ 形状：**推出来的东西被写成了「官方规格」。** 这是第一原则那条最典型的形状 ——
-#     不是编了一个数，是把一个需要限定的读法说成了事实。
-#   → 这一格改成只做本图**独有**的那件事：把两个「1 跳」不是一个单位说破。
-# ⚠️ 指别的图一律**按名字**，不要写「下一张」——&nbsp;这些图 L200 和 L300 共用，
-#    两边的前后顺序不一样（构建期有断言拦这类方位词）。
+# ══════════════════════════════════════════════════════════════════════
+# 底带：两个「1 跳」不是一个单位
 box(0, BY, W, 118, "#f8f9fa", "#dadce0", 10, 1.2)
 t(20, BY + 26, '⚠️ 两边的「1 跳」不是一个单位 ——&#160;这是这张图最容易被误读的地方',
   "svglbl", RD, 14)
