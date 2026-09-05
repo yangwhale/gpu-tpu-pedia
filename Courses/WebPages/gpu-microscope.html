@@ -512,8 +512,16 @@ NVIDIA 的 B200 是<b>两个 die 对软件呈现为一个 GPU</b>；TPU v7 是
 </figure>
 
 <p>这张图上最值得停一下的是<b>「两个 die 对软件是一个 GPU」</b>这件事。它不是免费的：
-L2 被切成四个分区（每个 die 两个，Hopper 的两倍），本分区实测约 21 TB/s，
-跨到对面 die 掉到 16.8 TB/s，延迟也变高。
+L2 被切成四个分区（每个 die 两个，Hopper 的两倍）。第三方实测：
+<b>当工作集小到只落在本地那个 L2 分区里时，整颗芯片能达到约 21 TB/s</b>；
+一旦开始跨到对面 die，掉到 16.8 TB/s，延迟也变高。
+<br><b>⚠️ 这两个数都是「整颗芯片达到的总带宽」，不是「一个分区的带宽」</b> ——
+「本分区」说的是<b>数据落在哪</b>（测试条件），不是<b>谁在供带宽</b>（分母口径）。
+不写清这一句，读者很容易乘以 4。
+<br><em>两个佐证：① 原文的说法就是「footprints contained within the local L2
+partition achieve 21 TB/s」，achieve 的主语是整机测试；
+② 本课自己算过 L1＋共享内存整颗合计约 35 TB/s ——
+<b>L2 的总带宽不可能高过 L1</b>，若 21 是每分区、整颗就是 84，那就反了。</em>
 也就是说「一个 GPU」这个抽象底下藏着一条你看不见、但会影响性能的缝。</p>
 <p>TPU v7 在同一个问题上做了<b>相反</b>的选择：同样是双 chiplet，它直接暴露成两个独立 device，
 各有各的地址空间。缝还是那条缝，区别只在于<b>由谁来面对它</b> ——
@@ -637,7 +645,7 @@ NVIDIA 让硬件扛下来（代价是跨 die 访问悄悄变慢），Google 让�
 <text x="55" y="465" class="box" fill="#d93025">Tensor Core ×1　（第 5 代）</text>
 <rect x="55" y="472" width="285" height="22" rx="4" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text x="62" y="487" class="numb" fill="#d93025">1,024 次乘加 / 周期</text>
-<text x="225" y="488" class="xs">← 官方口径，见下</text>
+<text x="225" y="488" class="xs">← 推导值，见下</text>
 <text x="55" y="508" class="xs">操作数<tspan font-weight="700" fill="#202124">不走寄存器堆</tspan>，走下面的 TMEM</text>
 <text x="55" y="522" class="xs">一次只吃<tspan font-weight="700" fill="#202124">很薄的一片</tspan>矩阵，不是想象中的大方阵</text>
 <text x="55" y="535" class="xs" fill="#d93025">薄到什么程度、怎么攒成大矩阵 —— 见图 G-4</text>
@@ -1518,11 +1526,14 @@ NVIDIA 没有公布确切值。反过来说，如果每 SM 确实是 8,192，那
 <rect x="187" y="510" width="9" height="92" rx="0" fill="#fce8e6"/>
 <text x="34" y="536" class="sec" fill="#d93025">Blackwell</text>
 <text x="34" y="555" class="xs">第 5 代</text>
-<text x="34" y="576" class="lbl" fill="#202124">256 个线程 ＝ 两个 SM 配对</text>
+<text x="34" y="576" class="lbl" fill="#202124">两个 SM 配对 · 单线程发射</text>
 <text x="34" y="592" class="xxs">参与一次 MMA</text>
 <text x="214" y="536" class="lbl"><tspan class="mono" fill="#1967d2">tcgen05.mma</tspan>　·　单 SM：M ＝ 64/128，N ＝ 8,16,…256（步长 8）　·　两 SM 配对：M ＝ 128</text>
 <text x="214" y="554" class="lbl">/256，N ＝ 16,32,…256（<tspan font-weight="700" fill="#d93025">步长 16</tspan>）　·　<tspan font-weight="700" fill="#d93025">K 仍然只有 16</tspan></text>
-<text x="214" y="572" class="xs">配对时 M 和 N 的步长<tspan font-weight="700" fill="#202124">都翻倍</tspan> —— 这不是「同一条指令做得更大」，是<tspan font-weight="700" fill="#202124">粒度本身变粗了</tspan></text>
+<text x="214" y="572" class="xs">配对时 M 和 N 的步长<tspan font-weight="700" fill="#202124">都翻倍</tspan> —— 这不是「同一条指令做得更大」，是<tspan font-weight="700" fill="#202124">粒度本身变粗了</tspan>。<tspan font-weight="700" fill="#d93025">⚠️ 这一代趋势反转</tspan>：前</text>
+<text x="214" y="587" class="xs">四代是「一次动员越来越多线程」，tcgen05 <tspan font-weight="700" fill="#202124">由单个线程发射</tspan>（cta_group::2 说的是哪两个 CTA 供数，不是 </text>
+<text x="214" y="602" class="xs">256 线程一起发），操作数改由 TMEM 供给 —— <tspan font-weight="700" fill="#202124">所以这条轴该读成「操作数的作用域有多大」，不是「动员多少线</tspan></text>
+<text x="214" y="617" class="xs"><tspan font-weight="700" fill="#202124">程」</tspan></text>
 <rect x="940" y="524" width="424" height="64" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.1" stroke-dasharray="3,2"/>
 <text x="954" y="542" class="xs">操作数住在哪</text>
 <text x="954" y="562" class="lbl"><tspan font-weight="700" fill="#d93025">操作数与累加器都在 TMEM</tspan>，不占寄存器</text>
@@ -2207,8 +2218,9 @@ TPU v7 有没有硬件级的分块缩放通路，<b>本文没有查实</b>。
 <text x="338" y="161" class="box" fill="#1a73e8">L2 缓存</text>
 <text x="338" y="186" class="lbl">126 MB</text>
 <text x="338" y="205" class="xs">4 个分区，每 die 2 个</text>
-<text x="338" y="223" class="xxs"><tspan fill="#9aa0a6">本分区实测 21 TB/s、跨 die </tspan></text>
-<text x="338" y="235" class="xxs"><tspan fill="#9aa0a6">16.8 —— 第三方</tspan></text>
+<text x="338" y="223" class="xxs"><tspan fill="#9aa0a6">整颗达到 21 TB/s（数据只落本</tspan></text>
+<text x="338" y="235" class="xxs"><tspan fill="#9aa0a6">地分区时）、跨 die 16.8 —— 第</tspan></text>
+<text x="338" y="247" class="xxs"><tspan fill="#9aa0a6">三方</tspan></text>
 <rect x="398" y="120" width="104" height="19" rx="9" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
 <text x="450" y="133" class="xxs" fill="#d93025" text-anchor="middle">TPU 没有这一站</text>
 <line x1="450" y1="139" x2="450" y2="144" stroke="#d93025" stroke-width="1.4"/>

@@ -97,7 +97,7 @@ p.append(f'<text class="svgsm" x="18" y="{yb+70}" fill="#7a5000">'
 W('fig1-3.svg',p+['</svg>'])
 
 # ══════════ 图 1-4 · 压轴：312 FLOP/byte ══════════
-V7B,V7BW,V7F=2307,7.380,4614     # TFLOPS / TB·s⁻¹ / TFLOPS  官方 per chip
+V7B,V7BW,V7F=2307,7.3728,4614     # TFLOPS / TB·s⁻¹ / TFLOPS  官方 per chip
 B2B,B2BW,B2F=2500,8.000,5000     # dense per GPU，由官方域级数字除 72 得到
 H2=828          # 471 是原来只讲 HBM 一层时的高度；下面那段阶梯 ＋ **三行**口径说明撑到 822
                 # （2026-09-04：反推校验那句原来一行 1121px 宽、被 viewBox 裁掉，拆成两行后 +18）
@@ -119,8 +119,8 @@ def panel(x,name,col,rows,src):
         q.append(f'<text class="svgsm" x="{x+452}" y="{y+60}" text-anchor="end" fill="{col}">FLOP / byte</text>')
     q.append(f'<text class="svgsm" x="{x+18}" y="238">{src}</text>')
 panel(0,"TPU v7（每 chip）",GR,
-      [("BF16",f"{V7B:,} TFLOPS",f"{V7BW} TB/s",f"{V7B/1000/V7BW*1000:.1f}"),
-       ("FP8", f"{V7F:,} TFLOPS",f"{V7BW} TB/s",f"{V7F/1000/V7BW*1000:.1f}")],
+      [("BF16",f"{V7B:,} TFLOPS",f"{V7BW:.2f} TB/s",f"{V7B/1000/V7BW*1000:.1f}"),
+       ("FP8", f"{V7F:,} TFLOPS",f"{V7BW:.2f} TB/s",f"{V7F/1000/V7BW*1000:.1f}")],
       "来源：Google Cloud 官方 TPU7x 规格表，直接给的就是 per chip")
 panel(530,"GB200（NVL72 里那颗 · 每 GPU · dense）",BL,
       [("BF16",f"{B2B:,} TFLOPS",f"{B2BW:.1f} TB/s",f"{B2B/1000/B2BW*1000:.1f}"),
@@ -133,7 +133,7 @@ panel(530,"GB200（NVL72 里那颗 · 每 GPU · dense）",BL,
 q.append(f'<rect x="0" y="260" width="1000" height="98" rx="8" fill="#202124"/>')
 q.append('<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">'
 # ⛔ ⚠️ 2026-09-04：那个 0.03% 是假精度 —— GB200 侧的 8 TB/s 反推出的引脚速率7.81 Gbps 不是任何一档标称值，十进制／二进制两种读法本身就差 2.4%。结论（同一量级）不变，但别拿第三位当卖点。详见 §1.1 那个折叠。
-         'BF16　312.6　对　312.5　　｜　　FP8　625.2　对　625.0　　——&#160;<tspan font-weight="700">同一量级</tspan></text>')
+         'BF16　312.9　对　312.5　　｜　　FP8　625.2　对　625.0　　——&#160;<tspan font-weight="700">同一量级</tspan></text>')
 # ⛔ 这一行是 2026-09-04 补的，位置紧贴上面那行大字，**必须挨着**：
 #    上面那行给的是三位有效数字，而第三位是假的 —— 隔开就等于没警告。
 q.append('<text class="svgsm" x="500" y="304" text-anchor="middle" fill="#ffe08a">'

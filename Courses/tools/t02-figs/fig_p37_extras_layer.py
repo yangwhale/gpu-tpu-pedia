@@ -101,7 +101,7 @@ def _tpu(f):
     for i, (c, ttl, sub, subc, body) in enumerate([
         (GN, "TensorCore", "有 MXU", SUB, "矩阵乘主力。<b>本课一路拆下来的都是它。</b>"),
         (PU, "SparseCore", "没有 MXU", RD, "为<b>不规则访存</b>准备的："
-                                              "一次搬 (8,) 而不是 (8,128)。"),
+                                              "DMA 粒度 64 字节（SIMD 宽 16），不是靠 (8,128) 那套单位。"),
     ]):
         x = R_X + 26 + i * 322
         f.rect(x, LAY_Y + 70, 300, 118, "#fff", c, 2.2, 8)

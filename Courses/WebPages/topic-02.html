@@ -712,14 +712,14 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="18" y="106">BF16</text>
 <text class="svgtxt" x="18" y="128" style="font-size:12.5px">2,307 TFLOPS</text>
 <line x1="18" y1="134" x2="250" y2="134" stroke="#1e8e3e"/>
-<text class="svgtxt" x="18" y="150" style="font-size:12.5px">7.38 TB/s</text>
-<text class="svgnum" x="452" y="136" text-anchor="end" fill="#1e8e3e" style="font-size:22px">312.6</text>
+<text class="svgtxt" x="18" y="150" style="font-size:12.5px">7.37 TB/s</text>
+<text class="svgnum" x="452" y="136" text-anchor="end" fill="#1e8e3e" style="font-size:22px">312.9</text>
 <text class="svgsm" x="452" y="152" text-anchor="end" fill="#1e8e3e">FLOP / byte</text>
 <text class="svgsm" x="18" y="168">FP8</text>
 <text class="svgtxt" x="18" y="190" style="font-size:12.5px">4,614 TFLOPS</text>
 <line x1="18" y1="196" x2="250" y2="196" stroke="#1e8e3e"/>
-<text class="svgtxt" x="18" y="212" style="font-size:12.5px">7.38 TB/s</text>
-<text class="svgnum" x="452" y="198" text-anchor="end" fill="#1e8e3e" style="font-size:22px">625.2</text>
+<text class="svgtxt" x="18" y="212" style="font-size:12.5px">7.37 TB/s</text>
+<text class="svgnum" x="452" y="198" text-anchor="end" fill="#1e8e3e" style="font-size:22px">625.8</text>
 <text class="svgsm" x="452" y="214" text-anchor="end" fill="#1e8e3e">FLOP / byte</text>
 <text class="svgsm" x="18" y="238">来源：Google Cloud 官方 TPU7x 规格表，直接给的就是 per chip</text>
 <rect x="530" y="50" width="470" height="196" rx="10" fill="#f8f9fa" stroke="#1a73e8"/>
@@ -738,7 +738,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="982" y="214" text-anchor="end" fill="#1a73e8">FLOP / byte</text>
 <text class="svgsm" x="548" y="238">来源：NVIDIA 官方 GB200 NVL72 域级数字 ÷ 72，稀疏值取一半得 dense</text>
 <rect x="0" y="260" width="1000" height="98" rx="8" fill="#202124"/>
-<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">BF16　312.6　对　312.5　　｜　　FP8　625.2　对　625.0　　——&#160;<tspan font-weight="700">同一量级</tspan></text>
+<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">BF16　312.9　对　312.5　　｜　　FP8　625.2　对　625.0　　——&#160;<tspan font-weight="700">同一量级</tspan></text>
 <text class="svgsm" x="500" y="304" text-anchor="middle" fill="#ffe08a">⚠️ 别读第三位：GB200 那个「8 TB/s」官方没写口径，十进制还是 8×1024 差 2.4%（见正文折叠）</text>
 <text class="svgsm" x="500" y="324" text-anchor="middle" fill="#ffffffcc">⚠️ 换成 HGX 板上的 B200 就是 2,250 ÷ 8.0 ＝ 281.3，离 312 差 11% —— 「都落在 312」的前提是拿 NVL72 里那颗 GB200 比</text>
 <text class="svgsm" x="500" y="342" text-anchor="middle" fill="#ffffff99">推断（没有出处，别当结论讲）：两边都在拿 HBM 带宽去配矩阵算力，比值撞在一起并不奇怪 —— 但没有哪一家这么解释过</text>
@@ -777,7 +777,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="0" y="786" fill="#5f6368">反推校验：2,500 ÷ 64 ＝ 39 TB/s 全片，再 ÷（148 SM × 128 B）得时钟 ≈ 2.06 GHz，与 B200 对得上。</text>
 <text class="svgsm" x="0" y="804" fill="#5f6368">⭐ 真正的差别不在算法，在<tspan font-weight="700">可达性</tspan>：HBM 那 8 TB/s 是 148 个 SM 抢的，共享内存这 128 B/周期是每个 SM 自己的。</text>
 </svg>
-  <figcaption>算力除以带宽，两边落在同一个数上：<b>312.6 对 312.5，相对差 0.03%</b>，BF16 和 FP8 完全一样。⚠️ 「为什么一样」<b>是推断，没有出处</b>；而且换成 HGX 板上的 B200 就是 281.3，差 11%。<br>⭐ <b>图下半段</b>：同一个除法在每一层各做一次 ——&nbsp;<b>HBM 312、L2 119、共享内存 64</b>。越靠近计算，这条线越低，但只低约 5 倍。</figcaption>
+  <figcaption>算力除以带宽，两边落在<b>同一个量级</b>：<b>312.9 对 312.5</b>，BF16 和 FP8 完全一样。<b>⛔ 别读第三位</b>（8 TB/s 的口径本身就差 2.4%）。⚠️ 「为什么一样」<b>是推断，没有出处</b>；而且换成 HGX 板上的 B200 就是 281.3，差 11%。<br>⭐ <b>图下半段</b>：同一个除法在每一层各做一次 ——&nbsp;<b>HBM 312、L2 119、共享内存 64</b>。越靠近计算，这条线越低，但只低约 5 倍。</figcaption>
   </figure>
 
   <p>黑带里那两行小字<b>不是免责声明，是使用说明</b>。<em>两句话要分开站</em>：
@@ -797,7 +797,8 @@ details.aside b{color:var(--ink);font-weight:600}
     <br>——&nbsp;因为<b>「HBM3E」只说了代次，没说档位</b>。
     每颗 stack 都是 <b>1024 根数据线</b>，带宽 ＝ 1024 × 每根引脚的速率；
     而这一代的引脚速率<b>从 8.0 到 9.6 Gbps 都算 HBM3E</b>。
-    <em>反推一下：v7 跑的是 <b>7.2 Gbps</b>（7.37 TB/s ÷ 8 颗，分毫不差），
+    <em>反推一下：v7 跑的是 <b>7.2 Gbps</b>（7.37 TB/s ÷ 8 颗，<b>算术上分毫不差</b> ——&nbsp;
+    但要注意 7.2 本身也在上面那个 8.0–9.6 的区间<b>之外</b>，见下面的折叠），
     GB200 跑的是 <b>7.8 上下</b>。</em>
     <br><b>用哪一档是买方挑的 ——&nbsp;按功耗、散热、可靠性、供应挑，
     不是芯片能力的上限。</b>
@@ -806,8 +807,13 @@ details.aside b{color:var(--ink);font-weight:600}
   <!-- ⭐⭐ 2026-09-04 加。Chris 追问：「同样是 8 颗 24 GB 的 HBM3E，
        为什么一边 7.4、一边 8？」——&nbsp;去把两个数拆到引脚上算了一遍，
        结果**顺手把本课自己的招牌数字审出了一个洞**：
-       v7 那边分毫不差，GB200 那边反推出来的引脚速率不是任何一档标称值，
-       两种读法差 2.4% ——&nbsp;而「312.6 对 312.5」那第三位就落在这 2.4% 里面。
+       v7 那边算术上分毫不差、GB200 那边反推出来不是任何一档标称值 ——&nbsp;
+       ⛔ 2026-09-05 补：**其实两边都落在区间外**，v7 那个 7.2 离下沿 −10%、
+       GB200 那个 7.81 只 −2.4%，反倒是 v7 更远。旧版给 7.81 挂了警告、
+       给 7.2 盖了「分毫不差」的章，**判据对两边不对称**。
+       ⭐ 形状：**「算得上」和「是一个标称档」是两件事** ——
+         一个能整除的反推值让人误以为它被证实了。
+       两种读法差 2.4% ——&nbsp;而「312.9 对 312.5」那第三位就落在这 2.4% 里面。
        ⛔ 所以「相对差万分之三」这个说法**不能再当卖点**。结论不变
        （两边在同一量级），但精度是假的。
        ⭐ 而「二进制还是十进制」正是 §6 那四句问法之一 ——&nbsp;
@@ -827,7 +833,12 @@ details.aside b{color:var(--ink);font-weight:600}
     <ul>
       <li><b>TPU v7</b>：官方 7.37 TB/s ÷ 8 颗 ＝ 921.6 GB/s ／颗 ——&nbsp;
         <code>1024 bit × 7.2 Gbps ÷ 8 ＝ 921.6</code>。
-        <b>正好是 7.2 Gbps 这一档，分毫不差。</b></li>
+        <b>算术上正好是 7.2 Gbps，分毫不差</b>（1024 × 7.2 ÷ 8 ＝ 921.6，
+        × 8 颗 ＝ 7,372.8 GB/s）。
+        <br>⚠️ <b>但 7.2 落在上面那个 8.0–9.6 的区间之外</b>，
+        跟 GB200 那个 7.81 是同一类事：<b>两个反推值都不是这一代的标称档</b>，
+        说明官方那个带宽数背后有未写明的降频或口径。
+        <b>两边要同等对待，不能只按住一个。</b></li>
       <li><b>GB200</b>：官方 8 TB/s ÷ 8 颗 ＝ 1,000 GB/s ／颗 ——&nbsp;
         反推引脚速率是 <b>7.81 Gbps</b>。<em>⚠️ 这不是任何一档标称值。</em></li>
     </ul>
@@ -841,7 +852,7 @@ details.aside b{color:var(--ink);font-weight:600}
       <code>8 × 1024 GB/s ＝ 8,192 GB/s</code>，对外取整写成「8」
       <br><b>两种读法本身差 2.4%。</b>算出来：
       <code>2,500 ÷ 8.000 ＝ 312.5</code>，而 <code>2,500 ÷ 8.192 ＝ 305.2</code>。
-      <br>——&nbsp;<b>「312.6 对 312.5」那第三位，整个落在这 2.4% 的不确定里。</b>
+      <br>——&nbsp;<b>「312.9 对 312.5」那第三位，整个落在这 2.4% 的不确定里。</b>
       <br><br>⭐ <b>结论不变，精度作废</b>：两边的兑换比<b>确实在同一量级</b>
       （差百分之几），这一节的产出照旧。<b>但「差万分之三」是个假精度，不要拿它当卖点。</b>
       <br>⭐⭐ <b>顺带说一句这件事最好笑也最有用的地方</b>：
@@ -924,7 +935,7 @@ details.aside b{color:var(--ink);font-weight:600}
        不是一个档次的东西，特别单薄，而且也没有用，听众也不感兴趣。」
        ——&nbsp;去数了一遍，他是对的，而且能量化：
          · 第 ② 格整格在说「这两条可以跳过」——&nbsp;一格的篇幅用来说这里没信息；
-         · 第 ③ 格是 fig1-4 的复述，312.6 / 312.5 白纸黑字再来一遍；
+         · 第 ③ 格是 fig1-4 的复述，312.9 / 312.5 白纸黑字再来一遍；
          · 只有第 ① 格有新东西，而它值一句话，不值三分之一张图。
        ⭐ 根子上的毛病：这门课别的图都是**机器的图**（SM 拆开、一个数走完全程、
           六个站台）；那一张是**给规格表做的分类账**。台下关心机器长什么样，
@@ -1177,7 +1188,7 @@ details.aside b{color:var(--ink);font-weight:600}
           <td>186 GB / GPU<span class="sub">（软件可见；物理 192 GB）</span>；8,000 GB/s</td><td>同一代 HBM，量级相同</td></tr>
       <tr><td><b>算力（每 chip / 每 GPU）</b></td><td>BF16 2,307 ｜ FP8 4,614 TFLOPS</td>
           <td>BF16 2,500 ｜ FP8 5,000 TFLOPS（dense，NVL72 里那颗）</td><td>同一量级</td></tr>
-      <tr class="sum"><td><b>算力 ÷ 带宽</b></td><td class="n"><b>312.6</b> FLOP/byte</td>
+      <tr class="sum"><td><b>算力 ÷ 带宽</b></td><td class="n"><b>312.9</b> FLOP/byte</td>
           <td class="n"><b>312.5</b> FLOP/byte</td><td>⭐⭐ 几乎完全相同</td></tr>
       <tr><td><b>卡间</b></td><td>ICI 1,200 GB/s 双向 · 3D torus · 最大 9,216 chip</td>
           <td>NVLink 1.8 TB/s / GPU · NVL72 域 · 72 卡（本课编排口径按 64）</td>
@@ -1453,10 +1464,10 @@ details.aside b{color:var(--ink);font-weight:600}
 <path d="M836.1538461538462 202 v6" stroke="#9aa0a6"/>
 <text class="svgsm" x="836.1538461538462" y="218" text-anchor="middle" fill="#5f6368">65536</text>
 <text class="svgsm" x="540.0" y="238" text-anchor="middle" fill="#5f6368">算术强度（FLOP / byte，对数轴）</text>
-<path d="M420.901675206047 84 v118" stroke="#f9ab00" stroke-width="2.4" stroke-dasharray="6 4"/>
-<text class="svglbl" x="420.901675206047" y="76" text-anchor="middle" fill="#7a5000">312 —— 硬件的分水岭</text>
-<text class="svgsm" x="412.901675206047" y="58" text-anchor="end" fill="#5f6368">左边：带宽说了算</text>
-<text class="svgsm" x="428.901675206047" y="58" fill="#5f6368">右边：算力说了算</text>
+<path d="M420.97619183442237 84 v118" stroke="#f9ab00" stroke-width="2.4" stroke-dasharray="6 4"/>
+<text class="svglbl" x="420.97619183442237" y="76" text-anchor="middle" fill="#7a5000">312 —— 硬件的分水岭</text>
+<text class="svgsm" x="412.97619183442237" y="58" text-anchor="end" fill="#5f6368">左边：带宽说了算</text>
+<text class="svgsm" x="428.97619183442237" y="58" fill="#5f6368">右边：算力说了算</text>
 <text class="svglbl" x="176" y="110" text-anchor="end" fill="#d93025">朴素注意力</text>
 <path d="M190 106 H297.6923076923077" stroke="#d93025" stroke-width="1.4" stroke-dasharray="3 3" opacity="0.5"/>
 <circle cx="297.6923076923077" cy="106" r="7" fill="#d93025"/>
@@ -2612,7 +2623,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="55" y="465" class="box" fill="#d93025">Tensor Core ×1　（第 5 代）</text>
 <rect x="55" y="472" width="285" height="22" rx="4" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text x="62" y="487" class="numb" fill="#d93025">1,024 次乘加 / 周期</text>
-<text x="225" y="488" class="xs">← 官方口径，见下</text>
+<text x="225" y="488" class="xs">← 推导值，见下</text>
 <text x="55" y="508" class="xs">操作数<tspan font-weight="700" fill="#202124">不走寄存器堆</tspan>，走下面的 TMEM</text>
 <text x="55" y="522" class="xs">一次只吃<tspan font-weight="700" fill="#202124">很薄的一片</tspan>矩阵，不是想象中的大方阵</text>
 <text x="55" y="535" class="xs" fill="#d93025">薄到什么程度、怎么攒成大矩阵 —— 见图 G-4</text>
@@ -5048,11 +5059,14 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="187" y="510" width="9" height="92" rx="0" fill="#fce8e6"/>
 <text x="34" y="536" class="sec" fill="#d93025">Blackwell</text>
 <text x="34" y="555" class="xs">第 5 代</text>
-<text x="34" y="576" class="lbl" fill="#202124">256 个线程 ＝ 两个 SM 配对</text>
+<text x="34" y="576" class="lbl" fill="#202124">两个 SM 配对 · 单线程发射</text>
 <text x="34" y="592" class="xxs">参与一次 MMA</text>
 <text x="214" y="536" class="lbl"><tspan class="mono" fill="#1967d2">tcgen05.mma</tspan>　·　单 SM：M ＝ 64/128，N ＝ 8,16,…256（步长 8）　·　两 SM 配对：M ＝ 128</text>
 <text x="214" y="554" class="lbl">/256，N ＝ 16,32,…256（<tspan font-weight="700" fill="#d93025">步长 16</tspan>）　·　<tspan font-weight="700" fill="#d93025">K 仍然只有 16</tspan></text>
-<text x="214" y="572" class="xs">配对时 M 和 N 的步长<tspan font-weight="700" fill="#202124">都翻倍</tspan> —— 这不是「同一条指令做得更大」，是<tspan font-weight="700" fill="#202124">粒度本身变粗了</tspan></text>
+<text x="214" y="572" class="xs">配对时 M 和 N 的步长<tspan font-weight="700" fill="#202124">都翻倍</tspan> —— 这不是「同一条指令做得更大」，是<tspan font-weight="700" fill="#202124">粒度本身变粗了</tspan>。<tspan font-weight="700" fill="#d93025">⚠️ 这一代趋势反转</tspan>：前</text>
+<text x="214" y="587" class="xs">四代是「一次动员越来越多线程」，tcgen05 <tspan font-weight="700" fill="#202124">由单个线程发射</tspan>（cta_group::2 说的是哪两个 CTA 供数，不是 </text>
+<text x="214" y="602" class="xs">256 线程一起发），操作数改由 TMEM 供给 —— <tspan font-weight="700" fill="#202124">所以这条轴该读成「操作数的作用域有多大」，不是「动员多少线</tspan></text>
+<text x="214" y="617" class="xs"><tspan font-weight="700" fill="#202124">程」</tspan></text>
 <rect x="940" y="524" width="424" height="64" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1.1" stroke-dasharray="3,2"/>
 <text x="954" y="542" class="xs">操作数住在哪</text>
 <text x="954" y="562" class="lbl"><tspan font-weight="700" fill="#d93025">操作数与累加器都在 TMEM</tspan>，不占寄存器</text>
@@ -7737,7 +7751,8 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <rect x="1054" y="154" width="300" height="118" rx="8" fill="#fff" stroke="#8430ce" stroke-width="2.2"/>
 <text x="1068" y="178" class="box" fill="#8430ce">SparseCore</text>
 <text x="1344" y="178" class="xxs" fill="#d93025" text-anchor="end">没有 MXU</text>
-<text x="1068" y="200" class="xs">为<tspan font-weight="700" fill="#202124">不规则访存</tspan>准备的：一次搬 (8,) 而不是 (8,128)。</text>
+<text x="1068" y="200" class="xs">为<tspan font-weight="700" fill="#202124">不规则访存</tspan>准备的：DMA 粒度 64 字节（SIMD 宽 </text>
+<text x="1068" y="216" class="xs">16），不是靠 (8,128) 那套单位。</text>
 <line x1="1204" y1="272" x2="1204" y2="296" stroke="#8430ce" stroke-width="1.6" marker-end="url(#aB)"/>
 <rect x="732" y="296" width="622" height="30" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.4"/>
 <text x="742" y="316" class="xs" fill="#5f6368">HBM　·　共用控制器，通道宽度也一样 —— 差的是一次搬多小，不是能搬多快</text>
@@ -8014,8 +8029,9 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <text x="338" y="161" class="box" fill="#1a73e8">L2 缓存</text>
 <text x="338" y="186" class="lbl">126 MB</text>
 <text x="338" y="205" class="xs">4 个分区，每 die 2 个</text>
-<text x="338" y="223" class="xxs"><tspan fill="#9aa0a6">本分区实测 21 TB/s、跨 die </tspan></text>
-<text x="338" y="235" class="xxs"><tspan fill="#9aa0a6">16.8 —— 第三方</tspan></text>
+<text x="338" y="223" class="xxs"><tspan fill="#9aa0a6">整颗达到 21 TB/s（数据只落本</tspan></text>
+<text x="338" y="235" class="xxs"><tspan fill="#9aa0a6">地分区时）、跨 die 16.8 —— 第</tspan></text>
+<text x="338" y="247" class="xxs"><tspan fill="#9aa0a6">三方</tspan></text>
 <rect x="398" y="120" width="104" height="19" rx="9" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
 <text x="450" y="133" class="xxs" fill="#d93025" text-anchor="middle">TPU 没有这一站</text>
 <line x1="450" y1="139" x2="450" y2="144" stroke="#d93025" stroke-width="1.4"/>
@@ -8952,7 +8968,16 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
     <b>TPU 空转的原因是形状</b>：<code>head_dim ＝ 128</code> 撞上 256 的 MXU，
     <em>而且<b>两个矩阵乘各撞一次</b> ——&nbsp;
     <code>QKᵀ</code> 那步 128 落在收缩维，<code>PV</code> 那步 128 落在输出维。</em>
-    <b>于是这个算子的 MXU 利用率封顶 50%，改配置救不了。</b>
+    <b>于是这个算子的 MXU 利用率封顶 50%，<u>调 kernel 参数救不了</u>。</b>
+    <!-- ⛔ 2026-09-05：这里原来写「改配置救不了」，跟 3.4 打架 ——&nbsp;
+         3.4 给了一组实测：32 头 × 128 改成 16 头 × 256，MFU 在 8K/16K/32K 上
+         分别 +21% / +32% / +46%。那**就是**改配置救回来了。
+         3.4 的限定是「这是模型架构的决定，不是调参」，这里漏了那个限定。
+         ⭐ 形状：**「救不了」要说清是哪一层救不了。** 一个不带层次的否定句，
+           在另一节被一组实测直接推翻。 -->
+    <em>——&nbsp;这里说的是 <b>kernel 参数那一层</b>。真出路有两条，都在 3.4：
+    <b>改 head_dim</b>（模型架构的决定，不是调参 —— 32 头 × 128 换成 16 头 × 256，
+    实测 MFU 在 8K/16K/32K 上分别 +21% / +32% / +46%），或者<b>全转置流水线</b>。</em>
 
     <br><br><!-- ⭐ 2026-09-04：3.4 那边把「空间／时间」这条判据挖出来之后，
          这三条其实可以收成一句。放在这儿当收口，比三条并列有力。 -->
@@ -10389,6 +10414,16 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 
   <p>但拓扑能延展多远，跟你<b>实际拿得到多少</b>是两件事。
     下面是我们自己跑的数 ——&nbsp;<b>不是厂商标称，是实测掉了多少。</b></p>
+  <!-- ⛔ 2026-09-05：这一节开头写着「只画硬件：几条链路、每条多宽、连成什么形状、
+       最远几跳」，两张图之后却摆了一组通信模式的实测掉速 —— **节内自相矛盾**。
+       不删这组数（它是我们自己跑的，很值钱），而是把它的身份和边界写清楚：
+       它是**单侧**的、是**域内扩规模**的、不是两边对照。 -->
+  <p class="landing">⚠️ <b>先把这组数的身份说清楚，它跟上面两张图不是一回事。</b>
+    上面画的是<b>结构</b>（两边怎么连），这组是<b>一侧的实测</b> ——&nbsp;
+    <b>只有 GPU 侧，而且是同一个 NVL72 域内从 8 卡扩到 32 卡</b>，
+    不是两边对照。<b>TPU 侧的对应实测这门课没跑过</b>（环面上的集合通信一次都没测）。
+    放在这里只为说明一件事：<b>「域内没有距离」不等于「域内没有代价」。</b>
+    至于哪种通信模式在哪种拓扑上吃亏 ——&nbsp;那还是专题五的事。</p>
 <figure class="fbox fwide" id="ms-p6">
 <svg viewBox="0 0 1400 966" width="100%" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="DeepEP 在 8、16、32 GPU 三档的实测带宽，以 8 GPU 为基准归一化：Copy 基本持平，Reduce 降约 18%，Dispatch 降约 9%，Combine 降约 19%">
 <text x="20" y="26" class="ttl">实测：规模一大，<tspan font-weight="700" fill="#d93025">all-to-all 就掉</tspan>　—— 以及一个<tspan font-weight="700" fill="#d93025">塌掉的对照项</tspan></text>
@@ -11419,8 +11454,9 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <text x="964" y="560" class="xs"><tspan font-weight="700" fill="#202124">两个都报最省事</tspan>：<tspan fill="#9aa0a6">吞吐说明谁快，MFU 说明还剩多少没榨出来。</tspan></text>
 <rect x="20" y="632" width="1360" height="100" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
 <text x="38" y="660" class="sec">⭐ 第 ③ 档为什么贵：只调一边，比出来的是调参投入的差距</text>
-<text x="38" y="686" class="xs"><tspan font-weight="700" fill="#202124">同一个模型、同一个规模，v7 上从 445 调到 666.6 TFLOP/s/chip —— +50%。</tspan><tspan fill="#9aa0a6">（这里面有 </tspan><tspan font-weight="700" fill="#202124">8.6% 是把频率档从默认锁到最高</tspan>换来的，属于硬件工作点不是调优，剥掉约 <tspan font-weight="700" fill="#202124">+38%</tspan>；起点另有一份文档记的是 457，那样算 <tspan font-weight="700" fill="#202124">+45.9%</tspan>。<tspan font-weight="700" fill="#202124">三个数都列出来，正是这一节在讲的事。</tspan>）</text>
-<text x="38" y="705" class="xs"><tspan font-weight="700" fill="#d93025">这个幅度比很多「硬件对比」结论本身都大 —— 只调了一边的对比，读者看到的是「哪一边的人更熟」。</tspan><tspan font-weight="700" fill="#202124">⚠️ 而我们 GPU 侧的调优记录只到一次 7 组配置的 sweep（492 → 527，+7.1%）—— 所以下一节那组数，我们自己也只把它挂在 ③ 档的下沿。</tspan></text>
+<text x="38" y="686" class="xs"><tspan font-weight="700" fill="#202124">同一个模型、同一个规模，v7 上从 445 调到 666.6 TFLOP/s/chip —— +50%。</tspan><tspan fill="#9aa0a6">（⚠️ 6.3 那张实测图上的 v7 是 </tspan><tspan font-weight="700" fill="#202124">662.3</tspan>，不是这里的 666.6 ——<tspan font-weight="700" fill="#202124">两者不是同一次 run</tspan>：666.6 是调优记录里的最好一次，662.3 是拿去跟 GB300 并排比的那一次。差 0.65%，<tspan font-weight="700" fill="#202124">拿去对 </tspan></text>
+<text x="38" y="705" class="xs"><tspan font-weight="700" fill="#202124">854.0 的一律用 662.3</tspan>。）<tspan fill="#9aa0a6">（这里面有 </tspan><tspan font-weight="700" fill="#202124">8.6% 是把频率档从默认锁到最高</tspan>换来的，属于硬件工作点不是调优，剥掉约 <tspan font-weight="700" fill="#202124">+38%</tspan>；起点另有一份文档记的是 457，那样算 <tspan font-weight="700" fill="#202124">+45.9%</tspan>。<tspan font-weight="700" fill="#202124">三个数都列出来，正是这一节在讲的事。</tspan>）<tspan font-weight="700" fill="#d93025">这个幅度比很多「硬件对比」结论本身都大 —— 只调</tspan></text>
+<text x="38" y="724" class="xs"><tspan font-weight="700" fill="#d93025">了一边的对比，读者看到的是「哪一边的人更熟」。</tspan><tspan font-weight="700" fill="#202124">⚠️ 而我们 GPU 侧的调优记录只到一次 7 组配置的 sweep（492 → 527，+7.1%）—— 所以下一节那组数，我们自己也只把它挂在 ③ 档的下沿。</tspan></text>
 <text x="1380" y="748" class="xxs" fill="#9aa0a6" text-anchor="end">第 ③ 档的实测在下一节 · 代价条为对数示意，非测量值 · v7 与 GPU 侧调优幅度均取自本仓库的调优记录</text>
 </svg>
 <figcaption><b>这是 6.3 的入场券 ——</b> 下一小节要摆两边的实测，而这张图决定了那组数该被当成什么。</figcaption>
@@ -11963,8 +11999,9 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
 <rect x="690" y="874" width="672" height="92" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
 <text x="702" y="893" class="lbl" fill="#1a73e8">所以能说的只有这一句，一个字都不能多</text>
 <text x="702" y="916" class="sec"><tspan font-weight="700" fill="#202124">机制上 TPU 那个前提在这类负载上成立；而在这一组 64 单元的实测里，它没有兑现。</tspan></text>
-<text x="702" y="942" class="xxs"><tspan font-weight="700" fill="#202124">⚠️ 1.31 只能当一个点，不能当一个界。</tspan><tspan fill="#9aa0a6">它有两个</tspan><tspan font-weight="700" fill="#202124">方向相反</tspan>的修正，而<tspan font-weight="700" fill="#202124">两个都没量过</tspan>：GB300 侧更好的那组（EP16，882.3）没复测 → 差距可能</text>
-<text x="702" y="956" class="xxs">到 <tspan font-weight="700" fill="#202124">1.35</tspan>；P-18 六条边界<tspan font-weight="700" fill="#202124">四条利于 GB300</tspan> → 差距可能更小。最重的两条是<tspan font-weight="700" fill="#202124">「软件成熟度，且会变」</tspan>和<tspan font-weight="700" fill="#202124">「64 是 GPU 的主场」</tspan>。</text>
+<text x="702" y="942" class="xxs"><tspan font-weight="700" fill="#202124">⚠️ 1.31 只能当一个点，不能当一个界。</tspan><tspan fill="#9aa0a6">它有两个</tspan><tspan font-weight="700" fill="#202124">方向相反</tspan>的修正。<tspan font-weight="700" fill="#202124">往上</tspan>：EP16（882.3）没复测 → 可到 <tspan font-weight="700" fill="#202124">1.35</tspan>；而边界 ⑤ 那个锁频<tspan font-weight="700" fill="#202124">量过，值 </tspan></text>
+<text x="702" y="956" class="xxs"><tspan font-weight="700" fill="#202124">+8.6%</tspan>，剥掉是 <tspan font-weight="700" fill="#202124">1.42</tspan>，两项都算 <tspan font-weight="700" fill="#202124">1.47</tspan>。<tspan font-weight="700" fill="#202124">往下</tspan>：六条边界四条利于 GB300 → 可能更小，<tspan font-weight="700" fill="#202124">这一侧一条都没量过</tspan>。最重的一条是<tspan font-weight="700" fill="#202124">「软件成熟度，且会</tspan></text>
+<text x="702" y="970" class="xxs"><tspan font-weight="700" fill="#202124">变」</tspan>。</text>
 <text x="1380" y="992" class="xxs" fill="#9aa0a6" text-anchor="end">▶ ＝ 现场念的三行，其余印在这里供课后回查　·　每一行的出处标号就写在同一行里 —— §9 是最容易被单独截走的一节，边界必须跟结论同框</text>
 </svg>
 <figcaption>八行取舍，两边各一句。<b>全课下来，两边同口径量过的只有 6.3 那 1.31 倍</b> ——而这句话在底带里，不在表里。<b>这张表整张是机制推理，它给不出倍数。</b></figcaption>

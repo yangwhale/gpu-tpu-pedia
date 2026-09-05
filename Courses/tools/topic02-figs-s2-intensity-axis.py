@@ -2,7 +2,7 @@
 import io,math
 def W(f,p): io.open(f,'w',encoding='utf-8').write('\n'.join(p))
 BL,PU,OR,GR,RD,GY,YL="#1a73e8","#9334e6","#e8710a","#1e8e3e","#d93025","#5f6368","#f9ab00"
-LINE=312.6
+LINE=312.9
 # ── 全部当场算 ──
 n=2**17; d=128                                   # 一个头，128K 序列
 flop_at=2*(2*n*n*d)

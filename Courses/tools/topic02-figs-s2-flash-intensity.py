@@ -78,7 +78,7 @@ ai_naive=flop/bytes_naive
 # flash: 流量 ≈ Q,K,V,O 各读/写一次 = 4*n*d*2 B
 bytes_flash=4*n*d*2
 ai_flash=flop/bytes_flash
-LINE=312.6
+LINE=312.9
 H4=412
 r=[f'<svg viewBox="0 0 1000 {H4}" width="100%" role="img" aria-label="朴素注意力的算术强度只有 64，Flash 把它拉到 65536，都以 312 这条脊线为参照">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'

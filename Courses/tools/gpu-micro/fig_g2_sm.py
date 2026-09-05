@@ -174,7 +174,7 @@ def _subcore(f, x, T, idx, full=True):
     f.rect(xi + 8, y + 24, wi - 16, 22, "#fff", RD, 1, 4)
     f.t(xi + 15, y + 39, "1,024 次乘加 / 周期", "numb", RD)
     if full:
-        f.t(xi + 178, y + 40, "← 官方口径，见下", "xs")
+        f.t(xi + 178, y + 40, "← 推导值，见下", "xs")   # ⛔ 2026-09-05：这里原来写「官方口径」。它是从 A100 白皮书 1,024/SM 经「H100 ×2 → Blackwell 再 ×2」推来的，本文别处两处都标「推导值」。
         f.t(xi + 8, y + 60, "操作数<tspan font-weight=\"700\" fill=\"#202124\">不走寄存器堆</tspan>，走下面的 TMEM", "xs")
         f.t(xi + 8, y + 74, "一次只吃<tspan font-weight=\"700\" fill=\"#202124\">很薄的一片</tspan>矩阵，"
                             "不是想象中的大方阵", "xs")
