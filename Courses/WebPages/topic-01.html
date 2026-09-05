@@ -90,6 +90,14 @@ body.batched [data-v="tokens"]::after{
 .guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
             font-size:16px;line-height:1.75}
 .guess .rev.on{display:block}
+/* 「↺ 重来」按钮：由 JS 生成后塞进答案区顶部。放在答案区里面是有意的 ——
+   答案区没展开时它跟着一起隐藏，天然实现「答过了才出现」，不需要额外状态类。
+   ⭐ 2026-09-05 与专题二保持一致（Chris：「专题一里边那道题做同样处理」）。 */
+.guess .rst{float:right;margin:-2px 0 8px 14px}
+.guess .rst button{font:600 13px/1 inherit;padding:8px 15px;border:1.5px solid var(--line);
+  background:#fff;border-radius:8px;cursor:pointer;color:var(--gray);
+  transition:border-color .15s,color .15s}
+.guess .rst button:hover{border-color:var(--gray);color:var(--ink)}
 .guess .rev>p>b{color:var(--red)}          /* 只有直属段落的粗体标红，表格和说明框不受影响 */
 .guess .qs{font-size:15px;line-height:1.7;color:var(--gray)}
 .guess .qs b{color:var(--ink)}
@@ -6672,17 +6680,46 @@ function drawCardGrid(r){
   addEventListener("resize", ()=>{ if(hot) place(hot); });
 })();
 
-/* ── 猜一猜 ── */
+/* ── 猜一猜 ──
+   ⭐ 2026-09-05 换成跟专题二同一套实现（Chris：「专题一里边那道题做同样处理」）。
+   三点差别，都是专题二那边踩出来的：
+     ① **多题**：按 .guess 逐个绑定，不写死 querySelector 和 id="rev" ——
+        页面上可能出现第二道题的东西，一开始就别用单数选择器。
+     ② **多组**：以 .opts 为一组，组内互斥、组间独立，所有组都选过才出答案
+        （配对选项会泄题：认出一半，另一半自动跟着定）。这一课目前只有一组，
+        但实现先备着，加第二组不用再改。
+     ③ **可重来**：按钮由 JS 生成塞进答案区，答案区一收它就跟着隐藏。
+   ⚠️ 改这里要顺手看一眼专题二 topic02-build-L200.py 里的同一段，两边应当一致。 */
 (function(){
-  const box = document.querySelector(".guess"); if(!box) return;
-  const rev = document.getElementById("rev");
-  box.querySelectorAll("button").forEach(b=>b.addEventListener("click",()=>{
-    box.querySelectorAll("button").forEach(x=>x.classList.remove("picked","right"));
-    b.classList.add("picked");
-    box.querySelector("[data-right]").classList.add("right");
-    rev.classList.add("on");
-    rev.scrollIntoView({behavior:"smooth", block:"nearest"});
-  }));
+  function bind(){
+    document.querySelectorAll('.guess').forEach(function(box){
+      var rev=box.querySelector('.rev'); if(!rev) return;
+      var groups=box.querySelectorAll('.opts');
+      var rst=document.createElement('div');
+      rst.className='rst';
+      rst.innerHTML='<button type="button">↺ 重来</button>';
+      rst.firstChild.addEventListener('click', function(){
+        box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+        rev.classList.remove('on');
+        box.scrollIntoView({behavior:'smooth', block:'nearest'});
+      });
+      rev.insertBefore(rst, rev.firstChild);
+      groups.forEach(function(g){
+        g.querySelectorAll('button').forEach(function(b){
+          b.addEventListener('click', function(){
+            g.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+            b.classList.add('picked');
+            var r=g.querySelector('[data-right]'); if(r) r.classList.add('right');
+            var done=true;
+            groups.forEach(function(gg){ if(!gg.querySelector('.picked')) done=false; });
+            if(done){ rev.classList.add('on'); rev.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+          });
+        });
+      });
+    });
+  }
+  if(document.readyState==='loading') addEventListener('DOMContentLoaded', bind);
+  else bind();
 })();
 
 /* ── 阅读进度 + 回顶 ── */
