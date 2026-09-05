@@ -9,7 +9,7 @@ ROWS=[  # (层名, 副注, TPU 内容, GPU 内容, TPU空?, GPU空?)
   "寄存器堆 64K × 32 bit = 256 KB／SM<TAB>每线程最多 255 个",0,0),
  ("片上 · 显式管","谁放什么，由人或编译器决定","VMEM 64 MiB／核（＝／device）<TAB>SMEM 1 MiB<TAB>—— 编译器排布，没有自动行为",
   "shared memory 最多 228 KB／SM<TAB>—— 写 kernel 的人用 __shared__ 手工搬",0,0),
- ("片上 · 自动管","硬件替你决定放什么","CMEM = 0",
+ ("片上 · 自动管","硬件替你决定放什么","硬件缓存 ＝ 0（v7 无 CMEM）",
   "L1（与 shared 合计上限 256 KB／SM）<TAB>L2 126 MB／GPU<TAB>—— 全自动，你只能提示不能指定",1,0),
  # ⚠️ 这一行的行名从「专用协处理器」改成「可编程协处理器」，空格子也从「没有对应物」
  # 改成「没有可编程的」—— 少了「可编程」三个字，这一格就是错的：GPU 上有 TMA
@@ -38,7 +38,7 @@ ROWS=[  # (层名, 副注, TPU 内容, GPU 内容, TPU空?, GPU空?)
   "<TAB>⚠️ 跨 lane 靠 warp shuffle 指令，官方没把它单列成部件",0,0),
  # 官方正文写「96 GB」是十进制，而同一张表的 192 GiB ÷ 2 = 96 GiB —— 本课统一用 GiB，
  # 理由和附录 A 那个 94.74 GiB 是同一条：判 OOM 的分母必须是二进制的。
- ("芯片外","HBM","96 GiB／device（＝ 192 GiB ÷ 2）<TAB>整 chip 7,380 GB/s","186 GB／GPU（软件可见；物理 192 GB）<TAB>8,000 GB/s",0,0),
+ ("芯片外","HBM","96 GiB／device（＝ 192 GiB ÷ 2）<TAB>整 chip 7,372.8 GB/s","186 GB／GPU（软件可见；物理 192 GB）<TAB>8,000 GB/s",0,0),
 ]
 RH,TOP,LX,LW,RX,RW=84,70,168,404,592,408
 H=TOP+RH*len(ROWS)+104

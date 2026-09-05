@@ -199,7 +199,7 @@ def _tpu_pipe(f):
     f.t(RX + 6, PIPE_Y - 15, "TPU　·　v7", "sec", GN)
 
     yy = _stop(f, RX, RW, SY[0], STOPS[0][0], GN, "HBM3e",
-               "192 GiB · 7.4 TB/s / chip")
+               "192 GiB · 7.37 TB/s / chip")
     para(f, RX + 20, yy, RW - 40,
          "官方数字。<b>96 GiB / device</b>（v7 是 2 device / chip）。",
          "xs", 16, max_lines=1)

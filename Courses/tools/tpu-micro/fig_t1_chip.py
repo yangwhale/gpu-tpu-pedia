@@ -88,7 +88,10 @@ def _die(f, dx, idx):
     f.rect(tx, ty, tw, 24, FILL[BL], rx=8)
     f.rect(tx, ty + 16, tw, 8, FILL[BL], rx=0)
     f.t(tx + 10, ty + 17, "TensorCore　×1　@ 2.2 GHz", "box", BL)
-    f.t(tx + tw - 10, ty + 17, "两个 MXU 合计 131,072 个乘加单元", "xxs", BL, "end")
+    # ⛔ 2026-09-05：这里原来写「131,072 个乘加单元」。数本身没错（两个 MXU 的**格子**数），
+    #    但 131,072 在本课还代表另一件事 —— **单个 MXU 每周期的乘加次数**。
+    #    同一个数、两级含义，而全课只有 §3.1 正文点破过。每次出现都把单位钉上。
+    f.t(tx + tw - 10, ty + 17, "两个 MXU 合计 131,072 个格子（cell）", "xxs", BL, "end")
 
     for k in range(2):
         _mxu(f, tx + 12 + k * 104, ty + 34)
@@ -123,8 +126,8 @@ def _die(f, dx, idx):
     if full:
         f.t(hx + 10, hy + 38, "这一半只属于 die 0 —— 两个 die 不共享地址空间", "xs")
         f.t(hx + 10, hy + 54,
-            gate.IP("整封装 8 个 HBM3E 堆栈、7.4 TB/s；按 core 拆是约 3,433 GiB/s",
-                    "整封装 8 个 HBM3E 堆栈、7.4 TB/s；按 die 拆分的口径官方未公开",
+            gate.IP("整封装 8 个 HBM3E 堆栈、7.37 TB/s；按 core 拆是约 3,433 GiB/s",
+                    "整封装 8 个 HBM3E 堆栈、7.37 TB/s；按 die 拆分的口径官方未公开",
                     why="片上带宽"), "xxs")
     else:
         f.t(hx + 10, hy + 38, "另一半属于 die 1，两套地址空间互不可见", "xs")
@@ -186,7 +189,7 @@ def _sidebar(f):
         ("SparseCore", "4", "每 device 2 个", PU),
         ("SparseCore 的向量 tile", "64", "4 × 16", PU),
         ("HBM 容量", "192 GiB", "官方表头就写 GiB；同页正文的 GB 是笔误", YL),
-        ("HBM 带宽", "7.4 TB/s", "官方 7,380 GB/s", YL),
+        ("HBM 带宽", "7.37 TB/s", "官方另一处写 7,380 GB/s，差 0.1%", YL),
         ("ICI 对外带宽", "1,200 GB/s", "六条链路双向合计", RD),
     ]
     ry = y + 44

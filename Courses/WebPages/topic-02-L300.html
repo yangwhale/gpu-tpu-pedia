@@ -652,8 +652,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="58" y="209" fill="#fff" style="font-size:11.5px">VPU</text>
 <text class="svgsm" x="176" y="209" style="font-size:11.5px">逐元素 · 峰值低两个数量级</text>
 <rect x="48" y="222" width="112" height="24" rx="5" fill="#9334e6"/>
-<text class="svgsm" x="58" y="239" fill="#fff" style="font-size:11.5px">XLU</text>
-<text class="svgsm" x="176" y="239" style="font-size:11.5px">转置 · 跨 lane 归约 —— 慢</text>
+<text class="svgsm" x="58" y="239" fill="#fff" style="font-size:11.5px">XLU 跨 lane 单元</text>
+<text class="svgsm" x="176" y="239" style="font-size:11.5px">转置 · 跨 lane 归约（硬件版 shuffle）—— 慢</text>
 <rect x="48" y="252" width="112" height="24" rx="5" fill="#d93025"/>
 <text class="svgsm" x="58" y="269" fill="#fff" style="font-size:11.5px">标量单元 ×1</text>
 <text class="svgsm" x="176" y="269" style="font-size:11.5px">产生所有地址 —— 只有一个</text>
@@ -687,8 +687,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="574" y="209" fill="#fff" style="font-size:11.5px">VPU</text>
 <text class="svgsm" x="692" y="209" style="font-size:11.5px">逐元素 · 峰值低两个数量级</text>
 <rect x="564" y="222" width="112" height="24" rx="5" fill="#9334e6"/>
-<text class="svgsm" x="574" y="239" fill="#fff" style="font-size:11.5px">XLU</text>
-<text class="svgsm" x="692" y="239" style="font-size:11.5px">转置 · 跨 lane 归约 —— 慢</text>
+<text class="svgsm" x="574" y="239" fill="#fff" style="font-size:11.5px">XLU 跨 lane 单元</text>
+<text class="svgsm" x="692" y="239" style="font-size:11.5px">转置 · 跨 lane 归约（硬件版 shuffle）—— 慢</text>
 <rect x="564" y="252" width="112" height="24" rx="5" fill="#d93025"/>
 <text class="svgsm" x="574" y="269" fill="#fff" style="font-size:11.5px">标量单元 ×1</text>
 <text class="svgsm" x="692" y="269" style="font-size:11.5px">产生所有地址 —— 只有一个</text>
@@ -735,7 +735,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="500" y="718" text-anchor="middle" fill="#fff" style="font-size:11.5px">好消息：D2D 比一条 1D ICI 链路快 6 倍 —— 跨 chiplet 贵，但不是灾难。⚠️ 6 倍的基数是「一条链路 200 GB/s」，不是整颗 chip 那 1,200</text>
 <text class="svglbl" x="0" y="766" fill="#202124" style="font-size:13px">整颗 chip 对外：</text>
 <text class="svgsm" x="116" y="766" fill="#1e8e3e" style="font-size:11.5px">HBM</text>
-<text class="svgsm" x="156" y="766" style="font-size:11.5px">192（官方表写 GiB、正文写 GB）· 7,380 GB/s</text>
+<text class="svgsm" x="156" y="766" style="font-size:11.5px">192 GiB · 7,372.8 GB/s（＝7.37 TB/s；官方另一处写 7,380，差 0.1%）</text>
 <text class="svgsm" x="116" y="787" fill="#1e8e3e" style="font-size:11.5px">ICI</text>
 <text class="svgsm" x="156" y="787" style="font-size:11.5px">整颗 1,200 GB/s（双向合计）· 每轴 200 GB/s ＝ 收发各约 100、同时跑 · D2D 那 6 倍比的是这条 200 · 3D torus</text>
 <text class="svgsm" x="116" y="808" fill="#1e8e3e" style="font-size:11.5px">算力</text>
@@ -895,7 +895,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svglbl" x="142" y="260" text-anchor="end" fill="#202124">片上 · 自动管</text>
 <text class="svgsm" x="142" y="276" text-anchor="end">硬件替你决定放什么</text>
 <rect x="168" y="238" width="404" height="70" rx="7" fill="#fafafa" stroke="#9aa0a6" stroke-dasharray="6 5"/>
-<text class="svgnum" x="370.0" y="264" text-anchor="middle" fill="#d93025">CMEM = 0</text>
+<text class="svgnum" x="370.0" y="264" text-anchor="middle" fill="#d93025">硬件缓存 ＝ 0（v7 无 CMEM）</text>
 <text class="svgsm" x="370.0" y="283" text-anchor="middle" fill="#d93025">GPU 那边整整一层，在这里根本不存在</text>
 <rect x="592" y="238" width="408" height="70" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="0.8"/>
 <text class="svgsm" x="606" y="260" fill="#202124">L1（与 shared 合计上限 256 KB／SM）</text>
@@ -924,7 +924,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="142" y="528" text-anchor="end">HBM</text>
 <rect x="168" y="490" width="404" height="70" rx="7" fill="#fff" stroke="#1e8e3e" stroke-width="0.8"/>
 <text class="svgsm" x="182" y="512" fill="#202124">96 GiB／device（＝ 192 GiB ÷ 2）</text>
-<text class="svgsm" x="182" y="529" fill="#202124">整 chip 7,380 GB/s</text>
+<text class="svgsm" x="182" y="529" fill="#202124">整 chip 7,372.8 GB/s</text>
 <rect x="592" y="490" width="408" height="70" rx="7" fill="#fff" stroke="#1a73e8" stroke-width="0.8"/>
 <text class="svgsm" x="606" y="512" fill="#202124">186 GB／GPU（软件可见；物理 192 GB）</text>
 <text class="svgsm" x="606" y="529" fill="#202124">8,000 GB/s</text>
@@ -1259,7 +1259,7 @@ details.aside b{color:var(--ink);font-weight:600}
           <td>XLU 跨 lane 单元 × 2<sup>†</sup><br><span class="sub">转置 · 跨 lane 归约 · shuffle。超越函数（<code>exp</code> / <code>tanh</code>）<b>是单独一类资源</b><sup>§</sup> ——&nbsp;Pallas 的成本模型里 <code>transcendentals</code> 跟 <code>flops</code> 平级单开一栏；但<b>部件叫什么、几个，公开资料没有</b></span></td>
           <td>SFU × 4 / 处理块<sup>‡</sup><br><span class="sub">exp · rcp · rsqrt 等超越函数。跨 lane 靠 warp shuffle 指令，官方没单列成部件</span></td>
           <td>⚠️ 两边<b>各点名了一个</b>，又<b>各自不说另一个</b></td></tr>
-      <tr><td><b>HBM</b></td><td>96 GiB / device（＝ 192 GiB ÷ 2）；整 chip 7,380 GB/s</td>
+      <tr><td><b>HBM</b></td><td>96 GiB / device（＝ 192 GiB ÷ 2）；整 chip 7,372.8 GB/s（＝ 7.37 TB/s）</td>
           <td>186 GB / GPU<span class="sub">（软件可见；物理 192 GB）</span>；8,000 GB/s</td><td>同一代 HBM，量级相同</td></tr>
       <tr><td><b>算力（每 chip / 每 GPU）</b></td><td>BF16 2,307 ｜ FP8 4,614 TFLOPS</td>
           <td>BF16 2,500 ｜ FP8 5,000 TFLOPS（dense，NVL72 里那颗）</td><td>同一量级</td></tr>
@@ -1374,7 +1374,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <path d="M747.0 310 v16" stroke="#dadce0" stroke-width="1.4" />
 <rect x="512" y="326" width="470" height="32" rx="6" fill="#fff" stroke="#5f6368" stroke-dasharray="5 4"/>
 <text class="svgsm" x="524" y="344" fill="#5f6368">（没有这一层）</text>
-<text class="svgsm" x="970" y="344" text-anchor="end" fill="#5f6368">CMEM = 0</text>
+<text class="svgsm" x="970" y="344" text-anchor="end" fill="#5f6368">硬件缓存 ＝ 0</text>
 <path d="M747.0 358 v16" stroke="#dadce0" stroke-width="1.4" />
 <rect x="512" y="374" width="470" height="32" rx="6" fill="#f8f9fa" stroke="#1e8e3e"/>
 <text class="svgsm" x="524" y="392" fill="#202124">HBM</text>
@@ -2691,7 +2691,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="46" y="192" width="400" height="24" rx="8" fill="#e8f0fe"/>
 <rect x="46" y="208" width="400" height="8" rx="0" fill="#e8f0fe"/>
 <text x="56" y="209" class="box" fill="#1a73e8">TensorCore　×1　@ 2.2 GHz</text>
-<text x="436" y="209" class="xxs" fill="#1a73e8" text-anchor="end">两个 MXU 合计 131,072 个乘加单元</text>
+<text x="436" y="209" class="xxs" fill="#1a73e8" text-anchor="end">两个 MXU 合计 131,072 个格子（cell）</text>
 <rect x="58" y="226" width="92" height="100" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
 <rect x="66" y="234" width="76" height="62" rx="2" fill="url(#t1-mxucell)" stroke="#1e8e3e" stroke-width="1.1"/>
 <text x="104" y="310" class="lbl" fill="#1e8e3e" text-anchor="middle">MXU</text>
@@ -2880,7 +2880,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="46" y="472" width="400" height="64" rx="8" fill="#fef7e0" stroke="#f9ab00" stroke-width="1.8"/>
 <text x="56" y="492" class="box" fill="#202124">HBM3E　96 GiB</text>
 <text x="56" y="510" class="xs">这一半只属于 die 0 —— 两个 die 不共享地址空间</text>
-<text x="56" y="526" class="xxs">整封装 8 个 HBM3E 堆栈、7.4 TB/s；按 die 拆分的口径官方未公开</text>
+<text x="56" y="526" class="xxs">整封装 8 个 HBM3E 堆栈、7.37 TB/s；按 die 拆分的口径官方未公开</text>
 <text x="436" y="492" class="xxs" text-anchor="end">＝ 封装 192 GiB 的一半</text>
 <rect x="486" y="152" width="420" height="400" rx="10" fill="#fcfcfd" stroke="#5f6368" stroke-width="1.6"/>
 <rect x="486" y="152" width="420" height="30" rx="10" fill="#f1f3f4"/>
@@ -2891,7 +2891,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="496" y="192" width="400" height="24" rx="8" fill="#e8f0fe"/>
 <rect x="496" y="208" width="400" height="8" rx="0" fill="#e8f0fe"/>
 <text x="506" y="209" class="box" fill="#1a73e8">TensorCore　×1　@ 2.2 GHz</text>
-<text x="886" y="209" class="xxs" fill="#1a73e8" text-anchor="end">两个 MXU 合计 131,072 个乘加单元</text>
+<text x="886" y="209" class="xxs" fill="#1a73e8" text-anchor="end">两个 MXU 合计 131,072 个格子（cell）</text>
 <rect x="508" y="226" width="92" height="100" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
 <rect x="516" y="234" width="76" height="62" rx="2" fill="url(#t1-mxucell)" stroke="#1e8e3e" stroke-width="1.1"/>
 <text x="554" y="310" class="lbl" fill="#1e8e3e" text-anchor="middle">MXU</text>
@@ -3110,8 +3110,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="1166" y="275" class="xxs">官方表头就写 GiB；同页正文的 GB 是笔误</text>
 <rect x="954" y="286" width="4" height="20" rx="2" fill="#f9ab00"/>
 <text x="966" y="301" class="lbl" fill="#202124">HBM 带宽</text>
-<text x="1154" y="301" class="numb" fill="#f9ab00" text-anchor="end">7.4 TB/s</text>
-<text x="1166" y="301" class="xxs">官方 7,380 GB/s</text>
+<text x="1154" y="301" class="numb" fill="#f9ab00" text-anchor="end">7.37 TB/s</text>
+<text x="1166" y="301" class="xxs">官方另一处写 7,380 GB/s，差 0.1%</text>
 <rect x="954" y="312" width="4" height="20" rx="2" fill="#d93025"/>
 <text x="966" y="327" class="lbl" fill="#202124">ICI 对外带宽</text>
 <text x="1154" y="327" class="numb" fill="#d93025" text-anchor="end">1,200 GB/s</text>
@@ -6090,8 +6090,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="20" y="792" width="1360" height="132" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
 <text x="34" y="818" class="sec" fill="#1a73e8">一句话总结这张表</text>
 <text x="34" y="842" class="xs"><tspan font-weight="700" fill="#202124">GPU 的层级是「执行体的层级」，TPU 的层级是「数据形状的层级」。</tspan>thread、warp、block 说的都是谁在跑；lane、sublane、tile、slice 说的都是数据被切成什么样。</text>
-<text x="34" y="880" class="xs">这个区别有个非常实际的后果：<tspan font-weight="700" fill="#202124">GPU 的性能问题多半出在「占用率」上</tspan>（同时驻留的 warp 够不够多，能不能把延迟盖住）；<tspan font-weight="700" fill="#202124">TPU 的性能问题多半出在「形状」上</tspan>（矩阵维度对不对齐、切片切得均不均匀）。两边的调优直觉<tspan font-weight="700" fill="#d93025">不能互相搬运</tspan> —— 这也是为什么 §4 那个 </text>
-<text x="34" y="898" class="xs"><tspan class="mono" fill="#1967d2">head_dim=128</tspan> 打 TPU 却不打 GPU。</text>
+<text x="34" y="880" class="xs">这个区别有个非常实际的后果：<tspan font-weight="700" fill="#202124">GPU 的性能问题多半出在「占用率」上</tspan>（同时驻留的 warp 够不够多，能不能把延迟盖住）；<tspan font-weight="700" fill="#202124">TPU 的性能问题多半出在「形状」上</tspan>（矩阵维度对不对齐、切片切得均不均匀）。两边的调优直觉<tspan font-weight="700" fill="#d93025">不能互相搬运</tspan> —— 这也是为什么<tspan font-weight="700" fill="#202124">收缩维那一节</tspan>里的</text>
+<text x="34" y="898" class="xs"> <tspan class="mono" fill="#1967d2">head_dim=128</tspan> 打 TPU 却不打 GPU。</text>
 </svg>
 <figcaption><b class="fno">图 T-3</b>　<b>TPU 这边刻意按问题对齐，不按名词对齐。</b>名词对名词能排出一张漂亮的翻译表，按问题排才看得见<b>有两行 TPU 那一栏是空的</b>。空的那两行正是 GPU 的 block 和 warp 调度器。　<span class="msfrom">—— 出自《<a href="tpu-microscope.html">TPU 显微镜</a>》</span></figcaption>
 </figure>
@@ -9012,15 +9012,15 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="472" y="620" fill="#174ea6">……共 64 段</text>
 <text class="svglbl" x="748" y="450" fill="#174ea6" style="font-size:13px">一段 2048 行</text>
 <text class="svgsm" x="748" y="470" fill="#174ea6">× 256 列（K 的一片）</text>
-<text class="svgsm" x="748" y="498" fill="#5f6368">片上累加器</text>
+<text class="svgsm" x="748" y="498" fill="#5f6368">这一段的局部和（占 VMEM）</text>
 <text class="svgsm" x="748" y="516" fill="#174ea6">2048 × 256 × 4 B</text>
 <text class="svglbl" x="748" y="534" fill="#174ea6" style="font-size:13px">＝ 2 MiB</text>
 <rect x="904" y="374" width="496" height="250" rx="8" fill="#fce8e6" stroke="#d93025"/>
 <text class="svglbl" x="918" y="396" fill="#a50e0e" style="font-size:12px">⛔ 为什么 M 不能一口气流完</text>
-<text class="svgsm" x="918" y="422" fill="#a50e0e">那样每个 n 块的累加器要</text>
+<text class="svgsm" x="918" y="422" fill="#a50e0e">那样每个 n 块的局部和要占</text>
 <text class="svglbl" x="918" y="442" fill="#a50e0e" style="font-size:13px">131072 × 256 × 4 B</text>
 <text class="svglbl" x="918" y="462" fill="#d93025" style="font-size:18px">＝ 128 MiB</text>
-<text class="svgsm" x="918" y="486" fill="#a50e0e">——&#160;<tspan font-weight="700">比整块 VMEM（64 MB）还大</tspan>。</text>
+<text class="svgsm" x="918" y="486" fill="#a50e0e">——&#160;<tspan font-weight="700">比整块 VMEM（64 MiB）还大</tspan>。</text>
 <text class="svglbl" x="918" y="514" fill="#a50e0e" style="font-size:13px">所以 M 必须切段。</text>
 <text class="svgsm" x="918" y="534" fill="#a50e0e">而切段就<tspan font-weight="700">必然要重搬右矩阵</tspan>。</text>
 <text class="svgsm" x="918" y="562" fill="#5f6368">⚠️ 这不是实现不好，</text>
@@ -9070,10 +9070,10 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="14" y="802" fill="#202124">⭐ <tspan font-weight="700">装一块权重要 256 个周期</tspan>（TPU 初代论文原话），而流一段 2048 行要 2048 个周期 ——&#160;<tspan font-weight="700">装的那 256 完全藏在算的那 2048 里面</tspan>。</text>
 <text class="svgsm" x="14" y="822" fill="#202124">⚠️ 所以藏得住的条件很直白：<tspan font-weight="700">一段的行数要大于 256</tspan>。这里 2048 是它的 8 倍，稳。<tspan fill="#5f6368">（这一条是把两个公开数字放一起推的，不是官方结论。）</tspan></text>
 <text class="svgsm" x="14" y="846" fill="#d93025">⛔ 反例就在隔壁：注意力转置之后 M ＝ 128 ——&#160;<tspan font-weight="700">连 256 这个门槛都够不着，乒乓就藏不住了</tspan>。</text>
-<text class="svglbl" x="0" y="904" fill="#202124" style="font-size:13px">④ 段切得越碎，右矩阵就要<tspan font-weight="700">重搬越多次</tspan>——&#160;而段能开多长，由片上累加器顶住</text>
+<text class="svglbl" x="0" y="904" fill="#202124" style="font-size:13px">④ 段切得越碎，右矩阵就要<tspan font-weight="700">重搬越多次</tspan>——&#160;而段能开多长，由那块局部和缓存顶住</text>
 <rect x="0" y="916" width="820" height="150" rx="8" fill="#fff" stroke="#dadce0"/>
 <text class="svglbl" x="16" y="940" fill="#5f6368" style="font-size:12px">一段多少行</text>
-<text class="svglbl" x="190" y="940" fill="#5f6368" style="font-size:12px">片上累加器</text>
+<text class="svglbl" x="190" y="940" fill="#5f6368" style="font-size:12px">局部和占 VMEM</text>
 <text class="svglbl" x="380" y="940" fill="#5f6368" style="font-size:12px">B 进阵列的总次数</text>
 <text class="svglbl" x="600" y="940" fill="#5f6368" style="font-size:12px">乒乓藏得住吗</text>
 <line x1="0" y1="948" x2="820" y2="948" stroke="#dadce0"/>
@@ -10341,7 +10341,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <path d="M809,114 h-5 a4,4 0 0 0 -4,4 v58 a4,4 0 0 0 4,4 h5 z" fill="#1e8e3e"/>
 <rect x="805" y="114" width="4" height="66" fill="#1e8e3e"/>
 <text x="820" y="139" class="box" fill="#1e8e3e">HBM3e</text>
-<text x="1344" y="139" class="xxs" fill="#5f6368" text-anchor="end">192 GiB · 7.4 TB/s / chip</text>
+<text x="1344" y="139" class="xxs" fill="#5f6368" text-anchor="end">192 GiB · 7.37 TB/s / chip</text>
 <text x="820" y="156" class="xs">官方数字。<tspan font-weight="700" fill="#202124">96 GiB / device</tspan>（v7 是 2 device / chip）。</text>
 <rect x="800" y="210" width="560" height="78" rx="9" fill="none" stroke="#d93025" stroke-width="2.0" stroke-dasharray="7,5"/>
 <text x="820" y="237" class="box" fill="#d93025">没有这一站</text>
@@ -13101,7 +13101,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="724" y="706" width="656" height="132" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
 <text x="742" y="732" class="sec">静态的红利</text>
 <text x="742" y="756" class="xs"><tspan font-weight="700" fill="#202124">编译器看得到整张图。</tspan>跨算子融合、通信与计算重叠、内存复用，这三样不用你操心，也<tspan font-weight="700" fill="#202124">不写在你的代码里</tspan>。</text>
-<text x="742" y="782" class="xs"><tspan font-weight="700" fill="#202124">显存规划是确定的。</tspan>所以能<tspan font-weight="700" fill="#d93025">不占卡就提前算出会不会 OOM</tspan> —— 这一条 GPU 侧没有对应物，5.5 会单讲。</text>
+<text x="742" y="782" class="xs"><tspan font-weight="700" fill="#202124">显存规划是确定的。</tspan>所以能<tspan font-weight="700" fill="#d93025">不占卡就提前算出会不会 OOM</tspan> —— 这一条 GPU 侧没有对应物 —— <tspan fill="#9aa0a6">完整版 L300 §5.6 单讲。</tspan></text>
 <text x="742" y="808" class="xs"><tspan font-weight="700" fill="#202124">而且这三样是免费的。</tspan>你什么都不做就已经吃到了 —— 代价是<tspan font-weight="700" fill="#d93025">不想要的时候也关不掉</tspan>。</text>
 <rect x="20" y="864" width="1360" height="92" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
 <text x="38" y="892" class="sec">一句话记住这一节</text>
@@ -14368,7 +14368,7 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="38" y="601" class="xs"><tspan font-weight="700" fill="#d93025">写不出这一行，就别报百分比。</tspan><tspan fill="#9aa0a6">退一步报</tspan><tspan font-weight="700" fill="#202124">吞吐本身</tspan>（tokens/s，或者「跑完一步要几秒」）—— 那个数虽然也有口径，但至少<tspan font-weight="700" fill="#202124">能直接感觉到快慢</tspan>，而百分比不行。<tspan font-weight="700" fill="#202124">下一张讲的就是：什么时候该退这一步。</tspan></text>
 <text x="1380" y="660" class="xxs" fill="#9aa0a6" text-anchor="end">实测：A4X（GB200 NVL72）2 节点 8 GPU · Qwen3 类 MoE · seq 16384 · FP8 训练，实测 503 TFLOP/s/GPU · 峰值口径见上一张图</text>
 </svg>
-<figcaption><b class="fno">图 P-13</b>　<b>5.6 刚在「这个数的单位是什么」上绊过一次。</b>这一张是同一个问题换了一层：单位没错，除数错了。</figcaption>
+<figcaption><b class="fno">图 P-13</b>　<b>上一张刚在「这个数的单位是什么」上绊过一次。</b>这一张是同一个问题换了一层：单位没错，除数错了。</figcaption>
 </figure>
 
   <!-- ⭐⭐ 2026-09-02 从 L200 回填。图 P-13 已经讲了 MFU/HFU 的分野，也给了
@@ -14570,7 +14570,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="868" y="124" width="512" height="452" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
 <text x="886" y="150" class="sec">乙　·　把这 1.29 倍拆开 —— 只拆得动一半</text>
 <rect x="886" y="168" width="476" height="44" rx="8" fill="#e8f0fe" stroke="#202124" stroke-width="1.4"/>
-<text x="1124.0" y="196" class="box" fill="#202124" text-anchor="middle">854.0 ÷ 662.3  =  1.29  =  1.084 × 1.190</text>
+<text x="1124.0" y="190" class="box" fill="#202124" text-anchor="middle">854.0 ÷ 662.3  =  1.29  =  1.084 × 1.190</text>
+<text x="1124.0" y="208" class="xxs" fill="#5f6368" text-anchor="middle">而按每芯片 token/s：6,242 ÷ 4,770 ＝ 1.31 —— 下文一律用这个</text>
 <rect x="892" y="234" width="146.64513833576837" height="34" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
 <text x="965.3225691678842" y="256" class="numb" fill="#d93025" text-anchor="middle">1.084</text>
 <rect x="1038.6451383357685" y="234" width="317.3548616642317" height="34" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>

@@ -37,7 +37,7 @@ def chiplet(x, dev):
     o.append(f'<rect x="{x+16}" y="126" width="420" height="158" rx="10" fill="#e6f4ea" stroke="{GR}" stroke-width="1.2"/>')
     o.append(f'<text class="svglbl" x="{x+32}" y="150" fill="{GR}" {LB}>TensorCore ×1</text>')
     for j,(t,sb,c) in enumerate([("MXU ×2","256 × 256 脉动阵列",GR),("VPU","逐元素 · 峰值低两个数量级",PU),
-                                 ("XLU","转置 · 跨 lane 归约 —— 慢",PU),("标量单元 ×1","产生所有地址 —— 只有一个",RD)]):
+                                 ("XLU 跨 lane 单元","转置 · 跨 lane 归约（硬件版 shuffle）—— 慢",PU),("标量单元 ×1","产生所有地址 —— 只有一个",RD)]):
         yy=162+j*30
         o.append(f'<rect x="{x+32}" y="{yy}" width="112" height="24" rx="5" fill="{c}"/>')
         o.append(f'<text class="svgsm" x="{x+42}" y="{yy+17}" fill="#fff" {SM}>{t}</text>')
@@ -98,7 +98,7 @@ p.append(f'<text class="svgsm" x="500" y="718" text-anchor="middle" fill="#fff" 
 # 这三项**必须竖排**：横着并列时每列只有 300px，而 11.5px 下最长那项
 # 要 262px，加上标签就溢出列宽 —— 「7,380 GB/s」会压到下一列的「ICI」上。
 p.append(f'<text class="svglbl" x="0" y="766" fill="#202124" {LB}>整颗 chip 对外：</text>')
-for i,(t,v) in enumerate([("HBM","192（官方表写 GiB、正文写 GB）· 7,380 GB/s"),
+for i,(t,v) in enumerate([("HBM","192 GiB · 7,372.8 GB/s（＝7.37 TB/s；官方另一处写 7,380，差 0.1%）"),
                           ("ICI","整颗 1,200 GB/s（双向合计）· 每轴 200 GB/s ＝ 收发各约 100、同时跑 · D2D 那 6 倍比的是这条 200 · 3D torus"),
                           ("算力","BF16 2,307 TFLOPS ｜ FP8 4,614 TFLOPS")]):
     p.append(f'<text class="svgsm" x="116" y="{766+i*21}" fill="{GR}" {SM}>{t}</text>')

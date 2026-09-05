@@ -489,7 +489,7 @@ TPU 的 3D 环面一路铺到 <b>9,216 颗</b>，全程同一套 ICI，
 <tr><td>累加器</td><td>128 个 · (8,256) · 32 bit</td><td>JAX 开源代码</td></tr>
 <tr><td>lane / sublane</td><td>128 / 8</td><td>JAX 开源代码</td></tr>
 <tr><td>VMEM / SMEM 容量</td><td>64 MiB / 1 MiB 每 core</td><td>JAX 开源代码</td></tr>
-<tr><td>HBM 容量与带宽</td><td>192 GiB · 7,380 GB/s · 8 stack</td>
+<tr><td>HBM 容量与带宽</td><td>192 GiB · 7,372.8 GB/s（＝ 7.37 TB/s）· 8 stack<br><b>⚠️ 官方另一处写 7,380 GB/s</b>，差 0.1%；引脚反推恰好落在 8 × 921.6 ＝ 7,372.8，<b>本文除法一律用 7.37</b></td>
 <td>Cloud TPU 产品文档（表头写的是 GiB）</td></tr>
 <tr><td>SparseCore 内部构成</td><td>16 子核 · lane 16 · 512 KiB · 粒度 32 B</td>
 <td>JAX 开源代码</td></tr>
