@@ -224,73 +224,118 @@ t(RX + 20, TOP + 52, '<tspan font-weight="700">没有交换机</tspan>：每颗�
 t(RX + 20, TOP + 74, '<tspan fill="#d93025" font-weight="700">红色虚线 ＝ 环绕链路</tspan>'
                      '（每个方向画一条示意，实际三个方向都首尾相接）', None, GY2)
 
-U, V, WZ = 46, 30, 44   # ⚠️ 同列最小间隔 |60m−44k| ＝ 12px > 直径 11
-OX, OY = RX + CW / 2, TOP + 232
+# ⛔⛔ 2026-09-05 第四版。第三版用 2:1 等轴测，Chris：「实在是太丑陋了。」
+#    **病根不是画得不够细，是投影选错了。** 2:1 等轴测把三个轴画成互成 120°、
+#    长度相同 ——&nbsp;三个方向视觉上完全对等，于是大脑把点阵读成**一张六边形网格**，
+#    再怎么加景深也立不起来。
+#    ⭐ 换成**斜二测（cabinet）**：x 纯水平、z 纯竖直、y 缩短并斜着往里。
+#      三个轴视觉上**不对等**，这正是人手画盒子的画法，一眼就是立体。
+#    再补三样让它真的像个体：**外框线框立方体** ＋ **三面淡色底** ＋ **坐标轴三脚架**。
+#    ⭐ 不重合可证：两点同位需 70Δi＋34Δj＝0 且 27Δj＋70Δk＝0；
+#      后式给 Δj ＝ −70Δk/27，|Δj|≤3 时只有 Δk＝0 → 全零解。
+U, DX, DY, WZ = 62, 30, 24, 62     # x 步长 / y 的横竖分量（缩短＋倾斜）/ z 步长
+OX0, OY0 = RX + 186, TOP + 358     # (0,0,0) 落点＝立方体左前下角
+
+
 def proj(i, j, k):
-    return OX + (i - j) * U, OY + (i + j) * V - k * WZ
+    return OX0 + i * U + j * DX, OY0 - j * DY - k * WZ
 
-# 先边后点，k 从低到高（低的在下方＝更近，后画压住）
-# ⭐ 2026-09-05：加景深。等轴测点阵如果所有点一样深一样大，看着是平的 ——
-#    远近靠**颜色深浅 ＋ 尺寸**来分，这是等轴测图能不能立起来的关键一步。
-#    depth 定义为「离观察者多远」：i+j 越小、k 越大 ＝ 越靠后。
-def depth(i, j, k):
-    return ((6 - (i + j)) + k * 2) / 12.0      # 0 ＝ 最近，1 ＝ 最远
 
-# 边：先远后近，远的淡
-edges = []
+def poly(pts, fill, op, stroke=None, sw=1.0):
+    d = " ".join("%.1f,%.1f" % proj(*q) for q in pts)
+    p.append('<polygon points="%s" fill="%s" fill-opacity="%.2f" stroke="%s" '
+             'stroke-width="%.1f"/>' % (d, fill, op, stroke or "none", sw))
+
+
+# ① 三个朝向观察者的面先铺一层淡底 —— 「体」的感觉九成来自这一步
+poly([(0, 0, 0), (3, 0, 0), (3, 0, 3), (0, 0, 3)], GR, .07)   # 前面 j=0
+poly([(0, 0, 3), (3, 0, 3), (3, 3, 3), (0, 3, 3)], GR, .13)   # 顶面 k=3
+poly([(3, 0, 0), (3, 3, 0), (3, 3, 3), (3, 0, 3)], GR, .04)   # 右面 i=3
+
+# ② 点阵的边：按深度 j 从远到近，远的细而淡
+E = []
 for k in range(4):
     for j in range(4):
         for i in range(4):
             for di, dj, dk in ((1, 0, 0), (0, 1, 0), (0, 0, 1)):
                 if i + di < 4 and j + dj < 4 and k + dk < 4:
-                    edges.append((depth(i, j, k), (i, j, k), (i + di, j + dj, k + dk)))
-for d, aa, bb in sorted(edges, key=lambda e: -e[0]):
+                    E.append(((j + (j + dj)) / 6.0, (i, j, k), (i + di, j + dj, k + dk)))
+for d, aa, bb in sorted(E, key=lambda e: -e[0]):
     x0, y0 = proj(*aa); x1, y1 = proj(*bb)
     p.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" '
              'stroke-width="%.2f" opacity="%.2f"/>'
-             % (x0, y0, x1, y1, GR, 1.35 - 0.55 * d, 0.75 - 0.42 * d))
+             % (x0, y0, x1, y1, GR, 1.5 - 0.6 * d, 0.8 - 0.5 * d))
 
-nodes = sorted(((depth(i, j, k), i, j, k)
-                for k in range(4) for j in range(4) for i in range(4)),
-               key=lambda n: -n[0])
-for d, i, j, k in nodes:
-    x0, y0 = proj(i, j, k)
-    r = 7.4 - 2.0 * d
-    p.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="2.4" '
+# ③ 外框线框：12 条棱加粗，立方体的轮廓一出来就不会被读成平面网格
+C = [(0, 0, 0), (3, 0, 0), (3, 3, 0), (0, 3, 0),
+     (0, 0, 3), (3, 0, 3), (3, 3, 3), (0, 3, 3)]
+for a_, b_ in [(0,1),(1,2),(2,3),(3,0),(4,5),(5,6),(6,7),(7,4),(0,4),(1,5),(2,6),(3,7)]:
+    x0, y0 = proj(*C[a_]); x1, y1 = proj(*C[b_])
+    p.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" '
+             'stroke-width="1.6" opacity=".55"/>' % (x0, y0, x1, y1, "#0d652d"))
+
+# ④ 结点：越靠后越小越淡
+for d, i, j, k in sorted(((j / 3.0, i, j, k) for k in range(4)
+                          for j in range(4) for i in range(4)), key=lambda n: -n[0]):
+    x0, y0 = proj(i, j, k); r = 8.4 - 2.6 * d
+    p.append('<rect x="%.1f" y="%.1f" width="%.1f" height="%.1f" rx="2.6" '
              'fill="%s" stroke="%s" stroke-width="%.2f" opacity="%.2f"/>'
              % (x0 - r, y0 - r, 2 * r, 2 * r,
-                "#ffffff" if d > .45 else "#d7efdf", GR, 1.5 - 0.5 * d, 1 - 0.28 * d))
+                "#ffffff" if d > .5 else "#cfe9d7", GR, 1.6 - 0.6 * d, 1 - 0.25 * d))
 
-# ⭐⭐ 2026-09-05：高亮一颗，把它的 6 条邻居链路画出来。
-#    这是这一版最要紧的一处改动 ——&nbsp;它跟左边那颗「18 条」构成**正面对照**：
-#    左边一颗出 18 条、条条通交换机；右边一颗出 6 条、条条只到邻居。
-#    ⭐ 两个数摆在同一张图的同一个位置上，「交换式的域」和「直连的网」
-#      这两个词就不用解释了。
-HI3 = (1, 1, 1)                                # 取内部那一颗，6 条都是普通链路
+# ⑤ 坐标轴三脚架 —— 告诉眼睛哪个方向是「往里」
+AX, AY = RX + 62, TOP + 300
+for dx, dy, lab, lx, ly in ((52, 0, 'x', 8, 5), (0, -52, 'z', -4, -8),
+                            (30, -24, 'y（往里）', 6, -2)):
+    p.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" '
+             'stroke-width="1.6"/>' % (AX, AY, AX + dx, AY + dy, GY2))
+    p.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="%s"/>' % (AX + dx, AY + dy, GY2))
+    t(AX + dx + lx, AY + dy + ly, lab, "svglbl", GY2, 11)
+
+# ⑥ 高亮一颗，把它的 6 条邻居链路画出来。
+#    ⭐ 这是跟左半张的**正面对照**：左边一颗出 18 条、条条通交换机；
+#      右边一颗出 6 条、条条只到邻居。两个数在同一张图的同一个位置上，
+#      「交换式的域」和「直连的网」就不用解释了。
+#    ⚠️ 标签不再压在点阵上（上一版就是压着的），改成引线拉到体外。
+HI3 = (1, 1, 1)
 hx0, hy0 = proj(*HI3)
 for di, dj, dk in ((1,0,0), (-1,0,0), (0,1,0), (0,-1,0), (0,0,1), (0,0,-1)):
-    nb = (HI3[0]+di, HI3[1]+dj, HI3[2]+dk)
-    x1, y1 = proj(*nb)
+    x1, y1 = proj(HI3[0]+di, HI3[1]+dj, HI3[2]+dk)
     p.append('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="#0d652d" '
-             'stroke-width="2.4"/>' % (hx0, hy0, x1, y1))
-    p.append('<circle cx="%.1f" cy="%.1f" r="4.6" fill="#0d652d"/>' % (x1, y1))
-p.append('<rect x="%.1f" y="%.1f" width="15" height="15" rx="3" fill="#0d652d"/>'
-         % (hx0 - 7.5, hy0 - 7.5))
-t(hx0 + 16, hy0 - 12, '这一颗的 6 条', "svglbl", "#0d652d", 12)
+             'stroke-width="2.6"/>' % (hx0, hy0, x1, y1))
+    p.append('<circle cx="%.1f" cy="%.1f" r="4.8" fill="#0d652d"/>' % (x1, y1))
+p.append('<rect x="%.1f" y="%.1f" width="17" height="17" rx="3.5" fill="#0d652d"/>'
+         % (hx0 - 8.5, hy0 - 8.5))
+LBX, LBY = RX + CW - 150, TOP + 300
+line(hx0 + 10, hy0 + 6, LBX - 6, LBY - 4, "#0d652d", 1.0)
+t(LBX, LBY, '这一颗的 <tspan font-weight="700">6 条</tspan>', "svglbl", "#0d652d", 12)
+t(LBX, LBY + 15, '全是直连邻居', None, "#0d652d", 11)
 
-# 三条环绕弧：x 方向、y 方向、z 方向各一条
-def wrap(a, b, c0, c1):
-    """两端各给一个控制点偏移，画一条绕到体外的环绕弧。"""
-    (x0, y0), (x1, y1) = a, b
+# ⑦ 三条环绕：贴着体外走，每个方向一条
+for a_, b_, c0, c1, lab, lxy in (
+        # ⚠️ 控制点必须**同号同向**，等于沿弦的法线整体外推 ——&nbsp;这样才是一道
+        #    贴着体外的浅弓。上一版两端一正一负，弧先往外甩再拐回来，
+        #    三条叠在一起成了两个大椭圆，看不出各自连的是哪两颗。
+        ((3, 0, 0), (0, 0, 0), (0, 44), (0, 44), 'x 环绕', (OX0 + 74, OY0 + 52)),
+        ((0, 3, 0), (0, 0, 0), (-26, -32), (-26, -32), 'y 环绕', (OX0 - 104, OY0 - 30)),
+        ((3, 3, 3), (3, 3, 0), (58, 0), (58, 0), 'z 环绕', (OX0 + 272, OY0 - 150))):
+    (x0, y0), (x1, y1) = proj(*a_), proj(*b_)
     path('M%.1f %.1f C %.1f %.1f, %.1f %.1f, %.1f %.1f'
-         % (x0, y0, x0 + c0[0], y0 + c0[1], x1 + c1[0], y1 + c1[1], x1, y1),
-         RD, 1.7, "5 4")
-wrap(proj(3, 0, 3), proj(0, 0, 3), (52, -46), (-52, -46))     # x 环绕（顶层后缘）
-wrap(proj(0, 3, 3), proj(0, 0, 3), (-52, -34), (-52, 34))     # y 环绕
-wrap(proj(3, 3, 3), proj(3, 3, 0), (66, -8), (66, 8))         # z 环绕
-t(RX + CW - 24, TOP + 108, 'x 环绕', "svglbl", RD, 11, "end")
-t(RX + 26, TOP + 238, 'y 环绕', "svglbl", RD, 11)
-t(RX + CW - 24, TOP + 340, 'z 环绕', "svglbl", RD, 11, "end")
+         % (x0, y0, x0 + c0[0], y0 + c0[1], x1 + c1[0], y1 + c1[1], x1, y1), RD, 1.8, "5 4")
+    t(lxy[0], lxy[1], lab, "svglbl", RD, 11)
+
+# ⑧ 小插图：一维上 4 个点接成环，最远 2 步 —— 「2＋2＋2」的分子在这儿
+RCX, RCY, RR = RX + 92, TOP + 152, 34
+p.append('<circle cx="%s" cy="%s" r="%s" fill="none" stroke="%s" stroke-width="1.4" '
+         'stroke-dasharray="4 3" opacity=".5"/>' % (RCX, RCY, RR, RD))
+RP = [(RCX, RCY - RR), (RCX + RR, RCY), (RCX, RCY + RR), (RCX - RR, RCY)]
+for n, (qx, qy) in enumerate(RP):
+    p.append('<rect x="%.1f" y="%.1f" width="13" height="13" rx="3" fill="%s" '
+             'stroke="%s" stroke-width="1.4"/>'
+             % (qx - 6.5, qy - 6.5, "#0d652d" if n in (0, 2) else "#cfe9d7", GR))
+t(RCX, TOP + 100, '一维上的 4 个点', "svglbl", "#0d652d", 12, "middle")
+t(RCX, TOP + 205, '首尾一接 ——&#160;<tspan font-weight="700">最远 2 步</tspan>', None, "#0d652d", 11, "middle")
+t(RCX, TOP + 220, '（不接环绕要 3 步）', None, GY2, 10, "middle")
 
 RBY = TOP + 424
 box(RX + 20, RBY, CW - 40, 80, "#fff", "#c3e2cc", 8)
