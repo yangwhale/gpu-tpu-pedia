@@ -99,8 +99,8 @@ W('fig1-3.svg',p+['</svg>'])
 # ══════════ 图 1-4 · 压轴：312 FLOP/byte ══════════
 V7B,V7BW,V7F=2307,7.3728,4614     # TFLOPS / TB·s⁻¹ / TFLOPS  官方 per chip
 B2B,B2BW,B2F=2500,8.000,5000     # dense per GPU，由官方域级数字除 72 得到
-H2=848          # 471 是原来只讲 HBM 一层时的高度；下面那段阶梯 ＋ **三行**口径说明撑到 822
-                # （2026-09-04：反推校验那句原来一行 1121px 宽、被 viewBox 裁掉，拆成两行后 +18）
+H2=778          # 沿革：471（只讲 HBM 一层）→ 加三层阶梯与口径说明撑到 848
+                # → 2026-09-05 删掉那条黑底压轴带，下半张整体上提 104px，回到 778
 q=[f'<svg viewBox="0 0 1000 {H2}" width="100%" role="img" aria-label="TPU v7 与 B200 的算力带宽比几乎完全相同，都是每字节约 312 次浮点运算；并列出 GB200 上 HBM、L2、共享内存三层各自的兑换比 312 / 119 / 64">',
    '<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">'
    '两家公司、两套架构、两种设计哲学 —— 算力除以带宽，落在同一个数上</text>',
@@ -126,29 +126,16 @@ panel(530,"GB200（NVL72 里那颗 · 每 GPU · dense）",BL,
       [("BF16",f"{B2B:,} TFLOPS",f"{B2BW:.1f} TB/s",f"{B2B/1000/B2BW*1000:.1f}"),
        ("FP8", f"{B2F:,} TFLOPS",f"{B2BW:.1f} TB/s",f"{B2F/1000/B2BW*1000:.1f}")],
       "来源：NVIDIA 官方 GB200 NVL72 域级数字 ÷ 72，稀疏值取一半得 dense")
-# 底带不能用 BL —— 上面刚把蓝定成 GPU、绿定成 TPU，这一条是**两边共同的结论**，
-# 染成任何一个平台色都会读成「这是那一边的说法」。用中性墨色。
-# ⛔ 2026-09-04 黑带从 80 长到 98：里面现在是四行（大字 ＋ 三条警告），
-# 新加的那条「别读第三位」必须挨着大字，于是后面两条各下移一行。
-q.append(f'<rect x="0" y="260" width="1000" height="98" rx="8" fill="#202124"/>')
-q.append('<text class="svgnum" x="500" y="286" text-anchor="middle" fill="#fff" style="font-size:19px">'
-# ⛔ ⚠️ 2026-09-04：那个 0.03% 是假精度 —— GB200 侧的 8 TB/s 反推出的引脚速率7.81 Gbps 不是任何一档标称值，十进制／二进制两种读法本身就差 2.4%。结论（同一量级）不变，但别拿第三位当卖点。详见 §1.1 那个折叠。
-         'BF16　312.9　对　312.5　　｜　　FP8　625.8　对　625.0　　——&#160;<tspan font-weight="700">同一量级</tspan></text>')
-# ⛔ 这一行是 2026-09-04 补的，位置紧贴上面那行大字，**必须挨着**：
-#    上面那行给的是三位有效数字，而第三位是假的 —— 隔开就等于没警告。
-q.append('<text class="svgsm" x="500" y="304" text-anchor="middle" fill="#ffe08a">'
-         '⚠️ 别读第三位：GB200 那个「8 TB/s」官方没写口径，十进制还是 8×1024 差 2.4%（见正文折叠）</text>')
-# ⛔ 这里原本写「这不是巧合能解释的。两边被同一批负载和同一代 HBM 技术钉在了同一个
-#    比值上」——听着很漂亮，但**没有任何一家这么说过**，是从两个数字倒推出来的因果。
-#    而且它还挑 SKU：换成 HGX B200 板上那颗，就是 2,250 ÷ 8.0 = 281.3，离 312 差 11%。
-#    所以「都是 312」本身是真的，「为什么都是 312」是推断，两者必须分开讲。
-q.append('<text class="svgsm" x="500" y="324" text-anchor="middle" fill="#ffffffcc">'
-         '⚠️ 换成 HGX 板上的 B200 就是 2,250 ÷ 8.0 ＝ 281.3，离 312 差 11% —— '
-         '「都落在 312」的前提是拿 NVL72 里那颗 GB200 比</text>')
-q.append('<text class="svgsm" x="500" y="342" text-anchor="middle" fill="#ffffff99">'
-         '推断（没有出处，别当结论讲）：两边都在拿 HBM 带宽去配矩阵算力，'
-         '比值撞在一起并不奇怪 —— 但没有哪一家这么解释过</text>')
-q.append(f'<text class="svglbl" x="0" y="384" fill="#202124">这个数到底是什么意思</text>')
+# ⛔ 2026-09-05 这里原来有一条黑底压轴带：一行大字「BF16 312.9 对 312.5 ｜ FP8 625.8
+#    对 625.0 —— 同一量级」，下面挂三条警告（别读第三位 / 换 HGX B200 就是 281.3 差 11% /
+#    「为什么都是 312」是推断没出处）。Chris 2026-09-05 看到就一句：「这一段没用啦，
+#    都是废话，删了。」他是对的，两头都站不住：
+#      · 大字是**重复** —— 上面两个 panel 已经用 22px 把 312.9 和 312.5 摆在那儿了；
+#      · 三条警告是**反高潮** —— 图刚交出一个数，立刻用三行字把它撤回去一半。
+#    ⭐ 而且这些内容一个字都没丢：三条的完整版都在 L200 §1.1 那个折叠里（含 7.81 Gbps
+#      的反推、8,000 vs 8×1024 差 2.4%、281.3 挑 SKU），讲稿也各有一段。
+#      **图交结论，正文管边界** —— 别再往图里塞免责声明。
+q.append(f'<text class="svglbl" x="0" y="284" fill="#202124">这个数到底是什么意思</text>')
 # ⛔ 2026-09-05 全文统一改口径，**改回去就是错的**。
 #    原来写「每搬一个字节，硬件配套供得起 312 次运算」——&nbsp;Chris 的原话：
 #    「这个说法给人的感觉就是，你做 312 次运算，需要的原材料就是一个字节。这是说反了。」
@@ -163,7 +150,7 @@ for i,t in enumerate([
   "· 于是每个算子只剩一个问题：它的算术强度比 312 高还是低？高就是算力受限，低就是带宽受限",
   "· 专题一那八步里，① embedding 的算术强度是 0 —— 它根本不在这根轴上（完整版 L300 §2.8 收全）。这就是第 2 节要处理的东西",
   "· 而 ④ Dense MLP 的大矩阵乘能远高于 312 —— 那是第 3 节的战场。同一颗芯片，两种完全不同的困境"]):
-    q.append(f'<text class="svgsm" x="0" y="{404+i*17}" fill="{RD if i>=3 else "#202124"}">{t}</text>')
+    q.append(f'<text class="svgsm" x="0" y="{304+i*17}" fill="{RD if i>=3 else "#202124"}">{t}</text>')
 
 # ── 续：同一个除法，每一层各做一次 ────────────────────────────────────
 # ⭐ 2026-09-03 补。原来整张图只算了 HBM 那一层就收工 —— 可这门课的主线
@@ -195,12 +182,12 @@ LADDER = [("HBM3e", "片外", f"{B2B:,} TFLOPS ÷ {B2BW:.1f} TB/s", B2B/B2BW),
           ("L2", "硬件自动管", f"{B2B:,} TFLOPS ÷ {L2BW} TB/s", B2B/L2BW),
           ("共享内存 / L1", "软件显式管",
            f"{SM_FLOP:,} FLOP ÷ {SMEM_BPC} B　（都按每 SM 每周期）", SM_FLOP/SMEM_BPC)]
-LY, LH, BARX, PXPU = 548, 26, 396, 430/312.5     # 条形起点与「每 FLOP/byte 几像素」
-q.append(f'<line x1="0" y1="488" x2="1000" y2="488" stroke="#e8eaed"/>')
-q.append('<text class="svglbl" x="0" y="514" fill="#202124" style="font-size:13.5px">'
+LY, LH, BARX, PXPU = 468, 26, 396, 430/312.5     # 条形起点与「每 FLOP/byte 几像素」
+q.append(f'<line x1="0" y1="408" x2="1000" y2="408" stroke="#e8eaed"/>')
+q.append('<text class="svglbl" x="0" y="434" fill="#202124" style="font-size:13.5px">'
          '⚠️ 但这条线不止一条 ——&#160;'
          '<tspan font-weight="700">每往计算靠近一层，它就往下掉一截</tspan></text>')
-q.append('<text class="svgsm" x="0" y="533">同一个除法，在每一层各做一次。'
+q.append('<text class="svgsm" x="0" y="453">同一个除法，在每一层各做一次。'
          '下面三个数都只对 GB200 那一颗成立，推导链写在每一行上</text>')
 for i,(lay,who,formula,val) in enumerate(LADDER):
     y = LY + i*(LH+14)
@@ -222,26 +209,26 @@ for i,(lay,who,formula,val) in enumerate(LADDER):
 q.append(f'<text class="svgsm" x="1000" y="{LY+2*(LH+14)+34}" text-anchor="end" fill="{GY}">'
          'FLOP / byte　—— 每一层各自的门槛。'
          '<tspan font-weight="700">条越短门槛越低，算子越容易在这一层变成算力受限</tspan></text>')
-q.append('<rect x="0" y="670" width="1000" height="86" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')
-q.append('<text class="svglbl" x="18" y="692" fill="#7a5000">'
+q.append('<rect x="0" y="600" width="1000" height="86" rx="8" fill="#fef7e0" stroke="#f9ab00"/>')
+q.append('<text class="svglbl" x="18" y="622" fill="#7a5000">'
          '⭐ 从 HBM 爬到共享内存，这条线只降了约 5 倍 ——&#160;'
          '<tspan font-weight="700">片上不是无限快的</tspan></text>')
 # ⛔ 这里原来写「换箱子，不是丢箱子」——&nbsp;好记，但**箱子是第四个比方**。
 #    本课的比方总预算是三个本体：冷库＝HBM、灶台＝片上暂存、刀宽＝指令粒度，
 #    而且那三个到 §3 才立。在 §1 引第四个，等于让台下多背一套映射。
 #    这里改成不打比方的直说 —— 反正这一段本来就是算术。
-q.append('<text class="svgsm" x="18" y="712" fill="#7a5000">'
+q.append('<text class="svgsm" x="18" y="642" fill="#7a5000">'
          '算子融合减掉的是 <tspan font-weight="700">HBM 那一层</tspan>的搬运；'
          '可那批数据总得在片上落脚 ——&#160;<tspan font-weight="700">账没有消失，它挪到了下面这条线上</tspan>。</text>')
-q.append('<text class="svgsm" x="18" y="730" fill="#7a5000">'
+q.append('<text class="svgsm" x="18" y="660" fill="#7a5000">'
          '所以融合之后要拿新的强度去跟 <tspan font-weight="700">64</tspan> 比，'
          '不能再跟 312 比 ——&#160;融合<tspan font-weight="700">做过头，会在新的这条线上重新撞墙</tspan>。</text>')
-q.append('<text class="svgsm" x="18" y="746" fill="#7a5000">'
+q.append('<text class="svgsm" x="18" y="676" fill="#7a5000">'
          '⛔ 只画了 GB200 一侧：TPU 的 VMEM 带宽官方没公开，那条线存在但给不出数。</text>')
-q.append(f'<text class="svgsm" x="0" y="770" fill="{GY}">'
+q.append(f'<text class="svgsm" x="0" y="700" fill="{GY}">'
          '64 的出处：分子 8,192 FLOP/周期/SM 见图 G-2；分母 128 B/周期/SM 有三处一致的公开测量'
          '（Hopper 微基准实测 127.9 · SemiAnalysis · Chips and Cheese），硬件上是 32 bank × 4 B。</text>')
-q.append(f'<text class="svgsm" x="0" y="788" fill="{GY}">'
+q.append(f'<text class="svgsm" x="0" y="718" fill="{GY}">'
          '⚠️ 三条线口径不同：上两条是<tspan font-weight="700">整颗芯片</tspan>'
          '（2,500 TFLOPS ÷ 全片带宽），第三条是<tspan font-weight="700">单个 SM 每周期</tspan>。'
          '换算过去比值不变 ——&#160;148 和时钟同时出现在分子分母，约掉了，'
@@ -249,10 +236,10 @@ q.append(f'<text class="svgsm" x="0" y="788" fill="{GY}">'
 # ⛔ 2026-09-04：这一行原来是一整条，量出来 1121px 宽，
 #    而 viewBox 只有 1000 —— **右边 121px 直接被裁掉，末尾那半句谁都没读到**。
 #    ⭐ SVG 的 <text> 不换行，长句必须自己断行；判据进了 topic02-lint-layout.py。
-q.append(f'<text class="svgsm" x="0" y="806" fill="{GY}">'
+q.append(f'<text class="svgsm" x="0" y="736" fill="{GY}">'
          '反推校验：2,500 ÷ 64 ＝ 39 TB/s 全片，再 ÷（148 SM × 128 B）'
          '得时钟 ≈ 2.06 GHz，与 B200 对得上。</text>')
-q.append(f'<text class="svgsm" x="0" y="824" fill="{GY}">'
+q.append(f'<text class="svgsm" x="0" y="754" fill="{GY}">'
          '⭐ 真正的差别不在算法，在<tspan font-weight="700">可达性</tspan>：'
          'HBM 那 8 TB/s 是 148 个 SM 抢的，共享内存这 128 B/周期是每个 SM 自己的。</text>')
 W('fig1-4.svg',q+['</svg>'])
