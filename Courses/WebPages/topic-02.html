@@ -4651,11 +4651,11 @@ details.aside b{color:var(--ink);font-weight:600}
 
   <p>第三个问题值一张图 ——&nbsp;<b>带着「哪一列在变、哪几列自始至终没变」去看</b>。</p>
 <figure class="fbox fwide" id="s012-fig3-4">
-  <svg viewBox="0 0 1400 736" width="100%" role="img" aria-label="一块数据从全局内存进到共享内存的四种路径：普通 load/store 经过寄存器、Ampere 的 cp.async 直通、Hopper 的 TMA 引擎按描述符搬运、TPU 从第一代起就用编译器显式发的 DMA">
+  <svg viewBox="0 0 1400 892" width="100%" role="img" aria-label="一块数据从全局内存进到共享内存的四种路径：普通 load/store 经过寄存器、Ampere 的 cp.async 直通、Hopper 的 TMA 引擎按描述符搬运、Blackwell 的 tcgen05 把操作数与累加器搬进专用矩阵暂存、TPU 从第一代起就用编译器显式发的 DMA">
 <defs><marker id="a34" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="5" markerHeight="5" orient="auto"><path d="M0 0 L8 4 L0 8 z" fill="#5f6368"/></marker></defs>
-<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">一块数据怎么进到共享内存 ——&#160;<tspan font-weight="700">GPU 走了三代，TPU 出厂就在终点</tspan></text>
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">一块数据怎么进到共享内存 ——&#160;<tspan font-weight="700">GPU 走了四代，TPU 出厂就在终点</tspan></text>
 <text class="svgsm" x="0" y="37">只看两件事：<tspan font-weight="700">数据在半路要不要经过寄存器</tspan>，以及<tspan font-weight="700">地址、跨步、边界是谁算的</tspan>——&#160;这两件事一变，线程就从「搬运工」退成了「发号令的」</text>
-<rect x="338" y="74" width="228" height="392" rx="10" fill="#f1f3f4"/>
+<rect x="338" y="74" width="228" height="484" rx="10" fill="#f1f3f4"/>
 <text class="svgsm" x="452" y="92" fill="#5f6368" text-anchor="middle">中转这一格 ——&#160;<tspan font-weight="700">整张图的差别都在这儿</tspan></text>
 <text class="svglbl" x="866" y="92" fill="#5f6368" style="font-size:12px">地址、跨步、边界谁算</text>
 <text class="svglbl" x="1116" y="92" fill="#5f6368" style="font-size:12px">发起它的线程接下来干什么</text>
@@ -4713,33 +4713,54 @@ details.aside b{color:var(--ink);font-weight:600}
 <text class="svgsm" x="1116" y="324" fill="#3c4043"><tspan font-weight="700">一个线程发完就走</tspan>；</text>
 <text class="svgsm" x="1116" y="341" fill="#3c4043">搬完引擎自己去 barrier 报数</text>
 <line x1="0" y1="372" x2="1400" y2="372" stroke="#e8eaed"/>
-<text class="svglbl" x="0" y="414" fill="#e8710a" style="font-size:12px">TPU：<tspan font-weight="700">出厂就是这样</tspan></text>
-<text class="svgsm" x="0" y="432">编译器显式发的 <tspan font-weight="700">DMA</tspan></text>
+<text class="svglbl" x="0" y="414" fill="#8430ce" style="font-size:12px">Blackwell 起</text>
+<text class="svgsm" x="0" y="432"><tspan font-weight="700">tcgen05</tspan> ＋ 一块专用矩阵暂存</text>
 <rect x="218" y="396" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
-<text class="svgsm" x="268" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">HBM</text>
+<text class="svgsm" x="268" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">共享内存</text>
 <path d="M318 420 H349" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
-<rect x="352" y="396" width="200" height="48" rx="7" fill="#fef7e0" stroke="#e8710a" stroke-width="2"/>
-<text class="svgsm" x="452" y="416" fill="#e8710a" text-anchor="middle" font-weight="700">DMA 引擎</text>
-<text class="svgsm" x="452" y="432" fill="#5f6368" text-anchor="middle" style="font-size:10px">和上面那行是同一类东西</text>
+<rect x="352" y="396" width="200" height="48" rx="7" fill="#fff" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="452" y="416" fill="#8430ce" text-anchor="middle" font-weight="700">TMEM 256 KB/SM</text>
+<text class="svgsm" x="452" y="432" fill="#5f6368" text-anchor="middle" style="font-size:10px">操作数与累加器都住这儿</text>
 <path d="M552 420 H581" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
 <rect x="584" y="396" width="118" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
-<text class="svgsm" x="643" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">VMEM</text>
+<text class="svgsm" x="643" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">矩阵暂存</text>
 <path d="M702 420 H731" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
 <rect x="734" y="396" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
-<text class="svgsm" x="784" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">MXU</text>
-<text class="svgsm" x="866" y="416" fill="#3c4043"><tspan font-weight="700">编译期就排好了</tspan></text>
-<text class="svgsm" x="1116" y="416" fill="#7a3e00"><tspan font-weight="700">这一栏对 TPU 不成立</tspan> ——&#160;</text>
-<text class="svgsm" x="1116" y="433" fill="#7a3e00">这边压根没有「线程」这个角色</text>
-<rect x="0" y="486" width="1400" height="96" rx="9" fill="#e6f4ea" stroke="#1e8e3e"/>
-<text class="svglbl" x="16" y="511" fill="#0b6b30" style="font-size:13px">⭐ 一条线看下来：搬运从「<tspan text-decoration="underline">取数指令的副作用</tspan>」，变成了「<tspan text-decoration="underline">一台按描述符干活的引擎</tspan>」</text>
-<text class="svgsm" x="16" y="532" fill="#0b6b30">GPU 用了三代走到这儿，TPU 第一天就在这儿。<tspan font-weight="700">这不是谁抄谁</tspan> ——&#160;是同一个物理约束逼出来的同一个答案：</text>
-<text class="svgsm" x="16" y="551" fill="#0b6b30"><tspan font-weight="700">矩阵单元越快，喂料这件事就越不能占着算的人</tspan>。两边的分歧不在终点，在<tspan font-weight="700">谁来发这条 DMA</tspan> ——&#160;GPU 是运行时某个线程，TPU 是编译期就排好的一步。</text>
-<text class="svgsm" x="16" y="570" fill="#5f6368">——&#160;「搬运是取数的副作用，还是一条独立的 DMA」这句话，在《GPU 显微镜》图 G-6 里已经出现过；这张图给的是它<tspan font-weight="700">怎么一步步变成现在这样</tspan>。</text>
-<rect x="0" y="598" width="1400" height="82" rx="9" fill="#fef7e0" stroke="#f9ab00"/>
-<text class="svglbl" x="16" y="622" fill="#7a5000" style="font-size:13px">⚠️ 生产者一换人，<tspan font-weight="700">对齐的办法也得跟着换</tspan></text>
-<text class="svgsm" x="16" y="643" fill="#7a5000">第三行那台引擎<tspan font-weight="700">不是线程</tspan>，它不会「到达」，只会「往里放了多少字节」。而 <tspan font-weight="700"><tspan font-family="monospace">__syncthreads()</tspan> 数的是人头</tspan>，对它没用。</text>
-<text class="svgsm" x="16" y="662" fill="#7a5000">所以 Hopper 的 barrier 多了一项本事：<tspan font-weight="700">连字节数一起数</tspan>——&#160;人到齐<tspan font-weight="700">并且</tspan>字节够了，才放行。<tspan fill="#5f6368">这就是「异步事务 barrier」这个名字的来历。</tspan></text>
-<text class="svgsm" x="0" y="708" fill="#9aa0a6">📌 这一张全部出自官方：<tspan font-weight="700">cp.async</tspan> 的直通路径见 CUDA 编程指南；<tspan font-weight="700">TMA 的单线程发起、硬件接管地址生成</tspan>与<tspan font-weight="700">异步事务 barrier 数字节</tspan>，是 Hopper 架构官方博客的原话。</text>
+<text class="svgsm" x="784" y="424" fill="#9aa0a6" text-anchor="middle" font-weight="700">Tensor Core</text>
+<text class="svgsm" x="866" y="416" fill="#3c4043"><tspan font-weight="700">仍是硬件算</tspan>；而这一代</text>
+<text class="svgsm" x="866" y="433" fill="#3c4043"><tspan font-weight="700">连结果都不回寄存器堆</tspan></text>
+<text class="svgsm" x="1116" y="416" fill="#3c4043"><tspan font-weight="700">一个线程代表整个 CTA 发</tspan>；</text>
+<text class="svgsm" x="1116" y="433" fill="#3c4043">要用结果得再显式取回来</text>
+<line x1="0" y1="464" x2="1400" y2="464" stroke="#e8eaed"/>
+<text class="svglbl" x="0" y="506" fill="#e8710a" style="font-size:12px">TPU：<tspan font-weight="700">出厂就是这样</tspan></text>
+<text class="svgsm" x="0" y="524">编译器显式发的 <tspan font-weight="700">DMA</tspan></text>
+<rect x="218" y="488" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="268" y="516" fill="#9aa0a6" text-anchor="middle" font-weight="700">HBM</text>
+<path d="M318 512 H349" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="352" y="488" width="200" height="48" rx="7" fill="#fef7e0" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="452" y="508" fill="#e8710a" text-anchor="middle" font-weight="700">DMA 引擎</text>
+<text class="svgsm" x="452" y="524" fill="#5f6368" text-anchor="middle" style="font-size:10px">和上面那行是同一类东西</text>
+<path d="M552 512 H581" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="584" y="488" width="118" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="643" y="516" fill="#9aa0a6" text-anchor="middle" font-weight="700">VMEM</text>
+<path d="M702 512 H731" stroke="#5f6368" stroke-width="1.4" marker-end="url(#a34)"/>
+<rect x="734" y="488" width="100" height="48" rx="7" fill="#fff" stroke="#9aa0a6" stroke-width="1.3"/>
+<text class="svgsm" x="784" y="516" fill="#9aa0a6" text-anchor="middle" font-weight="700">MXU</text>
+<text class="svgsm" x="866" y="508" fill="#3c4043"><tspan font-weight="700">编译期就排好了</tspan></text>
+<text class="svgsm" x="1116" y="508" fill="#7a3e00"><tspan font-weight="700">这一栏对 TPU 不成立</tspan> ——&#160;</text>
+<text class="svgsm" x="1116" y="525" fill="#7a3e00">这边压根没有「线程」这个角色</text>
+<rect x="0" y="578" width="1400" height="116" rx="9" fill="#e6f4ea" stroke="#1e8e3e"/>
+<text class="svglbl" x="16" y="603" fill="#0b6b30" style="font-size:13px">⭐ 一条线看下来：搬运从「<tspan text-decoration="underline">取数指令的副作用</tspan>」，变成了「<tspan text-decoration="underline">一台按描述符干活的引擎</tspan>」</text>
+<text class="svgsm" x="16" y="624" fill="#0b6b30">GPU 用了<tspan font-weight="700">四代</tspan>走到这儿，TPU 第一天就在这儿。<tspan font-weight="700">这不是谁抄谁</tspan> ——&#160;是同一个物理约束逼出来的同一个答案：</text>
+<text class="svgsm" x="16" y="643" fill="#0b6b30"><tspan font-weight="700">矩阵单元越快，喂料这件事就越不能占着算的人</tspan>。⛔ 但<tspan font-weight="700">别把这条线读成「GPU 在往编译期挪」</tspan> ——&#160;TMA 那张描述符是<tspan font-weight="700">运行时建的</tspan>。</text>
+<text class="svgsm" x="16" y="662" fill="#0b6b30">收敛的是<tspan font-weight="700">怎么搬</tspan>（整块、按描述符、不占线程）；<tspan font-weight="700">谁决定</tspan>那一层一步没动 ——&#160;GPU 是运行时某个线程发，TPU 是编译期就排好的一步。<tspan fill="#5f6368">这正是全课那条主线。</tspan></text>
+<text class="svgsm" x="16" y="681" fill="#5f6368">——&#160;「搬运是取数的副作用，还是一条独立的 DMA」这句话，在《GPU 显微镜》图 G-6 里已经出现过；这张图给的是它<tspan font-weight="700">怎么一步步变成现在这样</tspan>。</text>
+<rect x="0" y="710" width="1400" height="82" rx="9" fill="#fef7e0" stroke="#f9ab00"/>
+<text class="svglbl" x="16" y="734" fill="#7a5000" style="font-size:13px">⚠️ 生产者一换人，<tspan font-weight="700">对齐的办法也得跟着换</tspan></text>
+<text class="svgsm" x="16" y="755" fill="#7a5000">第三行那台引擎<tspan font-weight="700">不是线程</tspan>，它不会「到达」，只会「往里放了多少字节」。而 <tspan font-weight="700"><tspan font-family="monospace">__syncthreads()</tspan> 数的是人头</tspan>，对它没用。</text>
+<text class="svgsm" x="16" y="774" fill="#7a5000">所以 Hopper 的 barrier 多了一项本事：<tspan font-weight="700">连字节数一起数</tspan>——&#160;人到齐<tspan font-weight="700">并且</tspan>字节够了，才放行。<tspan fill="#5f6368">这就是「异步事务 barrier」这个名字的来历。</tspan></text>
+<text class="svgsm" x="0" y="820" fill="#9aa0a6">📌 这一张全部出自官方：<tspan font-weight="700">cp.async</tspan> 的直通路径见 CUDA 编程指南；<tspan font-weight="700">TMA 的单线程发起、硬件接管地址生成</tspan>与<tspan font-weight="700">异步事务 barrier 数字节</tspan>，是 Hopper 架构官方博客的原话。</text>
+<text class="svgsm" x="0" y="840" fill="#9aa0a6">Blackwell 那一行：<tspan font-weight="700">tcgen05 由单个线程代表整个 CTA 发射</tspan>、<tspan font-weight="700">TMEM 256 KB/SM 且由软件在 MMA 作用域显式管理</tspan> ——&#160;出自 PTX ISA 与第三方微基准，本图不额外推导。</text>
 </svg>
   <figcaption>⭐ <b>四行里只有中转那一列在变，两头是同一个东西</b>。
     第一行数据要在寄存器里过一道，而且地址和循环全靠线程自己跑；
@@ -11384,6 +11405,59 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
     <br><br>——&nbsp;<b>GPU 想要这份性能，办法就是让自己更像 TPU</b>；
     而它能往前挪的<b>只有最上面那一层</b>，下面两层挪不动
     ——&nbsp;<b>挪得动的话，那些晶体管早就省下来了。</b></div>
+
+  <!-- ⭐⭐ 2026-09-05 新增。触发事件：Chris 听到 3.3b 那张四代图之后当场说
+       「这条趋势线本身就是一个结论，值得单独立出来，而且要 double check」。
+       核实过了（出处写在图脚）：趋势是真的，而且它在 Blackwell 上又走了一步。
+       ⭐ 为什么放在这里而不是 3.3b：3.3b 那张图回答的是「一块数据怎么进来」，
+         是机制；而这一段回答的是「那 GPU 是不是在变成 TPU」，是**立场**。
+         立场该跟 CUDA Graph 那句反驳放在一起 —— 它们是同一个形状的两句反驳。
+       ⛔ 这一段最重要的工作不是说「趋势存在」，是**把趋势的边界划清楚**：
+         收敛的是「怎么搬」，不是「谁决定」。Chris 第一次转述时说的是
+         「逐渐变成了编译器确定」—— 那一步不成立，TMA 的描述符是运行时建的。 -->
+  <h3>5.4b　第二句反驳：那 TMA 呢 ——&nbsp;搬运这条路，不是也在往 TPU 那边挪吗</h3>
+
+  <p class="landing">这一问比 CUDA Graph 那句更值得答，因为<b>它说的方向是对的</b>。</p>
+
+  <p>把 3.3b 那张四代图竖着读一遍，趋势藏不住：</p>
+  <ul>
+    <li><b>一直都有</b>：普通取数 ——&nbsp;数据在寄存器里过一道，
+      <b>地址、跨步、边界全靠线程自己算</b>，而且搬完才轮到它算。</li>
+    <li><b>Ampere 起</b>：<code>cp.async</code> ——&nbsp;砍掉寄存器那一道，
+      <b>地址仍然自己算</b>。</li>
+    <li><b>Hopper 起</b>：TMA ——&nbsp;<b>一个线程填一张描述符发出去就走</b>，
+      跨步、偏移、边界<b>整个由硬件接管</b>。三十二条 lane 各算一个地址这件事，
+      在这条路上<b>主动放弃了</b>。</li>
+    <li><b>Blackwell 起</b>：<code>tcgen05</code> ——&nbsp;这一步最狠。
+      矩阵指令<b>由单个线程代表整个 CTA 发射</b>，
+      而操作数与累加器搬进一块 <b>256 KB/SM 的专用矩阵暂存</b>，
+      <b>连结果都不回寄存器堆</b>。</li>
+  </ul>
+
+  <p class="landing">四代下来，那条通路的终点长这样：<b>整块搬、按描述符搬、
+    不占线程、落在一块软件说了算的专用暂存里。</b>
+    ——&nbsp;<em>而这正是 TPU 第一天的样子。</em></p>
+
+  <div class="note ok"><span class="t">⭐ 但这条趋势线只走了一半，剩下那一半才是本课的主线</span>
+    <b>收敛的是「怎么搬」</b>：粒度（整块）、寻址的主体（专用硬件，不再是三十二条 lane）、
+    操作数的落点（专用暂存，不再是寄存器堆）。这三样确实在往同一个终点走。
+    <br><b>没收敛的是「谁决定」</b> ——&nbsp;而这一层<b>一步都没动</b>：
+    <br>·&nbsp;<b>TMA 那张描述符是<u>运行时</u>建的</b>，不是编译期烤进二进制的。
+      形状照样可以变，变了就重建一张。
+    <br>·&nbsp;<b>L1／L2 还在，命中不命中照样跑起来才知道</b> ——&nbsp;
+      §2.1 那四个决定里，有三个原样活着。
+    <br>·&nbsp;<b>warp 调度器照样每个周期现挑</b>。
+    <br><br>——&nbsp;<b>所以准确的说法不是「GPU 在变成 TPU」，是
+    「GPU 把<u>喂料</u>这件事做成了 TPU 的样子，而<u>谁来发号令</u>那一层一动没动」。</b>
+    <em>两边的分歧从来不在终点，在<b>谁来发这条 DMA</b>。</em></div>
+
+  <div class="note warn"><span class="t">⚠️ 这条趋势为什么必然发生 ——&nbsp;它不是抄袭，是同一个约束</span>
+    <b>矩阵单元越快，「喂料」这件事就越不能占着算的人。</b>
+    当一条矩阵指令能在几拍里吃掉几十 KB，你再让三十二个线程轮流去算地址、
+    去过一遍寄存器堆，<b>那些线程就成了自己算力的看门人</b>。
+    <br>两家面对的是同一道物理题，于是给出了同一个答案 ——&nbsp;
+    <b>只不过一家走了四代，另一家出厂就在终点。</b>
+    <em>这也是全课那句话在时间轴上的样子：不是谁更聪明，是同一个决定推到底的后果。</em></div>
 </div></section>
 
 <section id="s6"><div class="wrap">

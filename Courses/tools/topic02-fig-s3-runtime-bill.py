@@ -68,6 +68,17 @@ ROWS = [
      "全局内存", "TMA 引擎", "按张量维度＋块坐标", GN, "共享内存", "Tensor Core",
      ["<tspan font-weight=\"700\">硬件算</tspan>：跨步、偏移、", "边界全由它接管"],
      ["<tspan font-weight=\"700\">一个线程发完就走</tspan>；", "搬完引擎自己去 barrier 报数"]),
+    # ⭐⭐ 2026-09-05 补第四代。这条趋势线原来停在 Hopper，而它在 Blackwell 上
+    #    **又走了一步，而且是最狠的一步**：前三代动的都是「数据怎么进来」，
+    #    这一步动的是「操作数和结果还在不在线程的寄存器里」——&nbsp;答案是不在了。
+    #    出处（都在图脚）：tcgen05 由**单个线程代表整个 CTA 发**、TMEM 256 KB/SM
+    #    由软件在 MMA 作用域显式管理。
+    ("Blackwell 起", "<tspan font-weight=\"700\">tcgen05</tspan> ＋ 一块专用矩阵暂存",
+     "共享内存", "TMEM 256 KB/SM", "操作数与累加器都住这儿", PU, "矩阵暂存", "Tensor Core",
+     ["<tspan font-weight=\"700\">仍是硬件算</tspan>；而这一代",
+      "<tspan font-weight=\"700\">连结果都不回寄存器堆</tspan>"],
+     ["<tspan font-weight=\"700\">一个线程代表整个 CTA 发</tspan>；",
+      "要用结果得再显式取回来"]),
     ("TPU：<tspan font-weight=\"700\">出厂就是这样</tspan>", "编译器显式发的 <tspan font-weight=\"700\">DMA</tspan>",
      "HBM", "DMA 引擎", "和上面那行是同一类东西", OR, "VMEM", "MXU",
      ["<tspan font-weight=\"700\">编译期就排好了</tspan>"],
@@ -75,15 +86,16 @@ ROWS = [
 ]
 
 BAND_Y = TOP + len(ROWS) * RH + 14
-BAND_H = 96
+BAND_H = 116   # ⭐ 2026-09-05 加了一行「收敛的是怎么搬、谁决定没动」，+20
 WARN_Y = BAND_Y + BAND_H + 16
 WARN_H = 82
 SRC_Y = WARN_Y + WARN_H + 16
-H = SRC_Y + 40
+H = SRC_Y + 84   # ⭐ 2026-09-05：出处那段从两行变四行（补了 Blackwell 那一代的出处），+44
 
 p = ['<svg viewBox="0 0 %d %d" width="100%%" role="img" aria-label="'
      '一块数据从全局内存进到共享内存的四种路径：普通 load/store 经过寄存器、'
      'Ampere 的 cp.async 直通、Hopper 的 TMA 引擎按描述符搬运、'
+     'Blackwell 的 tcgen05 把操作数与累加器搬进专用矩阵暂存、'
      'TPU 从第一代起就用编译器显式发的 DMA">' % (W, H)]
 p.append('<defs><marker id="a34" viewBox="0 0 8 8" refX="7" refY="4" '
          'markerWidth="5" markerHeight="5" orient="auto">'
@@ -91,7 +103,7 @@ p.append('<defs><marker id="a34" viewBox="0 0 8 8" refX="7" refY="4" '
 
 p.append('<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">'
          '一块数据怎么进到共享内存 ——&#160;'
-         '<tspan font-weight="700">GPU 走了三代，TPU 出厂就在终点</tspan></text>')
+         '<tspan font-weight="700">GPU 走了四代，TPU 出厂就在终点</tspan></text>')
 p.append('<text class="svgsm" x="0" y="37">'
          '只看两件事：<tspan font-weight="700">数据在半路要不要经过寄存器</tspan>，'
          '以及<tspan font-weight="700">地址、跨步、边界是谁算的</tspan>'
@@ -154,7 +166,10 @@ for i, (gen, ins, src, mid, midsub, col, dst, cons, addr, thr) in enumerate(ROWS
                  % (T1X, by + 20 + j * 17, s))
     for j, s in enumerate(thr):
         p.append('<text class="svgsm" x="%d" y="%d" fill="%s">%s</text>'
-                 % (T2X, by + 20 + j * 17, "#3c4043" if i < 3 else "#7a3e00", s))
+                 # ⚠️ 加行之后这个索引要跟着改：最后一行才是 TPU。
+                 # 忘了改的话，配色会错位到 Blackwell 那一行上。
+                 % (T2X, by + 20 + j * 17,
+                    "#3c4043" if i < len(ROWS) - 1 else "#7a3e00", s))
 
 # ── 落点带 ────────────────────────────────────────────────────────────
 p.append('<rect x="0" y="%d" width="%d" height="%d" rx="9" fill="#e6f4ea" stroke="%s"/>'
@@ -164,17 +179,22 @@ p.append('<text class="svglbl" x="16" y="%d" fill="#0b6b30" style="font-size:13p
          '变成了「<tspan text-decoration="underline">一台按描述符干活的引擎</tspan>」</text>'
          % (BAND_Y + 25))
 p.append('<text class="svgsm" x="16" y="%d" fill="#0b6b30">'
-         'GPU 用了三代走到这儿，TPU 第一天就在这儿。'
+         'GPU 用了<tspan font-weight="700">四代</tspan>走到这儿，TPU 第一天就在这儿。'
          '<tspan font-weight="700">这不是谁抄谁</tspan> ——&#160;'
          '是同一个物理约束逼出来的同一个答案：</text>' % (BAND_Y + 46))
 p.append('<text class="svgsm" x="16" y="%d" fill="#0b6b30">'
          '<tspan font-weight="700">矩阵单元越快，喂料这件事就越不能占着算的人</tspan>。'
-         '两边的分歧不在终点，在<tspan font-weight="700">谁来发这条 DMA</tspan> ——&#160;'
-         'GPU 是运行时某个线程，TPU 是编译期就排好的一步。</text>' % (BAND_Y + 65))
+         '⛔ 但<tspan font-weight="700">别把这条线读成「GPU 在往编译期挪」</tspan> ——&#160;'
+         'TMA 那张描述符是<tspan font-weight="700">运行时建的</tspan>。</text>' % (BAND_Y + 65))
+p.append('<text class="svgsm" x="16" y="%d" fill="#0b6b30">'
+         '收敛的是<tspan font-weight="700">怎么搬</tspan>（整块、按描述符、不占线程）；'
+         '<tspan font-weight="700">谁决定</tspan>那一层一步没动 ——&#160;'
+         'GPU 是运行时某个线程发，TPU 是编译期就排好的一步。'
+         '<tspan fill="%s">这正是全课那条主线。</tspan></text>' % (BAND_Y + 84, GY))
 p.append('<text class="svgsm" x="16" y="%d" fill="%s">'
          '——&#160;「搬运是取数的副作用，还是一条独立的 DMA」这句话，'
          '在《GPU 显微镜》图 G-6 里已经出现过；这张图给的是它<tspan font-weight="700">怎么一步步变成现在这样</tspan>。</text>'
-         % (BAND_Y + 84, GY))
+         % (BAND_Y + 103, GY))
 
 # ── 连带的一条：生产者换了人，对齐的办法也得换 ────────────────────────
 p.append('<rect x="0" y="%d" width="%d" height="%d" rx="9" fill="#fef7e0" stroke="%s"/>'
@@ -193,11 +213,18 @@ p.append('<text class="svgsm" x="16" y="%d" fill="#7a5000">'
          '<tspan fill="%s">这就是「异步事务 barrier」这个名字的来历。</tspan></text>'
          % (WARN_Y + 64, GY))
 
+# ⚠️ SVG 的 <text> 不会自动换行 —— 一段长文全塞进一个 <text> 会横着长出图外，
+#    版面体检报的是「顶出」。多加一行就多开一个 <text>。
 p.append('<text class="svgsm" x="0" y="%d" fill="%s">'
          '📌 这一张全部出自官方：<tspan font-weight="700">cp.async</tspan> 的直通路径见 CUDA 编程指南；'
          '<tspan font-weight="700">TMA 的单线程发起、硬件接管地址生成</tspan>与'
          '<tspan font-weight="700">异步事务 barrier 数字节</tspan>，是 Hopper 架构官方博客的原话。</text>'
          % (SRC_Y + 12, DIM))
+p.append('<text class="svgsm" x="0" y="%d" fill="%s">'
+         'Blackwell 那一行：<tspan font-weight="700">tcgen05 由单个线程代表整个 CTA 发射</tspan>、'
+         '<tspan font-weight="700">TMEM 256 KB/SM 且由软件在 MMA 作用域显式管理</tspan>'
+         ' ——&#160;出自 PTX ISA 与第三方微基准，本图不额外推导。</text>'
+         % (SRC_Y + 32, DIM))
 p.append('</svg>')
 io.open('fig3-4.svg', 'w', encoding='utf-8').write('\n'.join(p))
 print('fig3-4 ok', H)
