@@ -192,11 +192,15 @@ def _subcore(f, x, T, idx, full=True):
     #    ⭐ 差别是实质的：你没法让四个处理块各自独立申请 64 KiB。
     f.t(xi + 8, y + 15, "TMEM　本块够得着的 32 lane × 512 列 ＝ 64 KiB", "lbl", RD)
     f.t(xi + 8, y + 31,
-        (f"⚠️ 不是各分一块 ——&#160;按<tspan font-weight=\"700\">列</tspan>整体申请，"
-         f"一列跨全部 128 lane；本块只<tspan font-weight=\"700\">够得着</tspan> "
-         f"lane {idx*32}–{idx*32+31}"
-         if full else f"只够得着 lane <tspan font-weight=\"700\" fill=\"#202124\">{idx*32}–{idx*32+31}</tspan>"),
+        # ⛔ 这一行必须塞进 1/4 幅宽（约 320px）。原来那版写全了机制
+        #    （「一列跨全部 128 lane」），当场撞进右边那块 —— 几何 lint 抓到。
+        #    机制留在上面的注释和正文里，图上只留结论。
+        (f"⚠️ 按<tspan font-weight=\"700\">列</tspan>整体申请，不是各分一块"
+         if full else f"只够得着 lane <tspan font-weight=\"700\" fill=\"#202124\">{idx*32}–{idx*32+31}</tspan>"
+),
         "xs")
+    if full:
+        f.t(xi + 8, y + 45, "本块只够得着 lane 0–31", "xs")
 
     # 访存 / 特殊函数
     y, h = T + LDST[0], LDST[1]
