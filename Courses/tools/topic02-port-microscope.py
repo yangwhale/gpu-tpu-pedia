@@ -1092,6 +1092,84 @@ def sections(F):
     ⭐ 它扛延迟靠的不是每次更快，是<b>十六路各追各的地址、同时欠着很多次取数</b>。</figcaption>
   </figure>
 
+  <!-- ⭐⭐ 2026-09-06 新增（fig3-5b ＋ 下面那张 flag 表）。Chris 的原话：
+       「Sparse Core 这一部分就跟 MXU 和 tensor core 一样重要，所以你把这个图
+         都给它拆开，画清楚：里边都有什么 sub core、tile、它们都是干什么的、
+         彼此之间的关系，然后线都画上。然后你再把那几个典型的 XLA 的 flag
+         都列出来，让大家知道这些东西都是干什么的，有直观的感受。」
+       ⛔ 上面那张 fig3-5 是「它跟 TensorCore 有什么不同」，这张是「它内部长什么样」。
+          两张都要留 —— 合成一张的话，对比和拆解会互相挤掉对方的位置。
+       ⛔ 图里所有名字都用公开文档的叫法（scalar subcore / vector subcore(tile) /
+          SPMEM / TileSPMEM）。**本仓库是公开仓库，不要换成别处看来的代号。** -->
+  <!-- ⛔ 这一段被版面 lint 抓过一次「加粗 63%」。**一段话里每个转折都加粗，
+       等于一个都没加粗。** 全段只留最后那句判断加粗，前面的铺垫一律不加。 -->
+  <p>知道了它不是什么，接着该知道它是什么 ——&nbsp;把盖子掀开看一眼。
+    这颗核在这门课里的地位跟 MXU 同级，理由是同一条：
+    <b>它不是某个部件的加强版，是主核上被砍掉的那套能力的独立承载者。</b></p>
+
+  <figure class="fbox fwide" id="s012-fig3-5b">
+  <svg viewBox="0 0 1400 772" width="100%"></svg>
+  <figcaption>⭐ <b>一颗 SparseCore ＝ 1 个标量子核 ＋ 16 个同构的向量子核（tile）＋ 一块共享 SPMEM</b>，
+    三种角色全都直连 HBM。<b>两种线的分工是这张图的重点</b>：橙色虚线是<b>派活</b>
+    （标量子核发 DMA 请求），蓝色实线是<b>数据</b>（tile 自己去搬）——&nbsp;
+    <b>发命令的人不搬数据</b>，这正是它能同时欠着一大把取数的原因。
+    ⛔ 十六个 tile 里<b>没有 MXU</b>，别当成小一号的 TensorCore。
+    规格与操作清单出自 JAX Pallas SparseCore 官方文档。</figcaption>
+  </figure>
+
+  <p>把图上那条「集合通信」的线落到实处 ——&nbsp;<b>它在 XLA 里就是一组开关</b>。
+    下面这些 flag 全部出自公开材料（MaxText 的
+    <code>benchmarks/xla_flags_library.py</code>、OpenXLA 文档与公开的 Ironwood 调优配方），
+    <b>列出来是为了让「卸载」这两个字有个能上手的抓手</b>：</p>
+
+  <div class="tbl-wrap"><table>
+    <tr><th>flag</th><th>它开的是什么</th><th>该知道的那一条</th></tr>
+    <tr><td colspan="3"><b>① 主开关 ——&nbsp;哪些集合通信交给 SparseCore</b></td></tr>
+    <tr><td><code>--xla_tpu_enable_sparse_core_collective_offload_all_gather</code></td>
+        <td>All-Gather 交给 SparseCore</td>
+        <td rowspan="3"><b>Ironwood（v7）上这三个默认就是 true</b>。<br>
+            <em>也就是说：你不设任何 flag，它已经在替你干活了</em></td></tr>
+    <tr><td><code>…_offload_reduce_scatter</code></td><td>Reduce-Scatter</td></tr>
+    <tr><td><code>…_offload_all_reduce</code></td><td>All-Reduce</td></tr>
+    <tr><td><code>…_offload_2d_all_gather</code></td>
+        <td>两层网格上的 All-Gather</td>
+        <td>要显式开</td></tr>
+    <tr><td colspan="3"><b>② 地基 ——&nbsp;主开关生效需要跟着一起设的</b></td></tr>
+    <tr><td><code>--xla_tpu_use_tc_device_shape_on_sc</code></td>
+        <td>让 SC 沿用 TensorCore 那套 device shape</td>
+        <td rowspan="4">MaxText 把这四个打成一组叫
+            <code>ENABLE_SPARSECORE_OFFLOADING_BASE_FLAGS</code>，<br>
+            取值 <code>true / false / false / true</code>。
+            <em>单开主开关往往看不到效果，坑就在这儿</em></td></tr>
+    <tr><td><code>--xla_sc_enable_instruction_fusion</code></td><td>SC 侧的指令融合</td></tr>
+    <tr><td><code>--xla_sc_disjoint_spmem</code></td>
+        <td>共享 SPMEM 是否按 tile 切成互不重叠的块</td></tr>
+    <tr><td><code>--xla_sc_disable_megacore_partitioning</code></td>
+        <td>关掉 megacore 划分</td></tr>
+    <tr><td colspan="3"><b>③ 看得见 ——&nbsp;不开这几个，profile 上那段是黑的</b></td></tr>
+    <tr><td><code>--xla_tpu_enable_all_gather_offload_tracing</code><br>
+            <code>…_reduce_scatter_offload_tracing</code><br>
+            <code>…_all_reduce_offload_tracing</code></td>
+        <td>把卸载出去的那段打进 trace</td>
+        <td>调优时才开。<b>「看 trace 不看宣传页」这条规矩，
+            在这里需要你先把灯打开</b></td></tr>
+    <tr><td colspan="3"><b>④ 顺带一个不属于 SparseCore、但每次都要一起调的</b></td></tr>
+    <tr><td><code>--xla_tpu_scoped_vmem_limit_kib</code></td>
+        <td>单个 op 最多能占多少 VMEM，<b>剩下的留给下一个 op 预取</b></td>
+        <td>MaxText 公开配方：稠密模型 <b>98304</b>、MoE <b>81920</b></td></tr>
+  </table></div>
+  <p class="tbl-note">⚠️ <b>两条必须一起记住的约束。</b>
+    第一，<b>Continuation Fusion 与 SparseCore 卸载只能二选一</b>——&nbsp;
+    MaxText 的注释原话是「Either one of CF or SC can be enabled at a time」。
+    两者都是「让通信和计算重叠」的手段，<b>走的是两条不同的路，不能叠加</b>；
+    <em>以为「都打开更快」是这一组 flag 上最常见的误用。</em>
+    <!-- ⛔ 下面这段是如实转述 + 明说不解释，别改成「因为编译器会 clamp 所以没关系」。
+         clamp 这件事我没有公开出处，写出来就是拿推测冒充事实。
+         判断依据见 CLAUDE.md 第一原则。 -->
+    第二，<code>98304 KiB ＝ 96 MiB</code>，<b>比 v7 单核 64 MiB 的 VMEM 还大</b>——&nbsp;
+    这个数在公开配方里是跨代通用的一个上限申请，实际生效值受目标机器约束。
+    <b>这里只如实转述配方，不替它解释。</b></p>
+
   <p>但上面那句开场白得当场收回一半。我说「两边都在主力之外多准备了一样东西」——&nbsp;
     <b>TPU 那半句成立，GPU 那半句不成立</b>：块量化不在 Tensor Core 外面，就在里面。
     摆正之后，那两个坑会露出一个共同的形状。</p>''')

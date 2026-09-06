@@ -9718,6 +9718,232 @@ details.aside b{color:var(--ink);font-weight:600}
     ⭐ 它扛延迟靠的不是每次更快，是<b>十六路各追各的地址、同时欠着很多次取数</b>。</figcaption>
   </figure>
 
+  <!-- ⭐⭐ 2026-09-06 新增（fig3-5b ＋ 下面那张 flag 表）。Chris 的原话：
+       「Sparse Core 这一部分就跟 MXU 和 tensor core 一样重要，所以你把这个图
+         都给它拆开，画清楚：里边都有什么 sub core、tile、它们都是干什么的、
+         彼此之间的关系，然后线都画上。然后你再把那几个典型的 XLA 的 flag
+         都列出来，让大家知道这些东西都是干什么的，有直观的感受。」
+       ⛔ 上面那张 fig3-5 是「它跟 TensorCore 有什么不同」，这张是「它内部长什么样」。
+          两张都要留 —— 合成一张的话，对比和拆解会互相挤掉对方的位置。
+       ⛔ 图里所有名字都用公开文档的叫法（scalar subcore / vector subcore(tile) /
+          SPMEM / TileSPMEM）。**本仓库是公开仓库，不要换成别处看来的代号。** -->
+  <!-- ⛔ 这一段被版面 lint 抓过一次「加粗 63%」。**一段话里每个转折都加粗，
+       等于一个都没加粗。** 全段只留最后那句判断加粗，前面的铺垫一律不加。 -->
+  <p>知道了它不是什么，接着该知道它是什么 ——&nbsp;把盖子掀开看一眼。
+    这颗核在这门课里的地位跟 MXU 同级，理由是同一条：
+    <b>它不是某个部件的加强版，是主核上被砍掉的那套能力的独立承载者。</b></p>
+
+  <figure class="fbox fwide" id="s012-fig3-5b">
+  <svg viewBox="0 0 1400 772" width="100%" role="img" aria-label="SparseCore 内部拆解：一个标量子核派活、十六个同构的向量子核各自带本地内存、一块共享 SPMEM，全部直连 HBM">
+<defs>
+<marker id="ah-5f6368" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker>
+<marker id="ahr-5f6368" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#5f6368"/></marker>
+<marker id="ah-e8710a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker>
+<marker id="ahr-e8710a" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#e8710a"/></marker>
+<marker id="ah-1a73e8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker>
+<marker id="ahr-1a73e8" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#1a73e8"/></marker>
+<marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e8e3e"/></marker>
+<marker id="ahr-1e8e3e" viewBox="0 0 10 10" refX="1" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M10,0 L0,5 L10,10 z" fill="#1e8e3e"/></marker>
+</defs>
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">把 SparseCore 拆开 ——&#160;<tspan font-weight="700">里面有哪些子核、各干什么、线怎么连</tspan></text>
+<text class="svgsm" x="0" y="37">「SparseCore 对比 TensorCore」那张把它当成一个整体在用；这一张掀开盖子。<tspan font-weight="700">形状上它更像一台十六路的搬运机，而不是一台计算器。</tspan></text>
+<rect x="0" y="50" width="1400" height="292" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="16" y="74" fill="#7a5000" style="font-size:13px">一颗 SparseCore</text>
+<text class="svgsm" x="150" y="74" fill="#7a5000">——&#160;v7 上每颗芯片 <tspan font-weight="700">4 个物理核</tspan>，按 device 算 <tspan font-weight="700">2 个</tspan>。整颗核占的面积很小，但它是这一节的第二个主角。</text>
+<text class="svgsm" x="16" y="92" fill="#5f6368">⭐ 读法：<tspan font-weight="700">橙色虚线＝派活（控制与 DMA 请求），蓝色实线＝真正的数据搬运</tspan>。两种线分开画，是因为这颗核最反直觉的一点就是——&#160;<tspan font-weight="700">发命令的人自己不搬数据</tspan>。</text>
+<rect x="16" y="104" width="222" height="218" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="28" y="126" fill="#7a5000" style="font-size:12px">标量子核 × 1</text>
+<text class="svgsm" x="28" y="142" fill="#5f6368">scalar subcore</text>
+<text class="svgsm" x="28" y="166" fill="#7a5000">· 标量运算（一次一个数）</text>
+<text class="svgsm" x="28" y="184" fill="#7a5000">· <tspan font-weight="700">动态索引</tspan> ——&#160;地址可以是</text>
+<text class="svgsm" x="28" y="202" fill="#7a5000">&#160;&#160;&#160;刚从数据里算出来的</text>
+<text class="svgsm" x="28" y="220" fill="#7a5000">· <tspan font-weight="700">发起 DMA 与 stream</tspan></text>
+<text class="svgsm" x="28" y="238" fill="#7a5000">· 自带 <tspan font-weight="700">SMEM</tspan>（它的私有便签）</text>
+<rect x="28" y="262" width="198" height="46" rx="6" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="38" y="282" fill="#7a5000"><tspan font-weight="700">⭐ 它是调度中枢：</tspan></text>
+<text class="svgsm" x="38" y="298" fill="#7a5000">不算数据，只决定谁去搬什么</text>
+<rect x="270" y="104" width="500" height="218" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="282" y="126" fill="#7a5000" style="font-size:12px">向量子核 × 16</text>
+<text class="svgsm" x="388" y="126" fill="#5f6368">——&#160;公开文档里也直接叫 <tspan font-weight="700">tile</tspan></text>
+<text class="svgsm" x="282" y="144" fill="#7a5000"><tspan font-weight="700">十六个完全同构</tspan>，每个自带内存、数据流各走各的</text>
+<rect x="282" y="154" width="110" height="30" rx="5" fill="#fff5d6" stroke="#d93025" stroke-width="2"/>
+<text class="svgsm" x="337" y="174" fill="#d93025" text-anchor="middle"><tspan font-weight="700">① tile 0</tspan></text>
+<rect x="397" y="154" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="452" y="174" fill="#7a5000" text-anchor="middle">tile 1</text>
+<rect x="512" y="154" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="567" y="174" fill="#7a5000" text-anchor="middle">tile 2</text>
+<rect x="627" y="154" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="682" y="174" fill="#7a5000" text-anchor="middle">tile 3</text>
+<rect x="282" y="189" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="337" y="209" fill="#7a5000" text-anchor="middle">tile 4</text>
+<rect x="397" y="189" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="452" y="209" fill="#7a5000" text-anchor="middle">tile 5</text>
+<rect x="512" y="189" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="567" y="209" fill="#7a5000" text-anchor="middle">tile 6</text>
+<rect x="627" y="189" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="682" y="209" fill="#7a5000" text-anchor="middle">tile 7</text>
+<rect x="282" y="224" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="337" y="244" fill="#7a5000" text-anchor="middle">tile 8</text>
+<rect x="397" y="224" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="452" y="244" fill="#7a5000" text-anchor="middle">tile 9</text>
+<rect x="512" y="224" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="567" y="244" fill="#7a5000" text-anchor="middle">tile 10</text>
+<rect x="627" y="224" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="682" y="244" fill="#7a5000" text-anchor="middle">tile 11</text>
+<rect x="282" y="259" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="337" y="279" fill="#7a5000" text-anchor="middle">tile 12</text>
+<rect x="397" y="259" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="452" y="279" fill="#7a5000" text-anchor="middle">tile 13</text>
+<rect x="512" y="259" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="567" y="279" fill="#7a5000" text-anchor="middle">tile 14</text>
+<rect x="627" y="259" width="110" height="30" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="682" y="279" fill="#7a5000" text-anchor="middle">tile 15</text>
+<text class="svgsm" x="282" y="311" fill="#d93025">⛔ 别把它当成「小一号的 TensorCore」：<tspan font-weight="700">这里面没有 MXU</tspan>。</text>
+<rect x="802" y="104" width="200" height="218" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="814" y="126" fill="#174ea6" style="font-size:12px">共享 VMEM</text>
+<text class="svgsm" x="814" y="144" fill="#174ea6">文档里叫 <tspan font-weight="700">SPMEM</tspan></text>
+<text class="svgsm" x="814" y="172" fill="#174ea6">· 十六个 tile 都能访问</text>
+<text class="svgsm" x="814" y="190" fill="#174ea6">· <tspan font-weight="700">跨 tile 交换数据</tspan></text>
+<text class="svgsm" x="814" y="208" fill="#174ea6">&#160;&#160;走的就是这块</text>
+<text class="svgsm" x="814" y="226" fill="#174ea6">· 很小、很快</text>
+<text class="svgsm" x="814" y="244" fill="#174ea6">· <tspan font-weight="700">编译器显式管</tspan>，</text>
+<text class="svgsm" x="814" y="262" fill="#174ea6">&#160;&#160;不是缓存</text>
+<rect x="814" y="270" width="176" height="40" rx="5" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="824" y="287" fill="#174ea6">⛔ 不是 TensorCore</text>
+<text class="svgsm" x="824" y="303" fill="#174ea6">&#160;&#160;&#160;那块 VMEM</text>
+<rect x="1042" y="104" width="342" height="218" rx="8" fill="#fff" stroke="#d93025" stroke-width="2"/>
+<text class="svglbl" x="1054" y="126" fill="#d93025" style="font-size:12px">① 把一个 tile 放大看</text>
+<text class="svgsm" x="1054" y="144" fill="#5f6368">十六个长得一样，看懂一个就看懂全部</text>
+<rect x="1054" y="160" width="318" height="38" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="1064" y="176" fill="#7a5000"><tspan font-weight="700">向量 ALU</tspan></text>
+<text class="svgsm" x="1064" y="191" fill="#7a5000">SIMD <tspan font-weight="700">16 lane</tspan>（F32）／<tspan font-weight="700">32</tspan>（BF16）</text>
+<rect x="1054" y="204" width="318" height="38" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="1064" y="220" fill="#7a5000"><tspan font-weight="700">本地 VMEM</tspan></text>
+<text class="svgsm" x="1064" y="235" fill="#7a5000">文档里叫 <tspan font-weight="700">TileSPMEM</tspan> ／ local SPMEM</text>
+<rect x="1054" y="248" width="318" height="38" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="1064" y="264" fill="#7a5000"><tspan font-weight="700">本地 SMEM</tspan></text>
+<text class="svgsm" x="1064" y="279" fill="#7a5000">这个 tile 自己的标量便签</text>
+<rect x="1054" y="294" width="318" height="20" rx="5" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="1064" y="309" fill="#7a5000">⭐ 一次动的是十几个数，不是一千个</text>
+<line x1="242" y1="169" x2="276" y2="169" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah-e8710a)"/>
+<line x1="242" y1="204" x2="276" y2="204" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah-e8710a)"/>
+<line x1="242" y1="239" x2="276" y2="239" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah-e8710a)"/>
+<line x1="242" y1="274" x2="276" y2="274" stroke="#e8710a" stroke-width="1.6" stroke-dasharray="5 4" marker-end="url(#ah-e8710a)"/>
+<rect x="240" y="179" width="28" height="15" rx="2" fill="#fef7e0" stroke="#fef7e0" stroke-width="1"/>
+<text class="svgsm" x="254" y="190" fill="#e8710a" text-anchor="middle"><tspan font-weight="700">派活</tspan></text>
+<line x1="743" y1="169" x2="796" y2="169" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#ah-1a73e8)" marker-start="url(#ahr-1a73e8)"/>
+<line x1="743" y1="204" x2="796" y2="204" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#ah-1a73e8)" marker-start="url(#ahr-1a73e8)"/>
+<line x1="743" y1="239" x2="796" y2="239" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#ah-1a73e8)" marker-start="url(#ahr-1a73e8)"/>
+<line x1="743" y1="274" x2="796" y2="274" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#ah-1a73e8)" marker-start="url(#ahr-1a73e8)"/>
+<rect x="772" y="179" width="28" height="15" rx="2" fill="#fef7e0" stroke="#fef7e0" stroke-width="1"/>
+<text class="svgsm" x="786" y="190" fill="#1a73e8" text-anchor="middle"><tspan font-weight="700">数据</tspan></text>
+<line x1="127" y1="344" x2="127" y2="370" stroke="#1e8e3e" stroke-width="2" marker-end="url(#ah-1e8e3e)"/>
+<line x1="400" y1="344" x2="400" y2="370" stroke="#1e8e3e" stroke-width="2" marker-end="url(#ah-1e8e3e)"/>
+<line x1="640" y1="344" x2="640" y2="370" stroke="#1e8e3e" stroke-width="2" marker-end="url(#ah-1e8e3e)"/>
+<line x1="902" y1="344" x2="902" y2="370" stroke="#1e8e3e" stroke-width="2" marker-end="url(#ah-1e8e3e)"/>
+<rect x="0" y="376" width="1400" height="80" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svglbl" x="16" y="400" fill="#0b6b30" style="font-size:13px">HBM</text>
+<text class="svgsm" x="70" y="400" fill="#0b6b30">——&#160;<tspan font-weight="700">大表、权重、中间结果都在这儿</tspan>。每次 DMA 的最小粒度 <tspan font-weight="700">64 字节</tspan>（<tspan font-family="ui-monospace,monospace">pltpu.get_tpu_info().sparse_core</tspan> 直接报得出来）</text>
+<text class="svgsm" x="16" y="420" fill="#0b6b30"><tspan font-weight="700">三种角色都直连 HBM</tspan>——&#160;标量子核往那儿发 DMA，tile 往那儿取数、写回，SPMEM 里周转的东西也从那儿来。</text>
+<text class="svgsm" x="16" y="440" fill="#0b6b30">⭐ 对照一下就知道这颗核为什么存在：TensorCore 那边按<tspan font-weight="700">向量寄存器的形状</tspan>（8 sublane × 128 lane）成块地取，要的若只是散落的几行，就得为整块付钱；这边按 <tspan font-weight="700">64 字节</tspan>走。</text>
+<rect x="0" y="474" width="690" height="152" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="14" y="498" fill="#202124" style="font-size:13px">一次 gather 沿着这些线怎么走</text>
+<text class="svgsm" x="14" y="522" fill="#5f6368"><tspan font-weight="700">1.</tspan></text>
+<text class="svgsm" x="34" y="522" fill="#202124"><tspan font-weight="700">索引先到位</tspan></text>
+<text class="svgsm" x="105" y="522" fill="#5f6368">——&#160;要取哪些行，这份索引本身也是数据，放在 SparseCore 自己的内存里</text>
+<text class="svgsm" x="14" y="547" fill="#5f6368"><tspan font-weight="700">2.</tspan></text>
+<text class="svgsm" x="34" y="547" fill="#202124"><tspan font-weight="700">标量子核照着索引发 DMA</tspan></text>
+<text class="svgsm" x="176" y="547" fill="#5f6368">——&#160;<tspan font-weight="700">橙色虚线</tspan>——&#160;它一次抛出一大把请求，不等任何一个回来</text>
+<text class="svgsm" x="14" y="572" fill="#5f6368"><tspan font-weight="700">3.</tspan></text>
+<text class="svgsm" x="34" y="572" fill="#202124"><tspan font-weight="700">十六个 tile 各追各的地址</tspan></text>
+<text class="svgsm" x="189" y="572" fill="#5f6368">——&#160;<tspan font-weight="700">蓝色实线</tspan>——&#160;从 HBM 取回自己那份，互不排队</text>
+<text class="svgsm" x="14" y="597" fill="#5f6368"><tspan font-weight="700">4.</tspan></text>
+<text class="svgsm" x="34" y="597" fill="#202124"><tspan font-weight="700">要跨 tile 汇总时经 SPMEM</tspan></text>
+<text class="svgsm" x="192" y="597" fill="#5f6368">——&#160;scatter 就是同一条路反着走</text>
+<text class="svgsm" x="14" y="619" fill="#202124">⭐ <tspan font-weight="700">它扛延迟的方式不是让每一次取数变快，是同时欠着很多次取数。</tspan></text>
+<rect x="710" y="474" width="690" height="152" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="724" y="498" fill="#7a5000" style="font-size:13px">它擅长的四类活（官方文档原话，不是我归纳的）</text>
+<rect x="724" y="510" width="8" height="8" rx="2" fill="#7a5000" stroke="#7a5000" stroke-width="1"/>
+<text class="svgsm" x="742" y="522" fill="#7a5000"><tspan font-weight="700">小向量算术</tspan></text>
+<text class="svgsm" x="815" y="522" fill="#5f6368">——&#160;一次十几个数的加减乘</text>
+<rect x="724" y="535" width="8" height="8" rx="2" fill="#7a5000" stroke="#7a5000" stroke-width="1"/>
+<text class="svgsm" x="742" y="547" fill="#7a5000"><tspan font-weight="700">gather / scatter</tspan></text>
+<text class="svgsm" x="859" y="547" fill="#5f6368">——&#160;按索引取、按索引写</text>
+<rect x="724" y="560" width="8" height="8" rx="2" fill="#7a5000" stroke="#7a5000" stroke-width="1"/>
+<text class="svgsm" x="742" y="572" fill="#7a5000"><tspan font-weight="700">排序 · 去重 · 计数 · 直方图</tspan></text>
+<text class="svgsm" x="918" y="572" fill="#5f6368">——&#160;全是「先看了数据才知道下一步」的活</text>
+<rect x="724" y="585" width="8" height="8" rx="2" fill="#7a5000" stroke="#7a5000" stroke-width="1"/>
+<text class="svgsm" x="742" y="597" fill="#7a5000"><tspan font-weight="700">ragged 操作</tspan></text>
+<text class="svgsm" x="825" y="597" fill="#5f6368">——&#160;每一行长度都不一样的那种</text>
+<text class="svgsm" x="724" y="619" fill="#7a5000">⭐ 四条共用一个形状：<tspan font-weight="700">要么地址是算出来的，要么形状是不齐的</tspan>——&#160;正好是静态编译的机器最难受的两件事。</text>
+<rect x="0" y="642" width="1400" height="118" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svglbl" x="16" y="666" fill="#0b6b30" style="font-size:13px">⭐ 为什么这台「搬运机」后来被拿去扛集合通信</text>
+<text class="svgsm" x="16" y="688" fill="#0b6b30">All-Gather、Reduce-Scatter 这些活，拆开看<tspan font-weight="700">恰好也是「发一大把 DMA、各自回来、中间顺手加一下」</tspan>——&#160;跟 gather 是同一个形状，只是对面从 HBM 换成了别的芯片。</text>
+<text class="svgsm" x="16" y="708" fill="#0b6b30">于是就有了这一节最后那件事：<tspan font-weight="700">把集合通信从 TensorCore 手里接过去，让计算和通信真正并行</tspan>。Pallas 里这条路是公开的 ——&#160;<tspan font-family="ui-monospace,monospace">VectorSubcoreMesh</tspan> 让你</text>
+<text class="svgsm" x="16" y="726" fill="#0b6b30">「用写 TensorCore collective 的同一套模型，在 SparseCore 上写 collective」（JAX Pallas 官方文档原话）。<tspan font-weight="700">这件事在 XLA 里就是一组 flag 开关。</tspan></text>
+<text class="svgsm" x="16" y="746" fill="#5f6368">⚠️ 「为什么这套本事也适合卸载 collective」是<tspan font-weight="700">从形状推的</tspan>——&#160;官方公开了开关和收益，没有公开这段设计理由。</text>
+</svg>
+  <figcaption>⭐ <b>一颗 SparseCore ＝ 1 个标量子核 ＋ 16 个同构的向量子核（tile）＋ 一块共享 SPMEM</b>，
+    三种角色全都直连 HBM。<b>两种线的分工是这张图的重点</b>：橙色虚线是<b>派活</b>
+    （标量子核发 DMA 请求），蓝色实线是<b>数据</b>（tile 自己去搬）——&nbsp;
+    <b>发命令的人不搬数据</b>，这正是它能同时欠着一大把取数的原因。
+    ⛔ 十六个 tile 里<b>没有 MXU</b>，别当成小一号的 TensorCore。
+    规格与操作清单出自 JAX Pallas SparseCore 官方文档。</figcaption>
+  </figure>
+
+  <p>把图上那条「集合通信」的线落到实处 ——&nbsp;<b>它在 XLA 里就是一组开关</b>。
+    下面这些 flag 全部出自公开材料（MaxText 的
+    <code>benchmarks/xla_flags_library.py</code>、OpenXLA 文档与公开的 Ironwood 调优配方），
+    <b>列出来是为了让「卸载」这两个字有个能上手的抓手</b>：</p>
+
+  <div class="tbl-wrap"><table>
+    <tr><th>flag</th><th>它开的是什么</th><th>该知道的那一条</th></tr>
+    <tr><td colspan="3"><b>① 主开关 ——&nbsp;哪些集合通信交给 SparseCore</b></td></tr>
+    <tr><td><code>--xla_tpu_enable_sparse_core_collective_offload_all_gather</code></td>
+        <td>All-Gather 交给 SparseCore</td>
+        <td rowspan="3"><b>Ironwood（v7）上这三个默认就是 true</b>。<br>
+            <em>也就是说：你不设任何 flag，它已经在替你干活了</em></td></tr>
+    <tr><td><code>…_offload_reduce_scatter</code></td><td>Reduce-Scatter</td></tr>
+    <tr><td><code>…_offload_all_reduce</code></td><td>All-Reduce</td></tr>
+    <tr><td><code>…_offload_2d_all_gather</code></td>
+        <td>两层网格上的 All-Gather</td>
+        <td>要显式开</td></tr>
+    <tr><td colspan="3"><b>② 地基 ——&nbsp;主开关生效需要跟着一起设的</b></td></tr>
+    <tr><td><code>--xla_tpu_use_tc_device_shape_on_sc</code></td>
+        <td>让 SC 沿用 TensorCore 那套 device shape</td>
+        <td rowspan="4">MaxText 把这四个打成一组叫
+            <code>ENABLE_SPARSECORE_OFFLOADING_BASE_FLAGS</code>，<br>
+            取值 <code>true / false / false / true</code>。
+            <em>单开主开关往往看不到效果，坑就在这儿</em></td></tr>
+    <tr><td><code>--xla_sc_enable_instruction_fusion</code></td><td>SC 侧的指令融合</td></tr>
+    <tr><td><code>--xla_sc_disjoint_spmem</code></td>
+        <td>共享 SPMEM 是否按 tile 切成互不重叠的块</td></tr>
+    <tr><td><code>--xla_sc_disable_megacore_partitioning</code></td>
+        <td>关掉 megacore 划分</td></tr>
+    <tr><td colspan="3"><b>③ 看得见 ——&nbsp;不开这几个，profile 上那段是黑的</b></td></tr>
+    <tr><td><code>--xla_tpu_enable_all_gather_offload_tracing</code><br>
+            <code>…_reduce_scatter_offload_tracing</code><br>
+            <code>…_all_reduce_offload_tracing</code></td>
+        <td>把卸载出去的那段打进 trace</td>
+        <td>调优时才开。<b>「看 trace 不看宣传页」这条规矩，
+            在这里需要你先把灯打开</b></td></tr>
+    <tr><td colspan="3"><b>④ 顺带一个不属于 SparseCore、但每次都要一起调的</b></td></tr>
+    <tr><td><code>--xla_tpu_scoped_vmem_limit_kib</code></td>
+        <td>单个 op 最多能占多少 VMEM，<b>剩下的留给下一个 op 预取</b></td>
+        <td>MaxText 公开配方：稠密模型 <b>98304</b>、MoE <b>81920</b></td></tr>
+  </table></div>
+  <p class="tbl-note">⚠️ <b>两条必须一起记住的约束。</b>
+    第一，<b>Continuation Fusion 与 SparseCore 卸载只能二选一</b>——&nbsp;
+    MaxText 的注释原话是「Either one of CF or SC can be enabled at a time」。
+    两者都是「让通信和计算重叠」的手段，<b>走的是两条不同的路，不能叠加</b>；
+    <em>以为「都打开更快」是这一组 flag 上最常见的误用。</em>
+    <!-- ⛔ 下面这段是如实转述 + 明说不解释，别改成「因为编译器会 clamp 所以没关系」。
+         clamp 这件事我没有公开出处，写出来就是拿推测冒充事实。
+         判断依据见 CLAUDE.md 第一原则。 -->
+    第二，<code>98304 KiB ＝ 96 MiB</code>，<b>比 v7 单核 64 MiB 的 VMEM 还大</b>——&nbsp;
+    这个数在公开配方里是跨代通用的一个上限申请，实际生效值受目标机器约束。
+    <b>这里只如实转述配方，不替它解释。</b></p>
+
   <p>但上面那句开场白得当场收回一半。我说「两边都在主力之外多准备了一样东西」——&nbsp;
     <b>TPU 那半句成立，GPU 那半句不成立</b>：块量化不在 Tensor Core 外面，就在里面。
     摆正之后，那两个坑会露出一个共同的形状。</p>

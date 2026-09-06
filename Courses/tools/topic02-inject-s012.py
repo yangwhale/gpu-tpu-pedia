@@ -46,6 +46,9 @@ SCRIPTS = {
     "topic02-fig-s3-thread-is-a-lane.py": {"fig3-3.svg": "fig3-3"},
     "topic02-fig-s3-runtime-bill.py":     {"fig3-4.svg": "fig3-4"},
     "topic02-fig-s3-sparsecore.py":       {"fig3-5.svg": "fig3-5"},
+    # ⭐ 3-5 是「它跟 TensorCore 有什么不同」，3-5b 是「把它拆开里面有什么」。
+    #   两张分工不同，别合并（2026-09-06）。
+    "topic02-fig-s3-sc-inside.py":        {"fig3-5b.svg": "fig3-5b"},
     "topic02-fig-s3-mxu-dataflow.py":     {"fig3-6.svg": "fig3-6"},
     "topic02-figs-s1-hierarchy-intensity.py":
                                          {"fig1-3.svg": "fig1-3", "fig1-4.svg": "fig1-4"},
