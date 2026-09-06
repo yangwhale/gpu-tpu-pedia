@@ -22,6 +22,39 @@
         <span class="sub">·「每个 scale 盖 K 方向连续 16 个元素」另见 NVIDIA cuDNN
         前端关于 scale factor 布局的文档</span></li>
 
+      <!-- ⭐ 2026-09-06 补：四块课后延伸的出处。台账跟正文同步长，
+           不要只把新内容加进正文而忘了这里 —— 这一讲的规矩是「结论 ← 材料」，
+           台账缺一条，那条结论就成了无源之水。 -->
+      <li><b>UE8M0／UE4M3 的位分配与取值范围、四种操作数格式对应的块长与 scale 类型、
+        <code>mxf4nvf4</code> 块 16 可配两种 scale、TMEM 按<b>列</b>分配（2 的幂、≥32 列）、
+        一个 warp 只够得着 32 条 lane</b><br>
+        ←&nbsp;Colfax Research
+        <a href="https://research.colfax-intl.com/cutlass-tutorial-hardware-supported-block-scaling-with-nvidia-blackwell-gpus"
+           target="_blank" rel="noopener">Hardware-supported Block-scaling with NVIDIA
+        Blackwell GPUs</a> 与
+        <a href="https://research.colfax-intl.com/cutlass-tutorial-writing-gemm-kernels-using-tensor-memory-for-nvidia-blackwell-gpus/"
+           target="_blank" rel="noopener">Writing GEMM Kernels Using Tensor Memory</a>
+        <span class="sub">后者也是「累加器搬出寄存器堆是为了把寄存器让给调度和
+          epilogue」「所有数据都在 CTA 共享空间里，所以这条指令可以且必须由
+          单线程发起」两句的来处。</span></li>
+
+      <li>⭐ <b>四条 MMA <code>kind</code> 的速度档与布局限制（2× 对 4×、
+        4× 只支持 TN）</b><br>
+        ←&nbsp;NVIDIA
+        <a href="https://docs.nvidia.com/cutlass/4.3.1/media/docs/cpp/blackwell_functionality.html"
+           target="_blank" rel="noopener">CUTLASS · Blackwell SM100 GEMMs</a>
+        的 <code>tcgen05.mma</code> 指令表<br>
+        <span class="sub">⚠️ 表里标的是<b>相对 Hopper FP8 Tensor Core 的倍率</b>，
+          不是绝对 TFLOPS。<b>「走混合 kind 就掉回一半」是照这张表读出来的，
+          不是实测</b> ——&nbsp;想确认的话得自己跑两条 kind 对比。</span></li>
+
+      <li><b>「标称 FP4 峰值里不含 scale」</b><br>
+        ←&nbsp;⚠️ <b>这一条没有官方声明，是推的，推导链如下</b>：<br>
+        <span class="sub">NVFP4 每 16 个元素一个 scale、MXFP4 每 32 个一个
+          （见上面两条的出处）→ 两者 scale 数量差一倍 → 而 B200 的 FP4 峰值
+          对外只公布一个数、不按格式区分 → <b>若 scale 计入 FLOP，两个格式的
+          峰值不可能相同</b>。<b>反证成立，但不是官方口径。</b></span></li>
+
       <li><b>scale 必须进 TMEM、SFA／SFB 的交错布局、显存→共享内存→TMEM 这条路</b><br>
         ←&nbsp;Colfax Research
         <a href="https://research.colfax-intl.com/cutlass-tutorial-hardware-supported-block-scaling-with-nvidia-blackwell-gpus"

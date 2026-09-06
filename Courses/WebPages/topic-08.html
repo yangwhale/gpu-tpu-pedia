@@ -1153,6 +1153,140 @@ ul + p, ul + div.note { margin-top: 14px }
       <em>进来那一下的换算<b>焊在 MMA 流水线里</b>，出去那一下
       <b>是普通核跑一条新指令</b>。</em></p>
 
+    <!-- ⭐⭐ 2026-09-06 四块课后延伸。Chris 连问：块量化的硬件怎么实现的、
+         怎么做到不消耗算力、记 TFLOPS 时算进去没有、反量化算不算一次 FLOP、
+         TMEM 到底干什么用、那个 scaling 单元支持的是 NVFP4 还是 MXFP4。
+         ⛔ 全部放折叠 —— 他明说「上课未必讲，课后让同学们看」。
+         ⭐ 其中「走错指令只有一半速度」那条是这次挖出来最值钱的一条，
+            它是本讲主线（规格表 vs 门槛）的直接实例，别降级成脚注。
+         ⚠️ 出处全部公开（NVIDIA CUTLASS 文档 / PTX ISA / Colfax），
+            已补进 topic08-seg-sources.html。 -->
+    <h3>课后延伸　四块「问到硅上」的细节</h3>
+    <p class="sub">下面四块都是把上面那三样往下再追一层，
+      <b>主线上跳过不影响听懂</b>。第 ② 块最实用 ——&nbsp;
+      <em>它能解释「为什么我换了 FP4 却没快一倍」。</em></p>
+
+    <details class="aside"><summary>延伸一：为什么<b>一套</b>硬件能同时吃 NVFP4 和 MXFP4</summary>
+      <div class="body">
+      <b>先回答那个问题本身：两个都支持，而且是同一套单元。</b>
+      <br><br>
+      <b>关键在于：scale 不管哪种格式，永远是一个八位的无符号浮点数。</b>
+      <em>区别只在这八位<b>怎么解释</b> ——&nbsp;位宽一样，数据通路就能共用。</em>
+      <div class="tbl-wrap"><table>
+        <tr><th>操作数格式</th><th>一个 scale 盖多少个元素</th><th>scale 的类型</th></tr>
+        <tr><td><code>mxf8</code>（E5M2 / E4M3）</td><td>32</td><td>UE8M0</td></tr>
+        <tr><td><code>mxf6</code>（E3M2 / E2M3）</td><td>32</td><td>UE8M0</td></tr>
+        <tr><td><code>mxf4</code>（E2M1）<em>＝ MXFP4</em></td><td>32</td><td>UE8M0</td></tr>
+        <tr><td><code>nvf4</code>（E2M1）<em>＝ NVFP4</em></td><td><b>16</b></td><td><b>UE4M3</b></td></tr>
+      </table></div>
+      <p class="tbl-note">两种 scale 类型都是<b>无符号</b>八位、都支持 NaN 但不支持无穷。
+        <code>UE8M0</code> 把八位<b>全部</b>给指数（取值只能是 2<sup>x</sup>，
+        −127 ≤ x ≤ 127）；<code>UE4M3</code> 是四位指数三位尾数。</p>
+
+      ⭐ <b>这个差别在硬件上是实打实的成本差</b>：
+      <em>乘一个 2 的整数次幂，等于把浮点数的指数字段加一下 ——&nbsp;
+      <b>几乎白送</b>。而 UE4M3 带尾数，那是一次<b>真的乘法</b>。</em>
+      <b>所以 NVFP4 多出来的那点精度，是拿电路换的</b>
+      ——&nbsp;<em>这也是为什么 MX 是行业标准、NVFP4 是自家格式。</em>
+      <br><br>
+      ⭐ <b>还有一件事挺有意思：硬件比这两个格式加起来更宽。</b>
+      <em>PTX 里 <code>mxf4nvf4</code> 这一档，块长 16 时 <b>E8M0 和 E4M3 都收</b>，
+      块长 32 则必须配 E8M0。</em>
+      <b>也就是说「块 16 ＋ 纯指数 scale」这个组合硬件是支持的，
+      只是没有哪个标准格式叫这个名字。</b>
+      </div>
+    </details>
+
+    <details class="aside"><summary>⚠️ 延伸二：同样是 FP4，<b>走错指令只有一半速度</b></summary>
+      <div class="body">
+      <b>这一条是本讲主线最锋利的一个实例。</b>
+      <em>NVIDIA 的 CUTLASS 文档里，Blackwell 的 MMA 指令是按 <code>kind</code>
+      分档标速度的（倍率相对 Hopper 的 FP8 Tensor Core）：</em>
+      <div class="tbl-wrap"><table>
+        <tr><th>指令 kind</th><th>能吃什么</th><th>速度档</th><th>矩阵布局</th></tr>
+        <tr><td><code>kind::f8f6f4</code></td><td>f4 / f6 / f8 混着来</td>
+            <td>2×</td><td>四种都行</td></tr>
+        <tr><td><code>kind::mxf8f6f4.block_scale</code></td><td>mxf4 / mxf6 / mxf8</td>
+            <td>2×</td><td>四种都行</td></tr>
+        <tr><td><b><code>kind::mxf4.block_scale</code></b></td><td>只吃 mxf4</td>
+            <td><b>4×</b></td><td><b>只有 TN</b></td></tr>
+        <tr><td><b><code>kind::mxf4nvf4.block_scale</code></b></td><td>mxf4 <b>或</b> nvf4</td>
+            <td><b>4×</b></td><td><b>只有 TN</b></td></tr>
+      </table></div>
+      <p class="tbl-note">TN ＝ A 行优先、B 列优先。<b>4× 那两条只认这一种排法。</b></p>
+
+      ⭐ <b>所以「B200 的 FP4 是 FP8 的两倍」这句话有两个隐含前提</b>：
+      <em>你走的是<b>专用</b>那条 kind，而且矩阵摆的是 TN。</em>
+      <br><br>
+      <b>走那条什么都能吃的混合指令会怎么样？</b>
+      <em>数据还是四位的、显存还是省一半、精度行为也一样
+      ——&nbsp;<b>只有矩阵乘的速度掉回 FP8 那一档</b>。</em>
+      <b>而这件事不会报错，也不会在任何日志里说一句。</b>
+      <br><br>
+      ⛔ <b>这就是这一讲第 6 节说的「沉默的失败」在性能上的版本</b>：
+      <em>规格表给的是上限，门槛写在指令表里
+      ——&nbsp;<b>而两者之间隔着一整份你没读过的文档。</b></em>
+      </div>
+    </details>
+
+    <details class="aside"><summary>延伸三：标称的 FP4 算力里，把 scale 和反量化算进去了吗</summary>
+      <div class="body">
+      <b>没有。标称只数乘加，一次乘加记两个 FLOP。</b>
+      <br><br>
+      <b>有一条很干净的旁证能把这件事钉死</b>
+      ——&nbsp;<em>不用查任何白皮书，用两个格式互相对照就行：</em>
+      <ul>
+        <li>NVFP4 是<b>每 16 个数</b>一个 scale，MXFP4 是<b>每 32 个数</b>一个 scale
+          ——&nbsp;<b>scale 的数量差整整一倍。</b></li>
+        <li>而 B200 的 FP4 峰值对外<b>只报一个数</b>，没有按格式分开。</li>
+        <li>⭐ <b>如果 scale 进账，这两个格式的峰值必然不同。</b>
+          <em>它们相同，所以 scale 不在账里。</em></li>
+      </ul>
+      <b>那「反量化算不算一次 FLOP」？——&nbsp;这个问题问不出来，因为
+      <u>没有一个单独的反量化步骤可数</u>。</b>
+      <em>它就是 MMA 流水线里的一级。你要么用 block-scale 的 MMA
+      （反量化长在里面，拆不出来），要么自己先把 FP4 升成 BF16 再算
+      ——&nbsp;<b>那走的是 BF16 的峰值，压根不是 FP4 那个数字。</b></em>
+      <br><br>
+      ⚠️ <b>反过来有一笔真该记住的账：量化那一侧是实打实花时间的，
+      而且一个 FLOP 都不在峰值里。</b>
+      <em>算每块的最大值、压成 E2M1、生成 scale ——&nbsp;
+      这些是真实指令，跑在通用核上。</em>
+      <b>只比 MMA 的峰值，就会把这一整段漏掉。</b>
+      </div>
+    </details>
+
+    <details class="aside"><summary>延伸四：TMEM 为什么会存在 ——&nbsp;它不只是「一块新内存」</summary>
+      <div class="body">
+      <b>先看它取代了什么。</b>
+      <em>Hopper 及以前，MMA 的累加器住在<b>寄存器堆</b>里，每个线程拿着结果的一小片。</em>
+      <b>Blackwell 的 MMA 块子大到累加器会把寄存器吃光</b>，占用率直接被压死。
+      <br><br>
+      <b>于是给累加器单开了一块地。</b>CUTLASS 文档的说法是：
+      <em>这样一来，<b>寄存器就能主要用于调度和 epilogue 那些事</b>。</em>
+      <br><br>
+      <b>换来的三样东西，一样比一样重要</b>：
+      <ul>
+        <li><b>① 寄存器压力解除</b> ——&nbsp;能开更大的 tile。</li>
+        <li>⭐ <b>② MMA 可以（而且<u>必须</u>）由单个线程发起。</b>
+          <em>因为这条指令要用的数据<b>一个字节都不在私有寄存器里</b>，
+          全在 CTA 共享的内存空间中。</em>
+          <b>矩阵单元跟 warp 调度器解耦了 ——&nbsp;这是三样里最深的一样。</b></li>
+        <li><b>③ 两个 SM 能合做一次 MMA</b>（<code>cta_group::2</code>）
+          ——&nbsp;<em>只有累加器住在公共内存里才做得到。</em></li>
+      </ul>
+      <b>代价也很具体</b>：这块地要你<b>显式申请、显式释放</b>；
+      <em>分配的单位是<b>列</b>（必须是 2 的幂、至少 32 列）</em>；
+      算完还得用专门的指令把结果搬回寄存器才能做后处理；
+      而且<b>一个 warp 只够得着 32 条 lane</b>（四分之一）
+      ——&nbsp;<em>所以光是搬结果就得动用一整个 warpgroup。</em>
+      <br><br>
+      ⭐ <b>把「分配单位是列」这一条记住，上面第 ① 笔代价就通了</b>：
+      <em>存 scale 只用到 32 条 lane，但另外 96 条也跟着被占住、别的东西不能用
+      ——&nbsp;<b>因为一列的 128 条 lane 是一起给出去的，没法只要四分之一。</b></em>
+      </div>
+    </details>
+
     <!-- ⭐⭐ 2026-09-04 Chris 明确要求「数据源和出处也都写」。
          ⛔ 之前的毛病很实在：**大量出处只写在 HTML 注释里，读者根本看不见**。
             注释是给维护者的，不是给学员的 —— 这一条以后建新内容时也适用。
@@ -1219,6 +1353,39 @@ ul + p, ul + div.note { margin-top: 14px }
         Blackwell GPUs (SM12x)</a>
         <span class="sub">·「每个 scale 盖 K 方向连续 16 个元素」另见 NVIDIA cuDNN
         前端关于 scale factor 布局的文档</span></li>
+
+      <!-- ⭐ 2026-09-06 补：四块课后延伸的出处。台账跟正文同步长，
+           不要只把新内容加进正文而忘了这里 —— 这一讲的规矩是「结论 ← 材料」，
+           台账缺一条，那条结论就成了无源之水。 -->
+      <li><b>UE8M0／UE4M3 的位分配与取值范围、四种操作数格式对应的块长与 scale 类型、
+        <code>mxf4nvf4</code> 块 16 可配两种 scale、TMEM 按<b>列</b>分配（2 的幂、≥32 列）、
+        一个 warp 只够得着 32 条 lane</b><br>
+        ←&nbsp;Colfax Research
+        <a href="https://research.colfax-intl.com/cutlass-tutorial-hardware-supported-block-scaling-with-nvidia-blackwell-gpus"
+           target="_blank" rel="noopener">Hardware-supported Block-scaling with NVIDIA
+        Blackwell GPUs</a> 与
+        <a href="https://research.colfax-intl.com/cutlass-tutorial-writing-gemm-kernels-using-tensor-memory-for-nvidia-blackwell-gpus/"
+           target="_blank" rel="noopener">Writing GEMM Kernels Using Tensor Memory</a>
+        <span class="sub">后者也是「累加器搬出寄存器堆是为了把寄存器让给调度和
+          epilogue」「所有数据都在 CTA 共享空间里，所以这条指令可以且必须由
+          单线程发起」两句的来处。</span></li>
+
+      <li>⭐ <b>四条 MMA <code>kind</code> 的速度档与布局限制（2× 对 4×、
+        4× 只支持 TN）</b><br>
+        ←&nbsp;NVIDIA
+        <a href="https://docs.nvidia.com/cutlass/4.3.1/media/docs/cpp/blackwell_functionality.html"
+           target="_blank" rel="noopener">CUTLASS · Blackwell SM100 GEMMs</a>
+        的 <code>tcgen05.mma</code> 指令表<br>
+        <span class="sub">⚠️ 表里标的是<b>相对 Hopper FP8 Tensor Core 的倍率</b>，
+          不是绝对 TFLOPS。<b>「走混合 kind 就掉回一半」是照这张表读出来的，
+          不是实测</b> ——&nbsp;想确认的话得自己跑两条 kind 对比。</span></li>
+
+      <li><b>「标称 FP4 峰值里不含 scale」</b><br>
+        ←&nbsp;⚠️ <b>这一条没有官方声明，是推的，推导链如下</b>：<br>
+        <span class="sub">NVFP4 每 16 个元素一个 scale、MXFP4 每 32 个一个
+          （见上面两条的出处）→ 两者 scale 数量差一倍 → 而 B200 的 FP4 峰值
+          对外只公布一个数、不按格式区分 → <b>若 scale 计入 FLOP，两个格式的
+          峰值不可能相同</b>。<b>反证成立，但不是官方口径。</b></span></li>
 
       <li><b>scale 必须进 TMEM、SFA／SFB 的交错布局、显存→共享内存→TMEM 这条路</b><br>
         ←&nbsp;Colfax Research

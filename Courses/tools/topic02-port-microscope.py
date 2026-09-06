@@ -1170,6 +1170,154 @@ def sections(F):
     这个数在公开配方里是跨代通用的一个上限申请，实际生效值受目标机器约束。
     <b>这里只如实转述配方，不替它解释。</b></p>
 
+  <!-- ⭐⭐ 2026-09-06 三个课后延伸折叠。Chris：「我上课的时候未必需要讲，
+       但是课后可以让同学们去看这部分。」
+       ⛔ 所以它们**必须是折叠**，不能进主线 —— 主线 87 分钟是排过的，
+          这三块加起来能顶十几分钟，摊进去这一节就崩了。
+       ⭐ 三块的来处都是现场追问，按提问顺序排：
+          ① CF 是什么、为什么跟 SC 二选一（问在 flag 表上）
+          ② 标量／向量／矩阵老是分不清（问在 SparseCore 那张图上）
+          ③ MMA 三个字母什么意思、TPU 有没有（顺着 ② 问下来的）
+       ⛔ ③ 里那段「Tensor Core 在两边指的东西大小差两个数量级」
+          是一个挂了很久的悬案，别再拆出去单放 —— 它只有紧跟着 MMA
+          才讲得通（先说清 MMA 是 SM 里一条指令，才显出 scope 的荒谬）。 -->
+  <h3>课后延伸　三块「课上未必讲、但值得自己看一遍」的</h3>
+  <p class="sub">下面三块都是现场追问逼出来的，<b>主线上跳过不影响听懂</b>，
+    但它们各自都堵住了一个很容易含混过去的地方。</p>
+
+  <details class="aside"><summary>延伸一：CF 是什么？为什么它跟 SparseCore 卸载只能二选一</summary>
+    <div class="body">
+    <b>CF ＝ Continuation Fusion，直译是「接力式融合」。</b>
+    <em>它跟 SparseCore 卸载的<b>目标完全一样</b>：让集合通信和计算重叠。
+      不一样的是手段。</em>
+    <br><br>
+    <b>CF 的做法</b>：把一次 All-Gather 切成很多小块，塞进相邻的计算里 ——&nbsp;
+    TensorCore 算一小段、搬一小块、再算一小段，<b>在同一颗核上交替进行</b>。
+    这一轮没搬完的进度，作为一个中间状态传给下一个融合块，一路接力下去
+    ——&nbsp;<em><b>continuation 这个名字就是这么来的。</b></em>
+    <br><br>
+    <b>SparseCore 卸载的做法</b>：整段通信外包给旁边那颗核，TensorCore 一直在算。
+    <br><br>
+    <b>那为什么只能二选一？</b>MaxText 的配置文档里有一句话把这件事说死了
+    ——&nbsp;<em>「实现（比如 BC-offload 或者 continuation fusion）是根据其他 flag
+    的取值<b>挑</b>出来的」。</em>
+    <b>挑。</b>它们是<b>同一个 collective 的几种可选实现</b>，
+    编译器只能选一个来重写那条指令。<b>两个都打开，就是两个 pass 抢着改同一个 op。</b>
+    <br><br>
+    ⭐ <b>能带走的一条：看到「两个优化都打开会不会更快」，先问它们是不是
+    同一件事的两种做法。</b><em>是的话，打开两个不等于叠加
+    ——&nbsp;等于让编译器替你随便挑一个。</em>
+    <span class="sub">出处：MaxText 公开仓库
+      <code>src/maxtext/configs/README.md</code> 与
+      <code>benchmarks/xla_flags_library.py</code>；
+      「continuation state 从一个 async collective fusion 传到下一个」
+      的描述见公开技术博客，<b>NVIDIA/Google 均未发布 CF 的正式设计文档</b>。</span>
+    </div>
+  </details>
+
+  <details class="aside"><summary>延伸二：标量、向量、矩阵 ——&nbsp;三种单元到底差在哪（我怎么老也分不清）</summary>
+    <div class="body">
+    <b>先肯定一个直觉：按维度分，是对的。</b>
+    <em>标量一次一个数（0 维），向量一次一排数（1 维），
+      矩阵一次吃两个二维块（2 维）。形状上就是这么回事。</em>
+    <br><br>
+    ⛔ <b>但最容易错的理解，是把它们当成算力档次</b>
+    ——&nbsp;<em>好像标量单元是个弱鸡版的向量单元。</em>
+    <b>它们干的根本不是同一类活。</b>
+    <br><br>
+    <b>· 向量单元干的是：对一排数做<u>同一件事</u>。</b>
+      <em>一千个数，一条指令，全都加二。</em><br>
+    <b>· 标量单元干的是：做<u>一个决定</u>。</b>
+      <em>这个循环转几圈？下一个地址在哪？这一批要不要跳过？</em>
+    <br><br>
+    ⭐ <b>区别不是量，是性质 ——&nbsp;决定只有一个答案，你没法把它做一千遍。</b>
+    <em>所以标量单元「弱」不是缺点，是它那件事本来就只需要做一次。</em>
+    <br><br>
+    <b>打个比方</b>：向量核是流水线上一百个工人，同时拧同一种螺丝；
+    标量核是旁边那个拿着单子说「这批走三号线」的人。
+    <b>他就一个，也不需要一百个他。</b>
+    <br><br>
+    <b>回到上面那张图</b>：SparseCore 里 1 个标量子核配 16 个向量子核，
+    <b>这个比例不是因为标量算力不够，是分工本来就长这样</b>。
+    橙色虚线（命令）从标量子核出发，蓝色实线（数据）是十六个 tile 各自去搬
+    ——&nbsp;<em>「发命令的人自己不搬数据」，说的就是这个分工。</em>
+    <br><br>
+    ⭐ <b>最后一句最有用：这个三件套不是 SparseCore 特有的。</b>
+    TensorCore 也是标量单元 ＋ 向量单元（VPU）＋ 矩阵单元（MXU）三层，
+    GPU 的 SM 里同样有这三档。<b>整台机器的骨架都是这个形状</b>
+    ——&nbsp;<em>你在别处再碰到，就不用重新分辨一次了。</em>
+    </div>
+  </details>
+
+  <details class="aside"><summary>延伸三：MMA 这三个字母是什么？TPU 上有没有这东西</summary>
+    <div class="body">
+    <b>MMA ＝ Matrix Multiply-Accumulate，矩阵乘加。</b>
+    <em>一条指令算的是 <code>D ＝ A×B ＋ C</code>。</em>
+    <br><br>
+    <b>硬件上它特别在三点</b>，每一点都对应一笔真实的省钱：
+    <ul>
+      <li><b>① 一条指令做一整个小矩阵乘</b>，不是一次标量乘加。
+        <em>取指、译码的成本摊到几百次乘加上 ——&nbsp;<b>这是省调度</b>。</em></li>
+      <li><b>② 乘和加融在一起，累加位宽更高。</b>
+        输入 FP8／FP4，累加 FP32，<b>中间不落地、不舍入</b>。
+        <em>⭐ 这是四位输入能用的前提 ——&nbsp;不是因为四位够准，
+        是因为它只负责乘，加法那一头一直是三十二位。</em></li>
+      <li><b>③ 操作数在单元内部被复用。</b>
+        <em>标量循环里 A 的每个元素要为 B 的每一列重读一次；
+        MMA 单元读一次就在整块里反复用 ——&nbsp;<b>这是算术强度上去的来源</b>，
+        跟第 1 节那条线直接接上。</em></li>
+    </ul>
+    ⭐ <b>顺着几代看，有一条特别清楚的演化线：指令越来越大，发起者越来越小。</b>
+    <div class="tbl-wrap"><table>
+      <tr><th>代</th><th>谁来发这条指令</th><th>操作数放在哪</th></tr>
+      <tr><td>Volta ～ Ampere</td><td>一个 warp（32 线程）同步执行</td>
+          <td>各线程<b>私有寄存器</b>里各拿一片</td></tr>
+      <tr><td>Hopper</td><td>一个 warpgroup（128 线程），<b>异步</b></td>
+          <td>A 可以直接来自<b>共享内存</b></td></tr>
+      <tr><td>Blackwell</td><td><b>一个线程</b>发出去就不管了</td>
+          <td>共享内存 ＋ <b>Tensor Memory</b>，累加器也在里面</td></tr>
+    </table></div>
+    <p class="tbl-note">Blackwell 那一行的「必须由单个线程发起」是官方文档的措辞，
+      理由很干脆：<b>这条指令要用的数据一个字节都不在私有寄存器里</b>，
+      全在 CTA 共享的内存空间中 ——&nbsp;<em>所以矩阵单元跟 warp 调度器解耦了。</em></p>
+
+    <b>那 TPU 有没有 MMA？——&nbsp;数学上有，形式上没有，而这个差别正好是本讲的主线。</b>
+    <br><br>
+    <em>MXU 做的当然是同一件事：矩阵乘加。</em>
+    <b>差别不在「有没有矩阵指令」，在<u>谁决定它什么时候执行</u>。</b>
+    GPU 这边，MMA 是运行时由线程发射、由硬件调度、由记分板跟踪的一条指令；
+    TPU 那边，整台机器是超长指令字，<b>每一拍发什么在编译期就排死了</b>
+    ——&nbsp;<em>没有记分板，没有乱序，连「线程」这个概念都没有。</em>
+    <br><br>
+    ⭐ <b>一句话对照：GPU 把矩阵乘做成了一条<u>指令</u>，TPU 把矩阵乘做成了一条<u>流水线</u>。</b>
+    <em>指令要被发射、被调度、被跟踪；流水线只是到点了，数据自己流过去。</em>
+
+    <div class="note danger"><span class="t">⚠️ 顺带澄清一个长期混淆：「Tensor Core」在两边差着两个数量级</span>
+      <b>· NVIDIA 的 Tensor Core</b>：是 <b>SM 里面的一个执行单元</b>。
+      一颗 B200 上有一百多个 SM，每个 SM 里还有若干个。<br>
+      <b>· TPU 的 TensorCore</b>：是<b>整颗 device 的主计算核</b>，
+      里面装着 MXU、VPU、标量单元和 VMEM。v7 一颗芯片上<b>只有 2 个</b>。<br><br>
+      ⭐ <b>所以「TPU 的 TensorCore」对应的不是「GPU 的 Tensor Core」，
+      对应的是「GPU 的一整颗 die」那一层。</b>
+      <em>跨平台读规格表时，这是最容易错的一处 ——&nbsp;
+      而且错了之后所有的「每个核多少算力」都会跟着错。</em></div>
+
+    <p>⭐ <b>最后一个观察，也是这一讲想让你带走的东西</b>：
+      Blackwell 这一代的动作 ——&nbsp;累加器搬出寄存器、单线程发射、
+      操作数放进专用内存 ——&nbsp;<b>方向上是在朝 TPU 靠。</b>
+      <em>它在矩阵乘这一块<b>主动放弃了「每个线程各管一片」的动态性</b>，
+      换来更大的块和更少的调度开销。</em>
+      而在别的地方，GPU 依然是那台什么都能干的动态机器。
+      <b>两条路没有合并，但在最赚钱的那个部件上，它们靠近了一步。</b></p>
+    <span class="sub">出处：NVIDIA PTX ISA 文档（<code>mma</code> / <code>wgmma</code> /
+      <code>tcgen05.mma</code> 三代指令）、NVIDIA CUTLASS 的 Blackwell 功能文档、
+      Colfax Research 的 Blackwell Tensor Memory 教程。
+      <b>「Blackwell 在朝 TPU 靠」是我的判断，不是任何一方的官方说法。</b></span>
+    </div>
+  </details>
+  <!-- ▲ 课后延伸三块 结束 ▲　⛔ 这个哨兵是 L200 用 lift() 搬这三块的终点标记，
+       别删、别改字 —— 删了 build 会在 topic02-build-L200.py 里直接报 ValueError。 -->
+
   <p>但上面那句开场白得当场收回一半。我说「两边都在主力之外多准备了一样东西」——&nbsp;
     <b>TPU 那半句成立，GPU 那半句不成立</b>：块量化不在 Tensor Core 外面，就在里面。
     摆正之后，那两个坑会露出一个共同的形状。</p>''')
