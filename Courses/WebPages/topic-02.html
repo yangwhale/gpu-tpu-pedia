@@ -648,7 +648,7 @@ details.aside b{color:var(--ink);font-weight:600}
          而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
          ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
          （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
-    <span class="chip">⏱ <b>91 分钟 · 41 张图</b></span>
+    <span class="chip">⏱ <b>96 分钟 · 41 张图</b></span>
     <span class="chip">完整版 <a href="topic-02-L300.html"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -5293,6 +5293,297 @@ details.aside b{color:var(--ink);font-weight:600}
     <b>三套加起来，就是「跑起来才决定」这条路的明细账。</b>
     <br><br>TPU 一样都不需要 ——&nbsp;<b>不是它简陋，是这三个问题它在编译期就全回答完了</b>。
     <em>——&nbsp;这也是 3.2 那五样「少掉的部件」的第二次收账：少掉的不是能力，是这笔账。</em></div>
+
+
+  <h3>3.3c　⭐ 矩阵乘在硬件上到底是按什么顺序跑的</h3>
+  <p class="lead">到这里，两边的部件都拆完了。<b>但有一件更基本的事，前面一直没说：
+    一次矩阵乘，在硬件上究竟是按什么顺序算的？</b></p>
+
+  <p>这一节大概是全课唯一一处<b>「几乎所有人都想错了、而且错得毫无察觉」</b>的地方。
+    <em>因为错的那个版本太自然了 ——&nbsp;<b>它就是你在纸上算矩阵乘的方法。</b></em></p>
+
+  <p><b>先把你脑子里那个说出来</b>：拿左矩阵的第一行、右矩阵的第一列，
+    对应相乘再加起来，得到结果矩阵左上角那一个数；<b>这个格子就算完了</b>，
+    换下一个。——&nbsp;<em>数学上完全正确。</em>
+    <b>而真实硬件，无论 GPU 还是 TPU，一个都不这么算。</b></p>
+
+  <figure class="fbox fwide" id="s012-fig3-8">
+  <svg viewBox="0 0 1400 1268" width="100%" role="img" aria-label="同一个矩阵乘的三种数据流：朴素内积序只要一个累加器但完全没有复用；GPU 把 M 和 N 摊在空间、K 走时间；TPU 把 K 和 N 摊在空间、M 走时间">
+<defs>
+<marker id="a-5f6368" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#5f6368"/></marker>
+<marker id="a-e8710a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#e8710a"/></marker>
+<marker id="a-1a73e8" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1a73e8"/></marker>
+<marker id="a-1e8e3e" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#1e8e3e"/></marker>
+<marker id="a-8430ce" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#8430ce"/></marker>
+<marker id="a-d93025" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="#d93025"/></marker>
+</defs>
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">同一个矩阵乘，三种把它铺在硅上的方式 ——&#160;<tspan font-weight="700">结果一模一样，数据流完全不同</tspan></text>
+<text class="svgsm" x="0" y="37">⭐ <tspan font-weight="700">几乎所有人脑子里的矩阵乘都是「先把一个点积算完」——&#160;而硬件一个都不这么做。</tspan>这张图就是为了把那个差别摊开。全程用同一个小例子：<tspan font-weight="700">A 是 2×3，B 是 3×2，C 是 2×2</tspan>（M＝2，N＝2，K＝3）。</text>
+<rect x="0" y="50" width="1400" height="220" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="16" y="74" fill="#202124" style="font-size:13px">① 朴素算法（内积序）——&#160;<tspan font-weight="700">你脑子里那个。一个累加器就够，但它几乎没有复用</tspan></text>
+<text class="svgsm" x="16" y="94" fill="#5f6368">写成代码就是三层循环，<tspan font-weight="700">k 在最里面</tspan>：先把 C 的一个格子彻底算完，再去下一个格子。</text>
+<text class="svgsm" x="30" y="110" fill="#1a73e8"><tspan font-weight="700">A（2×3）</tspan></text>
+<rect x="30" y="116" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="47" y="137" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₀₀</text>
+<rect x="64" y="116" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="81" y="137" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₀₁</text>
+<rect x="98" y="116" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="115" y="137" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₀₂</text>
+<rect x="30" y="150" width="34" height="34" rx="3" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="47" y="171" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₁₀</text>
+<rect x="64" y="150" width="34" height="34" rx="3" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="81" y="171" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₁₁</text>
+<rect x="98" y="150" width="34" height="34" rx="3" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="115" y="171" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₁₂</text>
+<text class="svglbl" x="148" y="150" fill="#202124" style="font-size:18px">×</text>
+<text class="svgsm" x="168" y="110" fill="#e8710a"><tspan font-weight="700">B（3×2）</tspan></text>
+<rect x="168" y="116" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="185" y="137" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₀₀</text>
+<rect x="202" y="116" width="34" height="34" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="219" y="137" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₀₁</text>
+<rect x="168" y="150" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="185" y="171" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₁₀</text>
+<rect x="202" y="150" width="34" height="34" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="219" y="171" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₁₁</text>
+<rect x="168" y="184" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="185" y="205" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₂₀</text>
+<rect x="202" y="184" width="34" height="34" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="219" y="205" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₂₁</text>
+<text class="svglbl" x="252" y="150" fill="#202124" style="font-size:18px">=</text>
+<text class="svgsm" x="272" y="110" fill="#8430ce"><tspan font-weight="700">C（2×2）</tspan></text>
+<rect x="272" y="116" width="34" height="34" rx="3" fill="#efdcfb" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="289" y="137" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">c₀₀</text>
+<rect x="306" y="116" width="34" height="34" rx="3" fill="#fff" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="323" y="137" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">c₀₁</text>
+<rect x="272" y="150" width="34" height="34" rx="3" fill="#fff" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="289" y="171" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">c₁₀</text>
+<rect x="306" y="150" width="34" height="34" rx="3" fill="#fff" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="323" y="171" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">c₁₁</text>
+<text class="svgsm" x="380" y="130" fill="#202124"><tspan font-weight="700">第 1 步</tspan>：拿 A 的<tspan fill="#1a73e8"><tspan font-weight="700">整个第 0 行</tspan></tspan>（3 个数）× B 的<tspan fill="#e8710a"><tspan font-weight="700">整个第 0 列</tspan></tspan>（3 个数），乘加完 ——&#160;得到 c₀₀ 一个格子，写出去。</text>
+<text class="svgsm" x="380" y="150" fill="#202124"><tspan font-weight="700">第 2 步</tspan>：还是 A 第 0 行，换 B 第 1 列，得到 c₀₁。⛔ <tspan fill="#d93025"><tspan font-weight="700">A 第 0 行那三个数，你又读了一遍。</tspan></tspan></text>
+<text class="svgsm" x="380" y="170" fill="#202124">第 3、4 步同理，A 第 1 行也要读两遍。</text>
+<rect x="380" y="186" width="990" height="88" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svglbl" x="394" y="208" fill="#d93025" style="font-size:12px">数一下这笔账</text>
+<text class="svgsm" x="394" y="228" fill="#202124">A 的 6 个数各读 2 遍 ＝ 12 次；B 的 6 个数各读 2 遍 ＝ 12 次。<tspan font-weight="700">总共读 24 次，只换来 12 次乘加。</tspan></text>
+<text class="svgsm" x="394" y="248" fill="#d93025">⛔ <tspan font-weight="700">复用率 0.5 ——&#160;读两次才干一次活。所以真实硬件一个都不这么算。</tspan>（累加器确实只要 1 个，代价是把操作数反复搬。）</text>
+<text class="svgsm" x="394" y="266" fill="#5f6368">⭐ 卡住很多人的正是这一步：<tspan font-weight="700">「一个格子算完就退休」的画面太自然了，自然到没人怀疑硬件不是这么干的。</tspan></text>
+<rect x="0" y="284" width="1400" height="320" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="16" y="308" fill="#174ea6" style="font-size:13px">② GPU 的算法（外积序）——&#160;<tspan font-weight="700">把 k 挪到最外层，M×N 个格子同时往上涨</tspan></text>
+<text class="svgsm" x="16" y="328" fill="#174ea6">每走一步 k，只读 <tspan font-weight="700">A 的第 k 列（M 个数）＋ B 的第 k 行（N 个数）</tspan>，然后这些数<tspan font-weight="700">两两配对</tspan>，一次更新<tspan font-weight="700">全部 4 个格子</tspan>。</text>
+<text class="svglbl" x="24" y="346" fill="#174ea6" style="font-size:12px">k ＝ 0</text>
+<rect x="68" y="358" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="85" y="379" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₀₀</text>
+<rect x="102" y="358" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="119" y="379" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₀₁</text>
+<text class="svgsm" x="144" y="380" fill="#e8710a"><tspan font-weight="700">B 第 0 行</tspan></text>
+<rect x="24" y="400" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="41" y="421" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₀₀</text>
+<rect x="24" y="434" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="41" y="455" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₁₀</text>
+<text class="svgsm" x="22" y="484" fill="#1a73e8"><tspan font-weight="700">A 第 0 列</tspan></text>
+<rect x="68" y="400" width="34" height="34" rx="3" fill="#ede7f6" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="85" y="421" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="102" y="400" width="34" height="34" rx="3" fill="#ede7f6" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="119" y="421" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="68" y="434" width="34" height="34" rx="3" fill="#ede7f6" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="85" y="455" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="102" y="434" width="34" height="34" rx="3" fill="#ede7f6" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="119" y="455" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<text class="svgsm" x="144" y="422" fill="#8430ce"><tspan font-weight="700">累加器</tspan></text>
+<text class="svgsm" x="144" y="440" fill="#8430ce">4 格<tspan font-weight="700">全动</tspan></text>
+<text class="svgsm" x="24" y="498" fill="#174ea6">读 <tspan font-weight="700">4</tspan> 个数 →&#160;做 <tspan font-weight="700">4</tspan> 次乘加 →&#160;<tspan font-weight="700">4 个格子各涨 1／3</tspan></text>
+<text class="svglbl" x="476" y="346" fill="#174ea6" style="font-size:12px">k ＝ 1</text>
+<rect x="520" y="358" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="537" y="379" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₁₀</text>
+<rect x="554" y="358" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="571" y="379" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₁₁</text>
+<text class="svgsm" x="596" y="380" fill="#e8710a"><tspan font-weight="700">B 第 1 行</tspan></text>
+<rect x="476" y="400" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="493" y="421" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₀₁</text>
+<rect x="476" y="434" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="493" y="455" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₁₁</text>
+<text class="svgsm" x="474" y="484" fill="#1a73e8"><tspan font-weight="700">A 第 1 列</tspan></text>
+<rect x="520" y="400" width="34" height="34" rx="3" fill="#d7c4f0" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="537" y="421" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="554" y="400" width="34" height="34" rx="3" fill="#d7c4f0" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="571" y="421" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="520" y="434" width="34" height="34" rx="3" fill="#d7c4f0" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="537" y="455" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="554" y="434" width="34" height="34" rx="3" fill="#d7c4f0" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="571" y="455" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<text class="svgsm" x="596" y="422" fill="#8430ce"><tspan font-weight="700">累加器</tspan></text>
+<text class="svgsm" x="596" y="440" fill="#8430ce">4 格<tspan font-weight="700">全动</tspan></text>
+<text class="svgsm" x="476" y="498" fill="#174ea6">读 <tspan font-weight="700">4</tspan> 个数 →&#160;做 <tspan font-weight="700">4</tspan> 次乘加 →&#160;<tspan font-weight="700">4 个格子各涨 1／3</tspan></text>
+<text class="svglbl" x="928" y="346" fill="#174ea6" style="font-size:12px">k ＝ 2</text>
+<rect x="972" y="358" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="989" y="379" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₂₀</text>
+<rect x="1006" y="358" width="34" height="34" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="1023" y="379" fill="#7a5000" text-anchor="middle" style="font-size:10px">b₂₁</text>
+<text class="svgsm" x="1048" y="380" fill="#e8710a"><tspan font-weight="700">B 第 2 行</tspan></text>
+<rect x="928" y="400" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="945" y="421" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₀₂</text>
+<rect x="928" y="434" width="34" height="34" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="945" y="455" fill="#174ea6" text-anchor="middle" style="font-size:10px">a₁₂</text>
+<text class="svgsm" x="926" y="484" fill="#1a73e8"><tspan font-weight="700">A 第 2 列</tspan></text>
+<rect x="972" y="400" width="34" height="34" rx="3" fill="#b98de6" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="989" y="421" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="1006" y="400" width="34" height="34" rx="3" fill="#b98de6" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="1023" y="421" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="972" y="434" width="34" height="34" rx="3" fill="#b98de6" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="989" y="455" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<rect x="1006" y="434" width="34" height="34" rx="3" fill="#b98de6" stroke="#8430ce" stroke-width="2"/>
+<text class="svgsm" x="1023" y="455" fill="#5b1a9e" text-anchor="middle" style="font-size:10px">＋1</text>
+<text class="svgsm" x="1048" y="422" fill="#8430ce"><tspan font-weight="700">累加器</tspan></text>
+<text class="svgsm" x="1048" y="440" fill="#8430ce">4 格<tspan font-weight="700">全动</tspan></text>
+<text class="svgsm" x="928" y="498" fill="#174ea6">读 <tspan font-weight="700">4</tspan> 个数 →&#160;做 <tspan font-weight="700">4</tspan> 次乘加 →&#160;<tspan font-weight="700">4 个格子各涨 1／3</tspan></text>
+<rect x="24" y="516" width="1352" height="74" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="38" y="538" fill="#174ea6">⭐ 三步走完，K 到头，四个格子<tspan font-weight="700">同时算完，一起倒出去</tspan>——&#160;<tspan font-weight="700">总共读 12 次，做 12 次乘加，复用率 1.0，整整好一倍</tspan>。</text>
+<text class="svgsm" x="38" y="558" fill="#174ea6">⭐ <tspan font-weight="700">回答「每个格子被用到几次」：恰好 K 次，一次不多一次不少，左上和右下完全一样。</tspan>每走一步 k，所有格子同时被更新一次 ——&#160;累加器总更新次数 ＝ M×N×K ＝ 乘加总次数。</text>
+<text class="svgsm" x="38" y="578" fill="#5f6368">⚠️ 这里画的是<tspan font-weight="700">算法级</tspan>的数据流。指令级上，一条 MMA 已经在内部把 K 方向的一小段（16／32／64 个）规约掉了——&#160;<tspan font-weight="700">形状完全一样，只是成批做</tspan>。</text>
+<rect x="0" y="618" width="1400" height="320" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svglbl" x="16" y="642" fill="#0b6b30" style="font-size:13px">③ TPU 的 MXU（脉动阵列）——&#160;<tspan font-weight="700">K 方向的求和不靠累加器，靠「沿着阵列往下流」</tspan></text>
+<text class="svgsm" x="16" y="662" fill="#0b6b30"><tspan font-weight="700">B 先装进阵列，装完就不动</tspan>（weight-stationary）。<tspan font-weight="700">A 一行一行地从左边流进去</tspan>，部分和一路向下累加，从底下出来时已经是算完的一行 C。</text>
+<text class="svgsm" x="96" y="708" fill="#1a73e8"><tspan font-weight="700">A 的行（一次一行，走的是时间）</tspan></text>
+<rect x="96" y="722" width="38" height="38" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="115" y="745" fill="#174ea6" text-anchor="middle" style="font-size:9px">a₀₀</text>
+<rect x="134" y="722" width="38" height="38" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="153" y="745" fill="#174ea6" text-anchor="middle" style="font-size:9px">a₀₁</text>
+<rect x="172" y="722" width="38" height="38" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="191" y="745" fill="#174ea6" text-anchor="middle" style="font-size:9px">a₀₂</text>
+<rect x="96" y="760" width="38" height="38" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="115" y="783" fill="#174ea6" text-anchor="middle" style="font-size:9px">a₁₀</text>
+<rect x="134" y="760" width="38" height="38" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="153" y="783" fill="#174ea6" text-anchor="middle" style="font-size:9px">a₁₁</text>
+<rect x="172" y="760" width="38" height="38" rx="3" fill="#d2e3fc" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="191" y="783" fill="#174ea6" text-anchor="middle" style="font-size:9px">a₁₂</text>
+<text class="svgsm" x="96" y="816" fill="#1a73e8">t ＝ 0 送第 0 行，t ＝ 1 送第 1 行</text>
+<line x1="218" y1="760" x2="422" y2="745" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a-1a73e8)"/>
+<line x1="218" y1="760" x2="422" y2="791" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a-1a73e8)"/>
+<line x1="218" y1="760" x2="422" y2="837" stroke="#1a73e8" stroke-width="1.4" stroke-dasharray="4 3" marker-end="url(#a-1a73e8)"/>
+<text class="svglbl" x="422" y="688" fill="#0b6b30" style="font-size:12px">MXU 阵列 ——&#160;真机是 256×256</text>
+<text class="svgsm" x="422" y="708" fill="#0b6b30">K（3）＝ <tspan font-weight="700">行</tspan>，N（2）＝ <tspan font-weight="700">列</tspan>——&#160;<tspan font-weight="700">两个都是空间维</tspan></text>
+<rect x="430" y="722" width="46" height="46" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="453" y="749" fill="#7a5000" text-anchor="middle" style="font-size:11px">b₀₀</text>
+<rect x="476" y="722" width="46" height="46" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="499" y="749" fill="#7a5000" text-anchor="middle" style="font-size:11px">b₀₁</text>
+<rect x="430" y="768" width="46" height="46" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="453" y="795" fill="#7a5000" text-anchor="middle" style="font-size:11px">b₁₀</text>
+<rect x="476" y="768" width="46" height="46" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="499" y="795" fill="#7a5000" text-anchor="middle" style="font-size:11px">b₁₁</text>
+<rect x="430" y="814" width="46" height="46" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="453" y="841" fill="#7a5000" text-anchor="middle" style="font-size:11px">b₂₀</text>
+<rect x="476" y="814" width="46" height="46" rx="3" fill="#fce8b2" stroke="#e8710a" stroke-width="2"/>
+<text class="svgsm" x="499" y="841" fill="#7a5000" text-anchor="middle" style="font-size:11px">b₂₁</text>
+<line x1="453" y1="764" x2="453" y2="771" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#a-1e8e3e)"/>
+<line x1="453" y1="810" x2="453" y2="817" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#a-1e8e3e)"/>
+<line x1="453" y1="856" x2="453" y2="863" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#a-1e8e3e)"/>
+<line x1="453" y1="863" x2="453" y2="886" stroke="#1e8e3e" stroke-width="2" marker-end="url(#a-1e8e3e)"/>
+<line x1="499" y1="764" x2="499" y2="771" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#a-1e8e3e)"/>
+<line x1="499" y1="810" x2="499" y2="817" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#a-1e8e3e)"/>
+<line x1="499" y1="856" x2="499" y2="863" stroke="#1e8e3e" stroke-width="1.4" marker-end="url(#a-1e8e3e)"/>
+<line x1="499" y1="863" x2="499" y2="886" stroke="#1e8e3e" stroke-width="2" marker-end="url(#a-1e8e3e)"/>
+<text class="svgsm" x="476" y="908" fill="#8430ce" text-anchor="middle"><tspan font-weight="700">C 的一行，从底下出来</tspan></text>
+<rect x="732" y="678" width="648" height="190" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svglbl" x="746" y="700" fill="#0b6b30" style="font-size:12px">每个 PE 干的事</text>
+<text class="svgsm" x="746" y="720" fill="#0b6b30">① 从左边接一个 a　② 乘上自己怀里那个 b　③ <tspan font-weight="700">加上从上面流下来的部分和</tspan></text>
+<text class="svgsm" x="746" y="738" fill="#0b6b30">④ 把 a 往右传，把新的部分和往下传。<tspan font-weight="700">就这四步，没有别的。</tspan></text>
+<text class="svgsm" x="746" y="764" fill="#0b6b30">⭐ <tspan font-weight="700">所以 K 方向那 3 项求和，是「空间上」完成的</tspan>——&#160;三个 PE 各做一次乘加，</text>
+<text class="svgsm" x="746" y="782" fill="#0b6b30">把部分和接力往下传。<tspan font-weight="700">这 3 项不需要任何外部累加器。</tspan></text>
+<text class="svgsm" x="746" y="808" fill="#0b6b30">外部累加器只在<tspan font-weight="700">跨 K 分块</tspan>时才用到——&#160;真机 K 常常几千，</text>
+<text class="svgsm" x="746" y="826" fill="#0b6b30">阵列一次只吃得下 256，剩下的按块累加。</text>
+<text class="svgsm" x="746" y="850" fill="#8430ce">⭐ <tspan font-weight="700">M 走的是时间</tspan>：A 的行一行一行进去，一行一行出来。</text>
+<text class="svgsm" x="16" y="924" fill="#0b6b30">⭐ <tspan font-weight="700">复用的账两边其实一样</tspan>：TPU 这边，<tspan font-weight="700">B 装一次被 M 行反复用，A 的一个数进来一次被同一行的 N 个 PE 用</tspan>——&#160;跟 GPU 那边靠二维累加器换来的复用，<tspan font-weight="700">是同一笔账的两种物理实现</tspan>。</text>
+<rect x="0" y="952" width="1400" height="258" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="16" y="976" fill="#7a5000" style="font-size:13px">⭐ 落点：同一个数学，区别只在「哪个维度摊在空间上，哪个维度走时间」</text>
+<text class="svgsm" x="316" y="1000" fill="#7a5000"><tspan font-weight="700">① 朴素（内积序）</tspan></text>
+<text class="svgsm" x="616" y="1000" fill="#7a5000"><tspan font-weight="700">② GPU（外积序）</tspan></text>
+<text class="svgsm" x="956" y="1000" fill="#7a5000"><tspan font-weight="700">③ TPU（脉动阵列）</tspan></text>
+<line x1="16" y1="1008" x2="1384" y2="1008" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="16" y="1028" fill="#7a5000"><tspan font-weight="700">M（左矩阵的行）</tspan></text>
+<text class="svgsm" x="316" y="1028" fill="#202124">时间</text>
+<text class="svgsm" x="616" y="1028" fill="#202124"><tspan font-weight="700">空间</tspan>：累加器的行</text>
+<text class="svgsm" x="956" y="1028" fill="#202124"><tspan font-weight="700">时间</tspan>：一行一行流进去</text>
+<text class="svgsm" x="16" y="1050" fill="#7a5000"><tspan font-weight="700">N（右矩阵的列）</tspan></text>
+<text class="svgsm" x="316" y="1050" fill="#202124">时间</text>
+<text class="svgsm" x="616" y="1050" fill="#202124"><tspan font-weight="700">空间</tspan>：累加器的列</text>
+<text class="svgsm" x="956" y="1050" fill="#202124"><tspan font-weight="700">空间</tspan>：阵列的列</text>
+<text class="svgsm" x="16" y="1072" fill="#7a5000"><tspan font-weight="700">K（求和那一维）</tspan></text>
+<text class="svgsm" x="316" y="1072" fill="#202124">时间</text>
+<text class="svgsm" x="616" y="1072" fill="#202124"><tspan font-weight="700">时间</tspan>：累加多少步</text>
+<text class="svgsm" x="956" y="1072" fill="#202124"><tspan font-weight="700">空间</tspan>：阵列的行</text>
+<text class="svgsm" x="16" y="1094" fill="#7a5000"><tspan font-weight="700">累加发生在哪</tspan></text>
+<text class="svgsm" x="316" y="1094" fill="#202124">一个寄存器里，反复加</text>
+<text class="svgsm" x="616" y="1094" fill="#202124">M×N 个格子里，<tspan font-weight="700">各被更新 K 次</tspan></text>
+<text class="svgsm" x="956" y="1094" fill="#202124"><tspan font-weight="700">沿着阵列往下传</tspan>，边流边加</text>
+<text class="svgsm" x="16" y="1116" fill="#7a5000"><tspan font-weight="700">要多大的累加器</tspan></text>
+<text class="svgsm" x="316" y="1116" fill="#202124">1 个</text>
+<text class="svgsm" x="616" y="1116" fill="#202124">M×N 个（真机是<tspan font-weight="700">一个 tile</tspan>，不是整个矩阵）</text>
+<text class="svgsm" x="956" y="1116" fill="#202124">只需跨 K 分块的那一份</text>
+<text class="svgsm" x="16" y="1138" fill="#7a5000"><tspan font-weight="700">复用率</tspan></text>
+<text class="svgsm" x="316" y="1138" fill="#202124"><tspan fill="#d93025"><tspan font-weight="700">0.5</tspan></tspan></text>
+<text class="svgsm" x="616" y="1138" fill="#202124">M×N ÷（M＋N）——&#160;128×256 的块约 <tspan font-weight="700">85</tspan></text>
+<text class="svgsm" x="956" y="1138" fill="#202124">B 用 M 遍、A 用 N 遍，<tspan font-weight="700">账同上</tspan></text>
+<text class="svgsm" x="16" y="1168" fill="#7a5000">⭐ <tspan font-weight="700">一句话：GPU 把 M 和 N 摊在空间上、让 K 走时间；TPU 把 K 和 N 摊在空间上、让 M 走时间。</tspan>——&#160;这一个选择，决定了后面所有事：累加器要多大、tile 为什么是核心旋钮、以及 TPU 为什么非得让权重坐着不动。</text>
+<text class="svgsm" x="16" y="1190" fill="#d93025">⛔ <tspan font-weight="700">而三种铺法算出来的 C，一个数都不差。</tspan><tspan fill="#5f6368">「结果相同、数据流不同」正是这门课想让你养成的那种看法——&#160;规格表只写结果，快慢全在数据流里。</tspan></text>
+</svg>
+  <figcaption>⭐ <b>三种铺法算出来的 C 一个数都不差，数据流却完全不同。</b>
+    ① 朴素（内积序）：先把一个格子彻底算完 ——&nbsp;<b>只要 1 个累加器，
+    但读 24 次才干 12 次活，复用率 0.5</b>。
+    ② GPU（外积序）：<b>k 挪到最外层</b>，每步只读 A 的一列 ＋ B 的一行，
+    <b>M×N 个格子同时各涨一点</b>，每个格子恰好被更新 K 次。
+    ③ TPU（脉动阵列）：<b>B 装进阵列就不动</b>，A 一行一行流过，
+    <b>K 方向的求和是沿着阵列在空间上完成的</b>，压根不经过外部累加器。
+    ⭐ 落点在最后那张表：<b>GPU 把 M 和 N 摊在空间上、让 K 走时间；
+    TPU 把 K 和 N 摊在空间上、让 M 走时间。</b></figcaption>
+  </figure>
+
+  <div class="note danger"><span class="t">⛔ 错的不是数学，是数据流 ——&nbsp;而规格表只写数学</span>
+    <b>内积序和外积序算出来的结果一模一样</b>，一个数都不差。
+    <em>所以你永远不会因为「算错了」而发现自己想的不是硬件干的那件事。</em><br>
+    <b>它们差在<u>要搬多少数据</u>上，而这才是决定快慢的那一半。</b>
+    <br>——&nbsp;<b>内积序：读 24 次，做 12 次乘加。外积序：读 12 次，做 12 次乘加。</b>
+    <em>这还只是 2×2 的玩具例子；块一大，差距就是几十倍上百倍。</em></div>
+
+  <div class="note ok"><span class="t">⭐ 这一节要带走的那条算式：累加器买的是复用率</span>
+    <b>为什么不能只留一行累加器？——&nbsp;有一条特别干净的算式能回答。</b><br><br>
+    <em>假设累加器是 M×N 的一小块。K 方向每往前走一步，你要读进来的是：
+    A 的一列（M 个数）＋ B 的一行（N 个数），一共 <b>M ＋ N</b> 个数。
+    而这一步你能做多少次乘加？<b>M × N 次。</b></em>
+    <br><br>⭐ <b>所以复用率 ＝ M × N ÷（M ＋ N）。</b>
+    <div class="tbl-wrap"><table>
+      <tr><th>累加器形状</th><th>复用率</th><th>读一个数干几次活</th></tr>
+      <tr><td>1 × N（只留一行）</td><td>N ÷（1＋N）</td><td><b>≈ 1</b>，N 开到一百万也一样</td></tr>
+      <tr><td>128 × 128</td><td>16,384 ÷ 256</td><td><b>64</b></td></tr>
+      <tr><td>128 × 256</td><td>32,768 ÷ 384</td><td><b>≈ 85</b></td></tr>
+    </table></div>
+    ⭐ <b>这条算式最狠的读法：它被<u>短边</u>卡死。</b>
+    <em>短边是 1，那长边开到一百万，复用率还是 1 ——&nbsp;<b>长的那一边一点忙都帮不上。</b></em>
+    <br>——&nbsp;<b>所以累加器阵列不是用来「装结果」的，它是用来<u>买复用</u>的。
+    你多开一个累加器，就等于让搬进来的那批操作数多配对一次。</b>
+    <em>⭐ 这正是第 1 节那条算术强度的主线，第一次长在了硅上。</em></div>
+
+  <div class="note info"><span class="t">⭐ 还有一个从电路上看的角度，同样说明它必须是二维的</span>
+    <b>MXU 是一个 256×256 的二维阵列，每一拍物理上要吐出 256 个部分和。</b>
+    <em>你如果只有一行累加器，那就是拿二百五十六分之一的阵列在干活，其余全空转。</em>
+    <br>——&nbsp;<b>二维的阵列，天然要配二维的累加器。累加器的形状就是阵列的形状</b>，
+    不是谁随手定的。
+    <br><br><b>顺带回答另一个常见的追问：那「倒出去」不是也很费吗？</b>
+    <em>不亏。不管怎么切，最后倒出去的总量都是 M×N，一个字节不多不少。</em>
+    <b>真正被多付的是 B 那一侧 ——&nbsp;一行一行来的话，整个 B 你得重读 M 遍。</b></div>
+
+  <div class="note warn"><span class="t">⚠️ 两条准确性上的边界，讲的时候别丢</span>
+    <b>①</b> 图里 GPU 那一栏画的是<b>算法级</b>的数据流。<em>指令级上，一条 MMA
+    已经在内部把 K 方向的一小段（16／32／64 个）规约掉了 ——&nbsp;
+    <b>形状完全一样，只是成批做</b>。</em>「累加器跨 k 块持续累加」这件事是明写在
+    指令里的：<em>第一块把累加器清零，之后每一块都是加上去。</em><br>
+    <b>②</b> TPU 那一栏，K 方向的求和在阵列内部沿空间完成，
+    <b>那一段不需要外部累加器</b>；<em>外部累加器只在<b>跨 K 分块</b>时才用到
+    ——&nbsp;真机 K 常常几千，而阵列一次只吃得下 256。</em></div>
+
+  <p>⭐ <b>把这一节收成一句：同一个数学，区别只在「哪个维度摊在空间上，哪个维度走时间」。</b>
+    <em>这一个选择往下决定了所有事 ——&nbsp;累加器要多大、tile 为什么是最核心的那个旋钮、
+    TPU 为什么非得让权重坐着不动。</em>
+    <b>接下来 3.4 要比的「一条指令吃多大一块」，比的就是这个选择的具体取值。</b></p>
 
   <h3>3.4　一条指令吃多大一块 —— 收缩维差 16 倍</h3>
   <!-- ⭐ 2026-09-03：问题提到图前面。原来是「回到粒度…两边不是同一个量级」，
@@ -13271,7 +13562,7 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
           一句 L300 去处留在明面（它是有用的下一步），节号勘误折起来 ——
           需要它的人一定是正拿着两版对照翻，那种人会去点开。 -->
   <!-- ⛔ 2026-09-04：这里原来写「这一版是 L200 · 一小时」，而页首那个自动算出来的
-       chip 报的是 91 分钟（当前 77）。**同一页上两个时长，一个手写一个算出来的。**
+       chip 报的是 96 分钟（当前 77）。**同一页上两个时长，一个手写一个算出来的。**
        ⭐ 2026-09-03 已经拍板「不砍内容，要一个准点的时段就按 80 分钟要」——&nbsp;
           所以「一小时」这个标签从那天起就不成立了，只是没人回头改标签。
        ⭐ 现在版本名只留等级码（L200 · 精讲版），**具体分钟数全篇只出现在
@@ -13284,9 +13575,9 @@ Vᵀ·Pᵀ 的左上角     = 7×1 + 9×2 + 11×3 = 7 + 18 + 33 = 58</code></pre
           ⚠️ 一个规矩只执行在发现它的那一处，就等于没立。
        ⭐ 现在「讲完了，它没有告诉你该买哪个……」是主线上的最后一句 ——&nbsp;
           那才是这门课要留下的话。L300 的去处折起来，想深挖的人一定会点。 -->
-  <details class="aside"><summary>这一版是 L200 · 精讲版（主线 91 分钟）——&nbsp;完整版 L300 多讲了什么<em>（想往下挖再点开）</em></summary>
+  <details class="aside"><summary>这一版是 L200 · 精讲版（主线 96 分钟）——&nbsp;完整版 L300 多讲了什么<em>（想往下挖再点开）</em></summary>
     <div class="body">
-  <div class="note info"><span class="t">这一版是 L200 · 精讲版（主线 91 分钟）</span>
+  <div class="note info"><span class="t">这一版是 L200 · 精讲版（主线 96 分钟）</span>
     完整版 <b>L300</b>（两小时，72 张图）多出来的是四组深挖：<br>
     ·芯片封装全景与十行完整对照<br>
     ·寄存器堆到位线的五张图<br>

@@ -51,6 +51,7 @@ SCRIPTS = {
     "topic02-fig-s3-sc-inside.py":        {"fig3-5b.svg": "fig3-5b"},
     "topic02-fig-s3-mxu-dataflow.py":     {"fig3-6.svg": "fig3-6"},
     "topic02-fig-s3-latency.py":          {"fig3-7.svg": "fig3-7"},
+    "topic02-fig-s3-dataflow.py":         {"fig3-8.svg": "fig3-8"},
     "topic02-figs-s1-hierarchy-intensity.py":
                                          {"fig1-3.svg": "fig1-3", "fig1-4.svg": "fig1-4"},
     "topic02-figs-s2-access-lane.py":    {"fig2-1.svg": "fig2-1", "fig2-2.svg": "fig2-2"},
