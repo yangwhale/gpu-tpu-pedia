@@ -9574,8 +9574,9 @@ details.aside b{color:var(--ink);font-weight:600}
 <rect x="664" y="588" width="716" height="162" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
 <text x="680" y="614" class="sec" fill="#d93025">最反直觉的一条：我们的生产任务里，它一次表都没查</text>
 <text x="680" y="636" class="xs">要不要把 embedding 卸载到 SparseCore，看的是<tspan font-weight="700" fill="#202124">同一批里「重复取同一行」的程度</tspan> —— 重复得越厉害，专用通路省下的越多。</text>
-<text x="680" y="688" class="xs">推荐系统那边少量热行被反复命中，重复度很高，这是 SparseCore 的主场。而我们这次的语言模型<tspan font-weight="700" fill="#202124">几乎每个索引都取不同的行</tspan>（一批 131,</text>
-<text x="680" y="704" class="xs">072 个 token，词表 129,280 行，重合极少）—— 落在<tspan font-weight="700" fill="#d93025">最不划算的一端</tspan>，编译器于是根本没把它派过去。</text>
+<text x="680" y="688" class="xs">推荐系统那边少量热行被反复命中，重复度很高，这是 SparseCore 的主场。而我们这次的语言模型<tspan font-weight="700" fill="#202124">取行重复度不够高</tspan>（<tspan font-weight="700" fill="#202124">不是没有重复</tspan>：十</text>
+<text x="680" y="704" class="xs">几万 token 里不同的词只有几千个，绝大部分命中最高频那一两千行，只是跟搜广推差着量级）—— 落在<tspan font-weight="700" fill="#d93025">最不划算的一端</tspan>，编译器于是根本</text>
+<text x="680" y="720" class="xs">没把它派过去。</text>
 <rect x="20" y="782" width="1360" height="132" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
 <text x="34" y="808" class="sec" fill="#1e8e3e">那生产里的 embedding 到底怎么跑的？—— 它根本不是查表</text>
 <text x="34" y="832" class="xs">MaxText 有一个开关 <tspan class="mono" fill="#1967d2">use_iota_embed</tspan>。打开时，查表被写成<tspan font-weight="700" fill="#202124">「把 token id 展成 one-hot，再和整张词表做一次矩阵乘」</tspan> —— 一条 <tspan class="mono" fill="#1967d2">dot</tspan>，跑在 MXU 上。关掉才是真的 <tspan class="mono" fill="#1967d2">gather</tspan>。<tspan font-weight="700" fill="#d93025">上游默认是关的，但仓库里 34 份配置显式打开、0 份显式关闭</tspan>，包括那几份给 GPU 用</text>
@@ -9784,8 +9785,8 @@ details.aside b{color:var(--ink);font-weight:600}
 <text x="736.0" y="484" class="xs" fill="#202124">宣传口径：「TPU 有个专门查 embedding 表的核」</text>
 <text x="724.0" y="514" class="xs"><tspan font-weight="700" fill="#202124">它只对「同一批行被反复查」的负载划算。</tspan>推荐系统那边少量热行被反复命中，重复度很高，那是它的主场。</text>
 <line x1="724.0" y1="537" x2="1366.0" y2="537" stroke="#8430ce" stroke-width="0.8" stroke-dasharray="3 3"/>
-<text x="724.0" y="557" class="xs"><tspan font-weight="700" fill="#d93025">而语言模型几乎每个索引都取不同的行</tspan>（一批 131,072 个 token，词表 129,280 行，重合极少）—— 落在最不划算的一端，<tspan font-weight="700" fill="#202124">编译</tspan></text>
-<text x="724.0" y="574" class="xs"><tspan font-weight="700" fill="#202124">器根本没往那儿派，生产任务里它一次表都没查过。</tspan></text>
+<text x="724.0" y="557" class="xs"><tspan font-weight="700" fill="#d93025">而语言模型的取行重复度不够高</tspan>（<tspan font-weight="700" fill="#202124">不是没有重复</tspan>：十几万 token 里不同的词只有几千个，绝大部分命中最高频那一两千行；只是跟</text>
+<text x="724.0" y="574" class="xs">搜广推差着量级）—— 落在最不划算的一端，<tspan font-weight="700" fill="#202124">编译器根本没往那儿派，生产任务里它一次表都没查过。</tspan></text>
 <rect x="20" y="626" width="1360" height="112" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
 <text x="38" y="654" class="sec" fill="#1a73e8">⭐ 落点：两句宣传语都没说错 —— 错的是把「支持」读成「我的负载用得上」</text>
 <text x="38" y="680" class="xs"><tspan font-weight="700" fill="#202124">这两个坑是同一个形状</tspan>：能力确实存在，但通往它的路上有一道<tspan font-weight="700" fill="#202124">只在文档细则里的条件</tspan>。宣传页只负责说「有」，不负责说「你够不够格」。</text>

@@ -2712,8 +2712,9 @@ MXU 个数错了 2 倍（4 应为 2），每 cell 的乘加数也错了 2 倍（
 <rect x="664" y="588" width="716" height="162" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
 <text x="680" y="614" class="sec" fill="#d93025">最反直觉的一条：我们的生产任务里，它一次表都没查</text>
 <text x="680" y="636" class="xs">要不要把 embedding 卸载到 SparseCore，看的是<tspan font-weight="700" fill="#202124">同一批里「重复取同一行」的程度</tspan> —— 重复得越厉害，专用通路省下的越多。</text>
-<text x="680" y="688" class="xs">推荐系统那边少量热行被反复命中，重复度很高，这是 SparseCore 的主场。而我们这次的语言模型<tspan font-weight="700" fill="#202124">几乎每个索引都取不同的行</tspan>（一批 131,</text>
-<text x="680" y="704" class="xs">072 个 token，词表 129,280 行，重合极少）—— 落在<tspan font-weight="700" fill="#d93025">最不划算的一端</tspan>，编译器于是根本没把它派过去。</text>
+<text x="680" y="688" class="xs">推荐系统那边少量热行被反复命中，重复度很高，这是 SparseCore 的主场。而我们这次的语言模型<tspan font-weight="700" fill="#202124">取行重复度不够高</tspan>（<tspan font-weight="700" fill="#202124">不是没有重复</tspan>：十</text>
+<text x="680" y="704" class="xs">几万 token 里不同的词只有几千个，绝大部分命中最高频那一两千行，只是跟搜广推差着量级）—— 落在<tspan font-weight="700" fill="#d93025">最不划算的一端</tspan>，编译器于是根本</text>
+<text x="680" y="720" class="xs">没把它派过去。</text>
 <rect x="20" y="782" width="1360" height="132" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
 <text x="34" y="808" class="sec" fill="#1e8e3e">那生产里的 embedding 到底怎么跑的？—— 它根本不是查表</text>
 <text x="34" y="832" class="xs">MaxText 有一个开关 <tspan class="mono" fill="#1967d2">use_iota_embed</tspan>。打开时，查表被写成<tspan font-weight="700" fill="#202124">「把 token id 展成 one-hot，再和整张词表做一次矩阵乘」</tspan> —— 一条 <tspan class="mono" fill="#1967d2">dot</tspan>，跑在 MXU 上。关掉才是真的 <tspan class="mono" fill="#1967d2">gather</tspan>。<tspan font-weight="700" fill="#d93025">上游默认是关的，但仓库里 34 份配置显式打开、0 份显式关闭</tspan>，包括那几份给 GPU 用</text>
@@ -2758,9 +2759,10 @@ Hunyuan3 那个尺寸下（M＝7×4096，K＝120,832，N＝4096），这条 matm
 
 <p>至于 SparseCore 为什么没被派去干这件事：看的是<b>同一批里「重复取同一行」的程度</b>。
 推荐系统那边少量热行被反复命中，重复率极高，那是 SparseCore 的主场；
-而语言模型的一个 batch 里几乎每个位置取的都是不同的词
-（一批 131,072 个 token，词表 129,280 行，重合极少）——
-落在<b>最不划算的那一端</b>，编译器于是根本没把它派过去。
+而语言模型的取行重复度不够高 ——&nbsp;<b>注意不是「没有重复」</b>：
+一条十几万 token 的序列里不同的词只有几千个，绝大部分命中最高频那一两千行。
+重复确实有，<b>只是跟搜广推差着量级</b>，落在<b>最不划算的那一端</b>，
+编译器于是根本没把它派过去。
 
 <p><b>所以这一节真正的收获不是「SparseCore 是什么」，是「不要用宣传口径去解释自己的 profile」。</b>
 那颗核确实存在、确实为稀疏访问而生，但在<b>你手上这个任务</b>里它可能在干完全不同的事
@@ -3445,8 +3447,8 @@ TPU 的 3D 环面一路铺到 <b>9,216 颗</b>，全程同一套 ICI，
 同样的事用 <code>gather</code> 约 1.0 ms —— <b>matmul 慢约 24 倍</b>。
 <b>请连着分母一起读</b>：它占一步只有 0.62%，所以「能接受」，不是「更快」</td></tr>
 <tr><td>embedding 的取行重复度<br>（§5）</td><td>一批 131,072 个 token · 词表 129,280 行</td>
-<td>语言模型几乎每个位置取的都是不同的词，<b>重合极少</b> —— 这正是 SparseCore
-<b>最不划算</b>的那一端。⚠️ 本页只给这个观察，<b>不给判据的具体算式</b></td></tr>
+<td>不是「几乎不重复」——&nbsp;十几万 token 里不同的词只有几千个，重复确实有；
+但<b>集中度跟搜广推差着量级</b>，所以落在 SparseCore <b>最不划算</b>的那一端。⚠️ 本页只给这个观察，<b>不给判据的具体算式</b></td></tr>
 <tr><td>XLA 编译耗时<br>（§7）</td><td>10–17 分钟</td>
 <td>v7 上大模型一次编译的常见区间。<b>它和硬件规格无关，跟模型大小、
 切片规模、XLA 版本都有关</b>，所以只当量级读，不要当基准</td></tr>
