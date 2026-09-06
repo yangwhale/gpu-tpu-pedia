@@ -5250,6 +5250,140 @@ details.aside b{color:var(--ink);font-weight:600}
       但「整颗 die 谁大」这门课给不出答案，因为有一半的数不公开。</b></em></div>
     </div></details>
 
+  <!-- ⭐⭐ 2026-09-06 新增 3.2d。Chris 现场追问：「我的 warp 需要一块数据，
+       L1 里没有，去 L2 lookup 要时间，L2 再去 HBM 搬又要时间，这一串下来
+       要耗费多少时间？……每一种情况耗费的时间还不一样长，这就太不好规划了，
+       也没法像 TPU 那样事先编成 Graph。」
+       ⭐⭐ 这一问问到的是整门课的地基，所以它**必须是主线**。
+          Chris 明确说：「别都折起来，不怕时间长，我自己可以去跳着讲。」
+       📌 结构上它补齐了片上存储的第三个轴：
+          3.2b 容量 → 3.2c 带宽 → **3.2d 延迟**。三个轴的结论方向并不一致，
+          合起来才是完整图景 —— 单看任何一个都会得出偏的判断。
+       ⛔ 数出自 H100（GH100）与消费级 Blackwell（GB203）的公开微基准，
+          **B200 没有同类公开数据**，图上和正文都写明了，别去掉那个限定。 -->
+  <h3>3.2d　那等多久呢 ——&nbsp;同一条 load，30 拍到 659 拍</h3>
+  <p>3.2b 问「有多大」，3.2c 问「跑多快」。<b>还差第三个轴：等多久。</b>
+    <em>而这个轴，是三个里面唯一一个 GPU 自己也答不上来的。</em></p>
+
+  <p><b>先把提问摆清楚</b>：一个 warp 要一块数据，L1 里没有 →&nbsp;去 L2 查 →&nbsp;
+    L2 也没有 →&nbsp;再去显存搬。<b>这一串下来要多久？</b></p>
+
+  <figure class="fbox fwide" id="s012-fig3-7">
+  <svg viewBox="0 0 1400 700" width="100%" role="img" aria-label="GPU 访存延迟阶梯：L1 命中三四十拍、L2 命中 273 拍、一路到显存 659 拍；同一条 load 指令相差二十倍，而 TPU 那边这个轴上只有常数">
+<text class="svglbl" x="0" y="17" fill="#202124" style="font-size:14px">延迟阶梯 ——&#160;<tspan font-weight="700">同一条 load 指令，30 拍到 659 拍</tspan></text>
+<text class="svgsm" x="0" y="37">§3.2b 比的是<tspan font-weight="700">容量</tspan>，§3.2c 比的是<tspan font-weight="700">带宽</tspan>。这是第三个轴：<tspan font-weight="700">等多久</tspan>——&#160;而三个轴给出的结论方向并不一致。</text>
+<rect x="0" y="50" width="1400" height="358" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="16" y="74" fill="#202124" style="font-size:13px">NVIDIA GPU：一次取数可能落在哪一档</text>
+<text class="svgsm" x="16" y="92" fill="#5f6368">指针追逐微基准实测，单位是<tspan font-weight="700">时钟周期（拍）</tspan>。前五行是 H100，最后一行是消费级 Blackwell 做对照。</text>
+<text class="svgsm" x="16" y="125" fill="#202124"><tspan font-weight="700">寄存器</tspan></text>
+<rect x="250" y="112" width="3" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="263" y="127" fill="#1e8e3e"><tspan font-weight="700">≈ 1 拍</tspan></text>
+<text class="svgsm" x="311" y="127" fill="#5f6368">——&#160;直接就在手里</text>
+<text class="svgsm" x="16" y="165" fill="#202124"><tspan font-weight="700">共享内存 ／ L1 命中</tspan></text>
+<rect x="250" y="152" width="27" height="20" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="287" y="167" fill="#1e8e3e"><tspan font-weight="700">30–40 拍</tspan></text>
+<text class="svgsm" x="348" y="167" fill="#5f6368">——&#160;H100 与 Blackwell 都在这一档</text>
+<text class="svgsm" x="16" y="205" fill="#202124"><tspan font-weight="700">L2 命中</tspan></text>
+<rect x="250" y="192" width="212" height="20" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="472" y="207" fill="#e8710a"><tspan font-weight="700">273 拍</tspan></text>
+<text class="svgsm" x="520" y="207" fill="#5f6368">——&#160;<tspan font-weight="700">已经比 L1 慢了七八倍</tspan></text>
+<text class="svgsm" x="16" y="245" fill="#202124"><tspan font-weight="700">L2 两个分区都打满</tspan></text>
+<rect x="250" y="232" width="395" height="20" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="655" y="247" fill="#e8710a"><tspan font-weight="700">508 拍</tspan></text>
+<text class="svgsm" x="703" y="247" fill="#5f6368">——&#160;分区设计在拥挤时优势消失</text>
+<text class="svgsm" x="16" y="285" fill="#202124"><tspan font-weight="700">一路到 HBM</tspan></text>
+<rect x="250" y="272" width="512" height="20" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="772" y="287" fill="#d93025"><tspan font-weight="700">659 拍</tspan></text>
+<text class="svgsm" x="820" y="287" fill="#5f6368">——&#160;<tspan font-weight="700">全 miss 的端到端耗时</tspan></text>
+<text class="svgsm" x="16" y="325" fill="#202124"><tspan font-weight="700">（对照）消费级 GDDR7</tspan></text>
+<rect x="250" y="312" width="682" height="20" rx="3" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="942" y="327" fill="#5f6368"><tspan font-weight="700">877 拍</tspan></text>
+<text class="svgsm" x="990" y="327" fill="#5f6368">——&#160;换一种显存这个数就变了</text>
+<text class="svgsm" x="16" y="370" fill="#d93025">⛔ <tspan font-weight="700">不要把这几段相加。</tspan>659 拍是<tspan font-weight="700">一次全 miss 的端到端耗时</tspan>——&#160;L1 和 L2 那两次扑空已经含在里面了。<tspan font-weight="700">该记住的不是「加起来多少」，是「同一条指令在 30 到 659 之间摆」。</tspan></text>
+<text class="svgsm" x="16" y="390" fill="#5f6368">⚠️ B200 没有同类公开数据。<tspan font-weight="700">量级与形状是这一代通用的，但别把它当成 B200 的实测值。</tspan>　出处：arXiv 2507.10789 的指针追逐微基准。</text>
+<rect x="0" y="424" width="680" height="178" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svglbl" x="16" y="448" fill="#0b6b30" style="font-size:13px">TPU：这个轴上只有常数</text>
+<text class="svgsm" x="16" y="468" fill="#0b6b30"><tspan font-weight="700">不是数字保密 ——&#160;是没有「可能命中、可能没命中」这一档。</tspan></text>
+<rect x="16" y="486" width="7" height="7" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="30" y="494" fill="#0b6b30"><tspan font-weight="700">VMEM 访问</tspan></text>
+<text class="svgsm" x="96" y="494" fill="#0b6b30">——&#160;编译器显式管的暂存。<tspan font-weight="700">数在那儿不是因为运气好，</tspan></text>
+<text class="svgsm" x="30" y="513" fill="#0b6b30"><tspan font-weight="700">是因为编译器自己发的那条 DMA 把它放在那儿</tspan></text>
+<rect x="16" y="524" width="7" height="7" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="30" y="532" fill="#0b6b30"><tspan font-weight="700">HBM → VMEM 的 DMA</tspan></text>
+<text class="svgsm" x="148" y="532" fill="#0b6b30">——&#160;这一段当然也有延迟，但它是<tspan font-weight="700">一次被安排好的搬运</tspan>：</text>
+<text class="svgsm" x="30" y="551" fill="#0b6b30">延迟已知，等待点也是编译器插的</text>
+<rect x="16" y="576" width="648" height="1" rx="0" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="16" y="594" fill="#0b6b30">⭐ <tspan font-weight="700">所以「缓存缺失」在 TPU 上不存在——&#160;不是缓存做得好，是根本没有硬件缓存。</tspan>缓存是一台猜测机器；<tspan font-weight="700">编译期排好的机器不需要猜</tspan>。</text>
+<rect x="700" y="424" width="700" height="178" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="716" y="448" fill="#7a5000" style="font-size:13px">那怎么规划？——&#160;GPU 根本不规划</text>
+<text class="svgsm" x="716" y="468" fill="#7a5000"><tspan font-weight="700">这二十倍的差距你在源码里看不出来</tspan>——&#160;同一条 load，长得一模一样。它的三条对策没有一条在试图算准：</text>
+<text class="svgsm" x="716" y="494" fill="#7a5000"><tspan font-weight="700">① 超量线程</tspan></text>
+<text class="svgsm" x="786" y="494" fill="#5f6368">——&#160;一个 SM 驻留几十个 warp，卡住就切下一个</text>
+<text class="svgsm" x="786" y="513" fill="#5f6368"><tspan font-weight="700">延迟不是被消除，是被别人的活盖住的</tspan></text>
+<text class="svgsm" x="716" y="532" fill="#7a5000"><tspan font-weight="700">② 记分板 ＋ 动态发射</tspan></text>
+<text class="svgsm" x="845" y="532" fill="#5f6368">——&#160;运行时盯着操作数到没到，到了才发</text>
+<text class="svgsm" x="716" y="551" fill="#7a5000"><tspan font-weight="700">③ 缓存本身</tspan></text>
+<text class="svgsm" x="786" y="551" fill="#5f6368">——&#160;它就是一台<tspan font-weight="700">猜测机器</tspan>，赌你还会再用一次</text>
+<rect x="716" y="576" width="668" height="1" rx="0" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="716" y="594" fill="#7a5000">⚠️ <tspan font-weight="700">调优在两边动的旋钮一样都不挨着</tspan>：GPU 调「怎么让别的活足够多」，TPU 调「怎么让编译器排得开」。</text>
+<rect x="0" y="618" width="1400" height="62" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="16" y="643" fill="#174ea6" style="font-size:13px">⭐ 一句话对照</text>
+<text class="svgsm" x="120" y="643" fill="#174ea6"><tspan font-weight="700">GPU 用「总有别的活可干」来盖住不确定的延迟；TPU 用「把不确定性删掉」来避免它。</tspan>——&#160;一个是统计学的答案，一个是确定性的答案。</text>
+<text class="svgsm" x="16" y="665" fill="#174ea6">这也是这门课从第 1 节起一直在说的那件事，<tspan font-weight="700">第一次落到了「拍」这个单位上</tspan>。⚠️ 但别读成「两边越走越远」——&#160;现代追峰值的 CUDA kernel 用异步拷贝＋显式 barrier 自己管双缓冲，<tspan font-weight="700">那就是在 GPU 上手写一个静态调度</tspan>。</text>
+</svg>
+  <figcaption>⭐ <b>同一条 load 指令，在源码里长得一模一样，实际耗时差二十倍。</b>
+    ⛔ <b>但不要把这几段相加</b> ——&nbsp;659 拍是<b>一次全 miss 的端到端耗时</b>，
+    L1 和 L2 那两次查找已经含在里面了。
+    ⭐ 右边那半是这张图真正的落点：<b>TPU 上这个轴只有常数</b> ——&nbsp;
+    不是数字保密，是<b>没有「可能命中、可能没命中」这一档</b>。
+    <span class="sub">数出自 arXiv 2507.10789 的指针追逐微基准（H100 与消费级
+      Blackwell）。<b>B200 没有同类公开数据，量级与形状可以借，别当成 B200 实测值。</b></span></figcaption>
+  </figure>
+
+  <div class="note danger"><span class="t">⛔ 提问里最容易走偏的一步：这几段不能相加</span>
+    「L1 查一下要时间，L2 查一下又要时间，HBM 搬又要时间」——&nbsp;
+    <b>这个直觉会把账算重</b>。<br>
+    <b>659 拍是一次全 miss 从发出到拿到的<u>端到端</u>耗时</b>，
+    <em>L1 那次扑空、L2 那次扑空，都已经含在这 659 里了。</em>
+    <br>——&nbsp;<b>真正该记住的不是「加起来多少」，是「同一条指令的耗时在 30 到 659 之间摆」。</b></div>
+
+  <div class="note ok"><span class="t">⭐ 那怎么规划？——&nbsp;答案是：GPU 根本不规划</span>
+    <b>「每种情况耗时不一样长，这就没法事先排」——&nbsp;这个判断完全成立。</b>
+    <em>而 GPU 的回答不是「我能算准」，是「我不需要算准」。</em><br><br>
+    <b>它的三条对策，没有一条在试图预测延迟：</b><br>
+    ·&nbsp;<b>超量线程</b> ——&nbsp;一个 SM 上驻留几十个 warp，这个卡住就切下一个。
+      <em>延迟不是被消除的，<b>是被别人的活盖住的</b>。</em><br>
+    ·&nbsp;<b>记分板 ＋ 动态发射</b> ——&nbsp;硬件在运行时盯着每条指令的操作数到没到，到了才发。<br>
+    ·&nbsp;<b>缓存本身就是一台猜测机器</b> ——&nbsp;它赌你还会再用一次。
+    <br><br>
+    <b>TPU 走的是反方向：把不确定性从源头删掉。</b>
+    <em>没有硬件缓存 →&nbsp;没有缓存缺失 →&nbsp;没有可变延迟。</em>
+    VMEM 里的数在那儿，<b>不是因为运气好，是因为编译器自己发的那条 DMA 把它放在那儿的</b>，
+    而且它也知道该在第几拍等。
+    <br><br>⭐ <b>一句话对照：GPU 用「总有别的活可干」来盖住不确定的延迟，
+    TPU 用「把不确定性删掉」来避免它。</b>
+    <em>一个是统计学的答案，一个是确定性的答案。</em>
+    <br><b>——&nbsp;所以 TPU 没有 L2 不是缺功能。缓存是一台猜测机器，
+    而一台编译期就把每一拍排好的机器，不需要猜。</b></div>
+
+  <div class="note info"><span class="t">⭐ 顺带解释了一件事：两边的「调优」没有一样东西是重合的</span>
+    <b>GPU 上你调的是「怎么让别的活足够多」</b> ——&nbsp;
+    <em>占用率、每个 SM 驻留多少 warp、访存合不合并、要不要牺牲寄存器换 warp 数。</em><br>
+    <b>TPU 上你调的是「怎么让编译器排得开」</b> ——&nbsp;
+    <em>维度对不对齐、块怎么切、双缓冲够不够、scoped vmem 给多少。</em><br>
+    ——&nbsp;<b>同一个词叫调优，动的东西一样都不挨着。</b>
+    <em>这也是为什么从一边转到另一边，经验几乎不能直接迁移
+      ——&nbsp;不是难度问题，是<b>你手上那些旋钮在对面根本不存在</b>。</em></div>
+
+  <div class="note warn"><span class="t">⚠️ 但别把这条线读成「两边越走越远」——&nbsp;恰恰相反</span>
+    <b>现代 CUDA kernel 正在往 TPU 那一侧靠。</b>
+    <em>异步拷贝、TMA、显式 barrier ——&nbsp;FlashAttention 那类追峰值的 kernel
+    现在干的事，本质就是「我自己发异步搬运、自己管双缓冲、自己等」。</em>
+    <br>——&nbsp;<b>那不就是在 GPU 上手写一个静态调度吗。</b>
+    <em>因为一旦你真的要峰值，「猜」就不够用了。</em>
+    <br><b>⭐ 这条线在 §3.5 的课后延伸里还会再出现一次</b>（Blackwell 的矩阵乘
+    把累加器搬出寄存器、改成单线程发射）——&nbsp;<b>同一个方向，两个不同的部件。</b></div>
+
   <h3>3.3　并行层级：哪几层是运行时才定的</h3>
   <p>上一节说的「运行时换任务」，具体在哪一层发生？把两边的层级摆开对照。
     <b>GPU 这边一共六层</b>，比课本上常说的四层多两层 ——&nbsp;
@@ -9955,6 +10089,71 @@ details.aside b{color:var(--ink);font-weight:600}
        ⛔ ③ 里那段「Tensor Core 在两边指的东西大小差两个数量级」
           是一个挂了很久的悬案，别再拆出去单放 —— 它只有紧跟着 MMA
           才讲得通（先说清 MMA 是 SM 里一条指令，才显出 scope 的荒谬）。 -->
+  <!-- ⭐⭐ 2026-09-06 第二轮。Chris：「你之前折叠进去的东西，你看看有重要的
+       也提出来，蒸馏一些关键的点给同学们也看一下。别都折起来。」
+       ⭐ 分工定成这样，后来人照办：**主线给结论 ＋ 一个能带走的判据，
+          折叠给机制 ＋ 出处。** 不要把折叠里的段落原样复制到主线来 ——
+          那样两份会各自漂，而且读者读第二遍时会觉得被耍。
+       ⛔ 挑进主线的判据只有三条，都是「不知道会一直错下去」的那种：
+          ① Tensor Core 在两边不是一个量级的东西（读规格表天天撞）
+          ② 标量 / 向量的分工（否则 1 配 16 会被读成算力不够）
+          ③ 两个优化都打开不等于叠加（CF vs SC 是这条的实例） -->
+  <div class="note danger"><span class="t">⛔ 先钉一个必须带走的：「Tensor Core」在两边差着两个数量级</span>
+    <b>这是跨平台读规格表最容易错的一处，而且错了之后所有「每个核多少算力」都跟着错。</b>
+    <div class="tbl-wrap"><table>
+      <tr><th></th><th>NVIDIA 的 Tensor Core</th><th>TPU 的 TensorCore</th></tr>
+      <tr><td><b>是什么</b></td><td><b>SM 里面的一个执行单元</b></td>
+          <td><b>整颗 device 的主计算核</b></td></tr>
+      <tr><td><b>里面装着</b></td><td>就是矩阵乘阵列本身</td>
+          <td>MXU ＋ VPU ＋ 标量单元 ＋ VMEM</td></tr>
+      <tr><td><b>一颗芯片上几个</b></td><td>一百多个 SM，每个里面还有若干</td>
+          <td>v7 上 <b>2 个</b></td></tr>
+    </table></div>
+    ⭐ <b>所以「TPU 的 TensorCore」对应的不是「GPU 的 Tensor Core」，
+    对应的是「GPU 的一整颗 die」那一层。</b>
+    <em>——&nbsp;§3.7 那张「592 个 Tensor Core 对 4 个 MXU」的账表，
+    就是踩在这个换算上的；换算错了，那张表会读出完全相反的结论。</em></div>
+
+  <div class="note ok"><span class="t">⭐ 第二条：标量单元和向量单元不是算力档次的差别</span>
+    <b>看到上面那张图里「1 个标量子核配 16 个向量子核」，
+    最容易的误读是「标量算力不够所以只配一个」。不是。</b><br><br>
+    ·&nbsp;<b>向量单元干的是：对一排数做<u>同一件事</u></b>
+      ——&nbsp;<em>一千个数，一条指令，全都加二。</em><br>
+    ·&nbsp;<b>标量单元干的是：做<u>一个决定</u></b>
+      ——&nbsp;<em>循环转几圈？下一个地址在哪？这批要不要跳过？</em><br><br>
+    ⭐ <b>区别不是量，是性质 ——&nbsp;决定只有一个答案，你没法把它做一千遍。</b>
+    <em>所以 1 配 16 是分工，不是配比失衡。</em>
+    <br>——&nbsp;<b>而且这个三件套（标量／向量／矩阵）不是 SparseCore 特有的</b>：
+    TensorCore 是这三层，GPU 的 SM 也是这三层。<b>整台机器的骨架都是这个形状。</b>
+    <span class="sub">按维度看就是 0 维／1 维／2 维 ——&nbsp;这个直觉是对的，
+      错的只是把维度读成了强弱。</span></div>
+
+  <div class="note info"><span class="t">⭐ 第三条：两个优化都打开，不等于叠加</span>
+    <b>上面那张 flag 表里最容易踩的不是某一个 flag，是那条互斥。</b>
+    <em>Continuation Fusion（把通信切碎塞进计算的缝隙里，让 TensorCore 自己
+    交替着算和搬）和 SparseCore 卸载（整段外包给旁边那颗核）——&nbsp;
+    <b>目标完全一样，是同一件事的两种实现</b>。</em><br>
+    <b>编译器只能挑一个来重写那条指令，所以两个都开 ＝ 两个 pass 抢着改同一个 op。</b>
+    <br><br>⭐ <b>能带走的判据：看到「两个优化都打开会不会更快」，
+    先问它们是不是同一件事的两种做法。</b>
+    <em>是的话，打开两个不等于叠加 ——&nbsp;等于让编译器替你随便挑一个。</em>
+    <span class="sub">CF 的机制、那句「实现是挑出来的」原文出处，见下面延伸一。</span></div>
+
+  <div class="note warn"><span class="t">⭐ 第四条：MMA 三个字母，以及 TPU 为什么没有它</span>
+    <b>MMA ＝ Matrix Multiply-Accumulate，矩阵乘加</b>，一条指令算
+    <code>D ＝ A×B ＋ C</code>。<br>
+    <b>其中一点值得单独记住</b>：<em>乘和加融在一起，而且<b>累加位宽比输入高得多</b>
+    ——&nbsp;输入 FP8／FP4，累加一直是 FP32，中间不落地不舍入。</em>
+    <b>⭐ 这才是四位输入能用的真正前提</b>：不是四位够准，
+    <b>是它只负责乘，加法那一头从来没降过精度。</b>
+    <br><br><b>TPU 有没有 MMA？——&nbsp;数学上有，形式上没有。</b>
+    <em>差别不在「有没有矩阵指令」，在<u>谁决定它什么时候执行</u>：
+    GPU 那边是运行时由线程发射、硬件调度、记分板跟踪的一条指令；
+    TPU 那边每一拍发什么在编译期就排死了。</em>
+    <br>⭐ <b>一句话：GPU 把矩阵乘做成了一条<u>指令</u>，TPU 把它做成了一条<u>流水线</u>。</b>
+    <em>——&nbsp;这跟 §3.2d 那张延迟图说的是同一件事，只是换了个部件。</em>
+    <span class="sub">三代演化线（warp → warpgroup → 单线程）与出处，见下面延伸三。</span></div>
+
   <h3>课后延伸　三块「课上未必讲、但值得自己看一遍」的</h3>
   <p class="sub">下面三块都是现场追问逼出来的，<b>主线上跳过不影响听懂</b>，
     但它们各自都堵住了一个很容易含混过去的地方。</p>

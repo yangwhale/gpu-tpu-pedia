@@ -1161,6 +1161,41 @@ ul + p, ul + div.note { margin-top: 14px }
             它是本讲主线（规格表 vs 门槛）的直接实例，别降级成脚注。
          ⚠️ 出处全部公开（NVIDIA CUTLASS 文档 / PTX ISA / Colfax），
             已补进 topic08-seg-sources.html。 -->
+    <!-- ⭐⭐ 2026-09-06 第二轮，Chris：「别都折起来……有重要的也提出来，
+         蒸馏一些关键的点给同学们也看一下。」
+         ⭐ 只提两条进主线，判据是「不知道会一直吃亏 / 会一直算错」：
+            ① 走错 kind 白丢一半速度（会一直吃亏，而且不报错）
+            ② 峰值只数乘加（会一直把量化那段成本算漏）
+         ⛔ 主线给结论 ＋ 一个数 ＋ 指向折叠；机制和出处留在折叠里。
+            别把折叠段落原样复制上来。 -->
+    <div class="note danger"><span class="t">⛔ 先钉一条最容易白丢一半速度的：FP4 的 MMA 指令有两档</span>
+      <b>「B200 的 FP4 是 FP8 的两倍」这句话有两个隐含前提，规格表一个都不写。</b><br><br>
+      <em>CUTLASS 的指令表里，能吃 FP4 的 <code>kind</code> 分两组</em>：<br>
+      ·&nbsp;<b>什么都能吃的混合 kind</b>（<code>f8f6f4</code> /
+        <code>mxf8f6f4.block_scale</code>）——&nbsp;<b>2×</b>，四种布局都收<br>
+      ·&nbsp;<b>专用的 FP4 kind</b>（<code>mxf4</code> / <code>mxf4nvf4</code>）
+        ——&nbsp;<b>4×</b>，<b>但只支持 TN 布局</b>
+      <br><br>⭐ <b>走混合那条，数据还是四位、显存照样省一半、精度行为也一样
+      ——&nbsp;<u>只有矩阵乘的速度掉回 FP8 那一档</u>。</b>
+      <b>而且不报错、不进日志。</b>
+      <em>——&nbsp;这就是本讲第 6 节那条「沉默的失败」在性能上的版本：
+      <b>规格表给的是上限，门槛写在指令表里。</b></em>
+      <span class="sub">四条 kind 的完整对照表与出处，见下面延伸二。
+        ⚠️ 表里标的是相对 Hopper FP8 的倍率，这一条是照表读出来的、不是实测。</span></div>
+
+    <div class="note warn"><span class="t">⭐ 再钉一条读峰值的：标称 TFLOPS 里只有乘加</span>
+      <b>scale 不算，反量化也没有一个独立步骤可数</b>
+      ——&nbsp;<em>它就是 MMA 流水线里的一级，拆不出来。</em><br>
+      <b>有一条不用查白皮书的旁证</b>：NVFP4 每 <b>16</b> 个数一个 scale、
+      MXFP4 每 <b>32</b> 个一个，<b>scale 数量差整整一倍</b>；
+      而 B200 的 FP4 峰值对外<b>只报一个数</b>。
+      <em>⭐ 若 scale 进账，这两个格式的峰值不可能相同。</em>
+      <br><br>⚠️ <b>反过来那一头才是真该记的账：量化是实打实花时间的，
+      而且一个 FLOP 都不在峰值里。</b>
+      <em>算每块最大值、压成 E2M1、生成 scale ——&nbsp;真实指令，跑在通用核上。</em>
+      <b>只比 MMA 峰值，就会把这一整段漏掉。</b>
+      <span class="sub">这条推导链是<b>推的、没有官方声明</b>，完整写法见下面延伸三与出处台账。</span></div>
+
     <h3>课后延伸　四块「问到硅上」的细节</h3>
     <p class="sub">下面四块都是把上面那三样往下再追一层，
       <b>主线上跳过不影响听懂</b>。第 ② 块最实用 ——&nbsp;
