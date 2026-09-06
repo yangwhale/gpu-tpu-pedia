@@ -78,21 +78,50 @@ h3.sec{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--gray2);
        text-transform:uppercase;margin:26px 0 10px;display:flex;align-items:center;gap:9px}
 h3.sec:after{content:"";flex:1;height:1px;background:var(--line2)}
 
-/* 讲稿 */
-.say{background:#fff;border:1px solid var(--line);border-radius:12px;padding:4px 24px 18px;
-     margin:12px 0;box-shadow:0 1px 2px rgba(0,0,0,.03)}
-.say p{margin:14px 0;font-size:16.5px;line-height:1.95}
-.say p:first-child{margin-top:18px}
-.say h4{margin:26px 0 2px;font-size:15px;color:var(--blue);
+/* 讲稿 —— 排成一本书，不是一份脚本
+   ⛔⛔ 2026-09-06 整段重写。Chris：「那个讲义能不能不要看上去跟一个脚本一样，
+        要看上去像一个故事书一样。」
+   ⭐ 原来那一版之所以像脚本，**不是因为内容，是因为版式**：
+      ① 每隔一两段就横插一个整宽蓝框（屏幕提示），叙述被切成碎片；
+      ② `<em>` 是荧光笔黄底，一页十几处，看着像别人划过的考卷；
+      ③ 无衬线 16.5px 顶着一个白卡片，读起来是「文档」不是「书」。
+   ⭐ 三条对策，逐条对应：
+      ① **舞台指示挪到页边**（宽屏时浮到右侧留白里），正文一条不断；
+      ② 荧光笔换成**细下划线**，强调还在，喧宾夺主没了；
+      ③ 正文换**衬线体、17.5px、行高 2.05、首行缩进两字**，去掉外框和阴影。
+   ⚠️ 这份 CSS 被两份讲义共用（专题二那份 `_css()` 原样抽这里的 <style>）——
+      改这里等于两边一起改，那是有意的。 */
+.say{background:transparent;border:0;border-radius:0;box-shadow:none;
+     padding:6px 0 20px;margin:4px 0;position:relative}
+.say p{margin:0 0 1.05em;font-size:17.5px;line-height:2.05;text-indent:2em;
+  font-family:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",Georgia,serif;
+  color:#1b1b1d;max-width:38em}
+.say p:first-child{margin-top:10px}
+/* 每一讲的头一段不缩进 —— 中文书的惯例，也让「这一讲开始了」一眼看得出来 */
+.say > p:first-of-type{text-indent:0}
+.say > p:first-of-type:first-letter{font-size:1.05em;font-weight:600}
+.say h4{margin:30px 0 6px;font-size:15px;color:var(--blue);
   border-left:3px solid var(--blue);padding-left:10px}
-.say em{font-style:normal;background:linear-gradient(transparent 62%,#ffe9a8 62%);
-        font-weight:600;padding:0 1px}
-.say .pause{display:block;font:600 12px var(--mono);color:var(--gray2);margin:18px 0;
-            padding-left:2px;letter-spacing:.04em}
-.say .pause:before{content:"⏸ "}
-.say .board{display:block;background:var(--blue-l);border-radius:8px;padding:10px 14px;
-            font-size:14px;color:var(--blue-d);margin:14px 0;line-height:1.7}
-.say .board:before{content:"🖥 屏幕　";font-weight:700}
+/* 强调：细下划线，不用荧光笔 */
+.say em{font-style:normal;background:none;font-weight:600;color:#111;
+        border-bottom:1.5px solid #e8c46a;padding-bottom:1px}
+/* ── 舞台指示：宽屏浮到右边页边，窄屏退回行内 ──────────────────────
+   它们是「怎么演」，不是「讲什么」。读故事的人应该能一路顺下来，
+   眼角瞥见就行。 */
+.say .pause,.say .board{display:block;font-size:13px;line-height:1.72;
+  color:var(--gray);margin:2px 0 14px;padding-left:12px;
+  border-left:2px solid var(--line);max-width:38em;
+  font-family:"Noto Sans CJK SC","PingFang SC",sans-serif;text-indent:0}
+.say .board{border-left-color:#9ab7e8}
+.say .pause{border-left-color:#d9d2c2;font-style:italic}
+.say .board:before{content:"屏幕 · ";font-weight:700;color:#5b7fc7}
+.say .pause:before{content:"停 · ";font-weight:700;color:#a89a76;font-style:normal}
+/* ⛔ 2026-09-06 这里试过「宽屏时把舞台指示浮到右侧页边」——&nbsp;**塌了，已撤**。
+   position:absolute 把它们移出文档流之后，相邻的两三条会**落在同一个 y 上互相叠字**
+   （原因很简单：absolute 元素的静态位置是它原来的位置，而后面的兄弟节点向上收缩，
+   于是好几条挤到一起）。
+   ⭐ 判据：**边注要真的排成一栏，得用双栏 grid，不能靠一个负的 right 值。**
+   现在两个宽度用同一套行内样式 ——&nbsp;安静、不断流，已经够书感了。 */
 
 /* 问答 */
 .qa{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0}
