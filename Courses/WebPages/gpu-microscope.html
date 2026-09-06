@@ -532,7 +532,7 @@ NVIDIA 让硬件扛下来（代价是跨 die 访问悄悄变慢），Google 让�
 <h2><span class="n">2</span>把一个 SM 拆开 —— 这张是全篇的核心</h2>
 <p class="sub">四个处理块、128 个 CUDA Core、4 个 Tensor Core、64 个 warp 槽，一个不落地画出来。</p>
 <figure class="figwide" id="g2">
-<svg viewBox="0 0 1400 1028" width="1400" height="1028" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NVIDIA Blackwell 一个 SM 显微镜展开：四个处理块、寄存器堆、Tensor Core 与 TMEM、共享内存与 TMA">
+<svg viewBox="0 0 1400 1146" width="1400" height="1146" xmlns="http://www.w3.org/2000/svg" role="img" aria-label="NVIDIA Blackwell 一个 SM 显微镜展开：四个处理块、寄存器堆、Tensor Core 与 TMEM、共享内存与 TMA">
 <defs><style>
 .ttl{font:700 18px "Noto Sans CJK SC",sans-serif;fill:#202124}
 .sec{font:700 15px "Noto Sans CJK SC",sans-serif;fill:#202124}
@@ -566,7 +566,7 @@ NVIDIA 让硬件扛下来（代价是跨 die 访问悄悄变慢），Google 让�
 <text x="643.225" y="58" class="sm">整个 SM 共享</text>
 <rect x="736.525" y="48" width="11" height="11" rx="2" fill="#9aa0a6"/>
 <text x="753.525" y="58" class="sm">官方未公布个数</text>
-<rect x="20" y="82" width="1360" height="762" rx="12" fill="#f8f9fa" stroke="#202124" stroke-width="2"/>
+<rect x="20" y="82" width="1360" height="880" rx="12" fill="#f8f9fa" stroke="#202124" stroke-width="2"/>
 <text x="36" y="104" class="sec">一个 SM（Streaming Multiprocessor）</text>
 <text x="320" y="104" class="sm">B200 全片 <tspan font-weight="700" fill="#202124">148 个</tspan>（物理 160，每 die 80、启用 74）　·　Blackwell Ultra 全片 160 个　·　最多 64 个 warp、32 个线程块同时驻留</text>
 <rect x="36" y="116" width="1328" height="40" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1.6"/>
@@ -908,43 +908,60 @@ NVIDIA 让硬件扛下来（代价是跨 die 访问悄悄变慢），Google 让�
 <rect x="1190" y="790" width="160" height="30" rx="5" fill="#fff" stroke="#5f6368" stroke-width="1.2"/>
 <text x="1270" y="803" class="xs" fill="#5f6368" text-anchor="middle">共享内存原子单元</text>
 <text x="1270" y="815" class="xxs" fill="#9aa0a6" text-anchor="middle">实测 32 次/周期/SM</text>
-<text x="20" y="870" class="sec">把上面四列乘回去 —— 整个 SM 的账</text>
-<rect x="20.0" y="882" width="163.0" height="62" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
-<text x="30.0" y="899" class="xs" fill="#1a73e8">CUDA Core</text>
-<text x="30.0" y="921" class="numb" fill="#1a73e8">128</text>
-<text x="30.0" y="936" class="xxs">32 × 4</text>
-<rect x="191.0" y="882" width="163.0" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
-<text x="201.0" y="899" class="xs" fill="#d93025">Tensor Core</text>
-<text x="201.0" y="921" class="numb" fill="#d93025">4</text>
-<text x="201.0" y="936" class="xxs">1 × 4</text>
-<rect x="362.0" y="882" width="163.0" height="62" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
-<text x="372.0" y="899" class="xs" fill="#1a73e8">寄存器堆</text>
-<text x="372.0" y="921" class="numb" fill="#1a73e8">256 KiB</text>
-<text x="372.0" y="936" class="xxs">64 KiB × 4</text>
-<rect x="533.0" y="882" width="163.0" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
-<text x="543.0" y="899" class="xs" fill="#d93025">TMEM</text>
-<text x="543.0" y="921" class="numb" fill="#d93025">256 KiB</text>
-<text x="543.0" y="936" class="xxs">64 KiB × 4</text>
-<rect x="704.0" y="882" width="163.0" height="62" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
-<text x="714.0" y="899" class="xs" fill="#1e8e3e">L1 ＋ 共享内存</text>
-<text x="714.0" y="921" class="numb" fill="#1e8e3e">256 KiB</text>
-<text x="714.0" y="936" class="xxs">四块共用</text>
-<rect x="875.0" y="882" width="163.0" height="62" rx="8" fill="#fff" stroke="#8430ce" stroke-width="1.4"/>
-<text x="885.0" y="899" class="xs" fill="#8430ce">最多驻留 warp</text>
-<text x="885.0" y="921" class="numb" fill="#8430ce">64</text>
-<text x="885.0" y="936" class="xxs">16 × 4</text>
-<rect x="1046.0" y="882" width="163.0" height="62" rx="8" fill="#fff" stroke="#8430ce" stroke-width="1.4"/>
-<text x="1056.0" y="899" class="xs" fill="#8430ce">最多驻留线程</text>
-<text x="1056.0" y="921" class="numb" fill="#8430ce">2,048</text>
-<text x="1056.0" y="936" class="xxs">64 warp × 32</text>
-<rect x="1217.0" y="882" width="163.0" height="62" rx="8" fill="#fff" stroke="#8430ce" stroke-width="1.4"/>
-<text x="1227.0" y="899" class="xs" fill="#8430ce">每周期发指令</text>
-<text x="1227.0" y="921" class="numb" fill="#8430ce">4 条</text>
-<text x="1227.0" y="936" class="xxs">1 × 4 个调度器</text>
-<rect x="20" y="956" width="1360" height="66" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
-<text x="34" y="976" class="box" fill="#d93025">「1,024 次乘加 / 周期」这个数从哪来</text>
-<text x="34" y="994" class="xs">A100 白皮书原话：四个 Tensor Core <tspan font-weight="700" fill="#202124">合计每周期 1,024 次</tspan> FP16 乘加（＝每核 256）。H100 官方称「张量吞吐 2× A100」，Blackwell 再 2× → <tspan font-weight="700" fill="#d93025">每核 1,024</tspan>。</text>
-<text x="34" y="1011" class="xs">代回 B200 对账：1,024 × 2 FLOP × 4 核 × 148 SM × 1.83 GHz ＝ 2.22 PFLOPS，官方 2.25 —— 差 <tspan font-weight="700" fill="#d93025">1.4%</tspan>，缺口就是官方没公布的确切时钟。完整对账表见正文 §2。</text>
+<rect x="36" y="840" width="1328" height="108" rx="8" fill="#fff" stroke="#202124" stroke-width="1.8"/>
+<text x="50" y="860" class="box" fill="#202124">⚠️ 一个 SM 里有<tspan font-weight="700" fill="#d93025">三块 256 KiB</tspan>，归属完全不同 ——&#160;这是全图最容易混的一处</text>
+<rect x="48.0" y="870" width="428.0" height="70" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.3"/>
+<text x="58.0" y="886" class="lbl" fill="#1a73e8">寄存器堆　256 KiB</text>
+<text x="58.0" y="901" class="xs"><tspan font-weight="700">切成 4 份</tspan>，每份 64 KiB</text>
+<text x="58.0" y="915" class="xs">⛔ 严格私有：warp 只能碰自己那份，</text>
+<text x="58.0" y="931" class="xs">跨处理块<tspan font-weight="700">完全不能访问</tspan></text>
+<rect x="486.0" y="870" width="428.0" height="70" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text x="496.0" y="886" class="lbl" fill="#1e8e3e">L1 ＋ 共享内存　256 KiB</text>
+<text x="496.0" y="901" class="xs"><tspan font-weight="700">一整块，不切</tspan>，四个块全都能访问</text>
+<text x="496.0" y="915" class="xs">⭐ 四个处理块之间<tspan font-weight="700">唯一</tspan>的数据通道 ——</text>
+<text x="496.0" y="931" class="xs">「线程块」这个抽象就落在它身上</text>
+<rect x="924.0" y="870" width="428.0" height="70" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.3"/>
+<text x="934.0" y="886" class="lbl" fill="#d93025">TMEM　256 KiB</text>
+<text x="934.0" y="901" class="xs">按<tspan font-weight="700">列</tspan>整体申请（一列跨全部 128 lane）</text>
+<text x="934.0" y="915" class="xs">介于两者之间：<tspan font-weight="700">访问权限</tspan>四分</text>
+<text x="934.0" y="931" class="xs">（一个 warp 32 lane），<tspan font-weight="700">所有权不分</tspan></text>
+<text x="20" y="988" class="sec">把上面四列乘回去 —— 整个 SM 的账</text>
+<rect x="20.0" y="1000" width="163.0" height="62" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="30.0" y="1017" class="xs" fill="#1a73e8">CUDA Core</text>
+<text x="30.0" y="1039" class="numb" fill="#1a73e8">128</text>
+<text x="30.0" y="1054" class="xxs">32 × 4</text>
+<rect x="191.0" y="1000" width="163.0" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="201.0" y="1017" class="xs" fill="#d93025">Tensor Core</text>
+<text x="201.0" y="1039" class="numb" fill="#d93025">4</text>
+<text x="201.0" y="1054" class="xxs">1 × 4</text>
+<rect x="362.0" y="1000" width="163.0" height="62" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text x="372.0" y="1017" class="xs" fill="#1a73e8">寄存器堆</text>
+<text x="372.0" y="1039" class="numb" fill="#1a73e8">256 KiB</text>
+<text x="372.0" y="1054" class="xxs">64 KiB × 4</text>
+<rect x="533.0" y="1000" width="163.0" height="62" rx="8" fill="#fff" stroke="#d93025" stroke-width="1.4"/>
+<text x="543.0" y="1017" class="xs" fill="#d93025">TMEM</text>
+<text x="543.0" y="1039" class="numb" fill="#d93025">256 KiB</text>
+<text x="543.0" y="1054" class="xxs">64 KiB × 4</text>
+<rect x="704.0" y="1000" width="163.0" height="62" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text x="714.0" y="1017" class="xs" fill="#1e8e3e">L1 ＋ 共享内存</text>
+<text x="714.0" y="1039" class="numb" fill="#1e8e3e">256 KiB</text>
+<text x="714.0" y="1054" class="xxs">四块共用</text>
+<rect x="875.0" y="1000" width="163.0" height="62" rx="8" fill="#fff" stroke="#8430ce" stroke-width="1.4"/>
+<text x="885.0" y="1017" class="xs" fill="#8430ce">最多驻留 warp</text>
+<text x="885.0" y="1039" class="numb" fill="#8430ce">64</text>
+<text x="885.0" y="1054" class="xxs">16 × 4</text>
+<rect x="1046.0" y="1000" width="163.0" height="62" rx="8" fill="#fff" stroke="#8430ce" stroke-width="1.4"/>
+<text x="1056.0" y="1017" class="xs" fill="#8430ce">最多驻留线程</text>
+<text x="1056.0" y="1039" class="numb" fill="#8430ce">2,048</text>
+<text x="1056.0" y="1054" class="xxs">64 warp × 32</text>
+<rect x="1217.0" y="1000" width="163.0" height="62" rx="8" fill="#fff" stroke="#8430ce" stroke-width="1.4"/>
+<text x="1227.0" y="1017" class="xs" fill="#8430ce">每周期发指令</text>
+<text x="1227.0" y="1039" class="numb" fill="#8430ce">4 条</text>
+<text x="1227.0" y="1054" class="xxs">1 × 4 个调度器</text>
+<rect x="20" y="1074" width="1360" height="66" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+<text x="34" y="1094" class="box" fill="#d93025">「1,024 次乘加 / 周期」这个数从哪来</text>
+<text x="34" y="1112" class="xs">A100 白皮书原话：四个 Tensor Core <tspan font-weight="700" fill="#202124">合计每周期 1,024 次</tspan> FP16 乘加（＝每核 256）。H100 官方称「张量吞吐 2× A100」，Blackwell 再 2× → <tspan font-weight="700" fill="#d93025">每核 1,024</tspan>。</text>
+<text x="34" y="1129" class="xs">代回 B200 对账：1,024 × 2 FLOP × 4 核 × 148 SM × 1.83 GHz ＝ 2.22 PFLOPS，官方 2.25 —— 差 <tspan font-weight="700" fill="#d93025">1.4%</tspan>，缺口就是官方没公布的确切时钟。完整对账表见正文 §2。</text>
 </svg>
 <figcaption><b>图 G-2　一个 SM 的显微镜展开。</b>一个 SM 分成四个对称的处理块（sub-core），每块自带 L0 指令缓存、一个 warp 调度器、16 个 warp 槽、64 KiB 寄存器、32 个 CUDA Core 和 1 个 Tensor Core。TMEM 也按 warp 号切成四份 —— warp k 只能碰 lane 32k 到 32k+31，这是 PTX 手册明写的硬约束。LD/ST 与 SFU 的个数用灰色标出：Blackwell 官方框图没有标数，图上沿用 Hopper 的画法。</figcaption>
 </figure>

@@ -26,7 +26,17 @@ SMEM_Y = PAIR_Y + PAIR_H + 10
 SMEM_H = 84
 TMA_Y = SMEM_Y + SMEM_H + 8
 TMA_H = 50
-SMBOT = TMA_Y + TMA_H + 14
+# ⭐⭐ 2026-09-06 新增「三块 256 KiB」对照带。现场原话：
+#    「不都说一个 SM 里可以共享那 256 的 cache 吗？结果它们都被完完整整
+#      分成了 4 份。这 4 份之间彼此能不能访问？」
+# ⭐ 追下去发现困惑有个非常具体的来源：**一个 SM 里有三块都是 256 KiB，
+#    而它们的归属完全不同** —— 一块切死、一块整块共享、一块介于两者之间。
+#    图上原来三个数各自标在各自的位置，从来没并排放过，
+#    读者把「共享的那个 256」和「切成四份的那个 256」记成同一块，太自然了。
+# ⛔ 这一带的价值全在「并排」——&nbsp;别把它拆开塞回各自的格子里。
+TRIO_Y = TMA_Y + TMA_H + 10
+TRIO_H = 108
+SMBOT = TRIO_Y + TRIO_H + 14
 SUMY = SMBOT + 26
 H = SUMY + 158
 
@@ -101,8 +111,38 @@ def build():
     f.t(1270, TMA_Y + 23, "共享内存原子单元", "xs", SUB, "middle")
     f.t(1270, TMA_Y + 35, "实测 32 次/周期/SM", "xxs", GREY, "middle")
 
+    _trio(f)
     _summary(f)
     return f.out()
+
+
+# ══════════════════════════════════════════════════════════════════════
+def _trio(f):
+    """三块 256 KiB 并排 —— 全图最容易混的一处。"""
+    f.rect(36, TRIO_Y, 1328, TRIO_H, "#fff", INK, 1.8, 8)
+    f.t(50, TRIO_Y + 20,
+        "⚠️ 一个 SM 里有<tspan font-weight=\"700\" fill=\"#d93025\">三块 256 KiB</tspan>"
+        "，归属完全不同 ——&#160;这是全图最容易混的一处", "box", INK)
+    cw = (1328 - 24 - 2 * 10) / 3
+    cols = [(BL, "寄存器堆　256 KiB",
+             "<tspan font-weight=\"700\">切成 4 份</tspan>，每份 64 KiB",
+             "⛔ 严格私有：warp 只能碰自己那份，",
+             "跨处理块<tspan font-weight=\"700\">完全不能访问</tspan>"),
+            (GN, "L1 ＋ 共享内存　256 KiB",
+             "<tspan font-weight=\"700\">一整块，不切</tspan>，四个块全都能访问",
+             "⭐ 四个处理块之间<tspan font-weight=\"700\">唯一</tspan>的数据通道 ——",
+             "「线程块」这个抽象就落在它身上"),
+            (RD, "TMEM　256 KiB",
+             "按<tspan font-weight=\"700\">列</tspan>整体申请（一列跨全部 128 lane）",
+             "介于两者之间：<tspan font-weight=\"700\">访问权限</tspan>四分",
+             "（一个 warp 32 lane），<tspan font-weight=\"700\">所有权不分</tspan>")]
+    for i, (c, t1, t2, t3, t4) in enumerate(cols):
+        x = 48 + i * (cw + 10)
+        f.rect(x, TRIO_Y + 30, cw, 70, FILL[c], c, 1.3, 6)
+        f.t(x + 10, TRIO_Y + 46, t1, "lbl", c)
+        f.t(x + 10, TRIO_Y + 61, t2, "xs")
+        f.t(x + 10, TRIO_Y + 75, t3, "xs")
+        f.t(x + 10, TRIO_Y + 91, t4, "xs")
 
 
 # ══════════════════════════════════════════════════════════════════════
