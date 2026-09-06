@@ -183,10 +183,19 @@ def _subcore(f, x, T, idx, full=True):
     # TMEM 分区
     y, h = T + TMEM[0], TMEM[1]
     f.rect(xi, y, wi, h, "#fff", RD, 1.5, 5, "3,2")
-    f.t(xi + 8, y + 15, "TMEM 分区　512 列 × 32 lane ＝ 64 KiB", "lbl", RD)
+    # ⛔ 2026-09-06 改措辞。原来写「TMEM 分区……全 SM 256 KiB 的 1/4」，
+    #    现场质疑「这些是不是分得太清了、其实混在一起用」——&nbsp;查下来
+    #    **这一格他的方向是对的**：TMEM 跟上面那几格不一样，
+    #    **它不是按处理块切开各归各的**。分配单位是「列」，而一列跨全部
+    #    128 条 lane，是整个 CTA 一起申请的。被四分的是**访问权限**
+    #    （一个 warp 只够得着自己那 32 条 lane），**不是所有权**。
+    #    ⭐ 差别是实质的：你没法让四个处理块各自独立申请 64 KiB。
+    f.t(xi + 8, y + 15, "TMEM　本块够得着的 32 lane × 512 列 ＝ 64 KiB", "lbl", RD)
     f.t(xi + 8, y + 31,
-        (f"全 SM 256 KiB 的 1/4　·　本块的 warp 只能碰 lane {idx*32}–{idx*32+31}"
-         if full else f"只能碰 lane <tspan font-weight=\"700\" fill=\"#202124\">{idx*32}–{idx*32+31}</tspan>"),
+        (f"⚠️ 不是各分一块 ——&#160;按<tspan font-weight=\"700\">列</tspan>整体申请，"
+         f"一列跨全部 128 lane；本块只<tspan font-weight=\"700\">够得着</tspan> "
+         f"lane {idx*32}–{idx*32+31}"
+         if full else f"只够得着 lane <tspan font-weight=\"700\" fill=\"#202124\">{idx*32}–{idx*32+31}</tspan>"),
         "xs")
 
     # 访存 / 特殊函数
