@@ -275,7 +275,7 @@ import math
 
 BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
 PU, CY, BR, PK = "#8430ce", "#00838f", "#7a5000", "#c5221f"
-W = 1820
+W = 2000
 p = []
 
 
@@ -446,9 +446,10 @@ t(16, BY + 43, '⭐ <tspan font-weight="700">整条一色</tspan>＝每一层都
   fill=RD)
 # ⛔ 对数刻度这件事必须写在**图上**，不能只写在源码注释里 ——
 #   读图的人看不到注释，而对数条会让差距"看起来变小"。
-t(16, BY + 61, '⚠️ KV 那一列的<tspan font-weight="700">条长是对数刻度</tspan>'
-               '——&#160;跨了三个数量级，线性刻度下 576 GiB 会吃光整行、'
-               '而 697 MiB 连一个像素都占不到。<tspan font-weight="700">看数字，别看长度比。</tspan>'
+t(16, BY + 61, '⚠️ KV 那一列的<tspan font-weight="700">条长是开方刻度</tspan>'
+               '——&#160;跨了三个数量级，线性下 697 MiB 连一个像素都占不到，'
+               '对数又把 846 倍压成 9 倍。<tspan font-weight="700">开方居中，但仍不是等比：'
+               '倍数看数字，别量长度。</tspan>'
                '　口径：<tspan font-weight="700">128K、BF16、batch 1、不含量化</tspan>；'
                '公式与每家的参数全在生成脚本里，可复算。', fill=GY)
 # ⭐⭐ 自己算出来的数，必须找外部锚点验一次 —— 否则「算得很认真」和「算错了」
@@ -718,7 +719,7 @@ BARW = MAXC * CELL + (MAXC - 1) * CGAP
 #    格子已经把配比说完了，再写一遍不是冗余，是在跟格子抢注意力。
 CTXX = BARX + BARW + 16
 KVX = CTXX + 62                       # KV cache 那一列，做得宽
-KVW = 210                             # 条最长 210px
+KVW = 400                             # 删掉一列之后，条加长到 400px
 NOTEX = KVX + KVW + 76
 HY = BY + 130
 t(LX, HY, '时间', fill=GY, bold=True)
@@ -783,15 +784,26 @@ for i, (tm, mdl, cyc, ctx, kvspec, note) in enumerate(ROWS):
         box(KVX, y - 13, 58, 18, "#f8f9fa", "#dadce0", 3)
         t(KVX + 29, y, '未核到', fill="#9aa0a6", anchor="middle", size=9)
     else:
-        lo, hi = math.log10(0.3), math.log10(700.0)
-        # ⛔ 最小宽度不能写死（原先写 46，"1008 MiB" 那种标签直接被条边裁掉）——
-        #   ⭐ 同一个错这张图上已经犯过三次：**按位置定尺寸，而不是按内容实际多宽。**
-        #     短条的下限必须由**标签自己的渲染宽度**决定。
+        # ⛔ 刻度从**对数**换成**开方**。现场原话：「让大的和小的，让人有一个
+        #   直观的感受，谁比较占地方，谁比较省地方，让它们的长短比例更明显一点。」
+        # ⭐ 四种刻度实算过一遍（400px 满宽，576 GiB 对 0.68 GiB）：
+        #     线性 400→0（小的直接消失，没法看）
+        #     对数 390→42，只差 9 倍 ——&nbsp;**把 846 倍压成 9 倍，等于没画**
+        #     立方根 400→42，跟对数一样平
+        #     **开方 400→14，差 29 倍** ←&nbsp;取这个
+        #   开方还有一个好处：现代那一堆（40 → 0.68）之间也分得开
+        #   （Llama2 105px vs V4 14px），对数下它们全挤在 42–252 那一段。
+        # ⚠️ 但开方仍然**不是等比**：条长不能拿来读倍数，倍数看条里的数字。
         lab = kv_fmt(g)
-        w = max(wpx(lab, 10) + 18,
-                int((math.log10(g) - lo) / (hi - lo) * KVW))
+        w = max(8, int(math.sqrt(g / 576.0) * KVW))
         box(KVX, y - 13, w, 18, c, c, 3)
-        t(KVX + 9, y, lab, fill="#fff", bold=True, size=10)
+        # ⭐ 标签放不下就放到条**外面**去（现场：「字可以冒出来，或者放到那个短的
+        #   柱子的后面，这些都可以接受」）——&nbsp;⛔ 别为了塞下字去把条拉长，
+        #   那等于让「多短」这条信息迁就「字多宽」，本末倒置。
+        if w >= wpx(lab, 10) + 18:
+            t(KVX + 9, y, lab, fill="#fff", bold=True, size=10)
+        else:
+            t(KVX + w + 7, y, lab, fill=c, bold=True, size=10)
     if note:
         t(NOTEX, y, note, fill=GY)
 
