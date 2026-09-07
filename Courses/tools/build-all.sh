@@ -53,6 +53,10 @@ if [ "${1:-}" != "--lint" ]; then
   # ⛔ 图必须先生成 —— topic03-build.py 会 assert 找不到 fig3-chronicle.svg。
   #    这条依赖是**故意做成硬失败**的：图缺了宁可构建挂掉，也不要悄悄出一份没图的教材。
   python3 topic03-fig-chronicle.py
+  # ⭐ 贯穿全篇的主线图（一层 Transformer ＋ 四个变体）—— 一个脚本吐五张。
+  #    ⛔ 五张必须同源，别拆成五个脚本：这个教学装置的全部价值就在于
+  #      「除了高亮那一处，五张完全一样」，拆开一定会漂而且不报错。
+  python3 topic03-fig-transformer.py
   python3 topic03-build.py
 
   step "专题三 讲义"

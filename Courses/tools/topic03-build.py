@@ -150,6 +150,7 @@ __FIG_CHRONICLE__
 </div></section>
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>先解决一个误会：那个矩阵从来没被存下来过 —— FlashAttention</h2></div>
 <div class="note ok"><p>⭐ <b>2026-09-04 从原来的第七节提到这里，并且展开了一大截。</b> 理由：上一节刚算出 488 GiB 和 32 GiB 两个吓人的数， <b>不先说清「那个大家伙根本不落地」，后面所有「怎么少算」的讨论都建在恐慌上。</b> 而且顺序反过来讲，逻辑更硬： <b>「怎么算」这条路已经被走到头了，剩下的省法只能去改「算什么」</b> —— 三个旋钮正是从这句话长出来的。</p></div>
+__FIG_TX_BASE__
 <h3>1.1 它跟三个旋钮不是一类东西</h3>
 <p>三个旋钮改的都是<b>算什么</b>。FlashAttention <b>一个字都不改数学</b> —— 它改的是<b>怎么算</b>。</p>
 <table>
@@ -242,6 +243,7 @@ __FIG_CHRONICLE__
 <p>⭐ <b>三层叠起来的结论很硬</b>： 形状锁死一半、寄存器压到 35%、记账口径还让它看着比实际好看。 <b>这三层没有一层是配置能救的</b> —— 要么改 head_dim，要么改 kernel 的数据流。 （我们试过的那条出路是把矩阵乘全转置，见 TUNING-v7 的附录。）</p>
 <h3>⚠️ 还有一条方法论：同一份 profile，不同工具页的百分比不可混用</h3>
 <p>「HBM 受限占多少」—— 一个工具页说 <b>35.6%</b>，另一个说 <b>19.5%</b>。 破案的钥匙是两者的 self-time 合计正好差 <b>2.00 倍</b>， 而 v7 恰好是 <b>2 device/chip</b>。<b>分母不是同一个东西，分子上的百分比自然对不上。</b> ⇒ 判瓶颈用 roofline 那一页，归因到算子用 op stats 那一页； <b>引用任何百分比都要写清出自哪个工具页。</b></p></div>
+__FIG_TX_FA__
 <h3>1.7 这一节留下的那句话</h3>
 <p><b>「怎么算」这条路，到这里基本走到头了。</b></p>
 <p>中间产物已经不落地，块大小已经贴着三堵墙，而算子仍然只跑到三成多 —— <b>剩下的空间不在「怎么算」里，只能去改「算什么」。</b></p>
@@ -286,6 +288,7 @@ __FIG_CHRONICLE__
 <hr>
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>旋钮①：每个 token 存多少</h2></div>
+__FIG_TX_K1__
 <h3>2.1 MHA → MQA → GQA：一个连续旋钮</h3>
 <ul><li><b>MHA</b>：每个头各存一份 K/V。128 个头就是 128 份</li><li><b>MQA</b>：所有头共用同一份 K/V。省 128 倍，但<b>质量掉</b></li><li><b>GQA</b>：分成 g 组，组内共用。<code>g = n_h</code> 退化成 MHA，<code>g = 1</code> 退化成 MQA</li></ul>
 <p>⭐ <b>值得强调的是「GQA 是一个连续旋钮」这件事本身</b> —— 它不是一个新机制，是把 MHA 和 MQA 之间的空白填上，让你可以按需要选一个点。 这门课后面会反复见到这个套路：<b>把一个二选一变成一个可调的连续量。</b></p>
@@ -306,6 +309,7 @@ __FIG_CHRONICLE__
 <hr>
 </div></section>
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>旋钮②：每个 query 看多少</h2></div>
+__FIG_TX_K2__
 <h3>3.1 SWA（滑动窗口）</h3>
 <ul><li>每个 token 只看自己前面固定窗口内的（Mistral 7B：<b>4096</b>）</li><li>最简单，KV cache 从随长度增长变成<b>常数</b></li><li>代价很硬：<b>长距离信息只能靠层层传递间接到达</b> —— 第 1 层看 4K，第 2 层能间接摸到 8K，要跨 128K 得堆 32 层</li><li>所以一般<b>不单用</b>，跟全注意力混排（见第六节）</li></ul>
 <h3>3.2 Attention sink —— 一个现象，不是一个方案</h3>
@@ -374,6 +378,7 @@ __FIG_CHRONICLE__
 <hr>
 </div></section>
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>旋钮③：换一套数学 —— 线性注意力</h2></div>
+__FIG_TX_K3__
 <h3>4.1 基本换法</h3>
 <p>softmax 注意力必须把所有 K 都留着，是因为 softmax 的分母要对<b>所有位置</b>求和 —— 你没法提前把它们合并。</p>
 <p><b>把 softmax 去掉</b>（换成某个可分解的核函数），求和就可以重排：</p>
@@ -623,26 +628,73 @@ out = [head, '''
 
 # ⭐ 图是外部脚本的产物：**页面里的 SVG 是产物，脚本才是源。**
 #   跟专题二那套规矩一致 —— 改图只改 topic03-fig-chronicle.py，然后重跑本脚本。
-_fig = os.path.join(HERE, "fig3-chronicle.svg")
-assert os.path.isfile(_fig), (
-    "缺 fig3-chronicle.svg —— 先跑 `python3 topic03-fig-chronicle.py`")
-_svg = io.open(_fig, encoding="utf-8").read().strip()
-_html = "\n".join(out).replace(
-    "__FIG_CHRONICLE__",
-    '<figure class="fbox fwide" id="fig-chronicle">%s'
-    '<figcaption>⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，'
-    '2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。'
-    # ⛔ 这句原先写「便宜的层占 75%–87.5%，无人全用线性」，是个**全称句** ——
-    #    表里补进混元 Hy3 和 GLM 系列之后就被证伪了（Hy3、MiniMax M2 是纯全，
-    #    还有五行是层内稀疏，根本不在这根轴上），而它不会报错。
-    #    ⭐ 图注是图的**下游**：图里改了口径，这里不会自己跟着动。
-    #      跟「教材改了讲义不跟」是同一个失败形状，只是尺度小一号。
-    '<b>下半 · 各家配比</b>：<b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>'
-    '（便宜的层占 75%%–87.5%%）；另有两家明确用纯全注意力，五家走层内稀疏。'
-    '⛔ <b>层间混合与层内稀疏用两种画法分开，不能同轴比较。</b>'
-    '<span class="sub">信息截至 2026-09-07，全部现搜；出处见图脚。</span></figcaption>'
-    '</figure>' % _svg)
-assert "__FIG_CHRONICLE__" not in _html, "图占位符没被替换掉"
+# ⛔ 这张表原先只有一张图、写死在代码里。加主线图那五张时改成了表驱动 ——
+#    否则同一段「读文件 → assert → 拼 figure → 换占位符」要抄六遍，
+#    抄的时候漏一处不会报错，只是那张图不见了。
+FIGS = {
+    "__FIG_CHRONICLE__": ("fig-chronicle", "fig3-chronicle.svg",
+        'topic03-fig-chronicle.py',
+        '⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，'
+        '2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。'
+        # ⛔ 这句原先写「便宜的层占 75%–87.5%，无人全用线性」，是个**全称句** ——
+        #    表里补进混元 Hy3 和 GLM 系列之后就被证伪了（Hy3、MiniMax M2 是纯全，
+        #    还有五行是层内稀疏，根本不在这根轴上），而它不会报错。
+        #    ⭐ 图注是图的**下游**：图里改了口径，这里不会自己跟着动。
+        #      跟「教材改了讲义不跟」是同一个失败形状，只是尺度小一号。
+        '<b>下半 · 各家配比</b>：<b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>'
+        '（便宜的层占 75%–87.5%）；另有两家明确用纯全注意力，五家走层内稀疏。'
+        '⛔ <b>层间混合与层内稀疏用两种画法分开，不能同轴比较。</b>'
+        '<span class="sub">信息截至 2026-09-07，全部现搜；出处见图脚。</span>'),
+
+    # ── 贯穿全篇的主线图：同一张图画五遍，每次只点亮被改动的那一处 ──────
+    # ⭐ 这组图的教学装置在于「五张除了高亮处完全一样」，所以图注也要一致地
+    #    提醒读者「这是同一张图」。⛔ 图注里不许出现「上一张 / 下一张」——
+    #    这些 SVG 是共用资产，方位词换个文档就指错，而且不报错。
+    "__FIG_TX_BASE__": ("fig-tx-base", "fig3-tx-base.svg",
+        'topic03-fig-transformer.py',
+        '⭐ <b>本专题的主线图</b>：一层 Transformer，每一步的张量形状都标出来。'
+        '<b>先只看一件事 —— 图上唯一一个随序列长度平方长大的量，'
+        '是 softmax 前后那个 <code>BTSKG</code>。</b>'
+        '整个专题三就是在跟它较劲，三个旋钮各是一种较劲的方式。'
+        '<span class="sub">图式借自 How to Scale Your Model，本图为重画。</span>'),
+
+    "__FIG_TX_K1__": ("fig-tx-k1", "fig3-tx-k1.svg",
+        'topic03-fig-transformer.py',
+        '⭐ <b>同一张主线图，只点亮旋钮① 动到的地方</b> —— 产生 K 和 V 的那两条支路。'
+        '<b>注意那个平方大的矩阵一点没动</b>：这个旋钮治的是显存墙，'
+        '<b>治不了 O(N²) 的计算量</b>。'),
+
+    "__FIG_TX_K2__": ("fig-tx-k2", "fig3-tx-k2.svg",
+        'topic03-fig-transformer.py',
+        '⭐ <b>同一张主线图，只点亮旋钮② 动到的地方</b> —— Q·Kᵀ 和它后面那张 mask。'
+        '<b>矩阵的形状一点没变</b>，变的是里面有多少格子真的要算。'
+        '⛔ 所以它跟旋钮① <b>正交</b>，两个可以同时上。'),
+
+    "__FIG_TX_K3__": ("fig-tx-k3", "fig3-tx-k3.svg",
+        'topic03-fig-transformer.py',
+        '⛔ <b>这一张不是高亮，是替换</b>：原来那四格（Q·Kᵀ → mask → softmax → S·V）'
+        '整个没了，换成点亮的两格。'
+        '⭐⭐ <b>不用听解释，读输出形状就够 —— 点亮那格输出 <code>BKHH</code>，'
+        'S 不见了。</b>状态大小只跟头维有关，跟序列多长无关。'),
+
+    "__FIG_TX_FA__": ("fig-tx-fa", "fig3-tx-fa.svg",
+        'topic03-fig-transformer.py',
+        '⭐ <b>同一张主线图，而点亮的三格跟底图一模一样</b>：同样的算子、同样的形状、'
+        '同样的 FLOPs。<b>FlashAttention 不是第四个旋钮</b> —— '
+        '三个旋钮改的是这张图，它改的是这张图<b>怎么跑</b>。'),
+}
+
+_html = "\n".join(out)
+for ph, (fid, fn, src, cap) in FIGS.items():
+    fp = os.path.join(HERE, fn)
+    # ⛔ 硬失败：图缺了宁可构建挂掉，也不要悄悄出一份少图的教材。
+    assert os.path.isfile(fp), "缺 %s —— 先跑 `python3 %s`" % (fn, src)
+    assert ph in _html, "正文里没有占位符 %s —— 加图忘了插锚点？" % ph
+    svg = io.open(fp, encoding="utf-8").read().strip()
+    _html = _html.replace(
+        ph, '<figure class="fbox fwide" id="%s">%s<figcaption>%s</figcaption>'
+            '</figure>' % (fid, svg, cap))
+assert "__FIG_" not in _html, "还有图占位符没被替换掉"
 io.open(OUT, "w", encoding="utf-8").write(_html)
 print("ok  topic-03.html  %s 字符 · %d 节"
       % (format(os.path.getsize(OUT), ","), len(SECTIONS)))

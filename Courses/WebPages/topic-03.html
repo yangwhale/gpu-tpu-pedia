@@ -989,6 +989,141 @@ h4 { margin:18px 0 6px; font-size:15px }
 </div></section>
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>先解决一个误会：那个矩阵从来没被存下来过 —— FlashAttention</h2></div>
 <div class="note ok"><p>⭐ <b>2026-09-04 从原来的第七节提到这里，并且展开了一大截。</b> 理由：上一节刚算出 488 GiB 和 32 GiB 两个吓人的数， <b>不先说清「那个大家伙根本不落地」，后面所有「怎么少算」的讨论都建在恐慌上。</b> 而且顺序反过来讲，逻辑更硬： <b>「怎么算」这条路已经被走到头了，剩下的省法只能去改「算什么」</b> —— 三个旋钮正是从这句话长出来的。</p></div>
+<figure class="fbox fwide" id="fig-tx-base"><svg viewBox="0 0 1400 914" width="100%" role="img" aria-label="主线图 · 一层 Transformer，每一步的张量形状">
+<text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">主线图 · 一层 Transformer，每一步的张量形状</text>
+<text class="svgsm" x="0" y="39" fill="#5f6368">⭐ 这张图会在整个专题里反复出现。每讲一个方案，就把它重画一遍，只把被改动的那一处点亮 —— 你永远知道自己在图上的哪儿。</text>
+<text class="svgsm" x="330" y="88" fill="#202124" text-anchor="middle" style="font-size:15px"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="356" y="88" fill="#5f6368">BTD</text>
+<text class="svgsm" x="384" y="88" fill="#9aa0a6">——&#160;一层的输入</text>
+<rect x="84" y="120" width="132" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="90" y="116" fill="#1a73e8" style="font-size:10px">BTD</text>
+<text class="svgsm" x="210" y="116" fill="#8430ce" text-anchor="end" style="font-size:10px">W_Q · DNH</text>
+<circle cx="150" cy="137" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="150" cy="137" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="150" y="168" fill="#202124" text-anchor="middle"><tspan font-weight="700">BTNH</tspan></text>
+<text class="svgsm" x="150" y="184" fill="#1a73e8" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">Q</tspan></text>
+<line x1="330" y1="98" x2="150" y2="106" stroke="#5f6368" stroke-width="1"/>
+<line x1="150" y1="106" x2="150" y2="120" stroke="#5f6368" stroke-width="1"/>
+<rect x="264" y="120" width="132" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="270" y="116" fill="#1a73e8" style="font-size:10px">BSD</text>
+<text class="svgsm" x="390" y="116" fill="#8430ce" text-anchor="end" style="font-size:10px">W_K · DKH</text>
+<circle cx="330" cy="137" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="330" cy="137" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="330" y="168" fill="#202124" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="330" y="184" fill="#1a73e8" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">K</tspan></text>
+<line x1="330" y1="98" x2="330" y2="106" stroke="#5f6368" stroke-width="1"/>
+<line x1="330" y1="106" x2="330" y2="120" stroke="#5f6368" stroke-width="1"/>
+<rect x="444" y="120" width="132" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="450" y="116" fill="#1a73e8" style="font-size:10px">BSD</text>
+<text class="svgsm" x="570" y="116" fill="#8430ce" text-anchor="end" style="font-size:10px">W_V · DKH</text>
+<circle cx="510" cy="137" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="510" cy="137" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="510" y="168" fill="#202124" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="510" y="184" fill="#1a73e8" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">V</tspan></text>
+<line x1="330" y1="98" x2="510" y2="106" stroke="#5f6368" stroke-width="1"/>
+<line x1="510" y1="106" x2="510" y2="120" stroke="#5f6368" stroke-width="1"/>
+<rect x="61" y="204" width="178" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="73" y="222" fill="#5f6368"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="129" y="222" fill="#5f6368">BTNH → BTKGH</text>
+<rect x="222" y="262" width="216" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="228" y="258" fill="#1a73e8" style="font-size:10px">BTKGH</text>
+<text class="svgsm" x="432" y="258" fill="#8430ce" text-anchor="end" style="font-size:10px">BSKH</text>
+<circle cx="330" cy="279" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="330" cy="279" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="330" y="312" fill="#202124" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="446" y="283" fill="#1a73e8"><tspan font-weight="700">Q·Kᵀ</tspan></text>
+<rect x="253" y="334" width="155" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="265" y="352" fill="#5f6368"><tspan font-weight="700">＋ masks</tspan></text>
+<text class="svgsm" x="326" y="352" fill="#5f6368">谁能看谁</text>
+<rect x="234" y="380" width="192" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="246" y="398" fill="#5f6368"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="302" y="398" fill="#202124"><tspan font-weight="700">BTSKG（记作 S）</tspan></text>
+<text class="svgsm" x="436" y="398" fill="#d93025">★ <tspan font-weight="700">全图唯一随长度平方长大的量</tspan></text>
+<rect x="222" y="438" width="216" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="228" y="434" fill="#1a73e8" style="font-size:10px">BTSKG</text>
+<text class="svgsm" x="432" y="434" fill="#8430ce" text-anchor="end" style="font-size:10px">BSKH</text>
+<circle cx="330" cy="455" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="330" cy="455" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="330" y="488" fill="#202124" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTKGH</tspan></text>
+<text class="svgsm" x="446" y="459" fill="#1a73e8"><tspan font-weight="700">S·V</tspan></text>
+<rect x="241" y="510" width="178" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="253" y="528" fill="#5f6368"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="309" y="528" fill="#5f6368">BTKGH → BTNH</text>
+<rect x="222" y="568" width="216" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="228" y="564" fill="#1a73e8" style="font-size:10px">BTNH</text>
+<text class="svgsm" x="432" y="564" fill="#8430ce" text-anchor="end" style="font-size:10px">W_O · NHD</text>
+<circle cx="330" cy="585" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="330" cy="585" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="330" y="618" fill="#202124" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTD</tspan></text>
+<text class="svgsm" x="446" y="589" fill="#1a73e8"><tspan font-weight="700">输出投影</tspan></text>
+<rect x="255" y="640" width="150" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="267" y="658" fill="#5f6368"><tspan font-weight="700">＋ 残差</tspan></text>
+<text class="svgsm" x="319" y="658" fill="#5f6368">BTD</text>
+<rect x="255" y="686" width="150" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="267" y="704" fill="#5f6368"><tspan font-weight="700">norm</tspan></text>
+<text class="svgsm" x="304" y="704" fill="#5f6368">BTD</text>
+<rect x="130" y="732" width="400" height="50" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="330" y="751" fill="#1e8e3e" text-anchor="middle"><tspan font-weight="700">MLP（本专题一个字都不改它）</tspan></text>
+<text class="svgsm" x="330" y="770" fill="#5f6368" text-anchor="middle" style="font-size:10px">BTD ·DF→ BTF ─gelu⊛─ BTF ·FD→ BTD</text>
+<rect x="219" y="800" width="222" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="231" y="818" fill="#5f6368"><tspan font-weight="700">＋ 残差 → norm</tspan></text>
+<text class="svgsm" x="328" y="818" fill="#5f6368">BTD　→ 下一层</text>
+<line x1="330" y1="230" x2="330" y2="262" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="318" x2="330" y2="334" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="360" x2="330" y2="380" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="406" x2="330" y2="438" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="494" x2="330" y2="510" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="536" x2="330" y2="568" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="624" x2="330" y2="640" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="666" x2="330" y2="686" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="712" x2="330" y2="732" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="782" x2="330" y2="800" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="150" y1="190" x2="150" y2="204" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="150" y1="230" x2="150" y2="240" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="150" y1="240" x2="330" y2="240" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="240" x2="330" y2="262" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="190" x2="330" y2="198" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="198" x2="462" y2="198" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="462" y1="198" x2="462" y2="279" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="462" y1="279" x2="438" y2="279" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="510" y1="190" x2="510" y2="198" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="510" y1="198" x2="512" y2="198" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="512" y1="198" x2="512" y2="455" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="512" y1="455" x2="438" y2="455" stroke="#5f6368" stroke-width="1.2"/>
+<rect x="680" y="66" width="700" height="295" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svglbl" x="694" y="86" fill="#d93025" style="font-size:13px">★ 先只看一件事：图上哪个量最大</text>
+<text class="svgsm" x="694" y="110" fill="#d93025"><tspan font-weight="700">★</tspan></text>
+<text class="svgsm" x="724" y="110" fill="#d93025">softmax 前后那个矩阵，形状 <tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="724" y="129" fill="#5f6368">它的形状里<tspan font-weight="700">同时带着 T（query 长度）和 S（KV 长度）</tspan></text>
+<text class="svgsm" x="694" y="148" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="724" y="148" fill="#d93025">所以它是<tspan font-weight="700">全图唯一一个随序列长度平方长大</tspan>的量</text>
+<text class="svgsm" x="724" y="186" fill="#5f6368">别的量都是线性的：Q/K/V 各带一个长度，X 带一个长度，</text>
+<text class="svgsm" x="724" y="205" fill="#5f6368">权重<tspan font-weight="700">一个长度都不带</tspan>（W 那几个形状里没有 T 也没有 S）</text>
+<text class="svgsm" x="694" y="243" fill="#1a73e8"><tspan font-weight="700">⭐⭐</tspan></text>
+<text class="svgsm" x="724" y="243" fill="#1a73e8"><tspan font-weight="700">整个专题三，就是在跟这一个张量较劲。</tspan></text>
+<text class="svgsm" x="724" y="262" fill="#1a73e8">四种较劲的方式，对应三个旋钮加 FlashAttention：</text>
+<text class="svgsm" x="694" y="281" fill="#1a73e8"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="724" y="281" fill="#1a73e8"><tspan font-weight="700">不动它</tspan>，改产生 K/V 的支路 —— 让存下来的变小</text>
+<text class="svgsm" x="694" y="300" fill="#e8710a"><tspan font-weight="700">②</tspan></text>
+<text class="svgsm" x="724" y="300" fill="#e8710a"><tspan font-weight="700">不动它的形状</tspan>，但让里面大部分格子不用算</text>
+<text class="svgsm" x="694" y="319" fill="#8430ce"><tspan font-weight="700">③</tspan></text>
+<text class="svgsm" x="724" y="319" fill="#8430ce"><tspan font-weight="700">把它整个删掉</tspan> —— 换一套数学</text>
+<text class="svgsm" x="694" y="338" fill="#1e8e3e"><tspan font-weight="700">④</tspan></text>
+<text class="svgsm" x="724" y="338" fill="#1e8e3e"><tspan font-weight="700">一处都不改</tspan>，只是不让它落到 HBM</text>
+<rect x="680" y="377" width="700" height="215" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="694" y="397" fill="#7a5000" style="font-size:13px">📐 把字母换成数字 ——&#160;它到底比别人大多少</text>
+<text class="svgsm" x="694" y="421" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、一层、BF16，把上面那些字母换成实际占多少：</text>
+<text class="svgsm" x="694" y="459" fill="#1a73e8"><tspan font-weight="700">Q/K/V/O</tspan></text>
+<text class="svgsm" x="748" y="459" fill="#1a73e8">四个加起来 —— <tspan font-weight="700">128 MiB</tspan></text>
+<text class="svgsm" x="694" y="478" fill="#d93025"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="735" y="478" fill="#d93025">中间那个矩阵 —— <tspan font-weight="700">32 GiB</tspan></text>
+<text class="svgsm" x="694" y="516" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="726" y="516" fill="#d93025"><tspan font-weight="700">差 256 倍。</tspan>而它俩在图上只隔了两格。</text>
+<text class="svgsm" x="694" y="554" fill="#1a73e8">⭐⭐ <tspan font-weight="700">这就是为什么整个专题都在跟它较劲</tspan> ——</text>
+<text class="svgsm" x="694" y="573" fill="#1a73e8">不是因为它难，是因为<tspan font-weight="700">别的项在它面前都是零头</tspan>。</text>
+<rect x="0" y="860" width="1400" height="44" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="16" y="887" fill="#1a73e8">📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。B 批量 · T query 长度 · S KV 长度 · D d_model · F MLP 隐层 · H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K</text>
+</svg><figcaption>⭐ <b>本专题的主线图</b>：一层 Transformer，每一步的张量形状都标出来。<b>先只看一件事 —— 图上唯一一个随序列长度平方长大的量，是 softmax 前后那个 <code>BTSKG</code>。</b>整个专题三就是在跟它较劲，三个旋钮各是一种较劲的方式。<span class="sub">图式借自 How to Scale Your Model，本图为重画。</span></figcaption></figure>
 <h3>1.1 它跟三个旋钮不是一类东西</h3>
 <p>三个旋钮改的都是<b>算什么</b>。FlashAttention <b>一个字都不改数学</b> —— 它改的是<b>怎么算</b>。</p>
 <table>
@@ -1081,6 +1216,141 @@ h4 { margin:18px 0 6px; font-size:15px }
 <p>⭐ <b>三层叠起来的结论很硬</b>： 形状锁死一半、寄存器压到 35%、记账口径还让它看着比实际好看。 <b>这三层没有一层是配置能救的</b> —— 要么改 head_dim，要么改 kernel 的数据流。 （我们试过的那条出路是把矩阵乘全转置，见 TUNING-v7 的附录。）</p>
 <h3>⚠️ 还有一条方法论：同一份 profile，不同工具页的百分比不可混用</h3>
 <p>「HBM 受限占多少」—— 一个工具页说 <b>35.6%</b>，另一个说 <b>19.5%</b>。 破案的钥匙是两者的 self-time 合计正好差 <b>2.00 倍</b>， 而 v7 恰好是 <b>2 device/chip</b>。<b>分母不是同一个东西，分子上的百分比自然对不上。</b> ⇒ 判瓶颈用 roofline 那一页，归因到算子用 op stats 那一页； <b>引用任何百分比都要写清出自哪个工具页。</b></p></div>
+<figure class="fbox fwide" id="fig-tx-fa"><svg viewBox="0 0 1400 914" width="100%" role="img" aria-label="FlashAttention —— 图上一处都没改，改的是「落不落地」">
+<text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">FlashAttention —— 图上一处都没改，改的是「落不落地」</text>
+<text class="svgsm" x="0" y="39" fill="#5f6368">⭐ 点亮的三格<tspan font-weight="700">跟底图一模一样</tspan>：同样的算子、同样的形状、同样的 FLOPs。<tspan font-weight="700">它不是第四个旋钮。</tspan></text>
+<text class="svgsm" x="330" y="88" fill="#bdc1c6" text-anchor="middle" style="font-size:15px"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="356" y="88" fill="#bdc1c6">BTD</text>
+<text class="svgsm" x="384" y="88" fill="#bdc1c6">——&#160;一层的输入</text>
+<rect x="84" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="90" y="116" fill="#bdc1c6" style="font-size:10px">BTD</text>
+<text class="svgsm" x="210" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_Q · DNH</text>
+<circle cx="150" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="150" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="150" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BTNH</tspan></text>
+<text class="svgsm" x="150" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">Q</tspan></text>
+<line x1="330" y1="98" x2="150" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="150" y1="106" x2="150" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="264" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="270" y="116" fill="#bdc1c6" style="font-size:10px">BSD</text>
+<text class="svgsm" x="390" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_K · DKH</text>
+<circle cx="330" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="330" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">K</tspan></text>
+<line x1="330" y1="98" x2="330" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="330" y1="106" x2="330" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="444" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="450" y="116" fill="#bdc1c6" style="font-size:10px">BSD</text>
+<text class="svgsm" x="570" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_V · DKH</text>
+<circle cx="510" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="510" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="510" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="510" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">V</tspan></text>
+<line x1="330" y1="98" x2="510" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="510" y1="106" x2="510" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="61" y="204" width="178" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="73" y="222" fill="#bdc1c6"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="129" y="222" fill="#bdc1c6">BTNH → BTKGH</text>
+<rect x="222" y="262" width="216" height="34" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="2.2"/>
+<rect x="214" y="244" width="232" height="78" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="228" y="258" fill="#1a73e8" style="font-size:10px">BTKGH</text>
+<text class="svgsm" x="432" y="258" fill="#8430ce" text-anchor="end" style="font-size:10px">BSKH</text>
+<circle cx="330" cy="279" r="9" fill="none" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="330" cy="279" r="2.6" fill="#1e8e3e"/>
+<text class="svgsm" x="330" y="312" fill="#202124" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="446" y="283" fill="#1e8e3e"><tspan font-weight="700">Q·Kᵀ</tspan></text>
+<rect x="253" y="334" width="155" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="265" y="352" fill="#bdc1c6"><tspan font-weight="700">＋ masks</tspan></text>
+<text class="svgsm" x="326" y="352" fill="#bdc1c6">谁能看谁</text>
+<rect x="234" y="380" width="192" height="26" rx="5" fill="#f8f9fa" stroke="#1e8e3e" stroke-width="2.2"/>
+<rect x="228" y="374" width="204" height="38" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="246" y="398" fill="#1e8e3e"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="302" y="398" fill="#202124"><tspan font-weight="700">BTSKG（记作 S）</tspan></text>
+<text class="svgsm" x="436" y="398" fill="#d93025">★ <tspan font-weight="700">全图唯一随长度平方长大的量</tspan></text>
+<rect x="222" y="438" width="216" height="34" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="2.2"/>
+<rect x="214" y="420" width="232" height="78" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="228" y="434" fill="#1a73e8" style="font-size:10px">BTSKG</text>
+<text class="svgsm" x="432" y="434" fill="#8430ce" text-anchor="end" style="font-size:10px">BSKH</text>
+<circle cx="330" cy="455" r="9" fill="none" stroke="#1e8e3e" stroke-width="1.6"/>
+<circle cx="330" cy="455" r="2.6" fill="#1e8e3e"/>
+<text class="svgsm" x="330" y="488" fill="#202124" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTKGH</tspan></text>
+<text class="svgsm" x="446" y="459" fill="#1e8e3e"><tspan font-weight="700">S·V</tspan></text>
+<rect x="241" y="510" width="178" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="253" y="528" fill="#bdc1c6"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="309" y="528" fill="#bdc1c6">BTKGH → BTNH</text>
+<rect x="222" y="568" width="216" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="228" y="564" fill="#bdc1c6" style="font-size:10px">BTNH</text>
+<text class="svgsm" x="432" y="564" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_O · NHD</text>
+<circle cx="330" cy="585" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="585" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="618" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTD</tspan></text>
+<text class="svgsm" x="446" y="589" fill="#bdc1c6"><tspan font-weight="700">输出投影</tspan></text>
+<rect x="255" y="640" width="150" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="267" y="658" fill="#bdc1c6"><tspan font-weight="700">＋ 残差</tspan></text>
+<text class="svgsm" x="319" y="658" fill="#bdc1c6">BTD</text>
+<rect x="255" y="686" width="150" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="267" y="704" fill="#bdc1c6"><tspan font-weight="700">norm</tspan></text>
+<text class="svgsm" x="304" y="704" fill="#bdc1c6">BTD</text>
+<rect x="130" y="732" width="400" height="50" rx="6" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="330" y="751" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">MLP（本专题一个字都不改它）</tspan></text>
+<text class="svgsm" x="330" y="770" fill="#bdc1c6" text-anchor="middle" style="font-size:10px">BTD ·DF→ BTF ─gelu⊛─ BTF ·FD→ BTD</text>
+<rect x="219" y="800" width="222" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="231" y="818" fill="#bdc1c6"><tspan font-weight="700">＋ 残差 → norm</tspan></text>
+<text class="svgsm" x="328" y="818" fill="#bdc1c6">BTD　→ 下一层</text>
+<line x1="330" y1="230" x2="330" y2="262" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="318" x2="330" y2="334" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="360" x2="330" y2="380" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="406" x2="330" y2="438" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="494" x2="330" y2="510" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="536" x2="330" y2="568" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="624" x2="330" y2="640" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="666" x2="330" y2="686" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="712" x2="330" y2="732" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="782" x2="330" y2="800" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="190" x2="150" y2="204" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="230" x2="150" y2="240" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="240" x2="330" y2="240" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="240" x2="330" y2="262" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="190" x2="330" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="198" x2="462" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="462" y1="198" x2="462" y2="279" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="462" y1="279" x2="438" y2="279" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="510" y1="190" x2="510" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="510" y1="198" x2="512" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="512" y1="198" x2="512" y2="455" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="512" y1="455" x2="438" y2="455" stroke="#bdc1c6" stroke-width="1.2"/>
+<rect x="680" y="66" width="700" height="314" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svglbl" x="694" y="86" fill="#1e8e3e" style="font-size:13px">④ 它删掉的不是计算，是搬运</text>
+<text class="svgsm" x="724" y="110" fill="#5f6368">朴素写法要把中间那个 BTSKG <tspan font-weight="700">写进 HBM，再读回来</tspan>：</text>
+<text class="svgsm" x="724" y="129" fill="#5f6368">写 S → 读 S → 写 P → 读 P，<tspan font-weight="700">四趟</tspan></text>
+<text class="svgsm" x="694" y="148" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="724" y="148" fill="#d93025">而 Q/K/V/O 加起来才 128 MiB，那个矩阵是 <tspan font-weight="700">32 GiB</tspan></text>
+<text class="svgsm" x="724" y="167" fill="#5f6368">（序列 128K 时的账，见 §1.2）</text>
+<text class="svgsm" x="694" y="205" fill="#1e8e3e"><tspan font-weight="700">⭐⭐</tspan></text>
+<text class="svgsm" x="724" y="205" fill="#1e8e3e"><tspan font-weight="700">FlashAttention 把这四趟全删了</tspan>：分块算，</text>
+<text class="svgsm" x="724" y="224" fill="#1e8e3e">中间结果只在片上暂存里走一遭，<tspan font-weight="700">从不落 HBM</tspan></text>
+<text class="svgsm" x="694" y="262" fill="#1a73e8"><tspan font-weight="700">📌</tspan></text>
+<text class="svgsm" x="724" y="262" fill="#1a73e8"><tspan font-weight="700">所以它跟三个旋钮不是一类东西，可以同时用。</tspan></text>
+<text class="svgsm" x="724" y="281" fill="#5f6368">旋钮改的是「算什么」，它改的是「算出来的东西放哪」</text>
+<text class="svgsm" x="724" y="300" fill="#5f6368">今天所有方案的实现里都有它 —— 它是地板不是选项</text>
+<text class="svgsm" x="694" y="338" fill="#e8710a"><tspan font-weight="700">⚠️</tspan></text>
+<text class="svgsm" x="724" y="338" fill="#e8710a"><tspan font-weight="700">它也不是免费的</tspan>：在线 softmax 要多做一遍重标定，</text>
+<text class="svgsm" x="724" y="357" fill="#e8710a">融合之后实测也只跑到约 35%，三层原因见 §1.6</text>
+<rect x="680" y="396" width="700" height="215" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="694" y="416" fill="#7a5000" style="font-size:13px">📐 把字母换成数字 ——&#160;它到底比别人大多少</text>
+<text class="svgsm" x="694" y="440" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、一层、BF16，把上面那些字母换成实际占多少：</text>
+<text class="svgsm" x="694" y="478" fill="#1a73e8"><tspan font-weight="700">Q/K/V/O</tspan></text>
+<text class="svgsm" x="748" y="478" fill="#1a73e8">四个加起来 —— <tspan font-weight="700">128 MiB</tspan></text>
+<text class="svgsm" x="694" y="497" fill="#d93025"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="735" y="497" fill="#d93025">中间那个矩阵 —— <tspan font-weight="700">32 GiB</tspan></text>
+<text class="svgsm" x="694" y="535" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="726" y="535" fill="#d93025"><tspan font-weight="700">差 256 倍。</tspan>而它俩在图上只隔了两格。</text>
+<text class="svgsm" x="694" y="573" fill="#1a73e8">⭐⭐ <tspan font-weight="700">这就是为什么整个专题都在跟它较劲</tspan> ——</text>
+<text class="svgsm" x="694" y="592" fill="#1a73e8">不是因为它难，是因为<tspan font-weight="700">别的项在它面前都是零头</tspan>。</text>
+<rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="16" y="887" fill="#1e8e3e">⭐ 一句话记住它：<tspan font-weight="700">三个旋钮改的是这张图，它改的是这张图怎么跑。</tspan>所以它跟谁都不冲突 —— 这也是它能成为默认实现的原因。</text>
+</svg><figcaption>⭐ <b>同一张主线图，而点亮的三格跟底图一模一样</b>：同样的算子、同样的形状、同样的 FLOPs。<b>FlashAttention 不是第四个旋钮</b> —— 三个旋钮改的是这张图，它改的是这张图<b>怎么跑</b>。</figcaption></figure>
 <h3>1.7 这一节留下的那句话</h3>
 <p><b>「怎么算」这条路，到这里基本走到头了。</b></p>
 <p>中间产物已经不落地，块大小已经贴着三堵墙，而算子仍然只跑到三成多 —— <b>剩下的空间不在「怎么算」里，只能去改「算什么」。</b></p>
@@ -1125,6 +1395,138 @@ h4 { margin:18px 0 6px; font-size:15px }
 <hr>
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>旋钮①：每个 token 存多少</h2></div>
+<figure class="fbox fwide" id="fig-tx-k1"><svg viewBox="0 0 1400 914" width="100%" role="img" aria-label="旋钮① 每个 token 存多少 —— 动的是这两条支路">
+<text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">旋钮① 每个 token 存多少 —— 动的是这两条支路</text>
+<text class="svgsm" x="0" y="39" fill="#5f6368">点亮的两格就是这个旋钮的全部作用域。⭐ 注意：<tspan font-weight="700">那个平方大的矩阵一点没动</tspan> —— 这个旋钮省的是显存，不是算力。</text>
+<text class="svgsm" x="330" y="88" fill="#bdc1c6" text-anchor="middle" style="font-size:15px"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="356" y="88" fill="#bdc1c6">BTD</text>
+<text class="svgsm" x="384" y="88" fill="#bdc1c6">——&#160;一层的输入</text>
+<rect x="84" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="90" y="116" fill="#bdc1c6" style="font-size:10px">BTD</text>
+<text class="svgsm" x="210" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_Q · DNH</text>
+<circle cx="150" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="150" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="150" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BTNH</tspan></text>
+<text class="svgsm" x="150" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">Q</tspan></text>
+<line x1="330" y1="98" x2="150" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="150" y1="106" x2="150" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="264" y="120" width="132" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text class="svgsm" x="270" y="116" fill="#1a73e8" style="font-size:10px">BSD</text>
+<text class="svgsm" x="390" y="116" fill="#8430ce" text-anchor="end" style="font-size:10px">W_K · DKH</text>
+<circle cx="330" cy="137" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="330" cy="137" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="330" y="168" fill="#202124" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="330" y="184" fill="#1a73e8" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">K</tspan></text>
+<line x1="330" y1="98" x2="330" y2="106" stroke="#5f6368" stroke-width="1"/>
+<line x1="330" y1="106" x2="330" y2="120" stroke="#5f6368" stroke-width="1"/>
+<rect x="444" y="120" width="132" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text class="svgsm" x="450" y="116" fill="#1a73e8" style="font-size:10px">BSD</text>
+<text class="svgsm" x="570" y="116" fill="#8430ce" text-anchor="end" style="font-size:10px">W_V · DKH</text>
+<circle cx="510" cy="137" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="510" cy="137" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="510" y="168" fill="#202124" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="510" y="184" fill="#1a73e8" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">V</tspan></text>
+<line x1="330" y1="98" x2="510" y2="106" stroke="#5f6368" stroke-width="1"/>
+<line x1="510" y1="106" x2="510" y2="120" stroke="#5f6368" stroke-width="1"/>
+<rect x="61" y="204" width="178" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="73" y="222" fill="#bdc1c6"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="129" y="222" fill="#bdc1c6">BTNH → BTKGH</text>
+<rect x="222" y="262" width="216" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="228" y="258" fill="#bdc1c6" style="font-size:10px">BTKGH</text>
+<text class="svgsm" x="432" y="258" fill="#bdc1c6" text-anchor="end" style="font-size:10px">BSKH</text>
+<circle cx="330" cy="279" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="279" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="312" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="446" y="283" fill="#bdc1c6"><tspan font-weight="700">Q·Kᵀ</tspan></text>
+<rect x="253" y="334" width="155" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="265" y="352" fill="#bdc1c6"><tspan font-weight="700">＋ masks</tspan></text>
+<text class="svgsm" x="326" y="352" fill="#bdc1c6">谁能看谁</text>
+<rect x="234" y="380" width="192" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="246" y="398" fill="#bdc1c6"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="302" y="398" fill="#bdc1c6"><tspan font-weight="700">BTSKG（记作 S）</tspan></text>
+<text class="svgsm" x="436" y="398" fill="#bdc1c6">★ <tspan font-weight="700">全图唯一随长度平方长大的量</tspan></text>
+<rect x="222" y="438" width="216" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="228" y="434" fill="#bdc1c6" style="font-size:10px">BTSKG</text>
+<text class="svgsm" x="432" y="434" fill="#bdc1c6" text-anchor="end" style="font-size:10px">BSKH</text>
+<circle cx="330" cy="455" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="455" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="488" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTKGH</tspan></text>
+<text class="svgsm" x="446" y="459" fill="#bdc1c6"><tspan font-weight="700">S·V</tspan></text>
+<rect x="241" y="510" width="178" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="253" y="528" fill="#bdc1c6"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="309" y="528" fill="#bdc1c6">BTKGH → BTNH</text>
+<rect x="222" y="568" width="216" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="228" y="564" fill="#bdc1c6" style="font-size:10px">BTNH</text>
+<text class="svgsm" x="432" y="564" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_O · NHD</text>
+<circle cx="330" cy="585" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="585" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="618" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTD</tspan></text>
+<text class="svgsm" x="446" y="589" fill="#bdc1c6"><tspan font-weight="700">输出投影</tspan></text>
+<rect x="255" y="640" width="150" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="267" y="658" fill="#bdc1c6"><tspan font-weight="700">＋ 残差</tspan></text>
+<text class="svgsm" x="319" y="658" fill="#bdc1c6">BTD</text>
+<rect x="255" y="686" width="150" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="267" y="704" fill="#bdc1c6"><tspan font-weight="700">norm</tspan></text>
+<text class="svgsm" x="304" y="704" fill="#bdc1c6">BTD</text>
+<rect x="130" y="732" width="400" height="50" rx="6" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="330" y="751" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">MLP（本专题一个字都不改它）</tspan></text>
+<text class="svgsm" x="330" y="770" fill="#bdc1c6" text-anchor="middle" style="font-size:10px">BTD ·DF→ BTF ─gelu⊛─ BTF ·FD→ BTD</text>
+<rect x="219" y="800" width="222" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="231" y="818" fill="#bdc1c6"><tspan font-weight="700">＋ 残差 → norm</tspan></text>
+<text class="svgsm" x="328" y="818" fill="#bdc1c6">BTD　→ 下一层</text>
+<line x1="330" y1="230" x2="330" y2="262" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="318" x2="330" y2="334" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="360" x2="330" y2="380" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="406" x2="330" y2="438" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="494" x2="330" y2="510" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="536" x2="330" y2="568" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="624" x2="330" y2="640" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="666" x2="330" y2="686" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="712" x2="330" y2="732" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="782" x2="330" y2="800" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="190" x2="150" y2="204" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="230" x2="150" y2="240" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="240" x2="330" y2="240" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="240" x2="330" y2="262" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="190" x2="330" y2="198" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="198" x2="462" y2="198" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="462" y1="198" x2="462" y2="279" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="462" y1="279" x2="438" y2="279" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="510" y1="190" x2="510" y2="198" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="510" y1="198" x2="512" y2="198" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="512" y1="198" x2="512" y2="455" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="512" y1="455" x2="438" y2="455" stroke="#5f6368" stroke-width="1.2"/>
+<rect x="680" y="66" width="700" height="276" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="694" y="86" fill="#1a73e8" style="font-size:13px">① 三种改法，都只改这两格</text>
+<text class="svgsm" x="694" y="110" fill="#1a73e8"><tspan font-weight="700">MQA</tspan></text>
+<text class="svgsm" x="724" y="110" fill="#1a73e8">K 从多个头砍到 <tspan font-weight="700">1 个</tspan>（K＝1）</text>
+<text class="svgsm" x="694" y="129" fill="#1a73e8"><tspan font-weight="700">GQA</tspan></text>
+<text class="svgsm" x="724" y="129" fill="#1a73e8">砍到几个，多个 query 头共用一个 KV 头（<tspan font-weight="700">G＝N∕K</tspan>）</text>
+<text class="svgsm" x="694" y="148" fill="#1a73e8"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="724" y="148" fill="#1a73e8">不砍头，改成<tspan font-weight="700">先压到一个低秩的 c，用时再上投影</tspan></text>
+<text class="svgsm" x="694" y="186" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="724" y="186" fill="#d93025"><tspan font-weight="700">看形状就知道省在哪</tspan>：KV cache 存的是 <tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="724" y="205" fill="#5f6368">里面那个 <tspan font-weight="700">K</tspan> 变小，缓存就等比变小 —— 就这么直接</text>
+<text class="svgsm" x="694" y="243" fill="#e8710a"><tspan font-weight="700">⚠️</tspan></text>
+<text class="svgsm" x="724" y="243" fill="#e8710a"><tspan font-weight="700">这个旋钮不省 FLOPs。</tspan>Q·Kᵀ 出来的还是 BTSKG，</text>
+<text class="svgsm" x="724" y="262" fill="#e8710a">该算的乘加一次不少 —— GQA 靠的是<tspan font-weight="700">把 KV 头广播开</tspan>再算</text>
+<text class="svgsm" x="694" y="300" fill="#5f6368"><tspan font-weight="700">📌</tspan></text>
+<text class="svgsm" x="724" y="300" fill="#5f6368">MLA 那条另有一处麻烦：<tspan font-weight="700">RoPE 必须单独走一路</tspan>，</text>
+<text class="svgsm" x="724" y="319" fill="#5f6368">因为上投影吸收不了带位置旋转的那几维（见 §2.3）</text>
+<rect x="680" y="358" width="700" height="215" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="694" y="378" fill="#7a5000" style="font-size:13px">📐 把字母换成数字 ——&#160;它到底比别人大多少</text>
+<text class="svgsm" x="694" y="402" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、一层、BF16，把上面那些字母换成实际占多少：</text>
+<text class="svgsm" x="694" y="440" fill="#1a73e8"><tspan font-weight="700">Q/K/V/O</tspan></text>
+<text class="svgsm" x="748" y="440" fill="#1a73e8">四个加起来 —— <tspan font-weight="700">128 MiB</tspan></text>
+<text class="svgsm" x="694" y="459" fill="#d93025"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="735" y="459" fill="#d93025">中间那个矩阵 —— <tspan font-weight="700">32 GiB</tspan></text>
+<text class="svgsm" x="694" y="497" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="726" y="497" fill="#d93025"><tspan font-weight="700">差 256 倍。</tspan>而它俩在图上只隔了两格。</text>
+<text class="svgsm" x="694" y="535" fill="#1a73e8">⭐⭐ <tspan font-weight="700">这就是为什么整个专题都在跟它较劲</tspan> ——</text>
+<text class="svgsm" x="694" y="554" fill="#1a73e8">不是因为它难，是因为<tspan font-weight="700">别的项在它面前都是零头</tspan>。</text>
+<rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="16" y="887" fill="#1a73e8">⭐ 一句话记住这个旋钮：<tspan font-weight="700">它改的是「存什么」，不是「算什么」。</tspan>所以它治的是显存墙，治不了 O(N²) 的计算量。</text>
+</svg><figcaption>⭐ <b>同一张主线图，只点亮旋钮① 动到的地方</b> —— 产生 K 和 V 的那两条支路。<b>注意那个平方大的矩阵一点没动</b>：这个旋钮治的是显存墙，<b>治不了 O(N²) 的计算量</b>。</figcaption></figure>
 <h3>2.1 MHA → MQA → GQA：一个连续旋钮</h3>
 <ul><li><b>MHA</b>：每个头各存一份 K/V。128 个头就是 128 份</li><li><b>MQA</b>：所有头共用同一份 K/V。省 128 倍，但<b>质量掉</b></li><li><b>GQA</b>：分成 g 组，组内共用。<code>g = n_h</code> 退化成 MHA，<code>g = 1</code> 退化成 MQA</li></ul>
 <p>⭐ <b>值得强调的是「GQA 是一个连续旋钮」这件事本身</b> —— 它不是一个新机制，是把 MHA 和 MQA 之间的空白填上，让你可以按需要选一个点。 这门课后面会反复见到这个套路：<b>把一个二选一变成一个可调的连续量。</b></p>
@@ -1145,6 +1547,143 @@ h4 { margin:18px 0 6px; font-size:15px }
 <hr>
 </div></section>
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>旋钮②：每个 query 看多少</h2></div>
+<figure class="fbox fwide" id="fig-tx-k2"><svg viewBox="0 0 1400 914" width="100%" role="img" aria-label="旋钮② 每个 query 看多少 —— 动的是 mask 那一格">
+<text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">旋钮② 每个 query 看多少 —— 动的是 mask 那一格</text>
+<text class="svgsm" x="0" y="39" fill="#5f6368">点亮的是 Q·Kᵀ 和它后面那个 mask。⭐ <tspan font-weight="700">矩阵的形状一点没变，变的是里面有多少格子真的要算。</tspan></text>
+<text class="svgsm" x="330" y="88" fill="#bdc1c6" text-anchor="middle" style="font-size:15px"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="356" y="88" fill="#bdc1c6">BTD</text>
+<text class="svgsm" x="384" y="88" fill="#bdc1c6">——&#160;一层的输入</text>
+<rect x="84" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="90" y="116" fill="#bdc1c6" style="font-size:10px">BTD</text>
+<text class="svgsm" x="210" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_Q · DNH</text>
+<circle cx="150" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="150" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="150" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BTNH</tspan></text>
+<text class="svgsm" x="150" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">Q</tspan></text>
+<line x1="330" y1="98" x2="150" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="150" y1="106" x2="150" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="264" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="270" y="116" fill="#bdc1c6" style="font-size:10px">BSD</text>
+<text class="svgsm" x="390" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_K · DKH</text>
+<circle cx="330" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="330" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">K</tspan></text>
+<line x1="330" y1="98" x2="330" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="330" y1="106" x2="330" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="444" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="450" y="116" fill="#bdc1c6" style="font-size:10px">BSD</text>
+<text class="svgsm" x="570" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_V · DKH</text>
+<circle cx="510" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="510" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="510" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="510" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">V</tspan></text>
+<line x1="330" y1="98" x2="510" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="510" y1="106" x2="510" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="61" y="204" width="178" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="73" y="222" fill="#bdc1c6"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="129" y="222" fill="#bdc1c6">BTNH → BTKGH</text>
+<rect x="222" y="262" width="216" height="34" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="2.2"/>
+<rect x="214" y="244" width="232" height="78" rx="8" fill="none" stroke="#e8710a" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="228" y="258" fill="#1a73e8" style="font-size:10px">BTKGH</text>
+<text class="svgsm" x="432" y="258" fill="#8430ce" text-anchor="end" style="font-size:10px">BSKH</text>
+<circle cx="330" cy="279" r="9" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<circle cx="330" cy="279" r="2.6" fill="#e8710a"/>
+<text class="svgsm" x="330" y="312" fill="#202124" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="446" y="283" fill="#e8710a"><tspan font-weight="700">Q·Kᵀ</tspan></text>
+<rect x="253" y="334" width="155" height="26" rx="5" fill="#f8f9fa" stroke="#e8710a" stroke-width="2.2"/>
+<rect x="247" y="328" width="167" height="38" rx="8" fill="none" stroke="#e8710a" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="265" y="352" fill="#e8710a"><tspan font-weight="700">＋ masks</tspan></text>
+<text class="svgsm" x="326" y="352" fill="#5f6368">谁能看谁</text>
+<rect x="234" y="380" width="192" height="26" rx="5" fill="#f8f9fa" stroke="#e8710a" stroke-width="2.2"/>
+<rect x="228" y="374" width="204" height="38" rx="8" fill="none" stroke="#e8710a" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="246" y="398" fill="#e8710a"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="302" y="398" fill="#202124"><tspan font-weight="700">BTSKG（记作 S）</tspan></text>
+<text class="svgsm" x="436" y="398" fill="#d93025">★ <tspan font-weight="700">全图唯一随长度平方长大的量</tspan></text>
+<rect x="222" y="438" width="216" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="228" y="434" fill="#bdc1c6" style="font-size:10px">BTSKG</text>
+<text class="svgsm" x="432" y="434" fill="#bdc1c6" text-anchor="end" style="font-size:10px">BSKH</text>
+<circle cx="330" cy="455" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="455" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="488" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTKGH</tspan></text>
+<text class="svgsm" x="446" y="459" fill="#bdc1c6"><tspan font-weight="700">S·V</tspan></text>
+<rect x="241" y="510" width="178" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="253" y="528" fill="#bdc1c6"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="309" y="528" fill="#bdc1c6">BTKGH → BTNH</text>
+<rect x="222" y="568" width="216" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="228" y="564" fill="#bdc1c6" style="font-size:10px">BTNH</text>
+<text class="svgsm" x="432" y="564" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_O · NHD</text>
+<circle cx="330" cy="585" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="585" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="618" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTD</tspan></text>
+<text class="svgsm" x="446" y="589" fill="#bdc1c6"><tspan font-weight="700">输出投影</tspan></text>
+<rect x="255" y="640" width="150" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="267" y="658" fill="#bdc1c6"><tspan font-weight="700">＋ 残差</tspan></text>
+<text class="svgsm" x="319" y="658" fill="#bdc1c6">BTD</text>
+<rect x="255" y="686" width="150" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="267" y="704" fill="#bdc1c6"><tspan font-weight="700">norm</tspan></text>
+<text class="svgsm" x="304" y="704" fill="#bdc1c6">BTD</text>
+<rect x="130" y="732" width="400" height="50" rx="6" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="330" y="751" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">MLP（本专题一个字都不改它）</tspan></text>
+<text class="svgsm" x="330" y="770" fill="#bdc1c6" text-anchor="middle" style="font-size:10px">BTD ·DF→ BTF ─gelu⊛─ BTF ·FD→ BTD</text>
+<rect x="219" y="800" width="222" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="231" y="818" fill="#bdc1c6"><tspan font-weight="700">＋ 残差 → norm</tspan></text>
+<text class="svgsm" x="328" y="818" fill="#bdc1c6">BTD　→ 下一层</text>
+<line x1="330" y1="230" x2="330" y2="262" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="318" x2="330" y2="334" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="360" x2="330" y2="380" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="406" x2="330" y2="438" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="494" x2="330" y2="510" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="536" x2="330" y2="568" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="624" x2="330" y2="640" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="666" x2="330" y2="686" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="712" x2="330" y2="732" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="782" x2="330" y2="800" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="190" x2="150" y2="204" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="230" x2="150" y2="240" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="240" x2="330" y2="240" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="240" x2="330" y2="262" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="190" x2="330" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="198" x2="462" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="462" y1="198" x2="462" y2="279" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="462" y1="279" x2="438" y2="279" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="510" y1="190" x2="510" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="510" y1="198" x2="512" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="512" y1="198" x2="512" y2="455" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="512" y1="455" x2="438" y2="455" stroke="#bdc1c6" stroke-width="1.2"/>
+<rect x="680" y="66" width="700" height="295" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="694" y="86" fill="#e8710a" style="font-size:13px">② 稀疏，本质上就是换一张 mask</text>
+<text class="svgsm" x="724" y="110" fill="#5f6368">标准因果注意力的 mask 是一个<tspan font-weight="700">下三角</tspan> —— 看全部历史</text>
+<text class="svgsm" x="694" y="129" fill="#e8710a"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="724" y="129" fill="#e8710a">所谓稀疏，就是<tspan font-weight="700">把这张 mask 换成别的形状</tspan>：</text>
+<text class="svgsm" x="694" y="167" fill="#e8710a"><tspan font-weight="700">SWA</tspan></text>
+<text class="svgsm" x="724" y="167" fill="#e8710a">只留主对角线附近一条带 —— 只看最近 W 个</text>
+<text class="svgsm" x="694" y="186" fill="#e8710a"><tspan font-weight="700">NSA</tspan></text>
+<text class="svgsm" x="724" y="186" fill="#e8710a">三条路并存：压缩看全局 ＋ top-k 挑重点 ＋ 滑窗看近处</text>
+<text class="svgsm" x="694" y="205" fill="#e8710a"><tspan font-weight="700">DSA</tspan></text>
+<text class="svgsm" x="724" y="205" fill="#e8710a">拿一个<tspan font-weight="700">轻量索引器</tspan>先打分，只留 top-k 那几块</text>
+<text class="svgsm" x="694" y="224" fill="#e8710a"><tspan font-weight="700">CSA</tspan></text>
+<text class="svgsm" x="724" y="224" fill="#e8710a">先把每 4 个 token 压成 1 个 entry，<tspan font-weight="700">在压缩后的格上</tspan>挑</text>
+<text class="svgsm" x="694" y="262" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="724" y="262" fill="#d93025"><tspan font-weight="700">它跟旋钮① 是正交的</tspan>：一个改 KV 存多少，</text>
+<text class="svgsm" x="724" y="281" fill="#d93025">一个改这张 mask —— 所以两个可以同时上（GLM-5 就是）</text>
+<text class="svgsm" x="694" y="319" fill="#d93025"><tspan font-weight="700">⚠️</tspan></text>
+<text class="svgsm" x="724" y="319" fill="#d93025"><tspan font-weight="700">纸面省下的 FLOPs，要 kernel 跟上了才算数。</tspan></text>
+<text class="svgsm" x="724" y="338" fill="#5f6368">不规则的 mask 对硬件不友好，这是这一支真正的门槛</text>
+<rect x="680" y="377" width="700" height="215" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="694" y="397" fill="#7a5000" style="font-size:13px">📐 把字母换成数字 ——&#160;它到底比别人大多少</text>
+<text class="svgsm" x="694" y="421" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、一层、BF16，把上面那些字母换成实际占多少：</text>
+<text class="svgsm" x="694" y="459" fill="#1a73e8"><tspan font-weight="700">Q/K/V/O</tspan></text>
+<text class="svgsm" x="748" y="459" fill="#1a73e8">四个加起来 —— <tspan font-weight="700">128 MiB</tspan></text>
+<text class="svgsm" x="694" y="478" fill="#d93025"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="735" y="478" fill="#d93025">中间那个矩阵 —— <tspan font-weight="700">32 GiB</tspan></text>
+<text class="svgsm" x="694" y="516" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="726" y="516" fill="#d93025"><tspan font-weight="700">差 256 倍。</tspan>而它俩在图上只隔了两格。</text>
+<text class="svgsm" x="694" y="554" fill="#1a73e8">⭐⭐ <tspan font-weight="700">这就是为什么整个专题都在跟它较劲</tspan> ——</text>
+<text class="svgsm" x="694" y="573" fill="#1a73e8">不是因为它难，是因为<tspan font-weight="700">别的项在它面前都是零头</tspan>。</text>
+<rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="16" y="887" fill="#e8710a">⭐ 一句话记住这个旋钮：<tspan font-weight="700">它改的是「看哪些」，形状不变、只是很多格子不算。</tspan>所以省的是 FLOPs，而 KV 该存多少还得存多少。</text>
+</svg><figcaption>⭐ <b>同一张主线图，只点亮旋钮② 动到的地方</b> —— Q·Kᵀ 和它后面那张 mask。<b>矩阵的形状一点没变</b>，变的是里面有多少格子真的要算。⛔ 所以它跟旋钮① <b>正交</b>，两个可以同时上。</figcaption></figure>
 <h3>3.1 SWA（滑动窗口）</h3>
 <ul><li>每个 token 只看自己前面固定窗口内的（Mistral 7B：<b>4096</b>）</li><li>最简单，KV cache 从随长度增长变成<b>常数</b></li><li>代价很硬：<b>长距离信息只能靠层层传递间接到达</b> —— 第 1 层看 4K，第 2 层能间接摸到 8K，要跨 128K 得堆 32 层</li><li>所以一般<b>不单用</b>，跟全注意力混排（见第六节）</li></ul>
 <h3>3.2 Attention sink —— 一个现象，不是一个方案</h3>
@@ -1213,6 +1752,133 @@ h4 { margin:18px 0 6px; font-size:15px }
 <hr>
 </div></section>
 <section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>旋钮③：换一套数学 —— 线性注意力</h2></div>
+<figure class="fbox fwide" id="fig-tx-k3"><svg viewBox="0 0 1400 822" width="100%" role="img" aria-label="旋钮③ 换一套数学 —— 把那个平方大的矩阵整个删掉">
+<text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">旋钮③ 换一套数学 —— 把那个平方大的矩阵整个删掉</text>
+<text class="svgsm" x="0" y="39" fill="#5f6368">⛔ 这一张跟前两张不一样：<tspan font-weight="700">它不是高亮，是替换。</tspan>原来那四格（Q·Kᵀ → mask → softmax → S·V）没了，换成点亮的这两格。</text>
+<text class="svgsm" x="330" y="88" fill="#bdc1c6" text-anchor="middle" style="font-size:15px"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="356" y="88" fill="#bdc1c6">BTD</text>
+<text class="svgsm" x="384" y="88" fill="#bdc1c6">——&#160;一层的输入</text>
+<rect x="84" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="90" y="116" fill="#bdc1c6" style="font-size:10px">BTD</text>
+<text class="svgsm" x="210" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_Q · DNH</text>
+<circle cx="150" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="150" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="150" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BTNH</tspan></text>
+<text class="svgsm" x="150" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">Q</tspan></text>
+<line x1="330" y1="98" x2="150" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="150" y1="106" x2="150" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="264" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="270" y="116" fill="#bdc1c6" style="font-size:10px">BSD</text>
+<text class="svgsm" x="390" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_K · DKH</text>
+<circle cx="330" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="330" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">K</tspan></text>
+<line x1="330" y1="98" x2="330" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="330" y1="106" x2="330" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="444" y="120" width="132" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="450" y="116" fill="#bdc1c6" style="font-size:10px">BSD</text>
+<text class="svgsm" x="570" y="116" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_V · DKH</text>
+<circle cx="510" cy="137" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="510" cy="137" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="510" y="168" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="510" y="184" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">V</tspan></text>
+<line x1="330" y1="98" x2="510" y2="106" stroke="#bdc1c6" stroke-width="1"/>
+<line x1="510" y1="106" x2="510" y2="120" stroke="#bdc1c6" stroke-width="1"/>
+<rect x="61" y="204" width="178" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="73" y="222" fill="#bdc1c6"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="129" y="222" fill="#bdc1c6">BTNH → BTKGH</text>
+<rect x="222" y="262" width="216" height="34" rx="5" fill="#f3e8fd" stroke="#8430ce" stroke-width="2.2"/>
+<rect x="214" y="244" width="232" height="78" rx="8" fill="none" stroke="#8430ce" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="228" y="258" fill="#1a73e8" style="font-size:10px">BSKH（K）</text>
+<text class="svgsm" x="432" y="258" fill="#8430ce" text-anchor="end" style="font-size:10px">BSKH（V）</text>
+<circle cx="330" cy="279" r="9" fill="none" stroke="#8430ce" stroke-width="1.6"/>
+<circle cx="330" cy="279" r="2.6" fill="#8430ce"/>
+<text class="svgsm" x="330" y="312" fill="#202124" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BKHH</tspan></text>
+<text class="svgsm" x="446" y="283" fill="#8430ce"><tspan font-weight="700">先算 KᵀV ＝ 状态</tspan></text>
+<rect x="222" y="346" width="216" height="34" rx="5" fill="#f3e8fd" stroke="#8430ce" stroke-width="2.2"/>
+<rect x="214" y="328" width="232" height="78" rx="8" fill="none" stroke="#8430ce" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="228" y="342" fill="#1a73e8" style="font-size:10px">BTKGH（Q）</text>
+<text class="svgsm" x="432" y="342" fill="#8430ce" text-anchor="end" style="font-size:10px">BKHH（状态）</text>
+<circle cx="330" cy="363" r="9" fill="none" stroke="#8430ce" stroke-width="1.6"/>
+<circle cx="330" cy="363" r="2.6" fill="#8430ce"/>
+<text class="svgsm" x="330" y="396" fill="#202124" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTKGH</tspan></text>
+<text class="svgsm" x="446" y="367" fill="#8430ce"><tspan font-weight="700">再拿 Q 去读状态</tspan></text>
+<rect x="241" y="418" width="178" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="253" y="436" fill="#bdc1c6"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="309" y="436" fill="#bdc1c6">BTKGH → BTNH</text>
+<rect x="222" y="476" width="216" height="34" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="228" y="472" fill="#bdc1c6" style="font-size:10px">BTNH</text>
+<text class="svgsm" x="432" y="472" fill="#bdc1c6" text-anchor="end" style="font-size:10px">W_O · NHD</text>
+<circle cx="330" cy="493" r="9" fill="none" stroke="#bdc1c6" stroke-width="1.6"/>
+<circle cx="330" cy="493" r="2.6" fill="#bdc1c6"/>
+<text class="svgsm" x="330" y="526" fill="#bdc1c6" text-anchor="middle" style="font-size:13px"><tspan font-weight="700">BTD</tspan></text>
+<text class="svgsm" x="446" y="497" fill="#bdc1c6"><tspan font-weight="700">输出投影</tspan></text>
+<rect x="255" y="548" width="150" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="267" y="566" fill="#bdc1c6"><tspan font-weight="700">＋ 残差</tspan></text>
+<text class="svgsm" x="319" y="566" fill="#bdc1c6">BTD</text>
+<rect x="255" y="594" width="150" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="267" y="612" fill="#bdc1c6"><tspan font-weight="700">norm</tspan></text>
+<text class="svgsm" x="304" y="612" fill="#bdc1c6">BTD</text>
+<rect x="130" y="640" width="400" height="50" rx="6" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="330" y="659" fill="#bdc1c6" text-anchor="middle"><tspan font-weight="700">MLP（本专题一个字都不改它）</tspan></text>
+<text class="svgsm" x="330" y="678" fill="#bdc1c6" text-anchor="middle" style="font-size:10px">BTD ·DF→ BTF ─gelu⊛─ BTF ·FD→ BTD</text>
+<rect x="219" y="708" width="222" height="26" rx="5" fill="#fafafa" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="231" y="726" fill="#bdc1c6"><tspan font-weight="700">＋ 残差 → norm</tspan></text>
+<text class="svgsm" x="328" y="726" fill="#bdc1c6">BTD　→ 下一层</text>
+<line x1="330" y1="230" x2="330" y2="262" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="318" x2="330" y2="346" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="330" y1="402" x2="330" y2="418" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="444" x2="330" y2="476" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="532" x2="330" y2="548" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="574" x2="330" y2="594" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="620" x2="330" y2="640" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="690" x2="330" y2="708" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="190" x2="150" y2="204" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="230" x2="150" y2="240" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="240" x2="330" y2="240" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="240" x2="330" y2="262" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="190" x2="330" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="330" y1="198" x2="462" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="462" y1="198" x2="462" y2="279" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="462" y1="279" x2="438" y2="279" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="510" y1="190" x2="510" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="510" y1="198" x2="512" y2="198" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="512" y1="198" x2="512" y2="279" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="512" y1="279" x2="438" y2="279" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="190" x2="150" y2="338" stroke="#bdc1c6" stroke-width="1.2"/>
+<line x1="150" y1="338" x2="222" y2="338" stroke="#bdc1c6" stroke-width="1.2"/>
+<rect x="680" y="66" width="700" height="314" rx="8" fill="#fff" stroke="#8430ce" stroke-width="1"/>
+<text class="svglbl" x="694" y="86" fill="#8430ce" style="font-size:13px">③ 不用听解释 —— 读输出形状就够了</text>
+<text class="svgsm" x="724" y="110" fill="#5f6368">softmax 的分母要对<tspan font-weight="700">所有位置</tspan>求和，所以它<tspan font-weight="700">锁死了乘法顺序</tspan>：</text>
+<text class="svgsm" x="724" y="129" fill="#5f6368">必须先 Q·Kᵀ（于是必须造出那个平方大的矩阵），再乘 V</text>
+<text class="svgsm" x="694" y="148" fill="#8430ce"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="724" y="148" fill="#8430ce"><tspan font-weight="700">把 softmax 拿掉，乘法就可以重新结合</tspan>：先 KᵀV，再乘 Q</text>
+<text class="svgsm" x="694" y="186" fill="#d93025"><tspan font-weight="700">⭐⭐</tspan></text>
+<text class="svgsm" x="724" y="186" fill="#d93025"><tspan font-weight="700">看点亮那格的输出形状：BKHH。</tspan></text>
+<text class="svgsm" x="724" y="205" fill="#d93025"><tspan font-weight="700">S 不见了。</tspan>状态大小只跟头维 H 有关，<tspan font-weight="700">跟序列多长无关</tspan>。</text>
+<text class="svgsm" x="724" y="224" fill="#d93025">这就是 O(N²) → O(N) 的全部内容，写在形状里，不用相信谁</text>
+<text class="svgsm" x="694" y="262" fill="#e8710a"><tspan font-weight="700">⛔</tspan></text>
+<text class="svgsm" x="724" y="262" fill="#e8710a"><tspan font-weight="700">但代价也写在同一格里。</tspan>因果版不能真的这么一乘 ——</text>
+<text class="svgsm" x="724" y="281" fill="#e8710a">状态要<tspan font-weight="700">按 t 一步步累加</tspan>，于是<tspan font-weight="700">串行回来了</tspan></text>
+<text class="svgsm" x="724" y="300" fill="#e8710a">chunk 化（分块并行）就是为了把并行度再找回来 —— 见 §4.4</text>
+<text class="svgsm" x="694" y="338" fill="#d93025"><tspan font-weight="700">⚠️</tspan></text>
+<text class="svgsm" x="724" y="338" fill="#d93025"><tspan font-weight="700">它不是「更快的 attention」，是另一个模型。</tspan></text>
+<text class="svgsm" x="724" y="357" fill="#5f6368">固定大小的状态 → <tspan font-weight="700">信息必然有损</tspan>，长程精确检索会力不从心</text>
+<rect x="680" y="396" width="700" height="215" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="694" y="416" fill="#7a5000" style="font-size:13px">📐 把字母换成数字 ——&#160;它到底比别人大多少</text>
+<text class="svgsm" x="694" y="440" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、一层、BF16，把上面那些字母换成实际占多少：</text>
+<text class="svgsm" x="694" y="478" fill="#1a73e8"><tspan font-weight="700">Q/K/V/O</tspan></text>
+<text class="svgsm" x="748" y="478" fill="#1a73e8">四个加起来 —— <tspan font-weight="700">128 MiB</tspan></text>
+<text class="svgsm" x="694" y="497" fill="#d93025"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="735" y="497" fill="#d93025">中间那个矩阵 —— <tspan font-weight="700">32 GiB</tspan></text>
+<text class="svgsm" x="694" y="535" fill="#d93025"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="726" y="535" fill="#d93025"><tspan font-weight="700">差 256 倍。</tspan>而它俩在图上只隔了两格。</text>
+<text class="svgsm" x="694" y="573" fill="#1a73e8">⭐⭐ <tspan font-weight="700">这就是为什么整个专题都在跟它较劲</tspan> ——</text>
+<text class="svgsm" x="694" y="592" fill="#1a73e8">不是因为它难，是因为<tspan font-weight="700">别的项在它面前都是零头</tspan>。</text>
+<rect x="0" y="768" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="16" y="795" fill="#8430ce">⭐ 这是三个旋钮里<tspan font-weight="700">唯一改变了模型能表达什么</tspan>的一个。另外两个改的是存法和看法，这一个改的是<tspan font-weight="700">数学本身</tspan>。</text>
+</svg><figcaption>⛔ <b>这一张不是高亮，是替换</b>：原来那四格（Q·Kᵀ → mask → softmax → S·V）整个没了，换成点亮的两格。⭐⭐ <b>不用听解释，读输出形状就够 —— 点亮那格输出 <code>BKHH</code>，S 不见了。</b>状态大小只跟头维有关，跟序列多长无关。</figcaption></figure>
 <h3>4.1 基本换法</h3>
 <p>softmax 注意力必须把所有 K 都留着，是因为 softmax 的分母要对<b>所有位置</b>求和 —— 你没法提前把它们合并。</p>
 <p><b>把 softmax 去掉</b>（换成某个可分解的核函数），求和就可以重排：</p>
