@@ -702,7 +702,7 @@ h4 { margin:18px 0 6px; font-size:15px }
         （每层还是全注意力的形状、只是少看几块）**不能放在同一根轴上比**。 -->
 <p>在拿尺子之前，先看一眼<b>全景</b>：这些名词是什么时候、按什么顺序冒出来的，
   以及今天各家<b>实际上是怎么配的</b>。</p>
-<figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1400 1332" width="100%" role="img" aria-label="Attention 编年史：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉，此后分成四支演化；下半是各家开源模型的混合配比条形图，含混元 Hy3／Hy4 与 GLM-5 系列">
+<figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1400 1439" width="100%" role="img" aria-label="Attention 编年史：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉，此后分成四支演化；下半是各家开源模型的混合配比条形图，含混元 Hy3／Hy4 与 GLM-5 系列">
 <text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">Attention 编年史 ——&#160;<tspan font-weight="700">从 RNN 的一个补丁，到今天各家的混合配比</tspan></text>
 <text class="svgsm" x="0" y="39">⭐ 一句话看懂整段历史：<tspan font-weight="700">Transformer 当初做的交易是「用平方的计算量，买来完全的并行度」——&#160;而这段历史，是在把那笔交易<tspan style="text-decoration:underline">往回赎</tspan>，但不能把并行度还回去。</tspan></text>
 <text class="svgsm" x="0" y="57" fill="#5f6368">线性注意力想赎回 O(N)，代价是重新引入一个<tspan font-weight="700">串行的状态</tspan>；于是 chunk 化又是为了把并行度找回来。<tspan font-weight="700">一个完整的圆。</tspan>　<tspan fill="#5f6368">（信息截至 2026-09-07，全部现搜）</tspan></text>
@@ -793,155 +793,230 @@ h4 { margin:18px 0 6px; font-size:15px }
 <circle cx="947" cy="384" r="4" fill="#1e8e3e"/>
 <line x1="947" y1="384" x2="947" y2="399" stroke="#1e8e3e" stroke-width="1.2"/>
 <text class="svgsm" x="953" y="408" fill="#1e8e3e"><tspan font-weight="700">⭐ FlashAttention</tspan></text>
-<rect x="0" y="447" width="1400" height="633" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<text class="svglbl" x="16" y="471" fill="#202124" style="font-size:13px">二、各家的混合配比 ——&#160;<tspan font-weight="700">「便宜的层 : 全注意力层」，一个循环里各几层</tspan></text>
-<text class="svgsm" x="16" y="490" fill="#d93025">⛔ <tspan font-weight="700">层间混合</tspan>（几层线性配一层全）和<tspan font-weight="700">层内稀疏</tspan>（每层都还是全注意力的形状，只是每个 query 少看几块）<tspan font-weight="700">不是一回事</tspan>——&#160;下面用两种画法分开，<tspan font-weight="700">不能放在同一根轴上比</tspan>。</text>
-<text class="svgsm" x="16" y="513" fill="#5f6368"><tspan font-weight="700">时间</tspan></text>
-<text class="svgsm" x="78" y="513" fill="#5f6368"><tspan font-weight="700">模型</tspan></text>
-<text class="svgsm" x="300" y="513" fill="#5f6368"><tspan font-weight="700">便宜的那一层</tspan></text>
-<text class="svgsm" x="470" y="513" fill="#5f6368"><tspan font-weight="700">一个循环里的配比</tspan></text>
-<text class="svgsm" x="876" y="513" fill="#5f6368"><tspan font-weight="700">备注</tspan></text>
-<line x1="16" y1="519" x2="1384" y2="519" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="16" y="539" fill="#5f6368">2025-01</text>
-<text class="svgsm" x="78" y="539" fill="#202124">MiniMax-01（456B）</text>
-<text class="svgsm" x="300" y="539" fill="#8430ce">Lightning</text>
-<rect x="470" y="527" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="527" width="288" height="16" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="808" y="539" fill="#8430ce"><tspan font-weight="700">7:1</tspan></text>
-<text class="svgsm" x="852" y="539" fill="#5f6368">88%</text>
-<text class="svgsm" x="876" y="539" fill="#5f6368">线性这一支第一次上到旗舰规模</text>
-<text class="svgsm" x="16" y="566" fill="#5f6368">2025-09</text>
-<text class="svgsm" x="78" y="566" fill="#202124">Qwen3-Next（80B/3B）</text>
-<text class="svgsm" x="300" y="566" fill="#1a73e8">Gated DeltaNet</text>
-<rect x="470" y="554" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="554" width="247" height="16" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="808" y="566" fill="#1a73e8"><tspan font-weight="700">3:1</tspan></text>
-<text class="svgsm" x="852" y="566" fill="#5f6368">75%</text>
-<text class="svgsm" x="16" y="593" fill="#5f6368">2025-10</text>
-<text class="svgsm" x="78" y="593" fill="#202124">MiniMax M2</text>
-<text class="svgsm" x="300" y="593" fill="#5f6368">——</text>
-<rect x="470" y="581" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="808" y="593" fill="#5f6368"><tspan font-weight="700">纯全</tspan></text>
-<text class="svgsm" x="852" y="593" fill="#5f6368">0%</text>
-<text class="svgsm" x="876" y="593" fill="#5f6368">⛔ <tspan font-weight="700">退回全注意力</tspan>：低精度状态敏感、prefix cache 难做</text>
-<text class="svgsm" x="16" y="620" fill="#5f6368">2025-10</text>
-<text class="svgsm" x="78" y="620" fill="#202124">Kimi Linear</text>
-<text class="svgsm" x="300" y="620" fill="#1a73e8">KDA</text>
-<rect x="470" y="608" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="608" width="247" height="16" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="808" y="620" fill="#1a73e8"><tspan font-weight="700">3:1</tspan></text>
-<text class="svgsm" x="852" y="620" fill="#5f6368">75%</text>
-<text class="svgsm" x="876" y="620" fill="#5f6368">KDA＝GDN ＋ 按通道门控</text>
-<text class="svgsm" x="16" y="647" fill="#5f6368">2026-01</text>
-<text class="svgsm" x="78" y="647" fill="#202124">小米 MiMo-V2-Flash</text>
-<text class="svgsm" x="300" y="647" fill="#00838f">SWA（窗口 128）</text>
-<rect x="470" y="635" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="635" width="275" height="16" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="808" y="647" fill="#00838f"><tspan font-weight="700">5:1</tspan></text>
-<text class="svgsm" x="852" y="647" fill="#5f6368">83%</text>
-<text class="svgsm" x="16" y="674" fill="#5f6368">2026-02</text>
-<text class="svgsm" x="78" y="674" fill="#202124">GLM-5（355B–744B）</text>
-<text class="svgsm" x="300" y="674" fill="#e8710a">DSA 稀疏</text>
-<rect x="470" y="662" width="330" height="16" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1.4" stroke-dasharray="4,3"/>
-<text class="svgsm" x="635" y="674" fill="#e8710a" text-anchor="middle"><tspan font-weight="700">层内稀疏 ——&#160;不是层间混合</tspan></text>
-<text class="svgsm" x="812" y="674" fill="#5f6368">智谱第一次上稀疏：MLA ＋ DeepSeek Sparse Attention</text>
-<text class="svgsm" x="16" y="701" fill="#5f6368">2026-03</text>
-<text class="svgsm" x="78" y="701" fill="#202124">Qwen3.5（0.8B–397B）</text>
-<text class="svgsm" x="300" y="701" fill="#1a73e8">Gated DeltaNet</text>
-<rect x="470" y="689" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="689" width="247" height="16" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="808" y="701" fill="#1a73e8"><tspan font-weight="700">3:1</tspan></text>
-<text class="svgsm" x="852" y="701" fill="#5f6368">75%</text>
-<text class="svgsm" x="876" y="701" fill="#5f6368">全家族统一：3×(GDN→FFN) → 1×(Gated Attn→FFN)</text>
-<text class="svgsm" x="16" y="728" fill="#5f6368">2026-04</text>
-<text class="svgsm" x="78" y="728" fill="#202124"><tspan font-weight="700">⭐ 小米 MiMo-V2.5-Pro</tspan></text>
-<text class="svgsm" x="300" y="728" fill="#1e8e3e">SWA（窗口 128）</text>
-<rect x="470" y="716" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="716" width="282" height="16" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="808" y="728" fill="#1e8e3e"><tspan font-weight="700">6:1</tspan></text>
-<text class="svgsm" x="852" y="728" fill="#5f6368">86%</text>
-<text class="svgsm" x="876" y="728" fill="#5f6368">窗口只有 128 ——&#160;比谁都激进</text>
-<text class="svgsm" x="16" y="755" fill="#5f6368">2026-06</text>
-<text class="svgsm" x="78" y="755" fill="#202124">GLM-5.2（744B）</text>
-<text class="svgsm" x="300" y="755" fill="#e8710a">DSA ＋ IndexShare</text>
-<rect x="470" y="743" width="330" height="16" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1.4" stroke-dasharray="4,3"/>
-<text class="svgsm" x="635" y="755" fill="#e8710a" text-anchor="middle"><tspan font-weight="700">层内稀疏 ——&#160;不是层间混合</tspan></text>
-<text class="svgsm" x="812" y="755" fill="#5f6368">⭐ 每四个稀疏层共用一个 indexer，1M 下每 token 省 2.9× FLOP</text>
-<text class="svgsm" x="16" y="782" fill="#5f6368">2026-06</text>
-<text class="svgsm" x="78" y="782" fill="#202124">Ling 2.6（蚂蚁百灵）</text>
-<text class="svgsm" x="300" y="782" fill="#8430ce">Lightning</text>
-<rect x="470" y="770" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="770" width="288" height="16" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="808" y="782" fill="#8430ce"><tspan font-weight="700">7:1</tspan></text>
-<text class="svgsm" x="852" y="782" fill="#5f6368">88%</text>
+<rect x="0" y="447" width="1400" height="740" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="16" y="471" fill="#202124" style="font-size:13px">二、一个循环里都有哪些层 ——&#160;<tspan font-weight="700">一格 ＝ 一层，格子的颜色 ＝ 那一层用什么注意力</tspan></text>
+<text class="svgsm" x="16" y="490" fill="#d93025">⭐ <tspan font-weight="700">整条一色</tspan>＝每一层都一样，花样在<tspan font-weight="700">层内部</tspan>（层内稀疏就长这样）；<tspan font-weight="700">切成格子</tspan>＝层与层不一样，花样在<tspan font-weight="700">层之间</tspan>。——&#160;<tspan font-weight="700">这两件事不能放在同一根轴上比。</tspan></text>
+<text class="svgsm" x="16" y="513" fill="#202124"><tspan font-weight="700">线性：</tspan></text>
+<rect x="56" y="503" width="13" height="13" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="74" y="513" fill="#5f6368">KDA</text>
+<rect x="106" y="503" width="13" height="13" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<text class="svgsm" x="124" y="513" fill="#5f6368">GDN</text>
+<rect x="156" y="503" width="13" height="13" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="174" y="513" fill="#5f6368">Lightning</text>
+<text class="svgsm" x="254" y="513" fill="#202124"><tspan font-weight="700">窗口：</tspan></text>
+<rect x="294" y="503" width="13" height="13" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="312" y="513" fill="#5f6368">SWA</text>
+<text class="svgsm" x="354" y="513" fill="#202124"><tspan font-weight="700">全注意力：</tspan></text>
+<rect x="417" y="503" width="13" height="13" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="435" y="513" fill="#5f6368">MLA／Gated MLA</text>
+<rect x="536" y="503" width="13" height="13" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="554" y="513" fill="#5f6368">Gated Attn／GQA</text>
+<text class="svgsm" x="671" y="513" fill="#202124"><tspan font-weight="700">稀疏：</tspan></text>
+<rect x="711" y="503" width="13" height="13" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="729" y="513" fill="#5f6368">DSA／MSA／稀疏 MLA／CSA</text>
+<rect x="882" y="503" width="13" height="13" rx="3" fill="#a50e0e" stroke="#a50e0e" stroke-width="1"/>
+<text class="svgsm" x="900" y="513" fill="#5f6368">HCA</text>
+<text class="svgsm" x="16" y="539" fill="#5f6368"><tspan font-weight="700">时间</tspan></text>
+<text class="svgsm" x="78" y="539" fill="#5f6368"><tspan font-weight="700">模型</tspan></text>
+<text class="svgsm" x="288" y="539" fill="#5f6368"><tspan font-weight="700">这一层 ＋ 那一层</tspan></text>
+<text class="svgsm" x="520" y="539" fill="#5f6368"><tspan font-weight="700">一个循环（一格 ＝ 一层）</tspan></text>
+<text class="svgsm" x="811" y="539" fill="#5f6368"><tspan font-weight="700">配比</tspan></text>
+<text class="svgsm" x="869" y="539" fill="#5f6368"><tspan font-weight="700">备注</tspan></text>
+<line x1="16" y1="545" x2="1384" y2="545" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="16" y="569" fill="#5f6368">2025-01</text>
+<text class="svgsm" x="78" y="569" fill="#202124">MiniMax-01（456B）</text>
+<text class="svgsm" x="288" y="569" fill="#8430ce"><tspan font-weight="700">Lightning</tspan></text>
+<text class="svgsm" x="349" y="569" fill="#5f6368">＋</text>
+<text class="svgsm" x="364" y="569" fill="#f9ab00"><tspan font-weight="700">全注意力</tspan></text>
+<rect x="520" y="556" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="555" y="556" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="590" y="556" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="625" y="556" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="660" y="556" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="695" y="556" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="730" y="556" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="765" y="556" width="32" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="811" y="569" fill="#8430ce"><tspan font-weight="700">7:1</tspan></text>
+<text class="svgsm" x="869" y="569" fill="#5f6368">线性这一支第一次上到旗舰规模</text>
+<text class="svgsm" x="16" y="599" fill="#5f6368">2025-09</text>
+<text class="svgsm" x="78" y="599" fill="#202124">Qwen3-Next（80B/3B）</text>
+<text class="svgsm" x="288" y="599" fill="#12b5cb"><tspan font-weight="700">Gated DeltaNet</tspan></text>
+<text class="svgsm" x="381" y="599" fill="#5f6368">＋</text>
+<text class="svgsm" x="396" y="599" fill="#f9ab00"><tspan font-weight="700">Gated Attention</tspan></text>
+<rect x="520" y="586" width="32" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<rect x="555" y="586" width="32" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<rect x="590" y="586" width="32" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<rect x="625" y="586" width="32" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="811" y="599" fill="#12b5cb"><tspan font-weight="700">3:1</tspan></text>
+<text class="svgsm" x="16" y="629" fill="#5f6368">2025-10</text>
+<text class="svgsm" x="78" y="629" fill="#202124">MiniMax M2</text>
+<text class="svgsm" x="288" y="629" fill="#f9ab00"><tspan font-weight="700">全注意力</tspan></text>
+<rect x="520" y="616" width="277" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="658" y="629" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">每一层都是这个</tspan></text>
+<text class="svgsm" x="811" y="629" fill="#5f6368">——</text>
+<text class="svgsm" x="869" y="629" fill="#5f6368">⛔ <tspan font-weight="700">退回全注意力</tspan>：低精度状态敏感、prefix cache 难做</text>
+<text class="svgsm" x="16" y="659" fill="#5f6368">2025-10</text>
+<text class="svgsm" x="78" y="659" fill="#202124">Kimi Linear</text>
+<text class="svgsm" x="288" y="659" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="311" y="659" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="659" fill="#e8710a"><tspan font-weight="700">MLA</tspan></text>
+<rect x="520" y="646" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="555" y="646" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="590" y="646" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="625" y="646" width="32" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="811" y="659" fill="#1a73e8"><tspan font-weight="700">3:1</tspan></text>
+<text class="svgsm" x="869" y="659" fill="#5f6368">KDA＝GDN ＋ 按通道门控</text>
+<text class="svgsm" x="16" y="689" fill="#5f6368">2026-01</text>
+<text class="svgsm" x="78" y="689" fill="#202124">小米 MiMo-V2-Flash</text>
+<text class="svgsm" x="288" y="689" fill="#00838f"><tspan font-weight="700">SWA</tspan></text>
+<text class="svgsm" x="311" y="689" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="689" fill="#f9ab00"><tspan font-weight="700">全注意力</tspan></text>
+<rect x="520" y="676" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="555" y="676" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="590" y="676" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="625" y="676" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="660" y="676" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="695" y="676" width="32" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="811" y="689" fill="#00838f"><tspan font-weight="700">5:1</tspan></text>
+<text class="svgsm" x="869" y="689" fill="#5f6368">SWA 窗口只有 128</text>
+<text class="svgsm" x="16" y="719" fill="#5f6368">2026-02</text>
+<text class="svgsm" x="78" y="719" fill="#202124">GLM-5（355B–744B）</text>
+<text class="svgsm" x="288" y="719" fill="#d93025"><tspan font-weight="700">DSA 稀疏 MLA</tspan></text>
+<rect x="520" y="706" width="277" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="658" y="719" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">每一层都是这个</tspan></text>
+<text class="svgsm" x="811" y="719" fill="#5f6368">——</text>
+<text class="svgsm" x="869" y="719" fill="#5f6368">智谱第一次上稀疏：MLA ＋ DeepSeek Sparse Attention</text>
+<text class="svgsm" x="16" y="749" fill="#5f6368">2026-03</text>
+<text class="svgsm" x="78" y="749" fill="#202124">Qwen3.5（0.8B–397B）</text>
+<text class="svgsm" x="288" y="749" fill="#12b5cb"><tspan font-weight="700">Gated DeltaNet</tspan></text>
+<text class="svgsm" x="381" y="749" fill="#5f6368">＋</text>
+<text class="svgsm" x="396" y="749" fill="#f9ab00"><tspan font-weight="700">Gated Attention</tspan></text>
+<rect x="520" y="736" width="32" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<rect x="555" y="736" width="32" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<rect x="590" y="736" width="32" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<rect x="625" y="736" width="32" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="811" y="749" fill="#12b5cb"><tspan font-weight="700">3:1</tspan></text>
+<text class="svgsm" x="869" y="749" fill="#5f6368">全家族统一：3×(GDN→FFN) → 1×(Gated Attn→FFN)</text>
+<text class="svgsm" x="16" y="779" fill="#5f6368">2026-04</text>
+<text class="svgsm" x="78" y="779" fill="#202124"><tspan font-weight="700">⭐ 小米 MiMo-V2.5-Pro</tspan></text>
+<text class="svgsm" x="288" y="779" fill="#00838f"><tspan font-weight="700">SWA</tspan></text>
+<text class="svgsm" x="311" y="779" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="779" fill="#f9ab00"><tspan font-weight="700">全注意力</tspan></text>
+<rect x="520" y="766" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="555" y="766" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="590" y="766" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="625" y="766" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="660" y="766" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="695" y="766" width="32" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="730" y="766" width="32" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="811" y="779" fill="#00838f"><tspan font-weight="700">6:1</tspan></text>
+<text class="svgsm" x="869" y="779" fill="#5f6368">窗口还是 128 ——&#160;比谁都激进</text>
 <text class="svgsm" x="16" y="809" fill="#5f6368">2026-06</text>
-<text class="svgsm" x="78" y="809" fill="#202124">MiniMax M3</text>
-<text class="svgsm" x="300" y="809" fill="#e8710a">MSA 稀疏</text>
-<rect x="470" y="797" width="330" height="16" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1.4" stroke-dasharray="4,3"/>
-<text class="svgsm" x="635" y="809" fill="#e8710a" text-anchor="middle"><tspan font-weight="700">层内稀疏 ——&#160;不是层间混合</tspan></text>
-<text class="svgsm" x="812" y="809" fill="#5f6368">⭐ 第三次转向：不回线性，改走稀疏。每 query 只看 top-16 个 128-token 块</text>
-<text class="svgsm" x="16" y="836" fill="#5f6368">2026-06</text>
-<text class="svgsm" x="78" y="836" fill="#202124">DeepSeek V4</text>
-<text class="svgsm" x="300" y="836" fill="#e8710a">CSA ＋ HCA</text>
-<rect x="470" y="824" width="330" height="16" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1.4" stroke-dasharray="4,3"/>
-<text class="svgsm" x="635" y="836" fill="#e8710a" text-anchor="middle"><tspan font-weight="700">层内稀疏 ——&#160;不是层间混合</tspan></text>
-<text class="svgsm" x="812" y="836" fill="#5f6368">按距离分层压缩</text>
-<text class="svgsm" x="16" y="863" fill="#5f6368">2026-07</text>
-<text class="svgsm" x="78" y="863" fill="#202124">Kimi K3（2.8T）</text>
-<text class="svgsm" x="300" y="863" fill="#3b6fd4">KDA</text>
-<rect x="470" y="851" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="851" width="244" height="16" rx="3" fill="#3b6fd4" stroke="#3b6fd4" stroke-width="1"/>
-<text class="svgsm" x="808" y="863" fill="#3b6fd4"><tspan font-weight="700">≈2.9:1</tspan></text>
-<text class="svgsm" x="852" y="863" fill="#5f6368">74%</text>
-<text class="svgsm" x="876" y="863" fill="#5f6368">93 层 ＝ 69 KDA ＋ 24 Gated MLA（KDA×3 → MLA×1，多出一层）</text>
-<text class="svgsm" x="16" y="890" fill="#5f6368">2026-07</text>
-<text class="svgsm" x="78" y="890" fill="#202124">混元 Hy3（295B/21B）</text>
-<text class="svgsm" x="300" y="890" fill="#5f6368">——</text>
-<rect x="470" y="878" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="808" y="890" fill="#5f6368"><tspan font-weight="700">纯全</tspan></text>
-<text class="svgsm" x="852" y="890" fill="#5f6368">0%</text>
-<text class="svgsm" x="876" y="890" fill="#5f6368">⛔ 80 层全是 GQA-8 ——&#160;<tspan font-weight="700">线性一层都没上</tspan></text>
-<text class="svgsm" x="16" y="917" fill="#5f6368">2026-07</text>
-<text class="svgsm" x="78" y="917" fill="#202124">Ling-3.0-flash（124B/5.1B）</text>
-<text class="svgsm" x="300" y="917" fill="#00838f">KDA</text>
-<rect x="470" y="905" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="905" width="275" height="16" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="808" y="917" fill="#00838f"><tspan font-weight="700">5:1</tspan></text>
-<text class="svgsm" x="852" y="917" fill="#5f6368">83%</text>
-<text class="svgsm" x="876" y="917" fill="#5f6368">35 KDA ＋ 7 Gated MLA ——&#160;<tspan font-weight="700">预训练第一天就是混合的</tspan></text>
-<text class="svgsm" x="16" y="944" fill="#5f6368">2026-08</text>
-<text class="svgsm" x="78" y="944" fill="#202124">混元 Hy4-preview（770B/49B）</text>
-<text class="svgsm" x="300" y="944" fill="#e8710a">Gated DSA</text>
-<rect x="470" y="932" width="330" height="16" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1.4" stroke-dasharray="4,3"/>
-<text class="svgsm" x="635" y="944" fill="#e8710a" text-anchor="middle"><tspan font-weight="700">层内稀疏 ——&#160;不是层间混合</tspan></text>
-<text class="svgsm" x="812" y="944" fill="#5f6368">78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）</text>
-<text class="svgsm" x="16" y="971" fill="#5f6368">2026-08</text>
-<text class="svgsm" x="78" y="971" fill="#202124"><tspan font-weight="700">⭐ GLM-5.3-Flash（321B/18B）</tspan></text>
-<text class="svgsm" x="300" y="971" fill="#1a73e8">KDA</text>
-<rect x="470" y="959" width="330" height="16" rx="3" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="959" width="249" height="16" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="808" y="971" fill="#1a73e8"><tspan font-weight="700">3:1</tspan></text>
-<text class="svgsm" x="852" y="971" fill="#5f6368">76%</text>
-<text class="svgsm" x="876" y="971" fill="#5f6368">45 层 ＝ 34 KDA ＋ 11 稀疏 MLA ——&#160;<tspan font-weight="700">第一次线性和稀疏同锅</tspan></text>
-<rect x="16" y="1004" width="1368" height="62" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
-<text class="svglbl" x="30" y="1024" fill="#174ea6" style="font-size:12px">⭐ 这张条形图一眼能看出两件事</text>
-<text class="svgsm" x="30" y="1044" fill="#174ea6">① 表里 17 行：<tspan font-weight="700">10 个层间混合、5 个层内稀疏、2 个明确用纯全注意力</tspan>。而<tspan font-weight="700">搞层间混合的那 10 个，配比无一例外落在 3:1 ～ 7:1</tspan>——&#160;便宜的层占 75%–87.5%。<tspan font-weight="700">没有人敢全用线性，也没有人只掺一两层。</tspan></text>
-<text class="svgsm" x="30" y="1060" fill="#174ea6">② <tspan font-weight="700">分派系</tspan>：KDA／GDN 那一派偏 <tspan font-weight="700">3:1–5:1</tspan>，Lightning 那一派偏 <tspan font-weight="700">7:1</tspan>，SWA 那一派偏 <tspan font-weight="700">5:1–6:1</tspan>——&#160;<tspan font-weight="700">用哪种便宜层，决定了你敢配多少。</tspan></text>
-<rect x="0" y="1094" width="1400" height="226" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
-<text class="svglbl" x="16" y="1118" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
-<text class="svgsm" x="16" y="1142" fill="#7a5000"><tspan font-weight="700">MiniMax</tspan></text>
-<text class="svgsm" x="118" y="1142" fill="#7a5000">线性（M1）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
-<text class="svgsm" x="16" y="1161" fill="#7a5000"><tspan font-weight="700">腾讯混元</tspan></text>
-<text class="svgsm" x="118" y="1161" fill="#7a5000">Hy3 <tspan font-weight="700">80 层纯 GQA-8</tspan>（连线性都没上）→&#160;Hy4 <tspan font-weight="700">78 层全 Gated DSA</tspan>——&#160;<tspan font-weight="700">跳过线性那一支，直接进稀疏</tspan></text>
-<text class="svgsm" x="16" y="1180" fill="#7a5000"><tspan font-weight="700">智谱 GLM</tspan></text>
-<text class="svgsm" x="118" y="1180" fill="#7a5000">5 上 DSA →&#160;5.2 加 <tspan font-weight="700">IndexShare</tspan> →&#160;5.3-Flash <tspan font-weight="700">第一次线性＋稀疏同锅</tspan>——&#160;半年走完三步</text>
-<text class="svglbl" x="16" y="1216" fill="#174ea6" style="font-size:12px">⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线</text>
-<text class="svgsm" x="16" y="1236" fill="#174ea6">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan> 四层一循环 ——&#160;每 4 层只有 1 层自己算索引。</text>
-<text class="svgsm" x="16" y="1254" fill="#174ea6">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
-<rect x="16" y="1266" width="1368" height="1" rx="0" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
-<text class="svglbl" x="16" y="1288" fill="#d93025" style="font-size:12px">⚠️ <tspan font-weight="700">一条必须带上的限定：稀疏那一档的账，纸面上拿不到</tspan></text>
-<text class="svgsm" x="16" y="1306" fill="#5f6368">MiniMax M3 的 GGUF 发布说明写着「MSA 不支持 →&#160;推理退回稠密」——&#160;<tspan font-weight="700">纸面省下的 FLOP，要 kernel 跟上了才算数</tspan>。这一栏的每一个「层内稀疏」，都该配一句「在哪个引擎上」。</text>
-</svg><figcaption>⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。<b>下半 · 各家配比</b>：<b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>（便宜的层占 75%–87.5%）；另有两家明确用纯全注意力，五家走层内稀疏。⛔ <b>层间混合与层内稀疏用两种画法分开，不能同轴比较。</b><span class="sub">信息截至 2026-09-07，全部现搜；出处见图脚。</span></figcaption></figure>
+<text class="svgsm" x="78" y="809" fill="#202124">GLM-5.2（744B）</text>
+<text class="svgsm" x="288" y="809" fill="#d93025"><tspan font-weight="700">DSA 稀疏 MLA</tspan></text>
+<rect x="520" y="796" width="277" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="658" y="809" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">每一层都是这个</tspan></text>
+<text class="svgsm" x="811" y="809" fill="#5f6368">——</text>
+<text class="svgsm" x="869" y="809" fill="#5f6368">⭐ ＋IndexShare：每四个稀疏层共用一个 indexer，1M 下省 2.9× FLOP</text>
+<text class="svgsm" x="16" y="839" fill="#5f6368">2026-06</text>
+<text class="svgsm" x="78" y="839" fill="#202124">Ling 2.6（蚂蚁百灵）</text>
+<text class="svgsm" x="288" y="839" fill="#8430ce"><tspan font-weight="700">Lightning</tspan></text>
+<text class="svgsm" x="349" y="839" fill="#5f6368">＋</text>
+<text class="svgsm" x="364" y="839" fill="#e8710a"><tspan font-weight="700">MLA</tspan></text>
+<rect x="520" y="826" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="555" y="826" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="590" y="826" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="625" y="826" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="660" y="826" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="695" y="826" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="730" y="826" width="32" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="765" y="826" width="32" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="811" y="839" fill="#8430ce"><tspan font-weight="700">7:1</tspan></text>
+<text class="svgsm" x="16" y="869" fill="#5f6368">2026-06</text>
+<text class="svgsm" x="78" y="869" fill="#202124">MiniMax M3</text>
+<text class="svgsm" x="288" y="869" fill="#d93025"><tspan font-weight="700">MSA 稀疏</tspan></text>
+<rect x="520" y="856" width="277" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="658" y="869" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">每一层都是这个</tspan></text>
+<text class="svgsm" x="811" y="869" fill="#5f6368">——</text>
+<text class="svgsm" x="869" y="869" fill="#5f6368">⭐ 第三次转向：不回线性，改走稀疏。每 query 只看 top-16 个 128-token 块</text>
+<text class="svgsm" x="16" y="899" fill="#5f6368">2026-06</text>
+<text class="svgsm" x="78" y="899" fill="#202124">DeepSeek V4</text>
+<text class="svgsm" x="288" y="899" fill="#a50e0e"><tspan font-weight="700">HCA</tspan></text>
+<text class="svgsm" x="311" y="899" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="899" fill="#d93025"><tspan font-weight="700">CSA</tspan></text>
+<rect x="520" y="886" width="32" height="18" rx="3" fill="#a50e0e" stroke="#a50e0e" stroke-width="1"/>
+<rect x="555" y="886" width="32" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="811" y="899" fill="#a50e0e"><tspan font-weight="700">1:1</tspan></text>
+<text class="svgsm" x="869" y="899" fill="#5f6368">HCA 与 CSA 交替：压缩率 128 的粗看 ＋ 压缩率 4 的细看</text>
+<text class="svgsm" x="16" y="929" fill="#5f6368">2026-07</text>
+<text class="svgsm" x="78" y="929" fill="#202124">Kimi K3（2.8T）</text>
+<text class="svgsm" x="288" y="929" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="311" y="929" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="929" fill="#e8710a"><tspan font-weight="700">Gated MLA</tspan></text>
+<rect x="520" y="916" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="555" y="916" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="590" y="916" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="625" y="916" width="32" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="811" y="929" fill="#1a73e8"><tspan font-weight="700">3:1</tspan></text>
+<text class="svgsm" x="869" y="929" fill="#5f6368">93 层 ＝ 69 KDA ＋ 24 Gated MLA（比整齐的 3:1 多出一层 MLA）</text>
+<text class="svgsm" x="16" y="959" fill="#5f6368">2026-07</text>
+<text class="svgsm" x="78" y="959" fill="#202124">混元 Hy3（295B/21B）</text>
+<text class="svgsm" x="288" y="959" fill="#f9ab00"><tspan font-weight="700">GQA-8</tspan></text>
+<rect x="520" y="946" width="277" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="658" y="959" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">每一层都是这个</tspan></text>
+<text class="svgsm" x="811" y="959" fill="#5f6368">——</text>
+<text class="svgsm" x="869" y="959" fill="#5f6368">⛔ 80 层全是 GQA-8 ——&#160;<tspan font-weight="700">线性一层都没上</tspan></text>
+<text class="svgsm" x="16" y="989" fill="#5f6368">2026-07</text>
+<text class="svgsm" x="78" y="989" fill="#202124">Ling-3.0-flash（124B/5.1B）</text>
+<text class="svgsm" x="288" y="989" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="311" y="989" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="989" fill="#e8710a"><tspan font-weight="700">Gated MLA</tspan></text>
+<rect x="520" y="976" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="555" y="976" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="590" y="976" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="625" y="976" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="660" y="976" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="695" y="976" width="32" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="811" y="989" fill="#1a73e8"><tspan font-weight="700">5:1</tspan></text>
+<text class="svgsm" x="869" y="989" fill="#5f6368">42 层 ＝ 35 KDA ＋ 7 MLA，<tspan font-weight="700">预训练第一天就是混合的</tspan></text>
+<text class="svgsm" x="16" y="1019" fill="#5f6368">2026-08</text>
+<text class="svgsm" x="78" y="1019" fill="#202124">混元 Hy4-preview（770B/49B）</text>
+<text class="svgsm" x="288" y="1019" fill="#d93025"><tspan font-weight="700">Gated DSA</tspan></text>
+<rect x="520" y="1006" width="277" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="658" y="1019" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">每一层都是这个</tspan></text>
+<text class="svgsm" x="811" y="1019" fill="#5f6368">——</text>
+<text class="svgsm" x="869" y="1019" fill="#5f6368">78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）</text>
+<text class="svgsm" x="16" y="1049" fill="#5f6368">2026-08</text>
+<text class="svgsm" x="78" y="1049" fill="#202124"><tspan font-weight="700">⭐ GLM-5.3-Flash（321B/18B）</tspan></text>
+<text class="svgsm" x="288" y="1049" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="311" y="1049" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="1049" fill="#d93025"><tspan font-weight="700">稀疏 MLA</tspan></text>
+<rect x="520" y="1036" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="555" y="1036" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="590" y="1036" width="32" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="625" y="1036" width="32" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="811" y="1049" fill="#1a73e8"><tspan font-weight="700">3:1</tspan></text>
+<text class="svgsm" x="869" y="1049" fill="#5f6368">45 层 ＝ 34 KDA ＋ 11 稀疏 MLA ——&#160;<tspan font-weight="700">第一次线性和稀疏同锅</tspan></text>
+<rect x="16" y="1085" width="1368" height="88" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="30" y="1105" fill="#174ea6" style="font-size:12px">⭐ 这张格子图一眼能看出三件事</text>
+<text class="svgsm" x="30" y="1125" fill="#174ea6">① 表里 17 家：<tspan font-weight="700">10 家是「便宜的层 ＋ 全注意力／稀疏层」</tspan>，6 家<tspan font-weight="700">每层同构</tspan>（整条一色），1 家是稀疏配稀疏。而那 10 家混合的，<tspan font-weight="700">配比无一例外落在 3:1 ～ 7:1</tspan>——&#160;<tspan font-weight="700">没有人敢全用线性，也没有人只掺一两层。</tspan></text>
+<text class="svgsm" x="30" y="1143" fill="#174ea6">② <tspan font-weight="700">分派系</tspan>：KDA／GDN 那一派偏 <tspan font-weight="700">3:1–5:1</tspan>，Lightning 那一派偏 <tspan font-weight="700">7:1</tspan>，SWA 那一派偏 <tspan font-weight="700">5:1–6:1</tspan>——&#160;<tspan font-weight="700">线性／窗口那一层用哪种，决定了你敢配多少。</tspan></text>
+<text class="svgsm" x="30" y="1161" fill="#174ea6">③ ⭐ <tspan font-weight="700">扫一眼颜色搭配</tspan>：混合的那 10 家里，<tspan font-weight="700">9 家都是「冷色 ＋ 橙黄」</tspan>——&#160;便宜的层配一层全注意力。<tspan font-weight="700">只有 GLM-5.3-Flash（321B/18B） 是「蓝 ＋ 红」：它配的那层「贵的」，本身已经是稀疏的了。</tspan></text>
+<rect x="0" y="1201" width="1400" height="226" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="16" y="1225" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
+<text class="svgsm" x="16" y="1249" fill="#7a5000"><tspan font-weight="700">MiniMax</tspan></text>
+<text class="svgsm" x="118" y="1249" fill="#7a5000">线性（M1）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
+<text class="svgsm" x="16" y="1268" fill="#7a5000"><tspan font-weight="700">腾讯混元</tspan></text>
+<text class="svgsm" x="118" y="1268" fill="#7a5000">Hy3 <tspan font-weight="700">80 层纯 GQA-8</tspan>（连线性都没上）→&#160;Hy4 <tspan font-weight="700">78 层全 Gated DSA</tspan>——&#160;<tspan font-weight="700">跳过线性那一支，直接进稀疏</tspan></text>
+<text class="svgsm" x="16" y="1287" fill="#7a5000"><tspan font-weight="700">智谱 GLM</tspan></text>
+<text class="svgsm" x="118" y="1287" fill="#7a5000">5 上 DSA →&#160;5.2 加 <tspan font-weight="700">IndexShare</tspan> →&#160;5.3-Flash <tspan font-weight="700">第一次线性＋稀疏同锅</tspan>——&#160;半年走完三步</text>
+<text class="svglbl" x="16" y="1323" fill="#174ea6" style="font-size:12px">⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线</text>
+<text class="svgsm" x="16" y="1343" fill="#174ea6">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan> 四层一循环 ——&#160;每 4 层只有 1 层自己算索引。</text>
+<text class="svgsm" x="16" y="1361" fill="#174ea6">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
+<rect x="16" y="1373" width="1368" height="1" rx="0" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svglbl" x="16" y="1395" fill="#d93025" style="font-size:12px">⚠️ <tspan font-weight="700">一条必须带上的限定：稀疏那一档的账，纸面上拿不到</tspan></text>
+<text class="svgsm" x="16" y="1413" fill="#5f6368">MiniMax M3 的 GGUF 发布说明写着「MSA 不支持 →&#160;推理退回稠密」——&#160;<tspan font-weight="700">纸面省下的 FLOP，要 kernel 跟上了才算数</tspan>。这一栏的每一个「层内稀疏」，都该配一句「在哪个引擎上」。</text>
+</svg><figcaption>⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。<b>下半 · 一个循环里都有哪些层</b>：<b>一格 ＝ 一层，颜色 ＝ 那一层用什么注意力</b>。整条一色 ＝ 每层同构（花样在层内部）；切成格子 ＝ 层与层不一样。⭐ <b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>；而扫一眼颜色就会发现，<b>只有 GLM-5.3-Flash 是「蓝 ＋ 红」</b> ——&nbsp;它配的那层「贵的」本身已经是稀疏的了。<span class="sub">信息截至 2026-09-07，全部现搜；出处见图脚。</span></figcaption></figure>
 <p class="sub">⭐ <b>这张图有两个重心。</b>上半是<b>编年史</b>——&nbsp;
   四条支线各修各的毛病，看完你会发现<b>每一步都是在修上一步暴露的问题，没有一步是凭空发明</b>。
   下半是<b>各家的混合配比</b> ——&nbsp;<b>所有人都落在 3:1 ～ 7:1 这个区间里</b>，

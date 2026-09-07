@@ -18,17 +18,32 @@
    线性注意力想赎回 O(N)，代价是重新引入一个串行的状态；
    于是 chunk 化又是为了把并行度找回来。**一个完整的圆。**
 
-📌 **下半那张配比图是全图的重心。** 它一眼能看出两件事：
-   ① 配比全部落在 **3:1 ～ 7:1**（便宜的层占 75%–87.5%）——&nbsp;
-      没有人敢全用线性，也没有人只用一两层。
-   ② **分派系**：KDA／GDN 那一派偏 3:1–5:1，Lightning 那一派偏 7:1，
-      SWA 那一派偏 5:1–6:1。**用哪种便宜层，决定了你敢配多少。**
+📌 **下半那张格子图是全图的重心。** 2026-09-07 现场要求重画：
 
-⛔ **一条口径护栏，别在简化时丢掉：**
-   **「层间混合」和「层内稀疏」不是一回事。** MiniMax M3、DeepSeek DSA／CSA、
-   GLM-5、混元 Hy4 走的是后者 ——&nbsp;每一层都还是全注意力的形状，
-   只是每个 query 少看几块。**不能跟 7:1 那种放在同一根轴上比**，
-   图里用不同的画法分开（虚线框 vs 实心条）。
+    「太乱了。便宜的那一层就不用写了，你就写什么注意力加什么注意力。
+      后面那一个循环里边，把它做成一个一个格子的这种条状图。就比如说这个
+      MLA 占几格，然后这个 KDA 占几格的这种一目了然的比例的条状图。
+      然后每一个类型该用自己的颜色就用自己的颜色。」
+
+⭐⭐ **改成格子之后，多出来两条旧画法根本画不出来的信息：**
+
+   ① **「有没有格子」本身就是一条信息。** 整条一色 ＝ 每层同构，
+      花样在层**内部**（层内稀疏就长这样）；切成格子 ＝ 层与层不一样，
+      花样在层**之间**。
+      ⛔ 所以别再给层内稀疏单画一种虚线框 ——&nbsp;那是**用两套画法说一件事**，
+        而它本来可以由同一套画法自己说出来。
+
+   ② **一个类型一个颜色之后，「贵的那层是什么」第一次看得见了。**
+      混合的十家里九家是「冷色 ＋ 橙黄」（便宜的层配一层全注意力），
+      **只有 GLM-5.3-Flash 是「蓝 ＋ 红」——&nbsp;它配的那层「贵的」，
+      本身已经是稀疏的了。** 这条结论在旧画法（一个配比一个颜色）下
+      根本无从看起 ——&nbsp;那时候颜色编码的是配比，不是类型。
+
+⛔ **两条口径护栏：**
+   1. **格子宽度固定，不按满宽等分。** 否则 4 格的循环和 8 格的循环画出来
+      一样长，「这个循环有多长」这条信息就没了。
+   2. **DeepSeek V4 是「稀疏配稀疏」（HCA 与 CSA 1:1 交替），不算层间混合。**
+      把它混进那十家里算，3:1～7:1 那条结论就假了 ——&nbsp;落点里按三类分开报数。
 
 ⭐⭐ **2026-09-07 补了混元和 GLM 之后，多出来一条原先看不见的线：**
    混元 Hy4 的 **IndexCache** 和 GLM-5.2 的 **IndexShare** 是同一个想法 ——&nbsp;
@@ -213,108 +228,207 @@ BY = TY + TH + 14
 #    同样改成占位符，等 ROWS 数完再回填。
 _BPANEL = len(p)
 p.append("")
-t(16, BY + 24, '二、各家的混合配比 ——&#160;'
-               '<tspan font-weight="700">「便宜的层 : 全注意力层」，一个循环里各几层</tspan>',
+t(16, BY + 24, '二、一个循环里都有哪些层 ——&#160;'
+               '<tspan font-weight="700">一格 ＝ 一层，格子的颜色 ＝ 那一层用什么注意力</tspan>',
   "svglbl", "#202124", size=13)
-t(16, BY + 43, '⛔ <tspan font-weight="700">层间混合</tspan>（几层线性配一层全）'
-               '和<tspan font-weight="700">层内稀疏</tspan>（每层都还是全注意力的形状，'
-               '只是每个 query 少看几块）<tspan font-weight="700">不是一回事</tspan>'
-               '——&#160;下面用两种画法分开，<tspan font-weight="700">不能放在同一根轴上比</tspan>。',
+# ⛔ 2026-09-07 重画（现场原话：「太乱了。便宜的那一层就不用写了，你就写什么注意力
+#    加什么注意力。后面那一个循环里边，把它做成一个一个格子的这种条状图。
+#    然后每一个类型该用自己的颜色就用自己的颜色。」）
+# ⭐⭐ 改成格子之后多出来一个原先没有的表达力：**「有没有格子」本身就是一条信息。**
+#    整条一色 ＝ 这个模型每一层都一样（花样在层**内部**）；
+#    切成格子 ＝ 层与层之间不一样（花样在层**之间**）。
+#    ⛔ 所以别再给「层内稀疏」单画一种虚线框了 —— 那是在用两套画法说一件事，
+#      而它本来可以由同一套画法自己说出来。
+t(16, BY + 43, '⭐ <tspan font-weight="700">整条一色</tspan>＝每一层都一样，花样在'
+               '<tspan font-weight="700">层内部</tspan>（层内稀疏就长这样）；'
+               '<tspan font-weight="700">切成格子</tspan>＝层与层不一样，花样在'
+               '<tspan font-weight="700">层之间</tspan>。'
+               '——&#160;<tspan font-weight="700">这两件事不能放在同一根轴上比。</tspan>',
   fill=RD)
 
-# 配色：一个配比一个颜色
-RATIO_COL = {"7:1": PU, "6:1": GR, "5:1": CY, "3:1": BL,
-             "≈2.9:1": "#3b6fd4", "纯全": GY, "层内稀疏": OR}
+# ── 一个类型一个颜色。⛔ 同族要用相近的色相，不同族必须拉开 ────────────
+#    线性一族 冷色 · 窗口 青 · 全注意力 橙黄 · 稀疏 红
+TYPE_COL = {
+    "KDA":             BL,          # 线性
+    "Gated DeltaNet":  "#12b5cb",
+    "Lightning":       PU,
+    "SWA":             CY,          # 窗口
+    "MLA":             OR,          # 全注意力一族
+    "Gated MLA":       OR,
+    "Gated Attention": "#f9ab00",
+    "全注意力":         "#f9ab00",
+    "GQA-8":           "#f9ab00",
+    "稀疏 MLA":         RD,          # 稀疏一族
+    "DSA 稀疏 MLA":     RD,
+    "Gated DSA":       RD,
+    "MSA 稀疏":         RD,
+    "CSA":             RD,
+    "HCA":             "#a50e0e",
+}
+SPARSE = {"稀疏 MLA", "DSA 稀疏 MLA", "Gated DSA", "MSA 稀疏", "CSA", "HCA"}
+
+# (时间, 模型, 一个循环的构成 [(类型, 几层)…], 备注)
+# ⛔ 只有一项 ＝ 每层同构，画成整条一色。
 ROWS = [
-    # (时间, 模型, 便宜层类型, 配比, 便宜层占比 0-1, 备注)
-    ("2025-01", "MiniMax-01（456B）", "Lightning", "7:1", 7 / 8,
-     "线性这一支第一次上到旗舰规模"),
-    ("2025-09", "Qwen3-Next（80B/3B）", "Gated DeltaNet", "3:1", 3 / 4, ""),
-    ("2025-10", "MiniMax M2", "——", "纯全", 0.0,
+    ("2025-01", "MiniMax-01（456B）",
+     [("Lightning", 7), ("全注意力", 1)], "线性这一支第一次上到旗舰规模"),
+    ("2025-09", "Qwen3-Next（80B/3B）",
+     [("Gated DeltaNet", 3), ("Gated Attention", 1)], ""),
+    ("2025-10", "MiniMax M2",
+     [("全注意力", 1)],
      "⛔ <tspan font-weight=\"700\">退回全注意力</tspan>：低精度状态敏感、prefix cache 难做"),
-    ("2025-10", "Kimi Linear", "KDA", "3:1", 3 / 4, "KDA＝GDN ＋ 按通道门控"),
-    ("2026-01", "小米 MiMo-V2-Flash", "SWA（窗口 128）", "5:1", 5 / 6, ""),
-    ("2026-02", "GLM-5（355B–744B）", "DSA 稀疏", "层内稀疏", -1,
-     "智谱第一次上稀疏：MLA ＋ DeepSeek Sparse Attention"),
-    ("2026-03", "Qwen3.5（0.8B–397B）", "Gated DeltaNet", "3:1", 3 / 4,
+    ("2025-10", "Kimi Linear",
+     [("KDA", 3), ("MLA", 1)], "KDA＝GDN ＋ 按通道门控"),
+    ("2026-01", "小米 MiMo-V2-Flash",
+     [("SWA", 5), ("全注意力", 1)], "SWA 窗口只有 128"),
+    ("2026-02", "GLM-5（355B–744B）",
+     [("DSA 稀疏 MLA", 1)], "智谱第一次上稀疏：MLA ＋ DeepSeek Sparse Attention"),
+    ("2026-03", "Qwen3.5（0.8B–397B）",
+     [("Gated DeltaNet", 3), ("Gated Attention", 1)],
      "全家族统一：3×(GDN→FFN) → 1×(Gated Attn→FFN)"),
-    ("2026-04", "⭐ 小米 MiMo-V2.5-Pro", "SWA（窗口 128）", "6:1", 6 / 7,
-     "窗口只有 128 ——&#160;比谁都激进"),
-    ("2026-06", "GLM-5.2（744B）", "DSA ＋ IndexShare", "层内稀疏", -1,
-     "⭐ 每四个稀疏层共用一个 indexer，1M 下每 token 省 2.9× FLOP"),
-    ("2026-06", "Ling 2.6（蚂蚁百灵）", "Lightning", "7:1", 7 / 8, ""),
-    ("2026-06", "MiniMax M3", "MSA 稀疏", "层内稀疏", -1,
+    ("2026-04", "⭐ 小米 MiMo-V2.5-Pro",
+     [("SWA", 6), ("全注意力", 1)], "窗口还是 128 ——&#160;比谁都激进"),
+    ("2026-06", "GLM-5.2（744B）",
+     [("DSA 稀疏 MLA", 1)],
+     "⭐ ＋IndexShare：每四个稀疏层共用一个 indexer，1M 下省 2.9× FLOP"),
+    ("2026-06", "Ling 2.6（蚂蚁百灵）",
+     [("Lightning", 7), ("MLA", 1)], ""),
+    ("2026-06", "MiniMax M3",
+     [("MSA 稀疏", 1)],
      "⭐ 第三次转向：不回线性，改走稀疏。每 query 只看 top-16 个 128-token 块"),
-    ("2026-06", "DeepSeek V4", "CSA ＋ HCA", "层内稀疏", -1, "按距离分层压缩"),
-    ("2026-07", "Kimi K3（2.8T）", "KDA", "≈2.9:1", 69 / 93,
-     "93 层 ＝ 69 KDA ＋ 24 Gated MLA（KDA×3 → MLA×1，多出一层）"),
-    ("2026-07", "混元 Hy3（295B/21B）", "——", "纯全", 0.0,
+    # ⭐ V4 不是「每层同构」——HCA 与 CSA 是**交替**的，所以它有格子。
+    #   但两格都是稀疏族，跟「线性配全注意力」那种混合不是一回事，落点里单列。
+    ("2026-06", "DeepSeek V4",
+     [("HCA", 1), ("CSA", 1)], "HCA 与 CSA 交替：压缩率 128 的粗看 ＋ 压缩率 4 的细看"),
+    ("2026-07", "Kimi K3（2.8T）",
+     [("KDA", 3), ("Gated MLA", 1)],
+     "93 层 ＝ 69 KDA ＋ 24 Gated MLA（比整齐的 3:1 多出一层 MLA）"),
+    ("2026-07", "混元 Hy3（295B/21B）",
+     [("GQA-8", 1)],
      "⛔ 80 层全是 GQA-8 ——&#160;<tspan font-weight=\"700\">线性一层都没上</tspan>"),
-    ("2026-07", "Ling-3.0-flash（124B/5.1B）", "KDA", "5:1", 35 / 42,
-     "35 KDA ＋ 7 Gated MLA ——&#160;<tspan font-weight=\"700\">预训练第一天就是混合的</tspan>"),
-    ("2026-08", "混元 Hy4-preview（770B/49B）", "Gated DSA", "层内稀疏", -1,
-     "78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）"),
-    # ⭐ 这一行是全表唯一「两种便宜法同时上」的：便宜的那层是线性(KDA)，
-    #    而它配的那层「贵的」本身还是稀疏的。所以它同时属于两个阵营。
-    # ⛔ 这一格只填「便宜的那一层」= KDA。别把稀疏 MLA 也写进来 ——
-    #    稀疏 MLA 是它配的**那层贵的**，写进这一列会把列的含义搅乱。
-    ("2026-08", "⭐ GLM-5.3-Flash（321B/18B）", "KDA", "3:1", 34 / 45,
+    ("2026-07", "Ling-3.0-flash（124B/5.1B）",
+     [("KDA", 5), ("Gated MLA", 1)],
+     "42 层 ＝ 35 KDA ＋ 7 MLA，<tspan font-weight=\"700\">预训练第一天就是混合的</tspan>"),
+    ("2026-08", "混元 Hy4-preview（770B/49B）",
+     [("Gated DSA", 1)], "78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）"),
+    # ⭐⭐ 全表唯一一条**蓝格＋红格**的：别人都是「冷色配橙黄」（线性配全注意力），
+    #   只有它是「线性配稀疏」。改成按类型上色之后，这件事不用写字就看得见。
+    ("2026-08", "⭐ GLM-5.3-Flash（321B/18B）",
+     [("KDA", 3), ("稀疏 MLA", 1)],
      "45 层 ＝ 34 KDA ＋ 11 稀疏 MLA ——&#160;"
      "<tspan font-weight=\"700\">第一次线性和稀疏同锅</tspan>"),
 ]
-LX, BARX, BARW = 16, 470, 330
-t(LX, BY + 66, '时间', fill=GY, bold=True)
-t(LX + 62, BY + 66, '模型', fill=GY, bold=True)
-t(300, BY + 66, '便宜的那一层', fill=GY, bold=True)
-t(BARX, BY + 66, '一个循环里的配比', fill=GY, bold=True)
-t(BARX + BARW + 76, BY + 66, '备注', fill=GY, bold=True)
+
+# ── 图例 ────────────────────────────────────────────────────────────
+LX = 16
+LEG = [("线性", (("KDA", "KDA"), ("Gated DeltaNet", "GDN"),
+                 ("Lightning", "Lightning"))),
+       ("窗口", (("SWA", "SWA"),)),
+       ("全注意力", (("MLA", "MLA／Gated MLA"),
+                    ("Gated Attention", "Gated Attn／GQA"))),
+       ("稀疏", (("稀疏 MLA", "DSA／MSA／稀疏 MLA／CSA"), ("HCA", "HCA")))]
+lx = LX
+for fam, items in LEG:
+    t(lx, BY + 66, fam + "：", fill="#202124", bold=True)
+    lx += wpx(fam + "：") + 6
+    for key, lab in items:
+        box(lx, BY + 56, 13, 13, TYPE_COL[key], TYPE_COL[key], 3)
+        t(lx + 18, BY + 66, lab, fill=GY)
+        lx += 18 + wpx(lab) + 14
+    lx += 10
+
+# ── 表头 ────────────────────────────────────────────────────────────
+MDLX, MIXX, BARX = LX + 62, 288, 520
+CELL, CGAP, MAXC = 32, 3, 8
+BARW = MAXC * CELL + (MAXC - 1) * CGAP          # 8 格满宽
+RATX, NOTEX = BARX + BARW + 14, BARX + BARW + 72
+HY = BY + 92
+t(LX, HY, '时间', fill=GY, bold=True)
+t(MDLX, HY, '模型', fill=GY, bold=True)
+t(MIXX, HY, '这一层 ＋ 那一层', fill=GY, bold=True)
+t(BARX, HY, '一个循环（一格 ＝ 一层）', fill=GY, bold=True)
+t(RATX, HY, '配比', fill=GY, bold=True)
+t(NOTEX, HY, '备注', fill=GY, bold=True)
 p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
-         % (BY + 72, W - 16, BY + 72, "#dadce0"))
+         % (HY + 6, W - 16, HY + 6, "#dadce0"))
 
-for i, (tm, mdl, cheap, ratio, frac, note) in enumerate(ROWS):
-    y = BY + 92 + i * 27
-    col = RATIO_COL[ratio]
+R0, RH = HY + 30, 30
+for i, (tm, mdl, cyc, note) in enumerate(ROWS):
+    y = R0 + i * RH
     t(LX, y, tm, fill=GY)
-    t(LX + 62, y, mdl, fill="#202124", bold=mdl.startswith("⭐"))
-    t(300, y, cheap, fill=col)
-    if frac < 0:                       # 层内稀疏：换一种画法，别跟层间混合混为一谈
-        box(BARX, y - 12, BARW, 16, "#fff", OR, 3, 1.4, "4,3")
-        t(BARX + BARW // 2, y, '层内稀疏 ——&#160;不是层间混合', fill=OR,
-          bold=True, anchor="middle")
+    t(MDLX, y, mdl, fill="#202124", bold=mdl.startswith("⭐"))
+    # 「这一层 ＋ 那一层」：每个类型用自己的颜色写
+    cx = MIXX
+    for j, (ty, _) in enumerate(cyc):
+        if j:
+            t(cx, y, "＋", fill=GY)
+            cx += wpx("＋") + 4
+        t(cx, y, ty, fill=TYPE_COL[ty], bold=True)
+        cx += wpx(ty) + 5
+    if len(cyc) == 1:
+        # 整条一色 ＝ 每层同构，没有循环可数
+        ty = cyc[0][0]
+        c = TYPE_COL[ty]
+        box(BARX, y - 13, BARW, 18, c, c, 4)
+        t(BARX + BARW // 2, y, '每一层都是这个', fill="#fff", bold=True,
+          anchor="middle", size=10)
+        t(RATX, y, '——', fill=GY)
     else:
-        box(BARX, y - 12, BARW, 16, "#f1f3f4", "#dadce0", 3)
-        wcheap = int(BARW * frac)
-        if wcheap:
-            box(BARX, y - 12, wcheap, 16, col, col, 3)
-        t(BARX + BARW + 8, y, ratio, fill=col, bold=True)
-        t(BARX + BARW + 52, y, '%.0f%%' % (frac * 100), fill=GY)
+        n = sum(k for _, k in cyc)
+        # ⛔ 格子宽度**固定**，不按满宽等分 —— 否则 4 格的循环和 8 格的循环
+        #   画出来一样长，「循环有多长」这条信息就没了。
+        gx = BARX
+        for ty, k in cyc:
+            c = TYPE_COL[ty]
+            for _ in range(k):
+                box(gx, y - 13, CELL, 18, c, c, 3)
+                gx += CELL + CGAP
+        t(RATX, y, "%d:%d" % (cyc[0][1], cyc[-1][1]),
+          fill=TYPE_COL[cyc[0][0]], bold=True)
     if note:
-        t(BARX + BARW + 76 if frac >= 0 else BARX + BARW + 12, y, note, fill=GY)
+        t(NOTEX, y, note, fill=GY)
 
-# 落点
-LZ = BY + 92 + len(ROWS) * 27 + 6
-BH = LZ - BY + 62 + 14                       # 落点框下沿 + 一点留白
+# ── 落点 ────────────────────────────────────────────────────────────
+LZ = R0 + len(ROWS) * RH + 6
+BH = LZ - BY + 88 + 14
 p[_BPANEL] = ('<rect x="0" y="%d" width="%d" height="%d" rx="8" fill="#fff" '
               'stroke="#dadce0" stroke-width="1"/>' % (BY, W, BH))
-box(16, LZ, W - 32, 62, "#e8f0fe", BL, 6)
-t(30, LZ + 20, '⭐ 这张条形图一眼能看出两件事', "svglbl", "#174ea6", size=12)
-# ⛔ 2026-09-07：原话是「所有配比都落在 3:1～7:1」，补进混元和 GLM 之后就不成立了 ——
-#    表里现在有 2 行纯全（M2、Hy3）、5 行层内稀疏，它们根本不在这根轴上。
-# ⭐ 教训：**「所有 X 都……」这种全称句，会被后来加的行悄悄证伪，而且不报错。**
-#    改成先报数再下结论，加行时数字对不上一眼就能看见。
-_hy = sum(1 for r in ROWS if r[4] > 0)
-_sp = sum(1 for r in ROWS if r[4] < 0)
-_fu = len(ROWS) - _hy - _sp
-t(30, LZ + 40, '① 表里 %d 行：<tspan font-weight="700">%d 个层间混合、%d 个层内稀疏、'
-               '%d 个明确用纯全注意力</tspan>。而<tspan font-weight="700">搞层间混合的那 %d 个，'
-               '配比无一例外落在 3:1 ～ 7:1</tspan>——&#160;便宜的层占 75%%–87.5%%。'
-               '<tspan font-weight="700">没有人敢全用线性，也没有人只掺一两层。</tspan>'
-               % (len(ROWS), _hy, _sp, _fu, _hy), fill="#174ea6")
-t(30, LZ + 56, '② <tspan font-weight="700">分派系</tspan>：'
+box(16, LZ, W - 32, 88, "#e8f0fe", BL, 6)
+t(30, LZ + 20, '⭐ 这张格子图一眼能看出三件事', "svglbl", "#174ea6", size=12)
+# ⛔ 「所有 X 都……」这种全称句会被后来加的行悄悄证伪，而且不报错。
+#    所以这里**先按数据分类报数，再下结论** —— 加行时数字对不上一眼就能看见。
+# ⭐ 分三类而不是两类：DeepSeek V4 也有格子，但它是「稀疏配稀疏」，
+#   跟「便宜的配全注意力」不是一回事，混在一起算会把 3:1~7:1 那条结论弄假。
+_uni = [r for r in ROWS if len(r[2]) == 1]
+_spx = [r for r in ROWS if len(r[2]) > 1 and all(t_ in SPARSE for t_, _ in r[2])]
+_hyb = [r for r in ROWS if len(r[2]) > 1 and r not in _spx]
+t(30, LZ + 40, '① 表里 %d 家：<tspan font-weight="700">%d 家是「便宜的层 ＋ 全注意力／稀疏层」</tspan>，'
+               '%d 家<tspan font-weight="700">每层同构</tspan>（整条一色），'
+               '%d 家是稀疏配稀疏。'
+               '而那 %d 家混合的，<tspan font-weight="700">配比无一例外落在 3:1 ～ 7:1</tspan>'
+               '——&#160;<tspan font-weight="700">没有人敢全用线性，也没有人只掺一两层。</tspan>'
+               % (len(ROWS), len(_hyb), len(_uni), len(_spx), len(_hyb)),
+  fill="#174ea6")
+# ⛔ 原来的 ② 写「用哪种便宜层决定了你敢配多少」——「便宜层」那一栏已经取消了，
+#    措辞得跟着改。⭐ 这就是「图注／落点是图的下游」那条：图改了口径，
+#    结论句不会自己跟着动，而且不报错。
+t(30, LZ + 58, '② <tspan font-weight="700">分派系</tspan>：'
                'KDA／GDN 那一派偏 <tspan font-weight="700">3:1–5:1</tspan>，'
                'Lightning 那一派偏 <tspan font-weight="700">7:1</tspan>，'
                'SWA 那一派偏 <tspan font-weight="700">5:1–6:1</tspan>'
-               '——&#160;<tspan font-weight="700">用哪种便宜层，决定了你敢配多少。</tspan>',
+               '——&#160;<tspan font-weight="700">线性／窗口那一层用哪种，'
+               '决定了你敢配多少。</tspan>', fill="#174ea6")
+# ⭐⭐ 这一条是**改成按类型上色之后才冒出来的** —— 原先一个配比一个颜色，
+#    根本看不见「贵的那层是什么」。现在扫一眼颜色搭配就有了。
+_warm = [r for r in _hyb if r[2][-1][0] not in SPARSE]
+_cold = [r for r in _hyb if r[2][-1][0] in SPARSE]
+t(30, LZ + 76, '③ ⭐ <tspan font-weight="700">扫一眼颜色搭配</tspan>：'
+               '混合的那 %d 家里，<tspan font-weight="700">%d 家都是「冷色 ＋ 橙黄」</tspan>'
+               '——&#160;便宜的层配一层全注意力。'
+               '<tspan font-weight="700">只有 %s 是「蓝 ＋ 红」：它配的那层「贵的」，'
+               '本身已经是稀疏的了。</tspan>'
+               % (len(_hyb), len(_warm),
+                  "、".join(r[1].replace("⭐ ", "") for r in _cold)),
   fill="#174ea6")
 
 # ══════════ 落点带 ══════════════════════════════════════════════════
