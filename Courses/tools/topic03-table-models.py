@@ -111,8 +111,11 @@ CSS = """
       —— 因为 **100vw 是含滚动条的**，而可用宽度不含。差那几像素就撑出页面。
    ⭐ 改成「只在够宽的屏上破版心」：1500px 以上才破（那时 1400 一定放得下），
       窄屏就老老实实待在版心里横向滚动。**不跟 vw 的边界情况较劲。** */
-@media (min-width:1500px){
-  .tblwrap{width:1400px;margin-left:calc((1080px - 1400px) / 2 - 24px)}
+/* 表的实测自然宽是 1618（62+288+360+110+416+382）。壳比它小就会出内部滚动条，
+   所以壳取 1620、破版心的门槛取 1720（那时 1620 一定放得下）。
+   ⛔ 这两个数是**量出来的**，改了列宽就要重量一次。 */
+@media (min-width:1720px){
+  .tblwrap{width:1620px;margin-left:calc((1080px - 1620px) / 2 - 24px)}
 }
 .tbltip{color:#5f6368;font-size:12.5px;margin:0 0 8px}
 .land{margin:14px 0 0;padding:14px 18px;background:#e8f0fe;border:1px solid #1a73e8;
@@ -131,7 +134,11 @@ CSS = """
 #mtbl td{padding:5px 8px;border-bottom:1px solid #f1f3f4;vertical-align:middle}
 #mtbl td.tm{color:#5f6368;white-space:nowrap;font-variant-numeric:tabular-nums}
 #mtbl td.ctx{white-space:nowrap;font-weight:700;color:#5f6368}
-#mtbl td.nt{color:#5f6368}
+/* ⭐ 备注**一行一句，不换行**。现场：「保持一行是一行」——
+   折行会把行高撑起来，信息密度直接掉一半。
+   ⛔ 前提是备注本身已经压到 ≤ 375px（见 topic03_models.py 里 ROWS 的注释）：
+     光设 nowrap 而不压内容，只会把表撑到 1700+，等于把问题挪个地方。 */
+#mtbl td.nt{color:#5f6368;white-space:nowrap}
 #mtbl .chip{display:inline-block;padding:2px 9px;border-radius:6px;border:1px solid;
   font-weight:700;white-space:nowrap}
 #mtbl .cy{white-space:nowrap}
