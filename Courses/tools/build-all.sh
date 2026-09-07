@@ -50,6 +50,9 @@ if [ "${1:-}" != "--lint" ]; then
   # ⭐ 专题三的**源是 md**（Courses/专题03-注意力演进.md），
   #    页面由 md2course.py 转出来。改内容改那份 md，别改脚本里的字符串。
   step "专题三 教材（从 md 生成）"
+  # ⛔ 图必须先生成 —— topic03-build.py 会 assert 找不到 fig3-chronicle.svg。
+  #    这条依赖是**故意做成硬失败**的：图缺了宁可构建挂掉，也不要悄悄出一份没图的教材。
+  python3 topic03-fig-chronicle.py
   python3 topic03-build.py
 
   step "专题三 讲义"

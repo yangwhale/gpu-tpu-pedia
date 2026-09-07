@@ -93,6 +93,23 @@ BODY = '''<section id="x0"><div class="wrap"><div class="stn"><h2>⏱ 一小时�
 <p>名词多到像是各搞各的。<b>但它们其实在解同一道题，而且只有三个旋钮可以拧。</b></p>
 <p>讲完这个专题，看到任何一个新变体，应该能立刻说出： <b>它在拧哪个旋钮、省了什么、赔了什么。</b></p>
 <div class="note info"><p>这一节的目标<b>不是记住这些名词</b>，是拿到一把尺子。名词一年换一批，尺子不换。</p></div>
+
+<!-- ⭐⭐ 2026-09-07 全景图。图由 topic03-fig-chronicle.py 生成，构建时读进来。
+     ⛔ 图上所有型号与配比都是当天现搜的公开信息 —— **这张图会过时**，
+        而且过时得比正文快得多（下半那张配比表几乎每月都有新行）。
+        约定：**每次开课前只重跑这一张图的调研，正文不动。**
+     ⚠️ 图上有一条护栏别删：层间混合（几层线性配一层全）和层内稀疏
+        （每层还是全注意力的形状、只是少看几块）**不能放在同一根轴上比**。 -->
+<p>在拿尺子之前，先看一眼<b>全景</b>：这些名词是什么时候、按什么顺序冒出来的，
+  以及今天各家<b>实际上是怎么配的</b>。</p>
+__FIG_CHRONICLE__
+<p class="sub">⭐ <b>这张图有两个重心。</b>上半是<b>编年史</b>——&nbsp;
+  四条支线各修各的毛病，看完你会发现<b>每一步都是在修上一步暴露的问题，没有一步是凭空发明</b>。
+  下半是<b>各家的混合配比</b> ——&nbsp;<b>所有人都落在 3:1 ～ 7:1 这个区间里</b>，
+  而且<b>用哪种便宜层，决定了你敢配多少</b>。
+  <br>⛔ 全图最该带走的一句在最底下：<b>MiniMax 一家、三代模型，把三个旋钮各拧了一遍</b>
+  （线性 → 退回全注意力 → 稀疏），而且每次转向都公开写了理由 ——&nbsp;
+  <em>「只有三个旋钮」这个框架不是我们归纳出来的，是有人真的一个一个试过去了。</em></p>
 <hr>
 </div></section>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>一切从长上下文说起 —— 两条独立的动机</h2></div>
@@ -543,6 +560,22 @@ out = [head, '''
 
 </body></html>''']
 
-io.open(OUT, "w", encoding="utf-8").write("\n".join(out))
+# ⭐ 图是外部脚本的产物：**页面里的 SVG 是产物，脚本才是源。**
+#   跟专题二那套规矩一致 —— 改图只改 topic03-fig-chronicle.py，然后重跑本脚本。
+_fig = os.path.join(HERE, "fig3-chronicle.svg")
+assert os.path.isfile(_fig), (
+    "缺 fig3-chronicle.svg —— 先跑 `python3 topic03-fig-chronicle.py`")
+_svg = io.open(_fig, encoding="utf-8").read().strip()
+_html = "\n".join(out).replace(
+    "__FIG_CHRONICLE__",
+    '<figure class="fbox fwide" id="fig-chronicle">%s'
+    '<figcaption>⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，'
+    '2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。'
+    '<b>下半 · 各家配比</b>：便宜的层占 75%%–87.5%%，无人全用线性，也无人只掺一两层。'
+    '⛔ <b>层间混合与层内稀疏用两种画法分开，不能同轴比较。</b>'
+    '<span class="sub">信息截至 2026-09-07，全部现搜；出处见图脚。</span></figcaption>'
+    '</figure>' % _svg)
+assert "__FIG_CHRONICLE__" not in _html, "图占位符没被替换掉"
+io.open(OUT, "w", encoding="utf-8").write(_html)
 print("ok  topic-03.html  %s 字符 · %d 节"
       % (format(os.path.getsize(OUT), ","), len(SECTIONS)))
