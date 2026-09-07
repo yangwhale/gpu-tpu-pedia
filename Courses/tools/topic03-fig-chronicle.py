@@ -99,6 +99,30 @@
    ⛔ 上下文那一列**只填核到一手出处的**（多数是直接读 config.json），
      核不到就留「—」。⭐ 空格不是「没有」，是「本轮没核到」——&nbsp;别把它读成 0。
 
+⭐⭐⭐ **2026-09-07 第五轮：砍掉「配比」列，加上「KV cache」列。** 原话：
+
+    「格子图画的就很清楚，一目了然几比几，所以配比那一列就不要了。
+      ……最重要的信息就像我们上一个专题讲的那样，KV Cache 到底占多大，
+      你一目了然每一个 header 到底压了多少……128K 的时候 KV Cache 到底占了
+      多大的地方？用一个小长条表示，条里边写占了多大，占的越多的颜色越深。」
+
+   · **砍「配比」的判据很干净：一个信息只该有一个出口。** 格子已经把配比说完了，
+     再写一遍不是冗余，是在**跟格子抢注意力**。
+   · **KV 那一列是算出来的，不是抄来的。** 公式和每家的参数都在本文件里，
+     谁都可以复算。⛔ 别把结果硬编码成常数 ——&nbsp;那样改了层数它不会跟着动。
+   · ⚠️ **条长是对数刻度**，因为跨了三个数量级：线性刻度下 576 GiB 会吃光整行，
+     而 697 MiB 连一个像素都占不到。**这一条必须写在图上，不能只写在注释里** ——
+     读图的人看不到注释，而对数条会让差距「看起来变小」。
+
+⭐⭐ **这一列冒出来的终点结论**：从 GPT-3 的 **576 GiB** 到 DeepSeek-V4 的
+   **697 MiB**，同一个 128K 长度下，六年 **846 倍**。而这 846 倍
+   **不是一个旋钮拧出来的**：MHA→GQA 砍头数（576→40）、MLA 改压缩（40→8.4）
+   是旋钮①；线性把大部分层的 KV **直接删成零**（8.4→1.0）是旋钮③；
+   CSA／HCA 存压缩池（→0.7）是旋钮②。**三个旋钮各贡献了一段。**
+
+   ⛔ GPT-3 那 576 GiB 是**假想值** ——&nbsp;它只有 2K 上下文，从没在 128K 上跑过。
+     但正因为假想，它才是一把干净的尺：**同一个长度下，六年到底省了多少。**
+
 ⛔ **一条口径护栏：格子宽度固定，不按满宽等分。**
    否则 4 格的循环和 8 格的循环画出来一样长，「这个循环有多长」这条信息就没了。
 
@@ -138,10 +162,11 @@
      45 层 ＝ **34 KDA ＋ 11 稀疏 MLA**（NoPE），GLM 家族**第一次线性和稀疏同锅**
 """
 import io
+import math
 
 BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
 PU, CY, BR, PK = "#8430ce", "#00838f", "#7a5000", "#c5221f"
-W = 1680
+W = 1820
 p = []
 
 
@@ -310,6 +335,13 @@ t(16, BY + 43, '⭐ <tspan font-weight="700">整条一色</tspan>＝每一层都
                '前四行是<tspan font-weight="700">基线</tspan>：'
                '每个新机制都配上它<tspan font-weight="700">首次出现时的那个模型</tspan>。',
   fill=RD)
+# ⛔ 对数刻度这件事必须写在**图上**，不能只写在源码注释里 ——
+#   读图的人看不到注释，而对数条会让差距"看起来变小"。
+t(16, BY + 61, '⚠️ KV 那一列的<tspan font-weight="700">条长是对数刻度</tspan>'
+               '——&#160;跨了三个数量级，线性刻度下 576 GiB 会吃光整行、'
+               '而 697 MiB 连一个像素都占不到。<tspan font-weight="700">看数字，别看长度比。</tspan>'
+               '　口径：<tspan font-weight="700">128K、BF16、batch 1、不含量化</tspan>；'
+               '公式与每家的参数全在生成脚本里，可复算。', fill=GY)
 
 # ── 一个类型一个颜色。同族相近色相，异族拉开 ──────────────────────────
 AMB, ORG, DKR = "#f9ab00", "#e8710a", "#a50e0e"
@@ -337,28 +369,88 @@ FULLNAME = {
 
 # (时间, 模型, 一个循环的构成 [(简写, 几层)…], 备注)
 # ⛔ 只有一项 ＝ 每层同构，画成整条一色。
+# ══════════════════════════════════════════════════════════════════
+# KV cache：**算出来的，不是抄来的。** 公式写在这儿，参数来自各家 config，
+# 谁都可以拿去复算。⛔ 别把结果硬编码成常数 —— 那样改了层数它不会跟着动。
+#
+#   普通 MHA/GQA/MQA ：2（K 和 V 两份）× 层数 × 长度 × KV头数 × 头维 × 2 B
+#   MLA 一族         ：       层数 × 长度 × (kv_lora_rank ＋ rope 维) × 2 B
+#                       ——&nbsp;只存那个压缩过的潜向量，**所有头共用一份**
+#   线性层           ：**一个字节都不占**（状态是固定大小，跟长度无关），
+#                       所以「层数」这一项只数**有 KV 的那些层**
+#   DeepSeek-V4      ：特判。它 shared K=V（只存一份不是两份），
+#                       而且 CSA/HCA 存的是**压缩池**：长度 ÷ 压缩率
+#
+# ⚠️ 口径：长度取 128K、BF16、batch=1、不含任何量化。
+#    这几条一改，数就全变 —— 报 KV cache 的时候必须连口径一起报。
+SEQ, BPE = 131072, 2
+
+
+def kv_gib(spec):
+    """按 spec 算 128K 时的 KV cache（GiB）。spec 为 None 表示没核到 config。"""
+    if spec is None:
+        return None
+    kind = spec[0]
+    if kind == "gqa":
+        _, L, H, D = spec
+        return 2 * L * SEQ * H * D * BPE / 2 ** 30
+    if kind == "mla":
+        _, L, R = spec                 # L 只数带 KV 的层，线性层不算
+        return L * SEQ * R * BPE / 2 ** 30
+    if kind == "v4":
+        _, n_csa, n_hca, n_swa, D, m_csa, m_hca, win = spec
+        # shared K=V → 每个条目只存一份；CSA/HCA 存压缩池；每层另挂一条滑窗支路
+        ent = (n_csa * (SEQ // m_csa) + n_hca * (SEQ // m_hca)
+               + (n_csa + n_hca + n_swa) * win)
+        return ent * D * BPE / 2 ** 30
+    raise ValueError(kind)
+
+
+def kv_fmt(g):
+    if g is None:
+        return "—"
+    if g >= 100:
+        return "%d GiB" % round(g)
+    if g >= 10:
+        return "%.0f GiB" % g
+    if g >= 1:
+        return "%.1f GiB" % g
+    return "%d MiB" % round(g * 1024)
+
+
+# 占得越多颜色越深 —— 一眼扫下来就是一条从深到浅的坡
+def kv_col(g):
+    if g is None:
+        return "#e8eaed"
+    for lim, c in ((100, "#7f0000"), (30, "#b31412"), (10, "#d93025"),
+                   (3, "#e8710a"), (1, "#f9ab00")):
+        if g >= lim:
+            return c
+    return "#1e8e3e"                   # 不到 1 GiB —— 已经是另一个量级了
+
+
 ROWS = [
-    # (时间, 模型, 循环构成, 上下文, 备注)
+    # (时间, 模型, 循环构成, 上下文, KV 规格, 备注)
     # ⛔ 上下文这一列**只填核到一手出处的**（多数是本轮直接读的 config.json）。
     #   核不到就留「—」——&nbsp;宁可缺一格，不猜一格。
     # ── 基线：每个机制配它首次出现的模型 ────────────────────────────
-    ("2020-05", "GPT-3（175B）", [("MHA", 1)], "2K",
+    ("2020-05", "GPT-3（175B）", [("MHA", 1)], "2K", ("gqa", 96, 96, 128),
      "96 层全 MHA，96 头×128 维。<tspan font-weight=\"700\">基线：KV 按头数线性长，没有任何省法</tspan>"),
-    ("2022-04", "PaLM（540B）", [("MQA", 1)], "2K",
+    ("2022-04", "PaLM（540B）", [("MQA", 1)], "2K", ("gqa", 118, 1, 256),
      "118 层，48 头<tspan font-weight=\"700\">共用 1 组 KV</tspan> ——&#160;第一次大规模砍 KV（Shazeer 2019）"),
-    ("2023-07", "Llama 2（70B）", [("GQA", 1)], "4K",
+    ("2023-07", "Llama 2（70B）", [("GQA", 1)], "4K", ("gqa", 80, 8, 128),
      "8 组 KV。MQA 砍太狠会掉质量，GQA 是折中（arXiv 2305.13245）"),
-    ("2024-05", "DeepSeek-V2（236B/21B）", [("MLA", 1)], "128K",
+    ("2024-05", "DeepSeek-V2（236B/21B）", [("MLA", 1)], "128K", ("mla", 60, 576),
      "不砍头，改低秩压缩。<tspan font-weight=\"700\">KV cache 降 93.3%</tspan>；V3 原样沿用"),
     # ── 三个旋钮各自的第一次 ────────────────────────────────────────
     # ⭐⭐ 这一行和下面 M2 那一行**必须并排读**：同一家公司、同一批人，
     #    01 用 7:1 线性混合做到 10M，M2 退回纯全注意力只剩 192K。差 50 倍。
-    ("2025-01", "MiniMax-01（456B）", [("LTN", 7), ("GQA", 1)], "10M",
+    ("2025-01", "MiniMax-01（456B）", [("LTN", 7), ("GQA", 1)], "10M", ("gqa", 10, 8, 128),
      "⭐ 线性第一次上旗舰规模。<tspan font-weight=\"700\">config 写着 10,240,000</tspan>；"
      "那层「贵的」是 GQA-8"),
-    ("2025-09", "DeepSeek-V3.2-Exp", [("DSA", 1)], "160K",
+    ("2025-09", "DeepSeek-V3.2-Exp", [("DSA", 1)], "160K", ("mla", 61, 576),
      "⭐ <tspan font-weight=\"700\">稀疏这一支的起点</tspan>：MLA ＋ Lightning Indexer，每 query 只留 top-k"),
-    ("2025-09", "Qwen3-Next（80B/3B）", [("GDN", 3), ("gAT", 1)], "—", ""),
+    ("2025-09", "Qwen3-Next（80B/3B）", [("GDN", 3), ("gAT", 1)], "—", None, ""),
     # ⭐⭐ 2026-09-07 现场追问：「所谓退回全注意力不大可能，全注意力就不可能有长上下文，
     #    它肯定有什么 trade off。它是不是用了压缩注意力的 MLA 这种？」
     #    去扒 MiniMax-M2/config.json，**对了一半，也纠正了一半**：
@@ -371,39 +463,40 @@ ROWS = [
     #      **「全注意力」是相对旋钮③（线性）说的，不是相对旋钮①（KV 存多少）说的。**
     #      M2 退回的是③，①上它一直压着。三个旋钮正交，M2 就是活证据。
     #    ⭐ 而「全注意力撑不起长上下文」这个直觉，被上下文那一列量化了：192K。
-    ("2025-10", "MiniMax M2（230B/10B）", [("GQA", 1)], "192K",
+    ("2025-10", "MiniMax M2（230B/10B）", [("GQA", 1)], "192K", ("gqa", 62, 8, 128),
      "⛔ <tspan font-weight=\"700\">「退回全注意力」不等于什么都没做</tspan>：它是 GQA-8 ＋ partial RoPE。"
      "但确实<tspan font-weight=\"700\">没有 MLA、没有稀疏</tspan>"),
-    ("2025-10", "Kimi Linear（48B/3B）", [("KDA", 3), ("MLA", 1)], "1M",
+    ("2025-10", "Kimi Linear（48B/3B）", [("KDA", 3), ("MLA", 1)], "1M", ("mla", 7, 576),
      "27 层 ＝ 20 KDA ＋ 7 MLA（<tspan font-weight=\"700\">末层强制 full，所以多一层</tspan>）。已用 NoPE"),
-    ("2026-01", "小米 MiMo-V2-Flash", [("SWA", 5), ("FULL", 1)], "—", "SWA 窗口只有 128"),
-    ("2026-02", "GLM-5（744B/40B）", [("DSA", 1)], "198K",
+    ("2026-01", "小米 MiMo-V2-Flash", [("SWA", 5), ("FULL", 1)], "—", None, "SWA 窗口只有 128"),
+    ("2026-02", "GLM-5（744B/40B）", [("DSA", 1)], "198K", ("mla", 78, 576),
      "MLA ＋ DSA，78 层。<tspan font-weight=\"700\">GLM-5.1 是同一套架构</tspan>，只有后训练不同"),
-    ("2026-03", "Qwen3.5（397B/17B）", [("GDN", 3), ("gAT", 1)], "256K",
+    ("2026-03", "Qwen3.5（397B/17B）", [("GDN", 3), ("gAT", 1)], "256K", None,
      "60 层 ＝ 45 线性 ＋ 15 全注意力，<tspan font-weight=\"700\">config 里 full_attention_interval: 4</tspan>"),
-    ("2026-04", "小米 MiMo-V2.5-Pro", [("SWA", 6), ("FULL", 1)], "—", "窗口还是 128 ——&#160;比谁都激进"),
+    ("2026-04", "小米 MiMo-V2.5-Pro", [("SWA", 6), ("FULL", 1)], "—", None, "窗口还是 128 ——&#160;比谁都激进"),
     ("2026-05", "DeepSeek-V4-Flash（43 层）",
      [("SWA", 2), ("CSA", 1), ("HCA", 1), ("CSA", 1), ("HCA", 1)], "1M",
+     ("v4", 21, 20, 2, 512, 4, 128, 128),
      "⭐ 前 2 层 SWA 引导，之后 <tspan font-weight=\"700\">CSA／HCA 严格交替</tspan>（21＋20）。"
      "<tspan font-weight=\"700\">MLA 被换掉了</tspan>，底层是 shared-KV 的 MQA"),
-    ("2026-06", "GLM-5.2（744B/40B）", [("DSA", 1)], "1M",
+    ("2026-06", "GLM-5.2（744B/40B）", [("DSA", 1)], "1M", ("mla", 78, 576),
      "⭐ ＋IndexShare：每四个稀疏层共用一个 indexer。<tspan font-weight=\"700\">198K → 1M 就是这一步</tspan>"),
-    ("2026-06", "Ling 2.6-1T（1T/63B）", [("LTN", 7), ("MLA", 1)], "256K",
+    ("2026-06", "Ling 2.6-1T（1T/63B）", [("LTN", 7), ("MLA", 1)], "256K", None,
      "⛔ 不是 KDA。而且是<tspan font-weight=\"700\">从 Ling-2.0 的 GQA 迁移改造</tspan>来的，不是从头训"),
-    ("2026-06", "MiniMax M3", [("MSA", 1)], "—",
+    ("2026-06", "MiniMax M3", [("MSA", 1)], "—", None,
      "⭐ 第三次转向：不回线性，改走稀疏。每 query 只看 top-16 个 128-token 块"),
-    ("2026-07", "Kimi K3（2.8T）", [("KDA", 3), ("gMLA", 1)], "1M",
+    ("2026-07", "Kimi K3（2.8T）", [("KDA", 3), ("gMLA", 1)], "1M", ("mla", 24, 576),
      "93 层 ＝ 69 KDA ＋ 24 Gated MLA（<tspan font-weight=\"700\">末层 92、93 连着两层 full</tspan>）"),
-    ("2026-07", "混元 Hy3（295B/21B）", [("GQA", 1)], "256K",
+    ("2026-07", "混元 Hy3（295B/21B）", [("GQA", 1)], "256K", ("gqa", 80, 8, 128),
      "⛔ 80 层全是 GQA-8 ——&#160;<tspan font-weight=\"700\">线性一层都没上</tspan>"),
-    ("2026-07", "Ling-3.0-flash（124B/5.1B）", [("KDA", 5), ("gMLA", 1)], "256K",
+    ("2026-07", "Ling-3.0-flash（124B/5.1B）", [("KDA", 5), ("gMLA", 1)], "256K", ("mla", 7, 576),
      "42 层 ＝ 35 KDA ＋ 7 MLA。<tspan font-weight=\"700\">跟 2.6 换了一支</tspan>；"
      "同代 tiny 是 3:1，旗舰尚未发布"),
-    ("2026-08", "GLM-5.3（744B/40B）", [("DSA", 1)], "1M",
+    ("2026-08", "GLM-5.3（744B/40B）", [("DSA", 1)], "1M", ("mla", 78, 576),
      "⚠️ <tspan font-weight=\"700\">旗舰版跟 5.2 是同一个 base，纯后训练，架构一个字没动</tspan>"),
-    ("2026-08", "混元 Hy4-preview（770B/49B）", [("gDSA", 1)], "1M",
+    ("2026-08", "混元 Hy4-preview（770B/49B）", [("gDSA", 1)], "1M", ("mla", 78, 576),
      "78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）"),
-    ("2026-08", "⭐ GLM-5.3-Flash（320B/18B）", [("KDA", 3), ("DSA", 1)], "1M",
+    ("2026-08", "⭐ GLM-5.3-Flash（320B/18B）", [("KDA", 3), ("DSA", 1)], "1M", ("mla", 11, 576),
      "45 层 ＝ 34 KDA ＋ 11 稀疏 MLA（NoPE）——&#160;"
      "<tspan font-weight=\"700\">GLM 第一次线性和稀疏同锅</tspan>，全新的 base"),
 ]
@@ -416,7 +509,7 @@ for li, (fam, keys) in enumerate((
         ("窗口", ("SWA",)),
         ("稀疏一族", ("DSA", "gDSA", "MSA", "CSA", "HCA")))):
     pass
-lx, ly2 = LX, BY + 66
+lx, ly2 = LX, BY + 84
 for fam, keys in (("全注意力一族", ("MHA", "MQA", "GQA", "FULL", "gAT", "MLA", "gMLA")),
                   ("线性", ("KDA", "GDN", "LTN")),
                   ("窗口", ("SWA",)),
@@ -434,22 +527,26 @@ for fam, keys in (("全注意力一族", ("MHA", "MQA", "GQA", "FULL", "gAT", "M
 MDLX, MIXX, BARX = LX + 62, 290, 512
 CELL, CGAP, MAXC = 42, 3, 8
 BARW = MAXC * CELL + (MAXC - 1) * CGAP
-RATX = BARX + BARW + 12
-CTXX = RATX + 54
-NOTEX = CTXX + 66
-HY = BY + 96
+# ⛔ 「配比」那一列删了 —— 现场原话：「格子图画的就很清楚，一目了然几比几，
+#    所以配比那一列就不要了。」⭐ 判据很干净：**一个信息只该有一个出口。**
+#    格子已经把配比说完了，再写一遍不是冗余，是在跟格子抢注意力。
+CTXX = BARX + BARW + 14
+KVX = CTXX + 62                       # KV cache 那一列，做得宽
+KVW = 210                             # 条最长 210px
+NOTEX = KVX + KVW + 76
+HY = BY + 112
 t(LX, HY, '时间', fill=GY, bold=True)
 t(MDLX, HY, '模型', fill=GY, bold=True)
 t(MIXX, HY, '这一层 ＋ 那一层', fill=GY, bold=True)
 t(BARX, HY, '一个循环（一格 ＝ 一层）', fill=GY, bold=True)
-t(RATX, HY, '配比', fill=GY, bold=True)
 t(CTXX, HY, '上下文', fill=GY, bold=True)
+t(KVX, HY, 'KV cache＠128K（BF16，batch 1）', fill=GY, bold=True)
 t(NOTEX, HY, '备注', fill=GY, bold=True)
 p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
          % (HY + 6, W - 16, HY + 6, "#dadce0"))
 
 R0, RH = HY + 30, 30
-for i, (tm, mdl, cyc, ctx, note) in enumerate(ROWS):
+for i, (tm, mdl, cyc, ctx, kvspec, note) in enumerate(ROWS):
     y = R0 + i * RH
     if i and ROWS[i - 1][0][:4] != tm[:4]:          # 换年份画一条极淡的分隔
         p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="#f1f3f4" '
@@ -474,7 +571,6 @@ for i, (tm, mdl, cyc, ctx, note) in enumerate(ROWS):
         box(BARX, y - 13, BARW, 18, c, c, 4)
         t(BARX + BARW // 2, y, '%s ——&#160;每一层都是这个' % ty, fill="#fff",
           bold=True, anchor="middle", size=10)
-        t(RATX, y, '——', fill=GY)
     else:
         # ⛔ 格子宽度固定，不按满宽等分 ——&#160;否则 4 格的循环和 8 格的循环
         #   画出来一样长，「这个循环有多长」这条信息就没了。
@@ -486,28 +582,42 @@ for i, (tm, mdl, cyc, ctx, note) in enumerate(ROWS):
                 t(gx + CELL // 2, y - 1, ty, fill="#fff", bold=True,
                   anchor="middle", size=9)
                 gx += CELL + CGAP
-        # 配比只在「便宜的 : 贵的」两段式时才有意义
-        if len(seen) == 2:
-            t(RATX, y, "%d:%d" % (cyc[0][1], cyc[-1][1]),
-              fill=TYPE_COL[cyc[0][0]], bold=True)
-        else:
-            t(RATX, y, '见备注', fill=GY)
     # 上下文：≥1M 的标红加粗 —— 那一档是这张表最想让人看见的分界
     if ctx == "—":
         t(CTXX, y, '—', fill="#bdc1c6")
     else:
         big = ctx.endswith("M")
         t(CTXX, y, ctx, fill=RD if big else GY, bold=big)
+    # ── KV cache 条 ────────────────────────────────────────────────
+    # ⛔ 条长用**对数**刻度。线性刻度下 GPT-3 那 576 GiB 会把整行吃光，
+    #   而 DeepSeek-V4 那 0.7 GiB 连一个像素都占不到 —— 跨三个数量级的量
+    #   本来就不该用线性条。⚠️ 但对数条会让差距"看起来变小"，
+    #   所以条里必须写数值，而且图脚要注明是对数。
+    g = kv_gib(kvspec)
+    c = kv_col(g)
+    if g is None:
+        box(KVX, y - 13, 58, 18, "#f8f9fa", "#dadce0", 3)
+        t(KVX + 29, y, '未核到', fill="#9aa0a6", anchor="middle", size=9)
+    else:
+        lo, hi = math.log10(0.3), math.log10(700.0)
+        # ⛔ 最小宽度不能写死（原先写 46，"1008 MiB" 那种标签直接被条边裁掉）——
+        #   ⭐ 同一个错这张图上已经犯过三次：**按位置定尺寸，而不是按内容实际多宽。**
+        #     短条的下限必须由**标签自己的渲染宽度**决定。
+        lab = kv_fmt(g)
+        w = max(wpx(lab, 10) + 18,
+                int((math.log10(g) - lo) / (hi - lo) * KVW))
+        box(KVX, y - 13, w, 18, c, c, 3)
+        t(KVX + 9, y, lab, fill="#fff", bold=True, size=10)
     if note:
         t(NOTEX, y, note, fill=GY)
 
 # ── 落点 ────────────────────────────────────────────────────────────
 LZ = R0 + len(ROWS) * RH + 6
-BH = LZ - BY + 108 + 14
+BH = LZ - BY + 132 + 14
 p[_BPANEL] = ('<rect x="0" y="%d" width="%d" height="%d" rx="8" fill="#fff" '
               'stroke="#dadce0" stroke-width="1"/>' % (BY, W, BH))
-box(16, LZ, W - 32, 108, "#e8f0fe", BL, 6)
-t(30, LZ + 20, '⭐ 这张格子图一眼能看出四件事', "svglbl", "#174ea6", size=12)
+box(16, LZ, W - 32, 132, "#e8f0fe", BL, 6)
+t(30, LZ + 20, '⭐ 这张格子图一眼能看出五件事', "svglbl", "#174ea6", size=12)
 # ⛔ 「所有 X 都……」这种全称句会被后来加的行悄悄证伪，而且不报错。
 #    所以按数据分类**先报数再下结论**。⭐ 分类判据写成代码，加行时自动跟着变。
 _uni = [r for r in ROWS if len(r[2]) == 1]
@@ -556,6 +666,22 @@ t(30, LZ + 94, '④ ⭐⭐ <tspan font-weight="700">把「上下文」那一列�
                '<tspan font-weight="700">最硬的对照来自 MiniMax 自己：'
                '01 用 7:1 线性做到 10M，M2 退回纯全注意力只剩 192K ——&#160;'
                '同一家、同一批人，差 50 倍。</tspan>' % len(_1m), fill="#174ea6")
+
+# ⭐⭐⭐ 这一条是加了 KV 那一列才浮出来的，也是整张表的终点。
+# ⛔ GPT-3 那 576 GiB 是**假想值**——它只有 2K 上下文，从来没在 128K 上跑过。
+#   但正因为假想，它才是一把干净的尺：**同一个长度下，六年到底省了多少。**
+_kv = [(r[1], kv_gib(r[4])) for r in ROWS if r[4] is not None]
+_mx, _mn = max(_kv, key=lambda x: x[1]), min(_kv, key=lambda x: x[1])
+t(30, LZ + 112, '⑤ ⭐⭐ <tspan font-weight="700">最后看 KV 那一列：从 %s 到 %s，'
+                '整整 %d 倍。</tspan>'
+                '而这 %d 倍<tspan font-weight="700">不是一个旋钮拧出来的</tspan> ——&#160;'
+                'MHA→GQA 砍头数（576→40）、MLA 改压缩（40→8.4）是旋钮①；'
+                '线性把大部分层的 KV <tspan font-weight="700">直接删成零</tspan>（8.4→1.0）是旋钮③；'
+                'CSA／HCA 存压缩池（→0.7）是旋钮②。'
+                '<tspan font-weight="700">三个旋钮各贡献了一段。</tspan>'
+                % (kv_fmt(_mx[1]), kv_fmt(_mn[1]),
+                   round(_mx[1] / _mn[1]), round(_mx[1] / _mn[1])),
+  fill="#174ea6")
 
 # ══════════ 落点带 ══════════════════════════════════════════════════
 FY, FH = BY + BH + 14, 226
