@@ -270,6 +270,24 @@
    ⛔ 只有 GPT-3 会折（次大的 Llama2 才 211px），所以这条分支现在只走一次 ——&nbsp;
      但逻辑是通用的，以后再加更长的行也自动折。
 
+⛔⛔ **2026-09-07 第十二轮：刻度从开方换回线性（真实比例），多段折行。** 原话：
+
+    「你这两条一边长太不真实了，你就多搞几条也行，按照真实比例下的长度来。」
+
+   **这个批评一针见血。** 上一版用开方刻度、满刻度＝两行，于是 GPT-3 **恰好**
+   等于 2×满宽 ——&nbsp;两条一模一样长。那个「正好」不是数据长成那样，
+   **是刻度凑出来的**。⭐ 教训：**当一个图形呈现出过于整齐的巧合，
+   先怀疑是自己的刻度在说话，而不是数据在说话。**
+
+   改成**线性 · 一整行 ＝ 60 GiB**：
+   · GPT-3 折 **10 条**，末段 240px 是**自然残段**，一眼看得出没被凑
+   · 那一行本身比别的行高出一截 ——&nbsp;**这不是排版事故，这就是结论**
+   · 现代那批铺开到 5–267px（Llama2 267、M2 207、GLM-5 系 73、V4 5）
+
+   ⚠️ **线性的代价要说清楚**：1 GiB 以下那几家（Kimi Linear 1008 MiB、
+   DeepSeek-V4 697 MiB）在真实比例下就是几个像素，**互相之间没法用长度比** ——&nbsp;
+   得读数字。但这本身也是一条结论：**它们相对 MHA 就是「几乎为零」。**
+
 ⛔ **一条口径护栏：格子宽度固定，不按满宽等分。**
    否则 4 格的循环和 8 格的循环画出来一样长，「这个循环有多长」这条信息就没了。
 
@@ -484,11 +502,10 @@ t(16, BY + 43, '⭐ <tspan font-weight="700">整条一色</tspan>＝每一层都
   fill=RD)
 # ⛔ 对数刻度这件事必须写在**图上**，不能只写在源码注释里 ——
 #   读图的人看不到注释，而对数条会让差距"看起来变小"。
-t(16, BY + 61, '⚠️ KV 那一列的<tspan font-weight="700">条长是开方刻度</tspan>'
-               '——&#160;跨了三个数量级，线性下 697 MiB 连一个像素都占不到，'
-               '对数又把 846 倍压成 9 倍。<tspan font-weight="700">开方居中，但仍不是等比：'
-               '倍数看数字，别量长度。</tspan>'
-               '　<tspan font-weight="700">GPT-3 那条太长，折成了上下两段</tspan>（满刻度＝两行）。'
+t(16, BY + 61, '⚠️ KV 那一列的<tspan font-weight="700">条长是真实比例</tspan>（线性，'
+               '<tspan font-weight="700">一整行 ＝ 60 GiB</tspan>）——&#160;'
+               '<tspan font-weight="700">GPT-3 一行画不下，就按真实长度往下折，折了 10 条。</tspan>'
+               '那一行比别的行高出一截，<tspan font-weight="700">这不是排版，这就是结论</tspan>。'
                '　口径：<tspan font-weight="700">128K、BF16、batch 1、不含量化</tspan>；'
                '公式与每家的参数全在生成脚本里，可复算。', fill=GY)
 # ⭐⭐ 自己算出来的数，必须找外部锚点验一次 —— 否则「算得很认真」和「算错了」
@@ -782,8 +799,30 @@ p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
          % (HY + 6, W - 16, HY + 6, "#dadce0"))
 
 R0, RH = HY + 30, 30
+# ⛔ 2026-09-07：行高从固定 30 改成**逐行累加** —— 折行的那一行需要更高。
+#   ⭐ 现场：「你这两条一边长太不真实了，你就多搞几条也行，按照真实比例下的长度来。」
+#     两条一样长确实是刻度凑出来的：开方刻度下 GPT-3 恰好 = 2×满宽，太整齐了。
+#     换成**线性（真实比例）**之后，它折几条就是几条，末段自然是残段。
+KV_PER_ROW = 60.0                     # 一整行 = 60 GiB
+KVS = KVW / KV_PER_ROW                # px per GiB
+def kv_folds(g):
+    """真实比例下要几段，以及每段多长。"""
+    import math as _m
+    px = max(2.0, g * KVS)
+    n = max(1, int(_m.ceil(px / KVW)))
+    return [KVW] * (n - 1) + [px - (n - 1) * KVW]
+# 先按每行需要的高度把 y 排好（只有折行的那一行会更高）
+_ROWY, _cy = [], R0
+for _r in ROWS:
+    _g = kv_gib(_r[4])
+    _n = 1 if _g is None else len(kv_folds(_g))
+    _h = RH if _n <= 1 else 14 + _n * 8
+    _ROWY.append(_cy + (_h - RH) // 2)
+    _cy += _h
+_ROWEND = _cy
+
 for i, (tm, mdl, cyc, ctx, kvspec, note) in enumerate(ROWS):
-    y = R0 + i * RH
+    y = _ROWY[i]
     # ⛔ 2026-09-07：初版把**整行**都上了底色，被当场叫停：「你做过度了，
     #   不是说整行都标上颜色，而是只是把模型名字那一列，用那个长条形的
     #   背景框给它标上颜色，把模型名字也框到那个小框框里。」
@@ -851,26 +890,31 @@ for i, (tm, mdl, cyc, ctx, kvspec, note) in enumerate(ROWS):
         #   而**其余每一条都长了一倍**（Llama2 105→211、V4 14→27），
         #   现代模型之间的差距这才真正看得出来。
         #   ⛔ 这是这次改动的**真正收益**：不是排版问题，是刻度问题。
-        full = max(8, int(math.sqrt(g / 576.0) * KVW * 2))
-        if full <= KVW:
-            box(KVX, y - 13, full, 18, c, c, 3)
+        segs = kv_folds(g)
+        if len(segs) == 1:
+            w = max(2, int(segs[0]))
+            box(KVX, y - 13, w, 18, c, c, 3)
             # 标签放不下就甩到条外面（现场：「字可以冒出来，或者放到短柱子后面」）
             # ⛔ 别为了塞下字去把条拉长 —— 那等于让「多短」迁就「字多宽」。
-            if full >= wpx(lab, 10) + 18:
+            if w >= wpx(lab, 10) + 18:
                 t(KVX + 9, y, lab, fill="#fff", bold=True, size=10)
             else:
-                t(KVX + full + 7, y, lab, fill=c, bold=True, size=10)
+                t(KVX + w + 7, y, lab, fill=c, bold=True, size=10)
         else:
-            # 折成上下两条。两段各 8px ＋ 2px 间隔 ＝ 18px，**跟普通条一样高**，
-            # 所以不用为它单独加行高；而"两条"这个形状本身就说明了它超长。
-            box(KVX, y - 14, KVW, 8, c, c, 2)
-            box(KVX, y - 4, full - KVW, 8, c, c, 2)
-            t(KVX + KVW + 7, y, lab, fill=c, bold=True, size=10)
+            # ⭐ 真实比例折行：折几段就画几段，**末段是残段**（不再是两条一样长）。
+            #   这一行本身比别的行高出一截 —— 那不是排版事故，**那就是结论**：
+            #   同一个刻度下，MHA 需要十条才画得完，而现代那批只要几个像素。
+            y0 = y - 13 - (len(segs) - 1) * 4
+            for k, sw in enumerate(segs):
+                box(KVX, y0 + k * 8, max(2, int(sw)), 6, c, c, 2)
+            t(KVX + int(segs[0]) + 8, y, lab, fill=c, bold=True, size=10)
+            t(KVX + int(segs[0]) + 8, y + 13, '（%d 条才画得下）' % len(segs),
+              fill=c, size=9)
     if note:
         t(NOTEX, y, note, fill=GY)
 
 # ── 落点 ────────────────────────────────────────────────────────────
-LZ = R0 + len(ROWS) * RH + 6
+LZ = _ROWEND + 6
 BH = LZ - BY + 196 + 14
 p[_BPANEL] = ('<rect x="0" y="%d" width="%d" height="%d" rx="8" fill="#fff" '
               'stroke="#dadce0" stroke-width="1"/>' % (BY, W, BH))
