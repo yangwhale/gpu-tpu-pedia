@@ -68,6 +68,37 @@
       DeepSeek-V2（MLA），**每个机制配它首次出现时的那个模型**；
       稀疏那一支的起点 DeepSeek-V3.2-Exp 也补进去了。
 
+⭐⭐⭐ **2026-09-07 第四轮，一条追问换来整张表的重心。** 原话：
+
+    「MiniMax M2 全注意力这个你得深入研究一下。所谓退回全注意力不大可能，
+      因为全注意力就不可能有长上下文，都这个年代了，它肯定是有什么 trade off
+      折中方案之类的。而且压缩注意力说的也是全注意力的意思，
+      它是不是用了压缩注意力的 MLA 这种？」
+
+   扒 `MiniMax-M2/config.json`，**这个怀疑对了一半，也纠正了一半**：
+
+   · **对的一半：它绝不是「什么都没做的全注意力」。**
+     `num_attention_heads: 48` / `num_key_value_heads: 8` ——&nbsp;**GQA-8**，
+     KV 直接是 MHA 的 1/6；`rotary_dim: 64` 配 `head_dim: 128` ——&nbsp;
+     **partial RoPE，只转一半维度**。原先那一行标成笼统的「FULL」是偷懒。
+   · **纠正的一半：它不是 MLA，也不是压缩注意力。**
+     config 里没有 `kv_lora_rank`、没有 indexer、`sliding_window: null`、
+     `attn_type_list` 62 层全是 1。
+
+   ⭐⭐ **这一问逼出了整张图最重要的一条口径：
+   「全注意力」是相对旋钮③（线性）说的，不是相对旋钮①（KV 存多少）说的。**
+   M2 退回的是③，①上它一直压着 ——&nbsp;**三个旋钮正交，M2 就是活证据。**
+
+   ⭐⭐⭐ **而「全注意力撑不起长上下文」这个直觉，被量化成了一整列。**
+   于是加了「上下文」这一列，扫下来的结论硬得出乎意料：
+   **做到 1M 以上的八家，无一例外都动了旋钮②或③；纯全注意力那一档最高只到 256K。**
+   最硬的对照来自 MiniMax 自己：**01 用 7:1 线性做到 10M
+   （config 写着 `10240000`），M2 退回纯全注意力只剩 192K（`196608`）——&nbsp;
+   同一家、同一批人，改一处架构差 50 倍。**
+
+   ⛔ 上下文那一列**只填核到一手出处的**（多数是直接读 config.json），
+     核不到就留「—」。⭐ 空格不是「没有」，是「本轮没核到」——&nbsp;别把它读成 0。
+
 ⛔ **一条口径护栏：格子宽度固定，不按满宽等分。**
    否则 4 格的循环和 8 格的循环画出来一样长，「这个循环有多长」这条信息就没了。
 
@@ -110,7 +141,7 @@ import io
 
 BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
 PU, CY, BR, PK = "#8430ce", "#00838f", "#7a5000", "#c5221f"
-W = 1560
+W = 1680
 p = []
 
 
@@ -307,70 +338,74 @@ FULLNAME = {
 # (时间, 模型, 一个循环的构成 [(简写, 几层)…], 备注)
 # ⛔ 只有一项 ＝ 每层同构，画成整条一色。
 ROWS = [
+    # (时间, 模型, 循环构成, 上下文, 备注)
+    # ⛔ 上下文这一列**只填核到一手出处的**（多数是本轮直接读的 config.json）。
+    #   核不到就留「—」——&nbsp;宁可缺一格，不猜一格。
     # ── 基线：每个机制配它首次出现的模型 ────────────────────────────
-    ("2020-05", "GPT-3（175B）", [("MHA", 1)],
+    ("2020-05", "GPT-3（175B）", [("MHA", 1)], "2K",
      "96 层全 MHA，96 头×128 维。<tspan font-weight=\"700\">基线：KV 按头数线性长，没有任何省法</tspan>"),
-    ("2022-04", "PaLM（540B）", [("MQA", 1)],
+    ("2022-04", "PaLM（540B）", [("MQA", 1)], "2K",
      "118 层，48 头<tspan font-weight=\"700\">共用 1 组 KV</tspan> ——&#160;第一次大规模砍 KV（Shazeer 2019）"),
-    ("2023-07", "Llama 2（70B）", [("GQA", 1)],
+    ("2023-07", "Llama 2（70B）", [("GQA", 1)], "4K",
      "8 组 KV。MQA 砍太狠会掉质量，GQA 是折中（arXiv 2305.13245）"),
-    ("2024-05", "DeepSeek-V2（236B/21B）", [("MLA", 1)],
+    ("2024-05", "DeepSeek-V2（236B/21B）", [("MLA", 1)], "128K",
      "不砍头，改低秩压缩。<tspan font-weight=\"700\">KV cache 降 93.3%</tspan>；V3 原样沿用"),
     # ── 三个旋钮各自的第一次 ────────────────────────────────────────
-    ("2025-01", "MiniMax-01（456B）", [("LTN", 7), ("FULL", 1)],
-     "⭐ <tspan font-weight=\"700\">线性这一支第一次上到旗舰规模</tspan>"),
-    ("2025-09", "DeepSeek-V3.2-Exp", [("DSA", 1)],
-     "⭐ <tspan font-weight=\"700\">稀疏这一支的起点</tspan>：Lightning Indexer 打分，每 query 只留 top-k"),
-    ("2025-09", "Qwen3-Next（80B/3B）", [("GDN", 3), ("gAT", 1)], ""),
-    ("2025-10", "MiniMax M2", [("FULL", 1)],
-     "⛔ <tspan font-weight=\"700\">退回全注意力</tspan>：低精度状态敏感、prefix cache 难做"),
-    ("2025-10", "Kimi Linear（48B/3B）", [("KDA", 3), ("MLA", 1)],
-     "KDA ＝ Gated DeltaNet ＋ 按通道门控"),
-    ("2026-01", "小米 MiMo-V2-Flash", [("SWA", 5), ("FULL", 1)], "SWA 窗口只有 128"),
-    ("2026-02", "GLM-5（744B/40B）", [("DSA", 1)],
-     "MLA ＋ DSA。<tspan font-weight=\"700\">GLM-5.1 是同一套架构</tspan>，只有后训练不同"),
-    ("2026-03", "Qwen3.5（0.8B–397B）", [("GDN", 3), ("gAT", 1)],
-     "全家族统一：3×(GDN→FFN) → 1×(Gated Attn→FFN)"),
-    ("2026-04", "小米 MiMo-V2.5-Pro", [("SWA", 6), ("FULL", 1)], "窗口还是 128 ——&#160;比谁都激进"),
-    # ⭐⭐ 2026-09-07 现场追问：「V4 是不是只有 CSA 跟 HCA？MLA 和 DSA 跑哪去了？」
-    #    去扒了 DeepSeek-V4-Flash 的 config.json，答案跟原先写的**不一样**：
-    #    · `compress_ratios` 就是层表：[0,0, 4,128,4,128,…,4, 0] ——&nbsp;
-    #      0＝滑窗全注意力（bootstrap）、4＝CSA（m=4）、128＝HCA（m′=128）。
-    #      43 层 ＝ **2 层 SWA 引导 ＋ 21 层 CSA ＋ 20 层 HCA**，CSA/HCA 严格交替。
-    #      ⛔ 所以它是**三种层**，不是两种 ——&nbsp;原先那一行漏了 SWA。
-    #    · **MLA 去哪了：被换掉了。** HF 官方文档原话「replaces DeepSeek-V3's
-    #      Multi-head Latent Attention (MLA) with a hybrid local + long-range design」。
-    #      config 里 `num_key_value_heads: 1` ——&nbsp;底层是 **shared K=V 的 MQA**，
-    #      同一个张量既当 key 又当 value。⭐ 绕了一大圈回到 2019 年的 MQA。
-    #    · **DSA 去哪了：没消失，降级成零件。** Lightning Indexer 还在，
-    #      它是 **CSA 内部**那一步打分（`index_n_heads: 64, index_topk: 512`）。
+    # ⭐⭐ 这一行和下面 M2 那一行**必须并排读**：同一家公司、同一批人，
+    #    01 用 7:1 线性混合做到 10M，M2 退回纯全注意力只剩 192K。差 50 倍。
+    ("2025-01", "MiniMax-01（456B）", [("LTN", 7), ("GQA", 1)], "10M",
+     "⭐ 线性第一次上旗舰规模。<tspan font-weight=\"700\">config 写着 10,240,000</tspan>；"
+     "那层「贵的」是 GQA-8"),
+    ("2025-09", "DeepSeek-V3.2-Exp", [("DSA", 1)], "160K",
+     "⭐ <tspan font-weight=\"700\">稀疏这一支的起点</tspan>：MLA ＋ Lightning Indexer，每 query 只留 top-k"),
+    ("2025-09", "Qwen3-Next（80B/3B）", [("GDN", 3), ("gAT", 1)], "—", ""),
+    # ⭐⭐ 2026-09-07 现场追问：「所谓退回全注意力不大可能，全注意力就不可能有长上下文，
+    #    它肯定有什么 trade off。它是不是用了压缩注意力的 MLA 这种？」
+    #    去扒 MiniMax-M2/config.json，**对了一半，也纠正了一半**：
+    #    · 对的一半：它绝不是「什么都没做」。`num_attention_heads: 48` /
+    #      `num_key_value_heads: 8` →&nbsp;**GQA-8**；`rotary_dim: 64` 配
+    #      `head_dim: 128` →&nbsp;**partial RoPE，只转一半维度**。
+    #    · 纠正的一半：**它不是 MLA、也不是压缩注意力。** 没有 `kv_lora_rank`、
+    #      没有 indexer、`sliding_window: null`、`attn_type_list` 62 层全是 1。
+    #    ⭐⭐⭐ 这一问逼出了本图最重要的一条口径：
+    #      **「全注意力」是相对旋钮③（线性）说的，不是相对旋钮①（KV 存多少）说的。**
+    #      M2 退回的是③，①上它一直压着。三个旋钮正交，M2 就是活证据。
+    #    ⭐ 而「全注意力撑不起长上下文」这个直觉，被上下文那一列量化了：192K。
+    ("2025-10", "MiniMax M2（230B/10B）", [("GQA", 1)], "192K",
+     "⛔ <tspan font-weight=\"700\">「退回全注意力」不等于什么都没做</tspan>：它是 GQA-8 ＋ partial RoPE。"
+     "但确实<tspan font-weight=\"700\">没有 MLA、没有稀疏</tspan>"),
+    ("2025-10", "Kimi Linear（48B/3B）", [("KDA", 3), ("MLA", 1)], "1M",
+     "27 层 ＝ 20 KDA ＋ 7 MLA（<tspan font-weight=\"700\">末层强制 full，所以多一层</tspan>）。已用 NoPE"),
+    ("2026-01", "小米 MiMo-V2-Flash", [("SWA", 5), ("FULL", 1)], "—", "SWA 窗口只有 128"),
+    ("2026-02", "GLM-5（744B/40B）", [("DSA", 1)], "198K",
+     "MLA ＋ DSA，78 层。<tspan font-weight=\"700\">GLM-5.1 是同一套架构</tspan>，只有后训练不同"),
+    ("2026-03", "Qwen3.5（397B/17B）", [("GDN", 3), ("gAT", 1)], "256K",
+     "60 层 ＝ 45 线性 ＋ 15 全注意力，<tspan font-weight=\"700\">config 里 full_attention_interval: 4</tspan>"),
+    ("2026-04", "小米 MiMo-V2.5-Pro", [("SWA", 6), ("FULL", 1)], "—", "窗口还是 128 ——&#160;比谁都激进"),
     ("2026-05", "DeepSeek-V4-Flash（43 层）",
-     [("SWA", 2), ("CSA", 1), ("HCA", 1), ("CSA", 1), ("HCA", 1)],
-     "⭐ 前 2 层 SWA 引导，之后 <tspan font-weight=\"700\">CSA／HCA 严格交替</tspan>（21 ＋ 20）。"
+     [("SWA", 2), ("CSA", 1), ("HCA", 1), ("CSA", 1), ("HCA", 1)], "1M",
+     "⭐ 前 2 层 SWA 引导，之后 <tspan font-weight=\"700\">CSA／HCA 严格交替</tspan>（21＋20）。"
      "<tspan font-weight=\"700\">MLA 被换掉了</tspan>，底层是 shared-KV 的 MQA"),
-    ("2026-06", "GLM-5.2（744B/40B）", [("DSA", 1)],
-     "⭐ ＋IndexShare：每四个稀疏层共用一个 indexer，1M 下省 2.9× FLOP"),
-    # ⛔ 现场记忆是「Ling 2.6 用 KDA」，查官方 base 模型卡不是 —— 见备注。
-    ("2026-06", "Ling 2.6-1T（1T/63B）", [("LTN", 7), ("MLA", 1)],
+    ("2026-06", "GLM-5.2（744B/40B）", [("DSA", 1)], "1M",
+     "⭐ ＋IndexShare：每四个稀疏层共用一个 indexer。<tspan font-weight=\"700\">198K → 1M 就是这一步</tspan>"),
+    ("2026-06", "Ling 2.6-1T（1T/63B）", [("LTN", 7), ("MLA", 1)], "256K",
      "⛔ 不是 KDA。而且是<tspan font-weight=\"700\">从 Ling-2.0 的 GQA 迁移改造</tspan>来的，不是从头训"),
-    ("2026-06", "MiniMax M3", [("MSA", 1)],
+    ("2026-06", "MiniMax M3", [("MSA", 1)], "—",
      "⭐ 第三次转向：不回线性，改走稀疏。每 query 只看 top-16 个 128-token 块"),
-    ("2026-07", "Kimi K3（2.8T）", [("KDA", 3), ("gMLA", 1)],
-     "93 层 ＝ 69 KDA ＋ 24 Gated MLA（比整齐的 3:1 多出一层 MLA）"),
-    ("2026-07", "混元 Hy3（295B/21B）", [("GQA", 1)],
+    ("2026-07", "Kimi K3（2.8T）", [("KDA", 3), ("gMLA", 1)], "1M",
+     "93 层 ＝ 69 KDA ＋ 24 Gated MLA（<tspan font-weight=\"700\">末层 92、93 连着两层 full</tspan>）"),
+    ("2026-07", "混元 Hy3（295B/21B）", [("GQA", 1)], "256K",
      "⛔ 80 层全是 GQA-8 ——&#160;<tspan font-weight=\"700\">线性一层都没上</tspan>"),
-    ("2026-07", "Ling-3.0-flash（124B/5.1B）", [("KDA", 5), ("gMLA", 1)],
+    ("2026-07", "Ling-3.0-flash（124B/5.1B）", [("KDA", 5), ("gMLA", 1)], "256K",
      "42 层 ＝ 35 KDA ＋ 7 MLA。<tspan font-weight=\"700\">跟 2.6 换了一支</tspan>；"
-     "同代 tiny 是 3:1。<tspan font-weight=\"700\">3.0 的旗舰（Pro／1T）尚未发布</tspan>"),
-    ("2026-08", "GLM-5.3（744B/40B）", [("DSA", 1)],
+     "同代 tiny 是 3:1，旗舰尚未发布"),
+    ("2026-08", "GLM-5.3（744B/40B）", [("DSA", 1)], "1M",
      "⚠️ <tspan font-weight=\"700\">旗舰版跟 5.2 是同一个 base，纯后训练，架构一个字没动</tspan>"),
-    ("2026-08", "混元 Hy4-preview（770B/49B）", [("gDSA", 1)],
+    ("2026-08", "混元 Hy4-preview（770B/49B）", [("gDSA", 1)], "1M",
      "78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）"),
-    # ⭐⭐ 全表唯一一条**蓝格＋红格**：别人都是「冷色配黄橙」（线性配全注意力），
-    #    只有它是「线性配稀疏」。按类型上色之后，这件事不用写字就看得见。
-    ("2026-08", "⭐ GLM-5.3-Flash（320B/18B）", [("KDA", 3), ("DSA", 1)],
+    ("2026-08", "⭐ GLM-5.3-Flash（320B/18B）", [("KDA", 3), ("DSA", 1)], "1M",
      "45 层 ＝ 34 KDA ＋ 11 稀疏 MLA（NoPE）——&#160;"
-     "<tspan font-weight=\"700\">GLM 第一次线性和稀疏同锅</tspan>，而且是全新的 base"),
+     "<tspan font-weight=\"700\">GLM 第一次线性和稀疏同锅</tspan>，全新的 base"),
 ]
 
 # ── 图例（两行，按族分组）────────────────────────────────────────────
@@ -399,19 +434,22 @@ for fam, keys in (("全注意力一族", ("MHA", "MQA", "GQA", "FULL", "gAT", "M
 MDLX, MIXX, BARX = LX + 62, 290, 512
 CELL, CGAP, MAXC = 42, 3, 8
 BARW = MAXC * CELL + (MAXC - 1) * CGAP
-RATX, NOTEX = BARX + BARW + 12, BARX + BARW + 62
+RATX = BARX + BARW + 12
+CTXX = RATX + 54
+NOTEX = CTXX + 66
 HY = BY + 96
 t(LX, HY, '时间', fill=GY, bold=True)
 t(MDLX, HY, '模型', fill=GY, bold=True)
 t(MIXX, HY, '这一层 ＋ 那一层', fill=GY, bold=True)
 t(BARX, HY, '一个循环（一格 ＝ 一层）', fill=GY, bold=True)
 t(RATX, HY, '配比', fill=GY, bold=True)
+t(CTXX, HY, '上下文', fill=GY, bold=True)
 t(NOTEX, HY, '备注', fill=GY, bold=True)
 p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
          % (HY + 6, W - 16, HY + 6, "#dadce0"))
 
 R0, RH = HY + 30, 30
-for i, (tm, mdl, cyc, note) in enumerate(ROWS):
+for i, (tm, mdl, cyc, ctx, note) in enumerate(ROWS):
     y = R0 + i * RH
     if i and ROWS[i - 1][0][:4] != tm[:4]:          # 换年份画一条极淡的分隔
         p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="#f1f3f4" '
@@ -454,16 +492,22 @@ for i, (tm, mdl, cyc, note) in enumerate(ROWS):
               fill=TYPE_COL[cyc[0][0]], bold=True)
         else:
             t(RATX, y, '见备注', fill=GY)
+    # 上下文：≥1M 的标红加粗 —— 那一档是这张表最想让人看见的分界
+    if ctx == "—":
+        t(CTXX, y, '—', fill="#bdc1c6")
+    else:
+        big = ctx.endswith("M")
+        t(CTXX, y, ctx, fill=RD if big else GY, bold=big)
     if note:
         t(NOTEX, y, note, fill=GY)
 
 # ── 落点 ────────────────────────────────────────────────────────────
 LZ = R0 + len(ROWS) * RH + 6
-BH = LZ - BY + 88 + 14
+BH = LZ - BY + 108 + 14
 p[_BPANEL] = ('<rect x="0" y="%d" width="%d" height="%d" rx="8" fill="#fff" '
               'stroke="#dadce0" stroke-width="1"/>' % (BY, W, BH))
-box(16, LZ, W - 32, 88, "#e8f0fe", BL, 6)
-t(30, LZ + 20, '⭐ 这张格子图一眼能看出三件事', "svglbl", "#174ea6", size=12)
+box(16, LZ, W - 32, 108, "#e8f0fe", BL, 6)
+t(30, LZ + 20, '⭐ 这张格子图一眼能看出四件事', "svglbl", "#174ea6", size=12)
 # ⛔ 「所有 X 都……」这种全称句会被后来加的行悄悄证伪，而且不报错。
 #    所以按数据分类**先报数再下结论**。⭐ 分类判据写成代码，加行时自动跟着变。
 _uni = [r for r in ROWS if len(r[2]) == 1]
@@ -499,6 +543,19 @@ t(30, LZ + 76, '③ ⭐ <tspan font-weight="700">扫一眼颜色搭配</tspan>�
                % (len(_hyb), len(_warm),
                   "、".join(r[1].replace("⭐ ", "").split("（")[0] for r in _cold)),
   fill="#174ea6")
+# ⭐⭐⭐ 2026-09-07 现场追问逼出来的一条，也是整张表最硬的一条：
+#    「所谓退回全注意力不大可能，因为全注意力就不可能有长上下文。」
+#    ——&nbsp;把上下文那一列竖着扫一遍，这个直觉被数据完全证实了，
+#    而最硬的对照来自 MiniMax 自己：同一家、同一批人，改一处架构差 50 倍。
+# ⛔ 空着的那几格是**没核到一手出处**，不是没有 —— 宁可缺不猜。
+_1m = [r for r in ROWS if r[3].endswith("M") and r[3] != "—"]
+_pure = [r for r in ROWS if len(r[2]) == 1 and r[2][0][0] not in SPARSE]
+t(30, LZ + 94, '④ ⭐⭐ <tspan font-weight="700">把「上下文」那一列竖着扫一遍</tspan>：'
+               '<tspan font-weight="700">做到 1M 以上的 %d 家，无一例外都动了旋钮②或③</tspan>；'
+               '而纯全注意力那一档最高只到 256K。'
+               '<tspan font-weight="700">最硬的对照来自 MiniMax 自己：'
+               '01 用 7:1 线性做到 10M，M2 退回纯全注意力只剩 192K ——&#160;'
+               '同一家、同一批人，差 50 倍。</tspan>' % len(_1m), fill="#174ea6")
 
 # ══════════ 落点带 ══════════════════════════════════════════════════
 FY, FH = BY + BH + 14, 226
