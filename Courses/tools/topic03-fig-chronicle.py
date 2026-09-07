@@ -194,6 +194,27 @@
    ⚠️ 小米这一族的 **K 和 V 维度不一样**（QK 192 / V 128），
      所以公式里是 `qk + v` 相加，**不是像 GQA 那样乘 2**。照抄会算错。
 
+⛔⛔ **2026-09-07 第八轮：一句质疑推翻了一格数，也定住了整列的口径。** 原话：
+
+    「MiniMax-01（456B）10M 的上下文是什么鬼，真的会那么长吗，为啥，效果如何？」
+
+   **查证结果：这一格我写错了。** 官方论文（arXiv 2501.08313）原话是
+   「can reach up to **1 million tokens during training** and
+   **extrapolate to 4 million tokens during inference**」——&nbsp;
+   **训练 1M、推理外推 4M**。而 config 里那个 `max_position_embeddings: 10240000`
+   是**位置编码的容量上限**，官方从没声称过 10M。已改成 4M。
+
+   ⭐⭐⭐ **但比这一格更重要的是它暴露的东西：整列的口径都得重新交代。**
+   这一列的每个数都读自各家 config 的同一个字段，而**那个字段各家含义并不一样** ——
+   有的填的是验证过的上下文，有的填的是理论容量。**同一个字段名，不同的语义。**
+
+   ⭐ 而「声明」和「能用」之间还隔着一整个 benchmark 的落差，
+   最好的证据来自厂商自己：小米 V2.5-Pro 的模型卡直接写着
+   **V2-Pro「到 1M 时塌到 0.00」**，V2.5-Pro 在 1M 也只有 0.37／0.62。
+
+   📌 所以列头加了「⚠️ 声明值」，并且落点⑥ 专门讲这件事。
+   **看到「支持 N 万上下文」，先问是谁、在什么任务上、测出多少分。**
+
 ⛔ **一条口径护栏：格子宽度固定，不按满宽等分。**
    否则 4 格的循环和 8 格的循环画出来一样长，「这个循环有多长」这条信息就没了。
 
@@ -562,9 +583,15 @@ ROWS = [
     # ── 三个旋钮各自的第一次 ────────────────────────────────────────
     # ⭐⭐ 这一行和下面 M2 那一行**必须并排读**：同一家公司、同一批人，
     #    01 用 7:1 线性混合做到 10M，M2 退回纯全注意力只剩 192K。差 50 倍。
-    ("2025-01", "MiniMax-01（456B）", [("LTN", 7), ("GQA", 1)], "10M", ("gqa", 10, 8, 128),
-     "⭐ 线性第一次上旗舰规模。<tspan font-weight=\"700\">config 写着 10,240,000</tspan>；"
-     "那层「贵的」是 GQA-8"),
+    # ⛔ 2026-09-07 现场质疑：「10M 的上下文是什么鬼，真的会那么长吗？」
+    #   查证结果：**我写错了。** 官方论文（arXiv 2501.08313）原话是
+    #   「can reach up to **1 million tokens during training** and
+    #    **extrapolate to 4 million tokens during inference**」。
+    #   config 里那个 `max_position_embeddings: 10240000` 是**位置编码的容量上限**，
+    #   官方从没声称过 10M。⭐⭐ 教训见落点⑥：**这一列读的是声明，不是能力。**
+    ("2025-01", "MiniMax-01（456B）", [("LTN", 7), ("GQA", 1)], "4M", ("gqa", 10, 8, 128),
+     "⭐ 线性第一次上旗舰规模。<tspan font-weight=\"700\">训练 1M，推理外推 4M</tspan>"
+     "（config 那个 10,240,000 只是位置编码容量，别当能力读）"),
     ("2025-09", "DeepSeek-V3.2-Exp", [("DSA", 1)], "160K", ("mla", 61, 576),
      "⭐ <tspan font-weight=\"700\">稀疏这一支的起点</tspan>：MLA ＋ Lightning Indexer，每 query 只留 top-k"),
     ("2025-09", "Qwen3-Next（80B/3B）", [("GDN", 3), ("gAT", 1)], "256K", ("gqa", 12, 2, 256),
@@ -675,6 +702,7 @@ t(MDLX, HY, '模型', fill=GY, bold=True)
 t(MIXX, HY, '这一层 ＋ 那一层', fill=GY, bold=True)
 t(BARX, HY, '一个循环（一格 ＝ 一层）', fill=GY, bold=True)
 t(CTXX, HY, '上下文', fill=GY, bold=True)
+t(CTXX, HY - 13, '⚠️ 声明值', fill=RD, size=9)
 t(KVX, HY, 'KV cache＠128K（BF16，batch 1）', fill=GY, bold=True)
 t(NOTEX, HY, '备注', fill=GY, bold=True)
 p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
@@ -754,11 +782,11 @@ for i, (tm, mdl, cyc, ctx, kvspec, note) in enumerate(ROWS):
 
 # ── 落点 ────────────────────────────────────────────────────────────
 LZ = R0 + len(ROWS) * RH + 6
-BH = LZ - BY + 132 + 14
+BH = LZ - BY + 174 + 14
 p[_BPANEL] = ('<rect x="0" y="%d" width="%d" height="%d" rx="8" fill="#fff" '
               'stroke="#dadce0" stroke-width="1"/>' % (BY, W, BH))
-box(16, LZ, W - 32, 132, "#e8f0fe", BL, 6)
-t(30, LZ + 20, '⭐ 这张格子图一眼能看出五件事', "svglbl", "#174ea6", size=12)
+box(16, LZ, W - 32, 174, "#e8f0fe", BL, 6)
+t(30, LZ + 20, '⭐ 这张格子图一眼能看出六件事', "svglbl", "#174ea6", size=12)
 # ⛔ 「所有 X 都……」这种全称句会被后来加的行悄悄证伪，而且不报错。
 #    所以按数据分类**先报数再下结论**。⭐ 分类判据写成代码，加行时自动跟着变。
 _uni = [r for r in ROWS if len(r[2]) == 1]
@@ -805,8 +833,8 @@ t(30, LZ + 94, '④ ⭐⭐ <tspan font-weight="700">把「上下文」那一列�
                '<tspan font-weight="700">做到 1M 以上的 %d 家，无一例外都动了旋钮②或③</tspan>；'
                '而纯全注意力那一档最高只到 256K。'
                '<tspan font-weight="700">最硬的对照来自 MiniMax 自己：'
-               '01 用 7:1 线性做到 10M，M2 退回纯全注意力只剩 192K ——&#160;'
-               '同一家、同一批人，差 50 倍。</tspan>' % len(_1m), fill="#174ea6")
+               '01 用 7:1 线性外推到 4M，M2 退回纯全注意力只剩 192K ——&#160;'
+               '同一家、同一批人，差二十倍。</tspan>' % len(_1m), fill="#174ea6")
 
 # ⭐⭐⭐ 这一条是加了 KV 那一列才浮出来的，也是整张表的终点。
 # ⛔ GPT-3 那 576 GiB 是**假想值**——它只有 2K 上下文，从来没在 128K 上跑过。
@@ -822,6 +850,24 @@ t(30, LZ + 112, '⑤ ⭐⭐ <tspan font-weight="700">最后看 KV 那一列：�
                 '<tspan font-weight="700">三个旋钮各贡献了一段。</tspan>'
                 % (kv_fmt(_mx[1]), kv_fmt(_mn[1]),
                    round(_mx[1] / _mn[1]), round(_mx[1] / _mn[1])),
+  fill="#174ea6")
+
+# ⭐⭐⭐ 2026-09-07 现场一句「10M 的上下文是什么鬼」逼出来的一条 ——
+#    而且它比任何一个具体数字都重要，因为它管着**整列怎么读**。
+# ⛔ 这一列的每个数都是从各家 config 的 `max_position_embeddings` 读的，
+#    而那个字段各家含义并不一样：有的是验证过的上下文，有的是理论容量。
+#    MiniMax-01 就是后者 —— config 写 10,240,000，官方只声称训练 1M、外推 4M。
+# ⛔ 一行写不下就拆两行 —— 别指望缩字号，那是把「读不清」换成「看不见」。
+t(30, LZ + 130, '⑥ ⛔⛔ <tspan font-weight="700">「上下文」这一列报的是'
+                '<tspan style="text-decoration:underline">声明</tspan>，不是'
+                '<tspan style="text-decoration:underline">能用</tspan>。</tspan>'
+                '数来自各家 config 的 max_position_embeddings，而这个字段各家含义并不一样'
+                '——&#160;MiniMax-01 那格 config 写着 <tspan font-weight="700">10,240,000</tspan>，'
+                '而官方只声称<tspan font-weight="700">训练 1M、外推 4M</tspan>。',
+  fill="#174ea6")
+t(46, LZ + 148, '<tspan font-weight="700">声明和能用之间还隔着一整个 benchmark 的落差</tspan>：'
+                '小米自己的模型卡就写着 V2-Pro「到 1M 时塌到 0.00」，而 V2.5-Pro 在 1M 也只有 0.37／0.62。'
+                '⭐ <tspan font-weight="700">看到「支持 N 万上下文」，先问是谁、在什么任务上、测出多少分。</tspan>',
   fill="#174ea6")
 
 # ══════════ 落点带 ══════════════════════════════════════════════════
