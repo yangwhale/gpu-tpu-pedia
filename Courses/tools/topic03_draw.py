@@ -1,0 +1,218 @@
+# -*- coding: utf-8 -*-
+"""专题三 · 画图基元 —— **每一节的图都用这一套**。
+
+⛔⛔ 2026-09-08 从 topic03-fig-rnn.py 抽出来。抽的理由不是「代码复用」，
+   是**视觉一致性**：这门课的图必须看起来是同一个人画的。
+   抄第二份的后果不是多写几行，是**两套图慢慢漂开，而且漂了不报错**
+   ——&nbsp;跟 topic03_models.py 当初被抽出来是同一个理由。
+
+⭐ 这套基元是照**专题二**的图逐条拆出来的。它的质感来自六样东西：
+
+     ① header(title, sub, legend)   图例条 ——&nbsp;颜色一上来就有词典
+     ② panel(...)                   面板套面板 ——&nbsp;外框 → 标题栏 → 内容
+     ③ cell(main, sub=...)          盒子两行字 ——&nbsp;主标签 ＋ 一句说明
+     ④ cell(..., grid=True)         矩阵纹理 ——&nbsp;权重看着像一块矩阵
+     ⑤ spot(...)                    高亮带 ——&nbsp;圈出「差别在这儿」
+     ⑥ band(kind, ...) ＋ src(...)  落点带 ＋ 📌 出处行
+
+⛔ **别再画「一个矩形 ＋ 居中一个词」。**
+⭐ 判据：**图里每一个盒子都该回答一个问题，而不是标一个名字。**
+
+📌 三条护栏，别拆：
+   · cell() 的宽度断言 ——&nbsp;文字放不下就报错，不许悄悄溢出
+   · src() 的宽度断言 ——&nbsp;**文字溢出既不报错也不产生滚动条，只是被裁掉**
+   · MINSZ 字号地板 ——&nbsp;专题二 42 张图渲染后最小 12.2px，这里对齐它
+     ⚠️ 地板只拦住**经过 _sz() 的调用点**；默认参数最容易绕过去（栽过一次）。
+"""
+import io
+import os
+import re
+import xml.dom.minidom
+
+HERE = os.path.dirname(os.path.abspath(__file__))
+
+BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
+PU, CY, BR, INK = "#8430ce", "#00838f", "#7a5000", "#202124"
+GY2, LINE, LINE2, BG2 = "#80868b", "#dadce0", "#e8eaed", "#f8f9fa"
+MINSZ = 11
+
+
+def _sz(n):
+    assert n >= MINSZ, "字号 %d 太小（地板 %d）" % (n, MINSZ)
+    return n
+
+
+def wpx(s, size=11.5):
+    n = 0.0
+    for ch in s:
+        n += 1.0 if ord(ch) > 0x2E80 else 0.55
+    return int(n * size)
+
+
+class Fig(object):
+    """一张 SVG。高度不写死，收尾按真实落点回填。"""
+
+    def __init__(self, w, aria):
+        self.w, self.aria, self.p = w, aria, []
+        self.p.append("")          # svg 开标签占位
+
+    # ── 原子 ────────────────────────────────────────────────────
+    def t(self, x, y, s, fill=INK, bold=False, size=11.5, anchor=None,
+          cls="svgsm", mono=False):
+        st = ["font-size:%.1fpx" % _sz(size)]
+        if mono:
+            # ⛔ 这里必须用单引号：style 是双引号属性，里面再写双引号会把属性提前闭合，
+            #   生成的 SVG 直接不良构（写盘前那道 XML 自检就是抓这个的）。
+            st.append("font-family:'Roboto Mono',ui-monospace,monospace")
+        self.p.append('<text class="%s" x="%d" y="%d" fill="%s"%s style="%s">%s</text>'
+                      % (cls, x, y, fill,
+                         ' text-anchor="%s"' % anchor if anchor else '',
+                         ";".join(st),
+                         '<tspan font-weight="700">%s</tspan>' % s if bold else s))
+
+    def box(self, x, y, w, h, fill="#fff", stroke=LINE, r=6, sw=1, dash=None,
+            shadow=False):
+        self.p.append('<rect x="%s" y="%s" width="%s" height="%s" rx="%d" fill="%s" '
+                      'stroke="%s" stroke-width="%s"%s%s/>'
+                      % (x, y, w, h, r, fill, stroke, sw,
+                         ' stroke-dasharray="%s"' % dash if dash else '',
+                         ' filter="url(#sh)"' if shadow else ''))
+
+    def line(self, x1, y1, x2, y2, col=GY2, sw=1.3, dash=None, arrow=True):
+        self.p.append('<line x1="%s" y1="%s" x2="%s" y2="%s" stroke="%s" '
+                      'stroke-width="%s" stroke-linecap="round"%s%s/>'
+                      % (x1, y1, x2, y2, col, sw,
+                         ' stroke-dasharray="%s"' % dash if dash else '',
+                         ' marker-end="url(#ah-%s)"' % col.lstrip("#") if arrow else ''))
+        if arrow:
+            self.marks.add(col)
+
+    def path(self, d, col=GY2, sw=1.3, dash=None, arrow=True):
+        self.p.append('<path d="%s" fill="none" stroke="%s" stroke-width="%s" '
+                      'stroke-linecap="round"%s%s/>'
+                      % (d, col, sw,
+                         ' stroke-dasharray="%s"' % dash if dash else '',
+                         ' marker-end="url(#ah-%s)"' % col.lstrip("#") if arrow else ''))
+        if arrow:
+            self.marks.add(col)
+
+    marks = set()
+
+    # ── ① 标题区 ＋ 图例条 ───────────────────────────────────────
+    def header(self, title, sub, legend=None, y=22):
+        self.t(0, y, title, INK, size=16.5, cls="svglbl")
+        yy = y + 22
+        if sub:
+            self.t(0, yy, sub, GY, size=_sz(12))
+            yy += 20
+        if legend:
+            x = 0
+            for col, lab in legend:
+                self.box(x, yy - 9, 11, 11, col, col, 2)
+                self.t(x + 17, yy, lab, GY, size=_sz(11))
+                x += 17 + wpx(lab, 11) + 22
+            yy += 16
+        return yy + 8
+
+    # ── ② 带标题栏的面板 ─────────────────────────────────────────
+    def panel(self, x, y, w, h, title, col=LINE, fill="#fff", tag=None,
+              tint=None, sub=None):
+        """外框 ＋ 顶部标题栏。tag 是右上角的小注（出处 / 口径）。"""
+        self.box(x, y, w, h, fill, col, 9)
+        self.box(x, y, w, 30, tint or BG2, col, 9)
+        self.box(x, y + 20, w, 10, tint or BG2, tint or BG2, 0)
+        self.line(x, y + 30, x + w, y + 30, col, 1, arrow=False)
+        self.t(x + 14, y + 20, title, col if col != LINE else INK,
+               bold=True, size=13.5, cls="svglbl")
+        if sub:
+            self.t(x + 16 + wpx(title, 13.5) + 12, y + 20, sub, GY, size=_sz(11))
+        if tag:
+            self.t(x + w - 14, y + 20, tag, GY2, size=_sz(11), anchor="end")
+        return y + 30
+
+    # ── ③ 两行字的盒子 —— 主标签 ＋ 一句说明 ─────────────────────
+    def cell(self, x, y, w, h, main, sub=None, col=LINE, fill="#fff",
+             size=12, r=6, grid=False, dash=None):
+        need = wpx(main, size) + 16
+        assert w >= need, "「%s」要 %dpx，格子只有 %dpx" % (main, need, w)
+        self.box(x, y, w, h, fill, col, r, dash=dash)
+        if grid:                     # ④ 矩阵纹理：让「一块权重」看着像一块矩阵
+            self.box(x + 1, y + 1, w - 2, h - 2, "url(#grid)", "none", r - 1)
+        if sub:
+            self.t(x + w / 2.0, y + h / 2.0 - 1, main, col, True, size, "middle")
+            self.t(x + w / 2.0, y + h / 2.0 + 14, sub, GY, size=_sz(11),
+                   anchor="middle", mono=True)
+        else:
+            self.t(x + w / 2.0, y + h / 2.0 + 4, main, col, True, size, "middle")
+
+    # ── 列头 / 行标签 ───────────────────────────────────────────
+    def colhead(self, x, y, main, sub=None, anchor=None):
+        self.t(x, y, main, GY, bold=True, size=_sz(12), anchor=anchor)
+        if sub:
+            self.t(x, y + 16, sub, GY2, size=_sz(11), anchor=anchor)
+
+    def rowlab(self, x, y, main, sub=None, col=INK):
+        self.t(x, y, main, col, bold=True, size=13, cls="svglbl")
+        if sub:
+            self.t(x, y + 17, sub, GY, size=_sz(11))
+
+    # ── ⑤ 高亮竖带：圈出「整张图的差别在这一列」 ──────────────────
+    def spot(self, x, y, w, h, col="#f1f3f4"):
+        self.box(x, y, w, h, col, "none", 8)
+
+    # ── ⑥ 底部落点带 ────────────────────────────────────────────
+    KIND = {"ok": (GR, "#e6f4ea", "⭐"), "warn": (OR, "#fef7e0", "⚠️"),
+            "info": (BL, "#e8f0fe", "⭐⭐"), "bad": (RD, "#fce8e6", "⛔")}
+
+    def band(self, y, kind, title, lines, w=None):
+        col, fill, icon = self.KIND[kind]
+        w = w or self.w
+        h = 34 + len(lines) * 21 + 8
+        self.box(0, y, w, h, fill, col, 9)
+        self.t(16, y + 24, "%s %s" % (icon, title), col, bold=True, size=13.5,
+               cls="svglbl")
+        for i, ln in enumerate(lines):
+            # ⛔ 跟 src() 同一条：**文字溢出既不报错也不产生滚动条，只是被裁掉**。
+            #   2026-09-08 实测又栽了一次（Shazeer 那句英文引文冲出右边界）——
+            #   ⭐ 所以凡是「一整行文字」的基元，都必须自带宽度断言。
+            need = wpx(re.sub(r"<[^>]+>", "", ln), 12) + 34
+            assert need <= w, "落点带第 %d 行要 %dpx，只有 %dpx —— 拆行" % (
+                i + 1, need, w)
+            self.t(16, y + 48 + i * 21, ln, col, size=_sz(12))
+        return y + h
+
+    def src(self, y, *lines):
+        """📌 出处行（可多行）—— 灰字小注，跟专题二一致。
+
+        ⛔ 带宽度自检：2026-09-08 实测有一行冲出了右边界，而**文字溢出既不报错
+          也不产生滚动条**，只是被裁掉 —— 页面上看只是「这句话没写完」。
+        """
+        for i, ln in enumerate(lines):
+            w = wpx(re.sub(r"<[^>]+>", "", ln), 11) + 22
+            assert w <= self.w, "出处第 %d 行要 %dpx，超出画布 %dpx —— 拆行" % (
+                i + 1, w, self.w)
+            self.t(0, y + i * 17, ("📌 " if i == 0 else "　　") + ln, GY2, size=_sz(11))
+        return y + len(lines) * 17 + 1
+
+    # ── 收尾 ────────────────────────────────────────────────────
+    def save(self, name, bottom):
+        self.p.append('</svg>')
+        marks = "".join(
+            '<marker id="ah-%s" viewBox="0 0 10 10" refX="8.5" refY="5" '
+            'markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse">'
+            '<path d="M 0 1 L 9 5 L 0 9 z" fill="%s"/></marker>'
+            % (c.lstrip("#"), c) for c in sorted(self.marks))
+        self.p[0] = (
+            '<svg viewBox="0 0 %d %d" width="100%%" role="img" aria-label="%s">'
+            '<defs>%s'
+            '<pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse">'
+            '<path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" '
+            'stroke-width="0.8"/></pattern>'
+            '<filter id="sh" x="-8%%" y="-8%%" width="118%%" height="124%%">'
+            '<feDropShadow dx="0" dy="1.5" stdDeviation="2.2" '
+            'flood-color="#202124" flood-opacity="0.10"/></filter>'
+            '</defs>' % (self.w, bottom, self.aria, marks))
+        s = "\n".join(self.p)
+        xml.dom.minidom.parseString(s.encode("utf-8"))
+        io.open(os.path.join(HERE, name), "w", encoding="utf-8").write(s)
+        print("ok  %s  %d×%d" % (name, self.w, bottom))

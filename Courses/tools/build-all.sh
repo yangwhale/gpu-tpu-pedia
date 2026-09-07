@@ -52,7 +52,9 @@ if [ "${1:-}" != "--lint" ]; then
   step "专题三 教材（从 md 生成）"
   # ⛔ 图必须先生成 —— topic03-build.py 会 assert 找不到 fig3-chronicle.svg。
   #    这条依赖是**故意做成硬失败**的：图缺了宁可构建挂掉，也不要悄悄出一份没图的教材。
-  python3 topic03-fig-rnn.py           # §零 RNN 三张图（怎么算 / 为什么慢 / 痛点通向哪）
+  # ⛔ 画法基元在 topic03_draw.py，三个 fig 脚本共用一份 —— 别在各自脚本里另起一套。
+  python3 topic03-fig-rnn.py           # §零 RNN 四张图（怎么算 / 为什么慢 / 解码又变回来 / 痛点通向哪）
+  python3 topic03-fig-mha.py           # §一 MHA 三张图（换掉了什么 / 在算什么 / 多头在多什么）
   python3 topic03-fig-chronicle.py     # 上半：时间轴 SVG
   # ⭐ 下半那张 39 行模型表现在是**可排序的 HTML 表**，不是 SVG ——
   #   两边读同一份 topic03_models.py，⛔ 数据只有一份。
