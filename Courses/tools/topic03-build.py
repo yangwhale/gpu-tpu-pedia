@@ -347,6 +347,23 @@ __FIG_CHRONICLE__
 </tbody></table>
 <p>⭐ <b>最后那个 2% 值得停一下算给学生看</b>：同样形状的 GQA-8 在 1M 下是 <b>244 GiB</b>， 2% 就是 <b>不到 5 GiB</b> —— <b>一百万 token 的上下文，KV 装得进一块卡的零头。</b> 对照本节开头那个 MHA 的 488 GiB（那还只是 128K）。<b>这就是三年的进展。</b></p>
 <div class="note warn"><p>⚠️ 这里还叠了一层跟注意力机制无关的优化：<b>KV 混合精度存储</b> —— RoPE 那几维用 BF16，其余用 FP8，光这一项就"近乎减半"。 <b>报告一个总收益的时候，要能拆出哪几分是机制带来的、哪几分是精度带来的。</b></p></div>
+<h3>3.5b ⭐ 第二阶段：索引本身成了开销 —— IndexShare 与 IndexCache</h3>
+<p>前面四个方案（NSA / DSA / CSA+HCA）都有一个共同的零件：<b>一个决定"该看哪几块"的索引器</b>。 §3.4 讲 DSA 的时候它叫 Lightning Indexer。到这一步为止，所有心思都花在<b>让每个 query 少看几块</b>上。</p>
+<p><b>但索引器自己也要算。</b> 它要为<b>每一层、每一个 token</b>，跟全部历史块打一次分。稀疏注意力把主体那部分省下来之后， 这笔原本不起眼的账就浮上来了 —— 尤其在 1M 上下文下，历史块本身就有几万个。</p>
+<p>2026 年年中，两家公司几乎同时给出了同一个答案：<b>别每层都重新算一遍"该看谁"。</b></p>
+<table>
+<thead><tr><th>模型</th><th>叫法</th><th>做法</th><th>官方给的收益</th></tr></thead><tbody>
+<tr><td><b>GLM-5.2</b>（智谱，2026-06-16，744B）</td><td><b>IndexShare</b></td><td>每四个稀疏注意力层<b>共用同一个索引器</b></td><td>1M 上下文下每 token FLOPs 降 <b>2.9×</b></td></tr>
+<tr><td><b>混元 Hy4-preview</b>（腾讯，2026-08-28，770B/49B）</td><td><b>IndexCache</b></td><td>同上：跨层复用稀疏索引</td><td>未单独给数</td></tr>
+</tbody></table>
+<div class="note ok"><p>⭐ 这两家撞了同一个想法，而且证据不用查博客 —— <b>打开两份 config 就看得见</b>。 它们的 <code>indexer_types</code> 字段都是同一个循环：</p>
+<pre><code>GLM-5.2  ： full, full, full, shared, shared, shared, full, shared, shared, shared, ...
+混元 Hy4 ： full, full,       shared, shared, shared, full, shared, shared, shared, ...
+                              └──────── 每 4 层里，只有 1 层自己算索引 ────────┘</code></pre>
+<p>GLM-5.2 的 config 里还有一个 <code>index_topk_freq: 4</code> 直接把这个 4 写了出来。</p></div>
+<p>⭐ <b>为什么这一小节值得单独留一块地方</b>：它是一个<b>优化制造出新的被优化对象</b>的干净例子。 稀疏注意力是为了省 attention 的账而来的；省成了，于是索引 —— 它原本只是这个方案的附属零件 —— 变成了新的大头，再被优化一轮。<b>这一节讲的三个旋钮都会经历这一步，不只是稀疏这一支。</b></p>
+<div class="note warn"><p>⚠️ <b>这不是白拿的，代价要说出来。</b> 官方博客只报了省下来的 FLOPs。 但共享索引器意味着<b>这四层被迫看同一批块</b> —— 它们不能各自挑各自的。 这是表达力上的一次让步：原本每一层可以按自己那一层的语义去决定关注哪里，现在四层绑在一起。</p>
+<p>📌 <b>口径</b>：上面这句是<b>从机制推出来的，不是引用</b> —— 索引器共享，选出的 top-k 集合当然就一样。 两家都没有公开这项让步对质量的影响有多大。<b>看到"降 2.9× FLOPs"这种数字，先找它换走了什么。</b></p></div>
 <h3>3.6 ⭐ 这一支的共同结构</h3>
 <p>讲完四个方案，回头把它们叠在一起，会看到同一个骨架：</p>
 <pre><code>                 ┌─ 一条"粗看"的路：压缩 / 全局，保证不漏
@@ -422,6 +439,50 @@ __FIG_CHRONICLE__
 <p>三个后果，一个比一个实在：</p>
 <ol><li><b>不用调 RoPE 外推。</b> 模型直接外推到 1M，不需要任何位置编码的重标定 —— 长上下文扩展里最烦人的一块调参，直接消失了</li><li><b>MLA 层在推理时可以退化成纯 MQA。</b> 位置编码没了， §2.3 里那条"不可吸收的 64 维"也就不存在了 —— <b>上投影可以完全吸收</b></li><li><b>KV cache 最多降 75%</b>（Kimi Linear 的数字）， 1M 上下文下 TPOT 从 11.48 ms 降到 1.84 ms，<b>6.3×</b></li></ol>
 <div class="note ok"><p>⭐ <b>这才是"混合"真正的意思</b>：不是"两个方案各跑一半凑合用"， 而是<b>让每一层只做自己擅长的事，然后把别人不用做的事一并省掉</b>。 一个架构选择（混合）解开了另一个看起来完全无关的约束（位置编码）。 <b>这门课想教的就是这种"看见约束之间的连接"的能力。</b></p></div>
+<h3>5.4 ⭐ 各家速查：你日常在用的那些模型，注意力到底是什么</h3>
+<p>三个旋钮到这里就拆完了。这一小节反过来 —— <b>按公司排一遍，看每一家实际拧的是哪个旋钮</b>。 都是能在公开 config 或官方博客里查到的，信息截至 <b>2026-09-07</b>。</p>
+<table>
+<thead><tr><th>家</th><th>代表型号</th><th>拧的是哪个旋钮</th><th>配比 / 形态</th></tr></thead><tbody>
+<tr><td rowspan="2">阿里 千问</td><td>Qwen3-Next（80B/3B）</td><td>③ 线性（Gated DeltaNet）</td><td><b>3 : 1</b></td></tr>
+<tr><td>Qwen3.5（0.8B–397B）</td><td>③ 线性</td><td><b>3 : 1</b>，全家族统一</td></tr>
+<tr><td rowspan="2">月之暗面 Kimi</td><td>Kimi Linear（48B/3B）</td><td>③ 线性（KDA）</td><td><b>3 : 1</b></td></tr>
+<tr><td>Kimi K3（2.8T）</td><td>③ 线性 ＋ NoPE</td><td>93 层 ＝ <b>69 KDA ＋ 24 Gated MLA</b></td></tr>
+<tr><td rowspan="2">蚂蚁 百灵 Ling</td><td>Ling 2.6</td><td>③ 线性（Lightning）</td><td><b>7 : 1</b></td></tr>
+<tr><td>Ling-3.0-flash（124B/5.1B）</td><td>③ 线性（KDA）</td><td><b>5 : 1</b> ＝ 35 KDA ＋ 7 MLA</td></tr>
+<tr><td rowspan="2">小米 MiMo</td><td>MiMo-V2-Flash</td><td>② 稀疏（SWA，窗口 128）</td><td><b>5 : 1</b></td></tr>
+<tr><td>MiMo-V2.5-Pro</td><td>② 稀疏（SWA，窗口 128）</td><td><b>6 : 1</b></td></tr>
+<tr><td rowspan="2">DeepSeek</td><td>V3.2</td><td>② 稀疏（DSA）</td><td>层内稀疏</td></tr>
+<tr><td>V4</td><td>② 稀疏（CSA ＋ HCA）</td><td>层内稀疏，按距离分层压缩</td></tr>
+<tr><td>MiniMax</td><td>01 → M2 → M3</td><td>③ → 退回全注意力 → ②</td><td>7 : 1 → 纯全 → 层内稀疏</td></tr>
+</tbody></table>
+<p>下面两家单独展开 —— 它们的轨迹在公开 config 里看得特别清楚，而且刚好是<b>两种完全不同的走法</b>。</p>
+<p><b>① 腾讯混元 —— 跳过线性那一支，直接进稀疏</b></p>
+<table>
+<thead><tr><th>看哪一项</th><th>Hy3（295B/21B）</th><th>Hy4-preview（770B/49B）</th></tr></thead><tbody>
+<tr><td>发布</td><td>preview 2026-04-23，正式版 2026-07-06</td><td>2026-08-28</td></tr>
+<tr><td>层数</td><td><b>80</b></td><td><b>78</b></td></tr>
+<tr><td>注意力</td><td><b>纯 GQA-8</b>（64 头 / 8 KV 头，head dim 128）</td><td><b>全部 78 层都是 Gated DSA</b>（<code>layer_types</code> 全为 <code>deepseek_sparse_attention</code>）</td></tr>
+<tr><td>混合</td><td><b>没有</b> —— 不掺线性，不掺稀疏</td><td>不是层间混合，是<b>层内稀疏</b>；索引器 32 头 × 128 维，top-k <b>2048</b></td></tr>
+<tr><td>上下文</td><td>256K</td><td><b>1M</b></td></tr>
+<tr><td>另外</td><td>192 专家 ＋ 1 共享，top-8</td><td>256 ＋ 1 共享 top-8；<b>iHC</b>（4 条残差流）；<code>gated_mla</code>；IndexCache</td></tr>
+</tbody></table>
+<div class="note ok"><p>⭐ Hy3 那一列不是查来的，是<b>读我们自己仓库里那份 config 数出来的</b> —— <code>tpu/Hunyuan3-295B-Pretraining/</code> 底下就有。<b>80 层里没有一层线性、没有一层稀疏。</b></p>
+<p>这跟"腾讯评估过线性注意力但最终没上"的说法对得上，而且是一手证据。 然后 Hy4 一步跨到全层稀疏 —— <b>它整个跳过了线性这一支。</b> 对照 §5.2 那张配比表：<b>混合不是唯一解，只是最多人选的那个解。</b></p></div>
+<p><b>② 智谱 GLM —— 半年之内走完三步，而且步步可查</b></p>
+<table>
+<thead><tr><th>版本</th><th>时间</th><th>注意力</th><th>这一步新增了什么</th></tr></thead><tbody>
+<tr><td>GLM-5（355B–744B）</td><td>2026-02-12</td><td>MLA ＋ <b>DSA</b></td><td>智谱第一次上稀疏</td></tr>
+<tr><td>GLM-5.2（744B）</td><td>2026-06-16</td><td>MLA ＋ DSA ＋ <b>IndexShare</b></td><td>每四个稀疏层共用一个索引器（见 §3.5b），1M 下省 <b>2.9×</b> FLOPs</td></tr>
+<tr><td><b>GLM-5.3-Flash</b>（321B/18B）</td><td>2026-08-26</td><td><b>KDA 线性 ＋ NoPE 稀疏 MLA</b></td><td>⭐ GLM 家族<b>第一次把线性和稀疏放进同一个模型</b>；原生多模态</td></tr>
+</tbody></table>
+<p>GLM-5.3-Flash 的 <code>layer_types</code> 是一个干净的四层循环：</p>
+<pre><code>linear, linear, linear, deepseek_sparse_attention,   ← 重复 11 次
+linear                                               ← 第 45 层多出来的一层
+
+45 层 = 34 层 KDA + 11 层稀疏 MLA        循环配比 3 : 1</code></pre>
+<div class="note ok"><p>⭐ <b>为什么单说这一个型号</b>：它是本课整张配比表里<b>唯一一个两种便宜法同时上</b>的模型。</p>
+<p>看清楚它的两层各是什么：便宜的那层是线性（KDA），而它配的那层"贵的"—— <b>本身已经是稀疏的了</b>。 别的混合模型是"线性配全注意力"，它是<b>"线性配稀疏"</b>。 <b>三个旋钮不是三选一，是可以叠着拧的。</b></p>
+<p>而且配比正好落回 <b>3 : 1</b>，跟 Kimi Linear、Qwen3.5 一样 —— <b>换了一家公司、换了搭档层的类型，配比还是那个区间。</b> 这是 §5.2 那句"3:1 到 6:1 这个量级"到目前为止最强的一个旁证。</p></div>
 <hr>
 </div></section>
 <section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>代价：没有免费的午餐</h2></div>
@@ -453,7 +514,7 @@ __FIG_CHRONICLE__
 <hr>
 </div></section>
 <section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>收尾：把谱系放回时间线</h2></div>
-<p><b>前面八节是谱系（可迁移的判断框架），这一节是时间线（记忆的挂钩）。</b> 顺序不能反 —— 先给框架，时间线才有意义；先给时间线，框架就变成了流水账。</p>
+<p><b>前面那些节讲的是谱系（可迁移的判断框架），这一节是时间线（记忆的挂钩）。</b> 顺序不能反 —— 先给框架，时间线才有意义；先给时间线，框架就变成了流水账。</p>
 <p>板书画一条线，把上面所有名词按年份钉上去：</p>
 <pre><code>2020  线性注意力          「softmax 拆了会怎样」        —— 想法有了，效果不行
 2021  delta rule          「状态要能擦除」              —— 修了第一个毛病
@@ -571,7 +632,13 @@ _html = "\n".join(out).replace(
     '<figure class="fbox fwide" id="fig-chronicle">%s'
     '<figcaption>⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，'
     '2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。'
-    '<b>下半 · 各家配比</b>：便宜的层占 75%%–87.5%%，无人全用线性，也无人只掺一两层。'
+    # ⛔ 这句原先写「便宜的层占 75%–87.5%，无人全用线性」，是个**全称句** ——
+    #    表里补进混元 Hy3 和 GLM 系列之后就被证伪了（Hy3、MiniMax M2 是纯全，
+    #    还有五行是层内稀疏，根本不在这根轴上），而它不会报错。
+    #    ⭐ 图注是图的**下游**：图里改了口径，这里不会自己跟着动。
+    #      跟「教材改了讲义不跟」是同一个失败形状，只是尺度小一号。
+    '<b>下半 · 各家配比</b>：<b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>'
+    '（便宜的层占 75%%–87.5%%）；另有两家明确用纯全注意力，五家走层内稀疏。'
     '⛔ <b>层间混合与层内稀疏用两种画法分开，不能同轴比较。</b>'
     '<span class="sub">信息截至 2026-09-07，全部现搜；出处见图脚。</span></figcaption>'
     '</figure>' % _svg)

@@ -98,7 +98,8 @@ def audit(fname):
 
 def main():
     total = 0
-    for f in ("topic-02.html", "topic-02-L300.html"):
+    for f in ("topic-02.html", "topic-02-L300.html",
+              "topic-03.html", "topic-08.html"):
         if os.path.exists(os.path.join(W, f)):
             total += audit(f)
     print("\n跨节指针体检：%d 类死指针。" % total)

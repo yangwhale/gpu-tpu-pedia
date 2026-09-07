@@ -136,5 +136,11 @@ def main(paths):
 if __name__ == '__main__':
     HERE = os.path.dirname(os.path.abspath(__file__))
     W = os.path.join(HERE, '..', 'WebPages')
+    # ⛔ 2026-09-07：这张清单原先漏了 topic-03，而专题三那张编年史正是**撞了三轮
+    #    才排开**的图（说明文字互糊 → 相邻年份撞 → 交错两行仍撞）。
+    # ⭐ 教训：**漏检的那一页，恰恰是最需要检的那一页** —— 新页面天然图最少、
+    #    最容易被忘进清单，而它的图又是最新画的、最没被人眼扫过的。
+    #    新建一个 topic-NN 页面时，第一件事就是把它加进这一行。
     main(sys.argv[1:] or [os.path.join(W, f) for f in
-                          ('topic-02.html', 'topic-02-L300.html', 'topic-01.html')])
+                          ('topic-02.html', 'topic-02-L300.html', 'topic-01.html',
+                           'topic-03.html', 'topic-08.html')])
