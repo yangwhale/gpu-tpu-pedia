@@ -157,6 +157,34 @@
      注意 48×256 ≠ d_model 18432，这在 PaLM 里是有意的）。按 384 算是 22 GiB，
      量级与结论都不变。
 
+⭐⭐ **2026-09-07 第七轮：同厂上底色 ＋ 补齐小米那两格。** 原话：
+
+    「同属于一家的话，你应该给它标成一样的背景颜色，这样好区分。然后小米家的
+      这个 MiMo 的模型，它也是开源，所以说你去拿那个模型的配置以及它的一些代码
+      之类的，你把它的那个 KV Cache 的大小也算出来，别在那空着。」
+
+   · **同厂底色的价值**：这张表是**按时间排**的，同一家的行天然被打散在各处。
+     底色一上，「某某家走了什么路」不用眼睛去找，**它自己浮出来** ——
+     MiniMax 三行粉、GLM 四行紫、混元两行橙红，跨时间线一眼连得起来。
+     ⛔ 底色必须**很淡**：它是分组线索，不是内容，抢了格子的颜色就本末倒置。
+
+   ⭐⭐ **小米那两格的教训比数字本身更值钱。**
+   上一轮我写「未核到」，理由是 `config.json` 被超长的量化 `ignored_layers`
+   字段截断。**这个理由是成立的，但结论下早了** ——&nbsp;
+   参数就在**官方模型卡的 Model Summary 表**里，而且比 config 还全。
+
+   ⛔ **`config.json` 拿不到 ≠ 数据不公开。** 模型卡、技术报告、推理框架的
+     recipe 页都可能有。**别在第一条路堵死之后就写「未核到」** ——&nbsp;
+     那看起来像严谨，实际上是少查了两个地方。
+
+   · MiMo-V2-Flash：48 层 ＝ 40 SWA ＋ 8 全注意力，窗口 128 →&nbsp;**5.0 GiB**。
+     头配置按同代 MiMo-V2.5 推算（这一格是**推的**，不是直读）。
+     ⭐ **锚点③**：模型卡自称「KV 省近 6×」，而 48 ÷ 8 ＝ 6，本式算出 **6.0×**。
+   · MiMo-V2.5-Pro：70 层 ＝ 60 SWA ＋ 10 全注意力，128 头 / 8 KV 头，
+     头维 QK 192 ／ V 128 →&nbsp;**6.3 GiB**，1M 上下文。全部直读自模型卡。
+   ⚠️ 小米这一族的 **K 和 V 维度不一样**（QK 192 / V 128），
+     所以公式里是 `qk + v` 相加，**不是像 GQA 那样乘 2**。照抄会算错。
+
 ⛔ **一条口径护栏：格子宽度固定，不按满宽等分。**
    否则 4 格的循环和 8 格的循环画出来一样长，「这个循环有多长」这条信息就没了。
 
@@ -398,6 +426,34 @@ TYPE_COL = {
     # 稀疏一族 —— 红
     "DSA": RD, "gDSA": RD, "MSA": RD, "CSA": RD, "HCA": DKR,
 }
+# ── 同一家用同一个底色 ────────────────────────────────────────────
+# ⭐ 现场要求：「同属于一家的话，应该给它标成一样的背景颜色，这样好区分。」
+#   ⭐⭐ 这条的价值在于：表是**按时间排**的，同一家的行天然被打散在各处。
+#     底色一上，「某某家走了什么路」这条线不用眼睛去找，它自己浮出来。
+# ⛔ 底色必须**很淡**——它是分组线索，不是内容。抢了格子的颜色就本末倒置了。
+#   （按名字前缀匹配，第一个命中为准。加新行时若厂商没命中，会落到中性灰。）
+VENDOR = [
+    ("GPT-3",    "OpenAI",   "#5f6368", "#f1f3f4"),
+    ("PaLM",     "Google",   "#1e8e3e", "#e6f4ea"),
+    ("Llama",    "Meta",     "#546e7a", "#eceff1"),
+    ("DeepSeek", "DeepSeek", "#00838f", "#e0f2f1"),
+    ("MiniMax",  "MiniMax",  "#c2185b", "#fce4ec"),
+    ("Qwen",     "阿里 千问", "#e8710a", "#fff3e0"),
+    ("Kimi",     "月之暗面",  "#5e35b1", "#ede7f6"),
+    ("小米",      "小米",     "#f9ab00", "#f9fbe7"),
+    ("GLM",      "智谱",     "#8430ce", "#f3e5f5"),
+    ("Ling",     "蚂蚁 百灵", "#0288d1", "#e1f5fe"),
+    ("混元",      "腾讯 混元", "#d84315", "#fbe9e7"),
+]
+
+
+def vendor_of(name):
+    for key, label, ink, bg in VENDOR:
+        if key in name:
+            return label, ink, bg
+    return "", GY, "#fff"
+
+
 SPARSE = {"DSA", "gDSA", "MSA", "CSA", "HCA"}
 LINEAR = {"KDA", "GDN", "LTN"}
 # 简写 → 全名（写在「这一层 ＋ 那一层」那一列）
@@ -439,6 +495,13 @@ def kv_gib(spec):
     if kind == "mla":
         _, L, R = spec                 # L 只数带 KV 的层，线性层不算
         return L * SEQ * R * BPE / 2 ** 30
+    if kind == "swahyb":
+        # 小米那一族：n_full 层全注意力 ＋ n_swa 层滑窗（窗口 win，只存 win 个 token）
+        # ⚠️ 它的 K 和 V 维度**不一样**（QK 192 / V 128），所以这里是 qk+v 相加，
+        #    不是像 GQA 那样乘 2。⛔ 照抄 GQA 的 ×2 会算错。
+        _, n_full, n_swa, kvh_f, kvh_s, qk, v, win = spec
+        ent = n_full * SEQ * kvh_f + n_swa * min(SEQ, win) * kvh_s
+        return ent * (qk + v) * BPE / 2 ** 30
     if kind == "v4":
         _, n_csa, n_hca, n_swa, D, m_csa, m_hca, win = spec
         # shared K=V → 每个条目只存一份；CSA/HCA 存压缩池；每层另挂一条滑窗支路
@@ -514,15 +577,29 @@ ROWS = [
      "但确实<tspan font-weight=\"700\">没有 MLA、没有稀疏</tspan>"),
     ("2025-10", "Kimi Linear（48B/3B）", [("KDA", 3), ("MLA", 1)], "1M", ("mla", 7, 576),
      "27 层 ＝ 20 KDA ＋ 7 MLA（<tspan font-weight=\"700\">末层强制 full，所以多一层</tspan>）。已用 NoPE"),
-    # ⛔ 小米这两行核不到：config.json 里那段量化 ignored_layers 极长，
-    #    把关键字段挤出了可取回的范围；configuration_*.py 里只有占位默认值。
-    #    ⭐ 宁可留空也不按「同类模型大概长这样」去填 —— 那种填法看起来最合理。
-    ("2026-01", "小米 MiMo-V2-Flash", [("SWA", 5), ("FULL", 1)], "—", None, "SWA 窗口只有 128"),
+    # ⭐ 小米这两行原先是「未核到」——&nbsp;config.json 被超长的量化字段截断了。
+    #   后来在**官方模型卡的 Model Summary 表**里拿到了全部参数，比 config 还全。
+    #   ⛔ 教训：**config.json 拿不到不等于数据不公开** —— 模型卡、技术报告、
+    #     推理框架的 recipe 页都可能有，别在第一条路堵死之后就写「未核到」。
+    # 📌 V2-Flash：48 层 ＝ 8 个 hybrid block ×（5 SWA ＋ 1 GA）＝ 40 SWA ＋ 8 GA。
+    #   头配置按**同代 MiMo-V2.5 那一列**（64 头 / GA 8 KV 头、SWA 4 KV 头 /
+    #   头维 QK 192、V 128 / 窗口 128）——&nbsp;这一格是**推算**，不是直读。
+    #   ⭐ 但有自洽锚点：模型卡自称「KV cache 省近 6×」，而 48 ÷ 8 ＝ 6，**对上了**。
+    ("2026-01", "小米 MiMo-V2-Flash（309B/15B）", [("SWA", 5), ("FULL", 1)], "256K",
+     ("swahyb", 8, 40, 8, 4, 192, 128, 128),
+     "48 层 ＝ 40 SWA ＋ 8 全注意力，窗口 128。"
+     "<tspan font-weight=\"700\">模型卡自称 KV 省近 6×，48÷8 正好是 6</tspan>"),
     ("2026-02", "GLM-5（744B/40B）", [("DSA", 1)], "198K", ("mla", 78, 576),
      "MLA ＋ DSA，78 层。<tspan font-weight=\"700\">GLM-5.1 是同一套架构</tspan>，只有后训练不同"),
     ("2026-03", "Qwen3.5（397B/17B）", [("GDN", 3), ("gAT", 1)], "256K", ("gqa", 15, 2, 256),
      "60 层 ＝ 45 线性 ＋ 15 全注意力，<tspan font-weight=\"700\">config 里 full_attention_interval: 4</tspan>"),
-    ("2026-04", "小米 MiMo-V2.5-Pro", [("SWA", 6), ("FULL", 1)], "—", None, "窗口还是 128 ——&#160;比谁都激进"),
+    # 📌 V2.5-Pro 的参数是官方模型卡 Model Summary 直给的，不是推的：
+    #   70 层（10 全注意力 ＋ 60 SWA）、128 头 / 8 KV 头（GQA）、
+    #   头维 QK 192 ／ V 128、窗口 128、1M 上下文。
+    ("2026-04", "小米 MiMo-V2.5-Pro（1.02T/42B）", [("SWA", 6), ("FULL", 1)], "1M",
+     ("swahyb", 10, 60, 8, 8, 192, 128, 128),
+     "70 层 ＝ 60 SWA ＋ 10 全注意力，窗口还是 128 ——&#160;"
+     "<tspan font-weight=\"700\">1M 上下文里最省的一档</tspan>"),
     ("2026-05", "DeepSeek-V4-Flash（43 层）",
      [("SWA", 2), ("CSA", 1), ("HCA", 1), ("CSA", 1), ("HCA", 1)], "1M",
      ("v4", 21, 20, 2, 512, 4, 128, 128),
@@ -572,6 +649,17 @@ for fam, keys in (("全注意力一族", ("MHA", "MQA", "GQA", "FULL", "gAT", "M
         lx += wpx(k, 9) + 12 + 6
     lx += 14
 
+# ── 厂商图例 ────────────────────────────────────────────────────────
+# ⛔ 上面每插一行，下面所有锚点都要跟着挪 —— 这张图已经在这上面栽过一次
+#   （加说明行只挪了表头，忘了图例，说明直接压在图例上）。
+lx2 = LX
+t(lx2, BY + 124, '按厂商上底色：', fill="#202124", bold=True)
+lx2 += wpx('按厂商上底色：') + 6
+for _k, _lab, _ink, _bg in VENDOR:
+    box(lx2, BY + 113, wpx(_lab) + 16, 15, _bg, _ink, 3)
+    t(lx2 + 8, BY + 124, _lab, fill=_ink, bold=True, size=10)
+    lx2 += wpx(_lab) + 16 + 8
+
 # ── 表头 ────────────────────────────────────────────────────────────
 MDLX, MIXX, BARX = LX + 62, 290, 512
 CELL, CGAP, MAXC = 42, 3, 8
@@ -583,7 +671,7 @@ CTXX = BARX + BARW + 14
 KVX = CTXX + 62                       # KV cache 那一列，做得宽
 KVW = 210                             # 条最长 210px
 NOTEX = KVX + KVW + 76
-HY = BY + 130
+HY = BY + 152
 t(LX, HY, '时间', fill=GY, bold=True)
 t(MDLX, HY, '模型', fill=GY, bold=True)
 t(MIXX, HY, '这一层 ＋ 那一层', fill=GY, bold=True)
@@ -597,9 +685,10 @@ p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
 R0, RH = HY + 30, 30
 for i, (tm, mdl, cyc, ctx, kvspec, note) in enumerate(ROWS):
     y = R0 + i * RH
-    if i and ROWS[i - 1][0][:4] != tm[:4]:          # 换年份画一条极淡的分隔
-        p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="#f1f3f4" '
-                 'stroke-width="1"/>' % (y - 21, W - 16, y - 21))
+    # 同厂同底色 ＋ 左侧一条饱和色棒。⛔ 必须先画底，再画字。
+    _vlab, _vink, _vbg = vendor_of(mdl)
+    box(8, y - 20, W - 16, RH - 2, _vbg, _vbg, 4)
+    box(8, y - 20, 4, RH - 2, _vink, _vink, 2)
     t(LX, y, tm, fill=GY)
     t(MDLX, y, mdl, fill="#202124", bold=mdl.startswith("⭐"))
     # 「这一层 ＋ 那一层」——&#160;去重后按出现顺序列全名，各用自己的颜色

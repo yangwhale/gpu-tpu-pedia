@@ -702,7 +702,7 @@ h4 { margin:18px 0 6px; font-size:15px }
         （每层还是全注意力的形状、只是少看几块）**不能放在同一根轴上比**。 -->
 <p>在拿尺子之前，先看一眼<b>全景</b>：这些名词是什么时候、按什么顺序冒出来的，
   以及今天各家<b>实际上是怎么配的</b>。</p>
-<figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1820 1701" width="100%" role="img" aria-label="Attention 编年史：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉，此后分成四支演化；下半是各家开源模型的混合配比条形图，含混元 Hy3／Hy4 与 GLM-5 系列">
+<figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1820 1723" width="100%" role="img" aria-label="Attention 编年史：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉，此后分成四支演化；下半是各家开源模型的混合配比条形图，含混元 Hy3／Hy4 与 GLM-5 系列">
 <text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">Attention 编年史 ——&#160;<tspan font-weight="700">从 RNN 的一个补丁，到今天各家的混合配比</tspan></text>
 <text class="svgsm" x="0" y="39">⭐ 一句话看懂整段历史：<tspan font-weight="700">Transformer 当初做的交易是「用平方的计算量，买来完全的并行度」——&#160;而这段历史，是在把那笔交易<tspan style="text-decoration:underline">往回赎</tspan>，但不能把并行度还回去。</tspan></text>
 <text class="svgsm" x="0" y="57" fill="#5f6368">线性注意力想赎回 O(N)，代价是重新引入一个<tspan font-weight="700">串行的状态</tspan>；于是 chunk 化又是为了把并行度找回来。<tspan font-weight="700">一个完整的圆。</tspan>　<tspan fill="#5f6368">（信息截至 2026-09-07，全部现搜）</tspan></text>
@@ -793,7 +793,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 <circle cx="1222" cy="384" r="4" fill="#1e8e3e"/>
 <line x1="1222" y1="384" x2="1222" y2="399" stroke="#1e8e3e" stroke-width="1.2"/>
 <text class="svgsm" x="1228" y="408" fill="#1e8e3e"><tspan font-weight="700">⭐ FlashAttention</tspan></text>
-<rect x="0" y="447" width="1820" height="1002" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="447" width="1820" height="1024" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
 <text class="svglbl" x="16" y="471" fill="#202124" style="font-size:13px">二、编年史续 · 一个循环里都有哪些层 ——&#160;<tspan font-weight="700">一格 ＝ 一层，格子里写的是那一层用什么注意力</tspan></text>
 <text class="svgsm" x="16" y="490" fill="#d93025">⭐ <tspan font-weight="700">整条一色</tspan>＝每一层都一样（花样在<tspan font-weight="700">层内部</tspan>）；<tspan font-weight="700">切成格子</tspan>＝层与层不一样（花样在<tspan font-weight="700">层之间</tspan>）。前四行是<tspan font-weight="700">基线</tspan>：每个新机制都配上它<tspan font-weight="700">首次出现时的那个模型</tspan>。</text>
 <text class="svgsm" x="16" y="508" fill="#5f6368">⚠️ KV 那一列的<tspan font-weight="700">条长是对数刻度</tspan>——&#160;跨了三个数量级，线性刻度下 576 GiB 会吃光整行、而 697 MiB 连一个像素都占不到。<tspan font-weight="700">看数字，别看长度比。</tspan>　口径：<tspan font-weight="700">128K、BF16、batch 1、不含量化</tspan>；公式与每家的参数全在生成脚本里，可复算。</text>
@@ -834,371 +834,435 @@ h4 { margin:18px 0 6px; font-size:15px }
 <text class="svgsm" x="748" y="549" fill="#fff" style="font-size:9px"><tspan font-weight="700">CSA</tspan></text>
 <rect x="774" y="538" width="26" height="15" rx="3" fill="#a50e0e" stroke="#a50e0e" stroke-width="1"/>
 <text class="svgsm" x="780" y="549" fill="#fff" style="font-size:9px"><tspan font-weight="700">HCA</tspan></text>
-<text class="svgsm" x="16" y="577" fill="#5f6368"><tspan font-weight="700">时间</tspan></text>
-<text class="svgsm" x="78" y="577" fill="#5f6368"><tspan font-weight="700">模型</tspan></text>
-<text class="svgsm" x="290" y="577" fill="#5f6368"><tspan font-weight="700">这一层 ＋ 那一层</tspan></text>
-<text class="svgsm" x="512" y="577" fill="#5f6368"><tspan font-weight="700">一个循环（一格 ＝ 一层）</tspan></text>
-<text class="svgsm" x="883" y="577" fill="#5f6368"><tspan font-weight="700">上下文</tspan></text>
-<text class="svgsm" x="945" y="577" fill="#5f6368"><tspan font-weight="700">KV cache＠128K（BF16，batch 1）</tspan></text>
-<text class="svgsm" x="1231" y="577" fill="#5f6368"><tspan font-weight="700">备注</tspan></text>
-<line x1="16" y1="583" x2="1804" y2="583" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="16" y="607" fill="#5f6368">2020-05</text>
-<text class="svgsm" x="78" y="607" fill="#202124">GPT-3（175B）</text>
-<text class="svgsm" x="290" y="607" fill="#f9ab00"><tspan font-weight="700">MHA</tspan></text>
-<rect x="512" y="594" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="690" y="607" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">MHA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="607" fill="#5f6368">2K</text>
-<rect x="945" y="594" width="204" height="18" rx="3" fill="#7f0000" stroke="#7f0000" stroke-width="1"/>
-<text class="svgsm" x="954" y="607" fill="#fff" style="font-size:10px"><tspan font-weight="700">576 GiB</tspan></text>
-<text class="svgsm" x="1231" y="607" fill="#5f6368">96 层全 MHA，96 头×128 维。<tspan font-weight="700">基线：KV 按头数线性长，没有任何省法</tspan></text>
-<line x1="16" y1="616" x2="1804" y2="616" stroke="#f1f3f4" stroke-width="1"/>
-<text class="svgsm" x="16" y="637" fill="#5f6368">2022-04</text>
-<text class="svgsm" x="78" y="637" fill="#202124">PaLM（540B）</text>
-<text class="svgsm" x="290" y="637" fill="#f9ab00"><tspan font-weight="700">MQA</tspan></text>
-<rect x="512" y="624" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="690" y="637" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">MQA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="637" fill="#5f6368">2K</text>
-<rect x="945" y="624" width="105" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="954" y="637" fill="#fff" style="font-size:10px"><tspan font-weight="700">15 GiB</tspan></text>
-<text class="svgsm" x="1231" y="637" fill="#5f6368">118 层，48 头<tspan font-weight="700">共用 1 组 KV</tspan> ——&#160;第一次大规模砍 KV（Shazeer 2019）</text>
-<line x1="16" y1="646" x2="1804" y2="646" stroke="#f1f3f4" stroke-width="1"/>
-<text class="svgsm" x="16" y="667" fill="#5f6368">2023-07</text>
-<text class="svgsm" x="78" y="667" fill="#202124">Llama 2（70B）</text>
-<text class="svgsm" x="290" y="667" fill="#f9ab00"><tspan font-weight="700">GQA</tspan></text>
-<rect x="512" y="654" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="690" y="667" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">GQA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="667" fill="#5f6368">4K</text>
-<rect x="945" y="654" width="132" height="18" rx="3" fill="#b31412" stroke="#b31412" stroke-width="1"/>
-<text class="svgsm" x="954" y="667" fill="#fff" style="font-size:10px"><tspan font-weight="700">40 GiB</tspan></text>
-<text class="svgsm" x="1231" y="667" fill="#5f6368">8 组 KV。MQA 砍太狠会掉质量，GQA 是折中（arXiv 2305.13245）</text>
-<line x1="16" y1="676" x2="1804" y2="676" stroke="#f1f3f4" stroke-width="1"/>
-<text class="svgsm" x="16" y="697" fill="#5f6368">2024-05</text>
-<text class="svgsm" x="78" y="697" fill="#202124">DeepSeek-V2（236B/21B）</text>
-<text class="svgsm" x="290" y="697" fill="#e8710a"><tspan font-weight="700">MLA</tspan></text>
-<rect x="512" y="684" width="357" height="18" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="690" y="697" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">MLA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="697" fill="#5f6368">128K</text>
-<rect x="945" y="684" width="90" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="954" y="697" fill="#fff" style="font-size:10px"><tspan font-weight="700">8.4 GiB</tspan></text>
-<text class="svgsm" x="1231" y="697" fill="#5f6368">不砍头，改低秩压缩。<tspan font-weight="700">KV cache 降 93.3%</tspan>；V3 原样沿用</text>
-<line x1="16" y1="706" x2="1804" y2="706" stroke="#f1f3f4" stroke-width="1"/>
-<text class="svgsm" x="16" y="727" fill="#5f6368">2025-01</text>
-<text class="svgsm" x="78" y="727" fill="#202124">MiniMax-01（456B）</text>
-<text class="svgsm" x="290" y="727" fill="#8430ce"><tspan font-weight="700">Lightning</tspan></text>
-<text class="svgsm" x="350" y="727" fill="#5f6368">＋</text>
-<text class="svgsm" x="364" y="727" fill="#f9ab00"><tspan font-weight="700">GQA</tspan></text>
-<rect x="512" y="714" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="533" y="726" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="557" y="714" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="578" y="726" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="602" y="714" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="623" y="726" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="647" y="714" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="668" y="726" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="692" y="714" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="713" y="726" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="737" y="714" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="758" y="726" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="782" y="714" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="803" y="726" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="827" y="714" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="848" y="726" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GQA</tspan></text>
-<text class="svgsm" x="883" y="727" fill="#d93025"><tspan font-weight="700">10M</tspan></text>
-<rect x="945" y="714" width="76" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="954" y="727" fill="#fff" style="font-size:10px"><tspan font-weight="700">5.0 GiB</tspan></text>
-<text class="svgsm" x="1231" y="727" fill="#5f6368">⭐ 线性第一次上旗舰规模。<tspan font-weight="700">config 写着 10,240,000</tspan>；那层「贵的」是 GQA-8</text>
-<text class="svgsm" x="16" y="757" fill="#5f6368">2025-09</text>
-<text class="svgsm" x="78" y="757" fill="#202124">DeepSeek-V3.2-Exp</text>
-<text class="svgsm" x="290" y="757" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
-<rect x="512" y="744" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="690" y="757" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">DSA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="757" fill="#5f6368">160K</text>
-<rect x="945" y="744" width="90" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="954" y="757" fill="#fff" style="font-size:10px"><tspan font-weight="700">8.6 GiB</tspan></text>
-<text class="svgsm" x="1231" y="757" fill="#5f6368">⭐ <tspan font-weight="700">稀疏这一支的起点</tspan>：MLA ＋ Lightning Indexer，每 query 只留 top-k</text>
-<text class="svgsm" x="16" y="787" fill="#5f6368">2025-09</text>
-<text class="svgsm" x="78" y="787" fill="#202124">Qwen3-Next（80B/3B）</text>
-<text class="svgsm" x="290" y="787" fill="#12b5cb"><tspan font-weight="700">Gated DeltaNet</tspan></text>
-<text class="svgsm" x="382" y="787" fill="#5f6368">＋</text>
-<text class="svgsm" x="396" y="787" fill="#f9ab00"><tspan font-weight="700">Gated Attention</tspan></text>
-<rect x="512" y="774" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
-<text class="svgsm" x="533" y="786" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
-<rect x="557" y="774" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
-<text class="svgsm" x="578" y="786" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
-<rect x="602" y="774" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
-<text class="svgsm" x="623" y="786" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
-<rect x="647" y="774" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="668" y="786" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">gAT</tspan></text>
-<text class="svgsm" x="883" y="787" fill="#5f6368">256K</text>
-<rect x="945" y="774" width="62" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="954" y="787" fill="#fff" style="font-size:10px"><tspan font-weight="700">3.0 GiB</tspan></text>
-<text class="svgsm" x="1231" y="787" fill="#5f6368">48 层 ＝ 36 线性 ＋ 12 全注意力（GQA-2，头维 256）</text>
-<text class="svgsm" x="16" y="817" fill="#5f6368">2025-10</text>
-<text class="svgsm" x="78" y="817" fill="#202124">MiniMax M2（230B/10B）</text>
-<text class="svgsm" x="290" y="817" fill="#f9ab00"><tspan font-weight="700">GQA</tspan></text>
-<rect x="512" y="804" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="690" y="817" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">GQA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="817" fill="#5f6368">192K</text>
-<rect x="945" y="804" width="125" height="18" rx="3" fill="#b31412" stroke="#b31412" stroke-width="1"/>
-<text class="svgsm" x="954" y="817" fill="#fff" style="font-size:10px"><tspan font-weight="700">31 GiB</tspan></text>
-<text class="svgsm" x="1231" y="817" fill="#5f6368">⛔ <tspan font-weight="700">「退回全注意力」不等于什么都没做</tspan>：它是 GQA-8 ＋ partial RoPE。但确实<tspan font-weight="700">没有 MLA、没有稀疏</tspan></text>
-<text class="svgsm" x="16" y="847" fill="#5f6368">2025-10</text>
-<text class="svgsm" x="78" y="847" fill="#202124">Kimi Linear（48B/3B）</text>
-<text class="svgsm" x="290" y="847" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
-<text class="svgsm" x="312" y="847" fill="#5f6368">＋</text>
-<text class="svgsm" x="326" y="847" fill="#e8710a"><tspan font-weight="700">MLA</tspan></text>
-<rect x="512" y="834" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="533" y="846" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="557" y="834" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="578" y="846" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="602" y="834" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="623" y="846" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="647" y="834" width="42" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="668" y="846" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">MLA</tspan></text>
-<text class="svgsm" x="883" y="847" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
-<rect x="945" y="834" width="61" height="18" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="954" y="847" fill="#fff" style="font-size:10px"><tspan font-weight="700">1008 MiB</tspan></text>
-<text class="svgsm" x="1231" y="847" fill="#5f6368">27 层 ＝ 20 KDA ＋ 7 MLA（<tspan font-weight="700">末层强制 full，所以多一层</tspan>）。已用 NoPE</text>
-<line x1="16" y1="856" x2="1804" y2="856" stroke="#f1f3f4" stroke-width="1"/>
-<text class="svgsm" x="16" y="877" fill="#5f6368">2026-01</text>
-<text class="svgsm" x="78" y="877" fill="#202124">小米 MiMo-V2-Flash</text>
-<text class="svgsm" x="290" y="877" fill="#00838f"><tspan font-weight="700">SWA</tspan></text>
-<text class="svgsm" x="312" y="877" fill="#5f6368">＋</text>
-<text class="svgsm" x="326" y="877" fill="#f9ab00"><tspan font-weight="700">全注意力</tspan></text>
-<rect x="512" y="864" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="533" y="876" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="557" y="864" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="578" y="876" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="602" y="864" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="623" y="876" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="647" y="864" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="668" y="876" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="692" y="864" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="713" y="876" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="737" y="864" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="758" y="876" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">FULL</tspan></text>
-<text class="svgsm" x="883" y="877" fill="#bdc1c6">—</text>
-<rect x="945" y="864" width="58" height="18" rx="3" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="974" y="877" fill="#9aa0a6" text-anchor="middle" style="font-size:9px">未核到</text>
-<text class="svgsm" x="1231" y="877" fill="#5f6368">SWA 窗口只有 128</text>
-<text class="svgsm" x="16" y="907" fill="#5f6368">2026-02</text>
-<text class="svgsm" x="78" y="907" fill="#202124">GLM-5（744B/40B）</text>
-<text class="svgsm" x="290" y="907" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
-<rect x="512" y="894" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="690" y="907" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">DSA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="907" fill="#5f6368">198K</text>
-<rect x="945" y="894" width="97" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="954" y="907" fill="#fff" style="font-size:10px"><tspan font-weight="700">11 GiB</tspan></text>
-<text class="svgsm" x="1231" y="907" fill="#5f6368">MLA ＋ DSA，78 层。<tspan font-weight="700">GLM-5.1 是同一套架构</tspan>，只有后训练不同</text>
-<text class="svgsm" x="16" y="937" fill="#5f6368">2026-03</text>
-<text class="svgsm" x="78" y="937" fill="#202124">Qwen3.5（397B/17B）</text>
-<text class="svgsm" x="290" y="937" fill="#12b5cb"><tspan font-weight="700">Gated DeltaNet</tspan></text>
-<text class="svgsm" x="382" y="937" fill="#5f6368">＋</text>
-<text class="svgsm" x="396" y="937" fill="#f9ab00"><tspan font-weight="700">Gated Attention</tspan></text>
-<rect x="512" y="924" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
-<text class="svgsm" x="533" y="936" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
-<rect x="557" y="924" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
-<text class="svgsm" x="578" y="936" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
-<rect x="602" y="924" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
-<text class="svgsm" x="623" y="936" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
-<rect x="647" y="924" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="668" y="936" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">gAT</tspan></text>
-<text class="svgsm" x="883" y="937" fill="#5f6368">256K</text>
-<rect x="945" y="924" width="68" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="954" y="937" fill="#fff" style="font-size:10px"><tspan font-weight="700">3.8 GiB</tspan></text>
-<text class="svgsm" x="1231" y="937" fill="#5f6368">60 层 ＝ 45 线性 ＋ 15 全注意力，<tspan font-weight="700">config 里 full_attention_interval: 4</tspan></text>
-<text class="svgsm" x="16" y="967" fill="#5f6368">2026-04</text>
-<text class="svgsm" x="78" y="967" fill="#202124">小米 MiMo-V2.5-Pro</text>
-<text class="svgsm" x="290" y="967" fill="#00838f"><tspan font-weight="700">SWA</tspan></text>
-<text class="svgsm" x="312" y="967" fill="#5f6368">＋</text>
-<text class="svgsm" x="326" y="967" fill="#f9ab00"><tspan font-weight="700">全注意力</tspan></text>
-<rect x="512" y="954" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="533" y="966" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="557" y="954" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="578" y="966" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="602" y="954" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="623" y="966" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="647" y="954" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="668" y="966" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="692" y="954" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="713" y="966" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="737" y="954" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="758" y="966" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="782" y="954" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="803" y="966" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">FULL</tspan></text>
-<text class="svgsm" x="883" y="967" fill="#bdc1c6">—</text>
-<rect x="945" y="954" width="58" height="18" rx="3" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="974" y="967" fill="#9aa0a6" text-anchor="middle" style="font-size:9px">未核到</text>
-<text class="svgsm" x="1231" y="967" fill="#5f6368">窗口还是 128 ——&#160;比谁都激进</text>
-<text class="svgsm" x="16" y="997" fill="#5f6368">2026-05</text>
-<text class="svgsm" x="78" y="997" fill="#202124">DeepSeek-V4-Flash（43 层）</text>
-<text class="svgsm" x="290" y="997" fill="#00838f"><tspan font-weight="700">SWA</tspan></text>
-<text class="svgsm" x="312" y="997" fill="#5f6368">＋</text>
-<text class="svgsm" x="326" y="997" fill="#d93025"><tspan font-weight="700">CSA</tspan></text>
-<text class="svgsm" x="348" y="997" fill="#5f6368">＋</text>
-<text class="svgsm" x="362" y="997" fill="#a50e0e"><tspan font-weight="700">HCA</tspan></text>
-<rect x="512" y="984" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="533" y="996" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="557" y="984" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
-<text class="svgsm" x="578" y="996" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
-<rect x="602" y="984" width="42" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="623" y="996" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">CSA</tspan></text>
-<rect x="647" y="984" width="42" height="18" rx="3" fill="#a50e0e" stroke="#a50e0e" stroke-width="1"/>
-<text class="svgsm" x="668" y="996" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">HCA</tspan></text>
-<rect x="692" y="984" width="42" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="713" y="996" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">CSA</tspan></text>
-<rect x="737" y="984" width="42" height="18" rx="3" fill="#a50e0e" stroke="#a50e0e" stroke-width="1"/>
-<text class="svgsm" x="758" y="996" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">HCA</tspan></text>
-<text class="svgsm" x="883" y="997" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
-<rect x="945" y="984" width="56" height="18" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="954" y="997" fill="#fff" style="font-size:10px"><tspan font-weight="700">697 MiB</tspan></text>
-<text class="svgsm" x="1231" y="997" fill="#5f6368">⭐ 前 2 层 SWA 引导，之后 <tspan font-weight="700">CSA／HCA 严格交替</tspan>（21＋20）。<tspan font-weight="700">MLA 被换掉了</tspan>，底层是 shared-KV 的 MQA</text>
-<text class="svgsm" x="16" y="1027" fill="#5f6368">2026-06</text>
-<text class="svgsm" x="78" y="1027" fill="#202124">GLM-5.2（744B/40B）</text>
-<text class="svgsm" x="290" y="1027" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
-<rect x="512" y="1014" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="690" y="1027" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">DSA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="1027" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
-<rect x="945" y="1014" width="97" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="954" y="1027" fill="#fff" style="font-size:10px"><tspan font-weight="700">11 GiB</tspan></text>
-<text class="svgsm" x="1231" y="1027" fill="#5f6368">⭐ ＋IndexShare：每四个稀疏层共用一个 indexer。<tspan font-weight="700">198K → 1M 就是这一步</tspan></text>
-<text class="svgsm" x="16" y="1057" fill="#5f6368">2026-06</text>
-<text class="svgsm" x="78" y="1057" fill="#202124">Ling 2.6-1T（1T/63B）</text>
-<text class="svgsm" x="290" y="1057" fill="#8430ce"><tspan font-weight="700">Lightning</tspan></text>
-<text class="svgsm" x="350" y="1057" fill="#5f6368">＋</text>
-<text class="svgsm" x="364" y="1057" fill="#e8710a"><tspan font-weight="700">MLA</tspan></text>
-<rect x="512" y="1044" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="533" y="1056" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="557" y="1044" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="578" y="1056" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="602" y="1044" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="623" y="1056" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="647" y="1044" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="668" y="1056" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="692" y="1044" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="713" y="1056" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="737" y="1044" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="758" y="1056" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="782" y="1044" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<text class="svgsm" x="803" y="1056" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
-<rect x="827" y="1044" width="42" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="848" y="1056" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">MLA</tspan></text>
-<text class="svgsm" x="883" y="1057" fill="#5f6368">256K</text>
-<rect x="945" y="1044" width="56" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="954" y="1057" fill="#fff" style="font-size:10px"><tspan font-weight="700">1.4 GiB</tspan></text>
-<text class="svgsm" x="1231" y="1057" fill="#5f6368">⛔ 不是 KDA。而且是<tspan font-weight="700">从 Ling-2.0 的 GQA 迁移改造</tspan>来的，不是从头训</text>
-<text class="svgsm" x="16" y="1087" fill="#5f6368">2026-06</text>
-<text class="svgsm" x="78" y="1087" fill="#202124">MiniMax M3</text>
-<text class="svgsm" x="290" y="1087" fill="#d93025"><tspan font-weight="700">MSA</tspan></text>
-<rect x="512" y="1074" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="690" y="1087" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">MSA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="1087" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
-<rect x="945" y="1074" width="105" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="954" y="1087" fill="#fff" style="font-size:10px"><tspan font-weight="700">15 GiB</tspan></text>
-<text class="svgsm" x="1231" y="1087" fill="#5f6368">⭐⭐ 60 层 GQA-4 ＋ 稀疏。<tspan font-weight="700">它的 KV 比走 MLA 的 GLM-5.2 还大</tspan> ——&#160;<tspan font-weight="700">稀疏省 FLOPs，不省 KV</tspan></text>
-<text class="svgsm" x="16" y="1117" fill="#5f6368">2026-07</text>
-<text class="svgsm" x="78" y="1117" fill="#202124">Kimi K3（2.8T）</text>
-<text class="svgsm" x="290" y="1117" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
-<text class="svgsm" x="312" y="1117" fill="#5f6368">＋</text>
-<text class="svgsm" x="326" y="1117" fill="#e8710a"><tspan font-weight="700">Gated MLA</tspan></text>
-<rect x="512" y="1104" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="533" y="1116" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="557" y="1104" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="578" y="1116" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="602" y="1104" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="623" y="1116" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="647" y="1104" width="42" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="668" y="1116" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">gMLA</tspan></text>
-<text class="svgsm" x="883" y="1117" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
-<rect x="945" y="1104" width="65" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="954" y="1117" fill="#fff" style="font-size:10px"><tspan font-weight="700">3.4 GiB</tspan></text>
-<text class="svgsm" x="1231" y="1117" fill="#5f6368">93 层 ＝ 69 KDA ＋ 24 Gated MLA（<tspan font-weight="700">末层 92、93 连着两层 full</tspan>）</text>
-<text class="svgsm" x="16" y="1147" fill="#5f6368">2026-07</text>
-<text class="svgsm" x="78" y="1147" fill="#202124">混元 Hy3（295B/21B）</text>
-<text class="svgsm" x="290" y="1147" fill="#f9ab00"><tspan font-weight="700">GQA</tspan></text>
-<rect x="512" y="1134" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="690" y="1147" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">GQA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="1147" fill="#5f6368">256K</text>
-<rect x="945" y="1134" width="132" height="18" rx="3" fill="#b31412" stroke="#b31412" stroke-width="1"/>
-<text class="svgsm" x="954" y="1147" fill="#fff" style="font-size:10px"><tspan font-weight="700">40 GiB</tspan></text>
-<text class="svgsm" x="1231" y="1147" fill="#5f6368">⛔ 80 层全是 GQA-8 ——&#160;<tspan font-weight="700">线性一层都没上</tspan></text>
-<text class="svgsm" x="16" y="1177" fill="#5f6368">2026-07</text>
-<text class="svgsm" x="78" y="1177" fill="#202124">Ling-3.0-flash（124B/5.1B）</text>
-<text class="svgsm" x="290" y="1177" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
-<text class="svgsm" x="312" y="1177" fill="#5f6368">＋</text>
-<text class="svgsm" x="326" y="1177" fill="#e8710a"><tspan font-weight="700">Gated MLA</tspan></text>
-<rect x="512" y="1164" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="533" y="1176" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="557" y="1164" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="578" y="1176" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="602" y="1164" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="623" y="1176" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="647" y="1164" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="668" y="1176" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="692" y="1164" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="713" y="1176" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="737" y="1164" width="42" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="758" y="1176" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">gMLA</tspan></text>
-<text class="svgsm" x="883" y="1177" fill="#5f6368">256K</text>
-<rect x="945" y="1164" width="61" height="18" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="954" y="1177" fill="#fff" style="font-size:10px"><tspan font-weight="700">1008 MiB</tspan></text>
-<text class="svgsm" x="1231" y="1177" fill="#5f6368">42 层 ＝ 35 KDA ＋ 7 MLA。<tspan font-weight="700">跟 2.6 换了一支</tspan>；同代 tiny 是 3:1，旗舰尚未发布</text>
-<text class="svgsm" x="16" y="1207" fill="#5f6368">2026-08</text>
-<text class="svgsm" x="78" y="1207" fill="#202124">GLM-5.3（744B/40B）</text>
-<text class="svgsm" x="290" y="1207" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
-<rect x="512" y="1194" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="690" y="1207" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">DSA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="1207" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
-<rect x="945" y="1194" width="97" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="954" y="1207" fill="#fff" style="font-size:10px"><tspan font-weight="700">11 GiB</tspan></text>
-<text class="svgsm" x="1231" y="1207" fill="#5f6368">⚠️ <tspan font-weight="700">旗舰版跟 5.2 是同一个 base，纯后训练，架构一个字没动</tspan></text>
-<text class="svgsm" x="16" y="1237" fill="#5f6368">2026-08</text>
-<text class="svgsm" x="78" y="1237" fill="#202124">混元 Hy4-preview（770B/49B）</text>
-<text class="svgsm" x="290" y="1237" fill="#d93025"><tspan font-weight="700">Gated DSA</tspan></text>
-<rect x="512" y="1224" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="690" y="1237" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">gDSA ——&#160;每一层都是这个</tspan></text>
-<text class="svgsm" x="883" y="1237" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
-<rect x="945" y="1224" width="97" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="954" y="1237" fill="#fff" style="font-size:10px"><tspan font-weight="700">11 GiB</tspan></text>
-<text class="svgsm" x="1231" y="1237" fill="#5f6368">78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）</text>
-<text class="svgsm" x="16" y="1267" fill="#5f6368">2026-08</text>
-<text class="svgsm" x="78" y="1267" fill="#202124"><tspan font-weight="700">⭐ GLM-5.3-Flash（320B/18B）</tspan></text>
-<text class="svgsm" x="290" y="1267" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
-<text class="svgsm" x="312" y="1267" fill="#5f6368">＋</text>
-<text class="svgsm" x="326" y="1267" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
-<rect x="512" y="1254" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="533" y="1266" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="557" y="1254" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="578" y="1266" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="602" y="1254" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="623" y="1266" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
-<rect x="647" y="1254" width="42" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="668" y="1266" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">DSA</tspan></text>
-<text class="svgsm" x="883" y="1267" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
-<rect x="945" y="1254" width="56" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
-<text class="svgsm" x="954" y="1267" fill="#fff" style="font-size:10px"><tspan font-weight="700">1.5 GiB</tspan></text>
-<text class="svgsm" x="1231" y="1267" fill="#5f6368">45 层 ＝ 34 KDA ＋ 11 稀疏 MLA（NoPE）——&#160;<tspan font-weight="700">GLM 第一次线性和稀疏同锅</tspan>，全新的 base</text>
-<rect x="16" y="1303" width="1788" height="132" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
-<text class="svglbl" x="30" y="1323" fill="#174ea6" style="font-size:12px">⭐ 这张格子图一眼能看出五件事</text>
-<text class="svgsm" x="30" y="1343" fill="#174ea6">① 表里 23 家：<tspan font-weight="700">10 家是「便宜的层 ＋ 一层贵的」</tspan>，12 家<tspan font-weight="700">每层同构</tspan>（整条一色），1 家是别的混法。而那 10 家混合的，<tspan font-weight="700">配比无一例外落在 3:1 ～ 7:1</tspan>——&#160;<tspan font-weight="700">没有人敢全用线性，也没有人只掺一两层。</tspan></text>
-<text class="svgsm" x="30" y="1361" fill="#174ea6">② <tspan font-weight="700">前四行是基线，也是一条完整的小史</tspan>：MHA →&#160;MQA（砍到 1 组）→&#160;GQA（折中）→&#160;MLA（改压缩）——&#160;<tspan font-weight="700">四步全都只在动「每个 token 存多少」这一个旋钮</tspan>，花了四年。</text>
-<text class="svgsm" x="30" y="1379" fill="#174ea6">③ ⭐ <tspan font-weight="700">扫一眼颜色搭配</tspan>：混合的那 10 家里 <tspan font-weight="700">9 家都是「冷色 ＋ 黄橙」</tspan>（便宜的层配一层全注意力）。<tspan font-weight="700">只有 GLM-5.3-Flash 是「蓝 ＋ 红」：它配的那层「贵的」，本身已经是稀疏的了。</tspan></text>
-<text class="svgsm" x="30" y="1397" fill="#174ea6">④ ⭐⭐ <tspan font-weight="700">把「上下文」那一列竖着扫一遍</tspan>：<tspan font-weight="700">做到 1M 以上的 9 家，无一例外都动了旋钮②或③</tspan>；而纯全注意力那一档最高只到 256K。<tspan font-weight="700">最硬的对照来自 MiniMax 自己：01 用 7:1 线性做到 10M，M2 退回纯全注意力只剩 192K ——&#160;同一家、同一批人，差 50 倍。</tspan></text>
-<text class="svgsm" x="30" y="1415" fill="#174ea6">⑤ ⭐⭐ <tspan font-weight="700">最后看 KV 那一列：从 576 GiB 到 697 MiB，整整 846 倍。</tspan>而这 846 倍<tspan font-weight="700">不是一个旋钮拧出来的</tspan> ——&#160;MHA→GQA 砍头数（576→40）、MLA 改压缩（40→8.4）是旋钮①；线性把大部分层的 KV <tspan font-weight="700">直接删成零</tspan>（8.4→1.0）是旋钮③；CSA／HCA 存压缩池（→0.7）是旋钮②。<tspan font-weight="700">三个旋钮各贡献了一段。</tspan></text>
-<rect x="0" y="1463" width="1820" height="226" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
-<text class="svglbl" x="16" y="1487" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
-<text class="svgsm" x="16" y="1511" fill="#7a5000"><tspan font-weight="700">MiniMax</tspan></text>
-<text class="svgsm" x="118" y="1511" fill="#7a5000">线性（M1）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
-<text class="svgsm" x="16" y="1530" fill="#7a5000"><tspan font-weight="700">腾讯混元</tspan></text>
-<text class="svgsm" x="118" y="1530" fill="#7a5000">Hy3 <tspan font-weight="700">80 层纯 GQA-8</tspan>（连线性都没上）→&#160;Hy4 <tspan font-weight="700">78 层全 Gated DSA</tspan>——&#160;<tspan font-weight="700">跳过线性那一支，直接进稀疏</tspan></text>
-<text class="svgsm" x="16" y="1549" fill="#7a5000"><tspan font-weight="700">智谱 GLM</tspan></text>
-<text class="svgsm" x="118" y="1549" fill="#7a5000">5 上 DSA →&#160;5.2 加 <tspan font-weight="700">IndexShare</tspan> →&#160;5.3-Flash <tspan font-weight="700">第一次线性＋稀疏同锅</tspan>——&#160;半年走完三步</text>
-<text class="svglbl" x="16" y="1585" fill="#174ea6" style="font-size:12px">⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线</text>
-<text class="svgsm" x="16" y="1605" fill="#174ea6">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan> 四层一循环 ——&#160;每 4 层只有 1 层自己算索引。</text>
-<text class="svgsm" x="16" y="1623" fill="#174ea6">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
-<rect x="16" y="1635" width="1788" height="1" rx="0" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
-<text class="svglbl" x="16" y="1657" fill="#d93025" style="font-size:12px">⚠️ <tspan font-weight="700">一条必须带上的限定：稀疏那一档的账，纸面上拿不到</tspan></text>
-<text class="svgsm" x="16" y="1675" fill="#5f6368">MiniMax M3 的 GGUF 发布说明写着「MSA 不支持 →&#160;推理退回稠密」——&#160;<tspan font-weight="700">纸面省下的 FLOP，要 kernel 跟上了才算数</tspan>。这一栏的每一个「层内稀疏」，都该配一句「在哪个引擎上」。</text>
+<text class="svgsm" x="16" y="571" fill="#202124"><tspan font-weight="700">按厂商上底色：</tspan></text>
+<rect x="102" y="560" width="53" height="15" rx="3" fill="#f1f3f4" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="110" y="571" fill="#5f6368" style="font-size:10px"><tspan font-weight="700">OpenAI</tspan></text>
+<rect x="163" y="560" width="53" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="171" y="571" fill="#1e8e3e" style="font-size:10px"><tspan font-weight="700">Google</tspan></text>
+<rect x="224" y="560" width="41" height="15" rx="3" fill="#eceff1" stroke="#546e7a" stroke-width="1"/>
+<text class="svgsm" x="232" y="571" fill="#546e7a" style="font-size:10px"><tspan font-weight="700">Meta</tspan></text>
+<rect x="273" y="560" width="66" height="15" rx="3" fill="#e0f2f1" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="281" y="571" fill="#00838f" style="font-size:10px"><tspan font-weight="700">DeepSeek</tspan></text>
+<rect x="347" y="560" width="60" height="15" rx="3" fill="#fce4ec" stroke="#c2185b" stroke-width="1"/>
+<text class="svgsm" x="355" y="571" fill="#c2185b" style="font-size:10px"><tspan font-weight="700">MiniMax</tspan></text>
+<rect x="415" y="560" width="68" height="15" rx="3" fill="#fff3e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="423" y="571" fill="#e8710a" style="font-size:10px"><tspan font-weight="700">阿里 千问</tspan></text>
+<rect x="491" y="560" width="62" height="15" rx="3" fill="#ede7f6" stroke="#5e35b1" stroke-width="1"/>
+<text class="svgsm" x="499" y="571" fill="#5e35b1" style="font-size:10px"><tspan font-weight="700">月之暗面</tspan></text>
+<rect x="561" y="560" width="39" height="15" rx="3" fill="#f9fbe7" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="569" y="571" fill="#f9ab00" style="font-size:10px"><tspan font-weight="700">小米</tspan></text>
+<rect x="608" y="560" width="39" height="15" rx="3" fill="#f3e5f5" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="616" y="571" fill="#8430ce" style="font-size:10px"><tspan font-weight="700">智谱</tspan></text>
+<rect x="655" y="560" width="68" height="15" rx="3" fill="#e1f5fe" stroke="#0288d1" stroke-width="1"/>
+<text class="svgsm" x="663" y="571" fill="#0288d1" style="font-size:10px"><tspan font-weight="700">蚂蚁 百灵</tspan></text>
+<rect x="731" y="560" width="68" height="15" rx="3" fill="#fbe9e7" stroke="#d84315" stroke-width="1"/>
+<text class="svgsm" x="739" y="571" fill="#d84315" style="font-size:10px"><tspan font-weight="700">腾讯 混元</tspan></text>
+<text class="svgsm" x="16" y="599" fill="#5f6368"><tspan font-weight="700">时间</tspan></text>
+<text class="svgsm" x="78" y="599" fill="#5f6368"><tspan font-weight="700">模型</tspan></text>
+<text class="svgsm" x="290" y="599" fill="#5f6368"><tspan font-weight="700">这一层 ＋ 那一层</tspan></text>
+<text class="svgsm" x="512" y="599" fill="#5f6368"><tspan font-weight="700">一个循环（一格 ＝ 一层）</tspan></text>
+<text class="svgsm" x="883" y="599" fill="#5f6368"><tspan font-weight="700">上下文</tspan></text>
+<text class="svgsm" x="945" y="599" fill="#5f6368"><tspan font-weight="700">KV cache＠128K（BF16，batch 1）</tspan></text>
+<text class="svgsm" x="1231" y="599" fill="#5f6368"><tspan font-weight="700">备注</tspan></text>
+<line x1="16" y1="605" x2="1804" y2="605" stroke="#dadce0" stroke-width="1"/>
+<rect x="8" y="609" width="1804" height="28" rx="4" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1"/>
+<rect x="8" y="609" width="4" height="28" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="16" y="629" fill="#5f6368">2020-05</text>
+<text class="svgsm" x="78" y="629" fill="#202124">GPT-3（175B）</text>
+<text class="svgsm" x="290" y="629" fill="#f9ab00"><tspan font-weight="700">MHA</tspan></text>
+<rect x="512" y="616" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="690" y="629" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">MHA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="629" fill="#5f6368">2K</text>
+<rect x="945" y="616" width="204" height="18" rx="3" fill="#7f0000" stroke="#7f0000" stroke-width="1"/>
+<text class="svgsm" x="954" y="629" fill="#fff" style="font-size:10px"><tspan font-weight="700">576 GiB</tspan></text>
+<text class="svgsm" x="1231" y="629" fill="#5f6368">96 层全 MHA，96 头×128 维。<tspan font-weight="700">基线：KV 按头数线性长，没有任何省法</tspan></text>
+<rect x="8" y="639" width="1804" height="28" rx="4" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1"/>
+<rect x="8" y="639" width="4" height="28" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="16" y="659" fill="#5f6368">2022-04</text>
+<text class="svgsm" x="78" y="659" fill="#202124">PaLM（540B）</text>
+<text class="svgsm" x="290" y="659" fill="#f9ab00"><tspan font-weight="700">MQA</tspan></text>
+<rect x="512" y="646" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="690" y="659" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">MQA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="659" fill="#5f6368">2K</text>
+<rect x="945" y="646" width="105" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="954" y="659" fill="#fff" style="font-size:10px"><tspan font-weight="700">15 GiB</tspan></text>
+<text class="svgsm" x="1231" y="659" fill="#5f6368">118 层，48 头<tspan font-weight="700">共用 1 组 KV</tspan> ——&#160;第一次大规模砍 KV（Shazeer 2019）</text>
+<rect x="8" y="669" width="1804" height="28" rx="4" fill="#eceff1" stroke="#eceff1" stroke-width="1"/>
+<rect x="8" y="669" width="4" height="28" rx="2" fill="#546e7a" stroke="#546e7a" stroke-width="1"/>
+<text class="svgsm" x="16" y="689" fill="#5f6368">2023-07</text>
+<text class="svgsm" x="78" y="689" fill="#202124">Llama 2（70B）</text>
+<text class="svgsm" x="290" y="689" fill="#f9ab00"><tspan font-weight="700">GQA</tspan></text>
+<rect x="512" y="676" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="690" y="689" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">GQA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="689" fill="#5f6368">4K</text>
+<rect x="945" y="676" width="132" height="18" rx="3" fill="#b31412" stroke="#b31412" stroke-width="1"/>
+<text class="svgsm" x="954" y="689" fill="#fff" style="font-size:10px"><tspan font-weight="700">40 GiB</tspan></text>
+<text class="svgsm" x="1231" y="689" fill="#5f6368">8 组 KV。MQA 砍太狠会掉质量，GQA 是折中（arXiv 2305.13245）</text>
+<rect x="8" y="699" width="1804" height="28" rx="4" fill="#e0f2f1" stroke="#e0f2f1" stroke-width="1"/>
+<rect x="8" y="699" width="4" height="28" rx="2" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="16" y="719" fill="#5f6368">2024-05</text>
+<text class="svgsm" x="78" y="719" fill="#202124">DeepSeek-V2（236B/21B）</text>
+<text class="svgsm" x="290" y="719" fill="#e8710a"><tspan font-weight="700">MLA</tspan></text>
+<rect x="512" y="706" width="357" height="18" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="690" y="719" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">MLA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="719" fill="#5f6368">128K</text>
+<rect x="945" y="706" width="90" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="954" y="719" fill="#fff" style="font-size:10px"><tspan font-weight="700">8.4 GiB</tspan></text>
+<text class="svgsm" x="1231" y="719" fill="#5f6368">不砍头，改低秩压缩。<tspan font-weight="700">KV cache 降 93.3%</tspan>；V3 原样沿用</text>
+<rect x="8" y="729" width="1804" height="28" rx="4" fill="#fce4ec" stroke="#fce4ec" stroke-width="1"/>
+<rect x="8" y="729" width="4" height="28" rx="2" fill="#c2185b" stroke="#c2185b" stroke-width="1"/>
+<text class="svgsm" x="16" y="749" fill="#5f6368">2025-01</text>
+<text class="svgsm" x="78" y="749" fill="#202124">MiniMax-01（456B）</text>
+<text class="svgsm" x="290" y="749" fill="#8430ce"><tspan font-weight="700">Lightning</tspan></text>
+<text class="svgsm" x="350" y="749" fill="#5f6368">＋</text>
+<text class="svgsm" x="364" y="749" fill="#f9ab00"><tspan font-weight="700">GQA</tspan></text>
+<rect x="512" y="736" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="533" y="748" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="557" y="736" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="578" y="748" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="602" y="736" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="623" y="748" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="647" y="736" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="668" y="748" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="692" y="736" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="713" y="748" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="737" y="736" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="758" y="748" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="782" y="736" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="803" y="748" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="827" y="736" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="848" y="748" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GQA</tspan></text>
+<text class="svgsm" x="883" y="749" fill="#d93025"><tspan font-weight="700">10M</tspan></text>
+<rect x="945" y="736" width="76" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="954" y="749" fill="#fff" style="font-size:10px"><tspan font-weight="700">5.0 GiB</tspan></text>
+<text class="svgsm" x="1231" y="749" fill="#5f6368">⭐ 线性第一次上旗舰规模。<tspan font-weight="700">config 写着 10,240,000</tspan>；那层「贵的」是 GQA-8</text>
+<rect x="8" y="759" width="1804" height="28" rx="4" fill="#e0f2f1" stroke="#e0f2f1" stroke-width="1"/>
+<rect x="8" y="759" width="4" height="28" rx="2" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="16" y="779" fill="#5f6368">2025-09</text>
+<text class="svgsm" x="78" y="779" fill="#202124">DeepSeek-V3.2-Exp</text>
+<text class="svgsm" x="290" y="779" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
+<rect x="512" y="766" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="690" y="779" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">DSA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="779" fill="#5f6368">160K</text>
+<rect x="945" y="766" width="90" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="954" y="779" fill="#fff" style="font-size:10px"><tspan font-weight="700">8.6 GiB</tspan></text>
+<text class="svgsm" x="1231" y="779" fill="#5f6368">⭐ <tspan font-weight="700">稀疏这一支的起点</tspan>：MLA ＋ Lightning Indexer，每 query 只留 top-k</text>
+<rect x="8" y="789" width="1804" height="28" rx="4" fill="#fff3e0" stroke="#fff3e0" stroke-width="1"/>
+<rect x="8" y="789" width="4" height="28" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="16" y="809" fill="#5f6368">2025-09</text>
+<text class="svgsm" x="78" y="809" fill="#202124">Qwen3-Next（80B/3B）</text>
+<text class="svgsm" x="290" y="809" fill="#12b5cb"><tspan font-weight="700">Gated DeltaNet</tspan></text>
+<text class="svgsm" x="382" y="809" fill="#5f6368">＋</text>
+<text class="svgsm" x="396" y="809" fill="#f9ab00"><tspan font-weight="700">Gated Attention</tspan></text>
+<rect x="512" y="796" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<text class="svgsm" x="533" y="808" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
+<rect x="557" y="796" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<text class="svgsm" x="578" y="808" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
+<rect x="602" y="796" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<text class="svgsm" x="623" y="808" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
+<rect x="647" y="796" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="668" y="808" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">gAT</tspan></text>
+<text class="svgsm" x="883" y="809" fill="#5f6368">256K</text>
+<rect x="945" y="796" width="62" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="954" y="809" fill="#fff" style="font-size:10px"><tspan font-weight="700">3.0 GiB</tspan></text>
+<text class="svgsm" x="1231" y="809" fill="#5f6368">48 层 ＝ 36 线性 ＋ 12 全注意力（GQA-2，头维 256）</text>
+<rect x="8" y="819" width="1804" height="28" rx="4" fill="#fce4ec" stroke="#fce4ec" stroke-width="1"/>
+<rect x="8" y="819" width="4" height="28" rx="2" fill="#c2185b" stroke="#c2185b" stroke-width="1"/>
+<text class="svgsm" x="16" y="839" fill="#5f6368">2025-10</text>
+<text class="svgsm" x="78" y="839" fill="#202124">MiniMax M2（230B/10B）</text>
+<text class="svgsm" x="290" y="839" fill="#f9ab00"><tspan font-weight="700">GQA</tspan></text>
+<rect x="512" y="826" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="690" y="839" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">GQA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="839" fill="#5f6368">192K</text>
+<rect x="945" y="826" width="125" height="18" rx="3" fill="#b31412" stroke="#b31412" stroke-width="1"/>
+<text class="svgsm" x="954" y="839" fill="#fff" style="font-size:10px"><tspan font-weight="700">31 GiB</tspan></text>
+<text class="svgsm" x="1231" y="839" fill="#5f6368">⛔ <tspan font-weight="700">「退回全注意力」不等于什么都没做</tspan>：它是 GQA-8 ＋ partial RoPE。但确实<tspan font-weight="700">没有 MLA、没有稀疏</tspan></text>
+<rect x="8" y="849" width="1804" height="28" rx="4" fill="#ede7f6" stroke="#ede7f6" stroke-width="1"/>
+<rect x="8" y="849" width="4" height="28" rx="2" fill="#5e35b1" stroke="#5e35b1" stroke-width="1"/>
+<text class="svgsm" x="16" y="869" fill="#5f6368">2025-10</text>
+<text class="svgsm" x="78" y="869" fill="#202124">Kimi Linear（48B/3B）</text>
+<text class="svgsm" x="290" y="869" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="312" y="869" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="869" fill="#e8710a"><tspan font-weight="700">MLA</tspan></text>
+<rect x="512" y="856" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="533" y="868" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="557" y="856" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="578" y="868" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="602" y="856" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="623" y="868" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="647" y="856" width="42" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="668" y="868" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="883" y="869" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="856" width="61" height="18" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="954" y="869" fill="#fff" style="font-size:10px"><tspan font-weight="700">1008 MiB</tspan></text>
+<text class="svgsm" x="1231" y="869" fill="#5f6368">27 层 ＝ 20 KDA ＋ 7 MLA（<tspan font-weight="700">末层强制 full，所以多一层</tspan>）。已用 NoPE</text>
+<rect x="8" y="879" width="1804" height="28" rx="4" fill="#f9fbe7" stroke="#f9fbe7" stroke-width="1"/>
+<rect x="8" y="879" width="4" height="28" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="16" y="899" fill="#5f6368">2026-01</text>
+<text class="svgsm" x="78" y="899" fill="#202124">小米 MiMo-V2-Flash（309B/15B）</text>
+<text class="svgsm" x="290" y="899" fill="#00838f"><tspan font-weight="700">SWA</tspan></text>
+<text class="svgsm" x="312" y="899" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="899" fill="#f9ab00"><tspan font-weight="700">全注意力</tspan></text>
+<rect x="512" y="886" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="533" y="898" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="557" y="886" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="578" y="898" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="602" y="886" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="623" y="898" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="647" y="886" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="668" y="898" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="692" y="886" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="713" y="898" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="737" y="886" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="758" y="898" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">FULL</tspan></text>
+<text class="svgsm" x="883" y="899" fill="#5f6368">256K</text>
+<rect x="945" y="886" width="76" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="954" y="899" fill="#fff" style="font-size:10px"><tspan font-weight="700">5.0 GiB</tspan></text>
+<text class="svgsm" x="1231" y="899" fill="#5f6368">48 层 ＝ 40 SWA ＋ 8 全注意力，窗口 128。<tspan font-weight="700">模型卡自称 KV 省近 6×，48÷8 正好是 6</tspan></text>
+<rect x="8" y="909" width="1804" height="28" rx="4" fill="#f3e5f5" stroke="#f3e5f5" stroke-width="1"/>
+<rect x="8" y="909" width="4" height="28" rx="2" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="16" y="929" fill="#5f6368">2026-02</text>
+<text class="svgsm" x="78" y="929" fill="#202124">GLM-5（744B/40B）</text>
+<text class="svgsm" x="290" y="929" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
+<rect x="512" y="916" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="690" y="929" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">DSA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="929" fill="#5f6368">198K</text>
+<rect x="945" y="916" width="97" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="954" y="929" fill="#fff" style="font-size:10px"><tspan font-weight="700">11 GiB</tspan></text>
+<text class="svgsm" x="1231" y="929" fill="#5f6368">MLA ＋ DSA，78 层。<tspan font-weight="700">GLM-5.1 是同一套架构</tspan>，只有后训练不同</text>
+<rect x="8" y="939" width="1804" height="28" rx="4" fill="#fff3e0" stroke="#fff3e0" stroke-width="1"/>
+<rect x="8" y="939" width="4" height="28" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="16" y="959" fill="#5f6368">2026-03</text>
+<text class="svgsm" x="78" y="959" fill="#202124">Qwen3.5（397B/17B）</text>
+<text class="svgsm" x="290" y="959" fill="#12b5cb"><tspan font-weight="700">Gated DeltaNet</tspan></text>
+<text class="svgsm" x="382" y="959" fill="#5f6368">＋</text>
+<text class="svgsm" x="396" y="959" fill="#f9ab00"><tspan font-weight="700">Gated Attention</tspan></text>
+<rect x="512" y="946" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<text class="svgsm" x="533" y="958" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
+<rect x="557" y="946" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<text class="svgsm" x="578" y="958" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
+<rect x="602" y="946" width="42" height="18" rx="3" fill="#12b5cb" stroke="#12b5cb" stroke-width="1"/>
+<text class="svgsm" x="623" y="958" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">GDN</tspan></text>
+<rect x="647" y="946" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="668" y="958" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">gAT</tspan></text>
+<text class="svgsm" x="883" y="959" fill="#5f6368">256K</text>
+<rect x="945" y="946" width="68" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="954" y="959" fill="#fff" style="font-size:10px"><tspan font-weight="700">3.8 GiB</tspan></text>
+<text class="svgsm" x="1231" y="959" fill="#5f6368">60 层 ＝ 45 线性 ＋ 15 全注意力，<tspan font-weight="700">config 里 full_attention_interval: 4</tspan></text>
+<rect x="8" y="969" width="1804" height="28" rx="4" fill="#f9fbe7" stroke="#f9fbe7" stroke-width="1"/>
+<rect x="8" y="969" width="4" height="28" rx="2" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="16" y="989" fill="#5f6368">2026-04</text>
+<text class="svgsm" x="78" y="989" fill="#202124">小米 MiMo-V2.5-Pro（1.02T/42B）</text>
+<text class="svgsm" x="290" y="989" fill="#00838f"><tspan font-weight="700">SWA</tspan></text>
+<text class="svgsm" x="312" y="989" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="989" fill="#f9ab00"><tspan font-weight="700">全注意力</tspan></text>
+<rect x="512" y="976" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="533" y="988" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="557" y="976" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="578" y="988" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="602" y="976" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="623" y="988" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="647" y="976" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="668" y="988" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="692" y="976" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="713" y="988" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="737" y="976" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="758" y="988" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="782" y="976" width="42" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="803" y="988" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">FULL</tspan></text>
+<text class="svgsm" x="883" y="989" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="976" width="82" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="954" y="989" fill="#fff" style="font-size:10px"><tspan font-weight="700">6.3 GiB</tspan></text>
+<text class="svgsm" x="1231" y="989" fill="#5f6368">70 层 ＝ 60 SWA ＋ 10 全注意力，窗口还是 128 ——&#160;<tspan font-weight="700">1M 上下文里最省的一档</tspan></text>
+<rect x="8" y="999" width="1804" height="28" rx="4" fill="#e0f2f1" stroke="#e0f2f1" stroke-width="1"/>
+<rect x="8" y="999" width="4" height="28" rx="2" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="16" y="1019" fill="#5f6368">2026-05</text>
+<text class="svgsm" x="78" y="1019" fill="#202124">DeepSeek-V4-Flash（43 层）</text>
+<text class="svgsm" x="290" y="1019" fill="#00838f"><tspan font-weight="700">SWA</tspan></text>
+<text class="svgsm" x="312" y="1019" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="1019" fill="#d93025"><tspan font-weight="700">CSA</tspan></text>
+<text class="svgsm" x="348" y="1019" fill="#5f6368">＋</text>
+<text class="svgsm" x="362" y="1019" fill="#a50e0e"><tspan font-weight="700">HCA</tspan></text>
+<rect x="512" y="1006" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="533" y="1018" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="557" y="1006" width="42" height="18" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="578" y="1018" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">SWA</tspan></text>
+<rect x="602" y="1006" width="42" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="623" y="1018" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">CSA</tspan></text>
+<rect x="647" y="1006" width="42" height="18" rx="3" fill="#a50e0e" stroke="#a50e0e" stroke-width="1"/>
+<text class="svgsm" x="668" y="1018" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">HCA</tspan></text>
+<rect x="692" y="1006" width="42" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="713" y="1018" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">CSA</tspan></text>
+<rect x="737" y="1006" width="42" height="18" rx="3" fill="#a50e0e" stroke="#a50e0e" stroke-width="1"/>
+<text class="svgsm" x="758" y="1018" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">HCA</tspan></text>
+<text class="svgsm" x="883" y="1019" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="1006" width="56" height="18" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="954" y="1019" fill="#fff" style="font-size:10px"><tspan font-weight="700">697 MiB</tspan></text>
+<text class="svgsm" x="1231" y="1019" fill="#5f6368">⭐ 前 2 层 SWA 引导，之后 <tspan font-weight="700">CSA／HCA 严格交替</tspan>（21＋20）。<tspan font-weight="700">MLA 被换掉了</tspan>，底层是 shared-KV 的 MQA</text>
+<rect x="8" y="1029" width="1804" height="28" rx="4" fill="#f3e5f5" stroke="#f3e5f5" stroke-width="1"/>
+<rect x="8" y="1029" width="4" height="28" rx="2" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="16" y="1049" fill="#5f6368">2026-06</text>
+<text class="svgsm" x="78" y="1049" fill="#202124">GLM-5.2（744B/40B）</text>
+<text class="svgsm" x="290" y="1049" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
+<rect x="512" y="1036" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="690" y="1049" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">DSA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="1049" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="1036" width="97" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="954" y="1049" fill="#fff" style="font-size:10px"><tspan font-weight="700">11 GiB</tspan></text>
+<text class="svgsm" x="1231" y="1049" fill="#5f6368">⭐ ＋IndexShare：每四个稀疏层共用一个 indexer。<tspan font-weight="700">198K → 1M 就是这一步</tspan></text>
+<rect x="8" y="1059" width="1804" height="28" rx="4" fill="#e1f5fe" stroke="#e1f5fe" stroke-width="1"/>
+<rect x="8" y="1059" width="4" height="28" rx="2" fill="#0288d1" stroke="#0288d1" stroke-width="1"/>
+<text class="svgsm" x="16" y="1079" fill="#5f6368">2026-06</text>
+<text class="svgsm" x="78" y="1079" fill="#202124">Ling 2.6-1T（1T/63B）</text>
+<text class="svgsm" x="290" y="1079" fill="#8430ce"><tspan font-weight="700">Lightning</tspan></text>
+<text class="svgsm" x="350" y="1079" fill="#5f6368">＋</text>
+<text class="svgsm" x="364" y="1079" fill="#e8710a"><tspan font-weight="700">MLA</tspan></text>
+<rect x="512" y="1066" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="533" y="1078" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="557" y="1066" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="578" y="1078" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="602" y="1066" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="623" y="1078" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="647" y="1066" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="668" y="1078" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="692" y="1066" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="713" y="1078" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="737" y="1066" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="758" y="1078" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="782" y="1066" width="42" height="18" rx="3" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="803" y="1078" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">LTN</tspan></text>
+<rect x="827" y="1066" width="42" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="848" y="1078" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="883" y="1079" fill="#5f6368">256K</text>
+<rect x="945" y="1066" width="56" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="954" y="1079" fill="#fff" style="font-size:10px"><tspan font-weight="700">1.4 GiB</tspan></text>
+<text class="svgsm" x="1231" y="1079" fill="#5f6368">⛔ 不是 KDA。而且是<tspan font-weight="700">从 Ling-2.0 的 GQA 迁移改造</tspan>来的，不是从头训</text>
+<rect x="8" y="1089" width="1804" height="28" rx="4" fill="#fce4ec" stroke="#fce4ec" stroke-width="1"/>
+<rect x="8" y="1089" width="4" height="28" rx="2" fill="#c2185b" stroke="#c2185b" stroke-width="1"/>
+<text class="svgsm" x="16" y="1109" fill="#5f6368">2026-06</text>
+<text class="svgsm" x="78" y="1109" fill="#202124">MiniMax M3</text>
+<text class="svgsm" x="290" y="1109" fill="#d93025"><tspan font-weight="700">MSA</tspan></text>
+<rect x="512" y="1096" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="690" y="1109" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">MSA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="1109" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="1096" width="105" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="954" y="1109" fill="#fff" style="font-size:10px"><tspan font-weight="700">15 GiB</tspan></text>
+<text class="svgsm" x="1231" y="1109" fill="#5f6368">⭐⭐ 60 层 GQA-4 ＋ 稀疏。<tspan font-weight="700">它的 KV 比走 MLA 的 GLM-5.2 还大</tspan> ——&#160;<tspan font-weight="700">稀疏省 FLOPs，不省 KV</tspan></text>
+<rect x="8" y="1119" width="1804" height="28" rx="4" fill="#ede7f6" stroke="#ede7f6" stroke-width="1"/>
+<rect x="8" y="1119" width="4" height="28" rx="2" fill="#5e35b1" stroke="#5e35b1" stroke-width="1"/>
+<text class="svgsm" x="16" y="1139" fill="#5f6368">2026-07</text>
+<text class="svgsm" x="78" y="1139" fill="#202124">Kimi K3（2.8T）</text>
+<text class="svgsm" x="290" y="1139" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="312" y="1139" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="1139" fill="#e8710a"><tspan font-weight="700">Gated MLA</tspan></text>
+<rect x="512" y="1126" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="533" y="1138" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="557" y="1126" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="578" y="1138" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="602" y="1126" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="623" y="1138" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="647" y="1126" width="42" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="668" y="1138" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">gMLA</tspan></text>
+<text class="svgsm" x="883" y="1139" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="1126" width="65" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="954" y="1139" fill="#fff" style="font-size:10px"><tspan font-weight="700">3.4 GiB</tspan></text>
+<text class="svgsm" x="1231" y="1139" fill="#5f6368">93 层 ＝ 69 KDA ＋ 24 Gated MLA（<tspan font-weight="700">末层 92、93 连着两层 full</tspan>）</text>
+<rect x="8" y="1149" width="1804" height="28" rx="4" fill="#fbe9e7" stroke="#fbe9e7" stroke-width="1"/>
+<rect x="8" y="1149" width="4" height="28" rx="2" fill="#d84315" stroke="#d84315" stroke-width="1"/>
+<text class="svgsm" x="16" y="1169" fill="#5f6368">2026-07</text>
+<text class="svgsm" x="78" y="1169" fill="#202124">混元 Hy3（295B/21B）</text>
+<text class="svgsm" x="290" y="1169" fill="#f9ab00"><tspan font-weight="700">GQA</tspan></text>
+<rect x="512" y="1156" width="357" height="18" rx="4" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="690" y="1169" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">GQA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="1169" fill="#5f6368">256K</text>
+<rect x="945" y="1156" width="132" height="18" rx="3" fill="#b31412" stroke="#b31412" stroke-width="1"/>
+<text class="svgsm" x="954" y="1169" fill="#fff" style="font-size:10px"><tspan font-weight="700">40 GiB</tspan></text>
+<text class="svgsm" x="1231" y="1169" fill="#5f6368">⛔ 80 层全是 GQA-8 ——&#160;<tspan font-weight="700">线性一层都没上</tspan></text>
+<rect x="8" y="1179" width="1804" height="28" rx="4" fill="#e1f5fe" stroke="#e1f5fe" stroke-width="1"/>
+<rect x="8" y="1179" width="4" height="28" rx="2" fill="#0288d1" stroke="#0288d1" stroke-width="1"/>
+<text class="svgsm" x="16" y="1199" fill="#5f6368">2026-07</text>
+<text class="svgsm" x="78" y="1199" fill="#202124">Ling-3.0-flash（124B/5.1B）</text>
+<text class="svgsm" x="290" y="1199" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="312" y="1199" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="1199" fill="#e8710a"><tspan font-weight="700">Gated MLA</tspan></text>
+<rect x="512" y="1186" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="533" y="1198" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="557" y="1186" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="578" y="1198" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="602" y="1186" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="623" y="1198" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="647" y="1186" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="668" y="1198" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="692" y="1186" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="713" y="1198" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="737" y="1186" width="42" height="18" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="758" y="1198" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">gMLA</tspan></text>
+<text class="svgsm" x="883" y="1199" fill="#5f6368">256K</text>
+<rect x="945" y="1186" width="61" height="18" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="954" y="1199" fill="#fff" style="font-size:10px"><tspan font-weight="700">1008 MiB</tspan></text>
+<text class="svgsm" x="1231" y="1199" fill="#5f6368">42 层 ＝ 35 KDA ＋ 7 MLA。<tspan font-weight="700">跟 2.6 换了一支</tspan>；同代 tiny 是 3:1，旗舰尚未发布</text>
+<rect x="8" y="1209" width="1804" height="28" rx="4" fill="#f3e5f5" stroke="#f3e5f5" stroke-width="1"/>
+<rect x="8" y="1209" width="4" height="28" rx="2" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="16" y="1229" fill="#5f6368">2026-08</text>
+<text class="svgsm" x="78" y="1229" fill="#202124">GLM-5.3（744B/40B）</text>
+<text class="svgsm" x="290" y="1229" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
+<rect x="512" y="1216" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="690" y="1229" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">DSA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="1229" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="1216" width="97" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="954" y="1229" fill="#fff" style="font-size:10px"><tspan font-weight="700">11 GiB</tspan></text>
+<text class="svgsm" x="1231" y="1229" fill="#5f6368">⚠️ <tspan font-weight="700">旗舰版跟 5.2 是同一个 base，纯后训练，架构一个字没动</tspan></text>
+<rect x="8" y="1239" width="1804" height="28" rx="4" fill="#fbe9e7" stroke="#fbe9e7" stroke-width="1"/>
+<rect x="8" y="1239" width="4" height="28" rx="2" fill="#d84315" stroke="#d84315" stroke-width="1"/>
+<text class="svgsm" x="16" y="1259" fill="#5f6368">2026-08</text>
+<text class="svgsm" x="78" y="1259" fill="#202124">混元 Hy4-preview（770B/49B）</text>
+<text class="svgsm" x="290" y="1259" fill="#d93025"><tspan font-weight="700">Gated DSA</tspan></text>
+<rect x="512" y="1246" width="357" height="18" rx="4" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="690" y="1259" fill="#fff" text-anchor="middle" style="font-size:10px"><tspan font-weight="700">gDSA ——&#160;每一层都是这个</tspan></text>
+<text class="svgsm" x="883" y="1259" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="1246" width="97" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="954" y="1259" fill="#fff" style="font-size:10px"><tspan font-weight="700">11 GiB</tspan></text>
+<text class="svgsm" x="1231" y="1259" fill="#5f6368">78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）</text>
+<rect x="8" y="1269" width="1804" height="28" rx="4" fill="#f3e5f5" stroke="#f3e5f5" stroke-width="1"/>
+<rect x="8" y="1269" width="4" height="28" rx="2" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="16" y="1289" fill="#5f6368">2026-08</text>
+<text class="svgsm" x="78" y="1289" fill="#202124"><tspan font-weight="700">⭐ GLM-5.3-Flash（320B/18B）</tspan></text>
+<text class="svgsm" x="290" y="1289" fill="#1a73e8"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="312" y="1289" fill="#5f6368">＋</text>
+<text class="svgsm" x="326" y="1289" fill="#d93025"><tspan font-weight="700">DSA</tspan></text>
+<rect x="512" y="1276" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="533" y="1288" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="557" y="1276" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="578" y="1288" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="602" y="1276" width="42" height="18" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="623" y="1288" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">KDA</tspan></text>
+<rect x="647" y="1276" width="42" height="18" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="668" y="1288" fill="#fff" text-anchor="middle" style="font-size:9px"><tspan font-weight="700">DSA</tspan></text>
+<text class="svgsm" x="883" y="1289" fill="#d93025"><tspan font-weight="700">1M</tspan></text>
+<rect x="945" y="1276" width="56" height="18" rx="3" fill="#f9ab00" stroke="#f9ab00" stroke-width="1"/>
+<text class="svgsm" x="954" y="1289" fill="#fff" style="font-size:10px"><tspan font-weight="700">1.5 GiB</tspan></text>
+<text class="svgsm" x="1231" y="1289" fill="#5f6368">45 层 ＝ 34 KDA ＋ 11 稀疏 MLA（NoPE）——&#160;<tspan font-weight="700">GLM 第一次线性和稀疏同锅</tspan>，全新的 base</text>
+<rect x="16" y="1325" width="1788" height="132" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="30" y="1345" fill="#174ea6" style="font-size:12px">⭐ 这张格子图一眼能看出五件事</text>
+<text class="svgsm" x="30" y="1365" fill="#174ea6">① 表里 23 家：<tspan font-weight="700">10 家是「便宜的层 ＋ 一层贵的」</tspan>，12 家<tspan font-weight="700">每层同构</tspan>（整条一色），1 家是别的混法。而那 10 家混合的，<tspan font-weight="700">配比无一例外落在 3:1 ～ 7:1</tspan>——&#160;<tspan font-weight="700">没有人敢全用线性，也没有人只掺一两层。</tspan></text>
+<text class="svgsm" x="30" y="1383" fill="#174ea6">② <tspan font-weight="700">前四行是基线，也是一条完整的小史</tspan>：MHA →&#160;MQA（砍到 1 组）→&#160;GQA（折中）→&#160;MLA（改压缩）——&#160;<tspan font-weight="700">四步全都只在动「每个 token 存多少」这一个旋钮</tspan>，花了四年。</text>
+<text class="svgsm" x="30" y="1401" fill="#174ea6">③ ⭐ <tspan font-weight="700">扫一眼颜色搭配</tspan>：混合的那 10 家里 <tspan font-weight="700">9 家都是「冷色 ＋ 黄橙」</tspan>（便宜的层配一层全注意力）。<tspan font-weight="700">只有 GLM-5.3-Flash 是「蓝 ＋ 红」：它配的那层「贵的」，本身已经是稀疏的了。</tspan></text>
+<text class="svgsm" x="30" y="1419" fill="#174ea6">④ ⭐⭐ <tspan font-weight="700">把「上下文」那一列竖着扫一遍</tspan>：<tspan font-weight="700">做到 1M 以上的 10 家，无一例外都动了旋钮②或③</tspan>；而纯全注意力那一档最高只到 256K。<tspan font-weight="700">最硬的对照来自 MiniMax 自己：01 用 7:1 线性做到 10M，M2 退回纯全注意力只剩 192K ——&#160;同一家、同一批人，差 50 倍。</tspan></text>
+<text class="svgsm" x="30" y="1437" fill="#174ea6">⑤ ⭐⭐ <tspan font-weight="700">最后看 KV 那一列：从 576 GiB 到 697 MiB，整整 846 倍。</tspan>而这 846 倍<tspan font-weight="700">不是一个旋钮拧出来的</tspan> ——&#160;MHA→GQA 砍头数（576→40）、MLA 改压缩（40→8.4）是旋钮①；线性把大部分层的 KV <tspan font-weight="700">直接删成零</tspan>（8.4→1.0）是旋钮③；CSA／HCA 存压缩池（→0.7）是旋钮②。<tspan font-weight="700">三个旋钮各贡献了一段。</tspan></text>
+<rect x="0" y="1485" width="1820" height="226" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svglbl" x="16" y="1509" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
+<text class="svgsm" x="16" y="1533" fill="#7a5000"><tspan font-weight="700">MiniMax</tspan></text>
+<text class="svgsm" x="118" y="1533" fill="#7a5000">线性（M1）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
+<text class="svgsm" x="16" y="1552" fill="#7a5000"><tspan font-weight="700">腾讯混元</tspan></text>
+<text class="svgsm" x="118" y="1552" fill="#7a5000">Hy3 <tspan font-weight="700">80 层纯 GQA-8</tspan>（连线性都没上）→&#160;Hy4 <tspan font-weight="700">78 层全 Gated DSA</tspan>——&#160;<tspan font-weight="700">跳过线性那一支，直接进稀疏</tspan></text>
+<text class="svgsm" x="16" y="1571" fill="#7a5000"><tspan font-weight="700">智谱 GLM</tspan></text>
+<text class="svgsm" x="118" y="1571" fill="#7a5000">5 上 DSA →&#160;5.2 加 <tspan font-weight="700">IndexShare</tspan> →&#160;5.3-Flash <tspan font-weight="700">第一次线性＋稀疏同锅</tspan>——&#160;半年走完三步</text>
+<text class="svglbl" x="16" y="1607" fill="#174ea6" style="font-size:12px">⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线</text>
+<text class="svgsm" x="16" y="1627" fill="#174ea6">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan> 四层一循环 ——&#160;每 4 层只有 1 层自己算索引。</text>
+<text class="svgsm" x="16" y="1645" fill="#174ea6">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
+<rect x="16" y="1657" width="1788" height="1" rx="0" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svglbl" x="16" y="1679" fill="#d93025" style="font-size:12px">⚠️ <tspan font-weight="700">一条必须带上的限定：稀疏那一档的账，纸面上拿不到</tspan></text>
+<text class="svgsm" x="16" y="1697" fill="#5f6368">MiniMax M3 的 GGUF 发布说明写着「MSA 不支持 →&#160;推理退回稠密」——&#160;<tspan font-weight="700">纸面省下的 FLOP，要 kernel 跟上了才算数</tspan>。这一栏的每一个「层内稀疏」，都该配一句「在哪个引擎上」。</text>
 </svg><figcaption>⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。<b>下半 · 一个循环里都有哪些层</b>：<b>一格 ＝ 一层，格子里写的就是那一层用什么注意力</b>。整条一色 ＝ 每层同构（花样在层内部）；切成格子 ＝ 层与层不一样。<b>前四行是基线</b> ——&nbsp;MHA→MQA→GQA→MLA，每个机制配它首次出现的那个模型。⭐ <b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>；而扫一眼颜色就会发现，<b>只有 GLM-5.3-Flash 是「蓝 ＋ 红」</b> ——&nbsp;它配的那层「贵的」本身已经是稀疏的了。⭐⭐ <b>最后那一列是 128K 时的 KV cache，按各家 config 算出来的</b>：<b>从 GPT-3 的 576 GiB 到 DeepSeek-V4 的 697 MiB，六年 847 倍</b> ——&nbsp;而这 847 倍是<b>三个旋钮各贡献了一段</b>，不是哪一个单独拧出来的。<span class="sub">信息截至 2026-09-07，全部现搜；出处见图脚。</span></figcaption></figure>
 <p class="sub">⭐ <b>这张图有两个重心。</b>上半是<b>编年史</b>——&nbsp;
   四条支线各修各的毛病，看完你会发现<b>每一步都是在修上一步暴露的问题，没有一步是凭空发明</b>。
