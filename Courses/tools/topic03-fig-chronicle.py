@@ -649,17 +649,6 @@ for fam, keys in (("全注意力一族", ("MHA", "MQA", "GQA", "FULL", "gAT", "M
         lx += wpx(k, 9) + 12 + 6
     lx += 14
 
-# ── 厂商图例 ────────────────────────────────────────────────────────
-# ⛔ 上面每插一行，下面所有锚点都要跟着挪 —— 这张图已经在这上面栽过一次
-#   （加说明行只挪了表头，忘了图例，说明直接压在图例上）。
-lx2 = LX
-t(lx2, BY + 124, '按厂商上底色：', fill="#202124", bold=True)
-lx2 += wpx('按厂商上底色：') + 6
-for _k, _lab, _ink, _bg in VENDOR:
-    box(lx2, BY + 113, wpx(_lab) + 16, 15, _bg, _ink, 3)
-    t(lx2 + 8, BY + 124, _lab, fill=_ink, bold=True, size=10)
-    lx2 += wpx(_lab) + 16 + 8
-
 # ── 表头 ────────────────────────────────────────────────────────────
 MDLX, MIXX, BARX = LX + 62, 290, 512
 CELL, CGAP, MAXC = 42, 3, 8
@@ -671,7 +660,7 @@ CTXX = BARX + BARW + 14
 KVX = CTXX + 62                       # KV cache 那一列，做得宽
 KVW = 210                             # 条最长 210px
 NOTEX = KVX + KVW + 76
-HY = BY + 152
+HY = BY + 130
 t(LX, HY, '时间', fill=GY, bold=True)
 t(MDLX, HY, '模型', fill=GY, bold=True)
 t(MIXX, HY, '这一层 ＋ 那一层', fill=GY, bold=True)
@@ -685,12 +674,17 @@ p.append('<line x1="16" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
 R0, RH = HY + 30, 30
 for i, (tm, mdl, cyc, ctx, kvspec, note) in enumerate(ROWS):
     y = R0 + i * RH
-    # 同厂同底色 ＋ 左侧一条饱和色棒。⛔ 必须先画底，再画字。
-    _vlab, _vink, _vbg = vendor_of(mdl)
-    box(8, y - 20, W - 16, RH - 2, _vbg, _vbg, 4)
-    box(8, y - 20, 4, RH - 2, _vink, _vink, 2)
+    # ⛔ 2026-09-07：初版把**整行**都上了底色，被当场叫停：「你做过度了，
+    #   不是说整行都标上颜色，而是只是把模型名字那一列，用那个长条形的
+    #   背景框给它标上颜色，把模型名字也框到那个小框框里。」
+    # ⭐ 判据：**分组线索只需要落在「被分组的那个东西」上。** 整行上色等于
+    #   给二十几行全铺了一层底噪，格子和 KV 条的颜色反而被拉低了对比。
+    #   一个小色框就够了 —— 它甚至更好认，因为色块小、边界清楚。
     t(LX, y, tm, fill=GY)
-    t(MDLX, y, mdl, fill="#202124", bold=mdl.startswith("⭐"))
+    # 模型名套一个厂商色的小框 —— 同一家一个颜色，扫一眼就连得起来
+    _vlab, _vink, _vbg = vendor_of(mdl)
+    box(MDLX - 7, y - 14, wpx(mdl) + 15, 20, _vbg, _vink, 5)
+    t(MDLX, y, mdl, fill=_vink, bold=True)
     # 「这一层 ＋ 那一层」——&#160;去重后按出现顺序列全名，各用自己的颜色
     seen, cx = [], MIXX
     for ty, _ in cyc:
