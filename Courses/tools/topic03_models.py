@@ -34,7 +34,7 @@ AMB, ORG, DKR = "#f9ab00", "#e8710a", "#a50e0e"
 TYPE_COL = {
     # 全注意力一族 —— 黄／橙
     "MHA": AMB, "MQA": AMB, "GQA": AMB, "FULL": AMB, "gAT": AMB,
-    "MLA": ORG, "gMLA": ORG,
+    "MLA": ORG, "gMLA": ORG, "CCA": "#bf360c",
     # 线性一族 —— 冷色
     "KDA": BL, "GDN": "#12b5cb", "LTN": PU,
     # ⭐ Mamba／RWKV 也归线性一族（冷色）——&nbsp;它们不是"另一支"，
@@ -70,6 +70,8 @@ VENDOR = [
     ("Mistral",  "Mistral",  "#c2410c", "#fff1e6"),
     ("Jamba",    "AI21",     "#7b1fa2", "#f6e9fb"),
     ("RWKV",     "RWKV",     "#00695c", "#e0f2f1"),
+    ("Trinity",  "Arcee",    "#00838f", "#e0f7fa"),
+    ("ZAYA",     "Zyphra",   "#6a1b9a", "#f3e5f5"),
 ]
 
 
@@ -88,7 +90,7 @@ FULLNAME = {
     "gAT": "Gated Attention", "MLA": "MLA", "gMLA": "Gated MLA",
     "KDA": "KDA", "GDN": "Gated DeltaNet", "LTN": "Lightning",
     "Mamba": "Mamba", "RWKV": "RWKV",
-    "SWA": "SWA", "DSA": "DSA", "gDSA": "Gated DSA", "MSA": "MSA",
+    "SWA": "SWA", "CCA": "Compressed Conv Attention", "DSA": "DSA", "gDSA": "Gated DSA", "MSA": "MSA",
     "CSA": "CSA", "HCA": "HCA",
 }
 
@@ -131,6 +133,14 @@ def kv_gib(spec):
         _, n_full, n_swa, kvh_f, kvh_s, qk, v, win = spec
         ent = n_full * SEQ * kvh_f + n_swa * min(SEQ, win) * kvh_s
         return ent * (qk + v) * BPE / 2 ** 30
+    if kind == "swahyb2":
+        # ⭐ 跟 swahyb 的区别：**滑窗层和全局层的 KV 头数、头维都不一样**。
+        #   Gemma 4 就是这样：滑窗层 16 头 × 256 维，全局层 4 头 × 512 维。
+        #   ⛔ 拿 swahyb 硬套会算错 —— 那个式子假设两种层同构。
+        _, n_full, n_swa, kvh_f, d_f, kvh_s, d_s, win = spec
+        ent = (n_full * SEQ * kvh_f * d_f
+               + n_swa * min(SEQ, win) * kvh_s * d_s)
+        return 2 * ent * BPE / 2 ** 30          # K 和 V 各一份
     if kind == "v4":
         _, n_csa, n_hca, n_swa, D, m_csa, m_hca, win = spec
         # shared K=V → 每个条目只存一份；CSA/HCA 存压缩池；每层另挂一条滑窗支路
@@ -259,6 +269,37 @@ ROWS = [
 # ⭐ 正确的修法不是去调锚点，是**让脚本自己排** —— 顺序是从数据推得出来的东西，
 #   就不该靠人手维护。这样以后新行插在哪儿都无所谓。
 # 📌 日期是 "YYYY-MM" 定长字符串，字典序即时间序；同月的按写入顺序（sort 稳定）。
+
+# ══════════════════════════════════════════════════════════════════
+# ⛔⛔ 2026-09-07 第八轮：现场发现 **2025-10 → 2026-05 空了七个月**。
+#     原话：「他怎么能空那么久呢？是不是有一些重要的事情你给丢掉了？」
+#     ——&nbsp;**确实丢了。** 那七个月是开源架构最密的一段。
+# ⭐ 形状：**Highlight 视图把稀疏暴露出来了。** 全量 39 行里那段看着只是「少几行」，
+#   一旦筛成机制主线，七个月的空白立刻刺眼 ——&nbsp;
+#   **筛选不只是省地方，它还是一种体检。**
+# 📌 下面五行是这一轮补的，全部现读 config 或一手技术报告。
+#    ⚠️ 同一轮还确认了**没补进来**的（记在这儿，别以为漏了）：
+#      Kimi K2.5（2026-01，MLA，机制与 K2 同）、Qwen3-Coder-Next（2026-02，
+#      GDN 混合，机制与 Qwen3-Next 同）、Step 3.5 Flash（2026-02）、
+#      Ling 2.5 1T（2026-02，Lightning＋MLA，与本表 Ling 2.6 同机制）、
+#      Sarvam 30B/105B（2026-03，GQA／MLA）、Nanbeige 4.1、Cohere Tiny Aya、
+#      Olmo 3、Laguna XS.2（逐层注意力预算，机制有意思但没拿到 config）。
+#      ⛔ 没补的理由是**机制重复或没核到 config**，不是「不重要」。
+ROWS += [
+    ("2025-12", "DeepSeek-V3.2　671B/37B · 61 层", [("DSA", 1)], "160K", ("mla", 61, 576),
+     "Exp 转正。<tspan font-weight=\"700\">index_topk 512 → 2048</tspan>，KV 与 V3 一样"),
+    ("2026-01", "Trinity Large　400B/13B · 60 层",
+     [("SWA", 3), ("FULL", 1)], "256K", ("swahyb", 15, 45, 8, 8, 128, 128, 4096),
+     "Arcee。3:1 窗口 4096 ＋ 全局层 NoPE ＋ 门控注意力"),
+    ("2026-02", "MiniMax M2.5　230B/10B · 62 层", [("GQA", 1)], "192K", ("gqa", 62, 8, 128),
+     "⚠️ <tspan font-weight=\"700\">架构与 M2 逐字段相同</tspan>，稀疏要等 M3"),
+    ("2026-04", "Gemma 4 31B　31B 稠密 · 60 层",
+     [("SWA", 5), ("FULL", 1)], "256K", ("swahyb2", 10, 50, 4, 512, 16, 256, 1024),
+     "⭐ 全局层 <tspan font-weight=\"700\">K 维加倍 ＋ K=V 共享</tspan>，窗口 1024"),
+    ("2026-05", "ZAYA1-8B　8B 稠密 · 40 层", [("CCA", 1)], "128K", ("gqa", 40, 2, 128),
+     "⭐ <tspan font-weight=\"700\">CCA：注意力直接在压缩隐空间里做</tspan>；AMD GPU 训的"),
+]
+
 ROWS.sort(key=lambda r: r[0])
 _d = [r[0] for r in ROWS]
 assert _d == sorted(_d), "排序没生效"
@@ -359,6 +400,13 @@ HL = {
     "MiniMax M2":        "反例：退回全注意力。证明「全注意力」说的是旋钮③，不是①",
     # 例外③：Hy4 的 gDSA 机制上跟 GLM 那几行重叠，留它是因为**路线**独一份。
     "混元 Hy4-preview":   "跳过线性那一支，从纯 GQA 直接跳进全层稀疏",
+    # ── 2026-09-07 第八轮补：原先 Highlight 里 2025-10 直接跳到 2026-05，
+    #    空了七个月。⭐ 补进来之后才发现，那段**不是没发布，是没有新机制** ——
+    #    见落点⑧。这四行分别代表「转正 / 收进主线 / 新招 / 新机制」四种进展。
+    "DeepSeek-V3.2":     "Exp 转正：稀疏从实验走进生产，top-k 512 → 2048",
+    "Qwen3.5":           "千问把混合注意力从旁支 Qwen3-Next 收进了主线",
+    "Gemma 4 31B":       "旋钮①又出新招：全局层 K 维加倍再让 K=V 共享一份",
+    "ZAYA1-8B":          "CCA —— 不只是压缩 KV，而是把注意力搬进压缩隐空间里算",
     "GLM-5.3-Flash":     "唯一一个把②和③同锅：34 层 KDA ＋ 11 层稀疏 MLA",
 }
 

@@ -263,7 +263,23 @@ _mx, _mn = max(_kv, key=lambda x: x[1]), min(_kv, key=lambda x: x[1])
 _v2, _v3 = M.kv_gib(("mla", 60, 576)), M.kv_gib(("mla", 61, 576))
 _short = lambda n: n.split("\u3000")[0].replace("⭐ ", "")
 
-LAND = ("""<div class="land"><p class="lh">⭐ 这张表一眼能看出七件事
+# ⛔⛔ 2026-09-07：现场指着 Highlight 视图问「2025-10 到 2026-05 怎么能空那么久，
+#     是不是丢了重要的东西？」——&nbsp;**确实丢了五行**（见 topic03_models.py）。
+# ⭐⭐ 但补完之后冒出一条比「补齐」更值钱的结论：**那段窗口里发布密度并不低，
+#     密的是模型，不是机制** ——&nbsp;窗口内出现的每一种层类型，都在窗口之前就有了。
+# ⭐ 所以下面这条落点是**算出来的**，不是感想：逐个类型回查首次出现日期。
+#   ⛔ 别把它写成固定文案 —— 新数据进来它该自己变，甚至该自己失效。
+_W0, _W1 = "2025-11", "2026-03"
+_first = {}
+for _r in M.ROWS:                       # ROWS 已按时间排序，第一次见到即首发
+    for _t, _ in _r[2]:
+        _first.setdefault(_t, _r[0])
+_win = [r for r in M.ROWS if _W0 <= r[0] <= _W1]
+_wtypes = sorted({t for r in _win for t, _ in r[2]})
+_newin = [t for t in _wtypes if _first[t] >= _W0]      # 窗口内才首发的机制
+
+
+LAND = ("""<div class="land"><p class="lh">⭐ 这张表一眼能看出八件事
 <span style="font-weight:400;color:#5f6368">（以下统计**恒按全部 %d 行**算，切到 Highlight 也不变
 ——&#160;不然「有几家怎么样」这种话会跟着显示模式变，那就不是结论了）</span></p>""".replace("**", "") % len(M.ROWS) + """
 <ol>
@@ -294,12 +310,23 @@ DeepSeek-V2 是 236B、V3 是 671B，<b>参数差 2.8 倍，KV 却只差 %.1f%%<
 因为 MLA 的 KV 只跟<b>「层数 × (kv_lora_rank ＋ rope 维)」</b>走——
 跟专家多少、hidden 多宽、总参多大一点关系都没有。
 MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断了。</b></li>
+<li>⭐⭐ <b>最后一条是这张表自己长出来的，不是我们想说的。</b>
+把 <b>%s ～ %s</b> 这五个月单独看：<b>%d 个模型发布，用到 %d 种层类型
+（%s）——&nbsp;而其中<u>在这个窗口里才首次出现的，是 %d 种</u>。</b><br>
+换句话说，<b>那五个月发布很密，密的是模型，不是机制</b>：全是既有招式的重新组合与规模化。
+⭐ <b>这是一段「消化期」</b>——&nbsp;新机制在 2025 年秋天集中冒出来（DSA、GDN、KDA），
+然后各家花了一个冬天把它们搬进自己的旗舰。
+<b>下一波新东西要等到 2026 春天</b>（Gemma 4 的 K=V 共享、ZAYA1 的 CCA、V4 的 CSA／HCA）。<br>
+⛔ <b>而这条结论是被 Highlight 视图逼出来的</b>：全量 %d 行里那段看着只是「少几行」，
+一筛成机制主线，空白立刻刺眼。<b>筛选不只是省地方，它还是一种体检。</b></li>
 </ol></div>""" % (len(M.ROWS), len(_hyb), len(_uni), len(_oth), len(_hyb),
                   len(_hyb), len(_warm), "、".join(_short(r[1]) for r in _cold),
                   len(_1m),
                   M.kv_fmt(_mx[1]), _short(_mx[0]), M.kv_fmt(_mn[1]), _short(_mn[0]),
                   round(_mx[1] / _mn[1]),
-                  (_v3 / _v2 - 1) * 100, M.kv_fmt(_v2), M.kv_fmt(_v3)))
+                  (_v3 / _v2 - 1) * 100, M.kv_fmt(_v2), M.kv_fmt(_v3),
+                  _W0, _W1, len(_win), len(_wtypes),
+                  "、".join(_wtypes), len(_newin), len(M.ROWS)))
 
 _NHL = sum(1 for r in M.ROWS if M.is_hl(r[1]))
 
@@ -321,6 +348,11 @@ assert "__N" not in html, "计数占位符没被替换掉"
 
 # ── 写盘前自检 ────────────────────────────────────────────────────
 assert html.count("<tr ") == len(M.ROWS), "行数对不上"
+# ⛔ 标题「一眼能看出八件事」是写死的中文数字，而落点条数会变。
+#   ⭐ 加一行自检把两者绑住 —— 这类「标题说 N、正文列 M」的漂移不报错、很难看。
+_CN = "零一二三四五六七八九十"
+_n = LAND.count("<li>")
+assert "看出%s件事" % _CN[_n] in html, "标题写的件数跟落点条数对不上（现在 %d 条）" % _n
 assert "higcp" not in html, "私人域名不能进公开产物"
 import xml.dom.minidom  # noqa: E402  仅用来验表格片段是不是良构 XML
 xml.dom.minidom.parseString(
