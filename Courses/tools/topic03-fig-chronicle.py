@@ -416,10 +416,17 @@ LANES = (
         #    都是 full,shared,shared,shared 四层一循环 —— 撞了同一个想法。
         (2026, "IndexShare · IndexCache"),
     ]),
-    ("③ 换一套数学（线性注意力）", PU, "#f3e8fd", [
+    # ⛔ 2026-09-07：这条泳道原先**漏了整条 Mamba/SSM 主干**，而它不是"另一支"，
+    #   是这一支的**直系祖宗** ——&nbsp;Gated DeltaNet 那篇论文的标题就叫
+    #   《Gated Delta Networks: **Improving Mamba2** with Delta Rule》
+    #   （arXiv 2412.06464）。千问 Qwen3-Next／Qwen3.5 用的就是 GDN。
+    # ⭐ 所以 Mamba 必须进这条泳道，而不是另开一条。
+    ("③ 换一套数学（线性注意力 · SSM 同源）", PU, "#f3e8fd", [
         (2020, "线性 Transformer"), (2021, "DeltaNet"),
-        (2024, "可并行 DeltaNet · GDN"), (2025, "KDA · Lightning"),
-        (2026, "Gated DeltaNet-2"),
+        (2023, "Mamba"),
+        (2024, "Mamba-2（SSD）· 可并行 DeltaNet · GDN"),
+        (2025, "KDA · Lightning"),
+        (2026, "Mamba-3 · Gated DeltaNet-2"),
     ]),
     ("④ 不改数学，只改怎么算", GR, "#e6f4ea", [
         (2022, "⭐ FlashAttention"),

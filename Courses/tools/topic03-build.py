@@ -399,6 +399,29 @@ __FIG_TX_K3__
 <p>⚠️ <b>两处容易记错的出处，讲的时候要说对：</b></p>
 <ul><li><b>delta rule 不是 2024 年的东西</b>，是 Schlag 等 2021 年那篇 <em>Linear Transformers Are Secretly Fast Weight Programmers</em>（可上溯到 1990 年代的 fast weight programmer）。2024 年那篇（arXiv 2406.06484）做的是 <b>把它并行化</b>，这是另一件事、也是很关键的一件事 —— 见 §4.4</li><li><b>KDA 是 2025 年 10 月的 Kimi Linear</b>，不是 2026 年</li></ul>
 <p>⭐ <b>第 4 步为什么值得单独说</b>：标量遗忘门意味着「整个状态一起变旧」。 per-channel 意味着<b>不同特征维度可以有各自的遗忘速度</b> —— 有些通道记语法（该快忘），有些记实体名（该慢忘）。 KDA 还把它做成了一个特殊的 <b>DPLR（对角 + 低秩）</b>形式， 正是因为这个特殊形式，才配得出一个比通用 DPLR 便宜得多的分块并行算法。 <b>表达力和可算性是一起设计的，不是先设计再优化。</b></p>
+<h3>4.2b ⭐⭐ Mamba 在哪？——&nbsp;它不是另一支，它是这一支的祖宗</h3>
+<p>讲到这里一定会有人问：<b>那 Mamba 呢？SSM 那一路怎么没提？</b> 这个问题问得对，而答案比「另开一支」有意思得多。</p>
+<div class="note ok"><p>⭐ <b>最硬的一条证据，不用推：Gated DeltaNet 那篇论文的标题就叫</b> <em>《Gated Delta Networks: <b>Improving Mamba2</b> with Delta Rule》</em>（arXiv 2412.06464）。 而<b>千问 Qwen3-Next 和 Qwen3.5 用的就是 GDN</b>。 <b>所以千问那一支的祖宗，字面意义上就是 Mamba-2。</b></p></div>
+<p>把它们放到同一个式子里看，一切就清楚了。上面 §4.1 那个递推稍微写全一点：</p>
+<pre><code>S_t = A_t · S_{t-1} + v_t k_tᵀ        ← 所有这些方法都长这样
+
+区别只有一处：允许 A_t 长什么样。</code></pre>
+<table>
+<thead><tr><th>方法</th><th>A_t 的结构</th><th>它解决了上一步的什么毛病</th></tr></thead><tbody>
+<tr><td>朴素线性注意力（2020）</td><td><b>I</b>（单位阵）</td><td>——&nbsp;只加不减，写满就糊</td></tr>
+<tr><td>RetNet / GLA</td><td>标量 γ 或对角 <b>Diag(γ)</b> 衰减</td><td>让陈年旧事自己淡出</td></tr>
+<tr><td>Mamba（2023）</td><td>对角，而且<b>依赖输入</b>（selective）</td><td>衰减速度由内容决定，不是固定的</td></tr>
+<tr><td><b>Mamba-2</b>（2024-05）</td><td><b>A ＝ a<sub>t</sub>·I</b>（标量×单位阵）</td><td>⭐ <b>故意退回最简形式</b>——正因为退了，才证得出跟线性注意力<b>对偶</b>（SSD），才能把递推写成矩阵乘、吃上 Tensor Core</td></tr>
+<tr><td>DeltaNet（2021 / 2024 并行化）</td><td><b>I − β k kᵀ</b>（单位阵减秩一）</td><td>先擦掉旧的再写新的，而不是硬加</td></tr>
+<tr><td><b>GDN</b>（2024-12）</td><td><b>α(I − β k kᵀ)</b></td><td>把 Mamba-2 的门控 ＋ DeltaNet 的擦除<b>合到一起</b></td></tr>
+<tr><td><b>KDA</b>（2025-10）</td><td><b>Diag(α)(I − β k kᵀ)</b></td><td>门从标量升成<b>逐通道</b>——不同特征各有各的遗忘速度</td></tr>
+<tr><td>Mamba-3（2026-03）</td><td>面向<b>推理</b>重新设计</td><td>前几代都在优化训练，这一代优化部署</td></tr>
+</tbody></table>
+<p>⭐ <b>Mamba-2 那篇论文的题目更直白</b>：<em>《Transformers are SSMs》</em>（arXiv 2405.21060）。 它证明的正是 <b>selective SSM 和「带结构化掩码的线性注意力」是同一件事的两种写法</b>——这就是 SSD（State Space Duality）。</p>
+<div class="note warn"><p>⛔ <b>贯穿这张表的，是一条硬约束：A<sub>t</sub> 必须有足够的结构，才能做分块并行。</b></p>
+<ul><li><b>全矩阵 A</b>：表达力最强，但没有高效的并行扫描——只能一步一步递推，<b>并行度直接归零</b></li><li><b>对角</b>：最容易并行</li><li><b>单位阵减秩一</b>：要靠 2024 年那篇「可并行 DeltaNet」的技巧才算得动</li><li><b>DPLR（对角 ＋ 低秩）</b>：KDA 专门设计了一个<b>特化版本</b>，才能把它压进 Tensor Core</li></ul>
+<p>⭐ 所以这张表不是「表达力越来越强」的单调故事。<b>每一步都在「A 能多复杂」和「还算不算得动」之间重新划线</b>—— 这正是 §4.2 那句「表达力和可算性是一起设计的」的完整版。</p></div>
+<div class="note ok"><p>⭐⭐ <b>回到最初那个问题：Mamba 缺了吗？</b> 没缺——<b>它在表里，只是我们一直用它下游的名字（GDN、KDA）在叫它。</b> 编年史那张图的第三条泳道里，Mamba、Mamba-2、Mamba-3 现在都标上了，<b>跟 DeltaNet 一族在同一条线上</b>，因为它们本来就是。</p></div>
 <h3>4.3 ⚠️ 它不是「更快的 attention」，是另一个模型</h3>
 <p>这是本节最重要的一句话，也是最容易被听众误解的一句。</p>
 <p>三个旋钮里，只有旋钮 ③ <b>改变了模型能表达什么</b>：</p>
