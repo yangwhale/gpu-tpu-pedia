@@ -661,7 +661,7 @@ h4 { margin:18px 0 6px; font-size:15px }
         （每层还是全注意力的形状、只是少看几块）**不能放在同一根轴上比**。 -->
 <p>在拿尺子之前，先看一眼<b>全景</b>：这些名词是什么时候、按什么顺序冒出来的，
   以及今天各家<b>实际上是怎么配的</b>。</p>
-<figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1560 636" width="100%" role="img" aria-label="Attention 编年史：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉，此后分成四支演化；下半是各家开源模型的混合配比条形图，含混元 Hy3／Hy4 与 GLM-5 系列">
+<figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1560 588" width="100%" role="img" aria-label="Attention 编年史时间轴：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉、只留下这个补丁，此后分成四条支线演化 ——&#160;KV 存多少、每个 query 看多少、换一套数学、只改怎么算">
 <text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">Attention 编年史 ——&#160;<tspan font-weight="700">从 RNN 的一个补丁，到今天各家的混合配比</tspan></text>
 <text class="svgsm" x="0" y="39">⭐ 一句话看懂整段历史：<tspan font-weight="700">Transformer 当初做的交易是「用平方的计算量，买来完全的并行度」——&#160;而这段历史，是在把那笔交易<tspan style="text-decoration:underline">往回赎</tspan>，但不能把并行度还回去。</tspan></text>
 <text class="svgsm" x="0" y="57" fill="#5f6368">线性注意力想赎回 O(N)，代价是重新引入一个<tspan font-weight="700">串行的状态</tspan>；于是 chunk 化又是为了把并行度找回来。<tspan font-weight="700">一个完整的圆。</tspan>　<tspan fill="#5f6368">（信息截至 2026-09-07，全部现搜）</tspan></text>
@@ -755,7 +755,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 <circle cx="761" cy="333" r="4" fill="#1e8e3e"/>
 <line x1="761" y1="333" x2="761" y2="348" stroke="#1e8e3e" stroke-width="1.2"/>
 <text class="svgsm" x="767" y="357" fill="#1e8e3e"><tspan font-weight="700">⭐ FlashAttention</tspan></text>
-<rect x="0" y="398" width="1560" height="226" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="398" width="1560" height="178" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
 <text class="svglbl" x="16" y="422" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
 <text class="svgsm" x="16" y="446" fill="#7a5000"><tspan font-weight="700">MiniMax</tspan></text>
 <text class="svgsm" x="118" y="446" fill="#7a5000">线性（M1）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
@@ -766,10 +766,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 <text class="svglbl" x="16" y="520" fill="#174ea6" style="font-size:12px">⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线</text>
 <text class="svgsm" x="16" y="540" fill="#174ea6">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan> 四层一循环 ——&#160;每 4 层只有 1 层自己算索引。</text>
 <text class="svgsm" x="16" y="558" fill="#174ea6">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
-<rect x="16" y="570" width="1528" height="1" rx="0" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
-<text class="svglbl" x="16" y="592" fill="#d93025" style="font-size:12px">⚠️ <tspan font-weight="700">一条必须带上的限定：稀疏那一档的账，纸面上拿不到</tspan></text>
-<text class="svgsm" x="16" y="610" fill="#5f6368">MiniMax M3 的 GGUF 发布说明写着「MSA 不支持 →&#160;推理退回稠密」——&#160;<tspan font-weight="700">纸面省下的 FLOP，要 kernel 跟上了才算数</tspan>。这一栏的每一个「层内稀疏」，都该配一句「在哪个引擎上」。</text>
-</svg><figcaption>⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。<b>下半 · 一个循环里都有哪些层</b>：<b>一格 ＝ 一层，格子里写的就是那一层用什么注意力</b>。整条一色 ＝ 每层同构（花样在层内部）；切成格子 ＝ 层与层不一样。<b>前四行是基线</b> ——&nbsp;MHA→MQA→GQA→MLA，每个机制配它首次出现的那个模型。⭐ <b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>；而扫一眼颜色就会发现，<b>只有 GLM-5.3-Flash 是「蓝 ＋ 红」</b> ——&nbsp;它配的那层「贵的」本身已经是稀疏的了。<span class="sub">信息截至 2026-09-07，全部现搜。下半那张 39 行的模型表已经改成<b>可排序的 HTML 表</b>，就在图下面。</span></figcaption></figure>
+</svg></figure>
 <div class="wrap">
 <style>
 /* ⛔ 这张表天然 ~1400px 宽，而版心只有 1032 —— 直接放会溢出 390px。

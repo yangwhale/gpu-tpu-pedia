@@ -629,22 +629,18 @@ out = [head, '''
 #    否则同一段「读文件 → assert → 拼 figure → 换占位符」要抄六遍，
 #    抄的时候漏一处不会报错，只是那张图不见了。
 FIGS = {
+    # ⛔ 2026-09-07 把这张图的图注**整段删掉了**（现在是空串 ——&nbsp;下面的循环
+    #    见到空串就不出 <figcaption>）。现场判断：「这些内容都没有什么用。」
+    # ⭐ 它确实已经没用了，而且原因值得记：那段图注还在讲「上半 · 编年史」和
+    #    「下半 · 一个循环里都有哪些层」——&nbsp;可**「下半」早就不在这张图里了**，
+    #    39 行的模型表已经拆成图下面那张可排序 HTML 表。图注在给一张
+    #    **不存在的图**做导读，而且它读起来完全通顺，所以一直没人发现。
+    # ⭐⭐ 形状：**图注是图的下游，图改了它不会自己跟着动，也不会报错。**
+    #    这跟「教材改了讲义不跟」「aria-label 还在描述被拆走的半张图」是同一个病。
+    # 📌 那段图注里唯一有信息量的一句「一格 ＝ 一层 / 整条一色 ＝ 每层同构」
+    #    没有丢：它在表头的 hint（topic03-table-models.py）和表下的落点里都有。
     "__FIG_CHRONICLE__": ("fig-chronicle", "fig3-chronicle.svg",
-        'topic03-fig-chronicle.py',
-        '⭐ <b>上半 · 编年史</b>：注意力最早是 2014 年给 RNN 打的一个补丁，'
-        '2017 年 Transformer 把 RNN 整个拿掉、只留下这个补丁；此后分成四条支线。'
-        # ⛔ 这句原先写「便宜的层占 75%–87.5%，无人全用线性」，是个**全称句** ——
-        #    表里补进混元 Hy3 和 GLM 系列之后就被证伪了（Hy3、MiniMax M2 是纯全，
-        #    还有五行是层内稀疏，根本不在这根轴上），而它不会报错。
-        #    ⭐ 图注是图的**下游**：图里改了口径，这里不会自己跟着动。
-        #      跟「教材改了讲义不跟」是同一个失败形状，只是尺度小一号。
-        '<b>下半 · 一个循环里都有哪些层</b>：<b>一格 ＝ 一层，格子里写的就是那一层用什么注意力</b>。'
-        '整条一色 ＝ 每层同构（花样在层内部）；切成格子 ＝ 层与层不一样。'
-        '<b>前四行是基线</b> ——&nbsp;MHA→MQA→GQA→MLA，每个机制配它首次出现的那个模型。'
-        '⭐ <b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>；'
-        '而扫一眼颜色就会发现，<b>只有 GLM-5.3-Flash 是「蓝 ＋ 红」</b> ——&nbsp;'
-        '它配的那层「贵的」本身已经是稀疏的了。'
-        '<span class="sub">信息截至 2026-09-07，全部现搜。下半那张 39 行的模型表已经改成<b>可排序的 HTML 表</b>，就在图下面。</span>'),
+        'topic03-fig-chronicle.py', ''),
 
     # ── 贯穿全篇的主线图：同一张图画五遍，每次只点亮被改动的那一处 ──────
     # ⭐ 这组图的教学装置在于「五张除了高亮处完全一样」，所以图注也要一致地
@@ -701,9 +697,11 @@ for ph, (fid, fn, src, cap) in FIGS.items():
     assert os.path.isfile(fp), "缺 %s —— 先跑 `python3 %s`" % (fn, src)
     assert ph in _html, "正文里没有占位符 %s —— 加图忘了插锚点？" % ph
     svg = io.open(fp, encoding="utf-8").read().strip()
+    # ⛔ 图注为空串时**不要出空的 <figcaption>** —— 它不显示文字，但照样吃
+    #    figcaption 的 margin/padding，图底下会多出一段说不清来路的空白。
     _html = _html.replace(
-        ph, '<figure class="fbox fwide" id="%s">%s<figcaption>%s</figcaption>'
-            '</figure>' % (fid, svg, cap))
+        ph, '<figure class="fbox fwide" id="%s">%s%s</figure>'
+            % (fid, svg, '<figcaption>%s</figcaption>' % cap if cap else ''))
 assert "__FIG_" not in _html, "还有图占位符没被替换掉"
 io.open(OUT, "w", encoding="utf-8").write(_html)
 print("ok  topic-03.html  %s 字符 · %d 节"

@@ -531,8 +531,13 @@ TH = ly - TY + 8
 p[_PANEL] = ('<rect x="0" y="%d" width="%d" height="%d" rx="8" fill="#f8f9fa" '
              'stroke="#dadce0" stroke-width="1"/>' % (TY, W, TH))
 # ══════════ 落点带 ══════════════════════════════════════════════════
-FY, FH = TY + TH + 16, 226
-box(0, FY, W, FH, "#fef7e0", OR)
+# ⛔ 2026-09-07：这里的高度原先写死成 226。删掉底下那条 ⚠️ 限定之后，
+#    面板底下立刻空出 50px ——&nbsp;而**构建不会报错**，只是图变丑。
+# ⭐ 跟 viewBox 高度、泳道行数是**同一类错**：由内容推出来的值被抄成了常量。
+#    改成占位符 + 回填，跟上面那两处一致。⛔ 别再写死。
+FY = TY + TH + 16
+_FOOT = len(p)
+p.append("")   # 落点带底框占位，高度等内容排完再补
 t(16, FY + 24, '⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;'
                '而且拧的过程全写在公开的 config 里', "svglbl", BR, size=13)
 # ⭐ 三条轨迹并列，才看得出「这不是某一家的偶然选择」。
@@ -561,24 +566,32 @@ t(16, FY + 142, '混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 
                 '两家的 <tspan font-weight="700">indexer_types</tspan> 都是 '
                 '<tspan font-weight="700">full, shared, shared, shared</tspan> 四层一循环 '
                 '——&#160;每 4 层只有 1 层自己算索引。', fill="#174ea6")
-t(16, FY + 160, '⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，'
-                '已经不是「让每个 query 少看几块」，而是'
-                '<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>'
-                '——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>'
-                '这是 2026 年才冒出来的一层。', fill="#174ea6")
+_LAST = FY + 160
+t(16, _LAST, '⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，'
+             '已经不是「让每个 query 少看几块」，而是'
+             '<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>'
+             '——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>'
+             '这是 2026 年才冒出来的一层。', fill="#174ea6")
 
-box(16, FY + 172, W - 32, 1, GY, GY, 0)
-t(16, FY + 194, '⚠️ <tspan font-weight="700">一条必须带上的限定：稀疏那一档的账，'
-                '纸面上拿不到</tspan>', "svglbl", RD, size=12)
-t(16, FY + 212, 'MiniMax M3 的 GGUF 发布说明写着「MSA 不支持 →&#160;推理退回稠密」'
-                '——&#160;<tspan font-weight="700">纸面省下的 FLOP，要 kernel 跟上了才算数</tspan>。'
-                '这一栏的每一个「层内稀疏」，都该配一句「在哪个引擎上」。', fill=GY)
+# ⛔ 2026-09-07 删掉了这里原有的一整块「⚠️ 一条必须带上的限定」——
+#    讲 MiniMax M3 的 GGUF 发布说明写着「MSA 不支持 → 推理退回稠密」，
+#    结论是「纸面省下的 FLOP，要 kernel 跟上了才算数」。
+#    现场判断：这一块在这张图上没有用。⭐ 这张图回答的是「什么时候出现了什么」，
+#    而那条限定是**落地口径**，跟时间轴不是一个问题 ——&nbsp;
+#    挂在这里等于让一张编年史图额外背一条工程告诫，两边都被稀释。
+# ⛔ 别顺手加回来。真要留这条限定，它该长在正文讲稀疏那一节里，不是长在图脚。
+FH = _LAST - FY + 18
+p[_FOOT] = ('<rect x="0" y="%d" width="%d" height="%d" rx="6" fill="#fef7e0" '
+            'stroke="%s" stroke-width="1"/>' % (FY, W, FH, OR))
 
 p.append('</svg>')
 # ── 回填 svg 开标签：高度按真实落点算，不写死 ──────────────────────
+# ⛔ aria-label 原先还在说「下半是各家开源模型的混合配比条形图」——&nbsp;
+#    那半张图早就拆成 HTML 表了。⭐ 无障碍标签是图的下游，图改了它不会自己跟着动，
+#    而且**看不见，所以永远不会被发现**。这次一并改对。
 p[_HDR] = ('<svg viewBox="0 0 %d %d" width="100%%" role="img" aria-label="'
-           'Attention 编年史：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉，'
-           '此后分成四支演化；下半是各家开源模型的混合配比条形图，'
-           '含混元 Hy3／Hy4 与 GLM-5 系列">' % (W, FY + FH + 12))
+           'Attention 编年史时间轴：2014 年注意力作为 RNN 的补丁出现，'
+           '2017 年 Transformer 把 RNN 拿掉、只留下这个补丁，此后分成四条支线演化 ——&#160;'
+           'KV 存多少、每个 query 看多少、换一套数学、只改怎么算">' % (W, FY + FH + 12))
 io.open('fig3-chronicle.svg', 'w', encoding='utf-8').write('\n'.join(p))
 print('fig3-chronicle ok')
