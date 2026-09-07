@@ -34,7 +34,7 @@ AMB, ORG, DKR = "#f9ab00", "#e8710a", "#a50e0e"
 TYPE_COL = {
     # 全注意力一族 —— 黄／橙
     "MHA": AMB, "MQA": AMB, "GQA": AMB, "FULL": AMB, "gAT": AMB,
-    "MLA": ORG, "gMLA": ORG, "CCA": "#bf360c",
+    "MLA": ORG, "gMLA": ORG,
     # 线性一族 —— 冷色
     "KDA": BL, "GDN": "#12b5cb", "LTN": PU,
     # ⭐ Mamba／RWKV 也归线性一族（冷色）——&nbsp;它们不是"另一支"，
@@ -70,8 +70,6 @@ VENDOR = [
     ("Mistral",  "Mistral",  "#c2410c", "#fff1e6"),
     ("Jamba",    "AI21",     "#7b1fa2", "#f6e9fb"),
     ("RWKV",     "RWKV",     "#00695c", "#e0f2f1"),
-    ("Trinity",  "Arcee",    "#00838f", "#e0f7fa"),
-    ("ZAYA",     "Zyphra",   "#6a1b9a", "#f3e5f5"),
 ]
 
 
@@ -90,7 +88,7 @@ FULLNAME = {
     "gAT": "Gated Attention", "MLA": "MLA", "gMLA": "Gated MLA",
     "KDA": "KDA", "GDN": "Gated DeltaNet", "LTN": "Lightning",
     "Mamba": "Mamba", "RWKV": "RWKV",
-    "SWA": "SWA", "CCA": "Compressed Conv Attention", "DSA": "DSA", "gDSA": "Gated DSA", "MSA": "MSA",
+    "SWA": "SWA", "DSA": "DSA", "gDSA": "Gated DSA", "MSA": "MSA",
     "CSA": "CSA", "HCA": "HCA",
 }
 
@@ -285,19 +283,24 @@ ROWS = [
 #      Sarvam 30B/105B（2026-03，GQA／MLA）、Nanbeige 4.1、Cohere Tiny Aya、
 #      Olmo 3、Laguna XS.2（逐层注意力预算，机制有意思但没拿到 config）。
 #      ⛔ 没补的理由是**机制重复或没核到 config**，不是「不重要」。
+# ⛔⛔ 2026-09-07 再删两行：**Arcee Trinity Large** 和 **Zyphra ZAYA1-8B**。
+#     现场原话：「ZAYA1 还有 Trinity 这种小众的都不要了。」
+# ⭐ 判据（值得当成入表标准）：**这张表是参照物，而参照物的前提是读者见过它。**
+#   一个只在架构上有趣、但没人真在用的模型放进来只会稀释这张表 ——&nbsp;
+#   读者扫过去认不出，就会开始怀疑整张表的选材。
+#   ⛔ 所以：**架构新颖 ≠ 该进表。** 新机制想讲就讲在时间轴上（那是机制图），
+#     别为了讲一个机制硬塞一行没人用的模型。
+# 📌 因此 CCA（压缩卷积注意力）也从时间轴撤了 ——&nbsp;它在本课唯一的载体就是
+#   ZAYA1，模型一走它就成了悬空引用：读者问「哪个模型用了」，表里答不上来。
+#   ⭐ 而 MFA、CLA、K=V 共享留着，因为它们各自都有在用的模型。
 ROWS += [
     ("2025-12", "DeepSeek-V3.2　671B/37B · 61 层", [("DSA", 1)], "160K", ("mla", 61, 576),
      "Exp 转正。<tspan font-weight=\"700\">index_topk 512 → 2048</tspan>，KV 与 V3 一样"),
-    ("2026-01", "Trinity Large　400B/13B · 60 层",
-     [("SWA", 3), ("FULL", 1)], "256K", ("swahyb", 15, 45, 8, 8, 128, 128, 4096),
-     "Arcee。3:1 窗口 4096 ＋ 全局层 NoPE ＋ 门控注意力"),
     ("2026-02", "MiniMax M2.5　230B/10B · 62 层", [("GQA", 1)], "192K", ("gqa", 62, 8, 128),
      "⚠️ <tspan font-weight=\"700\">架构与 M2 逐字段相同</tspan>，稀疏要等 M3"),
     ("2026-04", "Gemma 4 31B　31B 稠密 · 60 层",
      [("SWA", 5), ("FULL", 1)], "256K", ("swahyb2", 10, 50, 4, 512, 16, 256, 1024),
      "⭐ 全局层 <tspan font-weight=\"700\">K 维加倍 ＋ K=V 共享</tspan>，窗口 1024"),
-    ("2026-05", "ZAYA1-8B　8B 稠密 · 40 层", [("CCA", 1)], "128K", ("gqa", 40, 2, 128),
-     "⭐ <tspan font-weight=\"700\">CCA：注意力直接在压缩隐空间里做</tspan>；AMD GPU 训的"),
 ]
 
 ROWS.sort(key=lambda r: r[0])
@@ -406,7 +409,6 @@ HL = {
     "DeepSeek-V3.2":     "Exp 转正：稀疏从实验走进生产，top-k 512 → 2048",
     "Qwen3.5":           "千问把混合注意力从旁支 Qwen3-Next 收进了主线",
     "Gemma 4 31B":       "旋钮①又出新招：全局层 K 维加倍再让 K=V 共享一份",
-    "ZAYA1-8B":          "CCA —— 不只是压缩 KV，而是把注意力搬进压缩隐空间里算",
     "GLM-5.3-Flash":     "唯一一个把②和③同锅：34 层 KDA ＋ 11 层稀疏 MLA",
 }
 
