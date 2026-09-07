@@ -123,6 +123,40 @@
    ⛔ GPT-3 那 576 GiB 是**假想值** ——&nbsp;它只有 2K 上下文，从没在 128K 上跑过。
      但正因为假想，它才是一把干净的尺：**同一个长度下，六年到底省了多少。**
 
+⭐⭐⭐ **2026-09-07 第六轮：全表 KV 重算 ＋ 补齐缺口 ＋ 拿外部锚点验公式。** 原话：
+
+    「KV cache 这部分的大小非常的重要，你即使已经写出来的值也去给我重新算一遍。
+      ……那些没有查到值的话，你也根据模型架构去算……DSA 它肯定是基于 MLA 来的，
+      所以 DSA 应该就是 MLA 对吧？」
+
+   · **「DSA 就是 MLA」这个理解对，但有一个例外。** V3.2 / GLM-5 系列 / 混元 Hy4
+     的 config 里都有 `kv_lora_rank: 512` ——&nbsp;**indexer 只决定算哪些，
+     不改变存什么**，所以 DSA 的 KV cache 就是 MLA 的 KV cache。
+     ⛔ **但 DeepSeek-V4 是例外**：它把 MLA 换掉了，改成 shared-KV MQA ＋ 压缩池。
+     **这条规律到 V4 就断了。**
+
+   ⭐⭐ **自己算出来的数，必须找外部锚点验一次** ——&nbsp;否则「算得很认真」
+   和「算错了」在纸面上长得一模一样。这两个锚点都不是我们挑的，是人家自己报的：
+
+     ① DeepSeek-V2 论文：MLA 的 KV「相当于只有 **2.25 组**的 GQA」。
+        2×2.25×128×60 ＝ **34,560**；本式 60×576 ＝ **34,560**。**完全相等。**
+     ② DeepSeek-V4 报告：KV 是 V3.2 的 **7%**。本式算出 **7.9%**。
+
+   两个独立锚点都落回来了，这套公式才敢用。
+
+   · **补齐的缺口**（都是这一轮现读的 config）：Qwen3-Next 12 层全注意力 GQA-2
+     →&nbsp;3.0 GiB；Qwen3.5 15 层 GQA-2 →&nbsp;3.8 GiB；Ling 2.6 是 **MLA**
+     （`kv_lora_rank: 512`，10 层）→&nbsp;1.4 GiB；
+     **MiniMax M3 是 GQA-4 ＋ 稀疏，不是 MLA** →&nbsp;15 GiB，上下文 **1M**。
+   · ⭐ **M3 那一行值得单独看**：它走稀疏，KV 反而**比走 MLA 的 GLM-5.2 还大**。
+     **稀疏省 FLOPs，不省 KV** ——&nbsp;这是活证据，别把两件事混起来。
+   · ⛔ **小米那两行仍是「未核到」**：config.json 里那段量化 `ignored_layers`
+     极长，把关键字段挤出了可取回范围；`configuration_*.py` 里只有占位默认值。
+     **宁可留空，也不按「同类模型大概长这样」去填** ——&nbsp;那种填法看起来最合理。
+   · ⚠️ **PaLM 是全表唯一一格不是一手 config 的**：头维取 256（多方公开复现一致，
+     注意 48×256 ≠ d_model 18432，这在 PaLM 里是有意的）。按 384 算是 22 GiB，
+     量级与结论都不变。
+
 ⛔ **一条口径护栏：格子宽度固定，不按满宽等分。**
    否则 4 格的循环和 8 格的循环画出来一样长，「这个循环有多长」这条信息就没了。
 
@@ -342,6 +376,14 @@ t(16, BY + 61, '⚠️ KV 那一列的<tspan font-weight="700">条长是对数�
                '而 697 MiB 连一个像素都占不到。<tspan font-weight="700">看数字，别看长度比。</tspan>'
                '　口径：<tspan font-weight="700">128K、BF16、batch 1、不含量化</tspan>；'
                '公式与每家的参数全在生成脚本里，可复算。', fill=GY)
+# ⭐⭐ 自己算出来的数，必须找外部锚点验一次 —— 否则「算得很认真」和「算错了」
+#    在纸面上长得一模一样。这两个锚点都不是我们选的，是人家自己报的口径。
+t(16, BY + 78, '⭐ <tspan font-weight="700">这套公式验过两个外部锚点</tspan>：'
+               '① DeepSeek-V2 论文说 MLA 的 KV「相当于只有 <tspan font-weight="700">2.25 组</tspan>的 GQA」'
+               '——&#160;2×2.25×128×60 ＝ 34,560，本式 60×576 ＝ <tspan font-weight="700">34,560，完全相等</tspan>；'
+               '② V4 报告说它的 KV 是 V3.2 的 <tspan font-weight="700">7%</tspan>'
+               '——&#160;本式算出 <tspan font-weight="700">7.9%</tspan>。'
+               '<tspan font-weight="700">两个独立锚点都落回来了，公式才敢用。</tspan>', fill="#0b6b30")
 
 # ── 一个类型一个颜色。同族相近色相，异族拉开 ──────────────────────────
 AMB, ORG, DKR = "#f9ab00", "#e8710a", "#a50e0e"
@@ -436,6 +478,9 @@ ROWS = [
     # ── 基线：每个机制配它首次出现的模型 ────────────────────────────
     ("2020-05", "GPT-3（175B）", [("MHA", 1)], "2K", ("gqa", 96, 96, 128),
      "96 层全 MHA，96 头×128 维。<tspan font-weight=\"700\">基线：KV 按头数线性长，没有任何省法</tspan>"),
+    # ⚠️ PaLM 的头维取 256（多方公开复现一致；注意 48×256 ≠ d_model 18432，
+    #    这在 PaLM 里是有意的，Q 投影不与 d_model 对齐）。若按 384 算是 22 GiB，
+    #    量级与结论都不变。⛔ 这一格是本表**唯一一个非一手 config** 的。
     ("2022-04", "PaLM（540B）", [("MQA", 1)], "2K", ("gqa", 118, 1, 256),
      "118 层，48 头<tspan font-weight=\"700\">共用 1 组 KV</tspan> ——&#160;第一次大规模砍 KV（Shazeer 2019）"),
     ("2023-07", "Llama 2（70B）", [("GQA", 1)], "4K", ("gqa", 80, 8, 128),
@@ -450,7 +495,8 @@ ROWS = [
      "那层「贵的」是 GQA-8"),
     ("2025-09", "DeepSeek-V3.2-Exp", [("DSA", 1)], "160K", ("mla", 61, 576),
      "⭐ <tspan font-weight=\"700\">稀疏这一支的起点</tspan>：MLA ＋ Lightning Indexer，每 query 只留 top-k"),
-    ("2025-09", "Qwen3-Next（80B/3B）", [("GDN", 3), ("gAT", 1)], "—", None, ""),
+    ("2025-09", "Qwen3-Next（80B/3B）", [("GDN", 3), ("gAT", 1)], "256K", ("gqa", 12, 2, 256),
+     "48 层 ＝ 36 线性 ＋ 12 全注意力（GQA-2，头维 256）"),
     # ⭐⭐ 2026-09-07 现场追问：「所谓退回全注意力不大可能，全注意力就不可能有长上下文，
     #    它肯定有什么 trade off。它是不是用了压缩注意力的 MLA 这种？」
     #    去扒 MiniMax-M2/config.json，**对了一半，也纠正了一半**：
@@ -468,10 +514,13 @@ ROWS = [
      "但确实<tspan font-weight=\"700\">没有 MLA、没有稀疏</tspan>"),
     ("2025-10", "Kimi Linear（48B/3B）", [("KDA", 3), ("MLA", 1)], "1M", ("mla", 7, 576),
      "27 层 ＝ 20 KDA ＋ 7 MLA（<tspan font-weight=\"700\">末层强制 full，所以多一层</tspan>）。已用 NoPE"),
+    # ⛔ 小米这两行核不到：config.json 里那段量化 ignored_layers 极长，
+    #    把关键字段挤出了可取回的范围；configuration_*.py 里只有占位默认值。
+    #    ⭐ 宁可留空也不按「同类模型大概长这样」去填 —— 那种填法看起来最合理。
     ("2026-01", "小米 MiMo-V2-Flash", [("SWA", 5), ("FULL", 1)], "—", None, "SWA 窗口只有 128"),
     ("2026-02", "GLM-5（744B/40B）", [("DSA", 1)], "198K", ("mla", 78, 576),
      "MLA ＋ DSA，78 层。<tspan font-weight=\"700\">GLM-5.1 是同一套架构</tspan>，只有后训练不同"),
-    ("2026-03", "Qwen3.5（397B/17B）", [("GDN", 3), ("gAT", 1)], "256K", None,
+    ("2026-03", "Qwen3.5（397B/17B）", [("GDN", 3), ("gAT", 1)], "256K", ("gqa", 15, 2, 256),
      "60 层 ＝ 45 线性 ＋ 15 全注意力，<tspan font-weight=\"700\">config 里 full_attention_interval: 4</tspan>"),
     ("2026-04", "小米 MiMo-V2.5-Pro", [("SWA", 6), ("FULL", 1)], "—", None, "窗口还是 128 ——&#160;比谁都激进"),
     ("2026-05", "DeepSeek-V4-Flash（43 层）",
@@ -481,10 +530,10 @@ ROWS = [
      "<tspan font-weight=\"700\">MLA 被换掉了</tspan>，底层是 shared-KV 的 MQA"),
     ("2026-06", "GLM-5.2（744B/40B）", [("DSA", 1)], "1M", ("mla", 78, 576),
      "⭐ ＋IndexShare：每四个稀疏层共用一个 indexer。<tspan font-weight=\"700\">198K → 1M 就是这一步</tspan>"),
-    ("2026-06", "Ling 2.6-1T（1T/63B）", [("LTN", 7), ("MLA", 1)], "256K", None,
+    ("2026-06", "Ling 2.6-1T（1T/63B）", [("LTN", 7), ("MLA", 1)], "256K", ("mla", 10, 576),
      "⛔ 不是 KDA。而且是<tspan font-weight=\"700\">从 Ling-2.0 的 GQA 迁移改造</tspan>来的，不是从头训"),
-    ("2026-06", "MiniMax M3", [("MSA", 1)], "—", None,
-     "⭐ 第三次转向：不回线性，改走稀疏。每 query 只看 top-16 个 128-token 块"),
+    ("2026-06", "MiniMax M3", [("MSA", 1)], "1M", ("gqa", 60, 4, 128),
+     "⭐⭐ 60 层 GQA-4 ＋ 稀疏。<tspan font-weight=\"700\">它的 KV 比走 MLA 的 GLM-5.2 还大</tspan> ——&#160;<tspan font-weight=\"700\">稀疏省 FLOPs，不省 KV</tspan>"),
     ("2026-07", "Kimi K3（2.8T）", [("KDA", 3), ("gMLA", 1)], "1M", ("mla", 24, 576),
      "93 层 ＝ 69 KDA ＋ 24 Gated MLA（<tspan font-weight=\"700\">末层 92、93 连着两层 full</tspan>）"),
     ("2026-07", "混元 Hy3（295B/21B）", [("GQA", 1)], "256K", ("gqa", 80, 8, 128),
@@ -509,7 +558,7 @@ for li, (fam, keys) in enumerate((
         ("窗口", ("SWA",)),
         ("稀疏一族", ("DSA", "gDSA", "MSA", "CSA", "HCA")))):
     pass
-lx, ly2 = LX, BY + 84
+lx, ly2 = LX, BY + 102
 for fam, keys in (("全注意力一族", ("MHA", "MQA", "GQA", "FULL", "gAT", "MLA", "gMLA")),
                   ("线性", ("KDA", "GDN", "LTN")),
                   ("窗口", ("SWA",)),
@@ -534,7 +583,7 @@ CTXX = BARX + BARW + 14
 KVX = CTXX + 62                       # KV cache 那一列，做得宽
 KVW = 210                             # 条最长 210px
 NOTEX = KVX + KVW + 76
-HY = BY + 112
+HY = BY + 130
 t(LX, HY, '时间', fill=GY, bold=True)
 t(MDLX, HY, '模型', fill=GY, bold=True)
 t(MIXX, HY, '这一层 ＋ 那一层', fill=GY, bold=True)
