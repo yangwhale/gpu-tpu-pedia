@@ -85,8 +85,15 @@ for tm, mdl, cyc, ctx, kvspec, note in M.ROWS:
                 ('<em style="color:%s">%s</em>' % (c, lab))
         cell_kv = '<span class="kvw">%s%s</span>' % (bars, extra)
 
+    # ── 备注一格两份：Boom 模式给这一行独有的那句，Highlight 模式给
+    #    「它凭什么在这条线上」。⭐ 两种模式不是「同一张表少几行」，
+    #    是**两种读法** —— 全量表是参照物，highlight 是一条能读下来的线。
+    _hl = M.HL.get(M.short_name(mdl))
+    cell_nt = ('<span class="n-all">%s</span>' % esc(note)
+               + ('<span class="n-hl">%s</span>' % esc(_hl) if _hl else ''))
+
     rows.append(
-        '<tr data-t="%s" data-v="%s" data-c="%.6f" data-x="%d" data-k="%.6f">'
+        '<tr data-t="%s" data-v="%s" data-c="%.6f" data-x="%d" data-k="%.6f"%s>'
         '<td class="tm">%s</td><td>%s</td><td class="cy">%s</td>'
         '<td class="ctx">%s</td><td class="kv">%s</td><td class="nt">%s</td></tr>'
         # ⛔ 排序键里原先用 \x01 当分隔符 —— **控制字符进不了 XML 属性**，
@@ -95,7 +102,8 @@ for tm, mdl, cyc, ctx, kvspec, note in M.ROWS:
         % (tm, esc("%s|%s" % M.vendor_key(mdl, tm)).replace('"', "&quot;"),
            M.cheap_frac(cyc), M.ctx_tokens(ctx),
            -1.0 if g is None else g,
-           tm, cell_mdl, cell_cyc, ctx, cell_kv, esc(note)))
+           ' data-hl="1"' if _hl else '',
+           tm, cell_mdl, cell_cyc, ctx, cell_kv, cell_nt))
 
 CSS = """
 <style>
@@ -152,6 +160,26 @@ CSS = """
 #mtbl .kv .fold{font-weight:400;opacity:.75}
 #mtbl .unk{color:#9aa0a6;font-size:10px;border:1px solid #dadce0;border-radius:3px;padding:2px 7px}
 #mtbl .hint{font-weight:400;color:#9aa0a6;font-size:11px}
+
+/* ── Highlight ／ Boom 两态开关 ────────────────────────────────────
+   ⭐ 只藏行、不动数据：隐藏是 CSS 干的，排序 JS 照常按 data-* 重排全部 39 行，
+     两个功能互不知道对方存在 ——&nbsp;所以「先排序再切模式」和「先切模式再排序」
+     结果一样。⛔ 别改成 JS 里 removeChild，那样一切模式排序状态就丢了。 */
+.hlbar{display:flex;align-items:center;gap:10px;margin:0 0 10px}
+.hlbtns{display:inline-flex;border:1px solid #dadce0;border-radius:999px;overflow:hidden}
+.hlbtns button{border:0;background:#fff;color:#5f6368;font:inherit;font-size:12.5px;
+  font-weight:700;padding:5px 16px;cursor:pointer;line-height:1.4}
+.hlbtns button+button{border-left:1px solid #dadce0}
+.hlbtns button:hover{background:#f1f3f4;color:#1a73e8}
+.hlbtns button[aria-pressed="true"]{background:#1a73e8;color:#fff}
+.hlbtns button[aria-pressed="true"]:hover{background:#1a73e8;color:#fff}
+.hlnote{color:#5f6368;font-size:12px}
+/* 默认（Boom）：全部 39 行，备注给这一行独有的那句 */
+#mtbl .n-hl{display:none}
+/* Highlight：非入选行整行不出现，备注换成「它凭什么在这条线上」 */
+#mtbl.hl tbody tr:not([data-hl]){display:none}
+#mtbl.hl .n-all{display:none}
+#mtbl.hl .n-hl{display:inline;color:#174ea6}
 </style>
 """
 
@@ -183,6 +211,19 @@ JS = """
   });
  });
  var f=t.querySelector('th.s[data-k="t"]'); if(f) f.classList.add('up');
+
+ // ── Highlight ／ Boom ──────────────────────────────────────────
+ // ⛔ 只切 class，不碰 DOM 顺序、不碰任何数值。
+ var bs=document.querySelectorAll('.hlbtns button'), nt=document.querySelector('.hlnote');
+ function setMode(hl){
+  t.classList.toggle('hl', hl);
+  bs.forEach(function(b){b.setAttribute('aria-pressed', String(b.dataset.m===(hl?'hl':'all')));});
+  if(nt) nt.textContent = hl
+    ? '只看撑起这段历史的 __NHL__ 行 —— 备注换成「它凭什么在这条线上」'
+    : '全部 __NALL__ 行。备注是这一行独有的那句话';
+ }
+ bs.forEach(function(b){b.addEventListener('click',function(){setMode(b.dataset.m==='hl');});});
+ setMode(true);          // ⭐ 默认 Highlight：39 行是参照物，18 行才是一条读得下来的线
 })();
 </script>
 """
@@ -209,12 +250,22 @@ _oth = [r for r in _mix if r not in _hyb]
 _warm = [r for r in _hyb if r[2][-1][0] not in M.SPARSE]
 _cold = [r for r in _hyb if r[2][-1][0] in M.SPARSE]
 _1m = [r for r in M.ROWS if r[3].endswith("M")]
-_kv = [(r[1], M.kv_gib(r[4])) for r in M.ROWS if r[4] is not None and M.kv_gib(r[4]) > 0]
+# ⛔ 2026-09-07 修。这里原先是「全表非零 KV 的最大 ÷ 最小」，算出 1152 倍 ——
+#   而那个最小值是 **Mistral 7B 的 512 MiB**。⭐ 拿 7B 去跟 175B 比 KV 倍数，
+#   比出来的是**模型大小**，不是机制省下来的量，而这一条恰恰是想说机制。
+#   ⭐⭐ 形状：**极值统计会自动挑出「最不可比的那一行」** ——&nbsp;
+#     min/max 不知道什么叫可比，它只知道大小。加一行小模型就能把结论悄悄改掉。
+#   修法：只在**前沿规模（≥100B 总参）**里取两端，口径写进正文那句话里。
+_BIG = 100.0
+_kv = [(r[1], M.kv_gib(r[4])) for r in M.ROWS
+       if r[4] is not None and M.kv_gib(r[4]) > 0 and M.total_params_b(r[1]) >= _BIG]
 _mx, _mn = max(_kv, key=lambda x: x[1]), min(_kv, key=lambda x: x[1])
 _v2, _v3 = M.kv_gib(("mla", 60, 576)), M.kv_gib(("mla", 61, 576))
 _short = lambda n: n.split("\u3000")[0].replace("⭐ ", "")
 
-LAND = ("""<div class="land"><p class="lh">⭐ 这张表一眼能看出七件事</p>
+LAND = ("""<div class="land"><p class="lh">⭐ 这张表一眼能看出七件事
+<span style="font-weight:400;color:#5f6368">（以下统计**恒按全部 %d 行**算，切到 Highlight 也不变
+——&#160;不然「有几家怎么样」这种话会跟着显示模式变，那就不是结论了）</span></p>""".replace("**", "") % len(M.ROWS) + """
 <ol>
 <li>表里 <b>%d</b> 家：<b>%d 家是「便宜的层 ＋ 一层贵的」</b>，%d 家<b>每层同构</b>，
 %d 家是别的混法。而那 %d 家混合的，<b>配比无一例外落在 3:1 ～ 7:1</b> ——
@@ -226,7 +277,9 @@ LAND = ("""<div class="land"><p class="lh">⭐ 这张表一眼能看出七件事
 <li>⭐⭐ 把<b>上下文</b>那一列排一下：做到 <b>1M 以上的 %d 家，无一例外都动了旋钮②或③</b>；
 纯全注意力那一档最高只到 256K。最硬的对照来自 MiniMax 自己：
 <b>01 用 7:1 线性外推到 4M，M2 退回纯全注意力只剩 192K</b>——同一家、同一批人，差二十倍。</li>
-<li>⭐⭐ 把 <b>KV cache</b> 排一下：从 <b>%s</b> 到 <b>%s</b>，整整 <b>%d 倍</b>。
+<li>⭐⭐ 把 <b>KV cache</b> 排一下：<b>%s</b>（%s）到 <b>%s</b>（%s），整整 <b>%d 倍</b>
+<span style="color:#5f6368">——&#160;两端都取 <b>100B 以上</b>的，不然「最小」会落到 Mistral 7B 头上，
+那比的是模型大小不是机制</span>。
 而这不是一个旋钮拧出来的——MHA→GQA 砍头数、MLA 改压缩、<b>CLA 跨层共享</b>是旋钮①；
 线性把大部分层的 KV <b>直接删成零</b>是旋钮③；CSA／HCA 存压缩池是旋钮②。
 <b>三个旋钮各贡献了一段。</b>⭐ 而 <b>RWKV 那一行干脆是 0</b>——纯 RNN 没有 KV cache 这个东西。</li>
@@ -243,15 +296,28 @@ DeepSeek-V2 是 236B、V3 是 671B，<b>参数差 2.8 倍，KV 却只差 %.1f%%<
 MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断了。</b></li>
 </ol></div>""" % (len(M.ROWS), len(_hyb), len(_uni), len(_oth), len(_hyb),
                   len(_hyb), len(_warm), "、".join(_short(r[1]) for r in _cold),
-                  len(_1m), M.kv_fmt(_mx[1]), M.kv_fmt(_mn[1]),
+                  len(_1m),
+                  M.kv_fmt(_mx[1]), _short(_mx[0]), M.kv_fmt(_mn[1]), _short(_mn[0]),
                   round(_mx[1] / _mn[1]),
                   (_v3 / _v2 - 1) * 100, M.kv_fmt(_v2), M.kv_fmt(_v3)))
 
-html = ('%s<div class="tblwrap"><p class="tbltip">⭐ <b>点表头可以排序</b>'
+_NHL = sum(1 for r in M.ROWS if M.is_hl(r[1]))
+
+BAR = ('<div class="hlbar">'
+       '<span class="hlbtns">'
+       '<button type="button" data-m="hl" aria-pressed="true">⭐ Highlight</button>'
+       '<button type="button" data-m="all" aria-pressed="false">Boom ——&#160;全部</button>'
+       '</span><span class="hlnote"></span></div>')
+
+html = ('%s<div class="tblwrap">%s<p class="tbltip">⭐ <b>点表头可以排序</b>'
         '——&#160;时间 / 厂商 / 便宜层占比 / 上下文 / KV 大小，'
-        '再点一次反向。<b>默认按时间。</b></p>'
+        '再点一次反向。<b>默认按时间。</b>两种模式下排序都作用在全部 %d 行上。</p>'
         '<table id="mtbl"><thead>%s</thead><tbody>\n%s\n</tbody></table>%s</div>%s'
-        % (CSS, TH, "\n".join(rows), LAND, JS))
+        % (CSS, BAR, len(M.ROWS), TH, "\n".join(rows), LAND, JS))
+# ⛔ 计数写进 JS 是**从数据填的**，不是手打的字面量 ——&nbsp;加一行模型，
+#   按钮旁边那句说明会自己跟着变。手打的话它会在某次加行之后静默说谎。
+html = html.replace("__NHL__", str(_NHL)).replace("__NALL__", str(len(M.ROWS)))
+assert "__N" not in html, "计数占位符没被替换掉"
 
 # ── 写盘前自检 ────────────────────────────────────────────────────
 assert html.count("<tr ") == len(M.ROWS), "行数对不上"
