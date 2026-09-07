@@ -272,6 +272,39 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <b>这个顺序是这一讲的骨架，不要打乱。</b></p>
 </div>
 
+<h3 class="sec">讲稿 · 0 起点：RNN（新增，约 10 分钟）</h3>
+<div class="say">
+  <span class="board">课件第零节，三张图。<b>这一节的作用是给全讲埋线，不是补课。</b></span>
+
+  <span class="pause">⛔ <b>最容易讲砸的方式：讲成「RNN 科普」。</b><br>
+    台下多半知道 RNN 是什么。<b>他们不知道的是「为什么它在加速器上就是快不起来」</b>——&nbsp;
+    <em>把时间压在第二张图上，第一张两三分钟带过。</em></span>
+
+  <p><b>第一张图（怎么算）</b>：只讲两句。
+    ① Elman 那条虚线<b>不是学出来的</b>，原文写死「fixed weight of 1.0」；
+    ② <b>竖着的箭头一直可以并行，卡住的只有横着那一根</b>。
+    <em>第二句是给后面所有「把 RNN 变快」的努力定位置的。</em></p>
+
+  <p><b>第二张图（为什么慢）——&nbsp;这一节的重心，给它 5 分钟。</b>
+    先反直觉一下：<b>RNN 的计算量比同规模自注意力还小</b>（Vaswani 表 1，O(n·d²) vs O(n²·d)），
+    <b>可它就是慢</b>。然后落到那一行账上：<b>算术强度 ＝ batch size，跟隐藏维一点关系没有</b>。
+    最后砸那个数：<b>要把一块 v7 喂饱，batch 得开到 313</b>。</p>
+
+  <span class="pause">⭐ <b>这里有一个可以现场做的收口</b>，效果很好：<br>
+    念 Vaswani 引言那句原话 ——&nbsp;<em>「memory constraints limit batching across examples」</em>
+    ——&nbsp;然后问一句：<b>「batch 是它唯一的算术强度来源，而长序列又不让你把 batch 开大。
+    两头堵死了，对吧？」</b></span>
+
+  <p><b>第三张图（三个痛点）</b>：<b>不要逐条讲解，直接指最底下那一格。</b>
+    <em>「今天这一讲后面所有东西，都是这三条的解药；而第①条后来被反着又走了一遍。」</em>
+    <b>讲完这一句就翻页</b>——&nbsp;它是伏笔，不是结论，兑现在第六节（线性注意力）。</p>
+
+  <div class="warn"><b>⛔ 这一节不许展开的两件事：</b>
+    ① LSTM 三个门分别干什么（跟本讲无关，一展开就是十分钟）；
+    ② Bahdanau 的对齐公式（第一节讲注意力时再说）。
+    <b>只说「它一开始只是 RNN 的一个补丁」这一句，就够了。</b></div>
+</div>
+
 <h3 class="sec">讲稿 · 1 FlashAttention（唯一有逐字稿的一节）</h3>
 <div class="say">
   <span class="board">课件第一节。<b>这一节占 12 分钟，是全讲最长的一节。</b></span>
