@@ -110,112 +110,75 @@ __TABLE_MODELS__
 <hr>
 </div></section>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>起点：RNN ——&nbsp;被注意力补的那个东西</h2></div>
-<p>上面那张编年史的<b>最左端</b>写着一行字：<b>2014 年，注意力是 RNN 的一个补丁</b>。</p>
-<p>要看懂这个补丁在补什么，<b>得先看被补的那个东西</b>。而且这一节不是背景介绍 ——&nbsp;
-  <b>RNN 的三个痛点，后面每一个变体都能追回到其中一条</b>；
-  等讲到线性注意力那一支的时候你会发现，<b>它是回来把第一条重做一遍</b>。</p>
-<div class="note info"><p><b>这一节要能回答四个问题：</b>它是什么原理、一步到底在算什么、
-  为什么在加速器上快不起来、以及它疼在哪。<b>四个问题各配一张图。</b></p></div>
 
-<h3>0.1 它要解决的问题：序列是有先后的</h3>
-<p>一句话里的词不是一袋子，是<b>一条链</b>。「他把书还给了图书馆」和「图书馆把书还给了他」，
-  用的词一模一样，意思正相反。所以模型必须知道<b>什么在什么前面</b>。</p>
-<p>最直接的办法：<b>从左往右读，一边读一边攒一个「到目前为止的摘要」</b>，
-  读到下一个词的时候，把这个摘要和新词一起再算一遍，更新摘要。</p>
-<p>这个「摘要」就是<b>隐藏状态 <code>h</code></b>，一个固定长度的向量。
-  <b>RNN 的全部设计就是这一句话。</b>它的好处和它后来的三个痛点，都是这一个决定的后果。</p>
-<div class="note ok"><p>⭐ <b>先记住一件事：这个盒子是固定大小的。</b>
-  不管你喂它 10 个词还是 10 万个词，<code>h</code> 都是 <code>[d]</code> 维。
-  <b>「记忆是定量的」——&nbsp;这一条后面会反复回来。</b></p></div>
+<div class="note danger"><p>⭐⭐ <b>先给一个反直觉的事实：你现在用的每一个大模型，在往外吐每一个字的时候，
+  都退回成了 1990 年那条链的形状。</b><br>
+  Transformer 赢在<b>训练能并行</b>。可<b>生成的时候，它一个 token 一个 token 地走，
+  每走一步都要把全部权重从显存里搬一遍</b> ——&nbsp;<b>这跟 RNN 一模一样</b>。<br>
+  ⛔ <b>它没有治好 RNN 的病，它只是把病从训练挪到了推理</b>；而且挪过去之后<b>更重</b>。</p></div>
 
-<h3>0.2 一个 RNN 到底在算什么</h3>
-<p>它最早的样子来自 <b>Elman 1990</b>《Finding Structure in Time》。
-  原图里除了输入层、隐藏层、输出层，还多了一组 <b>context units</b>：
-  <b>每算完一步，就把隐藏层的激活值原样抄一份放进去</b>，下一步它和新输入一起进网络。</p>
-<p>⭐ 原文对这条边写得很死：<b>「on a one-for-one basis, with fixed weight of 1.0」</b>
-  ——&nbsp;<b>它不是学出来的，是硬接线</b>。整个「循环」就靠这一条抄写。</p>
+<p>所以这一节<b>不是背景介绍，是本专题的舞台说明</b>。<b>四个问题，四张图。</b></p>
+
+<h3>0.1 它是什么、怎么算</h3>
+<p><b>序列有先后，所以得有个东西把历史带下去。</b>RNN 的答案是<b>带一个固定大小的状态向量 <code>h</code></b>
+  ——&nbsp;<b>全部设计就这一句</b>。</p>
 __FIG_RNN_UNROLL__
-<p>把它<b>沿时间展开</b>之后，图右边那条链才是它真实的样子。每一格里发生的事很少：</p>
-<pre><code>h_t = tanh( W_h · h_{t-1}  +  W_x · x_t  +  b )
-y_t = W_y · h_t</code></pre>
-<p><b>两个矩阵乘、一个加法、一个非线性。</b>就这些。
-  LSTM（1997）和 GRU（2014）也没有改这个形状 ——&nbsp;
-  它们把那个 <code>tanh</code> 换成了几个<b>门</b>（LSTM 四个、GRU 三个），
-  目的是给梯度留一条不被反复乘小数的通路。<b>链还是那条链。</b></p>
-<div class="note warn"><p>⚠️ <b>看图的时候注意方向。</b>
-  竖着的那些箭头（<code>x→h→y</code>）<b>彼此不相干，一直都可以并行</b>；
-  被卡死的<b>只有横着那一个方向</b>。
-  <b>后面所有「把 RNN 变快」的努力，动的都只是这一根横箭头。</b></p></div>
-
-<h3>0.3 它在硬件上为什么快不起来</h3>
-<p>这里最容易搞反：<b>RNN 慢，不是因为算得多。</b></p>
-<p>Vaswani 那篇论文自己给了账（表 1）：一层的计算量，<b>循环层是 O(n·d²)，自注意力是 O(n²·d)</b>
-  ——&nbsp;<b>序列比维度短的时候，RNN 的计算量反而更小</b>。可它就是慢。</p>
+<h3>0.2 为什么在加速器上快不起来</h3>
+<p>⛔ <b>先别去比总计算量。</b><code>O(n·d²)</code> 和 <code>O(n²·d)</code> 谁大，取决于 <code>n</code> 和 <code>d</code> 谁大；
+  Vaswani 原文说的是 <b><code>n &lt; d</code> 时自注意力更快，而那正是当年的常态</b>。
+  <b>固定不变的是另一列 ——&nbsp;串行步数。</b></p>
 <table>
 <thead><tr><th>层的类型</th><th>每层计算量</th><th><b>串行步数</b></th><th>两个位置之间的最长路径</th></tr></thead><tbody>
 <tr><td>自注意力</td><td>O(n² · d)</td><td><b>O(1)</b></td><td><b>O(1)</b></td></tr>
 <tr><td>循环（RNN）</td><td>O(n · d²)</td><td><b>O(n)</b></td><td><b>O(n)</b></td></tr>
 <tr><td>卷积</td><td>O(k · n · d²)</td><td>O(1)</td><td>O(log_k n)</td></tr>
 </tbody></table>
-<p class="sub">⭐ 这张表是 <b>Transformer 作者自己算的</b>（arXiv 1706.03762 表 1），不是后人的归纳。
-  中间那一列<b>「串行步数」</b>就是全部答案：<b>RNN 是 O(n)，注意力是 O(1)。</b></p>
-<p>那么「串行」在硬件上具体长什么样？——&nbsp;<b>同一块权重，被从 HBM 搬了 n 次。</b></p>
+<p class="sub">⭐ 这张表是 <b>Transformer 作者自己算的</b>（arXiv 1706.03762 表 1）。
+  <b>中间那一列就是全部答案。</b></p>
 __FIG_RNN_HW__
-<p>把账算出来（LSTM 的循环支路，隐藏维 <code>d</code>，batch <code>B</code>，BF16）：</p>
-<pre><code>权重块 [4d × d]      搬进来   4d · d · 2 字节
-乘上   [d × B]       算了     2 · 4d · d · B 次
-算术强度 = FLOPs / 字节  =  B      ← 跟 d 无关，就等于 batch size</code></pre>
-<p>而 Transformer 训练时，同一块权重<b>只搬一次</b>，配的是 <code>[d × (n·B)]</code>，
-  算术强度是 <b><code>n·B</code></b>。<b>整整差了一个 n。</b></p>
-<p>拐点在哪：TPU v7 官方每芯片 FP8 <b>4614 TFLOP/s</b>，BF16 取一半 ＝ <b>2307</b>；
-  官方 HBM 带宽 <b>7.37 TB/s</b>。<code>2307 ÷ 7.37 = <b>313 FLOP/byte</b></code>。</p>
-<div class="note danger"><p>⛔ <b>也就是说：要把一块 v7 喂饱，LSTM 的 batch 得开到 313 以上。</b>
-  而 Vaswani 引言那句原话讲的正是它的反面 ——&nbsp;
-  <em>「This <b>inherently sequential</b> nature precludes parallelization within
-  training examples, which becomes critical at longer sequence lengths, as
-  <b>memory constraints limit batching across examples</b>.」</em><br>
-  <b>序列一长，显存就不让你把 batch 开大</b> ——&nbsp;而 batch 恰恰是 RNN 唯一的算术强度来源。
-  <b>两头堵死。</b></p></div>
-<p>硬件侧还有一份更直白的一手说法。NVIDIA 的《Recurrent Layers User's Guide》里写着两句：</p>
-<ul>
-<li>每个门每一相的计算「is equivalent to a <b>GEMM with one dimension of one</b>」
-  ——&nbsp;<b>名义上是矩阵乘，实际是矩阵乘向量</b>；</li>
-<li>「We can combine these GEMMs over the minibatch size, <b>but not over different
-  sequence steps</b>」——&nbsp;<b>这就是「为什么串行」的硬件版原文</b>：
-  能沿 batch 拼，<b>不能沿时间拼</b>。</li>
-</ul>
-<div class="note ok"><p>⭐ <b>当年的解法值得记一笔：persistent RNN</b> ——&nbsp;
-  既然权重每步都要读，那就<b>把它钉在片上不搬</b>。
-  <b>这跟七年后 FlashAttention「不让中间结果落 HBM」是同一个念头</b>，
-  只是换了个算子（<a href="#s二">见 §二</a>）。
-  <b>「搬运比计算贵」这条规律，在这门课里会反复出现。</b></p></div>
+<div class="note danger"><p>⛔ <b>两头堵死</b>：batch 是它唯一的算术强度来源，
+  而 Vaswani 引言那句原话说的正是另一头 ——&nbsp;<em>「memory constraints limit batching
+  across examples」</em>：<b>序列一长，显存就不让你把 batch 开大。</b></p></div>
 
-<h3>0.4 三个痛点，以及它们各自通向哪</h3>
-<p>把上面的东西收成三条。<b>这三条就是后面三十年的路线图。</b></p>
+<h3>0.3 解码时，Transformer 又变回了这个形状</h3>
+<p><b>这是本节的落点，也是整个专题的舞台。</b></p>
+__FIG_RNN_DECODE__
+<div class="note info"><p>⭐⭐ Ⓐ 和 Ⓒ 都是「一步一个，每步搬一遍权重」。
+  <b>唯一的区别是每步还得额外搬什么</b>：<br>
+  RNN 搬的是一个<b>固定大小</b>的状态；Transformer 搬的是一路<b>线性变长</b>的 KV cache
+  ——&nbsp;<b>128K 时它能比权重本身还大</b>（下一节算给你看）。<br>
+  ⭐ <b>后面三个旋钮拧的全是同一件事：让这一行每步要搬的东西变小。</b></p></div>
+
+<h3>0.4 三个痛点，各自通向哪</h3>
 __FIG_RNN_PAIN__
-<p><b>第 ③ 条是注意力的出生证明。</b>Sutskever 2014 的 seq2seq 把整句话编码成
-  「a vector of a <b>fixed dimensionality</b>」，解码器只能盯着这一个向量翻译。
-  句子一长就装不下 ——&nbsp;于是 Bahdanau 2014 说：<b>别只看最后那个向量，
-  让解码的每一步回头去看整段编码，自己挑该看哪里。</b></p>
-<div class="note warn"><p>⚠️ <b>一个常见的张冠李戴：「固定长度向量是瓶颈」这句话不是 Sutskever 说的。</b>
-  他那篇的摘要只是描述做法（映射到一个固定维度的向量），
-  <b>「这是个瓶颈」是 Bahdanau 那篇反过来指出的</b>。
-  <b>别把后人的批评安到原作者头上</b> ——&nbsp;这门课自己的规矩。</p></div>
-<p>而 <b>第 ① 条</b>后来被<b>反着又走了一遍</b>，这才是本专题真正的主脊：</p>
-<div class="note info"><p>Transformer 用<b>放弃状态</b>换来了并行度，代价是那个 O(N²) 的注意力矩阵。<br>
-  <b>线性注意力和 Mamba 这一支，是想把状态请回来</b> ——&nbsp;因为<b>有状态才有 O(N)</b>。<br>
-  ⛔ 但状态一回来，<b>串行也跟着回来了</b>。于是又得想办法把并行度找回来：
-  <b>chunk 化、parallel scan</b>。Martin &amp; Cundy 2018（arXiv 1709.04057）证明了
-  <b>只有「线性」的循环依赖才扫得动</b> ——&nbsp;
-  <b>这就是后面 DeltaNet / GDN / KDA 的公式为什么必须长成那个样子。</b></p></div>
+<div class="note warn"><p>⚠️ <b>一个常见的张冠李戴：「固定长度向量是瓶颈」不是 Sutskever 说的。</b>
+  他那篇只是描述做法（映射到「a vector of a fixed dimensionality」）；
+  <b>「这是个瓶颈」是 Bahdanau 那篇的原话</b>（arXiv 1409.0473：
+  <em>「we conjecture that the use of a fixed-length vector is a bottleneck」</em>）。
+  <b>别把后人的批评安到原作者头上。</b></p></div>
 
-<h3>0.5 于是下一步</h3>
+<details class="aside"><summary>📌 这一节的出处清单（全部一手核过）</summary>
+<ul>
+<li><b>Elman 1990</b>《Finding Structure in Time》——&nbsp;context units「copied … on a
+  one-for-one basis, with fixed weight of 1.0」。</li>
+<li><b>Bengio, Simard, Frasconi 1994</b>——&nbsp;梯度消失；<b>Hochreiter &amp; Schmidhuber 1997</b>——&nbsp;LSTM。</li>
+<li><b>Bahdanau et al. 2014</b>（arXiv 1409.0473）——&nbsp;「fixed-length vector is a bottleneck」。</li>
+<li><b>Vaswani et al. 2017</b>（arXiv 1706.03762）——&nbsp;引言「This <b>inherently sequential</b>
+  nature precludes parallelization within training examples…」＋ 表 1 三列。</li>
+<li><b>NVIDIA《Recurrent Layers User's Guide》</b>——&nbsp;「a GEMM with <b>one dimension of one</b>」；
+  「can combine these GEMMs over the minibatch size, <b>but not over different sequence steps</b>」。</li>
+<li><b>Martin &amp; Cundy 2018</b>（arXiv 1709.04057）——&nbsp;非线性依赖挡住并行，
+  <b>只有线性依赖能用 parallel scan 扫</b>，实测最高 9× 加速。</li>
+<li>拐点 313 FLOP/byte ＝ v7 官方每芯片 FP8 4614 TFLOP/s（BF16 取一半 2307）÷ 官方 HBM 7.37 TB/s。</li>
+</ul></details>
+
+<h3>0.5 于是下一节</h3>
 <p>RNN 疼在三处：<b>算不快、记不住、装不下</b>。
   注意力最早只解决了第三条，<b>而且是作为 RNN 的一个附件出现的</b>。</p>
-<p>真正的转折在 2017 年：<b>有人问，既然那个附件这么好使，能不能把 RNN 整个扔掉，只留附件？</b>
-  <b>——&nbsp;这就是下一节，MHA。</b></p>
+<p>2017 年有人问：<b>既然这个附件这么好使，能不能把 RNN 整个扔掉，只留附件？</b></p>
 <hr>
 </div></section>
+
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>一切从长上下文说起 —— 两条独立的动机</h2></div>
 <p><b>这两条要分开讲。</b> 它们指向同一批技术，但出发点完全不同， 混在一起讲就变成了名词罗列。</p>
 <h3>1.1 线索 A · 硬件账算不过来</h3>
@@ -760,18 +723,22 @@ FIGS = {
     #   ⛔ 别合并 —— 第一张是语义、第二张是性能，两种坐标系。
     "__FIG_RNN_UNROLL__": ("fig-rnn-unroll", "fig3-rnn-unroll.svg",
         'topic03-fig-rnn.py',
-        '⭐ <b>左边是 Elman 1990 的原始画法</b>：那条虚线是「把隐藏层原样抄一份」，'
-        '<b>固定权重 1.0、不参与训练</b> —— 整个循环就靠这一条硬接线。'
-        '<b>右边是同一个东西沿时间展开</b>。'
-        '<b>竖着的箭头彼此不相干，横着那一根才是卡住一切的地方。</b>'),
+        '⭐ <b>同一个东西的两种画法。</b>看完只要带走一件事：'
+        '<b>竖着的箭头一直可以并行，被卡住的只有横着那一根</b> —— '
+        '<b>后面所有「让它变快」的努力，动的都只是那一根。</b>'),
 
     "__FIG_RNN_HW__": ("fig-rnn-hw", "fig3-rnn-hw.svg",
         'topic03-fig-rnn.py',
-        '⭐ <b>RNN 慢不是因为算得多，是因为搬得多</b> —— 同一块权重被从 HBM 搬了 n 次，'
-        '而每次只配一条 batch 那么窄的向量。'
-        '<b>算术强度等于 batch size，跟隐藏维一点关系都没有</b>；'
-        'Transformer 训练时同一块权重只搬一次，算术强度是 <code>n·B</code>。'
-        '<span class="sub">拐点 313 FLOP/byte 由 v7 官方 FP8 4614（BF16 取半 2307）÷ 7.37 TB/s 算得。</span>'),
+        '⭐ <b>这张图要带走的是那个「跟 d 无关」</b>：不管隐藏维是 512 还是 8192，'
+        '<b>RNN 每一步的算术强度就等于 batch size</b>。'
+        '<b>它意味着「把模型做小」根本救不了 RNN。</b>'),
+
+    "__FIG_RNN_DECODE__": ("fig-rnn-decode", "fig3-rnn-decode.svg",
+        'topic03-fig-rnn.py',
+        '⭐⭐ <b>本节的落点。</b>Ⓐ 和 Ⓒ 是同一个形状 —— 一步一个 token，每步把权重搬一遍。'
+        '<b>区别只在每步还得额外搬什么：RNN 是一个固定大小的状态，'
+        'Transformer 是一路线性变长的 KV cache。</b>'
+        '<b>整个专题三都发生在 Ⓒ 这一行上。</b>'),
 
     "__FIG_RNN_PAIN__": ("fig-rnn-pain", "fig3-rnn-pain.svg",
         'topic03-fig-rnn.py',
