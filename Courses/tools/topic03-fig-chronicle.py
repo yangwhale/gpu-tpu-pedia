@@ -391,22 +391,14 @@ t(0, 57, '线性注意力想赎回 O(N)，代价是重新引入一个<tspan font
 TY = 72
 _PANEL = len(p)
 p.append("")   # 面板底框占位，高度算完再补
-t(16, TY + 24, '一、编年史 ——&#160;四条支线，各修各的毛病', "svglbl", "#202124", size=13)
+t(16, TY + 24, '一、编年史 ——&#160;四条支线，各修各的毛病'
+               '<tspan fill="%s" font-weight="400" style="font-size:11px">'
+               '　（横轴按每年的内容疏密压缩过：没有事件的年份收窄、'
+               '事件多的年份放宽 ——&#160;<tspan font-weight="700">间距不代表时间长短</tspan>）'
+               '</tspan>' % GY, "svglbl", "#202124", size=13)
 
-Y0, Y1 = 2014, 2026
-AX0, AXW = 150, W - 150 - 30
-def xf(y, frac=0.0):
-    return AX0 + int((y - Y0 + frac) / (Y1 - Y0 + 1) * AXW)
-
-# 年份刻度
-AXY = TY + 46
-p.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
-         % (AX0 - 8, AXY, W - 24, AXY, GY))
-for y in range(Y0, Y1 + 1):
-    x = xf(y, 0.5)
-    p.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
-             % (x, AXY - 4, x, AXY + 4, GY))
-    t(x, AXY - 9, "'%s" % str(y)[2:], fill=GY, anchor="middle", size=10)
+# ⛔ 横轴的刻度定义**挪到 LANES 之后**了 —— 每年占多宽是从那一年的标签量出来的，
+#    所以必须先有 LANES 才能算轴。别再把它移回来。
 
 # ⛔ 2026-09-07 重排。初版每个事件带一句说明，结果同年多事件时说明互相糊住
 #    （2024 的 MLA 和「可并行 DeltaNet」直接叠在一起），2026 那几个还冲出右边界。
@@ -444,6 +436,50 @@ LANES = (
         (2022, "⭐ FlashAttention"),
     ]),
 )
+
+# ══════════ 横轴：每年占多宽，由那一年最宽的标签决定 ══════════════════
+# ⛔ 2026-09-07 重算。原先是**每年等宽**（AXW÷13 ≈ 106px），后果是
+#    2015 / 2016 / 2018 三个一件事都没有的年份白占了 318px，而 2024 和 2026
+#    那几年的标签挤在 106px 里，只能靠贪心分行一层层往下堆。
+#    现场原话：「这个地方太密集，能不能把这个尺度调一调？中间没有内容的年份收一收。」
+# ⭐ 判据跟前面几次是同一条：**每年该多宽，是从那一年最宽的标签推出来的，
+#    不是手填的常量。** 以后加事件、改名字，轴自己会跟着变；一旦写死某个
+#    年份的宽度，就会重演「加一行就撞车」那一类问题。
+# ⛔ 代价必须写在图上：这样一来**横向间距不再代表时间长短**，
+#    所以泳道面板标题后面挂了一句说明。别把那句删掉。
+Y0, Y1 = 2014, 2026
+AX0, AXW = 150, W - 150 - 30
+LEAD, GAP, YR_MIN = 12, 10, 30    # 刻度左侧留白 / 标签右侧留白 / 空年份的最小宽度
+_need = {y: 0 for y in range(Y0, Y1 + 1)}
+for (_nm, _co, _fi, _evs) in LANES:
+    for (_yr, _lab) in _evs:
+        _need[_yr] = max(_need[_yr], wpx(_lab))
+_ideal = {y: (YR_MIN if _need[y] == 0 else LEAD + 6 + _need[y] + GAP)
+          for y in range(Y0, Y1 + 1)}
+# 理想宽度之和通常跟 AXW 差一点，整体等比缩放一次贴合，不裁也不留缝。
+_k = AXW / float(sum(_ideal.values()))
+_off, _acc = {}, 0.0
+for y in range(Y0, Y1 + 1):
+    _off[y] = _acc
+    _acc += _ideal[y] * _k
+
+
+def xf(y):
+    """年份 → 刻度像素。⛔ **不是线性的** —— 每年占多宽由那一年最宽的标签决定。"""
+    return AX0 + int(_off[y] + LEAD * _k)
+
+
+AXY = TY + 46
+p.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
+         % (AX0 - 8, AXY, W - 24, AXY, GY))
+for y in range(Y0, Y1 + 1):
+    x = xf(y)
+    # 空年份的刻度画淡一点：那一段是被压掉的，不该看着跟有内容的年份一样重。
+    _c = "#bdc1c6" if _need[y] == 0 else GY
+    p.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1"/>'
+             % (x, AXY - 4, x, AXY + 4, _c))
+    t(x, AXY - 9, "'%s" % str(y)[2:], fill=_c, anchor="middle", size=10)
+
 LY = AXY + 14
 # ⛔ 第三轮。前两版分别栽在：①带说明文字互相糊；②只留名字但相邻年份仍撞；
 #    ③改成上下两行交错之后，泳道③ 里 2024 和 2026 又落回同一行、又撞上了
@@ -457,7 +493,7 @@ def _rows(evs):
     """把事件按实际宽度贪心分行，返回 [(事件, 行号)] 和总行数。"""
     ends, out = [], []
     for (yr, lab) in evs:
-        x = xf(yr, 0.5)
+        x = xf(yr)
         w = wpx(lab)
         right = x + w + 10 > W - 30
         x0 = (x - 6 - w) if right else (x + 6)
@@ -482,7 +518,7 @@ for (name, col, fill, evs), (y, h, placed) in zip(LANES, LANE_Y):
     box(4, y, W - 28, h, fill, col, 5)
     t(14, y + 15, name, fill=col, bold=True)
     for (yr, lab, r, right) in placed:
-        x = xf(yr, 0.5)
+        x = xf(yr)
         ty = y + 28 + r * 17
         p.append('<circle cx="%d" cy="%d" r="4" fill="%s"/>' % (x, y + 4, col))
         p.append('<line x1="%d" y1="%d" x2="%d" y2="%d" stroke="%s" stroke-width="1.2"/>'
