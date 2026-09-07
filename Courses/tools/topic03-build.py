@@ -103,6 +103,7 @@ BODY = '''<section id="x0"><div class="wrap"><div class="stn"><h2>⏱ 一小时�
 <p>在拿尺子之前，先看一眼<b>全景</b>：这些名词是什么时候、按什么顺序冒出来的，
   以及今天各家<b>实际上是怎么配的</b>。</p>
 __FIG_CHRONICLE__
+__TABLE_MODELS__
 <p class="sub">⭐ <b>这张图有两个重心。</b>上半是<b>编年史</b>——&nbsp;
   四条支线各修各的毛病，看完你会发现<b>每一步都是在修上一步暴露的问题，没有一步是凭空发明</b>。
   下半是<b>各家的混合配比</b> ——&nbsp;<b>所有人都落在 3:1 ～ 7:1 这个区间里</b>，
@@ -670,10 +671,7 @@ FIGS = {
         '⭐ <b>搞层间混合的那十家，配比无一例外落在 3:1 ～ 7:1</b>；'
         '而扫一眼颜色就会发现，<b>只有 GLM-5.3-Flash 是「蓝 ＋ 红」</b> ——&nbsp;'
         '它配的那层「贵的」本身已经是稀疏的了。'
-        '⭐⭐ <b>最后那一列是 128K 时的 KV cache，按各家 config 算出来的</b>：'
-        '<b>从 GPT-3 的 576 GiB 到 DeepSeek-V4 的 697 MiB，六年 847 倍</b> ——&nbsp;'
-        '而这 847 倍是<b>三个旋钮各贡献了一段</b>，不是哪一个单独拧出来的。'
-        '<span class="sub">信息截至 2026-09-07，全部现搜；出处见图脚。</span>'),
+        '<span class="sub">信息截至 2026-09-07，全部现搜。下半那张 39 行的模型表已经改成<b>可排序的 HTML 表</b>，就在图下面。</span>'),
 
     # ── 贯穿全篇的主线图：同一张图画五遍，每次只点亮被改动的那一处 ──────
     # ⭐ 这组图的教学装置在于「五张除了高亮处完全一样」，所以图注也要一致地
@@ -714,6 +712,16 @@ FIGS = {
 }
 
 _html = "\n".join(out)
+
+# ⭐ 模型表是 HTML 不是 SVG（表头可排序），所以不走 FIGS 那条 figure 通道。
+# ⛔ 硬失败：表缺了宁可构建挂掉，也不要悄悄出一份没有编年史表的教材。
+_tbl = os.path.join(HERE, "fig3-models-table.html")
+assert os.path.isfile(_tbl), "缺 fig3-models-table.html —— 先跑 `python3 topic03-table-models.py`"
+assert "__TABLE_MODELS__" in _html, "正文里没有 __TABLE_MODELS__ 占位符"
+_html = _html.replace("__TABLE_MODELS__",
+                      '<div class="wrap">%s</div>'
+                      % io.open(_tbl, encoding="utf-8").read())
+
 for ph, (fid, fn, src, cap) in FIGS.items():
     fp = os.path.join(HERE, fn)
     # ⛔ 硬失败：图缺了宁可构建挂掉，也不要悄悄出一份少图的教材。

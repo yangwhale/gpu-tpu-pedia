@@ -1,0 +1,364 @@
+# -*- coding: utf-8 -*-
+"""专题三 · 模型编年史的**数据源**——&nbsp;两个产物共用这一份。
+
+⭐⭐ **为什么单独抽成一个模块。** 2026-09-07 现场要求「表头你点哪个就按哪个排序」，
+   而原先整张表画在 SVG 里 ——&nbsp;**SVG 的文字是死的：点不了、搜不了、复制不了**。
+   39 行的参照表本来就不该是图。于是拆成两个产物：
+
+     · `topic03-fig-chronicle.py`   →&nbsp;上半时间轴，**那是真·图**，留 SVG
+     · `topic03-table-models.py`    →&nbsp;下半模型表，**那是真·表**，出 HTML
+
+   ⛔ 两边都要读同一份 ROWS。**所以数据必须只有一份** ——&nbsp;抄成两份的话，
+     改了一边忘了另一边，两个产物会静默地漂开，而且谁都不报错。
+     （这跟专题二 §0–§2 那批图当初「页面里一份、脚本里一份」是同一类事故。）
+
+📌 改数据改这里。画法改各自那个脚本。
+"""
+import math
+
+# 供画图脚本沿用的基础色
+BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
+PU, CY, BR = "#8430ce", "#00838f", "#7a5000"
+
+
+def wpx(s, size=11.5):
+    """粗估纯文本像素宽——&nbsp;CJK 约一个字号宽，ASCII 约一半多。"""
+    n = 0.0
+    for ch in s:
+        n += 1.0 if ord(ch) > 0x2E80 else 0.55
+    return int(n * size)
+
+
+# ── 一个类型一个颜色。同族相近色相，异族拉开 ──────────────────────────
+AMB, ORG, DKR = "#f9ab00", "#e8710a", "#a50e0e"
+TYPE_COL = {
+    # 全注意力一族 —— 黄／橙
+    "MHA": AMB, "MQA": AMB, "GQA": AMB, "FULL": AMB, "gAT": AMB,
+    "MLA": ORG, "gMLA": ORG,
+    # 线性一族 —— 冷色
+    "KDA": BL, "GDN": "#12b5cb", "LTN": PU,
+    # ⭐ Mamba／RWKV 也归线性一族（冷色）——&nbsp;它们不是"另一支"，
+    #   Gated DeltaNet 那篇论文的标题就叫《Improving Mamba2 with Delta Rule》。
+    "Mamba": "#3949ab", "RWKV": "#00695c",
+    # 窗口 —— 青
+    "SWA": CY,
+    # 稀疏一族 —— 红
+    "DSA": RD, "gDSA": RD, "MSA": RD, "CSA": RD, "HCA": DKR,
+}
+# ── 同一家用同一个底色 ────────────────────────────────────────────
+# ⭐ 现场要求：「同属于一家的话，应该给它标成一样的背景颜色，这样好区分。」
+#   ⭐⭐ 这条的价值在于：表是**按时间排**的，同一家的行天然被打散在各处。
+#     底色一上，「某某家走了什么路」这条线不用眼睛去找，它自己浮出来。
+# ⛔ 底色必须**很淡**——它是分组线索，不是内容。抢了格子的颜色就本末倒置了。
+#   （按名字前缀匹配，第一个命中为准。加新行时若厂商没命中，会落到中性灰。）
+VENDOR = [
+    ("GPT-3",    "OpenAI",   "#5f6368", "#f1f3f4"),
+    ("PaLM",     "Google",   "#1e8e3e", "#e6f4ea"),
+    ("Llama",    "Meta",     "#546e7a", "#eceff1"),
+    ("DeepSeek", "DeepSeek", "#00838f", "#e0f2f1"),
+    ("MiniMax",  "MiniMax",  "#c2185b", "#fce4ec"),
+    ("Qwen",     "阿里 千问", "#e8710a", "#fff3e0"),
+    ("Kimi",     "月之暗面",  "#5e35b1", "#ede7f6"),
+    ("小米",      "小米",     "#f9ab00", "#f9fbe7"),
+    ("GLM",      "智谱",     "#8430ce", "#f3e5f5"),
+    ("Ling",     "蚂蚁 百灵", "#0288d1", "#e1f5fe"),
+    ("混元",      "腾讯 混元", "#d84315", "#fbe9e7"),
+    # ⛔ 2026-09-07 补：原先 2024 之后几乎全是中国模型，这是一份对外教材里
+    #   很明显的偏斜。Gemma／gpt-oss／Llama 4／Jamba／Mistral 全都补进来了。
+    ("Gemma",    "Google",   "#1e8e3e", "#e6f4ea"),
+    ("gpt-oss",  "OpenAI",   "#5f6368", "#f1f3f4"),
+    ("Mistral",  "Mistral",  "#c2410c", "#fff1e6"),
+    ("Jamba",    "AI21",     "#7b1fa2", "#f6e9fb"),
+    ("RWKV",     "RWKV",     "#00695c", "#e0f2f1"),
+]
+
+
+def vendor_of(name):
+    for key, label, ink, bg in VENDOR:
+        if key in name:
+            return label, ink, bg
+    return "", GY, "#fff"
+
+
+SPARSE = {"DSA", "gDSA", "MSA", "CSA", "HCA"}
+LINEAR = {"KDA", "GDN", "LTN", "Mamba", "RWKV"}
+# 简写 → 全名（写在「这一层 ＋ 那一层」那一列）
+FULLNAME = {
+    "MHA": "MHA", "MQA": "MQA", "GQA": "GQA", "FULL": "全注意力",
+    "gAT": "Gated Attention", "MLA": "MLA", "gMLA": "Gated MLA",
+    "KDA": "KDA", "GDN": "Gated DeltaNet", "LTN": "Lightning",
+    "Mamba": "Mamba", "RWKV": "RWKV",
+    "SWA": "SWA", "DSA": "DSA", "gDSA": "Gated DSA", "MSA": "MSA",
+    "CSA": "CSA", "HCA": "HCA",
+}
+
+# (时间, 模型, 一个循环的构成 [(简写, 几层)…], 备注)
+# ⛔ 只有一项 ＝ 每层同构，画成整条一色。
+# ══════════════════════════════════════════════════════════════════
+# KV cache：**算出来的，不是抄来的。** 公式写在这儿，参数来自各家 config，
+# 谁都可以拿去复算。⛔ 别把结果硬编码成常数 —— 那样改了层数它不会跟着动。
+#
+#   普通 MHA/GQA/MQA ：2（K 和 V 两份）× 层数 × 长度 × KV头数 × 头维 × 2 B
+#   MLA 一族         ：       层数 × 长度 × (kv_lora_rank ＋ rope 维) × 2 B
+#                       ——&nbsp;只存那个压缩过的潜向量，**所有头共用一份**
+#   线性层           ：**一个字节都不占**（状态是固定大小，跟长度无关），
+#                       所以「层数」这一项只数**有 KV 的那些层**
+#   DeepSeek-V4      ：特判。它 shared K=V（只存一份不是两份），
+#                       而且 CSA/HCA 存的是**压缩池**：长度 ÷ 压缩率
+#
+# ⚠️ 口径：长度取 128K、BF16、batch=1、不含任何量化。
+#    这几条一改，数就全变 —— 报 KV cache 的时候必须连口径一起报。
+SEQ, BPE = 131072, 2
+
+
+def kv_gib(spec):
+    """按 spec 算 128K 时的 KV cache（GiB）。spec 为 None 表示没核到 config。"""
+    if spec is None:
+        return None
+    kind = spec[0]
+    if kind == "gqa":
+        _, L, H, D = spec
+        return 2 * L * SEQ * H * D * BPE / 2 ** 30
+    if kind == "mla":
+        _, L, R = spec                 # L 只数带 KV 的层，线性层不算
+        return L * SEQ * R * BPE / 2 ** 30
+    if kind == "none":
+        return 0.0                     # 纯 RNN／SSM：只有固定大小的状态，没有 KV cache
+    if kind == "swahyb":
+        # 小米那一族：n_full 层全注意力 ＋ n_swa 层滑窗（窗口 win，只存 win 个 token）
+        # ⚠️ 它的 K 和 V 维度**不一样**（QK 192 / V 128），所以这里是 qk+v 相加，
+        #    不是像 GQA 那样乘 2。⛔ 照抄 GQA 的 ×2 会算错。
+        _, n_full, n_swa, kvh_f, kvh_s, qk, v, win = spec
+        ent = n_full * SEQ * kvh_f + n_swa * min(SEQ, win) * kvh_s
+        return ent * (qk + v) * BPE / 2 ** 30
+    if kind == "v4":
+        _, n_csa, n_hca, n_swa, D, m_csa, m_hca, win = spec
+        # shared K=V → 每个条目只存一份；CSA/HCA 存压缩池；每层另挂一条滑窗支路
+        ent = (n_csa * (SEQ // m_csa) + n_hca * (SEQ // m_hca)
+               + (n_csa + n_hca + n_swa) * win)
+        return ent * D * BPE / 2 ** 30
+    raise ValueError(kind)
+
+
+def kv_fmt(g):
+    if g is None:
+        return "—"
+    if g >= 100:
+        return "%d GiB" % round(g)
+    if g >= 10:
+        return "%.0f GiB" % g
+    if g >= 1:
+        return "%.1f GiB" % g
+    if g <= 0:
+        return "0（无 KV）"
+    return "%d MiB" % round(g * 1024)
+
+
+# 占得越多颜色越深 —— 一眼扫下来就是一条从深到浅的坡
+def kv_col(g):
+    if g is None:
+        return "#e8eaed"
+    for lim, c in ((100, "#7f0000"), (30, "#b31412"), (10, "#d93025"),
+                   (3, "#e8710a"), (1, "#f9ab00")):
+        if g >= lim:
+            return c
+    return "#1e8e3e"                   # 不到 1 GiB —— 已经是另一个量级了
+
+
+ROWS = [
+    # (时间, 模型, 循环构成, 上下文, KV 规格, 备注)
+    # ⛔ 上下文这一列**只填核到一手出处的**（多数是本轮直接读的 config.json）。
+    #   核不到就留「—」——&nbsp;宁可缺一格，不猜一格。
+    # ── 基线：每个机制配它首次出现的模型 ────────────────────────────
+    ("2020-05", "GPT-3　175B 稠密 · 96 层", [("MHA", 1)], "2K", ("gqa", 96, 96, 128),
+     "96 层全 MHA，96 头×128 维。<tspan font-weight=\"700\">基线：KV 按头数线性长，没有任何省法</tspan>"),
+    # ⚠️ PaLM 的头维取 256（多方公开复现一致；注意 48×256 ≠ d_model 18432，
+    #    这在 PaLM 里是有意的，Q 投影不与 d_model 对齐）。若按 384 算是 22 GiB，
+    #    量级与结论都不变。⛔ 这一格是本表**唯一一个非一手 config** 的。
+    ("2022-04", "PaLM　540B 稠密 · 118 层", [("MQA", 1)], "2K", ("gqa", 118, 1, 256),
+     "118 层，48 头<tspan font-weight=\"700\">共用 1 组 KV</tspan> ——&#160;第一次大规模砍 KV（Shazeer 2019）"),
+    ("2023-02", "Llama 1　65B 稠密 · 80 层", [("MHA", 1)], "2K", ("gqa", 80, 64, 128),
+     "Llama 一代还是纯 MHA。<tspan font-weight=\"700\">下一代才上 GQA</tspan> ——&#160;同一家、隔五个月"),
+    ("2023-07", "Llama 2　70B 稠密 · 80 层", [("GQA", 1)], "4K", ("gqa", 80, 8, 128),
+     "8 组 KV。MQA 砍太狠会掉质量，GQA 是折中（arXiv 2305.13245）"),
+    # ⭐⭐ SWA 进主流的第一枪。⛔ 原先表里 SWA 最早出现在 2026 的小米，那是错的。
+    ("2023-09", "Mistral 7B　7B 稠密 · 32 层", [("SWA", 1)], "32K",
+     ("swahyb", 0, 32, 0, 8, 128, 128, 4096),
+     "⭐ <tspan font-weight=\"700\">SWA 进主流的第一枪</tspan>：窗口 4096 ＋ GQA-8。<tspan font-weight=\"700\">KV 从此不随长度长</tspan>"),
+    # ⭐⭐⭐ 层间混合的开源起点。⛔ 原先表里最早是 2025-01 的 MiniMax-01，晚了十个月。
+    ("2024-03", "Jamba　52B/12B · 32 层", [("Mamba", 7), ("GQA", 1)], "256K",
+     ("gqa", 4, 8, 128),
+     "⭐⭐ <tspan font-weight=\"700\">层间混合的开源起点</tspan>：28 Mamba ＋ 4 注意力，<tspan font-weight=\"700\">配比 7:1 跟 MiniMax-01 一模一样，却早十个月</tspan>"),
+    ("2024-05", "DeepSeek-V2　236B/21B · 60 层", [("MLA", 1)], "128K", ("mla", 60, 576),
+     "不砍头，改低秩压缩。<tspan font-weight=\"700\">KV cache 降 93.3%</tspan>（论文口径：相当于只有 2.25 组的 GQA）"),
+    # ⭐⭐ 2026-09-07 现场点名要加：「毕竟我们第一讲是拿 DeepSeek v3 讲的，
+    #   所以这个锚点它很重要。」——&nbsp;专题一里提到 V3 二十一次，确实是那一讲的锚点。
+    # ⭐⭐⭐ 而且它跟上一行并排放，正好证出一条反直觉的事（现场自己推出来的）：
+    #   V2 是 236B、V3 是 671B，**参数差 2.8 倍，KV 却几乎一样**（8.4 vs 8.6 GiB）。
+    #   因为 MLA 的 KV 只跟「层数 × (kv_lora_rank ＋ rope 维)」走，
+    #   **跟模型多大、多少专家、hidden 多宽完全无关** ——&nbsp;60 层 vs 61 层、
+    #   lora rank 都是 512，所以只差那一层。**KV 跟参数量脱钩了。**
+    ("2024-06", "Gemma 2 27B　27B 稠密 · 46 层", [("SWA", 1), ("FULL", 1)], "8K",
+     ("swahyb", 23, 23, 16, 16, 128, 128, 4096),
+     "⭐ 谷歌开始交替：<tspan font-weight=\"700\">1:1，窗口 4096</tspan>。<tspan font-weight=\"700\">比小米早一年半</tspan>"),
+    ("2024-07", "Llama 3.1　405B 稠密 · 126 层", [("GQA", 1)], "128K",
+     ("gqa", 126, 8, 128),
+     "⛔ <tspan font-weight=\"700\">不上任何花招硬推到 128K 的代价</tspan>：63 GiB，比 Llama 2 还多"),
+    # ⭐ CLA（Cross-Layer Attention）是旋钮①里一个我原先完全没收的手法。
+    ("2024-11", "混元 Hunyuan-Large　389B/52B · 64 层", [("GQA", 1)], "128K",
+     ("gqa", 32, 8, 80),
+     "⭐ <tspan font-weight=\"700\">CLA：每 2 层共享同一份 KV</tspan>（config 里 cla_share_factor: 2）——&#160;<tspan font-weight=\"700\">旋钮①的第三种手法</tspan>"),
+    ("2024-12", "DeepSeek-V3　671B/37B · 61 层", [("MLA", 1)], "160K", ("mla", 61, 576),
+     "⭐ <tspan font-weight=\"700\">专题一的锚点模型。</tspan>跟 V2 只差 1 层、lora rank 一样，"
+     "<tspan font-weight=\"700\">所以参数差 2.8 倍而 KV 几乎相同</tspan>"),
+    # ── 三个旋钮各自的第一次 ────────────────────────────────────────
+    # ⭐⭐ 这一行和下面 M2 那一行**必须并排读**：同一家公司、同一批人，
+    #    01 用 7:1 线性混合做到 10M，M2 退回纯全注意力只剩 192K。差 50 倍。
+    # ⛔ 2026-09-07 现场质疑：「10M 的上下文是什么鬼，真的会那么长吗？」
+    #   查证结果：**我写错了。** 官方论文（arXiv 2501.08313）原话是
+    #   「can reach up to **1 million tokens during training** and
+    #    **extrapolate to 4 million tokens during inference**」。
+    #   config 里那个 `max_position_embeddings: 10240000` 是**位置编码的容量上限**，
+    #   官方从没声称过 10M。⭐⭐ 教训见落点⑥：**这一列读的是声明，不是能力。**
+    ("2025-01", "MiniMax-01　456B/45.9B · 80 层", [("LTN", 7), ("GQA", 1)], "4M", ("gqa", 10, 8, 128),
+     "⭐ 线性第一次上旗舰规模。<tspan font-weight=\"700\">训练 1M，推理外推 4M</tspan>"
+     "（config 那个 10,240,000 只是位置编码容量，别当能力读）"),
+    ("2025-03", "Gemma 3 27B　27B 稠密 · 62 层", [("SWA", 5), ("FULL", 1)], "128K",
+     ("swahyb", 10, 52, 16, 16, 128, 128, 1024),
+     "⭐⭐ <tspan font-weight=\"700\">5:1、窗口 1024</tspan>（config: sliding_window_pattern 6）——&#160;<tspan font-weight=\"700\">小米那个 5:1 不是首创</tspan>"),
+    ("2025-03", "RWKV-7 Goose　0.19B–2.9B · 纯 RNN", [("RWKV", 1)], "无限（理论）",
+     ("none",),
+     "⭐ <tspan font-weight=\"700\">唯一一行 KV 为零</tspan>：常数内存、常数单 token 推理时间。规模小，但它是<tspan font-weight=\"700\">纯 RNN 那一支还活着的证据</tspan>"),
+    ("2025-04", "Llama 4 Scout　109B/17B · 48 层", [("SWA", 3), ("FULL", 1)], "10M",
+     ("swahyb", 12, 36, 8, 8, 128, 128, 8192),
+     "块状局部 8192 配 1 层 NoPE 全局（iRoPE）。⚠️ <tspan font-weight=\"700\">声称 10M，又一个把容量当能力报的</tspan>"),
+    ("2025-04", "Qwen3-235B-A22B　235B/22B · 94 层", [("GQA", 1)], "40K",
+     ("gqa", 94, 4, 128),
+     "⭐ <tspan font-weight=\"700\">千问转线性之前的那一代</tspan>：纯 GQA-4，94 层，23.5 GiB"),
+    ("2025-09", "DeepSeek-V3.2-Exp　671B/37B · 61 层", [("DSA", 1)], "160K", ("mla", 61, 576),
+     "⭐ <tspan font-weight=\"700\">稀疏这一支的起点</tspan>：在 V3 上加 Lightning Indexer。⛔ <tspan font-weight=\"700\">KV 跟 V3 一个字节没差</tspan> ——&#160;稀疏省 FLOPs 不省 KV"),
+    ("2025-07", "Kimi K2　1T/32B · 61 层", [("MLA", 1)], "128K", ("mla", 61, 576),
+     "⭐ <tspan font-weight=\"700\">Kimi 上 KDA 之前的那一代</tspan>：纯 MLA，config 里架构名直接就是 DeepseekV3ForCausalLM"),
+    ("2025-07", "GLM-4.5　355B/32B · 92 层", [("GQA", 1)], "128K",
+     ("gqa", 92, 8, 128),
+     "⭐⭐ <tspan font-weight=\"700\">智谱上 DSA 之前的那一代</tspan>：92 层纯 GQA-8，<tspan font-weight=\"700\">46 GiB ——&#160;到 GLM-5 只剩 11 GiB，一代降 4 倍</tspan>"),
+    ("2025-08", "gpt-oss-120b　117B/5.1B · 36 层", [("SWA", 1), ("FULL", 1)], "128K",
+     ("swahyb", 18, 18, 8, 8, 64, 64, 128),
+     "⭐ <tspan font-weight=\"700\">OpenAI 首个开放权重</tspan>：1:1 交替、窗口 128 ＋ attention sink"),
+    ("2025-10", "Ling-1T（Ling 2.0）　1T/50B · 80 层", [("GQA", 1)], "32K",
+     ("gqa", 80, 8, 128),
+     "⭐⭐ <tspan font-weight=\"700\">Ling 2.6 就是从这一行迁移改造来的</tspan>：<tspan font-weight=\"700\">40 GiB → 1.4 GiB，降了 28 倍</tspan>"),
+    ("2025-09", "Qwen3-Next　80B/3B · 48 层", [("GDN", 3), ("gAT", 1)], "256K", ("gqa", 12, 2, 256),
+     "48 层 ＝ 36 线性 ＋ 12 全注意力（GQA-2，头维 256）"),
+    # ⭐⭐ 2026-09-07 现场追问：「所谓退回全注意力不大可能，全注意力就不可能有长上下文，
+    #    它肯定有什么 trade off。它是不是用了压缩注意力的 MLA 这种？」
+    #    去扒 MiniMax-M2/config.json，**对了一半，也纠正了一半**：
+    #    · 对的一半：它绝不是「什么都没做」。`num_attention_heads: 48` /
+    #      `num_key_value_heads: 8` →&nbsp;**GQA-8**；`rotary_dim: 64` 配
+    #      `head_dim: 128` →&nbsp;**partial RoPE，只转一半维度**。
+    #    · 纠正的一半：**它不是 MLA、也不是压缩注意力。** 没有 `kv_lora_rank`、
+    #      没有 indexer、`sliding_window: null`、`attn_type_list` 62 层全是 1。
+    #    ⭐⭐⭐ 这一问逼出了本图最重要的一条口径：
+    #      **「全注意力」是相对旋钮③（线性）说的，不是相对旋钮①（KV 存多少）说的。**
+    #      M2 退回的是③，①上它一直压着。三个旋钮正交，M2 就是活证据。
+    #    ⭐ 而「全注意力撑不起长上下文」这个直觉，被上下文那一列量化了：192K。
+    ("2025-10", "MiniMax M2　230B/10B · 62 层", [("GQA", 1)], "192K", ("gqa", 62, 8, 128),
+     "⛔ <tspan font-weight=\"700\">「退回全注意力」不等于什么都没做</tspan>：它是 GQA-8 ＋ partial RoPE。"
+     "但确实<tspan font-weight=\"700\">没有 MLA、没有稀疏</tspan>"),
+    ("2025-10", "Kimi Linear　48B/3B · 27 层", [("KDA", 3), ("MLA", 1)], "1M", ("mla", 7, 576),
+     "27 层 ＝ 20 KDA ＋ 7 MLA（<tspan font-weight=\"700\">末层强制 full，所以多一层</tspan>）。已用 NoPE"),
+    # ⭐ 小米这两行原先是「未核到」——&nbsp;config.json 被超长的量化字段截断了。
+    #   后来在**官方模型卡的 Model Summary 表**里拿到了全部参数，比 config 还全。
+    #   ⛔ 教训：**config.json 拿不到不等于数据不公开** —— 模型卡、技术报告、
+    #     推理框架的 recipe 页都可能有，别在第一条路堵死之后就写「未核到」。
+    # 📌 V2-Flash：48 层 ＝ 8 个 hybrid block ×（5 SWA ＋ 1 GA）＝ 40 SWA ＋ 8 GA。
+    #   头配置按**同代 MiMo-V2.5 那一列**（64 头 / GA 8 KV 头、SWA 4 KV 头 /
+    #   头维 QK 192、V 128 / 窗口 128）——&nbsp;这一格是**推算**，不是直读。
+    #   ⭐ 但有自洽锚点：模型卡自称「KV cache 省近 6×」，而 48 ÷ 8 ＝ 6，**对上了**。
+    ("2026-01", "小米 MiMo-V2-Flash　309B/15B · 48 层", [("SWA", 5), ("FULL", 1)], "256K",
+     ("swahyb", 8, 40, 8, 4, 192, 128, 128),
+     "48 层 ＝ 40 SWA ＋ 8 全注意力，窗口 128。"
+     "<tspan font-weight=\"700\">模型卡自称 KV 省近 6×，48÷8 正好是 6</tspan>"),
+    ("2026-02", "GLM-5　744B/40B · 78 层", [("DSA", 1)], "198K", ("mla", 78, 576),
+     "MLA ＋ DSA，78 层。<tspan font-weight=\"700\">GLM-5.1 是同一套架构</tspan>，只有后训练不同"),
+    ("2026-03", "Qwen3.5　397B/17B · 60 层", [("GDN", 3), ("gAT", 1)], "256K", ("gqa", 15, 2, 256),
+     "60 层 ＝ 45 线性 ＋ 15 全注意力，<tspan font-weight=\"700\">config 里 full_attention_interval: 4</tspan>"),
+    # 📌 V2.5-Pro 的参数是官方模型卡 Model Summary 直给的，不是推的：
+    #   70 层（10 全注意力 ＋ 60 SWA）、128 头 / 8 KV 头（GQA）、
+    #   头维 QK 192 ／ V 128、窗口 128、1M 上下文。
+    ("2026-04", "小米 MiMo-V2.5-Pro　1.02T/42B · 70 层", [("SWA", 6), ("FULL", 1)], "1M",
+     ("swahyb", 10, 60, 8, 8, 192, 128, 128),
+     "70 层 ＝ 60 SWA ＋ 10 全注意力，窗口还是 128 ——&#160;"
+     "<tspan font-weight=\"700\">1M 上下文里最省的一档</tspan>"),
+    ("2026-04", "DeepSeek-V4-Pro　1.6T/49B · 61 层",
+     [("HCA", 2), ("CSA", 1), ("HCA", 1), ("CSA", 1)], "1M",
+     ("v4", 30, 31, 0, 512, 4, 128, 128),
+     "⛔ 跟 Flash 不一样：<tspan font-weight=\"700\">前两层是 HCA 不是 SWA</tspan>（30 CSA ＋ 31 HCA）。<tspan font-weight=\"700\">1.6T 的模型，KV 不到 1 GiB</tspan>"),
+    ("2026-05", "DeepSeek-V4-Flash　284B/13B · 43 层",
+     [("SWA", 2), ("CSA", 1), ("HCA", 1), ("CSA", 1), ("HCA", 1)], "1M",
+     ("v4", 21, 20, 2, 512, 4, 128, 128),
+     "⭐ 前 2 层 SWA 引导，之后 <tspan font-weight=\"700\">CSA／HCA 严格交替</tspan>（21＋20）。"
+     "<tspan font-weight=\"700\">MLA 被换掉了</tspan>，底层是 shared-KV 的 MQA"),
+    ("2026-06", "GLM-5.2　744B/40B · 78 层", [("DSA", 1)], "1M", ("mla", 78, 576),
+     "⭐ ＋IndexShare：每四个稀疏层共用一个 indexer。<tspan font-weight=\"700\">198K → 1M 就是这一步</tspan>"),
+    ("2026-06", "Ling 2.6-1T　1T/63B · 80 层", [("LTN", 7), ("MLA", 1)], "256K", ("mla", 10, 576),
+     "⛔ 不是 KDA。而且是<tspan font-weight=\"700\">从 Ling-2.0 的 GQA 迁移改造</tspan>来的，不是从头训"),
+    ("2026-06", "MiniMax M3　428B/23B · 60 层", [("MSA", 1)], "1M", ("gqa", 60, 4, 128),
+     "⭐⭐ 60 层 GQA-4 ＋ 稀疏。<tspan font-weight=\"700\">它的 KV 比走 MLA 的 GLM-5.2 还大</tspan> ——&#160;<tspan font-weight=\"700\">稀疏省 FLOPs，不省 KV</tspan>"),
+    ("2026-07", "Kimi K3　2.8T/104B · 93 层", [("KDA", 3), ("gMLA", 1)], "1M", ("mla", 24, 576),
+     "93 层 ＝ 69 KDA ＋ 24 Gated MLA（<tspan font-weight=\"700\">末层 92、93 连着两层 full</tspan>）"),
+    ("2026-07", "混元 Hy3　295B/21B · 80 层", [("GQA", 1)], "256K", ("gqa", 80, 8, 128),
+     "⛔ 80 层全是 GQA-8 ——&#160;<tspan font-weight=\"700\">线性一层都没上</tspan>"),
+    ("2026-07", "Ling-3.0-flash　124B/5.1B · 42 层", [("KDA", 5), ("gMLA", 1)], "256K", ("mla", 7, 576),
+     "42 层 ＝ 35 KDA ＋ 7 MLA。<tspan font-weight=\"700\">跟 2.6 换了一支</tspan>；"
+     "同代 tiny 是 3:1，旗舰尚未发布"),
+    ("2026-08", "GLM-5.3　744B/40B · 78 层", [("DSA", 1)], "1M", ("mla", 78, 576),
+     "⚠️ <tspan font-weight=\"700\">旗舰版跟 5.2 是同一个 base，纯后训练，架构一个字没动</tspan>"),
+    ("2026-08", "混元 Hy4-preview　770B/49B · 78 层", [("gDSA", 1)], "1M", ("mla", 78, 576),
+     "78 层全稀疏 ＋ IndexCache（每 4 层只有 1 层自己算索引）"),
+    ("2026-08", "⭐ GLM-5.3-Flash　320B/18B · 45 层", [("KDA", 3), ("DSA", 1)], "1M", ("mla", 11, 576),
+     "45 层 ＝ 34 KDA ＋ 11 稀疏 MLA（NoPE）——&#160;"
+     "<tspan font-weight=\"700\">GLM 第一次线性和稀疏同锅</tspan>，全新的 base"),
+]
+
+# ⛔ 2026-09-07：一次补了 15 行，按锚点插入之后**日期顺序乱了**
+#   （2025-09 排到了 2025-07 前面）。
+# ⭐ 正确的修法不是去调锚点，是**让脚本自己排** —— 顺序是从数据推得出来的东西，
+#   就不该靠人手维护。这样以后新行插在哪儿都无所谓。
+# 📌 日期是 "YYYY-MM" 定长字符串，字典序即时间序；同月的按写入顺序（sort 稳定）。
+ROWS.sort(key=lambda r: r[0])
+_d = [r[0] for r in ROWS]
+assert _d == sorted(_d), "排序没生效"
+
+
+# ══════════════════════════════════════════════════════════════════
+# 下面几个是**排序键**：HTML 表点表头时按它们排。
+# ⛔ 排序键要从数据算，别在 HTML 里写死 ——&nbsp;写死就等于又抄了一份。
+CHEAP = LINEAR | {"SWA"}
+
+
+def cheap_frac(cyc):
+    """一个循环里「便宜的层」占多少。每层同构的行也能算：RWKV 是 1，MHA 是 0。"""
+    tot = sum(k for _, k in cyc)
+    return sum(k for t_, k in cyc if t_ in CHEAP) / float(tot)
+
+
+def ctx_tokens(s):
+    """把「128K」「4M」这类显示值换成数字，只用于排序。"""
+    if s.startswith("无限"):
+        return 1 << 40                 # 纯 RNN：理论无限，排最后
+    if s == "—":
+        return -1                      # 没核到的排最前（不假装它小）
+    n = float(s[:-1])
+    return int(n * (1024 if s.endswith("K") else 1024 * 1024))
+
+
+def vendor_key(mdl, tm):
+    """按厂商分组，**组内按时间**。现场说的「按模型名字也就是类别排序」就是这个。
+
+    ⛔ 组内别按名字排 —— 字典序会把 "DeepSeek-V3.2-Exp" 排到 "DeepSeek-V3" 前面
+      （'.' 的码位小于全角空格）。⭐ 而且按时间更有用：
+      同一家从上到下读下来就是**这家走过的路**。
+    """
+    lab, _ink, _bg = vendor_of(mdl)
+    return (lab, tm)
