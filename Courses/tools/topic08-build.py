@@ -35,6 +35,7 @@ CSS 从专题二 L300 抄
 「同一个职责不要两个载体」——&nbsp;各留一份必然走散。
 """
 import io
+import re
 import os
 
 HERE = os.path.dirname(os.path.abspath(__file__))
@@ -44,8 +45,47 @@ OUT = os.path.join(HERE, "..", "WebPages", "topic-08.html")
 _src = io.open(SRC, encoding="utf-8").read()
 
 # 从专题二 L300 抽 <head>（含 CSS），把标题换掉
+# ⛔⛔ 2026-09-07 修一个**静默了很久**的 bug：整个 <head> 是从专题二 L300 搬的，
+#    原先靠一句 `head.replace("<title>TPU 与 GPU", "<title>注意力演进")` 改标题。
+#    **那个模式根本匹配不上** ——&nbsp;L300 的真实标题是
+#    `<title>专题二 · TPU 与 GPU（L300 · 完整版）</title>`，中间多了「专题二 · 」。
+#    于是这一页在浏览器标签上一直显示「专题二 · TPU 与 GPU（L300 · 完整版）」，
+#    og:title / og:description / og:url / og:image 也全是专题二的 ——&nbsp;
+#    **分享出去的卡片标题、摘要、跳转全指向另一讲。**
+#
+# ⭐⭐ 形状：**`str.replace` 匹配不上时是静默的**，不报错、不返回失败标志，
+#    就是原样返回。**「改了」和「没改成」在代码里长得一模一样。**
+#    ⛔ 判据：**任何「替换模板里某一段」的操作，都必须断言它真的改了。**
+#    下面 `_sub()` 就是干这个的 —— 换不到直接让构建挂掉。
+#
+# 📌 顺带发现 `img/og-topic-02.jpg` **这个文件根本不存在**（img/ 里只有
+#    og-topic-01.jpg）。所以那条 og:image 是死链，专题二 L300 自己也带着。
+#    这一页直接把 og:image 摘掉 ——&nbsp;**没有图，好过指一张 404 的图**。
+
+
+def _sub(text, pattern, repl, what):
+    """替换 + 断言真的替换了。⛔ 不要退回裸的 str.replace。"""
+    new, n = re.subn(pattern, repl, text, count=1)
+    assert n == 1, "改不动 %s —— 模板变了？（模式：%s）" % (what, pattern)
+    return new
+
+
 _head = _src[:_src.index("</style>") + len("</style>")]
-_head = _head.replace("<title>TPU 与 GPU", "<title>精度与量化", 1)
+_head = _sub(_head, r"<title>.*?</title>", "<title>专题八 · 精度与量化</title>", "<title>")
+_head = _sub(_head, r'<meta property="og:title" content="[^"]*">',
+            '<meta property="og:title" content="精度与量化 · 每往下压一档，省一半显存和带宽">', "og:title")
+_head = _sub(_head, r'<meta property="og:description" content="[^"]*">',
+            '<meta property="og:description" content="代价是数值上的安全边际 —— 这一课讲这条边界具体在哪。">', "og:description")
+_head = _sub(_head, r'<meta property="og:url" content="[^"]*">',
+            '<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-08.html">', "og:url")
+# ⛔ og:image 曾经指向一个不存在的文件（img/og-topic-02.jpg），整条摘掉。
+# ⭐⭐ 这一条**故意不用 _sub**：它是「有就清掉」，不是「必须换成什么」。
+#   2026-09-07 实测：源模板那条已经先修好了，于是这里没得摘 —— _sub 当场断言失败。
+#   ⛔ 判据：**「必须改到」用断言，「有就清理」不用。** 把两者混在一起，
+#     护栏会在上游修好之后反过来把构建搞挂。
+_head = re.sub(r'\s*<meta property="og:image"[^>]*>(\s*<meta property="og:image:(width|height)"[^>]*>)*',
+            "", _head)
+assert "TPU 与 GPU" not in _head and "topic-02" not in _head, "head 里还有专题二的残留"
 
 # ⛔ 专题二那份 CSS 里 p 只有 margin-bottom，没有 margin-top，而 li 是 flex。
 #    于是紧跟在 </ul> 后面的段落会**贴到最后一个 bullet 上**，读起来像是

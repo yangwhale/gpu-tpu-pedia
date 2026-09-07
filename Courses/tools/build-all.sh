@@ -107,6 +107,13 @@ python3 topic02-lint-xref.py
 step "讲义覆盖体检（教材有的小节，讲义讲了没有）"
 python3 topic02-lint-coverage.py
 
+# ⭐ 第六条体检：**<head> 里的元信息**。前五条查的都是页面上看得见的东西，
+# 而标题只出现在浏览器标签、og 只出现在分享卡片上 —— ⛔ 这类错能错很久没人发现。
+# 2026-09-07 首次跑出：专题三、专题八的标题和四条 og 全是从专题二整段搬过来的，
+# 因为那句改标题的 str.replace 模式匹配不上，而**匹配不上是静默的**。
+step "head 元信息体检（标题 / og 指向 / og 图存在）"
+python3 topic02-lint-meta.py
+
 printf '\n\033[1m▸ 产物\033[0m\n'
 for f in topic-01.html topic-02-L300.html topic-02.html \
          topic-03.html topic-08.html \
