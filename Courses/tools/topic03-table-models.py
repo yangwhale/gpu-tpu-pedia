@@ -279,7 +279,18 @@ _wtypes = sorted({t for r in _win for t, _ in r[2]})
 _newin = [t for t in _wtypes if _first[t] >= _W0]      # 窗口内才首发的机制
 
 
-LAND = ("""<div class="land"><p class="lh">⭐ 这张表一眼能看出八件事
+# ⛔⛔ 2026-09-07 折叠。现场指着这一整块问：「这些乱七八糟的字不应该折叠起来吗？」
+# ⭐⭐ 该，而且这是**给整门课立的规矩**（写在 topic03-build.py 顶上）：
+#   **教材正文只留「一句 highlight ＋ 图」，任何超过两三句的解释一律折叠或进讲义。**
+#   判据：**关着折叠读，正文必须依然通顺完整。** 折叠里的是「想深挖的人才要的」。
+# 📌 所以这里外面只留**一句落点**，八条推导收进 details。
+#   ⛔ 别把 summary 写成「详情」「更多」——&nbsp;要写清里面是什么、值不值得展开。
+LAND = ("""<p class="tbltip">⭐ <b>这张表的一句话落点</b>：同一个 128K 长度，
+从 GPT-3 的 <b>576 GiB</b> 到 DeepSeek-V4-Flash 的 <b>697 MiB</b>，六年 <b>846 倍</b>
+——&#160;<b>而这不是一个旋钮拧出来的，三个旋钮各贡献了一段。</b></p>
+<details class="aside"><summary>⭐ 这张表还能一眼看出<b>八件事</b>
+<em>（含上面那条的完整推导，以及一条表自己长出来的结论）</em></summary>
+<div class="land"><p class="lh">⭐ 这张表一眼能看出八件事
 <span style="font-weight:400;color:#5f6368">（以下统计**恒按全部 %d 行**算，切到 Highlight 也不变
 ——&#160;不然「有几家怎么样」这种话会跟着显示模式变，那就不是结论了）</span></p>""".replace("**", "") % len(M.ROWS) + """
 <ol>
@@ -319,7 +330,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <b>下一波新东西要等到 2026 春天</b>（Gemma 4 的 K=V 共享、V4 的 CSA／HCA）。<br>
 ⛔ <b>而这条结论是被 Highlight 视图逼出来的</b>：全量 %d 行里那段看着只是「少几行」，
 一筛成机制主线，空白立刻刺眼。<b>筛选不只是省地方，它还是一种体检。</b></li>
-</ol></div>""" % (len(M.ROWS), len(_hyb), len(_uni), len(_oth), len(_hyb),
+</ol></div></details>""" % (len(M.ROWS), len(_hyb), len(_uni), len(_oth), len(_hyb),
                   len(_hyb), len(_warm), "、".join(_short(r[1]) for r in _cold),
                   len(_1m),
                   M.kv_fmt(_mx[1]), _short(_mx[0]), M.kv_fmt(_mn[1]), _short(_mn[0]),

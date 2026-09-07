@@ -890,7 +890,12 @@ h4 { margin:18px 0 6px; font-size:15px }
 <tr data-t="2026-08" data-v="智谱|2026-08" data-c="0.000000" data-x="1048576" data-k="10.968750"><td class="tm">2026-08</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">GLM-5.3　744B/40B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">DSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">⚠️ <b>跟 5.2 同一个 base</b>，纯后训练，架构没动</span></td></tr>
 <tr data-t="2026-08" data-v="腾讯 混元|2026-08" data-c="0.000000" data-x="1048576" data-k="10.968750" data-hl="1"><td class="tm">2026-08</td><td><span class="chip" style="color:#d84315;background:#fbe9e7;border-color:#d84315">混元 Hy4-preview　770B/49B · 78 层</span></td><td class="cy"><span class="uni" style="background:#d93025">gDSA —— 每一层都是这个</span></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#d93025;width:73px"></b><em style="color:#d93025">11 GiB</em></span></td><td class="nt"><span class="n-all">78 层全稀疏 ＋ <b>IndexCache</b>（每 4 层 1 层算索引）</span><span class="n-hl">跳过线性那一支，从纯 GQA 直接跳进全层稀疏</span></td></tr>
 <tr data-t="2026-08" data-v="智谱|2026-08" data-c="0.750000" data-x="1048576" data-k="1.546875" data-hl="1"><td class="tm">2026-08</td><td><span class="chip" style="color:#8430ce;background:#f3e5f5;border-color:#8430ce">⭐ GLM-5.3-Flash　320B/18B · 45 层</span></td><td class="cy"><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#1a73e8">KDA</i><i style="background:#d93025">DSA</i></td><td class="ctx">1M</td><td class="kv"><span class="kvw"><b class="bar" style="background:#f9ab00;width:10px"></b><em style="color:#f9ab00">1.5 GiB</em></span></td><td class="nt"><span class="n-all">34 KDA ＋ 11 稀疏 MLA —— <b>GLM 首次线性＋稀疏同锅</b></span><span class="n-hl">唯一一个把②和③同锅：34 层 KDA ＋ 11 层稀疏 MLA</span></td></tr>
-</tbody></table><div class="land"><p class="lh">⭐ 这张表一眼能看出八件事
+</tbody></table><p class="tbltip">⭐ <b>这张表的一句话落点</b>：同一个 128K 长度，
+从 GPT-3 的 <b>576 GiB</b> 到 DeepSeek-V4-Flash 的 <b>697 MiB</b>，六年 <b>846 倍</b>
+——&#160;<b>而这不是一个旋钮拧出来的，三个旋钮各贡献了一段。</b></p>
+<details class="aside"><summary>⭐ 这张表还能一眼看出<b>八件事</b>
+<em>（含上面那条的完整推导，以及一条表自己长出来的结论）</em></summary>
+<div class="land"><p class="lh">⭐ 这张表一眼能看出八件事
 <span style="font-weight:400;color:#5f6368">（以下统计恒按全部 42 行算，切到 Highlight 也不变
 ——&#160;不然「有几家怎么样」这种话会跟着显示模式变，那就不是结论了）</span></p>
 <ol>
@@ -930,7 +935,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <b>下一波新东西要等到 2026 春天</b>（Gemma 4 的 K=V 共享、V4 的 CSA／HCA）。<br>
 ⛔ <b>而这条结论是被 Highlight 视图逼出来的</b>：全量 42 行里那段看着只是「少几行」，
 一筛成机制主线，空白立刻刺眼。<b>筛选不只是省地方，它还是一种体检。</b></li>
-</ol></div></div>
+</ol></div></details></div>
 <script>
 (function(){
  var t=document.getElementById('mtbl'); if(!t) return;
@@ -971,13 +976,14 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 })();
 </script>
 </div>
-<p class="sub">⭐ <b>这张图有两个重心。</b>上半是<b>编年史</b>——&nbsp;
-  四条支线各修各的毛病，看完你会发现<b>每一步都是在修上一步暴露的问题，没有一步是凭空发明</b>。
-  下半是<b>各家的混合配比</b> ——&nbsp;<b>所有人都落在 3:1 ～ 7:1 这个区间里</b>，
-  而且<b>用哪种便宜层，决定了你敢配多少</b>。
-  <br>⛔ 全图最该带走的一句在最底下：<b>MiniMax 一家、三代模型，把三个旋钮各拧了一遍</b>
-  （线性 → 退回全注意力 → 稀疏），而且每次转向都公开写了理由 ——&nbsp;
-  <em>「只有三个旋钮」这个框架不是我们归纳出来的，是有人真的一个一个试过去了。</em></p>
+<!-- ⛔ 2026-09-07：这里原先是一段五行的说明，讲「上半是编年史、下半是各家配比」。
+     两个毛病：① 按新立的规矩，正文不留大段解释；
+     ② **「下半」早就不在这张图里了** —— 39 行的表已经拆成上面那张可排序 HTML 表。
+     ⭐ 又一次同一个病：**描述图的文字是图的下游，图改了它不会跟着动，而且读起来通顺。**
+     现在只留一句落点。 -->
+<p class="sub">⭐ <b>这一整块最该带走的一句</b>：<b>MiniMax 一家、三代模型，
+  把三个旋钮各拧了一遍</b>（线性 → 退回全注意力 → 稀疏），而且每次转向都公开写了理由
+  ——&nbsp;<em>「只有三个旋钮」这个框架不是我们归纳出来的，是有人真的一个一个试过去了。</em></p>
 <hr>
 </div></section>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>起点：RNN ——&nbsp;被注意力补的那个东西</h2></div>
