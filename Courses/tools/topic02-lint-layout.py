@@ -175,4 +175,4 @@ if __name__ == '__main__':
     #    新建一个 topic-NN 页面时，第一件事就是把它加进这一行。
     main(sys.argv[1:] or [os.path.join(W, f) for f in
                           ('topic-02.html', 'topic-02-L300.html', 'topic-01.html',
-                           'topic-03.html', 'topic-08.html')])
+                           'topic-02x.html', 'topic-03.html', 'topic-08.html')])
