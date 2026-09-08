@@ -181,6 +181,19 @@ class Fig(object):
             self.t(16, y + 48 + i * 21, ln, col, size=_sz(12))
         return y + h
 
+    def lines(self, x, y, w, rows, size=11, lh=17, fill=None, bold_first=False):
+        """在宽度 w 内画多行文字。⛔ **每一行都过宽度断言** ——
+        这套图前后栽过三次「文字溢出既不报错也没滚动条，只是被裁掉」。
+        ⭐ 换行点由调用方给（rows 是已经拆好的行），不做自动断词：
+          自动断词会把 <tspan> 拦腰截断，那种坏法比溢出还难查。
+        """
+        for i, ln in enumerate(rows):
+            need = wpx(re.sub(r"<[^>]+>", "", ln), size)
+            assert need <= w, "「%s」要 %dpx，只有 %dpx —— 拆行" % (
+                re.sub(r"<[^>]+>", "", ln)[:22], need, w)
+            self.t(x, y + i * lh, ln, fill or GY, bold_first and i == 0, _sz(size))
+        return y + len(rows) * lh
+
     def src(self, y, *lines):
         """📌 出处行（可多行）—— 灰字小注，跟专题二一致。
 

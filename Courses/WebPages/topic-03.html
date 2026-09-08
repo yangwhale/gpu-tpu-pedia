@@ -645,20 +645,139 @@ h4 { margin:18px 0 6px; font-size:15px }
 
 
 
-<section id="x1"><div class="wrap"><div class="stn"><h2>这个专题要回答的一个问题</h2></div>
-<p>MLA、GQA、SWA、DSA、NSA、CSA、HCA、DeltaNet、GDN、KDA、Gated MLA……</p>
-<p>名词多到像是各搞各的。<b>但它们其实在解同一道题，而且只有三个旋钮可以拧。</b></p>
-<p>讲完这个专题，看到任何一个新变体，应该能立刻说出： <b>它在拧哪个旋钮、省了什么、赔了什么。</b></p>
-<div class="note info"><p>这一节的目标<b>不是记住这些名词</b>，是拿到一把尺子。名词一年换一批，尺子不换。</p></div>
+<section id="x1"><div class="wrap"><div class="stn"><h2>这个专题在讲一件什么事</h2></div>
 
-<!-- ⭐⭐ 2026-09-07 全景图。图由 topic03-fig-chronicle.py 生成，构建时读进来。
-     ⛔ 图上所有型号与配比都是当天现搜的公开信息 —— **这张图会过时**，
-        而且过时得比正文快得多（下半那张配比表几乎每月都有新行）。
-        约定：**每次开课前只重跑这一张图的调研，正文不动。**
-     ⚠️ 图上有一条护栏别删：层间混合（几层线性配一层全）和层内稀疏
-        （每层还是全注意力的形状、只是少看几块）**不能放在同一根轴上比**。 -->
-<p>在拿尺子之前，先看一眼<b>全景</b>：这些名词是什么时候、按什么顺序冒出来的，
-  以及今天各家<b>实际上是怎么配的</b>。</p>
+<!-- ⭐⭐⭐ 2026-09-08 换立意。原来的开篇是「名词很多，但只有三个旋钮」——
+     那是**一把尺子，不是一个故事**。尺子能让人认名词，
+     但回答不了「为什么这六年非得这么走」。
+     现场原话：「先把骨架打好，把故事线捋清楚了 —— 这是一个什么样的故事？
+     怎么样向前推进的？每一次变革都是图啥？带来了什么？以及对现在这个
+     agentic 的意义 —— **长上下文才带来了智能，原来 2K 的上下文玩个毛？**」
+     ⛔ 三个旋钮那把尺子没有丢，它降级成了「故事的骨架」，在 §四 才登场。 -->
+
+<p><b>2020 年的 GPT-3，上下文是 2048 个 token。</b>那时候的模型是个很聪明的<b>补全器</b>
+  ——&nbsp;你给它一段话，它接得很好。</p>
+<p>今天你让它做的事完全不一样了：<b>读完整个代码库再改一处 bug</b>、
+  <b>连着跑几十轮工具调用</b>、<b>记住整场对话里你反复改过的主意</b>。</p>
+
+<div class="note ok"><p>⭐⭐ <b>上下文长度就是 agent 的工作记忆。</b>
+  记不住，就什么都干不成 ——&nbsp;<b>2K 的上下文，连一个文件都读不完。</b><br>
+  ⛔ 而<b>每加长一分上下文，KV cache 就线性涨一分</b>。<br>
+  ⭐ <b>所以这六年注意力的全部演化，是为了让「记得住」这件事付得起。</b></p></div>
+
+<p>下面这张是<b>整个专题的骨架</b>。六个阶段，每一段只问三件事：
+  <b>图啥、带来了什么、欠下了什么</b>。</p>
+<figure class="fbox fwide" id="fig-arc"><svg viewBox="0 0 1400 578" width="100%" role="img" aria-label="专题三的故事线：从 RNN 到今天的混合注意力，六个阶段，每个阶段各自图什么、带来了什么、欠下什么；落点是长上下文让 agent 成为可能"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">这是一个什么故事 ——&#160;<tspan font-weight="700">六年时间，把「记得住」变成一件付得起的事</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ <tspan font-weight="700">上下文长度就是 agent 的工作记忆。</tspan>2K 的时候模型只能当个聪明的补全器；要读整个代码库、跑几十轮工具调用、记住整场对话，<tspan font-weight="700">先得记得住</tspan>。而每加长一分上下文，<tspan font-weight="700">KV cache 就线性涨一分</tspan>。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">还没有 KV cache 这回事</text>
+<rect x="165" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="182" y="64" fill="#5f6368" style="font-size:11.0px">让每一份更小</text>
+<rect x="270" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="287" y="64" fill="#5f6368" style="font-size:11.0px">每步只读一部分</text>
+<rect x="386" y="55" width="11" height="11" rx="2" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="403" y="64" fill="#5f6368" style="font-size:11.0px">换回一个固定大小的状态</text>
+<rect x="0" y="88" width="224" height="42" rx="8" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="13" y="106" fill="#ffffffcc" style="font-size:11.0px">1990–2017</text>
+<text class="svgsm" x="13" y="123" fill="#fff" style="font-size:15.0px"><tspan font-weight="700">RNN</tspan></text>
+<rect x="0" y="130" width="224" height="128" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="130" width="224" height="12" rx="0" fill="#fce8e6" stroke="#fce8e6" stroke-width="1"/>
+<text class="svgsm" x="12" y="150" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">带一个固定大小的状态</tspan></text>
+<text class="svgsm" x="12" y="167" fill="#5f6368" style="font-size:11.0px">图啥：让模型记住</text>
+<text class="svgsm" x="12" y="184" fill="#5f6368" style="font-size:11.0px">　　　「之前发生了什么」</text>
+<text class="svgsm" x="12" y="201" fill="#5f6368" style="font-size:11.0px">带来：序列建模第一次可行</text>
+<text class="svgsm" x="12" y="218" fill="#5f6368" style="font-size:11.0px">⛔ 欠下：串行 ——&#160;算不快、</text>
+<text class="svgsm" x="12" y="235" fill="#5f6368" style="font-size:11.0px">　　　记不住、装不下</text>
+<text class="svgsm" x="12" y="150" fill="#d93025" style="font-size:11.0px"><tspan font-weight="700">带一个固定大小的状态</tspan></text>
+<rect x="232" y="88" width="224" height="42" rx="8" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="245" y="106" fill="#ffffffcc" style="font-size:11.0px">2017</text>
+<text class="svgsm" x="245" y="123" fill="#fff" style="font-size:15.0px"><tspan font-weight="700">MHA</tspan></text>
+<rect x="232" y="130" width="224" height="128" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1"/>
+<rect x="232" y="130" width="224" height="12" rx="0" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1"/>
+<text class="svgsm" x="244" y="150" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">把循环整个拿掉</tspan></text>
+<text class="svgsm" x="244" y="167" fill="#5f6368" style="font-size:11.0px">图啥：训练能并行，</text>
+<text class="svgsm" x="244" y="184" fill="#5f6368" style="font-size:11.0px">　　　规模才起得来</text>
+<text class="svgsm" x="244" y="201" fill="#5f6368" style="font-size:11.0px">带来：亿级 → 千亿级</text>
+<text class="svgsm" x="244" y="218" fill="#5f6368" style="font-size:11.0px">⛔ 欠下：状态没了，改成</text>
+<text class="svgsm" x="244" y="235" fill="#5f6368" style="font-size:11.0px">　　　留下全部历史 ＝ KV cache</text>
+<text class="svgsm" x="244" y="150" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">把循环整个拿掉</tspan></text>
+<line x1="222" y1="109" x2="230" y2="109" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="464" y="88" width="224" height="42" rx="8" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="477" y="106" fill="#ffffffcc" style="font-size:11.0px">2019–2024</text>
+<text class="svgsm" x="477" y="123" fill="#fff" style="font-size:15.0px"><tspan font-weight="700">旋钮①</tspan></text>
+<rect x="464" y="130" width="224" height="128" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="464" y="130" width="224" height="12" rx="0" fill="#e8f0fe" stroke="#e8f0fe" stroke-width="1"/>
+<text class="svgsm" x="476" y="150" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">让每一份更小</tspan></text>
+<text class="svgsm" x="476" y="167" fill="#5f6368" style="font-size:11.0px">图啥：单份 KV 太大，</text>
+<text class="svgsm" x="476" y="184" fill="#5f6368" style="font-size:11.0px">　　　先把它压下去</text>
+<text class="svgsm" x="476" y="201" fill="#5f6368" style="font-size:11.0px">带来：2K → 128K 成常态</text>
+<text class="svgsm" x="476" y="218" fill="#5f6368" style="font-size:11.0px">⛔ 欠下：MQA 砍太狠掉质量；</text>
+<text class="svgsm" x="476" y="235" fill="#5f6368" style="font-size:11.0px">　　　MLA 要给 RoPE 单开一路</text>
+<text class="svgsm" x="476" y="150" fill="#1a73e8" style="font-size:11.0px"><tspan font-weight="700">让每一份更小</tspan></text>
+<line x1="454" y1="109" x2="462" y2="109" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="696" y="88" width="224" height="42" rx="8" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="709" y="106" fill="#ffffffcc" style="font-size:11.0px">2023–2026</text>
+<text class="svgsm" x="709" y="123" fill="#fff" style="font-size:15.0px"><tspan font-weight="700">旋钮②</tspan></text>
+<rect x="696" y="130" width="224" height="128" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<rect x="696" y="130" width="224" height="12" rx="0" fill="#fef7e0" stroke="#fef7e0" stroke-width="1"/>
+<text class="svgsm" x="708" y="150" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">每步只读一部分</tspan></text>
+<text class="svgsm" x="708" y="167" fill="#5f6368" style="font-size:11.0px">图啥：单份压到头了，改成</text>
+<text class="svgsm" x="708" y="184" fill="#5f6368" style="font-size:11.0px">　　　「不是每个都得看」</text>
+<text class="svgsm" x="708" y="201" fill="#5f6368" style="font-size:11.0px">带来：1M 进入可用区间</text>
+<text class="svgsm" x="708" y="218" fill="#5f6368" style="font-size:11.0px">⛔ 欠下：省读不省存；</text>
+<text class="svgsm" x="708" y="235" fill="#5f6368" style="font-size:11.0px">　　　kernel 跟不上就白省</text>
+<text class="svgsm" x="708" y="150" fill="#e8710a" style="font-size:11.0px"><tspan font-weight="700">每步只读一部分</tspan></text>
+<line x1="686" y1="109" x2="694" y2="109" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="928" y="88" width="224" height="42" rx="8" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<text class="svgsm" x="941" y="106" fill="#ffffffcc" style="font-size:11.0px">2020–2026</text>
+<text class="svgsm" x="941" y="123" fill="#fff" style="font-size:15.0px"><tspan font-weight="700">旋钮③</tspan></text>
+<rect x="928" y="130" width="224" height="128" rx="8" fill="#f3e8fd" stroke="#8430ce" stroke-width="1"/>
+<rect x="928" y="130" width="224" height="12" rx="0" fill="#f3e8fd" stroke="#f3e8fd" stroke-width="1"/>
+<text class="svgsm" x="940" y="150" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">换回一个固定大小的状态</tspan></text>
+<text class="svgsm" x="940" y="167" fill="#5f6368" style="font-size:11.0px">图啥：既然变长是病根，</text>
+<text class="svgsm" x="940" y="184" fill="#5f6368" style="font-size:11.0px">　　　那就别让它变长</text>
+<text class="svgsm" x="940" y="201" fill="#5f6368" style="font-size:11.0px">带来：那些层的 KV 归零</text>
+<text class="svgsm" x="940" y="218" fill="#5f6368" style="font-size:11.0px">⛔ 欠下：串行跟着回来了，</text>
+<text class="svgsm" x="940" y="235" fill="#5f6368" style="font-size:11.0px">　　　得靠 chunk ＋ scan 找补</text>
+<text class="svgsm" x="940" y="150" fill="#8430ce" style="font-size:11.0px"><tspan font-weight="700">换回一个固定大小的状态</tspan></text>
+<line x1="918" y1="109" x2="926" y2="109" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="1160" y="88" width="224" height="42" rx="8" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1173" y="106" fill="#ffffffcc" style="font-size:11.0px">2024–今天</text>
+<text class="svgsm" x="1173" y="123" fill="#fff" style="font-size:15.0px"><tspan font-weight="700">混合</tspan></text>
+<rect x="1160" y="130" width="224" height="128" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1160" y="130" width="224" height="12" rx="0" fill="#e6f4ea" stroke="#e6f4ea" stroke-width="1"/>
+<text class="svgsm" x="1172" y="150" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">两头都要</tspan></text>
+<text class="svgsm" x="1172" y="167" fill="#5f6368" style="font-size:11.0px">图啥：单靠哪个都不够，</text>
+<text class="svgsm" x="1172" y="184" fill="#5f6368" style="font-size:11.0px">　　　就按层配比</text>
+<text class="svgsm" x="1172" y="201" fill="#5f6368" style="font-size:11.0px">带来：3:1 ～ 7:1 成了共识</text>
+<text class="svgsm" x="1172" y="218" fill="#5f6368" style="font-size:11.0px">⭐ 今天的形态：便宜的层</text>
+<text class="svgsm" x="1172" y="235" fill="#5f6368" style="font-size:11.0px">　　　管长度，贵的层管质量</text>
+<text class="svgsm" x="1172" y="150" fill="#1e8e3e" style="font-size:11.0px"><tspan font-weight="700">两头都要</tspan></text>
+<line x1="1150" y1="109" x2="1158" y2="109" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="0" y="274" width="1400" height="126" rx="9" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="16" y="298" fill="#1a73e8" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 两条曲线反着走 ——&#160;这才是这六年真正发生的事</tspan></text>
+<text class="svgsm" x="16" y="322" fill="#1a73e8" style="font-size:12.0px"><tspan font-weight="700">能跑多长</tspan>：GPT-3 的 <tspan font-weight="700">2K</tspan> →&#160;今天 <tspan font-weight="700">1M</tspan>（本课模型表里 12 家做到，<tspan font-weight="700">无一例外都动了旋钮②或③</tspan>）</text>
+<text class="svgsm" x="16" y="343" fill="#1a73e8" style="font-size:12.0px"><tspan font-weight="700">同一长度下要付多少</tspan>：128K 时的 KV cache 从 <tspan font-weight="700">576 GiB</tspan> 降到 <tspan font-weight="700">697 MiB</tspan>，<tspan font-weight="700">846 倍</tspan></text>
+<text class="svgsm" x="16" y="364" fill="#1a73e8" style="font-size:12.0px">⛔ 这两个数<tspan font-weight="700">是两把尺子，不能相乘</tspan>：一把量「能跑多长」，一把量「同一长度下省了多少」。</text>
+<text class="svgsm" x="16" y="385" fill="#1a73e8" style="font-size:12.0px">⭐⭐ <tspan font-weight="700">但它们同时发生，才有今天的 agent</tspan>——&#160;上下文能装下整个代码库，而且装得起。</text>
+<rect x="0" y="414" width="1400" height="105" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svglbl" x="16" y="438" fill="#1e8e3e" style="font-size:13.5px"><tspan font-weight="700">⭐ 所以这一讲从头到尾只有一个账本：KV cache</tspan></text>
+<text class="svgsm" x="16" y="462" fill="#1e8e3e" style="font-size:12.0px">⭐ 在张量形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;全图只有 K 和 V 两处带它，<tspan font-weight="700">那就是唯一要跨 token 留下来的东西</tspan>。</text>
+<text class="svgsm" x="16" y="483" fill="#1e8e3e" style="font-size:12.0px">三个旋钮是它的三个面：<tspan fill="#1a73e8" font-weight="700">① 每份多大</tspan>　<tspan fill="#e8710a" font-weight="700">② 每步读多少</tspan>　<tspan fill="#8430ce" font-weight="700">③ 干脆别让它变长</tspan></text>
+<text class="svgsm" x="16" y="504" fill="#1e8e3e" style="font-size:12.0px">⛔ 而 <tspan font-weight="700">FlashAttention 不在这三条里</tspan>——&#160;它已经是标配，在哪种注意力下都一样，<tspan font-weight="700">对这一讲没有区分度</tspan>。</text>
+<text class="svgsm" x="0" y="537" fill="#80868b" style="font-size:11.0px">📌 2K ＝ GPT-3 的 max_position_embeddings；1M 与 846 倍见本课模型表（128K、BF16、batch 1，两端都取 ≥100B 的模型）</text>
+<text class="svgsm" x="0" y="554" fill="#80868b" style="font-size:11.0px">　　⚠️ 512 倍（2K→1M）与 846 倍（KV 降幅）是两个口径，本图刻意分两行给出 ——&#160;把它们相乘是把两把尺子当成一把</text>
+</svg><figcaption>⭐ <b>整个专题的骨架。</b>六段，每段只问三件事：图啥、带来了什么、欠下了什么。<b>底下那两条数是这一讲真正的落点</b> —— 能跑的长度涨了，同一长度下要付的钱降了，<b>两件事同时发生，才有今天的 agent。</b></figcaption></figure>
+
+<div class="note info"><p>⭐ <b>这一讲从头到尾只有一个账本：KV cache。</b>
+  在张量形状里找 <code>S</code>（KV 长度）——&nbsp;<b>全图只有 K 和 V 两处带它</b>，
+  那就是唯一需要跨 token 留下来的东西。<br>
+  三个旋钮是同一个账本的三个面：<b>① 每份多大　② 每步读多少　③ 干脆别让它变长</b>。
+  <b>看到任何一个新名词，先问它在拧哪一面。</b></p></div>
+
+<p>骨架之后，先看一眼<b>全景与全部证据</b>：这些名词是什么时候、按什么顺序冒出来的，
+  以及今天各家<b>实际上是怎么配的</b>、<b>每一家的 KV cache 到底多大</b>。</p>
 <figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1460 639" width="100%" role="img" aria-label="Attention 编年史时间轴：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉、只留下这个补丁，此后分成四条支线演化 ——&#160;KV 存多少、每个 query 看多少、换一套数学、只改怎么算">
 <text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">Attention 编年史 ——&#160;<tspan font-weight="700">从 RNN 的一个补丁，到今天各家的混合配比</tspan></text>
 <text class="svgsm" x="0" y="39">⭐ 一句话看懂整段历史：<tspan font-weight="700">Transformer 当初做的交易是「用平方的计算量，买来完全的并行度」——&#160;而这段历史，是在把那笔交易<tspan style="text-decoration:underline">往回赎</tspan>，但不能把并行度还回去。</tspan></text>
@@ -978,14 +1097,11 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 })();
 </script>
 </div>
-<!-- ⛔ 2026-09-07：这里原先是一段五行的说明，讲「上半是编年史、下半是各家配比」。
-     两个毛病：① 按新立的规矩，正文不留大段解释；
-     ② **「下半」早就不在这张图里了** —— 39 行的表已经拆成上面那张可排序 HTML 表。
-     ⭐ 又一次同一个病：**描述图的文字是图的下游，图改了它不会跟着动，而且读起来通顺。**
-     现在只留一句落点。 -->
+<!-- ⛔ 图上所有型号与配比都是当天现搜的公开信息 —— **这张图会过时**，
+     而且过时得比正文快得多。约定：**每次开课前只重跑这一张图的调研，正文不动。** -->
 <p class="sub">⭐ <b>这一整块最该带走的一句</b>：<b>MiniMax 一家、三代模型，
   把三个旋钮各拧了一遍</b>（线性 → 退回全注意力 → 稀疏），而且每次转向都公开写了理由
-  ——&nbsp;<em>「只有三个旋钮」这个框架不是我们归纳出来的，是有人真的一个一个试过去了。</em></p>
+  ——&nbsp;<em>「三个旋钮」这个框架不是我们归纳出来的，是有人真的一个一个试过去了。</em></p>
 <hr>
 </div></section>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>起点：RNN ——&nbsp;被注意力补的那个东西</h2></div>
@@ -2155,7 +2271,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <p>⭐ <b>下一节的三个旋钮，就是「改算什么」的全部可能位置。</b></p>
 <hr>
 </div></section>
-<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>分类学：只有三个旋钮</h2></div>
+<section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>骨架：三个旋钮，是同一个账本的三个面</h2></div>
 <p>这是这个专题的骨架。把所有名词收进一张表：</p>
 <table>
 <thead><tr><th>旋钮</th><th>在改什么</th><th>代表</th></tr></thead><tbody>
@@ -2192,7 +2308,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 </tbody></table>
 <hr>
 </div></section>
-<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>旋钮①：每个 token 存多少</h2></div>
+<section id="s五"><div class="wrap"><div class="stn"><span class="badge">第 五 节</span><h2>旋钮①：让每一份更小</h2></div>
 <figure class="fbox fwide" id="fig-tx-k1"><svg viewBox="0 0 1400 914" width="100%" role="img" aria-label="旋钮① 每个 token 存多少 —— 动的是这两条支路">
 <text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">旋钮① 每个 token 存多少 —— 动的是这两条支路</text>
 <text class="svgsm" x="0" y="39" fill="#5f6368">点亮的两格就是这个旋钮的全部作用域 ——&#160;<tspan font-weight="700">正是带 S 的那两处</tspan>。⭐ 它省的是<tspan font-weight="700">每一份 KV 有多大</tspan>，不是算力。</text>
@@ -2310,7 +2426,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="724" y="262" fill="#e8710a">该算的乘加一次不少 —— GQA 靠的是<tspan font-weight="700">把 KV 头广播开</tspan>再算</text>
 <text class="svgsm" x="694" y="300" fill="#5f6368"><tspan font-weight="700">📌</tspan></text>
 <text class="svgsm" x="724" y="300" fill="#5f6368">MLA 那条另有一处麻烦：<tspan font-weight="700">RoPE 必须单独走一路</tspan>，</text>
-<text class="svgsm" x="724" y="319" fill="#5f6368">因为上投影吸收不了带位置旋转的那几维（见 §4.3）</text>
+<text class="svgsm" x="724" y="319" fill="#5f6368">因为上投影吸收不了带位置旋转的那几维（见 §5.3）</text>
 <rect x="680" y="358" width="700" height="234" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
 <text class="svglbl" x="694" y="378" fill="#7a5000" style="font-size:13px">📐 把字母换成数字 ——&#160;那份要留下来的到底有多大</text>
 <text class="svgsm" x="694" y="402" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、BF16、batch 1，把带 <tspan font-weight="700">S</tspan> 的那两处换成实际占多少：</text>
@@ -2328,26 +2444,26 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="16" y="887" fill="#1a73e8">⭐ 一句话记住这个旋钮：<tspan font-weight="700">它改的是「存什么」，不是「算什么」。</tspan>所以它治的是显存墙，治不了 O(N²) 的计算量。</text>
 </svg><figcaption>⭐ <b>同一张主线图，只点亮旋钮① 动到的地方</b> —— 产生 K 和 V 的那两条支路。<b>注意那个平方大的矩阵一点没动</b>：这个旋钮治的是显存墙，<b>治不了 O(N²) 的计算量</b>。</figcaption></figure>
-<h3>4.1 MHA → MQA → GQA：一个连续旋钮</h3>
+<h3>5.1 MHA → MQA → GQA：一个连续旋钮</h3>
 <ul><li><b>MHA</b>：每个头各存一份 K/V。128 个头就是 128 份</li><li><b>MQA</b>：所有头共用同一份 K/V。省 128 倍，但<b>质量掉</b></li><li><b>GQA</b>：分成 g 组，组内共用。<code>g = n_h</code> 退化成 MHA，<code>g = 1</code> 退化成 MQA</li></ul>
 <p>⭐ 值得强调的是「GQA 是一个连续旋钮」这件事本身 —— 它不是一个新机制，是把 MHA 和 MQA 之间的空白填上，让你可以按需要选一个点。 这门课后面会反复见到这个套路：<b>把一个二选一变成一个可调的连续量。</b></p>
 <p>代价说清楚：省的是 KV 的<b>份数</b>，赔的是<b>表达能力</b> —— 本来 128 个头可以各自关注不同的东西，现在被迫共享。</p>
-<h3>4.2 MLA：不砍头，改成低秩压缩</h3>
+<h3>5.2 MLA：不砍头，改成低秩压缩</h3>
 <ul><li>KV 不再按头存，而是压成<b>一个 512 维的隐向量</b>（<code>d_c = 512</code>）， 用的时候再用上投影矩阵升回 128 个头</li><li>位置信息<b>单独走 64 维一路 RoPE</b>（<code>d_h^R = 64</code>）</li><li>所以每 token 每层只存 <b>512 + 64 = 576</b> 个数 —— 对照 MHA 的 32,768 个，<b>56.9 倍</b></li><li>出处：V3 论文 <b>sec. 4.2</b> 超参一节，<code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code></li></ul>
 <p><b>代价：用计算换显存。</b> 多了一对降维/升维的矩阵乘。 这句话在<a href="专题04-反向与优化器.md">专题四</a> §3.2 会被再打一个折扣 —— ⚠️ <b>MLA 的压缩在训练前向里其实不生效</b>（K/V 会被解压出来算）， 它省的是<b>推理时的 KV cache</b>，不是训练时的激活。这是一个非常常见的误解。</p>
 <div class="note warn"><p>⚠️ <b>落到硬件上有个反直觉的后果</b>：MLA 在推理时可以把上投影矩阵"吸收"进 query 那一侧，从而改变整个计算的形状。同一个数学式子有多种算法实现， 选哪种取决于是 prefill 还是 decode。 这一条留到<a href="专题06-推理.md">专题六</a>。</p></div>
-<h3>4.3 ⚠️ 为什么 RoPE 必须单独走一路</h3>
+<h3>5.3 ⚠️ 为什么 RoPE 必须单独走一路</h3>
 <p>这是理解 MLA 的关键一步，也是最容易讲糊的一步。<b>值得花两分钟。</b></p>
 <p>MLA 想做的事是：<b>把上投影矩阵吸收掉，让推理时只需要读那个 512 维的隐向量。</b> 数学上，<code>qᵀ (W_UK c)</code> 可以重写成 <code>(W_UKᵀ q)ᵀ c</code> —— 上投影跑到 q 那边去了， 于是 K 根本不用真的解压出来。</p>
 <p><b>但 RoPE 一插进来这个重写就不成立了。</b> RoPE 是一个跟位置有关的旋转， 它作用在解压之后的 K 上；旋转矩阵夹在中间，<code>W_UK</code> 和 <code>c</code> 就分不开了。</p>
 <p>所以 MLA 的解法是把这两件事拆开走两条路： 一路 512 维不带位置、可以被吸收；另一路 64 维专门扛 RoPE、老老实实存着。 <b>576 = 512（可吸收）+ 64（不可吸收）。</b></p>
 <div class="note ok"><p>⭐ 这个「因为要保留某个代数变换，所以把功能拆成两路」的动作， 在后面还会以别的面貌出现（V4 的部分 RoPE、K3 的 NoPE）。 <b>值得当成一个套路记住，而不是当成 MLA 的一个实现细节。</b></p></div>
-<h3>4.4 Gated MLA</h3>
+<h3>5.4 Gated MLA</h3>
 <ul><li>在 MLA 的输出端加一个<b>门控</b>：<code>gate = σ(W_g x)</code>，逐元素乘在注意力输出上</li><li>Kimi K3 用的是<b>全秩</b>门控矩阵（K2 那代是低秩的）</li><li>出处：K3 技术报告 <b>sec. 2.1.2</b></li></ul>
 <p>它的作用不是省显存 —— <b>门控不减少任何 KV</b> —— 而是让模型能学会「这一层这个位置，注意力的输出干脆不要」。 放在旋钮 ① 里是因为它改的是 MLA 这一支的形状，但要讲清楚它<b>省的不是显存</b>。</p>
 <hr>
 </div></section>
-<section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>旋钮②：每个 query 看多少</h2></div>
+<section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>旋钮②：KV 照存，但每步只读一部分</h2></div>
 <figure class="fbox fwide" id="fig-tx-k2"><svg viewBox="0 0 1400 914" width="100%" role="img" aria-label="旋钮② 每个 query 看多少 —— 动的是 mask 那一格">
 <text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">旋钮② 每个 query 看多少 —— 动的是 mask 那一格</text>
 <text class="svgsm" x="0" y="39" fill="#5f6368">点亮的是 Q·Kᵀ 和它后面那个 mask。⭐ <tspan font-weight="700">矩阵的形状一点没变，变的是里面有多少格子真的要算。</tspan></text>
@@ -2488,9 +2604,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#e8710a" stroke-width="1"/>
 <text class="svgsm" x="16" y="887" fill="#e8710a">⭐ 一句话记住这个旋钮：<tspan font-weight="700">它改的是「看哪些」，形状不变、只是很多格子不算。</tspan>所以省的是 FLOPs，而 KV 该存多少还得存多少。</text>
 </svg><figcaption>⭐ <b>同一张主线图，只点亮旋钮② 动到的地方</b> —— Q·Kᵀ 和它后面那张 mask。<b>矩阵的形状一点没变</b>，变的是里面有多少格子真的要算。⛔ 所以它跟旋钮① <b>正交</b>，两个可以同时上。</figcaption></figure>
-<h3>5.1 SWA（滑动窗口）</h3>
+<h3>6.1 SWA（滑动窗口）</h3>
 <ul><li>每个 token 只看自己前面固定窗口内的（Mistral 7B：<b>4096</b>）</li><li>最简单，KV cache 从随长度增长变成<b>常数</b></li><li>代价很硬：<b>长距离信息只能靠层层传递间接到达</b> —— 第 1 层看 4K，第 2 层能间接摸到 8K，要跨 128K 得堆 32 层</li><li>所以一般<b>不单用</b>，跟全注意力混排（见第六节）</li></ul>
-<h3>5.2 Attention sink —— 一个现象，不是一个方案</h3>
+<h3>6.2 Attention sink —— 一个现象，不是一个方案</h3>
 <p><b>这一段是全课少有的"实验发现改变了工程做法"的例子，值得单独讲。</b></p>
 <p>StreamingLLM（arXiv 2309.17453）的观察：如果你朴素地做滑动窗口， 把开头那几个 token 的 KV 也滑掉，<b>模型立刻崩</b>。</p>
 <p>而它们发现的解法简单到有点荒谬：<b>留住最开头 4 个 token 的 KV 就够了</b> （论文原话：<em>"with just 4 initial tokens sufficing"</em>）， 再加上滑动窗口，Llama-2 / MPT / Falcon / Pythia 就能稳定处理到 <b>400 万 token</b>， 比"滑窗 + 重算"这个可用基线快 <b>22.2×</b>。</p>
@@ -2498,7 +2614,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <div class="note ok"><p>⭐ <b>两个层次的教训，都要讲：</b></p>
 <ol><li>工程上：任何"扔掉一部分 KV"的方案，都必须先问「有没有扔掉停车位」</li><li>方法上：这个 bug 从公式上完全看不出来，<b>只有把注意力矩阵画出来看才发现</b>。 这是这门课反复要说的那件事 —— <b>量出来的和算出来的，是两回事</b></li></ol>
 <p>后续：DeepSeek-V4 干脆给每个头加了一个<b>可学习的 sink logit</b>， 直接加进 softmax 分母里，于是这一行的注意力总和<b>可以小于 1，甚至接近 0</b>。 把一个模型被迫发明的 hack，变成了架构里的一等公民。</p></div>
-<h3>5.3 NSA —— 「native」是什么意思</h3>
+<h3>6.3 NSA —— 「native」是什么意思</h3>
 <ul><li>三条支路并行：<b>压缩</b>（粗看全部）/ <b>选择</b>（细看挑出来的）/ <b>滑窗</b>（细看邻近）， 再用一个小 MLP + sigmoid 出的门控分数融合</li><li>效果：64k 长度下，<b>解码快 11.6×、前向快 9.0×、反向快 6.0×</b>（arXiv 2502.11089）</li></ul>
 <p><b>「native」的意思是训练时就这么做，不是训练完再加的推理优化。</b> 这个区别很重要，值得单独说三十秒：</p>
 <table>
@@ -2509,11 +2625,11 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <tr><td>代价</td><td>无，随时可开关</td><td><b>要重训</b>，没法给已有模型打补丁</td></tr>
 </tbody></table>
 <div class="note ok"><p>⭐ 这张表解释了后面一个反复出现的现象： <b>为什么这些新注意力方案总是跟新模型一起发布，而不是作为一个推理框架的开关。</b></p></div>
-<h3>5.4 DSA（DeepSeek-V3.2）—— Lightning Indexer</h3>
+<h3>6.4 DSA（DeepSeek-V3.2）—— Lightning Indexer</h3>
 <ul><li><b>Lightning Indexer</b>：一个极轻量的打分网络，为每个 query 挑出 top-k 个 KV</li><li>打分式子 <code>I(t,s) = Σ_j w_j · ReLU(q_j · k_s)</code> —— ⭐ <b>用 ReLU 不用 softmax，纯粹是为了吞吐</b>，论文自己这么说的</li><li>头很少，而且跑在 <b>FP8</b> 上</li><li><b>k = 2048</b>。128K 上下文下，参与主注意力的从 128K 降到 2K —— <b>64 倍</b></li><li>复杂度从 O(L²) 变成 <b>O(L·k)</b></li><li>出处：arXiv 2512.02556</li></ul>
 <p>⚠️ <b>两个必须一起讲的细节，不然这个方案听起来像免费午餐：</b></p>
 <ol><li><b>indexer 自己还是 O(L²)。</b> 每个 query 要给所有 KV 打分才能挑 top-k。 省下来的是「主注意力的 O(L²)」，换来的是「一个便宜得多的 O(L²)」。 <b>省的是常数，不是阶。</b></li><li><b>它需要一个专门的训练阶段。</b> 先冻住除 indexer 之外的全部参数， 让 indexer 去<b>拟合主注意力自己的分布</b>（把各头注意力加起来、L1 归一化， 当作 indexer 的学习目标）。<b>稀疏是学出来的，不是规则定出来的。</b></li></ol>
-<h3>5.5 ⭐ CSA + HCA（DeepSeek-V4）—— 压缩率按距离分层</h3>
+<h3>6.5 ⭐ CSA + HCA（DeepSeek-V4）—— 压缩率按距离分层</h3>
 <p>这是线索 B「远近有别」最直接的体现，也是这一节的高潮。</p>
 <p><b>CSA</b>（Compressed Sparse Attention）</p>
 <ul><li>每 <b>m = 4</b> 个 token 的 KV 压成 1 个 entry，然后在<b>压缩后的 entry 上</b>做 DSA</li><li>V4-Pro top-k = 1024，V4-Flash top-k = 512</li><li>压缩不是简单平均：用了<b>两套交错的压缩序列</b>（互相错开半个块）， 各带一组可学习的位置偏置，在 2m 个元素上做 softmax。 ⭐ <b>交错是为了不让块边界成为信息断层</b> —— 一个 token 总在某一套里落在块中间</li></ul>
@@ -2529,7 +2645,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 </tbody></table>
 <p>⭐ 最后那个 2% 值得停一下算给学生看：同样形状的 GQA-8 在 1M 下是 244 GiB， 2% 就是 不到 5 GiB —— 一百万 token 的上下文，KV 装得进一块卡的零头。 对照本节开头那个 MHA 的 488 GiB（那还只是 128K）。<b>这就是三年的进展。</b></p>
 <div class="note warn"><p>⚠️ 这里还叠了一层跟注意力机制无关的优化：<b>KV 混合精度存储</b> —— RoPE 那几维用 BF16，其余用 FP8，光这一项就"近乎减半"。 报告一个总收益的时候，要能拆出哪几分是机制带来的、哪几分是精度带来的。</p></div>
-<h3>5.5b ⭐ 第二阶段：索引本身成了开销 —— IndexShare 与 IndexCache</h3>
+<h3>6.5b ⭐ 第二阶段：索引本身成了开销 —— IndexShare 与 IndexCache</h3>
 <p>前面四个方案（NSA / DSA / CSA+HCA）都有一个共同的零件：一个决定"该看哪几块"的索引器。 §5.4 讲 DSA 的时候它叫 Lightning Indexer。到这一步为止，所有心思都花在<b>让每个 query 少看几块</b>上。</p>
 <p><b>但索引器自己也要算。</b> 它要为<b>每一层、每一个 token</b>，跟全部历史块打一次分。稀疏注意力把主体那部分省下来之后， 这笔原本不起眼的账就浮上来了 —— 尤其在 1M 上下文下，历史块本身就有几万个。</p>
 <p>2026 年年中，两家公司几乎同时给出了同一个答案：<b>别每层都重新算一遍"该看谁"。</b></p>
@@ -2546,7 +2662,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <p>⭐ <b>为什么这一小节值得单独留一块地方</b>：它是一个<b>优化制造出新的被优化对象</b>的干净例子。 稀疏注意力是为了省 attention 的账而来的；省成了，于是索引 —— 它原本只是这个方案的附属零件 —— 变成了新的大头，再被优化一轮。这一节讲的三个旋钮都会经历这一步，不只是稀疏这一支。</p>
 <div class="note warn"><p>⚠️ <b>这不是白拿的，代价要说出来。</b> 官方博客只报了省下来的 FLOPs。 但共享索引器意味着<b>这四层被迫看同一批块</b> —— 它们不能各自挑各自的。 这是表达力上的一次让步：原本每一层可以按自己那一层的语义去决定关注哪里，现在四层绑在一起。</p>
 <p>📌 口径：上面这句是从机制推出来的，不是引用 —— 索引器共享，选出的 top-k 集合当然就一样。 两家都没有公开这项让步对质量的影响有多大。<b>看到"降 2.9× FLOPs"这种数字，先找它换走了什么。</b></p></div>
-<h3>5.6 ⭐ 这一支的共同结构</h3>
+<h3>6.6 ⭐ 这一支的共同结构</h3>
 <p>讲完四个方案，回头把它们叠在一起，会看到同一个骨架：</p>
 <pre><code>                 ┌─ 一条"粗看"的路：压缩 / 全局，保证不漏
 一个 query 的注意力 ┼─ 一条"细看"的路：挑出来的 top-k，保证准
@@ -2555,7 +2671,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <div class="note ok"><p>⭐ <b>看到一个新的稀疏注意力方案，先问它这三条路各占什么位置。</b> 这比记住它叫什么有用得多。</p></div>
 <hr>
 </div></section>
-<section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>旋钮③：换一套数学 —— 线性注意力</h2></div>
+<section id="s七"><div class="wrap"><div class="stn"><span class="badge">第 七 节</span><h2>旋钮③：换回一个固定大小的状态 —— 线性注意力</h2></div>
 <figure class="fbox fwide" id="fig-tx-k3"><svg viewBox="0 0 1400 822" width="100%" role="img" aria-label="旋钮③ 换一套数学 —— 把那个平方大的矩阵整个删掉">
 <text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">旋钮③ 换一套数学 —— 把那个平方大的矩阵整个删掉</text>
 <text class="svgsm" x="0" y="39" fill="#5f6368">⛔ 这一张跟前两张不一样：<tspan font-weight="700">它不是高亮，是替换。</tspan>原来那四格（Q·Kᵀ → mask → softmax → S·V）没了，换成点亮的这两格。</text>
@@ -2686,7 +2802,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="0" y="768" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#8430ce" stroke-width="1"/>
 <text class="svgsm" x="16" y="795" fill="#8430ce">⭐ 这是三个旋钮里<tspan font-weight="700">唯一改变了模型能表达什么</tspan>的一个。另外两个改的是存法和看法，这一个改的是<tspan font-weight="700">数学本身</tspan>。</text>
 </svg><figcaption>⛔ <b>这一张不是高亮，是替换</b>：原来那四格（Q·Kᵀ → mask → softmax → S·V）整个没了，换成点亮的两格。⭐⭐ <b>不用听解释，读输出形状就够 —— 点亮那格输出 <code>BKHH</code>，S 不见了。</b>状态大小只跟头维有关，跟序列多长无关。</figcaption></figure>
-<h3>6.1 基本换法</h3>
+<h3>7.1 基本换法</h3>
 <p>softmax 注意力必须把所有 K 都留着，是因为 softmax 的分母要对<b>所有位置</b>求和 —— 你没法提前把它们合并。</p>
 <p><b>把 softmax 去掉</b>（换成某个可分解的核函数），求和就可以重排：</p>
 <pre><code>softmax 版： out_t = Σ_{s≤t} softmax(q_t·k_s) v_s      ← 必须留下所有 (k_s, v_s)
@@ -2695,7 +2811,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <p>于是：</p>
 <ul><li>复杂度 O(L²·d) → <b>O(L·d²)</b>，对长序列是数量级的差别</li><li><b>没有随长度增长的 KV cache</b> —— 只有一个 <code>d_k × d_v</code> 的状态矩阵</li><li>推理时它就是一个 <b>RNN</b>：读一个 token、更新一次状态、吐一个输出</li></ul>
 <p><b>代价说死</b>：状态大小固定 → <b>信息必然有损</b>。 序列越长，往同一个矩阵里塞的东西越多，长程精确检索（"第 30 万字提到的那个电话号码"） 会力不从心。这不是实现问题，是这个换法的性质。</p>
-<h3>6.2 谱系：四步，每一步都在修上一步的一个具体毛病</h3>
+<h3>7.2 谱系：四步，每一步都在修上一步的一个具体毛病</h3>
 <table>
 <thead><tr><th>步</th><th>名字</th><th>补了什么</th><th>出处</th></tr></thead><tbody>
 <tr><td>1</td><td>朴素线性注意力</td><td>把 softmax 拆掉，换来固定状态</td><td>Katharopoulos 等, arXiv 2006.16236</td></tr>
@@ -2706,7 +2822,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <p>⚠️ <b>两处容易记错的出处，讲的时候要说对：</b></p>
 <ul><li><b>delta rule 不是 2024 年的东西</b>，是 Schlag 等 2021 年那篇 <em>Linear Transformers Are Secretly Fast Weight Programmers</em>（可上溯到 1990 年代的 fast weight programmer）。2024 年那篇（arXiv 2406.06484）做的是 <b>把它并行化</b>，这是另一件事、也是很关键的一件事 —— 见 §6.4</li><li><b>KDA 是 2025 年 10 月的 Kimi Linear</b>，不是 2026 年</li></ul>
 <p>⭐ <b>第 4 步为什么值得单独说</b>：标量遗忘门意味着「整个状态一起变旧」。 per-channel 意味着<b>不同特征维度可以有各自的遗忘速度</b> —— 有些通道记语法（该快忘），有些记实体名（该慢忘）。 KDA 还把它做成了一个特殊的 <b>DPLR（对角 + 低秩）</b>形式， 正是因为这个特殊形式，才配得出一个比通用 DPLR 便宜得多的分块并行算法。 表达力和可算性是一起设计的，不是先设计再优化。</p>
-<h3>6.2b ⭐⭐ Mamba 在哪？——&nbsp;它不是另一支，它是这一支的祖宗</h3>
+<h3>7.2b ⭐⭐ Mamba 在哪？——&nbsp;它不是另一支，它是这一支的祖宗</h3>
 <p>讲到这里一定会有人问：<b>那 Mamba 呢？SSM 那一路怎么没提？</b> 这个问题问得对，而答案比「另开一支」有意思得多。</p>
 <div class="note ok"><p>⭐ 最硬的一条证据，不用推：Gated DeltaNet 那篇论文的标题就叫 <em>《Gated Delta Networks: Improving Mamba2 with Delta Rule》</em>（arXiv 2412.06464）。 而千问 Qwen3-Next 和 Qwen3.5 用的就是 GDN。 <b>所以千问那一支的祖宗，字面意义上就是 Mamba-2。</b></p></div>
 <p>把它们放到同一个式子里看，一切就清楚了。上面 §6.1 那个递推稍微写全一点：</p>
@@ -2729,13 +2845,13 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <ul><li><b>全矩阵 A</b>：表达力最强，但没有高效的并行扫描——只能一步一步递推，<b>并行度直接归零</b></li><li><b>对角</b>：最容易并行</li><li><b>单位阵减秩一</b>：要靠 2024 年那篇「可并行 DeltaNet」的技巧才算得动</li><li><b>DPLR（对角 ＋ 低秩）</b>：KDA 专门设计了一个<b>特化版本</b>，才能把它压进 Tensor Core</li></ul>
 <p>⭐ 所以这张表不是「表达力越来越强」的单调故事。<b>每一步都在「A 能多复杂」和「还算不算得动」之间重新划线</b>—— 这正是 §6.2 那句「表达力和可算性是一起设计的」的完整版。</p></div>
 <div class="note ok"><p>⭐⭐ <b>回到最初那个问题：Mamba 缺了吗？</b> 没缺——它在表里，只是我们一直用它下游的名字（GDN、KDA）在叫它。 编年史那张图的第三条泳道里，Mamba、Mamba-2、Mamba-3 现在都标上了，<b>跟 DeltaNet 一族在同一条线上</b>，因为它们本来就是。</p></div>
-<h3>6.3 ⚠️ 它不是「更快的 attention」，是另一个模型</h3>
+<h3>7.3 ⚠️ 它不是「更快的 attention」，是另一个模型</h3>
 <p>这是本节最重要的一句话，也是最容易被听众误解的一句。</p>
 <p>三个旋钮里，只有旋钮 ③ <b>改变了模型能表达什么</b>：</p>
 <ul><li>旋钮 ①②：改的是<b>存法</b>和<b>看多少</b>，理论上你还能指着某个历史 token 说 "注意力权重在这儿"。<b>检索是显式的</b></li><li>旋钮 ③：历史被<b>碾进了一个矩阵</b>。你无法指着状态里的某一块说 "这是第 3 万个 token"。<b>检索是隐式的、有损的</b></li></ul>
 <p>所以：</p>
 <ul><li>它<b>不能</b>给已有模型打补丁，必须<b>从头训</b></li><li>评测上要特别看 <b>needle-in-a-haystack 这类精确检索任务</b>， 平均分好看不代表这一类不塌</li><li>也正因如此，<b>几乎没有人纯用线性注意力</b> —— 全都是混合（第五节）</li></ul>
-<h3>6.4 硬件视角：串行的状态怎么榨出并行度</h3>
+<h3>7.4 硬件视角：串行的状态怎么榨出并行度</h3>
 <p><b>这一段是我们的角度，别人的课不会这么讲。</b></p>
 <p><code>S_t = S_{t-1} + ...</code> 是<b>逐 token 串行</b>的。而加速器要的是宽而规整的并行。 训练一个 100 万 token 的序列，串行跑一百万步 —— 直接不用想。</p>
 <p>解法叫 <b>chunkwise parallel</b>：<b>块内并行、块间串行</b>。 把序列切成长为 C 的块，块内用矩阵乘一次算完，块与块之间才传递状态。 于是并行度从 1 变成 C，串行步数从 L 变成 L/C。</p>
@@ -2747,7 +2863,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <hr>
 </div></section>
 <section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>旋钮④（其实是元旋钮）：混合</h2></div>
-<h3>7.1 为什么混合几乎是唯一的答案</h3>
+<h3>8.1 为什么混合几乎是唯一的答案</h3>
 <p>单用任何一个旋钮都有一个致命短板：</p>
 <table>
 <thead><tr><th>单用</th><th>短板</th></tr></thead><tbody>
@@ -2756,7 +2872,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <tr><td>纯全注意力</td><td>KV 和 FLOPs 都爆</td></tr>
 </tbody></table>
 <p>混合的逻辑很朴素：全局层负责精确长程检索，线性/窗口层负责局部与效率，各司其职。 关键在于全局层<b>不需要很多</b> —— 只要有几层能做无损检索， 信息就能沿着残差流传给其余层用。</p>
-<h3>7.2 配比：3:1 是怎么来的，以及它不是定律</h3>
+<h3>8.2 配比：3:1 是怎么来的，以及它不是定律</h3>
 <table>
 <thead><tr><th>模型</th><th>配比</th><th>出处</th></tr></thead><tbody>
 <tr><td>Kimi Linear</td><td>KDA : 全注意力 MLA = <b>3 : 1</b>（48B 总 / 3B 激活）</td><td>arXiv 2510.26692</td></tr>
@@ -2767,14 +2883,14 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 </tbody></table>
 <p>⭐ <b>三件事要讲清楚：</b></p>
 <ol><li><b>3:1 是消融出来的，不是推出来的。</b> Kimi Linear 的消融里， <b>0:1（纯全注意力）反而表现不好</b> —— 这个结果比"3:1 最好"更有意思： <b>加线性层不只是省钱，它可能还带来了别的东西</b></li><li><b>同一家不同规模就换了配比</b>（Ling 的 tiny 3:1 / flash 5:1）—— <b>配比是超参，跟规模和数据有关，不要背下来当常识</b></li><li><b>区间比点值可信。</b> 记 "3:1 到 6:1 这个量级" 就够了</li></ol>
-<h3>7.3 ⭐ K3 的 NoPE —— 混合带来的一个意外红利</h3>
+<h3>8.3 ⭐ K3 的 NoPE —— 混合带来的一个意外红利</h3>
 <p>这是全节最漂亮的一处，值得留三分钟。</p>
 <p>K3 的全注意力（Gated MLA）层<b>完全不加位置编码</b>（NoPE）： 没有 RoPE，没有 YaRN，什么都没有。</p>
 <p>为什么敢这么做？ 因为它们中间夹着的 KDA 层， 本身就是靠递归的衰减和门控在编码顺序 —— 一个天然带时序的算子。 <b>位置信息由线性层提供，全注意力层只管检索。</b></p>
 <p>三个后果，一个比一个实在：</p>
-<ol><li><b>不用调 RoPE 外推。</b> 模型直接外推到 1M，不需要任何位置编码的重标定 —— 长上下文扩展里最烦人的一块调参，直接消失了</li><li><b>MLA 层在推理时可以退化成纯 MQA。</b> 位置编码没了， §4.3 里那条"不可吸收的 64 维"也就不存在了 —— <b>上投影可以完全吸收</b></li><li><b>KV cache 最多降 75%</b>（Kimi Linear 的数字）， 1M 上下文下 TPOT 从 11.48 ms 降到 1.84 ms，<b>6.3×</b></li></ol>
+<ol><li><b>不用调 RoPE 外推。</b> 模型直接外推到 1M，不需要任何位置编码的重标定 —— 长上下文扩展里最烦人的一块调参，直接消失了</li><li><b>MLA 层在推理时可以退化成纯 MQA。</b> 位置编码没了， §5.3 里那条"不可吸收的 64 维"也就不存在了 —— <b>上投影可以完全吸收</b></li><li><b>KV cache 最多降 75%</b>（Kimi Linear 的数字）， 1M 上下文下 TPOT 从 11.48 ms 降到 1.84 ms，<b>6.3×</b></li></ol>
 <div class="note ok"><p>⭐ <b>这才是"混合"真正的意思</b>：不是"两个方案各跑一半凑合用"， 而是让每一层只做自己擅长的事，然后把别人不用做的事一并省掉。 一个架构选择（混合）解开了另一个看起来完全无关的约束（位置编码）。 这门课想教的就是这种"看见约束之间的连接"的能力。</p></div>
-<h3>7.4 ⭐ 各家速查：你日常在用的那些模型，注意力到底是什么</h3>
+<h3>8.4 ⭐ 各家速查：你日常在用的那些模型，注意力到底是什么</h3>
 <p>三个旋钮到这里就拆完了。这一小节反过来 —— <b>按公司排一遍，看每一家实际拧的是哪个旋钮</b>。 都是能在公开 config 或官方博客里查到的，信息截至 <b>2026-09-07</b>。</p>
 <table>
 <thead><tr><th>家</th><th>代表型号</th><th>拧的是哪个旋钮</th><th>配比 / 形态</th></tr></thead><tbody>
@@ -2807,7 +2923,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <table>
 <thead><tr><th>版本</th><th>时间</th><th>注意力</th><th>这一步新增了什么</th></tr></thead><tbody>
 <tr><td>GLM-5（355B–744B）</td><td>2026-02-12</td><td>MLA ＋ <b>DSA</b></td><td>智谱第一次上稀疏</td></tr>
-<tr><td>GLM-5.2（744B）</td><td>2026-06-16</td><td>MLA ＋ DSA ＋ <b>IndexShare</b></td><td>每四个稀疏层共用一个索引器（见 §5.5b），1M 下省 <b>2.9×</b> FLOPs</td></tr>
+<tr><td>GLM-5.2（744B）</td><td>2026-06-16</td><td>MLA ＋ DSA ＋ <b>IndexShare</b></td><td>每四个稀疏层共用一个索引器（见 §6.5b），1M 下省 <b>2.9×</b> FLOPs</td></tr>
 <tr><td><b>GLM-5.3-Flash</b>（321B/18B）</td><td>2026-08-26</td><td><b>KDA 线性 ＋ NoPE 稀疏 MLA</b></td><td>⭐ GLM 家族<b>第一次把线性和稀疏放进同一个模型</b>；原生多模态</td></tr>
 </tbody></table>
 <p>GLM-5.3-Flash 的 <code>layer_types</code> 是一个干净的四层循环：</p>
