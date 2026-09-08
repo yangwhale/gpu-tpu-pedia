@@ -662,7 +662,7 @@ details.aside b{color:var(--ink);font-weight:600}
          而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
          ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
          （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
-    <span class="chip">⏱ <b>109 分钟 · 41 张图</b></span>
+    <span class="chip">⏱ <b>109 分钟 · 42 张图</b></span>
     <span class="chip">完整版 <a href="topic-02-L300.html"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -1299,6 +1299,189 @@ details.aside b{color:var(--ink);font-weight:600}
     片上换成 <b>64</b> 那条线，门槛只降 4.9 倍，而片上流量能涨几十倍，
     <b>撞墙不是因为门槛变高，是因为分母变大</b>。</figcaption>
   </figure>
+<figure class="fbox fwide" id="s012-fig1-7"><svg viewBox="0 0 1400 470" width="100%" role="img" aria-label="一次向量加在 TPU 上从 HBM 到向量单元再写回的全过程动画：读 a 两字节、读 b 两字节、向量单元做一次加法、写回 y 两字节，共搬六字节只算一次，算术强度 0.17"><style>
+/* ⛔ 所有名字带 f17- 前缀：内联 SVG 的样式表在 HTML 里是**文档级**的，
+   类名和 @keyframes 跟整页共享命名空间。撞名不报错，只会某天突然生效。
+   ⚠️ 这段注释里**不能写字面的尖括号标签名** —— 写了 XML 自检当场炸
+   （2026-09-08 现场撞的：注释里提了两个标签名，解析器把它们当成真标签）。 */
+.f17-fly{opacity:0;animation:f17-none 9s linear infinite}
+.f17-a{animation-name:f17-ka}
+.f17-b{animation-name:f17-kb}
+.f17-y{animation-name:f17-ky}
+.f17-spark{opacity:0;animation:f17-kspark 9s linear infinite}
+.f17-led{opacity:.28;animation:f17-klit 9s linear infinite}
+.f17-l1{animation-name:f17-kl1}
+.f17-l2{animation-name:f17-kl2}
+.f17-l3{animation-name:f17-kl3}
+.f17-l4{animation-name:f17-kl4}
+
+/* a：0–22% 走到 VMEM，22–36% 走到寄存器，36–44% 进 VPU，之后隐身 */
+@keyframes f17-ka{
+  0%  {opacity:0;transform:translateX(106px)}
+  4%  {opacity:1;transform:translateX(106px)}
+  22% {opacity:1;transform:translateX(374px)}
+  30% {opacity:1;transform:translateX(374px)}
+  40% {opacity:1;transform:translateX(642px)}
+  46% {opacity:1;transform:translateX(642px)}
+  54% {opacity:1;transform:translateX(910px)}
+  58% {opacity:0;transform:translateX(910px)}
+  100%{opacity:0;transform:translateX(910px)}
+}
+/* b：比 a 晚一点点出发，两块并排飞 —— 读 a 和读 b 花的是同一份带宽 */
+@keyframes f17-kb{
+  0%  {opacity:0;transform:translateX(106px)}
+  8%  {opacity:1;transform:translateX(106px)}
+  26% {opacity:1;transform:translateX(374px)}
+  32% {opacity:1;transform:translateX(374px)}
+  42% {opacity:1;transform:translateX(642px)}
+  48% {opacity:1;transform:translateX(642px)}
+  54% {opacity:1;transform:translateX(910px)}
+  58% {opacity:0;transform:translateX(910px)}
+  100%{opacity:0;transform:translateX(910px)}
+}
+/* y：算完之后原路回去 */
+@keyframes f17-ky{
+  0%,62%{opacity:0;transform:translateX(910px)}
+  64% {opacity:1;transform:translateX(910px)}
+  74% {opacity:1;transform:translateX(642px)}
+  84% {opacity:1;transform:translateX(374px)}
+  96% {opacity:1;transform:translateX(106px)}
+  100%{opacity:0;transform:translateX(106px)}
+}
+/* 唯一那一下 */
+@keyframes f17-kspark{
+  0%,56%{opacity:0} 58%{opacity:1} 61%{opacity:1} 63%{opacity:0} 100%{opacity:0}
+}
+@keyframes f17-kl1{0%,20%{opacity:.28} 24%,100%{opacity:1}}
+@keyframes f17-kl2{0%,26%{opacity:.28} 30%,100%{opacity:1}}
+@keyframes f17-kl3{0%,56%{opacity:.28} 60%,100%{opacity:1}}
+@keyframes f17-kl4{0%,94%{opacity:.28} 98%,100%{opacity:1}}
+
+/* 暂停：纯 CSS 复选框，不用一行 JS。开关就在这张图里（见上面 foreignObject），
+   用 :has() 从 svg 根往下打 —— 图自带全部零件，搬到哪份文档都能用。 */
+svg:has(#f17-pause:checked) .f17-fly,
+svg:has(#f17-pause:checked) .f17-spark,
+svg:has(#f17-pause:checked) .f17-led{animation-play-state:paused}
+
+/* ⭐⭐ 关掉动效的人看到的必须是**一张读得懂的静态图**，
+   不是三个方块叠在原点。所以这里不只是 animation:none ——
+   还要把每个元素摆到「一轮跑完」的姿态上：三块各停在自己的站台，
+   红框亮着，四行账全部点亮。 */
+@media (prefers-reduced-motion: reduce){
+  .f17-fly,.f17-spark,.f17-led{animation:none}
+  .f17-a{opacity:1;transform:translateX(374px)}
+  .f17-b{opacity:1;transform:translateX(642px)}
+  .f17-y{opacity:1;transform:translateX(106px)}
+  .f17-spark{opacity:1}
+  .f17-led{opacity:1}
+}
+</style><text x="0" y="16" fill="#202124" style="font:400 13px 'Noto Sans CJK SC',sans-serif">一次向量加，从头到尾 ——&#160;<tspan font-weight="700">全程只有一下是「算」，其余全是「搬」</tspan></text>
+<text x="0" y="38" fill="#5f6368" style="font:400 11px 'Noto Sans CJK SC',sans-serif">⭐ 这就是 <tspan font-weight="700">0.17</tspan> 长的样子。同一条通路上跑矩阵乘是什么样，见「一个数走完全程」那张（图 T-6）——&#160;<tspan font-weight="700">通路没变，忙的人换了</tspan>。</text>
+<rect x="0" y="52" width="10" height="10" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<text x="15" y="61" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">a（2 字节）</text>
+<rect x="111" y="52" width="10" height="10" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<text x="126" y="61" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">b（2 字节）</text>
+<rect x="222" y="52" width="10" height="10" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<text x="237" y="61" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">y ＝ a＋b（2 字节）</text>
+<rect x="399" y="52" width="10" height="10" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<text x="414" y="61" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">唯一一次「算」</text>
+<rect x="0" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="96" width="4" height="132" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1.0"/>
+<rect x="2" y="96" width="3" height="132" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text x="14" y="120" fill="#a50e0e" style="font:700 12.5px 'Noto Sans CJK SC',sans-serif">① HBM</text>
+<text x="14" y="138" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">片外主存</text>
+<line x1="13" y1="148" x2="199" y2="148" stroke="#dadce0" stroke-width="1"/>
+<text x="14" y="168" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">a 和 b 原本待在这儿</text>
+<text x="14" y="187" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">算完 y 也要写回这儿</text>
+<text x="14" y="206" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">⭐ 这一层的兑换比是 312</text>
+<rect x="268" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="268" y="96" width="4" height="132" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1.0"/>
+<rect x="270" y="96" width="3" height="132" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text x="282" y="120" fill="#b06000" style="font:700 12.5px 'Noto Sans CJK SC',sans-serif">② VMEM</text>
+<text x="282" y="138" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">片上暂存（不是缓存）</text>
+<line x1="281" y1="148" x2="467" y2="148" stroke="#dadce0" stroke-width="1"/>
+<text x="282" y="168" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">编译器插一条 DMA 搬上来</text>
+<text x="282" y="187" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">⛔ 搬多少、什么时候搬，</text>
+<text x="282" y="206" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">　 编译期就写死了（见 T-6）</text>
+<rect x="536" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="536" y="96" width="4" height="132" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.0"/>
+<rect x="538" y="96" width="3" height="132" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text x="550" y="120" fill="#174ea6" style="font:700 12.5px 'Noto Sans CJK SC',sans-serif">③ 向量寄存器</text>
+<text x="550" y="138" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">VPU 的输入端</text>
+<line x1="549" y1="148" x2="735" y2="148" stroke="#dadce0" stroke-width="1"/>
+<text x="550" y="168" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">一条向量指令吃</text>
+<text x="550" y="187" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">8 × 128 个元素</text>
+<text x="550" y="206" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">a 一份、b 一份，各占一个</text>
+<rect x="804" y="96" width="212" height="132" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="804" y="96" width="4" height="132" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="806" y="96" width="3" height="132" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text x="818" y="120" fill="#0d652d" style="font:700 12.5px 'Noto Sans CJK SC',sans-serif">④ VPU</text>
+<text x="818" y="138" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">向量单元</text>
+<line x1="817" y1="148" x2="1003" y2="148" stroke="#dadce0" stroke-width="1"/>
+<text x="818" y="168" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">做那一次加法</text>
+<text x="818" y="187" fill="#5f6368" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">⭐ 整张图里，红一下的只有这里</text>
+<defs><marker id="f17a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#1a73e8"/></marker><marker id="f17b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto"><path d="M0 0 L10 5 L0 10 z" fill="#80868b"/></marker></defs>
+<rect x="0" y="242" width="1016" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<line x1="106" y1="246" x2="106" y2="290" stroke="#dadce0" stroke-width="1" stroke-dasharray="2 3"/>
+<text x="106" y="238" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif" text-anchor="middle">①</text>
+<line x1="374" y1="246" x2="374" y2="290" stroke="#dadce0" stroke-width="1" stroke-dasharray="2 3"/>
+<text x="374" y="238" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif" text-anchor="middle">②</text>
+<line x1="642" y1="246" x2="642" y2="290" stroke="#dadce0" stroke-width="1" stroke-dasharray="2 3"/>
+<text x="642" y="238" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif" text-anchor="middle">③</text>
+<line x1="910" y1="246" x2="910" y2="290" stroke="#dadce0" stroke-width="1" stroke-dasharray="2 3"/>
+<text x="910" y="238" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif" text-anchor="middle">④</text>
+<line x1="128" y1="259" x2="352" y2="259" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#f17a)"/>
+<line x1="352" y1="279" x2="128" y2="279" stroke="#80868b" stroke-width="1.4" marker-end="url(#f17b)"/>
+<line x1="396" y1="259" x2="620" y2="259" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#f17a)"/>
+<line x1="620" y1="279" x2="396" y2="279" stroke="#80868b" stroke-width="1.4" marker-end="url(#f17b)"/>
+<line x1="664" y1="259" x2="888" y2="259" stroke="#1a73e8" stroke-width="1.6" marker-end="url(#f17a)"/>
+<line x1="888" y1="279" x2="664" y2="279" stroke="#80868b" stroke-width="1.4" marker-end="url(#f17b)"/>
+<text x="240" y="252" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif" text-anchor="middle">DMA</text>
+<text x="508" y="252" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif" text-anchor="middle">载入</text>
+<text x="776" y="252" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif" text-anchor="middle">喂入</text>
+<rect class="f17-fly f17-a" x="-16" y="253" width="13" height="13" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect class="f17-fly f17-b" x="3" y="253" width="13" height="13" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect class="f17-fly f17-y" x="-7" y="273" width="13" height="13" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect class="f17-spark" x="810" y="102" width="200" height="120" rx="7" fill="none" stroke="#d93025" stroke-width="2.5"/>
+<text x="910" y="212" fill="#a50e0e" style="font:700 20px 'Noto Sans CJK SC',sans-serif" text-anchor="middle">＋</text>
+<text x="0" y="312" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">灰色那条是回程：结果 → VMEM → HBM，同一套 DMA、同样是编译期排好的——&#160;<tspan font-weight="700">回程也要占带宽，写 y 那 2 个字节一样算在 6 里面</tspan></text>
+<foreignObject x="1250" y="0" width="150" height="26"><div xmlns="http://www.w3.org/1999/xhtml" style="font:11px 'Noto Sans CJK SC',sans-serif;color:#5f6368;text-align:right"><label style="cursor:pointer;user-select:none"><input type="checkbox" id="f17-pause" style="vertical-align:-1px"/> 暂停动画</label></div></foreignObject>
+<rect x="1052" y="96" width="348" height="198" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="1052" y="96" width="4" height="198" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1.0"/>
+<rect x="1054" y="96" width="3" height="198" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text x="1066" y="120" fill="#681da8" style="font:700 12.5px 'Noto Sans CJK SC',sans-serif">这一轮的账</text>
+<line x1="1065" y1="130" x2="1387" y2="130" stroke="#dadce0" stroke-width="1"/>
+<g class="f17-led f17-l1">
+<text x="1066" y="150" fill="#5f6368" style="font:400 11px 'Noto Sans CJK SC',sans-serif">读 a</text>
+<text x="1126" y="150" fill="#b06000" style="font:700 11px 'Roboto Mono',monospace">2 字节</text>
+</g>
+<g class="f17-led f17-l2">
+<text x="1066" y="170" fill="#5f6368" style="font:400 11px 'Noto Sans CJK SC',sans-serif">读 b</text>
+<text x="1126" y="170" fill="#0d652d" style="font:700 11px 'Roboto Mono',monospace">2 字节</text>
+</g>
+<g class="f17-led f17-l3">
+<text x="1066" y="190" fill="#5f6368" style="font:400 11px 'Noto Sans CJK SC',sans-serif">算　</text>
+<text x="1126" y="190" fill="#a50e0e" style="font:700 11px 'Roboto Mono',monospace">1 个 FLOP</text>
+</g>
+<g class="f17-led f17-l4">
+<text x="1066" y="210" fill="#5f6368" style="font:400 11px 'Noto Sans CJK SC',sans-serif">写 y</text>
+<text x="1126" y="210" fill="#174ea6" style="font:700 11px 'Roboto Mono',monospace">2 字节</text>
+</g>
+<text x="1066" y="256" fill="#5f6368" style="font:400 11px 'Noto Sans CJK SC',sans-serif">合计：搬 <tspan font-weight="700">6</tspan> 字节，算 <tspan font-weight="700">1</tspan> 次 → 强度 <tspan font-weight="700" fill="#a50e0e">0.17</tspan></text>
+<rect x="0" y="328" width="1400" height="78" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1.0"/>
+<rect x="0" y="328" width="4" height="78" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.0"/>
+<rect x="2" y="328" width="3" height="78" rx="0" fill="#fff" stroke="#fff" stroke-width="1.0"/>
+<text x="14" y="352" fill="#0d652d" style="font:700 12.5px 'Noto Sans CJK SC',sans-serif">看这一轮里「算」占了多少</text>
+<text x="14" y="374" fill="#5f6368" style="font:400 11px 'Noto Sans CJK SC',sans-serif">四个站台走一遍，<tspan font-weight="700">红框只闪一次</tspan>。搬 6 个字节换来 1 次加法 ——&#160;<tspan font-weight="700">这台机器每搬一个字节，本来能算 312 次</tspan>，现在只算了 <tspan font-weight="700">0.17</tspan> 次。</text>
+<text x="14" y="393" fill="#5f6368" style="font:400 11px 'Noto Sans CJK SC',sans-serif">⭐ <tspan font-weight="700">所以「带宽受限」不是慢，是闲</tspan>——&#160;算力一直在等数据到位。把这样的算子一个个接起来还各写一趟 HBM，就是第 2 节要治的病。</text>
+<text x="0" y="422" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">⚠️ <tspan font-weight="700">示意图：时间比例不代表真实耗时，只表示先后。</tspan>真实比例（搬 6 字节 vs 算 1 次）没法在同一屏里按比例演 ——&#160;<tspan font-weight="700">能演的是次序，不是快慢。</tspan></text>
+<text x="0" y="440" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">图上每个数都能当场复核：bf16 每元素 2 字节 → 读 a 2 ＋ 读 b 2 ＋ 写 y 2 ＝ 6；y ＝ a＋b 是 1 次加法 ＝ 1 个 FLOP（⛔ 不是乘加）；1 ÷ 6 ＝ 0.167 ≈ 0.17；312 ÷ 0.167 ＝ 1,872 倍。</text>
+<text x="0" y="458" fill="#80868b" style="font:400 10.5px 'Noto Sans CJK SC',sans-serif">⭐ 这张图的形式借自 How To Scale Your Model 的 pointwise-product 动图（jax-ml.github.io/scaling-book，MIT）——&#160;站台词汇与配色沿用本课 T-6，内容换成本节那个 0.17 的例子。</text></svg>
+<figcaption><b>图 1-7</b>　<b>一次向量加，从头到尾。</b>四个站台走一遍，
+  <b>红框只闪一次</b> ——&nbsp;搬 6 个字节，只换来 1 次加法。
+  <em>这就是 0.17 长的样子。</em>同一条通路上跑矩阵乘是什么样，见
+  <b>「一个数走完全程」</b>那张（图 T-6）——&nbsp;<b>通路没变，忙的人换了</b>。
+  <br>⚠️ 时间比例是示意，不代表真实耗时 ——&nbsp;<b>能演的是次序，不是快慢</b>。</figcaption></figure>
 
   <p>这张图把这条线用了三次。<b>两个例子特意避开注意力</b> ——&nbsp;
     那一笔第 2 节第一张图就要完整推一遍，在这儿先算等于剧透。</p>
