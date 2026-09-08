@@ -91,20 +91,22 @@ def fig_arc():
             "带来：3:1 ～ 7:1 成了共识",
             "⭐ 今天的形态：便宜的层", "　　　管长度，贵的层管质量"]),
     )
-    CW, GAP, BODY = 224, 8, 128
+    CW, GAP, BODY = 224, 8, 136
     for i, (a_, b_, name, col, fill, rows) in enumerate(ST):
         x = i * (CW + GAP)
-        f.box(x, y, CW, 42, col, col, 8)
-        f.t(x + 13, y + 18, "%s%s" % (a_, ("–" + b_) if b_ else ""),
-            "#ffffffcc", size=_sz(11))
-        f.t(x + 13, y + 35, name, "#fff", True, 15)
-        f.box(x, y + 42, CW, BODY, fill, col, 8)
-        f.box(x, y + 42, CW, 12, fill, fill, 0)
-        f.lines(x + 12, y + 62, CW - 22, rows, size=11, lh=17,
-                fill=col if False else GY)
-        f.t(x + 12, y + 62, rows[0], col, False, _sz(11))   # 首行用主色重画
+        # ⛔ 原先是实心彩头 ＋ 白字 ——&nbsp;专题一整张图里没有大面积实心色。
+        #   改成：浅底 ＋ 主色标题（t() 会自动降到 900）＋ 顶部一条 3px 彩条认色。
+        f.box(x, y, CW, BODY + 42, fill, col, 8)
+        f.box(x, y, CW, 5, col, col, 3)
+        f.box(x, y + 3, CW, 6, fill, fill, 0)
+        f.t(x + 13, y + 22, "%s%s" % (a_, ("–" + b_) if b_ else ""),
+            GY2, size=_sz(11))
+        f.t(x + 13, y + 40, name, col, True, 15)
+        f.line(x + 12, y + 48, x + CW - 12, y + 48, LINE, 1, arrow=False)
+        f.lines(x + 12, y + 66, CW - 22, rows, size=11, lh=17, fill=GY)
+        f.t(x + 12, y + 66, rows[0], col, False, _sz(11))   # 首行用主色（自动降 900）
         if i:
-            f.line(x - GAP - 2, y + 21, x - 2, y + 21, GY2, 1.4)
+            f.line(x - GAP - 2, y + 26, x - 2, y + 26, GY2, 1.4)
     y += 42 + BODY + 16
 
     # ── 落点 ────────────────────────────────────────────────────

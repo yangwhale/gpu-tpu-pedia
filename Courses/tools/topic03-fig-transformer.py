@@ -64,13 +64,23 @@ import os
 import xml.dom.minidom
 
 # ── 配色 ────────────────────────────────────────────────────────────
+# ⭐⭐ 2026-09-08 对齐专题一配色。这个文件**有自己的 t()**，
+#   所以 topic03_draw 里那套自动降档管不到它 ——&nbsp;
+#   ⛔ 这正是「共用基元」没做彻底留下的口子：改了库，这里纹丝不动。
+#   📌 权宜之计是在本地 t() 里装同一张降档表（下面 INK900）；
+#     ⭐ 真正的修法是把这个文件也迁到 topic03_draw，**记在待办里**。
 BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
-PU, CY, BR = "#8430ce", "#00838f", "#7a5000"
-DIM = "#bdc1c6"          # 被压灰的部分
+PU, CY, BR = "#9334e6", "#00838f", "#b06000"
+DIM = "#9aa0a6"          # 被压灰的部分（原 #bdc1c6 在白底上对比度太低）
+# 500 主色 → 900 文字色。跟 topic03_draw.INK900 保持一致。
+INK900 = {"#1a73e8": "#174ea6", "#1e8e3e": "#0d652d", "#d93025": "#a50e0e",
+          "#e8710a": "#b06000", "#f9ab00": "#b06000", "#9334e6": "#681da8",
+          "#8430ce": "#681da8", "#00838f": "#007b83", "#12b5cb": "#007b83"}
 DIMBG = "#fafafa"
 # 每个主色对应的浅底 —— 热的那一格用它，跟压灰的部分拉开层次
+# 500 主色 → 50 浅底。⛔ 换紫色时这里也得跟着换 —— 上次就漏了这张表，构建当场挂掉。
 TINT = {"#1a73e8": "#e8f0fe", "#e8710a": "#fef7e0",
-        "#8430ce": "#f3e8fd", "#1e8e3e": "#e6f4ea"}
+        "#9334e6": "#f3e8fd", "#8430ce": "#f3e8fd", "#1e8e3e": "#e6f4ea"}
 INK = "#202124"
 
 W = 1400
@@ -282,6 +292,8 @@ def render(v):
         return c if live(key) else DIM
 
     def t(x, y, s, cls="svgsm", fill=None, bold=False, size=None, anchor=None):
+        # ⭐ 自动降档：500 主色画文字 → 换成 900 深色变体（对齐专题一）。
+        fill = INK900.get(fill, fill)
         st = ["font-size:%dpx" % size] if size else []
         p.append('<text class="%s" x="%d" y="%d"%s%s%s>%s</text>' % (
             cls, x, y, ' fill="%s"' % fill if fill else '',

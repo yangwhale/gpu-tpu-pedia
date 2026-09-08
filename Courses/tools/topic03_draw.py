@@ -31,9 +31,47 @@ import xml.dom.minidom
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 
+# ══════════════════════════════════════════════════════════════════
+# ⭐⭐⭐ 2026-09-08 对齐专题一的配色。现场：「专题三的配色感觉土了吧唧，
+#     专题一的比较高端，照着专题一统一一下。」
+#
+# ⛔ 先量再改 ——&nbsp;把两讲所有 figure 里的颜色统计了一遍，"土"有三个**具体**原因：
+#
+#   ① **彩色文字直接用了主色（500 档）。**
+#      专题一的彩色文字压倒性地用 **900 档深色变体**：
+#      #174ea6×121、#0d652d×95、#b06000×74、#a50e0e×70；
+#      主色 #1a73e8 在它那儿几乎只出现在**填充和描边**上（文字仅 13 次）。
+#      而专题三反过来：#d93025×104、#1a73e8×102 全是**文字**。
+#      ⭐ 高饱和主色大面积当正文色，就是"廉价感"的头号来源。
+#
+#   ② **框线太重。** 专题一的描边主力是 #dadce0×287 和 #e8eaed×232（极浅）；
+#      专题三是 #bdc1c6×156 和 #5f6368×74 ——&nbsp;整整深一到两档。
+#
+#   ③ **多引进了一个体系外的紫。** #8430ce 不在 Google 那套色板里。
+#      换成 Material 的 purple 500/900：#9334e6 ／ #681da8。
+#
+# 📌 于是这里改成 **Material 三档制**：50 浅底 · 500 主色 · 900 文字。
+#   ⭐⭐ 关键在 `Fig.t()` 里做了**自动降档**：任何用 500 主色画文字的调用，
+#     会自动换成对应的 900 ——&nbsp;**一处改，四张图全跟着变**，
+#     而且以后写新图时想写错都难。⛔ 别把那个降档去掉。
+# ══════════════════════════════════════════════════════════════════
 BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
-PU, CY, BR, INK = "#8430ce", "#00838f", "#7a5000", "#202124"
+PU, CY, BR, INK = "#9334e6", "#00838f", "#b06000", "#202124"
 GY2, LINE, LINE2, BG2 = "#80868b", "#dadce0", "#e8eaed", "#f8f9fa"
+
+# 500 主色 → 900 文字色。⭐ 数值取自专题一实际用到的那几个。
+INK900 = {
+    "#1a73e8": "#174ea6",   # blue
+    "#1e8e3e": "#0d652d",   # green
+    "#d93025": "#a50e0e",   # red
+    "#e8710a": "#b06000",   # orange / amber
+    "#f9ab00": "#b06000",
+    "#9334e6": "#681da8",   # purple
+    "#8430ce": "#681da8",   # 旧紫，一并归位
+    "#00838f": "#007b83",   # cyan
+    "#12b5cb": "#007b83",
+    "#a50e0e": "#a50e0e",
+}
 MINSZ = 11
 
 
@@ -59,6 +97,9 @@ class Fig(object):
     # ── 原子 ────────────────────────────────────────────────────
     def t(self, x, y, s, fill=INK, bold=False, size=11.5, anchor=None,
           cls="svgsm", mono=False):
+        # ⭐ 自动降档：用 500 主色画文字 → 换成对应的 900 深色变体。
+        #   这一行就是「照着专题一统一配色」的全部实现。⛔ 别去掉。
+        fill = INK900.get(fill, fill)
         st = ["font-size:%.1fpx" % _sz(size)]
         if mono:
             # ⛔ 这里必须用单引号：style 是双引号属性，里面再写双引号会把属性提前闭合，
@@ -72,6 +113,8 @@ class Fig(object):
 
     def box(self, x, y, w, h, fill="#fff", stroke=LINE, r=6, sw=1, dash=None,
             shadow=False):
+        # 📌 stroke 默认就是 #dadce0 ——&nbsp;跟专题一的主力描边一致（那边 ×287）。
+        #   ⛔ 别把默认改深；要强调就显式传主色，不要靠加重灰线。
         self.p.append('<rect x="%s" y="%s" width="%s" height="%s" rx="%d" fill="%s" '
                       'stroke="%s" stroke-width="%s"%s%s/>'
                       % (x, y, w, h, r, fill, stroke, sw,
@@ -115,13 +158,20 @@ class Fig(object):
         return yy + 8
 
     # ── ② 带标题栏的面板 ─────────────────────────────────────────
+    # ⛔⛔ 2026-09-08：标题栏原先是**实心主色 ＋ 白字**。
+    #   对着专题一逐张看，它**整张图里没有一块大面积实心色** ——&nbsp;
+    #   颜色只出现在①细边框 ②小色块 ③文字（而且是 900 深色档）。
+    #   ⭐ 实心色块 ＋ 白字是「仪表盘」观感，正是「土」的第四个来源。
+    #   📌 改成：标题栏用 50 浅底，标题字用主色（会被 t() 自动降到 900），
+    #     底部一条细分隔线。**外框保留主色细边** ——&nbsp;专题二就是这么做的，
+    #     那张 TensorCore 图被认可过。
     def panel(self, x, y, w, h, title, col=LINE, fill="#fff", tag=None,
               tint=None, sub=None):
         """外框 ＋ 顶部标题栏。tag 是右上角的小注（出处 / 口径）。"""
         self.box(x, y, w, h, fill, col, 9)
         self.box(x, y, w, 30, tint or BG2, col, 9)
         self.box(x, y + 20, w, 10, tint or BG2, tint or BG2, 0)
-        self.line(x, y + 30, x + w, y + 30, col, 1, arrow=False)
+        self.line(x, y + 30, x + w, y + 30, LINE, 1, arrow=False)
         self.t(x + 14, y + 20, title, col if col != LINE else INK,
                bold=True, size=13.5, cls="svglbl")
         if sub:
