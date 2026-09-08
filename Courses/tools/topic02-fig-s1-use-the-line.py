@@ -45,6 +45,7 @@
    它只在读者拿这个词去别处套的时候才爆 —— 而这门课通篇在教读者这么套。
 """
 import io
+import re
 
 BL, OR, GR, RD, GY, YL, PU = ("#1a73e8", "#e8710a", "#1e8e3e", "#d93025",
                               "#5f6368", "#f9ab00", "#8430ce")
@@ -54,6 +55,19 @@ p = []
 
 
 def t(x, y, s, cls="svgsm", fill=None, size=None, anchor=None):
+    # ⛔⛔ 2026-09-08：这里以前是 'class="%s"' % cls，而全篇有 61 处按位置传了
+    #   `None`（本意是「不要类，用默认」）。于是**渲染出 `class="None"`** ——&nbsp;
+    #   一个不存在的类名，什么 CSS 都不命中，浏览器就按 SVG 文字的缺省字号 **16px**
+    #   画，再乘上宽图 1.22 倍的缩放 = **21px**，比正文的 18px 还大。
+    #   现场原话：「这个字它大到跟老年机一样」。
+    #   ⭐⭐ 两条判据：
+    #     ① **拼错的类名不报错、不难看、只是「变成另一种样子」** ——&nbsp;
+    #       它在 CSS 里没有对应规则，所以没有任何一层会抱怨。
+    #       同一形状：`class="None"`、`class="undefined"`、拼错的 BEM 名。
+    #     ② 缺省值是「样式」的时候，`None` 必须解释成**回到缺省**，
+    #       不能原样拼进属性。这里直接把 None 归一到 svglbl（本图的正文类）。
+    cls = cls or "svglbl"
+    assert re.match(r"^svg[a-z]+$", cls), "类名不对：%r" % cls
     p.append('<text class="%s" x="%s" y="%s"%s%s%s>%s</text>' % (
         cls, x, y, ' fill="%s"' % fill if fill else '',
         ' text-anchor="%s"' % anchor if anchor else '',

@@ -18,6 +18,16 @@
    整页文字都不换行，页面被撑到 2986px。这条留着，跟 ① 是一对：
    一个查往右撑破，一个查往左跑掉。
 
+④ **图里的字比正文还大**（2026-09-08）
+   现场原话：「这个字它大到跟老年机一样，这不好吧？」
+   真凶不是缩放，是 `class="None"` ——&nbsp;有 61 处按位置传了 `None` 当类名，
+   拼出来就是字面量 `None`。它在 CSS 里没有对应规则，于是浏览器按
+   **SVG 文字的缺省 16px** 画，再乘宽图 1.22 倍 = **21px**，比正文 18px 还大。
+   ⛔⛔ 阴险处：**拼错的类名不报错、不难看，只是「变成另一种样子」** ——&nbsp;
+      没有任何一层会抱怨，源码扫也扫不出（`class="None"` 语法完全合法）。
+   ⭐ 判据用外部锚点：**图里的字不该比正文大**。
+      不查类名对不对（拼错法有无穷种），查它渲染出来的结果越不越界。
+
 ③ **图里的字撞车 / 顶出画布**
    SVG 的 `<text>` **不会自动换行**，所以任何「把图里的字调大」的改动，
    风险都只有一种：压到隔壁的字上，或者顶出 viewBox。
@@ -82,8 +92,28 @@ JS_FIG = r"""()=>{
       if(Math.min(p.x+p.w,q.x+q.w)-Math.max(p.x,q.x) > 3){
         n++; if(hits.length<3) hits.push(p.s+'  ⟂  '+q.s);}
     }
-    if(n||oob.length) out.push({i, id:svg.getAttribute('data-fig')||f.id||'',
-      W,H, collide:n, hits, oob:oob.slice(0,3), noob:oob.length});
+    // ④ 字号越界：拿正文字号当外部锚点。
+    // ⛔ 判的是**这张图最常见的那个字号**（＝它的正文档），不是最大值 ——&nbsp;
+    //   标题、大号数字本来就该比正文大，按最大值判会把 8 张正常的图一起报出来，
+    //   真问题反而被淹掉（跟这个文件里 ② 那条「假阳性淹掉真问题」是同一课）。
+    const body=parseFloat(getComputedStyle(document.body).fontSize)||16;
+    const hist={}, samp={};
+    for(const t of svg.querySelectorAll('text')){
+      const s0=(t.textContent||'').trim(); if(!s0) continue;
+      // ⛔ 只乘一次 R.width/W。第一版写成 `/k*(R.width/W)`，而 k 就是 W/R.width，
+      //   等于把缩放**平方**了一遍 —— 12px 报成 18px，看着像真有问题。
+      //   ⭐ 同一个比例在同一行出现两次，就该停下来问哪个是多余的。
+      const fs=Math.round(parseFloat(getComputedStyle(t).fontSize)*(R.width/W));
+      hist[fs]=(hist[fs]||0)+1; if(!samp[fs]) samp[fs]=s0.slice(0,16);
+    }
+    const mode=Object.entries(hist).sort((a,b)=>b[1]-a[1])[0];
+    const big=[];
+    if(mode && +mode[0]>body)
+      big.push('正文档 '+mode[0]+'px ＞ 页面正文 '+body+'px（'+mode[1]+
+               ' 处，如「'+samp[mode[0]]+'」）');
+    if(n||oob.length||big.length) out.push({i, id:svg.getAttribute('data-fig')||f.id||'',
+      W,H, collide:n, hits, oob:oob.slice(0,3), noob:oob.length,
+      big:big.slice(0,3), nbig:big.length});
   });
   return out;}"""
 
@@ -120,15 +150,17 @@ def main(paths):
                     print('        %s +%-5d %s' % (k, v, w))
                 bad += g['nOver']
             for r in figs:
-                print('   ⚠️  #%-2d %-11s 撞车 %d／顶出 %d'
-                      % (r['i'], r['id'], r['collide'], r['noob']))
+                print('   ⚠️  #%-2d %-11s 撞车 %d／顶出 %d／字号越界 %d'
+                      % (r['i'], r['id'], r['collide'], r['noob'], r['nbig']))
                 for h in r['hits']:
                     print('           ⟂ ' + h)
                 for o in r['oob']:
                     print('           ↗ ' + o)
-                bad += r['collide'] + r['noob']
+                for z in r['big']:
+                    print('           🔠 ' + z)
+                bad += r['collide'] + r['noob'] + r['nbig']
             if not g['nGeo'] and not g['nOver'] and not figs:
-                print('   ✅ 无左跑、无右撑、图内文字无撞车')
+                print('   ✅ 无左跑、无右撑、图内文字无撞车、字号没越过正文')
         b.close()
     print('\n版面体检合计 %d 处。只报告，不中止构建。' % bad)
 
