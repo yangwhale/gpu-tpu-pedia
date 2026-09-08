@@ -103,8 +103,8 @@ def fig_arc():
             GY2, size=_sz(11))
         f.t(x + 13, y + 40, name, col, True, 15)
         f.line(x + 12, y + 48, x + CW - 12, y + 48, LINE, 1, arrow=False)
-        f.lines(x + 12, y + 66, CW - 22, rows, size=11, lh=17, fill=GY)
-        f.t(x + 12, y + 66, rows[0], col, False, _sz(11))   # 首行用主色（自动降 900）
+        f.lines(x + 12, y + 66, CW - 22, rows, size=11, lh=17, fill=GY,
+                first_fill=col)          # ⛔ 别再补画一遍首行，会叠成两层
         if i:
             f.line(x - GAP - 2, y + 26, x - 2, y + 26, GY2, 1.4)
     y += 42 + BODY + 16

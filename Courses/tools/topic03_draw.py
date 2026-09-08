@@ -270,7 +270,8 @@ class Fig(object):
             self.t(20, y + 48 + i * 21, ln, col, size=_sz(12))
         return y + h
 
-    def lines(self, x, y, w, rows, size=11, lh=17, fill=None, bold_first=False):
+    def lines(self, x, y, w, rows, size=11, lh=17, fill=None, bold_first=False,
+              first_fill=None):
         """在宽度 w 内画多行文字。⛔ **每一行都过宽度断言** ——
         这套图前后栽过三次「文字溢出既不报错也没滚动条，只是被裁掉」。
         ⭐ 换行点由调用方给（rows 是已经拆好的行），不做自动断词：
@@ -280,7 +281,12 @@ class Fig(object):
             need = wpx(re.sub(r"<[^>]+>", "", ln), size)
             assert need <= w, "「%s」要 %dpx，只有 %dpx —— 拆行" % (
                 re.sub(r"<[^>]+>", "", ln)[:22], need, w)
-            self.t(x, y + i * lh, ln, fill or GY, bold_first and i == 0, _sz(size))
+            # ⛔ first_fill 是给「首行用主色」用的。原先调用方的做法是**再画一遍首行**
+            #   ——&nbsp;同一段文字叠两层，版面体检当场报「撞车 6」。
+            #   ⭐ 重复绘制在纸面上完全看不出来，只有几何探针看得见。
+            self.t(x, y + i * lh, ln,
+                   (first_fill or fill or GY) if i == 0 else (fill or GY),
+                   bold_first and i == 0, _sz(size))
         return y + len(rows) * lh
 
     def src(self, y, *lines):
