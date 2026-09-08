@@ -55,6 +55,29 @@ HERE = os.path.dirname(os.path.abspath(__file__))
 #     会自动换成对应的 900 ——&nbsp;**一处改，四张图全跟着变**，
 #     而且以后写新图时想写错都难。⛔ 别把那个降档去掉。
 # ══════════════════════════════════════════════════════════════════
+
+# ══════════════════════════════════════════════════════════════════
+# ⭐⭐⭐ 2026-09-08 第三刀 · 填充规则。现场问：「是不是所有的地方都不用填充？
+#     现代化的文档风格是不是不用背景填充？外圈有颜色 ＋ 字有颜色就挺好。」
+#
+# ⛔ 我的意见：**方向对，但判据不是「填不填」，是「填的那块东西是不是信息本身」。**
+#   量了专题一才敢这么说 ——&nbsp;它的浅色填充并没有变少，只是**长在别的地方**：
+#
+#       专题一：大块（>40k px²）**7 个**，小块 **136 个**
+#       专题三：大块 **29 个**（最大的几条是 1400×178 的整条落点带），小块只有 56 个
+#
+#   ⭐⭐ 也就是说：**专题一把颜色用在「小而多」的元素上，
+#     专题三把颜色刷在「大而少」的整条带子上。** 这才是"现代 / 土"的分界。
+#
+# 📌 于是定成规矩（两类，别再一刀切）：
+#     · **是信息本身 → 填**：热力图格子、KV 条、类型色块、图例方块 ——&nbsp;
+#       它们小而多，颜色在编码含义，去掉就少了一层信息。
+#     · **只是容器 → 不填**：面板身子、整条落点带 ——&nbsp;
+#       它们大而少，颜色只是装饰，**留白 ＋ 细边 ＋ 彩色标题字**就够了。
+#
+# ⭐ 落点带改成「左侧 4px 竖色条 ＋ 白底 ＋ 细灰框」——&nbsp;
+#   这也正是今天大多数文档系统（GitHub alert、Material outlined）的做法。
+# ══════════════════════════════════════════════════════════════════
 BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
 PU, CY, BR, INK = "#9334e6", "#00838f", "#b06000", "#202124"
 GY2, LINE, LINE2, BG2 = "#80868b", "#dadce0", "#e8eaed", "#f8f9fa"
@@ -177,12 +200,12 @@ class Fig(object):
     def panel(self, x, y, w, h, title, col=LINE, fill="#fff", tag=None,
               tint=None, sub=None):
         """外框 ＋ 顶部标题栏。tag 是右上角的小注（出处 / 口径）。"""
-        self.box(x, y, w, h, fill, LINE, 9)
-        self.box(x, y, w, 30, tint or BG2, LINE, 9)
-        self.box(x, y + 20, w, 10, tint or BG2, tint or BG2, 0)
-        if col != LINE:                       # 顶部彩带：唯一的颜色身份
+        # ⛔ 标题栏也不再填色（见文件头「填充规则」）。颜色身份只剩两样：
+        #   顶部 4px 彩带 ＋ 彩色标题字。
+        self.box(x, y, w, h, "#fff", LINE, 9)
+        if col != LINE:
             self.box(x, y, w, 4, col, col, 2)
-            self.box(x, y + 2, w, 4, tint or BG2, tint or BG2, 0)
+            self.box(x, y + 2, w, 4, "#fff", "#fff", 0)
         self.line(x, y + 30, x + w, y + 30, LINE, 1, arrow=False)
         self.t(x + 14, y + 20, title, col if col != LINE else INK,
                bold=True, size=13.5, cls="svglbl")
@@ -227,20 +250,24 @@ class Fig(object):
             "info": (BL, "#e8f0fe", "⭐⭐"), "bad": (RD, "#fce8e6", "⛔")}
 
     def band(self, y, kind, title, lines, w=None):
+        """落点带。⛔ **不填色** ——&nbsp;白底 ＋ 细灰框 ＋ 左侧 4px 彩色竖条。
+        见文件头「填充规则」：容器不填，只有承载信息的小元素才填。"""
         col, fill, icon = self.KIND[kind]
         w = w or self.w
         h = 34 + len(lines) * 21 + 8
-        self.box(0, y, w, h, fill, col, 9)
-        self.t(16, y + 24, "%s %s" % (icon, title), col, bold=True, size=13.5,
+        self.box(0, y, w, h, "#fff", LINE, 9)
+        self.box(0, y, 4, h, col, col, 2)
+        self.box(2, y, 3, h, "#fff", "#fff", 0)
+        self.t(20, y + 24, "%s %s" % (icon, title), col, bold=True, size=13.5,
                cls="svglbl")
         for i, ln in enumerate(lines):
             # ⛔ 跟 src() 同一条：**文字溢出既不报错也不产生滚动条，只是被裁掉**。
             #   2026-09-08 实测又栽了一次（Shazeer 那句英文引文冲出右边界）——
             #   ⭐ 所以凡是「一整行文字」的基元，都必须自带宽度断言。
-            need = wpx(re.sub(r"<[^>]+>", "", ln), 12) + 34
+            need = wpx(re.sub(r"<[^>]+>", "", ln), 12) + 38
             assert need <= w, "落点带第 %d 行要 %dpx，只有 %dpx —— 拆行" % (
                 i + 1, need, w)
-            self.t(16, y + 48 + i * 21, ln, col, size=_sz(12))
+            self.t(20, y + 48 + i * 21, ln, col, size=_sz(12))
         return y + h
 
     def lines(self, x, y, w, rows, size=11, lh=17, fill=None, bold_first=False):

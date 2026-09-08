@@ -504,7 +504,9 @@ def render(v):
         ("⭐⭐", "<b>权重是所有人共享的一份，KV cache 是每人一份</b> ——", BL),
         ("", "所以它决定的不是「装不装得下」，是<b>能同时服务多少人</b>。", BL),
     ]
-    box(PX, NY, PW, 26 + len(NUM) * 19 + 18, "#fef7e0", OR, 8)
+    box(PX, NY, PW, 26 + len(NUM) * 19 + 18, "#fff", "#dadce0", 8)
+    box(PX, NY, 4, 26 + len(NUM) * 19 + 18, OR, OR, 2)
+    box(PX + 2, NY, 3, 26 + len(NUM) * 19 + 18, "#fff", "#fff", 0)
     t(PX + 14, NY + 20, "📐 把字母换成数字 ——&#160;那份要留下来的到底有多大",
       "svglbl", BR, size=13)
     for n, (tag, txt, col) in enumerate(NUM):

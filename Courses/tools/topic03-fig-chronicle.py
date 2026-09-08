@@ -532,7 +532,12 @@ for (name, col, fill, evs) in LANES:
     LANE_Y.append((ly, h, placed))
     ly += h + 4
 for (name, col, fill, evs), (y, h, placed) in zip(LANES, LANE_Y):
-    box(4, y, W - 28, h, fill, col, 5)
+    # ⛔ 2026-09-08：泳道底色去掉。判据见 topic03_draw 文件头「填充规则」——
+    #   **容器不填，只有承载信息的小元素才填。** 泳道底色是容器。
+    #   ⭐ 颜色身份改由「左侧 4px 竖条 ＋ 彩色泳道名 ＋ 事件点」承担。
+    box(4, y, W - 28, h, "#fff", "#dadce0", 5)
+    box(4, y, 4, h, col, col, 2)
+    box(6, y, 2, h, "#fff", "#fff", 0)
     t(14, y + 15, name, fill=col, bold=True)
     for (yr, lab, r, right) in placed:
         x = xf(yr)

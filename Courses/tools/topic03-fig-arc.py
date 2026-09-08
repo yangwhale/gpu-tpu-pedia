@@ -34,9 +34,9 @@ r"""专题三 · 总纲图 —— **这是一个什么故事，怎么从过去�
   前者是「能跑多长」，后者是「同一长度下省了多少」。
   ⛔ **不能相乘**，也不能说成「一共 43 万倍」——&nbsp;那是把两把尺子当成一把。
 """
-from topic03_draw import (Fig, wpx, _sz,
+from topic03_draw import (Fig, wpx, _sz, LINE,
                           BL, OR, GR, RD, GY, PU, CY, BR, INK,
-                          GY2, LINE, BG2)
+                          GY2, BG2)
 
 
 def fig_arc():
@@ -96,9 +96,9 @@ def fig_arc():
         x = i * (CW + GAP)
         # ⛔ 原先是实心彩头 ＋ 白字 ——&nbsp;专题一整张图里没有大面积实心色。
         #   改成：浅底 ＋ 主色标题（t() 会自动降到 900）＋ 顶部一条 3px 彩条认色。
-        f.box(x, y, CW, BODY + 42, fill, col, 8)
+        f.box(x, y, CW, BODY + 42, "#fff", LINE, 8)   # ⛔ 不填色，见 draw 文件头
         f.box(x, y, CW, 5, col, col, 3)
-        f.box(x, y + 3, CW, 6, fill, fill, 0)
+        f.box(x, y + 3, CW, 6, "#fff", "#fff", 0)
         f.t(x + 13, y + 22, "%s%s" % (a_, ("–" + b_) if b_ else ""),
             GY2, size=_sz(11))
         f.t(x + 13, y + 40, name, col, True, 15)
