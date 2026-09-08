@@ -80,7 +80,13 @@ head = _sub(head, r'<meta property="og:url" content="[^"]*">',
 #     护栏会在上游修好之后反过来把构建搞挂。
 head = re.sub(r'\s*<meta property="og:image"[^>]*>(\s*<meta property="og:image:(width|height)"[^>]*>)*',
             "", head)
-assert "TPU 与 GPU" not in head and "topic-02" not in head, "head 里还有专题二的残留"
+# ⛔⛔ 2026-09-08：查残留之前**先把注释剥掉**。
+#   起因：我在 port-microscope 注入的 CSS 里写了一句注释，正文提到了
+#   「topic-02-L300.html」这个文件名 —— 这条断言当场把整个 build 挂掉。
+#   ⭐ 判据：**护栏要查的是元数据（title / og:*），不是碰巧提到兄弟文件的散文。**
+#     注释是写给人看的，把它算进「残留」是把护栏的口径放得太宽。
+_probe = re.sub(r"/\*.*?\*/|<!--.*?-->", "", head, flags=re.S)
+assert "TPU 与 GPU" not in _probe and "topic-02" not in _probe, "head 里还有专题二的残留"
 # 跟专题八同一个补丁：这份 CSS 的 p 没有 margin-top，ul 后面紧跟的段落会贴上去
 head += """
 <style>
@@ -89,29 +95,9 @@ ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
    这里不再重复一份 —— 重复的 CSS 跟重复的正文是同一类问题。 */
 h4 { margin:18px 0 6px; font-size:15px }
 
-/* ══════════════════════════════════════════════════════════════
-   ⭐⭐⭐ 2026-09-08 · 提示框去彩底（**本讲专属覆盖**）
-   ══════════════════════════════════════════════════════════════
-   现场：「诸如此类的背景填充还有，不要背景填充，好丑。」
-
-   ⚠️ 先把话说清楚：**这一步是超出专题一的**。实测专题一自己也在用同款彩底
-      （.note ok ×33、.note info ×31、.note warn ×31、.note danger ×19）。
-      所以改完之后，**专题三跟专题一、二在这一处就不一致了** ——
-      而「一致性本身就是内容的一部分」是这门课自己立过的规矩。
-   📌 所以这里只覆盖本讲，**没有动共用的 CSS 源**。
-      要不要把专题一、二也一起改成这个样子，等拍板。
-
-   ⭐ 改法跟图里那一刀同一条判据：**容器不填色。**
-     留白 ＋ 细灰边 ＋ 左侧 4px 彩条 ＋ 彩色标题字，颜色身份一样清楚。
-   ⛔ 不动的：`code` / `pre` / `figure.fbox` / `details` 那几个 #f8f9fa ——
-     它们是**中性极浅灰**，不是彩色装饰，而且专题一逐字段一样。
-     `.chip`（模型表里的厂商色框）也不动 —— 那是信息本身。 */
-.note{background:#fff !important;border:1px solid var(--line);
-      border-left-width:4px}
-.note.info  {border-left-color:var(--blue)}
-.note.ok    {border-left-color:var(--green)}
-.note.warn  {border-left-color:var(--yellow)}
-.note.danger{border-left-color:var(--red)}
+/* ⭐ 2026-09-08：提示框去彩底那段**已经改到共用 CSS 源里了**
+   （topic-01.html 与 topic-02-L300.html），本讲不再单独覆盖 ——
+   ⛔ 同一条规则留两份，迟早只改一份。 */
 </style>"""
 
 # ⭐ 路线目录：节号与标题写死在这儿，跟正文里的 <section id> 对齐。

@@ -2623,7 +2623,15 @@ figure.fwide{margin-left:50%;transform:translateX(-50%);
    fwide 的图有 1760px 宽，图注全跟着就成了一行一百多字，所以这里
    **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
 .fwide figcaption{max-width:1080px;margin-left:0}
-.note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
+/* ⛔⛔ 2026-09-08：note.q 是第五种提示框，跟 info/warn/danger/ok 一样**去彩底**。
+   上一轮按名字挨个改那四种，**漏了它** —— 它不在那四个名字里，
+   而且它的定义还不在 topic-02-L300.html 里，是**这里注入进去的**。
+   ⭐ 两条判据：
+     ① 改一族样式要按「渲染后还有谁带底色」验收，不能按「我记得有几种」；
+     ② 先确认那个文件是不是生成物 —— 直接改 L300 会被下一次 build 原样盖掉，
+        而且**盖掉不报错**，只是下次渲染又变回来。 */
+.note.q{background:#fff;border:1px solid var(--line);
+        border-left:4px solid var(--purple)}
 /* ---- 开场热身选择题（.guess）----
    样式从专题一原样搬（topic-01.html），两课同一个观感 ——&nbsp;
    学员一眼认得出「又是那个先猜一猜」。改这里要顺手看一眼那边有没有跟着变。

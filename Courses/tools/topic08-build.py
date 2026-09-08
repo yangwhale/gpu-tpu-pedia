@@ -85,7 +85,13 @@ _head = _sub(_head, r'<meta property="og:url" content="[^"]*">',
 #     护栏会在上游修好之后反过来把构建搞挂。
 _head = re.sub(r'\s*<meta property="og:image"[^>]*>(\s*<meta property="og:image:(width|height)"[^>]*>)*',
             "", _head)
-assert "TPU 与 GPU" not in _head and "topic-02" not in _head, "head 里还有专题二的残留"
+# ⛔⛔ 2026-09-08：查残留之前**先把注释剥掉**。
+#   起因：我在 port-microscope 注入的 CSS 里写了一句注释，正文提到了
+#   「topic-02-L300.html」这个文件名 —— 这条断言当场把整个 build 挂掉。
+#   ⭐ 判据：**护栏要查的是元数据（title / og:*），不是碰巧提到兄弟文件的散文。**
+#     注释是写给人看的，把它算进「残留」是把护栏的口径放得太宽。
+_probe = re.sub(r"/\*.*?\*/|<!--.*?-->", "", _head, flags=re.S)
+assert "TPU 与 GPU" not in _probe and "topic-02" not in _probe, "head 里还有专题二的残留"
 
 # ⛔ 专题二那份 CSS 里 p 只有 margin-bottom，没有 margin-top，而 li 是 flex。
 #    于是紧跟在 </ul> 后面的段落会**贴到最后一个 bullet 上**，读起来像是

@@ -76,6 +76,14 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic08-build-lecture.py
 fi
 
+# ⭐⭐ 配色收尾。⛔ **必须排在所有生成器之后、所有体检之前**：
+#   在生成器之后，是因为它改的是产物 —— 2026-09-08 我先直接去改
+#   topic-02-L300.html 里的一行 CSS，**下一次 build 原样盖回去，而且不报错**。
+#   在体检之前，是因为体检该验的是读者真正拿到的那一版。
+#   它是幂等的，重跑无副作用。规则和「为什么不去改画图脚本」写在文件头。
+step "配色收尾（500 主色文字降 900、大面板去底）"
+python3 topic-repalette.py
+
 step "版面体检（报告为主，不中止）"
 python3 topic02-lint-readability.py
 

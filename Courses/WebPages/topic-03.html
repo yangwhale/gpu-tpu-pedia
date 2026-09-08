@@ -219,10 +219,18 @@ tr.sum td.n{color:var(--blue-d)}
 
 /* ── 提示块 ───────────────────────────── */
 .note{border-radius:var(--radius);padding:16px 20px;font-size:15px;line-height:1.7;margin:20px 0}
-.note.info{background:var(--blue-l)}
-.note.warn{background:var(--yellow-l);border-left:4px solid var(--yellow)}
-.note.danger{background:var(--red-l);border-left:4px solid var(--red)}
-.note.ok{background:var(--green-l);border-left:4px solid var(--green)}
+/* ⛔⛔ 2026-09-08 全书去彩底：提示块**不填背景**，白底 ＋ 细灰框 ＋ 左侧 4px 彩条。
+   原话：「不要背景填充，好丑」「现代化的文档风格是不是不用这个背景填充？
+   就是外圈有颜色，加上字有颜色，我觉得就挺好」。
+   ⭐ 这是全书唯一一份 note 样式源，专题二/三/八都从这里继承 ——&nbsp;
+     ⛔ 不要在某一课里再写一份局部覆盖，那样两边迟早漂开且不报错。
+   ⚠️ 还有第五种 `.note.q`（提问框），它的定义在 topic02-port-microscope.py
+     注入的那段 CSS 里，不在这个文件 —— 已一并去底。 */
+.note{background:#fff;border:1px solid var(--line);border-left-width:4px}
+.note.info{border-left-color:var(--blue)}
+.note.warn{border-left-color:var(--yellow)}
+.note.danger{border-left-color:var(--red)}
+.note.ok{border-left-color:var(--green)}
 .note .t{display:block;font-weight:700;margin-bottom:5px}
 /* 两级强调块：.punch 实心蓝（最强），.punch.soft 浅蓝底（次一级）。
    原来次一级是近黑底 —— 跟 index.html 的浅色基调不搭，已换成同色系的浅底。 */
@@ -514,7 +522,15 @@ figure.fwide{margin-left:50%;transform:translateX(-50%);
    fwide 的图有 1760px 宽，图注全跟着就成了一行一百多字，所以这里
    **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
 .fwide figcaption{max-width:1080px;margin-left:0}
-.note.q{background:#f6f0fd;border-left:4px solid var(--purple)}
+/* ⛔⛔ 2026-09-08：note.q 是第五种提示框，跟 info/warn/danger/ok 一样**去彩底**。
+   上一轮按名字挨个改那四种，**漏了它** —— 它不在那四个名字里，
+   而且它的定义还不在 topic-02-L300.html 里，是**这里注入进去的**。
+   ⭐ 两条判据：
+     ① 改一族样式要按「渲染后还有谁带底色」验收，不能按「我记得有几种」；
+     ② 先确认那个文件是不是生成物 —— 直接改 L300 会被下一次 build 原样盖掉，
+        而且**盖掉不报错**，只是下次渲染又变回来。 */
+.note.q{background:#fff;border:1px solid var(--line);
+        border-left:4px solid var(--purple)}
 /* ---- 开场热身选择题（.guess）----
    样式从专题一原样搬（topic-01.html），两课同一个观感 ——&nbsp;
    学员一眼认得出「又是那个先猜一猜」。改这里要顺手看一眼那边有没有跟着变。
@@ -610,29 +626,9 @@ ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
    这里不再重复一份 —— 重复的 CSS 跟重复的正文是同一类问题。 */
 h4 { margin:18px 0 6px; font-size:15px }
 
-/* ══════════════════════════════════════════════════════════════
-   ⭐⭐⭐ 2026-09-08 · 提示框去彩底（**本讲专属覆盖**）
-   ══════════════════════════════════════════════════════════════
-   现场：「诸如此类的背景填充还有，不要背景填充，好丑。」
-
-   ⚠️ 先把话说清楚：**这一步是超出专题一的**。实测专题一自己也在用同款彩底
-      （.note ok ×33、.note info ×31、.note warn ×31、.note danger ×19）。
-      所以改完之后，**专题三跟专题一、二在这一处就不一致了** ——
-      而「一致性本身就是内容的一部分」是这门课自己立过的规矩。
-   📌 所以这里只覆盖本讲，**没有动共用的 CSS 源**。
-      要不要把专题一、二也一起改成这个样子，等拍板。
-
-   ⭐ 改法跟图里那一刀同一条判据：**容器不填色。**
-     留白 ＋ 细灰边 ＋ 左侧 4px 彩条 ＋ 彩色标题字，颜色身份一样清楚。
-   ⛔ 不动的：`code` / `pre` / `figure.fbox` / `details` 那几个 #f8f9fa ——
-     它们是**中性极浅灰**，不是彩色装饰，而且专题一逐字段一样。
-     `.chip`（模型表里的厂商色框）也不动 —— 那是信息本身。 */
-.note{background:#fff !important;border:1px solid var(--line);
-      border-left-width:4px}
-.note.info  {border-left-color:var(--blue)}
-.note.ok    {border-left-color:var(--green)}
-.note.warn  {border-left-color:var(--yellow)}
-.note.danger{border-left-color:var(--red)}
+/* ⭐ 2026-09-08：提示框去彩底那段**已经改到共用 CSS 源里了**
+   （topic-01.html 与 topic-02-L300.html），本讲不再单独覆盖 ——
+   ⛔ 同一条规则留两份，迟早只改一份。 */
 </style>
 
 </head>
@@ -916,7 +912,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 <circle cx="734" cy="384" r="4" fill="#1e8e3e"/>
 <line x1="734" y1="384" x2="734" y2="399" stroke="#1e8e3e" stroke-width="1.2"/>
 <text class="svgsm" x="740" y="408" fill="#1e8e3e"><tspan font-weight="700">⭐ FlashAttention</tspan></text>
-<rect x="0" y="449" width="1460" height="178" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="449" width="1460" height="178" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/><rect x="0" y="449" width="4" height="178" rx="2" fill="#e8710a"/><rect x="2" y="449" width="3" height="178" fill="#fff"/>
 <text class="svglbl" x="16" y="473" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
 <text class="svgsm" x="16" y="497" fill="#7a5000"><tspan font-weight="700">MiniMax</tspan></text>
 <text class="svgsm" x="118" y="497" fill="#7a5000">线性（M1）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
@@ -1511,7 +1507,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="64" y="76" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">痛在哪</tspan></text>
 <text class="svgsm" x="556" y="76" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">谁来解</tspan></text>
 <text class="svgsm" x="880" y="76" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">解完之后欠下什么</tspan></text>
-<rect x="0" y="90" width="1400" height="96" rx="9" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="90" width="1400" height="96" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="90" width="4" height="96" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="90" width="3" height="96" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <rect x="14" y="112" width="40" height="40" rx="20" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="34" y="139" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">①</tspan></text>
 <text class="svglbl" x="64" y="124" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">串行：算不快</tspan></text>
@@ -1520,7 +1518,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svglbl" x="556" y="124" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Transformer</tspan></text>
 <text class="svgsm" x="556" y="150" fill="#5f6368" style="font-size:12.0px">把循环整个拿掉</text>
 <text class="svgsm" x="880" y="138" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">注意力矩阵变成 O(N²)</tspan> ——&#160;本专题三个旋钮都是在还这笔账</text>
-<rect x="0" y="194" width="1400" height="96" rx="9" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="194" width="1400" height="96" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="194" width="4" height="96" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="194" width="3" height="96" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <rect x="14" y="216" width="40" height="40" rx="20" fill="#fff" stroke="#e8710a" stroke-width="1"/>
 <text class="svgsm" x="34" y="243" fill="#b06000" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">②</tspan></text>
 <text class="svglbl" x="64" y="228" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">梯度消失：记不住</tspan></text>
@@ -1529,7 +1529,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svglbl" x="556" y="228" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">门控 → 注意力</tspan></text>
 <text class="svgsm" x="556" y="254" fill="#5f6368" style="font-size:12.0px">LSTM 1997 / GRU 2014</text>
 <text class="svgsm" x="880" y="242" fill="#5f6368" style="font-size:12.0px">注意力更彻底：<tspan font-weight="700">任意两个位置只隔一步</tspan>（表 1 最长路径 O(1) vs O(n)）</text>
-<rect x="0" y="298" width="1400" height="96" rx="9" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="298" width="1400" height="96" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="298" width="4" height="96" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="298" width="3" height="96" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <rect x="14" y="320" width="40" height="40" rx="20" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
 <text class="svgsm" x="34" y="347" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">③</tspan></text>
 <text class="svglbl" x="64" y="332" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">状态是固定大小：装不下</tspan></text>

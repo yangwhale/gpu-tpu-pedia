@@ -100,9 +100,9 @@
 # ⭐ 判据：**图里每一个盒子都该回答一个问题，而不是标一个名字。**
 # ══════════════════════════════════════════════════════════════════
 
-from topic03_draw import (Fig, wpx, _sz,
+from topic03_draw import (Fig, wpx, _sz, LINE,
                           BL, OR, GR, RD, GY, PU, CY, BR, INK,
-                          GY2, LINE, BG2)
+                          GY2, BG2)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -408,7 +408,10 @@ def fig_pain():
          GR, "#e6f4ea"),
     )
     for (num, name, hurt, cure, cure2, tail, col, fill) in ROWS:
-        f.box(0, y, W, 96, fill, col, 9)
+        # ⛔ 去彩底：容器不填。颜色身份留给左侧竖条 ＋ 圆形序号 ＋ 彩色标题。
+        f.box(0, y, W, 96, "#fff", LINE, 9)
+        f.box(0, y, 4, 96, col, col, 2)
+        f.box(2, y, 3, 96, "#fff", "#fff", 0)
         f.box(14, y + 22, 40, 40, "#fff", col, 20)
         f.t(34, y + 49, num, col, True, 19, "middle")
         f.t(64, y + 34, name, col, True, 13.5, cls="svglbl")

@@ -603,8 +603,14 @@ t(16, _LAST, '⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>�
 #    挂在这里等于让一张编年史图额外背一条工程告诫，两边都被稀释。
 # ⛔ 别顺手加回来。真要留这条限定，它该长在正文讲稀疏那一节里，不是长在图脚。
 FH = _LAST - FY + 18
-p[_FOOT] = ('<rect x="0" y="%d" width="%d" height="%d" rx="6" fill="#fef7e0" '
-            'stroke="%s" stroke-width="1"/>' % (FY, W, FH, OR))
+# ⛔ 2026-09-08 去彩底（判据见 topic03_draw 文件头「填充规则」：容器不填）。
+#   ⭐ 这一处是**回填**写的，所以前一轮按「box(0, FY, ...)」去搜没搜到 ——
+#     📌 教训：**改样式要按「产物长什么样」搜，不是按「代码怎么写的」搜。**
+p[_FOOT] = ('<rect x="0" y="%d" width="%d" height="%d" rx="6" fill="#fff" '
+            'stroke="#dadce0" stroke-width="1"/>'
+            '<rect x="0" y="%d" width="4" height="%d" rx="2" fill="%s"/>'
+            '<rect x="2" y="%d" width="3" height="%d" fill="#fff"/>'
+            % (FY, W, FH, FY, FH, OR, FY, FH))
 
 p.append('</svg>')
 # ── 回填 svg 开标签：高度按真实落点算，不写死 ──────────────────────
