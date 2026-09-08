@@ -90,7 +90,7 @@ def fig_swap():
 
     N, R, PY = 6, 19, y
     # ── 左：RNN ────────────────────────────────────────────────
-    LT = f.panel(0, PY, 660, 272, "Ⓐ RNN：一条链", RD, "#fce8e6",
+    LT = f.panel(0, PY, 660, 272, "Ⓐ RNN：一条链", RD, "#fff",
                  sub="信息只能沿着链爬", tag="§零 讲过", tint="#fadad6")
     for i in range(N):
         cx = 70 + i * 96
@@ -118,20 +118,21 @@ def fig_swap():
     #   ③ **它就是后面反复出现的那个「注意力矩阵」本人**。
     #   判据：**要讲「有多少」，就别画「怎么连」。**
     QX = 676
-    QT = f.panel(QX, PY, W - QX, 272, "Ⓑ 自注意力：一张 n × n 的表", BL, "#e8f0fe",
+    QT = f.panel(QX, PY, W - QX, 272, "Ⓑ 自注意力：一张 n × n 的表", BL, "#fff",
                  sub="每一格 ＝ 一个 query 对一个 key 的打分", tint="#d5e4fb")
     G, CELL = 8, 21
     gx, gy = QX + 96, QT + 26
     for r in range(G):
         for c in range(G):
             x, yv = gx + c * CELL, gy + r * CELL
+            # ⛔ 原先每格都描一圈饱和蓝边 ——&nbsp;64 格就是 64 条彩线，
+            #   那是「中性框线只占一半」的大头。⭐ 热力图本来就该只用填充。
             if c <= r:
                 lit = (r == G - 2)
                 f.box(x, yv, CELL - 3, CELL - 3,
-                      "#8ab4f8" if lit else "#c6dafc", BL if lit else "#a8c7fa",
-                      2, 0.6)
+                      "#669df6" if lit else "#c6dafc", "none", 2, 0)
             else:
-                f.box(x, yv, CELL - 3, CELL - 3, "#f1f3f4", "#e0e0e0", 2, 0.6)
+                f.box(x, yv, CELL - 3, CELL - 3, "#f1f3f4", "none", 2, 0)
     f.t(gx - 10, gy + 10, "q1", GY2, size=_sz(11), anchor="end")
     f.t(gx - 10, gy + (G - 2) * CELL + 10, "q7", BL, True, _sz(11), anchor="end")
     f.t(gx - 10, gy + (G - 1) * CELL + 10, "qn", GY2, size=_sz(11), anchor="end")
@@ -207,7 +208,7 @@ def fig_qkv():
 
     # ── 下：一条流水线 ───────────────────────────────────────────
     BY = y + 172 + 14
-    BT = f.panel(0, BY, W, 176, "② 一次注意力，四步", OR, "#fef7e0",
+    BT = f.panel(0, BY, W, 176, "② 一次注意力，四步", OR, "#fff",
                  sub="Attention(Q,K,V) = softmax(QKᵀ / √d_k) · V", tint="#fbeecb")
     STEPS = (("Q · Kᵀ", "每个 query 跟每个 key 打分", PU, "#f3e8fd", 200),
              ("÷ √d_k", "把方差拉回 1", RD, "#fce8e6", 150),
@@ -282,7 +283,7 @@ def fig_heads():
         RD, size=_sz(12))
 
     BX = 486
-    BT = f.panel(BX, y, W - BX, 214, "Ⓑ 多头（h ＝ 8）", BL, "#e8f0fe",
+    BT = f.panel(BX, y, W - BX, 214, "Ⓑ 多头（h ＝ 8）", BL, "#fff",
                  sub="切成 8 份，每份 64 维，各看各的，最后拼回来", tint="#d5e4fb")
     COLS = (PU, CY, GR, OR, RD, "#00838f", "#7b1fa2", BL)
     for i in range(8):

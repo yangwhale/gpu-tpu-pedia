@@ -165,12 +165,24 @@ class Fig(object):
     #   📌 改成：标题栏用 50 浅底，标题字用主色（会被 t() 自动降到 900），
     #     底部一条细分隔线。**外框保留主色细边** ——&nbsp;专题二就是这么做的，
     #     那张 TensorCore 图被认可过。
+    # ⛔⛔ 2026-09-08 第二刀。第一刀只换了标题栏（实心色 → 浅底），
+    #   现场回话「怎么感觉跟之前没什么变化」——&nbsp;**对的，我只改了一小块。**
+    # ⭐ 再量一次，这次量**描边的中性/彩色配比**（前一次量的是面积，两讲差不多，
+    #   所以那一轮没找到真凶）：
+    #     专题一 —— 中性 #dadce0×286 ＋ #e8eaed×231 ＋ #9aa0a6×78 ≈ 七成以上
+    #     专题三 —— 饱和主色约占一半（红 66 / 蓝 63 / 绿 47 / 紫 39 …）
+    #   ⭐⭐ **大面板全部用饱和主色描边，三四个摞在一起就是「吵」。**
+    # 📌 改法：**外框一律中性浅灰**，颜色身份改由「顶部一条 4px 彩带 ＋ 标题文字」承担
+    #   ——&nbsp;跟总纲图那六张卡同一套做法。⛔ 别再把主色传给大面板的外框。
     def panel(self, x, y, w, h, title, col=LINE, fill="#fff", tag=None,
               tint=None, sub=None):
         """外框 ＋ 顶部标题栏。tag 是右上角的小注（出处 / 口径）。"""
-        self.box(x, y, w, h, fill, col, 9)
-        self.box(x, y, w, 30, tint or BG2, col, 9)
+        self.box(x, y, w, h, fill, LINE, 9)
+        self.box(x, y, w, 30, tint or BG2, LINE, 9)
         self.box(x, y + 20, w, 10, tint or BG2, tint or BG2, 0)
+        if col != LINE:                       # 顶部彩带：唯一的颜色身份
+            self.box(x, y, w, 4, col, col, 2)
+            self.box(x, y + 2, w, 4, tint or BG2, tint or BG2, 0)
         self.line(x, y + 30, x + w, y + 30, LINE, 1, arrow=False)
         self.t(x + 14, y + 20, title, col if col != LINE else INK,
                bold=True, size=13.5, cls="svglbl")

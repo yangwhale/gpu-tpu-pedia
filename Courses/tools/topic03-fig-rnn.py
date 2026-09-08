@@ -214,7 +214,7 @@ def fig_hw():
          (RD, "串行：一步一格"), (GR, "并行：整段一次")])
 
     AH = 152
-    AT = f.panel(0, y, W, AH, "Ⓐ RNN", RD, "#fce8e6",
+    AT = f.panel(0, y, W, AH, "Ⓐ RNN", RD, "#fff",
                  sub="每一个时间步，都要把同一块权重 W 从 HBM 重新搬进片上一次",
                  tag="训练和推理都一样", tint="#fadad6")
     for i in range(6):
@@ -240,7 +240,7 @@ def fig_hw():
         "#a50e0e", size=_sz(12))
 
     BY = y + AH + 14
-    BT = f.panel(0, BY, W, 130, "Ⓑ Transformer 训练", GR, "#e6f4ea",
+    BT = f.panel(0, BY, W, 130, "Ⓑ Transformer 训练", GR, "#fff",
                  sub="同一块权重只搬一次，n 个位置一起喂进去", tint="#d7ecdc")
     f.cell(34, BT + 22, 98, 52, "W", "[k·d × d]", GR, "#fff", grid=True)
     f.t(146, BT + 54, "·", GY2, True, 15, "middle")
@@ -252,7 +252,7 @@ def fig_hw():
                      '那笔交易的硬件形态。</tspan>', "#0d652d", size=_sz(12))
 
     CY = BY + 130 + 14
-    CT = f.panel(0, CY, W, 190, "算术强度 ＝ 算了多少次 ÷ 搬了多少字节", OR, "#fef7e0",
+    CT = f.panel(0, CY, W, 190, "算术强度 ＝ 算了多少次 ÷ 搬了多少字节", OR, "#fff",
                  sub="它决定你是在等算力，还是在等内存", tint="#fbeecb")
     COLS = ((16, "算的是谁"), (250, "FLOPs"), (470, "搬进来的字节"),
             (650, "算术强度"), (770, "于是"))
