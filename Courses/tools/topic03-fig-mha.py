@@ -1,5 +1,5 @@
 # -*- coding: utf-8 -*-
-"""专题三 · §一「MHA」的三张图。
+r"""专题三 · §一「MHA」的三张图。
 
 ⭐ 承接 §零：RNN 疼在三处（算不快、记不住、装不下）。
    这一节讲 2017 年那一刀 ——&nbsp;**把循环整个拿掉，只留下那个补丁**。
@@ -223,12 +223,16 @@ def fig_qkv():
     f.box(x + 6, BT + 22, 210, 52, "#fff", OR, 6)
     f.t(x + 111, BT + 44, "输出 [n × d]", OR, True, 13, "middle")
     f.t(x + 111, BT + 62, "跟输入一样的形状", GY, size=_sz(11), anchor="middle")
-    f.t(30, BT + 104, '⛔ <tspan font-weight="700">第一步那个 Q·Kᵀ 的形状是 [n × n]</tspan>'
-                      '——&#160;它是整层里唯一一个随序列长度<tspan font-weight="700">平方</tspan>'
-                      '长大的东西。本专题后面三个旋钮，拧的全是它。', BR, size=_sz(12))
-    f.t(30, BT + 128, '⭐ 而 <tspan font-weight="700">K 和 V 得留着</tspan>'
+    # ⛔ 2026-09-08：这里原先写「它是整层里唯一一个随长度平方长大的东西」——
+    #   那是**存储口径**，而这一步根本不落地（FlashAttention 已是标配）。
+    #   ⭐ 改成计算口径，并把「要留下来的是什么」这条主线接上去。
+    f.t(30, BT + 104, '⛔ 第一步那个 Q·Kᵀ 是 <tspan font-weight="700">n × n 个数</tspan>'
+                      '——&#160;但它<tspan font-weight="700">不落地</tspan>，'
+                      '只在片上过。<tspan font-weight="700">贵在要算的次数，不在显存。</tspan>',
+        BR, size=_sz(12))
+    f.t(30, BT + 128, '⭐⭐ <tspan font-weight="700">真正要留下来的是 K 和 V</tspan>'
                       '——&#160;下一个 token 还要跟它们打分。'
-                      '<tspan font-weight="700">留下来的这两份，就叫 KV cache。</tspan>',
+                      '<tspan font-weight="700">这两份就是 KV cache，也是本讲唯一的账本。</tspan>',
         BR, size=_sz(12))
 
     yy = BY + 176 + 16
