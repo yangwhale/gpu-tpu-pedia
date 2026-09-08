@@ -339,6 +339,46 @@ ROWS += [
      "⭐ 全局层 <tspan font-weight=\"700\">K 维加倍 ＋ K=V 共享</tspan>，窗口 1024"),
 ]
 
+
+# ══════════════════════════════════════════════════════════════════
+# ⛔⛔ 2026-09-08 第九轮：现场要求「别漏掉人家最新发布的东西，
+#     漏了会被学生认为不严谨」。按家扫了一遍最新发布，**补两行真缺口**。
+#
+# ⭐⭐ 【缺口一 · Mistral Large 3】675B/41B，2025-12。
+#   本表原先 Mistral 只有 2023 年那个 7B ——&nbsp;**欧洲最大的开源旗舰整个不在表上**。
+#   ⭐ 而且扒开 params.json 之后，冒出一条比「补一行」值钱得多的事实：
+#     它的注意力是 **MLA，而且超参跟 DeepSeek-V3 逐字段一样**：
+#     n_layers 61、dim 7168、n_heads 128、kv_lora_rank 512、
+#     q_lora_rank 1536、qk_nope_head_dim 128、qk_rope_head_dim 64。
+#     → **MLA 已经从「DeepSeek 的自研」扩散成了跨大洲的行业默认。**
+#   ⚠️ 它没有 transformers 版 config（模型卡原话：「We sadly didn't have enough
+#     time to add Mistral Large 3 to transformers」），参数读自 params.json。
+#
+# ⭐⭐ 【缺口二 · Qwen3.8-Flash-Next】2026-08-26，model_type 是 qwen4_exp_text
+#   ——&nbsp;**Qwen4 架构的预览版**。本表原先千问最新只到 Qwen3.5（2026-03），
+#   **漏了整整一代架构**，这是最容易被学生当成「材料没更新」的那种缺口。
+#   · 注意力仍是 3:1（full_attention_interval = 4，48 层里 12 层全注意力），
+#     线性那一支的配置（linear_conv_kernel_dim 4、linear_num_key_heads 16 /
+#     value_heads 48、output_gate_type sigmoid）跟 Qwen3-Next 同族。
+#   · ⭐ 真正的新东西**不在注意力上**：ngram_size 3、
+#     ngram_vocab_size_base 20,000,000 ——&nbsp;**51B 的 n-gram 嵌入表**。
+#     本表是注意力表，所以只在备注里点一句，不另开列。
+#
+# 📌 同一轮扫过、**确认不进表**的（记下来，免得下次又查一遍）：
+#   · DeepSeek-V4-Flash-Vision-Exp（08-21）——&nbsp;V4-Flash 的多模态版，注意力没动
+#   · Qwen3.8-Max（2.4T，08-02）——&nbsp;**没开权重**，本表只收开源
+#   · Kimi K2.5 / K2.6 ——&nbsp;MLA，机制已被 K2 / K3 两行覆盖
+#   · Ling-3.0-tiny、Ling-3.0-flash-Fin ——&nbsp;同架构的小号与行业微调版
+#   · Nemotron 3.5 Lightning、Mistral Small 4 ——&nbsp;机制上没有新东西
+#   · Llama 5、Ring-3.0、GLM-5.4、混元 Hy4 正式版 ——&nbsp;**查无此物**，别脑补
+ROWS += [
+    ("2025-12", "Mistral Large 3　675B/41B · 61 层", [("MLA", 1)], "288K", ("mla", 61, 576),
+     "⭐ <tspan font-weight=\"700\">MLA 超参跟 V3 逐字段一样</tspan>；参数读自 params.json"),
+    ("2026-08", "Qwen3.8-Flash-Next　125B/6B · 48 层",
+     [("GDN", 3), ("gAT", 1)], "256K", ("gqa", 12, 2, 256),
+     "⭐ <tspan font-weight=\"700\">Qwen4 架构预览</tspan>；新东西在 51B 的 n-gram 嵌入表"),
+]
+
 ROWS.sort(key=lambda r: r[0])
 _d = [r[0] for r in ROWS]
 assert _d == sorted(_d), "排序没生效"
@@ -443,6 +483,7 @@ HL = {
     #    空了七个月。⭐ 补进来之后才发现，那段**不是没发布，是没有新机制** ——
     #    见落点⑧。这四行分别代表「转正 / 收进主线 / 新招 / 新机制」四种进展。
     "DeepSeek-V3.2":     "Exp 转正：稀疏从实验走进生产，top-k 512 → 2048",
+    "Mistral Large 3":   "MLA 扩散到了西方：欧洲最大开源旗舰逐字段照抄 V3 的 MLA 超参",
     "Qwen3.5":           "千问把混合注意力从旁支 Qwen3-Next 收进了主线",
     "Gemma 4 31B":       "旋钮①又出新招：全局层 K 维加倍再让 K=V 共享一份",
     "GLM-5.3-Flash":     "唯一一个把②和③同锅：34 层 KDA ＋ 11 层稀疏 MLA",
