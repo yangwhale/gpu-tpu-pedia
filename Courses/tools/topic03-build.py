@@ -115,6 +115,21 @@ h4 { margin:18px 0 6px; font-size:15px }
 #   折叠不是把内容藏起来，是**把「必须读」和「想读才读」分开**。
 #
 # ⛔ 新增章节前先回来读这一段。这门课后面每一节都按它写。
+# ⛔⛔⛔ 2026-09-08 抓到的一类**体检查不出来**的污染，写在这儿当规矩。
+#
+#   两次整体重编号（插 §零 RNN、插 §一 MHA）都用 `§(\d+)\.` 机械 +1。
+#   ⭐ 但这份文档里的「§X.Y」**有两种含义**：
+#        ① 本课的小节号 ——&nbsp;该跟着改
+#        ② **被引论文自己的小节号** ——&nbsp;⛔ 绝对不能改
+#   结果 6 处论文节号被 +2：DeepSeek-V3 的 sec.2.1/4.2 变成了 §4.1/§6.2、
+#   Kimi K3 的 sec.2.1.2 变成 §4.1.2、DeepSeek-V4 的 sec.2.3 变成 §4.3……
+#
+# ⭐⭐ **最毒的地方：污染后的号码恰好都落在真实存在的本课小节上。**
+#   于是跨节指针体检**全绿** ——&nbsp;它只查「这个号存不存在」，
+#   查不了「这个号该不该是本课的号」。读者按图索骥会翻到一节毫不相干的内容。
+#
+# 📌 现在的规矩：**论文小节号一律写成 `sec. X.Y`，本课小节号才用 `§X.Y`。**
+#   ⛔ 以后再重编号，只动 `§`，`sec.` 一个字都别碰。
 SECTIONS = [
     # ⭐ 2026-09-08：在 §零 之后插入新的 §一「MHA」，其余整体后移一位。
     # ⛔ 这是第二次整体重编号了。两次都靠 topic02-lint-xref.py 兜底 ——
@@ -476,7 +491,7 @@ __FIG_TX_K1__
 <p>⭐ 值得强调的是「GQA 是一个连续旋钮」这件事本身 —— 它不是一个新机制，是把 MHA 和 MQA 之间的空白填上，让你可以按需要选一个点。 这门课后面会反复见到这个套路：<b>把一个二选一变成一个可调的连续量。</b></p>
 <p>代价说清楚：省的是 KV 的<b>份数</b>，赔的是<b>表达能力</b> —— 本来 128 个头可以各自关注不同的东西，现在被迫共享。</p>
 <h3>4.2 MLA：不砍头，改成低秩压缩</h3>
-<ul><li>KV 不再按头存，而是压成<b>一个 512 维的隐向量</b>（<code>d_c = 512</code>）， 用的时候再用上投影矩阵升回 128 个头</li><li>位置信息<b>单独走 64 维一路 RoPE</b>（<code>d_h^R = 64</code>）</li><li>所以每 token 每层只存 <b>512 + 64 = 576</b> 个数 —— 对照 MHA 的 32,768 个，<b>56.9 倍</b></li><li>出处：V3 论文 §6.2 超参一节，<code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code></li></ul>
+<ul><li>KV 不再按头存，而是压成<b>一个 512 维的隐向量</b>（<code>d_c = 512</code>）， 用的时候再用上投影矩阵升回 128 个头</li><li>位置信息<b>单独走 64 维一路 RoPE</b>（<code>d_h^R = 64</code>）</li><li>所以每 token 每层只存 <b>512 + 64 = 576</b> 个数 —— 对照 MHA 的 32,768 个，<b>56.9 倍</b></li><li>出处：V3 论文 <b>sec. 4.2</b> 超参一节，<code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code></li></ul>
 <p><b>代价：用计算换显存。</b> 多了一对降维/升维的矩阵乘。 这句话在<a href="专题04-反向与优化器.md">专题四</a> §3.2 会被再打一个折扣 —— ⚠️ <b>MLA 的压缩在训练前向里其实不生效</b>（K/V 会被解压出来算）， 它省的是<b>推理时的 KV cache</b>，不是训练时的激活。这是一个非常常见的误解。</p>
 <div class="note warn"><p>⚠️ <b>落到硬件上有个反直觉的后果</b>：MLA 在推理时可以把上投影矩阵"吸收"进 query 那一侧，从而改变整个计算的形状。同一个数学式子有多种算法实现， 选哪种取决于是 prefill 还是 decode。 这一条留到<a href="专题06-推理.md">专题六</a>。</p></div>
 <h3>4.3 ⚠️ 为什么 RoPE 必须单独走一路</h3>
@@ -486,7 +501,7 @@ __FIG_TX_K1__
 <p>所以 MLA 的解法是<b>把这两件事拆开走两条路</b>： 一路 512 维不带位置、可以被吸收；另一路 64 维专门扛 RoPE、老老实实存着。 <b>576 = 512（可吸收）+ 64（不可吸收）。</b></p>
 <div class="note ok"><p>⭐ 这个「因为要保留某个代数变换，所以把功能拆成两路」的动作， 在后面还会以别的面貌出现（V4 的部分 RoPE、K3 的 NoPE）。 <b>值得当成一个套路记住，而不是当成 MLA 的一个实现细节。</b></p></div>
 <h3>4.4 Gated MLA</h3>
-<ul><li>在 MLA 的输出端加一个<b>门控</b>：<code>gate = σ(W_g x)</code>，逐元素乘在注意力输出上</li><li>Kimi K3 用的是<b>全秩</b>门控矩阵（K2 那代是低秩的）</li><li>出处：K3 技术报告 §4.1.2</li></ul>
+<ul><li>在 MLA 的输出端加一个<b>门控</b>：<code>gate = σ(W_g x)</code>，逐元素乘在注意力输出上</li><li>Kimi K3 用的是<b>全秩</b>门控矩阵（K2 那代是低秩的）</li><li>出处：K3 技术报告 <b>sec. 2.1.2</b></li></ul>
 <p>它的作用不是省显存 —— <b>门控不减少任何 KV</b> —— 而是让模型能学会「这一层这个位置，注意力的输出干脆不要」。 放在旋钮 ① 里是因为它改的是 MLA 这一支的形状，但要讲清楚它<b>省的不是显存</b>。</p>
 <hr>
 </div></section>
@@ -759,19 +774,57 @@ linear                                               ← 第 45 层多出来的�
 <table>
 <thead><tr><th>要什么</th><th>在哪</th></tr></thead><tbody>
 <tr><td>MQA / GQA</td><td>arXiv <b>1911.02150</b> / <b>2305.13245</b></td></tr>
-<tr><td>MLA</td><td>DeepSeek-V3, arXiv <b>2412.19437</b> §4.1 + §6.2（超参那段给了 <code>n_h/d_h/d_c/d_h^R</code> 的准确值）</td></tr>
-<tr><td>Gated MLA / K3 全貌</td><td>Kimi K3, arXiv <b>2607.24653</b> §4.1.2、表 1（93 层 / 69 KDA + 24 MLA / 2.78T-104.2B）</td></tr>
+<tr><td>MLA</td><td>DeepSeek-V3, arXiv <b>2412.19437</b> <b>sec. 2.1 + 4.2</b>（超参那段给了 <code>n_h/d_h/d_c/d_h^R</code> 的准确值）</td></tr>
+<tr><td>Gated MLA / K3 全貌</td><td>Kimi K3, arXiv <b>2607.24653</b> <b>sec. 2.1.2</b>、表 1（93 层 / 69 KDA + 24 MLA / 2.78T-104.2B）</td></tr>
 <tr><td>SWA</td><td>Mistral 7B, arXiv <b>2310.06825</b>（窗口 4096）</td></tr>
 <tr><td>Attention sink</td><td>StreamingLLM, arXiv <b>2309.17453</b>（4 个 token / 400 万 / 22.2×）</td></tr>
 <tr><td>NSA</td><td>arXiv <b>2502.11089</b>（三支路 + 门控；64k 下 11.6× / 9.0× / 6.0×）</td></tr>
 <tr><td>DSA + Lightning Indexer</td><td>DeepSeek-V3.2, arXiv <b>2512.02556</b>（ReLU 打分 / FP8 / k=2048 / 稠密预热阶段）。<b>我们有一手实测</b></td></tr>
-<tr><td>CSA / HCA</td><td>DeepSeek-V4, arXiv <b>2606.19348</b> §4.3 + §4.3.4（m=4 / m′=128 / top-k / 27%·10% / 2%）</td></tr>
+<tr><td>CSA / HCA</td><td>DeepSeek-V4, arXiv <b>2606.19348</b> <b>sec. 2.3 + 2.3.4</b>（m=4 / m′=128 / top-k / 27%·10% / 2%）</td></tr>
 <tr><td>线性注意力谱系</td><td><b>2006.16236</b>（线性）→ <b>2102.11174</b>（delta rule, 2021）→ <b>2406.06484</b>（可并行化）→ <b>2412.06464</b>（GDN）→ <b>2510.26692</b>（KDA）</td></tr>
 <tr><td>混合配比</td><td><b>2510.26692</b>（3:1 + 消融）、Ling-3.0 模型卡（3:1 / 5:1）、<b>2507.06457</b>（建议 3:1～6:1）</td></tr>
 <tr><td>FlashAttention</td><td>arXiv <b>2205.14135</b> + TPU 侧 Splash Attention 实测（<code>tpu/</code> 下多处）</td></tr>
+<tr><td><b>MHA 本体</b>（§一）</td><td>Vaswani et al. 2017, arXiv <b>1706.03762</b> ——&nbsp;<b>sec. 3.2 / 3.2.1 / 3.2.2 / 3.2.3</b> ＋ <b>表 1</b>；四条原话见下方折叠</td></tr>
+<tr><td><b>KV cache 被点名成瓶颈</b></td><td>Shazeer 2019, arXiv <b>1911.02150</b>（MQA 那篇）——&nbsp;<b>「memory-bandwidth cost of repeatedly loading the large keys and values tensors」</b></td></tr>
+<tr><td><b>RNN 一支</b>（§零）</td><td>Elman 1990《Finding Structure in Time》；Bengio, Simard, Frasconi 1994；Hochreiter &amp; Schmidhuber 1997；Cho et al. 2014；Bahdanau et al. 2014, arXiv <b>1409.0473</b></td></tr>
+<tr><td><b>只有线性依赖才扫得动</b></td><td>Martin &amp; Cundy 2018, arXiv <b>1709.04057</b>（ICLR'18）——&nbsp;实测最高 9× 加速</td></tr>
+<tr><td><b>RNN 在硬件上为什么慢</b></td><td>NVIDIA《Recurrent Layers User's Guide》——&nbsp;<b>「a GEMM with one dimension of one」</b>、<b>「can combine these GEMMs over the minibatch size, but not over different sequence steps」</b></td></tr>
 <tr><td>我们自己的 kernel 实战</td><td>Tokamax KDA kernel、<code>tpu/</code> 下 DSA 相关</td></tr>
-<tr><td>§2.1 那张 KV cache 对照表</td><td><b>自己按公式推的</b>：<code>2·n_h·d_h·L</code> 与 <code>(d_c+d_h^R)·L</code>，输入全部来自 V3 论文 §6.2。<b>口径（K/V 都按 d_h=128）要在讲的时候声明</b></td></tr>
+<tr><td>§2.1 那张 KV cache 对照表</td><td><b>自己按公式推的</b>：<code>2·n_h·d_h·L</code> 与 <code>(d_c+d_h^R)·L</code>，输入全部来自 V3 论文 <b>sec. 4.2</b>。<b>口径（K/V 都按 d_h=128）要在讲的时候声明</b></td></tr>
 </tbody></table>
+
+<details class="aside"><summary>🔍 <b>这一讲最吃劲的四条，把原话摆出来</b>
+<em>（省得读者去翻论文对措辞）</em></summary>
+<table>
+<thead><tr><th>这一讲怎么讲的</th><th>论文原话</th></tr></thead><tbody>
+<tr><td>「query 问、key 挂牌、value 是货」<b>不是我们编的比喻</b></td>
+<td><em>「mapping a <b>query</b> and a set of <b>key-value pairs</b> to an output …
+the output is computed as a <b>weighted sum of the values</b>, where the weight
+assigned to each value is computed by a <b>compatibility function of the query
+with the corresponding key</b>.」</em>（sec. 3.2）</td></tr>
+<tr><td>√d_k <b>别只说「防止 softmax 饱和」</b>，那是结论不是理由</td>
+<td><em>「for large values of d_k, the dot products <b>grow large in magnitude, pushing
+the softmax function into regions where it has extremely small gradients</b>.」</em>
+（sec. 3.2.1）<br>⭐ 理由在<b>脚注 4</b>：q、k 各维独立、均值 0、方差 1 时，
+q·k <b>均值 0、方差 d_k</b> ——&nbsp;标准差就是 √d_k。</td></tr>
+<tr><td>多头<b>不是不够用，是会把该分开的关注平均掉</b></td>
+<td><em>「jointly attend to information from different representation subspaces at
+different positions. <b>With a single attention head, averaging inhibits this.</b>」</em>
+（sec. 3.2.2；h = 8，d_k = d_v = d_model/h = 64）</td></tr>
+<tr><td><b>§零 图三 Ⓒ 那一行不是我们的推论</b>，是原文</td>
+<td><em>「training these layers is generally fast and simple, due to parallelizability
+across the length of the sequence, <b>incremental inference (where such parallelization
+is impossible) is often slow, due to the memory-bandwidth cost of repeatedly loading
+the large "keys" and "values" tensors</b>.」</em>（Shazeer 2019 摘要）<br>
+⭐ 2017 年造出这个形状，<b>2019 年就有人把它命名成问题了</b>；那篇给的解法 MQA
+正是本讲模型表的第二行。</td></tr>
+</tbody></table>
+</details>
+
+<p class="sub">📌 <b>记号约定</b>：<code>§X.Y</code> 是<b>本课</b>的小节号，
+<code>sec. X.Y</code> 是<b>被引论文自己</b>的小节号。
+⛔ 两者曾经用同一个记号，结果整体重编号时把论文的节号也改了 ——&nbsp;
+而且改完<b>恰好落在真实存在的本课小节上，体检全绿</b>。</p>
 <hr>
 </details>
 </div></section>
