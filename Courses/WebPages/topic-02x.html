@@ -1,0 +1,1302 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1">
+<title>专题二 · 外传：v6e 与扩散模型</title>
+<!-- 🦀 CloseCrab 标识。刻意不放图片文件 —— 内联一个 SVG，让每台机器
+     用自己的 emoji 字体现画：Mac 上是 Apple 那只红螃蟹，别处是各自的版本。
+     烤成 PNG 反而会把某一家的字形固定下来，在别的系统上看着别扭。
+     不支持 SVG 图标的浏览器会自动回落到根目录的 favicon.ico。 -->
+<link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
+<link rel="apple-touch-icon" href="../../apple-touch-icon.png">
+<meta property="og:title" content="v6e 与扩散模型 · 一颗算力强、显存弱的芯片，配什么样的活">
+<meta property="og:description" content="二十分钟，两张显微镜图，一根强度轴。H100 的屋脊点是 295，v6e 是 560 —— 这一讲只回答一个问题：什么样的活凑得够 560。">
+<meta property="og:type" content="article">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-02x.html">
+
+<meta name="twitter:card" content="summary_large_image">
+<meta name="theme-color" content="#1a73e8">
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6;
+  --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea;
+  --purple:#9334e6; --cyan:#12b5cb; --orange:#e8710a;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --bg:#fff; --bg2:#f8f9fa;
+  --radius:12px;
+  --mono:ui-monospace,SFMono-Regular,"SF Mono",Menlo,Consolas,monospace;
+  --tokmul:"";              /* batch≠1 时由 render() 写入，如 "128K × 64 条" */
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:96px}
+body{background:var(--bg);color:var(--ink);
+  font:400 16px/1.75 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,"Segoe UI",Roboto,sans-serif;
+  -webkit-font-smoothing:antialiased}
+.wrap{max-width:1080px;margin:0 auto;padding:0 24px}
+section{padding:56px 0;border-top:1px solid var(--line)}
+h2{font-size:31px;font-weight:700;letter-spacing:-.02em;margin-bottom:6px}
+h3{font-size:20px;font-weight:600;margin:32px 0 12px}
+h4{font-size:16px;font-weight:600;margin:22px 0 8px}
+p{margin-bottom:14px}
+.lead{color:var(--gray);font-size:17px;margin-bottom:28px}
+b,strong{font-weight:600;color:var(--ink)}
+a{color:var(--blue)}
+code,.k{font:600 .88em/1.4 var(--mono);background:var(--bg2);padding:2px 6px;
+        border-radius:4px;color:var(--blue-d);white-space:nowrap}
+.num{font-family:var(--mono);font-weight:600;font-variant-numeric:tabular-nums}
+
+/* ── batch ≠ 1 的防误读标记 ───────────────
+   「token 总数」= 序列长度 × batch。batch=1 时两者相等，看不出区别；
+   一旦 batch>1，这个数就不再是序列长度了，最容易被当成「输入变长了」。
+   下面两条规则在 batch=1 时完全不匹配 —— 默认口径下页面一个字都不会多。 */
+body.batched [data-v="tokens"]::after{
+  content:" (" var(--tokmul) ")";
+  font:600 .78em/1.4 var(--mono);color:var(--orange);letter-spacing:0}
+.ctrl.hot output{color:var(--orange);background:var(--yellow-l);
+  box-shadow:0 0 0 1px var(--yellow) inset}
+.ctrl.hot label{color:var(--orange);font-weight:600}
+
+/* ── 旅程进度条 ─────────────────────── */
+.journey{background:var(--bg2);border:1px solid var(--line);border-radius:var(--radius);
+         padding:14px 18px;margin:0 0 26px;display:flex;align-items:center;gap:16px;flex-wrap:wrap}
+.jsteps{display:flex;align-items:center;gap:0;flex:1;min-width:280px}
+.jstep{flex:1;height:6px;background:var(--line);position:relative;border-radius:3px;margin-right:3px}
+.jstep.done{background:var(--blue)}
+.jstep.now{background:var(--red)}
+.jstep span{position:absolute;top:-19px;left:0;font:600 10px var(--mono);color:var(--gray2)}
+.jstep.now span{color:var(--red)}
+.jstep.done span{color:var(--blue)}
+.jmeter{display:flex;gap:18px;font-size:13px;white-space:nowrap}
+.jmeter b{font-family:var(--mono);color:var(--blue-d)}
+.jmeter i{font-style:normal;color:var(--gray);margin-right:5px}
+
+/* ── 猜一猜 ───────────────────────────── */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:var(--blue-l)}
+.guess button.right{border-color:var(--green);background:var(--green-l)}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.75}
+.guess .rev.on{display:block}
+.guess .rev>p>b{color:var(--red)}          /* 只有直属段落的粗体标红，表格和说明框不受影响 */
+.guess .qs{font-size:15px;line-height:1.7;color:var(--gray)}
+.guess .qs b{color:var(--ink)}
+.guess .qs em{font-style:normal;color:var(--gray2);font-size:14px}
+.guess .rvt{font-size:14px;margin:4px 0 14px}
+.guess .rvt b{color:var(--ink)}
+
+/* ── 章节插画带 ───────────────────────── */
+/* 插画是浅底扁平矢量（Google 四色），所以 :after 的洗白层是「白→透明」，
+   跟深色版正好相反。换图但不换这层，标题会变成白底白字。 */
+.band{position:relative;height:210px;border-radius:16px;overflow:hidden;margin:0 0 26px;
+      display:flex;align-items:flex-end;background:var(--bg2);border:1px solid var(--line2)}
+.band img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover}
+.band:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(90deg,#fff 0%,rgba(255,255,255,.93) 40%,
+                 rgba(255,255,255,.55) 72%,rgba(255,255,255,.10) 100%)}
+.band .cap{position:relative;z-index:2;padding:0 32px 24px;color:var(--ink);max-width:660px}
+.band .cap .bn{font:700 11px/1 var(--mono);letter-spacing:.14em;color:var(--blue);
+      text-transform:uppercase;display:block;margin-bottom:8px}
+.band .cap .bt{font-size:27px;font-weight:700;letter-spacing:-.02em;display:block;margin-bottom:6px}
+.band .cap .bs{font-size:14.5px;color:var(--gray);line-height:1.6}
+
+/* ── 步号标记 ─────────────────────────── */
+.stn{display:flex;align-items:center;gap:14px;margin-bottom:4px}
+.stn .badge{flex:0 0 auto;font:700 12px/1 var(--mono);color:#fff;background:var(--blue);
+            border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.stn.big .badge{background:var(--red)}
+.stn h2{margin:0}
+
+/* ── hero ─────────────────────────────── */
+/* 浅色 hero，与 index.html 同一套：blue-l → 白 的竖向底 + 低透明度插画 + 横向洗白层 */
+.hero{position:relative;padding:96px 0 64px;overflow:hidden;
+      background:linear-gradient(180deg,var(--blue-l) 0%,#fff 100%)}
+.hero:before{content:"";position:absolute;inset:0;opacity:.5;
+      background:url(img/hero-token-journey.webp) center/cover no-repeat}
+.hero:after{content:"";position:absolute;inset:0;
+      background:linear-gradient(95deg,rgba(255,255,255,.94) 0%,rgba(255,255,255,.86) 38%,
+                 rgba(255,255,255,.46) 68%,rgba(255,255,255,.12) 100%)}
+.hero .wrap{position:relative;z-index:2}
+.hero h1,.hero .en,.hook{color:var(--ink)}
+.hero .crumb{color:var(--gray)}
+.hero .crumb a{color:var(--blue)}
+.lecbtn{display:inline-block;margin-left:14px;font-size:13px;padding:4px 12px;border-radius:14px;
+        background:#fff;border:1px solid var(--line);color:var(--blue);
+        text-decoration:none}
+.lecbtn:hover{background:var(--blue-l);border-color:var(--blue)}
+.hero .en{color:var(--gray)}
+.hook{border-left-color:var(--blue)}
+.hook em{color:var(--blue-d)}
+.hero p{color:var(--gray)}
+.hero p b{color:var(--ink)}
+.hero .chip{background:#fff;border-color:var(--line);color:var(--gray)}
+.hero .chip b{color:var(--blue-d)}
+.crumb{font-size:14px;color:var(--gray);margin-bottom:20px}
+.crumb a{text-decoration:none}
+.hero h1{font-size:50px;font-weight:700;letter-spacing:-.035em;line-height:1.12;margin-bottom:6px}
+.hero .en{font:italic 400 19px/1 var(--mono);color:var(--gray);letter-spacing:.02em;margin-bottom:26px}
+.hook{font-size:21px;line-height:1.6;font-weight:500;border-left:4px solid var(--blue);
+      padding-left:20px;max-width:800px;margin-bottom:22px}
+.hook em{font-style:normal;color:var(--blue-d);font-weight:600}
+/* 署名行。hero 里单独给色 —— .hero .author（0,2,0）压得过 .hero p（0,1,1） */
+.author{font-size:14.5px;margin-top:20px;line-height:1.7}
+.author b{font-weight:600}
+.author .sep{color:var(--line);margin:0 10px}
+.hero .author{color:var(--gray2)}
+.hero .author b{color:var(--ink)}
+.hero .author .sep{color:var(--line)}
+.chips{display:flex;flex-wrap:wrap;gap:8px;margin-top:24px}
+.chip{font-size:13px;background:#fff;border:1px solid var(--line);border-radius:20px;
+      padding:5px 14px;color:var(--gray)}
+.chip b{color:var(--blue-d)}
+
+/* ── sticky 控制台 ─────────────────────── */
+.console{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.94);
+         backdrop-filter:blur(10px);border-bottom:1px solid var(--line);
+         box-shadow:0 1px 8px rgba(0,0,0,.05)}
+/* 单行布局：它是 sticky 的，每多一行就永久吃掉一条屏幕。
+   所有控件都保留，靠「滑块可压缩、其余固定」把宽度挤出来。 */
+.console .inner{max-width:1080px;margin:0 auto;padding:7px 24px;
+                display:flex;align-items:center;gap:13px;flex-wrap:nowrap}
+.console .tag{font:700 10px/1 var(--mono);letter-spacing:.08em;color:var(--blue);
+              text-transform:uppercase;flex:0 0 auto}
+.ctrl{display:flex;align-items:center;gap:6px;font-size:12.5px;color:var(--gray);
+      flex:0 1 auto;min-width:0}
+.ctrl label{white-space:nowrap;font-weight:500}
+/* 唯一允许被压缩的东西 —— 窗口变窄时先短滑轨，不动文字和按钮 */
+.ctrl input[type=range]{flex:1 1 96px;min-width:50px;max-width:112px;accent-color:var(--blue)}
+.ctrl output{font:600 12.5px/1 var(--mono);color:var(--blue-d);min-width:44px;
+             background:var(--blue-l);padding:4px 6px;border-radius:5px;text-align:center;
+             flex:0 0 auto}
+.ctrl select{font:500 12.5px/1 inherit;padding:4px 6px;border:1px solid var(--line);
+             border-radius:5px;background:#fff;color:var(--ink);flex:0 0 auto}
+.presets{margin-left:auto;display:flex;align-items:center;gap:5px;font-size:11.5px;
+         color:var(--gray);flex:0 0 auto}
+.presets span{margin-right:1px}
+.presets button{font:500 11.5px/1 inherit;color:var(--gray);background:#fff;
+                border:1px solid var(--line);border-radius:13px;padding:5px 10px;
+                cursor:pointer;white-space:nowrap}
+.presets button:hover{border-color:var(--blue);color:var(--blue)}
+.presets button.on{background:var(--blue);border-color:var(--blue);color:#fff;font-weight:600}
+.live{background:var(--yellow-l);box-shadow:0 0 0 3px var(--yellow-l);
+      border-radius:3px;transition:background .45s,box-shadow .45s}
+
+/* ── 卡片 / 表格 ───────────────────────── */
+.grid{display:grid;gap:16px}
+.g2{grid-template-columns:1fr 1fr}.g3{grid-template-columns:repeat(3,1fr)}
+.g4{grid-template-columns:repeat(4,1fr)}
+.card{border:1px solid var(--line);border-radius:var(--radius);padding:20px 22px;background:#fff}
+.card.tint{background:var(--bg2)}
+.card h4{font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.08em;
+         text-transform:uppercase;margin:0 0 8px}
+.stat{font:700 27px/1.15 var(--mono);letter-spacing:-.02em;margin-bottom:4px}
+.stat.blue{color:var(--blue-d)}.stat.red{color:var(--red)}
+.stat.green{color:var(--green)}.stat.orange{color:var(--orange)}
+.sub{font-size:.92em;color:var(--gray)}
+.card .sub{font-size:13.5px;color:var(--gray);line-height:1.55}
+
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:16px 0}
+th{text-align:left;font-size:12px;font-weight:700;color:var(--gray);letter-spacing:.06em;
+   text-transform:uppercase;padding:10px 12px;border-bottom:2px solid var(--line);white-space:nowrap}
+td{padding:11px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.6}
+td.n{font-family:var(--mono);font-weight:600;text-align:right;font-variant-numeric:tabular-nums;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+tbody tr:hover{background:var(--bg2)}
+tr.sum td{border-top:2px solid var(--line);font-weight:700;background:var(--blue-l)}
+tr.sum td.n{color:var(--blue-d)}
+.tbl-wrap{overflow-x:auto}
+.tbl-note{font-size:13px;color:var(--gray);margin:8px 2px 0;line-height:1.7}
+
+/* ── 提示块 ───────────────────────────── */
+.note{border-radius:var(--radius);padding:16px 20px;font-size:15px;line-height:1.7;margin:20px 0}
+/* ⛔⛔ 2026-09-08 全书去彩底：提示块**不填背景**，白底 ＋ 细灰框 ＋ 左侧 4px 彩条。
+   原话：「不要背景填充，好丑」「现代化的文档风格是不是不用这个背景填充？
+   就是外圈有颜色，加上字有颜色，我觉得就挺好」。
+   ⭐ 这是全书唯一一份 note 样式源，专题二/三/八都从这里继承 ——&nbsp;
+     ⛔ 不要在某一课里再写一份局部覆盖，那样两边迟早漂开且不报错。
+   ⚠️ 还有第五种 `.note.q`（提问框），它的定义在 topic02-port-microscope.py
+     注入的那段 CSS 里，不在这个文件 —— 已一并去底。 */
+.note{background:#fff;border:1px solid var(--line);border-left-width:4px}
+.note.info{border-left-color:var(--blue)}
+.note.warn{border-left-color:var(--yellow)}
+.note.danger{border-left-color:var(--red)}
+.note.ok{border-left-color:var(--green)}
+.note .t{display:block;font-weight:700;margin-bottom:5px}
+/* 两级强调块：.punch 实心蓝（最强），.punch.soft 浅蓝底（次一级）。
+   原来次一级是近黑底 —— 跟 index.html 的浅色基调不搭，已换成同色系的浅底。 */
+.punch{font-size:20px;font-weight:600;line-height:1.6;text-align:center;padding:26px 30px;
+       background:var(--blue);color:#fff;border-radius:14px;margin:28px 0}
+.punch.soft{background:var(--blue-l);color:var(--ink);border:1px solid #d2e3fc}
+.punch small{display:block;font-size:14px;font-weight:400;opacity:.8;margin-top:8px}
+.punch.soft small{opacity:1;color:var(--gray)}
+
+/* ── 默认收起的详情块 ─────────────────── */
+details.more{border:1px solid var(--line);border-radius:var(--radius);background:var(--bg2);
+             margin:18px 0;overflow:hidden}
+details.more>summary{list-style:none;cursor:pointer;padding:11px 18px;font-size:14.5px;
+                     font-weight:600;color:var(--blue-d);user-select:none;
+                     display:flex;align-items:baseline;gap:9px;transition:background .15s}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::before{content:"▸";display:inline-block;font-size:11px;color:var(--gray2);
+                             transition:transform .18s;flex:none}
+details.more[open]>summary::before{transform:rotate(90deg)}
+details.more>summary:hover{background:var(--line2)}
+details.more[open]>summary{border-bottom:1px solid var(--line2)}
+details.more>summary .why{font-weight:400;color:var(--gray);font-size:13px}
+details.more .body{padding:2px 20px 14px}
+details.more .body>:first-child{margin-top:14px}
+details.more .body>:last-child{margin-bottom:0}
+details.more .body .note{margin:14px 0}
+
+/* ── 图 ───────────────────────────────── */
+figure{margin:26px 0}
+figure svg{display:block;width:100%;height:auto}
+figcaption{font-size:15px;color:#3c4043;margin-top:11px;line-height:1.65;text-align:left;max-width:none;margin-left:0;margin-right:0}
+.fbox{border:1px solid var(--line);border-radius:var(--radius);padding:24px;background:var(--bg2)}
+/* ⚠️ fill 用 :not([fill]) 兜底：SVG 的 fill= 呈现属性优先级低于 class 选择器，
+   直接写 .svgsm{fill:...} 会把元素上显式写的颜色全部盖掉（本文件曾有 398 处被静默盖成灰色）。
+   拆成「没写 fill 才给默认色」，写了 fill= 的就让它生效 —— 也自动覆盖 JS 后生成的节点。 */
+.svgtxt{font:500 13px var(--mono)}   .svgtxt:not([fill]){fill:var(--ink)}
+.svglbl{font:600 12px "Noto Sans CJK SC",sans-serif}   .svglbl:not([fill]){fill:var(--gray)}
+.svgnum{font:700 14px var(--mono)}   .svgnum:not([fill]){fill:var(--ink)}
+.svgsm{font:500 10.5px var(--mono)}   .svgsm:not([fill]){fill:var(--gray2)}
+
+/* ── 公式 ─────────────────────────────── */
+.eq{font-family:var(--mono);font-size:14.5px;background:var(--bg2);border-left:3px solid var(--blue);
+    border-radius:0 8px 8px 0;padding:14px 18px;margin:16px 0;overflow-x:auto;line-height:1.9;
+    white-space:pre-wrap;tab-size:2}
+.eq .c{color:var(--gray)}
+.eq .r{color:var(--blue-d);font-weight:700}
+
+/* ── 阅读进度 + 回顶 ─────────────────── */
+.progress{position:fixed;top:0;left:0;right:0;height:3px;z-index:60;background:transparent;
+          pointer-events:none}
+.progress i{display:block;height:100%;width:0;background:linear-gradient(90deg,#1a73e8,#9334e6);
+            transition:width .1s linear}
+.totop{position:fixed;right:22px;bottom:22px;width:44px;height:44px;border-radius:50%;
+       background:var(--ink);color:#fff;border:none;cursor:pointer;font-size:19px;z-index:55;
+       opacity:0;pointer-events:none;transition:opacity .2s;box-shadow:0 4px 16px rgba(0,0,0,.24)}
+.totop.on{opacity:.88;pointer-events:auto}
+.totop:hover{opacity:1}
+
+/* ── 术语 tooltip ─────────────────────── */
+.gl{border-bottom:1px dashed var(--blue);cursor:help;position:relative;
+    text-decoration:none;color:inherit}
+/* ⚠️ 气泡默认必须 display:none，不能只靠 opacity:0。
+   它是 290px 宽的绝对定位盒子，opacity:0 时照样占布局 —— 靠右的词会把整页
+   scrollWidth 顶出两三百像素，在 940 / 360 这类窗口下出现横向滚动条。
+   实测：关掉这两个伪元素，940px 下 scrollWidth 从 1211 直接回到 940。
+   代价是没有淡入动画，换来的是彻底不参与布局。 */
+/* ⚠️ 气泡必须 position:fixed，不能用 absolute。
+   absolute 时它会被任何一个「overflow 不是 visible」的祖先裁掉 ——
+   本页 10 个术语里有 6 个躺在 .tbl-wrap（overflow-x:auto）或 .more（hidden）里面。
+   注意 overflow-x:auto 会把 overflow-y 从 visible 提升成 auto，
+   所以横向滚动的表格同样会**纵向**裁切，气泡顶上那一截就这么没的。
+   fixed 之后坐标由 JS 在 mouseenter / focus 时写进 --tx/--ty，见下方 glossary()。 */
+.gl:after{content:attr(data-t);display:none;position:fixed;
+   left:var(--tx,-9999px);top:var(--ty,-9999px);
+   background:var(--ink);color:#fff;
+   font:400 13.5px/1.6 "Noto Sans CJK SC",sans-serif;padding:11px 15px;border-radius:9px;
+   width:290px;pointer-events:none;
+   box-shadow:0 6px 22px rgba(0,0,0,.22);z-index:80;text-align:left;white-space:normal}
+.gl:before{content:"";display:none;position:fixed;
+   left:var(--ax,-9999px);top:var(--ay,-9999px);
+   transform:translateX(-50%);border:6px solid transparent;border-top-color:var(--ink);
+   z-index:81;pointer-events:none}
+/* 上方放不下时整个翻到词的下方，箭头也要跟着掉个头 */
+.gl.below:before{border-top-color:transparent;border-bottom-color:var(--ink)}
+.gl:hover:after,.gl:focus:after{display:block}
+.gl:hover:before,.gl:focus:before{display:block}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+/* ── 打印 ─────────────────────────────── */
+@media print{
+  .console,.progress,.totop,.presets{display:none !important}
+  .hero:before{opacity:.28}
+  section{padding:22px 0;break-inside:avoid}
+  .band{height:150px;break-inside:avoid}
+  figure,.card,.note,.topic,.punch{break-inside:avoid}
+  details.more{border-color:#ccc;background:#fff}
+  details.more>summary{color:#000}
+  a[href^="http"]:after{content:" (" attr(href) ")";font-size:10px;color:#666}
+  body{font-size:12px}
+  .punch{background:#eee !important;color:#000 !important}
+  .punch.soft{background:#f1f3f4 !important;color:#000 !important}
+}
+
+@media(max-width:860px){.gl:after{width:220px;font-size:12.5px}}
+
+/* ── 目录 ─────────────────────────────── */
+.toc{background:var(--bg2);border-radius:var(--radius);padding:22px 26px;margin:24px 0}
+.toc ol{list-style:none;display:grid;grid-auto-flow:column;grid-template-rows:repeat(4,auto);
+        gap:2px 28px}
+.toc li{padding:6px 0;font-size:15px;display:flex;gap:10px}
+.toc li i{font:700 11px/1.6 var(--mono);color:#fff;background:var(--blue);border-radius:10px;
+          padding:2px 7px;flex:0 0 auto;font-style:normal;letter-spacing:.04em}
+.toc a{color:var(--ink);text-decoration:none}
+.toc a:hover{color:var(--blue)}
+
+footer{padding:44px 0 60px;color:var(--gray);font-size:14px;line-height:1.8;
+       border-top:1px solid var(--line)}
+footer a{text-decoration:none}
+/* ── 无障碍 ───────────────────────────── */
+:focus-visible{outline:3px solid var(--blue);outline-offset:2px;border-radius:3px}
+.skip{position:absolute;left:-9999px;top:0;background:var(--blue);color:#fff;
+      padding:10px 18px;z-index:200;border-radius:0 0 8px 0}
+.skip:focus{left:0}
+@media(prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*:before,*:after{transition-duration:.01ms !important;animation-duration:.01ms !important}
+}
+
+
+
+/* ══════════════════════════════════════════════════════════════════
+   ⭐⭐ 2026-09-04 投影版式（现场反馈：「要投到屏幕上去，以画图为主。
+        文字不要搞那么小的字，也不要搞那么密集的信息。」）
+   ⛔ 这里**只动字号与留白，不动版心宽度** —— 版心是按图的宽度定的，
+      改宽了 38 张图全要重画。
+   把正文 16 → 17.5、note 15 → 16.5、行距一起放开；
+   段间距和框间距加大，让每一屏的信息块数量降下来。
+   ⚠️ 窄屏那条 12px 的规则保持不动（手机上不是投影场景）。
+   ══════════════════════════════════════════════════════════════════ */
+body{font-size:17.5px;line-height:1.85}
+p{margin-bottom:18px}
+.note{font-size:16.5px;line-height:1.8;padding:20px 24px;margin:26px 0}
+.note .t{margin-bottom:8px;font-size:1.02em}
+.sub{font-size:.9em;line-height:1.7}
+li{padding:8px 0}
+h3{font-size:23px;margin:44px 0 16px}
+figcaption{line-height:1.8}
+details.aside > summary,details > summary{font-size:16px;padding:10px 0}
+/* 图和正文之间多留一口气 —— 投影时这一条比字号还管用。
+   ⛔⛔ 只准写 margin-top／margin-bottom，**不许写简写 `margin:30px 0`**。
+   2026-09-04 这里写过一次简写，后果是：简写把 margin-left 也设成了 0，
+   而 `figure.fbox`（元素＋类，特异度 0,1,1）压过下面 .fwide（0,1,0）——
+   于是所有宽图的 `margin-left:50%` 失效，只剩 translateX(-50%) 生效，
+   **整张图往左平移 720px，在 1900px 宽的窗口里左边缘跑到 x = −286**。
+   ⭐ 阴险在于：溢出探针查的是 scrollWidth > clientWidth，
+   而「跑到视口左边外面」根本不产生溢出，也不产生滚动条 —— 查不出来，
+   只有人眼看到「图被裁掉一块」。判据已加进 topic02-lint-readability.py。 */
+/* ⭐ 2026-09-04 节尾那一句。第二轮全局审的判据：**一节的最后一句话，
+   必须是这一节要留下的那句** —— 而当时有三节的结尾分别是一句版面交代、
+   一条图注、一段版本说明。补了落点之后给它一点视觉重量，
+   让读者合上一节时知道「这句是要带走的」。⛔ 不要做成大色块，
+   全篇提示框已经够多了；一条左边线 + 稍大的字就够。 */
+/* ⭐ 2026-09-04 引原文用。**逐字引用必须看得出是引用** ——&nbsp;
+   这门课到处在要求「每个数都能回查」，自己引论文时更不能把原文和转述混在一起。
+   等宽 ＋ 灰底 ＋ 左边线，一眼就知道这一段不是作者写的。 */
+b.fno{display:inline-block;font:600 11px/1.5 var(--sans);color:#5f6368;
+  background:var(--bg2);border:1px solid #dadce0;border-radius:4px;
+  padding:1px 7px;vertical-align:1px;letter-spacing:.02em}
+blockquote{margin:14px 0;padding:12px 18px;background:var(--bg2);
+  border-left:3px solid var(--gray);border-radius:0 8px 8px 0;
+  font:400 15px/1.75 var(--sans);color:var(--ink)}
+blockquote b{font-weight:700}
+
+p.landing{border-left:3px solid var(--blue);padding:2px 0 2px 16px;
+  margin:26px 0 10px;font-size:1.03em;color:var(--ink)}
+
+figure.fbox{margin-top:30px;margin-bottom:30px}
+/* ⭐ 2026-09-04 窄图也放大一档：§0–§2 那批是按 1000 px 画的，
+   塞进 1032 px 的版心等于原生比例 1.0 —— 图里 10.5 px 的字投影上还是 10.5 px。
+   突破到 1240 就等比放大 1.24 倍，跟宽图那条（1400 → 1760，1.26 倍）配成一对。
+   ⚠️ 版心本身**不许动**（38 张图的排版都吊在 1080 上），动的只有 figure。
+   ⚠️ 同时挂 fbox＋fwide 的元素由后面 figure.fwide 覆盖（同特异度、后写赢）。 */
+figure.fbox{width:min(1240px,calc(100vw - 32px));max-width:none;
+  margin-left:50%;transform:translateX(-50%)}
+figure.fbox > figcaption{max-width:1080px;margin-left:0}
+
+/* ⛔ 2026-09-04：上面那条 code 的 white-space:nowrap 是给**行内**代码的，
+   但它会一路继承进 <pre> —— nowrap 把换行折成空格，于是多行代码块
+   全挤成一行，而且不报错、只是难看。专题二 3.4 那个矩阵例子就这么废过一次。
+   ⭐ 所以块级代码必须单独把它扳回来，顺便去掉行内那层底色和内边距。
+   （这条写在 L300 的 CSS 里，因为 L200／专题三／专题八都从这儿抄 head。） */
+pre{background:var(--bg2);border:1px solid var(--line);border-radius:8px;
+    padding:14px 16px;overflow-x:auto;margin:14px 0;
+    font:500 13px/1.65 var(--mono);color:var(--ink)}
+pre code,pre .k{white-space:pre;background:none;padding:0;border-radius:0;
+                color:inherit;font-size:inherit;font-weight:inherit}
+
+/* 超窄屏：code 默认 nowrap，长的行内代码会把页面撑出横向滚动条 */
+@media(max-width:420px){
+  code,.k{white-space:normal;word-break:break-word}
+}
+
+/* 中等窗口：还想保住一行，就先把「场景」两个字和按钮内边距让出来 */
+@media(max-width:1020px){
+  .console .inner{gap:10px}
+  .presets span{display:none}
+  .presets button{padding:5px 8px;font-size:11px}
+  .ctrl label{font-size:12px}
+}
+
+@media(max-width:860px){
+  .hero h1{font-size:34px}.hook{font-size:18px}
+  .console .inner{flex-wrap:wrap}       /* 小屏放弃单行，否则会横向溢出 */
+  .g2,.g3,.g4,.toc ol{grid-template-columns:1fr}
+  .toc ol{grid-auto-flow:row;grid-template-rows:none}
+  .console .inner{gap:10px;padding:9px 16px}
+  .ctrl input[type=range]{width:84px}
+  .presets{margin-left:0;flex-wrap:wrap;gap:5px}
+  .presets span{display:none}
+  .presets button{padding:5px 10px;font-size:11.5px}
+  .console .adv{display:none}            /* 小屏只留序列长度滑块 + 场景预设 */
+  .console .tag{font-size:10px}
+  .ctrl label{font-size:12px}
+  .jmeter{flex-wrap:wrap;gap:6px 14px;font-size:12px;width:100%}
+  .journey{padding:12px 14px;gap:12px}
+  h2{font-size:25px}.punch{font-size:17px;padding:20px 22px}
+  .guess button{padding:11px 16px;font-size:14px}
+  .band{height:160px}.band .cap{padding:0 20px 18px}.band .cap .bt{font-size:21px}
+  .hero:before{opacity:.4}
+  .figpair{grid-template-columns:1fr !important}
+  .eq{font-size:12.5px;padding:12px 14px}
+}
+/* ── 支线小节（整个 h3 折起来）─────────────────────────────
+   跟 details.aside 的区别：aside 装一段旁白，branch 装**一整个小节**
+   （标题 ＋ 正文 ＋ 图）。判据是故事线：说不出「这段在旅程的哪一站」就折。
+
+   ⚠️ 展开后的内容区**不能有水平 padding、不能有边框背景**。里面的图是
+   .fwide（margin-left:50% ＋ translateX(-50%)，突破 1080 版心到 1440），
+   它按父容器算中心 —— 一旦 .body 有 padding，图就整体偏移；有边框的话
+   图还会从框里溢出去，很怪。所以只有 summary 那条灰条带样式。
+
+   ⚠️ 这几条也必须留在下面 CSS_MARK 之前，理由同上面故事线那段。 */
+details.branch{margin:26px 0}
+details.branch > summary{cursor:pointer;list-style:none;user-select:none;
+  padding:13px 18px;background:var(--bg2);border:1px solid var(--line);
+  border-left:3px solid var(--gray2);border-radius:0 10px 10px 0;
+  display:flex;align-items:baseline;gap:10px;flex-wrap:wrap;
+  font-size:16px;font-weight:600;color:var(--ink)}
+details.branch > summary::-webkit-details-marker{display:none}
+details.branch > summary::before{content:"▸";color:var(--gray2);font-weight:400}
+details.branch[open] > summary::before{content:"▾"}
+details.branch > summary:hover{border-left-color:var(--blue)}
+details.branch .tag{font-size:11px;font-weight:700;letter-spacing:.08em;color:#fff;
+  background:var(--gray2);border-radius:10px;padding:2px 9px;white-space:nowrap}
+details.branch summary em{font-style:normal;font-weight:400;font-size:13.5px;
+  color:var(--gray)}
+details.branch > .body{padding:20px 0 4px}
+/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */
+/* 图是按 1400 px 画的。塞进 1080 px 的版心，11 px 的字会缩到 8 px，
+   讲课根本看不清 —— 所以让它们突破版心，按接近原生的宽度渲染。
+
+   ⭐ 2026-09-04 上限 1440 → 1760。1440 只是「不缩小」，图里 10.5 px 的字
+   投到屏幕上还是 10.5 px，后排看不清。放到 1760，整张图等比放大 1.26 倍，
+   字跟着到 13 px 上下。**一个坐标都不用改、不可能撞车** ——
+   比逐张调字号安全得多（SVG 的 <text> 不换行，调字号会压到隔壁）。
+   窄屏由 calc(100vw - 32px) 兜底，行为不变。
+
+   ⛔⛔ 特异度写成 `figure.fwide`（0,1,1），不要写 `.fwide`（0,1,0）。
+   2026-09-04 页面主 CSS 里有一条 `figure.fbox{margin:30px 0}`（0,1,1），
+   简写把 margin-left 一起设成 0，**压过这里的 margin-left:50%** ——
+   于是只剩 translateX(-50%) 生效，整张宽图往左平移 720 px，
+   在 1900 px 宽的窗口里左边缘落到 x = −286，左边一截被裁掉。
+   ⭐ 而「往左跑」既不产生滚动条、也不让 scrollWidth 变大，
+   原来那个查横向溢出的探针对它恒为 0 —— 判据已加进 topic02-lint-layout.py。 */
+figure.fwide{margin-left:50%;transform:translateX(-50%);
+  width:min(1760px,calc(100vw - 32px));max-width:none;overflow-x:auto}
+.fwide svg{display:block}
+/* 图注跟着图走：**左边缘要跟图对齐**，不能居中 —— 页面主 CSS 里
+   figcaption 原本是 max-width:74ch ＋ 左右 auto，于是它永远缩在图的正中间，
+   看上去像另一个跟图无关的块（这是肉眼一眼就别扭、但读 CSS 读不出来的）。
+   fwide 的图有 1760px 宽，图注全跟着就成了一行一百多字，所以这里
+   **限到版心宽再左对齐**：既跟图左边缘齐，又不会长到读不下去。 */
+.fwide figcaption{max-width:1080px;margin-left:0}
+/* ⛔⛔ 2026-09-08：note.q 是第五种提示框，跟 info/warn/danger/ok 一样**去彩底**。
+   上一轮按名字挨个改那四种，**漏了它** —— 它不在那四个名字里，
+   而且它的定义还不在 topic-02-L300.html 里，是**这里注入进去的**。
+   ⭐ 两条判据：
+     ① 改一族样式要按「渲染后还有谁带底色」验收，不能按「我记得有几种」；
+     ② 先确认那个文件是不是生成物 —— 直接改 L300 会被下一次 build 原样盖掉，
+        而且**盖掉不报错**，只是下次渲染又变回来。 */
+.note.q{background:#fff;border:1px solid var(--line);
+        border-left:4px solid var(--purple)}
+/* ---- 开场热身选择题（.guess）----
+   样式从专题一原样搬（topic-01.html），两课同一个观感 ——&nbsp;
+   学员一眼认得出「又是那个先猜一猜」。改这里要顺手看一眼那边有没有跟着变。
+   ⚠️ 只有 L200 用到；L300 里这几条是死规则，留着无害，别为了「干净」删掉 ——
+      两版共用同一份 CSS，删了下次 L300 若要加就得再抄一遍。 */
+.guess{background:linear-gradient(135deg,#fef7e0,#fff8e6);border:1px solid #fddc7a;
+       border-radius:14px;padding:26px 30px;margin:26px 0}
+.guess h3{margin:0 0 6px;font-size:21px}
+.guess .q{font-size:17px;color:var(--gray);margin-bottom:18px;line-height:1.7}
+.guess .q .qs{font-size:15px}
+.guess .oplab{font-size:15px;color:var(--ink);font-weight:600;margin:14px 0 8px}
+.guess .oplab:first-of-type{margin-top:0}
+.guess .opts{display:flex;gap:10px;flex-wrap:wrap;margin-bottom:6px}
+.guess button{font:600 15px/1 inherit;padding:13px 22px;border:2px solid var(--line);
+              background:#fff;border-radius:10px;cursor:pointer;color:var(--ink);
+              transition:border-color .15s,transform .1s}
+.guess button:hover{border-color:var(--yellow);transform:translateY(-1px)}
+.guess button.picked{border-color:var(--blue);background:#e8f0fe}
+.guess button.right{border-color:var(--green);background:#e6f4ea}
+.guess .rev{display:none;margin-top:18px;padding-top:18px;border-top:1px solid #fddc7a;
+            font-size:16px;line-height:1.8}
+.guess .rev .qs{font-size:15px;color:var(--gray)}
+.guess .rev.on{display:block}
+/* 「↺ 重来」按钮：由 JS 生成后塞进答案区顶部。放在答案区里面是有意的 ——
+   答案区没展开时它跟着一起隐藏，天然实现「答过了才出现」，不需要额外的状态类。 */
+.guess .rst{float:right;margin:-2px 0 8px 14px}
+.guess .rst button{font:600 13px/1 inherit;padding:8px 15px;border:1.5px solid var(--line);
+  background:#fff;border-radius:8px;cursor:pointer;color:var(--gray);
+  transition:border-color .15s,color .15s}
+.guess .rst button:hover{border-color:var(--gray);color:var(--ink)}
+/* ---- 收尾节的 take-away 大字块 ----
+   ⛔ 2026-09-05 读到 §9：「那么多字，抓不住重点，字还那么小。
+      是不是给他少整几句 take-away highlight 就行了？」
+   ⭐ 病根是**收尾节用了正文的字号和密度**。正文 14 px 靠信息量取胜，
+      收尾节靠的是「就这三句，记住」——&nbsp;两者需要相反的排版。
+      所以这里不是把字调大一点，是**换一种块**：标题 19 px、留白翻倍、
+      每条一个序号圆点，一屏之内最多三条。
+   ⚠️ 别在这个块里塞第四条。它一旦超过三条就退化成又一段正文。
+   ⛔ 更硬的一条（2026-09-05 二次收时立的）：**只写图上没有的那一样。**
+      收尾节最容易「想强调，于是重复」——&nbsp;§9 为此返工过三次。 */
+/* ---- 引导思考块 ----
+   ⭐ 2026-09-05 现场反馈：「详情写到讲义里，引导部分就放到教材的引导思考部分。」
+   ⭐ 它跟 .note 的区别不是颜色，是**语法**：note 是陈述句，think 是**疑问句**，
+      而且**问完要留白**，让读者先自己答一遍再往下读。
+   ⛔ 里面只许放问题和「先想一下」，**不许把答案也塞进来** ——&nbsp;
+      塞了它就退化成又一个 note，而且是更花哨的那种。 */
+.think{margin:22px 0;padding:20px 24px 20px 26px;border-radius:12px;
+  background:#f3f6fb;border-left:5px solid var(--purple)}
+.think .qk{display:block;font-size:12.5px;font-weight:700;letter-spacing:.06em;
+  color:var(--purple);margin-bottom:8px}
+.think .qq{display:block;font-size:18px;line-height:1.6;color:var(--ink);font-weight:700}
+.think .qh{display:block;margin-top:9px;font-size:14px;color:var(--gray);font-style:italic}
+.tkaway{margin:26px 0;display:grid;gap:14px}
+.tkaway .tk{display:grid;grid-template-columns:30px 1fr;gap:16px;align-items:start;
+  padding:20px 24px;border-radius:12px;background:var(--bg2);
+  border:1px solid var(--line);border-left:5px solid var(--blue)}
+.tkaway .tk.solo{grid-template-columns:1fr}
+.tkaway .tk .n{width:28px;height:28px;border-radius:50%;background:var(--blue);
+  color:#fff;font-weight:700;font-size:15px;line-height:28px;text-align:center}
+.tkaway .tk b{display:block;font-size:19px;line-height:1.5;color:var(--ink);
+  font-weight:700;margin-bottom:7px}
+.tkaway .tk .d{display:block;font-size:15px;line-height:1.75;color:var(--gray)}
+.tkaway .tk .d b{display:inline;font-size:inherit;color:var(--ink);margin:0}
+@media(max-width:700px){.tkaway .tk{grid-template-columns:1fr}}
+/* ---- 旁白折叠块 ----
+   有些段落讲的是「这门课自己怎么犯错、怎么发现」——对学员理解硬件没有增量，
+   但作为方法论又值得留着。折起来：想看的人点开，讲课时直接跳过。
+   注意 open 属性一个都不要加，默认全收。 */
+details.aside{margin:18px 0;border:1px solid var(--line);border-radius:var(--radius);
+  background:var(--bg2);font-size:14px;color:var(--gray)}
+details.aside > summary{cursor:pointer;padding:11px 16px;list-style:none;
+  font-size:13.5px;color:var(--gray);user-select:none}
+details.aside > summary::-webkit-details-marker{display:none}
+details.aside > summary::before{content:"▸ ";color:var(--gray)}
+details.aside[open] > summary::before{content:"▾ "}
+details.aside > summary:hover{color:var(--ink)}
+details.aside[open] > summary{border-bottom:1px solid var(--line)}
+details.aside .body{padding:14px 16px 16px;line-height:1.75}
+details.aside b{color:var(--ink);font-weight:600}
+.msfrom{color:var(--gray);font-size:12.5px}
+.msdeep{display:grid;grid-template-columns:1fr 1fr;gap:16px;margin:22px 0}
+@media(max-width:860px){.msdeep{grid-template-columns:1fr}}
+.mscard{display:block;padding:20px 22px;border:1px solid var(--line);
+  border-radius:var(--radius);background:var(--bg2);text-decoration:none;
+  color:var(--ink);transition:border-color .15s,box-shadow .15s}
+.mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
+.mscard > b{display:block;font-size:16px;margin-bottom:6px}
+.mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+</style>
+<style>
+ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
+h4 { margin:18px 0 6px; font-size:15px }
+/* ⭐ L100 的版面比 L200/L300 松一档：图大、字少，图之间给足呼吸。
+   ⛔⛔ 只能写 margin-top / margin-bottom，**绝不能用 `margin: 34px 0` 这种简写**。
+   简写会把 margin-left 一并设成 0，而 `figure.fbox`（特异度 0,1,1）跟
+   `figure.fwide` 同级、又排在后面，于是压掉 .fwide 的 margin-left:50%，
+   只剩 translateX(-50%) 生效 ——&nbsp;**整张宽图往左平移半个屏幕**。
+   ⚠️ 这个坑 topic02-port-microscope.py 里白纸黑字写过（2026-09-04 栽的），
+   我 2026-09-09 建这一页时又原样踩了一遍。
+   ⭐ 判据：**改 margin 一律写具体方向，别用简写** ——&nbsp;
+     简写的杀伤力在于它悄悄重置了你没打算动的那三个方向。
+   ⭐ 而且它**不产生横向滚动条**：往左跑出视口既不撑大 scrollWidth、
+     也不报错，只有量 getBoundingClientRect().x 才看得见。 */
+figure.fbox { margin-top: 34px; margin-bottom: 34px }
+</style>
+
+<main class="wrap">
+
+<header class="hero">
+  <div class="kicker">专题二 · 外传　·　L100　·　20 分钟</div>
+  <h1>算力强，显存弱 —— 这样一颗芯片，该配什么样的活</h1>
+  <p class="lede">TPU v6e 与扩散模型。<b>这一讲的主角是芯片，不是模型。</b>
+    十几分钟把两颗硬件哪里不一样讲清楚，最后用扩散模型说明
+    <b>「什么样的活配什么样的芯片」</b>。</p>
+</header>
+
+<section id="s零">
+  <h2><span class="secno">开场</span>这一讲只回答一个问题</h2>
+  <p>专题二立过一条线：<b>算力 ÷ 显存带宽</b>，得到「每搬一个字节，这台机器本来能算多少次」。
+    那一讲算出 B200 和 TPU v7 <b>几乎一模一样</b>。</p>
+  <p>这一讲把同一把尺子多量两颗 —— <b>其中一颗立刻破了那个「都一样」</b>。</p>
+  <div class="note info"><span class="t">⛔ 先说清这一讲不做什么</span>
+    <b>不比 benchmark，不谈谁跑得快。</b>屋脊点是<b>结构量</b>，它只说「这台机器的胃口有多大」。
+    <em>本讲从头到尾只讲硬件结构与负载匹配。</em>
+    <br>扩散模型本身的原理（加噪、去噪、latent、VAE、DiT）在<b>专题十一</b>，那是一小时的深潜。
+  </div>
+</section>
+
+<section id="s一">
+  <h2><span class="secno">一</span>同一把尺子，量四颗芯片</h2>
+<figure class="fbox fwide" id="figx-1"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="四颗芯片的算力除以显存带宽：H100 是 295，B200 是 312，TPU v7 是 313，三者几乎一样；而 TPU v6e 是 560，接近前三者的两倍"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">同一把尺子，量四颗芯片 ——&#160;<tspan font-weight="700">只有 v6e 落在别处</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 尺子还是专题二那一把：<tspan font-weight="700">算力 ÷ 显存带宽</tspan> ＝ 每搬一个字节，这台机器本来能算多少次。<tspan font-weight="700">数越大，越挑「算得多、搬得少」的活。</tspan></text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">三颗旗舰：几乎重合</text>
+<rect x="138" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="155" y="64" fill="#5f6368" style="font-size:11.0px">v6e：跑出去将近一倍</text>
+<line x1="934.0322580645161" y1="86" x2="934.0322580645161" y2="312" stroke="#dadce0" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 4"/>
+<line x1="953.1935483870968" y1="86" x2="953.1935483870968" y2="312" stroke="#dadce0" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 4"/>
+<text class="svgsm" x="943" y="78" fill="#80868b" text-anchor="middle" style="font-size:11.0px">295 ～ 313：三颗挤在这一线</text>
+<text class="svgsm" x="0" y="100" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">NVIDIA H100 SXM</tspan></text>
+<text class="svgsm" x="0" y="120" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">989.5 ÷ 3.35 TB/s</text>
+<text class="svgsm" x="220" y="120" fill="#80868b" style="font-size:11.0px">数据表（稠密 ＝ 1,979 ÷ 2）</text>
+<line x1="620" y1="104" x2="1280" y2="104" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="620" y1="104" x2="934.429465575349" y2="104" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="927.429465575349" y="97" width="14" height="14" rx="7" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="949" y="109" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">295</tspan></text>
+<text class="svgsm" x="0" y="166" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">NVIDIA B200</tspan></text>
+<text class="svgsm" x="0" y="186" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">2500 ÷ 8.0 TB/s</text>
+<text class="svgsm" x="220" y="186" fill="#80868b" style="font-size:11.0px">专题二 §1 已算过</text>
+<line x1="620" y1="170" x2="1280" y2="170" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="620" y1="170" x2="952.6612903225807" y2="170" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="945.6612903225807" y="163" width="14" height="14" rx="7" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="967" y="175" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">312</tspan></text>
+<text class="svgsm" x="0" y="232" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">TPU v7（Ironwood）</tspan></text>
+<text class="svgsm" x="0" y="252" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">2307 ÷ 7.38 TB/s</text>
+<text class="svgsm" x="220" y="252" fill="#80868b" style="font-size:11.0px">专题二 §1 已算过</text>
+<line x1="620" y1="236" x2="1280" y2="236" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="620" y1="236" x2="952.7694728560189" y2="236" stroke="#5f6368" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="945.7694728560189" y="229" width="14" height="14" rx="7" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="967" y="241" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">313</tspan></text>
+<text class="svgsm" x="0" y="298" fill="#a50e0e" style="font-size:13.0px"><tspan font-weight="700">TPU v6e（Trillium）</tspan></text>
+<text class="svgsm" x="0" y="318" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">918 ÷ 1.638 TB/s</text>
+<text class="svgsm" x="220" y="318" fill="#80868b" style="font-size:11.0px">官方 v6e 规格表</text>
+<line x1="620" y1="302" x2="1280" y2="302" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="620" y1="302" x2="1216.5969514356611" y2="302" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="1209.5969514356611" y="295" width="14" height="14" rx="7" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1231" y="307" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">560</tspan></text>
+<line x1="620" y1="334" x2="1280" y2="334" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="620.0" y1="334" x2="620.0" y2="339" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="620" y="354" fill="#80868b" text-anchor="middle" style="font-size:11.0px">0</text>
+<line x1="726.4516129032259" y1="334" x2="726.4516129032259" y2="339" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="726" y="354" fill="#80868b" text-anchor="middle" style="font-size:11.0px">100</text>
+<line x1="832.9032258064516" y1="334" x2="832.9032258064516" y2="339" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="832" y="354" fill="#80868b" text-anchor="middle" style="font-size:11.0px">200</text>
+<line x1="939.3548387096774" y1="334" x2="939.3548387096774" y2="339" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="939" y="354" fill="#80868b" text-anchor="middle" style="font-size:11.0px">300</text>
+<line x1="1045.8064516129032" y1="334" x2="1045.8064516129032" y2="339" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="1045" y="354" fill="#80868b" text-anchor="middle" style="font-size:11.0px">400</text>
+<line x1="1152.258064516129" y1="334" x2="1152.258064516129" y2="339" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="1152" y="354" fill="#80868b" text-anchor="middle" style="font-size:11.0px">500</text>
+<line x1="1258.7096774193549" y1="334" x2="1258.7096774193549" y2="339" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="1258" y="354" fill="#80868b" text-anchor="middle" style="font-size:11.0px">600</text>
+<text class="svgsm" x="950" y="374" fill="#5f6368" text-anchor="middle" style="font-size:11.0px">屋脊点（FLOP / byte）——&#160;每搬一个字节，本来能算多少次</text>
+<line x1="934.0322580645161" y1="320" x2="1216.1290322580644" y2="320" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="1216.1290322580644" y1="320" x2="934.0322580645161" y2="320" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="1075" y="312" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">v6e 的胃口是 H100 的 1.9 倍</tspan></text>
+<rect x="0" y="392" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="392" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="392" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="416" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ 「算力强、显存弱」不是形容词 ——&#160;它就是这个 560</tspan></text>
+<text class="svgsm" x="20" y="440" fill="#b06000" style="font-size:12.0px">把 v6e 跟 H100 逐项摆开：<tspan font-weight="700">算力 918 对 989.5，是它的 93%，基本打平</tspan>；而 <tspan font-weight="700">带宽 1,638 对 3,350，只有 49%</tspan>，<tspan font-weight="700">容量 32 GB 对 80 GB，只有 40%</tspan>。</text>
+<text class="svgsm" x="20" y="461" fill="#b06000" style="font-size:12.0px">⭐ 分子几乎没变、分母砍掉一半 ——&#160;<tspan font-weight="700">屋脊点就翻了一倍</tspan>。这就是那句「算力强、显存弱」唯一精确的说法。</text>
+<text class="svgsm" x="20" y="482" fill="#b06000" style="font-size:12.0px">⭐⭐ 于是这颗芯片对负载的要求变了：<tspan font-weight="700">每搬一个字节，你得给它凑够 560 次运算，它才不闲着。</tspan>——&#160;凑不够的活，它比谁都亏；凑得够的活，它比谁都划算。</text>
+<rect x="0" y="511" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="511" width="4" height="84" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="511" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="535" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 所以这一讲只回答一个问题：什么样的活凑得够 560</tspan></text>
+<text class="svgsm" x="20" y="559" fill="#174ea6" style="font-size:12.0px">⛔ <tspan font-weight="700">屋脊点是结构量，不是性能量。</tspan>它只说「这台机器的胃口有多大」，<tspan font-weight="700">一个字都没说谁跑得快</tspan> ——&#160;本讲从头到尾不比 benchmark。</text>
+<text class="svgsm" x="20" y="580" fill="#174ea6" style="font-size:12.0px">接下来两张图<tspan font-weight="700">把两颗芯片拆开</tspan>，看这个 560 是从什么样的硅片布局里长出来的；然后再看<tspan font-weight="700">扩散模型的计算长什么样</tspan>，为什么它恰好是那种「凑得够」的活。</text>
+<text class="svgsm" x="0" y="613" fill="#80868b" style="font-size:11.0px">📌 v6e：918 TFLOPs bf16 / 1,638 GBps / 32 GB ——&#160;官方 v6e 规格表；H100 SXM：稠密 989.5 TFLOPs（数据表 1,979 带稀疏 ÷ 2）/ 3.35 TB/s / 80 GB ——&#160;官方数据表</text>
+<text class="svgsm" x="0" y="630" fill="#80868b" style="font-size:11.0px">　　⚠️ 口径三连：H100 取稠密不取稀疏（差整一倍）；v6e 每 chip 只有 1 个 TensorCore，per-chip 即 per-device；四颗一律 bf16。B200 与 v7 两行沿用专题二 §1 已核过的数。</text>
+</svg>
+<figcaption><b>图 X-1</b>　三颗旗舰挤在 295–313，<b>v6e 是 560</b>。「算力强、显存弱」不是形容词 —— 它就是这个数。<em>接下来两张图，看这个 560 是从什么样的硅片布局里长出来的。</em></figcaption></figure>
+</section>
+<section id="s二">
+  <h2><span class="secno">二</span>把两颗芯片拆开</h2>
+  <p>先看 v6e。<b>只要记住三件事：算力集中在两个大方阵里、片上有一整块暂存、通往片外的那根管子很窄。</b></p>
+<figure class="fbox fwide" id="figx-2"><svg viewBox="0 0 1400 852" width="100%" role="img" aria-label="一颗 TPU v6e 芯片的内部布局：1 个 TensorCore，内含 2 个 256×256 的 MXU、1 个 8×128 的向量单元、1 个标量单元，配 128 MiB 的 VMEM 片上暂存和 1 MiB SMEM；另有 2 个 SparseCore；片外是 32 GB HBM，带宽 1638 GB/s；对外 4 个 ICI 端口组成二维环面"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一颗 TPU v6e 拆开看 ——&#160;<tspan font-weight="700">1 颗芯片 ＝ 1 个核 ＝ 1 个 device</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 记住三件事就够了：<tspan font-weight="700">算力集中在 2 个大方阵里</tspan>、<tspan font-weight="700">片上有一整块 128 MiB 的暂存</tspan>、<tspan font-weight="700">通往片外的那根管子只有 1,638 GB/s</tspan>。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">算：矩阵与向量单元</text>
+<rect x="138" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="155" y="64" fill="#5f6368" style="font-size:11.0px">存：片上暂存</text>
+<rect x="243" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="260" y="64" fill="#5f6368" style="font-size:11.0px">片外主存 HBM</text>
+<rect x="350" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="367" y="64" fill="#5f6368" style="font-size:11.0px">SparseCore（本讲不展开）</text>
+<rect x="0" y="96" width="900" height="434" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="16" y="120" fill="#202124" style="font-size:14.0px"><tspan font-weight="700">一颗 v6e 芯片</tspan></text>
+<text class="svgsm" x="150" y="120" fill="#80868b" style="font-size:11.0px">对软件 ＝ 1 个 device　⭐ 不用除以 2</text>
+<text class="svgsm" x="884" y="120" fill="#a50e0e" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">918 TFLOP/s bf16</tspan></text>
+<rect x="16" y="136" width="868" height="308" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="16" y="136" width="868" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="16" y="138" width="868" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="16" y1="166" x2="884" y2="166" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="30" y="156" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">TensorCore × 1</tspan></text>
+<text class="svgsm" x="147" y="156" fill="#5f6368" style="font-size:11.0px">v7 是 2 个 ——&#160;这一代只有 1 个</text>
+<text class="svgsm" x="870" y="156" fill="#80868b" text-anchor="end" style="font-size:11.0px">稠密算力全在这里面</text>
+<rect x="36" y="184" width="196" height="96" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<rect x="37" y="185" width="194" height="94" rx="5" fill="url(#grid)" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="134" y="231" fill="#174ea6" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">MXU 0</tspan></text>
+<text class="svgsm" x="134" y="246" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">256 × 256</text>
+<rect x="248" y="184" width="196" height="96" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<rect x="249" y="185" width="194" height="94" rx="5" fill="url(#grid)" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="346" y="231" fill="#174ea6" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">MXU 1</tspan></text>
+<text class="svgsm" x="346" y="246" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">256 × 256</text>
+<text class="svgsm" x="36" y="298" fill="#174ea6" style="font-size:11.0px">⭐ 矩阵乘全部在这两块里发生</text>
+<text class="svgsm" x="36" y="316" fill="#5f6368" style="font-size:11.0px">一整块 256×256 的方阵，不切成小片</text>
+<rect x="474" y="184" width="176" height="96" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="562" y="231" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">向量单元 VPU</tspan></text>
+<text class="svgsm" x="562" y="246" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">8 × 128</text>
+<rect x="664" y="184" width="150" height="96" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="739" y="231" fill="#5f6368" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">标量单元</tspan></text>
+<text class="svgsm" x="739" y="246" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">发指令 · 发搬运</text>
+<text class="svgsm" x="474" y="298" fill="#5f6368" style="font-size:11.0px">归一化、激活、softmax 走这儿</text>
+<rect x="36" y="322" width="560" height="62" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="316" y="352" fill="#b06000" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">VMEM　128 MiB</tspan></text>
+<text class="svgsm" x="316" y="367" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">片上暂存（不是缓存）</text>
+<rect x="610" y="322" width="232" height="62" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="726" y="352" fill="#b06000" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">SMEM　1 MiB</tspan></text>
+<text class="svgsm" x="726" y="367" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">标量 / 描述符</text>
+<text class="svgsm" x="36" y="404" fill="#5f6368" style="font-size:11.0px">⭐ <tspan font-weight="700">v7 是「两个核各 64 MiB」，v6e 是「一个核独占 128 MiB」</tspan>——&#160;总量一样，但 v6e 不用把大张量切两半</text>
+<rect x="16" y="458" width="868" height="54" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="16" y="458" width="4" height="54" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="18" y="458" width="3" height="54" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="32" y="480" fill="#681da8" style="font-size:13.0px"><tspan font-weight="700">SparseCore × 2</tspan></text>
+<text class="svgsm" x="176" y="480" fill="#5f6368" style="font-size:11.0px">专门搬稀疏 / 大表的协处理器 ——&#160;本讲不展开</text>
+<text class="svgsm" x="176" y="498" fill="#80868b" style="font-size:11.0px">扩散模型用不到它；它是给推荐系统那类负载准备的</text>
+<rect x="0" y="588" width="900" height="76" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="588" width="4" height="76" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="588" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="16" y="613" fill="#a50e0e" style="font-size:14.0px"><tspan font-weight="700">HBM　32 GB</tspan></text>
+<text class="svgsm" x="200" y="613" fill="#5f6368" style="font-size:11.0px">片外主存 ——&#160;模型和中间结果都住这儿</text>
+<text class="svgsm" x="16" y="640" fill="#5f6368" style="font-size:11.0px">⛔ 通往片上的带宽只有 <tspan font-weight="700">1,638 GB/s</tspan> ——&#160;H100 是 3,350，<tspan font-weight="700">只有它的 49%</tspan></text>
+<path d="M 150 530 L 750 530 L 455 588 L 445 588 Z" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="150" y1="530" x2="445.0" y2="588" stroke="#d93025" stroke-width="1.4" stroke-linecap="round"/>
+<line x1="750" y1="530" x2="455.0" y2="588" stroke="#d93025" stroke-width="1.4" stroke-linecap="round"/>
+<rect x="445.0" y="574" width="10.0" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="472" y="568" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">1,638 GB/s</tspan>——&#160;整颗芯片的数据，都从这儿过</text>
+<rect x="936" y="96" width="464" height="178" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="936" y="96" width="464" height="4" rx="2" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="936" y="98" width="464" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="936" y1="126" x2="1400" y2="126" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="950" y="116" fill="#007b83" style="font-size:13.5px"><tspan font-weight="700">对外怎么连</tspan></text>
+<text class="svgsm" x="1386" y="116" fill="#80868b" text-anchor="end" style="font-size:11.0px">官方规格表</text>
+<text class="svgsm" x="952" y="150" fill="#5f6368" style="font-size:11.0px">ICI 端口</text>
+<text class="svgsm" x="1044" y="150" fill="#202124" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">4 个</tspan></text>
+<text class="svgsm" x="1156" y="150" fill="#80868b" style="font-size:11.0px">v7 是 6 个</text>
+<text class="svgsm" x="952" y="178" fill="#5f6368" style="font-size:11.0px">ICI 带宽</text>
+<text class="svgsm" x="1044" y="178" fill="#202124" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">800 GB/s</tspan></text>
+<text class="svgsm" x="1156" y="178" fill="#80868b" style="font-size:11.0px">每 chip 双向合计</text>
+<text class="svgsm" x="952" y="206" fill="#5f6368" style="font-size:11.0px">拓扑</text>
+<text class="svgsm" x="1044" y="206" fill="#202124" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">2D 环面</tspan></text>
+<text class="svgsm" x="1156" y="206" fill="#80868b" style="font-size:11.0px">v7 是 3D</text>
+<text class="svgsm" x="952" y="234" fill="#5f6368" style="font-size:11.0px">一个 Pod</text>
+<text class="svgsm" x="1044" y="234" fill="#202124" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">256 颗</tspan></text>
+<text class="svgsm" x="1156" y="234" fill="#80868b" style="font-size:11.0px">v7 是 9,216 颗</text>
+<text class="svgsm" x="952" y="262" fill="#5f6368" style="font-size:11.0px">每台主机</text>
+<text class="svgsm" x="1044" y="262" fill="#202124" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">8 颗</tspan></text>
+<text class="svgsm" x="1156" y="262" fill="#80868b" style="font-size:11.0px">DRAM 1,536 GiB</text>
+<rect x="936" y="290" width="464" height="216" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="936" y="290" width="464" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="936" y="292" width="464" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="936" y1="320" x2="1400" y2="320" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="950" y="310" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">这一张只要记住三条</tspan></text>
+<text class="svgsm" x="952" y="350" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="978" y="350" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">1 颗 ＝ 1 个核 ＝ 1 个 device</tspan></text>
+<text class="svgsm" x="978" y="370" fill="#5f6368" style="font-size:11.0px">专题二那个「除以 2」的坑，这一代没有</text>
+<text class="svgsm" x="952" y="412" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">②</tspan></text>
+<text class="svgsm" x="978" y="412" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">片上一整块 128 MiB 暂存</tspan></text>
+<text class="svgsm" x="978" y="432" fill="#5f6368" style="font-size:11.0px">大张量不用切成两半，编译器好排</text>
+<text class="svgsm" x="952" y="474" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">③</tspan></text>
+<text class="svgsm" x="978" y="474" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">片外那根管子只有 1,638 GB/s</tspan></text>
+<text class="svgsm" x="978" y="494" fill="#5f6368" style="font-size:11.0px">⛔ 这就是 560 的分母 ——&#160;全讲的症结</text>
+<rect x="0" y="688" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="688" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="688" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="712" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ 把这张布局压成一句话：算的地方很大，进料的门很窄</tspan></text>
+<text class="svgsm" x="20" y="736" fill="#b06000" style="font-size:12.0px">两块 <tspan font-weight="700">256×256</tspan> 的方阵摆在那儿，每一拍能吞下的乘加数是很大的；可所有数据进出片外，只能挤 <tspan font-weight="700">1,638 GB/s</tspan> 这一根管子。</text>
+<text class="svgsm" x="20" y="757" fill="#b06000" style="font-size:12.0px">⭐ <tspan font-weight="700">这就是 560 的来历</tspan>：分子（算力）没少，分母（带宽）被砍掉一半，于是「每搬一个字节得算多少次才不亏」这个门槛，就抬到了别人的两倍。</text>
+<text class="svgsm" x="20" y="778" fill="#b06000" style="font-size:12.0px">⭐⭐ 下一张把 H100 按同样的画法拆开 ——&#160;<tspan font-weight="700">看两颗芯片是怎么在同一件事上做了相反的选择的</tspan>。</text>
+<text class="svgsm" x="0" y="811" fill="#80868b" style="font-size:11.0px">📌 每 chip 1 个 TensorCore、2 个 MXU、1 个向量单元、1 个标量单元、918 TFLOPs bf16、HBM 32 GB / 1,638 GBps、ICI 800 GBps 4 端口、2D torus、Pod 256 chip、每 host 8 chip ——&#160;官方 v6e 规格表</text>
+<text class="svgsm" x="0" y="828" fill="#80868b" style="font-size:11.0px">　　MXU 256×256、VMEM 128 MiB/core、SMEM 1 MiB、SparseCore 2 core × 16 subcore × 8 lane ——&#160;JAX 公开源码 tpu_info.py 的 TPU_V6E 分支</text>
+</svg>
+<figcaption><b>图 X-2</b>　一颗 v6e：<b>1 颗 ＝ 1 个核 ＝ 1 个 device</b>，128 MiB 片上暂存，片外那道门 1,638 GB/s。<em>专题二反复强调的「容量除以 2」那个坑，这一代没有。</em></figcaption></figure>
+  <p>再按<b>同样的画法</b>拆 H100。看它在同一件事上做了什么相反的选择。</p>
+<figure class="fbox fwide" id="figx-3"><svg viewBox="0 0 1400 752" width="100%" role="img" aria-label="一颗 NVIDIA H100 SXM 的内部布局：132 个 SM，每个 SM 有 128 个 CUDA Core、4 个第四代 Tensor Core、256 KB 的 L1 与共享内存、256 KB 寄存器堆；全片共享 50 MB L2；片外 80 GB HBM3，带宽 3.35 TB/s；对外 NVLink 900 GB/s"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一颗 NVIDIA H100 拆开看 ——&#160;<tspan font-weight="700">同样的画法，相反的选择</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 跟上一张比着看：<tspan font-weight="700">算力摊成 528 个小单元</tspan>、<tspan font-weight="700">片上多了一整层硬件自动管的缓存</tspan>、<tspan font-weight="700">通往片外的门宽一倍</tspan>。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">算：SM 与 Tensor Core</text>
+<rect x="162" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="179" y="64" fill="#5f6368" style="font-size:11.0px">存：软件管的 L1 / 共享</text>
+<rect x="325" y="55" width="11" height="11" rx="2" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="342" y="64" fill="#5f6368" style="font-size:11.0px">存：硬件管的 L2 ——&#160;v6e 没有这一层</text>
+<rect x="581" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="598" y="64" fill="#5f6368" style="font-size:11.0px">片外主存 HBM3</text>
+<rect x="0" y="96" width="900" height="334" rx="10" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="16" y="120" fill="#202124" style="font-size:14.0px"><tspan font-weight="700">一颗 H100 SXM</tspan></text>
+<text class="svgsm" x="168" y="120" fill="#80868b" style="font-size:11.0px">8 GPC · 66 TPC · 每 TPC 2 个 SM</text>
+<text class="svgsm" x="884" y="120" fill="#a50e0e" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">989.5 TFLOP/s bf16 稠密</tspan></text>
+<rect x="16" y="136" width="868" height="196" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="16" y="136" width="868" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="16" y="138" width="868" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="16" y1="166" x2="884" y2="166" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="30" y="156" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">SM × 132</tspan></text>
+<text class="svgsm" x="103" y="156" fill="#5f6368" style="font-size:11.0px">算力摊在 132 个小核里 ——&#160;v6e 是 1 个大核</text>
+<text class="svgsm" x="870" y="156" fill="#80868b" text-anchor="end" style="font-size:11.0px">每格 ＝ 1 个 SM</text>
+<rect x="36.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="54.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="72.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="90.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="108.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="126.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="144.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="162.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="180.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="198.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="216.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="234.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="252.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="270.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="288.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="306.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="324.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="342.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="360.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="378.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="396.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="414.0" y="182.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="36.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="54.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="72.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="90.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="108.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="126.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="144.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="162.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="180.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="198.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="216.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="234.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="252.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="270.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="288.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="306.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="324.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="342.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="360.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="378.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="396.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="414.0" y="197.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="36.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="54.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="72.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="90.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="108.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="126.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="144.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="162.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="180.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="198.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="216.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="234.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="252.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="270.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="288.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="306.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="324.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="342.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="360.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="378.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="396.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="414.0" y="212.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="36.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="54.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="72.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="90.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="108.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="126.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="144.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="162.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="180.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="198.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="216.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="234.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="252.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="270.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="288.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="306.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="324.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="342.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="360.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="378.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="396.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="414.0" y="227.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="36.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="54.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="72.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="90.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="108.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="126.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="144.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="162.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="180.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="198.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="216.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="234.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="252.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="270.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="288.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="306.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="324.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="342.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="360.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="378.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="396.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="414.0" y="242.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="36.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="54.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="72.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="90.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="108.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="126.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="144.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="162.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="180.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="198.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="216.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="234.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="252.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="270.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="288.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="306.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="324.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="342.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="360.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="378.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="396.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<rect x="414.0" y="257.0" width="15.0" height="12.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.7"/>
+<text class="svgsm" x="36" y="288" fill="#5f6368" style="font-size:11.0px">每个 SM 里：<tspan font-weight="700">128 个 CUDA Core</tspan> ＋ <tspan font-weight="700">4 个第四代 Tensor Core</tspan></text>
+<text class="svgsm" x="36" y="306" fill="#5f6368" style="font-size:11.0px">全片合计 <tspan font-weight="700">16,896</tspan> 个 CUDA Core、<tspan font-weight="700">528</tspan> 个 Tensor Core</text>
+<rect x="614" y="180" width="250" height="108" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="628" y="202" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">一个 SM 里的存</tspan></text>
+<text class="svgsm" x="628" y="226" fill="#202124" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">L1 ＋ 共享内存　256 KB</text>
+<text class="svgsm" x="628" y="246" fill="#5f6368" style="font-size:11.0px">其中共享可配到 228 KB</text>
+<text class="svgsm" x="628" y="266" fill="#5f6368" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">寄存器堆　256 KB</text>
+<rect x="16" y="346" width="868" height="66" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="16" y="346" width="4" height="66" rx="2" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<rect x="18" y="346" width="3" height="66" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="32" y="371" fill="#007b83" style="font-size:13.0px"><tspan font-weight="700">L2 缓存　50 MB</tspan></text>
+<text class="svgsm" x="236" y="371" fill="#5f6368" style="font-size:11.0px">全片共享，<tspan font-weight="700">硬件自动管</tspan> ——&#160;程序管不着它留什么、赶走什么</text>
+<text class="svgsm" x="32" y="394" fill="#5f6368" style="font-size:11.0px">⭐⭐ <tspan font-weight="700">v6e 完全没有这一层</tspan>——&#160;JAX 源码里 v6e 的 CMEM 直接写着 0。片上放什么，那边全部由编译期决定。</text>
+<rect x="0" y="488" width="900" height="76" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="488" width="4" height="76" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="488" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="16" y="513" fill="#a50e0e" style="font-size:14.0px"><tspan font-weight="700">HBM3　80 GB</tspan></text>
+<text class="svgsm" x="214" y="513" fill="#5f6368" style="font-size:11.0px">容量是 v6e 的 2.5 倍（80 对 32）</text>
+<text class="svgsm" x="16" y="540" fill="#5f6368" style="font-size:11.0px">⭐ 通往片上的带宽 <tspan font-weight="700">3,350 GB/s</tspan> ——&#160;v6e 是 1,638，<tspan font-weight="700">这道门宽了一倍</tspan></text>
+<path d="M 150 430 L 750 430 L 460.2 488 L 439.8 488 Z" fill="#fce8e6" stroke="none" stroke-width="1.0"/>
+<line x1="150" y1="430" x2="439.77411477411476" y2="488" stroke="#d93025" stroke-width="1.4" stroke-linecap="round"/>
+<line x1="750" y1="430" x2="460.22588522588524" y2="488" stroke="#d93025" stroke-width="1.4" stroke-linecap="round"/>
+<rect x="439.77411477411476" y="474" width="20.45177045177045" height="16" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="478" y="468" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">3,350 GB/s</tspan>　⭐ 这道门的宽度跟上一张<tspan font-weight="700">按同一比例画</tspan></text>
+<rect x="936" y="96" width="464" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="936" y="96" width="464" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="936" y="98" width="464" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="936" y1="126" x2="1400" y2="126" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="950" y="116" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">三个相反的选择</tspan></text>
+<text class="svgsm" x="1386" y="116" fill="#80868b" text-anchor="end" style="font-size:11.0px">这一讲的全部内容</text>
+<text class="svgsm" x="952" y="156" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">算力怎么摆</tspan></text>
+<text class="svgsm" x="952" y="178" fill="#a50e0e" style="font-size:11.0px">v6e：2 块大方阵</text>
+<text class="svgsm" x="952" y="196" fill="#174ea6" style="font-size:11.0px">H100：528 个小单元</text>
+<text class="svgsm" x="952" y="216" fill="#80868b" style="font-size:11.0px">一个是「一次吞一大块」，一个是「同时应付很多小块」</text>
+<text class="svgsm" x="952" y="246" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">片上谁做主</tspan></text>
+<text class="svgsm" x="952" y="268" fill="#a50e0e" style="font-size:11.0px">v6e：编译期写死</text>
+<text class="svgsm" x="952" y="286" fill="#174ea6" style="font-size:11.0px">H100：多一层硬件缓存</text>
+<text class="svgsm" x="952" y="306" fill="#80868b" style="font-size:11.0px">v6e 的 CMEM ＝ 0，那一层它压根没有</text>
+<text class="svgsm" x="952" y="336" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">门有多宽</tspan></text>
+<text class="svgsm" x="952" y="358" fill="#a50e0e" style="font-size:11.0px">v6e：1,638 GB/s</text>
+<text class="svgsm" x="952" y="376" fill="#174ea6" style="font-size:11.0px">H100：3,350 GB/s</text>
+<text class="svgsm" x="952" y="396" fill="#80868b" style="font-size:11.0px">⛔ 这一条直接决定了那个 560 对 295</text>
+<rect x="936" y="412" width="464" height="132" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="936" y="412" width="464" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="936" y="414" width="464" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="936" y1="442" x2="1400" y2="442" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="950" y="432" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">一个反直觉的账</tspan></text>
+<text class="svgsm" x="952" y="468" fill="#5f6368" style="font-size:11.0px">H100 全部片上内存</text>
+<text class="svgsm" x="952" y="488" fill="#202124" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">132 × 256 KB ＋ 50 MB ≈ 84 MB</text>
+<text class="svgsm" x="952" y="514" fill="#5f6368" style="font-size:11.0px">v6e 光 VMEM 一项</text>
+<text class="svgsm" x="952" y="534" fill="#0d652d" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">128 MiB ≈ 134 MB</tspan></text>
+<text class="svgsm" x="952" y="558" fill="#0d652d" style="font-size:11.0px">⭐ 门窄，但屋里的台面更大 ——&#160;这两件事是配套的</text>
+<rect x="0" y="588" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="588" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="588" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="612" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 两颗芯片在同一件事上做了相反的选择 ——&#160;而它们各自都是自洽的</tspan></text>
+<text class="svgsm" x="20" y="636" fill="#174ea6" style="font-size:12.0px">H100 摊成 528 个小单元、再压一层硬件缓存，是为了<tspan font-weight="700">应付「我不知道你要跑什么」</tspan>：形状随时会变、访问随时可能落空，那就多留后手。</text>
+<text class="svgsm" x="20" y="657" fill="#174ea6" style="font-size:12.0px">v6e 压成 2 块大方阵、片上全交给编译器，是为了<tspan font-weight="700">吃透「我早就知道你要跑什么」</tspan>：形状固定、访问可提前排，后手就是浪费，不如把面积全给算力和台面。</text>
+<text class="svgsm" x="20" y="678" fill="#174ea6" style="font-size:12.0px">⭐⭐ 所以问题从来不是「谁更强」，是<tspan font-weight="700">你手上的活属于哪一种</tspan>。——&#160;下一张就看扩散模型的活长什么样。</text>
+<text class="svgsm" x="0" y="711" fill="#80868b" style="font-size:11.0px">📌 H100 SXM：132 SM（8 GPC / 66 TPC）、128 CUDA Core 与 4 个第四代 Tensor Core 每 SM、L1＋共享 256 KB／SM（共享可配 228 KB）、寄存器堆 256 KB／SM、L2 50 MB ——&#160;NVIDIA《Hopper Architecture In-Depth》</text>
+<text class="svgsm" x="0" y="728" fill="#80868b" style="font-size:11.0px">　　稠密 bf16 989.5 TFLOPS（数据表 1,979 带稀疏 ÷ 2）、HBM3 80 GB / 3.35 TB/s、NVLink 900 GB/s ——&#160;NVIDIA H100 官方数据表。⚠️ 84 MB 那个合计是本图当场加的：132 × 256 KB ＝ 33.8 MB，加 L2 50 MB。</text>
+</svg>
+<figcaption><b>图 X-3</b>　一颗 H100：算力摊成 <b>528 个</b>小单元，片上多了一整层<b>硬件自动管</b>的 L2，门宽一倍。<em>⭐ 两张图里那道门的宽度是按带宽等比画的，可以直接比。</em></figcaption></figure>
+
+  <div class="note ok"><span class="t">⭐ 两颗芯片各自都是自洽的</span>
+    H100 摊成很多小单元、再压一层硬件缓存，是为了应付<b>「我不知道你要跑什么」</b>；
+    v6e 压成两块大方阵、片上全交给编译器，是为了吃透<b>「我早就知道你要跑什么」</b>。
+    <br>——&nbsp;<b>所以问题从来不是谁更强，是你手上的活属于哪一种。</b>
+  </div>
+
+</section>
+<section id="s三">
+  <h2><span class="secno">三</span>那么扩散模型是哪一种活</h2>
+<figure class="fbox fwide" id="figx-5"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="左边是自回归 LLM：一个 token 一个 token 产出，KV cache 越来越长，形状每步都在变；右边是扩散模型：整张图一起动，走五十步，步与步之间只传一张大小不变的 latent，没有 KV cache，形状从头到尾一样"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">扩散一步在干什么 ——&#160;<tspan font-weight="700">同一段计算，原样跑五十遍</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 这一张不讲扩散的数学，只讲它<tspan font-weight="700">对硬件提了什么要求</tspan>：没有 KV cache、形状不变、同一段重复几十次。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">自回归 LLM：形状步步在变</text>
+<rect x="173" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="190" y="64" fill="#5f6368" style="font-size:11.0px">扩散：形状从头到尾一样</text>
+<rect x="0" y="94" width="680.0" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="94" width="680.0" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="96" width="680.0" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="124" x2="680.0" y2="124" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="114" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">自回归 LLM</tspan></text>
+<text class="svgsm" x="98" y="114" fill="#5f6368" style="font-size:11.0px">一个 token 一个 token</text>
+<text class="svgsm" x="666" y="114" fill="#80868b" text-anchor="end" style="font-size:11.0px">每步都不一样</text>
+<text class="svgsm" x="16" y="148" fill="#5f6368" style="font-size:11.0px">每一步都要带上前面所有的 KV ——&#160;它一直在长</text>
+<text class="svgsm" x="16" y="180" fill="#80868b" style="font-size:11.0px">第 1 步</text>
+<rect x="84" y="170" width="68" height="16" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="0.8"/>
+<text class="svgsm" x="92" y="182" fill="#a50e0e" style="font-size:11.0px">KV × 1</text>
+<rect x="160" y="170" width="26" height="16" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="194" y="182" fill="#80868b" style="font-size:11.0px">新 token</text>
+<text class="svgsm" x="16" y="224" fill="#80868b" style="font-size:11.0px">第 2 步</text>
+<rect x="84" y="214" width="128" height="16" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="0.8"/>
+<text class="svgsm" x="92" y="226" fill="#a50e0e" style="font-size:11.0px">KV × 2</text>
+<rect x="220" y="214" width="26" height="16" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="254" y="226" fill="#80868b" style="font-size:11.0px">新 token</text>
+<text class="svgsm" x="16" y="268" fill="#80868b" style="font-size:11.0px">第 3 步</text>
+<rect x="84" y="258" width="188" height="16" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="0.8"/>
+<text class="svgsm" x="92" y="270" fill="#a50e0e" style="font-size:11.0px">KV × 3</text>
+<rect x="280" y="258" width="26" height="16" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="314" y="270" fill="#80868b" style="font-size:11.0px">新 token</text>
+<text class="svgsm" x="16" y="312" fill="#80868b" style="font-size:11.0px">第 4 步</text>
+<rect x="84" y="302" width="248" height="16" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="0.8"/>
+<text class="svgsm" x="92" y="314" fill="#a50e0e" style="font-size:11.0px">KV × 4</text>
+<rect x="340" y="302" width="26" height="16" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="374" y="314" fill="#80868b" style="font-size:11.0px">新 token</text>
+<text class="svgsm" x="16" y="356" fill="#80868b" style="font-size:11.0px">第 5 步</text>
+<rect x="84" y="346" width="308" height="16" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="0.8"/>
+<text class="svgsm" x="92" y="358" fill="#a50e0e" style="font-size:11.0px">KV × 5</text>
+<rect x="400" y="346" width="26" height="16" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="434" y="358" fill="#80868b" style="font-size:11.0px">新 token</text>
+<text class="svgsm" x="16" y="390" fill="#a50e0e" style="font-size:11.0px">⛔ <tspan font-weight="700">形状每一步都变</tspan>——&#160;编译好的那一份，下一步就不合用了</text>
+<rect x="720.0" y="94" width="680.0" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="720.0" y="94" width="680.0" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="720.0" y="96" width="680.0" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="720.0" y1="124" x2="1400.0" y2="124" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="734" y="114" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">扩散模型</tspan></text>
+<text class="svgsm" x="802" y="114" fill="#5f6368" style="font-size:11.0px">整张图一起动，走 N 步</text>
+<text class="svgsm" x="1386" y="114" fill="#80868b" text-anchor="end" style="font-size:11.0px">每步一模一样</text>
+<text class="svgsm" x="736" y="148" fill="#5f6368" style="font-size:11.0px">每一步只吃上一步的结果 ——&#160;传过去的东西大小不变</text>
+<text class="svgsm" x="736" y="180" fill="#80868b" style="font-size:11.0px">第 1 步</text>
+<rect x="804.0" y="170" width="170" height="16" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<text class="svgsm" x="812" y="182" fill="#174ea6" style="font-size:11.0px">latent　大小不变</text>
+<line x1="988.0" y1="178" x2="1020.0" y2="178" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1028" y="182" fill="#80868b" style="font-size:11.0px">同一段计算</text>
+<text class="svgsm" x="736" y="224" fill="#80868b" style="font-size:11.0px">第 2 步</text>
+<rect x="804.0" y="214" width="170" height="16" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<text class="svgsm" x="812" y="226" fill="#174ea6" style="font-size:11.0px">latent　大小不变</text>
+<line x1="988.0" y1="222" x2="1020.0" y2="222" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1028" y="226" fill="#80868b" style="font-size:11.0px">同一段计算</text>
+<text class="svgsm" x="736" y="268" fill="#80868b" style="font-size:11.0px">第 3 步</text>
+<rect x="804.0" y="258" width="170" height="16" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<text class="svgsm" x="812" y="270" fill="#174ea6" style="font-size:11.0px">latent　大小不变</text>
+<line x1="988.0" y1="266" x2="1020.0" y2="266" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1028" y="270" fill="#80868b" style="font-size:11.0px">同一段计算</text>
+<text class="svgsm" x="736" y="312" fill="#80868b" style="font-size:11.0px">第 4 步</text>
+<rect x="804.0" y="302" width="170" height="16" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<text class="svgsm" x="812" y="314" fill="#174ea6" style="font-size:11.0px">latent　大小不变</text>
+<line x1="988.0" y1="310" x2="1020.0" y2="310" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1028" y="314" fill="#80868b" style="font-size:11.0px">同一段计算</text>
+<text class="svgsm" x="736" y="356" fill="#80868b" style="font-size:11.0px">第 50 步</text>
+<rect x="804.0" y="346" width="170" height="16" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="0.8"/>
+<text class="svgsm" x="812" y="358" fill="#174ea6" style="font-size:11.0px">latent　大小不变</text>
+<text class="svgsm" x="988" y="358" fill="#80868b" style="font-size:11.0px">……一共五十遍</text>
+<text class="svgsm" x="736" y="390" fill="#174ea6" style="font-size:11.0px">⭐ <tspan font-weight="700">编译一次，五十步全部复用</tspan>——&#160;而且没有一条 KV cache 要养</text>
+<rect x="0" y="416" width="1400" height="192" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="16" y="436" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">问的是同一件事</tspan></text>
+<text class="svgsm" x="360" y="436" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">自回归 LLM</tspan></text>
+<text class="svgsm" x="760" y="436" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">扩散模型</tspan></text>
+<line x1="0" y1="446" x2="1400" y2="446" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="470" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">步与步之间传什么</tspan></text>
+<rect x="348" y="456" width="4" height="34" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="364" y="470" fill="#a50e0e" style="font-size:12.0px">越来越长的 KV cache</text>
+<rect x="748" y="456" width="4" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="764" y="470" fill="#174ea6" style="font-size:12.0px">一张大小不变的 latent</text>
+<text class="svgsm" x="1060" y="470" fill="#80868b" style="font-size:11.0px">⭐ 扩散这一侧根本没有「历史」这个概念</text>
+<line x1="0" y1="500" x2="1400" y2="500" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="524" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">张量形状</tspan></text>
+<rect x="348" y="510" width="4" height="34" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="364" y="524" fill="#a50e0e" style="font-size:12.0px">每一步都在变</text>
+<rect x="748" y="510" width="4" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="764" y="524" fill="#174ea6" style="font-size:12.0px">从头到尾一个形状</text>
+<text class="svgsm" x="1060" y="524" fill="#80868b" style="font-size:11.0px">⛔ 这一条直接决定编译好的东西能不能复用</text>
+<line x1="0" y1="554" x2="1400" y2="554" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="578" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">同一段计算跑几次</tspan></text>
+<rect x="348" y="564" width="4" height="34" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="364" y="578" fill="#a50e0e" style="font-size:12.0px">每步都得重排</text>
+<rect x="748" y="564" width="4" height="34" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="764" y="578" fill="#174ea6" style="font-size:12.0px">原样跑五十遍</text>
+<text class="svgsm" x="1060" y="578" fill="#80868b" style="font-size:11.0px">⭐ 编译那笔固定开销，被摊到五十步上</text>
+<rect x="0" y="630" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="630" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="630" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="654" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 把这三条接回上一张芯片图 ——&#160;它们要的正是 v6e 给的</tspan></text>
+<text class="svgsm" x="20" y="678" fill="#0d652d" style="font-size:12.0px">v6e 片上<tspan font-weight="700">没有硬件缓存兜底</tspan>（CMEM ＝ 0），放什么全由编译期写死。这个设计有个前提：<tspan font-weight="700">形状得固定、计划得排得出来</tspan>。</text>
+<text class="svgsm" x="20" y="699" fill="#0d652d" style="font-size:12.0px">⭐ 而扩散把这个前提<tspan font-weight="700">喂得满满的</tspan>：形状不变、没有历史要养、同一段跑五十遍 ——&#160;编译期能知道的，它全都提前告诉你了。</text>
+<text class="svgsm" x="20" y="720" fill="#0d652d" style="font-size:12.0px">⭐⭐ 所以「合适」是两层意思叠在一起：<tspan font-weight="700">算术上</tspan>强度够高，窄带宽没成为瓶颈（上一张）；<tspan font-weight="700">结构上</tspan>形状全静态，编译优先这套打法拿到了它最想要的输入（这一张）。</text>
+<text class="svgsm" x="0" y="753" fill="#80868b" style="font-size:11.0px">📌 「没有 KV cache、每步独立、形状静态」这三条是扩散模型的结构事实，本课专题十一有完整推导；这一张只取它们对硬件的三个后果</text>
+<text class="svgsm" x="0" y="770" fill="#80868b" style="font-size:11.0px">　　⛔ 本图不含任何 benchmark 数 ——&#160;它讲的是结构匹配，不是快慢。扩散的数学（加噪 / 去噪 / latent / VAE）属于专题十一，那是一小时的深潜。</text>
+</svg>
+<figcaption><b>图 X-5</b>　没有 KV cache、形状从头到尾不变、同一段计算原样跑五十遍。<em>编译期能知道的，它全都提前告诉你了 —— 这正是 v6e 那套打法要的前提。</em></figcaption></figure>
+</section>
+<section id="s四">
+  <h2><span class="secno">四</span>把活放回那两条线上</h2>
+<figure class="fbox fwide" id="figx-4"><svg viewBox="0 0 1400 803" width="100%" role="img" aria-label="把各种负载按算术强度摆在一根对数轴上：LLM decode batch 1 是 1，batch 64 是 64，都远在 H100 的 295 和 v6e 的 560 这两条线左边；而 LLM prefill 8K 是 8192、文生图约 16000、文生视频更高，都远在两条线右边"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">把活放回那两条线上 ——&#160;<tspan font-weight="700">扩散模型落在很右边，而且是甩开两个数量级</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一条规则就够：<tspan font-weight="700">强度 ≈ 同一份权重被多少个「位置」共用</tspan>。权重从 HBM 搬上来是固定开销，服务的位置越多，这笔搬运摊得越薄。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">喂不饱：卡在搬运上</text>
+<rect x="138" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="155" y="64" fill="#5f6368" style="font-size:11.0px">喂得饱</text>
+<rect x="210" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="227" y="64" fill="#5f6368" style="font-size:11.0px">扩散：甩开两个数量级</text>
+<line x1="717.7585907179375" y1="122" x2="717.7585907179375" y2="424" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 4"/>
+<line x1="717.7585907179375" y1="98" x2="717.7585907179375" y2="122" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="709" y="94" fill="#80868b" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">H100　295</tspan></text>
+<line x1="759.7275562138348" y1="122" x2="759.7275562138348" y2="424" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" stroke-dasharray="4 4"/>
+<line x1="759.7275562138348" y1="120" x2="759.7275562138348" y2="122" stroke="#d93025" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="767" y="116" fill="#a50e0e" text-anchor="start" style="font-size:12.0px"><tspan font-weight="700">v6e　560</tspan></text>
+<path d="M 717.8 126 L 759.7 126 L 759.7 424 L 717.8 424 Z" fill="#fef7e0" stroke="none" stroke-width="1.0"/>
+<text class="svgsm" x="0" y="148" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">LLM decode　batch 1</tspan></text>
+<text class="svgsm" x="0" y="168" fill="#80868b" style="font-size:11.0px">一次只产 1 个 token</text>
+<line x1="300" y1="152" x2="1250" y2="152" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="300" y1="152" x2="345.3859918263485" y2="152" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="338.3859918263485" y="145" width="14" height="14" rx="7" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="361" y="157" fill="#a50e0e" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="0" y="206" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">LLM decode　batch 64</tspan></text>
+<text class="svgsm" x="0" y="226" fill="#80868b" style="font-size:11.0px">64 条请求共用一次权重搬运</text>
+<line x1="300" y1="210" x2="1250" y2="210" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="300" y1="210" x2="617.7019427844394" y2="210" stroke="#d93025" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="610.7019427844394" y="203" width="14" height="14" rx="7" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="633" y="215" fill="#a50e0e" style="font-size:13.0px"><tspan font-weight="700">64</tspan></text>
+<text class="svgsm" x="0" y="264" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">LLM prefill　8K 上下文</tspan></text>
+<text class="svgsm" x="0" y="284" fill="#80868b" style="font-size:11.0px">整段一次过</text>
+<line x1="300" y1="268" x2="1250" y2="268" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="300" y1="268" x2="935.4038855688789" y2="268" stroke="#1e8e3e" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="928.4038855688789" y="261" width="14" height="14" rx="7" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="951" y="273" fill="#0d652d" style="font-size:13.0px"><tspan font-weight="700">8,192</tspan></text>
+<text class="svgsm" x="0" y="322" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">文生图　1024 × 1024</tspan></text>
+<text class="svgsm" x="0" y="342" fill="#80868b" style="font-size:11.0px">latent 128×128 ＝ 16,384 个位置</text>
+<line x1="300" y1="326" x2="1250" y2="326" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="300" y1="326" x2="980.7898773952273" y2="326" stroke="#1a73e8" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="973.7898773952273" y="319" width="14" height="14" rx="7" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="996" y="331" fill="#174ea6" style="font-size:13.0px"><tspan font-weight="700">16,384</tspan></text>
+<text class="svgsm" x="0" y="380" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">文生视频</tspan></text>
+<text class="svgsm" x="0" y="400" fill="#80868b" style="font-size:11.0px">再多一到两个数量级（只标量级）</text>
+<line x1="300" y1="384" x2="1250" y2="384" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<line x1="300" y1="384" x2="1171.166093740524" y2="384" stroke="#1a73e8" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="1164.166093740524" y="377" width="14" height="14" rx="7" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1187" y="389" fill="#174ea6" style="font-size:13.0px"><tspan font-weight="700">10 万 ～ 100 万</tspan></text>
+<line x1="300" y1="432" x2="1250" y2="432" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="345.3859918263485" y1="432" x2="345.3859918263485" y2="437" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="345" y="452" fill="#80868b" text-anchor="middle" style="font-size:11.0px">1</text>
+<line x1="496.15499318862373" y1="432" x2="496.15499318862373" y2="437" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="496" y="452" fill="#80868b" text-anchor="middle" style="font-size:11.0px">10</text>
+<line x1="646.923994550899" y1="432" x2="646.923994550899" y2="437" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="646" y="452" fill="#80868b" text-anchor="middle" style="font-size:11.0px">100</text>
+<line x1="797.6929959131743" y1="432" x2="797.6929959131743" y2="437" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="797" y="452" fill="#80868b" text-anchor="middle" style="font-size:11.0px">1,000</text>
+<line x1="948.4619972754496" y1="432" x2="948.4619972754496" y2="437" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="948" y="452" fill="#80868b" text-anchor="middle" style="font-size:11.0px">10,000</text>
+<line x1="1099.2309986377247" y1="432" x2="1099.2309986377247" y2="437" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="1099" y="452" fill="#80868b" text-anchor="middle" style="font-size:11.0px">100,000</text>
+<line x1="1250.0" y1="432" x2="1250.0" y2="437" stroke="#80868b" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="1250" y="452" fill="#80868b" text-anchor="middle" style="font-size:11.0px">1,000,000</text>
+<text class="svgsm" x="775" y="472" fill="#5f6368" text-anchor="middle" style="font-size:11.0px">算术强度（FLOP / byte，对数轴）——&#160;越往右，越是「算得多、搬得少」</text>
+<text class="svgsm" x="541" y="498" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">← 这一边：卡在搬运上，算力再强也闲着</tspan></text>
+<text class="svgsm" x="1020" y="498" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">这一边：喂得饱，此时比的是算力 →</tspan></text>
+<rect x="0" y="520" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="520" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="520" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="544" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 所以「v6e 适合扩散」的精确说法是这个</tspan></text>
+<text class="svgsm" x="20" y="568" fill="#0d652d" style="font-size:12.0px">⛔ <tspan font-weight="700">不是它跑扩散更快。</tspan>是扩散把它的短板<tspan font-weight="700">挡在了瓶颈之外</tspan> ——&#160;强度上万，离 560 差着一个半数量级，那根窄管子根本没成为瓶颈。</text>
+<text class="svgsm" x="20" y="589" fill="#0d652d" style="font-size:12.0px">⭐ 于是只剩下没被挡住的那一项在起作用：<tspan font-weight="700">算力 918 对 989.5，是 H100 的 93%</tspan>。短板不参与，长板打平 ——&#160;这就是「合适」的全部含义。</text>
+<text class="svgsm" x="20" y="610" fill="#0d652d" style="font-size:12.0px">⭐⭐ 反过来也成立：<tspan font-weight="700">batch 小的 decode 落在最左边</tspan>，那里比的全是带宽，而 v6e 只有 H100 的 49% ——&#160;<tspan font-weight="700">同一颗芯片，在那种活上就是最吃亏的。</tspan></text>
+<rect x="0" y="639" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="639" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="639" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="663" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 同一条道理，原样适用于 prefill 重、decode 轻的任务</tspan></text>
+<text class="svgsm" x="20" y="687" fill="#174ea6" style="font-size:12.0px">prefill 是<tspan font-weight="700">整段一次过</tspan>，几千上万个位置共用一次权重搬运 ——&#160;它跟扩散落在轴上的同一边。</text>
+<text class="svgsm" x="20" y="708" fill="#174ea6" style="font-size:12.0px">⭐ 所以选型判据可以压成一句：<tspan font-weight="700">先看你的活在这根轴上落在哪儿</tspan>，再看那一边比的是什么。落右边比算力，v6e 打平；落左边比带宽，v6e 吃亏。</text>
+<text class="svgsm" x="20" y="729" fill="#174ea6" style="font-size:12.0px">⛔ 这根轴<tspan font-weight="700">只标量级，不标精确值</tspan>：patchify 块大小、层宽都会让这些数上下浮动几倍。⭐ 但结论只依赖「在线的哪一边」——&#160;16,000 对 560 差一个半数量级，浮动几倍不改变边。</text>
+<text class="svgsm" x="0" y="762" fill="#80868b" style="font-size:11.0px">📌 规则「强度 ≈ 位置数」是专题二 RNN 一节那条「强度 ＝ batch size」的推广；门槛 295 / 560 见本讲图 X-1（官方规格表当场除出来的）</text>
+<text class="svgsm" x="0" y="779" fill="#80868b" style="font-size:11.0px">　　⚠️ 位置数是量级估算：文生图按 1024×1024 经 VAE 下采样 8 倍得 latent 128×128；文生视频再加时间维，随模型而变，本图只给量级。⛔ 不要拿这根轴做定量推算。</text>
+</svg>
+<figcaption><b>图 X-4</b>　一条规则就够：<b>强度 ≈ 同一份权重被多少个「位置」共用</b>。decode 落在线的左边，prefill 和扩散甩到右边两个数量级。</figcaption></figure>
+
+  <div class="note ok"><span class="t">⭐⭐ 「v6e 适合扩散」的精确说法</span>
+    <b>不是它跑扩散更快。</b>是扩散把它的短板<b>挡在了瓶颈之外</b> ——&nbsp;
+    强度上万，那根窄管子根本没成为瓶颈；
+    <b>于是只剩下没被挡住的那一项在起作用：算力 918 对 989.5，是 H100 的 93%。</b>
+    <br><em>短板不参与，长板打平 —— 这就是「合适」的全部含义。</em>
+  </div>
+  <div class="note info"><span class="t">同一条道理，原样适用于 prefill 重、decode 轻的任务</span>
+    prefill 是整段一次过，几千上万个位置共用一次权重搬运，它跟扩散落在轴上的<b>同一边</b>。
+    <br>⛔ 反过来也成立：<b>batch 小的 decode 落在最左边</b>，那里比的全是带宽，
+    而 v6e 只有 H100 的 49% —— <b>同一颗芯片，在那种活上就是最吃亏的。</b>
+  </div>
+
+</section>
+
+<section id="s五">
+  <h2><span class="secno">五</span>落点</h2>
+  <p class="landing">—— <b>选芯片不是选「更强的那颗」，是先看你的活落在那根轴的哪一边。</b>
+    <br><em>落右边（扩散、prefill、大 batch）比的是算力，v6e 打平；
+    落左边（小 batch decode）比的是带宽，v6e 吃亏。</em>
+    <br><b>而这两件事，从两颗芯片的布局图上就能提前看出来 —— 不用等跑完。</b></p>
+  <div class="note warn"><span class="t">⚠️ 这一讲刻意留白的地方</span>
+    <b>没有端到端性能数。</b>本讲讲结构匹配，不讲快慢 —— 两件事需要的证据不一样，
+    后者要实测，而实测要连口径一起给。
+    <br><em>想看扩散模型本身：<b>专题十一</b>。想看这套分析框架怎么来的：<b>专题二</b>。</em>
+  </div>
+</section>
+
+</main>

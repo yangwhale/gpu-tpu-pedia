@@ -210,4 +210,5 @@ def main(files):
 #   ⭐ 判据：**面积阈值只能认出「大」，认不出「是不是在说事」。**
 #     所以这道工序只能扫「整批同一种坏写法」的页，不能当全局美化器用。
 if __name__ == "__main__":
-    main(sys.argv[1:] or ["topic-02.html", "topic-02-L300.html", "topic-08.html"])
+    main(sys.argv[1:] or ["topic-02.html", "topic-02-L300.html",
+                          "topic-02x.html", "topic-08.html"])

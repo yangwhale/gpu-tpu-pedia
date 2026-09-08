@@ -119,10 +119,17 @@ class Fig(object):
 
     # ── 原子 ────────────────────────────────────────────────────
     def t(self, x, y, s, fill=INK, bold=False, size=11.5, anchor=None,
-          cls="svgsm", mono=False):
+          cls="svgsm", mono=False, w=None):
         # ⭐ 自动降档：用 500 主色画文字 → 换成对应的 900 深色变体。
         #   这一行就是「照着专题一统一配色」的全部实现。⛔ 别去掉。
         fill = INK900.get(fill, fill)
+        # ⭐ 2026-09-09：传了 w 就当场校宽。lines() / src() / band() 早就有这道
+        #   护栏，唯独单行的 t() 没有 ——&nbsp;而单行才是最常写着写着就顶出去的。
+        #   ⛔ 文字溢出**不报错、不产生滚动条**，只是被裁掉。
+        if w is not None:
+            need = wpx(s, size)
+            assert need <= w, ("「%s」要 %dpx，只给了 %dpx ——&nbsp;拆行或加宽"
+                               % (re.sub(r"<[^>]+>", "", s)[:26], need, w))
         st = ["font-size:%.1fpx" % _sz(size)]
         if mono:
             # ⛔ 这里必须用单引号：style 是双引号属性，里面再写双引号会把属性提前闭合，
@@ -152,6 +159,13 @@ class Fig(object):
                          ' marker-end="url(#ah-%s)"' % col.lstrip("#") if arrow else ''))
         if arrow:
             self.marks.add(col)
+
+    def poly(self, d, fill="#fff", stroke="none", sw=1.0):
+        """闭合多边形，**能填色** ——&nbsp;path() 是 fill:none 的描边版，两个别混。
+        ⛔ 2026-09-09 踩过：拿 path() 去画「收口的细颈」，传了填充色当描边色，
+          画出来只有一条边。⭐ 名字里带 path 不代表它会填。"""
+        self.p.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%s"/>'
+                      % (d, fill, stroke, sw))
 
     def path(self, d, col=GY2, sw=1.3, dash=None, arrow=True):
         self.p.append('<path d="%s" fill="none" stroke="%s" stroke-width="%s" '

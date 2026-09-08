@@ -74,6 +74,17 @@ if [ "${1:-}" != "--lint" ]; then
 
   step "专题八 讲义"
   python3 topic08-build-lecture.py
+
+  # ⭐ 专题二外传（L100，20 分钟）。CSS 从 L300 抽，**必须排在它之后**。
+  #   ⛔ 五张图先生成 —— topic02x-build.py 找不到 svg 会直接 assert 挂掉，
+  #     这是故意的：宁可构建失败，也不要悄悄出一份缺图的教材。
+  #   ⭐ 画法基元共用 topic03_draw.py，别另起一套。
+  step "专题二 外传（L100 · v6e 与扩散模型）"
+  for g in topic02x-fig-ridge.py topic02x-fig-v6e.py topic02x-fig-h100.py \
+           topic02x-fig-load.py topic02x-fig-diff.py; do
+    python3 "$g"
+  done
+  python3 topic02x-build.py
 fi
 
 # ⭐⭐ 配色收尾。⛔ **必须排在所有生成器之后、所有体检之前**：
@@ -135,7 +146,7 @@ step "head 元信息体检（标题 / og 指向 / og 图存在）"
 python3 topic02-lint-meta.py
 
 printf '\n\033[1m▸ 产物\033[0m\n'
-for f in topic-01.html topic-02-L300.html topic-02.html \
+for f in topic-01.html topic-02-L300.html topic-02.html topic-02x.html \
          topic-03.html topic-08.html \
          gpu-microscope.html tpu-microscope.html; do
   [ -f "$W/$f" ] || continue
