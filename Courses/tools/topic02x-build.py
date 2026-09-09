@@ -162,6 +162,17 @@ a(fig("figx-6",
       "而 LLM 在「几十颗」。<em>v6e 不打「一个模型摊在几千颗上」那场仗，"
       "所以不用付那个成本。</em>"
       "<br>⚠️ 图上如实标了两条踩线和超线的 —— <b>只算权重，不含激活。</b>"))
+a('  <p>X-2 右栏还有两样只标了存在、没展开 —— <b>SparseCore</b> 和 <b>二维环面</b>。'
+  '这两张各补一下；<b>它们不影响主线，但少了会让人觉得芯片没拆干净。</b></p>')
+a(fig("figx-7",
+      "<b>图 X-7</b>　SparseCore：为<b>「在一张很大的表里到处乱查」</b>造的协处理器，"
+      "主用途是重 embedding 的推荐模型。"
+      "<em>⚠️ 图上摆的是推导链不是结论 —— 扩散这条链路上没有大表，所以它基本闲着；"
+      "但「闲着」不等于「用不到」。</em>"))
+a(fig("figx-8",
+      "<b>图 X-8</b>　4 个 ICI 口连上下左右，边缘绕回成二维环面，16×16 ＝ 256 颗，"
+      "<b>最远 16 跳</b>（对照 v7 的 4×4×4 是 6 跳）。"
+      "<em>16 跳听着多 —— 但跑扩散的时候几乎没人走这条路。</em>"))
 a("""
   <div class="note ok"><span class="t">⭐ 两颗芯片各自都是自洽的</span>
     H100 摊成很多小单元、再压一层硬件缓存，是为了应付<b>「我不知道你要跑什么」</b>；
@@ -222,7 +233,7 @@ from gate import lint_public                                    # noqa: E402
 bad = lint_public(html)
 assert not bad, "公开页面里出现内部词，已中止写盘：%s" % bad
 n_fig = html.count('<figure class="fbox fwide"')
-assert n_fig == 6, "图数不对：%d（应为 6）" % n_fig
+assert n_fig == 8, "图数不对：%d（应为 8）" % n_fig
 
 io.open(OUT, "w", encoding="utf-8").write(html)
 print("ok  topic-02x.html  %s 字符  %d 图" % (format(len(html), ","), n_fig))

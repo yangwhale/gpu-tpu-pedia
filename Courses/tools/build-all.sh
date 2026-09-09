@@ -81,10 +81,14 @@ if [ "${1:-}" != "--lint" ]; then
   #   ⭐ 画法基元共用 topic03_draw.py，别另起一套。
   step "专题二 外传（L100 · v6e 与扩散模型）"
   for g in topic02x-fig-ridge.py topic02x-fig-v6e.py topic02x-fig-h100.py \
-           topic02x-fig-load.py topic02x-fig-diff.py topic02x-fig-scale.py; do
+           topic02x-fig-load.py topic02x-fig-diff.py topic02x-fig-scale.py \
+           topic02x-fig-sparsecore.py topic02x-fig-torus.py; do
     python3 "$g"
   done
   python3 topic02x-build.py
+
+  step "专题二 外传 讲义"
+  python3 topic02x-build-lecture.py
 fi
 
 # ⭐⭐ 配色收尾。⛔ **必须排在所有生成器之后、所有体检之前**：
