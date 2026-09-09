@@ -335,4 +335,10 @@ if __name__ == '__main__':
     W = os.path.join(HERE, '..', 'WebPages')
     main(sys.argv[1:] or [os.path.join(W, f) for f in
                           ('topic-02-L300.html', 'topic-02.html', 'topic-01.html',
-                           'topic-03.html', 'topic-08.html')])
+                           'topic-03.html', 'topic-08.html',
+                           # ⛔ 2026-09-09 审计补：外传两页原来**不在清单里**，
+                           #   也就是从没被这道 lint 查过 —— 而 L100 明天就要讲。
+                           # ⚠️ 但它对这两页的覆盖很弱：正文只数到 285 汉字，
+                           #   因为内容几乎全在 <details> 折叠块和 SVG 里。
+                           #   **报「干净」不等于查过**，别把它当验收标准。
+                           'topic-02x.html', 'topic-02x-L200.html')])

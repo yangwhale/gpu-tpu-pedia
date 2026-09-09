@@ -601,8 +601,23 @@ a("""
   <p>到这里可以算强度了：这段计算的算术强度<b>约等于 N ＝ 75,600</b>，
     是 v6e 那条 560 的 <b>135 倍</b>。<b>带宽完全不是瓶颈。</b></p>
 
-  <p>但落在算力侧，<b>不等于算力就用满了</b>。我们自己在 Wan 上实测的 MFU 是
-    <b>约 37%</b> —— 六成多的算力没吃到。原因不在带宽，在别处：</p>
+  <p>但落在算力侧，<b>不等于算力就用满了</b>。
+    ⛔ <b>这里的口径要说准</b>（2026-09-09 审计改）：上面整段算的是
+    <b>Wan2.1</b>，而下面这个 MFU 出自我们 <b>Wan2.2</b> 的 profile 分析
+    （<code>tpu/Wan2.2/docs/wan_tpu_optimization_guide.md</code>），
+    <b>而且它是单个算子的数，不是整模型的</b>：</p>
+
+  <div class="tw"><table>
+    <thead><tr><th style="width:290px">口径</th><th style="width:110px">MFU</th>
+      <th>怎么来的</th></tr></thead>
+    <tbody>
+      <tr><td><b>Splash Attention 这一个算子</b></td><td><b>37%</b></td>
+        <td>roofline 15.974 ms ÷ 实测 43.93 ms ＝ 36.4%</td></tr>
+      <tr><td><b>整模型（优化后）</b></td><td><b>34%</b></td>
+        <td>Xprof 总览；<b>基线是 12%</b></td></tr>
+    </tbody></table></div>
+
+  <p>两个数都说明同一件事 —— <b>六成多的算力没吃到</b>。原因不在带宽，在别处：</p>
 
   <div class="note warn"><span class="t">⚠️ head_dim ＝ 128，而 MXU 是 256×256</span>
     注意力是<b>按头</b>算的，每个头的维度是 128。而 v6e 的 MXU 收缩阵列是
@@ -967,7 +982,8 @@ a("""
       <tr><td><b>§二点三</b>　权重体积决定要几颗</td><td>SDXL vs Wan2.1</td>
         <td>7 GB 的开 8 路，28 GB 的摊到 8 颗 —— 同一台机器两种用法</td></tr>
       <tr><td><b>§三</b>　扩散是计算密集</td><td>Wan2.1 720P</td>
-        <td>强度 75,600，实测 MFU 37% —— <b>落在算力侧，但没吃满</b></td></tr>
+        <td>强度 75,600；<b>Wan2.2</b> 上实测算子 MFU 37% ／ 整模型 34%
+          —— <b>落在算力侧，但没吃满</b></td></tr>
       <tr><td><b>§三点五</b>　MXU 喂不满会浪费成块</td><td>Wan2.1</td>
         <td>head_dim 128 对 MXU 256 —— 一半位置空着</td></tr>
       <tr><td><b>§五点一</b>　腰在 latent 那一处</td><td>全部七个三阶段模型</td>

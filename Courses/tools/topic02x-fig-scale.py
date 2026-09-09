@@ -116,9 +116,15 @@ def main():
         f.line(AX0, yy + 8, xf(gb), yy + 8, col, 3.2, arrow=False)
         f.box(xf(gb) - 7, yy + 1, 14, 14, col, col, 7)
         # 右侧：体积 ＋ 要几颗
-        f.t(xf(gb) + 16, yy + 13,
-            "%s GB" % (("%.1f" % gb).rstrip("0").rstrip(".")),
-            col, bold=True, size=_sz(12))
+        # ⛔ 2026-09-09 审计发现：LLM 那两行条子几乎顶到轴末，
+        #   「1342 GB」写在条子右边会撞上右列的配置文字。
+        #   ⭐ 判据：**贴着轴末的条形，标签要翻进条子里，不能一律往外写。**
+        vlab = "%s GB" % (("%.1f" % gb).rstrip("0").rstrip("."))
+        if xf(gb) + 16 + len(vlab) * 7.4 > AX1 + 6:
+            f.t(xf(gb) - 14, yy + 13, vlab, "#fff", bold=True,
+                size=_sz(12), anchor="end")
+        else:
+            f.t(xf(gb) + 16, yy + 13, vlab, col, bold=True, size=_sz(12))
         # ⭐ 右列＝**我们真跑过的配置**，不是从体积推出来的颗数。
         #   ⛔ 原来这里写的是「1 颗 / ≥ N 颗」，那是 gb ÷ 32 算的 ——&nbsp;
         #     现场当场纠正：「我们不是全部都有实测吗，不要按模型大小去瞎猜。」
