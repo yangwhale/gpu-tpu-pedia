@@ -103,8 +103,15 @@ def _graph(f):
          "16 个向量子核 ＋ 1 个标量子核。<r>没有 MXU</r>。", "xxs", 13)
 
     # ── 通路 ───────────────────────────────────────────────────────────
-    ch = (lambda n, s: s) if gate.is_public() else \
-         (lambda n, s: gate.IP("通道 %d：%s" % (n, s), s, why="内部通道编号"))
+    # ⛔ 通道编号本身也是内部编号 —— 跟正文一样按 key 从私有文本库取，
+    #    不把裸数字留在公开源码里（判据见 gate.py 顶部那段）。
+    _CH = gate.K("t5.chnum", {})
+    def ch(s):
+        # 编号来自私有文本库；这里只做拼接，源码里没有任何内部数值。
+        if gate.is_public() or s not in _CH:
+            return s
+        labelled = "通道 %s：%s" % (_CH[s], s)
+        return gate.IP(labelled, s, why="内部通道编号")
 
     def up(x, y0, y1, c, lab, anchor="start"):
         f.line(x, y0, x, y1, c, 1.8, marker={BL: "aB", GN: "aG", PU: "aP"}[c])
@@ -112,11 +119,11 @@ def _graph(f):
             "xxs", c, "start" if anchor == "start" else "end")
 
     # HBM → 两颗核
-    up(TCX + 50, HBM_Y - 2, CORE_Y + CORE_H + 6, BL, ch(2, "HBM → VMEM"))
-    up(SCX + 50, HBM_Y - 2, CORE_Y + CORE_H + 6, BL, ch(6, "HBM → SC 私有 SRAM"))
+    up(TCX + 50, HBM_Y - 2, CORE_Y + CORE_H + 6, BL, ch("HBM → VMEM"))
+    up(SCX + 50, HBM_Y - 2, CORE_Y + CORE_H + 6, BL, ch("HBM → SC 私有 SRAM"))
     # 两颗核 → ICI
-    up(TCX + 152, CORE_Y - 2, ICI_Y + 36, BL, ch(1, "VMEM → ICI"), "end")
-    up(SCX + 152, CORE_Y - 2, ICI_Y + 36, BL, ch(8, "SC → ICI"), "end")
+    up(TCX + 152, CORE_Y - 2, ICI_Y + 36, BL, ch("VMEM → ICI"), "end")
+    up(SCX + 152, CORE_Y - 2, ICI_Y + 36, BL, ch("SC → ICI"), "end")
 
     # ── 核间那两条：缝宽 120px，标签只能写短的，长解释放到图下方 ────────
     gx0, gx1 = TCX + CW_, SCX               # 缝的左右边界
@@ -126,7 +133,7 @@ def _graph(f):
     my = CORE_Y + 44
     f.t(gmid, my - 26, "① 能：SC → TC", "box", PU, "middle")
     f.line(gx1 - 2, my, gx0 + 6, my, PU, 2.6, marker="aP")
-    f.t(gmid, my + 18, ch(9, "直写 VMEM"), "xxs", PU, "middle")
+    f.t(gmid, my + 18, ch("直写 VMEM"), "xxs", PU, "middle")
 
     # ② 反方向：不存在（内部）／ 公开资料没列（公开）
     my2 = CORE_Y + CORE_H - 26
@@ -137,18 +144,14 @@ def _graph(f):
 
     # 图下方的结论
     para(f, LX, NOTE_Y, LW,
-         gate.IP(
-             "端点一共 8 个，两两连通该有约 50 条有向路线，<b>实际只有 17 条</b> —— "
-             "这不是一个全交叉开关，是<r>手挑出来的清单</r>。让 SparseCore 能写进 VMEM "
-             "实打实占掉了其中一条编号通道，不是「顺便允许」。",
+         gate.IK(
+             "t5.channels",
              "各条通路的<b>存在</b>可以从公开的 Pallas SparseCore 接口和它的内存空间约束看出来，"
              "但<g>完整的通道清单、以及反方向到底存不存在，公开资料没有列出</g> —— "
              "本文只画能站住的部分。",
              why="内部通道清单"), "xs", 16)
     para(f, LX, NOTE_Y + 52, LW,
-         gate.I("<b>缺的那条（②）是 TensorCore → SparseCore</b>：SparseCore 能把结果推给 "
-                "TensorCore，TensorCore 却推不回去，要给它送数据只能经 HBM 绕一圈。"
-                "硬件把「谁是生产者、谁是消费者」直接焊进了连线里。", why="同上"), "xs", 16)
+         gate.IKO("t5.missing_dir", why="同上"), "xs", 16)
 
 
 # ══════════════════════════════════════════════════════════════════════
@@ -246,8 +249,7 @@ def _cards(f):
     para(f, RX + 16, CB_Y + 48, RW - 32,
          "要不要把 embedding 卸载到 SparseCore，看的是<b>同一批里「重复取同一行」的程度</b>"
          " —— 重复得越厉害，专用通路省下的越多。" +
-         gate.I("判据是 <b>duplication factor</b> ＝ 这一批取了多少个索引 ÷ "
-                "<b>其中不重复的行数</b>。", why="判据公式出自内部资料"), "xs", 16)
+         gate.IKO("t5.dupfactor", why="判据公式出自内部资料"), "xs", 16)
     para(f, RX + 16, CB_Y + 100, RW - 32,
          "推荐系统那边少量热行被反复命中，重复度很高，这是 SparseCore 的主场。"
          # ⛔ 2026-09-06 改：错在拿序列长度当不重复行数。

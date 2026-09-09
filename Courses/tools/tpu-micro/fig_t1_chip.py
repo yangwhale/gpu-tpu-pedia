@@ -56,7 +56,7 @@ def _package(f):
     f.rect(PKG_X, PKG_Y, PKG_W, PKG_H, "#fff", INK, 2.2, 12)
     f.t(PKG_X + 16, PKG_Y + 26, "一个封装 ＝ 一颗 chip", "sec")
     f.t(PKG_X + 190, PKG_Y + 26,
-        gate.IP("内部代号 Ghostfish（gfc）· 对外名 Ironwood / TPU v7",
+        gate.IK("t1.codename",
                 "对外名 Ironwood / TPU v7", why="内部代号"), "xs")
     f.t(PKG_X + PKG_W - 16, PKG_Y + 26,
         "峰值 bf16 2,307 TFLOP/s　·　fp8 4,614 TFLOP/s", "lbl", INK, "end")

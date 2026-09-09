@@ -31,6 +31,53 @@ _MODE = "internal"
 _LOG = []          # [(kind, 内部内容摘要, 公开替代摘要, 为什么内部)]
 
 
+# ══════════════════════════════════════════════════════════════════════
+# ⛔⛔ 内部原文**不放在这个仓库里** —— 这个仓库是公开的。
+#
+# 触发事件（2026-08-31 记录，2026-09-09 修）：上面那套 I()/IP() 过滤的是
+# **渲染产物**，而 `gate.I("内部原文")` 的那个实参**随源码原样进 GitHub**。
+# 于是「写进内部版」这个动作在这个仓库里根本没有安全落点：产物是干净的，
+# 源码不是。清点时公开历史里躺着内部代号、片上带宽、ISA 宽度、通道清单。
+#
+# ⭐ 判据：**内容的落点只认仓库可见性，不认代码里的 mode 开关。**
+#
+# 现在公开源码里只留 key，正文在私有目录里。拿不到就退回公开版说法，
+# 并打一行警告 —— **不静默降级**，否则内部版会悄悄变成公开版而没人发现。
+# ══════════════════════════════════════════════════════════════════════
+import os as _os
+import sys as _sys
+
+PRIV_DIR = _os.environ.get(
+    "TPU_MICRO_INTERNAL_DIR",
+    _os.path.expanduser("~/ClosedCrab/page-generators/tpu-micro-internal"))
+
+_PRIV = None
+_PRIV_WARNED = False
+
+
+def _priv():
+    global _PRIV, _PRIV_WARNED
+    if _PRIV is None:
+        try:
+            if PRIV_DIR not in _sys.path:
+                _sys.path.insert(0, PRIV_DIR)
+            import tpu_micro_internal as _m
+            _PRIV = _m.TEXTS
+        except Exception as e:
+            _PRIV = {}
+            if not _PRIV_WARNED:
+                _PRIV_WARNED = True
+                print("⚠️  取不到内部文本库（%s）：%s\n"
+                      "    内部版将退回公开版说法。要完整内部版请设 "
+                      "TPU_MICRO_INTERNAL_DIR。" % (PRIV_DIR, e), file=_sys.stderr)
+    return _PRIV
+
+
+def K(key, default=None):
+    """按 key 取一条内部原文/数据。取不到返回 default。"""
+    return _priv().get(key, default)
+
+
 def set_mode(m):
     global _MODE, _LOG
     assert m in ("internal", "public"), m
@@ -66,6 +113,26 @@ def IP(internal_text, public_text, why="内部资料"):
     """同一件事的两种说法。公开版必须**仍然成立**，只是少了具体数值。"""
     _LOG.append(("swap", _clip(internal_text), _clip(public_text), why))
     return public_text if is_public() else internal_text
+
+
+def IK(key, public_text, why="内部资料"):
+    """IP 的按 key 版：内部原文从私有文本库取，公开说法留在源码里。
+
+    ⭐ 这是本文件里**唯一**应该用来放内部内容的入口。
+    直接写 `I("内部原文")` 会把原文留在公开仓库 —— 见上面那段。
+    """
+    internal_text = K(key)
+    if internal_text is None:
+        return public_text        # 取不到就退回公开版（已在 _priv() 里警告过）
+    return IP(internal_text, public_text, why)
+
+
+def IKO(key, why="内部资料"):
+    """I 的按 key 版：只在内部版出现，取不到就当空串。"""
+    internal_text = K(key)
+    if internal_text is None:
+        return ""
+    return I(internal_text, why)
 
 
 def gated(internal_text, public_text, why="内部资料"):

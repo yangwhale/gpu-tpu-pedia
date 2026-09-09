@@ -96,7 +96,36 @@ def scan(rel_paths):
                 ln = text.count("\n", 0, m.start()) + 1
                 line = text.splitlines()[ln - 1] if ln else ""
                 found.append((rel, ln, m.group(0), desc, line.strip()[:160]))
+        found += _scan_gate_literals(rel, text)
     return found
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ⛔⛔ 结构性判据：gate.I / gate.IP 的**内部实参不许是字面量**。
+#
+# 上面那张禁字表挡的是「已经想到的词」。真正漏出去的那批不是没被挡，
+# 是**根本没人想到要挡** —— `gate.I("内部原文")` 里的原文随源码进 GitHub，
+# 而闸门只过滤渲染产物。清点时公开历史里躺着内部代号、片上带宽、ISA 宽度。
+#
+# ⭐ 判据从「这个词危不危险」升级成「这个位置能不能放内部内容」——
+#    前者要靠记性穷举，后者一次覆盖全部未来的内部内容。
+#    内部原文一律走 gate.IK / gate.IKO，正文放私有目录，源码里只留 key。
+# ══════════════════════════════════════════════════════════════════════
+_GATE_LITERAL = re.compile(
+    r"""gate\.(?:I|IP|gated)\(\s*(?:f?['"]|f?['"]{3})""")
+
+
+def _scan_gate_literals(rel, text):
+    if "tools/" not in rel.replace(os.sep, "/") or not rel.endswith(".py"):
+        return []
+    out = []
+    for m in _GATE_LITERAL.finditer(text):
+        ln = text.count("\n", 0, m.start()) + 1
+        line = text.splitlines()[ln - 1]
+        out.append((rel, ln, m.group(0).strip(),
+                    "内部实参写成了字面量（改用 gate.IK / gate.IKO，正文放私有目录）",
+                    line.strip()[:160]))
+    return out
 
 
 def main(argv):
