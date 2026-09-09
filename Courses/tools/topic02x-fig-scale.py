@@ -76,11 +76,12 @@ def main():
                "在一颗到两颗的量级；而 LLM 是 794 GB 和 1342 GB，要几十颗")
     f.marks = set()
     y = f.header(
-        '装得下，和实际用了几颗 ——&#160;'
-        '<tspan font-weight="700">这是两个问题，右边那一列全是实测</tspan>',
-        '⭐ 左边是权重体积（回答「装不装得下」），'
-        '<tspan font-weight="700">右边是我们真跑过的配置</tspan>（回答「实际用了几颗」）——&#160;'
-        '<tspan font-weight="700">这两件事不是一回事，后者只能实测。</tspan>',
+        '装得下吗 ——&#160;<tspan font-weight="700">要算的是权重 ＋ 峰值激活，'
+        '而扩散是激活说了算</tspan>',
+        '⛔ 下面那根轴<tspan font-weight="700">只画权重</tspan>——&#160;'
+        '而扩散模型真正吃显存的是<tspan font-weight="700">运行时的激活</tspan>，'
+        '它比权重大、而且随分辨率和帧数涨。<tspan font-weight="700">'
+        '图下半部分是我们自己撞 OOM 时的实测账。</tspan>',
         [(BL, "扩散模型"), (GY, "对照：大语言模型"), (RD, "一颗 v6e ＝ 32 GB"),
          (GR, "实测：单颗"), (BL, "实测：8 卡一台主机")])
 
@@ -136,6 +137,39 @@ def main():
 
     y = ay + 62
 
+    # ══════════════════ 同一颗芯片上的真实预算（全是实测）══════════════════
+    # ⛔⛔ 2026-09-09 现场第二次纠正：「这个大小只是模型权重，你要考虑更深一层 ——
+    #   运行过程中需要的激活。Diffusion model 权重占的不多，主要是激活占的多。」
+    # ⭐ 他是对的，而且仓库里正好有一条**带 XLA 原始报错的 OOM 记录**可以当证据 ——
+    #   比任何估算都硬。下面这一块全部取自那份案例研究。
+    BUD = (
+        ("芯片标称", "32 GB", "官方规格表上的 HBM 容量", GY2, GY),
+        ("那次 OOM 时实际可用", "13.10 GB", "XLA 报错原文：There are 13.10G free ——&#160;"
+         "其余被权重与运行时占着", "#b06000", "#b06000"),
+        ("VAE 解码一步要多少", "19.00 GB", "XLA 报错原文：Attempting to reserve 19.00G "
+         "——&#160;⛔ 19 &gt; 13.1，OOM", "#a50e0e", "#a50e0e"),
+        ("对照：这个模型的权重", "10 GB", "CogVideoX-5B，bf16 ——&#160;"
+         "⭐ <tspan font-weight=\"700\">激活是权重的近两倍</tspan>", BL, "#174ea6"),
+        ("改实现之后", "&lt; 13 GB", "逐帧解码 ＋ 共享缓存 ——&#160;"
+         "⭐ 解法不是换更大的卡，是改实现", GR, "#0d652d"),
+    )
+    hy = y
+    TH = 34 + len(BUD) * 34
+    f.box(0, hy, W, TH, "#fff", LINE, 8)
+    f.colhead(14, hy + 22, "同一颗 v6e 上的真实预算（CogVideoX VAE，实测）")
+    f.colhead(430, hy + 22, "多少")
+    f.colhead(560, hy + 22, "出处 / 说明")
+    f.line(0, hy + 34, W, hy + 34, LINE, 1, arrow=False)
+    for i, (k, v, why, bar, tc) in enumerate(BUD):
+        yy = hy + 34 + i * 34
+        if i:
+            f.line(0, yy, W, yy, LINE2, 1, arrow=False)
+        f.box(0, yy + 6, 4, 22, bar, bar, 2)
+        f.t(14, yy + 22, k, INK, bold=True, size=_sz(12), w=410)
+        f.t(430, yy + 22, v, tc, bold=True, size=_sz(13))
+        f.t(560, yy + 22, why, GY, size=_sz(11.5), w=W - 574)
+    y = hy + TH + 22
+
     y = f.band(y, "bad",
                "⛔ 换成实测之后，立刻看出两处「按体积猜」会猜错的地方",
                ['① <tspan font-weight="700">S3Diff 只有 6.6 GB，按体积猜「一颗绰绰有余」——&#160;对，'
@@ -148,6 +182,19 @@ def main():
                 '<tspan font-weight="700">「装得下」和「该用几颗」是两个不同的问题。</tspan>'
                 '前者看体积就能答，<tspan font-weight="700">后者只能实测</tspan>——&#160;'
                 '而我们十个模型每一个都测过。'])
+
+    y = f.band(y + 14, "bad",
+               "⛔⛔ 所以「28 GB &lt; 32 GB 所以能跑」这句话是错的 ——&#160;两处都错",
+               ['① <tspan font-weight="700">分母错了。</tspan>32 GB 是标称，不是预算 ——&#160;'
+                '真跑起来权重和运行时先占掉一大块，'
+                '那次 OOM 时 XLA 报的是<tspan font-weight="700">只剩 13.10 GB</tspan>。',
+                '② <tspan font-weight="700">分子也错了。</tspan>要放进去的不只是权重，'
+                '还有<tspan font-weight="700">峰值激活</tspan> ——&#160;'
+                '而扩散这一族<tspan font-weight="700">激活比权重大</tspan>：'
+                'CogVideoX-5B 权重 10 GB，它的 VAE 解码一步却要 19 GB。',
+                '⭐⭐ 而且<tspan font-weight="700">激活随分辨率与帧数涨，权重一个字节不涨</tspan>——&#160;'
+                'Wan2.1 的 480P 跑得动、720P OOM，用的是<tspan font-weight="700">同一份权重</tspan>。'
+                '<tspan font-weight="700">权重决定装不装得进，激活决定跑不跑得动。</tspan>'])
 
     y = f.band(y + 14, "ok",
                "实测下来的分布：小的单颗，主力清一色 8 卡",
