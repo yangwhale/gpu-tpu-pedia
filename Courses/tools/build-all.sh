@@ -83,7 +83,8 @@ if [ "${1:-}" != "--lint" ]; then
   for g in topic02x-fig-ridge.py topic02x-fig-v6e.py topic02x-fig-h100.py \
            topic02x-fig-load.py topic02x-fig-diff.py topic02x-fig-scale.py \
            topic02x-fig-sparsecore.py topic02x-fig-torus.py \
-           topic02x-fig-why.py; do
+           topic02x-fig-why.py topic02x-fig-waist.py \
+           topic02x-fig-place.py; do
     python3 "$g"
   done
   python3 topic02x-build.py
