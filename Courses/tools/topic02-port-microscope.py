@@ -2728,6 +2728,18 @@ details.aside b{color:var(--ink);font-weight:600}
 .mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
 .mscard > b{display:block;font-size:16px;margin-bottom:6px}
 .mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+
+/* ══ 「课前勿点」那个折叠块（专题二 L200 开篇的两道热身题）══
+   ⭐ 跟普通的 details.more 分开配色：普通折叠是「想深挖再点」，
+   这个是**明确劝阻**。用红而不是蓝，让「别点」这层意思在扫视时就成立 ——&nbsp;
+   ⛔ 只靠 summary 里的文字挡不住手快的人。 */
+details.more.preclass{border-color:#f3c0bb;background:#fef7f6}
+details.more.preclass[open]{background:#fff}
+details.more.preclass>summary{color:#a50e0e}
+details.more.preclass>summary:hover{background:#fce8e6}
+details.more.preclass>summary::before{color:#d93025}
+details.more.preclass[open]>summary{border-bottom-color:#f3c0bb}
+details.more.preclass>summary .why{color:#b06000}
 ''' + _FAM_CSS
 
 TODO = re.compile(

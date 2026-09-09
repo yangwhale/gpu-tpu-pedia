@@ -620,6 +620,18 @@ details.aside b{color:var(--ink);font-weight:600}
 .mscard > b{display:block;font-size:16px;margin-bottom:6px}
 .mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
 
+/* ══ 「课前勿点」那个折叠块（专题二 L200 开篇的两道热身题）══
+   ⭐ 跟普通的 details.more 分开配色：普通折叠是「想深挖再点」，
+   这个是**明确劝阻**。用红而不是蓝，让「别点」这层意思在扫视时就成立 ——&nbsp;
+   ⛔ 只靠 summary 里的文字挡不住手快的人。 */
+details.more.preclass{border-color:#f3c0bb;background:#fef7f6}
+details.more.preclass[open]{background:#fff}
+details.more.preclass>summary{color:#a50e0e}
+details.more.preclass>summary:hover{background:#fce8e6}
+details.more.preclass>summary::before{color:#d93025}
+details.more.preclass[open]>summary{border-bottom-color:#f3c0bb}
+details.more.preclass>summary .why{color:#b06000}
+
 /* ══ 专题二一家四页的互跳导航（定义在 tools/topic02_family.py）══
    ⭐ 样式只写这一处：另外三页的 <head> 是从本文件整块切下去的。
    ⛔ 别在各页自己的 <style> 里再写一份。 */
@@ -721,6 +733,18 @@ nav.famnav .here em{color:#174ea6}
 </svg>
 
 <section style="border-top:none;padding-bottom:8px"><div class="wrap">
+<!-- ⛔⛔ 这两道热身题**默认折起来**，2026-09-09 现场定的：「写上课前勿点」。
+     ⭐ 理由不是嫌它占地方 ——&nbsp;是这两道题**只有在没看过答案时才有用**。
+       第一道是复习题（答案在听众脑子里），第二道是钩子题（592 对 4，
+       故意给一个没有解释的答案让人揣着「为什么」听完全程）。
+       **课前自己点开看一眼，这两个作用当场归零，而且不可逆。**
+     ⛔ 所以折叠在这里不是排版手段，是**保护题目本身**。summary 必须把
+       「为什么别点」说出来 ——&nbsp;只写「热身题」没人会忍住。
+     ⚠️ 两道题＋绑定脚本一起折进来。<script> 放在 <details> 里照常执行
+       （解析即执行，与展开状态无关），而且它本来就等 DOMContentLoaded。 -->
+<details class="more preclass">
+  <summary>⛔ 课前勿点 ——&nbsp;开讲前的两道热身题<span class="why">现场会一起做；提前看答案＝自己剧透，这两道题就废了</span></summary>
+  <div class="body">
   <div class="guess">
     <h3>开讲之前，先回一道上一课的题</h3>
     <p class="q">上一课我们拆了 <b>DeepSeek V3</b>：总参数 <b>671B</b>，
@@ -747,7 +771,6 @@ nav.famnav .here em{color:#174ea6}
         常常不是前两样。<em>第 1 节只做一件事，就是把「算」和「搬」的兑换比算出来。</em></span></p>
     </div>
   </div>
-</div></section>
 <script>
 /* ⛔ 2026-09-05 从「一道题」改成「N 道题」。第一版写死了
    querySelector('.guess') 和 getElementById('rev') —— 加第二道时
@@ -804,7 +827,6 @@ nav.famnav .here em{color:#174ea6}
 })();
 </script>
 
-<section style="border-top:none;padding-bottom:0"><div class="wrap">
   <div class="guess">
     <h3>再猜两个数 ——&nbsp;答案马上给，「为什么」要等到第 3 节</h3>
     <p class="q">这门课后面会把两颗芯片<b>拆开</b>，一层一层往里看。
@@ -842,6 +864,8 @@ nav.famnav .here em{color:#174ea6}
         <em>——&nbsp;到那儿的时候，你会自己认出这道题的答案长在哪一张图上。</em></span></p>
     </div>
   </div>
+  </div>
+</details>
 </div></section>
 
 <section id="s0" style="border-top:none"><div class="wrap">

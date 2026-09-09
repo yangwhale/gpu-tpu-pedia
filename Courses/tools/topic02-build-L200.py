@@ -336,6 +336,18 @@ def body():
     #    开场问三道，第三道的时候气氛已经从热身变成考试了。
     a("""
 <section style="border-top:none;padding-bottom:8px"><div class="wrap">
+<!-- ⛔⛔ 这两道热身题**默认折起来**，2026-09-09 现场定的：「写上课前勿点」。
+     ⭐ 理由不是嫌它占地方 ——&nbsp;是这两道题**只有在没看过答案时才有用**。
+       第一道是复习题（答案在听众脑子里），第二道是钩子题（592 对 4，
+       故意给一个没有解释的答案让人揣着「为什么」听完全程）。
+       **课前自己点开看一眼，这两个作用当场归零，而且不可逆。**
+     ⛔ 所以折叠在这里不是排版手段，是**保护题目本身**。summary 必须把
+       「为什么别点」说出来 ——&nbsp;只写「热身题」没人会忍住。
+     ⚠️ 两道题＋绑定脚本一起折进来。<script> 放在 <details> 里照常执行
+       （解析即执行，与展开状态无关），而且它本来就等 DOMContentLoaded。 -->
+<details class="more preclass">
+  <summary>⛔ 课前勿点 ——&nbsp;开讲前的两道热身题<span class="why">现场会一起做；提前看答案＝自己剧透，这两道题就废了</span></summary>
+  <div class="body">
   <div class="guess">
     <h3>开讲之前，先回一道上一课的题</h3>
     <p class="q">上一课我们拆了 <b>DeepSeek V3</b>：总参数 <b>671B</b>，
@@ -362,7 +374,6 @@ def body():
         常常不是前两样。<em>第 1 节只做一件事，就是把「算」和「搬」的兑换比算出来。</em></span></p>
     </div>
   </div>
-</div></section>
 <script>
 /* ⛔ 2026-09-05 从「一道题」改成「N 道题」。第一版写死了
    querySelector('.guess') 和 getElementById('rev') —— 加第二道时
@@ -445,7 +456,6 @@ def body():
     #    · 4 ＝ 2 TensorCore × 2 MXU／核（整颗 chip）
     #    改这两个数要连着 3.7 一起改，别只改这儿。
     a("""
-<section style="border-top:none;padding-bottom:0"><div class="wrap">
   <div class="guess">
     <h3>再猜两个数 ——&nbsp;答案马上给，「为什么」要等到第 3 节</h3>
     <p class="q">这门课后面会把两颗芯片<b>拆开</b>，一层一层往里看。
@@ -483,6 +493,8 @@ def body():
         <em>——&nbsp;到那儿的时候，你会自己认出这道题的答案长在哪一张图上。</em></span></p>
     </div>
   </div>
+  </div>
+</details>
 </div></section>""")
 
     # ── 第 0 节 ───────────────────────────────────────────────────
