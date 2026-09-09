@@ -186,6 +186,15 @@ a('</section>')
 
 a('<section id="s三">')
 a('  <h2><span class="secno">三</span>那么扩散模型是哪一种活</h2>')
+a('  <p>先回答一个更基础的问题：<b>这类模型为什么是「计算密集」的？</b>'
+  '拿 Wan2.1 的官方配置当场算一遍就清楚了。</p>')
+a(fig("figx-9",
+      "<b>图 X-9</b>　一段 720P、81 帧的视频经 VAE 与 patch 化后是 "
+      "<b>75,600 个 token</b>；而 config 里 <code>window_size = (−1,−1)</code> —— "
+      "<b>不开窗口，全局注意力</b>。于是算力的<b>七成花在 N² 的注意力上</b>，"
+      "那是纯矩阵乘。"
+      "<em>⭐ 外部锚点：每层 351.3 M × 40 层 ＝ 14.05 B，对上官方标称的 14B。</em>"))
+a('  <p>算力密集讲清楚了，再看它<b>结构上</b>为什么正好配这套编译优先的打法。</p>')
 a(fig("figx-5",
       "<b>图 X-5</b>　没有 KV cache、形状从头到尾不变、同一段计算原样跑五十遍。"
       "<em>编译期能知道的，它全都提前告诉你了 —— 这正是 v6e 那套打法要的前提。</em>"))
@@ -235,7 +244,7 @@ from gate import lint_public                                    # noqa: E402
 bad = lint_public(html)
 assert not bad, "公开页面里出现内部词，已中止写盘：%s" % bad
 n_fig = html.count('<figure class="fbox fwide"')
-assert n_fig == 8, "图数不对：%d（应为 8）" % n_fig
+assert n_fig == 9, "图数不对：%d（应为 9）" % n_fig
 
 io.open(OUT, "w", encoding="utf-8").write(html)
 print("ok  topic-02x.html  %s 字符  %d 图" % (format(len(html), ","), n_fig))

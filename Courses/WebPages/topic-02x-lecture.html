@@ -209,16 +209,17 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 <li class="grp">开场 · 2 分钟</li>
 <li><a href="#X0"><span class="n">开场</span>开场：只回答一个问题<span class="m">2′</span></a></li>
 <li class="grp">硬件 · 15 分钟</li>
-<li><a href="#X1"><span class="n">一</span>一：四颗芯片，一个异类<span class="m">3′</span></a></li>
-<li><a href="#X2"><span class="n">二</span>二：v6e 显微镜<span class="m">4′</span></a></li>
+<li><a href="#X1"><span class="n">一</span>一：四颗芯片，一个异类<span class="m">2′</span></a></li>
+<li><a href="#X2"><span class="n">二</span>二：v6e 显微镜<span class="m">3′</span></a></li>
 <li><a href="#X3"><span class="n">三</span>三：H100 显微镜<span class="m">3′</span></a></li>
 <li><a href="#X6"><span class="n">四</span>四：为什么 Pod 只有 256 颗<span class="m">2′</span></a></li>
 <li><a href="#X78"><span class="n">五</span>五：补两样（可跳）<span class="m">2′ 可跳</span></a></li>
-<li class="grp">模型 · 5 分钟</li>
-<li><a href="#X5"><span class="n">六</span>六：扩散是哪一种活<span class="m">3′</span></a></li>
-<li><a href="#X4"><span class="n">七</span>七：收口<span class="m">2′</span></a></li>
+<li class="grp">模型 · 7 分钟</li>
+<li><a href="#X9"><span class="n">六</span>六：为什么计算密集<span class="m">3′</span></a></li>
+<li><a href="#X5"><span class="n">七</span>六：扩散是哪一种活<span class="m">2′</span></a></li>
+<li><a href="#X4"><span class="n">八</span>八：收口<span class="m">2′</span></a></li>
 <li class="grp">收尾 · 1 分钟</li>
-<li><a href="#X9"><span class="n">八</span>八：落点<span class="m">1′</span></a></li>
+<li><a href="#XEND"><span class="n">九</span>九：落点<span class="m">1′</span></a></li>
   </ol>
 </aside>
 <main>
@@ -264,7 +265,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
 </section>
 <section class="lec" id="X1">
-  <h2><span class="no">一</span>　同一把尺子，量四颗芯片　<span class="min">3 分钟</span></h2>
+  <h2><span class="no">一</span>　同一把尺子，量四颗芯片　<span class="min">2 分钟</span></h2>
   <div class="meta2"><b>讲什么</b>：图 X-1：H100 295 · B200 312 · v7 313 · <b>v6e 560</b><br><b>落点</b>：<b>「算力强、显存弱」不是形容词，就是这个 560</b></div>
 
   <div class="goal"><span class="k">这一讲要留下什么</span>
@@ -313,7 +314,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
 </section>
 <section class="lec" id="X2">
-  <h2><span class="no">二</span>　把 v6e 拆开　<span class="min">4 分钟</span></h2>
+  <h2><span class="no">二</span>　把 v6e 拆开　<span class="min">3 分钟</span></h2>
   <div class="meta2"><b>讲什么</b>：图 X-2：1 颗 ＝ 1 个核 ＝ 1 个 device · 128 MiB 暂存 · 那道窄门<br><b>落点</b>：<b>560 的分母，就是图底下那根管子</b></div>
 
   <div class="goal"><span class="k">这一讲要留下什么</span>
@@ -515,8 +516,63 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   </div>
 
 </section>
+<section class="lec" id="X9">
+  <h2><span class="no">六</span>　为什么它是「计算密集」的　<span class="min">3 分钟</span></h2>
+  <div class="meta2"><b>讲什么</b>：图 X-9：75,600 个 token · 全局注意力 · 七成算力在 N² 上<br><b>落点</b>：<b>这就是「计算密集」四个字的全部来历</b></div>
+
+  <div class="goal"><span class="k">这一讲要留下什么</span>
+    <b>一段视频被压成七万五千个 token，而注意力是全局的 —— 于是算力随 token 数平方涨。</b>
+  </div>
+
+  <h3 class="sec">讲稿</h3>
+  <div class="say">
+    <span class="board">滚到<b>图 X-9</b>。先只看左边那一栏。</span>
+
+    <p><b>先算一件事：一段视频到底是多少个 token。</b>
+      拿 Wan2.1 的官方配置 —— 720 乘 1280、81 帧。</p>
+
+    <p>先过 VAE，<b>时间压 4 倍、空间压 8 乘 8</b>，变成 21 帧、90 乘 160 的 latent。
+      再 patch 化，<b>空间上 2 乘 2 合成一个 token</b>，变成 21 乘 45 乘 80。</p>
+
+    <span class="pause">⭐ <b>让他们自己乘一下。</b>
+      21 × 45 × 80 ＝ <b>75,600 个 token</b>。
+      ——&nbsp;<em>先把这个数砸下去，再讲后面的事。</em></span>
+
+    <span class="board">看中间那一栏。</span>
+
+    <p>每一层每一步的算力花在哪，图上拆成了四块。<b>注意力本身占 72%。</b></p>
+
+    <p><b>为什么这么高？</b>因为 config 里写着 <code>window_size = (−1, −1)</code> ——
+      <em>不开窗口，就是全局注意力。</em>
+      <b>七万五千个 token，两两之间都要算。</b>
+      算力随 token 数<b>平方</b>涨，这一项就是 4·N²·d。</p>
+
+    <p>四十层、五十步加起来，<b>一段视频 3.26e17 次浮点运算。</b></p>
+
+    <span class="pause">⭐ <b>这里插一句方法，比数字本身值钱。</b>
+      我怎么知道上面那套公式没算错？——&nbsp;<b>拿参数量对一遍。</b>
+      每层 351.3 M 参数乘 40 层等于 <b>14.05 B</b>，对上官方标称的 14B。
+      <em>参数量能对上，说明公式的形状是对的。
+      ——&nbsp;<b>对不上任何锚点的孤立数字，才是该害怕的。</b></em></span>
+
+    <span class="board">看右边那一栏，一句话收。</span>
+
+    <p><b>强度 75,600，门槛 560 —— 高出 135 倍。</b>带宽完全不是瓶颈。
+      而且这七成算力是 N² 的注意力，<b>纯矩阵乘</b> ——
+      <em>正是那两块 256×256 最擅长的形状。</em></p>
+  </div>
+
+  <h3 class="sec">别讲什么</h3>
+  <div class="dont">
+    <b>别推 FLOP 公式的每一项。</b>图上写了式子，念结论就行 ——
+    <b>台下要的是「七成在注意力上」，不是 8·N·d² 怎么来的。</b><br>
+    ⚠️ <b>那个「一颗 v6e 理论下界 5.9 分钟」只能当体感讲，不能当性能数。</b>
+    它假设 100% 利用率 —— 被追问就明说「这是算术，不是实测」。
+  </div>
+
+</section>
 <section class="lec" id="X5">
-  <h2><span class="no">六</span>　扩散一步在干什么　<span class="min">3 分钟</span></h2>
+  <h2><span class="no">七</span>　扩散一步在干什么　<span class="min">2 分钟</span></h2>
   <div class="meta2"><b>讲什么</b>：图 X-5：没有 KV cache · 形状不变 · 同一段跑五十遍<br><b>落点</b>：<b>编译期能知道的，扩散全都提前告诉你了</b></div>
 
   <div class="goal"><span class="k">这一讲要留下什么</span>
@@ -556,7 +612,7 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
 
 </section>
 <section class="lec" id="X4">
-  <h2><span class="no">七</span>　把活放回那两条线上　<span class="min">2 分钟</span></h2>
+  <h2><span class="no">八</span>　把活放回那两条线上　<span class="min">2 分钟</span></h2>
   <div class="meta2"><b>讲什么</b>：图 X-4：decode 在左边，prefill 和扩散甩到右边两个数量级<br><b>落点</b>：<b>不是它跑扩散更快，是扩散把它的短板挡在了瓶颈之外</b></div>
 
   <div class="goal"><span class="k">这一讲要留下什么</span>
@@ -600,8 +656,8 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   </div>
 
 </section>
-<section class="lec" id="X9">
-  <h2><span class="no">八</span>　落点　<span class="min">1 分钟</span></h2>
+<section class="lec" id="XEND">
+  <h2><span class="no">九</span>　落点　<span class="min">1 分钟</span></h2>
   <div class="meta2"><b>讲什么</b>：一句话收<br><b>落点</b>：<b>从布局图上就能提前看出来，不用等跑完</b></div>
 
   <h3 class="sec">讲稿</h3>

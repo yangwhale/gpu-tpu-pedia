@@ -1592,6 +1592,104 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 </section>
 <section id="s三">
   <h2><span class="secno">三</span>那么扩散模型是哪一种活</h2>
+  <p>先回答一个更基础的问题：<b>这类模型为什么是「计算密集」的？</b>拿 Wan2.1 的官方配置当场算一遍就清楚了。</p>
+<figure class="fbox fwide" id="figx-9"><svg viewBox="0 0 1400 701" width="100%" role="img" aria-label="以 Wan2.1-T2V-14B 的官方配置算一段 720×1280、81 帧的视频：经 VAE 下采样与 patch 化后是 75600 个 token；每层每步 1.63e14 FLOP，其中全局注意力占 72%；40 层 50 步共 3.26e17 FLOP"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">为什么扩散是计算密集型 ——&#160;<tspan font-weight="700">拿 Wan2.1 的真配置当场算一遍</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 结论先说：一段 720P、81 帧的视频 ＝ <tspan font-weight="700">75,600 个 token</tspan>，而注意力是<tspan font-weight="700">全局的</tspan>——&#160;于是算力的<tspan font-weight="700">七成花在注意力上，那是纯矩阵乘</tspan>。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">① 视频怎么变成 token</text>
+<rect x="153" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="170" y="64" fill="#5f6368" style="font-size:11.0px">② 算力花在哪</text>
+<rect x="259" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="276" y="64" fill="#5f6368" style="font-size:11.0px">③ 为什么这配 v6e</text>
+<rect x="0" y="96" width="396" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="96" width="396" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="98" width="396" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="126" x2="396" y2="126" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="116" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 一段视频 ＝ 多少个 token</tspan></text>
+<text class="svgsm" x="382" y="116" fill="#80868b" text-anchor="end" style="font-size:11.0px">Wan2.1 官方配置</text>
+<rect x="20" y="148" width="356" height="46" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="32" y="168" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">像素</tspan></text>
+<text class="svgsm" x="32" y="186" fill="#80868b" style="font-size:11.0px">你要的那段视频</text>
+<text class="svgsm" x="364" y="176" fill="#202124" text-anchor="end" style="font-size:13.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">720 × 1280 × 81 帧</tspan></text>
+<text class="svgsm" x="32" y="214" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">↓ VAE  stride (4, 8, 8)</text>
+<text class="svgsm" x="364" y="214" fill="#80868b" text-anchor="end" style="font-size:11.0px">时间 4 倍、空间 8×8 下采样</text>
+<rect x="20" y="226" width="356" height="46" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="32" y="246" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">latent</tspan></text>
+<text class="svgsm" x="32" y="264" fill="#80868b" style="font-size:11.0px">(81−1)/4+1 ＝ 21</text>
+<text class="svgsm" x="364" y="254" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">21 × 90 × 160</tspan></text>
+<text class="svgsm" x="32" y="292" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">↓ patch (1, 2, 2)</text>
+<text class="svgsm" x="364" y="292" fill="#80868b" text-anchor="end" style="font-size:11.0px">空间 2×2 合成一个 token</text>
+<rect x="20" y="304" width="356" height="46" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="32" y="324" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">token</tspan></text>
+<text class="svgsm" x="32" y="342" fill="#80868b" style="font-size:11.0px"></text>
+<text class="svgsm" x="364" y="332" fill="#174ea6" text-anchor="end" style="font-size:13.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">21 × 45 × 80</tspan></text>
+<rect x="20" y="360" width="356" height="42" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="198" y="387" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">N ＝ 75,600 个 token</tspan></text>
+<rect x="422" y="96" width="470" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="422" y="96" width="470" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="422" y="98" width="470" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="422" y1="126" x2="892" y2="126" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="436" y="116" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">② 每层每步的算力花在哪</tspan></text>
+<text class="svgsm" x="878" y="116" fill="#80868b" text-anchor="end" style="font-size:11.0px">d ＝ 5120 · ffn ＝ 13824</text>
+<text class="svgsm" x="442" y="160" fill="#202124" style="font-size:11.0px">注意力本身</text>
+<text class="svgsm" x="442" y="176" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">4·N²·d</text>
+<rect x="612" y="154" width="260.0" height="22" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="880" y="170" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">72%</tspan></text>
+<text class="svgsm" x="442" y="204" fill="#202124" style="font-size:11.0px">FFN</text>
+<text class="svgsm" x="442" y="220" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">4·N·d·ffn</text>
+<rect x="612" y="198" width="47.542857142857144" height="22" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="667" y="214" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">13%</tspan></text>
+<text class="svgsm" x="442" y="248" fill="#202124" style="font-size:11.0px">自注意力投影</text>
+<text class="svgsm" x="442" y="264" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">8·N·d²</text>
+<rect x="612" y="242" width="35.216931216931215" height="22" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="655" y="258" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">10%</tspan></text>
+<text class="svgsm" x="442" y="292" fill="#202124" style="font-size:11.0px">交叉注意力（文本 512）</text>
+<text class="svgsm" x="442" y="308" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">≈</text>
+<rect x="612" y="286" width="19.488565269729293" height="22" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="639" y="302" fill="#80868b" style="font-size:12.0px"><tspan font-weight="700">5%</tspan></text>
+<line x1="442" y1="326" x2="872" y2="326" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="442" y="348" fill="#5f6368" style="font-size:11.0px">每层合计 <tspan font-weight="700">1.63e14</tspan> FLOP　→　40 层一步 <tspan font-weight="700">6.52e15</tspan></text>
+<text class="svgsm" x="442" y="368" fill="#5f6368" style="font-size:11.0px">50 步一段视频 <tspan font-weight="700">3.26e17 FLOP</tspan></text>
+<text class="svgsm" x="442" y="388" fill="#5f6368" style="font-size:11.0px">⭐⭐ <tspan font-weight="700">注意力占七成</tspan>，而它是 N² 的<tspan font-weight="700">纯矩阵乘</tspan></text>
+<text class="svgsm" x="442" y="408" fill="#5f6368" style="font-size:11.0px">　 ——&#160;config 里 window_size ＝ (−1,−1)，<tspan font-weight="700">不开窗口，全局都算</tspan></text>
+<rect x="918" y="96" width="482" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="918" y="96" width="482" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="918" y="98" width="482" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="918" y1="126" x2="1400" y2="126" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="932" y="116" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">③ 于是它正好配 v6e</tspan></text>
+<text class="svgsm" x="934" y="152" fill="#5f6368" style="font-size:11.0px">强度 ≈ 每份权重服务多少 token</text>
+<text class="svgsm" x="934" y="178" fill="#0d652d" style="font-size:22.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">75,600</tspan></text>
+<text class="svgsm" x="1038" y="178" fill="#5f6368" style="font-size:12.0px">／ 门槛 560</text>
+<text class="svgsm" x="934" y="202" fill="#5f6368" style="font-size:11.0px">→ 高出 <tspan font-weight="700">135 倍</tspan>，那根窄管子完全不是瓶颈</text>
+<line x1="934" y1="218" x2="1384" y2="218" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="934" y="242" fill="#5f6368" style="font-size:11.0px">⭐ 而且七成算力是 <tspan font-weight="700">N² 的注意力</tspan>——&#160;</text>
+<text class="svgsm" x="934" y="263" fill="#5f6368" style="font-size:11.0px">　 纯矩阵乘，<tspan font-weight="700">MXU 的主场</tspan>，</text>
+<text class="svgsm" x="934" y="284" fill="#5f6368" style="font-size:11.0px">　 正是那两块 256×256 最擅长的形状</text>
+<text class="svgsm" x="934" y="305" fill="#5f6368" style="font-size:11.0px"></text>
+<text class="svgsm" x="934" y="326" fill="#5f6368" style="font-size:11.0px">⭐ 剩下要比的只有算力：</text>
+<text class="svgsm" x="934" y="347" fill="#5f6368" style="font-size:11.0px">　 <tspan font-weight="700">918 对 989.5 ＝ 93%</tspan>，基本打平</text>
+<text class="svgsm" x="934" y="388" fill="#b06000" style="font-size:11.0px">⚠️ 一颗 v6e 的<tspan font-weight="700">纯算力下界约 5.9 分钟</tspan></text>
+<text class="svgsm" x="934" y="406" fill="#80868b" style="font-size:11.0px">　 （3.26e17 ÷ 918 TFLOP/s，100% 利用率，实际做不到）</text>
+<rect x="0" y="418" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="418" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="418" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="442" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 把这一整套压成三句话</tspan></text>
+<text class="svgsm" x="20" y="466" fill="#174ea6" style="font-size:12.0px">① <tspan font-weight="700">一段视频被压成七万五千个 token</tspan>，而它们共用同一份权重 ——&#160;每层那 702 MB 的权重搬一次，服务 75,600 个位置。</text>
+<text class="svgsm" x="20" y="487" fill="#174ea6" style="font-size:12.0px">② <tspan font-weight="700">注意力是全局的，所以算力随 token 数平方涨</tspan>。七万五千个 token 两两都算，光这一项就占了七成 FLOP ——&#160;<tspan font-weight="700">这就是「计算密集」四个字的全部来历</tspan>。</text>
+<text class="svgsm" x="20" y="508" fill="#174ea6" style="font-size:12.0px">③ 于是它落在强度轴最右边：<tspan font-weight="700">带宽不是瓶颈，比的只剩算力</tspan>；而这七成算力又恰好是<tspan font-weight="700">纯矩阵乘</tspan>——&#160;v6e 那两块 256×256 的大方阵，等的就是这种活。</text>
+<rect x="0" y="537" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="537" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="537" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="561" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⚠️ 这张图刻意留白的地方</tspan></text>
+<text class="svgsm" x="20" y="585" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">FLOP 只数了矩阵乘</tspan>，没数 norm、激活、RoPE、softmax 那些向量运算。它给的是<tspan font-weight="700">量级和占比</tspan>，不是精确账。</text>
+<text class="svgsm" x="20" y="606" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">那个 5.9 分钟是理论下界，不是性能预测</tspan> ——&#160;它假设 100% 利用率，而实际做不到。⛔ 本讲不给性能数，这一条也不例外，它只是让「3.26e17」这个数有个体感。</text>
+<text class="svgsm" x="20" y="627" fill="#b06000" style="font-size:12.0px">⭐ 但有一条能对得上：<tspan font-weight="700">每层 351.3 M 参数 × 40 层 ＝ 14.05 B，对上官方标称的 14B</tspan>。——&#160;参数量能对上，说明上面那套公式的形状是对的。<tspan font-weight="700">对不上任何锚点的孤立数字，才是该害怕的。</tspan></text>
+<text class="svgsm" x="0" y="660" fill="#80868b" style="font-size:11.0px">📌 vae_stride (4,8,8)、patch_size (1,2,2)、dim 5120、ffn_dim 13824、num_layers 40、window_size (−1,−1)、text_len 512 ——&#160;Wan2.1 官方仓库 wan/configs/wan_t2v_14B.py</text>
+<text class="svgsm" x="0" y="677" fill="#80868b" style="font-size:11.0px">　　同族同量级：Wan2.2-T2V-A14B（总 27B / 每步激活 14B，Wan-AI 官方模型卡）、LongCat-Video 13.6B（美团官方，DiT 架构）——&#160;形状不同，但「token 极多 ＋ 全局注意力」这两条一样成立。</text>
+</svg>
+<figcaption><b>图 X-9</b>　一段 720P、81 帧的视频经 VAE 与 patch 化后是 <b>75,600 个 token</b>；而 config 里 <code>window_size = (−1,−1)</code> —— <b>不开窗口，全局注意力</b>。于是算力的<b>七成花在 N² 的注意力上</b>，那是纯矩阵乘。<em>⭐ 外部锚点：每层 351.3 M × 40 层 ＝ 14.05 B，对上官方标称的 14B。</em></figcaption></figure>
+  <p>算力密集讲清楚了，再看它<b>结构上</b>为什么正好配这套编译优先的打法。</p>
 <figure class="fbox fwide" id="figx-5"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="左边是自回归 LLM：一个 token 一个 token 产出，KV cache 越来越长，形状每步都在变；右边是扩散模型：整张图一起动，走五十步，步与步之间只传一张大小不变的 latent，没有 KV cache，形状从头到尾一样"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">扩散一步在干什么 ——&#160;<tspan font-weight="700">同一段计算，原样跑五十遍</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 这一张不讲扩散的数学，只讲它<tspan font-weight="700">对硬件提了什么要求</tspan>：没有 KV cache、形状不变、同一段重复几十次。</text>
