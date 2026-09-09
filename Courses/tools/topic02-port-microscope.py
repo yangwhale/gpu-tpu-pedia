@@ -2594,6 +2594,14 @@ def sections(F):
 # ══════════════════════════════════════════════════════════════════════
 # 这一行既是注释也是锚点：注入前用它找到上一份 CSS 的起点，整段替换。
 # **不要改它的字面** —— 改了就找不到历史上那几份，又会开始累积。
+# ⭐ 四页互跳导航的样式也从这里注入 ——&nbsp;定义在 topic02_family.py（单一来源）。
+# ⛔ 2026-09-09 教训：我先把它直接写进 topic-02-L300.html 的 <style>，
+#   而下面那段注入逻辑会**把 CSS_MARK 到 </style> 之间整段铲掉再重写** ——&nbsp;
+#   于是那份 CSS 每次 build 都被静默删掉，页面上导航条变成裸链接，**不报错**。
+#   这跟 memory 里 `.note.q` 那次是同一个形状：**改生成物 = 改了个寂寞。**
+#   ⭐ 判据：往一个由脚本重写的区域里加东西之前，先找出「谁拥有这段」。
+from topic02_family import CSS as _FAM_CSS               # noqa: E402
+
 CSS_MARK = "/* ---- 显微镜移植图（由 topic02-port-microscope.py 注入）---- */"
 
 CSS = '''
@@ -2720,7 +2728,7 @@ details.aside b{color:var(--ink);font-weight:600}
 .mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
 .mscard > b{display:block;font-size:16px;margin-bottom:6px}
 .mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
-'''
+''' + _FAM_CSS
 
 TODO = re.compile(
     r'<section[^>]*><div class="wrap">\s*<div class="note info">'

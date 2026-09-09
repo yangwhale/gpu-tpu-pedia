@@ -43,6 +43,8 @@ import io
 import os
 import re
 
+from topic02_family import nav          # 四页互跳导航，单一来源
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 WEB = os.path.join(HERE, "..", "WebPages")
 CSS_SRC = os.path.join(WEB, "topic-02-L300.html")
@@ -78,6 +80,11 @@ head = re.sub(r'\s*<meta property="og:image"[^>]*>'
 _probe = re.sub(r"/\*.*?\*/|<!--.*?-->", "", head, flags=re.S)
 assert "TPU 与 GPU" not in _probe and "topic-02-L300" not in _probe, \
     "head 里还有专题二 L300 的残留"
+# ⛔ 防回归：famnav 的样式住在 L300 的 <style> 里、由 topic02-port-microscope.py 注入。
+#   那段被重写过一次、把样式冲掉过一次，而**页面照样构建、导航条只是变成裸链接** ——
+#   ⭐ 不报错的退化必须用断言接住。
+assert "nav.famnav" in head, \
+    "切下来的 head 里没有 famnav 样式 —— 先跑 topic02-port-microscope.py"
 
 head += """
 <style>
@@ -131,6 +138,7 @@ a = BODY.append
 
 a("""
 <header class="hero">
+  __FAMNAV__
   <div class="kicker">专题二 · 外传　·　L100　·　20 分钟</div>
   <h1>算力强，显存弱 —— 这样一颗芯片，该配什么样的活</h1>
   <p class="lede">TPU v6e 与扩散模型。<b>这一讲的主角是芯片，不是模型。</b>
@@ -252,7 +260,7 @@ a("""
 </section>
 """)
 
-html = head + '\n<main class="wrap">\n' + "\n".join(BODY) + "\n</main>\n"
+html = head + '\n<main class="wrap">\n' + "\n".join(BODY).replace("__FAMNAV__", nav("topic-02x.html")) + "\n</main>\n"
 
 # ── 写盘前自检 ──────────────────────────────────────────────────
 import sys

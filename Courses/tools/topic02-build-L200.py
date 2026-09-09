@@ -103,6 +103,8 @@ import subprocess
 import sys
 import tempfile
 
+from topic02_family import CSS as _FAMCSS, nav   # 四页互跳导航，单一来源
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 SRC = os.path.join(HERE, "..", "WebPages", "topic-02-L300.html")
 OUT = os.path.join(HERE, "..", "WebPages", "topic-02.html")
@@ -4216,6 +4218,7 @@ HERO = '''
   <div class="crumb"><a href="index.html">加速器系统课程</a> ／ 主线 ／ 专题二
     ／ <b>L200 · 精讲版</b>
     <a class="lecbtn" href="topic-02-L200-lecture.html">📝 讲义（授课稿）</a></div>
+  ''' + nav("topic-02.html") + '''
   <h1>TPU 与 GPU</h1>
   <div class="en">Two Accelerators, Two Origins</div>
   <div class="hook">

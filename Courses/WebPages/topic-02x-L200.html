@@ -619,6 +619,28 @@ details.aside b{color:var(--ink);font-weight:600}
 .mscard:hover{border-color:var(--blue);box-shadow:0 2px 12px rgba(26,115,232,.12)}
 .mscard > b{display:block;font-size:16px;margin-bottom:6px}
 .mscard > span{display:block;color:var(--gray);font-size:13.5px;line-height:1.65}
+
+/* ══ 专题二一家四页的互跳导航（定义在 tools/topic02_family.py）══
+   ⭐ 样式只写这一处：另外三页的 <head> 是从本文件整块切下去的。
+   ⛔ 别在各页自己的 <style> 里再写一份。 */
+nav.famnav{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;
+  margin:0 0 24px;font-size:13px}
+nav.famnav .famlab{align-self:center;color:var(--gray2,#80868b);
+  margin-right:2px;white-space:nowrap}
+nav.famnav a,nav.famnav .here{display:block;padding:7px 13px;border-radius:8px;
+  border:1px solid var(--line,#dadce0);background:#fff;text-decoration:none;
+  line-height:1.45;transition:border-color .12s,background .12s}
+nav.famnav a{color:var(--blue,#1a73e8)}
+nav.famnav a:hover{border-color:var(--blue,#1a73e8);background:#f8fbff}
+/* ⭐ 当前页渲染成不可点的高亮块 ——&nbsp;它同时充当「你在这里」的指示，
+   所以不需要再单独放一个面包屑说明当前在哪一版。 */
+nav.famnav .here{color:var(--ink,#202124);font-weight:700;
+  border-color:var(--blue,#1a73e8);background:#e8f0fe;cursor:default}
+nav.famnav em{display:block;font-style:normal;font-weight:400;font-size:11.5px;
+  color:var(--gray2,#80868b);margin-top:2px}
+nav.famnav .here em{color:#174ea6}
+@media(max-width:760px){nav.famnav em{display:none}
+  nav.famnav a,nav.famnav .here{padding:6px 10px}}
 </style>
 <style>
 ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
@@ -654,6 +676,13 @@ figure.fbox { margin-top: 26px; margin-bottom: 26px }
 <main class="wrap">
 
 <header class="hero">
+  <nav class="famnav" aria-label="专题二的四个版本">
+  <span class="famlab">专题二共四版：</span>
+  <a href="topic-02.html">主线 L200<em>精讲 · 80 分钟</em></a>
+  <a href="topic-02-L300.html">主线 L300<em>完整版 · 两小时</em></a>
+  <a href="topic-02x.html">外传 L100<em>v6e 与扩散 · 20 分钟</em></a>
+  <span class="here" aria-current="page">外传 L200<em>v6e 与扩散 · 精讲</em></span>
+  </nav>
   <div class="kicker">专题二 · 外传　·　L200 精讲版</div>
   <h1>算力强，显存弱 —— 这样一颗芯片，该配什么样的活</h1>
   <p class="lede">TPU v6e 与扩散模型。<b>L100 那二十分钟给的是结论；这一版把每一步摊开</b> ——
