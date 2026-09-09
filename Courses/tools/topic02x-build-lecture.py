@@ -28,10 +28,35 @@ OUT = os.path.join(WEB, "topic-02x-lecture.html")
 DECK = "topic-02x.html"
 
 
+# ⭐ 逐字稿块的样式。⛔ 自己新造的 class 一定要配样式 ——&nbsp;
+#   没样式的 class 完全合法，只是**安静地什么都不做**（2026-09-09 刚在 .secno 上栽过）。
+#   讲稿是准备时读的（蓝），逐字稿是临场照着念的（绿），配色分开。
+_ORAL_CSS = """
+details.oral{border:1px solid #a8dab5;border-left:4px solid #1e8e3e;border-radius:8px;
+  background:#f6fbf7;margin:16px 0;overflow:hidden}
+details.oral>summary{cursor:pointer;list-style:none;padding:10px 16px;
+  font-weight:700;font-size:14.5px;color:#0d652d;user-select:none}
+details.oral>summary::-webkit-details-marker{display:none}
+details.oral>summary::before{content:"\\25b8";display:inline-block;margin-right:8px;
+  font-size:11px;color:#1e8e3e;transition:transform .18s}
+details.oral[open]>summary::before{transform:rotate(90deg)}
+details.oral[open]>summary{border-bottom:1px solid #d7ecdd}
+details.oral .body{padding:6px 20px 16px}
+details.oral .body p{margin:12px 0;font-size:15.5px;line-height:1.95}
+details.oral .body b{color:#0d652d}
+details.oral .body em{color:#5f6368;font-style:normal}
+"""
+
+
 def _css():
     h = io.open(CSS_SRC, encoding="utf-8").read()
     i = h.index("<style>")
-    return h[i:h.index("</style>") + len("</style>")]
+    css = h[i:h.index("</style>")]
+    # ⛔ 断言样式真的进去了 ——&nbsp;上一版我把 CSS 插错了地方，构建照样成功，
+    #   页面上逐字稿块只是没有边框，肉眼很难第一时间发现。
+    out = css + _ORAL_CSS + "</style>"
+    assert "details.oral{" in out
+    return out
 
 
 LEC = []
@@ -430,6 +455,17 @@ def _md(t):
     return re.sub(r"\*\*(.+?)\*\*", r"<b>\1</b>", t)
 
 
+from topic02x_oral import ORAL                    # 逐字稿，单独一份，见该文件头
+
+
+def _oral(i):
+    """渲染那一节的逐字稿。⛔ 缺一节直接断言失败 ——&nbsp;
+    「讲义里某一节没有逐字稿」不报错也不难看，只在临场翻到那一页时才发现。"""
+    assert i in ORAL, "%s 这一节没写逐字稿 —— 见 topic02x_oral.py" % i
+    return ('<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary>'
+            '<div class="body">%s</div></details>' % ORAL[i])
+
+
 def _secs():
     out = []
     for L in LEC:
@@ -437,8 +473,9 @@ def _secs():
             '<section class="lec" id="%s">\n'
             '  <h2><span class="no">%s</span>　%s　<span class="min">%d 分钟</span></h2>\n'
             '  <div class="meta2"><b>讲什么</b>：%s<br><b>落点</b>：%s</div>\n'
-            '%s\n</section>' % (L["id"], L["no"], L["title"], L["min"],
-                                _md(L["what"]), _md(L["land"]), L["html"]))
+            '%s\n%s\n</section>' % (L["id"], L["no"], L["title"], L["min"],
+                                    _md(L["what"]), _md(L["land"]), L["html"],
+                                    _oral(L["id"])))
     return "\n".join(out)
 
 
@@ -501,6 +538,9 @@ def main():
     hrefs = set(re.findall(r'<li><a href="#(\w+)"', html))
     assert hrefs == ids, "侧栏和正文对不上：侧栏多 %s，正文多 %s" % (
         sorted(hrefs - ids), sorted(ids - hrefs))
+    assert set(ORAL) == {L["id"] for L in LEC}, \
+        "逐字稿与讲义章节对不上：多 %s，少 %s" % (\
+            set(ORAL) - {L["id"] for L in LEC}, {L["id"] for L in LEC} - set(ORAL))
     assert total == 19, "主线合计 %d 分钟 —— 目标 19，超了就砍，少了就补" % total
 
     io.open(OUT, "w", encoding="utf-8").write(html)

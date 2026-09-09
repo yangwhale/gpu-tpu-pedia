@@ -182,6 +182,20 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
   .say{padding:2px 16px 14px}.say p{font-size:15.5px}
   .qa .a{padding-left:18px}
 }
+
+details.oral{border:1px solid #a8dab5;border-left:4px solid #1e8e3e;border-radius:8px;
+  background:#f6fbf7;margin:16px 0;overflow:hidden}
+details.oral>summary{cursor:pointer;list-style:none;padding:10px 16px;
+  font-weight:700;font-size:14.5px;color:#0d652d;user-select:none}
+details.oral>summary::-webkit-details-marker{display:none}
+details.oral>summary::before{content:"\25b8";display:inline-block;margin-right:8px;
+  font-size:11px;color:#1e8e3e;transition:transform .18s}
+details.oral[open]>summary::before{transform:rotate(90deg)}
+details.oral[open]>summary{border-bottom:1px solid #d7ecdd}
+details.oral .body{padding:6px 20px 16px}
+details.oral .body p{margin:12px 0;font-size:15.5px;line-height:1.95}
+details.oral .body b{color:#0d652d}
+details.oral .body em{color:#5f6368;font-style:normal}
 </style>
 <style>
 /* ⭐ 只补三条，其余全走专题一讲义那份 CSS —— 别在这儿另立一套观感。 */
@@ -259,6 +273,19 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <b>别铺垫太久。</b>开场只有一分钟 —— 说完两件事就往下走。
   </div>
 
+<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary><div class="body">
+<p>各位好。这一讲是专题二的外传，讲 TPU v6e 和扩散模型。<b>分两半。</b></p>
+
+<p>前一半讲<b>判据</b>：一条线，判你手上的活配不配这颗芯片。
+  <em>而且这件事跑之前就能判，不需要你先给我机器。</em></p>
+
+<p>后一半讲<b>我们做了什么</b>：这类模型的流水线为什么能拆成三段部署、
+  拆完各放哪台机器，以及五个月里十个模型是怎么一个个跑通的。</p>
+
+<p>开始之前先说清一件事，免得后面被问。<b>这十九分钟我不给你们比 benchmark，
+  一个快慢数都没有。</b>屋脊点是个结构量，它只说这台机器的胃口有多大，
+  <em>不说这顿饭多久吃完。</em></p>
+</div></details>
 </section>
 <section class="lec" id="X1">
   <h2><span class="no">一</span>　一把尺子量四颗，再把两颗拆开　<span class="min">5 分钟</span></h2>
@@ -324,6 +351,39 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     台下会自己接上。
   </div>
 
+<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary><div class="body">
+<p>专题二那把尺子：<b>算力除以显存带宽</b>。意思是，
+  每从显存搬一个字节，这台机器本来能算多少次。</p>
+
+<p>三颗旗舰挤在二百九十五到三百一十三 —— H100、B200、TPU v7，胃口差不多。
+  而 TPU v6e 是 <b>五百六十</b>。</p>
+
+<p>拆开看就是三个比值：跟 H100 比，<b>算力百分之九十三，带宽只有百分之四十九，
+  容量只有百分之四十</b>。分子基本没动，分母砍一半，商自然涨到两倍。</p>
+
+<p>这条线最值钱的地方是 —— <b>它纯用官方规格算，一个实测都不需要。</b>
+  <em>也就是说，客户还在犹豫要不要给你机器的时候，你已经能下判断了。</em></p>
+
+<p>这个五百六十是从什么样的硅片里长出来的？拆开看。</p>
+
+<p>v6e：算力<b>集中</b>在两个二百五十六见方的大方阵里，片上有一整块 128 兆的暂存，
+  <b>全部由编译器安排，没有硬件缓存兜底</b>，通往片外那道门一千六百三十八 GB 每秒。<br>
+  H100 是同一种画法：算力<b>摊成五百二十八个</b>小单元，片上多一整层<b>硬件自动管</b>的 L2，
+  门宽一倍。</p>
+
+<p>大家看那道门 —— <b>两张图里门的宽度是按带宽等比画的，可以直接叠着看</b>，那就是一半。</p>
+
+<p>三个问题，两边给了相反的答案，<b>而且各自都自洽</b>。<br>
+  H100 那一列全部指向「负载未知」—— 摊开、缓存兜底、门开大，
+  <em>三个都是为不确定性买的保险</em>。<br>
+  v6e 那一列全部指向「负载已知」—— 集中、编译期写死、门只开够用，
+  <em>三个都是把保险费省下来换算力密度</em>。</p>
+
+<p>所以<b>问题从来不是谁更强，是你手上的活属于哪一种。</b></p>
+
+<p><em>顺带埋一个后面要用的钩子：v6e 那个片上全靠编译期安排，
+  代价是编译器排错了就没有后手。<b>这句说完就走</b>，第四节会自己接上。</em></p>
+</div></details>
 </section>
 <section class="lec" id="X9X4">
   <h2><span class="no">二</span>　那你的活落在哪一边　<span class="min">3 分钟</span></h2>
@@ -367,6 +427,31 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     卡在 head_dim 128 对 MXU 的 256。<b>屋顶线说瓶颈在哪一侧，不说那一侧用得好不好。</b>
   </div>
 
+<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary><div class="body">
+<p>那你的活落在哪一边。<b>不引用别人的结论，拿 Wan2.1 的官方 config 当场算。</b></p>
+
+<p>七百二十 P、八十一帧，过 VAE 压缩再 patch 化，得到<b>七万五千六百个 token</b>。
+  对照一下：<em>LLM 解一步只处理一个 token。</em></p>
+
+<p>再看 config 里一个字段，window size 等于负一负一 —— <b>不开滑窗，全局注意力</b>。
+  于是算力的<b>七成</b>压在 N 平方那一项上，而那是纯矩阵乘。</p>
+
+<p>这里说一句<b>我们怎么确认自己没算错</b>。同一份 config 把参数量数出来，
+  每层三亿五千一百万，四十层<b>十四点零五 B</b>，正好对上官方标称的十四 B。
+  <em>参数量能对上，说明我们对这一层里有哪些矩阵的理解是对的。</em></p>
+
+<p>强度约等于七万五千六百，是那条五百六十的 <b>一百三十五倍</b>。带宽根本没参与。</p>
+
+<p>所以「v6e 适合扩散」的精确说法是：<b>不是它跑得更快</b>，
+  是扩散把它的两个短板<b>挡在了瓶颈之外</b>，只剩没被挡住的那一项在起作用 ——
+  算力九百一十八对九百八十九点五，百分之九十三。<b>短板不参与，长板打平。</b></p>
+
+<p><b>两条反过来的话我也得主动说。</b><br>
+  第一，小 batch 的 decode 落在轴的最左边，那里比的全是带宽，
+  v6e 只有百分之四十九 —— <b>同一颗芯片，那种活它最吃亏。</b><br>
+  第二，<b>落在算力侧不等于算力就吃满了</b>：我们实测 Wan 的 MFU 只有百分之三十七，
+  卡在 head dimension 一百二十八对 MXU 的二百五十六。</p>
+</div></details>
 </section>
 <section class="lec" id="X6">
   <h2><span class="no">三</span>　装得下吗 ——&nbsp;要算权重加激活　<span class="min">2 分钟</span></h2>
@@ -420,6 +505,30 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <b>别展开 Pod 拓扑</b>，也别展开逐帧解码怎么实现 —— 都在 L200 和专题十一。
   </div>
 
+<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary><div class="body">
+<p>装得下吗。<b>这一节真正要讲的不是上半张图。</b></p>
+
+<p>「二十八 GB 小于三十二 GB 所以能跑」这句话 —— <b>分子分母都错。</b></p>
+
+<p><b>分母错</b>：三十二 GB 是标称，不是预算。真跑起来权重和运行时先占掉一大块。
+  我们自己撞 OOM 那次，XLA 报的原话是<em>「只剩十三点一个 G」</em>。</p>
+
+<p><b>分子也错</b>：要放进去的不只是权重，还有<b>峰值激活</b>。
+  同一条报错前半句是<em>「尝试预留十九个 G」</em> ——
+  <b>CogVideoX 的 VAE 解码一步就要十九个 G，而这个模型的权重才十个 G。
+  激活是权重的近两倍。</b></p>
+
+<p><b>最有说服力的一句在这儿</b>：激活随分辨率和帧数涨，<b>而权重一个字节都不涨</b>。
+  <em>Wan2.1 的 480P 跑得动、720P OOM —— 用的是同一份权重。</em></p>
+
+<p>而且解法不是换更大的卡，是逐帧解码加共享缓存，把十九个 G 压到十三以下。
+  <b>改的是实现。</b>一句话收口：<b>权重决定装不装得进，激活决定跑不跑得动。</b></p>
+
+<p>顺带说实测配置，这一列<b>全是我们真跑过的，不是按体积猜的</b>。
+  小的跑单颗：S3Diff、SDXL、Real-ESRGAN。
+  主力清一色八卡：HunyuanVideo、Wan2.1、CogVideoX 在 v6e-8，Flux.2 在 v4-8。
+  <em>一台主机的量级就够，没有一个需要跨主机。</em></p>
+</div></details>
 </section>
 <section class="lec" id="X10">
   <h2><span class="no">四</span>　仓库里为什么同一个模型有两份例子　<span class="min">3 分钟</span></h2>
@@ -483,6 +592,33 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <b>注解抵消不了图形本身的断言。</b>
   </div>
 
+<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary><div class="body">
+<p><b>从这一节开始，全是我们自己跑出来的东西。</b></p>
+
+<p>打开我们仓库里任何一个扩散模型的目录，都会看到<b>两份例子</b>：
+  一个一体化脚本，和一个 staged 目录。
+  <b>后者存在的理由不是跑得更快，是它把切口露在外面。</b></p>
+
+<p>一体化那份快，适合验证一次改动。<b>但你看不见中间态</b> ——
+  文本 embedding、latent 全在内存里，跑完就没了。
+  <em>一出问题，视频全黑、出 NaN，你没有任何中间产物可看。</em></p>
+
+<p>三阶段把这一切摊开：三段之间只交接<b>三个文件</b>，两个 safetensors 加一份 config。
+  <b>只认文件，不认进程</b> —— <em>那三段本来就能跑在三台机器上。</em></p>
+
+<p><b>这一节真正要教会的是：拿到一份 latent，怎么验，三步。</b></p>
+
+<p><b>第一，shape 对不对</b>，由分辨率直接推：帧数减一除四加一得二十一，
+  高宽各除八，通道十六。<b>对不上就别往下跑。</b><br>
+  <b>第二，dtype 在哪看</b> —— 读文件头的 dtype 字段，
+  <b>再读 metadata 里的 dtype info</b>，<em>两者可能不一样</em>。<br>
+  <b>第三，字节数</b>：元素数乘每元素字节加文件头，跟文件一个字节不差。</p>
+
+<p><b>给个反例这一节就立住了。</b>Wan2.1 的 latent 是 F32、一千九百三十五万字节；
+  CogVideoX 的 latent <b>形状一模一样</b>，但 BF16、九百六十七万字节。
+  <em>大小差一倍，形状完全相同 —— 所以看文件大小既不能证明 shape 对，
+  也不能反推 dtype。<b>只能读头。</b></em></p>
+</div></details>
 </section>
 <section class="lec" id="X11">
   <h2><span class="no">五</span>　拆完怎么摆　<span class="min">3 分钟</span></h2>
@@ -517,6 +653,25 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     而分段的价值恰恰在这里 —— <b>拆开之后，每一段的账才第一次能单独算清楚。</b>
   </div>
 
+<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary><div class="body">
+<p>拆完怎么摆。<b>切得动只是可行性，真正的收益是：三段吃的根本不是同一种资源。</b></p>
+
+<p>文本编码几乎不吃算力，占全程<b>百分之一点三</b>。
+  DiT 去噪吃算力，占<b>九十八点三</b>。
+  VAE 解码吃显存峰值，却只占<b>零点四</b>。</p>
+
+<p>VAE 还有个特别的形状：<b>预热八十秒，之后每次一秒，八十倍差。</b>
+  这种东西<b>天生该做成常驻服务</b> —— 编译好放着，八十秒摊到上万次调用等于零。</p>
+
+<p><b>但有个顺口结论我要当场推翻。</b>「文本编码那么轻，放 CPU 就行」——
+  在 Wan2.1 上成立，它用 T5，三秒。
+  但 <b>Flux.2 用 Mistral3，放 CPU 要三十秒</b>，
+  而它的 DiT 在 TPU 上跑完五十步只要十三点五秒。
+  <b>那个「轻量」的第一段，反而是全程最慢的一段。</b></p>
+
+<p>所以判据不是「哪一段天生该放哪」，是<b>先量一量它在目标硬件上要多久</b>。
+  <em>而分段的价值恰恰在这里 —— 拆开之后，每一段的账才第一次能单独算清楚。</em></p>
+</div></details>
 </section>
 <section class="lec" id="X12">
   <h2><span class="no">六</span>　这套说法我们自己验过　<span class="min">2 分钟</span></h2>
@@ -557,6 +712,23 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <b>不要拿它比较任意两个模型谁更难</b> —— 会被当场问穿。
   </div>
 
+<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary><div class="body">
+<p>前面讲的都是<b>应该怎样</b>，这一页讲<b>实际怎样</b>。</p>
+
+<p>十个模型，五个月。视频这边 HunyuanVideo、Wan 2.1、Wan 2.2 图生视频、CogVideoX；
+  图像这边 SDXL、Flux.1、Flux.2、S3Diff 超分、Real-ESRGAN，外加一套 ComfyUI 节点。
+  <b>每一行的起止和提交数都是 git 历史直接数出来的，不是凭印象写的。</b></p>
+
+<p><b>但这一页真正的落点不是「我们做了十个」。</b>看提交数：
+  HunyuanVideo <b>七十三次</b>、CogVideoX 四十九、Wan2.1 四十四 ——
+  而 SDXL <b>九次</b>、Real-ESRGAN <b>三次</b>、Flux.1 <b>两次</b>。</p>
+
+<p>差别<b>不在模型难度</b>，SDXL 和 Flux.1 都不比 CogVideoX 简单。
+  差别在于：<b>前面几个是在发明方法，后面几个是在套用方法。</b></p>
+
+<p>所以落点是这一句 —— <b>接第十一个模型的成本，已经不是前十个的量级了。</b>
+  <em>这才是一条工程路线走通的标志。</em></p>
+</div></details>
 </section>
 <section class="lec" id="XEND">
   <h2><span class="no">收尾</span>　带走三句　<span class="min">0 分钟</span></h2>
@@ -587,6 +759,19 @@ footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);fo
     <b>专题十一</b>：扩散模型本身的原理。
   </div>
 
+<details class="oral"><summary>🎙 逐字稿 ——&nbsp;可以直接照着念</summary><div class="body">
+<p>收尾，带走三句。</p>
+
+<p><b>第一</b>，选芯片不是选更强的那颗，是先看你的活落在那根轴的哪一边 ——
+  <b>而这件事跑之前就能判。</b><br>
+  <b>第二</b>，扩散的流水线在 latent 那一处最细，
+  所以三段能拆到不同机器上各配各的资源。<br>
+  <b>第三</b>，这套说法我们在十个模型上跑了五个月，
+  <b>而提交数从七十三掉到两次。</b></p>
+
+<p>最后一句留给对面：<b>「你手上那个模型，我们可以先把它放到这根轴上看看。」</b>
+  <em>不需要你先给机器 —— 这是这一讲最实用的一个副产品。</em>谢谢大家。</p>
+</div></details>
 </section>
 </main>
 </div>
