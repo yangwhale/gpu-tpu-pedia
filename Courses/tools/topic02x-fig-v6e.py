@@ -102,10 +102,16 @@ def main():
     f.box(TC_X, SC_Y, 4, 54, PU, PU, 2)
     f.box(TC_X + 2, SC_Y, 3, 54, "#fff", "#fff", 0)
     f.t(TC_X + 16, SC_Y + 22, "SparseCore × 2", "#681da8", bold=True, size=13)
+    # ⛔⛔ 这两行原来写的是「扩散模型用不到它；它是给推荐系统那类负载准备的」。
+    #   **错的。** SparseCore 有两个职责，第二个是**集合通信卸载** ——&nbsp;
+    #   官方性能指南原文：把 all-reduce 这类卸到它上面，不占 MXU，
+    #   TensorCore 同时继续算。⭐ 只要跨卡，它就在干活。详见图 X-7。
     f.t(TC_X + 160, SC_Y + 22,
-        "专门搬稀疏 / 大表的协处理器 ——&#160;本讲不展开", GY, size=_sz(11))
+        "两个职责：① 稀疏 / 大表　② <tspan font-weight=\"700\">集合通信卸载</tspan>",
+        GY, size=_sz(11))
     f.t(TC_X + 160, SC_Y + 40,
-        "扩散模型用不到它；它是给推荐系统那类负载准备的", GY2, size=_sz(11))
+        "⭐ 只要跨卡就用得上它（all-gather / reduce-scatter）——&#160;见图 X-7",
+        GY2, size=_sz(11))
 
     # ── HBM ＋ 那根管子 ─────────────────────────────────────────
     HB_Y = ch_top + CH_H + 58        # ⭐ 拉开，好让那根管子看得出是「一段细颈」

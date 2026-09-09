@@ -33,7 +33,7 @@ def main():
     f.marks = set()
     y = f.header(
         '4 个口怎么连成 256 颗 ——&#160;'
-        '<tspan font-weight="700">二维环面，最远 16 跳，而扩散不在乎</tspan>',
+        '<tspan font-weight="700">二维环面，最远 16 跳；够扩散这一族用，不是不用</tspan>',
         '⭐ X-2 右栏那三行（4 个 ICI 口 · 2D 环面 · Pod 256）在这儿展开。'
         'X-6 说了「为什么 256 够用」，<tspan font-weight="700">这一张说「怎么连、代价是什么」</tspan>。',
         [(CY, "ICI 链路"), (RD, "绕回去的那一跳"), (BL, "最远的一对")])
@@ -105,23 +105,38 @@ def main():
         "环面每一维最多绕半圈，16 ÷ 2 ＝ 8，两维相加 ＝ 16",
         "　 对照 v7 的 4×4×4 立方：每维最多 2 跳，三维相加 ＝ "
         "<tspan font-weight=\"700\">6 跳</tspan>（专题二 §4 算过）",
-        "⛔ 16 跳听着很多 ——&#160;"
-        "<tspan font-weight=\"700\">但要先问一句：谁会走这条路？</tspan>",
+        "⭐ 走不走这条路，<tspan font-weight=\"700\">取决于你切不切模型</tspan>"
+        "——&#160;不切就几乎不走，一切开就一大堆 all-gather",
     ], size=11, lh=20, fill=GY)
 
     y = top + PH + 22
 
-    y = f.band(y, "ok",
-               "答案是：跑扩散的时候，几乎没人走",
-               ['X-6 已经说清了：<tspan font-weight="700">这一族模型一颗就装得下</tspan>。'
-                '于是多卡的用法是<tspan font-weight="700">各生成各的</tspan> ——&#160;'
-                '八颗卡同时出八张图，<tspan font-weight="700">卡与卡之间几乎不用说话</tspan>。',
-                '⭐ 通信量接近零的时候，<tspan font-weight="700">跳数是多少就不重要了</tspan>。'
-                '省下来的那两个 ICI 口、那一个维度，'
-                '换成了别的地方的面积和成本。',
-                '⛔ 反过来这条也成立：要是一个模型必须摊在几百颗上、每一层都要 '
-                'all-reduce，<tspan font-weight="700">16 跳就是实打实的成本</tspan> ——&#160;'
-                '<tspan font-weight="700">那种活本来就该去找 v7 的三维环面。</tspan>'])
+    y = f.band(y, "warn",
+               "⛔ 这里我原来写过头了 ——&#160;「几乎没人走这条路」是不对的",
+               ['<tspan font-weight="700">第一版这一段我写的是：模型一颗装得下，'
+                '多卡各生成各的，卡与卡之间几乎不用说话。</tspan>'
+                '——&#160;那只说对了<tspan font-weight="700">其中一种用法</tspan>。',
+                '⭐ 现场原话点破了：'
+                '「<tspan font-weight="700">扩散模型只要是跨卡通信的话，'
+                '也是有不少 all-gather 的</tspan>」。确实如此 ——&#160;'
+                'X-6 里 Wan2.2 那种超线的就得切开；长视频要切序列；'
+                '想缩短单张的出图时间也得切。<tspan font-weight="700">一切开，集合通信就来了。</tspan>',
+                '⚠️ <tspan font-weight="700">「装得下」只是说它<u>可以</u>不切，'
+                '不是说它<u>不会</u>被切。</tspan>'
+                '——&#160;把「一种常见用法」讲成「唯一用法」，是这一类错误的通用形状。'])
+
+    y = f.band(y + 14, "ok",
+               "所以 16 跳这件事，正确的读法是这样",
+               ['<tspan font-weight="700">纯数据并行时</tspan>（一颗一张图，各生成各的）：'
+                '通信接近零，<tspan font-weight="700">跳数确实无所谓</tspan>。',
+                '<tspan font-weight="700">一旦切开</tspan>（模型放不下、或要切序列 / 切张量）：'
+                'all-gather 与 reduce-scatter 一大堆，'
+                '<tspan font-weight="700">拓扑就开始要钱了</tspan> ——&#160;'
+                '而这正是 SparseCore 那第 ② 个职责（把通信卸下来）存在的理由，见图 X-7。',
+                '⭐⭐ 所以这一张真正的落点不是「16 跳没关系」，是：'
+                '<tspan font-weight="700">v6e 把互联做到「够扩散这一族用」的档位，'
+                '而不是「够一个模型摊在几千颗上」的档位</tspan>。'
+                '——&#160;<tspan font-weight="700">够用，不是不用。</tspan>'])
 
     y = f.src(y + 18,
               'ICI 端口 4 个、双向 800 GBps／chip、2D torus、Pod 256 chip、'

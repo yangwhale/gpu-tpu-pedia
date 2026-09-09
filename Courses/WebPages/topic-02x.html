@@ -789,8 +789,8 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <rect x="16" y="458" width="4" height="54" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
 <rect x="18" y="458" width="3" height="54" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svgsm" x="32" y="480" fill="#681da8" style="font-size:13.0px"><tspan font-weight="700">SparseCore × 2</tspan></text>
-<text class="svgsm" x="176" y="480" fill="#5f6368" style="font-size:11.0px">专门搬稀疏 / 大表的协处理器 ——&#160;本讲不展开</text>
-<text class="svgsm" x="176" y="498" fill="#80868b" style="font-size:11.0px">扩散模型用不到它；它是给推荐系统那类负载准备的</text>
+<text class="svgsm" x="176" y="480" fill="#5f6368" style="font-size:11.0px">两个职责：① 稀疏 / 大表　② <tspan font-weight="700">集合通信卸载</tspan></text>
+<text class="svgsm" x="176" y="498" fill="#80868b" style="font-size:11.0px">⭐ 只要跨卡就用得上它（all-gather / reduce-scatter）——&#160;见图 X-7</text>
 <rect x="0" y="588" width="900" height="76" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="588" width="4" height="76" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
 <rect x="2" y="588" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
@@ -1155,17 +1155,17 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="795" fill="#80868b" style="font-size:11.0px">　　一颗 v6e HBM 32 GB、每 host 8 颗 ——&#160;官方 v6e 规格表。bf16 按每参数 2 字节换算。⛔ 只算权重，不含激活、中间 latent、编译缓存。</text>
 </svg>
 <figcaption><b>图 X-6</b>　扩散这一族在<b>「一颗到几颗」</b>的量级，而 LLM 在「几十颗」。<em>v6e 不打「一个模型摊在几千颗上」那场仗，所以不用付那个成本。</em><br>⚠️ 图上如实标了两条踩线和超线的 —— <b>只算权重，不含激活。</b></figcaption></figure>
-  <p>X-2 右栏还有两样只标了存在、没展开 —— <b>SparseCore</b> 和 <b>二维环面</b>。这两张各补一下；<b>它们不影响主线，但少了会让人觉得芯片没拆干净。</b></p>
-<figure class="fbox fwide" id="figx-7"><svg viewBox="0 0 1400 624" width="100%" role="img" aria-label="TPU v6e 上每颗芯片有 2 个 SparseCore，每个含 16 个子核、每个子核 8 条 lane 和 256 KiB 本地内存。它是为重 embedding 的推荐模型造的；扩散模型这条链路上没有大 embedding 表，所以它基本闲着"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">SparseCore 拆开看 ——&#160;<tspan font-weight="700">这一讲用不上它，但你该知道它在</tspan></text>
-<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一颗 v6e 上除了那个大 TensorCore，还蹲着两个小协处理器。它们不做矩阵乘，<tspan font-weight="700">做的是「在一张很大的表里到处乱查」</tspan>。</text>
+  <p>X-2 右栏还有两样只标了存在、没展开 —— <b>SparseCore</b> 和 <b>二维环面</b>。这两张各补一下 —— <b>尤其 SparseCore，它不只是「给推荐系统用的」。</b></p>
+<figure class="fbox fwide" id="figx-7"><svg viewBox="0 0 1400 767" width="100%" role="img" aria-label="TPU v6e 上每颗芯片有 2 个 SparseCore，每个含 16 个子核、每个子核 8 条 lane 和 256 KiB 本地内存。它有两个职责：一是加速稀疏运算与大表 embedding，二是集合通信卸载 ——把 all-reduce、all-gather、reduce-scatter 从 TensorCore 手里接过去，不占矩阵单元，与计算并行执行。所以只要跨卡，它就在干活"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">SparseCore 拆开看 ——&#160;<tspan font-weight="700">它有两个职责，跨卡的时候一直在干活</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一颗 v6e 上除了那个大 TensorCore，还蹲着两个小协处理器。它们不做矩阵乘 ——&#160;<tspan font-weight="700">一是在大表里到处乱查，二是把集合通信从 TensorCore 手里接过去</tspan>。</text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">SparseCore：稀疏 / 大表</text>
-<rect x="172" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="189" y="64" fill="#5f6368" style="font-size:11.0px">TensorCore：稠密矩阵乘</text>
-<rect x="337" y="55" width="11" height="11" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="354" y="64" fill="#5f6368" style="font-size:11.0px">灰＝本讲不展开</text>
-<rect x="0" y="96" width="860" height="342" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">职责①：稀疏 / 大表</text>
+<rect x="140" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="157" y="64" fill="#5f6368" style="font-size:11.0px">职责②：集合通信卸载</text>
+<rect x="284" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="301" y="64" fill="#5f6368" style="font-size:11.0px">TensorCore：稠密矩阵乘</text>
+<rect x="0" y="96" width="860" height="366" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="96" width="860" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
 <rect x="0" y="98" width="860" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="126" x2="860" y2="126" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
@@ -1217,36 +1217,45 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="20" y="369" fill="#5f6368" style="font-size:11.0px">⭐ 跟 TensorCore 的<tspan font-weight="700">粒度正相反</tspan>：MXU 一次吞一整块 256×256 的方阵，</text>
 <text class="svgsm" x="20" y="388" fill="#5f6368" style="font-size:11.0px">　 SparseCore 是很多条窄 lane <tspan font-weight="700">各查各的</tspan>——&#160;它是为「散着取」造的</text>
 <text class="svgsm" x="20" y="407" fill="#5f6368" style="font-size:11.0px">⚠️ 怎么用它由 <tspan font-weight="700">XLA flag</tspan> 控制，不是写模型时决定的；内部数据流本讲不展开</text>
-<rect x="890" y="96" width="510" height="342" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="890" y="96" width="510" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<rect x="890" y="96" width="510" height="366" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="890" y="96" width="510" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
 <rect x="890" y="98" width="510" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="890" y1="126" x2="1400" y2="126" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="904" y="116" fill="#80868b" style="font-size:13.5px"><tspan font-weight="700">这一讲为什么不靠它</tspan></text>
-<text class="svgsm" x="1386" y="116" fill="#80868b" text-anchor="end" style="font-size:11.0px">⚠️ 推论，非官方结论</text>
-<text class="svgsm" x="906" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">官方原话怎么说它的用途</tspan></text>
-<text class="svgsm" x="906" y="172" fill="#5f6368" style="font-size:11.0px">「加速使用<tspan font-weight="700">稀疏运算</tspan>的模型；</text>
-<text class="svgsm" x="906" y="191" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">主用途</tspan>是加速重 embedding 的推荐模型」</text>
+<text class="svglbl" x="904" y="116" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">它的两个职责</tspan></text>
+<text class="svgsm" x="1386" y="116" fill="#80868b" text-anchor="end" style="font-size:11.0px">官方原文</text>
+<text class="svgsm" x="906" y="150" fill="#681da8" style="font-size:12.0px"><tspan font-weight="700">① 稀疏 / 大表</tspan></text>
+<text class="svgsm" x="906" y="172" fill="#5f6368" style="font-size:11.0px">「加速使用稀疏运算的模型；主用途是</text>
+<text class="svgsm" x="906" y="191" fill="#5f6368" style="font-size:11.0px">  加速重 embedding 的推荐模型」</text>
 <line x1="906" y1="218" x2="1384" y2="218" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svgsm" x="906" y="242" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">那扩散这条链路上有什么</tspan></text>
-<text class="svgsm" x="906" y="264" fill="#5f6368" style="font-size:11.0px">· 没有大 embedding 表</text>
-<text class="svgsm" x="906" y="284" fill="#5f6368" style="font-size:11.0px">· 没有稀疏梯度聚合</text>
-<text class="svgsm" x="906" y="304" fill="#5f6368" style="font-size:11.0px">· 全是稠密的大矩阵乘</text>
-<text class="svgsm" x="906" y="338" fill="#b06000" style="font-size:12.0px">→ <tspan font-weight="700">这颗协处理器基本闲着</tspan></text>
-<text class="svgsm" x="906" y="366" fill="#a50e0e" style="font-size:11.0px">⛔ 但「闲着」不等于「用不到」</text>
-<text class="svgsm" x="906" y="388" fill="#80868b" style="font-size:11.0px">——&#160;我们没实测，所以不下断言</text>
-<rect x="0" y="460" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="460" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="460" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="484" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⛔ 这里我改过一次口 ——&#160;而这个改口本身值得讲给学员听</tspan></text>
-<text class="svgsm" x="20" y="508" fill="#b06000" style="font-size:12.0px">这张图的<tspan font-weight="700">初版</tspan>我写的是「扩散模型用不到它」。<tspan font-weight="700">那句比出处强。</tspan>官方原文说的是 <tspan font-weight="700">a primary use case</tspan>（主用途），不是 only use case。</text>
-<text class="svgsm" x="20" y="529" fill="#b06000" style="font-size:12.0px">⭐ 所以现在图上摆的是<tspan font-weight="700">推导链</tspan>，不是结论：没有大 embedding 表 → 没有稀疏聚合 → 这颗为「散着取」造的东西在这条链路上基本闲着。<tspan font-weight="700">读者可以顺着链子自己判断，也可以反驳。</tspan></text>
-<text class="svgsm" x="20" y="550" fill="#b06000" style="font-size:12.0px">⚠️ 而且 XLA 是否把某些通信卸到它上面，由 XLA flag 控制（官方同页）——&#160;<tspan font-weight="700">我们没有实测，所以不下断言。</tspan></text>
-<text class="svgsm" x="0" y="583" fill="#80868b" style="font-size:11.0px">📌 「加速使用稀疏运算的模型；主用途是加速重 embedding 的推荐模型」、「v6e 每 chip 2 个，v5p 与 TPU7x 4 个」、「由 XLA flag 控制」——&#160;Cloud TPU 官方《TPU architecture》</text>
-<text class="svgsm" x="0" y="600" fill="#80868b" style="font-size:11.0px">　　16 subcore × 8 lane、每 subcore VMEM 256 KiB ——&#160;JAX 公开源码 tpu_info.py 的 TPU_V6E 分支。⚠️ 右栏那条「基本闲着」是本讲的推论，图上已标明。</text>
+<text class="svgsm" x="906" y="242" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">② 集合通信卸载</tspan></text>
+<text class="svgsm" x="906" y="264" fill="#5f6368" style="font-size:11.0px">「把 all-reduce 这类集合通信卸载到</text>
+<text class="svgsm" x="906" y="283" fill="#5f6368" style="font-size:11.0px">  SparseCore。这些操作<tspan font-weight="700">不占 MXU</tspan>，</text>
+<text class="svgsm" x="906" y="302" fill="#5f6368" style="font-size:11.0px">  可以在它上面执行，<tspan font-weight="700">同时 TensorCore</tspan></text>
+<text class="svgsm" x="906" y="321" fill="#5f6368" style="font-size:11.0px">  <tspan font-weight="700">继续算</tspan>」——&#160;官方性能指南</text>
+<text class="svgsm" x="906" y="340" fill="#5f6368" style="font-size:11.0px"></text>
+<text class="svgsm" x="906" y="359" fill="#5f6368" style="font-size:11.0px">All-Gather 与 Reduce-Scatter 也能卸，</text>
+<text class="svgsm" x="906" y="378" fill="#5f6368" style="font-size:11.0px">由 <tspan font-weight="700">XLA flag</tspan> 开关</text>
+<text class="svgsm" x="906" y="418" fill="#a50e0e" style="font-size:12.0px">⭐ <tspan font-weight="700">只要跨卡，它就在干活</tspan></text>
+<rect x="0" y="484" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="484" width="4" height="105" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="484" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="508" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 这张图我推翻重写过一次 ——&#160;而这个错法值得原样讲给学员听</tspan></text>
+<text class="svgsm" x="20" y="532" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">第一版我写的是「扩散模型用不到它」。那是错的。</tspan>我查架构文档看到 <tspan font-weight="700">a primary use case</tspan> 是推荐模型，就<tspan font-weight="700">把「主用途」当成了「用途的全集」</tspan>。</text>
+<text class="svgsm" x="20" y="553" fill="#a50e0e" style="font-size:12.0px">⭐ 判据：<tspan font-weight="700">「a primary use case」这种措辞本身就在告诉你「还有别的」</tspan> ——&#160;它是一个明确的<tspan font-weight="700">不完全枚举</tspan>信号，而我把它读成了定义。</text>
+<text class="svgsm" x="20" y="574" fill="#a50e0e" style="font-size:12.0px">⚠️ 更该警惕的是：我当时<tspan font-weight="700">还给这个错误配了一条像模像样的推导链</tspan>（没有大表 → 没有稀疏聚合 → 基本闲着）。<tspan font-weight="700">链子是对的，前提漏了一半，于是整条链推向了错的地方。</tspan></text>
+<rect x="0" y="603" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="603" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="603" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="627" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 对扩散来说，结论整个反过来：只要跨卡，它就在干活</tspan></text>
+<text class="svgsm" x="20" y="651" fill="#174ea6" style="font-size:12.0px">扩散<tspan font-weight="700">确实没有大 embedding 表</tspan>，所以它走的不是第 ① 条路。但只要模型要切开、要跨卡，<tspan font-weight="700">all-gather / reduce-scatter 就一大堆</tspan> ——&#160;第 ② 条路它走得很勤。</text>
+<text class="svgsm" x="20" y="672" fill="#174ea6" style="font-size:12.0px">⭐ 而这正是这颗协处理器最值钱的地方：<tspan font-weight="700">通信不占 MXU，可以跟计算真正并行</tspan>。——&#160;对一颗「算力强、显存弱」的芯片，<tspan font-weight="700">把通信从关键路径上挪开是格外划算的</tspan>。</text>
+<text class="svgsm" x="20" y="693" fill="#174ea6" style="font-size:12.0px">⚠️ 口径：上面那批集合通信卸载的材料<tspan font-weight="700">主要是 v7x / 第四代 SparseCore 语境</tspan>（Trillium 是第三代）。<tspan font-weight="700">v6e 上这条路的成熟度我们没有实测</tspan> ——&#160;这里如实标出，不含糊过去。</text>
+<text class="svgsm" x="0" y="726" fill="#80868b" style="font-size:11.0px">📌 职责① 与「v6e 每 chip 2 个」——&#160;官方《TPU architecture》；职责②「把 all-reduce 卸到 SparseCore，不占 MXU，与 TensorCore 并行」——&#160;官方《Cloud TPU 性能指南》</text>
+<text class="svgsm" x="0" y="743" fill="#80868b" style="font-size:11.0px">　　16 subcore × 8 lane、每 subcore VMEM 256 KiB ——&#160;JAX 公开源码 tpu_info.py 的 TPU_V6E 分支。⚠️ 集合通信卸载那批材料以 v7x / 第四代 SparseCore 为主，Trillium 是第三代，v6e 上的成熟度本课未实测。</text>
 </svg>
-<figcaption><b>图 X-7</b>　SparseCore：为<b>「在一张很大的表里到处乱查」</b>造的协处理器，主用途是重 embedding 的推荐模型。<em>⚠️ 图上摆的是推导链不是结论 —— 扩散这条链路上没有大表，所以它基本闲着；但「闲着」不等于「用不到」。</em></figcaption></figure>
-<figure class="fbox fwide" id="figx-8"><svg viewBox="0 0 1400 714" width="100%" role="img" aria-label="TPU v6e 每颗芯片有 4 个 ICI 端口，连上下左右四个邻居，边缘绕回形成二维环面；一个 Pod 是 16 乘 16 共 256 颗，最远两点相距 16 跳。对照 v7 是 6 个端口的三维环面"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">4 个口怎么连成 256 颗 ——&#160;<tspan font-weight="700">二维环面，最远 16 跳，而扩散不在乎</tspan></text>
+<figcaption><b>图 X-7</b>　SparseCore <b>有两个职责</b>：① 稀疏 / 大表（推荐模型那类）；<b>② 集合通信卸载 —— 把 all-reduce、all-gather 从 TensorCore 手里接过去，不占 MXU，跟计算真正并行。</b><em>⛔ 这张图我推翻重写过一次：初版写「扩散用不到它」是错的 —— 只要跨卡，它就在干活。</em></figcaption></figure>
+<figure class="fbox fwide" id="figx-8"><svg viewBox="0 0 1400 833" width="100%" role="img" aria-label="TPU v6e 每颗芯片有 4 个 ICI 端口，连上下左右四个邻居，边缘绕回形成二维环面；一个 Pod 是 16 乘 16 共 256 颗，最远两点相距 16 跳。对照 v7 是 6 个端口的三维环面"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">4 个口怎么连成 256 颗 ——&#160;<tspan font-weight="700">二维环面，最远 16 跳；够扩散这一族用，不是不用</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ X-2 右栏那三行（4 个 ICI 口 · 2D 环面 · Pod 256）在这儿展开。X-6 说了「为什么 256 够用」，<tspan font-weight="700">这一张说「怎么连、代价是什么」</tspan>。</text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#00838f" stroke="#00838f" stroke-width="1"/>
 <text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">ICI 链路</text>
@@ -1554,18 +1563,25 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="854" y="160" fill="#a50e0e" style="font-size:11.0px">边缘绕回</text>
 <text class="svgsm" x="580" y="416" fill="#5f6368" style="font-size:11.0px">⭐ <tspan font-weight="700">最远 16 跳</tspan>，这个数能当场推：环面每一维最多绕半圈，16 ÷ 2 ＝ 8，两维相加 ＝ 16</text>
 <text class="svgsm" x="580" y="436" fill="#5f6368" style="font-size:11.0px">　 对照 v7 的 4×4×4 立方：每维最多 2 跳，三维相加 ＝ <tspan font-weight="700">6 跳</tspan>（专题二 §4 算过）</text>
-<text class="svgsm" x="580" y="456" fill="#5f6368" style="font-size:11.0px">⛔ 16 跳听着很多 ——&#160;<tspan font-weight="700">但要先问一句：谁会走这条路？</tspan></text>
+<text class="svgsm" x="580" y="456" fill="#5f6368" style="font-size:11.0px">⭐ 走不走这条路，<tspan font-weight="700">取决于你切不切模型</tspan>——&#160;不切就几乎不走，一切开就一大堆 all-gather</text>
 <rect x="0" y="550" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="550" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="550" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
 <rect x="2" y="550" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="574" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 答案是：跑扩散的时候，几乎没人走</tspan></text>
-<text class="svgsm" x="20" y="598" fill="#0d652d" style="font-size:12.0px">X-6 已经说清了：<tspan font-weight="700">这一族模型一颗就装得下</tspan>。于是多卡的用法是<tspan font-weight="700">各生成各的</tspan> ——&#160;八颗卡同时出八张图，<tspan font-weight="700">卡与卡之间几乎不用说话</tspan>。</text>
-<text class="svgsm" x="20" y="619" fill="#0d652d" style="font-size:12.0px">⭐ 通信量接近零的时候，<tspan font-weight="700">跳数是多少就不重要了</tspan>。省下来的那两个 ICI 口、那一个维度，换成了别的地方的面积和成本。</text>
-<text class="svgsm" x="20" y="640" fill="#0d652d" style="font-size:12.0px">⛔ 反过来这条也成立：要是一个模型必须摊在几百颗上、每一层都要 all-reduce，<tspan font-weight="700">16 跳就是实打实的成本</tspan> ——&#160;<tspan font-weight="700">那种活本来就该去找 v7 的三维环面。</tspan></text>
-<text class="svgsm" x="0" y="673" fill="#80868b" style="font-size:11.0px">📌 ICI 端口 4 个、双向 800 GBps／chip、2D torus、Pod 256 chip、支持的 2D 切片形状最大到 16x16 ——&#160;官方 v6e 规格表</text>
-<text class="svgsm" x="0" y="690" fill="#80868b" style="font-size:11.0px">　　「最远 16 跳」是本图当场推的：N×N 环面每维最多 ⌊N/2⌋ 跳，16÷2 ＝ 8，两维相加 16。v7 的 4×4×4 同法得 2+2+2 ＝ 6。⚠️ 这是<tspan font-weight="700">拓扑距离</tspan>，不是延迟实测。</text>
+<text class="svglbl" x="20" y="574" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⛔ 这里我原来写过头了 ——&#160;「几乎没人走这条路」是不对的</tspan></text>
+<text class="svgsm" x="20" y="598" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">第一版这一段我写的是：模型一颗装得下，多卡各生成各的，卡与卡之间几乎不用说话。</tspan>——&#160;那只说对了<tspan font-weight="700">其中一种用法</tspan>。</text>
+<text class="svgsm" x="20" y="619" fill="#b06000" style="font-size:12.0px">⭐ 现场原话点破了：「<tspan font-weight="700">扩散模型只要是跨卡通信的话，也是有不少 all-gather 的</tspan>」。确实如此 ——&#160;X-6 里 Wan2.2 那种超线的就得切开；长视频要切序列；想缩短单张的出图时间也得切。<tspan font-weight="700">一切开，集合通信就来了。</tspan></text>
+<text class="svgsm" x="20" y="640" fill="#b06000" style="font-size:12.0px">⚠️ <tspan font-weight="700">「装得下」只是说它<u>可以</u>不切，不是说它<u>不会</u>被切。</tspan>——&#160;把「一种常见用法」讲成「唯一用法」，是这一类错误的通用形状。</text>
+<rect x="0" y="669" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="669" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="669" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="693" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 所以 16 跳这件事，正确的读法是这样</tspan></text>
+<text class="svgsm" x="20" y="717" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">纯数据并行时</tspan>（一颗一张图，各生成各的）：通信接近零，<tspan font-weight="700">跳数确实无所谓</tspan>。</text>
+<text class="svgsm" x="20" y="738" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">一旦切开</tspan>（模型放不下、或要切序列 / 切张量）：all-gather 与 reduce-scatter 一大堆，<tspan font-weight="700">拓扑就开始要钱了</tspan> ——&#160;而这正是 SparseCore 那第 ② 个职责（把通信卸下来）存在的理由，见图 X-7。</text>
+<text class="svgsm" x="20" y="759" fill="#0d652d" style="font-size:12.0px">⭐⭐ 所以这一张真正的落点不是「16 跳没关系」，是：<tspan font-weight="700">v6e 把互联做到「够扩散这一族用」的档位，而不是「够一个模型摊在几千颗上」的档位</tspan>。——&#160;<tspan font-weight="700">够用，不是不用。</tspan></text>
+<text class="svgsm" x="0" y="792" fill="#80868b" style="font-size:11.0px">📌 ICI 端口 4 个、双向 800 GBps／chip、2D torus、Pod 256 chip、支持的 2D 切片形状最大到 16x16 ——&#160;官方 v6e 规格表</text>
+<text class="svgsm" x="0" y="809" fill="#80868b" style="font-size:11.0px">　　「最远 16 跳」是本图当场推的：N×N 环面每维最多 ⌊N/2⌋ 跳，16÷2 ＝ 8，两维相加 16。v7 的 4×4×4 同法得 2+2+2 ＝ 6。⚠️ 这是<tspan font-weight="700">拓扑距离</tspan>，不是延迟实测。</text>
 </svg>
-<figcaption><b>图 X-8</b>　4 个 ICI 口连上下左右，边缘绕回成二维环面，16×16 ＝ 256 颗，<b>最远 16 跳</b>（对照 v7 的 4×4×4 是 6 跳）。<em>16 跳听着多 —— 但跑扩散的时候几乎没人走这条路。</em></figcaption></figure>
+<figcaption><b>图 X-8</b>　4 个 ICI 口连上下左右，边缘绕回成二维环面，16×16 ＝ 256 颗，<b>最远 16 跳</b>（对照 v7 的 4×4×4 是 6 跳）。<em>走不走这条路取决于你切不切模型 —— 不切几乎不走，一切开就一大堆 all-gather。<b>v6e 的互联是「够扩散这一族用」的档位，不是「不用」。</b></em></figcaption></figure>
 
   <div class="note ok"><span class="t">⭐ 两颗芯片各自都是自洽的</span>
     H100 摊成很多小单元、再压一层硬件缓存，是为了应付<b>「我不知道你要跑什么」</b>；
