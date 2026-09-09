@@ -178,10 +178,8 @@ def main():
                 '（5.46 秒 对 5.28 秒），而预热长了 15 倍。模型太小，通信开销盖过了收益。',
                 '② <tspan font-weight="700">Wan2.1 的 28 GB 按体积猜「贴边能塞进一颗」</tspan>——&#160;'
                 '而实测从来没人这么跑：它是在 <tspan font-weight="700">v6e-8 上 dp=1、tp=8 摊开</tspan>跑的。',
-                '⭐⭐ 两条合起来是同一句话：'
-                '<tspan font-weight="700">「装得下」和「该用几颗」是两个不同的问题。</tspan>'
-                '前者看体积就能答，<tspan font-weight="700">后者只能实测</tspan>——&#160;'
-                '而我们十个模型每一个都测过。'])
+                '⭐⭐ <tspan font-weight="700">「装得下」和「该用几颗」是两个不同的问题</tspan>——&#160;'
+                '前者看体积就能答，后者只能实测。'])
 
     y = f.band(y + 14, "bad",
                "⛔⛔ 所以「28 GB &lt; 32 GB 所以能跑」这句话是错的 ——&#160;两处都错",
@@ -197,14 +195,12 @@ def main():
                 '<tspan font-weight="700">权重决定装不装得进，激活决定跑不跑得动。</tspan>'])
 
     y = f.band(y + 14, "ok",
-               "实测下来的分布：小的单颗，主力清一色 8 卡",
-               ['<tspan font-weight="700">单颗</tspan>：S3Diff、SDXL（延迟最优）、Real-ESRGAN（8.8 M，纯卷积）。',
-                '<tspan font-weight="700">8 卡</tspan>：HunyuanVideo-1.5、Wan2.1、CogVideoX 在 v6e-8；'
-                'Flux.2 在 v4-8；Wan2.2 I2V 在 v5p-8 ——&#160;'
-                '<tspan font-weight="700">一台主机的量级就够，没有一个需要跨主机。</tspan>',
-                '⭐ 这正好解释了 X-2 里那三条看着像减配的规格'
-                '（4 个 ICI 口、二维环面、Pod 只有 256 颗）：'
-                '<tspan font-weight="700">v6e 不打「一个模型摊在几千颗上」那场仗 ——&#160;不打，就不用付那个成本。</tspan>'])
+               "实测分布：小的单颗，主力清一色 8 卡 ——&#160;没有一个需要跨主机",
+               ['<tspan font-weight="700">单颗</tspan>：S3Diff · SDXL（延迟最优）· Real-ESRGAN　'
+                '<tspan font-weight="700">8 卡</tspan>：HunyuanVideo-1.5 / Wan2.1 / CogVideoX '
+                '在 v6e-8 · Flux.2 在 v4-8 · Wan2.2 I2V 在 v5p-8',
+                '⭐ 这正好解释 X-2 里那三条看着像减配的规格（4 个 ICI 口、二维环面、Pod 只有 256）：'
+                '<tspan font-weight="700">v6e 不打「一个模型摊在几千颗上」那场仗，不打就不用付那个成本。</tspan>'])
 
     y = f.src(y + 18,
               '⭐ 右列「实测配置」全部取自各模型 README 的测试环境段：SDXL v6e-1/4/8 · '

@@ -126,6 +126,19 @@ header.hero::before,
 header.hero::after { display: none }
 header.hero > *    { position: relative; z-index: 2 }
 figure.fbox { margin-top: 26px; margin-bottom: 26px }
+/* ⭐⭐ 图按**原生宽 1400 封顶**，不再随视口放大。
+   ⛔ 2026-09-09 实测：1900px 视口下每张图都被拉到 1.22 倍 ——&nbsp;
+     后果有两层，第二层才是要命的：
+       ① 页面白白长了两千多像素；
+       ② **图里的字跟着放大 22%**，于是「图上字太多」这个观感有一半
+          其实是「图上的字被放大了」——&nbsp;而版面 lint 查的是「字号有没有
+          越过正文」，1.22 倍刚好没越过，所以它一直没报。
+   ⭐ 判据：**SVG 是按某个宽度设计的，就别让它超过那个宽度** ——&nbsp;
+     放大不会增加信息，只会让密度看起来更高。
+   ⚠️ 只作用在 svg 上，**不碰 figure 自身的 margin** ——&nbsp;
+     那个 margin 简写坑（会压掉 .fwide 的 margin-left:50%）见上面那段。 */
+figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
+                    display: block }
 </style>
 """
 

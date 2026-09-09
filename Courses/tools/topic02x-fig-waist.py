@@ -202,15 +202,12 @@ def main():
 
     y = f.band(y + 14, "ok",
                "⭐⭐ 三阶段那份例子的真正用途：它是一个「把切口露出来」的装置",
-               ['<tspan font-weight="700">教学上</tspan>：想让人看懂「一个扩散模型是怎么被拆开的」，'
-                '光讲结构没用 ——&#160;<tspan font-weight="700">'
-                '让他去 stage_outputs/ 把那两个文件打开看一眼，一次就懂了。</tspan>',
-                '<tspan font-weight="700">调试上</tspan>：视频全黑、出 NaN、动作快进 ——&#160;'
-                '这些问题<tspan font-weight="700">在一体化脚本里无从下手</tspan>，'
-                '而三阶段能逐段定位：是 latent 就错了，还是 VAE 那步的事？',
-                '<tspan font-weight="700">部署上</tspan>：既然三段只认文件不认进程，'
-                '<tspan font-weight="700">它们就能跑在三台机器上</tspan> ——&#160;'
-                '下一张讲三段各该放哪台。'])
+               ['<tspan font-weight="700">教学上</tspan>：让人去 stage_outputs/ 把那两个文件打开看一眼，'
+                '比讲十分钟结构管用。　'
+                '<tspan font-weight="700">调试上</tspan>：全黑 / NaN / 动作快进这些问题，'
+                '<tspan font-weight="700">在一体化脚本里无从下手</tspan>，三阶段能逐段定位。',
+                '<tspan font-weight="700">部署上</tspan>：既然只认文件不认进程，'
+                '<tspan font-weight="700">三段就能跑在三台机器上</tspan> ——&#160;下一张讲各放哪台。'])
 
     y = f.band(y + 14, "warn",
                "⛔ 这张图推翻重写过一次 ——&#160;那个错值得讲给学员听",

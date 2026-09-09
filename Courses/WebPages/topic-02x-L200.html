@@ -695,6 +695,19 @@ header.hero::before,
 header.hero::after { display: none }
 header.hero > *    { position: relative; z-index: 2 }
 figure.fbox { margin-top: 26px; margin-bottom: 26px }
+/* ⭐⭐ 图按**原生宽 1400 封顶**，不再随视口放大。
+   ⛔ 2026-09-09 实测：1900px 视口下每张图都被拉到 1.22 倍 ——&nbsp;
+     后果有两层，第二层才是要命的：
+       ① 页面白白长了两千多像素；
+       ② **图里的字跟着放大 22%**，于是「图上字太多」这个观感有一半
+          其实是「图上的字被放大了」——&nbsp;而版面 lint 查的是「字号有没有
+          越过正文」，1.22 倍刚好没越过，所以它一直没报。
+   ⭐ 判据：**SVG 是按某个宽度设计的，就别让它超过那个宽度** ——&nbsp;
+     放大不会增加信息，只会让密度看起来更高。
+   ⚠️ 只作用在 svg 上，**不碰 figure 自身的 margin** ——&nbsp;
+     那个 margin 简写坑（会压掉 .fwide 的 margin-left:50%）见上面那段。 */
+figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
+                    display: block }
 </style>
 
 <main class="wrap">
@@ -1301,7 +1314,7 @@ figure.fbox { margin-top: 26px; margin-bottom: 26px }
 
   <h3>二点三　一颗装得下吗 —— 那三条「减配」其实是配套的</h3>
   <p>X-2 右栏有三条规格看着像减配：<b>只有 4 个 ICI 口、二维环面、一个 Pod 只有 256 颗</b>（对照 v7 是 6 口、三维、9,216 颗）。<b>把模型的体积摆出来，这三条立刻说得通。</b></p>
-<figure class="fbox fwide" id="figx-6"><svg viewBox="0 0 1400 1231" width="100%" role="img" aria-label="把扩散模型和大语言模型的 bf16 权重体积摆在同一根对数轴上，并画出一颗 v6e 的 32 GB 这条线：扩散这一族从 7 GB 到 54 GB，在一颗到两颗的量级；而 LLM 是 794 GB 和 1342 GB，要几十颗"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="figx-6"><svg viewBox="0 0 1400 1210" width="100%" role="img" aria-label="把扩散模型和大语言模型的 bf16 权重体积摆在同一根对数轴上，并画出一颗 v6e 的 32 GB 这条线：扩散这一族从 7 GB 到 54 GB，在一颗到两颗的量级；而 LLM 是 794 GB 和 1342 GB，要几十颗"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">装得下吗 ——&#160;<tspan font-weight="700">要算的是权重 ＋ 峰值激活，而扩散是激活说了算</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⛔ 下面那根轴<tspan font-weight="700">只画权重</tspan>——&#160;而扩散模型真正吃显存的是<tspan font-weight="700">运行时的激活</tspan>，它比权重大、而且随分辨率和帧数涨。<tspan font-weight="700">图下半部分是我们自己撞 OOM 时的实测账。</tspan></text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
@@ -1417,7 +1430,7 @@ figure.fbox { margin-top: 26px; margin-bottom: 26px }
 <text class="svglbl" x="20" y="836" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 换成实测之后，立刻看出两处「按体积猜」会猜错的地方</tspan></text>
 <text class="svgsm" x="20" y="860" fill="#a50e0e" style="font-size:12.0px">① <tspan font-weight="700">S3Diff 只有 6.6 GB，按体积猜「一颗绰绰有余」——&#160;对，但那不是重点。</tspan>真正的发现是：<tspan font-weight="700">我们把它摊到 8 卡做张量并行，实测反而更慢</tspan>（5.46 秒 对 5.28 秒），而预热长了 15 倍。模型太小，通信开销盖过了收益。</text>
 <text class="svgsm" x="20" y="881" fill="#a50e0e" style="font-size:12.0px">② <tspan font-weight="700">Wan2.1 的 28 GB 按体积猜「贴边能塞进一颗」</tspan>——&#160;而实测从来没人这么跑：它是在 <tspan font-weight="700">v6e-8 上 dp=1、tp=8 摊开</tspan>跑的。</text>
-<text class="svgsm" x="20" y="902" fill="#a50e0e" style="font-size:12.0px">⭐⭐ 两条合起来是同一句话：<tspan font-weight="700">「装得下」和「该用几颗」是两个不同的问题。</tspan>前者看体积就能答，<tspan font-weight="700">后者只能实测</tspan>——&#160;而我们十个模型每一个都测过。</text>
+<text class="svgsm" x="20" y="902" fill="#a50e0e" style="font-size:12.0px">⭐⭐ <tspan font-weight="700">「装得下」和「该用几颗」是两个不同的问题</tspan>——&#160;前者看体积就能答，后者只能实测。</text>
 <rect x="0" y="931" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="931" width="4" height="105" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
 <rect x="2" y="931" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
@@ -1425,16 +1438,15 @@ figure.fbox { margin-top: 26px; margin-bottom: 26px }
 <text class="svgsm" x="20" y="979" fill="#a50e0e" style="font-size:12.0px">① <tspan font-weight="700">分母错了。</tspan>32 GB 是标称，不是预算 ——&#160;真跑起来权重和运行时先占掉一大块，那次 OOM 时 XLA 报的是<tspan font-weight="700">只剩 13.10 GB</tspan>。</text>
 <text class="svgsm" x="20" y="1000" fill="#a50e0e" style="font-size:12.0px">② <tspan font-weight="700">分子也错了。</tspan>要放进去的不只是权重，还有<tspan font-weight="700">峰值激活</tspan> ——&#160;而扩散这一族<tspan font-weight="700">激活比权重大</tspan>：CogVideoX-5B 权重 10 GB，它的 VAE 解码一步却要 19 GB。</text>
 <text class="svgsm" x="20" y="1021" fill="#a50e0e" style="font-size:12.0px">⭐⭐ 而且<tspan font-weight="700">激活随分辨率与帧数涨，权重一个字节不涨</tspan>——&#160;Wan2.1 的 480P 跑得动、720P OOM，用的是<tspan font-weight="700">同一份权重</tspan>。<tspan font-weight="700">权重决定装不装得进，激活决定跑不跑得动。</tspan></text>
-<rect x="0" y="1050" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1050" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="1050" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1074" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 实测下来的分布：小的单颗，主力清一色 8 卡</tspan></text>
-<text class="svgsm" x="20" y="1098" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">单颗</tspan>：S3Diff、SDXL（延迟最优）、Real-ESRGAN（8.8 M，纯卷积）。</text>
-<text class="svgsm" x="20" y="1119" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">8 卡</tspan>：HunyuanVideo-1.5、Wan2.1、CogVideoX 在 v6e-8；Flux.2 在 v4-8；Wan2.2 I2V 在 v5p-8 ——&#160;<tspan font-weight="700">一台主机的量级就够，没有一个需要跨主机。</tspan></text>
-<text class="svgsm" x="20" y="1140" fill="#0d652d" style="font-size:12.0px">⭐ 这正好解释了 X-2 里那三条看着像减配的规格（4 个 ICI 口、二维环面、Pod 只有 256 颗）：<tspan font-weight="700">v6e 不打「一个模型摊在几千颗上」那场仗 ——&#160;不打，就不用付那个成本。</tspan></text>
-<text class="svgsm" x="0" y="1173" fill="#80868b" style="font-size:11.0px">📌 ⭐ 右列「实测配置」全部取自各模型 README 的测试环境段：SDXL v6e-1/4/8 · HunyuanVideo-1.5 / Wan2.1 / CogVideoX 在 v6e-8 · Flux.2 在 v4-8 · Wan2.2 I2V 在 v5p-8 · S3Diff 与 Real-ESRGAN 单颗</text>
-<text class="svgsm" x="0" y="1190" fill="#80868b" style="font-size:11.0px">　　「8 卡反而更慢」出自 S3Diff README 的 Why Not Multi-Chip 段；权重体积按 bf16 每参数 2 字节换算，参数量出自各家官方模型卡</text>
-<text class="svgsm" x="0" y="1207" fill="#80868b" style="font-size:11.0px">　　⛔ 那根轴<tspan font-weight="700">只算权重</tspan>，不含激活与编译缓存 ——&#160;它能回答「装不装得下」，<tspan font-weight="700">回答不了「该用几颗」</tspan>。⚠️ FLUX.1 我们没有记录实测配置，图上如实留空。</text>
+<rect x="0" y="1050" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1050" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1050" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1074" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 实测分布：小的单颗，主力清一色 8 卡 ——&#160;没有一个需要跨主机</tspan></text>
+<text class="svgsm" x="20" y="1098" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">单颗</tspan>：S3Diff · SDXL（延迟最优）· Real-ESRGAN　<tspan font-weight="700">8 卡</tspan>：HunyuanVideo-1.5 / Wan2.1 / CogVideoX 在 v6e-8 · Flux.2 在 v4-8 · Wan2.2 I2V 在 v5p-8</text>
+<text class="svgsm" x="20" y="1119" fill="#0d652d" style="font-size:12.0px">⭐ 这正好解释 X-2 里那三条看着像减配的规格（4 个 ICI 口、二维环面、Pod 只有 256）：<tspan font-weight="700">v6e 不打「一个模型摊在几千颗上」那场仗，不打就不用付那个成本。</tspan></text>
+<text class="svgsm" x="0" y="1152" fill="#80868b" style="font-size:11.0px">📌 ⭐ 右列「实测配置」全部取自各模型 README 的测试环境段：SDXL v6e-1/4/8 · HunyuanVideo-1.5 / Wan2.1 / CogVideoX 在 v6e-8 · Flux.2 在 v4-8 · Wan2.2 I2V 在 v5p-8 · S3Diff 与 Real-ESRGAN 单颗</text>
+<text class="svgsm" x="0" y="1169" fill="#80868b" style="font-size:11.0px">　　「8 卡反而更慢」出自 S3Diff README 的 Why Not Multi-Chip 段；权重体积按 bf16 每参数 2 字节换算，参数量出自各家官方模型卡</text>
+<text class="svgsm" x="0" y="1186" fill="#80868b" style="font-size:11.0px">　　⛔ 那根轴<tspan font-weight="700">只算权重</tspan>，不含激活与编译缓存 ——&#160;它能回答「装不装得下」，<tspan font-weight="700">回答不了「该用几颗」</tspan>。⚠️ FLUX.1 我们没有记录实测配置，图上如实留空。</text>
 </svg>
 <figcaption><b>图 X-6</b>　上半权重体积 ＋ 实测配置，<b>下半是同一颗芯片上的真实预算</b>。<em>⛔ 右列原来写的是「1 颗 / ≥2 颗」——&#160;那是拿体积 ÷ 32 GB 推的。换成实测之后立刻看出两处会猜错的地方（见图下第一条落点带）。</em></figcaption></figure>
 
@@ -2435,7 +2447,7 @@ figure.fbox { margin-top: 26px; margin-bottom: 26px }
   <p>下面这张图把一次生成从头到尾的<b>数据体积</b>画在一根对数轴上。
     全部以 Wan2.1-T2V-14B、1280×720、81 帧为准。</p>
 
-<figure class="fbox fwide" id="figx-10"><svg viewBox="0 0 1400 1123" width="100%" role="img" aria-label="仓库里同一个模型有两份例子：一体化脚本一个进程跑完，三阶段版本拆成三个独立进程，中间用两个 safetensors 文件和一份 json 交接。图上给出这三个文件的真实字节数、张量形状与 dtype，以及验证一份 latent 是否正确的三步自检"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="figx-10"><svg viewBox="0 0 1400 1102" width="100%" role="img" aria-label="仓库里同一个模型有两份例子：一体化脚本一个进程跑完，三阶段版本拆成三个独立进程，中间用两个 safetensors 文件和一份 json 交接。图上给出这三个文件的真实字节数、张量形状与 dtype，以及验证一份 latent 是否正确的三步自检"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">仓库里为什么同一个模型有两份例子 ——&#160;<tspan font-weight="700">三阶段那份是拿来「看得见中间」的</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一体化跑得快，但你<tspan font-weight="700">看不见中间那份 latent 长什么样</tspan>。三阶段把切口露出来：两个 safetensors ＋ 一份 config ——&#160;<tspan font-weight="700">下面这些数全是直接解文件头得到的，不是算的。</tspan></text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
@@ -2516,23 +2528,22 @@ figure.fbox { margin-top: 26px; margin-bottom: 26px }
 <text class="svgsm" x="20" y="752" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">Wan2.1 的 latents：F32，[1,16,21,90,160]，19,353,872 B</tspan></text>
 <text class="svgsm" x="20" y="773" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">CogVideoX 的 latents：BF16，[1,16,21,90,160]，9,677,064 B</tspan></text>
 <text class="svgsm" x="20" y="794" fill="#a50e0e" style="font-size:12.0px">⭐ <tspan font-weight="700">形状一模一样，文件大小差一倍。</tspan>文件大小既不能证明 shape 对，也不能反推 dtype ——&#160;<tspan font-weight="700">只能读头。</tspan>这就是上面那三步为什么是三步，不是一步。</text>
-<rect x="0" y="823" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="823" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="823" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<rect x="0" y="823" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="823" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="823" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="20" y="847" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐⭐ 三阶段那份例子的真正用途：它是一个「把切口露出来」的装置</tspan></text>
-<text class="svgsm" x="20" y="871" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">教学上</tspan>：想让人看懂「一个扩散模型是怎么被拆开的」，光讲结构没用 ——&#160;<tspan font-weight="700">让他去 stage_outputs/ 把那两个文件打开看一眼，一次就懂了。</tspan></text>
-<text class="svgsm" x="20" y="892" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">调试上</tspan>：视频全黑、出 NaN、动作快进 ——&#160;这些问题<tspan font-weight="700">在一体化脚本里无从下手</tspan>，而三阶段能逐段定位：是 latent 就错了，还是 VAE 那步的事？</text>
-<text class="svgsm" x="20" y="913" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">部署上</tspan>：既然三段只认文件不认进程，<tspan font-weight="700">它们就能跑在三台机器上</tspan> ——&#160;下一张讲三段各该放哪台。</text>
-<rect x="0" y="942" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="942" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="942" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="966" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⛔ 这张图推翻重写过一次 ——&#160;那个错值得讲给学员听</tspan></text>
-<text class="svgsm" x="20" y="990" fill="#b06000" style="font-size:12.0px">初版画的是「数据体积对数轴」，最粗的一根柱子标着 <tspan font-weight="700">457 GB ——&#160;注意力分数矩阵</tspan>，旁边注了一句「从不落地」。</text>
-<text class="svgsm" x="20" y="1011" fill="#b06000" style="font-size:12.0px">⛔ 现场当场否掉：<tspan font-weight="700">那个矩阵从来没有被物化出来过</tspan>，Flash / Splash Attention 是<tspan font-weight="700">分块算的</tspan>，算完即弃，HBM 里根本不存在这么一块。</text>
-<text class="svgsm" x="20" y="1032" fill="#b06000" style="font-size:12.0px">⭐ 而「从不落地」那句注解<tspan font-weight="700">并不能救它</tspan>：把一个不存在的量画成「管子最粗处」，<tspan font-weight="700">整张图的比例尺就锚在了虚构上</tspan> ——&#160;读者记住的是柱子，不是柱子旁边那行小字。<tspan font-weight="700">注解抵消不了图形本身的断言。</tspan></text>
-<text class="svgsm" x="0" y="1065" fill="#80868b" style="font-size:11.0px">📌 三个文件的字节数、张量形状、dtype 与 metadata ——&#160;直接解 safetensors 文件头得到；文件在本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/ 下，可自行复核</text>
-<text class="svgsm" x="0" y="1082" fill="#80868b" style="font-size:11.0px">　　CogVideoX 那条对照取自它同名目录下的 stage2_latents.safetensors</text>
-<text class="svgsm" x="0" y="1099" fill="#80868b" style="font-size:11.0px">　　⚠️ 官方 wan_t2v_14B.py 写 text_len ＝ 512，而 diffusers 这条路实际存下来的文本 embedding 是 226 ——&#160;不影响 X-9 的结论（交叉注意力只占约 5% 算力），但「config 写的」与「实际跑的」在这里确实不是一个数。</text>
+<text class="svgsm" x="20" y="871" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">教学上</tspan>：让人去 stage_outputs/ 把那两个文件打开看一眼，比讲十分钟结构管用。　<tspan font-weight="700">调试上</tspan>：全黑 / NaN / 动作快进这些问题，<tspan font-weight="700">在一体化脚本里无从下手</tspan>，三阶段能逐段定位。</text>
+<text class="svgsm" x="20" y="892" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">部署上</tspan>：既然只认文件不认进程，<tspan font-weight="700">三段就能跑在三台机器上</tspan> ——&#160;下一张讲各放哪台。</text>
+<rect x="0" y="921" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="921" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="921" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="945" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⛔ 这张图推翻重写过一次 ——&#160;那个错值得讲给学员听</tspan></text>
+<text class="svgsm" x="20" y="969" fill="#b06000" style="font-size:12.0px">初版画的是「数据体积对数轴」，最粗的一根柱子标着 <tspan font-weight="700">457 GB ——&#160;注意力分数矩阵</tspan>，旁边注了一句「从不落地」。</text>
+<text class="svgsm" x="20" y="990" fill="#b06000" style="font-size:12.0px">⛔ 现场当场否掉：<tspan font-weight="700">那个矩阵从来没有被物化出来过</tspan>，Flash / Splash Attention 是<tspan font-weight="700">分块算的</tspan>，算完即弃，HBM 里根本不存在这么一块。</text>
+<text class="svgsm" x="20" y="1011" fill="#b06000" style="font-size:12.0px">⭐ 而「从不落地」那句注解<tspan font-weight="700">并不能救它</tspan>：把一个不存在的量画成「管子最粗处」，<tspan font-weight="700">整张图的比例尺就锚在了虚构上</tspan> ——&#160;读者记住的是柱子，不是柱子旁边那行小字。<tspan font-weight="700">注解抵消不了图形本身的断言。</tspan></text>
+<text class="svgsm" x="0" y="1044" fill="#80868b" style="font-size:11.0px">📌 三个文件的字节数、张量形状、dtype 与 metadata ——&#160;直接解 safetensors 文件头得到；文件在本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/ 下，可自行复核</text>
+<text class="svgsm" x="0" y="1061" fill="#80868b" style="font-size:11.0px">　　CogVideoX 那条对照取自它同名目录下的 stage2_latents.safetensors</text>
+<text class="svgsm" x="0" y="1078" fill="#80868b" style="font-size:11.0px">　　⚠️ 官方 wan_t2v_14B.py 写 text_len ＝ 512，而 diffusers 这条路实际存下来的文本 embedding 是 226 ——&#160;不影响 X-9 的结论（交叉注意力只占约 5% 算力），但「config 写的」与「实际跑的」在这里确实不是一个数。</text>
 </svg>
 <figcaption><b>图 X-10</b>　三阶段之间只交接三个文件。<em>⛔ 这张图推翻重写过一次：初版画过一根 457 GB 的「注意力分数矩阵」柱子，而<b>那个矩阵从来没有被物化过</b>（Flash / Splash 分块算，算完即弃）——把不存在的量画成「最粗处」，整张图的比例尺就锚在了虚构上。</em></figcaption></figure>
 
