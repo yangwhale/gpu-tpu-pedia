@@ -94,6 +94,23 @@ h4 { margin:18px 0 6px; font-size:15px }
    只剩 translateX(-50%) 生效 ——&nbsp;**整张宽图往左平移半个屏幕**。
    ⚠️ 这个坑 topic02-port-microscope.py 白纸黑字写过，L100 又原样踩了一遍。
    ⭐ 判据：**改 margin 一律写具体方向。** */
+/* ⛔⛔ `.hero` 这个类是从**专题一**继承下来的，它自带两层装饰性伪元素：
+     .hero:before  —— 一张「token 之旅」插图（opacity .5）
+     .hero:after   —— 一层白色蒙版，`linear-gradient(95deg, …94% → …12%)`
+   而专题一是把内容包在 `<div class="wrap">` 里的，靠 `.hero .wrap{z-index:2}` 浮在上面。
+   ⭐ 外传的 header 直接放 h1/p，**没有那层 .wrap**，于是拿不到 z-index ——
+     标题被压在两层装饰底下，被那层蒙版糊掉。
+   ⛔ 而且蒙版是 95deg 的：左侧 94% 不透明、右侧只剩 12% ——&nbsp;
+     **所以症状是「左半边特别糊、右半边还能看」**，一眼看去像配色问题，其实是层级问题。
+   ⭐ 判据：**看到「同一行字左右清晰度不一样」，先去找方向性渐变，别去调颜色。**
+     纯粹的对比度问题不会只糊一半。
+
+   修法：这一页本来就不需要那张插图（它画的是专题一的 token 之旅，
+   跟「两颗芯片」毫无关系，而且那几个彩点正好横穿标题）。
+   两层一起关掉，只留下 .hero 本身那道蓝到白的底色；再给直接子元素兜一层 z-index。 */
+header.hero::before,
+header.hero::after { display: none }
+header.hero > *    { position: relative; z-index: 2 }
 figure.fbox { margin-top: 26px; margin-bottom: 26px }
 </style>
 """
@@ -953,6 +970,14 @@ assert not bad, "公开页面里出现内部词，已中止写盘：%s" % bad
 
 # ⛔ 图数断言 ——&nbsp;每加一节要顺手改这个数。
 #   它的作用不是防少图，是防**图悄悄多出来**（复制粘贴节的时候最容易）。
+# ⛔ 防回归：只要页面用了 class="hero"，就必须带上中和它两层装饰的那段 CSS，
+#   否则标题会被那层 95deg 白蒙版糊掉（左侧 94% 不透明）。这个坑不报错、只是变糊。
+if 'class="hero"' in html:
+    assert "header.hero::after { display: none }" in html or \
+           "header.hero::after { display:none }" in html or \
+           "header.hero::before,\nheader.hero::after { display: none }" in html, \
+        "用了 .hero 却没中和它的装饰伪元素 —— 标题会被白蒙版糊掉"
+
 n_fig = html.count('<figure class="fbox fwide"')
 EXPECT_FIG = 13
 assert n_fig == EXPECT_FIG, "图数不对：%d（应为 %d）" % (n_fig, EXPECT_FIG)
