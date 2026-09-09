@@ -1,242 +1,239 @@
 # -*- coding: utf-8 -*-
-r"""外传 图 X-10 · **又胖又瘦** ——&nbsp;三阶段流水线上，数据体积一路是怎么变的。
+r"""外传 图 X-10 · **仓库里为什么同一个模型有两份例子** ——&nbsp;以及怎么用好三阶段那份。
 
 ════════════════════════════════════════════════════════════════════
-⭐ 这张图回答的问题
+⛔⛔ 这张图推翻重写过一次，原因值得原样留着
 ════════════════════════════════════════════════════════════════════
-「三段拆开跑，跨机到底要传多少东西？」
+初版画的是「一次生成的数据体积摊在对数轴上」，其中最粗的一根柱子标着
+**457 GB —— 注意力分数矩阵**，旁边注一句「从不落地」。
 
-答案出人意料地小：**19.4 MB**。而同一条链路上，DiT 内部随手一个激活张量
-就是 774 MB，注意力分数矩阵要是显式展开更是 457 GB。
+现场当场否掉：
 
-⭐⭐ 这就是**「腰」**的意思 ——&nbsp;
-   一条又胖又瘦的管道，最细的那一处恰好就是**该切开的那一处**。
+    「中间那个注意力矩阵**从来就没有被物化出来过**，
+      都是用的 Flash Attention 或者 Sparse Attention 分块计算的，
+      所以不可以这么弄。」
 
-════════════════════════════════════════════════════════════════════
-📌 每个数是怎么来的（全部以 Wan2.1-T2V-14B / 1280×720 / 81 帧为准）
-════════════════════════════════════════════════════════════════════
-⭐ 其中两个是**实测文件大小**，不是算出来的 ——&nbsp;
-  它们躺在本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/ 里：
-
-  · stage1_embeddings.safetensors  = 7,406,544 B  ≈ 7.4 MB
-  · stage2_latents.safetensors     = 19,353,872 B ≈ 19.4 MB
-  · output_video.mp4               =   776,380 B  ≈ 0.76 MB
-
-⭐⭐ 那个 latent 文件还顺手**验证了形状**：
-   16 × 21 × 90 × 160 × 4 B(fp32) = 19,353,600 B，
-   加 safetensors 头 272 B **正好等于 19,353,872** ——&nbsp;
-   一个字节不差。**这比任何推导都硬。**
-   ⚠️ 顺带说明它存的是 fp32；换 bf16 只要 9.7 MB。
-
-算出来的三个（推导链写在这里，图上也标了）：
-  · DiT 单个激活：75,600 token × 5,120 维 × 2 B = 774 MB
-  · 注意力分数若显式展开：75,600² × 40 头 × 2 B = **457 GB**
-    ⛔ 所以它**从不落地** ——&nbsp;Splash Attention 分块算，算完即弃
-  · VAE 展开后的像素张量：81 × 720 × 1280 × 3 × 2 B = 448 MB
-
-压缩比 = 223,948,800 个像素数 ÷ 4,838,400 个 latent 数 = **46.3 倍**
-  （空间 8×8 = 64 倍，时间 81→21 = 3.86 倍，通道 3→16 反向摊薄 5.33 倍）
+⭐ 他是对的，而且我那句「从不落地」的注解**并不能救它**：
+  一旦把一个从不存在的量画成「管子最粗的地方」，
+  **整张图的比例尺就建立在一个虚构的锚点上** ——&nbsp;
+  读者记住的是那根柱子，不是柱子旁边那行小字。
+  ⛔ **注解抵消不了图形本身的断言。** 图上画了，就是说它存在。
 
 ════════════════════════════════════════════════════════════════════
-⛔ 这张图不说什么
+⭐⭐ 重写后这张图要回答的，是现场真正想讲的那件事
 ════════════════════════════════════════════════════════════════════
-它画的是**数据体积**，不是**时间**。腰细不等于那一段快 ——&nbsp;
-恰恰相反，产出这个 19.4 MB 的 Stage 2 占了全程九成以上的时间。
-时间的那张图是 X-11。
+    「这个部分要表达的是我们 GitHub repository 里的例子，
+      为什么要分单体端到端跑通的、和分三个阶段的。
+      那三个阶段是为了展示怎么把一个模型拆开、
+      怎么在中间的 latent space 传递数据，
+      以及**这份 latent 的格式、维度、shape 怎么去验证**。
+      就是怎么用好 GitHub 里边的例子。」
+
+→ 所以这一张不再讲「体积有多大」，改讲**切口上到底交接了什么、怎么核对它**。
+
+════════════════════════════════════════════════════════════════════
+📌 图上每个数的出处：直接解 safetensors 文件头，不是算的
+════════════════════════════════════════════════════════════════════
+文件就在 `tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/`：
+
+  · stage1_embeddings.safetensors　7,406,544 B　头 976 B
+      prompt_embeds / negative_prompt_embeds　各 **F32 [1, 226, 4096]**
+      ⭐ metadata 里 `dtype_info = {"prompt_embeds": "bfloat16", ...}`
+        ——&nbsp;**盘上是 F32，原始是 bf16**（保存时转的，加载时按这条恢复）
+  · stage2_latents.safetensors　19,353,872 B　头 272 B
+      latents　**F32 [1, 16, 21, 90, 160]**
+  · generation_config.json　817 B　——&nbsp;分辨率 / 帧数 / 步数 / seed / model_id
+
+⭐⭐ 最值钱的一个对照（同一个 shape，两种 dtype）：
+    Wan2.1     latents  F32   [1,16,21,90,160]  → 19,353,872 B
+    CogVideoX  latents  BF16  [1,16,21,90,160]  →  9,677,064 B
+  **文件大小差一倍，形状一模一样** ——&nbsp;所以**不能靠文件大小反推 dtype**，
+  只能读头。这条正是「怎么验证」那一栏存在的理由。
+
+⚠️ 顺带记一个**口径不一致**，本图不展开但不要忘：
+  官方 `wan_t2v_14B.py` 写 `text_len = 512`，而 diffusers 这条路实际存下来的
+  文本 embedding 是 **226**。交叉注意力只占总算力约 5%，不影响 X-9 的结论，
+  但「config 写的」和「实际跑的」在这里确实不是一个数。
 """
-import math
+import re
 
 from topic03_draw import (Fig, wpx, _sz, LINE, LINE2,
                           BL, OR, GR, RD, GY, GY2, PU, CY, INK)
 
 W = 1400
 
-# (标签, 副标, 字节数, 类别, 是不是落盘点)
-#   类别 col：blue = 在算的中间态；green = 落盘的产物；red = 从不落地
-PTS = (
-    ("文本 prompt",      "约 230 个字符",              230,          "in",   False),
-    ("① 文本 embedding", "实测文件 7,406,544 B",       7406544,      "disk", True),
-    ("DiT 单个激活",     "75,600 × 5,120 × 2 B",       774144000,    "hot",  False),
-    ("注意力分数矩阵",   "75,600² × 40 头 × 2 B",      457200000000, "never", False),
-    ("② latent",         "实测文件 19,353,872 B",      19353872,     "disk", True),
-    ("VAE 展开的像素",   "81×720×1280×3 × 2 B",        448000000,    "hot",  False),
-    ("③ 成片 mp4",       "实测文件 776,380 B",         776380,       "disk", True),
+
+def wrap(sfull, w, size=11.5):
+    """按像素宽折行，⛔ 不切断英文 / 数字串（会断出「CogVideo / X」那种）。"""
+    units = re.findall(r"[A-Za-z0-9_.,\[\]()+\-/×＝]+|\s+|.", sfull)
+    out, cur = [], ""
+    for u in units:
+        if wpx(re.sub(r"<[^>]+>", "", cur + u), size) > w and cur:
+            out.append(cur.rstrip())
+            cur = u.lstrip()
+        else:
+            cur += u
+    if cur.strip():
+        out.append(cur.rstrip())
+    return out
+
+
+# 切口上真正落盘的三样东西（全部读自文件头）
+ARTS = (
+    ("stage1_embeddings.safetensors", "7,406,544 B", GR, "#0d652d",
+     ("prompt_embeds　　F32 [1, 226, 4096]",
+      "negative_prompt_embeds　F32 [1, 226, 4096]",
+      "⭐ metadata 的 dtype_info 记着：原始是 bfloat16")),
+    ("stage2_latents.safetensors", "19,353,872 B", BL, "#174ea6",
+     ("latents　F32 [1, 16, 21, 90, 160]",
+      "＝ 批 1 · 通道 16 · 帧 21 · 高 90 · 宽 160",
+      "⭐ 跨机时唯一要搬的就是这一份")),
+    ("generation_config.json", "817 B", PU, "#681da8",
+     ("height 720 · width 1280 · num_frames 81",
+      "steps 50 · guidance 5.0 · seed 2025 · model_id",
+      "⭐ 没有它，前两个文件无法自解释")),
 )
-
-COL = {"in": GY2, "disk": GR, "hot": BL, "never": RD}
-FILL = {"in": "#f1f3f4", "disk": "#e6f4ea", "hot": "#e8f0fe", "never": "#fce8e6"}
-DARK = {"in": GY, "disk": "#0d652d", "hot": "#174ea6", "never": "#a50e0e"}
-
-
-def _mult(r):
-    """倍数标签：大数取整，小数留一位 ——&nbsp;「× 590」比「× 590.4」好读。"""
-    return "%.0f" % r if r >= 10 else "%.1f" % r
-
-
-def human(b):
-    """⛔ 十进制，不是 1024 进制 ——&nbsp;见文件头「单位口径」那一段。"""
-    for lim, div, unit, fmt in ((1e3, 1, "B", "%.0f"),
-                                (1e6, 1e3, "KB", "%.0f"),
-                                (1e9, 1e6, "MB", "%.3g"),
-                                (1e12, 1e9, "GB", "%.0f"),
-                                (1e99, 1e12, "TB", "%.0f")):
-        if b < lim:
-            return (fmt + " %s") % (b / div, unit)
 
 
 def main():
-    f = Fig(W, "三阶段流水线上数据体积的变化：文本 embedding 7.4 MB，"
-               "DiT 内部单个激活 774 MB，注意力分数若展开 457 GB，"
-               "而两段之间真正落盘、真正跨机传的 latent 只有 19.4 MB，"
-               "最后成片 0.76 MB。管道又胖又瘦，最细的腰正好是该切开的地方")
+    f = Fig(W, "仓库里同一个模型有两份例子：一体化脚本一个进程跑完，"
+               "三阶段版本拆成三个独立进程，中间用两个 safetensors 文件和一份 json 交接。"
+               "图上给出这三个文件的真实字节数、张量形状与 dtype，"
+               "以及验证一份 latent 是否正确的三步自检")
     f.marks = set()
     y = f.header(
-        '又胖又瘦 ——&#160;'
-        '<tspan font-weight="700">跨机只传 19.4 MB，而管子里最粗处是 457 GB</tspan>',
-        '⭐ 纵轴是<tspan font-weight="700">对数刻度</tspan>的数据体积。'
-        '三个绿色的点是真正落盘的产物（本仓库里就有这三个文件，大小逐字节可核）；'
-        '蓝色是算的时候在 HBM 里的中间态；红色那根<tspan font-weight="700">从不落地</tspan>。',
-        [(GR, "落盘 · 可跨机"), (BL, "HBM 里的中间态"), (RD, "从不落地（分块算）")])
+        '仓库里为什么同一个模型有两份例子 ——&#160;'
+        '<tspan font-weight="700">三阶段那份是拿来「看得见中间」的</tspan>',
+        '⭐ 一体化跑得快，但你<tspan font-weight="700">看不见中间那份 latent 长什么样</tspan>。'
+        '三阶段把切口露出来：两个 safetensors ＋ 一份 config ——&#160;'
+        '<tspan font-weight="700">下面这些数全是直接解文件头得到的，不是算的。</tspan>',
+        [(GY2, "一体化：一个进程"), (BL, "三阶段：三个进程 ＋ 落盘交接"),
+         (GR, "可逐字节核对")])
 
-    # ══════════════════ 上半：对数柱 ＋ 沙漏轮廓 ══════════════════
-    AX0, AX1 = 96, W - 40
-    TOP = y + 30                      # 柱顶
-    BASE = TOP + 268                  # 柱底基线
-    LO, HI = 1e2, 1e12                # 对数轴范围
+    # ══════════════════ 上：两份例子并排 ══════════════════
+    top = y + 6
+    LW = 330
+    RW = W - LW - 26
+    RX = LW + 26
+    # ⛔ 高度算出来：标题栏 30 ＋ 上边距 22 ＋ 三张卡 3×92 ＋ 结论行 26 ＋ 下沿 14
+    PH = 30 + 22 + 3 * 92 + 26 + 14
 
-    def hpx(b):
-        return (BASE - TOP) * (math.log10(b) - math.log10(LO)) / \
-            (math.log10(HI) - math.log10(LO))
+    ly = f.panel(0, top, LW, PH, "① 一体化", GY2,
+                 sub="generate_torchax.py", tag="出片 / benchmark")
+    f.box(16, ly + 22, LW - 32, PH - 108, "#fafbfc", LINE2, 8, 1, dash="4 4")
+    f.lines(32, ly + 48, LW - 64, [
+        "一个进程，从 prompt 直接到成片。",
+        "",
+        "<tspan font-weight=\"700\">看不见中间态</tspan>：文本 embedding、",
+        "latent 全在内存里，跑完就没了。",
+        "",
+        "⭐ 它的用处是<tspan font-weight=\"700\">快</tspan> ——&#160;验证一次",
+        "改动、量一次端到端，用这个。",
+        "",
+        "⛔ 但一出问题（视频全黑、出 NaN），",
+        "<tspan font-weight=\"700\">你没有任何中间产物可看</tspan>。",
+    ], size=11.5, lh=19, fill=GY)
+    f.t(32, ly + PH - 62, "⛔ 调试时它帮不上忙", "#a50e0e", bold=True, size=_sz(12))
 
-    # ⛔ 背景层先画 ——&nbsp;X-1 那次把参考线画在最后，压掉了三个点。
-    for g in (1e3, 1e6, 1e9, 1e12):
-        gy = BASE - hpx(g)
-        f.line(AX0 - 46, gy, AX1, gy, LINE2, 1, dash="3 5", arrow=False)
-        f.t(AX0 - 52, gy + 4, human(g).replace(".0", ""), GY2,
-            size=_sz(11), anchor="end")
-    f.line(AX0 - 46, BASE, AX1, BASE, LINE, 1.2, arrow=False)
+    ry = f.panel(RX, top, RW, PH, "② 三阶段 ——&#160;切口露在外面", BL,
+                 sub="generate_diffusers_torchax_staged/", tag="调试 / 部署 / 教学")
+    for k, (nm, size_, col, dark, rows) in enumerate(ARTS):
+        yy = ry + 22 + k * 92
+        f.box(RX + 16, yy, RW - 32, 80, "#fff", col, 6, 1.5)
+        f.box(RX + 16, yy, 4, 80, col, col, 2)
+        f.t(RX + 34, yy + 22, "stage%d ⏷　%s" % (k + 1, nm), dark,
+            bold=True, size=_sz(12.5))
+        f.t(RX + RW - 30, yy + 22, size_, dark, bold=True,
+            size=_sz(12.5), anchor="end")
+        f.lines(RX + 34, yy + 42, RW - 70, list(rows),
+                size=11.5, lh=17, fill=GY)
+    f.t(RX + 16, ry + PH - 62,
+        "⭐ <tspan font-weight=\"700\">三段之间只认这三个文件、不认进程</tspan>"
+        "——&#160;所以它们天然可以跑在三台机器上",
+        "#174ea6", size=_sz(12), w=RW - 32)
 
-    n = len(PTS)
-    SLOT = (AX1 - AX0) / float(n)
-    BW = 74.0
+    y = top + PH + 24
 
-    def cx(i):
-        return AX0 + SLOT * i + SLOT / 2.0
-
-    # ── 沙漏轮廓：把七个柱顶连成一条带 ─────────────────────────
-    #   ⭐ 这条带才是这张图真正要讲的东西 ——&nbsp;柱子只是刻度，
-    #     「一会儿粗一会儿细」这个形状要一眼能看出来。
-    mid = BASE - 130
-    up, dn = [], []
-    for i, (_, _, b, _, _) in enumerate(PTS):
-        half = hpx(b) / 2.0
-        up.append((cx(i), mid - half))
-        dn.append((cx(i), mid + half))
-    d = "M %.1f %.1f " % up[0]
-    d += " ".join("L %.1f %.1f" % p for p in up[1:])
-    d += " " + " ".join("L %.1f %.1f" % p for p in reversed(dn))
-    d += " Z"
-    f.poly(d, fill="#f1f3f4", stroke=LINE, sw=1)
-
-    # ── 七根柱 ────────────────────────────────────────────────
-    for i, (lab, sub, b, kind, disk) in enumerate(PTS):
-        x = cx(i) - BW / 2.0
-        h = hpx(b)
-        f.box(x, BASE - h, BW, h, FILL[kind], COL[kind], 4,
-              1.6 if kind != "never" else 1.2,
-              dash="4 3" if kind == "never" else None)
-        # 数值贴柱顶
-        f.t(cx(i), BASE - h - 10, human(b), DARK[kind], bold=True,
-            size=_sz(12.5), anchor="middle")
-        # 标签在基线下
-        f.t(cx(i), BASE + 20, lab, DARK[kind] if disk else GY,
-            bold=disk, size=_sz(12), anchor="middle")
-        f.t(cx(i), BASE + 37, sub, GY2, size=_sz(11), anchor="middle")
-        if disk:
-            f.t(cx(i), BASE + 55, "落盘 ⏷", "#0d652d", bold=True,
-                size=_sz(11), anchor="middle")
-
-    # ── 柱间倍数：把对数轴吃掉的落差用文字补回来 ──────────────
-    for i in range(n - 1):
-        b0, b1 = PTS[i][2], PTS[i + 1][2]
-        r = b1 / float(b0)
-        lab = ("× %s" % _mult(r)) if r >= 1 else ("÷ %s" % _mult(1.0 / r))
-        col = "#a50e0e" if r >= 1 else "#0d652d"
-        mx = (cx(i) + cx(i + 1)) / 2.0
-        f.t(mx, BASE - 6, lab, col, bold=True, size=_sz(11.5), anchor="middle")
-
-    # ── 把「腰」单独标出来 ────────────────────────────────────
-    wi = 4                                     # latent 那一根
-    f.line(cx(wi), BASE - hpx(PTS[wi][2]) - 40, cx(wi),
-           BASE - hpx(PTS[wi][2]) - 14, GR, 2)
-    f.t(cx(wi), BASE - hpx(PTS[wi][2]) - 48,
-        "⭐ 最细的腰 ——&#160;跨机只传这一份",
-        "#0d652d", bold=True, size=_sz(12.5), anchor="middle")
-
-    y = BASE + 76
-
-    # ══════════════════ 中：三条读数 ══════════════════
+    # ══════════════════ 中：怎么验证那份 latent ══════════════════
     ROWS = (
-        ("压缩比", "46.3 ×",
-         "223,948,800 个像素数 ÷ 4,838,400 个 latent 数",
-         "空间 8×8 ＝ 64 倍、时间 81→21 ＝ 3.86 倍，通道 3→16 反向摊薄 5.33 倍"),
-        ("腰有多细", "2.5 %",
-         "19.4 MB ÷ 774 MB（DiT 单个激活）",
-         "相对展开后的 448 MB 像素张量是 4.3%；相对 457 GB 那根是 0.0042%"),
-        ("传它要多久", "1.5 ms",
-         "19.4 MB 走 100 Gbps ＝ 1.5 ms；走 1 Gbps 也只要 155 ms",
-         "⭐ 而 Stage 2 本身要跑 229 秒 ——&#160;传输占比 0.0007%，可以当成零"),
+        ("① shape 对不对",
+         "由分辨率直接推：帧 (81−1)/4+1 ＝ 21 · 高 720/8 ＝ 90 · "
+         "宽 1280/8 ＝ 160 · 通道 16",
+         "期望 [1, 16, 21, 90, 160]。"
+         "<tspan font-weight=\"700\">对不上就别往下跑</tspan> ——&#160;"
+         "后面只会得到全黑或 NaN"),
+        ("② dtype 在哪看",
+         "读 safetensors 头的 dtype 字段，"
+         "<tspan font-weight=\"700\">再读 metadata 里的 dtype_info</tspan>",
+         "⭐ 两者可能<tspan font-weight=\"700\">不一样</tspan>："
+         "Wan 的 embedding 盘上是 F32，而 dtype_info 写着原始是 bfloat16"),
+        ("③ 字节数对不对",
+         "元素数 × 每元素字节 ＋ 头 ＝ 文件大小",
+         "16×21×90×160×4 ＋ 272 ＝ "
+         "<tspan font-weight=\"700\">19,353,872</tspan>，跟文件"
+         "<tspan font-weight=\"700\">一个字节不差</tspan>"),
     )
     hy = y
-    f.box(0, hy, W, 30 + len(ROWS) * 50, "#fff", LINE, 8)
-    f.colhead(16, hy + 20, "读三个数")
-    f.colhead(190, hy + 20, "多少")
-    f.colhead(330, hy + 20, "怎么算的")
-    f.colhead(770, hy + 20, "旁注")
-    f.line(0, hy + 30, W, hy + 30, LINE, 1, arrow=False)
-    for i, (k, v, how, note) in enumerate(ROWS):
-        yy = hy + 30 + i * 50
+    TH = 34 + len(ROWS) * 54
+    f.box(0, hy, W, TH, "#fff", LINE, 8)
+    f.colhead(14, hy + 22, "拿到一份 latent，三步自检")
+    f.colhead(250, hy + 22, "怎么做")
+    f.colhead(740, hy + 22, "看什么")
+    f.line(0, hy + 34, W, hy + 34, LINE, 1, arrow=False)
+    for i, (k, how, note) in enumerate(ROWS):
+        yy = hy + 34 + i * 54
         if i:
             f.line(0, yy, W, yy, LINE2, 1, arrow=False)
-        f.t(16, yy + 22, k, INK, bold=True, size=_sz(12))
-        f.t(190, yy + 22, v, "#0d652d", bold=True, size=_sz(14))
-        f.t(330, yy + 22, how, GY, size=_sz(11.5), w=430)
-        f.t(770, yy + 22, note, GY2, size=_sz(11.5), w=W - 786)
-    y = hy + 30 + len(ROWS) * 50 + 22
+        f.t(14, yy + 24, k, INK, bold=True, size=_sz(12))
+        f.lines(250, yy + 22, 470, wrap(how, 466), size=11.5, lh=17, fill=GY)
+        f.lines(740, yy + 22, W - 754, wrap(note, W - 756),
+                size=11.5, lh=17, fill=GY)
+    y = hy + TH + 22
 
     # ══════════════════ 落点 ══════════════════
-    y = f.band(y, "ok",
-               "为什么「最细的那一处」正好就是「该切开的那一处」",
-               ['把流水线切开，代价是<tspan font-weight="700">切口上的数据要搬一趟</tspan>。'
-                '所以切在哪，取决于<tspan font-weight="700">哪儿的数据最少</tspan>。',
-                '⭐ 而扩散模型的形状<tspan font-weight="700">天然把这个位置摆在了明处</tspan>：'
-                'DiT 吐出来的 latent 是全程最瘦的一处 ——&#160;'
-                '往前是 774 MB 的激活，往后是 448 MB 的像素，它自己只有 19.4 MB。',
-                '⭐⭐ 于是这一刀几乎<tspan font-weight="700">不要钱</tspan>：'
-                '搬一趟 1.5 毫秒，而被切开的那一段要算 229 秒。'
-                '<tspan font-weight="700">切口成本相对计算量是四个数量级以下的小数 ——'
-                '「能不能切」这个问题在这里根本不成立，只剩「要不要切」。</tspan>'])
+    y = f.band(y, "bad",
+               "⛔ 一个反例，说明为什么「看文件大小」不算验证",
+               ['<tspan font-weight="700">Wan2.1 的 latents：F32，[1,16,21,90,160]，19,353,872 B</tspan>',
+                '<tspan font-weight="700">CogVideoX 的 latents：BF16，[1,16,21,90,160]，9,677,064 B</tspan>',
+                '⭐ <tspan font-weight="700">形状一模一样，文件大小差一倍。</tspan>'
+                '文件大小既不能证明 shape 对，也不能反推 dtype ——&#160;'
+                '<tspan font-weight="700">只能读头。</tspan>'
+                '这就是上面那三步为什么是三步，不是一步。'])
 
-    y = f.band(y + 14, "bad",
-               "⛔ 别把这张图读成「腰细所以那一段轻松」——&#160;正相反",
-               ['<tspan font-weight="700">这张图画的是数据体积，不是时间。</tspan>'
-                '产出那 19.4 MB 的 Stage 2，占了全程<tspan font-weight="700">九成以上的时间</tspan>。',
-                '⛔ 那根 457 GB 的红柱子也要读对：'
-                '<tspan font-weight="700">它从不真的存在。</tspan>'
-                'Splash Attention 是分块算的，一块算完即弃 ——&#160;'
-                '画它是为了说明<tspan font-weight="700">「不分块就没法跑」</tspan>，不是说 HBM 里真有这么多。',
-                '⚠️ 口径：全部以 Wan2.1-T2V-14B、1280×720、81 帧、50 步为准。'
-                '换模型换分辨率，绝对值全变 ——&#160;'
-                '<tspan font-weight="700">但「中间那一处最瘦」这个形状不变，'
-                '因为它是 VAE 压缩比决定的。</tspan>'])
+    y = f.band(y + 14, "ok",
+               "⭐⭐ 三阶段那份例子的真正用途：它是一个「把切口露出来」的装置",
+               ['<tspan font-weight="700">教学上</tspan>：想让人看懂「一个扩散模型是怎么被拆开的」，'
+                '光讲结构没用 ——&#160;<tspan font-weight="700">'
+                '让他去 stage_outputs/ 把那两个文件打开看一眼，一次就懂了。</tspan>',
+                '<tspan font-weight="700">调试上</tspan>：视频全黑、出 NaN、动作快进 ——&#160;'
+                '这些问题<tspan font-weight="700">在一体化脚本里无从下手</tspan>，'
+                '而三阶段能逐段定位：是 latent 就错了，还是 VAE 那步的事？',
+                '<tspan font-weight="700">部署上</tspan>：既然三段只认文件不认进程，'
+                '<tspan font-weight="700">它们就能跑在三台机器上</tspan> ——&#160;'
+                '下一张讲三段各该放哪台。'])
+
+    y = f.band(y + 14, "warn",
+               "⛔ 这张图推翻重写过一次 ——&#160;那个错值得讲给学员听",
+               ['初版画的是「数据体积对数轴」，最粗的一根柱子标着 '
+                '<tspan font-weight="700">457 GB ——&#160;注意力分数矩阵</tspan>，'
+                '旁边注了一句「从不落地」。',
+                '⛔ 现场当场否掉：<tspan font-weight="700">那个矩阵从来没有被物化出来过</tspan>，'
+                'Flash / Splash Attention 是<tspan font-weight="700">分块算的</tspan>，'
+                '算完即弃，HBM 里根本不存在这么一块。',
+                '⭐ 而「从不落地」那句注解<tspan font-weight="700">并不能救它</tspan>：'
+                '把一个不存在的量画成「管子最粗处」，'
+                '<tspan font-weight="700">整张图的比例尺就锚在了虚构上</tspan> ——&#160;'
+                '读者记住的是柱子，不是柱子旁边那行小字。'
+                '<tspan font-weight="700">注解抵消不了图形本身的断言。</tspan>'])
 
     y = f.src(y + 18,
-              '三个落盘点的字节数 ——&#160;本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/'
-              'stage_outputs/ 下三个文件的实际大小，可逐字节复核；'
-              '⭐ 其中 latent 那个：16×21×90×160×4 B ＋ 272 B 头 ＝ 19,353,872，一字不差',
-              '75,600 token 与 5,120 维、40 头 ——&#160;Wan 官方 config wan_t2v_14B.py；'
-              '229 秒 ——&#160;本仓库 Wan2.1/README 的 v6e-8 实测表。'
-              '⛔ 457 GB 是「若显式展开」的假想值，实际从不落地。')
+              '三个文件的字节数、张量形状、dtype 与 metadata ——&#160;直接解 safetensors '
+              '文件头得到；文件在本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/'
+              'stage_outputs/ 下，可自行复核',
+              'CogVideoX 那条对照取自它同名目录下的 stage2_latents.safetensors',
+              '⚠️ 官方 wan_t2v_14B.py 写 text_len ＝ 512，而 diffusers 这条路实际存下来的文本 '
+              'embedding 是 226 ——&#160;不影响 X-9 的结论（交叉注意力只占约 5% 算力），'
+              '但「config 写的」与「实际跑的」在这里确实不是一个数。')
     f.save("figx-10.svg", y + 6)
 
 

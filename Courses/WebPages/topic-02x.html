@@ -1479,118 +1479,125 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 </div></details>
 </section>
 <section id="s四">
-  <h2><span class="secno">四</span>它的流水线又胖又瘦 —— 所以能拆开部署</h2>
+  <h2><span class="secno">四</span>仓库里为什么同一个模型有两份例子</h2>
   <p>到这儿为止都在讲「配不配」。<b>下面这一半是我们自己趟出来的。</b></p>
-<figure class="fbox fwide" id="figx-10"><svg viewBox="0 0 1400 947" width="100%" role="img" aria-label="三阶段流水线上数据体积的变化：文本 embedding 7.4 MB，DiT 内部单个激活 774 MB，注意力分数若展开 457 GB，而两段之间真正落盘、真正跨机传的 latent 只有 19.4 MB，最后成片 0.76 MB。管道又胖又瘦，最细的腰正好是该切开的地方"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">又胖又瘦 ——&#160;<tspan font-weight="700">跨机只传 19.4 MB，而管子里最粗处是 457 GB</tspan></text>
-<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 纵轴是<tspan font-weight="700">对数刻度</tspan>的数据体积。三个绿色的点是真正落盘的产物（本仓库里就有这三个文件，大小逐字节可核）；蓝色是算的时候在 HBM 里的中间态；红色那根<tspan font-weight="700">从不落地</tspan>。</text>
-<rect x="0" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">落盘 · 可跨机</text>
-<rect x="112" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="129" y="64" fill="#5f6368" style="font-size:11.0px">HBM 里的中间态</text>
-<rect x="230" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="247" y="64" fill="#5f6368" style="font-size:11.0px">从不落地（分块算）</text>
-<line x1="50" y1="359.2" x2="1360" y2="359.2" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
-<text class="svgsm" x="44" y="363" fill="#80868b" text-anchor="end" style="font-size:11.0px">1 KB</text>
-<line x1="50" y1="278.8" x2="1360" y2="278.8" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
-<text class="svgsm" x="44" y="282" fill="#80868b" text-anchor="end" style="font-size:11.0px">1 MB</text>
-<line x1="50" y1="198.4" x2="1360" y2="198.4" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
-<text class="svgsm" x="44" y="202" fill="#80868b" text-anchor="end" style="font-size:11.0px">1 GB</text>
-<line x1="50" y1="118.0" x2="1360" y2="118.0" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
-<text class="svgsm" x="44" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px">1 TB</text>
-<line x1="50" y1="386" x2="1360" y2="386" stroke="#dadce0" stroke-width="1.2" stroke-linecap="round"/>
-<path d="M 186.3 251.2 L 366.9 190.7 L 547.4 163.7 L 728.0 126.6 L 908.6 185.2 L 1089.1 166.9 L 1269.7 203.9 L 1269.7 308.1 L 1089.1 345.1 L 908.6 326.8 L 728.0 385.4 L 547.4 348.3 L 366.9 321.3 L 186.3 260.8 Z" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
-<rect x="149.28571428571428" y="376.30569399472853" width="74.0" height="9.694306005271494" rx="4" fill="#f1f3f4" stroke="#80868b" stroke-width="1.6"/>
-<text class="svgsm" x="186" y="366" fill="#5f6368" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">230 B</tspan></text>
-<text class="svgsm" x="186" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">文本 prompt</text>
-<text class="svgsm" x="186" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">约 230 个字符</text>
-<rect x="329.85714285714283" y="255.49430172731496" width="74.0" height="130.50569827268504" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="366" y="245" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">7.41 MB</tspan></text>
-<text class="svgsm" x="366" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">① 文本 embedding</tspan></text>
-<text class="svgsm" x="366" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">实测文件 7,406,544 B</text>
-<text class="svgsm" x="366" y="441" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">落盘 ⏷</tspan></text>
-<rect x="510.42857142857144" y="201.37957704262072" width="74.0" height="184.62042295737928" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<text class="svgsm" x="547" y="191" fill="#174ea6" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">774 MB</tspan></text>
-<text class="svgsm" x="547" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">DiT 单个激活</text>
-<text class="svgsm" x="547" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">75,600 × 5,120 × 2 B</text>
-<rect x="691.0000000000001" y="127.10915325781701" width="74.0" height="258.890846742183" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.2" stroke-dasharray="4 3"/>
-<text class="svgsm" x="728" y="117" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">457 GB</tspan></text>
-<text class="svgsm" x="728" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">注意力分数矩阵</text>
-<text class="svgsm" x="728" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">75,600² × 40 头 × 2 B</text>
-<rect x="871.5714285714287" y="244.31462123284936" width="74.0" height="141.68537876715064" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="908" y="234" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">19.4 MB</tspan></text>
-<text class="svgsm" x="908" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">② latent</tspan></text>
-<text class="svgsm" x="908" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">实测文件 19,353,872 B</text>
-<text class="svgsm" x="908" y="441" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">落盘 ⏷</tspan></text>
-<rect x="1052.142857142857" y="207.74574922484973" width="74.0" height="178.25425077515027" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
-<text class="svgsm" x="1089" y="197" fill="#174ea6" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">448 MB</tspan></text>
-<text class="svgsm" x="1089" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">VAE 展开的像素</text>
-<text class="svgsm" x="1089" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">81×720×1280×3 × 2 B</text>
-<rect x="1232.7142857142858" y="281.7460077099177" width="74.0" height="104.25399229008228" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="1269" y="271" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">776 KB</tspan></text>
-<text class="svgsm" x="1269" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">③ 成片 mp4</tspan></text>
-<text class="svgsm" x="1269" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">实测文件 776,380 B</text>
-<text class="svgsm" x="1269" y="441" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">落盘 ⏷</tspan></text>
-<text class="svgsm" x="276" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">× 32202</tspan></text>
-<text class="svgsm" x="457" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">× 105</tspan></text>
-<text class="svgsm" x="637" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">× 591</tspan></text>
-<text class="svgsm" x="818" y="380" fill="#0d652d" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">÷ 23623</tspan></text>
-<text class="svgsm" x="998" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">× 23</tspan></text>
-<text class="svgsm" x="1179" y="380" fill="#0d652d" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">÷ 577</tspan></text>
-<line x1="908.5714285714287" y1="204.31462123284936" x2="908.5714285714287" y2="230.31462123284936" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
-<text class="svgsm" x="908" y="196" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">⭐ 最细的腰 ——&#160;跨机只传这一份</tspan></text>
-<rect x="0" y="462" width="1400" height="180" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="16" y="482" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">读三个数</tspan></text>
-<text class="svgsm" x="190" y="482" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">多少</tspan></text>
-<text class="svgsm" x="330" y="482" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">怎么算的</tspan></text>
-<text class="svgsm" x="770" y="482" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">旁注</tspan></text>
-<line x1="0" y1="492" x2="1400" y2="492" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svgsm" x="16" y="514" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">压缩比</tspan></text>
-<text class="svgsm" x="190" y="514" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">46.3 ×</tspan></text>
-<text class="svgsm" x="330" y="514" fill="#5f6368" style="font-size:11.5px">223,948,800 个像素数 ÷ 4,838,400 个 latent 数</text>
-<text class="svgsm" x="770" y="514" fill="#80868b" style="font-size:11.5px">空间 8×8 ＝ 64 倍、时间 81→21 ＝ 3.86 倍，通道 3→16 反向摊薄 5.33 倍</text>
-<line x1="0" y1="542" x2="1400" y2="542" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
-<text class="svgsm" x="16" y="564" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">腰有多细</tspan></text>
-<text class="svgsm" x="190" y="564" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">2.5 %</tspan></text>
-<text class="svgsm" x="330" y="564" fill="#5f6368" style="font-size:11.5px">19.4 MB ÷ 774 MB（DiT 单个激活）</text>
-<text class="svgsm" x="770" y="564" fill="#80868b" style="font-size:11.5px">相对展开后的 448 MB 像素张量是 4.3%；相对 457 GB 那根是 0.0042%</text>
-<line x1="0" y1="592" x2="1400" y2="592" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
-<text class="svgsm" x="16" y="614" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">传它要多久</tspan></text>
-<text class="svgsm" x="190" y="614" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">1.5 ms</tspan></text>
-<text class="svgsm" x="330" y="614" fill="#5f6368" style="font-size:11.5px">19.4 MB 走 100 Gbps ＝ 1.5 ms；走 1 Gbps 也只要 155 ms</text>
-<text class="svgsm" x="770" y="614" fill="#80868b" style="font-size:11.5px">⭐ 而 Stage 2 本身要跑 229 秒 ——&#160;传输占比 0.0007%，可以当成零</text>
-<rect x="0" y="664" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="664" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="664" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="688" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 为什么「最细的那一处」正好就是「该切开的那一处」</tspan></text>
-<text class="svgsm" x="20" y="712" fill="#0d652d" style="font-size:12.0px">把流水线切开，代价是<tspan font-weight="700">切口上的数据要搬一趟</tspan>。所以切在哪，取决于<tspan font-weight="700">哪儿的数据最少</tspan>。</text>
-<text class="svgsm" x="20" y="733" fill="#0d652d" style="font-size:12.0px">⭐ 而扩散模型的形状<tspan font-weight="700">天然把这个位置摆在了明处</tspan>：DiT 吐出来的 latent 是全程最瘦的一处 ——&#160;往前是 774 MB 的激活，往后是 448 MB 的像素，它自己只有 19.4 MB。</text>
-<text class="svgsm" x="20" y="754" fill="#0d652d" style="font-size:12.0px">⭐⭐ 于是这一刀几乎<tspan font-weight="700">不要钱</tspan>：搬一趟 1.5 毫秒，而被切开的那一段要算 229 秒。<tspan font-weight="700">切口成本相对计算量是四个数量级以下的小数 ——「能不能切」这个问题在这里根本不成立，只剩「要不要切」。</tspan></text>
-<rect x="0" y="783" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="783" width="4" height="105" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="2" y="783" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="807" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 别把这张图读成「腰细所以那一段轻松」——&#160;正相反</tspan></text>
-<text class="svgsm" x="20" y="831" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">这张图画的是数据体积，不是时间。</tspan>产出那 19.4 MB 的 Stage 2，占了全程<tspan font-weight="700">九成以上的时间</tspan>。</text>
-<text class="svgsm" x="20" y="852" fill="#a50e0e" style="font-size:12.0px">⛔ 那根 457 GB 的红柱子也要读对：<tspan font-weight="700">它从不真的存在。</tspan>Splash Attention 是分块算的，一块算完即弃 ——&#160;画它是为了说明<tspan font-weight="700">「不分块就没法跑」</tspan>，不是说 HBM 里真有这么多。</text>
-<text class="svgsm" x="20" y="873" fill="#a50e0e" style="font-size:12.0px">⚠️ 口径：全部以 Wan2.1-T2V-14B、1280×720、81 帧、50 步为准。换模型换分辨率，绝对值全变 ——&#160;<tspan font-weight="700">但「中间那一处最瘦」这个形状不变，因为它是 VAE 压缩比决定的。</tspan></text>
-<text class="svgsm" x="0" y="906" fill="#80868b" style="font-size:11.0px">📌 三个落盘点的字节数 ——&#160;本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/ 下三个文件的实际大小，可逐字节复核；⭐ 其中 latent 那个：16×21×90×160×4 B ＋ 272 B 头 ＝ 19,353,872，一字不差</text>
-<text class="svgsm" x="0" y="923" fill="#80868b" style="font-size:11.0px">　　75,600 token 与 5,120 维、40 头 ——&#160;Wan 官方 config wan_t2v_14B.py；229 秒 ——&#160;本仓库 Wan2.1/README 的 v6e-8 实测表。⛔ 457 GB 是「若显式展开」的假想值，实际从不落地。</text>
+  <p>打开仓库里任何一个扩散模型的目录，都会看到<b>两份例子</b>：一个一体化脚本，和一个 <code>*_staged/</code> 目录。<b>后者存在的理由不是「跑得更快」，是它把切口露在外面。</b></p>
+<figure class="fbox fwide" id="figx-10"><svg viewBox="0 0 1400 1123" width="100%" role="img" aria-label="仓库里同一个模型有两份例子：一体化脚本一个进程跑完，三阶段版本拆成三个独立进程，中间用两个 safetensors 文件和一份 json 交接。图上给出这三个文件的真实字节数、张量形状与 dtype，以及验证一份 latent 是否正确的三步自检"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">仓库里为什么同一个模型有两份例子 ——&#160;<tspan font-weight="700">三阶段那份是拿来「看得见中间」的</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一体化跑得快，但你<tspan font-weight="700">看不见中间那份 latent 长什么样</tspan>。三阶段把切口露出来：两个 safetensors ＋ 一份 config ——&#160;<tspan font-weight="700">下面这些数全是直接解文件头得到的，不是算的。</tspan></text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">一体化：一个进程</text>
+<rect x="127" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="144" y="64" fill="#5f6368" style="font-size:11.0px">三阶段：三个进程 ＋ 落盘交接</text>
+<rect x="321" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="338" y="64" fill="#5f6368" style="font-size:11.0px">可逐字节核对</text>
+<rect x="0" y="94" width="330" height="368" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="94" width="330" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<rect x="0" y="96" width="330" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="124" x2="330" y2="124" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="114" fill="#80868b" style="font-size:13.5px"><tspan font-weight="700">① 一体化</tspan></text>
+<text class="svgsm" x="83" y="114" fill="#5f6368" style="font-size:11.0px">generate_torchax.py</text>
+<text class="svgsm" x="316" y="114" fill="#80868b" text-anchor="end" style="font-size:11.0px">出片 / benchmark</text>
+<rect x="16" y="146" width="298" height="260" rx="8" fill="#fafbfc" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4 4"/>
+<text class="svgsm" x="32" y="172" fill="#5f6368" style="font-size:11.5px">一个进程，从 prompt 直接到成片。</text>
+<text class="svgsm" x="32" y="191" fill="#5f6368" style="font-size:11.5px"></text>
+<text class="svgsm" x="32" y="210" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">看不见中间态</tspan>：文本 embedding、</text>
+<text class="svgsm" x="32" y="229" fill="#5f6368" style="font-size:11.5px">latent 全在内存里，跑完就没了。</text>
+<text class="svgsm" x="32" y="248" fill="#5f6368" style="font-size:11.5px"></text>
+<text class="svgsm" x="32" y="267" fill="#5f6368" style="font-size:11.5px">⭐ 它的用处是<tspan font-weight="700">快</tspan> ——&#160;验证一次</text>
+<text class="svgsm" x="32" y="286" fill="#5f6368" style="font-size:11.5px">改动、量一次端到端，用这个。</text>
+<text class="svgsm" x="32" y="305" fill="#5f6368" style="font-size:11.5px"></text>
+<text class="svgsm" x="32" y="324" fill="#5f6368" style="font-size:11.5px">⛔ 但一出问题（视频全黑、出 NaN），</text>
+<text class="svgsm" x="32" y="343" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">你没有任何中间产物可看</tspan>。</text>
+<text class="svgsm" x="32" y="430" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">⛔ 调试时它帮不上忙</tspan></text>
+<rect x="356" y="94" width="1044" height="368" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="356" y="94" width="1044" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="356" y="96" width="1044" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="356" y1="124" x2="1400" y2="124" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="370" y="114" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">② 三阶段 ——&#160;切口露在外面</tspan></text>
+<text class="svgsm" x="587" y="114" fill="#5f6368" style="font-size:11.0px">generate_diffusers_torchax_staged/</text>
+<text class="svgsm" x="1386" y="114" fill="#80868b" text-anchor="end" style="font-size:11.0px">调试 / 部署 / 教学</text>
+<rect x="372" y="146" width="1012" height="80" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.5"/>
+<rect x="372" y="146" width="4" height="80" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="390" y="168" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">stage1 ⏷　stage1_embeddings.safetensors</tspan></text>
+<text class="svgsm" x="1370" y="168" fill="#0d652d" text-anchor="end" style="font-size:12.5px"><tspan font-weight="700">7,406,544 B</tspan></text>
+<text class="svgsm" x="390" y="188" fill="#5f6368" style="font-size:11.5px">prompt_embeds　　F32 [1, 226, 4096]</text>
+<text class="svgsm" x="390" y="205" fill="#5f6368" style="font-size:11.5px">negative_prompt_embeds　F32 [1, 226, 4096]</text>
+<text class="svgsm" x="390" y="222" fill="#5f6368" style="font-size:11.5px">⭐ metadata 的 dtype_info 记着：原始是 bfloat16</text>
+<rect x="372" y="238" width="1012" height="80" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.5"/>
+<rect x="372" y="238" width="4" height="80" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="390" y="260" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">stage2 ⏷　stage2_latents.safetensors</tspan></text>
+<text class="svgsm" x="1370" y="260" fill="#174ea6" text-anchor="end" style="font-size:12.5px"><tspan font-weight="700">19,353,872 B</tspan></text>
+<text class="svgsm" x="390" y="280" fill="#5f6368" style="font-size:11.5px">latents　F32 [1, 16, 21, 90, 160]</text>
+<text class="svgsm" x="390" y="297" fill="#5f6368" style="font-size:11.5px">＝ 批 1 · 通道 16 · 帧 21 · 高 90 · 宽 160</text>
+<text class="svgsm" x="390" y="314" fill="#5f6368" style="font-size:11.5px">⭐ 跨机时唯一要搬的就是这一份</text>
+<rect x="372" y="330" width="1012" height="80" rx="6" fill="#fff" stroke="#9334e6" stroke-width="1.5"/>
+<rect x="372" y="330" width="4" height="80" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="390" y="352" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">stage3 ⏷　generation_config.json</tspan></text>
+<text class="svgsm" x="1370" y="352" fill="#681da8" text-anchor="end" style="font-size:12.5px"><tspan font-weight="700">817 B</tspan></text>
+<text class="svgsm" x="390" y="372" fill="#5f6368" style="font-size:11.5px">height 720 · width 1280 · num_frames 81</text>
+<text class="svgsm" x="390" y="389" fill="#5f6368" style="font-size:11.5px">steps 50 · guidance 5.0 · seed 2025 · model_id</text>
+<text class="svgsm" x="390" y="406" fill="#5f6368" style="font-size:11.5px">⭐ 没有它，前两个文件无法自解释</text>
+<text class="svgsm" x="372" y="430" fill="#174ea6" style="font-size:12.0px">⭐ <tspan font-weight="700">三段之间只认这三个文件、不认进程</tspan>——&#160;所以它们天然可以跑在三台机器上</text>
+<rect x="0" y="486" width="1400" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="14" y="508" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">拿到一份 latent，三步自检</tspan></text>
+<text class="svgsm" x="250" y="508" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">怎么做</tspan></text>
+<text class="svgsm" x="740" y="508" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">看什么</tspan></text>
+<line x1="0" y1="520" x2="1400" y2="520" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="544" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">① shape 对不对</tspan></text>
+<text class="svgsm" x="250" y="542" fill="#5f6368" style="font-size:11.5px">由分辨率直接推：帧 (81−1)/4+1 ＝ 21 · 高 720/8 ＝ 90 · 宽 1280/8 ＝ 160 · 通</text>
+<text class="svgsm" x="250" y="559" fill="#5f6368" style="font-size:11.5px">道 16</text>
+<text class="svgsm" x="740" y="542" fill="#5f6368" style="font-size:11.5px">期望 [1, 16, 21, 90, 160]。<tspan font-weight="700">对不上就别往下跑</tspan> ——&#160;后面只会得到全黑或 NaN</text>
+<line x1="0" y1="574" x2="1400" y2="574" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="598" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">② dtype 在哪看</tspan></text>
+<text class="svgsm" x="250" y="596" fill="#5f6368" style="font-size:11.5px">读 safetensors 头的 dtype 字段，<tspan font-weight="700">再读 metadata 里的 dtype_info</tspan></text>
+<text class="svgsm" x="740" y="596" fill="#5f6368" style="font-size:11.5px">⭐ 两者可能<tspan font-weight="700">不一样</tspan>：Wan 的 embedding 盘上是 F32，而 dtype_info 写着原始是 bfloat16</text>
+<line x1="0" y1="628" x2="1400" y2="628" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="652" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">③ 字节数对不对</tspan></text>
+<text class="svgsm" x="250" y="650" fill="#5f6368" style="font-size:11.5px">元素数 × 每元素字节 ＋ 头 ＝ 文件大小</text>
+<text class="svgsm" x="740" y="650" fill="#5f6368" style="font-size:11.5px">16×21×90×160×4 ＋ 272 ＝ <tspan font-weight="700">19,353,872</tspan>，跟文件<tspan font-weight="700">一个字节不差</tspan></text>
+<rect x="0" y="704" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="704" width="4" height="105" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="704" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="728" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 一个反例，说明为什么「看文件大小」不算验证</tspan></text>
+<text class="svgsm" x="20" y="752" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">Wan2.1 的 latents：F32，[1,16,21,90,160]，19,353,872 B</tspan></text>
+<text class="svgsm" x="20" y="773" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">CogVideoX 的 latents：BF16，[1,16,21,90,160]，9,677,064 B</tspan></text>
+<text class="svgsm" x="20" y="794" fill="#a50e0e" style="font-size:12.0px">⭐ <tspan font-weight="700">形状一模一样，文件大小差一倍。</tspan>文件大小既不能证明 shape 对，也不能反推 dtype ——&#160;<tspan font-weight="700">只能读头。</tspan>这就是上面那三步为什么是三步，不是一步。</text>
+<rect x="0" y="823" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="823" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="823" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="847" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐⭐ 三阶段那份例子的真正用途：它是一个「把切口露出来」的装置</tspan></text>
+<text class="svgsm" x="20" y="871" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">教学上</tspan>：想让人看懂「一个扩散模型是怎么被拆开的」，光讲结构没用 ——&#160;<tspan font-weight="700">让他去 stage_outputs/ 把那两个文件打开看一眼，一次就懂了。</tspan></text>
+<text class="svgsm" x="20" y="892" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">调试上</tspan>：视频全黑、出 NaN、动作快进 ——&#160;这些问题<tspan font-weight="700">在一体化脚本里无从下手</tspan>，而三阶段能逐段定位：是 latent 就错了，还是 VAE 那步的事？</text>
+<text class="svgsm" x="20" y="913" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">部署上</tspan>：既然三段只认文件不认进程，<tspan font-weight="700">它们就能跑在三台机器上</tspan> ——&#160;下一张讲三段各该放哪台。</text>
+<rect x="0" y="942" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="942" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="942" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="966" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⛔ 这张图推翻重写过一次 ——&#160;那个错值得讲给学员听</tspan></text>
+<text class="svgsm" x="20" y="990" fill="#b06000" style="font-size:12.0px">初版画的是「数据体积对数轴」，最粗的一根柱子标着 <tspan font-weight="700">457 GB ——&#160;注意力分数矩阵</tspan>，旁边注了一句「从不落地」。</text>
+<text class="svgsm" x="20" y="1011" fill="#b06000" style="font-size:12.0px">⛔ 现场当场否掉：<tspan font-weight="700">那个矩阵从来没有被物化出来过</tspan>，Flash / Splash Attention 是<tspan font-weight="700">分块算的</tspan>，算完即弃，HBM 里根本不存在这么一块。</text>
+<text class="svgsm" x="20" y="1032" fill="#b06000" style="font-size:12.0px">⭐ 而「从不落地」那句注解<tspan font-weight="700">并不能救它</tspan>：把一个不存在的量画成「管子最粗处」，<tspan font-weight="700">整张图的比例尺就锚在了虚构上</tspan> ——&#160;读者记住的是柱子，不是柱子旁边那行小字。<tspan font-weight="700">注解抵消不了图形本身的断言。</tspan></text>
+<text class="svgsm" x="0" y="1065" fill="#80868b" style="font-size:11.0px">📌 三个文件的字节数、张量形状、dtype 与 metadata ——&#160;直接解 safetensors 文件头得到；文件在本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/ 下，可自行复核</text>
+<text class="svgsm" x="0" y="1082" fill="#80868b" style="font-size:11.0px">　　CogVideoX 那条对照取自它同名目录下的 stage2_latents.safetensors</text>
+<text class="svgsm" x="0" y="1099" fill="#80868b" style="font-size:11.0px">　　⚠️ 官方 wan_t2v_14B.py 写 text_len ＝ 512，而 diffusers 这条路实际存下来的文本 embedding 是 226 ——&#160;不影响 X-9 的结论（交叉注意力只占约 5% 算力），但「config 写的」与「实际跑的」在这里确实不是一个数。</text>
 </svg>
-<figcaption><b>图 X-10</b>　管子最粗处是 <b>457 GB</b>（注意力分数矩阵，从不落地），而两段之间真正跨机传的 latent <b>只有 19.4 MB</b>。</figcaption></figure>
-<details class="more"><summary>⭐⭐ 最细的那一处，正好就是该切开的那一处 ——&nbsp;<b>切口成本是计算量的万分之零点七</b></summary>
+<figcaption><b>图 X-10</b>　三阶段之间只交接三个文件：两个 safetensors ＋ 一份 config。<em>⭐ 图上的字节数、shape、dtype <b>全是直接解 safetensors 文件头得到的</b>，这三个文件仓库里就有，可自行复核。</em></figcaption></figure>
+<details class="more"><summary>⭐⭐ 拿到一份 latent，<b>三步自检</b>：shape、dtype、字节数 ——&nbsp;而「看文件大小」一步都不算</summary>
 <div class="body">
-    <p>切开流水线的代价，是<b>切口上的数据要搬一趟</b>。所以切在哪，取决于<b>哪儿的数据最少</b>。
-      而扩散的形状<b>天然把这个位置摆在了明处</b>：往前是 774 MB 的激活，
-      往后是 448 MB 的像素，<b>而 latent 自己只有 19.4 MB</b>。</p>
-    <p>算一下：19.4 MB 走 100 Gbps 是 <b>1.5 毫秒</b>，而被切开的那一段要算 <b>229 秒</b> ——&nbsp;
-      <b>「能不能切」这个问题在这里根本不成立，只剩「要不要切」。</b></p>
-    <p>⭐ 那三个绿点是<b>仓库里真实存在的文件</b>。latent 那个：
-      16×21×90×160×4 B ＋ 272 B 的 safetensors 头 ＝ 19,353,872，<b>一个字节不差</b>。</p>
-    <p>⛔ 两处极易读反：① 这张图画的是<b>体积，不是时间</b> ——
-      产出那 19.4 MB 的第二段恰恰占了全程 <b>98%</b> 的时间；
-      ② 那根 457 GB <b>从不真的存在</b>，Splash Attention 分块算，一块算完即弃。</p>
+    <p><b>① shape 对不对</b>：由分辨率直接推 —— 帧 (81−1)/4+1 ＝ 21、高 720/8 ＝ 90、
+      宽 1280/8 ＝ 160、通道 16 → 期望 <code>[1, 16, 21, 90, 160]</code>。
+      <b>对不上就别往下跑</b>，后面只会得到全黑或 NaN。</p>
+    <p><b>② dtype 在哪看</b>：读 safetensors 头的 dtype 字段，<b>再读 metadata 里的
+      <code>dtype_info</code></b>。⭐ 两者可能不一样 —— Wan 的 embedding <b>盘上是 F32，
+      而 dtype_info 写着原始是 bfloat16</b>（保存时转的，加载时按这条恢复）。</p>
+    <p><b>③ 字节数对不对</b>：16×21×90×160×4 ＋ 272 字节头 ＝ <b>19,353,872</b>，
+      跟文件<b>一个字节不差</b>。</p>
+    <p>⛔ <b>为什么「看文件大小」不算验证</b>：Wan2.1 的 latents 是 F32、19,353,872 B；
+      CogVideoX 的 latents <b>形状一模一样</b>，但 BF16、9,677,064 B ——&nbsp;
+      <b>大小差一倍，形状相同。只能读头。</b></p>
+    <p>⭐ 顺带说切口有多便宜：跨机要搬的就是那 19 MB 出头，走 100 Gbps 约 <b>1.5 毫秒</b>，
+      而被切开的那一段本身要算 <b>229 秒</b> —— <b>「能不能切」这个问题在这里根本不成立。</b></p>
 </div></details>
-</section>
 <section id="s五">
   <h2><span class="secno">五</span>拆完怎么摆 —— 三段吃的不是同一种资源</h2>
   <p>切得动只是可行性。真正的收益是：<b>这三段吃的根本不是同一种资源。</b></p>
@@ -1882,8 +1889,8 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
           <td>FLOP 全表、<b>window_size 的反事实</b>、锚点当场抓到的一个错、MFU 37% 的原因</td></tr>
         <tr><td>§三 一颗装得下吗</td><td><b>§二点三</b></td>
           <td>那三条「减配」为什么是配套的</td></tr>
-        <tr><td>§四 又胖又瘦</td><td><b>§五点一</b></td>
-          <td>三个读数的算式、19.4 MB 那个字节级验证</td></tr>
+        <tr><td>§四 两份例子 ／ 三步自检</td><td><b>§五点一</b></td>
+          <td>切口成本的几笔账、三个落盘产物的完整口径</td></tr>
         <tr><td>§五 拆完怎么摆</td><td><b>§五点二 ～ §五点四</b></td>
           <td>资源画像逐项、一个节点摆几路</td></tr>
         <tr><td>§六 我们真的跑过</td><td><b>§六</b></td>
