@@ -61,7 +61,7 @@ MODELS = (
     ("Wan2.1-T2V-14B", 14.0, True, "文生视频　⚠️ 权重贴着 32 GB 的边",
      "v6e-8（dp=1, tp=8）", "mid"),
     ("Wan2.2-T2V-A14B", 27.0, True, "MoE：总 27B / 每步激活 14B",
-     "v5p-8　（另有 v6e-16 分片方案）", "mid"),
+     "v6e-16（dp=2, sp=1, tp=8）", "mid"),
     ("Qwen3.5-397B", 397.0, False, "对照：LLM",
      "—　我们没在 v6e 上跑过", "na"),
     ("DeepSeek-V3", 671.0, False, "对照：LLM",
@@ -198,14 +198,15 @@ def main():
                "实测分布：小的单颗，主力清一色 8 卡 ——&#160;没有一个需要跨主机",
                ['<tspan font-weight="700">单颗</tspan>：S3Diff · SDXL（延迟最优）· Real-ESRGAN　'
                 '<tspan font-weight="700">8 卡</tspan>：HunyuanVideo-1.5 / Wan2.1 / CogVideoX '
-                '在 v6e-8 · Flux.2 在 v4-8 · Wan2.2 I2V 在 v5p-8',
+                '在 v6e-8 · Flux.2 在 v4-8 · Wan2.2 I2V 在 v6e-16',
                 '⭐ 这正好解释 X-2 里那三条看着像减配的规格（4 个 ICI 口、二维环面、Pod 只有 256）：'
                 '<tspan font-weight="700">v6e 不打「一个模型摊在几千颗上」那场仗，不打就不用付那个成本。</tspan>'])
 
     y = f.src(y + 18,
               '⭐ 右列「实测配置」全部取自各模型 README 的测试环境段：SDXL v6e-1/4/8 · '
               'HunyuanVideo-1.5 / Wan2.1 / CogVideoX 在 v6e-8 · Flux.2 在 v4-8 · '
-              'Wan2.2 I2V 在 v5p-8 · S3Diff 与 Real-ESRGAN 单颗',
+              'Wan2.2 I2V 在 v6e-16（分片配置见该模型优化指南第三章）· '
+              'S3Diff 与 Real-ESRGAN 单颗',
               '「8 卡反而更慢」出自 S3Diff README 的 Why Not Multi-Chip 段；'
               '权重体积按 bf16 每参数 2 字节换算，参数量出自各家官方模型卡',
               '⛔ 那根轴<tspan font-weight="700">只算权重</tspan>，不含激活与编译缓存 ——&#160;'
