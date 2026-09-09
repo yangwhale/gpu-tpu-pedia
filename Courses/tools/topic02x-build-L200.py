@@ -1003,7 +1003,7 @@ assert n_fig == EXPECT_FIG, "图数不对：%d（应为 %d）" % (n_fig, EXPECT_
 #   ⛔ 所以自检查的是「L100 里那张对照表还在不在」——&nbsp;
 #     表没了，读者就没有从 L100 跳到这一页的任何路径，而**页面照样构建**。
 l100 = io.open(os.path.join(WEB, "topic-02x.html"), encoding="utf-8").read()
-assert "想往下挖：这一讲的每一节在 L200 的哪儿" in l100, \
+assert "这一讲的每一节在 L200 的哪儿" in l100, \
     "L100 的收尾少了那张「→ L200」对照表 —— 两页之间会断掉"
 for sid in ("s零", "s一", "s六", "s收尾"):
     assert 'id="%s"' % sid in l100, "L100 里没有 %s" % sid

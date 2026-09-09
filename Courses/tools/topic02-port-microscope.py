@@ -2740,6 +2740,18 @@ details.more.preclass>summary:hover{background:#fce8e6}
 details.more.preclass>summary::before{color:#d93025}
 details.more.preclass[open]>summary{border-bottom-color:#f3c0bb}
 details.more.preclass>summary .why{color:#b06000}
+
+/* ══ 外传两页的节号 chip ══
+   ⛔ `.secno` 这个类是我在建外传时随手写的，**从来没有对应的 CSS** ——&nbsp;
+   于是节号跟标题挤成一团：「开场这一讲要回答的两件事」「一同一把尺子」。
+   页面照常构建、版面探针也不报（它查的是溢出和撞车，不查「读起来断不断句」）。
+   ⭐ 判据：**自己新造的类名，落地前要去确认它真有样式** ——&nbsp;
+   没有样式的 class 在 HTML 里是完全合法的，它只是安静地什么都不做。
+   ⚠️ 主线 L200/L300 的 h2 不带节号（纯文本标题），所以这条只影响外传两页。 */
+h2 .secno{display:inline-block;min-width:2.1em;margin-right:.52em;
+  padding:.1em .52em;border-radius:7px;background:#e8f0fe;color:#174ea6;
+  font-size:.6em;font-weight:700;letter-spacing:0;vertical-align:.24em;
+  text-align:center}
 ''' + _FAM_CSS
 
 TODO = re.compile(
