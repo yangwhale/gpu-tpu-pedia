@@ -2447,6 +2447,28 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
   <p>下面这张图把一次生成从头到尾的<b>数据体积</b>画在一根对数轴上。
     全部以 Wan2.1-T2V-14B、1280×720、81 帧为准。</p>
 
+
+  <p>拿 <b>Wan 2.2 图生视频</b>当例子 —— <b>十个模型都是这套布局</b>：
+    <a href="https://github.com/yangwhale/gpu-tpu-pedia/tree/main/tpu/Wan2.2">
+    github.com/yangwhale/gpu-tpu-pedia/tree/main/tpu/Wan2.2</a></p>
+<pre><code>tpu/Wan2.2/
+├── generate_i2v_torchax.py                   <b>← ① 一体化：一个进程从头跑到尾</b>
+├── generate_diffusers_i2v_torchax_staged/    <b>← ② 三阶段</b>
+│   ├── stage1_encoder.py                        文本 ＋ 首帧 → embedding
+│   ├── stage2_transformer.py                    五十步去噪 → latent
+│   ├── stage3_vae_decoder.py                    latent → 成片
+│   ├── utils.py                                 <b>落盘 / 读盘的 helper 全在这</b>
+│   └── stage_outputs/                        <b>← ⭐ 切口就在这个目录里</b>
+│       ├── stage1_embeddings.safetensors     <b>← 段与段之间唯一交接的，就这三个文件</b>
+│       ├── stage2_latents.safetensors
+│       ├── generation_config.json
+│       └── output_video.mp4                     成片
+├── docs/wan_tpu_optimization_guide.md        约 1,970 行迁移与优化指南
+└── README.md</code></pre>
+  <p class="dim">⚠️ 下面这张图上的字节数取自 <b>Wan2.1</b> 那一份同名目录
+    （<code>tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/</code>）——
+    两个模型目录结构相同，数不同。</p>
+
 <figure class="fbox fwide" id="figx-10"><svg viewBox="0 0 1400 1102" width="100%" role="img" aria-label="仓库里同一个模型有两份例子：一体化脚本一个进程跑完，三阶段版本拆成三个独立进程，中间用两个 safetensors 文件和一份 json 交接。图上给出这三个文件的真实字节数、张量形状与 dtype，以及验证一份 latent 是否正确的三步自检"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">仓库里为什么同一个模型有两份例子 ——&#160;<tspan font-weight="700">三阶段那份是拿来「看得见中间」的</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一体化跑得快，但你<tspan font-weight="700">看不见中间那份 latent 长什么样</tspan>。三阶段把切口露出来：两个 safetensors ＋ 一份 config ——&#160;<tspan font-weight="700">下面这些数全是直接解文件头得到的，不是算的。</tspan></text>

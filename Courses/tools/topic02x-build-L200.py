@@ -730,6 +730,28 @@ a("""
     全部以 Wan2.1-T2V-14B、1280×720、81 帧为准。</p>
 """)
 
+a("""
+  <p>拿 <b>Wan 2.2 图生视频</b>当例子 —— <b>十个模型都是这套布局</b>：
+    <a href="https://github.com/yangwhale/gpu-tpu-pedia/tree/main/tpu/Wan2.2">
+    github.com/yangwhale/gpu-tpu-pedia/tree/main/tpu/Wan2.2</a></p>
+<pre><code>tpu/Wan2.2/
+├── generate_i2v_torchax.py                   <b>← ① 一体化：一个进程从头跑到尾</b>
+├── generate_diffusers_i2v_torchax_staged/    <b>← ② 三阶段</b>
+│   ├── stage1_encoder.py                        文本 ＋ 首帧 → embedding
+│   ├── stage2_transformer.py                    五十步去噪 → latent
+│   ├── stage3_vae_decoder.py                    latent → 成片
+│   ├── utils.py                                 <b>落盘 / 读盘的 helper 全在这</b>
+│   └── stage_outputs/                        <b>← ⭐ 切口就在这个目录里</b>
+│       ├── stage1_embeddings.safetensors     <b>← 段与段之间唯一交接的，就这三个文件</b>
+│       ├── stage2_latents.safetensors
+│       ├── generation_config.json
+│       └── output_video.mp4                     成片
+├── docs/wan_tpu_optimization_guide.md        约 1,970 行迁移与优化指南
+└── README.md</code></pre>
+  <p class="dim">⚠️ 下面这张图上的字节数取自 <b>Wan2.1</b> 那一份同名目录
+    （<code>tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/</code>）——
+    两个模型目录结构相同，数不同。</p>
+""")
 a(fig("figx-10",
       "<b>图 X-10</b>　三阶段之间只交接三个文件。"
       "<em>⛔ 这张图推翻重写过一次：初版画过一根 457 GB 的「注意力分数矩阵」柱子，"

@@ -298,6 +298,28 @@ a('  <h2><span class="secno">四</span>仓库里为什么同一个模型有两�
 a('  <p><b>下面这一半是我们自己趟出来的。</b>仓库里每个扩散模型都有<b>两份例子</b>：'
   '一体化脚本，和一个 <code>*_staged/</code> 目录 —— '
   '<b>后者存在的理由不是更快，是它把切口露在外面。</b></p>')
+a("""
+  <p>拿 <b>Wan 2.2 图生视频</b>当例子 —— <b>十个模型都是这套布局</b>：
+    <a href="https://github.com/yangwhale/gpu-tpu-pedia/tree/main/tpu/Wan2.2">
+    github.com/yangwhale/gpu-tpu-pedia/tree/main/tpu/Wan2.2</a></p>
+<pre><code>tpu/Wan2.2/
+├── generate_i2v_torchax.py                   <b>← ① 一体化：一个进程从头跑到尾</b>
+├── generate_diffusers_i2v_torchax_staged/    <b>← ② 三阶段</b>
+│   ├── stage1_encoder.py                        文本 ＋ 首帧 → embedding
+│   ├── stage2_transformer.py                    五十步去噪 → latent
+│   ├── stage3_vae_decoder.py                    latent → 成片
+│   ├── utils.py                                 <b>落盘 / 读盘的 helper 全在这</b>
+│   └── stage_outputs/                        <b>← ⭐ 切口就在这个目录里</b>
+│       ├── stage1_embeddings.safetensors     <b>← 段与段之间唯一交接的，就这三个文件</b>
+│       ├── stage2_latents.safetensors
+│       ├── generation_config.json
+│       └── output_video.mp4                     成片
+├── docs/wan_tpu_optimization_guide.md        约 1,970 行迁移与优化指南
+└── README.md</code></pre>
+  <p class="dim">⚠️ 下面这张图上的字节数取自 <b>Wan2.1</b> 那一份同名目录
+    （<code>tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/</code>）——
+    两个模型目录结构相同，数不同。</p>
+""")
 a(fig("figx-10",
       "<b>图 X-10</b>　三阶段之间只交接三个文件：两个 safetensors ＋ 一份 config。"
       "<em>⭐ 图上的字节数、shape、dtype <b>全是直接解 safetensors 文件头得到的</b>，"
