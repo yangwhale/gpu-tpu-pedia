@@ -43,16 +43,31 @@ from topic03_draw import (Fig, wpx, _sz, LINE, LINE2,
 W = 1400
 CHIP_GB = 32.0        # 一颗 v6e 的 HBM（官方规格表）
 
-# (名字, 参数量 B, 是不是扩散, 备注)
+# (名字, 参数量 B, 是不是扩散, 备注, ⭐ 我们实测跑在什么配置上, 颜色档)
+# ⛔⛔ 2026-09-09 现场纠正：右边那一列原来是「1 颗 / ≥2 颗」——&nbsp;
+#   **拿权重体积除以 32 GB 推出来的，不是实测。**
+#   ⭐ 换成各模型 README「测试环境」段里真实记录的配置之后，
+#     立刻看出两处「按体积猜会猜错」的地方（见图下第一条落点带）——&nbsp;
+#     **「装得下」和「该用几颗」是两个不同的问题。**
 MODELS = (
-    ("SDXL", 3.5, True, "文生图"),
-    ("HunyuanVideo-1.5", 8.3, True, "文生视频"),
-    ("FLUX.1 [dev]", 12.0, True, "文生图"),
-    ("Wan2.1-T2V-14B", 14.0, True, "文生视频　⚠️ 贴着边"),
-    ("Wan2.2-T2V-A14B", 27.0, True, "MoE：总 27B / 每步激活 14B　⛔ 总权重超了"),
-    ("Qwen3.5-397B", 397.0, False, "对照：LLM"),
-    ("DeepSeek-V3", 671.0, False, "对照：LLM"),
+    ("S3Diff（SD-Turbo）", 3.3, True, "单步超分 4×",
+     "单颗　⭐ 8 卡实测反而更慢", "ok"),
+    ("SDXL", 3.5, True, "文生图",
+     "v6e-1　（也测过 v6e-4 / v6e-8 数据并行）", "ok"),
+    ("HunyuanVideo-1.5", 8.3, True, "文生视频",
+     "v6e-8", "mid"),
+    ("FLUX.1 [dev]", 12.0, True, "文生图",
+     "⚠️ 未记录实测配置", "na"),
+    ("Wan2.1-T2V-14B", 14.0, True, "文生视频　⚠️ 权重贴着 32 GB 的边",
+     "v6e-8（dp=1, tp=8）", "mid"),
+    ("Wan2.2-T2V-A14B", 27.0, True, "MoE：总 27B / 每步激活 14B",
+     "v5p-8　（另有 v6e-16 分片方案）", "mid"),
+    ("Qwen3.5-397B", 397.0, False, "对照：LLM",
+     "—　我们没在 v6e 上跑过", "na"),
+    ("DeepSeek-V3", 671.0, False, "对照：LLM",
+     "—　我们没在 v6e 上跑过", "na"),
 )
+CFGCOL = {"ok": "#0d652d", "mid": "#174ea6", "na": GY2}
 
 
 def main():
@@ -61,14 +76,15 @@ def main():
                "在一颗到两颗的量级；而 LLM 是 794 GB 和 1342 GB，要几十颗")
     f.marks = set()
     y = f.header(
-        '一颗装得下吗 ——&#160;'
-        '<tspan font-weight="700">这就是为什么 v6e 的 Pod 只有 256 颗</tspan>',
-        '⭐ X-2 里那三条看着像减配的规格（4 个 ICI 口、2D 环面、Pod 256），'
-        '把模型体积摆出来就合理了：<tspan font-weight="700">'
-        '这一族模型在「一颗到几颗」的量级上，不需要摊到几千颗</tspan>。',
-        [(BL, "扩散模型"), (GY, "对照：大语言模型"), (RD, "一颗 v6e ＝ 32 GB")])
+        '装得下，和实际用了几颗 ——&#160;'
+        '<tspan font-weight="700">这是两个问题，右边那一列全是实测</tspan>',
+        '⭐ 左边是权重体积（回答「装不装得下」），'
+        '<tspan font-weight="700">右边是我们真跑过的配置</tspan>（回答「实际用了几颗」）——&#160;'
+        '<tspan font-weight="700">这两件事不是一回事，后者只能实测。</tspan>',
+        [(BL, "扩散模型"), (GY, "对照：大语言模型"), (RD, "一颗 v6e ＝ 32 GB"),
+         (GR, "实测：单颗"), (BL, "实测：8 卡一台主机")])
 
-    AX0, AX1 = 330, W - 290
+    AX0, AX1 = 330, W - 470
     LO, HI = 4.0, 2000.0
 
     def xf(v):
@@ -89,7 +105,7 @@ def main():
     f.t(xf(CHIP_GB * 8), top - 30, "一台主机 8 颗　256 GB", GY2,
         size=_sz(11), anchor="middle")
 
-    for i, (name, pb, is_diff, note) in enumerate(MODELS):
+    for i, (name, pb, is_diff, note, cfg, ck) in enumerate(MODELS):
         yy = top + i * ROW
         gb = pb * 2.0                      # bf16：每参数 2 字节
         col = BL if is_diff else GY
@@ -99,21 +115,14 @@ def main():
         f.line(AX0, yy + 8, xf(gb), yy + 8, col, 3.2, arrow=False)
         f.box(xf(gb) - 7, yy + 1, 14, 14, col, col, 7)
         # 右侧：体积 ＋ 要几颗
-        need = int(math.ceil(gb / CHIP_GB))
         f.t(xf(gb) + 16, yy + 13,
             "%s GB" % (("%.1f" % gb).rstrip("0").rstrip(".")),
             col, bold=True, size=_sz(12))
-        # ⛔ 光看「装不装得下权重」会给出误导性的绿灯：Wan2.1 的 28 GB
-        #   确实 < 32，但激活只剩 4 GB 余量 ——&nbsp;判成「1 颗 ✅」等于替读者
-        #   下了一个我们没验证过的结论。⭐ 把「余量不足两成」单列成一档黄灯。
-        head = CHIP_GB * need - gb                    # 这么多颗之后剩下的余量
-        if need == 1 and head < CHIP_GB * 0.2:
-            lab, lc = "1 颗　⚠️ 余量只剩 %d GB" % round(head), "#b06000"
-        elif need == 1:
-            lab, lc = "1 颗", "#0d652d"
-        else:
-            lab, lc = "≥ %d 颗" % need, "#a50e0e"
-        f.t(AX1 + 24, yy + 13, lab, lc, bold=True, size=_sz(12))
+        # ⭐ 右列＝**我们真跑过的配置**，不是从体积推出来的颗数。
+        #   ⛔ 原来这里写的是「1 颗 / ≥ N 颗」，那是 gb ÷ 32 算的 ——&nbsp;
+        #     现场当场纠正：「我们不是全部都有实测吗，不要按模型大小去瞎猜。」
+        f.t(AX1 + 24, yy + 13, cfg, CFGCOL[ck], bold=(ck != "na"),
+            size=_sz(12), w=W - AX1 - 30)
 
     ay = top + len(MODELS) * ROW + 2
     f.line(AX0, ay, AX1, ay, GY2, 1.2, arrow=False)
@@ -127,38 +136,38 @@ def main():
 
     y = ay + 62
 
-    y = f.band(y, "warn",
-               "⛔ 别把这张图讲成「扩散都装得进一颗」——&#160;它不是",
-               ['<tspan font-weight="700">Wan2.1-14B 的 28 GB 已经贴着 32 GB 的边</tspan>，'
-                '激活只剩 4 GB 余量；'
-                '<tspan font-weight="700">Wan2.2 那个总 27B 的 MoE 直接超线</tspan>，'
-                '得两颗起。',
-                '⭐ 图上如实画出这两条踩线和超线的 ——&#160;'
-                '<tspan font-weight="700">一张结论过于整齐的图，台下第一时间就会怀疑它。</tspan>',
-                '⚠️ 而且这根轴<tspan font-weight="700">只算权重</tspan>：真跑起来还有激活、'
-                '中间 latent、编译缓存。'
-                '<tspan font-weight="700">「28 &lt; 32 所以能跑」不是结论，只是必要条件。</tspan>'])
+    y = f.band(y, "bad",
+               "⛔ 换成实测之后，立刻看出两处「按体积猜」会猜错的地方",
+               ['① <tspan font-weight="700">S3Diff 只有 6.6 GB，按体积猜「一颗绰绰有余」——&#160;对，'
+                '但那不是重点。</tspan>真正的发现是：'
+                '<tspan font-weight="700">我们把它摊到 8 卡做张量并行，实测反而更慢</tspan>'
+                '（5.46 秒 对 5.28 秒），而预热长了 15 倍。模型太小，通信开销盖过了收益。',
+                '② <tspan font-weight="700">Wan2.1 的 28 GB 按体积猜「贴边能塞进一颗」</tspan>——&#160;'
+                '而实测从来没人这么跑：它是在 <tspan font-weight="700">v6e-8 上 dp=1、tp=8 摊开</tspan>跑的。',
+                '⭐⭐ 两条合起来是同一句话：'
+                '<tspan font-weight="700">「装得下」和「该用几颗」是两个不同的问题。</tspan>'
+                '前者看体积就能答，<tspan font-weight="700">后者只能实测</tspan>——&#160;'
+                '而我们十个模型每一个都测过。'])
 
     y = f.band(y + 14, "ok",
-               "但量级是清楚的：这一族在「一颗到几颗」，LLM 在「几十颗」",
-               ['扩散这一族从 <tspan font-weight="700">7 GB 到 54 GB</tspan>；'
-                '同一根轴上，Qwen3.5-397B 是 <tspan font-weight="700">794 GB</tspan>、'
-                'DeepSeek-V3 是 <tspan font-weight="700">1,342 GB</tspan> ——&#160;'
-                '<tspan font-weight="700">差了一个半到两个数量级</tspan>。',
-                '⭐⭐ 于是 X-2 里那三条「减配」有了解释：'
-                '<tspan font-weight="700">4 个 ICI 口、2D 环面、Pod 只有 256 颗</tspan>，'
-                '是因为 v6e 不打「一个模型摊在几千颗上」那场仗 ——&#160;'
-                '<tspan font-weight="700">不打，就不用付那个成本。</tspan>',
-                '⭐ 反过来看也一样：模型一颗装得下，多卡就只是'
-                '<tspan font-weight="700">各生成各的</tspan>，'
-                '卡与卡之间几乎不用说话 ——&#160;这类扩展对互联的要求本来就低。'])
+               "实测下来的分布：小的单颗，主力清一色 8 卡",
+               ['<tspan font-weight="700">单颗</tspan>：S3Diff、SDXL（延迟最优）、Real-ESRGAN（8.8 M，纯卷积）。',
+                '<tspan font-weight="700">8 卡</tspan>：HunyuanVideo-1.5、Wan2.1、CogVideoX 在 v6e-8；'
+                'Flux.2 在 v4-8；Wan2.2 I2V 在 v5p-8 ——&#160;'
+                '<tspan font-weight="700">一台主机的量级就够，没有一个需要跨主机。</tspan>',
+                '⭐ 这正好解释了 X-2 里那三条看着像减配的规格'
+                '（4 个 ICI 口、二维环面、Pod 只有 256 颗）：'
+                '<tspan font-weight="700">v6e 不打「一个模型摊在几千颗上」那场仗 ——&#160;不打，就不用付那个成本。</tspan>'])
 
     y = f.src(y + 18,
-              'SDXL 3.5B ——&#160;本仓库 SDXL/README；HunyuanVideo-1.5 8.3B ——&#160;'
-              '腾讯官方 GitHub；FLUX.1 [dev] 12B ——&#160;Black Forest Labs 官方模型卡；'
-              'Wan2.1-T2V-14B 与 Wan2.2-T2V-A14B（总 27B / 激活 14B）——&#160;Wan-AI 官方模型卡',
-              '一颗 v6e HBM 32 GB、每 host 8 颗 ——&#160;官方 v6e 规格表。'
-              'bf16 按每参数 2 字节换算。⛔ 只算权重，不含激活、中间 latent、编译缓存。')
+              '⭐ 右列「实测配置」全部取自各模型 README 的测试环境段：SDXL v6e-1/4/8 · '
+              'HunyuanVideo-1.5 / Wan2.1 / CogVideoX 在 v6e-8 · Flux.2 在 v4-8 · '
+              'Wan2.2 I2V 在 v5p-8 · S3Diff 与 Real-ESRGAN 单颗',
+              '「8 卡反而更慢」出自 S3Diff README 的 Why Not Multi-Chip 段；'
+              '权重体积按 bf16 每参数 2 字节换算，参数量出自各家官方模型卡',
+              '⛔ 那根轴<tspan font-weight="700">只算权重</tspan>，不含激活与编译缓存 ——&#160;'
+              '它能回答「装不装得下」，<tspan font-weight="700">回答不了「该用几颗」</tspan>。'
+              '⚠️ FLUX.1 我们没有记录实测配置，图上如实留空。')
     f.save("figx-6.svg", y + 6)
 
 
