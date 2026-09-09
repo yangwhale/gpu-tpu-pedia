@@ -3,17 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width,initial-scale=1">
-<title>专题二 · 外传：v6e 与扩散模型</title>
+<title>专题二 · 外传 L200：v6e 与扩散模型（精讲）</title>
 <!-- 🦀 CloseCrab 标识。刻意不放图片文件 —— 内联一个 SVG，让每台机器
      用自己的 emoji 字体现画：Mac 上是 Apple 那只红螃蟹，别处是各自的版本。
      烤成 PNG 反而会把某一家的字形固定下来，在别的系统上看着别扭。
      不支持 SVG 图标的浏览器会自动回落到根目录的 favicon.ico。 -->
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
 <link rel="apple-touch-icon" href="../../apple-touch-icon.png">
-<meta property="og:title" content="v6e 与扩散模型 · 一颗算力强、显存弱的芯片，配什么样的活">
-<meta property="og:description" content="二十分钟，两张显微镜图，一根强度轴。H100 的屋脊点是 295，v6e 是 560 —— 这一讲只回答一个问题：什么样的活凑得够 560。">
+<meta property="og:title" content="v6e 与扩散模型 · 精讲版：从屋脊点一路推到三阶段部署">
+<meta property="og:description" content="L100 给结论，这一版给推导链、反例和中间量，再多两节 L100 没有的工程落地：流水线为什么又胖又瘦，以及我们在这条路上真跑过的十个模型。">
 <meta property="og:type" content="article">
-<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-02x.html">
+<meta property="og:url" content="https://gist.higcp.com/Courses/WebPages/topic-02x-L200.html">
 
 <meta name="twitter:card" content="summary_large_image">
 <meta name="theme-color" content="#1a73e8">
@@ -622,40 +622,72 @@ details.aside b{color:var(--ink);font-weight:600}
 </style>
 <style>
 ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
+h3 { margin:30px 0 8px; font-size:17px }
 h4 { margin:18px 0 6px; font-size:15px }
-/* ⭐ L100 的版面比 L200/L300 松一档：图大、字少，图之间给足呼吸。
-   ⛔⛔ 只能写 margin-top / margin-bottom，**绝不能用 `margin: 34px 0` 这种简写**。
+/* ⭐ L200 的版面比 L100 紧一档：字多了，图之间不必留那么大的空。
+   ⛔⛔ 只能写 margin-top / margin-bottom，**绝不能用 `margin: 26px 0` 这种简写**。
    简写会把 margin-left 一并设成 0，而 `figure.fbox`（特异度 0,1,1）跟
    `figure.fwide` 同级、又排在后面，于是压掉 .fwide 的 margin-left:50%，
    只剩 translateX(-50%) 生效 ——&nbsp;**整张宽图往左平移半个屏幕**。
-   ⚠️ 这个坑 topic02-port-microscope.py 里白纸黑字写过（2026-09-04 栽的），
-   我 2026-09-09 建这一页时又原样踩了一遍。
-   ⭐ 判据：**改 margin 一律写具体方向，别用简写** ——&nbsp;
-     简写的杀伤力在于它悄悄重置了你没打算动的那三个方向。
-   ⭐ 而且它**不产生横向滚动条**：往左跑出视口既不撑大 scrollWidth、
-     也不报错，只有量 getBoundingClientRect().x 才看得见。 */
-figure.fbox { margin-top: 34px; margin-bottom: 34px }
+   ⚠️ 这个坑 topic02-port-microscope.py 白纸黑字写过，L100 又原样踩了一遍。
+   ⭐ 判据：**改 margin 一律写具体方向。** */
+figure.fbox { margin-top: 26px; margin-bottom: 26px }
 </style>
 
 <main class="wrap">
 
 <header class="hero">
-  <div class="kicker">专题二 · 外传　·　L100　·　20 分钟</div>
+  <div class="kicker">专题二 · 外传　·　L200 精讲版</div>
   <h1>算力强，显存弱 —— 这样一颗芯片，该配什么样的活</h1>
-  <p class="lede">TPU v6e 与扩散模型。<b>这一讲的主角是芯片，不是模型。</b>
-    十几分钟把两颗硬件哪里不一样讲清楚，最后用扩散模型说明
-    <b>「什么样的活配什么样的芯片」</b>。</p>
+  <p class="lede">TPU v6e 与扩散模型。<b>L100 那二十分钟给的是结论；这一版把每一步摊开</b> ——
+    每个数怎么除出来的、拿什么锚点验过、什么时候不成立，
+    以及 L100 完全没讲的两件事：<b>流水线为什么又胖又瘦</b>，
+    还有<b>我们在这条路上真跑过的十个模型</b>。</p>
+  <div class="note info"><span class="t">怎么读这一页</span>
+    节号 <b>§零 到 §四 跟 L100 一一对应</b> —— 听过那二十分钟的，
+    可以拿着号直接跳到想挖的那一节。<b>§五、§六是这一版新增的</b>，L100 里没有。
+    <br>⛔ 全篇仍然<b>不做端到端 benchmark 对比</b>，理由在 §零 说清楚。
+  </div>
 </header>
 
+
 <section id="s零">
-  <h2><span class="secno">开场</span>这一讲只回答一个问题</h2>
-  <p>专题二立过一条线：<b>算力 ÷ 显存带宽</b>，得到「每搬一个字节，这台机器本来能算多少次」。
-    那一讲算出 B200 和 TPU v7 <b>几乎一模一样</b>。</p>
-  <p>这一讲把同一把尺子多量两颗 —— <b>其中一颗立刻破了那个「都一样」</b>。</p>
-  <div class="note info"><span class="t">⛔ 先说清这一讲不做什么</span>
-    <b>不比 benchmark，不谈谁跑得快。</b>屋脊点是<b>结构量</b>，它只说「这台机器的胃口有多大」。
-    <em>本讲从头到尾只讲硬件结构与负载匹配。</em>
-    <br>扩散模型本身的原理（加噪、去噪、latent、VAE、DiT）在<b>专题十一</b>，那是一小时的深潜。
+  <h2><span class="secno">零</span>这一讲只回答一个问题</h2>
+
+  <p>专题二立过一条线：<b>算力 ÷ 显存带宽</b>。它的物理含义是
+    <b>「每从显存搬一个字节，这台机器本来能算多少次」</b> ——
+    一个纯粹由硬件规格决定的数，跟你跑什么模型无关。</p>
+
+  <p>那一讲量了两颗：B200 是 312，TPU v7 是 313。<b>几乎一模一样。</b>
+    当时的结论是「这一代旗舰的胃口都差不多」。</p>
+
+  <p>这一讲把同一把尺子多量两颗。<b>其中一颗立刻破了那个「都一样」。</b></p>
+
+  <h3>零点一　为什么这个数值得单独拿出来说</h3>
+
+  <p>因为它是一条<b>分界线</b>，而分界线的用途只有一个：<b>判某一段计算落在哪一侧。</b></p>
+
+  <p>把你要跑的那段计算也算出一个数 —— <b>算术强度</b>，即
+    「这段计算每搬一个字节，实际算了多少次」。两个数一比：</p>
+
+  <ul>
+    <li><b>强度 &lt; 屋脊点</b> —— 算力在等数据。此时提升算力毫无意义，
+      要么加带宽，要么想办法让每个字节多干点活。</li>
+    <li><b>强度 &gt; 屋脊点</b> —— 数据管够，算力是唯一瓶颈。
+      此时加带宽也毫无意义。</li>
+  </ul>
+
+  <p><b>就这么两句话。</b>这一讲剩下的全部内容，都是在给这两句话填具体的数。</p>
+
+  <div class="note info"><span class="t">⛔ 先说清这一讲不做什么，以及为什么</span>
+    <b>不比 benchmark，不谈谁跑得快。</b>屋脊点是<b>结构量</b> ——
+    它只说「这台机器的胃口有多大」，不说「这顿饭多久吃完」。
+    <br>⚠️ 而且这不是回避：<b>我们手上唯一一组同模型双平台实测（HunyuanVideo-1.5），
+    本身就不支持「v6e 更快」这个结论。</b>
+    与其挑一组好看的数，不如把这一讲的边界说死 ——
+    <b>它讲的是结构匹配，不是快慢。</b>
+    <br><em>扩散模型本身的原理（加噪、去噪、latent、VAE、DiT、CFG）在<b>专题十一</b>，
+    那是一小时的深潜。这里只取那些结构事实<b>对硬件的后果</b>。</em>
   </div>
 </section>
 
@@ -734,11 +766,84 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="613" fill="#80868b" style="font-size:11.0px">📌 v6e：918 TFLOPs bf16 / 1,638 GBps / 32 GB ——&#160;官方 v6e 规格表；H100 SXM：稠密 989.5 TFLOPs（数据表 1,979 带稀疏 ÷ 2）/ 3.35 TB/s / 80 GB ——&#160;官方数据表</text>
 <text class="svgsm" x="0" y="630" fill="#80868b" style="font-size:11.0px">　　⚠️ 口径三连：H100 取稠密不取稀疏（差整一倍）；v6e 每 chip 只有 1 个 TensorCore，per-chip 即 per-device；四颗一律 bf16。B200 与 v7 两行沿用专题二 §1 已核过的数。</text>
 </svg>
-<figcaption><b>图 X-1</b>　三颗旗舰挤在 295–313，<b>v6e 是 560</b>。「算力强、显存弱」不是形容词 —— 它就是这个数。<em>接下来两张图，看这个 560 是从什么样的硅片布局里长出来的。</em></figcaption></figure>
+<figcaption><b>图 X-1</b>　三颗旗舰挤在 295–313，<b>v6e 是 560</b>。<em>下面三小节分别回答：这个数怎么除出来的、我们凭什么信它、以及「算力强显存弱」在这四颗上具体差多少。</em></figcaption></figure>
+
+  <h3>一点一　这个数是怎么除出来的</h3>
+
+  <p>分子是<b>稠密 bf16 算力</b>，分母是<b>HBM 带宽</b>。两个都取官方规格表上的数，
+    不取任何实测值 —— 这一点很重要，它保证了这条线<b>在跑任何东西之前就能画出来</b>。</p>
+
+  <table>
+    <thead><tr><th>芯片</th><th>bf16 稠密算力</th><th>HBM 带宽</th>
+      <th>屋脊点<br><span class="dim">＝ 算力 ÷ 带宽</span></th><th>出处</th></tr></thead>
+    <tbody>
+      <tr><td><b>H100 SXM</b></td><td>989.5 TFLOPS</td><td>3.35 TB/s</td>
+        <td><b>295</b></td><td>NVIDIA 官方数据表</td></tr>
+      <tr><td><b>B200</b></td><td>—</td><td>—</td>
+        <td><b>312</b></td><td>专题二已推导</td></tr>
+      <tr><td><b>TPU v7</b></td><td>—</td><td>—</td>
+        <td><b>313</b></td><td>专题二已推导</td></tr>
+      <tr><td><b>TPU v6e</b></td><td>918 TFLOPS</td><td>1,638 GB/s</td>
+        <td><b>560</b></td><td>Cloud TPU v6e 官方规格页</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note warn"><span class="t">⚠️ H100 那个 989.5 是算出来的，不是抄的</span>
+    NVIDIA 的数据表上印的是 <b>BFLOAT16 Tensor Core：1,979 TFLOPS</b>，
+    但那一行下面有一句小字：<b>with sparsity</b>（结构化稀疏，2:4）。
+    <br><b>稀疏算力不能跟稠密算力比</b> —— 它要求权重里每四个有两个是零，
+    而我们这里比的所有负载都不满足这个前提。
+    <b>稠密值是它的一半：989.5。</b>
+    <br>⭐ 这是这张表里唯一一处需要动脑的地方，也是最容易被抄错的地方 ——
+    <b>网上大量「H100 有 1979 TFLOPS」的说法，都漏了那三个词。</b>
+  </div>
+
+  <h3>一点二　我们凭什么信这条公式 —— 拿一个已知答案复现它</h3>
+
+  <p>公式再简单，也得验。<b>验的办法不是再推一遍，而是找一个别人已经算过的例子，
+    看我们的算法能不能把他的答案原样复现出来。</b></p>
+
+  <p>用的是 Google 那本公开的《How to Scale Your Model》。它在讲屋顶线的那一章里，
+    对 <b>TPU v5p</b> 给出了自己的屋脊点。我们把 v5p 的官方算力和带宽代进
+    「算力 ÷ 带宽」，<b>得到的数跟它印出来的一致。</b></p>
+
+  <div class="note ok"><span class="t">⭐ 这一步为什么不能省</span>
+    我们要用这条公式去给 v6e 和 v7 下判断，而<b>那两个数没有人可以对照</b>。
+    先在一个<b>有标准答案的输入</b>上跑通，再拿它去算没有答案的输入 ——
+    这样万一 v6e 那个 560 错了，错也只可能错在<b>输入的规格数</b>上，
+    <b>不会错在公式本身</b>。
+    <br><em>整个错误空间被砍掉了一半，代价是十分钟。</em>
+  </div>
+
+  <h3>一点三　「算力强、显存弱」具体是多强、多弱</h3>
+
+  <p>把 v6e 跟 H100 逐项相除，三个比值：</p>
+
+  <table>
+    <thead><tr><th>比什么</th><th>v6e</th><th>H100 SXM</th>
+      <th>v6e ÷ H100</th><th>这一项算强还是弱</th></tr></thead>
+    <tbody>
+      <tr><td>bf16 稠密算力</td><td>918 TFLOPS</td><td>989.5 TFLOPS</td>
+        <td><b>93%</b></td><td><b>基本打平</b></td></tr>
+      <tr><td>HBM 带宽</td><td>1,638 GB/s</td><td>3.35 TB/s</td>
+        <td><b>49%</b></td><td>只有一半</td></tr>
+      <tr><td>HBM 容量</td><td>32 GB</td><td>80 GB</td>
+        <td><b>40%</b></td><td>不到一半</td></tr>
+    </tbody>
+  </table>
+
+  <p>三项里两项是短板，只有一项打平。<b>所以「v6e 合适」这句话，
+    从这里开始就注定只能是有条件的</b> —— 条件就是那两个短板得<b>不参与</b>。</p>
+
+  <p class="landing">⭐ <b>屋脊点 560 其实就是这三个比值的一句话总结：</b>
+    分子基本没变，分母砍了一半，商自然涨到约两倍。
+    <br><em>560 ÷ 295 ＝ 1.90 —— 这个 1.9 倍，跟带宽那栏的 49% 是同一件事的两种说法。</em></p>
 </section>
+
 <section id="s二">
   <h2><span class="secno">二</span>把两颗芯片拆开</h2>
-  <p>先看 v6e。<b>只要记住三件事：算力集中在两个大方阵里、片上有一整块暂存、通往片外的那根管子很窄。</b></p>
+  <p>上一节的三个比值是<b>结果</b>。这一节看它们是从什么样的硅片布局里长出来的 ——<b>两颗芯片在同样的三个问题上，做了完全相反的选择。</b></p>
+  <h3>二点一　v6e：算力集中在两个大方阵里</h3>
 <figure class="fbox fwide" id="figx-2"><svg viewBox="0 0 1400 852" width="100%" role="img" aria-label="一颗 TPU v6e 芯片的内部布局：1 个 TensorCore，内含 2 个 256×256 的 MXU、1 个 8×128 的向量单元、1 个标量单元，配 128 MiB 的 VMEM 片上暂存和 1 MiB SMEM；另有 2 个 SparseCore；片外是 32 GB HBM，带宽 1638 GB/s；对外 4 个 ICI 端口组成二维环面"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一颗 TPU v6e 拆开看 ——&#160;<tspan font-weight="700">1 颗芯片 ＝ 1 个核 ＝ 1 个 device</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 记住三件事就够了：<tspan font-weight="700">算力集中在 2 个大方阵里</tspan>、<tspan font-weight="700">片上有一整块 128 MiB 的暂存</tspan>、<tspan font-weight="700">通往片外的那根管子只有 1,638 GB/s</tspan>。</text>
@@ -847,8 +952,27 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="811" fill="#80868b" style="font-size:11.0px">📌 每 chip 1 个 TensorCore、2 个 MXU、1 个向量单元、1 个标量单元、918 TFLOPs bf16、HBM 32 GB / 1,638 GBps、ICI 800 GBps 4 端口、2D torus、Pod 256 chip、每 host 8 chip ——&#160;官方 v6e 规格表</text>
 <text class="svgsm" x="0" y="828" fill="#80868b" style="font-size:11.0px">　　MXU 256×256、VMEM 128 MiB/core、SMEM 1 MiB、SparseCore 2 core × 16 subcore × 8 lane ——&#160;JAX 公开源码 tpu_info.py 的 TPU_V6E 分支</text>
 </svg>
-<figcaption><b>图 X-2</b>　一颗 v6e：<b>1 颗 ＝ 1 个核 ＝ 1 个 device</b>，128 MiB 片上暂存，片外那道门 1,638 GB/s。<em>专题二反复强调的「容量除以 2」那个坑，这一代没有。</em></figcaption></figure>
-  <p>再按<b>同样的画法</b>拆 H100。看它在同一件事上做了什么相反的选择。</p>
+<figcaption><b>图 X-2</b>　一颗 v6e：<b>1 颗 ＝ 1 个核 ＝ 1 个 device</b>，两个 256×256 的 MXU，128 MiB 片上暂存，片外那道门 1,638 GB/s。<em>⭐ 注意右栏那三条看着像减配的规格 —— 二点四节会解释它们为什么是配套的。</em></figcaption></figure>
+
+  <p>三件事值得记住：</p>
+  <ol>
+    <li><b>算力集中。</b>整颗芯片的稠密算力就装在两个 256×256 的方阵里。
+      <b>要喂饱它，你的矩阵得足够大</b> —— 小矩阵会让方阵大半空转。</li>
+    <li><b>片上有一整块暂存。</b>128 MiB 的 VMEM，比 H100 一个 SM 的
+      共享内存大三个数量级。<b>但它全部由编译器安排</b>，没有硬件缓存兜底。</li>
+    <li><b>通往片外的管子窄。</b>1,638 GB/s，不到 H100 的一半 ——
+      这就是上一节那个 49% 的物理来源。</li>
+  </ol>
+
+  <div class="note info"><span class="t">⭐ 这一代没有「容量除以 2」那个坑</span>
+    专题二反复强调过：TPU v7 上 <b>1 颗芯片 ＝ 2 个 device</b>，
+    所以框架日志里按 device 报的数，换算成每芯片要乘 2、看容量要除 2。
+    <br><b>v6e 是 1:1</b> —— 一颗芯片就是一个 TensorCore 就是一个 device。
+    <em>跨代沿用那条换算规则会算错，这是本讲需要单独提醒的一处。</em>
+  </div>
+
+  <h3>二点二　H100：同样的画法，三个相反的选择</h3>
+  <p>下面这张图<b>刻意用了跟 X-2 完全一样的画法和比例尺</b> ——尤其是那道「门」的宽度，两张图是按带宽等比画的，<b>可以直接叠着看。</b></p>
 <figure class="fbox fwide" id="figx-3"><svg viewBox="0 0 1400 752" width="100%" role="img" aria-label="一颗 NVIDIA H100 SXM 的内部布局：132 个 SM，每个 SM 有 128 个 CUDA Core、4 个第四代 Tensor Core、256 KB 的 L1 与共享内存、256 KB 寄存器堆；全片共享 50 MB L2；片外 80 GB HBM3，带宽 3.35 TB/s；对外 NVLink 900 GB/s"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一颗 NVIDIA H100 拆开看 ——&#160;<tspan font-weight="700">同样的画法，相反的选择</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 跟上一张比着看：<tspan font-weight="700">算力摊成 528 个小单元</tspan>、<tspan font-weight="700">片上多了一整层硬件自动管的缓存</tspan>、<tspan font-weight="700">通往片外的门宽一倍</tspan>。</text>
@@ -1065,8 +1189,46 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="711" fill="#80868b" style="font-size:11.0px">📌 H100 SXM：132 SM（8 GPC / 66 TPC）、128 CUDA Core 与 4 个第四代 Tensor Core 每 SM、L1＋共享 256 KB／SM（共享可配 228 KB）、寄存器堆 256 KB／SM、L2 50 MB ——&#160;NVIDIA《Hopper Architecture In-Depth》</text>
 <text class="svgsm" x="0" y="728" fill="#80868b" style="font-size:11.0px">　　稠密 bf16 989.5 TFLOPS（数据表 1,979 带稀疏 ÷ 2）、HBM3 80 GB / 3.35 TB/s、NVLink 900 GB/s ——&#160;NVIDIA H100 官方数据表。⚠️ 84 MB 那个合计是本图当场加的：132 × 256 KB ＝ 33.8 MB，加 L2 50 MB。</text>
 </svg>
-<figcaption><b>图 X-3</b>　一颗 H100：算力摊成 <b>528 个</b>小单元，片上多了一整层<b>硬件自动管</b>的 L2，门宽一倍。<em>⭐ 两张图里那道门的宽度是按带宽等比画的，可以直接比。</em></figcaption></figure>
-  <p>最后补一张。X-2 里有三条规格看着像<b>减配</b> —— 只有 4 个 ICI 口、二维环面、一个 Pod 只有 256 颗。<b>把模型的体积摆出来，这三条就说得通了。</b></p>
+<figcaption><b>图 X-3</b>　一颗 H100：算力摊成 <b>528 个</b>小单元（132 个 SM，每个 4 个），片上多了一整层<b>硬件自动管</b>的 L2，门宽一倍。<em>⭐ 门的宽度按带宽等比 —— 跟 X-2 直接可比。</em></figcaption></figure>
+
+  <table>
+    <thead><tr><th>同一个问题</th><th>TPU v6e 的答</th><th>H100 的答</th>
+      <th>这个选择在防什么</th></tr></thead>
+    <tbody>
+      <tr><td><b>算力怎么摆</b></td>
+        <td>集中成 2 个 256×256 方阵</td>
+        <td>摊成 528 个小单元</td>
+        <td>摊开是为了<b>不管来什么形状都有人能接</b>；
+          集中是为了<b>大矩阵上把利用率吃满</b></td></tr>
+      <tr><td><b>片上谁做主</b></td>
+        <td>128 MiB 全归编译器，<b>CMEM ＝ 0</b></td>
+        <td>50 MB L2 由<b>硬件自动</b>管，另有每 SM 256 KB</td>
+        <td>硬件自动管是为了<b>应付「我不知道你要跑什么」</b>；
+          交给编译器是为了<b>吃透「我早就知道你要跑什么」</b></td></tr>
+      <tr><td><b>门开多宽</b></td>
+        <td>1,638 GB/s</td>
+        <td>3.35 TB/s</td>
+        <td>门宽一倍，代价是屋脊点低一半 —— <b>它挡的是「强度不够」的活</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok"><span class="t">⭐⭐ 两颗芯片各自都是自洽的</span>
+    这三行不是「谁做得好谁做得差」，是<b>同一道题的两个解，各自配套</b>。
+    <br>H100 那一列全部指向<b>「负载未知」</b>：摊开、缓存兜底、门开大 ——
+    <b>三个都是为不确定性买的保险</b>。
+    <br>v6e 那一列全部指向<b>「负载已知」</b>：集中、编译期写死、门只开够用 ——
+    <b>三个都是把保险费省下来换算力密度</b>。
+    <br>——&nbsp;<b>所以问题从来不是谁更强，是你手上的活属于哪一种。</b>
+  </div>
+
+  <div class="note warn"><span class="t">⚠️ 那个 CMEM ＝ 0 是有代价的，别只看它省下的</span>
+    没有硬件缓存兜底，意味着<b>编译器排错了就没有后手</b>。
+    形状是动态的、访存模式在运行时才知道的负载，在这套设计上会很难受。
+    <br><b>这条恰好是 §三要用的：扩散模型为什么正好把这个前提喂得满满的。</b>
+  </div>
+
+  <h3>二点三　一颗装得下吗 —— 那三条「减配」其实是配套的</h3>
+  <p>X-2 右栏有三条规格看着像减配：<b>只有 4 个 ICI 口、二维环面、一个 Pod 只有 256 颗</b>（对照 v7 是 6 口、三维、9,216 颗）。<b>把模型的体积摆出来，这三条立刻说得通。</b></p>
 <figure class="fbox fwide" id="figx-6"><svg viewBox="0 0 1400 819" width="100%" role="img" aria-label="把扩散模型和大语言模型的 bf16 权重体积摆在同一根对数轴上，并画出一颗 v6e 的 32 GB 这条线：扩散这一族从 7 GB 到 54 GB，在一颗到两颗的量级；而 LLM 是 794 GB 和 1342 GB，要几十颗"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一颗装得下吗 ——&#160;<tspan font-weight="700">这就是为什么 v6e 的 Pod 只有 256 颗</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ X-2 里那三条看着像减配的规格（4 个 ICI 口、2D 环面、Pod 256），把模型体积摆出来就合理了：<tspan font-weight="700">这一族模型在「一颗到几颗」的量级上，不需要摊到几千颗</tspan>。</text>
@@ -1154,8 +1316,21 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="778" fill="#80868b" style="font-size:11.0px">📌 SDXL 3.5B ——&#160;本仓库 SDXL/README；HunyuanVideo-1.5 8.3B ——&#160;腾讯官方 GitHub；FLUX.1 [dev] 12B ——&#160;Black Forest Labs 官方模型卡；Wan2.1-T2V-14B 与 Wan2.2-T2V-A14B（总 27B / 激活 14B）——&#160;Wan-AI 官方模型卡</text>
 <text class="svgsm" x="0" y="795" fill="#80868b" style="font-size:11.0px">　　一颗 v6e HBM 32 GB、每 host 8 颗 ——&#160;官方 v6e 规格表。bf16 按每参数 2 字节换算。⛔ 只算权重，不含激活、中间 latent、编译缓存。</text>
 </svg>
-<figcaption><b>图 X-6</b>　扩散这一族在<b>「一颗到几颗」</b>的量级，而 LLM 在「几十颗」。<em>v6e 不打「一个模型摊在几千颗上」那场仗，所以不用付那个成本。</em><br>⚠️ 图上如实标了两条踩线和超线的 —— <b>只算权重，不含激活。</b></figcaption></figure>
-  <p>X-2 右栏还有两样只标了存在、没展开 —— <b>SparseCore</b> 和 <b>二维环面</b>。这两张各补一下 —— <b>尤其 SparseCore，它不只是「给推荐系统用的」。</b></p>
+<figcaption><b>图 X-6</b>　扩散这一族在<b>「一颗到几颗」</b>的量级（7–54 GB），而 LLM 在「几十颗」（794 GB、1,342 GB）。<em>⚠️ 图上如实画了两条踩线和超线的 —— <b>只算权重，不含激活。</b></em></figcaption></figure>
+
+  <p>逻辑很直接：<b>v7 那套三维环面、九千多颗的规格，是为「一个模型摊在几千颗上」
+    准备的。而扩散这一族根本不打那场仗。</b></p>
+  <p>不打，就<b>不用付那个成本</b> —— 少两个 ICI 口、少一个维度、Pod 小一个数量级，
+    省下来的面积和功耗，全都还给了算力密度。<b>这三条不是减配，是不同的题面。</b></p>
+
+  <div class="note bad"><span class="t">⛔ 但别把这张图讲成「扩散都装得进一颗」</span>
+    <b>Wan2.1-14B 的 28 GB 已经贴着 32 GB 的边</b>，激活只剩 4 GB 余量；
+    <b>Wan2.2 那个总 27B 的 MoE 直接超线</b>，两颗起。
+    <br>⚠️ 而且这根轴<b>只算权重</b>：真跑起来还有激活、中间 latent、编译缓存。
+    <b>「28 &lt; 32 所以能跑」不是结论，只是必要条件。</b>
+  </div>
+
+  <h3>二点四　X-2 右栏那两样只标了存在的：SparseCore 与二维环面</h3>
 <figure class="fbox fwide" id="figx-7"><svg viewBox="0 0 1400 767" width="100%" role="img" aria-label="TPU v6e 上每颗芯片有 2 个 SparseCore，每个含 16 个子核、每个子核 8 条 lane 和 256 KiB 本地内存。它有两个职责：一是加速稀疏运算与大表 embedding，二是集合通信卸载 ——把 all-reduce、all-gather、reduce-scatter 从 TensorCore 手里接过去，不占矩阵单元，与计算并行执行。所以只要跨卡，它就在干活"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">SparseCore 拆开看 ——&#160;<tspan font-weight="700">它有两个职责，跨卡的时候一直在干活</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一颗 v6e 上除了那个大 TensorCore，还蹲着两个小协处理器。它们不做矩阵乘 ——&#160;<tspan font-weight="700">一是在大表里到处乱查，二是把集合通信从 TensorCore 手里接过去</tspan>。</text>
@@ -1253,7 +1428,33 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="726" fill="#80868b" style="font-size:11.0px">📌 职责① 与「v6e 每 chip 2 个」——&#160;官方《TPU architecture》；职责②「把 all-reduce 卸到 SparseCore，不占 MXU，与 TensorCore 并行」——&#160;官方《Cloud TPU 性能指南》</text>
 <text class="svgsm" x="0" y="743" fill="#80868b" style="font-size:11.0px">　　16 subcore × 8 lane、每 subcore VMEM 256 KiB ——&#160;JAX 公开源码 tpu_info.py 的 TPU_V6E 分支。⚠️ 集合通信卸载那批材料以 v7x / 第四代 SparseCore 为主，Trillium 是第三代，v6e 上的成熟度本课未实测。</text>
 </svg>
-<figcaption><b>图 X-7</b>　SparseCore <b>有两个职责</b>：① 稀疏 / 大表（推荐模型那类）；<b>② 集合通信卸载 —— 把 all-reduce、all-gather 从 TensorCore 手里接过去，不占 MXU，跟计算真正并行。</b><em>⛔ 这张图我推翻重写过一次：初版写「扩散用不到它」是错的 —— 只要跨卡，它就在干活。</em></figcaption></figure>
+<figcaption><b>图 X-7</b>　SparseCore <b>有两个职责</b>：① 稀疏 / 大表（推荐模型那类）；<b>② 集合通信卸载 —— 把 all-reduce、all-gather 从 TensorCore 手里接过去，不占 MXU，跟计算真正并行。</b><em>⛔ 这张图推翻重写过一次，图上原样保留了错在哪 —— 那个错法本身值得讲给学员听。</em></figcaption></figure>
+
+  <div class="note bad"><span class="t">⛔ 这个错法值得单独讲一遍</span>
+    初版这张图写的是「扩散模型用不到 SparseCore，它是给推荐系统那类负载准备的」。
+    <b>那是错的。</b>
+    <br>错误的来源：架构文档里写着
+    <b>「a primary use case is accelerating recommendation models」</b>，
+    我<b>把「主用途」当成了「用途的全集」</b>。
+    <br>⭐ 判据：<b>「a primary use case」这种措辞本身就在告诉你「还有别的」</b> ——
+    它是一个明确的<b>不完全枚举</b>信号，而我把它读成了定义。
+    <br>⚠️ 更该警惕的是：<b>我当时还给这个错误配了一条像模像样的推导链</b>
+    （扩散没有大 embedding 表 → 没有稀疏聚合 → 它基本闲着）。
+    <b>链子每一环都对，前提漏了一半，于是整条链推向了错的地方。</b>
+    <br><em>——&nbsp;这是这门课里最该带走的一种自我怀疑：
+    <b>推理顺畅从来不是前提完整的证据。</b></em>
+  </div>
+
+  <p>更正后的结论整个反过来：<b>只要跨卡，SparseCore 就在干活。</b>
+    扩散确实没有大 embedding 表，所以它走的不是第 ① 条路；
+    但只要模型要切开，<b>all-gather 和 reduce-scatter 就一大堆</b> —— 第 ② 条路它走得很勤。</p>
+
+  <div class="note warn"><span class="t">⚠️ 口径：这批材料主要是第四代 SparseCore 的语境</span>
+    「集合通信卸载」那批官方材料以 <b>v7x / 第四代 SparseCore</b> 为主，
+    而 <b>Trillium 是第三代</b>。<b>v6e 上这条路的成熟度我们没有实测。</b>
+    <br><em>如实标出来，不含糊过去 —— 这一条在图上也写着。</em>
+  </div>
+
 <figure class="fbox fwide" id="figx-8"><svg viewBox="0 0 1400 833" width="100%" role="img" aria-label="TPU v6e 每颗芯片有 4 个 ICI 端口，连上下左右四个邻居，边缘绕回形成二维环面；一个 Pod 是 16 乘 16 共 256 颗，最远两点相距 16 跳。对照 v7 是 6 个端口的三维环面"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">4 个口怎么连成 256 颗 ——&#160;<tspan font-weight="700">二维环面，最远 16 跳；够扩散这一族用，不是不用</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ X-2 右栏那三行（4 个 ICI 口 · 2D 环面 · Pod 256）在这儿展开。X-6 说了「为什么 256 够用」，<tspan font-weight="700">这一张说「怎么连、代价是什么」</tspan>。</text>
@@ -1581,18 +1782,11 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="792" fill="#80868b" style="font-size:11.0px">📌 ICI 端口 4 个、双向 800 GBps／chip、2D torus、Pod 256 chip、支持的 2D 切片形状最大到 16x16 ——&#160;官方 v6e 规格表</text>
 <text class="svgsm" x="0" y="809" fill="#80868b" style="font-size:11.0px">　　「最远 16 跳」是本图当场推的：N×N 环面每维最多 ⌊N/2⌋ 跳，16÷2 ＝ 8，两维相加 16。v7 的 4×4×4 同法得 2+2+2 ＝ 6。⚠️ 这是<tspan font-weight="700">拓扑距离</tspan>，不是延迟实测。</text>
 </svg>
-<figcaption><b>图 X-8</b>　4 个 ICI 口连上下左右，边缘绕回成二维环面，16×16 ＝ 256 颗，<b>最远 16 跳</b>（对照 v7 的 4×4×4 是 6 跳）。<em>走不走这条路取决于你切不切模型 —— 不切几乎不走，一切开就一大堆 all-gather。<b>v6e 的互联是「够扩散这一族用」的档位，不是「不用」。</b></em></figcaption></figure>
-
-  <div class="note ok"><span class="t">⭐ 两颗芯片各自都是自洽的</span>
-    H100 摊成很多小单元、再压一层硬件缓存，是为了应付<b>「我不知道你要跑什么」</b>；
-    v6e 压成两块大方阵、片上全交给编译器，是为了吃透<b>「我早就知道你要跑什么」</b>。
-    <br>——&nbsp;<b>所以问题从来不是谁更强，是你手上的活属于哪一种。</b>
-  </div>
-
+<figcaption><b>图 X-8</b>　4 个 ICI 口连上下左右，边缘绕回成二维环面，16×16 ＝ 256 颗，<b>最远 16 跳</b>（对照 v7 的 4×4×4 是 6 跳）。<em>走不走这条路取决于你切不切模型 —— <b>v6e 的互联是「够扩散这一族用」的档位，不是「不用」。</b></em></figcaption></figure>
 </section>
 <section id="s三">
   <h2><span class="secno">三</span>那么扩散模型是哪一种活</h2>
-  <p>先回答一个更基础的问题：<b>这类模型为什么是「计算密集」的？</b>拿 Wan2.1 的官方配置当场算一遍就清楚了。</p>
+  <p>要判它落在轴的哪一侧，得先算出它的<b>算术强度</b>。而算强度之前，得先回答一个更基础的问题：<b>这类模型为什么是「计算密集」的？</b>——&nbsp;拿 Wan2.1-T2V-14B 的官方配置当场算一遍，一步都不跳。</p>
 <figure class="fbox fwide" id="figx-9"><svg viewBox="0 0 1400 701" width="100%" role="img" aria-label="以 Wan2.1-T2V-14B 的官方配置算一段 720×1280、81 帧的视频：经 VAE 下采样与 patch 化后是 75600 个 token；每层每步 1.63e14 FLOP，其中全局注意力占 72%；40 层 50 步共 3.26e17 FLOP"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">为什么扩散是计算密集型 ——&#160;<tspan font-weight="700">拿 Wan2.1 的真配置当场算一遍</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 结论先说：一段 720P、81 帧的视频 ＝ <tspan font-weight="700">75,600 个 token</tspan>，而注意力是<tspan font-weight="700">全局的</tspan>——&#160;于是算力的<tspan font-weight="700">七成花在注意力上，那是纯矩阵乘</tspan>。</text>
@@ -1688,9 +1882,147 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="660" fill="#80868b" style="font-size:11.0px">📌 vae_stride (4,8,8)、patch_size (1,2,2)、dim 5120、ffn_dim 13824、num_layers 40、window_size (−1,−1)、text_len 512 ——&#160;Wan2.1 官方仓库 wan/configs/wan_t2v_14B.py</text>
 <text class="svgsm" x="0" y="677" fill="#80868b" style="font-size:11.0px">　　同族同量级：Wan2.2-T2V-A14B（总 27B / 每步激活 14B，Wan-AI 官方模型卡）、LongCat-Video 13.6B（美团官方，DiT 架构）——&#160;形状不同，但「token 极多 ＋ 全局注意力」这两条一样成立。</text>
 </svg>
-<figcaption><b>图 X-9</b>　一段 720P、81 帧的视频经 VAE 与 patch 化后是 <b>75,600 个 token</b>；而 config 里 <code>window_size = (−1,−1)</code> —— <b>不开窗口，全局注意力</b>。于是算力的<b>七成花在 N² 的注意力上</b>，那是纯矩阵乘。<em>⭐ 外部锚点：每层 351.3 M × 40 层 ＝ 14.05 B，对上官方标称的 14B。</em></figcaption></figure>
-  <p>算力密集讲清楚了，再看它<b>结构上</b>为什么正好配这套编译优先的打法。</p>
-<figure class="fbox fwide" id="figx-5"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="左边是自回归 LLM：一个 token 一个 token 产出，KV cache 越来越长，形状每步都在变；右边是扩散模型：整张图一起动，走五十步，步与步之间只传一张大小不变的 latent，没有 KV cache，形状从头到尾一样"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figcaption><b>图 X-9</b>　三步：像素 → latent → token，然后拆 FLOP。<em>下面三小节把图上这三列各自的算式摊开，并给出<b>一个能证伪整套公式的外部锚点</b>。</em></figcaption></figure>
+
+  <h3>三点一　第一步：一段视频到底有多少个 token</h3>
+
+  <p>输入是 <b>1280×720、81 帧</b>。它要过两道压缩才进 Transformer：</p>
+
+  <table>
+    <thead><tr><th>这一步</th><th>做了什么</th><th>形状变成</th><th>依据</th></tr></thead>
+    <tbody>
+      <tr><td>原始像素</td><td>—</td><td>81 × 720 × 1280 × 3</td><td>输入参数</td></tr>
+      <tr><td><b>VAE 压缩</b></td>
+        <td>时间 ÷4、空间 ÷8×8，通道 3 → 16</td>
+        <td>16 × <b>21</b> × <b>90</b> × <b>160</b></td>
+        <td><code>vae_stride = (4, 8, 8)</code></td></tr>
+      <tr><td><b>Patch 化</b></td>
+        <td>空间上每 2×2 合成一个 token</td>
+        <td>21 × <b>45</b> × <b>80</b></td>
+        <td><code>patch_size = (1, 2, 2)</code></td></tr>
+      <tr><td><b>序列长度 N</b></td><td>21 × 45 × 80</td>
+        <td colspan="2"><b>＝ 75,600 个 token</b>，每个 <code>dim = 5120</code> 维</td></tr>
+    </tbody>
+  </table>
+
+  <p>对照一下：<b>一次 LLM 解码，一步只处理 1 个 token。</b>差了将近五个数量级 ——
+    而这个差距，就是后面所有结论的源头。</p>
+
+  <h3>三点二　第二步：这 FLOP 是怎么花掉的</h3>
+
+  <p>一层 DiT、一个去噪步，四项开销。<b>N ＝ 75,600，d ＝ 5,120，FFN 中间层 13,824。</b></p>
+
+  <table>
+    <thead><tr><th>这一项</th><th>算式</th><th>FLOP</th><th>占比</th></tr></thead>
+    <tbody>
+      <tr><td><b>注意力（QKᵀ 与 AV）</b></td><td>4 · N² · d</td>
+        <td><b>1.17 × 10¹⁴</b></td><td><b>72%</b></td></tr>
+      <tr><td>FFN</td><td>4 · N · d · 13,824</td>
+        <td>2.14 × 10¹³</td><td>13%</td></tr>
+      <tr><td>自注意力的 q/k/v/o 投影</td><td>8 · N · d²</td>
+        <td>1.59 × 10¹³</td><td>10%</td></tr>
+      <tr><td>交叉注意力（文本只有 512 个 token）</td><td>—</td>
+        <td>8.77 × 10¹²</td><td>5%</td></tr>
+      <tr><td colspan="2"><b>每层每步合计</b></td>
+        <td><b>1.63 × 10¹⁴</b></td><td>100%</td></tr>
+      <tr><td colspan="2">× 40 层 × 50 步 ＝ <b>生成一段视频</b></td>
+        <td colspan="2"><b>3.26 × 10¹⁷ FLOP</b></td></tr>
+    </tbody>
+  </table>
+
+  <p>七成花在那个 <b>N²</b> 项上。<b>而 N² 意味着：token 数翻倍，这一项翻四倍。</b>
+    上一小节那个 75,600 之所以是源头，原因就在这个平方上。</p>
+
+  <div class="note info"><span class="t">这里可以顺手回答「一颗 v6e 要跑多久」</span>
+    3.26 × 10¹⁷ ÷ 918 × 10¹² ＝ <b>355 秒，约 5.9 分钟</b>。
+    <br>⛔ 但这是<b>算术，不是性能预测</b> —— 它假设算力 100% 吃满，而这做不到（见三点五）。
+    <b>它的正确用法是当下界：任何低于 5.9 分钟的宣称，一定有别的事情发生了</b>
+    （降步数、降分辨率、缓存复用、稀疏化）。
+  </div>
+
+  <h3>三点三　那一行 config 才是分水岭</h3>
+
+  <p>上面那个「注意力占七成」<b>完全取决于一个字段</b>：</p>
+
+  <pre><code>window_size = (-1, -1)   # ← 不开滑窗，全局注意力</code></pre>
+
+  <p>如果它不是 −1，而是一个有限的窗口 <b>w</b>，注意力就从 <b>4·N²·d</b> 掉成
+    <b>4·N·w·d</b> —— 从平方变成线性。整套结论会怎么变：</p>
+
+  <table>
+    <thead><tr><th>假如窗口是</th><th>注意力 FLOP</th><th>注意力占比</th>
+      <th>每层总量</th><th>总算力变成原来的</th></tr></thead>
+    <tbody>
+      <tr><td><b>−1（实际情况）</b></td><td><b>1.17 × 10¹⁴</b></td><td><b>72%</b></td>
+        <td><b>1.63 × 10¹⁴</b></td><td><b>1 ×</b></td></tr>
+      <tr><td>8,192</td><td>1.27 × 10¹³</td><td>22%</td>
+        <td>5.87 × 10¹³</td><td>1 / 2.8</td></tr>
+      <tr><td>4,096</td><td>6.34 × 10¹²</td><td>12%</td>
+        <td>5.24 × 10¹³</td><td>1 / 3.1</td></tr>
+      <tr><td>2,048</td><td>3.17 × 10¹²</td><td>6%</td>
+        <td>4.92 × 10¹³</td><td>1 / 3.3</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note bad"><span class="t">⛔ 所以「视频模型都很重」这句话不能当依据</span>
+    开了滑窗，注意力从占七成掉到占一成，<b>整个「计算密集」的结论也就跟着塌了</b>。
+    <br>⭐ 判据：<b>这个字段必须去 config 里看，不能凭直觉推。</b>
+    同一族模型里，开不开窗口是设计者逐个模型做的选择 ——
+    <b>它不是「视频模型」这个类别的属性。</b>
+  </div>
+
+  <h3>三点四　凭什么信这一整套算式 —— 一个能证伪它的锚点</h3>
+
+  <p>上面那张 FLOP 表里，任何一项的系数写错 2 倍，结果看起来都一样合理。
+    <b>所以必须找一个独立的、有标准答案的量来验。</b></p>
+
+  <p>用参数量。同一份 config，把一层的权重数出来：</p>
+
+  <table>
+    <thead><tr><th>一层里有什么</th><th>参数量</th></tr></thead>
+    <tbody>
+      <tr><td>自注意力 q/k/v/o：4 · d²</td><td>104.9 M</td></tr>
+      <tr><td>交叉注意力 q/k/v/o：4 · d²</td><td>104.9 M</td></tr>
+      <tr><td>FFN：2 · d · 13,824</td><td>141.6 M</td></tr>
+      <tr><td><b>每层合计</b></td><td><b>351.3 M</b></td></tr>
+      <tr><td><b>× 40 层</b></td>
+        <td><b>14.05 B　←　官方标称「14B」</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok"><span class="t">⭐⭐ 这一步为什么不能省 —— 它当场抓到过一个错</span>
+    参数量能对上，说明我们对<b>「这一层里到底有哪些矩阵」</b>的理解是对的；
+    而 FLOP 表用的是同一批矩阵。<b>形状对了，系数才有意义。</b>
+    <br>⭐ 写这一节时，我另起了一个脚本复算，得到的却是 <b>9.86 B</b>，对不上。
+    查下去发现：<b>那个脚本漏掉了交叉注意力的四个投影矩阵</b>（少了 104.9 M/层）。
+    ——&nbsp;<b>是锚点抓到了它，不是我看出来的。</b>
+    <br><em>如果当初没设这个锚点，那个脚本会安安静静地给出一套自洽但错误的数。
+    <b>孤立的、对不上任何外部量的数字，才是最该害怕的。</b></em>
+  </div>
+
+  <h3>三点五　⚠️ 强度够高 ≠ 算力自动吃满</h3>
+
+  <p>到这里可以算强度了：这段计算的算术强度<b>约等于 N ＝ 75,600</b>，
+    是 v6e 那条 560 的 <b>135 倍</b>。<b>带宽完全不是瓶颈。</b></p>
+
+  <p>但落在算力侧，<b>不等于算力就用满了</b>。我们自己在 Wan 上实测的 MFU 是
+    <b>约 37%</b> —— 六成多的算力没吃到。原因不在带宽，在别处：</p>
+
+  <div class="note warn"><span class="t">⚠️ head_dim ＝ 128，而 MXU 是 256×256</span>
+    注意力是<b>按头</b>算的，每个头的维度是 128。而 v6e 的 MXU 收缩阵列是
+    <b>256×256</b> —— 送进去的 K 维只有 128，<b>方阵一半的位置是空的</b>。
+    <br>⭐ 这正是 §二点一那个「算力集中」的另一面：
+    <b>集中成大方阵，好处是大矩阵上利用率高，代价是喂不满时浪费也成块</b>。
+    <br><em>——&nbsp;屋顶线告诉你<b>瓶颈在哪一侧</b>，它不告诉你<b>那一侧用得好不好</b>。
+    这是两个问题，L100 只讲了第一个。</em>
+  </div>
+
+  <h3>三点六　结构上的三条：它把编译期想知道的全提前说了</h3>
+
+  <p>三点一到三点五讲的是<b>算术上</b>的匹配。还有<b>结构上</b>的一半 ——
+    而这一半恰好对上 §二点二那个「CMEM ＝ 0」的设计前提。</p>
+
+  <figure class="fbox fwide" id="figx-5"><svg viewBox="0 0 1400 794" width="100%" role="img" aria-label="左边是自回归 LLM：一个 token 一个 token 产出，KV cache 越来越长，形状每步都在变；右边是扩散模型：整张图一起动，走五十步，步与步之间只传一张大小不变的 latent，没有 KV cache，形状从头到尾一样"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">扩散一步在干什么 ——&#160;<tspan font-weight="700">同一段计算，原样跑五十遍</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 这一张不讲扩散的数学，只讲它<tspan font-weight="700">对硬件提了什么要求</tspan>：没有 KV cache、形状不变、同一段重复几十次。</text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
@@ -1799,10 +2131,38 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="753" fill="#80868b" style="font-size:11.0px">📌 「没有 KV cache、每步独立、形状静态」这三条是扩散模型的结构事实，本课专题十一有完整推导；这一张只取它们对硬件的三个后果</text>
 <text class="svgsm" x="0" y="770" fill="#80868b" style="font-size:11.0px">　　⛔ 本图不含任何 benchmark 数 ——&#160;它讲的是结构匹配，不是快慢。扩散的数学（加噪 / 去噪 / latent / VAE）属于专题十一，那是一小时的深潜。</text>
 </svg>
-<figcaption><b>图 X-5</b>　没有 KV cache、形状从头到尾不变、同一段计算原样跑五十遍。<em>编译期能知道的，它全都提前告诉你了 —— 这正是 v6e 那套打法要的前提。</em></figcaption></figure>
+<figcaption><b>图 X-5</b>　没有 KV cache、形状从头到尾不变、同一段计算原样跑五十遍。<em>⭐ 对照左栏的自回归 LLM：它每一步 KV 都更长，形状步步在变 ——<b>编译好的那一份，下一步就不合用了。</b></em></figcaption></figure>
+
+  <div class="note ok"><span class="t">⭐ 两层匹配叠在一起，才是「合适」的全部含义</span>
+    <b>算术上</b>：强度 75,600 对门槛 560，窄带宽这个短板没成为瓶颈（三点五）。
+    <br><b>结构上</b>：形状全静态、没有历史要养、同一段跑五十遍 ——
+    编译优先这套打法拿到了它最想要的输入（这一小节）。
+    <br><em>缺任何一半，「合适」都不成立。</em>
+  </div>
+
 </section>
 <section id="s四">
   <h2><span class="secno">四</span>把活放回那两条线上</h2>
+
+  <p>前面每算一种负载都要拆一遍 FLOP，太慢。<b>其实有一条心算规则，
+    三十秒就能把任何一种负载放到轴上。</b></p>
+
+  <h3>四点一　一条能心算的规则：强度 ≈ 同一份权重被多少个「位置」共用</h3>
+
+  <p>推导只要三行。看一个权重矩阵 <b>W</b>，形状 in × out，bf16 存储：</p>
+
+  <ul>
+    <li><b>要搬的字节</b>：每个参数 2 字节 → <b>2 · in · out</b></li>
+    <li><b>能算的次数</b>：batch 里有 B 个位置，每个位置每参数 2 次浮点
+      （一乘一加）→ <b>2 · B · in · out</b></li>
+    <li><b>相除</b>：<b>强度 ＝ B</b></li>
+  </ul>
+
+  <p class="landing">⭐ <b>就这么干净：强度直接等于「有多少个位置在共用这一次权重搬运」。</b>
+    <br><em>它跟模型多大、多少层、什么架构<b>全都无关</b> —— 那些量在分子分母上同时出现，约掉了。</em></p>
+
+  <h3>四点二　于是四类负载各自落在哪</h3>
+
 <figure class="fbox fwide" id="figx-4"><svg viewBox="0 0 1400 803" width="100%" role="img" aria-label="把各种负载按算术强度摆在一根对数轴上：LLM decode batch 1 是 1，batch 64 是 64，都远在 H100 的 295 和 v6e 的 560 这两条线左边；而 LLM prefill 8K 是 8192、文生图约 16000、文生视频更高，都远在两条线右边"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">把活放回那两条线上 ——&#160;<tspan font-weight="700">扩散模型落在很右边，而且是甩开两个数量级</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一条规则就够：<tspan font-weight="700">强度 ≈ 同一份权重被多少个「位置」共用</tspan>。权重从 HBM 搬上来是固定开销，服务的位置越多，这笔搬运摊得越薄。</text>
@@ -1884,18 +2244,703 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
 <text class="svgsm" x="0" y="762" fill="#80868b" style="font-size:11.0px">📌 规则「强度 ≈ 位置数」是专题二 RNN 一节那条「强度 ＝ batch size」的推广；门槛 295 / 560 见本讲图 X-1（官方规格表当场除出来的）</text>
 <text class="svgsm" x="0" y="779" fill="#80868b" style="font-size:11.0px">　　⚠️ 位置数是量级估算：文生图按 1024×1024 经 VAE 下采样 8 倍得 latent 128×128；文生视频再加时间维，随模型而变，本图只给量级。⛔ 不要拿这根轴做定量推算。</text>
 </svg>
-<figcaption><b>图 X-4</b>　一条规则就够：<b>强度 ≈ 同一份权重被多少个「位置」共用</b>。decode 落在线的左边，prefill 和扩散甩到右边两个数量级。</figcaption></figure>
+<figcaption><b>图 X-4</b>　同一根轴，四类负载。<em>⭐ 位置在轴上的左右，完全由上一小节那个 B 决定 —— 不需要跑就能画。</em></figcaption></figure>
+
+  <table>
+    <thead><tr><th>负载</th><th>「位置」是什么</th><th>典型强度</th>
+      <th>对 v6e 的 560</th><th>瓶颈在哪</th></tr></thead>
+    <tbody>
+      <tr><td><b>decode，batch = 1</b></td><td>1 个 token</td><td><b>≈ 1</b></td>
+        <td>差 560 倍</td><td><b>带宽</b>（算力几乎全空转）</td></tr>
+      <tr><td>decode，batch = 64</td><td>64 个 token</td><td>≈ 64</td>
+        <td>还差 8.75 倍</td><td>带宽</td></tr>
+      <tr><td><b>prefill，8K 上下文</b></td><td>8,192 个 token 一次过</td><td>≈ 8,192</td>
+        <td><b>超 14.6 倍</b></td><td><b>算力</b></td></tr>
+      <tr><td><b>扩散一步</b></td><td>75,600 个 token 一起动</td><td><b>≈ 75,600</b></td>
+        <td><b>超 135 倍</b></td><td><b>算力</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note info"><span class="t">⭐ 这张表能直接读出一条采购判据</span>
+    要让 v6e 的算力<b>不空转</b>，decode 的 batch 得堆到 <b>560</b>；
+    同一件事在 H100 上只要 <b>295</b>。
+    <br>——&nbsp;<b>「屋脊点高」翻译成运维语言，就是「凑批的压力大一倍」。</b>
+    <em>凑不到那个批，买来的算力就是在等数据。</em>
+  </div>
 
   <div class="note ok"><span class="t">⭐⭐ 「v6e 适合扩散」的精确说法</span>
     <b>不是它跑扩散更快。</b>是扩散把它的短板<b>挡在了瓶颈之外</b> ——&nbsp;
-    强度上万，那根窄管子根本没成为瓶颈；
+    强度 75,600 对门槛 560，那根窄管子根本没参与；
     <b>于是只剩下没被挡住的那一项在起作用：算力 918 对 989.5，是 H100 的 93%。</b>
     <br><em>短板不参与，长板打平 —— 这就是「合适」的全部含义。</em>
   </div>
-  <div class="note info"><span class="t">同一条道理，原样适用于 prefill 重、decode 轻的任务</span>
-    prefill 是整段一次过，几千上万个位置共用一次权重搬运，它跟扩散落在轴上的<b>同一边</b>。
-    <br>⛔ 反过来也成立：<b>batch 小的 decode 落在最左边</b>，那里比的全是带宽，
-    而 v6e 只有 H100 的 49% —— <b>同一颗芯片，在那种活上就是最吃亏的。</b>
+
+  <div class="note bad"><span class="t">⛔ 反过来同样成立，而且更该记住</span>
+    <b>小 batch 的 decode 落在轴的最左边</b>，那里比的全是带宽 ——
+    而 v6e 只有 H100 的 <b>49%</b>。
+    <b>同一颗芯片，在那种活上就是最吃亏的那颗。</b>
+    <br><em>这不是缺点，是同一个设计选择的另一面：
+    §二点二那三个「相反的选择」，在这里一次性结清账单。</em>
+  </div>
+
+</section>
+<section id="s五">
+  <h2><span class="secno">五</span>流水线的形状：又胖又瘦</h2>
+
+  <p>到 §四为止，这门课一直把「跑一次扩散」当成<b>一件事</b>。
+    实际部署时它是<b>三件事</b>：文本编码 → 五十步去噪 → VAE 解码。</p>
+
+  <p>而这三件事<b>可以拆到三台机器上跑</b>。这一节回答两个问题：
+    <b>凭什么能拆</b>（本节前半），<b>拆完怎么摆</b>（后半）。</p>
+
+  <div class="note info"><span class="t">⭐ 为什么这一节属于一门讲硬件的课</span>
+    因为「能不能拆」<b>完全是一道硬件账</b>：拆开的代价是切口上的数据要搬一趟，
+    而搬得起搬不起，取决于<b>那个切口有多细</b>。
+    <br><em>这跟 §四那条「强度 ≈ 位置数」是同一类推理 ——
+    <b>都是先把量算出来，再让量去决定架构。</b></em>
+  </div>
+
+  <h3>五点一　管子里每一处有多粗</h3>
+
+  <p>下面这张图把一次生成从头到尾的<b>数据体积</b>画在一根对数轴上。
+    全部以 Wan2.1-T2V-14B、1280×720、81 帧为准。</p>
+
+<figure class="fbox fwide" id="figx-10"><svg viewBox="0 0 1400 947" width="100%" role="img" aria-label="三阶段流水线上数据体积的变化：文本 embedding 7.4 MB，DiT 内部单个激活 774 MB，注意力分数若展开 457 GB，而两段之间真正落盘、真正跨机传的 latent 只有 19.4 MB，最后成片 0.76 MB。管道又胖又瘦，最细的腰正好是该切开的地方"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">又胖又瘦 ——&#160;<tspan font-weight="700">跨机只传 19.4 MB，而管子里最粗处是 457 GB</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 纵轴是<tspan font-weight="700">对数刻度</tspan>的数据体积。三个绿色的点是真正落盘的产物（本仓库里就有这三个文件，大小逐字节可核）；蓝色是算的时候在 HBM 里的中间态；红色那根<tspan font-weight="700">从不落地</tspan>。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">落盘 · 可跨机</text>
+<rect x="112" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="129" y="64" fill="#5f6368" style="font-size:11.0px">HBM 里的中间态</text>
+<rect x="230" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="247" y="64" fill="#5f6368" style="font-size:11.0px">从不落地（分块算）</text>
+<line x1="50" y1="359.2" x2="1360" y2="359.2" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="44" y="363" fill="#80868b" text-anchor="end" style="font-size:11.0px">1 KB</text>
+<line x1="50" y1="278.8" x2="1360" y2="278.8" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="44" y="282" fill="#80868b" text-anchor="end" style="font-size:11.0px">1 MB</text>
+<line x1="50" y1="198.4" x2="1360" y2="198.4" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="44" y="202" fill="#80868b" text-anchor="end" style="font-size:11.0px">1 GB</text>
+<line x1="50" y1="118.0" x2="1360" y2="118.0" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="44" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px">1 TB</text>
+<line x1="50" y1="386" x2="1360" y2="386" stroke="#dadce0" stroke-width="1.2" stroke-linecap="round"/>
+<path d="M 186.3 251.2 L 366.9 190.7 L 547.4 163.7 L 728.0 126.6 L 908.6 185.2 L 1089.1 166.9 L 1269.7 203.9 L 1269.7 308.1 L 1089.1 345.1 L 908.6 326.8 L 728.0 385.4 L 547.4 348.3 L 366.9 321.3 L 186.3 260.8 Z" fill="#f1f3f4" stroke="#dadce0" stroke-width="1"/>
+<rect x="149.28571428571428" y="376.30569399472853" width="74.0" height="9.694306005271494" rx="4" fill="#f1f3f4" stroke="#80868b" stroke-width="1.6"/>
+<text class="svgsm" x="186" y="366" fill="#5f6368" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">230 B</tspan></text>
+<text class="svgsm" x="186" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">文本 prompt</text>
+<text class="svgsm" x="186" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">约 230 个字符</text>
+<rect x="329.85714285714283" y="255.49430172731496" width="74.0" height="130.50569827268504" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="366" y="245" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">7.41 MB</tspan></text>
+<text class="svgsm" x="366" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">① 文本 embedding</tspan></text>
+<text class="svgsm" x="366" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">实测文件 7,406,544 B</text>
+<text class="svgsm" x="366" y="441" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">落盘 ⏷</tspan></text>
+<rect x="510.42857142857144" y="201.37957704262072" width="74.0" height="184.62042295737928" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="547" y="191" fill="#174ea6" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">774 MB</tspan></text>
+<text class="svgsm" x="547" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">DiT 单个激活</text>
+<text class="svgsm" x="547" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">75,600 × 5,120 × 2 B</text>
+<rect x="691.0000000000001" y="127.10915325781701" width="74.0" height="258.890846742183" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.2" stroke-dasharray="4 3"/>
+<text class="svgsm" x="728" y="117" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">457 GB</tspan></text>
+<text class="svgsm" x="728" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">注意力分数矩阵</text>
+<text class="svgsm" x="728" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">75,600² × 40 头 × 2 B</text>
+<rect x="871.5714285714287" y="244.31462123284936" width="74.0" height="141.68537876715064" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="908" y="234" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">19.4 MB</tspan></text>
+<text class="svgsm" x="908" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">② latent</tspan></text>
+<text class="svgsm" x="908" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">实测文件 19,353,872 B</text>
+<text class="svgsm" x="908" y="441" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">落盘 ⏷</tspan></text>
+<rect x="1052.142857142857" y="207.74574922484973" width="74.0" height="178.25425077515027" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="1089" y="197" fill="#174ea6" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">448 MB</tspan></text>
+<text class="svgsm" x="1089" y="406" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">VAE 展开的像素</text>
+<text class="svgsm" x="1089" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">81×720×1280×3 × 2 B</text>
+<rect x="1232.7142857142858" y="281.7460077099177" width="74.0" height="104.25399229008228" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="1269" y="271" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">776 KB</tspan></text>
+<text class="svgsm" x="1269" y="406" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">③ 成片 mp4</tspan></text>
+<text class="svgsm" x="1269" y="423" fill="#80868b" text-anchor="middle" style="font-size:11.0px">实测文件 776,380 B</text>
+<text class="svgsm" x="1269" y="441" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">落盘 ⏷</tspan></text>
+<text class="svgsm" x="276" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">× 32202</tspan></text>
+<text class="svgsm" x="457" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">× 105</tspan></text>
+<text class="svgsm" x="637" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">× 591</tspan></text>
+<text class="svgsm" x="818" y="380" fill="#0d652d" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">÷ 23623</tspan></text>
+<text class="svgsm" x="998" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">× 23</tspan></text>
+<text class="svgsm" x="1179" y="380" fill="#0d652d" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">÷ 577</tspan></text>
+<line x1="908.5714285714287" y1="204.31462123284936" x2="908.5714285714287" y2="230.31462123284936" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="908" y="196" fill="#0d652d" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">⭐ 最细的腰 ——&#160;跨机只传这一份</tspan></text>
+<rect x="0" y="462" width="1400" height="180" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="16" y="482" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">读三个数</tspan></text>
+<text class="svgsm" x="190" y="482" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">多少</tspan></text>
+<text class="svgsm" x="330" y="482" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">怎么算的</tspan></text>
+<text class="svgsm" x="770" y="482" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">旁注</tspan></text>
+<line x1="0" y1="492" x2="1400" y2="492" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="514" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">压缩比</tspan></text>
+<text class="svgsm" x="190" y="514" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">46.3 ×</tspan></text>
+<text class="svgsm" x="330" y="514" fill="#5f6368" style="font-size:11.5px">223,948,800 个像素数 ÷ 4,838,400 个 latent 数</text>
+<text class="svgsm" x="770" y="514" fill="#80868b" style="font-size:11.5px">空间 8×8 ＝ 64 倍、时间 81→21 ＝ 3.86 倍，通道 3→16 反向摊薄 5.33 倍</text>
+<line x1="0" y1="542" x2="1400" y2="542" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="564" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">腰有多细</tspan></text>
+<text class="svgsm" x="190" y="564" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">2.5 %</tspan></text>
+<text class="svgsm" x="330" y="564" fill="#5f6368" style="font-size:11.5px">19.4 MB ÷ 774 MB（DiT 单个激活）</text>
+<text class="svgsm" x="770" y="564" fill="#80868b" style="font-size:11.5px">相对展开后的 448 MB 像素张量是 4.3%；相对 457 GB 那根是 0.0042%</text>
+<line x1="0" y1="592" x2="1400" y2="592" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="614" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">传它要多久</tspan></text>
+<text class="svgsm" x="190" y="614" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">1.5 ms</tspan></text>
+<text class="svgsm" x="330" y="614" fill="#5f6368" style="font-size:11.5px">19.4 MB 走 100 Gbps ＝ 1.5 ms；走 1 Gbps 也只要 155 ms</text>
+<text class="svgsm" x="770" y="614" fill="#80868b" style="font-size:11.5px">⭐ 而 Stage 2 本身要跑 229 秒 ——&#160;传输占比 0.0007%，可以当成零</text>
+<rect x="0" y="664" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="664" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="664" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="688" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 为什么「最细的那一处」正好就是「该切开的那一处」</tspan></text>
+<text class="svgsm" x="20" y="712" fill="#0d652d" style="font-size:12.0px">把流水线切开，代价是<tspan font-weight="700">切口上的数据要搬一趟</tspan>。所以切在哪，取决于<tspan font-weight="700">哪儿的数据最少</tspan>。</text>
+<text class="svgsm" x="20" y="733" fill="#0d652d" style="font-size:12.0px">⭐ 而扩散模型的形状<tspan font-weight="700">天然把这个位置摆在了明处</tspan>：DiT 吐出来的 latent 是全程最瘦的一处 ——&#160;往前是 774 MB 的激活，往后是 448 MB 的像素，它自己只有 19.4 MB。</text>
+<text class="svgsm" x="20" y="754" fill="#0d652d" style="font-size:12.0px">⭐⭐ 于是这一刀几乎<tspan font-weight="700">不要钱</tspan>：搬一趟 1.5 毫秒，而被切开的那一段要算 229 秒。<tspan font-weight="700">切口成本相对计算量是四个数量级以下的小数 ——「能不能切」这个问题在这里根本不成立，只剩「要不要切」。</tspan></text>
+<rect x="0" y="783" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="783" width="4" height="105" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="783" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="807" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 别把这张图读成「腰细所以那一段轻松」——&#160;正相反</tspan></text>
+<text class="svgsm" x="20" y="831" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">这张图画的是数据体积，不是时间。</tspan>产出那 19.4 MB 的 Stage 2，占了全程<tspan font-weight="700">九成以上的时间</tspan>。</text>
+<text class="svgsm" x="20" y="852" fill="#a50e0e" style="font-size:12.0px">⛔ 那根 457 GB 的红柱子也要读对：<tspan font-weight="700">它从不真的存在。</tspan>Splash Attention 是分块算的，一块算完即弃 ——&#160;画它是为了说明<tspan font-weight="700">「不分块就没法跑」</tspan>，不是说 HBM 里真有这么多。</text>
+<text class="svgsm" x="20" y="873" fill="#a50e0e" style="font-size:12.0px">⚠️ 口径：全部以 Wan2.1-T2V-14B、1280×720、81 帧、50 步为准。换模型换分辨率，绝对值全变 ——&#160;<tspan font-weight="700">但「中间那一处最瘦」这个形状不变，因为它是 VAE 压缩比决定的。</tspan></text>
+<text class="svgsm" x="0" y="906" fill="#80868b" style="font-size:11.0px">📌 三个落盘点的字节数 ——&#160;本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/ 下三个文件的实际大小，可逐字节复核；⭐ 其中 latent 那个：16×21×90×160×4 B ＋ 272 B 头 ＝ 19,353,872，一字不差</text>
+<text class="svgsm" x="0" y="923" fill="#80868b" style="font-size:11.0px">　　75,600 token 与 5,120 维、40 头 ——&#160;Wan 官方 config wan_t2v_14B.py；229 秒 ——&#160;本仓库 Wan2.1/README 的 v6e-8 实测表。⛔ 457 GB 是「若显式展开」的假想值，实际从不落地。</text>
+</svg>
+<figcaption><b>图 X-10</b>　三个绿色的点是<b>真正落盘的文件</b>，大小取自我们自己跑出来的产物，逐字节可核；蓝色是 HBM 里的中间态；<b>红色那根从不落地</b>。<em>⭐ 注意中间那道收窄 —— 那就是这一节的全部内容。</em></figcaption></figure>
+
+  <p>三个数值得单独读：</p>
+
+  <table>
+    <thead><tr><th>读什么</th><th>多少</th><th>怎么来的</th></tr></thead>
+    <tbody>
+      <tr><td><b>VAE 压缩比</b></td><td><b>46.3 ×</b></td>
+        <td>223,948,800 个像素数 ÷ 4,838,400 个 latent 数<br>
+          <span class="dim">＝ 空间 64 倍 × 时间 3.86 倍 ÷ 通道摊薄 5.33 倍</span></td></tr>
+      <tr><td><b>跨机要传多少</b></td><td><b>19.4 MB</b></td>
+        <td>DiT 吐出来的那份 latent。<b>只有它需要过网</b></td></tr>
+      <tr><td><b>传它要多久</b></td><td><b>1.5 ms</b></td>
+        <td>19.4 MB 走 100 Gbps；就算走 1 Gbps 也只要 155 ms</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok"><span class="t">⭐⭐ 于是「能不能切」这个问题根本不成立</span>
+    被切开的那一段本身要算 <b>229 秒</b>，而搬一趟切口数据是 <b>1.5 毫秒</b> ——
+    <b>切口成本是计算量的万分之零点七</b>。
+    <br>⭐ 更值得记的是<b>为什么最细的那一处正好就是该切开的那一处</b>：
+    往前是 774 MB 的激活，往后是 448 MB 的像素，
+    <b>而 latent 自己只有 19.4 MB —— 扩散模型的形状天然把切口摆在了明处。</b>
+  </div>
+
+  <div class="note info"><span class="t">⭐ 那个 19.4 MB 顺手把形状也验了</span>
+    16 × 21 × 90 × 160 个数 × 4 字节（fp32）＝ <b>19,353,600</b>，
+    加上 safetensors 的 272 字节文件头，<b>正好等于文件的 19,353,872 —— 一个字节不差。</b>
+    <br><em>跟 §三点四那个 14.05 B 是同一种手法：<b>用一个独立可测的量，去验一整套推导。</b>
+    这次连误差都没有，因为字节数是精确的。</em>
+  </div>
+
+  <div class="note bad"><span class="t">⛔ 这张图有两处极易读反</span>
+    ① <b>它画的是体积，不是时间。</b>腰细不代表那一段轻松 ——
+    恰恰相反，<b>产出那 19.4 MB 的 Stage 2 占了全程 98% 的时间。</b>
+    <br>② <b>那根 457 GB 的红柱子从不真的存在。</b>
+    它是「注意力分数矩阵若显式展开」的假想值；Splash Attention 是分块算的，
+    一块算完即弃。<b>画它是为了说明「不分块就没法跑」，不是说 HBM 里真有这么多。</b>
+  </div>
+
+  <h3>五点二　三段的胃口完全不一样 —— 这才是分开部署的真正理由</h3>
+
+  <p>切得动只是<b>可行性</b>。真正的收益来自另一件事：<b>这三段吃的根本不是同一种资源。</b></p>
+
+<figure class="fbox fwide" id="figx-11"><svg viewBox="0 0 1400 1077" width="100%" role="img" aria-label="三段的资源画像对比：文本编码几乎不吃资源，DiT 去噪吃算力占九成八时间，VAE 解码吃显存峰值但只占零点四；下面画两种部署拓扑，一体化全塞一台机器，分开部署则 CPU 跑编码、八颗 TPU 做张量并行跑 DiT、一颗 TPU 常驻做 VAE 解码，跨机只传十九兆的 latent"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">谁吃算力、谁吃显存 ——&#160;<tspan font-weight="700">于是三段该摆在不同的地方</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 上一张说明<tspan font-weight="700">切得动</tspan>（腰只有 19.4 MB）；这一张说明<tspan font-weight="700">为什么值得切</tspan> ——&#160;三段的胃口根本不是一回事，塞进同一台机器必然有人吃不饱、有人撑着。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">① 文本编码</text>
+<rect x="95" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="112" y="64" fill="#5f6368" style="font-size:11.0px">② DiT 去噪（吃算力）</text>
+<rect x="247" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="264" y="64" fill="#5f6368" style="font-size:11.0px">③ VAE 解码（吃显存）</text>
+<rect x="0" y="94" width="1400" height="322" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="14" y="116" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">问的是同一件事</tspan></text>
+<text class="svgsm" x="178" y="116" fill="#5f6368" style="font-size:12.5px"><tspan font-weight="700">① 文本编码</tspan></text>
+<text class="svgsm" x="446" y="116" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">② DiT 去噪</tspan></text>
+<text class="svgsm" x="714" y="116" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">③ VAE 解码</tspan></text>
+<text class="svgsm" x="998" y="116" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">旁注</tspan></text>
+<line x1="0" y1="128" x2="1400" y2="128" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">它在干什么</tspan></text>
+<rect x="166" y="137" width="3" height="30" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="178" y="150" fill="#5f6368" style="font-size:12.0px">把 prompt 编成向量</text>
+<rect x="434" y="137" width="3" height="30" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="446" y="150" fill="#174ea6" style="font-size:12.0px">五十步去噪，全部算力在这</text>
+<rect x="702" y="137" width="3" height="30" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="714" y="150" fill="#0d652d" style="font-size:12.0px">把 latent 展开成像素</text>
+<line x1="0" y1="176" x2="1400" y2="176" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="198" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">吃的是哪种资源</tspan></text>
+<rect x="166" y="185" width="3" height="30" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="178" y="198" fill="#5f6368" style="font-size:12.0px">几乎不吃／读一遍权重</text>
+<rect x="434" y="185" width="3" height="30" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="446" y="198" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">吃算力</tspan></text>
+<rect x="702" y="185" width="3" height="30" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="714" y="198" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">吃显存峰值</tspan></text>
+<text class="svgsm" x="998" y="198" fill="#80868b" style="font-size:11.0px">⭐ 三种胃口完全不同 ——&#160;这才是该分开的真正理由</text>
+<line x1="0" y1="224" x2="1400" y2="224" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="246" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">正式运行占多少时间</tspan></text>
+<rect x="166" y="233" width="3" height="30" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="178" y="246" fill="#5f6368" style="font-size:12.0px">3 秒 ／ 1.3%</text>
+<rect x="434" y="233" width="3" height="30" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="446" y="246" fill="#174ea6" style="font-size:12.0px">230 秒 ／ 98.3%</text>
+<rect x="702" y="233" width="3" height="30" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="714" y="246" fill="#0d652d" style="font-size:12.0px">1 秒 ／ 0.4%</text>
+<text class="svgsm" x="998" y="246" fill="#80868b" style="font-size:11.0px">Wan2.1 720P，v6e-8 实测</text>
+<line x1="0" y1="272" x2="1400" y2="272" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="294" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">编译（预热）要多久</tspan></text>
+<rect x="166" y="281" width="3" height="30" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="178" y="294" fill="#5f6368" style="font-size:12.0px">—</text>
+<rect x="434" y="281" width="3" height="30" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="446" y="294" fill="#174ea6" style="font-size:12.0px">110 秒</text>
+<rect x="702" y="281" width="3" height="30" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="714" y="294" fill="#0d652d" style="font-size:12.0px">80 秒 → 之后每次 1 秒</text>
+<text class="svgsm" x="998" y="294" fill="#80868b" style="font-size:11.0px">⭐ VAE 是 80 倍差 ——&#160;这个形状天生该做成常驻服务</text>
+<line x1="0" y1="320" x2="1400" y2="320" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="342" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">峰值内存卡在哪</tspan></text>
+<rect x="166" y="329" width="3" height="30" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="178" y="342" fill="#5f6368" style="font-size:12.0px">权重本身</text>
+<rect x="434" y="329" width="3" height="30" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="446" y="342" fill="#174ea6" style="font-size:12.0px">权重 28 GB ＋ 激活 774 MB</text>
+<rect x="702" y="329" width="3" height="30" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="714" y="342" fill="#0d652d" style="font-size:12.0px">展开成 448 MB 像素</text>
+<text class="svgsm" x="998" y="342" fill="#80868b" style="font-size:11.0px">⛔ 当年 maxdiffusion 那版就是在第三段 OOM</text>
+<line x1="0" y1="368" x2="1400" y2="368" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="390" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">于是摆在哪</tspan></text>
+<rect x="166" y="377" width="3" height="30" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="178" y="390" fill="#5f6368" style="font-size:12.0px">CPU 或 TPU ——&#160;先量再定</text>
+<rect x="434" y="377" width="3" height="30" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="446" y="390" fill="#174ea6" style="font-size:12.0px">TPU 多芯片，TP／CP 分片</text>
+<rect x="702" y="377" width="3" height="30" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="714" y="390" fill="#0d652d" style="font-size:12.0px">TPU 单芯片，常驻</text>
+<text class="svgsm" x="998" y="390" fill="#80868b" style="font-size:11.0px">⚠️ 第一格别写死，见下方 Flux.2 反例</text>
+<rect x="0" y="440" width="685.0" height="332" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="440" width="685.0" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<rect x="0" y="442" width="685.0" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="470" x2="685.0" y2="470" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="460" fill="#80868b" style="font-size:13.5px"><tspan font-weight="700">方式一：端到端一体化</tspan></text>
+<text class="svgsm" x="163" y="460" fill="#5f6368" style="font-size:11.0px">generate_torchax.py ·  一台 v6e-8，一个进程</text>
+<text class="svgsm" x="671" y="460" fill="#80868b" text-anchor="end" style="font-size:11.0px">验证 / 演示 / benchmark</text>
+<rect x="16" y="484" width="653.0" height="262" rx="8" fill="#fafbfc" stroke="#e8eaed" stroke-width="1" stroke-dasharray="4 4"/>
+<rect x="32" y="496" width="621.0" height="62" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<text class="svgsm" x="46" y="518" fill="#80868b" style="font-size:12.5px"><tspan font-weight="700">① 文本编码</tspan></text>
+<text class="svgsm" x="46" y="536" fill="#5f6368" style="font-size:11.0px">T5 权重驻留</text>
+<text class="svgsm" x="46" y="551" fill="#80868b" style="font-size:11.0px">算完就闲着，但内存一直占着</text>
+<line x1="342.5" y1="558" x2="342.5" y2="580" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="32" y="584" width="621.0" height="62" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="46" y="606" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">② DiT 去噪</tspan></text>
+<text class="svgsm" x="46" y="624" fill="#5f6368" style="font-size:11.0px">28 GB 权重 ＋ 激活</text>
+<text class="svgsm" x="46" y="639" fill="#80868b" style="font-size:11.0px">全程只有这一段真的在忙</text>
+<line x1="342.5" y1="646" x2="342.5" y2="668" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="32" y="672" width="621.0" height="62" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="46" y="694" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">③ VAE 解码</tspan></text>
+<text class="svgsm" x="46" y="712" fill="#5f6368" style="font-size:11.0px">峰值展开 448 MB</text>
+<text class="svgsm" x="46" y="727" fill="#80868b" style="font-size:11.0px">跑 1 秒，编译 80 秒每次重付</text>
+<text class="svgsm" x="16" y="758" fill="#a50e0e" style="font-size:11.5px">⛔ <tspan font-weight="700">三种胃口共用一份资源</tspan>——&#160;按最馋的那一段配机器，另外两段的钱就白付了</text>
+<rect x="715.0" y="440" width="685.0" height="332" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="715.0" y="440" width="685.0" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="715.0" y="442" width="685.0" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="715.0" y1="470" x2="1400.0" y2="470" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="729" y="460" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">方式二：三段分开部署</tspan></text>
+<text class="svgsm" x="878" y="460" fill="#5f6368" style="font-size:11.0px">stage1 / stage2 / stage3</text>
+<text class="svgsm" x="1386" y="460" fill="#80868b" text-anchor="end" style="font-size:11.0px">生产 / 多机 / 异构</text>
+<rect x="747.0" y="496" width="621.0" height="62" rx="6" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<text class="svgsm" x="761" y="518" fill="#80868b" style="font-size:12.5px"><tspan font-weight="700">① CPU 节点（或小 TPU）</tspan></text>
+<text class="svgsm" x="761" y="536" fill="#5f6368" style="font-size:11.0px">算一次，换 50 个 seed 反复用</text>
+<text class="svgsm" x="761" y="551" fill="#80868b" style="font-size:11.0px">⚠️ 前提是它在 CPU 上够快 ——&#160;见下方反例</text>
+<line x1="1057.5" y1="558" x2="1057.5" y2="578" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="1069" y="573" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">7.4 MB embedding ⏷</tspan></text>
+<rect x="747.0" y="584" width="621.0" height="62" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="761" y="606" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">② TPU DiT 节点 · v6e-8</tspan></text>
+<text class="svgsm" x="761" y="624" fill="#5f6368" style="font-size:11.0px">8 颗做 TP：40 头 ÷ 8 ＝ 5 头每颗</text>
+<text class="svgsm" x="761" y="639" fill="#80868b" style="font-size:11.0px">算力全压这儿，扩容也只扩这一层</text>
+<line x1="1057.5" y1="646" x2="1057.5" y2="666" stroke="#1e8e3e" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="1069" y="661" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">19.4 MB latent ⏷</tspan></text>
+<rect x="747.0" y="672" width="621.0" height="62" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="761" y="694" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">③ TPU VAE 服务 · 1 颗常驻</tspan></text>
+<text class="svgsm" x="761" y="712" fill="#5f6368" style="font-size:11.0px">编译好放着，谁要解码谁来调</text>
+<text class="svgsm" x="761" y="727" fill="#80868b" style="font-size:11.0px">80 秒编译摊到成千上万次调用 ≈ 0</text>
+<text class="svgsm" x="731" y="758" fill="#0d652d" style="font-size:11.5px">⭐ <tspan font-weight="700">三段各配各的机器</tspan>——&#160;而把它们串起来的成本，是那两根绿线上的几十兆</text>
+<rect x="0" y="794" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="794" width="4" height="105" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="794" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="818" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 「text encoder 放 CPU」不是普适结论 ——&#160;Flux.2 就是反例</tspan></text>
+<text class="svgsm" x="20" y="842" fill="#a50e0e" style="font-size:12.0px">Wan2.1 用 T5，那一段 <tspan font-weight="700">3 秒</tspan>，放哪都行。但 Flux.2 用 Mistral3，<tspan font-weight="700">放 CPU 要 30 秒</tspan> ——&#160;而它的 DiT 在 TPU 上跑完 50 步只要 <tspan font-weight="700">13.5 秒</tspan>。</text>
+<text class="svgsm" x="20" y="863" fill="#a50e0e" style="font-size:12.0px">⭐⭐ 也就是说 <tspan font-weight="700">Flux.2 那个「轻量」的第一段，反而是全程最慢的一段</tspan>。照着「编码器放 CPU」的顺口结论摆，等于把整条链的瓶颈从 TPU 挪到了 CPU 上。</text>
+<text class="svgsm" x="20" y="884" fill="#a50e0e" style="font-size:12.0px">⭐ 判据不是「哪一段天生该放哪」，而是<tspan font-weight="700">先量一量它在目标硬件上要多久</tspan>。分段的价值恰恰在这里 ——&#160;<tspan font-weight="700">拆开之后，每一段的账才第一次能单独算清楚。</tspan></text>
+<rect x="0" y="913" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="913" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="913" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="937" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 「一个节点能放几路」——&#160;先看权重塞不塞得下，再看它够不够忙</tspan></text>
+<text class="svgsm" x="20" y="961" fill="#174ea6" style="font-size:12.0px">一台 v6e-8 是 <tspan font-weight="700">8 颗 × 32 GB ＝ 256 GB</tspan>。Wan2.1 的 28 GB 权重单颗只剩 4 GB 余量，所以走 <tspan font-weight="700">TP 摊到 8 颗</tspan>，每颗 3.5 GB，宽裕得多。</text>
+<text class="svgsm" x="20" y="982" fill="#174ea6" style="font-size:12.0px">⭐ 反过来，SDXL 只有 7 GB，<tspan font-weight="700">一颗就装得下</tspan> ——&#160;于是 v6e-8 上的正确用法不是切一个模型，而是<tspan font-weight="700">开 8 路各生成各的</tspan>（我们实测 2.40 img/s）。</text>
+<text class="svgsm" x="20" y="1003" fill="#174ea6" style="font-size:12.0px">⭐⭐ 两条合起来是同一句话：<tspan font-weight="700">装不下就把一个模型摊开，装得下就多放几路。</tspan>而分段之后这个决定是<tspan font-weight="700">按段做的</tspan> ——&#160;DiT 那一层摊开，VAE 那一层多放几路，互不牵扯。</text>
+<text class="svgsm" x="0" y="1036" fill="#80868b" style="font-size:11.0px">📌 三段耗时与预热 ——&#160;本仓库 Wan2.1/README（v6e-8）与 Flux.2/README（v4-8）实测表；分片配置 dp=2/tp=4、40 头 ÷ 8 设备 ——&#160;本仓库 Wan2.2/docs/wan_tpu_optimization_guide.md 第三章</text>
+<text class="svgsm" x="0" y="1053" fill="#80868b" style="font-size:11.0px">　　SDXL 一颗 7 GB、v6e-8 八路数据并行 2.40 img/s ——&#160;本仓库 SDXL/README；v6e 单颗 HBM 32 GB ——&#160;官方 v6e 规格表。⚠️ 三处实测硬件不同（v6e-8 / v4-8），本图只取各自的段间比例，不做横向快慢比较。</text>
+</svg>
+<figcaption><b>图 X-11</b>　上半是三段的资源画像，下半是两种部署拓扑。<em>⭐ 左边一体化那栏的问题不是「慢」，是<b>按最馋的那一段配机器，另外两段的钱就白付了</b>。</em></figcaption></figure>
+
+  <ul>
+    <li><b>① 文本编码</b> —— 几乎不吃算力，就是把权重读一遍。占全程 <b>1.3%</b>。</li>
+    <li><b>② DiT 去噪</b> —— <b>吃算力</b>。占全程 <b>98.3%</b>。§三算过的那 3.26 × 10¹⁷ FLOP 全在这儿。</li>
+    <li><b>③ VAE 解码</b> —— <b>吃显存峰值</b>。把 480 万个数展开成 2.24 亿个，占全程 <b>0.4%</b>。</li>
+  </ul>
+
+  <div class="note info"><span class="t">⭐ VAE 那一段有个特别的形状：编译极贵，运行极便宜</span>
+    720P 下 <b>预热要 80 秒，之后每次只要 1 秒 —— 80 倍差</b>。
+    <br>这个形状<b>天生该做成常驻服务</b>：编译好放着，谁要解码谁来调，
+    那 80 秒摊到成千上万次调用上等于零。
+    <b>而一体化脚本每起一次进程就得重付一遍。</b>
+    <br><em>——&nbsp;注意这是一条<b>纯粹由「编译期做主」推出来的部署结论</b>。
+    §二点二那个 CMEM ＝ 0 的设计，代价在这里，收益也在这里。</em>
+  </div>
+
+  <h3>五点三　⛔ 一条顺口的结论，和一个当场推翻它的反例</h3>
+
+  <p>看完上面那张图，最容易得出的结论是：<b>「文本编码那么轻，放 CPU 就行。」</b>
+    这条在 Wan2.1 上成立 —— 它用 T5，那一段只要 <b>3 秒</b>。</p>
+
+  <p><b>但 Flux.2 立刻推翻它。</b></p>
+
+  <table>
+    <thead><tr><th>模型</th><th>① 文本编码</th><th>② 去噪（TPU）</th>
+      <th>③ VAE</th><th>最慢的是哪一段</th></tr></thead>
+    <tbody>
+      <tr><td><b>Wan2.1</b>（T5）</td><td>3 秒</td><td><b>230 秒</b></td><td>1 秒</td>
+        <td>去噪 —— 符合直觉</td></tr>
+      <tr><td><b>Flux.2</b>（Mistral3，放 CPU）</td><td><b>30 秒</b></td><td>13.5 秒</td>
+        <td>1.5 秒</td><td><b>文本编码 —— 反过来了</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note bad"><span class="t">⛔ 照顺口结论摆，等于把瓶颈从 TPU 挪到了 CPU 上</span>
+    Flux.2 那个「轻量」的第一段，<b>反而是全程最慢的一段</b>。
+    <br>⭐ 判据不是<b>「哪一段天生该放哪」</b>，而是
+    <b>「先量一量它在目标硬件上要多久」</b>。
+    <br><em>而分段的价值恰恰在这里 ——&nbsp;
+    <b>拆开之后，每一段的账才第一次能单独算清楚。</b>
+    一体化脚本里，你连「文本编码花了 30 秒」这件事都看不见。</em>
+  </div>
+
+  <h3>五点四　一个节点摆几路：先看塞不塞得下，再看它够不够忙</h3>
+
+  <p>一台 v6e-8 是 <b>8 颗 × 32 GB ＝ 256 GB</b>。同一台机器，两种截然不同的用法：</p>
+
+  <table>
+    <thead><tr><th>模型</th><th>bf16 权重</th><th>单颗放得下吗</th>
+      <th>于是怎么用这 8 颗</th></tr></thead>
+    <tbody>
+      <tr><td><b>Wan2.1-14B</b></td><td>28 GB</td>
+        <td>⚠️ 贴边，只剩 4 GB 余量</td>
+        <td><b>TP 摊到 8 颗</b>，每颗 3.5 GB —— 40 个头 ÷ 8 ＝ 每颗 5 个头</td></tr>
+      <tr><td><b>SDXL</b></td><td>7 GB</td><td>✅ 轻松</td>
+        <td><b>开 8 路各生成各的</b>（数据并行）—— 实测 2.40 张/秒</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok"><span class="t">⭐⭐ 两行是同一句话</span>
+    <b>装不下就把一个模型摊开，装得下就多放几路。</b>
+    <br>⭐ 而分段之后，这个决定是<b>按段做的</b>：
+    DiT 那一层摊开、VAE 那一层多放几路，<b>互不牵扯</b> ——
+    一体化脚本里这两个决定被绑死成了一个。
+    <br><em>这就是「分三阶段有利于部署」这句话的全部具体含义。</em>
+  </div>
+
+</section>
+<section id="s六">
+  <h2><span class="secno">六</span>这套说法，我们自己验过吗</h2>
+
+  <p>前五节讲的全是<b>应该怎样</b>：屋脊点该怎么算、活该落在轴的哪一侧、
+    流水线该在哪儿切。<b>这一节讲实际怎样。</b></p>
+
+  <p>——&nbsp;同一批道理，在<b>十个真模型上跑了五个月</b>之后，留下了什么。</p>
+
+  <h3>六点一　五个月，十个模型</h3>
+
+<figure class="fbox fwide" id="figx-12"><svg viewBox="0 0 1400 975" width="100%" role="img" aria-label="十个模型的适配时间线，从 2025 年 12 月 3 日到 2026 年 4 月 3 日。顶部三条色带标出三代移植方法的更替，其中 12 月 10 日是分水岭 —— 手写 Flax 的文件在那天被删除，torchax 成为唯一主线"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">五个月，十个模型 ——&#160;<tspan font-weight="700">而三代方法的分界，写在文件名里</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 每一行的起止和提交数都是 <tspan font-weight="700">git 提交历史直接数出来的</tspan>，不是凭印象写的 ——&#160;印象里最早做的是 Wan，<tspan font-weight="700">而历史说是 HunyuanVideo，早了整整一周</tspan>。</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">视频生成</text>
+<rect x="83" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="100" y="64" fill="#5f6368" style="font-size:11.0px">图像生成</text>
+<rect x="166" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="183" y="64" fill="#5f6368" style="font-size:11.0px">超分 / 修复</text>
+<rect x="267" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="284" y="64" fill="#5f6368" style="font-size:11.0px">交付形态</text>
+<rect x="266.0" y="134" width="784.0" height="26" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="658" y="152" fill="#0d652d" text-anchor="middle" style="font-size:11.5px"><tspan font-weight="700">第三代 · torchax ＋ diffusers-tpu</tspan></text>
+<rect x="222.44444444444446" y="134" width="43.55555555555554" height="26" rx="5" fill="#feefc3" stroke="#e8710a" stroke-width="1.2"/>
+<text class="svgsm" x="222" y="124" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">第二代 · 手写 Flax / 纯 JAX</tspan></text>
+<line x1="224.44444444444446" y1="128" x2="224.44444444444446" y2="134" stroke="#e8710a" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="198" y="152" fill="#5f6368" text-anchor="end" style="font-size:11.5px"><tspan font-weight="700">移植方法</tspan></text>
+<rect x="206.0" y="134" width="8" height="26" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.2" stroke-dasharray="3 2"/>
+<text class="svgsm" x="220" y="106" fill="#a50e0e" style="font-size:11.5px"><tspan font-weight="700">第一代 · 官方 maxdiffusion —— 起点，无独立区间</tspan></text>
+<line x1="216.0" y1="110" x2="216.0" y2="134" stroke="#d93025" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="210.0" y1="170" x2="210.0" y2="584" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="216" y="164" fill="#80868b" style="font-size:11.0px">2025 年 12 月</text>
+<line x1="402.8888888888889" y1="170" x2="402.8888888888889" y2="584" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="408" y="164" fill="#80868b" style="font-size:11.0px">2026 年 1 月</text>
+<line x1="595.7777777777778" y1="170" x2="595.7777777777778" y2="584" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="601" y="164" fill="#80868b" style="font-size:11.0px">2 月</text>
+<line x1="770.0" y1="170" x2="770.0" y2="584" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="776" y="164" fill="#80868b" style="font-size:11.0px">3 月</text>
+<line x1="962.8888888888889" y1="170" x2="962.8888888888889" y2="584" stroke="#e8eaed" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svgsm" x="968" y="164" fill="#80868b" style="font-size:11.0px">4 月</text>
+<text class="svgsm" x="0" y="194" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">HunyuanVideo-1.5</tspan></text>
+<text class="svgsm" x="0" y="209" fill="#80868b" style="font-size:11.0px">文生视频 ·  8.3B</text>
+<rect x="222.44444444444446" y="184" width="149.33333333333331" height="17" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="381" y="197" fill="#174ea6" style="font-size:11.0px"><tspan font-weight="700">73 次提交</tspan></text>
+<text class="svgsm" x="1160" y="197" fill="#80868b" style="font-size:11.0px">第一个吃螃蟹的，提交数全场最多</text>
+<text class="svgsm" x="0" y="234" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">Wan 2.1 T2V</tspan></text>
+<text class="svgsm" x="0" y="249" fill="#80868b" style="font-size:11.0px">文生视频 ·  14B</text>
+<rect x="266.0" y="224" width="516.4444444444445" height="17" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="792" y="237" fill="#174ea6" style="font-size:11.0px"><tspan font-weight="700">44 次提交</tspan></text>
+<text class="svgsm" x="1160" y="237" fill="#80868b" style="font-size:11.0px">720P 从 OOM 到 229 秒</text>
+<text class="svgsm" x="0" y="274" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">CogVideoX 1.5</tspan></text>
+<text class="svgsm" x="0" y="289" fill="#80868b" style="font-size:11.0px">文生视频 ·  5B</text>
+<rect x="278.44444444444446" y="264" width="504.0" height="17" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="792" y="277" fill="#174ea6" style="font-size:11.0px"><tspan font-weight="700">49 次提交</tspan></text>
+<text class="svgsm" x="1160" y="277" fill="#80868b" style="font-size:11.0px">720P 106 秒</text>
+<text class="svgsm" x="0" y="314" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">Wan 2.2 I2V</tspan></text>
+<text class="svgsm" x="0" y="329" fill="#80868b" style="font-size:11.0px">图生视频 ·  27B/14B</text>
+<rect x="290.8888888888889" y="304" width="491.55555555555554" height="17" rx="4" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="792" y="317" fill="#007b83" style="font-size:11.0px"><tspan font-weight="700">26 次提交</tspan></text>
+<text class="svgsm" x="1160" y="317" fill="#80868b" style="font-size:11.0px">MoE，两颗起</text>
+<text class="svgsm" x="0" y="354" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">Flux.2</tspan></text>
+<text class="svgsm" x="0" y="369" fill="#80868b" style="font-size:11.0px">文生图 ·  —</text>
+<rect x="384.22222222222223" y="344" width="273.77777777777777" height="17" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="668" y="357" fill="#681da8" style="font-size:11.0px"><tspan font-weight="700">11 次提交</tspan></text>
+<text class="svgsm" x="1160" y="357" fill="#80868b" style="font-size:11.0px">一上来就是三代打法，不走弯路</text>
+<text class="svgsm" x="0" y="394" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">ComfyUI on TPU</tspan></text>
+<text class="svgsm" x="0" y="409" fill="#80868b" style="font-size:11.0px">图形界面 ·  4 个节点</text>
+<rect x="415.33333333333337" y="384" width="18.66666666666663" height="17" rx="4" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="444" y="397" fill="#b06000" style="font-size:11.0px"><tspan font-weight="700">28 次提交</tspan></text>
+<text class="svgsm" x="1160" y="397" fill="#80868b" style="font-size:11.0px">给不写代码的人用</text>
+<text class="svgsm" x="0" y="434" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">SDXL</tspan></text>
+<text class="svgsm" x="0" y="449" fill="#80868b" style="font-size:11.0px">文生图 ·  3.5B</text>
+<rect x="658.0" y="424" width="9.0" height="17" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="677" y="437" fill="#681da8" style="font-size:11.0px"><tspan font-weight="700">9 次提交</tspan></text>
+<text class="svgsm" x="1160" y="437" fill="#80868b" style="font-size:11.0px">补上最经典的 UNet，单颗 3 秒</text>
+<text class="svgsm" x="0" y="474" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">S3Diff</tspan></text>
+<text class="svgsm" x="0" y="489" fill="#80868b" style="font-size:11.0px">单步超分 ·  3.3B</text>
+<rect x="801.1111111111111" y="464" width="49.77777777777783" height="17" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="860" y="477" fill="#0d652d" style="font-size:11.0px"><tspan font-weight="700">11 次提交</tspan></text>
+<text class="svgsm" x="1160" y="477" fill="#80868b" style="font-size:11.0px">编译后 5.5 倍</text>
+<text class="svgsm" x="0" y="514" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">Flux.1</tspan></text>
+<text class="svgsm" x="0" y="529" fill="#80868b" style="font-size:11.0px">文生图 ·  12B</text>
+<rect x="844.6666666666666" y="504" width="9.0" height="17" rx="4" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="863" y="517" fill="#681da8" style="font-size:11.0px"><tspan font-weight="700">2 次提交</tspan></text>
+<text class="svgsm" x="1160" y="517" fill="#80868b" style="font-size:11.0px">只交一体化版</text>
+<text class="svgsm" x="0" y="554" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">Real-ESRGAN</tspan></text>
+<text class="svgsm" x="0" y="569" fill="#80868b" style="font-size:11.0px">超分 ·  8.8M</text>
+<rect x="969.1111111111111" y="544" width="9.0" height="17" rx="4" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="988" y="557" fill="#0d652d" style="font-size:11.0px"><tspan font-weight="700">3 次提交</tspan></text>
+<text class="svgsm" x="1160" y="557" fill="#80868b" style="font-size:11.0px">纯卷积网 —— 验证非 Transformer 路径</text>
+<line x1="234.88888888888889" y1="174" x2="234.88888888888889" y2="584" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="4 3"/>
+<line x1="266.0" y1="174" x2="266.0" y2="584" stroke="#d93025" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="290.8888888888889" y1="174" x2="290.8888888888889" y2="584" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="4 3"/>
+<text class="svgsm" x="230" y="604" fill="#80868b" style="font-size:11.0px">▲ 三阶段首次出现</text>
+<text class="svgsm" x="262" y="621" fill="#a50e0e" style="font-size:11.0px"><tspan font-weight="700">▲ ⭐ flax 后缀集体删除 —— 第三代从这天算起</tspan></text>
+<text class="svgsm" x="286" y="638" fill="#80868b" style="font-size:11.0px">▲ 优化完全指南成稿</text>
+<rect x="0" y="671" width="1400" height="126" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="671" width="4" height="126" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="671" width="3" height="126" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="695" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 读这张图的三条线索</tspan></text>
+<text class="svgsm" x="20" y="719" fill="#174ea6" style="font-size:12.0px">⚠️ <tspan font-weight="700">第一代没有独立的时间段</tspan>：maxdiffusion 是起点不是阶段 ——&#160;12 月 3 日第一天就已经在写 Flax 版了。<tspan font-weight="700">图上只给它一个起点标记，不编一段区间出来。</tspan></text>
+<text class="svgsm" x="20" y="740" fill="#174ea6" style="font-size:12.0px">① <tspan font-weight="700">前两周极密</tspan>：12 月 3 日到 14 日，四个视频模型全部开工，同时试完了三条移植路线 ——&#160;<tspan font-weight="700">代价最大的探索集中在最前面。</tspan></text>
+<text class="svgsm" x="20" y="761" fill="#174ea6" style="font-size:12.0px">② <tspan font-weight="700">12 月 29 日之后没有再换过方法</tspan>。Flux.2 是第一个「一上来就是 torchax ＋ 三阶段」的模型，之后 SDXL / S3Diff / Real-ESRGAN 都照着走，<tspan font-weight="700">提交数从几十掉到个位数</tspan>。</text>
+<text class="svgsm" x="20" y="782" fill="#174ea6" style="font-size:12.0px">③ 那三条尾巴（Wan2.1 / CogVideoX / Wan2.2 拖到 3 月初）不是还在攻坚，是<tspan font-weight="700">回头把新方法反哺回老模型</tspan>——&#160;这也是为什么它们的提交数最高。</text>
+<rect x="0" y="811" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="811" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="811" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="835" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐ 提交数掉下去，才是这套方法真正立住的证据</tspan></text>
+<text class="svgsm" x="20" y="859" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">HunyuanVideo 73 次、CogVideoX 49 次、Wan2.1 44 次；而 SDXL 9 次、Real-ESRGAN 3 次、Flux.1 2 次。</tspan></text>
+<text class="svgsm" x="20" y="880" fill="#0d652d" style="font-size:12.0px">⭐ 差别不在模型难度 ——&#160;SDXL 和 Flux.1 都不比 CogVideoX 简单。差别在于<tspan font-weight="700">前面几个是在「发明方法」，后面几个是在「套用方法」</tspan>。</text>
+<text class="svgsm" x="20" y="901" fill="#0d652d" style="font-size:12.0px">⭐⭐ 所以这张图的落点不是「我们做了十个模型」，而是<tspan font-weight="700">「接第十一个模型的成本，已经不是前十个的量级了」</tspan>——&#160;这才是一条工程路线走通的标志。</text>
+<text class="svgsm" x="0" y="934" fill="#80868b" style="font-size:11.0px">📌 全部日期与提交数 ——&#160;本仓库 git 提交历史，以 <tspan font-family="monospace">git log --diff-filter=A</tspan> 取首次提交、<tspan font-family="monospace">git log --oneline | wc -l</tspan> 取提交数；统计截至 2026-04-03</text>
+<text class="svgsm" x="0" y="951" fill="#80868b" style="font-size:11.0px">　　⚠️ 提交数只反映改动次数，<tspan font-weight="700">不等于工作量或难度</tspan> ——&#160;这里用它做的唯一推断是「发明方法 vs 套用方法」的量级差，不用它比较任意两个模型谁更难。</text>
+</svg>
+<figcaption><b>图 X-12</b>　每一行的起止与提交数都是 <b>git 提交历史直接数出来的</b>。<em>⭐ 顶部三条色带是移植方法的更替 —— 注意 12 月 10 日那道红线：<b>那天手写 Flax 的文件被删除，第三代从那一刻算起。</b></em></figcaption></figure>
+
+  <p>值得单独指出的是<b>提交数的走向</b>：</p>
+
+  <table>
+    <thead><tr><th>时期</th><th>代表模型</th><th>提交数</th><th>在做什么</th></tr></thead>
+    <tbody>
+      <tr><td><b>前两周</b></td><td>HunyuanVideo-1.5</td><td><b>73</b></td>
+        <td><b>发明方法</b> —— 同时在试三条移植路线</td></tr>
+      <tr><td>头一个月</td><td>CogVideoX / Wan2.1</td><td>49 / 44</td>
+        <td>方法定型，并回头反哺老模型</td></tr>
+      <tr><td><b>后三个月</b></td><td>SDXL / Real-ESRGAN / Flux.1</td><td><b>9 / 3 / 2</b></td>
+        <td><b>套用方法</b> —— 照着 README 抄一遍</td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok"><span class="t">⭐⭐ 提交数掉下去，才是一条工程路线走通的标志</span>
+    差别<b>不在模型难度</b> —— SDXL 和 Flux.1 都不比 CogVideoX 简单。
+    差别在于<b>前面几个是在发明方法，后面几个是在套用方法</b>。
+    <br>——&nbsp;<b>所以这一节的落点不是「我们做了十个模型」，
+    而是「接第十一个模型的成本，已经不是前十个的量级了」。</b>
+  </div>
+
+  <div class="note warn"><span class="t">⚠️ 提交数只能这么用，别过度解读</span>
+    它反映的是<b>改动次数</b>，不等于工作量，更不等于难度。
+    <br>这里拿它做的<b>唯一</b>推断是「发明 vs 套用」的<b>量级差</b>（73 对 2），
+    <b>不用它比较任意两个模型谁更难。</b>
+  </div>
+
+  <h3>六点二　为什么又是 JAX 版、又是 torchax 版</h3>
+
+  <p>这是客户最常问的一条。而它<b>讲道理是讲不赢的</b> ——
+    「用 PyTorch 生态」和「用 JAX 原生」，两边都能说出一串听起来对的理由。</p>
+
+  <p><b>我们的答法是：三条都走完，把对照版原样留在仓库里。</b></p>
+
+<figure class="fbox fwide" id="figx-13"><svg viewBox="0 0 1400 875" width="100%" role="img" aria-label="三代移植方法的逐项对比：第一代用官方 maxdiffusion 撞上 OOM，第二代手写 Flax 与纯 JAX 能跑但每个新模型都要重写，第三代 torchax 走 PyTorch 自己的 dispatcher 不需要重新 tracing，成为今天十个模型的主线；第二代的代码刻意保留作数值对照"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">三条移植路线，<tspan font-weight="700">我们全走完了 ——&#160;而且第二代的代码还留在仓库里</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 「为什么不用纯 JAX 重写」这种问题<tspan font-weight="700">讲道理是讲不赢的</tspan>。我们的答法是三条都走一遍，把对照版原样留着 ——&#160;<tspan font-weight="700">要判断的人读代码，不必听我们说。</tspan></text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">第一代：撞墙</text>
+<rect x="105" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="122" y="64" fill="#5f6368" style="font-size:11.0px">第二代：能跑，但贵</text>
+<rect x="243" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="260" y="64" fill="#5f6368" style="font-size:11.0px">第三代：留下了</text>
+<rect x="0" y="94" width="1400" height="284" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="180.0" y="102" width="400.0" height="36" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text class="svgsm" x="192" y="118" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">第一代</tspan></text>
+<text class="svgsm" x="192" y="133" fill="#a50e0e" style="font-size:11.0px">官方 maxdiffusion</text>
+<rect x="588.0" y="102" width="400.0" height="36" rx="5" fill="#feefc3" stroke="#e8710a" stroke-width="1.2"/>
+<text class="svgsm" x="600" y="118" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">第二代</tspan></text>
+<text class="svgsm" x="600" y="133" fill="#b06000" style="font-size:11.0px">手写 Flax NNX / 纯 JAX</text>
+<rect x="996.0" y="102" width="400.0" height="36" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="1008" y="118" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">第三代</tspan></text>
+<text class="svgsm" x="1008" y="133" fill="#0d652d" style="font-size:11.0px">torchax ＋ diffusers-tpu</text>
+<text class="svgsm" x="14" y="124" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">问的是同一件事</tspan></text>
+<line x1="0" y1="146" x2="1400" y2="146" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="170" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">具体怎么做的</tspan></text>
+<rect x="180.0" y="156" width="3" height="38" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="192" y="168" fill="#5f6368" style="font-size:11.5px">直接用官方那套 JAX 原生的扩散库</text>
+<rect x="588.0" y="156" width="3" height="38" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="600" y="168" fill="#5f6368" style="font-size:11.5px">把 DiT 和 VAE 用 Flax NNX 或纯 JAX 重写一遍</text>
+<rect x="996.0" y="156" width="3" height="38" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1008" y="168" fill="#5f6368" style="font-size:11.5px">PyTorch 代码不改，靠 torchax 把 ATen 算子映射到 JAX</text>
+<line x1="0" y1="204" x2="1400" y2="204" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="228" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">当时为什么走这条</tspan></text>
+<rect x="180.0" y="214" width="3" height="38" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="192" y="226" fill="#5f6368" style="font-size:11.5px">现成、官方维护、TPU 原生 —— 理论上最省事</text>
+<rect x="588.0" y="214" width="3" height="38" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="600" y="226" fill="#5f6368" style="font-size:11.5px">能跑、能精细控制分片与内存、能做数值对齐验证</text>
+<rect x="996.0" y="214" width="3" height="38" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1008" y="226" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">走 PyTorch 自己的 dispatcher，不需要重新 tracing</tspan></text>
+<line x1="0" y1="262" x2="1400" y2="262" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="286" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">撞到了什么</tspan></text>
+<rect x="180.0" y="272" width="3" height="38" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="192" y="284" fill="#a50e0e" style="font-size:11.5px"><tspan font-weight="700">Wan 2.1 的 720P 在 VAE 这一步直接 OOM，跑不起来；模型覆盖面也</tspan></text>
+<text class="svgsm" x="192" y="301" fill="#a50e0e" style="font-size:11.5px">窄</text>
+<rect x="588.0" y="272" width="3" height="38" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="600" y="284" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">每来一个新模型就得重写一遍 —— 权重、scheduler、pipeline 全要跟</tspan></text>
+<text class="svgsm" x="600" y="301" fill="#b06000" style="font-size:11.5px">着移植</text>
+<rect x="996.0" y="272" width="3" height="38" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1008" y="284" fill="#5f6368" style="font-size:11.5px">—（没有换掉它的理由出现）</text>
+<line x1="0" y1="320" x2="1400" y2="320" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="344" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">今天仓库里还剩什么</tspan></text>
+<rect x="180.0" y="330" width="3" height="38" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="192" y="342" fill="#5f6368" style="font-size:11.5px">只作为参考实现被引用 —— Splash Attention 的几个技巧是从它那儿</text>
+<text class="svgsm" x="192" y="359" fill="#5f6368" style="font-size:11.5px">学的</text>
+<rect x="588.0" y="330" width="3" height="38" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="600" y="342" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">刻意保留的对照版：Wan 2.1 的 Flax 版与纯 JAX 版 VAE、</tspan></text>
+<text class="svgsm" x="600" y="359" fill="#b06000" style="font-size:11.5px">CogVideoX 的 dit_flax</text>
+<rect x="996.0" y="330" width="3" height="38" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1008" y="342" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">十个模型的主线实现，全部在这条路上</tspan></text>
+<rect x="0" y="400" width="1400" height="170" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="14" y="422" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">四项逐一比</tspan></text>
+<text class="svgsm" x="192" y="422" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">纯 JAX</tspan></text>
+<text class="svgsm" x="600" y="422" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">Flax NNX</tspan></text>
+<text class="svgsm" x="1008" y="422" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">torchax</tspan></text>
+<line x1="0" y1="434" x2="1400" y2="434" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="456" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">追踪开销</tspan></text>
+<text class="svgsm" x="192" y="456" fill="#5f6368" style="font-size:11.5px">需要完整 tracing</text>
+<text class="svgsm" x="600" y="456" fill="#5f6368" style="font-size:11.5px">需要完整 tracing</text>
+<text class="svgsm" x="1008" y="456" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">无 —— 走 dispatcher</tspan></text>
+<line x1="0" y1="468" x2="1400" y2="468" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="490" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">编译粒度</tspan></text>
+<text class="svgsm" x="192" y="490" fill="#5f6368" style="font-size:11.5px">完整函数</text>
+<text class="svgsm" x="600" y="490" fill="#5f6368" style="font-size:11.5px">完整函数</text>
+<text class="svgsm" x="1008" y="490" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">增量</tspan></text>
+<line x1="0" y1="502" x2="1400" y2="502" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="524" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">可变状态</tspan></text>
+<text class="svgsm" x="192" y="524" fill="#5f6368" style="font-size:11.5px">要 pytree=False</text>
+<text class="svgsm" x="600" y="524" fill="#5f6368" style="font-size:11.5px">要显式传 cache</text>
+<text class="svgsm" x="1008" y="524" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">直接支持</tspan></text>
+<line x1="0" y1="536" x2="1400" y2="536" stroke="#e8eaed" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="14" y="558" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">生态兼容</tspan></text>
+<text class="svgsm" x="192" y="558" fill="#5f6368" style="font-size:11.5px">需要移植</text>
+<text class="svgsm" x="600" y="558" fill="#5f6368" style="font-size:11.5px">需要移植</text>
+<text class="svgsm" x="1008" y="558" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">完整 PyTorch</tspan></text>
+<rect x="0" y="592" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="592" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="592" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="616" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐⭐ 四项里最后一项才是决定性的</tspan></text>
+<text class="svgsm" x="20" y="640" fill="#0d652d" style="font-size:12.0px">前三项（追踪开销、编译粒度、可变状态）说的都是<tspan font-weight="700">快慢</tspan>。而第四项<tspan font-weight="700">生态兼容</tspan>说的是另一回事：<tspan font-weight="700">下一个模型接不接得进来。</tspan></text>
+<text class="svgsm" x="20" y="661" fill="#0d652d" style="font-size:12.0px">⭐ 第二代那条路的真正代价<tspan font-weight="700">不是慢，是「每个新模型都要重写一遍」</tspan> ——&#160;这项成本不随熟练度下降，它随模型数量线性累加。</text>
+<text class="svgsm" x="20" y="682" fill="#0d652d" style="font-size:12.0px">⭐⭐ 所以选型的判据不是「哪条路这一次更快」，而是<tspan font-weight="700">「哪条路让第十一个模型变便宜」</tspan>。——&#160;这跟上一张图里提交数从 73 掉到 2，说的是同一件事。</text>
+<rect x="0" y="711" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="711" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="711" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="735" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⛔ 但别把这张图读成「第二代是弯路」</tspan></text>
+<text class="svgsm" x="20" y="759" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">没有第二代，我们不会知道该往哪个方向优化。</tspan>分片策略、内存布局、数值对齐这些认识，都是在手写那一版里长出来的 ——&#160;换成一开始就用 torchax，那些东西会被框架挡在视野之外。</text>
+<text class="svgsm" x="20" y="780" fill="#b06000" style="font-size:12.0px">⭐ 而且那批代码<tspan font-weight="700">今天仍在服役</tspan>：当 torchax 版算出可疑结果时，<tspan font-weight="700">拿纯 JAX 版跑同一个输入对一遍</tspan>，是最快的定位手段。</text>
+<text class="svgsm" x="20" y="801" fill="#b06000" style="font-size:12.0px">⭐ 判据：<tspan font-weight="700">一条被换掉的路线，值不值得留下取决于它还能不能当参照物</tspan> ——&#160;而不是取决于它现在跑得快不快。</text>
+<text class="svgsm" x="0" y="834" fill="#80868b" style="font-size:11.0px">📌 四项逐项对比与三版实测 ——&#160;本仓库 Wan2.1 的 torchax_vs_flax_vs_jax_analysis.md（约 960 行），同目录另有 aten_ops_catalog.md 列明 torchax 实际映射了哪些算子</text>
+<text class="svgsm" x="0" y="851" fill="#80868b" style="font-size:11.0px">　　maxdiffusion 版 VAE 在 Wan2.1 720P 上 OOM ——&#160;本仓库 Wan2.1/README 实测表；⚠️ 三代的时间界限见图 X-12，其中「第三代从 12-10 起算」的依据是那天手写 Flax 的文件被删除，不是一个事后追认的说法。</text>
+</svg>
+<figcaption><b>图 X-13</b>　三代移植方法逐项对照，下半是 torchax、Flax NNX、纯 JAX 的四项实测比较。<em>⭐ 最后一项<b>生态兼容</b>才是决定性的 —— 前三项说的是快慢，它说的是<b>下一个模型接不接得进来</b>。</em></figcaption></figure>
+
+  <div class="note info"><span class="t">⭐ torchax 为什么不需要重新 tracing</span>
+    Flax 和纯 JAX 都要<b>把整个函数 trace 一遍</b>再交给 XLA。
+    torchax 走的是 <b>PyTorch 自己的 C++ dispatcher</b>：
+    调用 <code>conv3d</code> 时，dispatcher 认出算子类型，
+    路由到 torchax 注册的后端，<b>直接落到对应的 JAX 实现</b>。
+    <br><em>——&nbsp;它不是「又一个 tracing 框架」，它是<b>在算子这一层换了后端</b>。</em>
+  </div>
+
+  <div class="note bad"><span class="t">⛔ 但别把这张图读成「第二代是弯路」</span>
+    <b>没有第二代，我们不会知道该往哪个方向优化。</b>
+    分片策略、内存布局、数值对齐这些认识，全是在手写那一版里长出来的 ——
+    一开始就用 torchax，这些东西会被框架挡在视野之外。
+    <br>⭐ 而且那批代码<b>今天仍在服役</b>：torchax 版算出可疑结果时，
+    <b>拿纯 JAX 版跑同一个输入对一遍</b>，是最快的定位手段。
+    <br><em>判据：<b>一条被换掉的路线值不值得留下，取决于它还能不能当参照物 ——
+    而不是取决于它现在跑得快不快。</b></em>
+  </div>
+
+  <h3>六点三　这十个模型跟前面五节是什么关系</h3>
+
+  <p>不是「附录里的项目清单」。<b>每一个都在验证前面某一节的某一条断言</b>：</p>
+
+  <table>
+    <thead><tr><th>前面哪一节说过</th><th>哪个模型验的</th><th>验出了什么</th></tr></thead>
+    <tbody>
+      <tr><td><b>§二点三</b>　权重体积决定要几颗</td><td>SDXL vs Wan2.1</td>
+        <td>7 GB 的开 8 路，28 GB 的摊到 8 颗 —— 同一台机器两种用法</td></tr>
+      <tr><td><b>§三</b>　扩散是计算密集</td><td>Wan2.1 720P</td>
+        <td>强度 75,600，实测 MFU 37% —— <b>落在算力侧，但没吃满</b></td></tr>
+      <tr><td><b>§三点五</b>　MXU 喂不满会浪费成块</td><td>Wan2.1</td>
+        <td>head_dim 128 对 MXU 256 —— 一半位置空着</td></tr>
+      <tr><td><b>§五点一</b>　腰在 latent 那一处</td><td>全部七个三阶段模型</td>
+        <td>无一例外，中间产物都是全程最小的那一份</td></tr>
+      <tr><td><b>§五点三</b>　编码器放哪要先量</td><td>Flux.2</td>
+        <td><b>反例</b>：Mistral3 放 CPU 30 秒，比它的 DiT 还慢</td></tr>
+      <tr><td>整套框架对非 Transformer 成不成立</td><td><b>Real-ESRGAN</b></td>
+        <td>纯卷积网，8.8M 参数 —— <b>切块之后比 L40S 快 1.9 倍</b></td></tr>
+    </tbody>
+  </table>
+
+  <div class="note ok"><span class="t">⭐ 最后一行是特意留的</span>
+    Real-ESRGAN 是十个里唯一一个<b>非 Transformer、非扩散</b>的模型
+    （纯卷积，只有 8.8M 参数）。
+    <br>放它进来的目的<b>不是多凑一个</b>，是<b>看这套分析框架在完全不同的架构上还成不成立</b>。
+    <br><em>——&nbsp;答案是成立的：它同样落在算力侧，同样靠切块提高每字节的计算量，
+    <b>只是「位置」从 token 变成了 tile。</b></em>
   </div>
 
 </section>
@@ -1910,6 +2955,20 @@ figure.fbox { margin-top: 34px; margin-bottom: 34px }
     <b>没有端到端性能数。</b>本讲讲结构匹配，不讲快慢 —— 两件事需要的证据不一样，
     后者要实测，而实测要连口径一起给。
     <br><em>想看扩散模型本身：<b>专题十一</b>。想看这套分析框架怎么来的：<b>专题二</b>。</em>
+  </div>
+
+  <div class="note ok"><span class="t">⭐⭐ 这一版比 L100 多给了什么</span>
+    L100 给的是<b>结论</b>：560、75,600、短板被挡在瓶颈之外。
+    这一版多的是<b>四样东西</b> ——
+    <br>① <b>推导链</b>（§一点一、§三点二）：每个数怎么除出来的；
+    <br>② <b>验证</b>（§一点二、§三点四、§五点一）：拿什么外部锚点验过它，
+    以及<b>锚点当场抓到过什么错</b>；
+    <br>③ <b>反例</b>（§三点三的 window_size、§三点五的 MFU 37%、§五点三的 Flux.2）：
+    这些结论什么时候不成立；
+    <br>④ <b>落地</b>（§五、§六）：从「该怎么切」到「真的切了，十个模型五个月」。
+    <br><em>⭐ 如果只带走一条，带走 ③ ——&nbsp;
+    <b>一套只有顺例的说法，第一次遇到边界就会碎；
+    而知道边界在哪的人，才敢把它用在没见过的模型上。</b></em>
   </div>
 </section>
 

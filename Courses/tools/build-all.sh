@@ -84,10 +84,16 @@ if [ "${1:-}" != "--lint" ]; then
            topic02x-fig-load.py topic02x-fig-diff.py topic02x-fig-scale.py \
            topic02x-fig-sparsecore.py topic02x-fig-torus.py \
            topic02x-fig-why.py topic02x-fig-waist.py \
-           topic02x-fig-place.py; do
+           topic02x-fig-place.py topic02x-fig-timeline.py \
+           topic02x-fig-routes.py; do
     python3 "$g"
   done
   python3 topic02x-build.py
+
+  # ⭐ L200 精讲版。⛔ **必须排在 L100 之后** —— 它的写盘自检会去读 topic-02x.html，
+  #   核对「§零–§四 两页节号一一对应」这条约定还成不成立。
+  step "专题二 外传 L200（精讲版）"
+  python3 topic02x-build-L200.py
 
   step "专题二 外传 讲义"
   python3 topic02x-build-lecture.py
@@ -153,6 +159,7 @@ python3 topic02-lint-meta.py
 
 printf '\n\033[1m▸ 产物\033[0m\n'
 for f in topic-01.html topic-02-L300.html topic-02.html topic-02x.html \
+         topic-02x-L200.html \
          topic-03.html topic-08.html \
          gpu-microscope.html tpu-microscope.html; do
   [ -f "$W/$f" ] || continue

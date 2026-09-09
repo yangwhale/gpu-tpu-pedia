@@ -221,8 +221,8 @@ a("""
 a('</section>')
 
 a("""
-<section id="s五">
-  <h2><span class="secno">五</span>落点</h2>
+<section id="s收尾">
+  <h2><span class="secno">收尾</span>落点</h2>
   <p class="landing">—— <b>选芯片不是选「更强的那颗」，是先看你的活落在那根轴的哪一边。</b>
     <br><em>落右边（扩散、prefill、大 batch）比的是算力，v6e 打平；
     落左边（小 batch decode）比的是带宽，v6e 吃亏。</em>
