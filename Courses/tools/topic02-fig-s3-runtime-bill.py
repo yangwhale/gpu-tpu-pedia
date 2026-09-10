@@ -87,7 +87,9 @@ ROWS = [
 
 BAND_Y = TOP + len(ROWS) * RH + 14
 BAND_H = 116   # ⭐ 2026-09-05 加了一行「收敛的是怎么搬、谁决定没动」，+20
-WARN_Y = BAND_Y + BAND_H + 16
+L2_Y = BAND_Y + BAND_H + 16      # ⭐ 2026-09-10 新增的「L2 在哪」带
+L2_H = 82
+WARN_Y = L2_Y + L2_H + 16
 WARN_H = 82
 SRC_Y = WARN_Y + WARN_H + 16
 H = SRC_Y + 84   # ⭐ 2026-09-05：出处那段从两行变四行（补了 Blackwell 那一代的出处），+44
@@ -195,6 +197,37 @@ p.append('<text class="svgsm" x="16" y="%d" fill="%s">'
          '——&#160;「搬运是取数的副作用，还是一条独立的 DMA」这句话，'
          '在《GPU 显微镜》图 G-6 里已经出现过；这张图给的是它<tspan font-weight="700">怎么一步步变成现在这样</tspan>。</text>'
          % (BAND_Y + 103, GY))
+
+# ── ⛔⛔ 2026-09-10 加：这张图上「L2 在哪」是个高频误读 ──────────────
+#   现场原话（三处都要纠）：「中间肯定得经过 TMA，然后再到共享内存，就是 L2」、
+#   「L1 跟 TMA 是一个地方，都在 SM 里」、「TMA 负责从 HBM 搬到 L2」。
+#   ⭐ 第二句对，另外两句不对：
+#     · 共享内存**不是** L2 —— 它在 SM 里、和 L1 是同一块 228 KB；
+#       L2 在 SM **外面**，全片 126 MB / 4 分区，所有 SM 共用。
+#     · TMA 的目的地是**共享内存**，不是 L2。
+#   ⚠️ 但「图不清楚」这条批评成立：**这张图从头到尾没画 L2**，
+#     也没标哪些框在 SM 里 —— 懂行的人一看就会问「L2 呢」。
+#   ⭐ 判据：**一个部件被故意省略时，要在图上说出「为什么可以省」**，
+#     否则省略会被读成「不存在」或「就是旁边那个」。
+p.append('<rect x="0" y="%d" width="%d" height="%d" rx="9" fill="#e8f0fe" stroke="%s"/>'
+         % (L2_Y, W, L2_H, "#1a73e8"))
+p.append('<text class="svglbl" x="16" y="%d" fill="#174ea6" style="font-size:13px">'
+         '⚠️ 图上<tspan font-weight="700">没有 L2</tspan>，这是故意的 ——&#160;'
+         '<tspan font-weight="700">它在这条路上是「透明」的</tspan></text>'
+         % (L2_Y + 24))
+p.append('<text class="svgsm" x="16" y="%d" fill="#174ea6">'
+         '所有 global 访问都<tspan font-weight="700">路过</tspan> L2'
+         '（全片 126 MB、4 分区、在 <tspan font-weight="700">SM 外面</tspan>，所有 SM 共用），'
+         '但<tspan font-weight="700">它不是任何一步的目的地</tspan> ——&#160;'
+         '这几行搬运的终点都是共享内存 / VMEM。</text>'
+         % (L2_Y + 45))
+p.append('<text class="svgsm" x="16" y="%d" fill="#174ea6">'
+         '⛔ <tspan font-weight="700">别把共享内存当成 L2</tspan>：'
+         '<tspan font-weight="700">共享内存在 SM 里，和 L1 是同一块 228 KB</tspan>；'
+         'L2 在 SM 外、大三个数量级。'
+         '<tspan fill="%s">TMA 引擎也在 SM 里（Hopper 起每 SM 一个），'
+         '它的目的地同样是共享内存。</tspan></text>'
+         % (L2_Y + 64, GY))
 
 # ── 连带的一条：生产者换了人，对齐的办法也得换 ────────────────────────
 p.append('<rect x="0" y="%d" width="%d" height="%d" rx="9" fill="#fef7e0" stroke="%s"/>'
