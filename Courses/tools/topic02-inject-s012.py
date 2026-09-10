@@ -55,6 +55,7 @@ SCRIPTS = {
     "topic02-fig-s3-dataflow.py":         {"fig3-8.svg": "fig3-8"},
     "topic02-figs-s1-hierarchy-intensity.py":
                                          {"fig1-3.svg": "fig1-3", "fig1-4.svg": "fig1-4"},
+    "topic02-fig-s1-contraction.py":     {"fig1-8.svg": "fig1-8"},
     "topic02-figs-s2-access-lane.py":    {"fig2-1.svg": "fig2-1", "fig2-2.svg": "fig2-2"},
     "topic02-figs-s2-flash-intensity.py": {"fig2-3.svg": "fig2-3", "fig2-4.svg": "fig2-4"},
     "topic02-fig-s2-three-wastes.py":    {"fig2-5.svg": "fig2-5"},

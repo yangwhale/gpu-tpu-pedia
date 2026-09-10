@@ -715,7 +715,7 @@ nav.famnav .here em{color:#174ea6}
          而且**页面上没有任何东西会为此报错**，它只是安静地在开篇撒谎。
          ⭐ 现在图数从 _FIG_SEEN 数出来，分钟数从讲义脚本的 lec(...) 里读回来
          （见 _lecture_minutes），两处都不允许出现第二份拷贝。 -->
-    <span class="chip">⏱ <b>109 分钟 · 42 张图</b></span>
+    <span class="chip">⏱ <b>109 分钟 · 43 张图</b></span>
     <span class="chip">完整版 <a href="topic-02-L300.html"><b>L300 →</b></a></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
@@ -1550,6 +1550,110 @@ svg:has(#f17-pause:checked) .f17-led{animation-play-state:paused}
 
   <p>这张图把这条线用了三次。<b>两个例子特意避开注意力</b> ——&nbsp;
     那一笔第 2 节第一张图就要完整推一遍，在这儿先算等于剧透。</p>
+
+  <!-- ⭐⭐ 2026-09-10 加 1.2 与 fig1-8。来源是现场追问，原话三连：
+       「方阵长宽都是 N，那 M×K · K×N 呢？强度应该跟收缩维 K 有关，
+         K 越长强度越高对吧？而 head_dim=128 的注意力就严重低于标称。
+         那做了 Flash 之后，是因为什么变了？」
+       ⭐ 三问全对，而且它把 §1（融合）、§2（Flash）、§3.4/3.6（喂不满）
+          第一次连成一条线 —— 这条线原来在课件上是断的。
+       ⛔ 那这跟上面「两个例子特意避开注意力」矛盾吗？不矛盾，但要说清：
+          **避开的是「把注意力的账完整推一遍」**（那是 §2 第一张图的活）。
+          这里只把注意力当成一个**代入值**用，代完立刻交给 §2。
+          ⚠️ 判据：引一个后面要讲的东西当例子可以，**替它把结论讲了不行**。
+       ⛔ 口径陷阱已画在图上：本图 ≈128 是**单个矩阵乘孤立看**，
+          §2 图 2-4 那个 64 是**朴素注意力整体看**（中间矩阵走两个来回）。
+          两张图并排而不说破，读者一定以为其中一张错了。 -->
+  <h3><span class="secno">1.2</span>方阵只是特例 ——&nbsp;强度由<u>最小</u>的那个维度说了算</h3>
+
+  <p>上面那两个例子里的矩阵乘是<b>方阵</b>，三边都是 N，所以约出来是 N/3。
+    但真实的矩阵乘是 <b>M×K · K×N</b>，三个维度不一样长。
+    <b>那强度到底跟哪一个有关？</b></p>
+
+  <p>还是同一道除法，只是这次别急着代数：算的次数是 <code>2·M·N·K</code>，
+    搬的字节是 <code>2·(MK ＋ KN ＋ MN)</code>。约完是一个很干净的形式 ——&nbsp;
+    <b><code>1/强度 ＝ 1/M ＋ 1/N ＋ 1/K</code></b>。</p>
+
+  <p><b>倒数相加，意味着谁最小谁说了算。</b>
+    <em>所以「K 越长强度越高」是对的 ——&nbsp;但它有天花板：
+    K 拉到无穷，强度也只到 <code>MN/(M+N)</code>。
+    <b>K 救不了 M 或 N 太小。</b></em>
+    <br>⛔ 最狠的一个特例：batch ＝ 1 的 decode，<b>M ＝ 1</b>，
+    于是 1/强度 ≥ 1 ——&nbsp;<b>强度上限就是 1</b>，K 和 N 再大都没用。
+    <em>这就是 LLM 解码怎么都卡在带宽上的那一行算术。</em></p>
+
+  <p>把注意力代进去：<code>QK<sup>T</sup></code> 的两个外维都是序列长 S，
+    <b>而收缩维就是 head_dim</b>。多数模型 head_dim ＝ 128，于是强度
+    <b>≈ 128</b> ——&nbsp;<b>低于 v7 那条 312，也低于 v6e 那条 560。</b></p>
+
+
+<figure class="fbox" id="s012-fig1-8"><svg viewBox="0 0 1000 558" width="100%" role="img" aria-label="矩阵乘的算术强度由三个维度共同决定，倒数相加；注意力的收缩维就是 head_dim 128，因此强度上不去">
+<text class="svglbl" x="0" y="16" fill="#202124" style="font-size:13.5px">强度到底由哪个维度决定 —— <tspan font-weight="700">是最小的那个，而注意力里最小的就是 head_dim</tspan></text>
+<text class="svgsm" x="0" y="35">§1 只算了方阵（N/3）。真实的矩阵乘是 M×K · K×N —— 三个维度各有各的作用，而它们的作用方式是「倒数相加」。</text>
+<rect x="0" y="48" width="982" height="34" rx="6" fill="#e8f0fe" stroke="#1a73e8"/>
+<text class="svgsm" x="16" y="69" fill="#174ea6" font-family="ui-monospace,monospace">算 2·M·N·K　÷　搬 2·(MK＋KN＋MN)　⟹　<tspan font-weight="700">1/强度 ＝ 1/M ＋ 1/N ＋ 1/K</tspan>　（M=N=K 时退化成 N/3，正是 §1 那个例子）</text>
+<rect x="0" y="96" width="320" height="250" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
+<rect x="0" y="96" width="320" height="26" rx="8" fill="#1a73e8"/>
+<rect x="0" y="114" width="320" height="8" fill="#1a73e8"/>
+<text class="svglbl" x="12" y="114" fill="#fff">① 三个维度，倒数相加</text>
+<text class="svgsm" x="14" y="140" fill="#5f6368">M×K · K×N，bf16，A/B/C 各过一次</text>
+<text class="svgsm" x="14" y="159" fill="#202124" font-family="ui-monospace,monospace">算：2·M·N·K</text>
+<text class="svgsm" x="14" y="178" fill="#202124" font-family="ui-monospace,monospace">搬：2·(MK ＋ KN ＋ MN) 字节</text>
+<text class="svgsm" x="14" y="197" fill="#174ea6" font-family="ui-monospace,monospace">⟹ 1/I ＝ 1/M ＋ 1/N ＋ 1/K</text>
+<text class="svgsm" x="14" y="216" fill="#5f6368"></text>
+<text class="svgsm" x="14" y="235" fill="#0d652d" font-family="ui-monospace,monospace">方阵 M=N=K：I ＝ N/3</text>
+<text class="svgsm" x="14" y="254" fill="#0d652d" font-family="ui-monospace,monospace">边长 256 → I ＝ 85.3（§1 念过的 85）</text>
+<rect x="10" y="290" width="300" height="46" rx="5" fill="#1a73e8"/>
+<text class="svgsm" x="22" y="308" fill="#fff">倒数相加 ⟹ 谁最小谁说了算。</text>
+<text class="svgsm" x="22" y="325" fill="#fff">强度永远被三个维度里最小的那个卡住。</text>
+<rect x="335" y="96" width="320" height="250" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
+<rect x="335" y="96" width="320" height="26" rx="8" fill="#e8710a"/>
+<rect x="335" y="114" width="320" height="8" fill="#e8710a"/>
+<text class="svglbl" x="347" y="114" fill="#fff">② K 越长强度越高 —— 但有天花板</text>
+<text class="svgsm" x="349" y="140" fill="#5f6368">固定 M ＝ N ＝ 512，只拉长 K：</text>
+<text class="svgsm" x="349" y="159" fill="#202124" font-family="ui-monospace,monospace">K ＝ 64     → I ＝   51.2</text>
+<text class="svgsm" x="349" y="178" fill="#202124" font-family="ui-monospace,monospace">K ＝ 128    → I ＝   85.3</text>
+<text class="svgsm" x="349" y="197" fill="#202124" font-family="ui-monospace,monospace">K ＝ 512    → I ＝  170.7</text>
+<text class="svgsm" x="349" y="216" fill="#202124" font-family="ui-monospace,monospace">K ＝ 4,096  → I ＝  240.9</text>
+<text class="svgsm" x="349" y="235" fill="#a50e0e" font-family="ui-monospace,monospace">K → ∞　　 → I → 256</text>
+<text class="svgsm" x="349" y="254" fill="#a50e0e">上限 ＝ MN/(M+N) ＝ 256，拉不动了</text>
+<rect x="345" y="290" width="300" height="46" rx="5" fill="#d93025"/>
+<text class="svgsm" x="357" y="308" fill="#fff">⛔ 推论：batch=1 的 decode，M ＝ 1，</text>
+<text class="svgsm" x="357" y="325" fill="#fff">所以 I ≤ 1 —— K 和 N 再大都救不了。</text>
+<rect x="670" y="96" width="320" height="250" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1.6"/>
+<rect x="670" y="96" width="320" height="26" rx="8" fill="#9334e6"/>
+<rect x="670" y="114" width="320" height="8" fill="#9334e6"/>
+<text class="svglbl" x="682" y="114" fill="#fff">③ 注意力：收缩维就是 head_dim</text>
+<text class="svgsm" x="684" y="140" fill="#5f6368">每个头，S ＝ 75,600，d ＝ 128</text>
+<text class="svgsm" x="684" y="159" fill="#202124" font-family="ui-monospace,monospace">QK<tspan baseline-shift="super" font-size="8">T</tspan>：M=S, N=S, <tspan font-weight="700">K=d=128</tspan></text>
+<text class="svgsm" x="684" y="178" fill="#a50e0e" font-family="ui-monospace,monospace">　→ I ＝ 127.6</text>
+<text class="svgsm" x="684" y="197" fill="#202124" font-family="ui-monospace,monospace">PV：M=S, K=S, <tspan font-weight="700">N=d=128</tspan></text>
+<text class="svgsm" x="684" y="216" fill="#a50e0e" font-family="ui-monospace,monospace">　→ I ＝ 127.6（同样被 128 卡住）</text>
+<text class="svgsm" x="684" y="235" fill="#5f6368"></text>
+<text class="svgsm" x="684" y="254" fill="#5f6368">对照：v7 屋脊 312　v6e 屋脊 560</text>
+<rect x="680" y="290" width="300" height="46" rx="5" fill="#9334e6"/>
+<text class="svgsm" x="692" y="308" fill="#fff">128 ＜ 312 ＜ 560 —— 不做 Flash 的话，</text>
+<text class="svgsm" x="692" y="325" fill="#fff">注意力这两个矩阵乘落在带宽那一侧。</text>
+<rect x="0" y="364" width="982" height="52" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/><rect x="0" y="364" width="4" height="52.0" rx="3.0" fill="#f9ab00"/>
+<text class="svgsm" x="16" y="385" fill="#8a5a00">⚠️ <tspan font-weight="700">口径：「注意力的强度」有两个都对的答案，分母不一样。</tspan></text>
+<text class="svgsm" x="16" y="404" fill="#8a5a00">本图 ≈128 是<tspan font-weight="700">单个矩阵乘孤立看</tspan>（A/B/C 各过一次）；§2 图 2-4 那个 64 是<tspan font-weight="700">朴素注意力整体看</tspan>（中间矩阵 S 和 P 各走一个来回，分母多一倍）。</text>
+<rect x="0" y="428" width="982" height="122" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/><rect x="0" y="428" width="4" height="122.0" rx="3.0" fill="#1e8e3e"/>
+<text class="svglbl" x="18" y="450" fill="#0d652d">那 Flash 到底改了什么 ——&#160;以及为什么改完了还是喂不满</text>
+<text class="svgsm" x="18" y="472" fill="#0d652d">① <tspan font-weight="700">Flash 换的是分母，不是分子</tspan>：中间那个 S×S 不再落 HBM，过 HBM 的只剩 Q/K/V/O ＝ 4·S·d·2 B，</text>
+<text class="svgsm" x="18" y="491" fill="#0d652d">　 于是 I ＝ 4S²d ÷ 8Sd ＝ <tspan font-weight="700">S/2 ＝ 37,800</tspan>（S＝75,600）。<tspan font-weight="700">一个 FLOP 都没省</tspan>，还因为重算多算了一点。→ §2</text>
+<text class="svgsm" x="18" y="510" fill="#0d652d">② <tspan font-weight="700">同一个 128 咬了两口</tspan>：<tspan font-weight="700">收缩维 128 → 强度上不去</tspan>（本图）；<tspan font-weight="700">MXU 是 256 见方，只喂进 128 → 一半空着</tspan>（§3.4 / §3.6）。</text>
+<text class="svgsm" x="18" y="529" fill="#0d652d">　 前者是「要不要等数据」，后者是「算的时候算得满不满」——&#160;<tspan font-weight="700">两件事，同一个数字。</tspan></text>
+</svg>
+<figcaption>图 1-8　强度由三个维度共同决定，倒数相加 —— 注意力里最小的那个就是
+  head_dim；同一个 128 在「强度」和「喂不喂得满 MXU」两个层面各咬一口。</figcaption></figure>
+
+  <p>——&nbsp;<b>所以「注意力是矩阵乘，当然算力受限」是个错觉。</b>
+    <em>不做融合的话，它落在带宽那一侧，而卡住它的正是 head_dim。</em>
+    <br><b>那 Flash 改的是什么？</b>下一节第一张图会给出完整那一笔；
+    这里先记住方向：<b>它一个 FLOP 都没省，改的是分母。</b>
+    <br>⭐ 而<b>同一个 128 还会再咬一口</b>：MXU 是 256 见方，
+    只喂进 128 ——&nbsp;那是 <b>§3.4 / §3.6</b> 的事。
+    <em>强度问的是「要不要等数据」，喂满问的是「算的时候算得满不满」。</em></p>
 
   <!-- ⭐⭐ 2026-09-04 补这一句，理由是**位置**不是内容。
        这一节的产出框（「就两样：一条线，一条判据」）在图**之前**，
