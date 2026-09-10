@@ -819,7 +819,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
 <text class="svgsm" x="0" y="630" fill="#80868b" style="font-size:11.0px">　　⚠️ 口径三连：H100 取稠密不取稀疏（差整一倍）；v6e 每 chip 只有 1 个 TensorCore，per-chip 即 per-device；四颗一律 bf16。B200 与 v7 两行沿用专题二 §1 已核过的数。</text>
 </svg>
 <figcaption><b>图 X-1</b>　三颗旗舰挤在 295–313，<b>v6e 是 560</b>。「算力强、显存弱」不是形容词 —— 它就是这个数。</figcaption></figure>
-  <p>这个 560 从什么样的布局里长出来？<b>按同一种画法拆开两颗。</b></p>
+  <p>这个 560 从什么样的布局里长出来？<b>先看 v6e 这一颗</b> ——&nbsp;<em>H100 的对照放在下面那一折里，需要时再点开。</em></p>
 <figure class="fbox fwide" id="figx-2"><svg viewBox="0 0 1400 852" width="100%" role="img" aria-label="一颗 TPU v6e 芯片的内部布局：1 个 TensorCore，内含 2 个 256×256 的 MXU、1 个 8×128 的向量单元、1 个标量单元，配 128 MiB 的 VMEM 片上暂存和 1 MiB SMEM；另有 2 个 SparseCore；片外是 32 GB HBM，带宽 1638 GB/s；对外 4 个 ICI 端口组成二维环面"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一颗 TPU v6e 拆开看 ——&#160;<tspan font-weight="700">1 颗芯片 ＝ 1 个核 ＝ 1 个 device</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 记住三件事就够了：<tspan font-weight="700">算力集中在 2 个大方阵里</tspan>、<tspan font-weight="700">片上有一整块 128 MiB 的暂存</tspan>、<tspan font-weight="700">通往片外的那根管子只有 1,638 GB/s</tspan>。</text>
@@ -929,6 +929,8 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
 <text class="svgsm" x="0" y="828" fill="#80868b" style="font-size:11.0px">　　MXU 256×256、VMEM 128 MiB/core、SMEM 1 MiB、SparseCore 2 core × 16 subcore × 8 lane ——&#160;JAX 公开源码 tpu_info.py 的 TPU_V6E 分支</text>
 </svg>
 <figcaption><b>图 X-2</b>　一颗 <b>TPU v6e</b>：算力集中在<b>两个 256×256 的方阵</b>里，片上一整块 128 MiB 暂存（<b>全由编译器安排，没有硬件缓存兜底</b>），通往片外那道门 1,638 GB/s。</figcaption></figure>
+<details class="more"><summary>⭐ 对照 · <b>一颗 H100 拆开看</b>（图 X-3，默认折起）——&nbsp;同样的画法，算力<b>摊成 528 个</b>小单元，片上多一整层<b>硬件自动管</b>的 L2，<b>门宽一倍</b></summary>
+<div class="body">
 <figure class="fbox fwide" id="figx-3"><svg viewBox="0 0 1400 752" width="100%" role="img" aria-label="一颗 NVIDIA H100 SXM 的内部布局：132 个 SM，每个 SM 有 128 个 CUDA Core、4 个第四代 Tensor Core、256 KB 的 L1 与共享内存、256 KB 寄存器堆；全片共享 50 MB L2；片外 80 GB HBM3，带宽 3.35 TB/s；对外 NVLink 900 GB/s"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一颗 NVIDIA H100 拆开看 ——&#160;<tspan font-weight="700">同样的画法，相反的选择</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 跟上一张比着看：<tspan font-weight="700">算力摊成 528 个小单元</tspan>、<tspan font-weight="700">片上多了一整层硬件自动管的缓存</tspan>、<tspan font-weight="700">通往片外的门宽一倍</tspan>。</text>
@@ -1146,6 +1148,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
 <text class="svgsm" x="0" y="728" fill="#80868b" style="font-size:11.0px">　　稠密 bf16 989.5 TFLOPS（数据表 1,979 带稀疏 ÷ 2）、HBM3 80 GB / 3.35 TB/s、NVLink 900 GB/s ——&#160;NVIDIA H100 官方数据表。⚠️ 84 MB 那个合计是本图当场加的：132 × 256 KB ＝ 33.8 MB，加 L2 50 MB。</text>
 </svg>
 <figcaption><b>图 X-3</b>　一颗 <b>H100</b>：同样的画法。算力摊成 <b>528 个</b>小单元，片上多了一整层<b>硬件自动管</b>的 L2，门宽一倍。<em>⭐ 两张图里那道门是按带宽<b>等比</b>画的，可以直接叠着比。</em></figcaption></figure>
+</div></details>
 <details class="more"><summary>⭐⭐ 两颗都是自洽的：一个在防「我不知道你要跑什么」，一个在吃透「我早就知道你要跑什么」</summary>
 <div class="body">
     <p>同样三个问题，两边给了<b>相反</b>的答案：</p>
