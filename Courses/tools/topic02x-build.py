@@ -88,6 +88,15 @@ assert "nav.famnav" in head, \
 
 head += """
 <style>
+/* ⛔ 2026-09-10 新造的两个类，样式必须在这儿落地。
+   ⭐ 判据（09-09 栽过一次的）：**自己新造的类名，落地前要确认它真有样式** ——&nbsp;
+     没有样式不会报错、构建照常成功，只是页面上悄悄少一块。 */
+h2 .tag.skip{display:inline-block;margin-left:.6em;padding:.14em .62em;border-radius:999px;
+  background:#fef7e0;color:#8a5a00;font-size:.42em;font-weight:700;
+  letter-spacing:0;vertical-align:.34em}
+details.more.skipsec{border-color:#f7d98a;background:#fffdf6}
+details.more.skipsec[open]{background:#fff}
+details.more.skipsec > summary{color:#8a5a00}
 ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
 h4 { margin:18px 0 6px; font-size:15px }
 /* ⭐ L100 的版面比 L200/L300 松一档：图大、字少，图之间给足呼吸。
@@ -166,7 +175,7 @@ def fold(summary, body):
 a("""
 <header class="hero">
   __FAMNAV__
-  <div class="kicker">专题二 · 外传　·　L100　·　19 分钟</div>
+  <div class="kicker">专题二 · 外传　·　L100　·　主线 17 分钟（§三 可跳，展开另加 2 分钟）</div>
   <h1>算力强，显存弱 —— 我们把这样一颗芯片用成了什么样</h1>
   <p class="lede">TPU v6e 与扩散模型。<b>前十分钟一条线加两张芯片图，判你的活配不配；
     后八分钟摊开我们真跑过的东西。</b></p>
@@ -280,7 +289,24 @@ a(fold('⭐⭐ 于是「v6e 适合扩散」的精确说法是：<b>短板不参�
 a('</section>')
 
 a('<section id="s三">')
-a('  <h2><span class="secno">三</span>一颗装得下吗</h2>')
+a('  <h2><span class="secno">三</span>一颗装得下吗'
+  '<span class="tag skip">⏱ 主线可跳</span></h2>')
+
+# ⛔ 2026-09-10 现场：「这个章节它没什么用，在整个的故事线上，
+#   把这个章节折起来，15 分钟不讲这个。」
+#   ⭐ 他是对的：这一讲的故事线是「判据 → 我们做了什么 → 捞客户」，
+#     而「装得下吗」回答的是一个**部署细节**，不推进那条线。
+#   ⚠️ 但整节删掉太可惜 —— 那条 XLA 原始报错是全讲唯一一份**一手证据**。
+#     所以按本文件 fold() 的判据处理：**折的是内容，结论留在外面。**
+#     下面这一句常驻可见，整节折起来放在它后面。
+a('  <p><b>一句话带过就够</b>：'
+  '<b>权重决定装不装得进，激活决定跑不跑得动</b> ——&nbsp;'
+  '而扩散是<b>后者</b>说了算（我们撞 OOM 时 XLA 报的是'
+  '<code>只剩 13.10G</code>，而 VAE 一步要 <code>19.00G</code>）。'
+  '<em>展开的账在下面，主线不讲。</em></p>')
+a('<details class="more skipsec"><summary>'
+  '⏱ <b>整节展开</b>（约 2 分钟）：那根权重体积轴、实测配置，'
+  '以及我们自己撞 OOM 的那笔实测账</summary>\n<div class="body">')
 a(fig("figx-6",
       "<b>图 X-6</b>　上半是权重体积与我们真跑过的配置；"
       "<b>下半是同一颗芯片上的真实预算</b> —— 那是我们自己撞 OOM 时的实测账。"
@@ -327,6 +353,7 @@ a(fold('这张图的数是从哪儿来的（出处 ＋ 三条边界）',
     <p>⛔ <b>那根轴只算权重</b>，不含激活与编译缓存 ——&nbsp;
       它能回答「装不装得下」，<b>回答不了「该用几颗」</b>。<br>
       ⚠️ <b>FLUX.1 我们没有记录实测配置</b>，图上如实留空。</p>"""))
+a('</div></details>')
 a('</section>')
 
 a('<section id="s四">')
@@ -466,7 +493,7 @@ a(fold('想往下挖：这一讲的每一节在 L200 的哪儿（含<b>本讲没
           <td>560 怎么除出来的、989.5 为什么不是 1979、拿 v5p 复现公式；两颗芯片的逐项对照表</td></tr>
         <tr><td>§二 你的活落在哪一边</td><td><b>§三 ＋ §四</b></td>
           <td>FLOP 全表、<b>window_size 的反事实</b>、锚点当场抓到的一个错、MFU 37% 的原因</td></tr>
-        <tr><td>§三 一颗装得下吗</td><td><b>§二点三</b></td>
+        <tr><td>§三 一颗装得下吗<b>（主线可跳）</b></td><td><b>§二点三</b></td>
           <td>那三条「减配」为什么是配套的</td></tr>
         <tr><td>§四 两份例子 ／ 三步自检</td><td><b>§五点一</b></td>
           <td>切口成本的几笔账、三个落盘产物的完整口径</td></tr>

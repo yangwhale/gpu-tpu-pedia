@@ -75,7 +75,7 @@ if [ "${1:-}" != "--lint" ]; then
   step "专题八 讲义"
   python3 topic08-build-lecture.py
 
-  # ⭐ 专题二外传（L100，20 分钟）。CSS 从 L300 抽，**必须排在它之后**。
+  # ⭐ 专题二外传（L100，主线 17 分钟 ＋ §三 可跳 2 分钟）。CSS 从 L300 抽，**必须排在它之后**。
   #   ⛔ 五张图先生成 —— topic02x-build.py 找不到 svg 会直接 assert 挂掉，
   #     这是故意的：宁可构建失败，也不要悄悄出一份缺图的教材。
   #   ⭐ 画法基元共用 topic03_draw.py，别另起一套。
@@ -156,6 +156,10 @@ python3 topic02-lint-secnum.py
 
 step "head 元信息体检（标题 / og 指向 / og 图存在）"
 python3 topic02-lint-meta.py
+# ⛔ 2026-09-10 加：四页 famnav 必须跟 topic02_family.PAGES 一致。
+#   L300 那份是手写在 HTML 里的，改过时长后它独自留在旧值上（写着 20 分钟），
+#   而 family.py 写 19、实际 17 —— 三个版本，谁都不报错。
+python3 topic02-lint-meta.py --famnav
 
 printf '\n\033[1m▸ 产物\033[0m\n'
 for f in topic-01.html topic-02-L300.html topic-02.html topic-02x.html \

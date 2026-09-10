@@ -667,6 +667,15 @@ nav.famnav .here em{color:#174ea6}
   nav.famnav a,nav.famnav .here{padding:6px 10px}}
 </style>
 <style>
+/* ⛔ 2026-09-10 新造的两个类，样式必须在这儿落地。
+   ⭐ 判据（09-09 栽过一次的）：**自己新造的类名，落地前要确认它真有样式** ——&nbsp;
+     没有样式不会报错、构建照常成功，只是页面上悄悄少一块。 */
+h2 .tag.skip{display:inline-block;margin-left:.6em;padding:.14em .62em;border-radius:999px;
+  background:#fef7e0;color:#8a5a00;font-size:.42em;font-weight:700;
+  letter-spacing:0;vertical-align:.34em}
+details.more.skipsec{border-color:#f7d98a;background:#fffdf6}
+details.more.skipsec[open]{background:#fff}
+details.more.skipsec > summary{color:#8a5a00}
 ul + p, ol + p, ul + div.note, ol + div.note, table + p { margin-top: 14px }
 h4 { margin:18px 0 6px; font-size:15px }
 /* ⭐ L100 的版面比 L200/L300 松一档：图大、字少，图之间给足呼吸。
@@ -720,10 +729,10 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
   <span class="famlab">专题二共四版：</span>
   <a href="topic-02.html">主线 L200<em>精讲 · 80 分钟</em></a>
   <a href="topic-02-L300.html">主线 L300<em>完整版 · 两小时</em></a>
-  <span class="here" aria-current="page">外传 L100<em>19 分钟 · 含十模型</em></span>
+  <span class="here" aria-current="page">外传 L100<em>17 分钟 · 含十模型</em></span>
   <a href="topic-02x-L200.html">外传 L200<em>精讲 · 含显微镜拆解</em></a>
   </nav>
-  <div class="kicker">专题二 · 外传　·　L100　·　19 分钟</div>
+  <div class="kicker">专题二 · 外传　·　L100　·　主线 17 分钟（§三 可跳，展开另加 2 分钟）</div>
   <h1>算力强，显存弱 —— 我们把这样一颗芯片用成了什么样</h1>
   <p class="lede">TPU v6e 与扩散模型。<b>前十分钟一条线加两张芯片图，判你的活配不配；
     后八分钟摊开我们真跑过的东西。</b></p>
@@ -1383,7 +1392,10 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
 </div></details>
 </section>
 <section id="s三">
-  <h2><span class="secno">三</span>一颗装得下吗</h2>
+  <h2><span class="secno">三</span>一颗装得下吗<span class="tag skip">⏱ 主线可跳</span></h2>
+  <p><b>一句话带过就够</b>：<b>权重决定装不装得进，激活决定跑不跑得动</b> ——&nbsp;而扩散是<b>后者</b>说了算（我们撞 OOM 时 XLA 报的是<code>只剩 13.10G</code>，而 VAE 一步要 <code>19.00G</code>）。<em>展开的账在下面，主线不讲。</em></p>
+<details class="more skipsec"><summary>⏱ <b>整节展开</b>（约 2 分钟）：那根权重体积轴、实测配置，以及我们自己撞 OOM 的那笔实测账</summary>
+<div class="body">
 <figure class="fbox fwide" id="figx-6"><svg viewBox="0 0 1400 818" width="100%" role="img" aria-label="把扩散模型和大语言模型的 bf16 权重体积摆在同一根对数轴上，并画出一颗 v6e 的 32 GB 这条线：扩散这一族从 7 GB 到 54 GB，在一颗到两颗的量级；而 LLM 是 794 GB 和 1342 GB，要几十颗"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">装得下吗 ——&#160;<tspan font-weight="700">要算的是权重 ＋ 峰值激活，而扩散是激活说了算</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⛔ 下面那根轴<tspan font-weight="700">只画权重</tspan>——&#160;而扩散模型真正吃显存的是<tspan font-weight="700">运行时的激活</tspan>，它比权重大、而且随分辨率和帧数涨。<tspan font-weight="700">图下半部分是我们自己撞 OOM 时的实测账。</tspan></text>
@@ -1538,6 +1550,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
     <p>⛔ <b>那根轴只算权重</b>，不含激活与编译缓存 ——&nbsp;
       它能回答「装不装得下」，<b>回答不了「该用几颗」</b>。<br>
       ⚠️ <b>FLUX.1 我们没有记录实测配置</b>，图上如实留空。</p>
+</div></details>
 </div></details>
 </section>
 <section id="s四">
@@ -1979,7 +1992,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
           <td>560 怎么除出来的、989.5 为什么不是 1979、拿 v5p 复现公式；两颗芯片的逐项对照表</td></tr>
         <tr><td>§二 你的活落在哪一边</td><td><b>§三 ＋ §四</b></td>
           <td>FLOP 全表、<b>window_size 的反事实</b>、锚点当场抓到的一个错、MFU 37% 的原因</td></tr>
-        <tr><td>§三 一颗装得下吗</td><td><b>§二点三</b></td>
+        <tr><td>§三 一颗装得下吗<b>（主线可跳）</b></td><td><b>§二点三</b></td>
           <td>那三条「减配」为什么是配套的</td></tr>
         <tr><td>§四 两份例子 ／ 三步自检</td><td><b>§五点一</b></td>
           <td>切口成本的几笔账、三个落盘产物的完整口径</td></tr>
