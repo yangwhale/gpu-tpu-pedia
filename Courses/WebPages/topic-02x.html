@@ -1565,7 +1565,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
     （<code>tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/</code>）——
     两个模型目录结构相同，数不同。</p>
 
-<figure class="fbox fwide" id="figx-10"><svg viewBox="0 0 1400 1102" width="100%" role="img" aria-label="仓库里同一个模型有两份例子：一体化脚本一个进程跑完，三阶段版本拆成三个独立进程，中间用两个 safetensors 文件和一份 json 交接。图上给出这三个文件的真实字节数、张量形状与 dtype，以及验证一份 latent 是否正确的三步自检"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="figx-10"><svg viewBox="0 0 1400 710" width="100%" role="img" aria-label="仓库里同一个模型有两份例子：一体化脚本一个进程跑完，三阶段版本拆成三个独立进程，中间用两个 safetensors 文件和一份 json 交接。图上给出这三个文件的真实字节数、张量形状与 dtype，以及验证一份 latent 是否正确的三步自检"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">仓库里为什么同一个模型有两份例子 ——&#160;<tspan font-weight="700">三阶段那份是拿来「看得见中间」的</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 一体化跑得快，但你<tspan font-weight="700">看不见中间那份 latent 长什么样</tspan>。三阶段把切口露出来：两个 safetensors ＋ 一份 config ——&#160;<tspan font-weight="700">下面这些数全是直接解文件头得到的，不是算的。</tspan></text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
@@ -1639,29 +1639,6 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
 <text class="svgsm" x="14" y="652" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">③ 字节数对不对</tspan></text>
 <text class="svgsm" x="250" y="650" fill="#5f6368" style="font-size:11.5px">元素数 × 每元素字节 ＋ 头 ＝ 文件大小</text>
 <text class="svgsm" x="740" y="650" fill="#5f6368" style="font-size:11.5px">16×21×90×160×4 ＋ 272 ＝ <tspan font-weight="700">19,353,872</tspan>，跟文件<tspan font-weight="700">一个字节不差</tspan></text>
-<rect x="0" y="704" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="704" width="4" height="105" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="2" y="704" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="728" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 一个反例，说明为什么「看文件大小」不算验证</tspan></text>
-<text class="svgsm" x="20" y="752" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">Wan2.1 的 latents：F32，[1,16,21,90,160]，19,353,872 B</tspan></text>
-<text class="svgsm" x="20" y="773" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">CogVideoX 的 latents：BF16，[1,16,21,90,160]，9,677,064 B</tspan></text>
-<text class="svgsm" x="20" y="794" fill="#a50e0e" style="font-size:12.0px">⭐ <tspan font-weight="700">形状一模一样，文件大小差一倍。</tspan>文件大小既不能证明 shape 对，也不能反推 dtype ——&#160;<tspan font-weight="700">只能读头。</tspan>这就是上面那三步为什么是三步，不是一步。</text>
-<rect x="0" y="823" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="823" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="823" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="847" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐⭐ 三阶段那份例子的真正用途：它是一个「把切口露出来」的装置</tspan></text>
-<text class="svgsm" x="20" y="871" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">教学上</tspan>：让人去 stage_outputs/ 把那两个文件打开看一眼，比讲十分钟结构管用。　<tspan font-weight="700">调试上</tspan>：全黑 / NaN / 动作快进这些问题，<tspan font-weight="700">在一体化脚本里无从下手</tspan>，三阶段能逐段定位。</text>
-<text class="svgsm" x="20" y="892" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">部署上</tspan>：既然只认文件不认进程，<tspan font-weight="700">三段就能跑在三台机器上</tspan> ——&#160;下一张讲各放哪台。</text>
-<rect x="0" y="921" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="921" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="921" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="945" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⛔ 这张图推翻重写过一次 ——&#160;那个错值得讲给学员听</tspan></text>
-<text class="svgsm" x="20" y="969" fill="#b06000" style="font-size:12.0px">初版画的是「数据体积对数轴」，最粗的一根柱子标着 <tspan font-weight="700">457 GB ——&#160;注意力分数矩阵</tspan>，旁边注了一句「从不落地」。</text>
-<text class="svgsm" x="20" y="990" fill="#b06000" style="font-size:12.0px">⛔ 现场当场否掉：<tspan font-weight="700">那个矩阵从来没有被物化出来过</tspan>，Flash / Splash Attention 是<tspan font-weight="700">分块算的</tspan>，算完即弃，HBM 里根本不存在这么一块。</text>
-<text class="svgsm" x="20" y="1011" fill="#b06000" style="font-size:12.0px">⭐ 而「从不落地」那句注解<tspan font-weight="700">并不能救它</tspan>：把一个不存在的量画成「管子最粗处」，<tspan font-weight="700">整张图的比例尺就锚在了虚构上</tspan> ——&#160;读者记住的是柱子，不是柱子旁边那行小字。<tspan font-weight="700">注解抵消不了图形本身的断言。</tspan></text>
-<text class="svgsm" x="0" y="1044" fill="#80868b" style="font-size:11.0px">📌 三个文件的字节数、张量形状、dtype 与 metadata ——&#160;直接解 safetensors 文件头得到；文件在本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/ 下，可自行复核</text>
-<text class="svgsm" x="0" y="1061" fill="#80868b" style="font-size:11.0px">　　CogVideoX 那条对照取自它同名目录下的 stage2_latents.safetensors</text>
-<text class="svgsm" x="0" y="1078" fill="#80868b" style="font-size:11.0px">　　⚠️ 官方 wan_t2v_14B.py 写 text_len ＝ 512，而 diffusers 这条路实际存下来的文本 embedding 是 226 ——&#160;不影响 X-9 的结论（交叉注意力只占约 5% 算力），但「config 写的」与「实际跑的」在这里确实不是一个数。</text>
 </svg>
 <figcaption><b>图 X-10</b>　三阶段之间只交接三个文件：两个 safetensors ＋ 一份 config。<em>⭐ 图上的字节数、shape、dtype <b>全是直接解 safetensors 文件头得到的</b>，这三个文件仓库里就有，可自行复核。</em></figcaption></figure>
 <details class="more"><summary>⭐⭐ 拿到一份 latent，<b>三步自检</b>：shape、dtype、字节数 ——&nbsp;而「看文件大小」一步都不算</summary>
@@ -1679,6 +1656,40 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
       <b>大小差一倍，形状相同。只能读头。</b></p>
     <p>⭐ 顺带说切口有多便宜：跨机要搬的就是那 19 MB 出头，走 100 Gbps 约 <b>1.5 毫秒</b>，
       而被切开的那一段本身要算 <b>229 秒</b> —— <b>「能不能切」这个问题在这里根本不成立。</b></p>
+</div></details>
+<details class="more"><summary>⭐⭐ 三阶段那份例子的真正用途：<b>它是一个「把切口露出来」的装置</b></summary>
+<div class="body">
+    <p><b>教学上</b>：让人去 <code>stage_outputs/</code> 把那两个文件打开看一眼，
+      <b>比讲十分钟结构管用</b>。</p>
+    <p><b>调试上</b>：全黑 / NaN / 动作快进这些问题，<b>在一体化脚本里无从下手</b>，
+      三阶段能<b>逐段定位</b>。</p>
+    <p><b>部署上</b>：既然只认文件不认进程，<b>三段就能跑在三台机器上</b> ——&nbsp;
+      下一节讲各放哪台。</p>
+</div></details>
+<details class="more"><summary>⛔ <b>这张图我推翻重写过一次</b> ——&nbsp;<b>注解抵消不了图形本身的断言</b>（那个错值得讲给学员听）</summary>
+<div class="body">
+    <p>初版画的是「数据体积对数轴」，最粗的一根柱子标着
+      <b>457 GB —— 注意力分数矩阵</b>，旁边我还很小心地注了一句「从不落地」。</p>
+    <p>⛔ <b>那是错的</b>：那个矩阵<b>从来没有被物化出来过</b>。
+      Flash / Splash Attention 是<b>分块算的</b>，算完即弃，
+      HBM 里根本不存在这么一块。</p>
+    <p>⭐ 而「从不落地」那句注解<b>并不能救它</b>：
+      把一个不存在的量画成「管子最粗处」，
+      <b>整张图的比例尺就锚在了虚构上</b> ——&nbsp;
+      读者记住的是柱子，不是柱子旁边那行小字。
+      <b>注解抵消不了图形本身的断言。</b></p>
+</div></details>
+<details class="more"><summary>这张图的数是从哪儿来的（含一处 <b>config 写的 ≠ 实际跑的</b>）</summary>
+<div class="body">
+    <p>三个文件的字节数、张量形状、dtype 与 metadata ——&nbsp;
+      <b>直接解 safetensors 文件头得到</b>；文件就在本仓库
+      <code>tpu/Wan2.1/generate_diffusers_torchax_staged/stage_outputs/</code> 下，
+      <b>可自行复核</b>。CogVideoX 那条对照取自它同名目录下的
+      <code>stage2_latents.safetensors</code>。</p>
+    <p>⚠️ 官方 <code>wan_t2v_14B.py</code> 写 <code>text_len ＝ 512</code>，
+      而 diffusers 这条路<b>实际存下来的文本 embedding 是 226</b> ——&nbsp;
+      不影响 X-9 的结论（交叉注意力只占约 5% 算力），
+      但<b>「config 写的」与「实际跑的」在这里确实不是一个数</b>。</p>
 </div></details>
 <section id="s五">
   <h2><span class="secno">五</span>拆完怎么摆 —— 三段吃的不是同一种资源</h2>

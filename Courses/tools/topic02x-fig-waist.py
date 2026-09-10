@@ -191,46 +191,15 @@ def main():
     y = hy + TH + 22
 
     # ══════════════════ 落点 ══════════════════
-    y = f.band(y, "bad",
-               "⛔ 一个反例，说明为什么「看文件大小」不算验证",
-               ['<tspan font-weight="700">Wan2.1 的 latents：F32，[1,16,21,90,160]，19,353,872 B</tspan>',
-                '<tspan font-weight="700">CogVideoX 的 latents：BF16，[1,16,21,90,160]，9,677,064 B</tspan>',
-                '⭐ <tspan font-weight="700">形状一模一样，文件大小差一倍。</tspan>'
-                '文件大小既不能证明 shape 对，也不能反推 dtype ——&#160;'
-                '<tspan font-weight="700">只能读头。</tspan>'
-                '这就是上面那三步为什么是三步，不是一步。'])
-
-    y = f.band(y + 14, "ok",
-               "⭐⭐ 三阶段那份例子的真正用途：它是一个「把切口露出来」的装置",
-               ['<tspan font-weight="700">教学上</tspan>：让人去 stage_outputs/ 把那两个文件打开看一眼，'
-                '比讲十分钟结构管用。　'
-                '<tspan font-weight="700">调试上</tspan>：全黑 / NaN / 动作快进这些问题，'
-                '<tspan font-weight="700">在一体化脚本里无从下手</tspan>，三阶段能逐段定位。',
-                '<tspan font-weight="700">部署上</tspan>：既然只认文件不认进程，'
-                '<tspan font-weight="700">三段就能跑在三台机器上</tspan> ——&#160;下一张讲各放哪台。'])
-
-    y = f.band(y + 14, "warn",
-               "⛔ 这张图推翻重写过一次 ——&#160;那个错值得讲给学员听",
-               ['初版画的是「数据体积对数轴」，最粗的一根柱子标着 '
-                '<tspan font-weight="700">457 GB ——&#160;注意力分数矩阵</tspan>，'
-                '旁边注了一句「从不落地」。',
-                '⛔ 现场当场否掉：<tspan font-weight="700">那个矩阵从来没有被物化出来过</tspan>，'
-                'Flash / Splash Attention 是<tspan font-weight="700">分块算的</tspan>，'
-                '算完即弃，HBM 里根本不存在这么一块。',
-                '⭐ 而「从不落地」那句注解<tspan font-weight="700">并不能救它</tspan>：'
-                '把一个不存在的量画成「管子最粗处」，'
-                '<tspan font-weight="700">整张图的比例尺就锚在了虚构上</tspan> ——&#160;'
-                '读者记住的是柱子，不是柱子旁边那行小字。'
-                '<tspan font-weight="700">注解抵消不了图形本身的断言。</tspan>'])
-
-    y = f.src(y + 18,
-              '三个文件的字节数、张量形状、dtype 与 metadata ——&#160;直接解 safetensors '
-              '文件头得到；文件在本仓库 tpu/Wan2.1/generate_diffusers_torchax_staged/'
-              'stage_outputs/ 下，可自行复核',
-              'CogVideoX 那条对照取自它同名目录下的 stage2_latents.safetensors',
-              '⚠️ 官方 wan_t2v_14B.py 写 text_len ＝ 512，而 diffusers 这条路实际存下来的文本 '
-              'embedding 是 226 ——&#160;不影响 X-9 的结论（交叉注意力只占约 5% 算力），'
-              '但「config 写的」与「实际跑的」在这里确实不是一个数。')
+    # ⛔⛔ 2026-09-10 现场：「把这些给我折叠起来。」
+    #   原来这里还有**三条色带 ＋ 三行出处**，跟 X-6 那次是同一个毛病：
+    #   散文写进了 SVG，而 **SVG 里折不了东西**。
+    #   ⭐ 三条里第一条（「看文件大小」不算验证）**跟图下面那个折叠块完全重复** ——
+    #     同一个职责两个载体，删掉纯赚。另外两条和出处是图里独有的，
+    #     已搬到 topic02x-build.py 里图下方的 <details>，结论句留在折叠条上。
+    #   ⚠️ 尤其是「这张图推翻重写过一次 / 457 GB」那条 —— 它是全讲最有说服力的
+    #     一段，**搬走不等于删掉**，它现在是一个独立折叠，折叠条上就写着落点。
+    #   ⭐ 图里只留结构本身：两份例子的对照 ＋ 三步自检表。
     f.save("figx-10.svg", y + 6)
 
 
