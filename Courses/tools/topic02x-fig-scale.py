@@ -121,8 +121,16 @@ def main():
         #   ⭐ 判据：**贴着轴末的条形，标签要翻进条子里，不能一律往外写。**
         vlab = "%s GB" % (("%.1f" % gb).rstrip("0").rstrip("."))
         if xf(gb) + 16 + len(vlab) * 7.4 > AX1 + 6:
-            f.t(xf(gb) - 14, yy + 13, vlab, "#fff", bold=True,
-                size=_sz(12), anchor="end")
+            # ⛔⛔ 2026-09-10 这一处修了三次，前两次都错，值得把过程留着：
+            #   ① 一律往右写 → 「1342 GB」压上右列的配置文字。
+            #   ② 改成翻进条子里、白字 → **看不见了**。
+            #      根因不是位置，是**颜色**：这里的条子是一根 3.2px 的线，
+            #      不是一块填充色带 —— 白字落在白底上等于隐形。
+            #   ③ 现在：挪到条子**正上方**，用条子自己的颜色。
+            #   ⭐ 判据：**反白只在「有足够大的实心底」时才成立。**
+            #     线不是底。改颜色之前先问一句：它落在什么上面。
+            f.t(xf(gb), yy - 4, vlab, col, bold=True,
+                size=_sz(11), anchor="end")
         else:
             f.t(xf(gb) + 16, yy + 13, vlab, col, bold=True, size=_sz(12))
         # ⭐ 右列＝**我们真跑过的配置**，不是从体积推出来的颗数。
@@ -176,48 +184,14 @@ def main():
         f.t(560, yy + 22, why, GY, size=_sz(11.5), w=W - 574)
     y = hy + TH + 22
 
-    y = f.band(y, "bad",
-               "⛔ 换成实测之后，立刻看出两处「按体积猜」会猜错的地方",
-               ['① <tspan font-weight="700">S3Diff 只有 6.6 GB，按体积猜「一颗绰绰有余」——&#160;对，'
-                '但那不是重点。</tspan>真正的发现是：'
-                '<tspan font-weight="700">我们把它摊到 8 卡做张量并行，实测反而更慢</tspan>'
-                '（5.46 秒 对 5.28 秒），而预热长了 15 倍。模型太小，通信开销盖过了收益。',
-                '② <tspan font-weight="700">Wan2.1 的 28 GB 按体积猜「贴边能塞进一颗」</tspan>——&#160;'
-                '而实测从来没人这么跑：它是在 <tspan font-weight="700">v6e-8 上 dp=1、tp=8 摊开</tspan>跑的。',
-                '⭐⭐ <tspan font-weight="700">「装得下」和「该用几颗」是两个不同的问题</tspan>——&#160;'
-                '前者看体积就能答，后者只能实测。'])
-
-    y = f.band(y + 14, "bad",
-               "⛔⛔ 所以「28 GB &lt; 32 GB 所以能跑」这句话是错的 ——&#160;两处都错",
-               ['① <tspan font-weight="700">分母错了。</tspan>32 GB 是标称，不是预算 ——&#160;'
-                '真跑起来权重和运行时先占掉一大块，'
-                '那次 OOM 时 XLA 报的是<tspan font-weight="700">只剩 13.10 GB</tspan>。',
-                '② <tspan font-weight="700">分子也错了。</tspan>要放进去的不只是权重，'
-                '还有<tspan font-weight="700">峰值激活</tspan> ——&#160;'
-                '而扩散这一族<tspan font-weight="700">激活比权重大</tspan>：'
-                'CogVideoX-5B 权重 10 GB，它的 VAE 解码一步却要 19 GB。',
-                '⭐⭐ 而且<tspan font-weight="700">激活随分辨率与帧数涨，权重一个字节不涨</tspan>——&#160;'
-                'Wan2.1 的 480P 跑得动、720P OOM，用的是<tspan font-weight="700">同一份权重</tspan>。'
-                '<tspan font-weight="700">权重决定装不装得进，激活决定跑不跑得动。</tspan>'])
-
-    y = f.band(y + 14, "ok",
-               "实测分布：小的单颗，主力清一色 8 卡 ——&#160;没有一个需要跨主机",
-               ['<tspan font-weight="700">单颗</tspan>：S3Diff · SDXL（延迟最优）· Real-ESRGAN　'
-                '<tspan font-weight="700">8 卡</tspan>：HunyuanVideo-1.5 / Wan2.1 / CogVideoX '
-                '在 v6e-8 · Flux.2 在 v4-8 · Wan2.2 I2V 在 v6e-16',
-                '⭐ 这正好解释 X-2 里那三条看着像减配的规格（4 个 ICI 口、二维环面、Pod 只有 256）：'
-                '<tspan font-weight="700">v6e 不打「一个模型摊在几千颗上」那场仗，不打就不用付那个成本。</tspan>'])
-
-    y = f.src(y + 18,
-              '⭐ 右列「实测配置」全部取自各模型 README 的测试环境段：SDXL v6e-1/4/8 · '
-              'HunyuanVideo-1.5 / Wan2.1 / CogVideoX 在 v6e-8 · Flux.2 在 v4-8 · '
-              'Wan2.2 I2V 在 v6e-16（分片配置见该模型优化指南第三章）· '
-              'S3Diff 与 Real-ESRGAN 单颗',
-              '「8 卡反而更慢」出自 S3Diff README 的 Why Not Multi-Chip 段；'
-              '权重体积按 bf16 每参数 2 字节换算，参数量出自各家官方模型卡',
-              '⛔ 那根轴<tspan font-weight="700">只算权重</tspan>，不含激活与编译缓存 ——&#160;'
-              '它能回答「装不装得下」，<tspan font-weight="700">回答不了「该用几颗」</tspan>。'
-              '⚠️ FLUX.1 我们没有记录实测配置，图上如实留空。')
+    # ⛔⛔ 2026-09-10 现场：「这一堆乱七八糟的字都折叠起来。」
+    #   原来这里还有**三条色带 ＋ 三行出处**，全是散文式长句，
+    #   把这张图撑成了一面字墙 ——&nbsp;而它们本来就不是图，是话。
+    #   ⭐ 判据：**SVG 里折不了东西。要折就得先把它搬出图。**
+    #     所以三条色带和出处都挪到了 topic02x-build.py 里图下面的
+    #     <details> 折叠块，结论句留在折叠条上。
+    #   ⚠️ 图里只留两样：那根轴（体积）＋ 真实预算表（实测账）——&nbsp;
+    #     它们是**表格和坐标**，本来就该是图。
     f.save("figx-6.svg", y + 6)
 
 
