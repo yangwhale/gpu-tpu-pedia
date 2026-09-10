@@ -670,6 +670,13 @@ nav.famnav .here em{color:#174ea6}
 /* ⛔ 2026-09-10 新造的两个类，样式必须在这儿落地。
    ⭐ 判据（09-09 栽过一次的）：**自己新造的类名，落地前要确认它真有样式** ——&nbsp;
      没有样式不会报错、构建照常成功，只是页面上悄悄少一块。 */
+/* ⭐ 2026-09-10 加：§一 开头那排 v6e 官方规格卡。
+   ⛔ 同样先确认样式落地（h2 .tag.skip 那次的判据）。 */
+.kpirow{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0 6px}
+.kpirow .kpi{flex:1 1 150px;border:1px solid #dadce0;border-radius:10px;
+  padding:14px 16px;background:#fff;text-align:center}
+.kpirow .kpi b{display:block;font-size:26px;line-height:1.15;color:#1a73e8}
+.kpirow .kpi span{display:block;margin-top:4px;font-size:12px;color:#5f6368}
 h2 .tag.skip{display:inline-block;margin-left:.6em;padding:.14em .62em;border-radius:999px;
   background:#fef7e0;color:#8a5a00;font-size:.42em;font-weight:700;
   letter-spacing:0;vertical-align:.34em}
@@ -754,6 +761,24 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
 </section>
 <section id="s一">
   <h2><span class="secno">一</span>同一把尺子量四颗芯片 —— 再把其中两颗拆开</h2>
+  <p><b>先把这颗芯片的四个官方数摆出来</b> ——&nbsp;
+    <em>整节课要用的原料就这四个。</em></p>
+  <div class="kpirow">
+    <div class="kpi"><b>918</b><span>TFLOPS BF16 / 芯片</span></div>
+    <div class="kpi"><b>1,836</b><span>TOPS INT8 / 芯片</span></div>
+    <div class="kpi"><b>32 GB</b><span>HBM2e / 芯片</span></div>
+    <div class="kpi"><b>1,638</b><span>GB/s HBM 带宽</span></div>
+  </div>
+  <p>TPU v6e（研发代号 <b>Trillium</b>）是 Google 第六代张量处理单元，
+    <b>单 Pod 规模 256 芯片</b>，针对 Transformer、文生图与卷积网络的
+    训练、微调与在线服务做了系统级优化。</p>
+  <p>⭐ <b>这一讲的头两个数就是从上面这排里除出来的</b>：
+    <b>918 ÷ 1.638 ＝ 560</b> ——&nbsp;下面那张图上 v6e 那一根，就是这么来的。
+    <em>另外两个数（32 GB、以及 1,638 本身）在 §三 还会各用一次。</em></p>
+  <p class="src">规格出处：Cloud TPU v6e 官方文档
+    <a href="https://docs.cloud.google.com/tpu/docs/v6e">docs.cloud.google.com/tpu/docs/v6e</a>
+    ——&nbsp;<em>本课自己从 JAX <code>tpu_info</code> 读到的是 bf16 920 / int8 1,840 TOPS，
+    与官方差 0.3% 以内（取整口径不同，不是矛盾）。</em></p>
 <figure class="fbox fwide" id="figx-1"><svg viewBox="0 0 1400 654" width="100%" role="img" aria-label="四颗芯片的算力除以显存带宽：H100 是 295，B200 是 312，TPU v7 是 313，三者几乎一样；而 TPU v6e 是 560，接近前三者的两倍"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">同一把尺子，量四颗芯片 ——&#160;<tspan font-weight="700">只有 v6e 落在别处</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 尺子还是专题二那一把：<tspan font-weight="700">算力 ÷ 显存带宽</tspan> ＝ 每搬一个字节，这台机器本来能算多少次。<tspan font-weight="700">数越大，越挑「算得多、搬得少」的活。</tspan></text>

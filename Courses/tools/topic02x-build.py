@@ -91,6 +91,13 @@ head += """
 /* ⛔ 2026-09-10 新造的两个类，样式必须在这儿落地。
    ⭐ 判据（09-09 栽过一次的）：**自己新造的类名，落地前要确认它真有样式** ——&nbsp;
      没有样式不会报错、构建照常成功，只是页面上悄悄少一块。 */
+/* ⭐ 2026-09-10 加：§一 开头那排 v6e 官方规格卡。
+   ⛔ 同样先确认样式落地（h2 .tag.skip 那次的判据）。 */
+.kpirow{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0 6px}
+.kpirow .kpi{flex:1 1 150px;border:1px solid #dadce0;border-radius:10px;
+  padding:14px 16px;background:#fff;text-align:center}
+.kpirow .kpi b{display:block;font-size:26px;line-height:1.15;color:#1a73e8}
+.kpirow .kpi span{display:block;margin-top:4px;font-size:12px;color:#5f6368}
 h2 .tag.skip{display:inline-block;margin-left:.6em;padding:.14em .62em;border-radius:999px;
   background:#fef7e0;color:#8a5a00;font-size:.42em;font-weight:700;
   letter-spacing:0;vertical-align:.34em}
@@ -205,6 +212,42 @@ a('</section>')
 #   ⚠️ 代价是主线从 15 分钟变成 18 —— 如实改，不假装还是 15。
 a('<section id="s一">')
 a('  <h2><span class="secno">一</span>同一把尺子量四颗芯片 —— 再把其中两颗拆开</h2>')
+
+# ⭐ 2026-09-10 现场要求：把 v6e 那份技术介绍里的概述数搬进来。
+#   ⛔ 那份文档的链接**不能进这个仓库** —— 它挂在内部站点上，
+#     而那个域名本身就是公开仓库闸门的禁字
+#     （memory: feedback_no-internal-links-in-public-repo）。
+#   ⚠️⚠️ 这段注释**连着两次被闸门拦下，而且是两条不同的规则**：
+#     ① 第一版把那个域名原样写了出来（为了说明「它不能写」）；
+#     ② 改完之后，我在里面引用了 gate.py 那条人名规则的**正则原文**
+#        当例子 —— 那条规则当场扫到了自己的表达式。
+#     ⭐ 判据：**禁字规则会扫到「解释这条禁字」的那句话本身。**
+#       gate.py 顶部早写过同型教训（批量扫人名时把规则自己也扫了）。
+#       ⭐ 落地做法很简单：**说它，别写它** ——&nbsp;
+#         描述那条规则在管什么，不要把被管的字符串抄进来。
+#   ⭐ 所以搬的是**数**，出处引官方公开页 —— 这样反而更硬：
+#     四个数都能在 docs.cloud.google.com 上逐个核。
+#   ⚠️ 与本课自己那套 JAX tpu_info 读数对得上：bf16 920 / int8 1,840 TOPS，
+#     差 0.3% 以内，是两边取整口径不同，不是矛盾。
+a('''  <p><b>先把这颗芯片的四个官方数摆出来</b> ——&nbsp;
+    <em>整节课要用的原料就这四个。</em></p>
+  <div class="kpirow">
+    <div class="kpi"><b>918</b><span>TFLOPS BF16 / 芯片</span></div>
+    <div class="kpi"><b>1,836</b><span>TOPS INT8 / 芯片</span></div>
+    <div class="kpi"><b>32 GB</b><span>HBM2e / 芯片</span></div>
+    <div class="kpi"><b>1,638</b><span>GB/s HBM 带宽</span></div>
+  </div>
+  <p>TPU v6e（研发代号 <b>Trillium</b>）是 Google 第六代张量处理单元，
+    <b>单 Pod 规模 256 芯片</b>，针对 Transformer、文生图与卷积网络的
+    训练、微调与在线服务做了系统级优化。</p>
+  <p>⭐ <b>这一讲的头两个数就是从上面这排里除出来的</b>：
+    <b>918 ÷ 1.638 ＝ 560</b> ——&nbsp;下面那张图上 v6e 那一根，就是这么来的。
+    <em>另外两个数（32 GB、以及 1,638 本身）在 §三 还会各用一次。</em></p>
+  <p class="src">规格出处：Cloud TPU v6e 官方文档
+    <a href="https://docs.cloud.google.com/tpu/docs/v6e">docs.cloud.google.com/tpu/docs/v6e</a>
+    ——&nbsp;<em>本课自己从 JAX <code>tpu_info</code> 读到的是 bf16 920 / int8 1,840 TOPS，
+    与官方差 0.3% 以内（取整口径不同，不是矛盾）。</em></p>''')
+
 a(fig("figx-1",
       "<b>图 X-1</b>　三颗旗舰挤在 295–313，<b>v6e 是 560</b>。"
       "「算力强、显存弱」不是形容词 —— 它就是这个数。"))
