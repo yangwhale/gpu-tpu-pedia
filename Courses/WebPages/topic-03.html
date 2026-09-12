@@ -3124,23 +3124,102 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="16" y="887" fill="#174ea6">⭐ 一句话记住这个旋钮：<tspan font-weight="700">它改的是「存什么」，不是「算什么」。</tspan>所以它治的是显存墙，治不了 O(N²) 的计算量。</text>
 </svg><figcaption>⭐ <b>同一张主线图，只点亮旋钮① 动到的地方</b> —— 产生 K 和 V 的那两条支路。<b>注意那个平方大的矩阵一点没动</b>：这个旋钮治的是显存墙，<b>治不了 O(N²) 的计算量</b>。</figcaption></figure>
-<h3>5.1 MHA → MQA → GQA：一个连续旋钮</h3>
-<ul><li><b>MHA</b>：每个头各存一份 K/V。128 个头就是 128 份</li><li><b>MQA</b>：所有头共用同一份 K/V。省 128 倍，但<b>质量掉</b></li><li><b>GQA</b>：分成 g 组，组内共用。<code>g = n_h</code> 退化成 MHA，<code>g = 1</code> 退化成 MQA</li></ul>
-<p>⭐ 值得强调的是「GQA 是一个连续旋钮」这件事本身 —— 它不是一个新机制，是把 MHA 和 MQA 之间的空白填上，让你可以按需要选一个点。 这门课后面会反复见到这个套路：<b>把一个二选一变成一个可调的连续量。</b></p>
-<p>代价说清楚：省的是 KV 的<b>份数</b>，赔的是<b>表达能力</b> —— 本来 128 个头可以各自关注不同的东西，现在被迫共享。</p>
-<h3>5.2 MLA：不砍头，改成低秩压缩</h3>
-<ul><li>KV 不再按头存，而是压成<b>一个 512 维的隐向量</b>（<code>d_c = 512</code>）， 用的时候再用上投影矩阵升回 128 个头</li><li>位置信息<b>单独走 64 维一路 RoPE</b>（<code>d_h^R = 64</code>）</li><li>所以每 token 每层只存 <b>512 + 64 = 576</b> 个数 —— 对照 MHA 的 32,768 个，<b>56.9 倍</b></li><li>出处：V3 论文 <b>sec. 4.2</b> 超参一节，<code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code></li></ul>
-<p><b>代价：用计算换显存。</b> 多了一对降维/升维的矩阵乘。 这句话在<a href="专题04-反向与优化器.md">专题四</a> §3.2 会被再打一个折扣 —— ⚠️ <b>MLA 的压缩在训练前向里其实不生效</b>（K/V 会被解压出来算）， 它省的是<b>推理时的 KV cache</b>，不是训练时的激活。这是一个非常常见的误解。</p>
-<div class="note warn"><p>⚠️ <b>落到硬件上有个反直觉的后果</b>：MLA 在推理时可以把上投影矩阵"吸收"进 query 那一侧，从而改变整个计算的形状。同一个数学式子有多种算法实现， 选哪种取决于是 prefill 还是 decode。 这一条留到<a href="专题06-推理.md">专题六</a>。</p></div>
-<h3>5.3 ⚠️ 为什么 RoPE 必须单独走一路</h3>
-<p>这是理解 MLA 的关键一步，也是最容易讲糊的一步。<b>值得花两分钟。</b></p>
-<p>MLA 想做的事是：<b>把上投影矩阵吸收掉，让推理时只需要读那个 512 维的隐向量。</b> 数学上，<code>qᵀ (W_UK c)</code> 可以重写成 <code>(W_UKᵀ q)ᵀ c</code> —— 上投影跑到 q 那边去了， 于是 K 根本不用真的解压出来。</p>
-<p><b>但 RoPE 一插进来这个重写就不成立了。</b> RoPE 是一个跟位置有关的旋转， 它作用在解压之后的 K 上；旋转矩阵夹在中间，<code>W_UK</code> 和 <code>c</code> 就分不开了。</p>
-<p>所以 MLA 的解法是把这两件事拆开走两条路： 一路 512 维不带位置、可以被吸收；另一路 64 维专门扛 RoPE、老老实实存着。 <b>576 = 512（可吸收）+ 64（不可吸收）。</b></p>
-<div class="note ok"><p>⭐ 这个「因为要保留某个代数变换，所以把功能拆成两路」的动作， 在后面还会以别的面貌出现（V4 的部分 RoPE、K3 的 NoPE）。 <b>值得当成一个套路记住，而不是当成 MLA 的一个实现细节。</b></p></div>
-<h3>5.4 Gated MLA</h3>
-<ul><li>在 MLA 的输出端加一个<b>门控</b>：<code>gate = σ(W_g x)</code>，逐元素乘在注意力输出上</li><li>Kimi K3 用的是<b>全秩</b>门控矩阵（K2 那代是低秩的）</li><li>出处：K3 技术报告 <b>sec. 2.1.2</b></li></ul>
-<p>它的作用不是省显存 —— <b>门控不减少任何 KV</b> —— 而是让模型能学会「这一层这个位置，注意力的输出干脆不要」。 放在旋钮 ① 里是因为它改的是 MLA 这一支的形状，但要讲清楚它<b>省的不是显存</b>。</p>
+<!-- ⛔⛔ 2026-09-12 按「多画图少说话」重排 §五。原来 5.1–5.4 是四段散文（824 汉字）。
+     ⭐ 新图 fig3-knob1 吸收了其中三块：
+       · 四种存法的对照（含「MQA 比 MLA 还小」那个题眼）→ 左栏
+       · 5.3 那三步代数（能吸收 / 被 R 夹住 / 拆两路）→ 右栏。
+         这一块尤其该画：讲义写着它「最容易讲糊」，
+         而它本质是「一个重写成不成立」—— 图能直接把「成不成立」摆出来。
+       · MLA 的代价、训练／推理口径、Gated MLA 不省显存 → 落点带
+     正文只留**图给不了的三样**：GQA 那个「连续旋钮」的方法论、
+     MLA 的超参出处、以及那条留给专题六的硬件伏笔。
+     ⛔ 按行号切并对首尾断言 —— 上一轮按内容切，切掉过 §三 的节标题。 -->
+<figure class="fbox fwide" id="fig-knob1"><svg viewBox="0 0 1400 552" width="100%" role="img" aria-label="旋钮一：让每一份更小。四种存法在同一形状下的对照 —— MQA 比 MLA 存得还少，所以这一支比的不是谁存得少；右边讲为什么 MLA 的 RoPE 必须单独走一路"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">旋钮 ① 让每一份更小 ——&#160;<tspan font-weight="700">但比的从来不是「谁存得最少」</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">同一个形状（V3：61 层 · 128 头 · 每头 128 维 · 128K · bf16），换四种存法</text>
+<rect x="0" y="72" width="640" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="72" width="640" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="74" width="640" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="102" x2="640" y2="102" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="92" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">四种存法，同一个形状</tspan></text>
+<text class="svgsm" x="163" y="92" fill="#5f6368" style="font-size:11.0px">每 token 每层要留几个数 →&#160;128K 一个用户共多少</text>
+<text class="svgsm" x="16" y="106" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">存法</tspan></text>
+<text class="svgsm" x="112" y="106" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">KV 头</tspan></text>
+<text class="svgsm" x="196" y="106" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">每 token 每层</tspan></text>
+<text class="svgsm" x="330" y="106" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">128K 单用户</tspan></text>
+<text class="svgsm" x="430" y="106" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">相对 MHA</tspan></text>
+<text class="svgsm" x="16" y="132" fill="#5f6368" style="font-size:13.0px"><tspan font-weight="700">MHA</tspan></text>
+<text class="svgsm" x="112" y="132" fill="#80868b" style="font-size:11.0px">128 份</text>
+<text class="svgsm" x="196" y="132" fill="#202124" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">32,768</tspan></text>
+<text class="svgsm" x="330" y="132" fill="#5f6368" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">488 GiB</tspan></text>
+<text class="svgsm" x="430" y="132" fill="#80868b" style="font-size:11.0px">—</text>
+<text class="svgsm" x="16" y="150" fill="#80868b" style="font-size:11.0px">每个头各存一份 K/V</text>
+<rect x="500" y="123" width="150.0" height="12" rx="3" fill="#fff" stroke="#5f6368" stroke-width="1.3"/>
+<text class="svgsm" x="16" y="178" fill="#b06000" style="font-size:13.0px"><tspan font-weight="700">GQA-8</tspan></text>
+<text class="svgsm" x="112" y="178" fill="#80868b" style="font-size:11.0px">8 份</text>
+<text class="svgsm" x="196" y="178" fill="#202124" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">2,048</tspan></text>
+<text class="svgsm" x="330" y="178" fill="#b06000" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">30.50 GiB</tspan></text>
+<text class="svgsm" x="430" y="178" fill="#80868b" style="font-size:11.0px">省 16×</text>
+<text class="svgsm" x="16" y="196" fill="#80868b" style="font-size:11.0px">分成 8 组，组内共用</text>
+<rect x="500" y="169" width="56.83937124413993" height="12" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="16" y="224" fill="#0d652d" style="font-size:13.0px"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="112" y="224" fill="#80868b" style="font-size:11.0px">不按头存</text>
+<text class="svgsm" x="196" y="224" fill="#202124" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">576</tspan></text>
+<text class="svgsm" x="330" y="224" fill="#0d652d" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">8.58 GiB</tspan></text>
+<text class="svgsm" x="430" y="224" fill="#80868b" style="font-size:11.0px">省 57×</text>
+<text class="svgsm" x="16" y="242" fill="#80868b" style="font-size:11.0px">压成 512 维隐向量 ＋ 64 维 RoPE</text>
+<rect x="500" y="215" width="36.461258188842734" height="12" rx="3" fill="#fff" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="16" y="270" fill="#a50e0e" style="font-size:13.0px"><tspan font-weight="700">MQA</tspan></text>
+<text class="svgsm" x="112" y="270" fill="#80868b" style="font-size:11.0px">1 份</text>
+<text class="svgsm" x="196" y="270" fill="#202124" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">256</tspan></text>
+<text class="svgsm" x="330" y="270" fill="#a50e0e" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">3.81 GiB</tspan></text>
+<text class="svgsm" x="430" y="270" fill="#80868b" style="font-size:11.0px">省 128×</text>
+<text class="svgsm" x="16" y="288" fill="#80868b" style="font-size:11.0px">所有头共用同一份</text>
+<rect x="500" y="261" width="27.45160679898048" height="12" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.3"/>
+<text class="svgsm" x="16" y="328" fill="#a50e0e" style="font-size:12.5px">⭐⭐ <tspan font-weight="700">题眼在这儿：MQA 只要 3.81 GiB，比 MLA 的 8.58 还小 2.25 倍。</tspan></text>
+<text class="svgsm" x="16" y="348" fill="#5f6368" style="font-size:12.0px">MQA 2019 年就把体积压到头了 ——&#160;<tspan font-weight="700">代价是质量掉得厉害</tspan>。</text>
+<text class="svgsm" x="16" y="370" fill="#174ea6" style="font-size:12.5px">⭐ 所以这一支比的<tspan font-weight="700">不是「谁存得最少」，是「同样一份字节，换回多少能力」</tspan>。</text>
+<rect x="698" y="72" width="640" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="698" y="72" width="640" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="698" y="74" width="640" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="698" y1="102" x2="1338" y2="102" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="712" y="92" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">为什么 MLA 的 RoPE 必须单独走一路</tspan></text>
+<text class="svgsm" x="956" y="92" fill="#5f6368" style="font-size:11.0px">理解 MLA 的关键一步 ——&#160;本质是「一个代数重写成不成立」</text>
+<text class="svglbl" x="714" y="124" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="738" y="124" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">没有 RoPE 时</tspan></text>
+<rect x="714" y="134" width="608" height="30" rx="6" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="730" y="154" fill="#0d652d" style="font-size:13.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">qᵀ (W_UK c)  ＝  (W_UKᵀ q)ᵀ c</tspan></text>
+<text class="svgsm" x="714" y="182" fill="#5f6368" style="font-size:12.0px">✅ 上投影<tspan font-weight="700">跑到 q 那边去了</tspan> ——&#160;<tspan font-weight="700">K 根本不用解压</tspan>，只读那 512 维</text>
+<text class="svglbl" x="714" y="220" fill="#a50e0e" style="font-size:14.0px"><tspan font-weight="700">②</tspan></text>
+<text class="svgsm" x="738" y="220" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">插进 RoPE 之后</tspan></text>
+<rect x="714" y="230" width="608" height="30" rx="6" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="730" y="250" fill="#a50e0e" style="font-size:13.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">qᵀ  R  (W_UK c)</tspan></text>
+<text class="svgsm" x="714" y="278" fill="#5f6368" style="font-size:12.0px">⛔ <tspan font-weight="700">R 夹在中间</tspan>，W_UK 和 c <tspan font-weight="700">分不开了</tspan> ——&#160;吸收失败</text>
+<rect x="714" y="304" width="608" height="62" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="730" y="326" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">③ 于是<tspan font-weight="700">把它拆成两路走</tspan>：</tspan></text>
+<text class="svgsm" x="730" y="348" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">512 维</tspan>不带位置、<tspan font-weight="700">可以被吸收</tspan>　＋　<tspan font-weight="700">64 维</tspan>专扛 RoPE、<tspan font-weight="700">老老实实存着</tspan>　＝　<tspan font-weight="700">576</tspan></text>
+<rect x="0" y="390" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="390" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="390" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="414" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐ 把 5.3 当成一个套路记住，别当成 MLA 的实现细节</tspan></text>
+<text class="svgsm" x="20" y="438" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">「为了保住某个代数变换，把功能拆成两路」</tspan>——&#160;这个动作后面还会换面貌出现：<tspan font-weight="700">V4 的部分 RoPE、K3 的 NoPE</tspan>。</text>
+<text class="svgsm" x="20" y="459" fill="#174ea6" style="font-size:12.0px">⛔ <tspan font-weight="700">MLA 的代价是用计算换显存</tspan>：多了一对降维／升维矩阵乘。而且<tspan font-weight="700">它省的是推理时的 KV cache，不是训练时的激活</tspan>——&#160;训练前向里 K/V 会被解压出来算。<tspan font-weight="700">这是个非常常见的误解。</tspan></text>
+<text class="svgsm" x="20" y="480" fill="#174ea6" style="font-size:12.0px">⭐ <tspan font-weight="700">Gated MLA</tspan>（K3）在 MLA 输出端加一个全秩门控 —— ⛔ <tspan font-weight="700">它一个字节的 KV 都不省</tspan>，它让模型能学会「这一层这个位置，注意力的输出干脆不要」。</text>
+<text class="svgsm" x="0" y="511" fill="#80868b" style="font-size:11.0px">📌 四个数由公式当场算出并断言（脚本内）；MLA 超参出自 V3 论文 §4.2：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</text>
+<text class="svgsm" x="0" y="528" fill="#80868b" style="font-size:11.0px">　　MQA：Shazeer arXiv 1911.02150　GQA：Ainslie 等 arXiv 2305.13245　MLA：DeepSeek-V2/V3 arXiv 2412.19437　Gated MLA：Kimi K3 技术报告 §2.1.2</text>
+</svg><figcaption>⭐⭐ <b>左边四种存法摆在同一形状下：MQA 反而比 MLA 还小 2.25 倍。</b><b>所以这一支比的不是「谁存得最少」，是「同样一份字节换回多少能力」。</b><em>右边那三行代数，就是 MLA 为什么非要把 RoPE 拆出去单走一路。</em></figcaption></figure>
+<h3>5.1 ＋ 5.2 ＋ 5.3 ＋ 5.4　从砍头到压缩</h3>
+<p>⭐ <b>这里真正值得单独说一句的，是「GQA 是一个连续旋钮」这件事本身</b>
+  ——&nbsp;它不是一个新机制，是<b>把 MHA 和 MQA 之间的空白填上</b>，
+  让你可以按需要选一个点。
+  <em>这门课后面会反复见到这个套路：<b>把一个二选一变成一个可调的连续量。</b></em></p>
+<p>MLA 的超参出自 <b>V3 论文 §4.2</b>：
+  <code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code>
+  ——&nbsp;<em>图上那 576 就是 512 ＋ 64。</em></p>
+<div class="note warn"><p>⚠️ <b>落到硬件上还有一个反直觉的后果</b>：MLA 在推理时可以把上投影矩阵
+  「吸收」进 query 那一侧，<b>从而改变整个计算的形状</b>。
+  同一个数学式子有多种算法实现，<b>选哪种取决于是 prefill 还是 decode</b>
+  ——&nbsp;这一条留到<a href="专题06-推理.md">专题六</a>。</p></div>
 <hr>
 </div></section>
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>旋钮②：KV 照存，但每步只读一部分</h2></div>
