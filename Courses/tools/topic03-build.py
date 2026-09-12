@@ -1177,14 +1177,14 @@ linear                                               ← 第 45 层多出来的�
 <section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>代价：没有免费的午餐</h2></div>
 <p>一张表把所有方案摆在一起：</p>
 <table>
-<thead><tr><th></th><th>KV 显存</th><th>计算量</th><th>长程质量</th><th>kernel 复杂度</th><th>能否给已有模型打补丁</th></tr></thead><tbody>
-<tr><td>MHA</td><td>基准</td><td>基准</td><td>基准</td><td>简单</td><td>—</td></tr>
-<tr><td>GQA</td><td>↓↓</td><td>—</td><td>↓</td><td>简单</td><td>需微调</td></tr>
-<tr><td>MLA</td><td>↓↓↓</td><td>↑（训练时）</td><td>≈</td><td>中</td><td>不能</td></tr>
-<tr><td>SWA</td><td>↓↓↓</td><td>↓↓</td><td>↓↓↓</td><td>简单</td><td>勉强（要留 sink）</td></tr>
-<tr><td>DSA</td><td><b>—</b>（KV 全存，只是不读）</td><td>↓↓↓</td><td>≈</td><td><b>高</b></td><td>需专门训练阶段</td></tr>
-<tr><td>CSA/HCA</td><td>↓↓↓</td><td>↓↓↓</td><td>≈</td><td><b>很高</b></td><td>不能</td></tr>
-<tr><td>线性（KDA 等）</td><td><b>无 KV</b>，但有固定状态</td><td>↓↓↓</td><td>↓↓</td><td><b>很高</b></td><td><b>不能，必须从头训</b></td></tr>
+<thead><tr><th>方案</th><th>KV 显存</th><th>计算量</th><th>⭐ 省在哪个阶段</th><th>长程质量</th><th>kernel 复杂度</th><th>能否给已有模型打补丁</th></tr></thead><tbody>
+<tr><td>MHA</td><td>基准</td><td>基准</td><td>—</td><td>基准</td><td>简单</td><td>—</td></tr>
+<tr><td>GQA</td><td>↓↓</td><td>—</td><td><b>decode</b>（省带宽）</td><td>↓</td><td>简单</td><td>需微调</td></tr>
+<tr><td>MLA</td><td>↓↓↓</td><td>↑（训练时）</td><td><b>decode</b>（训练前向反而更贵）</td><td>≈</td><td>中</td><td>不能</td></tr>
+<tr><td>SWA</td><td>↓↓↓</td><td>↓↓</td><td>两边都省</td><td>↓↓↓</td><td>简单</td><td>勉强（要留 sink）</td></tr>
+<tr><td>DSA</td><td><b>—</b>（KV 全存，只是不读）</td><td>↓↓↓</td><td><b>prefill</b> 为主（decode 省的是读）</td><td>≈</td><td><b>高</b></td><td>需专门训练阶段</td></tr>
+<tr><td>CSA/HCA</td><td>↓↓↓</td><td>↓↓↓</td><td>两边都省</td><td>≈</td><td><b>很高</b></td><td>不能</td></tr>
+<tr><td>线性（KDA 等）</td><td><b>无 KV</b>，但有固定状态</td><td>↓↓↓</td><td><b>decode</b>（prefill 要 chunk 化才不亏）</td><td>↓↓</td><td><b>很高</b></td><td><b>不能，必须从头训</b></td></tr>
 </tbody></table>
 <p><!-- ⛔ 2026-09-13 夜间 R18：这四条原来在这里用 <ol> 写了一遍，
      而 R15 那张 fig3-landing 的第二格**已经把它们画出来了**（连第四条那个
