@@ -126,7 +126,7 @@ def fig_arc():
         '⭐⭐ <tspan font-weight="700">但它们同时发生，才有今天的 agent</tspan>'
         '——&#160;上下文能装下整个代码库，而且装得起。'])
 
-    y = f.band(y + 14, "ok", "所以这一讲从头到尾只有一个账本：KV cache", [
+    y = f.band(y + 14, "ok", "所以这一讲的前半程只有一个账本：KV cache（⚠️ 到旋钮② 它就不够用了）", [
         '⭐ 在张量形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;'
         '全图只有 K 和 V 两处带它，<tspan font-weight="700">那就是唯一要跨 token 留下来的东西</tspan>。',
         '三个旋钮是它的三个面：<tspan fill="%s" font-weight="700">① 每份多大</tspan>　'

@@ -50,7 +50,7 @@ r"""专题三 · §一「MHA」的三张图。
   across the length of the sequence, **incremental inference (where such
   parallelization is impossible) is often slow, due to the memory-bandwidth cost
   of repeatedly loading the large "keys" and "values" tensors**.」
-  ⭐ 这句话把 §零 图三 Ⓒ 那一行**从我们的推论变成了原文**：
+  ⭐ 这句话把 §零那张「解码时又变回 RNN」图 Ⓒ 那一行**从我们的推论变成了原文**：
     2017 年造出这个形状，**2019 年就有人把它命名成问题了**，
     而那篇给出的解法（MQA）正是本课模型表里的第二行。
 
@@ -153,11 +153,11 @@ def fig_swap():
     yy = PY + 272 + 16
     yy = f.band(yy, "warn", "这一刀换来了什么，又欠下了什么", [
         '<tspan font-weight="700">换来的</tspan>：串行步数从 O(n) 掉到 O(1)'
-        '——&#160;整段序列一次算完，加速器终于喂得饱了（这正是 §零 图二那笔账的反面）。',
+        '——&#160;整段序列一次算完，加速器终于喂得饱了（这正是 §零那张「RNN 在硬件上为什么慢」图那笔账的反面）。',
         '<tspan font-weight="700">欠下的</tspan>：连线数从 n 变成 n²。'
         '⛔ 而且注意 ——&#160;<tspan font-weight="700">状态没了</tspan>：'
         'RNN 那个固定大小的 h 被换成了「把所有历史原封不动留着」。',
-        '⭐ 于是 §零 图三 Ⓒ 那一行的病根在这儿：'
+        '⭐ 于是 §零那张「解码时又变回 RNN」图 Ⓒ 那一行的病根在这儿：'
         '<tspan font-weight="700">解码时每一步都得把「所有历史」重读一遍 ——&#160;那就是 KV cache。</tspan>'])
     yy = f.src(yy + 18,
                'Vaswani et al. 2017 (arXiv 1706.03762) 表 1：自注意力 串行步数 O(1)／最长路径 O(1)；'
@@ -317,7 +317,7 @@ def fig_heads():
         '<tspan font-style="italic">「incremental inference … is often slow, due to the '
         '<tspan font-weight="700">memory-bandwidth cost of repeatedly loading '
         'the large &quot;keys&quot; and &quot;values&quot; tensors</tspan>」</tspan>',
-        '⭐⭐ <tspan font-weight="700">这句话把 §零 图三 Ⓒ 那一行从我们的推论变成了原文</tspan>'
+        '⭐⭐ <tspan font-weight="700">这句话把 §零那张「解码时又变回 RNN」图 Ⓒ 那一行从我们的推论变成了原文</tspan>'
         '——&#160;2017 年造出这个形状，<tspan font-weight="700">2019 年就有人把它命名成问题了</tspan>。'])
     yy = f.src(yy + 18,
                'Vaswani et al. 2017 §3.2.2：「jointly attend to information from different '
