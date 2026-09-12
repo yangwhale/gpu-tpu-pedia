@@ -4372,6 +4372,145 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="737" fill="#80868b" style="font-size:11.0px">　　SWA：Mistral 7B arXiv 2310.06825　sink：StreamingLLM arXiv 2309.17453　NSA：arXiv 2502.11089　DSA：DeepSeek-V3.2 arXiv 2512.02556　CSA/HCA：DeepSeek-V4 arXiv 2606.19348</text>
 </svg><figcaption>⭐⭐ <b>五张 mask 并排，这一支的共同结构就出来了：先用一个便宜得多的办法决定「看哪些」，再只对那些做主注意力。</b><em>区别只在那个「便宜的办法」是写死的规则，还是学出来的。</em></figcaption></figure>
 <h3>6.1 ～ 6.6　从「砍成一条带」到「先压再挑」</h3>
+<!-- ⭐⭐ 2026-09-13 夜间 R6。滑窗这一支原来只在 mask 图里占一格，
+     而它其实藏着这一讲**最好讲的一个故事**：
+       凭什么敢砍（层数是免费的射程）→ 砍了为什么会崩（5158 对 5.40）
+       → 真正的原因（softmax 要求一行加起来等于 1）。
+     ⭐ 「把那四个 token 换成换行符照样管用」是判决性实验 ——
+       它一句话证明了起作用的是**位置**不是语义。 -->
+<figure class="fbox fwide" id="fig-swa-why"><svg viewBox="0 0 1400 816" width="100%" role="img" aria-label="滑窗凭什么敢砍：层数是免费的射程；砍了为什么会崩：困惑度从 5.40 炸到 5158；为什么会有 attention sink：softmax 要求一行加起来等于一"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">滑窗　——　凭什么敢砍，砍了为什么会崩，那四个 token 到底是什么</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 这是一个侦探故事，<tspan font-weight="700">按时间顺序讲最好听</tspan>：先有办法，再出事故，最后才找到原因</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">能砍的理由</text>
+<rect x="94" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="111" y="64" fill="#5f6368" style="font-size:11.0px">事故现场</text>
+<rect x="177" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="194" y="64" fill="#5f6368" style="font-size:11.0px">真正的原因</text>
+<rect x="271" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="288" y="64" fill="#5f6368" style="font-size:11.0px">更彻底的解法</text>
+<rect x="0" y="88" width="440" height="446" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">① 凭什么敢砍</tspan></text>
+<text class="svgsm" x="110" y="108" fill="#5f6368" style="font-size:11.0px">层数是免费的射程</text>
+<rect x="66" y="148" width="334" height="26" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="316.5" y="150" width="81.5" height="22" rx="3" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="60" y="165" fill="#80868b" text-anchor="end" style="font-size:11.0px">第 1 层</text>
+<rect x="66" y="182" width="334" height="26" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="233.0" y="184" width="165.0" height="22" rx="3" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="60" y="199" fill="#80868b" text-anchor="end" style="font-size:11.0px">第 2 层</text>
+<rect x="66" y="216" width="334" height="26" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="149.5" y="218" width="248.5" height="22" rx="3" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="60" y="233" fill="#80868b" text-anchor="end" style="font-size:11.0px">第 3 层</text>
+<rect x="66" y="250" width="334" height="26" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="66.0" y="252" width="332.0" height="22" rx="3" fill="#ceead6" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="60" y="267" fill="#80868b" text-anchor="end" style="font-size:11.0px">第 4 层</text>
+<text class="svgsm" x="22" y="296" fill="#5f6368" style="font-size:11.5px">每层只看 W 个，但下一层看的是上一层的输出</text>
+<text class="svgsm" x="22" y="316" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">递归下去 —— k 层之后，信息能走 k × W</tspan></text>
+<rect x="22" y="332" width="396" height="76" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="22" y="332" width="4" height="76" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="24" y="332" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="40" y="356" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">Mistral 7B：W = 4,096，32 层</tspan></text>
+<text class="svgsm" x="40" y="378" fill="#5f6368" style="font-size:12.0px">→ 理论射程 131,072 个 token</text>
+<text class="svgsm" x="40" y="398" fill="#80868b" style="font-size:11.0px">缓存固定 W 个槽位，位置 i 存在 i mod W</text>
+<rect x="22" y="420" width="396" height="64" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="38" y="444" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">⚠️ 理论射程 ≠ 有效射程</tspan></text>
+<text class="svgsm" x="38" y="465" fill="#5f6368" style="font-size:11.5px">信息每层只能挪一格窗口，而且一路被稀释</text>
+<rect x="470" y="88" width="440" height="446" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="88" width="440" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="470" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="470" y1="118" x2="910" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="484" y="108" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">② 事故现场</tspan></text>
+<text class="svgsm" x="566" y="108" fill="#5f6368" style="font-size:11.0px">Llama-2-13B，PG19 第一本书</text>
+<rect x="492" y="144" width="396" height="68" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="492" y="144" width="4" height="68" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="494" y="144" width="3" height="68" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="170" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">0 + 1024　纯窗口</tspan></text>
+<text class="svgsm" x="870" y="174" fill="#a50e0e" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">5158.07</tspan></text>
+<text class="svgsm" x="510" y="194" fill="#5f6368" style="font-size:11.5px">最前面那几个一被挤掉，模型就废了</text>
+<rect x="492" y="222" width="396" height="68" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="492" y="222" width="4" height="68" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="494" y="222" width="3" height="68" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="248" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">4 + 1020　留四个</tspan></text>
+<text class="svgsm" x="870" y="252" fill="#0d652d" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">5.40</tspan></text>
+<text class="svgsm" x="510" y="272" fill="#5f6368" style="font-size:11.5px">只是把最前面四个 token 留着</text>
+<rect x="492" y="300" width="396" height="68" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="492" y="300" width="4" height="68" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="494" y="300" width="3" height="68" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="326" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">4 个换行符 + 1020</tspan></text>
+<text class="svgsm" x="870" y="330" fill="#681da8" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">5.60</tspan></text>
+<text class="svgsm" x="510" y="350" fill="#5f6368" style="font-size:11.5px">把那四个换成「\n」——&#160;几乎一样</text>
+<rect x="492" y="380" width="396" height="74" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="492" y="380" width="4" height="74" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="494" y="380" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="404" fill="#681da8" style="font-size:13.0px"><tspan font-weight="700">⭐⭐ 第三行是判决性实验</tspan></text>
+<text class="svgsm" x="510" y="426" fill="#5f6368" style="font-size:11.5px">换成换行符照样管用 ——</text>
+<text class="svgsm" x="510" y="445" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">起作用的是<tspan font-weight="700">位置</tspan>，不是语义。</tspan></text>
+<text class="svgsm" x="492" y="466" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">留几个够？（Llama-2-7B，4096 缓存）</tspan></text>
+<rect x="492" y="480" width="74.4" height="42" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="529" y="497" fill="#80868b" text-anchor="middle" style="font-size:11.0px">留 0 个</text>
+<text class="svgsm" x="529" y="514" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">3360</tspan></text>
+<rect x="572.4" y="480" width="74.4" height="42" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="609" y="497" fill="#80868b" text-anchor="middle" style="font-size:11.0px">留 1 个</text>
+<text class="svgsm" x="609" y="514" fill="#5f6368" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">11.88</tspan></text>
+<rect x="652.8" y="480" width="74.4" height="42" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="690" y="497" fill="#80868b" text-anchor="middle" style="font-size:11.0px">留 2 个</text>
+<text class="svgsm" x="690" y="514" fill="#5f6368" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">10.51</tspan></text>
+<rect x="733.1999999999999" y="480" width="74.4" height="42" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="770" y="497" fill="#80868b" text-anchor="middle" style="font-size:11.0px">留 4 个</text>
+<text class="svgsm" x="770" y="514" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">9.59</tspan></text>
+<rect x="813.5999999999999" y="480" width="74.4" height="42" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="850" y="497" fill="#80868b" text-anchor="middle" style="font-size:11.0px">留 8 个</text>
+<text class="svgsm" x="850" y="514" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">9.54</tspan></text>
+<rect x="940" y="88" width="460" height="446" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="940" y="88" width="460" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="940" y="90" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="940" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="954" y="108" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">③ 真正的原因：softmax 的一条硬约束</tspan></text>
+<text class="svgsm" x="1204" y="108" fill="#5f6368" style="font-size:11.0px">它不是 bug，也不是特性</text>
+<rect x="962" y="144" width="416" height="96" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="962" y="144" width="4" height="96" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="964" y="144" width="3" height="96" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="169" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">softmax 要求<tspan font-weight="700">一行加起来等于 1</tspan></tspan></text>
+<text class="svgsm" x="980" y="192" fill="#5f6368" style="font-size:11.5px">可这一行常常「没什么特别想看的」——</text>
+<text class="svgsm" x="980" y="213" fill="#5f6368" style="font-size:11.5px">那多出来的权重<tspan font-weight="700">总得放在某处</tspan>。</text>
+<text class="svgsm" x="980" y="232" fill="#80868b" style="font-size:11.0px">于是模型给自己找了个停车位。</text>
+<rect x="962" y="254" width="416" height="74" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="978" y="278" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">为什么偏偏是最前面几个？</tspan></text>
+<text class="svgsm" x="978" y="300" fill="#5f6368" style="font-size:11.5px">因为自回归 —— 它们对<tspan font-weight="700">所有</tspan>后续位置都可见，</text>
+<text class="svgsm" x="978" y="319" fill="#5f6368" style="font-size:11.5px">全场只有它们人人都够得着。</text>
+<text class="svglbl" x="962" y="340" fill="#b06000" style="font-size:13.0px"><tspan font-weight="700">⭐ 两个更彻底的解法</tspan></text>
+<rect x="962" y="362" width="416" height="50" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="978" y="383" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">预训练时加一个可学的 sink token</tspan></text>
+<text class="svgsm" x="978" y="401" fill="#5f6368" style="font-size:11.5px">有了专用车位，<tspan font-weight="700">一个就够</tspan></text>
+<rect x="962" y="420" width="416" height="50" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="978" y="441" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">换 softmax-off-by-one</tspan></text>
+<text class="svgsm" x="978" y="459" fill="#5f6368" style="font-size:11.5px">分母 +1，<tspan font-weight="700">允许这一行什么都不看</tspan></text>
+<rect x="0" y="556" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="556" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="556" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="580" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这个故事真正的教益 —— 比 sink 本身值钱</tspan></text>
+<text class="svgsm" x="20" y="604" fill="#174ea6" style="font-size:12.0px">attention sink 不是 bug，也不是谁设计的特性，它是<tspan font-weight="700">归一化约束逼出来的副产品</tspan>：你规定一行必须加起来等于 1，模型就一定会找个地方倒掉多余的那部分。</text>
+<text class="svgsm" x="20" y="625" fill="#174ea6" style="font-size:12.0px">⭐ 判据：<tspan font-weight="700">看到模型里一个「毫无道理却极其稳定」的现象，先去找是不是某个守恒 / 归一化约束逼出来的。</tspan>量化里那批总也压不下去的 outlier，跟这是同一件事。</text>
+<text class="svgsm" x="20" y="646" fill="#174ea6" style="font-size:12.0px">⛔ 还有一条：<tspan font-weight="700">这个 bug 从公式上完全看不出来</tspan> ——&#160;是把注意力矩阵画出来才发现的。这一讲所有的图，都是这个道理。</text>
+<rect x="0" y="675" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="675" width="4" height="84" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="675" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="699" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ 别把「理论射程」当「有效射程」</tspan></text>
+<text class="svgsm" x="20" y="723" fill="#b06000" style="font-size:12.0px">32 层 × 4,096 = <tspan font-weight="700">131,072</tspan> 是个上界，说的是「信息最远能传到这儿」，不是「这么远还能用」——&#160;每跨一层只挪一格窗口，而且一路被后面的信息稀释。</text>
+<text class="svgsm" x="20" y="744" fill="#b06000" style="font-size:12.0px">⭐ 稳妥说法：<tspan font-weight="700">滑窗把「远处」从「看不见」变成了「看得见但很模糊」</tspan>，所以后面那些方案才要在滑窗之外再加一条「挑着看」的路。</text>
+<text class="svgsm" x="0" y="775" fill="#80868b" style="font-size:11.0px">📌 ① 出自 Mistral 7B arXiv 2310.06825 §2（k×W 射程、W=4096/32 层、rolling buffer cache）；131,072 与 8× 由脚本当场算并断言</text>
+<text class="svgsm" x="0" y="792" fill="#80868b" style="font-size:11.0px">　　②③ 出自 StreamingLLM（Xiao 等 arXiv 2309.17453, ICLR 2024）表 1 / 表 2，以及原文 §3.1 与 §3.3：5158.07 → 5.40、换行符 5.60、留 1/2/4/8 个的对照、可学 sink token、softmax-off-by-one</text>
+</svg><figcaption>⭐⭐ <b>一个侦探故事：先有办法（层数是免费的射程，32 层 × 4096 = 131,072），再出事故（困惑度 5.40 → 5158），最后才找到原因（softmax 要求一行加起来等于 1）。</b><em>判决性实验在中间那格：把最前面四个 token 换成换行符，照样管用 —— 起作用的是位置，不是语义。</em></figcaption></figure>
+<h4>6.1b　滑窗：凭什么敢砍，砍了为什么会崩</h4>
+<p>⭐ 图给不了的是这条判据的<b>一般形式</b>：
+  <b>看到模型里一个「毫无道理却极其稳定」的现象，先去找是不是某个守恒或归一化约束逼出来的。</b>
+  <em>attention sink 不是 bug、也不是谁设计的特性 ——&nbsp;
+  你规定每一行注意力必须加起来等于 1，模型就<b>一定</b>会找个地方倒掉多余的那部分。
+  量化里那批总也压不下去的 outlier，跟它是同一件事。</em></p>
+
 <p>⭐ 图上五张 mask 从左到右，就是这一支的演进：
   <b>砍成一条带（SWA）→ 补回停车位（sink）→ 学着挑（NSA / DSA）→ 先压再挑（CSA/HCA）</b>。</p>
 

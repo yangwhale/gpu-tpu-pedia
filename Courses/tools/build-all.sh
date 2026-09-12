@@ -73,6 +73,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-dsa-why.py       # §六 DSA 凭什么只看 2048 个（鸡生蛋 ＋ 让真注意力当老师）
   python3 topic03-fig-nsa-why.py       # §六 NSA 三条路被四个坑逼出来（计算稀疏 ≠ 访存稀疏）
   python3 topic03-fig-csa-why.py       # §六 CSA/HCA：压缩的两个正交方向 ＋ 为什么交错
+  python3 topic03-fig-swa-why.py       # §六 滑窗凭什么敢砍 ＋ attention sink 的完整故事
   python3 topic03-fig-chronicle.py     # 上半：时间轴 SVG
   # ⭐ 下半那张 39 行模型表现在是**可排序的 HTML 表**，不是 SVG ——
   #   两边读同一份 topic03_models.py，⛔ 数据只有一份。
