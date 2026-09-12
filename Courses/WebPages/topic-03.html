@@ -3208,6 +3208,145 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="511" fill="#80868b" style="font-size:11.0px">📌 四个数由公式当场算出并断言（脚本内）；MLA 超参出自 V3 论文 §4.2：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</text>
 <text class="svgsm" x="0" y="528" fill="#80868b" style="font-size:11.0px">　　MQA：Shazeer arXiv 1911.02150　GQA：Ainslie 等 arXiv 2305.13245　MLA：DeepSeek-V2/V3 arXiv 2412.19437　Gated MLA：Kimi K3 技术报告 §2.1.2</text>
 </svg><figcaption>⭐⭐ <b>左边四种存法摆在同一形状下：MQA 反而比 MLA 还小 2.25 倍。</b><b>所以这一支比的不是「谁存得最少」，是「同样一份字节换回多少能力」。</b><em>右边那三行代数，就是 MLA 为什么非要把 RoPE 拆出去单走一路。</em></figcaption></figure>
+<!-- ⭐⭐ 2026-09-13 夜间 R1 加。现场原话：
+     「像 MLA 这种东西，它为什么能压缩？这里边跟信息论有关的东西，对吧？」
+     ⛔ 原来这一节只回答了「MLA 是什么」和「省多少」，**从没回答「凭什么」**。
+     ⭐ 判据：**一个数字告诉你结果，一条推理链才留得下来。**
+       56.9× 这个数学生记不住；「哪一段白送、哪一段是赌的」这个问法会跟他一辈子。
+     图放在四种存法对照**之后** —— 先知道它做了什么，再问它凭什么。 -->
+<figure class="fbox fwide" id="fig-mla-why"><svg viewBox="0 0 1400 795" width="100%" role="img" aria-label="MLA 为什么能压缩：三格一条推理链 —— 先算出 32768 个数里至少 4.57 倍是纯冗余，再说明存原料是拿计算换存储，最后给出「K/V 投影本来就低秩」的事前证据"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">MLA 凭什么敢这么压　——　一笔信息账，三步推出来</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 这张图不讲 MLA 是什么（那在上一张），只讲<tspan font-weight="700">它为什么可行</tspan></text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">存下来的（结果）</text>
+<rect x="127" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="144" y="64" fill="#5f6368" style="font-size:11.0px">原料</text>
+<rect x="188" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="205" y="64" fill="#5f6368" style="font-size:11.0px">压缩后的原料</text>
+<rect x="293" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="310" y="64" fill="#5f6368" style="font-size:11.0px">拿计算换存储</text>
+<rect x="398" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="415" y="64" fill="#5f6368" style="font-size:11.0px">赌注</text>
+<rect x="0" y="88" width="440" height="348" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="440" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 先算一笔账</tspan></text>
+<text class="svgsm" x="110" y="108" fill="#5f6368" style="font-size:11.0px">这 32,768 个数是哪来的</text>
+<rect x="26" y="148" width="96" height="46" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="74" y="170" fill="#174ea6" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">h</tspan></text>
+<text class="svgsm" x="74" y="185" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">7,168 维</text>
+<text class="svgsm" x="26" y="214" fill="#5f6368" style="font-size:11.5px">一个 token 在这一层的全部内容</text>
+<line x1="130" y1="171" x2="214" y2="171" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="172" y="162" fill="#5f6368" text-anchor="middle" style="font-size:11.5px">W<tspan baseline-shift="super" font-size="8">K</tspan> · W<tspan baseline-shift="super" font-size="8">V</tspan></text>
+<text class="svgsm" x="172" y="188" fill="#80868b" text-anchor="middle" style="font-size:11.0px">线性、确定</text>
+<rect x="222" y="148" width="192" height="46" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1"/>
+<rect x="226.0" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="237.5" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="249.0" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="260.5" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="272.0" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="283.5" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="295.0" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="306.5" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="318.0" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="329.5" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="341.0" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="352.5" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="364.0" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="375.5" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="387.0" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="398.5" y="153" width="10.0" height="36" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="318" y="169" fill="#5f6368" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">K ＋ V</tspan></text>
+<text class="svgsm" x="318" y="184" fill="#80868b" text-anchor="middle" style="font-size:11.0px">32,768 维（128 个头）</text>
+<text class="svgsm" x="222" y="214" fill="#5f6368" style="font-size:11.5px">MHA 每 token 每层真正缓存的东西</text>
+<line x1="26" y1="252" x2="414" y2="252" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="26" y="274" fill="#174ea6" style="font-size:13.0px"><tspan font-weight="700">⭐ 一次确定性映射不会凭空造出信息</tspan></text>
+<text class="svgsm" x="26" y="298" fill="#5f6368" style="font-size:11.5px">把一张纸复印 128 份，信息还是那一张 ——</text>
+<text class="svgsm" x="26" y="317" fill="#5f6368" style="font-size:11.5px">复印件再多，也回答不了原件回答不了的问题。</text>
+<rect x="26" y="348" width="388" height="56" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="40" y="371" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">32,768 ÷ 7,168 ＝ 4.57 倍</tspan></text>
+<text class="svgsm" x="40" y="391" fill="#5f6368" style="font-size:11.5px">这一段是<tspan font-weight="700">白送的</tspan> —— 不损失任何东西</text>
+<rect x="480" y="88" width="440" height="348" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="480" y="88" width="440" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="480" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="480" y1="118" x2="920" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="494" y="108" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 那为什么一直存 32,768</tspan></text>
+<text class="svgsm" x="669" y="108" fill="#5f6368" style="font-size:11.0px">因为存的是结果，不是原料</text>
+<rect x="506" y="144" width="130" height="44" rx="6" fill="#fff" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="571" y="165" fill="#5f6368" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">存结果</tspan></text>
+<text class="svgsm" x="571" y="180" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">读的时候直接用</text>
+<text class="svgsm" x="652" y="171" fill="#5f6368" style="font-size:12.0px">省计算，费地方</text>
+<rect x="506" y="202" width="130" height="44" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="571" y="223" fill="#b06000" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">存原料</tspan></text>
+<text class="svgsm" x="571" y="238" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">读的时候现算一遍</text>
+<text class="svgsm" x="652" y="229" fill="#b06000" style="font-size:12.0px">省地方，费计算</text>
+<text class="svgsm" x="506" y="264" fill="#b06000" style="font-size:11.5px">⭐ 这是一笔交易，不是一个错误 —— 早期两边都不紧张</text>
+<line x1="506" y1="290" x2="894" y2="290" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="506" y="316" fill="#202124" style="font-size:13.5px"><tspan font-weight="700">MLA 走了两步，第二步才是关键</tspan></text>
+<rect x="506" y="340" width="388" height="40" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="520" y="365" fill="#5f6368" style="font-size:12.5px">第一步　改成存原料　7,168</text>
+<text class="svgsm" x="880" y="365" fill="#174ea6" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">白送 4.57×</tspan></text>
+<rect x="506" y="390" width="388" height="66" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="506" y="390" width="4" height="66" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="508" y="390" width="3" height="66" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="524" y="415" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">第二步　原料也不全存，压到 512</tspan></text>
+<text class="svgsm" x="524" y="438" fill="#5f6368" style="font-size:11.5px">⭐ 这等于强制 W<tspan baseline-shift="super" font-size="8">K</tspan> 的秩 ≤ 512 —— 这一步是赌注</text>
+<text class="svgsm" x="880" y="415" fill="#681da8" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">赌 12.4×</tspan></text>
+<rect x="960" y="88" width="440" height="348" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="960" y="88" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="960" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="960" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="974" y="108" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">③ 凭什么敢赌</tspan></text>
+<text class="svgsm" x="1070" y="108" fill="#5f6368" style="font-size:11.0px">「K/V 本来就低秩」是先有证据的</text>
+<rect x="986" y="144" width="388" height="40" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="1000" y="169" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">Eigen Attention</tspan></text>
+<text class="svgsm" x="1112" y="169" fill="#80868b" style="font-size:11.0px">对<tspan font-weight="700">已训好</tspan>的模型做低秩分解</text>
+<text class="svgsm" x="1360" y="169" fill="#0d652d" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">省 40%</tspan></text>
+<rect x="986" y="192" width="388" height="40" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="1000" y="217" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">Palu</tspan></text>
+<text class="svgsm" x="1040" y="217" fill="#80868b" style="font-size:11.0px">分组头低秩 ＋ 自动分配秩</text>
+<text class="svgsm" x="1360" y="217" fill="#0d652d" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">省 50%</tspan></text>
+<rect x="986" y="240" width="388" height="40" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="1000" y="265" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">LoRC</tspan></text>
+<text class="svgsm" x="1040" y="265" fill="#80868b" style="font-size:11.0px">逐层分配不同的秩</text>
+<text class="svgsm" x="1360" y="265" fill="#0d652d" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">无损为主</tspan></text>
+<text class="svgsm" x="986" y="290" fill="#0d652d" style="font-size:11.5px">⭐ 三家都在 MLA 前后独立做到 ——</text>
+<text class="svgsm" x="986" y="309" fill="#5f6368" style="font-size:11.5px">「低秩」不是 DeepSeek 猜的，是量出来的。</text>
+<line x1="986" y1="332" x2="1374" y2="332" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="986" y="358" fill="#202124" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 那 MLA 的不同在哪</tspan></text>
+<rect x="986" y="382" width="388" height="70" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="986" y="382" width="4" height="70" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="988" y="382" width="3" height="70" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="1004" y="406" fill="#5f6368" style="font-size:11.5px">上面三家是<tspan font-weight="700">近似</tspan>：训完再去凑</text>
+<text class="svgsm" x="1004" y="428" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">MLA 是<tspan font-weight="700">约束</tspan>：从第一天就按 512 训</tspan></text>
+<rect x="0" y="458" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="458" width="4" height="84" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="458" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="482" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 一句话：你存下来的从来不是信息，是信息的一个展开</tspan></text>
+<text class="svgsm" x="20" y="506" fill="#174ea6" style="font-size:12.0px">32,768 → 7,168 是<tspan font-weight="700">白送的 4.57 倍</tspan>（信息论管着，谁都拿得到）；7,168 → 576 是<tspan font-weight="700">赌出来的 12.4 倍</tspan>（要重训，要承担掉点风险）。</text>
+<text class="svgsm" x="20" y="527" fill="#174ea6" style="font-size:12.0px">⭐ 合起来 <tspan font-weight="700">56.9×</tspan>。看任何一个压缩方案，都值得先把这两段拆开问：<tspan font-weight="700">哪一段是白送的，哪一段是赌的？</tspan></text>
+<rect x="0" y="556" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="556" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="556" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="580" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐⭐ 记住这条暗线 —— 它今天会出现两次</tspan></text>
+<text class="svgsm" x="20" y="604" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">事后压</tspan>（拿训好的模型去凑）对上 <tspan font-weight="700">从头按压缩训</tspan>（把约束写进训练）。</text>
+<text class="svgsm" x="20" y="625" fill="#0d652d" style="font-size:12.0px">这里是 Eigen Attention 对 MLA；到了 §六，同一个对立会换成<tspan font-weight="700">推理期稀疏 对 native 稀疏</tspan>。⭐ 两次的结论一样：<tspan font-weight="700">后者掉点小得多。</tspan></text>
+<rect x="0" y="654" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="654" width="4" height="84" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="654" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="678" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ 口径，别讲过头</tspan></text>
+<text class="svgsm" x="20" y="702" fill="#b06000" style="font-size:12.0px">⚠️ 「MLA 比 MHA 还好一点」这句话<tspan font-weight="700">依赖口径</tspan>：DeepSeek 自己的对照是<tspan font-weight="700">对齐总参数量</tspan>后比的；</text>
+<text class="svgsm" x="20" y="723" fill="#b06000" style="font-size:12.0px">社区复现里也有「带 RoPE 时 MHA 略好」的结果。⭐ 稳妥的说法是<tspan font-weight="700">「在同等预算下不吃亏」</tspan>，而不是「压缩使它变强」。</text>
+<text class="svgsm" x="0" y="754" fill="#80868b" style="font-size:11.0px">📌 维度出自 DeepSeek-V2 论文 §2.1（arXiv 2405.04434）与 V3 config：d=7168, n_h=128, d_h=128, d_c=512, d_h^R=64；三个倍数由脚本当场算并断言</text>
+<text class="svgsm" x="0" y="771" fill="#80868b" style="font-size:11.0px">　　事后低秩：Eigen Attention（EMNLP Findings 2024）、Palu、LoRC　「MLA 优于 MHA」的口径见 DeepSeek-V2 仓库 issue #26</text>
+</svg><figcaption>⭐⭐ <b>32,768 个数是从一个 7,168 维的 h 算出来的 —— 一次确定性映射不造信息，所以 4.57 倍是白送的。</b><b>真正的赌注是后面那步：7,168 压到 576，等于强制 K 投影的秩 ≤ 512。</b><em>而敢赌是因为「K/V 本来就低秩」在 MLA 之前已经被量过了。</em></figcaption></figure>
+<h3>5.0b　为什么它能压 —— 一笔信息账</h3>
+<p>⭐ 图给不了的只有一句：<b>这条推理链本身是可迁移的</b>。
+  <em>看任何一个压缩方案 ——&nbsp;KV、权重、激活、梯度 ——&nbsp;都先把它拆成两段问：
+  <b>哪一段是「表示冗余」白送的，哪一段是「赌它低秩／稀疏／可近似」赌来的？</b>
+  白送的那段不用做实验，赌的那段必须看掉点。</em></p>
+
 <h3>5.1 ＋ 5.2 ＋ 5.3 ＋ 5.4　从砍头到压缩</h3>
 <p>⭐ <b>这里真正值得单独说一句的，是「GQA 是一个连续旋钮」这件事本身</b>
   ——&nbsp;它不是一个新机制，是<b>把 MHA 和 MQA 之间的空白填上</b>，
