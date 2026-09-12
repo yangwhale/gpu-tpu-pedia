@@ -48,7 +48,11 @@ CROSS_DOC_OK = {
 }
 
 # 引用前面这些字样说明它指的是别的文档，不该拿本文档的目录去对
-FOREIGN = re.compile(r'(专题[一二三四五六七八九十\d]|L300|L200|完整版|精讲版)')
+# ⛔ 2026-09-12 补 `论文|paper|arXiv`。触发：专题三里两处「V3 **论文** §4.2」
+#    被报成本文档的死指针 —— 它指的是 DeepSeek 那篇论文的第 4.2 节。
+#    ⭐ 一个总在误报的闸门等于没有闸门，误报要当真 bug 修。
+FOREIGN = re.compile(r'(专题[一二三四五六七八九十\d]|L300|L200|完整版|精讲版'
+                     r'|论文|paper|arXiv|原文)')
 
 
 def collect(path):
@@ -68,7 +72,19 @@ def collect(path):
 def audit(fname):
     txt = collect(os.path.join(W, fname))
     # ⚠️ 「实有小节」按**渲染后行首**取，不按标签取 —— 见文件头那条误报教训。
-    have = set(m.group(1) for m in re.finditer(r'(?m)^(\d+\.\d+[a-z]?)[　 ]', txt))
+    # ⛔⛔ 2026-09-12：原先只取行首**第一个**号，于是合并标题
+    #    「5.1 ＋ 5.2 ＋ 5.3 ＋ 5.4　从砍头到压缩」只登记了 5.1，
+    #    指向 5.3 的两处引用（其中一处还画在图里）被报成死指针。
+    # ⭐ 判据：**合并小节是常规动作**（「多画图少说话」经常把几小节并成一张图），
+    #    所以解析器必须认整串号，不能认第一个。
+    # ⚠️ 只扫行首那一段**连续的号码串**，不扫整行 —— 标题里出现
+    #    「GLM-5.2」这种版本号会被误当成小节号。
+    have = set()
+    for line in txt.split("\n"):
+        m = re.match(r'((?:\d+\.\d+[a-z]?)(?:\s*[＋+、，,～~]\s*\d+\.\d+[a-z]?)*)[　 ]',
+                     line)
+        if m:
+            have.update(re.findall(r'\d+\.\d+[a-z]?', m.group(1)))
     ok = CROSS_DOC_OK.get(fname, set())
 
     bad, cross = {}, {}

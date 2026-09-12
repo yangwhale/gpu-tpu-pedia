@@ -67,6 +67,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-motives.py       # §二 两条动机线（硬件账 ＋ 信息账 ＋ 交汇处）
   python3 topic03-fig-knobs.py         # §四 三个旋钮：全课骨架（为什么恰好是三个）
   python3 topic03-fig-knob1.py         # §五 旋钮①（四种存法对照 ＋ RoPE 为什么单走一路）
+  python3 topic03-fig-knob2.py         # §六 旋钮②（五种读法画成五张 mask）
   python3 topic03-fig-chronicle.py     # 上半：时间轴 SVG
   # ⭐ 下半那张 39 行模型表现在是**可排序的 HTML 表**，不是 SVG ——
   #   两边读同一份 topic03_models.py，⛔ 数据只有一份。
