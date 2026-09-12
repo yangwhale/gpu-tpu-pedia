@@ -895,7 +895,8 @@ __FIG_MQA_WHY__
 <p>MLA 的超参出自 <b>V3 论文 §4.2</b>：
   <code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code>
   ——&nbsp;<em>图上那 576 就是 512 ＋ 64。</em></p>
-<div class="note bad"><p>⛔⛔ <b>MLA 最大的部署坑：它在张量并行下会退化（⭐ 2026-09-13 补）</b></p>
+<div class="note bad"><p>⛔⛔ <b>MLA 最大的<u>推理</u>部署坑：它在张量并行下会退化（⭐ 2026-09-13 补）</b></p>
+<p>⚠️ <b>先把作用域说死：下面讲的<u>只是推理</u>。</b><em>训练侧没有这个问题 ——&nbsp;训练<b>没有 cache 要复制</b>，W<sup>UK</sup>/W<sup>UV</sup> 都是按头切的，TP 照切；被复制的只有那个 576 维的<b>隐向量激活</b>，跟 7168 维的 hidden 比可以忽略。</em></p>
 <p>GQA / MHA 的 KV 是<b>按头切</b>的，TP=8 就每张卡各存八分之一，天然可分。
   <b>而 MLA 的 KV 是一份 576 维的隐向量，根本不按头分</b> ——&nbsp;于是只剩三条路：</p>
 <ul>
@@ -908,7 +909,7 @@ __FIG_MQA_WHY__
   <b>一个在单卡上很漂亮的数学结构（把 K、V 合进一个共享隐向量），
   到了多卡上恰恰因为「不按头分」而失去了最自然的切法。</b>
   <em>⛔ 所以引用「MLA 省 57 倍」的时候，要带一句「在什么并行配置下」。</em></p>
-<p>📌 口径：三条做法是公开实现里能看到的；<b>各自的具体开销本课没有实测</b>。</p></div>
+<p>📌 口径：三条做法是公开实现里能看到的；<b>各自的具体开销本课没有实测</b>。⚠️ <b>再强调一次：这三条全是推理侧的。</b></p></div>
 
 <div class="note warn"><p>⚠️ <b>落到硬件上还有一个反直觉的后果</b>：MLA 在推理时可以把上投影矩阵
   「吸收」进 query 那一侧，<b>从而改变整个计算的形状</b>。
@@ -1208,7 +1209,7 @@ linear                                               ← 第 45 层多出来的�
 <tr><td>CSA/HCA</td><td>↓↓↓</td><td>↓↓↓</td><td>两边都省</td><td>≈</td><td><b>很高</b></td><td>不能</td></tr>
 <tr><td>线性（KDA 等）</td><td><b>无 KV</b>，但有固定状态</td><td>↓↓↓</td><td><b>decode</b>（prefill 要 chunk 化才不亏）</td><td>↓↓</td><td><b>很高</b></td><td><b>不能，必须从头训</b></td></tr>
 </tbody></table>
-<p><!-- ⛔ 2026-09-13 夜间 R18：这四条原来在这里用 <ol> 写了一遍，
+<!-- ⛔ 2026-09-13 夜间 R18：这四条原来在这里用 <ol> 写了一遍，
      而 R15 那张 fig3-landing 的第二格**已经把它们画出来了**（连第四条那个
      12% / 10% 的账都画了）。⭐ 同一件事两处各讲一遍，正是本课一直在修的毛病。
      → 正文压成一行指针，四条的完整版看 §十 那张图。 -->
@@ -1238,7 +1239,63 @@ __FIG_LANDING__
 <tr><td>线性（KDA）</td><td>片上内存够放下 chunk 的中间量</td><td>chunk 被迫调小 → 并行度掉 → 优势被吃掉</td></tr>
 <tr><td>长上下文 + MoE 同时上</td><td>HBM 带宽够两边分</td><td>all-to-all 与 KV cache <b>抢同一份带宽</b></td></tr>
 </tbody></table>
-<div class="note info"><p>一句话收尾：注意力的变体史，就是一部 「在显存、算力、访存规整度三者之间反复搬家」的历史。 早期搬显存（MQA/GQA/MLA），中期搬算力（稀疏）， 现在在搬访存规整度（chunk 化的线性注意力）—— <b>而访存规整度是最难搬的那一样。</b></p></div>
+<!-- ⛔ 2026-09-14 二轮学生审稿（叙事与取舍那位）：这里原来有一段
+     「一句话收尾」散文，**跟 fig3-landing 的落点带逐字相同**。
+     ⭐ 判据沿用本讲已经用过两次的那条：**图给得了的，正文不复述。**
+     → 删散文，留图。 -->
+
+<h3>10.2 ⭐⭐ 上面那张表的第二行，落到我们自己的机器上是什么样</h3>
+<p>那张表里「稀疏（DSA/NSA/CSA）假设 gather 不太贵」这一行，
+  <b>在 TPU 上就是一整个工程战场</b>。而这恰好是这门课<b>唯一有资格讲、别人讲不了</b>的部分 ——
+  所以它值得单独占两张图。</p>
+<!-- ⭐⭐⭐ 2026-09-14 TPU 轮 R27。现场点的题：
+     「注意力在 TPU 上跑有没有困难？哪些本来是给 GPU 设计的、搬过来需要克服？」
+     ⭐ 先摆**结构性的错配**，不摆清楚，后面那些 kernel 技巧看起来就只是一堆技巧。 -->
+__FIG_TPU_GAP__
+
+<div class="note warn"><p>⚠️ <b>先把「谁是给谁设计的」说清楚，免得听成 TPU 的黑历史。</b>
+  这一讲从 §四 到 §八 讲的每一个机制，
+  <b>它们的第一版 kernel 全部是在 GPU 上写出来的</b> ——&nbsp;
+  FlashAttention、PagedAttention、NSA 的三支路、DSA 的 indexer，无一例外。
+  <b>所以「搬到 TPU 上有难度」不是 TPU 的缺陷，是这批机制自带的一条硬件假设：
+  随手 gather 不太贵。</b>
+  <em>⭐ 而这条假设，正是 TPU 为了换取规整访存下的高效率而主动放弃的。</em></p></div>
+
+<h3>10.3 ⭐⭐ 那怎么克服 —— 三招，以及两个一定会被问到的问题</h3>
+<!-- ⭐⭐⭐ 2026-09-14 TPU 轮 R28–R31。这张图要回答的是现场点名的三问：
+     ① 不连续的 KV gather 怎么办（DMA 调度）
+     ② 运行时那个「取哪 2048 条」的决定，成本是什么？能不能全在卡上算？
+        要不要发回 host？
+     ③ SparseCore 能不能帮上忙？
+     ⛔ 第三问必须**诚实地留在「看起来对但还没被公开验证」**上 ——
+       公开的那套 TPU 生产注意力 kernel（RPA）走的是 TensorCore + Pallas/Mosaic，
+       **不是 SparseCore**。 -->
+__FIG_TPU_FIX__
+
+<div class="note ok"><p>⭐⭐ <b>「能不能在卡里边完全算完、要不要发回 CPU」这一问，答案是分两层的</b> ——&nbsp;
+  <b>别答成一个字。</b></p>
+<table>
+<thead><tr><th>哪一层的决定</th><th>谁来算</th><th>频率</th><th>为什么放在这一层</th></tr></thead><tbody>
+<tr><td><b>批次级</b>：这一步有哪些请求、各自多长、页表长什么样</td><td><b>host CPU</b>（服务框架）</td><td>每步一次</td><td>它本来就是调度器的产物，而且一步只算一次，摊到几千个 token 上可以忽略</td></tr>
+<tr><td><b>token 级</b>：这个 query 要读哪 2048 条、对应哪些 HBM 地址</td><td><b>卡上的标量单元</b></td><td>每 token 每层</td><td><b>发回 host 是不可能的</b> ——&nbsp;一次 PCIe 往返以微秒计，而这一步的预算是几十微秒</td></tr>
+</tbody></table>
+<p>⭐ 所以准确的说法是：<b>top-k 那个「决定」不出卡；出卡的只有本来就在 host 上的批次级元信息。</b>
+  <em>⛔ 不要说成「全在卡上算」——&nbsp;页表是 host 给的；也不要说成「要发回 CPU」——&nbsp;
+  逐 token 的地址计算发回去一次就废了。</em></p></div>
+
+<div class="note info"><p>⭐⭐ <b>跨层共享那一支（§6.5b 的 IndexShare / IndexCache），
+  在 TPU 上比在 GPU 上更值钱</b> ——&nbsp;这是一条本课的推导，写清楚它多省的是什么：</p>
+<ul>
+<li><b>GPU 上省的是</b>：indexer 那部分 FLOPs（GLM-5.2 报 1M 下每 token 降 <b>2.9×</b>，见 <a href="#s六">§6.5b</a>）</li>
+<li><b>TPU 上还额外省三样</b>：① 动态元信息的标量计算<b>只做一次</b>，后面几层直接复用；
+  ② 几层的 gather 模式<b>完全相同</b>，DMA 描述符可以重用，不必每层重编一遍；
+  ③ <b>动态决定的「次数」本身降了四倍</b></li>
+</ul>
+<p>⭐ 最后那条是这一节真正想留下的判据：
+  <b>在一台 static-first 的机器上，动态性的<em>次数</em>本身就是成本 ——&nbsp;
+  不只是每次动态有多贵。</b>
+  <em>⚠️ 「TPU 上额外更值钱」是本课从 RPA 那篇描述的机制推出来的，
+  <b>没有公开的对照实测</b>；GLM-5.2 的 2.9× 是 FLOPs 口径、且不是在 TPU 上测的。</em></p></div>
 <hr>
 </div></section>
 <section id="s十一"><div class="wrap"><div class="stn"><span class="badge">第 十一 节</span><h2>收尾：把谱系放回时间线</h2></div>
@@ -1354,19 +1411,20 @@ out = [head, '''
   <h1>注意力演进</h1>
   <div class="en">Three Knobs, Not Thirty Names</div>
   <div class="hook">
-    名词多到像各搞各的，<b>但只有三个旋钮可以拧</b>。<br>
-    <em>——&nbsp;而在拧它们之前，得先知道「怎么算」这条路已经走到了哪。</em>
+    2020 年的 GPT-3 只能记住 <b>2048</b> 个 token；今天的模型记 <b>100 万</b>。<br>
+    <em>——&nbsp;这六年的注意力演进，讲的就是这 <b>512 倍</b> 是怎么换来的。</em>
   </div>
   <p style="max-width:820px;color:var(--gray)">
     MLA、GQA、SWA、DSA、NSA、CSA、DeltaNet、GDN、KDA……
-    这一讲的目标不是记住这些名字，是<b>拿到一把尺子</b>：
-    看到任何一个新变体，能立刻说出它在拧哪个旋钮、省了什么、赔了什么。
+    名词多到像各搞各的，<b>但只有三个旋钮可以拧</b>。
+    这一讲不按名字讲，按<b>它们各自是怎么被逼出来的</b>讲 ——&nbsp;
+    每一个都回到一手论文与 config 核过。
   </p>
   <div class="chips">
     <span class="chip">前置 <b>专题一 · 专题二</b></span>
-    <span class="chip">第一节 <b>FlashAttention 详解</b></span>
+    <span class="chip">主线 <b>三个旋钮</b> ＋ 一条硬件线</span>
     <span class="chip">含 <b>我们自己的 v7 实测</b></span>
-    <span class="chip">⏱ <b>约 1 小时</b></span>
+    <span class="chip">⏱ <b>70′ / 111′ / 134′ 三档</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
@@ -1452,6 +1510,20 @@ FIGS = {
         '⭐⭐ <b>五张 mask 并排，这一支的共同结构就出来了：先用一个便宜得多的办法'
         '决定「看哪些」，再只对那些做主注意力。</b>'
         '<em>区别只在那个「便宜的办法」是写死的规则，还是学出来的。</em>'),
+
+    # ── §10.2 / §10.3 落到 TPU（2026-09-14 TPU 轮 R27–R31 加）──────
+    "__FIG_TPU_GAP__": ("fig-tpu-gap", "fig3-tpu-gap.svg",
+        'topic03-fig-tpu-gap.py',
+        '⭐⭐ <b>先看清楚是哪两件事对不上：TPU 的三条硬约束（静态形状、tiled 粗粒度布局、'
+        '偏好规整访存）对上现代注意力的三个动态性来源（ragged、分页 KV、运行时 top-k）。</b>'
+        '<em>不摆清楚这个错配，后面那些 kernel 技巧看起来就只是一堆技巧。</em>'),
+
+    "__FIG_TPU_FIX__": ("fig-tpu-fix", "fig3-tpu-fix.svg",
+        'topic03-fig-tpu-fix.py',
+        '⭐⭐ <b>三招的共同形状：把「一个动态」换成「一批静态」。</b>'
+        '<b>而运行时那个 top-k 决定不用出卡 —— 它用的是 FlashAttention 阶段本来就闲着的标量单元。</b>'
+        '<em>SparseCore 架构上正对口（它天生支持数据相关的控制流与访存），'
+        '但公开的那套 TPU 生产注意力 kernel 用的还是 TensorCore —— 这条留在「看起来对但未被公开验证」。</em>'),
 
     # ── §九＋§十 落点（2026-09-13 夜间 R15 加）─────────────────────
     "__FIG_LANDING__": ("fig-landing", "fig3-landing.svg", 'topic03-fig-landing.py',

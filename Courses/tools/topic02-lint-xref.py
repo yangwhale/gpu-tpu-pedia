@@ -92,10 +92,15 @@ def audit(fname):
         n = m.group(1)
         if n in have:
             continue
-        # ⛔ 2026-09-13：窗口原来是 14 个字符，而「Shazeer arXiv 1911.02150（§2.4」
-        #   里 arXiv 离得有 18 个字符远 —— 放行条件明明成立却没匹配上。
-        #   ⭐ 判据：**放行窗口要按真实写法量，别拍脑袋定长度。**
-        if FOREIGN.search(txt[max(0, m.start() - 28):m.start()]):
+        # ⛔ 这个放行窗口连着误报了两次，两次都是「字数不够」：
+        #   14 → 28 是因为「Shazeer arXiv 1911.02150（§2.4」隔了 18 个字符；
+        #   28 → 按句读断是因为「RPA（Jiang 等，arXiv 2604.15464，2026-04）§1 与 §2.4」
+        #   隔了 30 多个 —— ⭐ 判据：**两次同型误报之后就别再调那个数字了，
+        #   换一个不靠数字的边界。** 现在回看到最近的句读（句号/分号/换行），
+        #   问的是「**这一句**里有没有说它是别的文档」，而不是「前 N 个字符里有没有」。
+        head = txt[max(0, m.start() - 120):m.start()]
+        head = re.split(r'[。；\n]', head)[-1]
+        if FOREIGN.search(head):
             continue                      # 明写了是别的文档，放行
         (cross if n in ok else bad)[n] = (cross if n in ok else bad).get(n, 0) + 1
 
