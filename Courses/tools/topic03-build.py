@@ -204,6 +204,162 @@ BODY = '''<section id="x1"><div class="wrap"><div class="stn"><h2>这个专题�
   <em>后面那三个旋钮，是同一个账本的三个面。</em>
   <br>（三个面分别是什么，看完下面这张骨架图再说。）</p>
 
+<!-- ⭐⭐ 2026-09-12 加两道课前题（现场点的）。样式 .guess/.opts/.oplab 与
+     劝阻用的 details.more.preclass 都是从专题二 L300 的 <style> 继承来的，
+     本页不另写 CSS。JS 也照搬那一份，三条坑都已经在那边踩平：
+       ① 按 .guess 逐个绑定，别用 id（页面上会有第二道题）
+       ② 等 DOMContentLoaded（内联脚本只看得见它上面的 DOM）
+       ③ 以 .opts 为一组，组内互斥、组间独立，**所有组都选过才展开答案**
+          —— 配对选项会泄题：认出一半，另一半自动跟着定了。
+     ⛔⛔ 第二题 (b) 不给具体数字：**VMEM 带宽是未公开规格**，
+        而屋脊点 × 算力 = 带宽，给了屋脊点等于把那个数反推出来。
+        这里只到「落在几十这一档」为止 —— 跟专题二的公开边界严格一致。
+        ⭐ 而且这恰好是个好考点：它就是专题二教的那四句问法之一。 -->
+<details class="more preclass">
+  <summary>⛔ 课前勿点 ——&nbsp;开讲前的两道热身题<span class="why">现场会一起做；提前看答案＝自己剧透，这两道题就废了</span></summary>
+  <div class="body">
+
+  <div class="guess">
+    <h3>第一题 · 一个用户的 KV cache，到底有多大</h3>
+    <p class="q"><b>DeepSeek V3</b>（671B，61 层，128 个注意力头，head_dim 128），
+      <b>128K 上下文、单个用户、bf16 存</b>。<br>
+      <span class="qs">同样这个形状，换四种注意力，KV cache 各是多大？
+      <b>四行分开选，各选各的。</b></span></p>
+
+    <div class="oplab">(a) 最朴素的 <b>MHA</b>（128 个 KV 头）</div>
+    <div class="opts">
+      <button data-g="0">61 GiB</button>
+      <button data-g="1">122 GiB</button>
+      <button data-g="2" data-right>488 GiB</button>
+      <button data-g="3">976 GiB</button>
+    </div>
+
+    <div class="oplab">(b) <b>GQA-8</b>（KV 头砍到 8）</div>
+    <div class="opts">
+      <button data-g="0">3.8 GiB</button>
+      <button data-g="1">8.6 GiB</button>
+      <button data-g="2" data-right>30.5 GiB</button>
+      <button data-g="3">61 GiB</button>
+    </div>
+
+    <div class="oplab">(c) <b>MQA</b>（KV 头砍到 1）</div>
+    <div class="opts">
+      <button data-g="0" data-right>3.8 GiB</button>
+      <button data-g="1">8.6 GiB</button>
+      <button data-g="2">15.3 GiB</button>
+      <button data-g="3">30.5 GiB</button>
+    </div>
+
+    <div class="oplab">(d) <b>MLA</b>（V3 真实用的方案）</div>
+    <div class="opts">
+      <button data-g="0">3.8 GiB</button>
+      <button data-g="1" data-right>8.6 GiB</button>
+      <button data-g="2">30.5 GiB</button>
+      <button data-g="3">61 GiB</button>
+    </div>
+
+    <div class="rev">
+      <p><b>488　/　30.5　/　3.8　/　8.6　GiB。</b><br>
+        <span class="qs">算法就一条：<b>每 token 每层要留下几个数</b>，
+        乘 61 层、乘 2 字节、乘 131,072 个 token。<br>
+        MHA ＝ 2×128×128 ＝ 32,768 →&nbsp;<b>488 GiB</b>；
+        GQA-8 ＝ 2×8×128 ＝ 2,048 →&nbsp;<b>30.5</b>（16×）；
+        MQA ＝ 2×1×128 ＝ 256 →&nbsp;<b>3.8</b>（128×）；
+        MLA ＝ 压缩维 512 ＋ RoPE 64 ＝ 576 →&nbsp;<b>8.6</b>（56.9×）。</span></p>
+      <p><b>⭐⭐ 这道题真正的题眼在 (c) 和 (d) 的大小关系：</b>
+        <span class="qs"><b>MQA 只要 3.8 GiB，比 MLA 的 8.6 还小 2.25 倍。</b>
+        <b>MLA 并不是最省的那个。</b><br>
+        ⭐ 所以这一支的目标从来不是「谁存得最少」——&nbsp;
+        MQA 早在 2019 年就把它压到头了，代价是<b>质量掉得厉害</b>。
+        <b>真正要比的是「同样一份字节，换回多少能力」。</b>
+        <em>这正是第五节要讲的那条线。</em></span></p>
+      <p style="margin-bottom:0"><b>⚠️ 还有一个口径要说清：</b>
+        <span class="qs">488 GiB 是「<b>假如 V3 用 MHA</b>」的<b>反事实</b>数字，
+        不是 V3 的实测值 ——&nbsp;V3 从第一天就是 MLA。
+        而且这里沿用了 V3 论文比较表的口径（K、V 都按 head_dim=128 算）；
+        <b>V3 真实的 K 每头是 128+64＝192 维，严格算这个基线还会更大一点。</b></span></p>
+    </div>
+  </div>
+
+  <div class="guess" style="margin-top:22px">
+    <h3>第二题 · 那条「算得过来还是搬得过来」的线</h3>
+    <p class="q">上一讲那把尺子：<b>算力 ÷ 带宽</b> ——&nbsp;
+      每从内存搬一个字节，这台机器配套能算多少次。<br>
+      <span class="qs">在 <b>TPU v7</b> 上，<b>两层各是多少？两行分开选。</b></span></p>
+
+    <div class="oplab">(a) 对 <b>HBM</b>（片外）</div>
+    <div class="opts">
+      <button data-g="0">78</button>
+      <button data-g="1">156</button>
+      <button data-g="2" data-right>约 313</button>
+      <button data-g="3">约 626</button>
+    </div>
+
+    <div class="oplab">(b) 对 <b>VMEM</b>（片上）</div>
+    <div class="opts">
+      <button data-g="0">跟 HBM 一样，约 313</button>
+      <button data-g="1">比 HBM <b>高</b>，约 3,000</button>
+      <button data-g="2" data-right>比 HBM <b>低</b>一个量级 ——&nbsp;几十这一档</button>
+      <button data-g="3">片上没有「屋脊点」这回事</button>
+    </div>
+
+    <div class="rev">
+      <p><b>(a) 约 313。(b) 比 HBM 低一个量级，落在几十这一档。</b><br>
+        <span class="qs">(a) ＝ 2,307 TFLOP/s ÷ 7.37 TB/s。
+        <b>这个数不是本讲新造的，它就是<a href="topic-02.html">专题二</a>整整一节在立的那条屋脊线。</b></span></p>
+      <p><b>⭐ (b) 最容易选反，而选反的人通常是把「快」和「门槛高」搞混了：</b>
+        <span class="qs">片上更快，所以<b>分母变大</b> ——&nbsp;
+        同一个分子除以更大的分母，<b>商只会更小</b>。
+        <b>越靠近计算，这条线越低。</b>
+        <em>门槛低意味着：同一个算子挪到片上以后，更容易变成算力受限。</em></span></p>
+      <p style="margin-bottom:0"><b>⛔ 而 (b) 为什么只给量级、不给数 ——&nbsp;这才是这道题最想教的一件事：</b>
+        <span class="qs"><b>VMEM 的带宽官方没有公开。</b>
+        而屋脊点乘以算力就等于带宽 ——&nbsp;<b>给出一个精确的屋脊点，
+        等于把那个没公开的数反推出来。</b>所以我们到「几十这一档」为止，<b>不往下猜</b>。<br>
+        ⭐ 这正是<a href="topic-02.html">专题二</a>第 6 节那四句问法里的一句：
+        <b>先问这个数的出处和口径，再用它。</b>
+        <em>而那四句不是拿来审别人材料的 ——&nbsp;是先拿来审自己的。</em></span></p>
+    </div>
+  </div>
+
+  </div>
+</details>
+<script>
+/* 与专题二同一份实现；三条坑（别用 id、等 DOMContentLoaded、按 .opts 分组）
+   的来由写在上面那段注释里。 */
+(function(){
+  function bind(){
+  document.querySelectorAll('.guess').forEach(function(box){
+    var rev=box.querySelector('.rev'); if(!rev) return;
+    var groups=box.querySelectorAll('.opts');
+    var rst=document.createElement('div');
+    rst.className='rst';
+    rst.innerHTML='<button type="button">\u21ba 重来</button>';
+    rst.firstChild.addEventListener('click', function(){
+      box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+      rev.classList.remove('on');
+      box.scrollIntoView({behavior:'smooth', block:'nearest'});
+    });
+    rev.insertBefore(rst, rev.firstChild);
+    groups.forEach(function(g){
+      g.querySelectorAll('button').forEach(function(b){
+        b.addEventListener('click', function(){
+          g.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+          b.classList.add('picked');
+          var r=g.querySelector('[data-right]'); if(r) r.classList.add('right');
+          var done=true;
+          groups.forEach(function(gg){ if(!gg.querySelector('.picked')) done=false; });
+          if(done){ rev.classList.add('on'); rev.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+        });
+      });
+    });
+  });
+  }
+  if(document.readyState==='loading') addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
+</script>
+
 <p>下面这张是<b>整个专题的骨架</b>。六个阶段，每一段只问三件事：
   <b>图啥、带来了什么、欠下了什么</b>。</p>
 __FIG_ARC__
