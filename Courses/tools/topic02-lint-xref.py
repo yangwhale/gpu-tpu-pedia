@@ -101,18 +101,63 @@ def audit(fname):
 
     print("\n══ %s" % fname)
     print("   实有小节 %d 个" % len(have))
+    bad_cnt = audit_counts(fname, txt)
     if cross:
         print("   ○ 跨文档引用（§0 已列明，放行）：%s"
               % "、".join("§%s×%d" % (k, v) for k, v in sorted(cross.items())))
     if not bad:
         print("   ✅ 没有指向本文档不存在的小节")
-        return 0
+        return bad_cnt
     for n, c in sorted(bad.items()):
         print("   ⛔ §%s 指了 %d 次，而本文档没有这一节" % (n, c))
         for m in list(re.finditer(r'(?:§|第)\s*' + re.escape(n) + r'\s*节?', txt))[:2]:
             a = max(0, m.start() - 46)
             print("        …%s…" % txt[a:m.end() + 34].replace("\n", " / "))
-    return len(bad)
+    return len(bad) + bad_cnt
+
+
+# ══════════════════════════════════════════════════════════════════════
+# ⛔⛔ 第二道体检：**「一共 N 次」这类计数断言**。
+#
+# 触发事件（2026-09-13）：专题三里一张图写着「这条暗线今天会出现两次」，
+# 而后面另外三处分别写着「第二次 / 第三次 / 第四次出现」——&nbsp;数到了四。
+# 第一张图是先画的，那时还没预见到后面会再加两处。
+#
+# ⭐ 判据：**凡是写死「一共 N 次」的地方，都是一个会随后续改动悄悄过期的断言。**
+#   它不报错、不影响渲染，只是在课堂上被学员当场数出来。
+#   所以：要么别写计数，要么让脚本替你数。
+# ══════════════════════════════════════════════════════════════════════
+# ⛔ 「两」必须在表里 —— 中文口语里「两次」远比「二次」常见。
+#   2026-09-13 这条 lint 刚写完就漏掉了一处「会出现两次」，当场打脸。
+#   ⭐ 规则写得像对的，不等于它覆盖了真实的写法。
+_ORD = {"一": 1, "二": 2, "两": 2, "三": 3, "四": 4, "五": 5, "六": 6,
+        "七": 7, "八": 8, "九": 9, "十": 10}
+
+
+def audit_counts(fname, txt):
+    """返回坏掉的计数条数。"""
+    seen = sorted({_ORD[m.group(1)] for m in
+                   re.finditer(r"第([一二两三四五六七八九十])次出现", txt)
+                   if m.group(1) in _ORD})
+    claims = [_ORD[m.group(1)] for m in
+              re.finditer(r"(?:一共|总共)?(?:会)?出现(?:了)?([一二两三四五六七八九十])次", txt)
+              if m.group(1) in _ORD]
+    if not seen and not claims:
+        return 0
+    bad = 0
+    top = max(seen) if seen else 0
+    for c in claims:
+        if top and c != top:
+            print("   ⛔ 声称「出现 %d 次」，但文中标到第 %d 次 —— 对不上" % (c, top))
+            bad += 1
+    # 序号要连续，不能跳号
+    if seen and seen != list(range(seen[0], seen[0] + len(seen))):
+        print("   ⛔ 「第 N 次出现」的序号跳号了：%s" % seen)
+        bad += 1
+    if not bad and (seen or claims):
+        print("   ✅ 计数自洽（标到第 %d 次，声称 %s）"
+              % (top, claims or "未声称"))
+    return bad
 
 
 def main():

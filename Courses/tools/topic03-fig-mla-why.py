@@ -183,7 +183,7 @@ def main():
         "<tspan font-weight=\"700\">哪一段是白送的，哪一段是赌的？</tspan>" % tot,
     ])
 
-    yy = f.band(yy + 14, "ok", "⭐⭐ 记住这条暗线 —— 它今天会出现两次", [
+    yy = f.band(yy + 14, "ok", "⭐⭐ 记住这条暗线 —— 今天它一共出现四次，这是第一次", [
         "<tspan font-weight=\"700\">事后压</tspan>（拿训好的模型去凑）"
         "对上 <tspan font-weight=\"700\">从头按压缩训</tspan>（把约束写进训练）。",
         "这里是 Eigen Attention 对 MLA；"

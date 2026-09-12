@@ -43,8 +43,8 @@ def main():
     f.marks = set()
     y0 = f.header(
         "第二个轴　——　三个旋钮说的是「改什么」，这条说的是「什么时候改」",
-        "⭐⭐ 这条对立在前面<tspan font-weight=\"700\">出现了四次</tspan>，"
-        "四次都在不同的分支上 ——&#160;到第四次它就不是巧合了",
+        "⭐⭐ 这条对立今天<tspan font-weight=\"700\">会出现四次</tspan>，"
+        "四次在四个不同的分支上 ——&#160;所以它不是巧合，是一个轴",
         [(OR, "事后：拿训好的模型去凑"), (GR, "native：把约束写进训练"),
          (GY, "同一个旋钮的两种用法")])
 
@@ -114,7 +114,10 @@ def main():
     ])
 
     yy = f.src(yy + 16,
-               "四行的出处分别见 §五（Eigen Attention / Palu / LoRC、GQA uptraining）"
+               "⚠️ 下面四行里有三行要到 §五 / §六 才展开 ——&#160;"
+               "这一格是<tspan font-weight=\"700\">先给坐标系</tspan>，不是回顾；"
+               "出处分别见 §五（Eigen Attention / "
+               "Palu / LoRC、GQA uptraining）"
                "与 §六（H2O、DSA、NSA §2 列的那批事后方法）——&#160;每一处都有单独的图和引用",
                "「两个轴」这个组织方式是本课的归纳，不是任何一篇论文的提法")
     f.save("fig3-when-axis.svg", yy + 6)
