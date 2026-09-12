@@ -8,7 +8,8 @@ r"""专题三 · §二「信息账的严格版本」（2026-09-13 夜间 · R9�
 
   ① **两个互信息，别混为一谈**
      · 传统的**两点互信息**：两个 token 之间的相关性，随距离**幂律衰减**。
-       Lin & Tegmark 证明：任何马尔可夫/隐马尔可夫过程都是**指数**衰减，
+       Lin & Tegmark 证明：任何**有限状态**的马尔可夫/隐马尔可夫过程
+       （＝概率正则文法）都是**指数**衰减，
        而实测自然语言是**幂律** ——&nbsp;这正是语言不能用马尔可夫近似的原因。
      · L2M 的**双部互信息**：把序列从中间切开，**两半之间**的互信息，
        随长度**幂律增长**。
@@ -75,12 +76,15 @@ def main():
     f.path("M " + " L ".join(pts), BL, 1.8, arrow=False)
     f.t(bx + bw - 10, yy + bh - 14, "距离 →", GY2, size=11, anchor="end")
     yy += bh + 18
-    f.t(x + 22, yy, "⭐ 随距离<tspan font-weight=\"700\">幂律衰减</tspan> —— 而任何马尔可夫过程", GY,
+    f.t(x + 22, yy, "⭐ 随距离<tspan font-weight=\"700\">幂律衰减</tspan> ——&#160;"
+        "而任何<tspan font-weight=\"700\">有限状态</tspan>的", GY, size=11.5, w=pw - 44)
+    f.t(x + 22, yy + 19, "马尔可夫过程都是<tspan font-weight=\"700\">指数</tspan>衰减。", GY,
         size=11.5, w=pw - 44)
-    f.t(x + 22, yy + 19, "都是<tspan font-weight=\"700\">指数</tspan>衰减。这正是语言不能用", GY,
-        size=11.5, w=pw - 44)
-    f.t(x + 22, yy + 38, "马尔可夫近似的原因。", GY, size=11.5)
-    yy += 56
+    f.t(x + 22, yy + 38, "这正是语言不能用马尔可夫近似的原因。", GY, size=11.5,
+        w=pw - 44)
+    f.t(x + 22, yy + 57, "⚠️ 「有限状态」这个限定不能省 ——&#160;原文说的是概率正则文法。",
+        GY2, size=11, w=pw - 44)
+    yy += 74
 
     f.line(x + 22, yy, x + pw - 22, yy, LINE, 1, arrow=False)
     yy += 20
@@ -217,9 +221,12 @@ def main():
     ])
 
     yy = f.src(yy + 16,
-               "① 出自 Lin ＆ Tegmark《Critical Behavior in Physics and "
-               "Probabilistic Formal Languages》（Entropy 2017, arXiv 1606.06737）："
-               "马尔可夫/隐马尔可夫过程互信息指数衰减，实测自然语言近似幂律",
+               "① 出自 Lin ＆ Tegmark《Criticality in Formal Languages and "
+               "Statistical Physics》（Entropy 2017, arXiv 1606.06737）",
+               "⚠️ arXiv v1 的旧题名是《Critical Behavior in Physics and Probabilistic "
+               "Formal Languages》，两者是同一篇 ——&#160;标了正式出处就用正式题名",
+               "原文口径：互信息在任何<tspan font-weight=\"700\">概率正则文法</tspan>下"
+               "指数衰减，而<tspan font-weight=\"700\">上下文无关文法</tspan>下可以是幂律",
                "② 出自 L2M（arXiv 2503.04725, ICML 2025）：双部互信息幂律 scaling、"
                "「状态维度必须至少同阶增长」的定理、以及 Transformer 自动满足的那段分析",
                "③ 为本课推导，非论文结论")

@@ -148,7 +148,10 @@ def main():
          ).format(gqa_1m),
         '⭐ 对照本讲开头那个 <tspan font-weight="700">MHA 的 488 GiB ——&#160;而那还只是 128K</tspan>。'
         '<tspan font-weight="700">这就是三年的进展。</tspan>',
-        '⚠️ 但报总收益时要能<tspan font-weight="700">拆开</tspan>：V4 那一版还叠了一层'
+        '⚠️ 这个 2% 的基线是<tspan font-weight="700">同形状的 GQA-8</tspan>；'
+        '§6.4c 那张 CSA 图给的「10% 的 KV」比的是 <tspan font-weight="700">V3.2</tspan> ——&#160;'
+        '<tspan font-weight="700">两个数都对，对的是各自的基线</tspan>，别并排比。',
+        '⚠️ 而且报总收益时要能<tspan font-weight="700">拆开</tspan>：V4 那一版还叠了一层'
         '<tspan font-weight="700">跟注意力机制无关</tspan>的优化 ——&#160;'
         'KV 混合精度（RoPE 那几维 BF16、其余 FP8），<tspan font-weight="700">光这一项就近乎减半</tspan>。'])
 

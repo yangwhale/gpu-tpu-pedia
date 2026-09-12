@@ -181,6 +181,11 @@ def main():
         "⭐ 注意这两个数<tspan font-weight=\"700\">不一样</tspan> ——&#160;"
         "FLOPs 省到 27%、KV 省到 10%，"
         "说明<tspan font-weight=\"700\">横着压主要省的是存储，稀疏主要省的是计算</tspan>。",
+        "⚠️ <tspan font-weight=\"700\">这个 10% 跟 §6.1～6.6 那张五格 mask 图上的「约 2%」"
+        "不是同一个基线</tspan>：这里比的是 <tspan font-weight=\"700\">V3.2</tspan>，"
+        "那里比的是同形状的 <tspan font-weight=\"700\">GQA-8</tspan>，"
+        "而且那 2% 还叠了一层跟注意力机制无关的 KV 混合精度。"
+        "⭐ 两个数都对 ——&#160;<tspan font-weight=\"700\">对的是各自的基线</tspan>。",
     ])
 
     yy = f.src(yy + 16,

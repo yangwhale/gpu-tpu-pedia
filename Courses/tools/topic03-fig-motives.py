@@ -48,7 +48,7 @@ def main():
     assert abs(mha - 488) < 1 and abs(gqa - 30.5) < .1 and abs(mla - 8.58) < .05
 
     f = Fig(W, "长上下文的两条独立动机：左边是硬件账 —— 一个用户 128K 的 KV cache "
-               "按最朴素的 MHA 算是 488 GiB，要 5.5 块 v7；右边是信息账 —— "
+               "按最朴素的 MHA 算是 488 GiB，要 5.2 块 v7；右边是信息账 —— "
                "注意力矩阵极稀疏、有 attention sink、远近关注粒度不同；"
                "两条线交汇处才是所有变体的位置")
     f.marks = set()

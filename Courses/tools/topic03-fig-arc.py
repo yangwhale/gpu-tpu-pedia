@@ -26,7 +26,9 @@ r"""专题三 · 总纲图 —— **这是一个什么故事，怎么从过去�
 ════════════════════════════════════════════════════════════════════
 
 · **2K**：GPT-3 的 `max_position_embeddings` ＝ 2048（本课模型表第一行）
-· **1M**：本课模型表里做到 1M 以上的有 13 家（含 RWKV-7 的「无限（理论）」），全部动了旋钮②或③
+· **1M**：本课模型表里做到 1M 以上的有 **12 家**（口径见 topic03_models.over_1m：
+  声明值 ≥1M；RWKV-7 的「无限（理论）」不计入 —— 算上它是 13 家，结论不变），
+  全部动了旋钮②或③
 · **576 GiB → 697 MiB ＝ 846 倍**：同一个 128K 长度、BF16、batch 1，
   两端都取 **≥100B** 的模型（GPT-3 ／ DeepSeek-V4-Flash）。见模型表落点⑤
 · **488 GiB**：V3 形状假想成纯 MHA、128K 时的 KV cache（本课 §二）
@@ -34,6 +36,7 @@ r"""专题三 · 总纲图 —— **这是一个什么故事，怎么从过去�
   前者是「能跑多长」，后者是「同一长度下省了多少」。
   ⛔ **不能相乘**，也不能说成「一共 43 万倍」——&nbsp;那是把两把尺子当成一把。
 """
+import topic03_models as M
 from topic03_draw import (Fig, wpx, _sz, LINE,
                           BL, OR, GR, RD, GY, PU, CY, BR, INK,
                           GY2, BG2)
@@ -112,7 +115,8 @@ def fig_arc():
     # ── 落点 ────────────────────────────────────────────────────
     y = f.band(y, "info", "两条曲线反着走 ——&#160;这才是这六年真正发生的事", [
         '<tspan font-weight="700">能跑多长</tspan>：GPT-3 的 <tspan font-weight="700">2K</tspan>'
-        ' →&#160;今天 <tspan font-weight="700">1M</tspan>（本课模型表里 13 家做到，'
+        ' →&#160;今天 <tspan font-weight="700">1M</tspan>'
+        '（本课模型表里 %d 家做到，' % len(M.over_1m(M.ROWS)) +
         '<tspan font-weight="700">无一例外都动了旋钮②或③</tspan>）',
         '<tspan font-weight="700">同一长度下要付多少</tspan>：128K 时的 KV cache 从 '
         '<tspan font-weight="700">576 GiB</tspan> 降到 '

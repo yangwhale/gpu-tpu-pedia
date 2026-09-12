@@ -121,13 +121,15 @@ def main():
         yy += 46
 
     yy += 4
-    f.box(x + 22, yy, pw - 44, 76, "#fff", RD, 8)
-    f.box(x + 22, yy, 4, 76, RD, RD, 2)
-    f.box(x + 24, yy, 3, 76, "#fff", "#fff", 0)
+    f.box(x + 22, yy, pw - 44, 98, "#fff", RD, 8)
+    f.box(x + 22, yy, 4, 98, RD, RD, 2)
+    f.box(x + 24, yy, 3, 98, "#fff", "#fff", 0)
     f.t(x + 40, yy + 25, "⭐ 左端那个结果最值得讲：", RD, True, 12.5)
     f.t(x + 40, yy + 47, "Kimi 的消融里 <tspan font-weight=\"700\">0:1（纯全注意力）</tspan>", GY, size=11.5)
     f.t(x + 40, yy + 67, "<tspan font-weight=\"700\">反而表现不好</tspan>。", RD, True, 12.5)
-    fits(yy + 76, y0, ph, "②")
+    f.t(x + 40, yy + 88, "⚠️ 原文只有这一句<tspan font-weight=\"700\">定性描述</tspan>，没公开数值",
+        GY2, size=11, w=pw - 76)
+    fits(yy + 98, y0, ph, "②")
 
     # ══ ③ 为什么全局层不用多 ════════════════════════════════════
     x, pw = PX[2], PW[2]

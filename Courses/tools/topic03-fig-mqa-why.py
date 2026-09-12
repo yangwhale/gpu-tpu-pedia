@@ -70,17 +70,22 @@ def main():
         INK, True, 12.5, w=pw - 48)
     yy += 26
 
+    # ⚠️ 层级要画对：原文是**两条**，第二条下面才分两个子形式。
     OPTS = [
-        ("限制序列长度 n", "就不让它变长", "—", GY2),
-        ("只看一个局部邻域", "后来叫<tspan font-weight=\"700\">滑窗</tspan>", "旋钮②", BL),
-        ("压缩历史位置的个数", "后来叫<tspan font-weight=\"700\">稀疏 / 压缩</tspan>", "旋钮②", BL),
+        (0, "① 限制序列长度 n", "就不让它变长", "—", GY2),
+        (0, "② 减少「被看到」的位置数", "——&#160;而这一条原文又分两种：", "", GY),
+        (1, "· 只看一个局部邻域", "后来叫<tspan font-weight=\"700\">滑窗</tspan>", "旋钮②", BL),
+        (1, "· 压缩历史位置的个数", "后来叫<tspan font-weight=\"700\">稀疏 / 压缩</tspan>",
+         "旋钮②", BL),
     ]
-    for name, later, knob, col in OPTS:
-        f.box(x + 24, yy, pw - 48, 42, "#fff", LINE, 8)
-        f.t(x + 38, yy + 26, name, GY, True, 12)
-        f.t(x + 38 + wpx(name, 12) + 14, yy + 26, later, GY2, size=11)
-        f.t(x + pw - 38, yy + 26, knob, col, True, 11.5, "end")
-        yy += 50
+    for lvl, name, later, knob, col in OPTS:
+        ix = x + 24 + lvl * 18
+        f.box(ix, yy, pw - 48 - lvl * 18, 38, "#fff", LINE, 8)
+        f.t(ix + 14, yy + 24, name, GY, True, 12)
+        f.t(ix + 14 + wpx(name, 12) + 12, yy + 24, later, GY2, size=11)
+        if knob:
+            f.t(x + pw - 38, yy + 24, knob, col, True, 11.5, "end")
+        yy += 44
 
     yy += 6
     f.t(x + 24, yy, "然后 Shazeer 说：本文走一条<tspan font-weight=\"700\">正交</tspan>的路 ——", GY,
@@ -207,6 +212,9 @@ def main():
                "① 与 ② 出自 MQA 原论文 Shazeer arXiv 1911.02150（§2.4 与表 3 ——&#160;"
                "⚠️ 这篇一共只有 3 张表，"
                "Billion-Word LM 基准的 dev 困惑度）；「正交」是原文用词",
+               "⚠️ 表 3 里各行的 <tspan font-weight=\"700\">d_ff 并不相同</tspan>"
+               "（8192 / 9088 / 9984）——&#160;那是为了<tspan font-weight=\"700\">对齐总参数量</tspan>；"
+               "跟 MLA 那格的口径注是同一件事，看困惑度差之前先知道这点",
                "③ 出自 GQA 原论文 Ainslie 等 arXiv 2305.13245 §2.1–2.2："
                "mean pooling、α=5% 续训、GQA-1=MQA / GQA-H=MHA")
     f.save("fig3-mqa-why.svg", yy + 6)
