@@ -2461,39 +2461,184 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 </div></section>
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>一切从长上下文说起 —— 两条独立的动机</h2></div>
 <p><b>这两条要分开讲。</b> 它们指向同一批技术，但出发点完全不同， 混在一起讲就变成了名词罗列。</p>
-<h3>2.1 线索 A · 硬件账算不过来</h3>
-<p>上下文一长，<b>KV cache 就爆</b>。</p>
-<p>它的增长是双重的：<b>随序列长度线性增长，又随层数线性增长</b>。 而且它跟参数不一样 —— 参数是固定的一次性开销，KV cache 是随用户输入长度涨的。</p>
-<p>用一个大家已经熟悉的形状来砸体感：<b>就用专题一那个 V3</b> （61 层、hidden 7168、128 个头、每头 128 维）。 假设它用的是最朴素的 MHA，128K 上下文，bf16 存：</p>
-<pre><code>每 token 每层    2 × n_h × d_h  = 2 × 128 × 128 = 32,768 个数
-每 token 全模型  × 61 层                        = 1,998,848 个数
-                × 2 字节                        = 3,997,696 B = 3.81 MiB
-128K token       × 131,072                      = 523,986,010,112 B
-                                                 = 488 GiB</code></pre>
-<p><b>一个用户、一段 128K 的输入，KV cache 488 GiB。</b></p>
-<p>摆三个对照，让这个数字站住：</p>
-<table>
-<thead><tr><th>对照物</th><th>数值</th><th>于是</th></tr></thead><tbody>
-<tr><td>一块 TPU v7 device 的 HBM</td><td>94.74 GB ≈ <b>88.23 GiB</b></td><td><b>一个用户的 KV 就要 5.5 个 device 装</b></td></tr>
-<tr><td>V3 的全部权重（671 B × 2 B）</td><td>1.342 TB ≈ <b>1250 GiB</b></td><td>单用户占权重的 <b>39%</b>；<b>三个并发用户就超过权重本身</b></td></tr>
-<tr><td>同样形状换成 GQA-8</td><td><b>30.50 GiB</b></td><td>16 倍，但还是装不进一块卡</td></tr>
-<tr><td>同样形状换成 MLA（V3 真实方案）</td><td><b>8.58 GiB</b></td><td><b>56.9 倍</b></td></tr>
-</tbody></table>
-<div class="note warn"><p>⚠️ <b>这个 488 GiB 是「假如 V3 用 MHA」的反事实数字，不是 V3 的实测值。</b> 而且这里沿用了 V3 论文比较表的口径（K、V 都按 d_h=128 算）； V3 真实的 K 每头是 128+64=192 维，所以严格算 MHA 基线还会更大一点。 讲的时候要说清楚这是自己按公式推的、口径是什么 —— 这门课自己的规矩：推出来的数字必须带推导链。</p></div>
-<p>推理场景更狠：并发用户越多，KV cache 线性叠加。 权重是所有用户共享的一份，KV cache 是每人一份。 所以 KV cache 不是显存里的一项开销，<b>它直接决定了你能同时服务多少人</b> —— 这一条到<a href="专题06-推理.md">专题六</a>会变成 batch size 的硬上限。</p>
-<div class="note info"><p>这一条是<b>工程账</b>：不解决它，长上下文根本上不了线。</p></div>
-<h3>2.2 线索 B · 信息本身不需要那么多</h3>
-<p>这条更有意思，也更少被讲。</p>
-<p><b>一个 128K 的序列，真的需要 128K 份独立的 KV 吗？</b></p>
-<p>几个可以摆出来的观察：</p>
-<ul><li><b>注意力矩阵实测是极其稀疏的</b> —— 绝大部分权重集中在很少的位置上， 剩下的近乎为零。那么把那些近零的算出来，算的是什么？</li><li><b>Attention sink</b> —— 模型会把大量注意力"停放"在序列最开头的几个 token 上， 跟内容无关。这说明注意力权重里有一部分根本不是在做检索</li><li><b>远近有别</b> —— 邻近几十个 token 的关注是密集、细粒度的； 几万 token 之外的关注是稀疏、粗粒度的。 <b>凭什么用同一套精度去处理这两种？</b></li><li>于是：<b>压缩</b>（远处的多个 token 合并成一个）、 <b>稀疏</b>（只挑相关的看）、<b>分层</b>（近处精细远处粗糙）都变得合理</li></ul>
-<div class="note info"><p>这一条是<b>信息账</b>：即使显存无限，把全部算力花在一个高度冗余的矩阵上也是浪费。</p></div>
-<h3>2.3 两条线的关系</h3>
-<p><b>A 说「必须省」，B 说「可以省而不太亏」。</b></p>
-<p>这两句话缺一不可：</p>
-<ul><li><b>只有 A</b>，你得到的是一堆有损压缩的权宜之计，效果掉了只能认</li><li><b>只有 B</b>，你没有动力去付 kernel 那么难写的代价</li><li><b>两条合起来</b>，才解释了为什么这个方向在过去三年里投入了这么多人 —— 它同时是一件<b>不得不做</b>和<b>做了不太亏</b>的事</li></ul>
-<p><b>所有变体都活在这两条线的交汇处。</b> 一个变体好不好，就看它在 「省了多少（A）」和「亏了多少（B）」之间落在哪。</p>
-<hr>
+<!-- ⛔⛔ 2026-09-12：2.1 / 2.2 / 2.3 原来是三段纯散文（合计 887 汉字、**0 张图**），
+     是全讲最严重的一处「说话多、画图少」。
+     ⭐ 而它们全都是**结构**不是叙述 —— 一条推导阶梯、四个对照、三个观察、
+       一个「缺一不可」的交汇。**结构就该画。**
+     现在整节压成：两句引子 ＋ 一张图 ＋ 两句图给不了的落点。
+     ⛔ 改这一段时切过一次头：按「2.1 的 h3 到下一个 h3」切，
+       **把夹在中间的 §三 节标题一起切掉了**（页面上第三节整个消失，构建不报错）。
+       ⭐ 判据：**切之前先看这中间还夹着什么** —— 这次改成按行号切，
+         并对首尾两行做断言。 -->
+<h3>2.1 ＋ 2.2 ＋ 2.3　两条线，一个交汇处</h3>
+<p><b>这两条必须分开讲。</b>它们指向同一批技术，<b>但出发点完全不同</b>
+  ——&nbsp;<em>混在一起讲，就成了名词罗列。</em></p>
+<figure class="fbox fwide" id="fig-motives"><svg viewBox="0 0 1400 595" width="100%" role="img" aria-label="长上下文的两条独立动机：左边是硬件账 —— 一个用户 128K 的 KV cache 按最朴素的 MHA 算是 488 GiB，要 5.5 块 v7；右边是信息账 —— 注意力矩阵极稀疏、有 attention sink、远近关注粒度不同；两条线交汇处才是所有变体的位置"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">为什么是现在 ——&#160;<tspan font-weight="700">两条完全独立的线，在同一个地方交汇</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⛔ 这两条必须分开讲：它们指向同一批技术，但出发点完全不同 ——&#160;混在一起讲就成了名词罗列</text>
+<rect x="0" y="72" width="672" height="322" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="72" width="672" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="74" width="672" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="102" x2="672" y2="102" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="92" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">线索 A · 硬件账算不过来</tspan></text>
+<text class="svgsm" x="186" y="92" fill="#5f6368" style="font-size:11.0px">结论：必须省。不解决它，长上下文根本上不了线</text>
+<text class="svgsm" x="16" y="108" fill="#5f6368" style="font-size:11.0px">拿 DeepSeek V3 砸体感（61 层 · 128 头 · 每头 128 维 · 128K · bf16）</text>
+<text class="svgsm" x="20" y="130" fill="#5f6368" style="font-size:12.0px">每 token 每层</text>
+<text class="svgsm" x="150" y="130" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">2 × 128 × 128</text>
+<text class="svgsm" x="330" y="130" fill="#5f6368" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace">32,768 个数</text>
+<text class="svgsm" x="20" y="154" fill="#5f6368" style="font-size:12.0px">× 61 层</text>
+<text class="svgsm" x="330" y="154" fill="#5f6368" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace">1,998,848 个数</text>
+<text class="svgsm" x="20" y="178" fill="#5f6368" style="font-size:12.0px">× 2 字节</text>
+<text class="svgsm" x="330" y="178" fill="#5f6368" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace">3.81 MiB / token</text>
+<text class="svgsm" x="20" y="202" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">× 131,072 token</tspan></text>
+<text class="svgsm" x="330" y="202" fill="#a50e0e" style="font-size:14.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">488 GiB</tspan></text>
+<text class="svgsm" x="560" y="202" fill="#a50e0e" style="font-size:11.0px"><tspan font-weight="700">← 一个用户</tspan></text>
+<text class="svgsm" x="20" y="240" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">摆三个对照，让这个数站住</tspan></text>
+<text class="svgsm" x="20" y="264" fill="#202124" style="font-size:11.0px">一块 v7 device 的 HBM</text>
+<rect x="232" y="254" width="119.65656344270164" height="13" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.4"/>
+<text class="svgsm" x="496" y="264" fill="#80868b" text-anchor="end" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">88.23 GiB</tspan></text>
+<text class="svgsm" x="506" y="264" fill="#80868b" style="font-size:11.0px">一个用户就要 5.5 块</text>
+<text class="svgsm" x="20" y="290" fill="#202124" style="font-size:11.0px">V3 全部权重（671B × 2B）</text>
+<rect x="232" y="280" width="190.0" height="13" rx="3" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="496" y="290" fill="#174ea6" text-anchor="end" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">1250 GiB</tspan></text>
+<text class="svgsm" x="506" y="290" fill="#80868b" style="font-size:11.0px">单用户占 39%；三个并发就超过权重</text>
+<text class="svgsm" x="20" y="316" fill="#202124" style="font-size:11.0px">换成 GQA-8</text>
+<rect x="232" y="306" width="91.91495747152983" height="13" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="496" y="316" fill="#b06000" text-anchor="end" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">30.50 GiB</tspan></text>
+<text class="svgsm" x="506" y="316" fill="#80868b" style="font-size:11.0px">省 16 倍 —— 还是装不进一块</text>
+<text class="svgsm" x="20" y="342" fill="#202124" style="font-size:11.0px">换成 MLA（V3 真实方案）</text>
+<rect x="232" y="332" width="60.19737046245097" height="13" rx="3" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="496" y="342" fill="#0d652d" text-anchor="end" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">8.58 GiB</tspan></text>
+<text class="svgsm" x="506" y="342" fill="#80868b" style="font-size:11.0px">省 56.9 倍</text>
+<text class="svgsm" x="20" y="376" fill="#a50e0e" style="font-size:12.0px">⛔ <tspan font-weight="700">权重是所有用户共享一份，KV cache 是每人一份</tspan>——&#160;所以它直接决定<tspan font-weight="700">你能同时服务多少人</tspan>。</text>
+<text class="svgsm" x="20" y="396" fill="#80868b" style="font-size:11.0px">⚠️ 488 是「假如 V3 用 MHA」的<tspan font-weight="700">反事实</tspan>值，不是实测 ——&#160;V3 从第一天就是 MLA。</text>
+<rect x="728" y="72" width="672" height="322" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="728" y="72" width="672" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="728" y="74" width="672" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="728" y1="102" x2="1400" y2="102" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="742" y="92" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">线索 B · 信息本身不需要那么多</tspan></text>
+<text class="svgsm" x="955" y="92" fill="#5f6368" style="font-size:11.0px">结论：可以省，而且不太亏</text>
+<text class="svgsm" x="744" y="108" fill="#5f6368" style="font-size:11.0px">128K 的序列，真需要 128K 份独立的 KV 吗？三个观察 ——</text>
+<rect x="752" y="128" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="137" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="137" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="146" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="146" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="770" y="146" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="155" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="155" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="770" y="155" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="779" y="155" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="164" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="164" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="770" y="164" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="779" y="164" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="788" y="164" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="173" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="173" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="770" y="173" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="779" y="173" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="788" y="173" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="797" y="173" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="182" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="182" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="770" y="182" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="779" y="182" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="788" y="182" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="797" y="182" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="806" y="182" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="191" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="191" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="770" y="191" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="779" y="191" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="788" y="191" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="797" y="191" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="806" y="191" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="815" y="191" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="200" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="200" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="770" y="200" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="779" y="200" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="788" y="200" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="797" y="200" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="806" y="200" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="815" y="200" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="824" y="200" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="849" y="146" fill="#202124" style="font-size:12.0px">① <tspan font-weight="700">实测极其稀疏</tspan></text>
+<text class="svgsm" x="849" y="164" fill="#5f6368" style="font-size:11.0px">绝大部分权重集中在很少的位置，其余近乎为零。</text>
+<text class="svgsm" x="849" y="182" fill="#80868b" style="font-size:11.0px">那把近零的那些算出来，算的是什么？</text>
+<rect x="752" y="233" width="7.5" height="7.5" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="761" y="233" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="770" y="233" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="779" y="233" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="788" y="233" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="797" y="233" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="806" y="233" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="815" y="233" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<rect x="824" y="233" width="7.5" height="7.5" rx="1" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="849" y="241" fill="#202124" style="font-size:12.0px">② <tspan font-weight="700">Attention sink</tspan></text>
+<text class="svgsm" x="849" y="259" fill="#5f6368" style="font-size:11.0px">注意力被大量「停放」在开头几个 token 上，<tspan font-weight="700">跟内容无关</tspan></text>
+<text class="svgsm" x="849" y="277" fill="#80868b" style="font-size:11.0px">——&#160;说明有一部分权重根本不是在做检索。</text>
+<rect x="752" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="752" y="299" width="5.5" height="10.66" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="759" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="759" y="299" width="5.5" height="10.66" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="766" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="766" y="299" width="5.5" height="10.66" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="773" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="773" y="299" width="5.5" height="10.66" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="780" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="780" y="299" width="5.5" height="10.66" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="787" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="787" y="299" width="5.5" height="10.66" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="794" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="794" y="299" width="5.5" height="10.66" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="801" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="801" y="299" width="5.5" height="10.66" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="808" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="808" y="299" width="5.5" height="7.15" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="815" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="815" y="299" width="5.5" height="7.15" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="822" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="822" y="299" width="5.5" height="7.15" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="829" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="829" y="299" width="5.5" height="7.15" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="836" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="836" y="299" width="5.5" height="7.15" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="843" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="843" y="299" width="5.5" height="7.15" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="850" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="850" y="299" width="5.5" height="0.0" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="857" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="857" y="299" width="5.5" height="0.0" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="864" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="864" y="299" width="5.5" height="0.0" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<rect x="871" y="299" width="5.5" height="13" rx="1" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="871" y="299" width="5.5" height="0.0" rx="1" fill="#fff" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="752" y="325" fill="#80868b" style="font-size:11.0px">远 ←</text>
+<text class="svgsm" x="856" y="325" fill="#80868b" style="font-size:11.0px">→ 近</text>
+<text class="svgsm" x="900" y="305" fill="#202124" style="font-size:12.0px">③ <tspan font-weight="700">远近有别</tspan></text>
+<text class="svgsm" x="900" y="323" fill="#5f6368" style="font-size:11.0px">邻近几十个 token 密集细粒度；几万之外稀疏粗粒度。</text>
+<text class="svgsm" x="900" y="341" fill="#80868b" style="font-size:11.0px"><tspan font-weight="700">凭什么用同一套精度处理这两种？</tspan></text>
+<text class="svgsm" x="748" y="358" fill="#0d652d" style="font-size:12.0px">⭐ 于是 <tspan font-weight="700">压缩</tspan>（远处多个合并成一个）、<tspan font-weight="700">稀疏</tspan>（只挑相关的看）、<tspan font-weight="700">分层</tspan>（近精细远粗糙）都变得合理。</text>
+<rect x="0" y="412" width="1400" height="126" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="412" width="4" height="126" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="412" width="3" height="126" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="436" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 两条缺一不可 ——&#160;所有变体都活在它们的交汇处</tspan></text>
+<text class="svgsm" x="20" y="460" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">只有 A</tspan>（必须省）：你得到的是一堆有损压缩的权宜之计，<tspan font-weight="700">效果掉了只能认</tspan>。</text>
+<text class="svgsm" x="20" y="481" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">只有 B</tspan>（可以省）：你<tspan font-weight="700">没有动力</tspan>去付 kernel 那么难写的代价。</text>
+<text class="svgsm" x="20" y="502" fill="#174ea6" style="font-size:12.0px">⭐⭐ <tspan font-weight="700">两条合起来</tspan>，才解释了为什么这个方向三年里投了这么多人——&#160;它同时是一件<tspan font-weight="700">不得不做</tspan>和<tspan font-weight="700">做了不太亏</tspan>的事。</text>
+<text class="svgsm" x="20" y="523" fill="#174ea6" style="font-size:12.0px">⭐ 所以判一个变体好不好，就看它在<tspan font-weight="700">「省了多少（A）」和「亏了多少（B）」</tspan>之间落在哪。</text>
+<text class="svgsm" x="0" y="554" fill="#80868b" style="font-size:11.0px">📌 左栏四行推导与四个对照值均按公式当场算出（脚本里带断言）；口径沿用 V3 论文比较表（K、V 都按 d_h=128）——&#160;<tspan font-weight="700">V3 真实的 K 每头是 128+64=192 维，严格算这个基线还会更大</tspan></text>
+<text class="svgsm" x="0" y="571" fill="#80868b" style="font-size:11.0px">　　⚠️ 右栏三个观察是<tspan font-weight="700">现象</tspan>，不是本课实测；它们各自对应后面的一支方案（稀疏 →&#160;§六、分层 →&#160;§六、压缩 →&#160;§五）</text>
+</svg><figcaption>⭐ <b>左边是硬件账（必须省），右边是信息账（可以省而不太亏）。</b><b>两条完全独立，却在同一个地方交汇 —— 所有变体都活在那儿。</b><em>判一个变体好不好，就看它在「省了多少」和「亏了多少」之间落在哪。</em></figcaption></figure>
+<div class="note bad"><p>⛔ <b>图上那 488 GiB 是「假如 V3 用 MHA」的反事实值</b>，
+  不是 V3 的实测 ——&nbsp;<b>V3 从第一天就是 MLA</b>。
+  <em>这门课自己的规矩：推出来的数必须带推导链和口径，图里两样都写了。</em></p></div>
+<p>⭐ 还有一句图上画不出来、后面却要反复用：
+  <b>KV cache 不是显存里的一项开销，它直接决定你能同时服务多少人</b>
+  ——&nbsp;<em>权重所有人共享一份，KV cache 每人一份。这一条到<b>专题六</b>
+  会变成 batch size 的硬上限。</em></p>
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>FlashAttention ——&nbsp;已经是标配，所以这一讲不展开它</h2></div>
 

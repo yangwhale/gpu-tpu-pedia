@@ -63,7 +63,8 @@ if [ "${1:-}" != "--lint" ]; then
   # ⛔ 画法基元在 topic03_draw.py，三个 fig 脚本共用一份 —— 别在各自脚本里另起一套。
   python3 topic03-fig-arc.py           # 总纲：这是一个什么故事（六段骨架）
   python3 topic03-fig-rnn.py           # §零 RNN 四张图（怎么算 / 为什么慢 / 解码又变回来 / 痛点通向哪）
-  python3 topic03-fig-mha.py           # §一 MHA 三张图（换掉了什么 / 在算什么 / 多头在多什么）
+  python3 topic03-fig-mha.py           # §一 MHA 四张图（换掉了什么 / 信息怎么流 / 在算什么 / 多头）
+  python3 topic03-fig-motives.py       # §二 两条动机线（硬件账 ＋ 信息账 ＋ 交汇处）
   python3 topic03-fig-chronicle.py     # 上半：时间轴 SVG
   # ⭐ 下半那张 39 行模型表现在是**可排序的 HTML 表**，不是 SVG ——
   #   两边读同一份 topic03_models.py，⛔ 数据只有一份。
