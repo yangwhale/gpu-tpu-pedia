@@ -85,41 +85,40 @@ def main():
         f.t(cx + 18, cy + 24, name, col, True, 12.5, w=CW - 90)
         f.t(cx + CW - 16, cy + 24, year, GY2, size=11, anchor="end")
 
-        # 矩阵
+        # ⛔⛔ 2026-09-14 二轮学生量了 WCAG 对比度：这八格原来靠**深浅**区分，
+        #   DeltaNet 底色 vs GDN 底色 **1.05 : 1**，I vs a·I 1.64 : 1 ——
+        #   在 2× DPI 的 PNG 上都分不出来，投影仪上就是八个一样的方块。
+        # ⭐ 判据：**别用深浅编码要「一眼看出来」的差别，用结构。**
+        #   现在：对角格里画一根**高度可变的竖条**（＝衰减强度），
+        #   秩一那一块另外盖一层**斜纹**（＝那个 −βkkᵀ）。
+        #   深浅只做辅助，拿掉颜色这张图照样读得出来。
         mx = cx + 18
         my = cy + 38
+        RANK1 = kind.startswith("rank1")
         for r in range(N):
             for c in range(N):
-                on, shade = False, 1.0
-                if kind == "eye":
-                    on = (r == c)
-                elif kind == "diag":
-                    on, shade = (r == c), 1.0 - r * 0.11
-                elif kind == "diag-chan":
-                    on, shade = (r == c), 0.45 + ((r * 3) % 5) * 0.13
-                elif kind == "scalar":
-                    on, shade = (r == c), 0.72
-                elif kind == "rank1":
-                    on = True
-                    shade = 1.0 if r == c else 0.22
-                elif kind == "rank1-decay":
-                    on = True
-                    shade = 0.7 if r == c else 0.18
-                elif kind == "rank1-chan":
-                    on = True
-                    shade = (0.4 + ((r * 2) % 4) * 0.2) if r == c else 0.18
-                elif kind == "full":
-                    on, shade = True, 0.55
-                if on:
-                    g = int(255 - shade * 150)
-                    fill = "#%02x%02x%02x" % (g, min(255, g + 18), 255 - int(shade * 60))
-                    if col == RD:
-                        fill = "#%02x%02x%02x" % (255, g, g)
-                    f.box(mx + c * CELL, my + r * CELL, CELL - 2, CELL - 2,
-                          fill, "none", 2)
-                else:
-                    f.box(mx + c * CELL, my + r * CELL, CELL - 2, CELL - 2,
-                          "#fff", LINE2, 2)
+                f.box(mx + c * CELL, my + r * CELL, CELL - 2, CELL - 2,
+                      "#fff", LINE2, 2)
+        if RANK1 or kind == "full":       # 整块底：秩一 / 全矩阵
+            f.box(mx, my, N * CELL - 2, N * CELL - 2,
+                  "#fce8e6" if kind == "full" else "#f1f3f4", "none", 3)
+            for k in range(-N, N):        # 斜纹，表示「一整块都被动了」
+                f.line(mx + k * CELL, my, mx + (k + N) * CELL,
+                       my + N * CELL - 2, LINE2, 0.8)
+        for r in range(N):                # 对角线上的竖条：高度 = 衰减强度
+            v = {"eye": 1.0,
+                 "diag": 1.0 - r * 0.105,
+                 "diag-chan": 0.35 + ((r * 3) % 5) * 0.16,
+                 "scalar": 0.62,
+                 "rank1": 1.0,
+                 "rank1-decay": 0.62,
+                 "rank1-chan": 0.3 + ((r * 2) % 4) * 0.23,
+                 "full": 0.55}[kind]
+            h = max(2.0, (CELL - 2) * v)
+            bar = "#d93025" if col == RD else col
+            f.box(mx + r * CELL, my + r * CELL + (CELL - 2 - h), CELL - 2, h,
+                  bar, "none", 2)
+
         f.t(mx + N * CELL + 16, my + 18, form, INK, True, 12,
             w=CW - N * CELL - 44)
         f.t(mx + N * CELL + 16, my + 44, "修了什么", GY2, size=11)
@@ -128,14 +127,14 @@ def main():
 
         # ⭐ 2026-09-13：投影上「深浅」分不开，补一行结构标签 ——
         #   让差别靠**读得出来的词**传达，不靠像素亮度。
-        SHAPE = {"eye": "只有对角线，全同",
-                 "diag": "对角线，同一个固定的 γ",
-                 "diag-chan": "对角线，逐通道各定各的，依输入变",
-                 "scalar": "对角线，整块同一个标量",
-                 "rank1": "对角线 ＋ 一整块秩一",
-                 "rank1-decay": "秩一块 ＋ 对角线整体变淡",
-                 "rank1-chan": "秩一块 ＋ 对角线逐通道不同",
-                 "full": "全满 —— 没有结构可利用"}
+        SHAPE = {"eye": "对角线，竖条等高（全同）",
+                 "diag": "对角线，竖条逐行变矮（固定 γ）",
+                 "diag-chan": "对角线，竖条高低不齐（逐通道）",
+                 "scalar": "对角线，竖条等高但矮一截（×a）",
+                 "rank1": "斜纹整块 ＋ 对角竖条等高",
+                 "rank1-decay": "斜纹整块 ＋ 对角竖条整体变矮",
+                 "rank1-chan": "斜纹整块 ＋ 对角竖条高低不齐",
+                 "full": "整块红底 —— 没有结构可利用"}
         f.t(mx, my + N * CELL + 16, SHAPE[kind], col if col != GY else GY2,
             True, 11, w=CW - 36)
 
@@ -176,8 +175,10 @@ def main():
                "DeltaNet arXiv 2102.11174（2021）与并行化 arXiv 2406.06484、"
                "Mamba-2 / SSD arXiv 2405.21060、GDN arXiv 2412.06464、"
                "KDA（Kimi Linear）arXiv 2510.26692",
-               "⚠️ 矩阵缩略图是<tspan font-weight=\"700\">示意</tspan>：只画结构（哪里非零、"
-               "深浅代表是否逐通道不同），不代表真实数值")
+               "⚠️ 矩阵缩略图是<tspan font-weight=\"700\">示意</tspan>：只画结构 ——&#160;"
+               "<tspan font-weight=\"700\">对角竖条的高度</tspan>代表衰减强度、"
+               "<tspan font-weight=\"700\">斜纹</tspan>代表「一整块都被动了」（那个 −βkkᵀ），"
+               "<tspan font-weight=\"700\">不代表真实数值</tspan>")
     f.save("fig3-at-gallery.svg", yy + 6)
 
 

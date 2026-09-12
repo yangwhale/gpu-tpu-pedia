@@ -56,6 +56,10 @@ def main():
     f.t(330, ay + 4, "128K 单用户", GY, bold=True, size=11)
     f.t(430, ay + 4, "相对 MHA", GY, bold=True, size=11)
     mx = VAR[0][1]
+    BX, BARW = 496, 62          # 真实线性刻度：488 GiB 占满 62px
+    ZX, ZOOMW = 566, 62         # 放大镜：以 GQA-8 的 30.50 GiB 为满格
+    f.t(BX, ay + 4, "真实比例", GY, bold=True, size=11)
+    f.t(ZX, ay + 4, "放大 16×", GY2, bold=True, size=11)
     for i, (nm, per, desc, col, heads) in enumerate(VAR):
         yy = ay + 26 + i * 46
         f.t(16, yy + 4, nm, col, bold=True, size=_sz(13))
@@ -66,9 +70,18 @@ def main():
         f.t(430, yy + 4, "—" if i == 0 else "省 %.0f×" % (mx / per),
             GY2, size=11)
         f.t(16, yy + 22, desc, GY2, size=11)
-        bw = max(3, 150 * (per / float(mx)) ** 0.35)
-        f.box(500, yy - 5, bw, 12, "#fff", col, 3, 1.3)
+        bw = max(1.0, BARW * per / float(mx))
+        f.box(BX, yy - 5, bw, 12, col, col, 2)
+        if per != mx:                       # 放大镜：后三根用自己的基准再画一遍
+            zw = max(2.0, ZOOMW * per / float(VAR[1][1]))
+            f.box(ZX, yy - 5, zw, 12, "#fff", col, 2, 1.2)
 
+    f.t(16, ay + PH - 100,
+        "⭐ <tspan font-weight=\"700\">左列是真实线性比例</tspan>，后三根细到几乎看不见 ——&#160;"
+        "这正是要的画面（MQA 是 MHA 的 0.78%）。", GY2, size=11, w=CW - 32)
+    f.t(16, ay + PH - 84,
+        "右列换了基准（满格 ＝ GQA-8 的 30.50 GiB），才看得出后三者之间的差。",
+        GY2, size=11, w=CW - 32)
     f.t(16, ay + PH - 74,
         '⭐⭐ <tspan font-weight="700">题眼在这儿：MQA 只要 3.81 GiB，'
         '比 MLA 的 8.58 还小 2.25 倍。</tspan>', RD, size=_sz(12.5))

@@ -39,6 +39,16 @@ def main():
 
     MW = 250
     TOP = y + 26
+    # 128K 上下文下**真正被读到**的那一份占全部历史的比例。
+    # ⚠️ CSA 那格留空：V4 报的 2% 是 1M 下的**存储**口径、基线也不是这里的全注意力，
+    #   ⭐ 与其凑一个可比的假数，不如把「不可比」写在图上。
+    REAL = [
+        (1.0, "真实比例：100%（基线）"),
+        (4096 / 131072.0, "真实比例：3.1%（窗口 4096 / 128K）"),
+        (4100 / 131072.0, "真实比例：3.1% ＋ 4 个 sink"),
+        (2048 / 131072.0, "真实比例：1.56%（k=2048 / 128K）"),
+        (0.0, "⚠️ 口径不同，不能并排比（见下）"),
+    ]
     MASKS = [
         ("全注意力", GY, "基线：下三角全算", "O(L²)，KV 随长度线性涨",
          lambda r, c: c <= r),
@@ -47,14 +57,14 @@ def main():
          lambda r, c: c <= r and r - c < 4),
         ("＋ Attention sink", RD, "滑窗 ＋ 留住最开头 4 个",
          "⭐ 只留 4 个就够，扔了立刻崩",
-         lambda r, c: (c <= r and r - c < 4) or c < 1),
+         lambda r, c: (c <= r and r - c < 4) or c < 4),
         ("DSA 学着挑", BL, "Indexer 给每个 query 挑 top-k",
          "128K → 2K，64 倍；k=2048",
          lambda r, c: c <= r and (r - c < 2 or c < 1 or (c * 7 + r * 3) % 11 == 0)),
         ("CSA 先压再挑", PU, "每 4 个 token 压成 1 个，再在压缩后挑",
          "V4：1M 下 KV 降到约 2%",
-         lambda r, c: c <= r and ((c // 2) * 2 == c) and
-                      (r - c < 3 or (c * 5 + r) % 9 == 0)),
+         lambda r, c: c <= r and (r - c < 3
+                                  or (c % 4 == 0 and (c * 5 + r) % 9 < 5))),
     ]
     for i, (nm, col, how, cost, fn) in enumerate(MASKS):
         x = i * (MW + 37)
@@ -69,13 +79,31 @@ def main():
                 f.box(x + c * C, gy_ + r * C, C - 1.2, C - 1.2,
                       col if on else "#eef1f3", "none", 1)
         f.t(x, gy_ + N * C + 18, cost, col, size=11, w=MW)
+        # ── 按真实比例的一条细带（16×16 的格子撑不住 1.56% 这种量级）──
+        fr, note = REAL[i]
+        by_ = gy_ + N * C + 30
+        f.box(x, by_, MW - 12, 9, "#fff", LINE, 2)
+        f.box(x + 0.8, by_ + 0.8, max(0.8, (MW - 13.6) * fr), 7.4, col,
+              "none", 2)
+        f.t(x, by_ + 24, note, GY2, size=11, w=MW)
 
     yy = gy_ + N * C + 34
 
     # ⭐ 2026-09-12：这一条原来写的是「先用便宜办法决定看哪些」——&nbsp;对，但泛。
     #   教材 6.6 那个「三条路」框架更准，而且它原来是 <pre> 里的 ASCII 画 ——
     #   ⭐ **ASCII 画本来就是「想画图但手边只有文本」的产物**，搬进真图里。
-    yy = f.band(yy, "info", "五张 mask 摆在一起，这一支的共同结构就出来了", [
+    yy = f.band(yy, "warn", "⚠️ 先说清楚这五张图怎么读 —— 格子是示意，细带才是真比例", [
+        "16×16 的格子<tspan font-weight=\"700\">撑不住 1.56% 这种量级</tspan>："
+        "画得出来的最细的窗口也有 1/16 ＝ 6%，而真实是 1.56%～3.1%。"
+        "⭐ 所以每张下面加了一条<tspan font-weight=\"700\">按真比例画的细带</tspan>。",
+        "⛔ 读格子看<tspan font-weight=\"700\">形状</tspan>（哪里有、哪里没有），"
+        "读细带看<tspan font-weight=\"700\">狠不狠</tspan>。"
+        "⚠️ CSA 那条空着是故意的：V4 报的 2% 是 <tspan font-weight=\"700\">1M 下的存储量</tspan>，"
+        "跟前四条的「128K 下读多少」<tspan font-weight=\"700\">不是一个口径</tspan> ——&#160;"
+        "凑一个可比的假数还不如把「不可比」写在图上。",
+    ])
+
+    yy = f.band(yy + 14, "info", "五张 mask 摆在一起，这一支的共同结构就出来了", [
         '<tspan font-weight="700">同一个骨架，三条路</tspan>：'
         '<tspan font-weight="700">粗看</tspan>（压缩／全局，保证不漏）＋'
         '<tspan font-weight="700">细看</tspan>（挑出来的 top-k，保证准）＋'

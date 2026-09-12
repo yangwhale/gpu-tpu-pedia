@@ -55,7 +55,7 @@ def main():
         [(GR, "先于 DSA 的经验事实"), (RD, "鸡生蛋的难点"),
          (BL, "让真注意力当老师"), (PU, "设计决策"), (OR, "硬件约束")])
 
-    ph = 412
+    ph = 534
 
     # ══ ① 能不能只看一小部分 ════════════════════════════════════
     x, pw = PX[0], PW[0]
@@ -76,23 +76,67 @@ def main():
         size=11)
     yy += 92
 
-    # 幂律小图：少数几根高柱 ＋ 一条贴地长尾
-    f.t(x + 24, yy, "幂律长什么样", GY, True, 12)
-    yy += 10
-    bx, bw, bh = x + 24, pw - 48, 68
-    f.box(bx, yy, bw, bh, "#fff", LINE, 6)
+    # ⛔⛔ 2026-09-14 二轮学生审稿逆算：这里原来画 46 根 h ∝ i^-0.85 的柱子，
+    #   **画出来的分布正面反驳它下面那行字** —— 按那个指数，前 5% 只吃掉 27%，
+    #   而字写的是「5% 就够」。⭐ 判据：**要论证「前一小撮就够」，该画的是
+    #   累计曲线，不是密度柱** —— 柱状图给不出「前 x% 一共占多少」这个量。
+    # ⭐⭐ 而且改成累计之后，一件更值钱的事自己冒出来了：
+    #   本课手上那两个公开锚点（H2O 的「5%→95%」与 Chen 的「20%→70%」）
+    #   **互相打架**，把它们各自的曲线画出来，k=2048 在两条线上分别落到
+    #   93% 和 40% —— 这正好解释了 DSA 为什么必须**训练**索引器，
+    #   而不是套一个稀疏度常数。
     import math
-    n = 46
-    for i in range(n):
-        v = 1.0 / (1 + i) ** 0.85
-        h = max(1.4, v * (bh - 16))
-        col = GR if i < 3 else (LINE2 if i > 8 else "#a8dab5")
-        f.box(bx + 8 + i * (bw - 16) / float(n), yy + bh - 8 - h,
-              (bw - 16) / float(n) - 1.2, h, col, "none", 1)
-    f.t(bx + 8, yy + bh + 16, "前几个吃掉大半", GR, size=11)
-    f.t(bx + bw - 8, yy + bh + 16, "长尾每个都接近 0", GY2, size=11,
+    f.t(x + 24, yy, "把两个公开口径各自画成累计曲线", GY, True, 12)
+    yy += 10
+    bx, bw, bh = x + 24, pw - 48, 92
+    f.box(bx, yy, bw, bh, "#fff", LINE, 6)
+    X0, X1 = bx + 30, bx + bw - 12
+    Y0, Y1 = yy + bh - 14, yy + 8            # y: 0% 在下，100% 在上
+    LO = 0.002                               # 横轴 log 从 0.2% 到 100%
+
+    def px(fr):
+        return X0 + (X1 - X0) * (math.log(fr / LO) / math.log(1.0 / LO))
+
+    def py_(v):
+        return Y0 + (Y1 - Y0) * v
+
+    # 两条 F(x) = x^b，各自过自己那个已发表的点
+    CURVES = [
+        ("H2O：前 5% → 95%", 0.05, 0.95, GR),
+        ("Chen 2024：前 20% → 70%", 0.20, 0.70, OR),
+    ]
+    for lab, ax_, ay_, col in CURVES:
+        b = math.log(ay_) / math.log(ax_)
+        pts = []
+        for k in range(61):
+            fr = LO * (1.0 / LO) ** (k / 60.0)
+            pts.append((px(fr), py_(min(1.0, fr ** b))))
+        f.path(pts, col, 1.8)
+        f.spot(px(ax_), py_(ay_), col, 3.2)
+
+    # DSA 的工作点：1.56%
+    f.line(px(frac / 100.0), Y1 - 2, px(frac / 100.0), Y0 + 4, RD, 1.2,
+           dash="3 3", arrow=False)
+    f.t(px(frac / 100.0), Y1 - 6, "k=2048", RD, True, 11, "middle")
+    for v, lab in ((1.0, "100%"), (0.5, "50%"), (0.0, "0")):
+        f.t(bx + 26, py_(v) + 4, lab, GY2, size=11, anchor="end")
+    f.t(X0, Y0 + 16, "0.2%", GY2, size=11)
+    f.t(X1, Y0 + 16, "100%　取了多少比例的位置（对数）", GY2, size=11,
         anchor="end")
-    yy += bh + 30
+    yy += bh + 24
+    for lab, ax_, ay_, col in CURVES:
+        b = math.log(ay_) / math.log(ax_)
+        f.t(x + 24, yy, lab, col, True, 11.5)
+        f.t(x + pw - 24, yy, "→ 1.56%% 处覆盖 %.0f%%" % (100 * (frac / 100.0) ** b),
+            col, True, 11.5, anchor="end")
+        yy += 18
+    yy += 8
+    f.t(x + 24, yy, "⛔ <tspan font-weight=\"700\">两个公开口径差了一倍多</tspan> ——&#160;"
+        "所以「几%就够」不是常数。", RD, size=11.5, w=pw - 48)
+    yy += 20
+    f.t(x + 24, yy, "⭐ 这正是 DSA 为什么要<tspan font-weight=\"700\">训练</tspan>索引器："
+        "它不赌分布，它去学。", GR, True, 11.5, w=pw - 48)
+    yy += 24
 
     f.box(x + 24, yy, pw - 48, 48, "#fff", LINE, 8)
     f.t(x + 40, yy + 21, "DSA 取 k = 2,048；128K 上下文下 ——", GY, size=11.5)
@@ -181,13 +225,19 @@ def main():
     yy = y0 + ph + 22
     yy = f.band(yy, "warn", "那 2048 这个数到底怎么来的 —— 老实说：论文没给消融", [
         ("能说的只有三件事：① 128K 下它占 <tspan font-weight=\"700\">{:.2f}%</tspan>；"
-         "② H2O 量到的稀疏度是 95% 以上，"
-         "<tspan font-weight=\"700\">1.6% 比那还狠 ——&#160;它靠的是「挑得准」不是「挑得多」</tspan>；"
+         "② 两个公开口径（H2O 前 5%→95%、Chen 前 20%→70%）在 1.56% 处"
+         "<tspan font-weight=\"700\">分别给 93% 和 40%</tspan> ——&#160;"
+         "<tspan font-weight=\"700\">差一倍多，所以它靠的是「挑得准」不是「挑得多」</tspan>；"
          ).format(frac),
         "③ <tspan font-weight=\"700\">历史不足 2048 时，top-2048 就是全选</tspan>"
         "——&#160;这是定义直接推出来的，所以短上下文下 DSA 就是普通 MLA，"
         "<tspan font-weight=\"700\">稀疏只在长上下文才启动</tspan>。",
-        "⚠️ 别把「95% 稀疏」当普适常数 ——&#160;那是 H2O 在它测的那批模型上量的。",
+        "⚠️ 别把「95% 稀疏」当普适常数 ——&#160;那是 H2O 在它测的那批模型上量的，"
+        "而 Chen 2024 在别的模型上量到「前 20% 只覆盖 70%」。"
+        "⭐ <tspan font-weight=\"700\">两个都发表了，两个都对 ——&#160;对的是各自那批模型。</tspan>",
+        "⛔ 左栏那两条曲线是<tspan font-weight=\"700\">各自只过一个已发表点的示意拟合</tspan>"
+        "（F(x)=x^b），<tspan font-weight=\"700\">不是实测曲线</tspan> ——&#160;"
+        "画它是为了说明「几%就够」随分布变，不是为了给一个精确覆盖率。",
     ])
 
     yy = f.band(yy + 14, "ok", "暗线第三次出现：事后压 vs 从头按压缩训", [
