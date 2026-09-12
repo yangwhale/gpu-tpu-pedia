@@ -92,14 +92,15 @@ def main():
     f.t(x + 26, yy, "⭐ 一次确定性映射不会凭空造出信息",
         BL, True, 13, cls="svglbl")
     yy = f.lines(x + 26, yy + 24, PW - 52, [
-        "把一张纸复印 128 份，信息还是那一张 ——",
-        "复印件再多，也回答不了原件回答不了的问题。"], 11.5, 19)
+        "K、V 是 h 的一个<tspan font-weight=\"700\">线性像</tspan>，秩不超过 7,168 ——",
+        "所以存 h 再现算，一个 bit 都不少。"], 11.5, 19)
 
     yy += 12
     f.box(x + 26, yy, PW - 52, 56, "#fff", BL, 8)
     f.t(x + 40, yy + 23, "32,768 ÷ 7,168 ＝ %.2f 倍" % free, BL, True, 13.5,
         cls="svglbl")
-    f.t(x + 40, yy + 43, "这一段是<tspan font-weight=\"700\">白送的</tspan> —— 不损失任何东西", GY, size=11.5)
+    f.t(x + 40, yy + 43, "⚠️ 前提：2·n_h·d_h ÷ d_model &gt; 1（V3 ＝ 4.57）",
+        GY, size=11.5)
 
     # ══ ② 那为什么还是存结果 ════════════════════════════════════
     x = PX[1]
@@ -133,8 +134,8 @@ def main():
     f.box(x + 26, yy, PW - 52, 66, "#fff", PU, 8)
     f.box(x + 26, yy, 4, 66, PU, PU, 2)
     f.box(x + 28, yy, 3, 66, "#fff", "#fff", 0)
-    f.t(x + 44, yy + 25, "第二步　原料也不全存，压到 512", PU, True, 12.5)
-    f.t(x + 44, yy + 48, "⭐ 这等于强制 W<tspan baseline-shift=\"super\" font-size=\"8\">K</tspan> 的秩 ≤ 512 —— 这一步是赌注",
+    f.t(x + 44, yy + 25, "第二步　压到 512 ＋ 64 维 RoPE ＝ 576", PU, True, 12.5)
+    f.t(x + 44, yy + 48, "⭐ 等于强制 K 与 V <tspan font-weight=\"700\">合起来</tspan>那个映射的秩 ≤ 512",
         GY, size=11.5)
     f.t(x + PW - 40, yy + 25, "赌 %.1f×" % bet, PU, True, 12, "end")
 
@@ -190,6 +191,15 @@ def main():
         "到了 §六，同一个对立会换成"
         "<tspan font-weight=\"700\">推理期稀疏 对 native 稀疏</tspan>。"
         "⭐ 两次的结论一样：<tspan font-weight=\"700\">后者掉点小得多。</tspan>",
+    ])
+
+    yy = f.band(yy + 14, "warn", "三条前提，缺一条这套账就不成立", [
+        "⚠️ 那 4.57 倍<tspan font-weight=\"700\">不是普适的</tspan>：它等于 "
+        "2·n_h·d_h ÷ d_model，<tspan font-weight=\"700\">只在「注意力比残差流宽」的模型上大于 1</tspan>。"
+        "V3 宽 2.29 倍所以是 4.57；很多 GQA 模型这个比值小于 1 ——&#160;"
+        "<tspan font-weight=\"700\">那里根本没有「白送」这一段。</tspan>",
+        "⚠️ 被约束的是 <tspan font-weight=\"700\">K 和 V 合起来</tspan>那个映射（两者共用同一个 c），"
+        "比「只压 K」狠得多；带 RoPE 的那 64 维<tspan font-weight=\"700\">另走一路，不在这个约束里</tspan>。",
     ])
 
     yy = f.band(yy + 14, "warn", "口径，别讲过头", [

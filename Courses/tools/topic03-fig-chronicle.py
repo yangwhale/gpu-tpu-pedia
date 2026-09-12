@@ -103,7 +103,7 @@
 
    ⭐⭐⭐ **而「全注意力撑不起长上下文」这个直觉，被量化成了一整列。**
    于是加了「上下文」这一列，扫下来的结论硬得出乎意料：
-   **做到 1M 以上的八家，无一例外都动了旋钮②或③；纯全注意力那一档最高只到 256K。**
+   **做到 1M 以上的十三家，无一例外都动了旋钮②或③；纯全注意力那一档最高只到 288K（Mistral Large 3）。**
    最硬的对照来自 MiniMax 自己：**01 用 7:1 线性做到 10M
    （config 写着 `10240000`），M2 退回纯全注意力只剩 192K（`196608`）——&nbsp;
    同一家、同一批人，改一处架构差 50 倍。**
@@ -310,7 +310,7 @@
 
 ⭐⭐ **2026-09-07 补了混元和 GLM 之后，多出来一条原先看不见的线：**
    混元 Hy4 的 **IndexCache** 和 GLM-5.2 的 **IndexShare** 是同一个想法 ——&nbsp;
-   两家的 `indexer_types` 都是 `full, shared, shared, shared` 四层一循环。
+   两家的 `indexer_types` 都是 `full, shared, shared, shared` 稳态四层一循环（前几层各家不同）。
    **稀疏的第二阶段优化不再是「让每个 query 少看几块」，
    而是「别每层都重新算一遍该看谁」——&nbsp;索引本身变成了新的开销。**
    这是 2026 年才冒出来的一层，值得单独占时间轴上一个点。
@@ -334,7 +334,7 @@
    · **GLM-5.2**（2026-06-16，z.ai 博客＋HF config）744B，`GlmMoeDsaForCausalLM`，
      `index_topk_freq: 4`，官方原话「uses the same indexer across every four
      sparse attention layers, reducing per-token FLOPs by 2.9× at a 1M context」
-   · **GLM-5.3-Flash**（2026-08-26，z.ai 博客＋HF config＋vLLM recipe）321B/18B，
+   · **GLM-5.3-Flash**（2026-08-26，z.ai 博客＋HF config＋vLLM recipe）320B/18B，
      `layer_types` 是 `linear×3 → deepseek_sparse_attention×1` 循环，
      45 层 ＝ **34 KDA ＋ 11 稀疏 MLA**（NoPE），GLM 家族**第一次线性和稀疏同锅**
 """
@@ -430,7 +430,7 @@ LANES = (
         (2023, "SWA · sink"), (2025, "NSA · DSA"), (2026, "CSA＋HCA · MSA"),
         # ⭐ 2026 多出来的**第二阶段**：不是「少看几块」，是「别每层重算该看谁」。
         #    GLM-5.2 叫 IndexShare、混元 Hy4 叫 IndexCache，两家的 indexer_types
-        #    都是 full,shared,shared,shared 四层一循环 —— 撞了同一个想法。
+        #    都是 full,shared,shared,shared 稳态四层一循环（前几层各家不同） —— 撞了同一个想法。
         (2026, "IndexShare · IndexCache"),
     ]),
     # ⛔ 2026-09-07：这条泳道原先**漏了整条 Mamba/SSM 主干**，而它不是"另一支"，
@@ -566,7 +566,7 @@ t(16, FY + 24, '⭐ 全图落点：三家公司，各自把旋钮拧了一遍 �
 #    左边留 118px 给公司名，三行对齐。
 for i, (who, arc) in enumerate((
         ('MiniMax',
-         '线性（M1）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）'
+         '线性（01）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）'
          '→&#160;<tspan font-weight="700">稀疏</tspan>（M3）'
          '——&#160;三次转向，每次都公开写了为什么'),
         ('腾讯混元',
@@ -586,7 +586,7 @@ t(16, FY + 122, '⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多�
 t(16, FY + 142, '混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 '
                 'GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：'
                 '两家的 <tspan font-weight="700">indexer_types</tspan> 都是 '
-                '<tspan font-weight="700">full, shared, shared, shared</tspan> 四层一循环 '
+                '<tspan font-weight="700">full, shared, shared, shared</tspan> 稳态四层一循环（前几层各家不同） '
                 '——&#160;每 4 层只有 1 层自己算索引。', fill="#174ea6")
 _LAST = FY + 160
 t(16, _LAST, '⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，'

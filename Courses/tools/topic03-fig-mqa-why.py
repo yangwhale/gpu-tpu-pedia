@@ -39,7 +39,7 @@ def main():
 
     # ── ② 那张消融表（Shazeer 1911.02150 表 4）─────────────────
     ABL = [
-        ("multi-head", "h=8, d_k=128", 29.9, "128 份 K/V", GY),
+        ("multi-head", "h=8, d_k=128", 29.9, "8 份 K/V", GY),
         ("multi-query", "h=8, 共用 1 份", 30.2, "1 份 K/V", GR),
         ("multi-head", "h=1, d_k=128", 31.2, "1 份 K/V", RD),
     ]
@@ -204,7 +204,8 @@ def main():
     ])
 
     yy = f.src(yy + 16,
-               "① 与 ② 出自 MQA 原论文 Shazeer arXiv 1911.02150（§2.4 与表 4，"
+               "① 与 ② 出自 MQA 原论文 Shazeer arXiv 1911.02150（§2.4 与表 3 ——&#160;"
+               "⚠️ 这篇一共只有 3 张表，"
                "Billion-Word LM 基准的 dev 困惑度）；「正交」是原文用词",
                "③ 出自 GQA 原论文 Ainslie 等 arXiv 2305.13245 §2.1–2.2："
                "mean pooling、α=5% 续训、GQA-1=MQA / GQA-H=MHA")

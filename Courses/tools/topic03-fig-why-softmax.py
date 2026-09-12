@@ -50,8 +50,8 @@ def main():
 
     # ══ ① softmax 要服务的是加权平均 ════════════════════════════
     x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 为什么是 softmax", GR,
-                 sub="先看它要服务什么")
+    py = f.panel(x, y0, pw, ph, "① softmax 一次满足了哪三件事", GR,
+                 sub="⚠️ 不是「必需」，是一揽子便宜")
 
     yy = py + 24
     f.box(x + 22, yy, pw - 44, 50, "#fff", INK, 8)
@@ -59,12 +59,12 @@ def main():
     f.t(x + 38, yy + 40, "o ＝ Σ 权重 × value", GY, size=11.5, mono=True)
     yy += 64
 
-    f.t(x + 22, yy, "于是权重被逼出三条硬要求：", GY, size=12)
+    f.t(x + 22, yy, "于是权重顺手拿到了三件事：", GY, size=12)
     yy += 20
     for need, why, col in [
-        ("非负", "「负着看一眼」没有意义", GR),
-        ("加起来等于 1", "否则输出尺度随序列长度乱飘", GR),
-        ("可导", "否则「该看哪儿」学不出来", GR),
+        ("非负 ＋ 和为 1", "输出是 value 的<tspan font-weight=\"700\">凸组合</tspan>", GR),
+        ("尺度稳定", "输出大小不随序列长度乱飘", GR),
+        ("可导", "能用普通反传学「该看哪儿」", GR),
     ]:
         f.box(x + 22, yy, pw - 44, 46, "#fff", col, 8)
         f.t(x + 38, yy + 20, need, col, True, 12)
@@ -75,7 +75,7 @@ def main():
     f.box(x + 22, yy, pw - 44, 78, "#fff", GR, 8)
     f.box(x + 22, yy, 4, 78, GR, GR, 2)
     f.box(x + 24, yy, 3, 78, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 24, "softmax 三条全中，还附送一条：", GR, True, 12.5)
+    f.t(x + 40, yy + 24, "⭐ 一次全拿到，还附送一条：", GR, True, 12.5)
     f.t(x + 40, yy + 46, "<tspan font-weight=\"700\">指数把差距放大</tspan> ——&#160;它像一个", GY, size=11.5)
     f.t(x + 40, yy + 66, "<tspan font-weight=\"700\">能求导的 argmax</tspan>：既能聚焦，又留着梯度", GY,
         size=11.5)
@@ -159,7 +159,18 @@ def main():
 
     # ══ 落点带 ══════════════════════════════════════════════════
     yy = y0 + ph + 22
-    yy = f.band(yy, "info", "⭐⭐ 优点和副作用，常常是同一条性质", [
+    yy = f.band(yy, "bad", "⛔⛔ 这三条<tspan font-weight=\"700\">都不是必需的</tspan> —— 而这一讲后面三节，分别在放松其中一条", [
+        "放松<tspan font-weight=\"700\">「和为 1」</tspan> → §六 的 attention sink："
+        "可学的 sink logit、softmax-off-by-one，都让一行的总和可以小于 1。",
+        "放松<tspan font-weight=\"700\">「非负 ＋ 凸组合」</tspan> → §七 的线性注意力："
+        "q·S 是一个<tspan font-weight=\"700\">有符号的线性组合</tspan>，三条一条不剩，照样能用。",
+        "放松<tspan font-weight=\"700\">「可导」</tspan> → §六 的 DSA："
+        "top-k 本来就不可导 ——&#160;它把索引器<tspan font-weight=\"700\">从计算图上摘下来</tspan>单独训。",
+        "⭐ 所以这一格<tspan font-weight=\"700\">不是在论证 softmax 非它不可</tspan>，"
+        "是在给你一张<tspan font-weight=\"700\">目录</tspan>：后面每放松一条，就长出一支方案。",
+    ])
+
+    yy = f.band(yy + 14, "info", "⭐⭐ 优点和副作用，常常是同一条性质", [
         "softmax 那条「<tspan font-weight=\"700\">一行加起来等于 1</tspan>」，"
         "在这里是<tspan font-weight=\"700\">优点</tspan>（让加权平均的尺度稳定）；"
         "到了 §六，同一条性质就是 <tspan font-weight=\"700\">attention sink 的成因</tspan>"

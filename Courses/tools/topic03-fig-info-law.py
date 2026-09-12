@@ -143,21 +143,23 @@ def main():
     for knob, what, order, verdict, col in [
         ("旋钮① 每份更小", "MLA / GQA 压的是<tspan font-weight=\"700\">每个 token 存多少</tspan>",
          "阶还是 L，动的是常数", "安全", GR),
-        ("旋钮② 每步少读", "KV <tspan font-weight=\"700\">照样全存</tspan>，只是这一步不读它",
-         "状态仍是 L；CSA 横压也只是常数", "安全", GR),
+        ("旋钮② 动态挑选", "DSA / NSA / CSA：KV <tspan font-weight=\"700\">照样全存</tspan>，只是不读",
+         "状态仍是 L", "安全", GR),
+        ("旋钮② 固定窗口", "纯 SWA：窗口外的<tspan font-weight=\"700\">直接扔了</tspan>",
+         "状态是 O(W) 常数", "同罪", RD),
         ("旋钮③ 固定状态", "把历史压成一个<tspan font-weight=\"700\">不随长度增长</tspan>的东西",
-         "阶掉到 O(1)", "必然违反", RD),
+         "阶掉到 O(1)", "同罪", RD),
     ]:
-        h = 104
+        h = 82
         f.box(x + 22, yy, pw - 44, h, "#fff", col, 8)
         f.box(x + 22, yy, 4, h, col, col, 2)
         f.box(x + 24, yy, 3, h, "#fff", "#fff", 0)
         f.t(x + 40, yy + 25, knob, col, True, 12.5)
         f.t(x + pw - 38, yy + 25, verdict, col, True, 12.5, "end")
         f.t(x + 40, yy + 50, what, GY, size=11.5, w=pw - 76)
-        f.t(x + 40, yy + 72, order, GY2, size=11, w=pw - 76)
+        f.t(x + 40, yy + 70, order, GY2, size=11, w=pw - 190)
         if col == RD:
-            f.t(x + 40, yy + 92, "→ 所以它<tspan font-weight=\"700\">只能混着用</tspan>", RD, True, 12)
+            f.t(x + pw - 38, yy + 46, "只能混着用", RD, True, 11.5, "end")
         yy += h + 10
     fits(yy, y0, ph, "③")
 
@@ -172,14 +174,21 @@ def main():
         "而这条幂律是「实际需求」。"
         "前两个旋钮就是在<tspan font-weight=\"700\">不掉到需求线以下的前提下，"
         "把那个过量的常数压小</tspan>。",
-        "⛔ 第三个旋钮不一样 ——&#160;它<tspan font-weight=\"700\">动的是阶，不是常数</tspan>。"
-        "这是一条质的分界，也是为什么<tspan font-weight=\"700\">今天没有一个纯线性注意力的前沿模型</tspan>。",
+        "⛔ 而<tspan font-weight=\"700\">纯 SWA 和纯线性是同一类</tspan> ——&#160;"
+        "它们动的都是<tspan font-weight=\"700\">阶</tspan>，不是常数。"
+        "⭐⭐ 这条分类有一个白捡的验证：<tspan font-weight=\"700\">44 行表里所有 SWA 模型"
+        "（Gemma 2/3/4、gpt-oss、MiMo 两代）也全是混着全注意力用的</tspan>，配比 1:1～6:1。",
+        "⭐ 跟线性那批<tspan font-weight=\"700\">同一个区间</tspan> ——&#160;"
+        "同一条理论，一口气解释了两类看起来无关的混合。",
     ])
 
     yy = f.band(yy + 14, "warn", "口径，三条", [
         "⚠️ L2M 是<tspan font-weight=\"700\">必要条件，不是充分条件</tspan>：状态够大只是"
         "「有可能记住」，不等于「真的学会了」。",
-        "⚠️ 第三格（三个旋钮各站在哪）是<tspan font-weight=\"700\">本课按定义做的推导</tspan>，"
+        "⚠️ L2M 是<tspan font-weight=\"700\">渐近</tspan>命题（「总存在一个长度」）——&#160;"
+        "它说明<tspan font-weight=\"700\">纯线性/纯窗口不能无限外推</tspan>，"
+        "<tspan font-weight=\"700\">不说明在 1M 这个具体尺度上非混不可</tspan>（那部分仍是消融出来的）。",
+        "⚠️ 第三格（各旋钮站在哪）是<tspan font-weight=\"700\">本课按定义做的推导</tspan>，"
         "论文没有逐个旋钮分析 ——&#160;论文只分析了 Transformer 与状态空间模型两类。",
         "⚠️ 两点互信息与双部互信息<tspan font-weight=\"700\">是两个不同的量</tspan>，"
         "L2M 明确说它们独立地各自 scaling ——&#160;别拿一个去推另一个。",

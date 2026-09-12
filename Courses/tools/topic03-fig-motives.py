@@ -33,7 +33,18 @@ def main():
     mha = per_tok * B * T / GiB
     gqa, mqa = mha / 16, mha / 128
     mla = (512 + 64) * B * L * T / GiB
-    hbm, wgt = 94.74e9 / GiB, 671 * 2e9 / GiB
+    # ⛔⛔ 2026-09-13 学生审稿抓到两处单位/口径错，两处都很典型：
+    #
+    # ① **94.74 已经是 GiB，不是字节。** 原来写 `94.74e9 / GiB`，
+    #    等于把一个 GiB 数当成 GB 又转了一次 → 88.23，比真值小 7%。
+    #    ⭐ 专题二有一整张图在推这个数：192 GiB/chip ÷ 2 = 96.00 GiB/device，
+    #      减去约 1.26 GiB 运行时预留 = **94.74 GiB 可分配**。全课统一用它。
+    #
+    # ② **V3 的权重原生是 FP8，不是 BF16。** 按 2 字节算出来的 1250 GiB
+    #    是一个「从来不会被这么部署」的数。按 FP8 算是 625 GiB ——
+    #    ⭐ 而且这个修正**对论点有利**：权重更小，KV 反而更快压过它。
+    hbm = 94.74                       # GiB，可分配值（专题二 §附录 A 推导）
+    wgt = 671 * 1e9 / GiB             # V3 原生 FP8：671B × 1 B/参数
     assert abs(mha - 488) < 1 and abs(gqa - 30.5) < .1 and abs(mla - 8.58) < .05
 
     f = Fig(W, "长上下文的两条独立动机：左边是硬件账 —— 一个用户 128K 的 KV cache "
@@ -76,8 +87,8 @@ def main():
     f.t(20, cy, "摆三个对照，让这个数站住", GY, bold=True, size=11)
     BAR0, BARW = 232, 190
     VALX, NOTEX = BAR0 + BARW + 74, BAR0 + BARW + 84
-    REF = [("一块 v7 device 的 HBM", hbm, GY2, "一个用户就要 5.5 块"),
-           ("V3 全部权重（671B × 2B）", wgt, BL, "单用户占 39%；三个并发就超过权重"),
+    REF = [("一块 v7 device 的 HBM（可分配）", hbm, GY2, "一个用户就要 5.2 块"),
+           ("V3 全部权重（671B，原生 FP8）", wgt, BL, "单用户就占 78%；两个并发即超过权重"),
            ("换成 GQA-8", gqa, OR, "省 16 倍 —— 还是装不进一块"),
            ("换成 MLA（V3 真实方案）", mla, GR, "省 56.9 倍")]
     mx = max(mha, wgt)

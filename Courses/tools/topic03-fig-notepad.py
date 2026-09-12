@@ -80,9 +80,10 @@ def main():
     f.t(x + 40, yy + 25, "⭐ 板子的上限是可以写出来的", OR, True, 13)
     f.t(x + 40, yy + 49, "一共写了 L 条，而板子只有 d 个「方向」——", GY,
         size=11.5)
-    f.t(x + 40, yy + 70, "<tspan font-weight=\"700\">L 一旦超过 d，就一定有东西被盖掉</tspan>。", OR,
+    f.t(x + 40, yy + 70, "<tspan font-weight=\"700\">L 超过 d_k，key 就必然线性相关</tspan> ——", OR,
         True, 12.5)
-    f.t(x + 40, yy + 89, "论文原话叫 key「collision」", GY2, size=11)
+    f.t(x + 40, yy + 89, "除非 value 恰好满足同一组关系，否则必有覆盖", GY2,
+        size=11)
     fits(yy + 96, y0, ph, "①")
 
     # ══ ② 三种写法 ══════════════════════════════════════════════
@@ -138,7 +139,7 @@ def main():
         cls="svglbl")
     f.t(x + 38, yy + 49, "它是<tspan font-weight=\"700\">一个边跑边被训练的小模型</tspan> ——", INK,
         True, 12.5, w=pw - 76)
-    f.t(x + 38, yy + 68, "损失是 ½‖S k − v‖²，每个 token 训一步", GY,
+    f.t(x + 38, yy + 68, "⚠️ 前提：k 已 L2 归一、学习率取 β、损失是<tspan font-weight=\"700\">瞬时</tspan>的", GY,
         size=11.5)
     yy += 90
 

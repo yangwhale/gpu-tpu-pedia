@@ -33,7 +33,7 @@ def main():
     y0 = f.header(
         "混合　——　配比是一条轴，而<tspan font-weight=\"700\">两头都不好</tspan>",
         "⭐⭐ 「为什么必须混合」现在有理论版本了 ——&#160;"
-        "§二 那条 L2M 条件把纯线性那一头<tspan font-weight=\"700\">直接判死</tspan>",
+        "§二 那条 L2M 条件说<tspan font-weight=\"700\">纯线性不能无限外推</tspan>——&#160;而它连滑窗一起判",
         [(RD, "单用的短板"), (GR, "各家实际落点"),
          (BL, "建议区间"), (PU, "意外红利")])
 
@@ -48,7 +48,7 @@ def main():
     for who, bad, col in [
         ("只用滑窗", "跨不了长距离", RD),
         ("只用纯全注意力", "KV 和 FLOPs 都爆", RD),
-        ("只用纯线性", "精确检索塌", RD),
+        ("只用纯线性 / 纯滑窗", "精确检索塌 · 状态是常数", RD),
     ]:
         f.box(x + 22, yy, pw - 44, 50, "#fff", col, 8)
         f.t(x + 38, yy + 30, who, col, True, 12.5)
@@ -68,22 +68,24 @@ def main():
         True, 12.5)
     yy += 142
 
-    f.t(x + 22, yy, "⭐ 所以「必须混合」不是工程经验，", INK, True, 12.5)
-    f.t(x + 22, yy + 21, "是<tspan font-weight=\"700\">有下界的</tspan>。", INK, True, 12.5)
+    f.t(x + 22, yy, "⭐ 所以「纯线性不行」有一条<tspan font-weight=\"700\">渐近</tspan>必要条件撑着；", INK,
+        True, 12.5, w=pw - 44)
+    f.t(x + 22, yy + 21, "⚠️ 但<tspan font-weight=\"700\">「在 1M 这个尺度上非混不可」仍然是消融出来的</tspan>。",
+        INK, size=11.5, w=pw - 44)
     fits(yy + 28, y0, ph, "①")
 
     # ══ ② 配比轴 ════════════════════════════════════════════════
     x, pw = PX[1], PW[1]
     py = f.panel(x, y0, pw, ph, "② 配比是一条轴", GR,
-                 sub="各家的实际落点")
+                 sub="⚠️ 轴是「便宜层 : 贵层」")
 
     yy = py + 34
     ax0, ax1 = x + 40, x + pw - 40
     f.line(ax0, yy, ax1, yy, GY2, 1.4, arrow=False)
     f.t(ax0, yy - 14, "0 : 1", RD, True, 12)
-    f.t(ax0, yy + 20, "纯全注意力", GY2, size=11)
+    f.t(ax0, yy + 20, "全是全注意力", GY2, size=11)
     f.t(ax1, yy - 14, "1 : 0", RD, True, 12, "end")
-    f.t(ax1, yy + 20, "纯线性", GY2, size=11, anchor="end")
+    f.t(ax1, yy + 20, "全是便宜层", GY2, size=11, anchor="end")
 
     # 建议区间 3:1 ~ 6:1 的带
     def at(r):     # r 是「线性 : 全」的线性占比 0..1
@@ -103,9 +105,9 @@ def main():
     yy += 44
     for ratio, label in [
         ("3 : 1", "Kimi Linear · K3 · Qwen3.5 · GLM-5.3-Flash"),
-        ("5 : 1", "Ling-3.0-flash · MiMo-V2-Flash"),
-        ("6 : 1", "MiMo-V2.5-Pro"),
-        ("7 : 1", "Ling 2.6 · MiniMax-01"),
+        ("5 : 1", "Ling-3.0-flash（线性）· MiMo-V2-Flash（滑窗）"),
+        ("6 : 1", "MiMo-V2.5-Pro（滑窗）"),
+        ("7 : 1", "Ling 2.6 · MiniMax-01（线性）"),
     ]:
         f.box(x + 22, yy, pw - 44, 40, "#fff", LINE, 6)
         f.t(x + 38, yy + 25, ratio, GR, True, 12.5)
@@ -151,7 +153,7 @@ def main():
 
     for r in ["不用调 RoPE 外推 —— 直接到 1M",
               "MLA 层推理时可退化成纯 MQA（上投影能全吸收）",
-              "KV cache 最多再降 75%"]:
+              "KV 再降 75% —— ⚠️ 那是 3:1 配比的功劳，不是 NoPE 的"]:
         f.box(x + 22, yy, pw - 44, 38, "#fff", LINE, 6)
         f.t(x + 38, yy + 24, "→ " + r, GY, size=11.5, w=pw - 76)
         yy += 44
@@ -168,9 +170,12 @@ def main():
     ])
 
     yy = f.band(yy + 14, "warn", "配比是超参，别背成常识", [
-        "⚠️ <tspan font-weight=\"700\">3:1 是消融出来的，不是推出来的。</tspan>"
+        "⚠️ <tspan font-weight=\"700\">这条轴上的「便宜层」不全是线性</tspan> ——&#160;"
+        "小米那两家是<tspan font-weight=\"700\">滑窗</tspan>。⭐ 两类混合落在同一个区间，"
+        "本身就是一条证据。<tspan font-weight=\"700\">3:1 是消融出来的，不是推出来的。</tspan>"
         "同一家不同规模就换配比（Ling 的 tiny 是 3:1、flash 是 5:1）。",
-        "⭐ 记<tspan font-weight=\"700\">「3:1 到 6:1 这个量级」</tspan>就够了 ——&#160;"
+        "⭐ 两个口径别混：<tspan font-weight=\"700\">实测落点 3:1～7:1</tspan>（本课 44 行表），"
+        "<tspan font-weight=\"700\">消融建议 3:1～6:1</tspan>（arXiv 2507.06457）——&#160;"
         "<tspan font-weight=\"700\">区间比点值可信</tspan>。",
     ])
 
