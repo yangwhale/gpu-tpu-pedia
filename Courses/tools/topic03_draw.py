@@ -110,6 +110,25 @@ def wpx(s, size=11.5):
     return int(n * size)
 
 
+def sub(base, idx):
+    """下标：`sub("S", "t−1")` → `S` 加一个真下标。
+
+    ⛔ 2026-09-14 二轮学生审稿：图里原来直接写 `S_{t-1}`、`ℝ^(d_v×d_k)`，
+      **SVG 不渲染 LaTeX，于是全专题最核心的那个递推式长得像没编译的稿子**。
+    ⭐ 判据：**图里不能出现「等着被别的东西渲染」的记法** ——
+      SVG 里只有 dy 位移是到处都靠得住的做法，baseline-shift 各家不一。
+    ⚠️ 用 dy 必须**成对**：移下去多少就要移回来多少，否则后面的字全歪。
+    """
+    return ('%s<tspan font-size="0.72em" dy="3">%s</tspan>'
+            '<tspan dy="-3"></tspan>' % (base, idx))
+
+
+def sup(base, idx):
+    """上标，同 `sub` 的注意事项。"""
+    return ('%s<tspan font-size="0.72em" dy="-4">%s</tspan>'
+            '<tspan dy="4"></tspan>' % (base, idx))
+
+
 class Fig(object):
     """一张 SVG。高度不写死，收尾按真实落点回填。"""
 

@@ -12,8 +12,9 @@ r"""专题三 · §九＋§十「三种资源之间的搬家史」（2026-09-13 
        前两样能用公式算，这一样只能靠 kernel 一行一行写出来。
 
 ⭐⭐ 第三格是这一讲**唯一一条能防住「被数字骗」的判据**：
-   注意力只是账单的一部分。短上下文下它只占 12% ——&nbsp;
-   **这时候你把它优化到极致，端到端也就快 10%。**
+   注意力只是账单的一部分，而且**占多少完全看上下文多长**：
+   4K 下平方项只占 12.3%，1M 下 97.3% ——&nbsp;
+   **同一个机制在两端根本不是同一件事。**
    所以任何一个倍数，**必须带上「在多长的上下文下」**。
 """
 from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
@@ -31,7 +32,7 @@ def main():
     #   砍掉 12% 的时间就是快 12%，10% 这个数凭空保守了两个点，
     #   而两个具体数并排摆着会被当成两个独立事实。
     # ⭐ 改成：占比给具体数（4K 锚点），收益只说「一成出头」。
-    SHARE = 12                    # 4K 上下文下注意力占的算力比例（专题一那条曲线）
+    SHARE = 12                    # 只保留给旧引用；三个长度的构成在 ③ 里当场算
 
     f = Fig(W, "三种资源之间的搬家史：早期搬显存、中期搬算力、现在搬访存规整度；"
                "四个取舍；以及注意力只是账单的一部分这条防骗判据")
@@ -113,42 +114,92 @@ def main():
     fits(yy + 8, y0, ph, "②")
 
     # ══ ③ 防骗判据 ══════════════════════════════════════════════
+    # ⛔⛔ 2026-09-14 二轮学生审稿，这一格连挨两刀，而且都打在要害上：
+    #   ① 标题写「一次前向的**时间**」，可 SHARE 的定义是
+    #      **平方项 FLOP ÷ 总前向 FLOP** —— 是算力不是时间。
+    #      而本讲 §3.6 自己写着：同样 seq=4096，splash attention
+    #      **占 23% 的时间**、效率只有 35.5%（全场最低）。效率最低的算子，
+    #      时间占比一定高于 FLOPs 占比 —— **两处正面对撞**。
+    #   ② 那 12% **只是平方项**。同一条件下注意力自己的投影（Q/K/V/O）
+    #      还占 27.4%，所以把剩下那格标成「MoE ＋ MLP ＋ 通信 88%」是错的。
+    # ⭐⭐ 改完反而比原版更有教学价值：**FLOPs 省了不等于时间省了**，
+    #   正是这一格想教的判据本身。
     x, pw = PX[2], PW[2]
     py = f.panel(x, y0, pw, ph, "③ 一条防骗判据", RD,
                  sub="这一讲最该带走的一句")
 
-    yy = py + 30
-    # 一根账单条：注意力只占一小段
+    # 三个长度的算力构成，当场算、当场断言（公式与常数同专题一那条曲线）
+    CC = dict(d=7168, L=61, nDense=3, V=129280, H=128, qLora=1536, kvLora=512,
+              nope=128, rope=64, vDim=128, nExp=256, nShr=1, topK=8,
+              dMoe=2048, dFf=18432)
+    CC["nMoe"] = CC["L"] - CC["nDense"]
+    CC["qkDim"] = CC["nope"] + CC["rope"]
+
+    def share(seq):
+        mlaW = (CC["d"] * CC["qLora"] + CC["qLora"] * CC["H"] * CC["qkDim"]
+                + CC["d"] * (CC["kvLora"] + CC["rope"])
+                + CC["kvLora"] * CC["H"] * (CC["nope"] + CC["vDim"])
+                + CC["H"] * CC["vDim"] * CC["d"])
+        proj = 2 * seq * mlaW * CC["L"]
+        sq = (CC["H"] * seq * seq * (CC["qkDim"] + CC["vDim"])) * CC["L"]
+        dense = 2 * seq * 3 * CC["d"] * CC["dFf"] * CC["nDense"]
+        moe = 2 * seq * (CC["topK"] + CC["nShr"]) * 3 * CC["d"] * CC["dMoe"] * CC["nMoe"]
+        head = 2 * seq * CC["V"] * CC["d"]
+        tot = proj + sq + dense + moe + head
+        return sq / tot, proj / tot, (dense + moe + head) / tot
+
+    LENS = [("4K", 4096), ("128K", 131072), ("1M", 1048576)]
+    SH = [(lab,) + share(n) for lab, n in LENS]
+    assert abs(SH[0][1] - .1229) < .001 and abs(SH[2][1] - .9729) < .001
+
+    yy = py + 26
+    f.t(x + 22, yy, "一次前向的<tspan font-weight=\"700\">算力</tspan>都花在哪"
+        "（⚠️ 算力，不是时间）", GY, True, 12, w=pw - 44)
+    yy += 12
     bw = pw - 44
-    f.t(x + 22, yy, "4K 上下文下，一次前向的时间都花在哪", GY, True, 12)
+    for lab, sq, proj, rest in SH:
+        yy += 22
+        f.t(x + 22, yy, lab, INK, True, 12)
+        f.box(x + 62, yy - 13, bw - 40, 18, "#fff", LINE, 4)
+        cx = x + 63
+        for frac, col, nm in ((sq, "#fce8e6", "平方项"),
+                              (proj, "#fef7e0", "投影"),
+                              (rest, "#f1f3f4", "其余")):
+            wseg = (bw - 42) * frac
+            f.box(cx, yy - 12, max(0.6, wseg), 16,
+                  col, "none", 2)
+            if wseg > 52:
+                f.t(cx + wseg / 2.0, yy - 0.5, nm, GY, size=11, anchor="middle")
+            cx += wseg
+        yy += 14
+        f.t(x + 62, yy, "平方项 %.1f%% · 注意力投影 %.1f%% · 其余 %.1f%%"
+            % (sq * 100, proj * 100, rest * 100), GY2, size=11, w=bw - 40)
+        yy += 8
     yy += 14
-    f.box(x + 22, yy, bw, 40, "#fff", LINE, 6)
-    f.box(x + 24, yy + 2, bw * SHARE / 100.0 - 2, 36, "#fce8e6", "none", 4)
-    f.t(x + 24 + bw * SHARE / 100.0 / 2.0, yy + 25, "注意力", RD, True, 11.5,
-        "middle")
-    f.t(x + 24 + bw * (SHARE + 100) / 200.0, yy + 25,
-        "MoE ＋ MLP ＋ 通信", GY, True, 12, "middle")
-    yy += 56
-    f.t(x + 22, yy, "注意力约占 <tspan font-weight=\"700\">%d%%</tspan>（专题一那条曲线）" % SHARE, GY,
-        size=11.5, w=pw - 44)
-    yy += 28
 
-    f.box(x + 22, yy, pw - 44, 96, "#fff", RD, 8)
-    f.box(x + 22, yy, 4, 96, RD, RD, 2)
-    f.box(x + 24, yy, 3, 96, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 26, "把注意力<tspan font-weight=\"700\">砍到 0</tspan>，端到端上限也就", RD, True, 12.5)
-    f.t(x + 40, yy + 54, "一成出头", RD, True, 22)
-    f.t(x + 40, yy + 82, "剩下那 %d%%（MoE/MLP/通信）一分没省。" % (100 - SHARE), GY,
-        size=11.5)
-    yy += 110
+    f.box(x + 22, yy, pw - 44, 104, "#fff", RD, 8)
+    f.box(x + 22, yy, 4, 104, RD, RD, 2)
+    f.box(x + 24, yy, 3, 104, "#fff", "#fff", 0)
+    f.t(x + 40, yy + 25, "⭐ 同一个机制，占比差 <tspan font-weight=\"700\">八倍</tspan>", RD,
+        True, 12.5, w=pw - 76)
+    f.t(x + 40, yy + 48, "4K 下平方项 %.0f%%，1M 下 %.0f%%。"
+        % (SH[0][1] * 100, SH[2][1] * 100), GY, size=11.5, w=pw - 76)
+    f.t(x + 40, yy + 70, "⛔ 所以「省了 N 倍」这句话，在这两端"
+        "<tspan font-weight=\"700\">根本不是同一件事</tspan>。", GY, size=11.5,
+        w=pw - 76)
+    f.t(x + 40, yy + 92, "⚠️ 而且短上下文那 12% 之外，注意力自己的投影还占 27%",
+        GY2, size=11, w=pw - 76)
+    yy += 118
 
-    f.box(x + 22, yy, pw - 44, 96, "#fff", INK, 8)
-    f.t(x + 38, yy + 26, "⭐⭐ 所以任何一个倍数，", INK, True, 13,
+    f.box(x + 22, yy, pw - 44, 100, "#fff", INK, 8)
+    f.t(x + 38, yy + 25, "⭐⭐ 所以任何一个倍数，", INK, True, 13,
         cls="svglbl")
-    f.t(x + 38, yy + 52, "<tspan font-weight=\"700\">必须带上「在多长的上下文下」</tspan>。", INK,
+    f.t(x + 38, yy + 50, "<tspan font-weight=\"700\">必须带上「在多长的上下文下」</tspan>。", INK,
         True, 13, w=pw - 76)
-    f.t(x + 38, yy + 76, "不带这句，那些倍数全是耍流氓。", GY, size=11.5)
-    fits(yy + 96, y0, ph, "③")
+    f.t(x + 38, yy + 74, "不带这句，那些倍数全是耍流氓。", GY, size=11.5)
+    f.t(x + 38, yy + 93, "⭐ 而且要问清楚：省的是 FLOPs，还是墙钟时间？", GY2,
+        size=11, w=pw - 76)
+    fits(yy + 100, y0, ph, "③")
 
     # ══ 落点带 ══════════════════════════════════════════════════
     yy = y0 + ph + 22
@@ -166,8 +217,13 @@ def main():
 
     yy = f.src(yy + 16,
                "四个取舍与硬件假设表见 §九 / §十 正文（每条都可追到前面对应小节）",
-               "「4K 下注意力约占一成算力」出自专题一那条曲线（128K 是 81.8%，1M 是 97%）；"
-               "「砍到 0 也就快一成出头」由此直接推出 ——&#160;"
+               "③ 的三根条<tspan font-weight=\"700\">由本脚本当场算并断言</tspan>，"
+               "公式与常数同专题一那条曲线（V3：61 层 / 128 头 / MoE top-8＋1 共享，"
+               "因果掩码按半算）",
+               "⚠️ 它是 <tspan font-weight=\"700\">FLOPs 口径，不是时间</tspan> ——&#160;"
+               "同样 seq=4096，本讲 §3.6 量到 splash attention "
+               "<tspan font-weight=\"700\">占 23% 的时间</tspan>、效率只有 35.5%；"
+               "<tspan font-weight=\"700\">效率最低的算子，时间占比一定高于算力占比</tspan>"
                "⚠️ 这是<tspan font-weight=\"700\">量级示意</tspan>，"
                "具体占比随模型结构、批大小、序列长度变")
     f.save("fig3-landing.svg", yy + 6)

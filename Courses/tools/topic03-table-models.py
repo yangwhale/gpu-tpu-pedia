@@ -249,6 +249,30 @@ _hyb = [r for r in _mix
 _oth = [r for r in _mix if r not in _hyb]
 _warm = [r for r in _hyb if r[2][-1][0] not in M.SPARSE]
 _cold = [r for r in _hyb if r[2][-1][0] in M.SPARSE]
+# ⛔⛔ 2026-09-14 二轮学生审稿抓到的最刺眼一条：本课有三处在讲「配比区间」，
+#   三处互斥，而且**证据就在同一张表里**：
+#     · 这里写「无一例外落在 3:1 ～ 7:1」——&nbsp;Gemma 2 和 gpt-oss 都是 **1:1**，当场证伪；
+#     · fig-info-law 写「所有 SWA 模型也全是混着全注意力用」——&nbsp;
+#       同一张表里 **Mistral 7B 是纯 SWA，一层全注意力都没有**，是全称量词被反例打穿。
+# ⭐ 判据（这正是 R26 那次提交自己立的规矩）：**由表长出来的结论，要由表现算。**
+#   规则写清楚了，结论没跟着重算 —— 所以这里改成脚本当场算，写死的一律删。
+def _ratio(r):
+    """一行混合模型的「便宜层 : 贵层」——&nbsp;按循环里的计数算，不按总层数。"""
+    c = sum(n for t, n in r[2] if t in M.CHEAP)
+    e = sum(n for t, n in r[2] if t not in M.CHEAP)
+    return c, e
+
+
+_rat = sorted({_ratio(r)[0] // _ratio(r)[1] for r in _hyb})
+_RLO, _RHI = _rat[0], _rat[-1]
+_swa = sorted({_ratio(r)[0] // _ratio(r)[1] for r in _hyb
+               if any(t == "SWA" for t, _ in r[2])})
+_lin = sorted({_ratio(r)[0] // _ratio(r)[1] for r in _hyb
+               if any(t in M.LINEAR for t, _ in r[2])})
+# ⭐ 两族**各自**的区间才是有内容的话：它们重叠，而重叠本身就是证据。
+_PURE = [r for r in M.ROWS if len(r[2]) == 1 and r[2][0][0] in M.CHEAP]
+assert _RLO == 1 and _RHI == 7, "配比区间变了，正文那句话要跟着重读一遍：%s" % _rat
+
 _1m = [r for r in M.ROWS if r[3].endswith("M")]
 # ⛔ 2026-09-07 修。这里原先是「全表非零 KV 的最大 ÷ 最小」，算出 1152 倍 ——
 #   而那个最小值是 **Mistral 7B 的 512 MiB**。⭐ 拿 7B 去跟 175B 比 KV 倍数，
@@ -295,8 +319,14 @@ LAND = ("""<p class="tbltip">⭐ <b>这张表的一句话落点</b>：同一个 
 ——&#160;不然「有几家怎么样」这种话会跟着显示模式变，那就不是结论了）</span></p>""".replace("**", "") % len(M.ROWS) + """
 <ol>
 <li>表里 <b>%d</b> 家：<b>%d 家是「便宜的层 ＋ 一层贵的」</b>，%d 家<b>每层同构</b>，
-%d 家是别的混法。而那 %d 家混合的，<b>配比无一例外落在 3:1 ～ 7:1</b> ——
-<b>没有人敢全用线性，也没有人只掺一两层。</b></li>
+%d 家是别的混法。那 %d 家混合的，配比落在 <b>%d:1 ～ %d:1</b> ——
+而<b>拆成两族看更有意思</b>：<b>线性混合 %s</b>、<b>滑窗混合 %s</b>，
+<b>两族重叠在 3:1 ～ 6:1</b>。⭐ 两类看起来毫不相干的混合落进同一段区间，
+<b>这件事本身就是一条证据</b>。<br>
+⚠️ <b>但别说成「无一例外」</b>：<b>%s</b> 就是<b>纯便宜层、一层贵的都没有</b>的反例。
+⭐ 而这个反例恰恰值得讲 ——&nbsp;<b>纯滑窗真的上过生产、用了两年</b>，
+它正好说明 <a href="#s二">§二那条 L2M 条件</a>是<b>渐近</b>命题，
+<b>管不了 32K 这个尺度</b>。</li>
 <li>前几行是基线，也是一条完整的小史：MHA → MQA（砍到 1 组）→ GQA（折中）→ MLA（改压缩）
 → <b>CLA（跨层共享）</b>——<b>全都只在动「每个 token 存多少」这一个旋钮</b>。</li>
 <li>⭐ <b>扫一眼颜色搭配</b>：混合的那 %d 家里 <b>%d 家是「冷色 ＋ 黄橙」</b>（便宜的层配一层全注意力）。
@@ -331,6 +361,10 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 ⛔ <b>而这条结论是被 Highlight 视图逼出来的</b>：全量 %d 行里那段看着只是「少几行」，
 一筛成机制主线，空白立刻刺眼。<b>筛选不只是省地方，它还是一种体检。</b></li>
 </ol></div></details>""" % (len(M.ROWS), len(_hyb), len(_uni), len(_oth), len(_hyb),
+                  _RLO, _RHI,
+                  "、".join("%d:1" % v for v in _lin),
+                  "、".join("%d:1" % v for v in _swa),
+                  "、".join(_short(r[1]) for r in _PURE),
                   len(_hyb), len(_warm), "、".join(_short(r[1]) for r in _cold),
                   len(_1m),
                   M.kv_fmt(_mx[1]), _short(_mx[0]), M.kv_fmt(_mn[1]), _short(_mn[0]),

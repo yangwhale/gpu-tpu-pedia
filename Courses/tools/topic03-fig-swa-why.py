@@ -16,8 +16,8 @@ r"""专题三 · §六「滑窗凭什么敢砍，砍了为什么会崩」（2026
   ③ **为什么会有这么个东西** ——&nbsp;softmax 要求一行加起来等于 1。
      当这一行「没什么特别想看的」，多出来的权重**总得放在某处**；
      而初始 token 因为自回归对**所有**后续位置可见，最容易被训成那个停车位。
-     ⭐ 两个更彻底的解法：预训练时加一个可学的 sink token（一个就够），
-     或者换成 softmax-off-by-one（分母 +1，**允许什么都不看**）。
+     ⭐ 两条看起来同样彻底的解法，**只有一条成立**：可学的 sink token 行，
+     softmax-off-by-one 被论文自己的 Zero Sink 实验证伪（PPL 29214）。
 
 ⛔ 这一段是全讲「公式看不出来、画出来才看见」最好的例子 ——&nbsp;讲义里要点破。
 """
@@ -155,17 +155,37 @@ def main():
     f.t(x + 38, yy + 65, "全场只有它们人人都够得着。", GY, size=11.5)
     yy += 86
 
-    f.t(x + 22, yy, "⭐ 两个更彻底的解法", OR, True, 13, cls="svglbl")
+    # ⛔⛔ 2026-09-14 二轮学生审稿：这两条原来并排列成「两个更彻底的解法」——
+    #   **其中一条被论文自己的实验证伪了**。
+    #   §3.3 明说 SoftMax₁ **等价于**前置一个全零 K/V 的 token（他们叫 Zero Sink），
+    #   并且和 Vanilla / Learnable Sink 一起从头预训了三个 160M 模型对照：
+    #     0+1024 下 PPL —— Vanilla 27.87 / **Zero Sink 29214** / Learnable 1235
+    #     1+1023 下 PPL —— Vanilla 18.49 / Zero Sink 19.90 / **Learnable 18.01**
+    #   原话：zero sink「to some extent」有缓解，但模型仍然去抓别的开头 token；
+    #        「Introducing a sink token is highly effective」。
+    # ⭐⭐ 这个对照本身就是好料：它正好印证上面那句「模型一定会找地方倒掉多余的」——
+    #   给它一个**全零**的车位不够，得给一个**能学**的。
+    f.t(x + 22, yy, "⭐ 两条看起来同样彻底的解法，只有一条成立", OR, True, 13,
+        cls="svglbl")
     yy += 22
-    for lab, txt in [
-        ("预训练时加一个可学的 sink token", "有了专用车位，<tspan font-weight=\"700\">一个就够</tspan>"),
-        ("换 softmax-off-by-one", "分母 +1，<tspan font-weight=\"700\">允许这一行什么都不看</tspan>"),
+    for lab, txt, col, mark in [
+        ("预训练时加一个<tspan font-weight=\"700\">可学的</tspan> sink token",
+         "一个就够 ——&#160;1+1023 下 PPL <tspan font-weight=\"700\">18.01</tspan>（vanilla 18.49）",
+         GR, "⭐ 成立"),
+        ("换 softmax-off-by-one（分母 +1）",
+         "论文验过：它等价于前置全零 KV，0+1024 下 PPL <tspan font-weight=\"700\">29214</tspan>",
+         RD, "⛔ 不成立"),
     ]:
-        f.box(x + 22, yy, pw - 44, 50, "#fff", OR, 8)
-        f.t(x + 38, yy + 21, lab, OR, True, 12)
-        f.t(x + 38, yy + 39, txt, GY, size=11.5)
-        yy += 58
-    fits(yy, y0, ph, "③")
+        f.box(x + 22, yy, pw - 44, 62, "#fff", col, 8)
+        f.box(x + 22, yy, 4, 62, col, col, 2)
+        f.box(x + 24, yy, 3, 62, "#fff", "#fff", 0)
+        f.t(x + 38, yy + 22, lab, col, True, 12, w=pw - 120)
+        f.t(x + pw - 38, yy + 22, mark, col, True, 11.5, anchor="end")
+        f.t(x + 38, yy + 44, txt, GY, size=11.5, w=pw - 76)
+        yy += 70
+    f.t(x + 22, yy, "⭐⭐ 差别在<tspan font-weight=\"700\">「可学」</tspan> ——&#160;"
+        "停车位得让它自己挑位置。", INK, True, 12, w=pw - 44)
+    fits(yy + 6, y0, ph, "③")
 
     # ══ 落点带 ══════════════════════════════════════════════════
     yy = y0 + ph + 22
@@ -193,8 +213,11 @@ def main():
                "① 出自 Mistral 7B arXiv 2310.06825 §2（k×W 射程、W=4096/32 层、"
                "rolling buffer cache）；131,072 与 8× 由脚本当场算并断言",
                "②③ 出自 StreamingLLM（Xiao 等 arXiv 2309.17453, ICLR 2024）"
-               "表 1 / 表 2，以及原文 §3.1 与 §3.3：5158.07 → 5.40、换行符 5.60、"
-               "留 1/2/4/8 个的对照、可学 sink token、softmax-off-by-one")
+               "表 1 / 表 2 与 §3.1 / §3.3：5158.07 → 5.40、换行符 5.60、"
+               "留 1/2/4/8 个的对照；⛔ Zero Sink（＝softmax-off-by-one）那组反例出自"
+               "同文表 3 / 表 10 的三个 160M 预训练对照",
+               "⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）"
+               "<tspan font-weight=\"700\">不是同一个评测集</tspan> ——&#160;5.40 与 9.59 不可直接比")
     f.save("fig3-swa-why.svg", yy + 6)
 
 

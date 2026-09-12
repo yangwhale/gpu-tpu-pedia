@@ -45,7 +45,7 @@ def main():
         [(RD, "纯加：谁也不擦"), (GR, "delta：先擦再写"),
          (PU, "门控：选择性地擦"), (OR, "板子的物理上限")])
 
-    ph = 446
+    ph = 492
 
     # ══ ① 板子是什么 ════════════════════════════════════════════
     x, pw = PX[0], PW[0]
@@ -139,17 +139,46 @@ def main():
         cls="svglbl")
     f.t(x + 38, yy + 49, "它是<tspan font-weight=\"700\">一个边跑边被训练的小模型</tspan> ——", INK,
         True, 12.5, w=pw - 76)
-    f.t(x + 38, yy + 68, "⚠️ 前提：k 已 L2 归一、学习率取 β、损失是<tspan font-weight=\"700\">瞬时</tspan>的", GY,
+    f.t(x + 38, yy + 68, "⚠️ 前提只有两条：学习率取 β、损失是<tspan font-weight=\"700\">瞬时</tspan>的", GY,
         size=11.5)
     yy += 90
+
+    # ⛔ 2026-09-14 二轮学生审稿：上面那行原来还挂着「k 已 L2 归一」——
+    #   **它不是这个等价的前提**。把 S − β(Sk−v)kᵀ 展开就是 S(I−βkkᵀ) + βvkᵀ，
+    #   对**任意** k 都成立，论文 §2.2 给这个推导时没有任何归一化假设。
+    # ⭐ 判据：**给一个结论挂上它不需要的前提，会让它看起来比实际更脆弱。**
+    #   L2 归一真正的出处是 §3.3 的**稳定性**，而那才是「叉掉」这个比喻的来源。
+    f.box(x + 22, yy, pw - 44, 96, "#fff", PU, 8)
+    f.box(x + 22, yy, 4, 96, PU, PU, 2)
+    f.box(x + 24, yy, 3, 96, "#fff", "#fff", 0)
+    f.t(x + 38, yy + 24, "⭐ 那 L2 归一是干嘛的？——&#160;稳定性", PU, True, 12.5)
+    f.t(x + 38, yy + 46, "I − β k kᵀ 的特征值是 1（重 d−1 个）和 1 − β‖k‖²", GY,
+        size=11.5, w=pw - 76)
+    f.t(x + 38, yy + 66, "要它落在 [0,1] 才需要 ‖k‖ = 1", GY, size=11.5)
+    f.t(x + 38, yy + 86, "⭐⭐ 而 β=1 时它正好是个投影：那个方向擦干净，"
+        "其余 d−1 个一点不动", PU, True, 11.5, w=pw - 76)
+    yy += 110
 
     f.box(x + 22, yy, pw - 44, 100, "#fff", OR, 8)
     f.box(x + 22, yy, 4, 100, OR, OR, 2)
     f.box(x + 24, yy, 3, 100, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 25, "⚠️ 代价：它比纯加法难并行", OR, True, 12.5)
-    f.t(x + 40, yy + 47, "纯加法的各项互不依赖，可以一起算；", GY, size=11.5)
-    f.t(x + 40, yy + 67, "「先擦再写」是<tspan font-weight=\"700\">串行</tspan>的 ——", GY, size=11.5)
-    f.t(x + 40, yy + 87, "论文原话：表达力与并行度的根本权衡", GY2, size=11)
+    # ⛔⛔ 2026-09-14 二轮学生审稿，这里原来写「『先擦再写』是**串行**的」——
+    #   **把被引论文的结论讲反了**：arXiv 2406.06484 的标题就是
+    #   《Parallelizing Linear Transformers with the Delta Rule **over Sequence Length**》，
+    #   它的全部贡献正是证明这东西能沿序列并行（WY 表示 + chunkwise）。
+    # ⛔ 而 §6 那句「表达力与并行度的根本权衡」说的对象是**比 DeltaNet 更强**的那批
+    #   （Recurrent DeltaNet / mesa-layer），而且是带引用的 "suggests"，不是本文结论。
+    # ⭐ 判据：**引一篇论文的某一句之前，先看一眼它的标题在说什么。**
+    #   而且本讲自己的 fig-at-gallery 写的是「要专门的技巧」、§7.4 整节讲的是
+    #   「块内并行块间串行」—— 同一份讲义两处说法不一致，这才是最该抓的信号。
+    f.t(x + 40, yy + 25, "⚠️ 代价：没有纯加法那种「各项互不依赖」的自由", OR,
+        True, 12.5, w=pw - 76)
+    f.t(x + 40, yy + 47, "要靠<tspan font-weight=\"700\">专门的分块算法</tspan>才能沿序列并行", GY,
+        size=11.5, w=pw - 76)
+    f.t(x + 40, yy + 67, "——&#160;这正是 2406.06484 那篇的贡献（见 §7.4）", GY2,
+        size=11, w=pw - 76)
+    f.t(x + 40, yy + 87, "⭐ 它顺带指出：比 delta 更强的那批就再也并行不了了", GY2,
+        size=11, w=pw - 76)
     fits(yy + 100, y0, ph, "③")
 
     # ══ 落点带 ══════════════════════════════════════════════════
@@ -169,13 +198,22 @@ def main():
         "<tspan font-weight=\"700\">而且它跟序列长度无关。</tspan>"
         % (st / 2.0 ** 20, st * NL / 2.0 ** 20),
         "⭐ 于是有个自然的问题：<tspan font-weight=\"700\">短上下文、高并发下，"
-        "它会不会反而比 KV 更费？</tspan>算一下交叉点："
-        "状态 ÷ 每 token 的 KV ＝ <tspan font-weight=\"700\">约 %d 个 token</tspan>。"
-        % cross,
+        "它会不会反而比 KV 更费？</tspan>⛔ 算交叉点之前，先把两边的口径摊开 ——&#160;"
+        "<tspan font-weight=\"700\">这一步不写出来，512 这个数就是个孤立数字</tspan>：",
+        "状态 ＝ %d × %d × %d × 4 B<tspan font-weight=\"700\">(fp32)</tspan> "
+        "＝ <tspan font-weight=\"700\">%.0f MiB</tspan>　·　"
+        "GQA-8 每 token 每层 ＝ 2 × %d × %d × 2 B<tspan font-weight=\"700\">(bf16)</tspan> "
+        "＝ <tspan font-weight=\"700\">%.0f KiB</tspan>"
+        % (H, DK, DV, st / 2.0 ** 20, G, DH, kvt / 1024.0),
+        "→ 交叉点 ＝ %.0f MiB ÷ %.0f KiB ＝ <tspan font-weight=\"700\">%d 个 token</tspan>。"
+        "⚠️ <tspan font-weight=\"700\">两边精度不一样</tspan> ——&#160;"
+        "状态若也按 bf16 存，交叉点就变成 %d。"
+        % (st / 2.0 ** 20, kvt / 1024.0, cross, cross // 2),
         "⛔ 也就是说<tspan font-weight=\"700\">只在几百 token 以内它才更贵</tspan>；"
         "到 8K 时 GQA-8 的 KV 已经是它的 16 倍。"
-        "⚠️ 上面的形状是<tspan font-weight=\"700\">示例</tspan>（32 头 × 128 × 128），"
-        "换模型请自己代 ——&#160;<tspan font-weight=\"700\">公式比数字有用</tspan>。",
+        "⚠️ 形状是<tspan font-weight=\"700\">示例</tspan>（32 头 × 128 × 128），"
+        "而 69 是 K3 的真层数（K3 实际 96 头）——&#160;"
+        "所以那个 138 MiB 是<tspan font-weight=\"700\">量级示意，不是 K3 的部署数</tspan>。",
     ])
 
     yy = f.band(yy, "info", "⭐⭐ 这个比喻之所以好，是因为它把三代的差别缩到了一个动作上", [
@@ -198,7 +236,9 @@ def main():
                "递推式、key collision（L &gt; d）、delta rule ＝ Widrow-Hoff、"
                "以及「等价于对 ½‖Sk−v‖² 做一步 SGD」，均出自 DeltaNet 论文 "
                "Yang 等 arXiv 2406.06484 §2.1–2.2",
-               "「表达力与并行度之间存在根本权衡」也是该文原话（§6）；"
+               "⚠️ 该文 §6 那句「表达力与并行度之间存在根本权衡」说的是 Recurrent DeltaNet / "
+               "mesa-layer 那一批<tspan font-weight=\"700\">比 delta 更强</tspan>的模型，"
+               "不是 delta 对纯加法，而且原文是带引用的 suggests；"
                "「记事板」这个比喻是本课的讲法")
     f.save("fig3-notepad.svg", yy + 6)
 

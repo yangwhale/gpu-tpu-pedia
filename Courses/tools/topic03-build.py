@@ -1137,19 +1137,29 @@ __FIG_HYBRID__
 <table>
 <thead><tr><th>模型</th><th>配比</th><th>出处</th></tr></thead><tbody>
 <tr><td>Kimi Linear</td><td>KDA : 全注意力 MLA = <b>3 : 1</b>（48B 总 / 3B 激活）</td><td>arXiv 2510.26692</td></tr>
-<tr><td><b>Kimi K3</b></td><td>KDA : Gated MLA = <b>3 : 1</b>（<b>69 KDA + 24 MLA = 93 层</b>）</td><td>arXiv 2607.24653 表 1</td></tr>
+<tr><td><b>Kimi K3</b></td><td><b>93 层 ＝ 23 × (3 KDA ＋ 1 Gated MLA) ＋ 1 MLA</b> ——&nbsp;循环配比 <b>3 : 1</b>，实际层数 69 : 24。<em>⚠️ 别写成「69 : 24 = 3 : 1」，一除就是 2.875</em></td><td>arXiv 2607.24653 表 1 ＋ §2.1</td></tr>
 <tr><td>Ling-3.0-tiny</td><td>KDA : MLA = 3 : 1</td><td>模型卡</td></tr>
 <tr><td>Ling-3.0-flash</td><td>KDA : MLA = <b>5 : 1</b></td><td>模型卡</td></tr>
 <tr><td>一篇系统性消融</td><td>建议区间 <b>3:1 ～ 6:1</b></td><td>arXiv 2507.06457</td></tr>
 </tbody></table>
 <p>⭐ <b>三件事要讲清楚：</b></p>
 <ol><li><b>3:1 是消融出来的，不是推出来的。</b> Kimi Linear 的消融里， <b>0:1（纯全注意力）反而表现不好</b> —— 这个结果比"3:1 最好"更有意思： <b>加线性层不只是省钱，它可能还带来了别的东西</b></li><li><b>同一家不同规模就换了配比</b>（Ling 的 tiny 3:1 / flash 5:1）—— <b>配比是超参，跟规模和数据有关，不要背下来当常识</b></li><li><b>区间比点值可信。</b> 记 "3:1 到 6:1 这个量级" 就够了</li></ol>
-<h3>8.3 ⭐ K3 的 NoPE —— 混合带来的一个意外红利</h3>
+<!-- ⛔ 2026-09-14 二轮学生审稿：这一小节原来叫「K3 的 NoPE」，**记错了发明人**。
+     Kimi Linear（arXiv 2510.26692）原文就写着「we apply NoPE to all full
+     attention (MLA) layers」，而 K3 §2.1.2 自己说的是「follows the hybrid
+     design of Kimi Linear and applies NoPE to all MLA layers」。
+     ⭐ 而且 §8.4 速查表里 Kimi Linear 那一行也漏了 NoPE —— 表跟着一起错。 -->
+<h3>8.3 ⭐ 从 Kimi Linear 到 K3 的 NoPE —— 混合带来的一个意外红利</h3>
 <p>这是全节最漂亮的一处，值得留三分钟。</p>
-<p>K3 的全注意力（Gated MLA）层<b>完全不加位置编码</b>（NoPE）： 没有 RoPE，没有 YaRN，什么都没有。</p>
+<p><b>Kimi Linear 就已经这么做了</b>，K3 只是照搬：全注意力（Gated MLA）层<b>完全不加位置编码</b>（NoPE）—— 没有 RoPE，没有 YaRN，什么都没有。</p>
 <p>为什么敢这么做？ 因为它们中间夹着的 KDA 层， 本身就是靠递归的衰减和门控在编码顺序 —— 一个天然带时序的算子。 <b>位置信息由线性层提供，全注意力层只管检索。</b></p>
 <p>三个后果，一个比一个实在：</p>
-<ol><li><b>不用调 RoPE 外推。</b> 模型直接外推到 1M，不需要任何位置编码的重标定 —— 长上下文扩展里最烦人的一块调参，直接消失了</li><li><b>MLA 层在推理时可以退化成纯 MQA。</b> 位置编码没了， §5.3 里那条"不可吸收的 64 维"也就不存在了 —— <b>上投影可以完全吸收</b></li><li><b>KV cache 最多降 75%</b>（Kimi Linear 的数字）， 1M 上下文下 TPOT 从 11.48 ms 降到 1.84 ms，<b>6.3×</b></li></ol>
+<ol><li><b>不用调 RoPE 外推。</b> 模型直接外推到 1M，不需要任何位置编码的重标定 —— 长上下文扩展里最烦人的一块调参，直接消失了</li><li><b>MLA 层在推理时可以退化成纯 MQA。</b> 位置编码没了， §5.3 里那条"不可吸收的 64 维"也就不存在了 —— <b>上投影可以完全吸收</b></li></ol>
+<div class="note warn"><p>⛔ <b>这里原先还列了第三条「KV cache 最多降 75%」——&nbsp;那一条不是 NoPE 的功劳。</b>
+  75% 来自 <b>3:1 的配比</b>（四层里只有一层是全注意力），<b>跟加不加位置编码无关</b>。
+  <em>⭐ 这个错误值得留在页面上：<a href="#s八">§八那张配比图</a>的 ⚠️ 注早就写对了，
+  而正文没跟着改 ——&nbsp;<b>图改对了不等于文改对了，同一个事实有两个落点就会有两个版本。</b></em>
+  1M 下 TPOT 从 11.48 ms 降到 1.84 ms（<b>6.3×</b>）这个数仍然成立，它记在配比头上。</p></div>
 <div class="note ok"><p>⭐ <b>这才是"混合"真正的意思</b>：不是"两个方案各跑一半凑合用"， 而是让每一层只做自己擅长的事，然后把别人不用做的事一并省掉。 一个架构选择（混合）解开了另一个看起来完全无关的约束（位置编码）。 这门课想教的就是这种"看见约束之间的连接"的能力。</p></div>
 <h3>8.4 ⭐ 各家速查：你日常在用的那些模型，注意力到底是什么</h3>
 <p>三个旋钮到这里就拆完了。这一小节反过来 —— <b>按公司排一遍，看每一家实际拧的是哪个旋钮</b>。 都是能在公开 config 或官方博客里查到的，信息截至 <b>2026-09-07</b>。</p>
@@ -1158,7 +1168,7 @@ __FIG_HYBRID__
 <tr><td rowspan="2">阿里 千问</td><td>Qwen3-Next（80B/3B）</td><td>③ 线性（Gated DeltaNet）</td><td><b>3 : 1</b></td></tr>
 <tr><td>Qwen3.5（0.8B–397B）</td><td>③ 线性</td><td><b>3 : 1</b>，全家族统一</td></tr>
 <tr><td rowspan="2">月之暗面 Kimi</td><td>Kimi Linear（48B/3B）</td><td>③ 线性（KDA）</td><td><b>3 : 1</b></td></tr>
-<tr><td>Kimi K3（2.8T）</td><td>③ 线性 ＋ NoPE</td><td>93 层 ＝ <b>69 KDA ＋ 24 Gated MLA</b></td></tr>
+<tr><td>Kimi K3（2.8T）</td><td>③ 线性 ＋ NoPE（沿用 Kimi Linear）</td><td><b>93 层 ＝ 23 × (3 KDA ＋ 1 MLA) ＋ 1 MLA</b></td></tr>
 <tr><td rowspan="2">蚂蚁 百灵 Ling</td><td>Ling 2.6</td><td>③ 线性（Lightning）</td><td><b>7 : 1</b></td></tr>
 <tr><td>Ling-3.0-flash（124B/5.1B）</td><td>③ 线性（KDA）</td><td><b>5 : 1</b> ＝ 35 KDA ＋ 7 MLA</td></tr>
 <tr><td rowspan="2">小米 MiMo</td><td>MiMo-V2-Flash</td><td>② 稀疏（SWA，窗口 128）</td><td><b>5 : 1</b></td></tr>
@@ -1535,7 +1545,9 @@ FIGS = {
     # ── §八 混合（2026-09-13 夜间 R14 加）──────────────────────────
     "__FIG_HYBRID__": ("fig-hybrid", "fig3-hybrid.svg", 'topic03-fig-hybrid.py',
         '⭐⭐ <b>配比是一条轴，而两头都不好。</b>'
-        '<b>纯线性那一头不是「实测不行」—— §二 那条 L2M 条件把它直接判死了。</b>'
+        '<b>纯线性那一头不是「实测不行」—— §二 那条 L2M 条件说它的状态必须随长度变大。</b>'
+        '<em>⚠️ 但「变大」的办法不止混合一种：论文自己给的另一条是按长度整个放大模型。'
+        '混合是工程上选的那条，不是定理逼出来的那条。</em>'
         '<em>而左端那个反直觉结果更值得讲：Kimi 的消融里 0:1（纯全注意力）'
         '反而表现不好 —— 加线性层不只是省钱。</em>'),
 

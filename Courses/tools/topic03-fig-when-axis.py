@@ -25,7 +25,8 @@ W = 1400
 def main():
     ROWS = [
         ("旋钮①　每份更小", "低秩分解",
-         "Eigen Attention / Palu / LoRC", "拿训好的模型做低秩分解", "省 40–50%",
+         "Eigen Attention / Palu / LoRC", "拿训好的模型做低秩分解",
+         "40%（Eigen）· 50%（Palu）",
          "MLA", "从第一天就按 512 训", "省 56.9×"),
         ("旋钮①　每份更小", "砍头",
          "GQA uptraining", "平均池化 ＋ 5% 算力续训", "接近 MHA",
@@ -34,7 +35,8 @@ def main():
          "H2O", "一个 KV 驱逐策略，不改训练", "随时可开关",
          "DSA", "943.7B token 继续训练", "掉点小得多"),
         ("旋钮②　每步少读", "挑着看",
-         "ClusterKV / MagicPIG / Quest", "推理期加的选择器", "⛔ 梯度断、访存不连续",
+         "ClusterKV / HashAttention / Quest", "推理期加的选择器",
+         "⛔ 三家三种毛病（见 §6.3b）",
          "NSA", "端到端训练的三条分支", "持平或超过全注意力"),
     ]
 

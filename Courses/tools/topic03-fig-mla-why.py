@@ -99,7 +99,7 @@ def main():
     f.box(x + 26, yy, PW - 52, 56, "#fff", BL, 8)
     f.t(x + 40, yy + 23, "32,768 ÷ 7,168 ＝ %.2f 倍" % free, BL, True, 13.5,
         cls="svglbl")
-    f.t(x + 40, yy + 43, "⚠️ 前提：2·n_h·d_h ÷ d_model &gt; 1（V3 ＝ 4.57）",
+    f.t(x + 40, yy + 43, "⚠️ 前提：2·n_kv·d_h ÷ d_model &gt; 1（V3 ＝ 4.57）",
         GY, size=11.5)
 
     # ══ ② 那为什么还是存结果 ════════════════════════════════════
@@ -195,9 +195,16 @@ def main():
 
     yy = f.band(yy + 14, "warn", "三条前提，缺一条这套账就不成立", [
         "⚠️ 那 4.57 倍<tspan font-weight=\"700\">不是普适的</tspan>：它等于 "
-        "2·n_h·d_h ÷ d_model，<tspan font-weight=\"700\">只在「注意力比残差流宽」的模型上大于 1</tspan>。"
-        "V3 宽 2.29 倍所以是 4.57；很多 GQA 模型这个比值小于 1 ——&#160;"
-        "<tspan font-weight=\"700\">那里根本没有「白送」这一段。</tspan>",
+        "2·n_kv·d_h ÷ d_model ——&#160;<tspan font-weight=\"700\">分子用的是真正被缓存的头数</tspan>"
+        "（MHA 下它就等于 n_h，V3 两者都是 128）。"
+        "<tspan font-weight=\"700\">只在「缓存比残差流宽」的模型上大于 1。</tspan>",
+        "⭐ 两个例子必须并排看，只放 V3 会把人引到 query 头数上去："
+        "<tspan font-weight=\"700\">V3（MHA）</tspan>2×128×128÷7168 ＝ <tspan font-weight=\"700\">4.57</tspan>；"
+        "<tspan font-weight=\"700\">Llama-3-70B（GQA-8）</tspan>2×8×128÷8192 ＝ "
+        "<tspan font-weight=\"700\">0.25</tspan> ——&#160;那里根本没有「白送」这一段。",
+        "⛔ 若在 Llama 那一行误用 query 头数（64）去算，得到的是 2.0 &gt; 1 ——&#160;"
+        "<tspan font-weight=\"700\">结论正好反过来</tspan>。"
+        "⭐ 这类只在反例上才炸的记号错，最难自己发现。",
         "⚠️ 被约束的是 <tspan font-weight=\"700\">K 和 V 合起来</tspan>那个映射（两者共用同一个 c），"
         "比「只压 K」狠得多；带 RoPE 的那 64 维<tspan font-weight=\"700\">另走一路，不在这个约束里</tspan>。",
     ])
