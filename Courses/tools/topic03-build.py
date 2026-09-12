@@ -565,8 +565,12 @@ __FIG_MHA_QKV__
 <div class="note warn"><p>⚠️ 「query / key / value」不是我们编的比喻，是论文自己的措辞：
   <em>「mapping a query and a set of key-value pairs to an output … the output is a
   weighted sum of the values」</em>。<br>
-  ⭐ 而那个 <code>√d_k</code> 也不是玄学 ——&nbsp;推导链在论文脚注里，两行就讲得完
-  （见图中蓝框）：<b>打分的方差随维度线性长大，而 softmax 只认绝对数值。</b></p></div>
+  <!-- ⛔ 2026-09-12 按「多画图少说话」砍：原来这里把图里蓝框那段推导
+       又复述了一遍（方差随维度线性长大 / softmax 只认绝对数值）。删。
+       只留一句指路 ＋ 一句**结论的重新命名** —— 后者图里没有，而且一说就记住。 -->
+  ⭐ 那个 <code>√d_k</code> 的<b>推导链在图里的蓝框</b>（论文脚注 4，两行）。<br>
+  <b>说白了：它就是一个标准差。</b>
+  <em>除掉它只做一件事 ——&nbsp;把打分的方差拉回 1。</em></p></div>
 
 <h3>1.3 多头在多什么</h3>
 __FIG_MHA_HEADS__
