@@ -624,6 +624,11 @@ details.aside b{color:var(--ink);font-weight:600}
    ⭐ 跟普通的 details.more 分开配色：普通折叠是「想深挖再点」，
    这个是**明确劝阻**。用红而不是蓝，让「别点」这层意思在扫视时就成立 ——&nbsp;
    ⛔ 只靠 summary 里的文字挡不住手快的人。 */
+/* ⭐ 2026-09-12：揭晓规则改成「全对才开」，全选但没全对时用它报分。
+   判据：新造的类名落地前先确认它真有样式（09-09 栽过一次）。 */
+.guess .hint{display:none;margin-top:14px;padding:11px 16px;border-radius:10px;
+  background:#fce8e6;border:1px solid #f3c0bb;color:#a50e0e;font-weight:700;font-size:15px}
+.guess .hint.on{display:block}
 details.more.preclass{border-color:#f3c0bb;background:#fef7f6}
 details.more.preclass[open]{background:#fff}
 details.more.preclass>summary{color:#a50e0e}
@@ -754,6 +759,13 @@ h4 { margin:18px 0 6px; font-size:15px }
         而屋脊点 × 算力 = 带宽，给了屋脊点等于把那个数反推出来。
         这里只到「落在几十这一档」为止 —— 跟专题二的公开边界严格一致。
         ⭐ 而且这恰好是个好考点：它就是专题二教的那四句问法之一。 -->
+<style>
+/* ⭐ 2026-09-12 新造的 .hint —— 判据：**自己新造的类名，落地前先确认它真有样式**。
+   放行内 <style> 而不是塞进公共 CSS：它只服务这两道题，没必要全站背着。 */
+.guess .hint{display:none;margin-top:14px;padding:11px 16px;border-radius:10px;
+  background:#fce8e6;border:1px solid #f3c0bb;color:#a50e0e;font-weight:700;font-size:15px}
+.guess .hint.on{display:block}
+</style>
 <details class="more preclass">
   <summary>⛔ 课前勿点 ——&nbsp;开讲前的两道热身题<span class="why">现场会一起做；提前看答案＝自己剧透，这两道题就废了</span></summary>
   <div class="body">
@@ -877,18 +889,48 @@ h4 { margin:18px 0 6px; font-size:15px }
     rst.firstChild.addEventListener('click', function(){
       box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
       rev.classList.remove('on');
+      var hh=box.querySelector('.hint');
+      if(hh){ hh.textContent=''; hh.classList.remove('on'); }   /* ⛔ 别忘了连提示一起清 */
       box.scrollIntoView({behavior:'smooth', block:'nearest'});
     });
     rev.insertBefore(rst, rev.firstChild);
+    /* ⛔⛔ 2026-09-12 改揭晓规则（现场点的）：
+         ① **全对才开**；② 全选了但没全对 → 报「N 对 M 错，继续努力」，不揭晓。
+       ⭐ 连带必须改的一处：原来一点就给正确答案加 .right（绿框）——
+         那等于**第一次点击就把答案送出去了**，「全对才开」根本无从谈起。
+         现在 .right 只在**全对那一刻**才加。
+       ⚠️ 判据：**改揭晓条件时要顺着查一遍「还有什么地方也在泄答案」** ——
+         按钮配色、aria、title 都算。这里就差点漏掉 .right。 */
+    var hint=document.createElement('div');
+    hint.className='hint';
+    box.insertBefore(hint, rev);
+    function grade(){
+      var done=true, ok=0;
+      groups.forEach(function(gg){
+        var p=gg.querySelector('.picked');
+        if(!p){ done=false; return; }
+        if(p.hasAttribute('data-right')) ok++;
+      });
+      if(!done){ hint.textContent=''; hint.classList.remove('on'); return; }
+      var bad=groups.length-ok;
+      if(bad===0){
+        hint.textContent=''; hint.classList.remove('on');
+        box.querySelectorAll('[data-right]').forEach(function(r){ r.classList.add('right'); });
+        rev.classList.add('on');
+        rev.scrollIntoView({behavior:'smooth', block:'nearest'});
+      }else{
+        hint.textContent='⚠️ ' + ok + ' 对 ' + bad + ' 错，继续努力';
+        hint.classList.add('on');
+        rev.classList.remove('on');
+        box.querySelectorAll('.right').forEach(function(r){ r.classList.remove('right'); });
+      }
+    }
     groups.forEach(function(g){
       g.querySelectorAll('button').forEach(function(b){
         b.addEventListener('click', function(){
           g.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
           b.classList.add('picked');
-          var r=g.querySelector('[data-right]'); if(r) r.classList.add('right');
-          var done=true;
-          groups.forEach(function(gg){ if(!gg.querySelector('.picked')) done=false; });
-          if(done){ rev.classList.add('on'); rev.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+          grade();
         });
       });
     });

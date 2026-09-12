@@ -2733,6 +2733,11 @@ details.aside b{color:var(--ink);font-weight:600}
    ⭐ 跟普通的 details.more 分开配色：普通折叠是「想深挖再点」，
    这个是**明确劝阻**。用红而不是蓝，让「别点」这层意思在扫视时就成立 ——&nbsp;
    ⛔ 只靠 summary 里的文字挡不住手快的人。 */
+/* ⭐ 2026-09-12：揭晓规则改成「全对才开」，全选但没全对时用它报分。
+   判据：新造的类名落地前先确认它真有样式（09-09 栽过一次）。 */
+.guess .hint{display:none;margin-top:14px;padding:11px 16px;border-radius:10px;
+  background:#fce8e6;border:1px solid #f3c0bb;color:#a50e0e;font-weight:700;font-size:15px}
+.guess .hint.on{display:block}
 details.more.preclass{border-color:#f3c0bb;background:#fef7f6}
 details.more.preclass[open]{background:#fff}
 details.more.preclass>summary{color:#a50e0e}

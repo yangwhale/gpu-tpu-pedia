@@ -408,18 +408,47 @@ def body():
     rst.firstChild.addEventListener('click', function(){
       box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
       rev.classList.remove('on');
+      var hh=box.querySelector('.hint');
+      if(hh){ hh.textContent=''; hh.classList.remove('on'); }   /* ⛔ 连提示一起清 */
       box.scrollIntoView({behavior:'smooth', block:'nearest'});
     });
     rev.insertBefore(rst, rev.firstChild);
+    /* ⛔⛔ 2026-09-12 改揭晓规则（现场点的，专题三先改、这里跟上保持一致）：
+         ① **全对才开**；② 全选了但没全对 → 报「N 对 M 错，继续努力」，不揭晓。
+       ⭐ 连带必须改的一处：原来一点就给正确答案加 .right（绿框）——
+         那等于**第一次点击就把答案送出去了**，「全对才开」无从谈起。
+         现在 .right 只在**全对那一刻**才加。
+       ⚠️ 判据：**改揭晓条件时顺着查一遍「还有什么地方也在泄答案」。** */
+    var hint=document.createElement('div');
+    hint.className='hint';
+    box.insertBefore(hint, rev);
+    function grade(){
+      var done=true, ok=0;
+      groups.forEach(function(gg){
+        var p=gg.querySelector('.picked');
+        if(!p){ done=false; return; }
+        if(p.hasAttribute('data-right')) ok++;
+      });
+      if(!done){ hint.textContent=''; hint.classList.remove('on'); return; }
+      var bad=groups.length-ok;
+      if(bad===0){
+        hint.textContent=''; hint.classList.remove('on');
+        box.querySelectorAll('[data-right]').forEach(function(r){ r.classList.add('right'); });
+        rev.classList.add('on');
+        rev.scrollIntoView({behavior:'smooth', block:'nearest'});
+      }else{
+        hint.textContent='\u26a0\ufe0f ' + ok + ' 对 ' + bad + ' 错，继续努力';
+        hint.classList.add('on');
+        rev.classList.remove('on');
+        box.querySelectorAll('.right').forEach(function(r){ r.classList.remove('right'); });
+      }
+    }
     groups.forEach(function(g){
       g.querySelectorAll('button').forEach(function(b){
         b.addEventListener('click', function(){
           g.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
           b.classList.add('picked');
-          var r=g.querySelector('[data-right]'); if(r) r.classList.add('right');
-          var done=true;
-          groups.forEach(function(gg){ if(!gg.querySelector('.picked')) done=false; });
-          if(done){ rev.classList.add('on'); rev.scrollIntoView({behavior:'smooth', block:'nearest'}); }
+          grade();
         });
       });
     });
