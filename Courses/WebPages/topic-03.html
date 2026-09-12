@@ -5654,6 +5654,167 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="0" y="768" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#9334e6" stroke-width="1"/>
 <text class="svgsm" x="16" y="795" fill="#681da8">⭐ 这是三个旋钮里<tspan font-weight="700">唯一改变了模型能表达什么</tspan>的一个。另外两个改的是存法和看法，这一个改的是<tspan font-weight="700">数学本身</tspan>。</text>
 </svg><figcaption>⛔ <b>这一张不是高亮，是替换</b>：原来那四格（Q·Kᵀ → mask → softmax → S·V）整个没了，换成点亮的两格。⭐⭐ <b>不用听解释，读输出形状就够 —— 点亮那格输出 <code>BKHH</code>，S 不见了。</b>状态大小只跟头维有关，跟序列多长无关。</figcaption></figure>
+<!-- ⭐⭐⭐ 2026-09-13 夜间 R11。现场给了一个比喻并说它「非常重要」：
+     「一个记事板，固定大小。一种是疯狂往里写、后写的覆盖先写的；
+       一种是先把先写的叉掉，再写后写的；一种是选择性地叉掉。」
+     ⭐ 这三句正好是这一支的三代（纯线性 → delta rule → 门控）。
+       这张图做的事是：**把「叉掉」钉到式子里的一个确切位置上** ——
+       (I − β k kᵀ) 就是它。
+     ⭐⭐ 顺带给出第三个读法：delta rule 等价于对 ½‖Sk−v‖² 做一步 SGD，
+       于是状态不再是缓存，而是**一个边跑边被训练的小模型**。 -->
+<figure class="fbox fwide" id="fig-notepad"><svg viewBox="0 0 1400 795" width="100%" role="img" aria-label="一块固定大小的记事板：纯线性注意力是疯狂往里写后写盖先写，delta rule 是先把这个方向上的旧内容擦掉再写，门控版是选择性地擦；擦这个动作在式子里就是 I 减 beta k k 转置"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一块固定大小的记事板　——　三种写法，就是这一支的三代</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐⭐ 这一张要做的事：<tspan font-weight="700">把「叉掉」这个动作，钉到式子里的一个确切位置上</tspan></text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">纯加：谁也不擦</text>
+<rect x="116" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="133" y="64" fill="#5f6368" style="font-size:11.0px">delta：先擦再写</text>
+<rect x="240" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="257" y="64" fill="#5f6368" style="font-size:11.0px">门控：选择性地擦</text>
+<rect x="367" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="384" y="64" fill="#5f6368" style="font-size:11.0px">板子的物理上限</text>
+<rect x="0" y="88" width="440" height="446" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="440" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">① 先说清楚「板子」是什么</tspan></text>
+<text class="svgsm" x="191" y="108" fill="#5f6368" style="font-size:11.0px">它就是那个固定大小的状态</text>
+<rect x="85.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="115.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="145.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="175.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="205.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="235.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="265.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="295.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="325.0" y="144" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="85.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="115.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="145.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="175.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="205.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="235.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="265.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="295.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="325.0" y="168" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="85.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="115.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="145.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="175.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="205.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="235.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="265.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="295.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="325.0" y="192" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="85.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="115.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="145.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="175.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="205.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="235.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="265.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="295.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="325.0" y="216" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="85.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="115.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="145.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="175.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="205.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="235.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="265.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="295.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="325.0" y="240" width="27" height="21" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="220" y="282" fill="#b06000" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">状态 S：一块 d × d 的板子</tspan></text>
+<text class="svgsm" x="220" y="302" fill="#5f6368" text-anchor="middle" style="font-size:11.5px">大小固定，<tspan font-weight="700">不随序列变长而变大</tspan></text>
+<rect x="22" y="318" width="396" height="44" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="38" y="345" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">写</tspan></text>
+<text class="svgsm" x="70" y="345" fill="#5f6368" style="font-size:11.5px">把一对 (k, v) 的关联记到板子上</text>
+<rect x="22" y="370" width="396" height="44" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="38" y="397" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">读</tspan></text>
+<text class="svgsm" x="70" y="397" fill="#5f6368" style="font-size:11.5px">拿 q 去板子上查，取回一个 v</text>
+<rect x="22" y="426" width="396" height="96" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="22" y="426" width="4" height="96" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="24" y="426" width="3" height="96" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="40" y="451" fill="#b06000" style="font-size:13.0px"><tspan font-weight="700">⭐ 板子的上限是可以写出来的</tspan></text>
+<text class="svgsm" x="40" y="475" fill="#5f6368" style="font-size:11.5px">一共写了 L 条，而板子只有 d 个「方向」——</text>
+<text class="svgsm" x="40" y="496" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700"><tspan font-weight="700">L 一旦超过 d，就一定有东西被盖掉</tspan>。</tspan></text>
+<text class="svgsm" x="40" y="515" fill="#80868b" style="font-size:11.0px">论文原话叫 key「collision」</text>
+<rect x="470" y="88" width="440" height="446" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="88" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="470" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="470" y1="118" x2="910" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="484" y="108" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 三种写法</tspan></text>
+<text class="svgsm" x="566" y="108" fill="#5f6368" style="font-size:11.0px">现场那个比喻，逐句钉到式子上</text>
+<rect x="492" y="140" width="396" height="118" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="492" y="140" width="4" height="118" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="494" y="140" width="3" height="118" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="510" y="166" fill="#a50e0e" style="font-size:13.0px"><tspan font-weight="700">① 疯狂往里写</tspan></text>
+<rect x="510" y="178" width="340" height="28" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="522" y="197" fill="#202124" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace">S ← S ＋ v kᵀ</text>
+<text class="svgsm" x="510" y="227" fill="#5f6368" style="font-size:11.5px">谁也不擦，新的直接叠在旧的上面</text>
+<text class="svgsm" x="510" y="247" fill="#5f6368" style="font-size:11.5px">⛔ 结果：互相干扰，L &gt; d 时必然撞车</text>
+<rect x="492" y="268" width="396" height="118" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="492" y="268" width="4" height="118" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="494" y="268" width="3" height="118" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="510" y="294" fill="#0d652d" style="font-size:13.0px"><tspan font-weight="700">② 先叉掉，再写</tspan></text>
+<rect x="510" y="306" width="340" height="28" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="522" y="325" fill="#202124" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace">S ← S(I − β k kᵀ) ＋ β v kᵀ</text>
+<text class="svgsm" x="510" y="355" fill="#5f6368" style="font-size:11.5px">⭐ 那个 (I − β k kᵀ) 就是「叉掉」——</text>
+<text class="svgsm" x="510" y="375" fill="#5f6368" style="font-size:11.5px">在 k 这个方向上，把旧内容按比例擦掉</text>
+<rect x="492" y="396" width="396" height="118" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="492" y="396" width="4" height="118" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="494" y="396" width="3" height="118" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="510" y="422" fill="#681da8" style="font-size:13.0px"><tspan font-weight="700">③ 选择性地叉</tspan></text>
+<rect x="510" y="434" width="340" height="28" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="522" y="453" fill="#202124" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace">再加一个学出来的门 α</text>
+<text class="svgsm" x="510" y="483" fill="#5f6368" style="font-size:11.5px">擦多少、擦哪几个通道，由门决定</text>
+<text class="svgsm" x="510" y="503" fill="#5f6368" style="font-size:11.5px">⭐ 这就是 Gated DeltaNet / KDA 那一支</text>
+<rect x="940" y="88" width="460" height="446" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="940" y="88" width="460" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="940" y="90" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="940" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="954" y="108" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">③ 「先擦」还有个更深的读法</tspan></text>
+<text class="svgsm" x="1144" y="108" fill="#5f6368" style="font-size:11.0px">它把记事板变成了一个小模型</text>
+<rect x="962" y="142" width="416" height="116" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<rect x="962" y="142" width="4" height="116" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="964" y="142" width="3" height="116" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="167" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">把那个式子换个角度看：</tspan></text>
+<text class="svgsm" x="980" y="190" fill="#5f6368" style="font-size:11.5px">S k 是「按这个 key 现在能取出什么」</text>
+<text class="svgsm" x="980" y="210" fill="#5f6368" style="font-size:11.5px">v 是「本来该取出什么」</text>
+<text class="svgsm" x="980" y="232" fill="#5f6368" style="font-size:11.5px">⭐ 按两者的<tspan font-weight="700">差</tspan>去改板子 ——</text>
+<text class="svgsm" x="980" y="252" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">这就是<tspan font-weight="700">一步梯度下降</tspan>，β 是学习率</tspan></text>
+<rect x="962" y="272" width="416" height="76" rx="8" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svglbl" x="978" y="297" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">⭐⭐ 于是状态不再是一个「缓存」</tspan></text>
+<text class="svgsm" x="978" y="321" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">它是<tspan font-weight="700">一个边跑边被训练的小模型</tspan> ——</tspan></text>
+<text class="svgsm" x="978" y="340" fill="#5f6368" style="font-size:11.5px">损失是 ½‖S k − v‖²，每个 token 训一步</text>
+<rect x="962" y="362" width="416" height="100" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="962" y="362" width="4" height="100" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="964" y="362" width="3" height="100" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="387" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">⚠️ 代价：它比纯加法难并行</tspan></text>
+<text class="svgsm" x="980" y="409" fill="#5f6368" style="font-size:11.5px">纯加法的各项互不依赖，可以一起算；</text>
+<text class="svgsm" x="980" y="429" fill="#5f6368" style="font-size:11.5px">「先擦再写」是<tspan font-weight="700">串行</tspan>的 ——</text>
+<text class="svgsm" x="980" y="449" fill="#80868b" style="font-size:11.0px">论文原话：表达力与并行度的根本权衡</text>
+<rect x="0" y="556" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="556" width="4" height="84" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="556" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="580" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这个比喻之所以好，是因为它把三代的差别缩到了一个动作上</tspan></text>
+<text class="svgsm" x="20" y="604" fill="#174ea6" style="font-size:12.0px">三代的差别不在「怎么读」，全在<tspan font-weight="700">「写之前擦不擦、擦多少」</tspan>：<tspan font-weight="700">不擦 → 按固定方向擦 → 学着擦</tspan>。</text>
+<text class="svgsm" x="20" y="625" fill="#174ea6" style="font-size:12.0px">⭐ 所以看到这一支的任何一个新名字，只要问一句：<tspan font-weight="700">它的「擦」是怎么决定的？</tspan>——&#160;剩下的部分，三代之间几乎没变。</text>
+<rect x="0" y="654" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="654" width="4" height="84" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="654" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="678" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ 别把「板子」想成一个装 token 的盒子</tspan></text>
+<text class="svgsm" x="20" y="702" fill="#b06000" style="font-size:12.0px">⚠️ 板子上存的<tspan font-weight="700">不是 token，是「键到值」的映射</tspan>。所以「装不下」不是「条数超了」，而是<tspan font-weight="700">不同的键在同一个方向上互相覆盖</tspan>。</text>
+<text class="svgsm" x="20" y="723" fill="#b06000" style="font-size:12.0px">⭐ 这也解释了为什么 L &gt; d 是个分界：<tspan font-weight="700">d 个方向撑不起 L 条互不干扰的映射。</tspan></text>
+<text class="svgsm" x="0" y="754" fill="#80868b" style="font-size:11.0px">📌 递推式、key collision（L &gt; d）、delta rule ＝ Widrow-Hoff、以及「等价于对 ½‖Sk−v‖² 做一步 SGD」，均出自 DeltaNet 论文 Yang 等 arXiv 2406.06484 §2.1–2.2</text>
+<text class="svgsm" x="0" y="771" fill="#80868b" style="font-size:11.0px">　　「表达力与并行度之间存在根本权衡」也是该文原话（§6）；「记事板」这个比喻是本课的讲法</text>
+</svg><figcaption>⭐⭐ <b>三种写法就是这一支的三代：疯狂往里写（纯加，L &gt; d 必撞车）→ 先把这个方向上的旧内容叉掉再写（delta rule）→ 选择性地叉（门控）。</b><b>那个 (I − β k kᵀ) 就是「叉掉」。</b><em>再换个角度看，它等价于对 ½‖Sk−v‖² 做一步 SGD —— 状态不再是缓存，是一个边跑边被训练的小模型。</em></figcaption></figure>
+<h3>7.0　一块固定大小的记事板</h3>
+<p>⭐ 图给不了的是这条<b>提问法</b>：
+  <b>看到这一支的任何一个新名字，只问一句 ——&nbsp;「它的『擦』是怎么决定的？」</b>
+  <em>三代之间，<b>读的方式几乎没变，全部的差别都在「写之前擦不擦、擦多少」</b>。
+  这个问法能让你在三十秒内把一个新方案放到正确的位置上。</em></p>
+
 <h3>7.1 基本换法</h3>
 <p>softmax 注意力必须把所有 K 都留着，是因为 softmax 的分母要对<b>所有位置</b>求和 —— 你没法提前把它们合并。</p>
 <p><b>把 softmax 去掉</b>（换成某个可分解的核函数），求和就可以重排：</p>

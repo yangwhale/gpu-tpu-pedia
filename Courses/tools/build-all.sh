@@ -70,6 +70,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-info-law.py      # §二 信息账的严格版本（双部互信息 ＋ L2M 条件）
   python3 topic03-fig-knobs.py         # §四 三个旋钮：全课骨架（为什么恰好是三个）
   python3 topic03-fig-when-axis.py     # §四 第二个轴：什么时候改（事后 vs native）
+  python3 topic03-fig-notepad.py       # §七 记事板比喻：三种写法钉到式子上
   python3 topic03-fig-knob1.py         # §五 旋钮①（四种存法对照 ＋ RoPE 为什么单走一路）
   python3 topic03-fig-mla-why.py       # §五 MLA 凭什么能压（信息账：白送的 vs 赌出来的）
   python3 topic03-fig-mqa-why.py       # §五 砍头这一支怎么想出来的（2019 选项单 ＋ 自由度不是宽度）
