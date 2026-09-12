@@ -219,7 +219,7 @@ BODY = '''<section id="x1"><div class="wrap"><div class="stn"><h2>这个专题�
 
 <div class="note ok"><p>⭐⭐ <b>上下文长度就是 agent 的工作记忆。</b>
   记不住，就什么都干不成 ——&nbsp;<b>2K 的上下文，连一个文件都读不完。</b><br>
-  ⛔ 而<b>每加长一分上下文，KV cache 就线性涨一分</b>。<br>
+  ⛔ 而<b>每加长一分上下文，<b>KV cache</b>（模型每吐一个字都要回看前面所有字，于是把每个字算出来的 K、V 存着不重算 ——&nbsp;存下来的这堆就叫它）就线性涨一分</b>。<br>
   ⭐ <b>所以这六年注意力的全部演化，是为了让「记得住」这件事付得起。</b></p></div>
 
 <!-- ⭐ 2026-09-12 加这一句。口述一遍之后发现的：
@@ -480,6 +480,10 @@ __FIG_RNN_HW__
   across examples」</em>：<b>序列一长，显存就不让你把 batch 开大。</b></p></div>
 
 <h3>0.3 解码时，Transformer 又变回了这个形状</h3>
+<p>📌 <b>两个词先说清，后面一直要用</b>：把整段输入<b>一次算完</b>叫
+  <b>prefill</b>（预填充）；之后<b>一个一个往外吐</b>叫 <b>decode</b>（解码）。
+  <em>⭐ 这一讲后面很多结论在这两个阶段是<b>相反</b>的 ——&nbsp;
+  看到一个「省了多少」，先问它说的是哪个阶段。</em></p>
 <p><b>这是本节的落点，也是整个专题的舞台。</b></p>
 __FIG_RNN_DECODE__
 <div class="note info"><p>⭐⭐ Ⓐ 和 Ⓒ 都是「一步一个，每步搬一遍权重」。
@@ -658,6 +662,11 @@ __FIG_INFO_LAW__
   会变成 batch size 的硬上限。</em></p>
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>FlashAttention ——&nbsp;已经是标配，所以这一讲不展开它</h2></div>
+<div class="note info"><p>📌 <b>这一节会用到的几个硬件词（⭐ 2026-09-13 补 ——&nbsp;
+  原先它们都是当已知词用的）</b>：
+  <b>MXU</b>＝矩阵乘单元（TPU v7 上是 256×256）· <b>VPU</b>＝向量单元（做加减、指数这类）·
+  <b>SRAM / VMEM</b>＝片上暂存，快但极小 · <b>SM</b>＝GPU 上的一个计算单元 ·
+  <b>warp</b>＝GPU 上 32 条线程一组 · <b>gather</b>＝按下标从内存里东一个西一个地捞。</p></div>
 
 <!-- ⛔⛔ 2026-09-08 第二次降级，这次连标题都换了。现场原话：
        「FlashAttention 现在已经是标配了，它在各种 attention 模式下都是一样的，
@@ -1023,11 +1032,16 @@ __FIG_NOTEPAD__
   这个问法能让你在三十秒内把一个新方案放到正确的位置上。</em></p>
 
 <h3>7.1 基本换法</h3>
+<div class="note info"><p>📌 <b>这一节的记号约定（⭐ 2026-09-13 补 ——&nbsp;
+  原先三处朝向不一致，数学背景的读者第一眼就卡住）</b>：
+  状态 <code>S ∈ ℝ^(d_v × d_k)</code>；转移矩阵 <code>A_t</code> 一律<b>右乘</b>
+  （<code>S_t = S_{t-1} · A_t + v_t k_tᵀ</code>）；读出写作 <code>S_t · q_t</code>。
+  <em>A_t 是 d_k×d_k ——&nbsp;<b>只有右乘，维度才对得上。</b></em></p></div>
 <p>softmax 注意力必须把所有 K 都留着，是因为 softmax 的分母要对<b>所有位置</b>求和 —— 你没法提前把它们合并。</p>
 <p><b>把 softmax 去掉</b>（换成某个可分解的核函数），求和就可以重排：</p>
 <pre><code>softmax 版： out_t = Σ_{s≤t} softmax(q_t·k_s) v_s      ← 必须留下所有 (k_s, v_s)
-线性版：     S_t   = S_{t-1} + k_t v_tᵀ                ← 一个固定大小的状态
-            out_t = q_t S_t</code></pre>
+线性版：     S_t   = S_{t-1} + v_t k_tᵀ                ← 一个固定大小的状态
+            out_t = S_t · q_t</code></pre>
 <p>于是：</p>
 <ul><li>复杂度 O(L²·d) → <b>O(L·d²)</b>，对长序列是数量级的差别</li><li><b>没有随长度增长的 KV cache</b> —— 只有一个 <code>d_k × d_v</code> 的状态矩阵</li><li>推理时它就是一个 <b>RNN</b>：读一个 token、更新一次状态、吐一个输出</li></ul>
 <p><b>代价说死</b>：状态大小固定 → <b>信息必然有损</b>。 序列越长，往同一个矩阵里塞的东西越多，长程精确检索（"第 30 万字提到的那个电话号码"） 会力不从心。这不是实现问题，是这个换法的性质。</p>
@@ -1647,6 +1661,50 @@ for ph, (fid, fn, src, cap) in FIGS.items():
         ph, '<figure class="fbox fwide" id="%s">%s%s</figure>'
             % (fid, svg, '<figcaption>%s</figcaption>' % cap if cap else ''))
 assert "__FIG_" not in _html, "还有图占位符没被替换掉"
+# ══════════════════════════════════════════════════════════════════
+# ⭐⭐ 2026-09-13 学生审稿：全文 0 个锚链接 —— 每一句「见 §X.Y」都要
+#   手动往回滚 80 万字符的页面。新手那位说他「真的滚回去找过，找不到才发现是错引」。
+#   ⭐ 这里做一次后处理：
+#     ① 给每个 <h3>/<h4> 自动加 id（按它开头的小节号）
+#     ② 把正文里的「§X.Y」替换成指向它的 <a>
+#   ⛔ 只替换**真实存在**的号 —— 指不到的保持原样，
+#     这样它们在页面上仍然是纯文本，而 xref 体检照样能抓出来。
+def _anchorize(html):
+    import re as _re
+    ids = {}
+
+    def _mark(m):
+        tag, attrs, body = m.group(1), m.group(2), m.group(3)
+        plain = _re.sub(r"<[^>]+>", "", body)
+        # ⛔ 合并标题（「5.1 ＋ 5.2 ＋ 5.3 ＋ 5.4」）要**把整串号都登记上** ——
+        #   只认第一个的话，指向 5.3 的引用就锚不上。
+        #   ⭐ 这跟 topic02-lint-xref 里那条是同一个坑，那边今晚刚修过一次。
+        run = _re.match(r"\s*((?:\d+\.\d+[a-z]?)(?:\s*[＋+、，,～~]\s*\d+\.\d+[a-z]?)*)",
+                        plain)
+        if not run or "id=" in attrs:
+            return m.group(0)
+        nums = _re.findall(r"\d+\.\d+[a-z]?", run.group(1))
+        sid = "s" + nums[0].replace(".", "-")
+        for nm in nums:
+            ids[nm] = sid
+        return "<%s%s id=\"%s\">%s</%s>" % (tag, attrs, sid, body, tag)
+
+    html = _re.sub(r"<(h[34])([^>]*)>(.*?)</\1>", _mark, html, flags=_re.S)
+
+    def _link(m):
+        num = m.group(1)
+        if num not in ids:
+            return m.group(0)          # 指不到的不动，留给 xref 体检去报
+        return '<a href="#%s">§%s</a>' % (ids[num], num)
+
+    # ⛔ 不碰 <svg> 里面的文字（那是图，锚点点不动）也不碰已经在 <a> 里的
+    parts = _re.split(r"(<svg.*?</svg>)", html, flags=_re.S)
+    for i in range(0, len(parts), 2):
+        parts[i] = _re.sub(r"§(\d+\.\d+[a-z]?)", _link, parts[i])
+    return "".join(parts)
+
+
+_html = _anchorize(_html)
 io.open(OUT, "w", encoding="utf-8").write(_html)
 print("ok  topic-03.html  %s 字符 · %d 节"
       % (format(os.path.getsize(OUT), ","), len(SECTIONS)))

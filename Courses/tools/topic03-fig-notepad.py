@@ -154,6 +154,30 @@ def main():
 
     # ══ 落点带 ══════════════════════════════════════════════════
     yy = y0 + ph + 22
+    # ── 板子到底多少字节 ──────────────────────────────────────
+    H, DK, DV, NL = 32, 128, 128, 69          # ⚠️ 形状是**示例**，不是某个模型的实测
+    G, DH = 8, 128                            # 对照组：GQA-8
+    st = H * DK * DV * 4                      # 每层状态，fp32
+    kvt = 2 * G * DH * 2                      # 每层每 token 的 KV，bf16
+    cross = st // kvt
+    assert cross == 512 and abs(st * NL / 2**20 - 138) < 1
+
+    yy = f.band(yy, "warn", "板子到底占多少字节 ——&#160;全讲只有这一支没给过数", [
+        "每层状态 ＝ 头数 × d_k × d_v × 4 B（通常 fp32 存）"
+        "＝ <tspan font-weight=\"700\">%.0f MiB</tspan>；"
+        "69 个 KDA 层就是 <tspan font-weight=\"700\">%.0f MiB / 请求</tspan> ——&#160;"
+        "<tspan font-weight=\"700\">而且它跟序列长度无关。</tspan>"
+        % (st / 2.0 ** 20, st * NL / 2.0 ** 20),
+        "⭐ 于是有个自然的问题：<tspan font-weight=\"700\">短上下文、高并发下，"
+        "它会不会反而比 KV 更费？</tspan>算一下交叉点："
+        "状态 ÷ 每 token 的 KV ＝ <tspan font-weight=\"700\">约 %d 个 token</tspan>。"
+        % cross,
+        "⛔ 也就是说<tspan font-weight=\"700\">只在几百 token 以内它才更贵</tspan>；"
+        "到 8K 时 GQA-8 的 KV 已经是它的 16 倍。"
+        "⚠️ 上面的形状是<tspan font-weight=\"700\">示例</tspan>（32 头 × 128 × 128），"
+        "换模型请自己代 ——&#160;<tspan font-weight=\"700\">公式比数字有用</tspan>。",
+    ])
+
     yy = f.band(yy, "info", "⭐⭐ 这个比喻之所以好，是因为它把三代的差别缩到了一个动作上", [
         "三代的差别不在「怎么读」，全在<tspan font-weight=\"700\">「写之前擦不擦、擦多少」</tspan>："
         "<tspan font-weight=\"700\">不擦 → 按固定方向擦 → 学着擦</tspan>。",

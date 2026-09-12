@@ -318,8 +318,9 @@ def fig_decode():
         ("Ⓑ", "Transformer 训练", "它当年赢下来的地方", GR, "#e6f4ea", "#d7ecdc",
          "并行", "整段只搬一次：W", "算术强度 ＝ n · B", "一次搬运换 n 倍的活干", "p"),
         ("Ⓒ", "Transformer 解码", "你现在用的每个大模型", PU, "#f3e8fd", "#e8d5f7",
-         "串行", "每步搬：W ＋ 越来越长的 KV", "算术强度 ≈ B",
-         "串行回来了，还多背一个变长的 KV", "g"),
+         "串行", "每步搬：W ＋ 越来越长的 KV",
+         "权重那半 ＝ B　｜　KV 那半 ＝ G/2（跟 B 无关）",
+         "⛔ 加 batch 只救得了权重那半，救不了 KV 那半", "g"),
     )
     ROWH = 128
     for i, (tag, name, note, col, fill, tint, ser, mov, ai, tail, mode) in enumerate(ROWS):
@@ -354,6 +355,23 @@ def fig_decode():
         f.t(1102, top + 44, tail, col, True, _sz(12))
 
     yy = y + 3 * (ROWH + 12) + 6
+    # ⛔⛔ 2026-09-13 学生审稿（做推理部署三年的那位）抓到的最重一条：
+    #   Ⓒ 原来只写「算术强度 ≈ B」—— 那只对**权重那一半**成立。
+    #   ⭐ decode 时 KV 是**每个请求各一份**：batch 一大，读的字节和算的 FLOPs
+    #     同比例涨，所以注意力那半的强度**跟 B 无关**。
+    #   这一条不改，后面「三个旋钮到底改善了什么」在 decode 侧整条因果链是断的。
+    yy = f.band(yy, "bad", "⛔ Ⓒ 那一行的算术强度，必须拆成两半看", [
+        "<tspan font-weight=\"700\">权重那一半</tspan>：全 batch 共享一份，"
+        "所以攒 batch 有用 ——&#160;强度 ＝ B。这是所有「加大 batch 提吞吐」的依据。",
+        "<tspan font-weight=\"700\">KV 那一半</tspan>：每个请求各存各的。"
+        "batch 一大，<tspan font-weight=\"700\">读的字节和算的 FLOPs 同比例涨</tspan> ——&#160;"
+        "强度恒等于 <tspan font-weight=\"700\">GQA 组大小的一半</tspan>，跟 B 无关。",
+        "⭐ 拿 GQA-8 算就是 <tspan font-weight=\"700\">4 FLOP/byte</tspan>，"
+        "对着上一格那条 313 的屋脊线差两个数量级 ——&#160;"
+        "<tspan font-weight=\"700\">而且攒 batch 一点都救不了。</tspan>"
+        "这正是后面三个旋钮要动它的原因。",
+    ])
+
     yy = f.band(yy, "info", "把 Ⓐ 和 Ⓒ 摆在一起看 ——&#160;这就是整个专题三的舞台", [
         '两边都是「一步一个，每步把权重搬一遍」。'
         '<tspan font-weight="700">唯一的区别在「每步还得额外搬什么」：</tspan>',
