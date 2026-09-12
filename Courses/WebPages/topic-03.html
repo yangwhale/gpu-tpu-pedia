@@ -3341,6 +3341,137 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="754" fill="#80868b" style="font-size:11.0px">📌 维度出自 DeepSeek-V2 论文 §2.1（arXiv 2405.04434）与 V3 config：d=7168, n_h=128, d_h=128, d_c=512, d_h^R=64；三个倍数由脚本当场算并断言</text>
 <text class="svgsm" x="0" y="771" fill="#80868b" style="font-size:11.0px">　　事后低秩：Eigen Attention（EMNLP Findings 2024）、Palu、LoRC　「MLA 优于 MHA」的口径见 DeepSeek-V2 仓库 issue #26</text>
 </svg><figcaption>⭐⭐ <b>32,768 个数是从一个 7,168 维的 h 算出来的 —— 一次确定性映射不造信息，所以 4.57 倍是白送的。</b><b>真正的赌注是后面那步：7,168 压到 576，等于强制 K 投影的秩 ≤ 512。</b><em>而敢赌是因为「K/V 本来就低秩」在 MLA 之前已经被量过了。</em></figcaption></figure>
+<!-- ⭐⭐ 2026-09-13 夜间 R2。上一张答「MLA 凭什么敢压」，
+     这一张答**它的对手为什么更窄反而更差**，外加一个意外收获：
+     ⭐ MQA 论文 §2.4 自己就列了一张「怎么少搬 K/V」的选项单，
+       今天三个旋钮里的两个都在那张单子上 ——
+       **这门课的骨架不是我们事后归纳的，是当事人自己列的。** -->
+<figure class="fbox fwide" id="fig-mqa-why"><svg viewBox="0 0 1400 774" width="100%" role="img" aria-label="砍头这一支是怎么想出来的：2019 年 MQA 论文里那张选项单、「自由度不是宽度」的消融证据、以及 GQA 的两个发明点"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">砍头这一支是怎么想出来的　——　三个「为什么」，证据都在原论文里</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 上一张讲 MLA 凭什么敢压；这一张讲<tspan font-weight="700">它的对手为什么更窄反而更差</tspan></text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">MHA 基线</text>
+<rect x="85" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="102" y="64" fill="#5f6368" style="font-size:11.0px">共用一份 K/V</text>
+<rect x="192" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="209" y="64" fill="#5f6368" style="font-size:11.0px">真的只剩一个头</text>
+<rect x="308" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="325" y="64" fill="#5f6368" style="font-size:11.0px">2019 年就列出的选项</text>
+<rect x="454" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="471" y="64" fill="#5f6368" style="font-size:11.0px">GQA 的发明点</text>
+<rect x="0" y="88" width="440" height="404" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="440" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 2019 年那张选项单</tspan></text>
+<text class="svgsm" x="160" y="108" fill="#5f6368" style="font-size:11.0px">MQA 论文 §2.4，原文列的</text>
+<text class="svgsm" x="24" y="142" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">「解码每步都要重新搬一遍 K/V —— 怎么少搬？」</tspan></text>
+<rect x="24" y="168" width="392" height="42" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="38" y="194" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">限制序列长度 n</tspan></text>
+<text class="svgsm" x="137" y="194" fill="#80868b" style="font-size:11.0px">就不让它变长</text>
+<text class="svgsm" x="402" y="194" fill="#80868b" text-anchor="end" style="font-size:11.5px"><tspan font-weight="700">—</tspan></text>
+<rect x="24" y="218" width="392" height="42" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="38" y="244" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">只看一个局部邻域</tspan></text>
+<text class="svgsm" x="148" y="244" fill="#80868b" style="font-size:11.0px">后来叫<tspan font-weight="700">滑窗</tspan></text>
+<text class="svgsm" x="402" y="244" fill="#174ea6" text-anchor="end" style="font-size:11.5px"><tspan font-weight="700">旋钮②</tspan></text>
+<rect x="24" y="268" width="392" height="42" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="38" y="294" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">压缩历史位置的个数</tspan></text>
+<text class="svgsm" x="160" y="294" fill="#80868b" style="font-size:11.0px">后来叫<tspan font-weight="700">稀疏 / 压缩</tspan></text>
+<text class="svgsm" x="402" y="294" fill="#174ea6" text-anchor="end" style="font-size:11.5px"><tspan font-weight="700">旋钮②</tspan></text>
+<text class="svgsm" x="24" y="324" fill="#5f6368" style="font-size:11.5px">然后 Shazeer 说：本文走一条<tspan font-weight="700">正交</tspan>的路 ——</text>
+<rect x="24" y="346" width="392" height="52" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="24" y="346" width="4" height="52" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="26" y="346" width="3" height="52" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="42" y="368" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">去掉 K/V 的「头」这一维</tspan></text>
+<text class="svgsm" x="402" y="368" fill="#0d652d" text-anchor="end" style="font-size:11.5px"><tspan font-weight="700">旋钮①</tspan></text>
+<text class="svgsm" x="42" y="387" fill="#80868b" style="font-size:11.0px">query 侧的头一个不动</text>
+<text class="svglbl" x="24" y="414" fill="#174ea6" style="font-size:13.0px"><tspan font-weight="700">⭐⭐ 今天三个旋钮里的两个，</tspan></text>
+<text class="svglbl" x="24" y="435" fill="#174ea6" style="font-size:13.0px"><tspan font-weight="700">2019 年那张单子上就有。</tspan></text>
+<text class="svgsm" x="24" y="458" fill="#5f6368" style="font-size:11.5px">⛔ 不是我们事后归纳的骨架 —— 是当事人自己列的。</text>
+<rect x="470" y="88" width="440" height="404" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="88" width="440" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="470" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="470" y1="118" x2="910" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="484" y="108" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">② 自由度不是宽度</tspan></text>
+<text class="svgsm" x="607" y="108" fill="#5f6368" style="font-size:11.0px">同一篇论文的消融表</text>
+<text class="svgsm" x="494" y="150" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">配置</tspan></text>
+<text class="svgsm" x="702" y="150" fill="#5f6368" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">缓存</tspan></text>
+<text class="svgsm" x="880" y="150" fill="#5f6368" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">困惑度</tspan></text>
+<rect x="494" y="162" width="392" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="510" y="184" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">multi-head</tspan></text>
+<text class="svgsm" x="510" y="202" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">h=8, d_k=128</text>
+<text class="svgsm" x="702" y="193" fill="#5f6368" text-anchor="middle" style="font-size:11.5px">128 份 K/V</text>
+<text class="svgsm" x="870" y="193" fill="#5f6368" text-anchor="end" style="font-size:15.0px"><tspan font-weight="700">29.9</tspan></text>
+<rect x="494" y="222" width="392" height="52" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="510" y="244" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">multi-query</tspan></text>
+<text class="svgsm" x="510" y="262" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">h=8, 共用 1 份</text>
+<text class="svgsm" x="702" y="253" fill="#5f6368" text-anchor="middle" style="font-size:11.5px">1 份 K/V</text>
+<text class="svgsm" x="870" y="253" fill="#0d652d" text-anchor="end" style="font-size:15.0px"><tspan font-weight="700">30.2</tspan></text>
+<rect x="494" y="282" width="392" height="52" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="510" y="304" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">multi-head</tspan></text>
+<text class="svgsm" x="510" y="322" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">h=1, d_k=128</text>
+<text class="svgsm" x="702" y="313" fill="#5f6368" text-anchor="middle" style="font-size:11.5px">1 份 K/V</text>
+<text class="svgsm" x="870" y="313" fill="#a50e0e" text-anchor="end" style="font-size:15.0px"><tspan font-weight="700">31.2</tspan></text>
+<rect x="494" y="346" width="392" height="74" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="494" y="346" width="4" height="74" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="496" y="346" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="512" y="370" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">后两行缓存的 K/V <tspan font-weight="700">一样多</tspan></tspan></text>
+<text class="svgsm" x="512" y="391" fill="#5f6368" style="font-size:11.5px">差别只在 query 侧还留不留 8 个问法 ——</text>
+<text class="svgsm" x="512" y="410" fill="#5f6368" style="font-size:11.5px">就这一点，把困惑度拉回 1.0</text>
+<text class="svgsm" x="494" y="426" fill="#80868b" style="font-size:11.0px">对照组：把总维度摊给更多头（缓存都是 1 份）</text>
+<rect x="494" y="444" width="128" height="38" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="504" y="461" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">h=2, d_k=64</text>
+<text class="svgsm" x="504" y="476" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">31.1</tspan></text>
+<rect x="628" y="444" width="128" height="38" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="638" y="461" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">h=4, d_k=32</text>
+<text class="svgsm" x="638" y="476" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">31.0</tspan></text>
+<rect x="762" y="444" width="128" height="38" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="772" y="461" fill="#80868b" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">h=8, d_k=16</text>
+<text class="svgsm" x="772" y="476" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">30.9</tspan></text>
+<rect x="940" y="88" width="460" height="404" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="940" y="88" width="460" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="940" y="90" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="940" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="954" y="108" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">③ GQA 的两个发明点</tspan></text>
+<text class="svgsm" x="1093" y="108" fill="#5f6368" style="font-size:11.0px">不是「折中一下」那么简单</text>
+<text class="svglbl" x="964" y="142" fill="#681da8" style="font-size:13.0px"><tspan font-weight="700">发明点一　不用从头重训</tspan></text>
+<rect x="964" y="164" width="412" height="50" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="978" y="186" fill="#5f6368" style="font-size:12.0px">把一组里所有头的 K/V 投影<tspan font-weight="700">取平均</tspan></text>
+<text class="svgsm" x="978" y="204" fill="#80868b" style="font-size:11.0px">论文实测：比「挑一个头」和「随机初始化」都好</text>
+<rect x="964" y="222" width="412" height="50" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="978" y="244" fill="#5f6368" style="font-size:12.0px">再用 <tspan font-weight="700">5%</tspan> 原始预训练算力续训一下</text>
+<text class="svgsm" x="978" y="262" fill="#80868b" style="font-size:11.0px">然后它就是一个 GQA 模型了</text>
+<text class="svglbl" x="964" y="286" fill="#681da8" style="font-size:13.0px"><tspan font-weight="700">发明点二　真正的动机不是「取个中间值」</tspan></text>
+<rect x="964" y="310" width="412" height="94" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="964" y="310" width="4" height="94" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="966" y="310" width="3" height="94" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="982" y="334" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">模型越大，头越多 ——</tspan></text>
+<text class="svgsm" x="982" y="355" fill="#5f6368" style="font-size:11.5px">MQA 一律砍到 1 份，等于<tspan font-weight="700">削减力度随规模失控</tspan></text>
+<text class="svgsm" x="982" y="376" fill="#5f6368" style="font-size:11.5px">GQA 固定的是<tspan font-weight="700">组数</tspan>，于是削减比例可控</text>
+<text class="svgsm" x="982" y="395" fill="#80868b" style="font-size:11.0px">GQA-1 就是 MQA，GQA-H 就是 MHA</text>
+<text class="svgsm" x="964" y="418" fill="#681da8" style="font-size:12.0px">⭐ 所以它是一个<tspan font-weight="700">旋钮</tspan>，不是一个新机制。</text>
+<rect x="0" y="514" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="514" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="514" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="538" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 把 ② 和上一张连起来：瓶颈的伤害，不在它多窄</tspan></text>
+<text class="svgsm" x="20" y="562" fill="#174ea6" style="font-size:12.0px">MQA 每 token 每层只存 256 个数，比 MLA 的 576 还<tspan font-weight="700">窄一倍多</tspan>，可是它<tspan font-weight="700">明显更差</tspan>。</text>
+<text class="svgsm" x="20" y="583" fill="#174ea6" style="font-size:12.0px">因为 MQA 逼所有头<tspan font-weight="700">收到同一份 k 和 v</tspan>；MLA 只要求它们<tspan font-weight="700">从同一份压缩里各自解码</tspan>——&#160;每个头有自己的上投影。</text>
+<text class="svgsm" x="20" y="604" fill="#174ea6" style="font-size:12.0px">⭐ 判据：<tspan font-weight="700">瓶颈的伤害不在于它多窄，在于它剥夺了多少自由度。</tspan>这条在后面看稀疏、看线性注意力时还要用。</text>
+<rect x="0" y="633" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="633" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="633" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="657" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐ 暗线第二次出现：事后压 vs 从头按压缩训</tspan></text>
+<text class="svgsm" x="20" y="681" fill="#0d652d" style="font-size:12.0px">GQA 是<tspan font-weight="700">事后</tspan>的典范 ——&#160;拿一个 MHA checkpoint，平均池化 ＋ 5% 续训就成了；<tspan font-weight="700">便宜，但天花板也就到「接近 MHA」</tspan>。</text>
+<text class="svgsm" x="20" y="702" fill="#0d652d" style="font-size:12.0px">MLA 是<tspan font-weight="700">从头</tspan>的典范 ——&#160;要重训，但换来 56.9× 而不是 16×。⭐ <tspan font-weight="700">这两条路一直并存到今天</tspan>，§六 还会再遇见一次。</text>
+<text class="svgsm" x="0" y="733" fill="#80868b" style="font-size:11.0px">📌 ① 与 ② 出自 MQA 原论文 Shazeer arXiv 1911.02150（§2.4 与表 4，Billion-Word LM 基准的 dev 困惑度）；「正交」是原文用词</text>
+<text class="svgsm" x="0" y="750" fill="#80868b" style="font-size:11.0px">　　③ 出自 GQA 原论文 Ainslie 等 arXiv 2305.13245 §2.1–2.2：mean pooling、α=5% 续训、GQA-1=MQA / GQA-H=MHA</text>
+</svg><figcaption>⭐⭐ <b>2019 年 MQA 那篇论文自己就列了一张「怎么少搬 K/V」的选项单 —— 今天三个旋钮里的两个，那张单子上就有。</b><b>中间那三行是「自由度不是宽度」的论文自带证据：同样只缓存一份 K/V，保留 8 个 query 头能把困惑度拉回整整 1.0。</b></figcaption></figure>
+<h3>5.0c　那为什么更窄的 MQA 反而输了</h3>
+<p>⭐ 图里那三行困惑度值得单独记一下：<b>MQA 和「真的只剩一个头」缓存的 K/V 一样多</b>，
+  差别只在 query 侧还留不留 8 个不同的问法 ——&nbsp;就这一点差了整整 1.0。
+  <em>所以后面看任何一个「压缩」方案，都要分清它压掉的是<b>体积</b>还是<b>自由度</b>：
+  <b>压体积通常还好，压自由度很贵。</b></em></p>
+
 <h3>5.0b　为什么它能压 —— 一笔信息账</h3>
 <p>⭐ 图给不了的只有一句：<b>这条推理链本身是可迁移的</b>。
   <em>看任何一个压缩方案 ——&nbsp;KV、权重、激活、梯度 ——&nbsp;都先把它拆成两段问：

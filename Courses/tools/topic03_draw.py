@@ -127,7 +127,12 @@ class Fig(object):
         #   护栏，唯独单行的 t() 没有 ——&nbsp;而单行才是最常写着写着就顶出去的。
         #   ⛔ 文字溢出**不报错、不产生滚动条**，只是被裁掉。
         if w is not None:
-            need = wpx(s, size)
+            # ⛔ 2026-09-13：原先按**含标签的原串**量宽，于是任何一处
+            #   <tspan font-weight="700"> 都被当成 30 多个可见字符，
+            #   好好的一行被误判成溢出。lines() / band() / src() 三个基元
+            #   早就先 strip 再量，唯独 t() 没有 —— ⭐ 同一套护栏里
+            #   **有一个成员判据不一样，就等于那条判据在这里不成立**。
+            need = wpx(re.sub(r"<[^>]+>", "", s), size)
             assert need <= w, ("「%s」要 %dpx，只给了 %dpx ——&nbsp;拆行或加宽"
                                % (re.sub(r"<[^>]+>", "", s)[:26], need, w))
         st = ["font-size:%.1fpx" % _sz(size)]

@@ -92,7 +92,10 @@ def audit(fname):
         n = m.group(1)
         if n in have:
             continue
-        if FOREIGN.search(txt[max(0, m.start() - 14):m.start()]):
+        # ⛔ 2026-09-13：窗口原来是 14 个字符，而「Shazeer arXiv 1911.02150（§2.4」
+        #   里 arXiv 离得有 18 个字符远 —— 放行条件明明成立却没匹配上。
+        #   ⭐ 判据：**放行窗口要按真实写法量，别拍脑袋定长度。**
+        if FOREIGN.search(txt[max(0, m.start() - 28):m.start()]):
             continue                      # 明写了是别的文档，放行
         (cross if n in ok else bad)[n] = (cross if n in ok else bad).get(n, 0) + 1
 
