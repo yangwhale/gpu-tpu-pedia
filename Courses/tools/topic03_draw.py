@@ -132,6 +132,10 @@ class Fig(object):
         #   （⏸ 2026-09-13 在 fig3-why-softmax 上栽过一次。）
         for _bad in "\u23f8\u23f1\u23f3\u23ef":
             assert _bad not in s, "这个符号渲染不出来（会变成小方块）：%r" % _bad
+        # ⛔ <tspan> 跨两次 t() 调用是不可能的（生成的是两个独立 <text>）。
+        #   不配平的话要等到 save() 的 XML 自检才报，而那时行号指向产物。
+        assert s.count("<tspan") == s.count("</tspan>"), \
+            "<tspan> 没配平（一个 tspan 不能跨两次 t() 调用）：%s" % s[:50]
         # ⭐ 2026-09-09：传了 w 就当场校宽。lines() / src() / band() 早就有这道
         #   护栏，唯独单行的 t() 没有 ——&nbsp;而单行才是最常写着写着就顶出去的。
         #   ⛔ 文字溢出**不报错、不产生滚动条**，只是被裁掉。

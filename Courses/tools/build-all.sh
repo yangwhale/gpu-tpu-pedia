@@ -67,6 +67,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-why-softmax.py  # §一 为什么非 softmax 不可 ＋ K/V 为什么分家
   python3 topic03-fig-mha.py           # §一 MHA 四张图（换掉了什么 / 信息怎么流 / 在算什么 / 多头）
   python3 topic03-fig-motives.py       # §二 两条动机线（硬件账 ＋ 信息账 ＋ 交汇处）
+  python3 topic03-fig-info-law.py      # §二 信息账的严格版本（双部互信息 ＋ L2M 条件）
   python3 topic03-fig-knobs.py         # §四 三个旋钮：全课骨架（为什么恰好是三个）
   python3 topic03-fig-knob1.py         # §五 旋钮①（四种存法对照 ＋ RoPE 为什么单走一路）
   python3 topic03-fig-mla-why.py       # §五 MLA 凭什么能压（信息账：白送的 vs 赌出来的）

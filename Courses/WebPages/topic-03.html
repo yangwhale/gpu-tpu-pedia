@@ -2874,6 +2874,130 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="554" fill="#80868b" style="font-size:11.0px">📌 左栏四行推导与四个对照值均按公式当场算出（脚本里带断言）；口径沿用 V3 论文比较表（K、V 都按 d_h=128）——&#160;<tspan font-weight="700">V3 真实的 K 每头是 128+64=192 维，严格算这个基线还会更大</tspan></text>
 <text class="svgsm" x="0" y="571" fill="#80868b" style="font-size:11.0px">　　⚠️ 右栏三个观察是<tspan font-weight="700">现象</tspan>，不是本课实测；它们各自对应后面的一支方案（稀疏 →&#160;§六、分层 →&#160;§六、压缩 →&#160;§五）</text>
 </svg><figcaption>⭐ <b>左边是硬件账（必须省），右边是信息账（可以省而不太亏）。</b><b>两条完全独立，却在同一个地方交汇 —— 所有变体都活在那儿。</b><em>判一个变体好不好，就看它在「省了多少」和「亏了多少」之间落在哪。</em></figcaption></figure>
+
+<!-- ⭐⭐⭐ 2026-09-13 夜间 R9。上面那张给的是**直觉版**的信息账
+     （实测稀疏、远近有别）。这一张给**严格版**：
+       · 两点互信息随距离幂律衰减（Lin ＆ Tegmark：马尔可夫是指数衰减）
+       · 双部互信息随长度幂律**增长**
+       · L2M 条件：状态维度必须至少同阶增长
+     ⭐⭐ 它顺手回答了一个后面才会问的问题：**为什么第三个旋钮必须混着用。**
+       那不是工程经验，是有理论下界的。 -->
+<figure class="fbox fwide" id="fig-info-law"><svg viewBox="0 0 1400 848" width="100%" role="img" aria-label="信息账的严格版本：两点互信息随距离幂律衰减，双部互信息随长度幂律增长；L2M 条件要求模型的历史状态维度至少同阶增长；据此三个旋钮里只有第三个必然违反，所以它只能混着用"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">信息账的严格版本　——　「远处可以少看」这句话，能不能算出来</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐⭐ 这一张<tspan font-weight="700">顺手回答了「为什么第三个旋钮必须混着用」</tspan>——&#160;那不是工程经验，是有理论下界的</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">两点互信息：衰减</text>
+<rect x="127" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="144" y="64" fill="#5f6368" style="font-size:11.0px">双部互信息：增长</text>
+<rect x="254" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="271" y="64" fill="#5f6368" style="font-size:11.0px">L2M 条件</text>
+<rect x="339" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="356" y="64" fill="#5f6368" style="font-size:11.0px">本课的推导</text>
+<rect x="0" y="88" width="440" height="440" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="440" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 两个互信息，别混为一谈</tspan></text>
+<text class="svgsm" x="191" y="108" fill="#5f6368" style="font-size:11.0px">一个在衰减，一个在增长</text>
+<text class="svgsm" x="22" y="142" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">两点互信息：两个 token 之间</tspan></text>
+<rect x="22" y="154" width="396" height="72" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<path d="M 32.0,166.0 L 41.6,180.9 L 51.3,187.6 L 60.9,191.7 L 70.6,194.4 L 80.2,196.4 L 89.8,198.0 L 99.5,199.2 L 109.1,200.3 L 118.8,201.2 L 128.4,201.9 L 138.1,202.6 L 147.7,203.1 L 157.3,203.6 L 167.0,204.1 L 176.6,204.5 L 186.3,204.9 L 195.9,205.2 L 205.5,205.5 L 215.2,205.8 L 224.8,206.1 L 234.5,206.3 L 244.1,206.6 L 253.7,206.8 L 263.4,207.0 L 273.0,207.2 L 282.7,207.4 L 292.3,207.5 L 301.9,207.7 L 311.6,207.9 L 321.2,208.0 L 330.9,208.1 L 340.5,208.3 L 350.2,208.4 L 359.8,208.5 L 369.4,208.6 L 379.1,208.7 L 388.7,208.8 L 398.4,208.9 L 408.0,209.0" fill="none" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round"/>
+<text class="svgsm" x="408" y="212" fill="#80868b" text-anchor="end" style="font-size:11.0px">距离 →</text>
+<text class="svgsm" x="22" y="244" fill="#5f6368" style="font-size:11.5px">⭐ 随距离<tspan font-weight="700">幂律衰减</tspan> —— 而任何马尔可夫过程</text>
+<text class="svgsm" x="22" y="263" fill="#5f6368" style="font-size:11.5px">都是<tspan font-weight="700">指数</tspan>衰减。这正是语言不能用</text>
+<text class="svgsm" x="22" y="282" fill="#5f6368" style="font-size:11.5px">马尔可夫近似的原因。</text>
+<line x1="22" y1="300" x2="418" y2="300" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="22" y="320" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">双部互信息：把序列从中间切开</tspan></text>
+<rect x="22" y="332" width="396" height="72" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="32" y="342" width="186.0" height="52" rx="3" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="222.0" y="342" width="186.0" height="52" rx="3" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="125" y="372" fill="#5f6368" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">前一半</tspan></text>
+<text class="svgsm" x="315" y="372" fill="#5f6368" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">后一半</tspan></text>
+<text class="svgsm" x="220" y="372" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">↔</tspan></text>
+<text class="svgsm" x="22" y="422" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">⭐ 这个量随长度<tspan font-weight="700">幂律增长</tspan>。</tspan></text>
+<text class="svgsm" x="22" y="443" fill="#5f6368" style="font-size:11.5px">不矛盾：<tspan font-weight="700">单对相关性越来越弱，</tspan></text>
+<text class="svgsm" x="22" y="462" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">但成对的数量越来越多。</tspan></text>
+<rect x="470" y="88" width="440" height="440" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="88" width="440" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="470" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="470" y1="118" x2="910" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="484" y="108" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">② L2M 条件</tspan></text>
+<text class="svgsm" x="569" y="108" fill="#5f6368" style="font-size:11.0px">一条硬下界</text>
+<rect x="492" y="144" width="396" height="78" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="492" y="144" width="4" height="78" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="494" y="144" width="3" height="78" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="169" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">模型能表达出来的互信息，</tspan></text>
+<text class="svgsm" x="510" y="191" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700"><tspan font-weight="700">受限于它历史状态的维度</tspan>。</tspan></text>
+<text class="svgsm" x="510" y="212" fill="#80868b" style="font-size:11.0px">（缓存里装不下的东西，它就是不知道）</text>
+<rect x="492" y="236" width="396" height="76" rx="8" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svglbl" x="508" y="261" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">⭐⭐ 于是有了一条必要条件：</tspan></text>
+<text class="svgsm" x="508" y="285" fill="#202124" style="font-size:12.5px"><tspan font-weight="700"><tspan font-weight="700">状态维度必须至少以同样的幂律增长</tspan></tspan></text>
+<text class="svgsm" x="508" y="304" fill="#5f6368" style="font-size:11.5px">否则总存在一个长度，它兜不住</text>
+<text class="svgsm" x="492" y="326" fill="#5f6368" style="font-size:12.5px"><tspan font-weight="700">那现有架构各自什么情况？</tspan></text>
+<rect x="492" y="346" width="396" height="60" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="508" y="370" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">Transformer</tspan></text>
+<text class="svgsm" x="508" y="391" fill="#5f6368" style="font-size:11.5px">KV 随长度<tspan font-weight="700">线性</tspan>增长</text>
+<text class="svgsm" x="872" y="380" fill="#0d652d" text-anchor="end" style="font-size:12.5px"><tspan font-weight="700">自动满足</tspan></text>
+<rect x="492" y="414" width="396" height="60" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="508" y="438" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">固定大小状态</tspan></text>
+<text class="svgsm" x="508" y="459" fill="#5f6368" style="font-size:11.5px">不随长度增长</text>
+<text class="svgsm" x="872" y="448" fill="#a50e0e" text-anchor="end" style="font-size:12.5px"><tspan font-weight="700">必然违反</tspan></text>
+<text class="svgsm" x="492" y="484" fill="#5f6368" style="font-size:11.5px">⭐ 注意：Transformer 的「自动满足」是</text>
+<text class="svgsm" x="492" y="503" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">拿平方计算换来的</tspan> —— 它供给过量。</text>
+<rect x="940" y="88" width="460" height="440" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="940" y="88" width="460" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="940" y="90" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="940" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="954" y="108" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">③ 三个旋钮，各自站在哪</tspan></text>
+<text class="svgsm" x="1117" y="108" fill="#5f6368" style="font-size:11.0px">⚠️ 这一格是本课的推导</text>
+<rect x="962" y="142" width="416" height="104" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="962" y="142" width="4" height="104" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="964" y="142" width="3" height="104" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="167" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">旋钮① 每份更小</tspan></text>
+<text class="svgsm" x="1362" y="167" fill="#0d652d" text-anchor="end" style="font-size:12.5px"><tspan font-weight="700">安全</tspan></text>
+<text class="svgsm" x="980" y="192" fill="#5f6368" style="font-size:11.5px">MLA / GQA 压的是<tspan font-weight="700">每个 token 存多少</tspan></text>
+<text class="svgsm" x="980" y="214" fill="#80868b" style="font-size:11.0px">阶还是 L，动的是常数</text>
+<rect x="962" y="256" width="416" height="104" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="962" y="256" width="4" height="104" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="964" y="256" width="3" height="104" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="281" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">旋钮② 每步少读</tspan></text>
+<text class="svgsm" x="1362" y="281" fill="#0d652d" text-anchor="end" style="font-size:12.5px"><tspan font-weight="700">安全</tspan></text>
+<text class="svgsm" x="980" y="306" fill="#5f6368" style="font-size:11.5px">KV <tspan font-weight="700">照样全存</tspan>，只是这一步不读它</text>
+<text class="svgsm" x="980" y="328" fill="#80868b" style="font-size:11.0px">状态仍是 L；CSA 横压也只是常数</text>
+<rect x="962" y="370" width="416" height="104" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="962" y="370" width="4" height="104" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="964" y="370" width="3" height="104" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="395" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">旋钮③ 固定状态</tspan></text>
+<text class="svgsm" x="1362" y="395" fill="#a50e0e" text-anchor="end" style="font-size:12.5px"><tspan font-weight="700">必然违反</tspan></text>
+<text class="svgsm" x="980" y="420" fill="#5f6368" style="font-size:11.5px">把历史压成一个<tspan font-weight="700">不随长度增长</tspan>的东西</text>
+<text class="svgsm" x="980" y="442" fill="#80868b" style="font-size:11.0px">阶掉到 O(1)</text>
+<text class="svgsm" x="980" y="462" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">→ 所以它<tspan font-weight="700">只能混着用</tspan></tspan></text>
+<rect x="0" y="550" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="550" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="550" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="574" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 「远处可以少看」这句直觉，现在有了严格版本</tspan></text>
+<text class="svgsm" x="20" y="598" fill="#174ea6" style="font-size:12.0px">它<tspan font-weight="700">不是</tspan>「远处不重要」——&#160;两半之间的互信息是<tspan font-weight="700">随长度增长</tspan>的，只是<tspan font-weight="700">增长得慢（次线性）</tspan>。</text>
+<text class="svgsm" x="20" y="619" fill="#174ea6" style="font-size:12.0px">⭐ 于是整件事变得很清楚：<tspan font-weight="700">Transformer 的 KV 线性增长是「供给过量」</tspan>，而这条幂律是「实际需求」。前两个旋钮就是在<tspan font-weight="700">不掉到需求线以下的前提下，把那个过量的常数压小</tspan>。</text>
+<text class="svgsm" x="20" y="640" fill="#174ea6" style="font-size:12.0px">⛔ 第三个旋钮不一样 ——&#160;它<tspan font-weight="700">动的是阶，不是常数</tspan>。这是一条质的分界，也是为什么<tspan font-weight="700">今天没有一个纯线性注意力的前沿模型</tspan>。</text>
+<rect x="0" y="669" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="669" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="669" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="693" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ 口径，三条</tspan></text>
+<text class="svgsm" x="20" y="717" fill="#b06000" style="font-size:12.0px">⚠️ L2M 是<tspan font-weight="700">必要条件，不是充分条件</tspan>：状态够大只是「有可能记住」，不等于「真的学会了」。</text>
+<text class="svgsm" x="20" y="738" fill="#b06000" style="font-size:12.0px">⚠️ 第三格（三个旋钮各站在哪）是<tspan font-weight="700">本课按定义做的推导</tspan>，论文没有逐个旋钮分析 ——&#160;论文只分析了 Transformer 与状态空间模型两类。</text>
+<text class="svgsm" x="20" y="759" fill="#b06000" style="font-size:12.0px">⚠️ 两点互信息与双部互信息<tspan font-weight="700">是两个不同的量</tspan>，L2M 明确说它们独立地各自 scaling ——&#160;别拿一个去推另一个。</text>
+<text class="svgsm" x="0" y="790" fill="#80868b" style="font-size:11.0px">📌 ① 出自 Lin ＆ Tegmark《Critical Behavior in Physics and Probabilistic Formal Languages》（Entropy 2017, arXiv 1606.06737）：马尔可夫/隐马尔可夫过程互信息指数衰减，实测自然语言近似幂律</text>
+<text class="svgsm" x="0" y="807" fill="#80868b" style="font-size:11.0px">　　② 出自 L2M（arXiv 2503.04725, ICML 2025）：双部互信息幂律 scaling、「状态维度必须至少同阶增长」的定理、以及 Transformer 自动满足的那段分析</text>
+<text class="svgsm" x="0" y="824" fill="#80868b" style="font-size:11.0px">　　③ 为本课推导，非论文结论</text>
+</svg><figcaption>⭐⭐ <b>两点互信息随距离幂律衰减（所以语言不能用马尔可夫近似），而两半之间的双部互信息随长度幂律增长。</b><b>L2M 条件：模型历史状态的维度必须至少以同样的幂律增长 —— 这就是为什么固定大小状态那一支必须混着用。</b></figcaption></figure>
+<h3>2.3b　严格版本：两半之间的互信息</h3>
+<p>⭐ 图给不了的是这句改口：
+  <b>「远处可以少看」不等于「远处不重要」。</b>
+  <em>两半之间的互信息是<b>随长度增长</b>的 ——&nbsp;只是增长得慢。
+  所以正确的说法是：<b>Transformer 那条线性增长的 KV 是「供给过量」，
+  而这条幂律是「实际需求」</b>；
+  前两个旋钮做的事，是在不掉到需求线以下的前提下<b>把过量的常数压小</b>。</em></p>
+
 <div class="note bad"><p>⛔ <b>图上那 488 GiB 是「假如 V3 用 MHA」的反事实值</b>，
   不是 V3 的实测 ——&nbsp;<b>V3 从第一天就是 MLA</b>。
   <em>这门课自己的规矩：推出来的数必须带推导链和口径，图里两样都写了。</em></p></div>
