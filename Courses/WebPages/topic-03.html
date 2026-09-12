@@ -2357,6 +2357,118 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
   <b>说白了：它就是一个标准差。</b>
   <em>除掉它只做一件事 ——&nbsp;把打分的方差拉回 1。</em></p></div>
 
+<!-- ⭐⭐ 2026-09-13 夜间 R8。两个「为什么不那样做」——
+     这一讲讲了 softmax 怎么用，**从没讲为什么非它不可**；
+     也讲了 q/k/v 三件套，**没讲为什么 k 和 v 不能是同一个**。
+     ⭐⭐ 第二格是意外收获：它一句话串起了 §六 ——
+       DSA 的索引器敢换 ReLU，是因为**它只排序、不加权平均**。 -->
+<figure class="fbox fwide" id="fig-why-softmax"><svg viewBox="0 0 1400 723" width="100%" role="img" aria-label="为什么是 softmax：因为它要服务加权平均，权重得非负、和为一、可导；但索引器只排序不加权，所以 DSA 敢换成 ReLU；以及为什么 K 和 V 要分家：检索是非对称的，按 A 找取回 B"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">两个「为什么不那样做」　——　softmax 与 K/V 分家</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 这两条都很少有人讲，而且<tspan font-weight="700">各自能串起后面一整段</tspan></text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">softmax 必须满足的</text>
+<rect x="142" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="159" y="64" fill="#5f6368" style="font-size:11.0px">换掉它的条件</text>
+<rect x="247" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="264" y="64" fill="#5f6368" style="font-size:11.0px">检索的非对称</text>
+<rect x="352" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="369" y="64" fill="#5f6368" style="font-size:11.0px">回扣后面的小节</text>
+<rect x="0" y="88" width="440" height="434" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">① 为什么是 softmax</tspan></text>
+<text class="svgsm" x="156" y="108" fill="#5f6368" style="font-size:11.0px">先看它要服务什么</text>
+<rect x="22" y="142" width="396" height="50" rx="8" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="38" y="163" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">注意力最后那一步是<tspan font-weight="700">加权平均</tspan></tspan></text>
+<text class="svgsm" x="38" y="182" fill="#5f6368" style="font-size:11.5px;font-family:'Roboto Mono',ui-monospace,monospace">o ＝ Σ 权重 × value</text>
+<text class="svgsm" x="22" y="206" fill="#5f6368" style="font-size:12.0px">于是权重被逼出三条硬要求：</text>
+<rect x="22" y="226" width="396" height="46" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="38" y="246" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">非负</tspan></text>
+<text class="svgsm" x="134" y="246" fill="#5f6368" style="font-size:11.5px">「负着看一眼」没有意义</text>
+<rect x="22" y="280" width="396" height="46" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="38" y="300" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">加起来等于 1</tspan></text>
+<text class="svgsm" x="134" y="300" fill="#5f6368" style="font-size:11.5px">否则输出尺度随序列长度乱飘</text>
+<rect x="22" y="334" width="396" height="46" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="38" y="354" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">可导</tspan></text>
+<text class="svgsm" x="134" y="354" fill="#5f6368" style="font-size:11.5px">否则「该看哪儿」学不出来</text>
+<rect x="22" y="392" width="396" height="78" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="22" y="392" width="4" height="78" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="24" y="392" width="3" height="78" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="40" y="416" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">softmax 三条全中，还附送一条：</tspan></text>
+<text class="svgsm" x="40" y="438" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">指数把差距放大</tspan> ——&#160;它像一个</text>
+<text class="svgsm" x="40" y="458" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">能求导的 argmax</tspan>：既能聚焦，又留着梯度</text>
+<rect x="470" y="88" width="440" height="434" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="88" width="440" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="470" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="470" y1="118" x2="910" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="484" y="108" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 那 DSA 为什么敢换成 ReLU</tspan></text>
+<text class="svgsm" x="681" y="108" fill="#5f6368" style="font-size:11.0px">⭐ 这一格串起 §六</text>
+<rect x="492" y="142" width="396" height="56" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="492" y="142" width="4" height="56" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="494" y="142" width="3" height="56" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="165" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">§六 里 DSA 的索引器打分式子：</tspan></text>
+<text class="svgsm" x="510" y="185" fill="#5f6368" style="font-size:12.0px;font-family:'Roboto Mono',ui-monospace,monospace">I(t,s) ＝ Σ w · <tspan font-weight="700">ReLU</tspan>(q · k)</text>
+<text class="svglbl" x="492" y="212" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">那它凭什么不用 softmax？</tspan></text>
+<rect x="492" y="238" width="396" height="76" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="492" y="238" width="4" height="76" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="494" y="238" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="262" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">主注意力</tspan></text>
+<text class="svgsm" x="510" y="284" fill="#5f6368" style="font-size:11.5px">要拿这些分数去<tspan font-weight="700">加权平均</tspan></text>
+<text class="svgsm" x="510" y="304" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">→ 三条全要</tspan></text>
+<rect x="492" y="324" width="396" height="76" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="492" y="324" width="4" height="76" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="494" y="324" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="348" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">索引器</tspan></text>
+<text class="svgsm" x="510" y="370" fill="#5f6368" style="font-size:11.5px">只拿这些分数去<tspan font-weight="700">排个序</tspan>，挑 top-k</text>
+<text class="svgsm" x="510" y="390" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">→ 和为 1 不必要</tspan></text>
+<rect x="492" y="412" width="396" height="96" rx="8" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svglbl" x="508" y="437" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">⭐⭐ 判据，记这一句就够：</tspan></text>
+<text class="svgsm" x="508" y="461" fill="#202124" style="font-size:12.5px"><tspan font-weight="700"><tspan font-weight="700">这个分数是拿去加权，还是只拿去排序？</tspan></tspan></text>
+<text class="svgsm" x="508" y="483" fill="#5f6368" style="font-size:11.5px">两者对归一化的要求根本不一样 ——</text>
+<text class="svgsm" x="508" y="501" fill="#5f6368" style="font-size:11.5px">只排序的那个，可以换成便宜得多的东西。</text>
+<rect x="940" y="88" width="460" height="434" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="940" y="88" width="460" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="940" y="90" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="940" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="954" y="108" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">③ 为什么 K 和 V 要分家</tspan></text>
+<text class="svgsm" x="1121" y="108" fill="#5f6368" style="font-size:11.0px">因为检索天生是非对称的</text>
+<rect x="962" y="142" width="416" height="74" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<rect x="962" y="142" width="4" height="74" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="964" y="142" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="166" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">k 是书脊上印的字，v 是书里的内容</tspan></text>
+<text class="svgsm" x="980" y="188" fill="#5f6368" style="font-size:11.5px">你<tspan font-weight="700">照着书脊找</tspan>，</text>
+<text class="svgsm" x="980" y="208" fill="#5f6368" style="font-size:11.5px">但<tspan font-weight="700">拿走的是书里的东西</tspan>。</text>
+<text class="svglbl" x="962" y="230" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">那如果让 k ＝ v 会怎样？</tspan></text>
+<rect x="962" y="256" width="416" height="96" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="962" y="256" width="4" height="96" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="964" y="256" width="3" height="96" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="281" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">那就只有「<tspan font-weight="700">跟我像的</tspan>」会被取回来。</tspan></text>
+<text class="svgsm" x="980" y="304" fill="#5f6368" style="font-size:11.5px">可你要的经常<tspan font-weight="700">不是像你的那个</tspan>，</text>
+<text class="svgsm" x="980" y="324" fill="#5f6368" style="font-size:11.5px">是<tspan font-weight="700">能补上你缺的那块的</tspan>那个 ——</text>
+<text class="svgsm" x="980" y="344" fill="#80868b" style="font-size:11.0px">代词要找的是它指代的名词，不是别的代词。</text>
+<rect x="962" y="366" width="416" height="76" rx="8" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="978" y="391" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">⭐ 一句话：注意力要的是</tspan></text>
+<text class="svgsm" x="978" y="414" fill="#202124" style="font-size:12.5px"><tspan font-weight="700"><tspan font-weight="700">按 A 去找，取回 B</tspan> —— 一次非对称的检索。</tspan></text>
+<text class="svgsm" x="978" y="434" fill="#80868b" style="font-size:11.0px">📌 这一格是推导 ＋ 类比，不是论文原话</text>
+<rect x="0" y="544" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="544" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="544" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="568" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 优点和副作用，常常是同一条性质</tspan></text>
+<text class="svgsm" x="20" y="592" fill="#174ea6" style="font-size:12.0px">softmax 那条「<tspan font-weight="700">一行加起来等于 1</tspan>」，在这里是<tspan font-weight="700">优点</tspan>（让加权平均的尺度稳定）；到了 §六，同一条性质就是 <tspan font-weight="700">attention sink 的成因</tspan>——&#160;没什么想看的时候，多余的权重也得倒在某处。</text>
+<text class="svgsm" x="20" y="613" fill="#174ea6" style="font-size:12.0px">⭐ 所以那个 softmax-off-by-one 的补丁，本质就是<tspan font-weight="700">把这一条放松掉</tspan>（分母 +1，允许一行加起来小于 1）。</text>
+<text class="svgsm" x="20" y="634" fill="#174ea6" style="font-size:12.0px">⛔ 判据：<tspan font-weight="700">看到一个设计的副作用，先回头看它的优点是靠哪条性质换来的</tspan> ——&#160;十有八九是同一条。</text>
+<text class="svgsm" x="0" y="665" fill="#80868b" style="font-size:11.0px">📌 ① 三条要求是 softmax 与加权平均的定义直接给的；「指数放大差距」「软的 argmax」是通行说法</text>
+<text class="svgsm" x="0" y="682" fill="#80868b" style="font-size:11.0px">　　② DSA 索引器用 ReLU 及其理由（为吞吐）出自 DeepSeek-V3.2-Exp 技术报告 §1；⚠️「因为只排序不加权所以敢换」是本课的解释，报告只给了「为吞吐」这个理由</text>
+<text class="svgsm" x="0" y="699" fill="#80868b" style="font-size:11.0px">　　③ 为推导 ＋ 类比，非论文原话</text>
+</svg><figcaption>⭐⭐ <b>softmax 的三条要求（非负、和为 1、可导）全是「加权平均」逼出来的。</b><b>所以 DSA 的索引器敢换成 ReLU —— 它只拿分数去排序，不做加权平均。</b><em>右边：k 是书脊、v 是内容，检索天生非对称 —— 按 A 去找，取回 B。</em></figcaption></figure>
+<h4>1.2b　为什么非得是 softmax，为什么 k 和 v 不能是同一个</h4>
+<p>⭐ 图给不了的是这条判据的<b>通用形式</b>：
+  <b>看到一个设计的副作用，先回头看它的优点是靠哪条性质换来的 ——&nbsp;十有八九是同一条。</b>
+  <em>softmax 那条「一行加起来等于 1」，在这里让加权平均的尺度稳定（优点），
+  到 §六 就是 attention sink 的成因（副作用）。
+  <b>而 softmax-off-by-one 这个补丁，本质就是把这一条放松掉。</b></em></p>
+
 <h3>1.3 多头在多什么</h3>
 <figure class="fbox fwide" id="fig-mha-heads"><svg viewBox="0 0 1400 606" width="100%" role="img" aria-label="多头注意力：把 d_model 切成 h 份，每份独立做一次注意力再拼回来。总维度不变，总计算量也基本不变；多头的价值是避免单头把不同的关注平均掉"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-7b1fa2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#7b1fa2"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">多头在多什么 ——&#160;<tspan font-weight="700">不是堆算力，是不让「平均」把不同的关注糊成一团</tspan></text>
