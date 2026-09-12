@@ -1051,7 +1051,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 </svg><figcaption>⭐ <b>整个专题的骨架。</b>六段，每段只问三件事：图啥、带来了什么、欠下了什么。<b>底下那两条数是这一讲真正的落点</b> —— 能跑的长度涨了，同一长度下要付的钱降了，<b>两件事同时发生，才有今天的 agent。</b></figcaption></figure>
 
 <div class="note info"><p>⭐ <b>这一讲从头到尾只有一个账本：KV cache。</b>
-  在张量形状里找 <code>S</code>（KV 长度）——&nbsp;<b>全图只有 K 和 V 两处带它</b>，
+  在张量形状里找 <code>S</code>（KV 长度）——&nbsp;<b>全图只有 K 和 V 两处「留得下来」的带它</b>（注意力矩阵那一处也带 S，但它<b>算完就扔</b>，不进 KV cache），
   那就是唯一需要跨 token 留下来的东西。<br>
   三个旋钮是同一个账本的三个面：<b>① 每份多大　② 每步读多少　③ 干脆别让它变长</b>。
   <b>看到任何一个新名词，先问它在拧哪一面。</b></p></div>
@@ -2618,10 +2618,10 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="253" y="334" width="155" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
 <text class="svgsm" x="265" y="352" fill="#5f6368"><tspan font-weight="700">＋ masks</tspan></text>
 <text class="svgsm" x="326" y="352" fill="#5f6368">谁能看谁</text>
-<rect x="234" y="380" width="192" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="246" y="398" fill="#5f6368"><tspan font-weight="700">softmax</tspan></text>
-<text class="svgsm" x="302" y="398" fill="#202124"><tspan font-weight="700">BTSKG（记作 S）</tspan></text>
-<text class="svgsm" x="436" y="398" fill="#a50e0e">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
+<rect x="201" y="380" width="258" height="26" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="213" y="398" fill="#5f6368"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="269" y="398" fill="#202124"><tspan font-weight="700">BTSKG（注意力矩阵，记作 A）</tspan></text>
+<text class="svgsm" x="469" y="398" fill="#a50e0e">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
 <rect x="222" y="438" width="216" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="228" y="434" fill="#174ea6" style="font-size:10px">BTSKG</text>
 <text class="svgsm" x="432" y="434" fill="#681da8" text-anchor="end" style="font-size:10px">BSKH</text>
@@ -2676,7 +2676,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="680" y="66" width="700" height="333" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svglbl" x="694" y="86" fill="#a50e0e" style="font-size:13px">★ 先只看一件事：图上什么东西需要留到下一个 token</text>
 <text class="svgsm" x="694" y="110" fill="#a50e0e"><tspan font-weight="700">★</tspan></text>
-<text class="svgsm" x="724" y="110" fill="#a50e0e">在形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;只有两处带它：</text>
+<text class="svgsm" x="724" y="110" fill="#a50e0e">在形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;<tspan font-weight="700">只有两处「留得下来」的带它</tspan>：</text>
 <text class="svgsm" x="724" y="129" fill="#a50e0e"><tspan font-weight="700">K 的输出 BSKH</tspan> 和 <tspan font-weight="700">V 的输出 BSKH</tspan></text>
 <text class="svgsm" x="694" y="148" fill="#a50e0e"><tspan font-weight="700">⭐</tspan></text>
 <text class="svgsm" x="724" y="148" fill="#a50e0e"><tspan font-weight="700">S 是唯一会随对话越变越长的那一维</tspan></text>
@@ -2712,7 +2712,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="630" fill="#174ea6">所以它决定的不是「装不装得下」，是<tspan font-weight="700">能同时服务多少人</tspan>。</text>
 <rect x="0" y="860" width="1400" height="44" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="16" y="887" fill="#174ea6">📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。B 批量 · T query 长度 · S KV 长度 · D d_model · F MLP 隐层 · H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K</text>
-</svg><figcaption>⭐ <b>本专题的主线图</b>：一层 Transformer，每一步的张量形状都标出来。<b>先只看一件事 —— 在形状里找 <code>S</code>（KV 长度）：全图只有两处带它，K 和 V 的输出。</b>那就是唯一需要跨 token 留下来的东西 —— <b>KV cache</b>。三个旋钮各是一种跟它较劲的方式。<span class="sub">图式借自 How to Scale Your Model，本图为重画。</span></figcaption></figure>
+</svg><figcaption>⭐ <b>本专题的主线图</b>：一层 Transformer，每一步的张量形状都标出来。<b>先只看一件事 —— 在形状里找 <code>S</code>（KV 长度）：只有两处「留得下来」的带它，K 和 V 的输出。</b>那就是唯一需要跨 token 留下来的东西 —— <b>KV cache</b>。三个旋钮各是一种跟它较劲的方式。<span class="sub">图式借自 How to Scale Your Model，本图为重画。</span></figcaption></figure>
 
 <h3 id="s1-5">1.5 于是下一节</h3>
 <!-- ⛔ 2026-09-12：Shazeer 那段引文与「2019 年就被点名」这句，
@@ -3206,11 +3206,11 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="253" y="334" width="155" height="26" rx="5" fill="#fafafa" stroke="#9aa0a6" stroke-width="1"/>
 <text class="svgsm" x="265" y="352" fill="#9aa0a6"><tspan font-weight="700">＋ masks</tspan></text>
 <text class="svgsm" x="326" y="352" fill="#9aa0a6">谁能看谁</text>
-<rect x="234" y="380" width="192" height="26" rx="5" fill="#f8f9fa" stroke="#1e8e3e" stroke-width="2.2"/>
-<rect x="228" y="374" width="204" height="38" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1" stroke-dasharray="5,4"/>
-<text class="svgsm" x="246" y="398" fill="#0d652d"><tspan font-weight="700">softmax</tspan></text>
-<text class="svgsm" x="302" y="398" fill="#202124"><tspan font-weight="700">BTSKG（记作 S）</tspan></text>
-<text class="svgsm" x="436" y="398" fill="#a50e0e">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
+<rect x="201" y="380" width="258" height="26" rx="5" fill="#f8f9fa" stroke="#1e8e3e" stroke-width="2.2"/>
+<rect x="195" y="374" width="270" height="38" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="213" y="398" fill="#0d652d"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="269" y="398" fill="#202124"><tspan font-weight="700">BTSKG（注意力矩阵，记作 A）</tspan></text>
+<text class="svgsm" x="469" y="398" fill="#a50e0e">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
 <rect x="222" y="438" width="216" height="34" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="2.2"/>
 <rect x="214" y="420" width="232" height="78" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1" stroke-dasharray="5,4"/>
 <text class="svgsm" x="228" y="434" fill="#174ea6" style="font-size:10px">BTSKG</text>
@@ -3560,10 +3560,10 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="253" y="334" width="155" height="26" rx="5" fill="#fafafa" stroke="#9aa0a6" stroke-width="1"/>
 <text class="svgsm" x="265" y="352" fill="#9aa0a6"><tspan font-weight="700">＋ masks</tspan></text>
 <text class="svgsm" x="326" y="352" fill="#9aa0a6">谁能看谁</text>
-<rect x="234" y="380" width="192" height="26" rx="5" fill="#fafafa" stroke="#9aa0a6" stroke-width="1"/>
-<text class="svgsm" x="246" y="398" fill="#9aa0a6"><tspan font-weight="700">softmax</tspan></text>
-<text class="svgsm" x="302" y="398" fill="#9aa0a6"><tspan font-weight="700">BTSKG（记作 S）</tspan></text>
-<text class="svgsm" x="436" y="398" fill="#9aa0a6">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
+<rect x="201" y="380" width="258" height="26" rx="5" fill="#fafafa" stroke="#9aa0a6" stroke-width="1"/>
+<text class="svgsm" x="213" y="398" fill="#9aa0a6"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="269" y="398" fill="#9aa0a6"><tspan font-weight="700">BTSKG（注意力矩阵，记作 A）</tspan></text>
+<text class="svgsm" x="469" y="398" fill="#9aa0a6">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
 <rect x="222" y="438" width="216" height="34" rx="5" fill="#fafafa" stroke="#9aa0a6" stroke-width="1"/>
 <text class="svgsm" x="228" y="434" fill="#9aa0a6" style="font-size:10px">BTSKG</text>
 <text class="svgsm" x="432" y="434" fill="#9aa0a6" text-anchor="end" style="font-size:10px">BSKH</text>
@@ -4089,11 +4089,11 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <rect x="247" y="328" width="167" height="38" rx="8" fill="none" stroke="#e8710a" stroke-width="1" stroke-dasharray="5,4"/>
 <text class="svgsm" x="265" y="352" fill="#b06000"><tspan font-weight="700">＋ masks</tspan></text>
 <text class="svgsm" x="326" y="352" fill="#5f6368">谁能看谁</text>
-<rect x="234" y="380" width="192" height="26" rx="5" fill="#f8f9fa" stroke="#e8710a" stroke-width="2.2"/>
-<rect x="228" y="374" width="204" height="38" rx="8" fill="none" stroke="#e8710a" stroke-width="1" stroke-dasharray="5,4"/>
-<text class="svgsm" x="246" y="398" fill="#b06000"><tspan font-weight="700">softmax</tspan></text>
-<text class="svgsm" x="302" y="398" fill="#202124"><tspan font-weight="700">BTSKG（记作 S）</tspan></text>
-<text class="svgsm" x="436" y="398" fill="#a50e0e">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
+<rect x="201" y="380" width="258" height="26" rx="5" fill="#f8f9fa" stroke="#e8710a" stroke-width="2.2"/>
+<rect x="195" y="374" width="270" height="38" rx="8" fill="none" stroke="#e8710a" stroke-width="1" stroke-dasharray="5,4"/>
+<text class="svgsm" x="213" y="398" fill="#b06000"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="269" y="398" fill="#202124"><tspan font-weight="700">BTSKG（注意力矩阵，记作 A）</tspan></text>
+<text class="svgsm" x="469" y="398" fill="#a50e0e">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
 <rect x="222" y="438" width="216" height="34" rx="5" fill="#fafafa" stroke="#9aa0a6" stroke-width="1"/>
 <text class="svgsm" x="228" y="434" fill="#9aa0a6" style="font-size:10px">BTSKG</text>
 <text class="svgsm" x="432" y="434" fill="#9aa0a6" text-anchor="end" style="font-size:10px">BSKH</text>

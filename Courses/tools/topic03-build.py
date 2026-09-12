@@ -432,7 +432,7 @@ BODY = '''<section id="x1"><div class="wrap"><div class="stn"><h2>这个专题�
 __FIG_ARC__
 
 <div class="note info"><p>⭐ <b>这一讲从头到尾只有一个账本：KV cache。</b>
-  在张量形状里找 <code>S</code>（KV 长度）——&nbsp;<b>全图只有 K 和 V 两处带它</b>，
+  在张量形状里找 <code>S</code>（KV 长度）——&nbsp;<b>全图只有 K 和 V 两处「留得下来」的带它</b>（注意力矩阵那一处也带 S，但它<b>算完就扔</b>，不进 KV cache），
   那就是唯一需要跨 token 留下来的东西。<br>
   三个旋钮是同一个账本的三个面：<b>① 每份多大　② 每步读多少　③ 干脆别让它变长</b>。
   <b>看到任何一个新名词，先问它在拧哪一面。</b></p></div>
@@ -1628,7 +1628,7 @@ FIGS = {
     "__FIG_TX_BASE__": ("fig-tx-base", "fig3-tx-base.svg",
         'topic03-fig-transformer.py',
         '⭐ <b>本专题的主线图</b>：一层 Transformer，每一步的张量形状都标出来。'
-        '<b>先只看一件事 —— 在形状里找 <code>S</code>（KV 长度）：全图只有两处带它，'
+        '<b>先只看一件事 —— 在形状里找 <code>S</code>（KV 长度）：只有两处「留得下来」的带它，'
         'K 和 V 的输出。</b>'
         '那就是唯一需要跨 token 留下来的东西 —— <b>KV cache</b>。'
         '三个旋钮各是一种跟它较劲的方式。'
