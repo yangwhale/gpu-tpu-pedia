@@ -347,11 +347,28 @@ BAR = ('<div class="hlbar">'
        '<button type="button" data-m="all" aria-pressed="false">Boom ——&#160;全部</button>'
        '</span><span class="hlnote"></span></div>')
 
-html = ('%s<div class="tblwrap">%s<p class="tbltip">⭐ <b>点表头可以排序</b>'
+_SRC_NOTE = ('<div class="note warn"><p>📌 <b>这张表的取数规则（⭐ 2026-09-13 补 ——&nbsp;'
+             '由表长出来的结论全靠这条规则撑着）</b></p>'
+             '<ul>'
+             '<li><b>层配比 / 层数 / 头数 / 维度</b>：一律读<b>公开 config</b>（HF 上那份 '
+             '<code>config.json</code>）。</li>'
+             '<li><b>上下文</b>：取 config 的 <code>max_position_embeddings</code>。'
+             '⚠️ <b>它是容量不是能力</b> ——&nbsp;声明 10M 不等于 10M 上都好用。</li>'
+             '<li><b>KV cache</b>：一律按 <b>@128K · bf16 · batch 1</b> 由形状当场算出，'
+             '<b>不取厂商自报值</b>。⚠️ 滑窗模型给的是<b>窗口封顶后</b>的量。</li>'
+             '<li>⛔ <b>三处例外，各自标了</b>：混元 Hy3 那一行读自我们自己的仓库；'
+             'Ling 一族读自模型卡；两处声明与实测口径不一致的（MiniMax-01 的 4M / config 10M）'
+             '在备注里写了。</li>'
+             '</ul>'
+             '<p>⚠️ <b>凡是上下文 &lt; 128K 的行，那一格的 KV 是反事实值</b>'
+             '（把它的形状放到 128K 上算）——&nbsp;<b>包括「846 倍」的分子 GPT-3</b>，'
+             '它的实际上下文只有 2K。<em>这个倍数是用来看量级的，不是用来引用的。</em></p></div>')
+
+html = ('%s%s<div class="tblwrap">%s<p class="tbltip">⭐ <b>点表头可以排序</b>'
         '——&#160;时间 / 厂商 / 便宜层占比 / 上下文 / KV 大小，'
         '再点一次反向。<b>默认按时间。</b>两种模式下排序都作用在全部 %d 行上。</p>'
         '<table id="mtbl"><thead>%s</thead><tbody>\n%s\n</tbody></table>%s</div>%s'
-        % (CSS, BAR, len(M.ROWS), TH, "\n".join(rows), LAND, JS))
+        % (CSS, _SRC_NOTE, BAR, len(M.ROWS), TH, "\n".join(rows), LAND, JS))
 # ⛔ 计数写进 JS 是**从数据填的**，不是手打的字面量 ——&nbsp;加一行模型，
 #   按钮旁边那句说明会自己跟着变。手打的话它会在某次加行之后静默说谎。
 html = html.replace("__NHL__", str(_NHL)).replace("__NALL__", str(len(M.ROWS)))
