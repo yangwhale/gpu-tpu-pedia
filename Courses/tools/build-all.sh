@@ -73,6 +73,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-notepad.py       # §七 记事板比喻：三种写法钉到式子上
   python3 topic03-fig-at-gallery.py    # §七 A_t 的形状决定了一切（八种结构并排）
   python3 topic03-fig-chunkwise.py     # §7.4 块内并行块间串行 ＋ 块长两头夹
+  python3 topic03-fig-hybrid.py        # §八 配比是一条轴，两头都不好
   python3 topic03-fig-knob1.py         # §五 旋钮①（四种存法对照 ＋ RoPE 为什么单走一路）
   python3 topic03-fig-mla-why.py       # §五 MLA 凭什么能压（信息账：白送的 vs 赌出来的）
   python3 topic03-fig-mqa-why.py       # §五 砍头这一支怎么想出来的（2019 选项单 ＋ 自由度不是宽度）
