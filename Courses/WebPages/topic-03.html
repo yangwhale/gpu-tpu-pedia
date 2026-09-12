@@ -5824,40 +5824,534 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <p>于是：</p>
 <ul><li>复杂度 O(L²·d) → <b>O(L·d²)</b>，对长序列是数量级的差别</li><li><b>没有随长度增长的 KV cache</b> —— 只有一个 <code>d_k × d_v</code> 的状态矩阵</li><li>推理时它就是一个 <b>RNN</b>：读一个 token、更新一次状态、吐一个输出</li></ul>
 <p><b>代价说死</b>：状态大小固定 → <b>信息必然有损</b>。 序列越长，往同一个矩阵里塞的东西越多，长程精确检索（"第 30 万字提到的那个电话号码"） 会力不从心。这不是实现问题，是这个换法的性质。</p>
-<h3>7.2 谱系：四步，每一步都在修上一步的一个具体毛病</h3>
-<table>
-<thead><tr><th>步</th><th>名字</th><th>补了什么</th><th>出处</th></tr></thead><tbody>
-<tr><td>1</td><td>朴素线性注意力</td><td>把 softmax 拆掉，换来固定状态</td><td>Katharopoulos 等, arXiv 2006.16236</td></tr>
-<tr><td>2</td><td><b>delta rule</b></td><td>状态只加不减 → 写满就糊。改成「<b>先擦掉旧的，再写新的</b>」</td><td>Schlag 等, arXiv <b>2102.11174</b>（2021）</td></tr>
-<tr><td>3</td><td><b>GDN</b>（Gated DeltaNet）</td><td>delta rule 不会主动遗忘 → 加一个<b>遗忘门</b>，让陈年旧事自然衰减</td><td>arXiv <b>2412.06464</b>（2024-12）</td></tr>
-<tr><td>4</td><td><b>KDA</b></td><td>遗忘门是个<b>标量</b>，全部通道同一个速度 → 升级成 <b>per-channel 向量</b></td><td>Kimi Linear, arXiv <b>2510.26692</b>（2025-10）</td></tr>
-</tbody></table>
-<p>⚠️ <b>两处容易记错的出处，讲的时候要说对：</b></p>
-<ul><li><b>delta rule 不是 2024 年的东西</b>，是 Schlag 等 2021 年那篇 <em>Linear Transformers Are Secretly Fast Weight Programmers</em>（可上溯到 1990 年代的 fast weight programmer）。2024 年那篇（arXiv 2406.06484）做的是 <b>把它并行化</b>，这是另一件事、也是很关键的一件事 —— 见 §7.2</li><li><b>KDA 是 2025 年 10 月的 Kimi Linear</b>，不是 2026 年</li></ul>
-<p>⭐ <b>第 4 步为什么值得单独说</b>：标量遗忘门意味着「整个状态一起变旧」。 per-channel 意味着<b>不同特征维度可以有各自的遗忘速度</b> —— 有些通道记语法（该快忘），有些记实体名（该慢忘）。 KDA 还把它做成了一个特殊的 <b>DPLR（对角 + 低秩）</b>形式， 正是因为这个特殊形式，才配得出一个比通用 DPLR 便宜得多的分块并行算法。 表达力和可算性是一起设计的，不是先设计再优化。</p>
-<h3>7.2b ⭐⭐ Mamba 在哪？——&nbsp;它不是另一支，它是这一支的祖宗</h3>
-<p>讲到这里一定会有人问：<b>那 Mamba 呢？SSM 那一路怎么没提？</b> 这个问题问得对，而答案比「另开一支」有意思得多。</p>
-<div class="note ok"><p>⭐ 最硬的一条证据，不用推：Gated DeltaNet 那篇论文的标题就叫 <em>《Gated Delta Networks: Improving Mamba2 with Delta Rule》</em>（arXiv 2412.06464）。 而千问 Qwen3-Next 和 Qwen3.5 用的就是 GDN。 <b>所以千问那一支的祖宗，字面意义上就是 Mamba-2。</b></p></div>
-<p>把它们放到同一个式子里看，一切就清楚了。上面 §6.1 那个递推稍微写全一点：</p>
-<pre><code>S_t = A_t · S_{t-1} + v_t k_tᵀ        ← 所有这些方法都长这样
+<!-- ⛔⛔ 2026-09-13 夜间 R12 重排 7.2 ＋ 7.2b。
+     原来这里是**三张表 ＋ 大段散文**（含两张 A_t 结构表），
+     而它们讲的其实只有一件事：**那个矩阵长什么样**。
+     ⭐⭐ 这是全讲最该画、却一直没画的地方 —— 矩阵结构画出来一眼就懂，
+       用表格讲是在浪费读者的眼睛。
+     新图 fig3-at-gallery 吸收了：八种 A_t 的结构与年份、每一步修了什么、
+     各自的并行代价、Mamba 那两条字面证据。
+     正文只留**图给不了的两样**：两处容易记错的出处，
+     以及 KDA 那个 DPLR 特化为什么值得单独说。
+     ⛔ 按行号切并对首尾断言。 -->
+<h3>7.2 ＋ 7.2b　A_t 的形状决定了一切</h3>
+<figure class="fbox fwide" id="fig-at-gallery"><svg viewBox="0 0 1400 772" width="100%" role="img" aria-label="A_t 的形状决定了一切：八种结构并排，从单位阵到对角、到单位阵减秩一、到逐通道门控；A 越自由表达力越强，但能不能分块并行当场决定它能不能活"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">所有这些方法长成同一个递推　S_t ＝ A_t · S_{t-1} ＋ v_t k_tᵀ</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐⭐ <tspan font-weight="700">区别只有一处：允许 A_t 长什么样。</tspan>把八种形状并排画出来，谱系、亲缘、代价一眼全在</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">对角类：最好并行</text>
+<rect x="127" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="144" y="64" fill="#5f6368" style="font-size:11.0px">单位阵减秩一</text>
+<rect x="232" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="249" y="64" fill="#5f6368" style="font-size:11.0px">逐通道</text>
+<rect x="304" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="321" y="64" fill="#5f6368" style="font-size:11.0px">算不动的那一档</text>
+<rect x="0" y="94" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="94" width="4" height="196" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<rect x="2" y="94" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="18" y="118" fill="#5f6368" style="font-size:12.5px"><tspan font-weight="700">朴素线性注意力</tspan></text>
+<text class="svgsm" x="328" y="118" fill="#80868b" text-anchor="end" style="font-size:11.0px">2020</text>
+<rect x="18" y="132" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="30" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="42" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="54" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="66" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="78" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="90" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="18" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="30" y="144" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="42" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="54" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="66" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="78" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="90" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="18" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="30" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="42" y="156" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="54" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="66" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="78" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="90" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="18" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="30" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="42" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="54" y="168" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="66" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="78" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="90" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="18" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="30" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="42" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="54" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="66" y="180" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="78" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="90" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="18" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="30" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="42" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="54" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="66" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="78" y="192" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="90" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="18" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="30" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="42" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="54" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="66" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="78" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="90" y="204" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="118" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">I</tspan></text>
+<text class="svgsm" x="118" y="176" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="118" y="194" fill="#5f6368" style="font-size:11.0px">—— 起点：只加不减</text>
+<text class="svgsm" x="18" y="272" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="58" y="272" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
+<rect x="352" y="94" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="352" y="94" width="4" height="196" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="354" y="94" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="370" y="118" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">RetNet / GLA</tspan></text>
+<text class="svgsm" x="680" y="118" fill="#80868b" text-anchor="end" style="font-size:11.0px">2023</text>
+<rect x="370" y="132" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="382" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="394" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="406" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="418" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="442" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="370" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="382" y="144" width="10" height="10" rx="2" fill="#798bca" stroke="none" stroke-width="1"/>
+<rect x="394" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="406" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="418" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="442" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="370" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="382" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="394" y="156" width="10" height="10" rx="2" fill="#8a9cd1" stroke="none" stroke-width="1"/>
+<rect x="406" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="418" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="442" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="370" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="382" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="394" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="406" y="168" width="10" height="10" rx="2" fill="#9aacd7" stroke="none" stroke-width="1"/>
+<rect x="418" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="442" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="370" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="382" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="394" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="406" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="418" y="180" width="10" height="10" rx="2" fill="#abbdde" stroke="none" stroke-width="1"/>
+<rect x="430" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="442" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="370" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="382" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="394" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="406" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="418" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="192" width="10" height="10" rx="2" fill="#bbcde5" stroke="none" stroke-width="1"/>
+<rect x="442" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="370" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="382" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="394" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="406" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="418" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="430" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="442" y="204" width="10" height="10" rx="2" fill="#ccdeeb" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="470" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">γ 或 Diag(γ)</tspan></text>
+<text class="svgsm" x="470" y="176" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="470" y="194" fill="#5f6368" style="font-size:11.0px">让陈年旧事自己淡出</text>
+<text class="svgsm" x="370" y="272" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="410" y="272" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
+<rect x="704" y="94" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="704" y="94" width="4" height="196" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="706" y="94" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="722" y="118" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">Mamba</tspan></text>
+<text class="svgsm" x="1032" y="118" fill="#80868b" text-anchor="end" style="font-size:11.0px">2023</text>
+<rect x="722" y="132" width="10" height="10" rx="2" fill="#bbcde4" stroke="none" stroke-width="1"/>
+<rect x="734" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="746" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="758" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="770" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="782" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="794" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="722" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="734" y="144" width="10" height="10" rx="2" fill="#8193cd" stroke="none" stroke-width="1"/>
+<rect x="746" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="758" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="770" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="782" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="794" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="722" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="734" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="746" y="156" width="10" height="10" rx="2" fill="#a8badd" stroke="none" stroke-width="1"/>
+<rect x="758" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="770" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="782" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="794" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="722" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="734" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="746" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="758" y="168" width="10" height="10" rx="2" fill="#6d7fc5" stroke="none" stroke-width="1"/>
+<rect x="770" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="782" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="794" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="722" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="734" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="746" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="758" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="770" y="180" width="10" height="10" rx="2" fill="#94a6d5" stroke="none" stroke-width="1"/>
+<rect x="782" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="794" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="722" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="734" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="746" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="758" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="770" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="782" y="192" width="10" height="10" rx="2" fill="#bbcde4" stroke="none" stroke-width="1"/>
+<rect x="794" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="722" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="734" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="746" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="758" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="770" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="782" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="794" y="204" width="10" height="10" rx="2" fill="#8193cd" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="822" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">对角，且依赖输入</tspan></text>
+<text class="svgsm" x="822" y="176" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="822" y="194" fill="#5f6368" style="font-size:11.0px">衰减速度由内容决定</text>
+<text class="svgsm" x="722" y="272" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="762" y="272" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">容易</tspan></text>
+<rect x="1056" y="94" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="1056" y="94" width="4" height="196" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="1058" y="94" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="1074" y="118" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">Mamba-2</tspan></text>
+<text class="svgsm" x="1384" y="118" fill="#80868b" text-anchor="end" style="font-size:11.0px">2024-05</text>
+<rect x="1074" y="132" width="10" height="10" rx="2" fill="#93a5d4" stroke="none" stroke-width="1"/>
+<rect x="1086" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1098" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1110" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1122" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1134" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1146" y="132" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1074" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1086" y="144" width="10" height="10" rx="2" fill="#93a5d4" stroke="none" stroke-width="1"/>
+<rect x="1098" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1110" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1122" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1134" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1146" y="144" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1074" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1086" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1098" y="156" width="10" height="10" rx="2" fill="#93a5d4" stroke="none" stroke-width="1"/>
+<rect x="1110" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1122" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1134" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1146" y="156" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1074" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1086" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1098" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1110" y="168" width="10" height="10" rx="2" fill="#93a5d4" stroke="none" stroke-width="1"/>
+<rect x="1122" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1134" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1146" y="168" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1074" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1086" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1098" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1110" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1122" y="180" width="10" height="10" rx="2" fill="#93a5d4" stroke="none" stroke-width="1"/>
+<rect x="1134" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1146" y="180" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1074" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1086" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1098" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1110" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1122" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1134" y="192" width="10" height="10" rx="2" fill="#93a5d4" stroke="none" stroke-width="1"/>
+<rect x="1146" y="192" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1074" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1086" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1098" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1110" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1122" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1134" y="204" width="10" height="10" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1146" y="204" width="10" height="10" rx="2" fill="#93a5d4" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1174" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">a·I（标量×单位阵）</tspan></text>
+<text class="svgsm" x="1174" y="176" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="1174" y="194" fill="#5f6368" style="font-size:11.0px">⭐ 故意退回最简，换来 SSD 对偶</text>
+<text class="svgsm" x="1074" y="272" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="1114" y="272" fill="#174ea6" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
+<rect x="0" y="300" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="300" width="4" height="196" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="300" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="18" y="324" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">DeltaNet</tspan></text>
+<text class="svgsm" x="328" y="324" fill="#80868b" text-anchor="end" style="font-size:11.0px">2021 / 2024 并行化</text>
+<rect x="18" y="338" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="30" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="350" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="42" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="362" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="54" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="374" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="66" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="386" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="78" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="398" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="90" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="410" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="118" y="356" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">I − β k kᵀ</tspan></text>
+<text class="svgsm" x="118" y="382" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="118" y="400" fill="#5f6368" style="font-size:11.0px">先擦掉旧的再写新的</text>
+<text class="svgsm" x="18" y="478" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="58" y="478" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">要专门的技巧</tspan></text>
+<rect x="352" y="300" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="352" y="300" width="4" height="196" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="354" y="300" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="370" y="324" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">GDN</tspan></text>
+<text class="svgsm" x="680" y="324" fill="#80868b" text-anchor="end" style="font-size:11.0px">2024-12</text>
+<rect x="370" y="338" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="382" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="350" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="394" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="362" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="406" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="374" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="418" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="386" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="430" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="398" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="442" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="410" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="470" y="356" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">α(I − β k kᵀ)</tspan></text>
+<text class="svgsm" x="470" y="382" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="470" y="400" fill="#5f6368" style="font-size:11.0px">门控 ＋ 擦除，合到一起</text>
+<text class="svgsm" x="370" y="478" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="410" y="478" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">要专门的技巧</tspan></text>
+<rect x="704" y="300" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="704" y="300" width="4" height="196" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="706" y="300" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="722" y="324" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="1032" y="324" fill="#80868b" text-anchor="end" style="font-size:11.0px">2025-10</text>
+<rect x="722" y="338" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
+<rect x="734" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="350" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
+<rect x="746" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="362" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
+<rect x="758" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="374" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
+<rect x="770" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="386" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
+<rect x="782" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="398" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
+<rect x="794" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="410" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="822" y="356" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">Diag(α)(I − β k kᵀ)</tspan></text>
+<text class="svgsm" x="822" y="382" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="822" y="400" fill="#5f6368" style="font-size:11.0px">门从标量升成逐通道</text>
+<text class="svgsm" x="722" y="478" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="762" y="478" fill="#681da8" style="font-size:11.5px"><tspan font-weight="700">要特化的 DPLR 算法</tspan></text>
+<rect x="1056" y="300" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="1056" y="300" width="4" height="196" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="1058" y="300" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="1074" y="324" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">（若允许全矩阵）</tspan></text>
+<text class="svgsm" x="1384" y="324" fill="#80868b" text-anchor="end" style="font-size:11.0px">——</text>
+<rect x="1074" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1174" y="356" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">任意 A</tspan></text>
+<text class="svgsm" x="1174" y="382" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="1174" y="400" fill="#5f6368" style="font-size:11.0px">表达力最强</text>
+<text class="svgsm" x="1074" y="478" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="1114" y="478" fill="#a50e0e" style="font-size:11.5px"><tspan font-weight="700">⛔ 并行度归零</tspan></text>
+<rect x="0" y="512" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="512" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="512" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="536" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这张图真正的结论：表达力和可算性是一起设计的</tspan></text>
+<text class="svgsm" x="20" y="560" fill="#174ea6" style="font-size:12.0px">从上到下，A 越来越自由 ——&#160;<tspan font-weight="700">但这不是一个「表达力越来越强」的单调故事</tspan>。每一步都在「A 能多复杂」和「还算不算得动」之间<tspan font-weight="700">重新划一次线</tspan>。</text>
+<text class="svgsm" x="20" y="581" fill="#174ea6" style="font-size:12.0px">⭐ 最能说明问题的是 <tspan font-weight="700">Mamba-2 主动往回退</tspan>：它把 A 退成最简的 a·I ——&#160;正因为退了，才证得出它跟线性注意力是<tspan font-weight="700">对偶</tspan>的（SSD），才能把递推写成矩阵乘、吃上 Tensor Core。</text>
+<text class="svgsm" x="20" y="602" fill="#174ea6" style="font-size:12.0px">⛔ 最后一格是反例：<tspan font-weight="700">全矩阵 A 表达力最强，但没有高效的并行扫描 ——&#160;并行度直接归零，于是它根本不在候选名单里。</tspan></text>
+<rect x="0" y="631" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="631" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="631" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="655" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐ 顺带回答「那 Mamba 呢」—— 它不是另一支，是这一支的祖宗</tspan></text>
+<text class="svgsm" x="20" y="679" fill="#0d652d" style="font-size:12.0px">不用推理，有一条字面证据：Gated DeltaNet 那篇论文的标题就是《<tspan font-weight="700">Gated Delta Networks: Improving Mamba2 with Delta Rule</tspan>》，而 Qwen3-Next / Qwen3.5 用的就是 GDN。</text>
+<text class="svgsm" x="20" y="700" fill="#0d652d" style="font-size:12.0px">⭐ 再加上 Mamba-2 那篇自己的标题 ——&#160;《<tspan font-weight="700">Transformers are SSMs</tspan>》。<tspan font-weight="700">SSM 和线性注意力从来就不是两支，是同一件事的两种写法。</tspan></text>
+<text class="svgsm" x="0" y="731" fill="#80868b" style="font-size:11.0px">📌 递推式与各家 A_t 的结构见：线性注意力 arXiv 2006.16236、DeltaNet arXiv 2102.11174（2021）与并行化 arXiv 2406.06484、Mamba-2 / SSD arXiv 2405.21060、GDN arXiv 2412.06464、KDA（Kimi Linear）arXiv 2510.26692</text>
+<text class="svgsm" x="0" y="748" fill="#80868b" style="font-size:11.0px">　　⚠️ 矩阵缩略图是<tspan font-weight="700">示意</tspan>：只画结构（哪里非零、深浅代表是否逐通道不同），不代表真实数值</text>
+</svg><figcaption>⭐⭐ <b>所有这些方法长成同一个递推，区别只有一处：允许 A_t 长什么样。</b><b>八种形状并排，谱系、亲缘、代价一眼全在。</b><em>最能说明问题的是 Mamba-2 主动往回退到最简的 a·I —— 正因为退了，才证得出跟线性注意力的对偶，才能吃上 Tensor Core。</em></figcaption></figure>
+<p>⭐ 图给不了的是这条<b>读法</b>：
+  <b>看到一个新的线性注意力，先把它的 A 写出来，再问「这个形状还能不能分块并行」。</b>
+  <em>两个问题的答案一配对，你就知道它会不会活下来 ——&nbsp;
+  <b>表达力和可算性是一起设计的，不是先设计再优化。</b></em></p>
 
-区别只有一处：允许 A_t 长什么样。</code></pre>
-<table>
-<thead><tr><th>方法</th><th>A_t 的结构</th><th>它解决了上一步的什么毛病</th></tr></thead><tbody>
-<tr><td>朴素线性注意力（2020）</td><td><b>I</b>（单位阵）</td><td>——&nbsp;只加不减，写满就糊</td></tr>
-<tr><td>RetNet / GLA</td><td>标量 γ 或对角 <b>Diag(γ)</b> 衰减</td><td>让陈年旧事自己淡出</td></tr>
-<tr><td>Mamba（2023）</td><td>对角，而且<b>依赖输入</b>（selective）</td><td>衰减速度由内容决定，不是固定的</td></tr>
-<tr><td><b>Mamba-2</b>（2024-05）</td><td><b>A ＝ a<sub>t</sub>·I</b>（标量×单位阵）</td><td>⭐ <b>故意退回最简形式</b>——正因为退了，才证得出跟线性注意力<b>对偶</b>（SSD），才能把递推写成矩阵乘、吃上 Tensor Core</td></tr>
-<tr><td>DeltaNet（2021 / 2024 并行化）</td><td><b>I − β k kᵀ</b>（单位阵减秩一）</td><td>先擦掉旧的再写新的，而不是硬加</td></tr>
-<tr><td><b>GDN</b>（2024-12）</td><td><b>α(I − β k kᵀ)</b></td><td>把 Mamba-2 的门控 ＋ DeltaNet 的擦除<b>合到一起</b></td></tr>
-<tr><td><b>KDA</b>（2025-10）</td><td><b>Diag(α)(I − β k kᵀ)</b></td><td>门从标量升成<b>逐通道</b>——不同特征各有各的遗忘速度</td></tr>
-<tr><td>Mamba-3（2026-03）</td><td>面向<b>推理</b>重新设计</td><td>前几代都在优化训练，这一代优化部署</td></tr>
-</tbody></table>
-<p>⭐ <b>Mamba-2 那篇论文的题目更直白</b>：<em>《Transformers are SSMs》</em>（arXiv 2405.21060）。 它证明的正是 selective SSM 和「带结构化掩码的线性注意力」是同一件事的两种写法——这就是 SSD（State Space Duality）。</p>
-<div class="note warn"><p>⛔ <b>贯穿这张表的，是一条硬约束：A<sub>t</sub> 必须有足够的结构，才能做分块并行。</b></p>
-<ul><li><b>全矩阵 A</b>：表达力最强，但没有高效的并行扫描——只能一步一步递推，<b>并行度直接归零</b></li><li><b>对角</b>：最容易并行</li><li><b>单位阵减秩一</b>：要靠 2024 年那篇「可并行 DeltaNet」的技巧才算得动</li><li><b>DPLR（对角 ＋ 低秩）</b>：KDA 专门设计了一个<b>特化版本</b>，才能把它压进 Tensor Core</li></ul>
-<p>⭐ 所以这张表不是「表达力越来越强」的单调故事。<b>每一步都在「A 能多复杂」和「还算不算得动」之间重新划线</b>—— 这正是 §7.2 那句「表达力和可算性是一起设计的」的完整版。</p></div>
-<div class="note ok"><p>⭐⭐ <b>回到最初那个问题：Mamba 缺了吗？</b> 没缺——它在表里，只是我们一直用它下游的名字（GDN、KDA）在叫它。 编年史那张图的第三条泳道里，Mamba、Mamba-2、Mamba-3 现在都标上了，<b>跟 DeltaNet 一族在同一条线上</b>，因为它们本来就是。</p></div>
+<div class="note warn"><p>⚠️ <b>两处容易记错的出处，讲的时候要说对：</b></p>
+<ul><li><b>delta rule 不是 2024 年的东西</b>，是 Schlag 等 2021 年那篇
+  <em>Linear Transformers Are Secretly Fast Weight Programmers</em>
+  （可上溯到 1990 年代的 fast weight programmer）。
+  2024 年那篇（arXiv 2406.06484）做的是<b>把它并行化</b> ——&nbsp;
+  这是另一件事，而且是很关键的一件事。</li>
+<li><b>KDA 是 2025 年 10 月的 Kimi Linear</b>，不是 2026 年。</li></ul></div>
+
+<div class="note ok"><p>⭐ <b>图上最后那两格为什么值得单独说一句</b>：
+  KDA 把逐通道的门做成了一个特殊的 <b>DPLR（对角 ＋ 低秩）</b>形式 ——&nbsp;
+  <b>正是因为这个特殊形式，才配得出一个比通用 DPLR 便宜得多的分块并行算法。</b>
+  <em>它不是「先设计一个强的，再去优化」，是<b>一边看着能不能算得动，一边设计</b>。</em></p></div>
+
 <h3>7.3 ⚠️ 它不是「更快的 attention」，是另一个模型</h3>
 <p>这是本节最重要的一句话，也是最容易被听众误解的一句。</p>
 <p>三个旋钮里，只有旋钮 ③ <b>改变了模型能表达什么</b>：</p>
