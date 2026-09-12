@@ -1190,7 +1190,8 @@ ul + p, ul + div.note { margin-top: 14px }
 
     <p>⚠️ <b>scale 不是「放进 Tensor Core 里」，是放进 <code>TMEM</code>。</b>
       <em>TMEM 是 SM 上的一块内存 ——&nbsp;每 SM <b>256 KiB</b>，
-      128 lane × 512 column、每格 32 bit，路径是 显存 → 共享内存 → TMEM。</em>
+      <b>128 lane × 512 column</b>、每格 32 bit，路径是 显存 → 共享内存 → TMEM。</em>
+      <em>（⭐ <b>lane ＝ TMEM 的「行」，一条 lane 对应一个线程的落点</b> ——&nbsp;所以下面那句「一个 warp 只够得着 32 条 lane」说的就是 warp 的 32 个线程。）</em>
       <b>它装的是累加器和 scale，不是 FP4 操作数本身</b>（那些从共享内存流进来）。</p>
 
     <p><b>⭐ 「乘 scale 不额外消耗算力」这句对</b> ——&nbsp;

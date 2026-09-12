@@ -92,13 +92,21 @@ head += """
    ⭐ 判据（09-09 栽过一次的）：**自己新造的类名，落地前要确认它真有样式** ——&nbsp;
      没有样式不会报错、构建照常成功，只是页面上悄悄少一块。 */
 /* ⭐ 2026-09-10 加：§一 开头那排 v6e 官方规格卡。
-   ⛔ 同样先确认样式落地（h2 .tag.skip 那次的判据）。 */
+   ⛔ 同样先确认样式落地（h2 .tag.optional 那次的判据）。 */
 .kpirow{display:flex;gap:12px;flex-wrap:wrap;margin:18px 0 6px}
 .kpirow .kpi{flex:1 1 150px;border:1px solid #dadce0;border-radius:10px;
   padding:14px 16px;background:#fff;text-align:center}
 .kpirow .kpi b{display:block;font-size:26px;line-height:1.15;color:#1a73e8}
 .kpirow .kpi span{display:block;margin-top:4px;font-size:12px;color:#5f6368}
-h2 .tag.skip{display:inline-block;margin-left:.6em;padding:.14em .62em;border-radius:999px;
+/* ⛔⛔ 2026-09-14 版面探针抓到：这个徽章的渲染位置是 left = -9991px ——
+   **它从来没显示过**，而且不产生滚动条、不报错、看截图也看不出来。
+   根因是 **class 名撞车**：全站样式里 `.skip` 是无障碍「跳到正文」那个链接
+   （position:absolute; left:-9999px 藏在屏幕外），而这里把 `.skip` 复用成了
+   「这一节可跳过」的徽章。`h2 .tag.skip` 只设了 display，没设 position/left，
+   于是 a11y 那条规则赢了。
+   ⭐ 判据：**给装饰元素起名前，先 grep 一遍全站有没有同名的功能类** ——
+     撞上了不会报错，只会静默隐身。改名，不要靠 position:static 去压它。 */
+h2 .tag.optional{display:inline-block;margin-left:.6em;padding:.14em .62em;border-radius:999px;
   background:#fef7e0;color:#8a5a00;font-size:.42em;font-weight:700;
   letter-spacing:0;vertical-align:.34em}
 details.more.skipsec{border-color:#f7d98a;background:#fffdf6}
@@ -333,7 +341,7 @@ a('</section>')
 
 a('<section id="s三">')
 a('  <h2><span class="secno">三</span>一颗装得下吗'
-  '<span class="tag skip">⏱ 主线可跳</span></h2>')
+  '<span class="tag optional">⏱ 主线可跳</span></h2>')
 
 # ⛔ 2026-09-10 现场：「这个章节它没什么用，在整个的故事线上，
 #   把这个章节折起来，15 分钟不讲这个。」
