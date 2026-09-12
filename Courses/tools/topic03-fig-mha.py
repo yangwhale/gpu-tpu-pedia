@@ -68,7 +68,7 @@ r"""专题三 · §一「MHA」的三张图。
 """
 from topic03_draw import (Fig, wpx, _sz,
                           BL, OR, GR, RD, GY, PU, CY, BR, INK,
-                          GY2, LINE, BG2)
+                          GY2, LINE, LINE2, BG2)   # ⭐ LINE2 2026-09-12 补：新图要用
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -326,6 +326,126 @@ def fig_heads():
     f.save("fig3-mha-heads.svg", yy + 6)
 
 
+
+
+# ══════════════════════════════════════════════════════════════════════
+# 图 · 一次注意力到底把信息怎么搬过去的（2026-09-12 加）
+# ══════════════════════════════════════════════════════════════════════
+# ⭐ 现场要求原话：「借机先把 Transformer 讲了 —— 不用讲 MLP，就讲 attention；
+#   讲 Attention is all you need 到底是为啥；讲一个大白话让大家理解，
+#   为什么注意力就能把序列里所有信息互相传递；讲清楚到底怎么把所有信息
+#   弄到最后一个 token 的 embedding 上去的。**主要以画图为主，别写太多字。**」
+#
+# ⛔ 为什么另起一张，而不是改 fig3-mha-qkv：
+#   那张答的是「一层里在算什么」——&nbsp;四步、形状、√d，是**机械**的。
+#   这张答的是「信息怎么流」——&nbsp;是**直觉**的。两个问题，两张图。
+#   ⭐ 判据：**一张图只回答一个问题；「顺便也讲讲」就是它开始讲不清的时候。**
+#
+# ⚠️ 图里那组权重（5/30/8/45/7/5 ％）是**示意**，不是实测 —— 图上标了。
+W3 = 1400
+
+
+def fig_flow():
+    f = Fig(W3, "跟着最后一个 token 走一遍注意力：每个位置长出 query、key、value 三样东西；"
+                "最后那个 token 拿自己的 query 去跟每个 key 打分，softmax 成一组加起来等于一的权重；"
+                "再按权重把所有位置的 value 加起来，得到它的新向量")
+    y = f.header(
+        "一次注意力，干的就是一件事 ——&#160;"
+        '<tspan font-weight="700">每个位置都去全场取一次货</tspan>',
+        "跟着最后那个 token 走一遍：它怎么提问、别人怎么报价、货怎么汇到它身上",
+        [(BL, "query 我想找什么"), (OR, "key 我这儿有什么"), (GR, "value 被选中我就交这个")])
+
+    TOK = ["t1", "t2", "t3", "t4", "t5", "t6"]
+    WGT = [5, 30, 8, 45, 7, 5]              # ％，示意值，和 = 100
+    assert sum(WGT) == 100
+    ROW, TOP = 46, y + 62   # ⭐ colhead 带副标题，占到 y+16，内容要让开
+    def ry(i): return TOP + i * ROW
+
+    # ── ① 每个位置长出三样东西 ───────────────────────────────
+    f.colhead(0, y + 16, "① 每个位置都长出三样东西", "同一个向量，乘三个不同的矩阵")
+    for i, tk in enumerate(TOK):
+        hot = (i == len(TOK) - 1)
+        f.box(0, ry(i) - 14, 46, 26, "#e8f0fe" if hot else "#fff",
+              BL if hot else LINE, 6, 1.6 if hot else 1)
+        f.t(23, ry(i) + 4, tk, BL if hot else INK, bold=hot, size=12, anchor="middle")
+        for j, c in enumerate((BL, OR, GR)):
+            f.box(70 + j * 30, ry(i) - 11, 24, 20, "#fff", c, 4, 1.4)
+            f.t(82 + j * 30, ry(i) + 4, "qkv"[j], c, bold=True, size=11, anchor="middle")
+        f.line(48, ry(i), 66, ry(i), LINE2, 1.2, arrow=False)
+
+    # ── ② t6 拿 q 去跟每块牌子打分 ───────────────────────────
+    X2 = 215
+    f.colhead(X2, y + 16, "② 最后那个 token 拿它的 q 去对每块牌子",
+              "打分 → softmax → 一组加起来 ＝ 1 的权重")
+    QX, QY = X2 + 6, ry(len(TOK) - 1)
+    f.box(QX, QY - 15, 34, 28, "#e8f0fe", BL, 6, 1.6)
+    f.t(QX + 17, QY + 4, "q", BL, bold=True, size=13, anchor="middle")
+    f.t(QX + 17, QY + 30, "t6 的问题", BL, size=11, anchor="middle")
+    KX = X2 + 120
+    for i in range(len(TOK)):
+        f.box(KX, ry(i) - 11, 26, 20, "#fff", OR, 4, 1.3)
+        f.t(KX + 13, ry(i) + 4, "k", OR, bold=True, size=11, anchor="middle")
+        f.path("M %d %d C %d %d %d %d %d %d" % (QX + 36, QY, KX - 34, QY,
+                                                KX - 34, ry(i), KX - 3, ry(i)),
+               GY2, 1.1, arrow=True)
+    # 权重条
+    BX = KX + 46
+    f.t(BX, TOP - 16, "softmax 之后", GY, size=11)
+    for i, w_ in enumerate(WGT):
+        f.box(BX, ry(i) - 8, 2 + w_ * 1.9, 15, "#e6f4ea", GR, 3, 1)
+        f.t(BX + 6 + w_ * 1.9 + 8, ry(i) + 4, "%d%%" % w_, GR, bold=(w_ >= 30), size=11)
+    f.t(BX, ry(len(TOK) - 1) + 30, "加起来 ＝ 1", GR, bold=True, size=11)
+
+    # ── ③ 按权重把货加起来 ───────────────────────────────────
+    X3 = 700
+    f.colhead(X3, y + 16, "③ 按权重把所有人的 value 加起来",
+              "权重越大，交上来的那份占比越大")
+    for i, w_ in enumerate(WGT):
+        bw = 22 + w_ * 1.5
+        f.box(X3, ry(i) - 11, bw, 20, "#e6f4ea", GR, 4, 1.3)
+        f.t(X3 + bw / 2, ry(i) + 4, "v", GR, bold=True, size=11, anchor="middle")
+    OUTX = X3 + 250
+    for i in range(len(TOK)):
+        f.path("M %d %d C %d %d %d %d %d %d"
+               % (X3 + 22 + WGT[i] * 1.5 + 4, ry(i), OUTX - 60, ry(i),
+                  OUTX - 60, ry(len(TOK) - 1), OUTX - 6, ry(len(TOK) - 1)),
+               GR, 1.0 + WGT[i] * 0.055, arrow=True)
+    f.box(OUTX, ry(len(TOK) - 1) - 18, 118, 34, "#e8f0fe", BL, 7, 1.8)
+    f.t(OUTX + 59, ry(len(TOK) - 1) + 4, "t6 的新向量", BL, bold=True, size=12,
+        anchor="middle")
+    f.lines(OUTX - 30, ry(len(TOK) - 1) + 34, 210, [
+        '这<tspan font-weight="700">一个</tspan>向量里，现在装着',
+        '<tspan font-weight="700">全场按需加权</tspan>的内容。'], size=11, lh=16, fill=GY)
+
+    yy = ry(len(TOK) - 1) + 76
+
+    # ── 落点带 ───────────────────────────────────────────────
+    yy = f.band(yy, "ok", "为什么标题敢叫「Attention Is All You Need」", [
+        'RNN 要让 t1 影响 t6，得<tspan font-weight="700">一跳一跳传五次</tspan>；上面这一步 ——&#160;<tspan font-weight="700">一跳</tspan>。'
+        '而且<tspan font-weight="700">六个位置是同时做的</tspan>，不是排队。',
+        '整个过程<tspan font-weight="700">只有矩阵乘和一次 softmax</tspan>，没有任何循环 ——&#160;所以它能一次性并行算完整个序列。',
+        '⭐ 所以那句标题说的<tspan font-weight="700">不是「注意力很强」，是「混合信息这件事，只要它就够了」</tspan>'
+        '——&#160;<tspan font-weight="700">循环不需要，卷积也不需要</tspan>。'])
+
+    yy = f.band(yy + 14, "info", "两个最常被跳过的「为什么」", [
+        '<tspan font-weight="700">为什么要投三次，不能只用一个向量？</tspan>'
+        "因为「我想找什么」和「我能提供什么」本来就是两回事（q ≠ k）；"
+        "而「凭什么被选中」和「被选中之后交出什么」也是两回事（k ≠ v）。",
+        '<tspan font-weight="700">为什么说「所有信息互相传递」，上面不是只画了 t6 吗？</tspan>'
+        '因为<tspan font-weight="700">六个位置在同时做同样的事</tspan> ——&#160;'
+        '一层过后，<tspan font-weight="700">每个位置的向量都变成了「全场的一个加权视角」</tspan>。',
+        '⭐ 堆 L 层，就是把这件事<tspan font-weight="700">重复 L 次</tspan>，每一次都基于上一次的结果 ——&#160;'
+        '<tspan font-weight="700">这就是「理解」在 Transformer 里的全部形式。</tspan>'])
+
+    yy = f.src(yy + 16,
+               "「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 §3.2 的原文措辞，"
+               '不是本课编的比喻；<tspan font-weight="700">图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</tspan>',
+               '⚠️ 本图<tspan font-weight="700">只画注意力</tspan> ——&#160;一层 Transformer 里还有 FFN、残差、归一化，'
+               "它们不在本专题这条轴上（本专题的账本只有 KV cache）")
+    f.save("fig3-mha-flow.svg", yy + 6)
+
+
 fig_swap()
 fig_qkv()
+fig_flow()      # ⭐ 2026-09-12 加：信息怎么流（直觉），跟 qkv 那张（机械）分工
 fig_heads()

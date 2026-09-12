@@ -1981,6 +1981,169 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
   ⛔ 而更要紧的是另一件事：状态没了。RNN 那个固定大小的 <code>h</code>，
   被换成了「<b>把所有历史原封不动留着</b>」。</p></div>
 
+<!-- ⭐⭐ 2026-09-12 加 1.1b。现场要求：「借机先把 Transformer 讲了 ——
+     不用讲 MLP，就讲 attention；讲 Attention is all you need 到底为啥；
+     讲清楚信息到底怎么汇到最后一个 token 上去。**以画图为主，别写太多字。**」
+     ⭐ 位置是刻意的：**直觉放在机械之前**。
+       1.1 说「换成了什么结构」，1.1b 说「信息怎么流」，1.2 才说「形状和公式」。
+       原来 1.1 之后直接进 1.2，读者是先看到四步和 √d、再自己去悟为什么。
+     ⛔ 正文只留三句 —— 这一节的讲述全在图里。 -->
+<h3>1.1b 那它到底怎么把信息传过去的</h3>
+<p>上一张说的是<b>结构</b>换了。这一张说的是 ——&nbsp;<b>信息怎么走</b>。</p>
+<p>跟着<b>最后那个 token</b> 走一遍就够了：
+  它<b>提一个问题</b>，每个位置<b>报一次价</b>，
+  然后<b>按权重把所有人的货收上来</b>。</p>
+<figure class="fbox fwide" id="fig-mha-flow"><svg viewBox="0 0 1400 737" width="100%" role="img" aria-label="跟着最后一个 token 走一遍注意力：每个位置长出 query、key、value 三样东西；最后那个 token 拿自己的 query 去跟每个 key 打分，softmax 成一组加起来等于一的权重；再按权重把所有位置的 value 加起来，得到它的新向量"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一次注意力，干的就是一件事 ——&#160;<tspan font-weight="700">每个位置都去全场取一次货</tspan></text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">跟着最后那个 token 走一遍：它怎么提问、别人怎么报价、货怎么汇到它身上</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">query 我想找什么</text>
+<rect x="130" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="147" y="64" fill="#5f6368" style="font-size:11.0px">key 我这儿有什么</text>
+<rect x="259" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="276" y="64" fill="#5f6368" style="font-size:11.0px">value 被选中我就交这个</text>
+<text class="svgsm" x="0" y="104" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">① 每个位置都长出三样东西</tspan></text>
+<text class="svgsm" x="0" y="120" fill="#80868b" style="font-size:11.0px">同一个向量，乘三个不同的矩阵</text>
+<rect x="0" y="136" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="154" fill="#202124" text-anchor="middle" style="font-size:12.0px">t1</text>
+<rect x="70" y="139" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="154" fill="#174ea6" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="139" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="154" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="139" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="154" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="150" x2="66" y2="150" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="182" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="200" fill="#202124" text-anchor="middle" style="font-size:12.0px">t2</text>
+<rect x="70" y="185" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="200" fill="#174ea6" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="185" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="200" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="185" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="200" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="196" x2="66" y2="196" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="228" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="246" fill="#202124" text-anchor="middle" style="font-size:12.0px">t3</text>
+<rect x="70" y="231" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="246" fill="#174ea6" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="231" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="246" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="231" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="246" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="242" x2="66" y2="242" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="274" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="292" fill="#202124" text-anchor="middle" style="font-size:12.0px">t4</text>
+<rect x="70" y="277" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="292" fill="#174ea6" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="277" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="292" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="277" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="292" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="288" x2="66" y2="288" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="320" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="338" fill="#202124" text-anchor="middle" style="font-size:12.0px">t5</text>
+<rect x="70" y="323" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="338" fill="#174ea6" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="323" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="338" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="323" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="338" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="334" x2="66" y2="334" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="366" width="46" height="26" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="23" y="384" fill="#174ea6" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t6</tspan></text>
+<rect x="70" y="369" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="384" fill="#174ea6" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="369" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="384" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="369" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="384" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="380" x2="66" y2="380" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="215" y="104" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">② 最后那个 token 拿它的 q 去对每块牌子</tspan></text>
+<text class="svgsm" x="215" y="120" fill="#80868b" style="font-size:11.0px">打分 → softmax → 一组加起来 ＝ 1 的权重</text>
+<rect x="221" y="365" width="34" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="238" y="384" fill="#174ea6" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">q</tspan></text>
+<text class="svgsm" x="238" y="410" fill="#174ea6" text-anchor="middle" style="font-size:11.0px">t6 的问题</text>
+<rect x="335" y="139" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="154" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 380 C 301 380 301 150 332 150" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="185" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="200" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 380 C 301 380 301 196 332 196" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="231" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="246" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 380 C 301 380 301 242 332 242" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="277" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="292" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 380 C 301 380 301 288 332 288" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="323" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="338" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 380 C 301 380 301 334 332 334" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="369" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="384" fill="#b06000" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 380 C 301 380 301 380 332 380" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="381" y="134" fill="#5f6368" style="font-size:11.0px">softmax 之后</text>
+<rect x="381" y="142" width="11.5" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="404" y="154" fill="#0d652d" style="font-size:11.0px">5%</text>
+<rect x="381" y="188" width="59.0" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="452" y="200" fill="#0d652d" style="font-size:11.0px"><tspan font-weight="700">30%</tspan></text>
+<rect x="381" y="234" width="17.2" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="410" y="246" fill="#0d652d" style="font-size:11.0px">8%</text>
+<rect x="381" y="280" width="87.5" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="480" y="292" fill="#0d652d" style="font-size:11.0px"><tspan font-weight="700">45%</tspan></text>
+<rect x="381" y="326" width="15.299999999999999" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="408" y="338" fill="#0d652d" style="font-size:11.0px">7%</text>
+<rect x="381" y="372" width="11.5" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="404" y="384" fill="#0d652d" style="font-size:11.0px">5%</text>
+<text class="svgsm" x="381" y="410" fill="#0d652d" style="font-size:11.0px"><tspan font-weight="700">加起来 ＝ 1</tspan></text>
+<text class="svgsm" x="700" y="104" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">③ 按权重把所有人的 value 加起来</tspan></text>
+<text class="svgsm" x="700" y="120" fill="#80868b" style="font-size:11.0px">权重越大，交上来的那份占比越大</text>
+<rect x="700" y="139" width="29.5" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="714" y="154" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="185" width="67.0" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="733" y="200" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="231" width="34.0" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="717" y="246" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="277" width="89.5" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="744" y="292" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="323" width="32.5" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="716" y="338" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="369" width="29.5" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="714" y="384" fill="#0d652d" text-anchor="middle" style="font-size:11.0px"><tspan font-weight="700">v</tspan></text>
+<path d="M 733 150 C 890 150 890 380 944 380" fill="none" stroke="#1e8e3e" stroke-width="1.275" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 771 196 C 890 196 890 380 944 380" fill="none" stroke="#1e8e3e" stroke-width="2.65" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 738 242 C 890 242 890 380 944 380" fill="none" stroke="#1e8e3e" stroke-width="1.44" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 793 288 C 890 288 890 380 944 380" fill="none" stroke="#1e8e3e" stroke-width="3.475" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 736 334 C 890 334 890 380 944 380" fill="none" stroke="#1e8e3e" stroke-width="1.385" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 733 380 C 890 380 890 380 944 380" fill="none" stroke="#1e8e3e" stroke-width="1.275" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="950" y="362" width="118" height="34" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text class="svgsm" x="1009" y="384" fill="#174ea6" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t6 的新向量</tspan></text>
+<text class="svgsm" x="920" y="414" fill="#5f6368" style="font-size:11.0px">这<tspan font-weight="700">一个</tspan>向量里，现在装着</text>
+<text class="svgsm" x="920" y="430" fill="#5f6368" style="font-size:11.0px"><tspan font-weight="700">全场按需加权</tspan>的内容。</text>
+<rect x="0" y="456" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="456" width="4" height="105" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="456" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="480" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 为什么标题敢叫「Attention Is All You Need」</tspan></text>
+<text class="svgsm" x="20" y="504" fill="#0d652d" style="font-size:12.0px">RNN 要让 t1 影响 t6，得<tspan font-weight="700">一跳一跳传五次</tspan>；上面这一步 ——&#160;<tspan font-weight="700">一跳</tspan>。而且<tspan font-weight="700">六个位置是同时做的</tspan>，不是排队。</text>
+<text class="svgsm" x="20" y="525" fill="#0d652d" style="font-size:12.0px">整个过程<tspan font-weight="700">只有矩阵乘和一次 softmax</tspan>，没有任何循环 ——&#160;所以它能一次性并行算完整个序列。</text>
+<text class="svgsm" x="20" y="546" fill="#0d652d" style="font-size:12.0px">⭐ 所以那句标题说的<tspan font-weight="700">不是「注意力很强」，是「混合信息这件事，只要它就够了」</tspan>——&#160;<tspan font-weight="700">循环不需要，卷积也不需要</tspan>。</text>
+<rect x="0" y="575" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="575" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="575" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="599" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 两个最常被跳过的「为什么」</tspan></text>
+<text class="svgsm" x="20" y="623" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">为什么要投三次，不能只用一个向量？</tspan>因为「我想找什么」和「我能提供什么」本来就是两回事（q ≠ k）；而「凭什么被选中」和「被选中之后交出什么」也是两回事（k ≠ v）。</text>
+<text class="svgsm" x="20" y="644" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">为什么说「所有信息互相传递」，上面不是只画了 t6 吗？</tspan>因为<tspan font-weight="700">六个位置在同时做同样的事</tspan> ——&#160;一层过后，<tspan font-weight="700">每个位置的向量都变成了「全场的一个加权视角」</tspan>。</text>
+<text class="svgsm" x="20" y="665" fill="#174ea6" style="font-size:12.0px">⭐ 堆 L 层，就是把这件事<tspan font-weight="700">重复 L 次</tspan>，每一次都基于上一次的结果 ——&#160;<tspan font-weight="700">这就是「理解」在 Transformer 里的全部形式。</tspan></text>
+<text class="svgsm" x="0" y="696" fill="#80868b" style="font-size:11.0px">📌 「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 §3.2 的原文措辞，不是本课编的比喻；<tspan font-weight="700">图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</tspan></text>
+<text class="svgsm" x="0" y="713" fill="#80868b" style="font-size:11.0px">　　⚠️ 本图<tspan font-weight="700">只画注意力</tspan> ——&#160;一层 Transformer 里还有 FFN、残差、归一化，它们不在本专题这条轴上（本专题的账本只有 KV cache）</text>
+</svg><figcaption>⭐ <b>跟着最后那个 token 走一遍：它提问（q）、每个位置报价（k）、按权重把所有人的货（v）加起来。</b><b>一步之内够到全场，而且六个位置同时在做</b> —— 这就是那句标题的意思：<b>混合信息这件事，只要注意力就够了。</b></figcaption></figure>
+<div class="note info"><p>⭐⭐ <b>这张图想让你带走的就一句：一层注意力 ＝ 一次「全员报价、按需取货」。</b>
+  <br>而且<b>不只是最后那个 token 在做</b> ——&nbsp;<b>每个位置同时在做同样的事</b>。
+  所以一层过后，<b>每个位置的向量都变成了「全场的一个加权视角」</b>；
+  堆 L 层，就是把这件事重复 L 次。<br>
+  ⛔ <b>「Attention Is All You Need」这个标题最常被读反</b>：
+  它说的<b>不是「注意力很强」</b>，而是<b>「混合序列信息这件事，只要它就够了」</b>
+  ——&nbsp;<b>循环不需要，卷积也不需要</b>。</p></div>
+
 <h3>1.2 一层里到底在算什么</h3>
 <figure class="fbox fwide" id="fig-mha-qkv"><svg viewBox="0 0 1400 630" width="100%" role="img" aria-label="注意力的检索三件套：query 是要找什么，key 是每个 token 挂出来的牌子，value 是牌子后面的内容；打分之后除以根号 d 再做 softmax，最后按权重把 value 加权求和"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一层里到底在算什么 ——&#160;<tspan font-weight="700">论文自己的说法就是「检索」，不是我们编的比喻</tspan></text>
