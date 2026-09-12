@@ -302,8 +302,10 @@ def fig_heads():
 
     yy = y + 214 + 16
     yy = f.band(yy, "ok", "多头的代价，正好是本专题的题眼", [
-        '<tspan font-weight="700">好处</tspan>：8 个头可以同时盯 8 种不同的关系，'
-        '互不干扰 ——&#160;这是单头做不到的。',
+        '<tspan font-weight="700">好处</tspan>：一个头要同时盯语法、盯指代、盯主题，'
+        '<tspan font-weight="700">只能给一个折中的答案</tspan>；切成 8 个，'
+        '<tspan font-weight="700">各盯各的，互不干扰</tspan>。',
+        '⭐ 换个说法：<tspan font-weight="700">多头买到的不是算力，是分辨率。</tspan>',
         '⛔ <tspan font-weight="700">代价</tspan>：'
         '<tspan font-weight="700">每个头都要自己的 K 和 V</tspan>。'
         '于是要留下来的东西<tspan font-weight="700">乘以了 8</tspan>。',
