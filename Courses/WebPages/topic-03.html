@@ -3134,6 +3134,13 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <p>我们记下的经验规则是「块 ≈ seq/2」，可证伪版本是 「换 <code>seq = 8192</code> 时最优块应当变成 4096」—— ⚠️ <b>这一条尚未验证。</b></p></div>
 <p>⭐ 所以两边的墙不是「硬件 vs 调参」，是一面 vs 三面： GPU 那边容量一堵墙顶死，方向反倒清楚 —— 能开多大就开多大； <b>TPU 那边最优往往不在最大处</b>，得在三面之间找那个点。</p>
 <h3 id="s3-6">3.6 ⭐ 融合之后，它还是只跑到 35% —— 三层原因，都不是配置问题</h3>
+<div class="note info"><p>📌 <b>先把「效率」这个词定义一次（⭐ 2026-09-13 补 ——&nbsp;
+  原先这一段有四个百分比，一个定义都没有，而它结尾正好在教「引用百分比要写清出自哪个工具页」）</b>：</p>
+<p>下文的<b>效率</b> ＝ <code>XLA 记的该算子 FLOP ÷（该算子耗时 × per-device BF16 峰值）</code>，
+  峰值取 <b>1153.5 TFLOP/s</b>（v7 每芯片 2307 ÷ 2），数出自 <b>XProf 的 op stats 页</b>。
+  测量条件：<b>Hunyuan3-295B · seq 4096 · v7 64 芯片 · 训练（含反向）</b>。</p>
+<p>⚠️ <b>它不是 MFU</b>（MFU 的分子是模型级有效 FLOP，分母是整步耗时）；
+  也<b>不是 MXU 利用率</b>（那是硬件计数器读出来的）。<em>这三个数在同一段里都出现过，别混。</em></p></div>
 <p>这是这一节最该带走的一段：FlashAttention 不是终点。 我们在 v7 上量到 splash attention <b>占 23% 的时间、效率只有 35.5%，全场最低</b>。</p>
 <p>① 记账口径：报出来的那个百分比，分子是虚高的。 XLA 给 splash 记的 FLOP 是不折 causal 的全量 <code>4·b·s²·h·d</code>。 所以 32.8–39.0% 这个区间是拿虚高的分子算出来的，<b>真实执行效率比它更低</b>。</p>
 <div class="note warn"><p>⚠️ causal 跳过上三角是<b>节省</b>，不是又一道要乘上去的折扣 —— 它只造成记账错位。这两件事最容易混。</p></div>
@@ -5899,7 +5906,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
      以及 KDA 那个 DPLR 特化为什么值得单独说。
      ⛔ 按行号切并对首尾断言。 -->
 <h3 id="s7-2">7.2 ＋ 7.2b　A_t 的形状决定了一切</h3>
-<figure class="fbox fwide" id="fig-at-gallery"><svg viewBox="0 0 1400 772" width="100%" role="img" aria-label="A_t 的形状决定了一切：八种结构并排，从单位阵到对角、到单位阵减秩一、到逐通道门控；A 越自由表达力越强，但能不能分块并行当场决定它能不能活"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-at-gallery"><svg viewBox="0 0 1400 808" width="100%" role="img" aria-label="A_t 的形状决定了一切：八种结构并排，从单位阵到对角、到单位阵减秩一、到逐通道门控；A 越自由表达力越强，但能不能分块并行当场决定它能不能活"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">所有这些方法长成同一个递推　S_t ＝ S_{t-1} · A_t ＋ v_t k_tᵀ</text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐⭐ <tspan font-weight="700">区别只有一处：允许 A_t 长什么样。</tspan>（S ∈ ℝ^(d_v×d_k)，A_t <tspan font-weight="700">右乘</tspan>）把八种形状并排画出来，谱系、亲缘、代价一眼全在</text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
@@ -5910,9 +5917,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="249" y="64" fill="#5f6368" style="font-size:11.0px">逐通道</text>
 <rect x="304" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="321" y="64" fill="#5f6368" style="font-size:11.0px">算不动的那一档</text>
-<rect x="0" y="94" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="94" width="4" height="196" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
-<rect x="2" y="94" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<rect x="0" y="94" width="344" height="214" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="94" width="4" height="214" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<rect x="2" y="94" width="3" height="214" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svgsm" x="18" y="118" fill="#5f6368" style="font-size:12.5px"><tspan font-weight="700">朴素线性注意力</tspan></text>
 <text class="svgsm" x="328" y="118" fill="#80868b" text-anchor="end" style="font-size:11.0px">2020</text>
 <rect x="18" y="132" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
@@ -5967,11 +5974,12 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="118" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">I</tspan></text>
 <text class="svgsm" x="118" y="176" fill="#80868b" style="font-size:11.0px">修了什么</text>
 <text class="svgsm" x="118" y="194" fill="#5f6368" style="font-size:11.0px">—— 起点：只加不减</text>
-<text class="svgsm" x="18" y="272" fill="#80868b" style="font-size:11.0px">并行</text>
-<text class="svgsm" x="58" y="272" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
-<rect x="352" y="94" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="352" y="94" width="4" height="196" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="354" y="94" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="18" y="232" fill="#80868b" style="font-size:11.0px"><tspan font-weight="700">只有对角线，全同</tspan></text>
+<text class="svgsm" x="18" y="290" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="58" y="290" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
+<rect x="352" y="94" width="344" height="214" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="352" y="94" width="4" height="214" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="354" y="94" width="3" height="214" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svgsm" x="370" y="118" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">RetNet / GLA</tspan></text>
 <text class="svgsm" x="680" y="118" fill="#80868b" text-anchor="end" style="font-size:11.0px">2023</text>
 <rect x="370" y="132" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
@@ -6026,11 +6034,12 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="470" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">γ 或 Diag(γ)</tspan></text>
 <text class="svgsm" x="470" y="176" fill="#80868b" style="font-size:11.0px">修了什么</text>
 <text class="svgsm" x="470" y="194" fill="#5f6368" style="font-size:11.0px">让陈年旧事自己淡出</text>
-<text class="svgsm" x="370" y="272" fill="#80868b" style="font-size:11.0px">并行</text>
-<text class="svgsm" x="410" y="272" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
-<rect x="704" y="94" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="704" y="94" width="4" height="196" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="706" y="94" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="370" y="232" fill="#0d652d" style="font-size:11.0px"><tspan font-weight="700">对角线，逐行衰减</tspan></text>
+<text class="svgsm" x="370" y="290" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="410" y="290" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
+<rect x="704" y="94" width="344" height="214" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="704" y="94" width="4" height="214" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="706" y="94" width="3" height="214" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svgsm" x="722" y="118" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">Mamba</tspan></text>
 <text class="svgsm" x="1032" y="118" fill="#80868b" text-anchor="end" style="font-size:11.0px">2023</text>
 <rect x="722" y="132" width="10" height="10" rx="2" fill="#bbcde4" stroke="none" stroke-width="1"/>
@@ -6085,11 +6094,12 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="822" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">对角，且依赖输入</tspan></text>
 <text class="svgsm" x="822" y="176" fill="#80868b" style="font-size:11.0px">修了什么</text>
 <text class="svgsm" x="822" y="194" fill="#5f6368" style="font-size:11.0px">衰减速度由内容决定</text>
-<text class="svgsm" x="722" y="272" fill="#80868b" style="font-size:11.0px">并行</text>
-<text class="svgsm" x="762" y="272" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">容易</tspan></text>
-<rect x="1056" y="94" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="1056" y="94" width="4" height="196" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="1058" y="94" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="722" y="232" fill="#0d652d" style="font-size:11.0px"><tspan font-weight="700">对角线，衰减由输入决定</tspan></text>
+<text class="svgsm" x="722" y="290" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="762" y="290" fill="#0d652d" style="font-size:11.5px"><tspan font-weight="700">容易</tspan></text>
+<rect x="1056" y="94" width="344" height="214" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="1056" y="94" width="4" height="214" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="1058" y="94" width="3" height="214" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svgsm" x="1074" y="118" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">Mamba-2</tspan></text>
 <text class="svgsm" x="1384" y="118" fill="#80868b" text-anchor="end" style="font-size:11.0px">2024-05</text>
 <rect x="1074" y="132" width="10" height="10" rx="2" fill="#93a5d4" stroke="none" stroke-width="1"/>
@@ -6144,259 +6154,264 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="1174" y="150" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">a·I（标量×单位阵）</tspan></text>
 <text class="svgsm" x="1174" y="176" fill="#80868b" style="font-size:11.0px">修了什么</text>
 <text class="svgsm" x="1174" y="194" fill="#5f6368" style="font-size:11.0px">⭐ 故意退回最简，换来 SSD 对偶</text>
-<text class="svgsm" x="1074" y="272" fill="#80868b" style="font-size:11.0px">并行</text>
-<text class="svgsm" x="1114" y="272" fill="#174ea6" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
-<rect x="0" y="300" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="300" width="4" height="196" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="300" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="18" y="324" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">DeltaNet</tspan></text>
-<text class="svgsm" x="328" y="324" fill="#80868b" text-anchor="end" style="font-size:11.0px">2021 / 2024 并行化</text>
-<rect x="18" y="338" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
-<rect x="30" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="42" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="54" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="66" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="78" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="90" y="338" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="18" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="30" y="350" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
-<rect x="42" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="54" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="66" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="78" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="90" y="350" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="18" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="30" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="42" y="362" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
-<rect x="54" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="66" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="78" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="90" y="362" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="18" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="30" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="42" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="54" y="374" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
-<rect x="66" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="78" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="90" y="374" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="18" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="30" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="42" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="54" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="66" y="386" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
-<rect x="78" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="90" y="386" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="18" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="30" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="42" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="54" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="66" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="78" y="398" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
-<rect x="90" y="398" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="18" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="30" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="42" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="54" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="66" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="78" y="410" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
-<rect x="90" y="410" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
-<text class="svgsm" x="118" y="356" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">I − β k kᵀ</tspan></text>
-<text class="svgsm" x="118" y="382" fill="#80868b" style="font-size:11.0px">修了什么</text>
-<text class="svgsm" x="118" y="400" fill="#5f6368" style="font-size:11.0px">先擦掉旧的再写新的</text>
-<text class="svgsm" x="18" y="478" fill="#80868b" style="font-size:11.0px">并行</text>
-<text class="svgsm" x="58" y="478" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">要专门的技巧</tspan></text>
-<rect x="352" y="300" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="352" y="300" width="4" height="196" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="354" y="300" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="370" y="324" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">GDN</tspan></text>
-<text class="svgsm" x="680" y="324" fill="#80868b" text-anchor="end" style="font-size:11.0px">2024-12</text>
-<rect x="370" y="338" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
-<rect x="382" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="394" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="406" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="418" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="430" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="442" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="370" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="382" y="350" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
-<rect x="394" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="406" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="418" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="430" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="442" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="370" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="382" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="394" y="362" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
-<rect x="406" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="418" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="430" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="442" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="370" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="382" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="394" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="406" y="374" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
-<rect x="418" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="430" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="442" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="370" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="382" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="394" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="406" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="418" y="386" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
-<rect x="430" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="442" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="370" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="382" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="394" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="406" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="418" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="430" y="398" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
-<rect x="442" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="370" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="382" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="394" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="406" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="418" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="430" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="442" y="410" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
-<text class="svgsm" x="470" y="356" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">α(I − β k kᵀ)</tspan></text>
-<text class="svgsm" x="470" y="382" fill="#80868b" style="font-size:11.0px">修了什么</text>
-<text class="svgsm" x="470" y="400" fill="#5f6368" style="font-size:11.0px">门控 ＋ 擦除，合到一起</text>
-<text class="svgsm" x="370" y="478" fill="#80868b" style="font-size:11.0px">并行</text>
-<text class="svgsm" x="410" y="478" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">要专门的技巧</tspan></text>
-<rect x="704" y="300" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="704" y="300" width="4" height="196" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
-<rect x="706" y="300" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="722" y="324" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">KDA</tspan></text>
-<text class="svgsm" x="1032" y="324" fill="#80868b" text-anchor="end" style="font-size:11.0px">2025-10</text>
-<rect x="722" y="338" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
-<rect x="734" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="746" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="758" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="770" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="782" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="794" y="338" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="722" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="734" y="350" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
-<rect x="746" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="758" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="770" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="782" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="794" y="350" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="722" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="734" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="746" y="362" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
-<rect x="758" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="770" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="782" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="794" y="362" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="722" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="734" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="746" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="758" y="374" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
-<rect x="770" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="782" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="794" y="374" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="722" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="734" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="746" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="758" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="770" y="386" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
-<rect x="782" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="794" y="386" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="722" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="734" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="746" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="758" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="770" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="782" y="398" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
-<rect x="794" y="398" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="722" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="734" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="746" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="758" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="770" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="782" y="410" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
-<rect x="794" y="410" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
-<text class="svgsm" x="822" y="356" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">Diag(α)(I − β k kᵀ)</tspan></text>
-<text class="svgsm" x="822" y="382" fill="#80868b" style="font-size:11.0px">修了什么</text>
-<text class="svgsm" x="822" y="400" fill="#5f6368" style="font-size:11.0px">门从标量升成逐通道</text>
-<text class="svgsm" x="722" y="478" fill="#80868b" style="font-size:11.0px">并行</text>
-<text class="svgsm" x="762" y="478" fill="#681da8" style="font-size:11.5px"><tspan font-weight="700">要特化的 DPLR 算法</tspan></text>
-<rect x="1056" y="300" width="344" height="196" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="1056" y="300" width="4" height="196" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="1058" y="300" width="3" height="196" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="1074" y="324" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">（若允许全矩阵）</tspan></text>
-<text class="svgsm" x="1384" y="324" fill="#80868b" text-anchor="end" style="font-size:11.0px">——</text>
-<rect x="1074" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1086" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1098" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1110" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1122" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1134" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1146" y="338" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1074" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1086" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1098" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1110" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1122" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1134" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1146" y="350" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1074" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1086" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1098" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1110" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1122" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1134" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1146" y="362" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1074" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1086" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1098" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1110" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1122" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1134" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1146" y="374" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1074" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1086" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1098" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1110" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1122" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1134" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1146" y="386" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1074" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1086" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1098" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1110" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1122" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1134" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1146" y="398" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1074" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1086" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1098" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1110" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1122" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1134" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<rect x="1146" y="410" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
-<text class="svgsm" x="1174" y="356" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">任意 A</tspan></text>
-<text class="svgsm" x="1174" y="382" fill="#80868b" style="font-size:11.0px">修了什么</text>
-<text class="svgsm" x="1174" y="400" fill="#5f6368" style="font-size:11.0px">表达力最强</text>
-<text class="svgsm" x="1074" y="478" fill="#80868b" style="font-size:11.0px">并行</text>
-<text class="svgsm" x="1114" y="478" fill="#a50e0e" style="font-size:11.5px"><tspan font-weight="700">⛔ 并行度归零</tspan></text>
-<rect x="0" y="512" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="512" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="512" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="536" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这张图真正的结论：表达力和可算性是一起设计的</tspan></text>
-<text class="svgsm" x="20" y="560" fill="#174ea6" style="font-size:12.0px">从上到下，A 越来越自由 ——&#160;<tspan font-weight="700">但这不是一个「表达力越来越强」的单调故事</tspan>。每一步都在「A 能多复杂」和「还算不算得动」之间<tspan font-weight="700">重新划一次线</tspan>。</text>
-<text class="svgsm" x="20" y="581" fill="#174ea6" style="font-size:12.0px">⭐ 最能说明问题的是 <tspan font-weight="700">Mamba-2 主动往回退</tspan>：它把 A 退成最简的 a·I ——&#160;正因为退了，才证得出它跟线性注意力是<tspan font-weight="700">对偶</tspan>的（SSD），才能把递推写成矩阵乘、吃上 Tensor Core。</text>
-<text class="svgsm" x="20" y="602" fill="#174ea6" style="font-size:12.0px">⛔ 最后一格是反例：<tspan font-weight="700">全矩阵 A 表达力最强，但没有高效的并行扫描 ——&#160;并行度直接归零，于是它根本不在候选名单里。</tspan></text>
-<rect x="0" y="631" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="631" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="631" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="655" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐ 顺带回答「那 Mamba 呢」—— 它不是另一支，是这一支的祖宗</tspan></text>
-<text class="svgsm" x="20" y="679" fill="#0d652d" style="font-size:12.0px">不用推理，有一条字面证据：Gated DeltaNet 那篇论文的标题就是《<tspan font-weight="700">Gated Delta Networks: Improving Mamba2 with Delta Rule</tspan>》，而 Qwen3-Next / Qwen3.5 用的就是 GDN。</text>
-<text class="svgsm" x="20" y="700" fill="#0d652d" style="font-size:12.0px">⭐ 再加上 Mamba-2 那篇自己的标题 ——&#160;《<tspan font-weight="700">Transformers are SSMs</tspan>》。<tspan font-weight="700">SSM 和线性注意力从来就不是两支，是同一件事的两种写法。</tspan></text>
-<text class="svgsm" x="0" y="731" fill="#80868b" style="font-size:11.0px">📌 递推式与各家 A_t 的结构见：线性注意力 arXiv 2006.16236、DeltaNet arXiv 2102.11174（2021）与并行化 arXiv 2406.06484、Mamba-2 / SSD arXiv 2405.21060、GDN arXiv 2412.06464、KDA（Kimi Linear）arXiv 2510.26692</text>
-<text class="svgsm" x="0" y="748" fill="#80868b" style="font-size:11.0px">　　⚠️ 矩阵缩略图是<tspan font-weight="700">示意</tspan>：只画结构（哪里非零、深浅代表是否逐通道不同），不代表真实数值</text>
+<text class="svgsm" x="1074" y="232" fill="#174ea6" style="font-size:11.0px"><tspan font-weight="700">对角线，整块同一个标量</tspan></text>
+<text class="svgsm" x="1074" y="290" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="1114" y="290" fill="#174ea6" style="font-size:11.5px"><tspan font-weight="700">最容易</tspan></text>
+<rect x="0" y="318" width="344" height="214" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="318" width="4" height="214" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="318" width="3" height="214" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="18" y="342" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">DeltaNet</tspan></text>
+<text class="svgsm" x="328" y="342" fill="#80868b" text-anchor="end" style="font-size:11.0px">2021 / 2024 并行化</text>
+<rect x="18" y="356" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="30" y="356" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="356" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="356" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="356" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="356" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="356" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="368" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="368" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="42" y="368" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="368" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="368" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="368" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="368" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="380" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="380" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="380" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="54" y="380" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="380" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="380" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="380" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="392" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="392" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="392" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="392" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="66" y="392" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="392" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="392" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="404" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="404" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="404" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="404" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="404" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="78" y="404" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="404" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="416" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="416" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="416" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="416" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="416" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="416" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<rect x="90" y="416" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="18" y="428" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="30" y="428" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="42" y="428" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="54" y="428" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="66" y="428" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="78" y="428" width="10" height="10" rx="2" fill="#def0f2" stroke="none" stroke-width="1"/>
+<rect x="90" y="428" width="10" height="10" rx="2" fill="#697bc3" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="118" y="374" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">I − β k kᵀ</tspan></text>
+<text class="svgsm" x="118" y="400" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="118" y="418" fill="#5f6368" style="font-size:11.0px">先擦掉旧的再写新的</text>
+<text class="svgsm" x="18" y="456" fill="#b06000" style="font-size:11.0px"><tspan font-weight="700">对角线 ＋ 一整块秩一</tspan></text>
+<text class="svgsm" x="18" y="514" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="58" y="514" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">要专门的技巧</tspan></text>
+<rect x="352" y="318" width="344" height="214" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="352" y="318" width="4" height="214" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="354" y="318" width="3" height="214" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="370" y="342" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">GDN</tspan></text>
+<text class="svgsm" x="680" y="342" fill="#80868b" text-anchor="end" style="font-size:11.0px">2024-12</text>
+<rect x="370" y="356" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="382" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="368" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="394" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="380" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="406" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="392" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="418" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="404" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="430" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="416" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<rect x="442" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="370" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="382" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="394" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="406" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="418" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="430" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="442" y="428" width="10" height="10" rx="2" fill="#96a8d5" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="470" y="374" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">α(I − β k kᵀ)</tspan></text>
+<text class="svgsm" x="470" y="400" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="470" y="418" fill="#5f6368" style="font-size:11.0px">门控 ＋ 擦除，合到一起</text>
+<text class="svgsm" x="370" y="456" fill="#b06000" style="font-size:11.0px"><tspan font-weight="700">秩一块 ＋ 对角线整体变淡</tspan></text>
+<text class="svgsm" x="370" y="514" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="410" y="514" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">要专门的技巧</tspan></text>
+<rect x="704" y="318" width="344" height="214" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="704" y="318" width="4" height="214" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="706" y="318" width="3" height="214" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="722" y="342" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">KDA</tspan></text>
+<text class="svgsm" x="1032" y="342" fill="#80868b" text-anchor="end" style="font-size:11.0px">2025-10</text>
+<rect x="722" y="356" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
+<rect x="734" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="356" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="368" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
+<rect x="746" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="368" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="380" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
+<rect x="758" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="380" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="392" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
+<rect x="770" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="392" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="404" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
+<rect x="782" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="404" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="416" width="10" height="10" rx="2" fill="#8799cf" stroke="none" stroke-width="1"/>
+<rect x="794" y="416" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="722" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="734" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="746" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="758" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="770" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="782" y="428" width="10" height="10" rx="2" fill="#e4f6f5" stroke="none" stroke-width="1"/>
+<rect x="794" y="428" width="10" height="10" rx="2" fill="#c3d5e7" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="822" y="374" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">Diag(α)(I − β k kᵀ)</tspan></text>
+<text class="svgsm" x="822" y="400" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="822" y="418" fill="#5f6368" style="font-size:11.0px">门从标量升成逐通道</text>
+<text class="svgsm" x="722" y="456" fill="#681da8" style="font-size:11.0px"><tspan font-weight="700">秩一块 ＋ 对角线逐通道不同</tspan></text>
+<text class="svgsm" x="722" y="514" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="762" y="514" fill="#681da8" style="font-size:11.5px"><tspan font-weight="700">要特化的 DPLR 算法</tspan></text>
+<rect x="1056" y="318" width="344" height="214" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="1056" y="318" width="4" height="214" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="1058" y="318" width="3" height="214" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="1074" y="342" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">（若允许全矩阵）</tspan></text>
+<text class="svgsm" x="1384" y="342" fill="#80868b" text-anchor="end" style="font-size:11.0px">——</text>
+<rect x="1074" y="356" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="356" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="356" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="356" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="356" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="356" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="356" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="368" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="368" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="368" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="368" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="368" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="368" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="368" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="380" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="380" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="380" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="380" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="380" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="380" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="380" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="392" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="392" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="392" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="392" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="392" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="392" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="392" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="404" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="404" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="404" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="404" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="404" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="404" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="404" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="416" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="416" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="416" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="416" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="416" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="416" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="416" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1074" y="428" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1086" y="428" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1098" y="428" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1110" y="428" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1122" y="428" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1134" y="428" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<rect x="1146" y="428" width="10" height="10" rx="2" fill="#ffacac" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1174" y="374" fill="#202124" style="font-size:12.0px"><tspan font-weight="700">任意 A</tspan></text>
+<text class="svgsm" x="1174" y="400" fill="#80868b" style="font-size:11.0px">修了什么</text>
+<text class="svgsm" x="1174" y="418" fill="#5f6368" style="font-size:11.0px">表达力最强</text>
+<text class="svgsm" x="1074" y="456" fill="#a50e0e" style="font-size:11.0px"><tspan font-weight="700">全满 —— 没有结构可利用</tspan></text>
+<text class="svgsm" x="1074" y="514" fill="#80868b" style="font-size:11.0px">并行</text>
+<text class="svgsm" x="1114" y="514" fill="#a50e0e" style="font-size:11.5px"><tspan font-weight="700">⛔ 并行度归零</tspan></text>
+<rect x="0" y="548" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="548" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="548" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="572" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这张图真正的结论：表达力和可算性是一起设计的</tspan></text>
+<text class="svgsm" x="20" y="596" fill="#174ea6" style="font-size:12.0px">从上到下，A 越来越自由 ——&#160;<tspan font-weight="700">但这不是一个「表达力越来越强」的单调故事</tspan>。每一步都在「A 能多复杂」和「还算不算得动」之间<tspan font-weight="700">重新划一次线</tspan>。</text>
+<text class="svgsm" x="20" y="617" fill="#174ea6" style="font-size:12.0px">⭐ 最能说明问题的是 <tspan font-weight="700">Mamba-2 主动往回退</tspan>：它把 A 退成最简的 a·I ——&#160;正因为退了，才证得出它跟线性注意力是<tspan font-weight="700">对偶</tspan>的（SSD），才能把递推写成矩阵乘、吃上 Tensor Core。</text>
+<text class="svgsm" x="20" y="638" fill="#174ea6" style="font-size:12.0px">⛔ 最后一格是反例：<tspan font-weight="700">全矩阵 A 表达力最强，但没有高效的并行扫描 ——&#160;并行度直接归零，于是它根本不在候选名单里。</tspan></text>
+<rect x="0" y="667" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="667" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="667" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="691" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ ⭐ 顺带回答「那 Mamba 呢」—— 它不是另一支，是这一支的祖宗</tspan></text>
+<text class="svgsm" x="20" y="715" fill="#0d652d" style="font-size:12.0px">不用推理，有一条字面证据：Gated DeltaNet 那篇论文的标题就是《<tspan font-weight="700">Gated Delta Networks: Improving Mamba2 with Delta Rule</tspan>》，而 Qwen3-Next / Qwen3.5 用的就是 GDN。</text>
+<text class="svgsm" x="20" y="736" fill="#0d652d" style="font-size:12.0px">⭐ 再加上 Mamba-2 那篇自己的标题 ——&#160;《<tspan font-weight="700">Transformers are SSMs</tspan>》。<tspan font-weight="700">SSM 和线性注意力从来就不是两支，是同一件事的两种写法。</tspan></text>
+<text class="svgsm" x="0" y="767" fill="#80868b" style="font-size:11.0px">📌 递推式与各家 A_t 的结构见：线性注意力 arXiv 2006.16236、DeltaNet arXiv 2102.11174（2021）与并行化 arXiv 2406.06484、Mamba-2 / SSD arXiv 2405.21060、GDN arXiv 2412.06464、KDA（Kimi Linear）arXiv 2510.26692</text>
+<text class="svgsm" x="0" y="784" fill="#80868b" style="font-size:11.0px">　　⚠️ 矩阵缩略图是<tspan font-weight="700">示意</tspan>：只画结构（哪里非零、深浅代表是否逐通道不同），不代表真实数值</text>
 </svg><figcaption>⭐⭐ <b>所有这些方法长成同一个递推，区别只有一处：允许 A_t 长什么样。</b><b>八种形状并排，谱系、亲缘、代价一眼全在。</b><em>最能说明问题的是 Mamba-2 主动往回退到最简的 a·I —— 正因为退了，才证得出跟线性注意力的对偶，才能吃上 Tensor Core。</em></figcaption></figure>
 <p>⭐ 图给不了的是这条<b>读法</b>：
   <b>看到一个新的线性注意力，先把它的 A 写出来，再问「这个形状还能不能分块并行」。</b>

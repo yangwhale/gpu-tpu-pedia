@@ -57,7 +57,7 @@ def main():
     # ── 八个矩阵缩略图，两行四列 ────────────────────────────────
     N = 7                     # 缩略矩阵画 7×7
     CELL = 12
-    CW, CH = 344, 196
+    CW, CH = 344, 214
     yy = y0 + 6
     for idx, (name, year, form, kind, fix, par, col) in enumerate(ROWS):
         cx = (idx % 4) * (CW + 8)
@@ -108,6 +108,19 @@ def main():
         f.t(mx + N * CELL + 16, my + 44, "修了什么", GY2, size=11)
         f.t(mx + N * CELL + 16, my + 62, fix, GY, size=11,
             w=CW - N * CELL - 44)
+
+        # ⭐ 2026-09-13：投影上「深浅」分不开，补一行结构标签 ——
+        #   让差别靠**读得出来的词**传达，不靠像素亮度。
+        SHAPE = {"eye": "只有对角线，全同",
+                 "diag": "对角线，逐行衰减",
+                 "diag-sel": "对角线，衰减由输入决定",
+                 "scalar": "对角线，整块同一个标量",
+                 "rank1": "对角线 ＋ 一整块秩一",
+                 "rank1-decay": "秩一块 ＋ 对角线整体变淡",
+                 "rank1-chan": "秩一块 ＋ 对角线逐通道不同",
+                 "full": "全满 —— 没有结构可利用"}
+        f.t(mx, my + N * CELL + 16, SHAPE[kind], col if col != GY else GY2,
+            True, 11, w=CW - 36)
 
         f.t(cx + 18, cy + CH - 18, "并行", GY2, size=11)
         f.t(cx + 58, cy + CH - 18, par, col if col != GY else GY, True, 11.5,
