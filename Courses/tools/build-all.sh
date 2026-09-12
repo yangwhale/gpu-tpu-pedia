@@ -70,6 +70,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-mla-why.py       # §五 MLA 凭什么能压（信息账：白送的 vs 赌出来的）
   python3 topic03-fig-mqa-why.py       # §五 砍头这一支怎么想出来的（2019 选项单 ＋ 自由度不是宽度）
   python3 topic03-fig-knob2.py         # §六 旋钮②（五种读法画成五张 mask）
+  python3 topic03-fig-dsa-why.py       # §六 DSA 凭什么只看 2048 个（鸡生蛋 ＋ 让真注意力当老师）
   python3 topic03-fig-chronicle.py     # 上半：时间轴 SVG
   # ⭐ 下半那张 39 行模型表现在是**可排序的 HTML 表**，不是 SVG ——
   #   两边读同一份 topic03_models.py，⛔ 数据只有一份。
