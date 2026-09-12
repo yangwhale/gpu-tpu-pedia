@@ -1842,11 +1842,11 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <section id="s一"><div class="wrap"><div class="stn"><span class="badge">第 一 节</span><h2>MHA ——&nbsp;把循环拿掉，代价是什么</h2></div>
 
 <p>2017 年有人问：<b>既然那个补丁这么好使，能不能把 RNN 整个扔掉，只留补丁？</b></p>
-<div class="note ok"><p>⭐ 这一节要交代三件事，各配一张图：
-  换掉了什么（一根横箭头 → 一张 n × n 的表）、一层里到底在算什么
-  （检索三件套，外加那个 √d 是怎么来的）、多头在多什么（不是堆算力）。<br>
-  ⭐⭐ 落点只有一句：<b>KV cache 就是在这一节出生的</b> ——&nbsp;§零 图三 Ⓒ 那一行，
-  病根在这里。</p></div>
+<!-- ⛔ 2026-09-12 砍掉原来那段 88 字的「这一节要交代三件事，各配一张图……」：
+     **下面三个 h3 标题本身就是目录**，那段只是它的散文版重复。
+     只留落点一句 —— 落点是标题给不了的。 -->
+<div class="note ok"><p>⭐⭐ <b>这一节的落点只有一句：KV cache 就是在这里出生的</b>
+  ——&nbsp;§零 图三 Ⓒ 那一行的病根，在这一节。</p></div>
 
 <h3>1.1 换掉了什么</h3>
 <figure class="fbox fwide" id="fig-mha-swap"><svg viewBox="0 0 1400 523" width="100%" role="img" aria-label="RNN 与自注意力的信息通路对比：RNN 靠一条链一步一步传，任意两个位置之间要走 n 步；自注意力让每个位置直接连到所有位置，两点之间只隔一步，代价是连线数从 n 变成 n 的平方"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
@@ -1975,11 +1975,11 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="20" y="466" fill="#b06000" style="font-size:12.0px">⭐ 于是 §零 图三 Ⓒ 那一行的病根在这儿：<tspan font-weight="700">解码时每一步都得把「所有历史」重读一遍 ——&#160;那就是 KV cache。</tspan></text>
 <text class="svgsm" x="0" y="499" fill="#80868b" style="font-size:11.0px">📌 Vaswani et al. 2017 (arXiv 1706.03762) 表 1：自注意力 串行步数 O(1)／最长路径 O(1)；循环层两项都是 O(n)。因果遮罩见 §3.2.3：把非法连接「setting to −∞」</text>
 </svg><figcaption>⭐ <b>左边是 §零 那条链，右边是它的替代品。</b>看完带走一件事：<b>要算的格子从 n 变成了 n²，而那张表就是后面反复出现的「注意力矩阵」本人</b>。</figcaption></figure>
-<div class="note info"><p>⭐ §零 那张表（Vaswani 表 1）的「怎么做到的」就在这张图里：
-  串行步数 O(n) → O(1)、最长路径 O(n) → O(1)，代价是要算的格子从 <code>n</code> 变成
-  <code>n²</code>。<br>
-  ⛔ 而更要紧的是另一件事：状态没了。RNN 那个固定大小的 <code>h</code>，
-  被换成了「<b>把所有历史原封不动留着</b>」。</p></div>
+<!-- ⛔ 2026-09-12：前半句（O(n)→O(1)、格子 n→n²）图上就写着，删。
+     留下的这句**图画不出来**：图能画「多了什么」，画不出「少了什么」。 -->
+<div class="note bad"><p>⛔ <b>被换掉的不只是那根箭头 ——&nbsp;状态也没了。</b>
+  RNN 那个固定大小的 <code>h</code>，被换成了「<b>把所有历史原封不动留着</b>」。
+  <em>这一句后面每一节都要用到。</em></p></div>
 
 <!-- ⭐⭐ 2026-09-12 加 1.1b。现场要求：「借机先把 Transformer 讲了 ——
      不用讲 MLP，就讲 attention；讲 Attention is all you need 到底为啥；
@@ -2136,14 +2136,13 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="696" fill="#80868b" style="font-size:11.0px">📌 「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 §3.2 的原文措辞，不是本课编的比喻；<tspan font-weight="700">图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</tspan></text>
 <text class="svgsm" x="0" y="713" fill="#80868b" style="font-size:11.0px">　　⚠️ 本图<tspan font-weight="700">只画注意力</tspan> ——&#160;一层 Transformer 里还有 FFN、残差、归一化，它们不在本专题这条轴上（本专题的账本只有 KV cache）</text>
 </svg><figcaption>⭐ <b>跟着最后那个 token 走一遍：它提问（q）、每个位置报价（k）、按权重把所有人的货（v）加起来。</b><b>一步之内够到全场，而且六个位置同时在做</b> —— 这就是那句标题的意思：<b>混合信息这件事，只要注意力就够了。</b></figcaption></figure>
-<div class="note info"><p>⭐⭐ <b>这张图想让你带走的就一句：一层注意力 ＝ 一次「全员报价、按需取货」。</b>
-  <br>而且<b>不只是最后那个 token 在做</b> ——&nbsp;<b>每个位置同时在做同样的事</b>。
-  所以一层过后，<b>每个位置的向量都变成了「全场的一个加权视角」</b>；
-  堆 L 层，就是把这件事重复 L 次。<br>
-  ⛔ <b>「Attention Is All You Need」这个标题最常被读反</b>：
-  它说的<b>不是「注意力很强」</b>，而是<b>「混合序列信息这件事，只要它就够了」</b>
-  ——&nbsp;<b>循环不需要，卷积也不需要</b>。</p></div>
-
+<!-- ⛔⛔ 2026-09-12：这里原来有一条 134 字的注解，写着「一层注意力 ＝ 全员报价
+     按需取货」「每个位置同时在做」「那个标题最常被读反」——&nbsp;
+     **而这三句，在图里那两条落点带上一字不差地都有。**
+     ⭐ 是我画完图之后又把图里的话抄了一遍。整条删掉。
+     ⭐⭐ 判据（本讲常驻规矩，见文件头）：
+       **写正文之前先问一句「这句话图里有没有」。有，就别写第二遍。**
+       图注和落点带是图的一部分，不是「图外面还得再说一次」的理由。 -->
 <h3>1.2 一层里到底在算什么</h3>
 <figure class="fbox fwide" id="fig-mha-qkv"><svg viewBox="0 0 1400 630" width="100%" role="img" aria-label="注意力的检索三件套：query 是要找什么，key 是每个 token 挂出来的牌子，value 是牌子后面的内容；打分之后除以根号 d 再做 softmax，最后按权重把 value 加权求和"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一层里到底在算什么 ——&#160;<tspan font-weight="700">论文自己的说法就是「检索」，不是我们编的比喻</tspan></text>
