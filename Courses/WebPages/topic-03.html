@@ -3318,6 +3318,114 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="595" fill="#80868b" style="font-size:11.0px">📌 三步的拆法直接对应 Vaswani 2017 §3.2 的定义式：取 key-value pairs →&#160;按 compatibility 加权 →&#160;用 softmax 做这个加权</text>
 <text class="svgsm" x="0" y="612" fill="#80868b" style="font-size:11.0px">　　⚠️ 图上每个旋钮只列代表方案，<tspan font-weight="700">谁在哪一格、出处是什么，见本节那张名词收纳表</tspan></text>
 </svg><figcaption>⭐⭐ <b>三个旋钮不是凑出来的：一个 query 只做三步，一步一个位置可动。</b><b>这张图要留下的是「没有第四个位置」这个封闭感</b> —— <em>而 FlashAttention 不改算什么、只改怎么算，所以它不在这三条里。</em></figcaption></figure>
+<!-- ⭐⭐⭐ 2026-09-13 夜间 R10。前九轮里「事后压 vs 从头按压缩训」这条对立
+     **出现了四次**，每次在不同的技术分支上。到第四次它就不是巧合了 ——
+     它是一个**跟三个旋钮正交的轴**，该被扶正到骨架里。
+       · 三个旋钮回答「**改什么**」
+       · 这条暗线回答「**什么时候改**」
+     ⚠️ 图里带了一条必须讲的口径：事后/native 说的是**这次被怎么用**，
+       不是方法本身的属性（GQA 两列都待过）。 -->
+<figure class="fbox fwide" id="fig-when-axis"><svg viewBox="0 0 1400 849" width="100%" role="img" aria-label="第二个轴：什么时候改。事后压与从头按压缩训这条对立在四个分支上各出现一次，它跟三个旋钮正交，两轴一交叉就成了一张地图"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">第二个轴　——　三个旋钮说的是「改什么」，这条说的是「什么时候改」</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐⭐ 这条对立在前面<tspan font-weight="700">出现了四次</tspan>，四次都在不同的分支上 ——&#160;到第四次它就不是巧合了</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">事后：拿训好的模型去凑</text>
+<rect x="160" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="177" y="64" fill="#5f6368" style="font-size:11.0px">native：把约束写进训练</text>
+<rect x="323" y="55" width="11" height="11" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="340" y="64" fill="#5f6368" style="font-size:11.0px">同一个旋钮的两种用法</text>
+<text class="svgsm" x="0" y="96" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">在哪个旋钮上</tspan></text>
+<text class="svglbl" x="252" y="96" fill="#b06000" style="font-size:13.0px"><tspan font-weight="700">事后　拿训好的模型去凑</tspan></text>
+<text class="svglbl" x="716" y="96" fill="#0d652d" style="font-size:13.0px"><tspan font-weight="700">native　把约束写进训练</tspan></text>
+<text class="svgsm" x="0" y="140" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">旋钮①　每份更小</tspan></text>
+<text class="svgsm" x="0" y="160" fill="#80868b" style="font-size:11.0px">低秩分解</text>
+<rect x="236" y="110" width="440" height="72" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="236" y="110" width="4" height="72" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="238" y="110" width="3" height="72" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="254" y="136" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">Eigen Attention / Palu / LoRC</tspan></text>
+<text class="svgsm" x="254" y="160" fill="#5f6368" style="font-size:11.5px">拿训好的模型做低秩分解</text>
+<text class="svgsm" x="658" y="160" fill="#80868b" text-anchor="end" style="font-size:11.0px">省 40–50%</text>
+<rect x="700" y="110" width="684" height="72" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="700" y="110" width="4" height="72" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="702" y="110" width="3" height="72" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="718" y="136" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="718" y="160" fill="#5f6368" style="font-size:11.5px">从第一天就按 512 训</text>
+<text class="svgsm" x="1366" y="160" fill="#80868b" text-anchor="end" style="font-size:11.0px">省 56.9×</text>
+<text class="svgsm" x="0" y="224" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">旋钮①　每份更小</tspan></text>
+<text class="svgsm" x="0" y="244" fill="#80868b" style="font-size:11.0px">砍头</text>
+<rect x="236" y="194" width="440" height="72" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="236" y="194" width="4" height="72" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="238" y="194" width="3" height="72" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="254" y="220" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">GQA uptraining</tspan></text>
+<text class="svgsm" x="254" y="244" fill="#5f6368" style="font-size:11.5px">平均池化 ＋ 5% 算力续训</text>
+<text class="svgsm" x="658" y="244" fill="#80868b" text-anchor="end" style="font-size:11.0px">接近 MHA</text>
+<rect x="700" y="194" width="684" height="72" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="700" y="194" width="4" height="72" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="702" y="194" width="3" height="72" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="718" y="220" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">GQA from scratch</tspan></text>
+<text class="svgsm" x="718" y="244" fill="#5f6368" style="font-size:11.5px">一开始就分 8 组</text>
+<text class="svgsm" x="1366" y="244" fill="#80868b" text-anchor="end" style="font-size:11.0px">同上，但不用两段</text>
+<text class="svgsm" x="0" y="308" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">旋钮②　每步少读</tspan></text>
+<text class="svgsm" x="0" y="328" fill="#80868b" style="font-size:11.0px">挑着看</text>
+<rect x="236" y="278" width="440" height="72" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="236" y="278" width="4" height="72" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="238" y="278" width="3" height="72" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="254" y="304" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">H2O</tspan></text>
+<text class="svgsm" x="254" y="328" fill="#5f6368" style="font-size:11.5px">一个 KV 驱逐策略，不改训练</text>
+<text class="svgsm" x="658" y="328" fill="#80868b" text-anchor="end" style="font-size:11.0px">随时可开关</text>
+<rect x="700" y="278" width="684" height="72" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="700" y="278" width="4" height="72" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="702" y="278" width="3" height="72" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="718" y="304" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">DSA</tspan></text>
+<text class="svgsm" x="718" y="328" fill="#5f6368" style="font-size:11.5px">943.7B token 继续训练</text>
+<text class="svgsm" x="1366" y="328" fill="#80868b" text-anchor="end" style="font-size:11.0px">掉点小得多</text>
+<text class="svgsm" x="0" y="392" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">旋钮②　每步少读</tspan></text>
+<text class="svgsm" x="0" y="412" fill="#80868b" style="font-size:11.0px">挑着看</text>
+<rect x="236" y="362" width="440" height="72" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="236" y="362" width="4" height="72" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="238" y="362" width="3" height="72" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="254" y="388" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">ClusterKV / MagicPIG / Quest</tspan></text>
+<text class="svgsm" x="254" y="412" fill="#5f6368" style="font-size:11.5px">推理期加的选择器</text>
+<text class="svgsm" x="658" y="412" fill="#80868b" text-anchor="end" style="font-size:11.0px">⛔ 梯度断、访存不连续</text>
+<rect x="700" y="362" width="684" height="72" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="700" y="362" width="4" height="72" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="702" y="362" width="3" height="72" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="718" y="388" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">NSA</tspan></text>
+<text class="svgsm" x="718" y="412" fill="#5f6368" style="font-size:11.5px">端到端训练的三条分支</text>
+<text class="svgsm" x="1366" y="412" fill="#80868b" text-anchor="end" style="font-size:11.0px">持平或超过全注意力</text>
+<rect x="0" y="452" width="1400" height="66" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="452" width="4" height="66" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="452" width="3" height="66" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="477" fill="#b06000" style="font-size:13.0px"><tspan font-weight="700">事后这一列的共同点</tspan></text>
+<text class="svgsm" x="200" y="477" fill="#5f6368" style="font-size:12.0px">便宜、不用重训、随时可开关</text>
+<text class="svgsm" x="20" y="500" fill="#5f6368" style="font-size:11.5px">⛔ 但天花板明显更低 —— 最好也就「接近原来那个」</text>
+<rect x="0" y="528" width="1400" height="66" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="528" width="4" height="66" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="528" width="3" height="66" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="553" fill="#0d652d" style="font-size:13.0px"><tspan font-weight="700">native 这一列的共同点</tspan></text>
+<text class="svgsm" x="200" y="553" fill="#5f6368" style="font-size:12.0px">要重训，而且往往要专门的 kernel</text>
+<text class="svgsm" x="20" y="576" fill="#5f6368" style="font-size:11.5px">⭐ 但它能<tspan font-weight="700">持平甚至超过</tspan>，还能顺带省训练成本</text>
+<rect x="0" y="610" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="610" width="4" height="84" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="610" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="634" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 两个轴一交叉，这一讲就从一张清单变成一张地图</tspan></text>
+<text class="svgsm" x="20" y="658" fill="#174ea6" style="font-size:12.0px">横轴「<tspan font-weight="700">改什么</tspan>」：每份更小 / 每步少读 / 换一套数学。纵轴「<tspan font-weight="700">什么时候改</tspan>」：事后 / 从头。</text>
+<text class="svgsm" x="20" y="679" fill="#174ea6" style="font-size:12.0px">⭐ 拿到任何一个新名字，先把它<tspan font-weight="700">放进某一格</tspan>——&#160;放不进去的，才值得你花时间细看；能放进去的，它的优点和代价<tspan font-weight="700">你已经知道了</tspan>。</text>
+<rect x="0" y="708" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="708" width="4" height="84" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="708" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="732" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ 一条必须讲清的口径，否则这张图会教出错误的心智模型</tspan></text>
+<text class="svgsm" x="20" y="756" fill="#b06000" style="font-size:12.0px"><tspan font-weight="700">「事后 / native」说的是这个方法被怎么用，不是方法本身的属性。</tspan></text>
+<text class="svgsm" x="20" y="777" fill="#b06000" style="font-size:12.0px">GQA 最初是 uptraining 出来的（事后那一列），但今天很多模型<tspan font-weight="700">从第一天就是 GQA</tspan>（native 那一列）。⭐ 同一个机制，两种用法，两种结论 ——&#160;所以<tspan font-weight="700">别问「这个方法属于哪一列」，要问「这次它被怎么用」</tspan>。</text>
+<text class="svgsm" x="0" y="808" fill="#80868b" style="font-size:11.0px">📌 四行的出处分别见 §五（Eigen Attention / Palu / LoRC、GQA uptraining）与 §六（H2O、DSA、NSA §2 列的那批事后方法）——&#160;每一处都有单独的图和引用</text>
+<text class="svgsm" x="0" y="825" fill="#80868b" style="font-size:11.0px">　　「两个轴」这个组织方式是本课的归纳，不是任何一篇论文的提法</text>
+</svg><figcaption>⭐⭐ <b>三个旋钮说的是「改什么」，这一张说的是「什么时候改」—— 两个轴正交。</b><b>事后那一列便宜、可开关，但天花板就是「接近原来那个」；native 那一列要重训，却能持平甚至超过。</b><em>⚠️ 注意：这说的是方法「这次被怎么用」，不是它本身的属性。</em></figcaption></figure>
+<h3>4.2b　第二个轴：什么时候改</h3>
+<p>⭐ 图给不了的是这张地图的<b>用法</b>：
+  <b>拿到一个新名字，先把它放进某一格。</b>
+  <em>放得进去的，它的优点和代价<b>你已经知道了</b>，不用细看；
+  <b>放不进去的，才值得你花时间</b> ——&nbsp;那才是真正的新东西。</em></p>
+
 
 <table>
 <thead><tr><th>旋钮</th><th>在改什么</th><th>代表</th></tr></thead><tbody>
