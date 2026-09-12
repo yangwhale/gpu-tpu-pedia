@@ -1165,7 +1165,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 <rect x="4" y="380" width="1432" height="41" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
 <rect x="4" y="380" width="4" height="41" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
 <rect x="6" y="380" width="2" height="41" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="14" y="395" fill="#1e8e3e"><tspan font-weight="700">④ 不改数学，只改怎么算</tspan></text>
+<text class="svgsm" x="14" y="395" fill="#1e8e3e"><tspan font-weight="700">⊘ 不在旋钮上：实现层（不改数学，只改怎么算）</tspan></text>
 <circle cx="734" cy="384" r="4" fill="#1e8e3e"/>
 <line x1="734" y1="384" x2="734" y2="399" stroke="#1e8e3e" stroke-width="1.2"/>
 <text class="svgsm" x="740" y="408" fill="#1e8e3e"><tspan font-weight="700">⭐ FlashAttention</tspan></text>
@@ -2680,45 +2680,49 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <line x1="510" y1="198" x2="512" y2="198" stroke="#5f6368" stroke-width="1.2"/>
 <line x1="512" y1="198" x2="512" y2="455" stroke="#5f6368" stroke-width="1.2"/>
 <line x1="512" y1="455" x2="438" y2="455" stroke="#5f6368" stroke-width="1.2"/>
-<rect x="680" y="66" width="700" height="333" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="680" y="66" width="700" height="352" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svglbl" x="694" y="86" fill="#a50e0e" style="font-size:13px">★ 先只看一件事：图上什么东西需要留到下一个 token</text>
 <text class="svgsm" x="694" y="110" fill="#a50e0e"><tspan font-weight="700">★</tspan></text>
 <text class="svgsm" x="724" y="110" fill="#a50e0e">在形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;<tspan font-weight="700">只有两处「留得下来」的带它</tspan>：</text>
 <text class="svgsm" x="724" y="129" fill="#a50e0e"><tspan font-weight="700">K 的输出 BSKH</tspan> 和 <tspan font-weight="700">V 的输出 BSKH</tspan></text>
 <text class="svgsm" x="694" y="148" fill="#a50e0e"><tspan font-weight="700">⭐</tspan></text>
 <text class="svgsm" x="724" y="148" fill="#a50e0e"><tspan font-weight="700">S 是唯一会随对话越变越长的那一维</tspan></text>
-<text class="svgsm" x="724" y="186" fill="#5f6368">别的量都不带 S：Q 带 T、X 带 T，</text>
-<text class="svgsm" x="724" y="205" fill="#5f6368">权重<tspan font-weight="700">一个长度都不带</tspan>（W 那几个形状里没有 T 也没有 S）</text>
-<text class="svgsm" x="724" y="224" fill="#5f6368">→ 所以<tspan font-weight="700">全图唯一要跨 token 留下来的，就是 K 和 V</tspan></text>
-<text class="svgsm" x="694" y="262" fill="#174ea6"><tspan font-weight="700">⭐⭐</tspan></text>
-<text class="svgsm" x="724" y="262" fill="#174ea6"><tspan font-weight="700">整个专题三，就是在跟这一份 KV cache 较劲。</tspan></text>
-<text class="svgsm" x="694" y="281" fill="#174ea6"><tspan font-weight="700">①</tspan></text>
-<text class="svgsm" x="724" y="281" fill="#174ea6"><tspan font-weight="700">让每一份更小</tspan> —— 改产生 K/V 的那两条支路</text>
-<text class="svgsm" x="694" y="300" fill="#b06000"><tspan font-weight="700">②</tspan></text>
-<text class="svgsm" x="724" y="300" fill="#b06000"><tspan font-weight="700">KV 照存，但每步只读一部分</tspan> —— 改 mask 那一格</text>
-<text class="svgsm" x="694" y="319" fill="#681da8"><tspan font-weight="700">③</tspan></text>
-<text class="svgsm" x="724" y="319" fill="#681da8"><tspan font-weight="700">换成一个固定大小的状态</tspan> —— 换一套数学，S 直接消失</text>
-<text class="svgsm" x="694" y="357" fill="#5f6368"><tspan font-weight="700">📌</tspan></text>
-<text class="svgsm" x="724" y="357" fill="#5f6368">中间那一步（softmax 前后）<tspan font-weight="700">不落地</tspan>，不占显存 ——</text>
-<text class="svgsm" x="724" y="376" fill="#5f6368">FlashAttention 已是标配，<tspan font-weight="700">本讲不展开它</tspan></text>
-<rect x="680" y="415" width="700" height="253" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="680" y="415" width="4" height="253" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="682" y="415" width="3" height="253" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="694" y="435" fill="#b06000" style="font-size:13px">📐 把字母换成数字 ——&#160;那份要留下来的到底有多大</text>
-<text class="svgsm" x="694" y="459" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、BF16、batch 1，把带 <tspan font-weight="700">S</tspan> 的那两处换成实际占多少：</text>
-<text class="svgsm" x="694" y="497" fill="#a50e0e"><tspan font-weight="700">每层</tspan></text>
-<text class="svgsm" x="727" y="497" fill="#a50e0e">K ＋ V ＝ 2 × S × K头 × H × 2 B —— 一层就 <tspan font-weight="700">8 GiB</tspan>（MHA，128 头）</text>
-<text class="svgsm" x="694" y="516" fill="#b06000"><tspan font-weight="700">⚠️ 训练侧</tspan></text>
-<text class="svgsm" x="762" y="516" fill="#b06000"><tspan font-weight="700">这一栏在训练里是空的</tspan> —— K/V 是算完就扔的激活，不跨 step 留。<tspan font-weight="700">全讲所有倍数都只对推理成立。</tspan></text>
-<text class="svgsm" x="694" y="535" fill="#a50e0e"><tspan font-weight="700">× 61 层</tspan></text>
-<text class="svgsm" x="747" y="535" fill="#a50e0e"><tspan font-weight="700">488 GiB</tspan> ——&#160;<tspan font-weight="700">一个用户、一段输入</tspan></text>
-<text class="svgsm" x="694" y="573" fill="#5f6368"><tspan font-weight="700">对照</tspan></text>
-<text class="svgsm" x="727" y="573" fill="#5f6368">整个模型的<tspan font-weight="700">权重</tspan>（671B × 2B）＝ 1250 GiB</text>
-<text class="svgsm" x="694" y="592" fill="#a50e0e"><tspan font-weight="700">⭐</tspan></text>
-<text class="svgsm" x="726" y="592" fill="#a50e0e"><tspan font-weight="700">三个并发用户，KV 就超过权重本身</tspan></text>
-<text class="svgsm" x="694" y="630" fill="#174ea6"><tspan font-weight="700">⭐⭐</tspan></text>
-<text class="svgsm" x="726" y="630" fill="#174ea6"><tspan font-weight="700">权重是所有人共享的一份，KV cache 是每人一份</tspan> ——</text>
-<text class="svgsm" x="694" y="649" fill="#174ea6">所以它决定的不是「装不装得下」，是<tspan font-weight="700">能同时服务多少人</tspan>。</text>
+<text class="svgsm" x="694" y="186" fill="#5f6368"><tspan font-weight="700">⚠️</tspan></text>
+<text class="svgsm" x="724" y="186" fill="#5f6368">图上带 S 的形状<tspan font-weight="700">不止两处</tspan>（K/V 的进出、两个 matmul 的操作数…）</text>
+<text class="svgsm" x="724" y="205" fill="#5f6368"><tspan font-weight="700">「带 S」和「要跨 token 留下来」是两件事</tspan> ——&#160;</text>
+<text class="svgsm" x="724" y="224" fill="#5f6368">中间那些带 S 的是<tspan font-weight="700">算完就扔的</tspan>（FlashAttention 连物化都不物化）</text>
+<text class="svgsm" x="724" y="243" fill="#5f6368">→ 所以<tspan font-weight="700">唯一要跨 token 留下来的，是 K 和 V 的输出</tspan></text>
+<text class="svgsm" x="694" y="281" fill="#174ea6"><tspan font-weight="700">⭐⭐</tspan></text>
+<text class="svgsm" x="724" y="281" fill="#174ea6"><tspan font-weight="700">整个专题三，就是在跟这一份 KV cache 较劲。</tspan></text>
+<text class="svgsm" x="694" y="300" fill="#174ea6"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="724" y="300" fill="#174ea6"><tspan font-weight="700">让每一份更小</tspan> —— 改产生 K/V 的那两条支路</text>
+<text class="svgsm" x="694" y="319" fill="#b06000"><tspan font-weight="700">②</tspan></text>
+<text class="svgsm" x="724" y="319" fill="#b06000"><tspan font-weight="700">KV 照存，但每步只读一部分</tspan> —— 改 mask 那一格</text>
+<text class="svgsm" x="694" y="338" fill="#681da8"><tspan font-weight="700">③</tspan></text>
+<text class="svgsm" x="724" y="338" fill="#681da8"><tspan font-weight="700">换成一个固定大小的状态</tspan> —— 换一套数学，S 直接消失</text>
+<text class="svgsm" x="694" y="376" fill="#5f6368"><tspan font-weight="700">📌</tspan></text>
+<text class="svgsm" x="724" y="376" fill="#5f6368">中间那一步（softmax 前后）<tspan font-weight="700">不落地</tspan>，不占显存 ——</text>
+<text class="svgsm" x="724" y="395" fill="#5f6368">FlashAttention 已是标配，<tspan font-weight="700">本讲不展开它</tspan></text>
+<rect x="680" y="434" width="700" height="291" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="680" y="434" width="4" height="291" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="682" y="434" width="3" height="291" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="694" y="454" fill="#b06000" style="font-size:13px">📐 把字母换成数字 ——&#160;那份要留下来的到底有多大</text>
+<text class="svgsm" x="694" y="478" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、BF16、batch 1，把带 <tspan font-weight="700">S</tspan> 的那两处换成实际占多少：</text>
+<text class="svgsm" x="694" y="516" fill="#a50e0e"><tspan font-weight="700">每层</tspan></text>
+<text class="svgsm" x="727" y="516" fill="#a50e0e">K ＋ V ＝ 2 × S × K头 × H × 2 B —— 一层就 <tspan font-weight="700">8 GiB</tspan>（MHA，128 头）</text>
+<text class="svgsm" x="694" y="535" fill="#b06000"><tspan font-weight="700">⚠️ 训练侧</tspan></text>
+<text class="svgsm" x="762" y="535" fill="#b06000"><tspan font-weight="700">这一栏在训练里是空的</tspan> —— K/V 是算完就扔的激活，不跨 step 留。<tspan font-weight="700">全讲所有倍数都只对推理成立。</tspan></text>
+<text class="svgsm" x="694" y="554" fill="#a50e0e"><tspan font-weight="700">× 61 层</tspan></text>
+<text class="svgsm" x="747" y="554" fill="#a50e0e"><tspan font-weight="700">488 GiB</tspan> ——&#160;<tspan font-weight="700">一个用户、一段输入</tspan></text>
+<text class="svgsm" x="694" y="592" fill="#5f6368"><tspan font-weight="700">对照</tspan></text>
+<text class="svgsm" x="727" y="592" fill="#5f6368">整个模型的<tspan font-weight="700">权重</tspan>（671B × 2B）＝ 1250 GiB</text>
+<text class="svgsm" x="694" y="611" fill="#a50e0e"><tspan font-weight="700">⭐</tspan></text>
+<text class="svgsm" x="726" y="611" fill="#a50e0e"><tspan font-weight="700">三个并发用户，KV 就超过权重本身</tspan></text>
+<text class="svgsm" x="694" y="649" fill="#174ea6"><tspan font-weight="700">⭐⭐</tspan></text>
+<text class="svgsm" x="726" y="649" fill="#174ea6"><tspan font-weight="700">权重是所有人共享的一份，KV cache 是每人一份</tspan> ——</text>
+<text class="svgsm" x="694" y="668" fill="#174ea6">所以它决定的不是「装不装得下」，是<tspan font-weight="700">能同时服务多少人</tspan>。</text>
+<text class="svgsm" x="694" y="706" fill="#5f6368"><tspan font-weight="700">➜</tspan></text>
+<text class="svgsm" x="726" y="706" fill="#5f6368"><tspan font-weight="700">这笔账在后面四张图里一直挂着</tspan> ——&#160;每张会说清它把这笔账动到了哪一格。</text>
 <rect x="0" y="860" width="1400" height="44" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="16" y="887" fill="#174ea6">📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。B 批量 · T query 长度 · S KV 长度 · D d_model · F MLP 隐层 · H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K</text>
 </svg><figcaption>⭐ <b>本专题的主线图</b>：一层 Transformer，每一步的张量形状都标出来。<b>先只看一件事 —— 在形状里找 <code>S</code>（KV 长度）：只有两处「留得下来」的带它，K 和 V 的输出。</b>那就是唯一需要跨 token 留下来的东西 —— <b>KV cache</b>。三个旋钮各是一种跟它较劲的方式。<span class="sub">图式借自 How to Scale Your Model，本图为重画。</span></figcaption></figure>
@@ -3280,7 +3284,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <line x1="512" y1="198" x2="512" y2="455" stroke="#9aa0a6" stroke-width="1.2"/>
 <line x1="512" y1="455" x2="438" y2="455" stroke="#9aa0a6" stroke-width="1.2"/>
 <rect x="680" y="66" width="700" height="314" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svglbl" x="694" y="86" fill="#0d652d" style="font-size:13px">④ 它删掉的不是计算，是搬运</text>
+<text class="svglbl" x="694" y="86" fill="#0d652d" style="font-size:13px">⊘ 不在旋钮上：它删掉的不是计算，是搬运</text>
 <text class="svgsm" x="724" y="110" fill="#5f6368">朴素写法会把中间那一步 <tspan font-weight="700">写进 HBM 再读回来</tspan>；融合之后不会：</text>
 <text class="svgsm" x="724" y="129" fill="#5f6368">写 S → 读 S → 写 P → 读 P，<tspan font-weight="700">四趟</tspan></text>
 <text class="svgsm" x="694" y="148" fill="#a50e0e"><tspan font-weight="700">⭐</tspan></text>
@@ -3296,9 +3300,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="338" fill="#b06000"><tspan font-weight="700">⚠️</tspan></text>
 <text class="svgsm" x="724" y="338" fill="#b06000"><tspan font-weight="700">它也不是免费的</tspan>：在线 softmax 要多做一遍重标定，</text>
 <text class="svgsm" x="724" y="357" fill="#b06000">融合之后实测也只跑到约 35%，三层原因见 §3.6</text>
-<rect x="680" y="396" width="700" height="253" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="680" y="396" width="4" height="253" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="682" y="396" width="3" height="253" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<rect x="680" y="396" width="700" height="310" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="680" y="396" width="4" height="310" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="682" y="396" width="3" height="310" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="694" y="416" fill="#b06000" style="font-size:13px">📐 把字母换成数字 ——&#160;那份要留下来的到底有多大</text>
 <text class="svgsm" x="694" y="440" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、BF16、batch 1，把带 <tspan font-weight="700">S</tspan> 的那两处换成实际占多少：</text>
 <text class="svgsm" x="694" y="478" fill="#a50e0e"><tspan font-weight="700">每层</tspan></text>
@@ -3314,6 +3318,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="611" fill="#174ea6"><tspan font-weight="700">⭐⭐</tspan></text>
 <text class="svgsm" x="726" y="611" fill="#174ea6"><tspan font-weight="700">权重是所有人共享的一份，KV cache 是每人一份</tspan> ——</text>
 <text class="svgsm" x="694" y="630" fill="#174ea6">所以它决定的不是「装不装得下」，是<tspan font-weight="700">能同时服务多少人</tspan>。</text>
+<text class="svgsm" x="694" y="668" fill="#0d652d"><tspan font-weight="700">➜ 这一格</tspan></text>
+<text class="svgsm" x="751" y="668" fill="#0d652d"><tspan font-weight="700">这笔账一个字节都不变。</tspan>FlashAttention 改的是「怎么跑」，</text>
+<text class="svgsm" x="694" y="687" fill="#0d652d">它省的是那个<tspan font-weight="700">从来没落地过</tspan>的中间矩阵 ——&#160;跟 488 无关。</text>
 <rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#1e8e3e" stroke-width="1"/>
 <text class="svgsm" x="16" y="887" fill="#0d652d">⭐ 一句话记住它：<tspan font-weight="700">三个旋钮改的是这张图，它改的是这张图怎么跑。</tspan>所以它跟谁都不冲突 —— 这也是它能成为默认实现的原因。</text>
 </svg><figcaption>⭐ <b>同一张主线图，而点亮的三格跟底图一模一样</b>：同样的算子、同样的形状、同样的 FLOPs。<b>FlashAttention 不是第四个旋钮</b> —— 三个旋钮改的是这张图，它改的是这张图<b>怎么跑</b>。</figcaption></figure>
@@ -3501,7 +3508,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <table>
 <thead><tr><th>旋钮</th><th>在改什么</th><th>代表</th></tr></thead><tbody>
 <tr><td><b>① 每个 token 存多少</b></td><td>减少 KV 的<b>份数</b>或<b>维度</b></td><td>MQA → GQA → <b>MLA</b> → Gated MLA</td></tr>
-<tr><td><b>② 每个 query 看多少</b></td><td>限制<b>范围</b>或<b>动态挑选</b></td><td><b>SWA</b> · NSA · <b>DSA</b> · <b>CSA / HCA</b></td></tr>
+<tr><td><b>② 每个 query 看多少</b></td><td>限制<b>范围</b>或<b>动态挑选</b></td><td><b>SWA</b> · NSA · <b>DSA</b> · <b>CSA / HCA</b>（⚠️ CSA 同时也在拧 ①，见 <a href="#s六"><a href="#s6-4c">§6.4c</a></a>）</td></tr>
 <tr><td><b>③ 换一套数学</b></td><td>用<b>固定大小的状态</b>代替不断变长的 KV</td><td>线性注意力：DeltaNet → <b>GDN</b> → <b>KDA</b></td></tr>
 <tr><td><b>①+②+③ 混着来</b></td><td>不同层用不同方案</td><td><b>Hybrid</b>：V4 的 CSA+HCA、K3 的 KDA+Gated MLA</td></tr>
 </tbody></table>
@@ -3523,7 +3530,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <tr><td>Attention sink</td><td>StreamingLLM, arXiv 2309.17453</td><td>—（现象）</td><td>开头几个 token 被当作"停车位"，扔了就崩</td></tr>
 <tr><td><b>NSA</b></td><td>arXiv 2502.11089</td><td>②</td><td>压缩 / 选择 / 滑窗三条支路，门控融合，<b>训练时就用</b></td></tr>
 <tr><td><b>DSA</b></td><td>DeepSeek-V3.2, arXiv 2512.02556</td><td>②</td><td>Lightning Indexer 给每个 query 挑 top-k</td></tr>
-<tr><td><b>CSA / HCA</b></td><td>DeepSeek-V4, arXiv 2606.19348</td><td>①+②</td><td>先把 KV 按块压缩，再稀疏挑选；两档压缩率混排</td></tr>
+<tr><td><b>CSA / HCA</b></td><td>DeepSeek-V4, arXiv 2606.19348</td><td><b>①（token 维）＋②</b></td><td>先把 KV 按块压缩（＝沿 token 维压，见 <a href="#s六"><a href="#s6-4c">§6.4c</a></a>），再稀疏挑选；两档压缩率混排</td></tr>
 <tr><td>DeltaNet</td><td>起源 Schlag 等 arXiv 2102.11174；可并行化 arXiv 2406.06484</td><td>③</td><td>状态更新用 delta rule：擦掉旧的再写新的</td></tr>
 <tr><td><b>GDN</b>（Gated DeltaNet）</td><td>arXiv 2412.06464</td><td>③</td><td>在 delta rule 上加遗忘门</td></tr>
 <tr><td><b>KDA</b></td><td>Kimi Linear, arXiv 2510.26692</td><td>③</td><td>遗忘门从标量升级成 <b>per-channel</b> 向量</td></tr>
@@ -3652,9 +3659,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="319" fill="#5f6368"><tspan font-weight="700">📌</tspan></text>
 <text class="svgsm" x="724" y="319" fill="#5f6368">MLA 那条另有一处麻烦：<tspan font-weight="700">RoPE 必须单独走一路</tspan>，</text>
 <text class="svgsm" x="724" y="338" fill="#5f6368">因为上投影吸收不了带位置旋转的那几维（见 §5.3）</text>
-<rect x="680" y="377" width="700" height="253" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="680" y="377" width="4" height="253" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="682" y="377" width="3" height="253" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<rect x="680" y="377" width="700" height="291" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="680" y="377" width="4" height="291" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="682" y="377" width="3" height="291" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="694" y="397" fill="#b06000" style="font-size:13px">📐 把字母换成数字 ——&#160;那份要留下来的到底有多大</text>
 <text class="svgsm" x="694" y="421" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、BF16、batch 1，把带 <tspan font-weight="700">S</tspan> 的那两处换成实际占多少：</text>
 <text class="svgsm" x="694" y="459" fill="#a50e0e"><tspan font-weight="700">每层</tspan></text>
@@ -3670,6 +3677,8 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="592" fill="#174ea6"><tspan font-weight="700">⭐⭐</tspan></text>
 <text class="svgsm" x="726" y="592" fill="#174ea6"><tspan font-weight="700">权重是所有人共享的一份，KV cache 是每人一份</tspan> ——</text>
 <text class="svgsm" x="694" y="611" fill="#174ea6">所以它决定的不是「装不装得下」，是<tspan font-weight="700">能同时服务多少人</tspan>。</text>
+<text class="svgsm" x="694" y="649" fill="#174ea6"><tspan font-weight="700">➜ 这一格</tspan></text>
+<text class="svgsm" x="751" y="649" fill="#174ea6"><tspan font-weight="700">把 488 这个数直接改小</tspan> ——&#160;它动的就是这笔账的分子。</text>
 <rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="16" y="887" fill="#174ea6">⭐ 一句话记住这个旋钮：<tspan font-weight="700">它改的是「存什么」，不是「算什么」。</tspan>所以它治的是显存墙，治不了 O(N²) 的计算量。</text>
 </svg><figcaption>⭐ <b>同一张主线图，只点亮旋钮① 动到的地方</b> —— 产生 K 和 V 的那两条支路。<b>注意那个平方大的矩阵一点没动</b>：这个旋钮治的是显存墙，<b>治不了 O(N²) 的计算量</b>。</figcaption></figure>
@@ -4196,9 +4205,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="319" fill="#a50e0e"><tspan font-weight="700">⚠️</tspan></text>
 <text class="svgsm" x="724" y="319" fill="#a50e0e"><tspan font-weight="700">纸面省下的 FLOPs，要 kernel 跟上了才算数。</tspan></text>
 <text class="svgsm" x="724" y="338" fill="#5f6368">不规则的 mask 对硬件不友好，这是这一支真正的门槛</text>
-<rect x="680" y="377" width="700" height="253" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="680" y="377" width="4" height="253" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="682" y="377" width="3" height="253" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<rect x="680" y="377" width="700" height="310" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="680" y="377" width="4" height="310" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="682" y="377" width="3" height="310" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="694" y="397" fill="#b06000" style="font-size:13px">📐 把字母换成数字 ——&#160;那份要留下来的到底有多大</text>
 <text class="svgsm" x="694" y="421" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、BF16、batch 1，把带 <tspan font-weight="700">S</tspan> 的那两处换成实际占多少：</text>
 <text class="svgsm" x="694" y="459" fill="#a50e0e"><tspan font-weight="700">每层</tspan></text>
@@ -4214,6 +4223,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="592" fill="#174ea6"><tspan font-weight="700">⭐⭐</tspan></text>
 <text class="svgsm" x="726" y="592" fill="#174ea6"><tspan font-weight="700">权重是所有人共享的一份，KV cache 是每人一份</tspan> ——</text>
 <text class="svgsm" x="694" y="611" fill="#174ea6">所以它决定的不是「装不装得下」，是<tspan font-weight="700">能同时服务多少人</tspan>。</text>
+<text class="svgsm" x="694" y="649" fill="#b06000"><tspan font-weight="700">➜ 这一格</tspan></text>
+<text class="svgsm" x="751" y="649" fill="#b06000"><tspan font-weight="700">这笔账一个字节都不变。</tspan>它省的是「每步读多少」，不是「存多少」。</text>
+<text class="svgsm" x="694" y="668" fill="#b06000">⛔ 所以看着 488 别以为它在往下走 ——&#160;<tspan font-weight="700">它原地不动</tspan>。</text>
 <rect x="0" y="860" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#e8710a" stroke-width="1"/>
 <text class="svgsm" x="16" y="887" fill="#b06000">⭐ 一句话记住这个旋钮：<tspan font-weight="700">它改的是「看哪些」，形状不变、只是很多格子不算。</tspan>所以省的是 FLOPs，而 KV 该存多少还得存多少。</text>
 </svg><figcaption>⭐ <b>同一张主线图，只点亮旋钮② 动到的地方</b> —— Q·Kᵀ 和它后面那张 mask。<b>矩阵的形状一点没变</b>，变的是里面有多少格子真的要算。⛔ 所以它跟旋钮① <b>正交</b>，两个可以同时上。</figcaption></figure>
@@ -5116,11 +5128,14 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="809" fill="#80868b" style="font-size:11.0px">　　⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）<tspan font-weight="700">不是同一个评测集</tspan> ——&#160;5.40 与 9.59 不可直接比</text>
 </svg><figcaption>⭐⭐ <b>一个侦探故事：先有办法（层数是免费的射程，32 层 × 4096 = 131,072），再出事故（困惑度 5.40 → 5158），最后才找到原因（softmax 要求一行加起来等于 1）。</b><em>判决性实验在中间那格：把最前面四个 token 换成换行符，照样管用 —— 起作用的是位置，不是语义。</em></figcaption></figure>
 <h4 id="s6-1b">6.1b　滑窗：凭什么敢砍，砍了为什么会崩</h4>
-<p>⭐ 图给不了的是这条判据的<b>一般形式</b>：
-  <b>看到模型里一个「毫无道理却极其稳定」的现象，先去找是不是某个守恒或归一化约束逼出来的。</b>
-  <em>attention sink 不是 bug、也不是谁设计的特性 ——&nbsp;
-  你规定每一行注意力必须加起来等于 1，模型就<b>一定</b>会找个地方倒掉多余的那部分。
-  量化里那批总也压不下去的 outlier，跟它是同一件事。</em></p>
+<!-- ⛔ 2026-09-14：这里原来把 fig-swa-why 落点带的两句（「归一化约束逼出来的」
+     ＋「量化里那批 outlier」）**逐字复述**了一遍。图上有，正文就不写。 -->
+<p>⭐ 图给不了的只有一条<b>课程内的接线</b>：
+  图上那句「量化里那批 outlier 跟这是同一件事」不是顺口一提 ——&nbsp;
+  <b>那批 outlier 在 <a href="topic-08.html">专题八</a> 有专门一节</b>。
+  <em>到那儿你会再遇到同一个形状：一个「毫无道理却极其稳定」的现象，
+  背后是一条你没注意到的守恒约束。<b>同一个形状分在两讲里各讲一遍，
+  比在一讲里说两遍有用。</b></em></p>
 
 <p>⭐ 图上五张 mask 从左到右，就是这一支的演进：
   <b>砍成一条带（SWA）→ 补回停车位（sink）→ 学着挑（NSA / DSA）→ 先压再挑（CSA/HCA）</b>。</p>
@@ -5382,7 +5397,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="798" fill="#80868b" style="font-size:11.0px">　　「top 20% 只覆盖 70%」是 NSA 转引 Chen 等 2024；「95% 稀疏」出自 H2O arXiv 2306.14048 ——&#160;两者口径不同，图中如实并列</text>
 </svg><figcaption>⭐⭐ <b>NSA 的三条分支不是设计出来的，是被四个坑逼出来的 —— 而那四个坑是论文 §2 自己列的。</b><b>最值钱的一条：计算稀疏 ≠ 访存稀疏。</b><em>按块选、组内共享，都是为了访存，不是为了精度。</em></figcaption></figure>
 <h4 id="s6-3b">6.3b　NSA 的三条路，是被四个坑逼出来的</h4>
-<p>⭐ 图给不了的是这条判据的**用法**：
+<p>⭐ 图给不了的是这条判据的<b>用法</b>：
   <b>看任何一篇讲稀疏的文章，先问「它省的是 FLOPs 还是字节」。</b>
   <em>省 FLOPs 谁都会 ——&nbsp;在纸上少算 90% 的格子而已；
   但只要那些格子散落在显存各处、或者同组的头各挑各的，<b>要搬的字节一点没少</b>。
@@ -5592,10 +5607,18 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="778" fill="#80868b" style="font-size:11.0px">　　⚠️ 「两种失效模式互补、所以交错」是从两者定义推出的解释，论文只说了采用交错混合配置，未给这个理由，也未在此给出层间配比</text>
 </svg><figcaption>⭐⭐ <b>压缩有两个互不相干的方向：竖着压（一个 token 存多少个数）是旋钮①，横着压（几个 token 合成一条）才是 CSA/HCA。</b><b>CSA 压得轻＋挑，看得细但会漏；HCA 压得狠＋全看，不漏但看得粗 —— 两种坏法正好相反，所以交错摆着互相兜底。</b></figcaption></figure>
 <h4 id="s6-4c">6.4c　CSA 压的是 token 不是头 —— 压缩的两个方向</h4>
-<p>⭐ 图给不了的是这条<b>提问法</b>：
-  <b>拿到任何一个新注意力方案，先问它动了哪几个轴</b>
-  ——&nbsp;<em>竖着压（每个 token 存多少）、横着压（几个 token 合一条）、
-  读哪几条（稀疏）。三个轴互不相干，所以可以同时拧。
+<!-- ⛔ 2026-09-14：「先问它动了哪几个轴」这句 fig-csa-why 的落点带上已经有了。 -->
+<p>⭐ 图给不了的只有<b>这三个轴跟三个旋钮怎么对上</b> ——&nbsp;
+  <b>而这一处全讲原先有三种说法，必须在这儿定死一个</b>：</p>
+<div class="note ok"><p>⭐⭐ <b>「横着压」不是第四个旋钮，它是<u>旋钮① 的第二个方向</u>。</b>
+  <em>旋钮① 问的是「每个 token 留多少字节」，而这件事有两个压法：
+  <b>沿特征维压</b>（MQA/GQA/MLA ——&nbsp;<a href="#s五">§五</a>讲的全是这个方向）和
+  <b>沿 token 维压</b>（CSA：几个 token 合成一条，于是平均每 token 也变小了）。
+  <b>两个方向都在同一个旋钮上，因为它们改的是同一件事：那份要留下来的有多大。</b></em></p>
+<p>⛔ <b>所以三处口径统一成这一条</b>：§四 的名词收纳表写「旋钮①（token 维）＋ 旋钮②」，
+  编年史那条泳道同理。<em>⚠️ 而「一个 query 只做三步」这个封闭性论证<b>不受影响</b> ——&nbsp;
+  横着压改的仍然是第一步（要留什么），只是换了个维度下刀。</em></p></div>
+<p><em>三个轴互不相干，所以可以同时拧 ——&nbsp;
   DeepSeek-V4 就是三个一起拧：MLA ＋ CSA/HCA ＋ DSA。</em></p>
 
 <!-- ⭐ 2026-09-12 补回 6.5b。上一步重排 §六 时，注释里写了「保留 6.5b」，
@@ -5742,9 +5765,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="338" fill="#a50e0e"><tspan font-weight="700">⚠️</tspan></text>
 <text class="svgsm" x="724" y="338" fill="#a50e0e"><tspan font-weight="700">它不是「更快的 attention」，是另一个模型。</tspan></text>
 <text class="svgsm" x="724" y="357" fill="#5f6368">固定大小的状态 → <tspan font-weight="700">信息必然有损</tspan>，长程精确检索会力不从心</text>
-<rect x="680" y="396" width="700" height="253" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="680" y="396" width="4" height="253" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="682" y="396" width="3" height="253" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<rect x="680" y="396" width="700" height="310" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="680" y="396" width="4" height="310" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="682" y="396" width="3" height="310" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="694" y="416" fill="#b06000" style="font-size:13px">📐 把字母换成数字 ——&#160;那份要留下来的到底有多大</text>
 <text class="svgsm" x="694" y="440" fill="#5f6368">取序列 <tspan font-weight="700">128K</tspan>、BF16、batch 1，把带 <tspan font-weight="700">S</tspan> 的那两处换成实际占多少：</text>
 <text class="svgsm" x="694" y="478" fill="#a50e0e"><tspan font-weight="700">每层</tspan></text>
@@ -5760,6 +5783,9 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="694" y="611" fill="#174ea6"><tspan font-weight="700">⭐⭐</tspan></text>
 <text class="svgsm" x="726" y="611" fill="#174ea6"><tspan font-weight="700">权重是所有人共享的一份，KV cache 是每人一份</tspan> ——</text>
 <text class="svgsm" x="694" y="630" fill="#174ea6">所以它决定的不是「装不装得下」，是<tspan font-weight="700">能同时服务多少人</tspan>。</text>
+<text class="svgsm" x="694" y="668" fill="#681da8"><tspan font-weight="700">➜ 这一格</tspan></text>
+<text class="svgsm" x="751" y="668" fill="#681da8"><tspan font-weight="700">这笔账整个作废。</tspan>S 从形状里消失，状态跟长度无关 ——&#160;</text>
+<text class="svgsm" x="694" y="687" fill="#681da8">上面这张按 S＝128K 算出来的表，<tspan font-weight="700">在旋钮③ 下根本不成立</tspan>。</text>
 <rect x="0" y="768" width="1400" height="44" rx="8" fill="#f8f9fa" stroke="#9334e6" stroke-width="1"/>
 <text class="svgsm" x="16" y="795" fill="#681da8">⭐ 这是三个旋钮里<tspan font-weight="700">唯一改变了模型能表达什么</tspan>的一个。另外两个改的是存法和看法，这一个改的是<tspan font-weight="700">数学本身</tspan>。</text>
 </svg><figcaption>⛔ <b>这一张不是高亮，是替换</b>：原来那四格（Q·Kᵀ → mask → softmax → S·V）整个没了，换成点亮的两格。⭐⭐ <b>不用听解释，读输出形状就够 —— 点亮那格输出 <code>BKHH</code>，S 不见了。</b>状态大小只跟头维有关，跟序列多长无关。</figcaption></figure>
@@ -5935,10 +5961,12 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="964" fill="#80868b" style="font-size:11.0px">　　⚠️ 该文 §6 那句「表达力与并行度之间存在根本权衡」说的是 Recurrent DeltaNet / mesa-layer 那一批<tspan font-weight="700">比 delta 更强</tspan>的模型，不是 delta 对纯加法，而且原文是带引用的 suggests；「记事板」这个比喻是本课的讲法</text>
 </svg><figcaption>⭐⭐ <b>三种写法就是这一支的三代：疯狂往里写（纯加，L &gt; d 必撞车）→ 先把这个方向上的旧内容叉掉再写（delta rule）→ 选择性地叉（门控）。</b><b>那个 (I − β k kᵀ) 就是「叉掉」。</b><em>再换个角度看，它等价于对 ½‖Sk−v‖² 做一步 SGD —— 状态不再是缓存，是一个边跑边被训练的小模型。</em></figcaption></figure>
 <h3 id="s7-0">7.0　一块固定大小的记事板</h3>
-<p>⭐ 图给不了的是这条<b>提问法</b>：
-  <b>看到这一支的任何一个新名字，只问一句 ——&nbsp;「它的『擦』是怎么决定的？」</b>
-  <em>三代之间，<b>读的方式几乎没变，全部的差别都在「写之前擦不擦、擦多少」</b>。
-  这个问法能让你在三十秒内把一个新方案放到正确的位置上。</em></p>
+<!-- ⛔ 2026-09-14：这句提问法 fig-notepad 的落点带上已经有了，此处不再复述。 -->
+<p>⭐ 图给不了的只有<b>这一支跟前两个旋钮的关系 ——&nbsp;它换的东西比它们都大</b>：
+  <em>旋钮①②改的是<b>那张 n×n 的表怎么存、怎么读</b>，表本身一直都在；
+  <b>旋钮③ 是第一次把那张表整个拿掉</b>，换成一块固定大小的板子。
+  ——&nbsp;所以它是唯一一个<b>让 S 从张量形状里消失</b>的旋钮，
+  也是唯一一个<b>换了数学</b>的。</em></p>
 
 <h3 id="s7-1">7.1 基本换法</h3>
 <div class="note info"><p>📌 <b>这一节的记号约定（⭐ 2026-09-13 补 ——&nbsp;
@@ -6751,7 +6779,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 
 <hr>
 </div></section>
-<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>旋钮④（其实是元旋钮）：混合</h2></div>
+<section id="s八"><div class="wrap"><div class="stn"><span class="badge">第 八 节</span><h2>元旋钮 ⊕：混合</h2></div>
 <!-- ⭐ 2026-09-13 夜间 R14。§八 原来是**五张表** —— 表该留（型号对配比
      本来就是表），但缺一张**把结论摆出来**的图。
      ⭐⭐ 新图最重要的一格是：§二 那条 L2M 条件把「纯线性」那一头**直接判死**，

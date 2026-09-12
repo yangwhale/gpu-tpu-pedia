@@ -445,7 +445,7 @@ LANES = (
         (2025, "KDA · Lightning"),
         (2026, "Mamba-3 · Gated DeltaNet-2"),
     ]),
-    ("④ 不改数学，只改怎么算", GR, "#e6f4ea", [
+    ("⊘ 不在旋钮上：实现层（不改数学，只改怎么算）", GR, "#e6f4ea", [
         (2022, "⭐ FlashAttention"),
     ]),
 )
