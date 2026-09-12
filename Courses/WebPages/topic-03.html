@@ -4541,6 +4541,133 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
   它是主注意力分布的一个廉价复制品（跨头求和、L1 归一、KL 对齐）。
   这个套路在推理优化里到处都是，值得单独记住。</em></p>
 
+<!-- ⭐⭐ 2026-09-13 夜间 R4。上一张答 DSA 怎么挑，这一张答
+     **NSA 为什么长成三条路** —— 答案是「被四个坑逼出来的」，
+     而那四个坑是论文 §2 自己列的，不是我们归纳的。
+     ⭐ 这一张顺带把本讲「落到硬件」那条主线提前落地了一次：
+       **计算稀疏 ≠ 访存稀疏** —— 按块选、组内共享，都是为访存不是为精度。
+     ⚠️ 图里如实并列了两处打架的稀疏度口径（95% vs top20%→70%）。 -->
+<figure class="fbox fwide" id="fig-nsa-why"><svg viewBox="0 0 1400 822" width="100%" role="img" aria-label="NSA 的三条路是被什么逼出来的：先看事后稀疏的四个坑，再看三条分支怎么一条对一个坑，最后是 native 的含义"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">NSA　——　三条路不是设计出来的，是被四个坑逼出来的</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 这张图<tspan font-weight="700">先讲坑再讲路</tspan>，因为论文自己就是这么写的：§2 拆坑，§3 每条分支对着一个坑</text>
+<rect x="0" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">事后稀疏踩的坑</text>
+<rect x="116" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="133" y="64" fill="#5f6368" style="font-size:11.0px">NSA 的对策</text>
+<rect x="212" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="229" y="64" fill="#5f6368" style="font-size:11.0px">硬件逼出来的</text>
+<rect x="317" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="334" y="64" fill="#5f6368" style="font-size:11.0px">学出来的，不是写死的</text>
+<rect x="0" y="88" width="440" height="452" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="440" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">① 事后稀疏的四个坑</tspan></text>
+<text class="svgsm" x="150" y="108" fill="#5f6368" style="font-size:11.0px">NSA §2 自己列的</text>
+<rect x="22" y="140" width="396" height="76" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="22" y="140" width="4" height="76" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="24" y="140" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="40" y="164" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">坑1　省了计算，没省时间</tspan></text>
+<text class="svgsm" x="40" y="186" fill="#5f6368" style="font-size:11.5px">解码期稀疏，prefill 期却要先算注意力图、建索引</text>
+<text class="svgsm" x="40" y="206" fill="#80868b" style="font-size:11.0px">例：H2O 这一类</text>
+<rect x="22" y="226" width="396" height="76" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="22" y="226" width="4" height="76" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="24" y="226" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="40" y="250" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">坑2　离散操作把梯度断了</tspan></text>
+<text class="svgsm" x="40" y="272" fill="#5f6368" style="font-size:11.5px">k-means、SimHash 这种选择不可导 —— <tspan font-weight="700">学不到「该怎么挑」</tspan></text>
+<text class="svgsm" x="40" y="292" fill="#80868b" style="font-size:11.0px">例：ClusterKV / MagicPIG</text>
+<rect x="22" y="312" width="396" height="76" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="22" y="312" width="4" height="76" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="24" y="312" width="3" height="76" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="40" y="336" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">坑3　按 token 选 → 访存不连续</tspan></text>
+<text class="svgsm" x="40" y="358" fill="#5f6368" style="font-size:11.5px">从 KV cache 里捞一个个散落的 token，<tspan font-weight="700">FlashAttention 用不上</tspan></text>
+<text class="svgsm" x="40" y="378" fill="#80868b" style="font-size:11.0px">例：HashAttention</text>
+<rect x="22" y="398" width="396" height="84" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="22" y="398" width="4" height="84" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="24" y="398" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="40" y="422" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">坑4　在 GQA 上「稀疏」会失效</tspan></text>
+<text class="svgsm" x="40" y="444" fill="#5f6368" style="font-size:11.5px">每个头各选各的，真正要搬的是<tspan font-weight="700">同组各头的并集</tspan></text>
+<text class="svgsm" x="40" y="464" fill="#80868b" style="font-size:11.0px">例：Quest</text>
+<text class="svgsm" x="40" y="476" fill="#b06000" style="font-size:11.5px"><tspan font-weight="700">⭐⭐ 计算稀疏了，访存没稀疏</tspan></text>
+<rect x="470" y="88" width="440" height="452" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="88" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="470" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="470" y1="118" x2="910" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="484" y="108" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 三条路，一条对一个坑</tspan></text>
+<text class="svgsm" x="647" y="108" fill="#5f6368" style="font-size:11.0px">并行跑，门控加权合起来</text>
+<rect x="492" y="140" width="396" height="82" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="492" y="140" width="4" height="82" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="494" y="140" width="3" height="82" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="164" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">压缩　粗看一遍全局</tspan></text>
+<text class="svgsm" x="510" y="187" fill="#5f6368" style="font-size:11.5px">连续块用一个<tspan font-weight="700">可学的 MLP</tspan>压成一个 key</text>
+<text class="svgsm" x="510" y="208" fill="#80868b" style="font-size:11.0px">带块内位置编码</text>
+<rect x="492" y="232" width="396" height="82" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="492" y="232" width="4" height="82" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="494" y="232" width="3" height="82" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="256" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">选择　细看要紧的几块</tspan></text>
+<text class="svgsm" x="510" y="279" fill="#5f6368" style="font-size:11.5px">⭐ <tspan font-weight="700">按块选，不按 token 选</tspan> —— 坑③逼的</text>
+<text class="svgsm" x="510" y="300" fill="#80868b" style="font-size:11.0px">组内共享选择 —— 坑④逼的</text>
+<rect x="492" y="324" width="396" height="82" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="492" y="324" width="4" height="82" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="494" y="324" width="3" height="82" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="348" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">滑窗　近处永远保留</tspan></text>
+<text class="svgsm" x="510" y="371" fill="#5f6368" style="font-size:11.5px">最近的一段，原样给</text>
+<text class="svgsm" x="510" y="392" fill="#80868b" style="font-size:11.0px">局部信息不该靠「挑」来保证</text>
+<rect x="492" y="420" width="396" height="86" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<rect x="492" y="420" width="4" height="86" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="494" y="420" width="3" height="86" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="510" y="444" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">怎么合：o ＝ Σ g<tspan baseline-shift="sub" font-size="8">c</tspan> · Attn(q, 第 c 条路)</tspan></text>
+<text class="svgsm" x="510" y="466" fill="#5f6368" style="font-size:11.5px">门 g 由一个 MLP ＋ sigmoid 算出来</text>
+<text class="svgsm" x="510" y="487" fill="#174ea6" style="font-size:11.5px">⭐ 配比是<tspan font-weight="700">学出来的</tspan>，不是写死的三分之一</text>
+<rect x="940" y="88" width="460" height="452" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="940" y="88" width="460" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="940" y="90" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="940" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="954" y="108" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">③ native 到底 native 在哪</tspan></text>
+<text class="svgsm" x="1148" y="108" fill="#5f6368" style="font-size:11.0px">不是「训的时候也开着」这么简单</text>
+<text class="svgsm" x="962" y="142" fill="#5f6368" style="font-size:12.0px">论文的论点只有一句：</text>
+<rect x="962" y="164" width="416" height="58" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="962" y="164" width="4" height="58" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="964" y="164" width="3" height="58" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="980" y="188" fill="#681da8" style="font-size:12.5px"><tspan font-weight="700">事后加稀疏，等于<tspan font-weight="700">把模型推离它的预训练轨迹</tspan></tspan></text>
+<text class="svgsm" x="980" y="209" fill="#5f6368" style="font-size:11.5px">那些靠全局检索的头，是最先被剪坏的</text>
+<text class="svglbl" x="962" y="238" fill="#b06000" style="font-size:13.0px"><tspan font-weight="700">⚠️ 这里有一处口径打架 —— 如实讲</tspan></text>
+<rect x="962" y="262" width="416" height="52" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="978" y="284" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">H2O 2023</tspan></text>
+<text class="svgsm" x="978" y="303" fill="#5f6368" style="font-size:11.5px">注意力矩阵 95% 以上稀疏，<tspan font-weight="700">5% 的 KV 就够</tspan></text>
+<rect x="962" y="322" width="416" height="52" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="978" y="344" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">Chen 等 2024（NSA 引）</tspan></text>
+<text class="svgsm" x="978" y="363" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">top 20% 只覆盖 70%</tspan> 的注意力分数</text>
+<text class="svgsm" x="962" y="386" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">⭐ 方向一致（确实稀疏），程度打架。</tspan></text>
+<text class="svgsm" x="962" y="407" fill="#5f6368" style="font-size:11.5px">⛔ 别把任何一个当普适常数 —— 稀疏度随</text>
+<text class="svgsm" x="962" y="426" fill="#5f6368" style="font-size:11.5px">模型、层、上下文长度变。</text>
+<rect x="962" y="444" width="416" height="72" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="978" y="467" fill="#5f6368" style="font-size:11.5px">NSA 的实证：27B backbone，260B token 预训练</text>
+<text class="svgsm" x="978" y="488" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">通用 / 长文 / 推理三类上<tspan font-weight="700">持平或超过全注意力</tspan></tspan></text>
+<text class="svgsm" x="978" y="507" fill="#80868b" style="font-size:11.0px">64K 长度下，解码、前向、反向三段都更快</text>
+<rect x="0" y="562" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="562" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="562" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="586" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这一张最值钱的一句：计算稀疏 ≠ 访存稀疏</tspan></text>
+<text class="svgsm" x="20" y="610" fill="#174ea6" style="font-size:12.0px">坑③和坑④是<tspan font-weight="700">同一件事的两个面</tspan>：你在纸上少算了 90% 的格子，但只要那些格子<tspan font-weight="700">散落在显存各处</tspan>，或者<tspan font-weight="700">同组的头各挑各的</tspan>，要搬的字节一点没少。</text>
+<text class="svgsm" x="20" y="631" fill="#174ea6" style="font-size:12.0px">⭐ 所以 NSA 的选择粒度是<tspan font-weight="700">块</tspan>、选择范围是<tspan font-weight="700">组内共享</tspan> ——&#160;这两个设计<tspan font-weight="700">都不是为了精度，是为了访存</tspan>。</text>
+<text class="svgsm" x="20" y="652" fill="#174ea6" style="font-size:12.0px">⛔ 看任何一篇讲稀疏的文章，先问一句：<tspan font-weight="700">它省的是 FLOPs 还是字节？</tspan>省 FLOPs 很容易，省字节才算数。</text>
+<rect x="0" y="681" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="681" width="4" height="84" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="681" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="705" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">⭐ 暗线第四次出现 —— 这次连论文标题都挑明了</tspan></text>
+<text class="svgsm" x="20" y="729" fill="#0d652d" style="font-size:12.0px">NSA 的 N 就是 <tspan font-weight="700">Natively trainable</tspan>。同一个对立在这一讲已经出现四次：Eigen Attention 对 MLA、GQA 对 MLA、H2O 对 DSA、<tspan font-weight="700">这一堆事后方法对 NSA</tspan>。</text>
+<text class="svgsm" x="20" y="750" fill="#0d652d" style="font-size:12.0px">⭐ 到这里可以把它当结论讲了：<tspan font-weight="700">凡是要改注意力形状的改动，事后做都便宜，但天花板明显更低；要拿到上限，就得把约束写进训练。</tspan></text>
+<text class="svgsm" x="0" y="781" fill="#80868b" style="font-size:11.0px">📌 四个坑与三条路均出自 NSA 原论文 Yuan 等 arXiv 2502.11089 §2.1–2.2 与 §3.2–3.3（ACL 2025）；例子里的方法名也是原文点的</text>
+<text class="svgsm" x="0" y="798" fill="#80868b" style="font-size:11.0px">　　「top 20% 只覆盖 70%」是 NSA 转引 Chen 等 2024；「95% 稀疏」出自 H2O arXiv 2306.14048 ——&#160;两者口径不同，图中如实并列</text>
+</svg><figcaption>⭐⭐ <b>NSA 的三条分支不是设计出来的，是被四个坑逼出来的 —— 而那四个坑是论文 §2 自己列的。</b><b>最值钱的一条：计算稀疏 ≠ 访存稀疏。</b><em>按块选、组内共享，都是为了访存，不是为了精度。</em></figcaption></figure>
+<h4>6.3b　NSA 的三条路，是被四个坑逼出来的</h4>
+<p>⭐ 图给不了的是这条判据的**用法**：
+  <b>看任何一篇讲稀疏的文章，先问「它省的是 FLOPs 还是字节」。</b>
+  <em>省 FLOPs 谁都会 ——&nbsp;在纸上少算 90% 的格子而已；
+  但只要那些格子散落在显存各处、或者同组的头各挑各的，<b>要搬的字节一点没少</b>。
+  NSA 的两个看起来很朴素的决定（按块选、组内共享），<b>都是为访存，不是为精度</b>。</em></p>
+
 <h4>唯一必须单独拎出来的一张表：「训练期稀疏」和「推理期稀疏」不是一回事</h4>
 <p>NSA 的「<b>native</b>」指的就是<b>训练时就这么做</b>，不是训练完再加的推理优化。
   <em>这个区别值得单独说三十秒 ——&nbsp;它解释了后面一个反复出现的现象。</em></p>
