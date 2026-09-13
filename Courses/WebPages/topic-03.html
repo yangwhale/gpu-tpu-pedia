@@ -5289,10 +5289,234 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <em>⛔ 所以引用「MLA 省 57 倍」的时候，要带一句「在什么并行配置下」。</em></p>
 <p>📌 口径：三条做法是公开实现里能看到的；各自的具体开销本课没有实测。⚠️ 再强调一次：这三条<b>全是推理侧</b>的。</p></div>
 
-<div class="note warn"><p>⚠️ <b>落到硬件上还有一个反直觉的后果</b>：MLA 在推理时可以把上投影矩阵
-  「吸收」进 query 那一侧，<b>从而改变整个计算的形状</b>。
-  同一个数学式子有多种算法实现，<b>选哪种取决于是 prefill 还是 decode</b>
-  ——&nbsp;这一条留到<a href="专题06-推理.md">专题六</a>。</p></div>
+<!-- ⭐⭐⭐ 2026-09-13 夜间 R15。这一节里「吸收」这个词出现了四次，
+     **一次也没说它是什么** —— 最接近的一处是 fig3-knob1 里一句括号注
+     「（吸收进 q 那一侧）」，对没学过的人等于没说。而讲义自己写着
+     这一块「最容易讲糊」。⛔ 原来这里那条 warn 直接把它推给了专题六，
+     可它是 MLA **能不能省**的前提，推掉之后这一节就缺了一环。
+     ⭐ 它其实是本讲已经立起来的装置第三次出场：把括号挪个位置。 -->
+<h3 id="s5-4b">5.4b　「吸收」到底是什么 ——&nbsp;这是 MLA 能省下来的前提</h3>
+
+<!-- ⛔ 这段原来还带着「如果真要拆……论文原话 must recompute the keys」三句，
+     被「图前预告过长」的 lint 抓到 —— 而那三句图里 ① 格一字不差地画着。
+     ⭐ 判据（文件头第一条）：**写正文前先问「这句话图里有没有」。** -->
+<p>前面一直在说 MLA 把 K、V 压成一个 576 维的隐向量存起来。
+  那生成下一个词的时候，不是还得把它们<b>拆回来</b>才能比对吗？</p>
+
+<figure class="fbox fwide" id="fig-absorb"><svg viewBox="0 0 1400 1653" width="100%" role="img" aria-label="MLA 的吸收：把括号挪一下，就不用解压缓存"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">「吸收」到底是什么 ——&#160;把括号挪一下，仓库里的压缩包一个都不用拆</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">MLA 把 K 和 V 压成一个 512 维的压缩包存起来。那生成下一个词的时候，不是得把它们<tspan font-weight="700">全拆开</tspan>才能比对吗？——&#160;不用。这张图画的就是那个「不用」。</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">天真做法：全拆开</text>
+<rect x="159" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="180" y="74" fill="#5f6368" style="font-size:14.0px">吸收：一个都不拆</text>
+<rect x="318" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="339" y="74" fill="#5f6368" style="font-size:14.0px">同一块矩阵 W_UK（认这个紫色）</text>
+<rect x="0" y="102" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">① 天真做法：每生成一个词，把仓库里所有压缩包<tspan font-weight="700">全部拆开</tspan></tspan></text>
+<text class="svgsm" x="1386" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px">解压 S 次</text>
+<text class="svglbl" x="30" y="172" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">仓库（KV cache）</tspan></text>
+<rect x="36.76" y="197.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="57.0" y1="197.0" x2="57.0" y2="231.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="36.8" y1="205.0" x2="77.2" y2="205.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<text class="svgsm" x="57" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">512</text>
+<rect x="98.76" y="197.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="119.0" y1="197.0" x2="119.0" y2="231.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="98.8" y1="205.0" x2="139.2" y2="205.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<text class="svgsm" x="119" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">512</text>
+<rect x="160.76" y="197.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="181.0" y1="197.0" x2="181.0" y2="231.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="160.8" y1="205.0" x2="201.2" y2="205.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<text class="svgsm" x="181" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">512</text>
+<rect x="222.76" y="197.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="243.0" y1="197.0" x2="243.0" y2="231.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="222.8" y1="205.0" x2="263.2" y2="205.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<text class="svgsm" x="243" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">512</text>
+<rect x="284.76" y="197.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="305.0" y1="197.0" x2="305.0" y2="231.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="284.8" y1="205.0" x2="325.2" y2="205.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<text class="svgsm" x="305" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">512</text>
+<text class="svgsm" x="378" y="222" fill="#80868b" style="font-size:22.0px">…</text>
+<text class="svgsm" x="404" y="218" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">共 S 个</tspan></text>
+<text class="svgsm" x="404" y="240" fill="#80868b" style="font-size:14.0px">（128K 上下文就是 13 万个）</text>
+<line x1="600" y1="218" x2="646" y2="218" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="652" y="190" width="108" height="56" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="706" y="216" fill="#681da8" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">W_UK</tspan></text>
+<text class="svgsm" x="706" y="236" fill="#681da8" text-anchor="middle" style="font-size:14.0px">上投影</text>
+<line x1="766" y1="218" x2="812" y2="218" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<path d="M 823.3 192.3 H 844.6 L 851.4 202.0 V 237.7 H 823.3 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="844.6" y1="192.3" x2="844.6" y2="202.0" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="844.6" y1="202.0" x2="851.4" y2="202.0" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="827.9" y1="213.9" x2="845.4" y2="213.9" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="827.9" y1="223.6" x2="845.4" y2="223.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<path d="M 865.3 192.3 H 886.6 L 893.4 202.0 V 237.7 H 865.3 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="886.6" y1="192.3" x2="886.6" y2="202.0" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="886.6" y1="202.0" x2="893.4" y2="202.0" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="869.9" y1="213.9" x2="887.4" y2="213.9" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="869.9" y1="223.6" x2="887.4" y2="223.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<path d="M 907.3 192.3 H 928.6 L 935.4 202.0 V 237.7 H 907.3 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="928.6" y1="192.3" x2="928.6" y2="202.0" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="928.6" y1="202.0" x2="935.4" y2="202.0" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="911.9" y1="213.9" x2="929.4" y2="213.9" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="911.9" y1="223.6" x2="929.4" y2="223.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="950" y="222" fill="#80868b" style="font-size:22.0px">…</text>
+<text class="svgsm" x="862" y="256" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px">每个 K 都是 128 维</text>
+<text class="svgsm" x="982" y="212" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">拆出来的 K，也是 S 个</tspan></text>
+<text class="svgsm" x="982" y="234" fill="#a50e0e" style="font-size:15.0px">⛔ 而且每生成一个词就得全部重拆一遍</text>
+<text class="svgsm" x="30" y="290" fill="#202124" style="font-size:16.0px">⚠️ 注意「重拆」两个字：<tspan font-weight="700">拆完不能留</tspan> ——&#160;留下来就等于又存了一份没压缩的 K，那正是 MLA 想省掉的东西。所以每生成一个词，这 S 次解压全都要重做一遍。</text>
+<text class="svgsm" x="30" y="322" fill="#5f6368" style="font-size:15.0px">📌 论文原话（DeepSeek-V2）：这样就<tspan font-weight="700">「must recompute the keys for all the prefix tokens during inference」</tspan></text>
+<text class="svgsm" x="30" y="364" fill="#5f6368" style="font-size:16.0px">🏠 换成生活里的说法：书架上有一万本外文书，你每查一个词，就把<tspan font-weight="700">一万本全翻译成中文</tspan>再找。查完扔掉，下次再翻译一万本。</text>
+<rect x="0" y="458" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="458" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="460" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="488" x2="1400" y2="488" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="478" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 吸收：把那块紫色矩阵<tspan font-weight="700">搬到 q 那一侧</tspan> ——&#160;压缩包一个都不用拆</tspan></text>
+<text class="svgsm" x="1386" y="478" fill="#80868b" text-anchor="end" style="font-size:11.0px">解压 0 次</text>
+<text class="svglbl" x="30" y="528" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">查询 q（一个，就一个）</tspan></text>
+<rect x="38.4" y="551.0" width="35.2" height="37.0" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<circle cx="45.4" cy="557.0" r="3.1" fill="#1a73e8" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="56" y="612" fill="#174ea6" text-anchor="middle" style="font-size:14.0px">q（128）</text>
+<line x1="86" y1="572" x2="128" y2="572" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="134" y="544" width="108" height="56" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="188" y="570" fill="#681da8" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">W_UK</tspan></text>
+<text class="svgsm" x="188" y="590" fill="#681da8" text-anchor="middle" style="font-size:14.0px">转置着用</text>
+<line x1="248" y1="572" x2="290" y2="572" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="300.4" y="551.0" width="35.2" height="37.0" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<circle cx="307.4" cy="557.0" r="3.1" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="318" y="612" fill="#0d652d" text-anchor="middle" style="font-size:14.0px">q′（512）</text>
+<text class="svgsm" x="352" y="566" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">⭐ 只做这一次</tspan></text>
+<text class="svgsm" x="352" y="588" fill="#5f6368" style="font-size:15.0px">（不管仓库里有多少个包）</text>
+<text class="svglbl" x="600" y="528" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">仓库（原封不动）</tspan></text>
+<rect x="606.76" y="553.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="627.0" y1="553.0" x2="627.0" y2="587.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="606.8" y1="561.0" x2="647.2" y2="561.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<rect x="668.76" y="553.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="689.0" y1="553.0" x2="689.0" y2="587.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="668.8" y1="561.0" x2="709.2" y2="561.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<rect x="730.76" y="553.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="751.0" y1="553.0" x2="751.0" y2="587.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="730.8" y1="561.0" x2="771.2" y2="561.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<rect x="792.76" y="553.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="813.0" y1="553.0" x2="813.0" y2="587.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="792.8" y1="561.0" x2="833.2" y2="561.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<rect x="854.76" y="553.0" width="40.48" height="34.0" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="875.0" y1="553.0" x2="875.0" y2="587.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="854.8" y1="561.0" x2="895.2" y2="561.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<text class="svgsm" x="944" y="578" fill="#80868b" style="font-size:22.0px">…</text>
+<text class="svgsm" x="978" y="568" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">✅ 一个都没拆</tspan></text>
+<text class="svgsm" x="978" y="592" fill="#5f6368" style="font-size:15.0px">直接拿 q′ 去跟压缩包点积</text>
+<rect x="30" y="640" width="1340" height="62" rx="8" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="52" y="678" fill="#202124" style="font-size:22.0px;font-family:'Roboto Mono',ui-monospace,monospace">q<tspan font-size="13">ᵀ</tspan> <tspan fill="#5f6368">(</tspan> <tspan fill="#9334e6" font-weight="700">W_UK</tspan> c <tspan fill="#5f6368">)</tspan>　　＝　　<tspan fill="#5f6368">(</tspan> <tspan fill="#9334e6" font-weight="700">W_UK</tspan><tspan font-size="13">ᵀ</tspan> q <tspan fill="#5f6368">)</tspan><tspan font-size="13">ᵀ</tspan> c</text>
+<text class="svgsm" x="660" y="658" fill="#5f6368" style="font-size:15.0px">同一个乘法。只是括号挪了个位置。</text>
+<text class="svgsm" x="660" y="682" fill="#202124" style="font-size:15.0px">⭐ 左边括号在 c 那边 ——&#160;有几个 c 就算几次。</text>
+<text class="svgsm" x="660" y="704" fill="#0d652d" style="font-size:15.0px">⭐ 右边括号在 q 那边 ——&#160;只有一个 q，所以只算一次。</text>
+<text class="svgsm" x="30" y="736" fill="#202124" style="font-size:18.0px">🏠 生活版就是一句话：<tspan font-weight="700">与其把一万本外文书全翻译过来，不如把你的搜索词翻译过去。</tspan></text>
+<text class="svgsm" x="30" y="764" fill="#5f6368" style="font-size:16.0px">⭐ V 那一侧同理：W_UV 可以吸进输出投影 W_O ——&#160;所以 K 和 V <tspan font-weight="700">两边都不用拆</tspan>。</text>
+<rect x="0" y="844" width="1400" height="336" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="844" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="846" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="874" x2="1400" y2="874" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="864" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">③ 省多少？——&#160;算出来的答案跟直觉不一样</tspan></text>
+<text class="svgsm" x="1386" y="864" fill="#80868b" text-anchor="end" style="font-size:11.0px">d_c=512 · d_h=128 · 本课自算</text>
+<text class="svgsm" x="30" y="908" fill="#202124" style="font-size:16.0px">直觉会说「解压 S 次变成 1 次，所以省 S 倍」。<tspan font-weight="700">⛔ 不对</tspan> ——&#160;吸收之后每个 token 的点积从 128 维变成了 512 维，<tspan font-weight="700">这一头贵了 4 倍</tspan>，在把省下的吃回去。</text>
+<text class="svgsm" x="30" y="976" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">S = 128</tspan></text>
+<text class="svgsm" x="180" y="976" fill="#80868b" style="font-size:14.0px">（128 个 token 在仓库里）</text>
+<rect x="470" y="956" width="760" height="28" rx="6" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="956" width="380.0" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1244" y="977" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">省 64×</tspan></text>
+<text class="svgsm" x="30" y="1028" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">S = 1,024</tspan></text>
+<text class="svgsm" x="180" y="1028" fill="#80868b" style="font-size:14.0px">（1,024 个 token 在仓库里）</text>
+<rect x="470" y="1008" width="760" height="28" rx="6" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="1008" width="675.5555555555555" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1244" y="1029" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">省 114×</tspan></text>
+<text class="svgsm" x="30" y="1080" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">S = 4,096</tspan></text>
+<text class="svgsm" x="180" y="1080" fill="#80868b" style="font-size:14.0px">（4,096 个 token 在仓库里）</text>
+<rect x="470" y="1060" width="760" height="28" rx="6" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="1060" width="736.9696969696969" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1244" y="1081" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">省 124×</tspan></text>
+<text class="svgsm" x="30" y="1132" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">S = 128K</tspan></text>
+<text class="svgsm" x="180" y="1132" fill="#80868b" style="font-size:14.0px">（131,072 个 token 在仓库里）</text>
+<rect x="470" y="1112" width="760" height="28" rx="6" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="1112" width="759.2585365853658" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1244" y="1133" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">省 128×</tspan></text>
+<line x1="1230" y1="942" x2="1230" y2="1156" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="1244" y="936" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">上限 128×</tspan></text>
+<text class="svgsm" x="30" y="1162" fill="#202124" style="font-size:16.0px">⭐⭐ 这个上限<tspan font-weight="700">正好是每个头的维度 d_h = 128</tspan>，S 再长也过不去 ——&#160;因为解压一个 token 要 d_h×d_c 次乘加，而点积只要 d_c 次，两者的比就是 d_h。</text>
+<rect x="0" y="1240" width="1400" height="170" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1240" width="4" height="170" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1240" width="3" height="170" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1267" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 两条定律，一条允许、一条禁止 ——&#160;MLA 最难的两件事都在这里</tspan></text>
+<text class="svgsm" x="20" y="1298" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">结合律允许你挪括号</tspan>：a(bc) ＝ (ab)c。②那一步靠的就是它，论文原话是 「due to the associative law of matrix multiplication, we can absorb W^UK into W^UQ, a</text>
+<text class="svgsm" x="20" y="1322" fill="#b06000" style="font-size:15.0px">nd W^UV into W^O」。</text>
+<text class="svgsm" x="20" y="1346" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">⛔ 但交换律不成立</tspan>：ab ≠ ba。RoPE 会往 q 和 W_UK 中间塞进一个跟位置有关的旋转 R，而<tspan font-weight="700">夹在中间的东西挪不出去</tspan> ——&#160;原话「a RoPE matrix … will lie between W^Q and </text>
+<text class="svgsm" x="20" y="1370" fill="#b06000" style="font-size:15.0px">W^UK and matrix multiplication does not obey a commutative law」。</text>
+<text class="svgsm" x="20" y="1394" fill="#b06000" style="font-size:15.0px">⭐ 所以 DeepSeek 把带位置的那一小块<tspan font-weight="700">单独拎出来走 64 维一路</tspan>（本节那张寄快递的图讲的就是这件事）：包裹外面贴日期，包裹里面保持「一次就能翻译完」。</text>
+<rect x="0" y="1424" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1424" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1424" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1451" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 同一个把戏，本讲这是第三次出场</tspan></text>
+<text class="svgsm" x="20" y="1482" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">§7 线性注意力</tspan>：把括号从 (QKᵀ)V 挪成 Q(KᵀV) ——&#160;那个句长×句长的大方块就不用建了。</text>
+<text class="svgsm" x="20" y="1506" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">§5 MLA 吸收</tspan>（这张图）：把括号从 qᵀ(W_UK c) 挪成 (W_UKᵀ q)ᵀ c ——&#160;压缩包就不用拆了。</text>
+<text class="svgsm" x="20" y="1530" fill="#174ea6" style="font-size:15.0px">⭐ 两次都是<tspan font-weight="700">同一个数学恒等式</tspan>，也都被同一件事挡过：§7 被因果 mask 挡住，这里被 RoPE 挡住。<tspan font-weight="700">⛔ 挡住结合律的，永远是「中间被塞了个东西」。</tspan></text>
+<text class="svgsm" x="0" y="1562" fill="#80868b" style="font-size:14.0px">📌 「吸收」与「RoPE 挡住它」两处原文均出自 DeepSeek-V2，arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank"><tspan text-decoration="underline">2405.04434</tspan></a>（§2.1.2、§2.1.3）；超参 d_c=512 / d_h=128 / n_h=128 是 DeepSeek-V3 的口径</text>
+<text class="svgsm" x="0" y="1583" fill="#80868b" style="font-size:14.0px">　　⭐ ③ 那笔账是<tspan font-weight="700">本课自己算的</tspan>，脚本里带断言：天真 ＝ S×(d_h·d_c ＋ d_h)，吸收 ＝ d_h·d_c ＋ S·d_c；上限 (d_h·d_c＋d_h)/d_c ≈ d_h。⚠️ 只数乘加，<tspan font-weight="700">没算访存</tspan> ——&#160;真机上访存</text>
+<text class="svgsm" x="0" y="1604" fill="#80868b" style="font-size:14.0px">　　往往才是瓶颈，所以这是个下界不是实测</text>
+<text class="svgsm" x="0" y="1625" fill="#80868b" style="font-size:14.0px">　　⚠️ 吸收<tspan font-weight="700">只在 decode 用得上</tspan>：prefill 时一批里有很多个 q，「只变换一次」这个便宜就没了（这也是 §五 表里「压缩不生效」那一行的意思）</text>
+</svg><figcaption>⭐⭐ <b>盯住那块紫色的 W<sup>UK</sup></b>：①里它站在缓存那一侧，②里它<b>搬到了 q 那一侧</b> ——&nbsp;整张图讲的就是这一次搬家。<em>⚠️ ③ 那个「上限 128×」是本课自己算的，只数乘加没算访存。</em></figcaption></figure>
+
+<div class="note ok"><p>★ <b>不用拆。把括号挪一下就行</b></p>
+<p><code>qᵀ (W<sup>UK</sup> c) ＝ (W<sup>UK</sup>ᵀ q)ᵀ c</code>
+  ——&nbsp;<b>同一个乘法，只是括号换了个位置。</b></p>
+<p>左边括号在 <code>c</code> 那侧：缓存里有几个 <code>c</code> 就得算几次。
+  右边括号在 <code>q</code> 那侧：<b>一步只有一个 q，所以只算一次</b>，
+  而缓存里的压缩包<b>一个都不用拆</b>。</p>
+<p>🏠 <b>生活版就一句话</b>：<em>与其把一万本外文书全翻译过来，
+  不如把你的搜索词翻译过去。</em></p>
+<p>⭐ V 那一侧同理 ——&nbsp;<code>W<sup>UV</sup></code> 可以吸进输出投影
+  <code>W<sup>O</sup></code>。所以 K 和 V 两边都不用拆。</p></div>
+
+<div class="note warn"><p>⚠️ <b>省多少？算出来的答案跟直觉不一样</b></p>
+<p>直觉会说「解压从 S 次变成 1 次，所以省 S 倍」。<b>不对</b>
+  ——&nbsp;吸收之后每个 token 的点积从 128 维变成了 512 维，
+  <b>这一头贵了 4 倍</b>，在把省下的吃回去。</p>
+<p>两笔加起来算（图③），省的倍数<b>有个上限，而这个上限正好是每头维度
+  <code>d_h = 128</code></b>：解压一个 token 要 <code>d_h×d_c</code> 次乘加，
+  而点积只要 <code>d_c</code> 次，两者的比就是 <code>d_h</code>。
+  <em>S 再长也过不去这个数。</em></p>
+<p>📌 口径：这笔账是本课自己算的，<b>只数乘加，没算访存</b>
+  ——&nbsp;真机上访存往往才是瓶颈，所以它是个下界不是实测。</p></div>
+
+<div class="note danger"><p>⛔ <b>两条定律，一条允许、一条禁止 ——&nbsp;MLA 最难的两件事都在这儿</b></p>
+<p><b>结合律允许你挪括号。</b>上面那一步靠的就是它。
+  <em>论文原话：<code>due to the associative law of matrix multiplication, we
+  can absorb W<sup>UK</sup> into W<sup>UQ</sup>, and W<sup>UV</sup> into
+  W<sup>O</sup></code>。</em></p>
+<p><b>但交换律不成立。</b>RoPE 会往 <code>q</code> 和 <code>W<sup>UK</sup></code>
+  中间塞进一个跟位置有关的旋转矩阵，而<b>夹在中间的东西挪不出去</b>。
+  <em>原话：<code>a RoPE matrix … will lie between W<sup>Q</sup> and
+  W<sup>UK</sup> and matrix multiplication does not obey a commutative
+  law</code>。</em></p>
+<p>⭐ 这就是 5.3 那张寄快递的图在讲的事：
+  <b>把带位置的那一小块单独拎出来走 64 维一路</b> ——&nbsp;
+  包裹外面贴日期，包裹里面保持「一次就能翻译完」。</p></div>
+
+<div class="note info"><p>📌 <b>同一个把戏，本讲这是第三次出场</b></p>
+<p><b>§七 线性注意力</b>：把括号从 <code>(QKᵀ)V</code> 挪成
+  <code>Q(KᵀV)</code> ——&nbsp;那个句长×句长的大方块就不用建了。<br>
+  <b>§五 MLA 吸收</b>（这一小节）：把括号从 <code>qᵀ(W<sup>UK</sup>c)</code>
+  挪成 <code>(W<sup>UK</sup>ᵀq)ᵀc</code> ——&nbsp;压缩包就不用拆了。</p>
+<p>⭐ 两次是同一个数学恒等式，而且都被同一类东西挡过：
+  §七被因果 mask 挡住，这里被 RoPE 挡住。
+  <em><b>挡住结合律的，永远是「中间被塞了个东西」。</b></em></p></div>
+
+<div class="note warn"><p>⚠️ <b>最后一句作用域</b>：吸收<b>只在 decode 用得上</b>
+  ——&nbsp;prefill 时一批里有很多个 <code>q</code>，「只变换一次」这个便宜就没了
+  （这正是本节开头那张表里「压缩不生效」那一行的意思）。</p>
+<p>⭐ 于是同一个数学式子有了两种算法实现，<b>选哪种取决于是 prefill 还是 decode</b>
+  ——&nbsp;怎么在一个引擎里同时装下两套，留到<a href="专题06-推理.md">专题六</a>。</p></div>
 <hr>
 </div></section>
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>旋钮②：KV 照存，但每步只读一部分</h2></div>

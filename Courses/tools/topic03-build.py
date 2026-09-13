@@ -1123,10 +1123,72 @@ __FIG_LOWRANK__
   <em>⛔ 所以引用「MLA 省 57 倍」的时候，要带一句「在什么并行配置下」。</em></p>
 <p>📌 口径：三条做法是公开实现里能看到的；各自的具体开销本课没有实测。⚠️ 再强调一次：这三条<b>全是推理侧</b>的。</p></div>
 
-<div class="note warn"><p>⚠️ <b>落到硬件上还有一个反直觉的后果</b>：MLA 在推理时可以把上投影矩阵
-  「吸收」进 query 那一侧，<b>从而改变整个计算的形状</b>。
-  同一个数学式子有多种算法实现，<b>选哪种取决于是 prefill 还是 decode</b>
-  ——&nbsp;这一条留到<a href="专题06-推理.md">专题六</a>。</p></div>
+<!-- ⭐⭐⭐ 2026-09-13 夜间 R15。这一节里「吸收」这个词出现了四次，
+     **一次也没说它是什么** —— 最接近的一处是 fig3-knob1 里一句括号注
+     「（吸收进 q 那一侧）」，对没学过的人等于没说。而讲义自己写着
+     这一块「最容易讲糊」。⛔ 原来这里那条 warn 直接把它推给了专题六，
+     可它是 MLA **能不能省**的前提，推掉之后这一节就缺了一环。
+     ⭐ 它其实是本讲已经立起来的装置第三次出场：把括号挪个位置。 -->
+<h3>5.4b　「吸收」到底是什么 ——&nbsp;这是 MLA 能省下来的前提</h3>
+
+<!-- ⛔ 这段原来还带着「如果真要拆……论文原话 must recompute the keys」三句，
+     被「图前预告过长」的 lint 抓到 —— 而那三句图里 ① 格一字不差地画着。
+     ⭐ 判据（文件头第一条）：**写正文前先问「这句话图里有没有」。** -->
+<p>前面一直在说 MLA 把 K、V 压成一个 576 维的隐向量存起来。
+  那生成下一个词的时候，不是还得把它们<b>拆回来</b>才能比对吗？</p>
+
+__FIG_ABSORB__
+
+<div class="note ok"><p>★ <b>不用拆。把括号挪一下就行</b></p>
+<p><code>qᵀ (W<sup>UK</sup> c) ＝ (W<sup>UK</sup>ᵀ q)ᵀ c</code>
+  ——&nbsp;<b>同一个乘法，只是括号换了个位置。</b></p>
+<p>左边括号在 <code>c</code> 那侧：缓存里有几个 <code>c</code> 就得算几次。
+  右边括号在 <code>q</code> 那侧：<b>一步只有一个 q，所以只算一次</b>，
+  而缓存里的压缩包<b>一个都不用拆</b>。</p>
+<p>🏠 <b>生活版就一句话</b>：<em>与其把一万本外文书全翻译过来，
+  不如把你的搜索词翻译过去。</em></p>
+<p>⭐ V 那一侧同理 ——&nbsp;<code>W<sup>UV</sup></code> 可以吸进输出投影
+  <code>W<sup>O</sup></code>。所以 K 和 V 两边都不用拆。</p></div>
+
+<div class="note warn"><p>⚠️ <b>省多少？算出来的答案跟直觉不一样</b></p>
+<p>直觉会说「解压从 S 次变成 1 次，所以省 S 倍」。<b>不对</b>
+  ——&nbsp;吸收之后每个 token 的点积从 128 维变成了 512 维，
+  <b>这一头贵了 4 倍</b>，在把省下的吃回去。</p>
+<p>两笔加起来算（图③），省的倍数<b>有个上限，而这个上限正好是每头维度
+  <code>d_h = 128</code></b>：解压一个 token 要 <code>d_h×d_c</code> 次乘加，
+  而点积只要 <code>d_c</code> 次，两者的比就是 <code>d_h</code>。
+  <em>S 再长也过不去这个数。</em></p>
+<p>📌 口径：这笔账是本课自己算的，<b>只数乘加，没算访存</b>
+  ——&nbsp;真机上访存往往才是瓶颈，所以它是个下界不是实测。</p></div>
+
+<div class="note danger"><p>⛔ <b>两条定律，一条允许、一条禁止 ——&nbsp;MLA 最难的两件事都在这儿</b></p>
+<p><b>结合律允许你挪括号。</b>上面那一步靠的就是它。
+  <em>论文原话：<code>due to the associative law of matrix multiplication, we
+  can absorb W<sup>UK</sup> into W<sup>UQ</sup>, and W<sup>UV</sup> into
+  W<sup>O</sup></code>。</em></p>
+<p><b>但交换律不成立。</b>RoPE 会往 <code>q</code> 和 <code>W<sup>UK</sup></code>
+  中间塞进一个跟位置有关的旋转矩阵，而<b>夹在中间的东西挪不出去</b>。
+  <em>原话：<code>a RoPE matrix … will lie between W<sup>Q</sup> and
+  W<sup>UK</sup> and matrix multiplication does not obey a commutative
+  law</code>。</em></p>
+<p>⭐ 这就是 5.3 那张寄快递的图在讲的事：
+  <b>把带位置的那一小块单独拎出来走 64 维一路</b> ——&nbsp;
+  包裹外面贴日期，包裹里面保持「一次就能翻译完」。</p></div>
+
+<div class="note info"><p>📌 <b>同一个把戏，本讲这是第三次出场</b></p>
+<p><b>§七 线性注意力</b>：把括号从 <code>(QKᵀ)V</code> 挪成
+  <code>Q(KᵀV)</code> ——&nbsp;那个句长×句长的大方块就不用建了。<br>
+  <b>§五 MLA 吸收</b>（这一小节）：把括号从 <code>qᵀ(W<sup>UK</sup>c)</code>
+  挪成 <code>(W<sup>UK</sup>ᵀq)ᵀc</code> ——&nbsp;压缩包就不用拆了。</p>
+<p>⭐ 两次是同一个数学恒等式，而且都被同一类东西挡过：
+  §七被因果 mask 挡住，这里被 RoPE 挡住。
+  <em><b>挡住结合律的，永远是「中间被塞了个东西」。</b></em></p></div>
+
+<div class="note warn"><p>⚠️ <b>最后一句作用域</b>：吸收<b>只在 decode 用得上</b>
+  ——&nbsp;prefill 时一批里有很多个 <code>q</code>，「只变换一次」这个便宜就没了
+  （这正是本节开头那张表里「压缩不生效」那一行的意思）。</p>
+<p>⭐ 于是同一个数学式子有了两种算法实现，<b>选哪种取决于是 prefill 还是 decode</b>
+  ——&nbsp;怎么在一个引擎里同时装下两套，留到<a href="专题06-推理.md">专题六</a>。</p></div>
 <hr>
 </div></section>
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>旋钮②：KV 照存，但每步只读一部分</h2></div>
@@ -2067,6 +2129,14 @@ FIGS = {
         ' —— 这就是「点积自动带相对距离」的全部内容。'
         '<em>⭐ 顺带把长文本那三种做法一句话各自归位：直接外推＝硬往超刻度处读；'
         '内插＝每格走半格；NTK-aware＝换一个进制。</em>'),
+    # ── §5.4b 吸收（2026-09-13 夜间 R15 加）───────────────────────
+    # ⭐ 全网讲 MLA 的文章几乎都跳过这一步，或者只写一行公式。
+    #   ⛔ 而它是 MLA「能不能真省下来」的前提 —— 不吸收，压缩等于白压。
+    "__FIG_ABSORB__": ("fig-absorb", "fig3-absorb.svg",
+        'topic03-fig-absorb.py',
+        '⭐⭐ <b>盯住那块紫色的 W<sup>UK</sup></b>：①里它站在缓存那一侧，'
+        '②里它<b>搬到了 q 那一侧</b> ——&nbsp;整张图讲的就是这一次搬家。'
+        '<em>⚠️ ③ 那个「上限 128×」是本课自己算的，只数乘加没算访存。</em>'),
     "__FIG_KNOB1__": ("fig-knob1", "fig3-knob1.svg", 'topic03-fig-knob1.py',
         '⭐⭐ <b>左边四种存法摆在同一形状下：MQA 反而比 MLA 还小 2.25 倍。</b>'
         '<b>所以这一支比的不是「谁存得最少」，是「同样一份字节换回多少能力」。</b>'
