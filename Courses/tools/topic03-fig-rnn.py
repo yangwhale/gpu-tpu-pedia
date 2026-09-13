@@ -405,7 +405,7 @@ def fig_pain():
         "⭐ 后面三十年的路线图，<tspan font-weight=\"700\">"
         "就是这三条各自的解药</tspan>")
 
-    PH = 340
+    PH = 364   # ⭐ 三条「解药」框画到了声明高度以外，补上
     py = f.panel(0, y, W, PH, "三个痛点，三个画面", RD, sub="一个一个看")
     ay = py + 22
 

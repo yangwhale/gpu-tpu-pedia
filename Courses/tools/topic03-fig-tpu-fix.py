@@ -34,88 +34,133 @@ def main():
         "共同形状：<tspan font-weight=\"700\">把「一个临时改单」换成「一批预制套餐」</tspan>",
         [(GR, "三招"), (BL, "谁来算"), (PU, "拣货小队"), (RD, "还没被验证的")])
 
-    # ══════════ ① 三招 ══════════════════════════════════════════
-    PH = 300
+    # ⭐⭐⭐ 2026-09-14 重画。审图原话：「**当前它就是一块写字的板子** ——
+    #   七张要点卡，零个画面。中央厨房这个全课最好的比喻，一笔都没画。」
+    # ⛔ 比喻写在脚本注释里、也写在卡片文字里 —— 唯独**没落到图上**。
+    #   注释里的比喻救不了读者，他看到的只有卡片。
+
+    # ══════════ ① 三招：保温台上的预制套餐 ══════════════════════
+    PH = 372
     py = f.panel(0, y0, W, PH, "① 三招 ——　都是「不现开火，改成挑一个预制的」",
                  GR, sub="RPA 论文的三个做法")
 
-    ay = py + 24
-    FIX = [
-        ("把盘子切小一点", "强制用最小的那种餐盒",
-         "长短不一的那一维，别放在切盘子的方向上"),
-        ("上菜和收盘并成一趟", "decode 时那一下零碎的写，",
-         "融进主菜一起做 ——　用做菜的时间盖住它"),
-        ("按客流预制几套套餐", "全长单一套、全短单一套、混着的一套",
-         "⭐ 最像中央厨房：不做万能菜谱，做几套再挑"),
-    ]
-    for i, (t, a, b) in enumerate(FIX):
-        bx = 56 + i * 442
-        f.box(bx, ay + 26, 400, 190, "#fff", GR, 10)
-        f.t(bx + 22, ay + 68, "%d. %s" % (i + 1, t), GR, True, 22, w=356)
-        f.t(bx + 22, ay + 110, a, GY, size=17, w=356)
-        f.t(bx + 22, ay + 142, b, GY, size=17, w=356)
-        for k in range(4):
-            on = (k == 1)
-            f.box(bx + 22 + k * 62, ay + 166, 52, 34,
-                  "#e6f4ea" if on else BG2, GR if on else LINE2, 5)
-    f.box(56, ay + 234, 1304, 46, "#e6f4ea", GR, 8)
-    f.t(80, ay + 264, "⭐ 成绩：Llama 3 8B 在 TPU7x 上 ——　"
-        "decode MBU 86%　·　prefill MFU 73%", GR, True, 21)
+    ay = py + 26
+    # 保温台
+    f.box(56, ay + 84, 800, 14, "#f1f3f4", GY2, 4)
+    f.t(56, ay + 122, "保温台：开工前就把几套做好摆上", GY2, size=16)
+    TRAYS = [("全长的", False), ("全短的", False), ("混着的", True), ("留一格", False)]
+    for i, (lab, pick) in enumerate(TRAYS):
+        tx = 76 + i * 196
+        f.box(tx, ay + 24, 156, 58, "#e6f4ea" if pick else "#fff",
+              GR if pick else LINE2, 8, 2.4 if pick else 1)
+        f.t(tx + 78, ay + 58, lab, GR if pick else GY, pick, 19, "middle")
+        if pick:
+            f.line(tx + 78, ay + 6, tx + 78, ay + 20, GR, 2.2)
+            f.t(tx + 78, ay - 4, "来单了，挑这套", GR, True, 17, "middle")
 
-    # ══════════ ② 前台 vs 后厨 ══════════════════════════════════
+    f.box(896, ay + 12, 448, 116, "#fff", GR, 10)
+    f.t(920, ay + 46, "⭐ 共同形状", GR, True, 20)
+    f.t(920, ay + 76, "把「一个临时改单」", GY, size=17)
+    f.t(920, ay + 102, "换成「一批预制套餐」", GY, size=17)
+
+    FIX = [("1. 把盘子切小一点", "强制用最小的那种餐盒 ——　长短不一的那一维，别放在切盘子的方向上"),
+           ("2. 上菜和收盘并成一趟", "decode 时那一下零碎的写，融进主菜一起做，用做菜的时间盖住它"),
+           ("3. 按客流预制几套套餐", "⭐ 最像中央厨房：不做万能菜谱，做几套再挑 ——　就是上面这张图")]
+    for i, (h_, d_) in enumerate(FIX):
+        f.t(56, ay + 158 + i * 44, h_, GR, True, 19)
+        f.t(330, ay + 158 + i * 44, d_, GY, size=17, w=1010)
+    f.box(56, ay + 286, 1288, 34, "#e6f4ea", GR, 8)
+    f.t(76, ay + 310, "⭐ 成绩：Llama 3 8B 在 TPU7x 上 ——　"
+        "decode MBU 86%　·　prefill MFU 73%", GR, True, 20)
+
+    # ══════════ ② 前台 vs 后厨：画成一张平面图 ══════════════════
     y1 = y0 + PH + 18
-    PH2 = 322
+    PH2 = 326
     py2 = f.panel(0, y1, W, PH2,
                   "② 那个「今天做哪几道菜」的决定，谁来算　——　答案分两层",
                   BL, sub="别答成一个字")
 
-    by = py2 + 22
-    f.box(56, by + 24, 636, 176, "#fff", GY2, 10)
-    f.t(80, by + 64, "前台（host CPU）", GY, True, 24)
-    f.t(80, by + 104, "今天有几桌、每桌几个人、坐哪几张台", GY, size=18)
-    f.t(80, by + 140, "一顿饭<tspan font-weight=\"700\">只报一次</tspan>", GY, True, 20)
-    f.t(80, by + 178, "摊到几千道菜上，可以忽略", GY2, size=16)
+    by = py2 + 26
+    # 前台
+    f.box(56, by + 16, 340, 176, "#f8f9fa", GY2, 10)
+    f.t(226, by + 50, "前台", GY, True, 24, "middle")
+    f.t(226, by + 74, "host CPU", GY2, size=16, anchor="middle")
+    f.box(116, by + 92, 160, 62, "#fff", GY2, 6)          # 台卡
+    f.t(196, by + 118, "今天 12 桌", INK, True, 20, "middle")
+    f.t(196, by + 142, "每桌几个人", GY2, size=16, anchor="middle")
+    f.t(226, by + 178, "一顿饭只报一次", GY, True, 18, "middle")
 
-    f.box(724, by + 24, 636, 176, "#e8f0fe", BL, 10)
-    f.t(748, by + 64, "后厨（就在卡上）", BL, True, 24)
-    f.t(748, by + 104, "这道菜的料，从哪个货架、拿多少", GY, size=18)
-    f.t(748, by + 140, "<tspan font-weight=\"700\">每道菜都要算一次</tspan>", BL, True, 20)
-    f.t(748, by + 178, "⛔ 跑去问前台一次就废了：一来一回是微秒级，"
-        "这一步总共只有几十微秒", RD, size=16, w=588)
+    # 中间那条「跑去问前台」的路 —— 打叉
+    f.line(400, by + 104, 560, by + 104, RD, 2.0, dash="6,5")
+    f.t(480, by + 90, "每道菜都跑去问？", RD, size=16, anchor="middle")
+    for dx, dy in ((-14, -14), (-14, 14)):
+        f.line(480 - dx, by + 104 - dy, 480 + dx, by + 104 + dy, RD, 3.0,
+               arrow=False)
+    f.t(480, by + 148, "一来一回是微秒级，", RD, size=16, anchor="middle")
+    f.t(480, by + 170, "而这一步只有几十微秒", RD, size=16, anchor="middle")
 
-    f.box(56, by + 220, 1304, 80, "#e6f4ea", GR, 10)
-    f.t(80, by + 258, "⭐⭐ 而且这笔账是拿闲人付的", GR, True, 23)
-    f.t(80, by + 292, "颠勺的时候（矩阵乘忙得冒烟），"
-        "<tspan font-weight=\"700\">算账那位（标量单元）正没事干</tspan> ——&#160;"
-        "地址计算恰好是他的活。", GY, size=18)
+    # 后厨
+    f.box(564, by + 16, 420, 176, "#e8f0fe", BL, 10)
+    f.t(774, by + 50, "后厨（就在卡上）", BL, True, 24, "middle")
+    for k in range(5):                                     # 货架
+        f.box(590 + k * 78, by + 70, 66, 54, "#fff", BL, 5)
+        f.t(623 + k * 78, by + 102, "%d 号" % (k + 1), BL, size=16,
+                anchor="middle")
+    f.t(774, by + 150, "这道菜的料从哪个货架 ——　自己算", BL, True, 18, "middle")
+    f.t(774, by + 178, "每道菜都要算一次", GY, size=17, anchor="middle")
+
+    # 闲着的那个人
+    f.box(1004, by + 16, 340, 176, "#e6f4ea", GR, 10)
+    f.t(1024, by + 50, "⭐⭐ 这笔账是拿闲人付的", GR, True, 20)
+    f.box(1024, by + 68, 140, 52, "#fff", GR, 6)
+    f.t(1094, by + 100, "颠勺的", GY, True, 18, "middle")
+    f.box(1180, by + 68, 140, 52, "#fff", GR, 6)
+    f.t(1250, by + 92, "算账的", GR, True, 18, "middle")
+    f.t(1250, by + 112, "正没事干", GR, size=15, anchor="middle")
+    f.t(1024, by + 148, "矩阵乘忙得冒烟的时候，", GY, size=17, w=316)
+    f.t(1024, by + 174, "标量单元正闲着 ——　地址计算是他的活", GY, size=16,
+        w=316)
+
+    f.t(56, by + 230, "⭐ 所以这一问的答案是两层："
+        "<tspan font-weight=\"700\">「今天有几桌」前台报，一顿饭一次；"
+        "「这道菜从哪个货架拿」后厨自己算，每道菜一次。</tspan>"
+        "　⛔ 混成一句就必错。", INK, size=19, w=1300)
 
     # ══════════ ③ 拣货小队 ══════════════════════════════════════
     y2 = y1 + PH2 + 18
-    PH3 = 272
+    PH3 = 312
     py3 = f.panel(0, y2, W, PH3, "③ 那 SparseCore 能不能干这个",
                   PU, sub="一支专门跑腿拣货的小队")
 
-    ey = py3 + 22
-    f.box(56, ey + 24, 636, 168, "#f3e8fd", PU, 10)
-    f.t(80, ey + 64, "✅ 架构上非常对口", PU, True, 23)
-    for i, ln in enumerate([
-        "天生就是干散落取货的（不规则、稀疏访存）",
-        "能按条件决定去哪儿拿 ——　数据相关的控制流",
-        "还能跨通道排序、过滤、前缀和 ——　正是 top-k 要的",
-    ]):
-        f.t(104, ey + 104 + i * 32, "· " + ln, GY, size=17)
+    ey = py3 + 26
+    # 小队 ＋ 推车
+    for k in range(3):
+        f.box(76 + k * 62, ey + 30, 46, 56, "#f3e8fd", PU, 6)
+        f.t(99 + k * 62, ey + 64, "拣", PU, True, 18, "middle")
+    f.line(268, ey + 58, 300, ey + 58, PU, 2.0)
+    f.box(308, ey + 26, 220, 64, "#fff", OR, 8)
+    f.t(418, ey + 52, "推车", OR, True, 19, "middle")
+    f.t(418, ey + 78, "最多 2048 件", OR, True, 20, "middle")
+    f.t(76, ey + 116, "⚠️ 规矩：这一趟最多拿几件，<tspan font-weight=\"700\">"
+        "必须开工前就报</tspan>　超了就分批，或者直接丢掉一部分", GY, size=17,
+        w=820)
+    f.t(76, ey + 146, "⭐ 对 DSA 反而天然满足 ——　k 就是 2048，定死的", OR,
+        True, 19)
 
-    f.box(724, ey + 24, 636, 168, "#fff", OR, 10)
-    f.t(748, ey + 64, "⚠️ 但它有个规矩：先报数", OR, True, 23)
-    f.t(748, ey + 104, "「这一趟最多拿几件」必须提前声明", GY, size=17)
-    f.t(748, ey + 136, "超了就得分批，或者直接丢掉一部分", GY, size=17)
-    f.t(748, ey + 176, "⭐ 对 DSA 反而天然满足 ——　k 就是 2048，定死的", OR,
-        True, 18, w=588)
+    f.box(872, ey + 20, 472, 148, "#f3e8fd", PU, 10)
+    f.t(896, ey + 52, "✅ 架构上非常对口", PU, True, 20)
+    for i, ln in enumerate(["天生干散落取货（不规则、稀疏访存）",
+                            "能按条件决定去哪儿拿",
+                            "跨通道排序、过滤、前缀和 ——　正是 top-k 要的"]):
+        f.t(896, ey + 84 + i * 28, "· " + ln, GY, size=16, w=424)
 
-    f.box(56, ey + 208, 1304, 44, "#fce8e6", RD, 8)
-    f.t(80, ey + 238, "⛔ 但要诚实：公开的那套 TPU 生产注意力 kernel 走的是主厨这条线"
-        "（TensorCore ＋ Pallas/Mosaic），<tspan font-weight=\"700\">"
-        "不是拣货小队</tspan>。", RD, True, 19)
+    f.box(56, ey + 190, 1288, 76, "#fce8e6", RD, 8)
+    f.t(76, ey + 220, "⛔ 但要诚实：公开的那套 TPU 生产注意力 kernel 走的是"
+        "<tspan font-weight=\"700\">主厨</tspan>这条线"
+        "（TensorCore ＋ Pallas/Mosaic），", RD, size=19, w=1248)
+    f.t(76, ey + 250, "<tspan font-weight=\"700\">不是拣货小队</tspan>。"
+        "没有公开材料说有人用它跑注意力的 top-k ——　台下如果有 TPU 的人，"
+        "含糊一句就会被抓住。", RD, size=19, w=1248)
 
     # ══════════ 落点 ════════════════════════════════════════════
     yy = y2 + PH3 + 20

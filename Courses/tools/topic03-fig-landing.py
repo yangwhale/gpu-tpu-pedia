@@ -21,7 +21,8 @@ from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
                           GY2, LINE, LINE2, BG2)
 
 W = 1400
-PX, PW = [0, 470, 940], [440, 440, 460]
+# ① 提到上面吃满整幅宽之后，②③ 两栏各 690px（原来三栏各 440）
+PX, PW = [0, 0, 710], [0, 690, 690]
 
 
 def main():
@@ -43,48 +44,69 @@ def main():
         "<tspan font-weight=\"700\">先搬能算的，最后才搬算不出来的</tspan>",
         [(BL, "显存"), (GR, "算力"), (OR, "访存规整度"), (RD, "防骗判据")])
 
+    # ⭐⭐⭐ 2026-09-14 重画 ① ——&nbsp;审图原话：
+    #   「整个专题的落点，现在是三栏文字卡；『三个房间、一条搬家路线』
+    #     只画了三个空矩形叠在一起，**搬家这件事一点没画**。」
+    # ⛔ 而它挤在 440px 的一栏里，画什么都施展不开。
+    # ⭐ 判据还是那条：**栏宽是可读性定的，不是内容条数定的。**
+    #   ① 提到上面吃满整幅宽，②③ 留在下面并排。
     ph = 520
+    PH1 = 320
 
-    # ══ ① 三种资源：一部搬家史 ══════════════════════════════════
-    # ⭐⭐⭐ 2026-09-14 重画：原来是三张文字卡。现在画成**真的搬家** ——
-    #   东西从一个房间挪到另一个房间，而且**顺序不是随机的**。
-    x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 三个房间，一条搬家路线", BL,
-                 sub="⭐ 顺序不是随机的")
+    # ══ ① 真的画一次搬家 ════════════════════════════════════════
+    py = f.panel(0, y0, W, PH1, "① 三个房间，一条搬家路线", BL,
+                 sub="⭐ 顺序不是随机的 ——　先搬能拿尺子量的，最后才搬量不出来的")
 
-    yy = py + 22
+    ry = py + 30
+    RW, RGAP, RH = 400, 60, 170
     ROOMS = [
-        ("早期", "搬显存", "MQA → GQA → MLA", "换来：每份更小", BL),
-        ("中期", "搬算力", "SWA → DSA → CSA", "换来：格子更少", GR),
-        ("现在", "搬访存规整度", "chunk 化的线性", "换来：读得更顺", OR),
+        ("早期", "显存", BL, "#e8f0fe", "MQA → GQA → MLA", "每份更小", "shrink"),
+        ("中期", "算力", GR, "#e6f4ea", "SWA → DSA → CSA", "格子更少", "few"),
+        ("现在", "访存规整度", OR, "#fef7e0", "chunk 化的线性", "读得更顺", "stuck"),
     ]
-    for i, (era, who, what, got, col) in enumerate(ROOMS):
-        f.box(x + 22, yy, pw - 44, 86, "#fff", col, 10)
-        f.box(x + 22, yy, 5, 86, col, col, 3)
-        f.box(x + 25, yy, 4, 86, "#fff", "#fff", 0)
-        f.box(x + 44, yy + 20, 46, 44, "#fff", col, 5)
-        f.line(x + 44, yy + 32, x + 90, yy + 32, col, 1.4, arrow=False)
-        f.t(x + 106, yy + 34, era, GY2, size=16)
-        f.t(x + 106, yy + 58, who, col, True, 19)
-        f.t(x + 244, yy + 34, what, GY, size=16, w=pw - 280)
-        f.t(x + 244, yy + 58, got, GY2, size=16, w=pw - 280)
-        if i < 2:
-            f.line(x + pw / 2.0, yy + 88, x + pw / 2.0, yy + 96, GY2, 1.2)
-        yy += 98
+    for i, (era, name, col, tint, who, got, kind) in enumerate(ROOMS):
+        rx = 60 + i * (RW + RGAP)
+        # 房间：只画三面墙 ＋ 一个门口，别画成又一个矩形卡片
+        f.box(rx, ry, RW, RH, tint, col, 10)
+        f.t(rx + 20, ry + 34, "%s ——　搬「%s」这个房间" % (era, name), col, True, 20)
+        gx, gy = rx + 22, ry + 56
+        if kind == "shrink":                    # 一摞箱子 → 一个小箱子
+            for k in range(4):
+                f.box(gx + k * 30, gy + 6, 24, 44, "#fff", col, 4)
+            f.line(gx + 128, gy + 28, gx + 166, gy + 28, col, 2.0)
+            f.box(gx + 174, gy + 20, 24, 18, "#fff", col, 4)
+            f.t(gx + 212, gy + 34, "东西还是那些，", GY, size=16)
+            f.t(gx + 212, gy + 56, "每一份变小了", GY, size=16)
+        elif kind == "few":                     # 格子还在，只搬走其中两个
+            for k in range(6):
+                on = k in (1, 4)
+                f.box(gx + k * 34, gy + 6, 28, 44,
+                      col if on else "#fff", "none" if on else LINE2, 4)
+            f.t(gx + 212, gy + 34, "格子一个没少，", GY, size=16)
+            f.t(gx + 212, gy + 56, "这一趟只搬两个", GY, size=16)
+        else:                                   # 门口卡住一个箱子
+            f.box(gx, gy + 6, 92, 44, "#fff", col, 4)
+            f.line(gx + 100, gy + 28, gx + 138, gy + 28, col, 2.0)
+            # 门框
+            f.box(gx + 146, gy - 4, 12, 64, "#fff", GY2, 2)
+            f.box(gx + 158, gy + 10, 52, 36, "#fce8e6", RD, 4)
+            f.t(gx + 184, gy + 34, "卡住", RD, True, 16, "middle")
+            f.t(gx + 226, gy + 34, "门就那么宽 ——", GY, size=16)
+            f.t(gx + 226, gy + 56, "只能一行行写", GY, size=16)
+        f.t(rx + 20, ry + 146, who, GY2, size=16)
+        f.t(rx + RW - 20, ry + 146, "换来：" + got, col, True, 17, anchor="end")
+        if i < 2:                               # 搬运路线
+            f.line(rx + RW + 8, ry + RH / 2.0, rx + RW + RGAP - 8,
+                   ry + RH / 2.0, GY2, 2.0)
 
-    yy += 6
-    f.box(x + 22, yy, pw - 44, 92, "#e8f0fe", BL, 10)
-    f.t(x + 40, yy + 30, "⭐ 为什么偏偏是这个顺序", BL, True, 18)
-    f.t(x + 40, yy + 56, "前两样<tspan font-weight=\"700\">能拿尺子量</tspan> ——", GY,
-        size=17.5, w=pw - 76)
-    f.t(x + 40, yy + 78, "多少字节、多少 FLOPs，坐下来就能算。", GY, size=17.5,
-        w=pw - 76)
-    yy += 102
-    f.t(x + 22, yy, "⛔ 而访存规整度<tspan font-weight=\"700\">量不出来</tspan>，", GY,
-        size=17.5, w=pw - 44)
-    f.t(x + 22, yy + 22, "它只出现在 kernel 里，", GY, size=17.5, w=pw - 44)
-    f.t(x + 22, yy + 46, "所以被留到了最后。", GY, size=17.5, w=pw - 44)
-    fits(yy + 52, y0, ph, "①")
+    f.box(60, ry + RH + 18, W - 120, 82, "#fff", INK, 10)
+    f.t(84, ry + RH + 46, "⭐ 为什么偏偏是这个顺序", INK, True, 20)
+    f.t(340, ry + RH + 46, "前两样<tspan font-weight=\"700\">能拿尺子量</tspan>"
+        " ——　多少字节、多少 FLOPs，坐下来就能算。", GY, size=17, w=940)
+    f.t(340, ry + RH + 72, "⛔ 而访存规整度<tspan font-weight=\"700\">量不出来</tspan>"
+        "，它只出现在 kernel 里 ——　所以被留到了最后。", GY, size=17, w=940)
+
+    y0 = y0 + PH1 + 18
 
     # ══ ② 四个取舍 ══════════════════════════════════════════════
     x, pw = PX[1], PW[1]

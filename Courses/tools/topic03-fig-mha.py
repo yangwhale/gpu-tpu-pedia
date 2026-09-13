@@ -184,7 +184,7 @@ def fig_qkv():
          (OR, "打分 ＋ 归一")])
 
     # ── 上：三件套 ───────────────────────────────────────────────
-    TT = f.panel(0, y, W, 172, "① 三件套都是从同一个 x 投影出来的",
+    TT = f.panel(0, y, W, 187, "① 三件套都是从同一个 x 投影出来的",
                  sub="同一个 token，用三套不同的权重看它三次")
     f.cell(30, TT + 30, 120, 56, "x", "这个 token", INK, "#fff")
     for i, (lab, sub, col, fill) in enumerate((
