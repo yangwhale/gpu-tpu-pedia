@@ -43,7 +43,7 @@ def main():
         "<tspan font-weight=\"700\">先搬能算的，最后才搬算不出来的</tspan>",
         [(BL, "显存"), (GR, "算力"), (OR, "访存规整度"), (RD, "防骗判据")])
 
-    ph = 486
+    ph = 520
 
     # ══ ① 三种资源：一部搬家史 ══════════════════════════════════
     # ⭐⭐⭐ 2026-09-14 重画：原来是三张文字卡。现在画成**真的搬家** ——
@@ -55,8 +55,8 @@ def main():
     yy = py + 22
     ROOMS = [
         ("早期", "搬显存", "MQA → GQA → MLA", "换来：每份更小", BL),
-        ("中期", "搬算力", "SWA → DSA → CSA·HCA", "换来：格子更少", GR),
-        ("现在", "搬访存规整度", "chunk 化的线性注意力", "换来：读得更顺", OR),
+        ("中期", "搬算力", "SWA → DSA → CSA", "换来：格子更少", GR),
+        ("现在", "搬访存规整度", "chunk 化的线性", "换来：读得更顺", OR),
     ]
     for i, (era, who, what, got, col) in enumerate(ROOMS):
         f.box(x + 22, yy, pw - 44, 86, "#fff", col, 10)
@@ -64,10 +64,10 @@ def main():
         f.box(x + 25, yy, 4, 86, "#fff", "#fff", 0)
         f.box(x + 44, yy + 20, 46, 44, "#fff", col, 5)
         f.line(x + 44, yy + 32, x + 90, yy + 32, col, 1.4, arrow=False)
-        f.t(x + 106, yy + 34, era, GY2, size=13)
+        f.t(x + 106, yy + 34, era, GY2, size=16)
         f.t(x + 106, yy + 58, who, col, True, 19)
-        f.t(x + 244, yy + 34, what, GY, size=13, w=pw - 280)
-        f.t(x + 244, yy + 58, got, GY2, size=13, w=pw - 280)
+        f.t(x + 244, yy + 34, what, GY, size=16, w=pw - 280)
+        f.t(x + 244, yy + 58, got, GY2, size=16, w=pw - 280)
         if i < 2:
             f.line(x + pw / 2.0, yy + 88, x + pw / 2.0, yy + 96, GY2, 1.2)
         yy += 98
@@ -76,15 +76,15 @@ def main():
     f.box(x + 22, yy, pw - 44, 92, "#e8f0fe", BL, 10)
     f.t(x + 40, yy + 30, "⭐ 为什么偏偏是这个顺序", BL, True, 18)
     f.t(x + 40, yy + 56, "前两样<tspan font-weight=\"700\">能拿尺子量</tspan> ——", GY,
-        size=14, w=pw - 76)
-    f.t(x + 40, yy + 78, "多少字节、多少 FLOPs，坐下来就能算。", GY, size=14,
+        size=17.5, w=pw - 76)
+    f.t(x + 40, yy + 78, "多少字节、多少 FLOPs，坐下来就能算。", GY, size=17.5,
         w=pw - 76)
     yy += 102
     f.t(x + 22, yy, "⛔ 而访存规整度<tspan font-weight=\"700\">量不出来</tspan>，", GY,
-        size=14, w=pw - 44)
-    f.t(x + 22, yy + 20, "它只出现在 kernel 里 ——&#160;所以被留到了最后。", GY,
-        size=14, w=pw - 44)
-    fits(yy + 26, y0, ph, "①")
+        size=17.5, w=pw - 44)
+    f.t(x + 22, yy + 22, "它只出现在 kernel 里，", GY, size=17.5, w=pw - 44)
+    f.t(x + 22, yy + 46, "所以被留到了最后。", GY, size=17.5, w=pw - 44)
+    fits(yy + 52, y0, ph, "①")
 
     # ══ ② 四个取舍 ══════════════════════════════════════════════
     x, pw = PX[1], PW[1]
@@ -107,18 +107,18 @@ def main():
         f.box(x + 22, yy, pw - 44, h, "#fff", col, 8)
         f.box(x + 22, yy, 4, h, col, col, 2)
         f.box(x + 24, yy, 3, h, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 27, "%d. %s" % (i + 1, head), col, True, 12.5,
+        f.t(x + 40, yy + 27, "%d. %s" % (i + 1, head), col, True, 16,
             w=pw - 76)
         f.t(x + 40, yy + 54, body.split("；")[0] + ("；" if "；" in body else ""),
-            GY, size=11.5, w=pw - 76)
+            GY, size=14.5, w=pw - 76)
         rest = body.split("；")[1] if "；" in body else ""
         if rest:
-            f.t(x + 40, yy + 73, rest, GY, size=11.5, w=pw - 76)
+            f.t(x + 40, yy + 73, rest, GY, size=14.5, w=pw - 76)
         yy += h + 8
 
     yy += 2
     f.t(x + 22, yy, "⭐ 问「省了多少」之前，先问<tspan font-weight=\"700\">省的是哪一样</tspan>。", INK,
-        True, 12.5, w=pw - 44)
+        True, 16, w=pw - 44)
     fits(yy + 8, y0, ph, "②")
 
     # ══ ③ 防骗判据 ══════════════════════════════════════════════
@@ -162,12 +162,12 @@ def main():
 
     yy = py + 26
     f.t(x + 22, yy, "一次前向的<tspan font-weight=\"700\">算力</tspan>都花在哪"
-        "（⚠️ 算力，不是时间）", GY, True, 12, w=pw - 44)
+        "（⚠️ 算力，不是时间）", GY, True, 15, w=pw - 44)
     yy += 12
     bw = pw - 44
     for lab, sq, proj, rest in SH:
         yy += 22
-        f.t(x + 22, yy, lab, INK, True, 12)
+        f.t(x + 22, yy, lab, INK, True, 15)
         f.box(x + 62, yy - 13, bw - 40, 18, "#fff", LINE, 4)
         cx = x + 63
         for frac, col, nm in ((sq, "#fce8e6", "平方项"),
@@ -177,11 +177,11 @@ def main():
             f.box(cx, yy - 12, max(0.6, wseg), 16,
                   col, "none", 2)
             if wseg > 52:
-                f.t(cx + wseg / 2.0, yy - 0.5, nm, GY, size=11, anchor="middle")
+                f.t(cx + wseg / 2.0, yy - 0.5, nm, GY, size=14, anchor="middle")
             cx += wseg
         yy += 14
         f.t(x + 62, yy, "平方项 %.1f%% · 注意力投影 %.1f%% · 其余 %.1f%%"
-            % (sq * 100, proj * 100, rest * 100), GY2, size=11, w=bw - 40)
+            % (sq * 100, proj * 100, rest * 100), GY2, size=14, w=bw - 40)
         yy += 8
     yy += 14
 
@@ -189,24 +189,24 @@ def main():
     f.box(x + 22, yy, 4, 104, RD, RD, 2)
     f.box(x + 24, yy, 3, 104, "#fff", "#fff", 0)
     f.t(x + 40, yy + 25, "⭐ 同一个机制，占比差 <tspan font-weight=\"700\">八倍</tspan>", RD,
-        True, 12.5, w=pw - 76)
+        True, 16, w=pw - 76)
     f.t(x + 40, yy + 48, "4K 下平方项 %.0f%%，1M 下 %.0f%%。"
-        % (SH[0][1] * 100, SH[2][1] * 100), GY, size=11.5, w=pw - 76)
-    f.t(x + 40, yy + 70, "⛔ 所以「省了 N 倍」这句话，在这两端"
-        "<tspan font-weight=\"700\">根本不是同一件事</tspan>。", GY, size=11.5,
+        % (SH[0][1] * 100, SH[2][1] * 100), GY, size=14.5, w=pw - 76)
+    f.t(x + 40, yy + 70, "⛔ 「省了 N 倍」在这两端"
+        "<tspan font-weight=\"700\">根本不是同一件事</tspan>。", GY, size=14.5,
         w=pw - 76)
     f.t(x + 40, yy + 92, "⚠️ 而且短上下文那 12% 之外，注意力自己的投影还占 27%",
-        GY2, size=11, w=pw - 76)
+        GY2, size=14, w=pw - 76)
     yy += 118
 
     f.box(x + 22, yy, pw - 44, 100, "#fff", INK, 8)
-    f.t(x + 38, yy + 25, "⭐⭐ 所以任何一个倍数，", INK, True, 13,
+    f.t(x + 38, yy + 25, "⭐⭐ 所以任何一个倍数，", INK, True, 16,
         cls="svglbl")
     f.t(x + 38, yy + 50, "<tspan font-weight=\"700\">必须带上「在多长的上下文下」</tspan>。", INK,
-        True, 13, w=pw - 76)
-    f.t(x + 38, yy + 74, "不带这句，那些倍数全是耍流氓。", GY, size=11.5)
+        True, 16, w=pw - 76)
+    f.t(x + 38, yy + 74, "不带这句，那些倍数全是耍流氓。", GY, size=14.5)
     f.t(x + 38, yy + 93, "⭐ 而且要问清楚：省的是 FLOPs，还是墙钟时间？", GY2,
-        size=11, w=pw - 76)
+        size=14, w=pw - 76)
     fits(yy + 100, y0, ph, "③")
 
     # ══ 落点带 ══════════════════════════════════════════════════

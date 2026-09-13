@@ -45,52 +45,53 @@ def main():
 
     CW, GAP = 640, 58
     RX = CW + GAP
-    PH = 470
+    PH = 512
 
     # ══════════ 左：四种存法 ══════════
     ay = f.panel(0, y, CW, PH, "四种存法，同一个形状", BL,
                  sub="每 token 每层要留几个数 →&#160;128K 一个用户共多少")
-    f.t(16, ay + 4, "存法", GY, bold=True, size=11)
-    f.t(112, ay + 4, "KV 头", GY, bold=True, size=11)
-    f.t(196, ay + 4, "每 token 每层", GY, bold=True, size=11)
-    f.t(330, ay + 4, "128K 单用户", GY, bold=True, size=11)
-    f.t(430, ay + 4, "相对 MHA", GY, bold=True, size=11)
+    f.t(16, ay + 4, "存法", GY, bold=True, size=14)
+    f.t(112, ay + 4, "KV 头", GY, bold=True, size=14)
+    f.t(196, ay + 4, "每 token 每层", GY, bold=True, size=14)
+    f.t(330, ay + 4, "128K 单用户", GY, bold=True, size=14)
+    f.t(430, ay + 4, "相对 MHA", GY, bold=True, size=14)
     mx = VAR[0][1]
     BX, BARW = 496, 62          # 真实线性刻度：488 GiB 占满 62px
     ZX, ZOOMW = 566, 62         # 放大镜：以 GQA-8 的 30.50 GiB 为满格
-    f.t(BX, ay + 4, "真实比例", GY, bold=True, size=11)
-    f.t(ZX, ay + 4, "放大 16×", GY2, bold=True, size=11)
+    f.t(BX, ay + 4, "真实比例", GY, bold=True, size=14)
+    f.t(ZX, ay + 4, "放大 16×", GY2, bold=True, size=14)
     for i, (nm, per, desc, col, heads) in enumerate(VAR):
         yy = ay + 26 + i * 46
-        f.t(16, yy + 4, nm, col, bold=True, size=_sz(13))
-        f.t(112, yy + 4, heads, GY2, size=11)
-        f.t(196, yy + 4, format(per, ","), INK, bold=True, size=11, mono=True)
+        f.t(16, yy + 4, nm, col, bold=True, size=_sz(16))
+        f.t(112, yy + 4, heads, GY2, size=14)
+        f.t(196, yy + 4, format(per, ","), INK, bold=True, size=14, mono=True)
         f.t(330, yy + 4, "%.2f GiB" % tot(per) if tot(per) < 100
-            else "%.0f GiB" % tot(per), col, bold=True, size=_sz(12), mono=True)
+            else "%.0f GiB" % tot(per), col, bold=True, size=_sz(15), mono=True)
         f.t(430, yy + 4, "—" if i == 0 else "省 %.0f×" % (mx / per),
-            GY2, size=11)
-        f.t(16, yy + 22, desc, GY2, size=11)
+            GY2, size=14)
+        f.t(16, yy + 22, desc, GY2, size=14)
         bw = max(1.0, BARW * per / float(mx))
         f.box(BX, yy - 5, bw, 12, col, col, 2)
         if per != mx:                       # 放大镜：后三根用自己的基准再画一遍
             zw = max(2.0, ZOOMW * per / float(VAR[1][1]))
             f.box(ZX, yy - 5, zw, 12, "#fff", col, 2, 1.2)
 
-    f.t(16, ay + PH - 100,
-        "⭐ <tspan font-weight=\"700\">左列是真实线性比例</tspan>，后三根细到几乎看不见 ——&#160;"
-        "这正是要的画面（MQA 是 MHA 的 0.78%）。", GY2, size=11, w=CW - 32)
-    f.t(16, ay + PH - 84,
-        "右列换了基准（满格 ＝ GQA-8 的 30.50 GiB），才看得出后三者之间的差。",
-        GY2, size=11, w=CW - 32)
+    f.t(16, ay + PH - 158,
+        "⭐ <tspan font-weight=\"700\">左列是真实线性比例</tspan> ——&#160;"
+        "后三根细到几乎看不见，", GY2, size=14, w=CW - 32)
+    f.t(16, ay + PH - 138,
+        "这正是要的画面（MQA 是 MHA 的 0.78%）。", GY2, size=14, w=CW - 32)
+    f.t(16, ay + PH - 118,
+        "右列换了基准（满格 ＝ GQA-8 的 30.50 GiB）。", GY2, size=14, w=CW - 32)
     f.t(16, ay + PH - 74,
         '⭐⭐ <tspan font-weight="700">题眼在这儿：MQA 只要 3.81 GiB，'
-        '比 MLA 的 8.58 还小 2.25 倍。</tspan>', RD, size=_sz(12.5))
+        '比 MLA 的 8.58 还小 2.25 倍。</tspan>', RD, size=_sz(16))
     f.t(16, ay + PH - 54,
         'MQA 2019 年就把体积压到头了 ——&#160;'
-        '<tspan font-weight="700">代价是质量掉得厉害</tspan>。', GY, size=_sz(12))
+        '<tspan font-weight="700">代价是质量掉得厉害</tspan>。', GY, size=_sz(15))
     f.t(16, ay + PH - 32,
         '⭐ 所以这一支比的<tspan font-weight="700">不是「谁存得最少」，'
-        '是「同样一份字节，换回多少能力」</tspan>。', BL, size=_sz(12.5))
+        '是「同样一份字节，换回多少能力」</tspan>。', BL, size=_sz(16))
 
     # ══════════ 右：RoPE 为什么必须单独走一路 ══════════
     # ⭐⭐⭐ 2026-09-14 重画：原来是两行代数。现在先给一个**寄快递**的画面 ——
@@ -106,7 +107,7 @@ def main():
     f.line(RX + 144, ey + 60, RX + 188, ey + 60, GY2, 1.6)
     f.box(RX + 196, ey + 34, 150, 52, "#fff", GR, 8)
     f.t(RX + 271, ey + 56, "收件人自己拆", GY, True, _sz(13), "middle")
-    f.t(RX + 271, ey + 78, "（吸收进 q 那一侧）", GY2, size=_sz(11), anchor="middle")
+    f.t(RX + 271, ey + 78, "（吸收进 q 那一侧）", GY2, size=_sz(14), anchor="middle")
     f.t(RX + 366, ey + 66, "✅ 仓库省地方", GR, True, _sz(14))
     ey += 104
 
@@ -118,12 +119,12 @@ def main():
     f.line(RX + 144, ey + 60, RX + 176, ey + 60, RD, 1.6)
     f.box(RX + 182, ey + 34, 116, 52, "#fff", RD, 8)
     f.t(RX + 240, ey + 58, "按位置转一下", RD, True, _sz(13), "middle")
-    f.t(RX + 240, ey + 80, "（那个 R）", GY2, size=_sz(11), anchor="middle")
+    f.t(RX + 240, ey + 80, "（那个 R）", GY2, size=_sz(14), anchor="middle")
     f.line(RX + 306, ey + 60, RX + 338, ey + 60, RD, 1.6)
     f.box(RX + 344, ey + 34, 150, 52, "#fff", RD, 8)
     f.t(RX + 419, ey + 66, "只好先拆开再存", RD, True, _sz(13), "middle")
     f.t(RX + 16, ey + 108, "⛔ 这道工序卡在中间，"
-        "<tspan font-weight=\"700\">拆包这件事就挪不走了</tspan>", GY, size=_sz(12.5))
+        "<tspan font-weight=\"700\">拆包这件事就挪不走了</tspan>", GY, size=_sz(16))
     ey += 130
 
     # ③ 解法：把要贴标签的那一小部分单拿出来
@@ -132,22 +133,22 @@ def main():
         PU, True, _sz(13.5))
     f.t(RX + 32, ey + 50,
         '<tspan font-weight="700">512 维</tspan>不带位置 → 照旧只存压缩包、拆包挪给收件人',
-        INK, size=_sz(12))
+        INK, size=_sz(15))
     f.t(RX + 32, ey + 72,
         '<tspan font-weight="700">64 维</tspan>专扛 RoPE → 老老实实拆开存　'
-        '＝　一共 <tspan font-weight="700">576</tspan>', INK, size=_sz(12))
+        '＝　一共 <tspan font-weight="700">576</tspan>', INK, size=_sz(15))
     ey += 108
 
     # 代数留作佐证，放在最后、字小一号
-    f.t(RX + 16, ey + 18, "📌 代数上就是这两行：", GY2, size=_sz(11.5))
+    f.t(RX + 16, ey + 18, "📌 代数上就是这两行：", GY2, size=_sz(14.5))
     f.box(RX + 16, ey + 26, CW - 32, 28, "#f8f9fa", LINE, 6)
     f.t(RX + 32, ey + 45, "qᵀ (W_UK c) ＝ (W_UKᵀ q)ᵀ c", GR, bold=True,
-        size=_sz(12.5), mono=True)
-    f.t(RX + 300, ey + 45, "✅ 挪得走", GR, size=_sz(11.5))
+        size=_sz(16), mono=True)
+    f.t(RX + 300, ey + 45, "✅ 挪得走", GR, size=_sz(14.5))
     f.box(RX + 16, ey + 60, CW - 32, 28, "#f8f9fa", LINE, 6)
-    f.t(RX + 32, ey + 79, "qᵀ R (W_UK c)", RD, bold=True, size=_sz(12.5),
+    f.t(RX + 32, ey + 79, "qᵀ R (W_UK c)", RD, bold=True, size=_sz(16),
         mono=True)
-    f.t(RX + 300, ey + 79, "⛔ R 夹在中间，分不开", RD, size=_sz(11.5))
+    f.t(RX + 300, ey + 79, "⛔ R 夹在中间，分不开", RD, size=_sz(14.5))
 
     yy = y + PH + 18
     yy = f.band(yy, "info", "⭐ 把 5.3 当成一个套路记住，别当成 MLA 的实现细节", [

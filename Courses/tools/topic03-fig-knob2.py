@@ -19,7 +19,7 @@ from topic03_draw import (Fig, wpx, _sz,
 W = 1400
 GiB = 2 ** 30
 N = 16          # mask 边长（格）
-C = 8.5         # 格子像素
+C = 15.0        # 格子像素（原 8.5 ——&nbsp;一行挤五张的时候只能这么小）
 
 
 def main():
@@ -37,7 +37,7 @@ def main():
         "⭐ 这一支的历史本身就说明该画图：attention sink 那个 bug 从公式上看不出来，"
         "是把矩阵画出来才发现的")
 
-    MW = 250
+    MW = 440
     TOP = y + 26
     # 128K 上下文下**真正被读到**的那一份占全部历史的比例。
     # ⚠️ CSA 那格留空：V4 报的 2% 是 1M 下的**存储**口径、基线也不是这里的全注意力，
@@ -66,11 +66,15 @@ def main():
          lambda r, c: c <= r and (r - c < 3
                                   or (c % 4 == 0 and (c * 5 + r) % 9 < 5))),
     ]
+    # ⛔ 原来五张并排一行（每张 250px）。⭐ 改成 3＋2 两行，每张 440px ——
+    #   格子从 8.5px 变成 15px，标签从 11px 变成 16–19px。
     for i, (nm, col, how, cost, fn) in enumerate(MASKS):
-        x = i * (MW + 37)
-        f.t(x, TOP, nm, col, bold=True, size=_sz(13), cls="svglbl")
-        f.t(x, TOP + 18, how, GY, size=11, w=MW)
-        gy_ = TOP + 30
+        x = (i % 3) * (MW + 40)
+        ROWH = 372
+        ty = TOP + (i // 3) * ROWH
+        f.t(x, ty, nm, col, bold=True, size=_sz(19), cls="svglbl")
+        f.t(x, ty + 24, how, GY, size=15, w=MW)
+        gy_ = ty + 38
         for r in range(N):
             for c in range(N):
                 if c > r:
@@ -78,16 +82,16 @@ def main():
                 on = fn(r, c)
                 f.box(x + c * C, gy_ + r * C, C - 1.2, C - 1.2,
                       col if on else "#eef1f3", "none", 1)
-        f.t(x, gy_ + N * C + 18, cost, col, size=11, w=MW)
+        f.t(x, gy_ + N * C + 24, cost, col, size=16, w=MW)
         # ── 按真实比例的一条细带（16×16 的格子撑不住 1.56% 这种量级）──
         fr, note = REAL[i]
         by_ = gy_ + N * C + 30
         f.box(x, by_, MW - 12, 9, "#fff", LINE, 2)
         f.box(x + 0.8, by_ + 0.8, max(0.8, (MW - 13.6) * fr), 7.4, col,
               "none", 2)
-        f.t(x, by_ + 24, note, GY2, size=11, w=MW)
+        f.t(x, by_ + 28, note, GY2, size=14, w=MW)
 
-    yy = gy_ + N * C + 72
+    yy = TOP + 372 + 300 + 56
 
     # ⭐ 2026-09-12：这一条原来写的是「先用便宜办法决定看哪些」——&nbsp;对，但泛。
     #   教材 6.6 那个「三条路」框架更准，而且它原来是 <pre> 里的 ASCII 画 ——
