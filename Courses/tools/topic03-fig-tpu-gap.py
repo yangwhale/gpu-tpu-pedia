@@ -1,165 +1,145 @@
 # -*- coding: utf-8 -*-
-r"""专题三 · §十「这些注意力落到 TPU 上，难在哪」（2026-09-13 · TPU 轮 R27）。
+r"""专题三 · §10.2「这些注意力落到 TPU 上，难在哪」
 
-⭐⭐⭐ 现场点的题：「注意力在 TPU 上跑起来有没有困难的地方？
-   哪些本来是给 GPU 设计的，搬到 TPU 上有难度、需要克服？」
+⭐⭐⭐ 2026-09-14 **整张重画**，换成两个生活画面：
+   **中央厨房 vs 点单现做**，以及**仓库取货**。
 
-   这一张先把**结构性的错配**摆出来，因为不摆清楚，
-   后面那些 kernel 技巧看起来就只是一堆技巧。
+  ① **TPU 像中央厨房**：菜单提前定死，所有东西按批预制 ——&nbsp;
+     出餐极快，代价是**临时改单很贵**。
+     **GPU 像点单现做**：来什么做什么，灵活，但每道菜都要现开火。
+     ⚠️ 这不是谁好谁坏 ——&nbsp;**中央厨房快，正是因为它不接临时改单。**
+  ② **而现代注意力偏偏全是临时改单**：每桌人数不一样（ragged）、
+     食材散在仓库各处（分页 KV）、**今天做哪几道菜要开工了才知道**（运行时 top-k）。
+  ③ **对上之后最疼的一处画成仓库取货**：
+     连号货架 →&nbsp;一趟推车拉走；散落各处 →&nbsp;跑很多趟。
+     ⭐ 这就是 RPA 原文那句「让 DMA 调度变得困难」。
 
-  ① **TPU 这一侧的三条硬约束**（不是缺点，是它快的原因）
-     · XLA 是 **static-first**：形状要在编译期定死
-     · 内存布局是 **tiled、粗粒度**的：细粒度切片本身就不便宜
-     · 整条流水线为**规整访存**优化：一旦访问模式跟 layout 不对齐就要罚钱
-
-  ② **现代注意力这一侧的三个动态性来源**（全是最近五年长出来的）
-     · **ragged**：一个 batch 里各请求长度不同
-     · **分页 KV**：一条序列的 KV 散在不连续的页上
-     · **运行时 top-k**：这一步到底读哪 2048 条，**要跑起来才知道**
-
-  ③ **两边一对上，就是三处具体的疼**
-
-⛔ 最该引的一句话来自 Google 自己那篇 RPA 论文：
-   「现有 LLM 推理 kernel 和服务系统**基本都是 GPU 中心的**，
-     **还没有一套成熟的办法**把 LLM 负载高效地映射到 TPU 架构上。」
-   ——&nbsp;这句话出自 2026 年 4 月，不是五年前。
+⛔ 最该念的一句出自 Google 自己那篇 RPA 论文（arXiv 2604.15464，2026-04）：
+   现有 LLM 推理 kernel **基本都是 GPU 中心的**，
+   **还没有一套成熟的办法**把 LLM 负载高效地映射到 TPU 架构上。
 """
-from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
-                          GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+                          BG2)
 
 W = 1400
-PX, PW = [0, 470, 940], [440, 440, 460]
 
 
 def main():
-    def fits(y, y0, ph, who):
-        assert y <= y0 + ph - 6, "%s 到 %d，面板底边 %d" % (who, y, y0 + ph)
-
-    f = Fig(W, "这些注意力落到 TPU 上难在哪：TPU 的三条硬约束（静态形状、"
-               "tiled 粗粒度布局、偏好规整访存）对上现代注意力的三个动态性来源"
-               "（ragged、分页 KV、运行时 top-k），一对上就是三处具体的疼")
+    f = Fig(W, "注意力落到 TPU 上难在哪：TPU 像中央厨房，菜单提前定死、按批预制，"
+               "出餐快但临时改单贵；而现代注意力全是临时改单 —— 每桌人数不同、"
+               "食材散在仓库各处、今天做哪几道要开工才知道")
     f.marks = set()
     y0 = f.header(
-        "落到 TPU 上　——　先看清楚是<tspan font-weight=\"700\">哪两件事对不上</tspan>",
-        "⛔ 不先摆清结构性的错配，后面那些 kernel 技巧看起来就只是一堆技巧",
-        [(BL, "TPU 的硬约束"), (OR, "注意力的动态性"),
-         (RD, "对上之后的疼"), (GR, "已经有的解法")])
+        "落到 TPU 上 ——　先看清楚是哪两件事对不上",
+        "<tspan font-weight=\"700\">中央厨房</tspan> 碰上 "
+        "<tspan font-weight=\"700\">全是临时改单的客人</tspan>",
+        [(BL, "中央厨房 ＝ TPU"), (OR, "临时改单 ＝ 现代注意力"),
+         (RD, "最疼的一处"), (GR, "已经有的解法")])
 
-    ph = 436
+    # ══════════ ① 两种厨房 ══════════════════════════════════════
+    PH = 300
+    py = f.panel(0, y0, W, PH, "① 两种厨房 ——　这不是谁好谁坏",
+                 BL, sub="中央厨房快，正是因为它不接临时改单")
 
-    # ══ ① TPU 侧 ════════════════════════════════════════════════
-    x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① TPU 这一侧的三条硬约束", BL,
-                 sub="⭐ 不是缺点 —— 是它快的原因")
+    ay = py + 24
+    f.box(56, ay + 26, 636, 218, "#e8f0fe", BL, 10)
+    f.t(80, ay + 66, "TPU ＝ 中央厨房", BL, True, 26)
+    for i, ln in enumerate([
+        "菜单提前定死　——　形状要在编译期就知道",
+        "按整批预制　——　最小一批就是一大盘，不零卖",
+        "取货路线固定　——　连号货架，一趟拉走",
+    ]):
+        f.t(104, ay + 112 + i * 38, "· " + ln, GY, size=18)
+    f.t(80, ay + 226, "⭐ 出餐极快 ——　代价是临时改单很贵", BL, True, 20)
 
-    yy = py + 26
-    for head, body, why in [
-        ("XLA 是 static-first", "形状必须在<tspan font-weight=\"700\">编译期</tspan>定死",
-         "换个形状就重编译；所以要 padding、要分桶"),
-        ("内存布局 tiled、粗粒度", "最小 tile 是 <tspan font-weight=\"700\">(8, 128)</tspan> 这个量级",
-         "想按 token 精细切一刀，本身就不便宜"),
-        ("整条流水线为规整访存优化", "连续、可预测的搬运最划算",
-         "访问模式一旦跟 layout 不对齐，就要罚钱"),
-    ]:
-        f.box(x + 22, yy, pw - 44, 100, "#fff", BL, 8)
-        f.box(x + 22, yy, 4, 100, BL, BL, 2)
-        f.box(x + 24, yy, 3, 100, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 26, head, BL, True, 12.5, w=pw - 76)
-        f.t(x + 40, yy + 52, body, GY, size=11.5, w=pw - 76)
-        f.t(x + 40, yy + 78, "→ " + why, GY2, size=11, w=pw - 76)
-        yy += 110
+    f.box(724, ay + 26, 636, 218, "#fff", OR, 10)
+    f.t(748, ay + 66, "GPU ＝ 点单现做", OR, True, 26)
+    for i, ln in enumerate([
+        "来什么做什么　——　形状跑起来才定也行",
+        "一份也做　——　细粒度切一刀不太贵",
+        "满仓库跑腿　——　散落取货也认了",
+    ]):
+        f.t(772, ay + 112 + i * 38, "· " + ln, GY, size=18)
+    f.t(748, ay + 226, "⭐ 灵活 ——　代价是每道菜都要现开火", OR, True, 20)
 
-    yy += 2
-    f.t(x + 22, yy, "⭐ 这三条正是 TPU 在<tspan font-weight=\"700\">规整稠密</tspan>"
-        "负载上", GY, size=11.5, w=pw - 44)
-    f.t(x + 22, yy + 20, "效率那么高的原因。<tspan font-weight=\"700\">它们是一体两面。</tspan>",
-        GY, size=11.5, w=pw - 44)
-    fits(yy + 26, y0, ph, "①")
+    # ══════════ ② 客人全是临时改单 ══════════════════════════════
+    y1 = y0 + PH + 18
+    PH2 = 268
+    py2 = f.panel(0, y1, W, PH2, "② 而现代注意力，偏偏全是临时改单",
+                  OR, sub="三样，全是最近五年长出来的")
 
-    # ══ ② 注意力侧 ══════════════════════════════════════════════
-    x, pw = PX[1], PW[1]
-    py = f.panel(x, y0, pw, ph, "② 现代注意力的三个动态性来源", OR,
-                 sub="全是最近五年才长出来的")
+    by = py2 + 24
+    for i, (t, what, where) in enumerate([
+        ("每桌人数都不一样", "一个 batch 里各请求长度不同", "vLLM 那套调度带来的"),
+        ("食材散在仓库各处", "一条序列的 KV 散在不连续的页上", "PagedAttention 带来的"),
+        ("今天做哪几道菜，开工了才知道", "这一步到底读哪 2048 条",
+         "DSA / NSA 这一支带来的"),
+    ]):
+        bx = 56 + i * 442
+        f.box(bx, by + 24, 400, 168, "#fff", OR, 10)
+        f.t(bx + 22, by + 66, t, OR, True, 21, w=356)
+        f.t(bx + 22, by + 108, what, GY, size=17, w=356)
+        f.t(bx + 22, by + 172, "来源：" + where, GY2, size=15)
 
-    yy = py + 26
-    for head, body, when in [
-        ("ragged：一批里各人长度不同",
-         "prefill 和 decode 还混在同一个 batch 里", "vLLM 那套调度带来的"),
-        ("分页 KV：一条序列散在多页上",
-         "页与页之间<tspan font-weight=\"700\">地址不连续</tspan>", "PagedAttention 带来的"),
-        ("运行时 top-k：这一步读哪 2048 条",
-         "<tspan font-weight=\"700\">要跑起来才知道</tspan> ——&#160;编译期算不出来", "DSA / NSA 这一支带来的"),
-    ]:
-        f.box(x + 22, yy, pw - 44, 100, "#fff", OR, 8)
-        f.box(x + 22, yy, 4, 100, OR, OR, 2)
-        f.box(x + 24, yy, 3, 100, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 26, head, OR, True, 12.5, w=pw - 76)
-        f.t(x + 40, yy + 52, body, GY, size=11.5, w=pw - 76)
-        f.t(x + 40, yy + 78, "来源：" + when, GY2, size=11, w=pw - 76)
-        yy += 110
+    f.t(56, by + 220, "⛔ 这三样<tspan font-weight=\"700\">全是在 GPU 上先长出来的</tspan>"
+        " ——&#160;它们默认了一台「随手跑腿不太贵」的机器。", RD, True, 21)
 
-    yy += 2
-    f.t(x + 22, yy, "⛔ 注意这三条<tspan font-weight=\"700\">全是在 GPU 上先长出来的</tspan>",
-        OR, True, 12.5, w=pw - 44)
-    f.t(x + 22, yy + 20, "——&#160;它们默认了一台「随手 gather 不太贵」的机器。",
-        GY, size=11.5, w=pw - 44)
-    fits(yy + 26, y0, ph, "②")
+    # ══════════ ③ 仓库取货 ══════════════════════════════════════
+    y2 = y1 + PH2 + 18
+    PH3 = 292
+    py3 = f.panel(0, y2, W, PH3, "③ 对上之后，最疼的是哪一处 ——　仓库取货",
+                  RD, sub="RPA 论文 §2 逐条点了名")
 
-    # ══ ③ 对上之后的三处疼 ══════════════════════════════════════
-    x, pw = PX[2], PW[2]
-    py = f.panel(x, y0, pw, ph, "③ 一对上，就是三处具体的疼", RD,
-                 sub="RPA 论文 §2 逐条点了名")
+    ey = py3 + 22
+    f.t(56, ey + 24, "连号货架：一趟推车拉走", GR, True, 22)
+    for i in range(20):
+        on = 4 <= i < 12
+        f.box(56 + i * 32, ey + 40, 26, 56, "#e6f4ea" if on else BG2,
+              GR if on else LINE2, 4)
+    f.line(180, ey + 112, 430, ey + 112, GR, 2.2)
+    f.t(56, ey + 142, "✅ 一次搬运，地址连着", GR, True, 19)
 
-    yy = py + 26
-    for head, body in [
-        ("KV 要从<tspan font-weight=\"700\">动态算出来的、不连续的地址</tspan> gather",
-         "原文：这让 <tspan font-weight=\"700\">DMA 调度</tspan>变得困难"),
-        ("KV 更新要 <tspan font-weight=\"700\">scatter</tspan> 进只填了一半的页",
-         "decode 时还是<tspan font-weight=\"700\">单 token 粒度</tspan>的写"),
-        ("形状只有<tspan font-weight=\"700\">跑起来</tspan>才知道",
-         "而 XLA 的整套优化都建立在「形状已知」上"),
-    ]:
-        f.box(x + 22, yy, pw - 44, 82, "#fff", RD, 8)
-        f.box(x + 22, yy, 4, 82, RD, RD, 2)
-        f.box(x + 24, yy, 3, 82, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 28, head, RD, True, 12.5, w=pw - 76)
-        f.t(x + 40, yy + 56, body, GY, size=11.5, w=pw - 76)
-        yy += 92
+    f.t(760, ey + 24, "散落各处：跑很多趟", RD, True, 22)
+    for i in range(20):
+        on = i in (1, 4, 9, 13, 14, 18)
+        f.box(760 + i * 32, ey + 40, 26, 56, "#fce8e6" if on else BG2,
+              RD if on else LINE2, 4)
+    for i in (1, 4, 9, 13, 14, 18):
+        f.line(773 + i * 32, ey + 104, 773 + i * 32, ey + 118, RD, 1.4)
+    f.t(760, ey + 142, "⛔ 六次搬运，地址还是跑起来才算出来的", RD, True, 19)
 
-    yy += 4
-    f.box(x + 22, yy, pw - 44, 92, "#fff", INK, 8)
-    f.t(x + 38, yy + 26, "⭐⭐ 这不是「TPU 不行」", INK, True, 13,
-        cls="svglbl")
-    f.t(x + 38, yy + 50, "是<tspan font-weight=\"700\">这一批机制是在另一台机器上想出来的</tspan>，",
-        GY, size=11.5, w=pw - 76)
-    f.t(x + 38, yy + 72, "它们把「gather 不太贵」当成了背景假设。", GY,
-        size=11.5, w=pw - 76)
-    fits(yy + 92, y0, ph, "③")
+    f.box(56, ey + 168, 1304, 104, "#fce8e6", RD, 10)
+    f.t(80, ey + 208, "⭐ 论文原话：这让<tspan font-weight=\"700\">"
+        "DMA 调度</tspan>变得困难", RD, True, 22)
+    f.t(80, ey + 246, "——&#160;DMA 就是那台推车：它最擅长「一趟拉一整排」，"
+        "最怕「这一趟拉哪几个，得先算一下」。", GY, size=18)
 
-    # ══ 落点带 ══════════════════════════════════════════════════
-    yy = y0 + ph + 22
+    # ══════════ 落点 ════════════════════════════════════════════
+    yy = y2 + PH3 + 20
     yy = f.band(yy, "bad", "⛔ 这句话值得原样念一遍 —— 它出自 2026 年 4 月，不是五年前", [
-        "「现有 LLM 推理 kernel 和服务系统<tspan font-weight=\"700\">基本都是 GPU 中心的</tspan>，"
-        "而且<tspan font-weight=\"700\">还没有一套成熟的办法</tspan>"
+        "「现有 LLM 推理 kernel 和服务系统<tspan font-weight=\"700\">基本都是 GPU 中心的"
+        "</tspan>，而且<tspan font-weight=\"700\">还没有一套成熟的办法</tspan>"
         "把 LLM 负载高效地映射到 TPU 架构上。」",
-        "——&#160;Google 自己那篇 Ragged Paged Attention 论文的摘要（arXiv 2604.15464）。",
+        "——&#160;Google 自己那篇 Ragged Paged Attention 论文的摘要（arXiv 2604.15464）。"
         "⭐ 所以这一节讲的不是「怎么调参」，是<tspan font-weight=\"700\">一个还在打开的工程战场</tspan>。",
     ])
 
-    yy = f.band(yy + 14, "info", "⭐ 一条可迁移的判据：看一个机制默认了什么样的机器", [
-        "ragged 调度、分页 KV、运行时 top-k ——&#160;"
-        "这三样<tspan font-weight=\"700\">都默认「随手 gather 不太贵」</tspan>。"
-        "在一台为规整访存优化的机器上，这个假设<tspan font-weight=\"700\">不成立</tspan>。",
+    yy = f.band(yy + 14, "info", "⭐ 一条能带走的判据：看一个机制默认了什么样的机器", [
+        "临时改单、散落取货、开工才知道做什么 ——&#160;"
+        "<tspan font-weight=\"700\">这三样都默认「随手跑腿不太贵」</tspan>。"
+        "在一家为「按批预制」优化的厨房里，这个假设<tspan font-weight=\"700\">不成立</tspan>。",
         "⭐ 所以移植的活儿不是「翻译代码」，是"
         "<tspan font-weight=\"700\">把那个隐含的硬件假设找出来，再换一个等价但规整的做法</tspan>。"
-        "下面两张图讲的就是这个「换法」。",
+        "下一张讲的就是这个「换法」。",
     ])
 
     yy = f.src(yy + 16,
                "三处疼与那句摘要出自 Ragged Paged Attention（Jiang 等，"
                "arXiv 2604.15464，2026-04）§1 与 §2.4；TPU 的三条约束亦见该文 §1",
-               "⚠️ 「最小 tile 是 (8,128) 这个量级」是该文举的例子（BF16(12,128) 被"
-               "补齐到 BF16(16,128)），不同数据类型与配置下 tile 形状不同")
+               "⚠️ 「中央厨房 / 点单现做 / 仓库取货」是"
+               "<tspan font-weight=\"700\">本课的比喻</tspan> ——&#160;"
+               "论文那侧的说法是 static-first 编译、tiled 粗粒度布局、"
+               "以及「从动态算出来的不连续地址 gather」")
     f.save("fig3-tpu-gap.svg", yy + 6)
 
 

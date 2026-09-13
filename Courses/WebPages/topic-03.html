@@ -7727,109 +7727,128 @@ linear                                               ← 第 45 层多出来的�
 <!-- ⭐⭐⭐ 2026-09-14 TPU 轮 R27。现场点的题：
      「注意力在 TPU 上跑有没有困难？哪些本来是给 GPU 设计的、搬过来需要克服？」
      ⭐ 先摆**结构性的错配**，不摆清楚，后面那些 kernel 技巧看起来就只是一堆技巧。 -->
-<figure class="fbox fwide" id="fig-tpu-gap"><svg viewBox="0 0 1400 806" width="100%" role="img" aria-label="这些注意力落到 TPU 上难在哪：TPU 的三条硬约束（静态形状、tiled 粗粒度布局、偏好规整访存）对上现代注意力的三个动态性来源（ragged、分页 KV、运行时 top-k），一对上就是三处具体的疼"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">落到 TPU 上　——　先看清楚是<tspan font-weight="700">哪两件事对不上</tspan></text>
-<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⛔ 不先摆清结构性的错配，后面那些 kernel 技巧看起来就只是一堆技巧</text>
+<figure class="fbox fwide" id="fig-tpu-gap"><svg viewBox="0 0 1400 1243" width="100%" role="img" aria-label="注意力落到 TPU 上难在哪：TPU 像中央厨房，菜单提前定死、按批预制，出餐快但临时改单贵；而现代注意力全是临时改单 —— 每桌人数不同、食材散在仓库各处、今天做哪几道要开工才知道"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">落到 TPU 上 ——　先看清楚是哪两件事对不上</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">中央厨房</tspan> 碰上 <tspan font-weight="700">全是临时改单的客人</tspan></text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">TPU 的硬约束</text>
-<rect x="107" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="124" y="64" fill="#5f6368" style="font-size:11.0px">注意力的动态性</text>
-<rect x="223" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="240" y="64" fill="#5f6368" style="font-size:11.0px">对上之后的疼</text>
-<rect x="328" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="345" y="64" fill="#5f6368" style="font-size:11.0px">已经有的解法</text>
-<rect x="0" y="88" width="440" height="436" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="88" width="440" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="108" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① TPU 这一侧的三条硬约束</tspan></text>
-<text class="svgsm" x="194" y="108" fill="#5f6368" style="font-size:11.0px">⭐ 不是缺点 —— 是它快的原因</text>
-<rect x="22" y="144" width="396" height="100" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
-<rect x="22" y="144" width="4" height="100" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="24" y="144" width="3" height="100" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="40" y="170" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">XLA 是 static-first</tspan></text>
-<text class="svgsm" x="40" y="196" fill="#5f6368" style="font-size:11.5px">形状必须在<tspan font-weight="700">编译期</tspan>定死</text>
-<text class="svgsm" x="40" y="222" fill="#80868b" style="font-size:11.0px">→ 换个形状就重编译；所以要 padding、要分桶</text>
-<rect x="22" y="254" width="396" height="100" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
-<rect x="22" y="254" width="4" height="100" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="24" y="254" width="3" height="100" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="40" y="280" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">内存布局 tiled、粗粒度</tspan></text>
-<text class="svgsm" x="40" y="306" fill="#5f6368" style="font-size:11.5px">最小 tile 是 <tspan font-weight="700">(8, 128)</tspan> 这个量级</text>
-<text class="svgsm" x="40" y="332" fill="#80868b" style="font-size:11.0px">→ 想按 token 精细切一刀，本身就不便宜</text>
-<rect x="22" y="364" width="396" height="100" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
-<rect x="22" y="364" width="4" height="100" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="24" y="364" width="3" height="100" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="40" y="390" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">整条流水线为规整访存优化</tspan></text>
-<text class="svgsm" x="40" y="416" fill="#5f6368" style="font-size:11.5px">连续、可预测的搬运最划算</text>
-<text class="svgsm" x="40" y="442" fill="#80868b" style="font-size:11.0px">→ 访问模式一旦跟 layout 不对齐，就要罚钱</text>
-<text class="svgsm" x="22" y="476" fill="#5f6368" style="font-size:11.5px">⭐ 这三条正是 TPU 在<tspan font-weight="700">规整稠密</tspan>负载上</text>
-<text class="svgsm" x="22" y="496" fill="#5f6368" style="font-size:11.5px">效率那么高的原因。<tspan font-weight="700">它们是一体两面。</tspan></text>
-<rect x="470" y="88" width="440" height="436" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="88" width="440" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="470" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="470" y1="118" x2="910" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="484" y="108" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 现代注意力的三个动态性来源</tspan></text>
-<text class="svgsm" x="688" y="108" fill="#5f6368" style="font-size:11.0px">全是最近五年才长出来的</text>
-<rect x="492" y="144" width="396" height="100" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
-<rect x="492" y="144" width="4" height="100" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="494" y="144" width="3" height="100" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="510" y="170" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">ragged：一批里各人长度不同</tspan></text>
-<text class="svgsm" x="510" y="196" fill="#5f6368" style="font-size:11.5px">prefill 和 decode 还混在同一个 batch 里</text>
-<text class="svgsm" x="510" y="222" fill="#80868b" style="font-size:11.0px">来源：vLLM 那套调度带来的</text>
-<rect x="492" y="254" width="396" height="100" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
-<rect x="492" y="254" width="4" height="100" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="494" y="254" width="3" height="100" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="510" y="280" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">分页 KV：一条序列散在多页上</tspan></text>
-<text class="svgsm" x="510" y="306" fill="#5f6368" style="font-size:11.5px">页与页之间<tspan font-weight="700">地址不连续</tspan></text>
-<text class="svgsm" x="510" y="332" fill="#80868b" style="font-size:11.0px">来源：PagedAttention 带来的</text>
-<rect x="492" y="364" width="396" height="100" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
-<rect x="492" y="364" width="4" height="100" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="494" y="364" width="3" height="100" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="510" y="390" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">运行时 top-k：这一步读哪 2048 条</tspan></text>
-<text class="svgsm" x="510" y="416" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">要跑起来才知道</tspan> ——&#160;编译期算不出来</text>
-<text class="svgsm" x="510" y="442" fill="#80868b" style="font-size:11.0px">来源：DSA / NSA 这一支带来的</text>
-<text class="svgsm" x="492" y="476" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">⛔ 注意这三条<tspan font-weight="700">全是在 GPU 上先长出来的</tspan></tspan></text>
-<text class="svgsm" x="492" y="496" fill="#5f6368" style="font-size:11.5px">——&#160;它们默认了一台「随手 gather 不太贵」的机器。</text>
-<rect x="940" y="88" width="460" height="436" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="940" y="88" width="460" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="940" y="90" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="940" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="954" y="108" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">③ 一对上，就是三处具体的疼</tspan></text>
-<text class="svgsm" x="1144" y="108" fill="#5f6368" style="font-size:11.0px">RPA 论文 §2 逐条点了名</text>
-<rect x="962" y="144" width="416" height="82" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
-<rect x="962" y="144" width="4" height="82" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="964" y="144" width="3" height="82" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="980" y="172" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">KV 要从<tspan font-weight="700">动态算出来的、不连续的地址</tspan> gather</tspan></text>
-<text class="svgsm" x="980" y="200" fill="#5f6368" style="font-size:11.5px">原文：这让 <tspan font-weight="700">DMA 调度</tspan>变得困难</text>
-<rect x="962" y="236" width="416" height="82" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
-<rect x="962" y="236" width="4" height="82" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="964" y="236" width="3" height="82" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="980" y="264" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">KV 更新要 <tspan font-weight="700">scatter</tspan> 进只填了一半的页</tspan></text>
-<text class="svgsm" x="980" y="292" fill="#5f6368" style="font-size:11.5px">decode 时还是<tspan font-weight="700">单 token 粒度</tspan>的写</text>
-<rect x="962" y="328" width="416" height="82" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
-<rect x="962" y="328" width="4" height="82" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="964" y="328" width="3" height="82" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="980" y="356" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">形状只有<tspan font-weight="700">跑起来</tspan>才知道</tspan></text>
-<text class="svgsm" x="980" y="384" fill="#5f6368" style="font-size:11.5px">而 XLA 的整套优化都建立在「形状已知」上</text>
-<rect x="962" y="424" width="416" height="92" rx="8" fill="#fff" stroke="#202124" stroke-width="1"/>
-<text class="svglbl" x="978" y="450" fill="#202124" style="font-size:13.0px"><tspan font-weight="700">⭐⭐ 这不是「TPU 不行」</tspan></text>
-<text class="svgsm" x="978" y="474" fill="#5f6368" style="font-size:11.5px">是<tspan font-weight="700">这一批机制是在另一台机器上想出来的</tspan>，</text>
-<text class="svgsm" x="978" y="496" fill="#5f6368" style="font-size:11.5px">它们把「gather 不太贵」当成了背景假设。</text>
-<rect x="0" y="546" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="546" width="4" height="105" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="2" y="546" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="570" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 这句话值得原样念一遍 —— 它出自 2026 年 4 月，不是五年前</tspan></text>
-<text class="svgsm" x="20" y="594" fill="#a50e0e" style="font-size:12.0px">「现有 LLM 推理 kernel 和服务系统<tspan font-weight="700">基本都是 GPU 中心的</tspan>，而且<tspan font-weight="700">还没有一套成熟的办法</tspan>把 LLM 负载高效地映射到 TPU 架构上。」</text>
-<text class="svgsm" x="20" y="615" fill="#a50e0e" style="font-size:12.0px">——&#160;Google 自己那篇 Ragged Paged Attention 论文的摘要（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank"><tspan text-decoration="underline">2604.15464</tspan></a>）。</text>
-<text class="svgsm" x="20" y="636" fill="#a50e0e" style="font-size:12.0px">⭐ 所以这一节讲的不是「怎么调参」，是<tspan font-weight="700">一个还在打开的工程战场</tspan>。</text>
-<rect x="0" y="665" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="665" width="4" height="84" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="665" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="689" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐ 一条可迁移的判据：看一个机制默认了什么样的机器</tspan></text>
-<text class="svgsm" x="20" y="713" fill="#174ea6" style="font-size:12.0px">ragged 调度、分页 KV、运行时 top-k ——&#160;这三样<tspan font-weight="700">都默认「随手 gather 不太贵」</tspan>。在一台为规整访存优化的机器上，这个假设<tspan font-weight="700">不成立</tspan>。</text>
-<text class="svgsm" x="20" y="734" fill="#174ea6" style="font-size:12.0px">⭐ 所以移植的活儿不是「翻译代码」，是<tspan font-weight="700">把那个隐含的硬件假设找出来，再换一个等价但规整的做法</tspan>。下面两张图讲的就是这个「换法」。</text>
-<text class="svgsm" x="0" y="765" fill="#80868b" style="font-size:11.0px">📌 三处疼与那句摘要出自 Ragged Paged Attention（Jiang 等，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank"><tspan text-decoration="underline">2604.15464</tspan></a>，2026-04）§1 与 §2.4；TPU 的三条约束亦见该文 §1</text>
-<text class="svgsm" x="0" y="782" fill="#80868b" style="font-size:11.0px">　　⚠️ 「最小 tile 是 (8,128) 这个量级」是该文举的例子（BF16(12,128) 被补齐到 BF16(16,128)），不同数据类型与配置下 tile 形状不同</text>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">中央厨房 ＝ TPU</text>
+<rect x="124" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="141" y="64" fill="#5f6368" style="font-size:11.0px">临时改单 ＝ 现代注意力</text>
+<rect x="285" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="302" y="64" fill="#5f6368" style="font-size:11.0px">最疼的一处</text>
+<rect x="379" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="396" y="64" fill="#5f6368" style="font-size:11.0px">已经有的解法</text>
+<rect x="0" y="88" width="1400" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="90" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 两种厨房 ——　这不是谁好谁坏</tspan></text>
+<text class="svgsm" x="227" y="108" fill="#5f6368" style="font-size:11.0px">中央厨房快，正是因为它不接临时改单</text>
+<rect x="56" y="168" width="636" height="218" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="80" y="208" fill="#174ea6" style="font-size:26.0px"><tspan font-weight="700">TPU ＝ 中央厨房</tspan></text>
+<text class="svgsm" x="104" y="254" fill="#5f6368" style="font-size:18.0px">· 菜单提前定死　——　形状要在编译期就知道</text>
+<text class="svgsm" x="104" y="292" fill="#5f6368" style="font-size:18.0px">· 按整批预制　——　最小一批就是一大盘，不零卖</text>
+<text class="svgsm" x="104" y="330" fill="#5f6368" style="font-size:18.0px">· 取货路线固定　——　连号货架，一趟拉走</text>
+<text class="svgsm" x="80" y="368" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">⭐ 出餐极快 ——　代价是临时改单很贵</tspan></text>
+<rect x="724" y="168" width="636" height="218" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="748" y="208" fill="#b06000" style="font-size:26.0px"><tspan font-weight="700">GPU ＝ 点单现做</tspan></text>
+<text class="svgsm" x="772" y="254" fill="#5f6368" style="font-size:18.0px">· 来什么做什么　——　形状跑起来才定也行</text>
+<text class="svgsm" x="772" y="292" fill="#5f6368" style="font-size:18.0px">· 一份也做　——　细粒度切一刀不太贵</text>
+<text class="svgsm" x="772" y="330" fill="#5f6368" style="font-size:18.0px">· 满仓库跑腿　——　散落取货也认了</text>
+<text class="svgsm" x="748" y="368" fill="#b06000" style="font-size:20.0px"><tspan font-weight="700">⭐ 灵活 ——　代价是每道菜都要现开火</tspan></text>
+<rect x="0" y="406" width="1400" height="268" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="406" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="408" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="436" x2="1400" y2="436" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="426" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 而现代注意力，偏偏全是临时改单</tspan></text>
+<text class="svgsm" x="245" y="426" fill="#5f6368" style="font-size:11.0px">三样，全是最近五年长出来的</text>
+<rect x="56" y="484" width="400" height="168" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="78" y="526" fill="#b06000" style="font-size:21.0px"><tspan font-weight="700">每桌人数都不一样</tspan></text>
+<text class="svgsm" x="78" y="568" fill="#5f6368" style="font-size:17.0px">一个 batch 里各请求长度不同</text>
+<text class="svgsm" x="78" y="632" fill="#80868b" style="font-size:15.0px">来源：vLLM 那套调度带来的</text>
+<rect x="498" y="484" width="400" height="168" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="520" y="526" fill="#b06000" style="font-size:21.0px"><tspan font-weight="700">食材散在仓库各处</tspan></text>
+<text class="svgsm" x="520" y="568" fill="#5f6368" style="font-size:17.0px">一条序列的 KV 散在不连续的页上</text>
+<text class="svgsm" x="520" y="632" fill="#80868b" style="font-size:15.0px">来源：PagedAttention 带来的</text>
+<rect x="940" y="484" width="400" height="168" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="962" y="526" fill="#b06000" style="font-size:21.0px"><tspan font-weight="700">今天做哪几道菜，开工了才知道</tspan></text>
+<text class="svgsm" x="962" y="568" fill="#5f6368" style="font-size:17.0px">这一步到底读哪 2048 条</text>
+<text class="svgsm" x="962" y="632" fill="#80868b" style="font-size:15.0px">来源：DSA / NSA 这一支带来的</text>
+<text class="svgsm" x="56" y="680" fill="#a50e0e" style="font-size:21.0px"><tspan font-weight="700">⛔ 这三样<tspan font-weight="700">全是在 GPU 上先长出来的</tspan> ——&#160;它们默认了一台「随手跑腿不太贵」的机器。</tspan></text>
+<rect x="0" y="692" width="1400" height="292" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="692" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="694" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="722" x2="1400" y2="722" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="712" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">③ 对上之后，最疼的是哪一处 ——　仓库取货</tspan></text>
+<text class="svgsm" x="294" y="712" fill="#5f6368" style="font-size:11.0px">RPA 论文 §2 逐条点了名</text>
+<text class="svgsm" x="56" y="768" fill="#0d652d" style="font-size:22.0px"><tspan font-weight="700">连号货架：一趟推车拉走</tspan></text>
+<rect x="56" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="88" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="120" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="152" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="184" y="784" width="26" height="56" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="216" y="784" width="26" height="56" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="248" y="784" width="26" height="56" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="280" y="784" width="26" height="56" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="312" y="784" width="26" height="56" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="344" y="784" width="26" height="56" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="376" y="784" width="26" height="56" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="408" y="784" width="26" height="56" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="440" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="472" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="504" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="536" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="568" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="600" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="632" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="664" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<line x1="180" y1="856" x2="430" y2="856" stroke="#1e8e3e" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="56" y="886" fill="#0d652d" style="font-size:19.0px"><tspan font-weight="700">✅ 一次搬运，地址连着</tspan></text>
+<text class="svgsm" x="760" y="768" fill="#a50e0e" style="font-size:22.0px"><tspan font-weight="700">散落各处：跑很多趟</tspan></text>
+<rect x="760" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="792" y="784" width="26" height="56" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="824" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="856" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="888" y="784" width="26" height="56" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="920" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="952" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="984" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1016" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1048" y="784" width="26" height="56" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="1080" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1112" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1144" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1176" y="784" width="26" height="56" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="1208" y="784" width="26" height="56" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="1240" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1272" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1304" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1336" y="784" width="26" height="56" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<rect x="1368" y="784" width="26" height="56" rx="4" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<line x1="805" y1="848" x2="805" y2="862" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="901" y1="848" x2="901" y2="862" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="1061" y1="848" x2="1061" y2="862" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="1189" y1="848" x2="1189" y2="862" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="1221" y1="848" x2="1221" y2="862" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="1349" y1="848" x2="1349" y2="862" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="760" y="886" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">⛔ 六次搬运，地址还是跑起来才算出来的</tspan></text>
+<rect x="56" y="912" width="1304" height="104" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="80" y="952" fill="#a50e0e" style="font-size:22.0px"><tspan font-weight="700">⭐ 论文原话：这让<tspan font-weight="700">DMA 调度</tspan>变得困难</tspan></text>
+<text class="svgsm" x="80" y="990" fill="#5f6368" style="font-size:18.0px">——&#160;DMA 就是那台推车：它最擅长「一趟拉一整排」，最怕「这一趟拉哪几个，得先算一下」。</text>
+<rect x="0" y="1004" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1004" width="4" height="84" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1004" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1028" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ ⛔ 这句话值得原样念一遍 —— 它出自 2026 年 4 月，不是五年前</tspan></text>
+<text class="svgsm" x="20" y="1052" fill="#a50e0e" style="font-size:12.0px">「现有 LLM 推理 kernel 和服务系统<tspan font-weight="700">基本都是 GPU 中心的</tspan>，而且<tspan font-weight="700">还没有一套成熟的办法</tspan>把 LLM 负载高效地映射到 TPU 架构上。」</text>
+<text class="svgsm" x="20" y="1073" fill="#a50e0e" style="font-size:12.0px">——&#160;Google 自己那篇 Ragged Paged Attention 论文的摘要（arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank"><tspan text-decoration="underline">2604.15464</tspan></a>）。⭐ 所以这一节讲的不是「怎么调参」，是<tspan font-weight="700">一个还在打开的工程战场</tspan>。</text>
+<rect x="0" y="1102" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1102" width="4" height="84" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1102" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1126" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐ 一条能带走的判据：看一个机制默认了什么样的机器</tspan></text>
+<text class="svgsm" x="20" y="1150" fill="#174ea6" style="font-size:12.0px">临时改单、散落取货、开工才知道做什么 ——&#160;<tspan font-weight="700">这三样都默认「随手跑腿不太贵」</tspan>。在一家为「按批预制」优化的厨房里，这个假设<tspan font-weight="700">不成立</tspan>。</text>
+<text class="svgsm" x="20" y="1171" fill="#174ea6" style="font-size:12.0px">⭐ 所以移植的活儿不是「翻译代码」，是<tspan font-weight="700">把那个隐含的硬件假设找出来，再换一个等价但规整的做法</tspan>。下一张讲的就是这个「换法」。</text>
+<text class="svgsm" x="0" y="1202" fill="#80868b" style="font-size:11.0px">📌 三处疼与那句摘要出自 Ragged Paged Attention（Jiang 等，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank"><tspan text-decoration="underline">2604.15464</tspan></a>，2026-04）§1 与 §2.4；TPU 的三条约束亦见该文 §1</text>
+<text class="svgsm" x="0" y="1219" fill="#80868b" style="font-size:11.0px">　　⚠️ 「中央厨房 / 点单现做 / 仓库取货」是<tspan font-weight="700">本课的比喻</tspan> ——&#160;论文那侧的说法是 static-first 编译、tiled 粗粒度布局、以及「从动态算出来的不连续地址 gather」</text>
 </svg><figcaption>⭐⭐ <b>先看清楚是哪两件事对不上：TPU 的三条硬约束（静态形状、tiled 粗粒度布局、偏好规整访存）对上现代注意力的三个动态性来源（ragged、分页 KV、运行时 top-k）。</b><em>不摆清楚这个错配，后面那些 kernel 技巧看起来就只是一堆技巧。</em></figcaption></figure>
 
 <div class="note warn"><p>⚠️ <b>先把「谁是给谁设计的」说清楚，免得听成 TPU 的黑历史。</b>
@@ -7849,115 +7868,102 @@ linear                                               ← 第 45 层多出来的�
      ⛔ 第三问必须**诚实地留在「看起来对但还没被公开验证」**上 ——
        公开的那套 TPU 生产注意力 kernel（RPA）走的是 TensorCore + Pallas/Mosaic，
        **不是 SparseCore**。 -->
-<figure class="fbox fwide" id="fig-tpu-fix"><svg viewBox="0 0 1400 914" width="100%" role="img" aria-label="TPU 上怎么克服：RPA 的三招都是把动态换成一批静态；运行时决定的成本可以完全在卡上算，用的是本来闲着的标量单元；SparseCore 架构上对口但要先声明静态上界"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
-<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">那怎么克服　——　三招，以及两个一定会被问到的问题</text>
-<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐⭐ 三招的共同形状：<tspan font-weight="700">把「一个动态」换成「一批静态」</tspan></text>
+<figure class="fbox fwide" id="fig-tpu-fix"><svg viewBox="0 0 1400 1315" width="100%" role="img" aria-label="怎么克服：三招的共同形状是把一个临时改单换成一批预制套餐；那个运行时的决定分两层 —— 前台报几桌几人，后厨自己算货架地址，而且用的是颠勺时闲着的那个算账的人；SparseCore 像一支拣货小队"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">那怎么克服 ——　三招，和两个一定会被问到的问题</text>
+<text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">共同形状：<tspan font-weight="700">把「一个临时改单」换成「一批预制套餐」</tspan></text>
 <rect x="0" y="55" width="11" height="11" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">RPA 的三招</text>
-<rect x="96" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="113" y="64" fill="#5f6368" style="font-size:11.0px">在卡上算</text>
-<rect x="179" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="196" y="64" fill="#5f6368" style="font-size:11.0px">SparseCore</text>
-<rect x="278" y="55" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="295" y="64" fill="#5f6368" style="font-size:11.0px">本课的推导</text>
-<rect x="0" y="88" width="440" height="506" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="88" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="0" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="118" x2="440" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="108" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">① 三招：把动态换成一批静态</tspan></text>
-<text class="svgsm" x="204" y="108" fill="#5f6368" style="font-size:11.0px">RPA 论文的三个创新</text>
-<rect x="22" y="142" width="396" height="122" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="22" y="142" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="24" y="142" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="40" y="168" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">1. 细粒度 tiling</tspan></text>
-<text class="svgsm" x="40" y="192" fill="#5f6368" style="font-size:11.5px">强制 XLA 选最小的 tile，并且把 ragged 维度挪开</text>
-<text class="svgsm" x="40" y="217" fill="#80868b" style="font-size:11.0px">⭐ 不要让「长度」落在最后两维的 tiling 维上 ——&#160;那样才切</text>
-<text class="svgsm" x="40" y="234" fill="#80868b" style="font-size:11.0px">得动</text>
-<rect x="22" y="272" width="396" height="122" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="22" y="272" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="24" y="272" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="40" y="298" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">2. 把 KV 更新融进 attention</tspan></text>
-<text class="svgsm" x="40" y="322" fill="#5f6368" style="font-size:11.5px">decode 时那个单 token 粒度的 scatter，</text>
-<text class="svgsm" x="40" y="341" fill="#5f6368" style="font-size:11.5px">原本要在 TensorCore 上单独做一遍</text>
-<text class="svgsm" x="40" y="366" fill="#80868b" style="font-size:11.0px">⭐ 融进去之后，用计算把写的延迟盖住</text>
-<rect x="22" y="402" width="396" height="122" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="22" y="402" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="24" y="402" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="40" y="428" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">3. 分布感知编译</tspan></text>
-<text class="svgsm" x="40" y="452" fill="#5f6368" style="font-size:11.5px">按序列长度分布，编出好几个特化 kernel（decode / prefill / </text>
-<text class="svgsm" x="40" y="471" fill="#5f6368" style="font-size:11.5px">混合）</text>
-<text class="svgsm" x="40" y="496" fill="#80868b" style="font-size:11.0px">⭐⭐ 这一招最像 TPU 的风格：不写一个动态 kernel，</text>
-<text class="svgsm" x="40" y="513" fill="#80868b" style="font-size:11.0px">写一批静态的再挑</text>
-<rect x="22" y="532" width="396" height="56" rx="8" fill="#fff" stroke="#202124" stroke-width="1"/>
-<text class="svgsm" x="38" y="556" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">⭐ 成绩：Llama 3 8B 在 TPU7x 上</tspan></text>
-<text class="svgsm" x="38" y="577" fill="#5f6368" style="font-size:11.5px">decode <tspan font-weight="700">MBU 86%</tspan> · prefill <tspan font-weight="700">MFU 73%</tspan></text>
-<rect x="470" y="88" width="440" height="506" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="470" y="88" width="440" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="470" y="90" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="470" y1="118" x2="910" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="484" y="108" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">② 运行时那个决定，谁来算</tspan></text>
-<text class="svgsm" x="661" y="108" fill="#5f6368" style="font-size:11.0px">⭐ 答案：卡上算，而且用闲着的那部分</text>
-<rect x="492" y="142" width="396" height="104" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
-<rect x="492" y="142" width="4" height="104" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="494" y="142" width="3" height="104" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="510" y="168" fill="#174ea6" style="font-size:12.5px"><tspan font-weight="700">TensorCore 里有两套寄存器</tspan></text>
-<text class="svgsm" x="510" y="192" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">VREG</tspan>（向量）——&#160;矩阵乘的时候忙得冒烟</text>
-<text class="svgsm" x="510" y="214" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">SREG</tspan>（标量）——&#160;同一时刻<tspan font-weight="700">基本闲着</tspan></text>
-<text class="svgsm" x="510" y="236" fill="#80868b" style="font-size:11.0px">（RPA 论文原话：SREG 在计算密集阶段欠用）</text>
-<rect x="492" y="260" width="396" height="96" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="492" y="260" width="4" height="96" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="494" y="260" width="3" height="96" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="510" y="286" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">⭐⭐ 而「这一步搬哪几块」的地址计算</tspan></text>
-<text class="svgsm" x="510" y="310" fill="#5f6368" style="font-size:11.5px">恰好是<tspan font-weight="700">纯标量</tspan>的活儿。</text>
-<text class="svgsm" x="510" y="332" fill="#0d652d" style="font-size:12.0px"><tspan font-weight="700">→ 预计算元数据放进 SMEM，<tspan font-weight="700">标量和向量重叠跑</tspan></tspan></text>
-<text class="svgsm" x="492" y="370" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">⛔ 但要分清两层，别混：</tspan></text>
-<rect x="492" y="392" width="396" height="52" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="508" y="414" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">host CPU 给的</tspan></text>
-<text class="svgsm" x="508" y="433" fill="#5f6368" style="font-size:11.0px">页表、每条序列多长、这一批怎么排 —— <tspan font-weight="700">批次级</tspan></text>
-<rect x="492" y="450" width="396" height="52" rx="8" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="508" y="472" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">卡上标量核算的</tspan></text>
-<text class="svgsm" x="508" y="491" fill="#5f6368" style="font-size:11.0px">这一步的 DMA 地址和大小 —— <tspan font-weight="700">kernel 内</tspan></text>
-<text class="svgsm" x="492" y="510" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">⭐ 所以 top-k 的「决定」<tspan font-weight="700">不用出卡</tspan>。</tspan></text>
-<rect x="940" y="88" width="460" height="506" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="940" y="88" width="460" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
-<rect x="940" y="90" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="940" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="954" y="108" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">③ SparseCore 能不能帮</tspan></text>
-<text class="svgsm" x="1118" y="108" fill="#5f6368" style="font-size:11.0px">⭐ 架构上正对口，但有前提</text>
-<rect x="962" y="142" width="416" height="116" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="962" y="142" width="4" height="116" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="964" y="142" width="3" height="116" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="980" y="168" fill="#0d652d" style="font-size:12.5px"><tspan font-weight="700">✓ 它就是为「不规则访存」造的</tspan></text>
-<text class="svgsm" x="980" y="192" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">原生支持数据相关的控制流与访存</tspan></text>
-<text class="svgsm" x="980" y="214" fill="#5f6368" style="font-size:11.5px">而且自带跨 lane 的<tspan font-weight="700">排序 / 过滤 / 前缀和</tspan></text>
-<text class="svgsm" x="980" y="236" fill="#0d652d" style="font-size:11.5px">⭐ 那正是 top-k 要的三样东西</text>
-<rect x="962" y="272" width="416" height="96" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
-<rect x="962" y="272" width="4" height="96" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="964" y="272" width="3" height="96" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="980" y="298" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">⚠️ 但它消化动态性的方式是</tspan></text>
-<text class="svgsm" x="980" y="322" fill="#5f6368" style="font-size:11.5px"><tspan font-weight="700">先声明一个静态上界</tspan>（每分区最多几个 id）</text>
-<text class="svgsm" x="980" y="344" fill="#5f6368" style="font-size:11.5px">超了就 mini-batch，或者<tspan font-weight="700">丢 id</tspan></text>
-<rect x="962" y="382" width="416" height="96" rx="8" fill="#fff" stroke="#202124" stroke-width="1"/>
-<text class="svgsm" x="978" y="408" fill="#202124" style="font-size:12.5px"><tspan font-weight="700">⭐ 对 DSA 来说这个前提<tspan font-weight="700">天然满足</tspan></tspan></text>
-<text class="svgsm" x="978" y="432" fill="#5f6368" style="font-size:11.5px">——&#160;k 本来就是固定的 2048。</text>
-<text class="svgsm" x="978" y="456" fill="#a50e0e" style="font-size:11.5px">⛔ 但公开的生产 kernel 走的<tspan font-weight="700">不是</tspan>这条路（见下）</text>
-<rect x="0" y="616" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="616" width="4" height="105" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="616" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="640" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⚠️ 关于 SparseCore，必须把话说完 —— 否则这一格会变成一个误导</tspan></text>
-<text class="svgsm" x="20" y="664" fill="#b06000" style="font-size:12.0px">以上说的是<tspan font-weight="700">架构上对不对口</tspan>，不是「已经有人这么做了」。<tspan font-weight="700">目前公开可查的生产级 TPU attention kernel（RPA）走的是 TensorCore ＋ Pallas/Mosaic 那条路</tspan>，不是 SparseCore。</text>
-<text class="svgsm" x="20" y="685" fill="#b06000" style="font-size:12.0px">⭐ 而且 SparseCore 一直以来的编程入口是 embedding 那套算子；要拿它做 attention 的 KV 收集，得走 <tspan font-weight="700">Pallas 的 SparseCore 后端</tspan>。</text>
-<text class="svgsm" x="20" y="706" fill="#b06000" style="font-size:12.0px">⛔ 所以正确的说法是：<tspan font-weight="700">这是一个「看起来很对但还没被公开验证」的方向</tspan>——&#160;讲的时候就这么讲，别讲成既成事实。</text>
-<rect x="0" y="735" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="735" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="735" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="759" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 跨层共享 top-k，在 TPU 上比在 GPU 上更值（⚠️ 本课推导）</tspan></text>
-<text class="svgsm" x="20" y="783" fill="#174ea6" style="font-size:12.0px">GPU 上，四层共享一个索引器省的主要是<tspan font-weight="700">索引器自己的 FLOPs</tspan>（GLM-5.2 报的 1M 下每 token 降 2.9×）。</text>
-<text class="svgsm" x="20" y="804" fill="#174ea6" style="font-size:12.0px">⭐ 但在 TPU 上它还额外省掉三样：<tspan font-weight="700">① 三次「动态元数据计算 ＋ 不规则 DMA 调度」的固定开销</tspan>；<tspan font-weight="700">② 后三层的 gather 模式完全相同</tspan>，同一套 DMA 描述符和 tiling 决策可以直接复用；</text>
-<text class="svgsm" x="20" y="825" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">③ 动态性的「次数」少了四倍</tspan> ——&#160;而在一台 static-first 的机器上，<tspan font-weight="700">动态性的次数本身就是成本</tspan>。⚠️ 这三条是按机制推的，<tspan font-weight="700">没有实测</tspan>。</text>
-<text class="svgsm" x="0" y="856" fill="#80868b" style="font-size:11.0px">📌 ①② 出自 Ragged Paged Attention（Jiang 等，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank"><tspan text-decoration="underline">2604.15464</tspan></a>，2026-04）§1 与 §5：三招、SREG 欠用与元数据预计算进 SMEM、MBU 86% / MFU 73%</text>
-<text class="svgsm" x="0" y="873" fill="#80868b" style="font-size:11.0px">　　③ 出自 OpenXLA 的 SparseCore 文档（openxla.org/xla/sparsecore）：「为不规则稀疏访存加速的专用 tiled 处理器」「原生支持数据相关的控制流与访存」「跨 lane 的排序 / 过滤 / 前缀和」，以及 max_ids_per_partition 这类静态上界</text>
-<text class="svgsm" x="0" y="890" fill="#80868b" style="font-size:11.0px">　　⚠️ 最后那条「跨层共享在 TPU 上更值」是本课按机制做的推导，不是任何一篇的结论</text>
+<text class="svgsm" x="17" y="64" fill="#5f6368" style="font-size:11.0px">三招</text>
+<rect x="61" y="55" width="11" height="11" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="78" y="64" fill="#5f6368" style="font-size:11.0px">谁来算</text>
+<rect x="133" y="55" width="11" height="11" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="150" y="64" fill="#5f6368" style="font-size:11.0px">拣货小队</text>
+<rect x="216" y="55" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="233" y="64" fill="#5f6368" style="font-size:11.0px">还没被验证的</text>
+<rect x="0" y="88" width="1400" height="300" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="88" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="90" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="118" x2="1400" y2="118" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="108" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">① 三招 ——　都是「不现开火，改成挑一个预制的」</tspan></text>
+<text class="svgsm" x="335" y="108" fill="#5f6368" style="font-size:11.0px">RPA 论文的三个做法</text>
+<rect x="56" y="168" width="400" height="190" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="78" y="210" fill="#0d652d" style="font-size:22.0px"><tspan font-weight="700">1. 把盘子切小一点</tspan></text>
+<text class="svgsm" x="78" y="252" fill="#5f6368" style="font-size:17.0px">强制用最小的那种餐盒</text>
+<text class="svgsm" x="78" y="284" fill="#5f6368" style="font-size:17.0px">长短不一的那一维，别放在切盘子的方向上</text>
+<rect x="78" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="140" y="308" width="52" height="34" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="202" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="264" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="498" y="168" width="400" height="190" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="520" y="210" fill="#0d652d" style="font-size:22.0px"><tspan font-weight="700">2. 上菜和收盘并成一趟</tspan></text>
+<text class="svgsm" x="520" y="252" fill="#5f6368" style="font-size:17.0px">decode 时那一下零碎的写，</text>
+<text class="svgsm" x="520" y="284" fill="#5f6368" style="font-size:17.0px">融进主菜一起做 ——　用做菜的时间盖住它</text>
+<rect x="520" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="582" y="308" width="52" height="34" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="644" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="706" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="940" y="168" width="400" height="190" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="962" y="210" fill="#0d652d" style="font-size:22.0px"><tspan font-weight="700">3. 按客流预制几套套餐</tspan></text>
+<text class="svgsm" x="962" y="252" fill="#5f6368" style="font-size:17.0px">全长单一套、全短单一套、混着的一套</text>
+<text class="svgsm" x="962" y="284" fill="#5f6368" style="font-size:17.0px">⭐ 最像中央厨房：不做万能菜谱，做几套再挑</text>
+<rect x="962" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1024" y="308" width="52" height="34" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1086" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1148" y="308" width="52" height="34" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="56" y="376" width="1304" height="46" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="80" y="406" fill="#0d652d" style="font-size:21.0px"><tspan font-weight="700">⭐ 成绩：Llama 3 8B 在 TPU7x 上 ——　decode MBU 86%　·　prefill MFU 73%</tspan></text>
+<rect x="0" y="406" width="1400" height="322" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="406" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="408" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="436" x2="1400" y2="436" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="426" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">② 那个「今天做哪几道菜」的决定，谁来算　——　答案分两层</tspan></text>
+<text class="svgsm" x="395" y="426" fill="#5f6368" style="font-size:11.0px">别答成一个字</text>
+<rect x="56" y="482" width="636" height="176" rx="10" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="80" y="522" fill="#5f6368" style="font-size:24.0px"><tspan font-weight="700">前台（host CPU）</tspan></text>
+<text class="svgsm" x="80" y="562" fill="#5f6368" style="font-size:18.0px">今天有几桌、每桌几个人、坐哪几张台</text>
+<text class="svgsm" x="80" y="598" fill="#5f6368" style="font-size:20.0px"><tspan font-weight="700">一顿饭<tspan font-weight="700">只报一次</tspan></tspan></text>
+<text class="svgsm" x="80" y="636" fill="#80868b" style="font-size:16.0px">摊到几千道菜上，可以忽略</text>
+<rect x="724" y="482" width="636" height="176" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="748" y="522" fill="#174ea6" style="font-size:24.0px"><tspan font-weight="700">后厨（就在卡上）</tspan></text>
+<text class="svgsm" x="748" y="562" fill="#5f6368" style="font-size:18.0px">这道菜的料，从哪个货架、拿多少</text>
+<text class="svgsm" x="748" y="598" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700"><tspan font-weight="700">每道菜都要算一次</tspan></tspan></text>
+<text class="svgsm" x="748" y="636" fill="#a50e0e" style="font-size:16.0px">⛔ 跑去问前台一次就废了：一来一回是微秒级，这一步总共只有几十微秒</text>
+<rect x="56" y="678" width="1304" height="80" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="80" y="716" fill="#0d652d" style="font-size:23.0px"><tspan font-weight="700">⭐⭐ 而且这笔账是拿闲人付的</tspan></text>
+<text class="svgsm" x="80" y="750" fill="#5f6368" style="font-size:18.0px">颠勺的时候（矩阵乘忙得冒烟），<tspan font-weight="700">算账那位（标量单元）正没事干</tspan> ——&#160;地址计算恰好是他的活。</text>
+<rect x="0" y="746" width="1400" height="272" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="746" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="0" y="748" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="776" x2="1400" y2="776" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="766" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">③ 那 SparseCore 能不能干这个</tspan></text>
+<text class="svgsm" x="226" y="766" fill="#5f6368" style="font-size:11.0px">一支专门跑腿拣货的小队</text>
+<rect x="56" y="822" width="636" height="168" rx="10" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="80" y="862" fill="#681da8" style="font-size:23.0px"><tspan font-weight="700">✅ 架构上非常对口</tspan></text>
+<text class="svgsm" x="104" y="902" fill="#5f6368" style="font-size:17.0px">· 天生就是干散落取货的（不规则、稀疏访存）</text>
+<text class="svgsm" x="104" y="934" fill="#5f6368" style="font-size:17.0px">· 能按条件决定去哪儿拿 ——　数据相关的控制流</text>
+<text class="svgsm" x="104" y="966" fill="#5f6368" style="font-size:17.0px">· 还能跨通道排序、过滤、前缀和 ——　正是 top-k 要的</text>
+<rect x="724" y="822" width="636" height="168" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="748" y="862" fill="#b06000" style="font-size:23.0px"><tspan font-weight="700">⚠️ 但它有个规矩：先报数</tspan></text>
+<text class="svgsm" x="748" y="902" fill="#5f6368" style="font-size:17.0px">「这一趟最多拿几件」必须提前声明</text>
+<text class="svgsm" x="748" y="934" fill="#5f6368" style="font-size:17.0px">超了就得分批，或者直接丢掉一部分</text>
+<text class="svgsm" x="748" y="974" fill="#b06000" style="font-size:18.0px"><tspan font-weight="700">⭐ 对 DSA 反而天然满足 ——　k 就是 2048，定死的</tspan></text>
+<rect x="56" y="1006" width="1304" height="44" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="80" y="1036" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">⛔ 但要诚实：公开的那套 TPU 生产注意力 kernel 走的是主厨这条线（TensorCore ＋ Pallas/Mosaic），<tspan font-weight="700">不是拣货小队</tspan>。</tspan></text>
+<rect x="0" y="1038" width="1400" height="84" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1038" width="4" height="84" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1038" width="3" height="84" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1062" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ ⛔ 第三格这条要留在「看起来很对、但还没被公开验证」上</tspan></text>
+<text class="svgsm" x="20" y="1086" fill="#b06000" style="font-size:12.0px">SparseCore 的公开资料说它是「为<tspan font-weight="700">不规则、稀疏访存</tspan>做的专用处理器」，并且<tspan font-weight="700">原生支持数据相关的控制流与访存</tspan>、能做跨 lane 的排序 / 过滤 / 前缀和。</text>
+<text class="svgsm" x="20" y="1107" fill="#b06000" style="font-size:12.0px">⛔ 但<tspan font-weight="700">没有公开材料</tspan>说有人用它跑注意力的 top-k。⭐ 台下如果有 TPU 的人，含糊一句就会被抓住 ——&#160;<tspan font-weight="700">照着这行念。</tspan></text>
+<rect x="0" y="1136" width="1400" height="105" rx="9" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1136" width="4" height="105" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1136" width="3" height="105" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1160" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ ⭐⭐ 跨层共享那一支，在这台机器上比在 GPU 上更值钱</tspan></text>
+<text class="svgsm" x="20" y="1184" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">GPU 上省的是</tspan>：索引器那部分算力（GLM-5.2 报 1M 下每 token 降 2.9×，见 §6.5b）。</text>
+<text class="svgsm" x="20" y="1205" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">TPU 上还额外省三样</tspan>：① 「这一趟拿哪几件」只算一次，后面几层直接复用；② 几层的取货路线<tspan font-weight="700">完全一样</tspan>，推车的单子可以重用；③ <tspan font-weight="700">临时改单的次数本身降了四倍</tspan>。</text>
+<text class="svgsm" x="20" y="1226" fill="#174ea6" style="font-size:12.0px">⭐ 最后那条才是这一节真正想留下的判据：<tspan font-weight="700">在一家「按批预制」的厨房里，改单的次数本身就是成本</tspan> ——&#160;不只是每次改单有多贵。⚠️ 这是本课从 RPA 描述的机制推出来的，<tspan font-weight="700">没有公开的对照实测</tspan>。</text>
+<text class="svgsm" x="0" y="1257" fill="#80868b" style="font-size:11.0px">📌 三招、「SREG 在计算密集阶段欠用」、以及 MBU 86% / MFU 73%，均出自 Ragged Paged Attention（Jiang 等 arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank"><tspan text-decoration="underline">2604.15464</tspan></a>）§3–§5</text>
+<text class="svgsm" x="0" y="1274" fill="#80868b" style="font-size:11.0px">　　SparseCore 的定位与「必须声明静态上界、超了就 mini-batch 或丢 ID」出自 openxla.org 的 SparseCore 公开文档</text>
+<text class="svgsm" x="0" y="1291" fill="#80868b" style="font-size:11.0px">　　⚠️ 「中央厨房 / 前台后厨 / 拣货小队」是<tspan font-weight="700">本课的比喻</tspan>；⚠️ 跨层共享在 TPU 上更值钱那一条是<tspan font-weight="700">本课的推导</tspan>，无公开对照实测</text>
 </svg><figcaption>⭐⭐ <b>三招的共同形状：把「一个动态」换成「一批静态」。</b><b>而运行时那个 top-k 决定不用出卡 —— 它用的是 FlashAttention 阶段本来就闲着的标量单元。</b><em>SparseCore 架构上正对口（它天生支持数据相关的控制流与访存），但公开的那套 TPU 生产注意力 kernel 用的还是 TensorCore —— 这条留在「看起来对但未被公开验证」。</em></figcaption></figure>
 
 <div class="note ok"><p>⭐⭐ <b>「能不能在卡里边完全算完、要不要发回 CPU」这一问，答案是分两层的</b> ——&nbsp;

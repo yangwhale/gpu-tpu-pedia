@@ -1,237 +1,157 @@
 # -*- coding: utf-8 -*-
-r"""专题三 · §十「那怎么克服 —— TPU 上的三招 ＋ 两个常被问到的问题」
-（2026-09-13 · TPU 轮 R28–R31）。
+r"""专题三 · §10.3「那怎么克服 —— 三招，以及两个一定会被问到的问题」
 
-⭐⭐⭐ 现场点的三个具体问题，这一张逐个回答：
+⭐⭐⭐ 2026-09-14 **整张重画**，接着上一张那家中央厨房往下讲。
 
-  ① **不连续的 gather 把 DMA 调度搞乱了，怎么办？**
-     ——&nbsp;RPA 论文给的三招，每一招都在把「动态」换成「一批静态」。
-
-  ② **运行时才决定读哪 2048 条，这个决定的成本是什么？
-     能不能完全在卡里算？要不要发往 host CPU？**
-     ⭐⭐ 答案很漂亮：**能在卡上算，而且用的正是本来闲着的标量单元。**
-     RPA 论文的原话是：FlashAttention 计算密集阶段 **SREG 是欠用的**，
-     而动态 DMA 地址与大小的元数据计算**需要大量标量计算、却让向量寄存器闲着** ——
-     所以他们把元数据**预计算后放进 SMEM**，让标量和向量执行重叠，把延迟藏掉。
-     ⛔ 要分清两层：**批次级**的页表/序列长度是 host 给的；
-     **kernel 内**「这一步搬哪几块」的地址计算在卡上做。
-
-  ③ **SparseCore 能不能帮？**
-     架构上**正对口**（原生支持数据相关的控制流与访存，还自带跨 lane 的
-     排序 / 过滤 / 前缀和 ——&nbsp;正是 top-k 要的）。
-     ⚠️ 但它消化动态性的方式是**先声明静态上界**；而且**目前公开的生产级
-     TPU attention kernel 走的是 TensorCore ＋ Pallas/Mosaic，不是 SparseCore**。
-
-  ④ 外加一条：**跨层共享 top-k（IndexShare / IndexCache）在 TPU 上比在 GPU 上更值。**
-     ⚠️ 这一条是本课的推导。
+  ① **三招的共同形状：把「一个临时改单」换成「一批预制套餐」。**
+     来单的时候**挑一个**，而不是现开火。
+  ② **那个「今天做哪几道菜」的决定，谁来算？要不要问前台？**
+     ⭐⭐ 答案分两层，画成**前台 vs 后厨**：
+     · **前台（host CPU）**：今天有几桌、每桌几个人 ——&nbsp;
+       本来就在它手上，**一顿饭只报一次，可以忽略**。
+     · **后厨（就在卡上）**：这道菜从哪个货架拿 ——&nbsp;
+       **每道菜都要算，跑去问前台一次就废了。**
+     ⭐ 而且它用的是**本来就闲着的那个人**：颠勺的时候（矩阵乘忙），
+     算账那位（标量单元）正没事干，地址计算恰好是他的活。
+  ③ **SparseCore 能不能干这个？** 画成一支**专门跑腿拣货的小队**：
+     天生擅长散落取货 ——&nbsp;⚠️ 但要**先报一个数量上限**。
+     对 DSA 恰好天然满足（k 就是 2048）。
+     ⛔ 可公开的那套生产 kernel 走的是主厨这条线，**不是拣货小队**。
 """
-from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
-                          GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+                          BG2)
 
 W = 1400
-PX, PW = [0, 470, 940], [440, 440, 460]
 
 
 def main():
-    def fits(y, y0, ph, who):
-        assert y <= y0 + ph - 6, "%s 到 %d，面板底边 %d" % (who, y, y0 + ph)
-
-    f = Fig(W, "TPU 上怎么克服：RPA 的三招都是把动态换成一批静态；"
-               "运行时决定的成本可以完全在卡上算，用的是本来闲着的标量单元；"
-               "SparseCore 架构上对口但要先声明静态上界")
+    f = Fig(W, "怎么克服：三招的共同形状是把一个临时改单换成一批预制套餐；"
+               "那个运行时的决定分两层 —— 前台报几桌几人，后厨自己算货架地址，"
+               "而且用的是颠勺时闲着的那个算账的人；SparseCore 像一支拣货小队")
     f.marks = set()
     y0 = f.header(
-        "那怎么克服　——　三招，以及两个一定会被问到的问题",
-        "⭐⭐ 三招的共同形状：<tspan font-weight=\"700\">把「一个动态」换成「一批静态」</tspan>",
-        [(GR, "RPA 的三招"), (BL, "在卡上算"), (PU, "SparseCore"),
-         (OR, "本课的推导")])
+        "那怎么克服 ——　三招，和两个一定会被问到的问题",
+        "共同形状：<tspan font-weight=\"700\">把「一个临时改单」换成「一批预制套餐」</tspan>",
+        [(GR, "三招"), (BL, "谁来算"), (PU, "拣货小队"), (RD, "还没被验证的")])
 
-    ph = 506
+    # ══════════ ① 三招 ══════════════════════════════════════════
+    PH = 300
+    py = f.panel(0, y0, W, PH, "① 三招 ——　都是「不现开火，改成挑一个预制的」",
+                 GR, sub="RPA 论文的三个做法")
 
-    # ══ ① 三招 ══════════════════════════════════════════════════
-    x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 三招：把动态换成一批静态", GR,
-                 sub="RPA 论文的三个创新")
+    ay = py + 24
+    FIX = [
+        ("把盘子切小一点", "强制用最小的那种餐盒",
+         "长短不一的那一维，别放在切盘子的方向上"),
+        ("上菜和收盘并成一趟", "decode 时那一下零碎的写，",
+         "融进主菜一起做 ——　用做菜的时间盖住它"),
+        ("按客流预制几套套餐", "全长单一套、全短单一套、混着的一套",
+         "⭐ 最像中央厨房：不做万能菜谱，做几套再挑"),
+    ]
+    for i, (t, a, b) in enumerate(FIX):
+        bx = 56 + i * 442
+        f.box(bx, ay + 26, 400, 190, "#fff", GR, 10)
+        f.t(bx + 22, ay + 68, "%d. %s" % (i + 1, t), GR, True, 22, w=356)
+        f.t(bx + 22, ay + 110, a, GY, size=17, w=356)
+        f.t(bx + 22, ay + 142, b, GY, size=17, w=356)
+        for k in range(4):
+            on = (k == 1)
+            f.box(bx + 22 + k * 62, ay + 166, 52, 34,
+                  "#e6f4ea" if on else BG2, GR if on else LINE2, 5)
+    f.box(56, ay + 234, 1304, 46, "#e6f4ea", GR, 8)
+    f.t(80, ay + 264, "⭐ 成绩：Llama 3 8B 在 TPU7x 上 ——　"
+        "decode MBU 86%　·　prefill MFU 73%", GR, True, 21)
 
-    yy = py + 24
-    for i, (head, body, key) in enumerate([
-        ("细粒度 tiling",
-         "强制 XLA 选最小的 tile，并且把 ragged 维度挪开",
-         "⭐ 不要让「长度」落在最后两维的 tiling 维上 ——&#160;"
-         "那样才切得动"),
-        ("把 KV 更新融进 attention",
-         "decode 时那个单 token 粒度的 scatter，"
-         "原本要在 TensorCore 上单独做一遍",
-         "⭐ 融进去之后，用计算把写的延迟盖住"),
-        ("分布感知编译",
-         "按序列长度分布，编出好几个特化 kernel"
-         "（decode / prefill / 混合）",
-         "⭐⭐ 这一招最像 TPU 的风格：不写一个动态 kernel，写一批静态的再挑"),
+    # ══════════ ② 前台 vs 后厨 ══════════════════════════════════
+    y1 = y0 + PH + 18
+    PH2 = 322
+    py2 = f.panel(0, y1, W, PH2,
+                  "② 那个「今天做哪几道菜」的决定，谁来算　——　答案分两层",
+                  BL, sub="别答成一个字")
+
+    by = py2 + 22
+    f.box(56, by + 24, 636, 176, "#fff", GY2, 10)
+    f.t(80, by + 64, "前台（host CPU）", GY, True, 24)
+    f.t(80, by + 104, "今天有几桌、每桌几个人、坐哪几张台", GY, size=18)
+    f.t(80, by + 140, "一顿饭<tspan font-weight=\"700\">只报一次</tspan>", GY, True, 20)
+    f.t(80, by + 178, "摊到几千道菜上，可以忽略", GY2, size=16)
+
+    f.box(724, by + 24, 636, 176, "#e8f0fe", BL, 10)
+    f.t(748, by + 64, "后厨（就在卡上）", BL, True, 24)
+    f.t(748, by + 104, "这道菜的料，从哪个货架、拿多少", GY, size=18)
+    f.t(748, by + 140, "<tspan font-weight=\"700\">每道菜都要算一次</tspan>", BL, True, 20)
+    f.t(748, by + 178, "⛔ 跑去问前台一次就废了：一来一回是微秒级，"
+        "这一步总共只有几十微秒", RD, size=16, w=588)
+
+    f.box(56, by + 220, 1304, 80, "#e6f4ea", GR, 10)
+    f.t(80, by + 258, "⭐⭐ 而且这笔账是拿闲人付的", GR, True, 23)
+    f.t(80, by + 292, "颠勺的时候（矩阵乘忙得冒烟），"
+        "<tspan font-weight=\"700\">算账那位（标量单元）正没事干</tspan> ——&#160;"
+        "地址计算恰好是他的活。", GY, size=18)
+
+    # ══════════ ③ 拣货小队 ══════════════════════════════════════
+    y2 = y1 + PH2 + 18
+    PH3 = 272
+    py3 = f.panel(0, y2, W, PH3, "③ 那 SparseCore 能不能干这个",
+                  PU, sub="一支专门跑腿拣货的小队")
+
+    ey = py3 + 22
+    f.box(56, ey + 24, 636, 168, "#f3e8fd", PU, 10)
+    f.t(80, ey + 64, "✅ 架构上非常对口", PU, True, 23)
+    for i, ln in enumerate([
+        "天生就是干散落取货的（不规则、稀疏访存）",
+        "能按条件决定去哪儿拿 ——　数据相关的控制流",
+        "还能跨通道排序、过滤、前缀和 ——　正是 top-k 要的",
     ]):
-        h = 122
-        f.box(x + 22, yy, pw - 44, h, "#fff", GR, 8)
-        f.box(x + 22, yy, 4, h, GR, GR, 2)
-        f.box(x + 24, yy, 3, h, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 26, "%d. %s" % (i + 1, head), GR, True, 12.5)
-        yy2 = f.lines(x + 40, yy + 50, pw - 76,
-                      _wrap(body, pw - 76), 11.5, 19)
-        f.lines(x + 40, yy2 + 6, pw - 76, _wrap(key, pw - 76), 11, 17,
-                fill=GY2)
-        yy += h + 8
+        f.t(104, ey + 104 + i * 32, "· " + ln, GY, size=17)
 
-    f.box(x + 22, yy, pw - 44, 56, "#fff", INK, 8)
-    f.t(x + 38, yy + 24, "⭐ 成绩：Llama 3 8B 在 TPU7x 上", INK, True, 12.5)
-    f.t(x + 38, yy + 45, "decode <tspan font-weight=\"700\">MBU 86%</tspan> · prefill <tspan font-weight=\"700\">MFU 73%</tspan>", GY,
-        size=11.5)
-    fits(yy + 56, y0, ph, "①")
+    f.box(724, ey + 24, 636, 168, "#fff", OR, 10)
+    f.t(748, ey + 64, "⚠️ 但它有个规矩：先报数", OR, True, 23)
+    f.t(748, ey + 104, "「这一趟最多拿几件」必须提前声明", GY, size=17)
+    f.t(748, ey + 136, "超了就得分批，或者直接丢掉一部分", GY, size=17)
+    f.t(748, ey + 176, "⭐ 对 DSA 反而天然满足 ——　k 就是 2048，定死的", OR,
+        True, 18, w=588)
 
-    # ══ ② 运行时决定的成本 ══════════════════════════════════════
-    x, pw = PX[1], PW[1]
-    py = f.panel(x, y0, pw, ph, "② 运行时那个决定，谁来算", BL,
-                 sub="⭐ 答案：卡上算，而且用闲着的那部分")
+    f.box(56, ey + 208, 1304, 44, "#fce8e6", RD, 8)
+    f.t(80, ey + 238, "⛔ 但要诚实：公开的那套 TPU 生产注意力 kernel 走的是主厨这条线"
+        "（TensorCore ＋ Pallas/Mosaic），<tspan font-weight=\"700\">"
+        "不是拣货小队</tspan>。", RD, True, 19)
 
-    yy = py + 24
-    f.box(x + 22, yy, pw - 44, 104, "#fff", BL, 8)
-    f.box(x + 22, yy, 4, 104, BL, BL, 2)
-    f.box(x + 24, yy, 3, 104, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 26, "TensorCore 里有两套寄存器", BL, True, 12.5)
-    f.t(x + 40, yy + 50, "<tspan font-weight=\"700\">VREG</tspan>（向量）——&#160;矩阵乘的时候忙得冒烟", GY,
-        size=11.5, w=pw - 76)
-    f.t(x + 40, yy + 72, "<tspan font-weight=\"700\">SREG</tspan>（标量）——&#160;同一时刻<tspan font-weight=\"700\">基本闲着</tspan>", GY,
-        size=11.5, w=pw - 76)
-    f.t(x + 40, yy + 94, "（RPA 论文原话：SREG 在计算密集阶段欠用）", GY2,
-        size=11)
-    yy += 118
-
-    f.box(x + 22, yy, pw - 44, 96, "#fff", GR, 8)
-    f.box(x + 22, yy, 4, 96, GR, GR, 2)
-    f.box(x + 24, yy, 3, 96, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 26, "⭐⭐ 而「这一步搬哪几块」的地址计算", GR, True, 12.5)
-    f.t(x + 40, yy + 50, "恰好是<tspan font-weight=\"700\">纯标量</tspan>的活儿。", GY, size=11.5)
-    f.t(x + 40, yy + 72, "→ 预计算元数据放进 SMEM，<tspan font-weight=\"700\">标量和向量重叠跑</tspan>",
-        GR, True, 12, w=pw - 76)
-    yy += 110
-
-    f.t(x + 22, yy, "⛔ 但要分清两层，别混：", INK, True, 12.5)
-    yy += 22
-    for who, what, col in [
-        ("host CPU 给的", "页表、每条序列多长、这一批怎么排 —— <tspan font-weight=\"700\">批次级</tspan>", GY),
-        ("卡上标量核算的", "这一步的 DMA 地址和大小 —— <tspan font-weight=\"700\">kernel 内</tspan>", BL),
-    ]:
-        f.box(x + 22, yy, pw - 44, 52, "#fff", col if col != GY else LINE, 8)
-        f.t(x + 38, yy + 22, who, col, True, 12)
-        f.t(x + 38, yy + 41, what, GY, size=11, w=pw - 76)
-        yy += 58
-    f.t(x + 22, yy + 2, "⭐ 所以 top-k 的「决定」<tspan font-weight=\"700\">不用出卡</tspan>。", INK,
-        True, 12.5, w=pw - 44)
-    fits(yy + 10, y0, ph, "②")
-
-    # ══ ③ SparseCore 能不能帮 ═══════════════════════════════════
-    x, pw = PX[2], PW[2]
-    py = f.panel(x, y0, pw, ph, "③ SparseCore 能不能帮", PU,
-                 sub="⭐ 架构上正对口，但有前提")
-
-    yy = py + 24
-    f.box(x + 22, yy, pw - 44, 116, "#fff", GR, 8)
-    f.box(x + 22, yy, 4, 116, GR, GR, 2)
-    f.box(x + 24, yy, 3, 116, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 26, "✓ 它就是为「不规则访存」造的", GR, True, 12.5)
-    f.t(x + 40, yy + 50, "<tspan font-weight=\"700\">原生支持数据相关的控制流与访存</tspan>", GY, size=11.5)
-    f.t(x + 40, yy + 72, "而且自带跨 lane 的<tspan font-weight=\"700\">排序 / 过滤 / 前缀和</tspan>", GY,
-        size=11.5)
-    f.t(x + 40, yy + 94, "⭐ 那正是 top-k 要的三样东西", GR, size=11.5)
-    yy += 130
-
-    f.box(x + 22, yy, pw - 44, 96, "#fff", OR, 8)
-    f.box(x + 22, yy, 4, 96, OR, OR, 2)
-    f.box(x + 24, yy, 3, 96, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 26, "⚠️ 但它消化动态性的方式是", OR, True, 12.5)
-    f.t(x + 40, yy + 50, "<tspan font-weight=\"700\">先声明一个静态上界</tspan>（每分区最多几个 id）", GY,
-        size=11.5, w=pw - 76)
-    f.t(x + 40, yy + 72, "超了就 mini-batch，或者<tspan font-weight=\"700\">丢 id</tspan>", GY, size=11.5)
-    yy += 110
-
-    f.box(x + 22, yy, pw - 44, 96, "#fff", INK, 8)
-    f.t(x + 38, yy + 26, "⭐ 对 DSA 来说这个前提<tspan font-weight=\"700\">天然满足</tspan>", INK,
-        True, 12.5)
-    f.t(x + 38, yy + 50, "——&#160;k 本来就是固定的 2048。", GY, size=11.5)
-    f.t(x + 38, yy + 74, "⛔ 但公开的生产 kernel 走的<tspan font-weight=\"700\">不是</tspan>这条路（见下）",
-        RD, size=11.5, w=pw - 76)
-    fits(yy + 96, y0, ph, "③")
-
-    # ══ 落点带 ══════════════════════════════════════════════════
-    yy = y0 + ph + 22
-    yy = f.band(yy, "warn", "⚠️ 关于 SparseCore，必须把话说完 —— 否则这一格会变成一个误导", [
-        "以上说的是<tspan font-weight=\"700\">架构上对不对口</tspan>，不是「已经有人这么做了」。"
-        "<tspan font-weight=\"700\">目前公开可查的生产级 TPU attention kernel（RPA）"
-        "走的是 TensorCore ＋ Pallas/Mosaic 那条路</tspan>，不是 SparseCore。",
-        "⭐ 而且 SparseCore 一直以来的编程入口是 embedding 那套算子；"
-        "要拿它做 attention 的 KV 收集，得走 <tspan font-weight=\"700\">Pallas 的 SparseCore 后端</tspan>。",
-        "⛔ 所以正确的说法是：<tspan font-weight=\"700\">这是一个「看起来很对但还没被公开验证」的方向</tspan>"
-        "——&#160;讲的时候就这么讲，别讲成既成事实。",
+    # ══════════ 落点 ════════════════════════════════════════════
+    yy = y2 + PH3 + 20
+    yy = f.band(yy, "warn", "⛔ 第三格这条要留在「看起来很对、但还没被公开验证」上", [
+        "SparseCore 的公开资料说它是「为<tspan font-weight=\"700\">不规则、稀疏访存"
+        "</tspan>做的专用处理器」，并且<tspan font-weight=\"700\">原生支持"
+        "数据相关的控制流与访存</tspan>、能做跨 lane 的排序 / 过滤 / 前缀和。",
+        "⛔ 但<tspan font-weight=\"700\">没有公开材料</tspan>说有人用它跑注意力的 top-k。"
+        "⭐ 台下如果有 TPU 的人，含糊一句就会被抓住 ——&#160;"
+        "<tspan font-weight=\"700\">照着这行念。</tspan>",
     ])
 
-    yy = f.band(yy + 14, "info", "⭐⭐ 跨层共享 top-k，在 TPU 上比在 GPU 上更值（⚠️ 本课推导）", [
-        "GPU 上，四层共享一个索引器省的主要是<tspan font-weight=\"700\">索引器自己的 FLOPs</tspan>"
-        "（GLM-5.2 报的 1M 下每 token 降 2.9×）。",
-        "⭐ 但在 TPU 上它还额外省掉三样："
-        "<tspan font-weight=\"700\">① 三次「动态元数据计算 ＋ 不规则 DMA 调度」的固定开销</tspan>；"
-        "<tspan font-weight=\"700\">② 后三层的 gather 模式完全相同</tspan>，"
-        "同一套 DMA 描述符和 tiling 决策可以直接复用；",
-        "<tspan font-weight=\"700\">③ 动态性的「次数」少了四倍</tspan> ——&#160;"
-        "而在一台 static-first 的机器上，<tspan font-weight=\"700\">动态性的次数本身就是成本</tspan>。"
-        "⚠️ 这三条是按机制推的，<tspan font-weight=\"700\">没有实测</tspan>。",
+    yy = f.band(yy + 14, "info", "⭐⭐ 跨层共享那一支，在这台机器上比在 GPU 上更值钱", [
+        "<tspan font-weight=\"700\">GPU 上省的是</tspan>：索引器那部分算力"
+        "（GLM-5.2 报 1M 下每 token 降 2.9×，见 §6.5b）。",
+        "<tspan font-weight=\"700\">TPU 上还额外省三样</tspan>："
+        "① 「这一趟拿哪几件」只算一次，后面几层直接复用；"
+        "② 几层的取货路线<tspan font-weight=\"700\">完全一样</tspan>，推车的单子可以重用；"
+        "③ <tspan font-weight=\"700\">临时改单的次数本身降了四倍</tspan>。",
+        "⭐ 最后那条才是这一节真正想留下的判据："
+        "<tspan font-weight=\"700\">在一家「按批预制」的厨房里，改单的次数本身就是成本"
+        "</tspan> ——&#160;不只是每次改单有多贵。"
+        "⚠️ 这是本课从 RPA 描述的机制推出来的，<tspan font-weight=\"700\">"
+        "没有公开的对照实测</tspan>。",
     ])
 
     yy = f.src(yy + 16,
-               "①② 出自 Ragged Paged Attention（Jiang 等，arXiv 2604.15464，2026-04）"
-               "§1 与 §5：三招、SREG 欠用与元数据预计算进 SMEM、MBU 86% / MFU 73%",
-               "③ 出自 OpenXLA 的 SparseCore 文档（openxla.org/xla/sparsecore）："
-               "「为不规则稀疏访存加速的专用 tiled 处理器」「原生支持数据相关的控制流与访存」"
-               "「跨 lane 的排序 / 过滤 / 前缀和」，以及 max_ids_per_partition 这类静态上界",
-               "⚠️ 最后那条「跨层共享在 TPU 上更值」是本课按机制做的推导，不是任何一篇的结论")
+               "三招、「SREG 在计算密集阶段欠用」、以及 MBU 86% / MFU 73%，"
+               "均出自 Ragged Paged Attention（Jiang 等 arXiv 2604.15464）§3–§5",
+               "SparseCore 的定位与「必须声明静态上界、超了就 mini-batch 或丢 ID」"
+               "出自 openxla.org 的 SparseCore 公开文档",
+               "⚠️ 「中央厨房 / 前台后厨 / 拣货小队」是"
+               "<tspan font-weight=\"700\">本课的比喻</tspan>；"
+               "⚠️ 跨层共享在 TPU 上更值钱那一条是<tspan font-weight=\"700\">本课的推导"
+               "</tspan>，无公开对照实测")
     f.save("fig3-tpu-fix.svg", yy + 6)
-
-
-def _wrap(t, w, size=11.5):
-    """按像素宽度折行。
-
-    ⛔ 这个小工具连翻了两次车，两次都值得记：
-      ① 第一版**只在标点处断**，碰上「一长串没标点的短语」就断不动 ——
-         于是 t() 的宽度断言当场报错。⭐ 折行器必须有兜底的硬断点。
-      ② 第二版补了硬断点，但它是**先把字加进去、再判断超没超**，
-         所以每一行都恰好超出一个字。⭐ 判据：**要判的是「加上这个字会不会超」，
-         不是「加完了超没超」** ——&nbsp;这类 off-by-one 在断言里表现为
-         「只差 7px」，看起来像阈值调小一点就好，其实是判断点放错了位置。
-    ⛔ 还有一条：**断点不能落在 `<tag>` 里面**，否则标签被劈成两半。
-    """
-    import re
-    # ⛔ 折行会在任意位置断开，所以**传进来的必须是纯文本** ——
-    #   一个 <tspan> 被劈成两半，t() 的配平断言才会报，而那时已经离源头很远了。
-    assert "<" not in t, "_wrap 的输入不能带标签（会被折断）：%s" % t[:40]
-    lim = w - 12
-    out, cur, depth = [], "", 0
-
-    def vis(x):
-        return wpx(re.sub(r"<[^>]+>", "", x), size)
-
-    for ch in t:
-        if ch == "<":
-            depth += 1
-        # 先问「加上它会不会超」——&nbsp;超了就先把手里这行交出去
-        if depth == 0 and cur and vis(cur + ch) > lim:
-            out.append(cur)
-            cur = ""
-        cur += ch
-        if ch == ">":
-            depth = max(0, depth - 1)
-        # 标点处优先断（只在已经写了大半行时才断，免得断出一堆碎行）
-        if depth == 0 and ch in "，。；、" and vis(cur) > lim * 0.55:
-            out.append(cur)
-            cur = ""
-    if cur.strip():
-        out.append(cur)
-    return out or [t]
 
 
 main()
