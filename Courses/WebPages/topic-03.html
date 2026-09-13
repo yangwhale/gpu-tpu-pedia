@@ -3907,7 +3907,9 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
         把 Q_i、O_i、m_i、ℓ_i 从 HBM 读进来
         算这一格，更新 O_i、m_i、ℓ_i
         再把 O_i、m_i、ℓ_i 写回 HBM</code></pre>
-<p>⛔ 看内层那三行：<code>O_i</code> 和那两个统计量每一轮外循环都要读进来、写回去一次。 为什么躲不掉？——&nbsp;因为<b>下一块 K／V 还会碰到同一个 Q 块</b>， 它的输出没算完，只能先存回去。</p>
+<p>⛔ 看内层那三行：<code>O_i</code> 和那两个统计量每一轮外循环都要读进来、写回去一次。 为什么躲不掉？——&nbsp;因为<b>下一块 K／V 还会碰到同一个 Q 块</b>， 它的输出没算完，只能先存回去。
+  ⭐ <em>这句话下面那张图的①<b>画出来了</b>：一趟外层循环碰到的是<b>一列</b>，
+  而一个输出要等齐的是<b>一行</b> ——&nbsp;<b>两者只交于一格</b>，所以这一趟凑不齐任何一个成品。</em></p>
 <p><b>第二版：把两层对调。</b></p>
 <pre><code>for i in Q 的每一块:                # 外层 ← 换成了 Q
     把 Q_i 搬进 SRAM，O_i、m_i、ℓ_i 就地清零
@@ -3930,21 +3932,23 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <p>⭐ 那<b>到底省了多少</b>？——&nbsp;这个问题值得认真数一遍，
   因为<em>只盯着 <code>O</code> 看，会得出一个错的量级</em>。</p>
 
-<figure class="fbox fwide" id="fig-loop-order"><svg viewBox="0 0 1400 1873" width="100%" role="img" aria-label="FlashAttention 把内外循环对调之后：同一张块网格，两种走法；四个张量各自要被搬多少趟；以及同一条判据在 warp 这一层又用了一遍"><defs><marker id="ah-9ac7a8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9ac7a8"/></marker><marker id="ah-c9b6d8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#c9b6d8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-loop-order"><svg viewBox="0 0 1400 1915" width="100%" role="img" aria-label="FlashAttention 把内外循环对调之后：同一张块网格，两种走法；四个张量各自要被搬多少趟；以及同一条判据在 warp 这一层又用了一遍"><defs><marker id="ah-9ac7a8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9ac7a8"/></marker><marker id="ah-c9b6d8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#c9b6d8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">内外循环对调：省下的到底是什么</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">满网的图画的都是<tspan font-weight="700">遍历顺序</tspan>；这张画的是<tspan font-weight="700">后果</tspan> ——&#160;把四个张量分开称一次重</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">载一次 K/V</text>
 <rect x="119" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
 <text class="svgsm" x="140" y="74" fill="#5f6368" style="font-size:14.0px">搬一次 O</text>
-<rect x="223" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="244" y="74" fill="#5f6368" style="font-size:14.0px">FA2</text>
-<rect x="0" y="102" width="1400" height="482" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="223" y="63" width="14" height="14" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="244" y="74" fill="#5f6368" style="font-size:14.0px">这一趟碰到的</text>
+<rect x="354" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="375" y="74" fill="#5f6368" style="font-size:14.0px">输出要等齐的</text>
+<rect x="0" y="102" width="1400" height="524" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="102" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
 <rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">① 同一张块网格，两种走法</tspan></text>
-<text class="svgsm" x="191" y="122" fill="#5f6368" style="font-size:11.0px">行 ＝ Q 的块，列 ＝ K/V 的块；浅灰 ＝ causal 整块跳过</text>
+<text class="svgsm" x="191" y="122" fill="#5f6368" style="font-size:11.0px">行 ＝ Q 的块，列 ＝ K/V 的块；浅灰 ＝ causal 整块跳过；8×8 是示意，真实 64×64（L ＝ 8192、块 128）</text>
 <text class="svgsm" x="278" y="184" fill="#681da8" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA1：外层 K/V，内层 Q</tspan></text>
 <text class="svgsm" x="278" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">一列一列地走</text>
 <text class="svgsm" x="278" y="224" fill="#80868b" text-anchor="middle" style="font-size:13.0px">K / V 的块 →</text>
@@ -3975,7 +3979,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="169" y="311" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="182" y="292" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="201" y="311" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
-<rect x="214" y="292" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="214" y="292" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="218" y="296" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
 <rect x="233" y="311" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="246" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
@@ -3987,7 +3991,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="169" y="343" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="182" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="201" y="343" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
-<rect x="214" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="214" y="324" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="233" y="343" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="246" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="250" y="328" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
@@ -4000,7 +4004,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="169" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="182" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="201" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
-<rect x="214" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="214" y="356" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="233" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="246" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="265" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
@@ -4014,7 +4018,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="169" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="182" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="201" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
-<rect x="214" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="214" y="388" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="233" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="246" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="265" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
@@ -4029,7 +4033,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="169" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="182" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="201" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
-<rect x="214" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="214" y="420" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="233" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="246" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="265" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
@@ -4045,7 +4049,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="169" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="182" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="201" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
-<rect x="214" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="214" y="452" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="233" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="246" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
 <rect x="265" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
@@ -4066,6 +4070,10 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <line x1="325.0" y1="391" x2="325.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
 <line x1="357.0" y1="423" x2="357.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
 <line x1="389.0" y1="455" x2="389.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<rect x="146" y="384" width="198" height="38" rx="5" fill="none" stroke="#d93025" stroke-width="1.8"/>
+<text class="svgsm" x="138" y="408" fill="#a50e0e" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">O_5 要等齐</tspan></text>
+<text class="svgsm" x="229" y="249" fill="#007b83" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">这一趟</tspan></text>
+<text class="svgsm" x="229" y="272" fill="#007b83" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">↓</tspan></text>
 <text class="svgsm" x="958" y="184" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA2：外层 Q，内层 K/V</tspan></text>
 <text class="svgsm" x="958" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">一行一行地走</text>
 <text class="svgsm" x="958" y="224" fill="#80868b" text-anchor="middle" style="font-size:13.0px">K / V 的块 →</text>
@@ -4131,17 +4139,17 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="990" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
 <rect x="1022" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
 <rect x="1054" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
-<rect x="830" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="830" y="388" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="834" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
-<rect x="862" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="862" y="388" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="866" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
-<rect x="894" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="894" y="388" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="898" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
-<rect x="926" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="926" y="388" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="930" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
-<rect x="958" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="958" y="388" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="962" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
-<rect x="990" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="990" y="388" width="30" height="30" rx="2" fill="#d0e9ec" stroke="#00838f" stroke-width="1.3"/>
 <rect x="994" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
 <rect x="1009" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <rect x="1022" y="388" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
@@ -4187,99 +4195,104 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <line x1="833" y1="403.0" x2="1017" y2="403.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
 <line x1="833" y1="435.0" x2="1049" y2="435.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
 <line x1="833" y1="467.0" x2="1081" y2="467.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<rect x="826" y="384" width="198" height="38" rx="5" fill="none" stroke="#d93025" stroke-width="1.8"/>
+<text class="svgsm" x="818" y="408" fill="#a50e0e" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">O_5 要等齐</tspan></text>
+<text class="svgsm" x="1053" y="408" fill="#007b83" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">这一趟</tspan></text>
 <text class="svgsm" x="700" y="356" fill="#80868b" text-anchor="middle" style="font-size:24.0px"><tspan font-weight="700">vs</tspan></text>
 <rect x="154" y="496" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
 <text class="svgsm" x="170" y="504" fill="#5f6368" style="font-size:14.0px">K/V 每列只载一次（64 次）</text>
 <rect x="154" y="518" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <text class="svgsm" x="170" y="526" fill="#5f6368" style="font-size:14.0px">O 每一格都要读回来再写回去</text>
+<text class="svgsm" x="154" y="548" fill="#5f6368" style="font-size:14.0px"><tspan fill="#00838f" font-weight="700">这一趟 ＝ 一列</tspan>，<tspan fill="#d93025" font-weight="700">要等齐的 ＝ 一行</tspan> ——&#160;只交于 1 格，这一趟只给 O_5 凑齐 1/6</text>
 <rect x="834" y="496" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
 <text class="svgsm" x="850" y="504" fill="#5f6368" style="font-size:14.0px">K/V 每一格都要重新载一次</text>
 <rect x="834" y="518" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
 <text class="svgsm" x="850" y="526" fill="#5f6368" style="font-size:14.0px">O 每行只写一次（64 次）</text>
-<text class="svgsm" x="60" y="556" fill="#5f6368" style="font-size:15.0px">⭐ <tspan font-weight="700">两个点在两版之间正好换了位置</tspan> ——&#160;这就是这一格要说的全部。FA1 躲不掉那些橙点，是因为它外层走 K/V：<tspan font-weight="700">下一列还会碰到同一个 Q 块</tspan>，</text>
-<text class="svgsm" x="60" y="581" fill="#5f6368" style="font-size:15.0px">这块的输出没算完，只能先存回去。FA2 外层走 Q：<tspan font-weight="700">一整行走完，这块输出就彻底定稿了</tspan>。⚠️ 图上画 8×8 是示意，真实是 64×64（L ＝ 8192、块 128）。</text>
-<rect x="0" y="604" width="1400" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="604" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="0" y="606" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="634" x2="1400" y2="634" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="624" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 那到底省了多少 ——&#160;四个张量分开称一次</tspan></text>
-<text class="svgsm" x="325" y="624" fill="#5f6368" style="font-size:11.0px">⚠️ 本课自己按两份 Algorithm 1 数的，论文没给过这个数</text>
-<text class="svgsm" x="284" y="704" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">Q</tspan></text>
-<rect x="300" y="688" width="280" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
-<text class="svgsm" x="590" y="703" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　2080</tspan></text>
-<rect x="300" y="714" width="8" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="318" y="729" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　64</tspan></text>
-<text class="svgsm" x="284" y="774" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">K、V</tspan></text>
-<rect x="300" y="758" width="17" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
-<text class="svgsm" x="327" y="773" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　128</tspan></text>
-<rect x="300" y="784" width="560" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="870" y="799" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　4160</tspan></text>
-<text class="svgsm" x="284" y="844" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">O（读＋写）</tspan></text>
-<rect x="300" y="828" width="560" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
-<text class="svgsm" x="870" y="843" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　4160</tspan></text>
-<rect x="300" y="854" width="8" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="318" y="869" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　64</tspan></text>
-<line x1="130" y1="888" x2="1040" y2="888" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
-<text class="svgsm" x="284" y="916" fill="#202124" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">合计</tspan></text>
-<text class="svgsm" x="300" y="916" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">FA1 6368　　FA2 4288　　→　只差 1.49 倍</tspan></text>
-<text class="svgsm" x="60" y="954" fill="#5f6368" style="font-size:15.0px">⛔ <tspan font-weight="700">只看 O 那一行，会得出一个错的量级</tspan>：4160 对 64，是 <tspan font-weight="700">65 倍</tspan>。「一次都不落 HBM」这句话本身没错，<tspan font-weight="700">但拿它当总账就错了</tspan>。</text>
-<text class="svgsm" x="60" y="979" fill="#5f6368" style="font-size:15.0px">⭐ 因为 <tspan font-weight="700">FA2 把省下的 O 流量，又用 K/V 的重读还了回去</tspan>：K/V 在 FA1 里待在外圈、只读一趟；到 FA2 跑进内圈，每个 Q 块都要把全部 K/V 重新走一遍。</text>
-<text class="svgsm" x="60" y="1004" fill="#5f6368" style="font-size:15.0px">⚠️ 换成非 causal 口径这个比值是 1.492，<tspan font-weight="700">结论不挑口径</tspan>；而且这是按 HBM 读写次数数的理想账，真机上 L2 会吃掉一部分 K/V 重读 ——&#160;1.49 倍是<tspan font-weight="700">偏乐观那一侧</tspan>。</text>
-<rect x="0" y="1054" width="1400" height="386" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1054" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="0" y="1056" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="1084" x2="1400" y2="1084" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="1074" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">③ 同一条判据，在 warp 这一层又用了一遍</tspan></text>
-<text class="svgsm" x="289" y="1074" fill="#5f6368" style="font-size:11.0px">一个 thread block 内部，4 个 warp 怎么分活</text>
-<text class="svgsm" x="180" y="1116" fill="#681da8" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA1：切 K／V（论文原词 “split-K”）</tspan></text>
-<rect x="80" y="1146" width="200" height="160" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
-<text class="svgsm" x="180" y="1140" fill="#80868b" text-anchor="middle" style="font-size:13.0px">输出块 O_i</text>
-<rect x="86" y="1152" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
-<rect x="91" y="1157" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
-<rect x="96" y="1162" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
-<rect x="101" y="1167" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
-<text class="svgsm" x="180" y="1232" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">4 份部分和</tspan></text>
-<text class="svgsm" x="180" y="1254" fill="#681da8" text-anchor="middle" style="font-size:13.0px">谁都不完整</text>
-<text class="svgsm" x="860" y="1116" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA2：切 Q</tspan></text>
-<rect x="760" y="1146" width="200" height="160" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
-<text class="svgsm" x="860" y="1140" fill="#80868b" text-anchor="middle" style="font-size:13.0px">输出块 O_i</text>
-<rect x="766" y="1152" width="188" height="32" rx="4" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="860" y="1173" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 0 的那一片（定稿）</tspan></text>
-<rect x="766" y="1190" width="188" height="32" rx="4" fill="#d8ebdd" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="860" y="1211" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 1 的那一片（定稿）</tspan></text>
-<rect x="766" y="1228" width="188" height="32" rx="4" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="860" y="1249" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 2 的那一片（定稿）</tspan></text>
-<rect x="766" y="1266" width="188" height="32" rx="4" fill="#d8ebdd" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="860" y="1287" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 3 的那一片（定稿）</tspan></text>
-<text class="svgsm" x="80" y="1334" fill="#5f6368" style="font-size:15.0px">4 个 warp 各持 K/V 的一片，<tspan font-weight="700">Q 大家共用</tspan>。</text>
-<text class="svgsm" x="80" y="1359" fill="#5f6368" style="font-size:15.0px">每个 warp 只算得出<tspan font-weight="700">一份部分和</tspan> ——</text>
-<text class="svgsm" x="80" y="1384" fill="#5f6368" style="font-size:15.0px">必须写进共享内存、同步、再加起来。</text>
-<text class="svgsm" x="80" y="1409" fill="#5f6368" style="font-size:15.0px">⛔ 论文原话：这些读写<tspan font-weight="700">拖慢了前向</tspan>。</text>
-<text class="svgsm" x="760" y="1334" fill="#5f6368" style="font-size:15.0px">4 个 warp 各持 Q 的一片，<tspan font-weight="700">K/V 大家共用</tspan>。</text>
-<text class="svgsm" x="760" y="1359" fill="#5f6368" style="font-size:15.0px">每个 warp 直接算出<tspan font-weight="700">自己那一片完整输出</tspan> ——</text>
-<text class="svgsm" x="760" y="1384" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">warp 之间完全不需要通信。</tspan></text>
-<text class="svgsm" x="760" y="1409" fill="#5f6368" style="font-size:15.0px">⭐ 跟上面 Q 块之间互不通信，是同一件事。</text>
-<rect x="0" y="1442" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1442" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="1442" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1469" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 一条判据，两个尺度通用</tspan></text>
-<text class="svgsm" x="20" y="1500" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">切「要被累加的那一维」就得合；切「各自独立出结果的那一维」就不用合。</tspan>attention 里前者是 K／V（它们在求和号里面），后者是 Q（每行输出各管各的）。</text>
-<text class="svgsm" x="20" y="1524" fill="#0d652d" style="font-size:15.0px">⭐ 所以 thread block 那一层和 warp 那一层做的是同一个动作 ——&#160;<tspan font-weight="700">把外圈让给 Q</tspan>。这条判据的用处远不止 attention：任何融合 kernel 分工前，先问一句「我切的这一维在不</text>
-<text class="svgsm" x="20" y="1548" fill="#0d652d" style="font-size:15.0px">在求和号里」。</text>
-<rect x="0" y="1576" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1576" width="4" height="146" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="1576" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1603" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 三处别讲过头</tspan></text>
-<text class="svgsm" x="20" y="1634" fill="#b06000" style="font-size:15.0px">① <tspan font-weight="700">论文从没说过「对调是为了让 O 不落 HBM」</tspan>。它给的理由是 ① 减少 non-matmul FLOP ② occupancy ——&#160;本图那个 1.49 倍是<tspan font-weight="700">本课自己数的</tspan>，FA2 连 IO-complexity 定理都</text>
-<text class="svgsm" x="20" y="1658" fill="#b06000" style="font-size:15.0px">没有。</text>
-<text class="svgsm" x="20" y="1682" fill="#b06000" style="font-size:15.0px">② <tspan font-weight="700">只对调了 forward</tspan>。FA1 的 backward 和 FA2 的 backward <tspan font-weight="700">都还是 K/V 在外层</tspan>。</text>
-<text class="svgsm" x="20" y="1706" fill="#b06000" style="font-size:15.0px">③ 这个顺序<tspan font-weight="700">不是 FA2 首创</tspan>：论文自己写的是“first suggested and implemented by <tspan font-weight="700">Phil Tillet</tspan> in the Triton implementation”。</text>
-<text class="svgsm" x="0" y="1736" fill="#80868b" style="font-size:14.0px">📌 📌 FA1 arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank"><tspan text-decoration="underline">2205.14135</tspan></a> §3.1 Algorithm 1（外层 K/V、内层 Q；O_i、ℓ_i、m_i 的写回在内层循环里，line 12–13）；Figure 1 caption 逐字「In the outer loop (red arro</text>
-<text class="svgsm" x="0" y="1757" fill="#80868b" style="font-size:14.0px">　　ws) ... loops through blocks of the K and V matrices」。</text>
-<text class="svgsm" x="0" y="1778" fill="#80868b" style="font-size:14.0px">　　📌 FA2 arXiv <a href="https://arxiv.org/abs/2307.08691" target="_blank"><tspan text-decoration="underline">2307.08691</tspan></a> §3.1.1 Algorithm 1（外层 Q、内层 K/V，O_i 与 L_i 在内层结束后各写一次）；宣布对调那句在 §3.2 “Parallelism”，并注明归功于 Phil Tillet 的 </text>
-<text class="svgsm" x="0" y="1799" fill="#80868b" style="font-size:14.0px">　　Triton 实现。warp 层全部出自 §3.3 与 Figure 3 ——&#160;⚠️ FA1 论文里 “warp” 出现 0 次，那段是 FA2 的回溯。</text>
-<text class="svgsm" x="0" y="1820" fill="#80868b" style="font-size:14.0px">　　⛔ 原词是 “split-K”，不是坊间常见的 “sliced-K”（两篇全文零次）。⚠️ 本图<tspan font-weight="700">不引用任何加速比</tspan> ——&#160;FA2 论文里那几个百分比分属不同口径（attention 单算子 vs 端到端训练、不同</text>
-<text class="svgsm" x="0" y="1841" fill="#80868b" style="font-size:14.0px">　　硬件配置），混用会得出错的结论，本讲 §3.6b 专门讲过这条纪律。</text>
+<text class="svgsm" x="834" y="548" fill="#5f6368" style="font-size:14.0px"><tspan fill="#00838f" font-weight="700">这一趟 ＝ 一行</tspan>，<tspan fill="#d93025" font-weight="700">要等齐的 ＝ 同一行</tspan> ——&#160;完全重合，走完这一趟 O_5 就定稿</text>
+<text class="svgsm" x="60" y="576" fill="#5f6368" style="font-size:15.0px">⭐ 判据就长在这两个集合上：<tspan font-weight="700">一趟循环碰到的格子，跟一个输出需要的格子，是不是同一批。</tspan>不是 → 这一趟凑不齐任何一个成品，</text>
+<text class="svgsm" x="60" y="601" fill="#5f6368" style="font-size:15.0px">中间结果只能先落回 HBM（FA1 那 4160 次 O 读写就是这么来的）；是 → 算完即定稿。⭐ 这跟面板 ③ 的 warp 判据<tspan font-weight="700">是同一句话</tspan> ——&#160;求和号跑在 K/V 这一维上。</text>
+<rect x="0" y="646" width="1400" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="646" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="648" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="676" x2="1400" y2="676" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="666" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 那到底省了多少 ——&#160;四个张量分开称一次</tspan></text>
+<text class="svgsm" x="325" y="666" fill="#5f6368" style="font-size:11.0px">⚠️ 本课自己按两份 Algorithm 1 数的，论文没给过这个数</text>
+<text class="svgsm" x="284" y="746" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">Q</tspan></text>
+<rect x="300" y="730" width="280" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
+<text class="svgsm" x="590" y="745" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　2080</tspan></text>
+<rect x="300" y="756" width="8" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="318" y="771" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　64</tspan></text>
+<text class="svgsm" x="284" y="816" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">K、V</tspan></text>
+<rect x="300" y="800" width="17" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
+<text class="svgsm" x="327" y="815" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　128</tspan></text>
+<rect x="300" y="826" width="560" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="870" y="841" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　4160</tspan></text>
+<text class="svgsm" x="284" y="886" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">O（读＋写）</tspan></text>
+<rect x="300" y="870" width="560" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
+<text class="svgsm" x="870" y="885" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　4160</tspan></text>
+<rect x="300" y="896" width="8" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="318" y="911" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　64</tspan></text>
+<line x1="130" y1="930" x2="1040" y2="930" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="284" y="958" fill="#202124" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">合计</tspan></text>
+<text class="svgsm" x="300" y="958" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">FA1 6368　　FA2 4288　　→　只差 1.49 倍</tspan></text>
+<text class="svgsm" x="60" y="996" fill="#5f6368" style="font-size:15.0px">⛔ <tspan font-weight="700">只看 O 那一行，会得出一个错的量级</tspan>：4160 对 64，是 <tspan font-weight="700">65 倍</tspan>。「一次都不落 HBM」这句话本身没错，<tspan font-weight="700">但拿它当总账就错了</tspan>。</text>
+<text class="svgsm" x="60" y="1021" fill="#5f6368" style="font-size:15.0px">⭐ 因为 <tspan font-weight="700">FA2 把省下的 O 流量，又用 K/V 的重读还了回去</tspan>：K/V 在 FA1 里待在外圈、只读一趟；到 FA2 跑进内圈，每个 Q 块都要把全部 K/V 重新走一遍。</text>
+<text class="svgsm" x="60" y="1046" fill="#5f6368" style="font-size:15.0px">⚠️ 换成非 causal 口径这个比值是 1.492，<tspan font-weight="700">结论不挑口径</tspan>；而且这是按 HBM 读写次数数的理想账，真机上 L2 会吃掉一部分 K/V 重读 ——&#160;1.49 倍是<tspan font-weight="700">偏乐观那一侧</tspan>。</text>
+<rect x="0" y="1096" width="1400" height="386" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1096" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="1098" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1126" x2="1400" y2="1126" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1116" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">③ 同一条判据，在 warp 这一层又用了一遍</tspan></text>
+<text class="svgsm" x="289" y="1116" fill="#5f6368" style="font-size:11.0px">一个 thread block 内部，4 个 warp 怎么分活</text>
+<text class="svgsm" x="180" y="1158" fill="#681da8" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA1：切 K／V（论文原词 “split-K”）</tspan></text>
+<rect x="80" y="1188" width="200" height="160" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="180" y="1182" fill="#80868b" text-anchor="middle" style="font-size:13.0px">输出块 O_i</text>
+<rect x="86" y="1194" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
+<rect x="91" y="1199" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
+<rect x="96" y="1204" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
+<rect x="101" y="1209" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
+<text class="svgsm" x="180" y="1274" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">4 份部分和</tspan></text>
+<text class="svgsm" x="180" y="1296" fill="#681da8" text-anchor="middle" style="font-size:13.0px">谁都不完整</text>
+<text class="svgsm" x="860" y="1158" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA2：切 Q</tspan></text>
+<rect x="760" y="1188" width="200" height="160" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1182" fill="#80868b" text-anchor="middle" style="font-size:13.0px">输出块 O_i</text>
+<rect x="766" y="1194" width="188" height="32" rx="4" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1215" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 0 的那一片（定稿）</tspan></text>
+<rect x="766" y="1232" width="188" height="32" rx="4" fill="#d8ebdd" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1253" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 1 的那一片（定稿）</tspan></text>
+<rect x="766" y="1270" width="188" height="32" rx="4" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1291" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 2 的那一片（定稿）</tspan></text>
+<rect x="766" y="1308" width="188" height="32" rx="4" fill="#d8ebdd" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1329" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 3 的那一片（定稿）</tspan></text>
+<text class="svgsm" x="80" y="1376" fill="#5f6368" style="font-size:15.0px">4 个 warp 各持 K/V 的一片，<tspan font-weight="700">Q 大家共用</tspan>。</text>
+<text class="svgsm" x="80" y="1401" fill="#5f6368" style="font-size:15.0px">每个 warp 只算得出<tspan font-weight="700">一份部分和</tspan> ——</text>
+<text class="svgsm" x="80" y="1426" fill="#5f6368" style="font-size:15.0px">必须写进共享内存、同步、再加起来。</text>
+<text class="svgsm" x="80" y="1451" fill="#5f6368" style="font-size:15.0px">⛔ 论文原话：这些读写<tspan font-weight="700">拖慢了前向</tspan>。</text>
+<text class="svgsm" x="760" y="1376" fill="#5f6368" style="font-size:15.0px">4 个 warp 各持 Q 的一片，<tspan font-weight="700">K/V 大家共用</tspan>。</text>
+<text class="svgsm" x="760" y="1401" fill="#5f6368" style="font-size:15.0px">每个 warp 直接算出<tspan font-weight="700">自己那一片完整输出</tspan> ——</text>
+<text class="svgsm" x="760" y="1426" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">warp 之间完全不需要通信。</tspan></text>
+<text class="svgsm" x="760" y="1451" fill="#5f6368" style="font-size:15.0px">⭐ 跟上面 Q 块之间互不通信，是同一件事。</text>
+<rect x="0" y="1484" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1484" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1484" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1511" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 一条判据，三个尺度通用</tspan></text>
+<text class="svgsm" x="20" y="1542" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">切「要被累加的那一维」就得合；切「各自独立出结果的那一维」就不用合。</tspan>attention 里前者是 K／V（它们在求和号里面），后者是 Q（每行输出各管各的）。</text>
+<text class="svgsm" x="20" y="1566" fill="#0d652d" style="font-size:15.0px">⭐ 所以面板 ① 那句「这一趟碰到的，是不是这个输出要的」，跟这里的 warp 分工，是<tspan font-weight="700">同一条判据在三个尺度上</tspan>：循环、thread block、warp ——&#160;动作都是<tspan font-weight="700">把外圈让给 Q</tspan>。这条判</text>
+<text class="svgsm" x="20" y="1590" fill="#0d652d" style="font-size:15.0px">据的用处远不止 attention：任何融合 kernel 分工前，先问一句「我切的这一维在不在求和号里」。</text>
+<rect x="0" y="1618" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1618" width="4" height="146" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1618" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1645" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 三处别讲过头</tspan></text>
+<text class="svgsm" x="20" y="1676" fill="#b06000" style="font-size:15.0px">① <tspan font-weight="700">论文从没说过「对调是为了让 O 不落 HBM」</tspan>。它给的理由是 ① 减少 non-matmul FLOP ② occupancy ——&#160;本图那个 1.49 倍是<tspan font-weight="700">本课自己数的</tspan>，FA2 连 IO-complexity 定理都</text>
+<text class="svgsm" x="20" y="1700" fill="#b06000" style="font-size:15.0px">没有。</text>
+<text class="svgsm" x="20" y="1724" fill="#b06000" style="font-size:15.0px">② <tspan font-weight="700">只对调了 forward</tspan>。FA1 的 backward 和 FA2 的 backward <tspan font-weight="700">都还是 K/V 在外层</tspan>。</text>
+<text class="svgsm" x="20" y="1748" fill="#b06000" style="font-size:15.0px">③ 这个顺序<tspan font-weight="700">不是 FA2 首创</tspan>：论文自己写的是“first suggested and implemented by <tspan font-weight="700">Phil Tillet</tspan> in the Triton implementation”。</text>
+<text class="svgsm" x="0" y="1778" fill="#80868b" style="font-size:14.0px">📌 📌 FA1 arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank"><tspan text-decoration="underline">2205.14135</tspan></a> §3.1 Algorithm 1（外层 K/V、内层 Q；O_i、ℓ_i、m_i 的写回在内层循环里，line 12–13）；Figure 1 caption 逐字「In the outer loop (red arro</text>
+<text class="svgsm" x="0" y="1799" fill="#80868b" style="font-size:14.0px">　　ws) ... loops through blocks of the K and V matrices」。</text>
+<text class="svgsm" x="0" y="1820" fill="#80868b" style="font-size:14.0px">　　📌 FA2 arXiv <a href="https://arxiv.org/abs/2307.08691" target="_blank"><tspan text-decoration="underline">2307.08691</tspan></a> §3.1.1 Algorithm 1（外层 Q、内层 K/V，O_i 与 L_i 在内层结束后各写一次）；宣布对调那句在 §3.2 “Parallelism”，并注明归功于 Phil Tillet 的 </text>
+<text class="svgsm" x="0" y="1841" fill="#80868b" style="font-size:14.0px">　　Triton 实现。warp 层全部出自 §3.3 与 Figure 3 ——&#160;⚠️ FA1 论文里 “warp” 出现 0 次，那段是 FA2 的回溯。</text>
+<text class="svgsm" x="0" y="1862" fill="#80868b" style="font-size:14.0px">　　⛔ 原词是 “split-K”，不是坊间常见的 “sliced-K”（两篇全文零次）。⚠️ 本图<tspan font-weight="700">不引用任何加速比</tspan> ——&#160;FA2 论文里那几个百分比分属不同口径（attention 单算子 vs 端到端训练、不同</text>
+<text class="svgsm" x="0" y="1883" fill="#80868b" style="font-size:14.0px">　　硬件配置），混用会得出错的结论，本讲 §3.6b 专门讲过这条纪律。</text>
 </svg><figcaption>⭐⭐ <b>满网的 FA 图画的都是遍历顺序；这张画的是后果 —— 换一个循环顺序，四个张量各自要被搬多少趟。</b><b>只看 O 是 65 倍，四个一起数只有 1.49 倍：FA2 把省下的 O 流量，又用 K／V 的重读还了回去。</b><em>所以对调换来的不主要是带宽，是并行度 —— 这跟论文自己给的两条理由（non-matmul FLOP、occupancy）对得上。</em></figcaption></figure>
 
 <div class="note warn"><p>⚠️ <b>「O 不落 HBM」是真的，但它不是这次对调的主要收益。</b></p>
