@@ -76,6 +76,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-chunkwise.py     # §7.4 块内并行块间串行 ＋ 块长两头夹
   python3 topic03-fig-copy-matrix.py   # §五 「复制」那块 0/1 矩阵，一格一格画出来
   python3 topic03-fig-hybrid.py        # §八 配比是一条轴，两头都不好
+  python3 topic03-fig-ratio-or-count.py # §8.2b 守恒的是比值不是层数（14 份 config）
   python3 topic03-fig-ratio-grid.py    # §8.2 那张消融表画出来 ＋ 它问不出什么
   python3 topic03-fig-perstep.py       # §9.1 把 ↓↓↓ 换成一步 decode 要搬多少字节
   python3 topic03-fig-landing.py       # §九＋§十 三种资源之间的搬家史 ＋ 防骗判据
