@@ -144,12 +144,22 @@ def main():
 
     # ══ ③ 一拿掉，三样东西一起消失 ═══════════════════════════════════
     yy = top + PH2 + 26
-    PH3 = 268
+    # ⭐⭐ 2026-09-14 R38b：这一格原来是三张并排卡片 ——&#160;
+    #   标题写着「三样麻烦**一起**消失」「它们本来看着互不相干」，
+    #   可**「一起」这件事图上没有任何东西承载**，读者只能选择相信。
+    # ⭐⭐ 判据（可以直接拿去查别的图）：
+    #    **面板标题里出现连接词（一起 / 同时 / 因此 / 所以），
+    #      图上就必须有一个对应的图形连接物。** 没有就是在用文字冒充结构。
+    # ⭐ 于是改成「一个根 → 三条分支」：左边一个被划掉的 R，
+    #   一条竖脊分出三根箭头。三样东西挂在同一个根上，一眼就看见。
+    # ⚠️ 顺带从三列改一列 ——&#160;正文宽了，2-3 行压成 1 行，
+    #   所以净增高只有 20px（268 → 298），不是靠加高换来的。
+    PH3 = 298   # ⚠️ 288 时底下那行 ⭐⭐ 贴着第三张卡的下边框
     top = f.panel(0, yy, W, PH3,
                   "③ R 一拿掉，<tspan font-weight=\"700\">三样麻烦一起消失"
                   "</tspan> ——&#160;而它们本来看着互不相干", BL,
                   tag="三条都是原文说的")
-    for i, (ttl, body, col) in enumerate([
+    ROWS = [
         ("吸收完全生效",
          "没有 R 夹在中间，上投影可以整个吸进 q 那一侧。"
          "<tspan font-weight=\"700\">推理时 MLA 直接退化成纯 MQA。</tspan>", GR),
@@ -160,16 +170,36 @@ def main():
         ("不用再调外推",
          "没有位置编码，就<tspan font-weight=\"700\">没有外推要重标定</tspan>。"
          "长上下文扩展里最烦人的一块调参，直接不存在了。", PU),
-    ]):
-        bx = 30 + i * 452
-        f.box(bx, top + 34, 426, 132, "none", LINE, 9)
-        f.badge(bx + 16, top + 50, i + 1, col)
-        f.t(bx + 62, top + 72, ttl, col, bold=True, size=18, cls="svglbl")
-        yy2 = top + 106
-        from topic03_draw import wrap_rich
-        for r in wrap_rich(body, 394, 16 * 1.12):
-            f.t(bx + 16, yy2, r, GY, size=16)
-            yy2 += 24
+    ]
+    RY0, RH, RGAP, CX = top + 34, 56, 14, 236
+    cys = [RY0 + i * (RH + RGAP) + RH / 2 for i in range(len(ROWS))]
+
+    # ── 那个根：被划掉的 R ───────────────────────────────────────
+    rh = cys[-1] - cys[0] + RH
+    rbx, rby, rbw = 30, cys[0] - RH / 2, 150
+    f.box(rbx, rby + rh / 2 - 38, rbw, 76, "#fce8e6", RD, 9, 1.6, dash="6 4")
+    rcx, rcy = rbx + rbw / 2, rby + rh / 2
+    f.t(rcx, rcy - 2, "R", RD, bold=True, size=30, anchor="middle")
+    f.t(rcx, rcy + 22, "没有理由存在了", RD, size=14, anchor="middle")
+    # ⭐ 划掉这一笔是这个装置的落点 ——&#160;虚线框只说「特殊」，划掉才说「没了」
+    f.line(rbx + 18, rcy + 26, rbx + rbw - 18, rcy - 30, RD, 2.2, arrow=False)
+
+    # ── 一条竖脊分出三根 ─────────────────────────────────────────
+    f.line(rbx + rbw, rcy, CX - 26, rcy, GY2, 1.5, arrow=False)
+    f.line(CX - 26, cys[0], CX - 26, cys[-1], GY2, 1.5, arrow=False)
+    for cy in cys:
+        f.line(CX - 26, cy, CX - 4, cy, GY2, 1.5)
+
+    from topic03_draw import wrap_rich
+    for i, (ttl, body, col) in enumerate(ROWS):
+        by = RY0 + i * (RH + RGAP)
+        f.box(CX, by, W - CX - 30, RH, "none", LINE, 9)
+        f.badge(CX + 20, by + 22, i + 1, col)   # ⚠️ 对齐标题行，不对齐正文行
+        f.t(CX + 46, by + 27, ttl, col, bold=True, size=18, cls="svglbl")
+        rows_ = wrap_rich(body, W - CX - 78, 16 * 1.12)
+        # ⛔ 一行放不下就是布局没算对 ——&#160;这一格的全部收益来自「一行一条」
+        assert len(rows_) == 1, (ttl, len(rows_))
+        f.t(CX + 46, by + 48, rows_[0], GY, size=16)
     f.t(30, top + PH3 - 44,
         "⭐⭐ <tspan font-weight=\"700\">注意这不是「找到了绕过 R 的技巧」"
         "</tspan> ——&#160;是让别人替它把活干了，"
