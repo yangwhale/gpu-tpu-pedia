@@ -2995,6 +2995,192 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <em>KV cache 是拿显存换时间，而这一讲全部的账，
   都是在算这笔交换到底有多贵。</em></p></div>
 
+<!-- ⭐⭐⭐ 2026-09-13 夜间 R14。六份调研报告一致指到同一个空白：
+     讲义讲完「八乘六十四等于五百一十二」，台下立刻会想的那个问题
+     ——&nbsp;**128 个数凭什么记得住上万个 token** ——&nbsp;全网没人回答。
+     ⭐ 而它一旦回答了，能同时接住本讲三处：为什么不是 8 维、
+       为什么 MLA 压到 512 不死、为什么长上下文会越读越糊。 -->
+<h3 id="s1-3b">1.3b　顺便回答一个立刻会想到的问题：128 个数，凭什么记得住上万个 token</h3>
+
+<p>上一段说多头买到的是<b>分辨率</b>：一个头只管 128 维。
+  那问题就很自然了 ——&nbsp;128 个数，<b>怎么可能</b>记得住一整篇文章里上万个词的区别？</p>
+
+<figure class="fbox fwide" id="fig-capacity"><svg viewBox="0 0 1400 1754" width="100%" role="img" aria-label="为什么会记混：128 维里能塞下多少个彼此不像的方向"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">为什么会记混 ——&#160;一个 128 维的脑袋，装得下多少件「互不相干」的事</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">每篇文章都写「每个头 128 维」，然后就过去了。可 128 个数凭什么记得住上万个 token 的区别？这张图把它算出来：严格不撞只能装 128 个，放宽成「差不多不撞」就能装上万个</text>
+<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px"> ——&#160;而「记混」正是这笔放宽的价钱。</text>
+<rect x="0" y="85" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="21" y="96" fill="#5f6368" style="font-size:14.0px">完全不撞（两两垂直）</text>
+<rect x="187" y="85" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="208" y="96" fill="#5f6368" style="font-size:14.0px">差不多不撞</text>
+<rect x="304" y="85" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="325" y="96" fill="#5f6368" style="font-size:14.0px">串扰＝记混</text>
+<rect x="0" y="124" width="1400" height="334" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="124" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="126" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="154" x2="1400" y2="154" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="144" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">① 先问上限：要求「谁跟谁都不沾边」，一间屋子里能立几根杆？</tspan></text>
+<text class="svgsm" x="1386" y="144" fill="#80868b" text-anchor="end" style="font-size:11.0px">秩论证 · 当场验</text>
+<text class="svglbl" x="40" y="188" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">一张桌面（2 维）</tspan></text>
+<text class="svgsm" x="40" y="212" fill="#5f6368" style="font-size:15.0px">横一根、竖一根，就满了</text>
+<rect x="30" y="272" width="300" height="96" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<line x1="90" y1="352" x2="290" y2="352" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="90" y1="352" x2="90" y2="280" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="300" y="372" fill="#0d652d" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">2 根</tspan></text>
+<line x1="340" y1="272" x2="340" y2="368" stroke="#80868b" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svglbl" x="400" y="188" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">房间的墙角（3 维）</tspan></text>
+<text class="svgsm" x="400" y="212" fill="#5f6368" style="font-size:15.0px">再加一根「往里」，三根，也满了</text>
+<rect x="390" y="272" width="300" height="96" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<line x1="470" y1="352" x2="640" y2="352" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="470" y1="352" x2="470" y2="280" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<line x1="470" y1="352" x2="408" y2="306" stroke="#1e8e3e" stroke-width="2.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="660" y="372" fill="#0d652d" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">3 根</tspan></text>
+<line x1="700" y1="272" x2="700" y2="368" stroke="#80868b" stroke-width="1" stroke-linecap="round" stroke-dasharray="3 5"/>
+<text class="svglbl" x="760" y="188" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">一个注意力头（128 维）</tspan></text>
+<text class="svgsm" x="760" y="212" fill="#5f6368" style="font-size:15.0px">画不出来 ——&#160;但这个上限不用画也知道</text>
+<rect x="750" y="272" width="620" height="96" rx="8" fill="none" stroke="#e8eaed" stroke-width="1"/>
+<line x1="800" y1="348" x2="873.2798370868762" y2="337.7011905289552" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="869.0849515607929" y2="321.48077173364777" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="861.3487803690731" y2="306.6197251431647" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="850.4678786446249" y2="293.8798260801814" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="837.0" y2="283.9141201199516" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="821.6355061494825" y2="277.23344805873535" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="805.1619790570653" y2="274.18026028077304" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="788.4238495870229" y2="274.9110627959598" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="772.2791120872225" y2="279.3883947620577" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="757.5553437100226" y2="287.3827487226146" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="745.0072829146728" y2="298.4843351294445" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="735.2781416716847" y2="312.12408810177106" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<line x1="800" y1="348" x2="728.8666345005644" y2="327.60283566954206" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round"/>
+<text class="svgsm" x="906" y="308" fill="#80868b" style="font-size:22.0px">…</text>
+<text class="svgsm" x="940" y="306" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">最多 128 根。</tspan></text>
+<text class="svgsm" x="940" y="330" fill="#5f6368" style="font-size:15.0px">第 129 根一定能被前面那些<tspan font-weight="700">拼出来</tspan> ——&#160;它不是新东西。</text>
+<text class="svgsm" x="940" y="354" fill="#80868b" style="font-size:14.0px">（脚本当场验：128 维里取 129 个向量，秩只有 128）</text>
+<text class="svgsm" x="30" y="440" fill="#202124" style="font-size:16.0px">⭐ 所以「互不相干的方向」这种<tspan font-weight="700">奢侈品</tspan>，一个头只买得起 128 件。如果模型真按这个标准办事，它一辈子也只认得 128 个概念。</text>
+<rect x="0" y="514" width="1400" height="396" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="514" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="516" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="544" x2="1400" y2="544" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="534" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">② 那就别那么讲究：只要「差不多不撞」就行 ——&#160;容量立刻爆炸</tspan></text>
+<text class="svgsm" x="1386" y="534" fill="#80868b" text-anchor="end" style="font-size:11.0px">本课当场算 · numpy</text>
+<text class="svgsm" x="30" y="576" fill="#5f6368" style="font-size:16.0px">把标准从「正好 90°」放宽到「大概 90° 就行」，能塞进去多少根？下面三个表盘是<tspan font-weight="700">真的随机丢进 128 维再量出来的</tspan> ——&#160;量的是<tspan font-weight="700">最挤的那一对</tspan>。</text>
+<rect x="100" y="606" width="300" height="236" rx="9" fill="none" stroke="#e8eaed" stroke-width="1"/>
+<line x1="250" y1="794" x2="250" y2="668" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 5"/>
+<text class="svgsm" x="256" y="662" fill="#80868b" style="font-size:14.0px">90°（完全不撞）</text>
+<line x1="250" y1="794" x2="368" y2="794" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="250" y1="794" x2="290.39404076337814" y2="683.1292578233258" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M 294.0 794.0 A 44 44 0 0 0 265.1 752.7" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svglbl" x="308" y="768" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">70.0°</tspan></text>
+<text class="svglbl" x="250" y="632" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">丢 128 根进去</tspan></text>
+<text class="svgsm" x="250" y="828" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">最挤的一对仍差 70° 才重合</text>
+<rect x="430" y="606" width="300" height="236" rx="9" fill="none" stroke="#e8eaed" stroke-width="1"/>
+<line x1="580" y1="794" x2="580" y2="668" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 5"/>
+<text class="svgsm" x="586" y="662" fill="#80868b" style="font-size:14.0px">90°（完全不撞）</text>
+<line x1="580" y1="794" x2="698" y2="794" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="580" y1="794" x2="628.9007205367088" y2="686.6094998103151" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M 624.0 794.0 A 44 44 0 0 0 598.2 754.0" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svglbl" x="638" y="768" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">65.5°</tspan></text>
+<text class="svglbl" x="580" y="632" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">丢 1,000 根进去</tspan></text>
+<text class="svgsm" x="580" y="828" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">最挤的一对仍差 66° 才重合</text>
+<rect x="760" y="606" width="300" height="236" rx="9" fill="none" stroke="#e8eaed" stroke-width="1"/>
+<line x1="910" y1="794" x2="910" y2="668" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 5"/>
+<text class="svgsm" x="916" y="662" fill="#80868b" style="font-size:14.0px">90°（完全不撞）</text>
+<line x1="910" y1="794" x2="1028" y2="794" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="910" y1="794" x2="967.557970225811" y2="690.9899030993338" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<path d="M 954.0 794.0 A 44 44 0 0 0 931.5 755.6" fill="none" stroke="#e8710a" stroke-width="1.6"/>
+<text class="svglbl" x="968" y="768" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">60.8°</tspan></text>
+<text class="svglbl" x="910" y="632" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">丢 10,000 根进去</tspan></text>
+<text class="svgsm" x="910" y="828" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">最挤的一对仍差 61° 才重合</text>
+<text class="svgsm" x="30" y="862" fill="#202124" style="font-size:16.0px">⭐ 读这三个表盘只读一件事：<tspan font-weight="700">根数涨了 78 倍（128 → 1 万），最挤的那一对才挤了 9°。</tspan>　容量几乎是白捡的。</text>
+<text class="svgsm" x="30" y="888" fill="#a50e0e" style="font-size:16.0px">⛔ 反过来，<tspan font-weight="700">维度一小就立刻崩</tspan>：同样丢 1000 根，8 维里最挤的一对只剩 12° ——&#160;那两根基本就是同一根，模型分不出它们。<tspan font-weight="700">这就是「为什么不用 8 维」。</tspan></text>
+<rect x="0" y="966" width="1400" height="366" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="966" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="968" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="996" x2="1400" y2="996" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="986" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">③ 便宜没白占：「差不多」就是「有点像」，而有点像会漏票 ——&#160;这就是记混</tspan></text>
+<text class="svgsm" x="1386" y="986" fill="#80868b" text-anchor="end" style="font-size:11.0px">cos=0.2 · logit=√d·cos</text>
+<text class="svglbl" x="40" y="1030" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">先看一个干扰项有多小</tspan></text>
+<rect x="70" y="1056" width="76" height="168" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="108" y="1046" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">正主</tspan></text>
+<line x1="70" y1="1225" x2="420" y2="1225" stroke="#dadce0" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="220" y="1221" width="76" height="3" rx="1" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="258" y="1212" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">一个干扰项</tspan></text>
+<text class="svgsm" x="258" y="1248" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px">细到画不出来</text>
+<text class="svgsm" x="258" y="1270" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">＝ 正主的 0.0117%</text>
+<text class="svgsm" x="40" y="1288" fill="#202124" style="font-size:16.0px">⭐ 单看它，<tspan font-weight="700">完全可以忽略。</tspan></text>
+<text class="svgsm" x="40" y="1314" fill="#a50e0e" style="font-size:16.0px">⛔ 但「可以忽略」<tspan font-weight="700">不能乘以一万。</tspan></text>
+<line x1="470" y1="1030" x2="470" y2="1338" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svglbl" x="510" y="1030" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">再看数量一上来会怎么样</tspan></text>
+<text class="svgsm" x="510" y="1098" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">100 个干扰</tspan></text>
+<rect x="640" y="1072" width="560" height="38" rx="6" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="640" y="1072" width="553.5085842651516" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1212" y="1098" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">正主 99%</tspan></text>
+<text class="svgsm" x="916" y="1097" fill="#0d652d" text-anchor="middle" style="font-size:14.0px">正主拿到的</text>
+<text class="svgsm" x="510" y="1172" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">1,000 个干扰</tspan></text>
+<rect x="640" y="1146" width="560" height="38" rx="6" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="640" y="1146" width="501.21831933234006" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1212" y="1172" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">正主 90%</tspan></text>
+<text class="svgsm" x="890" y="1171" fill="#0d652d" text-anchor="middle" style="font-size:14.0px">正主拿到的</text>
+<text class="svgsm" x="510" y="1246" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">10,000 个干扰</tspan></text>
+<rect x="640" y="1220" width="560" height="38" rx="6" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="640" y="1220" width="257.7348077419188" height="38" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1212" y="1246" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">正主 46%</tspan></text>
+<text class="svgsm" x="768" y="1245" fill="#0d652d" text-anchor="middle" style="font-size:14.0px">正主拿到的</text>
+<text class="svgsm" x="1048" y="1245" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px">漏给干扰的</text>
+<text class="svgsm" x="510" y="1284" fill="#202124" style="font-size:16.0px">⭐ 生活里的同一件事：<tspan font-weight="700">一个人在台下小声嘀咕，你听不见；一万个人同时小声嘀咕，台上的人就喊不过了。</tspan></text>
+<text class="svgsm" x="510" y="1310" fill="#a50e0e" style="font-size:16.0px">⛔ 而长上下文是<tspan font-weight="700">两头夹击</tspan>：嘀咕的人变多（N 涨），而且最吵的那个还离得更近了（②里的夹角在变小）。</text>
+<rect x="0" y="1392" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1392" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1392" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1419" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 这张图一次回答了本讲三个「为什么」</tspan></text>
+<text class="svgsm" x="20" y="1450" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">为什么每个头是 128 维，不是 8 维？</tspan>——&#160;因为容量不是线性的。8 维里丢 1000 根，最挤的一对只剩 12°（几乎是同一根）；128 维里丢 1 万根还有 61°。</text>
+<text class="svgsm" x="20" y="1474" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">为什么 MLA 压到 512 维还能用？</tspan>——&#160;因为它要的从来不是「完全正交」。这正是 §5「白送的那段 vs 赌的那段」里<tspan font-weight="700">赌的那段</tspan>赌的东西：赌压完之后大家<tspan font-weight="700">还够不像</tspan>。</text>
+<text class="svgsm" x="20" y="1498" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">为什么上下文越长越容易记混？</tspan>——&#160;③ 那三根条就是答案。⛔ 注意这不是「模型偷懒」，是 softmax 把所有人的票加起来等于 1 的<tspan font-weight="700">直接后果</tspan>。</text>
+<rect x="0" y="1528" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1528" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1528" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1555" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 顺手接住 §六：稀疏注意力到底在省什么</tspan></text>
+<text class="svgsm" x="20" y="1586" fill="#0d652d" style="font-size:15.0px">如果记混是「干扰项太多」造成的，那<tspan font-weight="700">少看几个反而可能更准</tspan> ——&#160;这不是省钱的副作用，是它自己的好处。</text>
+<text class="svgsm" x="20" y="1610" fill="#0d652d" style="font-size:15.0px">⭐ DSA 在 128K 里只挑 2048 个（1.5625%），NSA 分三路挑。本讲前面把它们讲成「为了省」，③ 这三根条说明<tspan font-weight="700">它们同时也在降噪</tspan>。</text>
+<text class="svgsm" x="0" y="1642" fill="#80868b" style="font-size:14.0px">📌 ⭐ 图里所有数字都是本课当场算的（numpy；随机单位向量，d=128；夹角量的是最挤的那一对），脚本里带断言 ——&#160;不是引来的</text>
+<text class="svgsm" x="0" y="1663" fill="#80868b" style="font-size:14.0px">　　⚠️ 但<tspan font-weight="700">想法不是本课的</tspan>：「差不多正交能装指数多个」是 Johnson–Lindenstrauss 引理的推论；「叠加（superposition）」这套解释出自 Anthropic Elhage 等《Toy Models of Sup</text>
+<text class="svgsm" x="0" y="1684" fill="#80868b" style="font-size:14.0px">　　erposition》（arXiv <a href="https://arxiv.org/abs/2209.10652" target="_blank"><tspan text-decoration="underline">2209.10652</tspan></a>）</text>
+<text class="svgsm" x="0" y="1705" fill="#80868b" style="font-size:14.0px">　　⚠️ 串扰那格的 logit ＝ √d·cos 是<tspan font-weight="700">推导来的不是测来的</tspan>：q、k 各分量 O(1) 时内积 ≈ d·cos，注意力再除以 √d，剩下 √d·cos。真实模型里 q、k 的模长会被训练调整，所以这一格读<tspan font-weight="700"></tspan></text>
+<text class="svgsm" x="0" y="1726" fill="#80868b" style="font-size:14.0px">　　<tspan font-weight="700">趋势</tspan>，别读绝对值</text>
+</svg><figcaption>⭐⭐ <b>这张图的重点在②和③的对照</b>：② 说容量几乎是白捡的（根数涨 78 倍，最挤的一对才挤 9°），③ 说这笔便宜的价钱是串扰——&nbsp;<b>而价钱是按数量收的</b>。<em>⚠️ ③ 的 logit = √d·cos 是推导来的不是测来的，读趋势别读绝对值。</em></figcaption></figure>
+
+<div class="note ok"><p>★ <b>答案分两层，而第二层才是有用的那层</b></p>
+<p><b>第一层是硬上限</b>：要求「谁跟谁都不沾边」（两两垂直），
+  128 维里最多只能立 <b>128 根</b> 杆子 ——&nbsp;第 129 根一定能被前面那些拼出来。
+  <em>如果模型真按这个标准办事，一个头一辈子只认得 128 个概念。</em></p>
+<p><b>第二层是模型实际在做的</b>：把标准放宽成「<b>差不多</b>不沾边」。
+  图②是当场算的 ——&nbsp;128 维里随便丢 <b>一万根</b>，最挤的那一对仍然差着 <b>61°</b>
+  才会重合。<b>根数涨了 78 倍，最挤的那一对才挤了 9°。</b></p>
+<p>⭐ 所以容量不是 128，是几万。<em>这笔便宜不是白占的 ——&nbsp;
+  「差不多」的意思就是「有点像」，而有点像会漏票。</em></p></div>
+
+<p><b>漏票有多少？图③把它算成了两个数</b>，这两个数放在一起才是重点：</p>
+
+<ol><li><b>单个干扰项小到画不出来</b> ——&nbsp;只有正主的 <code>0.0117%</code>。
+  完全可以忽略。</li>
+<li><b>但「可以忽略」不能乘以一万。</b>一万个加起来是正主的 1.17 倍，
+  <b>正主只剩 46%</b>。</li></ol>
+
+<div class="note warn"><p>⚠️ <b>这就是「记混」，它不是模型偷懒，是 softmax 的直接后果</b></p>
+<p>生活里的同一件事：<em>一个人在台下小声嘀咕，你听不见；
+  一万个人同时小声嘀咕，台上的人就喊不过了。</em></p>
+<p>⛔ 而长上下文是<b>两头夹击</b>：嘀咕的人变多（图③那根轴），
+  <b>而且最吵的那一个还离得更近了</b>（图②那根轴，夹角在变小）。
+  <em>两根轴同时往坏的方向走 ——&nbsp;这就是为什么上下文一长，模型就开始「串台」。</em></p></div>
+
+<div class="note info"><p>📌 <b>这一小节后面要用三次，先在这里打个招呼</b></p>
+<p>① <b>为什么每个头是 128 维，不是 8 维</b> ——&nbsp;容量不是线性的。
+  8 维里丢 1000 根，最挤的一对只剩 12°，那两根基本就是同一根。</p>
+<p>② <b>为什么 MLA 敢压到 512 维</b>（§五）——&nbsp;因为它要的从来不是「完全正交」。
+  <em>「赌的那段」赌的就是这件事：压完之后大家<b>还够不像</b>。</em></p>
+<p>③ <b>为什么稀疏注意力不只是省钱</b>（§六）——&nbsp;如果记混是干扰项太多造成的，
+  那<b>少看几个反而可能更准</b>。<em>降噪是它的正面效果，不是省钱的副作用。</em></p></div>
+
 <h3 id="s1-4">1.4　本节压轴：把形状标出来（这张图后面一直在用）</h3>
 <p>前面讲的是想法。<b>标上形状之后，这笔账可以用眼睛读</b>
   ——&nbsp;<em>在形状里找那个会越变越长的维度就行。</em></p>
