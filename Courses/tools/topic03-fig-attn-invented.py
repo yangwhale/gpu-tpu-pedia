@@ -1,200 +1,142 @@
 # -*- coding: utf-8 -*-
-r"""专题三 · §一「注意力是怎么被发明出来的」（2026-09-13 夜间 · R7）。
+r"""专题三 · §1.0「注意力是怎么被发明出来的」
 
-⭐⭐ 三步，**每一步都在修上一步的一个具体毛病** ——&nbsp;
-   注意力不是谁一次想出来的，是被三次「这儿不对」推出来的。
+⭐⭐⭐ 2026-09-14 **整张重画**（现场：「图是图，字是字 ——&nbsp;把原理画出来」）。
+   上一版是三栏文字，一千三百多字。这一版**三格三个画面**，
+   每格只回答一句「上一步哪儿不对」，字大、字少。
 
-  ① **2014 Bahdanau** ——&nbsp;毛病是 seq2seq 要把整句话压进**一个固定长度向量**。
-     他的第一个念头**不是「注意力」，是「对齐」**（机器翻译里本来就有词对词对应）。
-     ⭐ 真正的关键一步是那个「**软**」字：硬切片不可导，
-     softmax 加权平均可导 ——&nbsp;于是对齐能**跟翻译模型一起学**。
-     ⭐⭐ 论文自己的说法很漂亮：上下文向量 = **在所有可能的对齐上取期望**。
-
-  ② **2017 第一刀：把打分函数换成点积** ——&nbsp;
-     Bahdanau 的打分是个小前馈网络（加性注意力）。
-     ⭐⭐ 原文明说：两者理论复杂度相仿，但点积**快得多、省内存**，
-     因为它**能用高度优化的矩阵乘实现**。
-     ——&nbsp;**选点积不是因为它更准，是因为它能变成矩阵乘。**
-     这是这门课「硬件反过来决定公式」的第一个例子，而且是论文原话。
-     √d 的由来也在同一节的脚注里：分量独立、均值 0 方差 1 → 点积方差 = d_k。
-
-  ③ **2017 第二刀：既然能直连，那还要 RNN 干什么** ——&nbsp;
-     关联任意两个位置的操作数：ConvS2S 线性、ByteNet 对数、**自注意力常数**。
-     ⭐⭐ 但论文同一句话里就承认了代价：**加权平均降低了有效分辨率**，
-     「an effect we counteract with Multi-Head Attention」——&nbsp;
-     **多头是用来补偿这个代价的**，不是「多个视角」这种营销词。
+   ① **2014 ——&nbsp;一个向量装不下。**
+      画面：一整句话被挤进**一个小方块**，再由它生成整段译文。
+      ⭐ 关键那一步是「**软**」：硬挑一个词不可导，
+      softmax 加权平均可导 ——&nbsp;于是对齐能**跟翻译模型一起学出来**。
+   ② **2017 第一刀 ——&nbsp;打分函数太慢。**
+      画面：左边**每一对都要过一个小网络**（加性），
+      右边**整张表一次矩阵乘**（点积）。
+      ⭐⭐ 论文原话：两者理论复杂度相仿，但点积**快得多、省内存**，
+      因为**能用高度优化的矩阵乘实现** ——&nbsp;
+      **选点积不是因为它更准，是因为它能变成矩阵乘。**
+      这是本课「硬件反过来决定公式」的第一个例子，而且是论文原话。
+   ③ **2017 第二刀 ——&nbsp;既然能直连，还要 RNN 干什么。**
+      画面：一条**要走 n 步**的链，对上一张**任意两点一步可达**的表。
+      ⚠️ 同一句话里论文就认了代价：**加权平均降低了有效分辨率**，
+      「an effect we counteract with Multi-Head Attention」——&nbsp;
+      **多头是来补偿这个代价的**，不是「多个视角」这种营销词。
 """
-from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
-                          GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, GR, RD, GY, PU, INK, GY2, LINE, LINE2, BG2)
 
 W = 1400
 PX, PW = [0, 470, 940], [440, 440, 460]
+SRC = ["我", "今天", "很", "开心"]
 
 
 def main():
-    def fits(y, y0, ph, who):
-        assert y <= y0 + ph - 6, "%s 到 %d，面板底边 %d" % (who, y, y0 + ph)
-
-    f = Fig(W, "注意力是怎么被发明出来的：2014 年 Bahdanau 为了修固定长度向量"
-               "这个瓶颈提出软对齐，2017 年把打分换成点积（为了能用矩阵乘），"
-               "再去掉循环，多头用来补偿加权平均造成的分辨率损失")
+    f = Fig(W, "注意力是被三次「这儿不对」推出来的：2014 年一个向量装不下整句，"
+               "于是软对齐；2017 年加性打分每一对都要过小网络太慢，换成点积因为"
+               "能写成矩阵乘；再去掉循环，多头用来补偿加权平均的分辨率损失")
     f.marks = set()
     y0 = f.header(
-        "注意力是怎么被发明出来的　——　三步，每一步都在修上一步的一个具体毛病",
-        "⛔ 它<tspan font-weight=\"700\">不是谁一次想出来的</tspan>，"
-        "是被三次「这儿不对」推出来的",
-        [(BL, "2014 · 修瓶颈"), (GR, "2017 · 修打分函数"),
-         (PU, "2017 · 去掉循环"), (OR, "被硬件推着走的地方")])
+        "注意力是怎么被发明出来的",
+        "三步 ——&#160;<tspan font-weight=\"700\">每一步都在修上一步的一个具体毛病</tspan>",
+        [(RD, "上一步哪儿不对"), (GR, "这一步怎么修"),
+         (PU, "被硬件推着走的那一刀")])
 
-    ph = 436
+    PH = 408
 
-    # ══ ① 2014 Bahdanau ═════════════════════════════════════════
+    # ══════════ ① 2014：一个向量装不下 ═══════════════════════════
     x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 2014　毛病：一个向量装不下", BL,
+    py = f.panel(x, y0, pw, PH, "① 2014　一个向量装不下", BL,
                  sub="Bahdanau / Cho / Bengio")
 
-    yy = py + 26
-    # 小示意：一整句 → 一个小方块 → 解码
-    f.box(x + 24, yy, 150, 34, "#fff", GY, 6)
-    f.t(x + 99, yy + 22, "一整句源文", GY, True, 12, "middle")
-    f.line(x + 180, yy + 17, x + 216, yy + 17, GY2, 1.4)
-    f.box(x + 222, yy + 4, 54, 26, "#fff", RD, 6)
-    f.t(x + 249, yy + 21, "一个向量", RD, True, 11, "middle")
-    f.line(x + 282, yy + 17, x + 318, yy + 17, GY2, 1.4)
-    f.box(x + 324, yy, 92, 34, "#fff", GY, 6)
-    f.t(x + 370, yy + 22, "解码", GY, True, 12, "middle")
-    yy += 48
-    f.t(x + 24, yy, "⛔ 句子越长越崩 —— 这是当时实测出来的", RD, size=11.5,
-        w=pw - 48)
-    yy += 26
+    yy = py + 24
+    # 上：旧做法 —— 整句挤进一个小方块
+    for i, w in enumerate(SRC):
+        f.box(x + 22 + i * 74, yy, 66, 38, BG2, LINE2, 6)
+        f.t(x + 55 + i * 74, yy + 25, w, GY, True, 16, "middle")
+    for i in range(4):
+        f.line(x + 55 + i * 74, yy + 42, x + 202, yy + 62, GY2, 1.1)
+    f.box(x + 168, yy + 66, 68, 40, "#fce8e6", RD, 8)
+    f.t(x + 202, yy + 92, "一个", RD, True, 17, "middle")
+    f.t(x + 202, yy + 124, "向量", RD, True, 17, "middle")
+    f.line(x + 202, yy + 132, x + 202, yy + 156, GY2, 1.4)
+    f.box(x + 100, yy + 160, 204, 40, "#fff", GY, 8)
+    f.t(x + 202, yy + 186, "整段译文都从这儿出", GY, True, 16, "middle")
+    f.t(x + 22, yy + 228, "⛔ 句子越长，挤得越狠", RD, True, 18)
+    f.t(x + 22, yy + 254, "原文：a fixed-length vector", GY2, size=13)
+    f.t(x + 22, yy + 274, "is a bottleneck", GY2, size=13)
 
-    f.box(x + 22, yy, pw - 44, 74, "#fff", BL, 8)
-    f.box(x + 22, yy, 4, 74, BL, BL, 2)
-    f.box(x + 24, yy, 3, 74, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 24, "他的第一个念头不是「注意力」", BL, True, 12.5)
-    f.t(x + 40, yy + 46, "是<tspan font-weight=\"700\">对齐</tspan> —— 机器翻译里本来就有的", GY, size=11.5)
-    f.t(x + 40, yy + 65, "「这个译词对应原文哪几个词」", GY2, size=11)
-    yy += 88
+    f.box(x + 22, yy + 290, pw - 44, 64, "#fff", GR, 8)
+    f.t(x + 38, yy + 316, "⭐ 修法的关键是那个「软」字", GR, True, 17)
+    f.t(x + 38, yy + 342, "硬挑一个词不可导；加权平均可导", GY, size=15)
 
-    f.box(x + 22, yy, pw - 44, 96, "#fff", GR, 8)
-    f.box(x + 22, yy, 4, 96, GR, GR, 2)
-    f.box(x + 24, yy, 3, 96, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 25, "⭐ 关键的一步是那个「软」字", GR, True, 13)
-    f.t(x + 40, yy + 48, "硬切一段出来 → <tspan font-weight=\"700\">不可导</tspan>，学不了", GY, size=11.5)
-    f.t(x + 40, yy + 68, "softmax 加权平均 → <tspan font-weight=\"700\">可导</tspan>", GY, size=11.5)
-    f.t(x + 40, yy + 88, "于是对齐能跟翻译模型<tspan font-weight=\"700\">一起训</tspan>", GR, size=11.5)
-    yy += 108
-
-    f.t(x + 22, yy, "⭐⭐ 论文自己的说法，值得记住：", INK, True, 12.5)
-    f.t(x + 22, yy + 22, "上下文向量 ＝ <tspan font-weight=\"700\">在所有可能的对齐上取期望</tspan>", INK,
-        True, 12.5, w=pw - 44)
-    fits(yy + 30, y0, ph, "①")
-
-    # ══ ② 2017 第一刀：点积 ═════════════════════════════════════
+    # ══════════ ② 2017 第一刀：打分函数 ══════════════════════════
     x, pw = PX[1], PW[1]
-    py = f.panel(x, y0, pw, ph, "② 2017 第一刀　换打分函数", GR,
+    py = f.panel(x, y0, pw, PH, "② 2017 第一刀　打分太慢", GR,
                  sub="加性 → 点积")
 
-    yy = py + 26
-    for who, how, col in [
-        ("Bahdanau 的打分", "一个<tspan font-weight=\"700\">小前馈网络</tspan>（加性注意力）", GY),
-        ("Transformer 的打分", "<tspan font-weight=\"700\">一个点积</tspan> q · k", GR),
-    ]:
-        f.box(x + 22, yy, pw - 44, 52, "#fff", col, 8)
-        f.t(x + 38, yy + 22, who, col, True, 12)
-        f.t(x + 38, yy + 41, how, GY, size=11.5, w=pw - 76)
-        yy += 60
+    yy = py + 24
+    f.t(x + 22, yy + 18, "加性（旧）", RD, True, 19)
+    f.t(x + 22, yy + 42, "每一对，过一个小网络", GY, size=15)
+    for r in range(3):
+        for c in range(3):
+            cx, cy2 = x + 34 + c * 62, yy + 56 + r * 46
+            f.box(cx, cy2, 50, 34, "#fff", RD, 5)
+            f.t(cx + 25, cy2 + 22, "net", RD, size=13, anchor="middle")
+    f.t(x + 232, yy + 122, "n² 次", RD, True, 20)
+    f.t(x + 232, yy + 148, "小网络", RD, True, 20)
 
-    yy += 4
-    f.box(x + 22, yy, pw - 44, 100, "#fff", OR, 8)
-    f.box(x + 22, yy, 4, 100, OR, OR, 2)
-    f.box(x + 24, yy, 3, 100, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 25, "⭐⭐ 换的理由，原文明说了", OR, True, 13)
-    f.t(x + 40, yy + 48, "两者<tspan font-weight=\"700\">理论复杂度相仿</tspan>", GY, size=11.5)
-    f.t(x + 40, yy + 68, "但点积<tspan font-weight=\"700\">快得多、省内存</tspan> —— 因为它", GY, size=11.5)
-    f.t(x + 40, yy + 88, "<tspan font-weight=\"700\">能用高度优化的矩阵乘实现</tspan>", OR, True, 12.5)
-    yy += 114
+    f.line(x + 22, yy + 208, x + pw - 44, yy + 208, LINE, 1, arrow=False)
 
-    f.t(x + 22, yy, "⭐ 那个 √d 也在同一节的脚注里", INK, True, 12.5)
-    yy += 22
-    f.box(x + 22, yy, pw - 44, 96, "#fff", LINE, 8)
-    f.t(x + 38, yy + 24, "假设各分量独立、均值 0、方差 1", GY, size=11.5)
-    f.t(x + 38, yy + 45, "→ 点积 q·k 的方差就是 <tspan font-weight=\"700\">d_k</tspan>", GY, size=11.5)
-    f.t(x + 38, yy + 66, "d 一大，softmax 被推进饱和区，", GY, size=11.5)
-    f.t(x + 38, yy + 86, "梯度小到学不动 → 所以除以 √d_k", INK, True, 12)
-    fits(yy + 96, y0, ph, "②")
+    f.t(x + 22, yy + 238, "点积（今天）", GR, True, 19)
+    f.t(x + 22, yy + 262, "整张表，一次矩阵乘", GY, size=15)
+    f.box(x + 34, yy + 276, 152, 76, "#e6f4ea", GR, 6)
+    f.t(x + 110, yy + 322, "Q · Kᵀ", GR, True, 24, "middle")
+    f.t(x + 206, yy + 322, "一次", GR, True, 20)
 
-    # ══ ③ 2017 第二刀：去循环 ＋ 多头 ════════════════════════════
+    # ══════════ ③ 2017 第二刀：去掉循环 ══════════════════════════
     x, pw = PX[2], PW[2]
-    py = f.panel(x, y0, pw, ph, "③ 2017 第二刀　那还要 RNN 干什么", PU,
-                 sub="顺带交代多头为什么存在")
+    py = f.panel(x, y0, pw, PH, "③ 2017 第二刀　那还要 RNN 干什么", PU,
+                 sub="两点之间要走几步")
 
     yy = py + 24
-    f.t(x + 22, yy, "关联任意两个位置，要几步？", INK, True, 12.5)
-    yy += 18
-    for who, cost, col in [("ConvS2S", "线性", GY2), ("ByteNet", "对数", GY2),
-                           ("自注意力", "<tspan font-weight=\"700\">常数</tspan>", PU)]:
-        f.box(x + 22, yy, pw - 44, 40, "#fff", LINE if col == GY2 else PU, 8)
-        f.t(x + 38, yy + 25, who, col if col != GY2 else GY, True, 12)
-        f.t(x + pw - 38, yy + 25, cost, col if col != GY2 else GY, True, 12,
-            "end")
-        yy += 46
+    f.t(x + 22, yy + 18, "循环：一步一步传", RD, True, 19)
+    for i in range(5):
+        f.box(x + 26 + i * 82, yy + 36, 62, 40, "#fff", RD, 6)
+        f.t(x + 57 + i * 82, yy + 62, str(i + 1), RD, True, 18, "middle")
+        if i < 4:
+            f.line(x + 90 + i * 82, yy + 56, x + 104 + i * 82, yy + 56, RD, 1.4)
+    f.t(x + 22, yy + 102, "①→⑤ 要走 4 步", RD, True, 18)
 
-    yy += 6
-    f.box(x + 22, yy, pw - 44, 74, "#fff", PU, 8)
-    f.box(x + 22, yy, 4, 74, PU, PU, 2)
-    f.box(x + 24, yy, 3, 74, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 24, "于是那句标题就顺理成章了：", PU, True, 12.5)
-    f.t(x + 40, yy + 46, "既然任意两个位置能直连，", GY, size=11.5)
-    f.t(x + 40, yy + 65, "<tspan font-weight=\"700\">那还要循环干什么</tspan>", PU, True, 12.5)
-    yy += 88
+    f.line(x + 22, yy + 124, x + pw - 44, yy + 124, LINE, 1, arrow=False)
 
-    f.box(x + 22, yy, pw - 44, 118, "#fff", OR, 8)
-    f.box(x + 22, yy, 4, 118, OR, OR, 2)
-    f.box(x + 24, yy, 3, 118, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 25, "⭐⭐ 多头为什么存在 —— 论文给了因果", OR, True, 13)
-    f.t(x + 40, yy + 49, "同一句话里它就承认了代价：", GY, size=11.5)
-    f.t(x + 40, yy + 69, "<tspan font-weight=\"700\">加权平均降低了有效分辨率</tspan>", GY, True, 12)
-    f.t(x + 40, yy + 91, "多头就是用来<tspan font-weight=\"700\">抵消这个代价</tspan>的", OR, True, 12.5)
-    f.t(x + 40, yy + 111, "原话：单头时「averaging inhibits this」", GY2,
-        size=11)
-    fits(yy + 118, y0, ph, "③")
+    f.t(x + 22, yy + 154, "自注意力：直接连", GR, True, 19)
+    for i in range(5):
+        f.spot(x + 26 + i * 82, yy + 172, 62, 40, "#e6f4ea")
+        f.t(x + 57 + i * 82, yy + 198, str(i + 1), GR, True, 18, "middle")
+    f.path([(x + 57, yy + 170), (x + 220, yy + 138), (x + 385, yy + 170)],
+           GR, 1.8)
+    f.t(x + 22, yy + 238, "①→⑤ 一步", GR, True, 18)
 
-    # ══ 落点带 ══════════════════════════════════════════════════
-    yy = y0 + ph + 22
-    yy = f.band(yy, "info", "⭐⭐ 这一张要带走的：注意力是被三次「这儿不对」推出来的", [
-        "① 一个向量装不下 → <tspan font-weight=\"700\">软对齐</tspan>；"
-        "② 小网络打分太慢 → <tspan font-weight=\"700\">点积</tspan>；"
-        "③ 既然能直连 → <tspan font-weight=\"700\">扔掉循环</tspan>，"
-        "而扔掉之后分辨率变糙 → <tspan font-weight=\"700\">多头补回来</tspan>。",
-        "⛔ 所以别把它讲成「有人灵光一闪设计了注意力」——&#160;"
-        "<tspan font-weight=\"700\">每一步都能指出它在修哪一个具体毛病</tspan>，"
-        "这才是可以学的部分。",
+    f.box(x + 22, yy + 262, pw - 44, 92, "#fff", PU, 8)
+    f.t(x + 38, yy + 288, "⚠️ 同一句话里，论文认了代价", PU, True, 17)
+    f.t(x + 38, yy + 314, "加权平均<tspan font-weight=\"700\">降低了有效分辨率</tspan>", GY,
+        size=15)
+    f.t(x + 38, yy + 340, "多头就是拿来补这个的", PU, True, 17)
+
+    # ══════════ 落点带 ═══════════════════════════════════════════
+    yy = y0 + PH + 22
+    yy = f.band(yy, "info", "⭐⭐ 第二格那一刀，是这门课的主线第一次出现", [
+        "论文自己写的理由是：两者<tspan font-weight=\"700\">理论复杂度相仿</tspan>，"
+        "但点积<tspan font-weight=\"700\">快得多、省内存，因为它能用高度优化的矩阵乘实现</tspan>。",
+        "⭐ 换句话说 ——&#160;<tspan font-weight=\"700\">选点积不是因为它更准，"
+        "是因为它能变成矩阵乘。</tspan>"
+        "这一讲后面每一个变体，几乎都能追到同一句话上。",
     ])
 
-    yy = f.band(yy + 14, "ok", "⭐ 硬件反过来决定公式 —— 这门课的主线，第一次出现就在这儿", [
-        "点积胜出<tspan font-weight=\"700\">不是因为它更准</tspan>（论文说两者理论复杂度相仿，"
-        "小 d 下表现也相似），是因为它<tspan font-weight=\"700\">能写成矩阵乘</tspan>。",
-        "⭐ 记住这条，后面看 head_dim=128 撞 MXU、看「按块选不按 token 选」、"
-        "看「DSA 必须搭 MQA 模式」，都是同一件事的不同面："
-        "<tspan font-weight=\"700\">能被硬件喜欢的公式，才活得下来。</tspan>",
-    ])
-
-    yy = f.band(yy + 14, "warn", "两个容易讲歪的地方", [
-        "⚠️ <tspan font-weight=\"700\">「多头 ＝ 多个视角」是个营销式说法。</tspan>"
-        "论文给的因果是反的：先有「加权平均把分辨率弄糙了」这个代价，"
-        "多头是<tspan font-weight=\"700\">用来抵消它的补丁</tspan>。",
-        "⚠️ <tspan font-weight=\"700\">「固定长度向量是瓶颈」是 Bahdanau 说的</tspan>，"
-        "不是 seq2seq 原文说的 ——&#160;原文只是那么做，没说它是瓶颈。",
-    ])
-
-    yy = f.src(yy + 16,
-               "① 出自 Bahdanau 等 arXiv 1409.0473（ICLR 2015）摘要与 §3："
-               "fixed-length vector 是 bottleneck、(soft-)search、jointly trained、"
-               "「expected annotation over possible alignments」",
-               "②③ 出自 Attention Is All You Need（Vaswani 等 arXiv 1706.03762）"
-               "原文 §2 与 §3.2.1–3.2.2 及其脚注 4：矩阵乘那句、方差 d_k 的推导、"
-               "「reduced effective resolution due to averaging … counteract with Multi-Head」")
+    yy = f.src(yy + 14,
+               "① Bahdanau 等 arXiv 1409.0473；②③ Vaswani 等 arXiv 1706.03762 "
+               "§3.2.1（点积 vs 加性）与 §3.2.2（多头补偿分辨率）",
+               "⚠️ 画面里的句子、方框数量都是<tspan font-weight=\"700\">示意</tspan>，"
+               "不对应任何一次真实实验")
     f.save("fig3-attn-invented.svg", yy + 6)
 
 

@@ -106,10 +106,19 @@ JS_FIG = r"""()=>{
       const fs=Math.round(parseFloat(getComputedStyle(t).fontSize)*(R.width/W));
       hist[fs]=(hist[fs]||0)+1; if(!samp[fs]) samp[fs]=s0.slice(0,16);
     }
+    // ⭐⭐ 2026-09-14 放宽阈值，并把理由写下来（否则下一个人会把它调回去）：
+    //   这条规矩定的时候，图**基本上是文字面板** ——&nbsp;那时「图内字号超过正文」
+    //   确实等于图在抢正文的层级。
+    //   ⛔ 但现在图的定位变了：现场原话「图的目的是把原理画出来，
+    //     一目了然，打到屏幕上去分享」——&nbsp;**投屏要缩到 0.6～0.7**，
+    //     图里的主标签本来就该比正文大一档，否则后排看不清。
+    //   ⭐ 所以现在判的是「有没有大到离谱」，不是「有没有超过正文」：
+    //     阈值 = 正文 + 4px。**太小那一头由投屏体检（topic02-lint-projection）管。**
+    const CEIL = body + 4;
     const mode=Object.entries(hist).sort((a,b)=>b[1]-a[1])[0];
     const big=[];
-    if(mode && +mode[0]>body)
-      big.push('正文档 '+mode[0]+'px ＞ 页面正文 '+body+'px（'+mode[1]+
+    if(mode && +mode[0]>CEIL)
+      big.push('正文档 '+mode[0]+'px ＞ 上限 '+CEIL+'px（正文 '+body+'＋4）（'+mode[1]+
                ' 处，如「'+samp[mode[0]]+'」）');
     if(n||oob.length||big.length) out.push({i, id:svg.getAttribute('data-fig')||f.id||'',
       W,H, collide:n, hits, oob:oob.slice(0,3), noob:oob.length,

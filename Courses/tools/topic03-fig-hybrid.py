@@ -37,7 +37,7 @@ def main():
         [(RD, "单用的短板"), (GR, "各家实际落点"),
          (BL, "建议区间"), (PU, "意外红利")])
 
-    ph = 430
+    ph = 486
 
     # ══ ① 三种单用的短板 ════════════════════════════════════════
     x, pw = PX[0], PW[0]
@@ -95,7 +95,7 @@ def main():
     yy = py + 30
     f.t(x + 22, yy, "横轴：<tspan font-weight=\"700\">便宜层 : 贵层</tspan>"
         "（每几层便宜的，配一层贵的）", GY, size=11.5, w=pw - 44)
-    yy += 26
+    yy += 34
     ax0, ax1 = x + 54, x + pw - 34
     import math
 
@@ -115,11 +115,13 @@ def main():
         (6, "6 : 1", "MiMo-V2.5-Pro", "滑窗", OR),
         (7, "7 : 1", "Ling 2.6 · MiniMax-01 · Jamba", "线性", BL),
     ]
-    for k, lab, who, fam, col in ROWS2:
+    for n_, (k, lab, who, fam, col) in enumerate(ROWS2):
         px = at(k)
         f.box(px - 3.5, yy - 7, 7, 14, col, "none", 2)
-        f.t(px, yy - 20, lab, col, True, 11.5, "middle")
-    yy += 26
+        # ⛔ 5:1 / 6:1 / 7:1 在对数轴上挨得很近，标签必须**交错两排**
+        f.t(px, yy + (26 if n_ % 2 == 0 else 42), lab, col, True,
+            11.5, "middle")
+    yy += 62
     for k, lab, who, fam, col in ROWS2:
         f.t(x + 22, yy, lab, col, True, 11.5)
         f.t(x + 68, yy, fam, GY2, size=11)

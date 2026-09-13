@@ -209,13 +209,14 @@ def main():
         "所以后面那些方案才要在滑窗之外再加一条「挑着看」的路。",
     ])
 
-    yy = f.src(yy + 16,
+    yy = f.src(yy + 34,
                "① 出自 Mistral 7B arXiv 2310.06825 §2（k×W 射程、W=4096/32 层、"
                "rolling buffer cache）；131,072 与 8× 由脚本当场算并断言",
                "②③ 出自 StreamingLLM（Xiao 等 arXiv 2309.17453, ICLR 2024）"
                "表 1 / 表 2 与 §3.1 / §3.3：5158.07 → 5.40、换行符 5.60、"
-               "留 1/2/4/8 个的对照；⛔ Zero Sink（＝softmax-off-by-one）那组反例出自"
-               "同文表 3 / 表 10 的三个 160M 预训练对照",
+               "留 1/2/4/8 个的对照",
+               "⛔ Zero Sink（＝softmax-off-by-one）那组反例出自同文表 3 / 表 10 的"
+               "三个 160M 预训练对照",
                "⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）"
                "<tspan font-weight=\"700\">不是同一个评测集</tspan> ——&#160;5.40 与 9.59 不可直接比")
     f.save("fig3-swa-why.svg", yy + 6)

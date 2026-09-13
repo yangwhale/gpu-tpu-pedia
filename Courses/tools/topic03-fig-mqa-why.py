@@ -129,7 +129,7 @@ def main():
         bw2 = (ppl - P0) * PSCALE
         f.box(BX0, yy + 24, bw2, 14, col if col != GY else GY2, "none", 2)
         f.t(BX0 + bw2 + 8, yy + 35, "%.1f" % ppl, col, True, 14)
-        f.t(x + pw - 40, yy + 22, cache, GY, size=11, anchor="end")
+        f.t(x + 150, yy + 40, cache, GY2, size=11)
         ROWY[name + cfg] = yy + 31
         yy += 60
     f.t(x + 24, yy + 2, "⚠️ 条形起点 ＝ 困惑度 29.0，"
