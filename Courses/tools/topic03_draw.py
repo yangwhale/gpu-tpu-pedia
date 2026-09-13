@@ -421,6 +421,147 @@ class Fig(object):
             self.t(x + w / 2.0, y + h / 2.0 + 4, main, col, True, size, "middle")
 
     # ── 列头 / 行标签 ───────────────────────────────────────────
+    # ══════════════════════════════════════════════════════════════
+    # ⭐⭐⭐ 2026-09-13 现场：「**最重点的是要画更漂亮的图。**」
+    #   而这一课最缺的不是配色，是**共用图标**：36 张图里的小人、箱子、书、
+    #   白板、推车，全是各画各的矩形现搭 ——&nbsp;既粗糙，又互相对不上。
+    # ⭐ 判据：**同一个比喻在不同图里必须长成同一个样子。**
+    #   「一摞复印件」在 MLA 图和 landing 图里要是两种画法，
+    #   读者就不会把它们连起来 ——&nbsp;而那条连线正是这门课的价值。
+    # ⛔ 「漂亮」不是加渐变加阴影（见 memory feedback_material-design-style）。
+    #   这里的做法是：**轮廓线 ＋ 一块浅底 ＋ 一两笔细节**，
+    #   细节只画**能承担识别功能**的那一两笔（书的书脊、箱子的封条、推车的轮子）。
+    # ══════════════════════════════════════════════════════════════
+    def icon(self, kind, x, y, w=40, h=44, col=None, tint=None, label=None,
+             lsize=15):
+        """画一个图标。**(x, y) 是左上角**，w/h 是外框 —— 跟 box() 一致。
+
+        kind: person 人 · box 箱子 · book 书 · books 一摞书 · paper 纸/复印件
+              · board 白板 · cart 推车 · house 房子 · note 便签 · shelf 货架
+              · drawer 抽屉 · tray 餐盘 · door 门
+        """
+        c = col or GY2
+        t_ = tint or "#fff"
+        P = self.p.append
+        def R(rx, ry, rw, rh, f=None, sw=1.4, r=3):
+            self.box(x + rx, y + ry, rw, rh, f if f is not None else t_, c, r, sw)
+        def L(x1, y1, x2, y2, sw=1.3):
+            P('<line x1="%.1f" y1="%.1f" x2="%.1f" y2="%.1f" stroke="%s" '
+              'stroke-width="%s" stroke-linecap="round"/>'
+              % (x + x1, y + y1, x + x2, y + y2, c, sw))
+        def C(cx, cy, r, f=None):
+            P('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s" stroke="%s" '
+              'stroke-width="1.4"/>' % (x + cx, y + cy, r, f or t_, c))
+
+        if kind == "person":                 # 头 ＋ 肩：两笔就够认
+            C(w / 2.0, h * 0.28, min(w, h) * 0.19)
+            P('<path d="M %.1f %.1f a %.1f %.1f 0 0 1 %.1f 0 z" fill="%s" '
+              'stroke="%s" stroke-width="1.4"/>'
+              % (x + w * 0.18, y + h * 0.92, w * 0.32, h * 0.42, w * 0.64,
+                 t_, c))
+        elif kind == "box":                  # 箱子：一道封条
+            R(w * 0.06, h * 0.18, w * 0.88, h * 0.68, r=4)
+            L(w * 0.5, h * 0.18, w * 0.5, h * 0.86)
+            L(w * 0.06, h * 0.34, w * 0.94, h * 0.34)
+        elif kind == "book":                 # 书：一条书脊
+            R(w * 0.14, h * 0.10, w * 0.72, h * 0.80, r=2)
+            L(w * 0.30, h * 0.10, w * 0.30, h * 0.90, 2.2)
+        elif kind == "books":                # 一摞：三本并排，高度不齐
+            for i, (dx, dh) in enumerate(((0.08, 0.78), (0.38, 0.90), (0.66, 0.70))):
+                self.box(x + w * dx, y + h * (0.94 - dh), w * 0.24, h * dh,
+                         t_, c, 2, 1.4)
+        elif kind == "paper":                # 纸：右上角折角
+            P('<path d="M %.1f %.1f H %.1f L %.1f %.1f V %.1f H %.1f Z" '
+              'fill="%s" stroke="%s" stroke-width="1.4" stroke-linejoin="round"/>'
+              % (x + w * 0.14, y + h * 0.08, x + w * 0.70, x + w * 0.88,
+                 y + h * 0.26, y + h * 0.92, x + w * 0.14, t_, c))
+            L(w * 0.70, h * 0.08, w * 0.70, h * 0.26)
+            L(w * 0.70, h * 0.26, w * 0.88, h * 0.26)
+            for k in range(2):
+                L(w * 0.26, h * (0.48 + k * 0.18), w * 0.72, h * (0.48 + k * 0.18), 1.0)
+        elif kind == "board":                # 白板：两条腿
+            R(w * 0.04, h * 0.06, w * 0.92, h * 0.62, r=3)
+            L(w * 0.24, h * 0.68, w * 0.16, h * 0.94)
+            L(w * 0.76, h * 0.68, w * 0.84, h * 0.94)
+        elif kind == "cart":                 # 推车：车斗 ＋ 两个轮子
+            R(w * 0.06, h * 0.14, w * 0.76, h * 0.50, r=3)
+            L(w * 0.82, h * 0.14, w * 0.94, h * 0.14)
+            C(w * 0.26, h * 0.82, min(w, h) * 0.11)
+            C(w * 0.66, h * 0.82, min(w, h) * 0.11)
+        elif kind == "house":                # 房子：墙先画，屋顶后画且不填实
+            # ⛔ 第一版屋顶 fill=描边色（实心深灰），把墙整个压住了 ——
+            #   ⭐ 又是「后画的不透明形状盖住先画的」那条，这次栽在自己手上。
+            R(w * 0.16, h * 0.44, w * 0.68, h * 0.48, r=2)
+            L(w * 0.44, h * 0.66, w * 0.44, h * 0.92, 1.6)   # 门
+            L(w * 0.44, h * 0.66, w * 0.62, h * 0.66, 1.6)
+            L(w * 0.62, h * 0.66, w * 0.62, h * 0.92, 1.6)
+            P('<path d="M %.1f %.1f L %.1f %.1f L %.1f %.1f" fill="none" '
+              'stroke="%s" stroke-width="2.0" stroke-linejoin="round" '
+              'stroke-linecap="round"/>'
+              % (x + w * 0.04, y + h * 0.46, x + w * 0.5, y + h * 0.08,
+                 x + w * 0.96, y + h * 0.46, c))
+        elif kind == "note":                 # 便签：左上角一枚图钉
+            R(w * 0.10, h * 0.14, w * 0.80, h * 0.74, r=2)
+            C(w * 0.26, h * 0.26, min(w, h) * 0.07, c)
+        elif kind == "shelf":                # 货架：三层
+            R(w * 0.04, h * 0.08, w * 0.92, h * 0.84, r=2)
+            for k in range(2):
+                L(w * 0.04, h * (0.36 + k * 0.28), w * 0.96, h * (0.36 + k * 0.28))
+        elif kind == "drawer":               # 抽屉：三格 ＋ 把手
+            R(w * 0.04, h * 0.08, w * 0.92, h * 0.84, r=3)
+            for k in range(3):
+                yy = h * (0.08 + 0.28 * k)
+                if k:
+                    L(w * 0.04, yy, w * 0.96, yy)
+                L(w * 0.40, yy + h * 0.14, w * 0.60, yy + h * 0.14, 2.0)
+        elif kind == "tray":                 # 餐盘 / 蒸屉：一个浅盘
+            R(w * 0.04, h * 0.30, w * 0.92, h * 0.40, r=5)
+            L(w * 0.04, h * 0.70, w * 0.96, h * 0.70, 2.0)
+        elif kind == "door":                 # 门框：只画两根柱子和门楣
+            L(w * 0.18, h * 0.08, w * 0.18, h * 0.94, 2.6)
+            L(w * 0.82, h * 0.08, w * 0.82, h * 0.94, 2.6)
+            L(w * 0.18, h * 0.08, w * 0.82, h * 0.08, 2.6)
+        else:
+            raise AssertionError("没有这个图标：%s" % kind)
+
+        if label:
+            self.t(x + w / 2.0, y + h + lsize + 4, label, c, True, lsize,
+                   anchor="middle")
+        return x + w, y + h
+
+    def badge(self, x, y, n, col=None, r=13):
+        """序号徽章：一个实心圆 ＋ 白字。⭐ 用它给步骤编号，别再写「1.」。"""
+        c = col or INK
+        self.p.append('<circle cx="%.1f" cy="%.1f" r="%.1f" fill="%s"/>'
+                      % (x + r, y + r, r, c))
+        self.t(x + r, y + r + r * 0.38, str(n), "#fff", True,
+               _sz(int(r * 1.25)), anchor="middle")
+        return x + 2 * r
+
+    def elbow(self, x1, y1, x2, y2, col=None, sw=1.6, r=10, arrow=True,
+              via="h"):
+        """圆角直角连线。⛔ 别再用两条 line 拼 ——&nbsp;硬直角是「简陋」的主要来源之一。
+
+        via="h" 先横后竖，via="v" 先竖后横。
+        """
+        c = col or GY2
+        if arrow:
+            self.marks.add(c)
+        sx = 1 if x2 > x1 else -1
+        sy = 1 if y2 > y1 else -1
+        rr = min(r, abs(x2 - x1) / 2.0, abs(y2 - y1) / 2.0)
+        if via == "h":
+            d = ("M %.1f %.1f H %.1f Q %.1f %.1f %.1f %.1f V %.1f"
+                 % (x1, y1, x2 - sx * rr, x2, y1, x2, y1 + sy * rr, y2))
+        else:
+            d = ("M %.1f %.1f V %.1f Q %.1f %.1f %.1f %.1f H %.1f"
+                 % (x1, y1, y2 - sy * rr, x1, y2, x1 + sx * rr, y2, x2))
+        self.p.append('<path d="%s" fill="none" stroke="%s" stroke-width="%s" '
+                      'stroke-linecap="round"%s/>'
+                      % (d, c, sw,
+                         ' marker-end="url(#ah-%s)"' % c.lstrip("#")
+                         if arrow else ''))
+
     def colhead(self, x, y, main, sub=None, anchor=None):
         self.t(x, y, main, GY, bold=True, size=_sz(12), anchor=anchor)
         if sub:
