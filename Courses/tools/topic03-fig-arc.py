@@ -37,7 +37,7 @@ r"""专题三 · 总纲图 —— **这是一个什么故事，怎么从过去�
   ⛔ **不能相乘**，也不能说成「一共 43 万倍」——&nbsp;那是把两把尺子当成一把。
 """
 import topic03_models as M
-from topic03_draw import (Fig, wpx, _sz, LINE,
+from topic03_draw import (Fig, wpx, _sz, LINE, LINE2,
                           BL, OR, GR, RD, GY, PU, CY, BR, INK,
                           GY2, BG2)
 
@@ -58,59 +58,81 @@ def fig_arc():
         [(RD, "还没有 KV cache 这回事"), (BL, "让每一份更小"),
          (OR, "每步只读一部分"), (PU, "换回一个固定大小的状态")])
 
-    # ── 六个阶段 ────────────────────────────────────────────────
-    # ⛔ 每张卡的正文**手工拆好行**（一行 ≤ 约 16 个汉字）。
-    #   ⭐ 不做自动断词：自动断词会把 <tspan> 拦腰截断，那种坏法比溢出还难查。
-    #   护栏在 Fig.lines() 里 ——&nbsp;任何一行超宽直接报错。
+    # ── 六个阶段：每一格先给一个小画面，再给三句短话 ─────────────
+    # ⭐⭐⭐ 2026-09-14 重画：原来是六张**文字卡**（每张六行字）。
+    #   现在每格上半是**图**、下半只留三行 ——&nbsp;而且每个小画面
+    #   **复用后面各节已经立起来的比喻**（一摞、只亮几格、换成一块板子、
+    #   几个普通配一个资深），前后对得上。
     ST = (
-        ("1990", "2017", "RNN", RD, "#fce8e6", [
-            "<tspan font-weight=\"700\">带一个固定大小的状态</tspan>",
-            "图啥：让模型记住", "　　　「之前发生了什么」",
-            "带来：序列建模第一次可行",
-            "⛔ 欠下：串行 ——&#160;算不快、", "　　　记不住、装不下"]),
-        ("2017", "", "MHA", GY, "#f1f3f4", [
-            "<tspan font-weight=\"700\">把循环整个拿掉</tspan>",
-            "图啥：训练能并行，", "　　　规模才起得来",
-            "带来：亿级 → 千亿级",
-            "⛔ 欠下：状态没了，改成", "　　　留下全部历史 ＝ KV cache"]),
-        ("2019", "2024", "旋钮①", BL, "#e8f0fe", [
-            "<tspan font-weight=\"700\">让每一份更小</tspan>",
-            "图啥：单份 KV 太大，", "　　　先把它压下去",
-            "带来：2K → 128K 成常态",
-            "⛔ 欠下：MQA 砍太狠掉质量；", "　　　MLA 要给 RoPE 单开一路"]),
-        ("2023", "2026", "旋钮②", OR, "#fef7e0", [
-            "<tspan font-weight=\"700\">每步只读一部分</tspan>",
-            "图啥：单份压到头了，改成", "　　　「不是每个都得看」",
-            "带来：1M 进入可用区间",
-            "⛔ 欠下：省读不省存；", "　　　kernel 跟不上就白省"]),
-        ("2020", "2026", "旋钮③", PU, "#f3e8fd", [
-            "<tspan font-weight=\"700\">换回一个固定大小的状态</tspan>",
-            "图啥：既然变长是病根，", "　　　那就别让它变长",
-            "带来：那些层的 KV 归零",
-            "⛔ 欠下：串行跟着回来了，", "　　　得靠 chunk ＋ scan 找补"]),
-        ("2024", "今天", "混合", GR, "#e6f4ea", [
-            "<tspan font-weight=\"700\">两头都要</tspan>",
-            "图啥：单靠哪个都不够，", "　　　就按层配比",
-            "带来：3:1 ～ 7:1 成了共识",
-            "⭐ 今天的形态：便宜的层", "　　　管长度，贵的层管质量"]),
+        ("1990–2017", "RNN", RD, "chain",
+         "带一个固定大小的状态", "序列建模第一次可行",
+         "⛔ 串行：算不快、记不住"),
+        ("2017", "MHA", GY, "table",
+         "把循环整个拿掉", "训练能并行，规模才起得来",
+         "⛔ 状态没了 → KV cache 出生"),
+        ("2019–2024", "旋钮①", BL, "thin",
+         "让每一份更小", "2K → 128K 成常态",
+         "⛔ 砍太狠会掉质量"),
+        ("2023–2026", "旋钮②", OR, "few",
+         "每步只读一部分", "1M 进入可用区间",
+         "⛔ 省读不省存"),
+        ("2020–2026", "旋钮③", PU, "board",
+         "换回一块固定大小的板子", "那些层的 KV 归零",
+         "⛔ 串行跟着回来了"),
+        ("2024–今天", "混合", GR, "team",
+         "两头都要", "3:1 ～ 7:1 成了共识",
+         "⭐ 便宜的管长度，贵的管质量"),
     )
-    CW, GAP, BODY = 224, 8, 136
-    for i, (a_, b_, name, col, fill, rows) in enumerate(ST):
+    CW, GAP, BODY = 224, 8, 158
+    for i, (era, name, col, kind, what, got, owe) in enumerate(ST):
         x = i * (CW + GAP)
-        # ⛔ 原先是实心彩头 ＋ 白字 ——&nbsp;专题一整张图里没有大面积实心色。
-        #   改成：浅底 ＋ 主色标题（t() 会自动降到 900）＋ 顶部一条 3px 彩条认色。
-        f.box(x, y, CW, BODY + 42, "#fff", LINE, 8)   # ⛔ 不填色，见 draw 文件头
+        f.box(x, y, CW, BODY + 46, "#fff", LINE, 8)
         f.box(x, y, CW, 5, col, col, 3)
         f.box(x, y + 3, CW, 6, "#fff", "#fff", 0)
-        f.t(x + 13, y + 22, "%s%s" % (a_, ("–" + b_) if b_ else ""),
-            GY2, size=_sz(11))
-        f.t(x + 13, y + 40, name, col, True, 15)
-        f.line(x + 12, y + 48, x + CW - 12, y + 48, LINE, 1, arrow=False)
-        f.lines(x + 12, y + 66, CW - 22, rows, size=11, lh=17, fill=GY,
-                first_fill=col)          # ⛔ 别再补画一遍首行，会叠成两层
+        f.t(x + 13, y + 24, era, GY2, size=_sz(11.5))
+        f.t(x + 13, y + 46, name, col, True, _sz(17))
+
+        gx, gy_ = x + 14, y + 58
+        if kind == "chain":
+            for k in range(5):
+                f.box(gx + k * 38, gy_ + 8, 28, 26, "#fce8e6", col, 4)
+                if k < 4:
+                    f.line(gx + 30 + k * 38, gy_ + 21, gx + 38 + k * 38,
+                           gy_ + 21, col, 1.2)
+        elif kind == "table":
+            for r in range(4):
+                for c in range(4):
+                    if c <= r:
+                        f.box(gx + c * 24, gy_ + 4 + r * 11, 20, 9,
+                              "#e8eaed", "none", 2)
+        elif kind == "thin":
+            for k in range(5):
+                f.box(gx + k * 38, gy_ + 8, 28, 26, BG2, LINE2, 4)
+                f.box(gx + 8 + k * 38, gy_ + 16, 12, 10, col, "none", 2)
+        elif kind == "few":
+            for k in range(5):
+                on = k in (1, 3)
+                f.box(gx + k * 38, gy_ + 8, 28, 26,
+                      col if on else BG2, "none" if on else LINE2, 4)
+        elif kind == "board":
+            for k in range(3):
+                f.box(gx + k * 24, gy_ + 8, 18, 26, BG2, LINE2, 3)
+            f.line(gx + 78, gy_ + 21, gx + 96, gy_ + 21, col, 1.6)
+            f.box(gx + 102, gy_ + 4, 76, 34, "#f3e8fd", col, 5)
+        elif kind == "team":
+            for k in range(4):
+                pro = (k == 3)
+                f.box(gx + k * 38, gy_ + 8, 28, 26,
+                      "#e8f0fe" if pro else "#e6f4ea", BL if pro else GR, 4)
+                f.t(gx + 14 + k * 38, gy_ + 27, "资" if pro else "普",
+                    BL if pro else GR, True, _sz(12), "middle")
+
+        f.t(x + 13, y + 118, what, col, True, _sz(12.5), w=CW - 26)
+        f.t(x + 13, y + 144, got, GY, size=_sz(11.5), w=CW - 26)
+        f.t(x + 13, y + 172, owe, GY2, size=_sz(11.5), w=CW - 26)
         if i:
             f.line(x - GAP - 2, y + 26, x - 2, y + 26, GY2, 1.4)
-    y += 42 + BODY + 16
+    y += 46 + BODY + 16
 
     # ── 落点 ────────────────────────────────────────────────────
     y = f.band(y, "info", "两条曲线反着走 ——&#160;这才是这六年真正发生的事", [
