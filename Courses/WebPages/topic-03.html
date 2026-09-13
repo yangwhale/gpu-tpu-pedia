@@ -4524,18 +4524,161 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <h3 id="s3-5">3.5 ⭐ TPU 那边是三堵墙 —— 而且「块越大越好」是错的</h3>
 <p>TPU 侧对应的是 <b>Splash Attention</b>。它的灶台看着大得多 （Ironwood 每个 TensorCore <b>64 MB VMEM</b>，一颗 chip 两个核 = 128 MB）， <b>但块反而不能随便开大。</b></p>
 <p>JAX 里 Splash Attention 的<b>默认块是 128 × 128</b>， 而且源码里挂着一句 <code>TODO</code>：「以后按启发式选更好的参数」。</p>
-<p><b>我们自己在 Hunyuan3-295B 上扫过这个参数</b>（<code>seq = 4096</code>，v7 64 芯片， 完整数据见 <a href="../tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md"><code>tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md</code></a>）：</p>
+<p><b>我们自己在 Hunyuan3-295B 上扫过这个参数</b>（<code>seq = 4096</code>，v7 <b>16 芯片 / 20 层 / pdbs 8</b>， 完整数据见 <a href="../tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md"><code>tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md</code></a>）：</p>
 <table>
-<thead><tr><th>块大小</th><th>KV 方向切出几块</th><th>结果</th></tr></thead><tbody>
-<tr><td><b>2048（甜点）</b></td><td><b>2 块</b></td><td><b>228.4 TFLOP/s/device</b></td></tr>
-<tr><td>4096</td><td>1 块</td><td><b>VMEM 直接爆</b>（爆在反向）</td></tr>
-<tr><td>4096（compute 压回 2048）</td><td>1 块</td><td><b>−11.5%</b></td></tr>
-<tr><td>512（照抄官方长上下文配置）</td><td>8 块</td><td><b>−1.0%</b></td></tr>
+<thead><tr><th>run</th><th>块布局</th><th>KV 方向切几块</th><th>TFLOP/s/device</th><th>vs 基线</th></tr></thead><tbody>
+<tr><td><b>B1</b></td><td><b>全 2048</b></td><td><b>2 块</b></td><td><b>223.6</b></td><td>基线</td></tr>
+<tr><td>S2</td><td>官方非均匀布局（含 <code>sa_block_kv_compute=512</code>）</td><td>8 块</td><td>221.3</td><td><b>−1.0%</b></td></tr>
+<tr><td>S1</td><td>全 2048 ＋ <code>use_max_logit_estimate=30</code></td><td>2 块</td><td>228.4</td><td>+2.1%</td></tr>
 </tbody></table>
+<p>再往上（块 4096，KV 方向只剩 1 块）<b>撞 VMEM 墙</b>。 源文件只记了「往上撞 VMEM 墙」这一句，<b>没有留下 OOM 现场</b>，所以这一档这里不给数。</p>
+<div class="note danger"><span class="t">⛔ 这张表最容易读错的地方：228.4 不是块大小的功劳</span><p>228.4 那一行同时开了 <code>use_max_logit_estimate=30</code> —— 那是<b>另一个开关</b>（用一个可证明的 logit 上界替掉 online softmax 的 running max）。 <b>纯粹属于「块大小 = 2048」的成绩是 223.6</b>，差的那 2.1% 得记在 max_logit 头上。</p>
+<p><em>⭐ 一份消融表里同时变了两个旋钮时，<b>「最好的那一行」和「你正在讲的那个旋钮」往往不是一回事</b>。 引数之前先看清那一行还开了什么。</em></p></div>
+<figure class="fbox fwide" id="fig-three-walls"><svg viewBox="0 0 1400 1460" width="100%" role="img" aria-label="Splash attention 块大小的三堵墙，以及最优块为什么是个绝对值"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">§3.5　三堵墙，方向各不相同 —— 而且甜点是个<tspan font-weight="700">绝对值</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">块大小往上撞两堵、往下撞一堵；剩下的缝正对 2048，而这个 2048 换到 seq 16384 上<tspan font-weight="700">没有跟着动</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">实测</text>
+<rect x="75" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="96" y="74" fill="#5f6368" style="font-size:14.0px">没测过</text>
+<rect x="164" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="185" y="74" fill="#5f6368" style="font-size:14.0px">被证伪</text>
+<rect x="30" y="76" width="1340" height="362" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="30" y="76" width="1340" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="30" y="78" width="1340" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="30" y1="106" x2="1370" y2="106" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="44" y="96" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 三堵墙，方向各不相同</tspan></text>
+<text class="svgsm" x="1356" y="96" fill="#80868b" text-anchor="end" style="font-size:11.0px">seq = 4096</text>
+<text class="svgsm" x="60" y="130" fill="#5f6368" style="font-size:12.0px">块大小（以及 KV 方向因此切出几块）</text>
+<rect x="788" y="206" width="144" height="96" rx="8" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="260" y="166" fill="#202124" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">512</tspan></text>
+<text class="svgsm" x="260" y="188" fill="#80868b" text-anchor="middle" style="font-size:12.0px">切 8 块</text>
+<text class="svgsm" x="560" y="166" fill="#202124" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">1024</tspan></text>
+<text class="svgsm" x="560" y="188" fill="#80868b" text-anchor="middle" style="font-size:12.0px">切 4 块</text>
+<text class="svgsm" x="860" y="166" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">2048</tspan></text>
+<text class="svgsm" x="860" y="188" fill="#80868b" text-anchor="middle" style="font-size:12.0px">切 2 块</text>
+<text class="svgsm" x="1160" y="166" fill="#202124" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">4096</tspan></text>
+<text class="svgsm" x="1160" y="188" fill="#80868b" text-anchor="middle" style="font-size:12.0px">切 1 块</text>
+<line x1="150" y1="202" x2="1290" y2="202" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<rect x="150" y="214" width="260" height="32" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text class="svgsm" x="280" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">往下：碎块开销</tspan></text>
+<rect x="410" y="214" width="330" height="32" rx="5" fill="none" stroke="#80868b" stroke-width="1.2" stroke-dasharray="5 4"/>
+<text class="svgsm" x="575" y="234" fill="#80868b" text-anchor="middle" style="font-size:12.0px">1024 没测过，但同向</text>
+<line x1="744" y1="230" x2="788" y2="230" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="1010" y="214" width="300" height="32" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1.2"/>
+<text class="svgsm" x="1160" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">往上：容量墙</tspan></text>
+<line x1="1004" y1="230" x2="950" y2="230" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="1010" y="258" width="300" height="32" rx="5" fill="#fef7e0" stroke="#e8710a" stroke-width="1.2"/>
+<text class="svgsm" x="1160" y="278" fill="#b06000" text-anchor="middle" style="font-size:12.5px"><tspan font-weight="700">往上：并行度</tspan></text>
+<line x1="1004" y1="274" x2="950" y2="274" stroke="#e8710a" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="860" y="322" fill="#0d652d" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">三面都够不着的，只剩这一列</tspan></text>
+<rect x="62" y="343" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="84" y="352" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">往下 · 碎块开销</tspan></text>
+<text class="svgsm" x="193" y="352" fill="#5f6368" style="font-size:12.0px">每块的固定开销（mask 检查、running max/sum 更新、pipeline stage 切换）摊不动。512 实测 −1.0%。</text>
+<rect x="62" y="369" width="11" height="11" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="84" y="378" fill="#a50e0e" style="font-size:12.5px"><tspan font-weight="700">往上 · 容量墙</tspan></text>
+<text class="svgsm" x="181" y="378" fill="#5f6368" style="font-size:12.0px">S 块是 b×b，块开到 4096 时它一个人就占满 64 MiB VMEM ——&#160;见面板 ③。</text>
+<rect x="62" y="395" width="11" height="11" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="84" y="404" fill="#b06000" style="font-size:12.5px"><tspan font-weight="700">往上 · 并行度</tspan></text>
+<text class="svgsm" x="181" y="404" fill="#5f6368" style="font-size:12.0px">KV 方向只切得出一块，那一维的流水直接塌掉。⚠️ 这一堵是从 kernel 结构推的，源文件未实测。</text>
+<rect x="30" y="454" width="1340" height="282" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="30" y="454" width="1340" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="30" y="456" width="1340" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="30" y1="484" x2="1370" y2="484" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="44" y="474" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">② 判决：最优块跟着 seq 走吗</tspan></text>
+<text class="svgsm" x="1356" y="474" fill="#80868b" text-anchor="end" style="font-size:11.0px">两条轴按同一个绝对像素尺画</text>
+<text class="svgsm" x="60" y="539" fill="#202124" style="font-size:14.0px"><tspan font-weight="700">seq = 4096</tspan></text>
+<text class="svgsm" x="60" y="558" fill="#80868b" style="font-size:11.5px">生产形状</text>
+<line x1="290" y1="534" x2="720" y2="534" stroke="#80868b" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="300" y1="529" x2="300" y2="539" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="300" y="556" fill="#80868b" text-anchor="middle" style="font-size:11.0px">512</text>
+<line x1="430" y1="529" x2="430" y2="539" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="430" y="556" fill="#80868b" text-anchor="middle" style="font-size:11.0px">1024</text>
+<line x1="560" y1="529" x2="560" y2="539" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="560" y="556" fill="#80868b" text-anchor="middle" style="font-size:11.0px">2048</text>
+<line x1="690" y1="529" x2="690" y2="539" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="690" y="556" fill="#80868b" text-anchor="middle" style="font-size:11.0px">4096</text>
+<rect x="552" y="526" width="16" height="16" rx="8" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="544" y="539" fill="#0d652d" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">最优 = seq/2</tspan></text>
+<text class="svgsm" x="60" y="625" fill="#202124" style="font-size:14.0px"><tspan font-weight="700">seq = 16384</tspan></text>
+<text class="svgsm" x="60" y="644" fill="#80868b" style="font-size:11.5px">同一个 kernel，只把 seq 拉长 4 倍</text>
+<line x1="290" y1="620" x2="980" y2="620" stroke="#80868b" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="300" y1="615" x2="300" y2="625" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="300" y="642" fill="#80868b" text-anchor="middle" style="font-size:11.0px">512</text>
+<line x1="430" y1="615" x2="430" y2="625" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="430" y="642" fill="#80868b" text-anchor="middle" style="font-size:11.0px">1024</text>
+<line x1="560" y1="615" x2="560" y2="625" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="560" y="642" fill="#80868b" text-anchor="middle" style="font-size:11.0px">2048</text>
+<line x1="690" y1="615" x2="690" y2="625" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="690" y="642" fill="#80868b" text-anchor="middle" style="font-size:11.0px">4096</text>
+<line x1="820" y1="615" x2="820" y2="625" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="820" y="642" fill="#80868b" text-anchor="middle" style="font-size:11.0px">8192</text>
+<line x1="950" y1="615" x2="950" y2="625" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="950" y="642" fill="#80868b" text-anchor="middle" style="font-size:11.0px">16384</text>
+<rect x="552" y="612" width="16" height="16" rx="8" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="544" y="625" fill="#0d652d" text-anchor="end" style="font-size:12.0px"><tspan font-weight="700">最优 = seq/8</tspan></text>
+<rect x="811" y="611" width="18" height="18" rx="9" fill="none" stroke="#d93025" stroke-width="1.4" stroke-dasharray="3 3"/>
+<text class="svgsm" x="820" y="604" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">✗</tspan></text>
+<text class="svgsm" x="842" y="624" fill="#a50e0e" style="font-size:12.0px">比例规则预测最优块在这里（8192）—— 实测没有</text>
+<line x1="560" y1="512" x2="560" y2="642" stroke="#1e8e3e" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="560" y="506" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">同一个绝对位置</tspan></text>
+<text class="svgsm" x="60" y="678" fill="#202124" style="font-size:13.5px">⭐ seq 拉长 4 倍，最优块纹丝不动 ——&#160;它是 seq/2 还是 seq/8 纯属巧合，共同点是那个 2048 本身。</text>
+<text class="svgsm" x="60" y="700" fill="#a50e0e" style="font-size:13.0px">⛔ 课件原文写的是「看 block/seq 的比例，不是绝对值」，并注明「尚未验证」——&#160;方向反了，而且那次验证早就做完了。</text>
+<rect x="30" y="752" width="1340" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="30" y="752" width="1340" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="30" y="754" width="1340" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="30" y1="782" x2="1370" y2="782" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="44" y="772" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">③ 为什么是绝对值：片上那份工作集里，一个 seq 都没有</tspan></text>
+<text class="svgsm" x="1356" y="772" fill="#80868b" text-anchor="end" style="font-size:11.0px">面积按真实字节数等比</text>
+<rect x="110" y="826" width="200" height="200" rx="6" fill="none" stroke="#dadce0" stroke-width="1.4"/>
+<text class="svgsm" x="210" y="800" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">块 = 2048</tspan></text>
+<text class="svgsm" x="210" y="818" fill="#80868b" text-anchor="middle" style="font-size:11.0px">VMEM 64 MiB / TensorCore</text>
+<rect x="110" y="926" width="100" height="100" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="160" y="981" fill="#174ea6" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">16 MiB</tspan></text>
+<rect x="430" y="826" width="200" height="200" rx="6" fill="none" stroke="#dadce0" stroke-width="1.4"/>
+<text class="svgsm" x="530" y="800" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">块 = 4096</tspan></text>
+<text class="svgsm" x="530" y="818" fill="#80868b" text-anchor="middle" style="font-size:11.0px">VMEM 64 MiB / TensorCore</text>
+<rect x="430" y="826" width="200" height="200" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text class="svgsm" x="530" y="931" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">64 MiB</tspan></text>
+<text class="svgsm" x="210" y="1050" fill="#5f6368" text-anchor="middle" style="font-size:12.0px">S 块 16 MiB，还剩得下 Q/K/V（合 1.5 MiB）</text>
+<text class="svgsm" x="530" y="1050" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px">S 块正好 64 MiB ——&#160;一个人占满，Q/K/V 无处可放</text>
+<text class="svgsm" x="700" y="818" fill="#202124" style="font-size:14.0px"><tspan font-weight="700">片上工作集</tspan></text>
+<text class="svgsm" x="700" y="848" fill="#202124" style="font-size:14.0px">Q[b×d]　＋　K[b×d]　＋　V[b×d]　＋　S[b×b]</text>
+<text class="svgsm" x="700" y="874" fill="#5f6368" style="font-size:12.5px">前三项线性，第四项平方 ——&#160;所以块一翻倍，S 翻四倍。</text>
+<text class="svgsm" x="700" y="906" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">⭐ 这四项里没有 seq。</tspan></text>
+<text class="svgsm" x="700" y="930" fill="#5f6368" style="font-size:12.5px">seq 只决定你要绕几趟：seq ÷ b。</text>
+<text class="svgsm" x="700" y="952" fill="#5f6368" style="font-size:12.5px">甜点由 VMEM 顶死，而 VMEM 不知道你的 seq 是多少 ——</text>
+<text class="svgsm" x="700" y="974" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">这就是它为什么是个绝对值。</tspan></text>
+<rect x="686" y="994" width="640" height="62" rx="6" fill="none" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="700" y="1018" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 而 b = seq 时「切 1 块」＝ 压根没分块：</tspan></text>
+<text class="svgsm" x="700" y="1040" fill="#b06000" style="font-size:12.5px">S 就是整张注意力矩阵，你回到了 §3.1 的原点。那堵容量墙就是 FlashAttention 本来要解决的那一堵。</text>
+<rect x="0" y="1132" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1132" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1132" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1159" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 带得走的那一条</tspan></text>
+<text class="svgsm" x="20" y="1190" fill="#0d652d" style="font-size:15.0px">块大小的最优值是<tspan font-weight="700">硬件定的绝对值</tspan>，不是 `block/seq` 的比例。换序列长度时<tspan font-weight="700">不要按比例缩放块大小</tspan> ——&#160;换硬件（VMEM 容量变了）才需要重扫。</text>
+<text class="svgsm" x="20" y="1214" fill="#0d652d" style="font-size:15.0px">照抄别人的配置之所以翻车，不是因为比例变了，而是因为他们那个绝对值是给他们的硬件调的。</text>
+<rect x="0" y="1230" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1230" width="4" height="146" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1230" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1257" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 这一节是审出来的 ——&#160;原表四行错了三行</tspan></text>
+<text class="svgsm" x="20" y="1288" fill="#a50e0e" style="font-size:15.0px">228.4 是 `全 2048 ＋ use_max_logit_estimate=30`（run S1）；<tspan font-weight="700">纯块大小 2048 的基线是 223.6</tspan>（run B1）。差的那 2.1% 是另一个开关的功劳。</text>
+<text class="svgsm" x="20" y="1312" fill="#a50e0e" style="font-size:15.0px">「4096 → VMEM 爆在反向」与「compute 压回 2048 → −11.5%」<tspan font-weight="700">在源文件里都不存在</tspan>：前者是 MoE ragged-dot `tile_k` 的 OOM（另一个 kernel），后者是「把 forward 优</text>
+<text class="svgsm" x="20" y="1336" fill="#a50e0e" style="font-size:15.0px">化到无限快」的收益天花板 `23% × 50%`。</text>
+<text class="svgsm" x="20" y="1360" fill="#a50e0e" style="font-size:15.0px">规模也写错了：消融跑的是 <tspan font-weight="700">16 chip / 20 层 / pdbs 8</tspan>，不是 64 芯片。</text>
+<text class="svgsm" x="0" y="1386" fill="#80868b" style="font-size:14.0px">📌 📌 实测数据出自 `tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md` 「消融实测」表（16 chip / 20 层 / pdbs 8 / seq 4096）与「四条可复用结论」①。</text>
+<text class="svgsm" x="0" y="1407" fill="#80868b" style="font-size:14.0px">　　⛔ 该文件<tspan font-weight="700">前后自相矛盾</tspan>：第 634 行的「方法论教训 ①」说看比例，两千行后的「可复用结论 ①」用 seq 16384 的直接实验说<tspan font-weight="700">与 seq 无关</tspan>。后者晚一轮、有实验，以它为准。</text>
+<text class="svgsm" x="0" y="1428" fill="#80868b" style="font-size:14.0px">　　⚠️ 面板① 的「并行度墙」是从 kernel 结构推的，源文件只实测了容量墙那一侧；1024 那一档<tspan font-weight="700">没有可追溯的 splash 实测</tspan>，故画成虚线。</text>
+</svg><figcaption>⭐⭐ <b>三堵墙方向各不相同：往下是碎块开销，往上是容量墙和并行度</b> —— 剩下的那道缝正对 2048。而第 ② 格是这一节真正的判决：<b>把 seq 拉长 4 倍，最优块纹丝不动</b>，所以它是个绝对值，不是 <code>block/seq</code> 的比例。<em>第 ③ 格给出为什么必然如此 —— 片上工作集里一个 seq 都没有。</em></figcaption></figure>
 <p><b>三堵墙，方向各不相同：</b></p>
-<ol><li><b>往上是容量墙</b> —— 再开大一档就装不下，<b>而且先爆的是反向那一侧</b></li><li>往上还有第二堵，常常比容量更早撞到：<b>并行度</b> —— 块一大，KV 方向只切得出一块，那一维的流水直接塌掉。 ⭐ <b>这一堵最反直觉：装得下，却更慢。</b></li><li><b>往下是碎块开销</b> —— 每块的固定开销（mask 检查、running max/sum 更新、 pipeline stage 切换）摊不动</li></ol>
-<div class="note warn"><span class="t">⚠️ 一条可迁移的教训：块大小要看 <code>block / seq</code> 的比例，不是绝对值</span><p>那个 512 不是我们瞎试的，是官方 tpu7x benchmark 里的值 —— 但那份配置是给 <code>max_target_length = 131072</code> 调的： 512 相对 131072 是 1/256；到我们 <code>seq = 4096</code>，512 就成了 1/8。 <b>跨序列长度照抄配置会反向优化。</b></p>
-<p>我们记下的经验规则是「块 ≈ seq/2」，可证伪版本是 「换 <code>seq = 8192</code> 时最优块应当变成 4096」—— ⚠️ <b>这一条尚未验证。</b></p></div>
+<ol><li><b>往上是容量墙</b> —— 再开大一档就装不下。 ⭐ 而它的成因图上能一眼看到：片上要放的 <code>S</code> 块是 <code>b×b</code>，<b>块翻倍它翻四倍</b>；块开到 4096 时，光这一块就正好占满 64 MiB VMEM</li><li>往上还有第二堵：<b>并行度</b> —— 块一大，KV 方向只切得出一块，那一维的流水直接塌掉。 ⭐ <b>这一堵最反直觉：装得下，却更慢。</b><em>（⚠️ 这一堵是从 kernel 结构推的，我们没有单独实测它）</em></li><li><b>往下是碎块开销</b> —— 每块的固定开销（mask 检查、running max/sum 更新、 pipeline stage 切换）摊不动</li></ol>
+<div class="note ok"><span class="t">⭐ 一条可迁移的教训：最优块是个<b>绝对值</b>，不随序列长度缩放</span><p>那个 512 不是我们瞎试的，是官方 tpu7x benchmark 里的值 —— 那份配置是给 <code>max_target_length = 131072</code> 调的。<b>照抄它会反向优化</b>，这一点没错； 但原因<b>不是</b>「比例变了」，而是 <b>512 本身就不是这块硬件的甜点</b>。</p>
+<p>后来我们在同一个 kernel 上把 <code>seq</code> 从 4096 拉到 <b>16384</b>（长了 4 倍）—— <b>最优块还是 2048</b>。它在前者身上是 <code>seq/2</code>，在后者身上是 <code>seq/8</code>： <b>两次的共同点是那个绝对值，不是比例。</b></p>
+<p>⭐ 为什么必然如此，看上面那张图的第 ③ 格：片上工作集是 <code>Q[b×d] + K[b×d] + V[b×d] + S[b×b]</code>，<b>这四项里一个 <code>seq</code> 都没有</b>。 <code>seq</code> 只决定你要绕几趟（<code>seq ÷ b</code>）。甜点由 VMEM 顶死，而 <b>VMEM 不知道你的 <code>seq</code> 是多少</b>。</p>
+<p><b>所以：换序列长度不用重扫块大小，换硬件才要。</b></p></div>
+<div class="note warn"><span class="t">⚠️ 这一节是审出来的 —— 顺带一条关于「怎么引别人的结论」</span><p>这一节此前的版本写的是「要看 <code>block/seq</code> 的比例」，并注明「尚未验证」。 <b>方向反了，而且那次验证早就做完了。</b></p>
+<p>出错的机制很具体：源文件在前面有一段「方法论教训」，是从<b>一个数据点</b>（照抄 512，−1.0%）反推出来的； 两千行之后的「可复用结论」里，<b>后一轮用 seq 16384 的直接实验把它推翻了</b>。 我们读到前一半就停了。</p>
+<p><em>⭐ 判据：<b>同一份长文档里，晚出现的结论可能推翻早出现的。</b> 引一句「教训」之前，先搜一遍全文还有没有同主题的第二段 —— 尤其当那句话你打算加粗的时候。</em></p></div>
 <p>⭐ 所以两边的墙不是「硬件 vs 调参」，是一面 vs 三面： GPU 那边容量一堵墙顶死，方向反倒清楚 —— 能开多大就开多大； <b>TPU 那边最优往往不在最大处</b>，得在三面之间找那个点。</p>
 <h3 id="s3-6">3.6 ⭐ 融合之后，它还是只跑到 35% —— 三层原因，都不是配置问题</h3>
 <div class="note info"><p>📌 <b>先把「效率」这个词定义一次</b>（⭐ 2026-09-13 补 ——&nbsp;
@@ -11772,10 +11915,10 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="0" y="1246" fill="#80868b" style="font-size:14.0px">　　⚠️ 「排队办事 / 交接单」是<tspan font-weight="700">本课的比喻</tspan></text>
 </svg><figcaption>⭐⭐ <b>第三个旋钮本来是为了省 —— 把平方降成线性；结果先丢掉的是并行度。</b><b>解法是块内并行、块间串行：并行度从 1 变成 C，串行步数从 L 变成 L/C，而且数学一点没改。</b><em>块长两头被夹住 —— 小了算力吃不满，大了放不进片上内存。</em></figcaption></figure>
 <p>⭐ 这一条可以<b>迁移</b>出去：
-  <b>块大小被片上内存顶死</b>，这跟<a href="专题01-一个-Token-的一生.md">专题一</a>
+  <b>块大小被片上内存顶死</b>，这跟本讲 <b><a href="#s3-5">§3.5</a></b> 里
   splash attention 的块大小是<b>同一类问题</b> ——&nbsp;
-  <em>而那一讲已经证过一次：<b>块大小看的是比例，不是绝对值</b>，
-  跨序列长度照抄配置会反向优化。这条结论在这里可以直接搬过来用。</em></p>
+  <em>而那一节已经证过一次：<b>最优块是个绝对值，不随序列长度缩放</b>
+  （seq 从 4096 拉到 16384，最优块都是 2048）。换 seq 不用重扫，换硬件才要。</em></p>
 
 <hr>
 </div></section>

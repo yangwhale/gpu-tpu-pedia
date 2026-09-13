@@ -34,6 +34,25 @@ board 提示里的引号有两种用途，机器分不清：
 所以这里只在**提示明确说了「滚到 / 指 / 停在 / 翻到」**时才对账，
 而且比对前把内层引号、加粗标记、省略号全部剥掉，做**子串包含**匹配。
 宁可漏报，不要误报。
+
+════════════════════════════════════════════════════════════════════
+⛔⛔ 2026-09-14：这条 lint 报了几个月的绿，而它只看了五份讲义里的一份
+════════════════════════════════════════════════════════════════════
+原来的 main() 把两个文件名**写死**成 `topic-02.html` ↔
+`topic-02-L200-lecture.html`。于是：
+  · 它每次打印「100 条 board 提示，0 条对不上」——&nbsp;那 100 条**全是专题二的**；
+  · 专题一 141 条、专题三 90 条、专题二x 12 条、专题八 8 条，
+    **共 251 条从来没有被对过账**。
+
+代价是真金白银的：专题三讲义里连着三条 cue 写着「滚到 1.3 / 1.5 / 1.6」，
+实际该去 §3.3 / §3.5 / §3.6。§1.3、§1.5 真实存在（是别的内容），
+§1.6 **压根不存在** ——&nbsp;而这条 lint 对三条全都没吭声，因为它没读那个文件。
+（更早还误诊过一次：以为「1.2b 碰巧存在」才放行的，其实是根本没查。）
+
+⭐⭐ 判据：**「0 条对不上」和「0 条被检查」在输出里长得一模一样。**
+   任何按文件名枚举的检查，都要**把实际检了哪几对打出来**，
+   并且在发现新页面没有配对时**主动报出来**，而不是静默跳过。
+   —— 本仓库的同类教训：「测试全绿不是证据」「空结果不等于没有」。
 """
 import os
 import re
@@ -50,25 +69,73 @@ def norm(t):
     return re.sub(r'[\s　·…、，。！？：:,.\-—－ᅳ「」『』（）()【】""\'\'*⭐⚠️⛔📖🍳▸]', '', t)
 
 
+# ⭐ 讲义 → 它对应的课件。**新增讲义必须在这里登记** ——&nbsp;
+#   没登记的会在下面被主动报出来，不会静默跳过（这正是 2026-09-14 那个洞）。
+PAIRS = [
+    ("topic-01-lecture.html",      "topic-01.html"),
+    ("topic-02-L200-lecture.html", "topic-02.html"),
+    ("topic-02x-lecture.html",     "topic-02x.html"),
+    ("topic-03-lecture.html",      "topic-03.html"),
+    ("topic-08-lecture.html",      "topic-08.html"),
+]
+
+
+def check_one(pg, lec, dck):
+    """返回 (cue 数, 对不上的条数)。找不到文件就跳过并说清楚。"""
+    lp, dp = os.path.join(W, lec), os.path.join(W, dck)
+    if not (os.path.exists(lp) and os.path.exists(dp)):
+        print('   ○ %-30s 跳过（缺 %s）'
+              % (lec, lec if not os.path.exists(lp) else dck))
+        return 0, 0
+    pg.goto("file://" + os.path.abspath(dp))
+    pg.wait_for_timeout(1200)
+    # ⛔⛔ 2026-09-14：这里原来用 innerText —— 而 **innerText 对折叠在
+    #   <details> 里的元素返回空串**。专题三有 10 个 h3 在折叠区，于是
+    #   lint 只看得见 2 个 §3.x，把 3.2b / 3.3 / 3.5 / 3.6 全报成「不存在」。
+    # ⭐ 判据：**lint 要查的是「文档里有没有」，不是「此刻屏幕上有没有」** ——
+    #   凡是判断存在性的取值，一律用 textContent；innerText 只适合量版面。
+    #   （误报比漏报更糟：本文件头上就写着「误报会把真问题淹掉」。）
+    deck = pg.evaluate("""()=>({
+      txt: document.body.innerText + ' ' + document.body.textContent,
+      figs: [...document.querySelectorAll('figure')].map(f=>f.id),
+      h3: [...document.querySelectorAll('h3')].map(e=>e.textContent)})""")
+    pg.goto("file://" + os.path.abspath(lp))
+    pg.wait_for_timeout(1000)
+    cues = pg.evaluate(
+        """()=>[...document.querySelectorAll('.board')]"""
+        """.map(e=>e.innerText.replace(/\\s+/g,' ').trim())""")
+    n = scan(cues, deck, lec)
+    print('   %s %-30s %3d 条 cue，%d 条对不上'
+          % ('✅' if not n else '⛔', lec, len(cues), n))
+    return len(cues), n
+
+
 def main():
     from playwright.sync_api import sync_playwright
+    # ⛔ 主动发现没登记的讲义 ——&nbsp;静默跳过就是上一个版本翻车的方式。
+    known = {a for a, _ in PAIRS}
+    stray = sorted(f for f in os.listdir(W)
+                   if f.endswith("-lecture.html") and f not in known)
+    total = bad = 0
     with sync_playwright() as pw:
         b = pw.chromium.launch()
         pg = b.new_page(viewport={"width": 1900, "height": 1100})
-        pg.goto("file://" + os.path.abspath(os.path.join(W, "topic-02.html")))
-        pg.wait_for_timeout(1200)
-        deck = pg.evaluate("""()=>({
-          txt: document.body.innerText,
-          figs: [...document.querySelectorAll('figure')].map(f=>f.id),
-          h3: [...document.querySelectorAll('h3')].map(e=>e.innerText)})""")
-        pg.goto("file://" + os.path.abspath(
-            os.path.join(W, "topic-02-L200-lecture.html")))
-        pg.wait_for_timeout(1000)
-        cues = pg.evaluate(
-            """()=>[...document.querySelectorAll('.board')]"""
-            """.map(e=>e.innerText.replace(/\\s+/g,' ').trim())""")
+        for lec, dck in PAIRS:
+            c, n = check_one(pg, lec, dck)
+            total += c
+            bad += n
         b.close()
+    if stray:
+        print('\n⛔ 有讲义没在 PAIRS 里登记，因此从未被对账：%s'
+              % '、'.join(stray))
+        bad += len(stray)
+    print('\n讲义 ↔ 课件对账：%d 份讲义、%d 条 board 提示，%d 条对不上。'
+          % (len(PAIRS), total, bad))
+    if not bad:
+        print('   ✅ 每一条「滚到 X」的 X 都还在。')
 
+
+def scan(cues, deck, lec):
     deck_txt = norm(deck["txt"])
     bad = 0
     for c in cues:
@@ -86,8 +153,11 @@ def main():
                 print('   提示原文：%s' % c[:96])
                 bad += 1
         for k in FIGID.findall(c):
-            if not any(k in f for f in deck["figs"]) \
-               and not any(('s012-' + k) in f for f in deck["figs"]):
+            # ⭐ 三种写法指的是同一张图，都要认：
+            #   讲义说 `fig3-duality`（SVG 文件名）／专题三页面 id 是 `fig-duality`
+            #   ／专题二页面 id 是 `s012-fig1-4`。
+            alt = {k, 's012-' + k, re.sub(r'^fig\d+-', 'fig-', k)}
+            if not any(a in f for a in alt for f in deck["figs"]):
                 print('\n⛔ 讲义指了一个不存在的图 id：%s' % k)
                 print('   提示原文：%s' % c[:96])
                 bad += 1
@@ -96,10 +166,7 @@ def main():
                 print('\n⛔ 讲义指了一个不存在的小节号：%s' % n)
                 print('   提示原文：%s' % c[:96])
                 bad += 1
-    print('\n讲义 ↔ 课件对账：%d 条 board 提示，%d 条对不上。'
-          % (len(cues), bad))
-    if not bad:
-        print('   ✅ 每一条「滚到 X」的 X 都还在。')
+    return bad
 
 
 if __name__ == '__main__':

@@ -979,18 +979,26 @@ __FIG_ONLINE__
 <h3>3.5 ⭐ TPU 那边是三堵墙 —— 而且「块越大越好」是错的</h3>
 <p>TPU 侧对应的是 <b>Splash Attention</b>。它的灶台看着大得多 （Ironwood 每个 TensorCore <b>64 MB VMEM</b>，一颗 chip 两个核 = 128 MB）， <b>但块反而不能随便开大。</b></p>
 <p>JAX 里 Splash Attention 的<b>默认块是 128 × 128</b>， 而且源码里挂着一句 <code>TODO</code>：「以后按启发式选更好的参数」。</p>
-<p><b>我们自己在 Hunyuan3-295B 上扫过这个参数</b>（<code>seq = 4096</code>，v7 64 芯片， 完整数据见 <a href="../tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md"><code>tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md</code></a>）：</p>
+<p><b>我们自己在 Hunyuan3-295B 上扫过这个参数</b>（<code>seq = 4096</code>，v7 <b>16 芯片 / 20 层 / pdbs 8</b>， 完整数据见 <a href="../tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md"><code>tpu/Hunyuan3-295B-Pretraining/TUNING-v7.md</code></a>）：</p>
 <table>
-<thead><tr><th>块大小</th><th>KV 方向切出几块</th><th>结果</th></tr></thead><tbody>
-<tr><td><b>2048（甜点）</b></td><td><b>2 块</b></td><td><b>228.4 TFLOP/s/device</b></td></tr>
-<tr><td>4096</td><td>1 块</td><td><b>VMEM 直接爆</b>（爆在反向）</td></tr>
-<tr><td>4096（compute 压回 2048）</td><td>1 块</td><td><b>−11.5%</b></td></tr>
-<tr><td>512（照抄官方长上下文配置）</td><td>8 块</td><td><b>−1.0%</b></td></tr>
+<thead><tr><th>run</th><th>块布局</th><th>KV 方向切几块</th><th>TFLOP/s/device</th><th>vs 基线</th></tr></thead><tbody>
+<tr><td><b>B1</b></td><td><b>全 2048</b></td><td><b>2 块</b></td><td><b>223.6</b></td><td>基线</td></tr>
+<tr><td>S2</td><td>官方非均匀布局（含 <code>sa_block_kv_compute=512</code>）</td><td>8 块</td><td>221.3</td><td><b>−1.0%</b></td></tr>
+<tr><td>S1</td><td>全 2048 ＋ <code>use_max_logit_estimate=30</code></td><td>2 块</td><td>228.4</td><td>+2.1%</td></tr>
 </tbody></table>
+<p>再往上（块 4096，KV 方向只剩 1 块）<b>撞 VMEM 墙</b>。 源文件只记了「往上撞 VMEM 墙」这一句，<b>没有留下 OOM 现场</b>，所以这一档这里不给数。</p>
+<div class="note danger"><span class="t">⛔ 这张表最容易读错的地方：228.4 不是块大小的功劳</span><p>228.4 那一行同时开了 <code>use_max_logit_estimate=30</code> —— 那是<b>另一个开关</b>（用一个可证明的 logit 上界替掉 online softmax 的 running max）。 <b>纯粹属于「块大小 = 2048」的成绩是 223.6</b>，差的那 2.1% 得记在 max_logit 头上。</p>
+<p><em>⭐ 一份消融表里同时变了两个旋钮时，<b>「最好的那一行」和「你正在讲的那个旋钮」往往不是一回事</b>。 引数之前先看清那一行还开了什么。</em></p></div>
+__FIG_THREE_WALLS__
 <p><b>三堵墙，方向各不相同：</b></p>
-<ol><li><b>往上是容量墙</b> —— 再开大一档就装不下，<b>而且先爆的是反向那一侧</b></li><li>往上还有第二堵，常常比容量更早撞到：<b>并行度</b> —— 块一大，KV 方向只切得出一块，那一维的流水直接塌掉。 ⭐ <b>这一堵最反直觉：装得下，却更慢。</b></li><li><b>往下是碎块开销</b> —— 每块的固定开销（mask 检查、running max/sum 更新、 pipeline stage 切换）摊不动</li></ol>
-<div class="note warn"><span class="t">⚠️ 一条可迁移的教训：块大小要看 <code>block / seq</code> 的比例，不是绝对值</span><p>那个 512 不是我们瞎试的，是官方 tpu7x benchmark 里的值 —— 但那份配置是给 <code>max_target_length = 131072</code> 调的： 512 相对 131072 是 1/256；到我们 <code>seq = 4096</code>，512 就成了 1/8。 <b>跨序列长度照抄配置会反向优化。</b></p>
-<p>我们记下的经验规则是「块 ≈ seq/2」，可证伪版本是 「换 <code>seq = 8192</code> 时最优块应当变成 4096」—— ⚠️ <b>这一条尚未验证。</b></p></div>
+<ol><li><b>往上是容量墙</b> —— 再开大一档就装不下。 ⭐ 而它的成因图上能一眼看到：片上要放的 <code>S</code> 块是 <code>b×b</code>，<b>块翻倍它翻四倍</b>；块开到 4096 时，光这一块就正好占满 64 MiB VMEM</li><li>往上还有第二堵：<b>并行度</b> —— 块一大，KV 方向只切得出一块，那一维的流水直接塌掉。 ⭐ <b>这一堵最反直觉：装得下，却更慢。</b><em>（⚠️ 这一堵是从 kernel 结构推的，我们没有单独实测它）</em></li><li><b>往下是碎块开销</b> —— 每块的固定开销（mask 检查、running max/sum 更新、 pipeline stage 切换）摊不动</li></ol>
+<div class="note ok"><span class="t">⭐ 一条可迁移的教训：最优块是个<b>绝对值</b>，不随序列长度缩放</span><p>那个 512 不是我们瞎试的，是官方 tpu7x benchmark 里的值 —— 那份配置是给 <code>max_target_length = 131072</code> 调的。<b>照抄它会反向优化</b>，这一点没错； 但原因<b>不是</b>「比例变了」，而是 <b>512 本身就不是这块硬件的甜点</b>。</p>
+<p>后来我们在同一个 kernel 上把 <code>seq</code> 从 4096 拉到 <b>16384</b>（长了 4 倍）—— <b>最优块还是 2048</b>。它在前者身上是 <code>seq/2</code>，在后者身上是 <code>seq/8</code>： <b>两次的共同点是那个绝对值，不是比例。</b></p>
+<p>⭐ 为什么必然如此，看上面那张图的第 ③ 格：片上工作集是 <code>Q[b×d] + K[b×d] + V[b×d] + S[b×b]</code>，<b>这四项里一个 <code>seq</code> 都没有</b>。 <code>seq</code> 只决定你要绕几趟（<code>seq ÷ b</code>）。甜点由 VMEM 顶死，而 <b>VMEM 不知道你的 <code>seq</code> 是多少</b>。</p>
+<p><b>所以：换序列长度不用重扫块大小，换硬件才要。</b></p></div>
+<div class="note warn"><span class="t">⚠️ 这一节是审出来的 —— 顺带一条关于「怎么引别人的结论」</span><p>这一节此前的版本写的是「要看 <code>block/seq</code> 的比例」，并注明「尚未验证」。 <b>方向反了，而且那次验证早就做完了。</b></p>
+<p>出错的机制很具体：源文件在前面有一段「方法论教训」，是从<b>一个数据点</b>（照抄 512，−1.0%）反推出来的； 两千行之后的「可复用结论」里，<b>后一轮用 seq 16384 的直接实验把它推翻了</b>。 我们读到前一半就停了。</p>
+<p><em>⭐ 判据：<b>同一份长文档里，晚出现的结论可能推翻早出现的。</b> 引一句「教训」之前，先搜一遍全文还有没有同主题的第二段 —— 尤其当那句话你打算加粗的时候。</em></p></div>
 <p>⭐ 所以两边的墙不是「硬件 vs 调参」，是一面 vs 三面： GPU 那边容量一堵墙顶死，方向反倒清楚 —— 能开多大就开多大； <b>TPU 那边最优往往不在最大处</b>，得在三面之间找那个点。</p>
 <h3>3.6 ⭐ 融合之后，它还是只跑到 35% —— 三层原因，都不是配置问题</h3>
 <div class="note info"><p>📌 <b>先把「效率」这个词定义一次</b>（⭐ 2026-09-13 补 ——&nbsp;
@@ -1731,10 +1739,10 @@ __FIG_TWO_BRACKETS__
 <p>知道了凭什么能分，剩下的就是<b>硬件上怎么排</b>：</p>
 __FIG_CHUNKWISE__
 <p>⭐ 这一条可以<b>迁移</b>出去：
-  <b>块大小被片上内存顶死</b>，这跟<a href="专题01-一个-Token-的一生.md">专题一</a>
+  <b>块大小被片上内存顶死</b>，这跟本讲 <b>§3.5</b> 里
   splash attention 的块大小是<b>同一类问题</b> ——&nbsp;
-  <em>而那一讲已经证过一次：<b>块大小看的是比例，不是绝对值</b>，
-  跨序列长度照抄配置会反向优化。这条结论在这里可以直接搬过来用。</em></p>
+  <em>而那一节已经证过一次：<b>最优块是个绝对值，不随序列长度缩放</b>
+  （seq 从 4096 拉到 16384，最优块都是 2048）。换 seq 不用重扫，换硬件才要。</em></p>
 
 <hr>
 </div></section>
@@ -2520,6 +2528,15 @@ FIGS = {
 
     # ── §7.2c 对偶（2026-09-14 夜间 R32 加）───────────────────────
     # ⛔ 上面那条图注抛了「对偶」这个词就走，全讲再没解释过。这一格补上。
+    # ── §3.5 三堵墙（2026-09-14 夜间 R34 加，连带审出该节 7 处错）──
+    "__FIG_THREE_WALLS__": ("fig-three-walls", "fig3-three-walls.svg",
+        'topic03-fig-three-walls.py',
+        '⭐⭐ <b>三堵墙方向各不相同：往下是碎块开销，往上是容量墙和并行度</b> —— '
+        '剩下的那道缝正对 2048。'
+        '而第 ② 格是这一节真正的判决：<b>把 seq 拉长 4 倍，最优块纹丝不动</b>，'
+        '所以它是个绝对值，不是 <code>block/seq</code> 的比例。'
+        '<em>第 ③ 格给出为什么必然如此 —— 片上工作集里一个 seq 都没有。</em>'),
+
     "__FIG_DUALITY__": ("fig-duality", "fig3-duality.svg",
         'topic03-fig-duality.py',
         '⭐⭐ <b>递推读法和矩阵读法是同一个计算，差别只在先算哪一步。</b>'

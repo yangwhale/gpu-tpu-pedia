@@ -74,6 +74,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-loop-order.py     # §3.2b 内外循环对调：省的到底是什么
   python3 topic03-fig-at-gallery.py    # §七 A_t 的形状决定了一切（八种结构并排）
   python3 topic03-fig-duality.py       # §7.2c 对偶：递推读法 ＝ 矩阵读法（numpy 当场验）
+python3 topic03-fig-three-walls.py   # §3.5 三堵墙：方向各不相同，而甜点是个绝对值
   python3 topic03-fig-two-brackets.py  # §7.4 前半 凭什么能分块：块间根本没有 mask
   python3 topic03-fig-chunkwise.py     # §7.4 块内并行块间串行 ＋ 块长两头夹
   python3 topic03-fig-copy-matrix.py   # §五 「复制」那块 0/1 矩阵，一格一格画出来
