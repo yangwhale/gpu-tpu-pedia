@@ -102,7 +102,7 @@
 
 from topic03_draw import (Fig, wpx, _sz, LINE,
                           BL, OR, GR, RD, GY, PU, CY, BR, INK,
-                          GY2, BG2)
+                          GY2, BG2, LINE2)
 
 
 # ══════════════════════════════════════════════════════════════════
@@ -389,58 +389,83 @@ def fig_decode():
 # 图四：三个痛点各自通向哪条路
 # ══════════════════════════════════════════════════════════════════
 def fig_pain():
+    """⭐⭐⭐ 2026-09-14 整张重画：原来是**三行表格**，现在每个痛点配一个画面。
+
+    ① 串行 ——&nbsp;**一排人传话**，后一个必须等前一个开口。
+    ② 记不住 ——&nbsp;话传到后面**越来越淡**。
+    ③ 装不下 ——&nbsp;**一整段话塞进一个小盒子**。
+    """
     W = 1400
-    f = Fig(W, "RNN 的三个痛点各自通向后来的哪条技术路线：串行通向 Transformer，"
-               "梯度消失通向门控与注意力的短路径，固定大小的状态通向注意力机制；"
-               "而线性注意力与 Mamba 是把第一条反过来再走一遍")
+    f = Fig(W, "RNN 的三个痛点画成三个画面：一排人传话（串行）、"
+               "话传到后面越来越淡（记不住）、一整段话塞进一个小盒子（装不下）；"
+               "后面三十年的路线图就是这三条各自的解药")
     f.marks = set()
     y = f.header(
-        'RNN 的三个痛点 ——&#160;'
-        '<tspan font-weight="700">后面三十年的路线图，就是这三条各自的解药</tspan>',
-        '⭐ 这一页是路标：<tspan font-weight="700">后面每一个变体，'
-        '都能追回到这三条里的某一条。</tspan>')
+        "RNN 的三个痛点",
+        "⭐ 后面三十年的路线图，<tspan font-weight=\"700\">"
+        "就是这三条各自的解药</tspan>")
 
-    f.colhead(64, y + 4, "痛在哪")
-    f.colhead(556, y + 4, "谁来解")
-    f.colhead(880, y + 4, "解完之后欠下什么")
-    y += 18
+    PH = 340
+    py = f.panel(0, y, W, PH, "三个痛点，三个画面", RD, sub="一个一个看")
+    ay = py + 22
 
-    ROWS = (
-        ("①", "串行：算不快",
-         "h<tspan baseline-shift=\"sub\" font-size=\"10\">t</tspan> 要等 "
-         "h<tspan baseline-shift=\"sub\" font-size=\"10\">t−1</tspan>，"
-         "序列多长就排多少轮；权重每轮重搬一次",
-         "Transformer", "把循环整个拿掉",
-         "<tspan font-weight=\"700\">注意力矩阵变成 O(N²)</tspan> ——&#160;"
-         "本专题三个旋钮都是在还这笔账", RD, "#fce8e6"),
-        ("②", "梯度消失：记不住",
-         "反向传播要连乘 n 次，小于 1 就指数衰减 ——&#160;学不到远处的依赖",
-         "门控 → 注意力", "LSTM 1997 / GRU 2014",
-         "注意力更彻底：<tspan font-weight=\"700\">任意两个位置只隔一步</tspan>"
-         "（表 1 最长路径 O(1) vs O(n)）", OR, "#fef7e0"),
-        ("③", "状态是固定大小：装不下",
-         "不管序列多长，全部历史压进一个 [d] 的向量 ——&#160;长句子必然丢信息",
-         "Bahdanau 2014", "别只看最后那个向量",
-         "让解码每一步回头看整段编码 ——&#160;⭐ "
-         "<tspan font-weight=\"700\">注意力的出生证明：它一开始只是 RNN 的一个补丁</tspan>",
-         GR, "#e6f4ea"),
-    )
-    for (num, name, hurt, cure, cure2, tail, col, fill) in ROWS:
-        # ⛔ 去彩底：容器不填。颜色身份留给左侧竖条 ＋ 圆形序号 ＋ 彩色标题。
-        f.box(0, y, W, 96, "#fff", LINE, 9)
-        f.box(0, y, 4, 96, col, col, 2)
-        f.box(2, y, 3, 96, "#fff", "#fff", 0)
-        f.box(14, y + 22, 40, 40, "#fff", col, 20)
-        f.t(34, y + 49, num, col, True, 19, "middle")
-        f.t(64, y + 34, name, col, True, 13.5, cls="svglbl")
-        f.t(64, y + 60, hurt, GY, size=_sz(12))
-        f.line(500, y + 46, 536, y + 46, col, 1.8)
-        f.t(556, y + 34, cure, col, True, 13.5, cls="svglbl")
-        f.t(556, y + 60, cure2, GY, size=_sz(12))
-        f.t(880, y + 48, tail, GY, size=_sz(12))
-        y += 104
+    # ── ① 串行：一排人传话 ──────────────────────────────────────
+    f.t(56, ay + 24, "① 算不快", RD, True, 26)
+    f.t(56, ay + 54, "一排人传话，后一个必须等前一个开口", GY, size=17)
+    for i in range(7):
+        x = 56 + i * 56
+        f.box(x, ay + 70, 44, 44, "#fce8e6", RD, 6)
+        f.t(x + 22, ay + 98, str(i + 1), RD, True, 17, "middle")
+        if i < 6:
+            f.line(x + 46, ay + 92, x + 54, ay + 92, RD, 1.2)
+    f.t(56, ay + 146, "⛔ 序列多长，就排多少轮", RD, True, 19)
+    f.t(56, ay + 176, "而且每一轮都要<tspan font-weight=\"700\">把全部权重"
+        "重搬一遍</tspan>", GY, size=16)
 
-    y = f.band(y + 4, "info", "而第 ① 条后来被反着又走了一遍 ——&#160;这就是专题三真正的主脊", [
+    # ── ② 记不住：越传越淡 ──────────────────────────────────────
+    f.t(500, ay + 24, "② 记不住", OR, True, 26)
+    f.t(500, ay + 54, "话传到后面，越来越淡", GY, size=17)
+    for i in range(7):
+        x = 500 + i * 56
+        alpha = 1.0 - i * 0.14
+        g = int(255 - 140 * alpha)
+        f.box(x, ay + 70, 44, 44, "#%02x%02x%02x" % (255, g + 30, g), OR
+              if i < 2 else LINE2, 6)
+        f.t(x + 22, ay + 98, "话", OR if i < 3 else GY2, True, 17, "middle")
+    f.t(500, ay + 146, "⛔ 反传要连乘 n 次", OR, True, 19)
+    f.t(500, ay + 176, "小于 1 就<tspan font-weight=\"700\">指数衰减</tspan>"
+        " ——　学不到远处", GY, size=16)
+
+    # ── ③ 装不下：一整段塞进小盒子 ──────────────────────────────
+    f.t(944, ay + 24, "③ 装不下", GR, True, 26)
+    f.t(944, ay + 54, "一整段话，塞进一个固定大小的小盒子", GY, size=17)
+    for i in range(7):
+        f.box(944 + i * 30, ay + 70, 22, 44, BG2, LINE2, 4)
+    f.line(1160, ay + 92, 1196, ay + 92, GR, 1.6)
+    f.box(1204, ay + 76, 56, 34, "#e6f4ea", GR, 6)
+    f.t(1232, ay + 99, "h", GR, True, 20, "middle")
+    f.t(944, ay + 146, "⛔ 不管多长，都压进这一个向量", GR, True, 19)
+    f.t(944, ay + 176, "长句子<tspan font-weight=\"700\">必然丢东西</tspan>", GY,
+        size=16)
+
+    # ── 三条解药 ────────────────────────────────────────────────
+    cy = ay + 208
+    for i, (col, cure, how, owe) in enumerate([
+        (RD, "Transformer", "把循环整个拿掉",
+         "欠下：注意力矩阵 O(N²)，三个旋钮都在还这笔账"),
+        (OR, "门控 → 注意力", "LSTM 1997 / GRU 2014",
+         "注意力更彻底：任意两个位置只隔一步"),
+        (GR, "Bahdanau 2014", "别只看最后那个向量",
+         "⭐ 注意力的出生证明：它一开始只是 RNN 的一个补丁"),
+    ]):
+        bx = 56 + i * 444
+        f.box(bx, cy, 400, 104, "#fff", col, 10)
+        f.t(bx + 20, cy + 36, "解药：" + cure, col, True, 21)
+        f.t(bx + 20, cy + 66, how, GY, size=17)
+        f.t(bx + 20, cy + 94, owe, GY2, size=14, w=360)
+
+    y = y + PH + 20
+    y = f.band(y, "info", "而第 ① 条后来被反着又走了一遍 ——　这就是专题三真正的主脊", [
         'Transformer 用「放弃状态」换来了并行度。'
         '<tspan font-weight="700">线性注意力和 Mamba 这一支，是想把状态请回来</tspan>'
         '——&#160;因为有状态，每步要搬的东西才不再变长。',
@@ -450,8 +475,10 @@ def fig_pain():
         '<tspan font-weight="700">它们得线性到能被 scan，否则就退回 1990 年那条链。'
         '一个完整的圆。</tspan>'])
     y = f.src(y + 18,
-              'Bengio, Simard, Frasconi 1994（梯度消失）；Hochreiter &amp; Schmidhuber 1997（LSTM）；'
-              'Bahdanau et al. 2014 (arXiv 1409.0473)「a fixed-length vector is a bottleneck」',
+              'Bengio, Simard, Frasconi 1994（梯度消失）；'
+              'Hochreiter &amp; Schmidhuber 1997（LSTM）；'
+              'Bahdanau et al. 2014 (arXiv 1409.0473)'
+              '「a fixed-length vector is a bottleneck」',
               'Vaswani et al. 2017 (arXiv 1706.03762) 表 1；Martin &amp; Cundy 2018 '
               '(arXiv 1709.04057)：非线性依赖挡住并行，只有线性依赖能用 parallel scan 扫')
     f.save("fig3-rnn-pain.svg", y + 6)
