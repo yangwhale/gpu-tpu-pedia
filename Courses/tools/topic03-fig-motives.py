@@ -59,13 +59,13 @@ def main():
 
     CW, GAP = 672, 56
     RX = CW + GAP
-    PH = 322
+    PH = 356
 
     # ══════════ 左：线索 A · 硬件账（必须省）══════════
     ay = f.panel(0, y, CW, PH, "线索 A · 硬件账算不过来", RD,
                  sub="结论：必须省。不解决它，长上下文根本上不了线")
     f.t(16, ay + 6, "拿 DeepSeek V3 砸体感（61 层 · 128 头 · 每头 128 维 · 128K · bf16）",
-        GY, size=11)
+        GY, size=14)
     STEP = [
         ("每 token 每层", "2 × 128 × 128", "%s 个数" % format(per_tok_layer, ",")),
         ("× 61 层", "", "%s 个数" % format(per_tok, ",")),
@@ -75,16 +75,16 @@ def main():
     sy = ay + 28
     for i, (a, b_, c) in enumerate(STEP):
         last = (i == len(STEP) - 1)
-        f.t(20, sy + i * 24, a, INK if last else GY, bold=last, size=_sz(12))
+        f.t(20, sy + i * 24, a, INK if last else GY, bold=last, size=_sz(15))
         if b_:
             f.t(150, sy + i * 24, b_, GY2, size=11, mono=True)
         f.t(330, sy + i * 24, c, RD if last else GY, bold=last,
             size=_sz(14 if last else 12), mono=True)
-    f.t(560, sy + 3 * 24, "← 一个用户", RD, bold=True, size=11)
+    f.t(560, sy + 3 * 24, "← 一个用户", RD, bold=True, size=14)
 
     # 三个对照，用横条
     cy = sy + 4 * 24 + 14
-    f.t(20, cy, "摆三个对照，让这个数站住", GY, bold=True, size=11)
+    f.t(20, cy, "摆三个对照，让这个数站住", GY, bold=True, size=14)
     BAR0, BARW = 232, 190
     VALX, NOTEX = BAR0 + BARW + 74, BAR0 + BARW + 84
     REF = [("一块 v7 device 的 HBM（可分配）", hbm, GY2, "一个用户就要 5.2 块"),
@@ -94,7 +94,7 @@ def main():
     mx = max(mha, wgt)
     for i, (nm, v, c, note) in enumerate(REF):
         yy = cy + 20 + i * 26
-        f.t(20, yy + 4, nm, INK, size=11)
+        f.t(20, yy + 4, nm, INK, size=14)
         # ⛔ 2026-09-12：第一版把数值写在「条子末端 ＋ 8px」，备注钉在固定列 ——
         #   条子一长，数值就冲进备注里。⭐ 判据（X-6 那次同一条）：
         #   **标签位置不要跟着条形长度走，钉在固定列上。**
@@ -102,19 +102,19 @@ def main():
         f.box(BAR0, yy - 6, bw, 13, "#fff", c, 3, 1.4)
         f.t(VALX, yy + 4, "%.2f GiB" % v if v < 100 else "%.0f GiB" % v,
             c, bold=True, size=11, mono=True, anchor="end")
-        f.t(NOTEX, yy + 4, note, GY2, size=11)
+        f.t(NOTEX, yy + 4, note, GY2, size=14)
     f.t(20, cy + 20 + 4 * 26 + 12,
         '⛔ <tspan font-weight="700">权重是所有用户共享一份，KV cache 是每人一份</tspan>'
         '——&#160;所以它直接决定<tspan font-weight="700">你能同时服务多少人</tspan>。',
-        RD, size=_sz(12))
+        RD, size=_sz(15))
     f.t(20, cy + 20 + 4 * 26 + 32,
         "⚠️ 488 是「假如 V3 用 MHA」的<tspan font-weight=\"700\">反事实</tspan>值，"
-        "不是实测 ——&#160;V3 从第一天就是 MLA。", GY2, size=11)
+        "不是实测 ——&#160;V3 从第一天就是 MLA。", GY2, size=14)
 
     # ══════════ 右：线索 B · 信息账（可以省而不太亏）══════════
     by = f.panel(RX, y, CW, PH, "线索 B · 信息本身不需要那么多", GR,
                  sub="结论：可以省，而且不太亏")
-    f.t(RX + 16, by + 6, "128K 的序列，真需要 128K 份独立的 KV 吗？三个观察 ——", GY, size=11)
+    f.t(RX + 16, by + 6, "128K 的序列，真需要 128K 份独立的 KV 吗？三个观察 ——", GY, size=14)
 
     # ① 稀疏：画一个 n×n，只有少数格子深
     ox, oy = RX + 24, by + 26
@@ -127,11 +127,11 @@ def main():
             f.box(ox + c * CELL, oy + r * CELL, CELL - 1.5, CELL - 1.5,
                   "#1e8e3e" if hot else "#e6f4ea", "none", 1)
     f.t(ox + N * CELL + 16, oy + 18,
-        '① <tspan font-weight="700">实测极其稀疏</tspan>', INK, size=_sz(12))
+        '① <tspan font-weight="700">实测极其稀疏</tspan>', INK, size=_sz(15))
     f.t(ox + N * CELL + 16, oy + 36,
-        "绝大部分权重集中在很少的位置，其余近乎为零。", GY, size=11)
+        "绝大部分权重集中在很少的位置，其余近乎为零。", GY, size=14)
     f.t(ox + N * CELL + 16, oy + 54,
-        "那把近零的那些算出来，算的是什么？", GY2, size=11)
+        "那把近零的那些算出来，算的是什么？", GY2, size=14)
 
     # ② attention sink：第一列恒亮
     o2 = oy + N * CELL + 24
@@ -139,12 +139,12 @@ def main():
         f.box(ox + c * CELL, o2, CELL - 1.5, CELL - 1.5,
               "#1e8e3e" if c == 0 else "#e6f4ea", "none", 1)
     f.t(ox + N * CELL + 16, o2 + 8,
-        '② <tspan font-weight="700">Attention sink</tspan>', INK, size=_sz(12))
+        '② <tspan font-weight="700">Attention sink</tspan>', INK, size=_sz(15))
     f.t(ox + N * CELL + 16, o2 + 26,
         "注意力被大量「停放」在开头几个 token 上，<tspan font-weight=\"700\">跟内容无关</tspan>",
-        GY, size=11)
+        GY, size=14)
     f.t(ox + N * CELL + 16, o2 + 44,
-        "——&#160;说明有一部分权重根本不是在做检索。", GY2, size=11)
+        "——&#160;说明有一部分权重根本不是在做检索。", GY2, size=14)
 
     # ③ 远近有别：近密远疏
     o3 = o2 + 66
@@ -152,19 +152,21 @@ def main():
         dens = 1.0 if c > 13 else (0.45 if c > 7 else 0.18)
         f.box(ox + c * 7, o3, 5.5, 13, "#1e8e3e", "none", 1)
         f.box(ox + c * 7, o3, 5.5, 13 * (1 - dens), "#fff", "none", 1)
-    f.t(ox, o3 + 26, "远 ←", GY2, size=11)
-    f.t(ox + 18 * 7 - 22, o3 + 26, "→ 近", GY2, size=11)
+    f.t(ox, o3 + 26, "远 ←", GY2, size=14)
+    f.t(ox + 18 * 7 - 22, o3 + 26, "→ 近", GY2, size=14)
     f.t(ox + 18 * 7 + 22, o3 + 6,
-        '③ <tspan font-weight="700">远近有别</tspan>', INK, size=_sz(12))
+        '③ <tspan font-weight="700">远近有别</tspan>', INK, size=_sz(15))
     f.t(ox + 18 * 7 + 22, o3 + 24,
-        "邻近几十个 token 密集细粒度；几万之外稀疏粗粒度。", GY, size=11)
+        "邻近几十个 token 密集细粒度；几万之外稀疏粗粒度。", GY, size=14)
     f.t(ox + 18 * 7 + 22, o3 + 42,
-        "<tspan font-weight=\"700\">凭什么用同一套精度处理这两种？</tspan>", GY2, size=11)
+        "<tspan font-weight=\"700\">凭什么用同一套精度处理这两种？</tspan>", GY2, size=14)
 
-    f.t(RX + 20, by + PH - 66,
-        '⭐ 于是 <tspan font-weight="700">压缩</tspan>（远处多个合并成一个）、'
-        '<tspan font-weight="700">稀疏</tspan>（只挑相关的看）、'
-        '<tspan font-weight="700">分层</tspan>（近精细远粗糙）都变得合理。', GR, size=_sz(12))
+    f.t(RX + 20, by + PH - 74,
+        '⭐ 于是这三样都变得合理：', GR, bold=True, size=_sz(15))
+    f.t(RX + 20, by + PH - 50,
+        '<tspan font-weight="700">压缩</tspan>（远处多个合并成一个）　·　'
+        '<tspan font-weight="700">稀疏</tspan>（只挑相关的看）　·　'
+        '<tspan font-weight="700">分层</tspan>（近精细远粗糙）', GR, size=_sz(15))
 
     yy = y + PH + 18
 
