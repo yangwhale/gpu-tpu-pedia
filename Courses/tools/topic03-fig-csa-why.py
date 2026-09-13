@@ -1,201 +1,173 @@
 # -*- coding: utf-8 -*-
-r"""专题三 · §六「CSA 压什么、HCA 图什么、为什么交错」（2026-09-13 夜间 · R5）。
+r"""专题三 · §6.4c「CSA 压什么、HCA 图什么、为什么交错」
 
-⭐⭐ 现场问的是「CSA 又为什么把四个头压成一个？HCA 又图啥？
-   那它俩之间为什么穿插着摆？」
+⭐⭐⭐ 2026-09-14 **整张重画**，换成一个开过会的人都懂的画面：**记会议纪要。**
 
-⛔ 第一件事就是**把问题本身校正一下**：CSA 压的**不是头，是 token**。
-   ⭐⭐ 而这恰恰是这一张图最该留下的东西 ——&nbsp;**压缩有两个正交的方向**：
+⛔ 第一件事仍然是把问题本身校正：CSA 压的**不是头，是 token**。
+⭐⭐ 而这正是这一张最该留下的东西 ——&nbsp;**压缩有两个不同的方向**：
 
-     · 纵向：<b>一个 token 存多少个数</b> ——&nbsp;这是旋钮①（MQA / GQA / MLA）
-     · 横向：<b>多少个 token 合成一条</b> ——&nbsp;这是 CSA / HCA
-     · 再加一个「这一步读哪几条」——&nbsp;那是旋钮②的稀疏
+  · **每条记得更短** ——&nbsp;一条还是一条，只是字少了 →&nbsp;旋钮①（MQA/GQA/MLA）
+  · **四条并成一条** ——&nbsp;条数变少了 →&nbsp;CSA / HCA
+  · **只翻其中几条** ——&nbsp;那是旋钮②的稀疏
 
-   三样互相独立，所以 V4 **三样一起上**。
+  ⭐ 画出来就一目了然：一摞便签，**一种是每张写得更短，一种是四张订成一张**。
 
-⭐ 第二件事是 HCA 的用意，这条是**从两者的定义推出来的**（论文未明述，图中标了口径）：
-   CSA = 压得轻 ＋ 挑 → <b>看得细，但会漏</b>（没选中的完全看不见）
-   HCA = 压得狠 ＋ 不挑 → <b>不漏，但看得粗</b>
-   两种失效模式正好相反 ——&nbsp;⚠️ **交错摆也许正是为了互相兜底**，
-   但这只是一个讲得通的解释，论文只说了采用交错配置、没给理由。
+⭐ HCA 的用意用「纪要的两个版本」讲：
+  · CSA ＝ **详细版 ＋ 只翻几页** →&nbsp;看得细，但没翻到的完全不知道
+  · HCA ＝ **极简版 ＋ 整本都看** →&nbsp;不会漏，但很粗
+  ⚠️ 两种漏法正好相反，**交错摆也许正是为了互相兜底** ——&nbsp;
+  但这只是一个讲得通的解释，论文只说了采用交错配置、没给理由。
 """
-from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
-                          GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+                          BG2)
 
 W = 1400
-PX, PW = [0, 470, 940], [440, 440, 460]
 
 
 def main():
-    def fits(y, y0, ph, who):
-        assert y <= y0 + ph - 6, "%s 到 %d，面板底边 %d" % (who, y, y0 + ph)
+    M, MP = 4, 128                     # CSA 每 4 条压 1 条；HCA 每 128 条压 1 条
+    assert MP // M == 32
 
-    f = Fig(W, "CSA 压的是 token 不是头：压缩有纵向和横向两个正交方向；"
-               "CSA 压得轻加挑选、HCA 压得狠但密集，两者失效模式相反，"
-               "⚠️ 交错也许正是为了互相兜底 —— 这是本课的解释，论文没给理由")
+    f = Fig(W, "CSA 压的是 token 不是头：把 KV 想成一摞会议便签 —— "
+               "每张写得更短是旋钮一，四张订成一张才是 CSA；"
+               "HCA 是极简版但整本都看，两种漏法相反，所以交错摆")
     f.marks = set()
     y0 = f.header(
-        "CSA 与 HCA　——　压缩其实有两个方向，而这两个方向互不相干",
-        "⛔ 先校正一个常见口误：CSA 压的<tspan font-weight=\"700\">不是头，是 token</tspan>"
-        "（横着压），旋钮① 压的才是头（竖着压）",
-        [(BL, "纵向：一个 token 存多少"), (GR, "横向：几个 token 合一条"),
-         (OR, "读哪几条（稀疏）"), (PU, "两种失效模式")])
+        "CSA 压的是 token，不是头",
+        "把 KV 想成<tspan font-weight=\"700\">一摞会议便签</tspan> ——&#160;"
+        "压它有<tspan font-weight=\"700\">两个完全不同的方向</tspan>",
+        [(BL, "每张写更短"), (GR, "四张订一张"), (OR, "只翻几页"),
+         (PU, "两个版本交错")])
 
-    ph = 436
+    # ══════════ ① 两个方向 ══════════════════════════════════════
+    PH = 372
+    py = f.panel(0, y0, W, PH, "① 一摞便签，两种压法 ——　它们是两件事",
+                 BL, sub="这一格弄混了，后面全乱")
 
-    # ══ ① 两个方向 ══════════════════════════════════════════════
-    x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 压缩有两个正交的方向", BL,
-                 sub="把矩阵摆出来就清楚了")
+    ay = py + 24
 
-    yy = py + 34
-    # 一张 token × 维度 的小矩阵
-    R, C = 8, 10
-    cw, chh = 22, 20
-    mx, my = x + 92, yy
-    for r in range(R):
-        for c in range(C):
-            f.box(mx + c * cw, my + r * chh, cw - 2, chh - 2, BG2, LINE2, 2)
-    f.t(mx - 12, my + R * chh / 2.0, "token", GY, True, 11.5, "end")
-    f.t(mx - 12, my + R * chh / 2.0 + 16, "（一行一个）", GY2, size=11,
-        anchor="end")
-    f.t(mx + C * cw / 2.0, my - 12, "一个 token 的表示（一行里的格子）", GY,
-        size=11, anchor="middle")
+    def note(x, y, w, h, lines, col, tint):
+        f.box(x, y, w, h, tint, col, 6)
+        for k, ln in enumerate(lines):
+            f.box(x + 10, y + 12 + k * 12, ln, 5, col, "none", 2)
 
-    # 纵向压：把列收窄
-    f.line(mx + C * cw + 16, my + 6, mx + C * cw + 16, my + R * chh - 6,
-           BL, 1.6, arrow=False)
-    f.t(mx + C * cw + 24, my + 22, "旋钮①", BL, True, 11.5)
-    f.t(mx + C * cw + 24, my + 40, "MQA/GQA", GY2, size=11)
-    f.t(mx + C * cw + 24, my + 56, "MLA", GY2, size=11)
-    f.t(mx + C * cw + 24, my + 76, "竖着压", BL, size=11)
+    # 原始：8 张便签，每张写得满
+    f.t(56, ay + 22, "原来：8 张便签，每张写得满", GY, True, 20)
+    for i in range(8):
+        note(56 + i * 56, ay + 36, 46, 74, [26, 26, 26, 22, 26], GY2, "#fff")
+    f.t(56, ay + 138, "8 条 × 每条 5 行", GY2, size=15)
 
-    # 横向压：把行合并
-    f.line(mx, my + R * chh + 14, mx + C * cw - 4, my + R * chh + 14,
-           GR, 1.6, arrow=False)
-    f.t(mx, my + R * chh + 34, "CSA / HCA —— 横着压：把连着的几行合成一行",
-        GR, True, 11.5, w=pw - 100)
+    # 方向 A：每张写更短
+    f.t(56, ay + 186, "方向 A：每张写得更短", BL, True, 22)
+    for i in range(8):
+        note(56 + i * 56, ay + 200, 46, 74, [26, 20], BL, "#e8f0fe")
+    f.t(56, ay + 302, "还是 8 条，但每条只剩 2 行", BL, size=17)
+    f.t(56, ay + 328, "→　<tspan font-weight=\"700\">这是旋钮①（MQA / GQA / MLA）"
+        "</tspan>", BL, size=17)
 
-    yy = my + R * chh + 52
-    f.box(x + 22, yy, pw - 44, 50, "#fff", OR, 8)
-    f.box(x + 22, yy, 4, 50, OR, OR, 2)
-    f.box(x + 24, yy, 3, 50, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 21, "还有第三件事：这一步<tspan font-weight=\"700\">读哪几行</tspan>", OR, True, 12.5)
-    f.t(x + 40, yy + 40, "那是旋钮②的稀疏 —— 跟压不压没关系", GY, size=11.5)
-    yy += 62
+    f.line(520, ay + 186, 520, ay + 300, LINE, 1.2, arrow=False)
 
-    f.box(x + 22, yy, pw - 44, 70, "#fff", BL, 8)
-    f.t(x + 38, yy + 24, "⭐⭐ 三样互不相干，所以可以同时上", BL, True, 13,
-        cls="svglbl")
-    f.t(x + 38, yy + 46, "DeepSeek-V4 就是三样一起：MLA ＋ 横压 ＋ 稀疏",
-        GY, size=11.5)
-    f.t(x + 38, yy + 64, "⛔ 别把它们当成三个竞品 —— 它们是三个轴", GY2,
-        size=11)
-    fits(yy + 70, y0, ph, "①")
+    # 方向 B：四张订成一张
+    f.t(560, ay + 186, "方向 B：四张订成一张", GR, True, 22)
+    for i in range(2):
+        note(560 + i * 120, ay + 200, 100, 74, [80, 80, 80, 70, 80], GR,
+             "#e6f4ea")
+        f.t(560 + i * 120 + 50, ay + 292, "第 %d 摞" % (i + 1), GR, size=14,
+            anchor="middle")
+    f.t(560, ay + 328, "条数 8 → 2　→　<tspan font-weight=\"700\">这才是 CSA"
+        "（每 %d 条压 1 条）</tspan>" % M, GR, size=17)
 
-    # ══ ② CSA：先压再挑 ═════════════════════════════════════════
-    x, pw = PX[1], PW[1]
-    py = f.panel(x, y0, pw, ph, "② CSA：先压一点，再挑", GR,
-                 sub="压缩 ＋ 稀疏，两个省法相乘")
+    f.box(880, ay + 180, 480, 140, "#fff", INK, 10)
+    f.t(904, ay + 220, "⭐ 两个方向互不相干", INK, True, 22)
+    f.t(904, ay + 256, "「每条更短」和「条数更少」可以同时做 ——", GY, size=17)
+    f.t(904, ay + 288, "DeepSeek-V4 就是<tspan font-weight=\"700\">两个一起，"
+        "再加上「只翻几页」</tspan>。", GY, size=17)
 
-    yy = py + 24
-    CS = [
-        ("第一步　每 m 个 token 压成一条",
-         "<tspan font-weight=\"700\">不是简单平均</tspan> —— 两组 KV 各配一组可学权重，",
-         "softmax 归一后加权合并；窗口还是<tspan font-weight=\"700\">重叠</tspan>的"),
-        ("第二步　在压缩后的条目上跑 DSA",
-         "每个 query 只挑 top-k 条 —— <tspan font-weight=\"700\">挑的是压缩条目，</tspan>",
-         "<tspan font-weight=\"700\">不是原始 token</tspan>，于是索引器要打分的对象少了 m 倍"),
-        ("第三步　再并上一小段滑窗",
-         "补回近处的细粒度依赖 ——",
-         "⭐ 「近处永远保留」在 NSA 里也有，是这一支的共同结构"),
-    ]
-    for title, l1, l2 in CS:
-        f.box(x + 22, yy, pw - 44, 92, "#fff", GR, 8)
-        f.box(x + 22, yy, 4, 92, GR, GR, 2)
-        f.box(x + 24, yy, 3, 92, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 24, title, GR, True, 12.5)
-        f.t(x + 40, yy + 48, l1, GY, size=11.5, w=pw - 76)
-        f.t(x + 40, yy + 70, l2, GY, size=11.5, w=pw - 76)
-        yy += 102
+    # ══════════ ② CSA vs HCA：纪要的两个版本 ════════════════════
+    y1 = y0 + PH + 18
+    PH2 = 318
+    py2 = f.panel(0, y1, W, PH2, "② CSA 和 HCA ——　同一场会的两个版本",
+                  PU, sub="一个细但会漏，一个粗但不漏")
 
-    yy += 2
-    f.box(x + 22, yy, pw - 44, 64, "#fff", LINE, 8)
-    f.t(x + 38, yy + 24, "⭐ 两个省法是<tspan font-weight=\"700\">相乘</tspan>的：压 m 倍 × 只读 k 条",
-        INK, True, 12.5)
-    f.t(x + 38, yy + 46, "这就是为什么它敢把上下文推到一百万", GY, size=11.5)
-    fits(yy + 64, y0, ph, "②")
+    by = py2 + 22
+    # CSA：详细版 + 只翻几页
+    f.t(56, by + 20, "CSA ＝ 详细版　＋　只翻其中几页", GR, True, 22)
+    for i in range(16):
+        on = i in (2, 3, 10)
+        f.box(56 + i * 40, by + 36, 32, 66, "#e6f4ea" if on else BG2,
+              GR if on else LINE2, 4)
+        if on:
+            for k in range(4):
+                f.box(62 + i * 40, by + 44 + k * 14, 20, 5, GR, "none", 2)
+    f.t(56, by + 128, "✅ 翻到的那几页，内容很全", GR, True, 18)
+    f.t(56, by + 158, "⛔ 没翻到的，<tspan font-weight=\"700\">等于完全不知道</tspan>", RD,
+        size=18)
 
-    # ══ ③ HCA 图啥 ＋ 为什么交错 ═════════════════════════════════
-    x, pw = PX[2], PW[2]
-    py = f.panel(x, y0, pw, ph, "③ HCA 图啥，为什么交错", PU,
-                 sub="两种失效模式，正好相反")
+    # HCA：极简版 + 整本都看
+    f.t(736, by + 20, "HCA ＝ 极简版　＋　整本都看", OR, True, 22)
+    for i in range(16):
+        f.box(736 + i * 40, by + 36, 32, 66, "#fef7e0", OR, 4)
+        f.box(742 + i * 40, by + 62, 20, 5, OR, "none", 2)
+    f.t(736, by + 128, "✅ 一页都不会漏", OR, True, 18)
+    f.t(736, by + 158, "⛔ 但每页<tspan font-weight=\"700\">只剩一行，很粗</tspan>", RD,
+        size=18)
 
-    yy = py + 24
-    f.box(x + 22, yy, pw - 44, 56, "#fff", PU, 8)
-    f.box(x + 22, yy, 4, 56, PU, PU, 2)
-    f.box(x + 24, yy, 3, 56, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 23, "HCA：每 m′ 个 token 压成一条（m′ ≫ m）", PU,
-        True, 12.5)
-    f.t(x + 40, yy + 43, "但是 <tspan font-weight=\"700\">不挑，全看</tspan> —— 保持密集注意力", GY,
-        size=11.5)
-    yy += 72
+    f.box(56, by + 188, 1304, 104, "#f3e8fd", PU, 10)
+    f.t(80, by + 226, "⚠️ 两种漏法正好相反 ——　交错摆<tspan font-weight=\"700\">"
+        "也许</tspan>正是为了让它们互相兜底", PU, True, 21)
+    f.t(80, by + 264, "⛔ 但论文只说了采用交错配置，<tspan font-weight=\"700\">"
+        "没给这个理由</tspan> ——&#160;这是一个讲得通的解释，不是它的设计意图。",
+        GY, size=17)
 
-    f.t(x + 22, yy, "⭐⭐ 为什么要两种？看它们各自怎么坏", INK, True, 13.5,
-        cls="svglbl")
-    yy += 26
-    for who, good, bad, col in [
-        ("CSA　压得轻 ＋ 挑", "被选中的那几块<tspan font-weight=\"700\">看得很细</tspan>",
-         "⛔ 没选中的<tspan font-weight=\"700\">完全看不见</tspan> —— 会漏", GR),
-        ("HCA　压得狠 ＋ 全看", "<tspan font-weight=\"700\">一个位置都不漏</tspan>",
-         "⛔ 每个位置只剩一个很糙的摘要", PU),
-    ]:
-        f.box(x + 22, yy, pw - 44, 78, "#fff", col, 8)
-        f.t(x + 38, yy + 23, who, col, True, 12.5)
-        f.t(x + 38, yy + 45, "✓ " + good, GY, size=11.5, w=pw - 76)
-        f.t(x + 38, yy + 66, bad, GY, size=11.5, w=pw - 76)
-        yy += 88
+    # ══════════ ③ 成绩 ══════════════════════════════════════════
+    y2 = y1 + PH2 + 18
+    PH3 = 196
+    py3 = f.panel(0, y2, W, PH3, "③ 成绩：一百万上下文成为常规配置", GR,
+                  sub="1M 下，V4-Pro 对 V3.2")
 
-    f.box(x + 22, yy, pw - 44, 78, "#fff", INK, 8)
-    f.t(x + 38, yy + 24, "⚠️ 两种坏法正好相反 ——&#160;交错摆<tspan font-weight=\"700\">"
-        "也许</tspan>", INK, size=12.5, w=pw - 76)
-    f.t(x + 38, yy + 44, "<tspan font-weight=\"700\">正是为了让它们互相兜底</tspan>。", INK,
-        size=12.5, w=pw - 76)
-    f.t(x + 38, yy + 64, "⛔ 但论文只说了采用交错配置，<tspan font-weight=\"700\">没给理由</tspan>",
-        GY, size=11, w=pw - 76)
-    fits(yy + 78, y0, ph, "③")
+    ey = py3 + 24
+    for i, (num, what, col, why) in enumerate([
+        ("27%", "单 token 推理 FLOPs", GR, "「只翻几页」省的是算"),
+        ("10%", "KV cache", BL, "「四条并一条」省的是存"),
+    ]):
+        bx = 120 + i * 420
+        f.box(bx, ey + 18, 360, 112, "#fff", col, 10)
+        f.t(bx + 28, ey + 74, num, col, True, 42)
+        f.t(bx + 142, ey + 62, what, GY, True, 19)
+        f.t(bx + 142, ey + 96, why, GY2, size=15)
 
-    # ══ 落点带 ══════════════════════════════════════════════════
-    yy = y0 + ph + 22
-    yy = f.band(yy, "info", "⭐⭐ 这一张要带走的一句：压缩有两个方向，它们互不相干", [
-        "<tspan font-weight=\"700\">竖着压</tspan>（一个 token 存多少个数）是旋钮①；"
-        "<tspan font-weight=\"700\">横着压</tspan>（几个 token 合成一条）是 CSA/HCA；"
-        "<tspan font-weight=\"700\">读哪几条</tspan>是旋钮②。",
-        "⭐ 想清楚这三个轴，V4 那套「CSA＋HCA」就不是一个新名词，"
-        "而是<tspan font-weight=\"700\">三个轴同时拧到一个新位置</tspan>。"
-        "⛔ 拿到任何一个新方案，先问它<tspan font-weight=\"700\">动了哪几个轴</tspan>。",
+    f.box(984, ey + 18, 376, 112, "#fff", PU, 10)
+    f.t(1008, ey + 54, "⭐ 这两个数不一样，是有话说的", PU, True, 18)
+    f.t(1008, ey + 88, "横着压主要省存储，", GY, size=16)
+    f.t(1008, ey + 116, "稀疏主要省计算", GY, size=16)
+
+    # ══════════ 落点 ════════════════════════════════════════════
+    yy = y2 + PH3 + 20
+    yy = f.band(yy, "info", "⭐⭐ 带走一条：拿到一个新方案，先问它动了哪几个方向", [
+        "<tspan font-weight=\"700\">每条更短</tspan>（一个 token 存多少）· "
+        "<tspan font-weight=\"700\">条数更少</tspan>（几个 token 合一条）· "
+        "<tspan font-weight=\"700\">只翻几条</tspan>（这一步读哪些）——&#160;三个方向互不相干。",
+        "⭐ 前两个都在回答「那份要留下来的有多大」，所以都算<tspan font-weight=\"700\">"
+        "旋钮①</tspan>（只是下刀的维度不同，见 §4.2b）；第三个是<tspan "
+        "font-weight=\"700\">旋钮②</tspan>。<tspan font-weight=\"700\">V4 三个一起拧。</tspan>",
     ])
 
-    yy = f.band(yy + 14, "ok", "成绩：一百万上下文成为常规配置", [
-        "1M 上下文下，DeepSeek-V4-Pro 只要 DeepSeek-V3.2 的 "
-        "<tspan font-weight=\"700\">27% 单 token 推理 FLOPs</tspan> 和 "
-        "<tspan font-weight=\"700\">10% 的 KV cache</tspan>。",
-        "⭐ 注意这两个数<tspan font-weight=\"700\">不一样</tspan> ——&#160;"
-        "FLOPs 省到 27%、KV 省到 10%，"
-        "说明<tspan font-weight=\"700\">横着压主要省的是存储，稀疏主要省的是计算</tspan>。",
-        "⚠️ <tspan font-weight=\"700\">这个 10% 跟 §6.1～6.6 那张五格 mask 图上的「约 2%」"
-        "不是同一个基线</tspan>：这里比的是 <tspan font-weight=\"700\">V3.2</tspan>，"
-        "那里比的是同形状的 <tspan font-weight=\"700\">GQA-8</tspan>，"
-        "而且那 2% 还叠了一层跟注意力机制无关的 KV 混合精度。"
-        "⭐ 两个数都对 ——&#160;<tspan font-weight=\"700\">对的是各自的基线</tspan>。",
+    yy = f.band(yy + 14, "warn", "口径：这个 10% 跟别处那个 2% 不是一个基线", [
+        "⚠️ 这里的 <tspan font-weight=\"700\">27% / 10%</tspan> 比的是 "
+        "<tspan font-weight=\"700\">V3.2</tspan>；"
+        "§6.1～6.6 那张五格 mask 图上写的「约 2%」比的是<tspan font-weight=\"700\">"
+        "同形状的 GQA-8</tspan>，而且那 2% 还叠了一层跟注意力机制无关的 KV 混合精度。",
+        "⭐ <tspan font-weight=\"700\">两个数都对 ——&#160;对的是各自的基线</tspan>，别并排比。",
     ])
 
     yy = f.src(yy + 16,
                "CSA / HCA 的机制出自 DeepSeek-V4 技术报告 arXiv 2606.19348 "
-               "§2.3–2.3.1（每 m 个压一条 → DSA top-k → 并上滑窗；HCA 压 m′≫m 但保持密集）",
+               "§2.3–2.3.1（每 m 个压一条 → DSA top-k → 并上滑窗；"
+               "HCA 压 m′≫m 但保持密集，m=%d / m′=%d）" % (M, MP),
                "27% FLOPs / 10% KV cache 出自同一篇摘要与 §2.3.4（1M 上下文、对比 V3.2）",
-               "⚠️ 「两种失效模式互补、所以交错」是从两者定义推出的解释，"
-               "论文只说了采用交错混合配置，未给这个理由，也未在此给出层间配比")
+               "⚠️ 「会议便签 / 两个版本」是<tspan font-weight=\"700\">本课的比喻</tspan>；"
+               "⚠️ 「两种漏法互补所以交错」是从定义推出的解释，论文未给这个理由，"
+               "也未在此给出层间配比")
     f.save("fig3-csa-why.svg", yy + 6)
 
 

@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
-r"""专题三 · §七「一块固定大小的记事板」（2026-09-13 夜间 · R11）。
+r"""专题三 · §7.0「一块固定大小的记事板」
 
-⭐⭐⭐ 这个比喻是现场给的，而且现场说了它「对于理解非常重要」：
+⭐⭐⭐ 2026-09-14 **整张重画** ——&nbsp;这个比喻是现场给的，
+   现场还说了它「对于理解非常重要」。上一版把它**写**出来了，
+   这一版把它**画**出来：三块白板，三种写法，看一眼就懂。
 
 > 「一个记事板，固定大小。有一种是疯狂往里写，后写的覆盖先写的；
 >   有一种是先写的叉掉，然后再写后写的；
@@ -9,237 +11,179 @@ r"""专题三 · §七「一块固定大小的记事板」（2026-09-13 夜间 �
 
    ⭐ 这三句话正好就是这一支的三代：
      **纯线性注意力 → delta rule → 门控 delta rule**。
-   这一张图要做的，就是把这个比喻**钉到式子上**，
-   让「叉掉」这个动作在代数里有一个确切的对应物。
 
-📌 三个关键事实（都出自 DeltaNet 论文 arXiv 2406.06484 §2.1–2.2）：
-   ① 纯线性注意力的递推就是 **S_t = S_{t-1} + v_t k_tᵀ** ——&nbsp;纯加法，
-      **没法「释放」旧的关联**；序列一旦 **L > d**，键就开始撞车。
-      ⭐ 这正是「板子只有那么大」的精确版本。
-   ② delta rule：**S_t = S_{t-1} − β_t(S_{t-1}k_t − v_t)k_tᵀ**，
-      改写成 **S_{t-1}(I − β k kᵀ) + β v kᵀ** ——&nbsp;
-      那个 (I − β k kᵀ) **就是「叉掉」**：在 k 这个方向上按比例擦掉旧内容。
-   ③ 它还有另一个读法：这是对在线回归损失 ½‖Sk − v‖² **做一步 SGD**，
-      β 就是学习率。⭐⭐ 于是状态不再是一个缓存，
-      而是**一个边跑边被训练的小模型**。
+📌 关键事实（DeltaNet 论文 arXiv 2406.06484 §2.1–2.2）：
+   · 纯加法递推 **没法释放旧的关联**；序列一旦 **L > d**，键就开始撞车。
+   · delta rule 的 **(I − β k kᵀ)** 就是「叉掉」：在 k 这个方向上按比例擦。
+   · 它还等价于对 ½‖Sk − v‖² **做一步梯度下降**（β 就是学习率）——&nbsp;
+     ⭐⭐ 于是状态不再是一个缓存，而是**一个边跑边被训练的小模型**。
 """
-from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
-                          GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+                          BG2)
 
 W = 1400
-PX, PW = [0, 470, 940], [440, 440, 460]
 
 
 def main():
-    def fits(y, y0, ph, who):
-        assert y <= y0 + ph - 6, "%s 到 %d，面板底边 %d" % (who, y, y0 + ph)
-
-    f = Fig(W, "一块固定大小的记事板：纯线性注意力是疯狂往里写后写盖先写，"
-               "delta rule 是先把这个方向上的旧内容擦掉再写，"
-               "门控版是选择性地擦；擦这个动作在式子里就是 I 减 beta k k 转置")
-    f.marks = set()
-    y0 = f.header(
-        "一块固定大小的记事板　——　三种写法，就是这一支的三代",
-        "⭐⭐ 这一张要做的事：<tspan font-weight=\"700\">把「叉掉」这个动作，"
-        "钉到式子里的一个确切位置上</tspan>",
-        [(RD, "纯加：谁也不擦"), (GR, "delta：先擦再写"),
-         (PU, "门控：选择性地擦"), (OR, "板子的物理上限")])
-
-    ph = 492
-
-    # ══ ① 板子是什么 ════════════════════════════════════════════
-    x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 先说清楚「板子」是什么", OR,
-                 sub="它就是那个固定大小的状态")
-
-    yy = py + 26
-    # 画一块板：d×d 的格子
-    n = 9
-    cw = 30
-    bx = x + (pw - n * cw) / 2.0
-    for r in range(5):
-        for c in range(n):
-            f.box(bx + c * cw, yy + r * 24, cw - 3, 21, BG2, LINE2, 2)
-    f.t(x + pw / 2.0, yy + 5 * 24 + 18, "状态 S：一块 d × d 的板子", OR,
-        True, 12.5, "middle")
-    f.t(x + pw / 2.0, yy + 5 * 24 + 38,
-        "大小固定，<tspan font-weight=\"700\">不随序列变长而变大</tspan>", GY, size=11.5, anchor="middle")
-    yy += 5 * 24 + 54
-
-    for lab, txt in [("写", "把一对 (k, v) 的关联记到板子上"),
-                     ("读", "拿 q 去板子上查，取回一个 v")]:
-        f.box(x + 22, yy, pw - 44, 44, "#fff", LINE, 8)
-        f.t(x + 38, yy + 27, lab, INK, True, 13)
-        f.t(x + 70, yy + 27, txt, GY, size=11.5, w=pw - 130)
-        yy += 52
-
-    yy += 4
-    f.box(x + 22, yy, pw - 44, 96, "#fff", OR, 8)
-    f.box(x + 22, yy, 4, 96, OR, OR, 2)
-    f.box(x + 24, yy, 3, 96, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 25, "⭐ 板子的上限是可以写出来的", OR, True, 13)
-    f.t(x + 40, yy + 49, "一共写了 L 条，而板子只有 d 个「方向」——", GY,
-        size=11.5)
-    f.t(x + 40, yy + 70, "<tspan font-weight=\"700\">L 超过 d_k，key 就必然线性相关</tspan> ——", OR,
-        True, 12.5)
-    f.t(x + 40, yy + 89, "除非 value 恰好满足同一组关系，否则必有覆盖", GY2,
-        size=11)
-    fits(yy + 96, y0, ph, "①")
-
-    # ══ ② 三种写法 ══════════════════════════════════════════════
-    x, pw = PX[1], PW[1]
-    py = f.panel(x, y0, pw, ph, "② 三种写法", GR,
-                 sub="现场那个比喻，逐句钉到式子上")
-
-    yy = py + 22
-    WAYS = [
-        ("① 疯狂往里写", "S ← S ＋ v kᵀ", RD,
-         "谁也不擦，新的直接叠在旧的上面",
-         "⛔ 结果：互相干扰，L &gt; d 时必然撞车"),
-        ("② 先叉掉，再写", "S ← S(I − β k kᵀ) ＋ β v kᵀ", GR,
-         "⭐ 那个 (I − β k kᵀ) 就是「叉掉」——",
-         "在 k 这个方向上，把旧内容按比例擦掉"),
-        ("③ 选择性地叉", "再加一个学出来的门 α", PU,
-         "擦多少、擦哪几个通道，由门决定",
-         "⭐ 这就是 Gated DeltaNet / KDA 那一支"),
-    ]
-    for title, formula, col, l1, l2 in WAYS:
-        h = 118
-        f.box(x + 22, yy, pw - 44, h, "#fff", col, 8)
-        f.box(x + 22, yy, 4, h, col, col, 2)
-        f.box(x + 24, yy, 3, h, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 26, title, col, True, 13, cls="svglbl")
-        f.box(x + 40, yy + 38, pw - 100, 28, BG2, LINE2, 5)
-        f.t(x + 52, yy + 57, formula, INK, size=12, mono=True, w=pw - 124)
-        f.t(x + 40, yy + 87, l1, GY, size=11.5, w=pw - 76)
-        f.t(x + 40, yy + 107, l2, GY, size=11.5, w=pw - 76)
-        yy += h + 10
-    fits(yy, y0, ph, "②")
-
-    # ══ ③ 为什么「先擦」真的更好 ════════════════════════════════
-    x, pw = PX[2], PW[2]
-    py = f.panel(x, y0, pw, ph, "③ 「先擦」还有个更深的读法", BL,
-                 sub="它把记事板变成了一个小模型")
-
-    yy = py + 24
-    f.box(x + 22, yy, pw - 44, 116, "#fff", BL, 8)
-    f.box(x + 22, yy, 4, 116, BL, BL, 2)
-    f.box(x + 24, yy, 3, 116, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 25, "把那个式子换个角度看：", BL, True, 12.5)
-    f.t(x + 40, yy + 48, "S k 是「按这个 key 现在能取出什么」", GY,
-        size=11.5)
-    f.t(x + 40, yy + 68, "v 是「本来该取出什么」", GY, size=11.5)
-    f.t(x + 40, yy + 90, "⭐ 按两者的<tspan font-weight=\"700\">差</tspan>去改板子 ——", GY, size=11.5)
-    f.t(x + 40, yy + 110, "这就是<tspan font-weight=\"700\">一步梯度下降</tspan>，β 是学习率", BL,
-        True, 12.5)
-    yy += 130
-
-    f.box(x + 22, yy, pw - 44, 76, "#fff", INK, 8)
-    f.t(x + 38, yy + 25, "⭐⭐ 于是状态不再是一个「缓存」", INK, True, 13,
-        cls="svglbl")
-    f.t(x + 38, yy + 49, "它是<tspan font-weight=\"700\">一个边跑边被训练的小模型</tspan> ——", INK,
-        True, 12.5, w=pw - 76)
-    f.t(x + 38, yy + 68, "⚠️ 前提只有两条：学习率取 β、损失是<tspan font-weight=\"700\">瞬时</tspan>的", GY,
-        size=11.5)
-    yy += 90
-
-    # ⛔ 2026-09-14 二轮学生审稿：上面那行原来还挂着「k 已 L2 归一」——
-    #   **它不是这个等价的前提**。把 S − β(Sk−v)kᵀ 展开就是 S(I−βkkᵀ) + βvkᵀ，
-    #   对**任意** k 都成立，论文 §2.2 给这个推导时没有任何归一化假设。
-    # ⭐ 判据：**给一个结论挂上它不需要的前提，会让它看起来比实际更脆弱。**
-    #   L2 归一真正的出处是 §3.3 的**稳定性**，而那才是「叉掉」这个比喻的来源。
-    f.box(x + 22, yy, pw - 44, 96, "#fff", PU, 8)
-    f.box(x + 22, yy, 4, 96, PU, PU, 2)
-    f.box(x + 24, yy, 3, 96, "#fff", "#fff", 0)
-    f.t(x + 38, yy + 24, "⭐ 那 L2 归一是干嘛的？——&#160;稳定性", PU, True, 12.5)
-    f.t(x + 38, yy + 46, "I − β k kᵀ 的特征值是 1（重 d−1 个）和 1 − β‖k‖²", GY,
-        size=11.5, w=pw - 76)
-    f.t(x + 38, yy + 66, "要它落在 [0,1] 才需要 ‖k‖ = 1", GY, size=11.5)
-    f.t(x + 38, yy + 86, "⭐⭐ 而 β=1 时它正好是个投影：那个方向擦干净，"
-        "其余 d−1 个一点不动", PU, True, 11.5, w=pw - 76)
-    yy += 110
-
-    f.box(x + 22, yy, pw - 44, 100, "#fff", OR, 8)
-    f.box(x + 22, yy, 4, 100, OR, OR, 2)
-    f.box(x + 24, yy, 3, 100, "#fff", "#fff", 0)
-    # ⛔⛔ 2026-09-14 二轮学生审稿，这里原来写「『先擦再写』是**串行**的」——
-    #   **把被引论文的结论讲反了**：arXiv 2406.06484 的标题就是
-    #   《Parallelizing Linear Transformers with the Delta Rule **over Sequence Length**》，
-    #   它的全部贡献正是证明这东西能沿序列并行（WY 表示 + chunkwise）。
-    # ⛔ 而 §6 那句「表达力与并行度的根本权衡」说的对象是**比 DeltaNet 更强**的那批
-    #   （Recurrent DeltaNet / mesa-layer），而且是带引用的 "suggests"，不是本文结论。
-    # ⭐ 判据：**引一篇论文的某一句之前，先看一眼它的标题在说什么。**
-    #   而且本讲自己的 fig-at-gallery 写的是「要专门的技巧」、§7.4 整节讲的是
-    #   「块内并行块间串行」—— 同一份讲义两处说法不一致，这才是最该抓的信号。
-    f.t(x + 40, yy + 25, "⚠️ 代价：没有纯加法那种「各项互不依赖」的自由", OR,
-        True, 12.5, w=pw - 76)
-    f.t(x + 40, yy + 47, "要靠<tspan font-weight=\"700\">专门的分块算法</tspan>才能沿序列并行", GY,
-        size=11.5, w=pw - 76)
-    f.t(x + 40, yy + 67, "——&#160;这正是 2406.06484 那篇的贡献（见 §7.4）", GY2,
-        size=11, w=pw - 76)
-    f.t(x + 40, yy + 87, "⭐ 它顺带指出：比 delta 更强的那批就再也并行不了了", GY2,
-        size=11, w=pw - 76)
-    fits(yy + 100, y0, ph, "③")
-
-    # ══ 落点带 ══════════════════════════════════════════════════
-    yy = y0 + ph + 22
-    # ── 板子到底多少字节 ──────────────────────────────────────
-    H, DK, DV, NL = 32, 128, 128, 69          # ⚠️ 形状是**示例**，不是某个模型的实测
+    H, DK, DV, NL = 32, 128, 128, 69          # ⚠️ 形状是示例，不是某个模型的实测
     G, DH = 8, 128                            # 对照组：GQA-8
     st = H * DK * DV * 4                      # 每层状态，fp32
     kvt = 2 * G * DH * 2                      # 每层每 token 的 KV，bf16
     cross = st // kvt
-    assert cross == 512 and abs(st * NL / 2**20 - 138) < 1
+    assert cross == 512 and abs(st * NL / 2 ** 20 - 138) < 1
 
-    yy = f.band(yy, "warn", "板子到底占多少字节 ——&#160;全讲只有这一支没给过数", [
-        "每层状态 ＝ 头数 × d_k × d_v × 4 B（通常 fp32 存）"
-        "＝ <tspan font-weight=\"700\">%.0f MiB</tspan>；"
-        "69 个 KDA 层就是 <tspan font-weight=\"700\">%.0f MiB / 请求</tspan> ——&#160;"
-        "<tspan font-weight=\"700\">而且它跟序列长度无关。</tspan>"
-        % (st / 2.0 ** 20, st * NL / 2.0 ** 20),
-        "⭐ 于是有个自然的问题：<tspan font-weight=\"700\">短上下文、高并发下，"
-        "它会不会反而比 KV 更费？</tspan>⛔ 算交叉点之前，先把两边的口径摊开 ——&#160;"
-        "<tspan font-weight=\"700\">这一步不写出来，512 这个数就是个孤立数字</tspan>：",
-        "状态 ＝ %d × %d × %d × 4 B<tspan font-weight=\"700\">(fp32)</tspan> "
-        "＝ <tspan font-weight=\"700\">%.0f MiB</tspan>　·　"
-        "GQA-8 每 token 每层 ＝ 2 × %d × %d × 2 B<tspan font-weight=\"700\">(bf16)</tspan> "
-        "＝ <tspan font-weight=\"700\">%.0f KiB</tspan>"
-        % (H, DK, DV, st / 2.0 ** 20, G, DH, kvt / 1024.0),
-        "→ 交叉点 ＝ %.0f MiB ÷ %.0f KiB ＝ <tspan font-weight=\"700\">%d 个 token</tspan>。"
-        "⚠️ <tspan font-weight=\"700\">两边精度不一样</tspan> ——&#160;"
-        "状态若也按 bf16 存，交叉点就变成 %d。"
-        % (st / 2.0 ** 20, kvt / 1024.0, cross, cross // 2),
-        "⛔ 也就是说<tspan font-weight=\"700\">只在几百 token 以内它才更贵</tspan>；"
-        "到 8K 时 GQA-8 的 KV 已经是它的 16 倍。"
-        "⚠️ 形状是<tspan font-weight=\"700\">示例</tspan>（32 头 × 128 × 128），"
-        "而 69 是 K3 的真层数（K3 实际 96 头）——&#160;"
-        "所以那个 138 MiB 是<tspan font-weight=\"700\">量级示意，不是 K3 的部署数</tspan>。",
-    ])
+    f = Fig(W, "一块固定大小的记事板：三块白板三种写法 —— 疯狂往里写后写盖先写、"
+               "先把这一栏叉掉再写、选择性地叉；「叉掉」在式子里就是 I 减 beta k k 转置")
+    f.marks = set()
+    y0 = f.header(
+        "线性注意力 ＝ 一块<tspan font-weight=\"700\">固定大小的记事板</tspan>",
+        "板子就那么大 ——&#160;<tspan font-weight=\"700\">三代的差别，"
+        "全在「写之前擦不擦、擦多少」</tspan>",
+        [(RD, "不擦"), (GR, "先擦再写"), (PU, "选择性地擦")])
 
-    yy = f.band(yy, "info", "⭐⭐ 这个比喻之所以好，是因为它把三代的差别缩到了一个动作上", [
-        "三代的差别不在「怎么读」，全在<tspan font-weight=\"700\">「写之前擦不擦、擦多少」</tspan>："
+    # ══════════ ① 三块白板 ══════════════════════════════════════
+    PH = 364
+    py = f.panel(0, y0, W, PH, "① 同一块板子，三种写法", GR,
+                 sub="现场那个比喻，画出来")
+
+    ay = py + 24
+    BW, BH = 400, 190
+    WAYS = [
+        (RD, "① 疯狂往里写", "后写的盖住先写的", "S ← S ＋ v kᵀ",
+         "⛔ 糊成一团", "mess"),
+        (GR, "② 先叉掉，再写", "写之前，把这一栏擦干净", "S ← S(I − β k kᵀ) ＋ β v kᵀ",
+         "✅ 干净", "erase"),
+        (PU, "③ 选择性地叉", "擦多少、擦哪几栏，学出来", "再加一个学出来的门 α",
+         "⭐ GDN / KDA 这一支", "gate"),
+    ]
+    for i, (col, name, how, eq, verdict, kind) in enumerate(WAYS):
+        bx = 40 + i * 448
+        f.t(bx, ay + 24, name, col, True, 25)
+        f.t(bx, ay + 50, how, GY, size=17)
+        # 白板
+        f.box(bx, ay + 62, BW, BH, "#fff", col, 10)
+        for r in range(4):
+            for c in range(6):
+                cx, cyy = bx + 22 + c * 62, ay + 82 + r * 42
+                if kind == "mess":
+                    # 一层盖一层：三条不同颜色的划痕叠在一起
+                    for k in range(3):
+                        f.line(cx, cyy + 6 + k * 5, cx + 46, cyy + 26 - k * 6,
+                               RD if k == 0 else ("#f6aea6" if k == 1 else GY2),
+                               2.0, arrow=False)
+                elif kind == "erase":
+                    if c == 2:                 # 这一栏被擦干净，重新写
+                        f.box(cx - 4, cyy - 4, 54, 34, "#e6f4ea", "none", 4)
+                        f.line(cx, cyy + 14, cx + 46, cyy + 14, GR, 2.4,
+                               arrow=False)
+                    else:
+                        f.line(cx, cyy + 14, cx + 46, cyy + 14, GY2, 2.0,
+                               arrow=False)
+                else:
+                    # 选择性：每一栏擦掉的程度不同
+                    frac = [1.0, .25, .7, .1, .9, .45][c]
+                    f.line(cx, cyy + 14, cx + 46 * frac, cyy + 14, PU, 2.4,
+                           arrow=False)
+                    if frac < .99:
+                        f.line(cx + 46 * frac, cyy + 14, cx + 46, cyy + 14,
+                               LINE2, 2.0, arrow=False)
+        f.t(bx, ay + 282, verdict, col, True, 20)
+        f.box(bx, ay + 296, BW, 38, BG2, LINE2, 6)
+        f.t(bx + 14, ay + 322, eq, INK, size=16, mono=True, w=BW - 28)
+
+    # ══════════ ② 「叉掉」在式子里是哪一块 ══════════════════════
+    y1 = y0 + PH + 18
+    PH2 = 282
+    py2 = f.panel(0, y1, W, PH2, "② 「叉掉」这个动作，在式子里就是这一块",
+                  BL, sub="把比喻钉到代数上")
+
+    by = py2 + 24
+    f.box(56, by + 30, 620, 96, "#fff", GR, 10)
+    f.t(80, by + 84, "S ← S ( I − β k kᵀ ) ＋ β v kᵀ", INK, True, 28,
+        mono=True)
+    f.box(214, by + 46, 214, 62, "none", GR, 6, 2.4)
+    f.t(321, by + 144, "这一块就是「叉掉」", GR, True, 21, "middle")
+    f.t(321, by + 172, "在 k 这个方向上，按比例把旧的擦掉", GY, size=17,
+        anchor="middle")
+
+    f.box(716, by + 30, 644, 180, "#e8f0fe", BL, 10)
+    f.t(740, by + 70, "⭐⭐ 它还有另一个读法", BL, True, 23)
+    f.t(740, by + 108, "「板子上现在能取出什么」减「本来该取出什么」，", GY,
+        size=18)
+    f.t(740, by + 140, "按这个<tspan font-weight=\"700\">差</tspan>去改板子 ——&#160;"
+        "这就是<tspan font-weight=\"700\">一步梯度下降</tspan>。", GY, size=18)
+    f.t(740, by + 180, "于是状态不再是一块缓存，", BL, True, 20)
+    f.t(740, by + 210, "而是<tspan font-weight=\"700\">一个边跑边被训练的小模型</tspan>。",
+        BL, True, 20)
+    f.t(740, by + 236, "⚠️ 前提只有两条：学习率取 β、损失是瞬时的", GY2, size=14)
+
+    # ══════════ ③ 板子为什么装不下 ══════════════════════════════
+    y2 = y1 + PH2 + 18
+    PH3 = 250
+    py3 = f.panel(0, y2, W, PH3, "③ 板子为什么会「装不下」——　它不是条数超了",
+                  OR, sub="装的不是 token，是「键到值」的对应关系")
+
+    ey = py3 + 22
+    f.t(56, ey + 22, "板子上有 d 个「方向」，你要往里记 L 条对应关系", GY,
+        True, 20)
+    for i in range(8):
+        ang = i
+        f.line(300 + 0, ey + 150, 300 + 120 * (0.3 + 0.1 * (ang % 4)),
+               ey + 150 - 90 + 26 * (ang % 5), OR if i < 5 else RD, 2.0)
+    f.t(60, ey + 156, "d 个方向", OR, True, 19)
+    f.t(470, ey + 96, "L 条要记的对应关系", GY, size=17)
+    f.t(470, ey + 130, "⛔ L 超过 d 之后，", RD, True, 20)
+    f.t(470, ey + 162, "总有两条<tspan font-weight=\"700\">指到同一个方向上</tspan> ——",
+        GY, size=18)
+    f.t(470, ey + 194, "它们就开始互相盖。", RD, True, 20)
+
+    f.box(920, ey + 20, 440, 190, "#fff", INK, 10)
+    f.t(944, ey + 60, "⚠️ 所以别把板子想成一个盒子", INK, True, 21)
+    f.t(944, ey + 96, "它装的<tspan font-weight=\"700\">不是 token</tspan>，", GY,
+        size=18)
+    f.t(944, ey + 128, "是「按这个 key，该取出那个 value」", GY, size=18)
+    f.t(944, ey + 158, "这样的<tspan font-weight=\"700\">对应关系</tspan>。", GY, size=18)
+    f.t(944, ey + 194, "「装不下」＝ 方向不够用了，不是条数超了", GY2, size=15)
+
+    # ══════════ 落点 ════════════════════════════════════════════
+    yy = y2 + PH3 + 20
+    yy = f.band(yy, "info", "⭐⭐ 这个比喻好在哪：它把三代的差别缩到了一个动作上", [
+        "三代<tspan font-weight=\"700\">读的方式几乎没变</tspan>，"
+        "全部差别都在「写之前擦不擦、擦多少」："
         "<tspan font-weight=\"700\">不擦 → 按固定方向擦 → 学着擦</tspan>。",
         "⭐ 所以看到这一支的任何一个新名字，只要问一句："
         "<tspan font-weight=\"700\">它的「擦」是怎么决定的？</tspan>"
         "——&#160;剩下的部分，三代之间几乎没变。",
     ])
 
-    yy = f.band(yy + 14, "warn", "别把「板子」想成一个装 token 的盒子", [
-        "⚠️ 板子上存的<tspan font-weight=\"700\">不是 token，是「键到值」的映射</tspan>。"
-        "所以「装不下」不是「条数超了」，而是"
-        "<tspan font-weight=\"700\">不同的键在同一个方向上互相覆盖</tspan>。",
-        "⭐ 这也解释了为什么 L &gt; d 是个分界："
-        "<tspan font-weight=\"700\">d 个方向撑不起 L 条互不干扰的映射。</tspan>",
+    yy = f.band(yy + 14, "warn", "板子到底占多少字节 —— 全讲只有这一支没给过数", [
+        "⛔ 算交叉点之前先把口径摊开，"
+        "<tspan font-weight=\"700\">不写出来，512 就是个孤立数字</tspan>：",
+        "状态 ＝ %d × %d × %d × 4 B<tspan font-weight=\"700\">(fp32)</tspan> ＝ "
+        "<tspan font-weight=\"700\">%.0f MiB</tspan>　·　GQA-8 每 token 每层 ＝ "
+        "2 × %d × %d × 2 B<tspan font-weight=\"700\">(bf16)</tspan> ＝ "
+        "<tspan font-weight=\"700\">%.0f KiB</tspan>"
+        % (H, DK, DV, st / 2.0 ** 20, G, DH, kvt / 1024.0),
+        "→ 交叉点 ＝ <tspan font-weight=\"700\">%d 个 token</tspan>；"
+        "⚠️ 两边精度不一样 ——&#160;状态若也按 bf16 存，交叉点就变成 %d。"
+        "⛔ 只在几百 token 以内它才更贵，到 8K 时 GQA-8 的 KV 已是它的 16 倍。"
+        % (cross, cross // 2),
+        "⚠️ 形状是<tspan font-weight=\"700\">示例</tspan>（32 头 × 128 × 128），"
+        "而 69 是 K3 的真层数（K3 实际 96 头）——&#160;"
+        "所以「%.0f MiB / 请求」是<tspan font-weight=\"700\">量级示意，不是部署数</tspan>。"
+        % (st * NL / 2.0 ** 20),
     ])
 
     yy = f.src(yy + 16,
                "递推式、key collision（L &gt; d）、delta rule ＝ Widrow-Hoff、"
                "以及「等价于对 ½‖Sk−v‖² 做一步 SGD」，均出自 DeltaNet 论文 "
                "Yang 等 arXiv 2406.06484 §2.1–2.2",
-               "⚠️ 该文 §6 那句「表达力与并行度之间存在根本权衡」说的是 Recurrent DeltaNet / "
-               "mesa-layer 那一批<tspan font-weight=\"700\">比 delta 更强</tspan>的模型，"
-               "不是 delta 对纯加法，而且原文是带引用的 suggests；"
-               "「记事板」这个比喻是本课的讲法")
+               "⚠️ 该文 §6 那句「表达力与并行度之间存在根本权衡」说的是 "
+               "Recurrent DeltaNet / mesa-layer 那一批<tspan font-weight=\"700\">"
+               "比 delta 更强</tspan>的模型，不是 delta 对纯加法，"
+               "而且原文是带引用的 suggests",
+               "⚠️ 「记事板 / 擦」是<tspan font-weight=\"700\">现场给的比喻</tspan>，"
+               "不是论文措辞")
     f.save("fig3-notepad.svg", yy + 6)
 
 
