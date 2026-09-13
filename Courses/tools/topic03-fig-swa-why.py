@@ -70,12 +70,20 @@ def main():
 
     # ══════════ ② 崩了 ══════════════════════════════════════════
     y1 = y0 + PH + 18
-    PH2 = 390
+    PH2 = 452
     py2 = f.panel(0, y1, W, PH2, "② 砍了为什么会崩 ——　扔掉最前面四个，就崩了",
                   RD, sub="Llama-2-13B，PG19")
 
     by = py2 + 24
-    BASE, HMAX = by + 196, 150
+    # ⛔⛔ 「柱子按对数画」这句原来在柱子**下面 130px** ——&nbsp;
+    #   读者先看到「5158 只比 5.40 高两倍多」，得出「差得也不算多」，
+    #   往下读才知道是对数轴，而那一眼的印象跟这张图要说的正好相反。
+    # ⭐ 判据：**读图的钥匙必须在图之前。** 放在后面 ＝ 先让人看错一眼再纠正。
+    f.t(120, by + 18, "⚠️ 先说怎么读：这三根柱子<tspan font-weight=\"700\">"
+        "按对数画</tspan> ——　线性画的话后两根根本看不见。", RD, size=17, w=860)
+    f.t(120, by + 42, "<tspan font-weight=\"700\">"
+        "5158 和 5.40 差的是三个数量级，不是三倍。</tspan>", RD, size=17, w=860)
+    BASE, HMAX = by + 250, 150   # ⭐ 上面多了两行读图提示，柱子整体下移
     import math
     for i, (lab, v, col, note) in enumerate([
         ("只留窗口\n0 + 1024", PPL_WIN, RD, "⛔ 崩了"),
@@ -89,8 +97,7 @@ def main():
         for k, ln in enumerate(lab.split("\n")):
             f.t(x + 75, BASE + 26 + k * 24, ln, GY, size=16, anchor="middle")
         f.t(x + 75, BASE - h - 44, note, col, True, 18, "middle")
-    f.t(120, BASE + 130, "困惑度（柱子按对数画 ——　线性画的话后两根根本看不见）",
-        GY2, size=14)
+    f.t(120, BASE + 130, "困惑度（越低越好）", GY2, size=16)
 
     f.box(1000, by + 24, 360, 192, "#e8f0fe", BL, 10)
     f.t(1024, by + 66, "⭐⭐ 判决性的是第三根", BL, True, 21)

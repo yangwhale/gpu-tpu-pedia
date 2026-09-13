@@ -199,10 +199,13 @@ VARIANTS = [
             ("", "FlashAttention 已是标配，<b>本讲不展开它</b>", GY),
         ]),
         # ⛔ 这条是记号表，一行放不下 —— **拆两行，不要靠缩字号硬塞**。
-        foot=["📌 形状记号沿用 How to Scale Your Model"
-              "（jax-ml.github.io/scaling-book），本图为重画。",
-              "B 批量 · T query 长度 · S KV 长度 · D d_model · F MLP 隐层 · "
-              "H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K"],
+        # ⭐ 字母表提到图**顶上**（legend），底下只留出处。
+        legend="B 批量 · T query 长度 · <tspan font-weight=\"700\">S KV 长度</tspan>"
+               " · D d_model · F MLP 隐层 · H 头维 · N query 头数 · "
+               "K KV 头数 · G ＝ N∕K",
+        markkv=True,      # ⭐ 底图上把那两处 BSKH 点出来
+        foot="📌 形状记号沿用 How to Scale Your Model"
+             "（jax-ml.github.io/scaling-book），本图为重画。",
         acct=[("➜", "<b>这笔账在后面四张图里一直挂着</b> ——&#160;"
                     "每张会说清它把这笔账动到了哪一格。", GY)],
     ),
@@ -359,9 +362,17 @@ def render(v):
     t(0, 22, v["title"], "svglbl", INK, size=19)
     t(0, 48, v["lead"].replace("<b>", '<tspan font-weight="700">')
                       .replace("</b>", "</tspan>"), fill=GY, size=15)
+    LEGH = 0
+    if v.get("legend"):
+        # ⛔ 记号表原来在图的最底下 ——&nbsp;读者在第 3 行就撞上 BTNH，
+        #   却要滚过整张 1374px 的图才知道那些字母是什么。
+        box(0, 62, W, 30, "#f8f9fa", "#e8eaed", 6)
+        t(12, 82, "读这张图先认字母：", None, GY2, size=15)
+        t(150, 82, v["legend"], None, GY, size=15)
+        LEGH = 40
 
     # ── 上：数据流（吃满整幅宽）────────────────────────────────────
-    y = 84
+    y = 84 + LEGH
     stages = v["stages"]()
     # 把 Q/K/V 那三格摆在同一行：记下它们在列表里的位置
     qkv = [i for i, s in enumerate(stages) if s[0] in ("q", "k", "v")]
@@ -399,6 +410,12 @@ def render(v):
                              % (x2, y + 29, c))
                     p.append('<circle cx="%d" cy="%d" r="2.6" fill="%s"/>'
                              % (x2, y + 29, c))
+                    if v.get("markkv") and k2 in ("k", "v"):
+                        # ⭐ 「在形状里找 S」是全讲重复最多的指令 ——
+                        #   那就让底图**自己把这两处标出来**，别让人空手去找。
+                        p.append('<rect x="%d" y="%d" width="82" height="26" '
+                                 'rx="5" fill="#fce8e6"/>'
+                                 % (x2 - 41, y + 44))
                     t(x2, y + 62, out, fill=C(k2, INK), bold=True,
                       anchor="middle", size=FS_NAME)
                     t(x2, y + 84, nm, fill=c, bold=True, size=FS_NAME,
@@ -567,6 +584,9 @@ def render(v):
 
     # ── 底部落点带 ──────────────────────────────────────────────────
     FY = max(FLOW_H, PANEL_H) + 14
+    if v.get("markkv"):
+        t(QX - QKVW, FLOW_H + 6, "⬆ 红底那两处就是它 ——　全图只有这两个"
+          "输出要跨 token 留下来", None, RD, size=17)
     foots = v["foot"]
     foots = [foots] if isinstance(foots, str) else list(foots)
     FH = 22 + 26 * len(foots)

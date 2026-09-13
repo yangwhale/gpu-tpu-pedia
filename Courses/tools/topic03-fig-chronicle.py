@@ -361,8 +361,15 @@ def wpx(s, size=11.5):
     return int(n * size)
 
 
+# ⭐ 2026-09-14 只改字号，**立意和布局一个字不动**（现场：「编年史我挺满意的」）。
+#   这张原来 83% 的字小于 13px ——&nbsp;不传 size 就落到 svgsm 的 10.5px 地板上。
+#   ⛔ 而全课其它图都已经抬到 15px，只剩它投屏读不了。
+#   这里只把**默认字号**顶上去；每一处显式传了 size 的照旧。
+FS_DEF = 15
+
+
 def t(x, y, s, cls="svgsm", fill=None, bold=False, size=None, anchor=None):
-    st = ["font-size:%dpx" % size] if size else []
+    st = ["font-size:%dpx" % (size or FS_DEF)]
     p.append('<text class="%s" x="%d" y="%d"%s%s%s>%s</text>' % (
         cls, x, y, ' fill="%s"' % fill if fill else '',
         ' text-anchor="%s"' % anchor if anchor else '',
@@ -472,7 +479,7 @@ LEAD, GAP, YR_MIN = 12, 10, 30    # 刻度左侧留白 / 标签右侧留白 / �
 _need = {y: 0 for y in range(Y0, Y1 + 1)}
 for (_nm, _co, _fi, _evs) in LANES:
     for (_yr, _lab) in _evs:
-        _need[_yr] = max(_need[_yr], wpx(_lab))
+        _need[_yr] = max(_need[_yr], wpx(_lab, FS_DEF))
 _ideal = {y: (YR_MIN if _need[y] == 0 else LEAD + 6 + _need[y] + GAP)
           for y in range(Y0, Y1 + 1)}
 # 理想宽度之和通常跟 AXW 差一点，整体等比缩放一次贴合，不裁也不留缝。
@@ -513,7 +520,7 @@ def _rows(evs):
     ends, out = [], []
     for (yr, lab) in evs:
         x = xf(yr)
-        w = wpx(lab)
+        w = wpx(lab, FS_DEF)
         right = x + w + 10 > W - 30
         x0 = (x - 6 - w) if right else (x + 6)
         for r, e in enumerate(ends):
@@ -585,12 +592,15 @@ for i, (who, arc) in enumerate((
 
 t(16, FY + 122, '⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线',
   "svglbl", "#174ea6", size=12)
+# ⛔ 字号从 10.5 抬到 15 之后这一行放不下了 —— 拆两行，别缩回去
 t(16, FY + 142, '混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 '
                 'GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：'
                 '两家的 <tspan font-weight="700">indexer_types</tspan> 都是 '
-                '<tspan font-weight="700">full, shared, shared, shared</tspan> 稳态四层一循环（前几层各家不同） '
+                '<tspan font-weight="700">full, shared, shared, shared</tspan>',
+  fill="#174ea6")
+t(16, FY + 164, '稳态四层一循环（前几层各家不同）'
                 '——&#160;每 4 层只有 1 层自己算索引。', fill="#174ea6")
-_LAST = FY + 160
+_LAST = FY + 186
 t(16, _LAST, '⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，'
              '已经不是「让每个 query 少看几块」，而是'
              '<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>'
