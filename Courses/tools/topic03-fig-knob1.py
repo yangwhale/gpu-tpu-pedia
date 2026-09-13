@@ -43,60 +43,86 @@ def main():
         '<tspan font-weight="700">但比的从来不是「谁存得最少」</tspan>',
         "同一个形状（V3：61 层 · 128 头 · 每头 128 维 · 128K · bf16），换四种存法")
 
-    CW, GAP = 640, 58
-    RX = CW + GAP
-    PH = 512
+    # ⭐⭐⭐ 2026-09-14 重画 ①。审图原话：「左半张是一张**六列表格**，
+    #   最后那列的柱子自己承认『后三根细到几乎看不见』。」
+    # ⭐ 真正的题眼是**二维**的：MQA 比 MLA 还小，**但更差**。
+    #   一维表格画不出「又小又差」——&nbsp;所以换成散点：
+    #   横轴「一份占多少地方」，纵轴「换回多少能力」，四个点一摆自己就说话了。
+    # ⛔⛔ 纵轴必须诚实：**四家没有同一份可比的实测**。
+    #   唯一同基准的一对是 MQA 论文表 3（MHA 29.9 / MQA 30.2 / 真单头 31.2）；
+    #   GQA 与 MLA 各自的论文只声称「接近／不弱于 MHA」，不是同一张表。
+    #   所以纵轴画成**两档定性**，并在图上写死这一句 ——
+    #   画成连续刻度等于编出一份不存在的实测。
+    CW = W
+    PH = 420
 
-    # ══════════ 左：四种存法 ══════════
-    ay = f.panel(0, y, CW, PH, "四种存法，同一个形状", BL,
-                 sub="每 token 每层要留几个数 →&#160;128K 一个用户共多少")
-    f.t(16, ay + 4, "存法", GY, bold=True, size=14)
-    f.t(112, ay + 4, "KV 头", GY, bold=True, size=14)
-    f.t(196, ay + 4, "每 token 每层", GY, bold=True, size=14)
-    f.t(330, ay + 4, "128K 单用户", GY, bold=True, size=14)
-    f.t(430, ay + 4, "相对 MHA", GY, bold=True, size=14)
-    mx = VAR[0][1]
-    BX, BARW = 496, 62          # 真实线性刻度：488 GiB 占满 62px
-    ZX, ZOOMW = 566, 62         # 放大镜：以 GQA-8 的 30.50 GiB 为满格
-    f.t(BX, ay + 4, "真实比例", GY, bold=True, size=14)
-    f.t(ZX, ay + 4, "放大 16×", GY2, bold=True, size=14)
-    for i, (nm, per, desc, col, heads) in enumerate(VAR):
-        yy = ay + 26 + i * 46
-        f.t(16, yy + 4, nm, col, bold=True, size=_sz(16))
-        f.t(112, yy + 4, heads, GY2, size=14)
-        f.t(196, yy + 4, format(per, ","), INK, bold=True, size=14, mono=True)
-        f.t(330, yy + 4, "%.2f GiB" % tot(per) if tot(per) < 100
-            else "%.0f GiB" % tot(per), col, bold=True, size=_sz(15), mono=True)
-        f.t(430, yy + 4, "—" if i == 0 else "省 %.0f×" % (mx / per),
-            GY2, size=14)
-        f.t(16, yy + 22, desc, GY2, size=14)
-        bw = max(1.0, BARW * per / float(mx))
-        f.box(BX, yy - 5, bw, 12, col, col, 2)
-        if per != mx:                       # 放大镜：后三根用自己的基准再画一遍
-            zw = max(2.0, ZOOMW * per / float(VAR[1][1]))
-            f.box(ZX, yy - 5, zw, 12, "#fff", col, 2, 1.2)
+    # ══════════ ① 四种存法：一张散点 ══════════════════════════
+    ay = f.panel(0, y, CW, PH, "四种存法 ——　把它们摆到一张图上", BL,
+                 sub="横轴：一份占多少地方（对数）　·　纵轴：换回多少能力（⚠️ 定性）")
 
-    f.t(16, ay + PH - 158,
-        "⭐ <tspan font-weight=\"700\">左列是真实线性比例</tspan> ——&#160;"
-        "后三根细到几乎看不见，", GY2, size=14, w=CW - 32)
-    f.t(16, ay + PH - 138,
-        "这正是要的画面（MQA 是 MHA 的 0.78%）。", GY2, size=14, w=CW - 32)
-    f.t(16, ay + PH - 118,
-        "右列换了基准（满格 ＝ GQA-8 的 30.50 GiB）。", GY2, size=14, w=CW - 32)
-    f.t(16, ay + PH - 74,
-        '⭐⭐ <tspan font-weight="700">题眼在这儿：MQA 只要 3.81 GiB，'
-        '比 MLA 的 8.58 还小 2.25 倍。</tspan>', RD, size=_sz(16))
-    f.t(16, ay + PH - 54,
-        'MQA 2019 年就把体积压到头了 ——&#160;'
-        '<tspan font-weight="700">代价是质量掉得厉害</tspan>。', GY, size=_sz(15))
-    f.t(16, ay + PH - 32,
-        '⭐ 所以这一支比的<tspan font-weight="700">不是「谁存得最少」，'
-        '是「同样一份字节，换回多少能力」</tspan>。', BL, size=_sz(16))
+    X0, X1 = 210, 940
+    YT, YB = ay + 40, ay + 250
+    import math as _m
+    def sx(g):                     # 1 ～ 1000 GiB，三个数量级
+        return X0 + (X1 - X0) * _m.log10(max(g, 1.0)) / 3.0
+    # 两档定性分区
+    f.spot(X0 - 40, YT, X1 - X0 + 120, 96, "#e6f4ea")
+    f.spot(X0 - 40, YT + 120, X1 - X0 + 120, 90, "#fce8e6")
+    f.t(X0 - 30, YT + 26, "跟 MHA 基本打平", GR, True, 18)
+    f.t(X0 - 30, YT + 146, "明显更差", RD, True, 18)
+    f.line(X0 - 40, YB + 6, X1 + 80, YB + 6, LINE, 1.4, arrow=False)
+    for g, lab in ((3.0, "3"), (10, "10"), (30, "30"), (100, "100"),
+                   (488, "488")):
+        f.line(sx(g), YB + 6, sx(g), YB + 12, GY2, 1.2, arrow=False)
+        f.t(sx(g), YB + 32, lab, GY2, size=15, anchor="middle")
+    f.t(X1 + 20, YB + 32, "GiB ——　越右边越占地方", GY2, size=16)
+
+    PTS = [("MHA", 488.0, 1, GY, "每个头各存一份"),
+           ("GQA-8", 30.50, 1, OR, "8 组，组内共用"),
+           ("MLA", 8.58, 1, GR, "压成 512 ＋ 64"),
+           ("MQA", 3.81, 0, RD, "所有头共用一份")]
+    for nm, g, hi, col, desc in PTS:
+        cy = YT + (48 if hi else 166)
+        f.box(sx(g) - 9, cy - 9, 18, 18, col, col, 9)
+        f.t(sx(g), cy - 22, nm, col, True, 21, "middle")
+        f.t(sx(g), cy + 34, "%.2f GiB" % g if g < 100 else "%.0f GiB" % g,
+            col, True, 17, "middle")
+        f.t(sx(g), cy + 56, desc, GY2, size=15, anchor="middle")
+
+    # 题眼：从 MQA 指到 MLA 的那一段
+    # ⛔ 题眼这行别跟 MQA 的数值标签抢同一条基线 —— 压到分区底部去
+    f.line(sx(3.81), YT + 132, sx(8.58), YT + 78, RD, 2.0)
+    f.t(sx(30.5), YT + 196, "⭐⭐ 题眼：MQA 比 MLA 还小 2.25 倍，"
+        "<tspan font-weight=\"700\">却更差</tspan>", RD, True, 19)
+
+    f.box(1076, ay + 30, 308, 232, "#fff", INK, 10)
+    f.t(1096, ay + 62, "⭐ 所以这一支比的", INK, True, 20)
+    f.t(1096, ay + 88, "不是「谁存得最少」", INK, True, 20)
+    f.t(1096, ay + 124, "MQA 早在 2019 年就把", GY, size=17, w=272)
+    f.t(1096, ay + 148, "体积压到头了。", GY, size=17, w=272)
+    f.t(1096, ay + 184, "⭐ 要比的是：同样一份", BL, True, 18, w=272)
+    f.t(1096, ay + 208, "字节，换回多少能力。", BL, True, 18, w=272)
+    f.t(1096, ay + 244, "（这正是第五节的线）", GY2, size=15)
+
+    f.t(16, ay + 300, "⚠️ <tspan font-weight=\"700\">纵轴是定性的</tspan>"
+        " ——　四家<tspan font-weight=\"700\">没有同一份可比的实测</tspan>。"
+        "唯一同基准的一对是 MQA 论文表 3："
+        "MHA 29.9 ／ MQA 30.2 ／ 真单头 31.2（困惑度，越低越好）；",
+        GY, size=17, w=1368)
+    f.t(16, ay + 326, "GQA 与 MLA 各自的论文只声称「接近／不弱于 MHA」，"
+        "不是同一张表 ——　所以这里只画两档，不画连续刻度。", GY, size=17,
+        w=1368)
+    f.t(16, ay + 362, "📐 横轴那几个数：61 层 · 128K · bf16 · batch 1，"
+        "一个用户一份 ——　MHA 488 GiB ／ GQA-8 30.50 ／ MLA 8.58 ／ MQA 3.81。",
+        GY2, size=16, w=1368)
 
     # ══════════ 右：RoPE 为什么必须单独走一路 ══════════
     # ⭐⭐⭐ 2026-09-14 重画：原来是两行代数。现在先给一个**寄快递**的画面 ——
     #   代数留在下面当佐证，但**看懂靠的是上面那张图**。
-    by = f.panel(RX, y, CW, PH, "为什么 MLA 的 RoPE 必须单独走一路", PU,
+    y = y + PH + 18
+    RX = 0
+    PH = 512
+    by = f.panel(RX, y, W, PH, "为什么 MLA 的 RoPE 必须单独走一路", PU,
                  sub="先看一个寄快递的画面")
 
     ey = by + 10

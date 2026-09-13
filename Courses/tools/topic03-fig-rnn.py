@@ -251,37 +251,51 @@ def fig_hw():
                      '<tspan font-weight="700">这就是「用平方的计算量买完全的并行度」'
                      '那笔交易的硬件形态。</tspan>', "#0d652d", size=_sz(15))
 
+    # ══════════ ③ 算术强度：画成一趟货车 ══════════════════════
+    # ⭐⭐⭐ 2026-09-14 重画。原来是一张五列表（算的是谁／FLOPs／字节／强度／于是）——
+    #   ⛔ 「算术强度」这个词本身就抽象，再用表格讲，等于用抽象解释抽象。
+    # ⭐ 它的本义就是一句大白话：**跑一趟，能干多少活。**
+    #   那就画一趟车：车一样大（搬同一块权重），车上装的活不一样多。
     CY = BY + 130 + 14
-    CT = f.panel(0, CY, W, 190, "算术强度 ＝ 算了多少次 ÷ 搬了多少字节", OR, "#fff",
-                 sub="它决定你是在等算力，还是在等内存", tint="#fbeecb")
-    COLS = ((16, "算的是谁"), (250, "FLOPs"), (470, "搬进来的字节"),
-            (650, "算术强度"), (770, "于是"))
-    for x, lab in COLS:
-        f.colhead(x, CT + 22, lab)
-    f.line(16, CT + 32, W - 16, CT + 32, "#e6c86a", 1, arrow=False)
-    for i, (a, b, c, d_, e, col) in enumerate((
-            ("RNN 每一步", "2 · k·d · d · B", "k·d · d · 2", "B",
-             "⛔ <tspan font-weight=\"700\">跟 d 无关，就等于 batch size</tspan>", RD),
-            ("Transformer 训练", "2 · k·d · d · (n·B)", "k·d · d · 2", "n · B",
-             "⭐ <tspan font-weight=\"700\">整整多了一个 n</tspan>", GR))):
-        yy = CT + 56 + i * 26
-        f.t(16, yy, a, col, True, _sz(12))
-        f.t(250, yy, b, INK, size=_sz(15), mono=True)
-        f.t(470, yy, c, INK, size=_sz(15), mono=True)
-        f.t(650, yy, d_, col, True, 16)
-        f.t(770, yy, e, col, size=_sz(15))
-    f.t(16, CT + 112, '⭐ 那个 k（LSTM 是 4、朴素 RNN 是 1）'
-                      '<tspan font-weight="700">上下一约就没了</tspan>'
-                      '——&#160;算术强度等于 batch，跟门数、跟隐藏维都无关。'
-                      '（激活的搬运比权重小两个数量级，略去。）', BR, size=_sz(14))
-    f.line(16, CT + 122, W - 16, CT + 122, "#e6c86a", 1, arrow=False)
-    f.t(16, CT + 130 + 14, '拐点：TPU v7 官方每芯片 FP8 '
-        '<tspan font-weight="700">4614 TFLOP/s</tspan>，BF16 取一半 ＝ '
-        '<tspan font-weight="700">2307</tspan>；官方 HBM 带宽 '
-        '<tspan font-weight="700">7.37 TB/s</tspan>。2307 ÷ 7.37 ＝ '
-        '<tspan font-weight="700">313 FLOP/byte</tspan>', BR, size=_sz(15))
+    CH = 330
+    CT = f.panel(0, CY, W, CH, "算术强度 ——　说人话就是「跑一趟，能干多少活」",
+                 OR, "#fff", sub="它决定你是在等算力，还是在等内存", tint="#fbeecb")
 
-    yy = CY + 190 + 16
+    ty = CT + 26
+    for i, (who, cargo, ai, note, col) in enumerate((
+            ("RNN 每一步", 1, "B",
+             "⛔ 车照样跑一趟，车上只有一个 batch 的活", RD),
+            ("Transformer 训练", 6, "n · B",
+             "⭐ 同样跑一趟，装了 n 倍的活", GR))):
+        by2 = ty + i * 116
+        # 车头
+        f.box(56, by2 + 26, 56, 46, "#fff", col, 6)
+        f.t(84, by2 + 55, "🚚", col, True, 22, "middle")
+        f.t(56, by2 + 18, who, col, True, 20)
+        # 车厢：同样长，装的箱子不一样多
+        f.box(120, by2 + 22, 420, 54, "#fff", col, 6)
+        for k in range(cargo):
+            f.box(130 + k * 68, by2 + 30, 56, 38, "#e6f4ea" if i else "#fce8e6",
+                  col, 4)
+        f.t(560, by2 + 40, "搬的是同一块权重 W", GY, size=17)
+        f.t(560, by2 + 66, "（车一样大，跑一趟的成本一样）", GY2, size=16)
+        f.t(880, by2 + 40, "算术强度", GY2, size=16)
+        f.t(880, by2 + 70, ai, col, True, 28)
+        f.t(980, by2 + 56, note, col, True, 18, w=380)
+
+    # 屋脊线：一条横线，两根柱子一上一下
+    ry2 = ty + 240
+    f.line(56, ry2, 1344, ry2, BR, 2.0, dash="7,5")
+    f.t(56, ry2 - 10, "TPU v7 的屋脊线　313 FLOP/byte"
+        "　←　2307 TFLOP/s ÷ 7.37 TB/s", BR, True, 19)
+    f.t(56, ry2 + 26, "⛔ 线以下 ＝ 在等内存。LSTM 的强度就等于 batch ——　"
+        "<tspan font-weight=\"700\">要够到这条线，batch 得开到 313 以上</tspan>；"
+        "而序列一长，显存又不让你把 batch 开大。", GY, size=18, w=1288)
+    f.t(56, ry2 + 54, "⭐ 那个 k（LSTM 是 4、朴素 RNN 是 1）上下一约就没了 ——　"
+        "强度跟门数、跟隐藏维都无关。（激活的搬运比权重小两个数量级，略去。）",
+        GY2, size=16, w=1288)
+
+    yy = CY + CH + 16
     yy = f.band(yy, "bad", "两头堵死", [
         '<tspan font-weight="700">要喂饱一块 v7，batch 得开到 313 以上</tspan>'
         '——&#160;而 batch 是 RNN 唯一的算术强度来源。',

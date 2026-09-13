@@ -295,7 +295,17 @@ class Fig(object):
     def poly(self, d, fill="#fff", stroke="none", sw=1.0):
         """闭合多边形，**能填色** ——&nbsp;path() 是 fill:none 的描边版，两个别混。
         ⛔ 2026-09-09 踩过：拿 path() 去画「收口的细颈」，传了填充色当描边色，
-          画出来只有一条边。⭐ 名字里带 path 不代表它会填。"""
+          画出来只有一条边。⭐ 名字里带 path 不代表它会填。
+
+        ⛔⛔ 2026-09-14：上一轮给 path() 补了「接受点列表」，**漏了这个姐妹基元** ——
+          当天下午画房子屋顶就又踩进去，d="[(84, 120), …]"，屋顶没画出来。
+        ⭐ 判据：**同一个毛病，先去姐妹基元上找一遍。**
+          它们签名相同、职责相邻，写错的人不会只在一个上面写错。
+        """
+        if isinstance(d, (list, tuple)):
+            d = ("M " + " L ".join("%.2f %.2f" % (x, y) for x, y in d) + " Z")
+        assert isinstance(d, str) and d[:1] in "Mm", \
+            "poly() 的 d 必须是 SVG 路径串或点列表，收到：%r" % (d,)
         self.p.append('<path d="%s" fill="%s" stroke="%s" stroke-width="%s"/>'
                       % (d, fill, stroke, sw))
 
@@ -445,7 +455,12 @@ class Fig(object):
             #   ⭐ 所以折行时按 MONO_K 倍的字号去量，留出这 10%。
             rows.extend(wrap_rich(ln, w - 40, SZ * MONO_K))
         h = 40 + len(rows) * LH + 10
-        self.box(0, y, w, h, "#fff", LINE, 9)
+        # ⛔⛔ 2026-09-14 第三次撞同一条：**跟背景同色的填充照样是一次覆盖**。
+        #   面板改透明之后，落点带的白底接着干同样的事 ——&nbsp;
+        #   它把上一块面板画出界的最后一行整段擦掉（fig3-rnn-hw 实测）。
+        # ⭐ 判据升级版：**一个毛病在基元层出现过，就去所有姐妹基元上找一遍。**
+        #   这套库里会画大矩形的有三处：panel / band / cell —— 一次全查完。
+        self.box(0, y, w, h, "none", LINE, 9)
         self.box(0, y, 4, h, col, col, 2)
         self.box(2, y, 3, h, "#fff", "#fff", 0)
         self.t(20, y + 27, "%s %s" % (icon, title), col, bold=True, size=17,
