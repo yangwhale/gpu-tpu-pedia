@@ -60,6 +60,7 @@
 ⛔ BODY 里有 % 号（百分比），所以它**只能用普通字符串**，
    不要在它上面做 %-格式化。
 """
+import re
 import io
 import re
 import os
@@ -2096,7 +2097,75 @@ def _anchorize(html):
     return "".join(parts)
 
 
+# ══════════════════════════════════════════════════════════════════
+# ⭐⭐⭐ 2026-09-14 麻瓜视角审稿里唯一一条「我真的想关掉页面」：
+#   「1MB 单页 ＋ 36 张图 ＋ 十几处内部跳转，**跳过去就回不来了**。」
+#   而 CSS 里 .progress / .totop 早就写好了，body 里一次都没用上 ——
+#   ⛔ **写好了没接上，等于没写**，而且比没写更难发现（看代码像是有）。
+# ⭐ 目录**从 SECTIONS 里长出来**，不手写 —— 手写那份一定会跟节标题漂。
+# ══════════════════════════════════════════════════════════════════
+def _build_nav(html):
+    secs = re.findall(
+        r'<section id="(s[^"]+)"><div class="wrap"><div class="stn">'
+        r'<span class="badge">第 (\S+) 节</span><h2>(.*?)</h2>', html, re.S)
+    if not secs:
+        return html
+    items = []
+    for sid, num, title in secs:
+        t = re.sub(r"<[^>]+>", "", title).replace("&nbsp;", " ")
+        t = re.split(r"——|:|：", t)[0].strip()[:16]
+        items.append('<a href="#%s"><b>%s</b> %s</a>' % (sid, num, t))
+    nav = ('<div class="progress"><i></i></div>\n'
+           '<nav class="toc" id="toc"><div class="toc-in">'
+           '<span class="toc-lb">目录</span>' + "".join(items) + '</div></nav>\n')
+    tail = ('<button class="totop" id="totop" title="回到顶部"'
+            ' onclick="scrollTo({top:0,behavior:\'smooth\'})">↑</button>\n'
+            '<script>(function(){\n'
+            ' var bar=document.querySelector(".progress i"),'
+            ' top=document.getElementById("totop"),'
+            ' toc=document.getElementById("toc"),'
+            ' ls=[].slice.call(toc.querySelectorAll("a"));\n'
+            ' function tick(){\n'
+            '  var h=document.documentElement,'
+            '  p=h.scrollTop/(h.scrollHeight-h.clientHeight||1);\n'
+            '  bar.style.width=(p*100).toFixed(1)+"%";\n'
+            '  top.className="totop"+(h.scrollTop>600?" on":"");\n'
+            '  var cur=null;\n'
+            '  ls.forEach(function(a){var e=document.querySelector(a.getAttribute("href"));\n'
+            '    if(e&&e.getBoundingClientRect().top<140)cur=a;});\n'
+            '  ls.forEach(function(a){a.className=(a===cur?"on":"");});\n'
+            '  if(cur&&cur.offsetLeft-toc.scrollLeft>toc.clientWidth-220)\n'
+            '    toc.scrollLeft=cur.offsetLeft-120;\n'
+            ' }\n'
+            ' addEventListener("scroll",tick,{passive:true});tick();\n'
+            '})();</script>\n')
+    html = html.replace("</head>", CSS_NAV + "</head>", 1)
+    html = re.sub(r"(<body[^>]*>)", r"\1\n" + nav, html, count=1)
+    return html.replace("</body>", tail + "</body>", 1)
+
+
+CSS_NAV = """<style>
+/* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
+   那条规则之前是空转的（顶上什么都没有，点内链只是白空一截）。 */
+.toc{position:sticky;top:0;z-index:58;background:rgba(255,255,255,.96);
+     backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid #e8eaed;
+     overflow-x:auto;scrollbar-width:none}
+.toc::-webkit-scrollbar{display:none}
+.toc-in{display:flex;gap:2px;align-items:center;white-space:nowrap;
+        max-width:1760px;margin:0 auto;padding:7px 16px}
+.toc-lb{font:600 12px var(--mono);color:#9aa0a6;padding-right:10px;flex:none}
+.toc a{font:500 13px/1.2 var(--mono);color:#5f6368;text-decoration:none;
+       padding:6px 10px;border-radius:6px;flex:none}
+.toc a b{color:#202124}
+.toc a:hover{background:#f1f3f4}
+.toc a.on{background:#e8f0fe;color:#174ea6}
+.toc a.on b{color:#174ea6}
+@media print{.toc{display:none}}
+</style>
+"""
+
 _html = _anchorize(_html)
+_html = _build_nav(_html)
 
 # ⭐⭐ 2026-09-14 现场点的：「引用的那些论文得在教材里边，把可点击的 link 都放里边，
 #   有愿意多学的人可以去点开看。」→ arXiv 编号**自动**变成链接，见 course_links.py。

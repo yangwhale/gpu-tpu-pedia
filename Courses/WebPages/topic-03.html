@@ -682,8 +682,29 @@ h4 { margin:18px 0 6px; font-size:15px }
    ⛔ 同一条规则留两份，迟早只改一份。 */
 </style>
 
+<style>
+/* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
+   那条规则之前是空转的（顶上什么都没有，点内链只是白空一截）。 */
+.toc{position:sticky;top:0;z-index:58;background:rgba(255,255,255,.96);
+     backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid #e8eaed;
+     overflow-x:auto;scrollbar-width:none}
+.toc::-webkit-scrollbar{display:none}
+.toc-in{display:flex;gap:2px;align-items:center;white-space:nowrap;
+        max-width:1760px;margin:0 auto;padding:7px 16px}
+.toc-lb{font:600 12px var(--mono);color:#9aa0a6;padding-right:10px;flex:none}
+.toc a{font:500 13px/1.2 var(--mono);color:#5f6368;text-decoration:none;
+       padding:6px 10px;border-radius:6px;flex:none}
+.toc a b{color:#202124}
+.toc a:hover{background:#f1f3f4}
+.toc a.on{background:#e8f0fe;color:#174ea6}
+.toc a.on b{color:#174ea6}
+@media print{.toc{display:none}}
+</style>
 </head>
 <body>
+<div class="progress"><i></i></div>
+<nav class="toc" id="toc"><div class="toc-in"><span class="toc-lb">目录</span><a href="#s零"><b>零</b> 起点</a><a href="#s一"><b>一</b> MHA</a><a href="#s二"><b>二</b> 一切从长上下文说起</a><a href="#s三"><b>三</b> FlashAttention</a><a href="#s四"><b>四</b> 骨架</a><a href="#s五"><b>五</b> 旋钮①</a><a href="#s六"><b>六</b> 旋钮②</a><a href="#s七"><b>七</b> 旋钮③</a><a href="#s八"><b>八</b> 元旋钮 ⊕</a><a href="#s九"><b>九</b> 代价</a><a href="#s十"><b>十</b> 落到硬件（本专题的落点）</a><a href="#s十一"><b>十一</b> 收尾</a><a href="#s十二"><b>十二</b> 这个专题明确不讲</a></div></nav>
+
 
 <!-- ⛔ 这个文件由 Courses/tools/topic03-build.py 生成。
      **正文写在那个脚本的 BODY 常量里** —— 改内容改那里，别改这个产物，
@@ -8376,4 +8397,20 @@ the large "keys" and "values" tensors</b>.」</em>（Shazeer 2019 摘要）<br>
     <b>正文就写在那个脚本的 BODY 里</b>（md 只是大纲）。本目录采用 CC BY-NC-SA 4.0。</p>
 </div>
 
+<button class="totop" id="totop" title="回到顶部" onclick="scrollTo({top:0,behavior:'smooth'})">↑</button>
+<script>(function(){
+ var bar=document.querySelector(".progress i"), top=document.getElementById("totop"), toc=document.getElementById("toc"), ls=[].slice.call(toc.querySelectorAll("a"));
+ function tick(){
+  var h=document.documentElement,  p=h.scrollTop/(h.scrollHeight-h.clientHeight||1);
+  bar.style.width=(p*100).toFixed(1)+"%";
+  top.className="totop"+(h.scrollTop>600?" on":"");
+  var cur=null;
+  ls.forEach(function(a){var e=document.querySelector(a.getAttribute("href"));
+    if(e&&e.getBoundingClientRect().top<140)cur=a;});
+  ls.forEach(function(a){a.className=(a===cur?"on":"");});
+  if(cur&&cur.offsetLeft-toc.scrollLeft>toc.clientWidth-220)
+    toc.scrollLeft=cur.offsetLeft-120;
+ }
+ addEventListener("scroll",tick,{passive:true});tick();
+})();</script>
 </body></html>
