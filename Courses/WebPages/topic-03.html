@@ -3796,7 +3796,198 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <div class="note warn"><p>⭐⭐ <b>两个尺度，同一条判据</b>： 切「要被累加的那一维」就得合；切「各自独立出结果的那一维」就不用合。 attention 里前者是 K／V（它们在求和号里面），后者是 Q（每行输出各管各的）。</p>
 <p>⚠️ 这条判据的用处远不止 attention ——&nbsp; <b>任何融合 kernel 在分工时，先问一句「我切的这一维在不在求和号里」。</b></p></div>
 <h3 id="s3-3">3.3 ⚠️ 在线 softmax 不是免费的 —— 它是后面 35% 那个数的根</h3>
-<p>softmax 要减最大值才数值稳定，而最大值要看完整行才知道。 在线归约的做法是：<b>每来一块就更新一次 running max 和 running sum， 并把已经累好的输出按比例重标定一次。</b></p>
+<!-- ⭐⭐⭐ 2026-09-13 夜间 R16。这一节全节只有一张图，而**最像魔术的那一步
+     一张图都没有**：softmax 要看完整行才能算，凭什么一次只看一块也算得对？
+     ⛔ 原来只有下面这一句话（「每来一块就更新一次 running max / running sum，
+       并把已经累好的输出按比例重标定一次」）——&nbsp;每个字都对，
+       但没学过的人读完**不会有任何画面**。
+     ⭐ 新图沿用 fig3-lowrank 那一招：**让读者自己核**，两条路算出同一个数。 -->
+<p>softmax 要减最大值才数值稳定，而<b>最大值要看完整行才知道</b>。
+  ——&nbsp;那 FlashAttention 一次只看一块，凭什么算得对？</p>
+
+<figure class="fbox fwide" id="fig-online"><svg viewBox="0 0 1400 1562" width="100%" role="img" aria-label="在线 softmax：改到一半发现有人考得更高，怎么办"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">在线 softmax ——&#160;改到一半发现有人考得更高，不用把前面的卷子重翻一遍</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">softmax 要先知道<tspan font-weight="700">整行的最大值</tspan>才能算，而 FlashAttention 一次只看一小块。它凭什么算得对？这张图用五个真数字把两条路各走一遍 ——&#160;<tspan font-weight="700">最后一个数你可以自己对。</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">传统：整行摊开</text>
+<rect x="145" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="166" y="74" fill="#5f6368" style="font-size:14.0px">在线：一块一块来</text>
+<rect x="304" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="325" y="74" fill="#5f6368" style="font-size:14.0px">重标定的那个系数</text>
+<rect x="0" y="102" width="1400" height="268" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">① 传统算法：<tspan font-weight="700">得先把整行摊开</tspan> ——&#160;因为要减最大值</tspan></text>
+<text class="svgsm" x="1386" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px">片上要放得下 S 个数</text>
+<text class="svglbl" x="30" y="164" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">一整行的打分（这里只画 5 个，真实是 S 个）</tspan></text>
+<path d="M 41.0 182.8 H 69.0 L 78.0 193.6 V 233.2 H 41.0 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="69.0" y1="182.8" x2="69.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="69.0" y1="193.6" x2="78.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="47.0" y1="206.8" x2="70.0" y2="206.8" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="47.0" y1="217.6" x2="70.0" y2="217.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="59" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="59" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 1</text>
+<path d="M 119.0 182.8 H 147.0 L 156.0 193.6 V 233.2 H 119.0 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="147.0" y1="182.8" x2="147.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="147.0" y1="193.6" x2="156.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="125.0" y1="206.8" x2="148.0" y2="206.8" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="125.0" y1="217.6" x2="148.0" y2="217.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="137" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">3</tspan></text>
+<text class="svgsm" x="137" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 5</text>
+<path d="M 197.0 182.8 H 225.0 L 234.0 193.6 V 233.2 H 197.0 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="225.0" y1="182.8" x2="225.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="225.0" y1="193.6" x2="234.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="203.0" y1="206.8" x2="226.0" y2="206.8" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="203.0" y1="217.6" x2="226.0" y2="217.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="215" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="215" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 2</text>
+<path d="M 275.0 182.8 H 303.0 L 312.0 193.6 V 233.2 H 275.0 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="303.0" y1="182.8" x2="303.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="303.0" y1="193.6" x2="312.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="281.0" y1="206.8" x2="304.0" y2="206.8" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="281.0" y1="217.6" x2="304.0" y2="217.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="293" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">5</tspan></text>
+<text class="svgsm" x="293" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 8</text>
+<path d="M 353.0 182.8 H 381.0 L 390.0 193.6 V 233.2 H 353.0 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="381.0" y1="182.8" x2="381.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="381.0" y1="193.6" x2="390.0" y2="193.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="359.0" y1="206.8" x2="382.0" y2="206.8" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="359.0" y1="217.6" x2="382.0" y2="217.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="371" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="371" y="256" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 3</text>
+<path d="M 430.0 208.0 H 500.0 Q 500.0 208.0 500.0 208.0 V 208.0" fill="none" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="508" y="174" width="210" height="74" rx="8" fill="none" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="613" y="204" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">先找最大值</tspan></text>
+<text class="svgsm" x="613" y="230" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">这里是 5</tspan></text>
+<text class="svgsm" x="742" y="200" fill="#202124" style="font-size:16.0px">⛔ 这一步<tspan font-weight="700">必须看完全部</tspan>才能动笔 ——</text>
+<text class="svgsm" x="742" y="224" fill="#202124" style="font-size:16.0px">所以整行都得同时摆在片上暂存里。</text>
+<text class="svgsm" x="742" y="248" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">128K 上下文，这一行就是 13 万个数。</tspan></text>
+<text class="svgsm" x="30" y="338" fill="#202124" style="font-size:16.0px">⭐ <tspan font-weight="700">注意省的是什么</tspan>：减最大值是为了数值稳定（不减，exp 会溢出）。所以「必须先看完整行」不是实现懒，是这一步的定义就这样。</text>
+<text class="svgsm" x="30" y="364" fill="#5f6368" style="font-size:16.0px">⛔ 而这正是那张 S×S 的大表非建不可的原因 ——&#160;FlashAttention 要拆掉的就是它。</text>
+<rect x="0" y="426" width="1400" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="426" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="428" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="456" x2="1400" y2="456" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="446" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 在线算法：一摞一摞地改，手里<tspan font-weight="700">只攥三个数</tspan></tspan></text>
+<text class="svgsm" x="1386" y="446" fill="#80868b" text-anchor="end" style="font-size:11.0px">片上只放一块</text>
+<text class="svglbl" x="30" y="490" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">第一摞（前 3 个）</tspan></text>
+<path d="M 41.0 514.8 H 69.0 L 78.0 525.6 V 565.2 H 41.0 Z" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="69.0" y1="514.8" x2="69.0" y2="525.6" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="69.0" y1="525.6" x2="78.0" y2="525.6" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="47.0" y1="538.8" x2="70.0" y2="538.8" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="47.0" y1="549.6" x2="70.0" y2="549.6" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="59" y="548" fill="#0d652d" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">2</tspan></text>
+<text class="svgsm" x="59" y="588" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 1</text>
+<path d="M 119.0 514.8 H 147.0 L 156.0 525.6 V 565.2 H 119.0 Z" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="147.0" y1="514.8" x2="147.0" y2="525.6" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="147.0" y1="525.6" x2="156.0" y2="525.6" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="125.0" y1="538.8" x2="148.0" y2="538.8" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="125.0" y1="549.6" x2="148.0" y2="549.6" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="137" y="548" fill="#0d652d" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">3</tspan></text>
+<text class="svgsm" x="137" y="588" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 5</text>
+<path d="M 197.0 514.8 H 225.0 L 234.0 525.6 V 565.2 H 197.0 Z" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="225.0" y1="514.8" x2="225.0" y2="525.6" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="225.0" y1="525.6" x2="234.0" y2="525.6" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="203.0" y1="538.8" x2="226.0" y2="538.8" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="203.0" y1="549.6" x2="226.0" y2="549.6" stroke="#1e8e3e" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="215" y="548" fill="#0d652d" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="215" y="588" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 2</text>
+<path d="M 274.0 540.0 H 344.0 Q 344.0 540.0 344.0 540.0 V 540.0" fill="none" stroke="#1e8e3e" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="352" y="504" width="300" height="106" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="368" y="530" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">手里的三个数</tspan></text>
+<text class="svgsm" x="368" y="556" fill="#202124" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">目前最高分 m ＝ 3</text>
+<text class="svgsm" x="368" y="578" fill="#202124" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">目前总和   s ＝ 1.5032</text>
+<text class="svgsm" x="368" y="600" fill="#202124" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">加权和（未除 s）o ＝ 5.6386</text>
+<text class="svgsm" x="676" y="544" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 就这三个标量。</tspan></text>
+<text class="svgsm" x="676" y="568" fill="#5f6368" style="font-size:16.0px">前三张卷子<tspan font-weight="700">可以扔了</tspan>。</text>
+<text class="svglbl" x="30" y="622" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">第二摞（后 2 个）——&#160;出事了</tspan></text>
+<path d="M 41.0 644.8 H 69.0 L 78.0 655.6 V 695.2 H 41.0 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="69.0" y1="644.8" x2="69.0" y2="655.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="69.0" y1="655.6" x2="78.0" y2="655.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="47.0" y1="668.8" x2="70.0" y2="668.8" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="47.0" y1="679.6" x2="70.0" y2="679.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="59" y="678" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">5</tspan></text>
+<text class="svgsm" x="59" y="718" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 8</text>
+<path d="M 119.0 644.8 H 147.0 L 156.0 655.6 V 695.2 H 119.0 Z" fill="#fce8e6" stroke="#d93025" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="147.0" y1="644.8" x2="147.0" y2="655.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="147.0" y1="655.6" x2="156.0" y2="655.6" stroke="#d93025" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="125.0" y1="668.8" x2="148.0" y2="668.8" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="125.0" y1="679.6" x2="148.0" y2="679.6" stroke="#d93025" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="137" y="678" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">4</tspan></text>
+<text class="svgsm" x="137" y="718" fill="#80868b" text-anchor="middle" style="font-size:14.0px">内容 3</text>
+<text class="svgsm" x="200" y="664" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">⚠️ 这里有个 5</tspan></text>
+<text class="svgsm" x="200" y="688" fill="#a50e0e" style="font-size:16.0px">比手里的 3 还高。</text>
+<text class="svgsm" x="200" y="712" fill="#a50e0e" style="font-size:16.0px">之前算的全都得改口径。</text>
+<path d="M 404.0 670.0 H 470.0 Q 470.0 670.0 470.0 670.0 V 670.0" fill="none" stroke="#e8710a" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="478" y="634" width="336" height="106" rx="8" fill="none" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="494" y="660" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">重标定 ——&#160;只要乘一个数</tspan></text>
+<text class="svgsm" x="494" y="688" fill="#b06000" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">系数 ＝ exp(旧最高 − 新最高)</text>
+<text class="svgsm" x="494" y="712" fill="#202124" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">     ＝ exp(3 − 5) ＝ 0.1353</text>
+<text class="svgsm" x="494" y="734" fill="#5f6368" style="font-size:15.0px">把 s 和 o 各乘一次，完事。</text>
+<path d="M 822.0 670.0 H 888.0 Q 888.0 670.0 888.0 670.0 V 670.0" fill="none" stroke="#1e8e3e" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="896" y="634" width="300" height="106" rx="8" fill="none" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="912" y="660" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">更新后的三个数</tspan></text>
+<text class="svgsm" x="912" y="686" fill="#202124" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">m ＝ 5</text>
+<text class="svgsm" x="912" y="708" fill="#202124" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">s ＝ 1.5713</text>
+<text class="svgsm" x="912" y="730" fill="#202124" style="font-size:15.0px;font-family:'Roboto Mono',ui-monospace,monospace">o ＝ 9.8667（除以 s 才是输出）</text>
+<text class="svgsm" x="30" y="808" fill="#202124" style="font-size:17.0px">🏠 <tspan font-weight="700">这就是那句生活里的话</tspan>：</text>
+<text class="svgsm" x="30" y="836" fill="#202124" style="font-size:18.0px"><tspan font-weight="700">改到一半发现有人考得更高，不用把前面的卷子重翻一遍 ——&#160;把手里已经算出来的总分乘一个系数就行。</tspan></text>
+<rect x="0" y="912" width="1400" height="246" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="912" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="914" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="942" x2="1400" y2="942" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="932" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">③ 两条路，同一个数 ——&#160;这一格请<tspan font-weight="700">自己核</tspan></tspan></text>
+<text class="svgsm" x="1386" y="932" fill="#80868b" text-anchor="end" style="font-size:11.0px">精确相等，不是近似</text>
+<rect x="30" y="972" width="650" height="150" rx="8" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="48" y="1000" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">传统：摊开整行</tspan></text>
+<text class="svgsm" x="48" y="1030" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">减最大值 5 之后：</text>
+<text class="svgsm" x="48" y="1056" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">  0.0498  0.1353  0.0183  1.0000  0.3679</text>
+<text class="svgsm" x="48" y="1082" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">总和 s ＝ 1.5713　加权和 o ＝ 9.8667</text>
+<text class="svgsm" x="48" y="1108" fill="#202124" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">输出 ＝ o ÷ s ＝ 6.2793</tspan></text>
+<rect x="720" y="972" width="650" height="150" rx="8" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="738" y="1000" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">在线：两摞 ＋ 一次重标定</tspan></text>
+<text class="svgsm" x="738" y="1030" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">第一摞：s ＝ 1.5032　o ＝ 5.6386</text>
+<text class="svgsm" x="738" y="1056" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">乘系数 0.1353，再加第二摞：</text>
+<text class="svgsm" x="738" y="1082" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">总和 s ＝ 1.5713　加权和 o ＝ 9.8667</text>
+<text class="svgsm" x="738" y="1108" fill="#202124" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">输出 ＝ o ÷ s ＝ 6.2793</tspan></text>
+<text class="svgsm" x="700" y="1050" fill="#202124" text-anchor="middle" style="font-size:30.0px"><tspan font-weight="700">＝</tspan></text>
+<text class="svgsm" x="700" y="1092" fill="#202124" text-anchor="middle" style="font-size:22.0px">✅</text>
+<text class="svgsm" x="30" y="1158" fill="#202124" style="font-size:17.0px">⭐ 差是 <tspan font-weight="700">0</tspan>，不是「误差很小」——&#160;在线 softmax 是<tspan font-weight="700">恒等变换</tspan>，不是近似算法。<tspan font-weight="700">它不掉点。</tspan></text>
+<rect x="0" y="1218" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1218" width="4" height="122" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1218" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1245" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 但它不是免费的 ——&#160;这就是 3.3 那句话的实体</tspan></text>
+<text class="svgsm" x="20" y="1276" fill="#b06000" style="font-size:15.0px">每来一块，就多一次<tspan font-weight="700">求 max</tspan>、一次 <tspan font-weight="700">exp</tspan>、一次<tspan font-weight="700">按系数重标定</tspan>。⛔ 这三样<tspan font-weight="700">都不是矩阵乘</tspan>。</text>
+<text class="svgsm" x="20" y="1300" fill="#b06000" style="font-size:15.0px">⚠️ 更要命的是它们卡在<tspan font-weight="700">归约链</tspan>上：下一块要用上一块更新出来的 m 和 s，<tspan font-weight="700">排不进矩阵乘的流水里一起跑</tspan>。</text>
+<text class="svgsm" x="20" y="1324" fill="#b06000" style="font-size:15.0px">⭐ 所以 3.6 那个「融合完还是只跑到 35%」，根不在配置上 ——&#160;<tspan font-weight="700">有一部分就在这张图里</tspan>。</text>
+<rect x="0" y="1354" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1354" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1354" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1381" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 它省掉的到底是什么（这一条最容易说错）</tspan></text>
+<text class="svgsm" x="20" y="1412" fill="#0d652d" style="font-size:15.0px">⛔ <tspan font-weight="700">不是省算力</tspan>：该做的乘加一次不少，重标定还额外多了一些。</text>
+<text class="svgsm" x="20" y="1436" fill="#0d652d" style="font-size:15.0px">⭐ 省的是<tspan font-weight="700">片上暂存</tspan>：传统要同时摆下整行 S 个数，在线一次只摆一块。<tspan font-weight="700">于是那张 S×S 的大表根本不用建。</tspan></text>
+<text class="svgsm" x="20" y="1460" fill="#0d652d" style="font-size:15.0px">📌 这跟 §五 的账是<tspan font-weight="700">两回事</tspan>：§五 省的是要<tspan font-weight="700">跨 token 留下来</tspan>的 KV cache，这里省的是<tspan font-weight="700">算一步时中途摊开</tspan>的中间结果。⚠️ 两个都叫「省显存」，但省的不是同一样东西。</text>
+<text class="svgsm" x="0" y="1492" fill="#80868b" style="font-size:14.0px">📌 在线归约的做法出自 Milakov &amp; Gimelshein《Online normalizer calculation for softmax》（arXiv <a href="https://arxiv.org/abs/1805.02867" target="_blank"><tspan text-decoration="underline">1805.02867</tspan></a>），FlashAttention（arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank"><tspan text-decoration="underline">2205.14135</tspan></a>）把它用进了注意力</text>
+<text class="svgsm" x="0" y="1513" fill="#80868b" style="font-size:14.0px">　　⭐ 图里五个打分和五个「内容」是<tspan font-weight="700">本课随手编的示例数</tspan>，但两条路的计算是脚本当场跑的，并且断言<tspan font-weight="700">精确相等（差恒为 0）</tspan></text>
+<text class="svgsm" x="0" y="1534" fill="#80868b" style="font-size:14.0px">　　⚠️ 「内容」这里简化成了一个数；真实的 V 是一个 d_h 维向量，重标定对整个向量同时做 ——&#160;道理一样，画成一个数只是为了能核</text>
+</svg><figcaption>⭐⭐ <b>盯住②里那个橙色的系数</b>：发现更高分之后，不用回头重算 ——&nbsp;<b>把手里的 s 和 o 各乘一次它就行</b>。<em>⚠️ 而这个「各乘一次」不是矩阵乘，还卡在归约链上 ——&nbsp;3.6 那个「只跑到 35%」有一部分就在这儿。</em></figcaption></figure>
+
+<div class="note ok"><p>★ <b>办法是：手里只攥三个数，来了更高分就把它们缩一下</b></p>
+<p>每来一块，就更新一次 <code>running max</code> 和 <code>running sum</code>，
+  并把<b>已经累好的那份加权和按比例重标定一次</b>。</p>
+<p>🏠 <b>生活版</b>：<em>改到一半发现有人考得更高，
+  不用把前面的卷子重翻一遍 ——&nbsp;把手里已经算出来的总分乘一个系数就行。</em></p>
+<p>⭐ <b>它不是近似</b>：图③里两条路算出来的差是 <b>0</b>，不是「误差很小」。
+  <em>在线 softmax 是恒等变换，<b>不掉点</b>。</em></p></div>
+
+<div class="note info"><p>📌 <b>顺手把「省的是什么」说清楚，这一条最容易说错</b></p>
+<p>⛔ <b>不是省算力</b> ——&nbsp;该做的乘加一次不少，重标定还额外多了一些。<br>
+  ⭐ 省的是<b>片上暂存</b>：传统要同时摆下整行 <code>S</code> 个数，
+  在线一次只摆一块。<b>于是那张 S×S 的大表根本不用建。</b></p>
+<p>⚠️ 这跟 <a href="#s五">§五</a> 的账<b>是两回事</b>：那边省的是要
+  <b>跨 token 留下来</b>的 KV cache，这里省的是<b>算一步时中途摊开</b>的中间结果。
+  <em>两个都叫「省显存」，省的却不是同一样东西。</em></p></div>
 <div class="note danger"><span class="t">⛔ 这里有个几乎人人都会踩的误会：压力<b>不在</b>那两个 running 值上</span><p>「在线 softmax 只要存一个最大值和一个求和项」——&nbsp;<b>这句话是对的， 而且它们确实很小</b>：每行各一个标量。一个 <code>bq = 512</code> 的 Q 块， 两个加起来也就 <b>4 KB</b> 量级。</p>
 <p>真正占地方的是 <code>S = Q@Kᵀ</code> 那一整块。 它的形状是 <code>[bq, bkv]</code> ——&nbsp;<code>512 × 512</code> 的 fp32 就是 1 MB， <code>2048 × 2048</code> 是 16 MB。<b>比那两个 running 值大两三个数量级。</b></p>
 <p>而且它<b>不是存一次就完了</b>：每来一个 KV 块就重新生成一整块。</p></div>
