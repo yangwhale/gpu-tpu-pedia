@@ -179,10 +179,69 @@ def main():
     f.t(1024, by + 172, "结果几乎一样", BL, True, 22)
     f.t(1024, by + 202, "→　起作用的是位置，不是内容", BL, True, 17)
 
-    # ══════════ ③ 必须投满的选票 ════════════════════════════════
-    y2 = y1 + PH2 + 18
+    # ══════════ ③a 得票最高的那位，什么都不做 ══════════════════
+    # ⭐⭐⭐ 2026-09-13 新增。我们的选票比喻停在「票必须投满，于是全堆到
+    #   最前面几个人身上」——&nbsp;⛔ **缺了最后一步，而缺的这步才是机制本身**：
+    #   它投的那个人，**value 几乎是零**。
+    # ⚠️ 而且要诚实：「不许弃权的喧嚣民主」这个比喻**不是我们原创的** ——
+    #   Evan Miller 2023-07《Attention Is Off By One》原话就是
+    #   "a deafening democracy where abstention is disallowed"。主动引他。
+    y2a = y1 + PH2 + 18
+    PH3A = 352
+    py3a = f.panel(0, y2a, W, PH3A,
+                   "③ 得票最高的那位，什么都不做", BL,
+                   sub="⭐ 这一步才是机制本身 ——　前面两格只说了「票投给了谁」")
+
+    ay3 = py3a + 34
+    # 两根柱子：注意力权重冲天 vs value 模长贴地
+    BW2, BH2 = 118, 132
+    for k, (lab, hi, col, note) in enumerate((
+            ("注意力权重", 1.0, RD, "冲天"),
+            ("它的 value 模长", 0.08, GY2, "贴地"))):
+        x = 130 + k * 220
+        h = BH2 * hi
+        f.box(x, ay3 + 20 + BH2 - h, BW2, max(h, 4), col, "none", 4)
+        f.t(x + BW2 / 2.0, ay3 + 178, lab, col, True, 17, "middle")
+        f.t(x + BW2 / 2.0, ay3 + 202, note, GY2, size=16, anchor="middle")
+    f.t(130, ay3 + 8, "第 0 号座位上那个 token：", INK, True, 19)
+    f.t(130, ay3 + 234, "⭐ 把票投给他 ＝ 弃权", BL, True, 21)
+
+    # 为什么偏偏是第 0 个：因果掩码下唯一人人都够得着的座位
+    MX = 620
+    f.t(MX, ay3 + 8, "为什么偏偏是最前面那几个？", INK, True, 19)
+    N3 = 7
+    C3 = 26
+    for r in range(N3):
+        for c in range(N3):
+            on = c <= r
+            f.box(MX + c * C3, ay3 + 26 + r * C3, C3 - 3, C3 - 3,
+                  ("#e8f0fe" if c else "#1a73e8") if on else "#fff",
+                  "none" if on else LINE2, 2)
+    f.t(MX + C3 / 2.0, ay3 + 26 + N3 * C3 + 22, "↑", BL, True, 20, "middle")
+    f.t(MX, ay3 + 26 + N3 * C3 + 48, "因果掩码下，第 0 列是<tspan "
+        "font-weight=\"700\">唯一一列全满的</tspan>", BL, True, 17)
+    f.t(MX, ay3 + 26 + N3 * C3 + 72, "——　不是它特殊，"
+        "是<tspan font-weight=\"700\">只有它人人都够得着</tspan>", GY, size=17)
+
+    f.box(1010, ay3 + 14, 334, 214, "#e8f0fe", BL, 10)
+    f.t(1030, ay3 + 46, "⭐⭐ 于是整件事说得通了", BL, True, 20)
+    for i3, ln in enumerate([
+            "softmax 不许弃权，",
+            "模型就自己造了一个",
+            "**弃权用的候选人**出来：",
+            "永远在场、什么主张都没有。",
+            "",
+            "⛔ 砍掉他不是砍掉一个老 token，",
+            "是砍掉了**弃权票这个选项**。"]):
+        if not ln:
+            continue
+        b = "**" in ln
+        f.t(1030, ay3 + 78 + i3 * 24, ln.replace("**", ""), GY, b, 17, w=300)
+
+    # ══════════ ④ 必须投满的选票 ════════════════════════════════
+    y2 = y2a + PH3A + 18
     PH3 = 324
-    py3 = f.panel(0, y2, W, PH3, "③ 那这几个 token 到底在干嘛 ——　它们是废票桶",
+    py3 = f.panel(0, y2, W, PH3, "④ 两条看起来同样彻底的解法，只有一条成立",
                   BL, sub="softmax 要求每一行的票必须投满")
 
     vy = py3 + 20
@@ -247,7 +306,12 @@ def main():
                "三个 160M 预训练对照",
                "⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）"
                "<tspan font-weight=\"700\">不是同一个评测集</tspan>；"
-               "⚠️ 「传话 / 废票桶」是本课的比喻")
+               "⚠️ 「传话」是本课的比喻；⛔ 但「不许弃权的选票」"
+               "<tspan font-weight=\"700\">不是本课原创</tspan> ——&#160;"
+               "Evan Miller 2023-07《Attention Is Off By One》原话就是 "
+               "「a deafening democracy where abstention is disallowed」",
+               "③ 「value 模长极小」出自 Barbero 等 arXiv 2504.02732 图 4；"
+               "「第 0 列是因果掩码下唯一全满的一列」是由掩码定义直接得出的")
     f.save("fig3-swa-why.svg", yy + 6)
 
 

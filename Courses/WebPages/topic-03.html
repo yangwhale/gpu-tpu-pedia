@@ -6027,7 +6027,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
        → 真正的原因（softmax 要求一行加起来等于 1）。
      ⭐ 「把那四个 token 换成换行符照样管用」是判决性实验 ——
        它一句话证明了起作用的是**位置**不是语义。 -->
-<figure class="fbox fwide" id="fig-swa-why"><svg viewBox="0 0 1400 1906" width="100%" role="img" aria-label="滑窗凭什么敢砍：每个人只跟身边几个说话，但话能一层层往外传，层数是免费的射程；砍了为什么会崩：把最前面四个 token 扔掉，困惑度从 5.40 炸到 5158；为什么：softmax 要求每行的票必须投满"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-swa-why"><svg viewBox="0 0 1400 2318" width="100%" role="img" aria-label="滑窗凭什么敢砍：每个人只跟身边几个说话，但话能一层层往外传，层数是免费的射程；砍了为什么会崩：把最前面四个 token 扔掉，困惑度从 5.40 炸到 5158；为什么：softmax 要求每行的票必须投满"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">滑窗：凭什么敢砍，砍了为什么会崩</text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">一个<tspan font-weight="700">按时间顺序讲的侦探故事</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
@@ -6186,49 +6186,126 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="1024" y="868" fill="#5f6368" style="font-size:17.0px">毫无意义的换行符</text>
 <text class="svgsm" x="1024" y="906" fill="#174ea6" style="font-size:22.0px"><tspan font-weight="700">结果几乎一样</tspan></text>
 <text class="svgsm" x="1024" y="936" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">→　起作用的是位置，不是内容</tspan></text>
-<rect x="0" y="1150" width="1400" height="324" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1150" width="1400" height="352" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="1150" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
 <rect x="0" y="1152" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="1180" x2="1400" y2="1180" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="1170" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">③ 那这几个 token 到底在干嘛 ——　它们是废票桶</tspan></text>
-<text class="svgsm" x="333" y="1170" fill="#5f6368" style="font-size:11.0px">softmax 要求每一行的票必须投满</text>
-<rect x="56" y="1226" width="600" height="150" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="80" y="1264" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">规矩：每一行的票加起来必须正好 100 分</tspan></text>
-<text class="svgsm" x="80" y="1302" fill="#5f6368" style="font-size:18.0px">——　哪怕这一行「没什么特别想看的」，</text>
-<text class="svgsm" x="80" y="1334" fill="#5f6368" style="font-size:18.0px">票<tspan font-weight="700">也必须投出去</tspan>。</text>
-<text class="svgsm" x="80" y="1366" fill="#80868b" style="font-size:15.0px">这就是 softmax 的归一化</text>
-<path d="M 672.00 1300.00 L 716.00 1300.00" fill="none" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
-<rect x="736" y="1226" width="624" height="150" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
-<text class="svgsm" x="760" y="1264" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">于是废票都投给了最前面那几个</tspan></text>
-<text class="svgsm" x="760" y="1302" fill="#5f6368" style="font-size:18.0px">为什么偏偏是它们？——　因为自回归：</text>
-<text class="svgsm" x="760" y="1334" fill="#5f6368" style="font-size:18.0px"><tspan font-weight="700">全场只有开头那几个，人人都够得着。</tspan></text>
-<text class="svgsm" x="760" y="1366" fill="#80868b" style="font-size:15.0px">把废票桶撤了，票没处投，整行就乱套</text>
-<rect x="56" y="1396" width="640" height="86" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="80" y="1432" fill="#0d652d" style="font-size:20.0px"><tspan font-weight="700">⭐ 一个成立的解法</tspan></text>
-<text class="svgsm" x="80" y="1464" fill="#5f6368" style="font-size:17.0px">预训练时加一个<tspan font-weight="700">可学的</tspan>废票桶　→　1+1023 下 PPL 18.01</text>
-<rect x="720" y="1396" width="640" height="86" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="744" y="1432" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">⛔ 一个看起来对、但被论文自己证伪的</tspan></text>
-<text class="svgsm" x="744" y="1464" fill="#5f6368" style="font-size:17.0px">给一个<tspan font-weight="700">全零</tspan>的桶（＝softmax-off-by-one）　→　PPL 29214</text>
-<rect x="0" y="1494" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1494" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="1494" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1521" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这个故事真正的教益 —— 比 sink 本身值钱</tspan></text>
-<text class="svgsm" x="20" y="1552" fill="#174ea6" style="font-size:15.0px">attention sink 不是 bug，也不是谁设计的特性，它是<tspan font-weight="700">「票必须投满」这条规矩逼出来的副产品</tspan>。</text>
-<text class="svgsm" x="20" y="1576" fill="#174ea6" style="font-size:15.0px">⭐ 判据：<tspan font-weight="700">看到模型里一个「毫无道理却极其稳定」的现象，先去找是不是某个守恒 / 归一化约束逼出来的。</tspan>量化里那批总也压不下去的 outlier，跟这是同一件事（见专题八）。</text>
-<text class="svgsm" x="20" y="1600" fill="#174ea6" style="font-size:15.0px">⛔ 还有一条：<tspan font-weight="700">这个 bug 从公式上完全看不出来</tspan> ——&#160;是把注意力矩阵<tspan font-weight="700">画出来</tspan>才发现的。这一讲所有的图，都是这个道理。</text>
-<rect x="0" y="1630" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1630" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="1630" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1657" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 别把「理论射程」当「有效射程」</tspan></text>
-<text class="svgsm" x="20" y="1688" fill="#b06000" style="font-size:15.0px">4,096 × 32 ＝ <tspan font-weight="700">131,072</tspan> 是个上界，说的是「信息最远能传到这儿」，<tspan font-weight="700">不是「这么远还能用」</tspan> ——&#160;每跨一层只挪一格窗口，而且一路被后面的信息稀释。</text>
-<text class="svgsm" x="20" y="1712" fill="#b06000" style="font-size:15.0px">⭐ 稳妥说法：<tspan font-weight="700">滑窗把「远处」从「看不见」变成了「看得见但很模糊」</tspan> ——&#160;所以后面那些方案才要在滑窗之外再加一条「挑着看」的路。</text>
-<text class="svgsm" x="0" y="1752" fill="#80868b" style="font-size:14.0px">📌 ① 有效射程那一格出自 guangxuanx.com/blog/stacking-swa.html（作者是 StreamingLLM 一作，⚠️ 个人博客非同行评议）：纯 SWA ≈ 0.58·W·√L；有残差时跟层数无关。⚠️ 其中 </text>
-<text class="svgsm" x="0" y="1773" fill="#80868b" style="font-size:14.0px">　　α≈0.95 是作者断言不是实测，所以本图只说「一到两个窗口宽」不写死倍数</text>
-<text class="svgsm" x="0" y="1794" fill="#80868b" style="font-size:14.0px">　　gpt-oss-20b 的 1:1 交替与 sliding_window=128 是本课直接读 huggingface.co/openai/gpt-oss-20b 的 config.json 得到的</text>
-<text class="svgsm" x="0" y="1815" fill="#80868b" style="font-size:14.0px">　　Mistral 7B arXiv <a href="https://arxiv.org/abs/2310.06825" target="_blank"><tspan text-decoration="underline">2310.06825</tspan></a> §2（k×W 射程、W=4096 / 32 层、rolling buffer cache）；131,072 由脚本当场乘出来并断言</text>
-<text class="svgsm" x="0" y="1836" fill="#80868b" style="font-size:14.0px">　　②③ 出自 StreamingLLM（Xiao 等 arXiv <a href="https://arxiv.org/abs/2309.17453" target="_blank"><tspan text-decoration="underline">2309.17453</tspan></a>, ICLR 2024）表 1 / 表 2 与 §3.1 / §3.3：5158.07 → 5.40、换行符 5.60、留 1/2/4/8 个的对照</text>
-<text class="svgsm" x="0" y="1857" fill="#80868b" style="font-size:14.0px">　　⛔ Zero Sink（＝softmax-off-by-one）那组反例出自同文表 3 / 表 10 的三个 160M 预训练对照</text>
-<text class="svgsm" x="0" y="1878" fill="#80868b" style="font-size:14.0px">　　⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）<tspan font-weight="700">不是同一个评测集</tspan>；⚠️ 「传话 / 废票桶」是本课的比喻</text>
+<text class="svglbl" x="14" y="1170" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">③ 得票最高的那位，什么都不做</tspan></text>
+<text class="svgsm" x="218" y="1170" fill="#5f6368" style="font-size:11.0px">⭐ 这一步才是机制本身 ——　前面两格只说了「票投给了谁」</text>
+<rect x="130" y="1234.0" width="118" height="132.0" rx="4" fill="#d93025" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="189" y="1392" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">注意力权重</tspan></text>
+<text class="svgsm" x="189" y="1416" fill="#80868b" text-anchor="middle" style="font-size:16.0px">冲天</text>
+<rect x="350" y="1355.44" width="118" height="10.56" rx="4" fill="#80868b" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="409" y="1392" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">它的 value 模长</tspan></text>
+<text class="svgsm" x="409" y="1416" fill="#80868b" text-anchor="middle" style="font-size:16.0px">贴地</text>
+<text class="svgsm" x="130" y="1222" fill="#202124" style="font-size:19.0px"><tspan font-weight="700">第 0 号座位上那个 token：</tspan></text>
+<text class="svgsm" x="130" y="1448" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">⭐ 把票投给他 ＝ 弃权</tspan></text>
+<text class="svgsm" x="620" y="1222" fill="#202124" style="font-size:19.0px"><tspan font-weight="700">为什么偏偏是最前面那几个？</tspan></text>
+<rect x="620" y="1240" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1240" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="672" y="1240" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="698" y="1240" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="724" y="1240" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="750" y="1240" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1240" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1266" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1266" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1266" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="698" y="1266" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="724" y="1266" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="750" y="1266" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1266" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1292" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1292" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1292" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1292" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="724" y="1292" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="750" y="1292" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1292" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1318" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1318" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1318" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1318" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="724" y="1318" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="750" y="1318" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1318" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1344" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1344" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1344" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1344" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="724" y="1344" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="750" y="1344" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1344" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1370" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1370" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1370" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1370" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="724" y="1370" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="750" y="1370" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="776" y="1370" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1396" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1396" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1396" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1396" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="724" y="1396" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="750" y="1396" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="776" y="1396" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="633" y="1444" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">↑</tspan></text>
+<text class="svgsm" x="620" y="1470" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">因果掩码下，第 0 列是<tspan font-weight="700">唯一一列全满的</tspan></tspan></text>
+<text class="svgsm" x="620" y="1494" fill="#5f6368" style="font-size:17.0px">——　不是它特殊，是<tspan font-weight="700">只有它人人都够得着</tspan></text>
+<rect x="1010" y="1228" width="334" height="214" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1030" y="1260" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">⭐⭐ 于是整件事说得通了</tspan></text>
+<text class="svgsm" x="1030" y="1292" fill="#5f6368" style="font-size:17.0px">softmax 不许弃权，</text>
+<text class="svgsm" x="1030" y="1316" fill="#5f6368" style="font-size:17.0px">模型就自己造了一个</text>
+<text class="svgsm" x="1030" y="1340" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">弃权用的候选人出来：</tspan></text>
+<text class="svgsm" x="1030" y="1364" fill="#5f6368" style="font-size:17.0px">永远在场、什么主张都没有。</text>
+<text class="svgsm" x="1030" y="1412" fill="#5f6368" style="font-size:17.0px">⛔ 砍掉他不是砍掉一个老 token，</text>
+<text class="svgsm" x="1030" y="1436" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">是砍掉了弃权票这个选项。</tspan></text>
+<rect x="0" y="1520" width="1400" height="324" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1520" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="1522" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1550" x2="1400" y2="1550" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1540" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">④ 两条看起来同样彻底的解法，只有一条成立</tspan></text>
+<text class="svgsm" x="299" y="1540" fill="#5f6368" style="font-size:11.0px">softmax 要求每一行的票必须投满</text>
+<rect x="56" y="1596" width="600" height="150" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="80" y="1634" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">规矩：每一行的票加起来必须正好 100 分</tspan></text>
+<text class="svgsm" x="80" y="1672" fill="#5f6368" style="font-size:18.0px">——　哪怕这一行「没什么特别想看的」，</text>
+<text class="svgsm" x="80" y="1704" fill="#5f6368" style="font-size:18.0px">票<tspan font-weight="700">也必须投出去</tspan>。</text>
+<text class="svgsm" x="80" y="1736" fill="#80868b" style="font-size:15.0px">这就是 softmax 的归一化</text>
+<path d="M 672.00 1670.00 L 716.00 1670.00" fill="none" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="736" y="1596" width="624" height="150" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="760" y="1634" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">于是废票都投给了最前面那几个</tspan></text>
+<text class="svgsm" x="760" y="1672" fill="#5f6368" style="font-size:18.0px">为什么偏偏是它们？——　因为自回归：</text>
+<text class="svgsm" x="760" y="1704" fill="#5f6368" style="font-size:18.0px"><tspan font-weight="700">全场只有开头那几个，人人都够得着。</tspan></text>
+<text class="svgsm" x="760" y="1736" fill="#80868b" style="font-size:15.0px">把废票桶撤了，票没处投，整行就乱套</text>
+<rect x="56" y="1766" width="640" height="86" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="80" y="1802" fill="#0d652d" style="font-size:20.0px"><tspan font-weight="700">⭐ 一个成立的解法</tspan></text>
+<text class="svgsm" x="80" y="1834" fill="#5f6368" style="font-size:17.0px">预训练时加一个<tspan font-weight="700">可学的</tspan>废票桶　→　1+1023 下 PPL 18.01</text>
+<rect x="720" y="1766" width="640" height="86" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="744" y="1802" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">⛔ 一个看起来对、但被论文自己证伪的</tspan></text>
+<text class="svgsm" x="744" y="1834" fill="#5f6368" style="font-size:17.0px">给一个<tspan font-weight="700">全零</tspan>的桶（＝softmax-off-by-one）　→　PPL 29214</text>
+<rect x="0" y="1864" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1864" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1864" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1891" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这个故事真正的教益 —— 比 sink 本身值钱</tspan></text>
+<text class="svgsm" x="20" y="1922" fill="#174ea6" style="font-size:15.0px">attention sink 不是 bug，也不是谁设计的特性，它是<tspan font-weight="700">「票必须投满」这条规矩逼出来的副产品</tspan>。</text>
+<text class="svgsm" x="20" y="1946" fill="#174ea6" style="font-size:15.0px">⭐ 判据：<tspan font-weight="700">看到模型里一个「毫无道理却极其稳定」的现象，先去找是不是某个守恒 / 归一化约束逼出来的。</tspan>量化里那批总也压不下去的 outlier，跟这是同一件事（见专题八）。</text>
+<text class="svgsm" x="20" y="1970" fill="#174ea6" style="font-size:15.0px">⛔ 还有一条：<tspan font-weight="700">这个 bug 从公式上完全看不出来</tspan> ——&#160;是把注意力矩阵<tspan font-weight="700">画出来</tspan>才发现的。这一讲所有的图，都是这个道理。</text>
+<rect x="0" y="2000" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="2000" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="2000" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="2027" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 别把「理论射程」当「有效射程」</tspan></text>
+<text class="svgsm" x="20" y="2058" fill="#b06000" style="font-size:15.0px">4,096 × 32 ＝ <tspan font-weight="700">131,072</tspan> 是个上界，说的是「信息最远能传到这儿」，<tspan font-weight="700">不是「这么远还能用」</tspan> ——&#160;每跨一层只挪一格窗口，而且一路被后面的信息稀释。</text>
+<text class="svgsm" x="20" y="2082" fill="#b06000" style="font-size:15.0px">⭐ 稳妥说法：<tspan font-weight="700">滑窗把「远处」从「看不见」变成了「看得见但很模糊」</tspan> ——&#160;所以后面那些方案才要在滑窗之外再加一条「挑着看」的路。</text>
+<text class="svgsm" x="0" y="2122" fill="#80868b" style="font-size:14.0px">📌 ① 有效射程那一格出自 guangxuanx.com/blog/stacking-swa.html（作者是 StreamingLLM 一作，⚠️ 个人博客非同行评议）：纯 SWA ≈ 0.58·W·√L；有残差时跟层数无关。⚠️ 其中 </text>
+<text class="svgsm" x="0" y="2143" fill="#80868b" style="font-size:14.0px">　　α≈0.95 是作者断言不是实测，所以本图只说「一到两个窗口宽」不写死倍数</text>
+<text class="svgsm" x="0" y="2164" fill="#80868b" style="font-size:14.0px">　　gpt-oss-20b 的 1:1 交替与 sliding_window=128 是本课直接读 huggingface.co/openai/gpt-oss-20b 的 config.json 得到的</text>
+<text class="svgsm" x="0" y="2185" fill="#80868b" style="font-size:14.0px">　　Mistral 7B arXiv <a href="https://arxiv.org/abs/2310.06825" target="_blank"><tspan text-decoration="underline">2310.06825</tspan></a> §2（k×W 射程、W=4096 / 32 层、rolling buffer cache）；131,072 由脚本当场乘出来并断言</text>
+<text class="svgsm" x="0" y="2206" fill="#80868b" style="font-size:14.0px">　　②③ 出自 StreamingLLM（Xiao 等 arXiv <a href="https://arxiv.org/abs/2309.17453" target="_blank"><tspan text-decoration="underline">2309.17453</tspan></a>, ICLR 2024）表 1 / 表 2 与 §3.1 / §3.3：5158.07 → 5.40、换行符 5.60、留 1/2/4/8 个的对照</text>
+<text class="svgsm" x="0" y="2227" fill="#80868b" style="font-size:14.0px">　　⛔ Zero Sink（＝softmax-off-by-one）那组反例出自同文表 3 / 表 10 的三个 160M 预训练对照</text>
+<text class="svgsm" x="0" y="2248" fill="#80868b" style="font-size:14.0px">　　⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）<tspan font-weight="700">不是同一个评测集</tspan>；⚠️ 「传话」是本课的比喻；⛔ 但「不许弃权的选票」<tspan font-weight="700">不是本课原创</tspan> ——&#160;Evan Miller 2023-07《Attentio</text>
+<text class="svgsm" x="0" y="2269" fill="#80868b" style="font-size:14.0px">　　n Is Off By One》原话就是 「a deafening democracy where abstention is disallowed」</text>
+<text class="svgsm" x="0" y="2290" fill="#80868b" style="font-size:14.0px">　　③ 「value 模长极小」出自 Barbero 等 arXiv <a href="https://arxiv.org/abs/2504.02732" target="_blank"><tspan text-decoration="underline">2504.02732</tspan></a> 图 4；「第 0 列是因果掩码下唯一全满的一列」是由掩码定义直接得出的</text>
 </svg><figcaption>⭐⭐ <b>一个侦探故事：先有办法（层数是免费的射程，32 层 × 4096 = 131,072），再出事故（困惑度 5.40 → 5158），最后才找到原因（softmax 要求一行加起来等于 1）。</b><em>判决性实验在中间那格：把最前面四个 token 换成换行符，照样管用 —— 起作用的是位置，不是语义。</em></figcaption></figure>
 <h4 id="s6-1b">6.1b　滑窗：凭什么敢砍，砍了为什么会崩</h4>
 <!-- ⛔ 2026-09-12：这里原来把 fig-swa-why 落点带的两句（「归一化约束逼出来的」
