@@ -43,40 +43,48 @@ def main():
         "<tspan font-weight=\"700\">先搬能算的，最后才搬算不出来的</tspan>",
         [(BL, "显存"), (GR, "算力"), (OR, "访存规整度"), (RD, "防骗判据")])
 
-    ph = 438
+    ph = 486
 
-    # ══ ① 三种资源 ＋ 搬家顺序 ══════════════════════════════════
+    # ══ ① 三种资源：一部搬家史 ══════════════════════════════════
+    # ⭐⭐⭐ 2026-09-14 重画：原来是三张文字卡。现在画成**真的搬家** ——
+    #   东西从一个房间挪到另一个房间，而且**顺序不是随机的**。
     x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 三种资源，一条搬家路线", BL,
-                 sub="顺序不是随机的")
+    py = f.panel(x, y0, pw, ph, "① 三个房间，一条搬家路线", BL,
+                 sub="⭐ 顺序不是随机的")
 
-    yy = py + 26
-    for i, (era, who, what, col) in enumerate([
-        ("早期", "搬显存", "MQA → GQA → MLA", BL),
-        ("中期", "搬算力", "SWA → NSA / DSA → CSA·HCA", GR),
-        ("现在", "搬访存规整度", "chunk 化的线性注意力", OR),
-    ]):
-        f.box(x + 22, yy, pw - 44, 82, "#fff", col, 8)
-        f.box(x + 22, yy, 4, 82, col, col, 2)
-        f.box(x + 24, yy, 3, 82, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 27, era, GY2, size=11.5)
-        f.t(x + 84, yy + 27, who, col, True, 13, cls="svglbl")
-        f.t(x + 40, yy + 54, what, GY, size=11.5, w=pw - 76)
-        f.t(x + 40, yy + 73, "换来的：" + ["更小的每份", "更少的格子",
-                                        "更规整的读法"][i], GY2, size=11)
+    yy = py + 22
+    ROOMS = [
+        ("早期", "搬显存", "MQA → GQA → MLA", "换来：每份更小", BL),
+        ("中期", "搬算力", "SWA → DSA → CSA·HCA", "换来：格子更少", GR),
+        ("现在", "搬访存规整度", "chunk 化的线性注意力", "换来：读得更顺", OR),
+    ]
+    for i, (era, who, what, got, col) in enumerate(ROOMS):
+        f.box(x + 22, yy, pw - 44, 86, "#fff", col, 10)
+        f.box(x + 22, yy, 5, 86, col, col, 3)
+        f.box(x + 25, yy, 4, 86, "#fff", "#fff", 0)
+        f.box(x + 44, yy + 20, 46, 44, "#fff", col, 5)
+        f.line(x + 44, yy + 32, x + 90, yy + 32, col, 1.4, arrow=False)
+        f.t(x + 106, yy + 34, era, GY2, size=13)
+        f.t(x + 106, yy + 58, who, col, True, 19)
+        f.t(x + 244, yy + 34, what, GY, size=13, w=pw - 280)
+        f.t(x + 244, yy + 58, got, GY2, size=13, w=pw - 280)
         if i < 2:
-            f.line(x + pw / 2.0, yy + 84, x + pw / 2.0, yy + 92, GY2, 1.2)
-        yy += 94
+            f.line(x + pw / 2.0, yy + 88, x + pw / 2.0, yy + 96, GY2, 1.2)
+        yy += 98
 
-    yy += 2
-    f.box(x + 22, yy, pw - 44, 76, "#fff", OR, 8)
-    f.box(x + 22, yy, 4, 76, OR, OR, 2)
-    f.box(x + 24, yy, 3, 76, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 25, "⭐ 为什么是这个顺序？", OR, True, 12.5)
-    f.t(x + 40, yy + 47, "<tspan font-weight=\"700\">前两样能用公式算</tspan>；", GY, size=11.5)
-    f.t(x + 40, yy + 67, "访存规整度<tspan font-weight=\"700\">只能靠 kernel 一行行写出来</tspan>。", GY,
-        size=11.5)
-    fits(yy + 76, y0, ph, "①")
+    yy += 6
+    f.box(x + 22, yy, pw - 44, 92, "#e8f0fe", BL, 10)
+    f.t(x + 40, yy + 30, "⭐ 为什么偏偏是这个顺序", BL, True, 18)
+    f.t(x + 40, yy + 56, "前两样<tspan font-weight=\"700\">能拿尺子量</tspan> ——", GY,
+        size=14, w=pw - 76)
+    f.t(x + 40, yy + 78, "多少字节、多少 FLOPs，坐下来就能算。", GY, size=14,
+        w=pw - 76)
+    yy += 102
+    f.t(x + 22, yy, "⛔ 而访存规整度<tspan font-weight=\"700\">量不出来</tspan>，", GY,
+        size=14, w=pw - 44)
+    f.t(x + 22, yy + 20, "它只出现在 kernel 里 ——&#160;所以被留到了最后。", GY,
+        size=14, w=pw - 44)
+    fits(yy + 26, y0, ph, "①")
 
     # ══ ② 四个取舍 ══════════════════════════════════════════════
     x, pw = PX[1], PW[1]
