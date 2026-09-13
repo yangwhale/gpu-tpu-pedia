@@ -114,31 +114,101 @@ def main():
 
     # ══ ② 而这已经是 MLA 之后的数字 ════════════════════════════════
     yy = top + PH1 + 26
-    PH2 = 262
+    PH2 = 400   # ⚠️ R43 从 262 涨上来：这一格从两张文字卡片换成了四行尺子
     top = f.panel(0, yy, W, PH2,
                   "② 别忘了：上面那根红柱子<tspan font-weight=\"700\">已经是 MLA "
                   "压过之后</tspan>的 ——&#160;如果它用 MHA 呢", BL,
                   tag="同口径的反事实")
-    for i, (ttl, body, col) in enumerate([
-        ("一个人，128K",
-         "MLA：<tspan font-weight=\"700\">%.2f GiB</tspan>。"
-         "MHA：<tspan font-weight=\"700\">%.0f GiB</tspan> ——&#160;"
-         "比整个模型权重的四分之三还多，<tspan font-weight=\"700\">"
-         "就为了一个人。</tspan>" % (KV128K, KVMHA), OR),
-        ("64 个人，128K",
-         "MLA：%.0f GiB，还算得出要几张卡。"
-         "MHA：<tspan font-weight=\"700\">%.1f TiB</tspan> ——&#160;"
-         "<tspan font-weight=\"700\">这时候问题已经不是「要几张卡」，是「做不了」。"
-         "</tspan>" % (B, KVMHA * 64 / 1024.0), RD),
-    ]):
-        bx = 30 + i * 684
-        f.box(bx, top + 32, 656, 132, "none", LINE, 9)
-        f.badge(bx + 18, top + 48, i + 1, col)
-        f.t(bx + 64, top + 70, ttl, col, bold=True, size=19, cls="svglbl")
-        yj = top + 104
-        for r in wrap_rich(body, 622, 16 * 1.12):
-            f.t(bx + 18, yj, r, GY, size=16)
-            yj += 24
+    # ⭐⭐⭐ 2026-09-14 R43 重画。原来这一格是**两张写着数字的卡片**，
+    #   而它要说的那句话是「这已经不是『要几张卡』，是『做不了』」——
+    #   **「做不了」是个程度，程度得画出来才有分量，写出来只是一个形容词。**
+    #
+    # ⭐⭐ 装置：**四个场景摆到同一根「要几张卡」的尺子上，让第四根自己冲出图外。**
+    #   ⭐ 这跟面板① 是同一个手法的另一头 —— 面板① 用「0.27 GiB，细到画不出来」
+    #     表示小，这一格用「337 张卡，大到画不下」表示大。
+    #     **同一张图，一头细到画不出来，一头大到画不下。**
+    #
+    # ⭐⭐⭐ 而摆上尺子之后，掉出来一句本课以前没说过的话：
+    #   **MHA 伺候一个人要 12 张卡，MLA 伺候 64 个人要 13 张卡。**
+    #   差一张卡，服务的人数差 64 倍 —— 这比「56.9 倍」具体得多，
+    #   而且它是这张图自己的四个数做除法得出来的，没引进任何新口径。
+    SCEN = [
+        ("MLA", "一个人", 1, KV128K, GR),
+        ("MHA", "一个人", 1, KVMHA, RD),
+        ("MLA", "64 个人", 64, KV128K, GR),
+        ("MHA", "64 个人", 64, KVMHA, RD),
+    ]
+    # ⚠️ 这四个数跟面板① 的 nA/nB **不是同一套口径**：nA 是「4K 上下文」，
+    #   这一格四行全是 128K。所以 cards[0]＝7 ≠ nA＝7 只是巧合，别拿来互相断言。
+    cards = [int(-(-(WEIGHT + kv * n) // DEV)) for _, _, n, kv, _ in SCEN]
+    assert cards[2] == nB, (cards[2], nB)      # 这一对才是同口径的（MLA · 64 人 · 128K）
+    # ⭐ 下面两条断言就是上面那句话的依据，改任何一个常数它们会先炸
+    assert cards == [7, 12, 13, 337], cards
+    assert cards[2] - cards[1] == 1, cards     # 差一张卡
+    AX0, AXW, AXMAX = 300, 1040.0, 20          # 尺子只画到 20 张卡
+    PXC = AXW / AXMAX
+    over = cards[3] - AXMAX
+    wides = over * PXC / W                     # 画不下的部分折合几个图宽
+    assert 11 < wides < 12.5, wides            # ＝ 317 张卡 × 52 px ÷ 1400
+
+    f.t(30, top + 52,
+        "把四个场景摆到<tspan font-weight=\"700\">同一根尺子</tspan>上 ——&#160;"
+        "横轴就是「要几张卡」（权重 %.0f GiB ＋ KV，按 TPU v7 每 device "
+        "%.2f GiB 向上取整）。" % (WEIGHT, DEV), GY, size=16)
+    for i in range(0, AXMAX + 1, 4):
+        x = AX0 + i * PXC
+        f.line(x, top + 74, x, top + 296, LINE2, 1, arrow=False)
+        f.t(x, top + 70, "%d" % i, GY2, size=13, anchor="middle")
+    f.t(AX0 - 10, top + 70, "张卡", GY2, size=13, anchor="end")
+
+    ROWY = []
+    for i, (kind, who, n, kv, col) in enumerate(SCEN):
+        y = top + 86 + i * 54
+        ROWY.append(y)
+        f.t(AX0 - 16, y + 27, "%s ·　%s" % (kind, who), col, True, 17, "end")
+        c = cards[i]
+        if c <= AXMAX:
+            f.box(AX0, y, c * PXC, 38, "#fce8e6" if col is RD else "#e6f4ea",
+                  col, 5, 1.6)
+            f.t(AX0 + c * PXC + 14, y + 26, "%d 张卡" % c, col, True, 19)
+        else:
+            # ⛔ 冲出图外那一根：**不要缩放坐标去把它塞进来** ——
+            #   一缩放，前三根就全挤成一团，而「塞不下」这件事恰恰是论点。
+            # ⭐ 箭头尖故意顶到**图框上**（W-8），不是停在刻度尽头 ——
+            #   停在 20 那一格看起来像「正好装满」，顶到框上才是「装不下」。
+            f.box(AX0, y, AXW + 18, 38, "#fce8e6", RD, 5, 1.6)
+            f.poly([(AX0 + AXW + 18, y), (W - 8, y + 19),
+                    (AX0 + AXW + 18, y + 38)], "#fce8e6", RD, 1.6)
+            f.t(AX0 + 20, y + 26,
+                "%d 张卡 ——&#160;<tspan font-weight=\"700\">"
+                "按这把尺子还要再往右画 %.1f 个图宽</tspan>" % (cards[3], wides),
+                RD, True, 19)
+    # ⭐ 把「差一张卡」这件事用一个括号括起来 ——&#160;光靠两行数字读者不会自己去减。
+    # ⚠️ 括号竖边落在 bx1+92 而不是紧贴条尾：第 2、3 行的「12 张卡」「13 张卡」
+    #   标注就挂在条尾右边，实测各自伸到 998 / 1052，贴着画会压上去。
+    # ⭐ 竖边的位置是**从标注实际有多宽算出来的**，不是拍脑袋加个偏移 ——
+    #   「13 张卡」比「12 张卡」宽不了多少，但只要贴着画就会被横线穿过去。
+    lab_end = max(AX0 + cards[r] * PXC + 14 + wpx("%d 张卡" % cards[r], 19)
+                  for r in (1, 2))
+    vx = lab_end + 26
+    f.line(vx, ROWY[1] + 19, vx, ROWY[2] + 19, PU, 1.6, arrow=False)
+    for r in (1, 2):
+        f.line(lab_end + 8, ROWY[r] + 19, vx, ROWY[r] + 19, PU, 1.4,
+               arrow=False)
+    NOTE = "⭐ 差一张卡，人数差 64 倍"
+    assert vx + 14 + wpx(NOTE, 18) < W - 20, vx + 14 + wpx(NOTE, 18)
+    f.t(vx + 14, ROWY[1] + 52,
+        "⭐ 差<tspan font-weight=\"700\">一张卡</tspan>，"
+        "人数差 <tspan font-weight=\"700\">64 倍</tspan>", PU, True, 18)
+
+    # ⭐⭐ 这句是摆上尺子之后**掉出来的**，本课以前没说过 ——&#160;
+    #   它比「56.9 倍」具体，因为它说的是同一台机器上的两件事。
+    f.t(30, top + 328,
+        "⭐⭐ 把第 2、3 行叠在一起读："
+        "<tspan font-weight=\"700\">MHA 伺候一个人要 12 张卡，"
+        "MLA 伺候 64 个人要 13 张卡。</tspan>"
+        "同样一台机器 ——&#160;一个换六十四个。", INK, size=18)
+
     f.t(30, top + PH2 - 44,
         "⭐⭐ 所以 §五 那个 <tspan font-weight=\"700\">56.9×</tspan>"
         "（＝ %.0f ÷ %.2f）不是一次「优化」——&#160;"
