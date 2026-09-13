@@ -12962,13 +12962,22 @@ linear                                               ← 第 45 层多出来的�
 <text class="svgsm" x="44" y="1274" fill="#80868b" style="font-size:15.0px">⚠️ 只算 HBM 读 ——&#160;真机只会更慢，但各方案之间的比例站得住</text>
 <rect x="712" y="968" width="664" height="186" rx="9" fill="none" stroke="#d93025" stroke-width="1"/>
 <text class="svglbl" x="732" y="998" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">反直觉一：显存省了 56.9 倍，只快了 7.08 倍</tspan></text>
-<text class="svgsm" x="732" y="1024" fill="#5f6368" style="font-size:16.0px">⭐ 那 8.0 倍是在这两步里被吃掉的：</text>
-<text class="svgsm" x="744" y="1054" fill="#a50e0e" style="font-size:19.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">56.9×</tspan></text>
-<text class="svgsm" x="834" y="1054" fill="#5f6368" style="font-size:15.0px">显存之比 ——&#160;KV 488 ÷ 8.58</text>
-<text class="svgsm" x="744" y="1084" fill="#b06000" style="font-size:19.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">12.14×</tspan></text>
-<text class="svgsm" x="834" y="1084" fill="#5f6368" style="font-size:15.0px">每步还要读一份<tspan font-weight="700">所有人共享</tspan>的权重（÷ 4.69）</text>
-<text class="svgsm" x="744" y="1114" fill="#0d652d" style="font-size:19.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">7.08×</tspan></text>
-<text class="svgsm" x="834" y="1114" fill="#5f6368" style="font-size:15.0px">MHA 装不下，被迫用 12 张卡而不是 7 张（÷ 1.71）</text>
+<text class="svgsm" x="732" y="1022" fill="#5f6368" style="font-size:15.0px">整条 ＝ 显存的 <tspan font-weight="700">56.9×</tspan>；三段按<tspan font-weight="700">对数</tspan>切，所以<tspan font-weight="700">正好铺满</tspan> ——&#160;没有第三个原因。</text>
+<rect x="732.0" y="1028" width="290.6461939658842" height="36" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="877" y="1052" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">7.08×</tspan></text>
+<rect x="1022.6461939658842" y="1028" width="229.3222829489694" height="36" rx="4" fill="#feefe3" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="1137" y="1052" fill="#b06000" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">÷4.69</tspan></text>
+<rect x="1251.9684769148537" y="1028" width="80.03152308514642" height="36" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text class="svgsm" x="1291" y="1052" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">÷1.71</tspan></text>
+<rect x="732" y="1073" width="12" height="12" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="752" y="1084" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">7.08× 真正到手</tspan></text>
+<text class="svgsm" x="875" y="1084" fill="#5f6368" style="font-size:15.0px">——&#160;而右边两段合起来是 8.03×，<tspan font-weight="700">吃掉的比到手的还多</tspan></text>
+<rect x="732" y="1093" width="12" height="12" rx="2" fill="#feefe3" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="752" y="1104" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">÷4.69 被共享的权重吃掉</tspan></text>
+<text class="svgsm" x="935" y="1104" fill="#5f6368" style="font-size:15.0px">——&#160;每步还得把 34.46 GiB 权重读一遍，这段谁都省不掉</text>
+<rect x="732" y="1113" width="12" height="12" rx="2" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="752" y="1124" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">÷1.71 被多出来的卡吃掉</tspan></text>
+<text class="svgsm" x="935" y="1124" fill="#5f6368" style="font-size:15.0px">——&#160;MHA 装不下，被迫用 12 张而不是 7 张（12÷7）</text>
 <text class="svgsm" x="732" y="1144" fill="#202124" style="font-size:16.0px">⭐ 所以 MLA 真正省下的不是时间，是<tspan font-weight="700">那 5 张卡</tspan> ——&#160;它们可以拿去服务别人。</text>
 <rect x="712" y="1166" width="664" height="128" rx="9" fill="none" stroke="#1a73e8" stroke-width="1"/>
 <text class="svglbl" x="732" y="1196" fill="#174ea6" style="font-size:19.0px"><tspan font-weight="700">反直觉二：MLA 之后再上稀疏，只再快 1.24 倍</tspan></text>
