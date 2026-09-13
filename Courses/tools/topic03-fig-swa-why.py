@@ -58,7 +58,7 @@ def main():
     # ⭐⭐ 这条改完反而更值钱：它正好解释了**混合架构为什么必须存在**
     #   （原文自己说的）——&nbsp;接上 §八。
     import math as _m
-    PH = 412
+    PH = 560
     py = f.panel(0, y0, W, PH,
                  "① 凭什么敢砍 ——　每层只看身边几个，但话能往外传",
                  GR, sub="⚠️ 能传多远，比「层数 × 窗口」小得多")
@@ -118,6 +118,28 @@ def main():
         % (format(WIN, ","), LAY, format(span, ",")), RD, True, 18)
     f.t(840, cy + 94, "⛔ 那是<tspan font-weight=\"700\">理论上限</tspan>，"
         "不是能用的长度", RD, True, 18)
+
+    # ── 工业界的答案：不堆层数，改成隔一层插一层全注意力 ──────────
+    # ⭐ 这组数是**我自己读 config 读到的**（huggingface.co/openai/gpt-oss-20b
+    #   的 config.json），不是转述：layer_types 是 sliding / full **1:1 交替**，
+    #   而且 sliding_window 只有 **128**。
+    # ⭐⭐ 它正好是上面那条结论的工业答案：既然堆层数没用，那就别指望堆 ——
+    #   隔一层插一层真正的全注意力。⛔ 顺带它也说明窗口可以开得极小。
+    ty = cy + 140
+    f.box(56, ty, 1288, 96, "#e8f0fe", BL, 10)
+    f.t(80, ty + 32, "⭐⭐ 所以工业界的答案不是「堆更多层」，是"
+        "<tspan font-weight=\"700\">隔一层插一层真正的全注意力</tspan>", BL,
+        True, 21)
+    for k in range(12):
+        full = (k % 2 == 1)
+        f.box(80 + k * 46, ty + 46, 38, 30, "#1a73e8" if full else "#fff",
+              BL, 4)
+        f.t(99 + k * 46, ty + 67, "全" if full else "窗",
+            "#fff" if full else BL, True, 16, "middle")
+    f.t(640, ty + 58, "gpt-oss-20b：24 层，<tspan font-weight=\"700\">"
+        "滑窗 / 全注意力 1:1 交替</tspan>，", GY, size=17)
+    f.t(640, ty + 82, "而且它的窗口只有 <tspan font-weight=\"700\">128</tspan>"
+        " ——　窗口小到这个地步，靠堆层数是绝无可能够到 128K 的。", GY, size=17)
 
     # ══════════ ② 崩了 ══════════════════════════════════════════
     y1 = y0 + PH + 18
@@ -214,7 +236,9 @@ def main():
     ])
 
     yy = f.src(yy + 24,
-               "① 出自 Mistral 7B arXiv 2310.06825 §2（k×W 射程、W=4096 / 32 层、"
+               "① 有效射程那一格出自 guangxuanx.com/blog/stacking-swa.html（作者是 StreamingLLM 一作，⚠️ 个人博客非同行评议）：纯 SWA ≈ 0.58·W·√L；有残差时跟层数无关。⚠️ 其中 α≈0.95 是作者断言不是实测，所以本图只说「一到两个窗口宽」不写死倍数",
+               "gpt-oss-20b 的 1:1 交替与 sliding_window=128 是本课直接读 huggingface.co/openai/gpt-oss-20b 的 config.json 得到的",
+               "Mistral 7B arXiv 2310.06825 §2（k×W 射程、W=4096 / 32 层、"
                "rolling buffer cache）；131,072 由脚本当场乘出来并断言",
                "②③ 出自 StreamingLLM（Xiao 等 arXiv 2309.17453, ICLR 2024）"
                "表 1 / 表 2 与 §3.1 / §3.3：5158.07 → 5.40、换行符 5.60、"
