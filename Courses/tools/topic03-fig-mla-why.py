@@ -115,29 +115,83 @@ def main():
     f.t(1168, dy + 172, "两段相乘 ＝ %.1f 倍" % tot, INK, True, 20)
 
     # ══════════ ③ 凭什么敢赌 ════════════════════════════════════
+    # ⭐⭐⭐ 2026-09-14 R45 重画。原来这一格是**四张写着字的卡片**：三张橙的
+    #   （Eigen Attention / Palu / LoRC）＋ 一张绿的写着「从第一天就按缩印后的
+    #   尺寸练字」。那句绿卡上的话是这一格的全部价值，而它**只是一句话**。
+    #
+    # ⭐⭐ 装置：**两张稿纸，终点宽度像素级相同。**
+    #   左边是一张写满大字的稿纸被缩印机压窄 ——&nbsp;笔画挤成一团；
+    #   右边那张**生来就这么窄**，笔画少但根根分明。
+    #   ⭐ 关键是**终点等宽**（代码里 assert 住）：终点一样、起点不一样，
+    #     所以差别只能来自「什么时候变窄的」。这是 fig3-flip 面板①
+    #     「两根柱子的权重段像素级相同」那一招的复用。
+    # ⛔ 这一格**不主张「事后压掉点更多」** ——&nbsp;本课没有那个口径的实测。
+    #   它只主张一件事：**两者性质不同**，一个是压，一个是生来如此。
     y2 = y1 + PH2 + 18
-    PH3 = 208
+    PH3 = 348
     py3 = f.panel(0, y2, W, PH3, "③ 凭什么敢赌 ——　因为有人先拿训好的模型试过了",
-                  GR, sub="事后缩印 vs 从头按缩印练字")
+                  GR, sub="事后缩印 vs 生来就这么窄 ——　终点一样宽，区别在什么时候变窄")
 
-    ey = py3 + 18
-    f.t(56, ey + 14, "事后缩印（MLA 之前就有人做）", OR, True, 20)
-    for i, (who, what, num) in enumerate([
-        ("Eigen Attention", "拿训好的模型做低秩分解", "省 40%"),
-        ("Palu", "分组头低秩 ＋ 自动分配秩", "省 50%"),
-        ("LoRC", "逐层分配不同的秩", "未报统一比例"),
-    ]):
-        bx = 56 + i * 296
-        f.box(bx, ey + 28, 264, 108, "#fff", OR, 10)
-        f.t(bx + 20, ey + 62, who, OR, True, 19)
-        f.t(bx + 20, ey + 92, what, GY, size=15)
-        f.t(bx + 20, ey + 122, num, OR, True, 20)
+    ey = py3 + 12
+    PAPH, NROW = 148, 4              # 稿纸高 / 行数
 
-    f.t(964, ey + 14, "MLA 的不同", GR, True, 20)
-    f.box(964, ey + 28, 396, 108, "#e6f4ea", GR, 10)
-    f.t(988, ey + 66, "⭐ 从第一天就按", GR, True, 21)
-    f.t(988, ey + 98, "缩印后的尺寸练字", GR, True, 23)
-    f.t(988, ey + 126, "不是事后压，是一开始就长这样", GY2, size=14)
+    def sheet(x, y0, w, label, col, tint):
+        f.box(x, y0, w, PAPH, tint, col, 8, 1.6)
+        f.t(x + w / 2, y0 + PAPH + 22, label, col, True, 17, "middle")
+
+    def strokes(x, y0, w, n, col, sw=5.0):
+        """⭐ 一行 n 笔，均匀铺满 w。**笔数是内容，宽度是容器** ——
+        同样 n 笔塞进更窄的 w，笔就会挨上；这正是「缩印」和「生来就窄」的差别。"""
+        for r in range(NROW):
+            yr = y0 + 26 + r * 32
+            for k in range(n):
+                xk = x + 14 + (w - 28) * (k + 0.5) / n
+                f.line(xk, yr, xk, yr + 18, col, sw, arrow=False)
+
+    WIDE, NSTK = 300.0, 9
+    # ⛔ 这两个必须相等，它就是整格的论点。分成两个名字而不是共用一个常数，
+    #   是为了让「后来改了其中一个」当场炸掉 ——&#160;不等宽的话读者会读成
+    #   「右边只是压得更狠」，而不是「它根本没被压过」。
+    W_POST, W_MLA = 104.0, 104.0
+    assert W_POST == W_MLA, "两张终点稿纸不等宽，这一格的论点就没了"
+    NARROW = W_POST
+    X_POST, X_MLA = 452.0, 940.0
+
+    f.t(40, ey + 18, "事后缩印（MLA 之前就有人做）", OR, True, 20)
+    sheet(40, ey + 34, WIDE, "训好的模型　每一笔都写开了", GY2, "#fff")
+    strokes(40, ey + 34, WIDE, NSTK, GY2)
+    f.line(360, ey + 108, 436, ey + 108, OR, 2.0)
+    f.t(398, ey + 96, "缩印", OR, True, 16, "middle")
+    f.t(398, ey + 130, "（事后低秩）", GY2, size=14, anchor="middle")
+    sheet(X_POST, ey + 34, W_POST, "挤成一团", OR, "#fef7e0")
+    strokes(X_POST, ey + 34, W_POST, NSTK, OR, sw=9.0)   # ⭐ 9 > 笔距 8.4，真的叠上
+    f.t(40, ey + 232,
+        "⛔ 同样 <tspan font-weight=\"700\">9 笔</tspan>硬塞进这么窄 ——&#160;"
+        "挨上的那些就是<tspan font-weight=\"700\">被丢掉的方向</tspan>。"
+        "写的时候没人知道以后要缩。", GY, size=17)
+
+    f.line(700, ey + 10, 700, ey + 250, LINE, 1.2, dash="5 5", arrow=False)
+
+    f.t(752, ey + 18, "MLA：生来就这么窄", GR, True, 20)
+    sheet(X_MLA, ey + 34, W_MLA, "根根分明", GR, "#e6f4ea")
+    strokes(X_MLA, ey + 34, W_MLA, 3, GR, sw=5.0)
+    f.t(752, ey + 76, "没有「原稿」这一步。", GY, size=17)
+    f.t(752, ey + 104, "训练时格子就这么大，", GY, size=17)
+    f.t(752, ey + 132, "<tspan font-weight=\"700\">模型自己决定</tspan>", INK,
+        size=17)
+    f.t(752, ey + 160, "<tspan font-weight=\"700\">这三笔写什么</tspan>。", INK,
+        size=17)
+    f.t(752, ey + 232,
+        "⭐ 两张终点稿纸<tspan font-weight=\"700\">一样宽</tspan> ——&#160;"
+        "区别不在压得多狠，在<tspan font-weight=\"700\">什么时候变窄的</tspan>。",
+        GR, True, 17)
+
+    f.t(40, ey + 268,
+        "📌 事后缩印这条路 MLA 之前早有人走，这也是本课说「赌得有依据」的依据："
+        "<tspan font-weight=\"700\">Eigen Attention</tspan> 省 40%　·　"
+        "<tspan font-weight=\"700\">Palu</tspan> 分组头低秩 ＋ 自动分配秩，省 50%　·　"
+        "<tspan font-weight=\"700\">LoRC</tspan> 逐层分配不同的秩（未报统一比例）。",
+        GY2, size=15)
 
     # ══════════ 落点 ════════════════════════════════════════════
     yy = y2 + PH3 + 20
