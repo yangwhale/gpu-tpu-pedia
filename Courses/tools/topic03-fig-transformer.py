@@ -70,6 +70,7 @@ import xml.dom.minidom
 #   📌 权宜之计是在本地 t() 里装同一张降档表（下面 INK900）；
 #     ⭐ 真正的修法是把这个文件也迁到 topic03_draw，**记在待办里**。
 BL, OR, GR, RD, GY = "#1a73e8", "#e8710a", "#1e8e3e", "#d93025", "#5f6368"
+GY2 = "#80868b"
 PU, CY, BR = "#9334e6", "#00838f", "#b06000"
 DIM = "#9aa0a6"          # 被压灰的部分（原 #bdc1c6 在白底上对比度太低）
 # 500 主色 → 900 文字色。跟 topic03_draw.INK900 保持一致。
@@ -84,9 +85,18 @@ TINT = {"#1a73e8": "#e8f0fe", "#e8710a": "#fef7e0",
 INK = "#202124"
 
 W = 1400
-FLOW_R = 660             # 左侧流程图占到这里，右边是讲解栏
-CX = 330                 # 主列中心
-QX, KX, VX = 150, 330, 510   # Q / K / V 三列
+# ⭐⭐⭐ 2026-09-14 第二刀：注解栏搬走之后，右边那 700px **从 y≈400 往下全是空的**，
+#   而流程图还挤在左边 660px 里、靠 10.5px 的标签活着。
+#   ⛔ 「注解栏搬走了」和「版面重排」是两件事 —— 只做前一件，省下的地方没人用。
+# ⭐ 于是改成**上下结构**：流程图吃满整幅宽（字号随之从 10.5 抬到 15–16），
+#   「三个筐」那个画面挪到流程图下面，也吃满整幅宽。
+CX = 700                 # 主列中心（＝整幅正中）
+QX, KX, VX = 320, 700, 1080  # Q / K / V 三列
+MMW = 170                # 主列矩阵乘框的半宽
+QKVW = 110               # Q/K/V 支路框的半宽
+# 字号：这张图全课曝光最多，**标签不许再回到 svgsm 的 10.5px 地板**
+FS_SHAPE = 15            # 形状记号（BTD / BSKH …）
+FS_NAME = 16             # 算子名（softmax / 输出投影 …）
 
 
 def wpx(s, size=11.5):
@@ -184,9 +194,11 @@ VARIANTS = [
             ("📌", "中间那一步（softmax 前后）<b>不落地</b>，不占显存 ——", GY),
             ("", "FlashAttention 已是标配，<b>本讲不展开它</b>", GY),
         ]),
-        foot="📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），"
-             "本图为重画。B 批量 · T query 长度 · S KV 长度 · D d_model · "
-             "F MLP 隐层 · H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K",
+        # ⛔ 这条是记号表，一行放不下 —— **拆两行，不要靠缩字号硬塞**。
+        foot=["📌 形状记号沿用 How to Scale Your Model"
+              "（jax-ml.github.io/scaling-book），本图为重画。",
+              "B 批量 · T query 长度 · S KV 长度 · D d_model · F MLP 隐层 · "
+              "H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K"],
         acct=[("➜", "<b>这笔账在后面四张图里一直挂着</b> ——&#160;"
                     "每张会说清它把这笔账动到了哪一格。", GY)],
     ),
@@ -340,12 +352,12 @@ def render(v):
     p.append("")                                    # svg 开标签占位
 
     # ── 标题 ────────────────────────────────────────────────────────
-    t(0, 18, v["title"], "svglbl", INK, size=15)
-    t(0, 39, v["lead"].replace("<b>", '<tspan font-weight="700">')
-                      .replace("</b>", "</tspan>"), fill=GY)
+    t(0, 22, v["title"], "svglbl", INK, size=19)
+    t(0, 48, v["lead"].replace("<b>", '<tspan font-weight="700">')
+                      .replace("</b>", "</tspan>"), fill=GY, size=15)
 
-    # ── 左：数据流 ──────────────────────────────────────────────────
-    y = 74
+    # ── 上：数据流（吃满整幅宽）────────────────────────────────────
+    y = 84
     stages = v["stages"]()
     # 把 Q/K/V 那三格摆在同一行：记下它们在列表里的位置
     qkv = [i for i, s in enumerate(stages) if s[0] in ("q", "k", "v")]
@@ -359,9 +371,9 @@ def render(v):
             _, _, _, name, shape, note = s
             t(x, y + 14, name, fill=C(key, INK), bold=True, size=15,
               anchor="middle")
-            t(x + 26, y + 14, shape, fill=C(key, GY))
-            t(x + 26 + wpx(shape) + 10, y + 14, "——&#160;" + note,
-              fill=C(key, DIM if not live(key) else "#9aa0a6"))
+            t(x + 26, y + 14, shape, fill=C(key, GY), size=FS_SHAPE)
+            t(x + 26 + wpx(shape, FS_SHAPE) + 12, y + 14, "——&#160;" + note,
+              fill=C(key, DIM if not live(key) else GY2), size=FS_SHAPE)
             pos[key] = (x, y, y + 20)
             y += 34
 
@@ -371,80 +383,89 @@ def render(v):
                 for j in qkv:
                     k2, _, x2, lin, rin, out, nm = stages[j]
                     c = C(k2, BL)
-                    box(x2 - 66, y + 12, 132, 34,
+                    box(x2 - QKVW, y + 12, 2 * QKVW, 34,
                         "#e8f0fe" if live(k2) else DIMBG, c, 5,
                         1.8 if live(k2) and hot else 1)
-                    t(x2 - 60, y + 8, lin, fill=C(k2, BL), size=13)
-                    t(x2 + 60, y + 8, rin, fill=C(k2, PU), size=13,
-                      anchor="end")
+                    t(x2 - QKVW + 6, y + 8, lin, fill=C(k2, BL),
+                      size=FS_SHAPE)
+                    t(x2 + QKVW - 6, y + 8, rin, fill=C(k2, PU),
+                      size=FS_SHAPE, anchor="end")
                     p.append('<circle cx="%d" cy="%d" r="9" fill="none" '
                              'stroke="%s" stroke-width="1.6"/>'
                              % (x2, y + 29, c))
                     p.append('<circle cx="%d" cy="%d" r="2.6" fill="%s"/>'
                              % (x2, y + 29, c))
-                    t(x2, y + 60, out, fill=C(k2, INK), bold=True,
+                    t(x2, y + 62, out, fill=C(k2, INK), bold=True,
+                      anchor="middle", size=FS_NAME)
+                    t(x2, y + 84, nm, fill=c, bold=True, size=FS_NAME,
                       anchor="middle")
-                    t(x2, y + 76, nm, fill=c, bold=True, size=13,
-                      anchor="middle")
-                    pos[k2] = (x2, y + 12, y + 82)
+                    pos[k2] = (x2, y + 12, y + 90)
                     line(CX, y - 10, x2, y - 2, C(k2, GY), 1)
                     line(x2, y - 2, x2, y + 12, C(k2, GY), 1)
-                y += 96
+                y += 104
             i += 1
             continue
 
         elif kind == "mm":
             _, _, _, lin, rin, out, nm = s
             c = C(key, acc if hot else BL)
-            box(x - 108, y + 12, 216, 34,
+            box(x - MMW, y + 12, 2 * MMW, 34,
                 DIMBG if not live(key) else
                 (TINT[acc] if hot else "#e8f0fe"), c, 5,
                 2.2 if (hot and live(key)) else 1)
             if hot and live(key):
                 # ⛔ 别把上沿放在 y+6 —— 输入标签的基线在 y+8，虚线会从字中间穿过，
                 #    渲染出来像删除线。框要**连输入标签和输出形状一起框住**。
-                box(x - 116, y - 6, 232, 78, "none", c, 8, 1, "5,4")
-            t(x - 102, y + 8, lin, fill=C(key, BL), size=13)
-            t(x + 102, y + 8, rin, fill=C(key, PU), size=13, anchor="end")
+                box(x - MMW - 8, y - 6, 2 * MMW + 16, 80, "none", c, 8,
+                    1, "5,4")
+            t(x - MMW + 6, y + 8, lin, fill=C(key, BL), size=FS_SHAPE)
+            t(x + MMW - 6, y + 8, rin, fill=C(key, PU), size=FS_SHAPE,
+              anchor="end")
             p.append('<circle cx="%d" cy="%d" r="9" fill="none" stroke="%s" '
                      'stroke-width="1.6"/>' % (x, y + 29, c))
             p.append('<circle cx="%d" cy="%d" r="2.6" fill="%s"/>'
                      % (x, y + 29, c))
-            t(x, y + 62, out, fill=C(key, INK), bold=True, anchor="middle",
-              size=13)
-            t(x + 116, y + 33, nm, fill=c, bold=True)
-            pos[key] = (x, y + 12, y + 68)
-            y += 84
+            t(x, y + 64, out, fill=C(key, INK), bold=True, anchor="middle",
+              size=FS_NAME)
+            t(x - MMW - 24, y + 34, nm, fill=c, bold=True, size=FS_NAME,
+              anchor="end")
+            pos[key] = (x, y + 12, y + 72)
+            y += 90
 
         elif kind in ("op", "add"):
             _, _, _, lab, sub, mark = s
             c = C(key, acc if hot else GY)
-            wbox = max(150, wpx(lab, 12) + wpx(sub, 11) + 60)
-            box(x - wbox // 2, y, wbox, 26,
+            # ⛔ 这里原来按 12/11px 估宽，而字是 10.5px 画的 —— 侥幸没顶出去。
+            #   现在字号抬到 15/16，**估宽必须用同一个字号**，否则必撞。
+            wbox = max(220, wpx(lab, FS_NAME) + wpx(sub, FS_SHAPE) + 56)
+            box(x - wbox // 2, y, wbox, 32,
                 "#f8f9fa" if live(key) else DIMBG, c, 5,
                 2.2 if (hot and live(key)) else 1)
             if hot and live(key):
-                box(x - wbox // 2 - 6, y - 6, wbox + 12, 38, "none", c, 8,
+                box(x - wbox // 2 - 6, y - 6, wbox + 12, 44, "none", c, 8,
                     1, "5,4")
-            t(x - wbox // 2 + 12, y + 18, lab, fill=c, bold=True)
-            t(x - wbox // 2 + 12 + wpx(lab) + 12, y + 18, sub,
+            t(x - wbox // 2 + 14, y + 22, lab, fill=c, bold=True,
+              size=FS_NAME)
+            t(x - wbox // 2 + 14 + wpx(lab, FS_NAME) + 12, y + 22, sub,
               fill=C(key, INK if mark == "★" else GY),
-              bold=(mark == "★"))
+              bold=(mark == "★"), size=FS_SHAPE)
             if mark == "★":
-                t(x + wbox // 2 + 10, y + 18,
+                t(x + wbox // 2 + 14, y + 22,
                   "★ <tspan font-weight=\"700\">这一步不落地，贵在要算的次数</tspan>",
-                  fill=C(key, RD))
-            pos[key] = (x, y, y + 26)
-            y += 46
+                  fill=C(key, RD), size=FS_SHAPE)
+            pos[key] = (x, y, y + 32)
+            y += 52
 
         elif kind == "mlp":
             _, _, _, lab, sub, _ = s
             c = C(key, GR)
-            box(x - 200, y, 400, 50, "#e6f4ea" if live(key) else DIMBG, c, 6)
-            t(x, y + 19, lab, fill=c, bold=True, anchor="middle")
-            t(x, y + 38, sub, fill=C(key, GY), anchor="middle", size=13)
-            pos[key] = (x, y, y + 50)
-            y += 68
+            box(x - 330, y, 660, 58, "#e6f4ea" if live(key) else DIMBG, c, 6)
+            t(x, y + 24, lab, fill=c, bold=True, anchor="middle",
+              size=FS_NAME)
+            t(x, y + 46, sub, fill=C(key, GY), anchor="middle",
+              size=FS_SHAPE)
+            pos[key] = (x, y, y + 58)
+            y += 76
 
         i += 1
 
@@ -471,8 +492,8 @@ def render(v):
     #    渲染出来活像一条删除线。几何 lint 抓不到（线不是文字，不算撞车）。
     # ⭐ 教训：**连线要走"路由列"，不要从源头直降。** 源头的 x 是按可读性排的，
     #    它跟沿途有什么东西完全无关，直降迟早会穿过某个标签。
-    for src, tgt, rx in (("k", nxt, CX + 132),
-                         ("v", "av" if "av" in pos else "st", CX + 182)):
+    for src, tgt, rx in (("k", nxt, CX + MMW + 46),
+                         ("v", "av" if "av" in pos else "st", CX + MMW + 96)):
         if tgt not in pos or src not in pos:
             continue
         c = C(src, GY)
@@ -481,125 +502,76 @@ def render(v):
         line(sx, sy, sx, sy + 8, c, 1.2)
         line(sx, sy + 8, rx, sy + 8, c, 1.2)
         line(rx, sy + 8, rx, ymid, c, 1.2)
-        line(rx, ymid, CX + 108, ymid, c, 1.2)
+        line(rx, ymid, CX + MMW, ymid, c, 1.2)
     if "st" in pos and "qs" in pos:                 # 线性版：Q 直接下到 qs
         line(QX, pos["q"][2], QX, pos["qs"][1] - 8, C("q", GY), 1.2)
-        line(QX, pos["qs"][1] - 8, CX - 108, pos["qs"][1] - 8, C("q", GY), 1.2)
+        line(QX, pos["qs"][1] - 8, CX - MMW, pos["qs"][1] - 8, C("q", GY), 1.2)
 
     FLOW_H = y
 
-    # ── 右：讲解栏 ──────────────────────────────────────────────────
+    # ── 下：一个画面 ＋ 一句话 ─────────────────────────────────────
+    # ⭐⭐⭐ 2026-09-14 现场拍板「要搬」：**注解栏整段搬进正文**。
+    #   现场的判据是「图是图，字是字」——&nbsp;这一栏原来有十几行解释，
+    #   那是正文的活；图这边只留**一个画面 ＋ 一句这一格干了什么**。
+    # ⛔ 搬走的不是删掉：每一条都原样落在 topic03-build.py 里对应 figure 的下面，
+    #   而且在那儿它能被搜索、被复制、在手机上会自动折行 ——&nbsp;SVG 里三样都不行。
+    # ⭐ 搬完还要**把地方让出来**：这一栏从右边挪到了流程图下面，整幅宽，
+    #   于是流程图那边的标签才能从 10.5px 抬到 15px。
     ph, pcol, rows = v["panel"]
-    PX, PW = FLOW_R + 20, W - FLOW_R - 40
+    PX, PW = 0, W
+    PY0 = FLOW_H + 20
 
-    # ⭐⭐⭐ 2026-09-14：先给一个**生活画面**，再上术语。
-    #   现场判据：「图的目的是把原理画出来，让普通人一目了然。」
-    #   这张主线图要回答的是「**什么东西下班要锁进柜子**」——&nbsp;
-    #   三个筐一画，后面那串形状就有地方挂了。
-    #   ⛔ 五张共用（它是同一个坐标系），所以画在这里、不按变体改。
-    PICH = 150
-    box(PX, 66, PW, PICH, "#fff", INK, 8)
-    t(PX + 14, 90, "先看一个画面：这一层算完，桌上的东西分三堆", "svglbl",
-      INK, size=14)
-    BW = (PW - 56) / 3.0
+    PICH = 190
+    box(PX, PY0, PW, PICH, "#fff", INK, 10)
+    t(PX + 22, PY0 + 36, "这一层算完，桌上的东西分三堆", "svglbl", INK, size=20)
+    BW = (PW - 88) / 3.0
     BINS = [
-        ("常驻的设备", "权重 W", "所有人共用，一直在那儿", GY, "#f1f3f4"),
-        ("草稿纸", "中间那些量", "算完就扔，不占地方", GR, "#e6f4ea"),
-        ("锁进柜子的", "K 和 V", "每来一个 token，柜子多一格", RD, "#fce8e6"),
+        ("常驻的设备", "权重 W", "所有人共用，不随对话变", GY, "#f1f3f4"),
+        ("草稿纸", "中间那些量", "算完就扔，不留到下一步", GR, "#e6f4ea"),
+        ("锁进柜子的", "K 和 V", "每来一个 token 就多一格", RD, "#fce8e6"),
     ]
-    for i, (name, what, why, col, tint) in enumerate(BINS):
-        bx = PX + 14 + i * (BW + 14)
-        box(bx, 102, BW, 96, tint, col, 6)
-        t(bx + 12, 126, name, None, col, bold=True, size=14)
-        t(bx + 12, 150, what, None, col, bold=True, size=15)
-        t(bx + 12, 174, why, None, GY, size=13)
+    for i2, (name, what, why, col2, tint) in enumerate(BINS):
+        bx = PX + 22 + i2 * (BW + 22)
+        box(bx, PY0 + 56, BW, 116, tint, col2, 8)
+        t(bx + 16, PY0 + 86, name, None, col2, bold=True, size=17)
+        t(bx + 16, PY0 + 118, what, None, col2, bold=True, size=20)
+        t(bx + 16, PY0 + 152, why, None, GY, size=15)
 
-    box(PX, 66 + PICH + 10, PW, 26 + len(rows) * 19 + 22, "#fff", pcol, 8)
-    t(PX + 14, 86 + PICH + 10, ph, "svglbl", pcol, size=13)
-    for n, (tag, txt, col) in enumerate(rows):
-        yy = 110 + PICH + 10 + n * 19
+    # 这一格干了什么 —— 每张一句，字大
+    SY = PY0 + PICH + 16
+    nacct = len([1 for tg, tx, _ in v.get("acct", []) if tx])
+    SH = 58 + 30 * nacct + 30
+    box(PX, SY, PW, SH, "#fff", pcol, 10)
+    t(PX + 22, SY + 38, ph, "svglbl", pcol, size=21)
+    acct = list(v.get("acct", []))
+    yy2 = SY + 76
+    for tag, txt, col2 in acct:
         if not txt:
             continue
         s2 = txt.replace("<b>", '<tspan font-weight="700">') \
                 .replace("</b>", "</tspan>")
         if tag:
-            t(PX + 14, yy, tag, fill=col or GY, bold=True)
-            t(PX + 14 + max(wpx(tag), 22) + 8, yy, s2, fill=col or GY)
+            t(PX + 22, yy2, tag, None, col2 or GY, bold=True, size=17)
+            t(PX + 22 + max(wpx(tag, 17), 26) + 14, yy2, s2, None,
+              col2 or GY, size=17)
         else:
-            t(PX + 44, yy, s2, fill=col or GY)
-    PANEL_H = 66 + PICH + 10 + 26 + len(rows) * 19 + 22
-
-    # ── 右下：把字母换成数字 ────────────────────────────────────────
-    # ⭐ 这张卡的**主体**五张图完全一样，是刻意的：它跟主线图一起构成「每次都在
-    #    同一个坐标系里看」的效果。⛔ 主体别按变体改。
-    # ⛔ 但 2026-09-14 二轮学生指出：逐字相同的代价是**其中三张变成了反向误导**
-    #   （FA 一个字节 KV 都不省、旋钮② 的落点正是「KV 照存」、旋钮③ 里 S 已经消失，
-    #    旁边却挂着按 S=128K 算出来的 488 GiB）。
-    # ⭐ 所以末尾接一行 per-variant 的 `acct`：**坐标系共用，但每张要说清
-    #   「这一格把这笔账动到了哪」**。——&nbsp;这比删掉面板好，删了就没有坐标系了。
-    # ⛔ 2026-09-08 换口径：这张卡原先算的是「中间那个矩阵比别人大多少」。
-    #    现场明确不再讲那件事（它不落地，讲它的显存是教旧常识）。
-    #    ⭐ 改成算**唯一真正要留下来的那份 —— KV cache**，并且给出**每层**和
-    #      **全模型**两个尺度：现场原话是「就讨论 KV cache 每一个 level 的事」。
-    # 📌 口径与本讲 §2.1 那张对照表必须一致（同一组数两处给不同值，比给错还糟）：
-    #    V3 形状、128K、BF16、batch 1、假设纯 MHA（n_h=128, d_h=128, 61 层）。
-    # ⭐⭐⭐ 2026-09-14：这张 📐 面板原来**五张图各印一遍**（11 行字 × 5）。
-    #   上一轮已经给每张接了一行 per-variant 的 `acct`（这一格把那笔账动到了哪），
-    #   ⛔ 但主体仍然是 11 行重复的文字 ——&nbsp;而现场的判据是「图是图，字是字」。
-    # ⭐ 现在：**完整那笔账只在底图（tx-base）上印一次**，
-    #   另外四张只留「这一格把它动到了哪」那一两行 ＋ 一句指回底图。
-    #   这样既保住了「同一个坐标系」的效果，又不让四张图各背 11 行字。
-    FULL = (v["f"] == "fig3-tx-base")
-    NY = PANEL_H + 16
-    NUM = [
-        ("", "取序列 <b>128K</b>、BF16、batch 1，把带 <b>S</b> 的那两处换成实际占多少：", GY),
-        ("", "", None),
-        ("每层", "K ＋ V ＝ 2 × S × K头 × H × 2 B —— 一层就 <b>8 GiB</b>（MHA，128 头）", RD),
-        ("⚠️ 训练侧", "<b>这一栏在训练里是空的</b> —— K/V 是算完就扔的激活，"
-                     "不跨 step 留。<b>全讲所有倍数都只对推理成立。</b>", OR),
-        ("× 61 层", "<b>488 GiB</b> ——&#160;<b>一个用户、一段输入</b>", RD),
-        ("", "", None),
-        # ⛔⛔ 2026-09-14 二轮学生审稿：这两行的口径**比 fig-motives 落后一版**。
-        #   V3 的权重**原生是 FP8**，按 2 B 算出来的 1250 GiB 是个
-        #   「从来不会被这么部署」的数；按 FP8 是 625 GiB，于是「几个并发超过权重」
-        #   从三个变成两个。⭐ 而这个修正**对论点有利**：权重更小，KV 更快压过它。
-        # ⛔ 这一处尤其该抓：这张面板在五张图里各出现一次，**错一处等于错五处**，
-        #   而讲义逐字稿照着念的又是另一套数 —— 讲台上和屏幕上对不上。
-        ("对照", "整个模型的<b>权重</b>（671B，<b>原生 FP8</b>，1 B/参数）＝ <b>625 GiB</b>", GY),
-        ("⭐", "<b>单用户就占 78%；两个并发，KV 就超过权重本身</b>", RD),
-        ("", "", None),
-        ("⭐⭐", "<b>权重是所有人共享的一份，KV cache 是每人一份</b> ——", BL),
-        ("", "所以它决定的不是「装不装得下」，是<b>能同时服务多少人</b>。", BL),
-        ("", "", None),
-    ] + list(v.get("acct", []))
-    if not FULL:
-        NUM = [("📐", "这笔账的完整算法在<b>底图那一张</b>上（§1.4）——&#160;"
-                "这里只说这一格把它动到了哪：", GY),
-               ("", "", None)] + list(v.get("acct", []))
-    box(PX, NY, PW, 26 + len(NUM) * 19 + 18, "#fff", "#dadce0", 8)
-    box(PX, NY, 4, 26 + len(NUM) * 19 + 18, OR, OR, 2)
-    box(PX + 2, NY, 3, 26 + len(NUM) * 19 + 18, "#fff", "#fff", 0)
-    t(PX + 14, NY + 20, "📐 把字母换成数字 ——&#160;那份要留下来的到底有多大",
-      "svglbl", BR, size=13)
-    for n, (tag, txt, col) in enumerate(NUM):
-        if not txt:
-            continue
-        s2 = txt.replace("<b>", '<tspan font-weight="700">') \
-                .replace("</b>", "</tspan>")
-        yy = NY + 44 + n * 19
-        if tag:
-            t(PX + 14, yy, tag, fill=col or GY, bold=True)
-            t(PX + 14 + max(wpx(tag), 22) + 10, yy, s2, fill=col or GY)
-        else:
-            t(PX + 14, yy, s2, fill=col or GY)
-    PANEL_H = NY + 26 + len(NUM) * 19 + 18
+            t(PX + 22, yy2, s2, None, col2 or GY, size=17)
+        yy2 += 30
+    t(W - 22, SY + SH - 16, "📌 这一格的完整讲解在图下面的正文里", None, GY2,
+      size=15, anchor="end")
+    PANEL_H = SY + SH
 
     # ── 底部落点带 ──────────────────────────────────────────────────
     FY = max(FLOW_H, PANEL_H) + 14
-    box(0, FY, W, 44, "#e8f0fe" if not hot else "#f8f9fa", acc, 8)
-    t(16, FY + 27, v["foot"].replace("<b>", '<tspan font-weight="700">')
-                            .replace("</b>", "</tspan>"), fill=acc)
-    TOT = FY + 44 + 10
+    foots = v["foot"]
+    foots = [foots] if isinstance(foots, str) else list(foots)
+    FH = 22 + 26 * len(foots)
+    box(0, FY, W, FH, "#e8f0fe" if not hot else "#f8f9fa", acc, 8)
+    for i3, ln in enumerate(foots):
+        t(16, FY + 30 + i3 * 26,
+          ln.replace("<b>", '<tspan font-weight="700">')
+            .replace("</b>", "</tspan>"), fill=acc, size=15)
+    TOT = FY + FH + 10
 
     # ⛔ viewBox 高度按真实落点算，别写死 —— 加一行就被裁，而且不报错。
     p[0] = ('<svg viewBox="0 0 %d %d" width="100%%" role="img" aria-label="%s">'
