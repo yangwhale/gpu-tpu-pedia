@@ -1890,7 +1890,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <!-- ⛔ 2026-09-12 砍掉原来那段 88 字的「这一节要交代三件事，各配一张图……」：
      **下面三个 h3 标题本身就是目录**，那段只是它的散文版重复。
      只留落点一句 —— 落点是标题给不了的。 -->
-<div class="note ok"><p>⭐⭐ <b>这一节的落点只有一句：KV cache 就是在这里出生的</b>
+<div class="note ok"><p><b>这一节要回答的就一件事：KV cache 是从哪儿来的</b>
   ——&nbsp;<a href="#s零">§零</a>那张「解码时又变回 RNN」图上 Ⓒ 那一行的病根，在这一节。</p></div>
 
 <!-- ⭐⭐ 2026-09-13 夜间 R7。现场定的新方针：
@@ -2017,13 +2017,13 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="842" fill="#80868b" style="font-size:11.0px">📌 ① 出自 Bahdanau 等 arXiv <a href="https://arxiv.org/abs/1409.0473" target="_blank"><tspan text-decoration="underline">1409.0473</tspan></a>（ICLR 2015）摘要与 §3：fixed-length vector 是 bottleneck、(soft-)search、jointly trained、「expected annotation over possible alignments」</text>
 <text class="svgsm" x="0" y="859" fill="#80868b" style="font-size:11.0px">　　②③ 出自 Attention Is All You Need（Vaswani 等 arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank"><tspan text-decoration="underline">1706.03762</tspan></a>）原文 §2 与 §3.2.1–3.2.2 及其脚注 4：矩阵乘那句、方差 d_k 的推导、「reduced effective resolution due to averaging … counteract with Multi-Head」</text>
 </svg><figcaption>⭐⭐ <b>三步，每一步都在修上一步的一个具体毛病：一个向量装不下 → 软对齐；小网络打分太慢 → 点积；既然能直连 → 扔掉循环，而扔掉之后分辨率变糙 → 多头补回来。</b><em>中间那格是本课主线第一次露面 —— 点积胜出不是因为它更准，是因为它能写成矩阵乘，这是论文原话。</em></figcaption></figure>
-<p>⭐ 图给不了的是这条<b>读论文的姿势</b>：
+<p>图给不了的是这条<b>读论文的姿势</b>：
   <b>看一个机制，先找它在修上一版的哪一个具体毛病。</b>
   <em>「有人灵光一闪设计了注意力」什么也教不了你；
   「一个固定长度向量装不下长句子，于是让解码器自己去源句里软性地找」
   ——&nbsp;<b>这个你下次能照着用。</b></em></p>
 
-<h3 id="s1-1">1.1 换掉了什么</h3>
+<h3 id="s1-1">1.1　先看它换掉了什么</h3>
 <figure class="fbox fwide" id="fig-mha-swap"><svg viewBox="0 0 1400 523" width="100%" role="img" aria-label="RNN 与自注意力的信息通路对比：RNN 靠一条链一步一步传，任意两个位置之间要走 n 步；自注意力让每个位置直接连到所有位置，两点之间只隔一步，代价是连线数从 n 变成 n 的平方"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">2017 年那一刀 ——&#160;<tspan font-weight="700">把那根横箭头拿掉，换成「每个位置直接看所有位置」</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ §零 三个痛点里的第 ① 条，就是在这里被解掉的。<tspan font-weight="700">而解法本身，就是这一讲后面要还的那笔账。</tspan></text>
@@ -2163,7 +2163,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
        1.1 说「换成了什么结构」，1.1b 说「信息怎么流」，1.2 才说「形状和公式」。
        原来 1.1 之后直接进 1.2，读者是先看到四步和 √d、再自己去悟为什么。
      ⛔ 正文只留三句 —— 这一节的讲述全在图里。 -->
-<h3 id="s1-1b">1.1b 那它到底怎么把信息传过去的</h3>
+<h3 id="s1-1b">1.1b　那它到底怎么把信息传过去的</h3>
 <p>上一张说的是<b>结构</b>换了。这一张说的是 ——&nbsp;<b>信息怎么走</b>。</p>
 <p>跟着<b>最后那个 token</b> 走一遍就够了：
   它<b>提一个问题</b>，每个位置<b>报一次价</b>，
@@ -2319,7 +2319,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
      ⭐⭐ 判据（本讲常驻规矩，见文件头）：
        **写正文之前先问一句「这句话图里有没有」。有，就别写第二遍。**
        图注和落点带是图的一部分，不是「图外面还得再说一次」的理由。 -->
-<h3 id="s1-2">1.2 一层里到底在算什么</h3>
+<h3 id="s1-2">1.2　拆开看：一层里到底在算什么</h3>
 <figure class="fbox fwide" id="fig-mha-qkv"><svg viewBox="0 0 1400 630" width="100%" role="img" aria-label="注意力的检索三件套：query 是要找什么，key 是每个 token 挂出来的牌子，value 是牌子后面的内容；打分之后除以根号 d 再做 softmax，最后按权重把 value 加权求和"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">一层里到底在算什么 ——&#160;<tspan font-weight="700">论文自己的说法就是「检索」，不是我们编的比喻</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 原文：mapping a <tspan font-style="italic">query</tspan> and a set of <tspan font-style="italic">key-value pairs</tspan> to an output …&#160;the output is a <tspan font-weight="700">weighted sum of the values</tspan>。</text>
@@ -2398,7 +2398,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
   <!-- ⛔ 2026-09-12 按「多画图少说话」砍：原来这里把图里蓝框那段推导
        又复述了一遍（方差随维度线性长大 / softmax 只认绝对数值）。删。
        只留一句指路 ＋ 一句**结论的重新命名** —— 后者图里没有，而且一说就记住。 -->
-  ⭐ 那个 <code>√d_k</code> 的<b>推导链在图里的蓝框</b>（论文脚注 4，两行）。<br>
+  那个 <code>√d_k</code> 的<b>推导链在图里的蓝框</b>（论文脚注 4，两行）。<br>
   <b>说白了：它就是一个标准差。</b>
   <em>除掉它只做一件事 ——&nbsp;把打分的方差拉回 1。</em></p></div>
 
@@ -2515,14 +2515,14 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="0" y="822" fill="#80868b" style="font-size:11.0px">　　② DSA 索引器用 ReLU 及其理由（为吞吐）出自 DeepSeek-V3.2-Exp 技术报告 §1；⚠️「因为只排序不加权所以敢换」是本课的解释，报告只给了「为吞吐」这个理由</text>
 <text class="svgsm" x="0" y="839" fill="#80868b" style="font-size:11.0px">　　③ 为推导 ＋ 类比，非论文原话</text>
 </svg><figcaption>⭐⭐ <b>softmax 的三条要求（非负、和为 1、可导）全是「加权平均」逼出来的。</b><b>所以 DSA 的索引器敢换成 ReLU —— 它只拿分数去排序，不做加权平均。</b><em>右边：k 是书脊、v 是内容，检索天生非对称 —— 按 A 去找，取回 B。</em></figcaption></figure>
-<h4 id="s1-2b">1.2b　为什么非得是 softmax，为什么 k 和 v 不能是同一个</h4>
+<h3 id="s1-2b">1.2b　那为什么非得是 softmax，k 和 v 又为什么不能是同一个</h3>
 <p>⭐ 图给不了的是这条判据的<b>通用形式</b>：
   <b>看到一个设计的副作用，先回头看它的优点是靠哪条性质换来的 ——&nbsp;十有八九是同一条。</b>
   <em>softmax 那条「一行加起来等于 1」，在这里让加权平均的尺度稳定（优点），
   到 §六 就是 attention sink 的成因（副作用）。
   <b>而 softmax-off-by-one 这个补丁，本质就是把这一条放松掉。</b></em></p>
 
-<h3 id="s1-3">1.3 多头在多什么</h3>
+<h3 id="s1-3">1.3　多头在多什么</h3>
 <figure class="fbox fwide" id="fig-mha-heads"><svg viewBox="0 0 1400 606" width="100%" role="img" aria-label="多头注意力：把 d_model 切成 h 份，每份独立做一次注意力再拼回来。总维度不变，总计算量也基本不变；多头的价值是避免单头把不同的关注平均掉"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-7b1fa2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#7b1fa2"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:16.5px">多头在多什么 ——&#160;<tspan font-weight="700">不是堆算力，是不让「平均」把不同的关注糊成一团</tspan></text>
 <text class="svgsm" x="0" y="44" fill="#5f6368" style="font-size:12.0px">⭐ 原文：「With a <tspan font-style="italic">single</tspan> attention head, <tspan font-weight="700">averaging inhibits this</tspan>.」——&#160;<tspan font-weight="700">单头不是不够用，是会把该分开的东西平均掉。</tspan></text>
@@ -2603,7 +2603,7 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
      ⭐ 这是本讲**第二次**抓到同型重复（上一次是 1.1b 那 134 字）——&nbsp;
        判据见文件头第一条：**写正文前先问「这句话图里有没有」。** -->
 
-<h3 id="s1-4">1.4 把形状标出来：本专题的主线图</h3>
+<h3 id="s1-4">1.4　本节压轴：把形状标出来（这张图后面一直在用）</h3>
 <p>前面讲的是想法。<b>标上形状之后，这笔账可以用眼睛读</b>
   ——&nbsp;<em>在形状里找那个会越变越长的维度就行。</em></p>
 <figure class="fbox fwide" id="fig-tx-base"><svg viewBox="0 0 1400 914" width="100%" role="img" aria-label="主线图 · 一层 Transformer，每一步的张量形状">
@@ -2754,10 +2754,15 @@ MHA 时代 KV 是跟着模型一起长的，<b>这条链在 MLA 这里被剪断�
 <text class="svgsm" x="16" y="887" fill="#174ea6">📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。B 批量 · T query 长度 · S KV 长度 · D d_model · F MLP 隐层 · H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K</text>
 </svg><figcaption>⭐ <b>本专题的主线图</b>：一层 Transformer，每一步的张量形状都标出来。<b>先只看一件事 —— 在形状里找 <code>S</code>（KV 长度）：只有两处「留得下来」的带它，K 和 V 的输出。</b>那就是唯一需要跨 token 留下来的东西 —— <b>KV cache</b>。三个旋钮各是一种跟它较劲的方式。<span class="sub">图式借自 <a href="https://jax-ml.github.io/scaling-book/" target="_blank" rel="noopener">How to Scale Your Model</a>，本图为重画。</span></figcaption></figure>
 
-<h3 id="s1-5">1.5 于是下一节</h3>
+<h3 id="s1-5">1.5　本节落点</h3>
 <!-- ⛔ 2026-09-12：Shazeer 那段引文与「2019 年就被点名」这句，
      图里第二条落点带已经完整写着（含英文原文）。删，只留下面那句指路。 -->
-<p>下一节先把这笔账<b>算成具体的字节数</b>，再看它为什么必须省。</p>
+<div class="note ok"><p><b>这一节要留下的只有一句</b>：
+  <b>KV cache 就是在这里出生的。</b></p>
+<p>把循环换成一张 n×n 的表，换来了训练能并行；
+  <em>代价是解码时每一步都要把<b>之前所有 token 的 K 和 V</b> 重新读一遍 ——&nbsp;
+  而这份东西<b>会随对话一直长下去</b>。</em></p>
+<p>⭐ <b>下一节把这笔账算成具体的字节数</b>，再看它为什么必须省。</p></div>
 <hr>
 </div></section>
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>一切从长上下文说起 —— 两条独立的动机</h2></div>
