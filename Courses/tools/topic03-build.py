@@ -1571,7 +1571,7 @@ out = [head, '''
     <span class="chip">前置 <b>专题一 · 专题二</b></span>
     <span class="chip">主线 <b>三个旋钮</b> ＋ 一条硬件线</span>
     <span class="chip">含 <b>我们自己的 v7 实测</b></span>
-    <span class="chip">⏱ <b>70′ / 111′ / 134′ 三档</b></span>
+    <span class="chip">⏱ <b>70′ / 113.5′ / 136.5′ 三档</b></span>
   </div>
   <p class="author">课程作者　<b>Chris Yang</b><span class="sep">·</span>Google Cloud
     AI Infra 架构师</p>
