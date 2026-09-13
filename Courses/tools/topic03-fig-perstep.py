@@ -203,12 +203,12 @@ def main():
 
     # ══ ③ 换算成毫秒 ══════════════════════════════════════════════
     yy = top + PH2 + 26
-    PH3 = 330
+    PH3 = 390
     top = f.panel(0, yy, W, PH3,
                   "③ 除以带宽 ——&#160;字节变毫秒，"
                   "<tspan font-weight=\"700\">这里才出现两条反直觉的</tspan>", BL,
                   tag="v7 每 device 3.685 TB/s")
-    f.box(24, top + 28, 664, 264, "none", LINE, 9)
+    f.box(24, top + 28, 664, 326, "none", LINE, 9)
     f.t(44, top + 58, "一步要多久（下界）", BL, bold=True, size=20,
         cls="svglbl")
     for j, (nm, kv, col, note, nd, rd, pct, ms, tps) in enumerate(bars):
@@ -217,29 +217,47 @@ def main():
         f.t(168, yj, "%.2f GiB ÷ %d 张" % (rd, nd), GY, size=15, mono=True)
         f.t(400, yj, "%.2f ms" % ms, INK, bold=True, size=18, mono=True)
         f.t(510, yj, "%.0f tok/s" % tps, col, size=16, mono=True)
-    f.t(44, top + 286, "⚠️ 只算 HBM 读 ——&#160;真机只会更慢，"
+    f.t(44, top + 334, "⚠️ 只算 HBM 读 ——&#160;真机只会更慢，"
         "但各方案之间的比例站得住", GY2, size=15)
 
-    f.box(712, top + 28, 664, 128, "none", RD, 9)
+    # ⭐⭐ 2026-09-14 R27：原来这里只用一句话说「差在哪」。
+    #   可这门课一贯的做法是**把倍数拆开看它在哪一步被吃掉的**
+    #   （§五 那个「4.571 白送 × 12.4 赌出来」就是同一个手法）。
+    #   ⭐ 拆出来正好是一条三级阶梯，每一级都有一个能指着说的原因：
+    #        56.9×（显存之比）→ 12.14×（每步还要读共享的权重）→ 7.08×（卡多了）
+    #   ⛔ 三个数必须互相除得上，所以这里全部算出来 + 断言，一个都不手抄。
+    byteR = mha[5] / mla[5]              # 每步字节之比
+    d1 = store / byteR                   # 第一级被吃掉多少
+    d2 = byteR / ratio                   # 第二级被吃掉多少
+    assert abs(d2 - mha[4] / mla[4]) < 1e-9, (d2, mha[4] / mla[4])
+    assert 12.0 < byteR < 12.3 and 4.6 < d1 < 4.8, (byteR, d1)
+
+    f.box(712, top + 28, 664, 186, "none", RD, 9)
     f.t(732, top + 58,
         "反直觉一：显存省了 %.1f 倍，只快了 %.2f 倍" % (store, ratio),
         RD, bold=True, size=19, cls="svglbl")
-    yj = top + 88
-    for r in wrap_rich(
-        "⛔ 差在哪？<tspan font-weight=\"700\">MHA 装不下，被迫用 %d 张 device "
-        "而不是 %d 张</tspan> ——&#160;它拿显存换来的卡，顺手也把带宽换来了。"
-        % (mha[4], mla[4]) +
+    f.t(732, top + 84, "⭐ 那 %.1f 倍是在这两步里被吃掉的：" % (store / ratio),
+        GY, size=16)
+    for j, (num, why, col) in enumerate([
+        ("%.1f×" % store, "显存之比 ——&#160;KV %.0f ÷ %.2f"
+         % (PLAN[0][1], PLAN[3][1]), RD),
+        ("%.2f×" % byteR, "每步还要读一份<tspan font-weight=\"700\">所有人共享"
+         "</tspan>的权重（÷ %.2f）" % d1, OR),
+        ("%.2f×" % ratio, "MHA 装不下，被迫用 %d 张卡而不是 %d 张（÷ %.2f）"
+         % (mha[4], mla[4], d2), GR),
+    ]):
+        yj = top + 114 + j * 30
+        f.t(744, yj, num, col, bold=True, size=19, mono=True)
+        f.t(834, yj, why, GY, size=15)
+    f.t(732, top + 204,
         "⭐ 所以 MLA 真正省下的不是时间，是<tspan font-weight=\"700\">"
-        "那 %d 张卡</tspan>，而它们可以拿去服务别人。" % saved,
-            624, 16 * 1.12):
-        f.t(732, yj, r, GY, size=16)
-        yj += 23
+        "那 %d 张卡</tspan> ——&#160;它们可以拿去服务别人。" % saved, INK, size=16)
 
-    f.box(712, top + 168, 664, 128, "none", BL, 9)
-    f.t(732, top + 198,
+    f.box(712, top + 226, 664, 128, "none", BL, 9)
+    f.t(732, top + 256,
         "反直觉二：MLA 之后再上稀疏，只再快 %.2f 倍" % gainD, BL, bold=True,
         size=19, cls="svglbl")
-    yj = top + 228
+    yj = top + 286
     for r in wrap_rich(
         "⭐⭐ 因为<tspan font-weight=\"700\">瓶颈已经搬到权重那一段</tspan>："
         "读 %.2f，KV 只剩 %.2f。这不是稀疏没用 ——&#160;"
