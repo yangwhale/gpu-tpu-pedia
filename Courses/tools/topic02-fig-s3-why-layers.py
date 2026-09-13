@@ -77,7 +77,13 @@ p = [f'<svg viewBox="0 0 {W} {H}" width="100%" role="img" '
      f'⚡ 为什么会有这一层</text>']
 
 # 因果列整体加一块浅底 —— 它是这张图唯一的新东西，要一眼看见
-p.append(f'<rect x="{C4-16}" y="{TOP-30}" width="{W-C4+16}" height="{len(ROWS)*RH+30}" '
+# ⛔⛔ 2026-09-13：这块浅底原来是 **append**（最后画），而它的上沿 TOP-30
+#   盖住了画在 TOP-12 的那个列头「⚡ 为什么会有这一层」——&nbsp;
+#   于是这张图**唯一那一列的标题在浏览器里根本看不见**，而 SVG 完全合法。
+# ⭐ 判据：**底色要先画**。任何「整片浅底」都该 insert 到它要衬的内容之前，
+#   而不是 append 到最后 —— SVG 没有 z-index，顺序就是层级。
+p.insert(len(p) - 4,
+         f'<rect x="{C4-16}" y="{TOP-30}" width="{W-C4+16}" height="{len(ROWS)*RH+30}" '
          f'rx="10" fill="#fef7e0"/>')
 
 for i, (zh, en, size, keeps, why) in enumerate(ROWS):
