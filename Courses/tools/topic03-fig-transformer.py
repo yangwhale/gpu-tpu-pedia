@@ -314,6 +314,10 @@ def render(v):
     def t(x, y, s, cls="svgsm", fill=None, bold=False, size=None, anchor=None):
         # ⭐ 自动降档：500 主色画文字 → 换成 900 深色变体（对齐专题一）。
         fill = INK900.get(fill, fill)
+        # ⛔ 这份 t() 是这个文件自己的复制品，原来**没有字号地板断言** ——
+        #   于是 13 处 10px 一直安安静静地待在全课曝光最多的那张图上。
+        assert size is None or size >= 11, \
+            "字号 %s 太小（全课地板 11px）：%s" % (size, s[:30])
         st = ["font-size:%dpx" % size] if size else []
         p.append('<text class="%s" x="%d" y="%d"%s%s%s>%s</text>' % (
             cls, x, y, ' fill="%s"' % fill if fill else '',
@@ -370,8 +374,8 @@ def render(v):
                     box(x2 - 66, y + 12, 132, 34,
                         "#e8f0fe" if live(k2) else DIMBG, c, 5,
                         1.8 if live(k2) and hot else 1)
-                    t(x2 - 60, y + 8, lin, fill=C(k2, BL), size=10)
-                    t(x2 + 60, y + 8, rin, fill=C(k2, PU), size=10,
+                    t(x2 - 60, y + 8, lin, fill=C(k2, BL), size=11)
+                    t(x2 + 60, y + 8, rin, fill=C(k2, PU), size=11,
                       anchor="end")
                     p.append('<circle cx="%d" cy="%d" r="9" fill="none" '
                              'stroke="%s" stroke-width="1.6"/>'
@@ -400,8 +404,8 @@ def render(v):
                 # ⛔ 别把上沿放在 y+6 —— 输入标签的基线在 y+8，虚线会从字中间穿过，
                 #    渲染出来像删除线。框要**连输入标签和输出形状一起框住**。
                 box(x - 116, y - 6, 232, 78, "none", c, 8, 1, "5,4")
-            t(x - 102, y + 8, lin, fill=C(key, BL), size=10)
-            t(x + 102, y + 8, rin, fill=C(key, PU), size=10, anchor="end")
+            t(x - 102, y + 8, lin, fill=C(key, BL), size=11)
+            t(x + 102, y + 8, rin, fill=C(key, PU), size=11, anchor="end")
             p.append('<circle cx="%d" cy="%d" r="9" fill="none" stroke="%s" '
                      'stroke-width="1.6"/>' % (x, y + 29, c))
             p.append('<circle cx="%d" cy="%d" r="2.6" fill="%s"/>'
@@ -438,7 +442,7 @@ def render(v):
             c = C(key, GR)
             box(x - 200, y, 400, 50, "#e6f4ea" if live(key) else DIMBG, c, 6)
             t(x, y + 19, lab, fill=c, bold=True, anchor="middle")
-            t(x, y + 38, sub, fill=C(key, GY), anchor="middle", size=10)
+            t(x, y + 38, sub, fill=C(key, GY), anchor="middle", size=11)
             pos[key] = (x, y, y + 50)
             y += 68
 
