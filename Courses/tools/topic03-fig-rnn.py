@@ -135,11 +135,11 @@ def fig_unroll():
     f.path("M %d %d L %d %d L %d %d" % (cx + 150, PT + 112, 380, PT + 112,
                                         380, PT + 182), PU, 1.4, "4 3")
     f.t(252, PT + 76, "原样复制一份", PU, True, _sz(11))
-    f.t(252, PT + 92, "固定权重 1.0，不训练", GY, size=_sz(11))
+    f.t(252, PT + 92, "固定权重 1.0，不训练", GY, size=_sz(14))
     f.t(14, PT + 250, '⭐ 那条<tspan font-weight="700">虚线不是学出来的</tspan>'
-                      '——&#160;原文写死「one-for-one basis,', GY, size=_sz(11))
+                      '——&#160;原文写死「one-for-one basis,', GY, size=_sz(14))
     f.t(14, PT + 266, 'with fixed weight of 1.0」。<tspan font-weight="700">'
-                      '整个循环就靠这一条硬接线。</tspan>', GY, size=_sz(11))
+                      '整个循环就靠这一条硬接线。</tspan>', GY, size=_sz(14))
 
     # ── 右：展开 ────────────────────────────────────────────────
     QX = 420
@@ -152,7 +152,7 @@ def fig_unroll():
     for i in range(n):
         x = x0 + i * step
         k = str(i + 1) if i < n - 1 else "n"
-        f.t(x + 57, QT + 18, "t = %s" % k, GY2, size=_sz(11), anchor="middle")
+        f.t(x + 57, QT + 18, "t = %s" % k, GY2, size=_sz(14), anchor="middle")
         if i == n - 1:
             f.t(x - 36, QT + 122, "…", GY2, True, 17, "middle")
         f.cell(x, QT + 174, 114, 36, "x%s" % k, None, GR, "#e6f4ea")
@@ -166,11 +166,11 @@ def fig_unroll():
     f.t(x0 + 126, QT + 112, "上一步的 h", RD, True, _sz(11))
     f.t(QX + 16, QT + 236,
         '⛔ <tspan font-weight="700">红底那一行就是全部问题的根源</tspan>：'
-        'h3 要用 h2，h2 要用 h1 ——&#160;一百万步就得排一百万轮。', GY, size=_sz(12))
+        'h3 要用 h2，h2 要用 h1 ——&#160;一百万步就得排一百万轮。', GY, size=_sz(15))
     f.t(QX + 16, QT + 258,
         '⭐ 而<tspan font-weight="700">竖着的绿、蓝箭头彼此不相干</tspan>'
         '——&#160;能并行的方向一直都在，'
-        '<tspan font-weight="700">被卡住的只有横着这一个。</tspan>', GY, size=_sz(12))
+        '<tspan font-weight="700">被卡住的只有横着这一个。</tspan>', GY, size=_sz(15))
 
     yy = y + 322 + 16
     yy = f.band(yy, "info", "拆开一格看：里面就是两个矩阵乘、一个加法、一个非线性", [
@@ -222,11 +222,11 @@ def fig_hw():
         # ⛔ 上一版这些箭头从 x-44 起 —— 那个位置**落在上一格的蓝条里面**。
         #   ⭐ 连线的起点要按「上一个元素的右边界」算，不能按「下一个元素往左退多少」算。
         f.cell(x, AT + 22, 92, 52, "W", "[k·d × d]", RD, "#fff", grid=True)
-        f.t(x + 104, AT + 54, "·", GY2, True, 15, "middle")
+        f.t(x + 104, AT + 54, "·", GY2, True, 18, "middle")
         f.box(x + 116, AT + 22, 26, 52, "#e8f0fe", BL, 4)
-        f.t(x + 129, AT + 92, "[d×B]", BL, size=_sz(11), anchor="middle")
+        f.t(x + 129, AT + 92, "[d×B]", BL, size=_sz(14), anchor="middle")
         f.t(x + 46, AT + 92, "第 %s 步" % (i + 1 if i < 5 else "n"),
-            GY2, size=_sz(11), anchor="middle")
+            GY2, size=_sz(14), anchor="middle")
         if i:
             px = x - 178 + 142        # 上一格蓝条的右边界
             if i == 5:
@@ -237,19 +237,19 @@ def fig_hw():
         '⛔ NVIDIA 官方文档的说法是「a GEMM with '
         '<tspan font-weight="700">one dimension of one</tspan>」'
         '——&#160;<tspan font-weight="700">名义上矩阵乘，实际是矩阵乘向量。</tspan>',
-        "#a50e0e", size=_sz(12))
+        "#a50e0e", size=_sz(15))
 
     BY = y + AH + 14
     BT = f.panel(0, BY, W, 130, "Ⓑ Transformer 训练", GR, "#fff",
                  sub="同一块权重只搬一次，n 个位置一起喂进去", tint="#d7ecdc")
     f.cell(34, BT + 22, 98, 52, "W", "[k·d × d]", GR, "#fff", grid=True)
-    f.t(146, BT + 54, "·", GY2, True, 15, "middle")
+    f.t(146, BT + 54, "·", GY2, True, 18, "middle")
     f.box(166, BT + 22, 900, 52, "#e8f0fe", BL, 6)
     f.t(616, BT + 54, "[ d × (n · B) ]　——　n 个位置全在这一块里", BL,
-        True, 13.5, "middle")
+        True, 17, "middle")
     f.t(14, BT + 96, '⭐ 一次搬运换来 n 倍的活干。'
                      '<tspan font-weight="700">这就是「用平方的计算量买完全的并行度」'
-                     '那笔交易的硬件形态。</tspan>', "#0d652d", size=_sz(12))
+                     '那笔交易的硬件形态。</tspan>', "#0d652d", size=_sz(15))
 
     CY = BY + 130 + 14
     CT = f.panel(0, CY, W, 190, "算术强度 ＝ 算了多少次 ÷ 搬了多少字节", OR, "#fff",
@@ -266,20 +266,20 @@ def fig_hw():
              "⭐ <tspan font-weight=\"700\">整整多了一个 n</tspan>", GR))):
         yy = CT + 56 + i * 26
         f.t(16, yy, a, col, True, _sz(12))
-        f.t(250, yy, b, INK, size=_sz(12), mono=True)
-        f.t(470, yy, c, INK, size=_sz(12), mono=True)
-        f.t(650, yy, d_, col, True, 13)
-        f.t(770, yy, e, col, size=_sz(12))
+        f.t(250, yy, b, INK, size=_sz(15), mono=True)
+        f.t(470, yy, c, INK, size=_sz(15), mono=True)
+        f.t(650, yy, d_, col, True, 16)
+        f.t(770, yy, e, col, size=_sz(15))
     f.t(16, CT + 112, '⭐ 那个 k（LSTM 是 4、朴素 RNN 是 1）'
                       '<tspan font-weight="700">上下一约就没了</tspan>'
                       '——&#160;算术强度等于 batch，跟门数、跟隐藏维都无关。'
-                      '（激活的搬运比权重小两个数量级，略去。）', BR, size=_sz(11))
+                      '（激活的搬运比权重小两个数量级，略去。）', BR, size=_sz(14))
     f.line(16, CT + 122, W - 16, CT + 122, "#e6c86a", 1, arrow=False)
     f.t(16, CT + 130 + 14, '拐点：TPU v7 官方每芯片 FP8 '
         '<tspan font-weight="700">4614 TFLOP/s</tspan>，BF16 取一半 ＝ '
         '<tspan font-weight="700">2307</tspan>；官方 HBM 带宽 '
         '<tspan font-weight="700">7.37 TB/s</tspan>。2307 ÷ 7.37 ＝ '
-        '<tspan font-weight="700">313 FLOP/byte</tspan>', BR, size=_sz(12))
+        '<tspan font-weight="700">313 FLOP/byte</tspan>', BR, size=_sz(15))
 
     yy = CY + 190 + 16
     yy = f.band(yy, "bad", "两头堵死", [
@@ -328,13 +328,13 @@ def fig_decode():
         top = f.panel(0, yy, W, ROWH, "%s %s" % (tag, name), col, fill,
                       sub=note, tint=tint,
                       tag="⛔ 病在这里" if mode == "g" else None)
-        f.t(16, top + 22, ser, col, True, 13)
-        f.t(16, top + 42, mov, GY, size=_sz(11))
+        f.t(16, top + 22, ser, col, True, 16)
+        f.t(16, top + 42, mov, GY, size=_sz(14))
         f.t(16, top + 62, ai, col, True, _sz(12))
         if mode == "p":
             f.box(300, top + 16, 760, 40, "#fff", col, 6)
-            f.t(680, top + 41, "t1 … tn　全部一起算", col, True, 13.5, "middle")
-            f.t(680, top + 74, "搬 W 一次", GY, size=_sz(11), anchor="middle")
+            f.t(680, top + 41, "t1 … tn　全部一起算", col, True, 17, "middle")
+            f.t(680, top + 74, "搬 W 一次", GY, size=_sz(14), anchor="middle")
         else:
             for k in range(6):
                 x = 300 + k * 118
@@ -348,10 +348,10 @@ def fig_decode():
                 if mode == "g":
                     bw = 14 + k * 12
                     f.box(x + 38 - bw / 2.0, top + 58, bw, 8, "#c9a0ea", col, 3)
-                    f.t(x + 38, top + 82, "W ＋ KV", col, size=_sz(11),
+                    f.t(x + 38, top + 82, "W ＋ KV", col, size=_sz(14),
                         anchor="middle")
                 else:
-                    f.t(x + 38, top + 74, "搬 W", GY, size=_sz(11), anchor="middle")
+                    f.t(x + 38, top + 74, "搬 W", GY, size=_sz(14), anchor="middle")
         f.t(1102, top + 44, tail, col, True, _sz(12))
 
     yy = y + 3 * (ROWH + 12) + 6
@@ -452,17 +452,17 @@ def fig_pain():
     cy = ay + 208
     for i, (col, cure, how, owe) in enumerate([
         (RD, "Transformer", "把循环整个拿掉",
-         "欠下：注意力矩阵 O(N²)，三个旋钮都在还这笔账"),
+         "欠下：注意力矩阵 O(N²)"),
         (OR, "门控 → 注意力", "LSTM 1997 / GRU 2014",
-         "注意力更彻底：任意两个位置只隔一步"),
+         "任意两个位置只隔一步"),
         (GR, "Bahdanau 2014", "别只看最后那个向量",
-         "⭐ 注意力的出生证明：它一开始只是 RNN 的一个补丁"),
+         "⭐ 注意力的出生证明"),
     ]):
         bx = 56 + i * 444
         f.box(bx, cy, 400, 104, "#fff", col, 10)
         f.t(bx + 20, cy + 36, "解药：" + cure, col, True, 21)
         f.t(bx + 20, cy + 66, how, GY, size=17)
-        f.t(bx + 20, cy + 94, owe, GY2, size=14, w=360)
+        f.t(bx + 20, cy + 94, owe, GY2, size=17.5, w=360)
 
     y = y + PH + 20
     y = f.band(y, "info", "而第 ① 条后来被反着又走了一遍 ——　这就是专题三真正的主脊", [

@@ -44,7 +44,7 @@ def main():
         ("GDN", "2024-12", "α(I − β k kᵀ)", "rank1-decay",
          "门控 ＋ 擦除，合到一起", "要专门的技巧", OR),
         ("KDA", "2025-10", "Diag(α)(I − β k kᵀ)", "rank1-chan",
-         "⭐ 把 GLA 那种逐通道门接到擦除上", "要特化的 DPLR 算法", PU),
+         "⭐ 逐通道门接到擦除上", "要特化的 DPLR 算法", PU),
         ("（若允许全矩阵）", "——", "任意 A", "full",
          "表达力最强", "⛔ 每步 combine 是 d×d 矩阵乘", RD),
     ]
@@ -82,8 +82,8 @@ def main():
         f.box(cx, cy, CW, CH, "#fff", LINE, 8)
         f.box(cx, cy, 4, CH, col, col, 2)
         f.box(cx + 2, cy, 3, CH, "#fff", "#fff", 0)
-        f.t(cx + 18, cy + 24, name, col, True, 12.5, w=CW - 90)
-        f.t(cx + CW - 16, cy + 24, year, GY2, size=11, anchor="end")
+        f.t(cx + 18, cy + 24, name, col, True, 16, w=CW - 90)
+        f.t(cx + CW - 16, cy + 24, year, GY2, size=14, anchor="end")
 
         # ⛔⛔ 2026-09-14 二轮学生量了 WCAG 对比度：这八格原来靠**深浅**区分，
         #   DeltaNet 底色 vs GDN 底色 **1.05 : 1**，I vs a·I 1.64 : 1 ——
@@ -119,10 +119,10 @@ def main():
             f.box(mx + r * CELL, my + r * CELL + (CELL - 2 - h), CELL - 2, h,
                   bar, "none", 2)
 
-        f.t(mx + N * CELL + 16, my + 18, form, INK, True, 12,
+        f.t(mx + N * CELL + 16, my + 18, form, INK, True, 15,
             w=CW - N * CELL - 44)
-        f.t(mx + N * CELL + 16, my + 44, "修了什么", GY2, size=11)
-        f.t(mx + N * CELL + 16, my + 62, fix, GY, size=11,
+        f.t(mx + N * CELL + 16, my + 44, "修了什么", GY2, size=14)
+        f.t(mx + N * CELL + 16, my + 62, fix, GY, size=14,
             w=CW - N * CELL - 44)
 
         # ⭐ 2026-09-13：投影上「深浅」分不开，补一行结构标签 ——
@@ -136,10 +136,10 @@ def main():
                  "rank1-chan": "斜纹整块 ＋ 对角竖条高低不齐",
                  "full": "整块红底 —— 没有结构可利用"}
         f.t(mx, my + N * CELL + 16, SHAPE[kind], col if col != GY else GY2,
-            True, 11, w=CW - 36)
+            True, 14, w=CW - 36)
 
-        f.t(cx + 18, cy + CH - 18, "并行", GY2, size=11)
-        f.t(cx + 58, cy + CH - 18, par, col if col != GY else GY, True, 11.5,
+        f.t(cx + 18, cy + CH - 18, "并行", GY2, size=14)
+        f.t(cx + 58, cy + CH - 18, par, col if col != GY else GY, True, 14.5,
             w=CW - 90)
     yy = yy + 2 * (CH + 10) + 6
 

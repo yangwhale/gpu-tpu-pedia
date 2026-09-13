@@ -99,16 +99,16 @@ def fig_swap():
         if i:
             f.line(cx - 96 + R + 5, LT + 42, cx - R - 5, LT + 42, RD, 1.8)
     f.t(14, LT + 96, '<tspan font-weight="700">t1 想影响 t6，得经过 5 跳</tspan>'
-                     '——&#160;每一跳都是一次矩阵乘，而且必须排队。', GY, size=_sz(12))
+                     '——&#160;每一跳都是一次矩阵乘，而且必须排队。', GY, size=_sz(15))
     f.t(14, LT + 122, '⛔ 串行步数 <tspan font-weight="700">O(n)</tspan>'
                       '　·　最长路径 <tspan font-weight="700">O(n)</tspan>'
-                      '　·　连线数 <tspan font-weight="700">n − 1</tspan>', RD, size=_sz(12))
+                      '　·　连线数 <tspan font-weight="700">n − 1</tspan>', RD, size=_sz(15))
     f.t(14, LT + 152, '⭐ 信息走得越远越容易被冲淡 ——&#160;'
                       '<tspan font-weight="700">这同时也是痛点 ② 梯度消失的几何解释</tspan>：'
-                      '梯度也得沿着同一条链爬回去。', GY, size=_sz(12))
+                      '梯度也得沿着同一条链爬回去。', GY, size=_sz(15))
     f.t(14, LT + 178, '⭐ 而且这条链一次只能动一格，'
                       '<tspan font-weight="700">加速器上再多的并行单元也用不上</tspan>。',
-        GY, size=_sz(12))
+        GY, size=_sz(15))
 
     # ── 右：自注意力 ────────────────────────────────────────────
     # ⛔ 初版画成「上下两排点 ＋ 贝塞尔连线」——&nbsp;n=6 就有 21 根线，
@@ -133,22 +133,22 @@ def fig_swap():
                       "#669df6" if lit else "#c6dafc", "none", 2, 0)
             else:
                 f.box(x, yv, CELL - 3, CELL - 3, "#f1f3f4", "none", 2, 0)
-    f.t(gx - 10, gy + 10, "q1", GY2, size=_sz(11), anchor="end")
+    f.t(gx - 10, gy + 10, "q1", GY2, size=_sz(14), anchor="end")
     f.t(gx - 10, gy + (G - 2) * CELL + 10, "q7", BL, True, _sz(11), anchor="end")
-    f.t(gx - 10, gy + (G - 1) * CELL + 10, "qn", GY2, size=_sz(11), anchor="end")
-    f.t(gx, gy - 8, "k1", GY2, size=_sz(11))
-    f.t(gx + (G - 1) * CELL, gy - 8, "kn", GY2, size=_sz(11), anchor="middle")
+    f.t(gx - 10, gy + (G - 1) * CELL + 10, "qn", GY2, size=_sz(14), anchor="end")
+    f.t(gx, gy - 8, "k1", GY2, size=_sz(14))
+    f.t(gx + (G - 1) * CELL, gy - 8, "kn", GY2, size=_sz(14), anchor="middle")
     f.t(gx + G * CELL + 16, gy + (G - 2) * CELL + 10,
         "← q7 这一行：它看得到 k1…k7", BL, True, _sz(12))
-    f.t(gx + G * CELL + 16, gy + 14, "灰格 ＝ 被因果遮罩挡住的未来", GY2, size=_sz(11))
-    f.t(gx + G * CELL + 16, gy + 34, "（softmax 之前置成 −∞）", GY2, size=_sz(11))
+    f.t(gx + G * CELL + 16, gy + 14, "灰格 ＝ 被因果遮罩挡住的未来", GY2, size=_sz(14))
+    f.t(gx + G * CELL + 16, gy + 34, "（softmax 之前置成 −∞）", GY2, size=_sz(14))
     f.t(QX + 14, QT + 208, '⭐ 串行步数 <tspan font-weight="700">O(1)</tspan>'
                            '　·　最长路径 <tspan font-weight="700">O(1)</tspan>'
                            '　·　⛔ 格子数 <tspan font-weight="700">n² ——&#160;'
-                           '这才是这一刀的账单</tspan>', BL, size=_sz(12))
+                           '这才是这一刀的账单</tspan>', BL, size=_sz(15))
     f.t(QX + 14, QT + 230, '⭐ 任意两个位置之间<tspan font-weight="700">只隔一格</tspan>'
                            '，而且<tspan font-weight="700">整张表可以一次算完</tspan>'
-                           '——&#160;左边那条链两样都做不到。', GY, size=_sz(12))
+                           '——&#160;左边那条链两样都做不到。', GY, size=_sz(15))
 
     yy = PY + 272 + 16
     yy = f.band(yy, "warn", "这一刀换来了什么，又欠下了什么", [
@@ -194,17 +194,17 @@ def fig_qkv():
         f.cell(230, TT + 12 + i * 50, 230, 42, lab, sub, col, fill)
         f.line(152, TT + 58, 226, TT + 33 + i * 50, col, 1.3)
     f.t(500, TT + 40, '⭐ <tspan font-weight="700">为什么要投三次而不是直接拿 x 比</tspan>',
-        INK, size=13, cls="svglbl")
+        INK, size=16, cls="svglbl")
     f.t(500, TT + 64, '因为「我想找什么」和「我能提供什么」<tspan font-weight="700">'
-                      '本来就是两回事</tspan>。', GY, size=_sz(12))
+                      '本来就是两回事</tspan>。', GY, size=_sz(15))
     f.t(500, TT + 86, '同一个词当 query 时该问的问题，跟它当 key 时该挂的牌子，'
-                      '不该是同一个向量。', GY, size=_sz(12))
+                      '不该是同一个向量。', GY, size=_sz(15))
     f.t(500, TT + 116, '⛔ 而 V 又跟 K 分开，是因为'
                        '<tspan font-weight="700">「凭什么被选中」和「被选中之后交出什么」</tspan>'
-                       '也是两回事。', GY, size=_sz(12))
+                       '也是两回事。', GY, size=_sz(15))
     f.t(500, TT + 138, '⭐ 三个投影 ＝ 三个可训练矩阵，'
                        '<tspan font-weight="700">这也是 KV cache 里存的那两样东西的出处</tspan>。',
-        GY, size=_sz(12))
+        GY, size=_sz(15))
 
     # ── 下：一条流水线 ───────────────────────────────────────────
     BY = y + 172 + 14
@@ -222,19 +222,19 @@ def fig_qkv():
         x += w + 34
     f.line(x - 26, BT + 48, x - 8, BT + 48, GY2, 1.4)
     f.box(x + 6, BT + 22, 210, 52, "#fff", OR, 6)
-    f.t(x + 111, BT + 44, "输出 [n × d]", OR, True, 13, "middle")
-    f.t(x + 111, BT + 62, "跟输入一样的形状", GY, size=_sz(11), anchor="middle")
+    f.t(x + 111, BT + 44, "输出 [n × d]", OR, True, 16, "middle")
+    f.t(x + 111, BT + 62, "跟输入一样的形状", GY, size=_sz(14), anchor="middle")
     # ⛔ 2026-09-08：这里原先写「它是整层里唯一一个随长度平方长大的东西」——
     #   那是**存储口径**，而这一步根本不落地（FlashAttention 已是标配）。
     #   ⭐ 改成计算口径，并把「要留下来的是什么」这条主线接上去。
     f.t(30, BT + 104, '⛔ 第一步那个 Q·Kᵀ 是 <tspan font-weight="700">n × n 个数</tspan>'
                       '——&#160;但它<tspan font-weight="700">不落地</tspan>，'
                       '只在片上过。<tspan font-weight="700">贵在要算的次数，不在显存。</tspan>',
-        BR, size=_sz(12))
+        BR, size=_sz(15))
     f.t(30, BT + 128, '⭐⭐ <tspan font-weight="700">真正要留下来的是 K 和 V</tspan>'
                       '——&#160;下一个 token 还要跟它们打分。'
                       '<tspan font-weight="700">这两份就是 KV cache，也是本讲唯一的账本。</tspan>',
-        BR, size=_sz(12))
+        BR, size=_sz(15))
 
     yy = BY + 176 + 16
     yy = f.band(yy, "info", "那个 √d_k 不是玄学，推导链在论文脚注里，两行就能讲完", [
@@ -273,14 +273,14 @@ def fig_heads():
     AT = f.panel(0, y, 470, 214, "Ⓐ 单头", GY, BG2, sub="一个 512 维的注意力",
                  tint="#eceff1")
     f.box(24, AT + 24, 420, 40, "#fff", GY2, 6)
-    f.t(234, AT + 49, "一次注意力，d = 512", GY, True, 13, "middle")
-    f.t(24, AT + 92, '一个 query 同时要兼顾：', GY, size=_sz(12))
+    f.t(234, AT + 49, "一次注意力，d = 512", GY, True, 16, "middle")
+    f.t(24, AT + 92, '一个 query 同时要兼顾：', GY, size=_sz(15))
     for i, s_ in enumerate(("「上一个词是什么」", "「这句话的主语是谁」",
                             "「三段之前提到的那个人名」")):
-        f.t(40, AT + 114 + i * 20, "· " + s_, GY2, size=_sz(12))
+        f.t(40, AT + 114 + i * 20, "· " + s_, GY2, size=_sz(15))
     f.t(24, AT + 182, '⛔ 只有<tspan font-weight="700">一组</tspan>权重可分配 ——&#160;'
                       '结果是<tspan font-weight="700">把三种关注平均了一下</tspan>。',
-        RD, size=_sz(12))
+        RD, size=_sz(15))
 
     BX = 486
     BT = f.panel(BX, y, W - BX, 214, "Ⓑ 多头（h ＝ 8）", BL, "#fff",
@@ -290,15 +290,15 @@ def fig_heads():
         x = BX + 24 + i * 108
         f.box(x, BT + 24, 92, 40, "#fff", COLS[i], 6)
         f.t(x + 46, BT + 49, "head %d" % (i + 1), COLS[i], True, _sz(12), "middle")
-        f.t(x + 46, BT + 80, "d = 64", GY2, size=_sz(11), anchor="middle")
+        f.t(x + 46, BT + 80, "d = 64", GY2, size=_sz(14), anchor="middle")
         f.line(x + 46, BT + 92, x + 46, BT + 108, COLS[i], 1.2)
     f.box(BX + 24, BT + 112, 8 * 108 - 16, 34, "#fff", BL, 6)
     f.t(BX + 24 + (8 * 108 - 16) / 2.0, BT + 134,
-        "Concat → 再过一个 W_O，拼回 512", BL, True, 13, "middle")
+        "Concat → 再过一个 W_O，拼回 512", BL, True, 16, "middle")
     f.t(BX + 24, BT + 182, '⭐ <tspan font-weight="700">8 × 64 ＝ 512</tspan>'
                            '——&#160;总维度没变、参数量没变、计算量也基本没变。'
                            '<tspan font-weight="700">多头是「切开」，不是「加倍」。</tspan>',
-        BL, size=_sz(12))
+        BL, size=_sz(15))
 
     yy = y + 214 + 16
     yy = f.band(yy, "ok", "多头的代价，正好是本专题的题眼", [
@@ -369,10 +369,10 @@ def fig_flow():
         hot = (i == len(TOK) - 1)
         f.box(0, ry(i) - 14, 46, 26, "#e8f0fe" if hot else "#fff",
               BL if hot else LINE, 6, 1.6 if hot else 1)
-        f.t(23, ry(i) + 4, tk, BL if hot else INK, bold=hot, size=12, anchor="middle")
+        f.t(23, ry(i) + 4, tk, BL if hot else INK, bold=hot, size=15, anchor="middle")
         for j, c in enumerate((BL, OR, GR)):
             f.box(70 + j * 30, ry(i) - 11, 24, 20, "#fff", c, 4, 1.4)
-            f.t(82 + j * 30, ry(i) + 4, "qkv"[j], c, bold=True, size=11, anchor="middle")
+            f.t(82 + j * 30, ry(i) + 4, "qkv"[j], c, bold=True, size=14, anchor="middle")
         f.line(48, ry(i), 66, ry(i), LINE2, 1.2, arrow=False)
 
     # ── ② t6 拿 q 去跟每块牌子打分 ───────────────────────────
@@ -381,22 +381,22 @@ def fig_flow():
               "打分 → softmax → 一组加起来 ＝ 1 的权重")
     QX, QY = X2 + 6, ry(len(TOK) - 1)
     f.box(QX, QY - 15, 34, 28, "#e8f0fe", BL, 6, 1.6)
-    f.t(QX + 17, QY + 4, "q", BL, bold=True, size=13, anchor="middle")
-    f.t(QX + 17, QY + 30, "t6 的问题", BL, size=11, anchor="middle")
+    f.t(QX + 17, QY + 4, "q", BL, bold=True, size=16, anchor="middle")
+    f.t(QX + 17, QY + 30, "t6 的问题", BL, size=14, anchor="middle")
     KX = X2 + 120
     for i in range(len(TOK)):
         f.box(KX, ry(i) - 11, 26, 20, "#fff", OR, 4, 1.3)
-        f.t(KX + 13, ry(i) + 4, "k", OR, bold=True, size=11, anchor="middle")
+        f.t(KX + 13, ry(i) + 4, "k", OR, bold=True, size=14, anchor="middle")
         f.path("M %d %d C %d %d %d %d %d %d" % (QX + 36, QY, KX - 34, QY,
                                                 KX - 34, ry(i), KX - 3, ry(i)),
                GY2, 1.1, arrow=True)
     # 权重条
     BX = KX + 46
-    f.t(BX, TOP - 16, "softmax 之后", GY, size=11)
+    f.t(BX, TOP - 16, "softmax 之后", GY, size=14)
     for i, w_ in enumerate(WGT):
         f.box(BX, ry(i) - 8, 2 + w_ * 1.9, 15, "#e6f4ea", GR, 3, 1)
-        f.t(BX + 6 + w_ * 1.9 + 8, ry(i) + 4, "%d%%" % w_, GR, bold=(w_ >= 30), size=11)
-    f.t(BX, ry(len(TOK) - 1) + 30, "加起来 ＝ 1", GR, bold=True, size=11)
+        f.t(BX + 6 + w_ * 1.9 + 8, ry(i) + 4, "%d%%" % w_, GR, bold=(w_ >= 30), size=14)
+    f.t(BX, ry(len(TOK) - 1) + 30, "加起来 ＝ 1", GR, bold=True, size=14)
 
     # ── ③ 按权重把货加起来 ───────────────────────────────────
     X3 = 700
@@ -405,7 +405,7 @@ def fig_flow():
     for i, w_ in enumerate(WGT):
         bw = 22 + w_ * 1.5
         f.box(X3, ry(i) - 11, bw, 20, "#e6f4ea", GR, 4, 1.3)
-        f.t(X3 + bw / 2, ry(i) + 4, "v", GR, bold=True, size=11, anchor="middle")
+        f.t(X3 + bw / 2, ry(i) + 4, "v", GR, bold=True, size=14, anchor="middle")
     OUTX = X3 + 250
     for i in range(len(TOK)):
         f.path("M %d %d C %d %d %d %d %d %d"
@@ -413,11 +413,11 @@ def fig_flow():
                   OUTX - 60, ry(len(TOK) - 1), OUTX - 6, ry(len(TOK) - 1)),
                GR, 1.0 + WGT[i] * 0.055, arrow=True)
     f.box(OUTX, ry(len(TOK) - 1) - 18, 118, 34, "#e8f0fe", BL, 7, 1.8)
-    f.t(OUTX + 59, ry(len(TOK) - 1) + 4, "t6 的新向量", BL, bold=True, size=12,
+    f.t(OUTX + 59, ry(len(TOK) - 1) + 4, "t6 的新向量", BL, bold=True, size=15,
         anchor="middle")
     f.lines(OUTX - 30, ry(len(TOK) - 1) + 34, 210, [
         '这<tspan font-weight="700">一个</tspan>向量里，现在装着',
-        '<tspan font-weight="700">全场按需加权</tspan>的内容。'], size=11, lh=16, fill=GY)
+        '<tspan font-weight="700">全场按需加权</tspan>的内容。'], size=14, lh=16, fill=GY)
 
     yy = ry(len(TOK) - 1) + 76
 
