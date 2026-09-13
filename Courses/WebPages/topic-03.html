@@ -6628,6 +6628,153 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
        (I − β k kᵀ) 就是它。
      ⭐⭐ 顺带给出第三个读法：delta rule 等价于对 ½‖Sk−v‖² 做一步 SGD，
        于是状态不再是缓存，而是**一个边跑边被训练的小模型**。 -->
+<!-- ⭐⭐⭐ 2026-09-13 新增。调研全网之后发现的**本课最大的一个缺口**：
+     「去掉 softmax，乘法就可以重新结合」是旋钮③ 的立身之本，
+     而我们原来**一张图都没有** —— 只有一句话和一个结果（BKHH，S 不见了）。
+     ⛔ 结果不等于动作：学生看得到 S 消失了，看不到是哪一步让它消失的。 -->
+<figure class="fbox fwide" id="fig-assoc"><svg viewBox="0 0 1400 1148" width="100%" role="img" aria-label="softmax 一拿掉，括号就能挪：左边先算 Q 乘 K 转置，中间被迫造出一个序列长 × 序列长的大方块；右边先算 K 转置乘 V，中间那块只有头维 ×头维，跟句子多长完全无关"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">旋钮③ 的立身之本 ——　<tspan font-weight="700">同一个乘法，只是把括号挪了个位置</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 矩阵按真实比例画。<tspan font-weight="700">那个大方块有没有被造出来，是看出来的，不是读出来的。</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">必须造出来的大方块</text>
+<rect x="173" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="194" y="74" fill="#5f6368" style="font-size:14.0px">跟句子长短无关的小方块</text>
+<rect x="0" y="102" width="1400" height="396" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">① softmax 在的时候 ——　必须先把那个大方块造出来</tspan></text>
+<text class="svgsm" x="354" y="122" fill="#5f6368" style="font-size:11.0px">分母要对所有位置求和，所以乘法顺序被锁死</text>
+<rect x="70" y="180.0" width="90" height="240" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<line x1="100" y1="180.0" x2="100" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="130" y1="180.0" x2="130" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="210.0" x2="160" y2="210.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="240.0" x2="160" y2="240.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="270.0" x2="160" y2="270.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="300.0" x2="160" y2="300.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="330.0" x2="160" y2="330.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="360.0" x2="160" y2="360.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="390.0" x2="160" y2="390.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="115" y="168" fill="#174ea6" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">Q</tspan></text>
+<text class="svgsm" x="115" y="442" fill="#80868b" text-anchor="middle" style="font-size:15.0px">句长 × 头维</text>
+<text class="svgsm" x="189" y="309" fill="#5f6368" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">×</tspan></text>
+<rect x="218" y="255.0" width="240" height="90" rx="4" fill="#fef7e0" stroke="#e8710a" stroke-width="1.6"/>
+<line x1="248" y1="255.0" x2="248" y2="345.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="278" y1="255.0" x2="278" y2="345.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="308" y1="255.0" x2="308" y2="345.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="338" y1="255.0" x2="338" y2="345.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="368" y1="255.0" x2="368" y2="345.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="398" y1="255.0" x2="398" y2="345.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="428" y1="255.0" x2="428" y2="345.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="218" y1="285.0" x2="458" y2="285.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="218" y1="315.0" x2="458" y2="315.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="338" y="243" fill="#b06000" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">Kᵀ</tspan></text>
+<text class="svgsm" x="338" y="367" fill="#80868b" text-anchor="middle" style="font-size:15.0px">头维 × 句长</text>
+<rect x="56" y="142.0" width="416" height="312.0" rx="10" fill="none" stroke="#d93025" stroke-width="1.8" stroke-dasharray="7,5"/>
+<text class="svgsm" x="74" y="168" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">① 先算这一对</tspan></text>
+<text class="svgsm" x="498" y="309" fill="#a50e0e" text-anchor="middle" style="font-size:28.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="536" y="180.0" width="240" height="240" rx="4" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<line x1="566" y1="180.0" x2="566" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="596" y1="180.0" x2="596" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="626" y1="180.0" x2="626" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="656" y1="180.0" x2="656" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="686" y1="180.0" x2="686" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="716" y1="180.0" x2="716" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="746" y1="180.0" x2="746" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="536" y1="210.0" x2="776" y2="210.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="536" y1="240.0" x2="776" y2="240.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="536" y1="270.0" x2="776" y2="270.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="536" y1="300.0" x2="776" y2="300.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="536" y1="330.0" x2="776" y2="330.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="536" y1="360.0" x2="776" y2="360.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="536" y1="390.0" x2="776" y2="390.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="656" y="168" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">Q·Kᵀ</tspan></text>
+<text class="svgsm" x="656" y="442" fill="#80868b" text-anchor="middle" style="font-size:15.0px">句长 × 句长</text>
+<text class="svgsm" x="656" y="466" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">⛔ 句子翻倍，它翻四倍</tspan></text>
+<text class="svgsm" x="805" y="309" fill="#5f6368" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">×</tspan></text>
+<rect x="834" y="180.0" width="90" height="240" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<line x1="864" y1="180.0" x2="864" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="894" y1="180.0" x2="894" y2="420.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="834" y1="210.0" x2="924" y2="210.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="834" y1="240.0" x2="924" y2="240.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="834" y1="270.0" x2="924" y2="270.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="834" y1="300.0" x2="924" y2="300.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="834" y1="330.0" x2="924" y2="330.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="834" y1="360.0" x2="924" y2="360.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="834" y1="390.0" x2="924" y2="390.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="879" y="168" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">V</tspan></text>
+<text class="svgsm" x="879" y="442" fill="#80868b" text-anchor="middle" style="font-size:15.0px">句长 × 头维</text>
+<text class="svgsm" x="70" y="494" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">⛔ softmax 的分母要对<tspan font-weight="700">所有位置</tspan>求和 ——　所以这张表躲不开，必须先整个算出来。</tspan></text>
+<rect x="0" y="516" width="1400" height="404" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="516" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="518" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="546" x2="1400" y2="546" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="536" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 把 softmax 拿掉 ——　括号一挪，大方块根本没被造出来</tspan></text>
+<text class="svgsm" x="388" y="536" fill="#5f6368" style="font-size:11.0px">同一个乘法，同一个结果</text>
+<rect x="70" y="594.0" width="90" height="240" rx="4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<line x1="100" y1="594.0" x2="100" y2="834.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="130" y1="594.0" x2="130" y2="834.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="624.0" x2="160" y2="624.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="654.0" x2="160" y2="654.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="684.0" x2="160" y2="684.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="714.0" x2="160" y2="714.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="744.0" x2="160" y2="744.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="774.0" x2="160" y2="774.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="70" y1="804.0" x2="160" y2="804.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="115" y="582" fill="#174ea6" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">Q</tspan></text>
+<text class="svgsm" x="115" y="856" fill="#80868b" text-anchor="middle" style="font-size:15.0px">句长 × 头维</text>
+<text class="svgsm" x="189" y="723" fill="#5f6368" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">×</tspan></text>
+<rect x="218" y="669.0" width="240" height="90" rx="4" fill="#fef7e0" stroke="#e8710a" stroke-width="1.6"/>
+<line x1="248" y1="669.0" x2="248" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="278" y1="669.0" x2="278" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="308" y1="669.0" x2="308" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="338" y1="669.0" x2="338" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="368" y1="669.0" x2="368" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="398" y1="669.0" x2="398" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="428" y1="669.0" x2="428" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="218" y1="699.0" x2="458" y2="699.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="218" y1="729.0" x2="458" y2="729.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="338" y="657" fill="#b06000" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">Kᵀ</tspan></text>
+<text class="svgsm" x="338" y="781" fill="#80868b" text-anchor="middle" style="font-size:15.0px">头维 × 句长</text>
+<text class="svgsm" x="487" y="723" fill="#5f6368" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">×</tspan></text>
+<rect x="516" y="594.0" width="90" height="240" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<line x1="546" y1="594.0" x2="546" y2="834.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="576" y1="594.0" x2="576" y2="834.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="516" y1="624.0" x2="606" y2="624.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="516" y1="654.0" x2="606" y2="654.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="516" y1="684.0" x2="606" y2="684.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="516" y1="714.0" x2="606" y2="714.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="516" y1="744.0" x2="606" y2="744.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="516" y1="774.0" x2="606" y2="774.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="516" y1="804.0" x2="606" y2="804.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="561" y="582" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">V</tspan></text>
+<text class="svgsm" x="561" y="856" fill="#80868b" text-anchor="middle" style="font-size:15.0px">句长 × 头维</text>
+<rect x="204" y="556.0" width="416" height="312.0" rx="10" fill="none" stroke="#1e8e3e" stroke-width="1.8" stroke-dasharray="7,5"/>
+<text class="svgsm" x="222" y="582" fill="#0d652d" style="font-size:18.0px"><tspan font-weight="700">① 改成先算这一对</tspan></text>
+<text class="svgsm" x="646" y="723" fill="#0d652d" text-anchor="middle" style="font-size:28.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="684" y="669.0" width="90" height="90" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<line x1="714" y1="669.0" x2="714" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="744" y1="669.0" x2="744" y2="759.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="684" y1="699.0" x2="774" y2="699.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<line x1="684" y1="729.0" x2="774" y2="729.0" stroke="#e8eaed" stroke-width="0.8" stroke-linecap="round"/>
+<text class="svgsm" x="729" y="657" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">KᵀV</tspan></text>
+<text class="svgsm" x="729" y="781" fill="#80868b" text-anchor="middle" style="font-size:15.0px">头维 × 头维</text>
+<text class="svgsm" x="729" y="805" fill="#0d652d" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">⭐ 句子再长，它还是这么大</tspan></text>
+<rect x="70" y="868" width="1260" height="66" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="92" y="898" fill="#0d652d" style="font-size:22.0px"><tspan font-weight="700">⭐⭐ 消失的那个 S，就是这个没被造出来的大方块。</tspan></text>
+<text class="svgsm" x="92" y="924" fill="#5f6368" style="font-size:18.0px">这也正是为什么它的状态形状是 <tspan font-weight="700">BKHH</tspan> ——　里面根本没有句长这一维。</text>
+<rect x="0" y="940" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="940" width="4" height="122" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="940" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="967" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ ⛔ 一条不说就会教出太好印象的口径：因果 mask 把这个重排挡住了</tspan></text>
+<text class="svgsm" x="20" y="998" fill="#b06000" style="font-size:15.0px">上面那一挪，成立的前提是<tspan font-weight="700">每个位置都能看见所有位置</tspan>。可自回归下有一张下三角的 mask ——&#160;<tspan font-weight="700">逐元素乘那张 mask，恰恰就是挡住你用结合律的那个东西</tspan>。</text>
+<text class="svgsm" x="20" y="1022" fill="#b06000" style="font-size:15.0px">所以真实实现是<tspan font-weight="700">折中</tspan>：把序列切成块，<tspan font-weight="700">块内按左边那条路老老实实算</tspan>（mask 只在块内起作用），<tspan font-weight="700">块间才用右边那条路传一个状态</tspan>。</text>
+<text class="svgsm" x="20" y="1046" fill="#b06000" style="font-size:15.0px">⭐ 所以 <a href="#s七">§7.4</a> 那个「排队办事、只传一张交接单」不是工程妥协 ——&#160;它是<tspan font-weight="700">「结合律」在有 mask 的情况下的正确推广形态</tspan>。</text>
+<text class="svgsm" x="0" y="1078" fill="#80868b" style="font-size:14.0px">📌 装置偷自 Google Research《Rethinking Attention with Performers》（2020-10）：括号画成彩色虚线框、矩阵按真实比例画</text>
+<text class="svgsm" x="0" y="1099" fill="#80868b" style="font-size:14.0px">　　「mask 才是挡住结合律的那个东西」出自 Hailey Schoelkopf 《Linear Attention Fundamentals》；「结合律是张量收缩顺序的特例」出自 Mamba-2 (SSD) 博客 Part II</text>
+<text class="svgsm" x="0" y="1120" fill="#80868b" style="font-size:14.0px">　　⚠️ 图里 8×3 的格数是<tspan font-weight="700">示意</tspan>；真实量级是句长 128K、头维 128</text>
+</svg><figcaption>⭐⭐ <b>同一个乘法，只是把括号挪了个位置</b> —— 左边被迫造出一个句长×句长的大方块，右边中间那块只有头维×头维，<b>跟句子多长完全无关</b>。<em>⛔ 但因果 mask 会把这个重排挡住 —— 逐元素乘那张下三角，恰恰就是挡住你用结合律的东西。所以真实实现是分块：块内按左边算，块间才用右边（见 <a href="#s7-4">§7.4</a>）。</em></figcaption></figure>
+
 <figure class="fbox fwide" id="fig-notepad"><svg viewBox="0 0 1400 1459" width="100%" role="img" aria-label="一块固定大小的记事板：三块白板三种写法 —— 疯狂往里写后写盖先写、先把这一栏叉掉再写、选择性地叉；「叉掉」在式子里就是 I 减 beta k k 转置"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">线性注意力 ＝ 一块<tspan font-weight="700">固定大小的记事板</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">板子就那么大 ——&#160;<tspan font-weight="700">三代的差别，全在「写之前擦不擦、擦多少」</tspan></text>
