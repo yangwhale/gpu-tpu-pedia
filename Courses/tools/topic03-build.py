@@ -454,7 +454,7 @@ __TABLE_MODELS__
 </div></section>
 <section id="s零"><div class="wrap"><div class="stn"><span class="badge">第 零 节</span><h2>起点：RNN ——&nbsp;被注意力补的那个东西</h2></div>
 
-<div class="note danger"><p>⭐⭐ 先给一个反直觉的事实：你现在用的每一个大模型，在往外吐每一个字的时候，
+<div class="note danger"><p>先给一个反直觉的事实：你现在用的每一个大模型，在往外吐每一个字的时候，
   都退回成了 1990 年那条链的形状。<br>
   Transformer 赢在<b>训练能并行</b>。可生成的时候，它一个 token 一个 token 地走，
   每走一步都要把全部权重从显存里搬一遍 ——&nbsp;<b>这跟 RNN 一模一样</b>。<br>
@@ -462,11 +462,11 @@ __TABLE_MODELS__
 
 <p>所以这一节<b>不是背景介绍，是本专题的舞台说明</b>。<b>四个问题，四张图。</b></p>
 
-<h3>0.1 它是什么、怎么算</h3>
+<h3>0.1　先把它是什么说清楚：一个固定大小的状态</h3>
 <p>序列有先后，所以得有个东西把历史带下去。RNN 的答案是带一个固定大小的状态向量 <code>h</code>
   ——&nbsp;<b>全部设计就这一句</b>。</p>
 __FIG_RNN_UNROLL__
-<h3>0.2 为什么在加速器上快不起来</h3>
+<h3>0.2　关键的是哪一列：为什么它在加速器上快不起来</h3>
 <p>⛔ 先别去比总计算量。<code>O(n·d²)</code> 和 <code>O(n²·d)</code> 谁大，取决于 <code>n</code> 和 <code>d</code> 谁大；
   Vaswani 原文说的是 <code>n &lt; d</code> 时自注意力更快，而那正是当年的常态。
   <b>固定不变的是另一列 ——&nbsp;串行步数。</b></p>
@@ -476,48 +476,55 @@ __FIG_RNN_UNROLL__
 <tr><td>循环（RNN）</td><td>O(n · d²)</td><td><b>O(n)</b></td><td><b>O(n)</b></td></tr>
 <tr><td>卷积</td><td>O(k · n · d²)</td><td>O(1)</td><td>O(log_k n)</td></tr>
 </tbody></table>
-<p class="sub">⭐ 这张表是 <b>Transformer 作者自己算的</b>（arXiv 1706.03762 表 1）。
+<p class="sub">这张表是 <b>Transformer 作者自己算的</b>（arXiv 1706.03762 表 1）。
   <b>中间那一列就是全部答案。</b></p>
 __FIG_RNN_HW__
 <div class="note danger"><p>⛔ 两头堵死：batch 是它唯一的算术强度来源，
   而 Vaswani 引言那句原话说的正是另一头 ——&nbsp;<em>「memory constraints limit batching
   across examples」</em>：<b>序列一长，显存就不让你把 batch 开大。</b></p></div>
 
-<h3>0.3 解码时，Transformer 又变回了这个形状</h3>
+<h3>0.3　本节高潮：解码时，Transformer 又变回了这个形状</h3>
 <p>📌 <b>两个词先说清，后面一直要用</b>：把整段输入<b>一次算完</b>叫
   <b>prefill</b>（预填充）；之后<b>一个一个往外吐</b>叫 <b>decode</b>（解码）。
   <em>⭐ 这一讲后面有<b>三处</b>结论在这两个阶段是<b>相反</b>的 ——&nbsp;
   看到一个「省了多少」，先问它说的是哪个阶段。</em></p>
-<div class="note info"><p>⭐ <b>先把那三处列出来，读到时你会认出它们</b>
+<div class="note info"><p><b>先把那三处列出来，读到时你会认出它们</b>
   ——&nbsp;<em>（这一栏是<b>路标</b>，现在不用懂，读到那儿回头看一眼就行）</em></p>
 <table>
 <thead><tr><th>旋钮</th><th>prefill 这边</th><th>decode 那边</th><th>在哪一节</th></tr></thead><tbody>
 <tr><td><b>① MLA</b></td><td>⛔ <b>压缩不生效</b>：训练与 prefill 的前向要把 KV 解压出来算</td>
-  <td>⭐ <b>省得最狠</b>：只读那 576 维</td><td><a href="#s五">§五</a></td></tr>
+  <td><b>省得最狠</b>：只读那 576 维</td><td><a href="#s五">§五</a></td></tr>
 <tr><td><b>② 稀疏</b></td><td>⛔ <b>可能一点不省</b>：要先算出注意力图才知道挑谁
   ——&nbsp;NSA 论文 §2 的第一个坑说的就是这个</td>
-  <td>⭐ 每步只读 k 条</td><td>§6.3b</td></tr>
+  <td>每步只读 k 条</td><td>§6.3b</td></tr>
 <tr><td><b>③ 线性</b></td><td>要靠<b>分块</b>才榨得出并行度（块内并行、块间串行）</td>
-  <td>⭐ <b>就是一条纯递推</b>，每步只碰那块固定大小的板子</td>
+  <td><b>就是一条纯递推</b>，每步只碰那块固定大小的板子</td>
   <td>§7.4</td></tr>
 </tbody></table>
 <p>⛔ <b>所以「省了 N 倍」这句话，不带阶段就是半句话。</b>
   <em><a href="#s九">§九</a>那张代价表专门有一列「⭐ 省在哪个阶段」，就是为了逼出这一问。</em></p></div>
-<p><b>这是本节的落点，也是整个专题的舞台。</b></p>
 __FIG_RNN_DECODE__
-<div class="note info"><p>⭐⭐ Ⓐ 和 Ⓒ 都是「一步一个，每步搬一遍权重」。
+<div class="note info"><p>Ⓐ 和 Ⓒ 都是「一步一个，每步搬一遍权重」。
   唯一的区别是每步还得额外搬什么：<br>
   RNN 搬的是一个固定大小的状态；Transformer 搬的是一路线性变长的 KV cache
   ——&nbsp;<b>128K 时它能比权重本身还大</b>（下一节算给你看）。<br>
   ⭐ 后面三个旋钮拧的全是同一件事：让这一行每步要搬的东西变小。</p></div>
 
-<h3>0.4 三个痛点，各自通向哪</h3>
+<h3>0.4　三个痛点，各自通向哪</h3>
 __FIG_RNN_PAIN__
 <div class="note warn"><p>⚠️ 一个常见的张冠李戴：「固定长度向量是瓶颈」不是 Sutskever 说的。
   他那篇只是描述做法（映射到「a vector of a fixed dimensionality」）；
   「这是个瓶颈」是 Bahdanau 那篇的原话（arXiv 1409.0473：
   <em>「we conjecture that the use of a fixed-length vector is a bottleneck」</em>）。
   <b>别把后人的批评安到原作者头上。</b></p></div>
+
+<h3>0.5　本节落点</h3>
+<div class="note ok"><p><b>这一节要留下的只有一句</b>：
+  <b>解码那一行，从 1990 年到今天，形状没变过。</b></p>
+<p>变的只是<b>每一步额外要搬的那个东西</b>：RNN 搬一个固定大小的状态，
+  Transformer 搬一路变长的 KV cache。
+  <em>后面三个旋钮拧的全是它 ——&nbsp;所以这一节不是背景介绍，
+  是<b>本专题的舞台说明</b>。</em></p></div>
 
 <details class="aside"><summary>📌 这一节的出处清单（全部一手核过）</summary>
 <ul>
