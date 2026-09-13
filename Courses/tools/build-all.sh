@@ -73,6 +73,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-notepad.py       # §七 记事板比喻：三种写法钉到式子上
   python3 topic03-fig-at-gallery.py    # §七 A_t 的形状决定了一切（八种结构并排）
   python3 topic03-fig-chunkwise.py     # §7.4 块内并行块间串行 ＋ 块长两头夹
+  python3 topic03-fig-copy-matrix.py   # §五 「复制」那块 0/1 矩阵，一格一格画出来
   python3 topic03-fig-hybrid.py        # §八 配比是一条轴，两头都不好
   python3 topic03-fig-ratio-grid.py    # §8.2 那张消融表画出来 ＋ 它问不出什么
   python3 topic03-fig-perstep.py       # §9.1 把 ↓↓↓ 换成一步 decode 要搬多少字节

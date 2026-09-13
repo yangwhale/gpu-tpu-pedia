@@ -5585,6 +5585,384 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   ——&nbsp;它不是一个新机制，是把 MHA 和 MQA 之间的空白填上，
   让你可以按需要选一个点。
   <em>这门课后面会反复见到这个套路：<b>把一个二选一变成一个可调的连续量。</b></em></p>
+<p>⭐⭐ 而这个旋钮之所以是<b>连续</b>的，理由比「取个中间值」深一层 ——&nbsp;
+  <b>MHA、MQA、GQA 之间差的，只是同一个位置上同一块矩阵里写了什么</b>。
+  把这块矩阵一格一格画出来，MLA 也会自己落到同一条轴上。</p>
+<figure class="fbox fwide" id="fig-copy-matrix"><svg viewBox="0 0 1400 1471" width="100%" role="img" aria-label="把 GQA 的「复制」写成矩阵：它是一个写死的 0/1 选择阵，MHA 端退化成单位阵，MQA 端是同一列堆满；MLA 用的是同样形状的矩阵，只是 32 格全部可训练 —— 分界线不是低秩，是这个矩阵里写的是 0/1 还是学出来的实数"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">「分割和复制，都是简单的线性变换」—— 那就把它画出来</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">同一条流水线、同一个位置的同一块矩阵　·　例子取 <tspan font-weight="700">4 个头、每头 2 维</tspan>，所以每层的 K 一共 8 维</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">写死的 1</text>
+<rect x="104" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="125" y="74" fill="#5f6368" style="font-size:14.0px">恒为 0</text>
+<rect x="194" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="215" y="74" fill="#5f6368" style="font-size:14.0px">学出来的实数</text>
+<rect x="0" y="102" width="1400" height="210" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">① 四个成员走的是同一条流水线</tspan></text>
+<text class="svgsm" x="218" y="122" fill="#5f6368" style="font-size:11.0px">左右两头完全一样，区别全部集中在中间那一块</text>
+<rect x="80" y="186" width="186" height="66" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="173" y="214" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">输入 x</tspan></text>
+<text class="svgsm" x="173" y="236" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">这一层的隐向量</text>
+<rect x="366" y="186" width="186" height="66" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="459" y="214" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">压一次</tspan></text>
+<text class="svgsm" x="459" y="236" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">乘 W_c，得到要缓存的 c</text>
+<rect x="652" y="186" width="186" height="66" rx="8" fill="#fff" stroke="#e8710a" stroke-width="2.2"/>
+<text class="svgsm" x="745" y="214" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">这一块</tspan></text>
+<text class="svgsm" x="745" y="236" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">从 c 还原出 4 个头的 K</text>
+<rect x="938" y="186" width="186" height="66" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="1031" y="214" fill="#202124" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">4 个头的 K</tspan></text>
+<text class="svgsm" x="1031" y="236" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">一共 8 维，四个成员完全一样</text>
+<line x1="274" y1="219.0" x2="358" y2="219.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="560" y1="219.0" x2="644" y2="219.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="846" y1="219.0" x2="930" y2="219.0" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="745" y="282" fill="#b06000" text-anchor="middle" style="font-size:15.0px">▲ <tspan font-weight="700">四个成员的区别，全在这一块矩阵里</tspan></text>
+<text class="svgsm" x="459" y="282" fill="#80868b" text-anchor="middle" style="font-size:14.0px">缓存的是这里的 c，不是右边的 K</text>
+<rect x="0" y="332" width="1400" height="460" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="332" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="334" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="362" x2="1400" y2="362" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="352" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">② 那一块矩阵长什么样</tspan></text>
+<text class="svgsm" x="164" y="352" fill="#5f6368" style="font-size:11.0px">行数 ＝ 要缓存的 c 有多宽 · 列数都是 8（＝ 还原出来的 K）· 蓝格写着 1，灰格恒为 0</text>
+<text class="svgsm" x="164" y="394" fill="#5f6368" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">MHA</tspan></text>
+<text class="svgsm" x="164" y="416" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">c 宽 8 　·　8×8</text>
+<rect x="60" y="438" width="24" height="24" rx="3" fill="#5f6368" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="72" y="455" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="86" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="98" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="112" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="124" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="138" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="150" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="164" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="176" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="190" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="202" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="216" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="228" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="242" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="254" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="60" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="72" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="86" y="464" width="24" height="24" rx="3" fill="#5f6368" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="98" y="481" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="112" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="124" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="138" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="150" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="164" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="176" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="190" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="202" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="216" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="228" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="242" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="254" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="60" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="72" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="86" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="98" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="112" y="490" width="24" height="24" rx="3" fill="#5f6368" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="124" y="507" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="138" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="150" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="164" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="176" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="190" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="202" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="216" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="228" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="242" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="254" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="60" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="72" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="86" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="98" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="112" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="124" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="138" y="516" width="24" height="24" rx="3" fill="#5f6368" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="150" y="533" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="164" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="176" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="190" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="202" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="216" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="228" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="242" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="254" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="60" y="542" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="72" y="559" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="86" y="542" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="98" y="559" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="112" y="542" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="124" y="559" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="138" y="542" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="150" y="559" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="164" y="542" width="24" height="24" rx="3" fill="#5f6368" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="176" y="559" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="190" y="542" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="202" y="559" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="216" y="542" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="228" y="559" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="242" y="542" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="254" y="559" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="60" y="568" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="72" y="585" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="86" y="568" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="98" y="585" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="112" y="568" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="124" y="585" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="138" y="568" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="150" y="585" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="164" y="568" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="176" y="585" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="190" y="568" width="24" height="24" rx="3" fill="#5f6368" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="202" y="585" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="216" y="568" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="228" y="585" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="242" y="568" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="254" y="585" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="60" y="594" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="72" y="611" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="86" y="594" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="98" y="611" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="112" y="594" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="124" y="611" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="138" y="594" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="150" y="611" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="164" y="594" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="176" y="611" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="190" y="594" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="202" y="611" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="216" y="594" width="24" height="24" rx="3" fill="#5f6368" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="228" y="611" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="242" y="594" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="254" y="611" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="60" y="620" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="72" y="637" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="86" y="620" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="98" y="637" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="112" y="620" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="124" y="637" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="138" y="620" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="150" y="637" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="164" y="620" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="176" y="637" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="190" y="620" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="202" y="637" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="216" y="620" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="228" y="637" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="242" y="620" width="24" height="24" rx="3" fill="#5f6368" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="254" y="637" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="434" y="394" fill="#681da8" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">MQA</tspan></text>
+<text class="svgsm" x="434" y="416" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">c 宽 2 　·　2×8</text>
+<rect x="330" y="438" width="24" height="24" rx="3" fill="#9334e6" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="342" y="455" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="356" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="368" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="382" y="438" width="24" height="24" rx="3" fill="#9334e6" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="394" y="455" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="408" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="420" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="434" y="438" width="24" height="24" rx="3" fill="#9334e6" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="446" y="455" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="460" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="472" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="486" y="438" width="24" height="24" rx="3" fill="#9334e6" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="498" y="455" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="512" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="524" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="330" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="342" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="356" y="464" width="24" height="24" rx="3" fill="#9334e6" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="368" y="481" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="382" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="394" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="408" y="464" width="24" height="24" rx="3" fill="#9334e6" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="420" y="481" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="434" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="446" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="460" y="464" width="24" height="24" rx="3" fill="#9334e6" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="472" y="481" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="486" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="498" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="512" y="464" width="24" height="24" rx="3" fill="#9334e6" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="524" y="481" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="664" y="394" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">GQA-2</tspan></text>
+<text class="svgsm" x="664" y="416" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">c 宽 4 　·　4×8</text>
+<rect x="560" y="438" width="24" height="24" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="572" y="455" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="586" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="598" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="612" y="438" width="24" height="24" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="624" y="455" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="638" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="650" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="664" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="676" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="690" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="702" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="716" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="728" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="742" y="438" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="754" y="455" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="560" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="572" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="586" y="464" width="24" height="24" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="598" y="481" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="612" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="624" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="638" y="464" width="24" height="24" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="650" y="481" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="664" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="676" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="690" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="702" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="716" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="728" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="742" y="464" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="754" y="481" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="560" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="572" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="586" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="598" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="612" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="624" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="638" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="650" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="664" y="490" width="24" height="24" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="676" y="507" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="690" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="702" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="716" y="490" width="24" height="24" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="728" y="507" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="742" y="490" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="754" y="507" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="560" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="572" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="586" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="598" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="612" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="624" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="638" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="650" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="664" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="676" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="690" y="516" width="24" height="24" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="702" y="533" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="716" y="516" width="24" height="24" rx="3" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="728" y="533" fill="#80868b" text-anchor="middle" style="font-size:13.0px">0</text>
+<rect x="742" y="516" width="24" height="24" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="754" y="533" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">1</tspan></text>
+<text class="svgsm" x="60" y="672" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">左边两块是两个极端</tspan>：MHA 退化成单位阵 —— 一个数都没复制，也一点都没压，c 就是 K 本身；MQA 是同一份被抄了 4 遍 —— 只存 2 维，代价是四个头拿到的 K 一模一样。</text>
+<text class="svgsm" x="60" y="697" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">右边两块形状完全相同，都是 4×8、cache 都是 4 维</tspan>：GQA-2 的 32 格里只有 <tspan font-weight="700">8 个 1</tspan>，其余 24 格<tspan font-weight="700">恒为 0、而且不可训练</tspan>；</text>
+<text class="svgsm" x="60" y="722" fill="#5f6368" style="font-size:15.0px">MLA 的同样 32 格<tspan font-weight="700">全部可训练</tspan>。⭐ 这就是全部的区别 —— 不在「压不压」，在<tspan font-weight="700">这块矩阵是写死的还是学出来的</tspan>。</text>
+<text class="svgsm" x="964" y="394" fill="#b06000" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="964" y="416" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">c 宽 4 　·　4×8</text>
+<rect x="860" y="438" width="24" height="24" rx="3" fill="#fbe2c8" stroke="#fff" stroke-width="1"/>
+<rect x="886" y="438" width="24" height="24" rx="3" fill="#f6c99a" stroke="#fff" stroke-width="1"/>
+<rect x="912" y="438" width="24" height="24" rx="3" fill="#f2b174" stroke="#fff" stroke-width="1"/>
+<rect x="938" y="438" width="24" height="24" rx="3" fill="#ee9a4e" stroke="#fff" stroke-width="1"/>
+<rect x="964" y="438" width="24" height="24" rx="3" fill="#fbe2c8" stroke="#fff" stroke-width="1"/>
+<rect x="990" y="438" width="24" height="24" rx="3" fill="#f6c99a" stroke="#fff" stroke-width="1"/>
+<rect x="1016" y="438" width="24" height="24" rx="3" fill="#f2b174" stroke="#fff" stroke-width="1"/>
+<rect x="1042" y="438" width="24" height="24" rx="3" fill="#ee9a4e" stroke="#fff" stroke-width="1"/>
+<rect x="860" y="464" width="24" height="24" rx="3" fill="#ee9a4e" stroke="#fff" stroke-width="1"/>
+<rect x="886" y="464" width="24" height="24" rx="3" fill="#fbe2c8" stroke="#fff" stroke-width="1"/>
+<rect x="912" y="464" width="24" height="24" rx="3" fill="#f6c99a" stroke="#fff" stroke-width="1"/>
+<rect x="938" y="464" width="24" height="24" rx="3" fill="#f2b174" stroke="#fff" stroke-width="1"/>
+<rect x="964" y="464" width="24" height="24" rx="3" fill="#ee9a4e" stroke="#fff" stroke-width="1"/>
+<rect x="990" y="464" width="24" height="24" rx="3" fill="#fbe2c8" stroke="#fff" stroke-width="1"/>
+<rect x="1016" y="464" width="24" height="24" rx="3" fill="#f6c99a" stroke="#fff" stroke-width="1"/>
+<rect x="1042" y="464" width="24" height="24" rx="3" fill="#f2b174" stroke="#fff" stroke-width="1"/>
+<rect x="860" y="490" width="24" height="24" rx="3" fill="#f2b174" stroke="#fff" stroke-width="1"/>
+<rect x="886" y="490" width="24" height="24" rx="3" fill="#ee9a4e" stroke="#fff" stroke-width="1"/>
+<rect x="912" y="490" width="24" height="24" rx="3" fill="#fbe2c8" stroke="#fff" stroke-width="1"/>
+<rect x="938" y="490" width="24" height="24" rx="3" fill="#f6c99a" stroke="#fff" stroke-width="1"/>
+<rect x="964" y="490" width="24" height="24" rx="3" fill="#f2b174" stroke="#fff" stroke-width="1"/>
+<rect x="990" y="490" width="24" height="24" rx="3" fill="#ee9a4e" stroke="#fff" stroke-width="1"/>
+<rect x="1016" y="490" width="24" height="24" rx="3" fill="#fbe2c8" stroke="#fff" stroke-width="1"/>
+<rect x="1042" y="490" width="24" height="24" rx="3" fill="#f6c99a" stroke="#fff" stroke-width="1"/>
+<rect x="860" y="516" width="24" height="24" rx="3" fill="#f6c99a" stroke="#fff" stroke-width="1"/>
+<rect x="886" y="516" width="24" height="24" rx="3" fill="#f2b174" stroke="#fff" stroke-width="1"/>
+<rect x="912" y="516" width="24" height="24" rx="3" fill="#ee9a4e" stroke="#fff" stroke-width="1"/>
+<rect x="938" y="516" width="24" height="24" rx="3" fill="#fbe2c8" stroke="#fff" stroke-width="1"/>
+<rect x="964" y="516" width="24" height="24" rx="3" fill="#f6c99a" stroke="#fff" stroke-width="1"/>
+<rect x="990" y="516" width="24" height="24" rx="3" fill="#f2b174" stroke="#fff" stroke-width="1"/>
+<rect x="1016" y="516" width="24" height="24" rx="3" fill="#ee9a4e" stroke="#fff" stroke-width="1"/>
+<rect x="1042" y="516" width="24" height="24" rx="3" fill="#fbe2c8" stroke="#fff" stroke-width="1"/>
+<rect x="852" y="430" width="222" height="116" rx="7" fill="none" stroke="#e8710a" stroke-width="2.2"/>
+<text class="svgsm" x="964" y="568" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">同样的 4×8，同样的 cache 宽度</tspan></text>
+<text class="svgsm" x="964" y="592" fill="#b06000" text-anchor="middle" style="font-size:15.0px">只是这 32 格<tspan font-weight="700">全部可训练</tspan></text>
+<text class="svgsm" x="964" y="618" fill="#80868b" text-anchor="middle" style="font-size:13.0px">（不填数字：编出来的小数会被当成真权重）</text>
+<path d="M 778.0 490.0 H 844.0 Q 844.0 490.0 844.0 490.0 V 490.0" fill="none" stroke="#e8710a" stroke-width="2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="814" y="370" fill="#b06000" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">把 0 和 1 换成学出来的实数</tspan></text>
+<rect x="0" y="812" width="1400" height="290" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="812" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="814" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="842" x2="1400" y2="842" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="832" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">③ 所以分界线在哪</tspan></text>
+<text class="svgsm" x="137" y="832" fill="#5f6368" style="font-size:11.0px">不是「有没有低秩」，是「那个矩阵是写死的还是学出来的」</text>
+<rect x="40" y="858" width="640" height="208" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="64" y="888" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">低秩区分不了这两个</tspan></text>
+<text class="svgsm" x="64" y="914" fill="#5f6368" style="font-size:15.0px">把 GQA 所有的 K、V 叠在一起，<tspan font-weight="700">GQA 本身就是一次低秩投影</tspan> —— 这一步</text>
+<text class="svgsm" x="64" y="939" fill="#5f6368" style="font-size:15.0px">MHA 也好 MLA 也好，大家都在做。所以「低秩」不是分界线。</text>
+<text class="svgsm" x="64" y="964" fill="#5f6368" style="font-size:15.0px"></text>
+<text class="svgsm" x="64" y="989" fill="#5f6368" style="font-size:15.0px">⭐ 真正不同的是<tspan font-weight="700">低秩之后那一步</tspan>：</text>
+<text class="svgsm" x="64" y="1014" fill="#5f6368" style="font-size:15.0px">GQA 用<tspan font-weight="700">分割 ＋ 复制</tspan>把 c 凑成 4 个头的 K，</text>
+<text class="svgsm" x="64" y="1039" fill="#5f6368" style="font-size:15.0px">而分割和复制<tspan font-weight="700">本身就是线性变换</tspan> ——</text>
+<text class="svgsm" x="64" y="1064" fill="#5f6368" style="font-size:15.0px">MLA 只是把这个写死的变换，换成一个一般的、可学的。</text>
+<rect x="720" y="858" width="640" height="208" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="744" y="888" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">⛔ 但这么一换，KV cache 会涨回去</tspan></text>
+<text class="svgsm" x="744" y="914" fill="#5f6368" style="font-size:15.0px">矩阵一放开，<tspan font-weight="700">四个头的 K 又各不相同了</tspan> ——</text>
+<text class="svgsm" x="744" y="939" fill="#5f6368" style="font-size:15.0px">要是照常缓存 K，cache 就退回 MHA 那么大，</text>
+<text class="svgsm" x="744" y="964" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">省的初衷当场作废</tspan>。</text>
+<text class="svgsm" x="744" y="989" fill="#5f6368" style="font-size:15.0px"></text>
+<text class="svgsm" x="744" y="1014" fill="#5f6368" style="font-size:15.0px">⭐ MLA 能成立，靠的是下一小节那个恒等变换：</text>
+<text class="svgsm" x="744" y="1039" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">只缓存 c，把上投影矩阵挪到 q 那一侧去</tspan>。</text>
+<text class="svgsm" x="744" y="1064" fill="#5f6368" style="font-size:15.0px">这张图是 §5.4b「吸收」的<tspan font-weight="700">前提</tspan>，不是它的替代。</text>
+<rect x="0" y="1124" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1124" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1124" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1151" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 一句话记住</tspan></text>
+<text class="svgsm" x="20" y="1182" fill="#174ea6" style="font-size:15.0px">GQA 的上投影是一个<tspan font-weight="700">写死的 0/1 复制矩阵</tspan>；MLA 把同一个位置、同一个形状的矩阵<tspan font-weight="700">松开让它学</tspan>。</text>
+<text class="svgsm" x="20" y="1206" fill="#174ea6" style="font-size:15.0px">两头也在这条轴上：<tspan font-weight="700">MHA ＝ 单位阵</tspan>（不复制也不压）、<tspan font-weight="700">MQA ＝ 一份抄满</tspan>。</text>
+<rect x="0" y="1234" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1234" width="4" height="122" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1234" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1261" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ ⚠️ 归属要说准，两条</tspan></text>
+<text class="svgsm" x="20" y="1292" fill="#b06000" style="font-size:15.0px">① 苏剑林的原话是「<tspan font-weight="700">MLA 被视为 GQA 的一般化</tspan>」，<tspan font-weight="700">不是</tspan>「MHA / MQA / GQA 都是 MLA 的特例」 —— 后一句是网上转述时放大的，别挂他名下。</text>
+<text class="svgsm" x="20" y="1316" fill="#b06000" style="font-size:15.0px">② 他也没否认 MLA 是低秩分解。准确说法是：<tspan font-weight="700">低秩这个描述没错，但它区分不了 GQA 和 MLA</tspan>。而且他写的 d_c &lt; d 这个条件，在 MHA 那一端会失效 —— 那一端 c 就是 K、V </text>
+<text class="svgsm" x="20" y="1340" fill="#b06000" style="font-size:15.0px">本身，根本没压。</text>
+<text class="svgsm" x="0" y="1370" fill="#80868b" style="font-size:14.0px">📌 📌 苏剑林《缓存与效果的极限拉扯：从MHA、MQA、GQA到MLA》kexue.fm/archives/10091 —— 「低秩投影这个角度并不贴近本质」「MLA的本质改进不是低秩投影，而是低秩投影之后的工</text>
+<text class="svgsm" x="0" y="1391" fill="#80868b" style="font-size:14.0px">　　作」「我们知道分割、复制都是简单的线性变换」三句均为原文逐字。</text>
+<text class="svgsm" x="0" y="1412" fill="#80868b" style="font-size:14.0px">　　📌 图上那几个矩阵是本课按 h=4 / d_k=2 自己构造的，脚本用 numpy 断言过「c 乘这个矩阵」与「把 c 按组复制」<tspan font-weight="700">逐元素相等</tspan> —— 这不是类比，是恒等。</text>
+<text class="svgsm" x="0" y="1433" fill="#80868b" style="font-size:14.0px">　　📌 MLA 那一格<tspan font-weight="700">刻意不填数字</tspan>：本课没有 V3 的真权重，编几个小数放上去会被当成真的。</text>
+</svg><figcaption>⭐⭐ <b>「MLA 就是给 KV 做低秩分解」这句话没错，但它区分不了 GQA 和 MLA —— 因为 GQA 也是低秩投影。</b><b>分界线在低秩<em>之后</em>那一步：GQA 用「分割 ＋ 复制」把 c 凑成各头的 K，而分割和复制本身就是线性变换 —— 它对应的就是图里那块<em>只有 8 个 1、其余全为 0、而且不可训练</em>的矩阵。MLA 只是把同一个位置、同一个形状的矩阵松开让它学。</b><em>⭐ 四个成员在图里列数完全相同（都是 8），只有行数（＝ cache 宽度）和格子内容不同：MHA ＝ 单位阵、MQA ＝ 一份抄满、GQA-2 与 MLA 同为 4×8。</em><em>⛔ 但矩阵一松开，各头的 K 又各不相同，cache 会涨回 MHA 那么大 —— 所以必须接 <a href="#s五">§5.4b</a> 的「吸收」。这张图是它的前提，不是替代。</em></figcaption></figure>
+<div class="note ok"><p>⭐ <b>这张图要破的是一个很顺口、但区分不了事情的说法：</b>
+  「MLA 就是给 KV 做低秩分解」。</p>
+<p>低秩这个描述<b>没错</b>，但它<b>区分不了 GQA 和 MLA</b> ——&nbsp;
+  把 GQA 所有的 K、V 叠在一起，<b>GQA 本身就是一次低秩投影</b>。
+  苏剑林的原话是：「<em>笔者认为低秩投影这个角度并不贴近本质……
+  MLA的本质改进不是低秩投影，而是低秩投影之后的工作。</em>」</p>
+<p>⭐⭐ <b>低秩之后那一步，才是分界线。</b>
+  GQA 用「分割 ＋ 复制」把 c 凑成各头要的 K、V；
+  而分割和复制本身就是线性变换 ——&nbsp;
+  它们对应的就是图里那块只有 8 个 1、其余全是 0、而且不可训练的矩阵。
+  <b>MLA 做的事，就是把这块写死的矩阵松开，让它学。</b></p></div>
+<div class="note warn"><p>⚠️ <b>引这一段时，两处归属要说准。</b></p>
+<p>① 苏剑林写的是「<b>MLA 被视为 GQA 的一般化</b>」，
+  <b>不是</b>「MHA / MQA / GQA 都是 MLA 的特例」 ——&nbsp;
+  后一句是网上转述时放大出来的，别挂在他名下。</p>
+<p>② 他也<b>没有否认</b> MLA 是低秩分解（他在另一篇里还写过
+  「从 MHA 的角度看，MLA 是给 K、V 加了 rank=512 的 LoRA」）。
+  准确的说法是上面那句：<b>低秩这个描述没错，只是它区分不了这两个</b>。</p>
+<p>③ 他给的条件 <code>d_c = g(d_k+d_v) &lt; d</code> 在 <b>MHA 那一端会失效</b> ——&nbsp;
+  g 取到 h 时 d_c 就等于 K、V 本身的总宽，<b>根本没压</b>，
+  图里那块矩阵也退化成单位阵。<em>所以「同一条轴」说的是那块矩阵的位置与形状，
+  不是说四个成员互为特例。</em></p></div>
 <p>MLA 的超参出自 <b>V3 论文 §4.2</b>：
   <code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code>
   ——&nbsp;<em>图上那 576 就是 512 ＋ 64。</em></p>
