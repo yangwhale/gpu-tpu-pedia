@@ -1,224 +1,171 @@
 # -*- coding: utf-8 -*-
-r"""专题三 · §六「滑窗凭什么敢砍，砍了为什么会崩」（2026-09-13 夜间 · R6）。
+r"""专题三 · §6.1b「滑窗凭什么敢砍，砍了为什么会崩」
 
-⭐⭐ 三格，是一个完整的侦探故事，**按时间顺序讲最好听**：
+⭐⭐⭐ 2026-09-14 **整张重画**，全部换成生活画面。
 
-  ① **凭什么敢砍** ——&nbsp;每层只看 W 个，但下一层看的是上一层的输出。
-     递归下去，k 层之后信息能走 k×W ——&nbsp;**层数是免费的射程**。
-     Mistral 7B：W=4096、32 层 → 理论射程 131,072（脚本当场乘出来断言）。
+  ① **凭什么敢砍** ——&nbsp;画**传话**：每个人只跟身边 4 个人说话，
+     但话可以一层一层往外传。**层数是免费的射程。**
+     Mistral 7B：窗口 4096 × 32 层 →&nbsp;131,072（脚本当场乘出来断言）。
 
-  ② **砍了为什么会崩** ——&nbsp;一个数字对比就够了：
-     Llama-2-13B 在 PG19 上，纯窗口 0+1024 的困惑度是 **5158.07**；
-     把**最前面四个 token** 留下来（4+1020），变成 **5.40**。
-     ⭐⭐ 判决性实验：把那四个 token 换成**换行符**，5.60 ——&nbsp;几乎一样。
-     **所以起作用的是位置，不是语义。**
+  ② **砍了为什么会崩** ——&nbsp;一个数字对比就够，画成**两根天差地别的柱子**：
+     纯窗口 0+1024 →&nbsp;**5158.07**；把最前面四个 token 留下 →&nbsp;**5.40**。
+     ⭐⭐ 判决性实验：把那四个换成**换行符**，5.60 ——&nbsp;几乎一样。
+     **所以起作用的是位置，不是内容。**
 
-  ③ **为什么会有这么个东西** ——&nbsp;softmax 要求一行加起来等于 1。
-     当这一行「没什么特别想看的」，多出来的权重**总得放在某处**；
-     而初始 token 因为自回归对**所有**后续位置可见，最容易被训成那个停车位。
-     ⭐ 两条看起来同样彻底的解法，**只有一条成立**：可学的 sink token 行，
-     softmax-off-by-one 被论文自己的 Zero Sink 实验证伪（PPL 29214）。
-
-⛔ 这一段是全讲「公式看不出来、画出来才看见」最好的例子 ——&nbsp;讲义里要点破。
+  ③ **为什么会有这么个东西** ——&nbsp;画成**必须投满的选票**：
+     softmax 要求每一行的票加起来正好 100 分，
+     **哪怕这一行没什么想看的，票也必须投出去** ——&nbsp;
+     于是大家把废票都投给了最前面那几个（自回归下只有它们人人都够得着）。
+     ⭐ 两条看起来同样彻底的解法，**只有一条成立**。
 """
-from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
-                          GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+                          BG2)
 
 W = 1400
-PX, PW = [0, 470, 940], [440, 440, 460]
 
 
 def main():
-    def fits(y, y0, ph, who):
-        assert y <= y0 + ph - 6, "%s 到 %d，面板底边 %d" % (who, y, y0 + ph)
-
     WIN, LAY = 4096, 32
     span = WIN * LAY
-    assert span == 131072                    # Mistral 说的「约 131K」就是这么来的
-    assert 32768 // WIN == 8                 # 32K 序列下缓存省 8 倍
+    assert span == 131072
     PPL_WIN, PPL_SINK, PPL_NL = 5158.07, 5.40, 5.60
-    assert PPL_WIN / PPL_SINK > 900          # 差了三个数量级
-    SINKN = [(0, 3359.95), (1, 11.88), (2, 10.51), (4, 9.59), (8, 9.54)]
-    assert SINKN[3][1] - SINKN[4][1] < 0.1   # 四个之后收益就没了
+    assert PPL_WIN / PPL_SINK > 900
 
-    f = Fig(W, "滑窗凭什么敢砍：层数是免费的射程；砍了为什么会崩：困惑度从 5.40 "
-               "炸到 5158；为什么会有 attention sink：softmax 要求一行加起来等于一")
+    f = Fig(W, "滑窗凭什么敢砍：每个人只跟身边几个说话，但话能一层层往外传，"
+               "层数是免费的射程；砍了为什么会崩：把最前面四个 token 扔掉，"
+               "困惑度从 5.40 炸到 5158；为什么：softmax 要求每行的票必须投满")
     f.marks = set()
     y0 = f.header(
-        "滑窗　——　凭什么敢砍，砍了为什么会崩，那四个 token 到底是什么",
-        "⭐ 这是一个侦探故事，<tspan font-weight=\"700\">按时间顺序讲最好听</tspan>："
-        "先有办法，再出事故，最后才找到原因",
-        [(GR, "能砍的理由"), (RD, "事故现场"), (PU, "真正的原因"),
-         (OR, "更彻底的解法")])
+        "滑窗：凭什么敢砍，砍了为什么会崩",
+        "一个<tspan font-weight=\"700\">按时间顺序讲的侦探故事</tspan>",
+        [(GR, "敢砍的理由"), (RD, "崩了"), (BL, "真正的原因")])
 
-    ph = 446
+    # ══════════ ① 传话：层数是免费的射程 ════════════════════════
+    PH = 250
+    py = f.panel(0, y0, W, PH, "① 凭什么敢砍 ——　每层只看身边几个，但话能往外传",
+                 GR, sub="层数是免费的射程")
 
-    # ══ ① 凭什么敢砍 ════════════════════════════════════════════
-    x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 凭什么敢砍", GR,
-                 sub="层数是免费的射程")
+    ay = py + 22
+    N = 9          # ⛔ 原来 13 个，右端撞上那块 Mistral 结论框
+    for L in range(3):
+        yy = ay + 22 + L * 52
+        f.t(56, yy + 16, "第 %d 层" % (L + 1), GY2, size=15)
+        for i in range(N):
+            x = 140 + i * 88
+            on = i <= 2 + L * 3
+            f.box(x, yy, 68, 32, "#e6f4ea" if on else BG2,
+                  GR if on else LINE2, 5)
+            f.t(x + 34, yy + 22, str(i + 1), GR if on else GY2,
+                on, 16, "middle")
+        if L < 2:
+            f.line(140 + 4.5 * 88, yy + 36, 140 + 4.5 * 88, yy + 50,
+                   GY2, 1.1)
+    f.t(140, ay + 190, "一层只跨 3 格 → 两层 6 格 → 三层 9 格 ……",
+        GY, size=18)
+    f.box(1000, ay + 24, 360, 152, "#e6f4ea", GR, 10)
+    f.t(1180, ay + 66, "Mistral 7B", GR, True, 21, "middle")
+    f.t(1180, ay + 106, "%s × %d 层" % (format(WIN, ","), LAY), GR, True, 22,
+        "middle")
+    f.t(1180, ay + 146, "＝ %s" % format(span, ","), GR, True, 26, "middle")
 
-    yy = py + 30
-    # 画四层，每层窗口向左延伸，示意射程累加
-    lh, lw = 34, pw - 106
-    for k in range(4):
-        ly = yy + k * lh
-        f.box(x + 66, ly, lw, lh - 8, "#fff", LINE2, 4)
-        reach = (k + 1) / 4.0
-        f.box(x + 66 + lw * (1 - reach), ly + 2, lw * reach - 2, lh - 12,
-              "#e6f4ea" if k < 3 else "#ceead6", "none", 3)
-        f.t(x + 60, ly + 17, "第 %d 层" % (k + 1), GY2, size=11, anchor="end")
-    f.t(x + 22, yy + 4 * lh + 12,
-        "每层只看 W 个，但下一层看的是上一层的输出", GY, size=11.5,
-        w=pw - 60)
-    f.t(x + 22, yy + 4 * lh + 32,
-        "递归下去 —— k 层之后，信息能走 k × W", GR, True, 12.5, w=pw - 60)
+    # ══════════ ② 崩了 ══════════════════════════════════════════
+    y1 = y0 + PH + 18
+    PH2 = 306
+    py2 = f.panel(0, y1, W, PH2, "② 砍了为什么会崩 ——　扔掉最前面四个，就崩了",
+                  RD, sub="Llama-2-13B，PG19")
 
-    yy = yy + 4 * lh + 48
-    f.box(x + 22, yy, pw - 44, 76, "#fff", GR, 8)
-    f.box(x + 22, yy, 4, 76, GR, GR, 2)
-    f.box(x + 24, yy, 3, 76, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 24, "Mistral 7B：W = 4,096，32 层", GR, True, 12.5)
-    f.t(x + 40, yy + 46, "→ 理论射程 %s 个 token" % format(span, ","),
-        GY, size=12)
-    f.t(x + 40, yy + 66, "缓存固定 W 个槽位，位置 i 存在 i mod W", GY2,
-        size=11)
-    yy += 88
+    by = py2 + 24
+    BASE, HMAX = by + 196, 150
+    import math
+    for i, (lab, v, col, note) in enumerate([
+        ("只留窗口\n0 + 1024", PPL_WIN, RD, "⛔ 崩了"),
+        ("留最前面 4 个\n4 + 1020", PPL_SINK, GR, "✅ 好了"),
+        ("那 4 个换成换行符\n4 + 1020", PPL_NL, BL, "⭐ 几乎一样"),
+    ]):
+        x = 120 + i * 300
+        h = HMAX * math.log10(v) / math.log10(PPL_WIN)
+        f.box(x, BASE - h, 150, h, col, "none", 5)
+        f.t(x + 75, BASE - h - 14, "%.2f" % v, col, True, 26, "middle")
+        for k, ln in enumerate(lab.split("\n")):
+            f.t(x + 75, BASE + 26 + k * 24, ln, GY, size=16, anchor="middle")
+        f.t(x + 75, BASE - h - 44, note, col, True, 18, "middle")
+    f.t(120, BASE + 130, "困惑度（柱子按对数画 ——　线性画的话后两根根本看不见）",
+        GY2, size=14)
 
-    f.box(x + 22, yy, pw - 44, 64, "#fff", OR, 8)
-    f.t(x + 38, yy + 24, "⚠️ 理论射程 ≠ 有效射程", OR, True, 12.5)
-    f.t(x + 38, yy + 45, "信息每层只能挪一格窗口，而且一路被稀释", GY,
-        size=11.5)
-    fits(yy + 64, y0, ph, "①")
+    f.box(1000, by + 24, 360, 192, "#e8f0fe", BL, 10)
+    f.t(1024, by + 66, "⭐⭐ 判决性的是第三根", BL, True, 21)
+    f.t(1024, by + 104, "把那四个 token 换成", GY, size=17)
+    f.t(1024, by + 134, "毫无意义的换行符", GY, size=17)
+    f.t(1024, by + 172, "结果几乎一样", BL, True, 22)
+    f.t(1024, by + 202, "→　起作用的是位置，不是内容", BL, True, 17)
 
-    # ══ ② 砍了为什么会崩 ════════════════════════════════════════
-    x, pw = PX[1], PW[1]
-    py = f.panel(x, y0, pw, ph, "② 事故现场", RD,
-                 sub="Llama-2-13B，PG19 第一本书")
+    # ══════════ ③ 必须投满的选票 ════════════════════════════════
+    y2 = y1 + PH2 + 18
+    PH3 = 300
+    py3 = f.panel(0, y2, W, PH3, "③ 那这几个 token 到底在干嘛 ——　它们是废票桶",
+                  BL, sub="softmax 要求每一行的票必须投满")
 
-    yy = py + 26
-    for cfg, ppl, note, col in [
-        ("0 + 1024　纯窗口", PPL_WIN, "最前面那几个一被挤掉，模型就废了", RD),
-        ("4 + 1020　留四个", PPL_SINK, "只是把最前面四个 token 留着", GR),
-        ("4 个换行符 + 1020", PPL_NL, "把那四个换成「\\n」——&#160;几乎一样", PU),
-    ]:
-        f.box(x + 22, yy, pw - 44, 68, "#fff", col, 8)
-        f.box(x + 22, yy, 4, 68, col, col, 2)
-        f.box(x + 24, yy, 3, 68, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 26, cfg, col, True, 12.5)
-        f.t(x + pw - 40, yy + 30, "%.2f" % ppl, col, True, 17, "end")
-        f.t(x + 40, yy + 50, note, GY, size=11.5, w=pw - 150)
-        yy += 78
+    vy = py3 + 20
+    f.box(56, vy + 26, 600, 150, "#e8f0fe", BL, 10)
+    f.t(80, vy + 64, "规矩：每一行的票加起来必须正好 100 分", BL, True, 21)
+    f.t(80, vy + 102, "——　哪怕这一行「没什么特别想看的」，", GY, size=18)
+    f.t(80, vy + 134, "票<tspan font-weight=\"700\">也必须投出去</tspan>。", GY, size=18)
+    f.t(80, vy + 166, "这就是 softmax 的归一化", GY2, size=15)
 
-    yy += 2
-    f.box(x + 22, yy, pw - 44, 74, "#fff", PU, 8)
-    f.box(x + 22, yy, 4, 74, PU, PU, 2)
-    f.box(x + 24, yy, 3, 74, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 24, "⭐⭐ 第三行是判决性实验", PU, True, 13)
-    f.t(x + 40, yy + 46, "换成换行符照样管用 ——", GY, size=11.5)
-    f.t(x + 40, yy + 65, "起作用的是<tspan font-weight=\"700\">位置</tspan>，不是语义。", PU, True, 12.5)
-    yy += 86
+    f.path([(672, vy + 100), (716, vy + 100)], BL, 2.0)
 
-    f.t(x + 22, yy, "留几个够？（Llama-2-7B，4096 缓存）", GY, True, 12)
-    yy += 14
-    bx = x + 22
-    for n_, v in SINKN:
-        w_ = (pw - 44 - 4 * 6) / 5.0
-        col = RD if n_ == 0 else (GR if n_ >= 4 else GY)
-        f.box(bx, yy, w_, 42, "#fff", LINE, 6)
-        f.t(bx + w_ / 2.0, yy + 17, "留 %d 个" % n_, GY2, size=11,
-            anchor="middle")
-        f.t(bx + w_ / 2.0, yy + 34, ("%.0f" if v > 100 else "%.2f") % v,
-            col, True, 12, "middle")
-        bx += w_ + 6
-    fits(yy + 42, y0, ph, "②")
+    f.box(736, vy + 26, 624, 150, "#fff", BL, 10)
+    f.t(760, vy + 64, "于是废票都投给了最前面那几个", BL, True, 21)
+    f.t(760, vy + 102, "为什么偏偏是它们？——　因为自回归：", GY, size=18)
+    f.t(760, vy + 134, "<tspan font-weight=\"700\">全场只有开头那几个，人人都够得着。</tspan>",
+        GY, size=18)
+    f.t(760, vy + 166, "把废票桶撤了，票没处投，整行就乱套", GY2, size=15)
 
-    # ══ ③ 真正的原因 ════════════════════════════════════════════
-    x, pw = PX[2], PW[2]
-    py = f.panel(x, y0, pw, ph, "③ 真正的原因：softmax 的一条硬约束", PU,
-                 sub="它不是 bug，也不是特性")
+    sy = vy + 196
+    f.box(56, sy, 640, 86, "#e6f4ea", GR, 10)
+    f.t(80, sy + 36, "⭐ 一个成立的解法", GR, True, 20)
+    f.t(80, sy + 68, "预训练时加一个<tspan font-weight=\"700\">可学的</tspan>废票桶　"
+        "→　1+1023 下 PPL 18.01", GY, size=17)
 
-    yy = py + 26
-    f.box(x + 22, yy, pw - 44, 96, "#fff", PU, 8)
-    f.box(x + 22, yy, 4, 96, PU, PU, 2)
-    f.box(x + 24, yy, 3, 96, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 25, "softmax 要求<tspan font-weight=\"700\">一行加起来等于 1</tspan>", PU, True, 12.5)
-    f.t(x + 40, yy + 48, "可这一行常常「没什么特别想看的」——", GY, size=11.5)
-    f.t(x + 40, yy + 69, "那多出来的权重<tspan font-weight=\"700\">总得放在某处</tspan>。", GY, size=11.5)
-    f.t(x + 40, yy + 88, "于是模型给自己找了个停车位。", GY2, size=11)
-    yy += 110
+    f.box(720, sy, 640, 86, "#fce8e6", RD, 10)
+    f.t(744, sy + 36, "⛔ 一个看起来对、但被论文自己证伪的", RD, True, 20)
+    f.t(744, sy + 68, "给一个<tspan font-weight=\"700\">全零</tspan>的桶"
+        "（＝softmax-off-by-one）　→　PPL 29214", GY, size=17)
 
-    f.box(x + 22, yy, pw - 44, 74, "#fff", LINE, 8)
-    f.t(x + 38, yy + 24, "为什么偏偏是最前面几个？", INK, True, 12.5)
-    f.t(x + 38, yy + 46, "因为自回归 —— 它们对<tspan font-weight=\"700\">所有</tspan>后续位置都可见，",
-        GY, size=11.5)
-    f.t(x + 38, yy + 65, "全场只有它们人人都够得着。", GY, size=11.5)
-    yy += 86
-
-    # ⛔⛔ 2026-09-14 二轮学生审稿：这两条原来并排列成「两个更彻底的解法」——
-    #   **其中一条被论文自己的实验证伪了**。
-    #   §3.3 明说 SoftMax₁ **等价于**前置一个全零 K/V 的 token（他们叫 Zero Sink），
-    #   并且和 Vanilla / Learnable Sink 一起从头预训了三个 160M 模型对照：
-    #     0+1024 下 PPL —— Vanilla 27.87 / **Zero Sink 29214** / Learnable 1235
-    #     1+1023 下 PPL —— Vanilla 18.49 / Zero Sink 19.90 / **Learnable 18.01**
-    #   原话：zero sink「to some extent」有缓解，但模型仍然去抓别的开头 token；
-    #        「Introducing a sink token is highly effective」。
-    # ⭐⭐ 这个对照本身就是好料：它正好印证上面那句「模型一定会找地方倒掉多余的」——
-    #   给它一个**全零**的车位不够，得给一个**能学**的。
-    f.t(x + 22, yy, "⭐ 两条看起来同样彻底的解法，只有一条成立", OR, True, 13,
-        cls="svglbl")
-    yy += 22
-    for lab, txt, col, mark in [
-        ("预训练时加一个<tspan font-weight=\"700\">可学的</tspan> sink token",
-         "一个就够 ——&#160;1+1023 下 PPL <tspan font-weight=\"700\">18.01</tspan>（vanilla 18.49）",
-         GR, "⭐ 成立"),
-        ("换 softmax-off-by-one（分母 +1）",
-         "论文验过：它等价于前置全零 KV，0+1024 下 PPL <tspan font-weight=\"700\">29214</tspan>",
-         RD, "⛔ 不成立"),
-    ]:
-        f.box(x + 22, yy, pw - 44, 62, "#fff", col, 8)
-        f.box(x + 22, yy, 4, 62, col, col, 2)
-        f.box(x + 24, yy, 3, 62, "#fff", "#fff", 0)
-        f.t(x + 38, yy + 22, lab, col, True, 12, w=pw - 120)
-        f.t(x + pw - 38, yy + 22, mark, col, True, 11.5, anchor="end")
-        f.t(x + 38, yy + 44, txt, GY, size=11.5, w=pw - 76)
-        yy += 70
-    f.t(x + 22, yy, "⭐⭐ 差别在<tspan font-weight=\"700\">「可学」</tspan> ——&#160;"
-        "停车位得让它自己挑位置。", INK, True, 12, w=pw - 44)
-    fits(yy + 6, y0, ph, "③")
-
-    # ══ 落点带 ══════════════════════════════════════════════════
-    yy = y0 + ph + 22
+    # ══════════ 落点 ════════════════════════════════════════════
+    yy = y2 + PH3 + 20
     yy = f.band(yy, "info", "⭐⭐ 这个故事真正的教益 —— 比 sink 本身值钱", [
         "attention sink 不是 bug，也不是谁设计的特性，"
-        "它是<tspan font-weight=\"700\">归一化约束逼出来的副产品</tspan>："
-        "你规定一行必须加起来等于 1，模型就一定会找个地方倒掉多余的那部分。",
+        "它是<tspan font-weight=\"700\">「票必须投满」这条规矩逼出来的副产品</tspan>。",
         "⭐ 判据：<tspan font-weight=\"700\">看到模型里一个「毫无道理却极其稳定」的现象，"
         "先去找是不是某个守恒 / 归一化约束逼出来的。</tspan>"
-        "量化里那批总也压不下去的 outlier，跟这是同一件事。",
+        "量化里那批总也压不下去的 outlier，跟这是同一件事（见专题八）。",
         "⛔ 还有一条：<tspan font-weight=\"700\">这个 bug 从公式上完全看不出来</tspan> ——&#160;"
-        "是把注意力矩阵画出来才发现的。这一讲所有的图，都是这个道理。",
+        "是把注意力矩阵<tspan font-weight=\"700\">画出来</tspan>才发现的。"
+        "这一讲所有的图，都是这个道理。",
     ])
 
     yy = f.band(yy + 14, "warn", "别把「理论射程」当「有效射程」", [
-        "32 层 × 4,096 = <tspan font-weight=\"700\">131,072</tspan> 是个上界，"
-        "说的是「信息最远能传到这儿」，不是「这么远还能用」——&#160;"
-        "每跨一层只挪一格窗口，而且一路被后面的信息稀释。",
+        "%s × %d ＝ <tspan font-weight=\"700\">%s</tspan> 是个上界，"
+        "说的是「信息最远能传到这儿」，<tspan font-weight=\"700\">不是「这么远还能用」"
+        "</tspan> ——&#160;每跨一层只挪一格窗口，而且一路被后面的信息稀释。"
+        % (format(WIN, ","), LAY, format(span, ",")),
         "⭐ 稳妥说法：<tspan font-weight=\"700\">滑窗把「远处」从「看不见」"
-        "变成了「看得见但很模糊」</tspan>，"
+        "变成了「看得见但很模糊」</tspan> ——&#160;"
         "所以后面那些方案才要在滑窗之外再加一条「挑着看」的路。",
     ])
 
-    yy = f.src(yy + 34,
-               "① 出自 Mistral 7B arXiv 2310.06825 §2（k×W 射程、W=4096/32 层、"
-               "rolling buffer cache）；131,072 与 8× 由脚本当场算并断言",
+    yy = f.src(yy + 24,
+               "① 出自 Mistral 7B arXiv 2310.06825 §2（k×W 射程、W=4096 / 32 层、"
+               "rolling buffer cache）；131,072 由脚本当场乘出来并断言",
                "②③ 出自 StreamingLLM（Xiao 等 arXiv 2309.17453, ICLR 2024）"
                "表 1 / 表 2 与 §3.1 / §3.3：5158.07 → 5.40、换行符 5.60、"
                "留 1/2/4/8 个的对照",
                "⛔ Zero Sink（＝softmax-off-by-one）那组反例出自同文表 3 / 表 10 的"
                "三个 160M 预训练对照",
                "⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）"
-               "<tspan font-weight=\"700\">不是同一个评测集</tspan> ——&#160;5.40 与 9.59 不可直接比")
+               "<tspan font-weight=\"700\">不是同一个评测集</tspan>；"
+               "⚠️ 「传话 / 废票桶」是本课的比喻")
     f.save("fig3-swa-why.svg", yy + 6)
 
 

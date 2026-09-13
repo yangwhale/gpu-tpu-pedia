@@ -1,190 +1,179 @@
 # -*- coding: utf-8 -*-
-r"""专题三 · §六「NSA 的三条路是被什么逼出来的」（2026-09-13 夜间 20 轮 · R4）。
+r"""专题三 · §6.3b「NSA 的三条路是被什么逼出来的」
 
-⭐⭐ 这一张的结构跟别的图不一样，是**故意的**：
-   它先讲**坑**，再讲**路**。⭐ 坑是 NSA 论文 §2 自己列的 ——
-   §2 整节叫「重新审视稀疏注意力方法」，把前人踩的坑一条条拆开，
-   §3 的三条分支**每一条都对着一个坑**。
+⭐⭐⭐ 2026-09-14 **整张重画**，换成一个人人都用过的画面：
+   **读一本很厚的书，你会怎么读？**
 
-  ① **事后稀疏的四个坑**（全部出自 NSA §2，不是我们归纳的）
-     · 省了计算没省时间：解码期稀疏，prefill 期却要先算注意力图、建索引
-     · 离散操作断梯度：k-means、SimHash 这类选择不可导，学不到「该怎么挑」
-     · 按 token 选 → 访存不连续 → 用不了 FlashAttention → 掉回低利用率
-     · ⭐⭐ 对 GQA 致命的一条：每个头独立选，**同组各头选择的并集**
-       才是真正要搬的内存量 ——&nbsp;**计算稀疏了，访存没稀疏。**
-
-  ② **三条路，一条对一个坑**：压缩（粗看）＋ 选择（细看，**按块**）
-     ＋ 滑窗（近处），用一个**学出来的门**加权合起来。
-
-  ③ **native 到底 native 在哪**：事后稀疏让模型偏离预训练轨迹。
-     ⚠️ 这里有一处**口径打架**，必须如实呈现：H2O 说「95% 稀疏、5% 够用」，
-     NSA 引的 Chen 等 2024 说「top 20% 只覆盖 70% 的注意力分数」。
-     ⭐ 方向一致、程度不一致 ——&nbsp;**别把任何一个当普适常数。**
+   ① **三条路 ＝ 读厚书的三种办法**（画出来，不用解释）
+      · **翻目录** ——&nbsp;每章压成一行，先粗看全书 →&nbsp;压缩分支
+      · **挑几章精读** ——&nbsp;⭐ 注意是**整章整章地挑**，不是东一句西一句 →&nbsp;选择分支
+      · **手边这几页** ——&nbsp;刚读过的上下文 →&nbsp;滑窗分支
+      三条同时用，**用一个学出来的门决定各占多少**。
+   ② **为什么非得整章整章地挑** ——&nbsp;这是全图最该记住的一格：
+      东一句西一句地抽，**书要来回翻**（访存不连续）；整章拿，**一次就搬走**。
+      ⭐⭐ 而且 GQA 下更狠：一组里每个头各挑各的，
+      真正要搬的是**所有头挑的并集** ——&nbsp;**算是省了，搬没省。**
+   ③ **四个坑** ——&nbsp;出自 NSA 论文 §2，逐条点了名。
+      ⚠️ 「三条分支一条对一个坑」是**本课的读法**，论文没做这个映射。
 """
-from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, CY, INK,
-                          GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+                          BG2)
 
 W = 1400
-PX, PW = [0, 470, 940], [440, 440, 460]
 
 
 def main():
-    def fits(y, y0, ph, who):
-        assert y <= y0 + ph - 6, "%s 到 %d，面板底边 %d" % (who, y, y0 + ph)
-
-    f = Fig(W, "NSA 的三条路是被什么逼出来的：先看事后稀疏的四个坑，"
-               "再看三条分支怎么一条对一个坑，最后是 native 的含义")
+    f = Fig(W, "NSA 的三条路就是读一本厚书的三种办法：翻目录粗看、整章整章地挑着精读、"
+               "看手边这几页；为什么非得整章整章地挑，因为东一句西一句要来回翻书，"
+               "而且 GQA 下真正要搬的是同组各头选择的并集")
     f.marks = set()
     y0 = f.header(
-        "NSA　——　三条路不是设计出来的，是被四个坑逼出来的",
-        "⭐ 这张图<tspan font-weight=\"700\">先讲坑再讲路</tspan>，"
-        "§2 拆坑是论文自己写的（四条逐条点了名）；⭐ <tspan font-weight=\"700\">把三条分支一条一条对回坑上，是本课的读法</tspan>",
-        [(RD, "事后稀疏踩的坑"), (GR, "NSA 的对策"),
-         (OR, "硬件逼出来的"), (BL, "学出来的，不是写死的")])
+        "NSA 的三条路 ——　其实就是你读一本厚书的三种办法",
+        "三条<tspan font-weight=\"700\">同时用</tspan>，"
+        "用一个<tspan font-weight=\"700\">学出来的门</tspan>决定各占多少",
+        [(BL, "翻目录"), (GR, "挑章精读"), (OR, "手边这几页"), (RD, "前人踩的坑")])
 
-    ph = 452
+    # ══════════ ① 读厚书的三种办法 ══════════════════════════════
+    PH = 308
+    py = f.panel(0, y0, W, PH, "① 一本很厚的书摆在你面前 ——　你会怎么读",
+                 GR, sub="这就是那三条分支")
 
-    # ══ ① 四个坑 ════════════════════════════════════════════════
-    x, pw = PX[0], PW[0]
-    py = f.panel(x, y0, pw, ph, "① 事后稀疏的四个坑", RD,
-                 sub="NSA §2 自己列的")
+    ay = py + 22
+    WAYS = [
+        (BL, "翻目录", "每章压成一行", "全书都扫到了，但粗",
+         "＝ 压缩分支"),
+        (GR, "挑几章精读", "⭐ 整章整章地挑", "挑中的看得很细",
+         "＝ 选择分支"),
+        (OR, "手边这几页", "刚翻过的上下文", "最近的一定看",
+         "＝ 滑窗分支"),
+    ]
+    for i, (col, name, how, what, who) in enumerate(WAYS):
+        bx = 56 + i * 342
+        f.box(bx, ay + 20, 310, 196, "#fff", col, 10)
+        f.t(bx + 24, ay + 60, name, col, True, 26)
+        # 每格配一个小画面：一本书的 12 章
+        for c in range(12):
+            cx = bx + 26 + (c % 6) * 46
+            cyy = ay + 84 + (c // 6) * 40
+            if i == 0:                      # 翻目录：每章都碰一下，但很薄
+                f.box(cx, cyy + 12, 40, 12, col, "none", 2)
+            elif i == 1:                    # 挑章精读：整章亮，只亮两章
+                on = c in (2, 3, 9)
+                f.box(cx, cyy, 40, 32, col if on else BG2,
+                      "none" if on else LINE2, 3)
+            else:                           # 手边这几页：只亮最后几章
+                on = c >= 9
+                f.box(cx, cyy, 40, 32, col if on else BG2,
+                      "none" if on else LINE2, 3)
+        f.t(bx + 24, ay + 186, how, col, True, 18)
+        f.t(bx + 24, ay + 210, what, GY2, size=15)
+        f.t(bx + 24, ay + 240, who, GY, True, 17)
 
-    yy = py + 22
+    f.box(1084, ay + 20, 276, 196, "#f3e8fd", PU, 10)
+    f.t(1108, ay + 60, "三条同时用", PU, True, 24)
+    f.t(1108, ay + 100, "一个学出来的门", GY, size=17)
+    f.t(1108, ay + 130, "决定这一步", GY, size=17)
+    f.t(1108, ay + 160, "各占多少", GY, size=17)
+    f.t(1108, ay + 198, "⭐ 不是三选一", PU, True, 19)
+
+    # ══════════ ② 为什么非得整章整章地挑 ════════════════════════
+    y1 = y0 + PH + 18
+    PH2 = 318
+    py2 = f.panel(0, y1, W, PH2,
+                  "② 全图最该记住的一格：为什么非得「整章整章」地挑",
+                  RD, sub="东一句西一句，书要来回翻")
+
+    by = py2 + 20
+    f.t(56, by + 20, "东一句西一句地抽", RD, True, 22)
+    for c in range(24):
+        on = c in (1, 5, 6, 12, 17, 21)
+        f.box(56 + c * 24, by + 36, 18, 52, RD if on else BG2,
+              "none" if on else LINE2, 2)
+    f.t(56, by + 116, "⛔ 要翻 6 次书 ——　每次只拿一句", RD, True, 19)
+    f.t(56, by + 144, "落到硬件上就是：访存不连续，FlashAttention 用不上", GY,
+        size=17)
+
+    f.t(720, by + 20, "整章整章地拿", GR, True, 22)
+    for c in range(24):
+        on = 4 <= c < 10 or 16 <= c < 22
+        f.box(720 + c * 24, by + 36, 18, 52, GR if on else BG2,
+              "none" if on else LINE2, 2)
+    f.t(720, by + 116, "✅ 只翻 2 次 ——　每次整块搬走", GR, True, 19)
+    f.t(720, by + 144, "同样多的内容，搬运次数差好几倍", GY, size=17)
+
+    gy_ = by + 178
+    f.box(56, gy_, 1304, 112, "#fce8e6", RD, 10)
+    f.t(80, gy_ + 40, "⭐⭐ 而在 GQA 上，这件事更狠", RD, True, 22)
+    f.t(80, gy_ + 76, "一组里<tspan font-weight=\"700\">每个头各挑各的</tspan>，"
+        "可它们共用同一份 KV ——&#160;真正要搬的是"
+        "<tspan font-weight=\"700\">所有头挑中的并集</tspan>。", GY, size=18)
+    f.t(80, gy_ + 104, "→　<tspan font-weight=\"700\">算是省了，搬没省。</tspan>"
+        "这正是 NSA 点名 Quest 的那一条。", RD, True, 18)
+
+    # ══════════ ③ 四个坑 ════════════════════════════════════════
+    y2 = y1 + PH2 + 18
+    PH3 = 244
+    py3 = f.panel(0, y2, W, PH3, "③ 这些讲究是从哪来的 ——　前人踩过的四个坑",
+                  OR, sub="NSA 论文 §2 逐条点了名")
+
+    ey = py3 + 18
     PITS = [
-        ("省了计算，没省时间",
-         "解码期稀疏，prefill 期却要先算注意力图、建索引",
+        ("省了算，没省时间", ["解码时稀疏，可 prefill", "还得先把注意力图算出来"],
          "H2O 这一类"),
-        ("离散操作把梯度断了",
-         "k-means、SimHash 这种选择不可导 —— <tspan font-weight=\"700\">学不到「该怎么挑」</tspan>",
+        ("挑的动作不可导", ["k-means、SimHash 这种挑法", "学不到「该怎么挑」"],
          "ClusterKV / MagicPIG"),
-        ("按 token 选 → 访存不连续",
-         "从 KV cache 里捞一个个散落的 token，<tspan font-weight=\"700\">FlashAttention 用不上</tspan>",
+        ("按 token 挑 → 来回翻书", ["散落各处的 token，", "FlashAttention 用不上"],
          "HashAttention"),
-        ("在 GQA 上「稀疏」会失效",
-         "每个头各选各的，真正要搬的是<tspan font-weight=\"700\">同组各头的并集</tspan>",
-         "Quest"),
+        ("GQA 上要搬并集", ["每个头各挑各的，", "真正搬的是它们的并集"], "Quest"),
     ]
-    for i, (title, body, who) in enumerate(PITS):
-        h = 84 if i == 3 else 76
-        col = OR if i >= 2 else RD
-        f.box(x + 22, yy, pw - 44, h, "#fff", col, 8)
-        f.box(x + 22, yy, 4, h, col, col, 2)
-        f.box(x + 24, yy, 3, h, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 24, "坑%d　%s" % (i + 1, title), col, True, 12.5)
-        f.t(x + 40, yy + 46, body, GY, size=11.5, w=pw - 80)
-        f.t(x + 40, yy + 66, "例：" + who, GY2, size=11)
-        if i == 3:
-            f.t(x + 40, yy + 78, "⭐⭐ 计算稀疏了，访存没稀疏", OR, True, 11.5)
-        yy += h + 10
-    fits(yy, y0, ph, "① 四个坑")
+    for i, (t1, t2, who) in enumerate(PITS):
+        bx = 56 + i * 332
+        f.box(bx, ey + 20, 300, 172, "#fff", OR, 10)
+        f.t(bx + 20, ey + 56, "坑 %d" % (i + 1), GY2, True, 15)
+        f.t(bx + 20, ey + 86, t1, OR, True, 19, w=264)
+        for k, ln in enumerate(t2):
+            f.t(bx + 20, ey + 118 + k * 24, ln, GY, size=15, w=264)
+        f.t(bx + 20, ey + 180, "例：" + who, GY2, size=14)
 
-    # ══ ② 三条路 ════════════════════════════════════════════════
-    x, pw = PX[1], PW[1]
-    py = f.panel(x, y0, pw, ph, "② 三条路，一条对一个坑", GR,
-                 sub="并行跑，门控加权合起来")
-
-    yy = py + 22
-    ROADS = [
-        ("压缩　粗看一遍全局", "连续块用一个<tspan font-weight=\"700\">可学的 MLP</tspan>压成一个 key",
-         "带块内位置编码", GR),
-        ("选择　细看要紧的几块", "⭐ <tspan font-weight=\"700\">按块选，不按 token 选</tspan> —— 坑③逼的",
-         "组内共享选择 —— 坑④逼的", GR),
-        ("滑窗　近处永远保留", "最近的一段，原样给",
-         "局部信息不该靠「挑」来保证", GR),
-    ]
-    for title, body, note, col in ROADS:
-        f.box(x + 22, yy, pw - 44, 82, "#fff", col, 8)
-        f.box(x + 22, yy, 4, 82, col, col, 2)
-        f.box(x + 24, yy, 3, 82, "#fff", "#fff", 0)
-        f.t(x + 40, yy + 24, title, col, True, 12.5)
-        f.t(x + 40, yy + 47, body, GY, size=11.5, w=pw - 80)
-        f.t(x + 40, yy + 68, note, GY2, size=11, w=pw - 80)
-        yy += 92
-
-    yy += 4
-    f.box(x + 22, yy, pw - 44, 86, "#fff", BL, 8)
-    f.box(x + 22, yy, 4, 86, BL, BL, 2)
-    f.box(x + 24, yy, 3, 86, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 24, "怎么合：o ＝ Σ g<tspan baseline-shift=\"sub\" "
-        "font-size=\"8\">c</tspan> · Attn(q, 第 c 条路)", BL, True, 12.5)
-    f.t(x + 40, yy + 46, "门 g 由一个 MLP ＋ sigmoid 算出来", GY, size=11.5)
-    f.t(x + 40, yy + 67, "⭐ 配比是<tspan font-weight=\"700\">学出来的</tspan>，不是写死的三分之一", BL,
-        size=11.5)
-    fits(yy + 86, y0, ph, "② 三条路")
-
-    # ══ ③ native 在哪 ═══════════════════════════════════════════
-    x, pw = PX[2], PW[2]
-    py = f.panel(x, y0, pw, ph, "③ native 到底 native 在哪", PU,
-                 sub="不是「训的时候也开着」这么简单")
-
-    yy = py + 24
-    f.t(x + 22, yy, "论文的论点只有一句：", GY, size=12)
-    yy += 22
-    f.box(x + 22, yy, pw - 44, 58, "#fff", PU, 8)
-    f.box(x + 22, yy, 4, 58, PU, PU, 2)
-    f.box(x + 24, yy, 3, 58, "#fff", "#fff", 0)
-    f.t(x + 40, yy + 24, "事后加稀疏，等于<tspan font-weight=\"700\">把模型推离它的预训练轨迹</tspan>",
-        PU, True, 12.5)
-    f.t(x + 40, yy + 45, "那些靠全局检索的头，是最先被剪坏的", GY, size=11.5)
-    yy += 74
-
-    f.t(x + 22, yy, "⚠️ 这里有一处口径打架 —— 如实讲", OR, True, 13,
-        cls="svglbl")
-    yy += 24
-    for who, claim, col in [
-        ("H2O 2023", "注意力矩阵 95% 以上稀疏，<tspan font-weight=\"700\">5% 的 KV 就够</tspan>", GR),
-        ("Chen 等 2024（NSA 引）", "<tspan font-weight=\"700\">top 20% 只覆盖 70%</tspan> 的注意力分数", RD),
-    ]:
-        f.box(x + 22, yy, pw - 44, 52, "#fff", col, 8)
-        f.t(x + 38, yy + 22, who, col, True, 12)
-        f.t(x + 38, yy + 41, claim, GY, size=11.5, w=pw - 76)
-        yy += 60
-
-    f.t(x + 22, yy + 4, "⭐ 方向一致（确实稀疏），程度打架。", INK, True, 12.5)
-    f.t(x + 22, yy + 25, "⛔ 别把任何一个当普适常数 —— 稀疏度随", GY,
-        size=11.5)
-    f.t(x + 22, yy + 44, "模型、层、上下文长度变。", GY, size=11.5)
-    yy += 62
-
-    f.box(x + 22, yy, pw - 44, 72, "#fff", LINE, 8)
-    f.t(x + 38, yy + 23, "NSA 的实证：27B backbone，260B token 预训练",
-        GY, size=11.5)
-    f.t(x + 38, yy + 44, "通用 / 长文 / 推理三类上<tspan font-weight=\"700\">持平或超过全注意力</tspan>",
-        GR, True, 12)
-    f.t(x + 38, yy + 63, "64K 长度下，解码、前向、反向三段都更快", GY2,
-        size=11)
-    fits(yy + 72, y0, ph, "③ native")
-
-    # ══ 落点带 ══════════════════════════════════════════════════
-    yy = y0 + ph + 22
-    yy = f.band(yy, "info", "⭐⭐ 这一张最值钱的一句：计算稀疏 ≠ 访存稀疏", [
-        "坑③和坑④是<tspan font-weight=\"700\">同一件事的两个面</tspan>："
-        "你在纸上少算了 90% 的格子，但只要那些格子<tspan font-weight=\"700\">"
-        "散落在显存各处</tspan>，或者<tspan font-weight=\"700\">同组的头各挑各的</tspan>，"
-        "要搬的字节一点没少。",
-        "⭐ 所以 NSA 的选择粒度是<tspan font-weight=\"700\">块</tspan>、"
-        "选择范围是<tspan font-weight=\"700\">组内共享</tspan> ——&#160;"
-        "这两个设计<tspan font-weight=\"700\">都不是为了精度，是为了访存</tspan>。",
-        "⛔ 看任何一篇讲稀疏的文章，先问一句："
-        "<tspan font-weight=\"700\">它省的是 FLOPs 还是字节？</tspan>"
-        "省 FLOPs 很容易，省字节才算数。",
+    # ══════════ 落点 ════════════════════════════════════════════
+    yy = y2 + PH3 + 20
+    yy = f.band(yy, "info", "⭐ 这一张真正的教益：稀疏不是「少算」，是「少搬」", [
+        "四个坑里有<tspan font-weight=\"700\">三个都跟「搬」有关</tspan> ——&#160;"
+        "省了计算没省时间、访存不连续、搬的是并集。"
+        "<tspan font-weight=\"700\">只有「挑的动作不可导」那条是算法问题。</tspan>",
+        "⭐ 所以看一篇讲稀疏的文章，先问一句："
+        "<tspan font-weight=\"700\">它省的是 FLOPs，还是字节？</tspan>"
+        "省 FLOPs 谁都会 ——&#160;在纸上少算 90% 的格子而已；"
+        "可只要那些格子散落在显存各处，<tspan font-weight=\"700\">要搬的字节一点没少</tspan>。",
     ])
 
-    yy = f.band(yy + 14, "ok", "暗线第四次出现 —— 这次连论文标题都挑明了", [
-        "NSA 的 N 就是 <tspan font-weight=\"700\">Natively trainable</tspan>。"
-        "同一个对立在这一讲已经出现四次："
-        "Eigen Attention 对 MLA、GQA 对 MLA、H2O 对 DSA、"
-        "<tspan font-weight=\"700\">这一堆事后方法对 NSA</tspan>。",
-        "⭐ 到这里可以把它当结论讲了："
-        "<tspan font-weight=\"700\">凡是要改注意力形状的改动，事后做都便宜，"
-        "但天花板明显更低；要拿到上限，就得把约束写进训练。</tspan>",
+    yy = f.band(yy + 14, "warn", "两条口径", [
+        "⚠️ <tspan font-weight=\"700\">「四个坑」是论文 §2 自己列的</tspan>"
+        "（逐条点了名，连例子都是原文的）；"
+        "⭐ 但<tspan font-weight=\"700\">「三条分支一条对一个坑」是本课的读法</tspan> ——&#160;"
+        "论文没有做这个一一映射。",
+        "⚠️ 稀疏到底能稀疏到什么程度，"
+        "<tspan font-weight=\"700\">公开口径本身就打架</tspan>：H2O 说「95% 稀疏、5% 够用」，"
+        "NSA 引的 Chen 等 2024 说「前 20% 只覆盖 70% 的注意力分数」。"
+        "⭐ 方向一致、程度差一倍多 ——&#160;<tspan font-weight=\"700\">别把任何一个当普适常数。</tspan>",
+    ])
+
+    yy = f.band(yy + 14, "ok", "暗线第四次出现：事后压 vs 从头按压缩训", [
+        "前面三次是 Eigen Attention 对 MLA、GQA 对 MLA、H2O 对 DSA。"
+        "<tspan font-weight=\"700\">这是第四次，而且它就写在名字里</tspan> ——&#160;"
+        "NSA 的 N 就是 <tspan font-weight=\"700\">Natively trainable</tspan>。",
+        "⭐ 事后稀疏是「拿一个按『每个都看』训出来的模型，临时叫它少看」——&#160;"
+        "它<tspan font-weight=\"700\">偏离了自己的预训练轨迹</tspan>；"
+        "native 是<tspan font-weight=\"700\">从第一天就按「我会少看」训</tspan>。"
+        "<tspan font-weight=\"700\">四个分支，同一条暗线。</tspan>",
     ])
 
     yy = f.src(yy + 16,
-               "四个坑与三条路均出自 NSA 原论文 Yuan 等 arXiv 2502.11089 "
-               "§2.1–2.2 与 §3.2–3.3（ACL 2025）；例子里的方法名也是原文点的",
-               "「top 20% 只覆盖 70%」是 NSA 转引 Chen 等 2024；"
-               "「95% 稀疏」出自 H2O arXiv 2306.14048 ——&#160;两者口径不同，图中如实并列")
+               "四个坑与三条分支出自 NSA（Yuan 等 arXiv 2502.11089）§2 与 §3；"
+               "27B backbone / 260B token 亦出自该文",
+               "⚠️ 「读厚书 / 翻目录 / 整章拿」是<tspan font-weight=\"700\">本课的比喻</tspan>；"
+               "论文那侧的说法是 compression / selection / sliding window 三分支"
+               "加一个 learned gate")
     f.save("fig3-nsa-why.svg", yy + 6)
 
 
