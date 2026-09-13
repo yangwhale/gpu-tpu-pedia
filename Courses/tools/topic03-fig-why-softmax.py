@@ -26,7 +26,7 @@ r"""专题三 · §1.2b「为什么是 softmax、为什么 K 和 V 要分家」
 """
 import math
 
-from topic03_draw import (Fig, BL, GR, RD, GY, INK, GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, GR, RD, GY, PU, INK, GY2, LINE, LINE2, BG2)
 
 W = 1400
 
@@ -216,7 +216,70 @@ def main():
     f.t(1134, cy + 160, "只找得到像我的", GY2, size=13)
 
     # ══════════ 一条落点带 ═══════════════════════════════════════
-    yy = y1 + PH2 + 20
+    # ══════════ ③ 人类找书 vs 注意力找书 ════════════════════════
+    # ⭐⭐⭐ 2026-09-13 新增。调研指出我们这个图书馆比喻**有个洞**：
+    #   映射是准的（需求/书脊/内容），但漏了最要命的一步 ——
+    #   **真实图书馆你只借一本。**
+    #   学生带着「找到那一本」的心智模型往下学，到 softmax 那里必崩：
+    #   他会以为注意力是「选中最像的那个」，而不是「按比例把所有的混起来」。
+    # 📌 这一点被 rossiXYZ（cnblogs 探秘 Transformer 系列）说破过：
+    #   「普通字典查找是精确匹配，**只从存储内容里面找出一条**；
+    #     注意力是向量化 ＋ 模糊匹配 ＋ **合并**。」
+    # ⭐ 改法不换比喻，只把同一张图画两遍并排 —— 左联硬查、右联软查。
+    y2 = y1 + PH2 + 18
+    PH3 = 352
+    py3 = f.panel(0, y2, W, PH3,
+                  "③ 同一个图书馆，人类和注意力的用法完全不一样", PU,
+                  sub="⚠️ 这一步不说清，softmax 那里一定会误解")
+
+    ey = py3 + 26
+    BOOKW, BOOKH, BGAP = 44, 58, 62
+
+    def shelf(x0, y0_, n, hits):
+        """一排书。hits: {index: 粗细} —— 粗细代表拿走多少。"""
+        for k in range(n):
+            bx = x0 + k * BGAP
+            on = k in hits
+            f.icon("book", bx, y0_, BOOKW, BOOKH,
+                   PU if on else GY2, "#f3e8fd" if on else "#fff")
+        return x0 + n * BGAP
+
+    # ── 左联：人类找书 ──────────────────────────────────────────
+    f.t(56, ey + 16, "① 人类找书", GY, True, 23)
+    f.t(56, ey + 42, "一条线，指向一本", GY2, size=17)
+    shelf(56, ey + 60, 6, {3})
+    f.icon("person", 56, ey + 176, 44, 52, GY2)
+    f.elbow(108, ey + 196, 56 + 3 * BGAP + 22, ey + 126, GY2, 2.0, r=14,
+            via="h")
+    f.t(120, ey + 208, "抱着它走了 ——　其余五本一页没动", GY, size=17)
+    f.box(56, ey + 240, 570, 46, "#f1f3f4", GY2, 8)
+    f.t(76, ey + 270, "⛔ 如果注意力是这样，就不需要 softmax 了", GY, True, 18)
+
+    # ── 右联：注意力找书 ────────────────────────────────────────
+    X2 = 700
+    f.t(X2, ey + 16, "② 注意力找书", PU, True, 23)
+    f.t(X2, ey + 42, "十几条粗细不同的线，同时指向一整排", PU, size=17)
+    WGT = [5, 30, 8, 45, 7, 5]
+    assert sum(WGT) == 100
+    for k, w_ in enumerate(WGT):
+        bx = X2 + k * BGAP
+        f.icon("book", bx, ey + 60, BOOKW, BOOKH, PU, "#f3e8fd")
+        f.t(bx + BOOKW / 2.0, ey + 134, "%d%%" % w_, PU, w_ >= 30, 16,
+            "middle")
+    f.icon("person", X2 + 2 * BGAP, ey + 176, 44, 52, PU, "#f3e8fd")
+    for k, w_ in enumerate(WGT):
+        f.line(X2 + 2 * BGAP + 22, ey + 176, X2 + k * BGAP + BOOKW / 2.0,
+               ey + 146, PU, 0.8 + w_ * 0.075, arrow=False)
+    f.t(X2 + 180, ey + 208, "每本撕下相应比例的一页，混成一本新书带走",
+        PU, True, 18)
+    f.box(X2, ey + 240, 644, 70, "#f3e8fd", PU, 8)
+    f.t(X2 + 20, ey + 268,
+        "⭐ 所以它其实不在「注意」，它在<tspan font-weight=\"700\">加权平均</tspan>",
+        PU, True, 18, w=604)
+    f.t(X2 + 20, ey + 294, "——　每本都被撕了一页，只是有的撕得多", PU,
+        size=18, w=604)
+
+    yy = y2 + PH3 + 20
     yy = f.band(yy, "info", "⭐ 带走一条判据：先问这个分数拿去干什么", [
         "<tspan font-weight=\"700\">拿去加权平均</tspan> ——&#160;"
         "那就必须非负、和为 1、可导，<tspan font-weight=\"700\">softmax 一次全给了</tspan>。",

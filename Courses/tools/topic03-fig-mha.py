@@ -283,7 +283,7 @@ def fig_heads():
         RD, size=_sz(15))
 
     BX = 486
-    BT = f.panel(BX, y, W - BX, 214, "Ⓑ 多头（h ＝ 8）", BL, "#fff",
+    BT = f.panel(BX, y, W - BX, 396, "Ⓑ 多头（h ＝ 8）", BL, "#fff",
                  sub="切成 8 份，每份 64 维，各看各的，最后拼回来", tint="#d5e4fb")
     COLS = (PU, CY, GR, OR, RD, "#00838f", "#7b1fa2", BL)
     for i in range(8):
@@ -292,15 +292,51 @@ def fig_heads():
         f.t(x + 46, BT + 49, "head %d" % (i + 1), COLS[i], True, _sz(12), "middle")
         f.t(x + 46, BT + 80, "d = 64", GY2, size=_sz(14), anchor="middle")
         f.line(x + 46, BT + 92, x + 46, BT + 108, COLS[i], 1.2)
+    # ⭐⭐⭐ 2026-09-13：原来到 Concat 就停了，而学生下一个问题必然是
+    #   「那个 W_O 到底干嘛的？」——&nbsp;我们没有答案。
+    # 📌 装置偷自 3Blue1Brown 第 6 集：**W_O 不是新东西，
+    #   它是八块碎片订在一起的一张板。** 画成八个出口梯形平移拼合。
     f.box(BX + 24, BT + 112, 8 * 108 - 16, 34, "#fff", BL, 6)
     f.t(BX + 24 + (8 * 108 - 16) / 2.0, BT + 134,
         "Concat → 再过一个 W_O，拼回 512", BL, True, 16, "middle")
-    f.t(BX + 24, BT + 182, '⭐ <tspan font-weight="700">8 × 64 ＝ 512</tspan>'
-                           '——&#160;总维度没变、参数量没变、计算量也基本没变。'
+
+    WY = BT + 156
+    f.t(BX + 24, WY + 20, "那个 W_O 到底是什么？", BL, True, 19)
+    for i in range(8):                       # 八块碎片
+        x = BX + 24 + i * 40
+        f.box(x, WY + 32, 34, 44, "#fff", COLS[i], 4)
+    f.t(BX + 24 + 8 * 40 + 14, WY + 60, "订在一起", GY, True, 17)
+    f.box(BX + 24 + 8 * 40 + 108, WY + 32, 150, 44, "#e8f0fe", BL, 5)
+    f.t(BX + 24 + 8 * 40 + 183, WY + 60, "＝ W_O", BL, True, 20, "middle")
+    # ⛔⛔ 这里原来传了 w=980，可这块面板从 BX=486 起、真实可用只有 866。
+    #   断言检查的是「need <= w」——&nbsp;w 是**我自己报的数**，不是真实空间，
+    #   所以它照样放行了一个溢出。
+    # ⭐ 判据（跟「注释写不碰 X 不等于真的没碰」同一类）：
+    #   **护栏只校验你告诉它的东西。** 宽度一律用 AVAIL 现算，别手填。
+    AVAIL = W - (BX + 24) - 24
+    f.t(BX + 24, WY + 100, "⭐ <tspan font-weight=\"700\">它不是新东西</tspan>"
+        " ——　八个头各自往同一条残差流上加了一份，加法而已。", GY, size=17,
+        w=AVAIL)
+
+    f.t(BX + 24, WY + 140, '⭐ <tspan font-weight="700">8 × 64 ＝ 512</tspan>'
+                           '——&#160;总维度没变、参数量没变。'
                            '<tspan font-weight="700">多头是「切开」，不是「加倍」。</tspan>',
         BL, size=_sz(15))
+    # ⛔⛔ 这条**必须带限定**：d_k ＝ d_model/h 只是**原始 Transformer 的取法**，
+    #   不是通例。本课全程拿 DeepSeek-V3 当例子，而 V3 是 128 头 × 128 维
+    #   ＝ 16384，比 d_model 7168 大 2.29 倍 —— 「总维度没变」在它身上不成立。
+    # ⭐ 这正是第一原则点名的那类「听起来像常识的架构关系」：
+    #   老约束在新架构上往往已被解除。
+    assert 8 * 64 == 512 and 128 * 128 != 7168
+    f.t(BX + 24, WY + 168,
+        '⚠️ 但<tspan font-weight="700">这只是原始 Transformer 的取法，不是通例</tspan>：',
+        GY2, size=16, w=AVAIL)
+    f.t(BX + 24, WY + 192,
+        '本课的主角 DeepSeek-V3 是 <tspan font-weight="700">128 头 × 128 维 '
+        '＝ 16,384</tspan>，比它的 d_model 7,168 <tspan font-weight="700">'
+        '大 2.29 倍</tspan>。', GY2, size=16, w=AVAIL)
 
-    yy = y + 214 + 16
+    yy = y + 214 + 176
     yy = f.band(yy, "ok", "多头的代价，正好是本专题的题眼", [
         '<tspan font-weight="700">好处</tspan>：一个头要同时盯语法、盯指代、盯主题，'
         '<tspan font-weight="700">只能给一个折中的答案</tspan>；切成 8 个，'
