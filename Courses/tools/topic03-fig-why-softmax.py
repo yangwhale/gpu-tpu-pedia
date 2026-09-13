@@ -22,7 +22,7 @@ r"""专题三 · §1.2b「为什么是 softmax、为什么 K 和 V 要分家」
       **那你只能找到长得像你问题的东西。**
 
 📌 口径：① 三条性质由 softmax 定义直接给出，柱子的数当场算并断言；
-   「索引器换 ReLU，for throughput」见 §6.4b；② 的卡片是类比，不是论文原话。
+   「索引器换 ReLU，for throughput」见 §6.2b；② 的卡片是类比，不是论文原话。
 """
 import math
 
@@ -139,7 +139,7 @@ def main():
         "那就必须非负、和为 1、可导，<tspan font-weight=\"700\">softmax 一次全给了</tspan>。",
         "<tspan font-weight=\"700\">只拿去排序</tspan> ——&#160;那「和为 1」根本不必要。"
         "DSA 的索引器走的正是这一条：它<tspan font-weight=\"700\">换成了 ReLU</tspan>，"
-        "论文给的理由就两个字 ——&#160;吞吐（见 §6.4b）。",
+        "论文给的理由就两个字 ——&#160;吞吐（见 §6.2b）。",
     ])
 
     yy = f.src(yy + 14,

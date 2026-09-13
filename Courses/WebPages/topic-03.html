@@ -2642,7 +2642,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="2" y="746" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="20" y="773" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐ 带走一条判据：先问这个分数拿去干什么</tspan></text>
 <text class="svgsm" x="20" y="804" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">拿去加权平均</tspan> ——&#160;那就必须非负、和为 1、可导，<tspan font-weight="700">softmax 一次全给了</tspan>。</text>
-<text class="svgsm" x="20" y="828" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">只拿去排序</tspan> ——&#160;那「和为 1」根本不必要。DSA 的索引器走的正是这一条：它<tspan font-weight="700">换成了 ReLU</tspan>，论文给的理由就两个字 ——&#160;吞吐（见 §6.4b）。</text>
+<text class="svgsm" x="20" y="828" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">只拿去排序</tspan> ——&#160;那「和为 1」根本不必要。DSA 的索引器走的正是这一条：它<tspan font-weight="700">换成了 ReLU</tspan>，论文给的理由就两个字 ——&#160;吞吐（见 §6.2b）。</text>
 <text class="svgsm" x="0" y="858" fill="#80868b" style="font-size:14.0px">📌 三条性质由 softmax 的定义直接给出；柱子的数由本脚本当场算并断言</text>
 <text class="svgsm" x="0" y="879" fill="#80868b" style="font-size:14.0px">　　「索引器用 ReLU，for throughput consideration」出自 DeepSeek-V3.2-Exp 技术报告 §2.1</text>
 <text class="svgsm" x="0" y="900" fill="#80868b" style="font-size:14.0px">　　⚠️ 图书馆卡片是<tspan font-weight="700">类比</tspan>，不是论文原话 ——&#160;论文只给了 query / key / value 三个名字</text>
@@ -3294,8 +3294,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   会变成 batch size 的硬上限。</em></p>
 </div></section>
 <section id="s三"><div class="wrap"><div class="stn"><span class="badge">第 三 节</span><h2>FlashAttention ——&nbsp;已经是标配，所以这一讲不展开它</h2></div>
-<div class="note info"><p>📌 <b>这一节会用到的几个硬件词（⭐ 2026-09-13 补 ——&nbsp;
-  原先它们都是当已知词用的）</b>：
+<h3 id="s3-1">3.1　先认几个硬件词</h3>
+<div class="note info"><p>📌 <b>这一节会用到的几个硬件词</b>：
   <b>MXU</b>＝矩阵乘单元（TPU v7 上是 256×256）· <b>VPU</b>＝向量单元（做加减、指数这类）·
   <b>SRAM / VMEM</b>＝片上暂存，快但极小 · <b>SM</b>＝GPU 上的一个计算单元 ·
   <b>warp</b>＝GPU 上 32 条线程一组 · <b>gather</b>＝按下标从内存里东一个西一个地捞。</p></div>
@@ -3415,7 +3415,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <p><b>③ 为什么连 50% 都到不了 —— 回到 3.3 那条链。</b> 持有 <code>Q@K</code> 输出（也就是<b>整块 <code>S</code></b>，不是那两个 running 值）的寄存器， 在最大值和减法完成前不能释放，于是不断堆积 → 寄存器压力 → <b>spill 到 VMEM</b> → MXU 停在等数据载回。 <b>一句话：VPU 跟不上 MXU。</b></p>
 <div class="note warn"><p>⭐ 这也解释了 3.5 那三堵墙里最反直觉的一堵为什么存在： <b>块开大 → <code>S</code> 那一块跟着变大 → 生命周期更长、更容易 spill。</b> 「装得下」和「跑得快」在这里是两回事。</p>
 <p>⭐ <b>三层叠起来的结论很硬</b>： 形状锁死一半、寄存器压到 35%、记账口径还让它看着比实际好看。 <b>这三层没有一层是配置能救的</b> —— 要么改 head_dim，要么改 kernel 的数据流。 （我们试过的那条出路是把矩阵乘全转置，见 TUNING-v7 的附录。）</p>
-<h3>⚠️ 还有一条方法论：同一份 profile，不同工具页的百分比不可混用</h3>
+<h3 id="s3-6b">3.6b ⚠️ 还有一条方法论：同一份 profile，不同工具页的百分比不可混用</h3>
 <p>「HBM 受限占多少」—— 一个工具页说 <b>35.6%</b>，另一个说 <b>19.5%</b>。 破案的钥匙是两者的 self-time 合计正好差 <b>2.00 倍</b>， 而 v7 恰好是 <b>2 device/chip</b>。分母不是同一个东西，分子上的百分比自然对不上。 ⇒ 判瓶颈用 roofline 那一页，归因到算子用 op stats 那一页； <b>引用任何百分比都要写清出自哪个工具页。</b></p></div>
 <figure class="fbox fwide" id="fig-tx-fa"><svg viewBox="0 0 1400 1378" width="100%" role="img" aria-label="FlashAttention —— 图上一处都没改，改的是「落不落地」">
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:19px">FlashAttention —— 图上一处都没改，改的是「落不落地」</text>
@@ -3572,6 +3572,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <hr>
 </div></section>
 <section id="s四"><div class="wrap"><div class="stn"><span class="badge">第 四 节</span><h2>骨架：三个旋钮，是同一个账本的三个面</h2></div>
+<h3 id="s4-1">4.1　三个旋钮</h3>
 <p>这是这个专题的骨架。把所有名词收进一张表：</p>
 <figure class="fbox fwide" id="fig-knobs"><svg viewBox="0 0 1400 1157" width="100%" role="img" aria-label="三个旋钮：一个 query 从头到尾只做三件事 —— 取出一份 KV、跟哪些位置算、用什么数学；每件事对应一个旋钮，所以没有第四个位置可以拧；FlashAttention 不在这块面板上"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">三个旋钮 ——　这块面板上就这么三个</text>
@@ -3897,7 +3898,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
      「没有第四个位置」＋ FlashAttention 的例外）。**上面那张图一条不少地画了**，
      而且图能表达「三步与三个旋钮一一正对」这个关系 —— 文字表达不了。整段删。
      ⭐ 判据见文件头第一条：写正文前先问「这句话图里有没有」。 -->
-<h3>一张名词收纳表</h3>
+<h3 id="s4-3">4.3　一张名词收纳表</h3>
 <p>这张表可以边读边填 ——&nbsp;每读完一个支线回来补一格：</p>
 <table>
 <thead><tr><th>名词</th><th>出处</th><th>旋钮</th><th>一句话</th></tr></thead><tbody>
@@ -4472,13 +4473,13 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="0" y="1497" fill="#80868b" style="font-size:14.0px">　　③ 出自 GQA 原论文 Ainslie 等 arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank"><tspan text-decoration="underline">2305.13245</tspan></a> §2.1–2.2：mean pooling、α=5% 续训、GQA-1=MQA / GQA-H=MHA</text>
 <text class="svgsm" x="0" y="1518" fill="#80868b" style="font-size:14.0px">　　⚠️ 「通讯录 / 查的人」是<tspan font-weight="700">本课的比喻</tspan></text>
 </svg><figcaption>⭐⭐ <b>2019 年 MQA 那篇论文自己就列了一张「怎么少搬 K/V」的选项单 —— 今天三个旋钮里的两个，那张单子上就有。</b><b>中间那三行是「自由度不是宽度」的论文自带证据：同样只缓存一份 K/V，保留 8 个 query 头能把困惑度拉回整整 1.0。</b></figcaption></figure>
-<h3 id="s5-0c">5.0c　那为什么更窄的 MQA 反而输了</h3>
+<h3 id="s5-0b">5.0b　那为什么更窄的 MQA 反而输了</h3>
 <p>⭐ 图里那三行困惑度值得单独记一下：<b>MQA 和「真的只剩一个头」缓存的 K/V 一样多</b>，
   差别只在 query 侧还留不留 8 个不同的问法 ——&nbsp;就这一点差了整整 1.0。
   <em>所以后面看任何一个「压缩」方案，都要分清它压掉的是<b>体积</b>还是<b>自由度</b>：
   <b>压体积通常还好，压自由度很贵。</b></em></p>
 
-<h3 id="s5-0b">5.0b　为什么它能压 —— 一笔信息账</h3>
+<h3 id="s5-0c">5.0c　为什么它能压 —— 一笔信息账</h3>
 <p>⭐ <b>这条推理链本身是可迁移的</b>。
   <em>看任何一个压缩方案 ——&nbsp;KV、权重、激活、梯度 ——&nbsp;都先把它拆成两段问：
   <b>哪一段是「表示冗余」白送的，哪一段是「赌它低秩／稀疏／可近似」赌来的？</b>
@@ -5776,7 +5777,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="0" y="1408" fill="#80868b" style="font-size:14.0px">　　 64 头且跑在 FP8 上</text>
 <text class="svgsm" x="0" y="1429" fill="#80868b" style="font-size:14.0px">　　⚠️ 「书墙 / 师徒」是<tspan font-weight="700">本课的比喻</tspan>；⛔ <tspan font-weight="700">k 的消融论文没有给</tspan> ——&#160;2048 这个数只能说它占多少、以及短序列下等于全选</text>
 </svg><figcaption>⭐⭐ <b>「能不能少看」是经验事实（H2O 量到注意力矩阵 95% 以上稀疏）；「怎么知道该看谁」才是难点 —— 要判断谁重要得先算注意力分数，而那正是你想省掉的东西。</b><em>DSA 的解法不是猜，是让真注意力当老师：冻住模型、保持密集，训一个便宜的索引器去 KL 拟合主注意力的分布。</em></figcaption></figure>
-<h4 id="s6-4b">6.4b　「怎么知道该看谁」是个鸡生蛋 —— DSA 让真注意力当老师</h4>
+<h4 id="s6-2b">6.2b　「怎么知道该看谁」是个鸡生蛋 —— DSA 让真注意力当老师</h4>
 <p>⭐ 这条套路值得起个名字：<b>要省掉一个贵的东西，先让它自己说出答案，
   再训一个便宜的去复制那个答案。</b>
   <em>DSA 的索引器就是这么来的 ——&nbsp;它<b>不是一个猜谁重要的启发式</b>，
@@ -5986,7 +5987,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   但只要那些格子散落在显存各处、或者同组的头各挑各的，<b>要搬的字节一点没少</b>。
   NSA 的两个看起来很朴素的决定（按块选、组内共享），<b>都是为访存，不是为精度</b>。</em></p>
 
-<h4>唯一必须单独拎出来的一张表：「训练期稀疏」和「推理期稀疏」不是一回事</h4>
+<h4 id="s6-3c">6.3c　唯一必须单独拎出来的一张表：「训练期稀疏」和「推理期稀疏」不是一回事</h4>
 <p>NSA 的「<b>native</b>」指的就是<b>训练时就这么做</b>，不是训练完再加的推理优化。
   <em>这个区别值得单独说三十秒 ——&nbsp;它解释了后面一个反复出现的现象。</em></p>
 <table>
@@ -6251,7 +6252,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
      ⭐ 判据：**注释写「保留 X」不等于保留了 X；改完要按清单逐项回点。**
      它必须留：索引器自身的开销这一层，图里没有，而且它是这一支的**第二阶段**。 -->
 <h3 id="s6-5b">6.5b ⭐ 第二阶段：索引本身成了开销 —— IndexShare 与 IndexCache</h3>
-<p>前面四个方案（NSA / DSA / CSA+HCA）都有一个共同的零件：一个决定"该看哪几块"的索引器。 <a href="#s6-4b">§6.4b</a> 讲 DSA 的时候它叫 Lightning Indexer。到这一步为止，所有心思都花在<b>让每个 query 少看几块</b>上。</p>
+<p>前面四个方案（NSA / DSA / CSA+HCA）都有一个共同的零件：一个决定"该看哪几块"的索引器。 <a href="#s6-2b">§6.2b</a> 讲 DSA 的时候它叫 Lightning Indexer。到这一步为止，所有心思都花在<b>让每个 query 少看几块</b>上。</p>
 <p><b>但索引器自己也要算。</b> 它要为<b>每一层、每一个 token</b>，跟全部历史块打一次分。稀疏注意力把主体那部分省下来之后， 这笔原本不起眼的账就浮上来了 —— 尤其在 1M 上下文下，历史块本身就有几万个。</p>
 <p>2026 年年中，两家公司几乎同时给出了同一个答案：<b>别每层都重新算一遍"该看谁"。</b></p>
 <table>
@@ -6670,19 +6671,18 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </svg><figcaption>⭐⭐ <b>三种写法就是这一支的三代：疯狂往里写（纯加，L &gt; d 必撞车）→ 先把这个方向上的旧内容叉掉再写（delta rule）→ 选择性地叉（门控）。</b><b>那个 (I − β k kᵀ) 就是「叉掉」。</b><em>再换个角度看，它等价于对 ½‖Sk−v‖² 做一步 SGD —— 状态不再是缓存，是一个边跑边被训练的小模型。</em></figcaption></figure>
 <h3 id="s7-0">7.0　一块固定大小的记事板</h3>
 <!-- ⛔ 2026-09-14：这句提问法 fig-notepad 的落点带上已经有了，此处不再复述。 -->
-<p>⭐ 这一支跟前两个旋钮的关系 ——&nbsp;<b>它换的东西比它们都大</b>：
+<p>⭐ 它换的东西比前两个旋钮都大：
   <em>旋钮①②改的是那张 n×n 的表怎么存、怎么读，表本身一直都在；
   旋钮③ 是<b>第一次把那张表整个拿掉</b>，换成一块固定大小的板子。
   ——&nbsp;所以它是唯一一个<b>让 S 从张量形状里消失</b>的旋钮，
   也是唯一一个换了数学的。</em></p>
 
-<h3 id="s7-1">7.1 基本换法</h3>
+<h3 id="s7-1">7.1 基本换法（上面那句「读形状就够了」的推导版）</h3>
 <div class="note info"><p>📌 <b>这一节的记号约定</b>（⭐ 2026-09-13 补 ——&nbsp;
   原先三处朝向不一致，数学背景的读者第一眼就卡住）：
   状态 <code>S ∈ ℝ^(d_v × d_k)</code>；转移矩阵 <code>A_t</code> 一律<b>右乘</b>
   （<code>S_t = S_{t-1} · A_t + v_t k_tᵀ</code>）；读出写作 <code>S_t · q_t</code>。
   <em>A_t 是 d_k×d_k ——&nbsp;<b>只有右乘，维度才对得上。</b></em></p></div>
-<p>softmax 注意力必须把所有 K 都留着，是因为 softmax 的分母要对<b>所有位置</b>求和 —— 你没法提前把它们合并。</p>
 <p><b>把 softmax 去掉</b>（换成某个可分解的核函数），求和就可以重排：</p>
 <pre><code>softmax 版： out_t = Σ_{s≤t} softmax(q_t·k_s) v_s      ← 必须留下所有 (k_s, v_s)
 线性版：     S_t   = S_{t-1} + v_t k_tᵀ                ← 一个固定大小的状态
@@ -7348,10 +7348,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <em>它不是「先设计一个强的，再去优化」，是<b>一边看着能不能算得动，一边设计</b>。</em></p></div>
 
 <h3 id="s7-3">7.3 ⚠️ 它不是「更快的 attention」，是另一个模型</h3>
-<p>这是本节最重要的一句话，也是最容易被听众误解的一句。</p>
 <p>三个旋钮里，只有旋钮 ③ <b>改变了模型能表达什么</b>：</p>
 <ul><li>旋钮 ①②：改的是<b>存法</b>和<b>看多少</b>，理论上你还能指着某个历史 token 说 "注意力权重在这儿"。<b>检索是显式的</b></li><li>旋钮 ③：历史被<b>碾进了一个矩阵</b>。你无法指着状态里的某一块说 "这是第 3 万个 token"。<b>检索是隐式的、有损的</b></li></ul>
-<p>所以：</p>
 <ul><li>它<b>不能</b>给已有模型打补丁，必须<b>从头训</b></li><li>评测上要特别看 <b>needle-in-a-haystack 这类精确检索任务</b>， 平均分好看不代表这一类不塌</li><li>也正因如此，<b>几乎没有人纯用线性注意力</b> —— 全都是混合（<b>第八节</b>）</li></ul>
 <!-- ⛔ 2026-09-13 夜间 R13 重排 7.4。原来是**纯散文**，
      而它讲的是一件彻底图形化的事：把序列切块、块内并行、块间串行。
@@ -7938,6 +7936,7 @@ linear                                               ← 第 45 层多出来的�
 <hr>
 </div></section>
 <section id="s十"><div class="wrap"><div class="stn"><span class="badge">第 十 节</span><h2>落到硬件（本专题的落点）</h2></div>
+<h3 id="s10-1">10.1　三种资源之间的搬家史</h3>
 <p>回到全课那条主线：<b>每一个变体都是被硬件逼出来的，也都对硬件提出了新要求。</b></p>
 <!-- ⭐⭐⭐ 2026-09-13 夜间 R15。这是**整个专题的落点**，
      而它原来只有两张表和一段散文。它该是一张图 ——
