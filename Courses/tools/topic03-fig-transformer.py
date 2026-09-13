@@ -374,8 +374,8 @@ def render(v):
                     box(x2 - 66, y + 12, 132, 34,
                         "#e8f0fe" if live(k2) else DIMBG, c, 5,
                         1.8 if live(k2) and hot else 1)
-                    t(x2 - 60, y + 8, lin, fill=C(k2, BL), size=11)
-                    t(x2 + 60, y + 8, rin, fill=C(k2, PU), size=11,
+                    t(x2 - 60, y + 8, lin, fill=C(k2, BL), size=13)
+                    t(x2 + 60, y + 8, rin, fill=C(k2, PU), size=13,
                       anchor="end")
                     p.append('<circle cx="%d" cy="%d" r="9" fill="none" '
                              'stroke="%s" stroke-width="1.6"/>'
@@ -404,8 +404,8 @@ def render(v):
                 # ⛔ 别把上沿放在 y+6 —— 输入标签的基线在 y+8，虚线会从字中间穿过，
                 #    渲染出来像删除线。框要**连输入标签和输出形状一起框住**。
                 box(x - 116, y - 6, 232, 78, "none", c, 8, 1, "5,4")
-            t(x - 102, y + 8, lin, fill=C(key, BL), size=11)
-            t(x + 102, y + 8, rin, fill=C(key, PU), size=11, anchor="end")
+            t(x - 102, y + 8, lin, fill=C(key, BL), size=13)
+            t(x + 102, y + 8, rin, fill=C(key, PU), size=13, anchor="end")
             p.append('<circle cx="%d" cy="%d" r="9" fill="none" stroke="%s" '
                      'stroke-width="1.6"/>' % (x, y + 29, c))
             p.append('<circle cx="%d" cy="%d" r="2.6" fill="%s"/>'
@@ -442,7 +442,7 @@ def render(v):
             c = C(key, GR)
             box(x - 200, y, 400, 50, "#e6f4ea" if live(key) else DIMBG, c, 6)
             t(x, y + 19, lab, fill=c, bold=True, anchor="middle")
-            t(x, y + 38, sub, fill=C(key, GY), anchor="middle", size=11)
+            t(x, y + 38, sub, fill=C(key, GY), anchor="middle", size=13)
             pos[key] = (x, y, y + 50)
             y += 68
 
@@ -512,7 +512,7 @@ def render(v):
         box(bx, 102, BW, 96, tint, col, 6)
         t(bx + 12, 126, name, None, col, bold=True, size=14)
         t(bx + 12, 150, what, None, col, bold=True, size=15)
-        t(bx + 12, 174, why, None, GY, size=11)
+        t(bx + 12, 174, why, None, GY, size=13)
 
     box(PX, 66 + PICH + 10, PW, 26 + len(rows) * 19 + 22, "#fff", pcol, 8)
     t(PX + 14, 86 + PICH + 10, ph, "svglbl", pcol, size=13)
@@ -543,6 +543,13 @@ def render(v):
     #      **全模型**两个尺度：现场原话是「就讨论 KV cache 每一个 level 的事」。
     # 📌 口径与本讲 §2.1 那张对照表必须一致（同一组数两处给不同值，比给错还糟）：
     #    V3 形状、128K、BF16、batch 1、假设纯 MHA（n_h=128, d_h=128, 61 层）。
+    # ⭐⭐⭐ 2026-09-14：这张 📐 面板原来**五张图各印一遍**（11 行字 × 5）。
+    #   上一轮已经给每张接了一行 per-variant 的 `acct`（这一格把那笔账动到了哪），
+    #   ⛔ 但主体仍然是 11 行重复的文字 ——&nbsp;而现场的判据是「图是图，字是字」。
+    # ⭐ 现在：**完整那笔账只在底图（tx-base）上印一次**，
+    #   另外四张只留「这一格把它动到了哪」那一两行 ＋ 一句指回底图。
+    #   这样既保住了「同一个坐标系」的效果，又不让四张图各背 11 行字。
+    FULL = (v["f"] == "fig3-tx-base")
     NY = PANEL_H + 16
     NUM = [
         ("", "取序列 <b>128K</b>、BF16、batch 1，把带 <b>S</b> 的那两处换成实际占多少：", GY),
@@ -565,6 +572,10 @@ def render(v):
         ("", "所以它决定的不是「装不装得下」，是<b>能同时服务多少人</b>。", BL),
         ("", "", None),
     ] + list(v.get("acct", []))
+    if not FULL:
+        NUM = [("📐", "这笔账的完整算法在<b>底图那一张</b>上（§1.4）——&#160;"
+                "这里只说这一格把它动到了哪：", GY),
+               ("", "", None)] + list(v.get("acct", []))
     box(PX, NY, PW, 26 + len(NUM) * 19 + 18, "#fff", "#dadce0", 8)
     box(PX, NY, 4, 26 + len(NUM) * 19 + 18, OR, OR, 2)
     box(PX + 2, NY, 3, 26 + len(NUM) * 19 + 18, "#fff", "#fff", 0)
