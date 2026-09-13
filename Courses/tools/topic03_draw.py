@@ -110,6 +110,63 @@ def wpx(s, size=11.5):
     return int(n * size)
 
 
+# ══════════════════════════════════════════════════════════════════
+# ⭐⭐⭐ 2026-09-14 现场：「图里那个字，不要太小，也不要太多」
+#   落点带原来是 12px、靠**宽度断言**逼调用方自己拆行。于是两件事同时发生：
+#     ① 字小 —— 全专题曝光最多的那批字都在这儿，投屏上看不清；
+#     ② 调用方为了过断言，把一句话硬拆成两条，读起来更碎。
+# ⭐ 治法是把「拆行」从调用方手里收回来：这里做**tspan 安全的自动折行**，
+#   于是字号可以放心抬到 15px，调用方一行写多长都行。
+# ⛔ 难点只有一个：断点可能落在 <tspan …> 里面。所以要维护一个开标签栈，
+#   断行时**先把栈里的标签全闭上，下一行再原样重开** —— 否则生成的 SVG
+#   不良构（save() 那道 XML 自检会抓到，但报的行号指向产物，回不到源头）。
+# ══════════════════════════════════════════════════════════════════
+_TAG = re.compile(r"<[^>]+>")
+MONO_K = 1.12          # svgsm 是等宽字，实际步进比 wpx() 估的宽约一成
+
+
+def wrap_rich(s, limit_px, size):
+    """把一段**带 <tspan> 的**文字按像素宽折成多行，标签自动闭合 / 重开。"""
+    out, cur, stack, w = [], [], [], 0.0
+    per = float(size)
+
+    def flush():
+        if not cur and not stack:
+            return
+        out.append("".join(cur) + "".join("</%s>" % t[0] for t in reversed(stack)))
+        del cur[:]
+        cur.extend(t[1] for t in stack)
+
+    i = 0
+    while i < len(s):
+        if s[i] == "<":
+            j = s.index(">", i) + 1
+            tag = s[i:j]
+            cur.append(tag)
+            if tag.startswith("</"):
+                if stack:
+                    stack.pop()
+            elif not tag.endswith("/>"):
+                stack.append((tag[1:].split()[0].rstrip(">"), tag))
+            i = j
+            continue
+        if s[i] == "&":                       # &#160; 这类实体算一个字
+            j = s.index(";", i) + 1
+            ch, adv, i = s[i:j], 1.0, j
+        else:
+            ch, adv, i = s[i], (1.0 if ord(s[i]) > 0x2E80 else 0.55), i + 1
+        # ⛔ 判的是「加上这个字会不会超」，不是「加完了超没超」——
+        #   后者每行都会正好溢出一个字，而那一个字刚好在边界上最显眼。
+        if w + adv * per > limit_px and w > 0:
+            flush()
+            w = 0.0
+        cur.append(ch)
+        w += adv * per
+    if cur:
+        out.append("".join(cur) + "".join("</%s>" % t[0] for t in reversed(stack)))
+    return out or [""]
+
+
 def sub(base, idx):
     """下标：`sub("S", "t−1")` → `S` 加一个真下标。
 
@@ -243,18 +300,23 @@ class Fig(object):
 
     # ── ① 标题区 ＋ 图例条 ───────────────────────────────────────
     def header(self, title, sub, legend=None, y=22):
-        self.t(0, y, title, INK, size=16.5, cls="svglbl")
-        yy = y + 22
+        # ⭐ 2026-09-14 抬字号：标题 16.5→20，副标题 12→15，图例 11→14。
+        #   现场原话「图里那个字不要太小 …… 打到屏幕上去分享」——
+        #   ⛔ 副标题和图例是**读图前必须先读的两样**，它们小等于整张图门槛高。
+        self.t(0, y, title, INK, size=20, cls="svglbl")
+        yy = y + 28
         if sub:
-            self.t(0, yy, sub, GY, size=_sz(12))
-            yy += 20
+            for r in wrap_rich(sub, self.w - 20, 15 * MONO_K):
+                self.t(0, yy, r, GY, size=_sz(15))
+                yy += 22
+            yy += 2
         if legend:
             x = 0
             for col, lab in legend:
-                self.box(x, yy - 9, 11, 11, col, col, 2)
-                self.t(x + 17, yy, lab, GY, size=_sz(11))
-                x += 17 + wpx(lab, 11) + 22
-            yy += 16
+                self.box(x, yy - 11, 14, 14, col, col, 3)
+                self.t(x + 21, yy, lab, GY, size=_sz(14))
+                x += 21 + wpx(lab, 14) + 26
+            yy += 20
         return yy + 8
 
     # ── ② 带标题栏的面板 ─────────────────────────────────────────
@@ -331,20 +393,23 @@ class Fig(object):
         见文件头「填充规则」：容器不填，只有承载信息的小元素才填。"""
         col, fill, icon = self.KIND[kind]
         w = w or self.w
-        h = 34 + len(lines) * 21 + 8
+        # ⭐ 2026-09-14：字号 12 → 15，换行改成自动（见 wrap_rich 的说明）。
+        #   ⛔ 原来靠宽度断言逼调用方拆行 —— 那既让字小，又让句子被拆碎。
+        SZ, LH = 15, 24
+        rows = []
+        for ln in lines:
+            # ⛔ svgsm 是**等宽字体**，Roboto Mono 的 ASCII 步进约 0.60em，
+            #   而 wpx() 按 0.55 估 —— 英文长句一累积就差出一整行。
+            #   ⭐ 所以折行时按 MONO_K 倍的字号去量，留出这 10%。
+            rows.extend(wrap_rich(ln, w - 40, SZ * MONO_K))
+        h = 40 + len(rows) * LH + 10
         self.box(0, y, w, h, "#fff", LINE, 9)
         self.box(0, y, 4, h, col, col, 2)
         self.box(2, y, 3, h, "#fff", "#fff", 0)
-        self.t(20, y + 24, "%s %s" % (icon, title), col, bold=True, size=13.5,
+        self.t(20, y + 27, "%s %s" % (icon, title), col, bold=True, size=17,
                cls="svglbl")
-        for i, ln in enumerate(lines):
-            # ⛔ 跟 src() 同一条：**文字溢出既不报错也不产生滚动条，只是被裁掉**。
-            #   2026-09-08 实测又栽了一次（Shazeer 那句英文引文冲出右边界）——
-            #   ⭐ 所以凡是「一整行文字」的基元，都必须自带宽度断言。
-            need = wpx(re.sub(r"<[^>]+>", "", ln), 12) + 38
-            assert need <= w, "落点带第 %d 行要 %dpx，只有 %dpx —— 拆行" % (
-                i + 1, need, w)
-            self.t(20, y + 48 + i * 21, ln, col, size=_sz(12))
+        for i, ln in enumerate(rows):
+            self.t(20, y + 58 + i * LH, ln, col, size=_sz(SZ))
         return y + h
 
     def lines(self, x, y, w, rows, size=11, lh=17, fill=None, bold_first=False,
@@ -372,12 +437,19 @@ class Fig(object):
         ⛔ 带宽度自检：2026-09-08 实测有一行冲出了右边界，而**文字溢出既不报错
           也不产生滚动条**，只是被裁掉 —— 页面上看只是「这句话没写完」。
         """
+        # ⭐ 2026-09-14：11 → 14px，同样改成自动折行（续行缩进对齐）。
+        SZ, LH = 14, 21
+        k = 0
         for i, ln in enumerate(lines):
-            w = wpx(re.sub(r"<[^>]+>", "", ln), 11) + 22
-            assert w <= self.w, "出处第 %d 行要 %dpx，超出画布 %dpx —— 拆行" % (
-                i + 1, w, self.w)
-            self.t(0, y + i * 17, ("📌 " if i == 0 else "　　") + ln, GY2, size=_sz(11))
-        return y + len(lines) * 17 + 1
+            # ⛔ 前缀（📌 ／ 全角缩进）是**折完行才加上去的** —— 折行限宽里
+            #   必须先把它减掉，否则每一行都正好多出一个前缀的宽度。
+            for j, r in enumerate(wrap_rich(ln, self.w - 46 - wpx("　　", SZ),
+                                            SZ * MONO_K)):
+                self.t(0, y + k * LH,
+                       ("📌 " if (i == 0 and j == 0) else "　　") + r,
+                       GY2, size=_sz(SZ))
+                k += 1
+        return y + k * LH + 1
 
     # ── 收尾 ────────────────────────────────────────────────────
     def save(self, name, bottom):

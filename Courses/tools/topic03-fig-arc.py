@@ -83,56 +83,76 @@ def fig_arc():
          "两头都要", "3:1 ～ 7:1 成了共识",
          "⭐ 便宜的管长度，贵的管质量"),
     )
-    CW, GAP, BODY = 224, 8, 158
+    # ⭐⭐⭐ 2026-09-14 第三刀：**六列 224px 是塞不下大字的**。
+    #   前一版已经把文字卡换成了小画面，可六格横排，每格只有 224px ——
+    #   于是画面只有 28px 见方、字只能给到 11.5px，**投到屏幕上什么都看不见**。
+    # ⛔ 判据要改：不是「这一格里能不能放下」，是「**这一格该有多宽**」。
+    #   格数是内容定的（六个阶段），宽度是可读性定的 —— 那就换行，不要压字。
+    # ⭐ 改成 2 行 × 3 列：每格 452px，画面放大一倍，字从 11.5 抬到 17–27。
+    CW, GAP, VGAP, BODY = 452, 22, 20, 256
+    y0 = y
     for i, (era, name, col, kind, what, got, owe) in enumerate(ST):
-        x = i * (CW + GAP)
-        f.box(x, y, CW, BODY + 46, "#fff", LINE, 8)
-        f.box(x, y, CW, 5, col, col, 3)
-        f.box(x, y + 3, CW, 6, "#fff", "#fff", 0)
-        f.t(x + 13, y + 24, era, GY2, size=_sz(11.5))
-        f.t(x + 13, y + 46, name, col, True, _sz(17))
+        r, c = divmod(i, 3)
+        x = c * (CW + GAP)
+        yy = y0 + r * (BODY + VGAP)
+        f.box(x, yy, CW, BODY, "#fff", LINE, 10)
+        f.box(x, yy, CW, 6, col, col, 3)
+        f.box(x, yy + 4, CW, 8, "#fff", "#fff", 0)
+        f.t(x + 22, yy + 34, era, GY2, size=15)
+        f.t(x + 22, yy + 68, name, col, True, 27)
 
-        gx, gy_ = x + 14, y + 58
-        if kind == "chain":
+        # ── 小画面：每格一个，复用后面各节已经立起来的比喻 ──────────
+        gx, gy_ = x + 22, yy + 84
+        if kind == "chain":                     # 一排人传话
             for k in range(5):
-                f.box(gx + k * 38, gy_ + 8, 28, 26, "#fce8e6", col, 4)
+                f.box(gx + k * 62, gy_ + 10, 46, 42, "#fce8e6", col, 6)
+                f.t(gx + 23 + k * 62, gy_ + 38, str(k + 1), col, True, 17,
+                    "middle")
                 if k < 4:
-                    f.line(gx + 30 + k * 38, gy_ + 21, gx + 38 + k * 38,
-                           gy_ + 21, col, 1.2)
-        elif kind == "table":
-            for r in range(4):
-                for c in range(4):
-                    if c <= r:
-                        f.box(gx + c * 24, gy_ + 4 + r * 11, 20, 9,
+                    f.line(gx + 48 + k * 62, gy_ + 31, gx + 62 + k * 62,
+                           gy_ + 31, col, 1.6)
+        elif kind == "table":                   # 人人都看得见人人
+            for rr in range(5):
+                for cc in range(5):
+                    if cc <= rr:
+                        f.box(gx + cc * 34, gy_ + 4 + rr * 10, 30, 8,
                               "#e8eaed", "none", 2)
-        elif kind == "thin":
+            f.t(gx + 190, gy_ + 34, "谁都能看见谁", GY2, size=15)
+        elif kind == "thin":                    # 每格还在，里面的东西变小
             for k in range(5):
-                f.box(gx + k * 38, gy_ + 8, 28, 26, BG2, LINE2, 4)
-                f.box(gx + 8 + k * 38, gy_ + 16, 12, 10, col, "none", 2)
-        elif kind == "few":
+                f.box(gx + k * 62, gy_ + 10, 46, 42, BG2, LINE2, 6)
+                f.box(gx + 14 + k * 62, gy_ + 24, 18, 14, col, "none", 3)
+            f.t(gx + 4, gy_ + 72, "格子没少，每格里的东西变小", GY2, size=15)
+        elif kind == "few":                     # 格子照样在，只读其中几个
             for k in range(5):
                 on = k in (1, 3)
-                f.box(gx + k * 38, gy_ + 8, 28, 26,
-                      col if on else BG2, "none" if on else LINE2, 4)
-        elif kind == "board":
+                f.box(gx + k * 62, gy_ + 10, 46, 42,
+                      col if on else BG2, "none" if on else LINE2, 6)
+            f.t(gx + 4, gy_ + 72, "格子照样在，这一步只读两个", GY2, size=15)
+        elif kind == "board":                   # 一长排换成一块板子
             for k in range(3):
-                f.box(gx + k * 24, gy_ + 8, 18, 26, BG2, LINE2, 3)
-            f.line(gx + 78, gy_ + 21, gx + 96, gy_ + 21, col, 1.6)
-            f.box(gx + 102, gy_ + 4, 76, 34, "#f3e8fd", col, 5)
-        elif kind == "team":
+                f.box(gx + k * 38, gy_ + 10, 30, 42, BG2, LINE2, 5)
+            f.line(gx + 120, gy_ + 31, gx + 148, gy_ + 31, col, 2.0)
+            f.box(gx + 156, gy_ + 6, 118, 50, "#f3e8fd", col, 7)
+            f.t(gx + 215, gy_ + 38, "一块板子", col, True, 17, "middle")
+        elif kind == "team":                    # 几个普通配一个资深
             for k in range(4):
                 pro = (k == 3)
-                f.box(gx + k * 38, gy_ + 8, 28, 26,
-                      "#e8f0fe" if pro else "#e6f4ea", BL if pro else GR, 4)
-                f.t(gx + 14 + k * 38, gy_ + 27, "资" if pro else "普",
-                    BL if pro else GR, True, _sz(12), "middle")
+                f.box(gx + k * 62, gy_ + 10, 46, 42,
+                      "#e8f0fe" if pro else "#e6f4ea", BL if pro else GR, 6)
+                f.t(gx + 23 + k * 62, gy_ + 38, "资深" if pro else "普通",
+                    BL if pro else GR, True, 15, "middle")
+            f.t(gx + 4, gy_ + 72, "三个便宜的配一个贵的", GY2, size=15)
 
-        f.t(x + 13, y + 118, what, col, True, _sz(12.5), w=CW - 26)
-        f.t(x + 13, y + 144, got, GY, size=_sz(11.5), w=CW - 26)
-        f.t(x + 13, y + 172, owe, GY2, size=_sz(11.5), w=CW - 26)
-        if i:
-            f.line(x - GAP - 2, y + 26, x - 2, y + 26, GY2, 1.4)
-    y += 46 + BODY + 16
+        f.t(x + 22, yy + 186, what, col, True, 19, w=CW - 44)
+        f.t(x + 22, yy + 214, got, GY, size=17, w=CW - 44)
+        f.t(x + 22, yy + 242, owe, GY2, size=17, w=CW - 44)
+        # 同一行内接上一格；换行处画一个折回标记
+        if c:
+            f.line(x - GAP - 2, yy + 40, x - 2, yy + 40, GY2, 1.6)
+        elif r:
+            f.t(0, yy - 8, "↳ 接着上一行", GY2, size=15)
+    y = y0 + 2 * BODY + VGAP + 18
 
     # ── 落点 ────────────────────────────────────────────────────
     y = f.band(y, "info", "两条曲线反着走 ——&#160;这才是这六年真正发生的事", [
