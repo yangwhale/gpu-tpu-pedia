@@ -95,8 +95,91 @@ def main():
                 col if v >= 0 else RD, True, 15, "middle")
             f.t(x + 30, ZERO + 44, TOK[i], GY2, size=12, anchor="middle")
 
+    # ══════════ ② 三组柱子只是这张图的一行 ═══════════════════════
+    # ⭐⭐⭐ 2026-09-13 吸收自 3Blue1Brown 第 6 集的**点阵图**
+    #   （点的大小 ＝ 点积大小；softmax 前后是同一张网格的两个状态）。
+    # ⛔ 为什么非加不可：上面那三组柱子是**一维**的 —— 它只画了一个 token 的那一行。
+    #   学生看完会以为注意力是「一个词看一排词」，而不是「所有词同时互看」。
+    # ⭐ 所以这一格的第一句话就是「**刚才那三根柱子，是这张网格的一行**」——
+    #   不另起炉灶，让两张图变成同一张。
+    # 白送的第二件事：因果掩码。它是上面「归一化」那个知识点的**第二次使用**，
+    #   成本几乎为零 —— 而「为什么是 −∞ 不是 0」正好只有懂了归一化才答得上。
+    yg = y0 + PH + 18
+    PHG = 482
+    pyg = f.panel(0, yg, W, PHG,
+                  "② 刚才那三根柱子，其实只是这张网格的一行",
+                  BL, sub="点越大 ＝ 这两个词越对得上　·　所有词是同时互看的")
+
+    N = 6
+    CELL = 46
+    WORD = ["那", "只", "猫", "跳", "上", "桌"]
+    # ⛔ 分数当场算，别手填 —— 手填的数过不了「每行加起来等于 1」这一关
+    import math as _m
+    RAW = [[round(2.4 * _m.cos((i * 1.7 + j * 2.3)) + 0.6 * ((i + j) % 3) - 0.4, 2)
+            for j in range(N)] for i in range(N)]
+    def row_softmax(r, mask=None):
+        z = [(-1e9 if (mask and mask[k]) else v) for k, v in enumerate(r)]
+        m = max(z); e = [_m.exp(v - m) for v in z]; t = sum(e)
+        return [v / t for v in e]
+    SM = [row_softmax(r) for r in RAW]
+    for r in SM:
+        assert abs(sum(r) - 1.0) < 1e-9          # 每行加起来必须是 1
+
+    def grid(gx, gy, vals, neg_ok, title, sub, col):
+        f.t(gx, gy - 14, title, col, True, 21)
+        f.t(gx, gy + 8, sub, GY, size=16)
+        for i in range(N):
+            f.t(gx - 16, gy + 44 + i * CELL, WORD[i], GY2, size=15,
+                anchor="end")
+            f.t(gx + 22 + i * CELL, gy + 34, WORD[i], GY2, size=15,
+                anchor="middle")
+        mx = max(abs(v) for r in vals for v in r)
+        for i in range(N):
+            for j in range(N):
+                v = vals[i][j]
+                cx = gx + 22 + j * CELL
+                cy = gy + 56 + i * CELL
+                r = 3 + 15 * abs(v) / mx
+                if v < 0 and neg_ok:             # 负分画成空心
+                    f.p.append('<circle cx="%.1f" cy="%.1f" r="%.1f" '
+                               'fill="none" stroke="%s" stroke-width="1.8"/>'
+                               % (cx, cy, r, RD))
+                else:
+                    f.p.append('<circle cx="%.1f" cy="%.1f" r="%.1f" '
+                               'fill="%s"/>' % (cx, cy, r, col))
+        return gy + 56 + N * CELL
+
+    GY0 = pyg + 42
+    grid(80, GY0, RAW, True, "softmax 之前", "有大有小，还有负的（空心）", GY)
+    f.t(400, GY0 + 170, "softmax", GR, True, 22)
+    f.line(392, GY0 + 186, 470, GY0 + 186, GR, 2.4)
+    f.t(392, GY0 + 214, "逐行做", GY2, size=15)
+    grid(516, GY0, SM, False, "softmax 之后", "全部朝上，而且每一行加起来正好是 1",
+         GR)
+
+    # ── 因果掩码：同一张网格再用一次 ────────────────────────────
+    MK = [[j > i for j in range(N)] for i in range(N)]
+    SMK = [row_softmax(RAW[i], MK[i]) for i in range(N)]
+    for r in SMK:
+        assert abs(sum(r) - 1.0) < 1e-9
+    gy3 = grid(952, GY0, SMK, False, "＋ 因果掩码",
+               "只许看自己和前面的", BL)
+    for i in range(N):                           # 把被挡住的格子划掉
+        for j in range(N):
+            if MK[i][j]:
+                cx, cy = 952 + 22 + j * CELL, GY0 + 56 + i * CELL
+                f.line(cx - 8, cy - 8, cx + 8, cy + 8, LINE2, 1.4, arrow=False)
+
+    f.box(80, gy3 + 12, W - 160, 74, "#fff", RD, 10)
+    f.t(104, gy3 + 42, "⛔ 挡住的那些格子，第一反应是填 0 ——　但填 0 不行", RD,
+        True, 20)
+    f.t(104, gy3 + 68, "填 0 之后那一行加起来就不等于 1 了。"
+        "所以要在 <tspan font-weight=\"700\">softmax 之前</tspan>填 "
+        "<tspan font-weight=\"700\">−∞</tspan> ——　"
+        "e 的 −∞ 次方是 0，归一化时它根本不参与分母。", GY, size=17, w=1230)
+
     # ══════════ 下半：K / V 分家 ═════════════════════════════════
-    y1 = y0 + PH + 18
+    y1 = yg + PHG + 18
     PH2 = 268
     py2 = f.panel(0, y1, W, PH2,
                   "② K 和 V 为什么要分家 ——　因为检索天生是「按 A 找，取回 B」",

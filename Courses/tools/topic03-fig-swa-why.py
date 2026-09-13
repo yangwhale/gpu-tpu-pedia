@@ -40,33 +40,84 @@ def main():
         "一个<tspan font-weight=\"700\">按时间顺序讲的侦探故事</tspan>",
         [(GR, "敢砍的理由"), (RD, "崩了"), (BL, "真正的原因")])
 
-    # ══════════ ① 传话：层数是免费的射程 ════════════════════════
-    PH = 250
-    py = f.panel(0, y0, W, PH, "① 凭什么敢砍 ——　每层只看身边几个，但话能往外传",
-                 GR, sub="层数是免费的射程")
+    # ══════════ ① 传话 —— 但射程不是免费的 ══════════════════════
+    # ⛔⛔⛔ 2026-09-13 **本课这里原来教的是错的心智模型**：
+    #   「层数是免费的射程，4096 × 32 = 131,072」。
+    # ⭐ 查证（guangxuanx.com/blog/stacking-swa.html，作者是 StreamingLLM 一作）
+    #   原话：「The formula D_eff = W·ln(ε)/ln(1−α) **should replace "L × W"
+    #   in your mental model of these models.**」
+    #   · 纯 SWA（无残差）：每层往回跳的距离是 [0, W) 上的**随机数**，不是每次跳满。
+    #     L 层就是 L 个随机数的和 → 中心极限 → 高斯。有效射程 ≈ **0.58·W·√L**。
+    #   · 有残差（真实模型）：α≈0.95 意味着**九成五的信息根本没进注意力层**，
+    #     直接从底下窜到顶上。于是衰减从高斯变成指数，
+    #     有效射程 ≈ W × 4.6/|ln(1−α)| ——&nbsp;**跟层数完全无关**。
+    # ⚠️ 置信度分两层，图上必须写清：√L 那半推导干净（且跟 CNN 有效感受野
+    #   的独立结论对得上）；而 α≈0.95 是作者**断言**不是实测，1.5W 对 α 极敏感
+    #   （α=0.90 → 2.0W，α=0.99 → 1.0W）。⛔ 所以图上只说「一到两个窗口宽、
+    #   跟层数无关」，**不写死 1.5**。而且这是个人博客，非同行评议。
+    # ⭐⭐ 这条改完反而更值钱：它正好解释了**混合架构为什么必须存在**
+    #   （原文自己说的）——&nbsp;接上 §八。
+    import math as _m
+    PH = 412
+    py = f.panel(0, y0, W, PH,
+                 "① 凭什么敢砍 ——　每层只看身边几个，但话能往外传",
+                 GR, sub="⚠️ 能传多远，比「层数 × 窗口」小得多")
 
-    ay = py + 22
-    N = 9          # ⛔ 原来 13 个，右端撞上那块 Mistral 结论框
+    ay = py + 20
+    # 左：传话本身（这一半是对的，保留）
+    f.t(56, ay + 22, "话确实能一层层往外传", GR, True, 20)
+    N = 7
     for L in range(3):
-        yy = ay + 22 + L * 52
-        f.t(56, yy + 16, "第 %d 层" % (L + 1), GY2, size=15)
+        yy = ay + 42 + L * 46
+        f.t(56, yy + 22, "第 %d 层" % (L + 1), GY2, size=15)
         for i in range(N):
-            x = 140 + i * 88
-            on = i <= 2 + L * 3
-            f.box(x, yy, 68, 32, "#e6f4ea" if on else BG2,
+            x = 138 + i * 62
+            on = i <= 2 + L * 2
+            f.box(x, yy, 48, 30, "#e6f4ea" if on else BG2,
                   GR if on else LINE2, 5)
-            f.t(x + 34, yy + 22, str(i + 1), GR if on else GY2,
-                on, 16, "middle")
-        if L < 2:
-            f.line(140 + 4.5 * 88, yy + 36, 140 + 4.5 * 88, yy + 50,
-                   GY2, 1.1)
-    f.t(140, ay + 190, "一层只跨 3 格 → 两层 6 格 → 三层 9 格 ……",
-        GY, size=18)
-    f.box(1000, ay + 24, 360, 152, "#e6f4ea", GR, 10)
-    f.t(1180, ay + 66, "Mistral 7B", GR, True, 21, "middle")
-    f.t(1180, ay + 106, "%s × %d 层" % (format(WIN, ","), LAY), GR, True, 22,
-        "middle")
-    f.t(1180, ay + 146, "＝ %s" % format(span, ","), GR, True, 26, "middle")
+            f.t(x + 24, yy + 21, str(i + 1), GR if on else GY2, on, 15,
+                "middle")
+
+    # 右：高尔顿板 —— 每层往回跳多远是随机的，L 层的和堆成钟形
+    gx = 640
+    f.t(gx, ay + 22, "⛔ 但每一层往回跳多远，是随机的", RD, True, 20)
+    f.t(gx, ay + 46, "L 层 ＝ L 个随机数相加 ——　堆成一个钟形", GY, size=16)
+    for r in range(4):                       # 钉板
+        for c in range(r + 1):
+            f.p.append('<circle cx="%.1f" cy="%.1f" r="2.6" fill="%s"/>'
+                       % (gx + 150 + (c - r / 2.0) * 26, ay + 70 + r * 20, GY2))
+    BASE, BH = ay + 176, 58
+    BINS = [_m.exp(-((k - 5.5) ** 2) / 7.0) for k in range(12)]
+    mxb = max(BINS)
+    for k, v in enumerate(BINS):
+        h = BH * v / mxb
+        f.box(gx + 20 + k * 26, BASE - h, 20, h, "#e6f4ea", GR, 2)
+    f.t(gx + 20, BASE + 24, "近", GY2, size=15)
+    f.t(gx + 20 + 11 * 26, BASE + 24, "远", GY2, size=15, anchor="end")
+    f.line(gx + 340, BASE - BH - 10, gx + 340, BASE + 6, RD, 2.0, dash="5,4")
+    f.t(gx + 348, BASE - 30, "「层数 × 窗口」", RD, True, 17)
+    f.t(gx + 348, BASE - 8, "在这儿 ——　钟形的尾巴", RD, size=16)
+    f.t(gx + 348, BASE + 14, "早就没了", RD, size=16)
+
+    # 下：两条通道 —— 残差才是主干道
+    cy = ay + 244
+    f.box(56, cy, 1288, 122, "#fff", INK, 10)
+    f.t(80, cy + 32, "⭐⭐ 而且真实模型里，九成五的信息根本没走注意力这条路", INK,
+        True, 21)
+    f.box(80, cy + 48, 700, 26, "#e8f0fe", BL, 5)
+    f.t(92, cy + 67, "残差 ——　直接从底下窜到顶上（约 95%）", BL, True, 17)
+    f.box(80, cy + 80, 46, 12, "#fef7e0", OR, 3)
+    f.t(136, cy + 91, "注意力 ——　真正往回看的那一小股（约 5%）", OR, True, 17)
+    f.t(80, cy + 112,
+        "每往回跳一个窗口就再乘一次这个小数 ——　"
+        "<tspan font-weight=\"700\">于是有效射程跟层数无关，大约就是一到两个窗口宽</tspan>。",
+        GY, size=17, w=1240)
+
+    f.box(820, cy + 44, 500, 62, "#fce8e6", RD, 8)
+    f.t(840, cy + 70, "Mistral 7B：%s × %d 层 ＝ %s"
+        % (format(WIN, ","), LAY, format(span, ",")), RD, True, 18)
+    f.t(840, cy + 94, "⛔ 那是<tspan font-weight=\"700\">理论上限</tspan>，"
+        "不是能用的长度", RD, True, 18)
 
     # ══════════ ② 崩了 ══════════════════════════════════════════
     y1 = y0 + PH + 18
