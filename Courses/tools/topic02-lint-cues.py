@@ -53,6 +53,28 @@ board 提示里的引号有两种用途，机器分不清：
    任何按文件名枚举的检查，都要**把实际检了哪几对打出来**，
    并且在发现新页面没有配对时**主动报出来**，而不是静默跳过。
    —— 本仓库的同类教训：「测试全绿不是证据」「空结果不等于没有」。
+
+════════════════════════════════════════════════════════════════════
+⛔ 2026-09-14 当天第二个洞：小节号只认 h3，而专题一的节号不在 h3 里
+════════════════════════════════════════════════════════════════════
+上面那条修完，专题一立刻报出「指了一个不存在的小节号：7.5」。
+**§7.5 是存在的** —— `#s75`，页面上明明白白写着「第 7.5 步 ·
+算出来的数，跟机器上量出来的数」。它只是**不长在 h3 里**：
+
+    专题二/三： <h3>3.5 三堵墙</h3>              ← 号和名同在 h3
+    专题一：    <span class="badge">第 7.5 步</span><h2>算出来的数…</h2>
+
+原来的检查写死 `deck["h3"]`，于是专题一的**八个小节一个都认不出来**，
+只是恰好只有一条 cue 写了数字节号，才只炸了一次。
+
+⭐⭐ 判据（跟上面那条是同一个病的两种长相）：
+   **检查器对文档的建模，比文档本身窄。**
+   上一条是「只看了五份文件里的一份」，这一条是「只认一种节号写法」。
+   两次的表现都是**报了一个听起来很确凿的否定结论**
+   （「从来没有这个小节」「每一条都对得上」），而真相是它没看。
+   ⛔ 我自己也吃了这一口：R34 把这条读成「topic-01 一个 7.x 都没有」
+   写进了提交记录 —— **那是从 lint 的模型里读出来的，不是从页面里查出来的。**
+   工具说「不存在」，永远只等于「工具没找到」。
 """
 import os
 import re
@@ -62,6 +84,17 @@ W = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "WebPages")
 POINT = re.compile(r'(滚到|指\s*下|指\s*最后|停在|翻到|翻回|移到|指着)')
 QUOTE = re.compile(r'[「『]([^」』]{4,32})[」』]')
 FIGID = re.compile(r'(?:s012-)?(?:fig|ms-)[a-z0-9-]+')
+
+
+def has_sec(head, n):
+    """这段标题文字算不算「小节 n」。
+
+    两种写法都要认，而且**只认开头**，不然 37.5% 会冒充 §7.5：
+        专题二/三  `3.5 三堵墙`        → 直接 startswith
+        专题一      `第 7.5 步`         → 剥掉开头的「第」再 startswith
+    """
+    t = re.sub(r'^\s*第\s*', '', head.strip())
+    return t.startswith(n)
 
 
 def norm(t):
@@ -95,10 +128,13 @@ def check_one(pg, lec, dck):
     # ⭐ 判据：**lint 要查的是「文档里有没有」，不是「此刻屏幕上有没有」** ——
     #   凡是判断存在性的取值，一律用 textContent；innerText 只适合量版面。
     #   （误报比漏报更糟：本文件头上就写着「误报会把真问题淹掉」。）
+    # ⛔ secs 不能只取 h3 —— 专题一的节号在 `<span class="badge">第 7.5 步</span>`
+    #   里，h2 只有名字没有号。少收一种写法，整个专题的小节都会被判成不存在。
     deck = pg.evaluate("""()=>({
       txt: document.body.innerText + ' ' + document.body.textContent,
       figs: [...document.querySelectorAll('figure')].map(f=>f.id),
-      h3: [...document.querySelectorAll('h3')].map(e=>e.textContent)})""")
+      secs: [...document.querySelectorAll('h2,h3,h4,.badge')]
+              .map(e=>e.textContent)})""")
     pg.goto("file://" + os.path.abspath(lp))
     pg.wait_for_timeout(1000)
     cues = pg.evaluate(
@@ -162,7 +198,7 @@ def scan(cues, deck, lec):
                 print('   提示原文：%s' % c[:96])
                 bad += 1
         for n in re.findall(r'(?<![0-9.])([0-9]\.[0-9][b-c]?)(?![0-9])', c):
-            if not any(h.strip().startswith(n) for h in deck["h3"]):
+            if not any(has_sec(h, n) for h in deck["secs"]):
                 print('\n⛔ 讲义指了一个不存在的小节号：%s' % n)
                 print('   提示原文：%s' % c[:96])
                 bad += 1
