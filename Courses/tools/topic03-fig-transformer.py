@@ -491,10 +491,33 @@ def render(v):
     # ── 右：讲解栏 ──────────────────────────────────────────────────
     ph, pcol, rows = v["panel"]
     PX, PW = FLOW_R + 20, W - FLOW_R - 40
-    box(PX, 66, PW, 26 + len(rows) * 19 + 22, "#fff", pcol, 8)
-    t(PX + 14, 86, ph, "svglbl", pcol, size=13)
+
+    # ⭐⭐⭐ 2026-09-14：先给一个**生活画面**，再上术语。
+    #   现场判据：「图的目的是把原理画出来，让普通人一目了然。」
+    #   这张主线图要回答的是「**什么东西下班要锁进柜子**」——&nbsp;
+    #   三个筐一画，后面那串形状就有地方挂了。
+    #   ⛔ 五张共用（它是同一个坐标系），所以画在这里、不按变体改。
+    PICH = 150
+    box(PX, 66, PW, PICH, "#fff", INK, 8)
+    t(PX + 14, 90, "先看一个画面：这一层算完，桌上的东西分三堆", "svglbl",
+      INK, size=14)
+    BW = (PW - 56) / 3.0
+    BINS = [
+        ("常驻的设备", "权重 W", "所有人共用，一直在那儿", GY, "#f1f3f4"),
+        ("草稿纸", "中间那些量", "算完就扔，不占地方", GR, "#e6f4ea"),
+        ("锁进柜子的", "K 和 V", "每来一个 token，柜子多一格", RD, "#fce8e6"),
+    ]
+    for i, (name, what, why, col, tint) in enumerate(BINS):
+        bx = PX + 14 + i * (BW + 14)
+        box(bx, 102, BW, 96, tint, col, 6)
+        t(bx + 12, 126, name, None, col, bold=True, size=14)
+        t(bx + 12, 150, what, None, col, bold=True, size=15)
+        t(bx + 12, 174, why, None, GY, size=11)
+
+    box(PX, 66 + PICH + 10, PW, 26 + len(rows) * 19 + 22, "#fff", pcol, 8)
+    t(PX + 14, 86 + PICH + 10, ph, "svglbl", pcol, size=13)
     for n, (tag, txt, col) in enumerate(rows):
-        yy = 110 + n * 19
+        yy = 110 + PICH + 10 + n * 19
         if not txt:
             continue
         s2 = txt.replace("<b>", '<tspan font-weight="700">') \
@@ -504,7 +527,7 @@ def render(v):
             t(PX + 14 + max(wpx(tag), 22) + 8, yy, s2, fill=col or GY)
         else:
             t(PX + 44, yy, s2, fill=col or GY)
-    PANEL_H = 66 + 26 + len(rows) * 19 + 22
+    PANEL_H = 66 + PICH + 10 + 26 + len(rows) * 19 + 22
 
     # ── 右下：把字母换成数字 ────────────────────────────────────────
     # ⭐ 这张卡的**主体**五张图完全一样，是刻意的：它跟主线图一起构成「每次都在
