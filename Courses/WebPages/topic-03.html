@@ -4340,6 +4340,157 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
      正文只留**图给不了的三样**：GQA 那个「连续旋钮」的方法论、
      MLA 的超参出处、以及那条留给专题六的硬件伏笔。
      ⛔ 按行号切并对首尾断言 —— 上一轮按内容切，切掉过 §三 的节标题。 -->
+<!-- ⭐⭐⭐ 2026-09-13 新增。本课原来对 RoPE 只有「寄快递」一个比喻，
+     而那个比喻回答的是「为什么 MLA 吸收不了它」——
+     ⛔ 「把位置变成转角，为什么点积就自动带上了相对距离」
+       这个最基础的问题，我们一张图都没有。 -->
+<figure class="fbox fwide" id="fig-rope"><svg viewBox="0 0 1400 1352" width="100%" role="img" aria-label="RoPE 就是把位置写成一排里程表转盘：最右边转得飞快，往左逐级变慢；两个位置各自转完之后，每个转盘上的夹角只跟它们的距离有关，跟各自在哪完全无关"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">RoPE ——　<tspan font-weight="700">把位置写成一排里程表转盘</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 这张图回答两件事：<tspan font-weight="700">为什么点积自动带上了相对距离</tspan>，以及<tspan font-weight="700">凭什么能外推到 1M</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">位置 m</text>
+<rect x="90" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="111" y="74" fill="#5f6368" style="font-size:14.0px">位置 n</text>
+<rect x="180" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="201" y="74" fill="#5f6368" style="font-size:14.0px">夹角＝m−n</text>
+<rect x="292" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="313" y="74" fill="#5f6368" style="font-size:14.0px">三种改法</text>
+<rect x="0" y="102" width="1400" height="324" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#202124" stroke="#202124" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px"><tspan font-weight="700">① 一个位置 ＝ 一排转盘的读数</tspan></text>
+<text class="svgsm" x="219" y="122" fill="#5f6368" style="font-size:11.0px">最右边转得飞快，往左逐级变慢 ——　跟里程表一模一样</text>
+<circle cx="130.0" cy="220.0" r="34.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="130" y1="220" x2="133.7425026137477" y2="246.2546010098438" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="130" y="282" fill="#80868b" text-anchor="middle" style="font-size:15.0px">第 1 对</text>
+<text class="svgsm" x="130" y="306" fill="#80868b" text-anchor="middle" style="font-size:14.0px">转速 1/β^0</text>
+<circle cx="300.0" cy="220.0" r="34.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="300" y1="220" x2="319.4175720000662" y2="201.93710162730673" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="300" y="282" fill="#80868b" text-anchor="middle" style="font-size:15.0px">第 10 对</text>
+<text class="svgsm" x="300" y="306" fill="#80868b" text-anchor="middle" style="font-size:14.0px">转速 1/β^9</text>
+<circle cx="470.0" cy="220.0" r="34.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="470" y1="220" x2="475.915960265261" y2="194.1482725114964" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="470" y="282" fill="#80868b" text-anchor="middle" style="font-size:15.0px">第 19 对</text>
+<text class="svgsm" x="470" y="306" fill="#80868b" text-anchor="middle" style="font-size:14.0px">转速 1/β^18</text>
+<circle cx="640.0" cy="220.0" r="34.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="640" y1="220" x2="641.6327512653176" y2="193.53030934624275" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="640" y="282" fill="#80868b" text-anchor="middle" style="font-size:15.0px">第 28 对</text>
+<text class="svgsm" x="640" y="306" fill="#80868b" text-anchor="middle" style="font-size:14.0px">转速 1/β^27</text>
+<circle cx="810.0" cy="220.0" r="34.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="810" y1="220" x2="810.447377536637" y2="193.4837737726555" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="810" y="282" fill="#80868b" text-anchor="middle" style="font-size:15.0px">第 37 对</text>
+<text class="svgsm" x="810" y="306" fill="#80868b" text-anchor="middle" style="font-size:14.0px">转速 1/β^36</text>
+<circle cx="980.0" cy="220.0" r="34.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="980" y1="220" x2="980.122516118615" y2="193.4802829992347" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="980" y="282" fill="#80868b" text-anchor="middle" style="font-size:15.0px">第 46 对</text>
+<text class="svgsm" x="980" y="306" fill="#80868b" text-anchor="middle" style="font-size:14.0px">转速 1/β^45</text>
+<circle cx="1150.0" cy="220.0" r="34.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="1150" y1="220" x2="1150.0335501648635" y2="193.48002122198363" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="1150" y="282" fill="#80868b" text-anchor="middle" style="font-size:15.0px">第 55 对</text>
+<text class="svgsm" x="1150" y="306" fill="#80868b" text-anchor="middle" style="font-size:14.0px">转速 1/β^54</text>
+<text class="svgsm" x="88" y="338" fill="#5f6368" style="font-size:17.0px">← 快（每个位置都转一大格）</text>
+<text class="svgsm" x="1192" y="338" fill="#5f6368" text-anchor="end" style="font-size:17.0px">慢（几万个位置才转一圈）→</text>
+<rect x="56" y="358" width="1288" height="80" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="80" y="388" fill="#5f6368" style="font-size:18.0px">⭐ 这排转盘就是 <tspan font-weight="700">位置 n 的 β 进制写法</tspan>（β ＝ 10000^(2/d) ≈ 1.155）</text>
+<text class="svgsm" x="80" y="416" fill="#5f6368" style="font-size:18.0px">d=128 就是 <tspan font-weight="700">64 位数</tspan>；第 m 位的除数 β^(m-1)，<tspan font-weight="700">正是第 m 对维度的转速</tspan>。</text>
+<rect x="0" y="444" width="1400" height="322" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="444" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="0" y="446" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="474" x2="1400" y2="474" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="464" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">② 为什么点积自动带上了相对距离 ——　看夹角就行</tspan></text>
+<text class="svgsm" x="335" y="464" fill="#5f6368" style="font-size:11.0px">两排转盘叠起来，每个盘上的夹角都是 (m−n)×转速</text>
+<circle cx="180.0" cy="570.0" r="48" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="180" y1="570" x2="159.6102291159835" y2="537.9335495681653" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="180" y1="570" x2="143.56087756280073" y2="559.2208369523973" stroke="#e8710a" stroke-width="2.6" stroke-linecap="round"/>
+<text class="svgsm" x="180" y="640" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">夹角 ＝ (m−n)×转速</tspan></text>
+<circle cx="390.0" cy="570.0" r="48" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="390" y1="570" x2="422.13217545828036" y2="590.2860370777115" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="390" y1="570" x2="419.50813924107104" y2="546.0569484290418" stroke="#e8710a" stroke-width="2.6" stroke-linecap="round"/>
+<text class="svgsm" x="390" y="640" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">夹角 ＝ (m−n)×转速</tspan></text>
+<circle cx="600.0" cy="570.0" r="48" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="600" y1="570" x2="614.0763897106826" y2="534.7033251890069" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="600" y1="570" x2="605.9833241309291" y2="532.4740112409514" stroke="#e8710a" stroke-width="2.6" stroke-linecap="round"/>
+<text class="svgsm" x="600" y="640" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">夹角 ＝ (m−n)×转速</tspan></text>
+<circle cx="810.0" cy="570.0" r="48" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="810" y1="570" x2="812.5623307369406" y2="532.0864870897653" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="810" y1="570" x2="811.068307742973" y2="532.0150198293286" stroke="#e8710a" stroke-width="2.6" stroke-linecap="round"/>
+<text class="svgsm" x="810" y="640" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">夹角 ＝ (m−n)×转速</tspan></text>
+<circle cx="1020.0" cy="570.0" r="48" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="1020" y1="570" x2="1020.4559890560788" y2="532.0027359671682" stroke="#1a73e8" stroke-width="2.6" stroke-linecap="round"/>
+<line x1="1020" y1="570" x2="1020.1899992083344" y2="532.0004749990104" stroke="#e8710a" stroke-width="2.6" stroke-linecap="round"/>
+<text class="svgsm" x="1020" y="640" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">夹角 ＝ (m−n)×转速</tspan></text>
+<text class="svgsm" x="122" y="504" fill="#5f6368" style="font-size:17.0px">蓝＝位置 m 转过的角　·　橙＝位置 n 转过的角</text>
+<rect x="56" y="660" width="1288" height="96" rx="10" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="80" y="692" fill="#681da8" style="font-size:21.0px"><tspan font-weight="700">⭐⭐ 每个盘上你只看得出<tspan font-weight="700">两根针差多少</tspan> ——　看不出各自转到了哪儿。</tspan></text>
+<text class="svgsm" x="80" y="722" fill="#5f6368" style="font-size:18.0px">而点积 <tspan font-weight="700">a·b ＝ |a||b|cos θ</tspan> 只吃夹角和长度：同转一个角，两样都没变。</text>
+<text class="svgsm" x="80" y="748" fill="#5f6368" style="font-size:18.0px">⭐ 所以绝对位置被转掉了，<tspan font-weight="700">留下来的只有 m−n</tspan>。</text>
+<rect x="0" y="784" width="1400" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="784" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="786" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="814" x2="1400" y2="814" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="804" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">③ 于是长文本那三种做法，一句话各自归位</tspan></text>
+<text class="svgsm" x="285" y="804" fill="#5f6368" style="font-size:11.0px">同一排转盘，三种改法</text>
+<rect x="30" y="844" width="428" height="268" rx="10" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="30" y="844" width="428" height="5" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="30" y="847" width="428" height="5" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="52" y="886" fill="#a50e0e" style="font-size:23.0px"><tspan font-weight="700">直接外推</tspan></text>
+<text class="svgsm" x="52" y="914" fill="#5f6368" style="font-size:17.0px">转盘一格不改</text>
+<circle cx="100.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="100" y1="974" x2="109.00066771767996" y2="993.8990849195613" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="190.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="190" y1="974" x2="207.1078597062642" y2="960.4240382929687" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="280.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="280" y1="974" x2="281.96294751448454" y2="952.248392311018" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="370.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="370" y1="974" x2="370.19655734645073" y2="952.1608845140295" stroke="#d93025" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="52" y="1028" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">硬往超出刻度的地方读</tspan></text>
+<rect x="52" y="1044" width="384" height="52" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="66" y="1074" fill="#5f6368" style="font-size:16.0px">⛔ 最慢那个盘从没转到过那儿 ——　模型没见过</text>
+<rect x="482" y="844" width="428" height="268" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="482" y="844" width="428" height="5" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="482" y="847" width="428" height="5" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="504" y="886" fill="#b06000" style="font-size:23.0px"><tspan font-weight="700">位置内插（PI）</tspan></text>
+<text class="svgsm" x="504" y="914" fill="#5f6368" style="font-size:17.0px">每格改成走半格</text>
+<circle cx="552.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="552" y1="974" x2="530.6507422301943" y2="978.6037802595682" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="642.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="642" y1="974" x2="651.4996472649892" y2="954.3342352846175" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="732.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="732" y1="974" x2="732.9824683385825" y2="952.1821092686831" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="822.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="822" y1="974" x2="822.0982796683053" y2="952.1602211296268" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="504" y="1028" fill="#b06000" style="font-size:18.0px"><tspan font-weight="700">整排一起放慢</tspan></text>
+<rect x="504" y="1044" width="384" height="52" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="518" y="1074" fill="#5f6368" style="font-size:16.0px">⛔ 最快那个盘现在分不清相邻两个位置了</text>
+<rect x="934" y="844" width="428" height="268" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="934" y="844" width="428" height="5" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="934" y="847" width="428" height="5" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="956" y="886" fill="#0d652d" style="font-size:23.0px"><tspan font-weight="700">NTK-aware</tspan></text>
+<text class="svgsm" x="956" y="914" fill="#5f6368" style="font-size:17.0px">换一个进制</text>
+<circle cx="1004.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="1004" y1="974" x2="1013.00066771768" y2="993.8990849195613" stroke="#1e8e3e" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="1094.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="1094" y1="974" x2="1104.5875106867643" y2="954.8979001819786" stroke="#1e8e3e" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="1184.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="1184" y1="974" x2="1184.621493387346" y2="952.1688446029651" stroke="#1e8e3e" stroke-width="2.0" stroke-linecap="round"/>
+<circle cx="1274.0" cy="974.0" r="28.0" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
+<line x1="1274" y1="974" x2="1274.0349538451617" y2="952.1600279709724" stroke="#1e8e3e" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="956" y="1028" fill="#0d652d" style="font-size:18.0px"><tspan font-weight="700">β 变大：快盘几乎不动，慢盘明显变慢</tspan></text>
+<rect x="956" y="1044" width="384" height="52" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="970" y="1074" fill="#5f6368" style="font-size:16.0px">⭐ 一句话：高频外推、低频内插</text>
+<rect x="0" y="1144" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1144" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1144" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1171" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这张图跟「寄快递」不冲突，是同一件事的两个切面</tspan></text>
+<text class="svgsm" x="20" y="1202" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">寄快递</tspan>回答的是「<tspan font-weight="700">为什么 MLA 吸收不了它</tspan>」——&#160;那个旋转矩阵夹在上投影和隐向量中间，拆不开。</text>
+<text class="svgsm" x="20" y="1226" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">里程表</tspan>回答的是「<tspan font-weight="700">为什么点积自动带相对距离</tspan>」和「<tspan font-weight="700">凭什么能外推</tspan>」。</text>
+<text class="svgsm" x="20" y="1250" fill="#174ea6" style="font-size:15.0px">⭐ 两个一起看，<a href="#s五">§五</a>那条 decoupled RoPE （让带位置的那几维单独走一路）就不是一个补丁，而是唯一的出路。</text>
+<text class="svgsm" x="0" y="1282" fill="#80868b" style="font-size:14.0px">📌 「RoPE ＝ 位置的 β 进制写法」以及外推／内插／NTK 的统一解释，出自苏剑林 kexue.fm/archives/9675（⚠️ 原文是推导，没有图）</text>
+<text class="svgsm" x="0" y="1303" fill="#80868b" style="font-size:14.0px">　　「二进制计数器 → 正弦」的动画装置出自 Fleetwood huggingface.co/blog/designing-positional-encoding；「点积只吃夹角和长度」出自 EleutherAI 的 RoPE 博客</text>
+<text class="svgsm" x="0" y="1324" fill="#80868b" style="font-size:14.0px">　　📐 θ_m ＝ 10000^(−2(m−1)/d) ＝ 1/β^(m−1) 这条等式<tspan font-weight="700">由本脚本当场验证并断言</tspan>，不是转述；RoPE 原始出处 RoFormer arXiv <a href="https://arxiv.org/abs/2104.09864" target="_blank"><tspan text-decoration="underline">2104.09864</tspan></a></text>
+</svg><figcaption>⭐⭐ <b>一个位置 ＝ 一排里程表转盘的读数</b>：最右边转得飞快，往左逐级变慢。两个位置各自转完之后，<b>每个盘上你只看得出两根针差多少，看不出各自转到哪儿</b> —— 这就是「点积自动带相对距离」的全部内容。<em>⭐ 顺带把长文本那三种做法一句话各自归位：直接外推＝硬往超刻度处读；内插＝每格走半格；NTK-aware＝换一个进制。</em></figcaption></figure>
+
 <figure class="fbox fwide" id="fig-knob1"><svg viewBox="0 0 1400 1237" width="100%" role="img" aria-label="旋钮一：让每一份更小。四种存法在同一形状下的对照 —— MQA 比 MLA 存得还少，所以这一支比的不是谁存得少；右边讲为什么 MLA 的 RoPE 必须单独走一路"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">旋钮 ① 让每一份更小 ——&#160;<tspan font-weight="700">但比的从来不是「谁存得最少」</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">同一个形状（V3：61 层 · 128 头 · 每头 128 维 · 128K · bf16），换四种存法</text>
@@ -7196,7 +7347,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="0" y="1216" fill="#80868b" style="font-size:14.0px">　　⚠️ 图里 8×3 的格数是<tspan font-weight="700">示意</tspan>；真实量级是句长 128K、头维 128</text>
 </svg><figcaption>⭐⭐ <b>同一个乘法，只是把括号挪了个位置</b> —— 左边被迫造出一个句长×句长的大方块，右边中间那块只有头维×头维，<b>跟句子多长完全无关</b>。<em>⛔ 但因果 mask 会把这个重排挡住 —— 逐元素乘那张下三角，恰恰就是挡住你用结合律的东西。所以真实实现是分块：块内按左边算，块间才用右边（见 <a href="#s7-4">§7.4</a>）。</em></figcaption></figure>
 
-<figure class="fbox fwide" id="fig-notepad"><svg viewBox="0 0 1400 1459" width="100%" role="img" aria-label="一块固定大小的记事板：三块白板三种写法 —— 疯狂往里写后写盖先写、先把这一栏叉掉再写、选择性地叉；「叉掉」在式子里就是 I 减 beta k k 转置"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-notepad"><svg viewBox="0 0 1400 1833" width="100%" role="img" aria-label="一块固定大小的记事板：三块白板三种写法 —— 疯狂往里写后写盖先写、先把这一栏叉掉再写、选择性地叉；「叉掉」在式子里就是 I 减 beta k k 转置"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">线性注意力 ＝ 一块<tspan font-weight="700">固定大小的记事板</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">板子就那么大 ——&#160;<tspan font-weight="700">三代的差别，全在「写之前擦不擦、擦多少」</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
@@ -7391,50 +7542,89 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="740" y="740" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">于是状态不再是一块缓存，</tspan></text>
 <text class="svgsm" x="740" y="770" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">而是<tspan font-weight="700">一个边跑边被训练的小模型</tspan>。</tspan></text>
 <text class="svgsm" x="740" y="796" fill="#80868b" style="font-size:14.0px">⚠️ 前提只有两条：学习率取 β、损失是瞬时的</text>
-<rect x="0" y="824" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="824" width="1400" height="356" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="824" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
 <rect x="0" y="826" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="854" x2="1400" y2="854" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="844" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">③ 板子为什么会「装不下」——　它不是条数超了</tspan></text>
-<text class="svgsm" x="314" y="844" fill="#5f6368" style="font-size:11.0px">装的不是 token，是「键到值」的对应关系</text>
-<text class="svgsm" x="56" y="898" fill="#5f6368" style="font-size:20.0px"><tspan font-weight="700">板子上有 d 个「方向」，你要往里记 L 条对应关系</tspan></text>
-<line x1="300" y1="1026" x2="336.0" y2="936" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<line x1="300" y1="1026" x2="348.0" y2="962" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<line x1="300" y1="1026" x2="360.0" y2="988" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<line x1="300" y1="1026" x2="372.0" y2="1014" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<line x1="300" y1="1026" x2="336.0" y2="1040" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
-<line x1="300" y1="1026" x2="348.0" y2="936" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<line x1="300" y1="1026" x2="360.0" y2="962" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<line x1="300" y1="1026" x2="372.0" y2="988" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="60" y="1032" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">d 个方向</tspan></text>
-<text class="svgsm" x="470" y="972" fill="#5f6368" style="font-size:17.0px">L 条要记的对应关系</text>
-<text class="svgsm" x="470" y="1006" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">⛔ L 超过 d 之后，</tspan></text>
-<text class="svgsm" x="470" y="1038" fill="#5f6368" style="font-size:18.0px">总有两条<tspan font-weight="700">指到同一个方向上</tspan> ——</text>
-<text class="svgsm" x="470" y="1070" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">它们就开始互相盖。</tspan></text>
-<rect x="920" y="896" width="440" height="190" rx="10" fill="#fff" stroke="#202124" stroke-width="1"/>
-<text class="svgsm" x="944" y="936" fill="#202124" style="font-size:21.0px"><tspan font-weight="700">⚠️ 所以别把板子想成一个盒子</tspan></text>
-<text class="svgsm" x="944" y="972" fill="#5f6368" style="font-size:18.0px">它装的<tspan font-weight="700">不是 token</tspan>，</text>
-<text class="svgsm" x="944" y="1004" fill="#5f6368" style="font-size:18.0px">是「按这个 key，该取出那个 value」</text>
-<text class="svgsm" x="944" y="1034" fill="#5f6368" style="font-size:18.0px">这样的<tspan font-weight="700">对应关系</tspan>。</text>
-<text class="svgsm" x="944" y="1070" fill="#80868b" style="font-size:15.0px">「装不下」＝ 方向不够用了，不是条数超了</text>
-<rect x="0" y="1094" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1094" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="1094" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1121" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这个比喻好在哪：它把三代的差别缩到了一个动作上</tspan></text>
-<text class="svgsm" x="20" y="1152" fill="#174ea6" style="font-size:15.0px">三代<tspan font-weight="700">读的方式几乎没变</tspan>，全部差别都在「写之前擦不擦、擦多少」：<tspan font-weight="700">不擦 → 按固定方向擦 → 学着擦</tspan>。</text>
-<text class="svgsm" x="20" y="1176" fill="#174ea6" style="font-size:15.0px">⭐ 所以看到这一支的任何一个新名字，只要问一句：<tspan font-weight="700">它的「擦」是怎么决定的？</tspan>——&#160;剩下的部分，三代之间几乎没变。</text>
-<rect x="0" y="1206" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1206" width="4" height="146" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="1206" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1233" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 板子到底占多少字节 —— 全讲只有这一支没给过数</tspan></text>
-<text class="svgsm" x="20" y="1264" fill="#b06000" style="font-size:15.0px">⛔ 算交叉点之前先把口径摊开，<tspan font-weight="700">不写出来，512 就是个孤立数字</tspan>：</text>
-<text class="svgsm" x="20" y="1288" fill="#b06000" style="font-size:15.0px">状态 ＝ 32 × 128 × 128 × 4 B<tspan font-weight="700">(fp32)</tspan> ＝ <tspan font-weight="700">2 MiB</tspan>　·　GQA-8 每 token 每层 ＝ 2 × 8 × 128 × 2 B<tspan font-weight="700">(bf16)</tspan> ＝ <tspan font-weight="700">4 KiB</tspan></text>
-<text class="svgsm" x="20" y="1312" fill="#b06000" style="font-size:15.0px">→ 交叉点 ＝ <tspan font-weight="700">512 个 token</tspan>；⚠️ 两边精度不一样 ——&#160;状态若也按 bf16 存，交叉点就变成 256。⛔ 只在几百 token 以内它才更贵，到 8K 时 GQA-8 的 KV 已是它的 16 倍。</text>
-<text class="svgsm" x="20" y="1336" fill="#b06000" style="font-size:15.0px">⚠️ 形状是<tspan font-weight="700">示例</tspan>（32 头 × 128 × 128），而 69 是 K3 的真层数（K3 实际 96 头）——&#160;所以「138 MiB / 请求」是<tspan font-weight="700">量级示意，不是部署数</tspan>。</text>
-<text class="svgsm" x="0" y="1368" fill="#80868b" style="font-size:14.0px">📌 递推式、key collision（L &gt; d）、delta rule ＝ Widrow-Hoff、以及「等价于对 ½‖Sk−v‖² 做一步 SGD」，均出自 DeltaNet 论文 Yang 等 arXiv <a href="https://arxiv.org/abs/2406.06484" target="_blank"><tspan text-decoration="underline">2406.06484</tspan></a> §2.1–2.2</text>
-<text class="svgsm" x="0" y="1389" fill="#80868b" style="font-size:14.0px">　　⚠️ 该文 §6 那句「表达力与并行度之间存在根本权衡」说的是 Recurrent DeltaNet / mesa-layer 那一批<tspan font-weight="700">比 delta 更强</tspan>的模型，不是 delta 对纯加法，而且原文是带引用的 suggest</text>
-<text class="svgsm" x="0" y="1410" fill="#80868b" style="font-size:14.0px">　　s</text>
-<text class="svgsm" x="0" y="1431" fill="#80868b" style="font-size:14.0px">　　⚠️ 「记事板 / 擦」是<tspan font-weight="700">现场给的比喻</tspan>，不是论文措辞</text>
+<text class="svglbl" x="14" y="844" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">②b 「叉掉」叉的是<tspan font-weight="700">一个方向</tspan>，不是一整块</tspan></text>
+<text class="svgsm" x="524" y="844" fill="#5f6368" style="font-size:11.0px">沿 k 方向压扁；所有垂直于 k 的方向，一动不动</text>
+<path d="M 80.00 1020.00 L 160.00 984.00 L 320.00 984.00 L 240.00 1020.00 Z" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1.2"/>
+<text class="svgsm" x="80" y="1042" fill="#80868b" style="font-size:15.0px">灰平面 ＝ 所有跟 k 无关的方向</text>
+<line x1="200" y1="1002" x2="200" y2="914" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="208" y="910" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">k</tspan></text>
+<line x1="200" y1="1002" x2="126" y2="940.0" stroke="#80868b" stroke-width="3.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="114" y="930" fill="#80868b" text-anchor="end" style="font-size:18.0px"><tspan font-weight="700">S</tspan></text>
+<text class="svgsm" x="200" y="1066" fill="#80868b" text-anchor="middle" style="font-size:21.0px"><tspan font-weight="700">β = 0</tspan></text>
+<text class="svgsm" x="200" y="1092" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">什么都没擦</text>
+<path d="M 410.00 1020.00 L 490.00 984.00 L 650.00 984.00 L 570.00 1020.00 Z" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1.2"/>
+<line x1="530" y1="1002" x2="530" y2="914" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="538" y="910" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">k</tspan></text>
+<line x1="530" y1="1002" x2="456" y2="971.0" stroke="#e8710a" stroke-width="3.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="444" y="961" fill="#b06000" text-anchor="end" style="font-size:18.0px"><tspan font-weight="700">S</tspan></text>
+<text class="svgsm" x="530" y="1066" fill="#b06000" text-anchor="middle" style="font-size:21.0px"><tspan font-weight="700">β = 0.5</tspan></text>
+<text class="svgsm" x="530" y="1092" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">这个方向压掉一半</text>
+<path d="M 740.00 1020.00 L 820.00 984.00 L 980.00 984.00 L 900.00 1020.00 Z" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1.2"/>
+<line x1="860" y1="1002" x2="860" y2="914" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="868" y="910" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">k</tspan></text>
+<line x1="860" y1="1002" x2="786" y2="1002.0" stroke="#1e8e3e" stroke-width="3.0" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="774" y="992" fill="#0d652d" text-anchor="end" style="font-size:18.0px"><tspan font-weight="700">S</tspan></text>
+<text class="svgsm" x="860" y="1066" fill="#0d652d" text-anchor="middle" style="font-size:21.0px"><tspan font-weight="700">β = 1</tspan></text>
+<text class="svgsm" x="860" y="1092" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">这个方向擦干净了</text>
+<path d="M 1070.00 1020.00 L 1150.00 984.00 L 1310.00 984.00 L 1230.00 1020.00 Z" fill="#f1f3f4" stroke="#e8eaed" stroke-width="1.2"/>
+<line x1="1190" y1="1002" x2="1190" y2="914" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1198" y="910" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">k</tspan></text>
+<line x1="1190" y1="1002" x2="1116" y2="1045.4" stroke="#9334e6" stroke-width="3.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="1104" y="1035" fill="#681da8" text-anchor="end" style="font-size:18.0px"><tspan font-weight="700">S</tspan></text>
+<text class="svgsm" x="1190" y="1066" fill="#681da8" text-anchor="middle" style="font-size:21.0px"><tspan font-weight="700">β > 1</tspan></text>
+<text class="svgsm" x="1190" y="1092" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">压过头，翻到平面另一侧</text>
+<rect x="56" y="1108" width="1288" height="78" rx="10" fill="#fff7ed" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="80" y="1138" fill="#b06000" style="font-size:21.0px"><tspan font-weight="700">⭐ 一张图三件事</tspan></text>
+<text class="svgsm" x="280" y="1138" fill="#5f6368" style="font-size:17.0px">① 叉的是<tspan font-weight="700">一个方向</tspan>，不是一整块　·　② β 是「叉多狠」的<tspan font-weight="700">连续旋钮</tspan>，不是开关</text>
+<text class="svgsm" x="280" y="1166" fill="#5f6368" style="font-size:17.0px">③ 也顺便解释了 <tspan font-weight="700">k 为什么一定要归一化</tspan> ——　不归一化，这个「压扁」就不受控。</text>
+<rect x="0" y="1198" width="1400" height="250" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1198" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="1200" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1228" x2="1400" y2="1228" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1218" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">③ 板子为什么会「装不下」——　它不是条数超了</tspan></text>
+<text class="svgsm" x="314" y="1218" fill="#5f6368" style="font-size:11.0px">装的不是 token，是「键到值」的对应关系</text>
+<text class="svgsm" x="56" y="1272" fill="#5f6368" style="font-size:20.0px"><tspan font-weight="700">板子上有 d 个「方向」，你要往里记 L 条对应关系</tspan></text>
+<line x1="300" y1="1400" x2="336.0" y2="1310" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="300" y1="1400" x2="348.0" y2="1336" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="300" y1="1400" x2="360.0" y2="1362" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="300" y1="1400" x2="372.0" y2="1388" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="300" y1="1400" x2="336.0" y2="1414" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<line x1="300" y1="1400" x2="348.0" y2="1310" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="300" y1="1400" x2="360.0" y2="1336" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="300" y1="1400" x2="372.0" y2="1362" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="60" y="1406" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">d 个方向</tspan></text>
+<text class="svgsm" x="470" y="1346" fill="#5f6368" style="font-size:17.0px">L 条要记的对应关系</text>
+<text class="svgsm" x="470" y="1380" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">⛔ L 超过 d 之后，</tspan></text>
+<text class="svgsm" x="470" y="1412" fill="#5f6368" style="font-size:18.0px">总有两条<tspan font-weight="700">指到同一个方向上</tspan> ——</text>
+<text class="svgsm" x="470" y="1444" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">它们就开始互相盖。</tspan></text>
+<rect x="920" y="1270" width="440" height="190" rx="10" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="944" y="1310" fill="#202124" style="font-size:21.0px"><tspan font-weight="700">⚠️ 所以别把板子想成一个盒子</tspan></text>
+<text class="svgsm" x="944" y="1346" fill="#5f6368" style="font-size:18.0px">它装的<tspan font-weight="700">不是 token</tspan>，</text>
+<text class="svgsm" x="944" y="1378" fill="#5f6368" style="font-size:18.0px">是「按这个 key，该取出那个 value」</text>
+<text class="svgsm" x="944" y="1408" fill="#5f6368" style="font-size:18.0px">这样的<tspan font-weight="700">对应关系</tspan>。</text>
+<text class="svgsm" x="944" y="1444" fill="#80868b" style="font-size:15.0px">「装不下」＝ 方向不够用了，不是条数超了</text>
+<rect x="0" y="1468" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1468" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1468" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1495" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这个比喻好在哪：它把三代的差别缩到了一个动作上</tspan></text>
+<text class="svgsm" x="20" y="1526" fill="#174ea6" style="font-size:15.0px">三代<tspan font-weight="700">读的方式几乎没变</tspan>，全部差别都在「写之前擦不擦、擦多少」：<tspan font-weight="700">不擦 → 按固定方向擦 → 学着擦</tspan>。</text>
+<text class="svgsm" x="20" y="1550" fill="#174ea6" style="font-size:15.0px">⭐ 所以看到这一支的任何一个新名字，只要问一句：<tspan font-weight="700">它的「擦」是怎么决定的？</tspan>——&#160;剩下的部分，三代之间几乎没变。</text>
+<rect x="0" y="1580" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1580" width="4" height="146" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1580" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1607" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 板子到底占多少字节 —— 全讲只有这一支没给过数</tspan></text>
+<text class="svgsm" x="20" y="1638" fill="#b06000" style="font-size:15.0px">⛔ 算交叉点之前先把口径摊开，<tspan font-weight="700">不写出来，512 就是个孤立数字</tspan>：</text>
+<text class="svgsm" x="20" y="1662" fill="#b06000" style="font-size:15.0px">状态 ＝ 32 × 128 × 128 × 4 B<tspan font-weight="700">(fp32)</tspan> ＝ <tspan font-weight="700">2 MiB</tspan>　·　GQA-8 每 token 每层 ＝ 2 × 8 × 128 × 2 B<tspan font-weight="700">(bf16)</tspan> ＝ <tspan font-weight="700">4 KiB</tspan></text>
+<text class="svgsm" x="20" y="1686" fill="#b06000" style="font-size:15.0px">→ 交叉点 ＝ <tspan font-weight="700">512 个 token</tspan>；⚠️ 两边精度不一样 ——&#160;状态若也按 bf16 存，交叉点就变成 256。⛔ 只在几百 token 以内它才更贵，到 8K 时 GQA-8 的 KV 已是它的 16 倍。</text>
+<text class="svgsm" x="20" y="1710" fill="#b06000" style="font-size:15.0px">⚠️ 形状是<tspan font-weight="700">示例</tspan>（32 头 × 128 × 128），而 69 是 K3 的真层数（K3 实际 96 头）——&#160;所以「138 MiB / 请求」是<tspan font-weight="700">量级示意，不是部署数</tspan>。</text>
+<text class="svgsm" x="0" y="1742" fill="#80868b" style="font-size:14.0px">📌 递推式、key collision（L &gt; d）、delta rule ＝ Widrow-Hoff、以及「等价于对 ½‖Sk−v‖² 做一步 SGD」，均出自 DeltaNet 论文 Yang 等 arXiv <a href="https://arxiv.org/abs/2406.06484" target="_blank"><tspan text-decoration="underline">2406.06484</tspan></a> §2.1–2.2</text>
+<text class="svgsm" x="0" y="1763" fill="#80868b" style="font-size:14.0px">　　⚠️ 该文 §6 那句「表达力与并行度之间存在根本权衡」说的是 Recurrent DeltaNet / mesa-layer 那一批<tspan font-weight="700">比 delta 更强</tspan>的模型，不是 delta 对纯加法，而且原文是带引用的 suggest</text>
+<text class="svgsm" x="0" y="1784" fill="#80868b" style="font-size:14.0px">　　s</text>
+<text class="svgsm" x="0" y="1805" fill="#80868b" style="font-size:14.0px">　　⚠️ 「记事板 / 擦」是<tspan font-weight="700">现场给的比喻</tspan>，不是论文措辞</text>
 </svg><figcaption>⭐⭐ <b>三种写法就是这一支的三代：疯狂往里写（纯加，L &gt; d 必撞车）→ 先把这个方向上的旧内容叉掉再写（delta rule）→ 选择性地叉（门控）。</b><b>那个 (I − β k kᵀ) 就是「叉掉」。</b><em>再换个角度看，它等价于对 ½‖Sk−v‖² 做一步 SGD —— 状态不再是缓存，是一个边跑边被训练的小模型。</em></figcaption></figure>
 <h3 id="s7-0">7.0　一块固定大小的记事板</h3>
 <!-- ⛔ 2026-09-12：这句提问法 fig-notepad 的落点带上已经有了，此处不再复述。 -->
