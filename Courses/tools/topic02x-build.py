@@ -98,7 +98,7 @@ head += """
   padding:14px 16px;background:#fff;text-align:center}
 .kpirow .kpi b{display:block;font-size:26px;line-height:1.15;color:#1a73e8}
 .kpirow .kpi span{display:block;margin-top:4px;font-size:12px;color:#5f6368}
-/* ⛔⛔ 2026-09-14 版面探针抓到：这个徽章的渲染位置是 left = -9991px ——
+/* ⛔⛔ 2026-09-12 版面探针抓到：这个徽章的渲染位置是 left = -9991px ——
    **它从来没显示过**，而且不产生滚动条、不报错、看截图也看不出来。
    根因是 **class 名撞车**：全站样式里 `.skip` 是无障碍「跳到正文」那个链接
    （position:absolute; left:-9999px 藏在屏幕外），而这里把 `.skip` 复用成了

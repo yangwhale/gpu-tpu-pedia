@@ -4489,7 +4489,7 @@ def main():
                              % (bad, why, html[max(0, i - 70):i + 20].replace("\n", "⏎")))
 
     # 全部自检过了，这时候才落盘。
-    # ⭐ 2026-09-14：论文编号自动变成可点链接（同专题三，见 course_links.py）
+    # ⭐ 2026-09-13：论文编号自动变成可点链接（同专题三，见 course_links.py）
     import course_links as _CL
     html = _CL.linkify_arxiv(html)
     io.open(OUT, "w", encoding="utf-8").write(html)

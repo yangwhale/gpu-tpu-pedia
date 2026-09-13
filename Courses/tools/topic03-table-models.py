@@ -249,7 +249,7 @@ _hyb = [r for r in _mix
 _oth = [r for r in _mix if r not in _hyb]
 _warm = [r for r in _hyb if r[2][-1][0] not in M.SPARSE]
 _cold = [r for r in _hyb if r[2][-1][0] in M.SPARSE]
-# ⛔⛔ 2026-09-14 二轮学生审稿抓到的最刺眼一条：本课有三处在讲「配比区间」，
+# ⛔⛔ 2026-09-12 二轮学生审稿抓到的最刺眼一条：本课有三处在讲「配比区间」，
 #   三处互斥，而且**证据就在同一张表里**：
 #     · 这里写「无一例外落在 3:1 ～ 7:1」——&nbsp;Gemma 2 和 gpt-oss 都是 **1:1**，当场证伪；
 #     · fig-info-law 写「所有 SWA 模型也全是混着全注意力用」——&nbsp;

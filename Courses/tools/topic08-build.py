@@ -323,7 +323,7 @@ a('''
 
 </body></html>''')
 
-# ⭐ 2026-09-14：论文编号自动变成可点链接（同专题三，见 course_links.py）
+# ⭐ 2026-09-13：论文编号自动变成可点链接（同专题三，见 course_links.py）
 import course_links as _CL
 _h8 = _CL.linkify_arxiv("\n".join(out))
 io.open(OUT, "w", encoding="utf-8").write(_h8)
