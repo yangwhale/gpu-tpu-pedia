@@ -307,12 +307,38 @@ def nested_a(path):
     return len(_r.findall(r"<a\b[^>]*>[^<]*<a\b", s))
 
 
+def undefined_note_class(path):
+    """用了 CSS 里没定义的 `note` 类 ——&nbsp;渲染成一个没样式的框。
+
+    ⛔ 2026-09-14 真出过：专题三用了 4 处 `note bad`，
+      而全站只定义了 ok / info / warn / danger / q。
+    ⭐ 判据：**装饰类名要照着已有的那套抄，别凭印象发明** ——
+      撞不上不报错、不难看，只是**该红的地方没红**。
+      （同型的上一次：`.skip` 撞上无障碍类，徽章 left = −9991px 从来没显示过。）
+    """
+    import re as _r
+    s = io.open(path, encoding="utf-8").read()
+    css = set(a or b for a, b in
+              _r.findall(r"\.note\.([a-z]+)\s*\{|\.note\.([a-z]+)[ ,>]", s))
+    used = set(_r.findall(r'class="note ([a-z]+)"', s))
+    return sorted(used - css)
+
+
 def main(paths):
     bad = 0
     for p in paths:
         if not os.path.exists(p):
             print('跳过（不存在）%s' % p)
             continue
+        miss = undefined_note_class(p)
+        if miss:
+            print('\n⛔ %s 用了 CSS 里没有的 note 类：%s'
+                  % (os.path.basename(p), "、".join(miss)))
+            print('    —— 渲染成一个没样式的框：不报错、不难看，'
+                  '只是**该红的地方没红**。')
+            print('    ⭐ 装饰类名照着已有那套抄（ok / info / warn / danger / q），'
+                  '别凭印象发明。')
+            bad += 1
         n_a = nested_a(p)
         if n_a:
             print('\n⛔⛔ %s 有 %d 处**嵌套 <a>** —— 非法 HTML，'

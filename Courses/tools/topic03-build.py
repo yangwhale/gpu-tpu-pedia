@@ -574,7 +574,7 @@ __FIG_ATTN_INVENTED__
 __FIG_MHA_SWAP__
 <!-- ⛔ 2026-09-12：前半句（O(n)→O(1)、格子 n→n²）图上就写着，删。
      留下的这句**图画不出来**：图能画「多了什么」，画不出「少了什么」。 -->
-<div class="note bad"><p>⛔ <b>被换掉的不只是那根箭头 ——&nbsp;状态也没了。</b>
+<div class="note danger"><p>⛔ <b>被换掉的不只是那根箭头 ——&nbsp;状态也没了。</b>
   RNN 那个固定大小的 <code>h</code>，被换成了「<b>把所有历史原封不动留着</b>」。
   <em>这一句后面每一节都要用到。</em></p></div>
 
@@ -673,7 +673,7 @@ __FIG_INFO_LAW__
   而这条幂律是「实际需求」</b>；
   前两个旋钮做的事，是在不掉到需求线以下的前提下<b>把过量的常数压小</b>。</em></p>
 
-<div class="note bad"><p>⛔ <b>图上那 488 GiB 是「假如 V3 用 MHA」的反事实值</b>，
+<div class="note danger"><p>⛔ <b>图上那 488 GiB 是「假如 V3 用 MHA」的反事实值</b>，
   不是 V3 的实测 ——&nbsp;<b>V3 从第一天就是 MLA</b>。
   <em>这门课自己的规矩：推出来的数必须带推导链和口径，图里两样都写了。</em></p></div>
 <p>⭐ 还有一句图上画不出来、后面却要反复用：
@@ -849,7 +849,7 @@ __FIG_WHEN_AXIS__
 <tr><td><b>①+②+③ 混着来</b></td><td>不同层用不同方案</td><td><b>Hybrid</b>：V4 的 CSA+HCA、K3 的 KDA+Gated MLA</td></tr>
 </tbody></table>
 
-<div class="note bad"><p>⛔⛔ <b>账本在这里交棒 ——&nbsp;这句要主动说，别等它自己露馅。</b></p>
+<div class="note danger"><p>⛔⛔ <b>账本在这里交棒 ——&nbsp;这句要主动说，别等它自己露馅。</b></p>
 <p>开场那句「只有一个账本：KV cache」到这里为止<b>还成立</b>，
   但<b>拧下去就不成立了</b>：</p>
 <ul>
@@ -953,7 +953,7 @@ __FIG_MQA_WHY__
 <p>MLA 的超参出自 <b>V3 论文 §4.2</b>：
   <code>n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</code>
   ——&nbsp;<em>图上那 576 就是 512 ＋ 64。</em></p>
-<div class="note bad"><p>⛔⛔ <b>MLA 最大的<u>推理</u>部署坑：它在张量并行下会退化（⭐ 2026-09-13 补）</b></p>
+<div class="note danger"><p>⛔⛔ <b>MLA 最大的<u>推理</u>部署坑：它在张量并行下会退化（⭐ 2026-09-13 补）</b></p>
 <p>⚠️ <b>先把作用域说死：下面讲的<u>只是推理</u>。</b><em>训练侧没有这个问题 ——&nbsp;训练<b>没有 cache 要复制</b>，W<sup>UK</sup>/W<sup>UV</sup> 都是按头切的，TP 照切；被复制的只有那个 576 维的<b>隐向量激活</b>，跟 7168 维的 hidden 比可以忽略。</em></p>
 <p>GQA / MHA 的 KV 是<b>按头切</b>的，TP=8 就每张卡各存八分之一，天然可分。
   <b>而 MLA 的 KV 是一份 576 维的隐向量，根本不按头分</b> ——&nbsp;于是只剩三条路：</p>

@@ -1437,7 +1437,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
   <p>不打，就<b>不用付那个成本</b> —— 少两个 ICI 口、少一个维度、Pod 小一个数量级，
     省下来的面积和功耗，全都还给了算力密度。<b>这三条不是减配，是不同的题面。</b></p>
 
-  <div class="note bad"><span class="t">⛔⛔ 「装得下」和「该用几颗」是两个不同的问题</span>
+  <div class="note danger"><span class="t">⛔⛔ 「装得下」和「该用几颗」是两个不同的问题</span>
     这张图右列以前是<b>拿权重体积除以 32 GB 推出来的颗数</b>。换成实测之后，
     两处猜错立刻显形：
     <br><b>① S3Diff 只有 6.6 GB</b>，按体积「一颗绰绰有余」——&nbsp;对，但重点不在这。
@@ -1554,7 +1554,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
 </svg>
 <figcaption><b>图 X-7</b>　SparseCore <b>有两个职责</b>：① 稀疏 / 大表（推荐模型那类）；<b>② 集合通信卸载 —— 把 all-reduce、all-gather 从 TensorCore 手里接过去，不占 MXU，跟计算真正并行。</b><em>⛔ 这张图推翻重写过一次，图上原样保留了错在哪 —— 那个错法本身值得讲给学员听。</em></figcaption></figure>
 
-  <div class="note bad"><span class="t">⛔ 这个错法值得单独讲一遍</span>
+  <div class="note danger"><span class="t">⛔ 这个错法值得单独讲一遍</span>
     初版这张图写的是「扩散模型用不到 SparseCore，它是给推荐系统那类负载准备的」。
     <b>那是错的。</b>
     <br>错误的来源：架构文档里写着
@@ -2088,7 +2088,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
     </tbody>
   </table>
 
-  <div class="note bad"><span class="t">⛔ 所以「视频模型都很重」这句话不能当依据</span>
+  <div class="note danger"><span class="t">⛔ 所以「视频模型都很重」这句话不能当依据</span>
     开了滑窗，注意力从占七成掉到占一成，<b>整个「计算密集」的结论也就跟着塌了</b>。
     <br>⭐ 判据：<b>这个字段必须去 config 里看，不能凭直觉推。</b>
     同一族模型里，开不开窗口是设计者逐个模型做的选择 ——
@@ -2414,7 +2414,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
     <br><em>短板不参与，长板打平 —— 这就是「合适」的全部含义。</em>
   </div>
 
-  <div class="note bad"><span class="t">⛔ 反过来同样成立，而且更该记住</span>
+  <div class="note danger"><span class="t">⛔ 反过来同样成立，而且更该记住</span>
     <b>小 batch 的 decode 落在轴的最左边</b>，那里比的全是带宽 ——
     而 v6e 只有 H100 的 <b>49%</b>。
     <b>同一颗芯片，在那种活上就是最吃亏的那颗。</b>
@@ -2573,7 +2573,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
     这次连误差都没有，因为字节数是精确的。</em>
   </div>
 
-  <div class="note bad"><span class="t">⛔ 这张图有两处极易读反</span>
+  <div class="note danger"><span class="t">⛔ 这张图有两处极易读反</span>
     ① <b>它画的是体积，不是时间。</b>腰细不代表那一段轻松 ——
     恰恰相反，<b>产出那 19.4 MB 的 Stage 2 占了全程 98% 的时间。</b>
     <br>② ⛔ <b>初版这里画过一根 457 GB 的「注意力分数矩阵」柱子，已删除。</b>
@@ -2753,7 +2753,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
     </tbody>
   </table>
 
-  <div class="note bad"><span class="t">⛔ 照顺口结论摆，等于把瓶颈从 TPU 挪到了 CPU 上</span>
+  <div class="note danger"><span class="t">⛔ 照顺口结论摆，等于把瓶颈从 TPU 挪到了 CPU 上</span>
     Flux.2 那个「轻量」的第一段，<b>反而是全程最慢的一段</b>。
     <br>⭐ 判据不是<b>「哪一段天生该放哪」</b>，而是
     <b>「先量一量它在目标硬件上要多久」</b>。
@@ -3045,7 +3045,7 @@ figure.fbox > svg { max-width: 1400px; margin-left: auto; margin-right: auto;
     <br><em>——&nbsp;它不是「又一个 tracing 框架」，它是<b>在算子这一层换了后端</b>。</em>
   </div>
 
-  <div class="note bad"><span class="t">⛔ 但别把这张图读成「第二代是弯路」</span>
+  <div class="note danger"><span class="t">⛔ 但别把这张图读成「第二代是弯路」</span>
     <b>没有第二代，我们不会知道该往哪个方向优化。</b>
     分片策略、内存布局、数值对齐这些认识，全是在手写那一版里长出来的 ——
     一开始就用 torchax，这些东西会被框架挡在视野之外。
