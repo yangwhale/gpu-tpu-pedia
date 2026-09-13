@@ -1316,9 +1316,19 @@ __FIG_ABSORB__
   <em>原话：<code>a RoPE matrix … will lie between W<sup>Q</sup> and
   W<sup>UK</sup> and matrix multiplication does not obey a commutative
   law</code>。</em></p>
-<p>⭐ 这就是 5.3 那张寄快递的图在讲的事：
-  <b>把带位置的那一小块单独拎出来走 64 维一路</b> ——&nbsp;
-  包裹外面贴日期，包裹里面保持「一次就能翻译完」。</p></div>
+<!-- ⭐⭐⭐ 2026-09-14 R44 补的一层。上面那两段是**论文自己的说法**，没错，
+     但「交换律不成立」是结论不是原因 —— 因为吸收这一步本来就只用结合律。
+     真正预乘不出来的是 R 带着的那个下标。推导链写在 fig3-knob1 的脚本头部。 -->
+<p>⭐⭐ <b>再往下追一层：卡住的不是「中间有东西」，是那东西<u>带下标</u>。</b>
+  假如塞在中间的是一块<b>固定</b>的矩阵 <code>M</code>，那
+  <code>W<sup>UQ</sup>ᵀ M W<sup>UK</sup></code> 照样能预乘成<b>一个</b>矩阵，
+  吸收完全成立 ——&nbsp;<b>这一步只用到结合律，压根没要交换律。</b></p>
+<p>可 RoPE 是<b>相对</b>的：<code>R<sub>t</sub>ᵀR<sub>j</sub> ＝
+  R<sub>j−t</sub></code> ——&nbsp;<b>每一对 (query, key) 对应一个不同的矩阵</b>。
+  要预乘就得预乘出<b>一整套</b>，有多少种相对距离就有多少个。
+  <b>这才是真做不到的那一步。</b></p>
+<p>⭐ 而 5.3 那张图画的就是解法：<b>把带位置的那一小块单独拎出来走 64 维一路</b>
+  ——&nbsp;<b>宽的那条轨上没有闸，紫块照旧搬得走。</b></p></div>
 
 <div class="note info"><p>📌 <b>同一个把戏，本讲这是第三次出场</b></p>
 <p><b>§七 线性注意力</b>：把括号从 <code>(QKᵀ)V</code> 挪成

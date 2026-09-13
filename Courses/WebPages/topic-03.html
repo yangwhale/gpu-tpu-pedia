@@ -5562,7 +5562,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="0" y="1324" fill="#80868b" style="font-size:14.0px">　　📐 θ_m ＝ 10000^(−2(m−1)/d) ＝ 1/β^(m−1) 这条等式<tspan font-weight="700">由本脚本当场验证并断言</tspan>，不是转述；RoPE 原始出处 RoFormer arXiv <a href="https://arxiv.org/abs/2104.09864" target="_blank"><tspan text-decoration="underline">2104.09864</tspan></a></text>
 </svg><figcaption>⭐⭐ <b>一个位置 ＝ 一排里程表转盘的读数</b>：最右边转得飞快，往左逐级变慢。两个位置各自转完之后，<b>每个盘上你只看得出两根针差多少，看不出各自转到哪儿</b> —— 这就是「点积自动带相对距离」的全部内容。<em>⭐ 顺带把长文本那三种做法一句话各自归位：直接外推＝硬往超刻度处读；内插＝每格走半格；NTK-aware＝换一个进制。</em></figcaption></figure>
 
-<figure class="fbox fwide" id="fig-knob1"><svg viewBox="0 0 1400 1237" width="100%" role="img" aria-label="旋钮一：让每一份更小。四种存法在同一形状下的对照 —— MQA 比 MLA 存得还少，所以这一支比的不是谁存得少；右边讲为什么 MLA 的 RoPE 必须单独走一路"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-knob1"><svg viewBox="0 0 1400 1576" width="100%" role="img" aria-label="旋钮一：让每一份更小。四种存法在同一形状下的对照 —— MQA 比 MLA 存得还少，所以这一支比的不是谁存得少；右边讲为什么 MLA 的 RoPE 必须单独走一路"><defs><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">旋钮 ① 让每一份更小 ——&#160;<tspan font-weight="700">但比的从来不是「谁存得最少」</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">同一个形状（V3：61 层 · 128 头 · 每头 128 维 · 128K · bf16），换四种存法</text>
 <rect x="0" y="82" width="1400" height="420" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
@@ -5616,51 +5616,107 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="16" y="412" fill="#5f6368" style="font-size:17.0px">⚠️ <tspan font-weight="700">纵轴是定性的</tspan> ——　四家<tspan font-weight="700">没有同一份可比的实测</tspan>。唯一同基准的一对是 MQA 论文表 3：MHA 29.9 ／ MQA 30.2 ／ 真单头 31.2（困惑度，越低越好）；</text>
 <text class="svgsm" x="16" y="438" fill="#5f6368" style="font-size:17.0px">GQA 与 MLA 各自的论文只声称「接近／不弱于 MHA」，不是同一张表 ——　所以这里只画两档，不画连续刻度。</text>
 <text class="svgsm" x="16" y="474" fill="#80868b" style="font-size:16.0px">📐 横轴那几个数：61 层 · 128K · bf16 · batch 1，一个用户一份 ——　MHA 488 GiB ／ GQA-8 30.50 ／ MLA 8.58 ／ MQA 3.81。</text>
-<rect x="0" y="520" width="1400" height="512" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="520" width="1400" height="830" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="520" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
 <rect x="0" y="522" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="550" x2="1400" y2="550" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="540" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">为什么 MLA 的 RoPE 必须单独走一路</tspan></text>
-<text class="svgsm" x="266" y="540" fill="#5f6368" style="font-size:11.0px">先看一个寄快递的画面</text>
-<text class="svgsm" x="16" y="582" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">① 没有 RoPE：仓库只存压缩包</tspan></text>
-<rect x="16" y="594" width="120" height="52" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="76" y="626" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">压缩包</tspan></text>
-<line x1="144" y1="620" x2="188" y2="620" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-<rect x="196" y="594" width="150" height="52" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="271" y="616" fill="#5f6368" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">收件人自己拆</tspan></text>
-<text class="svgsm" x="271" y="638" fill="#80868b" text-anchor="middle" style="font-size:14.0px">（吸收进 q 那一侧）</text>
-<text class="svgsm" x="366" y="626" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">✅ 仓库省地方</tspan></text>
-<text class="svgsm" x="16" y="686" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">② 插进 RoPE：中间多了一道仓库必须做的工序</tspan></text>
-<rect x="16" y="698" width="120" height="52" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="76" y="730" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">压缩包</tspan></text>
-<line x1="144" y1="724" x2="176" y2="724" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="182" y="698" width="116" height="52" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="240" y="722" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">按位置转一下</tspan></text>
-<text class="svgsm" x="240" y="744" fill="#80868b" text-anchor="middle" style="font-size:14.0px">（那个 R）</text>
-<line x1="306" y1="724" x2="338" y2="724" stroke="#d93025" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<rect x="344" y="698" width="150" height="52" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="419" y="730" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">只好先拆开再存</tspan></text>
-<text class="svgsm" x="16" y="772" fill="#5f6368" style="font-size:16.0px">⛔ 这道工序卡在中间，<tspan font-weight="700">拆包这件事就挪不走了</tspan></text>
-<rect x="16" y="794" width="1368" height="96" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="32" y="820" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">③ 解法：把「必须在仓库做工序」的那一小部分单拿出来</tspan></text>
-<text class="svgsm" x="32" y="844" fill="#202124" style="font-size:15.0px"><tspan font-weight="700">512 维</tspan>不带位置 → 照旧只存压缩包、拆包挪给收件人</text>
-<text class="svgsm" x="32" y="866" fill="#202124" style="font-size:15.0px"><tspan font-weight="700">64 维</tspan>专扛 RoPE → 老老实实拆开存　＝　一共 <tspan font-weight="700">576</tspan></text>
-<text class="svgsm" x="16" y="920" fill="#80868b" style="font-size:14.5px">📌 代数上就是这两行：</text>
-<rect x="16" y="928" width="1368" height="28" rx="6" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="32" y="947" fill="#0d652d" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">qᵀ (W_UK c) ＝ (W_UKᵀ q)ᵀ c</tspan></text>
-<text class="svgsm" x="300" y="947" fill="#0d652d" style="font-size:14.5px">✅ 挪得走</text>
-<rect x="16" y="962" width="1368" height="28" rx="6" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
-<text class="svgsm" x="32" y="981" fill="#a50e0e" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">qᵀ R (W_UK c)</tspan></text>
-<text class="svgsm" x="300" y="981" fill="#a50e0e" style="font-size:14.5px">⛔ R 夹在中间，分不开</text>
-<rect x="0" y="1050" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1050" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="1050" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1077" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐ 把 5.3 当成一个套路记住，别当成 MLA 的实现细节</tspan></text>
-<text class="svgsm" x="20" y="1108" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">「为了保住某个代数变换，把功能拆成两路」</tspan>——&#160;这个动作后面还会换面貌出现：<tspan font-weight="700">V4 的部分 RoPE、K3 的 NoPE</tspan>。</text>
-<text class="svgsm" x="20" y="1132" fill="#174ea6" style="font-size:15.0px">⛔ <tspan font-weight="700">MLA 的代价是用计算换显存</tspan>：多了一对降维／升维矩阵乘。而且<tspan font-weight="700">它省的是推理时的 KV cache，不是训练时的激活</tspan>——&#160;训练前向里 K/V 会被解压出来算。<tspan font-weight="700">这是个非常常见的误解。</tspan></text>
-<text class="svgsm" x="20" y="1156" fill="#174ea6" style="font-size:15.0px">⭐ <tspan font-weight="700">Gated MLA</tspan>（K3）在 MLA 输出端加一个全秩门控 —— ⛔ <tspan font-weight="700">它一个字节的 KV 都不省</tspan>，它让模型能学会「这一层这个位置，注意力的输出干脆不要」。</text>
-<text class="svgsm" x="0" y="1188" fill="#80868b" style="font-size:14.0px">📌 四个数由公式当场算出并断言（脚本内）；MLA 超参出自 V3 论文 §4.2：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</text>
-<text class="svgsm" x="0" y="1209" fill="#80868b" style="font-size:14.0px">　　MQA：Shazeer arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank"><tspan text-decoration="underline">1911.02150</tspan></a>　GQA：Ainslie 等 arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank"><tspan text-decoration="underline">2305.13245</tspan></a>　MLA：DeepSeek-V2/V3 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank"><tspan text-decoration="underline">2412.19437</tspan></a>　Gated MLA：Kimi K3 技术报告 §2.1.2</text>
+<text class="svgsm" x="266" y="540" fill="#5f6368" style="font-size:11.0px">沿用 §5.4b 那块紫方块 ——&#160;这一格只多一样东西：一道闸</text>
+<text class="svgsm" x="16" y="576" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">① 本来能做成什么 ——&#160;<tspan font-weight="700">紫色那块搬得走</tspan></tspan></text>
+<rect x="40" y="620" width="70" height="52" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="75" y="653" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">q</tspan></text>
+<text class="svgsm" x="75" y="690" fill="#80868b" text-anchor="middle" style="font-size:14.0px">一步只有一个</text>
+<rect x="140" y="620" width="118" height="52" rx="7" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.6"/>
+<text class="svgsm" x="199" y="653" fill="#681da8" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">W_UK</tspan></text>
+<text class="svgsm" x="199" y="690" fill="#80868b" text-anchor="middle" style="font-size:14.0px">上投影</text>
+<rect x="288" y="620" width="84" height="52" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="330" y="653" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">c</tspan></text>
+<text class="svgsm" x="330" y="690" fill="#80868b" text-anchor="middle" style="font-size:14.0px">仓库里存的就是它</text>
+<path d="M 199.0 604.0 H 75.0 Q 75.0 604.0 75.0 604.0 V 604.0" fill="none" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="128" y="596" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">搬过去</tspan></text>
+<text class="svgsm" x="418" y="654" fill="#80868b" style="font-size:24.0px">＝</text>
+<rect x="458" y="620" width="176" height="52" rx="7" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.6"/>
+<text class="svgsm" x="546" y="653" fill="#681da8" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">(W_UKᵀq)</tspan></text>
+<text class="svgsm" x="546" y="690" fill="#80868b" text-anchor="middle" style="font-size:14.0px">预乘好，一次算完</text>
+<rect x="664" y="620" width="84" height="52" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="706" y="653" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">c</tspan></text>
+<text class="svgsm" x="706" y="690" fill="#80868b" text-anchor="middle" style="font-size:14.0px">原封不动</text>
+<text class="svgsm" x="794" y="654" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">✅ 仓库里那些 c，一个都不用拆</tspan></text>
+<text class="svgsm" x="16" y="738" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">② 插进 RoPE：<tspan font-weight="700">路当中立了一道闸</tspan></tspan></text>
+<rect x="40" y="782" width="70" height="52" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="75" y="815" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">q</tspan></text>
+<rect x="158" y="764" width="132" height="52" rx="7" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="149" y="773" width="132" height="52" rx="7" fill="#fff" stroke="#d93025" stroke-width="1.0"/>
+<rect x="140" y="782" width="132" height="52" rx="7" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="206" y="815" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">R(j-t)</tspan></text>
+<line x1="150" y1="794" x2="262" y2="794" stroke="#d93025" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="5 4"/>
+<line x1="150" y1="808" x2="262" y2="808" stroke="#d93025" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="5 4"/>
+<line x1="150" y1="822" x2="262" y2="822" stroke="#d93025" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="5 4"/>
+<rect x="302" y="782" width="118" height="52" rx="7" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.6"/>
+<text class="svgsm" x="361" y="815" fill="#681da8" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">W_UK</tspan></text>
+<rect x="450" y="782" width="84" height="52" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="492" y="815" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">c</tspan></text>
+<line x1="352" y1="764" x2="280" y2="764" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="268" y="772" fill="#a50e0e" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">✕</tspan></text>
+<text class="svgsm" x="206" y="752" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">想搬，搬不动</tspan></text>
+<text class="svgsm" x="16" y="864" fill="#5f6368" style="font-size:17.0px">⛔ <tspan font-weight="700">紫块过不去</tspan>，那 W_UK c 就只能<tspan font-weight="700">在仓库里先算出来</tspan> ——&#160;那等于又存了一份<tspan font-weight="700">没压缩的 K</tspan>，MLA 白压了。</text>
+<rect x="16" y="888" width="1368" height="214" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="32" y="916" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">⭐⭐ 卡住的不是「中间有东西」，是那东西<tspan font-weight="700">带下标</tspan> ——&#160;<tspan font-weight="700">一块</tspan>预乘得掉，<tspan font-weight="700">一摞</tspan>预乘不掉</tspan></text>
+<text class="svgsm" x="40" y="940" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">假如闸是<tspan font-weight="700">固定</tspan>的一块</tspan></text>
+<rect x="40" y="980" width="96" height="50" rx="6" fill="#f1f3f4" stroke="#80868b" stroke-width="1.8"/>
+<text class="svgsm" x="88" y="1011" fill="#80868b" text-anchor="middle" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">M</tspan></text>
+<text class="svgsm" x="152" y="1012" fill="#80868b" style="font-size:24.0px">→</text>
+<rect x="190" y="980" width="230" height="50" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.8"/>
+<text class="svgsm" x="305" y="1011" fill="#681da8" text-anchor="middle" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">W_UQᵀ M W_UK</tspan></text>
+<text class="svgsm" x="40" y="1058" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">✅ 还是<tspan font-weight="700">一个</tspan>矩阵，预乘好收工 ——&#160;跟 ① 没区别</tspan></text>
+<line x1="470" y1="928" x2="470" y2="1070" stroke="#dadce0" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="4 4"/>
+<text class="svgsm" x="510" y="940" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">可 RoPE 是<tspan font-weight="700">相对</tspan>的：R_tᵀ R_j ＝ R(j-t)</tspan></text>
+<rect x="537" y="953" width="96" height="50" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.1"/>
+<rect x="528" y="962" width="96" height="50" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.1"/>
+<rect x="519" y="971" width="96" height="50" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.1"/>
+<rect x="510" y="980" width="96" height="50" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+<text class="svgsm" x="558" y="1011" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">R(1)</tspan></text>
+<text class="svgsm" x="622" y="1012" fill="#a50e0e" style="font-size:24.0px">→</text>
+<rect x="687" y="953" width="230" height="50" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.1"/>
+<rect x="678" y="962" width="230" height="50" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.1"/>
+<rect x="669" y="971" width="230" height="50" rx="6" fill="#fff" stroke="#d93025" stroke-width="1.1"/>
+<rect x="660" y="980" width="230" height="50" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1.8"/>
+<text class="svgsm" x="775" y="1011" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">W_UQᵀ R(j-t) W_UK</tspan></text>
+<text class="svgsm" x="936" y="1006" fill="#80868b" style="font-size:15.0px">有多少种距离</text>
+<text class="svgsm" x="936" y="1028" fill="#80868b" style="font-size:15.0px">就有多少块</text>
+<text class="svgsm" x="510" y="1058" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 这是<tspan font-weight="700">一摞</tspan>，不是一个 ——&#160;<tspan font-weight="700">预乘不出「那一个」，因为根本不存在那一个</tspan></tspan></text>
+<text class="svgsm" x="32" y="1084" fill="#80868b" style="font-size:15.0px">📌 论文原话是「matrix multiplication does not obey a commutative law」 ——&#160;那是结论。<tspan font-weight="700">吸收要的其实是结合律，而结合律一直成立</tspan>。（说法取自苏剑林，出处见页脚）</text>
+<text class="svgsm" x="16" y="1140" fill="#681da8" style="font-size:17.0px"><tspan font-weight="700">③ 解法：<tspan font-weight="700">把一条轨劈成两条</tspan> ——&#160;让闸只站在其中一条上</tspan></text>
+<rect x="16" y="1156" width="1368" height="156" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
+<rect x="48" y="1186" width="70" height="44" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="83" y="1215" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">q</tspan></text>
+<rect x="148" y="1186" width="118" height="44" rx="7" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.6"/>
+<text class="svgsm" x="207" y="1215" fill="#681da8" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">W_UK</tspan></text>
+<rect x="296" y="1186" width="84" height="44" rx="7" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="338" y="1215" fill="#0d652d" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">c</tspan></text>
+<path d="M 207.0 1174.0 H 83.0 Q 83.0 1174.0 83.0 1174.0 V 1174.0" fill="none" stroke="#9334e6" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="420" y="1215" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">512 维</tspan>，不带位置 ——&#160;闸不在这条上，<tspan font-weight="700">紫块照旧搬走</tspan></text>
+<rect x="48" y="1248" width="70" height="44" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="83" y="1277" fill="#174ea6" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">qᴿ</tspan></text>
+<rect x="148" y="1248" width="132" height="44" rx="7" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="214" y="1277" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">R(j-t)</tspan></text>
+<line x1="158" y1="1257" x2="270" y2="1257" stroke="#d93025" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="5 4"/>
+<line x1="158" y1="1270" x2="270" y2="1270" stroke="#d93025" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="5 4"/>
+<line x1="158" y1="1283" x2="270" y2="1283" stroke="#d93025" stroke-width="1.1" stroke-linecap="round" stroke-dasharray="5 4"/>
+<rect x="310" y="1248" width="84" height="44" rx="7" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="352" y="1277" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">kᴿ</tspan></text>
+<text class="svgsm" x="468" y="1277" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">64 维</tspan>，专扛位置 ——&#160;这条<tspan font-weight="700">不吸收，老实存着</tspan></text>
+<text class="svgsm" x="16" y="1340" fill="#202124" style="font-size:17.0px">⭐ 两条并起来 ＝ <tspan font-weight="700">512 ＋ 64 ＝ 576</tspan>。⛔ 注意这不是「把 RoPE 关小了」——&#160;<tspan font-weight="700">位置信息一点没少，只是被赶到了一条窄轨上</tspan>，好让宽的那条保住 ① 的搬家动作。</text>
+<rect x="0" y="1368" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1368" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1368" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1395" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐ 把 5.3 当成一个套路记住，别当成 MLA 的实现细节</tspan></text>
+<text class="svgsm" x="20" y="1426" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">「为了保住某个代数变换，把功能拆成两路」</tspan>——&#160;这个动作后面还会换面貌出现：<tspan font-weight="700">V4 的部分 RoPE、K3 的 NoPE</tspan>。</text>
+<text class="svgsm" x="20" y="1450" fill="#174ea6" style="font-size:15.0px">⛔ <tspan font-weight="700">MLA 的代价是用计算换显存</tspan>：多了一对降维／升维矩阵乘。而且<tspan font-weight="700">它省的是推理时的 KV cache，不是训练时的激活</tspan>——&#160;训练前向里 K/V 会被解压出来算。<tspan font-weight="700">这是个非常常见的误解。</tspan></text>
+<text class="svgsm" x="20" y="1474" fill="#174ea6" style="font-size:15.0px">⭐ <tspan font-weight="700">Gated MLA</tspan>（K3）在 MLA 输出端加一个全秩门控 —— ⛔ <tspan font-weight="700">它一个字节的 KV 都不省</tspan>，它让模型能学会「这一层这个位置，注意力的输出干脆不要」。</text>
+<text class="svgsm" x="0" y="1506" fill="#80868b" style="font-size:14.0px">📌 四个数由公式当场算出并断言（脚本内）；MLA 超参出自 V3 论文 §4.2：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</text>
+<text class="svgsm" x="0" y="1527" fill="#80868b" style="font-size:14.0px">　　MQA：Shazeer arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank"><tspan text-decoration="underline">1911.02150</tspan></a>　GQA：Ainslie 等 arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank"><tspan text-decoration="underline">2305.13245</tspan></a>　MLA：DeepSeek-V2/V3 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank"><tspan text-decoration="underline">2412.19437</tspan></a>　Gated MLA：Kimi K3 技术报告 §2.1.2</text>
+<text class="svgsm" x="0" y="1548" fill="#80868b" style="font-size:14.0px">　　⭐ 「中间那项跟位置差相关，所以合并不成一个固定矩阵」这个说法取自 苏剑林《缓存与效果的极限拉扯：从 MHA、MQA、GQA 到 MLA》（kexue.fm/archives/10091）——&#160;原话已核</text>
 </svg><figcaption>⭐⭐ <b>左边四种存法摆在同一形状下：MQA 反而比 MLA 还小 2.25 倍。</b><b>所以这一支比的不是「谁存得最少」，是「同样一份字节换回多少能力」。</b><em>右边那三行代数，就是 MLA 为什么非要把 RoPE 拆出去单走一路。</em></figcaption></figure>
 <!-- ⭐⭐ 2026-09-13 夜间 R1 加。现场原话：
      「像 MLA 这种东西，它为什么能压缩？这里边跟信息论有关的东西，对吧？」
@@ -6762,9 +6818,19 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <em>原话：<code>a RoPE matrix … will lie between W<sup>Q</sup> and
   W<sup>UK</sup> and matrix multiplication does not obey a commutative
   law</code>。</em></p>
-<p>⭐ 这就是 5.3 那张寄快递的图在讲的事：
-  <b>把带位置的那一小块单独拎出来走 64 维一路</b> ——&nbsp;
-  包裹外面贴日期，包裹里面保持「一次就能翻译完」。</p></div>
+<!-- ⭐⭐⭐ 2026-09-14 R44 补的一层。上面那两段是**论文自己的说法**，没错，
+     但「交换律不成立」是结论不是原因 —— 因为吸收这一步本来就只用结合律。
+     真正预乘不出来的是 R 带着的那个下标。推导链写在 fig3-knob1 的脚本头部。 -->
+<p>⭐⭐ <b>再往下追一层：卡住的不是「中间有东西」，是那东西<u>带下标</u>。</b>
+  假如塞在中间的是一块<b>固定</b>的矩阵 <code>M</code>，那
+  <code>W<sup>UQ</sup>ᵀ M W<sup>UK</sup></code> 照样能预乘成<b>一个</b>矩阵，
+  吸收完全成立 ——&nbsp;<b>这一步只用到结合律，压根没要交换律。</b></p>
+<p>可 RoPE 是<b>相对</b>的：<code>R<sub>t</sub>ᵀR<sub>j</sub> ＝
+  R<sub>j−t</sub></code> ——&nbsp;<b>每一对 (query, key) 对应一个不同的矩阵</b>。
+  要预乘就得预乘出<b>一整套</b>，有多少种相对距离就有多少个。
+  <b>这才是真做不到的那一步。</b></p>
+<p>⭐ 而 5.3 那张图画的就是解法：<b>把带位置的那一小块单独拎出来走 64 维一路</b>
+  ——&nbsp;<b>宽的那条轨上没有闸，紫块照旧搬得走。</b></p></div>
 
 <div class="note info"><p>📌 <b>同一个把戏，本讲这是第三次出场</b></p>
 <p><b>§七 线性注意力</b>：把括号从 <code>(QKᵀ)V</code> 挪成
