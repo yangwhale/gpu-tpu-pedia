@@ -10018,7 +10018,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="0" y="1389" fill="#80868b" style="font-size:14.0px">　　「0:1 反而表现不好」出自 Kimi Linear arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank"><tspan text-decoration="underline">2510.26692</tspan></a> ——&#160;⚠️ 原文只有一句定性描述，<tspan font-weight="700">没有公开数值</tspan></text>
 <text class="svgsm" x="0" y="1410" fill="#80868b" style="font-size:14.0px">　　NoPE 见 <tspan font-weight="700">Kimi Linear</tspan> 同文（对所有全注意力层用 NoPE）——&#160;⚠️ <tspan font-weight="700">是它先做的，K3 是沿用</tspan></text>
 <text class="svgsm" x="0" y="1431" fill="#80868b" style="font-size:14.0px">　　⚠️ 「普通员工 / 资深」是<tspan font-weight="700">本课的比喻</tspan></text>
-</svg><figcaption>⭐⭐ <b>配比是一条轴，而两头都不好。</b><b>纯线性那一头不是「实测不行」—— §二 那条 L2M 条件说它的状态必须随长度变大。</b><em>⚠️ 但「变大」的办法不止混合一种：论文自己给的另一条是按长度整个放大模型。混合是工程上选的那条，不是定理逼出来的那条。</em><em>而左端那个反直觉结果更值得讲：Kimi 的消融里 0:1（纯全注意力）反而表现不好 —— 加线性层不只是省钱。</em></figcaption></figure>
+</svg><figcaption>⭐⭐ <b>配比是一条轴，而两头都不好。</b><b>纯线性那一头不是「实测不行」—— §二 那条 L2M 条件说它的状态必须随长度变大。</b><em>⚠️ 但「变大」的办法不止混合一种：论文自己给的另一条是按长度整个放大模型。混合是工程上选的那条，不是定理逼出来的那条。</em><em>而左端那个反直觉结果更值得讲：Kimi 的消融里 0:1（纯全注意力）反而表现不好 —— 加线性层不只是省钱。那张消融表长什么样、它又<b>问不出</b>什么，见 <a href="#s八">§8.2</a>。</em></figcaption></figure>
 <h3 id="s8-1">8.1 为什么混合几乎是唯一的答案</h3>
 <p>单用任何一个旋钮都有一个致命短板：</p>
 <table>
@@ -10045,7 +10045,283 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <tr><td>一篇系统性消融</td><td>建议区间 <b>3:1 ～ 6:1</b></td><td>arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a></td></tr>
 </tbody></table>
 <p>⭐ <b>三件事要讲清楚：</b></p>
-<ol><li><b>3:1 是消融出来的，不是推出来的。</b> Kimi Linear 的消融里， <b>0:1（纯全注意力）反而表现不好</b>（⚠️ 原文只有这一句定性描述，没公开数值）—— 这个结果比"3:1 最好"更有意思： 加线性层不只是省钱，<b>它可能还带来了别的东西</b></li><li><b>同一家不同规模就换了配比</b>（Ling 的 tiny 3:1 / flash 5:1）—— <b>配比是超参，跟规模和数据有关，不要背下来当常识</b></li><li><b>区间比点值可信。</b> 记 "3:1 到 6:1 这个量级" 就够了</li></ol>
+<ol><li><b>3:1 是消融出来的，不是推出来的。</b> Kimi Linear 的消融里， <b>0:1（纯全注意力）反而不是最好的</b> —— 这个结果比"3:1 最好"更有意思： 加线性层不只是省钱，它可能还带来了别的东西</li><li><b>同一家不同规模就换了配比</b>（Ling 的 tiny 3:1 / flash 5:1）—— <b>配比是超参，跟规模和数据有关，不要背下来当常识</b></li><li><b>区间比点值可信。</b> 记 "3:1 到 6:1 这个量级" 就够了</li></ol>
+<!-- ⛔ 2026-09-14 R28 改：上面第 1 条原来写着「⚠️ 原文只有这一句定性描述，
+     **没公开数值**」——&nbsp;**这是错的**。arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a>v2 <a href="#s5-1">§5.2</a> Table 1
+     把五个配比的训练 / 验证 PPL 全列出来了（3:1 9.23/5.65、0:1 9.45/5.77、
+     1:1 9.29/5.66、7:1 9.23/5.70、15:1 9.34/5.82）。
+     ⭐ 而且数值一摆出来，原来那句「0:1 反而表现不好」方向对但排名说重了：
+     0:1 排第四，最差的是 15:1。措辞已改成「不是最好的」，下面补图。 -->
+<figure class="fbox fwide" id="fig-ratio-grid"><svg viewBox="0 0 1400 1651" width="100%" role="img" aria-label="Kimi Linear 那张配比消融表画出来：验证 PPL 是一条 U 形，最低点在 3:1，而纯全注意力 0:1 排第四不是最差；五个配比其实是 16 层除出来的，4:1 摆不匀所以根本没进表；最低点是「16 层里 4 层全注意力」，而 K3 保的是比例不是个数"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">「3:1 最好」这句话，底下是一张五行的表</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">数值全都公开了</tspan>　·　arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank"><tspan text-decoration="underline">2510.26692</tspan></a>v2 Table 1　·　消融模型 <tspan font-weight="700">16 头 16 层</tspan>，同等 FLOPs 预算</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">论文标出的最优</text>
+<rect x="145" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="166" y="74" fill="#5f6368" style="font-size:14.0px">全注意力层</text>
+<rect x="262" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="283" y="74" fill="#5f6368" style="font-size:14.0px">摆不匀，进不了表</text>
+<rect x="0" y="102" width="1400" height="320" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 表画出来长什么样</tspan></text>
+<text class="svgsm" x="150" y="122" fill="#5f6368" style="font-size:11.0px">左右两张图的纵轴跨度完全相同（都是 0.30），所以斜率可以直接比</text>
+<text class="svgsm" x="355" y="158" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">训练 PPL</tspan></text>
+<line x1="108" y1="184" x2="108" y2="314" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="100" y="189" fill="#80868b" text-anchor="end" style="font-size:14.0px">9.50</text>
+<text class="svgsm" x="100" y="319" fill="#80868b" text-anchor="end" style="font-size:14.0px">9.20</text>
+<line x1="108" y1="314" x2="580" y2="314" stroke="#e8eaed" stroke-width="1.1" stroke-linecap="round"/>
+<line x1="150.0" y1="205.66666666666666" x2="252.5" y2="275.00000000000006" stroke="#5f6368" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="252.5" y1="275.00000000000006" x2="355.0" y2="300.9999999999995" stroke="#5f6368" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="355.0" y1="300.9999999999995" x2="457.5" y2="300.9999999999995" stroke="#5f6368" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="457.5" y1="300.9999999999995" x2="560.0" y2="253.3333333333331" stroke="#5f6368" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="144.0" y="199.66666666666666" width="12" height="12" rx="6" fill="#5f6368" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="150" y="189" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">9.45</tspan></text>
+<text class="svgsm" x="150" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">0:1</text>
+<rect x="246.5" y="269.00000000000006" width="12" height="12" rx="6" fill="#5f6368" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="252" y="259" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">9.29</tspan></text>
+<text class="svgsm" x="252" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">1:1</text>
+<rect x="349.0" y="294.9999999999995" width="12" height="12" rx="6" fill="#1e8e3e" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="355" y="284" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">9.23</tspan></text>
+<text class="svgsm" x="355" y="336" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">3:1</tspan></text>
+<rect x="451.5" y="294.9999999999995" width="12" height="12" rx="6" fill="#5f6368" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="457" y="284" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">9.23</tspan></text>
+<text class="svgsm" x="457" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">7:1</text>
+<rect x="554.0" y="247.3333333333331" width="12" height="12" rx="6" fill="#5f6368" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="560" y="237" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">9.34</tspan></text>
+<text class="svgsm" x="560" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">15:1</text>
+<text class="svgsm" x="355" y="360" fill="#80868b" text-anchor="middle" style="font-size:15.0px">3:1 和 7:1 在训练集上一模一样，都是 9.23</text>
+<text class="svgsm" x="1085" y="158" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">验证 PPL（论文据以定稿的那一条）</tspan></text>
+<line x1="838" y1="184" x2="838" y2="314" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="830" y="189" fill="#80868b" text-anchor="end" style="font-size:14.0px">5.90</text>
+<text class="svgsm" x="830" y="319" fill="#80868b" text-anchor="end" style="font-size:14.0px">5.60</text>
+<line x1="838" y1="314" x2="1310" y2="314" stroke="#e8eaed" stroke-width="1.1" stroke-linecap="round"/>
+<line x1="880.0" y1="240.33333333333337" x2="982.5" y2="287.9999999999998" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="982.5" y1="287.9999999999998" x2="1085.0" y2="292.33333333333303" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="1085.0" y1="292.33333333333303" x2="1187.5" y2="270.6666666666664" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round"/>
+<line x1="1187.5" y1="270.6666666666664" x2="1290.0" y2="218.6666666666664" stroke="#1a73e8" stroke-width="2.2" stroke-linecap="round"/>
+<rect x="874.0" y="234.33333333333337" width="12" height="12" rx="6" fill="#1a73e8" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="880" y="224" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">5.77</tspan></text>
+<text class="svgsm" x="880" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">0:1</text>
+<rect x="976.5" y="281.9999999999998" width="12" height="12" rx="6" fill="#1a73e8" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="982" y="271" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">5.66</tspan></text>
+<text class="svgsm" x="982" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">1:1</text>
+<rect x="1079.0" y="286.33333333333303" width="12" height="12" rx="6" fill="#1e8e3e" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="1085" y="276" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">5.65</tspan></text>
+<text class="svgsm" x="1085" y="336" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">3:1</tspan></text>
+<rect x="1181.5" y="264.6666666666664" width="12" height="12" rx="6" fill="#1a73e8" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="1187" y="254" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">5.70</tspan></text>
+<text class="svgsm" x="1187" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">7:1</text>
+<rect x="1284.0" y="212.6666666666664" width="12" height="12" rx="6" fill="#1a73e8" stroke="#fff" stroke-width="1.6"/>
+<text class="svgsm" x="1290" y="202" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">5.82</tspan></text>
+<text class="svgsm" x="1290" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">15:1</text>
+<text class="svgsm" x="1085" y="360" fill="#80868b" text-anchor="middle" style="font-size:15.0px">同样这两个配置，验证集上差 0.05 —— 训练集看不出来</text>
+<text class="svgsm" x="880" y="266" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">排第 4</tspan></text>
+<text class="svgsm" x="1290" y="184" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">最差</tspan></text>
+<text class="svgsm" x="1085" y="380" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px">⛔ <tspan font-weight="700">纯全注意力那一头（0:1）不是最差的</tspan> —— 它排第 4，最差的是另一头的 15:1</text>
+<rect x="0" y="442" width="1400" height="490" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="442" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="444" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="472" x2="1400" y2="472" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="462" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 同样这五个配置，摆成 16 层看</tspan></text>
+<text class="svgsm" x="234" y="462" fill="#5f6368" style="font-size:11.0px">每一列都是那个 16 层模型 · 蓝格 ＝ 全注意力层，灰格 ＝ 线性层</text>
+<rect x="70" y="518" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="533" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="548" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="563" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="578" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="593" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="608" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="623" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="638" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="653" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="668" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="683" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="698" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="713" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="728" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="70" y="743" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="101" y="502" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">0:1</tspan></text>
+<text class="svgsm" x="101" y="774" fill="#5f6368" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">16 层全注意力</tspan></text>
+<text class="svgsm" x="101" y="793" fill="#5f6368" text-anchor="middle" style="font-size:14.5px">验证 PPL 5.77</text>
+<rect x="218" y="518" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="218" y="533" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="218" y="548" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="218" y="563" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="218" y="578" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="218" y="593" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="218" y="608" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="218" y="623" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="218" y="638" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="218" y="653" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="218" y="668" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="218" y="683" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="218" y="698" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="218" y="713" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="218" y="728" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="218" y="743" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="249" y="502" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">1:1</tspan></text>
+<text class="svgsm" x="249" y="774" fill="#5f6368" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">8 层全注意力</tspan></text>
+<text class="svgsm" x="249" y="793" fill="#5f6368" text-anchor="middle" style="font-size:14.5px">验证 PPL 5.66</text>
+<rect x="366" y="518" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="533" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="548" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="563" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="366" y="578" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="593" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="608" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="623" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="366" y="638" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="653" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="668" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="683" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="366" y="698" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="713" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="728" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="366" y="743" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="359" y="511" width="76" height="246" rx="6" fill="none" stroke="#1e8e3e" stroke-width="2"/>
+<text class="svgsm" x="397" y="502" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">3:1</tspan></text>
+<text class="svgsm" x="397" y="774" fill="#0d652d" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">4 层全注意力</tspan></text>
+<text class="svgsm" x="397" y="793" fill="#5f6368" text-anchor="middle" style="font-size:14.5px">验证 PPL 5.65</text>
+<rect x="514" y="518" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="533" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="548" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="563" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="578" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="593" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="608" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="623" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="514" y="638" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="653" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="668" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="683" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="698" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="713" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="728" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="514" y="743" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="545" y="502" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">7:1</tspan></text>
+<text class="svgsm" x="545" y="774" fill="#5f6368" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">2 层全注意力</tspan></text>
+<text class="svgsm" x="545" y="793" fill="#5f6368" text-anchor="middle" style="font-size:14.5px">验证 PPL 5.70</text>
+<rect x="662" y="518" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="533" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="548" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="563" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="578" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="593" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="608" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="623" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="638" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="653" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="668" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="683" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="698" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="713" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="728" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="662" y="743" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="693" y="502" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">15:1</tspan></text>
+<text class="svgsm" x="693" y="774" fill="#5f6368" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">1 层全注意力</tspan></text>
+<text class="svgsm" x="693" y="793" fill="#5f6368" text-anchor="middle" style="font-size:14.5px">验证 PPL 5.82</text>
+<line x1="838" y1="494" x2="838" y2="800" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="6 5"/>
+<rect x="900" y="518" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="533" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="548" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="563" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="578" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="900" y="593" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="608" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="623" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="638" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="653" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="900" y="668" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="683" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="698" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="713" width="62" height="13" rx="3" fill="#eceff1" stroke="#e8eaed" stroke-width="1"/>
+<rect x="900" y="728" width="62" height="13" rx="3" fill="#1a73e8" stroke="#fff" stroke-width="1"/>
+<rect x="900" y="743" width="62" height="13" rx="3" fill="#fff" stroke="#d93025" stroke-width="1.4" stroke-dasharray="3 3"/>
+<text class="svgsm" x="931" y="502" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">4:1</tspan></text>
+<text class="svgsm" x="931" y="774" fill="#5f6368" text-anchor="middle" style="font-size:14.5px"><tspan font-weight="700">5 层一组</tspan></text>
+<text class="svgsm" x="931" y="793" fill="#5f6368" text-anchor="middle" style="font-size:14.5px">⛔ 16 摆不匀</text>
+<text class="svgsm" x="1010" y="524" fill="#5f6368" style="font-size:15.0px">⭐⭐ 这五个配比不是挑出来的，</text>
+<text class="svgsm" x="1010" y="549" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">是 16 除出来的。</tspan></text>
+<text class="svgsm" x="1010" y="574" fill="#5f6368" style="font-size:15.0px"></text>
+<text class="svgsm" x="1010" y="599" fill="#5f6368" style="font-size:15.0px">16 层要摆得匀，每组 (r+1) 层</text>
+<text class="svgsm" x="1010" y="624" fill="#5f6368" style="font-size:15.0px">就必须<tspan font-weight="700">整除 16</tspan>。而 16 的约数</text>
+<text class="svgsm" x="1010" y="649" fill="#5f6368" style="font-size:15.0px">只有 1、2、4、8、16 ——</text>
+<text class="svgsm" x="1010" y="674" fill="#5f6368" style="font-size:15.0px">于是 r 只能取</text>
+<text class="svgsm" x="1010" y="699" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">0、1、3、7、15</tspan>，</text>
+<text class="svgsm" x="1010" y="724" fill="#5f6368" style="font-size:15.0px">正好就是表里那五行。</text>
+<text class="svgsm" x="70" y="814" fill="#5f6368" style="font-size:15.0px">⛔ 所以 <tspan font-weight="700">4:1 从来没被试过</tspan> —— 它要 5 层一组，</text>
+<text class="svgsm" x="70" y="839" fill="#5f6368" style="font-size:15.0px">摆到第 15 层就多出一层没地方放（右边那一列）。</text>
+<text class="svgsm" x="70" y="864" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">2:1（3 层一组）同样摆不匀</tspan>，所以 1:1 和 3:1 中间那一段，这张表也问不出来。</text>
+<text class="svgsm" x="740" y="814" fill="#5f6368" style="font-size:15.0px">⚠️ 「(r+1) 必须整除 16」是对那张表做的<tspan font-weight="700">算术观察</tspan>，</text>
+<text class="svgsm" x="740" y="839" fill="#5f6368" style="font-size:15.0px">不是作者给的理由 —— 论文并没有解释为什么选这五个。</text>
+<text class="svgsm" x="740" y="864" fill="#5f6368" style="font-size:15.0px">⭐ 但结论不变：<tspan font-weight="700">「为什么是 3 不是 4」，这张表回答不了。</tspan></text>
+<rect x="0" y="952" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="952" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="954" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="982" x2="1400" y2="982" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="972" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">③ 那最低点到底是「3:1」，还是「4 层」</tspan></text>
+<text class="svgsm" x="282" y="972" fill="#5f6368" style="font-size:11.0px">16 层里两者是同一件事 · 93 层里差 6 倍 · 公开文献没答案</text>
+<rect x="40" y="998" width="640" height="250" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="64" y="1028" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">同一个最低点，两种读法</tspan></text>
+<text class="svgsm" x="64" y="1052" fill="#5f6368" style="font-size:15.0px">读成<tspan font-weight="700">比例</tspan>：3 个线性配 1 个全注意力。→ 93 层的 K3 要配 <tspan font-weight="700" fill="#1a73e8">24 层</tspan>全注意力。</text>
+<text class="svgsm" x="64" y="1077" fill="#5f6368" style="font-size:15.0px">读成<tspan font-weight="700">个数</tspan>：一共有 4 层全注意力就够。→ 93 层的 K3 也只要 <tspan font-weight="700" fill="#e8710a">4 层</tspan>。</text>
+<text class="svgsm" x="64" y="1102" fill="#5f6368" style="font-size:15.0px"></text>
+<text class="svgsm" x="64" y="1127" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">在 16 层里，这两句话完全等价</tspan> —— 16 ÷ 4 ＝ 4，怎么读都是 4 层。</text>
+<text class="svgsm" x="64" y="1152" fill="#5f6368" style="font-size:15.0px">到了 93 层，两种读法差 <tspan font-weight="700">6 倍</tspan>。</text>
+<text class="svgsm" x="64" y="1177" fill="#5f6368" style="font-size:15.0px"></text>
+<text class="svgsm" x="64" y="1202" fill="#5f6368" style="font-size:15.0px">⛔ K3 实际保的是<tspan font-weight="700">比例</tspan>（93 层里 24 层全注意力，课程 §8.2 表已核）。</text>
+<text class="svgsm" x="64" y="1227" fill="#5f6368" style="font-size:15.0px">而<tspan font-weight="700">该保哪个</tspan>，我没有找到任何公开实验回答过 —— 所有配比消融都在小模型上做的。</text>
+<rect x="720" y="998" width="640" height="250" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="744" y="1028" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">⚠️ 还有一个口径问题：这整张表是 PPL</tspan></text>
+<text class="svgsm" x="744" y="1052" fill="#5f6368" style="font-size:15.0px">全场五个配比，验证 PPL 从 5.65 到 5.82 —— <tspan font-weight="700">一共差 3%</tspan>。</text>
+<text class="svgsm" x="744" y="1077" fill="#5f6368" style="font-size:15.0px"></text>
+<text class="svgsm" x="744" y="1102" fill="#5f6368" style="font-size:15.0px">另一篇 340M / 1.3B 的系统性消融（arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank"><tspan text-decoration="underline">2507.06457</tspan></a>）</text>
+<text class="svgsm" x="744" y="1127" fill="#5f6368" style="font-size:15.0px">把两个口径分开画，结论是<tspan font-weight="700">一条平的、一条涨的</tspan>：</text>
+<text class="svgsm" x="744" y="1152" fill="#5f6368" style="font-size:15.0px">· 语言建模分 —— 各架构都挤在 0.55～0.57，几乎不受影响；</text>
+<text class="svgsm" x="744" y="1177" fill="#5f6368" style="font-size:15.0px">· 召回（RULER）—— 从纯线性的 0.1～0.35 一路涨到全</text>
+<text class="svgsm" x="744" y="1202" fill="#5f6368" style="font-size:15.0px">　注意力基线约 0.42，<tspan font-weight="700">多数架构在 3:1 追平或超过</tspan>。</text>
+<text class="svgsm" x="744" y="1227" fill="#5f6368" style="font-size:15.0px"></text>
+<text class="svgsm" x="744" y="1252" fill="#5f6368" style="font-size:15.0px">⭐ 它给这个结论起的标题是：</text>
+<text class="svgsm" x="744" y="1277" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">「决定配比的是召回，不是困惑度」</tspan>。</text>
+<rect x="0" y="1304" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1304" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1304" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1331" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 这张表能回答什么，不能回答什么</tspan></text>
+<text class="svgsm" x="20" y="1362" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">能</tspan>：3:1 在这五个候选里最好，而且两头都比它差 —— 包括纯全注意力那一头。</text>
+<text class="svgsm" x="20" y="1386" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">不能</tspan>：为什么是 3 不是 4。4:1 在 16 层里摆不匀，从来没进过候选。</text>
+<text class="svgsm" x="20" y="1410" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">不能</tspan>：93 层该配几层全注意力。16 层里「3:1」和「4 层」是同一句话，93 层里不是。</text>
+<rect x="0" y="1438" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1438" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1438" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1465" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 引用这张表时必须一起说的两句</tspan></text>
+<text class="svgsm" x="20" y="1496" fill="#b06000" style="font-size:15.0px">① 它是 <tspan font-weight="700">16 层、同等 FLOPs</tspan> 的小模型消融 —— 配比结论没有在大模型上复现过。</text>
+<text class="svgsm" x="20" y="1520" fill="#b06000" style="font-size:15.0px">② 它量的是 <tspan font-weight="700">PPL</tspan>，而 PPL 恰恰是各家一致公认「对配比不敏感」的那个指标。要判配比得看召回。</text>
+<text class="svgsm" x="0" y="1550" fill="#80868b" style="font-size:14.0px">📌 📌 Kimi Linear，arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank"><tspan text-decoration="underline">2510.26692</tspan></a>v2 §5.2 Table 1 与同段正文（「16 heads, 16 layers」「same FLOPs budget」）——&#160;五个配比的训练 / 验证 PPL 均逐字抄自该表。</text>
+<text class="svgsm" x="0" y="1571" fill="#80868b" style="font-size:14.0px">　　📌 系统性消融，arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank"><tspan text-decoration="underline">2507.06457</tspan></a> §4.2 正文与 Figure 3 描述 —— 语言建模「大体持平、各架构都在 0.55-0.57」、召回「从 0.1-0.35 涨向全注意力基线约 0.42」两句均为原文转</text>
+<text class="svgsm" x="0" y="1592" fill="#80868b" style="font-size:14.0px">　　述。⛔ 该文摘要里的「召回近乎翻倍」本图不引：只核到正文这段描述，没有逐格核过它的 Table 6 / 7。</text>
+<text class="svgsm" x="0" y="1613" fill="#80868b" style="font-size:14.0px">　　📌 Kimi K3 的 93 层 / 24 层全注意力见课程 §8.2 表（arXiv <a href="https://arxiv.org/abs/2607.24653" target="_blank"><tspan text-decoration="underline">2607.24653</tspan></a> 表 1 ＋ §2.1）。「(r+1) 必须整除 16」是本课对该表做的算术观察，不是论文的说法。</text>
+</svg><figcaption>⭐⭐ <b>「3:1 最好」底下是一张五行的表，数值全都公开了 —— 而把它画出来之后，多出来三件原文那句定性描述看不到的事。</b><b>一：纯全注意力那一头（0:1）排第四，<em>不是最差</em>；最差的是另一头的 15:1。</b><b>二：3:1 和 7:1 的<em>训练</em> PPL 完全相同（都是 9.23），要到验证集上才分得开。</b>⭐⭐ <b>三：这五个配比不是挑出来的，是 16 除出来的 —— 消融模型只有 16 层，每组 (r+1) 层必须整除 16，所以 r 只能取 0 / 1 / 3 / 7 / 15。「为什么是 3 不是 4」这个问题，那张表<em>问不出来</em>。</b><em>⚠️ 「(r+1) 必须整除 16」是本课对该表做的算术观察，不是论文给的理由 —— 论文没有解释为什么选这五个。</em></figcaption></figure>
+<div class="note info"><p>⭐⭐ <b>顺着这张图，把上面第 1 条再往前推一格。</b>
+  那五个配比看起来像是精心挑的，其实是<b>被 16 除出来的</b> ——&nbsp;
+  消融模型只有 <b>16 层</b>，配比 r:1 要摆得匀，每组 (r+1) 层就必须整除 16；
+  16 的约数只有 1、2、4、8、16，于是 r 只能取 <b>0、1、3、7、15</b>，
+  <b>正好就是表里那五行</b>。</p>
+<p>⛔ 所以 <b>4:1 从来没被试过</b>（它要 5 层一组，16 层摆到第 15 层多出一层），
+  <b>2:1 也没有</b>。「为什么是 3 不是 4」这个问题，<b>那张表问不出来</b>。</p>
+<p><em>⚠️ 这是我们对那张表做的<b>算术观察</b>，不是论文给的理由 ——&nbsp;
+  原文没有解释为什么选这五个配比。</em></p></div>
+<div class="note warn"><p>⚠️ 还有一个口径问题，跟 <a href="#s九">§9.1</a> 那条判据是同一件事。
+  这张消融表量的是 <b>PPL</b>，而全场五个配比的验证 PPL 只从 5.65 到 5.82，
+  <b>一共差 3%</b>。</p>
+<p>另一篇 340M / 1.3B 的系统性消融（arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a>）把两个口径分开画，
+  结论是<b>一条平的、一条涨的</b>：语言建模分各架构都挤在 0.55～0.57、几乎不受配比影响；
+  而召回（RULER）从纯线性的 0.1～0.35 一路涨到全注意力基线约 0.42，
+  <b>多数架构在 3:1 追平或超过</b>。它给这个结论起的标题是
+  「<b>决定配比的是召回，不是困惑度</b>」。</p>
+<p>⭐ 换句话说：<b>一个「最优配比」也得说清它是按哪个指标最优的</b> ——&nbsp;
+  跟 <a href="#s九">§9.1</a> 说「一个倍数得说清它是哪一样的倍数」是同一条纪律。</p></div>
 <!-- ⛔ 2026-09-12 二轮学生审稿：这一小节原来叫「K3 的 NoPE」，**记错了发明人**。
      Kimi Linear（arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a>）原文就写着「we apply NoPE to all full
      attention (MLA) layers」，而 K3 sec. 2.1.2 自己说的是「follows the hybrid
