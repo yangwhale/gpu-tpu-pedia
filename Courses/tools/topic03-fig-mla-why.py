@@ -1,227 +1,171 @@
 # -*- coding: utf-8 -*-
-r"""专题三 · §五「MLA 为什么能压缩」（2026-09-13 加，夜间 20 轮 · R1）。
+r"""专题三 · §五「MLA 凭什么敢这么压」
 
-⭐⭐ 这张图回答的不是「MLA 是什么」（那是 fig3-knob1 的活），
-   而是 **「它凭什么敢这么压」**。现场原话：
-   「像 MLA 这种东西，它为什么能压缩？这里边跟信息论有关的东西，对吧？」
+⭐⭐⭐ 2026-09-14 **整张重画**。现场：「要跟现实生活中的世界结合起来，
+   让普通人一眼看出原理，不要那么抽象 ——&nbsp;我们是**大众课程**。」
 
-三格，是一条推理链，不是三个知识点：
+   这一版用一个人人都懂的画面：**一张原稿，复印了 128 份。**
 
-  ① **先算一笔账** ——&nbsp;MHA 每 token 每层存 32,768 个数，
-     而这 32,768 个数是从一个 7,168 维的 h **算出来的**。
-     ⭐ 一次确定性映射不会凭空造出信息 ——&nbsp;
-     **复印 128 份，信息还是那一张。** 所以至少 4.57 倍是纯冗余。
-
-  ② **那为什么大家一直存 32,768** ——&nbsp;因为存的是「算好的结果」。
-     存原料省地方，但读的时候要重算：这是一笔**拿计算换存储**的交易。
-     MLA 第一步就是改存原料；第二步才是真正的赌注 ——&nbsp;
-     原料也不全存，压到 512。**这等于强制 W^K 的秩 ≤ 512。**
-
-  ③ **凭什么敢赌** ——&nbsp;因为「K/V 投影本来就低秩」在 MLA 之前
-     就已经有一批**事后**分解的工作验证过了（Eigen Attention / Palu / LoRC）。
-     ⭐⭐ MLA 的不同不在于发现低秩，**在于从第一天就按 512 训**。
-     —— 这跟 §六 里「推理期稀疏 vs native 稀疏」是同一个故事，
-     是这一讲的暗线：**事后压 vs 从头按压缩训。**
+   ① **白送的那一段（4.57×）** ——&nbsp;画一张原稿复印成一摞。
+      摞起来很厚，可**信息还是那一张**。
+      ⭐ 这就是「一次确定性映射不会凭空造出信息」的生活版：
+      **复印件再多，也不会比原稿多出内容。**
+      所以「存 128 份复印件」本来就是白占地方 ——&nbsp;
+      改成「只存那一张原稿」，一个字的信息都没丢。
+   ② **赌的那一段（12.4×）** ——&nbsp;画同一张原稿被**缩印**。
+      缩印是**真会糊的** ——&nbsp;这一步不是白送，是赌。
+   ③ **凭什么敢赌** ——&nbsp;因为在 MLA 之前，
+      已经有人**拿训好的模型做过缩印实验**（Eigen Attention / Palu / LoRC）。
+      ⭐ MLA 的不同是：**它从第一天就按缩印后的尺寸练字。**
 
 📌 所有倍数当场算并断言，不写死。
+⚠️ 「复印 / 缩印」是本课的比喻，论文那侧的说法是「低秩联合压缩」。
 """
-from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, INK,
-                          GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+                          BG2)
 
 W = 1400
-PW = 440                      # 三栏等宽
-PX = [0, 480, 960]
 
 
 def main():
-    # ── 数字：全部当场算 ────────────────────────────────────────
     D_V3, NH, DH = 7168, 128, 128          # DeepSeek-V3 hidden / 头数 / 每头维
     KV = 2 * NH * DH                       # MHA 每 token 每层要存的数
     DC, DR = 512, 64                       # MLA 的隐向量 ＋ 解耦 RoPE
     LAT = DC + DR
-    free = KV / float(D_V3)                # 白送的那一段（纯冗余）
-    bet = D_V3 / float(LAT)                # 赌出来的那一段
+    free = KV / float(D_V3)
+    bet = D_V3 / float(LAT)
     tot = KV / float(LAT)
     assert KV == 32768 and LAT == 576
     assert abs(free - 4.571) < .01 and abs(tot - 56.9) < .05
-    assert abs(free * bet - tot) < 1e-6    # 两段相乘 = 总倍数
+    assert abs(free * bet - tot) < 1e-6
 
-    f = Fig(W, "MLA 为什么能压缩：三格一条推理链 —— 先算出 32768 个数里"
-               "至少 4.57 倍是纯冗余，再说明存原料是拿计算换存储，"
-               "最后给出「K/V 投影本来就低秩」的事前证据")
+    f = Fig(W, "MLA 凭什么敢这么压：把它想成一张原稿复印 128 份 —— "
+               "复印件再多也不会比原稿多出内容，所以扔掉复印件只存原稿是白送的；"
+               "再把原稿缩印到 576 才是赌，而缩印实验在它之前就有人做过")
     f.marks = set()
     y0 = f.header(
-        "MLA 凭什么敢这么压　——　一笔信息账，三步推出来",
-        "⭐ 这张图不讲 MLA 是什么（那在上一张），只讲<tspan font-weight=\"700\">它为什么可行</tspan>",
-        [(GY, "存下来的（结果）"), (BL, "原料"), (GR, "压缩后的原料"),
-         (OR, "拿计算换存储"), (PU, "赌注")])
+        "MLA 凭什么敢这么压",
+        "把它想成<tspan font-weight=\"700\">一张原稿，复印了 128 份</tspan>",
+        [(GY, "复印件"), (BL, "原稿"), (PU, "缩印 ＝ 赌"), (GR, "白送的那段")])
 
-    # ══ ① 先算一笔账 ════════════════════════════════════════════
-    x = PX[0]
-    ph = 348
-    py = f.panel(x, y0, PW, ph, "① 先算一笔账", BL,
-                 sub="这 32,768 个数是哪来的")
+    # ══════════ ① 白送 ══════════════════════════════════════════
+    PH = 368
+    py = f.panel(0, y0, W, PH, "① 第一步是白送的 ——　扔掉复印件，只留原稿",
+                 BL, sub="复印 128 份，信息还是那一张")
 
-    yy = py + 30
-    # 原料：一个窄盒
-    f.cell(x + 26, yy, 96, 46, "h", "7,168 维", BL)
-    f.t(x + 26, yy + 66, "一个 token 在这一层的全部内容", GY, size=11.5, w=200)
+    cy = py + 20
+    f.t(56, cy + 26, "今天的存法：128 份复印件", GY, True, 20)
+    for i in range(9):
+        d = i * 5
+        f.box(66 + d, cy + 48 + d, 146, 168, "#fff", LINE2, 8)
+    f.box(111, cy + 93, 146, 168, "#fff", GY, 8)
+    f.t(184, cy + 152, "K / V", GY, True, 22, "middle")
+    f.t(184, cy + 186, "第 128 份", GY2, size=15, anchor="middle")
+    f.t(56, cy + 296, "一共 %s 个数" % format(KV, ","), GY, True, 21)
+    f.t(56, cy + 322, "每 token、每一层", GY2, size=14)
 
-    # 映射箭头
-    f.line(x + 130, yy + 23, x + 214, yy + 23, GY2, 1.6)
-    f.t(x + 172, yy + 14, "W<tspan baseline-shift=\"super\" font-size=\"8\">K</tspan>"
-        " · W<tspan baseline-shift=\"super\" font-size=\"8\">V</tspan>",
-        GY, size=11.5, anchor="middle")
-    f.t(x + 172, yy + 40, "线性、确定", GY2, size=11, anchor="middle")
+    f.line(296, cy + 176, 348, cy + 176, GY2, 1.6)
+    f.t(322, cy + 158, "其实都是", GY2, size=14, anchor="middle")
+    f.t(322, cy + 204, "从它算出来的", GY2, size=14, anchor="middle")
 
-    # 结果：一个宽盒，画成 128 个小格暗示「复印 128 份」
-    bx, bw = x + 222, 192
-    f.box(bx, yy, bw, 46, "#fff", GY, 6)
-    for i in range(16):
-        f.box(bx + 4 + i * (bw - 8) / 16.0, yy + 5, (bw - 8) / 16.0 - 1.5, 36,
-              BG2, LINE2, 2)
-    f.t(bx + bw / 2.0, yy + 21, "K ＋ V", GY, True, 12, "middle")
-    f.t(bx + bw / 2.0, yy + 36, "32,768 维（128 个头）", GY2, size=11,
-        anchor="middle")
-    f.t(bx, yy + 66, "MHA 每 token 每层真正缓存的东西", GY, size=11.5, w=200)
+    f.box(366, cy + 86, 172, 180, "#e8f0fe", BL, 10)
+    f.t(452, cy + 134, "原稿 h", BL, True, 24, "middle")
+    f.t(452, cy + 174, "%s 个数" % format(D_V3, ","), BL, True, 20, "middle")
+    f.t(452, cy + 212, "这一层的输入向量", GY, size=14, anchor="middle")
 
-    yy += 96
-    f.line(x + 26, yy + 8, x + PW - 26, yy + 8, LINE, 1, arrow=False)
+    f.box(596, cy + 48, 764, 258, "#fff", GR, 10)
+    f.t(620, cy + 90, "⭐ 复印件再多，也不会比原稿多出内容", GR, True, 24)
+    f.t(620, cy + 130, "所以「存 128 份」本来就是白占地方 ——", GY, size=18)
+    f.t(620, cy + 162, "改成「只存那一张原稿」，一个字的信息都没丢。", GY, size=18)
+    f.box(620, cy + 188, 300, 96, "#e6f4ea", GR, 8)
+    f.t(770, cy + 226, "%s → %s" % (format(KV, ","), format(D_V3, ",")),
+        GR, True, 24, "middle")
+    f.t(770, cy + 262, "白送 %.2f 倍" % free, GR, True, 22, "middle")
+    f.t(952, cy + 226, "这一段<tspan font-weight=\"700\">不用做实验</tspan>", GY, size=17)
+    f.t(952, cy + 256, "算一下就是这样", GY2, size=15)
 
-    yy += 30
-    f.t(x + 26, yy, "⭐ 一次确定性映射不会凭空造出信息",
-        BL, True, 13, cls="svglbl")
-    yy = f.lines(x + 26, yy + 24, PW - 52, [
-        "K、V 是 h 的一个<tspan font-weight=\"700\">线性像</tspan>，秩不超过 7,168 ——",
-        "所以存 h 再现算，一个 bit 都不少。"], 11.5, 19)
+    # ══════════ ② 赌 ════════════════════════════════════════════
+    y1 = y0 + PH + 18
+    PH2 = 292
+    py2 = f.panel(0, y1, W, PH2, "② 第二步才是赌 ——　把原稿再缩印一次",
+                  PU, sub="缩印是真会糊的")
 
-    yy += 12
-    f.box(x + 26, yy, PW - 52, 56, "#fff", BL, 8)
-    f.t(x + 40, yy + 23, "32,768 ÷ 7,168 ＝ %.2f 倍" % free, BL, True, 13.5,
-        cls="svglbl")
-    f.t(x + 40, yy + 43, "⚠️ 前提：2·n_kv·d_h ÷ d_model &gt; 1（V3 ＝ 4.57）",
-        GY, size=11.5)
+    dy = py2 + 20
+    f.box(56, dy + 38, 168, 180, "#e8f0fe", BL, 10)
+    f.t(140, dy + 112, "原稿", BL, True, 24, "middle")
+    f.t(140, dy + 152, format(D_V3, ","), BL, True, 22, "middle")
+    f.line(240, dy + 128, 296, dy + 128, PU, 1.8)
+    f.t(268, dy + 110, "缩印", PU, True, 18, "middle")
 
-    # ══ ② 那为什么还是存结果 ════════════════════════════════════
-    x = PX[1]
-    py = f.panel(x, y0, PW, ph, "② 那为什么一直存 32,768", OR,
-                 sub="因为存的是结果，不是原料")
+    f.box(312, dy + 86, 122, 84, "#f3e8fd", PU, 10)
+    f.t(373, dy + 126, "576", PU, True, 26, "middle")
+    f.t(373, dy + 152, "个数", PU, size=15, anchor="middle")
+    f.t(312, dy + 196, "＝ 512 ＋ 64", GY2, size=15)
+    f.t(312, dy + 220, "后面那 64 是 RoPE，另走一路", GY2, size=13)
 
-    yy = py + 26
-    for lab, sub, col, note in [
-        ("存结果", "读的时候直接用", GY, "省计算，费地方"),
-        ("存原料", "读的时候现算一遍", OR, "省地方，费计算"),
-    ]:
-        f.cell(x + 26, yy, 130, 44, lab, sub, col)
-        f.t(x + 172, yy + 27, note, col, size=12)
-        yy += 58
+    f.box(478, dy + 38, 882, 204, "#fff", PU, 10)
+    f.t(502, dy + 78, "⚠️ 这一步跟上一步，性质完全不同", PU, True, 22)
+    f.t(502, dy + 114, "上一步是「扔掉复印件」——&#160;不丢信息，算出来的。", GY,
+        size=18)
+    f.t(502, dy + 146, "这一步是「把原稿缩小 12 倍」——&#160;一定会糊，", GY, size=18)
+    f.t(502, dy + 176, "<tspan font-weight=\"700\">赌的是糊了也不影响用</tspan>。", GY,
+        size=18)
+    f.box(940, dy + 132, 200, 62, "#f3e8fd", PU, 8)
+    f.t(1040, dy + 172, "赌 %.1f 倍" % bet, PU, True, 24, "middle")
+    f.t(1168, dy + 172, "两段相乘 ＝ %.1f 倍" % tot, INK, True, 20)
 
-    f.t(x + 26, yy + 4, "⭐ 这是一笔交易，不是一个错误 —— 早期两边都不紧张",
-        OR, size=11.5, w=PW - 52)
+    # ══════════ ③ 凭什么敢赌 ════════════════════════════════════
+    y2 = y1 + PH2 + 18
+    PH3 = 208
+    py3 = f.panel(0, y2, W, PH3, "③ 凭什么敢赌 ——　因为有人先拿训好的模型试过了",
+                  GR, sub="事后缩印 vs 从头按缩印练字")
 
-    yy += 30
-    f.line(x + 26, yy, x + PW - 26, yy, LINE, 1, arrow=False)
-    yy += 26
-
-    f.t(x + 26, yy, "MLA 走了两步，第二步才是关键", INK, True, 13.5,
-        cls="svglbl")
-    yy += 24
-    f.box(x + 26, yy, PW - 52, 40, "#fff", LINE, 8)
-    f.t(x + 40, yy + 25, "第一步　改成存原料　7,168", GY, size=12.5)
-    f.t(x + PW - 40, yy + 25, "白送 %.2f×" % free, BL, True, 12, "end")
-    yy += 50
-
-    f.box(x + 26, yy, PW - 52, 66, "#fff", PU, 8)
-    f.box(x + 26, yy, 4, 66, PU, PU, 2)
-    f.box(x + 28, yy, 3, 66, "#fff", "#fff", 0)
-    f.t(x + 44, yy + 25, "第二步　压到 512 ＋ 64 维 RoPE ＝ 576", PU, True, 12.5)
-    f.t(x + 44, yy + 48, "⭐ 等于强制 K 与 V <tspan font-weight=\"700\">合起来</tspan>那个映射的秩 ≤ 512",
-        GY, size=11.5)
-    f.t(x + PW - 40, yy + 25, "赌 %.1f×" % bet, PU, True, 12, "end")
-
-    # ══ ③ 凭什么敢赌 ════════════════════════════════════════════
-    x = PX[2]
-    py = f.panel(x, y0, PW, ph, "③ 凭什么敢赌", GR,
-                 sub="「K/V 本来就低秩」是先有证据的")
-
-    yy = py + 26
-    for who, what, gain in [
-        ("Eigen Attention", "对<tspan font-weight=\"700\">已训好</tspan>的模型做低秩分解", "省 40%"),
+    ey = py3 + 18
+    f.t(56, ey + 14, "事后缩印（MLA 之前就有人做）", OR, True, 20)
+    for i, (who, what, num) in enumerate([
+        ("Eigen Attention", "拿训好的模型做低秩分解", "省 40%"),
         ("Palu", "分组头低秩 ＋ 自动分配秩", "省 50%"),
-        ("LoRC", "逐层分配不同的秩", "无损为主"),
-    ]:
-        f.box(x + 26, yy, PW - 52, 40, "#fff", LINE, 8)
-        f.t(x + 40, yy + 25, who, GY, True, 12)
-        f.t(x + 40 + wpx(who, 12) + 14, yy + 25, what, GY2, size=11)
-        f.t(x + PW - 40, yy + 25, gain, GR, True, 12, "end")
-        yy += 48
+        ("LoRC", "逐层分配不同的秩", "未报统一比例"),
+    ]):
+        bx = 56 + i * 296
+        f.box(bx, ey + 28, 264, 108, "#fff", OR, 10)
+        f.t(bx + 20, ey + 62, who, OR, True, 19)
+        f.t(bx + 20, ey + 92, what, GY, size=15)
+        f.t(bx + 20, ey + 122, num, OR, True, 20)
 
-    f.t(x + 26, yy + 2, "⭐ 三家都在 MLA 前后独立做到 ——", GR, size=11.5)
-    f.t(x + 26, yy + 21, "「低秩」不是 DeepSeek 猜的，是量出来的。", GY,
-        size=11.5)
+    f.t(964, ey + 14, "MLA 的不同", GR, True, 20)
+    f.box(964, ey + 28, 396, 108, "#e6f4ea", GR, 10)
+    f.t(988, ey + 66, "⭐ 从第一天就按", GR, True, 21)
+    f.t(988, ey + 98, "缩印后的尺寸练字", GR, True, 23)
+    f.t(988, ey + 126, "不是事后压，是一开始就长这样", GY2, size=14)
 
-    yy += 44
-    f.line(x + 26, yy, x + PW - 26, yy, LINE, 1, arrow=False)
-    yy += 26
-
-    f.t(x + 26, yy, "⭐⭐ 那 MLA 的不同在哪", INK, True, 13.5, cls="svglbl")
-    yy += 24
-    f.box(x + 26, yy, PW - 52, 70, "#fff", GR, 8)
-    f.box(x + 26, yy, 4, 70, GR, GR, 2)
-    f.box(x + 28, yy, 3, 70, "#fff", "#fff", 0)
-    f.t(x + 44, yy + 24, "上面三家是<tspan font-weight=\"700\">近似</tspan>：训完再去凑", GY, size=11.5)
-    f.t(x + 44, yy + 46, "MLA 是<tspan font-weight=\"700\">约束</tspan>：从第一天就按 512 训", GR, True, 12.5)
-
-    # ══ 落点带 ══════════════════════════════════════════════════
-    yy = y0 + ph + 22
-    yy = f.band(yy, "info", "一句话：你存下来的从来不是信息，是信息的一个展开", [
-        "32,768 → 7,168 是<tspan font-weight=\"700\">白送的 %.2f 倍</tspan>"
-        "（信息论管着，谁都拿得到）；"
-        "7,168 → 576 是<tspan font-weight=\"700\">赌出来的 %.1f 倍</tspan>"
-        "（要重训，要承担掉点风险）。" % (free, bet),
-        "⭐ 合起来 <tspan font-weight=\"700\">%.1f×</tspan>。"
-        "看任何一个压缩方案，都值得先把这两段拆开问："
-        "<tspan font-weight=\"700\">哪一段是白送的，哪一段是赌的？</tspan>" % tot,
+    # ══════════ 落点 ════════════════════════════════════════════
+    yy = y2 + PH3 + 20
+    yy = f.band(yy, "info", "⭐ 带走一条判据：看任何一个压缩方案，先把它拆成两段", [
+        "<tspan font-weight=\"700\">哪一段是「扔复印件」</tspan> ——&#160;"
+        "信息本来就重复，算一下就知道，不用做实验。这一段是白送的。",
+        "<tspan font-weight=\"700\">哪一段是「缩印」</tspan> ——&#160;"
+        "赌它糊了也不影响用。<tspan font-weight=\"700\">这一段必须看掉点。</tspan>"
+        "⛔ 一个方案只报总倍数、不拆这两段，多半是把赌的那部分算成了白送的。",
     ])
 
-    yy = f.band(yy + 14, "ok", "⭐⭐ 记住这条暗线 —— 今天它一共出现四次，这是第一次", [
-        "<tspan font-weight=\"700\">事后压</tspan>（拿训好的模型去凑）"
-        "对上 <tspan font-weight=\"700\">从头按压缩训</tspan>（把约束写进训练）。",
-        "这里是 Eigen Attention 对 MLA；"
-        "到了 §六，同一个对立会换成"
-        "<tspan font-weight=\"700\">推理期稀疏 对 native 稀疏</tspan>。"
-        "⭐ 两次的结论一样：<tspan font-weight=\"700\">后者掉点小得多。</tspan>",
-    ])
-
-    yy = f.band(yy + 14, "warn", "三条前提，缺一条这套账就不成立", [
-        "⚠️ 那 4.57 倍<tspan font-weight=\"700\">不是普适的</tspan>：它等于 "
-        "2·n_kv·d_h ÷ d_model ——&#160;<tspan font-weight=\"700\">分子用的是真正被缓存的头数</tspan>"
-        "（MHA 下它就等于 n_h，V3 两者都是 128）。"
-        "<tspan font-weight=\"700\">只在「缓存比残差流宽」的模型上大于 1。</tspan>",
-        "⭐ 两个例子必须并排看，只放 V3 会把人引到 query 头数上去："
-        "<tspan font-weight=\"700\">V3（MHA）</tspan>2×128×128÷7168 ＝ <tspan font-weight=\"700\">4.57</tspan>；"
-        "<tspan font-weight=\"700\">Llama-3-70B（GQA-8）</tspan>2×8×128÷8192 ＝ "
-        "<tspan font-weight=\"700\">0.25</tspan> ——&#160;那里根本没有「白送」这一段。",
-        "⛔ 若在 Llama 那一行误用 query 头数（64）去算，得到的是 2.0 &gt; 1 ——&#160;"
-        "<tspan font-weight=\"700\">结论正好反过来</tspan>。"
-        "⭐ 这类只在反例上才炸的记号错，最难自己发现。",
-        "⚠️ 被约束的是 <tspan font-weight=\"700\">K 和 V 合起来</tspan>那个映射（两者共用同一个 c），"
-        "比「只压 K」狠得多；带 RoPE 的那 64 维<tspan font-weight=\"700\">另走一路，不在这个约束里</tspan>。",
-    ])
-
-    yy = f.band(yy + 14, "warn", "口径，别讲过头", [
-        "⚠️ 「MLA 比 MHA 还好一点」这句话<tspan font-weight=\"700\">依赖口径</tspan>："
-        "DeepSeek 自己的对照是<tspan font-weight=\"700\">对齐总参数量</tspan>后比的；",
-        "社区复现里也有「带 RoPE 时 MHA 略好」的结果。"
-        "⭐ 稳妥的说法是<tspan font-weight=\"700\">「在同等预算下不吃亏」</tspan>，"
-        "而不是「压缩使它变强」。",
+    yy = f.band(yy + 14, "warn", "两条口径，别讲过头", [
+        "⚠️ 「白送 %.2f 倍」不是普适的：它等于 2·n_kv·d_h ÷ d_model，"
+        "<tspan font-weight=\"700\">分子是真正被缓存的头数</tspan>。"
+        "V3 是 MHA 所以 4.57；Llama-3-70B 是 GQA-8，算出来 <tspan "
+        "font-weight=\"700\">0.25</tspan> ——&#160;那里根本没有「白送」这一段。" % free,
+        "⚠️ 被缩印的是 <tspan font-weight=\"700\">K 和 V 合起来</tspan>那一份"
+        "（两者共用同一张原稿），比「只压 K」狠得多；"
+        "带 RoPE 的那 64 维<tspan font-weight=\"700\">另走一路，不在缩印范围里</tspan>。",
     ])
 
     yy = f.src(yy + 16,
                "维度出自 DeepSeek-V2 论文 §2.1（arXiv 2405.04434）与 V3 config："
                "d=7168, n_h=128, d_h=128, d_c=512, d_h^R=64；三个倍数由脚本当场算并断言",
                "事后低秩：Eigen Attention（EMNLP Findings 2024）、Palu、LoRC　"
-               "「MLA 优于 MHA」的口径见 DeepSeek-V2 仓库 issue #26")
+               "「MLA 优于 MHA」的口径见 DeepSeek-V2 仓库 issue #26",
+               "⚠️ 「复印 / 缩印」是<tspan font-weight=\"700\">本课的比喻</tspan> ——&#160;"
+               "论文那一侧的说法是「低秩联合压缩」")
     f.save("fig3-mla-why.svg", yy + 6)
 
 
