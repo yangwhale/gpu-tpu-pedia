@@ -3896,7 +3896,9 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <p>FlashAttention 把三步融成一个 kernel：S 分块在片上算完， softmax 用在线归约边走边更新最大值和求和项，<b>S 整项消失</b>。</p>
 <p>⭐ 所以三笔账的形状是所有算子融合共有的： <b>FLOPs 一分不省，省的全在「中间产物不落地」这一行。</b></p>
 <h3 id="s3-2b">3.2b ⭐ 那张经典图：内循环、外循环 —— 以及 FA2 为什么把它掉了个个儿</h3>
-<p>FlashAttention 论文那张图，画的是<b>两层循环</b>： HBM 里躺着 Q、K、V、O，SRAM 是旁边一个小方块； 外层循环搬一块进 SRAM，内层循环扫过另一边的所有块。</p>
+<p>FlashAttention 论文那张图，画的是<b>两层循环</b>： HBM 里躺着 Q、K、V、O，SRAM 是旁边一个小方块； 外层循环搬一块进 SRAM，内层循环扫过另一边的所有块。
+  <span class="sub">（原文 Figure 1 的 caption 把颜色也说死了：<b>红箭头是外层、走 K 和 V</b>，
+  <b>蓝箭头是内层、走 Q</b>。）</span></p>
 <p><b>⚠️ 但那张图画的是第一版的顺序，而第二版把它换了过来 ——&nbsp; 这个「换」本身，比图更值得讲。</b></p>
 <p><b>第一版：外层是 K／V，内层是 Q。</b></p>
 <pre><code>for j in K/V 的每一块:              # 外层
@@ -3915,9 +3917,401 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <p>⭐ <b>两个后果，都很硬：</b></p>
 <ol><li><b><code>O_i</code> 和那两个统计量在整个内层循环里一直待在片上，一次都不落 HBM。</b></li><li><b>不同的 Q 块之间彻底独立</b> ——&nbsp; 可以直接铺到几百个执行单元上，<b>互相不用通信</b>。</li></ol>
 <div class="note ok"><p>⭐ 一句话记住它： 外循环放谁，谁的中间状态就不用来回搬。 而 attention 里「需要被累加到最后」的是 <code>O</code>，所以<b>外循环必须放 Q</b>。</p></div>
+
+<!-- ⭐⭐ 2026-09-14 夜间 R33 补图。⛔ 这一节的标题叫「那张经典图」，
+     而它自己**一张图都没有** —— 只有散文和两块伪代码，是全讲最刺眼的一处。
+     ⭐ 新图不复刻 FA1 Figure 1（那张画的是遍历顺序），改画**后果**：
+       换一个顺序，四个张量各自要被搬多少趟。
+     ⭐⭐ 一数就数出一件反直觉的事：只看 O 是 65 倍，四个一起数只有 1.49 倍 ——
+       FA2 把省下的 O 流量，又用 K/V 的重读还了回去。
+     ⛔ 而这跟论文自己的说法一致：FA2 **从没说过**对调是为了让 O 不落 HBM，
+       它给的理由是 non-matmul FLOP 和 occupancy。所以真正的大头是并行度。
+     ⭐ 图里顺带把 3.2c 的 warp 层也画了，所以 3.2c 改成指回这张图的 ③。 -->
+<p>⭐ 那<b>到底省了多少</b>？——&nbsp;这个问题值得认真数一遍，
+  因为<em>只盯着 <code>O</code> 看，会得出一个错的量级</em>。</p>
+
+<figure class="fbox fwide" id="fig-loop-order"><svg viewBox="0 0 1400 1873" width="100%" role="img" aria-label="FlashAttention 把内外循环对调之后：同一张块网格，两种走法；四个张量各自要被搬多少趟；以及同一条判据在 warp 这一层又用了一遍"><defs><marker id="ah-9ac7a8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9ac7a8"/></marker><marker id="ah-c9b6d8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#c9b6d8"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">内外循环对调：省下的到底是什么</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">满网的图画的都是<tspan font-weight="700">遍历顺序</tspan>；这张画的是<tspan font-weight="700">后果</tspan> ——&#160;把四个张量分开称一次重</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">载一次 K/V</text>
+<rect x="119" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="140" y="74" fill="#5f6368" style="font-size:14.0px">搬一次 O</text>
+<rect x="223" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="244" y="74" fill="#5f6368" style="font-size:14.0px">FA2</text>
+<rect x="0" y="102" width="1400" height="482" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">① 同一张块网格，两种走法</tspan></text>
+<text class="svgsm" x="191" y="122" fill="#5f6368" style="font-size:11.0px">行 ＝ Q 的块，列 ＝ K/V 的块；浅灰 ＝ causal 整块跳过</text>
+<text class="svgsm" x="278" y="184" fill="#681da8" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA1：外层 K/V，内层 Q</tspan></text>
+<text class="svgsm" x="278" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">一列一列地走</text>
+<text class="svgsm" x="278" y="224" fill="#80868b" text-anchor="middle" style="font-size:13.0px">K / V 的块 →</text>
+<text class="svgsm" x="138" y="356" fill="#174ea6" text-anchor="end" style="font-size:14.0px"><tspan font-weight="700">Q 的块</tspan></text>
+<text class="svgsm" x="138" y="376" fill="#174ea6" text-anchor="end" style="font-size:14.0px"><tspan font-weight="700">↓</tspan></text>
+<rect x="150" y="228" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="154" y="232" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="169" y="247" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="182" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="214" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="246" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="278" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="310" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="342" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="374" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="150" y="260" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="169" y="279" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="182" y="260" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="186" y="264" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="201" y="279" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="214" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="246" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="278" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="310" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="342" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="374" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="150" y="292" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="169" y="311" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="182" y="292" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="201" y="311" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="214" y="292" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="218" y="296" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="233" y="311" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="246" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="278" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="310" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="342" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="374" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="150" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="169" y="343" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="182" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="201" y="343" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="214" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="233" y="343" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="246" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="250" y="328" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="265" y="343" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="278" y="324" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="310" y="324" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="342" y="324" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="374" y="324" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="150" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="169" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="182" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="201" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="214" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="233" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="246" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="265" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="278" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="282" y="360" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="297" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="310" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="342" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="374" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="150" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="169" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="182" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="201" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="214" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="233" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="246" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="265" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="278" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="297" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="310" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="314" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="329" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="342" y="388" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="374" y="388" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="150" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="169" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="182" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="201" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="214" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="233" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="246" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="265" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="278" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="297" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="310" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="329" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="342" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="346" y="424" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="361" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="374" y="420" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="150" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="169" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="182" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="201" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="214" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="233" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="246" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="265" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="278" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="297" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="310" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="329" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="342" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="361" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="374" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="378" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="393" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<line x1="165.0" y1="231" x2="165.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<line x1="197.0" y1="263" x2="197.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<line x1="229.0" y1="295" x2="229.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<line x1="261.0" y1="327" x2="261.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<line x1="293.0" y1="359" x2="293.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<line x1="325.0" y1="391" x2="325.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<line x1="357.0" y1="423" x2="357.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<line x1="389.0" y1="455" x2="389.0" y2="479" stroke="#c9b6d8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-c9b6d8)"/>
+<text class="svgsm" x="958" y="184" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA2：外层 Q，内层 K/V</tspan></text>
+<text class="svgsm" x="958" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">一行一行地走</text>
+<text class="svgsm" x="958" y="224" fill="#80868b" text-anchor="middle" style="font-size:13.0px">K / V 的块 →</text>
+<text class="svgsm" x="818" y="356" fill="#174ea6" text-anchor="end" style="font-size:14.0px"><tspan font-weight="700">Q 的块</tspan></text>
+<text class="svgsm" x="818" y="376" fill="#174ea6" text-anchor="end" style="font-size:14.0px"><tspan font-weight="700">↓</tspan></text>
+<rect x="830" y="228" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="834" y="232" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="849" y="247" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="862" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="894" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="926" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="958" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="990" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1022" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1054" y="228" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="830" y="260" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="834" y="264" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="862" y="260" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="866" y="264" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="881" y="279" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="894" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="926" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="958" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="990" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1022" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1054" y="260" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="830" y="292" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="834" y="296" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="862" y="292" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="866" y="296" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="894" y="292" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="898" y="296" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="913" y="311" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="926" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="958" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="990" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1022" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1054" y="292" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="830" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="834" y="328" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="862" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="866" y="328" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="894" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="898" y="328" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="926" y="324" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="930" y="328" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="945" y="343" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="958" y="324" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="990" y="324" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1022" y="324" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1054" y="324" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="830" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="834" y="360" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="862" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="866" y="360" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="894" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="898" y="360" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="926" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="930" y="360" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="958" y="356" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="962" y="360" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="977" y="375" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="990" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1022" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1054" y="356" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="830" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="834" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="862" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="866" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="894" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="898" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="926" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="930" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="958" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="962" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="990" y="388" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="994" y="392" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="1009" y="407" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="1022" y="388" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="1054" y="388" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="830" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="834" y="424" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="862" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="866" y="424" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="894" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="898" y="424" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="926" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="930" y="424" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="958" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="962" y="424" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="990" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="994" y="424" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="1022" y="420" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="1026" y="424" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="1041" y="439" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="1054" y="420" width="30" height="30" rx="2" fill="#f4f6f8" stroke="#fff" stroke-width="1"/>
+<rect x="830" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="834" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="862" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="866" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="894" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="898" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="926" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="930" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="958" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="962" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="990" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="994" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="1022" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="1026" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="1054" y="452" width="30" height="30" rx="2" fill="#fbfcfe" stroke="#dde4ec" stroke-width="1"/>
+<rect x="1058" y="456" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="1073" y="471" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<line x1="833" y1="243.0" x2="857" y2="243.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<line x1="833" y1="275.0" x2="889" y2="275.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<line x1="833" y1="307.0" x2="921" y2="307.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<line x1="833" y1="339.0" x2="953" y2="339.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<line x1="833" y1="371.0" x2="985" y2="371.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<line x1="833" y1="403.0" x2="1017" y2="403.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<line x1="833" y1="435.0" x2="1049" y2="435.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<line x1="833" y1="467.0" x2="1081" y2="467.0" stroke="#9ac7a8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9ac7a8)"/>
+<text class="svgsm" x="700" y="356" fill="#80868b" text-anchor="middle" style="font-size:24.0px"><tspan font-weight="700">vs</tspan></text>
+<rect x="154" y="496" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="170" y="504" fill="#5f6368" style="font-size:14.0px">K/V 每列只载一次（64 次）</text>
+<rect x="154" y="518" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="170" y="526" fill="#5f6368" style="font-size:14.0px">O 每一格都要读回来再写回去</text>
+<rect x="834" y="496" width="7" height="7" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="850" y="504" fill="#5f6368" style="font-size:14.0px">K/V 每一格都要重新载一次</text>
+<rect x="834" y="518" width="7" height="7" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="850" y="526" fill="#5f6368" style="font-size:14.0px">O 每行只写一次（64 次）</text>
+<text class="svgsm" x="60" y="556" fill="#5f6368" style="font-size:15.0px">⭐ <tspan font-weight="700">两个点在两版之间正好换了位置</tspan> ——&#160;这就是这一格要说的全部。FA1 躲不掉那些橙点，是因为它外层走 K/V：<tspan font-weight="700">下一列还会碰到同一个 Q 块</tspan>，</text>
+<text class="svgsm" x="60" y="581" fill="#5f6368" style="font-size:15.0px">这块的输出没算完，只能先存回去。FA2 外层走 Q：<tspan font-weight="700">一整行走完，这块输出就彻底定稿了</tspan>。⚠️ 图上画 8×8 是示意，真实是 64×64（L ＝ 8192、块 128）。</text>
+<rect x="0" y="604" width="1400" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="604" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="606" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="634" x2="1400" y2="634" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="624" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 那到底省了多少 ——&#160;四个张量分开称一次</tspan></text>
+<text class="svgsm" x="325" y="624" fill="#5f6368" style="font-size:11.0px">⚠️ 本课自己按两份 Algorithm 1 数的，论文没给过这个数</text>
+<text class="svgsm" x="284" y="704" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">Q</tspan></text>
+<rect x="300" y="688" width="280" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
+<text class="svgsm" x="590" y="703" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　2080</tspan></text>
+<rect x="300" y="714" width="8" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="318" y="729" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　64</tspan></text>
+<text class="svgsm" x="284" y="774" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">K、V</tspan></text>
+<rect x="300" y="758" width="17" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
+<text class="svgsm" x="327" y="773" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　128</tspan></text>
+<rect x="300" y="784" width="560" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="870" y="799" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　4160</tspan></text>
+<text class="svgsm" x="284" y="844" fill="#202124" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">O（读＋写）</tspan></text>
+<rect x="300" y="828" width="560" height="20" rx="3" fill="#efe9f6" stroke="#9334e6" stroke-width="1.2"/>
+<text class="svgsm" x="870" y="843" fill="#681da8" style="font-size:15.0px"><tspan font-weight="700">FA1　4160</tspan></text>
+<rect x="300" y="854" width="8" height="20" rx="3" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="318" y="869" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">FA2　64</tspan></text>
+<line x1="130" y1="888" x2="1040" y2="888" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="284" y="916" fill="#202124" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">合计</tspan></text>
+<text class="svgsm" x="300" y="916" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">FA1 6368　　FA2 4288　　→　只差 1.49 倍</tspan></text>
+<text class="svgsm" x="60" y="954" fill="#5f6368" style="font-size:15.0px">⛔ <tspan font-weight="700">只看 O 那一行，会得出一个错的量级</tspan>：4160 对 64，是 <tspan font-weight="700">65 倍</tspan>。「一次都不落 HBM」这句话本身没错，<tspan font-weight="700">但拿它当总账就错了</tspan>。</text>
+<text class="svgsm" x="60" y="979" fill="#5f6368" style="font-size:15.0px">⭐ 因为 <tspan font-weight="700">FA2 把省下的 O 流量，又用 K/V 的重读还了回去</tspan>：K/V 在 FA1 里待在外圈、只读一趟；到 FA2 跑进内圈，每个 Q 块都要把全部 K/V 重新走一遍。</text>
+<text class="svgsm" x="60" y="1004" fill="#5f6368" style="font-size:15.0px">⚠️ 换成非 causal 口径这个比值是 1.492，<tspan font-weight="700">结论不挑口径</tspan>；而且这是按 HBM 读写次数数的理想账，真机上 L2 会吃掉一部分 K/V 重读 ——&#160;1.49 倍是<tspan font-weight="700">偏乐观那一侧</tspan>。</text>
+<rect x="0" y="1054" width="1400" height="386" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1054" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="1056" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1084" x2="1400" y2="1084" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1074" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">③ 同一条判据，在 warp 这一层又用了一遍</tspan></text>
+<text class="svgsm" x="289" y="1074" fill="#5f6368" style="font-size:11.0px">一个 thread block 内部，4 个 warp 怎么分活</text>
+<text class="svgsm" x="180" y="1116" fill="#681da8" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA1：切 K／V（论文原词 “split-K”）</tspan></text>
+<rect x="80" y="1146" width="200" height="160" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="180" y="1140" fill="#80868b" text-anchor="middle" style="font-size:13.0px">输出块 O_i</text>
+<rect x="86" y="1152" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
+<rect x="91" y="1157" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
+<rect x="96" y="1162" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
+<rect x="101" y="1167" width="176" height="142" rx="4" fill="none" stroke="#9334e6" stroke-width="1.2" stroke-dasharray="4,3"/>
+<text class="svgsm" x="180" y="1232" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">4 份部分和</tspan></text>
+<text class="svgsm" x="180" y="1254" fill="#681da8" text-anchor="middle" style="font-size:13.0px">谁都不完整</text>
+<text class="svgsm" x="860" y="1116" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">FA2：切 Q</tspan></text>
+<rect x="760" y="1146" width="200" height="160" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1140" fill="#80868b" text-anchor="middle" style="font-size:13.0px">输出块 O_i</text>
+<rect x="766" y="1152" width="188" height="32" rx="4" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1173" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 0 的那一片（定稿）</tspan></text>
+<rect x="766" y="1190" width="188" height="32" rx="4" fill="#d8ebdd" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1211" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 1 的那一片（定稿）</tspan></text>
+<rect x="766" y="1228" width="188" height="32" rx="4" fill="#e4f1e7" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1249" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 2 的那一片（定稿）</tspan></text>
+<rect x="766" y="1266" width="188" height="32" rx="4" fill="#d8ebdd" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="860" y="1287" fill="#0d652d" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">warp 3 的那一片（定稿）</tspan></text>
+<text class="svgsm" x="80" y="1334" fill="#5f6368" style="font-size:15.0px">4 个 warp 各持 K/V 的一片，<tspan font-weight="700">Q 大家共用</tspan>。</text>
+<text class="svgsm" x="80" y="1359" fill="#5f6368" style="font-size:15.0px">每个 warp 只算得出<tspan font-weight="700">一份部分和</tspan> ——</text>
+<text class="svgsm" x="80" y="1384" fill="#5f6368" style="font-size:15.0px">必须写进共享内存、同步、再加起来。</text>
+<text class="svgsm" x="80" y="1409" fill="#5f6368" style="font-size:15.0px">⛔ 论文原话：这些读写<tspan font-weight="700">拖慢了前向</tspan>。</text>
+<text class="svgsm" x="760" y="1334" fill="#5f6368" style="font-size:15.0px">4 个 warp 各持 Q 的一片，<tspan font-weight="700">K/V 大家共用</tspan>。</text>
+<text class="svgsm" x="760" y="1359" fill="#5f6368" style="font-size:15.0px">每个 warp 直接算出<tspan font-weight="700">自己那一片完整输出</tspan> ——</text>
+<text class="svgsm" x="760" y="1384" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">warp 之间完全不需要通信。</tspan></text>
+<text class="svgsm" x="760" y="1409" fill="#5f6368" style="font-size:15.0px">⭐ 跟上面 Q 块之间互不通信，是同一件事。</text>
+<rect x="0" y="1442" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1442" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1442" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1469" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 一条判据，两个尺度通用</tspan></text>
+<text class="svgsm" x="20" y="1500" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">切「要被累加的那一维」就得合；切「各自独立出结果的那一维」就不用合。</tspan>attention 里前者是 K／V（它们在求和号里面），后者是 Q（每行输出各管各的）。</text>
+<text class="svgsm" x="20" y="1524" fill="#0d652d" style="font-size:15.0px">⭐ 所以 thread block 那一层和 warp 那一层做的是同一个动作 ——&#160;<tspan font-weight="700">把外圈让给 Q</tspan>。这条判据的用处远不止 attention：任何融合 kernel 分工前，先问一句「我切的这一维在不</text>
+<text class="svgsm" x="20" y="1548" fill="#0d652d" style="font-size:15.0px">在求和号里」。</text>
+<rect x="0" y="1576" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1576" width="4" height="146" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1576" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1603" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 三处别讲过头</tspan></text>
+<text class="svgsm" x="20" y="1634" fill="#b06000" style="font-size:15.0px">① <tspan font-weight="700">论文从没说过「对调是为了让 O 不落 HBM」</tspan>。它给的理由是 ① 减少 non-matmul FLOP ② occupancy ——&#160;本图那个 1.49 倍是<tspan font-weight="700">本课自己数的</tspan>，FA2 连 IO-complexity 定理都</text>
+<text class="svgsm" x="20" y="1658" fill="#b06000" style="font-size:15.0px">没有。</text>
+<text class="svgsm" x="20" y="1682" fill="#b06000" style="font-size:15.0px">② <tspan font-weight="700">只对调了 forward</tspan>。FA1 的 backward 和 FA2 的 backward <tspan font-weight="700">都还是 K/V 在外层</tspan>。</text>
+<text class="svgsm" x="20" y="1706" fill="#b06000" style="font-size:15.0px">③ 这个顺序<tspan font-weight="700">不是 FA2 首创</tspan>：论文自己写的是“first suggested and implemented by <tspan font-weight="700">Phil Tillet</tspan> in the Triton implementation”。</text>
+<text class="svgsm" x="0" y="1736" fill="#80868b" style="font-size:14.0px">📌 📌 FA1 arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank"><tspan text-decoration="underline">2205.14135</tspan></a> §3.1 Algorithm 1（外层 K/V、内层 Q；O_i、ℓ_i、m_i 的写回在内层循环里，line 12–13）；Figure 1 caption 逐字「In the outer loop (red arro</text>
+<text class="svgsm" x="0" y="1757" fill="#80868b" style="font-size:14.0px">　　ws) ... loops through blocks of the K and V matrices」。</text>
+<text class="svgsm" x="0" y="1778" fill="#80868b" style="font-size:14.0px">　　📌 FA2 arXiv <a href="https://arxiv.org/abs/2307.08691" target="_blank"><tspan text-decoration="underline">2307.08691</tspan></a> §3.1.1 Algorithm 1（外层 Q、内层 K/V，O_i 与 L_i 在内层结束后各写一次）；宣布对调那句在 §3.2 “Parallelism”，并注明归功于 Phil Tillet 的 </text>
+<text class="svgsm" x="0" y="1799" fill="#80868b" style="font-size:14.0px">　　Triton 实现。warp 层全部出自 §3.3 与 Figure 3 ——&#160;⚠️ FA1 论文里 “warp” 出现 0 次，那段是 FA2 的回溯。</text>
+<text class="svgsm" x="0" y="1820" fill="#80868b" style="font-size:14.0px">　　⛔ 原词是 “split-K”，不是坊间常见的 “sliced-K”（两篇全文零次）。⚠️ 本图<tspan font-weight="700">不引用任何加速比</tspan> ——&#160;FA2 论文里那几个百分比分属不同口径（attention 单算子 vs 端到端训练、不同</text>
+<text class="svgsm" x="0" y="1841" fill="#80868b" style="font-size:14.0px">　　硬件配置），混用会得出错的结论，本讲 §3.6b 专门讲过这条纪律。</text>
+</svg><figcaption>⭐⭐ <b>满网的 FA 图画的都是遍历顺序；这张画的是后果 —— 换一个循环顺序，四个张量各自要被搬多少趟。</b><b>只看 O 是 65 倍，四个一起数只有 1.49 倍：FA2 把省下的 O 流量，又用 K／V 的重读还了回去。</b><em>所以对调换来的不主要是带宽，是并行度 —— 这跟论文自己给的两条理由（non-matmul FLOP、occupancy）对得上。</em></figcaption></figure>
+
+<div class="note warn"><p>⚠️ <b>「O 不落 HBM」是真的，但它不是这次对调的主要收益。</b></p>
+<p>按块级 HBM 读写数一遍（<code>L = 8192</code>、块 128，按 causal）：
+  <b>只看 <code>O</code> 是 4160 : 64，六十五倍</b>；
+  <b>四个张量一起数是 6368 : 4288，只差 1.49 倍</b>。
+  <em>差额去哪了 ——&nbsp;<b><code>K</code>／<code>V</code> 从外圈挪进了内圈</b>，
+  每个 Q 块都要把它们重新走一遍，省下的又还回去了。</em></p>
+<p>⭐⭐ 所以这次对调换来的<b>不主要是带宽，是并行度</b>：
+  FA1 只能按 <code>batch × head</code> 铺，FA2 多出「Q 块」一整维。
+  <b>batch 小、头数少、上下文长</b>的时候，前两维本来就铺不满几百个执行单元 ——&nbsp;
+  <em>那正是 FA2 最吃香的场合。</em></p>
+<p>⛔ <b>这个 1.49 是本课自己按两份 Algorithm 1 数出来的，不是论文报的数</b> ——&nbsp;
+  FA2 全文没有 IO-complexity 定理，整个 IO 分析 defer 给了 FA1。
+  <em>论文自己给的理由是两条：减少 non-matmul FLOP（<b><a href="#s3-1">§3.1</a></b>）、
+  提高 occupancy 且 thread block 之间无需通信（<b><a href="#s3-2">§3.2</a></b>）。</em></p></div>
+
+<div class="note info"><p>📌 <b>三处容易记错，一并说清</b></p>
+<ul><li><b>这个顺序不是 FA2 首创。</b>论文自己写的是
+  “first suggested and implemented by <b>Phil Tillet</b> in the Triton implementation”。</li>
+<li><b>只对调了 forward。</b>FA1 的 backward 和 FA2 的 backward
+  <b>都还是 K／V 在外层</b>。</li>
+<li>宣布对调那句话<b>不在 <a href="#s3-1">§3.1</a>，在 <a href="#s3-2">§3.2</a> “Parallelism”</b>；
+  <a href="#s3-1">§3.1</a> 只是把新顺序直接写进 Algorithm 1，没有一句话说「我们换了」。</li></ul></div>
+
 <h3 id="s3-2c">3.2c 同一个原则，在 warp 这一层又用了一遍</h3>
-<p>这件事在<b>块内部</b>还发生了第二次 ——&nbsp;而且这一次是官方原话：</p>
-<ul><li><b>第一版</b>：把 K 和 V 切给 4 个 warp，Q 大家共用（叫 sliced-K）。 ⛔ 于是每个 warp 都得把中间结果写进共享内存、同步、再加起来 ——&nbsp; 这些读写拖慢了前向。</li><li><b>第二版</b>：反过来，把 <b>Q 切给 4 个 warp</b>，K 和 V 大家共用。 ⭐ 每个 warp 算出自己那一片 <code>QKᵀ</code>，直接乘共享的那片 V 就得到自己那片输出 ——&nbsp;<b>warp 之间完全不需要通信。</b></li></ul>
+<p>这件事在<b>块内部</b>还发生了第二次 ——&nbsp;而且这一次是官方原话
+  （<b>上面那张图的 ③ 已经把它画出来了</b>）：</p>
+<div class="note warn"><p>⚠️ <b>出处要说对</b>：<b>FA1 论文里「warp」出现 0 次</b>。
+  下面这两段对 FA1 warp 切分的描述，全部出自 <b>FA2 <a href="#s3-3">§3.3</a></b> 的回溯，不是 FA1 自己写的。</p></div>
+<ul><li><b>第一版</b>：把 K 和 V 切给 4 个 warp，Q 大家共用
+  （论文原词是 <b><code>split-K</code></b> ——&nbsp;<em>坊间常见的「sliced-K」两篇论文里一次都没出现过</em>）。 ⛔ 于是每个 warp 都得把中间结果写进共享内存、同步、再加起来 ——&nbsp; 这些读写拖慢了前向。</li><li><b>第二版</b>：反过来，把 <b>Q 切给 4 个 warp</b>，K 和 V 大家共用。 ⭐ 每个 warp 算出自己那一片 <code>QKᵀ</code>，直接乘共享的那片 V 就得到自己那片输出 ——&nbsp;<b>warp 之间完全不需要通信。</b></li></ul>
 <div class="note warn"><p>⭐⭐ <b>两个尺度，同一条判据</b>： 切「要被累加的那一维」就得合；切「各自独立出结果的那一维」就不用合。 attention 里前者是 K／V（它们在求和号里面），后者是 Q（每行输出各管各的）。</p>
 <p>⚠️ 这条判据的用处远不止 attention ——&nbsp; <b>任何融合 kernel 在分工时，先问一句「我切的这一维在不在求和号里」。</b></p></div>
 <h3 id="s3-3">3.3 ⚠️ 在线 softmax 不是免费的 —— 它是后面 35% 那个数的根</h3>

@@ -71,6 +71,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-knobs.py         # §四 三个旋钮：全课骨架（为什么恰好是三个）
   python3 topic03-fig-when-axis.py     # §四 第二个轴：什么时候改（事后 vs native）
   python3 topic03-fig-notepad.py       # §七 记事板比喻：三种写法钉到式子上
+  python3 topic03-fig-loop-order.py     # §3.2b 内外循环对调：省的到底是什么
   python3 topic03-fig-at-gallery.py    # §七 A_t 的形状决定了一切（八种结构并排）
   python3 topic03-fig-duality.py       # §7.2c 对偶：递推读法 ＝ 矩阵读法（numpy 当场验）
   python3 topic03-fig-two-brackets.py  # §7.4 前半 凭什么能分块：块间根本没有 mask
