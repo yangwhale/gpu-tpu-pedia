@@ -703,7 +703,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 </head>
 <body>
 <div class="progress"><i></i></div>
-<nav class="toc" id="toc"><div class="toc-in"><span class="toc-lb">目录</span><a href="#s零"><b>零</b> 起点</a><a href="#s一"><b>一</b> MHA</a><a href="#s二"><b>二</b> 一切从长上下文说起</a><a href="#s三"><b>三</b> FlashAttention</a><a href="#s四"><b>四</b> 骨架</a><a href="#s五"><b>五</b> 旋钮①</a><a href="#s六"><b>六</b> 旋钮②</a><a href="#s七"><b>七</b> 旋钮③</a><a href="#s八"><b>八</b> 元旋钮 ⊕</a><a href="#s九"><b>九</b> 代价</a><a href="#s十"><b>十</b> 落到硬件（本专题的落点）</a><a href="#s十一"><b>十一</b> 收尾</a><a href="#s十二"><b>十二</b> 这个专题明确不讲</a></div></nav>
+<nav class="toc" id="toc"><div class="toc-in"><span class="toc-lb">目录</span><a href="#s零"><b>零</b> 起点</a><a href="#s一"><b>一</b> MHA</a><a href="#s二"><b>二</b> 一切从长上下文说起</a><a href="#s三"><b>三</b> FlashAttention</a><a href="#s四"><b>四</b> 骨架</a><a href="#s五"><b>五</b> 旋钮①</a><a href="#s六"><b>六</b> 旋钮②</a><a href="#s七"><b>七</b> 旋钮③</a><a href="#s八"><b>八</b> 元旋钮 ⊕</a><a href="#s九"><b>九</b> 代价</a><a href="#s十"><b>十</b> 落到硬件（本专题的落点）</a><a href="#s十一"><b>十一</b> 收尾</a></div></nav>
 
 
 <!-- ⛔ 这个文件由 Courses/tools/topic03-build.py 生成。
@@ -4627,9 +4627,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   到 §十 会发现对不上 ——&nbsp;而那时候很容易以为是自己没看懂。</p></div>
 
 <h3 id="s4-2b">4.2b　一条反复出现的判据：事后压，还是从头按压缩训</h3>
-<p>⭐ 这张地图的用法：
-  <b>拿到一个新名字，先把它放进某一格。</b>
-  <em>放得进去的，它的优点和代价<b>你已经知道了</b>，不用细看；
+<p>⭐ 这张地图的用法：拿到一个新名字，先把它放进某一格。
+  <em>放得进去的，它的优点和代价你已经知道了，不用细看；
   <b>放不进去的，才值得你花时间</b> ——&nbsp;那才是真正的新东西。</em></p>
 <div class="note warn"><p>⚠️ 这一条曾经被本讲写成「第二个轴」，现在降级了 ——&nbsp;
   因为它撑不起「轴」这个词。
@@ -10803,11 +10802,148 @@ linear                                               ← 第 45 层多出来的�
   这一节不需要新画面，需要的是一个<b>新问法</b>。</p></div>
 <p>⭐ <b>试着自己先从那条线上读出三件事，再往下看</b>：</p>
 <ol><li><b>前半段是单点突破，后半段全是组合。</b> 2025 年之后没有哪个模型只用一招</li><li><b>"推理期的补丁"逐年变成"训练期的架构"</b> —— NSA 的 native、DSA 的训练阶段、 K3 的从头混合训练，是同一个趋势的三次出现</li><li>每一步都是在<b>修上一步暴露出来的具体毛病</b>，不是凭空发明。 所以下一步大概率也是在修今天这批方案暴露的毛病 —— 那么今天这批的毛病是什么？（留给学生，也留给下一版课件）</li></ol>
+
+<!-- ⭐⭐⭐ 2026-09-14 故事线审计 R22。审计抓到的第一条、也是最硬的一条：
+     **封面立了一个极其具体的承诺 —— 那 512 倍 —— 而它在正文里出现 0 次。**
+     ⛔ 这不是少写了一段，是**故事结构上的失约**：
+       观众带着这个问题进场，散场时没人把答案给他。挂在墙上的枪，一整堂课没响。
+     ⭐ 这一小节就是那一枪，而且是用本课自己的提问顺序打的（§九 那条）。 -->
+<h3 id="s11-1">11.1　最后一件事：回到封面那 512 倍</h3>
+
+<p>开场我们说：<b>2020 年的 GPT-3 记 2048 个 token，今天的模型记 100 万</b>
+  ——&nbsp;这一讲讲的就是这 <b>512 倍</b> 是怎么换来的。
+  <em>现在把这笔账算完。</em></p>
+
+<figure class="fbox fwide" id="fig-gun"><svg viewBox="0 0 1400 1508" width="100%" role="img" aria-label="那 512 倍是怎么换来的：两笔账，三个旋钮各还各的"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">收尾 ——&#160;封面那 <tspan font-weight="700">512 倍</tspan>，到底是怎么换来的</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">开场我们说：2020 年的 GPT-3 记 2048 个 token，今天的模型记 100 万，这一讲讲的就是这 512 倍是怎么换来的。<tspan font-weight="700">现在把这笔账算完。</tspan>——&#160;而算它的办法，正是 §九 那句：<tspan font-weight="700">问「</tspan></text>
+<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">省了多少」之前，先问「省的是哪一样」。</tspan></text>
+<rect x="0" y="85" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="21" y="96" fill="#5f6368" style="font-size:14.0px">要还的：上下文涨了 512 倍</text>
+<rect x="225" y="85" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="246" y="96" fill="#5f6368" style="font-size:14.0px">显存账</text>
+<rect x="314" y="85" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="335" y="96" fill="#5f6368" style="font-size:14.0px">带宽账</text>
+<rect x="0" y="124" width="1400" height="214" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="124" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="126" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="154" x2="1400" y2="154" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="144" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">① 先把要还的那笔摆出来</tspan></text>
+<text class="svgsm" x="1386" y="144" fill="#80868b" text-anchor="end" style="font-size:11.0px">封面立的那个承诺</text>
+<text class="svgsm" x="60" y="214" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">2020</tspan></text>
+<text class="svglbl" x="60" y="254" fill="#5f6368" style="font-size:38.0px"><tspan font-weight="700">2,048</tspan></text>
+<text class="svgsm" x="60" y="282" fill="#5f6368" style="font-size:16.0px">GPT-3 的上下文</text>
+<text class="svgsm" x="390" y="214" fill="#80868b" style="font-size:17.0px"><tspan font-weight="700">今天</tspan></text>
+<text class="svglbl" x="390" y="254" fill="#a50e0e" style="font-size:38.0px"><tspan font-weight="700">1,048,576</tspan></text>
+<text class="svgsm" x="390" y="282" fill="#5f6368" style="font-size:16.0px">前沿模型的上下文</text>
+<line x1="420" y1="242" x2="480" y2="242" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="760" y="200" width="300" height="104" rx="9" fill="none" stroke="#d93025" stroke-width="1"/>
+<text class="svglbl" x="910" y="246" fill="#a50e0e" text-anchor="middle" style="font-size:40.0px"><tspan font-weight="700">× 512</tspan></text>
+<text class="svgsm" x="910" y="278" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">整整 512 倍，除得尽</text>
+<text class="svgsm" x="1090" y="236" fill="#202124" style="font-size:17.0px">⛔ 什么都不改的话，</text>
+<text class="svgsm" x="1090" y="260" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">KV cache 也要涨 512 倍。</tspan></text>
+<text class="svgsm" x="1090" y="284" fill="#5f6368" style="font-size:16.0px">这就是要还的那笔。</text>
+<rect x="0" y="394" width="1400" height="396" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="394" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="396" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="424" x2="1400" y2="424" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="414" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 它<tspan font-weight="700">不是一笔账，是两笔</tspan> ——&#160;而且是不同的旋钮各还各的</tspan></text>
+<text class="svgsm" x="1386" y="414" fill="#80868b" text-anchor="end" style="font-size:11.0px">这正是 §九 那条提问顺序</text>
+<rect x="24" y="456" width="664" height="316" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="44" y="486" fill="#0d652d" style="font-size:21.0px"><tspan font-weight="700">显存账</tspan></text>
+<text class="svgsm" x="123" y="486" fill="#80868b" style="font-size:15.0px">一个人要占多少</text>
+<text class="svgsm" x="44" y="528" fill="#0d652d" style="font-size:17.0px">旋钮①　MLA 压每一份</text>
+<text class="svglbl" x="360" y="528" fill="#0d652d" style="font-size:22.0px"><tspan font-weight="700">56.9×</tspan></text>
+<text class="svgsm" x="452" y="528" fill="#80868b" style="font-size:14.0px">488 GiB → 8.58 GiB，V3 口径核过</text>
+<text class="svgsm" x="44" y="584" fill="#0d652d" style="font-size:17.0px">元旋钮　混合 3:1</text>
+<text class="svglbl" x="360" y="584" fill="#0d652d" style="font-size:22.0px"><tspan font-weight="700">4×</tspan></text>
+<text class="svgsm" x="452" y="584" fill="#80868b" style="font-size:14.0px">四层里只有一层是全注意力</text>
+<line x1="44" y1="618" x2="668" y2="618" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="44" y="640" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">两个相乘</tspan></text>
+<text class="svglbl" x="360" y="640" fill="#202124" style="font-size:22.0px"><tspan font-weight="700">227.5×</tspan></text>
+<text class="svgsm" x="452" y="640" fill="#80868b" style="font-size:14.0px">这就是每个 token 便宜了多少</text>
+<rect x="44" y="706" width="624" height="48" rx="7" fill="none" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="62" y="736" fill="#a50e0e" style="font-size:17.0px">要还 512×，还上了 227.5× ——&#160;<tspan font-weight="700">还差 2.25 倍</tspan>。这才是真正多买的硬件。</text>
+<rect x="712" y="456" width="664" height="316" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="732" y="486" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">带宽账</tspan></text>
+<text class="svgsm" x="811" y="486" fill="#80868b" style="font-size:15.0px">每走一步要读多少</text>
+<text class="svgsm" x="732" y="528" fill="#174ea6" style="font-size:17.0px">旋钮②　稀疏注意力</text>
+<text class="svgsm" x="732" y="558" fill="#5f6368" style="font-size:16.0px">⛔ 它<tspan font-weight="700">一个字节都不省显存</tspan> ——&#160;KV 全存着，</text>
+<text class="svgsm" x="732" y="582" fill="#5f6368" style="font-size:16.0px">只是每步不全读。所以它不进左边那笔账。</text>
+<rect x="732" y="602" width="624" height="96" rx="8" fill="none" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="752" y="634" fill="#174ea6" style="font-size:18.0px"><tspan font-weight="700">DSA 每步固定只读 k ＝ 2,048 个</tspan></text>
+<text class="svgsm" x="752" y="668" fill="#202124" style="font-size:19.0px;font-family:'Roboto Mono',ui-monospace,monospace">1,048,576 ÷ 2,048 ＝ <tspan font-weight="700">512×</tspan></text>
+<text class="svgsm" x="752" y="736" fill="#174ea6" style="font-size:17.0px">⭐⭐ <tspan font-weight="700">正好也是 512。</tspan>上下文涨了 512 倍，<tspan font-weight="700">它一个都没多读。</tspan></text>
+<rect x="0" y="846" width="1400" height="234" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="846" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="0" y="848" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="876" x2="1400" y2="876" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="866" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">③ 于是「三个旋钮」这条主线，在这里收成一句话</tspan></text>
+<text class="svgsm" x="1386" y="866" fill="#80868b" text-anchor="end" style="font-size:11.0px">每个旋钮还的不是同一笔</text>
+<rect x="24" y="908" width="426" height="120" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="44" y="940" fill="#0d652d" style="font-size:20.0px"><tspan font-weight="700">旋钮①</tspan></text>
+<text class="svgsm" x="109" y="940" fill="#5f6368" style="font-size:16.0px">让每一份更小</text>
+<text class="svgsm" x="44" y="976" fill="#5f6368" style="font-size:16.0px">还<tspan font-weight="700">显存账</tspan> ——&#160;把每个 token 的开销压下去</text>
+<rect x="476" y="908" width="426" height="120" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="496" y="940" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">旋钮②</tspan></text>
+<text class="svgsm" x="561" y="940" fill="#5f6368" style="font-size:16.0px">每步只读一部分</text>
+<text class="svgsm" x="496" y="976" fill="#5f6368" style="font-size:16.0px">还<tspan font-weight="700">带宽账</tspan> ——&#160;⛔ 它<tspan font-weight="700">不还</tspan>显存账</text>
+<rect x="928" y="908" width="426" height="120" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="948" y="940" fill="#681da8" style="font-size:20.0px"><tspan font-weight="700">旋钮③</tspan></text>
+<text class="svgsm" x="1013" y="940" fill="#5f6368" style="font-size:16.0px">换成固定大小的状态</text>
+<text class="svgsm" x="948" y="976" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">两笔一起还</tspan> ——&#160;因为它让那个 S 整个消失了</text>
+<text class="svgsm" x="24" y="1066" fill="#202124" style="font-size:17.0px">⭐⭐ 所以「先问省的是哪一样」<tspan font-weight="700">不是一句方法论口号</tspan> ——&#160;不分开问，这两笔账根本对不上。</text>
+<rect x="0" y="1140" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1140" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1140" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1167" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 那 512 倍，是这么换来的</tspan></text>
+<text class="svgsm" x="20" y="1198" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">不是内存变大了。</tspan>显存这一笔，是把每个 token 的开销压了 227.5 倍 ——&#160;剩下那 2.25 倍，才是真正多买的硬件。</text>
+<text class="svgsm" x="20" y="1222" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">也不是带宽变快了。</tspan>带宽这一笔，是干脆不读了 ——&#160;每步固定只看 2048 个，<tspan font-weight="700">上下文涨 512 倍，它一个都没多读。</tspan></text>
+<text class="svgsm" x="20" y="1246" fill="#0d652d" style="font-size:15.0px">⭐⭐ 一句话收：<tspan font-weight="700">这六年真正变的不是机器，是「一个 token 到底该花多少钱」这件事被重新定价了。</tspan></text>
+<rect x="0" y="1276" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1276" width="4" height="146" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1276" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1303" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ ⛔ 这张图的口径，三条，一条都不能省</tspan></text>
+<text class="svgsm" x="20" y="1334" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">这是推演，不是某个真实模型的实测。</tspan>56.9× 是 V3 口径核过的，4× 是 Kimi Linear 3:1 配比推的 ——&#160;<tspan font-weight="700">两者不在同一个模型上</tspan>。这张图算的是「把本讲学到的三样叠在一个模型</text>
+<text class="svgsm" x="20" y="1358" fill="#a50e0e" style="font-size:15.0px">上会怎样」。</text>
+<text class="svgsm" x="20" y="1382" fill="#a50e0e" style="font-size:15.0px">混合里那几层线性的状态<tspan font-weight="700">不是零</tspan>，是固定大小。在 1M 这个尺度上把它算 0 <tspan font-weight="700">偏乐观</tspan>，但量级对。</text>
+<text class="svgsm" x="20" y="1406" fill="#a50e0e" style="font-size:15.0px">DSA 的 k=2048 是<tspan font-weight="700">在 128K 上的设定</tspan>（那时是 1.5625%）。放到 1M 是本课的外推 ——&#160;用来说明「固定 k」这个性质意味着什么，<tspan font-weight="700">不是说 DeepSeek 真在 1M 上这么跑</tspan>。</text>
+<text class="svgsm" x="0" y="1438" fill="#80868b" style="font-size:14.0px">📌 488 GiB / 8.58 GiB（61 层 · 128K · bf16 · 一个用户）· 3:1 配比 · k=2048 这四个数，本讲前面都已逐一核过并标了口径，这一张只做乘除</text>
+<text class="svgsm" x="0" y="1459" fill="#80868b" style="font-size:14.0px">　　⭐ 两个 512 为什么会相等，说破了很简单：<tspan font-weight="700">GPT-3 的上下文长度（2048）和 DSA 的 k（2048）恰好是同一个数</tspan> ——&#160;两条完全不相干的设定撞成了一个数，所以「今天 ÷ 当年」和「今天 </text>
+<text class="svgsm" x="0" y="1480" fill="#80868b" style="font-size:14.0px">　　÷ k」才算出同样的 512。⚠️ 这是<tspan font-weight="700">巧合，不是什么规律</tspan>，但它让这笔账好记得多。脚本里两个等式都断言了</text>
+</svg><figcaption>⭐⭐ <b>两个 512 为什么会相等</b>：GPT-3 的上下文长度和 DSA 的 k <b>恰好都是 2048</b> ——&nbsp;两条不相干的设定撞成一个数。<em>⚠️ 这是巧合不是规律，但它让这笔账好记得多。</em></figcaption></figure>
+
+<div class="note ok"><p>★ <b>那 512 倍，是这么换来的</b></p>
+<p><b>不是内存变大了。</b>显存这一笔，是把每个 token 的开销<b>压了 227.5 倍</b>
+  （旋钮① 的 56.9× × 混合 3:1 的 4×）——&nbsp;
+  要还 512 倍，还上了 227.5 倍，<b>剩下那 2.25 倍，才是真正多买的硬件</b>。</p>
+<p><b>也不是带宽变快了。</b>带宽这一笔，是干脆不读了
+  ——&nbsp;稀疏注意力每步固定只看 2048 个，
+  <b>上下文涨了 512 倍，它一个都没多读。</b></p>
+<p>⭐⭐ 一句话收：<b>这六年真正变的不是机器，
+  是「一个 token 到底该花多少钱」这件事被重新定价了。</b></p></div>
+
+<div class="note info"><p>📌 <b>顺手看一眼这笔账是怎么算出来的 ——&nbsp;它就是这门课的方法</b></p>
+<p>它不是一笔账，<b>是两笔</b>：显存账问「一个人要占多少」，带宽账问「每走一步要读多少」。
+  而三个旋钮<b>各还各的那一笔</b> ——&nbsp;
+  旋钮① 只还显存，旋钮② 只还带宽（<b>它一个字节都不省显存</b>），
+  旋钮③ 两笔一起还。</p>
+<p>⭐ 所以 <a href="#s九">§九</a> 那句「问『省了多少』之前，先问『省的是哪一样』」
+  不是一句方法论口号 ——&nbsp;<em><b>不分开问，这两笔账根本对不上。</b></em></p></div>
 <hr>
 </div></section>
-<section id="s十二"><div class="wrap"><div class="stn"><span class="badge">第 十二 节</span><h2>这个专题明确不讲</h2></div>
+<!-- ⭐⭐⭐ 2026-09-14 故事线审计 R23：这一块原来是**第十二节**，于是整堂课的
+     最后一节是「我们不讲什么」，最后一段是出处清单的说明 ——
+     ⛔ **等于电影最后一幕是片尾免责声明。**
+     ⭐ 内容该留（它防跑题、也是对读者的交代），但**不该是最后一句话**。
+     → 降级成折叠附录，跟出处清单并排。课现在结束在 11.1 那一枪上。
+     ⚠️ 目录是从「第 N 节」的 section 结构自动抓的，所以它会自动从目录里消失
+       —— 这正是想要的，顺手也把节表里那一行删了。 -->
+<section id="s十二"><div class="wrap">
+<details class="aside"><summary>📎 <b>附：这个专题明确不讲什么（以及为什么）</b>
+<em>（想知道边界在哪、或者在找某个主题去了哪一讲，点开）</em></summary>
 <ul><li><b>MLA 逐步的矩阵推导</b> → 在<a href="专题01-一个-Token-的一生.md">专题一</a>第 2 步。 ⭐ 分工是这样定的：专题一讲"V3 这一个模型里它怎么算"， 这里讲"为什么会有它、它在谱系里站哪、它换走了什么"。 这里只用一张图复述结论（576 = 512 + 64），不重讲推导 —— 重讲会占掉 5 分钟，而这 5 分钟买不到任何新东西</li><li><b>注意力的 kernel 怎么写</b> → 实现细节在<a href="专题07-性能调优与工具链.md">专题七</a></li><li><b>序列并行 / Context Parallelism 怎么切</b> → <a href="专题05-并行策略.md">专题五</a>。 这里只说"线性注意力的 CP 跟标准 CP 不一样"，不展开</li><li><b>prefill / decode 的形状差异</b> → <a href="专题06-推理.md">专题六</a></li><li><b>各家模型的完整参数表</b> → <a href="专题09-最新开源模型对比.md">专题九</a>。 这里给的每个数字都只为说明一个机制，<b>不做横向评测</b></li><li><b>Mamba / SSM 那一支</b> —— 跟线性注意力是近亲，但它自成体系。 这门课的听众用不上，<b>明确不讲</b>（问到就说一句"同一个思路的另一个分支"）</li></ul>
-<hr>
+</details>
 </div></section>
 <!-- ⭐⭐ 2026-09-07 定性。现场问：「后面那些内容是先放在那，一边写一边提取，
      吸收完就没了？还是现在就砍掉？」——&nbsp;**这两块是两种东西，不该一起处置。**

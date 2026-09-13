@@ -1,0 +1,202 @@
+# -*- coding: utf-8 -*-
+r"""专题三 · 收尾「那 512 倍是怎么换来的」—— 把封面挂的那把枪打响
+
+⭐⭐⭐ 2026-09-14 故事线审计 R22。审计抓到的第一条、也是最硬的一条：
+
+   **封面立了一个极其具体的承诺 ——「2020 年 GPT-3 记 2048 个 token，
+   今天记 100 万；这六年的注意力演进，讲的就是这 512 倍是怎么换来的」——
+   而「512 倍」在全文正文里出现 0 次。**
+
+   ⛔ 这不是少写了一段，是**故事结构上的失约**：
+   观众带着这个问题进场，散场时没人把答案给他。挂在墙上的枪，一整堂课没响。
+
+⭐ 这张图就是那一枪。而且它必须**用本课自己的提问顺序来打** ——
+   §九 那句「问『省了多少』之前，先问『省的是哪一样』」在这里终于有了用武之地：
+   **512 倍要分成两笔账还，而三个旋钮各还各的那一笔。**
+
+⭐⭐ 算出来有一个漂亮到不像真的结果，但它是真的：
+   上下文从 2048 涨到 1,048,576 是 **整整 512 倍**；
+   而 DSA 每步固定只读 **k = 2048** 个 ——&#160;1,048,576 ÷ 2048 **也正好是 512**。
+   **512 倍的上下文，它一个都没多读。**
+
+⚠️ 三条口径必须写在图上，否则这张图会被当成某个真实模型的实测：
+   ① 56.9× 是 V3 口径核过的；4× 是 Kimi Linear 3:1 配比推的 ——
+      **两者不在同一个模型上**，这是「把本讲学到的三样叠起来」的推演。
+   ② 混合里那几层线性的状态**不是零**，是固定大小 —— 在 1M 这个尺度上
+      把它算 0 是**偏乐观**，但量级对。
+   ③ DSA 的 k=2048 是 **128K 上的设定**，放到 1M 是本课的外推，
+      用来说明「固定 k」这个性质意味着什么。
+"""
+from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+                          BG2, wpx, wrap_rich)
+
+W = 1400
+OLD, NEW = 2048, 1048576          # GPT-3 → 今天
+MHA, MLA = 488.0, 8.58            # GiB，V3 口径，128K，一个用户
+HYB = 4.0                         # 混合 3:1 —— 四层里只有一层是全注意力
+K = 2048                          # DSA 每步固定读这么多
+
+
+def main():
+    grow = NEW // OLD
+    assert NEW % OLD == 0 and grow == 512
+    k1 = MHA / MLA                       # 旋钮①
+    tot = k1 * HYB                       # 显存账合计
+    gap = grow / tot                     # 还差多少
+    band = NEW // K                      # 带宽账
+    # ⭐⭐ 这张图的题眼就是这一行断言：带宽那一笔，**正好抵完**。
+    assert band == grow, (band, grow)
+    assert 56.8 < k1 < 57.0 and 2.2 < gap < 2.3, (k1, gap)
+
+    f = Fig(W, "那 512 倍是怎么换来的：两笔账，三个旋钮各还各的")
+    yy = f.header(
+        "收尾 ——&#160;封面那 <tspan font-weight=\"700\">512 倍</tspan>，"
+        "到底是怎么换来的",
+        "开场我们说：2020 年的 GPT-3 记 2048 个 token，今天的模型记 100 万，"
+        "这一讲讲的就是这 512 倍是怎么换来的。"
+        "<tspan font-weight=\"700\">现在把这笔账算完。</tspan>"
+        "——&#160;而算它的办法，正是 §九 那句：<tspan font-weight=\"700\">"
+        "问「省了多少」之前，先问「省的是哪一样」。</tspan>",
+        legend=[(RD, "要还的：上下文涨了 512 倍"), (GR, "显存账"),
+                (BL, "带宽账")])
+
+    # ══ ① 那把枪 ══════════════════════════════════════════════════
+    PH1 = 214
+    top = f.panel(0, yy, W, PH1,
+                  "① 先把要还的那笔摆出来", RD, tag="封面立的那个承诺")
+    for i, (yr, n, lab, col) in enumerate([
+        ("2020", OLD, "GPT-3 的上下文", GY),
+        ("今天", NEW, "前沿模型的上下文", RD),
+    ]):
+        cx = 60 + i * 330
+        f.t(cx, top + 60, yr, GY2, bold=True, size=17)
+        f.t(cx, top + 100, "{:,}".format(n), col, bold=True, size=38,
+            cls="svglbl")
+        f.t(cx, top + 128, lab, GY, size=16)
+    f.line(420, top + 88, 480, top + 88, RD, 2.2)
+    f.box(760, top + 46, 300, 104, "none", RD, 9)
+    f.t(910, top + 92, "× %d" % grow, RD, bold=True, size=40, anchor="middle",
+        cls="svglbl")
+    f.t(910, top + 124, "整整 512 倍，除得尽", GY, size=16, anchor="middle")
+    f.t(1090, top + 82, "⛔ 什么都不改的话，", INK, size=17)
+    f.t(1090, top + 106, "KV cache 也要涨 512 倍。", INK, bold=True, size=17)
+    f.t(1090, top + 130, "这就是要还的那笔。", GY, size=16)
+
+    # ══ ② 两笔账，分开还 ═══════════════════════════════════════════
+    yy = top + PH1 + 26
+    PH2 = 396
+    top = f.panel(0, yy, W, PH2,
+                  "② 它<tspan font-weight=\"700\">不是一笔账，是两笔</tspan>"
+                  " ——&#160;而且是不同的旋钮各还各的", GR,
+                  tag="这正是 §九 那条提问顺序")
+
+    # 左：显存账
+    f.box(24, top + 32, 664, 316, "none", LINE, 9)
+    f.t(44, top + 62, "显存账", GR, bold=True, size=21, cls="svglbl")
+    f.t(44 + wpx("显存账", 21) + 16, top + 62, "一个人要占多少", GY2, size=15)
+    rows = [
+        ("旋钮①　MLA 压每一份", "%.1f×" % k1, "488 GiB → 8.58 GiB，V3 口径核过", GR),
+        ("元旋钮　混合 3:1", "%.0f×" % HYB, "四层里只有一层是全注意力", GR),
+        ("两个相乘", "%.1f×" % tot, "这就是每个 token 便宜了多少", INK),
+    ]
+    for j, (lab, num, note, col) in enumerate(rows):
+        yj = top + 104 + j * 56
+        if j == 2:
+            f.line(44, yj - 22, 668, yj - 22, LINE, 1, arrow=False)
+        f.t(44, yj, lab, col, bold=(j == 2), size=17)
+        f.t(360, yj, num, col, bold=True, size=22, cls="svglbl")
+        f.t(452, yj, note, GY2, size=14)
+    f.box(44, top + 282, 624, 48, "none", RD, 7)
+    f.t(62, top + 312,
+        "要还 512×，还上了 %.1f× ——&#160;<tspan font-weight=\"700\">"
+        "还差 %.2f 倍</tspan>。这才是真正多买的硬件。" % (tot, gap), RD, size=17)
+
+    # 右：带宽账
+    f.box(712, top + 32, 664, 316, "none", LINE, 9)
+    f.t(732, top + 62, "带宽账", BL, bold=True, size=21, cls="svglbl")
+    f.t(732 + wpx("带宽账", 21) + 16, top + 62, "每走一步要读多少", GY2, size=15)
+    f.t(732, top + 104, "旋钮②　稀疏注意力", BL, size=17)
+    f.t(732, top + 134, "⛔ 它<tspan font-weight=\"700\">一个字节都不省显存</tspan>"
+        " ——&#160;KV 全存着，", GY, size=16)
+    f.t(732, top + 158, "只是每步不全读。所以它不进左边那笔账。", GY, size=16)
+    f.box(732, top + 178, 624, 96, "none", BL, 8)
+    f.t(752, top + 210, "DSA 每步固定只读 k ＝ %s 个" % "{:,}".format(K), BL,
+        bold=True, size=18)
+    f.t(752, top + 244,
+        "1,048,576 ÷ %s ＝ <tspan font-weight=\"700\">%d×</tspan>"
+        % ("{:,}".format(K), band), INK, size=19, mono=True)
+    f.t(752, top + 312,
+        "⭐⭐ <tspan font-weight=\"700\">正好也是 512。</tspan>"
+        "上下文涨了 512 倍，<tspan font-weight=\"700\">它一个都没多读。</tspan>",
+        BL, size=17)
+
+    # ══ ③ 三个旋钮各还了哪一笔 ═════════════════════════════════════
+    yy = top + PH2 + 26
+    PH3 = 234
+    top = f.panel(0, yy, W, PH3,
+                  "③ 于是「三个旋钮」这条主线，在这里收成一句话", PU,
+                  tag="每个旋钮还的不是同一笔")
+    for i, (nm, what, body, col) in enumerate([
+        ("旋钮①", "让每一份更小",
+         "还<tspan font-weight=\"700\">显存账</tspan> ——&#160;"
+         "把每个 token 的开销压下去", GR),
+        ("旋钮②", "每步只读一部分",
+         "还<tspan font-weight=\"700\">带宽账</tspan> ——&#160;"
+         "⛔ 它<tspan font-weight=\"700\">不还</tspan>显存账", BL),
+        ("旋钮③", "换成固定大小的状态",
+         "<tspan font-weight=\"700\">两笔一起还</tspan> ——&#160;"
+         "因为它让那个 S 整个消失了", PU),
+    ]):
+        bx = 24 + i * 452
+        f.box(bx, top + 32, 426, 120, "none", LINE, 9)
+        f.t(bx + 20, top + 64, nm, col, bold=True, size=20, cls="svglbl")
+        f.t(bx + 20 + wpx(nm, 20) + 14, top + 64, what, GY, size=16)
+        yj = top + 100
+        for r in wrap_rich(body, 392, 16 * 1.12):
+            f.t(bx + 20, yj, r, GY, size=16)
+            yj += 24
+    f.t(24, top + PH3 - 44,
+        "⭐⭐ 所以「先问省的是哪一样」<tspan font-weight=\"700\">不是一句方法论口号"
+        "</tspan> ——&#160;不分开问，这两笔账根本对不上。", INK, size=17)
+
+    # ══ 落点 ══════════════════════════════════════════════════════
+    yy = top + PH3 + 30
+    yy = f.band(yy, "ok", "那 512 倍，是这么换来的", [
+        "<tspan font-weight=\"700\">不是内存变大了。</tspan>"
+        "显存这一笔，是把每个 token 的开销压了 %.1f 倍 ——&#160;"
+        "剩下那 %.2f 倍，才是真正多买的硬件。" % (tot, gap),
+        "<tspan font-weight=\"700\">也不是带宽变快了。</tspan>"
+        "带宽这一笔，是干脆不读了 ——&#160;每步固定只看 2048 个，"
+        "<tspan font-weight=\"700\">上下文涨 512 倍，它一个都没多读。</tspan>",
+        "⭐⭐ 一句话收：<tspan font-weight=\"700\">"
+        "这六年真正变的不是机器，是「一个 token 到底该花多少钱」这件事被重新定价了。"
+        "</tspan>",
+    ])
+    yy = f.band(yy + 14, "bad", "⛔ 这张图的口径，三条，一条都不能省", [
+        "<tspan font-weight=\"700\">这是推演，不是某个真实模型的实测。</tspan>"
+        "56.9× 是 V3 口径核过的，4× 是 Kimi Linear 3:1 配比推的 ——&#160;"
+        "<tspan font-weight=\"700\">两者不在同一个模型上</tspan>。"
+        "这张图算的是「把本讲学到的三样叠在一个模型上会怎样」。",
+        "混合里那几层线性的状态<tspan font-weight=\"700\">不是零</tspan>，"
+        "是固定大小。在 1M 这个尺度上把它算 0 <tspan font-weight=\"700\">偏乐观"
+        "</tspan>，但量级对。",
+        "DSA 的 k=2048 是<tspan font-weight=\"700\">在 128K 上的设定</tspan>"
+        "（那时是 1.5625%）。放到 1M 是本课的外推 ——&#160;"
+        "用来说明「固定 k」这个性质意味着什么，"
+        "<tspan font-weight=\"700\">不是说 DeepSeek 真在 1M 上这么跑</tspan>。",
+    ])
+    yy = f.src(yy + 16,
+               "488 GiB / 8.58 GiB（61 层 · 128K · bf16 · 一个用户）· 3:1 配比 ·"
+               " k=2048 这四个数，本讲前面都已逐一核过并标了口径，"
+               "这一张只做乘除",
+               "⭐ 两个 512 为什么会相等，说破了很简单："
+               "<tspan font-weight=\"700\">GPT-3 的上下文长度（2048）"
+               "和 DSA 的 k（2048）恰好是同一个数</tspan> ——&#160;"
+               "两条完全不相干的设定撞成了一个数，所以"
+               "「今天 ÷ 当年」和「今天 ÷ k」才算出同样的 512。"
+               "⚠️ 这是<tspan font-weight=\"700\">巧合，不是什么规律</tspan>，"
+               "但它让这笔账好记得多。脚本里两个等式都断言了")
+    f.save("fig3-gun.svg", yy + 6)
+
+
+main()
