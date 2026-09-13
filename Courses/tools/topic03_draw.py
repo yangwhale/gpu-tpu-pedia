@@ -129,6 +129,28 @@ def sup(base, idx):
             '<tspan dy="4"></tspan>' % (base, idx))
 
 
+_ARXIV = re.compile(r"(?<![\d.])(\d{4}\.\d{4,5})(?![\d.])")
+
+
+def _svg_linkify(svg):
+    """把 <text> 里的 arXiv 编号变成可点的 SVG 链接。
+
+    ⛔ 只在 `<text>…</text>` 内部替换 ——&nbsp;元素属性里也可能出现四位小数
+      （viewBox、坐标），套进去就毁了。
+    ⚠️ 加下划线是必要的：SVG 里的 <a> **不会**像 HTML 那样自动变色变下划线，
+      不标出来读者根本不知道它能点。
+    """
+    def _one(m):
+        return ('<a href="https://arxiv.org/abs/%s" target="_blank">'
+                '<tspan text-decoration="underline">%s</tspan></a>'
+                % (m.group(1), m.group(1)))
+
+    def _intext(m):
+        return m.group(1) + _ARXIV.sub(_one, m.group(2)) + m.group(3)
+
+    return re.sub(r"(<text\b[^>]*>)(.*?)(</text>)", _intext, svg, flags=re.S)
+
+
 class Fig(object):
     """一张 SVG。高度不写死，收尾按真实落点回填。"""
 
@@ -376,6 +398,15 @@ class Fig(object):
             'flood-color="#202124" flood-opacity="0.10"/></filter>'
             '</defs>' % (self.w, bottom, self.aria, marks))
         s = "\n".join(self.p)
+        # ⭐⭐ 2026-09-14 现场点的：「引用的那些论文得在教材里边，
+        #   把可点击的 link 都放里边，有愿意多学的人可以去点开看。」
+        #   正文那边由 course_links.py 后处理，**但图里的出处它够不着** ——
+        #   那个后处理刻意跳过 <svg>（HTML 的 <a> 进不去 SVG 的文本流）。
+        # ⭐ 所以图这边自己来：在写盘前把 arXiv 编号包成 **SVG 自己的 <a>**。
+        # ⚠️ 两个前提，缺一个就白做：
+        #   ① 必须是**内联**的 SVG（本课就是内联进 HTML 的，所以点得动）；
+        #   ② `<a>` 要包在 `<text>` **里面**（包在外面 Chrome 不给点）。
+        s = _svg_linkify(s)
         xml.dom.minidom.parseString(s.encode("utf-8"))
         io.open(os.path.join(HERE, name), "w", encoding="utf-8").write(s)
         print("ok  %s  %d×%d" % (name, self.w, bottom))

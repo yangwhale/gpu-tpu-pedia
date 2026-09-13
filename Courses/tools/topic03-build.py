@@ -496,10 +496,10 @@ __FIG_RNN_HW__
   <td>⭐ <b>省得最狠</b>：只读那 576 维</td><td><a href="#s五">§五</a></td></tr>
 <tr><td><b>② 稀疏</b></td><td>⛔ <b>可能一点不省</b>：要先算出注意力图才知道挑谁
   ——&nbsp;NSA 论文 §2 的第一个坑说的就是这个</td>
-  <td>⭐ 每步只读 k 条</td><td><a href="#s六">§6.3b</a></td></tr>
+  <td>⭐ 每步只读 k 条</td><td>§6.3b</td></tr>
 <tr><td><b>③ 线性</b></td><td>要靠<b>分块</b>才榨得出并行度（块内并行、块间串行）</td>
   <td>⭐ <b>就是一条纯递推</b>，每步只碰那块固定大小的板子</td>
-  <td><a href="#s七">§7.4</a></td></tr>
+  <td>§7.4</td></tr>
 </tbody></table>
 <p>⛔ <b>所以「省了 N 倍」这句话，不带阶段就是半句话。</b>
   <em><a href="#s九">§九</a>那张代价表专门有一列「⭐ 省在哪个阶段」，就是为了逼出这一问。</em></p></div>
@@ -527,7 +527,7 @@ __FIG_RNN_PAIN__
 <li><b>Bahdanau et al. 2014</b>（arXiv 1409.0473）——&nbsp;「fixed-length vector is a bottleneck」。</li>
 <li><b>Vaswani et al. 2017</b>（arXiv 1706.03762）——&nbsp;引言「This <b>inherently sequential</b>
   nature precludes parallelization within training examples…」＋ 表 1 三列。</li>
-<li><b>NVIDIA《Recurrent Layers User's Guide》</b>——&nbsp;「a GEMM with <b>one dimension of one</b>」；
+<li><b><a href="https://docs.nvidia.com/deeplearning/performance/dl-performance-recurrent/" target="_blank" rel="noopener">NVIDIA《Recurrent Layers User's Guide》</a></b>——&nbsp;「a GEMM with <b>one dimension of one</b>」；
   「can combine these GEMMs over the minibatch size, <b>but not over different sequence steps</b>」。</li>
 <li><b>Martin &amp; Cundy 2018</b>（arXiv 1709.04057）——&nbsp;非线性依赖挡住并行，
   <b>只有线性依赖能用 parallel scan 扫</b>，实测最高 9× 加速。</li>
@@ -844,7 +844,7 @@ __FIG_WHEN_AXIS__
 <table>
 <thead><tr><th>旋钮</th><th>在改什么</th><th>代表</th></tr></thead><tbody>
 <tr><td><b>① 每个 token 存多少</b></td><td>减少 KV 的<b>份数</b>或<b>维度</b></td><td>MQA → GQA → <b>MLA</b> → Gated MLA</td></tr>
-<tr><td><b>② 每个 query 看多少</b></td><td>限制<b>范围</b>或<b>动态挑选</b></td><td><b>SWA</b> · NSA · <b>DSA</b> · <b>CSA / HCA</b>（⚠️ CSA 同时也在拧 ①，见 <a href="#s六">§6.4c</a>）</td></tr>
+<tr><td><b>② 每个 query 看多少</b></td><td>限制<b>范围</b>或<b>动态挑选</b></td><td><b>SWA</b> · NSA · <b>DSA</b> · <b>CSA / HCA</b>（⚠️ CSA 同时也在拧 ①，见 §6.4c）</td></tr>
 <tr><td><b>③ 换一套数学</b></td><td>用<b>固定大小的状态</b>代替不断变长的 KV</td><td>线性注意力：DeltaNet → <b>GDN</b> → <b>KDA</b></td></tr>
 <tr><td><b>①+②+③ 混着来</b></td><td>不同层用不同方案</td><td><b>Hybrid</b>：V4 的 CSA+HCA、K3 的 KDA+Gated MLA</td></tr>
 </tbody></table>
@@ -899,7 +899,7 @@ __FIG_WHEN_AXIS__
 <tr><td>Attention sink</td><td>StreamingLLM, arXiv 2309.17453</td><td>—（现象）</td><td>开头几个 token 被当作"停车位"，扔了就崩</td></tr>
 <tr><td><b>NSA</b></td><td>arXiv 2502.11089</td><td>②</td><td>压缩 / 选择 / 滑窗三条支路，门控融合，<b>训练时就用</b></td></tr>
 <tr><td><b>DSA</b></td><td>DeepSeek-V3.2, arXiv 2512.02556</td><td>②</td><td>Lightning Indexer 给每个 query 挑 top-k</td></tr>
-<tr><td><b>CSA / HCA</b></td><td>DeepSeek-V4, arXiv 2606.19348</td><td><b>①（token 维）＋②</b></td><td>先把 KV 按块压缩（＝沿 token 维压，见 <a href="#s六">§6.4c</a>），再稀疏挑选；两档压缩率混排</td></tr>
+<tr><td><b>CSA / HCA</b></td><td>DeepSeek-V4, arXiv 2606.19348</td><td><b>①（token 维）＋②</b></td><td>先把 KV 按块压缩（＝沿 token 维压，见 §6.4c），再稀疏挑选；两档压缩率混排</td></tr>
 <tr><td>DeltaNet</td><td>起源 Schlag 等 arXiv 2102.11174；可并行化 arXiv 2406.06484</td><td>③</td><td>状态更新用 delta rule：擦掉旧的再写新的</td></tr>
 <tr><td><b>GDN</b>（Gated DeltaNet）</td><td>arXiv 2412.06464</td><td>③</td><td>在 delta rule 上加遗忘门</td></tr>
 <tr><td><b>KDA</b></td><td>Kimi Linear, arXiv 2510.26692</td><td>③</td><td>遗忘门从标量升级成 <b>per-channel</b> 向量</td></tr>
@@ -1292,7 +1292,7 @@ __FIG_HYBRID__
 <table>
 <thead><tr><th>版本</th><th>时间</th><th>注意力</th><th>这一步新增了什么</th></tr></thead><tbody>
 <tr><td>GLM-5（355B–744B）</td><td>2026-02-12</td><td>MLA ＋ <b>DSA</b></td><td>智谱第一次上稀疏</td></tr>
-<tr><td>GLM-5.2（744B）</td><td>2026-06-16</td><td>MLA ＋ DSA ＋ <b>IndexShare</b></td><td>每四个稀疏层共用一个索引器（见 <a href="#s六">§6.5b</a>），1M 下省 <b>2.9×</b> FLOPs</td></tr>
+<tr><td>GLM-5.2（744B）</td><td>2026-06-16</td><td>MLA ＋ DSA ＋ <b>IndexShare</b></td><td>每四个稀疏层共用一个索引器（见 §6.5b），1M 下省 <b>2.9×</b> FLOPs</td></tr>
 <tr><td><b>GLM-5.3-Flash</b>（320B/18B）</td><td>2026-08-26</td><td><b>KDA 线性 ＋ NoPE 稀疏 MLA</b></td><td>⭐ GLM 家族<b>第一次把线性和稀疏放进同一个模型</b>；原生多模态</td></tr>
 </tbody></table>
 <p>GLM-5.3-Flash 的 <code>layer_types</code> 是一个干净的四层循环：</p>
@@ -1320,7 +1320,7 @@ linear                                               ← 第 45 层多出来的�
 <thead><tr><th>题</th><th>机制</th><th>本讲在哪儿提过</th></tr></thead><tbody>
 <tr><td><b>A</b></td><td><b>CLA</b> ——&nbsp;每 2 层共享同一份 KV</td><td>44 行表里有一行</td></tr>
 <tr><td><b>B</b></td><td><b>KV 量化</b> ——&nbsp;每个数从 16 bit 降到 8 bit</td><td><a href="#s四">§四</a> 那个 ⚠️ 框</td></tr>
-<tr><td><b>C</b></td><td><b>IndexShare</b> ——&nbsp;每四个稀疏层共用一个索引器</td><td><a href="#s六">§6.5b</a></td></tr>
+<tr><td><b>C</b></td><td><b>IndexShare</b> ——&nbsp;每四个稀疏层共用一个索引器</td><td>§6.5b</td></tr>
 </tbody></table>
 <details class="aside"><summary>✅ <b>对答案</b>
 <em>（⛔ 先自己写下九个词再点开 ——&nbsp;看着答案想「我本来也这么想」是没有用的）</em></summary>
@@ -1339,7 +1339,7 @@ linear                                               ← 第 45 层多出来的�
 </tbody></table>
 <p>⭐⭐ <b>三道里有两道答案是「都不是」——&nbsp;这是故意的。</b>
   <em>一张分类表真正的用处不是「什么都装得下」，是<b>让装不进去的东西显形</b>。
-  <a href="#s四">§4.2b</a> 那句话反过来说一遍就是：
+  §4.2b 那句话反过来说一遍就是：
   <b>放不进去的，才值得你花时间。</b></em></p>
 </details>
 <hr>
@@ -1433,7 +1433,7 @@ __FIG_TPU_FIX__
 <div class="note info"><p>⭐⭐ <b>跨层共享那一支（§6.5b 的 IndexShare / IndexCache），
   在 TPU 上比在 GPU 上更值钱</b> ——&nbsp;这是一条本课的推导，写清楚它多省的是什么：</p>
 <ul>
-<li><b>GPU 上省的是</b>：indexer 那部分 FLOPs（GLM-5.2 报 1M 下每 token 降 <b>2.9×</b>，见 <a href="#s六">§6.5b</a>）</li>
+<li><b>GPU 上省的是</b>：indexer 那部分 FLOPs（GLM-5.2 报 1M 下每 token 降 <b>2.9×</b>，见 §6.5b）</li>
 <li><b>TPU 上还额外省三样</b>：① 动态元信息的标量计算<b>只做一次</b>，后面几层直接复用；
   ② 几层的 gather 模式<b>完全相同</b>，DMA 描述符可以重用，不必每层重编一遍；
   ③ <b>动态决定的「次数」本身降了四倍</b></li>
@@ -1479,6 +1479,24 @@ __FIG_TPU_FIX__
 <details class="aside"><summary>📚 <b>这一讲的出处清单</b>
 <em>（每个机制配它的一手论文；想复核任何一个数字都从这儿进）</em></summary>
 
+<!-- ⭐⭐ 2026-09-14 现场点的：「引用的那些论文得在教材里边，把可点击的 link
+     都放里边，有愿意多学的人可以去点开看。」
+     ⛔ 做法是**后处理自动加**，不是手写（course_links.py）——
+       这一讲有几十处 arXiv 编号，而且每加一个机制就会多几处；
+       ⭐ 手写等于每次都要记得加，而**忘了不报错**。
+     ⭐ 图里的出处也一并处理了：那边用 SVG 自己的链接元素
+       （HTML 的链接进不去 SVG 的文本流），
+       并且加了下划线 —— SVG 的链接不会自动变色，不标出来没人知道它能点。 -->
+<div class="note ok"><p>⭐ <b>整页所有 arXiv 编号都是可点的</b>
+  ——&nbsp;<b>正文里的、表里的、连图上那些小字出处，点一下直接开论文。</b>
+  <em>（图里的链接带下划线 ——&nbsp;SVG 的链接不像网页那样自动变蓝，
+  所以特意标出来。）</em></p>
+<p>⚠️ <b>几个不是 arXiv 的，在表里单独挂了链接</b>：
+  DeepSeek-V3.2-Exp 技术报告（GitHub）、NVIDIA 的 RNN 性能指南、
+  张量形状记号沿用的 <a href="https://jax-ml.github.io/scaling-book/" target="_blank" rel="noopener">How to Scale Your Model</a>。
+  <em>各家模型的 config 没挂链接 ——&nbsp;它们在各自的 Hugging Face 仓库里，
+  版本会动，<b>写死一个链接迟早指到改过的那一版</b>。</em></p></div>
+
 <table>
 <thead><tr><th>要什么</th><th>在哪</th></tr></thead><tbody>
 <tr><td>MQA / GQA</td><td>arXiv <b>1911.02150</b> / <b>2305.13245</b></td></tr>
@@ -1487,7 +1505,7 @@ __FIG_TPU_FIX__
 <tr><td>SWA</td><td>Mistral 7B, arXiv <b>2310.06825</b>（窗口 4096）</td></tr>
 <tr><td>Attention sink</td><td>StreamingLLM, arXiv <b>2309.17453</b>（4 个 token / 400 万 / 22.2×）</td></tr>
 <tr><td>NSA</td><td>arXiv <b>2502.11089</b>（三支路 + 门控；64k 下 11.6× / 9.0× / 6.0×）</td></tr>
-<tr><td>DSA + Lightning Indexer</td><td><b>DeepSeek-V3.2-Exp 技术报告 §1–§2.1</b>（ReLU 打分 / FP8 / k=2048 / 稠密预热阶段 / KL 对齐）——&nbsp;⚠️ <b>不是后来那篇 arXiv 2512.02556</b>（《DeepSeek-V3.2》），两者节号对不上；本讲图里核的数全部来自 Exp 那份。<b>我们有一手实测</b></td></tr>
+<tr><td>DSA + Lightning Indexer</td><td><b><a href="https://github.com/deepseek-ai/DeepSeek-V3.2-Exp" target="_blank" rel="noopener">DeepSeek-V3.2-Exp 技术报告</a> §1–§2.1</b>（ReLU 打分 / FP8 / k=2048 / 稠密预热阶段 / KL 对齐）——&nbsp;⚠️ <b>不是后来那篇 arXiv 2512.02556</b>（《DeepSeek-V3.2》），两者节号对不上；本讲图里核的数全部来自 Exp 那份。<b>我们有一手实测</b></td></tr>
 <tr><td>CSA / HCA</td><td>DeepSeek-V4, arXiv <b>2606.19348</b> <b>sec. 2.3 + 2.3.4</b>（m=4 / m′=128 / top-k / 27%·10% / 2%）</td></tr>
 <tr><td>线性注意力谱系</td><td><b>2006.16236</b>（线性）→ <b>2102.11174</b>（delta rule, 2021）→ <b>2406.06484</b>（可并行化）→ <b>2412.06464</b>（GDN）→ <b>2510.26692</b>（KDA）</td></tr>
 <tr><td>混合配比</td><td><b>2510.26692</b>（3:1 + 消融）、Ling-3.0 模型卡（3:1 / 5:1）、<b>2507.06457</b>（建议 3:1～6:1）</td></tr>
@@ -1496,7 +1514,7 @@ __FIG_TPU_FIX__
 <tr><td><b>KV cache 被点名成瓶颈</b></td><td>Shazeer 2019, arXiv <b>1911.02150</b>（MQA 那篇）——&nbsp;<b>「memory-bandwidth cost of repeatedly loading the large keys and values tensors」</b></td></tr>
 <tr><td><b>RNN 一支</b>（§零）</td><td>Elman 1990《Finding Structure in Time》；Bengio, Simard, Frasconi 1994；Hochreiter &amp; Schmidhuber 1997；Cho et al. 2014；Bahdanau et al. 2014, arXiv <b>1409.0473</b></td></tr>
 <tr><td><b>只有线性依赖才扫得动</b></td><td>Martin &amp; Cundy 2018, arXiv <b>1709.04057</b>（ICLR'18）——&nbsp;实测最高 9× 加速</td></tr>
-<tr><td><b>RNN 在硬件上为什么慢</b></td><td>NVIDIA《Recurrent Layers User's Guide》——&nbsp;<b>「a GEMM with one dimension of one」</b>、<b>「can combine these GEMMs over the minibatch size, but not over different sequence steps」</b></td></tr>
+<tr><td><b>RNN 在硬件上为什么慢</b></td><td><a href="https://docs.nvidia.com/deeplearning/performance/dl-performance-recurrent/" target="_blank" rel="noopener">NVIDIA《Recurrent Layers User's Guide》</a>——&nbsp;<b>「a GEMM with one dimension of one」</b>、<b>「can combine these GEMMs over the minibatch size, but not over different sequence steps」</b></td></tr>
 <tr><td>我们自己的 kernel 实战</td><td>Tokamax KDA kernel、<code>tpu/</code> 下 DSA 相关</td></tr>
 <tr><td>§2.1 那张 KV cache 对照表</td><td><b>自己按公式推的</b>：<code>2·n_h·d_h·L</code> 与 <code>(d_c+d_h^R)·L</code>，输入全部来自 V3 论文 <b>sec. 4.2</b>。<b>口径（K/V 都按 d_h=128）要在讲的时候声明</b></td></tr>
 </tbody></table>
@@ -1855,7 +1873,7 @@ FIGS = {
         'K 和 V 的输出。</b>'
         '那就是唯一需要跨 token 留下来的东西 —— <b>KV cache</b>。'
         '三个旋钮各是一种跟它较劲的方式。'
-        '<span class="sub">图式借自 How to Scale Your Model，本图为重画。</span>'),
+        '<span class="sub">图式借自 <a href="https://jax-ml.github.io/scaling-book/" target="_blank" rel="noopener">How to Scale Your Model</a>，本图为重画。</span>'),
 
     "__FIG_TX_K1__": ("fig-tx-k1", "fig3-tx-k1.svg",
         'topic03-fig-transformer.py',
@@ -1942,14 +1960,27 @@ def _anchorize(html):
             return m.group(0)          # 指不到的不动，留给 xref 体检去报
         return '<a href="#%s">§%s</a>' % (ids[num], num)
 
-    # ⛔ 不碰 <svg> 里面的文字（那是图，锚点点不动）也不碰已经在 <a> 里的
+    # ⛔⛔ 2026-09-14：上面这行注释写着「也不碰已经在 <a> 里的」——&nbsp;**它没做**。
+    #   于是手写的 `§6.5b` 被再套一层，产出 8 处**嵌套 <a>**
+    #   （非法 HTML，浏览器会悄悄拆掉，点击行为不可预期）。
+    # ⭐ 判据（本仓库第 N 次遇到）：**注释写「不碰 X」不等于真的没碰。**
+    #   —— 而且这是自己给自己写的注释，最容易被当成已经成立的前提。
     parts = _re.split(r"(<svg.*?</svg>)", html, flags=_re.S)
     for i in range(0, len(parts), 2):
-        parts[i] = _re.sub(r"§(\d+\.\d+[a-z]?)", _link, parts[i])
+        inner = _re.split(r"(<a\b.*?</a>)", parts[i], flags=_re.S)
+        for j in range(0, len(inner), 2):
+            inner[j] = _re.sub(r"§(\d+\.\d+[a-z]?)", _link, inner[j])
+        parts[i] = "".join(inner)
     return "".join(parts)
 
 
 _html = _anchorize(_html)
+
+# ⭐⭐ 2026-09-14 现场点的：「引用的那些论文得在教材里边，把可点击的 link 都放里边，
+#   有愿意多学的人可以去点开看。」→ arXiv 编号**自动**变成链接，见 course_links.py。
+#   ⛔ 用后处理不用手写 <a>：这一讲有几十处，手写等于每次都要记得加，而忘了不报错。
+import course_links as _CL
+_html = _CL.linkify_arxiv(_html)
 io.open(OUT, "w", encoding="utf-8").write(_html)
-print("ok  topic-03.html  %s 字符 · %d 节"
-      % (format(os.path.getsize(OUT), ","), len(SECTIONS)))
+print("ok  topic-03.html  %s 字符 · %d 节 · %d 个论文链接"
+      % (format(os.path.getsize(OUT), ","), len(SECTIONS), _CL.count(_html)))

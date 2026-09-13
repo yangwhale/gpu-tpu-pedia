@@ -291,12 +291,36 @@ def fold_defines(path):
     return out
 
 
+def nested_a(path):
+    """嵌套 <a> ——&nbsp;非法 HTML，浏览器会悄悄拆掉，点击行为不可预期。
+
+    ⛔ 2026-09-14 真出过：正文里手写了 `<a href="#s六">§6.5b</a>`，
+      而自动加锚点那一步又把里面的 `§6.5b` 再包一层，产出 8 处嵌套。
+    ⭐ 判据：**页面上看不出来的错，就得有 lint 盯着** ——
+      这一处既不报错、渲染也正常，只有点下去才发现跳错地方。
+    """
+    import re as _r
+    s = io.open(path, encoding="utf-8").read()
+    # ⛔ 先把 HTML 注释剥掉 ——&nbsp;注释里写 `<a>` 讨论链接是常事，
+    #   不剥就会**报一个只存在于注释里的错**（这条 lint 上线第一分钟就踩了）。
+    s = _r.sub(r"<!--.*?-->", "", s, flags=_r.S)
+    return len(_r.findall(r"<a\b[^>]*>[^<]*<a\b", s))
+
+
 def main(paths):
     bad = 0
     for p in paths:
         if not os.path.exists(p):
             print('跳过（不存在）%s' % p)
             continue
+        n_a = nested_a(p)
+        if n_a:
+            print('\n⛔⛔ %s 有 %d 处**嵌套 <a>** —— 非法 HTML，'
+                  '浏览器会悄悄拆掉' % (os.path.basename(p), n_a))
+            print('    ⭐ 常见来源：正文手写了一个链接，而某个后处理'
+                  '（加锚点 / 加论文链接）又往里面套了一层。')
+            print('    修法不是把手写的那个改掉，是**让后处理跳过已经在 <a> 里的文本**。')
+            bad += 1
         for t, o, c in tag_balance(p):
             print('\n⛔⛔ %s 标签不配平：<%s> 开 %d 闭 %d'
                   % (os.path.basename(p), t, o, c))
