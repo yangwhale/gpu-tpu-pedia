@@ -16,8 +16,8 @@ r"""专题三 · §四「三个旋钮」骨架图
 """
 import math
 
-from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
-                          BG2)
+from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, INK, GY2, LINE,
+                          LINE2, BG2)
 
 W = 1400
 
@@ -110,22 +110,66 @@ def main():
 
     # ══════════ ③ 不在面板上的那个 ══════════════════════════════
     y2 = y1 + PH2 + 18
-    PH3 = 188
+    PH3 = 262
     py3 = f.panel(0, y2, W, PH3, "③ 那 FlashAttention 呢 ——　它不在这块面板上",
                   GY, sub="它改的不是算什么，是怎么算")
 
     ey = py3 + 22
-    f.box(56, ey + 20, 620, 116, "#f1f3f4", GY2, 10)
-    f.t(80, ey + 60, "它是机器侧面的一个开关", GY, True, 22)
-    f.t(80, ey + 96, "打开：同样的结果，少搬很多次；关上：一样算得出来", GY,
+    f.box(56, ey + 16, 560, 112, "#f1f3f4", GY2, 10)
+    f.t(80, ey + 54, "它是机器侧面的一个开关", GY, True, 22)
+    f.t(80, ey + 88, "打开：同样的结果，少搬很多次；关上：一样算得出来", GY,
         size=17)
-    f.t(80, ey + 128, "⛔ 它一个字节的 KV 都不省", RD, True, 19)
+    f.t(80, ey + 118, "⛔ 它一个字节的 KV 都不省", RD, True, 19)
 
-    f.box(708, ey + 20, 652, 116, "#fff", INK, 10)
-    f.t(732, ey + 60, "⭐ 判据：一个在所有分支上取值都一样的变量", INK, True, 21)
-    f.t(732, ey + 96, "对这一讲<tspan font-weight=\"700\">没有解释力</tspan> ——&#160;"
-        "三个旋钮怎么拧，它都在那儿，而且都一样有用。", GY, size=17)
-    f.t(732, ey + 128, "所以它不是第四个旋钮，它是另一层的事", GY2, size=16)
+    # ══ 两根切法不同的柱子 —— 给「省了很多」配一张证据 ══════════════
+    # ⭐⭐⭐ 2026-09-13 新增。装置偷自 FlashAttention 论文 Figure 1 右半：
+    #   **同一件事，按 FLOPs 切和按时间切，形状对不上。**
+    # ⛔ 但**没抄论文那组数** —— 那组我没核过。用的是**本课自己在 v7 上量的**
+    #   一对（同一个 seq=4096）：平方项占 FLOPs 12.3%，
+    #   而 splash attention 占**时间** 23%、效率只有 35.5%（全场最低）。
+    # ⭐ 一手的数比借来的更值钱，而且它正好是同一条判据的实例。
+    BX, BY, BW, BH = 700, ey + 20, 140, 132
+    GAPX = 300
+    FL = [("平方项", 12.3, RD), ("注意力投影", 27.4, OR), ("其余", 60.3, "#dadce0")]
+    TM = [("", 23.0, RD), ("其余", 77.0, "#dadce0")]
+    # ⛔ 小段（<20%）塞不进柱子里 ——&nbsp;标到柱子外面去。
+    #   左柱标左边、右柱标右边，两个标签才不会在中间撞上。
+    for k, (name, segs, side) in enumerate((("按 FLOPs 切", FL, -1),
+                                            ("按时间切（splash attn）", TM,
+                                             +1))):
+        x = BX + k * GAPX
+        f.t(x + BW / 2.0, BY - 6, name, INK, True, 19, "middle")
+        yy2 = BY + 6
+        for lab, pct, col in segs:
+            h = BH * pct / 100.0
+            f.box(x, yy2, BW, h, col, "none", 3)
+            txt = ("%s %.1f%%" % (lab, pct)).strip()
+            # ⛔ 只看高度不够 ——&nbsp;还得看**放不放得下**。
+            #   第一版只判 h>=30，于是「splash attn 23.0%」横着冲出了柱子。
+            if h >= 28 and wpx(txt, 15) < BW - 12:
+                f.t(x + BW / 2.0, yy2 + h / 2.0 + 6, txt,
+                    "#fff" if col != "#dadce0" else GY, True, 15, "middle")
+            elif side < 0:
+                f.t(x - 12, yy2 + h / 2.0 + 6, "%s %.1f%%" % (lab, pct),
+                    col, True, 16, "end")
+            else:
+                f.t(x + BW + 12, yy2 + h / 2.0 + 6, "%s %.1f%%" % (lab, pct),
+                    col, True, 16)
+            yy2 += h
+    # 两个红段之间连一条线：12.3% 的那一段 → 23% 的那一段
+    f.line(BX + BW + 6, BY + 14, BX + GAPX - 6, BY + 26, RD, 2.2)
+    f.t(BX + BW + 18, BY + 6, "≈ 两倍", RD, True, 17)
+    f.t(BX - 60, BY + BH + 34, "⛔ 同一件事，两种量法，形状对不上 ——　"
+        "差的那部分全在路上", RD, True, 19)
+    f.t(BX - 60, BY + BH + 58,
+        "⭐ 这一对数不是从论文抄的，是<tspan font-weight=\"700\">"
+        "我们自己在 v7 上量的</tspan>（同一个 seq=4096）", GY, size=16)
+
+    f.box(1128, ey + 16, 232, 112, "#fff", INK, 10)
+    f.t(1148, ey + 46, "⭐ 判据", INK, True, 20)
+    f.t(1148, ey + 74, "一个在所有分支上", GY, size=16)
+    f.t(1148, ey + 96, "取值都一样的变量，", GY, size=16)
+    f.t(1148, ey + 118, "对这一讲没有解释力", GY, True, 16)
 
     # ══════════ 落点 ════════════════════════════════════════════
     yy = y2 + PH3 + 20
