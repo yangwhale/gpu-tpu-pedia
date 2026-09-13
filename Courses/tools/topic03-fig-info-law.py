@@ -47,7 +47,7 @@ def main():
         [(BL, "两点互信息：衰减"), (GR, "双部互信息：增长"),
          (PU, "L2M 条件"), (OR, "本课的推导")])
 
-    ph = 520
+    ph = 592
 
     # ══ ① 两个互信息 ════════════════════════════════════════════
     x, pw = PX[0], PW[0]
@@ -67,15 +67,37 @@ def main():
     yy += 12
     bx, bw, bh = x + 22, pw - 44, 72
     f.box(bx, yy, bw, bh, "#fff", LINE, 6)
-    pts = []
-    for i in range(40):
-        d = 1 + i * 0.9
-        v = d ** -0.55
-        pts.append("%.1f,%.1f" % (bx + 10 + i * (bw - 20) / 39.0,
-                                  yy + bh - 10 - v * (bh - 22)))
-    f.path("M " + " L ".join(pts), BL, 1.8, arrow=False)
-    f.t(bx + bw - 10, yy + bh - 14, "距离 →", GY2, size=11, anchor="end")
+    import math
+    X0, X1 = bx + 34, bx + bw - 12
+    Y0, Y1 = yy + bh - 18, yy + 9
+    DMAX = 1000.0                       # 距离 1 → 1000，两轴都取对数
+    VMIN = 1e-3                         # 纵轴下限（对数）
+
+    def _px(d):
+        return X0 + (X1 - X0) * math.log10(d) / math.log10(DMAX)
+
+    def _py(v):
+        v = max(v, VMIN)
+        return Y0 + (Y1 - Y0) * (math.log10(v) - math.log10(VMIN)) / (-math.log10(VMIN))
+
+    for lab, fn, col in (("幂律（实测语言）", lambda d: d ** -0.55, BL),
+                         ("指数（马尔可夫）", lambda d: math.exp(-(d - 1) / 40.0), RD)):
+        pp = []
+        for k in range(61):
+            d = 10 ** (3.0 * k / 60.0)
+            pp.append((_px(d), _py(fn(d))))
+        f.path(pp, col, 1.8)
+    f.t(X1, _py(1e-3 ** 1) + 0, "", GY2, size=11)
+    f.t(bx + bw - 10, yy + bh - 4, "距离（对数）→", GY2, size=11, anchor="end")
+    f.t(bx + 6, yy + 14, "互信息", GY2, size=11)
+    f.t(_px(30), _py(30 ** -0.55) - 6, "幂律：一条直线", BL, True, 11)
+    f.t(_px(60), _py(math.exp(-59 / 40.0)) + 14, "指数：一头栽下去", RD, True, 11)
     yy += bh + 18
+    f.t(x + 22, yy, "⭐⭐ <tspan font-weight=\"700\">这是 log-log 坐标</tspan> ——&#160;"
+        "换成普通坐标，两条线长得一样，", GY, size=11.5, w=pw - 44)
+    f.t(x + 22, yy + 19, "<tspan font-weight=\"700\">这张图要说的区别就看不见了</tspan>。",
+        GY, size=11.5, w=pw - 44)
+    yy += 34
     f.t(x + 22, yy, "⭐ 随距离<tspan font-weight=\"700\">幂律衰减</tspan> ——&#160;"
         "而任何<tspan font-weight=\"700\">有限状态</tspan>的", GY, size=11.5, w=pw - 44)
     f.t(x + 22, yy + 19, "马尔可夫过程都是<tspan font-weight=\"700\">指数</tspan>衰减。", GY,
@@ -99,7 +121,21 @@ def main():
     f.t(bx + 14 + (bw - 24) * 0.75, yy + bh / 2.0 + 4, "后一半", GY,
         True, 12, "middle")
     f.t(bx + bw / 2.0, yy + bh / 2.0 + 4, "↔", GR, True, 15, "middle")
-    yy += bh + 18
+    yy += bh + 10
+    # ⛔ 「随长度幂律增长」原来一条曲线都没有 —— 只有两个灰框加一个 ↔。
+    gh = 62
+    f.box(bx, yy, bw, gh, "#fff", LINE, 6)
+    GX0, GX1 = bx + 34, bx + bw - 12
+    GY0, GY1 = yy + gh - 16, yy + 8
+    pp = []
+    for k in range(61):
+        L_ = 10 ** (3.0 * k / 60.0)
+        pp.append((GX0 + (GX1 - GX0) * math.log10(L_) / 3.0,
+                   GY0 + (GY1 - GY0) * (L_ ** 0.45) / (1000 ** 0.45)))
+    f.path(pp, GR, 1.8)
+    f.t(bx + 6, yy + 16, "互信息", GY2, size=11)
+    f.t(bx + bw - 10, yy + gh - 3, "序列长度（对数）→", GY2, size=11, anchor="end")
+    yy += gh + 12
     f.t(x + 22, yy, "⭐ 这个量随长度<tspan font-weight=\"700\">幂律增长</tspan>。", GR, True, 12.5)
     f.t(x + 22, yy + 21, "不矛盾：N 个位置能配出 N² 对 ——", GY, size=11.5)
     f.t(x + 22, yy + 40, "<tspan font-weight=\"700\">单对越来越弱，对数越来越多。</tspan>", GY, size=11.5)

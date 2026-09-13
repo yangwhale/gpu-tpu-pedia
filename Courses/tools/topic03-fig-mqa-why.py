@@ -61,7 +61,7 @@ def main():
 
     # ══ ① 2019 年那张选项单 ══════════════════════════════════════
     x, pw = PX[0], PW[0]
-    ph = 404
+    ph = 424
     py = f.panel(x, y0, pw, ph, "① 2019 年那张选项单", BL,
                  sub="MQA 论文 §2.4，原文列的")
 
@@ -117,13 +117,33 @@ def main():
     f.colhead(x + pw - 30, yy + 10, "困惑度", anchor="end")
     yy += 22
 
+    # 以 29.0 为基线画条形：差 1.0 就是 62px，一眼能量出来
+    P0, PSCALE = 29.0, 62.0
+    BX0 = x + 232
+    ROWY = {}
     for name, cfg, ppl, cache, col in ABL:
         f.box(x + 24, yy, pw - 48, 52, "#fff", col if col != GY else LINE, 8)
         f.t(x + 40, yy + 22, name, col, True, 12)
         f.t(x + 40, yy + 40, cfg, GY2, size=11, mono=True)
-        f.t(x + 232, yy + 31, cache, GY, size=11.5, anchor="middle")
-        f.t(x + pw - 40, yy + 31, "%.1f" % ppl, col, True, 15, "end")
+        f.t(x + 40, yy + 40 + 0, "", GY2, size=11)
+        bw2 = (ppl - P0) * PSCALE
+        f.box(BX0, yy + 24, bw2, 14, col if col != GY else GY2, "none", 2)
+        f.t(BX0 + bw2 + 8, yy + 35, "%.1f" % ppl, col, True, 14)
+        f.t(x + pw - 40, yy + 22, cache, GY, size=11, anchor="end")
+        ROWY[name + cfg] = yy + 31
         yy += 60
+    f.t(x + 24, yy + 2, "⚠️ 条形起点 ＝ 困惑度 29.0，"
+        "<tspan font-weight=\"700\">越短越好</tspan>", GY2, size=11, w=pw - 48)
+    yy += 18
+
+    # ⭐ 把题眼那个 1.0 直接量在图上
+    ya, yb = ROWY["multi-query" + "h=8, 共用 1 份"], ROWY["multi-head" + "h=1, d_k=128"]
+    xa = BX0 + (ABL[1][2] - P0) * PSCALE
+    xb = BX0 + (ABL[2][2] - P0) * PSCALE
+    f.line(xa, ya + 12, xa, yb + 6, RD, 1.1, dash="3 3", arrow=False)
+    f.line(xa, yb + 6, xb, yb + 6, RD, 1.4)
+    f.t((xa + xb) / 2.0, yb - 6, "整整 %.1f" % (ABL[2][2] - ABL[1][2]), RD,
+        True, 12, "middle")
 
     yy += 4
     f.box(x + 24, yy, pw - 48, 74, "#fff", RD, 8)

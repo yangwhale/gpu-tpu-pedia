@@ -85,40 +85,58 @@ def main():
     py = f.panel(x, y0, pw, ph, "② 配比是一条轴", GR,
                  sub="⚠️ 轴是「便宜层 : 贵层」")
 
-    yy = py + 34
-    ax0, ax1 = x + 40, x + pw - 40
+    # ⛔⛔ 2026-09-14 二轮学生：这条轴**画对了，然后不用它** ——
+    #   四个数据点全挤在轴长的最后 12.5% 里，tick 只有 6 单位宽、没有标签，
+    #   下面又用一个四行列表把同样四个配比重讲一遍。于是轴变成了纯装饰。
+    # ⭐⭐ 而「所有人都挤在极右端」恰恰是这张图最有意思的事实 ——
+    #   图上看得见，图上没写。
+    # → 轴改成直接按**便宜层 : 贵层**的比值排（1:1 … 7:1），点上带名字；
+    #   删掉下面那个列表；把「都在右端」这件事单独写一句。
+    yy = py + 30
+    f.t(x + 22, yy, "横轴：<tspan font-weight=\"700\">便宜层 : 贵层</tspan>"
+        "（每几层便宜的，配一层贵的）", GY, size=11.5, w=pw - 44)
+    yy += 26
+    ax0, ax1 = x + 54, x + pw - 34
+    import math
+
+    def at(k):                      # k = 便宜层 : 1，画在对数刻度上
+        return ax0 + (ax1 - ax0) * math.log(k) / math.log(8.0)
+
     f.line(ax0, yy, ax1, yy, GY2, 1.4, arrow=False)
-    f.t(ax0, yy - 14, "0 : 1", RD, True, 12)
-    f.t(ax0, yy + 20, "全是全注意力", GY2, size=11)
-    f.t(ax1, yy - 14, "1 : 0", RD, True, 12, "end")
-    f.t(ax1, yy + 20, "全是便宜层", GY2, size=11, anchor="end")
+    lo, hi = at(3), at(6)
+    f.box(lo, yy - 9, hi - lo, 18, "#e6f4ea", "none", 4)
+    f.t((lo + hi) / 2.0, yy - 16, "消融建议区间 3:1～6:1", GR, True, 11.5,
+        "middle")
 
-    # 建议区间 3:1 ~ 6:1 的带
-    def at(r):     # r 是「线性 : 全」的线性占比 0..1
-        return ax0 + (ax1 - ax0) * r
-    lo, hi = at(3 / 4.0), at(6 / 7.0)
-    f.box(lo, yy - 8, hi - lo, 16, "#e6f4ea", "none", 4)
-    f.t((lo + hi) / 2.0, yy - 16, "建议区间", GR, True, 11.5, "middle")
+    ROWS2 = [
+        (1, "1 : 1", "Gemma 2 · gpt-oss-120b", "滑窗", OR),
+        (3, "3 : 1", "Kimi Linear · K3 · Qwen3.5 · GLM-5.3F · Llama4S", "两族都有", GR),
+        (5, "5 : 1", "Ling-3.0-flash · MiMo-V2F · Gemma 3/4", "两族都有", GR),
+        (6, "6 : 1", "MiMo-V2.5-Pro", "滑窗", OR),
+        (7, "7 : 1", "Ling 2.6 · MiniMax-01 · Jamba", "线性", BL),
+    ]
+    for k, lab, who, fam, col in ROWS2:
+        px = at(k)
+        f.box(px - 3.5, yy - 7, 7, 14, col, "none", 2)
+        f.t(px, yy - 20, lab, col, True, 11.5, "middle")
+    yy += 26
+    for k, lab, who, fam, col in ROWS2:
+        f.t(x + 22, yy, lab, col, True, 11.5)
+        f.t(x + 68, yy, fam, GY2, size=11)
+        f.t(x + 116, yy, who, GY, size=11, w=pw - 140)
+        yy += 19
+    yy += 10
 
-    for ratio, label, r in [
-        ("3:1", "Kimi Linear · K3 · Qwen3.5 · GLM-5.3", 3 / 4.0),
-        ("5:1", "Ling-3.0-flash · MiMo-V2-Flash", 5 / 6.0),
-        ("6:1", "MiMo-V2.5-Pro", 6 / 7.0),
-        ("7:1", "Ling 2.6 · MiniMax-01", 7 / 8.0),
-    ]:
-        px = at(r)
-        f.box(px - 3, yy - 5, 6, 10, GR, "none", 2)
-    yy += 44
-    for ratio, label in [
-        ("3 : 1", "Kimi Linear · K3 · Qwen3.5 · GLM-5.3-Flash"),
-        ("5 : 1", "Ling-3.0-flash（线性）· MiMo-V2-Flash（滑窗）"),
-        ("6 : 1", "MiMo-V2.5-Pro（滑窗）"),
-        ("7 : 1", "Ling 2.6 · MiniMax-01（线性）"),
-    ]:
-        f.box(x + 22, yy, pw - 44, 40, "#fff", LINE, 6)
-        f.t(x + 38, yy + 25, ratio, GR, True, 12.5)
-        f.t(x + 96, yy + 25, label, GY, size=11, w=pw - 140)
-        yy += 46
+    f.box(x + 22, yy, pw - 44, 78, "#fff", BL, 8)
+    f.box(x + 22, yy, 4, 78, BL, BL, 2)
+    f.box(x + 24, yy, 3, 78, "#fff", "#fff", 0)
+    f.t(x + 40, yy + 24, "⭐⭐ 这条轴上最值得说的是「大家都在哪」", BL, True, 12.5,
+        w=pw - 76)
+    f.t(x + 40, yy + 46, "两端各 1/8 的区间里<tspan font-weight=\"700\">一个模型都没有</tspan>：",
+        GY, size=11.5, w=pw - 76)
+    f.t(x + 40, yy + 66, "没有人只掺一两层，也没有人敢全用便宜的。", GY, size=11.5,
+        w=pw - 76)
+    yy += 92
 
     yy += 4
     f.box(x + 22, yy, pw - 44, 98, "#fff", RD, 8)
