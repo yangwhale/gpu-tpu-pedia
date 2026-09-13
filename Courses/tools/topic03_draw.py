@@ -214,6 +214,8 @@ class Fig(object):
     def __init__(self, w, aria):
         self.w, self.aria, self.p = w, aria, []
         self.p.append("")          # svg 开标签占位
+        self._pan = None      # 当前面板 (top, bottom)
+        self._over = []       # 画到面板外面去的记录（越界自检）
 
     # ── 原子 ────────────────────────────────────────────────────
     def t(self, x, y, s, fill=INK, bold=False, size=11.5, anchor=None,
@@ -236,6 +238,15 @@ class Fig(object):
         #   这门课栽过两次（第二次还把解释写进了副标题，于是解释本身也印出来了）。
         #   ⭐ 2026-09-13 学生审稿又在两张图里各发现一处 —— 做成断言，别再靠人眼。
         assert "**" not in s, "图里不能写 **粗体**（SVG 不渲染，会原样印出来）：%s" % s[:46]
+        # ⛔⛔ 2026-09-14：<em>／<i>／<b> 这几个是 HTML 解析器的
+        #   **foreign-content 逃逸标签**。图是 inline 进 HTML 的，浏览器读到
+        #   <em> 会当场**退出 SVG 模式**，后面的内容全部丢弃 ——
+        #   fig3-when-axis 因此在浏览器里少了最后 200px（两条落点带 ＋ 出处行）。
+        #   ⭐ 而 SVG 文件本身是良构 XML，写盘自检、几何 lint 全都看不出来。
+        for _esc in ("<em>", "<i>", "<b>", "<p>", "<br>", "<font"):
+            assert _esc not in s, (
+                "图里不能写 %s ——&nbsp;它会让 HTML 解析器退出 SVG 模式，"
+                "后面的内容全丢：%s" % (_esc, s[:46]))
         assert s.count("<tspan") == s.count("</tspan>"), \
             "<tspan> 没配平（一个 tspan 不能跨两次 t() 调用）：%s" % s[:50]
         # ⭐ 2026-09-09：传了 w 就当场校宽。lines() / src() / band() 早就有这道
@@ -250,6 +261,7 @@ class Fig(object):
             need = wpx(re.sub(r"<[^>]+>", "", s), size)
             assert need <= w, ("「%s」要 %dpx，只给了 %dpx ——&nbsp;拆行或加宽"
                                % (re.sub(r"<[^>]+>", "", s)[:26], need, w))
+        self._note_ink(y)
         st = ["font-size:%.1fpx" % _sz(size)]
         if mono:
             # ⛔ 这里必须用单引号：style 是双引号属性，里面再写双引号会把属性提前闭合，
@@ -288,6 +300,18 @@ class Fig(object):
                       % (d, fill, stroke, sw))
 
     def path(self, d, col=GY2, sw=1.3, dash=None, arrow=True):
+        # ⛔⛔ 2026-09-14 审图抓到的最重一条：有 4 个调用方直接传**点列表**
+        #   （fig3-info-law 那两条曲线、dsa-why 的「鸡生蛋」回环、swa-why 和
+        #   attn-invented 各一根箭头）。于是 d="[(120.0, 184.0), …]" ——
+        #   ⭐ SVG 仍然是良构的 XML，写盘自检过；浏览器解析不了那个 d，
+        #     **什么都不画，也不报错**。info-law 的主图整个是空坐标系，
+        #     而旁边那个文字框还在解释一张不存在的图。
+        # ⭐ 判据：**「产物合法」和「产物正确」是两回事。**
+        #   凡是接受 DSL 字符串的基元，都要么接受结构化输入，要么当场校验。
+        if isinstance(d, (list, tuple)):
+            d = "M " + " L ".join("%.2f %.2f" % (x, y) for x, y in d)
+        assert isinstance(d, str) and d[:1] in "Mm", \
+            "path() 的 d 必须是 SVG 路径串或点列表，收到：%r" % (d,)
         self.p.append('<path d="%s" fill="none" stroke="%s" stroke-width="%s" '
                       'stroke-linecap="round"%s%s/>'
                       % (d, col, sw,
@@ -299,6 +323,16 @@ class Fig(object):
     marks = set()
 
     # ── ① 标题区 ＋ 图例条 ───────────────────────────────────────
+    # ⛔⛔ 2026-09-14：八张图有「内容被后画的面板底色盖住」——
+    #   f.panel() 声明的高度 < 实际画到的位置，下一块面板的白底直接糊上去，
+    #   盖掉的还净是关键句（tpu-fix 三条落点带、swa-why 的「柱子按对数画」…）。
+    # ⭐ 这条教训本来只写在 topic03-fig-when-axis.py 一个文件的注释里 ——
+    #   **写在注释里的判据只在那个文件生效**。做成基元级的断言才是真的修了。
+    def _note_ink(self, y):
+        """记下「画到了哪一行」，供面板越界自检用。"""
+        if self._pan is not None and y > self._pan[1] + 2:
+            self._over.append((self._pan[0], y, self._pan[1]))
+
     def header(self, title, sub, legend=None, y=22):
         # ⭐ 2026-09-14 抬字号：标题 16.5→20，副标题 12→15，图例 11→14。
         #   现场原话「图里那个字不要太小 …… 打到屏幕上去分享」——
@@ -339,9 +373,16 @@ class Fig(object):
     def panel(self, x, y, w, h, title, col=LINE, fill="#fff", tag=None,
               tint=None, sub=None):
         """外框 ＋ 顶部标题栏。tag 是右上角的小注（出处 / 口径）。"""
+        self._pan = (title, y + h)      # 越界自检：记下这块面板的下沿
         # ⛔ 标题栏也不再填色（见文件头「填充规则」）。颜色身份只剩两样：
         #   顶部 4px 彩带 ＋ 彩色标题字。
-        self.box(x, y, w, h, "#fff", LINE, 9)
+        # ⛔⛔ 2026-09-14：外框原来是 **白色实心**。页面也是白的，所以看不出来 ——
+        #   但它会把**上一块面板画出界的内容整段擦掉**（实测 fig3-tpu-fix 的
+        #   「decode MBU 86% / prefill MFU 73%」那行被削掉一半）。
+        # ⭐ 判据：**跟背景同色的填充不是「没填」，它照样是一次覆盖。**
+        #   改成 none 之后视觉零变化，而被盖住的内容会重新露出来 ——
+        #   然后几何 lint 就能把它当成撞车抓到（静默 → 可见）。
+        self.box(x, y, w, h, "none", LINE, 9)
         if col != LINE:
             self.box(x, y, w, 4, col, col, 2)
             self.box(x, y + 2, w, 4, "#fff", "#fff", 0)
@@ -391,6 +432,7 @@ class Fig(object):
     def band(self, y, kind, title, lines, w=None):
         """落点带。⛔ **不填色** ——&nbsp;白底 ＋ 细灰框 ＋ 左侧 4px 彩色竖条。
         见文件头「填充规则」：容器不填，只有承载信息的小元素才填。"""
+        self._pan = None            # 落点带在面板外面，合法
         col, fill, icon = self.KIND[kind]
         w = w or self.w
         # ⭐ 2026-09-14：字号 12 → 15，换行改成自动（见 wrap_rich 的说明）。
@@ -438,6 +480,7 @@ class Fig(object):
           也不产生滚动条**，只是被裁掉 —— 页面上看只是「这句话没写完」。
         """
         # ⭐ 2026-09-14：11 → 14px，同样改成自动折行（续行缩进对齐）。
+        self._pan = None            # 出处行同理
         SZ, LH = 14, 21
         k = 0
         for i, ln in enumerate(lines):
@@ -453,6 +496,15 @@ class Fig(object):
 
     # ── 收尾 ────────────────────────────────────────────────────
     def save(self, name, bottom):
+        # ⚠️ 越界自检：只报告不中止。⛔ 直接断言会一次打挂 8 张图，
+        #   那样只会逼人把断言关掉 —— 先让它可见，再一张一张修。
+        if self._over:
+            seen = {}
+            for ttl, y, bot in self._over:
+                seen[ttl] = max(seen.get(ttl, 0), y - bot)
+            for ttl, d in sorted(seen.items(), key=lambda kv: -kv[1]):
+                print("   ⚠️ %s：面板「%s」声明的下沿被越过 %d px（内容会被下一块盖住）"
+                      % (name, ttl[:22], d))
         self.p.append('</svg>')
         marks = "".join(
             '<marker id="ah-%s" viewBox="0 0 10 10" refX="8.5" refY="5" '

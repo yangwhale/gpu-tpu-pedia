@@ -107,7 +107,8 @@ def main():
     # ⭐ 判据：落点带的起点要跟**真实画到哪儿**走，不能跟声明的面板高走。
     yy = max(y1 + PH2, by + 40) + 20
     yy = f.band(yy, "warn", "⚠️ 一条不讲会教出错误心智模型的口径", [
-        "<tspan font-weight=\"700\">「改造 / 新建」说的是这个方法<em>这一次被怎么用</em>，"
+        "<tspan font-weight=\"700\">「改造 / 新建」说的是这个方法"
+        "<tspan font-style=\"italic\">这一次被怎么用</tspan>，"
         "不是方法本身的属性。</tspan>",
         "最好的例子就是 GQA：它最初是 <tspan font-weight=\"700\">uptraining</tspan> 出来的"
         "（改造），可今天 Llama 那一系<tspan font-weight=\"700\">从第一天就是 GQA</tspan>"
