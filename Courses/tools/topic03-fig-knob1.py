@@ -45,7 +45,7 @@ def main():
 
     CW, GAP = 640, 58
     RX = CW + GAP
-    PH = 300
+    PH = 470
 
     # ══════════ 左：四种存法 ══════════
     ay = f.panel(0, y, CW, PH, "四种存法，同一个形状", BL,
@@ -93,34 +93,61 @@ def main():
         '是「同样一份字节，换回多少能力」</tspan>。', BL, size=_sz(12.5))
 
     # ══════════ 右：RoPE 为什么必须单独走一路 ══════════
+    # ⭐⭐⭐ 2026-09-14 重画：原来是两行代数。现在先给一个**寄快递**的画面 ——
+    #   代数留在下面当佐证，但**看懂靠的是上面那张图**。
     by = f.panel(RX, y, CW, PH, "为什么 MLA 的 RoPE 必须单独走一路", PU,
-                 sub="理解 MLA 的关键一步 ——&#160;本质是「一个代数重写成不成立」")
-    EQ = [
-        ("①", "没有 RoPE 时", "qᵀ (W_UK c)  ＝  (W_UKᵀ q)ᵀ c", GR,
-         "✅ 上投影<tspan font-weight=\"700\">跑到 q 那边去了</tspan>"
-         " ——&#160;<tspan font-weight=\"700\">K 根本不用解压</tspan>，只读那 512 维"),
-        ("②", "插进 RoPE 之后", "qᵀ  R  (W_UK c)", RD,
-         "⛔ <tspan font-weight=\"700\">R 夹在中间</tspan>，"
-         "W_UK 和 c <tspan font-weight=\"700\">分不开了</tspan> ——&#160;吸收失败"),
-    ]
-    ey = by + 8
-    for no, when, eq, col, note in EQ:
-        f.t(RX + 16, ey + 14, no, col, bold=True, size=14, cls="svglbl")
-        f.t(RX + 40, ey + 14, when, INK, bold=True, size=_sz(12.5))
-        f.box(RX + 16, ey + 24, CW - 32, 30, "#f8f9fa", LINE, 6)
-        f.t(RX + 32, ey + 44, eq, col, bold=True, size=_sz(13), mono=True)
-        f.t(RX + 16, ey + 72, note, GY, size=_sz(12))
-        ey += 96
+                 sub="先看一个寄快递的画面")
 
-    f.box(RX + 16, ey + 2, CW - 32, 62, "#fff", PU, 8)
-    f.t(RX + 32, ey + 24,
-        '③ 于是<tspan font-weight="700">把它拆成两路走</tspan>：', PU,
-        bold=True, size=_sz(12.5))
-    f.t(RX + 32, ey + 46,
-        '<tspan font-weight="700">512 维</tspan>不带位置、<tspan font-weight="700">可以被吸收</tspan>'
-        '　＋　<tspan font-weight="700">64 维</tspan>专扛 RoPE、'
-        '<tspan font-weight="700">老老实实存着</tspan>　＝　<tspan font-weight="700">576</tspan>',
+    ey = by + 10
+    # ① 没有 RoPE：仓库存压缩包，收件人自己拆
+    f.t(RX + 16, ey + 22, "① 没有 RoPE：仓库只存压缩包", GR, True, _sz(15))
+    f.box(RX + 16, ey + 34, 120, 52, "#e6f4ea", GR, 8)
+    f.t(RX + 76, ey + 66, "压缩包", GR, True, _sz(14), "middle")
+    f.line(RX + 144, ey + 60, RX + 188, ey + 60, GY2, 1.6)
+    f.box(RX + 196, ey + 34, 150, 52, "#fff", GR, 8)
+    f.t(RX + 271, ey + 56, "收件人自己拆", GY, True, _sz(13), "middle")
+    f.t(RX + 271, ey + 78, "（吸收进 q 那一侧）", GY2, size=_sz(11), anchor="middle")
+    f.t(RX + 366, ey + 66, "✅ 仓库省地方", GR, True, _sz(14))
+    ey += 104
+
+    # ② 有 RoPE：中间多一道必须在仓库做的工序
+    f.t(RX + 16, ey + 22, "② 插进 RoPE：中间多了一道仓库必须做的工序", RD, True,
+        _sz(15))
+    f.box(RX + 16, ey + 34, 120, 52, "#fce8e6", RD, 8)
+    f.t(RX + 76, ey + 66, "压缩包", RD, True, _sz(14), "middle")
+    f.line(RX + 144, ey + 60, RX + 176, ey + 60, RD, 1.6)
+    f.box(RX + 182, ey + 34, 116, 52, "#fff", RD, 8)
+    f.t(RX + 240, ey + 58, "按位置转一下", RD, True, _sz(13), "middle")
+    f.t(RX + 240, ey + 80, "（那个 R）", GY2, size=_sz(11), anchor="middle")
+    f.line(RX + 306, ey + 60, RX + 338, ey + 60, RD, 1.6)
+    f.box(RX + 344, ey + 34, 150, 52, "#fff", RD, 8)
+    f.t(RX + 419, ey + 66, "只好先拆开再存", RD, True, _sz(13), "middle")
+    f.t(RX + 16, ey + 108, "⛔ 这道工序卡在中间，"
+        "<tspan font-weight=\"700\">拆包这件事就挪不走了</tspan>", GY, size=_sz(12.5))
+    ey += 130
+
+    # ③ 解法：把要贴标签的那一小部分单拿出来
+    f.box(RX + 16, ey, CW - 32, 96, "#f3e8fd", PU, 8)
+    f.t(RX + 32, ey + 26, "③ 解法：把「必须在仓库做工序」的那一小部分单拿出来",
+        PU, True, _sz(13.5))
+    f.t(RX + 32, ey + 50,
+        '<tspan font-weight="700">512 维</tspan>不带位置 → 照旧只存压缩包、拆包挪给收件人',
         INK, size=_sz(12))
+    f.t(RX + 32, ey + 72,
+        '<tspan font-weight="700">64 维</tspan>专扛 RoPE → 老老实实拆开存　'
+        '＝　一共 <tspan font-weight="700">576</tspan>', INK, size=_sz(12))
+    ey += 108
+
+    # 代数留作佐证，放在最后、字小一号
+    f.t(RX + 16, ey + 18, "📌 代数上就是这两行：", GY2, size=_sz(11.5))
+    f.box(RX + 16, ey + 26, CW - 32, 28, "#f8f9fa", LINE, 6)
+    f.t(RX + 32, ey + 45, "qᵀ (W_UK c) ＝ (W_UKᵀ q)ᵀ c", GR, bold=True,
+        size=_sz(12.5), mono=True)
+    f.t(RX + 300, ey + 45, "✅ 挪得走", GR, size=_sz(11.5))
+    f.box(RX + 16, ey + 60, CW - 32, 28, "#f8f9fa", LINE, 6)
+    f.t(RX + 32, ey + 79, "qᵀ R (W_UK c)", RD, bold=True, size=_sz(12.5),
+        mono=True)
+    f.t(RX + 300, ey + 79, "⛔ R 夹在中间，分不开", RD, size=_sz(11.5))
 
     yy = y + PH + 18
     yy = f.band(yy, "info", "⭐ 把 5.3 当成一个套路记住，别当成 MLA 的实现细节", [
