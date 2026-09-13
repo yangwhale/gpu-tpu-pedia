@@ -74,6 +74,7 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-fig-at-gallery.py    # §七 A_t 的形状决定了一切（八种结构并排）
   python3 topic03-fig-chunkwise.py     # §7.4 块内并行块间串行 ＋ 块长两头夹
   python3 topic03-fig-hybrid.py        # §八 配比是一条轴，两头都不好
+  python3 topic03-fig-perstep.py       # §9.1 把 ↓↓↓ 换成一步 decode 要搬多少字节
   python3 topic03-fig-landing.py       # §九＋§十 三种资源之间的搬家史 ＋ 防骗判据
   python3 topic03-fig-tpu-gap.py       # §10.2 落到 TPU：哪两件事对不上
   python3 topic03-fig-tpu-fix.py       # §10.3 三招 ＋ 在卡上算 ＋ SparseCore

@@ -3484,7 +3484,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="0" y="1266" fill="#80868b" style="font-size:14.0px">　　<tspan font-weight="700">＝ 56.9</tspan>，正好对上 §五 那个 4.571 × 12.4 ——&#160;两条路算出同一个数，互为交叉验证</text>
 <text class="svgsm" x="0" y="1287" fill="#80868b" style="font-size:14.0px">　　📌 「要几张卡」按 <tspan font-weight="700">TPU v7 每 device 94.74 GiB</tspan> 算（这个数本课的 AOT 工具链里核过：编译器自己报的 95.38G − 94.74G ＝ 656.93M，只有按 1024 才成立）。⚠️ 换别的硬件只</text>
 <text class="svgsm" x="0" y="1308" fill="#80868b" style="font-size:14.0px">　　是这两根柱子的刻度变，<tspan font-weight="700">结论不变</tspan>；而且这笔账<tspan font-weight="700">只算了装得下装不下，没算带宽</tspan></text>
-</svg><figcaption>⭐⭐ <b>只盯灰色那一段：两根柱子里它完全一样。</b>涨的全在红色那一段。<em>⚠️ 「要几张卡」只算了装得下装不下，<b>没算带宽</b>；换别的硬件只是刻度变，结论不变。</em></figcaption></figure>
+</svg><figcaption>⭐⭐ <b>只盯灰色那一段：两根柱子里它完全一样。</b>涨的全在红色那一段。<em>⚠️ 「要几张卡」只算了装得下装不下，<b>没算带宽</b> ——&nbsp;带宽那一笔在 <a href="#s九">§9.1</a> 还；换别的硬件只是刻度变，结论不变。</em></figcaption></figure>
 
 <div class="note ok"><p>★ <b>因为变的不是技术，是工作负载</b></p>
 <p>同一个模型（V3），<b>权重那一段一个字节没动</b>，都是 625 GiB。
@@ -10302,6 +10302,173 @@ linear                                               ← 第 45 层多出来的�
 <tr><td>CSA/HCA</td><td>↓↓↓</td><td>↓↓↓</td><td>两边都省</td><td>≈</td><td><b>很高</b></td><td>不能</td></tr>
 <tr><td>线性（KDA 等）</td><td><b>无 KV</b>，但有固定状态</td><td>↓↓↓</td><td><b>decode</b>（prefill 要 chunk 化才不亏）</td><td>↓↓</td><td><b>很高</b></td><td><b>不能，必须从头训</b></td></tr>
 </tbody></table>
+<!-- ⭐⭐⭐ 2026-09-14 R26。这一节原来**只有上面这张表**，而整张表都是 ↓↓↓。
+     ⛔ 这门课自己的规矩是「问『省了多少』之前先问『省的是哪一样』」——
+        箭头恰恰是**回答不了这个问题**的东西：↓↓↓ 既不说省的是哪一样，
+        也不说省了多少。⭐ 于是这里把同一批方案一路换算到**毫秒**。
+     ⭐ 顺带把 §二 那张图欠下的账还了 —— 它的图注明写着「只算了装得下装不下，
+        **没算带宽**」。带宽这一笔，就在这儿。 -->
+<h3 id="s9-1">9.1 把 ↓↓↓ 换成一笔能自己核的账</h3>
+<p>上面这张表每一格都是箭头。箭头能排序，<b>但它回答不了「省的是哪一样」</b> ——
+  而那正是本节唯一想说死的那条。所以把同一批方案，换成一个能拿计算器核的问题：
+  <b>吐一个字，要从 HBM 上搬多少字节？</b></p>
+<figure class="fbox fwide" id="fig-perstep"><svg viewBox="0 0 1400 1822" width="100%" role="img" aria-label="一步 decode 要从 HBM 搬多少字节：MHA 里 93% 是一个人的 KV；显存省 56.9 倍只换到 7 倍速度，因为 MHA 被迫多用了卡；MLA 之后再上稀疏只再快 1.24 倍，瓶颈已经搬到权重上"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">代价 ——&#160;把 <tspan font-weight="700">↓↓↓</tspan> 换成<tspan font-weight="700">一步 decode 要搬多少字节</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">§九 那张表每一格都是箭头。可这门课自己的规矩是<tspan font-weight="700">「问『省了多少』之前，先问『省的是哪一样』」</tspan> ——&#160;箭头恰恰回答不了这个。那就把同一批方案，<tspan font-weight="700">一路换算到毫秒</tspan>。</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">权重（所有人共享，每步一样多）</text>
+<rect x="257" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="278" y="74" fill="#5f6368" style="font-size:14.0px">这一个人的 KV</text>
+<rect x="397" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="418" y="74" fill="#5f6368" style="font-size:14.0px">换算成时间</text>
+<rect x="0" y="102" width="1400" height="196" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#80868b" style="font-size:13.5px"><tspan font-weight="700">① 吐一个字，HBM 上要走的是这两样</tspan></text>
+<text class="svgsm" x="1386" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px">DeepSeek-V3 · 128K · 一个用户 · batch 1</text>
+<rect x="24" y="158" width="652" height="130" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="46" y="190" fill="#80868b" style="font-size:20.0px"><tspan font-weight="700">权重</tspan></text>
+<text class="svglbl" x="46" y="228" fill="#80868b" style="font-size:30.0px"><tspan font-weight="700">34.46 GiB</tspan></text>
+<text class="svgsm" x="46" y="252" fill="#5f6368" style="font-size:15.0px">每 token 激活 37B，原生 FP8</text>
+<text class="svgsm" x="46" y="276" fill="#5f6368" style="font-size:15.0px">所有方案<tspan font-weight="700">完全一样</tspan>，而且<tspan font-weight="700">所有人共享</tspan></text>
+<rect x="710" y="158" width="652" height="130" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="732" y="190" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">这个人的 KV</tspan></text>
+<text class="svglbl" x="732" y="228" fill="#a50e0e" style="font-size:30.0px"><tspan font-weight="700">随方案变</tspan></text>
+<text class="svgsm" x="732" y="252" fill="#5f6368" style="font-size:15.0px">下面那五根柱子的差别全在这儿</text>
+<text class="svgsm" x="732" y="276" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">每人一份</tspan>，人越多、话越长，它越大</text>
+<rect x="0" y="354" width="1400" height="500" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="354" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="356" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="384" x2="1400" y2="384" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="374" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">② 一步要搬多少 ——&#160;<tspan font-weight="700">灰色那一段五根完全一样</tspan>，差别全在红色那一段</tspan></text>
+<text class="svgsm" x="1386" y="374" fill="#80868b" text-anchor="end" style="font-size:11.0px">柱高 ∝ 每步读的字节数</text>
+<rect x="40" y="674.1707282535849" width="150" height="15.829271746415069" rx="5" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<rect x="40" y="450.0" width="150" height="224.17072825358494" rx="5" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="115" y="568" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">488.0</tspan></text>
+<text class="svglbl" x="115" y="716" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">MHA</tspan></text>
+<text class="svgsm" x="115" y="742" fill="#202124" text-anchor="middle" style="font-size:15.0px">每步读 522.46 GiB</text>
+<text class="svgsm" x="115" y="766" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">KV 占 93.4%</tspan></text>
+<text class="svgsm" x="115" y="790" fill="#80868b" text-anchor="middle" style="font-size:15.0px">要 12 张 device</text>
+<rect x="226" y="674.1707282535849" width="150" height="15.829271746415069" rx="5" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<rect x="226" y="660.1600577377359" width="150" height="14.010670515849059" rx="5" fill="#fce8e6" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="301" y="673" fill="#b06000" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">30.5</tspan></text>
+<text class="svglbl" x="301" y="716" fill="#b06000" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">GQA-8</tspan></text>
+<text class="svgsm" x="301" y="742" fill="#202124" text-anchor="middle" style="font-size:15.0px">每步读 64.96 GiB</text>
+<text class="svgsm" x="301" y="766" fill="#b06000" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">KV 占 47.0%</tspan></text>
+<text class="svgsm" x="301" y="790" fill="#80868b" text-anchor="middle" style="font-size:15.0px">要 7 张 device</text>
+<rect x="412" y="674.1707282535849" width="150" height="15.829271746415069" rx="5" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<rect x="412" y="671.1707282535849" width="150" height="3" rx="1" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="487" y="662" fill="#681da8" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">3.81</tspan></text>
+<text class="svglbl" x="487" y="716" fill="#681da8" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">MQA</tspan></text>
+<text class="svgsm" x="487" y="742" fill="#202124" text-anchor="middle" style="font-size:15.0px">每步读 38.27 GiB</text>
+<text class="svgsm" x="487" y="766" fill="#681da8" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">KV 占 10.0%</tspan></text>
+<text class="svgsm" x="487" y="790" fill="#80868b" text-anchor="middle" style="font-size:15.0px">要 7 张 device</text>
+<rect x="598" y="674.1707282535849" width="150" height="15.829271746415069" rx="5" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<rect x="598" y="671.1707282535849" width="150" height="3" rx="1" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="673" y="662" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">8.58</tspan></text>
+<text class="svglbl" x="673" y="716" fill="#0d652d" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="673" y="742" fill="#202124" text-anchor="middle" style="font-size:15.0px">每步读 43.04 GiB</text>
+<text class="svgsm" x="673" y="766" fill="#0d652d" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">KV 占 19.9%</tspan></text>
+<text class="svgsm" x="673" y="790" fill="#80868b" text-anchor="middle" style="font-size:15.0px">要 7 张 device</text>
+<rect x="784" y="674.1707282535849" width="150" height="15.829271746415069" rx="5" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<rect x="784" y="671.1707282535849" width="150" height="3" rx="1" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="859" y="662" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">0.13</tspan></text>
+<text class="svglbl" x="859" y="716" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">DSA</tspan></text>
+<text class="svgsm" x="859" y="742" fill="#202124" text-anchor="middle" style="font-size:15.0px">每步读 34.59 GiB</text>
+<text class="svgsm" x="859" y="766" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">KV 占 0.4%</tspan></text>
+<text class="svgsm" x="859" y="790" fill="#80868b" text-anchor="middle" style="font-size:15.0px">要 7 张 device</text>
+<line x1="40" y1="691" x2="934" y2="691" stroke="#dadce0" stroke-width="1.2" stroke-linecap="round"/>
+<line x1="34" y1="674.1707282535849" x2="940" y2="674.1707282535849" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="5 4"/>
+<text class="svgsm" x="950" y="664" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">权重 34.46 GiB</tspan></text>
+<text class="svgsm" x="950" y="688" fill="#80868b" style="font-size:15.0px">五根都顶到这条线</text>
+<text class="svgsm" x="950" y="710" fill="#80868b" style="font-size:15.0px">一个字节不差</text>
+<text class="svgsm" x="950" y="734" fill="#80868b" style="font-size:15.0px">⚠️ 后三根的红段在这个刻度下<tspan font-weight="700">画不出来</tspan>，只能标数字 </text>
+<text class="svgsm" x="950" y="756" fill="#80868b" style="font-size:15.0px">——&#160;<tspan font-weight="700">而「画不出来」本身就是 488 有多离谱的证据。</tspan></text>
+<text class="svgsm" x="24" y="828" fill="#202124" style="font-size:17.0px">⭐⭐ 第一条读法：<tspan font-weight="700">MHA 那一步里，93.4% 的字节是一个人的 KV</tspan> ——&#160;权重只占 6.6%。「KV cache 是瓶颈」这句话，到这儿才算画出来了。</text>
+<text class="svgsm" x="24" y="854" fill="#5f6368" style="font-size:16.0px">⚠️ 顺手一条：<tspan font-weight="700">MQA 比 MLA 还省</tspan>（3.81 vs 8.58）——&#160;它从来不是慢，它是<tspan font-weight="700">质量塌</tspan>。省字节和能不能用是两回事。</text>
+<rect x="0" y="910" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="910" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="912" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="940" x2="1400" y2="940" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="930" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">③ 除以带宽 ——&#160;字节变毫秒，<tspan font-weight="700">这里才出现两条反直觉的</tspan></tspan></text>
+<text class="svgsm" x="1386" y="930" fill="#80868b" text-anchor="end" style="font-size:11.0px">v7 每 device 3.685 TB/s</text>
+<rect x="24" y="968" width="664" height="264" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="44" y="998" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">一步要多久（下界）</tspan></text>
+<text class="svgsm" x="44" y="1036" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">MHA</tspan></text>
+<text class="svgsm" x="168" y="1036" fill="#5f6368" style="font-size:15.0px;font-family:'Roboto Mono',ui-monospace,monospace">522.46 GiB ÷ 12 张</text>
+<text class="svgsm" x="400" y="1036" fill="#202124" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">12.69 ms</tspan></text>
+<text class="svgsm" x="510" y="1036" fill="#a50e0e" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">79 tok/s</text>
+<text class="svgsm" x="44" y="1074" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">GQA-8</tspan></text>
+<text class="svgsm" x="168" y="1074" fill="#5f6368" style="font-size:15.0px;font-family:'Roboto Mono',ui-monospace,monospace">64.96 GiB ÷ 7 张</text>
+<text class="svgsm" x="400" y="1074" fill="#202124" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">2.70 ms</tspan></text>
+<text class="svgsm" x="510" y="1074" fill="#b06000" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">370 tok/s</text>
+<text class="svgsm" x="44" y="1112" fill="#681da8" style="font-size:17.0px"><tspan font-weight="700">MQA</tspan></text>
+<text class="svgsm" x="168" y="1112" fill="#5f6368" style="font-size:15.0px;font-family:'Roboto Mono',ui-monospace,monospace">38.27 GiB ÷ 7 张</text>
+<text class="svgsm" x="400" y="1112" fill="#202124" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">1.59 ms</tspan></text>
+<text class="svgsm" x="510" y="1112" fill="#681da8" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">628 tok/s</text>
+<text class="svgsm" x="44" y="1150" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="168" y="1150" fill="#5f6368" style="font-size:15.0px;font-family:'Roboto Mono',ui-monospace,monospace">43.04 GiB ÷ 7 张</text>
+<text class="svgsm" x="400" y="1150" fill="#202124" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">1.79 ms</tspan></text>
+<text class="svgsm" x="510" y="1150" fill="#0d652d" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">558 tok/s</text>
+<text class="svgsm" x="44" y="1188" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">DSA</tspan></text>
+<text class="svgsm" x="168" y="1188" fill="#5f6368" style="font-size:15.0px;font-family:'Roboto Mono',ui-monospace,monospace">34.59 GiB ÷ 7 张</text>
+<text class="svgsm" x="400" y="1188" fill="#202124" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">1.44 ms</tspan></text>
+<text class="svgsm" x="510" y="1188" fill="#174ea6" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">694 tok/s</text>
+<text class="svgsm" x="44" y="1226" fill="#80868b" style="font-size:15.0px">⚠️ 只算 HBM 读 ——&#160;真机只会更慢，但各方案之间的比例站得住</text>
+<rect x="712" y="968" width="664" height="128" rx="9" fill="none" stroke="#d93025" stroke-width="1"/>
+<text class="svglbl" x="732" y="998" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">反直觉一：显存省了 56.9 倍，只快了 7.08 倍</tspan></text>
+<text class="svgsm" x="732" y="1028" fill="#5f6368" style="font-size:16.0px">⛔ 差在哪？<tspan font-weight="700">MHA 装不下，被迫用 12 张 device 而不是 7 张</tspan> ——&#160;它拿显存</text>
+<text class="svgsm" x="732" y="1051" fill="#5f6368" style="font-size:16.0px">换来的卡，顺手也把带宽换来了。⭐ 所以 MLA 真正省下的不是时间，是<tspan font-weight="700">那 5 </tspan></text>
+<text class="svgsm" x="732" y="1074" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">张卡</tspan>，而它们可以拿去服务别人。</text>
+<rect x="712" y="1108" width="664" height="128" rx="9" fill="none" stroke="#1a73e8" stroke-width="1"/>
+<text class="svglbl" x="732" y="1138" fill="#174ea6" style="font-size:19.0px"><tspan font-weight="700">反直觉二：MLA 之后再上稀疏，只再快 1.24 倍</tspan></text>
+<text class="svgsm" x="732" y="1168" fill="#5f6368" style="font-size:16.0px">⭐⭐ 因为<tspan font-weight="700">瓶颈已经搬到权重那一段</tspan>：读 34.46，KV 只剩 0.13。这不是稀疏没</text>
+<text class="svgsm" x="732" y="1191" fill="#5f6368" style="font-size:16.0px">用 ——&#160;这正是上面表里「DSA：prefill 为主」的<tspan font-weight="700">数值版</tspan>。</text>
+<rect x="0" y="1300" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1300" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1300" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1327" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 「先问省的是哪一样」，现金价值就在这三行里</tspan></text>
+<text class="svgsm" x="20" y="1358" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">省显存 ≠ 省时间。</tspan>MLA 对 MHA：显存 <tspan font-weight="700">56.9×</tspan>，单用户 decode 只有 <tspan font-weight="700">7.08×</tspan> ——&#160;省下来的那 5 张卡才是真正的收益。</text>
+<text class="svgsm" x="20" y="1382" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">省读 ≠ 省存。</tspan>DSA 那根柱子的灰段红段一个字节没少存，<tspan font-weight="700">它只是每步不读</tspan> ——&#160;所以它在这张图上只影响高度，不影响「要几张卡」。</text>
+<text class="svgsm" x="20" y="1406" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">瓶颈是会搬家的。</tspan>MHA 时代它在 KV（93.4%）；MLA 之后它搬到权重（80.1%）。<tspan font-weight="700">对着上一个瓶颈继续优化，是最常见的浪费。</tspan></text>
+<rect x="0" y="1436" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1436" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1436" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1463" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ ⚠️ 这张图只成立在 batch ＝ 1 上，这一条必须说</tspan></text>
+<text class="svgsm" x="20" y="1494" fill="#b06000" style="font-size:15.0px">权重那一段是<tspan font-weight="700">所有人分摊</tspan>的，KV 那一段<tspan font-weight="700">不摊</tspan>。所以人一多，灰段被摊薄、红段成倍长 ——&#160;<tspan font-weight="700">画面会翻回 KV 主导</tspan>。</text>
+<text class="svgsm" x="20" y="1518" fill="#b06000" style="font-size:15.0px">⭐ 这正是 §二 那张图的另一面：那里是<tspan font-weight="700">把人加上去</tspan>让 KV 变成主角，这里是<tspan font-weight="700">只留一个人</tspan>让权重变成主角。<tspan font-weight="700">同一个模型，问法不同，答案就不同</tspan> ——&#160;这本身就是本节的主题。</text>
+<rect x="0" y="1548" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1548" width="4" height="146" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1548" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1575" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ ⛔ 口径，三条</tspan></text>
+<text class="svgsm" x="20" y="1606" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">这是下界，不是实测。</tspan>只算从 HBM 把字节读进来的时间，不算计算、不算 MoE 的 all-to-all、不算 kernel 损耗。⚠️ 卡数只按<tspan font-weight="700">装得下</tspan>算，没算算力够不够。</text>
+<text class="svgsm" x="20" y="1630" fill="#a50e0e" style="font-size:15.0px">DSA 那根的 <tspan font-weight="700">0.13 GiB 也是下界</tspan> ——&#160;索引器仍要在全历史上打一遍分，那部分虽轻但不是零。k＝2,048 是 128K 上的设定（占 1.5625%）。</text>
+<text class="svgsm" x="20" y="1654" fill="#a50e0e" style="font-size:15.0px">⛔⛔ 单位：v7 官方 <tspan font-weight="700">7.37 TB/s 是每「芯片」</tspan>，而 v7 是 <tspan font-weight="700">2 device / chip</tspan>，本图一律按 device 算，所以用 <tspan font-weight="700">3.685 TB/s</tspan>、每 device <tspan font-weight="700">94.74 GiB</tspan>。这门课在这个 1:2 上栽过，</text>
+<text class="svgsm" x="20" y="1678" fill="#a50e0e" style="font-size:15.0px">所以写死在这儿。</text>
+<text class="svgsm" x="0" y="1710" fill="#80868b" style="font-size:14.0px">📌 装置偷自 Epoch AI 那条「字节 →&#160;毫秒 →&#160;钱」的换算链 ——&#160;抽象的「省了多少」一路换算到有直觉的量，每一步都能自己验算。本图走到毫秒为止（再往下换成钱要报价，那个本课核不</text>
+<text class="svgsm" x="0" y="1731" fill="#80868b" style="font-size:14.0px">　　了）</text>
+<text class="svgsm" x="0" y="1752" fill="#80868b" style="font-size:14.0px">　　⚠️ 数全部来自本讲前面已核过的：KV 488 / 30.50 / 3.81 / 8.58 GiB（61 层 · 128K · bf16 · 一个用户）· 权重 625 GiB · 每 token 激活 <tspan font-weight="700">37B</tspan>（671B/37B，官方模型卡，见 §</text>
+<text class="svgsm" x="0" y="1773" fill="#80868b" style="font-size:14.0px">　　零 那张年表）· v7 每 chip 7.37 TB/s、每 device 94.74 GiB</text>
+<text class="svgsm" x="0" y="1794" fill="#80868b" style="font-size:14.0px">　　📌 这张图<tspan font-weight="700">不引入任何新数</tspan>，全部是前面核过的数做除法 ——&#160;所以读者可以拿计算器逐格核，这也是它敢把 §九 那张箭头表替换掉的底气</text>
+</svg><figcaption>⭐⭐ <b>先只看灰段：五根柱子里它一模一样</b>（每步都要读那 34.46 GiB 激活权重）。差别全在红段 ——&nbsp;而 MHA 那根红段是灰段的 <b>14 倍</b>。<em>⚠️ 这是 batch ＝ 1 的账，也是<b>只算 HBM 读的下界</b>；人一多，灰段被摊薄、红段不摊，画面会翻回去。</em></figcaption></figure>
+<p>三行收口，都能自己验算：</p>
+<ul>
+<li><b>省显存 ≠ 省时间。</b> MLA 对 MHA，显存 <b>56.9×</b>，
+  单用户 decode 只有 <b>7.08×</b> ——&nbsp;<em>因为 MHA 装不下，被迫多用了卡，
+  而多出来的卡顺手也带来了带宽。所以 MLA 真正省下的不是时间，<b>是那 5 张卡</b>。</em></li>
+<li><b>省读 ≠ 省存。</b> DSA 那根柱子一个字节没少存，它只是<b>每步不读</b> ——&nbsp;
+  <em>所以它改变高度，不改变「要几张卡」。</em></li>
+<li>⭐⭐ <b>瓶颈是会搬家的。</b> MHA 时代它在 KV（占一步的 <b>93.4%</b>）；
+  MLA 之后它搬到了权重（<b>80.1%</b>）。
+  <em>对着上一个瓶颈继续优化，是这一行最常见的浪费。</em></li>
+</ul>
+<div class="note warn"><p>⚠️ <b>这笔账只成立在 batch ＝ 1 上。</b>
+  权重那一段是<b>所有人分摊</b>的，KV 那一段<b>不摊</b> ——&nbsp;
+  人一多，前者被摊薄、后者成倍长，<b>画面会翻回 KV 主导</b>。</p>
+<p>⭐ 这正好是 <a href="#s二">§二那张图</a>的另一面：那里是<b>把人加上去</b>，
+  让 KV 变成主角；这里是<b>只留一个人</b>，让权重变成主角。
+  <em>同一个模型，问法不同，答案就不同 ——&nbsp;这本身就是本节的主题。</em></p></div>
 <!-- ⛔ 2026-09-13 夜间 R18：这四条原来在这里用 <ol> 写了一遍，
      而 R15 那张 fig3-landing 的第二格**已经把它们画出来了**（连第四条那个
      12% / 10% 的账都画了）。⭐ 同一件事两处各讲一遍，正是本课一直在修的毛病。
