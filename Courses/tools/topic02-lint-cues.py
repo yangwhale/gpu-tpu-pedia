@@ -108,6 +108,7 @@ PAIRS = [
     ("topic-01-lecture.html",      "topic-01.html"),
     ("topic-02-L200-lecture.html", "topic-02.html"),
     ("topic-02x-lecture.html",     "topic-02x.html"),
+    ("topic-03-lecture.html",      "topic-03.html"),
     ("topic-03-L300-lecture.html", "topic-03-L300.html"),
     ("topic-08-lecture.html",      "topic-08.html"),
 ]

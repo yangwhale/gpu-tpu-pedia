@@ -92,7 +92,11 @@ if [ "${1:-}" != "--lint" ]; then
   python3 topic03-build-L300.py
   python3 topic03-build-L200.py
 
-  step "专题三 讲义（L300）"
+  # ⭐ 两份讲义：主线那份配 topic-03.html，档案那份配 topic-03-L300.html。
+  #   ⛔ 新增讲义必须同时在 topic02-lint-cues.py 的 PAIRS 里登记 ——&nbsp;
+  #     没登记的会被那条体检主动点名（2026-09-14 就是这么发现漏网的）。
+  step "专题三 讲义（主线 ＋ L300）"
+  python3 topic03-build-lecture.py
   python3 topic03-build-L300-lecture.py
 
   step "专题八 教材"
