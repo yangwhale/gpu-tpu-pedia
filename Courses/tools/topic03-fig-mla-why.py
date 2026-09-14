@@ -21,7 +21,7 @@ r"""专题三 · §五「MLA 凭什么敢这么压」
 📌 所有倍数当场算并断言，不写死。
 ⚠️ 「复印 / 缩印」是本课的比喻，论文那侧的说法是「低秩联合压缩」。
 """
-from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
+from topic03_draw import (Fig, wpx, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
                           BG2)
 
 W = 1400
@@ -128,7 +128,7 @@ def main():
     # ⛔ 这一格**不主张「事后压掉点更多」** ——&nbsp;本课没有那个口径的实测。
     #   它只主张一件事：**两者性质不同**，一个是压，一个是生来如此。
     y2 = y1 + PH2 + 18
-    PH3 = 348
+    PH3 = 424
     py3 = f.panel(0, y2, W, PH3, "③ 凭什么敢赌 ——　因为有人先拿训好的模型试过了",
                   GR, sub="事后缩印 vs 生来就这么窄 ——　终点一样宽，区别在什么时候变窄")
 
@@ -165,12 +165,24 @@ def main():
     f.t(398, ey + 130, "（事后低秩）", GY2, size=14, anchor="middle")
     sheet(X_POST, ey + 34, W_POST, "挤成一团", OR, "#fef7e0")
     strokes(X_POST, ey + 34, W_POST, NSTK, OR, sw=9.0)   # ⭐ 9 > 笔距 8.4，真的叠上
-    f.t(40, ey + 232,
-        "⛔ 同样 <tspan font-weight=\"700\">9 笔</tspan>硬塞进这么窄 ——&#160;"
-        "挨上的那些就是<tspan font-weight=\"700\">被丢掉的方向</tspan>。"
-        "写的时候没人知道以后要缩。", GY, size=17)
+    # ⚠️⚠️ 2026-09-14 R46 修 R45 留下的洞。这一格底下三行文字**全部严重超宽**
+    #   （实测 1390 / 1921 / 2204 px，图宽只有 1400），R45 交付时却报了「无右撑」。
+    # ⭐ 为什么肉眼看不出来：SVG 的 <text> 不折行，超出的部分**被截图的 viewport
+    #   裁掉**，屏幕上看起来是「这句话怎么少了半截」，不是「文字冒出去了」。
+    #   ⛔ 所以**目测截图不能替代宽度断言** —— 凡是 f.t() 的长句都得过 wpx。
+    COLW, RCOLW = 700 - 40 - 12, W - 752 - 20     # 左栏 / 右栏可用宽
 
-    f.line(700, ey + 10, 700, ey + 250, LINE, 1.2, dash="5 5", arrow=False)
+    def col(x, y0, rows, size, fill, bold=False, lh=24, lim=None):
+        for k, s in enumerate(rows):
+            assert wpx(s, size) < (lim or COLW), (k, wpx(s, size))
+            f.t(x, y0 + k * lh, s, fill, bold, size)
+
+    col(40, ey + 236, [
+        "⛔ 同样 <tspan font-weight=\"700\">9 笔</tspan>硬塞进这么窄 ——",
+        "挨上的那些就是<tspan font-weight=\"700\">被丢掉的方向</tspan>。",
+        "写的时候，没人知道以后要缩。"], 17, GY)
+
+    f.line(700, ey + 10, 700, ey + 300, LINE, 1.2, dash="5 5", arrow=False)
 
     f.t(752, ey + 18, "MLA：生来就这么窄", GR, True, 20)
     sheet(X_MLA, ey + 34, W_MLA, "根根分明", GR, "#e6f4ea")
@@ -181,17 +193,19 @@ def main():
         size=17)
     f.t(752, ey + 160, "<tspan font-weight=\"700\">这三笔写什么</tspan>。", INK,
         size=17)
-    f.t(752, ey + 232,
-        "⭐ 两张终点稿纸<tspan font-weight=\"700\">一样宽</tspan> ——&#160;"
-        "区别不在压得多狠，在<tspan font-weight=\"700\">什么时候变窄的</tspan>。",
-        GR, True, 17)
+    col(752, ey + 236, [
+        "⭐ 两张终点稿纸<tspan font-weight=\"700\">一样宽</tspan> ——",
+        "区别不在压得多狠，",
+        "在<tspan font-weight=\"700\">什么时候变窄的</tspan>。"],
+        17, GR, True, lim=RCOLW)
 
-    f.t(40, ey + 268,
-        "📌 事后缩印这条路 MLA 之前早有人走，这也是本课说「赌得有依据」的依据："
-        "<tspan font-weight=\"700\">Eigen Attention</tspan> 省 40%　·　"
-        "<tspan font-weight=\"700\">Palu</tspan> 分组头低秩 ＋ 自动分配秩，省 50%　·　"
-        "<tspan font-weight=\"700\">LoRC</tspan> 逐层分配不同的秩（未报统一比例）。",
-        GY2, size=15)
+    col(40, ey + 322, [
+        "📌 事后缩印这条路 MLA 之前早有人走，这也是本课说「赌得有依据」的依据：",
+        "　　<tspan font-weight=\"700\">Eigen Attention</tspan> 省 40%　·　"
+        "<tspan font-weight=\"700\">Palu</tspan> 分组头低秩 ＋ 自动分配秩，省 50%",
+        "　　<tspan font-weight=\"700\">LoRC</tspan> 逐层分配不同的秩"
+        "（未报统一比例 ——&#160;它按每层的敏感度分配，没有一个全局数字）。"],
+        15, GY2, lh=22, lim=W - 40 - 20)
 
     # ══════════ 落点 ════════════════════════════════════════════
     yy = y2 + PH3 + 20

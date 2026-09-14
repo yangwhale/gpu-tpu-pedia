@@ -87,6 +87,7 @@ python3 topic03-fig-three-walls.py   # §3.5 三堵墙：方向各不相同，�
   python3 topic03-fig-tpu-fix.py       # §10.3 三招 ＋ 在卡上算 ＋ SparseCore
   python3 topic03-fig-knob1.py         # §五 旋钮①（四种存法对照 ＋ RoPE 为什么单走一路）
   python3 topic03-fig-mla-why.py       # §五 MLA 凭什么能压（信息账：白送的 vs 赌出来的）
+  python3 topic03-fig-mla-credit.py    # §5.4c 压完了效果好，功劳记给谁（同等 cache 的受控消融）
   python3 topic03-fig-mqa-why.py       # §五 砍头这一支怎么想出来的（2019 选项单 ＋ 自由度不是宽度）
   python3 topic03-fig-knob2.py         # §六 旋钮②（五种读法画成五张 mask）
   python3 topic03-fig-dsa-why.py       # §六 DSA 凭什么只看 2048 个（鸡生蛋 ＋ 让真注意力当老师）
