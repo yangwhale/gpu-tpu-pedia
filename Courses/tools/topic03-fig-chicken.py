@@ -73,9 +73,14 @@ def main():
          "不训第二个打分器", "压缩分支的分数本来就要算，直接拿它当路由",
          ["⭐ 白捡：top-k 在前向图上是个 no-op，",
           "只决定从显存搬哪些块"]),
-        (PU, "③ 降维打击", "CSA · V4", "shrink",
+        # ⭐⭐ 2026-09-14 R13：原来这条只举了 CSA 一家，写着「这是 V4 相对 V3.2
+        #    真正的新东西」。核 wiki 时发现智谱 GLM-5.3-Flash 2026-08 独立做了
+        #    同一件事 ——&nbsp;所以改成**两家并列**，这是交叉验证，比孤例有力。
+        # ⛔ 但两家压的**不是同一个东西**，落点那条 band 里说清楚了。
+        (PU, "③ 降维打击", "CSA·V4 ／ IndexPool·GLM", "shrink",
          "先把序列压短 4 倍", "鸡生蛋没破 ——　但那只鸡小了 4 倍",
-         ["⭐ 这是 V4 相对 V3.2", "真正的新东西"]),
+         ["⭐ 两家独立想到同一招 ——　一家压 token，",
+          "一家压 indexer 的 key，都是 4 合 1"]),
     ]
     for i, (col, name, who, kind, a, b_, note) in enumerate(WAYS):
         x = 20 + i * (CW + GAP)
@@ -129,11 +134,30 @@ def main():
         "⭐ 于是<tspan font-weight=\"700\">「整块取」不是对硬件的妥协，是这个死结的直接推论</tspan>。"
         "本课原来把它们讲成两段互不相干的话 ——&#160;接上之后，两个难点变成一个。",
     ])
+    # ⭐⭐ 2026-09-14 R13 新增。原来第三条只有 CSA 一家，说成「V4 的新东西」；
+    #    核到智谱 2026-08 独立做了同一件事 ——&nbsp;**孤例变成交叉验证**。
+    # ⛔ 但必须同时说清「压的不是同一个东西」，否则就是把两件事混成一件。
+    yy = f.band(yy + 14, "ok",
+                "⭐⭐ 最后那条路，两家独立走到了一起 ——　但他们压的不是同一个东西", [
+        "<tspan font-weight=\"700\">DeepSeek 的 CSA 压的是序列本身</tspan>："
+        "4 个 token 合成 1 个 entry，"
+        "<tspan font-weight=\"700\">后面主注意力看到的就是压过的</tspan>。",
+        "<tspan font-weight=\"700\">智谱的 IndexPool 压的只是索引器手里那份 key</tspan>："
+        "4 个池化成 1 个、挑出 Top-512 个 pool 之后"
+        "<tspan font-weight=\"700\">再展开回 2048 个原 token</tspan> ——&#160;"
+        "主注意力吃到的<tspan font-weight=\"700\">一个没少</tspan>。",
+        "⭐ 所以 IndexPool 才是更纯的降维打击："
+        "<tspan font-weight=\"700\">只把鸡缩小，蛋一点没动</tspan>。"
+        "⭐⭐ 而两家独立收敛到「4 合 1」这一点本身就是证据 ——&#160;"
+        "<tspan font-weight=\"700\">它不是某一家的偶然发明，是这个死结自己逼出来的解</tspan>。",
+    ])
     yy = f.src(yy + 16,
                "① DSA 的师徒（两阶段训练、冻主模型 ＋ KL warmup）出自 "
                "DeepSeek-V3.2-Exp 技术报告 sec. 2；② NSA 的三支路出自 arXiv 2502.11089 sec. 3",
                "③ CSA 每 4 个 token 压成 1 个 entry、在压缩后的格上挑，"
-               "出自 DeepSeek-V4 相关公开材料（见 CSA 那张图的出处）",
+               "出自 DeepSeek-V4 相关公开材料（见 CSA 那张图的出处）；"
+               "IndexPool「把 4 个 indexer key 向量加权池化成 1 个」"
+               "出自智谱 GLM-5.3-Flash 官方博客（z.ai/blog/glm-5.3-flash，2026-08，模型 MIT 许可开源）",
                "⚠️「相似度算出来再稀疏就没好处 →&#160;只能按块打分」这条链子的表述"
                "出自 zhouyifan.net 的 Log-linear Sparse Attention 一文；"
                "「师徒 / 一份算两用 / 降维打击」是<tspan font-weight=\"700\">本课的命名</tspan>")
