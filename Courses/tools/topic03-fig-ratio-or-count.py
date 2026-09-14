@@ -251,19 +251,45 @@ def main():
     top = f.panel(0, y2, W_, PH3, "③ 但也别一刀切 ——　真实规则是两条叠加", GR,
                   sub="一条随深度涨，一条是常数")
 
+    # ⭐⭐⭐ 2026-09-15 R9：这一格原来是**两段纯文字**（①主体 ②外挂），
+    #   可它是这张图的结论，而且 **Kimi Linear 的 27 层能逐层画出来** ——
+    #   每 4 层一个全局 ＋ 末层必为全局 ＝ 6 ＋ 1 ＝ 7 条，20 : 7 ＝ 2.857。
+    #   ⭐ 画出来之后，右边那个「为什么不是 3.0」的小数点不用解释：
+    #     多出来的那一格就在最右边亮着。
+    # ⛔ 层号全部由规则现算并断言，不许手写 —— 数一变，右边那两个比值就对不上了。
+    KL_N = 27
+    KL_FULL = sorted(set(range(4, KL_N + 1, 4)) | {KL_N})
+    assert len(KL_FULL) == 7 and KL_N - len(KL_FULL) == 20, KL_FULL
     f.box(40, top + 18, 640, 224, "#fff", GR, 8, 1.6)
-    f.t(64, top + 50, "① 主体：按固定比例铺", GR, True, 17)
-    f.lines(64, top + 74, 592, [
-        "3:1（Qwen3.5、Kimi）、7:1（MiniMax-01、Ring-flash）、",
-        "每 10 层一个（Granite）——&#160;"
-        "<tspan font-weight=\"700\">这部分随深度线性涨</tspan>。",
-    ], size=15, lh=25)
-    f.t(64, top + 154, "② 外挂：按「位置」钉死几个全局层", OR, True, 17)
-    f.lines(64, top + 178, 592, [
-        "Kimi 两个模型都是「每 4 层一个 ＋ "
-        "<tspan font-weight=\"700\">末层必为全局</tspan>」。",
-        "<tspan font-weight=\"700\">这部分是常数</tspan>，不随深度涨。",
-    ], size=15, lh=25)
+    f.t(64, top + 46, "两条规则叠在一起长什么样 ——　"
+        "<tspan font-weight=\"700\">Kimi Linear 的 27 层，一层不落</tspan>",
+        INK, size=16)
+    CW2, CG2, CH2 = 20, 2, 30
+    for i in range(1, KL_N + 1):
+        x = 64 + (i - 1) * (CW2 + CG2)
+        tail = (i == KL_N)                       # 末层：外挂那一个
+        full = i in KL_FULL
+        f.box(x, top + 66, CW2, CH2,
+              ("#fef7e0" if tail else "#e8f0fe") if full else "#fff",
+              (OR if tail else BL) if full else LINE2, 3,
+              2.0 if tail else 1.2)
+        if full:
+            f.box(x + 5, top + 76, CW2 - 10, 10, OR if tail else BL, "none", 2)
+    # ⛔ 六个蓝格下面原来各写一个「4」——&#160;等距本来就看得出来，
+    #   而那串 4 反而像层号。只留末层那个标注。
+    f.t(64 + (KL_N - 1) * (CW2 + CG2) + CW2 / 2.0, top + 112, "末", OR, True,
+        13, "middle")
+    f.t(64, top + 146, "① <tspan font-weight=\"700\">主体</tspan>：蓝的那六个 ——　"
+        "每 4 层一个。<tspan font-weight=\"700\">层数一多，它跟着涨</tspan>。",
+        BL, size=16, w=592)
+    f.t(64, top + 172, "② <tspan font-weight=\"700\">外挂</tspan>：橙的那一个 ——　"
+        "末层必为全局。<tspan font-weight=\"700\">不管多深，永远就这一个</tspan>。",
+        OR, size=16, w=592)
+    f.t(64, top + 200, "⭐ 于是 <tspan font-weight=\"700\">20 : 7</tspan>，"
+        "不是 3 : 1 ——　<tspan font-weight=\"700\">多出来的就是最右边那一格</tspan>。",
+        GY, size=15, w=592)
+    f.t(64, top + 224, "（主体那条各家不同：3:1 · 7:1 · 每 10 层一个）",
+        GY2, size=14, w=592)
 
     f.box(720, top + 18, W_ - 760, 224, "#fff", LINE, 8, 1.2)
     f.t(744, top + 50, "⭐ 两条叠加，正好解释一个小数点", INK, True, 17)
@@ -271,7 +297,7 @@ def main():
         "末层那一个额外的全局层，会把实际比值"
         "<tspan font-weight=\"700\">从 3.0 压下来一点</tspan>：",
         "Kimi Linear　20 : 7 　= <tspan font-weight=\"700\">%.3f</tspan>"
-        "　（27 层，摊得薄的分母小）" % _R_KL,
+        "　（27 层，那一个摊不开）" % _R_KL,
         "Kimi K3　　　69 : 24 = <tspan font-weight=\"700\">%.3f</tspan>"
         "　（93 层，同一个 +1 被摊得更薄）" % _R_K3,
         "",
