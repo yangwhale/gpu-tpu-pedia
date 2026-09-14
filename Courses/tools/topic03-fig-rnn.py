@@ -261,7 +261,9 @@ def fig_hw():
     #   （band 的白框是一次真实覆盖，见 topic03_draw.band 的注）。
     #   这条警告在 build 里挂了不知多久 ——&#160;它不报错，只是每次都印一行。
     CH = 672
-    CT = f.panel(0, CY, W, CH, "算术强度 ——　说人话就是「跑一趟，能干多少活」",
+    CT = f.panel(0, CY, W, CH,
+                 "算术强度 ——　说人话就是「跑一趟，能干多少活」"
+                 "　⭐ 第一次读可以先跳过这一格",
                  OR, "#fff", sub="它决定你是在等算力，还是在等内存", tint="#fbeecb")
 
     ty = CT + 26
@@ -389,12 +391,15 @@ def fig_hw():
         GY2, size=15, w=1288)
 
     yy = CY + CH + 16
+    # ⭐ fold：这一条是「为什么两头都走不通」的完整论证，属于第二层。
+    #   课上只讲「两辆车」那一格，这条折起来，图矮一截、台阶也就出来了。
     yy = f.band(yy, "bad", "两头堵死", [
         '<tspan font-weight="700">要喂饱一块 v7，batch 得开到 313 以上</tspan>'
         '——&#160;而 batch 是 RNN 唯一的算术强度来源。',
         '而 Vaswani 引言那句原话讲的正是另一头：'
         '<tspan font-style="italic">「memory constraints limit batching across examples」</tspan>'
-        '——&#160;<tspan font-weight="700">序列一长，显存就不让你把 batch 开大。</tspan>'])
+        '——&#160;<tspan font-weight="700">序列一长，显存就不让你把 batch 开大。</tspan>'],
+                fold=True)
     yy = f.src(yy + 18, 'NVIDIA《Recurrent Layers User\'s Guide》'
                         '——&#160;「a GEMM with one dimension of one」、'
                         '「can combine these GEMMs over the minibatch size, '
