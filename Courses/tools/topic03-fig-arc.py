@@ -42,6 +42,142 @@ from topic03_draw import (Fig, wpx, _sz, LINE, LINE2,
                           GY2, BG2)
 
 
+import math
+import re
+
+
+def _mon(d):
+    """"2024-07" →&#160;从 2020-05 起算的第几个月。"""
+    yy, mm = int(d[:4]), int(d[5:7])
+    return (yy - 2020) * 12 + mm - 5
+
+
+def _ctx(s):
+    """模型表的上下文列 →&#160;token 数。RWKV 那行写「无限（理论）」，返回 None。"""
+    if "无限" in s:
+        return None
+    v = float(re.sub(r"[^\d.]", "", s))
+    return v * 1024 if "K" in s else (v * 1048576 if "M" in s else v)
+
+
+def _params_b(name):
+    """"Kimi K3　2.8T/104B · 93 层" →&#160;2800（总参数，单位 B）。"""
+    m_ = re.match(r"([\d.]+)\s*([BT])", name.split("　")[1])
+    return float(m_.group(1)) * (1000 if m_.group(2) == "T" else 1)
+
+
+def _series():
+    """从模型表现算两组点。⛔ 一个数都不许手写 ——&#160;全部来自 topic03_models.ROWS。
+
+    ⛔⛔ **右边那张图必须过滤 ≥100B** ——&#160;这是本图「846 倍」一直以来的口径
+    （见文件头出处：两端都取 ≥100B 的模型）。第一版没过滤，于是包络线在
+    2023-09 就被 **Mistral 7B 的 512 MiB** 拽到底了 ——&#160;
+    ⭐ 一个 7B 模型的 KV 当然小，那跟「省法」没关系，是它本来就小。
+    **图当时正好画在那句「576 GiB → 697 MiB」旁边，自己反驳自己。**
+    ⭐ 判据：**同一张图里两个数字，口径必须是同一个**；不同口径就得分两张图。
+    （左图不过滤 ——&#160;上下文长度跨尺寸可比，7B 能跑 32K 就是能跑 32K。）
+    """
+    up, dn = [], []
+    for date, name, _loop, c, kv, _n in M.ROWS:
+        who = name.split("　")[0].replace("⭐ ", "")
+        t, v = _mon(date), _ctx(c)
+        if v:
+            up.append((t, v, who))
+        g = M.kv_gib(kv)
+        if g and _params_b(name) >= 100:
+            dn.append((t, g, who))
+    return up, dn
+
+
+def _two_curves(f, y):
+    """两张同 x 轴的小图：左边「能跑多长」往上走，右边「同一长度的代价」往下走。"""
+    PW, H, GAP = 676, 330, 48       # 两张并排，一眼看见方向相反
+    XL, XR = 74, PW - 26            # 绘图区左右边界（面板内坐标）
+    up, dn = _series()
+    TMAX = max(t for t, _, _ in up + dn)
+    assert TMAX == _mon("2026-08"), "模型表末行不是 2026-08 了，x 轴范围要跟着改"
+    # ⭐ 把落点里那个「846 倍」钉在画出来的包络线两端上 ——&#160;
+    #   以后模型表增删行，只要这两端变了，这里当场报，不会出现
+    #   「图上画的是一条线、旁边写的是另一个数」。
+    _r = max(g for _, g, _ in dn) / min(g for _, g, _ in dn)
+    assert 845 < _r < 847, "右图包络两端的比值 %.0f≠846，落点那句要跟着改" % _r
+    # ⛔ 左图绿线的终点是 10M，不是 1M ——&#160;本讲一直说的「512 倍」是
+    #   2K→1M 那个**常态**值，不是纪录。两个数都对，但**不是同一条线上的**，
+    #   所以纪录写在图里、常态写在图下那行，谁也别冒充谁。
+    assert max(v for _, v, _ in up) == 10 * 1048576, "左图纪录不再是 10M 了"
+    assert 1048576 / 2048 == 512
+
+    def draw(px, title, sub, pts, lo, hi, ticks, best, note, anchors):
+        top = f.panel(px, y, PW, H, title, GR, "#fff", sub=sub)
+        y0, y1 = top + 26, y + H - 66          # 绘图区上下边界
+        sx = lambda t: px + XL + (XR - XL) * t / TMAX
+        sy = lambda v: y1 - (y1 - y0) * (math.log(v / lo) / math.log(hi / lo))
+        for tv, lab in ticks:                  # 横向参考线 ＋ 刻度（对数）
+            gy = sy(tv)
+            f.line(px + XL, gy, px + XR, gy, "#e8eaed", 1.0, arrow=False)
+            f.t(px + XL - 10, gy + 5, lab, GY2, size=14, anchor="end")
+        for yy_ in (2021, 2022, 2023, 2024, 2025, 2026):
+            gx = sx(_mon("%d-01" % yy_))
+            f.t(gx, y1 + 26, str(yy_), GY2, size=14, anchor="middle")
+        f.line(px + XL, y1, px + XR, y1, LINE2, 1.2, arrow=False)
+        # 包络线：跑到这个月为止的最好成绩 ——&#160;是数出来的，不是拟合的
+        run, seq = None, []
+        for t, v, _ in sorted(pts):
+            run = v if run is None else (max(run, v) if best == "max"
+                                         else min(run, v))
+            seq.append((t, run))
+        d = "M %.1f %.1f" % (sx(seq[0][0]), sy(seq[0][1]))
+        for i in range(1, len(seq)):           # 阶梯线：成绩是被某一家一次性刷新的
+            d += " L %.1f %.1f L %.1f %.1f" % (
+                sx(seq[i][0]), sy(seq[i - 1][1]), sx(seq[i][0]), sy(seq[i][1]))
+        d += " L %.1f %.1f" % (sx(TMAX), sy(seq[-1][1]))
+        f.path(d, GR, 3.0, arrow=False)
+        named = {a[0] for a in anchors}        # ⛔ 别写 who in anchors：那是元组列表
+        assert named <= {w for _, _, w in pts}, "要点名的模型不在这组点里"
+        for t, v, who in pts:                  # 每个模型一个点
+            hit = who in named
+            f.box(sx(t) - (6 if hit else 4), sy(v) - (6 if hit else 4),
+                  12 if hit else 8, 12 if hit else 8, RD if hit else GY2,
+                  "none", 6)
+        for who, dx, dy, al in anchors:
+            t, v = next((t, v) for t, v, w in pts if w == who)
+            f.t(sx(t) + dx, sy(v) + dy, who, RD, True, 14, al)
+        f.t(px + XL - 46, y + H - 14, note, GY, size=15)
+        return top
+
+    A_UP = [("GPT-3", 12, -12, "start"), ("Llama 4 Scout", -12, -12, "end"),
+            ("Kimi K3", 0, -16, "middle")]
+    A_DN = [("GPT-3", 14, 20, "start"), ("PaLM", 12, 24, "start"),
+            ("DeepSeek-V4-Flash", -12, -14, "end"),
+            ("混元 Hy3", -12, -12, "end")]     # ⭐ 反例：2026 年仍停在 40 GiB
+    draw(0, "能跑多长　↗", "每个点是一个模型声明的上下文上限",
+         up, 2048, 10 * 1048576,
+         [(2048, "2K"), (32768, "32K"), (131072, "128K"),
+          (1048576, "1M"), (10485760, "10M")],
+         "max", "⭐ 绿线＝当时的纪录：2K →&#160;10M（Llama 4 Scout 声明值，之后没人再刷）",
+         A_UP)
+    draw(PW + GAP, "同一长度的代价　↘",
+         "每个点是那个模型在 128K 时的 KV cache（BF16、batch 1）",
+         dn, 0.62, 640,
+         [(576, "576 GiB"), (64, "64 GiB"), (8, "8 GiB"),
+          (0.6807, "697 MiB")],
+         "min", "⭐ 绿线＝当时的最省记录。576 GiB →&#160;697 MiB，846 倍",
+         A_DN)
+    f._pan = None
+    f.t(0, y + H + 26,
+        '⛔ <tspan font-weight="700">不是所有人都在走</tspan> ——&#160;'
+        '右图 2026 年还有模型停在 40 GiB（混元 Hy3，纯 GQA）。'
+        '<tspan font-weight="700">动的是「最好成绩」那条线，不是每一家。</tspan>'
+        '<tspan x="0" dy="26">⚠️ </tspan>'
+        '<tspan font-weight="700">纪录也不等于常态</tspan>：左图那条线的终点是 '
+        '<tspan font-weight="700">10M</tspan>（一家的声明值）；'
+        '本讲说的 <tspan font-weight="700">512 倍</tspan> 是 2K →&#160;'
+        '<tspan font-weight="700">1M</tspan> 这个常态 ——&#160;模型表里 %d 家做到。'
+        % len(M.over_1m(M.ROWS)),
+        GY, size=_sz(15))
+    return y + H + 56
+
+
 def fig_arc():
     W = 1400
     f = Fig(W, "专题三的故事线：从 RNN 到今天的混合注意力，六个阶段，"
@@ -154,17 +290,18 @@ def fig_arc():
             f.t(0, yy - 8, "↳ 接着上一行", GY2, size=15)
     y = y0 + 2 * BODY + VGAP + 18
 
+    # ── 两条曲线：⛔ 这里以前只有一行字说「两条曲线反着走」，图上一条曲线都没有。
+    #   现在画真数据 ——&#160;本课模型表 44 行，每一行都有发布月份、声明上下文、
+    #   以及按 config 算出来的 128K KV cache。⛔ 不画平滑趋势线：那是编的。
+    #   画的是 ① 每个模型一个点 ② 「当时的最好成绩」包络线（跑最大值／最小值，
+    #   是从同一份数据里跑出来的，不是拟合的）。
+    y = _two_curves(f, y) + 14
+
     # ── 落点 ────────────────────────────────────────────────────
     y = f.band(y, "info", "两条曲线反着走 ——&#160;这才是这六年真正发生的事", [
-        '<tspan font-weight="700">能跑多长</tspan>：GPT-3 的 <tspan font-weight="700">2K</tspan>'
-        ' →&#160;今天 <tspan font-weight="700">1M</tspan>'
-        '（本课模型表里 %d 家做到，' % len(M.over_1m(M.ROWS)) +
-        '<tspan font-weight="700">无一例外都动了旋钮②或③</tspan>）',
-        '<tspan font-weight="700">同一长度下要付多少</tspan>：128K 时的 KV cache 从 '
-        '<tspan font-weight="700">576 GiB</tspan> 降到 '
-        '<tspan font-weight="700">697 MiB</tspan>，<tspan font-weight="700">846 倍</tspan>',
-        '⛔ 这两个数<tspan font-weight="700">是两把尺子，不能相乘</tspan>：'
-        '一把量「能跑多长」，一把量「同一长度下省了多少」。',
+        '⛔ 这两条<tspan font-weight="700">是两把尺子，不能相乘</tspan>：'
+        '左边量「能跑多长」，右边量「同一长度下省了多少」。'
+        '把 512 倍 × 846 倍说成四十万倍，是把两把尺子当成一把。',
         '⭐⭐ <tspan font-weight="700">但它们同时发生，才有今天的 agent</tspan>'
         '——&#160;上下文能装下整个代码库，而且装得起。'])
 
@@ -181,7 +318,13 @@ def fig_arc():
               '2K ＝ GPT-3 的 max_position_embeddings；1M 与 846 倍见本课模型表'
               '（128K、BF16、batch 1，两端都取 ≥100B 的模型）',
               '⚠️ 512 倍（2K→1M）与 846 倍（KV 降幅）是两个口径，'
-              '本图刻意分两行给出 ——&#160;把它们相乘是把两把尺子当成一把')
+              '本图刻意分两行给出 ——&#160;把它们相乘是把两把尺子当成一把',
+              '两张趋势图的点全部由 topic03_models.ROWS 现算，没有手写常数；'
+              '绿线是「跑到当月为止的最好成绩」，不是拟合曲线',
+              '右图只收 ≥100B 的模型 ——&#160;跟「846 倍」同一个口径。'
+              '不过滤的话包络线会被 Mistral 7B 的 512 MiB 拽到底，'
+              '而那只是因为它本来就小',
+              'RWKV-7 的 KV ＝ 0，对数轴上画不出来，没有进右图')
     f.save("fig3-arc.svg", y + 6)
 
 

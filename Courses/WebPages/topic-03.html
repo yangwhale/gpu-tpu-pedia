@@ -930,7 +930,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 <p><em>⚠️ 想看推导、消融表、我们自己在 v7 上的实测数据，去
   <a href="topic-03-L300.html">L300 完整版</a>；这一份只讲故事线。</em></p>
 
-<figure class="fbox fwide" id="fig-arc"><svg viewBox="0 0 1400 980" width="100%" role="img" aria-label="专题三的故事线：从 RNN 到今天的混合注意力，六个阶段，每个阶段各自图什么、带来了什么、欠下什么；落点是长上下文让 agent 成为可能"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-arc"><svg viewBox="0 0 1400 1332" width="100%" role="img" aria-label="专题三的故事线：从 RNN 到今天的混合注意力，六个阶段，每个阶段各自图什么、带来了什么、欠下什么；落点是长上下文让 agent 成为可能"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">这是一个什么故事 ——&#160;<tspan font-weight="700">六年时间，把「记得住」变成一件付得起的事</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ <tspan font-weight="700">上下文长度就是 agent 的工作记忆。</tspan>2K 的时候模型只能当个聪明的补全器；要读整个代码库、跑几十轮工具调用、记住整场对话，<tspan font-weight="700">先得记得住</tspan>。而每加长一分上下文，<tspan font-weight="700">KV cache 就</tspan></text>
 <text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">线性涨一分</tspan>。</text>
@@ -1057,23 +1057,157 @@ h4 { margin:18px 0 6px; font-size:15px }
 <text class="svgsm" x="970" y="614" fill="#5f6368" style="font-size:17.0px">3:1 ～ 7:1 成了共识</text>
 <text class="svgsm" x="970" y="642" fill="#80868b" style="font-size:17.0px">⭐ 便宜的管长度，贵的管质量</text>
 <line x1="924" y1="440" x2="946" y2="440" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
-<rect x="0" y="674" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="674" width="4" height="146" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="674" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="701" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 两条曲线反着走 ——&#160;这才是这六年真正发生的事</tspan></text>
-<text class="svgsm" x="20" y="732" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">能跑多长</tspan>：GPT-3 的 <tspan font-weight="700">2K</tspan> →&#160;今天 <tspan font-weight="700">1M</tspan>（本课模型表里 12 家做到，<tspan font-weight="700">无一例外都动了旋钮②或③</tspan>）</text>
-<text class="svgsm" x="20" y="756" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">同一长度下要付多少</tspan>：128K 时的 KV cache 从 <tspan font-weight="700">576 GiB</tspan> 降到 <tspan font-weight="700">697 MiB</tspan>，<tspan font-weight="700">846 倍</tspan></text>
-<text class="svgsm" x="20" y="780" fill="#174ea6" style="font-size:15.0px">⛔ 这两个数<tspan font-weight="700">是两把尺子，不能相乘</tspan>：一把量「能跑多长」，一把量「同一长度下省了多少」。</text>
-<text class="svgsm" x="20" y="804" fill="#174ea6" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">但它们同时发生，才有今天的 agent</tspan>——&#160;上下文能装下整个代码库，而且装得起。</text>
-<rect x="0" y="834" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="834" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="834" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="861" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以这一讲的前半程只有一个账本：KV cache（⚠️ 到旋钮② 它就不够用了）</tspan></text>
-<text class="svgsm" x="20" y="892" fill="#0d652d" style="font-size:15.0px">⭐ 在张量形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;全图只有 K 和 V 两处带它，<tspan font-weight="700">那就是唯一要跨 token 留下来的东西</tspan>。</text>
-<text class="svgsm" x="20" y="916" fill="#0d652d" style="font-size:15.0px">三个旋钮是它的三个面：<tspan fill="#1a73e8" font-weight="700">① 每份多大</tspan>　<tspan fill="#e8710a" font-weight="700">② 每步读多少</tspan>　<tspan fill="#9334e6" font-weight="700">③ 干脆别让它变长</tspan></text>
-<text class="svgsm" x="20" y="940" fill="#0d652d" style="font-size:15.0px">⛔ 而 <tspan font-weight="700">FlashAttention 不在这三条里</tspan>——&#160;它已经是标配，在哪种注意力下都一样，<tspan font-weight="700">对这一讲没有区分度</tspan>。</text>
+<rect x="0" y="674" width="676" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="674" width="676" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="676" width="676" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="704" x2="676" y2="704" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="694" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">能跑多长　↗</tspan></text>
+<text class="svgsm" x="102" y="694" fill="#5f6368" style="font-size:11.0px">每个点是一个模型声明的上下文上限</text>
+<line x1="74" y1="938.0" x2="650" y2="938.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="64" y="943" fill="#80868b" text-anchor="end" style="font-size:14.0px">2K</text>
+<line x1="74" y1="870.478099726518" x2="650" y2="870.478099726518" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="64" y="875" fill="#80868b" text-anchor="end" style="font-size:14.0px">32K</text>
+<line x1="74" y1="836.7171495897771" x2="650" y2="836.7171495897771" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="64" y="841" fill="#80868b" text-anchor="end" style="font-size:14.0px">128K</text>
+<line x1="74" y1="786.0757243846656" x2="650" y2="786.0757243846656" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="64" y="791" fill="#80868b" text-anchor="end" style="font-size:14.0px">1M</text>
+<line x1="74" y1="730.0" x2="650" y2="730.0" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="64" y="735" fill="#80868b" text-anchor="end" style="font-size:14.0px">10M</text>
+<text class="svgsm" x="135" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2021</text>
+<text class="svgsm" x="227" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2022</text>
+<text class="svgsm" x="319" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2023</text>
+<text class="svgsm" x="411" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2024</text>
+<text class="svgsm" x="504" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2025</text>
+<text class="svgsm" x="596" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2026</text>
+<line x1="74" y1="938" x2="650" y2="938" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<path d="M 74.0 938.0 L 250.6 938.0 L 250.6 938.0 L 327.4 938.0 L 327.4 938.0 L 365.8 938.0 L 365.8 921.1 L 381.2 921.1 L 381.2 870.5 L 427.3 870.5 L 427.3 819.8 L 442.6 819.8 L 442.6 819.8 L 450.3 819.8 L 450.3 819.8 L 458.0 819.8 L 458.0 819.8 L 488.7 819.8 L 488.7 819.8 L 496.4 819.8 L 496.4 819.8 L 504.1 819.8 L 504.1 752.3 L 519.4 752.3 L 519.4 752.3 L 527.1 752.3 L 527.1 752.3 L 527.1 752.3 L 527.1 730.0 L 550.2 730.0 L 550.2 730.0 L 550.2 730.0 L 550.2 730.0 L 557.8 730.0 L 557.8 730.0 L 565.5 730.0 L 565.5 730.0 L 565.5 730.0 L 565.5 730.0 L 573.2 730.0 L 573.2 730.0 L 573.2 730.0 L 573.2 730.0 L 573.2 730.0 L 573.2 730.0 L 588.6 730.0 L 588.6 730.0 L 588.6 730.0 L 588.6 730.0 L 596.2 730.0 L 596.2 730.0 L 603.9 730.0 L 603.9 730.0 L 603.9 730.0 L 603.9 730.0 L 611.6 730.0 L 611.6 730.0 L 619.3 730.0 L 619.3 730.0 L 619.3 730.0 L 619.3 730.0 L 619.3 730.0 L 619.3 730.0 L 619.3 730.0 L 619.3 730.0 L 627.0 730.0 L 627.0 730.0 L 634.6 730.0 L 634.6 730.0 L 634.6 730.0 L 634.6 730.0 L 642.3 730.0 L 642.3 730.0 L 642.3 730.0 L 642.3 730.0 L 642.3 730.0 L 642.3 730.0 L 650.0 730.0 L 650.0 730.0 L 650.0 730.0 L 650.0 730.0 L 650.0 730.0 L 650.0 730.0 L 650.0 730.0 L 650.0 730.0 L 650.0 730.0" fill="none" stroke="#1e8e3e" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="68.0" y="932.0" width="12" height="12" rx="6" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="246.64" y="934.0" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="323.44" y="934.0" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="361.84" y="917.1195249316295" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="377.2" y="866.478099726518" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="423.28" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="438.64" y="832.7171495897771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="446.32" y="900.239049863259" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="454.0" y="832.7171495897771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="484.72" y="832.7171495897771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="492.4" y="827.282850410223" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="500.08" y="748.3147742479246" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="515.44" y="832.7171495897771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="521.12" y="724.0" width="12" height="12" rx="6" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="523.12" y="861.0438005469639" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="546.1600000000001" y="832.7171495897771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="546.1600000000001" y="832.7171495897771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="553.8399999999999" y="832.7171495897771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="561.52" y="827.282850410223" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="561.52" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="569.2" y="866.478099726518" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="569.2" y="822.842704680422" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="569.2" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="584.56" y="827.282850410223" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="584.56" y="812.9682597710669" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="592.24" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="599.92" y="822.0933108554093" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="599.92" y="822.842704680422" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="607.6" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="615.28" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="615.28" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="615.28" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="615.28" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="622.96" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="630.64" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="630.64" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="636.32" y="780.0757243846656" width="12" height="12" rx="6" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="638.32" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="638.32" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="646.0" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="646.0" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="646.0" y="782.0757243846656" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="646.0" y="815.8366745214066" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="86" y="926" fill="#a50e0e" text-anchor="start" style="font-size:14.0px"><tspan font-weight="700">GPT-3</tspan></text>
+<text class="svgsm" x="515" y="718" fill="#a50e0e" text-anchor="end" style="font-size:14.0px"><tspan font-weight="700">Llama 4 Scout</tspan></text>
+<text class="svgsm" x="642" y="770" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">Kimi K3</tspan></text>
+<text class="svgsm" x="28" y="990" fill="#5f6368" style="font-size:15.0px">⭐ 绿线＝当时的纪录：2K →&#160;10M（Llama 4 Scout 声明值，之后没人再刷）</text>
+<rect x="724" y="674" width="676" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="724" y="674" width="676" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="724" y="676" width="676" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="724" y1="704" x2="1400" y2="704" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="738" y="694" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">同一长度的代价　↘</tspan></text>
+<text class="svgsm" x="867" y="694" fill="#5f6368" style="font-size:11.0px">每个点是那个模型在 128K 时的 KV cache（BF16、batch 1）</text>
+<line x1="798" y1="733.1580048557541" x2="1374" y2="733.1580048557541" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="788" y="738" fill="#80868b" text-anchor="end" style="font-size:14.0px">576 GiB</text>
+<line x1="798" y1="799.016128661307" x2="1374" y2="799.016128661307" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="788" y="804" fill="#80868b" text-anchor="end" style="font-size:14.0px">64 GiB</text>
+<line x1="798" y1="861.3439033962809" x2="1374" y2="861.3439033962809" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="788" y="866" fill="#80868b" text-anchor="end" style="font-size:14.0px">8 GiB</text>
+<line x1="798" y1="935.2004255396594" x2="1374" y2="935.2004255396594" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="788" y="940" fill="#80868b" text-anchor="end" style="font-size:14.0px">697 MiB</text>
+<text class="svgsm" x="859" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2021</text>
+<text class="svgsm" x="951" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2022</text>
+<text class="svgsm" x="1043" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2023</text>
+<text class="svgsm" x="1135" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2024</text>
+<text class="svgsm" x="1228" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2025</text>
+<text class="svgsm" x="1320" y="964" fill="#80868b" text-anchor="middle" style="font-size:14.0px">2026</text>
+<line x1="798" y1="938" x2="1374" y2="938" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<path d="M 798.0 733.2 L 974.6 733.2 L 974.6 843.0 L 1166.6 843.0 L 1166.6 859.7 L 1182.0 859.7 L 1182.0 859.7 L 1212.7 859.7 L 1212.7 859.7 L 1220.4 859.7 L 1220.4 859.7 L 1228.1 859.7 L 1228.1 875.4 L 1251.1 875.4 L 1251.1 875.4 L 1251.1 875.4 L 1251.1 875.4 L 1274.2 875.4 L 1274.2 875.4 L 1274.2 875.4 L 1274.2 875.4 L 1281.8 875.4 L 1281.8 878.6 L 1289.5 878.6 L 1289.5 878.6 L 1297.2 878.6 L 1297.2 878.6 L 1297.2 878.6 L 1297.2 878.6 L 1312.6 878.6 L 1312.6 878.6 L 1312.6 878.6 L 1312.6 878.6 L 1320.2 878.6 L 1320.2 878.6 L 1327.9 878.6 L 1327.9 878.6 L 1327.9 878.6 L 1327.9 878.6 L 1335.6 878.6 L 1335.6 884.1 L 1343.3 884.1 L 1343.3 924.4 L 1343.3 924.4 L 1343.3 924.4 L 1343.3 924.4 L 1343.3 924.4 L 1351.0 924.4 L 1351.0 935.2 L 1358.6 935.2 L 1358.6 935.2 L 1358.6 935.2 L 1358.6 935.2 L 1366.3 935.2 L 1366.3 935.2 L 1366.3 935.2 L 1366.3 935.2 L 1366.3 935.2 L 1366.3 935.2 L 1374.0 935.2 L 1374.0 935.2 L 1374.0 935.2 L 1374.0 935.2 L 1374.0 935.2 L 1374.0 935.2 L 1374.0 935.2 L 1374.0 935.2 L 1374.0 935.2" fill="none" stroke="#1e8e3e" stroke-width="3.0" stroke-linecap="round"/>
+<rect x="792.0" y="727.1580048557541" width="12" height="12" rx="6" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="968.64" y="837.0061776789424" width="12" height="12" rx="6" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1162.6399999999999" y="855.7479883199087" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1178.0" y="795.4881592646598" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1208.72" y="850.655549469948" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1216.4" y="855.2525501996771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1224.08" y="871.431474381606" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1247.12" y="860.8157679139824" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1247.12" y="825.0458821453258" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1270.16" y="855.2525501996771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1270.16" y="804.9145696873237" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1277.84" y="874.560222696394" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1285.52" y="855.2525501996771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1293.2" y="809.103699646632" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1293.2" y="816.7436675890441" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1308.56" y="855.2525501996771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1308.56" y="855.2525501996771" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1316.24" y="871.3583865037918" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1323.92" y="847.8840592569994" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1323.92" y="816.7436675890441" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1331.6" y="880.0542623021455" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1339.28" y="864.568008036026" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1339.28" y="920.4237829443515" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1339.28" y="909.4529751343431" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1344.96" y="929.1858861068729" width="12" height="12" rx="6" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1354.6399999999999" y="847.8840592569994" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1354.6399999999999" y="838.5024124788296" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1362.3200000000002" y="883.2122671578996" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1360.3200000000002" y="807.103699646632" width="12" height="12" rx="6" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1362.3200000000002" y="920.1437087346078" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1370.0" y="847.8840592569994" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1370.0" y="847.8840592569994" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1370.0" y="906.5962122498261" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<rect x="1370.0" y="886.7426162284785" width="8" height="8" rx="6" fill="#80868b" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="812" y="753" fill="#a50e0e" text-anchor="start" style="font-size:14.0px"><tspan font-weight="700">GPT-3</tspan></text>
+<text class="svgsm" x="986" y="867" fill="#a50e0e" text-anchor="start" style="font-size:14.0px"><tspan font-weight="700">PaLM</tspan></text>
+<text class="svgsm" x="1338" y="921" fill="#a50e0e" text-anchor="end" style="font-size:14.0px"><tspan font-weight="700">DeepSeek-V4-Flash</tspan></text>
+<text class="svgsm" x="1354" y="801" fill="#a50e0e" text-anchor="end" style="font-size:14.0px"><tspan font-weight="700">混元 Hy3</tspan></text>
+<text class="svgsm" x="752" y="990" fill="#5f6368" style="font-size:15.0px">⭐ 绿线＝当时的最省记录。576 GiB →&#160;697 MiB，846 倍</text>
+<text class="svgsm" x="0" y="1030" fill="#5f6368" style="font-size:15.0px">⛔ <tspan font-weight="700">不是所有人都在走</tspan> ——&#160;右图 2026 年还有模型停在 40 GiB（混元 Hy3，纯 GQA）。<tspan font-weight="700">动的是「最好成绩」那条线，不是每一家。</tspan><tspan x="0" dy="26">⚠️ </tspan><tspan font-weight="700">纪录也不等于常态</tspan>：左图那条线的终点是 <tspan font-weight="700">10M</tspan>（一家的声明值）；本讲说的 <tspan font-weight="700">512 倍</tspan> 是 2K →&#160;<tspan font-weight="700">1M</tspan> 这个常态 ——&#160;模型表里 12 家做到。</text>
+<rect x="0" y="1074" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1074" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1074" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1101" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 两条曲线反着走 ——&#160;这才是这六年真正发生的事</tspan></text>
+<text class="svgsm" x="20" y="1132" fill="#174ea6" style="font-size:15.0px">⛔ 这两条<tspan font-weight="700">是两把尺子，不能相乘</tspan>：左边量「能跑多长」，右边量「同一长度下省了多少」。把 512 倍 × 846 倍说成四十万倍，是把两把尺子当成一把。</text>
+<text class="svgsm" x="20" y="1156" fill="#174ea6" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">但它们同时发生，才有今天的 agent</tspan>——&#160;上下文能装下整个代码库，而且装得起。</text>
+<rect x="0" y="1186" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1186" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1186" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1213" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以这一讲的前半程只有一个账本：KV cache（⚠️ 到旋钮② 它就不够用了）</tspan></text>
+<text class="svgsm" x="20" y="1244" fill="#0d652d" style="font-size:15.0px">⭐ 在张量形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;全图只有 K 和 V 两处带它，<tspan font-weight="700">那就是唯一要跨 token 留下来的东西</tspan>。</text>
+<text class="svgsm" x="20" y="1268" fill="#0d652d" style="font-size:15.0px">三个旋钮是它的三个面：<tspan fill="#1a73e8" font-weight="700">① 每份多大</tspan>　<tspan fill="#e8710a" font-weight="700">② 每步读多少</tspan>　<tspan fill="#9334e6" font-weight="700">③ 干脆别让它变长</tspan></text>
+<text class="svgsm" x="20" y="1292" fill="#0d652d" style="font-size:15.0px">⛔ 而 <tspan font-weight="700">FlashAttention 不在这三条里</tspan>——&#160;它已经是标配，在哪种注意力下都一样，<tspan font-weight="700">对这一讲没有区分度</tspan>。</text>
 </svg><figcaption>⭐ <b>这就是整本书的路线图。</b>六段，每段只问三件事：图啥、带来了什么、欠下了什么。<br><b>底下那两条数才是落点，而且缺一不可</b> ——&nbsp;<em>只把长度做上去、价钱降不下来，没人用得起；价钱降下来了、长度还是 2K，那它仍旧只是个接话的补全器。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>2K ＝ GPT-3 的 max_position_embeddings；1M 与 846 倍见本课模型表（128K、BF16、batch 1，两端都取 ≥100B 的模型）</p>
-<p>⚠️ 512 倍（2K→1M）与 846 倍（KV 降幅）是两个口径，本图刻意分两行给出 ——&#160;把它们相乘是把两把尺子当成一把</p></details></figure>
+<p>⚠️ 512 倍（2K→1M）与 846 倍（KV 降幅）是两个口径，本图刻意分两行给出 ——&#160;把它们相乘是把两把尺子当成一把</p>
+<p>两张趋势图的点全部由 topic03_models.ROWS 现算，没有手写常数；绿线是「跑到当月为止的最好成绩」，不是拟合曲线</p>
+<p>右图只收 ≥100B 的模型 ——&#160;跟「846 倍」同一个口径。不过滤的话包络线会被 Mistral 7B 的 512 MiB 拽到底，而那只是因为它本来就小</p>
+<p>RWKV-7 的 KV ＝ 0，对数轴上画不出来，没有进右图</p></details></figure>
 
 </div></section>
 
