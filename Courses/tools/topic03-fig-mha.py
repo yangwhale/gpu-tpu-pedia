@@ -397,16 +397,42 @@ def fig_heads():
         '<tspan font-weight="700">averaging inhibits this</tspan>.」'
         '——&#160;<tspan font-weight="700">单头不是不够用，是会把该分开的东西平均掉。</tspan>')
 
-    AT = f.panel(0, y, 470, 214, "Ⓐ 单头", GY, BG2, sub="一个 512 维的注意力",
-                 tint="#eceff1")
-    f.box(24, AT + 24, 420, 40, "#fff", GY2, 6)
-    f.t(234, AT + 49, "一次注意力，d = 512", GY, True, 16, "middle")
-    f.t(24, AT + 92, '一个 query 同时要兼顾：', GY, size=_sz(15))
-    for i, s_ in enumerate(("「上一个词是什么」", "「这句话的主语是谁」",
-                            "「三段之前提到的那个人名」")):
-        f.t(40, AT + 114 + i * 20, "· " + s_, GY2, size=_sz(15))
-    f.t(24, AT + 182, '⛔ 只有<tspan font-weight="700">一组</tspan>权重可分配 ——&#160;'
-                      '结果是<tspan font-weight="700">把三种关注平均了一下</tspan>。',
+    # ⭐⭐⭐ 2026-09-15 第 1 轮改图：这一格原来是**一个文字框 ＋ 三条项目符号** ——
+    #   而它要说的那句「单头会把该分开的东西平均掉」，**图上写了，没画**。
+    # ⛔ 判据（现场原话）：**图的任务是把原理画出来，不是把该写在正文里的东西摆进框里。**
+    # ⭐ 而最理想的情形恰好在这儿：**画面需要的信息本来就全在**（那三条项目符号
+    #   写的正是三个要去的地方），只是以文字形式躺着。
+    # ⭐⭐ 于是画成向量合成：三根细线各指一个目标，一根粗线是它们的平均 ——
+    #   **关键是让那根粗线落在一片空地上**（三个目标摆成三角形，重心不等于任何一个）。
+    #   「谁都没真正指到」这件事，就从「读出来」变成了「看出来」。
+    AT = f.panel(0, y, 470, 320, "Ⓐ 单头", GY, BG2,
+                 sub="一个 query，三个想去的地方", tint="#eceff1")
+    QX, QY = 70, AT + 150
+    # 刻意排成「两上一下」而不是上中下 —— 均匀铺开时三者重心会正好落在中间那个
+    # 目标身上，画面就变成「平均之后精确指到了中间那个」，跟要讲的意思相反。
+    TG = [(300, AT + 40, 90, "上一个词"),
+          (330, AT + 78, 118, "这句话的主语"),
+          (272, AT + 262, 132, "三段前那个人名")]
+    f.icon("person", QX - 18, QY - 26, 40, 48, GY, "#fff")
+    f.t(QX + 2, QY + 40, "一个 query", GY, True, 14, "middle")
+    for bx, ty, bw, nm in TG:                  # 三根细虚线：它想去的三个地方
+        f.line(QX + 26, QY, bx - 8, ty, GY2, 1.4, dash="4 4", arrow=True)
+        f.box(bx, ty - 15, bw, 30, "#fff", GY2, 5)
+        f.t(bx + bw / 2, ty + 5, nm, GY, size=14, anchor="middle")
+    cx = sum(t[0] - 8 for t in TG) / 3.0       # ⭐ 三者重心 ＝ 平均之后的方向
+    cy = sum(t[1] for t in TG) / 3.0
+    K = 0.62                                   # 发散的方向一平均，合成向量本来就短
+    ex, ey = QX + 26 + K * (cx - QX - 26), QY + K * (cy - QY)
+    for bx, ty, bw, _ in TG:                   # 落点必须真的落在空地上，不许压框
+        assert not (bx - 14 <= ex <= bx + bw + 14 and ty - 29 <= ey <= ty + 29), \
+            f"平均落点 ({ex:.0f},{ey - AT:.0f}) 压在某个目标框上了"
+        assert bx + bw <= 462, f"目标框「{_}」右沿 {bx + bw} 越出面板"
+    f.line(QX + 26, QY, ex, ey, RD, 4.0, arrow=True)
+    f.spot(ex + 6, ey, 9, RD)
+    f.t(ex + 4, ey + 32, "平均之后", RD, True, 15, "middle")
+    f.t(ex + 4, ey + 54, "落在这儿", RD, True, 15, "middle")
+    f.t(24, AT + 292, '⛔ 只有<tspan font-weight="700">一组</tspan>权重 ——&#160;'
+                      '<tspan font-weight="700">那根粗线又短又谁都没指到。</tspan>',
         RD, size=_sz(15))
 
     BX = 486

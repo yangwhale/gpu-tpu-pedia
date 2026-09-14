@@ -3080,22 +3080,32 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   而 softmax-off-by-one 这个补丁，本质就是把这一条放松掉。</em></p>
 
 <h3 id="s1-3">1.3　多头在多什么</h3>
-<figure class="fbox fwide" id="fig-mha-heads"><svg viewBox="0 0 1400 778" width="100%" role="img" aria-label="多头注意力：把 d_model 切成 h 份，每份独立做一次注意力再拼回来。总维度不变，总计算量也基本不变；多头的价值是避免单头把不同的关注平均掉"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-7b1fa2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#7b1fa2"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-mha-heads"><svg viewBox="0 0 1400 778" width="100%" role="img" aria-label="多头注意力：把 d_model 切成 h 份，每份独立做一次注意力再拼回来。总维度不变，总计算量也基本不变；多头的价值是避免单头把不同的关注平均掉"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-7b1fa2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#7b1fa2"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">多头在多什么 ——&#160;<tspan font-weight="700">不是堆算力，是不让「平均」把不同的关注糊成一团</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 原文：「With a <tspan font-style="italic">single</tspan> attention head, <tspan font-weight="700">averaging inhibits this</tspan>.」——&#160;<tspan font-weight="700">单头不是不够用，是会把该分开的东西平均掉。</tspan></text>
-<rect x="0" y="82" width="470" height="214" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="82" width="470" height="320" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="82" width="470" height="4" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
 <rect x="0" y="84" width="470" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="112" x2="470" y2="112" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="102" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 单头</tspan></text>
-<text class="svgsm" x="75" y="102" fill="#5f6368" style="font-size:11.0px">一个 512 维的注意力</text>
-<rect x="24" y="136" width="420" height="40" rx="6" fill="#fff" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="234" y="161" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">一次注意力，d = 512</tspan></text>
-<text class="svgsm" x="24" y="204" fill="#5f6368" style="font-size:15.0px">一个 query 同时要兼顾：</text>
-<text class="svgsm" x="40" y="226" fill="#80868b" style="font-size:15.0px">· 「上一个词是什么」</text>
-<text class="svgsm" x="40" y="246" fill="#80868b" style="font-size:15.0px">· 「这句话的主语是谁」</text>
-<text class="svgsm" x="40" y="266" fill="#80868b" style="font-size:15.0px">· 「三段之前提到的那个人名」</text>
-<text class="svgsm" x="24" y="294" fill="#a50e0e" style="font-size:15.0px">⛔ 只有<tspan font-weight="700">一组</tspan>权重可分配 ——&#160;结果是<tspan font-weight="700">把三种关注平均了一下</tspan>。</text>
+<text class="svgsm" x="75" y="102" fill="#5f6368" style="font-size:11.0px">一个 query，三个想去的地方</text>
+<circle cx="72.0" cy="249.4" r="7.6" fill="#fff" stroke="#5f6368" stroke-width="1.4"/>
+<path d="M 59.2 280.2 a 12.8 20.2 0 0 1 25.6 0 z" fill="#fff" stroke="#5f6368" stroke-width="1.4"/>
+<text class="svgsm" x="72" y="302" fill="#5f6368" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">一个 query</tspan></text>
+<line x1="96" y1="262" x2="292" y2="152" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="4 4" marker-end="url(#ah-80868b)"/>
+<rect x="300" y="137" width="90" height="30" rx="5" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="345" y="157" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">上一个词</text>
+<line x1="96" y1="262" x2="322" y2="190" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="4 4" marker-end="url(#ah-80868b)"/>
+<rect x="330" y="175" width="118" height="30" rx="5" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="389" y="195" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">这句话的主语</text>
+<line x1="96" y1="262" x2="264" y2="374" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="4 4" marker-end="url(#ah-80868b)"/>
+<rect x="272" y="359" width="132" height="30" rx="5" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="338" y="379" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">三段前那个人名</text>
+<line x1="96" y1="262" x2="217.93333333333334" y2="247.53333333333333" stroke="#d93025" stroke-width="4.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="223.93333333333334" y="247.53333333333333" width="9" height="#d93025" rx="8" fill="#f1f3f4" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="221" y="279" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">平均之后</tspan></text>
+<text class="svgsm" x="221" y="301" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">落在这儿</tspan></text>
+<text class="svgsm" x="24" y="404" fill="#a50e0e" style="font-size:15.0px">⛔ 只有<tspan font-weight="700">一组</tspan>权重 ——&#160;<tspan font-weight="700">那根粗线又短又谁都没指到。</tspan></text>
 <rect x="486" y="82" width="914" height="396" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="486" y="82" width="914" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
 <rect x="486" y="84" width="914" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
