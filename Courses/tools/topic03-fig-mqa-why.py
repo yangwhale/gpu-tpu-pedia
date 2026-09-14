@@ -131,9 +131,9 @@ def main():
     #   纵轴是**这篇论文自己走的那条**，所以纵轴加粗。
     f.line(OX, OYA, OX + AXL, OYA, PU, 2.0)
     f.line(OX, OYA, OX, OYA - AXU, PU, 3.4)
-    f.t(OX + AXL, OYA + 26, "旋钮②　每个 query 看多少（§六）",
+    f.t(OX + AXL, OYA + 26, "旋钮②　每个 query 看多少（稀疏那一路）",
         PU, True, 16, anchor="end")
-    f.t(OX - 6, OYA - AXU - 24, "旋钮①　每个 token 存多少（§五）", PU, True, 16)
+    f.t(OX - 6, OYA - AXU - 24, "旋钮①　每个 token 存多少（GQA / MLA 那一路）", PU, True, 16)
     f.t(OX - 6, OYA + 26, "MHA", GY, True, 15, anchor="middle")
     f.t(OX - 6, OYA + 44, "各带一本、全都看", GY2, size=13, anchor="middle")
 
@@ -183,7 +183,7 @@ def main():
 
     f.t(40, OYA + 74,
         "⭐ 顺带交代第三个旋钮：<tspan font-weight=\"700\">它不在这张平面上</tspan> ——&#160;"
-        "换机制（§七）不是在这两根轴上挪，是<tspan font-weight=\"700\">换掉整个坐标系</tspan>。"
+        "换机制（线性注意力那一路）不是在这两根轴上挪，是<tspan font-weight=\"700\">换掉整个坐标系</tspan>。"
         "所以 2019 年那张单子上没有它，也不该有。", GY2, size=15)
 
     # ══════════ 落点 ════════════════════════════════════════════
@@ -213,7 +213,7 @@ def main():
         "再用 5% 的原始预训练算力续一下就能用，<tspan font-weight=\"700\">不用从头重训</tspan>。",
         "MLA 是<tspan font-weight=\"700\">从头</tspan>的典范 ——&#160;"
         "要重训，但换来的是 56.9× 而不是 16×。"
-        "⭐ <tspan font-weight=\"700\">这两条路一直并存到今天</tspan>，§六 还会再遇见两次。",
+        "⭐ <tspan font-weight=\"700\">这两条路一直并存到今天</tspan>，讲稀疏时还会再遇见两次。",
     ])
 
     yy = f.src(yy + 16,

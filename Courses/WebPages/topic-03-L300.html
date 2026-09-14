@@ -2293,7 +2293,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <h3 id="s1-1">1.1　先看它换掉了什么</h3>
 <figure class="fbox fwide" id="fig-mha-swap"><svg viewBox="0 0 1400 536" width="100%" role="img" aria-label="RNN 与自注意力的信息通路对比：RNN 靠一条链一步一步传，任意两个位置之间要走 n 步；自注意力让每个位置直接连到所有位置，两点之间只隔一步，代价是连线数从 n 变成 n 的平方"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">2017 年那一刀 ——&#160;<tspan font-weight="700">把那根横箭头拿掉，换成「每个位置直接看所有位置」</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ §零 三个痛点里的第 ① 条，就是在这里被解掉的。<tspan font-weight="700">而解法本身，就是这一讲后面要还的那笔账。</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 开篇讲 RNN 那三个痛点里的第 ① 条，就是在这里被解掉的。<tspan font-weight="700">而解法本身，就是这一讲后面要还的那笔账。</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">串行：只能一步一步走</text>
 <rect x="187" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
@@ -2306,7 +2306,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <line x1="0" y1="132" x2="660" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓐ RNN：一条链</tspan></text>
 <text class="svgsm" x="131" y="122" fill="#5f6368" style="font-size:11.0px">信息只能沿着链爬</text>
-<text class="svgsm" x="646" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px">§零 讲过</text>
+<text class="svgsm" x="646" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px">讲 RNN 时说过</text>
 <rect x="51" y="155" width="38" height="38" rx="19" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="70" y="179" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t1</tspan></text>
 <rect x="147" y="155" width="38" height="38" rx="19" fill="#fff" stroke="#d93025" stroke-width="1"/>
@@ -2412,9 +2412,9 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="390" width="4" height="122" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
 <rect x="2" y="390" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="20" y="417" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 这一刀换来了什么，又欠下了什么</tspan></text>
-<text class="svgsm" x="20" y="448" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">换来的</tspan>：串行步数从 O(n) 掉到 O(1)——&#160;整段序列一次算完，加速器终于喂得饱了（这正是 §零那张「RNN 在硬件上为什么慢」图那笔账的反面）。</text>
+<text class="svgsm" x="20" y="448" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">换来的</tspan>：串行步数从 O(n) 掉到 O(1)——&#160;整段序列一次算完，加速器终于喂得饱了（这正是「RNN 在硬件上为什么慢」那张图那笔账的反面）。</text>
 <text class="svgsm" x="20" y="472" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">欠下的</tspan>：连线数从 n 变成 n²。⛔ 而且注意 ——&#160;<tspan font-weight="700">状态没了</tspan>：RNN 那个固定大小的 h 被换成了「把所有历史原封不动留着」。</text>
-<text class="svgsm" x="20" y="496" fill="#b06000" style="font-size:15.0px">⭐ 于是 §零那张「解码时又变回 RNN」图 Ⓒ 那一行的病根在这儿：<tspan font-weight="700">解码时每一步都得把「所有历史」重读一遍 ——&#160;那就是 KV cache。</tspan></text>
+<text class="svgsm" x="20" y="496" fill="#b06000" style="font-size:15.0px">⭐ 于是「解码时又变回 RNN」那张图上 Ⓒ 那一行的病根，就在这儿：<tspan font-weight="700">解码时每一步都得把「所有历史」重读一遍 ——&#160;那就是 KV cache。</tspan></text>
 </svg><figcaption>⭐ <b>左边是 §零 那条链，右边是它的替代品。</b>看完带走一件事：<b>要算的格子从 n 变成了 n²，而那张表就是后面反复出现的「注意力矩阵」本人</b>。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a>) 表 1：自注意力 串行步数 O(1)／最长路径 O(1)；循环层两项都是 O(n)。因果遮罩见同一篇论文 <a href="#s3-2">§3.2</a>.3：把非法连接「setting to −∞」</p></details></figure>
 <!-- ⛔ 2026-09-12：前半句（O(n)→O(1)、格子 n→n²）图上就写着，删。
      留下的这句**图画不出来**：图能画「多了什么」，画不出「少了什么」。 -->
@@ -3168,7 +3168,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="659" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 而这个形状的代价，2019 年就被点名了</tspan></text>
 <text class="svgsm" x="20" y="690" fill="#a50e0e" style="font-size:15.0px">Shazeer 2019（MQA 那篇）摘要原话：训练很快，因为序列方向可以并行；但 ——</text>
 <text class="svgsm" x="20" y="714" fill="#a50e0e" style="font-size:15.0px"><tspan font-style="italic">「incremental inference … is often slow, due to the <tspan font-weight="700">memory-bandwidth cost of repeatedly loading the large &quot;keys&quot; and &quot;values&quot; tensors</tspan>」</tspan></text>
-<text class="svgsm" x="20" y="738" fill="#a50e0e" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">这句话把 §零那张「解码时又变回 RNN」图 Ⓒ 那一行从我们的推论变成了原文</tspan>——&#160;2017 年造出这个形状，<tspan font-weight="700">2019 年就有人把它命名成问题了</tspan>。</text>
+<text class="svgsm" x="20" y="738" fill="#a50e0e" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">这句话把「解码时又变回 RNN」那张图上 Ⓒ 那一行，从我们的推论变成了原文</tspan>——&#160;2017 年造出这个形状，<tspan font-weight="700">2019 年就有人把它命名成问题了</tspan>。</text>
 </svg><figcaption>⭐ <b>8 × 64 = 512：多头是「切开」不是「加倍」</b>，总维度和计算量都没变。<b>唯一被乘上去的是 KV</b> —— 下一节起要砍的就是它。</figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 <a href="#s3-2">§3.2</a>.2：「jointly attend to information from different representation subspaces」、「With a single attention head, averaging inhibits this」；h = 8，d_k = d_v = d_model/h = 64</p>
 <p>Shazeer 2019 (arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>)《Fast Transformer Decoding: One Write-Head is All You Need》摘要 ——&#160;本课模型表第二行 PaLM 用的就是它</p></details></figure>
 <!-- ⛔⛔ 2026-09-12：这里原来那条注解，跟图里那条落点带**连标题都一样**
@@ -3329,7 +3329,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="1528" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="1528" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
 <rect x="2" y="1528" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1555" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 顺手接住 §六：稀疏注意力到底在省什么</tspan></text>
+<text class="svglbl" x="20" y="1555" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 顺手接住后面讲稀疏那一节：稀疏注意力到底在省什么</tspan></text>
 <text class="svgsm" x="20" y="1586" fill="#0d652d" style="font-size:15.0px">如果记混是「干扰项太多」造成的，那<tspan font-weight="700">少看几个反而可能更准</tspan> ——&#160;这不是省钱的副作用，是它自己的好处。</text>
 <text class="svgsm" x="20" y="1610" fill="#0d652d" style="font-size:15.0px">⭐ DSA 在 128K 里只挑 2048 个（1.5625%），NSA 分三路挑。本讲前面把它们讲成「为了省」，③ 这三根条说明<tspan font-weight="700">它们同时也在降噪</tspan>。</text>
 </svg><figcaption>⭐⭐ <b>这张图的重点在②和③的对照</b>：② 说容量几乎是白捡的（根数涨 78 倍，最挤的一对才挤 9°），③ 说这笔便宜的价钱是串扰——&nbsp;<b>而价钱是按数量收的</b>。<em>⚠️ ③ 的 logit = √d·cos 是推导来的不是测来的，读趋势别读绝对值。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 图里所有数字都是本课当场算的（numpy；随机单位向量，d=128；夹角量的是最挤的那一对），脚本里带断言 ——&#160;不是引来的</p>
@@ -3662,7 +3662,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <line x1="1067.0" y1="871" x2="1085.0" y2="871" stroke="#9334e6" stroke-width="1.4" stroke-linecap="round"/>
 <text class="svgsm" x="1099" y="850" fill="#681da8" style="font-size:18.0px"><tspan font-weight="700">⭐ 差<tspan font-weight="700">一张卡</tspan>，人数差 <tspan font-weight="700">64 倍</tspan></tspan></text>
 <text class="svgsm" x="30" y="986" fill="#202124" style="font-size:17.0px">⭐⭐ 把第 2、3 行叠在一起读：<tspan font-weight="700">MHA 伺候一个人要 12 张卡，MLA 伺候 64 个人要 13 张卡。</tspan>同样一台机器 ——&#160;一个换六十四个。</text>
-<text class="svgsm" x="30" y="1014" fill="#202124" style="font-size:17.0px">⭐⭐ 所以 §五 那个 <tspan font-weight="700">56.9×</tspan>（＝ 488 ÷ 8.58）不是一次「优化」——&#160;<tspan font-weight="700">它是把这件事从「做不了」变成「做得了」。</tspan></text>
+<text class="svgsm" x="30" y="1014" fill="#202124" style="font-size:17.0px">⭐⭐ 所以 MLA 那个 <tspan font-weight="700">56.9×</tspan>（＝ 488 ÷ 8.58）不是一次「优化」——&#160;<tspan font-weight="700">它是把这件事从「做不了」变成「做得了」。</tspan></text>
 <rect x="0" y="1088" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="1088" width="4" height="146" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
 <rect x="2" y="1088" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
@@ -3678,7 +3678,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1306" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">问「省了多少」之前，先问「省的是哪一样」。</tspan>权重是<tspan font-weight="700">所有人共享一份</tspan>，KV cache 是<tspan font-weight="700">每人一份</tspan> ——&#160;它们根本不是同一类开销。</text>
 <text class="svgsm" x="20" y="1330" fill="#0d652d" style="font-size:15.0px">⭐ 所以 KV cache 不是「显存里的一项」，它直接决定<tspan font-weight="700">你能同时服务多少人</tspan>。<tspan font-weight="700">这一条到专题六会变成 batch size 的硬上限。</tspan></text>
 </svg><figcaption>⭐⭐ <b>只盯灰色那一段：两根柱子里它完全一样。</b>涨的全在红色那一段。<em>⚠️ 「要几张卡」只算了装得下装不下，<b>没算带宽</b> ——&nbsp;带宽那一笔在 <a href="#s九">§9.1</a> 还；换别的硬件只是刻度变，结论不变。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自知乎 姜富春《deepseek 技术解读(1)－彻底理解 MLA》（zhuanlan.zhihu.com/p/16730036197）——&#160;他用 Qwen-72B 做的这个对照，本图换成本讲一直在用的 V3 口径重算</p>
-<p>⚠️ 数全部来自本讲前面已核过的三个：权重 625 GiB（671B 原生 FP8）·MLA 的 KV 8.58 GiB（61 层 · 128K · bf16 · 一个用户）·反事实 MHA 488 GiB（同口径）。<b>488 ÷ 8.58 ＝ 56.9</b>，正好对上 §五 那个 4.571 × 12.4 ——&#160;两条路算出同一个数，互为交叉验证</p>
+<p>⚠️ 数全部来自本讲前面已核过的三个：权重 625 GiB（671B 原生 FP8）·MLA 的 KV 8.58 GiB（61 层 · 128K · bf16 · 一个用户）·反事实 MHA 488 GiB（同口径）。<b>488 ÷ 8.58 ＝ 56.9</b>，正好对上 MLA 那个 4.571 × 12.4 ——&#160;两条路算出同一个数，互为交叉验证</p>
 <p>📌 「要几张卡」按 <b>TPU v7 每 device 94.74 GiB</b> 算（这个数本课的 AOT 工具链里核过：编译器自己报的 95.38G − 94.74G ＝ 656.93M，只有按 1024 才成立）。⚠️ 换别的硬件只是这两根柱子的刻度变，<b>结论不变</b>；而且这笔账<b>只算了装得下装不下，没算带宽</b></p></details></figure>
 
 <div class="note ok"><p>★ <b>因为变的不是技术，是工作负载</b></p>
@@ -4705,7 +4705,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1567" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 它省掉的到底是什么（这一条最容易说错）</tspan></text>
 <text class="svgsm" x="20" y="1598" fill="#0d652d" style="font-size:15.0px">⛔ <tspan font-weight="700">不是省算力</tspan>：该做的乘加一次不少，重标定还额外多了一些。</text>
 <text class="svgsm" x="20" y="1622" fill="#0d652d" style="font-size:15.0px">⭐ 省的是<tspan font-weight="700">片上暂存</tspan>：传统要同时摆下整行 S 个数，在线一次只摆一块。<tspan font-weight="700">于是那张 S×S 的大表根本不用建。</tspan></text>
-<text class="svgsm" x="20" y="1646" fill="#0d652d" style="font-size:15.0px">📌 这跟 §五 的账是<tspan font-weight="700">两回事</tspan>：§五 省的是要<tspan font-weight="700">跨 token 留下来</tspan>的 KV cache，这里省的是<tspan font-weight="700">算一步时中途摊开</tspan>的中间结果。⚠️ 两个都叫「省显存」，但省的不是同一样东西。</text>
+<text class="svgsm" x="20" y="1646" fill="#0d652d" style="font-size:15.0px">📌 这跟 MLA 那笔账是<tspan font-weight="700">两回事</tspan>：MLA 省的是要<tspan font-weight="700">跨 token 留下来</tspan>的 KV cache，这里省的是<tspan font-weight="700">算一步时中途摊开</tspan>的中间结果。⚠️ 两个都叫「省显存」，但省的不是同一样东西。</text>
 </svg><figcaption>⭐⭐ <b>盯住②里那个橙色的系数</b>：发现更高分之后，不用回头重算 ——&nbsp;<b>把手里的 s 和 o 各乘一次它就行</b>。<em>⚠️ 而这个「各乘一次」不是矩阵乘，还卡在归约链上 ——&nbsp;3.6 那个「只跑到 35%」有一部分就在这儿。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>在线归约的做法出自 Milakov &amp; Gimelshein《Online normalizer calculation for softmax》（arXiv <a href="https://arxiv.org/abs/1805.02867" target="_blank" rel="noopener">1805.02867</a>），FlashAttention（arXiv <a href="https://arxiv.org/abs/2205.14135" target="_blank" rel="noopener">2205.14135</a>）把它用进了注意力</p>
 <p>⭐ 图里五个打分和五个「内容」是<b>本课随手编的示例数</b>，但两条路的计算是脚本当场跑的，并且断言<b>精确相等（差恒为 0）</b></p>
 <p>⚠️ 「内容」这里简化成了一个数；真实的 V 是一个 d_h 维向量，重标定对整个向量同时做 ——&#160;道理一样，画成一个数只是为了能核</p></details></figure>
@@ -5797,7 +5797,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1617" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这张图跟「寄快递」不冲突，是同一件事的两个切面</tspan></text>
 <text class="svgsm" x="20" y="1648" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">寄快递</tspan>回答的是「<tspan font-weight="700">为什么 MLA 吸收不了它</tspan>」——&#160;那个旋转矩阵夹在上投影和隐向量中间，拆不开。</text>
 <text class="svgsm" x="20" y="1672" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">里程表</tspan>回答的是「<tspan font-weight="700">为什么点积自动带相对距离</tspan>」和「<tspan font-weight="700">凭什么能外推</tspan>」。</text>
-<text class="svgsm" x="20" y="1696" fill="#174ea6" style="font-size:15.0px">⭐ 两个一起看，<a href="#s五">§五</a>那条 decoupled RoPE （让带位置的那几维单独走一路）就不是一个补丁，而是唯一的出路。</text>
+<text class="svgsm" x="20" y="1696" fill="#174ea6" style="font-size:15.0px">⭐ 两个一起看，<a href="#s五">讲 MLA 那一节</a>里那条 decoupled RoPE （让带位置的那几维单独走一路）就不是一个补丁，而是唯一的出路。</text>
 </svg><figcaption>⭐⭐ <b>一个位置 ＝ 一排里程表转盘的读数</b>：最右边转得飞快，往左逐级变慢。两个位置各自转完之后，<b>每个盘上你只看得出两根针差多少，看不出各自转到哪儿</b> —— 这就是「点积自动带相对距离」的全部内容。<em>⭐ 顺带把长文本那三种做法一句话各自归位：直接外推＝硬往超刻度处读；内插＝每格走半格；NTK-aware＝换一个进制。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>①「顺序归因果掩码，不归位置编码」：NoPE，arXiv <a href="https://arxiv.org/abs/2305.19466" target="_blank" rel="noopener">2305.19466</a>（NeurIPS 2023）——&#160;证明 decoder-only 不加任何显式位置编码也能学会顺序。<b>⛔ 常见讲法拿「你打我／我打你」论证「所以必须有位置编码」，是把前提（没有掩码的双向模型）漏掉了。</b></p>
 <p>②「RoPE 不是靠越远越衰减起作用」＋「快盘做位置、慢盘携带语义」：Barbero et al.，arXiv <a href="https://arxiv.org/abs/2410.06205" target="_blank" rel="noopener">2410.06205</a> ——&#160;对训练好的 Gemma 7B 做的内部分析；⚠️ 其中「携带语义」原文是 we suspect，<b>这里照样只当推测</b>。</p>
 <p>「RoPE ＝ 位置的 β 进制写法」以及外推／内插／NTK 的统一解释，出自苏剑林 kexue.fm/archives/9675（⚠️ 原文是推导，没有图）</p>
@@ -6473,8 +6473,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="40" y="886" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">Shazeer 先摆了一张单子：想让解码每步少搬点东西，可以 ——</tspan></text>
 <line x1="380" y1="1102" x2="850" y2="1102" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
 <line x1="380" y1="1102" x2="380" y2="950" stroke="#9334e6" stroke-width="3.4" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<text class="svgsm" x="850" y="1128" fill="#681da8" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">旋钮②　每个 query 看多少（§六）</tspan></text>
-<text class="svgsm" x="374" y="926" fill="#681da8" style="font-size:16.0px"><tspan font-weight="700">旋钮①　每个 token 存多少（§五）</tspan></text>
+<text class="svgsm" x="850" y="1128" fill="#681da8" text-anchor="end" style="font-size:16.0px"><tspan font-weight="700">旋钮②　每个 query 看多少（稀疏那一路）</tspan></text>
+<text class="svgsm" x="374" y="926" fill="#681da8" style="font-size:16.0px"><tspan font-weight="700">旋钮①　每个 token 存多少（GQA / MLA 那一路）</tspan></text>
 <text class="svgsm" x="374" y="1128" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">MHA</tspan></text>
 <text class="svgsm" x="374" y="1146" fill="#80868b" text-anchor="middle" style="font-size:13.0px">各带一本、全都看</text>
 <line x1="400" y1="1102" x2="400" y2="1082" stroke="#9334e6" stroke-width="1.4" stroke-linecap="round"/>
@@ -6506,7 +6506,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="924" y="986" fill="#5f6368" style="font-size:15.0px">⭐ 而「看多少个位置」一个没动 ——　这就是正交。</text>
 <text class="svgsm" x="924" y="1024" fill="#681da8" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 这门课的骨架不是我们事后归纳的，</tspan></text>
 <text class="svgsm" x="924" y="1050" fill="#681da8" style="font-size:17.0px"><tspan font-weight="700">是当事人自己列的 ——　连「正交」都是原话。</tspan></text>
-<text class="svgsm" x="40" y="1176" fill="#80868b" style="font-size:15.0px">⭐ 顺带交代第三个旋钮：<tspan font-weight="700">它不在这张平面上</tspan> ——&#160;换机制（§七）不是在这两根轴上挪，是<tspan font-weight="700">换掉整个坐标系</tspan>。所以 2019 年那张单子上没有它，也不该有。</text>
+<text class="svgsm" x="40" y="1176" fill="#80868b" style="font-size:15.0px">⭐ 顺带交代第三个旋钮：<tspan font-weight="700">它不在这张平面上</tspan> ——&#160;换机制（线性注意力那一路）不是在这两根轴上挪，是<tspan font-weight="700">换掉整个坐标系</tspan>。所以 2019 年那张单子上没有它，也不该有。</text>
 <rect x="0" y="1220" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="1220" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
 <rect x="2" y="1220" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
@@ -6525,7 +6525,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="2" y="1468" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="20" y="1495" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 暗线第二次出现：事后压 vs 从头按压缩训</tspan></text>
 <text class="svgsm" x="20" y="1526" fill="#0d652d" style="font-size:15.0px">GQA 是<tspan font-weight="700">事后</tspan>的典范 ——&#160;把已有的那几本通讯录<tspan font-weight="700">平均</tspan>成一本，再用 5% 的原始预训练算力续一下就能用，<tspan font-weight="700">不用从头重训</tspan>。</text>
-<text class="svgsm" x="20" y="1550" fill="#0d652d" style="font-size:15.0px">MLA 是<tspan font-weight="700">从头</tspan>的典范 ——&#160;要重训，但换来的是 56.9× 而不是 16×。⭐ <tspan font-weight="700">这两条路一直并存到今天</tspan>，§六 还会再遇见两次。</text>
+<text class="svgsm" x="20" y="1550" fill="#0d652d" style="font-size:15.0px">MLA 是<tspan font-weight="700">从头</tspan>的典范 ——&#160;要重训，但换来的是 56.9× 而不是 16×。⭐ <tspan font-weight="700">这两条路一直并存到今天</tspan>，讲稀疏时还会再遇见两次。</text>
 </svg><figcaption>⭐⭐ <b>最下面那一格只有两根轴，先看它们是垂直的</b>：横轴上那两个点是 2019 年 MQA 论文列给别人的选项（后来叫滑窗、叫稀疏 / 压缩，也就是今天的<b>旋钮②</b>），纵轴上那条是它自己走的（<b>旋钮①</b>）。<b>原点那个小方角是全图的论点 —— 而「正交」是论文原话，不是我们事后安的词。</b>左边那个灰虚线框（限制序列长度）<b>故意画在平面外</b>：它也在那张单子上，但它不是旋钮，硬塞到某根轴上就是撒谎。<b>中间那三行是「自由度不是宽度」的论文自带证据：同样只缓存一份 K/V，保留 8 个 query 头能把困惑度拉回整整 1.0。</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>①② 出自 MQA 原论文 Shazeer arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>（§2.4 与表 3 ——&#160;⚠️ 这篇一共只有 3 张表，Billion-Word LM 基准的 dev 困惑度）；「正交」是原文用词</p>
 <p>③ 出自 GQA 原论文 Ainslie 等 arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a> <a href="#s2-1">§2.1</a>–2.2：mean pooling、α=5% 续训、GQA-1=MQA / GQA-H=MHA</p>
 <p>⚠️ 「通讯录 / 查的人」是<b>本课的比喻</b></p></details></figure>
@@ -8760,7 +8760,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <figure class="fbox fwide" id="fig-overmix"><svg viewBox="0 0 1400 1312" width="100%" role="img" aria-label="attention sink 有什么用：一滴红墨水，和一个替它踩刹车的人"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">attention sink 有什么用 ——&#160;一滴红墨水，和一个替它踩刹车的人</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">§六前面只讲了 sink 是<tspan font-weight="700">怎么来的</tspan>（softmax 不许弃权，模型就造一个弃权用的候选人）。那它<tspan font-weight="700">有什么用</tspan>？——&#160;这张图说：那张弃权票<tspan font-weight="700">不是浪费掉的，它是刹车片</tspan>。</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">前面只讲了 sink 是<tspan font-weight="700">怎么来的</tspan>（softmax 不许弃权，模型就造一个弃权用的候选人）。那它<tspan font-weight="700">有什么用</tspan>？——&#160;这张图说：那张弃权票<tspan font-weight="700">不是浪费掉的，它是刹车片</tspan>。</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">被扰动的那个词，以及它染红的部分</text>
 <rect x="271" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
@@ -8925,7 +8925,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="0" y="1032" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="1032" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
 <rect x="2" y="1032" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1059" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 于是 §六 前面那一格要改一句口径</tspan></text>
+<text class="svglbl" x="20" y="1059" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 于是前面讲 sink 那一格要改一句口径</tspan></text>
 <text class="svgsm" x="20" y="1090" fill="#0d652d" style="font-size:15.0px">前面说「softmax 不许弃权，模型就自己造了一个弃权用的候选人」——&#160;那一句<tspan font-weight="700">只说到成因</tspan>。</text>
 <text class="svgsm" x="20" y="1114" fill="#0d652d" style="font-size:15.0px">⭐⭐ 这张图补上的是：<tspan font-weight="700">那张弃权票不是浪费掉的，它是刹车片。</tspan>没有它，扰动一个词，四层之后整句话都跟着动。</text>
 <text class="svgsm" x="20" y="1138" fill="#0d652d" style="font-size:15.0px">⛔ 所以 StreamingLLM 为什么砍掉开头几个 token 模型就崩 ——&#160;<tspan font-weight="700">不是丢了信息，是刹车没了。</tspan>（那几个 token 本来就没什么内容，这正是它们能当 sink 的原因。）</text>
@@ -12987,8 +12987,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="2" y="1392" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="20" y="1419" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 配比是超参，别背成常识</tspan></text>
 <text class="svgsm" x="20" y="1450" fill="#b06000" style="font-size:15.0px">⚠️ 这条轴上的「便宜层」<tspan font-weight="700">不全是线性</tspan> ——&#160;小米那两家是<tspan font-weight="700">滑窗</tspan>。<tspan font-weight="700">3:1 是消融出来的，不是推出来的</tspan>；同一家不同规模就换配比（Ling 的 tiny 是 3:1、flash 是 5:1）。</text>
-<text class="svgsm" x="20" y="1474" fill="#b06000" style="font-size:15.0px">⚠️ 「纯线性一定兜不住」要说准：§二 那条 L2M 条件要求的是<tspan font-weight="700">状态必须随长度变大</tspan> ——&#160;而「变大」的办法<tspan font-weight="700">不止混合一种</tspan>（论文自己给的另一条是按长度整个放大模型）。⭐ <tspan font-weight="700">混合是</tspan></text>
-<text class="svgsm" x="20" y="1498" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">工程上选的那条，不是定理逼出来的那条。</tspan></text>
+<text class="svgsm" x="20" y="1474" fill="#b06000" style="font-size:15.0px">⚠️ 「纯线性一定兜不住」要说准：那条 L2M 条件要求的是<tspan font-weight="700">状态必须随长度变大</tspan> ——&#160;而「变大」的办法<tspan font-weight="700">不止混合一种</tspan>（论文自己给的另一条是按长度整个放大模型）。⭐ <tspan font-weight="700">混合是工程</tspan></text>
+<text class="svgsm" x="20" y="1498" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">上选的那条，不是定理逼出来的那条。</tspan></text>
 <text class="svgsm" x="20" y="1522" fill="#b06000" style="font-size:15.0px">⚠️ 而且它是<tspan font-weight="700">渐近</tspan>命题 ——&#160;同一张表里 Mistral 7B 就是<tspan font-weight="700">纯滑窗</tspan>、一层全注意力都没有，还真的上过生产用了两年。</text>
 </svg><figcaption>⭐⭐ <b>配比是一条轴，而两头都不好。</b><b>中间那格一个点就是一个模型</b> —— 14 个点堆起来，<b>最高的一摞在 3:1（十四家占五家）</b>、往右没有一家超过 7:1，都不用数；点的颜色只编码一件事：<b>便宜的那层是线性，还是滑窗 / 局部</b>（按 <a href="#s八">§8.4</a> 逐家核过的旋钮分的）。<b>最左边 1:1 那两个清一色是滑窗族 —— 做线性混合的没有一家敢一比一。</b><b>纯线性那一头不是「实测不行」—— §二 那条 L2M 条件说它的状态必须随长度变大。</b><em>⚠️ 但「变大」的办法不止混合一种：论文自己给的另一条是按长度整个放大模型。混合是工程上选的那条，不是定理逼出来的那条。</em><em>而左端那个反直觉结果更值得讲：Kimi 的消融里 0:1（纯全注意力）反而表现不好 —— 加线性层不只是省钱。那张消融表长什么样、它又<b>问不出</b>什么，见 <a href="#s八">§8.2</a>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>配比与型号见 <a href="#s8-2">§8.2</a> / <a href="#s8-4">§8.4</a> 的表（每一行都标了出处，多数可在公开 config 里核）；系统性消融的建议区间出自 arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a></p>
 <p>「0:1 反而表现不好」出自 Kimi Linear arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a> ——&#160;⚠️ 原文只有一句定性描述，<b>没有公开数值</b></p>
@@ -13792,9 +13792,9 @@ linear                                               ← 第 45 层多出来的�
 <p>上面这张表每一格都是箭头。箭头能排序，<b>但它回答不了「省的是哪一样」</b> ——
   而那正是本节唯一想说死的那条。所以把同一批方案，换成一个能拿计算器核的问题：
   <b>吐一个字，要从 HBM 上搬多少字节？</b></p>
-<figure class="fbox fwide" id="fig-perstep"><svg viewBox="0 0 1400 1776" width="100%" role="img" aria-label="一步 decode 要从 HBM 搬多少字节：MHA 里 93% 是一个人的 KV；显存省 56.9 倍只换到 7 倍速度，因为 MHA 被迫多用了卡；MLA 之后再上稀疏只再快 1.24 倍，瓶颈已经搬到权重上"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-perstep"><svg viewBox="0 0 1400 1800" width="100%" role="img" aria-label="一步 decode 要从 HBM 搬多少字节：MHA 里 93% 是一个人的 KV；显存省 56.9 倍只换到 7 倍速度，因为 MHA 被迫多用了卡；MLA 之后再上稀疏只再快 1.24 倍，瓶颈已经搬到权重上"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">代价 ——&#160;把 <tspan font-weight="700">↓↓↓</tspan> 换成<tspan font-weight="700">一步 decode 要搬多少字节</tspan></text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">§九 那张表每一格都是箭头。可这门课自己的规矩是<tspan font-weight="700">「问『省了多少』之前，先问『省的是哪一样』」</tspan> ——&#160;箭头恰恰回答不了这个。那就把同一批方案，<tspan font-weight="700">一路换算到毫秒</tspan>。</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">讲代价那一节的表里每一格都是箭头。可这门课自己的规矩是<tspan font-weight="700">「问『省了多少』之前，先问『省的是哪一样』」</tspan> ——&#160;箭头恰恰回答不了这个。那就把同一批方案，<tspan font-weight="700">一路换算到毫秒</tspan>。</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
 <text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">权重（所有人共享，每步一样多）</text>
 <rect x="257" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
@@ -13926,23 +13926,24 @@ linear                                               ← 第 45 层多出来的�
 <text class="svgsm" x="20" y="1418" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">省显存 ≠ 省时间。</tspan>MLA 对 MHA：显存 <tspan font-weight="700">56.9×</tspan>，单用户 decode 只有 <tspan font-weight="700">7.08×</tspan> ——&#160;省下来的那 5 张卡才是真正的收益。</text>
 <text class="svgsm" x="20" y="1442" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">省读 ≠ 省存。</tspan>DSA 那根柱子的灰段红段一个字节没少存，<tspan font-weight="700">它只是每步不读</tspan> ——&#160;所以它在这张图上只影响高度，不影响「要几张卡」。</text>
 <text class="svgsm" x="20" y="1466" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">瓶颈是会搬家的。</tspan>MHA 时代它在 KV（93.4%）；MLA 之后它搬到权重（80.1%）。<tspan font-weight="700">对着上一个瓶颈继续优化，是最常见的浪费。</tspan></text>
-<rect x="0" y="1496" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1496" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="2" y="1496" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<rect x="0" y="1496" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1496" width="4" height="122" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1496" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="20" y="1523" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ ⚠️ 这张图只成立在 batch ＝ 1 上，这一条必须说</tspan></text>
 <text class="svgsm" x="20" y="1554" fill="#b06000" style="font-size:15.0px">权重那一段是<tspan font-weight="700">所有人分摊</tspan>的，KV 那一段<tspan font-weight="700">不摊</tspan>。所以人一多，灰段被摊薄、红段成倍长 ——&#160;<tspan font-weight="700">画面会翻回 KV 主导</tspan>。</text>
-<text class="svgsm" x="20" y="1578" fill="#b06000" style="font-size:15.0px">⭐ 这正是 §二 那张图的另一面：那里是<tspan font-weight="700">把人加上去</tspan>让 KV 变成主角，这里是<tspan font-weight="700">只留一个人</tspan>让权重变成主角。<tspan font-weight="700">同一个模型，问法不同，答案就不同</tspan> ——&#160;这本身就是本节的主题。</text>
-<rect x="0" y="1608" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="1608" width="4" height="146" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="2" y="1608" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="1635" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ ⛔ 口径，三条</tspan></text>
-<text class="svgsm" x="20" y="1666" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">这是下界，不是实测。</tspan>只算从 HBM 把字节读进来的时间，不算计算、不算 MoE 的 all-to-all、不算 kernel 损耗。⚠️ 卡数只按<tspan font-weight="700">装得下</tspan>算，没算算力够不够。</text>
-<text class="svgsm" x="20" y="1690" fill="#a50e0e" style="font-size:15.0px">DSA 那根的 <tspan font-weight="700">0.13 GiB 也是下界</tspan> ——&#160;索引器仍要在全历史上打一遍分，那部分虽轻但不是零。k＝2,048 是 128K 上的设定（占 1.5625%）。</text>
-<text class="svgsm" x="20" y="1714" fill="#a50e0e" style="font-size:15.0px">⛔⛔ 单位：v7 官方 <tspan font-weight="700">7.37 TB/s 是每「芯片」</tspan>，而 v7 是 <tspan font-weight="700">2 device / chip</tspan>，本图一律按 device 算，所以用 <tspan font-weight="700">3.685 TB/s</tspan>、每 device <tspan font-weight="700">94.74 GiB</tspan>。这门课在这个 1:2 上栽过，</text>
-<text class="svgsm" x="20" y="1738" fill="#a50e0e" style="font-size:15.0px">所以写死在这儿。</text>
+<text class="svgsm" x="20" y="1578" fill="#b06000" style="font-size:15.0px">⭐ 这正是那张「长度一变，主角就换人」图的另一面：那里是<tspan font-weight="700">把人加上去</tspan>让 KV 变成主角，这里是<tspan font-weight="700">只留一个人</tspan>让权重变成主角。<tspan font-weight="700">同一个模型，问法不同，答案就不同</tspan> ——&#160;这本身就是本</text>
+<text class="svgsm" x="20" y="1602" fill="#b06000" style="font-size:15.0px">节的主题。</text>
+<rect x="0" y="1632" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1632" width="4" height="146" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1632" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1659" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ ⛔ 口径，三条</tspan></text>
+<text class="svgsm" x="20" y="1690" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">这是下界，不是实测。</tspan>只算从 HBM 把字节读进来的时间，不算计算、不算 MoE 的 all-to-all、不算 kernel 损耗。⚠️ 卡数只按<tspan font-weight="700">装得下</tspan>算，没算算力够不够。</text>
+<text class="svgsm" x="20" y="1714" fill="#a50e0e" style="font-size:15.0px">DSA 那根的 <tspan font-weight="700">0.13 GiB 也是下界</tspan> ——&#160;索引器仍要在全历史上打一遍分，那部分虽轻但不是零。k＝2,048 是 128K 上的设定（占 1.5625%）。</text>
+<text class="svgsm" x="20" y="1738" fill="#a50e0e" style="font-size:15.0px">⛔⛔ 单位：v7 官方 <tspan font-weight="700">7.37 TB/s 是每「芯片」</tspan>，而 v7 是 <tspan font-weight="700">2 device / chip</tspan>，本图一律按 device 算，所以用 <tspan font-weight="700">3.685 TB/s</tspan>、每 device <tspan font-weight="700">94.74 GiB</tspan>。这门课在这个 1:2 上栽过，</text>
+<text class="svgsm" x="20" y="1762" fill="#a50e0e" style="font-size:15.0px">所以写死在这儿。</text>
 </svg><figcaption>⭐⭐ <b>先只看灰段：五根柱子里它一模一样</b>（每步都要读那 34.46 GiB 激活权重）。差别全在红段 ——&nbsp;而 MHA 那根红段是灰段的 <b>14 倍</b>。<em>⚠️ 这是 batch ＝ 1 的账，也是<b>只算 HBM 读的下界</b>；人一多，灰段被摊薄、红段不摊，画面会翻回去。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自 Epoch AI 那条「字节 →&#160;毫秒 →&#160;钱」的换算链 ——&#160;抽象的「省了多少」一路换算到有直觉的量，每一步都能自己验算。本图走到毫秒为止（再往下换成钱要报价，那个本课核不了）</p>
-<p>⚠️ 数全部来自本讲前面已核过的：KV 488 / 30.50 / 3.81 / 8.58 GiB（61 层 · 128K · bf16 · 一个用户）· 权重 625 GiB · 每 token 激活 <b>37B</b>（671B/37B，官方模型卡，见 §零 那张年表）· v7 每 chip 7.37 TB/s、每 device 94.74 GiB</p>
-<p>📌 这张图<b>不引入任何新数</b>，全部是前面核过的数做除法 ——&#160;所以读者可以拿计算器逐格核，这也是它敢把 §九 那张箭头表替换掉的底气</p></details></figure>
+<p>⚠️ 数全部来自本讲前面已核过的：KV 488 / 30.50 / 3.81 / 8.58 GiB（61 层 · 128K · bf16 · 一个用户）· 权重 625 GiB · 每 token 激活 <b>37B</b>（671B/37B，官方模型卡，见开篇那张年表）· v7 每 chip 7.37 TB/s、每 device 94.74 GiB</p>
+<p>📌 这张图<b>不引入任何新数</b>，全部是前面核过的数做除法 ——&#160;所以读者可以拿计算器逐格核，这也是它敢把那张「每一格都是箭头」的代价表替换掉的底气</p></details></figure>
 <p>三行收口，都能自己验算：</p>
 <ul>
 <li><b>省显存 ≠ 省时间。</b> MLA 对 MHA，显存 <b>56.9×</b>，
@@ -14554,8 +14555,8 @@ linear                                               ← 第 45 层多出来的�
 
 <figure class="fbox fwide" id="fig-gun"><svg viewBox="0 0 1400 1518" width="100%" role="img" aria-label="那 512 倍是怎么换来的：两笔账，三个旋钮各还各的"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">收尾 ——&#160;封面那 <tspan font-weight="700">512 倍</tspan>，到底是怎么换来的</text>
-<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">开场我们说：2020 年的 GPT-3 记 2048 个 token，今天的模型记 100 万，这一讲讲的就是这 512 倍是怎么换来的。<tspan font-weight="700">现在把这笔账算完。</tspan>——&#160;而算它的办法，正是 §九 那句：<tspan font-weight="700">问「</tspan></text>
-<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">省了多少」之前，先问「省的是哪一样」。</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">开场我们说：2020 年的 GPT-3 记 2048 个 token，今天的模型记 100 万，这一讲讲的就是这 512 倍是怎么换来的。<tspan font-weight="700">现在把这笔账算完。</tspan>——&#160;而算它的办法，正是那条提问顺序：<tspan font-weight="700">问</tspan></text>
+<text class="svgsm" x="0" y="72" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">「省了多少」之前，先问「省的是哪一样」。</tspan></text>
 <rect x="0" y="85" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="21" y="96" fill="#5f6368" style="font-size:14.0px">要还的：上下文涨了 512 倍</text>
 <rect x="225" y="85" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
@@ -14588,7 +14589,7 @@ linear                                               ← 第 45 层多出来的�
 <rect x="0" y="396" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="424" x2="1400" y2="424" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
 <text class="svglbl" x="14" y="414" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 它<tspan font-weight="700">不是一笔账，是两笔</tspan> ——&#160;同一把尺子量，切法完全不同</tspan></text>
-<text class="svgsm" x="1386" y="414" fill="#80868b" text-anchor="end" style="font-size:11.0px">这正是 §九 那条提问顺序</text>
+<text class="svgsm" x="1386" y="414" fill="#80868b" text-anchor="end" style="font-size:11.0px">这正是讲代价时那条提问顺序</text>
 <text class="svgsm" x="24" y="478" fill="#5f6368" style="font-size:16.0px">两根条<tspan font-weight="700">一样长</tspan>，长度都是那 512 倍。⚠️ 对数刻度 ——&#160;<tspan font-weight="700">段长读的是「乘几倍」，不是「占几成」</tspan>；相邻两段是<tspan font-weight="700">相乘</tspan>的关系。</text>
 <text class="svglbl" x="24" y="536" fill="#0d652d" style="font-size:21.0px"><tspan font-weight="700">显存账</tspan></text>
 <text class="svgsm" x="24" y="560" fill="#80868b" style="font-size:15.0px">一个人要占多少</text>

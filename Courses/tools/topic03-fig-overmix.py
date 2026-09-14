@@ -72,7 +72,7 @@ def main():
     f = Fig(W, "attention sink 有什么用：一滴红墨水，和一个替它踩刹车的人")
     yy = f.header(
         "attention sink 有什么用 ——&#160;一滴红墨水，和一个替它踩刹车的人",
-        "§六前面只讲了 sink 是<tspan font-weight=\"700\">怎么来的</tspan>"
+        "前面只讲了 sink 是<tspan font-weight=\"700\">怎么来的</tspan>"
         "（softmax 不许弃权，模型就造一个弃权用的候选人）。"
         "那它<tspan font-weight=\"700\">有什么用</tspan>？"
         "——&#160;这张图说：那张弃权票<tspan font-weight=\"700\">不是浪费掉的，"
@@ -183,7 +183,7 @@ def main():
 
     # ══ 落点 ══════════════════════════════════════════════════════
     yy = top + PH3 + 30
-    yy = f.band(yy, "ok", "于是 §六 前面那一格要改一句口径", [
+    yy = f.band(yy, "ok", "于是前面讲 sink 那一格要改一句口径", [
         "前面说「softmax 不许弃权，模型就自己造了一个弃权用的候选人」——&#160;"
         "那一句<tspan font-weight=\"700\">只说到成因</tspan>。",
         "⭐⭐ 这张图补上的是：<tspan font-weight=\"700\">那张弃权票不是浪费掉的，"

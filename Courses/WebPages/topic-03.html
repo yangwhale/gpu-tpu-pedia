@@ -765,8 +765,11 @@ h4 { margin:18px 0 6px; font-size:15px }
 
 <p><b>2020 年的 GPT-3，一次只能记住 2048 个 token。</b>那时候它是个很会接话的
   <b>补全器</b> ——&nbsp;你给一段，它接一段，接得挺像样。</p>
-<p>今天你让它干的活完全变了：读完一整个代码库再改一处 bug、连着跑几十轮工具调用、
-  <b>记住整场对话里你反复改过的主意</b>。<em>2K 的上下文，连一个文件都读不完。</em></p>
+<!-- ⛔ 这一句原来跟 fig-arc 落点带里那串活计逐字撞了（查重抓到）。
+     ⭐ 图负责列清单，正文负责**定调子** ——&nbsp;两边不该长一个样。 -->
+<p>今天你让它干的活完全变了：读完一整个代码库再回头改对一处 bug、
+  一口气走完几十步的工具链、还得<b>记得住你半小时前改过主意</b>。
+  <em>2K 的上下文，连一个文件都读不完。</em></p>
 
 <div class="note ok"><p>⭐⭐ <b>上下文长度就是模型的工作记忆。</b>
   记不住，就什么都干不成。<br>
@@ -1054,9 +1057,10 @@ h4 { margin:18px 0 6px; font-size:15px }
 <text class="svgsm" x="20" y="546" fill="#174ea6" style="font-size:15.0px">⭐ LSTM／GRU 没改这个形状，只是把 f 换成几个门（<tspan font-weight="700">LSTM 三个门＋一个候选值 ＝ 四块矩阵；GRU 两个门＋一个候选 ＝ 三块</tspan>）。<tspan font-weight="700">链还是那条链。</tspan></text>
 </svg><figcaption>⭐ 左边是 1990 年的原始画法，右边把它<b>沿时间摊开</b> ——&nbsp;<em>一条链的样子，得摊开才看得见。</em><br>看完只要记住一件事：<b>那条红线是横着走的。</b><em>这本书接下来所有的招，都是在想办法<b>别沿着它走</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Elman 1990《Finding Structure in Time》——&#160;context units「copied … on a one-for-one basis, with fixed weight of 1.0」；LSTM: Hochreiter &amp; Schmidhuber 1997；GRU: Cho et al. 2014</p></details></figure>
 
-<div class="note ok"><p>⭐⭐ <b>先把这个形状记住 ——&nbsp;一个固定大小的盒子，一步一步往下传。</b><br>
+<div class="note ok"><p>⭐⭐ <b>把图上这个形状先记在心里。</b>
   ⛔ 它在<a href="#s二">第二章</a>会被整个扔掉；然后在<a href="#s七">第七章</a>
-  <b>原样回来</b>。<em>要绕完那一整圈，我们才会发现：当年扔掉的东西里，有一样是宝贝。</em></p></div>
+  <b>原样回来</b>。<br>
+  <em>要绕完那一整圈，我们才会发现：当年扔掉的东西里，有一样是宝贝。</em></p></div>
 
 <h3 id="s1-2">1.2　第一个痛：盒子只有一个，所以只能一步一步来</h3>
 
@@ -1371,8 +1375,811 @@ h4 { margin:18px 0 6px; font-size:15px }
 
 
 <section id="s二"><div class="wrap"><div class="stn"><span class="badge">第 二 节</span><h2>2017 年那一刀 ——&nbsp;把链剪断，换成一张表</h2></div>
-<h3 id="s2-1">2.1　把「一步步传」换成「一眼全看」</h3>
-<div class="note warn"><span class="t">🚧 本章待写 ——&nbsp;MHA：把循环拿掉，代价是什么</span><p><b>这一章在故事里干什么：</b>这一刀<b>换来</b>的是：任意两个字之间只隔一步，整段话一次算完。<b>欠下</b>的是两样 ——&nbsp;要算的格子从 n 变成 n²，而且<b>那块小本子没了</b>：模型改成把所有历史原封不动留着。⭐ 后面七章全在还这第二笔债。</p><p><b>打算用的图</b>（从 L300 抽，逐张再精修）：<code>fig3-mha-swap.svg</code> · <code>fig3-mha-qkv.svg</code> · <code>fig3-mha-heads.svg</code> · <code>fig3-attn-invented.svg</code> · <code>fig3-why-softmax.svg</code> · <code>fig3-transformer.svg</code></p></div>
+
+<p class="lead">上一章最后留了一个问句：<b>既然这个配件这么好使，能不能把 RNN 整个扔掉，
+  只留配件？</b><em>2017 年有人真这么干了 ——&nbsp;而且论文标题就是这个意思。</em></p>
+
+<h3 id="s2-1">2.1　先看清那个配件是怎么被逼出来的</h3>
+
+<!-- ⛔ 图前预告不许复述图注（体检 W4）。原稿这里把图注那句
+     「每一步只修上一步的一个毛病」提前说了一遍 ——&nbsp;读者等于看了两次。
+     ⭐ 领进去的话只负责**换一种情绪**，具体机制交给图。 -->
+<p>动手之前先补一段：<b>注意力不是谁灵光一闪想出来的。</b>
+  <em>它是被人一次次嫌弃出来的 ——&nbsp;每一版都有人指着上一版说「这儿不对」。</em></p>
+
+<figure class="fbox fwide" id="fig-attn-invented"><svg viewBox="0 0 1400 650" width="100%" role="img" aria-label="注意力是被三次「这儿不对」推出来的：2014 年一个向量装不下整句，于是软对齐；2017 年加性打分每一对都要过小网络太慢，换成点积因为能写成矩阵乘；再去掉循环，多头用来补偿加权平均的分辨率损失"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">注意力是怎么被发明出来的</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">三步 ——&#160;<tspan font-weight="700">每一步都在修上一步的一个具体毛病</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">上一步哪儿不对</text>
+<rect x="145" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="166" y="74" fill="#5f6368" style="font-size:14.0px">这一步怎么修</text>
+<rect x="276" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="297" y="74" fill="#5f6368" style="font-size:14.0px">被硬件推着走的那一刀</text>
+<rect x="0" y="102" width="440" height="408" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="440" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="440" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 2014　一个向量装不下</tspan></text>
+<text class="svgsm" x="186" y="122" fill="#5f6368" style="font-size:11.0px">Bahdanau / Cho / Bengio</text>
+<rect x="22" y="156" width="66" height="38" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="55" y="181" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">我</tspan></text>
+<rect x="96" y="156" width="66" height="38" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="129" y="181" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">今天</tspan></text>
+<rect x="170" y="156" width="66" height="38" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="203" y="181" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">很</tspan></text>
+<rect x="244" y="156" width="66" height="38" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="277" y="181" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">开心</tspan></text>
+<line x1="55" y1="198" x2="202" y2="218" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="129" y1="198" x2="202" y2="218" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="203" y1="198" x2="202" y2="218" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="277" y1="198" x2="202" y2="218" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="168" y="222" width="68" height="40" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="202" y="248" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">一个</tspan></text>
+<text class="svgsm" x="202" y="280" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">向量</tspan></text>
+<line x1="202" y1="288" x2="202" y2="312" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="100" y="316" width="204" height="40" rx="8" fill="#fff" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="202" y="342" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">整段译文都从这儿出</tspan></text>
+<text class="svgsm" x="22" y="384" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">⛔ 句子越长，挤得越狠</tspan></text>
+<text class="svgsm" x="22" y="410" fill="#80868b" style="font-size:13.0px">原文：a fixed-length vector</text>
+<text class="svgsm" x="22" y="430" fill="#80868b" style="font-size:13.0px">is a bottleneck</text>
+<rect x="22" y="446" width="396" height="64" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="38" y="472" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 修法的关键是那个「软」字</tspan></text>
+<text class="svgsm" x="38" y="498" fill="#5f6368" style="font-size:15.0px">硬挑一个词不可导；加权平均可导</text>
+<rect x="470" y="102" width="440" height="408" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="470" y="102" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="470" y="104" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="470" y1="132" x2="910" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="484" y="122" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 2017 第一刀　打分太慢</tspan></text>
+<text class="svgsm" x="664" y="122" fill="#5f6368" style="font-size:11.0px">加性 → 点积</text>
+<text class="svgsm" x="492" y="174" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">加性（旧）</tspan></text>
+<text class="svgsm" x="492" y="198" fill="#5f6368" style="font-size:15.0px">每一对，过一个小网络</text>
+<rect x="504" y="212" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="529" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<rect x="566" y="212" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="591" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<rect x="628" y="212" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="653" y="234" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<rect x="504" y="258" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="529" y="280" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<rect x="566" y="258" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="591" y="280" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<rect x="628" y="258" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="653" y="280" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<rect x="504" y="304" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="529" y="326" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<rect x="566" y="304" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="591" y="326" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<rect x="628" y="304" width="50" height="34" rx="5" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="653" y="326" fill="#a50e0e" text-anchor="middle" style="font-size:13.0px">net</text>
+<text class="svgsm" x="702" y="278" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">n² 次</tspan></text>
+<text class="svgsm" x="702" y="304" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">小网络</tspan></text>
+<line x1="492" y1="364" x2="866" y2="364" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="492" y="394" fill="#0d652d" style="font-size:19.0px"><tspan font-weight="700">点积（今天）</tspan></text>
+<text class="svgsm" x="492" y="418" fill="#5f6368" style="font-size:15.0px">整张表，一次矩阵乘</text>
+<rect x="504" y="432" width="152" height="76" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="580" y="478" fill="#0d652d" text-anchor="middle" style="font-size:24.0px"><tspan font-weight="700">Q · Kᵀ</tspan></text>
+<text class="svgsm" x="676" y="478" fill="#0d652d" style="font-size:20.0px"><tspan font-weight="700">一次</tspan></text>
+<rect x="940" y="102" width="460" height="408" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="940" y="102" width="460" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="940" y="104" width="460" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="940" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="954" y="122" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">③ 2017 第二刀　那还要 RNN 干什么</tspan></text>
+<text class="svgsm" x="1203" y="122" fill="#5f6368" style="font-size:11.0px">两点之间要走几步</text>
+<text class="svgsm" x="962" y="174" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">循环：一步一步传</tspan></text>
+<rect x="966" y="192" width="62" height="40" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="997" y="218" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">1</tspan></text>
+<line x1="1030" y1="212" x2="1044" y2="212" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="1048" y="192" width="62" height="40" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1079" y="218" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">2</tspan></text>
+<line x1="1112" y1="212" x2="1126" y2="212" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="1130" y="192" width="62" height="40" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1161" y="218" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">3</tspan></text>
+<line x1="1194" y1="212" x2="1208" y2="212" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="1212" y="192" width="62" height="40" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1243" y="218" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">4</tspan></text>
+<line x1="1276" y1="212" x2="1290" y2="212" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="1294" y="192" width="62" height="40" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1325" y="218" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">5</tspan></text>
+<text class="svgsm" x="962" y="258" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">①→⑤ 要走 4 步</tspan></text>
+<line x1="962" y1="280" x2="1356" y2="280" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="962" y="310" fill="#0d652d" style="font-size:19.0px"><tspan font-weight="700">自注意力：直接连</tspan></text>
+<rect x="966" y="328" width="62" height="40" rx="8" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="997" y="354" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="1048" y="328" width="62" height="40" rx="8" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1079" y="354" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">2</tspan></text>
+<rect x="1130" y="328" width="62" height="40" rx="8" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1161" y="354" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">3</tspan></text>
+<rect x="1212" y="328" width="62" height="40" rx="8" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1243" y="354" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">4</tspan></text>
+<rect x="1294" y="328" width="62" height="40" rx="8" fill="#e6f4ea" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1325" y="354" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">5</tspan></text>
+<path d="M 997.00 326.00 L 1160.00 294.00 L 1325.00 326.00" fill="none" stroke="#1e8e3e" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="962" y="394" fill="#0d652d" style="font-size:18.0px"><tspan font-weight="700">①→⑤ 一步</tspan></text>
+<rect x="962" y="418" width="416" height="92" rx="8" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="978" y="444" fill="#681da8" style="font-size:17.0px"><tspan font-weight="700">⚠️ 同一句话里，论文认了代价</tspan></text>
+<text class="svgsm" x="978" y="470" fill="#5f6368" style="font-size:15.0px">加权平均<tspan font-weight="700">降低了有效分辨率</tspan></text>
+<text class="svgsm" x="978" y="496" fill="#681da8" style="font-size:17.0px"><tspan font-weight="700">多头就是拿来补这个的</tspan></text>
+<rect x="0" y="532" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="532" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="532" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="559" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 第二格那一刀，是这门课的主线第一次出现</tspan></text>
+<text class="svgsm" x="20" y="590" fill="#174ea6" style="font-size:15.0px">论文自己写的理由是：两者<tspan font-weight="700">理论复杂度相仿</tspan>，但点积<tspan font-weight="700">快得多、省内存，因为它能用高度优化的矩阵乘实现</tspan>。</text>
+<text class="svgsm" x="20" y="614" fill="#174ea6" style="font-size:15.0px">⭐ 换句话说 ——&#160;<tspan font-weight="700">选点积不是因为它更准，是因为它能变成矩阵乘。</tspan>这一讲后面每一个变体，几乎都能追到同一句话上。</text>
+</svg><figcaption>⭐ <b>三步，每一步只修上一步的一个毛病</b> ——&nbsp;<em>顺着读一遍，你会发现没有哪一步需要天才，只需要有人肯说「这儿不对」。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① Bahdanau 等 arXiv <a href="https://arxiv.org/abs/1409.0473" target="_blank" rel="noopener">1409.0473</a>；②③ Vaswani 等 arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a> §3.2.1（点积 vs 加性）与 §3.2.2（多头补偿分辨率）</p>
+<p>⚠️ 画面里的句子、方框数量都是<b>示意</b>，不对应任何一次真实实验</p></details></figure>
+
+<!-- ⛔⛔ 这里原来把图里蓝框那段（论文原话 ＋「不是更准，是能变成矩阵乘」）
+     **换了几个词又说了一遍**。⭐ 查重比不出来 ——&nbsp;它是改写不是照抄，
+     字符串对不上。**这一处是靠截图用眼睛看出来的。**
+     ⛔ 判据：查重只挡得住照抄；**改写只能靠眼睛，所以每章写完必须渲染出来看一遍。**
+     ⭐ 留下来的只有图给不了的：**这条线后面会去哪儿。** -->
+<div class="note ok"><p>⭐⭐ <b>图里蓝框那一句，先在这儿挂个号 ——&nbsp;它是这本书的第一条暗线。</b></p>
+<p><em>同样的事后面还会发生三次，一次比一次露骨。</em>到<a href="#s六">第六章</a>它会变成：
+  <b>连「挑哪几个字来看」都得按块挑，因为机器讨厌零零散散地取数。</b></p>
+<p>⛔ <b>这本书里不少公式长成那个样子，并不是数学上非如此不可</b> ——&nbsp;
+  <em>而是机器只认那一种形状。</em></p></div>
+
+<p class="landing">📌 <b>顺带交代一下这本书往后的读法</b>：每讲到一个新名词，
+  我都会先说它<b>在修上一版的哪个具体毛病</b>。
+  <em>——&nbsp;「某某灵光一闪」这件事你学不会；「上一版这个地方不对」，你下次能照着用。</em></p>
+
+<h3 id="s2-2">2.2　那一刀砍下去，换掉的是什么</h3>
+
+<figure class="fbox fwide" id="fig-mha-swap"><svg viewBox="0 0 1400 536" width="100%" role="img" aria-label="RNN 与自注意力的信息通路对比：RNN 靠一条链一步一步传，任意两个位置之间要走 n 步；自注意力让每个位置直接连到所有位置，两点之间只隔一步，代价是连线数从 n 变成 n 的平方"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">2017 年那一刀 ——&#160;<tspan font-weight="700">把那根横箭头拿掉，换成「每个位置直接看所有位置」</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 开篇讲 RNN 那三个痛点里的第 ① 条，就是在这里被解掉的。<tspan font-weight="700">而解法本身，就是这一讲后面要还的那笔账。</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">串行：只能一步一步走</text>
+<rect x="187" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="208" y="74" fill="#5f6368" style="font-size:14.0px">要算的格子</text>
+<rect x="304" y="63" width="14" height="14" rx="3" fill="#f1f3f4" stroke="#f1f3f4" stroke-width="1"/>
+<text class="svgsm" x="325" y="74" fill="#5f6368" style="font-size:14.0px">被因果遮罩挡住的未来</text>
+<rect x="0" y="102" width="660" height="272" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="660" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="104" width="660" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="660" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓐ RNN：一条链</tspan></text>
+<text class="svgsm" x="131" y="122" fill="#5f6368" style="font-size:11.0px">信息只能沿着链爬</text>
+<text class="svgsm" x="646" y="122" fill="#80868b" text-anchor="end" style="font-size:11.0px">讲 RNN 时说过</text>
+<rect x="51" y="155" width="38" height="38" rx="19" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="70" y="179" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t1</tspan></text>
+<rect x="147" y="155" width="38" height="38" rx="19" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="166" y="179" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t2</tspan></text>
+<line x1="94" y1="174" x2="142" y2="174" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="243" y="155" width="38" height="38" rx="19" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="262" y="179" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t3</tspan></text>
+<line x1="190" y1="174" x2="238" y2="174" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="339" y="155" width="38" height="38" rx="19" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="358" y="179" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t4</tspan></text>
+<line x1="286" y1="174" x2="334" y2="174" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="435" y="155" width="38" height="38" rx="19" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="454" y="179" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t5</tspan></text>
+<line x1="382" y1="174" x2="430" y2="174" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="531" y="155" width="38" height="38" rx="19" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="550" y="179" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t6</tspan></text>
+<line x1="478" y1="174" x2="526" y2="174" stroke="#d93025" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="14" y="228" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">t1 想影响 t6，得经过 5 跳</tspan>——&#160;每一跳都是一次矩阵乘，而且必须排队。</text>
+<text class="svgsm" x="14" y="254" fill="#a50e0e" style="font-size:15.0px">⛔ 串行步数 <tspan font-weight="700">O(n)</tspan>　·　最长路径 <tspan font-weight="700">O(n)</tspan>　·　连线数 <tspan font-weight="700">n − 1</tspan></text>
+<text class="svgsm" x="14" y="284" fill="#5f6368" style="font-size:15.0px">⭐ 信息走得越远越容易被冲淡 ——&#160;<tspan font-weight="700">这同时也是痛点 ② 梯度消失的几何解释</tspan>：梯度也得沿着同一条链爬回去。</text>
+<text class="svgsm" x="14" y="310" fill="#5f6368" style="font-size:15.0px">⭐ 而且这条链一次只能动一格，<tspan font-weight="700">加速器上再多的并行单元也用不上</tspan>。</text>
+<rect x="676" y="102" width="724" height="272" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="676" y="102" width="724" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="676" y="104" width="724" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="676" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="690" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 自注意力：一张 n × n 的表</tspan></text>
+<text class="svgsm" x="906" y="122" fill="#5f6368" style="font-size:11.0px">每一格 ＝ 一个 query 对一个 key 的打分</text>
+<rect x="772" y="158" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="793" y="158" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="814" y="158" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="835" y="158" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="856" y="158" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="877" y="158" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="898" y="158" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="919" y="158" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="772" y="179" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="793" y="179" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="814" y="179" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="835" y="179" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="856" y="179" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="877" y="179" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="898" y="179" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="919" y="179" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="772" y="200" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="793" y="200" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="814" y="200" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="835" y="200" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="856" y="200" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="877" y="200" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="898" y="200" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="919" y="200" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="772" y="221" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="793" y="221" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="814" y="221" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="835" y="221" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="856" y="221" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="877" y="221" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="898" y="221" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="919" y="221" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="772" y="242" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="793" y="242" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="814" y="242" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="835" y="242" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="856" y="242" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="877" y="242" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="898" y="242" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="919" y="242" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="772" y="263" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="793" y="263" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="814" y="263" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="835" y="263" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="856" y="263" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="877" y="263" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="898" y="263" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="919" y="263" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="772" y="284" width="18" height="18" rx="2" fill="#669df6" stroke="none" stroke-width="0"/>
+<rect x="793" y="284" width="18" height="18" rx="2" fill="#669df6" stroke="none" stroke-width="0"/>
+<rect x="814" y="284" width="18" height="18" rx="2" fill="#669df6" stroke="none" stroke-width="0"/>
+<rect x="835" y="284" width="18" height="18" rx="2" fill="#669df6" stroke="none" stroke-width="0"/>
+<rect x="856" y="284" width="18" height="18" rx="2" fill="#669df6" stroke="none" stroke-width="0"/>
+<rect x="877" y="284" width="18" height="18" rx="2" fill="#669df6" stroke="none" stroke-width="0"/>
+<rect x="898" y="284" width="18" height="18" rx="2" fill="#669df6" stroke="none" stroke-width="0"/>
+<rect x="919" y="284" width="18" height="18" rx="2" fill="#f1f3f4" stroke="none" stroke-width="0"/>
+<rect x="772" y="305" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="793" y="305" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="814" y="305" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="835" y="305" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="856" y="305" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="877" y="305" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="898" y="305" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<rect x="919" y="305" width="18" height="18" rx="2" fill="#c6dafc" stroke="none" stroke-width="0"/>
+<text class="svgsm" x="762" y="168" fill="#80868b" text-anchor="end" style="font-size:14.0px">q1</text>
+<text class="svgsm" x="762" y="294" fill="#174ea6" text-anchor="end" style="font-size:11.0px"><tspan font-weight="700">q7</tspan></text>
+<text class="svgsm" x="762" y="315" fill="#80868b" text-anchor="end" style="font-size:14.0px">qn</text>
+<text class="svgsm" x="772" y="150" fill="#80868b" style="font-size:14.0px">k1</text>
+<text class="svgsm" x="919" y="150" fill="#80868b" text-anchor="middle" style="font-size:14.0px">kn</text>
+<text class="svgsm" x="956" y="294" fill="#174ea6" style="font-size:12.0px"><tspan font-weight="700">← q7 这一行：它看得到 k1…k7</tspan></text>
+<text class="svgsm" x="956" y="172" fill="#80868b" style="font-size:14.0px">灰格 ＝ 被因果遮罩挡住的未来</text>
+<text class="svgsm" x="956" y="192" fill="#80868b" style="font-size:14.0px">（softmax 之前置成 −∞）</text>
+<text class="svgsm" x="690" y="340" fill="#174ea6" style="font-size:15.0px">⭐ 串行步数 <tspan font-weight="700">O(1)</tspan>　·　最长路径 <tspan font-weight="700">O(1)</tspan>　·　⛔ 格子数 <tspan font-weight="700">n² ——&#160;这才是这一刀的账单</tspan></text>
+<text class="svgsm" x="690" y="362" fill="#5f6368" style="font-size:15.0px">⭐ 任意两个位置之间<tspan font-weight="700">只隔一格</tspan>，而且<tspan font-weight="700">整张表可以一次算完</tspan>——&#160;左边那条链两样都做不到。</text>
+<rect x="0" y="390" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="390" width="4" height="122" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="390" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="417" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 这一刀换来了什么，又欠下了什么</tspan></text>
+<text class="svgsm" x="20" y="448" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">换来的</tspan>：串行步数从 O(n) 掉到 O(1)——&#160;整段序列一次算完，加速器终于喂得饱了（这正是「RNN 在硬件上为什么慢」那张图那笔账的反面）。</text>
+<text class="svgsm" x="20" y="472" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">欠下的</tspan>：连线数从 n 变成 n²。⛔ 而且注意 ——&#160;<tspan font-weight="700">状态没了</tspan>：RNN 那个固定大小的 h 被换成了「把所有历史原封不动留着」。</text>
+<text class="svgsm" x="20" y="496" fill="#b06000" style="font-size:15.0px">⭐ 于是「解码时又变回 RNN」那张图上 Ⓒ 那一行的病根，就在这儿：<tspan font-weight="700">解码时每一步都得把「所有历史」重读一遍 ——&#160;那就是 KV cache。</tspan></text>
+</svg><figcaption>⭐ <b>左边是上一章那条链，右边是它的替代品。</b><em>横着那根箭头没了，取而代之的是一张人人对人人的表 ——&nbsp;<b>这张表，就是后面整本书都在跟它较劲的那个「注意力矩阵」本人。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a>) 表 1：自注意力 串行步数 O(1)／最长路径 O(1)；循环层两项都是 O(n)。因果遮罩见同一篇论文 §3.2.3：把非法连接「setting to −∞」</p></details></figure>
+
+<div class="note danger"><p>⛔ <b>图里那句「状态没了」，正是<a href="#s一">第一章</a>结尾押下的那一笔。</b></p>
+<p>①「每步要搬的东西不随长度变」——&nbsp;<em>从这一刀落下的那一刻起，<b>不成立了</b>。</em></p>
+<p>⭐ <em>换来的是并行；赔进去的，是那份「贵不贵跟话有多长没关系」的清白。</em></p></div>
+
+<h3 id="s2-3">2.3　那信息到底是怎么走过去的</h3>
+
+<p>链剪断了，可话还是得连起来读。<b>不靠一格一格传，那靠什么？</b></p>
+
+<figure class="fbox fwide" id="fig-mha-flow"><svg viewBox="0 0 1400 774" width="100%" role="img" aria-label="跟着最后一个 token 走一遍注意力：每个位置长出 query、key、value 三样东西；最后那个 token 拿自己的 query 去跟每个 key 打分，softmax 成一组加起来等于一的权重；再按权重把所有位置的 value 加起来，得到它的新向量"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">一次注意力，干的就是一件事 ——&#160;<tspan font-weight="700">每个位置都去全场取一次货</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">跟着最后那个 token 走一遍：它怎么提问、别人怎么报价、货怎么汇到它身上</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">query 我想找什么</text>
+<rect x="162" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="183" y="74" fill="#5f6368" style="font-size:14.0px">key 我这儿有什么</text>
+<rect x="323" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="344" y="74" fill="#5f6368" style="font-size:14.0px">value 被选中我就交这个</text>
+<text class="svgsm" x="0" y="118" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">① 每个位置都长出三样东西</tspan></text>
+<text class="svgsm" x="0" y="134" fill="#80868b" style="font-size:11.0px">同一个向量，乘三个不同的矩阵</text>
+<rect x="0" y="150" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="168" fill="#202124" text-anchor="middle" style="font-size:15.0px">t1</text>
+<rect x="70" y="153" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="168" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="153" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="168" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="153" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="168" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="164" x2="66" y2="164" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="196" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="214" fill="#202124" text-anchor="middle" style="font-size:15.0px">t2</text>
+<rect x="70" y="199" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="214" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="199" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="214" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="199" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="214" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="210" x2="66" y2="210" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="242" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="260" fill="#202124" text-anchor="middle" style="font-size:15.0px">t3</text>
+<rect x="70" y="245" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="260" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="245" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="260" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="245" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="260" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="256" x2="66" y2="256" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="288" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="306" fill="#202124" text-anchor="middle" style="font-size:15.0px">t4</text>
+<rect x="70" y="291" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="306" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="291" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="306" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="291" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="306" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="302" x2="66" y2="302" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="334" width="46" height="26" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="23" y="352" fill="#202124" text-anchor="middle" style="font-size:15.0px">t5</text>
+<rect x="70" y="337" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="352" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="337" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="352" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="337" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="352" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="348" x2="66" y2="348" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<rect x="0" y="380" width="46" height="26" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="23" y="398" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">t6</tspan></text>
+<rect x="70" y="383" width="24" height="20" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="82" y="398" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">q</tspan></text>
+<rect x="100" y="383" width="24" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.4"/>
+<text class="svgsm" x="112" y="398" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<rect x="130" y="383" width="24" height="20" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="142" y="398" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<line x1="48" y1="394" x2="66" y2="394" stroke="#e8eaed" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="215" y="118" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">② 最后那个 token 拿它的 q 去对每块牌子</tspan></text>
+<text class="svgsm" x="215" y="134" fill="#80868b" style="font-size:11.0px">打分 → softmax → 一组加起来 ＝ 1 的权重</text>
+<rect x="221" y="379" width="34" height="28" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.6"/>
+<text class="svgsm" x="238" y="398" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">q</tspan></text>
+<text class="svgsm" x="238" y="424" fill="#174ea6" text-anchor="middle" style="font-size:14.0px">t6 的问题</text>
+<rect x="335" y="153" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="168" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 394 C 301 394 301 164 332 164" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="199" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="214" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 394 C 301 394 301 210 332 210" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="245" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="260" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 394 C 301 394 301 256 332 256" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="291" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="306" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 394 C 301 394 301 302 332 302" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="337" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="352" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 394 C 301 394 301 348 332 348" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="335" y="383" width="26" height="20" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1.3"/>
+<text class="svgsm" x="348" y="398" fill="#b06000" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">k</tspan></text>
+<path d="M 257 394 C 301 394 301 394 332 394" fill="none" stroke="#80868b" stroke-width="1.1" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="381" y="148" fill="#5f6368" style="font-size:14.0px">softmax 之后</text>
+<rect x="381" y="156" width="11.5" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="404" y="168" fill="#0d652d" style="font-size:14.0px">5%</text>
+<rect x="381" y="202" width="59.0" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="452" y="214" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">30%</tspan></text>
+<rect x="381" y="248" width="17.2" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="410" y="260" fill="#0d652d" style="font-size:14.0px">8%</text>
+<rect x="381" y="294" width="87.5" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="480" y="306" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">45%</tspan></text>
+<rect x="381" y="340" width="15.299999999999999" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="408" y="352" fill="#0d652d" style="font-size:14.0px">7%</text>
+<rect x="381" y="386" width="11.5" height="15" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="404" y="398" fill="#0d652d" style="font-size:14.0px">5%</text>
+<text class="svgsm" x="381" y="424" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">加起来 ＝ 1</tspan></text>
+<text class="svgsm" x="700" y="118" fill="#5f6368" style="font-size:12.0px"><tspan font-weight="700">③ 按权重把所有人的 value 加起来</tspan></text>
+<text class="svgsm" x="700" y="134" fill="#80868b" style="font-size:11.0px">权重越大，交上来的那份占比越大</text>
+<rect x="700" y="153" width="29.5" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="714" y="168" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="199" width="67.0" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="733" y="214" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="245" width="34.0" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="717" y="260" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="291" width="89.5" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="744" y="306" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="337" width="32.5" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="716" y="352" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<rect x="700" y="383" width="29.5" height="20" rx="4" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.3"/>
+<text class="svgsm" x="714" y="398" fill="#0d652d" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">v</tspan></text>
+<path d="M 733 164 C 890 164 890 394 944 394" fill="none" stroke="#1e8e3e" stroke-width="1.275" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 771 210 C 890 210 890 394 944 394" fill="none" stroke="#1e8e3e" stroke-width="2.65" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 738 256 C 890 256 890 394 944 394" fill="none" stroke="#1e8e3e" stroke-width="1.44" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 793 302 C 890 302 890 394 944 394" fill="none" stroke="#1e8e3e" stroke-width="3.475" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 736 348 C 890 348 890 394 944 394" fill="none" stroke="#1e8e3e" stroke-width="1.385" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<path d="M 733 394 C 890 394 890 394 944 394" fill="none" stroke="#1e8e3e" stroke-width="1.275" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="950" y="376" width="118" height="34" rx="7" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.8"/>
+<text class="svgsm" x="1009" y="398" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">t6 的新向量</tspan></text>
+<text class="svgsm" x="920" y="428" fill="#5f6368" style="font-size:14.0px">这<tspan font-weight="700">一个</tspan>向量里，现在装着</text>
+<text class="svgsm" x="920" y="444" fill="#5f6368" style="font-size:14.0px"><tspan font-weight="700">全场按需加权</tspan>的内容。</text>
+<rect x="0" y="470" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="470" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="470" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="497" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 为什么标题敢叫「Attention Is All You Need」</tspan></text>
+<text class="svgsm" x="20" y="528" fill="#0d652d" style="font-size:15.0px">RNN 要让 t1 影响 t6，得<tspan font-weight="700">一跳一跳传五次</tspan>；上面这一步 ——&#160;<tspan font-weight="700">一跳</tspan>。而且<tspan font-weight="700">六个位置是同时做的</tspan>，不是排队。</text>
+<text class="svgsm" x="20" y="552" fill="#0d652d" style="font-size:15.0px">整个过程<tspan font-weight="700">只有矩阵乘和一次 softmax</tspan>，没有任何循环 ——&#160;所以它能一次性并行算完整个序列。</text>
+<text class="svgsm" x="20" y="576" fill="#0d652d" style="font-size:15.0px">⭐ 所以那句标题说的<tspan font-weight="700">不是「注意力很强」，是「混合信息这件事，只要它就够了」</tspan>——&#160;<tspan font-weight="700">循环不需要，卷积也不需要</tspan>。</text>
+<rect x="0" y="606" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="606" width="4" height="146" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="606" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="633" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 两个最常被跳过的「为什么」</tspan></text>
+<text class="svgsm" x="20" y="664" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">为什么要投三次，不能只用一个向量？</tspan>——&#160;去图书馆找书：<tspan font-weight="700">你脑子里那个需求</tspan>（q）跟<tspan font-weight="700">书脊上印的标题</tspan>（k）不是同一个东西。</text>
+<text class="svgsm" x="20" y="688" fill="#174ea6" style="font-size:15.0px">⭐ 那 v 为什么还要跟 k 再分一次？<tspan font-weight="700">k 是书脊，v 是书里的内容</tspan>——&#160;「凭什么被选中」和「被选中之后交出什么」，本来就是两回事。</text>
+<text class="svgsm" x="20" y="712" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">为什么说「所有信息互相传递」，上面不是只画了 t6 吗？</tspan>因为<tspan font-weight="700">六个位置在同时做同样的事</tspan> ——&#160;一层过后，<tspan font-weight="700">每个位置的向量都变成了「全场的一个加权视角」</tspan>。</text>
+<text class="svgsm" x="20" y="736" fill="#174ea6" style="font-size:15.0px">⭐ 堆 L 层，就是把这件事<tspan font-weight="700">重复 L 次</tspan>，每一次都基于上一次的结果 ——&#160;<tspan font-weight="700">这就是「理解」在 Transformer 里的全部形式。</tspan></text>
+</svg><figcaption>⭐ 跟着最后那个字走一遍，你就懂了 ——&nbsp;<b>它不用等谁传话，直接一嗓子问全场，然后按各家报的价把货收回来。</b><br><em>⭐⭐ 而且这不是轮流来：<b>六个位置同时在做同一件事</b>。——&nbsp;上一章卡死人的那个「只能一步一步来」，到这里彻底没有了。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 论文 §3.2 的原话，不是本课编的比喻；<b>图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</b></p>
+<p>⚠️ 本图<b>只画注意力</b> ——&#160;一层 Transformer 里还有 FFN、残差、归一化，它们不在本专题这条轴上（本专题的账本只有 KV cache）</p></details></figure>
+
+<h3 id="s2-4">2.4　拆开一层看：它在算什么</h3>
+
+<figure class="fbox fwide" id="fig-mha-qkv"><svg viewBox="0 0 1400 916" width="100%" role="img" aria-label="注意力的检索三件套：query 是要找什么，key 是每个 token 挂出来的牌子，value 是牌子后面的内容；打分之后除以根号 d 再做 softmax，最后按权重把 value 加权求和"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">一层里到底在算什么 ——&#160;<tspan font-weight="700">论文自己的说法就是「检索」，不是我们编的比喻</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 原文：mapping a <tspan font-style="italic">query</tspan> and a set of <tspan font-style="italic">key-value pairs</tspan> to an output …&#160;the output is a <tspan font-weight="700">weighted sum of the values</tspan>。</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">Q 要找什么</text>
+<rect x="121" y="63" width="14" height="14" rx="3" fill="#00838f" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="142" y="74" fill="#5f6368" style="font-size:14.0px">K 挂出来的牌子</text>
+<rect x="268" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="289" y="74" fill="#5f6368" style="font-size:14.0px">V 牌子后面的货</text>
+<rect x="414" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="435" y="74" fill="#5f6368" style="font-size:14.0px">打分 ＋ 归一</text>
+<rect x="0" y="102" width="1400" height="187" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#202124" style="font-size:13.5px"><tspan font-weight="700">① 三件套都是从同一个 x 投影出来的</tspan></text>
+<text class="svgsm" x="259" y="122" fill="#5f6368" style="font-size:11.0px">同一个 token，用三套不同的权重看它三次</text>
+<rect x="30" y="162" width="120" height="56" rx="6" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="90" y="189" fill="#202124" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">x</tspan></text>
+<text class="svgsm" x="90" y="204" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">这个 token</text>
+<rect x="230" y="144" width="230" height="42" rx="6" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="345" y="164" fill="#681da8" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">Q = x·W_Q</tspan></text>
+<text class="svgsm" x="345" y="179" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">我要找什么</text>
+<line x1="152" y1="190" x2="226" y2="165" stroke="#9334e6" stroke-width="1.3" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="230" y="194" width="230" height="42" rx="6" fill="#e0f7fa" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="345" y="214" fill="#007b83" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">K = x·W_K</tspan></text>
+<text class="svgsm" x="345" y="229" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">我是什么，挂个牌</text>
+<line x1="152" y1="190" x2="226" y2="215" stroke="#00838f" stroke-width="1.3" stroke-linecap="round" marker-end="url(#ah-00838f)"/>
+<rect x="230" y="244" width="230" height="42" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="345" y="264" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">V = x·W_V</tspan></text>
+<text class="svgsm" x="345" y="279" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">我肚子里有什么货</text>
+<line x1="152" y1="190" x2="226" y2="265" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svglbl" x="500" y="172" fill="#202124" style="font-size:16.0px">⭐ <tspan font-weight="700">为什么要投三次而不是直接拿 x 比</tspan></text>
+<text class="svgsm" x="500" y="196" fill="#5f6368" style="font-size:15.0px">因为「我想找什么」和「我能提供什么」<tspan font-weight="700">本来就是两回事</tspan>。</text>
+<text class="svgsm" x="500" y="218" fill="#5f6368" style="font-size:15.0px">同一个词当 query 时该问的问题，跟它当 key 时该挂的牌子，不该是同一个向量。</text>
+<text class="svgsm" x="500" y="248" fill="#5f6368" style="font-size:15.0px">⛔ 而 V 又跟 K 分开，是因为<tspan font-weight="700">「凭什么被选中」和「被选中之后交出什么」</tspan>也是两回事。</text>
+<text class="svgsm" x="500" y="270" fill="#5f6368" style="font-size:15.0px">⭐ 三个投影 ＝ 三个可训练矩阵，<tspan font-weight="700">这也是 KV cache 里存的那两样东西的出处</tspan>。</text>
+<rect x="0" y="288" width="1400" height="466" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="288" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="290" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="318" x2="1400" y2="318" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="308" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 一次注意力 ——　不是「挑一家」，是「按权重把每一家的货混成一碗」</tspan></text>
+<text class="svgsm" x="488" y="308" fill="#5f6368" style="font-size:11.0px">Attention(Q,K,V) = softmax(QKᵀ / √d_k) · V</text>
+<rect x="30" y="366" width="152" height="96" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="106" y="398" fill="#681da8" text-anchor="middle" style="font-size:24.0px"><tspan font-weight="700">Q</tspan></text>
+<text class="svgsm" x="106" y="424" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">「放在哪儿了？」</tspan></text>
+<text class="svgsm" x="106" y="448" fill="#80868b" text-anchor="middle" style="font-size:13.0px">拿着这个去挨家问</text>
+<line x1="106" y1="366" x2="106" y2="340" stroke="#9334e6" stroke-width="1.4" stroke-linecap="round"/>
+<line x1="106" y1="340" x2="1239.0" y2="340" stroke="#9334e6" stroke-width="1.4" stroke-linecap="round"/>
+<line x1="319.0" y1="340" x2="319.0" y2="359" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="210" y="366" width="218" height="40" rx="6" fill="#e0f7fa" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="319" y="392" fill="#007b83" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">小明</tspan></text>
+<rect x="244" y="416" width="150" height="38" rx="6" fill="#a8dab5" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="319" y="441" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">V</tspan></text>
+<text class="svgsm" x="319" y="478" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">打分 14</tspan></text>
+<text class="svgsm" x="319" y="498" fill="#80868b" text-anchor="middle" style="font-size:13.0px">÷√d_k → 1.24</text>
+<line x1="549.0" y1="340" x2="549.0" y2="359" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="440" y="366" width="218" height="40" rx="6" fill="#e0f7fa" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="549" y="392" fill="#007b83" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">把</tspan></text>
+<rect x="474" y="416" width="150" height="38" rx="6" fill="#ceead6" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="549" y="441" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">V</tspan></text>
+<text class="svgsm" x="549" y="478" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">打分 -7</tspan></text>
+<text class="svgsm" x="549" y="498" fill="#80868b" text-anchor="middle" style="font-size:13.0px">÷√d_k → -0.62</text>
+<line x1="779.0" y1="340" x2="779.0" y2="359" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="670" y="366" width="218" height="40" rx="6" fill="#e0f7fa" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="779" y="392" fill="#007b83" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">钥匙</tspan></text>
+<rect x="704" y="416" width="150" height="38" rx="6" fill="#81c995" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="779" y="441" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">V</tspan></text>
+<text class="svgsm" x="779" y="478" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">打分 22</tspan></text>
+<text class="svgsm" x="779" y="498" fill="#80868b" text-anchor="middle" style="font-size:13.0px">÷√d_k → 1.94</text>
+<line x1="1009.0" y1="340" x2="1009.0" y2="359" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="900" y="366" width="218" height="40" rx="6" fill="#e0f7fa" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="1009" y="392" fill="#007b83" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">放进</tspan></text>
+<rect x="934" y="416" width="150" height="38" rx="6" fill="#34a853" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1009" y="441" fill="#fff" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">V</tspan></text>
+<text class="svgsm" x="1009" y="478" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">打分 31</tspan></text>
+<text class="svgsm" x="1009" y="498" fill="#80868b" text-anchor="middle" style="font-size:13.0px">÷√d_k → 2.74</text>
+<line x1="1239.0" y1="340" x2="1239.0" y2="359" stroke="#9334e6" stroke-width="1.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="1130" y="366" width="218" height="40" rx="6" fill="#e0f7fa" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="1239" y="392" fill="#007b83" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">抽屉</tspan></text>
+<rect x="1164" y="416" width="150" height="38" rx="6" fill="#0d652d" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1239" y="441" fill="#fff" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">V</tspan></text>
+<text class="svgsm" x="1239" y="478" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">打分 38</tspan></text>
+<text class="svgsm" x="1239" y="498" fill="#80868b" text-anchor="middle" style="font-size:13.0px">÷√d_k → 3.36</text>
+<text class="svgsm" x="210" y="524" fill="#80868b" style="font-size:13.0px">上排 ＝ K（挂出来的牌子）　　下排 ＝ V（牌子后面的货）</text>
+<text class="svgsm" x="30" y="560" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">⛔ 不除 √d_k</tspan></text>
+<rect x="30" y="574" width="0.5101886114832613" height="36" rx="0" fill="#34a853" stroke="none" stroke-width="1"/>
+<rect x="30.51018861148326" y="574" width="559.4897484051187" height="36" rx="0" fill="#0d652d" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="310" y="592" fill="#fff" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">抽屉</tspan></text>
+<text class="svgsm" x="310" y="608" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">99.9%</tspan></text>
+<rect x="30" y="574" width="560" height="36" rx="0" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="30" y="634" fill="#80868b" style="font-size:14.0px">⭐ 这一整条就是输出的那一碗　——　长度恒等于 100%，softmax 不许有人弃权</text>
+<text class="svgsm" x="30" y="662" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">整条被一家吃掉：模型只看得见「抽屉」</tspan></text>
+<text class="svgsm" x="30" y="686" fill="#5f6368" style="font-size:15.0px">另外四家加起来 0.09%——　在这根条上不到一个像素。</text>
+<text class="svgsm" x="740" y="560" fill="#0d652d" style="font-size:19.0px"><tspan font-weight="700">⭐ 除以 √d_k</tspan></text>
+<rect x="740" y="574" width="34.95652893328419" height="36" rx="0" fill="#a8dab5" stroke="none" stroke-width="1"/>
+<rect x="774.9565289332842" y="574" width="5.462737066808145" height="36" rx="0" fill="#ceead6" stroke="none" stroke-width="1"/>
+<rect x="780.4192660000923" y="574" width="70.89586003598698" height="36" rx="0" fill="#81c995" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="815" y="592" fill="#202124" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">钥匙</tspan></text>
+<text class="svgsm" x="815" y="608" fill="#202124" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">13%</tspan></text>
+<rect x="851.3151260360793" y="574" width="157.0724508167559" height="36" rx="0" fill="#34a853" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="929" y="592" fill="#fff" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">放进</tspan></text>
+<text class="svgsm" x="929" y="608" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">28%</tspan></text>
+<rect x="1008.3875768528352" y="574" width="291.61242314716475" height="36" rx="0" fill="#0d652d" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1154" y="592" fill="#fff" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">抽屉</tspan></text>
+<text class="svgsm" x="1154" y="608" fill="#fff" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">52%</tspan></text>
+<rect x="740" y="574" width="560" height="36" rx="0" fill="none" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="740" y="634" fill="#80868b" style="font-size:14.0px">⭐ 这一整条就是输出的那一碗　——　长度恒等于 100%，softmax 不许有人弃权</text>
+<text class="svgsm" x="740" y="662" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">混出来的是「放进 ＋ 抽屉」，这才答得上问题</tspan></text>
+<text class="svgsm" x="740" y="686" fill="#5f6368" style="font-size:15.0px">前两家占 80%，剩下三家还留着 20% 的余地。</text>
+<text class="svgsm" x="30" y="708" fill="#b06000" style="font-size:15.0px">⛔ 打分那一步（Q·Kᵀ）是 <tspan font-weight="700">n × n 个数</tspan>——&#160;但它<tspan font-weight="700">不落地</tspan>，只在片上过。<tspan font-weight="700">贵在要算的次数，不在显存。</tspan></text>
+<text class="svgsm" x="30" y="732" fill="#b06000" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">真正要留下来的是牌子和货（K 和 V）</tspan>——&#160;下一个 token 还要挨家问一遍。<tspan font-weight="700">这两份就是 KV cache，也是本讲唯一的账本。</tspan></text>
+<rect x="0" y="770" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="770" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="770" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="797" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 那个 √d_k 不是玄学，推导链在论文脚注里，两行就能讲完</tspan></text>
+<text class="svgsm" x="20" y="828" fill="#174ea6" style="font-size:15.0px">假设 q、k 各维<tspan font-weight="700">独立、均值 0、方差 1</tspan>，那么 q·k ＝ Σ q<tspan baseline-shift="sub" font-size="10">i</tspan>k<tspan baseline-shift="sub" font-size="10">i</tspan> 的<tspan font-weight="700">均值是 0，方差是 d_k</tspan>——&#160;标准差就是 √d_k。</text>
+<text class="svgsm" x="20" y="852" fill="#174ea6" style="font-size:15.0px">⭐ 所以除以 √d_k 只做一件事：<tspan font-weight="700">把打分的方差拉回 1</tspan>。维度越高分数摊得越开，不拉回来 softmax 会被推到「几乎全是 0 和 1」的角落，<tspan font-weight="700">梯度就没了</tspan>。</text>
+<text class="svgsm" x="20" y="876" fill="#174ea6" style="font-size:15.0px">⛔ 别只说「防止 softmax 饱和」——&#160;那是结论不是理由。<tspan font-weight="700">理由是方差随维度线性长大，而 softmax 只认绝对数值。</tspan></text>
+</svg><figcaption>⭐⭐ <b>台下最容易听岔的一句在这儿</b>：注意力<b>不是「挑出最像的那一个」</b>，<em>而是<b>按百分比把几家的货混成一碗</b>。</em><br>⛔ 而混完之后，<b>牌子和货（K 和 V）不能扔 ——&nbsp;下一个字还要用</b>。<em>留下来的这两份，就是这本书的反派：<b>KV cache</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 §3.2：「a weighted sum of the values … compatibility function of the query with the corresponding key」</p>
+<p>同一篇论文 §3.2.1 与脚注 4：「the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients」</p></details></figure>
+
+<div class="note info"><p>📌 那个 <code>√d_k</code> 看着吓人，<b>说白了就是一个标准差</b>。
+  <em>除掉它只做一件事：把打分的高低差拉回正常范围。</em></p>
+<p>⛔ 别小看这一下 ——&nbsp;<b>不除，整碗货会被一家吃掉</b>；
+  除了，才混得出一碗真正的混合物。</p></div>
+
+<h3 id="s2-5">2.5　多头在多什么</h3>
+
+<figure class="fbox fwide" id="fig-mha-heads"><svg viewBox="0 0 1400 778" width="100%" role="img" aria-label="多头注意力：把 d_model 切成 h 份，每份独立做一次注意力再拼回来。总维度不变，总计算量也基本不变；多头的价值是避免单头把不同的关注平均掉"><defs><marker id="ah-00838f" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#00838f"/></marker><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-7b1fa2" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#7b1fa2"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">多头在多什么 ——&#160;<tspan font-weight="700">不是堆算力，是不让「平均」把不同的关注糊成一团</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 原文：「With a <tspan font-style="italic">single</tspan> attention head, <tspan font-weight="700">averaging inhibits this</tspan>.」——&#160;<tspan font-weight="700">单头不是不够用，是会把该分开的东西平均掉。</tspan></text>
+<rect x="0" y="82" width="470" height="214" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="82" width="470" height="4" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<rect x="0" y="84" width="470" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="112" x2="470" y2="112" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="102" fill="#5f6368" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 单头</tspan></text>
+<text class="svgsm" x="75" y="102" fill="#5f6368" style="font-size:11.0px">一个 512 维的注意力</text>
+<rect x="24" y="136" width="420" height="40" rx="6" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="234" y="161" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">一次注意力，d = 512</tspan></text>
+<text class="svgsm" x="24" y="204" fill="#5f6368" style="font-size:15.0px">一个 query 同时要兼顾：</text>
+<text class="svgsm" x="40" y="226" fill="#80868b" style="font-size:15.0px">· 「上一个词是什么」</text>
+<text class="svgsm" x="40" y="246" fill="#80868b" style="font-size:15.0px">· 「这句话的主语是谁」</text>
+<text class="svgsm" x="40" y="266" fill="#80868b" style="font-size:15.0px">· 「三段之前提到的那个人名」</text>
+<text class="svgsm" x="24" y="294" fill="#a50e0e" style="font-size:15.0px">⛔ 只有<tspan font-weight="700">一组</tspan>权重可分配 ——&#160;结果是<tspan font-weight="700">把三种关注平均了一下</tspan>。</text>
+<rect x="486" y="82" width="914" height="396" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="486" y="82" width="914" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="486" y="84" width="914" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="486" y1="112" x2="1400" y2="112" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="500" y="102" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 多头（h ＝ 8）</tspan></text>
+<text class="svgsm" x="632" y="102" fill="#5f6368" style="font-size:11.0px">切成 8 份，每份 64 维，各看各的，最后拼回来</text>
+<rect x="510" y="136" width="92" height="40" rx="6" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="556" y="161" fill="#681da8" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">head 1</tspan></text>
+<text class="svgsm" x="556" y="192" fill="#80868b" text-anchor="middle" style="font-size:14.0px">d = 64</text>
+<line x1="556" y1="204" x2="556" y2="220" stroke="#9334e6" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="618" y="136" width="92" height="40" rx="6" fill="#fff" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="664" y="161" fill="#007b83" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">head 2</tspan></text>
+<text class="svgsm" x="664" y="192" fill="#80868b" text-anchor="middle" style="font-size:14.0px">d = 64</text>
+<line x1="664" y1="204" x2="664" y2="220" stroke="#00838f" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-00838f)"/>
+<rect x="726" y="136" width="92" height="40" rx="6" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="772" y="161" fill="#0d652d" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">head 3</tspan></text>
+<text class="svgsm" x="772" y="192" fill="#80868b" text-anchor="middle" style="font-size:14.0px">d = 64</text>
+<line x1="772" y1="204" x2="772" y2="220" stroke="#1e8e3e" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<rect x="834" y="136" width="92" height="40" rx="6" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="880" y="161" fill="#b06000" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">head 4</tspan></text>
+<text class="svgsm" x="880" y="192" fill="#80868b" text-anchor="middle" style="font-size:14.0px">d = 64</text>
+<line x1="880" y1="204" x2="880" y2="220" stroke="#e8710a" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="942" y="136" width="92" height="40" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="988" y="161" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">head 5</tspan></text>
+<text class="svgsm" x="988" y="192" fill="#80868b" text-anchor="middle" style="font-size:14.0px">d = 64</text>
+<line x1="988" y1="204" x2="988" y2="220" stroke="#d93025" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="1050" y="136" width="92" height="40" rx="6" fill="#fff" stroke="#00838f" stroke-width="1"/>
+<text class="svgsm" x="1096" y="161" fill="#007b83" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">head 6</tspan></text>
+<text class="svgsm" x="1096" y="192" fill="#80868b" text-anchor="middle" style="font-size:14.0px">d = 64</text>
+<line x1="1096" y1="204" x2="1096" y2="220" stroke="#00838f" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-00838f)"/>
+<rect x="1158" y="136" width="92" height="40" rx="6" fill="#fff" stroke="#7b1fa2" stroke-width="1"/>
+<text class="svgsm" x="1204" y="161" fill="#7b1fa2" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">head 7</tspan></text>
+<text class="svgsm" x="1204" y="192" fill="#80868b" text-anchor="middle" style="font-size:14.0px">d = 64</text>
+<line x1="1204" y1="204" x2="1204" y2="220" stroke="#7b1fa2" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-7b1fa2)"/>
+<rect x="1266" y="136" width="92" height="40" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1312" y="161" fill="#174ea6" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">head 8</tspan></text>
+<text class="svgsm" x="1312" y="192" fill="#80868b" text-anchor="middle" style="font-size:14.0px">d = 64</text>
+<line x1="1312" y1="204" x2="1312" y2="220" stroke="#1a73e8" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="510" y="224" width="848" height="34" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="934" y="246" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">Concat → 再过一个 W_O，拼回 512</tspan></text>
+<text class="svgsm" x="510" y="288" fill="#174ea6" style="font-size:19.0px"><tspan font-weight="700">那个 W_O 到底是什么？</tspan></text>
+<rect x="510" y="300" width="34" height="44" rx="4" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="550" y="300" width="34" height="44" rx="4" fill="#fff" stroke="#00838f" stroke-width="1"/>
+<rect x="590" y="300" width="34" height="44" rx="4" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="630" y="300" width="34" height="44" rx="4" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="670" y="300" width="34" height="44" rx="4" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="710" y="300" width="34" height="44" rx="4" fill="#fff" stroke="#00838f" stroke-width="1"/>
+<rect x="750" y="300" width="34" height="44" rx="4" fill="#fff" stroke="#7b1fa2" stroke-width="1"/>
+<rect x="790" y="300" width="34" height="44" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="844" y="328" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">订在一起</tspan></text>
+<rect x="938" y="300" width="150" height="44" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1013" y="328" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">＝ W_O</tspan></text>
+<text class="svgsm" x="510" y="368" fill="#5f6368" style="font-size:17.0px">⭐ <tspan font-weight="700">它不是新东西</tspan> ——　八个头各自往同一条残差流上加了一份，加法而已。</text>
+<text class="svgsm" x="510" y="408" fill="#174ea6" style="font-size:15.0px">⭐ <tspan font-weight="700">8 × 64 ＝ 512</tspan>——&#160;总维度没变、参数量没变。<tspan font-weight="700">多头是「切开」，不是「加倍」。</tspan></text>
+<text class="svgsm" x="510" y="436" fill="#80868b" style="font-size:16.0px">⚠️ 但<tspan font-weight="700">这只是原始 Transformer 的取法，不是通例</tspan>：</text>
+<text class="svgsm" x="510" y="460" fill="#80868b" style="font-size:16.0px">本课的主角 DeepSeek-V3 是 <tspan font-weight="700">128 头 × 128 维 ＝ 16,384</tspan>，比它的 d_model 7,168 <tspan font-weight="700">大 2.29 倍</tspan>。</text>
+<rect x="0" y="472" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="472" width="4" height="146" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="472" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="499" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 多头的代价，正好是本专题的题眼</tspan></text>
+<text class="svgsm" x="20" y="530" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">好处</tspan>：一个头要同时盯语法、盯指代、盯主题，<tspan font-weight="700">只能给一个折中的答案</tspan>；切成 8 个，<tspan font-weight="700">各盯各的，互不干扰</tspan>。</text>
+<text class="svgsm" x="20" y="554" fill="#0d652d" style="font-size:15.0px">⭐ 换个说法：<tspan font-weight="700">多头买到的不是算力，是分辨率。</tspan></text>
+<text class="svgsm" x="20" y="578" fill="#0d652d" style="font-size:15.0px">⛔ <tspan font-weight="700">代价</tspan>：<tspan font-weight="700">每个头都要自己的 K 和 V</tspan>。于是要留下来的东西<tspan font-weight="700">乘以了 8</tspan>。</text>
+<text class="svgsm" x="20" y="602" fill="#0d652d" style="font-size:15.0px">⭐⭐ 所以后面第一个旋钮（每个 token 存多少）第一刀砍的就是这里：<tspan font-weight="700">MQA 让 8 个头共用 1 组 KV，GQA 折中成几组</tspan>——&#160;<tspan font-weight="700">砍的正是多头在这一步乘上去的那个 8。</tspan></text>
+<rect x="0" y="632" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="632" width="4" height="122" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="632" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="659" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 而这个形状的代价，2019 年就被点名了</tspan></text>
+<text class="svgsm" x="20" y="690" fill="#a50e0e" style="font-size:15.0px">Shazeer 2019（MQA 那篇）摘要原话：训练很快，因为序列方向可以并行；但 ——</text>
+<text class="svgsm" x="20" y="714" fill="#a50e0e" style="font-size:15.0px"><tspan font-style="italic">「incremental inference … is often slow, due to the <tspan font-weight="700">memory-bandwidth cost of repeatedly loading the large &quot;keys&quot; and &quot;values&quot; tensors</tspan>」</tspan></text>
+<text class="svgsm" x="20" y="738" fill="#a50e0e" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">这句话把「解码时又变回 RNN」那张图上 Ⓒ 那一行，从我们的推论变成了原文</tspan>——&#160;2017 年造出这个形状，<tspan font-weight="700">2019 年就有人把它命名成问题了</tspan>。</text>
+</svg><figcaption>⭐⭐ <b>这一格里藏着后面四章的全部导火索。</b><em>为了看得更清楚，一个头被切成了八个 ——&nbsp;而这一刀的代价，绿带里已经替你算完了。</em><br>⛔ <b>从下一章起，所有人都在跟这个代价讨价还价</b>：<em><a href="#s四">第四章</a>直接砍它、<a href="#s五">第五章</a>把它压成一份压缩件、<a href="#s六">第六章</a>照存但不全读、<a href="#s七">第七章</a>干脆不存。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 §3.2.2：「jointly attend to information from different representation subspaces」、「With a single attention head, averaging inhibits this」；h = 8，d_k = d_v = d_model/h = 64</p>
+<p>Shazeer 2019 (arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>)《Fast Transformer Decoding: One Write-Head is All You Need》摘要 ——&#160;本课模型表第二行 PaLM 用的就是它</p></details></figure>
+
+<h3 id="s2-6">2.6　本章落点：KV cache 就是在这里出生的</h3>
+
+<p>前面讲的都是想法。<b>把形状标上去，这笔账就能用眼睛读了</b> ——&nbsp;
+  <em>只要在图里找那个<b>会越变越长</b>的维度。</em></p>
+
+<figure class="fbox fwide" id="fig-tx-base"><svg viewBox="0 0 1400 1388" width="100%" role="img" aria-label="主线图 · 一层 Transformer，每一步的张量形状">
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:19px">主线图 · 一层 Transformer，每一步的张量形状</text>
+<text class="svgsm" x="0" y="48" fill="#5f6368" style="font-size:15px">⭐ 这张图会在整个专题里反复出现。每讲一个方案，就把它重画一遍，只把被改动的那一处点亮 —— 你永远知道自己在图上的哪儿。</text>
+<rect x="0" y="62" width="1400" height="30" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="None" x="12" y="82" fill="#80868b" style="font-size:15px">读这张图先认字母：</text>
+<text class="None" x="150" y="82" fill="#5f6368" style="font-size:15px">B 批量 · T query 长度 · <tspan font-weight="700">S KV 长度</tspan> · D d_model · F MLP 隐层 · H 头维 · N query 头数 · K KV 头数 · G ＝ N∕K</text>
+<text class="svgsm" x="700" y="138" fill="#202124" text-anchor="middle" style="font-size:15px"><tspan font-weight="700">X</tspan></text>
+<text class="svgsm" x="726" y="138" fill="#5f6368" style="font-size:15px">BTD</text>
+<text class="svgsm" x="762" y="138" fill="#80868b" style="font-size:15px">——&#160;一层的输入</text>
+<rect x="210" y="170" width="220" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="216" y="166" fill="#174ea6" style="font-size:15px">BTD</text>
+<text class="svgsm" x="424" y="166" fill="#681da8" text-anchor="end" style="font-size:15px">W_Q · DNH</text>
+<circle cx="320" cy="187" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="320" cy="187" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="320" y="220" fill="#202124" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">BTNH</tspan></text>
+<text class="svgsm" x="320" y="242" fill="#174ea6" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">Q</tspan></text>
+<line x1="700" y1="148" x2="320" y2="156" stroke="#5f6368" stroke-width="1"/>
+<line x1="320" y1="156" x2="320" y2="170" stroke="#5f6368" stroke-width="1"/>
+<rect x="590" y="170" width="220" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="596" y="166" fill="#174ea6" style="font-size:15px">BSD</text>
+<text class="svgsm" x="804" y="166" fill="#681da8" text-anchor="end" style="font-size:15px">W_K · DKH</text>
+<circle cx="700" cy="187" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="700" cy="187" r="2.6" fill="#1a73e8"/>
+<rect x="659" y="202" width="82" height="26" rx="5" fill="#fce8e6"/>
+<text class="svgsm" x="700" y="220" fill="#202124" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="700" y="242" fill="#174ea6" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">K</tspan></text>
+<line x1="700" y1="148" x2="700" y2="156" stroke="#5f6368" stroke-width="1"/>
+<line x1="700" y1="156" x2="700" y2="170" stroke="#5f6368" stroke-width="1"/>
+<rect x="970" y="170" width="220" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="976" y="166" fill="#174ea6" style="font-size:15px">BSD</text>
+<text class="svgsm" x="1184" y="166" fill="#681da8" text-anchor="end" style="font-size:15px">W_V · DKH</text>
+<circle cx="1080" cy="187" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="1080" cy="187" r="2.6" fill="#1a73e8"/>
+<rect x="1039" y="202" width="82" height="26" rx="5" fill="#fce8e6"/>
+<text class="svgsm" x="1080" y="220" fill="#202124" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">BSKH</tspan></text>
+<text class="svgsm" x="1080" y="242" fill="#174ea6" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">V</tspan></text>
+<line x1="700" y1="148" x2="1080" y2="156" stroke="#5f6368" stroke-width="1"/>
+<line x1="1080" y1="156" x2="1080" y2="170" stroke="#5f6368" stroke-width="1"/>
+<rect x="210" y="262" width="220" height="32" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="224" y="284" fill="#5f6368" style="font-size:16px"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="297" y="284" fill="#5f6368" style="font-size:15px">BTNH → BTKGH</text>
+<rect x="530" y="326" width="340" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="536" y="322" fill="#174ea6" style="font-size:15px">BTKGH</text>
+<text class="svgsm" x="864" y="322" fill="#681da8" text-anchor="end" style="font-size:15px">BSKH</text>
+<circle cx="700" cy="343" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="700" cy="343" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="700" y="378" fill="#202124" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">BTSKG</tspan></text>
+<text class="svgsm" x="506" y="348" fill="#174ea6" text-anchor="end" style="font-size:16px"><tspan font-weight="700">Q·Kᵀ</tspan></text>
+<rect x="590" y="404" width="220" height="32" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="604" y="426" fill="#5f6368" style="font-size:16px"><tspan font-weight="700">＋ masks</tspan></text>
+<text class="svgsm" x="684" y="426" fill="#5f6368" style="font-size:15px">谁能看谁</text>
+<rect x="538" y="456" width="324" height="32" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="552" y="478" fill="#5f6368" style="font-size:16px"><tspan font-weight="700">softmax</tspan></text>
+<text class="svgsm" x="625" y="478" fill="#202124" style="font-size:15px"><tspan font-weight="700">BTSKG（注意力矩阵，记作 A）</tspan></text>
+<text class="svgsm" x="876" y="478" fill="#a50e0e" style="font-size:15px">★ <tspan font-weight="700">这一步不落地，贵在要算的次数</tspan></text>
+<rect x="530" y="520" width="340" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="536" y="516" fill="#174ea6" style="font-size:15px">BTSKG</text>
+<text class="svgsm" x="864" y="516" fill="#681da8" text-anchor="end" style="font-size:15px">BSKH</text>
+<circle cx="700" cy="537" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="700" cy="537" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="700" y="572" fill="#202124" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">BTKGH</tspan></text>
+<text class="svgsm" x="506" y="542" fill="#174ea6" text-anchor="end" style="font-size:16px"><tspan font-weight="700">A·V</tspan></text>
+<rect x="590" y="598" width="220" height="32" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="604" y="620" fill="#5f6368" style="font-size:16px"><tspan font-weight="700">reshape</tspan></text>
+<text class="svgsm" x="677" y="620" fill="#5f6368" style="font-size:15px">BTKGH → BTNH</text>
+<rect x="530" y="662" width="340" height="34" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="536" y="658" fill="#174ea6" style="font-size:15px">BTNH</text>
+<text class="svgsm" x="864" y="658" fill="#681da8" text-anchor="end" style="font-size:15px">W_O · NHD</text>
+<circle cx="700" cy="679" r="9" fill="none" stroke="#1a73e8" stroke-width="1.6"/>
+<circle cx="700" cy="679" r="2.6" fill="#1a73e8"/>
+<text class="svgsm" x="700" y="714" fill="#202124" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">BTD</tspan></text>
+<text class="svgsm" x="506" y="684" fill="#174ea6" text-anchor="end" style="font-size:16px"><tspan font-weight="700">输出投影</tspan></text>
+<rect x="590" y="740" width="220" height="32" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="604" y="762" fill="#5f6368" style="font-size:16px"><tspan font-weight="700">＋ 残差</tspan></text>
+<text class="svgsm" x="672" y="762" fill="#5f6368" style="font-size:15px">BTD</text>
+<rect x="590" y="792" width="220" height="32" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="604" y="814" fill="#5f6368" style="font-size:16px"><tspan font-weight="700">norm</tspan></text>
+<text class="svgsm" x="651" y="814" fill="#5f6368" style="font-size:15px">BTD</text>
+<rect x="370" y="844" width="660" height="58" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="700" y="868" fill="#0d652d" text-anchor="middle" style="font-size:16px"><tspan font-weight="700">MLP（本专题一个字都不改它）</tspan></text>
+<text class="svgsm" x="700" y="890" fill="#5f6368" text-anchor="middle" style="font-size:15px">BTD ·DF→ BTF ─gelu⊛─ BTF ·FD→ BTD</text>
+<rect x="563" y="920" width="275" height="32" rx="5" fill="#f8f9fa" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="577" y="942" fill="#5f6368" style="font-size:16px"><tspan font-weight="700">＋ 残差 → norm</tspan></text>
+<text class="svgsm" x="707" y="942" fill="#5f6368" style="font-size:15px">BTD　→ 下一层</text>
+<line x1="700" y1="294" x2="700" y2="326" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="386" x2="700" y2="404" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="436" x2="700" y2="456" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="488" x2="700" y2="520" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="580" x2="700" y2="598" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="630" x2="700" y2="662" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="722" x2="700" y2="740" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="772" x2="700" y2="792" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="824" x2="700" y2="844" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="902" x2="700" y2="920" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="320" y1="248" x2="320" y2="262" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="320" y1="294" x2="320" y2="304" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="320" y1="304" x2="700" y2="304" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="304" x2="700" y2="326" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="248" x2="700" y2="256" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="700" y1="256" x2="916" y2="256" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="916" y1="256" x2="916" y2="343" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="916" y1="343" x2="870" y2="343" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="1080" y1="248" x2="1080" y2="256" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="1080" y1="256" x2="966" y2="256" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="966" y1="256" x2="966" y2="537" stroke="#5f6368" stroke-width="1.2"/>
+<line x1="966" y1="537" x2="870" y2="537" stroke="#5f6368" stroke-width="1.2"/>
+<rect x="0" y="992" width="1400" height="190" rx="10" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svglbl" x="22" y="1028" fill="#202124" style="font-size:20px">这一层算完，桌上的东西分三堆</text>
+<rect x="22" y="1048" width="437" height="116" rx="8" fill="#f1f3f4" stroke="#5f6368" stroke-width="1"/>
+<text class="None" x="38" y="1078" fill="#5f6368" style="font-size:17px"><tspan font-weight="700">常驻的设备</tspan></text>
+<text class="None" x="38" y="1110" fill="#5f6368" style="font-size:20px"><tspan font-weight="700">权重 W</tspan></text>
+<text class="None" x="38" y="1144" fill="#5f6368" style="font-size:15px">所有人共用，不随对话变</text>
+<rect x="481" y="1048" width="437" height="116" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="None" x="497" y="1078" fill="#0d652d" style="font-size:17px"><tspan font-weight="700">草稿纸</tspan></text>
+<text class="None" x="497" y="1110" fill="#0d652d" style="font-size:20px"><tspan font-weight="700">中间那些量</tspan></text>
+<text class="None" x="497" y="1144" fill="#5f6368" style="font-size:15px">算完就扔，不留到下一步</text>
+<rect x="940" y="1048" width="437" height="116" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="None" x="956" y="1078" fill="#a50e0e" style="font-size:17px"><tspan font-weight="700">锁进柜子的</tspan></text>
+<text class="None" x="956" y="1110" fill="#a50e0e" style="font-size:20px"><tspan font-weight="700">K 和 V</tspan></text>
+<text class="None" x="956" y="1144" fill="#5f6368" style="font-size:15px">每来一个 token 就多一格</text>
+<rect x="0" y="1198" width="1400" height="118" rx="10" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svglbl" x="22" y="1236" fill="#a50e0e" style="font-size:21px">★ 先只看一件事：图上什么东西需要留到下一个 token</text>
+<text class="None" x="22" y="1274" fill="#5f6368" style="font-size:17px"><tspan font-weight="700">➜</tspan></text>
+<text class="None" x="62" y="1274" fill="#5f6368" style="font-size:17px"><tspan font-weight="700">这笔账在后面四张图里一直挂着</tspan> ——&#160;每张会说清它把这笔账动到了哪一格。</text>
+<text class="None" x="1378" y="1300" fill="#80868b" text-anchor="end" style="font-size:15px">📌 这一格的完整讲解在图下面的正文里</text>
+<text class="None" x="210" y="978" fill="#a50e0e" style="font-size:17px">⬆ 红底那两处就是它 ——　全图只有这两个输出要跨 token 留下来</text>
+<rect x="0" y="1330" width="1400" height="48" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="16" y="1360" fill="#174ea6" style="font-size:15px">📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。</text>
+</svg><figcaption>⭐ <b>别急着看懂整张 ——&nbsp;现在只做一件事</b>：<em>在这一堆字母里，把那个<b>会随对话越变越长</b>的找出来。</em><br>⭐⭐ 找到它，你就找到了后面<b>所有招数共同的靶子</b> ——&nbsp;<em>剩下七章，全是在想办法拿它开刀。</em></figcaption></figure>
+
+<div class="note ok"><p>⭐⭐ <b>给它起个名字：这一讲的主角，就是那个 <code>S</code>。</b></p>
+<p><em>后面每一章你其实只要盯着它问一句：这一招是让 S 前面的<b>系数变小</b>、
+  让每步<b>读到的 S 变少</b>，还是干脆让 S <b>从形状里消失</b>？</em></p>
+<p>⭐ <b>名词有几十个，它们全都只在回答这三问中的一个。</b></p></div>
+
+<div class="note info"><p>📌 <b>台下这时候一定会问：存不下，为什么不能每步重算？</b></p>
+<p>因为重算的不是「再算一遍」，是<b>每一步都把整段历史重算一遍</b>。
+  吐第 100 个字要把前 99 个重过一遍，吐第 101 个再重过一遍 ——&nbsp;
+  <em>整段生成的总开销会从正比于 N² 变成正比于 <b>N³</b>。</em></p>
+<p>⛔ 所以这不是「省一点」，是<b>能不能用</b>的分界线。
+  <em>KV cache 是拿显存换时间 ——&nbsp;而这本书剩下的部分，
+  全在算这笔交换到底有多贵。</em></p></div>
+
+<div class="note ok"><p><b>这一章也只留两句话。</b></p>
+<p><b>换来的</b>：任意两个字之间只隔一步，而且整段话可以一次算完 ——&nbsp;
+  <em>训练终于能把机器喂饱了。</em><br>
+  <b>欠下的</b>：要算的格子从 n 变成 n²；更要命的是<b>那个盒子没了</b>，
+  换成一份<b>会随对话一直长下去</b>的 KV cache。</p>
+<p>⭐ <a href="#s三">下一章</a>不讲新招 ——&nbsp;<b>只做一件事：把这份 KV cache
+  换算成实实在在的显存数字。</b>
+  <em>数字出来之前，谁都不会觉得它是个事。</em></p></div>
+
 </div></section>
 
 

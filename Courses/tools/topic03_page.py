@@ -158,6 +158,53 @@ def dup_caption_vs_fig(cap, svg, fid, n=14):
 DUP_WARNED = []
 
 
+def lint_dup_body_vs_figs(html, n=14):
+    """**正文**有没有把图里已经写着的话又说一遍。返回 [(片段, 命中的图)]。
+
+    ⛔⛔ 2026-09-14 R62 R2 扩容。上一版只查「图注 ↔ 图内文字」，当天下午
+      写第二章时**同一个毛病换了个位置又出现**：图自己的蓝色落点带已经把
+      论文那句理由写全了，紧挨着的一个 note 把它**又说了一遍**，
+      渲染出来页面第二次在原地结巴。
+
+    ⭐ 判据升级：**别按「它是图注还是正文」分类，按「读者会不会看见两遍」分类。**
+      ⛔ 上一版之所以漏，正是因为我按载体建的清单 ——&nbsp;跟「盘点按渲染后属性、
+        不按 class 名」是同一个形状：按名字建清单，一定会漏掉命名体系外的那一类。
+
+    📌 做法：把所有 <figure> 整块抠掉 ＝ 正文；抠出来的里面去掉 <figcaption>
+      ＝ 图内文字。两边扒成纯字比 14 字连续重合。
+
+    ⚠️⚠️ **它只挡得住照抄，挡不住改写。** 同一天第二章里最难看的那一处
+      （图里蓝框写了论文那句理由，紧挨的 note 换几个词又说一遍）
+      **这条查重一声没响** ——&nbsp;字符串对不上。那一处是渲染出来用眼睛看见的。
+      ⛔ 所以判据是：**每写完一章，必须把它截图看一遍。**
+        查重负责挡住机械重复，让眼睛有力气去看别的。
+    """
+    figs = re.findall(r"<figure\b.*?</figure>", html, re.S)
+    if not figs:
+        return []
+    # 图内文字：去掉图注、去掉折叠的出处（出处本来就该在两处都能查到）
+    inner = []
+    for f in figs:
+        t = re.sub(r"<figcaption>.*?</figcaption>", "", f, flags=re.S)
+        t = re.sub(r"<details class=\"figsrc\">.*?</details>", "", t, flags=re.S)
+        fid = re.search(r'id="([^"]+)"', f)
+        inner.append(((fid.group(1) if fid else "?"), _plain(t)))
+    body = _plain(re.sub(r"<figure\b.*?</figure>", "", html, flags=re.S))
+    hits, i = [], 0
+    while i + n <= len(body):
+        for fid, t in inner:
+            if body[i:i + n] in t:
+                j = i + n
+                while j < len(body) and body[i:j + 1] in t:
+                    j += 1
+                hits.append((body[i:j], fid))
+                i = j
+                break
+        else:
+            i += 1
+    return hits
+
+
 def place_figs(html, FIGS, here=HERE):
     """把 `__FIG_X__` 占位符换成 <figure>，并把 .src.html 包成折叠的出处。"""
     for ph, (fid, fn, src, cap) in FIGS.items():
@@ -369,7 +416,10 @@ def finish(html, out_path, sections, label):
     print("ok  %s  %s 字符 · %d 节 · %d 个论文链接"
           % (label, format(os.path.getsize(out_path), ","),
              len(sections), _CL.count(html)))
-    # ⭐ 图注 ↔ 图内文字查重的回执。⛔ 只报告不中止，理由见 dup_caption_vs_fig 的注。
+    # ⭐ 查重回执两条：图注 ↔ 图内文字、正文 ↔ 图内文字。
+    #   ⛔ 都只报告不中止，理由见 dup_caption_vs_fig 的注。
+    for frag, fid in lint_dup_body_vs_figs(html):
+        DUP_WARNED.append((fid + "（正文）", frag))
     if DUP_WARNED:
         print("    ⚠️  图注照抄图内文字 %d 处（%d 张图）——&nbsp;图注该写"
               "「图给不了的东西」" % (len(DUP_WARNED),

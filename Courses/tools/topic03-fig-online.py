@@ -245,8 +245,8 @@ def main():
         "⭐ 省的是<tspan font-weight=\"700\">片上暂存</tspan>："
         "传统要同时摆下整行 S 个数，在线一次只摆一块。"
         "<tspan font-weight=\"700\">于是那张 S×S 的大表根本不用建。</tspan>",
-        "📌 这跟 §五 的账是<tspan font-weight=\"700\">两回事</tspan>："
-        "§五 省的是要<tspan font-weight=\"700\">跨 token 留下来</tspan>的 KV cache，"
+        "📌 这跟 MLA 那笔账是<tspan font-weight=\"700\">两回事</tspan>："
+        "MLA 省的是要<tspan font-weight=\"700\">跨 token 留下来</tspan>的 KV cache，"
         "这里省的是<tspan font-weight=\"700\">算一步时中途摊开</tspan>的中间结果。"
         "⚠️ 两个都叫「省显存」，但省的不是同一样东西。",
     ])

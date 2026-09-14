@@ -99,7 +99,7 @@ def fig_swap():
     y = f.header(
         '2017 年那一刀 ——&#160;'
         '<tspan font-weight="700">把那根横箭头拿掉，换成「每个位置直接看所有位置」</tspan>',
-        '⭐ §零 三个痛点里的第 ① 条，就是在这里被解掉的。'
+        '⭐ 开篇讲 RNN 那三个痛点里的第 ① 条，就是在这里被解掉的。'
         '<tspan font-weight="700">而解法本身，就是这一讲后面要还的那笔账。</tspan>',
         [(RD, "串行：只能一步一步走"), (BL, "要算的格子"),
          ("#f1f3f4", "被因果遮罩挡住的未来")])
@@ -107,7 +107,7 @@ def fig_swap():
     N, R, PY = 6, 19, y
     # ── 左：RNN ────────────────────────────────────────────────
     LT = f.panel(0, PY, 660, 272, "Ⓐ RNN：一条链", RD, "#fff",
-                 sub="信息只能沿着链爬", tag="§零 讲过", tint="#fadad6")
+                 sub="信息只能沿着链爬", tag="讲 RNN 时说过", tint="#fadad6")
     for i in range(N):
         cx = 70 + i * 96
         f.box(cx - R, LT + 42 - R, 2 * R, 2 * R, "#fff", RD, R)
@@ -169,11 +169,12 @@ def fig_swap():
     yy = PY + 272 + 16
     yy = f.band(yy, "warn", "这一刀换来了什么，又欠下了什么", [
         '<tspan font-weight="700">换来的</tspan>：串行步数从 O(n) 掉到 O(1)'
-        '——&#160;整段序列一次算完，加速器终于喂得饱了（这正是 §零那张「RNN 在硬件上为什么慢」图那笔账的反面）。',
+        '——&#160;整段序列一次算完，加速器终于喂得饱了'
+        '（这正是「RNN 在硬件上为什么慢」那张图那笔账的反面）。',
         '<tspan font-weight="700">欠下的</tspan>：连线数从 n 变成 n²。'
         '⛔ 而且注意 ——&#160;<tspan font-weight="700">状态没了</tspan>：'
         'RNN 那个固定大小的 h 被换成了「把所有历史原封不动留着」。',
-        '⭐ 于是 §零那张「解码时又变回 RNN」图 Ⓒ 那一行的病根在这儿：'
+        '⭐ 于是「解码时又变回 RNN」那张图上 Ⓒ 那一行的病根，就在这儿：'
         '<tspan font-weight="700">解码时每一步都得把「所有历史」重读一遍 ——&#160;那就是 KV cache。</tspan>'])
     yy = f.src(yy + 18,
                'Vaswani et al. 2017 (arXiv 1706.03762) 表 1：自注意力 串行步数 O(1)／最长路径 O(1)；'
@@ -479,7 +480,8 @@ def fig_heads():
         '<tspan font-style="italic">「incremental inference … is often slow, due to the '
         '<tspan font-weight="700">memory-bandwidth cost of repeatedly loading '
         'the large &quot;keys&quot; and &quot;values&quot; tensors</tspan>」</tspan>',
-        '⭐⭐ <tspan font-weight="700">这句话把 §零那张「解码时又变回 RNN」图 Ⓒ 那一行从我们的推论变成了原文</tspan>'
+        '⭐⭐ <tspan font-weight="700">这句话把「解码时又变回 RNN」那张图上 Ⓒ 那一行，'
+        '从我们的推论变成了原文</tspan>'
         '——&#160;2017 年造出这个形状，<tspan font-weight="700">2019 年就有人把它命名成问题了</tspan>。'])
     yy = f.src(yy + 18,
                'Vaswani et al. 2017 论文 §3.2.2：「jointly attend to information from different '
