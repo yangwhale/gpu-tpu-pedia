@@ -220,7 +220,7 @@ def main():
         "而 69 是 K3 的真层数（K3 实际 96 头）——&#160;"
         "所以「%.0f MiB / 请求」是<tspan font-weight=\"700\">量级示意，不是部署数</tspan>。"
         % (st * NL / 2.0 ** 20),
-    ])
+    ], fold=True)
 
     yy = f.src(yy + 16,
                "递推式、key collision（L &gt; d）、delta rule ＝ Widrow-Hoff、"

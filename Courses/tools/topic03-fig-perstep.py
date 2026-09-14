@@ -216,7 +216,9 @@ def main():
 
     # ══ ③ 换算成毫秒 ══════════════════════════════════════════════
     yy = top + PH2 + 26
-    PH3 = 390
+    # ⭐ 2026-09-15：390 → 416。「反直觉二」那格补了 batch 依赖那两行，
+    #   面板下沿被越过 22 px（越界自检当场报的）。
+    PH3 = 416
     top = f.panel(0, yy, W, PH3,
                   "③ 除以带宽 ——&#160;字节变毫秒，"
                   "<tspan font-weight=\"700\">这里才出现两条反直觉的</tspan>", BL,
@@ -309,9 +311,22 @@ def main():
         "⭐ 所以 MLA 真正省下的不是时间，是<tspan font-weight=\"700\">"
         "那 %d 张卡</tspan> ——&#160;它们可以拿去服务别人。" % saved, INK, size=16)
 
-    f.box(712, top + 226, 664, 128, "none", BL, 9)
+    # ⛔⛔ 2026-09-15：这一格原来只写「只再快 1.24 倍」，被读成了一条**通用教训**。
+    #    它只在 batch=1 成立 ——&#160;**权重是全员分摊的，KV 是每人一份**。
+    #    同样这三个数：batch=8 → 2.90×，batch=32 → 8.00×（下面当场算，带断言）。
+    # ⭐⭐ 而最要命的是：**本讲第三章那句话正是它的失效条件** ——
+    #    「加 batch 救得了权重那半，救不了 KV 那半」。
+    #    两章原本方向相反，现在把它们接上 ——&#160;矛盾变成了一次呼应。
+    # ⭐ 判据：**任何「瓶颈已经搬走了」的结论，都要问一句「在多大的 batch 上」。**
+    # ⛔ 别硬写 8.58 ——&#160;从 kvr 反推，这样它永远跟着上面那个口径走。
+    #   （第一版我写成了一个根本不存在的变量 `kv`，断言当场报 1.00 —— 断言值了。）
+    _KV_MLA = kvr * SEQ / K                 # ＝ 8.58 GiB，MLA 一个人的整份 KV
+    _b32 = (ACT + _KV_MLA * 32) / (ACT + kvr * 32)
+    assert 7.5 < _b32 < 8.5, "batch=32 的倍数算歪了：%.2f" % _b32
+    f.box(712, top + 226, 664, 172, "none", BL, 9)
     f.t(732, top + 256,
-        "反直觉二：MLA 之后再上稀疏，只再快 %.2f 倍" % gainD, BL, bold=True,
+        "反直觉二：MLA 之后再上稀疏，<tspan style=\"text-decoration:underline\">"
+        "一个人用的时候</tspan>只再快 %.2f 倍" % gainD, BL, bold=True,
         size=17, cls="svglbl")
     yj = top + 286
     for r in wrap_rich(
@@ -320,6 +335,18 @@ def main():
         "这正是上面表里「DSA：prefill 为主」的<tspan font-weight=\"700\">"
         "数值版</tspan>。" % (ACT, kvr), 624, 16 * 1.12):
         f.t(732, yj, r, GY, size=16)
+        yj += 23
+    yj += 4
+    for r in wrap_rich(
+        "⛔ <tspan font-weight=\"700\">但这条只对一个人成立。</tspan>"
+        "权重那 %.2f 是<tspan font-weight=\"700\">全员分摊</tspan>的，"
+        "KV 却是<tspan font-weight=\"700\">每人一份</tspan> ——&#160;"
+        "同时伺候 32 个人，同样这三个数就变成 "
+        "<tspan font-weight=\"700\">%.1f 倍</tspan>。"
+        "⭐ 这正是<tspan font-weight=\"700\">第三章那句话的另一面</tspan>："
+        "加 batch 救得了权重那半，<tspan font-weight=\"700\">救不了 KV 那半</tspan>。"
+        % (ACT, _b32), 624, 16 * 1.12):
+        f.t(732, yj, r, RD, size=16)
         yj += 23
 
     # ══ 落点 ══════════════════════════════════════════════════════
@@ -361,8 +388,8 @@ def main():
         "</tspan>，而 v7 是 <tspan font-weight=\"700\">2 device / chip</tspan>，"
         "本图一律按 device 算，所以用 <tspan font-weight=\"700\">3.685 TB/s"
         "</tspan>、每 device <tspan font-weight=\"700\">94.74 GiB</tspan>。"
-        "这门课在这个 1:2 上栽过，所以写死在这儿。",
-    ])
+        "⚠️ 这个 1:2 极容易写反，所以这里显式写死。",
+    ], fold=True)
     yy = f.src(yy + 16,
                "装置偷自 Epoch AI 那条「字节 →&#160;毫秒 →&#160;钱」的换算链 ——&#160;"
                "抽象的「省了多少」一路换算到有直觉的量，每一步都能自己验算。"

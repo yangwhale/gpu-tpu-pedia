@@ -306,7 +306,7 @@ def main():
         "Nemotron-H / Jamba-1.5-Large：它们把 Mamba、Attention、FFN "
         "<tspan font-weight=\"700\">各算一层</tspan>，跨家族比「总层数」会差一倍。"
         "TurboS 的 128 层里只有 7 层全注意力，方向上更不支持假说 B，但口径不同，不进图。",
-    ])
+    ], fold=True)
 
     yy = f.src(yy + 14,
                "📌 全部数据来自各模型 HuggingFace 仓库的 config.json 逐个字段："

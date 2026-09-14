@@ -205,7 +205,7 @@ def main():
         "⚠️ 表 3 里各行的 <tspan font-weight=\"700\">d_ff 并不相同</tspan>"
         "（8192 / 9088 / 9984）——&#160;那是为了<tspan font-weight=\"700\">对齐总参数量</tspan>；"
         "看困惑度差之前先知道这一点。",
-    ])
+    ], fold=True)
 
     yy = f.band(yy + 14, "ok", "暗线第二次出现：事后压 vs 从头按压缩训", [
         "GQA 是<tspan font-weight=\"700\">事后</tspan>的典范 ——&#160;"

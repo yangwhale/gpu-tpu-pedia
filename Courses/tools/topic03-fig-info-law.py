@@ -166,7 +166,7 @@ def main():
         "⚠️ 第三格是<tspan font-weight=\"700\">本课按定义做的推导</tspan>；"
         "尤其旋钮② 那行 ——&#160;论文<tspan font-weight=\"700\">明确把稀疏注意力排除</tspan>"
         "在那段分析之外（原文括注 excluding sparse attention），只说「可以照样分析」。",
-    ])
+    ], fold=True)
 
     yy = f.src(yy + 16,
                "① 出自 Lin ＆ Tegmark《Criticality in Formal Languages and "

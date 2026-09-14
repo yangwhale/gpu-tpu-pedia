@@ -365,7 +365,7 @@ def main():
         "font-weight=\"700\">没关系</tspan>。",
         "⭐ NoPE 省的是③里那一条：<tspan font-weight=\"700\">%d 维里的那 %d 维"
         "</tspan>。两笔要分开记。" % (tot, DR),
-    ])
+    ], fold=True)
     yy = f.src(yy + 16,
                "四句原话均出自 Kimi Linear（arXiv 2510.26692）："
                "「we apply NoPE to all full attention (MLA) layers」·"

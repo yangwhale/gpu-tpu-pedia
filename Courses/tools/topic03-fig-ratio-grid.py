@@ -317,7 +317,7 @@ def main():
         "配比结论没有在大模型上复现过。",
         "② 它量的是 <tspan font-weight=\"700\">PPL</tspan>，而 PPL 恰恰是"
         "各家一致公认「对配比不敏感」的那个指标。要判配比得看召回。",
-    ])
+    ], fold=True)
 
     yy = f.src(yy + 14,
                "📌 Kimi Linear，arXiv 2510.26692v2 §5.2 Table 1 与同段正文"

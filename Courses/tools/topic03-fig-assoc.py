@@ -192,7 +192,7 @@ def main():
         "⭐ 所以后面那个「排队办事、只传一张交接单」"
         "不是工程妥协 ——&#160;它是<tspan font-weight=\"700\">「结合律」在有 mask "
         "的情况下的正确推广形态</tspan>。",
-    ])
+    ], fold=True)
     yy = f.src(yy + 16,
                "装置偷自 Google Research《Rethinking Attention with Performers》"
                "（2020-10）：括号画成彩色虚线框、矩阵按真实比例画",

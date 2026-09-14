@@ -193,7 +193,7 @@ def main():
         "<tspan font-weight=\"700\">「差不多不像」的代价，在这里就变成「擦串了」</tspan>。",
         "📌 所以「定点擦」是个<tspan font-weight=\"700\">近似</tspan>，"
         "不是真的只动一格。板子越满，擦得越串。",
-    ])
+    ], fold=True)
     yy = f.band(yy + 14, "info", "为什么固定大小的板子一定会坏 ——&#160;一软一硬两句", [
         "<tspan font-weight=\"700\">硬的那句（可以验算）</tspan>："
         "d 维空间里最多只能有 d 个互相正交的方向。"

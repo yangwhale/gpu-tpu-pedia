@@ -112,7 +112,7 @@ def main():
         "⚠️ CSA 那条空着是故意的：V4 报的 2% 是 <tspan font-weight=\"700\">1M 下的存储量</tspan>，"
         "跟前四条的「128K 下读多少」<tspan font-weight=\"700\">不是一个口径</tspan> ——&#160;"
         "凑一个可比的假数还不如把「不可比」写在图上。",
-    ])
+    ], fold=True)
 
     yy = f.band(yy + 14, "info", "五张 mask 摆在一起，这一支的共同结构就出来了", [
         '<tspan font-weight="700">同一个骨架，三条路</tspan>：'

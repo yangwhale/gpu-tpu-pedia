@@ -263,7 +263,7 @@ def main():
         "<tspan font-weight=\"700\">低秩这个描述没错，但它区分不了 GQA 和 MLA</tspan>。"
         "而且他写的 d_c &lt; d 这个条件，在 MHA 那一端会失效 —— "
         "那一端 c 就是 K、V 本身，根本没压。",
-    ])
+    ], fold=True)
 
     yy = f.src(yy + 14,
                "📌 苏剑林《缓存与效果的极限拉扯：从MHA、MQA、GQA到MLA》"

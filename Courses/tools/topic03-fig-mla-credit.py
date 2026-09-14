@@ -315,7 +315,7 @@ yb = f.band(yb + 10, "warn", "别把这一格读过头",
              "这是 ~900M dense、16B tokens 的消融，"
              "DeepSeek-V3 是 671B MoE、十几 T tokens。"
              "结论的<tspan font-weight=\"700\">方向</tspan>值得信，"
-             "<tspan font-weight=\"700\">幅度</tspan>不要搬。"])
+             "<tspan font-weight=\"700\">幅度</tspan>不要搬。"], fold=True)
 
 yb = f.src(yb + 12,
            "📌 全部数字一手核自　苏剑林《Transformer升级之路：20、MLA好在哪里?（上）》"
