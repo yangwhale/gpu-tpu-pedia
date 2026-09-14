@@ -315,6 +315,54 @@ def _svg_linkify(svg):
     return re.sub(r"(<text\b[^>]*>)(.*?)(</text>)", _intext, svg, flags=re.S)
 
 
+_TSPAN = re.compile(r"<tspan([^>]*)>|</tspan>")
+
+
+def _src_html(lines):
+    """把 src() 收着的那几行（SVG 记法）翻成 HTML 片段。
+
+    ⛔ 不能无脑把 `</tspan>` 换成 `</b>`：一行里同时出现加粗和等宽时
+      （`font-weight="700"` 与 `font-family="monospace"`），顺序一错就嵌套交叉。
+      ⭐ 所以按**栈**配对，开合两头都断言 ——
+      漏网的 tspan 在 HTML 里是个未知元素，浏览器不报错、照样显示文字，
+      只是**样式丢了**：一个「看起来对、只是少了点什么」的失效。
+      2026-09-14 第一版就是无脑替换，撞上了 `font-family="monospace"`。
+    ⚠️ arXiv 编号这里不动 —— 最终 HTML 会由 course_links.linkify_arxiv
+      统一处理，这里抢着做只会变成双重链接。
+    """
+    out = []
+    for ln in lines:
+        res, stack, pos = [], [], 0
+        for m in _TSPAN.finditer(ln):
+            res.append(ln[pos:m.start()])
+            pos = m.end()
+            if m.group(0) == "</tspan>":
+                # ⛔ 必须按栈配对，不能无脑替换成同一个闭合标签 ——
+                #   一行里同时有加粗和等宽时，顺序一错就嵌套交叉。
+                assert stack, "出处行里 </tspan> 比 <tspan> 多：%s" % ln[:50]
+                tag = stack.pop()
+                if tag:
+                    res.append("</%s>" % tag.split(" ")[0])
+            else:
+                a = m.group(1)
+                if "700" in a:
+                    tag = "b"
+                elif "monospac" in a or "mono" in a:
+                    tag = "code"
+                elif "fill=" in a:
+                    tag = 'span style="color:%s"' % re.search(
+                        r'fill=\\?"([^"\\]+)', a).group(1)
+                else:
+                    tag = None          # 认不出就只留文字，不留空标签
+                stack.append(tag)
+                if tag:
+                    res.append("<%s>" % tag)
+        res.append(ln[pos:])
+        assert not stack, "出处行里 <tspan> 没闭合：%s" % ln[:50]
+        out.append("<p>%s</p>" % "".join(res))
+    return "\n".join(out)
+
+
 class Fig(object):
     """一张 SVG。高度不写死，收尾按真实落点回填。"""
 
@@ -323,6 +371,7 @@ class Fig(object):
         self.p.append("")          # svg 开标签占位
         self._pan = None      # 当前面板 (top, bottom)
         self._over = []       # 画到面板外面去的记录（越界自检）
+        self._src = []        # 「出处与口径」正文，见 src()／save()
 
     # ── 原子 ────────────────────────────────────────────────────
     def t(self, x, y, s, fill=INK, bold=False, size=11.5, anchor=None,
@@ -750,25 +799,32 @@ class Fig(object):
         return y + len(rows) * lh
 
     def src(self, y, *lines):
-        """📌 出处行（可多行）—— 灰字小注，跟专题二一致。
+        """📌 出处与口径 ——&#160;**2026-09-14 起不再画进 SVG**。
 
-        ⛔ 带宽度自检：2026-09-08 实测有一行冲出了右边界，而**文字溢出既不报错
-          也不产生滚动条**，只是被裁掉 —— 页面上看只是「这句话没写完」。
+        现场原话：「整个文档里边有很多这种小字，并且是半透明的，其实并不重要，
+        就是需要收着，折起来。你把这些信息都折叠起来省地方，看的还清晰。」
+
+        ⭐⭐ 这段东西的定位本来就不是「图的一部分」——&#160;它是**给较真的人看的
+        脚注**：出处、口径、哪个数是实测哪个是断言。它每张图都占四到八行满宽的
+        灰字，加起来比好几张图还高，而 99% 的阅读里它只是噪音。
+        ⛔ 但它**不能删** ——&#160;「不确定就去查，绝不编」这条规矩的另一半就是
+        「查过的要留下出处」。所以是**折起来**，不是拿掉。
+
+        实现：这里只把原文收着，`save()` 旁落一份 `<name>.src.html`，
+        由 topic03-build.py 包成图下面的 `<details>`。
+        ⭐ 顺带白捡一样：文字由浏览器折行，不再需要 wrap_rich 按等宽估宽 ——
+          那条「冲出右边界、既不报错也不产生滚动条、只是被静默裁掉」的老毛病
+          （2026-09-08 踩过）从根上没了。
+        ⚠️ arXiv 链接**不是白捡的** ——&#160;搬家前 `_svg_linkify` 就已经在 SVG
+          里把它们做成可点的了，全页 109 个链接搬家前后一个不多一个不少。
+          （写这段注释时我先写成了「白捡」，数完才改过来。数一遍再写。）
+
+        ⛔ 返回值仍然是传进来的 y（不再吃高度）——&#160;调用方一律
+        `f.save(name, yy + 6)`，所以图的下沿会**自动收掉这四到八行**。
         """
-        # ⭐ 2026-09-13：11 → 14px，同样改成自动折行（续行缩进对齐）。
-        self._pan = None            # 出处行同理
-        SZ, LH = 14, 21
-        k = 0
-        for i, ln in enumerate(lines):
-            # ⛔ 前缀（📌 ／ 全角缩进）是**折完行才加上去的** —— 折行限宽里
-            #   必须先把它减掉，否则每一行都正好多出一个前缀的宽度。
-            for j, r in enumerate(wrap_rich(ln, self.w - 46 - wpx("　　", SZ),
-                                            SZ * MONO_K)):
-                self.t(0, y + k * LH,
-                       ("📌 " if (i == 0 and j == 0) else "　　") + r,
-                       GY2, size=_sz(SZ))
-                k += 1
-        return y + k * LH + 1
+        self._pan = None
+        self._src = [ln for ln in lines if ln and ln.strip()]
+        return y
 
     # ── 收尾 ────────────────────────────────────────────────────
     def save(self, name, bottom):
@@ -809,4 +865,15 @@ class Fig(object):
         s = _svg_linkify(s)
         xml.dom.minidom.parseString(s.encode("utf-8"))
         io.open(os.path.join(HERE, name), "w", encoding="utf-8").write(s)
-        print("ok  %s  %d×%d" % (name, self.w, bottom))
+
+        # ── 「出处与口径」旁落一份 HTML 片段（见 src() 的注释）────────────
+        # ⛔ 没有出处时**必须把旧的删掉**。否则改图时把 f.src(...) 去掉，
+        #   上一次留下的片段还躺在 tools/ 里，build 照样把它包进去 ——
+        #   ⭐ 产物目录里的陈旧文件不会报错，只会安静地继续生效。
+        side = os.path.join(HERE, name[:-4] + ".src.html")
+        if self._src:
+            io.open(side, "w", encoding="utf-8").write(_src_html(self._src))
+        elif os.path.exists(side):
+            os.remove(side)
+        print("ok  %s  %d×%d%s"
+              % (name, self.w, bottom, "  +出处" if self._src else ""))

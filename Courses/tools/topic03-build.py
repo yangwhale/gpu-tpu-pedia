@@ -129,6 +129,27 @@ h4 { margin:18px 0 6px; font-size:15px }
 /* ⭐ 2026-09-08：提示框去彩底那段**已经改到共用 CSS 源里了**
    （topic-01.html 与 topic-02-L300.html），本讲不再单独覆盖 ——
    ⛔ 同一条规则留两份，迟早只改一份。 */
+
+/* ── 图下面折起来的「出处与口径」（2026-09-14）────────────────
+   ⭐ 收起来的时候只是一行灰字，跟图注拉开一档；展开才是那一堆脚注。
+   ⛔ 宽度跟着 figure 走（figure 是 .fwide，最宽 1760px），但**正文限宽在
+     1080px** —— 出处是拿来读的散文，不是图，所以这里自己收回版心，
+     否则一行会拉到一米八长，眼睛跟不回来。 */
+.figsrc{max-width:1080px;margin:6px auto 0;border-top:1px dashed var(--line);
+        font-size:13.5px;color:var(--gray)}
+/* ⭐ 跟 details.aside 用同一套三角记号，不另发明一种 —— 同一页里两种折叠
+   长两个样子，读者要分别学一次。 */
+.figsrc>summary{cursor:pointer;list-style:none;padding:8px 2px;
+                font:600 12.5px/1.4 var(--mono);color:#9aa0a6;
+                letter-spacing:.02em}
+.figsrc>summary::-webkit-details-marker{display:none}
+.figsrc>summary::before{content:"▸ "}
+.figsrc[open]>summary::before{content:"▾ "}
+.figsrc>summary:hover{color:var(--ink)}
+.figsrc p{margin:0 0 7px;line-height:1.7}
+.figsrc p:first-of-type{margin-top:4px}
+.figsrc b{color:var(--ink);font-weight:600}
+@media print{.figsrc{font-size:11px}}
 </style>"""
 
 # ⭐ 路线目录：节号与标题写死在这儿，跟正文里的 <section id> 对齐。
@@ -2946,11 +2967,21 @@ for ph, (fid, fn, src, cap) in FIGS.items():
     assert os.path.isfile(fp), "缺 %s —— 先跑 `python3 %s`" % (fn, src)
     assert ph in _html, "正文里没有占位符 %s —— 加图忘了插锚点？" % ph
     svg = io.open(fp, encoding="utf-8").read().strip()
+    # ⭐⭐ 2026-09-14 现场原话：「整个文档里边有很多这种小字，并且是半透明的，
+    #   其实并不重要，就是需要收着，折起来。」——&nbsp;说的就是每张图底下那四到
+    #   八行「出处与口径」。它现在不画进 SVG 了（见 topic03_draw.src），
+    #   旁落一份 .src.html，在这儿包成一个默认收起的 <details>。
+    # ⛔ 折起来 ≠ 删掉：出处是「查过就要留下痕迹」那条规矩的另一半，
+    #   它必须一直在、一直可查，只是不该默认占版面。
+    sfp = fp[:-4] + ".src.html"
+    note = ('<details class="figsrc"><summary>出处与口径</summary>%s</details>'
+            % io.open(sfp, encoding="utf-8").read()) if os.path.isfile(sfp) else ''
     # ⛔ 图注为空串时**不要出空的 <figcaption>** —— 它不显示文字，但照样吃
     #    figcaption 的 margin/padding，图底下会多出一段说不清来路的空白。
     _html = _html.replace(
-        ph, '<figure class="fbox fwide" id="%s">%s%s</figure>'
-            % (fid, svg, '<figcaption>%s</figcaption>' % cap if cap else ''))
+        ph, '<figure class="fbox fwide" id="%s">%s%s%s</figure>'
+            % (fid, svg, '<figcaption>%s</figcaption>' % cap if cap else '',
+               note))
 assert "__FIG_" not in _html, "还有图占位符没被替换掉"
 # ══════════════════════════════════════════════════════════════════
 # ⭐⭐ 2026-09-13 学生审稿：全文 0 个锚链接 —— 每一句「见 §X.Y」都要
@@ -3071,6 +3102,17 @@ def _build_nav(html):
             '    toc.scrollLeft=cur.offsetLeft-120;\n'
             ' }\n'
             ' addEventListener("scroll",tick,{passive:true});tick();\n'
+            # ⛔ 折叠起来的 <details> **打印出来只剩一行标题** —— 出处与口径
+            #   是「查过就要留痕」那条规矩的落点，不能因为默认收起就印不出来。
+            #   ⭐ CSS 做不到强行展开（那是 UA 行为，display 覆盖不了），
+            #     所以挂 beforeprint / afterprint，印完原样收回去。
+            ' var SR=".figsrc";\n'
+            ' addEventListener("beforeprint",function(){\n'
+            '  document.querySelectorAll(SR).forEach(function(d){\n'
+            '   d.dataset.wasopen=d.open?"1":"";d.open=true;});});\n'
+            ' addEventListener("afterprint",function(){\n'
+            '  document.querySelectorAll(SR).forEach(function(d){\n'
+            '   d.open=d.dataset.wasopen==="1";});});\n'
             '})();</script>\n')
     html = html.replace("</head>", CSS_NAV + "</head>", 1)
     html = re.sub(r"(<body[^>]*>)", r"\1\n" + nav, html, count=1)
