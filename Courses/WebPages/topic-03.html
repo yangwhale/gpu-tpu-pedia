@@ -4309,8 +4309,1577 @@ h4 { margin:18px 0 6px; font-size:15px }
 
 
 <section id="s六"><div class="wrap"><div class="stn"><span class="badge">第 六 节</span><h2>换个方向：不是存得少，是别全读 ——&nbsp;从滑窗到 DSA</h2></div>
-<h3 id="s6-1">6.1　这一步之后，账本不止一本了</h3>
-<div class="note warn"><span class="t">🚧 本章待写 ——&nbsp;稀疏：SWA → NSA → DSA</span><p><b>这一章在故事里干什么：</b>前两章省的是「存多少」，这一章省的是「读多少」——&nbsp;<b>KV 一个字节都没少</b>。⭐⭐ 现场点名这一章要画图展开 DSA：<b>top-2048 到底是怎么挑出来的</b>、省的是哪一样、<b>trade-off 是什么</b>、以及<b>为了少读反而多花的那部分算力和不规整访存</b>。</p><p><b>打算用的图</b>（从 L300 抽，逐张再精修）：<code>fig3-knob2.svg</code> · <code>fig3-swa-why.svg</code> · <code>fig3-nsa-why.svg</code> · <code>fig3-dsa-why.svg</code> · <code>fig3-csa-why.svg</code> · <code>fig3-chicken.svg</code> · <code>fig3-overmix.svg</code></p></div>
+
+<p class="lead">前两章一直在拧同一个旋钮：让每一份小一点。
+  <em>这一章换一个完全没碰过的方向 ——&nbsp;每一份多大都不改，
+  改的是<b>每走一步到底读进来几份</b>。</em><br>
+  ⛔ <em>先把话说在前面：<b>这条路一个字节的显存都不省。</b></em></p>
+
+<h3 id="s6-1">6.1　先把这一支的全家福摆出来</h3>
+
+<figure class="fbox fwide" id="fig-knob2"><svg viewBox="0 0 1400 1564" width="100%" role="img" aria-label="旋钮二的五种读法画成五张注意力 mask：全注意力、滑动窗口、滑窗加 sink、DSA 学着挑 top-k、CSA 先压缩再挑。它们的共同结构是先用一个便宜的办法决定看哪些，再只对那些做主注意力"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">旋钮 ② 每步只读一部分 ——&#160;<tspan font-weight="700">五种读法，画成五张 mask 就看明白了</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 这一支的历史本身就说明该画图：attention sink 那个 bug 从公式上看不出来，是把矩阵画出来才发现的</text>
+<text class="svgsm" x="0" y="104" fill="#a50e0e" style="font-size:17.0px">⚠️ 先说怎么读：<tspan font-weight="700">格子是示意</tspan>（16×16 画不出 1.56% 那种量级），每张下面那条<tspan font-weight="700">细带才是真比例</tspan> ——　读格子看形状，读细带看狠不狠。</text>
+<text class="svglbl" x="0" y="140" fill="#5f6368" style="font-size:19.0px"><tspan font-weight="700">全注意力</tspan></text>
+<text class="svgsm" x="0" y="164" fill="#5f6368" style="font-size:15.0px">基线：下三角全算</text>
+<rect x="0.0" y="178.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="193.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="193.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="180.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="180.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="195.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="180.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="195.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="210.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="180.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="195.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="210.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<rect x="225.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#5f6368" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="0" y="442" fill="#5f6368" style="font-size:16.0px">O(L²)，KV 随长度线性涨</text>
+<rect x="0" y="448.0" width="428" height="9" rx="2" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0.8" y="448.8" width="426.4" height="7.4" rx="2" fill="#5f6368" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="0" y="476" fill="#80868b" style="font-size:14.0px">真实比例：100%（基线）</text>
+<text class="svglbl" x="480" y="140" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">SWA 滑动窗口</tspan></text>
+<text class="svgsm" x="480" y="164" fill="#5f6368" style="font-size:15.0px">只看前面固定窗口（Mistral 4096）</text>
+<rect x="480.0" y="178.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="193.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="193.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="660.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="660.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="675.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="660.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="675.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="690.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="660.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="675.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="690.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="705.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#e8710a" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="480" y="442" fill="#b06000" style="font-size:16.0px">⛔ 跨 128K 要堆 32 层才摸得到</text>
+<rect x="480" y="448.0" width="428" height="9" rx="2" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="480.8" y="448.8" width="13.325" height="7.4" rx="2" fill="#e8710a" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="480" y="476" fill="#80868b" style="font-size:14.0px">真实比例：3.1%（窗口 4096 / 128K）</text>
+<text class="svglbl" x="960" y="140" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700">＋ Attention sink</tspan></text>
+<text class="svgsm" x="960" y="164" fill="#5f6368" style="font-size:15.0px">滑窗 ＋ 留住最开头 4 个</text>
+<rect x="960.0" y="178.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="193.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="193.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="208.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="223.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="238.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="253.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="268.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="283.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1080.0" y="298.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1080.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1095.0" y="313.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1080.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1095.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1110.0" y="328.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1080.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1095.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1110.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1125.0" y="343.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1080.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1095.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1110.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1125.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1140.0" y="358.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1080.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1095.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1110.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1125.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1140.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1155.0" y="373.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1080.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1095.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1110.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1125.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1140.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1155.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1170.0" y="388.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="960.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="975.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="990.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1005.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1020.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1035.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1050.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1065.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1080.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1095.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1110.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1125.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="1140.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1155.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1170.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="1185.0" y="403.0" width="13.8" height="13.8" rx="1" fill="#d93025" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="960" y="442" fill="#a50e0e" style="font-size:16.0px">⭐ 只留 4 个就够，扔了立刻崩</text>
+<rect x="960" y="448.0" width="428" height="9" rx="2" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="960.8" y="448.8" width="13.3380126953125" height="7.4" rx="2" fill="#d93025" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="960" y="476" fill="#80868b" style="font-size:14.0px">真实比例：3.1% ＋ 4 个 sink</text>
+<text class="svglbl" x="0" y="512" fill="#174ea6" style="font-size:19.0px"><tspan font-weight="700">DSA 学着挑</tspan></text>
+<text class="svgsm" x="0" y="536" fill="#5f6368" style="font-size:15.0px">Indexer 给每个 query 挑 top-k</text>
+<rect x="0.0" y="550.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="565.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="565.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="580.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="580.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="580.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="595.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="595.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="595.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="595.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="180.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="180.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="195.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="180.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="195.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="210.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="0.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="15.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="30.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="45.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="60.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="75.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="90.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="105.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="120.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="135.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="150.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="165.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="180.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="195.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="210.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="225.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="0" y="814" fill="#174ea6" style="font-size:16.0px">128K → 2K，64 倍；k=2048</text>
+<rect x="0" y="820.0" width="428" height="9" rx="2" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="0.8" y="820.8" width="6.6625" height="7.4" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="0" y="848" fill="#80868b" style="font-size:14.0px">真实比例：1.56%（k=2048 / 128K）</text>
+<text class="svglbl" x="480" y="512" fill="#681da8" style="font-size:19.0px"><tspan font-weight="700">CSA 先压再挑</tspan></text>
+<text class="svgsm" x="480" y="536" fill="#5f6368" style="font-size:15.0px">每 4 个 token 压成 1 个，再在压缩后挑</text>
+<rect x="480.0" y="550.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="565.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="565.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="580.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="580.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="580.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="595.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="595.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="595.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="595.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="610.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="625.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="640.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="655.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="670.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="685.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="700.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="715.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="660.0" y="730.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="660.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="675.0" y="745.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="660.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="675.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="690.0" y="760.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="480.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="495.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="510.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="525.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="540.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="555.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="570.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="585.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="600.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="615.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="630.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="645.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#eef1f3" stroke="none" stroke-width="1"/>
+<rect x="660.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="675.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="690.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<rect x="705.0" y="775.0" width="13.8" height="13.8" rx="1" fill="#9334e6" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="480" y="814" fill="#681da8" style="font-size:16.0px">V4：1M 下 KV 降到约 2%</text>
+<rect x="480" y="820.0" width="428" height="9" rx="2" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="480.8" y="820.8" width="0.8" height="7.4" rx="2" fill="#9334e6" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="480" y="848" fill="#80868b" style="font-size:14.0px">⚠️ 口径不同，不能并排比（见下）</text>
+<rect x="0" y="868" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="868" width="4" height="122" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="868" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="895" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 那条细带的口径（上面那句的完整版）</tspan></text>
+<text class="svgsm" x="20" y="926" fill="#b06000" style="font-size:15.0px">16×16 的格子<tspan font-weight="700">撑不住 1.56% 这种量级</tspan>：画得出来的最细的窗口也有 1/16 ＝ 6%，而真实是 1.56%～3.1%。⭐ 所以每张下面加了一条<tspan font-weight="700">按真比例画的细带</tspan>。</text>
+<text class="svgsm" x="20" y="950" fill="#b06000" style="font-size:15.0px">⛔ 读格子看<tspan font-weight="700">形状</tspan>（哪里有、哪里没有），读细带看<tspan font-weight="700">狠不狠</tspan>。⚠️ CSA 那条空着是故意的：V4 报的 2% 是 <tspan font-weight="700">1M 下的存储量</tspan>，跟前四条的「128K 下读多少」<tspan font-weight="700">不是一个口径</tspan> ——&#160;凑一个可</text>
+<text class="svgsm" x="20" y="974" fill="#b06000" style="font-size:15.0px">比的假数还不如把「不可比」写在图上。</text>
+<rect x="0" y="1004" width="1400" height="170" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1004" width="4" height="170" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1004" width="3" height="170" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1031" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 五张 mask 摆在一起，这一支的共同结构就出来了</tspan></text>
+<text class="svgsm" x="20" y="1062" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">同一个骨架，三条路</tspan>：<tspan font-weight="700">粗看</tspan>（压缩／全局，保证不漏）＋<tspan font-weight="700">细看</tspan>（挑出来的 top-k，保证准）＋<tspan font-weight="700">近处</tspan>（滑动窗口，保证局部连贯）。</text>
+<text class="svgsm" x="20" y="1086" fill="#174ea6" style="font-size:15.0px">NSA 三条都有（显式三支路 ＋ 门控融合）；DSA 主要是<tspan font-weight="700">细看</tspan>配一点局部；CSA/HCA ——&#160;HCA 粗看、CSA 细看，另挂一条滑窗；<tspan font-weight="700">SWA 单用只有第三条 ——&#160;所以它单用不行</tspan>。</text>
+<text class="svgsm" x="20" y="1110" fill="#174ea6" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">看到一个新的稀疏注意力方案，先问它这三条路各占什么位置</tspan>——&#160;<tspan font-weight="700">这比记住它叫什么有用得多。</tspan></text>
+<text class="svgsm" x="20" y="1134" fill="#174ea6" style="font-size:15.0px">⛔ <tspan font-weight="700">不是免费午餐</tspan>：DSA 的 indexer <tspan font-weight="700">自己仍然是 O(L²)</tspan> ——&#160;每个 query 要给所有 KV 打分才能挑 top-k。<tspan font-weight="700">省的是常数，不是阶。</tspan></text>
+<text class="svgsm" x="20" y="1158" fill="#174ea6" style="font-size:15.0px">⛔ 而且它<tspan font-weight="700">需要专门的训练阶段</tspan>：冻住其余参数，让 indexer 去<tspan font-weight="700">拟合主注意力自己的分布</tspan>——&#160;<tspan font-weight="700">稀疏是学出来的，不是规则定出来的</tspan>。</text>
+<rect x="0" y="1188" width="1400" height="194" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1188" width="4" height="194" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1188" width="3" height="194" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1215" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ ⭐⭐ Attention sink：一个「只有画出来才看得见」的 bug</tspan></text>
+<text class="svgsm" x="20" y="1246" fill="#a50e0e" style="font-size:15.0px">朴素滑窗把开头几个 token 一起滑掉，<tspan font-weight="700">模型立刻崩</tspan>。而解法简单到荒谬 ——&#160;<tspan font-weight="700">留住最开头 4 个就够</tspan>（原话 “with just 4 initial tokens sufficing”）。</text>
+<text class="svgsm" x="20" y="1270" fill="#a50e0e" style="font-size:15.0px">为什么？<tspan font-weight="700">softmax 强制所有权重加起来等于 1</tspan> ——&#160;模型有时什么都不想看，<tspan font-weight="700">却没有「弃权」这个选项</tspan>，于是学会把多余的注意力<tspan font-weight="700">倾倒在开头几个位置</tspan>。<tspan font-weight="700">那几个 token 不是在传信息</tspan></text>
+<text class="svgsm" x="20" y="1294" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">，是停车位。</tspan></text>
+<text class="svgsm" x="20" y="1318" fill="#a50e0e" style="font-size:15.0px">⭐ 两层教训：<tspan font-weight="700">工程上</tspan>，任何「扔掉一部分 KV」的方案都要先问<tspan font-weight="700">有没有扔掉停车位</tspan>；<tspan font-weight="700">方法上</tspan>，这个 bug 公式里完全看不出来 ——&#160;<tspan font-weight="700">量出来的和算出来的，是两回事。</tspan></text>
+<text class="svgsm" x="20" y="1342" fill="#a50e0e" style="font-size:15.0px">📌 后续：V4 干脆给每个头加了一个<tspan font-weight="700">可学习的 sink logit</tspan>，直接进 softmax 分母 ——&#160;于是这一行的注意力总和<tspan font-weight="700">可以小于 1、甚至接近 0</tspan>。<tspan font-weight="700">把模型被迫发明的 hack，变成了架构里</tspan></text>
+<text class="svgsm" x="20" y="1366" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">的一等公民。</tspan></text>
+<rect x="0" y="1396" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1396" width="4" height="146" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1396" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1423" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 这三年走了多远 ——&#160;把 2% 那个数算给学生看</tspan></text>
+<text class="svgsm" x="20" y="1454" fill="#0d652d" style="font-size:15.0px">同样形状的 <tspan font-weight="700">GQA-8 在 1M 上下文下是 244 GiB</tspan>；V4 报的 <tspan font-weight="700">约 2%</tspan> 就是<tspan font-weight="700">不到 5 GiB</tspan> ——&#160;<tspan font-weight="700">一百万 token 的上下文，KV 装得进一块卡的零头。</tspan></text>
+<text class="svgsm" x="20" y="1478" fill="#0d652d" style="font-size:15.0px">⭐ 对照本讲开头那个 <tspan font-weight="700">MHA 的 488 GiB ——&#160;而那还只是 128K</tspan>。<tspan font-weight="700">这就是三年的进展。</tspan></text>
+<text class="svgsm" x="20" y="1502" fill="#0d652d" style="font-size:15.0px">⚠️ 这个 2% 的基线是<tspan font-weight="700">同形状的 GQA-8</tspan>；那张 CSA 图给的「10% 的 KV」比的是 <tspan font-weight="700">V3.2</tspan> ——&#160;<tspan font-weight="700">两个数都对，对的是各自的基线</tspan>，别并排比。</text>
+<text class="svgsm" x="20" y="1526" fill="#0d652d" style="font-size:15.0px">⚠️ 而且报总收益时要能<tspan font-weight="700">拆开</tspan>：V4 那一版还叠了一层<tspan font-weight="700">跟注意力机制无关</tspan>的优化 ——&#160;KV 混合精度（RoPE 那几维 BF16、其余 FP8），<tspan font-weight="700">光这一项就近乎减半</tspan>。</text>
+</svg><figcaption>⭐ <b>别一张一张看，要五张一起看</b> ——&nbsp;<em>这一支的骨架是从「五张摆在一起」里浮出来的，单看任何一张都看不见。</em><br>⭐⭐ <em>看完你会得到一把尺子：以后碰到一个没听过的稀疏方案，<b>先把它按到这五张里去比一比，比记住它叫什么名字有用得多。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>mask 图案为<b>示意</b>，用来表达各方案的读取形状，不是实测注意力分布；GQA-8 在 1M 下的 244 GiB 由公式当场算出（脚本带断言）</p>
+<p>SWA：Mistral 7B arXiv <a href="https://arxiv.org/abs/2310.06825" target="_blank" rel="noopener">2310.06825</a>　sink：StreamingLLM arXiv <a href="https://arxiv.org/abs/2309.17453" target="_blank" rel="noopener">2309.17453</a>　NSA：arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a>　DSA：DeepSeek-V3.2 arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a>　CSA/HCA：DeepSeek-V4 arXiv <a href="https://arxiv.org/abs/2606.19348" target="_blank" rel="noopener">2606.19348</a></p></details></figure>
+
+<h3 id="s6-2">6.2　最朴素的一招：只看身边那几个 ——&nbsp;以及它为什么会崩</h3>
+
+<p>最容易想到的就是<b>滑动窗口</b>：每个字只看前面固定的几百个。
+  <em>听上去很合理 ——&nbsp;说话本来就大多只跟附近有关。</em></p>
+<p>可它有一个著名的崩法，而且<b>崩得毫无预兆</b>。</p>
+
+<figure class="fbox fwide" id="fig-swa-why"><svg viewBox="0 0 1400 2164" width="100%" role="img" aria-label="滑窗凭什么敢砍：每个人只跟身边几个说话，但话能一层层往外传，层数是免费的射程；砍了为什么会崩：把最前面四个 token 扔掉，困惑度从 5.40 炸到 5158；为什么：softmax 要求每行的票必须投满"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">滑窗：凭什么敢砍，砍了为什么会崩</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">一个<tspan font-weight="700">按时间顺序讲的侦探故事</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">敢砍的理由</text>
+<rect x="117" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="138" y="74" fill="#5f6368" style="font-size:14.0px">崩了</text>
+<rect x="192" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="213" y="74" fill="#5f6368" style="font-size:14.0px">真正的原因</text>
+<rect x="0" y="102" width="1400" height="560" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">① 凭什么敢砍 ——　每层只看身边几个，但话能往外传</tspan></text>
+<text class="svgsm" x="366" y="122" fill="#5f6368" style="font-size:11.0px">⚠️ 能传多远，比「层数 × 窗口」小得多</text>
+<text class="svgsm" x="56" y="174" fill="#0d652d" style="font-size:20.0px"><tspan font-weight="700">话确实能一层层往外传</tspan></text>
+<text class="svgsm" x="56" y="216" fill="#80868b" style="font-size:15.0px">第 1 层</text>
+<rect x="138" y="194" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="162" y="215" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="200" y="194" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="224" y="215" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">2</tspan></text>
+<rect x="262" y="194" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="286" y="215" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">3</tspan></text>
+<rect x="324" y="194" width="48" height="30" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="348" y="215" fill="#80868b" text-anchor="middle" style="font-size:15.0px">4</text>
+<rect x="386" y="194" width="48" height="30" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="410" y="215" fill="#80868b" text-anchor="middle" style="font-size:15.0px">5</text>
+<rect x="448" y="194" width="48" height="30" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="472" y="215" fill="#80868b" text-anchor="middle" style="font-size:15.0px">6</text>
+<rect x="510" y="194" width="48" height="30" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="534" y="215" fill="#80868b" text-anchor="middle" style="font-size:15.0px">7</text>
+<text class="svgsm" x="56" y="262" fill="#80868b" style="font-size:15.0px">第 2 层</text>
+<rect x="138" y="240" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="162" y="261" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="200" y="240" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="224" y="261" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">2</tspan></text>
+<rect x="262" y="240" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="286" y="261" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">3</tspan></text>
+<rect x="324" y="240" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="348" y="261" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">4</tspan></text>
+<rect x="386" y="240" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="410" y="261" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">5</tspan></text>
+<rect x="448" y="240" width="48" height="30" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="472" y="261" fill="#80868b" text-anchor="middle" style="font-size:15.0px">6</text>
+<rect x="510" y="240" width="48" height="30" rx="5" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="534" y="261" fill="#80868b" text-anchor="middle" style="font-size:15.0px">7</text>
+<text class="svgsm" x="56" y="308" fill="#80868b" style="font-size:15.0px">第 3 层</text>
+<rect x="138" y="286" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="162" y="307" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">1</tspan></text>
+<rect x="200" y="286" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="224" y="307" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">2</tspan></text>
+<rect x="262" y="286" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="286" y="307" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">3</tspan></text>
+<rect x="324" y="286" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="348" y="307" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">4</tspan></text>
+<rect x="386" y="286" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="410" y="307" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">5</tspan></text>
+<rect x="448" y="286" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="472" y="307" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">6</tspan></text>
+<rect x="510" y="286" width="48" height="30" rx="5" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="534" y="307" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">7</tspan></text>
+<text class="svgsm" x="640" y="174" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 但每一层往回跳多远，是随机的</tspan></text>
+<text class="svgsm" x="640" y="198" fill="#5f6368" style="font-size:16.0px">L 层 ＝ L 个随机数相加 ——　堆成一个钟形</text>
+<circle cx="790.0" cy="222.0" r="2.6" fill="#80868b"/>
+<circle cx="777.0" cy="242.0" r="2.6" fill="#80868b"/>
+<circle cx="803.0" cy="242.0" r="2.6" fill="#80868b"/>
+<circle cx="764.0" cy="262.0" r="2.6" fill="#80868b"/>
+<circle cx="790.0" cy="262.0" r="2.6" fill="#80868b"/>
+<circle cx="816.0" cy="262.0" r="2.6" fill="#80868b"/>
+<circle cx="751.0" cy="282.0" r="2.6" fill="#80868b"/>
+<circle cx="777.0" cy="282.0" r="2.6" fill="#80868b"/>
+<circle cx="803.0" cy="282.0" r="2.6" fill="#80868b"/>
+<circle cx="829.0" cy="282.0" r="2.6" fill="#80868b"/>
+<rect x="660" y="327.2017003694831" width="20" height="0.7982996305169234" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="686" y="324.6689080824782" width="20" height="3.3310919175218068" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="712" y="317.5546458954188" width="20" height="10.445354104581238" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="738" y="303.3863749507369" width="20" height="24.6136250492631" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="764" y="284.41431700163344" width="20" height="43.585682998366586" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="790" y="270.0" width="20" height="58.00000000000001" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="816" y="270.0" width="20" height="58.00000000000001" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="842" y="284.41431700163344" width="20" height="43.585682998366586" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="868" y="303.3863749507369" width="20" height="24.6136250492631" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="894" y="317.5546458954188" width="20" height="10.445354104581238" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="920" y="324.6689080824782" width="20" height="3.3310919175218068" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="946" y="327.2017003694831" width="20" height="0.7982996305169234" rx="2" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="660" y="352" fill="#80868b" style="font-size:15.0px">近</text>
+<text class="svgsm" x="946" y="352" fill="#80868b" text-anchor="end" style="font-size:15.0px">远</text>
+<line x1="980" y1="260" x2="980" y2="334" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="5,4" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="988" y="298" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">「层数 × 窗口」</tspan></text>
+<text class="svgsm" x="988" y="320" fill="#a50e0e" style="font-size:16.0px">在这儿 ——　钟形的尾巴</text>
+<text class="svgsm" x="988" y="342" fill="#a50e0e" style="font-size:16.0px">早就没了</text>
+<rect x="56" y="396" width="1288" height="122" rx="10" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="80" y="428" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 而且真实模型里，九成五的信息根本没走注意力这条路</tspan></text>
+<rect x="80" y="444" width="700" height="26" rx="5" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="92" y="463" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">残差 ——　直接从底下窜到顶上（约 95%）</tspan></text>
+<rect x="80" y="476" width="46" height="12" rx="3" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="136" y="487" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">注意力 ——　真正往回看的那一小股（约 5%）</tspan></text>
+<text class="svgsm" x="80" y="508" fill="#5f6368" style="font-size:17.0px">每往回跳一个窗口就再乘一次这个小数 ——　<tspan font-weight="700">于是有效射程跟层数无关，大约就是一到两个窗口宽</tspan>。</text>
+<rect x="820" y="440" width="500" height="62" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="840" y="466" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">Mistral 7B：4,096 × 32 层 ＝ 131,072</tspan></text>
+<text class="svgsm" x="840" y="490" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 那是<tspan font-weight="700">理论上限</tspan>，不是能用的长度</tspan></text>
+<rect x="56" y="536" width="1288" height="96" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="80" y="568" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 所以工业界的答案不是「堆更多层」，是<tspan font-weight="700">隔一层插一层真正的全注意力</tspan></tspan></text>
+<rect x="80" y="582" width="38" height="30" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="99" y="603" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">窗</tspan></text>
+<rect x="126" y="582" width="38" height="30" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="145" y="603" fill="#fff" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">全</tspan></text>
+<rect x="172" y="582" width="38" height="30" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="191" y="603" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">窗</tspan></text>
+<rect x="218" y="582" width="38" height="30" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="237" y="603" fill="#fff" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">全</tspan></text>
+<rect x="264" y="582" width="38" height="30" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="283" y="603" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">窗</tspan></text>
+<rect x="310" y="582" width="38" height="30" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="329" y="603" fill="#fff" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">全</tspan></text>
+<rect x="356" y="582" width="38" height="30" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="375" y="603" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">窗</tspan></text>
+<rect x="402" y="582" width="38" height="30" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="421" y="603" fill="#fff" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">全</tspan></text>
+<rect x="448" y="582" width="38" height="30" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="467" y="603" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">窗</tspan></text>
+<rect x="494" y="582" width="38" height="30" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="513" y="603" fill="#fff" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">全</tspan></text>
+<rect x="540" y="582" width="38" height="30" rx="4" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="559" y="603" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">窗</tspan></text>
+<rect x="586" y="582" width="38" height="30" rx="4" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="605" y="603" fill="#fff" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">全</tspan></text>
+<text class="svgsm" x="640" y="594" fill="#5f6368" style="font-size:17.0px">gpt-oss-20b：24 层，<tspan font-weight="700">滑窗 / 全注意力 1:1 交替</tspan>，</text>
+<text class="svgsm" x="640" y="618" fill="#5f6368" style="font-size:17.0px">而且它的窗口只有 <tspan font-weight="700">128</tspan> ——　窗口小到这个地步，靠堆层数是绝无可能够到 128K 的。</text>
+<rect x="0" y="680" width="1400" height="488" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="680" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="682" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="710" x2="1400" y2="710" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="700" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">② 砍了为什么会崩 ——　扔掉最前面四个，就崩了</tspan></text>
+<text class="svgsm" x="339" y="700" fill="#5f6368" style="font-size:11.0px">Llama-2-13B，PG19</text>
+<text class="svgsm" x="120" y="752" fill="#a50e0e" style="font-size:17.0px">⚠️ 先说怎么读：这三根柱子<tspan font-weight="700">按对数画</tspan> ——　线性画的话后两根根本看不见。</text>
+<text class="svgsm" x="120" y="776" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">5158 和 5.40 差的是三个数量级，不是三倍。</tspan></text>
+<rect x="120" y="870.0" width="150" height="150.0" rx="5" fill="#d93025" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="195" y="856" fill="#a50e0e" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">5158.07</tspan></text>
+<text class="svgsm" x="195" y="1046" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">只留窗口</text>
+<text class="svgsm" x="195" y="1070" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">0 + 1024</text>
+<text class="svgsm" x="195" y="826" fill="#a50e0e" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">⛔ 崩了</tspan></text>
+<rect x="420" y="990.4082311617894" width="150" height="29.591768838210534" rx="5" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="495" y="976" fill="#0d652d" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">5.40</tspan></text>
+<text class="svgsm" x="495" y="1046" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">留最前面 4 个</text>
+<text class="svgsm" x="495" y="1070" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">4 + 1020</text>
+<text class="svgsm" x="495" y="946" fill="#0d652d" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">✅ 好了</tspan></text>
+<rect x="720" y="989.7700767575683" width="150" height="30.229923242431713" rx="5" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="795" y="975" fill="#174ea6" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">5.60</tspan></text>
+<text class="svgsm" x="795" y="1046" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">那 4 个换成换行符</text>
+<text class="svgsm" x="795" y="1070" fill="#5f6368" text-anchor="middle" style="font-size:16.0px">4 + 1020</text>
+<text class="svgsm" x="795" y="945" fill="#174ea6" text-anchor="middle" style="font-size:18.0px"><tspan font-weight="700">⭐ 几乎一样</tspan></text>
+<text class="svgsm" x="120" y="1150" fill="#80868b" style="font-size:16.0px">困惑度（越低越好）</text>
+<rect x="1000" y="758" width="360" height="192" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1024" y="800" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">⭐⭐ 判决性的是第三根</tspan></text>
+<text class="svgsm" x="1024" y="838" fill="#5f6368" style="font-size:17.0px">把那四个 token 换成</text>
+<text class="svgsm" x="1024" y="868" fill="#5f6368" style="font-size:17.0px">毫无意义的换行符</text>
+<text class="svgsm" x="1024" y="906" fill="#174ea6" style="font-size:22.0px"><tspan font-weight="700">结果几乎一样</tspan></text>
+<text class="svgsm" x="1024" y="936" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">→　起作用的是位置，不是内容</tspan></text>
+<rect x="0" y="1186" width="1400" height="352" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1186" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="1188" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1216" x2="1400" y2="1216" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1206" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">③ 得票最高的那位，什么都不做</tspan></text>
+<text class="svgsm" x="224" y="1206" fill="#5f6368" style="font-size:11.0px">⭐ 这一步才是机制本身 ——　前面两格只说了「票投给了谁」</text>
+<rect x="130" y="1270.0" width="118" height="132.0" rx="4" fill="#d93025" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="189" y="1428" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">注意力权重</tspan></text>
+<text class="svgsm" x="189" y="1452" fill="#80868b" text-anchor="middle" style="font-size:16.0px">冲天</text>
+<rect x="350" y="1391.44" width="118" height="10.56" rx="4" fill="#80868b" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="409" y="1428" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">它的 value 模长</tspan></text>
+<text class="svgsm" x="409" y="1452" fill="#80868b" text-anchor="middle" style="font-size:16.0px">贴地</text>
+<text class="svgsm" x="130" y="1258" fill="#202124" style="font-size:19.0px"><tspan font-weight="700">第 0 号座位上那个 token：</tspan></text>
+<text class="svgsm" x="130" y="1484" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">⭐ 把票投给他 ＝ 弃权</tspan></text>
+<text class="svgsm" x="620" y="1258" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">为什么偏偏是最前面那几个？</tspan></text>
+<rect x="620" y="1276" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1276" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="672" y="1276" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="698" y="1276" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="724" y="1276" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="750" y="1276" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1276" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1302" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1302" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1302" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="698" y="1302" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="724" y="1302" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="750" y="1302" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1302" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1328" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1328" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1328" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1328" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="724" y="1328" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="750" y="1328" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1328" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1354" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1354" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1354" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1354" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="724" y="1354" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="750" y="1354" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1354" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1380" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1380" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1380" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1380" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="724" y="1380" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="750" y="1380" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="776" y="1380" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1406" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1406" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1406" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1406" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="724" y="1406" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="750" y="1406" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="776" y="1406" width="23" height="23" rx="2" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="620" y="1432" width="23" height="23" rx="2" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="646" y="1432" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="672" y="1432" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="698" y="1432" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="724" y="1432" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="750" y="1432" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<rect x="776" y="1432" width="23" height="23" rx="2" fill="#e8f0fe" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="633" y="1480" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">↑</tspan></text>
+<text class="svgsm" x="620" y="1506" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">因果掩码下，第 0 列是<tspan font-weight="700">唯一一列全满的</tspan></tspan></text>
+<text class="svgsm" x="620" y="1530" fill="#5f6368" style="font-size:17.0px">——　不是它特殊，是<tspan font-weight="700">只有它人人都够得着</tspan></text>
+<rect x="1010" y="1264" width="334" height="214" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1030" y="1296" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">⭐⭐ 于是整件事说得通了</tspan></text>
+<text class="svgsm" x="1030" y="1328" fill="#5f6368" style="font-size:17.0px">softmax 不许弃权，</text>
+<text class="svgsm" x="1030" y="1352" fill="#5f6368" style="font-size:17.0px">模型就自己造了一个</text>
+<text class="svgsm" x="1030" y="1376" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">弃权用的候选人出来：</tspan></text>
+<text class="svgsm" x="1030" y="1400" fill="#5f6368" style="font-size:17.0px">永远在场、什么主张都没有。</text>
+<text class="svgsm" x="1030" y="1448" fill="#5f6368" style="font-size:17.0px">⛔ 砍掉他不是砍掉一个老 token，</text>
+<text class="svgsm" x="1030" y="1472" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">是砍掉了弃权票这个选项。</tspan></text>
+<rect x="0" y="1556" width="1400" height="324" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1556" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="1558" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1586" x2="1400" y2="1586" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1576" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">④ 两条看起来同样彻底的解法，只有一条成立</tspan></text>
+<text class="svgsm" x="305" y="1576" fill="#5f6368" style="font-size:11.0px">softmax 要求每一行的票必须投满</text>
+<rect x="56" y="1632" width="600" height="150" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="80" y="1670" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">规矩：每一行的票加起来必须正好 100 分</tspan></text>
+<text class="svgsm" x="80" y="1708" fill="#5f6368" style="font-size:17.0px">——　哪怕这一行「没什么特别想看的」，</text>
+<text class="svgsm" x="80" y="1740" fill="#5f6368" style="font-size:18.0px">票<tspan font-weight="700">也必须投出去</tspan>。</text>
+<text class="svgsm" x="80" y="1772" fill="#80868b" style="font-size:15.0px">这就是 softmax 的归一化</text>
+<path d="M 672.00 1706.00 L 716.00 1706.00" fill="none" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="736" y="1632" width="624" height="150" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="760" y="1670" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">于是废票都投给了最前面那几个</tspan></text>
+<text class="svgsm" x="760" y="1708" fill="#5f6368" style="font-size:17.0px">为什么偏偏是它们？——　因为自回归：</text>
+<text class="svgsm" x="760" y="1740" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">全场只有开头那几个，人人都够得着。</tspan></text>
+<text class="svgsm" x="760" y="1772" fill="#80868b" style="font-size:15.0px">把废票桶撤了，票没处投，整行就乱套</text>
+<rect x="56" y="1802" width="640" height="86" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="80" y="1838" fill="#0d652d" style="font-size:20.0px"><tspan font-weight="700">⭐ 一个成立的解法</tspan></text>
+<text class="svgsm" x="80" y="1870" fill="#5f6368" style="font-size:17.0px">预训练时加一个<tspan font-weight="700">可学的</tspan>废票桶　→　1+1023 下 PPL 18.01</text>
+<rect x="720" y="1802" width="640" height="86" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="744" y="1838" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 一个看起来对、但被论文自己证伪的</tspan></text>
+<text class="svgsm" x="744" y="1870" fill="#5f6368" style="font-size:17.0px">给一个<tspan font-weight="700">全零</tspan>的桶（＝softmax-off-by-one）　→　PPL 29214</text>
+<rect x="0" y="1900" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1900" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1900" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1927" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这个故事真正的教益 —— 比 sink 本身值钱</tspan></text>
+<text class="svgsm" x="20" y="1958" fill="#174ea6" style="font-size:15.0px">attention sink 不是 bug，也不是谁设计的特性，它是<tspan font-weight="700">「票必须投满」这条规矩逼出来的副产品</tspan>。</text>
+<text class="svgsm" x="20" y="1982" fill="#174ea6" style="font-size:15.0px">⭐ 判据：<tspan font-weight="700">看到模型里一个「毫无道理却极其稳定」的现象，先去找是不是某个守恒 / 归一化约束逼出来的。</tspan>量化里那批总也压不下去的 outlier，跟这是同一件事（见专题八）。</text>
+<text class="svgsm" x="20" y="2006" fill="#174ea6" style="font-size:15.0px">⛔ 还有一条：<tspan font-weight="700">这个 bug 从公式上完全看不出来</tspan> ——&#160;是把注意力矩阵<tspan font-weight="700">画出来</tspan>才发现的。这一讲所有的图，都是这个道理。</text>
+<rect x="0" y="2036" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="2036" width="4" height="98" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="2036" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="2063" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 别把「理论射程」当「有效射程」</tspan></text>
+<text class="svgsm" x="20" y="2094" fill="#b06000" style="font-size:15.0px">4,096 × 32 ＝ <tspan font-weight="700">131,072</tspan> 是个上界，说的是「信息最远能传到这儿」，<tspan font-weight="700">不是「这么远还能用」</tspan> ——&#160;每跨一层只挪一格窗口，而且一路被后面的信息稀释。</text>
+<text class="svgsm" x="20" y="2118" fill="#b06000" style="font-size:15.0px">⭐ 稳妥说法：<tspan font-weight="700">滑窗把「远处」从「看不见」变成了「看得见但很模糊」</tspan> ——&#160;所以后面那些方案才要在滑窗之外再加一条「挑着看」的路。</text>
+</svg><figcaption>⛔⛔ <b>中间那三根柱子是按对数画的</b> ——&nbsp;<em>5158 和 5.40 之间差的是<b>三个数量级</b>，不是三倍。</em><br>⭐ <em>一个模型从「能用」到「彻底胡说」，中间只隔着<b>四个 token</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 有效射程那一格出自 guangxuanx.com/blog/stacking-swa.html（作者是 StreamingLLM 一作，⚠️ 个人博客非同行评议）：纯 SWA ≈ 0.58·W·√L；有残差时跟层数无关。⚠️ 其中 α≈0.95 是作者断言不是实测，所以本图只说「一到两个窗口宽」不写死倍数</p>
+<p>gpt-oss-20b 的 1:1 交替与 sliding_window=128 是本课直接读 huggingface.co/openai/gpt-oss-20b 的 config.json 得到的</p>
+<p>Mistral 7B arXiv <a href="https://arxiv.org/abs/2310.06825" target="_blank" rel="noopener">2310.06825</a> §2（k×W 射程、W=4096 / 32 层、rolling buffer cache）；131,072 由脚本当场乘出来并断言</p>
+<p>②③ 出自 StreamingLLM（Xiao 等 arXiv <a href="https://arxiv.org/abs/2309.17453" target="_blank" rel="noopener">2309.17453</a>, ICLR 2024）论文表 1 / 表 2 与论文 <a href="#s3-1">§3.1</a> / <a href="#s3-3">§3.3</a>：5158.07 → 5.40、换行符 5.60、留 1/2/4/8 个的对照</p>
+<p>⛔ Zero Sink（＝softmax-off-by-one）那组反例出自同文表 3 / 表 10 的三个 160M 预训练对照</p>
+<p>⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）<b>不是同一个评测集</b>；⚠️ 「传话」是本课的比喻；⛔ 但「不许弃权的选票」<b>不是本课原创</b> ——&#160;Evan Miller 2023-07《Attention Is Off By One》原话就是 「a deafening democracy where abstention is disallowed」</p>
+<p>③ 「value 模长极小」出自 Barbero 等 arXiv <a href="https://arxiv.org/abs/2504.02732" target="_blank" rel="noopener">2504.02732</a> 图 4；「第 0 列是因果掩码下唯一全满的一列」是由掩码定义直接得出的</p></details></figure>
+
+<div class="note danger"><p>⛔ <b>这件事值得单拎出来讲，因为它是一整类 bug 的样板。</b></p>
+<p><em>从公式上你看不出任何问题；是有人<b>把注意力矩阵画出来</b>，
+  才看见开头那几个字上堆着一大片。</em></p>
+<p>⭐ <b>那几个字其实没什么意思 ——&nbsp;它们是个「废票桶」。</b>
+  <em>softmax 逼着每一行加起来等于 1，<b>不许有人弃权</b>；
+  于是当一个头这一步实在没什么想看的，它就得<b>把票投到某个地方去</b>。</em></p>
+<p>⛔ <em>窗口一滑过开头，废票桶被扔掉 ——&nbsp;那些票没地方去了。</em>
+  <b>模型不是慢慢变差，是当场崩掉。</b></p></div>
+
+<div class="note ok"><p>⭐⭐ <b>这一条正好把<a href="#s二">第二章</a>那个伏笔收了。</b></p>
+<p><em>当时 Bengio 说，注意力必须是「软」的 ——&nbsp;
+  要有一份<b>总额固定</b>的注意力，可以分摊到所有位置上，这样才能训。</em></p>
+<p>⛔ <b>「总额固定」是优点，也正是这里的病根。</b>
+  <em>一个设计的副作用，十有八九跟它的优点是同一条性质 ——&nbsp;
+  这条判据以后你会一直用。</em></p></div>
+
+<h3 id="s6-3">6.3　那就别只看身边，去把重要的挑出来 ——&nbsp;可这里有个死结</h3>
+
+<figure class="fbox fwide" id="fig-chicken"><svg viewBox="0 0 1400 900" width="100%" role="img" aria-label="破鸡生蛋的三条路：师徒让真注意力当老师教一个便宜的索引器；一份算两用不训第二个打分器，压缩分支的分数直接当路由；降维打击先把序列压短四倍，搜索空间跟着缩四倍"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">先说清这个死结：<tspan font-weight="700">要挑出重要的，得先算注意力；可算完了再挑，就没意义了</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 本课原来只讲了一种破法。其实有三条，而且是<tspan font-weight="700">真正不同的三条</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">死结</text>
+<rect x="75" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="96" y="74" fill="#5f6368" style="font-size:14.0px">师徒</text>
+<rect x="150" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="171" y="74" fill="#5f6368" style="font-size:14.0px">一份算两用</text>
+<rect x="267" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="288" y="74" fill="#5f6368" style="font-size:14.0px">降维打击</text>
+<rect x="0" y="102" width="1400" height="244" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">① 死结长什么样</tspan></text>
+<text class="svgsm" x="129" y="122" fill="#5f6368" style="font-size:11.0px">先把它画出来</text>
+<rect x="96" y="178" width="300" height="92" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="246" y="214" fill="#a50e0e" text-anchor="middle" style="font-size:21.0px"><tspan font-weight="700">想只算重要的那几块</tspan></text>
+<text class="svgsm" x="246" y="246" fill="#5f6368" text-anchor="middle" style="font-size:17.0px">→ 得先知道哪几块重要</text>
+<path d="M 400.0 224.0 H 560.0 Q 560.0 224.0 560.0 224.0 V 224.0" fill="none" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<rect x="560" y="178" width="300" height="92" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="710" y="214" fill="#a50e0e" text-anchor="middle" style="font-size:21.0px"><tspan font-weight="700">想知道哪几块重要</tspan></text>
+<text class="svgsm" x="710" y="246" fill="#5f6368" text-anchor="middle" style="font-size:17.0px">→ 得先把注意力算一遍</text>
+<path d="M 710 276 C 710 326 246 326 246 276" fill="none" stroke="#d93025" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="478" y="336" fill="#a50e0e" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">转回来了</tspan></text>
+<rect x="900" y="178" width="444" height="92" rx="10" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="922" y="210" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以三条破法都在回答同一句话：</tspan></text>
+<text class="svgsm" x="922" y="240" fill="#5f6368" style="font-size:17.0px">「怎么在<tspan font-weight="700">不算全</tspan>的前提下，知道该看谁」</text>
+<rect x="0" y="364" width="1400" height="396" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="364" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="366" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="394" x2="1400" y2="394" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="384" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">② 三条破法 ——　它们是真正不同的三条</tspan></text>
+<text class="svgsm" x="285" y="384" fill="#5f6368" style="font-size:11.0px">不是同一招的三种说法</text>
+<rect x="20" y="418" width="436" height="300" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<rect x="20" y="418" width="436" height="5" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="20" y="421" width="436" height="5" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="42" y="462" fill="#174ea6" style="font-size:25.0px"><tspan font-weight="700">① 师徒</tspan></text>
+<text class="svgsm" x="434" y="462" fill="#80868b" text-anchor="end" style="font-size:17.0px">DSA</text>
+<circle cx="64.0" cy="504.0" r="8.4" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<path d="M 49.9 536.0 a 14.1 21.0 0 0 1 28.2 0 z" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<text class="svgsm" x="64" y="556" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">老师</tspan></text>
+<rect x="104" y="494" width="12" height="42" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="120" y="494" width="12" height="42" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="136" y="494" width="12" height="42" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="152" y="494" width="12" height="42" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="168" y="494" width="12" height="42" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="184" y="494" width="12" height="42" rx="2" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<path d="M 210.0 515.0 H 256.0 Q 256.0 515.0 256.0 515.0 V 515.0" fill="none" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<circle cx="288.0" cy="504.0" r="8.4" fill="#f1f3f4" stroke="#80868b" stroke-width="1.4"/>
+<path d="M 273.9 536.0 a 14.1 21.0 0 0 1 28.2 0 z" fill="#f1f3f4" stroke="#80868b" stroke-width="1.4"/>
+<text class="svgsm" x="288" y="556" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">学生</tspan></text>
+<path d="M 333.6 494.0 H 356.0 L 363.2 503.0 V 536.0 H 333.6 Z" fill="#fff" stroke="#80868b" stroke-width="1.4" stroke-linejoin="round"/>
+<line x1="356.0" y1="494.0" x2="356.0" y2="503.0" stroke="#80868b" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="356.0" y1="503.0" x2="363.2" y2="503.0" stroke="#80868b" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="338.4" y1="514.0" x2="356.8" y2="514.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="338.4" y1="523.0" x2="356.8" y2="523.0" stroke="#80868b" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="348" y="556" fill="#80868b" text-anchor="middle" style="font-size:15.0px">只有名次表</text>
+<text class="svgsm" x="42" y="608" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">让真注意力当老师</tspan></text>
+<text class="svgsm" x="42" y="636" fill="#5f6368" style="font-size:17.0px">训一个便宜的学生去学它的排序</text>
+<rect x="42" y="654" width="392" height="54" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="56" y="680" fill="#5f6368" style="font-size:16.0px">⚠️ 代价：要专门训一个索引器</text>
+<text class="svgsm" x="56" y="702" fill="#5f6368" style="font-size:16.0px">（V3.2 花了 943.7B token）</text>
+<rect x="480" y="418" width="436" height="300" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="480" y="418" width="436" height="5" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="480" y="421" width="436" height="5" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="502" y="462" fill="#b06000" style="font-size:25.0px"><tspan font-weight="700">② 一份算两用</tspan></text>
+<text class="svgsm" x="894" y="462" fill="#80868b" text-anchor="end" style="font-size:17.0px">NSA</text>
+<rect x="502" y="498" width="96" height="40" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="550" y="524" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">压缩分支</tspan></text>
+<text class="svgsm" x="550" y="558" fill="#80868b" text-anchor="middle" style="font-size:15.0px">本来就要算</text>
+<path d="M 602.0 512.0 H 664.0 Q 672.0 512.0 672.0 504.0 V 494.0" fill="none" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<path d="M 602.0 524.0 H 664.0 Q 672.0 524.0 672.0 532.0 V 542.0" fill="none" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<text class="svgsm" x="680" y="500" fill="#5f6368" style="font-size:16.0px">① 当输出用</text>
+<text class="svgsm" x="680" y="548" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">② 当路由信号用</tspan></text>
+<text class="svgsm" x="502" y="608" fill="#b06000" style="font-size:20.0px"><tspan font-weight="700">不训第二个打分器</tspan></text>
+<text class="svgsm" x="502" y="636" fill="#5f6368" style="font-size:17.0px">压缩分支的分数本来就要算，直接拿它当路由</text>
+<rect x="502" y="654" width="392" height="54" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="516" y="680" fill="#5f6368" style="font-size:16.0px">⭐ 白捡：top-k 在前向图上是个 no-op，</text>
+<text class="svgsm" x="516" y="702" fill="#5f6368" style="font-size:16.0px">只决定从显存搬哪些块</text>
+<rect x="940" y="418" width="436" height="300" rx="10" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<rect x="940" y="418" width="436" height="5" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="940" y="421" width="436" height="5" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="962" y="462" fill="#681da8" style="font-size:25.0px"><tspan font-weight="700">③ 降维打击</tspan></text>
+<text class="svgsm" x="1354" y="462" fill="#80868b" text-anchor="end" style="font-size:17.0px">CSA · V4</text>
+<rect x="962" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="977" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="992" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1007" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1022" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1037" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1052" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1067" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1082" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1097" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1112" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="1127" y="496" width="11" height="26" rx="2" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="962" y="542" fill="#80868b" style="font-size:15.0px">12 格要挑</text>
+<path d="M 1148.0 509.0 H 1186.0 Q 1186.0 509.0 1186.0 509.0 V 509.0" fill="none" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<rect x="1196" y="496" width="22" height="26" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<rect x="1222" y="496" width="22" height="26" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<rect x="1248" y="496" width="22" height="26" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1196" y="542" fill="#681da8" style="font-size:16.0px"><tspan font-weight="700">只剩 3 格</tspan></text>
+<text class="svgsm" x="962" y="608" fill="#681da8" style="font-size:20.0px"><tspan font-weight="700">先把序列压短 4 倍</tspan></text>
+<text class="svgsm" x="962" y="636" fill="#5f6368" style="font-size:17.0px">鸡生蛋没破 ——　但那只鸡小了 4 倍</text>
+<rect x="962" y="654" width="392" height="54" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="976" y="680" fill="#5f6368" style="font-size:16.0px">⭐ 这是 V4 相对 V3.2</text>
+<text class="svgsm" x="976" y="702" fill="#5f6368" style="font-size:16.0px">真正的新东西</text>
+<rect x="0" y="780" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="780" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="780" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="807" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 顺着这条死结往下走一步，「为什么必须整块取」就不用单独讲了</tspan></text>
+<text class="svgsm" x="20" y="838" fill="#174ea6" style="font-size:15.0px">把链子接起来：<tspan font-weight="700">相似度一旦算出来，事后再稀疏就没好处</tspan> ——&#160;所以<tspan font-weight="700">必须有一个便宜的近似打分器</tspan>；而便宜的近似打分<tspan font-weight="700">只能按块做</tspan>（按 token 打分就等于把全表算了）。</text>
+<text class="svgsm" x="20" y="862" fill="#174ea6" style="font-size:15.0px">⭐ 于是<tspan font-weight="700">「整块取」不是对硬件的妥协，是这个死结的直接推论</tspan>。本课原来把它们讲成两段互不相干的话 ——&#160;接上之后，两个难点变成一个。</text>
+</svg><figcaption>⭐ <b>左边那个圈绕不过去，只能破 ——&nbsp;而破法有三条，不是一条。</b><br><em>⭐⭐ 三条各自聪明在不同地方，值得一条一条读：<b>一条是找人替考，一条是废物利用，一条干脆把考场缩小了。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① DSA 的师徒（两阶段训练、冻主模型 ＋ KL warmup）出自 DeepSeek-V3.2-Exp 技术报告 sec. 2；② NSA 的三支路出自 arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a> sec. 3</p>
+<p>③ CSA 每 4 个 token 压成 1 个 entry、在压缩后的格上挑，出自 DeepSeek-V4 相关公开材料（见 CSA 那张图的出处）</p>
+<p>⚠️「相似度算出来再稀疏就没好处 →&#160;只能按块打分」这条链子的表述出自 zhouyifan.net 的 Log-linear Sparse Attention 一文；「师徒 / 一份算两用 / 降维打击」是<b>本课的命名</b></p></details></figure>
+
+<h3 id="s6-4">6.4　DSA 是怎么破这个死结的 ——&nbsp;以及它一步到底在干什么</h3>
+
+<p>DeepSeek 的破法是<b>师徒</b>：<em>让真的注意力当老师，
+  另外训一个极便宜的学生，专门去学老师那张分布的<b>排序</b>。</em></p>
+
+<figure class="fbox fwide" id="fig-dsa-why"><svg viewBox="0 0 1400 1372" width="100%" role="img" aria-label="凭什么只看 2048 个就够：把它想成查资料 —— 一面十三万本的书墙，这一次用得上的只有一小格；难的是怎么知道该看谁，那是个鸡生蛋，DSA 的解法是让真注意力当老师，训一个便宜的小徒弟去模仿它的排序"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">凭什么只看 2048 个就够</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">把它想成<tspan font-weight="700">查资料</tspan>：书墙很长，可这一次真正用得上的只有几本</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">只用一小格</text>
+<rect x="117" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="138" y="74" fill="#5f6368" style="font-size:14.0px">鸡生蛋</text>
+<rect x="206" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="227" y="74" fill="#5f6368" style="font-size:14.0px">让老师教徒弟</text>
+<rect x="337" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="358" y="74" fill="#5f6368" style="font-size:14.0px">徒弟凭什么快</text>
+<rect x="0" y="102" width="1400" height="252" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">① 先说一个经验事实 ——　书墙很长，用得上的很少</tspan></text>
+<text class="svgsm" x="353" y="122" fill="#5f6368" style="font-size:11.0px">H2O 2023 量出来的</text>
+<text class="svgsm" x="56" y="178" fill="#5f6368" style="font-size:19.0px"><tspan font-weight="700">这一步能看到的历史：131,072 个 token</tspan></text>
+<rect x="56" y="188" width="1046" height="78" rx="6" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<rect x="64.0" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="78.7" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="93.4" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="108.1" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="122.8" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="137.5" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="152.2" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="166.89999999999998" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="181.6" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="196.29999999999998" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="211.0" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="225.7" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="240.39999999999998" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="255.1" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="269.79999999999995" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="284.5" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="299.2" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="313.9" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="328.59999999999997" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="343.3" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="358.0" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="372.7" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="387.4" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="402.09999999999997" y="196" width="10" height="62" rx="2" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="416.79999999999995" y="196" width="10" height="62" rx="2" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="431.5" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="446.2" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="460.9" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="475.59999999999997" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="490.29999999999995" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="505.0" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="519.7" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="534.4" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="549.0999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="563.8" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="578.5" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="593.1999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="607.9" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="622.6" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="637.3" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="652.0" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="666.6999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="681.4" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="696.1" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="710.8" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="725.5" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="740.1999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="754.9" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="769.5999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="784.3" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="799.0" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="813.6999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="828.4" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="843.0999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="857.8" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="872.5" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="887.1999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="901.9" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="916.5999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="931.3" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="946.0" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="960.6999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="975.4" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="990.0999999999999" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="1004.8" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="1019.5" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="1034.1999999999998" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="1048.9" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="1063.6" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="1078.3" y="196" width="10" height="62" rx="2" fill="#dfe3e7" stroke="none" stroke-width="1"/>
+<rect x="398.09999999999997" y="190" width="38" height="74" rx="4" fill="none" stroke="#1e8e3e" stroke-width="2.2"/>
+<line x1="409.45" y1="274" x2="409.45" y2="298" stroke="#1e8e3e" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="409" y="322" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">真正用得上的</tspan></text>
+<text class="svgsm" x="409" y="348" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">就这么一小格</tspan></text>
+<rect x="1136" y="188" width="224" height="160" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1248" y="236" fill="#0d652d" text-anchor="middle" style="font-size:26.0px"><tspan font-weight="700">2,048 个</tspan></text>
+<text class="svgsm" x="1248" y="274" fill="#0d652d" text-anchor="middle" style="font-size:24.0px"><tspan font-weight="700">＝ 1.56%</tspan></text>
+<text class="svgsm" x="1248" y="312" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">剩下那 98.4%</text>
+<text class="svgsm" x="1248" y="336" fill="#5f6368" text-anchor="middle" style="font-size:15.0px">几乎分不到权重</text>
+<rect x="0" y="372" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="372" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="374" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="402" x2="1400" y2="402" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="392" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">② 难的不是「少看」，是「怎么知道该看谁」</tspan></text>
+<text class="svgsm" x="305" y="392" fill="#5f6368" style="font-size:11.0px">一个鸡生蛋，和 DSA 的解法</text>
+<rect x="56" y="446" width="556" height="128" rx="10" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="80" y="482" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">要知道哪本书有用 ——　得先把它读了</tspan></text>
+<text class="svgsm" x="80" y="518" fill="#5f6368" style="font-size:17.0px">可「每本都读一遍」正是我想省掉的事</text>
+<text class="svgsm" x="80" y="552" fill="#a50e0e" style="font-size:20.0px"><tspan font-weight="700">⛔ 又转回来了</tspan></text>
+<path d="M 592.00 480.00 L 634.00 510.00 L 592.00 540.00" fill="none" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="676" y="434" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">DSA 的解法：让老师带一个便宜的徒弟</tspan></text>
+<rect x="676" y="446" width="296" height="128" rx="10" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="696" y="482" fill="#174ea6" style="font-size:20.0px"><tspan font-weight="700">老师 ＝ 真注意力</tspan></text>
+<text class="svgsm" x="696" y="516" fill="#5f6368" style="font-size:16.0px">它当然知道哪本有用</text>
+<text class="svgsm" x="696" y="548" fill="#80868b" style="font-size:15.0px">——　但它贵</text>
+<line x1="988" y1="510" x2="1040" y2="510" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="1014" y="492" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">照着学</tspan></text>
+<rect x="1064" y="446" width="296" height="128" rx="10" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1084" y="482" fill="#0d652d" style="font-size:20.0px"><tspan font-weight="700">徒弟 ＝ 索引器</tspan></text>
+<text class="svgsm" x="1084" y="516" fill="#5f6368" style="font-size:16.0px">不需要懂内容</text>
+<text class="svgsm" x="1084" y="548" fill="#0d652d" style="font-size:18.0px"><tspan font-weight="700">只要把书排对顺序</tspan></text>
+<rect x="56" y="596" width="1304" height="122" rx="10" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="80" y="632" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 关键是「怎么算徒弟学得像不像」——　不是让它猜，是<tspan font-weight="700">对着老师的答案打分</tspan></tspan></text>
+<text class="svgsm" x="80" y="668" fill="#5f6368" style="font-size:17.0px">热身阶段<tspan font-weight="700">全模型冻住</tspan>、注意力照常密集地算，只训徒弟去拟合老师那张分布（损失就是 KL）。</text>
+<text class="svgsm" x="80" y="702" fill="#202124" style="font-size:19.0px"><tspan font-weight="700">热身 2.1B token　→　稀疏期再训 943.7B token</tspan></text>
+<rect x="0" y="720" width="1400" height="216" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="720" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="722" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="750" x2="1400" y2="750" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="740" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">③ 徒弟凭什么便宜 ——　三样减法</tspan></text>
+<text class="svgsm" x="245" y="740" fill="#5f6368" style="font-size:11.0px">它只排序，不做加权平均</text>
+<rect x="56" y="788" width="306" height="130" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="78" y="828" fill="#b06000" style="font-size:24.0px"><tspan font-weight="700">64 头</tspan></text>
+<text class="svgsm" x="78" y="864" fill="#5f6368" style="font-size:16.0px">主注意力是 128 头</text>
+<text class="svgsm" x="78" y="898" fill="#80868b" style="font-size:15.0px">人手减一半</text>
+<rect x="394" y="788" width="306" height="130" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="416" y="828" fill="#b06000" style="font-size:24.0px"><tspan font-weight="700">ReLU 打分</tspan></text>
+<text class="svgsm" x="416" y="864" fill="#5f6368" style="font-size:16.0px">不用 softmax</text>
+<text class="svgsm" x="416" y="898" fill="#80868b" style="font-size:15.0px">只排序，就不必「和为 1」</text>
+<rect x="732" y="788" width="306" height="130" rx="10" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="754" y="828" fill="#b06000" style="font-size:24.0px"><tspan font-weight="700">FP8</tspan></text>
+<text class="svgsm" x="754" y="864" fill="#5f6368" style="font-size:16.0px">精度更糙</text>
+<text class="svgsm" x="754" y="898" fill="#80868b" style="font-size:15.0px">排序不需要那么准</text>
+<rect x="1070" y="788" width="290" height="130" rx="10" fill="#fff" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1092" y="824" fill="#681da8" style="font-size:19.0px"><tspan font-weight="700">⚠️ 还有一条硬的</tspan></text>
+<text class="svgsm" x="1092" y="856" fill="#681da8" style="font-size:19.0px"><tspan font-weight="700">它必须搭 MQA 模式</tspan></text>
+<text class="svgsm" x="1092" y="886" fill="#5f6368" style="font-size:15.0px">否则 kernel 上不划算 ——</text>
+<text class="svgsm" x="1092" y="910" fill="#80868b" style="font-size:14.0px">旋钮①② 在这儿被硬件绑住了</text>
+<rect x="0" y="956" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="956" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="956" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="983" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐ 带走一条套路：要省掉一个贵的东西，先让它自己说出答案</tspan></text>
+<text class="svgsm" x="20" y="1014" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">再训一个便宜的去复制那个答案。</tspan>DSA 的索引器不是「一个猜谁重要的启发式」——&#160;它是<tspan font-weight="700">主注意力分布的一个廉价复制品</tspan>。</text>
+<text class="svgsm" x="20" y="1038" fill="#174ea6" style="font-size:15.0px">⭐ 这个套路到处都能用：蒸馏、投机解码、各种预测器 ——&#160;都是「贵的当老师，便宜的当徒弟，拿老师的输出当标准答案」。</text>
+<rect x="0" y="1068" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1068" width="4" height="146" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="1068" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1095" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 那 2048 这个数怎么来的 —— 老实说：论文没给消融</tspan></text>
+<text class="svgsm" x="20" y="1126" fill="#b06000" style="font-size:15.0px">能说的只有三件事：① 128K 下它占 <tspan font-weight="700">1.56%</tspan>；② 两个公开口径（H2O「前 5%→95%」、Chen「前 20%→70%」）在 1.56% 处分别给 93% 和 40% ——&#160;<tspan font-weight="700">差一倍多</tspan>；</text>
+<text class="svgsm" x="20" y="1150" fill="#b06000" style="font-size:15.0px">③ <tspan font-weight="700">历史不足 2048 时，top-2048 就是全选</tspan> ——&#160;这是定义直接推出来的，所以短上下文下 DSA 就是普通 MLA，<tspan font-weight="700">稀疏只在长上下文才启动</tspan>。</text>
+<text class="svgsm" x="20" y="1174" fill="#b06000" style="font-size:15.0px">⚠️ 别把「95% 稀疏」当普适常数 ——&#160;那是 H2O 在它测的那批模型上量的，Chen 2024 在别的模型上量到「前 20% 只覆盖 70%」。⭐ <tspan font-weight="700">两个都发表了，两个都对 ——&#160;对的是各自那</tspan></text>
+<text class="svgsm" x="20" y="1198" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">批模型。</tspan></text>
+<rect x="0" y="1228" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1228" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1228" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1255" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 暗线第三次出现：事后压 vs 从头按压缩训</tspan></text>
+<text class="svgsm" x="20" y="1286" fill="#0d652d" style="font-size:15.0px">H2O 是<tspan font-weight="700">事后</tspan>的 ——&#160;一个 KV 驱逐策略，不改训练，随时可开关。</text>
+<text class="svgsm" x="20" y="1310" fill="#0d652d" style="font-size:15.0px">DSA 是<tspan font-weight="700">从头</tspan>的 ——&#160;热身 2.1B ＋ 稀疏期 <tspan font-weight="700">943.7B token</tspan> 的继续训练，模型是在「我会被稀疏」这个前提下学出来的。</text>
+<text class="svgsm" x="20" y="1334" fill="#0d652d" style="font-size:15.0px">⭐ 三次了：Eigen Attention 对 MLA、GQA 对 MLA、H2O 对 DSA。<tspan font-weight="700">同一条暗线，第三个分支。</tspan></text>
+</svg><figcaption>⭐ <b>看中间那一格就够了：它怎么知道徒弟学到位了没有。</b><br><em>⚠️ 至于 2048 这个数是怎么定下来的 ——&nbsp;图里说了老实话，<b>论文没给消融</b>。能查到的只有它占多大比例，而两个公开口径在这个比例上给出的答案<b>差着一倍多</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 出自 H2O：Zhang 等 arXiv <a href="https://arxiv.org/abs/2306.14048" target="_blank" rel="noopener">2306.14048</a>（「over 95% sparse」与累计注意力分数的幂律分布，均为原文表述）</p>
+<p>②③ 出自 DeepSeek-V3.2-Exp 技术报告 §1–<a href="#s2-1">§2.1</a>：KL 对齐、冻结主模型热身、跨头求和后 L1 归一、梯度断开、ReLU「for throughput consideration」、index_topk=2048、索引器 64 头且跑在 FP8 上</p>
+<p>⚠️ 「书墙 / 师徒」是<b>本课的比喻</b>；⛔ <b>k 的消融论文没有给</b> ——&#160;2048 这个数只能说它占多少、以及短序列下等于全选</p></details></figure>
+
+<!-- ⛔ 这块原来把图里那条落点带整段抄了一遍（查重抓到三段）。
+     ⭐ 只留图给不了的：**这个套路在别处也长这个样子。** -->
+<div class="note ok"><p>⭐ <b>图里那条套路，你在别处大概已经见过好几次了。</b></p>
+<p><em>投机解码：让小模型先草拟，大模型只负责验收。<br>
+  模型蒸馏：大模型的输出当标准答案，小模型照着学。<br>
+  各种缓存预测器：真实访问序列当标准答案，训一个便宜的去猜。</em></p>
+<p>⭐⭐ <b>同一个形状：贵的那个不用消失，它只要愿意当一次老师。</b></p></div>
+
+<p class="landing">📌 <b>下面这张，是这一章的正题。</b>
+  <em>——&nbsp;那 2048 个到底怎么挑出来的、省了什么、没省什么、多花了什么，一张图答完。</em></p>
+
+<figure class="fbox fwide" id="fig-dsa-flow"><svg viewBox="0 0 1400 1290" width="100%" role="img" aria-label="DSA 一步的三段流水线：闪电索引器用一个很轻的打分函数扫过全部历史，取分数最高的 2048 个，再只对这 2048 个做完整的注意力；以及三栏账：省了每步要算要搬的量、一点显存都没省、多花了索引器的全程打分和挑中之后的不连续访存"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">DSA 走一步 ——&#160;<tspan font-weight="700">那 2048 个是怎么挑出来的</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 三步，<tspan font-weight="700">每一步都便宜；真正贵的那一步，根本没在全长上做</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">轻：索引器扫全程</text>
+<rect x="159" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="180" y="74" fill="#5f6368" style="font-size:14.0px">挑中的 2048</text>
+<rect x="286" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="307" y="74" fill="#5f6368" style="font-size:14.0px">没被读到的</text>
+<rect x="403" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="424" y="74" fill="#5f6368" style="font-size:14.0px">代价</text>
+<rect x="0" y="102" width="1400" height="376" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">① 一步之内发生了什么</tspan></text>
+<text class="svgsm" x="170" y="122" fill="#5f6368" style="font-size:11.0px">从左往右读 ——　注意前两步都还没碰真正的 K/V，只在跟「分数」打交道</text>
+<rect x="24" y="250" width="108" height="62" rx="6" fill="#fff" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="78" y="280" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">当前这个字</tspan></text>
+<text class="svgsm" x="78" y="295" fill="#5f6368" text-anchor="middle" style="font-size:11.0px;font-family:'Roboto Mono',ui-monospace,monospace">它的 q</text>
+<line x1="132" y1="280" x2="176" y2="232" stroke="#1a73e8" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<rect x="182" y="170" width="412" height="112" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="198" y="198" fill="#174ea6" style="font-size:21.0px"><tspan font-weight="700">⚡ 闪电索引器</tspan></text>
+<text class="svgsm" x="198" y="224" fill="#5f6368" style="font-size:16.0px">给<tspan font-weight="700">每一个</tspan>历史 token 打一个分</text>
+<text class="svgsm" x="198" y="254" fill="#174ea6" style="font-size:15.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">I[t,s] ＝ Σ<tspan baseline-shift="sub" font-size="11">j</tspan> w[t,j] · ReLU( q[t,j] · k[s] )</tspan></text>
+<text class="svgsm" x="198" y="304" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐ 它便宜在三处：</tspan></text>
+<text class="svgsm" x="216" y="332" fill="#5f6368" style="font-size:16.0px">· 头很少（不是主注意力那 128 个头）</text>
+<text class="svgsm" x="216" y="356" fill="#5f6368" style="font-size:16.0px">· 用 ReLU 不用 softmax ——　只排序，不做加权平均</text>
+<text class="svgsm" x="216" y="380" fill="#5f6368" style="font-size:16.0px">· 低精度就够（它只要把顺序排对）</text>
+<rect x="182" y="408" width="412" height="62" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="198" y="436" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">⛔ 但它<tspan font-weight="700">必须扫过全部历史</tspan></tspan></text>
+<text class="svgsm" x="198" y="458" fill="#5f6368" style="font-size:16.0px">一个都不能跳 ——　不扫完，就不知道该跳谁</text>
+<path d="M 594.0 226.0 H 638.0 Q 638.0 226.0 638.0 226.0 V 226.0" fill="none" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="622" y="168" fill="#202124" style="font-size:18.0px"><tspan font-weight="700">② 一整排分数，挑出最高的 2048 个</tspan></text>
+<rect x="622.0" y="248" width="13" height="18" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="636.6" y="225" width="13" height="41" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="651.2" y="257" width="13" height="9" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="665.8" y="214" width="13" height="52" rx="2" fill="#fbbc04" stroke="#e8710a" stroke-width="1"/>
+<rect x="680.4" y="240" width="13" height="26" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="695.0" y="259" width="13" height="7" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="709.6" y="203" width="13" height="63" rx="2" fill="#fbbc04" stroke="#e8710a" stroke-width="1"/>
+<rect x="724.2" y="252" width="13" height="14" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="738.8" y="233" width="13" height="33" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="753.4" y="261" width="13" height="5" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="768.0" y="219" width="13" height="47" rx="2" fill="#fbbc04" stroke="#e8710a" stroke-width="1"/>
+<rect x="782.6" y="255" width="13" height="11" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="797.2" y="244" width="13" height="22" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="811.8" y="208" width="13" height="58" rx="2" fill="#fbbc04" stroke="#e8710a" stroke-width="1"/>
+<rect x="826.4" y="258" width="13" height="8" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="841.0" y="236" width="13" height="30" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="855.6" y="254" width="13" height="12" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="870.2" y="222" width="13" height="44" rx="2" fill="#fbbc04" stroke="#e8710a" stroke-width="1"/>
+<rect x="884.8" y="260" width="13" height="6" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="899.4" y="229" width="13" height="37" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="914.0" y="250" width="13" height="16" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="928.5999999999999" y="216" width="13" height="50" rx="2" fill="#fbbc04" stroke="#e8710a" stroke-width="1"/>
+<rect x="943.2" y="256" width="13" height="10" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="957.8" y="238" width="13" height="28" rx="2" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<line x1="616" y1="270" x2="972.4" y2="270" stroke="#80868b" stroke-width="1.1" stroke-linecap="round"/>
+<text class="svgsm" x="622" y="292" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">⭐ 橙色那几根 ＝ 分数进了前 2048</tspan></text>
+<text class="svgsm" x="622" y="314" fill="#80868b" style="font-size:16.0px">灰色的 ——　这一步之后就再也不碰了</text>
+<rect x="622" y="336" width="352" height="50" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="798" y="367" fill="#b06000" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">top-2048 选择器</tspan></text>
+<text class="svgsm" x="622" y="408" fill="#5f6368" style="font-size:16.0px">⚠️ 挑的是<tspan font-weight="700">位置</tspan>，不是内容 ——</text>
+<text class="svgsm" x="622" y="430" fill="#5f6368" style="font-size:16.0px">选完才去仓库里把这 2048 份取出来。</text>
+<text class="svgsm" x="622" y="458" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">⛔ 而它们<tspan font-weight="700">散落在各处</tspan>，不是连着的一块。</tspan></text>
+<path d="M 974.0 361.0 H 1008.0 Q 1008.0 361.0 1008.0 361.0 V 361.0" fill="none" stroke="#e8710a" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-e8710a)"/>
+<rect x="1012" y="170" width="364" height="216" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1028" y="200" fill="#0d652d" style="font-size:19.0px"><tspan font-weight="700">③ 只对这 2048 个做真正的注意力</tspan></text>
+<text class="svgsm" x="1028" y="226" fill="#80868b" style="font-size:16.0px">（V3.2 里就是完整的 MLA）</text>
+<rect x="1032" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1059" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1086" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1113" y="246" width="22" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1140" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1167" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1194" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1221" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1248" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1275" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1302" y="246" width="22" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1329" y="246" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1032" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1059" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1086" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1113" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1140" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1167" y="273" width="22" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1194" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1221" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1248" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1275" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1302" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1329" y="273" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1032" y="300" width="22" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1059" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1086" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1113" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1140" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1167" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1194" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1221" y="300" width="22" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1248" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1275" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1302" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1329" y="300" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1032" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1059" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1086" y="327" width="22" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1113" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1140" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1167" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1194" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1221" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1248" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1275" y="327" width="22" height="22" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1302" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<rect x="1329" y="327" width="22" height="22" rx="3" fill="#f8f9fa" stroke="#eceff1" stroke-width="1"/>
+<text class="svgsm" x="1028" y="372" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 贵的那一步，只在 1.56% 的格子上做</tspan></text>
+<rect x="1012" y="402" width="364" height="68" rx="8" fill="#f8f9fa" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="1028" y="428" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">所以整段注意力的账</tspan></text>
+<text class="svgsm" x="1028" y="450" fill="#5f6368" style="font-size:16.0px">从 <tspan font-weight="700">L × L</tspan> 变成 <tspan font-weight="700">L × 2048</tspan></text>
+<text class="svgsm" x="1028" y="470" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">⭐ 长文越长，赚得越多</tspan></text>
+<rect x="0" y="496" width="1400" height="172" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="496" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="498" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="526" x2="1400" y2="526" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="516" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">② 2048 在 128K 里是多大一块</tspan></text>
+<text class="svgsm" x="226" y="516" fill="#5f6368" style="font-size:11.0px">这一条按真比例画 ——　上面那 24 根柱子是示意，这一条不是</text>
+<rect x="40" y="556" width="1320" height="34" rx="4" fill="#e8eaed" stroke="#e8eaed" stroke-width="1"/>
+<rect x="40" y="556" width="20.625" height="34" rx="4" fill="#fbbc04" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="40" y="614" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⭐ 2048 ÷ 131072 ＝ <tspan font-weight="700">1.56%</tspan>　——　橙色那一小条就是每一步真正读进来的量</tspan></text>
+<text class="svgsm" x="40" y="640" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 剩下那 98.4% <tspan font-weight="700">还好端端地躺在显存里</tspan>　——　它们只是这一步没被读，不是没被存。</tspan></text>
+<text class="svgsm" x="40" y="664" fill="#5f6368" style="font-size:16.0px">📌 顺带一个定义直接推出来的事实：历史不足 2048 时，top-2048 就是全选 ——　短上下文下 DSA 就是普通 MLA，稀疏根本没启动。</text>
+<rect x="10" y="686" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="10" y="686" width="440" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="10" y="688" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="10" y1="716" x2="450" y2="716" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="24" y="706" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">✅ 省下来的</tspan></text>
+<text class="svgsm" x="116" y="706" fill="#5f6368" style="font-size:11.0px">每一步要算、要搬的那些格子</text>
+<text class="svgsm" x="30" y="750" fill="#5f6368" style="font-size:17.0px">注意力那一段从 <tspan font-weight="700">L×L</tspan> 变成 <tspan font-weight="700">L×2048</tspan>。</text>
+<text class="svgsm" x="30" y="780" fill="#5f6368" style="font-size:17.0px">128K 下就是 <tspan font-weight="700">只读 1.56%</tspan>。</text>
+<text class="svgsm" x="30" y="810" fill="#5f6368" style="font-size:17.0px">⭐ 上下文越长，省得越多 ——</text>
+<text class="svgsm" x="30" y="840" fill="#5f6368" style="font-size:17.0px">　 因为省的是<tspan font-weight="700">跟长度成正比</tspan>的那一段。</text>
+<rect x="480" y="686" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="480" y="686" width="440" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="480" y="688" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="480" y1="716" x2="920" y2="716" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="494" y="706" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">⛔ 一点没省的</tspan></text>
+<text class="svgsm" x="599" y="706" fill="#5f6368" style="font-size:11.0px">显存</text>
+<text class="svgsm" x="500" y="750" fill="#5f6368" style="font-size:17.0px"><tspan font-weight="700">KV cache 一个字节都没少。</tspan></text>
+<text class="svgsm" x="500" y="780" fill="#5f6368" style="font-size:17.0px">⛔ 道理很硬：<tspan font-weight="700">要能从历史里挑，</tspan></text>
+<text class="svgsm" x="500" y="810" fill="#5f6368" style="font-size:17.0px">　 <tspan font-weight="700">就得把历史全留着。</tspan></text>
+<text class="svgsm" x="500" y="840" fill="#5f6368" style="font-size:17.0px">⭐ 所以这一章跟前两章<tspan font-weight="700">不是一回事</tspan> ——</text>
+<text class="svgsm" x="500" y="870" fill="#5f6368" style="font-size:17.0px">　 前两章改「一份有多大」，</text>
+<text class="svgsm" x="500" y="900" fill="#5f6368" style="font-size:17.0px">　 这一章改「每步读几份」。</text>
+<rect x="950" y="686" width="440" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="950" y="686" width="440" height="4" rx="2" fill="#b06000" stroke="#b06000" stroke-width="1"/>
+<rect x="950" y="688" width="440" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="950" y1="716" x2="1390" y2="716" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="964" y="706" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">⚠️ 反而多花的</tspan></text>
+<text class="svgsm" x="1069" y="706" fill="#5f6368" style="font-size:11.0px">两笔，而且第二笔更疼</text>
+<text class="svgsm" x="970" y="750" fill="#5f6368" style="font-size:17.0px">① <tspan font-weight="700">索引器要给所有历史打分。</tspan></text>
+<text class="svgsm" x="970" y="780" fill="#5f6368" style="font-size:17.0px">　 它很便宜，但<tspan font-weight="700">不是零</tspan>，而且随长度涨。</text>
+<text class="svgsm" x="970" y="810" fill="#5f6368" style="font-size:17.0px">② <tspan font-weight="700">挑中的 2048 个散落在各处。</tspan></text>
+<text class="svgsm" x="970" y="840" fill="#5f6368" style="font-size:17.0px">　 不是一整块 ——　搬起来碎、</text>
+<text class="svgsm" x="970" y="870" fill="#5f6368" style="font-size:17.0px">　 用不上 FlashAttention 那套按块搬的办法。</text>
+<text class="svgsm" x="970" y="900" fill="#5f6368" style="font-size:17.0px">⭐ 这正是 NSA 改成<tspan font-weight="700">按块挑</tspan>的原因。</text>
+<rect x="0" y="1032" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1032" width="4" height="74" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1032" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1059" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ ⭐⭐ 这两笔多花的，正好把这一支后来的样子定下来了</tspan></text>
+<text class="svgsm" x="20" y="1090" fill="#a50e0e" style="font-size:15.0px">省 FLOPs 谁都会 ——　在纸上少算 98% 的格子而已。可只要那些格子<tspan font-weight="700">散落在显存各处</tspan>，<tspan font-weight="700">要搬的字节一点没少，时间就一点没省</tspan>。</text>
+<rect x="0" y="1122" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1122" width="4" height="146" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="1122" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1149" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 回到现场那四问，答案一句一条</tspan></text>
+<text class="svgsm" x="20" y="1180" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">怎么挑的</tspan>：一个很轻的打分器扫过全部历史，取分数最高的 2048 个位置。</text>
+<text class="svgsm" x="20" y="1204" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">省了显存吗</tspan>：<tspan font-weight="700">没有，一个字节都没省。</tspan>省的是每一步真正读进来、算进去的那一部分。</text>
+<text class="svgsm" x="20" y="1228" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">trade-off 是什么</tspan>：拿「可能漏掉某个重要的」换「只读 1.56%」——　而漏不漏，是靠训练让打分器去对齐真注意力的分布。</text>
+<text class="svgsm" x="20" y="1252" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">多花了什么算力</tspan>：索引器的全程打分（轻，但随长度涨）＋ 挑中之后的<tspan font-weight="700">不连续访存</tspan>（这一笔更疼）。</text>
+</svg><figcaption>⭐⭐⭐ <b>这一张是为现场那四个问题专门画的，四问四块，一一对上。</b><br><em>要是只看一眼，就看第 ② 块那条按真比例画的带子 ——&nbsp;<b>橙色那一小条是这一步读进来的，灰色那一大片全都还在显存里躺着。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>索引器的式子 I[t,s] ＝ Σ w·ReLU(q·k) 与 top-k＝2048 出自 DeepSeek-V3.2 技术报告（arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a>）及其公开实现</p>
+<p>「不连续访存用不上 FlashAttention」逐条出自 NSA 论文 （arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a>）<a href="#s2-2">§2.2</a>：token 粒度的选择要从 KV cache 里加载大量单个 token，「this non-contiguous memory access prevents efficient adaptation of fast attention techniques like FlashAttention」</p>
+<p>⚠️ 1.56% ＝ 2048 ÷ 131072，是<b>算出来的</b>；上排 24 根柱子的高低与选中位置是<b>示意</b>，不对应任何一次真实打分</p></details></figure>
+
+<h3 id="s6-5">6.5　本章落点：这一章最该记住的，是它<u>没</u>解决的那一栏</h3>
+
+<div class="note danger"><p>⛔⛔ <b>「稀疏就能省显存」是个极自然、也极常见的误会 ——&nbsp;
+  上面那张图的第三栏专门空着给它。</b></p>
+<p>⭐ <em>所以这个旋钮跟前两章根本不是一回事：<b>前两章动的是显存，
+  这一章动的是时间。</b></em></p>
+<p>⛔ <em>而这一栏空着，也正是<a href="#s八">第八章</a>存在的理由 ——&nbsp;
+  <b>既然一个旋钮补不齐，那就几个一起拧。</b></em></p></div>
+
+<div class="note ok"><p><b>这一章的两句话。</b></p>
+<p><b>换来的</b>：长上下文下那一段从「跟长度平方成正比」变成「跟长度成正比」，
+  <em>而且上下文越长赚得越多。</em><br>
+  <b>欠下的</b>：显存一分没省；索引器要扫全程；<em>挑中的那些散落在各处，
+  <b>搬起来很碎</b> ——&nbsp;这一笔到<a href="#s九">第九章</a>会变成真正的麻烦。</em></p>
+<p>⭐⭐ <em>而现在三条路都走过一遍了：<b>存得少、读得少</b>……
+  <a href="#s七">下一章</a>那一支最狠 ——&nbsp;<b>它干脆不存。</b>
+  而那条路的终点，是<a href="#s一">第一章</a>那个盒子。</em></p></div>
+
 </div></section>
 
 
