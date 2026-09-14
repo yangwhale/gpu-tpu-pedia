@@ -778,6 +778,144 @@ h4 { margin:18px 0 6px; font-size:15px }
   存下来的这一堆就叫 <b>KV cache</b>，它跟着上下文线性长。<br>
   ⭐ 所以这六年注意力的全部演化，只在做一件事：<b>让「记得住」这件事付得起。</b></p></div>
 
+<!-- ⭐⭐ 2026-09-14 R12 现场要求：「那个注意力编年史能给我放在开篇的位置吗？」
+     ⭐ 顺手做成**首尾呼应**：开篇摊开它（此刻看不懂是正常的），
+       第九章收尾请读者滚回来再看一眼。
+     ⛔ 判据：**同一张图放在开头和结尾，价值不一样** ——&nbsp;
+       开头它是「领土」（这八年真实发生了什么），结尾它是「你现在看得懂了」。
+       所以图只放一次，第二次用一句话把人送回来。 -->
+<p class="landing">⭐ 不过在开始之前，<b>先把这八年真实发生过的事，整个摊开看一眼。</b></p>
+
+<figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1460 665" width="100%" role="img" aria-label="Attention 编年史时间轴：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉、只留下这个补丁，此后分成四条支线演化 ——&#160;KV 存多少、每个 query 看多少、换一套数学、只改怎么算">
+<text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">Attention 编年史 ——&#160;<tspan font-weight="700">从 RNN 的一个补丁，到今天各家的混合配比</tspan></text>
+<text class="svgsm" x="0" y="39" style="font-size:15px">⭐ 一句话看懂整段历史：<tspan font-weight="700">Transformer 当初做的交易是「用平方的计算量，买来完全的并行度」——&#160;而这段历史，是在把那笔交易<tspan style="text-decoration:underline">往回赎</tspan>，但不能把并行度还回去。</tspan></text>
+<text class="svgsm" x="0" y="57" fill="#5f6368" style="font-size:15px">线性注意力想赎回 O(N)，代价是重新引入一个<tspan font-weight="700">串行的状态</tspan>；于是 chunk 化又是为了把并行度找回来。<tspan font-weight="700">一个完整的圆。</tspan>　<tspan fill="#5f6368">（信息截至 2026-09-07，全部现搜）</tspan></text>
+<rect x="0" y="72" width="1460" height="361" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
+<text class="svglbl" x="16" y="96" fill="#202124" style="font-size:13px">一、编年史 ——&#160;四条支线，各修各的毛病<tspan fill="#5f6368" font-weight="400" style="font-size:11px">　（横轴按每年的内容疏密压缩过：没有事件的年份收窄、事件多的年份放宽 ——&#160;<tspan font-weight="700">间距不代表时间长短</tspan>）</tspan></text>
+<line x1="174" y1="118" x2="1436" y2="118" stroke="#5f6368" stroke-width="1"/>
+<line x1="190" y1="114" x2="190" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="190" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'14</text>
+<line x1="298" y1="114" x2="298" y2="122" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="298" y="109" fill="#bdc1c6" text-anchor="middle" style="font-size:11px">'15</text>
+<line x1="319" y1="114" x2="319" y2="122" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="319" y="109" fill="#bdc1c6" text-anchor="middle" style="font-size:11px">'16</text>
+<line x1="341" y1="114" x2="341" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="341" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'17</text>
+<line x1="476" y1="114" x2="476" y2="122" stroke="#bdc1c6" stroke-width="1"/>
+<text class="svgsm" x="476" y="109" fill="#bdc1c6" text-anchor="middle" style="font-size:11px">'18</text>
+<line x1="498" y1="114" x2="498" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="498" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'19</text>
+<line x1="535" y1="114" x2="535" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="535" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'20</text>
+<line x1="650" y1="114" x2="650" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="650" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'21</text>
+<line x1="718" y1="114" x2="718" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="718" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'22</text>
+<line x1="834" y1="114" x2="834" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="834" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'23</text>
+<line x1="914" y1="114" x2="914" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="914" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'24</text>
+<line x1="1151" y1="114" x2="1151" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="1151" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'25</text>
+<line x1="1262" y1="114" x2="1262" y2="122" stroke="#5f6368" stroke-width="1"/>
+<text class="svgsm" x="1262" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'26</text>
+<rect x="4" y="132" width="1432" height="41" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="4" y="132" width="4" height="41" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
+<rect x="6" y="132" width="2" height="41" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="14" y="147" fill="#5f6368" style="font-size:15px"><tspan font-weight="700">前史 · 注意力是 RNN 的补丁</tspan></text>
+<circle cx="190" cy="136" r="4" fill="#5f6368"/>
+<line x1="190" y1="136" x2="190" y2="151" stroke="#5f6368" stroke-width="1.2"/>
+<text class="svgsm" x="196" y="160" fill="#5f6368" style="font-size:15px"><tspan font-weight="700">Bahdanau 注意力</tspan></text>
+<circle cx="341" cy="136" r="4" fill="#5f6368"/>
+<line x1="341" y1="136" x2="341" y2="151" stroke="#5f6368" stroke-width="1.2"/>
+<text class="svgsm" x="347" y="160" fill="#5f6368" style="font-size:15px"><tspan font-weight="700">⭐ Transformer / MHA</tspan></text>
+<rect x="4" y="177" width="1432" height="58" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="4" y="177" width="4" height="58" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="6" y="177" width="2" height="58" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="14" y="192" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">① 每个 token 存多少（KV 怎么小）</tspan></text>
+<circle cx="498" cy="181" r="4" fill="#1a73e8"/>
+<line x1="498" y1="181" x2="498" y2="196" stroke="#1a73e8" stroke-width="1.2"/>
+<text class="svgsm" x="504" y="205" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">MQA</tspan></text>
+<circle cx="834" cy="181" r="4" fill="#1a73e8"/>
+<line x1="834" y1="181" x2="834" y2="196" stroke="#1a73e8" stroke-width="1.2"/>
+<text class="svgsm" x="840" y="205" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">GQA</tspan></text>
+<circle cx="914" cy="181" r="4" fill="#1a73e8"/>
+<line x1="914" y1="181" x2="914" y2="196" stroke="#1a73e8" stroke-width="1.2"/>
+<text class="svgsm" x="920" y="205" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">MLA</tspan></text>
+<circle cx="914" cy="181" r="4" fill="#1a73e8"/>
+<line x1="914" y1="181" x2="914" y2="213" stroke="#1a73e8" stroke-width="1.2"/>
+<text class="svgsm" x="920" y="222" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">CLA 跨层共享</tspan></text>
+<circle cx="1151" cy="181" r="4" fill="#1a73e8"/>
+<line x1="1151" y1="181" x2="1151" y2="196" stroke="#1a73e8" stroke-width="1.2"/>
+<text class="svgsm" x="1157" y="205" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">MFA 低秩分解</tspan></text>
+<circle cx="1262" cy="181" r="4" fill="#1a73e8"/>
+<line x1="1262" y1="181" x2="1262" y2="213" stroke="#1a73e8" stroke-width="1.2"/>
+<text class="svgsm" x="1256" y="222" fill="#1a73e8" text-anchor="end" style="font-size:15px"><tspan font-weight="700">Gated MLA · K=V 共享</tspan></text>
+<rect x="4" y="239" width="1432" height="58" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="4" y="239" width="4" height="58" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="6" y="239" width="2" height="58" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="14" y="254" fill="#e8710a" style="font-size:15px"><tspan font-weight="700">② 每个 query 看多少（稀疏 · 压缩）</tspan></text>
+<circle cx="834" cy="243" r="4" fill="#e8710a"/>
+<line x1="834" y1="243" x2="834" y2="258" stroke="#e8710a" stroke-width="1.2"/>
+<text class="svgsm" x="840" y="267" fill="#e8710a" style="font-size:15px"><tspan font-weight="700">SWA · sink</tspan></text>
+<circle cx="1151" cy="243" r="4" fill="#e8710a"/>
+<line x1="1151" y1="243" x2="1151" y2="258" stroke="#e8710a" stroke-width="1.2"/>
+<text class="svgsm" x="1157" y="267" fill="#e8710a" style="font-size:15px"><tspan font-weight="700">NSA · DSA</tspan></text>
+<circle cx="1262" cy="243" r="4" fill="#e8710a"/>
+<line x1="1262" y1="243" x2="1262" y2="258" stroke="#e8710a" stroke-width="1.2"/>
+<text class="svgsm" x="1268" y="267" fill="#e8710a" style="font-size:15px"><tspan font-weight="700">CSA＋HCA · MSA</tspan></text>
+<circle cx="1262" cy="243" r="4" fill="#e8710a"/>
+<line x1="1262" y1="243" x2="1262" y2="275" stroke="#e8710a" stroke-width="1.2"/>
+<text class="svgsm" x="1256" y="284" fill="#e8710a" text-anchor="end" style="font-size:15px"><tspan font-weight="700">IndexShare · IndexCache</tspan></text>
+<rect x="4" y="301" width="1432" height="75" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="4" y="301" width="4" height="75" rx="2" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
+<rect x="6" y="301" width="2" height="75" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="14" y="316" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">③ 换一套数学（线性注意力 · SSM 同源）</tspan></text>
+<circle cx="535" cy="305" r="4" fill="#8430ce"/>
+<line x1="535" y1="305" x2="535" y2="320" stroke="#8430ce" stroke-width="1.2"/>
+<text class="svgsm" x="541" y="329" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">线性 Transformer</tspan></text>
+<circle cx="650" cy="305" r="4" fill="#8430ce"/>
+<line x1="650" y1="305" x2="650" y2="337" stroke="#8430ce" stroke-width="1.2"/>
+<text class="svgsm" x="656" y="346" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">DeltaNet</tspan></text>
+<circle cx="834" cy="305" r="4" fill="#8430ce"/>
+<line x1="834" y1="305" x2="834" y2="320" stroke="#8430ce" stroke-width="1.2"/>
+<text class="svgsm" x="840" y="329" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">Mamba</tspan></text>
+<circle cx="914" cy="305" r="4" fill="#8430ce"/>
+<line x1="914" y1="305" x2="914" y2="320" stroke="#8430ce" stroke-width="1.2"/>
+<text class="svgsm" x="920" y="329" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">Mamba-2（SSD）· 可并行 DeltaNet · GDN</tspan></text>
+<circle cx="1151" cy="305" r="4" fill="#8430ce"/>
+<line x1="1151" y1="305" x2="1151" y2="337" stroke="#8430ce" stroke-width="1.2"/>
+<text class="svgsm" x="1157" y="346" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">KDA · Lightning</tspan></text>
+<circle cx="1262" cy="305" r="4" fill="#8430ce"/>
+<line x1="1262" y1="305" x2="1262" y2="354" stroke="#8430ce" stroke-width="1.2"/>
+<text class="svgsm" x="1256" y="363" fill="#8430ce" text-anchor="end" style="font-size:15px"><tspan font-weight="700">Mamba-3 · Gated DeltaNet-2</tspan></text>
+<rect x="4" y="380" width="1432" height="41" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="4" y="380" width="4" height="41" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="6" y="380" width="2" height="41" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svgsm" x="14" y="395" fill="#1e8e3e" style="font-size:15px"><tspan font-weight="700">⊘ 不在旋钮上：实现层（不改数学，只改怎么算）</tspan></text>
+<circle cx="718" cy="384" r="4" fill="#1e8e3e"/>
+<line x1="718" y1="384" x2="718" y2="399" stroke="#1e8e3e" stroke-width="1.2"/>
+<text class="svgsm" x="724" y="408" fill="#1e8e3e" style="font-size:15px"><tspan font-weight="700">⭐ FlashAttention</tspan></text>
+<rect x="0" y="449" width="1460" height="204" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/><rect x="0" y="449" width="4" height="204" rx="2" fill="#e8710a"/><rect x="2" y="449" width="3" height="204" fill="#fff"/>
+<text class="svglbl" x="16" y="473" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
+<text class="svgsm" x="16" y="497" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">MiniMax</tspan></text>
+<text class="svgsm" x="118" y="497" fill="#7a5000" style="font-size:15px">线性（01）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
+<text class="svgsm" x="16" y="516" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">腾讯混元</tspan></text>
+<text class="svgsm" x="118" y="516" fill="#7a5000" style="font-size:15px">Hy3 <tspan font-weight="700">80 层纯 GQA-8</tspan>（连线性都没上）→&#160;Hy4 <tspan font-weight="700">78 层全 Gated DSA</tspan>——&#160;<tspan font-weight="700">跳过线性那一支，直接进稀疏</tspan></text>
+<text class="svgsm" x="16" y="535" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">智谱 GLM</tspan></text>
+<text class="svgsm" x="118" y="535" fill="#7a5000" style="font-size:15px">5 上 DSA →&#160;5.2 加 <tspan font-weight="700">IndexShare</tspan> →&#160;5.3-Flash <tspan font-weight="700">第一次线性＋稀疏同锅</tspan>——&#160;半年走完三步</text>
+<text class="svglbl" x="16" y="571" fill="#174ea6" style="font-size:12px">⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线</text>
+<text class="svgsm" x="16" y="591" fill="#174ea6" style="font-size:15px">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan></text>
+<text class="svgsm" x="16" y="613" fill="#174ea6" style="font-size:15px">稳态四层一循环（前几层各家不同）——&#160;每 4 层只有 1 层自己算索引。</text>
+<text class="svgsm" x="16" y="635" fill="#174ea6" style="font-size:15px">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
+</svg><figcaption>⭐ <b>这是真实发生过的八年，四条支线各修各的毛病。</b><em>不用现在看懂 ——&nbsp;先看清一件事：<b>它有多乱。</b></em><br>⭐⭐ <em>这一讲要做的，就是把这团乱麻理成<b>一条能从头读到尾的线</b>；而读完之后你再回来看它，<b>会看见完全不同的东西。</b></em></figcaption></figure>
+
+<div class="note info"><p>📌 <b>看不懂是正常的 ——&nbsp;而且是故意的。</b></p>
+<p><em>上面那张图里有三十几个名字。现在它对你来说大概就是一团噪音，
+  <b>请记住你此刻看它的感觉。</b></em></p>
+<p>⭐ <em>读到<a href="#s九">最后一章</a>，我会请你滚回来再看它一眼。
+  <b>到那时候，它会是另一张图。</b></em></p></div>
+
 <p class="landing">⭐ 这一讲按时间顺序讲，一步一步走。
   每一步只回答两个问题：<b>上一步欠下了什么，这一步拿什么来还。</b>
   <em>——&nbsp;所以读的时候不用记名词，记「谁欠了谁」就够了。</em></p>
@@ -8926,129 +9064,9 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 
 <h3 id="s9-6">9.6　收尾：一个完整的圆</h3>
 
-<figure class="fbox fwide" id="fig-chronicle"><svg viewBox="0 0 1460 665" width="100%" role="img" aria-label="Attention 编年史时间轴：2014 年注意力作为 RNN 的补丁出现，2017 年 Transformer 把 RNN 拿掉、只留下这个补丁，此后分成四条支线演化 ——&#160;KV 存多少、每个 query 看多少、换一套数学、只改怎么算">
-<text class="svglbl" x="0" y="18" fill="#202124" style="font-size:15px">Attention 编年史 ——&#160;<tspan font-weight="700">从 RNN 的一个补丁，到今天各家的混合配比</tspan></text>
-<text class="svgsm" x="0" y="39" style="font-size:15px">⭐ 一句话看懂整段历史：<tspan font-weight="700">Transformer 当初做的交易是「用平方的计算量，买来完全的并行度」——&#160;而这段历史，是在把那笔交易<tspan style="text-decoration:underline">往回赎</tspan>，但不能把并行度还回去。</tspan></text>
-<text class="svgsm" x="0" y="57" fill="#5f6368" style="font-size:15px">线性注意力想赎回 O(N)，代价是重新引入一个<tspan font-weight="700">串行的状态</tspan>；于是 chunk 化又是为了把并行度找回来。<tspan font-weight="700">一个完整的圆。</tspan>　<tspan fill="#5f6368">（信息截至 2026-09-07，全部现搜）</tspan></text>
-<rect x="0" y="72" width="1460" height="361" rx="8" fill="#f8f9fa" stroke="#dadce0" stroke-width="1"/>
-<text class="svglbl" x="16" y="96" fill="#202124" style="font-size:13px">一、编年史 ——&#160;四条支线，各修各的毛病<tspan fill="#5f6368" font-weight="400" style="font-size:11px">　（横轴按每年的内容疏密压缩过：没有事件的年份收窄、事件多的年份放宽 ——&#160;<tspan font-weight="700">间距不代表时间长短</tspan>）</tspan></text>
-<line x1="174" y1="118" x2="1436" y2="118" stroke="#5f6368" stroke-width="1"/>
-<line x1="190" y1="114" x2="190" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="190" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'14</text>
-<line x1="298" y1="114" x2="298" y2="122" stroke="#bdc1c6" stroke-width="1"/>
-<text class="svgsm" x="298" y="109" fill="#bdc1c6" text-anchor="middle" style="font-size:11px">'15</text>
-<line x1="319" y1="114" x2="319" y2="122" stroke="#bdc1c6" stroke-width="1"/>
-<text class="svgsm" x="319" y="109" fill="#bdc1c6" text-anchor="middle" style="font-size:11px">'16</text>
-<line x1="341" y1="114" x2="341" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="341" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'17</text>
-<line x1="476" y1="114" x2="476" y2="122" stroke="#bdc1c6" stroke-width="1"/>
-<text class="svgsm" x="476" y="109" fill="#bdc1c6" text-anchor="middle" style="font-size:11px">'18</text>
-<line x1="498" y1="114" x2="498" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="498" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'19</text>
-<line x1="535" y1="114" x2="535" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="535" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'20</text>
-<line x1="650" y1="114" x2="650" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="650" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'21</text>
-<line x1="718" y1="114" x2="718" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="718" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'22</text>
-<line x1="834" y1="114" x2="834" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="834" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'23</text>
-<line x1="914" y1="114" x2="914" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="914" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'24</text>
-<line x1="1151" y1="114" x2="1151" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="1151" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'25</text>
-<line x1="1262" y1="114" x2="1262" y2="122" stroke="#5f6368" stroke-width="1"/>
-<text class="svgsm" x="1262" y="109" fill="#5f6368" text-anchor="middle" style="font-size:11px">'26</text>
-<rect x="4" y="132" width="1432" height="41" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="4" y="132" width="4" height="41" rx="2" fill="#5f6368" stroke="#5f6368" stroke-width="1"/>
-<rect x="6" y="132" width="2" height="41" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="14" y="147" fill="#5f6368" style="font-size:15px"><tspan font-weight="700">前史 · 注意力是 RNN 的补丁</tspan></text>
-<circle cx="190" cy="136" r="4" fill="#5f6368"/>
-<line x1="190" y1="136" x2="190" y2="151" stroke="#5f6368" stroke-width="1.2"/>
-<text class="svgsm" x="196" y="160" fill="#5f6368" style="font-size:15px"><tspan font-weight="700">Bahdanau 注意力</tspan></text>
-<circle cx="341" cy="136" r="4" fill="#5f6368"/>
-<line x1="341" y1="136" x2="341" y2="151" stroke="#5f6368" stroke-width="1.2"/>
-<text class="svgsm" x="347" y="160" fill="#5f6368" style="font-size:15px"><tspan font-weight="700">⭐ Transformer / MHA</tspan></text>
-<rect x="4" y="177" width="1432" height="58" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="4" y="177" width="4" height="58" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="6" y="177" width="2" height="58" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="14" y="192" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">① 每个 token 存多少（KV 怎么小）</tspan></text>
-<circle cx="498" cy="181" r="4" fill="#1a73e8"/>
-<line x1="498" y1="181" x2="498" y2="196" stroke="#1a73e8" stroke-width="1.2"/>
-<text class="svgsm" x="504" y="205" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">MQA</tspan></text>
-<circle cx="834" cy="181" r="4" fill="#1a73e8"/>
-<line x1="834" y1="181" x2="834" y2="196" stroke="#1a73e8" stroke-width="1.2"/>
-<text class="svgsm" x="840" y="205" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">GQA</tspan></text>
-<circle cx="914" cy="181" r="4" fill="#1a73e8"/>
-<line x1="914" y1="181" x2="914" y2="196" stroke="#1a73e8" stroke-width="1.2"/>
-<text class="svgsm" x="920" y="205" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">MLA</tspan></text>
-<circle cx="914" cy="181" r="4" fill="#1a73e8"/>
-<line x1="914" y1="181" x2="914" y2="213" stroke="#1a73e8" stroke-width="1.2"/>
-<text class="svgsm" x="920" y="222" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">CLA 跨层共享</tspan></text>
-<circle cx="1151" cy="181" r="4" fill="#1a73e8"/>
-<line x1="1151" y1="181" x2="1151" y2="196" stroke="#1a73e8" stroke-width="1.2"/>
-<text class="svgsm" x="1157" y="205" fill="#1a73e8" style="font-size:15px"><tspan font-weight="700">MFA 低秩分解</tspan></text>
-<circle cx="1262" cy="181" r="4" fill="#1a73e8"/>
-<line x1="1262" y1="181" x2="1262" y2="213" stroke="#1a73e8" stroke-width="1.2"/>
-<text class="svgsm" x="1256" y="222" fill="#1a73e8" text-anchor="end" style="font-size:15px"><tspan font-weight="700">Gated MLA · K=V 共享</tspan></text>
-<rect x="4" y="239" width="1432" height="58" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="4" y="239" width="4" height="58" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<rect x="6" y="239" width="2" height="58" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="14" y="254" fill="#e8710a" style="font-size:15px"><tspan font-weight="700">② 每个 query 看多少（稀疏 · 压缩）</tspan></text>
-<circle cx="834" cy="243" r="4" fill="#e8710a"/>
-<line x1="834" y1="243" x2="834" y2="258" stroke="#e8710a" stroke-width="1.2"/>
-<text class="svgsm" x="840" y="267" fill="#e8710a" style="font-size:15px"><tspan font-weight="700">SWA · sink</tspan></text>
-<circle cx="1151" cy="243" r="4" fill="#e8710a"/>
-<line x1="1151" y1="243" x2="1151" y2="258" stroke="#e8710a" stroke-width="1.2"/>
-<text class="svgsm" x="1157" y="267" fill="#e8710a" style="font-size:15px"><tspan font-weight="700">NSA · DSA</tspan></text>
-<circle cx="1262" cy="243" r="4" fill="#e8710a"/>
-<line x1="1262" y1="243" x2="1262" y2="258" stroke="#e8710a" stroke-width="1.2"/>
-<text class="svgsm" x="1268" y="267" fill="#e8710a" style="font-size:15px"><tspan font-weight="700">CSA＋HCA · MSA</tspan></text>
-<circle cx="1262" cy="243" r="4" fill="#e8710a"/>
-<line x1="1262" y1="243" x2="1262" y2="275" stroke="#e8710a" stroke-width="1.2"/>
-<text class="svgsm" x="1256" y="284" fill="#e8710a" text-anchor="end" style="font-size:15px"><tspan font-weight="700">IndexShare · IndexCache</tspan></text>
-<rect x="4" y="301" width="1432" height="75" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="4" y="301" width="4" height="75" rx="2" fill="#8430ce" stroke="#8430ce" stroke-width="1"/>
-<rect x="6" y="301" width="2" height="75" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="14" y="316" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">③ 换一套数学（线性注意力 · SSM 同源）</tspan></text>
-<circle cx="535" cy="305" r="4" fill="#8430ce"/>
-<line x1="535" y1="305" x2="535" y2="320" stroke="#8430ce" stroke-width="1.2"/>
-<text class="svgsm" x="541" y="329" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">线性 Transformer</tspan></text>
-<circle cx="650" cy="305" r="4" fill="#8430ce"/>
-<line x1="650" y1="305" x2="650" y2="337" stroke="#8430ce" stroke-width="1.2"/>
-<text class="svgsm" x="656" y="346" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">DeltaNet</tspan></text>
-<circle cx="834" cy="305" r="4" fill="#8430ce"/>
-<line x1="834" y1="305" x2="834" y2="320" stroke="#8430ce" stroke-width="1.2"/>
-<text class="svgsm" x="840" y="329" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">Mamba</tspan></text>
-<circle cx="914" cy="305" r="4" fill="#8430ce"/>
-<line x1="914" y1="305" x2="914" y2="320" stroke="#8430ce" stroke-width="1.2"/>
-<text class="svgsm" x="920" y="329" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">Mamba-2（SSD）· 可并行 DeltaNet · GDN</tspan></text>
-<circle cx="1151" cy="305" r="4" fill="#8430ce"/>
-<line x1="1151" y1="305" x2="1151" y2="337" stroke="#8430ce" stroke-width="1.2"/>
-<text class="svgsm" x="1157" y="346" fill="#8430ce" style="font-size:15px"><tspan font-weight="700">KDA · Lightning</tspan></text>
-<circle cx="1262" cy="305" r="4" fill="#8430ce"/>
-<line x1="1262" y1="305" x2="1262" y2="354" stroke="#8430ce" stroke-width="1.2"/>
-<text class="svgsm" x="1256" y="363" fill="#8430ce" text-anchor="end" style="font-size:15px"><tspan font-weight="700">Mamba-3 · Gated DeltaNet-2</tspan></text>
-<rect x="4" y="380" width="1432" height="41" rx="5" fill="#fff" stroke="#dadce0" stroke-width="1"/>
-<rect x="4" y="380" width="4" height="41" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="6" y="380" width="2" height="41" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svgsm" x="14" y="395" fill="#1e8e3e" style="font-size:15px"><tspan font-weight="700">⊘ 不在旋钮上：实现层（不改数学，只改怎么算）</tspan></text>
-<circle cx="718" cy="384" r="4" fill="#1e8e3e"/>
-<line x1="718" y1="384" x2="718" y2="399" stroke="#1e8e3e" stroke-width="1.2"/>
-<text class="svgsm" x="724" y="408" fill="#1e8e3e" style="font-size:15px"><tspan font-weight="700">⭐ FlashAttention</tspan></text>
-<rect x="0" y="449" width="1460" height="204" rx="6" fill="#fff" stroke="#dadce0" stroke-width="1"/><rect x="0" y="449" width="4" height="204" rx="2" fill="#e8710a"/><rect x="2" y="449" width="3" height="204" fill="#fff"/>
-<text class="svglbl" x="16" y="473" fill="#7a5000" style="font-size:13px">⭐ 全图落点：三家公司，各自把旋钮拧了一遍 ——&#160;而且拧的过程全写在公开的 config 里</text>
-<text class="svgsm" x="16" y="497" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">MiniMax</tspan></text>
-<text class="svgsm" x="118" y="497" fill="#7a5000" style="font-size:15px">线性（01）→&#160;<tspan font-weight="700">退回全注意力</tspan>（M2）→&#160;<tspan font-weight="700">稀疏</tspan>（M3）——&#160;三次转向，每次都公开写了为什么</text>
-<text class="svgsm" x="16" y="516" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">腾讯混元</tspan></text>
-<text class="svgsm" x="118" y="516" fill="#7a5000" style="font-size:15px">Hy3 <tspan font-weight="700">80 层纯 GQA-8</tspan>（连线性都没上）→&#160;Hy4 <tspan font-weight="700">78 层全 Gated DSA</tspan>——&#160;<tspan font-weight="700">跳过线性那一支，直接进稀疏</tspan></text>
-<text class="svgsm" x="16" y="535" fill="#7a5000" style="font-size:15px"><tspan font-weight="700">智谱 GLM</tspan></text>
-<text class="svgsm" x="118" y="535" fill="#7a5000" style="font-size:15px">5 上 DSA →&#160;5.2 加 <tspan font-weight="700">IndexShare</tspan> →&#160;5.3-Flash <tspan font-weight="700">第一次线性＋稀疏同锅</tspan>——&#160;半年走完三步</text>
-<text class="svglbl" x="16" y="571" fill="#174ea6" style="font-size:12px">⭐⭐ 再看一眼第二列：这次补完混元和 GLM，多出来一条原先看不见的线</text>
-<text class="svgsm" x="16" y="591" fill="#174ea6" style="font-size:15px">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan></text>
-<text class="svgsm" x="16" y="613" fill="#174ea6" style="font-size:15px">稳态四层一循环（前几层各家不同）——&#160;每 4 层只有 1 层自己算索引。</text>
-<text class="svgsm" x="16" y="635" fill="#174ea6" style="font-size:15px">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
-</svg><figcaption>⭐ <b>读完全书再回头看这张，跟开课前看它，会是两张不同的图。</b><br><em>⭐⭐ 那四条支线，每一条你现在都知道它在修谁的什么毛病 ——&nbsp;<b>这才是这一讲真正想留给你的东西：不是三十个名词，是一张能自己往下长的地图。</b></em></figcaption></figure>
+<p class="landing">⭐⭐ <b>现在，请滚回<a href="#x1">开篇</a>那张编年史，再看它一眼。</b>
+  <em>——&nbsp;两小时前它是一团噪音；现在那四条支线，你每一条都知道它在修谁的什么毛病。</em></p>
+<p><em><b>那张图一个像素都没变。变的是你。</b></em></p>
 
 <div class="note ok"><p>⭐⭐⭐ <b>如果这一讲只带走一句话，我希望是这一句：</b></p>
 <p><em>图里那句话说的是整段历史的形状。<b>而每一章都是它的一个注脚：</b></em></p>
