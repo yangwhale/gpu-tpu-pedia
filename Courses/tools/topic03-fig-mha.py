@@ -62,7 +62,18 @@ r"""专题三 · §一「MHA」的三张图。
    **把论文的 §3.2 也改成了 §4.2** ——&nbsp;不报错、读起来还很像真的。
    ⭐ 判据：**同一种记号承载两种含义时，机械替换一定会串。**
      以后再重编号：本课节号请统一写成「本课 §X.Y」或只在正文字符串里出现，
-     出处引文里的论文节号一律带上论文名前缀（本文件已经都带了「Vaswani … §3.2」）。
+     出处引文里的论文节号一律带上论文名前缀。
+
+⛔⛔ **光写作者名不够 ——&nbsp;2026-09-14 R60 又栽了一次，而且是被「删别的东西」炸出来的。**
+   上面那条当初的落实办法是「带上『Vaswani …』前缀」。人看得懂，
+   `topic02-lint-xref.py` 看不懂 ——&nbsp;它的放行词表只认
+   `专题N|L200|L300|完整版|精讲版|论文|paper|arXiv|原文`，**没有作者名**。
+   那本文件里这五处为什么一直没报？因为**本课当时恰好有一节叫 §3.2**
+   （FlashAttention 那节），于是它们被当成「指向本课 §3.2」放行了 ——&nbsp;
+   **闸门一直是绿的，但绿得毫无道理。** R60 把 §三 整节删掉，五处当场全红。
+   ⭐ 判据：**「一直没报警」既可能是没问题，也可能是问题被另一个巧合盖住了。**
+     所以论文节号的写法现在收紧为：必须**字面出现**「论文 / 原文 / arXiv」之一，
+     不能只靠作者名（本文件五处均已改成「… 论文 §3.2」「同一篇论文 §3.2.1」）。
 
 ⛔ 本文件只画图。**画法基元在 `topic03_draw.py`，别在这里另起一套。**
 """
@@ -163,7 +174,7 @@ def fig_swap():
         '<tspan font-weight="700">解码时每一步都得把「所有历史」重读一遍 ——&#160;那就是 KV cache。</tspan>'])
     yy = f.src(yy + 18,
                'Vaswani et al. 2017 (arXiv 1706.03762) 表 1：自注意力 串行步数 O(1)／最长路径 O(1)；'
-               '循环层两项都是 O(n)。因果遮罩见 §3.2.3：把非法连接「setting to −∞」')
+               '循环层两项都是 O(n)。因果遮罩见同一篇论文 §3.2.3：把非法连接「setting to −∞」')
     f.save("fig3-mha-swap.svg", yy + 6)
 
 
@@ -360,9 +371,9 @@ def fig_qkv():
         '⛔ 别只说「防止 softmax 饱和」——&#160;那是结论不是理由。'
         '<tspan font-weight="700">理由是方差随维度线性长大，而 softmax 只认绝对数值。</tspan>'])
     yy = f.src(yy + 18,
-               'Vaswani et al. 2017 §3.2：「a weighted sum of the values … compatibility '
+               'Vaswani et al. 2017 论文 §3.2：「a weighted sum of the values … compatibility '
                'function of the query with the corresponding key」',
-               '§3.2.1 与脚注 4：「the dot products grow large in magnitude, pushing the '
+               '同一篇论文 §3.2.1 与脚注 4：「the dot products grow large in magnitude, pushing the '
                'softmax function into regions where it has extremely small gradients」')
     f.save("fig3-mha-qkv.svg", yy + 6)
 
@@ -468,7 +479,7 @@ def fig_heads():
         '⭐⭐ <tspan font-weight="700">这句话把 §零那张「解码时又变回 RNN」图 Ⓒ 那一行从我们的推论变成了原文</tspan>'
         '——&#160;2017 年造出这个形状，<tspan font-weight="700">2019 年就有人把它命名成问题了</tspan>。'])
     yy = f.src(yy + 18,
-               'Vaswani et al. 2017 §3.2.2：「jointly attend to information from different '
+               'Vaswani et al. 2017 论文 §3.2.2：「jointly attend to information from different '
                'representation subspaces」、「With a single attention head, averaging '
                'inhibits this」；h = 8，d_k = d_v = d_model/h = 64',
                'Shazeer 2019 (arXiv 1911.02150)《Fast Transformer Decoding: One Write-Head '
@@ -590,7 +601,7 @@ def fig_flow():
         '<tspan font-weight="700">这就是「理解」在 Transformer 里的全部形式。</tspan>'])
 
     yy = f.src(yy + 16,
-               "「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 §3.2 的原文措辞，"
+               "「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 论文 §3.2 的原话，"
                '不是本课编的比喻；<tspan font-weight="700">图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</tspan>',
                '⚠️ 本图<tspan font-weight="700">只画注意力</tspan> ——&#160;一层 Transformer 里还有 FFN、残差、归一化，'
                "它们不在本专题这条轴上（本专题的账本只有 KV cache）")
