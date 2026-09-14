@@ -2197,8 +2197,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="100" y="316" width="204" height="40" rx="8" fill="#fff" stroke="#5f6368" stroke-width="1"/>
 <text class="svgsm" x="202" y="342" fill="#5f6368" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">整段译文都从这儿出</tspan></text>
 <text class="svgsm" x="22" y="384" fill="#a50e0e" style="font-size:18.0px"><tspan font-weight="700">⛔ 句子越长，挤得越狠</tspan></text>
-<text class="svgsm" x="22" y="410" fill="#80868b" style="font-size:13.0px">原文：a fixed-length vector</text>
-<text class="svgsm" x="22" y="430" fill="#80868b" style="font-size:13.0px">is a bottleneck</text>
+<text class="svgsm" x="22" y="410" fill="#80868b" style="font-size:13.0px">原文：we conjecture that … a fixed-</text>
+<text class="svgsm" x="22" y="430" fill="#80868b" style="font-size:13.0px">length vector is a bottleneck（作者自己的推测）</text>
 <rect x="22" y="446" width="396" height="64" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
 <text class="svgsm" x="38" y="472" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 修法的关键是那个「软」字</tspan></text>
 <text class="svgsm" x="38" y="498" fill="#5f6368" style="font-size:15.0px">硬挑一个词不可导；加权平均可导</text>
@@ -5584,7 +5584,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <p>⭐ 但<b>训练侧它省</b>：W_K / W_V 跟着缩 ——&nbsp;
   参数、优化器状态、投影的 FLOPs 三样都省。</p>
 <p>📌 MLA 那条另有一处麻烦：RoPE 必须单独走一路，
-  因为上投影吸收不了带位置旋转的那几维（见 <a href="#s五">§五</a>）。</p></div>
+  因为上投影吸收不了带位置旋转的那几维（见本节前面那段）。</p></div>
 <!-- ⛔⛔ 2026-09-12 按「多画图少说话」重排 §五。原来 5.1–5.4 是四段散文（824 汉字）。
      ⭐ 新图 fig3-knob1 吸收了其中三块：
        · 四种存法的对照（含「MQA 比 MLA 还小」那个题眼）→ 左栏
@@ -5797,7 +5797,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1617" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这张图跟「寄快递」不冲突，是同一件事的两个切面</tspan></text>
 <text class="svgsm" x="20" y="1648" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">寄快递</tspan>回答的是「<tspan font-weight="700">为什么 MLA 吸收不了它</tspan>」——&#160;那个旋转矩阵夹在上投影和隐向量中间，拆不开。</text>
 <text class="svgsm" x="20" y="1672" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">里程表</tspan>回答的是「<tspan font-weight="700">为什么点积自动带相对距离</tspan>」和「<tspan font-weight="700">凭什么能外推</tspan>」。</text>
-<text class="svgsm" x="20" y="1696" fill="#174ea6" style="font-size:15.0px">⭐ 两个一起看，<a href="#s五">讲 MLA 那一节</a>里那条 decoupled RoPE （让带位置的那几维单独走一路）就不是一个补丁，而是唯一的出路。</text>
+<text class="svgsm" x="20" y="1696" fill="#174ea6" style="font-size:15.0px">⭐ 两个一起看，本节那条 decoupled RoPE （让带位置的那几维单独走一路）就不是一个补丁，而是唯一的出路。</text>
 </svg><figcaption>⭐⭐ <b>一个位置 ＝ 一排里程表转盘的读数</b>：最右边转得飞快，往左逐级变慢。两个位置各自转完之后，<b>每个盘上你只看得出两根针差多少，看不出各自转到哪儿</b> —— 这就是「点积自动带相对距离」的全部内容。<em>⭐ 顺带把长文本那三种做法一句话各自归位：直接外推＝硬往超刻度处读；内插＝每格走半格；NTK-aware＝换一个进制。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>①「顺序归因果掩码，不归位置编码」：NoPE，arXiv <a href="https://arxiv.org/abs/2305.19466" target="_blank" rel="noopener">2305.19466</a>（NeurIPS 2023）——&#160;证明 decoder-only 不加任何显式位置编码也能学会顺序。<b>⛔ 常见讲法拿「你打我／我打你」论证「所以必须有位置编码」，是把前提（没有掩码的双向模型）漏掉了。</b></p>
 <p>②「RoPE 不是靠越远越衰减起作用」＋「快盘做位置、慢盘携带语义」：Barbero et al.，arXiv <a href="https://arxiv.org/abs/2410.06205" target="_blank" rel="noopener">2410.06205</a> ——&#160;对训练好的 Gemma 7B 做的内部分析；⚠️ 其中「携带语义」原文是 we suspect，<b>这里照样只当推测</b>。</p>
 <p>「RoPE ＝ 位置的 β 进制写法」以及外推／内插／NTK 的统一解释，出自苏剑林 kexue.fm/archives/9675（⚠️ 原文是推导，没有图）</p>
@@ -7072,7 +7072,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1292" fill="#b06000" style="font-size:15.0px">① 苏剑林的原话是「<tspan font-weight="700">MLA 被视为 GQA 的一般化</tspan>」，<tspan font-weight="700">不是</tspan>「MHA / MQA / GQA 都是 MLA 的特例」 —— 后一句是网上转述时放大的，别挂他名下。</text>
 <text class="svgsm" x="20" y="1316" fill="#b06000" style="font-size:15.0px">② 他也没否认 MLA 是低秩分解。准确说法是：<tspan font-weight="700">低秩这个描述没错，但它区分不了 GQA 和 MLA</tspan>。而且他写的 d_c &lt; d 这个条件，在 MHA 那一端会失效 —— 那一端 c 就是 K、V </text>
 <text class="svgsm" x="20" y="1340" fill="#b06000" style="font-size:15.0px">本身，根本没压。</text>
-</svg><figcaption>⭐⭐ <b>「MLA 就是给 KV 做低秩分解」这句话没错，但它区分不了 GQA 和 MLA —— 因为 GQA 也是低秩投影。</b><b>分界线在低秩<em>之后</em>那一步：GQA 用「分割 ＋ 复制」把 c 凑成各头的 K，而分割和复制本身就是线性变换 —— 它对应的就是图里那块<em>只有 8 个 1、其余全为 0、而且不可训练</em>的矩阵。MLA 只是把同一个位置、同一个形状的矩阵松开让它学。</b><em>⭐ 四个成员在图里列数完全相同（都是 8），只有行数（＝ cache 宽度）和格子内容不同：MHA ＝ 单位阵、MQA ＝ 一份抄满、GQA-2 与 MLA 同为 4×8。</em><em>⛔ 但矩阵一松开，各头的 K 又各不相同，cache 会涨回 MHA 那么大 —— 所以必须接 <a href="#s五">§5.4b</a> 的「吸收」。这张图是它的前提，不是替代。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 苏剑林《缓存与效果的极限拉扯：从MHA、MQA、GQA到MLA》kexue.fm/archives/10091 —— 「低秩投影这个角度并不贴近本质」「MLA的本质改进不是低秩投影，而是低秩投影之后的工作」「我们知道分割、复制都是简单的线性变换」三句均为原文逐字。</p>
+</svg><figcaption>⭐⭐ <b>「MLA 就是给 KV 做低秩分解」这句话没错，但它区分不了 GQA 和 MLA —— 因为 GQA 也是低秩投影。</b><b>分界线在低秩<em>之后</em>那一步：GQA 用「分割 ＋ 复制」把 c 凑成各头的 K，而分割和复制本身就是线性变换 —— 它对应的就是图里那块<em>只有 8 个 1、其余全为 0、而且不可训练</em>的矩阵。MLA 只是把同一个位置、同一个形状的矩阵松开让它学。</b><em>⭐ 四个成员在图里列数完全相同（都是 8），只有行数（＝ cache 宽度）和格子内容不同：MHA ＝ 单位阵、MQA ＝ 一份抄满、GQA-2 与 MLA 同为 4×8。</em><em>⛔ 但矩阵一松开，各头的 K 又各不相同，cache 会涨回 MHA 那么大 —— 所以必须接 <a href="#s5-4b">§5.4b</a> 的「吸收」。这张图是它的前提，不是替代。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 苏剑林《缓存与效果的极限拉扯：从MHA、MQA、GQA到MLA》kexue.fm/archives/10091 —— 「低秩投影这个角度并不贴近本质」「MLA的本质改进不是低秩投影，而是低秩投影之后的工作」「我们知道分割、复制都是简单的线性变换」三句均为原文逐字。</p>
 <p>📌 图上那几个矩阵是本课按 h=4 / d_k=2 自己构造的，脚本用 numpy 断言过「c 乘这个矩阵」与「把 c 按组复制」<b>逐元素相等</b> —— 这不是类比，是恒等。</p>
 <p>📌 MLA 那一格<b>刻意不填数字</b>：本课没有 V3 的真权重，编几个小数放上去会被当成真的。</p></details></figure>
 <div class="note ok"><p>⭐ <b>这张图要破的是一个很顺口、但区分不了事情的说法：</b>
@@ -9914,7 +9914,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <em>这就是 O(N²) → O(N) 的全部内容，写在形状里，不用相信谁。</em></p></div>
 <div class="note danger"><p>⛔ <b>但代价也写在同一格里。</b>
   因果版不能真的这么一乘 ——&nbsp;状态要按 t 一步步累加，于是串行回来了；
-  分块并行（chunkwise）就是为了把并行度再找回来（见 <a href="#s七">§7.4</a>）。</p>
+  分块并行（chunkwise）就是为了把并行度再找回来（见 <a href="#s7-4">§7.4</a>）。</p>
 <p>⚠️ <b>它不是「更快的 attention」，是另一个模型。</b>
   固定大小的状态 →&nbsp;信息必然有损，长程精确检索会力不从心。</p></div>
 <!-- ⭐⭐⭐ 2026-09-13 夜间 R11。现场给了一个比喻并说它「非常重要」：
@@ -10084,7 +10084,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1111" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ ⛔ 一条不说就会教出太好印象的口径：因果 mask 把这个重排挡住了</tspan></text>
 <text class="svgsm" x="20" y="1142" fill="#b06000" style="font-size:15.0px">上面那一挪，成立的前提是<tspan font-weight="700">每个位置都能看见所有位置</tspan>。可自回归下有一张下三角的 mask ——&#160;<tspan font-weight="700">逐元素乘那张 mask，恰恰就是挡住你用结合律的那个东西</tspan>。</text>
 <text class="svgsm" x="20" y="1166" fill="#b06000" style="font-size:15.0px">所以真实实现是<tspan font-weight="700">折中</tspan>：把序列切成块，<tspan font-weight="700">块内按左边那条路老老实实算</tspan>（mask 只在块内起作用），<tspan font-weight="700">块间才用右边那条路传一个状态</tspan>。</text>
-<text class="svgsm" x="20" y="1190" fill="#b06000" style="font-size:15.0px">⭐ 所以 <a href="#s七">§7.4</a> 那个「排队办事、只传一张交接单」不是工程妥协 ——&#160;它是<tspan font-weight="700">「结合律」在有 mask 的情况下的正确推广形态</tspan>。</text>
+<text class="svgsm" x="20" y="1190" fill="#b06000" style="font-size:15.0px">⭐ 所以后面那个「排队办事、只传一张交接单」不是工程妥协 ——&#160;它是<tspan font-weight="700">「结合律」在有 mask 的情况下的正确推广形态</tspan>。</text>
 </svg><figcaption>⭐⭐ <b>同一个乘法，只是把括号挪了个位置</b> —— 左边被迫造出一个句长×句长的大方块，右边中间那块只有头维×头维，<b>跟句子多长完全无关</b>。<em>⛔ 但因果 mask 会把这个重排挡住 —— 逐元素乘那张下三角，恰恰就是挡住你用结合律的东西。所以真实实现是分块：块内按左边算，块间才用右边（见 <a href="#s7-4">§7.4</a>）。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自 Google Research《Rethinking Attention with Performers》（2020-10）：括号画成彩色虚线框、矩阵按真实比例画</p>
 <p>「mask 才是挡住结合律的那个东西」出自 Hailey Schoelkopf 《Linear Attention Fundamentals》；「结合律是张量收缩顺序的特例」出自 Mamba-2 (SSD) 博客 Part II</p>
 <p>⚠️ 图里 8×3 的格数是<b>示意</b>；真实量级是句长 128K、头维 128</p></details></figure>
@@ -12990,7 +12990,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1474" fill="#b06000" style="font-size:15.0px">⚠️ 「纯线性一定兜不住」要说准：那条 L2M 条件要求的是<tspan font-weight="700">状态必须随长度变大</tspan> ——&#160;而「变大」的办法<tspan font-weight="700">不止混合一种</tspan>（论文自己给的另一条是按长度整个放大模型）。⭐ <tspan font-weight="700">混合是工程</tspan></text>
 <text class="svgsm" x="20" y="1498" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">上选的那条，不是定理逼出来的那条。</tspan></text>
 <text class="svgsm" x="20" y="1522" fill="#b06000" style="font-size:15.0px">⚠️ 而且它是<tspan font-weight="700">渐近</tspan>命题 ——&#160;同一张表里 Mistral 7B 就是<tspan font-weight="700">纯滑窗</tspan>、一层全注意力都没有，还真的上过生产用了两年。</text>
-</svg><figcaption>⭐⭐ <b>配比是一条轴，而两头都不好。</b><b>中间那格一个点就是一个模型</b> —— 14 个点堆起来，<b>最高的一摞在 3:1（十四家占五家）</b>、往右没有一家超过 7:1，都不用数；点的颜色只编码一件事：<b>便宜的那层是线性，还是滑窗 / 局部</b>（按 <a href="#s八">§8.4</a> 逐家核过的旋钮分的）。<b>最左边 1:1 那两个清一色是滑窗族 —— 做线性混合的没有一家敢一比一。</b><b>纯线性那一头不是「实测不行」—— §二 那条 L2M 条件说它的状态必须随长度变大。</b><em>⚠️ 但「变大」的办法不止混合一种：论文自己给的另一条是按长度整个放大模型。混合是工程上选的那条，不是定理逼出来的那条。</em><em>而左端那个反直觉结果更值得讲：Kimi 的消融里 0:1（纯全注意力）反而表现不好 —— 加线性层不只是省钱。那张消融表长什么样、它又<b>问不出</b>什么，见 <a href="#s八">§8.2</a>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>配比与型号见 <a href="#s8-2">§8.2</a> / <a href="#s8-4">§8.4</a> 的表（每一行都标了出处，多数可在公开 config 里核）；系统性消融的建议区间出自 arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a></p>
+</svg><figcaption>⭐⭐ <b>配比是一条轴，而两头都不好。</b><b>中间那格一个点就是一个模型</b> —— 14 个点堆起来，<b>最高的一摞在 3:1（十四家占五家）</b>、往右没有一家超过 7:1，都不用数；点的颜色只编码一件事：<b>便宜的那层是线性，还是滑窗 / 局部</b>（按 <a href="#s8-4">§8.4</a> 逐家核过的旋钮分的）。<b>最左边 1:1 那两个清一色是滑窗族 —— 做线性混合的没有一家敢一比一。</b><b>纯线性那一头不是「实测不行」—— §二 那条 L2M 条件说它的状态必须随长度变大。</b><em>⚠️ 但「变大」的办法不止混合一种：论文自己给的另一条是按长度整个放大模型。混合是工程上选的那条，不是定理逼出来的那条。</em><em>而左端那个反直觉结果更值得讲：Kimi 的消融里 0:1（纯全注意力）反而表现不好 —— 加线性层不只是省钱。那张消融表长什么样、它又<b>问不出</b>什么，见 <a href="#s8-2">§8.2</a>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>配比与型号见 <a href="#s8-2">§8.2</a> / <a href="#s8-4">§8.4</a> 的表（每一行都标了出处，多数可在公开 config 里核）；系统性消融的建议区间出自 arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a></p>
 <p>「0:1 反而表现不好」出自 Kimi Linear arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a> ——&#160;⚠️ 原文只有一句定性描述，<b>没有公开数值</b></p>
 <p>NoPE 见 <b>Kimi Linear</b> 同文（对所有全注意力层用 NoPE）——&#160;⚠️ <b>是它先做的，K3 是沿用</b></p>
 <p>⚠️ 「普通员工 / 资深」是<b>本课的比喻</b></p></details></figure>
@@ -13305,7 +13305,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <h3 id="s8-2b">8.2b 守恒的是比值，还是全注意力的层数</h3>
 <p>上面那张消融表只在<b>一个深度</b>上扫配比，所以它答不了一个更基本的问题：
   <b>配比 3:1 是超参，还是「几层全注意力」才是超参？</b></p>
-<p>⛔ 这个问题有实际后果。<a href="#s八">§8.1</a> 写过「全局层不需要很多 ——&nbsp;
+<p>⛔ 这个问题有实际后果。<a href="#s8-1">§8.1</a> 写过「全局层不需要很多 ——&nbsp;
   只要有几层能做无损检索，信息就能沿残差流传给其余层用」。
   <em>这句话按字面读，预测的是<b>绝对条数与深度无关</b>：模型越深，比值就该越大。
   它是可以被证伪的 ——&nbsp;去数配置文件就行。</em></p>
@@ -13662,7 +13662,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <ol><li><b>不用调 RoPE 外推。</b> 模型直接外推到 1M，不需要任何位置编码的重标定 —— 长上下文扩展里最烦人的一块调参，直接消失了</li><li><b>MLA 层在推理时可以退化成纯 MQA。</b> 位置编码没了， <a href="#s5-1">§5.3</a> 里那条"不可吸收的 64 维"也就不存在了 —— <b>上投影可以完全吸收</b></li></ol>
 <div class="note warn"><p>⛔ <b>这里原先还列了第三条「KV cache 最多降 75%」——&nbsp;那一条不是 NoPE 的功劳。</b>
   75% 来自 <b>3:1 的配比</b>（四层里只有一层是全注意力），<b>跟加不加位置编码无关</b>。
-  <em>⭐ 这个错误值得留在页面上：<a href="#s八">§八那张配比图</a>的 ⚠️ 注早就写对了，
+  <em>⭐ 这个错误值得留在页面上：<b>本节那张配比图</b>的 ⚠️ 注早就写对了，
   而正文没跟着改 ——&nbsp;<b>图改对了不等于文改对了，同一个事实有两个落点就会有两个版本。</b></em>
   1M 下 TPOT 从 11.48 ms 降到 1.84 ms（<b>6.3×</b>）这个数仍然成立，它记在配比头上。</p></div>
 <div class="note ok"><p>⭐ <b>这才是"混合"真正的意思</b>：不是"两个方案各跑一半凑合用"， 而是让每一层只做自己擅长的事，然后把别人不用做的事一并省掉。 一个架构选择（混合）解开了另一个看起来完全无关的约束（位置编码）。 这门课想教的就是这种"看见约束之间的连接"的能力。</p></div>

@@ -61,8 +61,14 @@ def main():
     f.box(x + 100, yy + 160, 204, 40, "#fff", GY, 8)
     f.t(x + 202, yy + 186, "整段译文都从这儿出", GY, True, 16, "middle")
     f.t(x + 22, yy + 228, "⛔ 句子越长，挤得越狠", RD, True, 18)
-    f.t(x + 22, yy + 254, "原文：a fixed-length vector", GY2, size=13)
-    f.t(x + 22, yy + 274, "is a bottleneck", GY2, size=13)
+    # ⛔⛔ 2026-09-14 R4 核对一手论文时抓到的：原文是
+    #   「**we conjecture that** the use of a fixed-length vector is a bottleneck」
+    #   ——&#160;这是作者自己下的**推测**，不是已证的结论。
+    #   ⭐ 判据（CLAUDE.md 第一原则那条的引申）：**引用要连确定性一起引。**
+    #     把 "we conjecture" 吃掉，等于替作者把话说满了。
+    f.t(x + 22, yy + 254, "原文：we conjecture that … a fixed-", GY2, size=13)
+    f.t(x + 22, yy + 274, "length vector is a bottleneck（作者自己的推测）",
+        GY2, size=13)
 
     f.box(x + 22, yy + 290, pw - 44, 64, "#fff", GR, 8)
     f.t(x + 38, yy + 316, "⭐ 修法的关键是那个「软」字", GR, True, 17)

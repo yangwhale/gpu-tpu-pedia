@@ -215,10 +215,13 @@ def lint_dup_body_vs_figs(html, n=14):
         hits += [(r, fid + "（正文↔图内）") for r in _runs(body, t, n)]
     for fid, c in caps:
         hits += [(r, fid + "（正文↔图注）") for r in _runs(body, c, n)]
-    # ⛔ 同一个片段可能两边都撞，去重按片段。
+    # ⛔ 专有名词不算重复。「FlashAttention」十四个字母就能触发，可它是**术语**，
+    #   本来就该在图里和正文里各出现一次。⭐ 判据：**重复的单位是句子不是词** ——
+    #   所以要求命中片段里至少有 8 个汉字，纯拉丁的一串直接放行。
+    CJK = re.compile(r"[\u4e00-\u9fff]")
     seen, out = set(), []
     for r, w in hits:
-        if r in seen:
+        if r in seen or len(CJK.findall(r)) < 8:
             continue
         seen.add(r); out.append((r, w))
     return out
@@ -425,6 +428,26 @@ CSS_NAV = """<style>
 
 
 
+def lint_self_links(html):
+    """一个 <section> 里有没有链回它自己的锚点。返回 [(节 id, 链接文字)]。
+
+    ⛔ 2026-09-14 R4 抓到的：第二章里写「这就是<a href="#s二">下一节</a>那根
+      百分比条」——&nbsp;**#s二 就是第二章自己**，读者点了原地不动。
+    ⭐⭐ 为什么九条体检全放行：跨节指针体检只认 `§X.Y` 那种写法，
+      **中文的「下一节 / 上一张」它根本看不见**。
+      判据：**方位词也是指针**，而且比节号更难发现 ——&nbsp;它长得像散文。
+    📌 这里只查最确定的一种：**链接落在自己所在的那一节**。
+      这基本不可能是有意的，所以误报率极低。
+    """
+    bad = []
+    for m in re.finditer(r'<section id="([^"]+)".*?</section>', html, re.S):
+        sid, body = m.group(1), m.group(0)
+        for a in re.finditer(r'<a href="#(%s)"[^>]*>(.*?)</a>' % re.escape(sid),
+                             body, re.S):
+            bad.append((sid, re.sub(r"<[^>]+>", "", a.group(2))))
+    return bad
+
+
 def finish(html, out_path, sections, label):
     """锚点 → 吸顶目录 → arXiv 自动链接 → 写盘 → 打一行回执。"""
     html = anchorize(html)
@@ -456,4 +479,9 @@ def finish(html, out_path, sections, label):
     else:
         print("    ✅ 查重通过（图内／图注／正文 三面互不重合）")
     del DUP_WARNED[:]
+    self_links = lint_self_links(html)
+    if self_links:
+        print("    ⛔ 有链接指回自己所在的那一节（点了原地不动）：")
+        for sid, txt in self_links:
+            print("       #%-6s 链接文字「%s」" % (sid, txt[:24]))
     return html

@@ -235,7 +235,7 @@ def main():
         "<tspan font-weight=\"700\">里程表</tspan>回答的是"
         "「<tspan font-weight=\"700\">为什么点积自动带相对距离</tspan>」和"
         "「<tspan font-weight=\"700\">凭什么能外推</tspan>」。",
-        "⭐ 两个一起看，<a href=\"#s五\">讲 MLA 那一节</a>里那条 decoupled RoPE "
+        "⭐ 两个一起看，本节那条 decoupled RoPE "
         "（让带位置的那几维单独走一路）就不是一个补丁，而是唯一的出路。",
     ])
     yy = f.src(yy + 16,
