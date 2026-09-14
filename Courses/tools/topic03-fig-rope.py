@@ -70,11 +70,11 @@ def main():
         size=17, anchor="end")
     f.box(56, ay + 192, 1288, 80, "#e8f0fe", BL, 10)
     f.t(80, ay + 222, "⭐ 这排转盘就是 <tspan font-weight=\"700\">位置 n 的 "
-        "β 进制写法</tspan>（β ＝ 10000^(2/d) ≈ %.3f）" % beta, GY, size=18,
+        "β 进制写法</tspan>（β ＝ 10000^(2/d) ≈ %.3f）" % beta, GY, size=17,
         w=1240)
     f.t(80, ay + 250, "d=128 就是 <tspan font-weight=\"700\">64 位数</tspan>；"
         "第 m 位的除数 β^(m-1)，<tspan font-weight=\"700\">正是第 m 对维度的"
-        "转速</tspan>。", GY, size=18, w=1240)
+        "转速</tspan>。", GY, size=17, w=1240)
 
     # ══════════ ② 为什么点积只认距离 ════════════════════════════
     y1 = y0 + PH + 18
@@ -98,11 +98,11 @@ def main():
         size=17)
     f.box(56, by + 146, 1288, 96, "#f3e8fd", PU, 10)
     f.t(80, by + 178, "⭐⭐ 每个盘上你只看得出<tspan font-weight=\"700\">"
-        "两根针差多少</tspan> ——　看不出各自转到了哪儿。", PU, True, 21)
+        "两根针差多少</tspan> ——　看不出各自转到了哪儿。", PU, True, 17)
     f.t(80, by + 208, "而点积 <tspan font-weight=\"700\">a·b ＝ |a||b|cos θ</tspan>"
-        " 只吃夹角和长度：同转一个角，两样都没变。", GY, size=18, w=1240)
+        " 只吃夹角和长度：同转一个角，两样都没变。", GY, size=17, w=1240)
     f.t(80, by + 234, "⭐ 所以绝对位置被转掉了，<tspan font-weight=\"700\">"
-        "留下来的只有 m−n</tspan>。", GY, size=18, w=1240)
+        "留下来的只有 m−n</tspan>。", GY, size=17, w=1240)
 
     # ══════════ ③ 长文本三种改法 ════════════════════════════════
     y2 = y1 + PH2 + 18
@@ -132,7 +132,7 @@ def main():
             sp = base if kind == "none" else (base * 0.5 if kind == "slow"
                                               else base ** 1.25)
             dial(cx, ey + 130, 28, 9 * sp, col)
-        f.t(x + 22, ey + 184, b_, col, True, 18, w=384)
+        f.t(x + 22, ey + 184, b_, col, True, 17, w=384)
         f.box(x + 22, ey + 200, 384, 52, BG2, LINE2, 8)
         f.t(x + 36, ey + 230, note, GY, size=16, w=356)
 

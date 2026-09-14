@@ -68,7 +68,7 @@ def main():
         rx = 60 + i * (RW + RGAP)
         # 房间：只画三面墙 ＋ 一个门口，别画成又一个矩形卡片
         f.box(rx, ry, RW, RH, tint, col, 10)
-        f.t(rx + 20, ry + 34, "%s ——　搬「%s」这个房间" % (era, name), col, True, 20)
+        f.t(rx + 20, ry + 34, "%s ——　搬「%s」这个房间" % (era, name), col, True, 17)
         gx, gy = rx + 22, ry + 56
         if kind == "shrink":                    # 一摞箱子 → 一个小箱子
             for k in range(4):

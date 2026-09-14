@@ -158,7 +158,7 @@ def main():
     f.t(30, top + 248,
         "🏠 生活版就是一句话：<tspan font-weight=\"700\">"
         "与其把一万本外文书全翻译过来，不如把你的搜索词翻译过去。</tspan>",
-        INK, size=18)
+        INK, size=17)
     f.t(30, top + 276,
         "⭐ V 那一侧同理：W_UV 可以吸进输出投影 W_O ——&#160;"
         "所以 K 和 V <tspan font-weight=\"700\">两边都不用拆</tspan>。", GY,

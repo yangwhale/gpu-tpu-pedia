@@ -219,7 +219,7 @@ def main():
         #    会跟真正的差异抢注意力。
         f.t(ox, FY - 20,
             "R 没了 ——&#160;q 直接吸进去" if ghost else "R 还在 ——&#160;q 吸不进去",
-            GY if ghost else RD, bold=True, size=18, cls="svglbl")
+            GY if ghost else RD, bold=True, size=17, cls="svglbl")
 
         # q（两栏一模一样）
         f.icon("note", ox + LQ, FY, WQ, FH, BL, "#e8f0fe")

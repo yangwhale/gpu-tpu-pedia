@@ -279,7 +279,7 @@ def main():
     f.box(712, top + 28, 664, 186, "none", RD, 9)
     f.t(732, top + 58,
         "反直觉一：显存省了 %.1f 倍，只快了 %.2f 倍" % (store, ratio),
-        RD, bold=True, size=19, cls="svglbl")
+        RD, bold=True, size=17, cls="svglbl")
     f.t(732, top + 82,
         "整条 ＝ 显存的 <tspan font-weight=\"700\">%.1f×</tspan>；"
         "三段按<tspan font-weight=\"700\">对数</tspan>切，"
@@ -312,7 +312,7 @@ def main():
     f.box(712, top + 226, 664, 128, "none", BL, 9)
     f.t(732, top + 256,
         "反直觉二：MLA 之后再上稀疏，只再快 %.2f 倍" % gainD, BL, bold=True,
-        size=19, cls="svglbl")
+        size=17, cls="svglbl")
     yj = top + 286
     for r in wrap_rich(
         "⭐⭐ 因为<tspan font-weight=\"700\">瓶颈已经搬到权重那一段</tspan>："

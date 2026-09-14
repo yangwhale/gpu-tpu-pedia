@@ -106,9 +106,9 @@ def main():
     f.t(80, gy_ + 40, "⭐⭐ 而在 GQA 上，这件事更狠", RD, True, 22)
     f.t(80, gy_ + 76, "一组里<tspan font-weight=\"700\">每个头各挑各的</tspan>，"
         "可它们共用同一份 KV ——&#160;真正要搬的是"
-        "<tspan font-weight=\"700\">所有头挑中的并集</tspan>。", GY, size=18)
+        "<tspan font-weight=\"700\">所有头挑中的并集</tspan>。", GY, size=17)
     f.t(80, gy_ + 104, "→　<tspan font-weight=\"700\">算是省了，搬没省。</tspan>"
-        "这正是 NSA 点名 Quest 的那一条。", RD, True, 18)
+        "这正是 NSA 点名 Quest 的那一条。", RD, True, 17)
 
     # ══════════ ③ 四个坑 ════════════════════════════════════════
     y2 = y1 + PH2 + 18

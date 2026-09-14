@@ -176,7 +176,7 @@ def main():
         '⭐ 于是这三样都变得合理：<tspan font-weight="700">压缩</tspan>'
         '（远处多个合并成一个）　·　<tspan font-weight="700">稀疏</tspan>'
         '（只挑相关的看）　·　<tspan font-weight="700">分层</tspan>（近精细远粗糙）',
-        GR, size=19)
+        GR, size=17)
 
     yy = y2 + PH2 + 18
 

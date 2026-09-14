@@ -49,9 +49,9 @@ def main():
         f.t(x + 20, ay + 56, str(i + 1), RD, True, 15, "middle")
         if i < L - 1:
             f.line(x + 42, ay + 50, x + 52, ay + 50, RD, 1.2)
-    f.t(56, ay + 20, "每一步都要等上一步的结果", RD, True, 20)
+    f.t(56, ay + 20, "每一步都要等上一步的结果", RD, True, 17)
     f.t(56, ay + 108, "⛔ 一百万个 token ＝ <tspan font-weight=\"700\">一百万步，"
-        "一步都不能并</tspan>", RD, True, 21)
+        "一步都不能并</tspan>", RD, True, 17)
     f.t(56, ay + 142, "加速器最怕这个 ——&#160;几千个算力单元，一次只喂得上一个", GY,
         size=17)
 
@@ -86,13 +86,13 @@ def main():
     #   而这恰恰是「为什么要这么切」的全部答案。所以这里把它画出来。
     f.box(56, by + 196, 1304, 124, "#fff", INK, 10)
     f.t(80, by + 234, "⭐ 交接单上只有一样东西：<tspan font-weight=\"700\">"
-        "那块板子现在的样子</tspan>（状态 S）", INK, True, 21)
+        "那块板子现在的样子</tspan>（状态 S）", INK, True, 17)
     f.t(80, by + 272, "所以并行度从 <tspan font-weight=\"700\">1 变成 %d</tspan>，"
         "串行步数从 <tspan font-weight=\"700\">%d 变成 %d</tspan> ——&#160;"
-        "数学一个字没改，改的是算的顺序。" % (C, L, L // C), GY, size=18)
+        "数学一个字没改，改的是算的顺序。" % (C, L, L // C), GY, size=17)
     f.t(80, by + 302, "⭐⭐ 而且<tspan font-weight=\"700\">每一张交接单都一样大</tspan>"
         " ——&#160;跟这一批有几个人、整句话有多长，<tspan font-weight=\"700\">"
-        "都没关系</tspan>。这才是它敢这么切的全部理由。", GY, size=18)
+        "都没关系</tspan>。这才是它敢这么切的全部理由。", GY, size=17)
     f.box(1146, by + 214, 86, 86, "#e8f0fe", BL, 8, 1.6)
     f.t(1189, by + 250, "S", BL, True, 26, "middle")
     f.t(1189, by + 274, "d_k × d_v", BL, size=14, anchor="middle")
@@ -152,7 +152,7 @@ def main():
         "⭐⭐ <tspan font-weight=\"700\">所以 chunkwise 不是第三种算法，"
         "是连接那两端的一个旋钮</tspan> ——&#160;"
         "往上拧回 ①（一步一个，喂不饱算力），往下拧到底就是一整张矩阵算完。",
-        INK, size=19)
+        INK, size=17)
     # ⚠️ 这一行**不能再长了**：渲染后几何体检量到它顶出图框，才砍成现在这样
     #   （原句多「一整张」「上」「都」「。」，量准字宽后是 1386px，图才 1400 宽）。
     f.t(30, xy + 316,

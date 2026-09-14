@@ -253,14 +253,14 @@ def fig_qkv():
     assert STALL[TOP][0] == "抽屉"
 
     BY = y + 172 + 14
-    PH2 = 430
+    PH2 = 466
     BT = f.panel(0, BY, W, PH2,
                  "② 一次注意力 ——　不是「挑一家」，是「按权重把每一家的货混成一碗」",
                  OR, "#fff", sub="Attention(Q,K,V) = softmax(QKᵀ / √d_k) · V",
                  tint="#fbeecb")
 
     # ── 拿着问题的那个人 ───────────────────────────────────────
-    qy = BT + 22
+    qy = BT + 48
     f.box(30, qy, 152, 96, "#f3e8fd", PU, 8)
     f.t(106, qy + 32, "Q", PU, True, 24, "middle")
     f.t(106, qy + 58, "「放在哪儿了？」", PU, True, 15, "middle")
@@ -268,9 +268,22 @@ def fig_qkv():
 
     # ── 五个摊子：上面挂牌（K），下面是货（V）───────────────────
     SW, STEP, SX0 = 218, 230, 210
+    # ⛔⛔ 原来这里是**一把从 Q 射出去的斜扇形线**，终点 (sx-6, qy+20) 落在
+    #   K 框的竖直正中 ——&#160;于是去远处摊位的那几条**横穿了中间三个框**，
+    #   直接压在「小明」「把」「钥匙」上面。
+    #   ⭐ 上一轮我已经因为扇形线挪过一次标签，还在注释里写了
+    #     「扇形线是斜的，代码里看不出它扫过哪些坐标」——&#160;**然后只挪了标签，
+    #     没管线本身**。同一个原因，同一张图，漏了第二遍。
+    #   ⭐⭐ 判据：一条斜线的危险不在它的两个端点，在**它中间经过的那一段**。
+    #     端点在代码里看得见，中间那段只有渲染出来才看得见。
+    #   改成一根**横梁 ＋ 五个下探箭头**（comb）：横梁走在所有框的上方，
+    #   谁都不穿；而且「同一个 Q、挨家问了一遍」这层意思比扇形更直白。
+    BUSY = qy - 26
+    f.line(106, qy, 106, BUSY, PU, 1.4, arrow=False)
+    f.line(106, BUSY, SX0 + 4 * STEP + SW / 2, BUSY, PU, 1.4, arrow=False)
     for i, (word, z) in enumerate(STALL):
         sx = SX0 + i * STEP
-        f.line(186, qy + 48, sx - 6, qy + 20, PU, 1.0, arrow=False)
+        f.line(sx + SW / 2, BUSY, sx + SW / 2, qy - 7, PU, 1.0)
         f.box(sx, qy, SW, 40, "#e0f7fa", CY, 6)
         f.t(sx + SW / 2, qy + 26, word, CY, True, 18, "middle")
         f.box(sx + 34, qy + 50, SW - 68, 38, TINT[i], "none", 6)
@@ -279,14 +292,12 @@ def fig_qkv():
         f.t(sx + SW / 2, qy + 112, "打分 %d" % z, OR, True, 16, "middle")
         f.t(sx + SW / 2, qy + 132, "÷√d_k → %.2f" % (z / SQ), GY2, False, 13,
             "middle")
-    # ⛔ 这两个小标签原来贴在 (SX0, qy-4) 和 (SX0, qy+46) ——&#160;后者正好压在
-    #   Q 发出去的那把扇形线上。**扇形线是斜的，代码里看不出它扫过哪些坐标。**
-    #   合成一行放到扇形线上方。
-    f.t(SX0, qy - 8, "上排 ＝ K（挂出来的牌子）　　下排 ＝ V（牌子后面的货）",
+    # 图例挪到摊子下方 ——&#160;上方现在是横梁的地盘
+    f.t(SX0, qy + 158, "上排 ＝ K（挂出来的牌子）　　下排 ＝ V（牌子后面的货）",
         GY2, False, 13)
 
     # ── 两条支路：不除 / 除。⭐ 全图的论点在这两根条的**形状差别**上 ──
-    by = qy + 178
+    by = qy + 194
     BARW = 560
 
     def branch(ox, head, hcol, wts, verdict, vcol, foot):

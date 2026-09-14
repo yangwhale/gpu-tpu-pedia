@@ -172,7 +172,7 @@ def main():
 
     f.box(80, gy3 + 12, W - 160, 74, "#fff", RD, 10)
     f.t(104, gy3 + 42, "⛔ 挡住的那些格子，第一反应是填 0 ——　但填 0 不行", RD,
-        True, 20)
+        True, 17)
     f.t(104, gy3 + 68, "填 0 之后那一行加起来就不等于 1 了。"
         "所以要在 <tspan font-weight=\"700\">softmax 之前</tspan>填 "
         "<tspan font-weight=\"700\">−∞</tspan> ——　"
@@ -253,7 +253,7 @@ def main():
             via="h")
     f.t(120, ey + 208, "抱着它走了 ——　其余五本一页没动", GY, size=17)
     f.box(56, ey + 240, 570, 46, "#f1f3f4", GY2, 8)
-    f.t(76, ey + 270, "⛔ 如果注意力是这样，就不需要 softmax 了", GY, True, 18)
+    f.t(76, ey + 270, "⛔ 如果注意力是这样，就不需要 softmax 了", GY, True, 17)
 
     # ── 右联：注意力找书 ────────────────────────────────────────
     X2 = 700
@@ -271,13 +271,13 @@ def main():
         f.line(X2 + 2 * BGAP + 22, ey + 176, X2 + k * BGAP + BOOKW / 2.0,
                ey + 146, PU, 0.8 + w_ * 0.075, arrow=False)
     f.t(X2 + 180, ey + 208, "每本撕下相应比例的一页，混成一本新书带走",
-        PU, True, 18)
+        PU, True, 17)
     f.box(X2, ey + 240, 644, 70, "#f3e8fd", PU, 8)
     f.t(X2 + 20, ey + 268,
         "⭐ 所以它其实不在「注意」，它在<tspan font-weight=\"700\">加权平均</tspan>",
-        PU, True, 18, w=604)
+        PU, True, 17, w=604)
     f.t(X2 + 20, ey + 294, "——　每本都被撕了一页，只是有的撕得多", PU,
-        size=18, w=604)
+        size=17, w=604)
 
     yy = y2 + PH3 + 20
     yy = f.band(yy, "info", "⭐ 带走一条判据：先问这个分数拿去干什么", [

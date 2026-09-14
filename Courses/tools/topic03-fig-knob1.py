@@ -218,7 +218,7 @@ def main():
     f.t(RX + 32, ey + 28, "⭐⭐ 卡住的不是「中间有东西」，是那东西"
         "<tspan font-weight=\"700\">带下标</tspan> ——&#160;"
         "<tspan font-weight=\"700\">一块</tspan>预乘得掉，"
-        "<tspan font-weight=\"700\">一摞</tspan>预乘不掉", BR, True, 19)
+        "<tspan font-weight=\"700\">一摞</tspan>预乘不掉", BR, True, 17)
 
     def card(x, y0, w, h, s, col, tint, sw=1.8):
         f.box(x, y0, w, h, tint, col, 6, sw)

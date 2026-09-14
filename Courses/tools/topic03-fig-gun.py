@@ -174,13 +174,13 @@ def main():
         "⭐⭐ <tspan font-weight=\"700\">末尾露出来的那一小截红，"
         "就是六年里真正多买的硬件</tspan> ——&#160;只有 %.2f 倍。"
         "前面 %.1f 倍是「把每个 token 变便宜」换来的。" % (gap, tot), RD,
-        size=18)
+        size=17)
     f.t(24, YB + BH + 74,
         "⭐⭐ 这一根<tspan font-weight=\"700\">一点都没露</tspan> ——&#160;"
         "上下文涨了 512 倍，每步要读的<tspan font-weight=\"700\">"
         "一个字节都没涨</tspan>。"
         "⛔ 而它<tspan font-weight=\"700\">不省显存</tspan>：KV 全存着，"
-        "所以它不进上面那根条。", BL, size=18)
+        "所以它不进上面那根条。", BL, size=17)
 
     f.t(24, YB + BH + 102,
         "⛔ <tspan font-weight=\"700\">这两根条不是一本账，别加起来</tspan>"

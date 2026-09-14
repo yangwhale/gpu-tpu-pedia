@@ -109,12 +109,12 @@ def main():
     f.box(716, by + 30, 644, 180, "#e8f0fe", BL, 10)
     f.t(740, by + 70, "⭐⭐ 它还有另一个读法", BL, True, 23)
     f.t(740, by + 108, "「板子上现在能取出什么」减「本来该取出什么」，", GY,
-        size=18)
+        size=17)
     f.t(740, by + 140, "按这个<tspan font-weight=\"700\">差</tspan>去改板子 ——&#160;"
-        "这就是<tspan font-weight=\"700\">一步梯度下降</tspan>。", GY, size=18)
+        "这就是<tspan font-weight=\"700\">一步梯度下降</tspan>。", GY, size=17)
     f.t(740, by + 180, "于是状态不再是一块缓存，", BL, True, 20)
     f.t(740, by + 210, "而是<tspan font-weight=\"700\">一个边跑边被训练的小模型</tspan>。",
-        BL, True, 20)
+        BL, True, 17)
     f.t(740, by + 236, "⚠️ 前提只有两条：学习率取 β、损失是瞬时的", GY2, size=14)
 
     # ══════════ ③ 板子为什么装不下 ══════════════════════════════
@@ -173,7 +173,7 @@ def main():
 
     ey = py3 + 22
     f.t(56, ey + 22, "板子上有 d 个「方向」，你要往里记 L 条对应关系", GY,
-        True, 20)
+        True, 17)
     for i in range(8):
         ang = i
         f.line(300 + 0, ey + 150, 300 + 120 * (0.3 + 0.1 * (ang % 4)),
@@ -182,11 +182,11 @@ def main():
     f.t(470, ey + 96, "L 条要记的对应关系", GY, size=17)
     f.t(470, ey + 130, "⛔ L 超过 d 之后，", RD, True, 20)
     f.t(470, ey + 162, "总有两条<tspan font-weight=\"700\">指到同一个方向上</tspan> ——",
-        GY, size=18)
+        GY, size=17)
     f.t(470, ey + 194, "它们就开始互相盖。", RD, True, 20)
 
     f.box(920, ey + 20, 440, 190, "#fff", INK, 10)
-    f.t(944, ey + 60, "⚠️ 所以别把板子想成一个盒子", INK, True, 21)
+    f.t(944, ey + 60, "⚠️ 所以别把板子想成一个盒子", INK, True, 17)
     f.t(944, ey + 96, "它装的<tspan font-weight=\"700\">不是 token</tspan>，", GY,
         size=18)
     f.t(944, ey + 128, "是「按这个 key，该取出那个 value」", GY, size=18)
