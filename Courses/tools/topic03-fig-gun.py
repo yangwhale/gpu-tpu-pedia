@@ -155,7 +155,7 @@ def main():
     bar(YA, "显存账", "一个人要占多少", "单位：GiB／每 token", GR, [
         (k1, GR, "#e6f4ea", "%.1f" % k1, "旋钮①　MLA 把每一份压小"),
         (HYB, CY, "#e0f7fa", "%.0f" % HYB, "元旋钮　混合 3:1"),
-        (gap, RD, "#fce8e6", "%.2f" % gap, "⛔ 真多买的硬件"),
+        (gap, RD, "#fce8e6", "%.2f" % gap, "⛔ 剩下的这一截（见下）"),
     ])
     bar(YB, "带宽账", "每走一步要读多少", "单位：字节／每一步", BL, [
         (band, BL, "#e8f0fe", "%d" % band,
@@ -227,7 +227,19 @@ def main():
     yy = f.band(yy, "ok", "那 512 倍，是这么换来的", [
         "<tspan font-weight=\"700\">不是内存变大了。</tspan>"
         "显存这一笔，是把每个 token 的开销压了 %.1f 倍 ——&#160;"
-        "剩下那 %.2f 倍，才是真正多买的硬件。" % (tot, gap),
+        "<tspan font-weight=\"700\">整条里最长的那两段，都是「把 token 变便宜」</tspan>。"
+        % tot,
+        "⛔ <tspan font-weight=\"700\">而末尾那 %.2f 倍，要老实说清楚它是什么："
+        "它是前两段除完之后<u>剩下的那一截</u>，不是查来的数。</tspan>"
+        "本课把它叫「硬件」，<tspan font-weight=\"700\">是个偷懒的叫法</tspan> ——&#160;"
+        "它里面至少还混着两样本讲没拆开的东西："
+        "<tspan font-weight=\"700\">KV 用更低的精度存</tspan>（今天各家默认就这么干，"
+        "光这一项近乎再减半），以及<tspan font-weight=\"700\">前缀复用</tspan>。"
+        % gap,
+        "⭐⭐ 所以这一截<tspan font-weight=\"700\">只能读成「剩下的」，不能读成"
+        "「硬件的功劳」</tspan> ——&#160;真把那两样算进来，"
+        "<tspan font-weight=\"700\">硬件那一份还会更小。</tspan>"
+        "⭐ 而这恰恰让本图的结论更硬，不是更软。",
         "<tspan font-weight=\"700\">也不是带宽变快了。</tspan>"
         "带宽这一笔，是干脆不读了 ——&#160;每步固定只看 2048 个，"
         "<tspan font-weight=\"700\">上下文涨 512 倍，它一个都没多读。</tspan>",
