@@ -61,6 +61,23 @@ def main():
         legend=[(RD, "传统：整行摊开"), (GR, "在线：一块一块来"),
                 (OR, "重标定的那个系数")])
 
+    # ⭐⭐⭐ 2026-09-14 R59 新增：旁白栏。
+    #   ⛔ 这张图原本的毛病不是缺内容，是**缺一个连贯的声音**：
+    #     三块面板各自都对，读者却要自己在心里把它们串成一个故事。
+    #   ⭐ 现场给的三拍就是那条线，照抄不改：
+    #     「先假装它就是最大的 → 来了更大的 → 把刚才假装留下的痕迹擦掉」。
+    #   📌 刻意让算法**用第一人称说话**，而且只说动机、不说公式 ——
+    #     公式一个都不动，旁白只负责回答「它这一步在想什么」。
+    #     ⚠️ 所以旁白里不许出现任何这张图别处没有的数。
+    def say(y, col, tint, lines, h=None, x0=30, x1=1370):
+        h = h if h else 16 + 28 * len(lines)
+        f.box(x0, y, x1 - x0, h, tint, "none", 8)
+        f.box(x0, y, 5, h, col, col, 3)                 # 左侧引言竖条
+        f.t(x0 + 22, y + 30, "💬", GY, size=18)
+        for k, ln in enumerate(lines):
+            f.t(x0 + 54, y + 30 + k * 28, ln, GY, size=16, w=x1 - x0 - 76)
+        return y + h
+
     # 五张「卷子」的公共画法
     def papers(x0, y0, idx, col, tint):
         for k, i in enumerate(idx):
@@ -89,6 +106,9 @@ def main():
     f.t(742, ry + 46, "所以整行都得同时摆在片上暂存里。", INK, size=16)
     f.t(742, ry + 70, "128K 上下文，这一行就是 13 万个数。", RD, bold=True,
         size=16)
+    say(top + 138, RD, "#fef3f2", [
+        "「我得<tspan font-weight=\"700\">先把整行看完</tspan>，才知道该减掉多少 "
+        "——　所以这一行你别想让我分块，它必须整个摊在我面前。」"])
     f.t(30, top + PH1 - 62,
         "⭐ <tspan font-weight=\"700\">注意省的是什么</tspan>："
         "减最大值是为了数值稳定（不减，exp 会溢出）。"
@@ -100,7 +120,7 @@ def main():
 
     # ══ ② 在线：一块一块来，手里只攥三个数 ═══════════════════════════
     yy = top + PH1 + 26
-    PH2 = 430
+    PH2 = 616                                  # ⭐ R59：430 → 616，让出三条旁白
     top = f.panel(0, yy, W, PH2,
                   "② 在线算法：一摞一摞地改，手里<tspan font-weight=\"700\">"
                   "只攥三个数</tspan>", GR, tag="片上只放一块")
@@ -121,8 +141,12 @@ def main():
     f.t(676, ry + 58, "前三张卷子<tspan font-weight=\"700\">可以扔了</tspan>。",
         GY, size=16)
 
+    say(top + 166, GR, "#eef7f0", [
+        "「我<tspan font-weight=\"700\">先假装 3 就是全场最高分</tspan>，照这个口径"
+        "把总和和加权和都算出来。反正真出现更高的，我到时候再改。」"])
+
     # — 第二摞：出现了更高分
-    ry = top + 184
+    ry = top + 256
     f.t(30, ry - 18, "第二摞（后 2 个）——&#160;出事了", RD, bold=True, size=16,
         cls="svglbl")
     papers(34, ry, range(CUT, 5), RD, "#fce8e6")
@@ -149,6 +173,15 @@ def main():
     f.t(912, ry + 68, "s ＝ %.4f" % s2, INK, size=16, mono=True)
     f.t(912, ry + 90, "o ＝ %.4f（除以 s 才是输出）" % n2, INK, size=15,
         mono=True)
+
+    say(top + 370, OR, "#fff8ec", [
+        "「果然来了个 5。<tspan font-weight=\"700\">我不回头翻卷子</tspan> ——　"
+        "只把刚才『假装 3 最高』在账上留下的痕迹擦掉：",
+        "把 s 和 o <tspan font-weight=\"700\">各乘一次 exp(3−5)</tspan>，"
+        "口径就换成『5 最高』了。」"])
+    say(top + 456, BL, "#eef3fd", [
+        "「擦完了。<tspan font-weight=\"700\">我手里这三个数，跟一开始就知道 "
+        "5 最高、一次性算出来的完全一样</tspan> ——　下一格你可以自己核。」"])
 
     f.t(30, top + PH2 - 78,
         "🏠 <tspan font-weight=\"700\">这就是那句生活里的话</tspan>：",
