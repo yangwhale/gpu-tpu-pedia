@@ -61,47 +61,26 @@ if [ "${1:-}" != "--lint" ]; then
   # ⛔ 图必须先生成 —— topic03-build.py 会 assert 找不到 fig3-chronicle.svg。
   #    这条依赖是**故意做成硬失败**的：图缺了宁可构建挂掉，也不要悄悄出一份没图的教材。
   # ⛔ 画法基元在 topic03_draw.py，三个 fig 脚本共用一份 —— 别在各自脚本里另起一套。
-  python3 topic03-fig-arc.py           # 总纲：这是一个什么故事（六段骨架）
-  python3 topic03-fig-rnn.py           # §零 RNN 四张图（怎么算 / 为什么慢 / 解码又变回来 / 痛点通向哪）
-  python3 topic03-fig-attn-invented.py # §一 注意力是怎么被发明出来的（三步各修一个毛病）
-  python3 topic03-fig-why-softmax.py  # §一 为什么非 softmax 不可 ＋ K/V 为什么分家
-  python3 topic03-fig-mha.py           # §一 MHA 四张图（换掉了什么 / 信息怎么流 / 在算什么 / 多头）
-  python3 topic03-fig-motives.py       # §二 两条动机线（硬件账 ＋ 信息账 ＋ 交汇处）
-  python3 topic03-fig-info-law.py      # §二 信息账的严格版本（双部互信息 ＋ L2M 条件）
-  python3 topic03-fig-knobs.py         # §四 三个旋钮：全课骨架（为什么恰好是三个）
-  python3 topic03-fig-when-axis.py     # §四 第二个轴：什么时候改（事后 vs native）
-  python3 topic03-fig-notepad.py       # §七 记事板比喻：三种写法钉到式子上
-  python3 topic03-fig-loop-order.py     # §3.2b 内外循环对调：省的到底是什么
-  python3 topic03-fig-at-gallery.py    # §七 A_t 的形状决定了一切（八种结构并排）
-  python3 topic03-fig-duality.py       # §7.2c 对偶：递推读法 ＝ 矩阵读法（numpy 当场验）
-python3 topic03-fig-three-walls.py   # §3.5 三堵墙：方向各不相同，而甜点是个绝对值
-  python3 topic03-fig-two-brackets.py  # §7.4 前半 凭什么能分块：块间根本没有 mask
-  python3 topic03-fig-chunkwise.py     # §7.4 块内并行块间串行 ＋ 块长两头夹
-  python3 topic03-fig-copy-matrix.py   # §五 「复制」那块 0/1 矩阵，一格一格画出来
-  python3 topic03-fig-hybrid.py        # §八 配比是一条轴，两头都不好
-  python3 topic03-fig-ratio-or-count.py # §8.2b 守恒的是比值不是层数（14 份 config）
-  python3 topic03-fig-ratio-grid.py    # §8.2 那张消融表画出来 ＋ 它问不出什么
-  python3 topic03-fig-perstep.py       # §9.1 把 ↓↓↓ 换成一步 decode 要搬多少字节
-  python3 topic03-fig-landing.py       # §九＋§十 三种资源之间的搬家史 ＋ 防骗判据
-  python3 topic03-fig-tpu-gap.py       # §10.2 落到 TPU：哪两件事对不上
-  python3 topic03-fig-tpu-fix.py       # §10.3 三招 ＋ 在卡上算 ＋ SparseCore
-  python3 topic03-fig-knob1.py         # §五 旋钮①（四种存法对照 ＋ RoPE 为什么单走一路）
-  python3 topic03-fig-mla-why.py       # §五 MLA 凭什么能压（信息账：白送的 vs 赌出来的）
-  python3 topic03-fig-mla-credit.py    # §5.4c 压完了效果好，功劳记给谁（同等 cache 的受控消融）
-  python3 topic03-fig-mqa-why.py       # §五 砍头这一支怎么想出来的（2019 选项单 ＋ 自由度不是宽度）
-  python3 topic03-fig-knob2.py         # §六 旋钮②（五种读法画成五张 mask）
-  python3 topic03-fig-dsa-why.py       # §六 DSA 凭什么只看 2048 个（鸡生蛋 ＋ 让真注意力当老师）
-  python3 topic03-fig-nsa-why.py       # §六 NSA 三条路被四个坑逼出来（计算稀疏 ≠ 访存稀疏）
-  python3 topic03-fig-csa-why.py       # §六 CSA/HCA：压缩的两个正交方向 ＋ 为什么交错
-  python3 topic03-fig-swa-why.py       # §六 滑窗凭什么敢砍 ＋ attention sink 的完整故事
-  python3 topic03-fig-chronicle.py     # 上半：时间轴 SVG
-  # ⭐ 下半那张 39 行模型表现在是**可排序的 HTML 表**，不是 SVG ——
-  #   两边读同一份 topic03_models.py，⛔ 数据只有一份。
+  # ══════════════════════════════════════════════════════════════
+  # ⛔⛔ 2026-09-14：这里原来是 **33 行手写的 python3 调用**，而 tools/ 下
+  #   已经有 45 个 topic03-fig-*.py ——&nbsp;**12 个从来没被登记过**。
+  #   它们的 svg 是早先手跑时落在 tools/ 里的**陈旧产物**，于是：
+  #     · 本机构建照样通过（文件在，assert 满足），页面上却是上一版的图；
+  #     · 干净 clone 上会直接挂（svg 不在仓库里，gitignore 掉了）。
+  #   现场原话「为什么没有清理干净？还有这种该折叠起来的小字？」——
+  #   问的就是这 12 张：src() 改了，它们没重跑。
+  # ⭐⭐ 判据：**「一份要手工维护的清单」＋「漏了不报错」＝ 一定会漂。**
+  #   这跟版面体检漏掉 topic-03、图注还在讲被拆走的半张图，是同一个病。
+  #   ⭐ 改法不是「把 12 个补上」（下次加第 46 个还会漏），是**让清单消失**。
+  # ⛔ 先删干净再重建：留着旧 svg 的话，某个脚本挂掉时构建会拿上一版顶上，
+  #   **静默出一份新旧混合的教材**。宁可 assert 挂掉。
+  #   （每张图具体画什么，看各自脚本的 docstring —— 那份不会漂。）
+  # ══════════════════════════════════════════════════════════════
+  rm -f fig3-*.svg fig3-*.src.html
+  for s in topic03-fig-*.py; do python3 "$s"; done
+  # ⭐ 39 行模型表是**可排序的 HTML 表**不是 SVG，所以不在上面那个 glob 里。
+  #   ⛔ 它跟时间轴图读同一份 topic03_models.py —— 数据只有一份。
   python3 topic03-table-models.py
-  # ⭐ 贯穿全篇的主线图（一层 Transformer ＋ 四个变体）—— 一个脚本吐五张。
-  #    ⛔ 五张必须同源，别拆成五个脚本：这个教学装置的全部价值就在于
-  #      「除了高亮那一处，五张完全一样」，拆开一定会漂而且不报错。
-  python3 topic03-fig-transformer.py
   python3 topic03-build.py
 
   step "专题三 讲义"
