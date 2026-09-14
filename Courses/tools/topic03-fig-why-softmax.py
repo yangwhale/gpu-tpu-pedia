@@ -26,7 +26,7 @@ r"""专题三 · §1.2b「为什么是 softmax、为什么 K 和 V 要分家」
 """
 import math
 
-from topic03_draw import (Fig, BL, GR, RD, GY, PU, INK, GY2, LINE, LINE2, BG2)
+from topic03_draw import (Fig, wpx, BL, GR, RD, GY, PU, INK, GY2, LINE, LINE2, BG2)
 
 W = 1400
 
@@ -151,7 +151,14 @@ def main():
 
     GY0 = pyg + 42
     grid(80, GY0, RAW, True, "softmax 之前", "有大有小，还有负的（空心）", GY)
-    f.t(400, GY0 + 170, "softmax", GR, True, 22)
+    # ⛔ 2026-09-14：这个箭头标签原来是 22px 左对齐从 x=400 起，右端蹭到了右边
+    #   那张网格的行标（「跳」在 gx−16 ＝ 500 处右对齐）。新的 em 盒撞车判据把它
+    #   量出来了 ——&nbsp;重叠只有 1px，旧判据（重叠过半）离报出来差着十万八千里。
+    # ⭐ 两张网格之间只有 392…485 这 93px 可用，所以标签必须**居中 ＋ 降一档**，
+    #   并且当场断言它放得下 —— 下次谁再把字号调回去，这里会直接拦住。
+    LX, LW = 431.0, 19
+    assert wpx("softmax", LW) < 88, "两张网格中间只有 93px，这个标签放不下"
+    f.t(LX, GY0 + 170, "softmax", GR, True, LW, "middle")
     f.line(392, GY0 + 186, 470, GY0 + 186, GR, 2.4)
     f.t(392, GY0 + 214, "逐行做", GY2, size=15)
     grid(516, GY0, SM, False, "softmax 之后", "全部朝上，而且每一行加起来正好是 1",

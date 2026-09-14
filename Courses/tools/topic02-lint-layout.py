@@ -32,8 +32,11 @@
    SVG 的 `<text>` **不会自动换行**，所以任何「把图里的字调大」的改动，
    风险都只有一种：压到隔壁的字上，或者顶出 viewBox。
    38 张图人眼一张张看不现实，用 `getBBox()` 直接量。
-   ⚠️ 判据故意宽松：只有**垂直重叠超过一半**（即肉眼意义上「同一行」）
-      且水平相交 > 3px 才算撞车 —— 否则上下两行正常的行距会被误报成撞车。
+   ⚠️ 判据量的是 **em 盒**，不是浏览器给的整框（整框含 ascent+descent，
+      约 1.39 em，正常行距也会重叠几个 px）。em 盒重叠 > 0.5px 即算撞车。
+   ⛔ 2026-09-14 之前用的是「重叠超过各自高度的一半」——&nbsp;那个比例阈值
+      **对中文天然过宽**（汉字的墨几乎填满 em 盒），漏掉了「两行糊在一起」
+      整类。fig3-knobs 三处肉眼可见的压字，它报的是 0。
 
 用法：
     python3 topic02-lint-layout.py [页面…]
@@ -77,20 +80,36 @@ JS_FIG = r"""()=>{
     //    看着像「顶出画布」，其实 transform 早把它放回去了。
     //    2026-09-04 第一版就是这么误报了专题一那张对数图。
     const R=svg.getBoundingClientRect(), k=W/R.width;
+    // ⭐⭐ 2026-09-14 改判据：量的是 **em 盒**，不是 getBoundingClientRect 的整框。
+    //   浏览器给的框是字体的 ascent+descent（Noto Sans CJK 约 1.39 em），
+    //   比真正有墨的地方高出一大截 ——&nbsp;两行**正常行距**也会有几个 px 的框重叠。
+    //   原先为此设了「重叠超过一半才算」，方向对，代价是把
+    //   「**两行离得太近、糊成一团**」整类漏光了（见下面 hits 的判据说明）。
     for(const t of svg.querySelectorAll('text')){
       const b=t.getBoundingClientRect();
       if(!b.width) continue;
-      bb.push({x:(b.x-R.x)*k, y:(b.y-R.y)*k, w:b.width*k, h:b.height*k,
+      const fs=parseFloat(getComputedStyle(t).fontSize)*k;   // viewBox 单位
+      const h=b.height*k, pad=Math.max(0,(h-fs)/2);          // 上下各收掉虚高
+      bb.push({x:(b.x-R.x)*k, y:(b.y-R.y)*k, w:b.width*k, h:h,
+               ey:(b.y-R.y)*k+pad, eh:Math.min(h,fs),
                s:(t.textContent||'').slice(0,24)});
     }
     const oob=bb.filter(b=>b.x<-2||b.x+b.w>W+2||b.y<-2||b.y+b.h>H+2).map(b=>b.s);
+    // ⛔⛔ 2026-09-14 现场一眼看出 fig3-knobs 三处压字，**这条 lint 报的是 0**。
+    //   旧判据 `vy < min(h)*0.5 → 跳过`，而那三处 frac 只有 0.36。
+    //   ⭐⭐ 根因：**用「占各自高度的比例」当阈值，对中文天然过宽。**
+    //     汉字的墨几乎填满 em 盒，所以「重叠 36%」不是擦边，是实打实压上去了；
+    //     拉丁文那点 x-height 才撑得起 50% 的容差。
+    //   ⭐ 换成 em 盒 ＋ 绝对容差 0.5px 之后，七个页面 260 张图只命中 5 处，
+    //     没有一处是误报 ——&nbsp;**噪音没涨，漏检那一整类补上了。**
     const hits=[]; let n=0;
     for(let a=0;a<bb.length;a++) for(let c=a+1;c<bb.length;c++){
       const p=bb[a],q=bb[c];
-      const vy=Math.min(p.y+p.h,q.y+q.h)-Math.max(p.y,q.y);
-      if(vy < Math.min(p.h,q.h)*0.5) continue;
+      const vy=Math.min(p.ey+p.eh,q.ey+q.eh)-Math.max(p.ey,q.ey);
+      if(vy <= 0.5) continue;
       if(Math.min(p.x+p.w,q.x+q.w)-Math.max(p.x,q.x) > 3){
-        n++; if(hits.length<3) hits.push(p.s+'  ⟂  '+q.s);}
+        n++; if(hits.length<3)
+          hits.push(Math.round(vy)+'px  '+p.s+'  ⟂  '+q.s);}
     }
     // ④ 字号越界：拿正文字号当外部锚点。
     // ⛔ 判的是**这张图最常见的那个字号**（＝它的正文档），不是最大值 ——&nbsp;
