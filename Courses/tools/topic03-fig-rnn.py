@@ -443,7 +443,7 @@ def fig_decode():
          "串行", "每步搬：W ＋ 越来越长的 KV",
          # ⛔ R47：原稿用全角空格分隔，实测 288px，而左栏只有 284 ——
          #   条改成左端对齐之后，它会压到第一根条的左边线上。收窄到 264。
-         "权重那半 ＝ B｜KV 那半 ＝ G/2（跟 B 无关）",
+         "权重那半 ＝ B｜KV 那半 ＝ G（跟 B 无关）",
          "⛔ 加 batch 只救得了权重那半，救不了 KV 那半", "g"),
     )
     ROWH = 128
@@ -517,11 +517,17 @@ def fig_decode():
         "所以攒 batch 有用 ——&#160;强度 ＝ B。这是所有「加大 batch 提吞吐」的依据。",
         "<tspan font-weight=\"700\">KV 那一半</tspan>：每个请求各存各的。"
         "batch 一大，<tspan font-weight=\"700\">读的字节和算的 FLOPs 同比例涨</tspan> ——&#160;"
-        "强度恒等于 <tspan font-weight=\"700\">GQA 组大小的一半</tspan>，跟 B 无关。",
-        "⭐ 拿 GQA-8 算就是 <tspan font-weight=\"700\">4 FLOP/byte</tspan>，"
-        "对着上一格那条 313 的屋脊线差两个数量级 ——&#160;"
+        "强度恒等于 <tspan font-weight=\"700\">GQA 的组大小</tspan>，跟 B 无关。",
+        "⭐ 拿 GQA-8 算就是 <tspan font-weight=\"700\">8 FLOP/byte</tspan>，"
+        "对着上一格那条 313 的屋脊线<tspan font-weight=\"700\">差约 39 倍</tspan> ——&#160;"
         "<tspan font-weight=\"700\">而且攒 batch 一点都救不了。</tspan>"
         "这正是后面三个旋钮要动它的原因。",
+        "⛔ 口径（这条必须钉死，否则跟上面那条 313 不是一套尺子）："
+        "读的字节 ＝ K 和 V 各 S·d 个元素 × 2 B ＝ 4·S·d；"
+        "算的 FLOPs ＝ G 个 query 头 × (QKᵀ ＋ AV) 各 S·d 次乘加 × 2 ＝ 4·G·S·d。"
+        "两者一除，<tspan font-weight=\"700\">强度就是 G</tspan>。"
+        "⭐ 拿 MHA（G＝1）自检：1 FLOP/byte ——&#160;"
+        "正好对上业界那句「decode 的注意力强度约等于 1」。",
     ])
 
     # ══════════════════════════════════════════════════════════════

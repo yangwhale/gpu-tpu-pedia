@@ -117,9 +117,9 @@ def main():
             anchor="middle")
         if i < 3:
             f.line(x + 146, ry + 37, x + 162, ry + 37, GY2, 1.4)
-    f.t(40, ry - 22, "一个循环单元（3 : 1）——&#160;整个模型就是它重复 23 次",
+    f.t(40, ry - 22, "一个循环单元（3 : 1）——&#160;Kimi Linear 27 层，就是它重复 6 次再加 3 层",
         GY, bold=True, size=16, cls="svglbl")
-    f.t(350, ry + 98, "…… 这样的单元再重复 22 次", GY2, size=15,
+    f.t(350, ry + 98, "…… 这样的单元再重复 5 次", GY2, size=15,
         anchor="middle")
 
     f.t(760, ry - 4, "⭐ 线性层<tspan font-weight=\"700\">本来就是一步一步"
