@@ -1605,7 +1605,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </tbody></table>
 <p class="sub">这张表是 <b>Transformer 作者自己算的</b>（arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a> 表 1）。
   <b>中间那一列就是全部答案。</b></p>
-<figure class="fbox fwide" id="fig-rnn-hw"><svg viewBox="0 0 1400 923" width="100%" role="img" aria-label="RNN 与 Transformer 训练在硬件上的差别：RNN 每个时间步都要把同一块权重从 HBM 搬一次，算术强度等于 batch size；Transformer 训练时同一块权重只搬一次，算术强度是 batch size 乘以序列长度"><defs><marker id="ah-b06000" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#b06000"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-rnn-hw"><svg viewBox="0 0 1400 945" width="100%" role="img" aria-label="RNN 与 Transformer 训练在硬件上的差别：RNN 每个时间步都要把同一块权重从 HBM 搬一次，算术强度等于 batch size；Transformer 训练时同一块权重只搬一次，算术强度是 batch size 乘以序列长度"><defs><marker id="ah-b06000" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#b06000"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">为什么 RNN 在加速器上就是跑不快 ——&#160;<tspan font-weight="700">同一块权重被搬了 n 次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 「串行」在硬件上的具体形态就是这个：<tspan font-weight="700">权重每一步重搬一遍，而每次只配一条 batch 那么窄的向量。</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9aa0a6" stroke="#9aa0a6" stroke-width="1"/>
@@ -1691,7 +1691,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="166" y="320" width="900" height="52" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="616" y="352" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">[ d × (n · B) ]　——　n 个位置全在这一块里</tspan></text>
 <text class="svgsm" x="14" y="394" fill="#0d652d" style="font-size:15.0px">⭐ 一次搬运换来 n 倍的活干。<tspan font-weight="700">这就是「用平方的计算量买完全的并行度」那笔交易的硬件形态。</tspan></text>
-<rect x="0" y="412" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="412" width="1400" height="352" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="412" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
 <rect x="0" y="414" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="442" x2="1400" y2="442" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
@@ -1726,14 +1726,14 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="56" y="698" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">TPU v7 的屋脊线　313 FLOP/byte　←　2307 TFLOP/s ÷ 7.37 TB/s</tspan></text>
 <text class="svgsm" x="56" y="734" fill="#5f6368" style="font-size:18.0px">⛔ 线以下 ＝ 在等内存。LSTM 的强度就等于 batch ——　<tspan font-weight="700">要够到这条线，batch 得开到 313 以上</tspan>；而序列一长，显存又不让你把 batch 开大。</text>
 <text class="svgsm" x="56" y="762" fill="#80868b" style="font-size:16.0px">⭐ 那个 k（LSTM 是 4、朴素 RNN 是 1）上下一约就没了 ——　强度跟门数、跟隐藏维都无关。（激活的搬运比权重小两个数量级，略去。）</text>
-<rect x="0" y="758" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="758" width="4" height="98" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="2" y="758" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="785" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 两头堵死</tspan></text>
-<text class="svgsm" x="20" y="816" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">要喂饱一块 v7，batch 得开到 313 以上</tspan>——&#160;而 batch 是 RNN 唯一的算术强度来源。</text>
-<text class="svgsm" x="20" y="840" fill="#a50e0e" style="font-size:15.0px">而 Vaswani 引言那句原话讲的正是另一头：<tspan font-style="italic">「memory constraints limit batching across examples」</tspan>——&#160;<tspan font-weight="700">序列一长，显存就不让你把 batch 开大。</tspan></text>
-<text class="svgsm" x="0" y="874" fill="#80868b" style="font-size:14.0px">📌 NVIDIA《Recurrent Layers User's Guide》——&#160;「a GEMM with one dimension of one」、「can combine these GEMMs over the minibatch size, but not over different </text>
-<text class="svgsm" x="0" y="895" fill="#80868b" style="font-size:14.0px">　　sequence steps」；Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank"><tspan text-decoration="underline">1706.03762</tspan></a>) 引言</text>
+<rect x="0" y="780" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="780" width="4" height="98" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="780" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="807" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 两头堵死</tspan></text>
+<text class="svgsm" x="20" y="838" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">要喂饱一块 v7，batch 得开到 313 以上</tspan>——&#160;而 batch 是 RNN 唯一的算术强度来源。</text>
+<text class="svgsm" x="20" y="862" fill="#a50e0e" style="font-size:15.0px">而 Vaswani 引言那句原话讲的正是另一头：<tspan font-style="italic">「memory constraints limit batching across examples」</tspan>——&#160;<tspan font-weight="700">序列一长，显存就不让你把 batch 开大。</tspan></text>
+<text class="svgsm" x="0" y="896" fill="#80868b" style="font-size:14.0px">📌 NVIDIA《Recurrent Layers User's Guide》——&#160;「a GEMM with one dimension of one」、「can combine these GEMMs over the minibatch size, but not over different </text>
+<text class="svgsm" x="0" y="917" fill="#80868b" style="font-size:14.0px">　　sequence steps」；Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank"><tspan text-decoration="underline">1706.03762</tspan></a>) 引言</text>
 </svg><figcaption>⭐ <b>这张图要带走的是那个「跟 d 无关」</b>：不管隐藏维是 512 还是 8192，<b>RNN 每一步的算术强度就等于 batch size</b>。<b>它意味着「把模型做小」根本救不了 RNN。</b></figcaption></figure>
 <div class="note danger"><p>⛔ 两头堵死：batch 是它唯一的算术强度来源，
   而 Vaswani 引言那句原话说的正是另一头 ——&nbsp;<em>「memory constraints limit batching
@@ -1759,7 +1759,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </tbody></table>
 <p>⛔ <b>所以「省了 N 倍」这句话，不带阶段就是半句话。</b>
   <em><a href="#s九">§九</a>那张代价表专门有一列「⭐ 省在哪个阶段」，就是为了逼出这一问。</em></p></div>
-<figure class="fbox fwide" id="fig-rnn-decode"><svg viewBox="0 0 1400 808" width="100%" role="img" aria-label="三条时间线的对比：RNN 每步搬一次权重且串行；Transformer 训练时权重只搬一次且并行；但 Transformer 解码时又变回一步一个 token，每步搬一次权重，而且还要额外搬一路越来越长的 KV cache"><defs><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-rnn-decode"><svg viewBox="0 0 1400 982" width="100%" role="img" aria-label="三条时间线的对比：RNN 每步搬一次权重且串行；Transformer 训练时权重只搬一次且并行；但 Transformer 解码时又变回一步一个 token，每步搬一次权重，而且还要额外搬一路越来越长的 KV cache"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">⭐⭐ 而生成文字的时候，<tspan font-weight="700">Transformer 又变回了 1990 年那条链的形状</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⛔ <tspan font-weight="700">它没有治好 RNN 的病，它只是把病从「训练」挪到了「推理」</tspan>——&#160;而且挪过去之后更重。</text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
@@ -1775,31 +1775,37 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="14" y="122" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓐ RNN</tspan></text>
 <text class="svgsm" x="77" y="122" fill="#5f6368" style="font-size:11.0px">训练和推理都一样</text>
 <text class="svgsm" x="16" y="154" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">串行</tspan></text>
-<text class="svgsm" x="16" y="174" fill="#5f6368" style="font-size:14.0px">每步搬：W</text>
+<text class="svgsm" x="16" y="174" fill="#5f6368" style="font-size:14.0px">每步搬：W ＋ 一个固定大小的 h</text>
 <text class="svgsm" x="16" y="194" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">算术强度 ＝ B</tspan></text>
 <rect x="300" y="148" width="76" height="36" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="338" y="170" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t1</tspan></text>
-<text class="svgsm" x="338" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">搬 W</text>
+<rect x="300" y="188" width="22" height="13" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="338" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px">W ＋ h</text>
 <rect x="418" y="148" width="76" height="36" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="456" y="170" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t2</tspan></text>
 <line x1="376" y1="166" x2="410" y2="166" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="456" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">搬 W</text>
+<rect x="418" y="188" width="22" height="13" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="456" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px">W ＋ h</text>
 <rect x="536" y="148" width="76" height="36" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="574" y="170" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t3</tspan></text>
 <line x1="494" y1="166" x2="528" y2="166" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="574" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">搬 W</text>
+<rect x="536" y="188" width="22" height="13" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="574" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px">W ＋ h</text>
 <rect x="654" y="148" width="76" height="36" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="692" y="170" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t4</tspan></text>
 <line x1="612" y1="166" x2="646" y2="166" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="692" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">搬 W</text>
+<rect x="654" y="188" width="22" height="13" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="692" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px">W ＋ h</text>
 <rect x="772" y="148" width="76" height="36" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="810" y="170" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t5</tspan></text>
 <line x1="730" y1="166" x2="764" y2="166" stroke="#d93025" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
-<text class="svgsm" x="810" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">搬 W</text>
+<rect x="772" y="188" width="22" height="13" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="810" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px">W ＋ h</text>
 <rect x="890" y="148" width="76" height="36" rx="6" fill="#fff" stroke="#d93025" stroke-width="1"/>
 <text class="svgsm" x="928" y="170" fill="#a50e0e" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">tn</tspan></text>
 <text class="svgsm" x="868" y="172" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">…</tspan></text>
-<text class="svgsm" x="928" y="206" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">搬 W</text>
+<rect x="890" y="188" width="22" height="13" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="928" y="216" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px">W ＋ h</text>
 <text class="svgsm" x="1102" y="176" fill="#a50e0e" style="font-size:12.0px"><tspan font-weight="700">一步一格，权重每步重搬</tspan></text>
 <rect x="0" y="242" width="1400" height="128" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="242" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
@@ -1823,36 +1829,37 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="1386" y="402" fill="#80868b" text-anchor="end" style="font-size:11.0px">⛔ 病在这里</text>
 <text class="svgsm" x="16" y="434" fill="#681da8" style="font-size:16.0px"><tspan font-weight="700">串行</tspan></text>
 <text class="svgsm" x="16" y="454" fill="#5f6368" style="font-size:14.0px">每步搬：W ＋ 越来越长的 KV</text>
-<text class="svgsm" x="16" y="474" fill="#681da8" style="font-size:12.0px"><tspan font-weight="700">权重那半 ＝ B　｜　KV 那半 ＝ G/2（跟 B 无关）</tspan></text>
+<text class="svgsm" x="16" y="474" fill="#681da8" style="font-size:12.0px"><tspan font-weight="700">权重那半 ＝ B｜KV 那半 ＝ G/2（跟 B 无关）</tspan></text>
 <rect x="300" y="428" width="76" height="36" rx="6" fill="#fff" stroke="#9334e6" stroke-width="1"/>
 <text class="svgsm" x="338" y="450" fill="#681da8" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t1</tspan></text>
-<rect x="331.0" y="470" width="14" height="8" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="338" y="494" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
+<rect x="300" y="468" width="22" height="13" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="338" y="496" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
 <rect x="418" y="428" width="76" height="36" rx="6" fill="#fff" stroke="#9334e6" stroke-width="1"/>
 <text class="svgsm" x="456" y="450" fill="#681da8" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t2</tspan></text>
 <line x1="376" y1="446" x2="410" y2="446" stroke="#9334e6" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<rect x="443.0" y="470" width="26" height="8" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="456" y="494" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
+<rect x="418" y="468" width="38" height="13" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="456" y="496" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
 <rect x="536" y="428" width="76" height="36" rx="6" fill="#fff" stroke="#9334e6" stroke-width="1"/>
 <text class="svgsm" x="574" y="450" fill="#681da8" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t3</tspan></text>
 <line x1="494" y1="446" x2="528" y2="446" stroke="#9334e6" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<rect x="555.0" y="470" width="38" height="8" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="574" y="494" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
+<rect x="536" y="468" width="54" height="13" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="574" y="496" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
 <rect x="654" y="428" width="76" height="36" rx="6" fill="#fff" stroke="#9334e6" stroke-width="1"/>
 <text class="svgsm" x="692" y="450" fill="#681da8" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t4</tspan></text>
 <line x1="612" y1="446" x2="646" y2="446" stroke="#9334e6" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<rect x="667.0" y="470" width="50" height="8" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="692" y="494" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
+<rect x="654" y="468" width="70" height="13" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="692" y="496" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
 <rect x="772" y="428" width="76" height="36" rx="6" fill="#fff" stroke="#9334e6" stroke-width="1"/>
 <text class="svgsm" x="810" y="450" fill="#681da8" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">t5</tspan></text>
 <line x1="730" y1="446" x2="764" y2="446" stroke="#9334e6" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
-<rect x="779.0" y="470" width="62" height="8" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="810" y="494" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
+<rect x="772" y="468" width="86" height="13" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="810" y="496" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
 <rect x="890" y="428" width="76" height="36" rx="6" fill="#fff" stroke="#9334e6" stroke-width="1"/>
 <text class="svgsm" x="928" y="450" fill="#681da8" text-anchor="middle" style="font-size:12.0px"><tspan font-weight="700">tn</tspan></text>
 <text class="svgsm" x="868" y="452" fill="#681da8" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">…</tspan></text>
-<rect x="891.0" y="470" width="74" height="8" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
-<text class="svgsm" x="928" y="494" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
+<rect x="890" y="468" width="170" height="13" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<line x1="1060" y1="474" x2="1086" y2="474" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="928" y="496" fill="#681da8" text-anchor="middle" style="font-size:14.0px">W ＋ KV</text>
 <text class="svgsm" x="1102" y="456" fill="#681da8" style="font-size:12.0px"><tspan font-weight="700">⛔ 加 batch 只救得了权重那半，救不了 KV 那半</tspan></text>
 <rect x="0" y="528" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="528" width="4" height="122" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
@@ -1861,15 +1868,58 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="586" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">权重那一半</tspan>：全 batch 共享一份，所以攒 batch 有用 ——&#160;强度 ＝ B。这是所有「加大 batch 提吞吐」的依据。</text>
 <text class="svgsm" x="20" y="610" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">KV 那一半</tspan>：每个请求各存各的。batch 一大，<tspan font-weight="700">读的字节和算的 FLOPs 同比例涨</tspan> ——&#160;强度恒等于 <tspan font-weight="700">GQA 组大小的一半</tspan>，跟 B 无关。</text>
 <text class="svgsm" x="20" y="634" fill="#a50e0e" style="font-size:15.0px">⭐ 拿 GQA-8 算就是 <tspan font-weight="700">4 FLOP/byte</tspan>，对着上一格那条 313 的屋脊线差两个数量级 ——&#160;<tspan font-weight="700">而且攒 batch 一点都救不了。</tspan>这正是后面三个旋钮要动它的原因。</text>
-<rect x="0" y="650" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="650" width="4" height="146" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="650" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="677" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 把 Ⓐ 和 Ⓒ 摆在一起看 ——&#160;这就是整个专题三的舞台</tspan></text>
-<text class="svgsm" x="20" y="708" fill="#174ea6" style="font-size:15.0px">两边都是「一步一个，每步把权重搬一遍」。<tspan font-weight="700">唯一的区别在「每步还得额外搬什么」：</tspan></text>
-<text class="svgsm" x="20" y="732" fill="#174ea6" style="font-size:15.0px"><tspan fill="#d93025">· RNN：一个<tspan font-weight="700">固定大小</tspan>的状态 h——&#160;<tspan font-weight="700">跟上下文多长完全无关</tspan></tspan></text>
-<text class="svgsm" x="20" y="756" fill="#174ea6" style="font-size:15.0px"><tspan fill="#9334e6">· Transformer：一路<tspan font-weight="700">线性变长</tspan>的 KV cache ——&#160;<tspan font-weight="700">128K 上下文时它能比权重本身还大</tspan></tspan></text>
-<text class="svgsm" x="20" y="780" fill="#174ea6" style="font-size:15.0px">⭐ 所以后面三个旋钮拧的全是同一件事：<tspan font-weight="700">让 Ⓒ 这一行每步要搬的东西变小</tspan>——&#160;存少点（①）、看少点（②）、或者换回一个固定大小的状态（③）。</text>
-</svg><figcaption>⭐⭐ <b>本节的落点。</b>Ⓐ 和 Ⓒ 是同一个形状 —— 一步一个 token，每步把权重搬一遍。<b>区别只在每步还得额外搬什么：RNN 是一个固定大小的状态，Transformer 是一路线性变长的 KV cache。</b><b>整个专题三都发生在 Ⓒ 这一行上。</b></figcaption></figure>
+<rect x="0" y="650" width="1400" height="232" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="650" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="652" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="680" x2="1400" y2="680" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="670" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">⭐⭐ 把 Ⓐ 和 Ⓒ 摆在一起看 ——&#160;这就是整个专题三的舞台</tspan></text>
+<text class="svgsm" x="446" y="670" fill="#5f6368" style="font-size:11.0px">两行用的是上面同一组 t1…tn 的位置</text>
+<text class="svgsm" x="16" y="704" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">两边一模一样的部分</tspan></text>
+<text class="svgsm" x="16" y="724" fill="#80868b" style="font-size:13.0px">每步把整份 W 重搬一遍</text>
+<rect x="300" y="696" width="76" height="26" rx="4" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="338" y="714" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">W</tspan></text>
+<rect x="418" y="696" width="76" height="26" rx="4" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="456" y="714" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">W</tspan></text>
+<line x1="376" y1="709" x2="410" y2="709" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="536" y="696" width="76" height="26" rx="4" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="574" y="714" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">W</tspan></text>
+<line x1="494" y1="709" x2="528" y2="709" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="654" y="696" width="76" height="26" rx="4" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="692" y="714" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">W</tspan></text>
+<line x1="612" y1="709" x2="646" y2="709" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="772" y="696" width="76" height="26" rx="4" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="810" y="714" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">W</tspan></text>
+<line x1="730" y1="709" x2="764" y2="709" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="890" y="696" width="76" height="26" rx="4" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="928" y="714" fill="#5f6368" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">W</tspan></text>
+<line x1="848" y1="709" x2="882" y2="709" stroke="#80868b" stroke-width="1.2" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1102" y="714" fill="#80868b" style="font-size:14.0px"><tspan font-weight="700">这一排两边共用，区分不了任何事</tspan></text>
+<line x1="16" y1="736" x2="1384" y2="736" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svgsm" x="16" y="756" fill="#174ea6" style="font-size:16.0px">⭐ 不一样的只有一样：<tspan font-weight="700">每步还得额外搬什么</tspan></text>
+<text class="svgsm" x="16" y="796" fill="#a50e0e" style="font-size:16.0px"><tspan font-weight="700">Ⓐ 状态 h</tspan></text>
+<rect x="300" y="786" width="22" height="15" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<rect x="418" y="786" width="22" height="15" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<rect x="536" y="786" width="22" height="15" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<rect x="654" y="786" width="22" height="15" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<rect x="772" y="786" width="22" height="15" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<rect x="890" y="786" width="22" height="15" rx="3" fill="#f6b5ad" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1102" y="798" fill="#a50e0e" style="font-size:14.0px"><tspan font-weight="700">⭐ 平的 ——&#160;跟上下文多长无关</tspan></text>
+<text class="svgsm" x="16" y="842" fill="#681da8" style="font-size:16.0px"><tspan font-weight="700">Ⓒ KV cache</tspan></text>
+<rect x="300" y="832" width="22" height="15" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<rect x="418" y="832" width="38" height="15" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<rect x="536" y="832" width="54" height="15" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<rect x="654" y="832" width="70" height="15" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<rect x="772" y="832" width="86" height="15" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<rect x="890" y="832" width="170" height="15" rx="3" fill="#c9a0ea" stroke="#9334e6" stroke-width="1"/>
+<line x1="1060" y1="839" x2="1086" y2="839" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="1102" y="844" fill="#681da8" style="font-size:14.0px"><tspan font-weight="700">⛔ 一路长 ——&#160;128K 时比权重还大</tspan></text>
+<text class="svgsm" x="16" y="876" fill="#80868b" style="font-size:14.0px">⚠️ h 这条画出来只为当对照 ——&#160;它比权重小两个数量级，账上一直略去（见上一格）。这里比的是<tspan font-weight="700">会不会随 token 数变长</tspan>，不是比谁占得多。</text>
+<rect x="0" y="896" width="1400" height="74" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="896" width="4" height="74" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="896" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="923" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 整门课要拧的，就是上面那排紫条</tspan></text>
+<text class="svgsm" x="20" y="954" fill="#174ea6" style="font-size:15.0px">后面三个旋钮拧的全是同一件事：<tspan font-weight="700">让 Ⓒ 那一排每步额外搬的东西变小</tspan>——&#160;存少点（①）、看少点（②），或者干脆<tspan font-weight="700">换回上面那排红的</tspan>（③，线性注意力）。</text>
+</svg><figcaption>⭐⭐ <b>本节的落点，看最后那一格就够。</b>上面那排 W 两边共用，所以它区分不了任何事；<b>真正分开两条路的只有下面那两排条的宽度</b> ——红的从头到尾一样宽（状态 h 跟上下文多长无关），紫的每一步都比上一步长，到 tn 直接冲出格子（KV cache）。<b>整个专题三都发生在紫色这一排上。</b></figcaption></figure>
 <div class="note info"><p>Ⓐ 和 Ⓒ 都是「一步一个，每步搬一遍权重」。
   唯一的区别是每步还得额外搬什么：<br>
   RNN 搬的是一个固定大小的状态；Transformer 搬的是一路线性变长的 KV cache

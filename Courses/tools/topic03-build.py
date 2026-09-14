@@ -2428,10 +2428,11 @@ FIGS = {
 
     "__FIG_RNN_DECODE__": ("fig-rnn-decode", "fig3-rnn-decode.svg",
         'topic03-fig-rnn.py',
-        '⭐⭐ <b>本节的落点。</b>Ⓐ 和 Ⓒ 是同一个形状 —— 一步一个 token，每步把权重搬一遍。'
-        '<b>区别只在每步还得额外搬什么：RNN 是一个固定大小的状态，'
-        'Transformer 是一路线性变长的 KV cache。</b>'
-        '<b>整个专题三都发生在 Ⓒ 这一行上。</b>'),
+        '⭐⭐ <b>本节的落点，看最后那一格就够。</b>上面那排 W 两边共用，'
+        '所以它区分不了任何事；<b>真正分开两条路的只有下面那两排条的宽度</b> ——'
+        '红的从头到尾一样宽（状态 h 跟上下文多长无关），'
+        '紫的每一步都比上一步长，到 tn 直接冲出格子（KV cache）。'
+        '<b>整个专题三都发生在紫色这一排上。</b>'),
 
     "__FIG_RNN_PAIN__": ("fig-rnn-pain", "fig3-rnn-pain.svg",
         'topic03-fig-rnn.py',
