@@ -1605,7 +1605,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 </tbody></table>
 <p class="sub">这张表是 <b>Transformer 作者自己算的</b>（arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a> 表 1）。
   <b>中间那一列就是全部答案。</b></p>
-<figure class="fbox fwide" id="fig-rnn-hw"><svg viewBox="0 0 1400 945" width="100%" role="img" aria-label="RNN 与 Transformer 训练在硬件上的差别：RNN 每个时间步都要把同一块权重从 HBM 搬一次，算术强度等于 batch size；Transformer 训练时同一块权重只搬一次，算术强度是 batch size 乘以序列长度"><defs><marker id="ah-b06000" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#b06000"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-rnn-hw"><svg viewBox="0 0 1400 1265" width="100%" role="img" aria-label="RNN 与 Transformer 训练在硬件上的差别：RNN 每个时间步都要把同一块权重从 HBM 搬一次，算术强度等于 batch size；Transformer 训练时同一块权重只搬一次，算术强度是 batch size 乘以序列长度"><defs><marker id="ah-1a73e8" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1a73e8"/></marker><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">为什么 RNN 在加速器上就是跑不快 ——&#160;<tspan font-weight="700">同一块权重被搬了 n 次</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 「串行」在硬件上的具体形态就是这个：<tspan font-weight="700">权重每一步重搬一遍，而每次只配一条 batch 那么窄的向量。</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9aa0a6" stroke="#9aa0a6" stroke-width="1"/>
@@ -1691,7 +1691,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="166" y="320" width="900" height="52" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="616" y="352" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">[ d × (n · B) ]　——　n 个位置全在这一块里</tspan></text>
 <text class="svgsm" x="14" y="394" fill="#0d652d" style="font-size:15.0px">⭐ 一次搬运换来 n 倍的活干。<tspan font-weight="700">这就是「用平方的计算量买完全的并行度」那笔交易的硬件形态。</tspan></text>
-<rect x="0" y="412" width="1400" height="352" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="412" width="1400" height="672" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="412" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
 <rect x="0" y="414" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <line x1="0" y1="442" x2="1400" y2="442" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
@@ -1722,19 +1722,77 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="880" y="624" fill="#80868b" style="font-size:16.0px">算术强度</text>
 <text class="svgsm" x="880" y="654" fill="#0d652d" style="font-size:28.0px"><tspan font-weight="700">n · B</tspan></text>
 <text class="svgsm" x="980" y="640" fill="#0d652d" style="font-size:18.0px"><tspan font-weight="700">⭐ 同样跑一趟，装了 n 倍的活</tspan></text>
-<line x1="56" y1="708" x2="1344" y2="708" stroke="#b06000" stroke-width="2.0" stroke-linecap="round" stroke-dasharray="7,5" marker-end="url(#ah-b06000)"/>
-<text class="svgsm" x="56" y="698" fill="#b06000" style="font-size:19.0px"><tspan font-weight="700">TPU v7 的屋脊线　313 FLOP/byte　←　2307 TFLOP/s ÷ 7.37 TB/s</tspan></text>
-<text class="svgsm" x="56" y="734" fill="#5f6368" style="font-size:18.0px">⛔ 线以下 ＝ 在等内存。LSTM 的强度就等于 batch ——　<tspan font-weight="700">要够到这条线，batch 得开到 313 以上</tspan>；而序列一长，显存又不让你把 batch 开大。</text>
-<text class="svgsm" x="56" y="762" fill="#80868b" style="font-size:16.0px">⭐ 那个 k（LSTM 是 4、朴素 RNN 是 1）上下一约就没了 ——　强度跟门数、跟隐藏维都无关。（激活的搬运比权重小两个数量级，略去。）</text>
-<rect x="0" y="780" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="780" width="4" height="98" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
-<rect x="2" y="780" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="807" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 两头堵死</tspan></text>
-<text class="svgsm" x="20" y="838" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">要喂饱一块 v7，batch 得开到 313 以上</tspan>——&#160;而 batch 是 RNN 唯一的算术强度来源。</text>
-<text class="svgsm" x="20" y="862" fill="#a50e0e" style="font-size:15.0px">而 Vaswani 引言那句原话讲的正是另一头：<tspan font-style="italic">「memory constraints limit batching across examples」</tspan>——&#160;<tspan font-weight="700">序列一长，显存就不让你把 batch 开大。</tspan></text>
-<text class="svgsm" x="0" y="896" fill="#80868b" style="font-size:14.0px">📌 NVIDIA《Recurrent Layers User's Guide》——&#160;「a GEMM with one dimension of one」、「can combine these GEMMs over the minibatch size, but not over different </text>
-<text class="svgsm" x="0" y="917" fill="#80868b" style="font-size:14.0px">　　sequence steps」；Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank"><tspan text-decoration="underline">1706.03762</tspan></a>) 引言</text>
-</svg><figcaption>⭐ <b>这张图要带走的是那个「跟 d 无关」</b>：不管隐藏维是 512 还是 8192，<b>RNN 每一步的算术强度就等于 batch size</b>。<b>它意味着「把模型做小」根本救不了 RNN。</b></figcaption></figure>
+<text class="svgsm" x="1161" y="730" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">短序列：显存还让你开这么大</tspan></text>
+<text class="svgsm" x="1161" y="752" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">▼</tspan></text>
+<text class="svgsm" x="540" y="730" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">长序列：只能开到这里</tspan></text>
+<text class="svgsm" x="540" y="752" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">▼</tspan></text>
+<line x1="1145.6" y1="764" x2="556.0" y2="764" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-1a73e8)"/>
+<text class="svgsm" x="850" y="758" fill="#174ea6" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">S 越长，显存允许的 batch 越往左</tspan></text>
+<line x1="768.2" y1="796" x2="548.0" y2="796" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<line x1="768.2" y1="796" x2="988.4" y2="796" stroke="#d93025" stroke-width="2.4" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="768" y="784" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⛔ 可行区为空：能给的上限，已经跑到要求的下限左边</tspan></text>
+<line x1="996.4" y1="944" x2="996.4" y2="812" stroke="#b06000" stroke-width="4.0" stroke-linecap="round"/>
+<text class="svgsm" x="1008" y="808" fill="#b06000" style="font-size:18.0px"><tspan font-weight="700">TPU v7 屋脊线　313 FLOP/byte</tspan></text>
+<text class="svgsm" x="1008" y="828" fill="#80868b" style="font-size:14.0px">＝ 2307 TFLOP/s ÷ 7.37 TB/s（BF16）</text>
+<line x1="120" y1="870" x2="1240" y2="870" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="1264" y="876" fill="#80868b" style="font-size:22.0px"><tspan font-weight="700">…</tspan></text>
+<rect x="116.8" y="864" width="12" height="12" rx="6" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="122" y="894" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">batch 1</tspan></text>
+<rect x="203.6" y="864" width="12" height="12" rx="6" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="209" y="894" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">batch 32</tspan></text>
+<rect x="472.4" y="864" width="12" height="12" rx="6" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="478" y="894" fill="#a50e0e" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">batch 128</tspan></text>
+<rect x="120" y="904" width="876.4" height="40" rx="0" fill="#eaeef2" stroke="none" stroke-width="1"/>
+<rect x="996.4" y="904" width="243.60000000000002" height="40" rx="0" fill="#fdf0dd" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="330" y="930" fill="#5f6368" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">⛔ 这一整段 ＝ 在等内存</tspan></text>
+<text class="svgsm" x="1118" y="930" fill="#b06000" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">⭐ 这一段 ＝ MXU 吃饱了</tspan></text>
+<line x1="540.0" y1="926.0" x2="558.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="540.0" y1="908.0" x2="576.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="540.0" y1="890.0" x2="594.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="540.0" y1="872.0" x2="612.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="540.0" y1="854.0" x2="630.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="540.0" y1="836.0" x2="648.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="540.0" y1="818.0" x2="666.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="552.0" y1="812.0" x2="684.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="570.0" y1="812.0" x2="702.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="588.0" y1="812.0" x2="720.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="606.0" y1="812.0" x2="738.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="624.0" y1="812.0" x2="756.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="642.0" y1="812.0" x2="774.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="660.0" y1="812.0" x2="792.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="678.0" y1="812.0" x2="810.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="696.0" y1="812.0" x2="828.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="714.0" y1="812.0" x2="846.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="732.0" y1="812.0" x2="864.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="750.0" y1="812.0" x2="882.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="768.0" y1="812.0" x2="900.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="786.0" y1="812.0" x2="918.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="804.0" y1="812.0" x2="936.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="822.0" y1="812.0" x2="954.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="840.0" y1="812.0" x2="972.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="858.0" y1="812.0" x2="990.0" y2="944.0" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="876.0" y1="812.0" x2="996.4" y2="932.4" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="894.0" y1="812.0" x2="996.4" y2="914.4" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="912.0" y1="812.0" x2="996.4" y2="896.4" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="930.0" y1="812.0" x2="996.4" y2="878.4" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="948.0" y1="812.0" x2="996.4" y2="860.4" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="966.0" y1="812.0" x2="996.4" y2="842.4" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<line x1="984.0" y1="812.0" x2="996.4" y2="824.4" stroke="#f3b6b0" stroke-width="1.0" stroke-linecap="round"/>
+<text class="svgsm" x="768" y="848" fill="#a50e0e" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">硬件要你站进来，显存不让你进来</tspan></text>
+<text class="svgsm" x="1026" y="976" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">Transformer 训练 ＝ n·B　→　冲出图外</tspan></text>
+<line x1="1026.4" y1="988" x2="1290" y2="988" stroke="#1e8e3e" stroke-width="3.0" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="56" y="1022" fill="#80868b" style="font-size:15.0px">⭐ 那个 k（LSTM 是 4、朴素 RNN 是 1）上下一约就没了 ——　强度跟门数、跟隐藏维都无关。（激活的搬运比权重小两个数量级，略去。）</text>
+<text class="svgsm" x="56" y="1048" fill="#80868b" style="font-size:15.0px">⚠️ 口径：<tspan font-weight="700">两个 ▼ 的位置是示意</tspan>——&#160;具体能开多大取决于模型和显存；这张图只说方向：<tspan font-weight="700">S 一长它必然往左走，早晚越过 313</tspan>。</text>
+<text class="svgsm" x="56" y="1074" fill="#80868b" style="font-size:15.0px">⛔ 横轴是<tspan font-weight="700">线性</tspan>的，不是双对数：换成 log，1 和 313 会挤在一起，「差两个数量级」当场就看不见了。</text>
+<rect x="0" y="1100" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1100" width="4" height="98" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1100" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1127" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 两头堵死</tspan></text>
+<text class="svgsm" x="20" y="1158" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">要喂饱一块 v7，batch 得开到 313 以上</tspan>——&#160;而 batch 是 RNN 唯一的算术强度来源。</text>
+<text class="svgsm" x="20" y="1182" fill="#a50e0e" style="font-size:15.0px">而 Vaswani 引言那句原话讲的正是另一头：<tspan font-style="italic">「memory constraints limit batching across examples」</tspan>——&#160;<tspan font-weight="700">序列一长，显存就不让你把 batch 开大。</tspan></text>
+<text class="svgsm" x="0" y="1216" fill="#80868b" style="font-size:14.0px">📌 NVIDIA《Recurrent Layers User's Guide》——&#160;「a GEMM with one dimension of one」、「can combine these GEMMs over the minibatch size, but not over different </text>
+<text class="svgsm" x="0" y="1237" fill="#80868b" style="font-size:14.0px">　　sequence steps」；Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank"><tspan text-decoration="underline">1706.03762</tspan></a>) 引言</text>
+</svg><figcaption>⭐ <b>这张图要带走的是那个「跟 d 无关」</b>：不管隐藏维是 512 还是 8192，<b>RNN 每一步的算术强度就等于 batch size</b>。<b>它意味着「把模型做小」根本救不了 RNN。</b>⭐⭐ <b>然后看最下面那根横轴 —— 那是「两头堵死」的图形版</b>：最粗的那根竖线是地板（313，站右边才算喂饱），上面两个蓝三角是显存的天花板（<b>序列一长它往左走</b>），而它们之间那块<b>画满斜线的地方</b>就是<b>「硬件要你站进来，显存不让你进来」</b>。⚠️ 三角的位置是示意、图上没标数字：<b>这张图只承诺方向，不承诺数值</b>。⛔ 横轴是线性的不是对数 —— 换成 log，batch 1 和 313 会挤在一起，<b>整张图唯一的论点当场就看不见了</b>。</figcaption></figure>
 <div class="note danger"><p>⛔ 两头堵死：batch 是它唯一的算术强度来源，
   而 Vaswani 引言那句原话说的正是另一头 ——&nbsp;<em>「memory constraints limit batching
   across examples」</em>：<b>序列一长，显存就不让你把 batch 开大。</b></p></div>
