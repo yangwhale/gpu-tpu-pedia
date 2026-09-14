@@ -12,11 +12,11 @@ r"""专题三 · §6.1b「滑窗凭什么敢砍，砍了为什么会崩」
      ⭐⭐ 判决性实验：把那四个换成**换行符**，5.60 ——&nbsp;几乎一样。
      **所以起作用的是位置，不是内容。**
 
-  ③ **为什么会有这么个东西** ——&nbsp;画成**必须投满的选票**：
-     softmax 要求每一行的票加起来正好 100 分，
-     **哪怕这一行没什么想看的，票也必须投出去** ——&nbsp;
-     于是大家把废票都投给了最前面那几个（自回归下只有它们人人都够得着）。
-     ⭐ 两条看起来同样彻底的解法，**只有一条成立**。
+⛔⛔ 2026-09-15 **原来的 ③④ 已经拆到 `topic03-fig-sink.py`。**
+  整张图当时 **2164 px ＝ 2.5 屏**。拆点是图例自己给的：
+  绿「敢砍的理由」＋ 红「崩了」＝ 案情，留在这里；
+  蓝「真正的原因」＝ 破案，独立成 `fig3-sink`。
+  ⭐ 判据：**一张图只回答一个问句**；问句数一超，切口自己就浮出来了。
 """
 from topic03_draw import (Fig, BL, OR, GR, RD, GY, PU, INK, GY2, LINE, LINE2,
                           BG2)
@@ -187,112 +187,9 @@ def main():
     f.t(1024, by + 172, "结果几乎一样", BL, True, 22)
     f.t(1024, by + 202, "→　起作用的是位置，不是内容", BL, True, 17)
 
-    # ══════════ ③a 得票最高的那位，什么都不做 ══════════════════
-    # ⭐⭐⭐ 2026-09-13 新增。我们的选票比喻停在「票必须投满，于是全堆到
-    #   最前面几个人身上」——&nbsp;⛔ **缺了最后一步，而缺的这步才是机制本身**：
-    #   它投的那个人，**value 几乎是零**。
-    # ⚠️ 而且要诚实：「不许弃权的喧嚣民主」这个比喻**不是我们原创的** ——
-    #   Evan Miller 2023-07《Attention Is Off By One》原话就是
-    #   "a deafening democracy where abstention is disallowed"。主动引他。
-    y2a = y1 + PH2 + 18
-    PH3A = 352
-    py3a = f.panel(0, y2a, W, PH3A,
-                   "③ 得票最高的那位，什么都不做", BL,
-                   sub="⭐ 这一步才是机制本身 ——　前面两格只说了「票投给了谁」")
-
-    ay3 = py3a + 34
-    # 两根柱子：注意力权重冲天 vs value 模长贴地
-    BW2, BH2 = 118, 132
-    for k, (lab, hi, col, note) in enumerate((
-            ("注意力权重", 1.0, RD, "冲天"),
-            ("它的 value 模长", 0.08, GY2, "贴地"))):
-        x = 130 + k * 220
-        h = BH2 * hi
-        f.box(x, ay3 + 20 + BH2 - h, BW2, max(h, 4), col, "none", 4)
-        f.t(x + BW2 / 2.0, ay3 + 178, lab, col, True, 17, "middle")
-        f.t(x + BW2 / 2.0, ay3 + 202, note, GY2, size=16, anchor="middle")
-    f.t(130, ay3 + 8, "第 0 号座位上那个 token：", INK, True, 19)
-    f.t(130, ay3 + 234, "⭐ 把票投给他 ＝ 弃权", BL, True, 21)
-
-    # 为什么偏偏是第 0 个：因果掩码下唯一人人都够得着的座位
-    MX = 620
-    f.t(MX, ay3 + 8, "为什么偏偏是最前面那几个？", INK, True, 17)
-    N3 = 7
-    C3 = 26
-    for r in range(N3):
-        for c in range(N3):
-            on = c <= r
-            f.box(MX + c * C3, ay3 + 26 + r * C3, C3 - 3, C3 - 3,
-                  ("#e8f0fe" if c else "#1a73e8") if on else "#fff",
-                  "none" if on else LINE2, 2)
-    f.t(MX + C3 / 2.0, ay3 + 26 + N3 * C3 + 22, "↑", BL, True, 20, "middle")
-    f.t(MX, ay3 + 26 + N3 * C3 + 48, "因果掩码下，第 0 列是<tspan "
-        "font-weight=\"700\">唯一一列全满的</tspan>", BL, True, 17)
-    f.t(MX, ay3 + 26 + N3 * C3 + 72, "——　不是它特殊，"
-        "是<tspan font-weight=\"700\">只有它人人都够得着</tspan>", GY, size=17)
-
-    f.box(1010, ay3 + 14, 334, 214, "#e8f0fe", BL, 10)
-    f.t(1030, ay3 + 46, "⭐⭐ 于是整件事说得通了", BL, True, 20)
-    for i3, ln in enumerate([
-            "softmax 不许弃权，",
-            "模型就自己造了一个",
-            "**弃权用的候选人**出来：",
-            "永远在场、什么主张都没有。",
-            "",
-            "⛔ 砍掉他不是砍掉一个老 token，",
-            "是砍掉了**弃权票这个选项**。"]):
-        if not ln:
-            continue
-        b = "**" in ln
-        f.t(1030, ay3 + 78 + i3 * 24, ln.replace("**", ""), GY, b, 17, w=300)
-
-    # ══════════ ④ 必须投满的选票 ════════════════════════════════
-    y2 = y2a + PH3A + 18
-    PH3 = 324
-    py3 = f.panel(0, y2, W, PH3, "④ 两条看起来同样彻底的解法，只有一条成立",
-                  BL, sub="softmax 要求每一行的票必须投满")
-
-    vy = py3 + 20
-    f.box(56, vy + 26, 600, 150, "#e8f0fe", BL, 10)
-    f.t(80, vy + 64, "规矩：每一行的票加起来必须正好 100 分", BL, True, 17)
-    f.t(80, vy + 102, "——　哪怕这一行「没什么特别想看的」，", GY, size=17)
-    f.t(80, vy + 134, "票<tspan font-weight=\"700\">也必须投出去</tspan>。", GY, size=18)
-    f.t(80, vy + 166, "这就是 softmax 的归一化", GY2, size=15)
-
-    f.path([(672, vy + 100), (716, vy + 100)], BL, 2.0)
-
-    f.box(736, vy + 26, 624, 150, "#fff", BL, 10)
-    f.t(760, vy + 64, "于是废票都投给了最前面那几个", BL, True, 17)
-    f.t(760, vy + 102, "为什么偏偏是它们？——　因为自回归：", GY, size=17)
-    f.t(760, vy + 134, "<tspan font-weight=\"700\">全场只有开头那几个，人人都够得着。</tspan>",
-        GY, size=17)
-    f.t(760, vy + 166, "把废票桶撤了，票没处投，整行就乱套", GY2, size=15)
-
-    sy = vy + 196
-    f.box(56, sy, 640, 86, "#e6f4ea", GR, 10)
-    f.t(80, sy + 36, "⭐ 一个成立的解法", GR, True, 20)
-    f.t(80, sy + 68, "预训练时加一个<tspan font-weight=\"700\">可学的</tspan>废票桶　"
-        "→　1+1023 下 PPL 18.01", GY, size=17)
-
-    f.box(720, sy, 640, 86, "#fce8e6", RD, 10)
-    f.t(744, sy + 36, "⛔ 一个看起来对、但被论文自己证伪的", RD, True, 17)
-    f.t(744, sy + 68, "给一个<tspan font-weight=\"700\">全零</tspan>的桶"
-        "（＝softmax-off-by-one）　→　PPL 29214", GY, size=17)
-
     # ══════════ 落点 ════════════════════════════════════════════
-    yy = y2 + PH3 + 20
-    yy = f.band(yy, "info", "⭐⭐ 这个故事真正的教益 —— 比 sink 本身值钱", [
-        "attention sink 不是 bug，也不是谁设计的特性，"
-        "它是<tspan font-weight=\"700\">「票必须投满」这条规矩逼出来的副产品</tspan>。",
-        "⭐ 判据：<tspan font-weight=\"700\">看到模型里一个「毫无道理却极其稳定」的现象，"
-        "先去找是不是某个守恒 / 归一化约束逼出来的。</tspan>"
-        "量化里那批总也压不下去的 outlier，跟这是同一件事（见专题八）。",
-        "⛔ 还有一条：<tspan font-weight=\"700\">这个 bug 从公式上完全看不出来</tspan> ——&#160;"
-        "是把注意力矩阵<tspan font-weight=\"700\">画出来</tspan>才发现的。"
-        "这一讲所有的图，都是这个道理。",
-    ])
-
-    yy = f.band(yy + 14, "warn", "别把「理论射程」当「有效射程」", [
+    yy = y1 + PH2 + 20
+    yy = f.band(yy, "warn", "别把「理论射程」当「有效射程」", [
         "%s × %d ＝ <tspan font-weight=\"700\">%s</tspan> 是个上界，"
         "说的是「信息最远能传到这儿」，<tspan font-weight=\"700\">不是「这么远还能用」"
         "</tspan> ——&#160;每跨一层只挪一格窗口，而且一路被后面的信息稀释。"
@@ -307,19 +204,14 @@ def main():
                "gpt-oss-20b 的 1:1 交替与 sliding_window=128 是本课直接读 huggingface.co/openai/gpt-oss-20b 的 config.json 得到的",
                "Mistral 7B arXiv 2310.06825 §2（k×W 射程、W=4096 / 32 层、"
                "rolling buffer cache）；131,072 由脚本当场乘出来并断言",
-               "②③ 出自 StreamingLLM（Xiao 等 arXiv 2309.17453, ICLR 2024）"
-               "论文表 1 / 表 2 与论文 §3.1 / §3.3：5158.07 → 5.40、换行符 5.60、"
+               "② 出自 StreamingLLM（Xiao 等 arXiv 2309.17453, ICLR 2024）"
+               "论文表 1 / 表 2 与 §3.1 / §3.3：5158.07 → 5.40、换行符 5.60、"
                "留 1/2/4/8 个的对照",
-               "⛔ Zero Sink（＝softmax-off-by-one）那组反例出自同文表 3 / 表 10 的"
-               "三个 160M 预训练对照",
                "⚠️ 表 1（PG19 第一本书，65K）与表 2（拼接后 400K）"
                "<tspan font-weight=\"700\">不是同一个评测集</tspan>；"
-               "⚠️ 「传话」是本课的比喻；⛔ 但「不许弃权的选票」"
-               "<tspan font-weight=\"700\">不是本课原创</tspan> ——&#160;"
-               "Evan Miller 2023-07《Attention Is Off By One》原话就是 "
-               "「a deafening democracy where abstention is disallowed」",
-               "③ 「value 模长极小」出自 Barbero 等 arXiv 2504.02732 图 4；"
-               "「第 0 列是因果掩码下唯一全满的一列」是由掩码定义直接得出的")
+               "⚠️ 「传话」是本课的比喻",
+               "⭐ 「为什么会有这么个废票桶」在下一张 fig3-sink 里 ——&#160;"
+               "本图只到「它崩了」为止")
     f.save("fig3-swa-why.svg", yy + 6)
 
 
