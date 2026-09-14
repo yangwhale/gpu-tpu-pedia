@@ -158,51 +158,70 @@ def dup_caption_vs_fig(cap, svg, fid, n=14):
 DUP_WARNED = []
 
 
+def _runs(a, b, n):
+    """a 里有哪些 n 字以上的连续片段整段出现在 b 里。返回极大片段列表。"""
+    out, i = [], 0
+    while i + n <= len(a):
+        if a[i:i + n] in b:
+            j = i + n
+            while j < len(a) and a[i:j + 1] in b:
+                j += 1
+            out.append(a[i:j]); i = j
+        else:
+            i += 1
+    return out
+
+
 def lint_dup_body_vs_figs(html, n=14):
-    """**正文**有没有把图里已经写着的话又说一遍。返回 [(片段, 命中的图)]。
+    """一句话有没有在这一页上被读者看见两遍。返回 [(片段, 哪儿撞的)]。
 
-    ⛔⛔ 2026-09-14 R62 R2 扩容。上一版只查「图注 ↔ 图内文字」，当天下午
-      写第二章时**同一个毛病换了个位置又出现**：图自己的蓝色落点带已经把
-      论文那句理由写全了，紧挨着的一个 note 把它**又说了一遍**，
-      渲染出来页面第二次在原地结巴。
+    ⛔⛔ 2026-09-14 R62 同一个毛病在一天之内换了**三个位置**出现：
+      ① 图注复述图内文字（R1 抓到，于是有了 dup_caption_vs_fig）
+      ② 正文复述图内文字（R2 抓到，于是有了这个函数）
+      ③ **正文复述图注**（R3 抓到 ——&nbsp;第三章那把尺子，图注说了一遍，
+         紧挨着的 note 又说了一遍）
 
-    ⭐ 判据升级：**别按「它是图注还是正文」分类，按「读者会不会看见两遍」分类。**
-      ⛔ 上一版之所以漏，正是因为我按载体建的清单 ——&nbsp;跟「盘点按渲染后属性、
-        不按 class 名」是同一个形状：按名字建清单，一定会漏掉命名体系外的那一类。
+    ⭐⭐ 三次都栽在同一个错误的分类方式上：**我按「它是什么」建清单**
+      （图注 / 正文 / 图内），于是每次只堵住一格，下次它换一格再来。
+      ⛔ 正确的分类只有一个问题：**读者会不会看见两遍。**
+      ——&nbsp;这跟「盘点按渲染后属性、不按 class 名」是同一条教训。
 
-    📌 做法：把所有 <figure> 整块抠掉 ＝ 正文；抠出来的里面去掉 <figcaption>
-      ＝ 图内文字。两边扒成纯字比 14 字连续重合。
+    📌 所以这一版把一页上的文字分成三堆，**两两都比**：
+      图内文字（SVG）· 图注（figcaption）· 正文（figure 之外的一切）。
 
-    ⚠️⚠️ **它只挡得住照抄，挡不住改写。** 同一天第二章里最难看的那一处
-      （图里蓝框写了论文那句理由，紧挨的 note 换几个词又说一遍）
-      **这条查重一声没响** ——&nbsp;字符串对不上。那一处是渲染出来用眼睛看见的。
+    ⚠️⚠️ **它只挡得住照抄，挡不住改写。** 同一天里最难看的两处
+      （论文那句理由被换词重说、多头那条图注把绿带两句重说）
+      **这条查重一声没响** ——&nbsp;字符串对不上。那两处是渲染出来看见的。
       ⛔ 所以判据是：**每写完一章，必须把它截图看一遍。**
-        查重负责挡住机械重复，让眼睛有力气去看别的。
+        查重负责挡住机械重复，好让眼睛有力气去看别的。
     """
     figs = re.findall(r"<figure\b.*?</figure>", html, re.S)
     if not figs:
         return []
-    # 图内文字：去掉图注、去掉折叠的出处（出处本来就该在两处都能查到）
-    inner = []
+    inner, caps = [], []
     for f in figs:
+        m = re.search(r'id="([^"]+)"', f)
+        fid = m.group(1) if m else "?"
+        cap = "".join(re.findall(r"<figcaption>(.*?)</figcaption>", f, re.S))
         t = re.sub(r"<figcaption>.*?</figcaption>", "", f, flags=re.S)
-        t = re.sub(r"<details class=\"figsrc\">.*?</details>", "", t, flags=re.S)
-        fid = re.search(r'id="([^"]+)"', f)
-        inner.append(((fid.group(1) if fid else "?"), _plain(t)))
+        # ⛔ 折叠的「出处与口径」不参与 —— 出处本来就该在两处都查得到。
+        t = re.sub(r'<details class="figsrc">.*?</details>', "", t, flags=re.S)
+        inner.append((fid, _plain(t)))
+        if cap:
+            caps.append((fid, _plain(cap)))
     body = _plain(re.sub(r"<figure\b.*?</figure>", "", html, flags=re.S))
-    hits, i = [], 0
-    while i + n <= len(body):
-        for fid, t in inner:
-            if body[i:i + n] in t:
-                j = i + n
-                while j < len(body) and body[i:j + 1] in t:
-                    j += 1
-                hits.append((body[i:j], fid))
-                i = j
-                break
-        else:
-            i += 1
-    return hits
+    hits = []
+    for fid, t in inner:
+        hits += [(r, fid + "（正文↔图内）") for r in _runs(body, t, n)]
+    for fid, c in caps:
+        hits += [(r, fid + "（正文↔图注）") for r in _runs(body, c, n)]
+    # ⛔ 同一个片段可能两边都撞，去重按片段。
+    seen, out = set(), []
+    for r, w in hits:
+        if r in seen:
+            continue
+        seen.add(r); out.append((r, w))
+    return out
 
 
 def place_figs(html, FIGS, here=HERE):
@@ -418,17 +437,23 @@ def finish(html, out_path, sections, label):
              len(sections), _CL.count(html)))
     # ⭐ 查重回执两条：图注 ↔ 图内文字、正文 ↔ 图内文字。
     #   ⛔ 都只报告不中止，理由见 dup_caption_vs_fig 的注。
+    # ⛔⛔ 2026-09-14 R3 的一个自伤，记在这儿：给这个函数扩容时，我用
+    #   `s.index(函数名)` 和 `s.index("DUP_WARNED = []")` 去切片 ——&nbsp;
+    #   **而这两个锚点的先后顺序跟我以为的正好相反**，于是文件里同时存在了
+    #   两份同名函数，后定义的那份（旧版）赢。
+    #   ⭐⭐ 构建**照样全绿**，回执还印着「查重通过」——&nbsp;
+    #     它通过是因为跑的是旧代码，不是因为没问题。
+    #   ⛔ 判据：**按字符串位置切源码之前，先确认两个锚点谁在前**；
+    #     更稳的是切完 grep 一次「有没有出现两个同名 def」。
     for frag, fid in lint_dup_body_vs_figs(html):
-        DUP_WARNED.append((fid + "（正文）", frag))
+        DUP_WARNED.append((fid, frag))
     if DUP_WARNED:
-        print("    ⚠️  图注照抄图内文字 %d 处（%d 张图）——&nbsp;图注该写"
-              "「图给不了的东西」" % (len(DUP_WARNED),
-                                     len(set(f for f, _ in DUP_WARNED))))
+        print("    ⚠️  同一句话被读者看见两遍：%d 处" % len(DUP_WARNED))
         for fid, h in DUP_WARNED[:6]:
             print("       %-18s %s" % (fid, h[:40]))
         if len(DUP_WARNED) > 6:
             print("       …… 其余 %d 处" % (len(DUP_WARNED) - 6))
     else:
-        print("    ✅ 图注查重通过（没有 14 字以上照抄图内文字）")
+        print("    ✅ 查重通过（图内／图注／正文 三面互不重合）")
     del DUP_WARNED[:]
     return html
