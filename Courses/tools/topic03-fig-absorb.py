@@ -216,12 +216,12 @@ def main():
         "包裹外面贴日期，包裹里面保持「一次就能翻译完」。",
     ])
     yy = f.band(yy + 14, "info", "同一个把戏，本讲这是第三次出场", [
-        "<tspan font-weight=\"700\">§7 线性注意力</tspan>：把括号从 (QKᵀ)V "
+        "<tspan font-weight=\"700\">线性注意力那一章</tspan>：把括号从 (QKᵀ)V "
         "挪成 Q(KᵀV) ——&#160;那个句长×句长的大方块就不用建了。",
-        "<tspan font-weight=\"700\">§5 MLA 吸收</tspan>（这张图）："
+        "<tspan font-weight=\"700\">MLA 的吸收</tspan>（这张图）："
         "把括号从 qᵀ(W_UK c) 挪成 (W_UKᵀ q)ᵀ c ——&#160;压缩包就不用拆了。",
         "⭐ 两次都是<tspan font-weight=\"700\">同一个数学恒等式</tspan>，"
-        "也都被同一件事挡过：§7 被因果 mask 挡住，这里被 RoPE 挡住。"
+        "也都被同一件事挡过：那边被因果 mask 挡住，这里被 RoPE 挡住。"
         "<tspan font-weight=\"700\">⛔ 挡住结合律的，永远是「中间被塞了个东西」。</tspan>",
     ])
     yy = f.src(yy + 16,

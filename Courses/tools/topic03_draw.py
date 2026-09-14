@@ -844,6 +844,20 @@ class Fig(object):
                             for t in _re.findall(r"<text[^>]*>.*?</text>",
                                                  "\n".join(self.p), _re.S))
         _bad = _re.findall(r"§\s*[零一二三四五六七八九十]+", _svgtext)
+        # ⛔⛔ 2026-09-14 R6 补上**阿拉伯数字那一半**。上一版只挡中文数字，
+        #   于是「§5.4b」「§8.1」这种照样漏过去 ——&nbsp;实测漏了 **28 处 / 18 张图**。
+        #   ⭐ 判据（今天第三次踩同一个形状）：**按写法建清单，就会漏掉别的写法。**
+        # 📌 论文自己的节号要放行，判据跟 topic02-lint-xref 的 FOREIGN 一致：
+        #   **同一段文字里出现出处词**（论文 / paper / arXiv / 原文 / 技术报告 / 该文）
+        #   就认为这个 § 属于别人的文档，不是本课的指针。
+        # ⛔ 「专题二 §1」这种**跨讲指针**要放行：它点名了是哪一讲，
+        #   而别的讲的编号不会因为本讲分成两页而变。⚠️ 专题二是过去式，
+        #   这条断言不许把它逼着改版（figx-*.svg 也走这个 save）。
+        _OK = ("论文", "paper", "arXiv", "原文", "技术报告", "该文", "Vaswani",
+               "专题")
+        for _m in _re.finditer(r"(.{0,80})§\s*\d[\d.a-z–—~]*", _svgtext):
+            if not any(k in _m.group(1) for k in _OK):
+                _bad.append(_m.group(0)[-24:])
         assert not _bad, (
             "%s 的图内文字出现本课节号 %s ——&nbsp;共用 SVG 里要用名字不用节号"
             "（L200 / L300 两页编号对不上，见本处注释）" % (name, sorted(set(_bad))))

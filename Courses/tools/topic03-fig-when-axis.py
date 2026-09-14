@@ -116,7 +116,7 @@ def main():
         if empty:
             f.box(cx, ny, CW2, 128, "#fafafa", LINE2, 10, 1, "6,5")
             f.t(cx + CW2 / 2.0, ny + 58, "也空着", GY2, True, 20, "middle")
-            f.t(cx + CW2 / 2.0, ny + 86, "为什么留空见 §4.2b 正文", GY2,
+            f.t(cx + CW2 / 2.0, ny + 86, "为什么留空见正文", GY2,
                 size=15, anchor="middle")
         else:
             f.box(cx, ny, CW2, 128, "#e6f4ea", GR, 10)

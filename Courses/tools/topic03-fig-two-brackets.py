@@ -317,7 +317,7 @@ def main():
         "走的那条路，不是数学上的唯一解。",
         "② 对角块那 %d%% <tspan font-weight=\"700\">不会随句长消失</tspan>，"
         "它只是从平方变成线性。想再压，只能调小 C ——&#160;"
-        "而 C 被片上内存顶死，那是下一张图（§7.4）的事。"
+        "而 C 被片上内存顶死，那是下一张图的事。"
         % round(100.0 * DIA_1 / TOT_1),
         "③ GLA 论文说它的块内算不了半精度 matmul、上不了 tensor core，"
         "<tspan font-weight=\"700\">那是 GLA 用 log space 才有的口径</tspan>，"

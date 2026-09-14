@@ -133,7 +133,7 @@ def main():
                "① DSA 的师徒（两阶段训练、冻主模型 ＋ KL warmup）出自 "
                "DeepSeek-V3.2-Exp 技术报告 sec. 2；② NSA 的三支路出自 arXiv 2502.11089 sec. 3",
                "③ CSA 每 4 个 token 压成 1 个 entry、在压缩后的格上挑，"
-               "出自 DeepSeek-V4 相关公开材料（见 §6.4c 的出处）",
+               "出自 DeepSeek-V4 相关公开材料（见 CSA 那张图的出处）",
                "⚠️「相似度算出来再稀疏就没好处 →&#160;只能按块打分」这条链子的表述"
                "出自 zhouyifan.net 的 Log-linear Sparse Attention 一文；"
                "「师徒 / 一份算两用 / 降维打击」是<tspan font-weight=\"700\">本课的命名</tspan>")

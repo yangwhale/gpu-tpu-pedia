@@ -424,7 +424,7 @@ def main():
                "Figure 1 caption 逐字「In the outer loop (red arrows) ... "
                "loops through blocks of the K and V matrices」。",
                "📌 FA2 arXiv 2307.08691 §3.1.1 Algorithm 1（外层 Q、内层 K/V，"
-               "O_i 与 L_i 在内层结束后各写一次）；宣布对调那句在 §3.2 "
+               "O_i 与 L_i 在内层结束后各写一次）；宣布对调那句在论文 §3.2 "
                "“Parallelism”，并注明归功于 Phil Tillet 的 Triton 实现。"
                "warp 层全部出自 §3.3 与 Figure 3 ——&#160;"
                "⚠️ FA1 论文里 “warp” 出现 0 次，那段是 FA2 的回溯。",
@@ -432,7 +432,7 @@ def main():
                "⚠️ 本图<tspan font-weight=\"700\">不引用任何加速比</tspan> ——&#160;"
                "FA2 论文里那几个百分比分属不同口径（"
                "attention 单算子 vs 端到端训练、不同硬件配置），"
-               "混用会得出错的结论，本讲 §3.6b 专门讲过这条纪律。")
+               "混用会得出错的结论，本讲专门讲过这条纪律。")
 
     f.save("fig3-loop-order.svg", yy + 10)
 

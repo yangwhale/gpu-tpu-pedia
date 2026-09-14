@@ -245,7 +245,7 @@ def main():
         "",
         "⭐ MLA 能成立，靠的是下一小节那个恒等变换：",
         "<tspan font-weight=\"700\">只缓存 c，把上投影矩阵挪到 q 那一侧去</tspan>。",
-        "这张图是 §5.4b「吸收」的<tspan font-weight=\"700\">前提</tspan>，不是它的替代。",
+        "这张图是「吸收」那一步的<tspan font-weight=\"700\">前提</tspan>，不是它的替代。",
     ], size=15, lh=25)
 
     yy = y2 + PH3 + 22

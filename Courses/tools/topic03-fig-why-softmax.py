@@ -292,7 +292,7 @@ def main():
         "那就必须非负、和为 1、可导，<tspan font-weight=\"700\">softmax 一次全给了</tspan>。",
         "<tspan font-weight=\"700\">只拿去排序</tspan> ——&#160;那「和为 1」根本不必要。"
         "DSA 的索引器走的正是这一条：它<tspan font-weight=\"700\">换成了 ReLU</tspan>，"
-        "论文给的理由就两个字 ——&#160;吞吐（见 §6.2b）。",
+        "论文给的理由就两个字 ——&#160;吞吐（讲 DSA 时会再碰到）。",
     ])
 
     yy = f.src(yy + 14,

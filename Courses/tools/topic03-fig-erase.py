@@ -188,7 +188,7 @@ def main():
         "真实的「地址」<tspan font-weight=\"700\">不是一格一格的抽屉</tspan>，"
         "是连续的方向；擦也是<tspan font-weight=\"700\">按比例擦</tspan>"
         "（β 决定擦多干净），而且<tspan font-weight=\"700\">会顺带擦到相近的地址</tspan>。",
-        "⭐⭐ 这正好回指 <tspan font-weight=\"700\">§1.3b</tspan>：那里算过，"
+        "⭐⭐ 这正好回指讲<tspan font-weight=\"700\">「一个头装得下多少件事」</tspan>那张图：那里算过，"
         "128 维里塞一万个方向，最挤的一对还差 60 度 ——&#160;"
         "<tspan font-weight=\"700\">「差不多不像」的代价，在这里就变成「擦串了」</tspan>。",
         "📌 所以「定点擦」是个<tspan font-weight=\"700\">近似</tspan>，"

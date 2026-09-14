@@ -148,21 +148,21 @@ def main():
         "<tspan font-weight=\"700\">条数更少</tspan>（几个 token 合一条）· "
         "<tspan font-weight=\"700\">只翻几条</tspan>（这一步读哪些）——&#160;三个方向互不相干。",
         "⭐ 前两个都在回答「那份要留下来的有多大」，所以都算<tspan font-weight=\"700\">"
-        "旋钮①</tspan>（只是下刀的维度不同，见 §4.2b）；第三个是<tspan "
+        "旋钮①</tspan>（只是下刀的维度不同）；第三个是<tspan "
         "font-weight=\"700\">旋钮②</tspan>。<tspan font-weight=\"700\">V4 三个一起拧。</tspan>",
     ])
 
     yy = f.band(yy + 14, "warn", "口径：这个 10% 跟别处那个 2% 不是一个基线", [
         "⚠️ 这里的 <tspan font-weight=\"700\">27% / 10%</tspan> 比的是 "
         "<tspan font-weight=\"700\">V3.2</tspan>；"
-        "§6.1～6.6 那张五格 mask 图上写的「约 2%」比的是<tspan font-weight=\"700\">"
+        "那张五格 mask 图上写的「约 2%」比的是<tspan font-weight=\"700\">"
         "同形状的 GQA-8</tspan>，而且那 2% 还叠了一层跟注意力机制无关的 KV 混合精度。",
         "⭐ <tspan font-weight=\"700\">两个数都对 ——&#160;对的是各自的基线</tspan>，别并排比。",
     ])
 
     yy = f.src(yy + 16,
                "CSA / HCA 的机制出自 DeepSeek-V4 技术报告 arXiv 2606.19348 "
-               "§2.3–2.3.1（每 m 个压一条 → DSA top-k → 并上滑窗；"
+               "论文 §2.3–2.3.1（每 m 个压一条 → DSA top-k → 并上滑窗；"
                "HCA 压 m′≫m 但保持密集，m=%d / m′=%d）" % (M, MP),
                "27% FLOPs / 10% KV cache 出自同一篇摘要与 §2.3.4（1M 上下文、对比 V3.2）",
                "⚠️ 「会议便签 / 两个版本」是<tspan font-weight=\"700\">本课的比喻</tspan>；"

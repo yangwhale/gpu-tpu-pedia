@@ -209,7 +209,7 @@ def main():
 
     yy = f.band(yy + 14, "info", "⭐⭐ 跨层共享那一支，在这台机器上比在 GPU 上更值钱", [
         "<tspan font-weight=\"700\">GPU 上省的是</tspan>：索引器那部分算力"
-        "（GLM-5.2 报 1M 下每 token 降 2.9×，见 §6.5b）。",
+        "（GLM-5.2 报 1M 下每 token 降 2.9×）。",
         "<tspan font-weight=\"700\">TPU 上还额外省三样</tspan>："
         "① 「这一趟拿哪几件」只算一次，后面几层直接复用；"
         "② 几层的取货路线<tspan font-weight=\"700\">完全一样</tspan>，推车的单子可以重用；"
