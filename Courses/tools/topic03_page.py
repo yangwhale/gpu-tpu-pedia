@@ -214,6 +214,12 @@ def lint_dup_body_vs_figs(html, n=14):
     #   不是「文件里有没有两份」。
     _body_src = re.sub(r"<figure\b.*?</figure>", "", html, flags=re.S)
     _body_src = re.sub(r"<details\b.*?</details>", "", _body_src, flags=re.S)
+    # ⛔⛔ 封面（.hero）也不参与。它跟结尾那张图之间**隔着一整本书**，
+    #   而结尾那张图是**故意**把封面那句话接回去的 ——&nbsp;这叫首尾呼应，
+    #   不叫结巴。⭐ 判据补一条：**重复只有在「读者一眼能同时看见」时才是病**；
+    #   而这个距离，查重量不出来 ——&nbsp;所以这一处只能人来判，并在这里写死。
+    _body_src = re.sub(r'<div class="hero">.*?</div></div>', "", _body_src,
+                       flags=re.S)
     body = _plain(_body_src)
     hits = []
     for fid, t in inner:

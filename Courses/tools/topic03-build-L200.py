@@ -924,8 +924,108 @@ __TABLE_MODELS__
 
 
 <section id="s九"><div class="wrap"><div class="stn"><span class="badge">第 九 节</span><h2>落到机器上 ——&nbsp;以及那 512 倍是怎么换来的</h2></div>
-<h3>9.1　纸面省下来的，机器上不一定省得到</h3>
-__TODO_9__
+
+<p class="lead">八章的想法讲完了。<b>最后一件事：它们真搬到机器上，兑现了多少？</b><br>
+  ⭐ <em>这一章给三样东西：一张换算成毫秒的账、一场还没打完的仗，
+  以及开场那把枪的答案。</em></p>
+
+<h3>9.1　先把「省了 N 倍」换算成毫秒</h3>
+
+<p>前面每一章都在说「省了多少倍」。
+  <em>可倍数是个相对量，它不告诉你那一步到底要多久。</em></p>
+
+__FIG_PERSTEP__
+
+<h3>9.2　这些招落到 TPU 上，为什么格外难</h3>
+
+<p>要命的是：<b>这些聪明办法绝大多数是在 GPU 上长出来的。</b>
+  <em>而一台机器擅长什么，是写在它的出厂设计里的 ——&nbsp;换一台，前提就换了。</em></p>
+
+__FIG_TPU_GAP__
+
+<div class="note danger"><p>⛔⛔ <b>有人真的动手试过</b>，而他撞到的东西值得一字一句地看。</p>
+<p><em>2025 年有人把 NSA 移植到 TPU 上，写了一份工作日志。他的结论是一句话：
+  <b>动态稀疏在这套栈的每一层都难</b> ——</em></p>
+<p>· <em>编译器不喜欢运行时才知道的变量和分支，
+  <b>而「挑哪几块」恰恰是运行时才知道的</b>；</em><br>
+  · <em>写 kernel 的框架强制按顺序一格一格走，而 top-K 挑出来的块<b>是跳着的</b>
+  ——&nbsp;像 [7, 6, 1, 2] 这种顺序，它直接不让你走；</em><br>
+  · <em>而那个「把散落的块取回来」的操作，跑在芯片里<b>最不擅长这件事的那个部件上</b>。</em></p>
+<p>⭐ <em>光是把索引改写成编译器友好的形式，他就快了 <b>286 倍</b>
+  ——&nbsp;<b>算法一个字没改。</b></em></p></div>
+
+<div class="note danger"><p>⛔⛔⛔ 但真正值得记住的是下面这一条 ——&nbsp;
+  <b>它是这本书那条暗线的最后一击。</b></p>
+<p><em>为了对齐芯片里那块矩阵乘单元的形状，
+  <b>他不得不把 NSA 论文里的块大小从 32 改成 64</b>。</em></p>
+<p>⭐ <em>而他自己在日志里写了一句：<b>这可能会完全改变训练动态</b> ——&nbsp;
+  块大了，挑中的那一块里会夹进更多无关的东西，
+  模型在「大海捞针」这类细活上可能会变差。</em></p>
+<p>⛔⛔ <em>读懂这一条，这本书那条暗线就走完了全程：<br>
+  <a href="#s二">第二章</a>，硬件决定了<b>用哪个公式</b>；
+  <a href="#s六">第六章</a>，硬件决定了<b>怎么挑</b>；<br>
+  到这里，<b>硬件直接改了算法的超参 ——&nbsp;而那个超参会影响模型聪不聪明。</b></em></p></div>
+
+<h3>9.3　那怎么克服</h3>
+
+__FIG_TPU_FIX__
+
+<h3>9.4　全讲落点：这是一部反复搬家的历史</h3>
+
+<p>把九章摆在一起，会看见一个出乎意料干净的形状。</p>
+
+__FIG_LANDING__
+
+<h3>9.5　把开场那把枪打响</h3>
+
+<p>封面上挂着一把枪：<b>六年，五百一十二倍。</b>
+  <em>现在这笔账算得完了。</em></p>
+<p class="landing">📌 看图之前先自己猜一个数：
+  <em>这五百多倍里，<b>真正靠「买更好的硬件」换来的占几成？</b></em></p>
+
+__FIG_GUN__
+
+<h3>9.6　收尾：一个完整的圆</h3>
+
+__FIG_CHRONICLE__
+
+<div class="note ok"><p>⭐⭐⭐ <b>如果这一讲只带走一句话，我希望是这一句：</b></p>
+<p><em>图里那句话说的是整段历史的形状。<b>而每一章都是它的一个注脚：</b></em></p>
+<p><em>砍头、压成压缩件、只读一部分 ——&nbsp;赎回的是<b>那个平方项前面的系数</b>；<br>
+  线性注意力要赎的是<b>那个平方本身</b>，代价是把串行请了回来；<br>
+  于是分块并行又出现了 ——&nbsp;<b>为了把并行度再找回来。</b></em></p>
+<p>⭐⭐ <em>所以这一讲从头到尾其实只讲了一件事：
+  <b>三十年里，人们一直在同一个三角里挪动</b> ——&nbsp;
+  记得住、算得快、付得起。<b>哪一角都不能真的放手。</b></em></p></div>
+
+<h3>9.7　想往下读的人：这些人讲得比我好</h3>
+
+<div class="note info"><p>📌 这一讲里凡是讲得漂亮的地方，多半不是我想出来的。
+  <em><b>下面这些人把同一件事讲得更透，值得直接去读原文。</b></em></p>
+<p><b>说大白话的</b><br>
+  · <a href="https://speech.ee.ntu.edu.tw/~hylee/ml/ml2021-course-data/self_v7.pdf" target="_blank" rel="noopener">李宏毅《自注意力机制》讲义</a>
+  ——&nbsp;<em>中文圈讲自注意力最清楚的一份，图少而准。</em><br>
+  · <a href="https://jalammar.github.io/illustrated-transformer" target="_blank" rel="noopener">Jay Alammar《The Illustrated Transformer》</a>
+  ——&nbsp;<em>2018 年的老文章，至今没有被超越的图解。</em><br>
+  · <a href="https://bbycroft.net/llm" target="_blank" rel="noopener">bbycroft 的 3D 交互可视化</a>
+  ——&nbsp;<em>把一个 GPT 整个摊在三维空间里，可以一层一层点进去看。</em></p>
+<p><b>把机制讲到骨头里的</b><br>
+  · <a href="https://kexue.fm/archives/10091" target="_blank" rel="noopener">苏剑林《从 MHA、MQA、GQA 到 MLA》</a>
+  与 <a href="https://kexue.fm/archives/10907" target="_blank" rel="noopener">《MLA 好在哪里》上下两篇</a>
+  ——&nbsp;<em><a href="#s四">第四章</a>和<a href="#s五">第五章</a>大半的骨架来自这里。</em><br>
+  · <a href="https://goombalab.github.io/blog/2025/tradeoffs" target="_blank" rel="noopener">Albert Gu《On the Tradeoffs of SSMs and Transformers》</a>
+  ——&nbsp;<em><a href="#s七">第七章</a>那个「数据库 vs 大脑」的框架出自这里。</em><br>
+  · <a href="https://sustcsonglin.github.io/blog/2024/deltanet-1" target="_blank" rel="noopener">杨松琳《DeltaNet Explained》三篇</a>
+  ——&nbsp;<em>线性注意力这一支写得最清楚的一份中文作者英文博客。</em><br>
+  · <a href="https://magazine.sebastianraschka.com/p/visual-attention-variants" target="_blank" rel="noopener">Sebastian Raschka《A Visual Guide to Attention Variants》</a>
+  ——&nbsp;<em>要一张图看完所有变体，看这篇。</em></p>
+<p><b>真的动手去撞硬件的</b><br>
+  · <a href="https://henryhmko.github.io/posts/nsa_tpu/nsa_tpu.html" target="_blank" rel="noopener">Optimizing NSA for TPUs（Kernel Worklog）</a>
+  ——&nbsp;<em>上面那条「块大小从 32 改成 64」就出自这里。
+  全网少见的、把「落不落得下去」一路写到 kernel 那一层的记录。</em></p>
+<p>⭐ <em>另外，本讲的<b>全部推导、消融表、一手出处，以及我们自己在 v7 上的实测</b>，
+  都在<a href="topic-03-L300.html">完整版 L300</a> 里。</em></p></div>
+
 </div></section>
 '''
 
@@ -970,12 +1070,7 @@ PLAN = {
     # ✅ 第八章已写（2026-09-14 R62 R9）。
     # ⭐ fig3-info-law 是从第三章挪过来的：在那儿它只是「信息账」的严格版（旁支），
     #   在这儿它是「为什么纯线性一定兜不住」的**理论下界**，承重。
-    "__TODO_9__": ("落到硬件 + 收尾",
-        ["fig3-perstep.svg", "fig3-tpu-gap.svg", "fig3-tpu-fix.svg",
-         "fig3-landing.svg", "fig3-gun.svg", "fig3-chronicle.svg"],
-        "<b>纸面省下来的，机器上不一定省得到。</b>这一章讲这些聪明办法落到真机上"
-        "卡在哪、怎么克服，最后把封面挂的那把枪打响 ——&nbsp;"
-        "<b>512 倍到底是怎么换来的</b>。"),
+    # ✅ 第九章已写（2026-09-14 R62 R10）。九章全部成稿。
 }
 
 # ⭐ 图注是**图的一部分**，不是正文的摘要。写图注前先问：
@@ -1003,6 +1098,41 @@ FIGS = {
         '专治「装不下」。</em><br>'
         '⭐⭐ <b>下一章讲的，就是有人突然问了一句：'
         '既然这个配件这么好使，能不能把 RNN 整个扔掉，只留配件？</b>'),
+
+    # ── 第九章 ────────────────────────────────────────────────────
+    "__FIG_PERSTEP__": ("fig-perstep", "fig3-perstep.svg",
+        'topic03-fig-perstep.py',
+        '⭐ <b>倍数是相对的，毫秒是绝对的 ——&nbsp;这一张把前八章全部换算成后者。</b><br>'
+        '<em>⭐⭐ 看第二格里灰色那一段：<b>五个方案完全一样</b>。'
+        '差别全在红的那一段上 ——&nbsp;这才是「KV cache 是瓶颈」这句话真正的样子。</em>'),
+
+    "__FIG_TPU_GAP__": ("fig-tpu-gap", "fig3-tpu-gap.svg",
+        'topic03-fig-tpu-gap.py',
+        '⭐ <b>整张图的题眼是那个厨房比喻，值得慢慢看完。</b><br>'
+        '<em>⛔ 特别注意中间那段引文的<b>日期</b> ——&nbsp;它不是五年前的旧话。</em>'),
+
+    "__FIG_TPU_FIX__": ("fig-tpu-fix", "fig3-tpu-fix.svg",
+        'topic03-fig-tpu-fix.py',
+        '⭐ <b>三招的形状跟上一张那三个难处一一对上</b> ——&nbsp;'
+        '<em>可以把两张图叠着读：<b>左边是病，右边是药。</b></em>'),
+
+    "__FIG_LANDING__": ("fig-landing", "fig3-landing.svg",
+        'topic03-fig-landing.py',
+        '⭐⭐ <b>先看最下面那一行小字，它解释了整个顺序为什么是这样。</b><br>'
+        '<em>能拿尺子量的先被搬走，量不出来的留到最后 ——&nbsp;'
+        '<b>这不是研究者偷懒，这是任何一个领域都会有的走法。</b></em>'),
+
+    "__FIG_GUN__": ("fig-gun", "fig3-gun.svg", 'topic03-fig-gun.py',
+        '⭐⭐⭐ <b>这是整本书的收据。</b>'
+        '<em>开场挂在墙上那把枪，在这里打响 ——&nbsp;'
+        '而它打出来的答案，多半跟你开讲前猜的不一样。</em><br>'
+        '⚠️ <em>两根条<b>不是一本账</b>，图里专门写了一句提醒 ——&nbsp;别加起来。</em>'),
+
+    "__FIG_CHRONICLE__": ("fig-chronicle", "fig3-chronicle.svg",
+        'topic03-fig-chronicle.py',
+        '⭐ <b>读完全书再回头看这张，跟开课前看它，会是两张不同的图。</b><br>'
+        '<em>⭐⭐ 那四条支线，每一条你现在都知道它在修谁的什么毛病 ——&nbsp;'
+        '<b>这才是这一讲真正想留给你的东西：不是三十个名词，是一张能自己往下长的地图。</b></em>'),
 
     # ── 第八章 ────────────────────────────────────────────────────
     "__FIG_HYBRID__": ("fig-hybrid", "fig3-hybrid.svg", 'topic03-fig-hybrid.py',
