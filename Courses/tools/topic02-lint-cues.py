@@ -147,6 +147,62 @@ def check_one(pg, lec, dck):
     return len(cues), n
 
 
+def lint_board_speech():
+    """⛔ 要说出口的话，不许写进 `.board` 屏幕提示里 ——&nbsp;一律放 `.say`。
+
+    ════════════════════════════════════════════════════════════
+    2026-09-14 加。这一天同一个坑踩了两次，第二次才明白它是个**系统性**问题。
+    ════════════════════════════════════════════════════════════
+    症状：把一整段台词写进了 `<p class="board">`：
+        🖥 屏幕：滚到 fig3-chronicle，整张投。
+        「在开始之前，先把这八年真实发生过的事整个摊开看一眼。……」
+    上面那条对账（scan）只认「紧跟『滚到』后 40 字内」的引号，于是它把这段
+    台词的开头当成**课件引用**去找，报了一条**假的**「指了个找不到的东西」。
+
+    ⭐ 两个后果，第二个更贵：
+      ① 假报警本身要花时间排查；
+      ② **假报警会训练人忽略这条 lint** ——&nbsp;本仓库已经吃过三次这个亏
+         （零容忍自指计数、挖掉 svg 查定义、溢出探针不看 overflow-x）。
+
+    ⭐⭐ 所以修法不是「把 scan 的窗口调窄」，而是**从源头上分工**：
+        **`.board` 只写「去哪儿」，要说的话一律进 `.say`。**
+        —— 判据落在**写法**上，不落在**检测**上。检测总能被下一种写法绕过。
+
+    ⚠️ 判据必须严，不然又是一个误报源（那就自相矛盾了）。两条命中：
+      · **引号里含 `<br>`** ——&nbsp;屏幕提示不会分行，会分行的一定是台词。近乎零误报。
+      · **引号里 ≥40 个汉字**，且前面没有「说 / 念 / 原话」这类明确标注。
+    ⭐ 豁免那一条是真实存在的合法写法，别删：
+        `<em>说一句「先别一张一张看，要五张一起看……」。</em>`
+      —— 短台词内联进提示里，讲师一眼扫到，比拆成两段好。**标注过就放行。**
+    """
+    BOARD = re.compile(r'<p class="board"[^>]*>(.*?)</p>', re.S)
+    QUO = re.compile(r'「(.*?)」', re.S)
+    MARK = re.compile(r'(说一句|说|念|原话|台词)\s*$')
+    bad = 0
+    for f in sorted(os.listdir(W)):
+        if not f.endswith("-lecture.html"):
+            continue
+        src = open(os.path.join(W, f), encoding='utf-8').read()
+        for mb in BOARD.finditer(src):
+            body = mb.group(1)
+            for mq in QUO.finditer(body):
+                raw = mq.group(1)
+                plain = re.sub(r'<[^>]+>', '', raw)
+                han = len(re.findall(r'[一-鿿]', plain))
+                head = re.sub(r'<[^>]+>', '', body[:mq.start()])[-8:]
+                if '<br' in raw:
+                    why = '引号里有换行 ——&nbsp;屏幕提示不会分行'
+                elif han >= 40 and not MARK.search(head):
+                    why = '引号里 %d 个汉字，而且没标「说一句」' % han
+                else:
+                    continue
+                print('\n⛔ 台词写进了屏幕提示里（%s）：%s' % (f, why))
+                print('   ⭐ 改法：`.board` 只写去哪儿，这段话搬进 `.say`。')
+                print('   原文：%s…' % plain[:60])
+                bad += 1
+    return bad
+
+
 def main():
     from playwright.sync_api import sync_playwright
     # ⛔ 主动发现没登记的讲义 ——&nbsp;静默跳过就是上一个版本翻车的方式。
@@ -166,10 +222,18 @@ def main():
         print('\n⛔ 有讲义没在 PAIRS 里登记，因此从未被对账：%s'
               % '、'.join(stray))
         bad += len(stray)
+    # ⛔⛔ 2026-09-14 顺手发现：这个 main() **原来根本没有 return**。
+    #    于是 `sys.exit(main())` ＝ `sys.exit(None)` ＝ **退出码恒为 0** ——
+    #    这条 lint 哪怕报出一屏「⛔ 指了个不存在的图」，对外也是「成功」。
+    # ⭐ 判据（本仓库第 N 次撞同一类）：**打印出错误 ≠ 报告了失败。**
+    #    凡是 `sys.exit(f())` 的 f，都要回头确认它真的 return 了那个计数。
+    bad += lint_board_speech()
     print('\n讲义 ↔ 课件对账：%d 份讲义、%d 条 board 提示，%d 条对不上。'
           % (len(PAIRS), total, bad))
     if not bad:
         print('   ✅ 每一条「滚到 X」的 X 都还在。')
+        print('   ✅ 也没有把台词写进屏幕提示里。')
+    return bad
 
 
 def scan(cues, deck, lec):
