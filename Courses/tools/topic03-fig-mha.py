@@ -66,6 +66,8 @@ r"""专题三 · §一「MHA」的三张图。
 
 ⛔ 本文件只画图。**画法基元在 `topic03_draw.py`，别在这里另起一套。**
 """
+import math
+
 from topic03_draw import (Fig, wpx, _sz,
                           BL, OR, GR, RD, GY, PU, CY, BR, INK,
                           GY2, LINE, LINE2, BG2)   # ⭐ LINE2 2026-09-12 补：新图要用
@@ -206,37 +208,136 @@ def fig_qkv():
                        '<tspan font-weight="700">这也是 KV cache 里存的那两样东西的出处</tspan>。',
         GY, size=_sz(15))
 
-    # ── 下：一条流水线 ───────────────────────────────────────────
+    # ── 下：真的把「检索」画出来 ─────────────────────────────────
+    # ⭐⭐⭐ 2026-09-14 R52 重画。原来这一格是**五个框排成一行**
+    #   （Q·Kᵀ → ÷√d_k → softmax → ·V → 输出）。
+    #
+    # ⛔ 病灶有两条，第二条更要命：
+    #   ① 它只是把公式翻译成中文再排成流程图 ——&#160;读者已经在副标题里
+    #      看过那个公式了，五个框一个新信息都没加。
+    #   ② ⭐⭐ **图例里承诺了一个比喻，图上从头到尾没兑现。**
+    #      图例写着「K 挂出来的牌子 / V 牌子后面的货」，
+    #      可整张图**既没有牌子也没有货**。
+    #      （这是 R50 那条判据的推广：**正文／图例里出现一个具象词，
+    #        图上就必须有对应的东西。**用词冒充画面，比画得丑更坏 ——
+    #        读者以为自己看过那个画面了，其实只看过那个词。）
+    #
+    # ⭐ 而这一格真正要纠的误解只有一个，而且流程图**天生表达不了**：
+    #   **注意力不是「挑出最像的那一家」，是「按权重把每一家的货混成一碗」。**
+    #   五个框排一行只会强化「一步一步往下走」，不会告诉你最后是个**混合物**。
+    #
+    # ⭐⭐ 顺手把 √d_k 从抽象拉到具象：不除 ＝ 只看得见一个词，
+    #   除了 ＝ 才有「放进 ＋ 抽屉」这个组合。
+    #   「梯度就没了」是后果，**「只看得见一个词」才是读者当场能验的那个后果**。
+    #
+    # 📌 分数是编的（示意一次打分），但**从分数到百分比的每一步都是当场算的**，
+    #   下面有断言。⛔ 不许手写百分比 ——&#160;手写的迟早跟图对不上（R48 教训）。
+    SQ = math.sqrt(128.0)
+    STALL = (("小明", 14), ("把", -7), ("钥匙", 22), ("放进", 31), ("抽屉", 38))
+    TINT = ("#a8dab5", "#ceead6", "#81c995", "#34a853", "#0d652d")
+
+    def softmax(zs):
+        m = max(zs)
+        e = [math.exp(v - m) for v in zs]
+        s = sum(e)
+        return [v / s for v in e]
+
+    Z = [z for _, z in STALL]
+    W_RAW = softmax(Z)                       # 不除：饱和
+    W_SC = softmax([z / SQ for z in Z])      # 除了：摊开
+    assert abs(sum(W_RAW) - 1) < 1e-12 and abs(sum(W_SC) - 1) < 1e-12
+    # ⭐ 这两条断言就是这一格的论点本身 —— 断言挂了说明例子选坏了，不是画歪了
+    assert W_RAW[4] > 0.99, W_RAW              # 不除：一家独占
+    assert 0.4 < W_SC[4] < 0.7 and W_SC[3] > 0.2, W_SC   # 除了：至少两家有份
+    TOP = max(range(5), key=lambda i: W_SC[i])
+    assert STALL[TOP][0] == "抽屉"
+
     BY = y + 172 + 14
-    BT = f.panel(0, BY, W, 176, "② 一次注意力，四步", OR, "#fff",
-                 sub="Attention(Q,K,V) = softmax(QKᵀ / √d_k) · V", tint="#fbeecb")
-    STEPS = (("Q · Kᵀ", "每个 query 跟每个 key 打分", PU, "#f3e8fd", 200),
-             ("÷ √d_k", "把方差拉回 1", RD, "#fce8e6", 150),
-             ("softmax", "归一成「注意力权重」", OR, "#fff3e0", 190),
-             ("· V", "按权重把货加权求和", GR, "#e6f4ea", 180))
-    x = 30
-    for i, (main, sub, col, fill, w) in enumerate(STEPS):
-        f.cell(x, BT + 22, w, 52, main, sub, col, fill)
-        if i:
-            f.line(x - 26, BT + 48, x - 8, BT + 48, GY2, 1.4)
-        x += w + 34
-    f.line(x - 26, BT + 48, x - 8, BT + 48, GY2, 1.4)
-    f.box(x + 6, BT + 22, 210, 52, "#fff", OR, 6)
-    f.t(x + 111, BT + 44, "输出 [n × d]", OR, True, 16, "middle")
-    f.t(x + 111, BT + 62, "跟输入一样的形状", GY, size=_sz(14), anchor="middle")
+    PH2 = 430
+    BT = f.panel(0, BY, W, PH2,
+                 "② 一次注意力 ——　不是「挑一家」，是「按权重把每一家的货混成一碗」",
+                 OR, "#fff", sub="Attention(Q,K,V) = softmax(QKᵀ / √d_k) · V",
+                 tint="#fbeecb")
+
+    # ── 拿着问题的那个人 ───────────────────────────────────────
+    qy = BT + 22
+    f.box(30, qy, 152, 96, "#f3e8fd", PU, 8)
+    f.t(106, qy + 32, "Q", PU, True, 24, "middle")
+    f.t(106, qy + 58, "「放在哪儿了？」", PU, True, 15, "middle")
+    f.t(106, qy + 82, "拿着这个去挨家问", GY2, False, 13, "middle")
+
+    # ── 五个摊子：上面挂牌（K），下面是货（V）───────────────────
+    SW, STEP, SX0 = 218, 230, 210
+    for i, (word, z) in enumerate(STALL):
+        sx = SX0 + i * STEP
+        f.line(186, qy + 48, sx - 6, qy + 20, PU, 1.0, arrow=False)
+        f.box(sx, qy, SW, 40, "#e0f7fa", CY, 6)
+        f.t(sx + SW / 2, qy + 26, word, CY, True, 18, "middle")
+        f.box(sx + 34, qy + 50, SW - 68, 38, TINT[i], "none", 6)
+        f.t(sx + SW / 2, qy + 75, "V", "#fff" if i >= 3 else INK, True, 15,
+            "middle")
+        f.t(sx + SW / 2, qy + 112, "打分 %d" % z, OR, True, 16, "middle")
+        f.t(sx + SW / 2, qy + 132, "÷√d_k → %.2f" % (z / SQ), GY2, False, 13,
+            "middle")
+    # ⛔ 这两个小标签原来贴在 (SX0, qy-4) 和 (SX0, qy+46) ——&#160;后者正好压在
+    #   Q 发出去的那把扇形线上。**扇形线是斜的，代码里看不出它扫过哪些坐标。**
+    #   合成一行放到扇形线上方。
+    f.t(SX0, qy - 8, "上排 ＝ K（挂出来的牌子）　　下排 ＝ V（牌子后面的货）",
+        GY2, False, 13)
+
+    # ── 两条支路：不除 / 除。⭐ 全图的论点在这两根条的**形状差别**上 ──
+    by = qy + 178
+    BARW = 560
+
+    def branch(ox, head, hcol, wts, verdict, vcol, foot):
+        f.t(ox, by, head, hcol, True, 19)
+        x = ox
+        for i, p in enumerate(wts):
+            seg = BARW * p
+            if seg <= 0.4:                    # 窄到画不出来的，本身就是论点
+                continue
+            f.box(x, by + 14, seg, 36, TINT[i], "none", 0)
+            if seg > 46:
+                f.t(x + seg / 2, by + 32, STALL[i][0],
+                    "#fff" if i >= 3 else INK, True, 14, "middle")
+                # ⛔ 不许 %.0f ——&#160;99.91% 会被印成「100%」，
+                #   而「不是 100%、只是看不见」正是左边那根条要说的事。
+                f.t(x + seg / 2, by + 48,
+                    ("%.1f%%" if p > 0.99 else "%.0f%%") % (p * 100),
+                    "#fff" if i >= 3 else INK, True, 13, "middle")
+            x += seg
+        f.box(ox, by + 14, BARW, 36, "none", LINE, 0)
+        f.t(ox, by + 74, "⭐ 这一整条就是输出的那一碗　"
+                         "——　长度恒等于 100%，softmax 不许有人弃权",
+            GY2, False, 14)
+        f.t(ox, by + 102, verdict, vcol, True, 17)
+        f.t(ox, by + 126, foot, GY, False, 15)
+
+    branch(30, "⛔ 不除 √d_k", RD, W_RAW,
+           "整条被一家吃掉：模型只看得见「抽屉」",
+           RD, "另外四家加起来 %.2f%%——　在这根条上不到一个像素。"
+               % ((1 - W_RAW[4]) * 100))
+    branch(740, "⭐ 除以 √d_k", GR, W_SC,
+           "混出来的是「放进 ＋ 抽屉」，这才答得上问题",
+           GR, "前两家占 %.0f%%，剩下三家还留着 %.0f%% 的余地。"
+               % ((W_SC[4] + W_SC[3]) * 100,
+                  (W_SC[0] + W_SC[1] + W_SC[2]) * 100))
+
     # ⛔ 2026-09-08：这里原先写「它是整层里唯一一个随长度平方长大的东西」——
     #   那是**存储口径**，而这一步根本不落地（FlashAttention 已是标配）。
     #   ⭐ 改成计算口径，并把「要留下来的是什么」这条主线接上去。
-    f.t(30, BT + 104, '⛔ 第一步那个 Q·Kᵀ 是 <tspan font-weight="700">n × n 个数</tspan>'
-                      '——&#160;但它<tspan font-weight="700">不落地</tspan>，'
-                      '只在片上过。<tspan font-weight="700">贵在要算的次数，不在显存。</tspan>',
+    f.t(30, BT + PH2 - 76,
+        '⛔ 打分那一步（Q·Kᵀ）是 <tspan font-weight="700">n × n 个数</tspan>'
+        '——&#160;但它<tspan font-weight="700">不落地</tspan>，'
+        '只在片上过。<tspan font-weight="700">贵在要算的次数，不在显存。</tspan>',
         BR, size=_sz(15))
-    f.t(30, BT + 128, '⭐⭐ <tspan font-weight="700">真正要留下来的是 K 和 V</tspan>'
-                      '——&#160;下一个 token 还要跟它们打分。'
-                      '<tspan font-weight="700">这两份就是 KV cache，也是本讲唯一的账本。</tspan>',
+    f.t(30, BT + PH2 - 52,
+        '⭐⭐ <tspan font-weight="700">真正要留下来的是牌子和货（K 和 V）</tspan>'
+        '——&#160;下一个 token 还要挨家问一遍。'
+        '<tspan font-weight="700">这两份就是 KV cache，也是本讲唯一的账本。</tspan>',
         BR, size=_sz(15))
 
-    yy = BY + 176 + 16
+    yy = BY + PH2 + 16
     yy = f.band(yy, "info", "那个 √d_k 不是玄学，推导链在论文脚注里，两行就能讲完", [
         '假设 q、k 各维<tspan font-weight="700">独立、均值 0、方差 1</tspan>，'
         '那么 q·k ＝ Σ q<tspan baseline-shift="sub" font-size="10">i</tspan>'
