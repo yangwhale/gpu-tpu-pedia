@@ -57,7 +57,10 @@ if [ "${1:-}" != "--lint" ]; then
   #      · `md2course.py` **已删**
   #    ⭐ 判据：**注释指向一个不存在的工具时，它不会报错 ——&nbsp;
   #      只会让下一个人改错文件，然后奇怪为什么页面没变。**
-  step "专题三 教材（从 md 生成）"
+  # ⭐ 2026-09-14 R62：名字改成「两版」——&nbsp;原来叫「从 md 生成」，
+  #   而 md2course.py 上面那段注释里刚说完它**已删**。
+  #   ⛔ 一个步骤名说着一条不存在的流水线，比没有名字更坏。
+  step "专题三 教材（主线 L200 ＋ 档案 L300）"
   # ⛔ 图必须先生成 —— topic03-build.py 会 assert 找不到 fig3-chronicle.svg。
   #    这条依赖是**故意做成硬失败**的：图缺了宁可构建挂掉，也不要悄悄出一份没图的教材。
   # ⛔ 画法基元在 topic03_draw.py，三个 fig 脚本共用一份 —— 别在各自脚本里另起一套。
@@ -81,10 +84,16 @@ if [ "${1:-}" != "--lint" ]; then
   # ⭐ 39 行模型表是**可排序的 HTML 表**不是 SVG，所以不在上面那个 glob 里。
   #   ⛔ 它跟时间轴图读同一份 topic03_models.py —— 数据只有一份。
   python3 topic03-table-models.py
-  python3 topic03-build.py
 
-  step "专题三 讲义"
-  python3 topic03-build-lecture.py
+  # ⭐⭐ 2026-09-14 R62 一分为二：原来的专题三整体降格成 **L300（档案版）**，
+  #   旁边新起 **主线 L200**（一条故事线，产物就叫 topic-03.html）。
+  #   ⭐ 脚手架（head / 图装配 / 锚点 / 吸顶目录）只有一份：topic03_page.py ——
+  #     ⛔ 别让两个生成器各抄一套，那是这个仓库栽过四次的那个形状。
+  python3 topic03-build-L300.py
+  python3 topic03-build-L200.py
+
+  step "专题三 讲义（L300）"
+  python3 topic03-build-L300-lecture.py
 
   step "专题八 教材"
   python3 topic08-build.py
@@ -199,7 +208,7 @@ python3 topic02-lint-meta.py --famnav
 printf '\n\033[1m▸ 产物\033[0m\n'
 for f in topic-01.html topic-02-L300.html topic-02.html topic-02x.html \
          topic-02x-L200.html \
-         topic-03.html topic-08.html \
+         topic-03.html topic-03-L300.html topic-08.html \
          gpu-microscope.html tpu-microscope.html; do
   [ -f "$W/$f" ] || continue
   printf '  %-24s %9s  %2d 图\n' "$f" \

@@ -77,10 +77,18 @@ print("   %s" % ("✅ 每一页的标题和 og 指向都对得上自己。" if n
 #   要么只留一个源，要么加一道判据让漂移变成失败 —— 这里两样都做了：
 #   L300 的 nav 改成从 topic02_family 生成，再用这道 lint 兜底。
 # ══════════════════════════════════════════════════════════════════════
-def lint_famnav():
+# ⭐⭐ 2026-09-14 R62：专题三也分成一家两页了（L200 主线 ＋ L300 档案），
+#   于是这条体检从「只认 topic02_family」改成**按家族列表跑**。
+#   ⛔ 判据跟当初立这条时一样：**一个清单只要存在第二份，它就会漂。**
+#     这次差点又漂 —— 新加的 topic03 famnav 要是不进体检，
+#     以后加第三页时漏掉一处照样不报错。
+FAMILIES = ("topic02_family", "topic03_family")
+
+
+def lint_famnav_one(modname):
     import re, io as _io, os as _os, sys as _sys
     _sys.path.insert(0, _os.path.dirname(_os.path.abspath(__file__)))
-    from topic02_family import PAGES
+    PAGES = __import__(modname).PAGES
     W = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "WebPages")
     want = {n: (t, s) for n, t, s in PAGES}
     bad = []
@@ -97,12 +105,16 @@ def lint_famnav():
             if title not in block or sub not in block:
                 bad.append((name, "缺 %s 的「%s / %s」" % (other, title, sub)))
     if bad:
-        print("⛔ famnav 与 topic02_family.PAGES 不一致：")
+        print("⛔ famnav 与 %s.PAGES 不一致：" % modname)
         for n, why in bad:
             print("   %-24s %s" % (n, why))
         return 1
-    print("✅ 四页 famnav 与 topic02_family.PAGES 逐字一致")
+    print("✅ %d 页 famnav 与 %s.PAGES 逐字一致" % (len(want), modname))
     return 0
+
+
+def lint_famnav():
+    return sum(lint_famnav_one(m) for m in FAMILIES)
 
 
 if __name__ == "__main__":

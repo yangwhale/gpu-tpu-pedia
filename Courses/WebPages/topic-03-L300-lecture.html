@@ -1,54 +1,4 @@
-# -*- coding: utf-8 -*-
-"""专题三 · 注意力演进 —— 教师讲义（授课稿）。
-
-CSS 沿用专题一讲义（跟专题二、专题八三份一致）。⛔ 不要另写 CSS。
-
-════════════════════════════════════════════════════════════════
-⛔ 边界：课件里 🚧 的那几节，这里同样只给「打算怎么讲」
-════════════════════════════════════════════════════════════════
-第一节（FlashAttention）有逐字稿 ——&nbsp;它在课件里是成品。
-其余各节课件本身还是「已展开的大纲」，**讲义里不许编逐字稿**：
-编一段，现场你会照着念。
-
-⭐ 这一讲的讲义有个别人没有的难点：**第一节又长又硬，而它排在最前面。**
-   讲砸的方式是把它讲成「FlashAttention 科普」——&nbsp;
-   台下坐的是有经验的人，他们要的是**天花板在哪**，不是原理。
-   所以讲义里反复提醒：**原理快走，天花板慢走。**
-"""
-import io
-import os
-
-HERE = os.path.dirname(os.path.abspath(__file__))
-WEB = os.path.join(HERE, "..", "WebPages")
-CSS_SRC = os.path.join(WEB, "topic-01-lecture.html")
-OUT = os.path.join(WEB, "topic-03-lecture.html")
-DECK = "topic-03.html"
-
-
-_ORAL_CSS = """
-details.oral{border:1px solid #a8dab5;border-left:4px solid #1e8e3e;border-radius:8px;
-  background:#f6fbf7;margin:16px 0;padding:0}
-details.oral>summary{cursor:pointer;padding:10px 14px;font-weight:700;color:#0d652d}
-details.oral[open]{background:#fff}
-details.oral .body{padding:2px 16px 14px}
-details.oral .body p{margin:10px 0;line-height:1.9}
-"""
-
-
-def _css():
-    """⛔ 2026-09-12：这里原来直接 return 切下来的那段。
-    加逐字稿样式时要**插在 </style> 之前**，不能拼在后面 ——
-    拼在 </style> 之后就成了页面上的字面文本，而**构建照样成功**。
-    （专题二外传 09-09 踩过同一跤，所以下面加了断言。）"""
-    h = io.open(CSS_SRC, encoding="utf-8").read()
-    i = h.index("<style>")
-    end = h.index("</style>")
-    out = h[i:end] + _ORAL_CSS + "</style>"
-    assert "details.oral{" in out and out.count("</style>") == 1, "逐字稿样式没插进 <style> 里"
-    return out
-
-
-html = '''<!doctype html>
+<!doctype html>
 <html lang="zh-CN">
 <head>
 <meta charset="utf-8">
@@ -57,7 +7,188 @@ html = '''<!doctype html>
 <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>&#129408;</text></svg>">
 <meta property="og:title" content="注意力演进 · 讲义">
 <meta name="theme-color" content="#5f6368">
-''' + _css() + '''
+<style>
+:root{
+  --blue:#1a73e8; --blue-d:#174ea6; --blue-l:#e8f0fe;
+  --red:#d93025; --red-l:#fce8e6; --yellow:#f9ab00; --yellow-l:#fef7e0;
+  --green:#1e8e3e; --green-l:#e6f4ea; --purple:#9334e6;
+  --ink:#202124; --gray:#5f6368; --gray2:#80868b;
+  --line:#dadce0; --line2:#e8eaed; --paper:#fdfcfa; --bg2:#f6f5f2;
+  --mono:ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+}
+*{box-sizing:border-box;margin:0;padding:0}
+html{scroll-behavior:smooth;scroll-padding-top:78px}
+body{background:var(--paper);color:var(--ink);
+  font:400 16px/1.8 "Noto Sans CJK SC","PingFang SC","Microsoft YaHei",-apple-system,sans-serif;
+  -webkit-font-smoothing:antialiased}
+a{color:var(--blue)}
+b,strong{font-weight:600}
+code{font:600 .88em/1.4 var(--mono);background:#eeece7;padding:2px 6px;border-radius:4px;
+     color:var(--blue-d);white-space:nowrap}
+
+/* ── 顶栏 + tab ─────────────────────── */
+.top{position:sticky;top:0;z-index:50;background:rgba(253,252,250,.95);
+     backdrop-filter:blur(10px);border-bottom:1px solid var(--line)}
+.top .in{max-width:1240px;margin:0 auto;padding:10px 24px;display:flex;
+         align-items:center;gap:18px;flex-wrap:wrap}
+.top .who{font-size:14px;color:var(--gray);white-space:nowrap}
+.top .who b{color:var(--ink)}
+.tabs{display:flex;gap:4px;background:#eeece7;padding:3px;border-radius:9px}
+.tabs a{font-size:13.5px;font-weight:600;padding:7px 16px;border-radius:7px;
+        text-decoration:none;color:var(--gray)}
+.tabs a.on{background:#fff;color:var(--ink);box-shadow:0 1px 3px rgba(0,0,0,.1)}
+.tabs a:hover:not(.on){color:var(--ink)}
+.top .meta{margin-left:auto;font:600 12px var(--mono);color:var(--gray2)}
+
+/* ── 布局 ───────────────────────────── */
+.shell{max-width:1240px;margin:0 auto;padding:0 24px;display:grid;
+       grid-template-columns:238px 1fr;gap:44px;align-items:start}
+.side{position:sticky;top:78px;padding:28px 0 40px;max-height:calc(100vh - 78px);overflow-y:auto}
+.side h4{font:700 11px/1 var(--mono);letter-spacing:.12em;color:var(--gray2);
+         text-transform:uppercase;margin:0 0 12px}
+.side ol{list-style:none}
+.side li{margin-bottom:1px}
+.side a{display:flex;gap:9px;padding:6px 10px;border-radius:7px;font-size:13.5px;
+        text-decoration:none;color:var(--gray);line-height:1.45}
+.side a:hover{background:#eeece7;color:var(--ink)}
+.side a.on{background:var(--blue-l);color:var(--blue-d);font-weight:600}
+.side a i{font:700 10.5px/1.5 var(--mono);font-style:normal;color:var(--gray2);flex:0 0 20px}
+.side a.on i{color:var(--blue)}
+.side a.todo{opacity:.5}
+.side .grp{font:700 10.5px/1 var(--mono);letter-spacing:.1em;color:var(--gray2);
+           margin:16px 0 7px;padding-left:10px;text-transform:uppercase}
+main{padding:28px 0 90px;min-width:0}
+
+/* ── 讲次 ───────────────────────────── */
+.lec{border-top:1px solid var(--line);padding:36px 0 12px}
+.lec:first-child{border-top:none;padding-top:8px}
+.lh{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;margin-bottom:6px}
+.lh .no{font:700 12px/1 var(--mono);color:#fff;background:var(--ink);
+        border-radius:20px;padding:6px 12px;letter-spacing:.06em}
+.lh h2{font-size:26px;font-weight:700;letter-spacing:-.02em}
+.lh .t{margin-left:auto;font:600 12px var(--mono);color:var(--gray2);
+       background:var(--bg2);padding:5px 11px;border-radius:6px;white-space:nowrap}
+.goal{background:var(--green-l);border-left:4px solid var(--green);border-radius:0 10px 10px 0;
+      padding:14px 18px;margin:16px 0;font-size:16px;line-height:1.7}
+.goal b{color:#0b6b30}
+.goal .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#0b6b30;
+         text-transform:uppercase;margin-bottom:5px}
+
+h3.sec{font-size:13px;font-weight:700;letter-spacing:.1em;color:var(--gray2);
+       text-transform:uppercase;margin:26px 0 10px;display:flex;align-items:center;gap:9px}
+h3.sec:after{content:"";flex:1;height:1px;background:var(--line2)}
+
+/* 讲稿 —— 排成一本书，不是一份脚本
+   ⛔⛔ 2026-09-06 整段重写。现场反馈：「那个讲义能不能不要看上去跟一个脚本一样，
+        要看上去像一个故事书一样。」
+   ⭐ 原来那一版之所以像脚本，**不是因为内容，是因为版式**：
+      ① 每隔一两段就横插一个整宽蓝框（屏幕提示），叙述被切成碎片；
+      ② `<em>` 是荧光笔黄底，一页十几处，看着像别人划过的考卷；
+      ③ 无衬线 16.5px 顶着一个白卡片，读起来是「文档」不是「书」。
+   ⭐ 三条对策，逐条对应：
+      ① **舞台指示挪到页边**（宽屏时浮到右侧留白里），正文一条不断；
+      ② 荧光笔换成**细下划线**，强调还在，喧宾夺主没了；
+      ③ 正文换**衬线体、17.5px、行高 2.05、首行缩进两字**，去掉外框和阴影。
+   ⚠️ 这份 CSS 被两份讲义共用（专题二那份 `_css()` 原样抽这里的 <style>）——
+      改这里等于两边一起改，那是有意的。 */
+.say{background:transparent;border:0;border-radius:0;box-shadow:none;
+     padding:6px 0 20px;margin:4px 0;position:relative}
+.say p{margin:0 0 1.05em;font-size:17.5px;line-height:2.05;text-indent:2em;
+  font-family:"Noto Serif CJK SC","Source Han Serif SC","Songti SC","SimSun",Georgia,serif;
+  color:#1b1b1d;max-width:38em}
+.say p:first-child{margin-top:10px}
+/* 每一讲的头一段不缩进 —— 中文书的惯例，也让「这一讲开始了」一眼看得出来 */
+.say > p:first-of-type{text-indent:0}
+.say > p:first-of-type:first-letter{font-size:1.05em;font-weight:600}
+.say h4{margin:30px 0 6px;font-size:15px;color:var(--blue);
+  border-left:3px solid var(--blue);padding-left:10px}
+/* 强调：细下划线，不用荧光笔 */
+.say em{font-style:normal;background:none;font-weight:600;color:#111;
+        border-bottom:1.5px solid #e8c46a;padding-bottom:1px}
+/* ── 舞台指示：宽屏浮到右边页边，窄屏退回行内 ──────────────────────
+   它们是「怎么演」，不是「讲什么」。读故事的人应该能一路顺下来，
+   眼角瞥见就行。 */
+.say .pause,.say .board{display:block;font-size:13px;line-height:1.72;
+  color:var(--gray);margin:2px 0 14px;padding-left:12px;
+  border-left:2px solid var(--line);max-width:38em;
+  font-family:"Noto Sans CJK SC","PingFang SC",sans-serif;text-indent:0}
+.say .board{border-left-color:#9ab7e8}
+.say .pause{border-left-color:#d9d2c2;font-style:italic}
+.say .board:before{content:"屏幕 · ";font-weight:700;color:#5b7fc7}
+.say .pause:before{content:"停 · ";font-weight:700;color:#a89a76;font-style:normal}
+/* ⛔ 2026-09-06 这里试过「宽屏时把舞台指示浮到右侧页边」——&nbsp;**塌了，已撤**。
+   position:absolute 把它们移出文档流之后，相邻的两三条会**落在同一个 y 上互相叠字**
+   （原因很简单：absolute 元素的静态位置是它原来的位置，而后面的兄弟节点向上收缩，
+   于是好几条挤到一起）。
+   ⭐ 判据：**边注要真的排成一栏，得用双栏 grid，不能靠一个负的 right 值。**
+   现在两个宽度用同一套行内样式 ——&nbsp;安静、不断流，已经够书感了。 */
+
+/* 问答 */
+.qa{border:1px solid var(--line);border-radius:12px;overflow:hidden;margin:12px 0}
+.qa details{border-top:1px solid var(--line2)}
+.qa details:first-child{border-top:none}
+.qa summary{padding:13px 18px;cursor:pointer;font-size:15px;font-weight:600;
+            list-style:none;display:flex;gap:9px;background:#fff}
+.qa summary::-webkit-details-marker{display:none}
+.qa summary:before{content:"Q";font:700 11px/1.5 var(--mono);color:#fff;background:var(--purple);
+                   border-radius:50%;width:19px;height:19px;text-align:center;flex:0 0 19px;
+                   margin-top:3px}
+.qa summary:hover{background:var(--bg2)}
+.sub{font-size:.92em;color:var(--gray)}
+.qa .a{padding:2px 18px 16px 46px;font-size:15px;line-height:1.85;color:#3c4043;background:#fff}
+.qa .a p{margin:10px 0}
+
+/* 边界 / 提示 */
+.warn{background:var(--red-l);border-left:4px solid var(--red);border-radius:0 10px 10px 0;
+      padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.warn .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#a50e0e;
+         text-transform:uppercase;margin-bottom:5px}
+.tip{background:var(--yellow-l);border-left:4px solid var(--yellow);border-radius:0 10px 10px 0;
+     padding:13px 18px;margin:14px 0;font-size:15px;line-height:1.75}
+.tip .k{display:block;font:700 10.5px var(--mono);letter-spacing:.1em;color:#8a5a00;
+        text-transform:uppercase;margin-bottom:5px}
+
+.num{font-family:var(--mono);font-weight:600}
+table{width:100%;border-collapse:collapse;font-size:14.5px;margin:14px 0}
+th{text-align:left;font-size:11.5px;font-weight:700;color:var(--gray2);letter-spacing:.06em;
+   text-transform:uppercase;padding:9px 12px;border-bottom:2px solid var(--line)}
+td{padding:10px 12px;border-bottom:1px solid var(--line2);vertical-align:top;line-height:1.7}
+td.n{font-family:var(--mono);font-weight:600;white-space:nowrap}
+tbody tr:last-child td{border-bottom:none}
+
+.todo-box{border:1px dashed var(--line);border-radius:12px;padding:22px 24px;
+          color:var(--gray);font-size:15px;background:#fff}
+.todo-box b{color:var(--ink)}
+
+.plan{background:var(--bg2);border-radius:14px;padding:24px 26px;margin:0 0 8px}
+.plan h2{font-size:22px;margin-bottom:6px}
+.plan p{font-size:15px;color:var(--gray);margin-bottom:16px}
+.plan table{margin:0}
+.plan td:first-child{width:44px;font:700 11px var(--mono);color:var(--gray2)}
+/* 时间表要比上面那张图例表宽一点的首列（"12–27" 塞不进 44px），单独覆盖 */
+.plan .sched{margin:10px 0 0}
+.plan .sched td:first-child{width:64px;font:700 12.5px var(--mono);color:var(--blue)}
+.plan h3{font-size:16px;margin:22px 0 2px}
+
+footer{border-top:1px solid var(--line);padding:32px 0 60px;color:var(--gray);font-size:14px;
+       line-height:1.8;grid-column:1/-1}
+@media(max-width:900px){
+  .shell{grid-template-columns:1fr;gap:0}
+  .side{position:static;max-height:none;padding:18px 0 4px;
+        border-bottom:1px solid var(--line)}
+  .side ol{display:grid;grid-template-columns:1fr 1fr;gap:0 12px}
+  .lh h2{font-size:21px}.lh .t{margin-left:0}
+  .say{padding:2px 16px 14px}.say p{font-size:15.5px}
+  .qa .a{padding-left:18px}
+}
+
+details.oral{border:1px solid #a8dab5;border-left:4px solid #1e8e3e;border-radius:8px;
+  background:#f6fbf7;margin:16px 0;padding:0}
+details.oral>summary{cursor:pointer;padding:10px 14px;font-weight:700;color:#0d652d}
+details.oral[open]{background:#fff}
+details.oral .body{padding:2px 16px 14px}
+details.oral .body p{margin:10px 0;line-height:1.9}
+</style>
 <style>
 /* ⛔⛔ 2026-09-07 发现的既有 bug：整份讲义一直挤在一根 238px 的窄柱子里。
    根因：CSS 是从专题二讲义抽过来的，那边 .shell 是 `238px 910px` 两栏栅格 ——
@@ -72,13 +203,13 @@ html = '''<!doctype html>
 </head>
 <body>
 
-<!-- ⛔ 这个文件由 Courses/tools/topic03-build-lecture.py 生成，不要手改。 -->
+<!-- ⛔ 这个文件由 Courses/tools/topic03-build-L300-lecture.py 生成，不要手改。 -->
 
 <div class="top"><div class="in">
   <span class="who">专题三 · <b>注意力演进</b></span>
   <nav class="tabs">
-    <a href="''' + DECK + '''">课件</a>
-    <a href="topic-03-lecture.html" class="on">讲义</a>
+    <a href="topic-03-L300.html">课件</a>
+    <a href="topic-03-L300-lecture.html" class="on">讲义</a>
     <a href="topic-02.html">专题二（硬件背景）</a>
   </nav>
 </div></div>
@@ -89,7 +220,7 @@ html = '''<!doctype html>
 <div class="plan">
   <h2>这份讲义怎么用</h2>
   <p>这是<b>老师的草稿</b>，不是给学员的材料。学员看
-    <a href="''' + DECK + '''">课件</a>，你看这一份。<br>
+    <a href="topic-03-L300.html">课件</a>，你看这一份。<br>
     课程作者 <b>Chris Yang</b> · Google Cloud AI Infra 架构师。</p>
   <table><tbody>
     <tr><td>🎯</td><td><b>这一讲要留下什么</b>　讲完之后学员脑子里应该剩的那一句话。</td></tr>
@@ -3164,7 +3295,4 @@ html = '''<!doctype html>
      → 删掉空壳，图例那一行改成指向它。 -->
 </main>
 </div>
-</body></html>'''
-
-io.open(OUT, "w", encoding="utf-8").write(html)
-print("ok  topic-03-lecture.html  %s 字符" % format(os.path.getsize(OUT), ","))
+</body></html>
