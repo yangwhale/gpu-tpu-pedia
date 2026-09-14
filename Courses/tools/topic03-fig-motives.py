@@ -67,47 +67,68 @@ def main():
     # ══════════ 上：线索 A · 硬件账（必须省）══════════
     ay = f.panel(0, y, W, PH, "线索 A · 硬件账算不过来", RD,
                  sub="结论：必须省。不解决它，长上下文根本上不了线")
+    # ⭐⭐⭐ 2026-09-15 R5 重画这一格，两处都是「图在说另一件事」：
+    #
+    # ⛔ ① 原来上半是**一条四行乘法链**（32,768 → 1,998,848 → 3.81 MiB → 488 GiB）。
+    #    那是算术，不是画。⭐ 但「小东西 × 很多个 ＝ 天文数字」这个**体感**要留住 ——
+    #    所以只留最外面那一步画出来（一个小方块 × 131,072），
+    #    中间三步整条折进「出处与口径」。
+    #
+    # ⛔⛔ ② 更要命的一条：原来那四根对照条里**没有 488 这一根**。
+    #    标题写着「摆四个对照，让这个数站住」，可**被对照的那个数只是上方的一行字** ——
+    #    读者得拿脑子里的一个数去跟四根条子比。
+    #    ⭐ 判据：**参照系里必须包含被参照的那个东西**，否则它不叫对照，叫并列。
+    #
+    # ⛔ ③ 那四根条子还是 log10 画的、而且没有轴。可这一格要说的正是
+    #    「488 装不进一块卡、8.58 装得进」——&nbsp;对数会把这件事压平。
+    #    ⭐ 改成**换单位**：一格 ＝ 一块 v7 的 HBM。于是它天然是线性的，
+    #      而且「小的那两个只占一格里的一小条」本身就是结论，不是缺陷。
     f.t(20, ay + 10, "拿 DeepSeek V3 砸体感（61 层 · 128 头 · 每头 128 维 · 128K · bf16）",
         GY, size=16)
-    STEP = [
-        ("每 token 每层", "2 × 128 × 128", "%s 个数" % format(per_tok_layer, ",")),
-        ("× 61 层", "", "%s 个数" % format(per_tok, ",")),
-        ("× 2 字节", "", "%.2f MiB / token" % (per_tok * B / 2 ** 20)),
-        ("× 131,072 token", "", "%.0f GiB" % mha),
-    ]
-    sy = ay + 44
-    for i, (a_, b_, c_) in enumerate(STEP):
-        last = (i == len(STEP) - 1)
-        f.t(24, sy + i * 28, a_, INK if last else GY, bold=last, size=17)
-        if b_:
-            f.t(220, sy + i * 28, b_, GY2, size=15, mono=True)
-        f.t(430, sy + i * 28, c_, RD if last else GY, bold=last,
-            size=18 if last else 16, mono=True)
-    f.t(660, sy + 3 * 28, "← 一个用户", RD, bold=True, size=17)
 
-    # 三个对照，用横条 —— 现在有整幅宽，条子能画长，备注也放得下
-    cy = sy + 4 * 28 + 8
-    f.t(24, cy, "摆四个对照，让这个数站住", GY, bold=True, size=16)
-    BAR0, BARW = 470, 300
-    VALX, NOTEX = BAR0 + BARW + 108, BAR0 + BARW + 122
-    REF = [("一块 v7 device 的 HBM（可分配）", hbm, GY2, "一个用户就要 5.2 块"),
-           ("V3 全部权重（671B，原生 FP8）", wgt, BL,
-            "单用户就占 78%；两个并发即超过权重"),
+    # ── 种子：一个 token 有多小，乘出来有多大 ──────────────────
+    per_mib = per_tok * B / 2 ** 20
+    sy = ay + 46
+    f.box(24, sy, 14, 14, "#fce8e6", RD, 3, 1.4)      # 一个 token 那一点点
+    f.t(48, sy + 12, "一个 token 要存 <tspan font-weight=\"700\">%.2f MiB</tspan>"
+        % per_mib, GY, size=17)
+    f.path([(300, sy + 7), (352, sy + 7)], RD, 2.0)
+    f.t(364, sy + 12, "× <tspan font-weight=\"700\">131,072</tspan> 个 token",
+        GY, size=17)
+    f.path([(560, sy + 7), (612, sy + 7)], RD, 2.0)
+    f.t(624, sy + 12, "<tspan font-weight=\"700\">%.0f GiB</tspan>　一个用户" % mha,
+        RD, True, 19)
+    f.t(880, sy + 12, "（中间那几步在「出处与口径」里）", GY2, size=14)
+
+    # ── 换个单位：一格 ＝ 一块 v7 的 HBM ──────────────────────
+    cy = sy + 40
+    f.t(24, cy + 14, "换个单位就看得见了 ——　"
+        "<tspan font-weight=\"700\">一格 ＝ 一块 v7 device 的 HBM"
+        "（%.2f GiB 可分配）</tspan>" % hbm, GY, size=16)
+    CW_, CHH, CG, SLOT = 84, 34, 5, 7
+    X0 = 340
+    REF = [("这一个用户的 KV cache", mha, RD, "⛔ 一个人就要 5.2 块"),
+           ("V3 全部权重（671B，原生 FP8）", wgt, BL, "所有人共享这一份"),
            ("换成 GQA-8", gqa, OR, "省 16 倍 ——　还是装不进一块"),
-           ("换成 MLA（V3 真实方案）", mla, GR, "省 56.9 倍")]
-    mx = max(mha, wgt)
+           ("换成 MLA（V3 真实方案）", mla, GR, "省 56.9 倍 ——　这才塞得下")]
+    assert max(v for _, v, _, _ in REF) / hbm < SLOT, "最长那条超出 7 格了"
     for i, (nm, v, c_, note) in enumerate(REF):
-        yy_ = cy + 28 + i * 30
-        f.t(24, yy_ + 5, nm, INK, size=17)
-        # ⛔ 2026-09-12：第一版把数值写在「条子末端 ＋ 8px」，备注钉在固定列 ——
-        #   条子一长，数值就冲进备注里。⭐ 判据（X-6 那次同一条）：
-        #   **标签位置不要跟着条形长度走，钉在固定列上。**
-        bw = max(3, BARW * math.log10(1 + v) / math.log10(1 + mx))
-        f.box(BAR0, yy_ - 7, bw, 17, "#fff", c_, 3, 1.6)
-        f.t(VALX, yy_ + 5, "%.2f GiB" % v if v < 100 else "%.0f GiB" % v,
+        yy_ = cy + 36 + i * (CHH + 10)
+        f.t(24, yy_ + CHH / 2 + 6, nm, INK, size=17, w=300)
+        n = v / hbm                                  # 占几块卡
+        for k in range(SLOT):
+            f.box(X0 + k * (CW_ + CG), yy_, CW_, CHH, "#fff", LINE2, 4)
+            frac = min(1.0, max(0.0, n - k))         # 这一格填多少
+            if frac > 0:
+                f.box(X0 + k * (CW_ + CG), yy_, max(CW_ * frac, 2), CHH,
+                      c_, "none", 4)
+        VX = X0 + SLOT * (CW_ + CG) + 84
+        f.t(VX, yy_ + CHH / 2 + 6,
+            "%.2f GiB" % v if v < 100 else "%.0f GiB" % v,
             c_, bold=True, size=16, mono=True, anchor="end")
-        f.t(NOTEX, yy_ + 5, note, GY2, size=17)
-    f.t(24, cy + 28 + 4 * 30 + 16,
+        # ⛔ 带上 w= ——&#160;不带的话越界不报，得靠肉眼在截图里发现
+        f.t(VX + 12, yy_ + CHH / 2 + 6, note, GY2, size=16, w=1384 - VX - 12)
+    f.t(24, cy + 36 + 4 * (CHH + 10) + 18,
         '⛔ <tspan font-weight="700">权重是所有用户共享一份，KV cache 是每人一份</tspan>'
         '——&#160;所以它直接决定<tspan font-weight="700">你能同时服务多少人</tspan>。'
         '　　⚠️ 488 是「假如 V3 用 MHA」的反事实值，不是实测。',
@@ -193,7 +214,11 @@ def main():
         '<tspan font-weight="700">「省了多少（A）」和「亏了多少（B）」</tspan>之间落在哪。'])
 
     yy = f.src(yy + 16,
-               "左栏四行推导与四个对照值均按公式当场算出（脚本里带断言）；"
+               "📐 488 GiB 那条乘法链（原来画在图上，2026-09-15 折到这里）："
+               "每 token 每层 2 × 128 × 128 ＝ 32,768 个数 →&#160;× 61 层 ＝ "
+               "1,998,848 个数 →&#160;× 2 字节 ＝ 3.81 MiB/token →&#160;"
+               "× 131,072 token ＝ <tspan font-weight=\"700\">488 GiB</tspan>",
+               "四个对照值均按公式当场算出（脚本里带断言）；"
                "口径沿用 V3 论文比较表（K、V 都按 d_h=128）——&#160;"
                "<tspan font-weight=\"700\">V3 真实的 K 每头是 128+64=192 维，严格算这个基线还会更大</tspan>",
                "⚠️ 右栏三个观察是<tspan font-weight=\"700\">现象</tspan>，不是本课实测；"

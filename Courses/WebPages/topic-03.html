@@ -2842,7 +2842,7 @@ h4 { margin:18px 0 6px; font-size:15px }
 <p>真正让这么多人扑上来的，是<b>还有第二条线</b> ——&nbsp;
   <em>而且它跟显存一点关系都没有。</em></p>
 
-<figure class="fbox fwide" id="fig-motives"><svg viewBox="0 0 1400 1070" width="100%" role="img" aria-label="长上下文的两条独立动机：左边是硬件账 —— 一个用户 128K 的 KV cache 按最朴素的 MHA 算是 488 GiB，要 5.2 块 v7；右边是信息账 —— 注意力矩阵极稀疏、有 attention sink、远近关注粒度不同；两条线交汇处才是所有变体的位置"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-motives"><svg viewBox="0 0 1400 1070" width="100%" role="img" aria-label="长上下文的两条独立动机：左边是硬件账 —— 一个用户 128K 的 KV cache 按最朴素的 MHA 算是 488 GiB，要 5.2 块 v7；右边是信息账 —— 注意力矩阵极稀疏、有 attention sink、远近关注粒度不同；两条线交汇处才是所有变体的位置"><defs><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">为什么是现在 ——&#160;<tspan font-weight="700">两条完全独立的线，在同一个地方交汇</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⛔ 这两条必须分开讲：它们指向同一批技术，但出发点完全不同 ——&#160;混在一起讲就成了名词罗列</text>
 <rect x="0" y="82" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
@@ -2852,34 +2852,70 @@ h4 { margin:18px 0 6px; font-size:15px }
 <text class="svglbl" x="14" y="102" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">线索 A · 硬件账算不过来</tspan></text>
 <text class="svgsm" x="193" y="102" fill="#5f6368" style="font-size:11.0px">结论：必须省。不解决它，长上下文根本上不了线</text>
 <text class="svgsm" x="20" y="122" fill="#5f6368" style="font-size:16.0px">拿 DeepSeek V3 砸体感（61 层 · 128 头 · 每头 128 维 · 128K · bf16）</text>
-<text class="svgsm" x="24" y="156" fill="#5f6368" style="font-size:17.0px">每 token 每层</text>
-<text class="svgsm" x="220" y="156" fill="#80868b" style="font-size:15.0px;font-family:'Roboto Mono',ui-monospace,monospace">2 × 128 × 128</text>
-<text class="svgsm" x="430" y="156" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">32,768 个数</text>
-<text class="svgsm" x="24" y="184" fill="#5f6368" style="font-size:17.0px">× 61 层</text>
-<text class="svgsm" x="430" y="184" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">1,998,848 个数</text>
-<text class="svgsm" x="24" y="212" fill="#5f6368" style="font-size:17.0px">× 2 字节</text>
-<text class="svgsm" x="430" y="212" fill="#5f6368" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace">3.81 MiB / token</text>
-<text class="svgsm" x="24" y="240" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">× 131,072 token</tspan></text>
-<text class="svgsm" x="430" y="240" fill="#a50e0e" style="font-size:18.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">488 GiB</tspan></text>
-<text class="svgsm" x="660" y="240" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">← 一个用户</tspan></text>
-<text class="svgsm" x="24" y="276" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">摆四个对照，让这个数站住</tspan></text>
-<text class="svgsm" x="24" y="309" fill="#202124" style="font-size:17.0px">一块 v7 device 的 HBM（可分配）</text>
-<rect x="470" y="297" width="212.5243703749349" height="17" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.6"/>
-<text class="svgsm" x="878" y="309" fill="#80868b" text-anchor="end" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">94.74 GiB</tspan></text>
-<text class="svgsm" x="892" y="309" fill="#80868b" style="font-size:17.0px">一个用户就要 5.2 块</text>
-<text class="svgsm" x="24" y="339" fill="#202124" style="font-size:17.0px">V3 全部权重（671B，原生 FP8）</text>
-<rect x="470" y="327" width="300.0" height="17" rx="3" fill="#fff" stroke="#1a73e8" stroke-width="1.6"/>
-<text class="svgsm" x="878" y="339" fill="#174ea6" text-anchor="end" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">625 GiB</tspan></text>
-<text class="svgsm" x="892" y="339" fill="#80868b" style="font-size:17.0px">单用户就占 78%；两个并发即超过权重</text>
-<text class="svgsm" x="24" y="369" fill="#202124" style="font-size:17.0px">换成 GQA-8</text>
-<rect x="470" y="357" width="160.7332109379271" height="17" rx="3" fill="#fff" stroke="#e8710a" stroke-width="1.6"/>
-<text class="svgsm" x="878" y="369" fill="#b06000" text-anchor="end" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">30.50 GiB</tspan></text>
-<text class="svgsm" x="892" y="369" fill="#80868b" style="font-size:17.0px">省 16 倍 ——　还是装不进一块</text>
-<text class="svgsm" x="24" y="399" fill="#202124" style="font-size:17.0px">换成 MLA（V3 真实方案）</text>
-<rect x="470" y="387" width="105.26814036166722" height="17" rx="3" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
-<text class="svgsm" x="878" y="399" fill="#0d652d" text-anchor="end" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">8.58 GiB</tspan></text>
-<text class="svgsm" x="892" y="399" fill="#80868b" style="font-size:17.0px">省 56.9 倍</text>
-<text class="svgsm" x="24" y="440" fill="#a50e0e" style="font-size:17.0px">⛔ <tspan font-weight="700">权重是所有用户共享一份，KV cache 是每人一份</tspan>——&#160;所以它直接决定<tspan font-weight="700">你能同时服务多少人</tspan>。　　⚠️ 488 是「假如 V3 用 MHA」的反事实值，不是实测。</text>
+<rect x="24" y="158" width="14" height="14" rx="3" fill="#fce8e6" stroke="#d93025" stroke-width="1.4"/>
+<text class="svgsm" x="48" y="170" fill="#5f6368" style="font-size:17.0px">一个 token 要存 <tspan font-weight="700">3.81 MiB</tspan></text>
+<path d="M 300.00 165.00 L 352.00 165.00" fill="none" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="364" y="170" fill="#5f6368" style="font-size:17.0px">× <tspan font-weight="700">131,072</tspan> 个 token</text>
+<path d="M 560.00 165.00 L 612.00 165.00" fill="none" stroke="#d93025" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-d93025)"/>
+<text class="svgsm" x="624" y="170" fill="#a50e0e" style="font-size:19.0px"><tspan font-weight="700"><tspan font-weight="700">488 GiB</tspan>　一个用户</tspan></text>
+<text class="svgsm" x="880" y="170" fill="#80868b" style="font-size:14.0px">（中间那几步在「出处与口径」里）</text>
+<text class="svgsm" x="24" y="212" fill="#5f6368" style="font-size:16.0px">换个单位就看得见了 ——　<tspan font-weight="700">一格 ＝ 一块 v7 device 的 HBM（94.74 GiB 可分配）</tspan></text>
+<text class="svgsm" x="24" y="257" fill="#202124" style="font-size:17.0px">这一个用户的 KV cache</text>
+<rect x="340" y="234" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="340" y="234" width="84.0" height="34" rx="4" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="429" y="234" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="429" y="234" width="84.0" height="34" rx="4" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="518" y="234" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="518" y="234" width="84.0" height="34" rx="4" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="607" y="234" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="607" y="234" width="84.0" height="34" rx="4" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="696" y="234" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="696" y="234" width="84.0" height="34" rx="4" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="785" y="234" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="785" y="234" width="12.678910702976601" height="34" rx="4" fill="#d93025" stroke="none" stroke-width="1"/>
+<rect x="874" y="234" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="1047" y="257" fill="#a50e0e" text-anchor="end" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">488 GiB</tspan></text>
+<text class="svgsm" x="1059" y="257" fill="#80868b" style="font-size:16.0px">⛔ 一个人就要 5.2 块</text>
+<text class="svgsm" x="24" y="301" fill="#202124" style="font-size:17.0px">V3 全部权重（671B，原生 FP8）</text>
+<rect x="340" y="278" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="340" y="278" width="84.0" height="34" rx="4" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="429" y="278" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="429" y="278" width="84.0" height="34" rx="4" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="518" y="278" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="518" y="278" width="84.0" height="34" rx="4" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="607" y="278" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="607" y="278" width="84.0" height="34" rx="4" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="696" y="278" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="696" y="278" width="84.0" height="34" rx="4" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="785" y="278" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="785" y="278" width="84.0" height="34" rx="4" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<rect x="874" y="278" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="874" y="278" width="50.07500100936069" height="34" rx="4" fill="#1a73e8" stroke="none" stroke-width="1"/>
+<text class="svgsm" x="1047" y="301" fill="#174ea6" text-anchor="end" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">625 GiB</tspan></text>
+<text class="svgsm" x="1059" y="301" fill="#80868b" style="font-size:16.0px">所有人共享这一份</text>
+<text class="svgsm" x="24" y="345" fill="#202124" style="font-size:17.0px">换成 GQA-8</text>
+<rect x="340" y="322" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="340" y="322" width="27.04243191893604" height="34" rx="4" fill="#e8710a" stroke="none" stroke-width="1"/>
+<rect x="429" y="322" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="518" y="322" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="607" y="322" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="696" y="322" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="785" y="322" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="874" y="322" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="1047" y="345" fill="#b06000" text-anchor="end" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">30.50 GiB</tspan></text>
+<text class="svgsm" x="1059" y="345" fill="#80868b" style="font-size:16.0px">省 16 倍 ——　还是装不进一块</text>
+<text class="svgsm" x="24" y="389" fill="#202124" style="font-size:17.0px">换成 MLA（V3 真实方案）</text>
+<rect x="340" y="366" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="340" y="366" width="7.60568397720076" height="34" rx="4" fill="#1e8e3e" stroke="none" stroke-width="1"/>
+<rect x="429" y="366" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="518" y="366" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="607" y="366" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="696" y="366" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="785" y="366" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<rect x="874" y="366" width="84" height="34" rx="4" fill="#fff" stroke="#e8eaed" stroke-width="1"/>
+<text class="svgsm" x="1047" y="389" fill="#0d652d" text-anchor="end" style="font-size:16.0px;font-family:'Roboto Mono',ui-monospace,monospace"><tspan font-weight="700">8.58 GiB</tspan></text>
+<text class="svgsm" x="1059" y="389" fill="#80868b" style="font-size:16.0px">省 56.9 倍 ——　这才塞得下</text>
+<text class="svgsm" x="24" y="428" fill="#a50e0e" style="font-size:17.0px">⛔ <tspan font-weight="700">权重是所有用户共享一份，KV cache 是每人一份</tspan>——&#160;所以它直接决定<tspan font-weight="700">你能同时服务多少人</tspan>。　　⚠️ 488 是「假如 V3 用 MHA」的反事实值，不是实测。</text>
 <rect x="0" y="500" width="1400" height="384" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
 <rect x="0" y="500" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
 <rect x="0" y="502" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
@@ -3029,7 +3065,8 @@ h4 { margin:18px 0 6px; font-size:15px }
 <text class="svgsm" x="20" y="984" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">只有 B</tspan>（可以省）：你<tspan font-weight="700">没有动力</tspan>去付 kernel 那么难写的代价。</text>
 <text class="svgsm" x="20" y="1008" fill="#174ea6" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">两条合起来</tspan>，才解释了为什么这个方向三年里投了这么多人——&#160;它同时是一件<tspan font-weight="700">不得不做</tspan>和<tspan font-weight="700">做了不太亏</tspan>的事。</text>
 <text class="svgsm" x="20" y="1032" fill="#174ea6" style="font-size:15.0px">⭐ 所以判一个变体好不好，就看它在<tspan font-weight="700">「省了多少（A）」和「亏了多少（B）」</tspan>之间落在哪。</text>
-</svg><figcaption>⭐ <b>左右两半是各长各的，读的时候别把它们并成一句话。</b><em>一半是机器逼出来的，一半是数据自己露出来的破绽。</em><br>⭐⭐ <b>右下角那把尺子先记一下</b> ——&nbsp;<em>从下一章起，每出场一个新名词，我们都只拿它量两下。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>左栏四行推导与四个对照值均按公式当场算出（脚本里带断言）；口径沿用 V3 论文比较表（K、V 都按 d_h=128）——&#160;<b>V3 真实的 K 每头是 128+64=192 维，严格算这个基线还会更大</b></p>
+</svg><figcaption>⭐ <b>左右两半是各长各的，读的时候别把它们并成一句话。</b><em>一半是机器逼出来的，一半是数据自己露出来的破绽。</em><br>⭐⭐ <b>右下角那把尺子先记一下</b> ——&nbsp;<em>从下一章起，每出场一个新名词，我们都只拿它量两下。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📐 488 GiB 那条乘法链（原来画在图上，2026-09-15 折到这里）：每 token 每层 2 × 128 × 128 ＝ 32,768 个数 →&#160;× 61 层 ＝ 1,998,848 个数 →&#160;× 2 字节 ＝ 3.81 MiB/token →&#160;× 131,072 token ＝ <b>488 GiB</b></p>
+<p>四个对照值均按公式当场算出（脚本里带断言）；口径沿用 V3 论文比较表（K、V 都按 d_h=128）——&#160;<b>V3 真实的 K 每头是 128+64=192 维，严格算这个基线还会更大</b></p>
 <p>⚠️ 右栏三个观察是<b>现象</b>，不是本课实测；它们各自对应后面的一支方案（稀疏 →&#160;§六、分层 →&#160;§六、压缩 →&#160;§五）</p></details></figure>
 
 <!-- ⛔ 这段原来把图注那句「每出场一个新名词就拿它量两下」又说了一遍。
