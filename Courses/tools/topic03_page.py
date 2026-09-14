@@ -459,6 +459,42 @@ def lint_self_links(html):
     return bad
 
 
+# ⛔⛔⛔ 2026-09-15 R11：一类**渲染才现形**的 bug，必须用 lint 钉死。
+#
+# 这些页面是**内联 SVG**（`<svg>` 直接写在 HTML 里）。HTML 解析器在
+# foreign content（SVG）里碰到一个**只属于 HTML 的元素**时，会**当场退出
+# foreign content 模式** ——&nbsp;等于就地把 `</svg>` 补上了。
+# 后果：那个标签之后的一切，从图里掉出来，变成页面级的 HTML。
+#
+# 实际case（fig3-gun 的收尾落点带）：一句 `<u>剩下的那一截</u>`，
+# 让第九章那张收尾图的落点带**只显示两行**，剩下四行跑到图外面、
+# 以整页宽度渲染在图的下方。
+#   ⭐⭐ 而 SVG 源码里那六行**一行不少、y 坐标全在带子里** ——
+#     所以「读源码」「数字符」「查 y 坐标」三种自查全都过关。
+#     只有**把图渲染出来看**才发现。这正是这 11 轮定下那条死规矩的价值。
+#
+# ⭐ SVG 里要加下划线，用属性：`<tspan text-decoration="underline">`。
+_HTML_ONLY_IN_SVG = re.compile(
+    r"<(u|b|i|em|strong|br|p|div|span|small|code)\b[^>]*>", re.I)
+
+
+def lint_html_tags_in_svg(html):
+    """内联 SVG 里混进 HTML 专属标签 ——&nbsp;会把 SVG 就地截断。"""
+    bad = []
+    for m in re.finditer(r"<svg\b.*?</svg>", html, re.S):
+        # ⛔ foreignObject 里的 HTML 是**合法**的（专题二有一处用它排版），
+        #   先整段摘掉再查 ——&nbsp;否则会误报。
+        seg = re.sub(r"<foreignObject\b.*?</foreignObject>", "",
+                     m.group(0), flags=re.S)
+        fid = (re.search(r'id="(fig[^"]*)"', seg)
+               or re.search(r'aria-label="([^"]{0,28})', seg))
+        for t in _HTML_ONLY_IN_SVG.finditer(seg):
+            a = max(0, t.start() - 26)
+            bad.append((fid.group(1) if fid else "?", t.group(1),
+                        re.sub(r"<[^>]+>", "", seg[a:t.start() + 20])))
+    return bad
+
+
 def finish(html, out_path, sections, label):
     """锚点 → 吸顶目录 → arXiv 自动链接 → 写盘 → 打一行回执。"""
     html = anchorize(html)
@@ -490,6 +526,17 @@ def finish(html, out_path, sections, label):
     else:
         print("    ✅ 查重通过（图内／图注／正文 三面互不重合）")
     del DUP_WARNED[:]
+    bad_tags = lint_html_tags_in_svg(html)
+    if bad_tags:
+        # ⛔ 这条**中止构建**，不像查重那样只报告 ——&nbsp;
+        #   因为它不是「读起来啰嗦」，是**图会缺一块，而且缺得看不出来**。
+        for fid, tag, frag in bad_tags:
+            print("    ⛔⛔ %s 的 SVG 里有 HTML 标签 <%s>：…%s…"
+                  % (fid, tag, frag))
+        raise SystemExit(
+            "内联 SVG 里不能出现 HTML 专属标签 ——&nbsp;它会把 SVG 就地截断，"
+            "后面的内容整段掉到图外面。要下划线请用 "
+            'tspan text-decoration="underline"')
     self_links = lint_self_links(html)
     if self_links:
         print("    ⛔ 有链接指回自己所在的那一节（点了原地不动）：")

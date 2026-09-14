@@ -230,7 +230,7 @@ def main():
         "<tspan font-weight=\"700\">整条里最长的那两段，都是「把 token 变便宜」</tspan>。"
         % tot,
         "⛔ <tspan font-weight=\"700\">而末尾那 %.2f 倍，要老实说清楚它是什么："
-        "它是前两段除完之后<u>剩下的那一截</u>，不是查来的数。</tspan>"
+        "它是前两段除完之后<tspan text-decoration=\"underline\">剩下的那一截</tspan>，不是查来的数。</tspan>"
         "本课把它叫「硬件」，<tspan font-weight=\"700\">是个偷懒的叫法</tspan> ——&#160;"
         "它里面至少还混着两样本讲没拆开的东西："
         "<tspan font-weight=\"700\">KV 用更低的精度存</tspan>（今天各家默认就这么干，"

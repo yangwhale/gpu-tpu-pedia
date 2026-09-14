@@ -210,6 +210,33 @@ python3 topic02-lint-meta.py
 python3 topic02-lint-meta.py --famnav
 
 printf '\n\033[1m▸ 产物\033[0m\n'
+# ⛔⛔ 2026-09-15 R11：全仓扫一遍「内联 SVG 里混进 HTML 专属标签」。
+#   这些页面的 SVG 是**内联**的，HTML 解析器在 foreign content 里碰到
+#   <u> <b> <br> 这类只属于 HTML 的元素会**当场退出 foreign content** ——
+#   等于就地补了个 </svg>，那之后的图内容整段掉到图外面。
+#   ⭐ 实际case：fig3-gun 的收尾落点带只显示两行，剩下四行跑到图下面。
+#     而 SVG 源码里那六行一行不少、y 坐标全在带子里 —— 读源码查不出来。
+#   📌 topic03 那一家在 topic03_page.finish 里已经会当场中止；
+#     这里是**给其余各页兜底**（它们走别的脚手架）。
+python3 - "$W" <<'PY'
+import re, sys, glob, os
+bad = 0
+for p in sorted(glob.glob(os.path.join(sys.argv[1], "*.html"))):
+    s = open(p, encoding="utf-8").read()
+    for m in re.finditer(r"<svg\b.*?</svg>", s, re.S):
+        seg = re.sub(r"<foreignObject\b.*?</foreignObject>", "",
+                     m.group(0), flags=re.S)   # 里面的 HTML 合法
+        for t in re.finditer(r"<(u|b|i|em|strong|br|p|div|span|small|code)\b",
+                             seg, re.I):
+            bad += 1
+            print("    ⛔⛔ %s 的内联 SVG 里有 HTML 标签 <%s>"
+                  % (os.path.basename(p), t.group(1)))
+if bad:
+    sys.exit("内联 SVG 里不能有 HTML 标签 —— 它会把 SVG 就地截断。"
+             '要下划线用 tspan text-decoration="underline"')
+print("   ✅ 所有页面的内联 SVG 里没有 HTML 专属标签")
+PY
+
 for f in topic-01.html topic-02-L300.html topic-02.html topic-02x.html \
          topic-02x-L200.html \
          topic-03.html topic-03-L300.html topic-08.html \

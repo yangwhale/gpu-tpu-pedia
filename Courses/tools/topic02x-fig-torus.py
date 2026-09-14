@@ -121,8 +121,8 @@ def main():
                 '也是有不少 all-gather 的</tspan>」。确实如此 ——&#160;'
                 'X-6 里 Wan2.2 那种超线的就得切开；长视频要切序列；'
                 '想缩短单张的出图时间也得切。<tspan font-weight="700">一切开，集合通信就来了。</tspan>',
-                '⚠️ <tspan font-weight="700">「装得下」只是说它<u>可以</u>不切，'
-                '不是说它<u>不会</u>被切。</tspan>'
+                '⚠️ <tspan font-weight="700">「装得下」只是说它<tspan text-decoration="underline">可以</tspan>不切，'
+                '不是说它<tspan text-decoration="underline">不会</tspan>被切。</tspan>'
                 '——&#160;把「一种常见用法」讲成「唯一用法」，是这一类错误的通用形状。'])
 
     y = f.band(y + 14, "ok",
