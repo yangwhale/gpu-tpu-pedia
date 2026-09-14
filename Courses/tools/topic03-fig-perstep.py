@@ -236,17 +236,44 @@ def main():
                   "③ 除以带宽 ——&#160;字节变毫秒，"
                   "<tspan font-weight=\"700\">这里才出现两条反直觉的</tspan>", BL,
                   tag="v7 每 device 3.685 TB/s")
+    # ⭐⭐⭐ 2026-09-15 R6：这一格原来是**五行四列的数字表**（名字 / GiB÷张 /
+    #   毫秒 / tok/s）。可它恰恰是整张图的落点 ——&nbsp;
+    #   「显存省 56.9 倍，时间只快 7.08 倍」这句话，**得让人看见才信**。
+    # ⛔ 而且第二列「%.2f GiB ÷ %d 张」里那个 GiB 是**上一格已经写过的数**，
+    #   在这儿又出现一遍 ——&nbsp;两格之间自己重复。
+    # ⭐ 改成五根**线性**毫秒柱：上一格 MHA 的柱子一枝独秀（488 vs 8.58），
+    #   这一格它还是最高，但**高得有限** ——&nbsp;两格上下一对照，
+    #   「省显存 ≠ 省时间」不用写出来，看出来。
     f.box(24, top + 28, 664, 326, "none", LINE, 9)
     f.t(44, top + 58, "一步要多久（下界）", BL, bold=True, size=20,
         cls="svglbl")
+    TX0, TXW, TH = 196, 264, 22
+    tmax = max(r[7] for r in bars)
+    others = sum(r[7] for r in bars) - tmax
+    assert others < tmax, "「其余四根加起来还没 MHA 长」这句话不成立了"
     for j, (nm, kv, col, note, nd, rd, pct, ms, tps) in enumerate(bars):
-        yj = top + 96 + j * 38
-        f.t(44, yj, nm, col, bold=True, size=17)
-        f.t(168, yj, "%.2f GiB ÷ %d 张" % (rd, nd), GY, size=15, mono=True)
-        f.t(400, yj, "%.2f ms" % ms, INK, bold=True, size=18, mono=True)
-        f.t(510, yj, "%.0f tok/s" % tps, col, size=16, mono=True)
-    f.t(44, top + 334, "⚠️ 只算 HBM 读 ——&#160;真机只会更慢，"
-        "但各方案之间的比例站得住", GY2, size=15)
+        yj = top + 88 + j * 36
+        f.t(44, yj + TH / 2 + 6, nm, col, bold=True, size=17)
+        f.t(120, yj + TH / 2 + 6, "÷ %d 张" % nd, GY2, size=15, mono=True)
+        f.box(TX0, yj, max(TXW * ms / tmax, 3), TH, col, "none", 4)
+        f.t(560, yj + TH / 2 + 6, "%.2f ms" % ms, INK, bold=True, size=18,
+            mono=True, anchor="end")
+        f.t(570, yj + TH / 2 + 6, "%.0f tok/s" % tps, col, size=15, mono=True,
+            w=96)
+    AXY = top + 88 + 5 * 36 + 2                    # 一条真刻度，柱子才读得出
+    f.line(TX0, AXY, TX0 + TXW, AXY, LINE2, 1.2, arrow=False)
+    for tv in (0, 4, 8, 12):
+        gx = TX0 + TXW * tv / tmax
+        f.line(gx, AXY, gx, AXY + 6, GY2, 1.0, arrow=False)
+        f.t(gx, AXY + 22, "%d" % tv, GY2, size=14, anchor="middle")
+    f.t(TX0 + TXW + 16, AXY + 22, "ms", GY2, size=14)
+    f.t(44, AXY + 50,
+        '⭐ <tspan font-weight="700">MHA 那一根，比其余四根加起来还长</tspan>'
+        '（%.2f vs %.2f ms）。' % (tmax, others), BL, size=16, w=620)
+    # ⛔ 这一条**必须留在图上**，不许折进「出处」——&#160;见文件头「五条口径」那段：
+    #   它正是防「把这张图当成实测」的那一条。2026-09-15 一度折走过，当天改回。
+    f.t(44, AXY + 74, "⚠️ 只算 HBM 读 ——&#160;真机只会更慢，"
+        "但各方案之间的比例站得住", GY2, size=15, w=620)
 
     # ⭐⭐ 2026-09-14 R27：原来这里只用一句话说「差在哪」。
     #   可这门课一贯的做法是**把倍数拆开看它在哪一步被吃掉的**
