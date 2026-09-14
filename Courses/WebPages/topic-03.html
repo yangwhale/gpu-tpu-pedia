@@ -685,25 +685,29 @@ h4 { margin:18px 0 6px; font-size:15px }
 <style>
 /* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
    那条规则之前是空转的（顶上什么都没有，点内链只是白空一截）。 */
-.toc{position:sticky;top:0;z-index:58;background:rgba(255,255,255,.96);
+.tocbar{position:sticky;top:0;z-index:58;background:rgba(255,255,255,.96);
      backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid #e8eaed;
      overflow-x:auto;scrollbar-width:none}
-.toc::-webkit-scrollbar{display:none}
-.toc-in{display:flex;gap:2px;align-items:center;white-space:nowrap;
-        max-width:1760px;margin:0 auto;padding:7px 16px}
-.toc-lb{font:600 12px var(--mono);color:#9aa0a6;padding-right:10px;flex:none}
-.toc a{font:500 13px/1.2 var(--mono);color:#5f6368;text-decoration:none;
-       padding:6px 10px;border-radius:6px;flex:none}
-.toc a b{color:#202124}
-.toc a:hover{background:#f1f3f4}
-.toc a.on{background:#e8f0fe;color:#174ea6}
-.toc a.on b{color:#174ea6}
-@media print{.toc{display:none}}
+.tocbar::-webkit-scrollbar{display:none}
+.tocbar-in{display:flex;gap:6px;align-items:center;white-space:nowrap;
+        max-width:1760px;margin:0 auto;padding:8px 16px}
+.tocbar-lb{font:600 12px var(--mono);color:#9aa0a6;padding-right:6px;flex:none}
+/* ⭐ 2026-09-14 每个条目给一个真的框。原来只有 padding ＋ 悬停底色 ——
+   不悬停的时候它就是一排裸字，看不出「这是可以点的东西」，
+   条目之间也只靠 2px 间距分隔，读起来是一长串。
+   ⛔ 框要用 1px 实线 ＋ 胶囊圆角，不要用阴影：吸顶条只有 40 多像素高，
+     阴影在这个尺度上只会糊成一片灰。 */
+.tocbar a{font:500 13px/1.2 var(--mono);color:#5f6368;text-decoration:none;
+       padding:5px 11px;border:1px solid #dadce0;border-radius:999px;
+       background:#fff;flex:none;transition:background .12s,border-color .12s}
+.tocbar a:hover{background:#f1f3f4;border-color:#bdc1c6;color:#202124}
+.tocbar a.on{background:#e8f0fe;border-color:#aecbfa;color:#174ea6;font-weight:600}
+@media print{.tocbar{display:none}}
 </style>
 </head>
 <body>
 <div class="progress"><i></i></div>
-<nav class="toc" id="toc"><div class="toc-in"><span class="toc-lb">目录</span><a href="#s零"><b>零</b> 起点</a><a href="#s一"><b>一</b> MHA</a><a href="#s二"><b>二</b> 为什么是现在</a><a href="#s三"><b>三</b> FlashAttention</a><a href="#s四"><b>四</b> 骨架</a><a href="#s五"><b>五</b> 旋钮①</a><a href="#s六"><b>六</b> 旋钮②</a><a href="#s七"><b>七</b> 旋钮③</a><a href="#s八"><b>八</b> 元旋钮 ⊕</a><a href="#s九"><b>九</b> 代价</a><a href="#s十"><b>十</b> 落到硬件（本专题的落点）</a><a href="#s十一"><b>十一</b> 收尾</a></div></nav>
+<nav class="tocbar" id="tocbar"><div class="tocbar-in"><span class="tocbar-lb">目录</span><a href="#s零" title="第 零 节 · 起点">起点</a><a href="#s一" title="第 一 节 · MHA">MHA</a><a href="#s二" title="第 二 节 · 为什么是现在">为什么是现在</a><a href="#s三" title="第 三 节 · FlashAttention">FlashAttention</a><a href="#s四" title="第 四 节 · 骨架">骨架</a><a href="#s五" title="第 五 节 · 旋钮①">旋钮①</a><a href="#s六" title="第 六 节 · 旋钮②">旋钮②</a><a href="#s七" title="第 七 节 · 旋钮③">旋钮③</a><a href="#s八" title="第 八 节 · 元旋钮 ⊕">元旋钮 ⊕</a><a href="#s九" title="第 九 节 · 代价">代价</a><a href="#s十" title="第 十 节 · 落到硬件（本专题的落点）">落到硬件（本专题的落点）</a><a href="#s十一" title="第 十一 节 · 收尾">收尾</a></div></nav>
 
 
 <!-- ⛔ 这个文件由 Courses/tools/topic03-build.py 生成。
@@ -14609,13 +14613,13 @@ the large "keys" and "values" tensors</b>.」</em>（Shazeer 2019 摘要）<br>
     <b>正文就写在那个脚本的 BODY 里</b>（md 只是大纲）。本目录采用 CC BY-NC-SA 4.0。</p>
 </div>
 
-<button class="totop" id="totop" title="回到顶部" onclick="scrollTo({top:0,behavior:'smooth'})">↑</button>
+<button class="totop" id="totop" title="回到顶部" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 <script>(function(){
- var bar=document.querySelector(".progress i"), top=document.getElementById("totop"), toc=document.getElementById("toc"), ls=[].slice.call(toc.querySelectorAll("a"));
+ var bar=document.querySelector(".progress i"), btn=document.getElementById("totop"), toc=document.getElementById("tocbar"), ls=[].slice.call(toc.querySelectorAll("a"));
  function tick(){
   var h=document.documentElement,  p=h.scrollTop/(h.scrollHeight-h.clientHeight||1);
   bar.style.width=(p*100).toFixed(1)+"%";
-  top.className="totop"+(h.scrollTop>600?" on":"");
+  btn.className="totop"+(h.scrollTop>600?" on":"");
   var cur=null;
   ls.forEach(function(a){var e=document.querySelector(a.getAttribute("href"));
     if(e&&e.getBoundingClientRect().top<140)cur=a;});

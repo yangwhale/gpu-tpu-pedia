@@ -3015,26 +3015,54 @@ def _build_nav(html):
         r'<span class="badge">第 (\S+) 节</span><h2>(.*?)</h2>', html, re.S)
     if not secs:
         return html
+    # ⭐⭐ 2026-09-14：去掉条目前面的「零 一 二 三…」。
+    #   ⛔ 它在这一条横带里**没有一个读者用得上**：目录本来就是从左到右排的，
+    #     顺序靠位置已经说清楚了，汉字数字只是把每个条目撑宽一截、
+    #     还跟标题抢视觉重量（原来它是 <b> 且比标题更黑）。
+    #   ⭐ 节号没有丢 —— 挪进 title= 悬停提示。**要用的时候还在，不占版面。**
     items = []
     for sid, num, title in secs:
         t = re.sub(r"<[^>]+>", "", title).replace("&nbsp;", " ")
-        t = re.split(r"——|:|：", t)[0].strip()[:16]
-        items.append('<a href="#%s"><b>%s</b> %s</a>' % (sid, num, t))
+        full = re.split(r"——|:|：", t)[0].strip()
+        items.append('<a href="#%s" title="第 %s 节 · %s">%s</a>'
+                     % (sid, num, full, full[:16]))
+    # ⛔⛔ 2026-09-14 类名撞车：这条吸顶带原来也叫 `.toc`，而**基础 CSS 里早就有一个
+    #   `.toc`** —— 那是 2026-09-07 删掉的「这一讲的路线」方框目录留下的规则
+    #   （`.toc{background:var(--bg2);border-radius;padding:22px 26px;margin:24px 0}`）。
+    #   CSS_NAV 排在后面，所以 background 被盖住了、**看不出撞了**；
+    #   但 padding / margin / border-radius 没人覆盖，**一路漏进来**：
+    #   一条 44px 的横带被撑成 **88px**，上下各白 22px，左右还多 10px。
+    #   ⛔ 那条基础规则**不能删** —— 它是从 topic-02-L300 的 CSS 整份抄来的，
+    #     专题一现在还在用那个方框目录。所以改名的是我这边。
+    #   ⭐⭐ 判据：**新控件复用老类名，冲突只会在「没被覆盖到的那几个属性」上显形。**
+    #     背景色这种一眼能看见的反而是安全的 —— 危险的是盒模型：
+    #     它不改颜色、不报错，只是让尺寸对不上，而你会以为是自己的 padding 写错了。
     nav = ('<div class="progress"><i></i></div>\n'
-           '<nav class="toc" id="toc"><div class="toc-in">'
-           '<span class="toc-lb">目录</span>' + "".join(items) + '</div></nav>\n')
+           '<nav class="tocbar" id="tocbar"><div class="tocbar-in">'
+           '<span class="tocbar-lb">目录</span>' + "".join(items) + '</div></nav>\n')
+    # ⛔⛔ 2026-09-14：这个「回到顶部」**一次都没工作过**，而且它看起来完全正常 ——
+    #   按钮画出来了、.on 加上了、点得到（elementFromPoint 就是它自己）、
+    #   控制台一条报错都没有，**只是页面纹丝不动**。
+    #   根因：原来写的是裸 `scrollTo({top:0,…})`。行内 onclick 的作用域链是
+    #     元素 → 表单 → document → window，而 **`Element.prototype.scrollTo` 是存在的** ——
+    #   于是它解析成「滚动这个按钮自己」，按钮没有溢出内容，静默无操作。
+    #   ⭐⭐ 判据：**行内事件处理器里调任何滚动 / 焦点 / 尺寸类方法，一律写全 `window.`。**
+    #     这类名字在 Element 上往往也有一份同名的，抢在 window 前面被找到，
+    #     而且**不报错**——它是个合法调用，只是作用在错的对象上。
+    #   ⭐ 同一个坑的另一半：下面那个局部变量原来叫 `top`（＝ `window.top`）。
+    #     IIFE 里侥幸没出事，但同一族的影子命名，顺手改成 `btn`。
     tail = ('<button class="totop" id="totop" title="回到顶部"'
-            ' onclick="scrollTo({top:0,behavior:\'smooth\'})">↑</button>\n'
+            ' onclick="window.scrollTo({top:0,behavior:\'smooth\'})">↑</button>\n'
             '<script>(function(){\n'
             ' var bar=document.querySelector(".progress i"),'
-            ' top=document.getElementById("totop"),'
-            ' toc=document.getElementById("toc"),'
+            ' btn=document.getElementById("totop"),'
+            ' toc=document.getElementById("tocbar"),'
             ' ls=[].slice.call(toc.querySelectorAll("a"));\n'
             ' function tick(){\n'
             '  var h=document.documentElement,'
             '  p=h.scrollTop/(h.scrollHeight-h.clientHeight||1);\n'
             '  bar.style.width=(p*100).toFixed(1)+"%";\n'
-            '  top.className="totop"+(h.scrollTop>600?" on":"");\n'
+            '  btn.className="totop"+(h.scrollTop>600?" on":"");\n'
             '  var cur=null;\n'
             '  ls.forEach(function(a){var e=document.querySelector(a.getAttribute("href"));\n'
             '    if(e&&e.getBoundingClientRect().top<140)cur=a;});\n'
@@ -3052,20 +3080,24 @@ def _build_nav(html):
 CSS_NAV = """<style>
 /* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
    那条规则之前是空转的（顶上什么都没有，点内链只是白空一截）。 */
-.toc{position:sticky;top:0;z-index:58;background:rgba(255,255,255,.96);
+.tocbar{position:sticky;top:0;z-index:58;background:rgba(255,255,255,.96);
      backdrop-filter:saturate(1.6) blur(8px);border-bottom:1px solid #e8eaed;
      overflow-x:auto;scrollbar-width:none}
-.toc::-webkit-scrollbar{display:none}
-.toc-in{display:flex;gap:2px;align-items:center;white-space:nowrap;
-        max-width:1760px;margin:0 auto;padding:7px 16px}
-.toc-lb{font:600 12px var(--mono);color:#9aa0a6;padding-right:10px;flex:none}
-.toc a{font:500 13px/1.2 var(--mono);color:#5f6368;text-decoration:none;
-       padding:6px 10px;border-radius:6px;flex:none}
-.toc a b{color:#202124}
-.toc a:hover{background:#f1f3f4}
-.toc a.on{background:#e8f0fe;color:#174ea6}
-.toc a.on b{color:#174ea6}
-@media print{.toc{display:none}}
+.tocbar::-webkit-scrollbar{display:none}
+.tocbar-in{display:flex;gap:6px;align-items:center;white-space:nowrap;
+        max-width:1760px;margin:0 auto;padding:8px 16px}
+.tocbar-lb{font:600 12px var(--mono);color:#9aa0a6;padding-right:6px;flex:none}
+/* ⭐ 2026-09-14 每个条目给一个真的框。原来只有 padding ＋ 悬停底色 ——
+   不悬停的时候它就是一排裸字，看不出「这是可以点的东西」，
+   条目之间也只靠 2px 间距分隔，读起来是一长串。
+   ⛔ 框要用 1px 实线 ＋ 胶囊圆角，不要用阴影：吸顶条只有 40 多像素高，
+     阴影在这个尺度上只会糊成一片灰。 */
+.tocbar a{font:500 13px/1.2 var(--mono);color:#5f6368;text-decoration:none;
+       padding:5px 11px;border:1px solid #dadce0;border-radius:999px;
+       background:#fff;flex:none;transition:background .12s,border-color .12s}
+.tocbar a:hover{background:#f1f3f4;border-color:#bdc1c6;color:#202124}
+.tocbar a.on{background:#e8f0fe;border-color:#aecbfa;color:#174ea6;font-weight:600}
+@media print{.tocbar{display:none}}
 </style>
 """
 
