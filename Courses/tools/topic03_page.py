@@ -114,6 +114,50 @@ h4 { margin:18px 0 6px; font-size:15px }
     return head
 
 
+def _plain(s):
+    """扒成纯文字：去标签、去实体、去空白与标点，只留下可比对的字。"""
+    s = re.sub(r"<[^>]+>", "", s)
+    s = re.sub(r"&#?\w+;", "", s)
+    return re.sub(r"[\s，。、；：！？「」（）()·…——\-＝=／/]+", "", s)
+
+
+def dup_caption_vs_fig(cap, svg, fid, n=14):
+    """图注里有没有**整段照抄图内文字**。返回命中的片段列表。
+
+    ⛔⛔ 2026-09-14 R62 立。起因：第一章三张图的图注，全都在复述图自己
+      底下那条落点带 ——&nbsp;其中 fig-rnn-hw 那张，**图注的标题和图的落点带
+      标题是同一个词**（「两头堵死」），渲染出来页面在原地结巴了一次。
+
+    ⭐ 为什么原有的九条体检一条都没响：它们查的是**结构**（小节在不在、
+      指针指得中不中、节号对不对），而这是**同一句话住在两个地方**。
+      专题二 L200 那边有一条查重，但它比的是「正文 ↔ 图注」，
+      **比不到「图注 ↔ 图内文字」** ——&nbsp;因为图内文字在 SVG 里。
+
+    ⛔ 判据：**只有把图渲染出来、用眼睛看，才发现得了的问题，
+      就该在构建时用代码钉住。** 这一条是靠截图发现的，下一章不会再靠运气。
+
+    ⚠️ 只报告不中止 —— L300 那 58 张里有一批历史重复，现在整顿会churn
+      一大片、也不该在改主线的同一轮里做。**先让它可见。**
+    """
+    c, s = _plain(cap), _plain(svg)
+    if not c or not s:
+        return []
+    hits, i = [], 0
+    while i + n <= len(c):
+        if c[i:i + n] in s:
+            j = i + n
+            while j < len(c) and c[i:j + 1] in s:
+                j += 1
+            hits.append(c[i:j])
+            i = j
+        else:
+            i += 1
+    return hits
+
+
+DUP_WARNED = []
+
+
 def place_figs(html, FIGS, here=HERE):
     """把 `__FIG_X__` 占位符换成 <figure>，并把 .src.html 包成折叠的出处。"""
     for ph, (fid, fn, src, cap) in FIGS.items():
@@ -133,11 +177,12 @@ def place_figs(html, FIGS, here=HERE):
                 % io.open(sfp, encoding="utf-8").read()) if os.path.isfile(sfp) else ''
         # ⛔ 图注为空串时**不要出空的 <figcaption>** —— 它不显示文字，但照样吃
         #    figcaption 的 margin/padding，图底下会多出一段说不清来路的空白。
+        for h in dup_caption_vs_fig(cap, svg, fid):
+            DUP_WARNED.append((fid, h))
         html = html.replace(
             ph, '<figure class="fbox fwide" id="%s">%s%s%s</figure>'
                 % (fid, svg, '<figcaption>%s</figcaption>' % cap if cap else '',
                    note))
-    assert "__FIG_" not in html, "还有图占位符没被替换掉"
     assert "__FIG_" not in html, "还有图占位符没被替换掉"
     return html
 
@@ -324,4 +369,16 @@ def finish(html, out_path, sections, label):
     print("ok  %s  %s 字符 · %d 节 · %d 个论文链接"
           % (label, format(os.path.getsize(out_path), ","),
              len(sections), _CL.count(html)))
+    # ⭐ 图注 ↔ 图内文字查重的回执。⛔ 只报告不中止，理由见 dup_caption_vs_fig 的注。
+    if DUP_WARNED:
+        print("    ⚠️  图注照抄图内文字 %d 处（%d 张图）——&nbsp;图注该写"
+              "「图给不了的东西」" % (len(DUP_WARNED),
+                                     len(set(f for f, _ in DUP_WARNED))))
+        for fid, h in DUP_WARNED[:6]:
+            print("       %-18s %s" % (fid, h[:40]))
+        if len(DUP_WARNED) > 6:
+            print("       …… 其余 %d 处" % (len(DUP_WARNED) - 6))
+    else:
+        print("    ✅ 图注查重通过（没有 14 字以上照抄图内文字）")
+    del DUP_WARNED[:]
     return html
