@@ -209,7 +209,12 @@ def lint_dup_body_vs_figs(html, n=14):
         inner.append((fid, _plain(t)))
         if cap:
             caps.append((fid, _plain(cap)))
-    body = _plain(re.sub(r"<figure\b.*?</figure>", "", html, flags=re.S))
+    # ⛔ 折叠起来的 <details>（出处、模型表的长注解）**不算「看见两遍」** ——
+    #   它默认是收着的。⭐ 判据还是那一条：看的是**读者会不会看见两遍**，
+    #   不是「文件里有没有两份」。
+    _body_src = re.sub(r"<figure\b.*?</figure>", "", html, flags=re.S)
+    _body_src = re.sub(r"<details\b.*?</details>", "", _body_src, flags=re.S)
+    body = _plain(_body_src)
     hits = []
     for fid, t in inner:
         hits += [(r, fid + "（正文↔图内）") for r in _runs(body, t, n)]
