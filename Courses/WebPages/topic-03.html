@@ -7685,24 +7685,192 @@ h4 { margin:18px 0 6px; font-size:15px }
 
 <h3 id="s7-5">7.5　本章落点：兜了一整圈，我们对「状态」的看法变了</h3>
 
-<div class="note ok"><p>⭐⭐⭐ <b>Mamba 的作者有一个说法，值得整段抄下来。</b></p>
-<p><em>他说：其实<b>每一个自回归模型都是某种「状态模型」</b> ——&nbsp;
-  它在内存里持有一个状态，每吐一个字就演化一次。区别只在这个状态长什么样：</em></p>
-<p>注意力的状态，是把历史里<b>每一个元素都原样缓存下来</b>；<br>
-  这一支的状态，是把全部历史<b>压成一个固定大小的东西</b>。</p>
-<p>⛔ <em>然后他补了一句很有意思的观察：很多人管这一支的状态叫「一种 KV cache」——&nbsp;
-  <b>可反过来说才更准确：KV cache 才是状态的一种，而且是最不压缩的那一种。</b></em></p>
-<p>⭐ <em>——&nbsp;读到这儿，<a href="#s一">第一章</a>那个盒子的地位就变了：
-  它不是一个被淘汰的老办法，<b>它是这一整个家族的原型</b>。</em></p></div>
+<!-- ⛔⛔ 2026-09-15 画完 fig3-gu 之后**立刻重写了这一节的正文**。
+     原来三段引文是逐字写在正文里的；图一画出来，查重当场响了 **5 处**。
+     ⭐ 判据⑩：两处说同一件事，**挨着图的那一处赢**。
+     ⛔ 但不能简单删 ——&#160;正文要改成承担**图给不了的三样**：
+        ① 说话的人是谁（图里只在折叠的出处里）
+        ② 第一段引文里图没画的那半句（「每吐一个字就演化一次」）
+        ③ 门牌（Mamba）＋ 本章落点
+     判据：**查重响了不等于该删字，多半是该换一批字。** -->
+<p class="landing">📌 <b>这一节不讲新机制 ——&nbsp;先看图，再读下面这几句。</b>
+  <em><b>图是骨架，文字是血肉，顺序反了会读不动。</b></em></p>
 
-<div class="note info"><p>📌 <b>他还给了一个比喻，比任何指标都好用。</b></p>
-<p><b>Transformer 像一个数据库</b>：<em>每来一条新观察都当成重要资料归档，
-  要用的时候翻出来，一个字都不差。</em><br>
-  <b>这一支像一个大脑</b>：<em>大小有限、一直在线、边听边处理。</em></p>
-<p>⛔ <em>大脑记不住一整本电话簿，更背不出来。可人也不行 ——&nbsp;
-  我们对精确记忆和检索糟糕透顶，<b>而这好像并不妨碍智能出现</b>。</em></p>
-<p>⭐⭐ <em>所以「谁的长上下文更强」这个问法本身就不成立：
-  我自己的记忆，和我的研究笔记，哪个更好？——&nbsp;<b>它们只是不一样。</b></em></p></div>
+<figure class="fbox fwide" id="fig-gu"><svg viewBox="0 0 1400 1804" width="100%" role="img" aria-label="把前面七章重新安放一遍：所有自回归模型都是状态模型，区别只在状态长什么样。全注意力把历史每一条原样留着，线性注意力压成一个固定大小的东西，而滑窗和 DSA 在这条轴上原地不动。于是 KV cache 不是状态的上位概念，它才是状态的一种，而且是最不压缩的那一种。Transformer 像一个数据库，这一支像一个大脑，而人是后者"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">绕回原点：<tspan font-weight="700">KV cache 才是状态的一种</tspan>，而不是反过来</text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 这一格不讲新机制 ——&#160;它把<tspan font-weight="700">前面走过的每一条路，重新摆到同一条轴上</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">状态的两端</text>
+<rect x="117" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="138" y="74" fill="#5f6368" style="font-size:14.0px">在这条轴上没动</text>
+<rect x="262" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="283" y="74" fill="#5f6368" style="font-size:14.0px">落点</text>
+<rect x="0" y="102" width="1400" height="430" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 每一个自回归模型都是「状态模型」——　区别只在状态长什么样</tspan></text>
+<text class="svgsm" x="440" y="122" fill="#5f6368" style="font-size:11.0px">⚠️ 这条轴<tspan font-weight="700">没有刻度</tspan> ——　它只回答「谁在左、谁在右、谁原地不动」</text>
+<line x1="90" y1="228" x2="1320" y2="228" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="90" y="182" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">原样留着</tspan></text>
+<text class="svgsm" x="90" y="202" fill="#5f6368" style="font-size:13.0px">每一条历史都单独存着，一个字不差</text>
+<text class="svgsm" x="1320" y="182" fill="#174ea6" text-anchor="end" style="font-size:17.0px"><tspan font-weight="700">压成一个固定大小的东西</tspan></text>
+<text class="svgsm" x="1320" y="202" fill="#5f6368" text-anchor="end" style="font-size:13.0px">存多长的话，它都是这么大</text>
+<rect x="168" y="221" width="14" height="14" rx="7" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="175" y="258" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">全注意力</tspan></text>
+<text class="svgsm" x="175" y="280" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">把每一条 K/V 原样留着</text>
+<rect x="463" y="221" width="14" height="14" rx="7" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="470" y="258" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">GQA</tspan></text>
+<text class="svgsm" x="470" y="280" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">八份合一份 ——　还是一条一条存</text>
+<rect x="733" y="221" width="14" height="14" rx="7" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="740" y="258" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">MLA</tspan></text>
+<text class="svgsm" x="740" y="280" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">存压缩件 ——　小了很多，但仍随长度涨</text>
+<rect x="1208" y="221" width="14" height="14" rx="7" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1215" y="258" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">线性注意力 / Mamba</tspan></text>
+<text class="svgsm" x="1215" y="280" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">不存条目，只留一块板子</text>
+<text class="svgsm" x="90" y="336" fill="#202124" style="font-size:15.0px"><tspan font-weight="700">句子越长，那个状态怎么变？</tspan></text>
+<text class="svgsm" x="240" y="356" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">左边那三站（全注意力 / GQA / MLA）</tspan></text>
+<text class="svgsm" x="1120" y="356" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">右端那一站（线性注意力）</tspan></text>
+<rect x="240" y="378" width="46" height="19" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="232" y="392" fill="#5f6368" text-anchor="end" style="font-size:12.0px">短句</text>
+<rect x="240" y="408" width="104" height="19" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="232" y="422" fill="#5f6368" text-anchor="end" style="font-size:12.0px">中等</text>
+<rect x="240" y="438" width="196" height="19" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="232" y="452" fill="#5f6368" text-anchor="end" style="font-size:12.0px">很长的一段</text>
+<text class="svgsm" x="240" y="486" fill="#a50e0e" style="font-size:14.0px"><tspan font-weight="700">⛔ 越说越长 ——　这三条都在这一端</tspan></text>
+<rect x="1120" y="378" width="96" height="19" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1112" y="392" fill="#5f6368" text-anchor="end" style="font-size:12.0px">短句</text>
+<rect x="1120" y="408" width="96" height="19" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1112" y="422" fill="#5f6368" text-anchor="end" style="font-size:12.0px">中等</text>
+<rect x="1120" y="438" width="96" height="19" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1112" y="452" fill="#5f6368" text-anchor="end" style="font-size:12.0px">很长的一段</text>
+<line x1="1216" y1="372" x2="1216" y2="464" stroke="#1e8e3e" stroke-width="1.4" stroke-linecap="round" stroke-dasharray="3 3"/>
+<text class="svgsm" x="1120" y="486" fill="#0d652d" style="font-size:14.0px"><tspan font-weight="700">⭐ 一样大 ——　它不认识「句子多长」</tspan></text>
+<rect x="162" y="215" width="26" height="26" rx="13" fill="none" stroke="#e8710a" stroke-width="2.0"/>
+<text class="svgsm" x="175" y="302" fill="#b06000" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">⛔ 滑窗 / DSA 也站在这一站</tspan></text>
+<rect x="560" y="360" width="470" height="88" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="578" y="382" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">⛔ 为什么它们不在这条轴上挪？</tspan></text>
+<text class="svgsm" x="578" y="404" fill="#5f6368" style="font-size:13.5px">因为它们改的是「每一步读进来几份」，不是「存几份」——</text>
+<text class="svgsm" x="578" y="424" fill="#5f6368" style="font-size:13.5px">存的那一份一个字节都没少，所以站在原点一步没挪。</text>
+<rect x="0" y="584" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="584" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="584" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="611" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 这张轴真正要说的一句话</tspan></text>
+<text class="svgsm" x="20" y="642" fill="#174ea6" style="font-size:15.0px">前面<tspan font-weight="700">六章</tspan>拧的旋钮，都在这条轴的<tspan font-weight="700">左半边挪来挪去</tspan>；<tspan font-weight="700">只有这一章，真的走到了右端。</tspan></text>
+<text class="svgsm" x="20" y="666" fill="#174ea6" style="font-size:15.0px">⭐ 而走到右端的代价，也在图上：<tspan font-weight="700">右边那三个方块一样大，意味着装不下的东西就是装不下</tspan>。</text>
+<rect x="0" y="708" width="1400" height="380" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="708" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="710" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="738" x2="1400" y2="738" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="728" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 反过来说才对 ——　这是这一段最狠的一句</tspan></text>
+<text class="svgsm" x="312" y="728" fill="#5f6368" style="font-size:11.0px">⭐ 同样两个词，<tspan font-weight="700">谁装着谁，换了个位置</tspan></text>
+<text class="svgsm" x="60" y="766" fill="#5f6368" style="font-size:16.0px"><tspan font-weight="700">大多数人这么说</tspan></text>
+<rect x="60" y="782" width="560" height="196" rx="24" fill="#fce8e6" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="340" y="814" fill="#a50e0e" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">KV cache</tspan></text>
+<text class="svgsm" x="340" y="836" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">（被当成那个大类）</text>
+<rect x="160" y="864" width="360" height="86" rx="43" fill="#fff" stroke="#d93025" stroke-width="1.6"/>
+<text class="svgsm" x="340" y="892" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">线性注意力的状态</tspan></text>
+<text class="svgsm" x="340" y="914" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">「它是一种 KV cache」</text>
+<text class="svgsm" x="60" y="1004" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">⛔ 这么说的问题：</tspan></text>
+<text class="svgsm" x="60" y="1026" fill="#5f6368" style="font-size:13.5px">它把「最不压缩的那一种」当成了整个类别的名字。</text>
+<text class="svgsm" x="780" y="766" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">⭐ Albert Gu 的说法</tspan></text>
+<rect x="780" y="782" width="560" height="196" rx="24" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="1060" y="814" fill="#0d652d" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">状态（state）</tspan></text>
+<text class="svgsm" x="1060" y="836" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">每吐一个字就演化一次的那个东西</text>
+<rect x="806" y="864" width="246" height="86" rx="43" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="929" y="892" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">KV cache</tspan></text>
+<text class="svgsm" x="929" y="914" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">最<tspan font-weight="700">不</tspan>压缩的那一种</text>
+<rect x="1068" y="864" width="246" height="86" rx="43" fill="#fff" stroke="#1e8e3e" stroke-width="1.6"/>
+<text class="svgsm" x="1191" y="892" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">一块固定的板子</tspan></text>
+<text class="svgsm" x="1191" y="914" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">压得最狠的那一种</text>
+<text class="svgsm" x="780" y="1004" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">⭐ 换过来之后多出来的东西：</tspan></text>
+<text class="svgsm" x="780" y="1026" fill="#5f6368" style="font-size:13.5px">它们是兄弟，不是父子 ——　于是「第一章那个盒子」不再是被淘汰的老办法。</text>
+<line x1="645" y1="880" x2="755" y2="880" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="700" y="866" fill="#5f6368" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">翻过来</tspan></text>
+<rect x="0" y="1140" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1140" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1140" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1167" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 翻过来之后，第一章那个盒子变成了什么</tspan></text>
+<text class="svgsm" x="20" y="1198" fill="#0d652d" style="font-size:15.0px">它不是一个<tspan font-weight="700">被淘汰的老办法</tspan>，它是<tspan font-weight="700">这一整个家族的原型</tspan>。</text>
+<text class="svgsm" x="20" y="1222" fill="#0d652d" style="font-size:15.0px">⭐ 我们绕了三十年，不是绕回了一个旧东西 ——&#160;<tspan font-weight="700">是绕回来之后，第一次知道自己为什么要它。</tspan></text>
+<rect x="0" y="1264" width="1400" height="360" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1264" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="1266" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1294" x2="1400" y2="1294" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1284" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓒ 一个比任何指标都好用的比喻</tspan></text>
+<text class="svgsm" x="224" y="1284" fill="#5f6368" style="font-size:11.0px">⛔ 这一格<tspan font-weight="700">刻意不放任何数字</tspan> ——　它的落点恰恰是「这个比较本身不成立」</text>
+<rect x="60" y="1318" width="600" height="210" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="360" y="1348" fill="#174ea6" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">Transformer　像一个数据库</tspan></text>
+<rect x="152.88" y="1375.28" width="66.24000000000001" height="55.44" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="178.8" y1="1384.5" x2="193.2" y2="1384.5" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="152.9" y1="1393.8" x2="219.1" y2="1393.8" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="178.8" y1="1403.0" x2="193.2" y2="1403.0" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="152.9" y1="1412.2" x2="219.1" y2="1412.2" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="178.8" y1="1421.5" x2="193.2" y2="1421.5" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="252.88" y="1375.28" width="66.24000000000001" height="55.44" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="278.8" y1="1384.5" x2="293.2" y2="1384.5" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="252.9" y1="1393.8" x2="319.1" y2="1393.8" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="278.8" y1="1403.0" x2="293.2" y2="1403.0" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="252.9" y1="1412.2" x2="319.1" y2="1412.2" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="278.8" y1="1421.5" x2="293.2" y2="1421.5" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="352.88" y="1375.28" width="66.24000000000001" height="55.44" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="378.8" y1="1384.5" x2="393.2" y2="1384.5" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="352.9" y1="1393.8" x2="419.1" y2="1393.8" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="378.8" y1="1403.0" x2="393.2" y2="1403.0" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="352.9" y1="1412.2" x2="419.1" y2="1412.2" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="378.8" y1="1421.5" x2="393.2" y2="1421.5" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<rect x="452.88" y="1375.28" width="66.24000000000001" height="55.44" rx="3" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1.4"/>
+<line x1="478.8" y1="1384.5" x2="493.2" y2="1384.5" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="452.9" y1="1393.8" x2="519.1" y2="1393.8" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="478.8" y1="1403.0" x2="493.2" y2="1403.0" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<line x1="452.9" y1="1412.2" x2="519.1" y2="1412.2" stroke="#1a73e8" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="478.8" y1="1421.5" x2="493.2" y2="1421.5" stroke="#1a73e8" stroke-width="2.0" stroke-linecap="round"/>
+<text class="svgsm" x="360" y="1462" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">每来一条新观察都当成重要资料归档</text>
+<text class="svgsm" x="360" y="1484" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">要用的时候翻出来 ——　一个字都不差</text>
+<text class="svgsm" x="360" y="1510" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⛔ 代价：越存越多</tspan></text>
+<rect x="740" y="1318" width="600" height="210" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<text class="svgsm" x="1040" y="1348" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">这一支　像一个大脑</tspan></text>
+<rect x="984.8" y="1373.96" width="110.4" height="40.92" rx="3" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<line x1="1008.8" y1="1414.9" x2="999.2" y2="1432.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<line x1="1071.2" y1="1414.9" x2="1080.8" y2="1432.0" stroke="#1e8e3e" stroke-width="1.3" stroke-linecap="round"/>
+<text class="svgsm" x="1040" y="1462" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">大小有限、一直在线、边听边处理</text>
+<text class="svgsm" x="1040" y="1484" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">不归档 ——　边听边把它揉进那块板子</text>
+<text class="svgsm" x="1040" y="1510" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⛔ 代价：记不住一整本电话簿</tspan></text>
+<circle cx="700.0" cy="1403.4" r="10.6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<path d="M 682.1 1443.0 a 17.9 26.0 0 0 1 35.8 0 z" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1.4"/>
+<text class="svgsm" x="700" y="1470" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">我们</tspan></text>
+<line x1="700" y1="1490" x2="700" y2="1544" stroke="#1e8e3e" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="700" y1="1544" x2="1040" y2="1544" stroke="#1e8e3e" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="1040" y1="1544" x2="1040" y2="1534" stroke="#1e8e3e" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="700" y="1568" fill="#202124" text-anchor="middle" style="font-size:15.0px">而我们人，恰恰是<tspan font-weight="700">后面这一种</tspan>　——　在「精确记忆」和「精确检索」上糟糕透顶</text>
+<text class="svgsm" x="700" y="1594" fill="#0d652d" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">⭐ 而这好像<tspan font-weight="700">并不妨碍智能出现</tspan>。</tspan></text>
+<rect x="0" y="1676" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1676" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1676" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1703" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以那个问法本身就不成立</tspan></text>
+<text class="svgsm" x="20" y="1734" fill="#0d652d" style="font-size:15.0px">很多人爱问「<tspan font-weight="700">谁的长上下文更强</tspan>」。⭐ 可以反问一句：<tspan font-weight="700">我自己的记忆，和我的研究笔记，哪个更好？</tspan></text>
+<text class="svgsm" x="20" y="1758" fill="#0d652d" style="font-size:15.0px">——&#160;<tspan font-weight="700">它们只是不一样。</tspan>一个记得牢、查得准但越攒越厚；一个大小固定、一直在线但会记混。⛔ <tspan font-weight="700">这正是下一章要「两个都要」的全部理由。</tspan></text>
+</svg><figcaption>⭐⭐ <b>Ⓑ 那两个圈值得多看两秒</b> ——&nbsp;<em>左右用的是<b>同样两个词</b>，只是<b>谁装着谁换了个位置</b>。这件事用嘴说，听的人要在脑子里自己转一次；<b>画出来是一眼的事。</b></em><br>⭐ <em>Ⓐ 那条轴是<b>全课的地图</b>：前面六章都在左半边挪，<b>只有这一章真的走到了右端</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>三段引文均出自 Albert Gu《On the Tradeoffs of SSMs and Transformers》(goombalab.github.io/blog/2025/tradeoffs)：①「每个自回归模型都持有一个状态」②「KV cache 才是状态的一种，而且是最不压缩的那一种」③「数据库 vs 大脑」</p>
+<p>⚠️ Ⓐ 那条轴<b>没有刻度，而且不该有</b> ——&#160;GQA 砍的是头数、MLA 压的是维度、线性换的是整个数据结构，三者之间没有一个可比的标量。四个点的横坐标只表达先后，不表达倍数</p>
+<p>⚠️「滑窗 / DSA 原地不动」指的是<b>这条轴（存多少）</b>——&#160;它们在另一条轴（每步读多少）上走得很远</p>
+<p>⛔ Ⓒ 刻意不放任何指标：数据库与大脑是<b>框架不是 benchmark</b>，原文的落点就是「这个比较不成立」</p></details></figure>
+
+<div class="note ok"><p>⭐⭐⭐ <b>先交代说话的人：这几句出自
+  <a href="https://goombalab.github.io/blog/2025/tradeoffs" target="_blank" rel="noopener">Albert
+  Gu</a> ——&nbsp;Mamba 的作者之一，卡内基梅隆大学。</b></p>
+<p>⭐ <em>他那个框架的起点，是图里 Ⓐ <b>没画出来</b>的半句：每一个自回归模型
+  <b>在内存里都持有一个状态，每吐一个字就演化一次</b>。</em></p>
+<p>⛔ <em>请注意这句话的<b>覆盖面</b> ——&nbsp;它说的不是「有一类模型是状态模型」，
+  是<b>全都是</b>。于是前面七章那些看着毫不相干的名字，
+  <b>第一次被放进了同一个框子</b>，剩下的分歧只有一个：
+  <b>那个状态，长什么样。</b></em></p></div>
+
+<div class="note info"><p>📌 <b>顺带认个门牌：这一支在外面最响的名字叫
+  <u>Mamba</u></b>（2023）。</p>
+<p><em>它走的是<b>同一块板子、同一套「擦了再写」</b> ——&nbsp;
+  只是从<b>信号处理</b>那边推出来的，术语完全不一样，所以听上去像另一门功夫。</em></p>
+<p>⭐ <em>——&nbsp;这正是 <a href="#s七">7.2</a> 那条判据的又一次应验：
+  <b>名字记录的是血统，不是形态。</b></em></p></div>
 
 <div class="note ok"><p><b>这一章的两句话。</b></p>
 <p><b>换来的</b>：<em>KV cache 从形状里彻底消失了 ——&nbsp;
