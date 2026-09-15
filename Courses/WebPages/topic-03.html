@@ -6892,6 +6892,38 @@ h4 { margin:18px 0 6px; font-size:15px }
   当年 RNN 的状态跟输入维度同量级，是因为更新一次太贵；
   换成外积累加之后，状态可以撑得很大，而一步的代价还是常数。</em></p></div>
 
+<!-- ⭐ 2026-09-15 现场提问补：「它明明就是 RNN，为什么叫线性注意力？」
+     这个问题每个听众都会冒出来，而课里之前**一个字都没交代**。
+     答案不用猜 —— 那篇论文的标题和摘要第一句就把两层意思都写了。
+     ⛔ 出处必须写死：arXiv 2006.16236，ICML 2020。 -->
+<div class="note info"><p>📌 <b>顺手回答一个几乎人人会问的问题：
+  它明明就是 RNN，为什么叫「线性注意力」？</b></p>
+<p><em>先看命名它的那篇论文叫什么 ——&nbsp;
+  <b>《Transformers are RNNs: Fast Autoregressive Transformers with
+  Linear Attention》</b>（Katharopoulos 等，ICML 2020，arXiv <b><a href="https://arxiv.org/abs/2006.16236" target="_blank" rel="noopener">2006.16236</a></b>）。
+  <b>「它是 RNN」这件事就写在标题的<u>正</u>标题里</b>，作者从第一天就知道。
+  叫 linear attention 的是<b>副</b>标题里那个方法。</em></p>
+<p>⭐⭐ <b>而「线性」这两个字，一个词管住了两件事，摘要里一句话说全：</b></p>
+<ul>
+  <li><b>① 那个<u>点积</u>是线性的。</b>原话是
+    <em>“express the self-attention as a <b>linear dot-product of kernel
+    feature maps</b>”</em> ——&nbsp;softmax 那层非线性的壳去掉之后，
+    相似度变成一个可以拆开的双线性形式。</li>
+  <li><b>② 于是<u>复杂度</u>是线性的。</b>原话接着说：正因为如此，
+    才能<em>“make use of the <b>associativity property of matrix products</b>”</em>，
+    把 O(N²) 降到 <b>O(N)</b>。</li>
+</ul>
+<p>⛔ <b>这两件事不是并列的，是<u>因果</u>的。</b>
+  <em>正因为相似度线性了，结合律才用得上；正因为结合律用得上，括号才挪得动；
+  正因为括号挪得动，平方才掉成线性。<b>一个「线性」，一条因果链。</b></em></p>
+<p>⭐ <em>那为什么不干脆叫它 RNN？——&nbsp;<b>名字记录的是它从哪来，不是它是什么。</b>
+  它是从 attention 里<b>删</b>出来的，不是从 RNN 里<b>长</b>出来的；
+  而且 2020 年的 RNN 刚被 Transformer 打败三年，那时候是个不利的名字。</em></p>
+<p>⭐⭐ <em>这条判据后面还要再用一次：同一块板子，从信号处理那边推出来的叫
+  <b>SSM / Mamba</b>，从 attention 这边删出来的叫 <b>线性注意力</b>，
+  从 1990 年代 fast weight 那支接下来的叫 <b>delta rule</b>。
+  <b>三个名字，一样东西 ——&nbsp;听到新名字先问它的血统，别问它的外形。</b></em></p></div>
+
 <h3 id="s7-3">7.3　板子会写满 ——&nbsp;而这一支三十年的改进，改的一直是同一个动作</h3>
 
 <p>固定大小，就意味着<b>装不下全部历史</b>。<em>那它到底是怎么坏的？</em></p>
