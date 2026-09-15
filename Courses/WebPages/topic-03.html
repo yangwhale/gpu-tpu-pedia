@@ -6464,6 +6464,10 @@ h4 { margin:18px 0 6px; font-size:15px }
   必须先整个造出来 ——&nbsp;而它就是那个平方。</em></p>
 <p>⭐ 可要是把 softmax 拿掉呢？
   <em>剩下的就是三个矩阵连乘 ——&nbsp;<b>而矩阵乘法是可以挪括号的。</b></em></p>
+<p><span class="sub">⚠️ <b>「把 softmax 拿掉」是这一节的简化说法</b> ——&nbsp;
+  <em>严格讲拿掉的只是<b>指数</b>那一半，归一化的分母其实留着。
+  这个区别在<b>下一节末尾</b>会用到（它正好回答「一直加会不会爆」），
+  <b>这里先按简化版往下读不影响。</b></em></span></p>
 
 <figure class="fbox fwide" id="fig-assoc"><svg viewBox="0 0 1400 1106" width="100%" role="img" aria-label="softmax 一拿掉，括号就能挪：左边先算 Q 乘 K 转置，中间被迫造出一个序列长 × 序列长的大方块；右边先算 K 转置乘 V，中间那块只有头维 ×头维，跟句子多长完全无关"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">旋钮③ 的立身之本 ——　<tspan font-weight="700">同一个乘法，只是把括号挪了个位置</tspan></text>
@@ -6672,6 +6676,38 @@ h4 { margin:18px 0 6px; font-size:15px }
   所以它<b>没法</b>用加法把历史压在一起 ——&nbsp;它只能把每一条<b>原样留着</b>。<br>
   ⭐ <b>回头看 7.1 就通了：先拿掉 softmax，不只是为了挪括号 ——&nbsp;
   是拿掉它之后，「加」这个动作才第一次变得可逆、可取回。</b></em></p></div></div>
+
+<!-- ⭐⭐⭐ 2026-09-15 现场追问：「一直加不会爆炸吗？总得配个 norm 吧？」
+     ⛔ 查证时发现**本讲 7.1 那句「把 softmax 拿掉」是简化说法** ——&#160;
+        原论文公式 (5) 里**分母是在的**，被拿掉的只是 exp。
+     ⭐ 这一条必须写出来，不能让简化说法在课里当真话用。
+     出处：Katharopoulos 等, arXiv 2006.16236, 式 (5) 与式 (7)。 -->
+<div class="note danger"><p>⛔⛔ <b>那「一直加」不会爆吗？——&nbsp;这一问逼出一个
+  <u>本讲前面说漏了的事实</u>。</b></p>
+<p>⭐ <b>先认一件事：<a href="#s七">7.1</a> 那句「把 softmax 拿掉」是<u>简化说法</u>。</b>
+  <em>翻回原论文（Katharopoulos 等，<b>arXiv <a href="https://arxiv.org/abs/2006.16236" target="_blank" rel="noopener">2006.16236</a></b>）的式 (5)，
+  <b>分母是在的</b> ——&nbsp;它算的是
+  <b>「这一条的相似度 ÷ 所有条相似度之和」</b>，跟 softmax 的形状<b>一模一样</b>。</em></p>
+<p>⛔ <b>所以被拿掉的<u>不是归一化，是 exp</u>。</b>
+  <em>softmax ＝ <b>先取指数</b>，再<b>除以总和</b>。线性注意力扔掉的是前一半
+  （那层非线性的壳，也正是它锁死乘法顺序的原因），
+  <b>后一半原封不动地留着了</b>。而且分母自己也是个累加量，
+  <b>用同一招挪括号就能顺带算出来</b>，不多花什么。</em></p>
+<p>⭐⭐ <b>于是「爆不爆」就清楚了：<u>分子在涨，分母也在涨</u>。</b>
+  <em>取出来的是个<b>加权平均</b>，不是一个越堆越大的和。<b>这就是原版的 norm，
+  它从第一天起就在里面。</b></em></p>
+<p><span class="sub">⭐ 顺带一个容易被跳过的细节，它解释了那个奇怪的
+  <code>elu(x)+1</code>：<em>论文明说选它是为了让相似度<b>恒为正</b>
+  （式 7）。<b>因为分母要是能过零，除法当场就炸。</b>
+  至于为什么不用 relu ——&nbsp;原文的理由是 relu 在负半轴<b>梯度为 0</b>，训不动。</em></span></p>
+<div class="note ok"><p>⭐⭐⭐ <b>但这一支后来<u>主流并不靠那个分母</u> ——&nbsp;
+  它换了一条更狠的路，而那条路正好是<a href="#s七">下一节</a>整节的内容。</b></p>
+<p><em>做法是：<b>每一步先把板子整体乘掉一点，再加新的。</b>
+  于是「一直加」变成了「<b>一边加，一边一直在忘</b>」——&nbsp;
+  加的是等比级数不是等差级数，<b>它自己就收敛，根本不需要谁来压。</b></em></p>
+<p>⛔ <em>所以你的直觉对了一半：<b>确实得有东西管住它</b> ——&nbsp;
+  但管住它的<b>主力不是外面那层 norm，是「会忘」这件事本身</b>。
+  <b>外面通常还有一层 norm，那是兜底，不是主因。</b></em></p></div></div>
 <p class="landing">📌 说得再直白一点：
   <em>线性注意力<b>本质上就是一个 RNN</b>，只不过它的状态不是一个向量，是一个矩阵。</em></p>
 
