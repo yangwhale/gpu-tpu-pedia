@@ -6425,6 +6425,176 @@ h4 { margin:18px 0 6px; font-size:15px }
 <p>「不连续访存用不上 FlashAttention」逐条出自 NSA 论文 （arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a>）<a href="#s2-2">§2.2</a>：token 粒度的选择要从 KV cache 里加载大量单个 token，「this non-contiguous memory access prevents efficient adaptation of fast attention techniques like FlashAttention」</p>
 <p>⚠️ 1.56% ＝ 2048 ÷ 131072，是<b>算出来的</b>；上排 24 根柱子的高低与选中位置是<b>示意</b>，不对应任何一次真实打分</p></details></figure>
 
+<h3 id="s6-4b">6.4b　顺着这条路再走三步：NSA · CSA · HCA</h3>
+
+<!-- ⭐⭐⭐ 2026-09-16 新增。原来 NSA / CSA 被明确标成「支线，当堂不讲」，只留 DSA。
+     ⛔ 那个取舍成立于「一小时讲完」的前提，而这个前提已经没了。
+     ⭐ 更要紧的理由：**这四个名字是同一条路上的四步**，拆开讲每一步都少一个
+       对照组 ——&#160;尤其 DSA「为什么最碎」，不摆 NSA 的「挑块」在旁边说不清。
+     ⛔ 用 6.4b 不新起 6.5：它们是 DSA 的兄弟，而 6.5 是整章落点，
+       插在落点后面会把落点顶掉。
+     ⛔⛔ 第一版正文把图里的话抄了一遍（查重当场 2 → 10）。
+       判据⑩：挨着图的那一处赢。**正文只留图给不了的三样** ——&#160;
+       四个名字各自一句的<u>索引</u>、出处与口径、以及它跟本讲判据的关系。 -->
+<p class="lead">上一节那个 DSA，<b>不是这条路的终点，也不是起点。</b>
+  <em>把它前后那三步一起摆出来，你会看到一条很干净的线。</em></p>
+
+<figure class="fbox fwide" id="fig-deepseek-sparse"><svg viewBox="0 0 1400 1834" width="100%" role="img" aria-label="DeepSeek 稀疏注意力的四步：NSA 用压缩、选择、滑窗三条支路加门控融合，块级选择且训练时就稀疏；DSA 换成一个轻量索引器挑单个 token；CSA 先把四个 token 压成一条再挑；HCA 压到一百二十八倍并且不再挑，于是 mask 可以在编译期算死。两条轴：压多狠，以及需不需要运行时挑"><defs><marker id="ah-1e8e3e" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#1e8e3e"/></marker><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-d93025" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#d93025"/></marker><marker id="ah-e8710a" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#e8710a"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">DeepSeek 这一支的四步：<tspan font-weight="700">NSA → DSA → CSA → HCA</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 四个名字看着各不相干，其实是<tspan font-weight="700">同一条路上的四步</tspan> ——　而且最后一步<tspan font-weight="700">把「挑」这件事整个取消了</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">要运行时挑（动态）</text>
+<rect x="173" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="194" y="74" fill="#5f6368" style="font-size:14.0px">编译期就定死（静态）</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ NSA（2025-02）——　不是一条稀疏，是<tspan font-weight="700">三条支路并排跑，再用门控融合</tspan></tspan></text>
+<text class="svgsm" x="720" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 名字里的 Native 是重点：<tspan font-weight="700">训练的时候就稀疏</tspan>，不是训完再稀疏</text>
+<rect x="70" y="158" width="380" height="148" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="70" y="158" width="380" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="260" y="192" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">① 压缩</tspan></text>
+<text class="svgsm" x="260" y="222" fill="#202124" text-anchor="middle" style="font-size:15.0px">远处按块压成摘要</text>
+<text class="svgsm" x="260" y="248" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">静态　·　一个块一条</text>
+<line x1="260.0" y1="306" x2="260.0" y2="340" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="480" y="158" width="380" height="148" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="480" y="158" width="380" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="670" y="192" fill="#b06000" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">② 选择</tspan></text>
+<text class="svgsm" x="670" y="222" fill="#202124" text-anchor="middle" style="font-size:15.0px">挑出最相关的<tspan font-weight="700">几块</tspan></text>
+<text class="svgsm" x="670" y="248" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">⛔ 动态　·　跑起来才知道挑谁</text>
+<line x1="670.0" y1="306" x2="670.0" y2="340" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="890" y="158" width="380" height="148" rx="8" fill="#fff" stroke="#dadce0" stroke-width="1"/>
+<rect x="890" y="158" width="380" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1080" y="192" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">③ 滑窗</tspan></text>
+<text class="svgsm" x="1080" y="222" fill="#202124" text-anchor="middle" style="font-size:15.0px">身边那一段全留</text>
+<text class="svgsm" x="1080" y="248" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">静态　·　窗口固定</text>
+<line x1="1080.0" y1="306" x2="1080.0" y2="340" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="430" y="340" width="540" height="54" rx="27" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="700" y="373" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">门控融合　——　三条各自的结果按权重合起来</tspan></text>
+<line x1="700" y1="394" x2="700" y2="424" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="700" y="450" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">一个 token 的输出</tspan></text>
+<rect x="70" y="428" width="300" height="76" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="86" y="452" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">⭐ 三条里只有一条是动态的</tspan></text>
+<text class="svgsm" x="86" y="476" fill="#5f6368" style="font-size:13.0px">后面三步，动的全是这一条</text>
+<rect x="1000" y="428" width="330" height="76" rx="6" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1016" y="452" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">⭐ 训练时就用</tspan></text>
+<text class="svgsm" x="1016" y="476" fill="#5f6368" style="font-size:13.0px">不是训完再稀疏，所以模型是「长在稀疏上」的</text>
+<rect x="0" y="554" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="554" width="4" height="98" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="554" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="581" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ NSA 为什么从第一天就好落到硬件上</tspan></text>
+<text class="svgsm" x="20" y="612" fill="#174ea6" style="font-size:15.0px">因为它<tspan font-weight="700">挑的是块，不是散落的单个 token</tspan> ——&#160;块是连续的一片，搬起来整齐。论文自己把这一点写进了标题：<tspan font-weight="700">hardware-aligned</tspan>。</text>
+<text class="svgsm" x="20" y="636" fill="#174ea6" style="font-size:15.0px">⛔ <tspan font-weight="700">记住这个对照，下一格 DSA 正好反过来。</tspan></text>
+<rect x="0" y="678" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="678" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="680" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="708" x2="1400" y2="708" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="698" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 四个名字摆到同一张图上 ——　两条轴：<tspan font-weight="700">压多狠</tspan>　×　<tspan font-weight="700">挑不挑</tspan></tspan></text>
+<text class="svgsm" x="883" y="698" fill="#5f6368" style="font-size:11.0px">⚠️ 横轴<tspan font-weight="700">不是线性刻度</tspan>（1 / 4 / 128 等距摆）——　它只表达「谁比谁压得狠」</text>
+<line x1="110" y1="1038" x2="1310" y2="1038" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="110" y="1070" fill="#5f6368" style="font-size:15.0px"><tspan font-weight="700">不压</tspan></text>
+<text class="svgsm" x="1310" y="1070" fill="#5f6368" text-anchor="end" style="font-size:15.0px"><tspan font-weight="700">压得最狠</tspan></text>
+<text class="svgsm" x="700" y="1098" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">压　缩　比　（4 个 token 合 1 条 →　128 个合 1 条）</text>
+<text class="svgsm" x="60" y="748" fill="#b06000" style="font-size:16.0px"><tspan font-weight="700">要运行时挑</tspan></text>
+<text class="svgsm" x="60" y="770" fill="#5f6368" style="font-size:13.0px">（有 indexer）</text>
+<text class="svgsm" x="60" y="948" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">不用挑</tspan></text>
+<text class="svgsm" x="60" y="970" fill="#5f6368" style="font-size:13.0px">（编译期定死）</text>
+<rect x="192" y="792" width="216" height="96" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="192" y="792" width="216" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="300" y="826" fill="#b06000" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">NSA</tspan></text>
+<text class="svgsm" x="300" y="850" fill="#202124" text-anchor="middle" style="font-size:13.5px">块级选择 ＋ 压缩支路</text>
+<text class="svgsm" x="300" y="872" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">挑「块」——　整齐</text>
+<text class="svgsm" x="300" y="910" fill="#80868b" text-anchor="middle" style="font-size:12.0px">2025-02　arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank"><tspan text-decoration="underline">2502.11089</tspan></a></text>
+<line x1="300" y1="920" x2="300" y2="1030" stroke="#e8710a" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-e8710a)"/>
+<rect x="294" y="1032" width="12" height="12" rx="6" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="452" y="792" width="216" height="96" rx="8" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<rect x="452" y="792" width="216" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="560" y="826" fill="#a50e0e" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">DSA</tspan></text>
+<text class="svgsm" x="560" y="850" fill="#202124" text-anchor="middle" style="font-size:13.5px">不压，纯挑 top-k 个 token</text>
+<text class="svgsm" x="560" y="872" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">⛔ 挑散落的单 token ——　最碎</text>
+<text class="svgsm" x="560" y="910" fill="#80868b" text-anchor="middle" style="font-size:12.0px">本讲第六章的主角</text>
+<line x1="560" y1="920" x2="560" y2="1030" stroke="#d93025" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-d93025)"/>
+<rect x="554" y="1032" width="12" height="12" rx="6" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="752" y="792" width="216" height="96" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="752" y="792" width="216" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="860" y="826" fill="#b06000" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">CSA</tspan></text>
+<text class="svgsm" x="860" y="850" fill="#202124" text-anchor="middle" style="font-size:13.5px">先压 4 倍，再挑</text>
+<text class="svgsm" x="860" y="872" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">压过之后再挑 ——　鸡小了 4 倍</text>
+<text class="svgsm" x="860" y="910" fill="#80868b" text-anchor="middle" style="font-size:12.0px">MaxText：compress_ratio ＝ 4</text>
+<line x1="860" y1="920" x2="860" y2="1030" stroke="#e8710a" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-e8710a)"/>
+<rect x="854" y="1032" width="12" height="12" rx="6" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="1092" y="936" width="216" height="96" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="1092" y="936" width="216" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1200" y="970" fill="#0d652d" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">HCA</tspan></text>
+<text class="svgsm" x="1200" y="994" fill="#202124" text-anchor="middle" style="font-size:13.5px">压 128 倍，<tspan font-weight="700">不挑了</tspan></text>
+<text class="svgsm" x="1200" y="1016" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">⭐ 没有 indexer</text>
+<text class="svgsm" x="1200" y="1054" fill="#80868b" text-anchor="middle" style="font-size:12.0px">MaxText：compress_ratio ＞ 4</text>
+<line x1="1200" y1="1064" x2="1200" y2="1030" stroke="#1e8e3e" stroke-width="1.2" stroke-linecap="round" stroke-dasharray="3 3" marker-end="url(#ah-1e8e3e)"/>
+<rect x="1194" y="1032" width="12" height="12" rx="6" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<path d="M 860.0 856.0 H 1186.0 Q 1200.0 856.0 1200.0 870.0 V 930.0" fill="none" stroke="#1e8e3e" stroke-width="2.2" stroke-linecap="round" marker-end="url(#ah-1e8e3e)"/>
+<text class="svgsm" x="1200" y="916" fill="#0d652d" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⭐ 再压 32 倍　→　挑这一步整个没了</tspan></text>
+<rect x="0" y="1200" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1200" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1200" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1227" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 这张图真正要说的一句话</tspan></text>
+<text class="svgsm" x="20" y="1258" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">压得够狠的时候，就不需要挑了。</tspan>⭐ 挑，本来就是为了「在一大堆里只看几个」；可要是先把一大堆<tspan font-weight="700">压成一小堆</tspan>，那就<tspan font-weight="700">全看也无所谓了</tspan>。</text>
+<text class="svgsm" x="20" y="1282" fill="#0d652d" style="font-size:15.0px">⛔ 代价写在横轴上：<tspan font-weight="700">压 128 倍，分辨率就是没了</tspan> ——&#160;所以 HCA <tspan font-weight="700">不能单独用</tspan>，它旁边还挂着一个<tspan font-weight="700">局部滑窗</tspan>（默认 128）管近处。<tspan font-weight="700">远处压得很糊，近处一个不落。</tspan></text>
+<rect x="0" y="1324" width="1400" height="330" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1324" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="1326" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1354" x2="1400" y2="1354" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1344" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓒ 落到 TPU 上：HCA 不是「把动态稀疏做快了」，是<tspan font-weight="700">把动态换成了静态</tspan></tspan></text>
+<text class="svgsm" x="706" y="1344" fill="#5f6368" style="font-size:11.0px">⭐ 这一格回答的是本讲后面那个问题：<tspan font-weight="700">稀疏落到 TPU 上为什么难，以及这一支是怎么绕开的</tspan></text>
+<rect x="60" y="1380" width="620" height="232" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="60" y="1380" width="620" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="370" y="1414" fill="#b06000" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">动态（DSA / CSA）</tspan></text>
+<text class="svgsm" x="96" y="1454" fill="#5f6368" style="font-size:15.0px">跑起来才知道这一步该挑谁</text>
+<text class="svgsm" x="96" y="1486" fill="#5f6368" style="font-size:15.0px">→　mask 只能在运行时现造</text>
+<text class="svgsm" x="96" y="1518" fill="#5f6368" style="font-size:15.0px">→　要在 HBM 里放一张稠密的 mask</text>
+<text class="svgsm" x="96" y="1550" fill="#5f6368" style="font-size:15.0px">→　还要占着算数部件去算它</text>
+<text class="svgsm" x="96" y="1588" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">⛔ 每一层都在跟「运行时才知道」较劲</tspan></text>
+<rect x="720" y="1380" width="620" height="232" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="720" y="1380" width="620" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1030" y="1414" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">静态（HCA）</tspan></text>
+<text class="svgsm" x="756" y="1454" fill="#5f6368" style="font-size:15.0px">窗口固定、压缩比固定</text>
+<text class="svgsm" x="756" y="1486" fill="#5f6368" style="font-size:15.0px">→　mask 在<tspan font-weight="700">编译期</tspan>就能算出来</text>
+<text class="svgsm" x="756" y="1518" fill="#5f6368" style="font-size:15.0px">→　主机 CPU 上算好，打包成 bitmask</text>
+<text class="svgsm" x="756" y="1550" fill="#5f6368" style="font-size:15.0px">→　直接塞进片上，HBM 里不存稠密 mask</text>
+<text class="svgsm" x="756" y="1588" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">⭐ 运行时零决策，也零 mask 运算</tspan></text>
+<rect x="0" y="1706" width="1400" height="98" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1706" width="4" height="98" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1706" width="3" height="98" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1733" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 把这四步连起来，是一条很干净的线</tspan></text>
+<text class="svgsm" x="20" y="1764" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">NSA 挑块</tspan>（整齐）→&#160;<tspan font-weight="700">DSA 挑单 token</tspan>（更准，但最碎）→&#160;<tspan font-weight="700">CSA 先压再挑</tspan>（把要挑的池子缩小）→&#160;<tspan font-weight="700">HCA 压到不用挑</tspan>（决策整个消失）。</text>
+<text class="svgsm" x="20" y="1788" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">每一步都在把「运行时要做的决策」往编译期推。</tspan>⛔ 这跟本讲反复出现的那条判据是同一个形状：<tspan font-weight="700">一个麻烦最好的结局不是被解决，是不再存在。</tspan></text>
+</svg><figcaption>⭐⭐ <b>Ⓑ 那两条轴是这张图的全部</b> ——&nbsp;<em>横着是「压多狠」，竖着是「要不要运行时挑」。四个名字一摆上去，<b>那条对角线自己就出来了</b>。</em><br>⭐ <em>Ⓐ 里记一条对照：<b>NSA 挑的是块，DSA 挑的是散落的单 token</b> ——&nbsp;这一条决定了它们在硬件上的命。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>NSA ＝ Native Sparse Attention，arXiv <b><a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a></b>（DeepSeek, 2025-02）：摘要原话是「coarse-grained token compression ＋ fine-grained token selection」，标题里写着 hardware-aligned 与 natively trainable</p>
+<p>CSA / HCA 的结构与默认参数取自 <b>MaxText 的公开实现</b>（Apache-2.0）：两者同属 AttentionType.COMPRESSED；<b>compress_ratio ＝ 4 走 CSA</b>（必须传 indexer_mask），<b>compress_ratio ＞ 4 走 HCA</b>（用编译期静态 mask，默认 compress_ratio=128、local_window=128）。HCA 的 docstring 自称 “DeepSeek-V4 Heavily Compressed Attention”</p>
+<p>⛔ <b>本图不含任何性能数字</b> ——&#160;本课没有这四者的对照实测，画柱子就是编。图上只画结构，以及「要不要运行时决策」</p>
+<p>⚠️ Ⓑ 的横轴<b>不是线性刻度</b>，1 / 4 / 128 等距摆，只表达先后不表达倍数</p></details></figure>
+
+<div class="note ok"><p>⭐⭐ <b>先给一份速查 ——&nbsp;四个名字，一人一句。</b>
+  <em>（细节、两条轴、以及它们在 TPU 上的差别，全在上面那张图里。）</em></p>
+<ul>
+  <li><b>NSA</b>（2025-02）——&nbsp;<em>三条支路 ＋ 门控。<b>挑块</b>，训练时就稀疏。</em></li>
+  <li><b>DSA</b> ——&nbsp;<em>轻量索引器打分，<b>挑散落的单 token</b>。更准，也最碎。</em></li>
+  <li><b>CSA</b> ——&nbsp;<em>先压 4 倍<b>再挑</b>。要挑的池子小了四倍。</em></li>
+  <li><b>HCA</b> ——&nbsp;<em>压 128 倍，<b>挑这一步整个取消</b>。</em></li>
+</ul></div>
+
+<div class="note danger"><p>⛔ <b>为什么值得把这四步连起来看：它是本讲那条判据的又一次应验。</b></p>
+<p><em>这四步不是「四种不同的稀疏」，是<b>同一个动作被一步步往前挪</b> ——&nbsp;
+  从「跑起来才决定」，一路挪到「编译的时候就定死」。</em></p>
+<p>⭐⭐ <em>而最后那一步，<b>不是把麻烦解决了，是让麻烦不再存在</b> ——&nbsp;
+  跟 <a href="#s八">第八章</a>那条窄轨消失是同一个形状。</em></p>
+<p><span class="sub">📌 <b>出处与口径。</b>NSA ＝ Native Sparse Attention，
+  <b>arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a></b>（DeepSeek，2025-02）。
+  <b>CSA / HCA 的结构与默认参数取自 MaxText 的公开实现</b>（Apache-2.0）——&nbsp;
+  两者同属一种「压缩注意力」，按压缩比分叉：<b>等于 4 走 CSA</b>（必须提供索引器的
+  mask），<b>大于 4 走 HCA</b>（改用编译期静态 mask，默认压缩比 128、局部窗口 128）。
+  <em>⛔ <b>本节不含任何性能数字</b> ——&nbsp;本课没有这四者的对照实测，画柱子就是编。</em></span></p></div>
+
+
 <h3 id="s6-5">6.5　本章落点：这一章最该记住的，是它<u>没</u>解决的那一栏</h3>
 
 <div class="note danger"><p>⛔⛔ <b>「稀疏就能省显存」是个极自然、也极常见的误会 ——&nbsp;
