@@ -6907,8 +6907,13 @@ h4 { margin:18px 0 6px; font-size:15px }
 <ul>
   <li><b>① 那个<u>点积</u>是线性的。</b>原话是
     <em>“express the self-attention as a <b>linear dot-product of kernel
-    feature maps</b>”</em> ——&nbsp;softmax 那层非线性的壳去掉之后，
-    相似度变成一个可以拆开的双线性形式。</li>
+    feature maps</b>”</em>。<br>
+    <!-- ⛔ 这里原来写的是「变成一个可以拆开的双线性形式」——&#160;
+         **「双线性形式」是行话，两头都断着**。口头讲的时候我下意识换了说法，
+         那个说法才是真解释。判据：讲技术要说人话。 -->
+    ⭐ <b>说人话</b>：<em>softmax 是套在相似度<b>外面</b>的一层非线性的壳。
+    把这层壳拿掉，剩下的相似度就是 ——&nbsp;<b>q 和 k 各自先过一道很轻的变换，
+    然后直接点积。</b>没有壳了，也就<b>不用先凑齐一整行再算</b>。</em></li>
   <li><b>② 于是<u>复杂度</u>是线性的。</b>原话接着说：正因为如此，
     才能<em>“make use of the <b>associativity property of matrix products</b>”</em>，
     把 O(N²) 降到 <b>O(N)</b>。</li>
@@ -6918,7 +6923,11 @@ h4 { margin:18px 0 6px; font-size:15px }
   正因为括号挪得动，平方才掉成线性。<b>一个「线性」，一条因果链。</b></em></p>
 <p>⭐ <em>那为什么不干脆叫它 RNN？——&nbsp;<b>名字记录的是它从哪来，不是它是什么。</b>
   它是从 attention 里<b>删</b>出来的，不是从 RNN 里<b>长</b>出来的；
-  而且 2020 年的 RNN 刚被 Transformer 打败三年，那时候是个不利的名字。</em></p>
+  而且 2020 年的 RNN 刚被 Transformer 打败三年，那时候是个不利的名字 ——&nbsp;
+  <b>给新方法起名叫 RNN，等于自己把自己埋了。</b></em></p>
+<p>⭐ <em>还有一层是<b>写给谁看</b>：作者要说服的是<b>用 Transformer 的那群人</b>，
+  就得在<b>他们的坐标系里</b>命名。<b>「这是一种注意力」他们会读下去；
+  「这是一种 RNN」他们会划走。</b></em></p>
 <p>⭐⭐ <em>这条判据后面还要再用一次：同一块板子，从信号处理那边推出来的叫
   <b>SSM / Mamba</b>，从 attention 这边删出来的叫 <b>线性注意力</b>，
   从 1990 年代 fast weight 那支接下来的叫 <b>delta rule</b>。
