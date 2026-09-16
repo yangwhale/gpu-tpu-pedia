@@ -7576,8 +7576,15 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <p>❶ <b>「压缩难道还分远近吗？不是统一压的吗？」</b>——&nbsp;
   <em><b>是统一压的。</b>压缩器一视同仁，<b>不认远近</b>，每 128 个 token 合成一条。</em></p>
 <p><em>近处之所以还清楚，<b>不是压缩器手下留情，是旁边那条支路给的</b> ——&nbsp;
-  一个<b>局部滑窗</b>（默认 128）把身边那一段<b>原样留着、根本不进压缩器</b>。
-  ⭐ <b>两条支路的结果加起来，才是这一层的输出。</b></em></p>
+  一个<b>局部滑窗</b>（默认 128）把身边那一段<b>原样留着、根本不进压缩器</b>。</em></p>
+<!-- ⛔⛔ 这里原来写「两条支路的结果加起来，才是这一层的输出」——&#160;**是错的**。
+     那是 NSA 的门控融合，被我顺手套到了 V4 头上。扒了 MaxText 源码才发现
+     V4 走的是拼接：compressed_kv 直接 concat 到 kv 后面，一次 softmax 一起算。
+     ⭐ 判据（又一次）：**「听起来像常识的架构关系」最危险** ——&#160;
+       三条支路 → 门控融合，在 NSA 上成立，在 V4 上不成立。 -->
+<p><em>⭐ 而两段<b>不是各算一遍再融合</b>（那是 NSA 的做法）——&nbsp;
+  <b>压缩块直接拼在未压缩那段的后面，凑成一条更长的 KV 序列，一次注意力一起看。</b>
+  <span class="sub">（源码：<code>jnp.concatenate([kv, compressed_kv], axis=1)</code>）</span></em></p>
 <p><em>⭐⭐ 所以这个「越远越粗」是<b>两条支路拼出来的</b>，压缩本身没有这个概念。
   ——&nbsp;而这一手各位刚在 Ⓐ 见过：<b>NSA 的 ① 压缩管远、③ 滑窗管近。
   HCA 就是把 NSA 中间那条「选择」砍掉之后剩下的东西。</b></em></p>
@@ -7602,6 +7609,72 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   它们各自的身份<b>永久没了，不可逆</b>。
   ⭐ <b>这才是那条滑窗支路非挂不可的真正理由</b> ——&nbsp;
   不挂它，连刚说完的上一句都是一团摘要，模型接不上话。</em></p></div>
+
+<!-- ⭐⭐⭐ 2026-09-16 下午加。上面那两条答完，现场追问「那到底存下来的是什么」，
+     于是把 MaxText 的公开实现整个扒了一遍。⛔ 结果是**三个想当然全被推翻**，
+     包括我自己刚写进上一块的那句「两条支路加起来」。
+     ⭐ 判据（CLAUDE.md 第一原则的又一次应验）：**听起来像常识的架构关系最危险** ——
+       「三条支路 → 门控融合」在 NSA 上成立，套到 V4 上就是错的；
+       「DeepSeek ＝ MLA」在 V3 上成立，套到 V4 上也是错的。
+     ⛔ 本块全部结论都能在公开源码里逐条指出来，出处写在最后一段，不要删。 -->
+<div class="note ok"><p>⭐⭐⭐ <b>📌 把源码扒开之后 ——&nbsp;三个「想当然」全被推翻了。</b>
+  <em>（这一块是<b>加餐</b>，当堂只讲 ❶ 和 ❹ 两条，其余留给课后。）</em></p>
+
+<p>❶ <b>DeepSeek-V4 根本没用 MLA。</b><em>配置里写着
+  <code>num_query_heads: 64</code>、<code>num_kv_heads: 1</code>、<code>head_dim: 512</code>、
+  <code>attention_type: "compressed"</code> ——&nbsp;<b>整份配置里没有
+  <code>kv_lora_rank</code> 这一项。</b>它是 <b>MQA</b>，不是 MLA。</em></p>
+<p><em>⭐⭐ 而且还狠一层：<b>K 和 V 是同一条向量。</b>KV 投影把同一个张量返回两遍，
+  调注意力时也是 <code>attention_op(q, kv, kv, …)</code>。<br>
+  →&nbsp;<b>每个 token 每层只存 512 个数，K 和 V 共用这一条。</b>
+  对照 <a href="#s五">§五</a> 的 MLA：512 潜向量 ＋ 64 RoPE ＝ 576。</em></p>
+<p><em>⛔ 所以<b>「先压序列、再套 MLA」这条路在 V4 上不成立 ——&nbsp;它没有 MLA 可叠。</b>
+  <span class="sub">（代价：V 跟着 K 一起被 RoPE 转过，所以输出侧要再做一次
+  <b>反向 RoPE</b>，把 V 那份旋转撤掉。）</span></em></p>
+
+<p>❷ <b>压缩器不是对现成的 K/V 做池化。</b><em>它是<b>另一条独立的投影</b> ——&nbsp;
+  从 embedding 直接投出 <code>kv_proj</code> 和 <code>gate_proj</code> 两路，
+  窗口内做 <b>softmax 门控加权求和</b>，<b>不是求平均</b>。</em></p>
+<p><em>⭐ 而且 CSA 不是「四个一组」那么朴素：它是 <b>stride 4 / window 8 的重叠窗口</b> ——&nbsp;
+  每条摘要 ＝ <b>上一个窗口的后 4 个 ＋ 这个窗口的前 4 个</b>。
+  <b>压缩率是 4，可每条摘要看的是 8 个 token。</b></em></p>
+
+<p>❸ <b>那到底存下来的是什么？</b><em>压缩块的 cache <b>只有 1 个头</b>，
+  条数 ＝ 序列长度 ÷ 压缩比：</em></p>
+<ul>
+  <li><b>HCA</b>（压缩比 128）——&nbsp;<em><b>N/128 条，每条 512 宽</b>。</em></li>
+  <li><b>CSA</b>（压缩比 4）——&nbsp;<em><b>N/4 条，每条 1024 宽</b>
+    （重叠窗口要把两半都留着）；<b>另外还挂一份 indexer cache：N/4 条 × 256 宽</b>。</em></li>
+  <li><b>滑窗里那 128 个 token</b> ——&nbsp;<em>⭐ <b>既不是 MLA，也不是多头 K/V</b>，
+    就是主路径那条 <b>1 头 × 512 宽、K 和 V 共用</b>的。<b>滑窗只决定「这一段不合并」。</b></em></li>
+</ul>
+
+<p>❹ <b>DSA 那个 top-2048，确实是选在 MLA 上的。</b><em>V3.2 的配置：
+  <code>attention_type: "mla"</code>、<code>kv_lora_rank: 512</code>、
+  <code>indexer_topk: 2048</code>。</em></p>
+<p><em>顺序是：<b>MLA 的全量潜向量照存不误</b> →&nbsp;indexer <b>另存一份自己的小索引 key</b>
+  →&nbsp;对<b>全部</b> token 打分 →&nbsp;挑出 top-2048 →&nbsp;生成 mask
+  →&nbsp;<b>在 MLA 的全量 KV 上按这个 mask 做注意力</b>。</em></p>
+<!-- ⛔ 这一句原来把上面 fig-dsa-why 里那条判据<u>原样抄了一遍</u>（查重当场 2 → 3）。
+     判据⑩：挨着图的那一处赢。这里只留图给不了的东西 ——&#160;它在源码里长什么样。 -->
+<p><em>⭐⭐ 而上面 <a href="#fig-dsa-why">那张图</a>里的退化判据，
+  <b>在源码里就是一行 <code>if</code></b>：<code>k.shape[1] &lt;= indexer_topk</code>
+  时直接全选。<b>不是推论，是能指着代码说的。</b></em></p>
+
+<p>❺ <b>顺带一份 V4-Flash 的层配比</b>（43 层）：<em><code>[0, 0, 4, 128, 4, 128, …]</code>
+  ——&nbsp;前 3 层是 0/0/4，之后 <b>4 与 128 交替</b>。<code>compress_ratio = 0</code>
+  就是<b>纯滑窗层</b>，窗口 128。<b>V4 的 <code>indexer_topk</code> 是 512，
+  而且它挑的是「压缩块」，不是原始 token。</b></em></p>
+
+<p>⛔⛔ <em><b>这三个「想当然」栽在同一个形状上：都是把上一代成立的架构关系，
+  顺手套到了下一代身上。</b>「三条支路 → 门控融合」在 NSA 上对，在 V4 上错；
+  「DeepSeek ＝ MLA」在 V3 上对，在 V4 上错。</em></p>
+<p><span class="sub">📌 <b>出处。</b>以上全部取自 <b>MaxText 的公开实现</b>（Apache-2.0）：
+  <code>src/maxtext/layers/attention_compressed.py</code>、
+  <code>src/maxtext/layers/attention_mla.py</code>，配置
+  <code>src/maxtext/configs/models/deepseek4-284b.yml</code>（对应公开模型
+  DeepSeek-V4-Flash 284B）与 <code>deepseek3.2-671b.yml</code>。
+  <em>⛔ <b>仍然没有任何性能数字</b> ——&nbsp;这里核到的是结构，不是速度。</em></span></p></div>
 
 <div class="note danger"><p>⛔ <b>为什么值得把这四步连起来看：它是本讲那条判据的又一次应验。</b></p>
 <p><em>这四步不是「四种不同的稀疏」，是<b>同一个动作被一步步往前挪</b> ——&nbsp;
