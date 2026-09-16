@@ -137,7 +137,12 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
        就是那次拆分。重起炉灶之前，先列一遍「旧稿里有什么是新骨架接不住的」。
      ⛔⛔ **位置必须在那张模型表「之前」** ——&#160;
        表里有 KV cache 那一列，摆在题前面等于直接把第一题的答案送出去。
-     ⚠️ 两道题＋绑定脚本一起搬（脚本在 <details> 里照常执行）；
+     ⛔⛔ 2026-09-16 补：第一版**把绑定脚本落下了** ——&#160;
+       它在原稿里是 `</details>` **之后**一行，而我按 `</details>` 切片就停了。
+       后果是**选项点不动**（题目显示完全正常，所以肉眼看不出来）。
+       ⭐ 更该记的是：我当时在这条注释里写了「脚本一起搬」——&#160;
+       **那是没验证就写下的断言**，而 build 回执全绿。
+       判据（原注释里早就有，我又犯一次）：**交互要点过才算验过。**
        .guess/.opts/.rev 的样式来自共用样式表，不用另加。
      📌 揭晓规则：**全对才开**；全选但没全对 → 报「N 对 M 错」，不揭晓；
        答案区里有「↺ 重来」。这三条的来由见脚本内注释。 -->
@@ -266,6 +271,71 @@ BODY = '''<section id="s零"><div class="wrap"><div class="stn"><span class="bad
 
   </div>
 </details>
+<script>
+/* 与专题二同一份实现；三条坑（别用 id、等 DOMContentLoaded、按 .opts 分组）
+   的来由写在上面那段注释里。 */
+(function(){
+  function bind(){
+  document.querySelectorAll('.guess').forEach(function(box){
+    var rev=box.querySelector('.rev'); if(!rev) return;
+    var groups=box.querySelectorAll('.opts');
+    var rst=document.createElement('div');
+    rst.className='rst';
+    rst.innerHTML='<button type="button">\u21ba 重来</button>';
+    rst.firstChild.addEventListener('click', function(){
+      box.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+      rev.classList.remove('on');
+      var hh=box.querySelector('.hint');
+      if(hh){ hh.textContent=''; hh.classList.remove('on'); }   /* ⛔ 别忘了连提示一起清 */
+      box.scrollIntoView({behavior:'smooth', block:'nearest'});
+    });
+    rev.insertBefore(rst, rev.firstChild);
+    /* ⛔⛔ 2026-09-12 改揭晓规则（现场点的）：
+         ① **全对才开**；② 全选了但没全对 → 报「N 对 M 错，继续努力」，不揭晓。
+       ⭐ 连带必须改的一处：原来一点就给正确答案加 .right（绿框）——
+         那等于**第一次点击就把答案送出去了**，「全对才开」根本无从谈起。
+         现在 .right 只在**全对那一刻**才加。
+       ⚠️ 判据：**改揭晓条件时要顺着查一遍「还有什么地方也在泄答案」** ——
+         按钮配色、aria、title 都算。这里就差点漏掉 .right。 */
+    var hint=document.createElement('div');
+    hint.className='hint';
+    box.insertBefore(hint, rev);
+    function grade(){
+      var done=true, ok=0;
+      groups.forEach(function(gg){
+        var p=gg.querySelector('.picked');
+        if(!p){ done=false; return; }
+        if(p.hasAttribute('data-right')) ok++;
+      });
+      if(!done){ hint.textContent=''; hint.classList.remove('on'); return; }
+      var bad=groups.length-ok;
+      if(bad===0){
+        hint.textContent=''; hint.classList.remove('on');
+        box.querySelectorAll('[data-right]').forEach(function(r){ r.classList.add('right'); });
+        rev.classList.add('on');
+        rev.scrollIntoView({behavior:'smooth', block:'nearest'});
+      }else{
+        hint.textContent='\u26a0\ufe0f ' + ok + ' 对 ' + bad + ' 错，继续努力';
+        hint.classList.add('on');
+        rev.classList.remove('on');
+        box.querySelectorAll('.right').forEach(function(r){ r.classList.remove('right'); });
+      }
+    }
+    groups.forEach(function(g){
+      g.querySelectorAll('button').forEach(function(b){
+        b.addEventListener('click', function(){
+          g.querySelectorAll('button').forEach(function(x){x.classList.remove('picked','right');});
+          b.classList.add('picked');
+          grade();
+        });
+      });
+    });
+  });
+  }
+  if(document.readyState==='loading') addEventListener('DOMContentLoaded', bind);
+  else bind();
+})();
+</script>
 
 <!-- ⭐⭐ 2026-09-14 R12 现场要求：「那个注意力编年史能给我放在开篇的位置吗？」
      ⭐ 顺手做成**首尾呼应**：开篇摊开它（此刻看不懂是正常的），
