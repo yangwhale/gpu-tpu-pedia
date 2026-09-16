@@ -583,7 +583,13 @@ body.figonly section blockquote{display:none}
    的六成四）。⛔ 但图注不能整条藏 ——&#160;它是「看图该看什么」的指路。
    ⭐ 折中：**只留第一个 <br> 之前那一段**，后面的收起来。
      实测 43/48 条带 <br>，切完省 53%。切法在 place_figs 里。 */
-body.figonly figcaption .capmore{display:none}
+/* ⛔⛔ 2026-09-16 第二轮：只藏 .capmore 还不够 ——&#160;现场原话
+   「你的那个开关……它没收全吧？把一些该收起来的小字也接着都收进去。」
+   ⭐ 图注整条藏掉。折叠模式的定义就此收敛成一句：**只留图。**
+   ⚠️ 上一轮留图注的理由是「它是看图该看什么的指路」——&#160;那条理由没错，
+     但它跟「投屏时小字看不见」这条冲突，而讲课场景优先。
+     展开模式下图注一个字没少。 */
+body.figonly figcaption{display:none}
 body.figonly section h3{margin-top:34px}
 </style>
 """

@@ -749,7 +749,7 @@ class Fig(object):
     KIND = {"ok": (GR, "#e6f4ea", "⭐"), "warn": (OR, "#fef7e0", "⚠️"),
             "info": (BL, "#e8f0fe", "⭐⭐"), "bad": (RD, "#fce8e6", "⛔")}
 
-    def band(self, y, kind, title, lines, w=None, fold=False):
+    def band(self, y, kind, title, lines, w=None, fold=False, keep=False):
         """落点带。⛔ **不填色** ——&nbsp;白底 ＋ 细灰框 ＋ 左侧 4px 彩色竖条。
         见文件头「填充规则」：容器不填，只有承载信息的小元素才填。
 
@@ -772,6 +772,20 @@ class Fig(object):
         ⚠️ 折起来**不等于删**：「不确定就去查，绝不编」的另一半是
           「查过的要留下出处」——&#160;所以它仍然逐字在页面上，只是默认收着。
         """
+        # ⭐⭐⭐ 2026-09-16 现场：「像这样的小字对主线也没什么帮助……
+        #   你在讲课的时候，就算投到屏幕上人家也看不见的那种，就先收起来。」
+        #   ⛔ 但**不能只留第一行**：115 条落点带里 113 条是多行，而其中
+        #     绝大多数的第 2 行正是那句「⛔ 代价 / 欠下的」——&#160;
+        #     本课反复强调「好处和坏处必须一起出现」，砍掉第 2 行等于只报喜。
+        #   ⭐ 所以判据定在**第三行**：**一条落点带最多两行（一好一坏），
+        #     第三行起就是展开说明，收进「出处与口径」。**
+        #     实测命中 55 条（3 行 42、4 行 11、5 行 2），一条配对都没拆散。
+        #   ⚠️ `keep=True` 是逃生舱：极少数三行都不能少的地方用它。
+        if not fold and not keep and len(lines) > 2:
+            self._src.append('<tspan font-weight="700">%s %s（接上图）</tspan>'
+                             % (self.KIND[kind][2], title))
+            self._src.extend(ln for ln in lines[2:] if ln and ln.strip())
+            lines = lines[:2]
         if fold:
             # ⭐ 复用 src() 那条通道：`save()` 会把 `_src` 旁落成 .src.html，
             #   由 topic03_page 包成图下面那个默认收起的 <details>。
