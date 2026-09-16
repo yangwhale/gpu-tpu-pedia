@@ -2147,4 +2147,7 @@ for ph, (what, figs, asks) in PLAN.items():
 
 _html = P.place_table(_html)
 _html = P.place_figs(_html, FIGS)
+# ⭐ 2026-09-16：这一份是**要投屏讲的**，所以装上折叠开关，默认只剩图。
+#   ⛔ L300 不装 ——&#160;那一份是拿来读的。
+_html = P.add_figonly_toggle(_html)
 P.finish(_html, OUT, SECTIONS, "topic-03.html")

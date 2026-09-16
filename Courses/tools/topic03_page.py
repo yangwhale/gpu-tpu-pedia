@@ -495,6 +495,91 @@ def lint_html_tags_in_svg(html):
     return bad
 
 
+# ══════════════════════════════════════════════════════════════
+# ⭐⭐⭐ 2026-09-16 现场：「专题三今天就要开讲了，把几乎所有文字都折叠起来，
+#   因为我们照着图讲。特别重要的字留下。做个开关，默认折叠。」
+#
+# ⭐ 留下什么，不是凭感觉挑的 —— 这门课自己早就把「承重的那句」标出来了：
+#     `p.lead`    章首那一句（这一章在讲什么）
+#     `p.landing` 落点句（这一格的结论）
+#     `figcaption` 图注（它是图的一部分，投屏时正需要）
+#     `blockquote` 原话引文（只有 3 条，而且**念原话时屏幕上该有字**）
+#   其余一律折叠：正文 p、列表、引用、以及全部 note 块。
+# ⛔ 判据：**「哪些字重要」这个判断不要在样式表里重做一遍** ——
+#   正文里已经有语义标记了，折叠规则只该<u>引用</u>它，不该另立一套。
+#   （另立一套的后果是：以后加一段重要的话，样式表不知道，它就被折没了。）
+#
+# ⚠️ 只在**需要投屏的那一份**上开（L200 主线课件）。L300 是拿来读的，不开。
+# ══════════════════════════════════════════════════════════════
+FIGONLY_CSS = """
+<style id="figonly-css">
+.figbar{position:fixed;right:18px;bottom:18px;z-index:99;display:flex;gap:8px;
+  align-items:center;font:600 14px/1.4 system-ui,-apple-system,"Noto Sans CJK SC",sans-serif}
+.figbar button{cursor:pointer;border:1px solid #dadce0;background:#fff;color:#1a73e8;
+  border-radius:999px;padding:9px 18px;box-shadow:0 2px 10px rgba(0,0,0,.14);
+  font:inherit}
+.figbar button:hover{background:#f8f9fa}
+.figbar .hint{color:#80868b;font-weight:400;background:#fff;border-radius:999px;
+  padding:6px 12px;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+body.figonly section p:not(.lead):not(.landing),
+body.figonly section ul,
+body.figonly section ol,
+body.figonly section pre,
+body.figonly section .note{display:none}
+/* ⛔ 防守：图自己那一块里的任何 p 都不该被上面那条误伤 */
+body.figonly section figure p{display:revert}
+body.figonly section h3{margin-top:34px}
+</style>
+"""
+
+FIGONLY_HTML = """
+<div class="figbar">
+  <span class="hint" id="figonly-hint"></span>
+  <button id="figonly-btn" type="button"></button>
+</div>
+<script>
+(function(){
+  var KEY = "t3-figonly";
+  var btn  = document.getElementById("figonly-btn");
+  var hint = document.getElementById("figonly-hint");
+  // ⭐ 折叠了多少段，是**数出来的**，不写死 ——&#160;正文一改它自动跟着变。
+  var n = document.querySelectorAll(
+      "section p:not(.lead):not(.landing), section ul, section ol, "
+    + "section pre, section .note").length;
+  function set(on){
+    document.body.classList.toggle("figonly", on);
+    btn.textContent = on ? "展开讲解" : "折叠讲解";
+    hint.textContent = on ? ("已折叠 " + n + " 段讲解　·　按 T 切换")
+                          : ("讲解全展开　·　按 T 切换");
+    try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
+  }
+  var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
+  set(saved === null ? true : saved === "1");        // ⭐ 默认折叠
+  btn.addEventListener("click", function(){
+    set(!document.body.classList.contains("figonly"));
+  });
+  document.addEventListener("keydown", function(e){
+    if (e.key === "t" || e.key === "T"){
+      if (/^(INPUT|TEXTAREA)$/.test((e.target||{}).tagName||"")) return;
+      set(!document.body.classList.contains("figonly"));
+    }
+  });
+})();
+</script>
+"""
+
+
+def add_figonly_toggle(html):
+    """给一份页面装上「折叠讲解 / 展开讲解」开关，**默认折叠**。
+
+    ⛔ 只给要投屏的那一份用。返回改过的 html。"""
+    assert "figonly-css" not in html, "这一页已经装过折叠开关了"
+    assert "</head>" in html and "</body>" in html, "页面结构不对，装不上"
+    html = html.replace("</head>", FIGONLY_CSS + "</head>", 1)
+    html = html.replace("</body>", FIGONLY_HTML + "</body>", 1)
+    return html
+
+
 def finish(html, out_path, sections, label):
     """锚点 → 吸顶目录 → arXiv 自动链接 → 写盘 → 打一行回执。"""
     html = anchorize(html)

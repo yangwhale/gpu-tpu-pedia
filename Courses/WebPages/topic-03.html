@@ -703,6 +703,25 @@ h4 { margin:18px 0 6px; font-size:15px }
 @media print{.figsrc{font-size:11px}}
 </style>
 
+
+<style id="figonly-css">
+.figbar{position:fixed;right:18px;bottom:18px;z-index:99;display:flex;gap:8px;
+  align-items:center;font:600 14px/1.4 system-ui,-apple-system,"Noto Sans CJK SC",sans-serif}
+.figbar button{cursor:pointer;border:1px solid #dadce0;background:#fff;color:#1a73e8;
+  border-radius:999px;padding:9px 18px;box-shadow:0 2px 10px rgba(0,0,0,.14);
+  font:inherit}
+.figbar button:hover{background:#f8f9fa}
+.figbar .hint{color:#80868b;font-weight:400;background:#fff;border-radius:999px;
+  padding:6px 12px;box-shadow:0 2px 10px rgba(0,0,0,.10)}
+body.figonly section p:not(.lead):not(.landing),
+body.figonly section ul,
+body.figonly section ol,
+body.figonly section pre,
+body.figonly section .note{display:none}
+/* ⛔ 防守：图自己那一块里的任何 p 都不该被上面那条误伤 */
+body.figonly section figure p{display:revert}
+body.figonly section h3{margin-top:34px}
+</style>
 <style>
 /* ⭐ 吸顶目录：html 的 scroll-padding-top 本来就留了 96px 给它 ——
    那条规则之前是空转的（顶上什么都没有，点内链只是白空一截）。 */
@@ -10567,6 +10586,40 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   </p>
 </div>
 
+
+<div class="figbar">
+  <span class="hint" id="figonly-hint"></span>
+  <button id="figonly-btn" type="button"></button>
+</div>
+<script>
+(function(){
+  var KEY = "t3-figonly";
+  var btn  = document.getElementById("figonly-btn");
+  var hint = document.getElementById("figonly-hint");
+  // ⭐ 折叠了多少段，是**数出来的**，不写死 ——&#160;正文一改它自动跟着变。
+  var n = document.querySelectorAll(
+      "section p:not(.lead):not(.landing), section ul, section ol, "
+    + "section pre, section .note").length;
+  function set(on){
+    document.body.classList.toggle("figonly", on);
+    btn.textContent = on ? "展开讲解" : "折叠讲解";
+    hint.textContent = on ? ("已折叠 " + n + " 段讲解　·　按 T 切换")
+                          : ("讲解全展开　·　按 T 切换");
+    try { localStorage.setItem(KEY, on ? "1" : "0"); } catch(e){}
+  }
+  var saved = null; try { saved = localStorage.getItem(KEY); } catch(e){}
+  set(saved === null ? true : saved === "1");        // ⭐ 默认折叠
+  btn.addEventListener("click", function(){
+    set(!document.body.classList.contains("figonly"));
+  });
+  document.addEventListener("keydown", function(e){
+    if (e.key === "t" || e.key === "T"){
+      if (/^(INPUT|TEXTAREA)$/.test((e.target||{}).tagName||"")) return;
+      set(!document.body.classList.contains("figonly"));
+    }
+  });
+})();
+</script>
 <button class="totop" id="totop" title="回到顶部" onclick="window.scrollTo({top:0,behavior:'smooth'})">↑</button>
 <script>(function(){
  var bar=document.querySelector(".progress i"), btn=document.getElementById("totop"), toc=document.getElementById("tocbar"), ls=[].slice.call(toc.querySelectorAll("a"));
