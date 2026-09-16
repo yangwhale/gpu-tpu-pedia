@@ -295,13 +295,31 @@ def main():
                        "最后一层纯滑窗</tspan>", INK, size=15)
     f._pan = None
 
-    yy = f.band(py2 + PH2 + 22, "info", "为什么非得挂那段 128 的滑窗", [
-        "⛔ 因为 HCA 那一步<tspan font-weight=\"700\">会把最近的历史整个吞掉</tspan>："
-        "第一条压缩块要凑满 128 个 token 才成形，"
-        "而<tspan font-weight=\"700\">因果律不允许查询看见自己后面的 token</tspan> ——&#160;"
-        "于是刚开口的那几十个字，<tspan font-weight=\"700\">在压缩块里一条都还没出现</tspan>。",
-        "⭐ 滑窗补的就是这一段。"
-        "<tspan font-weight=\"700\">它不是「为了精度锦上添花」，是「不挂就接不上话」。</tspan>",
+    # ⛔⛔⛔ 2026-09-16 现场：「这个 CSA 它居然也有一个 SWA 吗？好像不对吧，
+    #   CSA 配的是 Lightning indexer，选的是 top 1024。」
+    #   ⭐ **图没画错，错的是这条带子只给了 HCA 一个理由** ——&#160;
+    #     于是读者看见 CSA 那行也挂滑窗，自然以为是画错了。
+    #     ⛔ 判据：**当一个部件三处都有、而你只解释了其中一处，
+    #       另外两处就会被读成 bug。理由要跟着部件走，不是跟着最极端的那个例子走。**
+    #   📌 事实核过：论文 **Figure 3 画的就是 CSA**，它的图注原话是
+    #     「Additionally, a small set of sliding window KV entries is combined
+    #      with the selected compressed KV entries to enhance local
+    #      fine-grained dependencies.」——&#160;滑窗就是在 CSA 这一节（§2.3.1）
+    #     被引入的；HF 的架构文档也写着「All three types share the same
+    #     backbone: … Shared sliding-window K=V branch」。
+    yy = f.band(py2 + PH2 + 22, "info",
+                "滑窗跟 indexer 不是二选一 ——　CSA 两样都有", [
+        "⛔ <tspan font-weight=\"700\">共同的理由：压缩块要凑满 m 个 token 才成形</tspan>，"
+        "而因果律不允许查询看见自己后面的 token ——&#160;"
+        "<tspan font-weight=\"700\">在凑满之前，查询无块可看</tspan>。"
+        "CSA 的 m ＝ 4，缺口小；HCA 的 m′ ＝ 128，缺口大到能把刚开口那几十个字整个吞掉。",
+        "⭐ <tspan font-weight=\"700\">而 CSA 还有一条自己的理由</tspan>："
+        "压缩块是好几个 token 的加权和，<tspan font-weight=\"700\">近处需要的是 token 级的分辨率</tspan>，"
+        "摘要给不了 ——&#160;论文 Figure 3 的图注就写着这是"
+        "「to enhance local fine-grained dependencies」。",
+        "⭐⭐ 所以两件事分工很清楚："
+        "<tspan font-weight=\"700\">indexer 管远处挑哪几条摘要，滑窗管近处一个不落。</tspan>"
+        "⛔ 它不是「为了精度锦上添花」，是「不挂就接不上话」。",
     ])
 
     # ══════════ Ⓒ 压缩怎么压 ═════════════════════════════════════

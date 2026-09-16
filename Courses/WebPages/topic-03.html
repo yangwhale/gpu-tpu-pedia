@@ -7481,7 +7481,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <b>「那它一条 KV 里到底存的是什么？跟 MLA 到底差在哪？」</b>
   <em>⭐ 这一节把 <b>DeepSeek-V4-Pro</b> 的一条 KV 整个拆开。</em></p>
 
-<figure class="fbox fwide" id="fig-v4-arch"><svg viewBox="0 0 1400 3514" width="100%" role="img" aria-label="DeepSeek-V4-Pro 的注意力：每个 token 每层只存一条 512 维向量，K 和 V 就是同一条，512 里只有末尾 64 维带 RoPE；CSA 把 4 个 token 压成一条再用索引器挑 1024 条，HCA 把 128 个压成一条且全部都看，两种层都在后面拼一段 128 的未压缩滑窗；取用时不做任何解压缩，只在输出侧按负位置反向旋转一次"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<figure class="fbox fwide" id="fig-v4-arch"><svg viewBox="0 0 1400 3538" width="100%" role="img" aria-label="DeepSeek-V4-Pro 的注意力：每个 token 每层只存一条 512 维向量，K 和 V 就是同一条，512 里只有末尾 64 维带 RoPE；CSA 把 4 个 token 压成一条再用索引器挑 1024 条，HCA 把 128 个压成一条且全部都看，两种层都在后面拼一段 128 的未压缩滑窗；取用时不做任何解压缩，只在输出侧按负位置反向旋转一次"><defs><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
 <text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">DeepSeek-V4-Pro：<tspan font-weight="700">一条 KV 到底长什么样</tspan></text>
 <text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 三个问题一次说清：<tspan font-weight="700">512 里装了什么</tspan>　·　<tspan font-weight="700">那 64 维 RoPE 去哪了</tspan>　·　<tspan font-weight="700">用的时候要不要解压</tspan></text>
 <rect x="0" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
@@ -7634,73 +7634,74 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="150" y="2298" fill="#5f6368" style="font-size:13.5px">1M 上下文下也只有约 8 千条，全看得起</text>
 <rect x="72" y="2310" width="1256" height="44" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
 <text class="svgsm" x="96" y="2338" fill="#202124" style="font-size:15.0px">⭐ V4-Pro 的层表（61 层，直接抄自 config.json）：<tspan font-family="ui-monospace,monospace">[128, 128, 4, 128, 4, 128, …, 4, 128, 0]</tspan>　——　<tspan font-weight="700">开头两层 HCA 打底，中间 CSA 与 HCA 交替，最后一层纯滑窗</tspan></text>
-<rect x="0" y="2394" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="2394" width="4" height="122" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="2" y="2394" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="2421" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 为什么非得挂那段 128 的滑窗</tspan></text>
-<text class="svgsm" x="20" y="2452" fill="#174ea6" style="font-size:15.0px">⛔ 因为 HCA 那一步<tspan font-weight="700">会把最近的历史整个吞掉</tspan>：第一条压缩块要凑满 128 个 token 才成形，而<tspan font-weight="700">因果律不允许查询看见自己后面的 token</tspan> ——&#160;于是刚开口的那几十个字，<tspan font-weight="700">在压缩块里</tspan></text>
-<text class="svgsm" x="20" y="2476" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">一条都还没出现</tspan>。</text>
-<text class="svgsm" x="20" y="2500" fill="#174ea6" style="font-size:15.0px">⭐ 滑窗补的就是这一段。<tspan font-weight="700">它不是「为了精度锦上添花」，是「不挂就接不上话」。</tspan></text>
-<rect x="0" y="2542" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="2542" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="0" y="2544" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="2572" x2="1400" y2="2572" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="2562" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓒ 压缩这一步到底在算什么 ——　<tspan font-weight="700">加权求和，权重是学出来的</tspan></tspan></text>
-<text class="svgsm" x="638" y="2562" fill="#5f6368" style="font-size:11.0px">⛔ 不是平均池化，也不是把现成的 K/V 拿来池化 ——　<tspan font-weight="700">压缩器有自己独立的投影矩阵</tspan></text>
-<rect x="60" y="2598" width="620" height="240" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
-<rect x="60" y="2598" width="620" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
-<text class="svgsm" x="370" y="2632" fill="#b06000" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">CSA：重叠窗口</tspan></text>
-<text class="svgsm" x="92" y="2670" fill="#5f6368" style="font-size:14.5px">两路投影 Cᵃ 和 Cᵇ，各配一路权重 Z</text>
-<text class="svgsm" x="92" y="2700" fill="#5f6368" style="font-size:14.5px">每条摘要 ＝ <tspan font-weight="700">2m ＝ 8 个 token</tspan> 的加权和</text>
-<text class="svgsm" x="92" y="2730" fill="#5f6368" style="font-size:14.5px">权重在这 8 个上做一次 softmax（还带可学的位置偏置）</text>
-<text class="svgsm" x="92" y="2760" fill="#5f6368" style="font-size:14.5px">相邻两条的来源<tspan font-weight="700">互相重叠</tspan></text>
-<text class="svgsm" x="92" y="2790" fill="#5f6368" style="font-size:14.5px">→　序列真正压到 <tspan font-weight="700">1/m ＝ 1/4</tspan></text>
-<text class="svgsm" x="92" y="2822" fill="#b06000" style="font-size:14.5px"><tspan font-weight="700">⭐ 看 8 个、只留 1 条 ——　边界不至于被切死</tspan></text>
-<rect x="720" y="2598" width="620" height="240" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="720" y="2598" width="620" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<text class="svgsm" x="1030" y="2632" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">HCA：非重叠窗口</tspan></text>
-<text class="svgsm" x="752" y="2670" fill="#5f6368" style="font-size:14.5px">同样是投影 ＋ 门控加权求和</text>
-<text class="svgsm" x="752" y="2700" fill="#5f6368" style="font-size:14.5px">每条摘要 ＝ <tspan font-weight="700">m′ ＝ 128 个 token</tspan> 的加权和</text>
-<text class="svgsm" x="752" y="2730" fill="#5f6368" style="font-size:14.5px">窗口<tspan font-weight="700">不重叠</tspan>，一刀一段</text>
-<text class="svgsm" x="752" y="2760" fill="#5f6368" style="font-size:14.5px">压完之后<tspan font-weight="700">再给这条摘要施加一次 RoPE</tspan></text>
-<text class="svgsm" x="752" y="2790" fill="#5f6368" style="font-size:14.5px">用的是这条摘要自己的<tspan font-weight="700">锚点位置</tspan></text>
-<text class="svgsm" x="752" y="2822" fill="#0d652d" style="font-size:14.5px"><tspan font-weight="700">⭐ 没有索引器 ——　压到这个份上，全看也看得起</tspan></text>
-<rect x="0" y="2898" width="1400" height="412" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="2898" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
-<rect x="0" y="2900" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<line x1="0" y1="2928" x2="1400" y2="2928" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
-<text class="svglbl" x="14" y="2918" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓓ 查询来了之后 ——　<tspan font-weight="700">全程没有任何一步叫「解压缩」</tspan></tspan></text>
-<text class="svgsm" x="592" y="2918" fill="#5f6368" style="font-size:11.0px">⭐ 但有一步很容易被漏掉：<tspan font-weight="700">输出侧要按负位置反向旋转一次</tspan></text>
-<rect x="72" y="2962" width="40" height="40" rx="20" fill="#fff" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="92" y="2989" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">①</tspan></text>
-<text class="svgsm" x="130" y="2989" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">查询</tspan></text>
-<text class="svgsm" x="288" y="2989" fill="#5f6368" style="font-size:15.0px">128 个头，每头 512 维（走 q_lora 1536 下投再上投）</text>
-<rect x="72" y="3020" width="40" height="40" rx="20" fill="#fff" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="92" y="3047" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">②</tspan></text>
-<text class="svgsm" x="130" y="3047" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">点积</tspan></text>
-<text class="svgsm" x="288" y="3047" fill="#5f6368" style="font-size:15.0px">直接和那条 512 相乘 ——　<tspan font-weight="700">不展开、不还原</tspan></text>
-<rect x="72" y="3078" width="40" height="40" rx="20" fill="#fff" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="92" y="3105" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">③</tspan></text>
-<text class="svgsm" x="130" y="3105" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">加权</tspan></text>
-<text class="svgsm" x="288" y="3105" fill="#5f6368" style="font-size:15.0px">softmax 之后，乘的还是<tspan font-weight="700">同一条 512</tspan></text>
-<rect x="72" y="3136" width="40" height="40" rx="20" fill="#fff" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="92" y="3163" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">④</tspan></text>
-<text class="svgsm" x="130" y="3163" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">反向 RoPE</tspan></text>
-<text class="svgsm" x="288" y="3163" fill="#5f6368" style="font-size:15.0px">对输出的 rope 那 64 维，用位置 <tspan font-weight="700">−i</tspan> 再转一次</text>
-<rect x="72" y="3194" width="40" height="40" rx="20" fill="#fff" stroke="#80868b" stroke-width="1"/>
-<text class="svgsm" x="92" y="3221" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">⑤</tspan></text>
-<text class="svgsm" x="130" y="3221" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">输出投影</tspan></text>
-<text class="svgsm" x="288" y="3221" fill="#5f6368" style="font-size:15.0px">分 16 组、每组降到 1024，再合回 hidden 7168</text>
-<rect x="72" y="3260" width="1256" height="52" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
-<text class="svgsm" x="96" y="3280" fill="#202124" style="font-size:15.0px">⛔ <tspan font-weight="700">④ 为什么非有不可</tspan>：K 和 V 是同一条，所以<tspan font-weight="700">V 也被 RoPE 转过了</tspan> ——　不转回来，V 携带的就是绝对位置的污染。</text>
-<text class="svgsm" x="96" y="3302" fill="#5f6368" style="font-size:14.0px">⭐ 按 −i 转回来之后，<tspan font-weight="700">每条 KV 的贡献只跟它到查询的「相对距离」有关</tspan>　·　论文 §2.3.3 式 26</text>
-<rect x="0" y="3362" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
-<rect x="0" y="3362" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
-<rect x="2" y="3362" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
-<text class="svglbl" x="20" y="3389" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 这一整套换来了什么</tspan></text>
-<text class="svgsm" x="20" y="3420" fill="#0d652d" style="font-size:15.0px">论文口径（1M 上下文，对照 DeepSeek-V3.2）：<tspan font-weight="700">V4-Pro ＝ 27% 的单 token 推理 FLOPs、10% 的 KV cache</tspan>；<tspan font-weight="700">V4-Flash ＝ 10% 与 7%</tspan>。</text>
-<text class="svgsm" x="20" y="3444" fill="#0d652d" style="font-size:15.0px">vLLM 的实现口径：1M 上下文、bf16 之下，<tspan font-weight="700">V4 每条序列 9.62 GiB</tspan>，对照同为 61 层的 V3.2 式估算 83.9 GiB ——&#160;<tspan font-weight="700">约 8.7 倍</tspan>；实跑再用 fp8 存注意力、fp4 存索引器，又能</text>
-<text class="svgsm" x="20" y="3468" fill="#0d652d" style="font-size:15.0px">减掉大约一半。</text>
+<rect x="0" y="2394" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="2394" width="4" height="146" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="2" y="2394" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="2421" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 滑窗跟 indexer 不是二选一 ——　CSA 两样都有</tspan></text>
+<text class="svgsm" x="20" y="2452" fill="#174ea6" style="font-size:15.0px">⛔ <tspan font-weight="700">共同的理由：压缩块要凑满 m 个 token 才成形</tspan>，而因果律不允许查询看见自己后面的 token ——&#160;<tspan font-weight="700">在凑满之前，查询无块可看</tspan>。CSA 的 m ＝ 4，缺口小；HCA 的 m′ ＝ 128，</text>
+<text class="svgsm" x="20" y="2476" fill="#174ea6" style="font-size:15.0px">缺口大到能把刚开口那几十个字整个吞掉。</text>
+<text class="svgsm" x="20" y="2500" fill="#174ea6" style="font-size:15.0px">⭐ <tspan font-weight="700">而 CSA 还有一条自己的理由</tspan>：压缩块是好几个 token 的加权和，<tspan font-weight="700">近处需要的是 token 级的分辨率</tspan>，摘要给不了 ——&#160;论文 Figure 3 的图注就写着这是「to enhance local f</text>
+<text class="svgsm" x="20" y="2524" fill="#174ea6" style="font-size:15.0px">ine-grained dependencies」。</text>
+<rect x="0" y="2566" width="1400" height="300" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="2566" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="2568" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="2596" x2="1400" y2="2596" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="2586" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓒ 压缩这一步到底在算什么 ——　<tspan font-weight="700">加权求和，权重是学出来的</tspan></tspan></text>
+<text class="svgsm" x="638" y="2586" fill="#5f6368" style="font-size:11.0px">⛔ 不是平均池化，也不是把现成的 K/V 拿来池化 ——　<tspan font-weight="700">压缩器有自己独立的投影矩阵</tspan></text>
+<rect x="60" y="2622" width="620" height="240" rx="8" fill="#fff" stroke="#e8710a" stroke-width="1"/>
+<rect x="60" y="2622" width="620" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="370" y="2656" fill="#b06000" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">CSA：重叠窗口</tspan></text>
+<text class="svgsm" x="92" y="2694" fill="#5f6368" style="font-size:14.5px">两路投影 Cᵃ 和 Cᵇ，各配一路权重 Z</text>
+<text class="svgsm" x="92" y="2724" fill="#5f6368" style="font-size:14.5px">每条摘要 ＝ <tspan font-weight="700">2m ＝ 8 个 token</tspan> 的加权和</text>
+<text class="svgsm" x="92" y="2754" fill="#5f6368" style="font-size:14.5px">权重在这 8 个上做一次 softmax（还带可学的位置偏置）</text>
+<text class="svgsm" x="92" y="2784" fill="#5f6368" style="font-size:14.5px">相邻两条的来源<tspan font-weight="700">互相重叠</tspan></text>
+<text class="svgsm" x="92" y="2814" fill="#5f6368" style="font-size:14.5px">→　序列真正压到 <tspan font-weight="700">1/m ＝ 1/4</tspan></text>
+<text class="svgsm" x="92" y="2846" fill="#b06000" style="font-size:14.5px"><tspan font-weight="700">⭐ 看 8 个、只留 1 条 ——　边界不至于被切死</tspan></text>
+<rect x="720" y="2622" width="620" height="240" rx="8" fill="#fff" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="720" y="2622" width="620" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1030" y="2656" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">HCA：非重叠窗口</tspan></text>
+<text class="svgsm" x="752" y="2694" fill="#5f6368" style="font-size:14.5px">同样是投影 ＋ 门控加权求和</text>
+<text class="svgsm" x="752" y="2724" fill="#5f6368" style="font-size:14.5px">每条摘要 ＝ <tspan font-weight="700">m′ ＝ 128 个 token</tspan> 的加权和</text>
+<text class="svgsm" x="752" y="2754" fill="#5f6368" style="font-size:14.5px">窗口<tspan font-weight="700">不重叠</tspan>，一刀一段</text>
+<text class="svgsm" x="752" y="2784" fill="#5f6368" style="font-size:14.5px">压完之后<tspan font-weight="700">再给这条摘要施加一次 RoPE</tspan></text>
+<text class="svgsm" x="752" y="2814" fill="#5f6368" style="font-size:14.5px">用的是这条摘要自己的<tspan font-weight="700">锚点位置</tspan></text>
+<text class="svgsm" x="752" y="2846" fill="#0d652d" style="font-size:14.5px"><tspan font-weight="700">⭐ 没有索引器 ——　压到这个份上，全看也看得起</tspan></text>
+<rect x="0" y="2922" width="1400" height="412" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="2922" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="2924" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="2952" x2="1400" y2="2952" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="2942" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓓ 查询来了之后 ——　<tspan font-weight="700">全程没有任何一步叫「解压缩」</tspan></tspan></text>
+<text class="svgsm" x="592" y="2942" fill="#5f6368" style="font-size:11.0px">⭐ 但有一步很容易被漏掉：<tspan font-weight="700">输出侧要按负位置反向旋转一次</tspan></text>
+<rect x="72" y="2986" width="40" height="40" rx="20" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="92" y="3013" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">①</tspan></text>
+<text class="svgsm" x="130" y="3013" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">查询</tspan></text>
+<text class="svgsm" x="288" y="3013" fill="#5f6368" style="font-size:15.0px">128 个头，每头 512 维（走 q_lora 1536 下投再上投）</text>
+<rect x="72" y="3044" width="40" height="40" rx="20" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="92" y="3071" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">②</tspan></text>
+<text class="svgsm" x="130" y="3071" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">点积</tspan></text>
+<text class="svgsm" x="288" y="3071" fill="#5f6368" style="font-size:15.0px">直接和那条 512 相乘 ——　<tspan font-weight="700">不展开、不还原</tspan></text>
+<rect x="72" y="3102" width="40" height="40" rx="20" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="92" y="3129" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">③</tspan></text>
+<text class="svgsm" x="130" y="3129" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">加权</tspan></text>
+<text class="svgsm" x="288" y="3129" fill="#5f6368" style="font-size:15.0px">softmax 之后，乘的还是<tspan font-weight="700">同一条 512</tspan></text>
+<rect x="72" y="3160" width="40" height="40" rx="20" fill="#fff" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="92" y="3187" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">④</tspan></text>
+<text class="svgsm" x="130" y="3187" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">反向 RoPE</tspan></text>
+<text class="svgsm" x="288" y="3187" fill="#5f6368" style="font-size:15.0px">对输出的 rope 那 64 维，用位置 <tspan font-weight="700">−i</tspan> 再转一次</text>
+<rect x="72" y="3218" width="40" height="40" rx="20" fill="#fff" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="92" y="3245" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">⑤</tspan></text>
+<text class="svgsm" x="130" y="3245" fill="#202124" style="font-size:16.0px"><tspan font-weight="700">输出投影</tspan></text>
+<text class="svgsm" x="288" y="3245" fill="#5f6368" style="font-size:15.0px">分 16 组、每组降到 1024，再合回 hidden 7168</text>
+<rect x="72" y="3284" width="1256" height="52" rx="6" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="96" y="3304" fill="#202124" style="font-size:15.0px">⛔ <tspan font-weight="700">④ 为什么非有不可</tspan>：K 和 V 是同一条，所以<tspan font-weight="700">V 也被 RoPE 转过了</tspan> ——　不转回来，V 携带的就是绝对位置的污染。</text>
+<text class="svgsm" x="96" y="3326" fill="#5f6368" style="font-size:14.0px">⭐ 按 −i 转回来之后，<tspan font-weight="700">每条 KV 的贡献只跟它到查询的「相对距离」有关</tspan>　·　论文 §2.3.3 式 26</text>
+<rect x="0" y="3386" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="3386" width="4" height="122" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="3386" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="3413" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 这一整套换来了什么</tspan></text>
+<text class="svgsm" x="20" y="3444" fill="#0d652d" style="font-size:15.0px">论文口径（1M 上下文，对照 DeepSeek-V3.2）：<tspan font-weight="700">V4-Pro ＝ 27% 的单 token 推理 FLOPs、10% 的 KV cache</tspan>；<tspan font-weight="700">V4-Flash ＝ 10% 与 7%</tspan>。</text>
+<text class="svgsm" x="20" y="3468" fill="#0d652d" style="font-size:15.0px">vLLM 的实现口径：1M 上下文、bf16 之下，<tspan font-weight="700">V4 每条序列 9.62 GiB</tspan>，对照同为 61 层的 V3.2 式估算 83.9 GiB ——&#160;<tspan font-weight="700">约 8.7 倍</tspan>；实跑再用 fp8 存注意力、fp4 存索引器，又能</text>
+<text class="svgsm" x="20" y="3492" fill="#0d652d" style="font-size:15.0px">减掉大约一半。</text>
 </svg><figcaption>⭐ <b>Ⓐ 那两条色带是这张图的全部</b> ——&nbsp;<em>V3.2 的 64 挂在 512 <b>外面</b>，V4 的 64 长在 512 <b>里面</b>。一眼就看出「576 变 512」省在哪。</em><span class="capmore"><br>⭐⭐ <em>而 Ⓓ 那个 ④ 是最容易漏掉的一步：<b>K 和 V 共用一条，所以 V 也被转过了，得按负位置转回来。</b>——&nbsp;省下来的那一半，代价就写在这一步上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>论文：<b>arXiv <a href="https://arxiv.org/abs/2606.19348" target="_blank" rel="noopener">2606.19348</a></b>《DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence》(DeepSeek-AI, 2026-04-26)。<a href="#s2-3">§2.3</a>.1 CSA：式 9–12 是压缩（<b>每条摘要由 2m 个 entry 加权求和而来，softmax 在这 2m 个上归一，相邻两条来源重叠，所以序列压到 1/m</b>），式 13–14 是 indexer 的低秩查询；<a href="#s2-3">§2.3</a>.2 HCA；<a href="#s2-3">§2.3</a>.3 Other Details 含 Partial RoPE、<b>式 26 的反向旋转</b>、式 27 的 attention sink</p>
 <p>配置：Hugging Face <b>deepseek-ai/DeepSeek-V4-Pro</b> 的 config.json ——　num_attention_heads 128、<b>num_key_value_heads 1</b>、head_dim 512、qk_rope_head_dim 64、q_lora_rank 1536、o_groups 16、o_lora_rank 1024、sliding_window 128、index_topk 1024、num_hidden_layers 61、rope_theta 10000 与 compress_rope_theta 160000</p>
 <p>架构说明：Hugging Face transformers 文档 model_doc/deepseek_v4 ——　其中「<b>Shared K=V Multi-Query Attention</b>」「Partial RoPE 落在每个头<b>末尾的 qk_rope_head_dim 个通道</b>」「压缩器的输出与滑窗分支的 KV <b>拼接</b>后再进核心注意力」</p>
