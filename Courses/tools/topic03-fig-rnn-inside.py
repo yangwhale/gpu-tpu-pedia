@@ -236,9 +236,12 @@ def main():
     f.t(370, py4 + 64, "1990　盒子里", BL, True, 19, "middle")
     f.box(310, py4 + 90, 120, 62, "#e8f0fe", BL, 6)
     f.t(370, py4 + 128, "一个状态", BL, True, 17, "middle")
-    f.t(370, py4 + 178, "就这一条向量。<tspan font-weight=\"700\">没有钥匙，也没有内容</tspan>。",
+    f.t(370, py4 + 160, "就这一条向量。<tspan font-weight=\"700\">没有钥匙，也没有内容</tspan>。",
         GY, size=15, anchor="middle")
-    f.t(370, py4 + 206, "它是<tspan font-weight=\"700\">全部历史压成的一团</tspan>",
+    f.t(370, py4 + 182,
+        "⭐ Elman 1990 原文里最大的那个模拟：<tspan font-weight=\"700\">150 个数</tspan>"
+        "（最小的只有 2 个）", GY, size=14, anchor="middle")
+    f.t(370, py4 + 208, "它是<tspan font-weight=\"700\">全部历史压成的一团</tspan>",
         BL, True, 15.5, "middle")
 
     f.box(730, py4 + 30, 600, 212, "#fff", PU, 8)
@@ -251,9 +254,13 @@ def main():
         f.t(x + 17, py4 + 138, "匙", PU, True, 13, "middle")
         f.box(x + 38, py4 + 90, 34, 62, "#fff", PU, 5)
         f.t(x + 55, py4 + 127, "值", PU, True, 13, "middle")
-    f.t(1030, py4 + 178, "每一个字都留一对，<tspan font-weight=\"700\">一个都不合并</tspan>。",
+    f.t(1030, py4 + 160, "每一个字都留一对，<tspan font-weight=\"700\">一个都不合并</tspan>。",
         GY, size=15, anchor="middle")
-    f.t(1030, py4 + 206, "它是<tspan font-weight=\"700\">全部历史原样留着</tspan>",
+    f.t(1030, py4 + 182,
+        "⚠️ 这套叫法是 2017 年给的；"
+        "<tspan font-weight=\"700\">缓存起来</tspan>是更晚的事", GY, size=14,
+        anchor="middle")
+    f.t(1030, py4 + 208, "它是<tspan font-weight=\"700\">全部历史原样留着</tspan>",
         PU, True, 15.5, "middle")
     f._pan = None
 
@@ -268,6 +275,20 @@ def main():
         "<tspan font-weight=\"700\">这本书剩下的章节，讲的就是这两个极端之间的全部空间。</tspan>",
     ])
 
+    yy = f.band(yy + 14, "info", "顺带回答「那什么时候变成二维的」", [
+        "⛔ <tspan font-weight=\"700\">矩阵状态不是 2020 年发明的，是 2020 年被"
+        "<tspan text-decoration=\"underline\">重新发现</tspan>的。</tspan>"
+        "⭐ 90 年代初 Schmidhuber 那一支的 Fast Weight Programmers，"
+        "用的就已经是<tspan font-weight=\"700\">外积累加出来的矩阵</tspan>。",
+        "⭐⭐ 2021 年那篇把两者<tspan font-weight=\"700\">形式等价</tspan>"
+        "证了出来（arXiv 2102.11174，作者里就有 Schmidhuber 本人）。"
+        "而它摘要里那句最值钱：那些外积拼的是"
+        "「<tspan font-weight=\"700\">self-invented activation patterns"
+        "（today called keys and values）</tspan>」——&#160;"
+        "<tspan font-weight=\"700\">今天叫 key 和 value 的那两样东西，"
+        "三十年前就以外积的形式出现过。</tspan>",
+    ])
+
     yy = f.src(yy + 24,
                "Ⓑ 那两个角度是<tspan font-weight=\"700\">现场采样算的</tspan>"
                "（各 4000 次随机向量对）：d=2 时 E|cosθ| ≈ %.2f（夹角约 %.0f°，"
@@ -280,6 +301,15 @@ def main():
                "⛔ Ⓒ <tspan font-weight=\"700\">不画具体的衰减曲线</tspan> ——&#160;"
                "衰减快慢取决于那个矩阵的谱，<tspan font-weight=\"700\">没有一条"
                "「通用曲线」</tspan>，画出来就是编。只画「反复相乘」这个结构",
+               "Ⓓ 里的 <tspan font-weight=\"700\">150</tspan> 出自 Elman 1990 "
+               "《Finding Structure in Time》原文：句子预测那个模拟"
+               "「hidden and context layers contained <tspan font-weight=\"700\">"
+               "150 nodes</tspan> each」；同一篇里最小的 XOR 模拟只有 "
+               "<tspan font-weight=\"700\">2 个隐藏单元</tspan>，字母预测那两个是 20 个",
+               "⛔ <tspan font-weight=\"700\">精度那一栏本图故意空着</tspan> ——&#160;"
+               "那个年代的论文<tspan font-weight=\"700\">不写精度</tspan>，"
+               "因为它当时还不是一个可以权衡的设计维度。"
+               "本课不替它补一个数",
                "⚠️ Ⓓ 的「2017」指的是 <tspan font-weight=\"700\">Q/K/V 这套命名"
                "和 KV cache 这笔账</tspan>；"
                "「拿一个查询去跟一串历史比相似度再加权平均」这件事本身，"
