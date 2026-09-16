@@ -451,22 +451,15 @@ __FIG_RECOMPUTE__
 
 <p>把 V3 在 128K 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
 
-<table>
-<thead><tr><th>张量</th><th>省显存</th><th>重算代价</th><th>每 GiB 付</th><th>结论</th></tr></thead>
-<tbody>
-<tr><td>MoE 派发（复制成 9 份）</td><td>15.75 GiB</td><td>~0</td><td><b>0</b></td><td>白捡</td></tr>
-<tr><td>RMSNorm 输出（每层 2 个）</td><td>3.50 GiB</td><td>0.01 TFLOP</td><td><b>~0</b></td><td>白捡</td></tr>
-<tr><td>SwiGLU 乘积 9 份（逐元素）</td><td>4.50 GiB</td><td>0.01 TFLOP</td><td><b>~0</b></td><td>白捡</td></tr>
-<tr><td>K/V 解压（输入宽 512）</td><td>8.00 GiB</td><td>4.40 TFLOP</td><td><b>0.55</b></td><td>划算</td></tr>
-<tr><td>Q 展开（输入宽 1,536）</td><td>6.00 GiB</td><td>9.90 TFLOP</td><td><b>1.65</b></td><td>划算</td></tr>
-<tr><td>专家输出 9 份（输入宽 2,048）</td><td>15.75 GiB</td><td>34.63 TFLOP</td><td><b>2.20</b></td><td>划算</td></tr>
-<tr><td>gate / up / 路由 / 降维（输入宽 7,168）</td><td>9.14 GiB</td><td>39.08 TFLOP</td><td><b>7.70</b></td><td>边际</td></tr>
-<tr><td><b>attention 输出</b></td><td><b>4.00 GiB</b></td><td><b>703.69 TFLOP</b></td><td><b>175.92</b></td><td><b>绝不</b></td></tr>
-</tbody></table>
+__TBL_PER_BYTE__
 
 <p><span class="sub">⭐ 这张表不用背，它是<u>上面那条闭式解直接排出来的</u> ——&nbsp;
   前六行的「每 GiB 付」就是各自的输入宽度换了个单位，
-  你拿 config 自己也能排一遍。</span></p>
+  你拿 config 自己也能排一遍。
+  <em>⛔ 顺带自曝：这张表早先有<b>一行</b>是手填的，
+  「省显存 9.14 × 每 GiB 7.70」算出来是 70 TFLOP，那一栏却写着 39.08。
+  <b>而这张表的卖点正是「你自己也能排一遍」</b> ——&nbsp;
+  照着排的人会正好撞上它。<b>现在整张表由闭式解生成，手改不了。</b></em></span></p>
 
 <div class="note danger"><p>⭐⭐ 回答那个直觉问题：「有没有占显存很小、算力却很大的东西？」
   ——&nbsp;<em>有，就是 attention，而且极端。
@@ -519,7 +512,7 @@ __FIG_PER_BYTE__
   对照的线性层也不同（12,288 vs 7,168）——&nbsp;<b>两条线都得重画。</b></em></p>
 <p class="landing">⭐⭐ <b>换句话说：能迁移的是<u>那个形状</u>，不是那些数。</b>
   <em>——&nbsp;换个模型，你要重画的是两条线，<b>而不是重记一组数字</b>。</em></p>
-<p><span class="sub">⛔ <b>顺带自曝一处</b>：这张图早先把 V3 的 1.25 直接套在 GPT-3 上，
+<p><span class="sub">⛔ 顺带自曝一处：这张图早先把 V3 的 1.25 直接套在 GPT-3 上，
   标成了 2,560。<em>——&nbsp;而这一讲从头到尾在讲「别拿 A 的常数套 B」。
   <b>判据：同一张图里出现两个模型时，每个模型的每一条线都要用它自己的常数。</b></em></span></p></div>
 <p><span class="sub">⚠️ 一处口径要说明白，不然数字对不上：论文那个 2.7%
@@ -529,8 +522,26 @@ __FIG_PER_BYTE__
 
 <p>顺带一句：这件事今天已经不用你操心了。
   <em>FlashAttention 天生就不把分数矩阵写进显存、反向时现算
-  ——&nbsp;等于把论文那条建议<b>内建成了默认行为</b>。
-  所以现代框架的选择性重算候选名单里，attention 根本不出现。</em></p>
+  ——&nbsp;等于把论文那条建议<b>内建成了默认行为</b>。</em></p>
+
+<div class="note danger"><p>⛔ <b>这里我原来写「所以现代框架的候选名单里 attention 根本不出现」——&nbsp;
+  <u>去翻了源码，完全说反了。</u></b></p>
+<p><em>Megatron-LM 的选择性重算开关 <code>--recompute-modules</code>，
+  候选项里第一个就是 <code>core_attn</code>，
+  <b>而且它是<u>默认值</u></b>（<code>recompute_modules = ["core_attn"]</code>）。</em></p>
+<p class="landing">⭐⭐⭐ 而这个默认值，正是 <b>2.6 那条判据的活标本</b>。
+  <em>它是 2,048 那个年代选出来的最优解：在那个长度上它对，
+  在 128K 上按我们这张表，它<b>恰恰是最不该重算的那一个</b>
+  ——&nbsp;但它还在那里当默认。</em></p>
+<p><span class="sub">⭐ <b>更值得看的是名单上的其余几项</b>：
+  <code>layernorm</code>、<code>moe_act</code>、<code>mla_up_proj</code>
+  ——&nbsp;<em>对照 2.3 那张表：RMSNorm 输出、SwiGLU 乘积、K/V 解压与 Q 展开。
+  <b>正好是最便宜的那几行，一个不多一个不少。</b>
+  我们那条闭式解排出来的名单，和框架实际提供的选项对上了。</em></span></p>
+<p><span class="sub">📌 <code>megatron/core/transformer/transformer_config.py</code>
+  的 <code>recompute_modules</code> 字段（2026-09 主干）。
+  ⛔ <b>判据：说「现代框架都不这么干了」之前，去 grep 一下那个框架。</b>
+  <em>这类断言听起来像常识，而它正好是最容易过期的一类。</em></span></p></div>
 
 <h3>2.6　⚠️ 本章落点：收益不能照抄别人的</h3>
 
@@ -643,7 +654,12 @@ __FIG_OPTIMIZERS__
 </ul>
 <p class="landing">⭐ 收紧后的判据：看它是不是「老的贡献永远不走」。
   <em>——&nbsp;永远不走的必须 fp32；会被衰减掉的、用完就扔的，低精度就够。</em></p>
-<p><span class="sub">📌 出处：DeepSeek-V3 技术报告，arXiv <b>2412.19437</b> §3.2.3。
+<p><span class="sub">📌 出处：DeepSeek-V3 技术报告，arXiv <b>2412.19437</b>
+  <b>§3.3.3</b>（原文分节是「低精度存储与通信」，不是 §3.2.3 那个重算小节）。
+  ⭐ <b>原文这句话几乎是逐条印证上面那张清单</b>：
+  <em>「用 BF16 而非 FP32 追踪 AdamW 的一阶和二阶矩，未观察到性能下降；
+  但主权重、以及<b>用于 batch 累积的梯度</b>，仍保留 FP32。」
+  ——&nbsp;<b>连「梯度因为要累积所以升回 fp32」这一条都写在里面。</b></em>
   ⛔ <b>顺带说明这张 16 字节的表不是定律</b> ——&nbsp;
   V3 这套配下来，每参数的账跟经典口径已经不是一个数了。</span></p></div>
 
@@ -818,6 +834,12 @@ __FIG_MUON__
   <li>还要多做几轮矩阵乘。<em>那几轮 Newton-Schulz 迭代不是免费的
     ——&nbsp;<b>这又是一次拿算力换显存</b>，跟<a href="#s二">第二节</a>那个决策同一个形状。</em></li>
 </ul>
+<p>⭐ <em>作者自己把这笔账算过：按 Llama 405B 的宽度和每批 token 数代进去，
+  <b>FLOP 开销低于 1%</b>；大小两个尺度都是这个量级。</em></p>
+<p><span class="sub">⚠️ 但注意这是 <b><u>FLOP</u> 口径，不是墙钟口径</b>。
+  <em>Newton-Schulz 那几轮是一串小矩阵乘、还互相依赖，
+  FLOP 少不代表时间短。上面那条「每一步更慢」说的是后者
+  ——&nbsp;<b>两句话不矛盾，是两把尺子。</b></em></span></p>
 <p>⭐⭐ <em>而它的证据方式值得单独一提：Muon 在 NanoGPT 那个刷速度的公开竞赛里
   把记录提了 <b>35%</b>，此后<b>十二次破纪录、七个不同的人</b>，全都还在用它。
   ——&nbsp;要是有人能把 AdamW 调到一样好，换回去就能破纪录，可没人换。</em></p>
@@ -854,19 +876,27 @@ __FIG_MUON__
     <td>算法不变，换的是存法</td></tr>
 </tbody></table>
 
-<p class="landing">⭐⭐ <b>注意这三条走的是<u>三个不同的思路</u>：</b>
-  <em>Muon 和 Lion 是<b>不要那一份</b>；Adafactor 是<b>换个更省的表示</b>；
-  8-bit 是<b>同一份东西存得更小</b>。
-  ——&nbsp;<b>所以它们可以叠加</b>，而前两者互斥。</em></p>
+<p class="landing">⭐⭐ 注意这三条走的是<b><u>三个不同的思路</u></b>：
+  <em>Muon 和 Lion 是「不要那一份」；Adafactor 是「换个更省的表示」；
+  8-bit 是「同一份东西存得更小」。
+  ——&nbsp;<b>所以 8-bit 可以跟前两者叠加，而前两者互斥。</b></em></p>
 
 <div class="note"><p>📌 8-bit Adam 那条值得多说一句，因为它的做法很干净。</p>
 <p><em>它把状态张量<b>切成小块、逐块独立量化</b>，
   再加上一种<b>对大值小值都精确</b>的非线性量化。
   论文报告：在一系列任务上保持 32 位的效果，而且不用改任何优化器超参
   ——&nbsp;两行代码的 drop-in 替换。</em></p>
-<p><span class="sub">📌 Dettmers 等，<b>arXiv 2110.02861</b>（ICLR 2022 spotlight）。
-  ⭐ <b>它是这五行里唯一「不改算法只改存法」的</b> ——&nbsp;
-  所以风险最低，也最该先试。</span></p></div>
+<p><span class="sub">📌 Dettmers 等，<b>arXiv 2110.02861</b>（ICLR 2022 spotlight）。</span></p>
+<p>⚠️ 但「不改算法只改存法」这句话<b><u>不完全成立</u></b>，摘要里就写着。
+  <em>论文把三件事绑在一起才达到 32 位的效果：分块量化、非线性量化，
+  以及第三件 ——&nbsp;<b>一个「稳定 embedding 层」</b>。</em></p>
+<p class="landing">⛔ <b>第三件是<u>动网络结构</u>的，不是存法。</b>
+  <em>它存在的理由很具体：语言模型的输入 token 分布极不均匀，
+  embedding 那一层的梯度方差特别大 ——&nbsp;
+  <b>而量化最怕的就是方差大。</b></em></p>
+<p><span class="sub">⭐ 这一条本身就是个判据：
+  <em>一个号称「drop-in 替换」的东西，先去摘要里数一数它到底改了几处
+  ——&nbsp;<b>「两行代码」说的是调用方改两行，不是它内部只改了一处。</b></em></span></p></div>
 
 <h4>⚠️ Muon 要在大模型上真跑起来，还得补两样</h4>
 <p><em>3.3 那段讲的是 Muon 的<b>想法</b>。
@@ -1302,7 +1332,7 @@ __FIG_STABILITY__
 <p><em>「让它别飞」有一堆办法：学习率调到极小、裁剪收到极紧……
   都能稳，代价是模型变差。</em></p>
 <p>⭐ <b>ST-MoE 那篇论文把这件事量出来了</b>
-  ——&nbsp;<em>同一个配置跑三次，看几次能跑完、以及跑完的质量：</em></p>
+  ——&nbsp;<em>同一个配置换不同随机种子反复跑，看几次能跑完、以及跑完的质量：</em></p>
 
 <table>
 <thead><tr><th>做法</th><th>稳定性</th><th>质量（越大越好）</th><th>结论</th></tr></thead>
@@ -1317,6 +1347,19 @@ __FIG_STABILITY__
 <p class="landing">⭐⭐⭐ 中间那一行是这张表的全部价值：
   「稳定 3/3」看着完美，可它是拿质量换来的。
   <em>——&nbsp;评价一个稳定性手段，必须同时看这两栏。</em></p>
+
+<div class="note"><p>⚠️ <b>两个口径要说清楚，不然这张表会被读得太重。</b></p>
+<ul>
+  <li><b>分母不一样。</b><em>基线跑的是 <b>6 个种子</b>，每个稳定性手段各跑
+    <b>3 个种子</b> ——&nbsp;所以「4/6」和「3/3」<b>不是同一个分母下的比较</b>。
+    ⛔ <b>3/3 也就是三次，样本小到不该当成「保证稳定」。</b></em></li>
+  <li><b>这个实验是<u>刻意挑</u>出来的。</b><em>作者写得很直白：小模型很少不稳定，
+    大模型又贵到跑不起足够的种子。<b>于是他们特意选了一个约三分之一概率会崩的配置，
+    还特意换到多语种数据上 ——&nbsp;因为那会让不稳定更频繁。</b></em></li>
+</ul>
+<p class="landing">⭐ <b>这不是黑点，是好的实验设计</b> ——&nbsp;
+  <em>研究一个罕见故障，你必须先把它变得不罕见。
+  <b>但读数的时候要记住：这个概率是被调高过的。</b></em></p></div>
 <p><span class="sub">📌 arXiv <b>2202.08906</b>（ST-MoE）Table 4。
   论文自己的小标题就是「很多方法能稳住稀疏模型，但代价是质量变差」。</span></p>
 
@@ -1371,6 +1414,10 @@ __FIG_STABILITY__
 <p class="landing">⭐ 治法也很直接：在做点积之前，给 Q 和 K 各做一次 LayerNorm。
   <em>——&nbsp;这就是今天很多大模型标配的 QK-norm 的来历。</em></p>
 <p><span class="sub">📌 arXiv <b>2302.05442</b>（ViT-22B）§2。
+  ⚠️ <b>出处要说准：QK-norm <u>不是</u> ViT-22B 发明的。</b>
+  <em>它的原文写的是「我们<b>采用</b> Gilmer 等（2023）的做法」
+  ——&nbsp;ViT-22B 是<b>把它用到 220 亿参数上并留下那张对照图</b>的地方，
+  这才是它值得引的原因。</em>
   ⭐ 注意这又是一次「只在大规模上才出现」的故障 ——&nbsp;
   跟 6.1 那条是同一个模式。</span></p>
 
@@ -1448,7 +1495,7 @@ __FIG_STABILITY__
 <tr><td>DeepSeek-V3 的 <b>完整 LR schedule</b>（2K 步 →&nbsp;10T 恒定 →&nbsp;4.3T 余弦
     →&nbsp;末段两级）；梯度裁剪 <b>1.0</b>；batch 3072→15360；
     bf16 的一/二阶矩 ＋ fp32 主权重和梯度；<b>重算 RMSNorm 与 MLA 上投影</b></td>
-    <td><b>arXiv 2412.19437</b> §3.2.3 / §4.2</td></tr>
+    <td><b>arXiv 2412.19437</b> §3.2.3（重算）/ §3.3.3（低精度）/ §4.2（超参）</td></tr>
 <tr><td>选择性重算的判据原文；GPT-3 省 70% 付 2.7%；MT-NLG 省 65% 付 1.6%</td>
     <td>Korthikanti 等，<b>arXiv 2205.05198</b></td></tr>
 <tr><td><b>warmup 的真实机制</b>（让网络能承受更大的目标学习率；
@@ -1627,7 +1674,72 @@ FIGS = {
         '权重只占 2 B，优化器那边占 12 B。</em>'),
 }
 
+# ══════════════════════════════════════════════════════════════════
+# §2.3 的排序表：**由闭式解生成，不手填**
+# ⛔ 2026-09-17 红队抓到：这张表原来八行全是手打的，其中一行
+#    「省显存 9.14 GiB × 每 GiB 付 7.70」算出来是 70 TFLOP，
+#    「重算代价」那一栏却写着 39.08 —— 另外七行都对得上，就它不对。
+# ⭐ 而这张表的卖点正是它下面那句「你拿 config 自己也能排一遍」。
+#    照着排的人**会正好撞上那一行**，然后开始怀疑整条闭式解。
+# ⭐⭐⭐ 判据：**一张宣称「按某条公式排出来」的表，就得真的用那条公式生成。**
+#    手填的表里，「大部分行能对上」不构成任何保证 —— 错的那行长得跟对的一样。
+# ══════════════════════════════════════════════════════════════════
+GIB_F = 2 ** 30 / 1e12        # FLOPs/字节 → TFLOP/GiB
+S_V3 = 131072                 # 128K 上下文
+D_V3 = 7168                   # V3 的模型宽度（最宽的那个线性层的输入）
+
+# (名称, 省显存 GiB, 每字节 FLOPs, 结论)
+#   线性层：每字节 FLOPs ＝ **输入宽度**（2·S·k·n ÷ (S·n·2)，S 和 n 全约掉）
+#   逐元素：每元素约四五次运算，bf16 折下来 ≈ **2 次/字节**。
+#     ⚠️ 这是个估算，所以两行**取同一个数** —— 它们之间分不出先后，
+#     而且取 2 还是取 3，显示出来都是「~0」，排序也不变。
+#     ⛔ 不要为了让表看起来精确而给它们编两个不同的值。
+#   attention：随序列长度线性上升，V3 那套头维度下约 1.25·S
+PER_BYTE_ROWS = [
+    ("MoE 派发（复制成 9 份）",                 15.75, 0.0,          "白捡"),
+    ("RMSNorm 输出（每层 2 个）",                3.50, 2.0,          "白捡"),
+    ("SwiGLU 乘积 9 份（逐元素）",               4.50, 2.0,          "白捡"),
+    ("K/V 解压（输入宽 512）",                   8.00, 512.0,        "划算"),
+    ("Q 展开（输入宽 1,536）",                   6.00, 1536.0,       "划算"),
+    ("专家输出 9 份（输入宽 2,048）",            15.75, 2048.0,       "划算"),
+    ("gate / up / 路由 / 降维（输入宽 7,168）",   9.14, float(D_V3),  "边际"),
+    ("attention 输出",                           4.00, 1.25 * S_V3,  "绝不"),
+]
+
+_rows, _prev = [], -1.0
+for _name, _gib, _pb, _verdict in PER_BYTE_ROWS:
+    _cost, _ratio = _gib * _pb * GIB_F, _pb * GIB_F
+    assert _ratio >= _prev, "表是按「每 GiB 付」升序排的，%s 插错位置了" % _name
+    _prev = _ratio
+    _c = "~0" if _cost < 0.005 else "%.2f TFLOP" % _cost
+    _r = "0" if _pb == 0 else ("~0" if _ratio < 0.05 else "%.2f" % _ratio)
+    _b = (lambda x: "<b>%s</b>" % x) if _verdict == "绝不" else (lambda x: x)
+    _rows.append("<tr><td>%s</td><td>%s</td><td>%s</td><td><b>%s</b></td><td>%s</td></tr>"
+                 % (_b(_name), _b("%.2f GiB" % _gib), _b(_c), _r, _b(_verdict)))
+
+_TBL = ('<table>\n<thead><tr><th>张量</th><th>省显存</th><th>重算代价</th>'
+        '<th>每 GiB 付</th><th>结论</th></tr></thead>\n<tbody>\n'
+        + "\n".join(_rows) + "\n</tbody></table>")
+
+# ⭐ 正文里引用这张表的三个数，也回头对一遍 —— 表改了正文没跟着改，
+#    是这类「生成表 + 手写正文」最典型的下一个坑。
+_cheap = [r for r in PER_BYTE_ROWS if r[2] * GIB_F < 3]
+_CHEAP_GIB = sum(r[1] for r in _cheap)
+_CHEAP_TF = sum(r[1] * r[2] * GIB_F for r in _cheap)
+_TIMES = (PER_BYTE_ROWS[-1][2] / PER_BYTE_ROWS[-2][2])
+_CROSS = D_V3 / 1.25
+
 _html = head + HERO + BODY + FOOT
+_html = _html.replace("__TBL_PER_BYTE__", _TBL)
+
+for _txt, _got in (("一层省 53.5 GiB，付 48.9 TFLOP", (_CHEAP_GIB, _CHEAP_TF)),
+                   ("贵 <b>23 倍</b>", _TIMES),
+                   ("<b>S ≈ 5,734</b>", _CROSS)):
+    assert _txt in _html, "正文里这句话被改过了，数对不上表：%s" % _txt
+assert abs(_CHEAP_GIB - 53.5) < 0.05 and abs(_CHEAP_TF - 48.9) < 0.05, \
+    "「比值小于 3 全收下」的合计变了：%.2f GiB / %.2f TFLOP" % (_CHEAP_GIB, _CHEAP_TF)
+assert abs(_TIMES - 23) < 0.5, "attention 比前一档贵的倍数变了：%.1f" % _TIMES
+assert abs(_CROSS - 5734) < 1, "交叉点变了：%.0f" % _CROSS
 
 for ph, (what, figs, asks) in PLAN.items():
     assert ph in _html, "正文里没有 %s —— 章写完了要连这一行一起删" % ph
