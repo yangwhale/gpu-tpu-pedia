@@ -1814,9 +1814,43 @@ body.figonly section h3{margin-top:34px}
 
 <div class="note ok"><p>⭐⭐⭐ 现在关键的一步：Adam 的更新量大约是
   「动量 ÷ 二阶矩的根号」——&nbsp;<u>分子分母的量纲互相抵消</u>。</p>
-<p><em>也就是说，<b>Adam 把梯度的量纲给除掉了</b>，这一步的大小<b>大概就在 1 附近</b>。</em></p>
+<p><em>也就是说，<b>Adam 把梯度的量纲给除掉了</b>
+  ——&nbsp;这一步的大小，变成了一个<b>跟梯度尺度无关的常数</b>。</em></p>
+
+<div class="note danger"><p>⚠️ <b>那个常数是多少？——&nbsp;<u>不是 1，是 0.2。</u></b>
+  <em>这一条我原来写错了，而且错得很典型：<b>「量纲抵消了」只说明它是常数，
+  没说明它等于 1。</b></em></p>
+<p>⭐ <em>实测：warmup 结束、进入正式训练之后，
+  Adam 的 update RMS <b>稳定在 0.2～0.3 之间</b>，
+  <b>而且不同尺寸的模型都一样</b>（β₁＝0.9、β₂＝0.95 这组常见设置下）。</em></p>
+<p class="landing">⭐⭐⭐ <b>而它有一个漂亮到不像话的闭式解 ——&nbsp;
+  在「梯度基本是噪声」这个近似下：</b><br>
+  <code>update RMS ≈ √[(1−β₁) / (1＋β₁)]</code><br>
+  <em>代入 β₁ ＝ 0.9：<b>0.2294</b>。跟实测对上了。</em></p>
+<p><span class="sub">📌 出处：苏剑林《为什么 Adam 的 Update RMS 是 0.2？》（科学空间
+  <code>kexue.fm/archives/11267</code>）——&nbsp;
+  文中给了数值模拟（纯高斯梯度模拟出 <b>0.225</b>）与平均场近似两条路，
+  两边都落在同一个数上。</span></p></div>
+
+<div class="note ok"><p>⭐⭐ <b>这个式子里有两件事值得单独拎出来。</b></p>
+<ul>
+  <li><b>① 它只跟 β₁ 有关，<u>跟 β₂ 无关</u>。</b>
+    <em>⭐ 这正好跟 <b>3.6</b> 那一节互补：
+    <b>β₂ 管的是「记多久」，β₁ 管的是「每一步迈多大」。</b>
+    ——&nbsp;两个 β 各管一头，这一下就分清了。</em></li>
+  <li><b>② 完整式子里还有一项：梯度的信噪比。</b>
+    <em>信噪比越高，update 越大。⛔ 而实际训练中<b>单次梯度的信噪比小得可怜</b>
+    ——&nbsp;<b>所以「把梯度当纯噪声」这个近似才会这么准。</b></em></li>
+</ul>
+<p class="landing">⭐ <b>反过来还能用：知道了 β₁ 和实测的 update RMS，
+  就能<u>反推梯度的信噪比</u></b> ——&nbsp;
+  <em>这是个不用额外算任何东西就能拿到的训练诊断量。</em></p></div>
 <p class="landing">⭐⭐ 所以学习率在 Adam 里的身份<u>变了</u> ——&nbsp;
-  它不再是个折算系数，它近乎直接就是「这一步每个参数挪多远」的上限。</p>
+  <b>它不再是折算系数，而是直接乘在一个常数上</b>：
+  <em>每一步每个参数大约挪 <code>0.2 × 学习率</code>。</em></p>
+<p>⭐ <em>这才是「Adam 的学习率好调」的真正原因：
+  <b>它跟 loss 的尺度、跟梯度的大小都脱钩了</b>，
+  只剩下一个由 β₁ 定死的系数。</em></p>
 <p>⭐ <em>这就是为什么 <b>Adam 的学习率那么好调、那么通用</b>
   ——&nbsp;而 <b>SGD 的学习率得一个模型一个模型地精调</b>。
   <b>这不是玄学，是量纲被消掉了。</b></em></p></div>
@@ -1830,16 +1864,168 @@ body.figonly section h3{margin-top:34px}
   <em>论文标题里那个 <b>decoupled</b>，说的就是这件事
   ——&nbsp;<b>整篇论文主要就干了这一件事。</b></em></p>
 
+<h4>⭐ 而 0.2 这个常数，顺手解决了「换优化器要不要重调学习率」</h4>
+
+<p><em>既然 Adam 每步挪的是 <code>0.2 × 学习率</code>，
+  那<b>别的优化器只要也把自己的 update 对齐到 0.2</b>
+  ——&nbsp;<b>Adam 那套调好的学习率和权重衰减就能直接搬过去用。</b></em></p>
+<p class="landing">⭐⭐ <b>这不是纸上谈兵：Kimi K2 从 Adam 迁到 Muon，用的就是这一招</b>
+  ——&nbsp;<em>把 Muon 的 update RMS 统一成 <b>0.2</b>，其余超参照抄。</em></p>
+<p><span class="sub">📌 同一篇（苏剑林，科学空间）。
+  ⭐ <b>这是「量纲」这条线最实用的一个落点</b>：
+  <em>先把某个量做成常数，<b>常数就能当接口用。</b></em></span></p>
+
+<figure class="fbox fwide" id="fig-muon"><svg viewBox="0 0 1400 1668" width="100%" role="img" aria-label="Muon 做的事叫矩阵符号函数，它是标量符号函数的推广：对标量是除掉大小只留正负，对对角阵退化成逐元素取符号，对一般矩阵则是做奇异值分解、把所有奇异值拉平到一。从范数的角度看，同一个「这一步不许迈太大」的约束问题，用 F 范数量得到 SGD，用谱范数量得到的就是 Muon。而它多出来的矩阵乘法几乎不花时间，因为它落在梯度算完、下一个梯度还没开始那段空窗里"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><marker id="ah-9334e6" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#9334e6"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">Muon　——　<tspan font-weight="700">同一个动作「扔掉大小，只留方向」，在三种形状上的三个版本</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⭐ 三列<tspan font-weight="700">并排看</tspan>，就会发现它们是一件事　·　⛔ 分开讲就变成三个知识点</text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">标量</text>
+<rect x="75" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="96" y="74" fill="#5f6368" style="font-size:14.0px">对角阵</text>
+<rect x="164" y="63" width="14" height="14" rx="3" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="185" y="74" fill="#5f6368" style="font-size:14.0px">一般矩阵</text>
+<rect x="0" y="102" width="1400" height="400" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 为什么它配叫「矩阵版的符号函数」</tspan></text>
+<text class="svgsm" x="264" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 每一列都是：<tspan font-weight="700">左边原样，右边只剩方向</tspan></text>
+<rect x="28" y="166" width="440" height="318" rx="8" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<rect x="28" y="166" width="440" height="4" rx="2" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="248" y="202" fill="#80868b" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">标量</tspan></text>
+<line x1="88" y1="282" x2="408" y2="282" stroke="#80868b" stroke-width="1.6" stroke-linecap="round"/>
+<line x1="118.0" y1="276" x2="118.0" y2="288" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="118" y="308" fill="#80868b" text-anchor="middle" style="font-size:12.0px">−1</text>
+<line x1="248.0" y1="276" x2="248.0" y2="288" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="248" y="308" fill="#80868b" text-anchor="middle" style="font-size:12.0px">0</text>
+<line x1="378.0" y1="276" x2="378.0" y2="288" stroke="#80868b" stroke-width="1.2" stroke-linecap="round"/>
+<text class="svgsm" x="378" y="308" fill="#80868b" text-anchor="middle" style="font-size:12.0px">＋1</text>
+<rect x="296.6" y="276" width="12" height="12" rx="6" fill="#202124" stroke="#202124" stroke-width="1"/>
+<text class="svgsm" x="302" y="258" fill="#202124" text-anchor="middle" style="font-size:13.0px"><tspan font-weight="700">0.42</tspan></text>
+<path d="M 302.6 250.0 Q 339.0 228.0 378.0 270.0" fill="none" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="248" y="348" fill="#5f6368" text-anchor="middle" style="font-size:13.5px">不管它原来是 0.42 还是 42</text>
+<text class="svgsm" x="248" y="374" fill="#80868b" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">出来都是 ＋1</tspan></text>
+<rect x="480" y="166" width="440" height="318" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<rect x="480" y="166" width="440" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="700" y="202" fill="#174ea6" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">对角阵</tspan></text>
+<text class="svgsm" x="558" y="258" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">+0.8</tspan></text>
+<line x1="590" y1="252" x2="652" y2="252" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="686" y="258" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">+1</tspan></text>
+<text class="svgsm" x="558" y="302" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">-0.3</tspan></text>
+<line x1="590" y1="296" x2="652" y2="296" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="686" y="302" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">-1</tspan></text>
+<text class="svgsm" x="558" y="346" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">+0.5</tspan></text>
+<line x1="590" y1="340" x2="652" y2="340" stroke="#80868b" stroke-width="1.4" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<text class="svgsm" x="686" y="346" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">+1</tspan></text>
+<rect x="730" y="236" width="150" height="140" rx="6" fill="#fff" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="805" y="264" fill="#174ea6" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">对角线上</tspan></text>
+<text class="svgsm" x="805" y="288" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">各管各的</text>
+<text class="svgsm" x="805" y="322" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">＝ 拍平成向量</text>
+<text class="svgsm" x="805" y="346" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">也没差</text>
+<text class="svgsm" x="700" y="410" fill="#5f6368" text-anchor="middle" style="font-size:14.0px"><tspan font-weight="700">⭐ 这一格是「向量做法」的极限</tspan></text>
+<rect x="932" y="166" width="440" height="318" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<rect x="932" y="166" width="440" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="1152" y="202" fill="#681da8" text-anchor="middle" style="font-size:20.0px"><tspan font-weight="700">一般矩阵</tspan></text>
+<rect x="976" y="256.0" width="26" height="96.0" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.4"/>
+<rect x="1018" y="292.48" width="26" height="59.519999999999996" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.4"/>
+<rect x="1060" y="320.32" width="26" height="31.68" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.4"/>
+<rect x="1102" y="340.48" width="26" height="11.52" rx="3" fill="#fff" stroke="#80868b" stroke-width="1.4"/>
+<line x1="970" y1="352" x2="1144" y2="352" stroke="#80868b" stroke-width="1.4" stroke-linecap="round"/>
+<text class="svgsm" x="1052" y="378" fill="#80868b" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">原来的奇异值</tspan></text>
+<rect x="1206" y="256.0" width="26" height="96.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.4"/>
+<rect x="1248" y="256.0" width="26" height="96.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.4"/>
+<rect x="1290" y="256.0" width="26" height="96.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.4"/>
+<rect x="1332" y="256.0" width="26" height="96.0" rx="3" fill="#f3e8fd" stroke="#9334e6" stroke-width="1.4"/>
+<line x1="1200" y1="352" x2="1374" y2="352" stroke="#80868b" stroke-width="1.4" stroke-linecap="round"/>
+<text class="svgsm" x="1282" y="378" fill="#681da8" text-anchor="middle" style="font-size:13.5px"><tspan font-weight="700">全部拉到 1</tspan></text>
+<line x1="1150" y1="304" x2="1194" y2="304" stroke="#9334e6" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-9334e6)"/>
+<text class="svgsm" x="1152" y="410" fill="#681da8" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⭐⭐ 方向全留下，大小全扔掉</tspan></text>
+<rect x="0" y="554" width="1400" height="230" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="554" width="1400" height="4" rx="2" fill="#9334e6" stroke="#9334e6" stroke-width="1"/>
+<rect x="0" y="556" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="584" x2="1400" y2="584" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="574" fill="#681da8" style="font-size:13.5px"><tspan font-weight="700">Ⓑ ⭐⭐⭐ 「矩阵和向量不都是一堆数字吗」——　<tspan font-weight="700">一个例子就能说清</tspan></tspan></text>
+<text class="svgsm" x="689" y="574" fill="#5f6368" style="font-size:11.0px">⛔ 拍平成向量，抹掉的正是这件事</text>
+<rect x="70" y="618" width="560" height="158" rx="8" fill="#f3e8fd" stroke="#9334e6" stroke-width="1"/>
+<text class="svgsm" x="350" y="652" fill="#681da8" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">矩阵有「迹」——　对角线元素之和</tspan></text>
+<text class="svgsm" x="96" y="688" fill="#5f6368" style="font-size:14.5px">⭐ 它不是瞎定义的：<tspan font-weight="700">相似变换下保持不变</tspan>，</text>
+<text class="svgsm" x="96" y="714" fill="#5f6368" style="font-size:14.5px">而且<tspan font-weight="700">等于所有特征值之和</tspan>。</text>
+<text class="svgsm" x="350" y="756" fill="#202124" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⭐⭐ 也就是说：对角线和非对角线，<tspan font-weight="700">地位不对等</tspan></tspan></text>
+<line x1="650" y1="696" x2="690" y2="696" stroke="#80868b" stroke-width="1.8" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<rect x="710" y="618" width="630" height="158" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1025" y="652" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">而「拍平成一个大向量」做的事</tspan></text>
+<text class="svgsm" x="1025" y="690" fill="#202124" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">就是宣布：所有位置一律平等</tspan></text>
+<text class="svgsm" x="1025" y="730" fill="#5f6368" text-anchor="middle" style="font-size:14.0px">⛔ SGD / Adam 都是这么干的 ——　它们是逐元素的</text>
+<text class="svgsm" x="1025" y="756" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⭐ 而 Muon 拒绝拍平</tspan></text>
+<rect x="0" y="836" width="1400" height="278" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="836" width="1400" height="4" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="0" y="838" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="866" x2="1400" y2="866" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="856" fill="#0d652d" style="font-size:13.5px"><tspan font-weight="700">Ⓒ ⭐⭐ 换一把尺子，就换一个优化器</tspan></text>
+<text class="svgsm" x="265" y="856" fill="#5f6368" style="font-size:11.0px">⭐ 同一个问题：<tspan font-weight="700">「这一步不许迈太大」的前提下，让 loss 降得最多</tspan></text>
+<rect x="90" y="906" width="560" height="82" rx="8" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="370" y="938" fill="#5f6368" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">用 F 范数量「迈多大」</tspan></text>
+<text class="svgsm" x="370" y="966" fill="#80868b" text-anchor="middle" style="font-size:13.0px">（＝把矩阵拍平，算欧氏长度）</text>
+<text class="svgsm" x="700" y="942" fill="#80868b" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="750" y="906" width="560" height="82" rx="8" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="1030" y="946" fill="#202124" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">得到的就是　SGD</tspan></text>
+<rect x="90" y="1004" width="560" height="82" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="370" y="1036" fill="#0d652d" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">用谱范数量「迈多大」</tspan></text>
+<text class="svgsm" x="370" y="1064" fill="#80868b" text-anchor="middle" style="font-size:13.0px">（＝由「矩阵乘向量」这个动作诱导出来的）</text>
+<text class="svgsm" x="700" y="1040" fill="#0d652d" text-anchor="middle" style="font-size:22.0px"><tspan font-weight="700">→</tspan></text>
+<rect x="750" y="1004" width="560" height="82" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1030" y="1044" fill="#0d652d" text-anchor="middle" style="font-size:19.0px"><tspan font-weight="700">得到的正是　Muon</tspan></text>
+<text class="svgsm" x="90" y="1110" fill="#5f6368" style="font-size:14.5px">⭐ 为什么谱范数更贴矩阵：<tspan font-weight="700">矩阵在网络里干的活，本来就是乘向量</tspan></text>
+<rect x="0" y="1166" width="1400" height="298" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1166" width="1400" height="4" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="0" y="1168" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="1196" x2="1400" y2="1196" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="1186" fill="#b06000" style="font-size:13.5px"><tspan font-weight="700">Ⓓ ⭐ 「每步多做十几次矩阵乘，不会很慢吗」——　<tspan font-weight="700">它塞进了一段本来就空着的时间</tspan></tspan></text>
+<text class="svgsm" x="771" y="1186" fill="#5f6368" style="font-size:11.0px">⚠️ 实测每步增加 <tspan font-weight="700">5% 以内</tspan>，作者自己声称 2%</text>
+<rect x="110.0" y="1256" width="484.0" height="66" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="352" y="1288" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">算这一步的梯度</tspan></text>
+<text class="svgsm" x="352" y="1310" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">算力满载</text>
+<rect x="594.0" y="1256" width="193.60000000000005" height="66" rx="6" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
+<text class="svgsm" x="690" y="1288" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">空窗</tspan></text>
+<text class="svgsm" x="690" y="1310" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">算力几乎闲着</text>
+<rect x="787.6" y="1256" width="532.4" height="66" rx="6" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="1053" y="1288" fill="#174ea6" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">算下一步的梯度</tspan></text>
+<text class="svgsm" x="1053" y="1310" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">算力满载</text>
+<rect x="594.0" y="1342" width="193.6" height="54" rx="6" fill="#fff" stroke="#e8710a" stroke-width="2.0"/>
+<text class="svgsm" x="690" y="1374" fill="#b06000" text-anchor="middle" style="font-size:16.0px"><tspan font-weight="700">msign 就干在这儿</tspan></text>
+<text class="svgsm" x="110" y="1432" fill="#5f6368" style="font-size:14.5px">⭐ 而且这些矩阵乘<tspan font-weight="700">尺寸固定、可以并行</tspan> ——　不是那种会卡住流水线的活</text>
+<text class="svgsm" x="110" y="1460" fill="#202124" style="font-size:15.0px"><tspan font-weight="700">⭐⭐ 所以它花的是<tspan font-weight="700">本来就闲着的算力</tspan>，换来的是<tspan font-weight="700">每参数少 4 字节</tspan>（16 → 12）</tspan></text>
+<rect x="0" y="1516" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1516" width="4" height="122" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="2" y="1516" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1543" fill="#a50e0e" style="font-size:17.0px"><tspan font-weight="700">⛔ 代价有两条，第二条很少被提到</tspan></text>
+<text class="svgsm" x="20" y="1574" fill="#a50e0e" style="font-size:15.0px">⛔ ① <tspan font-weight="700">它挑食</tspan>：不成矩阵的那些参数它处理不了，embedding 和输出头得留给 AdamW 兜底。</text>
+<text class="svgsm" x="20" y="1598" fill="#a50e0e" style="font-size:15.0px">⛔⛔ ② <tspan font-weight="700">它不是逐元素的，这会捅到并行</tspan>。逐元素的优化器有个隐形好处：<tspan font-weight="700">一个大矩阵切成两半分到两张卡，各自独立更新，轨迹一点不变</tspan>。Muon 不行 ——&#160;<tspan font-weight="700">切开的几块得先把梯度汇聚</tspan></text>
+<text class="svgsm" x="20" y="1622" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">起来</tspan>。⚠️ 而且不用并行也会踩：多头注意力常常是<tspan font-weight="700">一个大矩阵 reshape 出多个头</tspan>，参数里只有一个矩阵，本质上却是多个小矩阵。</text>
+</svg><figcaption>⭐⭐⭐ <b>Ⓐ 的三列要<u>并排看</u></b> ——&nbsp;<em>分开讲是三个知识点，并排放你自己就看出来了：<b>它们是同一个动作。</b></em><span class="capmore"><br>⭐⭐ <em>Ⓑ 用「迹」回答了「矩阵和向量到底差在哪」；Ⓒ 说明<b>换一把量尺就换一个优化器</b>；Ⓓ 解释了那十几次矩阵乘<b>为什么几乎不要钱</b>。</em><br>📌 <em>四条讲法都取自<b>苏剑林《Muon 优化器赏析》</b>（科学空间）——&nbsp;<b>图是我们自己重画的。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ <b>讲法来源</b>：苏剑林《Muon 优化器赏析：从向量到矩阵的本质跨越》，科学空间 spaces.ac.cn/archives/10592。Ⓐ 的三个特例、Ⓑ 的「迹」那个例子、Ⓒ 的范数视角、Ⓓ 的空窗解释，<b>四条都取自该文</b> ——&#160;⛔ <b>图是我们自己重画的，不是搬运</b></p>
+<p>⚠️ Ⓒ 那个范数视角该文另引《Old Optimizer, New Norm: An Anthology》；⭐ 该文还考了一笔源流：<b>2015 年的 Stochastic Spectral Descent 已经提出过大致相同的算法</b></p>
+<p>⛔ 本图<b>不含任何收敛速度对照</b> ——&#160;本课没有这些优化器的对照实测，跟 fig4-optimizers 同一条规矩</p>
+<p>⚠️ Ⓓ 的「5% 以内 / 作者称 2%」是<b>转述</b>，不是我们量的；真要用请自己在目标配置上量一遍（<b>这正是本讲那条「不能跨规模照抄」</b>）</p></details></figure>
+
 <h4>Muon 更激进一层</h4>
 
-<p><em>Adam 是<b>逐个元素</b>地把尺度除掉。
-  ⭐ 可 Muon 说：对一个矩阵参数来说，逐元素这个视角本身就不对
-  ——&nbsp;应该看<b>整个矩阵的形状</b>，
-  用迭代把更新矩阵<b>近似正交化</b>，让它在各个方向上尺度一致。</em></p>
-<p>⛔ <em>代价是<b>它挑食</b> ——&nbsp;网络里凡是不成矩阵的那些参数它处理不了，
-  得留给 AdamW 兜底（<b>具体是哪几类，图里那一行写了</b>）。</em>
-  ⭐ 好处是它不用存二阶矩了 ——&nbsp;每参数从 16 字节掉到 12 字节，
-  正好接上 3.1 那张账单。</p>
+<p class="lead">⭐ <b>上面那张图基本讲完了。</b>
+  <em>这里只补图上没说的三句。</em></p>
+
+<ul>
+  <li><b>它不是「又一个调参技巧」。</b>
+    <em>Ⓒ 那个视角说明：<b>SGD 和 Muon 是同一个问题的两个答案</b>，
+    差别只在<u>拿哪把尺子量「这一步迈多大」</u>。</em></li>
+  <li><b>它跟 3.1 那张账单直接对上。</b>
+    <em>不存二阶矩 ——&nbsp;<b>每参数 16 字节掉到 12</b>。</em></li>
+  <li><b>而它的算力几乎是白拿的</b>（Ⓓ）——&nbsp;
+    <em>⭐ 这是个可以迁移的思路：<b>先找一段本来就闲着的时间，再看它能干什么</b>。</em></li>
+</ul>
+
+<p><span class="sub">⭐ <b>Ⓐ 那三列里，中间那一列值得单独想一下</b>：
+  <em>Muon 作用在对角阵上会<b>退化成逐元素取 sign</b>
+  ——&nbsp;也就是说，<b>「向量做法」本来就是「矩阵做法」的一个特例</b>。
+  ⛔ 我们以前把它们当两种东西讲，那是把特例和一般情形讲反了。</em></span></p>
 
 <h4>📌 公式里不写、但真实存在的那几道</h4>
 
