@@ -126,6 +126,67 @@ def main():
         "光这一手就省一半。代价在 Ⓓ。",
     ])
 
+    # ══════════ Ⓐb 从 MLA 四步推到 V4 ═══════════════════════════
+    # ⭐⭐⭐ 2026-09-16 现场追加。原话：「CSA 跟 MLA 是什么关系？是不是这个
+    #   变体引进来进化来的？……你如果不是以 MLA 为基础，光压 4:1，还不如
+    #   原来那个 MLA 的压缩比高呢。」——&#160;**这个论证是对的**，而且它是
+    #   这一整套设计的命门：序列压缩只有建在一个已经很窄的 entry 上才成立。
+    # ⚠️ 这条链是**按两边定义推出来的结构演化**，不是论文原话。标在图上了。
+    PHB = 300
+    pyb = f.panel(0, yy + 26, W, PHB,
+                  "Ⓐb 这条 512 是<tspan font-weight=\"700\">哪来的</tspan> ——　"
+                  "从 MLA 四步就能推到它", BL,
+                  sub="⚠️ 这条链是<tspan font-weight=\"700\">按定义推的结构演化</tspan>，"
+                      "论文没说「V4 是 MLA 的变体」")
+
+    CHAIN = (
+        (PU, "① MLA（V3.2）",
+         ("一条 512 潜向量",
+          "＋ 两个升维矩阵还原每头 K/V",
+          "＋ 单挂一条 64 的 RoPE key",
+          "cache ＝ 576")),
+        (BL, "② 删掉升维矩阵",
+         ("那条 512 直接当 K，也当 V",
+          "所有头共读这一条",
+          "＝ Shared K＝V MQA",
+          "「吸收」这一手不需要了")),
+        (BL, "③ 把 64 收进去",
+         ("改成 partial RoPE",
+          "只转末尾 64 个通道",
+          "cache ＝ 512",
+          "⛔ 代价：输出按 −i 转回来")),
+        (GR, "④ 沿序列再压",
+         ("在这条 512 的基础上",
+          "每 m 条合成一条",
+          "m ＝ 4 →　CSA",
+          "m′ ＝ 128 →　HCA")),
+    )
+    CW = 314
+    for i, (col, title, lines) in enumerate(CHAIN):
+        x = 36 + i * (CW + 24)
+        f.box(x, pyb + 30, CW, 208, "#fff", col, 8)
+        f.box(x, pyb + 30, CW, 4, col, col, 2)
+        f.t(x + CW / 2.0, pyb + 62, title, col, True, 17, "middle")
+        for k, ln in enumerate(lines):
+            f.t(x + 18, pyb + 96 + k * 30, ln, GY, size=13.5)
+        if i < 3:
+            f.t(x + CW + 12, pyb + 138, "→", GY2, True, 19, "middle")
+    f.t(700, pyb + 268,
+        "⭐⭐ 所以「看着像 MLA」不是错觉 ——　"
+        "<tspan font-weight=\"700\">MQA 是它的形式，MLA 是它的效果</tspan>",
+        INK, True, 17, "middle")
+    f._pan = None
+
+    yy = f.band(pyb + PHB + 22, "warn", "为什么这两个轴必须一起上 ——　算一遍就知道", [
+        "假设 V4 <tspan font-weight=\"700\">不</tspan>以 MLA 那条窄 entry 为基础，"
+        "就是标准多头（128 头 × 128 维，K 和 V 各一份）＝&#160;"
+        "<tspan font-weight=\"700\">每 token 每层 32768 个数</tspan>。"
+        "压 4:1 之后还剩 <tspan font-weight=\"700\">8192</tspan> ——&#160;"
+        "而 MLA 是 <tspan font-weight=\"700\">576</tspan>。<tspan font-weight=\"700\">差十四倍。</tspan>",
+        "⭐ 结论：<tspan font-weight=\"700\">序列压缩不是「可以叠在宽度压缩上」，是「必须叠」</tspan> ——&#160;"
+        "光压条数、不压宽度，连上一代都打不过。",
+    ])
+
     # ══════════ Ⓑ 三种层，KV 序列各自长什么样 ═══════════════════
     PH2 = 486   # ⛔ 470 时层表黄底压住 HCA 行脚注，加高并把黄底下移
     py2 = f.panel(0, yy + 26, W, PH2,
