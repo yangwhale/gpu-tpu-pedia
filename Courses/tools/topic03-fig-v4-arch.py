@@ -187,6 +187,69 @@ def main():
         "光压条数、不压宽度，连上一代都打不过。",
     ])
 
+    # ══════════ Ⓐc 为什么 2019 年不行的 MQA，现在又行了 ═════════
+    # ⭐⭐⭐ 2026-09-16 现场追问追加。原话：「他们为什么把这个 MQA 又给捞回来？
+    #   这个 MQA 一开始不是证明他的能力不太行吗？什么时候 MQA 又好上了？」
+    # ⛔⛔ **论文没有正面回答这个问题** ——&#160;§2.3.3 / §2.3.4 都没有一段
+    #   解释「为什么共享 KV 不掉点」。所以这一格是**推导**，标记清楚。
+    # ⭐ 吸收恒等式本身是公开技巧（DeepSeek-V2 就有）；
+    #   「V4 ＝ MLA 吸收形态的原生化」是我们的判断，不是论文原话。
+    PHC = 430
+    pyc = f.panel(0, yy + 26, W, PHC,
+                  "Ⓐc 为什么 2019 年被判「能力不行」的 MQA，"
+                  "<tspan font-weight=\"700\">现在又行了</tspan>", BL,
+                  sub="⚠️ 论文没正面答这个问题 ——　"
+                      "<tspan font-weight=\"700\">下面是推导，不是原话</tspan>")
+
+    # ── 吸收恒等式
+    f.box(60, pyc + 26, 1280, 108, "#f3e8fd", PU, 8)
+    f.t(84, pyc + 56, "⭐⭐⭐ 先看一个恒等式 ——　"
+                      "<tspan font-weight=\"700\">MLA 吸收之后，本来就是一个 head_dim ＝ 512 的 MQA</tspan>",
+        INK, True, 17)
+    f.t(84, pyc + 86, "MLA 里第 h 个头的分数 ＝ q_h ·（W_UK,h · c）"
+                      "　＝　（W_UK,hᵀ · q_h）· c", GY, size=15, mono=True)
+    f.t(84, pyc + 114, "→　<tspan font-weight=\"700\">一条共享的 512 维 key，"
+                       "每个头拿自己那条 512 维 query 去点它</tspan>"
+                       "　·　value 侧同理，每头视角可并进输出投影", GY, size=14)
+
+    # ── 两边对照
+    f.box(60, pyc + 152, 620, 236, "#fff", RD, 8)
+    f.box(60, pyc + 152, 620, 4, RD, RD, 2)
+    f.t(370, pyc + 186, "2019 的 MQA", RD, True, 19, "middle")
+    for i, ln in enumerate((
+            "共享的那条<tspan font-weight=\"700\">只有一个头宽</tspan>（典型 128）",
+            "query 侧也还是 128 维",
+            "⛔ 每头视角<tspan font-weight=\"700\">是真的被删掉了</tspan>",
+            "⛔ 而且<tspan font-weight=\"700\">没有任何东西补偿它</tspan>",
+            "→　所以掉点",
+    )):
+        f.t(92, pyc + 222 + i * 30, ln, GY, size=14.5)
+
+    f.box(720, pyc + 152, 620, 236, "#fff", GR, 8)
+    f.box(720, pyc + 152, 620, 4, GR, GR, 2)
+    f.t(1030, pyc + 186, "V4 的 Shared K＝V MQA", GR, True, 19, "middle")
+    for i, ln in enumerate((
+            "共享的那条 <tspan font-weight=\"700\">512 宽 ——　宽四倍</tspan>",
+            "query <tspan font-weight=\"700\">每头 512</tspan>（从 1536 latent 上投）",
+            "⭐ 输出侧<tspan font-weight=\"700\">分组低秩投影</tspan>（16 组 × 1024）",
+            "⭐ 每头还有一个可学的 attention sink",
+            "→　<tspan font-weight=\"700\">每头视角没消失，它搬家了</tspan>",
+    )):
+        f.t(752, pyc + 222 + i * 30, ln, GY, size=14.5)
+    f._pan = None
+
+    yy = f.band(pyc + PHC + 22, "warn", "⛔ 但这不是「零损失」——　省一半不可能白省", [
+        "<tspan font-weight=\"700\">K 和 V 合成同一条，这一步连 MLA 都没敢做</tspan> ——&#160;"
+        "MLA 至少还有两个不同的升维矩阵把 K 和 V 区分开。"
+        "<tspan font-weight=\"700\">原本两组独立的 512 自由度，现在只剩一组。</tspan>",
+        "⭐ 这份损失被三样东西吃掉了："
+        "<tspan font-weight=\"700\">① query 侧每头 512 的自由度</tspan>；"
+        "<tspan font-weight=\"700\">② 输出侧的分组低秩投影</tspan>；"
+        "<tspan font-weight=\"700\">③ 原生训练</tspan> ——&#160;"
+        "它是从第一天就这么训的，不是从别的检查点改出来的。"
+        "<tspan font-style=\"italic\">（③ 是类比 NSA 的 Native，论文没这么说。）</tspan>",
+    ])
+
     # ══════════ Ⓑ 三种层，KV 序列各自长什么样 ═══════════════════
     PH2 = 486   # ⛔ 470 时层表黄底压住 HCA 行脚注，加高并把黄底下移
     py2 = f.panel(0, yy + 26, W, PH2,
