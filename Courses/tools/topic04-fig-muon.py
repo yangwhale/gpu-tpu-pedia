@@ -137,29 +137,91 @@ def main():
     f.t(1025, py2 + 172, "⭐ 而 Muon 拒绝拍平", RD, True, 15, "middle")
     f._pan = None
 
-    # ══════════ Ⓒ 范数视角：换把尺子就换个优化器 ═════════════════
-    PH3 = 278
+    # ══════════ Ⓒ 范数视角：两个约束区域，形状不同 ═══════════════
+    # ⭐⭐⭐ 2026-09-17 重画。原来这一格是**四个写着字的盒子**：
+    #   「用 F 范数 → SGD」「用谱范数 → Muon」。话是对的，可它什么也没解释 ——
+    #   读者仍然不知道「换把尺子」为什么会换出一个不同的更新。
+    # ⭐ 而这件事有一张标准的、画出来就懂的图：**把它画在奇异值平面上。**
+    #   横轴 σ₁、纵轴 σ₂（一个 2×2 的矩阵就两个奇异值，够用了）：
+    #     · F 范数 ＝ √(σ₁²＋σ₂²)　→　约束区域是**圆**
+    #     · 谱范数 ＝ max(σ₁, σ₂)　→　约束区域是**方**
+    #   问题都一样：在区域内，沿梯度方向走最远。
+    #     · 圆：最远点在梯度方向的延长线上 →　**保持原来的比例**，大的还是大
+    #     · 方：最远点是**那个角** →　**两个奇异值都变成 1**
+    #   ⭐⭐⭐ 而「所有奇异值拉到 1」正是 Ⓐ 第三列那个 msign。
+    #     **Muon 不是被定义出来的，是从这个方角上掉出来的。**
+    # 📌 数学上：max Σσᵢ(g)·σᵢ(Δ) 受 max σᵢ(Δ) ≤ 1 →　每个 σᵢ(Δ)=1，即 UVᵀ。
+    #   受 Σσᵢ(Δ)² ≤ 1 →　σ(Δ) ∝ σ(g)，即 Δ ∝ g，也就是 SGD。
+    G1, G2 = 0.92, 0.26          # 示意梯度的两个奇异值（一大一小，差别要看得见）
+    assert G1 > 3 * G2, "两个奇异值要差得够开，否则「拉平」这件事看不出来"
+
+    PH3 = 416
     py3 = f.panel(0, py2 + PH2 + 22, W, PH3,
-                  "Ⓒ ⭐⭐ 换一把尺子，就换一个优化器", GR,
+                  "Ⓒ ⭐⭐⭐ 换一把尺子，就换一个优化器　——　"
+                  "<tspan font-weight=\"700\">而尺子的差别就是这两个形状</tspan>", GR,
                   sub="⭐ 同一个问题：<tspan font-weight=\"700\">"
-                      "「这一步不许迈太大」的前提下，让 loss 降得最多</tspan>")
+                      "在「这一步不许迈太大」的区域里，沿梯度方向走最远</tspan>")
 
-    f.box(90, py3 + 40, 560, 82, "#f1f3f4", GY2, 8)
-    f.t(370, py3 + 72, "用 F 范数量「迈多大」", GY, True, 17, "middle")
-    f.t(370, py3 + 100, "（＝把矩阵拍平，算欧氏长度）", GY2, size=13, anchor="middle")
-    f.t(700, py3 + 76, "→", GY2, True, 22, "middle")
-    f.box(750, py3 + 40, 560, 82, "#f1f3f4", GY2, 8)
-    f.t(1030, py3 + 80, "得到的就是　SGD", INK, True, 19, "middle")
+    AX = 240                      # 单位长度对应的像素
+    PANES = (
+        (170, GY2, "#f1f3f4", "圆", "F 范数　＝　√(σ₁² ＋ σ₂²)",
+         "（把矩阵拍平，算欧氏长度）",
+         "最远点在<tspan font-weight=\"700\">梯度方向的延长线上</tspan>",
+         "→　比例原封不动：<tspan font-weight=\"700\">大的还是大，小的还是小</tspan>",
+         "得到的就是　SGD"),
+        (860, GR, "#e6f4ea", "方", "谱范数　＝　max(σ₁, σ₂)",
+         "（由「矩阵乘向量」这个动作诱导出来）",
+         "最远点是<tspan font-weight=\"700\">那个角</tspan>",
+         "→　<tspan font-weight=\"700\">两个奇异值都变成 1</tspan>　——　这就是 msign",
+         "得到的正是　Muon"),
+    )
+    for px, col, fill, shape, formula, formula2, where, what, who in PANES:
+        ox, oy = px + 40, py3 + 300           # 原点（左下）
+        # 坐标轴
+        f.line(ox, oy, ox + AX + 44, oy, GY2, 1.2)
+        f.line(ox, oy, ox, oy - AX - 44, GY2, 1.2)
+        f.t(ox + AX + 50, oy + 5, "σ₁", GY2, size=12)
+        f.t(ox - 6, oy - AX - 52, "σ₂", GY2, size=12, anchor="end")
 
-    f.box(90, py3 + 138, 560, 82, "#e6f4ea", GR, 8)
-    f.t(370, py3 + 170, "用谱范数量「迈多大」", GR, True, 17, "middle")
-    f.t(370, py3 + 198, "（＝由「矩阵乘向量」这个动作诱导出来的）", GY2, size=13, anchor="middle")
-    f.t(700, py3 + 174, "→", GR, True, 22, "middle")
-    f.box(750, py3 + 138, 560, 82, "#e6f4ea", GR, 8)
-    f.t(1030, py3 + 178, "得到的正是　Muon", GR, True, 19, "middle")
+        # 约束区域
+        if shape == "圆":
+            f.path("M %.1f %.1f A %.1f %.1f 0 0 1 %.1f %.1f L %.1f %.1f Z"
+                   % (ox, oy - AX, AX, AX, ox + AX, oy, ox, oy),
+                   col, 1.8, fill=fill, arrow=False)
+            tx, ty_ = ox + AX * G1 / (G1 ** 2 + G2 ** 2) ** .5, \
+                      oy - AX * G2 / (G1 ** 2 + G2 ** 2) ** .5
+        else:
+            f.box(ox, oy - AX, AX, AX, fill, col, 3, sw=1.8)
+            tx, ty_ = ox + AX, oy - AX
 
-    f.t(90, py3 + 244, "⭐ 为什么谱范数更贴矩阵：<tspan font-weight=\"700\">"
-                       "矩阵在网络里干的活，本来就是乘向量</tspan>", GY, size=14.5)
+        # 梯度方向（同一条，两边一样）
+        f.line(ox, oy, ox + AX * G1 * 1.12, oy - AX * G2 * 1.12, RD, 1.6)
+        f.t(ox + AX * G1 * 1.12 + 8, oy - AX * G2 * 1.12 - 6, "梯度方向", RD, True, 12)
+
+        # 落点。⚠️ 圆那边点在斜线中段，标签必须躲开「梯度方向」那四个字，
+        #   所以放到点的**下方**；方那边点在右上角，放右边就行。
+        f.box(tx - 5, ty_ - 5, 10, 10, col, col, 5)
+        if shape == "圆":
+            f.t(tx - 4, ty_ + 26, "这一步落在这儿", col, True, 12.5, anchor="middle")
+        else:
+            f.t(tx + 14, ty_ + 20, "这一步落在这儿", col, True, 12.5)
+        if shape != "圆":
+            f.line(ox, ty_, tx - 8, ty_, col, 1, dash="3 3", arrow=False)
+            f.line(tx, oy, tx, ty_ + 8, col, 1, dash="3 3", arrow=False)
+            f.t(ox - 6, ty_ + 5, "1", col, True, 12, anchor="end")
+            f.t(tx, oy + 18, "1", col, True, 12, anchor="middle")
+
+        f.t(px + 40, py3 + 48, shape, col, True, 22)
+        f.t(px + 84, py3 + 48, formula, INK, True, 15)
+        f.t(px + 84, py3 + 70, formula2, GY2, size=12)
+        f.t(px + 40, py3 + 336, where, GY, size=13)
+        f.t(px + 40, py3 + 358, what, col, size=13)
+        f.t(px + 40, py3 + 384, who, col, True, 17)
+
+    f.t(700, py3 + 200, "同一个梯度", GY2, True, 14, "middle")
+    f.t(700, py3 + 224, "同一个问题", GY2, True, 14, "middle")
+    f.t(700, py3 + 252, "⬇", GY2, True, 18, "middle")
+    f.t(700, py3 + 278, "只换了区域的形状", INK, True, 14, "middle")
     f._pan = None
 
     # ══════════ Ⓓ 为什么几乎不花时间 ═════════════════════════════
@@ -167,8 +229,9 @@ def main():
     py4 = f.panel(0, py3 + PH3 + 22, W, PH4,
                   "Ⓓ ⭐ 「每步多做十几次矩阵乘，不会很慢吗」——　"
                   "<tspan font-weight=\"700\">它塞进了一段本来就空着的时间</tspan>", OR,
-                  sub="⚠️ 实测每步增加 <tspan font-weight=\"700\">5% 以内</tspan>，"
-                      "作者自己声称 2%")
+                  sub="⭐ 作者自己算过这笔账："
+                      "<tspan font-weight=\"700\">FLOP 开销低于 1%</tspan>"
+                      "　——　⚠️ 但那是 FLOP 口径，不是墙钟口径")
 
     TX0, TX1 = 110, 1320
     ty = py4 + 60
@@ -213,9 +276,14 @@ def main():
                "Descent 已经提出过大致相同的算法</tspan>",
                "⛔ 本图<tspan font-weight=\"700\">不含任何收敛速度对照</tspan> ——&#160;"
                "本课没有这些优化器的对照实测，跟 fig4-optimizers 同一条规矩",
-               "⚠️ Ⓓ 的「5% 以内 / 作者称 2%」是<tspan font-weight=\"700\">转述</tspan>，"
-               "不是我们量的；真要用请自己在目标配置上量一遍"
-               "（<tspan font-weight=\"700\">这正是本讲那条「不能跨规模照抄」</tspan>）")
+               "⚠️ Ⓓ 那个「低于 1%」是<tspan font-weight=\"700\">作者按 Llama 405B 的"
+               "宽度和每批 token 数算出来的 FLOP 开销</tspan>，不是我们量的墙钟时间。"
+               "⛔ <tspan font-weight=\"700\">Newton-Schulz 是一串互相依赖的小矩阵乘，"
+               "FLOP 少不代表时间短</tspan> ——&#160;真要用请在目标配置上自己量"
+               "（<tspan font-weight=\"700\">这正是本讲那条「不能跨规模照抄」</tspan>）",
+               "⛔ 本图早先写的是「5% 以内 / 作者称 2%」，"
+               "<tspan font-weight=\"700\">那个 2% 查无出处</tspan> ——&#160;"
+               "作者原文给的是 FLOP 开销低于 1%。2026-09-17 订正")
     f.save("fig4-muon.svg", yy + 6)
 
 
