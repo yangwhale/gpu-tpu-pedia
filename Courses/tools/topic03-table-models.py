@@ -31,7 +31,10 @@ import topic03_models as M
 
 OUT = os.path.join(os.path.dirname(os.path.abspath(__file__)), "fig3-models-table.html")
 
-KVW = 400.0                 # KV 条满一行多长（px）
+# ⭐ 2026-09-16 等比缩小 400 → 300：这一列是**刚性**的（条是写死 px 的），
+#   它撑着整张表放不进 1440 的笔记本。⛔ 缩的是尺度不是含义 ——&#160;
+#   KV_PER_ROW 不动，所以「一整行 ＝ 60 GiB」这条真实比例照旧成立。
+KVW = 300.0                 # KV 条满一行多长（px）
 KV_PER_ROW = 60.0           # 一整行 ＝ 60 GiB（线性真实比例）
 KVS = KVW / KV_PER_ROW
 
@@ -119,12 +122,15 @@ CSS = """
       —— 因为 **100vw 是含滚动条的**，而可用宽度不含。差那几像素就撑出页面。
    ⭐ 改成「只在够宽的屏上破版心」：1500px 以上才破（那时 1400 一定放得下），
       窄屏就老老实实待在版心里横向滚动。**不跟 vw 的边界情况较劲。** */
-/* 表的实测自然宽是 1618（62+288+360+110+416+382）。壳比它小就会出内部滚动条，
-   所以壳取 1620、破版心的门槛取 1720（那时 1620 一定放得下）。
-   ⛔ 这两个数是**量出来的**，改了列宽就要重量一次。 */
-@media (min-width:1720px){
-  .tblwrap{width:1620px;margin-left:calc((1080px - 1620px) / 2 - 24px)}
-}
+/* ⭐⭐⭐ 2026-09-16 现场：「这个表的宽度被限制，好多内容藏起来了，能不能放开？」
+   ⛔ 量了一下确实：**1440 的屏上表宽 1615，只露出 984 ——&#160;藏了 631px**。
+     因为上面那版只在 **≥1720px** 才破版心，1440 的笔记本根本够不着。
+   ⭐⭐ 而上一版之所以退守到 1720，是因为拿 `100vw` 反算 margin 会溢出几像素 ——&#160;
+     **根因是 `100vw` 含滚动条，而可用宽度不含**。
+   ⭐⭐⭐ 所以正解不是「把门槛调低一点再赌一次」，是**换一个不含滚动条的量**：
+     `document.documentElement.clientWidth`。CSS 里没有这个量，JS 里有。
+     ⛔ 判据：**跟一个量的边界情况反复较劲之前，先问有没有另一个量本来就没这个毛病。**
+   ⚠️ CSS 只留兜底（横向滚动）；实际宽度由下面那段 JS 量出来后写死，并跟随 resize。 */
 .tbltip{color:#5f6368;font-size:12.5px;margin:0 0 8px}
 .land{margin:14px 0 0;padding:14px 18px;background:#e8f0fe;border:1px solid #1a73e8;
   border-radius:8px;color:#174ea6;font-size:12.5px;line-height:1.7}
@@ -150,11 +156,11 @@ CSS = """
 #mtbl .chip{display:inline-block;padding:2px 9px;border-radius:6px;border:1px solid;
   font-weight:700;white-space:nowrap}
 #mtbl .cy{white-space:nowrap}
-#mtbl .cy i{display:inline-block;width:40px;text-align:center;color:#fff;font-style:normal;
+#mtbl .cy i{display:inline-block;width:35px;text-align:center;color:#fff;font-style:normal;
   font-size:9px;font-weight:700;padding:3px 0;border-radius:3px;margin-right:3px}
 #mtbl .uni{display:inline-block;padding:3px 10px;border-radius:4px;color:#fff;
   font-size:10px;font-weight:700;white-space:nowrap}
-#mtbl .kvw{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px;max-width:470px}
+#mtbl .kvw{display:inline-flex;flex-wrap:wrap;align-items:center;gap:2px;max-width:356px}
 #mtbl .kv .bar{display:block;height:7px;border-radius:2px;flex:0 0 auto}
 #mtbl .kv em{font-style:normal;font-weight:700;font-size:11px;margin-left:6px;white-space:nowrap}
 #mtbl .kv .fold{font-weight:400;opacity:.75}
@@ -211,6 +217,23 @@ JS = """
   });
  });
  var f=t.querySelector('th.s[data-k="t"]'); if(f) f.classList.add('up');
+
+ // ── 破版心：按「不含滚动条的可用宽度」算 ────────────────────────
+ // ⛔ 不用 100vw ——&#160;它含滚动条，差那几像素就撑出页面（上一版就栽在这儿）。
+ (function(){
+  var w=document.querySelector('.tblwrap'); if(!w) return;
+  var par=w.parentNode;
+  function fit(){
+   var avail=document.documentElement.clientWidth-48;      // ⭐ 天然不含滚动条
+   var pad=parseFloat(getComputedStyle(par).paddingLeft)||0;
+   var left=par.getBoundingClientRect().left+pad;          // 版心内容左边缘
+   var wd=Math.min(avail, 1680);                           // 表自然宽 ~1620，留点余量
+   if(wd<=par.clientWidth-pad*2){ w.style.width=''; w.style.marginLeft=''; return; }
+   w.style.width=wd+'px';
+   w.style.marginLeft=Math.round((document.documentElement.clientWidth-wd)/2-left)+'px';
+  }
+  fit(); window.addEventListener('resize', fit);
+ })();
 
  // ── Highlight ／ Boom ──────────────────────────────────────────
  // ⛔ 只切 class，不碰 DOM 顺序、不碰任何数值。
