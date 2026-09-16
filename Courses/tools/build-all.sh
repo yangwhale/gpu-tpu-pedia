@@ -106,6 +106,8 @@ if [ "${1:-}" != "--lint" ]; then
 #     写完一章就把 topic04-build.py 里 PLAN 的那一行连同正文占位符一起删。
 echo ""
 echo "▸ 专题四 教材"
+# ⛔ 图先生成 —— topic04-build.py 的 place_figs 找不到 svg 会直接 assert 挂掉。
+for s in topic04-fig-*.py; do python3 "$s"; done
 python3 topic04-build.py
 
   step "专题八 教材"

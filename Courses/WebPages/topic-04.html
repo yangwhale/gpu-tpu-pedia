@@ -863,7 +863,190 @@ body.figonly section h3{margin-top:34px}
 <p class="lead">前面两节都在跟激活较劲。<em>可把账摊开一看 ——&nbsp;
   <b>那个从头到尾一言不发的角色，才是最大的一块。</b></em></p>
 
-<div class="note warn"><p>🚧 <b>本章待写 ——&nbsp;每参数 16 字节 · 其中 12 字节是 fp32 · 切一刀之后账完全变了</b></p><p><b>这一章在故事里干什么：</b>本讲的落点。⭐ 但要讲清楚一件事：那 16 字节是<b>「每张卡都有全套」</b>的账，<b>切一刀就完全变了</b>；而 ZeRO-3 下 bf16 权重<b>根本不常驻，它是流动的</b>。</p><p><b>打算用的图：</b><code>fig4-optstate</code> · <code>fig4-zero-split</code></p></div>
+<h3 id="s3-1">3.1　一个参数到底要占多少字节</h3>
+
+<p>混合精度训练下，<b>每一个参数身上挂着五样东西</b> ——&nbsp;
+  <em>而其中只有第一样是「模型本身」。</em></p>
+
+<figure class="fbox fwide" id="fig-optimizers"><svg viewBox="0 0 1400 1340" width="100%" role="img" aria-label="优化器谱系按「每个参数挂几份状态」排：SGD 零份，加动量一份，AdaGrad 和 RMSProp 各一份，Adam 与 AdamW 两份，而 2024 年的 Muon 只留一份动量、对更新矩阵做正交化，把二阶矩那一整份去掉了"><defs><marker id="ah-80868b" viewBox="0 0 10 10" refX="8.5" refY="5" markerWidth="5.5" markerHeight="5.5" orient="auto-start-reverse"><path d="M 0 1 L 9 5 L 0 9 z" fill="#80868b"/></marker><pattern id="grid" width="7" height="7" patternUnits="userSpaceOnUse"><path d="M 7 0 L 0 0 0 7" fill="none" stroke="#00000014" stroke-width="0.8"/></pattern><filter id="sh" x="-8%" y="-8%" width="118%" height="124%"><feDropShadow dx="0" dy="1.5" stdDeviation="2.2" flood-color="#202124" flood-opacity="0.10"/></filter></defs>
+<text class="svglbl" x="0" y="22" fill="#202124" style="font-size:20.0px">优化器谱系 ——　<tspan font-weight="700">每一代往每个参数身上挂了几份状态</tspan></text>
+<text class="svgsm" x="0" y="50" fill="#5f6368" style="font-size:15.0px">⛔ 这张图<tspan font-weight="700">不按算法怎么算排，按账单排</tspan>　·　⚠️ 横轴只表示先后，<tspan font-weight="700">不是线性年份</tspan></text>
+<rect x="0" y="63" width="14" height="14" rx="3" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="21" y="74" fill="#5f6368" style="font-size:14.0px">0 份</text>
+<rect x="76" y="63" width="14" height="14" rx="3" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="97" y="74" fill="#5f6368" style="font-size:14.0px">1 份</text>
+<rect x="152" y="63" width="14" height="14" rx="3" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="173" y="74" fill="#5f6368" style="font-size:14.0px">2 份</text>
+<rect x="228" y="63" width="14" height="14" rx="3" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="249" y="74" fill="#5f6368" style="font-size:14.0px">往回走</text>
+<rect x="0" y="102" width="1400" height="470" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="102" width="1400" height="4" rx="2" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<rect x="0" y="104" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="132" x2="1400" y2="132" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="122" fill="#174ea6" style="font-size:13.5px"><tspan font-weight="700">Ⓐ 三十年只在加同一样东西 ——　<tspan font-weight="700">直到 2024 年有人把它拿掉一份</tspan></tspan></text>
+<text class="svgsm" x="669" y="122" fill="#5f6368" style="font-size:11.0px">⭐ 「份数」指的是<tspan font-weight="700">每个参数要额外存几个跟它一样大的张量</tspan></text>
+<line x1="90" y1="488" x2="1330" y2="488" stroke="#80868b" stroke-width="2.0" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
+<line x1="90" y1="468.0" x2="1330" y2="468.0" stroke="#e8eaed" stroke-width="0.9" stroke-linecap="round" stroke-dasharray="4 5"/>
+<text class="svgsm" x="74" y="473" fill="#80868b" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">0 份</tspan></text>
+<line x1="90" y1="383.0" x2="1330" y2="383.0" stroke="#e8eaed" stroke-width="0.9" stroke-linecap="round" stroke-dasharray="4 5"/>
+<text class="svgsm" x="74" y="388" fill="#80868b" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">1 份</tspan></text>
+<line x1="90" y1="298.0" x2="1330" y2="298.0" stroke="#e8eaed" stroke-width="0.9" stroke-linecap="round" stroke-dasharray="4 5"/>
+<text class="svgsm" x="74" y="303" fill="#80868b" text-anchor="end" style="font-size:13.0px"><tspan font-weight="700">2 份</tspan></text>
+<rect x="164" y="462.0" width="12" height="12" rx="6" fill="#80868b" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="170" y="448" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">SGD</tspan></text>
+<line x1="170" y1="476.0" x2="170" y2="482" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
+<text class="svgsm" x="170" y="512" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">只按梯度走一步</text>
+<rect x="354" y="377.0" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="360" y="363" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">＋ 动量</tspan></text>
+<text class="svgsm" x="360" y="343" fill="#80868b" text-anchor="middle" style="font-size:12.5px">1964</text>
+<line x1="360" y1="391.0" x2="360" y2="482" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
+<text class="svgsm" x="360" y="512" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">记住上一步往哪走</text>
+<rect x="554" y="377.0" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="560" y="363" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">AdaGrad</tspan></text>
+<text class="svgsm" x="560" y="343" fill="#80868b" text-anchor="middle" style="font-size:12.5px">2011</text>
+<line x1="560" y1="391.0" x2="560" y2="482" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
+<text class="svgsm" x="560" y="512" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">每个参数一个学习率</text>
+<rect x="754" y="377.0" width="12" height="12" rx="6" fill="#1a73e8" stroke="#1a73e8" stroke-width="1"/>
+<text class="svgsm" x="760" y="363" fill="#174ea6" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">RMSProp</tspan></text>
+<text class="svgsm" x="760" y="343" fill="#80868b" text-anchor="middle" style="font-size:12.5px">2012</text>
+<line x1="760" y1="391.0" x2="760" y2="482" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
+<text class="svgsm" x="760" y="512" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">把累加换成滑动平均</text>
+<rect x="954" y="292.0" width="12" height="12" rx="6" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="960" y="278" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">Adam</tspan></text>
+<text class="svgsm" x="960" y="258" fill="#80868b" text-anchor="middle" style="font-size:12.5px">2014</text>
+<line x1="960" y1="306.0" x2="960" y2="482" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
+<text class="svgsm" x="960" y="512" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">动量 ＋ 自适应，两份都要</text>
+<rect x="1144" y="292.0" width="12" height="12" rx="6" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1150" y="278" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">AdamW</tspan></text>
+<text class="svgsm" x="1150" y="258" fill="#80868b" text-anchor="middle" style="font-size:12.5px">2017</text>
+<line x1="1150" y1="306.0" x2="1150" y2="482" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
+<text class="svgsm" x="1150" y="512" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">修 weight decay 那个 bug</text>
+<rect x="1304" y="377.0" width="12" height="12" rx="6" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1310" y="363" fill="#0d652d" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">Muon</tspan></text>
+<text class="svgsm" x="1310" y="343" fill="#80868b" text-anchor="middle" style="font-size:12.5px">2024</text>
+<line x1="1310" y1="391.0" x2="1310" y2="482" stroke="#e8eaed" stroke-width="1.0" stroke-linecap="round" stroke-dasharray="3 3"/>
+<text class="svgsm" x="1310" y="512" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">去掉 v，改为正交化</text>
+<text class="svgsm" x="700" y="554" fill="#80868b" text-anchor="middle" style="font-size:13.0px">⛔ 横轴只表示先后，不是线性年份</text>
+<rect x="1040" y="142" width="304" height="88" rx="8" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
+<text class="svgsm" x="1064" y="170" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ Muon 是往回走的那一步</tspan></text>
+<text class="svgsm" x="1064" y="194" fill="#5f6368" style="font-size:14.0px">三十年一路加，2024 年</text>
+<text class="svgsm" x="1064" y="216" fill="#5f6368" style="font-size:14.0px">有人把二阶矩那一份整个拿掉了</text>
+<rect x="0" y="624" width="1400" height="122" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="624" width="4" height="122" rx="2" fill="#e8710a" stroke="#e8710a" stroke-width="1"/>
+<rect x="2" y="624" width="3" height="122" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="651" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ AdamW 不是新算法 ——　它是在修一个 bug</tspan></text>
+<text class="svgsm" x="20" y="682" fill="#b06000" style="font-size:15.0px">⭐ 论文摘要原话：<tspan font-weight="700">L2 正则和 weight decay 对普通 SGD 是等价的，但对 Adam 这种自适应方法<tspan text-decoration="underline">不等价</tspan></tspan>。⛔ 因为 L2 那一项是<tspan font-weight="700">混在梯度里</tspan>进去的，再被二阶矩的分母一除 ——&#160;<tspan font-weight="700">梯度</tspan></text>
+<text class="svgsm" x="20" y="706" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">大的参数，它的 weight decay 被稀释掉了</tspan>。</text>
+<text class="svgsm" x="20" y="730" fill="#b06000" style="font-size:15.0px">⭐⭐ 所以 AdamW 的修法是把 weight decay <tspan font-weight="700">从梯度里解耦出来</tspan>，更新参数时单独减一下。<tspan font-weight="700">那个 W 就是 decoupled 的意思。</tspan></text>
+<rect x="0" y="772" width="1400" height="340" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="772" width="1400" height="4" rx="2" fill="#d93025" stroke="#d93025" stroke-width="1"/>
+<rect x="0" y="774" width="1400" height="4" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<line x1="0" y1="802" x2="1400" y2="802" stroke="#dadce0" stroke-width="1" stroke-linecap="round"/>
+<text class="svglbl" x="14" y="792" fill="#a50e0e" style="font-size:13.5px"><tspan font-weight="700">Ⓑ 所以「每参数 16 字节」是哪五样 ——　<tspan font-weight="700">其中 12 字节是 fp32 的那三份</tspan></tspan></text>
+<text class="svgsm" x="727" y="792" fill="#5f6368" style="font-size:11.0px">⭐ 混合精度训练的常规配置</text>
+<rect x="92" y="842" width="152.0" height="72" rx="8" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="168" y="874" fill="#80868b" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">bf16 权重</tspan></text>
+<text class="svgsm" x="168" y="898" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">2 B</tspan></text>
+<text class="svgsm" x="168" y="936" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">前向反向都用它</text>
+<rect x="244.0" y="842" width="152.0" height="72" rx="8" fill="#f1f3f4" stroke="#80868b" stroke-width="1"/>
+<text class="svgsm" x="320" y="874" fill="#80868b" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">bf16 梯度</tspan></text>
+<text class="svgsm" x="320" y="898" fill="#80868b" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">2 B</tspan></text>
+<text class="svgsm" x="320" y="936" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">反向算出来的</text>
+<rect x="396.0" y="842" width="304.0" height="72" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="548" y="874" fill="#a50e0e" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">fp32 主权重</tspan></text>
+<text class="svgsm" x="548" y="898" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">4 B</tspan></text>
+<text class="svgsm" x="548" y="936" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">真身，用来累加</text>
+<rect x="700.0" y="842" width="304.0" height="72" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="852" y="874" fill="#a50e0e" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">fp32 动量 m</tspan></text>
+<text class="svgsm" x="852" y="898" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">4 B</tspan></text>
+<text class="svgsm" x="852" y="936" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">Adam 的第一份</text>
+<rect x="1004.0" y="842" width="304.0" height="72" rx="8" fill="#fce8e6" stroke="#d93025" stroke-width="1"/>
+<text class="svgsm" x="1156" y="874" fill="#a50e0e" text-anchor="middle" style="font-size:15.5px"><tspan font-weight="700">fp32 二阶矩 v</tspan></text>
+<text class="svgsm" x="1156" y="898" fill="#a50e0e" text-anchor="middle" style="font-size:17.0px"><tspan font-weight="700">4 B</tspan></text>
+<text class="svgsm" x="1156" y="936" fill="#5f6368" text-anchor="middle" style="font-size:12.5px">⭐ Muon 去掉的就是它</text>
+<text class="svgsm" x="1320" y="884" fill="#202124" style="font-size:19.0px"><tspan font-weight="700">＝ 16 B</tspan></text>
+<text class="svgsm" x="92" y="992" fill="#202124" style="font-size:17.0px"><tspan font-weight="700">⭐ 而这一讲那句「最大的一块是优化器状态」，落到数上就是这么来的：</tspan></text>
+<text class="svgsm" x="92" y="1020" fill="#5f6368" style="font-size:15.5px"><tspan font-weight="700">权重只占 2 B，优化器那边（主权重 ＋ m ＋ v）占 12 B</tspan> ——　<tspan font-weight="700">六倍</tspan>。</text>
+<text class="svgsm" x="92" y="1054" fill="#0d652d" style="font-size:16.0px"><tspan font-weight="700">⛔ 而换成 Muon：二阶矩那一份没了 ——　<tspan font-weight="700">16 B 变成 12 B</tspan>，少四分之一。</tspan></text>
+<text class="svgsm" x="92" y="1084" fill="#5f6368" style="font-size:14.5px">⚠️ 但它<tspan font-weight="700">只管二维参数</tspan> ——　embedding 和输出头仍然走 AdamW，所以整模型省不到四分之一。</text>
+<rect x="0" y="1164" width="1400" height="146" rx="9" fill="none" stroke="#dadce0" stroke-width="1"/>
+<rect x="0" y="1164" width="4" height="146" rx="2" fill="#1e8e3e" stroke="#1e8e3e" stroke-width="1"/>
+<rect x="2" y="1164" width="3" height="146" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
+<text class="svglbl" x="20" y="1191" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ Muon 拿什么换来的这一份</tspan></text>
+<text class="svgsm" x="20" y="1222" fill="#0d652d" style="font-size:15.0px">⭐ 名字就是做法：<tspan font-weight="700">MomentUm Orthogonalized by Newton-Schulz</tspan> ——&#160;先按普通的 SGD 加动量算出更新量，再对这个更新<tspan font-weight="700">矩阵</tspan>做几轮 Newton-Schulz 迭代，把它<tspan font-weight="700">近似正交化</tspan>（等</text>
+<text class="svgsm" x="20" y="1246" fill="#0d652d" style="font-size:15.0px">价于换成离它最近的半正交矩阵，也就是把奇异值都拉到 1）。</text>
+<text class="svgsm" x="20" y="1270" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">Adam 是逐元素缩放步长，Muon 是整个矩阵一起做谱归一化</tspan> ——&#160;不让某几个方向独大。⛔ 代价：作者自己写明 <tspan font-weight="700">Muon 每一步的墙钟时间比 AdamW 慢</tspan>，它赚的是<tspan font-weight="700">样本效率</tspan>（同样</text>
+<text class="svgsm" x="20" y="1294" fill="#0d652d" style="font-size:15.0px">的 loss 用更少步数）。</text>
+</svg><figcaption>⭐⭐ <b>Ⓐ 的形状是这张图的全部</b> ——&nbsp;<em>三十年一路往上加，<b>2024 年有人往回走了一步</b>。</em><span class="capmore"><br>⭐ <em>而 Ⓑ 把「最大的一块是优化器状态」翻译成了一根尺子：<b>权重只占 2 B，优化器那边占 12 B。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Adam：Kingma & Ba，<b>arXiv <a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a></b>（ICLR 2015）；AdamW：Loshchilov & Hutter，<b>arXiv <a href="https://arxiv.org/abs/1711.05101" target="_blank" rel="noopener">1711.05101</a></b>（ICLR 2019）——&#160;Ⓐ 那条带子里的说法是它摘要的转述</p>
+<p>Muon：Keller Jordan 等 2024，作者 writeup kellerjordan.github.io/posts/muon。「只用于 2D 参数」「标量 / 向量 / 输入输出层仍用 AdamW」「per-step wallclock 比 AdamW 慢」<b>三条都是原文</b></p>
+<p>动量：Polyak 1964（heavy ball）／Nesterov 1983；AdaGrad：Duchi, Hazan, Singer, JMLR 2011（无 arXiv）；RMSProp：Hinton 2012 Coursera 第 6 讲 ——&#160;<b>从未正式发表</b>，这一条本身值得一提</p>
+<p>另有三条省状态的岔路本图没画：Adafactor（<b>arXiv <a href="https://arxiv.org/abs/1804.04235" target="_blank" rel="noopener">1804.04235</a></b>，把 v 分解成一行加一列）、Lion（<b>arXiv <a href="https://arxiv.org/abs/2302.06675" target="_blank" rel="noopener">2302.06675</a></b>，只用梯度符号、单动量）、8-bit Adam（状态量化，不改算法）</p>
+<p>⛔ <b>本图不含任何收敛速度的对照</b> ——&#160;本课没有这些优化器的对照实测，画曲线就是编。图上只有结构与各自论文的定位</p></details></figure>
+
+<div class="note ok"><p>⭐⭐ <b>这一节只要记住一句：权重 2 字节，优化器那边 12 字节。</b></p>
+<p><em>⭐ 所以「显存里最大的一块是优化器状态」不是一个修辞 ——&nbsp;
+  <b>它就是 2 比 12 这个比。</b></em></p>
+<p>⛔ <em>而且这 12 字节<b>全是 fp32</b>。下一小节说为什么它们非 fp32 不可。</em></p></div>
+
+<h3 id="s3-2">3.2　为什么主权重必须是 fp32 ——&nbsp;这一条反直觉</h3>
+
+<p>训练到后期，<b>单步的更新量相对权重本身非常小</b>。
+  <em>而 bf16 只有 8 位尾数 ——&nbsp;<b>小的更新量加上去会被直接舍掉，等于没更新。</b></em></p>
+<p>⭐ <em>所以要留一份 fp32 的<b>真身</b>来累加，
+  bf16 那份只是它的<b>投影</b>。</em></p>
+<p><span class="sub">⭐ 这也顺带解释了为什么 <b>FP8 训练难</b>：
+  精度往下压的时候，<b>哪些量可以压、哪些必须保留高精度，是有讲究的</b>
+  ——&nbsp;那是另一课的事。</span></p>
+
+<h3 id="s3-3">3.3　换个优化器，账单就跟着变</h3>
+
+<p class="lead">⭐ <b>优化器的选择是一个显存决策，不只是收敛速度的决策。</b>
+  <em>——&nbsp;这一点常被忽略，而它恰恰是这一讲要立的那条判据。</em></p>
+
+<!-- ⭐⭐⭐ 2026-09-16 现场：「你这个不得把主流优化器先捋一下？像什么 Adam、
+     AdamW，还有 Muon，还有一个最开始的叫 G 什么来着？」
+     ⭐ 那个是 SGD。（现场说的「GDN」是 Gated DeltaNet，上一讲的**架构**，
+       不是优化器 ——&#160;两个 G 撞车了，值得在正文里替读者点一句。）
+     ⛔ 判据：这一节**不按算法怎么算讲，按账单讲** ——&#160;
+       更新公式和收敛曲线在这一讲里都不承重。 -->
+<div class="note"><p>📌 <b>顺手把谱系捋一遍 ——&nbsp;按「挂几份状态」，不按年份。</b></p>
+<ul>
+  <li><b>SGD</b> ——&nbsp;<em><b>零状态</b>。算出梯度，往反方向走一步。
+    毛病是在狭长的山谷里来回横跳。</em></li>
+  <li><b>＋ 动量</b>（Polyak 1964）——&nbsp;<em><b>一份</b>。
+    记住上一步往哪走，这一步跟着惯性走。</em></li>
+  <li><b>AdaGrad</b>（2011）——&nbsp;<em><b>一份</b>。每个参数一个自己的学习率。
+    ⛔ 但它的分母<b>只增不减</b>，训着训着学习率衰减到零，模型不动了。</em></li>
+  <li><b>RMSProp</b>（2012）——&nbsp;<em><b>一份</b>，专门来修上面那条：
+    把「累加」换成「滑动平均」，老的会被忘掉。</em></li>
+  <li><b>Adam</b>（2014）——&nbsp;<em><b>两份</b>。动量和 RMSProp<b>都要</b>，
+    再加一个偏差修正。从此成了事实上的默认。</em></li>
+  <li><b>AdamW</b>（2017）——&nbsp;<em>还是两份。
+    <b>它不是新算法，是在修一个 bug</b> ——&nbsp;见下面那条。</em></li>
+  <li><b>Muon</b>（2024）——&nbsp;<em><b>回到一份</b>。
+    <b>把二阶矩那一整份拿掉了</b>，改成对更新矩阵做正交化。</em></li>
+</ul>
+<p><span class="sub">⚠️ 另有三条省状态的岔路，这一讲不展开：
+  <b>Adafactor</b> 把 v 分解成一行加一列；<b>Lion</b> 只用梯度的符号、单动量；
+  <b>8-bit Adam</b> 把状态本身量化、不改算法。</span></p></div>
+
+<div class="note danger"><p>⛔ <b>Muon 那一份不是白省的 ——&nbsp;三条限制都是作者自己写明的。</b></p>
+<ul>
+  <li><b>只管二维参数。</b><em>标量、向量，以及
+    <b>embedding 和最后那个输出头</b>，仍然走 AdamW ——&nbsp;
+    作者明说输入输出层用 AdamW 效果才最好。
+    <b>所以整模型省不到那四分之一。</b></em></li>
+  <li><b>每一步更慢</b>（原文写明）。<em>⛔ 所以它<b>不是「又快又省」</b> ——&nbsp;
+    <b>它把一笔账挪到了另一笔账上</b>：显存那栏减了，单步时间那栏加了。
+    划不划算，取决于你现在卡在哪一栏。</em></li>
+  <li><b>还要多做几轮矩阵乘。</b><em>那几轮 Newton-Schulz 迭代不是免费的
+    ——&nbsp;<b>这又是一次拿算力换显存</b>，跟<a href="#s二">第二节</a>那个决策同一个形状。</em></li>
+</ul>
+<p>⭐⭐ <em>而它的证据方式值得单独一提：Muon 在 NanoGPT 那个刷速度的公开竞赛里
+  把记录提了 <b>35%</b>，此后<b>十二次破纪录、七个不同的人</b>，全都还在用它。
+  <b>——&nbsp;要是有人能把 AdamW 调到一样好，换回去就能破纪录，可没人换。</b></em></p>
+<p><span class="sub">⭐ <b>顺带一句跟上一讲连起来：DeepSeek-V4 就是用 Muon 训的</b>
+  ——&nbsp;论文摘要里列的三大升级之一。</span></p></div>
 
 </div></section>
 
