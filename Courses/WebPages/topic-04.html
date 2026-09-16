@@ -880,7 +880,7 @@ body.figonly section h3{margin-top:34px}
 <p><em>猜高了的地方是正数，该高没高的地方是负数。
   <b>就这么简单。</b>这个差，就是整条反向链的<b>种子</b>。</em></p>
 <p><span class="sub">📌 这是 softmax ＋ 交叉熵这一对的经典结果 ——&nbsp;
-  <b>它们凑在一起，导数会漂亮地约化成「预测减真值」。</b>
+  它们凑在一起，导数会漂亮地约化成「预测减真值」。
   <em>不是所有 loss 都这么好看，但这一对是今天的默认组合。</em></span></p></div>
 
 <h3 id="s1-3">1.3　往回传的<u>不是一个数</u> ——&nbsp;这里是最多人卡住的地方</h3>
@@ -891,7 +891,7 @@ body.figonly section h3{margin-top:34px}
   <em>它的含义是：「loss 对我这一层输出的每一个位置，各有多敏感」
   ——&nbsp;这一层输出有多少个数，它就有多少个数。</em></p>
 
-<div class="note"><p>⭐⭐ <b>每一层拿到这个上游传来的敏感度之后，只做两件事：</b></p>
+<div class="note"><p>⭐⭐ 每一层拿到这个上游传来的敏感度之后，只做两件事：</p>
 <ul>
   <li><b>① 算出自己那块权重的梯度</b> ——&nbsp;
     <em>用这个敏感度，乘上<b>前向时存下来的输入</b>。</em></li>
@@ -993,7 +993,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svglbl" x="20" y="1137" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 这张图顺带回答了另外两个常见疑问</tspan></text>
 <text class="svgsm" x="20" y="1168" fill="#0d652d" style="font-size:15.0px">❓ <tspan font-weight="700">「为什么训练比推理贵这么多」</tspan> ——&#160;算力上就是这个 3 倍；⛔ 但真正拉开差距的不是它，而是<tspan font-weight="700">显存里那一整条从头挂到尾的激活</tspan>（下一张图）。</text>
 <text class="svgsm" x="20" y="1192" fill="#0d652d" style="font-size:15.0px">❓ <tspan font-weight="700">「反向能不能只算一次」</tspan> ——&#160;能，如果你<tspan font-weight="700">不打算继续往前传</tspan>（比如只微调最后一层）。⭐ 那种情况下第 ③ 次确实可以省掉 ——&#160;<tspan font-weight="700">冻结层为什么便宜，原因就在这儿。</tspan></text>
-</svg><figcaption>⭐⭐ <b>Ⓑ 是这张图的钥匙</b> ——&nbsp;<em>反向不是「比较慢」，是它要回答<b>两个不同的问题</b>：我这块权重该怎么改、上游该收到什么。两个问题，两次乘法。</em><span class="capmore"><br>⛔ <em>Ⓐ 第②步那句「用前向存下来的输入」是整个专题的枢纽 ——&nbsp;<b>激活扔不掉、以及下一节那笔交易，全挂在这一句上。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 「3 倍」是<b>矩阵乘口径</b>的常用近似：只数 matmul，忽略 norm / 激活 / 偏置 / 通信。真实 step 里这些占比不大，但<b>不是零</b></p>
+</svg><figcaption>⭐⭐ <b>Ⓑ 是这张图的钥匙</b> ——&nbsp;<em>反向不是「比较慢」，是它要回答<b>两个不同的问题</b>：我这块权重该怎么改、上游该收到什么。两个问题，两次乘法。</em><span class="capmore"><br>⛔ <em>Ⓐ 第②步那句「用前向存下来的输入」是整个专题的枢纽 ——&nbsp;激活扔不掉、以及下一节那笔交易，全挂在这一句上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 「3 倍」是<b>矩阵乘口径</b>的常用近似：只数 matmul，忽略 norm / 激活 / 偏置 / 通信。真实 step 里这些占比不大，但<b>不是零</b></p>
 <p>⛔ 图上第 ② 步那句「用前向存下来的输入」是<b>整个专题的枢纽</b> ——&#160;激活扔不掉、以及下一节那笔重算交易，全都挂在这一句上</p></details></figure>
 
 <h3 id="s1-4">1.4　⭐ 为什么偏导数一出现，这件事就变容易了</h3>
@@ -1039,7 +1039,7 @@ body.figonly section h3{margin-top:34px}
 <h3 id="s1-6">1.6　闭环：反向<u>必须</u>用到前向的值 ——&nbsp;这就是激活扔不掉的根本原因</h3>
 
 <p>回头看 1.3 那两件事里的第①件：
-  <b>算自己权重的梯度，要用「前向时存下来的输入」。</b></p>
+  算自己权重的梯度，要用「前向时存下来的输入」。</p>
 
 <div class="note danger"><p>⛔⛔ 这就是激活必须留着的根本原因 ——&nbsp;
   不是谁设计得不好，是<u>反向的数学本身要求它在场</u>。</p>
@@ -1144,6 +1144,73 @@ body.figonly section h3{margin-top:34px}
 <p class="lead">这是全课第一次出现<b>真正的取舍</b>：
   <em>不是「有没有更好的办法」，而是<b>两样东西只能选一样，你选哪个</b>。</em></p>
 
+
+<h3 id="s1-7">1.7　把那张原始账单摊开 ——&nbsp;<u>一层里到底挂了些什么</u></h3>
+
+<!-- ⭐⭐ 2026-09-16 补。这一小节是**给要自己算的人**看的，讲课时可以整段跳过。
+     ⛔ 但它不能不写：上面那两个数（4.15 TiB / 106.75 GiB）如果只给结论不给拆解，
+       它们就是两个**没法被质疑**的数字 —— 而这一讲从头到尾都在要求「说清是查的还是推的」。
+     ⭐ 判据：**一个自己推出来的数，必须连着推导一起给，否则它冒充的是事实。** -->
+
+<p class="lead">⭐ <b>这一小节可以整段跳过。</b>
+  <em>它是给要自己动手算的人看的 ——&nbsp;上面那两个数从哪来，全在这儿。</em></p>
+
+<p><b>基准单位先立住：</b><em>一份 hidden 宽的张量
+  ＝ <code>131,072 × 7,168 × 2 B</code> ＝ <b>1.75 GiB</b>。
+  下面所有数都是它的倍数。</em>（序列 131,072、batch 1、bf16。）</p>
+
+<h4>MLA 子层留什么</h4>
+<table>
+<thead><tr><th>留下的张量</th><th>宽度</th><th>大小</th></tr></thead>
+<tbody>
+<tr><td>norm 的输入（＝ 残差入口，<b>重算模式下唯一留的那份</b>）</td><td>7,168</td><td>1.75 GiB</td></tr>
+<tr><td>norm 的输出</td><td>7,168</td><td>1.75 GiB</td></tr>
+<tr><td>Q 降维结果（layernorm 前后各一份）</td><td>1,536</td><td>0.75 GiB</td></tr>
+<tr><td>KV 降维结果（含 RoPE 那 64 维）</td><td>576 / 512</td><td>0.27 GiB</td></tr>
+<tr><td><b>Q 展开后</b></td><td>128 头 × 192 ＝ <b>24,576</b></td><td><b>6.00 GiB</b></td></tr>
+<tr><td><b>K、V 解压后</b></td><td>128 头 × 256 ＝ <b>32,768</b></td><td><b>8.00 GiB</b></td></tr>
+<tr><td>attention 输出</td><td>128 头 × 128 ＝ 16,384</td><td>4.00 GiB</td></tr>
+<tr><td>logsumexp（fp32）</td><td>128</td><td>0.06 GiB</td></tr>
+<tr><td><b>小计</b></td><td></td><td><b>约 22.6 GiB</b></td></tr>
+</tbody></table>
+
+<h4>MoE 子层留什么</h4>
+<table>
+<thead><tr><th>留下的张量</th><th>份数 × 宽度</th><th>大小</th></tr></thead>
+<tbody>
+<tr><td>norm 的输入 / 输出</td><td>2 × 7,168</td><td>3.50 GiB</td></tr>
+<tr><td>路由分数</td><td>256</td><td>0.06 GiB</td></tr>
+<tr><td><b>派发出去的激活</b></td><td><b>9 份</b> × 7,168</td><td><b>15.75 GiB</b></td></tr>
+<tr><td>gate / up / SwiGLU 乘积</td><td>3 × 9 份 × 2,048</td><td>13.50 GiB</td></tr>
+<tr><td><b>专家输出（合并前）</b></td><td><b>9 份</b> × 7,168</td><td><b>15.75 GiB</b></td></tr>
+<tr><td><b>小计</b></td><td></td><td><b>约 48.6 GiB</b></td></tr>
+</tbody></table>
+
+<div class="note ok"><p>⭐⭐⭐ <b>「9 份」是这张表里最值得停一下的地方。</b></p>
+<p><em>9 ＝ 被激活的 8 个路由专家 ＋ 1 个共享专家。
+  <b>每个 token 的那份激活被复制了九遍</b> ——&nbsp;进去一次、出来一次，
+  光这两项就 <b>31.5 GiB</b>。</em></p>
+<p>⛔ <b>而它在专题一那张参数量的表上<u>完全看不出来</u>。</b>
+  <em>——&nbsp;MoE 在参数账上很划算（只激活一小部分），
+  <b>可在激活账上，它要付九份的复制费。</b></em></p></div>
+
+<p class="landing">⭐ 合起来：一层 MoE 块约 71 GiB，一层 dense 块约 40 GiB；
+  58 层 MoE ＋ 3 层 dense ≈ <u>4,245 GiB ≈ 4.15 TiB</u>。</p>
+
+<div class="note danger"><p>⚠️ <b>这张表的三条边界，讲的时候必须说清楚。</b></p>
+<ul>
+  <li><b>它是按算子逐项推的，不是从哪份报告抄的。</b>
+    <em>不同框架的算子融合程度、是否顺手重算便宜算子、
+    MoE 派发是否真的物化九份副本，差别都很大 ——&nbsp;<b>当量级看，别当准数。</b></em></li>
+  <li><b>注意力分数矩阵没算在里面。</b>
+    <em>专题一算过它在 128K 上是 4 TiB／层。
+    FlashAttention 压根不把它写进显存，所以它不出现在这张表上
+    ——&nbsp;⛔ 换成不带 flash 的朴素实现，这张表整个作废。</em></li>
+  <li>那个 106.75 GiB 是「已经做过一次交易之后」的账。
+    <em>它假设每层只留入口那一份 ——&nbsp;而那恰恰就是<b>开了重算之后的样子</b>。
+    ⭐ 所以先看原始账单、再看下一节，<b>顺序不能颠倒</b>。</em></li>
+</ul></div>
+
 <h3 id="s2-1">2.1　重算是什么 ——&nbsp;一句话：<u>不存过程，只存存档点</u></h3>
 
 <p><em>前向每算出一个中间结果就留着，是因为上一节那条
@@ -1218,7 +1285,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="1152" y="724" fill="#5f6368" text-anchor="middle" style="font-size:13.0px">33% 算力换 97% ——　显存实在不够时</text>
 <line x1="924" y1="692" x2="940" y2="692" stroke="#80868b" stroke-width="1.6" stroke-linecap="round" marker-end="url(#ah-80868b)"/>
 <text class="svgsm" x="700" y="798" fill="#a50e0e" text-anchor="middle" style="font-size:15.0px"><tspan font-weight="700">⛔ 显存本来就宽裕的时候（小模型、短序列），<tspan font-weight="700">重算就是纯亏</tspan></tspan></text>
-</svg><figcaption>⭐⭐ <b>要看的是两根条的<u>不对称</u></b> ——&nbsp;<em>付出那边只多出一小截，省下那边短到几乎看不见。</em><span class="capmore"><br>⚠️ <em>两根条<b>都归一化了</b>，所以可以直接并排看 ——&nbsp;<b>单位不同的量并排放，读者第一反应是去比长度，而那个比较没有意义。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 4.15 TiB / 106.75 GiB 是<b>自己按算子推的估算</b>（V3 的 config ＋ 官方参考实现的 MLA 前向），<b>当量级看</b>；就算差一倍，「不对称」这个结论也不变</p>
+</svg><figcaption>⭐⭐ <b>要看的是两根条的<u>不对称</u></b> ——&nbsp;<em>付出那边只多出一小截，省下那边短到几乎看不见。</em><span class="capmore"><br>⚠️ <em>两根条<b>都归一化了</b>，所以可以直接并排看 ——&nbsp;单位不同的量并排放，读者第一反应是去比长度，而那个比较没有意义。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⚠️ 4.15 TiB / 106.75 GiB 是<b>自己按算子推的估算</b>（V3 的 config ＋ 官方参考实现的 MLA 前向），<b>当量级看</b>；就算差一倍，「不对称」这个结论也不变</p>
 <p>⭐ 「3× →&#160;4×」是矩阵乘口径：重算等于把前向那一遍再买一次，所以多出来的正好是 <b>1/3</b></p>
 <p>📌 Ⓑ 里「选择性」那一档的 6% / 77%，推导过程与名次表见<b>下一张图与本节正文</b>；DeepSeek-V3 报告（<b>arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b>）明写他们重算全部 RMSNorm 与 MLA 上投影 ——&#160;正是那一档</p></details></figure>
 
@@ -1228,7 +1295,7 @@ body.figonly section h3{margin-top:34px}
   <em>把它扔掉、反向时重算回来，每省一个字节要付多少次浮点运算？</em></p>
 <p><b>比值越小越该扔。</b>就这一个数，<b>整张排序表自己就出来了。</b></p>
 
-<div class="note ok"><p>⭐⭐ <b>对线性层，这个数有闭式解，而且漂亮得出乎意料：</b></p>
+<div class="note ok"><p>⭐⭐ 对线性层，这个数有闭式解，而且漂亮得出乎意料：</p>
 <p><em>一个 <code>[S,k] × [k,n]</code> 的矩阵乘 ——&nbsp;
   重算代价 <code>2·S·k·n</code> FLOPs，产出张量 <code>S·n·2</code> 字节（bf16）。
   <b>一除，每字节代价 ＝ k。</b></em></p>
@@ -1257,10 +1324,24 @@ body.figonly section h3{margin-top:34px}
   它依赖 causal 折半的口径、依赖 V3 的头维度、依赖你拿哪个线性层做对照。
   ⭐ 要记的是那句「两条线斜率不同所以必然相交」，不是这个数。</span></p></div>
 
-<p>把 V3 在 128K 上排一遍，结论很干脆：
-  <em>MoE 派发的九份副本、RMSNorm 输出、SwiGLU 逐元素乘积 ——&nbsp;<b>白捡</b>（代价约等于 0）；
-  K/V 解压、Q 展开、专家输出 ——&nbsp;<b>划算</b>；
-  而 attention 输出只占 4 GiB，重算一次却要 703.69 TFLOP。</em></p>
+<p>把 V3 在 128K 上排一遍 ——&nbsp;一层 MoE 块，按「每 GiB 要付多少 TFLOP」升序：</p>
+
+<table>
+<thead><tr><th>张量</th><th>省显存</th><th>重算代价</th><th>每 GiB 付</th><th>结论</th></tr></thead>
+<tbody>
+<tr><td>MoE 派发（复制成 9 份）</td><td>15.75 GiB</td><td>~0</td><td><b>0</b></td><td>白捡</td></tr>
+<tr><td>RMSNorm 输出（每层 2 个）</td><td>3.50 GiB</td><td>0.01 TFLOP</td><td><b>~0</b></td><td>白捡</td></tr>
+<tr><td>SwiGLU 乘积 9 份（逐元素）</td><td>4.50 GiB</td><td>0.01 TFLOP</td><td><b>~0</b></td><td>白捡</td></tr>
+<tr><td>K/V 解压（输入宽 512）</td><td>8.00 GiB</td><td>4.40 TFLOP</td><td><b>0.55</b></td><td>划算</td></tr>
+<tr><td>Q 展开（输入宽 1,536）</td><td>6.00 GiB</td><td>9.90 TFLOP</td><td><b>1.65</b></td><td>划算</td></tr>
+<tr><td>专家输出 9 份（输入宽 2,048）</td><td>15.75 GiB</td><td>34.63 TFLOP</td><td><b>2.20</b></td><td>划算</td></tr>
+<tr><td>gate / up / 路由 / 降维（输入宽 7,168）</td><td>9.14 GiB</td><td>39.08 TFLOP</td><td><b>7.70</b></td><td>边际</td></tr>
+<tr><td><b>attention 输出</b></td><td><b>4.00 GiB</b></td><td><b>703.69 TFLOP</b></td><td><b>175.92</b></td><td><b>绝不</b></td></tr>
+</tbody></table>
+
+<p><span class="sub">⭐ <b>这张表不用背，它是<u>上面那条闭式解直接排出来的</u></b> ——&nbsp;
+  前六行的「每 GiB 付」就是各自的输入宽度换了个单位，
+  <b>你拿 config 自己也能排一遍。</b></span></p>
 
 <div class="note danger"><p>⭐⭐ 回答那个直觉问题：「有没有占显存很小、算力却很大的东西？」
   ——&nbsp;<em><b>有，就是 attention，而且极端。</b>
@@ -1273,9 +1354,9 @@ body.figonly section h3{margin-top:34px}
   <em>对比全量重算的「33% 换 97%」——&nbsp;
   选择性重算的性价比高一个数量级，这就是它值得单独配的原因。</em></p>
 
-<div class="note ok"><p>⭐⭐ <b>一条第一方证据：这张排序表不是我们自己推着玩的。</b></p>
+<div class="note ok"><p>⭐⭐ 一条第一方证据：这张排序表不是我们自己推着玩的。</p>
 <p><em>DeepSeek-V3 的报告里写得很直白 ——&nbsp;他们
-  「<b>重算全部 RMSNorm 运算和 MLA 上投影</b>」，
+  「重算全部 RMSNorm 运算和 MLA 上投影」，
   理由是「<b>开销很小，却显著降低了存激活的显存需求</b>」。</em></p>
 <p class="landing">⭐ <b>这正好落在上面那张表最便宜的那几行里。</b>
   <em>判据是我们自己推的，但<b>推出来的名单跟人家实际配的对上了</b>
@@ -1347,7 +1428,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="20" y="732" fill="#a50e0e" style="font-size:15.0px">⭐ 2022 年那篇（<tspan font-weight="700">arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank"><tspan text-decoration="underline">2205.05198</tspan></a></tspan>）说：挑「占显存不少、但重算起来不贵」的扔。<tspan font-weight="700">它选中了 attention</tspan> ——&#160;因为在 2,048 上，attention 只要 2,560，<tspan font-weight="700">比图上每一条线性层</tspan></text>
 <text class="svgsm" x="20" y="756" fill="#a50e0e" style="font-size:15.0px"><tspan font-weight="700">都低</tspan>。论文没错。</text>
 <text class="svgsm" x="20" y="780" fill="#a50e0e" style="font-size:15.0px">⛔ 到 131,072，同一条斜线爬到 <tspan font-weight="700">163,840</tspan> ——&#160;比最贵的那条线性层还高 <tspan font-weight="700">23 倍</tspan>。于是<tspan font-weight="700">它从最该扔的变成最该留的</tspan>。⭐⭐ <tspan font-weight="700">判据一个字没改，翻转的是前提。</tspan></text>
-</svg><figcaption>⭐⭐⭐ <b>全专题最值钱的一张</b> ——&nbsp;<em>「两条斜率不同的线必然相交」这句话，图讲一秒，字讲一段。</em><span class="capmore"><br>⭐ <em>双对数不是为了好看：<b>只有在这个坐标上，「常数」才是水平线、「正比于 S」才是直线</b>。</em><br>⛔ <em>两根竖线就是那场翻转的全部原因 ——&nbsp;<b>判据一个字没改，变的只有序列长度。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 线性层那条闭式解：<b>一个 [S,k]×[k,n] 的矩阵乘，每字节代价 ＝ k</b>（重算 2·S·k·n FLOPs ÷ 产出 S·n·2 字节，S 和 n 全约掉）——&#160;所以它在图上必然是水平线</p>
+</svg><figcaption>⭐⭐⭐ <b>全专题最值钱的一张</b> ——&nbsp;<em>「两条斜率不同的线必然相交」这句话，图讲一秒，字讲一段。</em><span class="capmore"><br>⭐ <em>双对数不是为了好看：只有在这个坐标上，「常数」才是水平线、「正比于 S」才是直线。</em><br>⛔ <em>两根竖线就是那场翻转的全部原因 ——&nbsp;<b>判据一个字没改，变的只有序列长度。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 线性层那条闭式解：<b>一个 [S,k]×[k,n] 的矩阵乘，每字节代价 ＝ k</b>（重算 2·S·k·n FLOPs ÷ 产出 S·n·2 字节，S 和 n 全约掉）——&#160;所以它在图上必然是水平线</p>
 <p>⚠️ attention 那条斜率 1.25 依赖 <b>V3 的头维度（qk 192 / v 128）与 causal 折半的口径</b>；换个模型斜率会变，<b>但「它是斜的」不会变</b> ——&#160;这才是要记的东西</p>
 <p>⛔ 交点 5,734 <b>不是工程阈值</b>，它还取决于你拿哪条线性层做对照（图上四条给的交点各不相同）</p>
 <p>📌 2022 那篇的收益数字（GPT-3 省 70% 付 2.7%）用的是<b>未折半的 Megatron 口径</b>；换成本图统一的 causal 口径，GPT-3 的 attention 占比是 1.37%</p></details></figure>
@@ -1359,7 +1440,7 @@ body.figonly section h3{margin-top:34px}
   Transformer Models，arXiv <b><a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener">2205.05198</a></b>（2022-05）。</em></p>
 <p><b>它的判据跟 2.3 一模一样</b> ——&nbsp;<em>论文原话是：挑那些
   「占显存不少、但重算起来不贵」的部分。</em></p>
-<p>⛔ <b>但它选出来要重算的，<u>恰恰就是 attention</u></b> ——&nbsp;
+<p>⛔ 但它选出来要重算的，<u>恰恰就是 attention</u> ——&nbsp;
   <em>QKᵀ、softmax、softmax dropout、以及 attention over V。
   收益是：GPT-3 省 <b>70%</b> 激活显存只付 <b>2.7%</b> 算力；
   MT-NLG 省 <b>65%</b> 付 <b>1.6%</b>。</em></p>
@@ -1595,7 +1676,7 @@ body.figonly section h3{margin-top:34px}
   <li><b>梯度</b> ——&nbsp;<em>本来是一次性的；<b>一旦要做梯度累积，它就变成累加量</b>，
     于是又得升回 fp32。</em></li>
 </ul>
-<p class="landing">⭐ <b>收紧后的判据：看它是不是「老的贡献永远不走」。</b>
+<p class="landing">⭐ 收紧后的判据：看它是不是「老的贡献永远不走」。
   <em>——&nbsp;永远不走的必须 fp32；<b>会被衰减掉的、用完就扔的，低精度就够。</b></em></p>
 <p><span class="sub">📌 出处：DeepSeek-V3 技术报告，arXiv <b><a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s3-2">§3.2</a>.3。
   ⛔ <b>顺带说明这张 16 字节的表不是定律</b> ——&nbsp;
@@ -1629,7 +1710,7 @@ body.figonly section h3{margin-top:34px}
 <h4>这个量纲问题一暴露，SGD 的根本毛病也就出来了</h4>
 
 <p>全网络共用一个学习率，可不同参数的梯度尺度可能差好几个数量级。
-  <em>结果就是：<b>梯度大的那些被一步走过头，梯度小的那些几乎不动。</b>
+  <em>结果就是：梯度大的那些被一步走过头，梯度小的那些几乎不动。
   ⛔ 你调学习率，其实是在这两头之间找一个<b>都不太满意的折中</b>。</em></p>
 
 <h4>⭐ 自适应那条线，核心想法只有一句</h4>
@@ -1797,7 +1878,7 @@ body.figonly section h3{margin-top:34px}
 <p>⭐ <em>论文自己的话是：「更大的模型通常能用更大的 batch，
   <b>但需要更小的学习率</b>」。他们用<b>梯度噪声尺度</b>来定 batch。</em></p>
 <p><span class="sub">⛔ <b>注意这张表里 batch 和学习率是<u>一起</u>变的</b> ——&nbsp;
-  这是最容易漏的一条：<b>你不能只调学习率不看 batch，它俩绑在一起。</b>
+  这是最容易漏的一条：你不能只调学习率不看 batch，它俩绑在一起。
   GPT-3 还额外把 batch 从 32K token 线性爬到目标值（头 40–120 亿 token 内）。
   📌 出处：arXiv <b><a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">2005.14165</a></b> 表 2.1 与 <a href="#s2-3">§2.3</a>。</span></p></div>
 
@@ -2089,13 +2170,13 @@ body.figonly section h3{margin-top:34px}
   <em>这一节全部按<b>全局总量</b>算 ——&nbsp;不分卡，怎么切是下一讲的事。</em></p>
 
 <div class="note"><p>📌 <b>常驻那一块的算式，短到可以口算：</b></p>
-<p><em><b>671e9 参数 × 16 字节 ÷ 1024⁴ ＝ 9.76 TiB。</b>
+<p><em>671e9 参数 × 16 字节 ÷ 1024⁴ ＝ 9.76 TiB。
   拆开是：权重 1.22 ＋ 梯度 1.22 ＋ 优化器状态 <b>7.32</b>。</em></p>
 <p>⭐ <em>换算一下就知道这是个什么量级 ——&nbsp;
-  <b>按每张卡 80 GiB 算，光这一块就要 125 张</b>，还没算激活、没算任何冗余。</em>
+  按每张卡 80 GiB 算，光这一块就要 125 张，还没算激活、没算任何冗余。</em>
   <span class="sub">（80 GiB 是这里<b>随手设的换算基准</b>，不是在说某款具体的卡。）</span></p></div>
 
-<p class="landing">⭐⭐ <b>注意这三项里，只有优化器状态那 7.32 TiB 是<u>纯开销</u></b>
+<p class="landing">⭐⭐ 注意这三项里，只有优化器状态那 7.32 TiB 是<u>纯开销</u>
   ——&nbsp;<em>它既不参与前向，也不参与反向，
   <b>只在每一步的最后那一瞬间被用一次。</b></em></p>
 
@@ -2115,15 +2196,15 @@ body.figonly section h3{margin-top:34px}
 <p><b>代进去（MoE 要用<u>激活</u>参数，不是总参数）：</b>
   <em><code>6 × 37e9 × 131,072 ≈ <b>29.1 PFLOP</b></code>，一条 128K 序列。</em></p>
 
-<div class="note danger"><p>⛔⛔ <b>但这个数在 128K 上是错的 ——&nbsp;而且错得很多。</b></p>
+<div class="note danger"><p>⛔⛔ 但这个数在 128K 上是错的 ——&nbsp;而且错得很多。</p>
 <p><em><code>6ND</code> 数的是<b>「跟权重相乘」</b>那部分。
   而 attention 里 QKᵀ 和 AV 这两步<b>没有权重参与</b>
   ——&nbsp;<b>它们根本不在这个公式的账里。</b></em></p>
 <p>⭐ <em>而<a href="#s二">第二节</a>算过：在 128K 上，
-  <b>attention 占一层前向算力的 82.1%</b>。
+  attention 占一层前向算力的 82.1%。
   也就是说 <code>6ND</code> 数到的只是剩下那 <b>17.9%</b>。</em></p>
-<p class="landing">⭐⭐⭐ <b>反推一下：真实算力大约是 <code>6ND</code> 的
-  <u>五到六倍</u></b> ——&nbsp;<em>29.1 PFLOP 实际接近 <b>160 PFLOP</b>。</em></p>
+<p class="landing">⭐⭐⭐ 反推一下：真实算力大约是 <code>6ND</code> 的
+  <u>五到六倍</u> ——&nbsp;<em>29.1 PFLOP 实际接近 <b>160 PFLOP</b>。</em></p>
 <p><span class="sub">⚠️ 这个倍数是<b>由 82.1% 反推的</b>（1 ÷ 0.179），
   而 82.1% 本身是自己按算子推的 ——&nbsp;<b>当量级看</b>。
   ⭐ 要记的不是这个倍数，是<b>那个公式什么时候会骗你：序列一长就会</b>。</span></p></div>
@@ -2155,7 +2236,7 @@ body.figonly section h3{margin-top:34px}
 
 <p class="lead">专题一算完前向，结论是<b>「装不下」</b>。
   <em>这一讲把账补全之后，那句话变得<b>具体</b>了 ——&nbsp;
-  <b>不是「装不下」，是「四项各自装不下，而且各有各的治法」。</b></em></p>
+  不是「装不下」，是「四项各自装不下，而且各有各的治法」。</em></p>
 
 <div class="note ok"><p>⭐⭐ <b>四项 ＋ 四种对策，一一对上：</b></p>
 <ul>
@@ -2167,11 +2248,86 @@ body.figonly section h3{margin-top:34px}
 <p class="landing">⭐⭐⭐ <b>你会注意到四条里有三条写着同一个字：<u>切</u>。</b>
   <em>——&nbsp;那就是<b>专题五</b>整讲要做的事：<b>切这件事本身，也是要算账的。</b></em></p></div>
 
-<p><span class="sub">⭐ <b>而这一讲真正想留下的，不是那几个数，是三条判据：</b><br>
+<p><span class="sub">⭐ 而这一讲真正想留下的，不是那几个数，是三条判据：<br>
   ① <b>要不要高精度，看那一项「老的贡献走不走」</b>（3.2）；<br>
-  ② <b>该不该重算，看「每省一字节要付多少 FLOPs」</b>（2.3）；<br>
-  ③ <b>凡是会改变数据分片形状的参数，都不能跨规模照抄</b>（2.6）。<br>
+  ② 该不该重算，看「每省一字节要付多少 FLOPs」（2.3）；<br>
+  ③ 凡是会改变数据分片形状的参数，都不能跨规模照抄（2.6）。<br>
   <em>数字会过期，这三条不会。</em></span></p>
+
+</div></section>
+
+<section id="s六"><div class="wrap"><div class="stn"><span class="badge">附　录</span><h2>这一讲的数是怎么核的</h2></div>
+
+<!-- ⭐⭐⭐ 2026-09-16 加。这一节是**给这一讲上保险**用的。
+     ⛔ 这一讲报了几十个数字，其中相当一部分是自己推的。
+       把两类混在一起报，读者没有任何办法分辨 —— 而他们会抄回去用。
+     ⭐ 判据（CLAUDE.md 第一原则的落地）：
+       **推出来的必须写清推导链；查来的必须给得到出处。两类不能长得一样。** -->
+
+<p class="lead">⭐⭐ <b>这一讲报了几十个数字。它们<u>不是同一种东西</u>。</b>
+  <em>有的能查到论文原文，有的是我们自己按算子推的
+  ——&nbsp;<b>后者可能差一倍，前者不会。</b></em></p>
+
+<h3 id="s6-1">6.1　查得到出处的（放心抄）</h3>
+<table>
+<thead><tr><th>数字 / 说法</th><th>出处</th></tr></thead>
+<tbody>
+<tr><td>每参数 <b>16 字节</b>（2＋2＋12）的经典口径；ZeRO 三级的切法</td>
+    <td>Rajbhandari 等，<b>arXiv <a href="https://arxiv.org/abs/1910.02054" target="_blank" rel="noopener">1910.02054</a></b></td></tr>
+<tr><td>GPT-3 七档<b>峰值学习率与 batch</b>；375M token 线性 warmup；
+    2,600 亿 token 内余弦降到 <b>10%</b>；weight decay 0.1；上下文 2,048</td>
+    <td><b>arXiv <a href="https://arxiv.org/abs/2005.14165" target="_blank" rel="noopener">2005.14165</a></b> 表 2.1 与 <a href="#s2-3">§2.3</a></td></tr>
+<tr><td>DeepSeek-V3 的 <b>完整 LR schedule</b>（2K 步 →&nbsp;10T 恒定 →&nbsp;4.3T 余弦
+    →&nbsp;末段两级）；梯度裁剪 <b>1.0</b>；batch 3072→15360；
+    bf16 的一/二阶矩 ＋ fp32 主权重和梯度；<b>重算 RMSNorm 与 MLA 上投影</b></td>
+    <td><b>arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></b> <a href="#s3-2">§3.2</a>.3 / <a href="#s4-2">§4.2</a></td></tr>
+<tr><td>选择性重算的判据原文；GPT-3 省 70% 付 2.7%；MT-NLG 省 65% 付 1.6%</td>
+    <td>Korthikanti 等，<b>arXiv <a href="https://arxiv.org/abs/2205.05198" target="_blank" rel="noopener">2205.05198</a></b></td></tr>
+<tr><td><b>warmup 的真实机制</b>（让网络能承受更大的目标学习率；
+    「样本太少估不准」<b>不是</b>主因；warmup 拉长收益边际）</td>
+    <td><b>arXiv <a href="https://arxiv.org/abs/2406.09405" target="_blank" rel="noopener">2406.09405</a></b>（NeurIPS 2024）</td></tr>
+<tr><td>Adam / AdamW / Adafactor / Lion 的原始定义</td>
+    <td><b><a href="https://arxiv.org/abs/1412.6980" target="_blank" rel="noopener">1412.6980</a></b> / <b><a href="https://arxiv.org/abs/1711.05101" target="_blank" rel="noopener">1711.05101</a></b> / <b><a href="https://arxiv.org/abs/1804.04235" target="_blank" rel="noopener">1804.04235</a></b> / <b><a href="https://arxiv.org/abs/2302.06675" target="_blank" rel="noopener">2302.06675</a></b></td></tr>
+<tr><td>Muon 只作用于二维参数、embedding 与输出头仍用 AdamW、
+    per-step 墙钟比 AdamW 慢</td>
+    <td>作者 writeup（<b>三条都是原文</b>）</td></tr>
+</tbody></table>
+
+<h3 id="s6-2">6.2　⚠️ 自己推的（当量级看，别当阈值）</h3>
+<table>
+<thead><tr><th>数字</th><th>推导链</th><th>它可能错在哪</th></tr></thead>
+<tbody>
+<tr><td><b>4.15 TiB</b> / <b>106.75 GiB</b> 激活</td>
+    <td>按算子逐项推（<a href="#s一">1.7</a> 那两张表）。输入只有 V3 的 config
+        ＋ 官方参考实现的 MLA 前向</td>
+    <td>框架的算子融合程度、MoE 派发是否真的物化九份</td></tr>
+<tr><td><b>attention 占一层算力 82.1%</b></td>
+    <td>按 causal 折半口径算。<b>专题一独立算出 81.8%，两边对上了</b></td>
+    <td>口径（折没折半）；换头维度就变</td></tr>
+<tr><td>交叉点 <b>S ≈ 5,734</b></td>
+    <td><code>1.25·S = 7,168</code>。1.25 来自 V3 头维度 192/128、causal 折半</td>
+    <td>⛔ 换一条线性层做对照，交点就不同 ——&nbsp;<b>它不是工程阈值</b></td></tr>
+<tr><td><b>6ND 低估五到六倍</b></td>
+    <td>由上面那个 82.1% 反推（1 ÷ 0.179）</td>
+    <td>它继承了 82.1% 的全部不确定性；<b>目前没有第三方实测佐证</b></td></tr>
+<tr><td><b>9.76 TiB</b> 常驻块 · <b>约 94 条</b>序列的分水岭</td>
+    <td>671e9 × 16 B ÷ 1024⁴；再除以 106.75 GiB。<b>图脚本里带 assert</b></td>
+    <td>16 B 是经典口径 ——&nbsp;<b>V3 自己就不是这么配的</b>（见 3.2）</td></tr>
+<tr><td>「按每张卡 80 GiB 算要 125 张」</td>
+    <td>9.76 TiB ÷ 80 GiB</td>
+    <td>⛔ 80 GiB 是<b>随手设的换算基准，不是某款具体的卡</b>；
+        真实部署还要算冗余、通信缓冲、碎片</td></tr>
+</tbody></table>
+
+<div class="note ok"><p>⭐⭐⭐ <b>为什么要专门写这一节。</b></p>
+<p><em>因为这两类数字<b>长得一模一样</b> ——&nbsp;都是几位有效数字加一个单位。
+  而读者会把它们<b>一起抄走</b>。</em></p>
+<p class="landing">⭐ 判据：一个自己推出来的数，必须连着推导一起给；
+  否则它冒充的是事实。</p>
+<p><span class="sub">📌 顺带一条方法：上面 82.1% 那一行是这一讲最该学的做法
+  ——&nbsp;它之所以可信，不是因为算得仔细，
+  而是因为专题一用完全独立的另一套算法给出了 81.8%。
+  <em>⭐ 孤立的估算没法验证；能对上一个外部锚点的估算，一次就把整套公式验了。</em></span></p></div>
 
 </div></section>
 
