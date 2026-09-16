@@ -741,6 +741,19 @@ body.figonly section figure p{display:revert}
    才存在：折叠规则是先写的，题是后搬的。
    判据：**加了新的内容类型，要回去看一遍既有的全局规则会不会误伤它。** */
 body.figonly .guess p{display:revert}
+/* ⛔⛔ 2026-09-16 现场截图抓到的：折叠模式下 <blockquote> 里的 <p> 被上面那条
+   规则藏掉，**外壳还在** ——&#160;于是页面上出现两条空的灰条，看着像坏了。
+   ⭐ 原设计说「原话引文保留」，但那从来没生效过（一生效就是空壳）。
+   ⛔ 这次顺势改判：**折叠模式下整块隐掉**。理由不是省地方 ——&#160;
+     引文是「故事」，不是「主线」，而折叠模式的定义就是只留主线。
+   ⭐ 判据（上一次是 .guess p，这次反过来）：**一条写得太宽的全局规则，
+     既会误伤该留的，也会留下该走的空壳 ——&#160;而空壳是静默的，更难发现。** */
+body.figonly section blockquote{display:none}
+/* ⭐⭐ 2026-09-16：图注是折叠模式下最大的一块字（48 条共 4960 字，占露出来
+   的六成四）。⛔ 但图注不能整条藏 ——&#160;它是「看图该看什么」的指路。
+   ⭐ 折中：**只留第一个 <br> 之前那一段**，后面的收起来。
+     实测 43/48 条带 <br>，切完省 53%。切法在 place_figs 里。 */
+body.figonly figcaption .capmore{display:none}
 body.figonly section h3{margin-top:34px}
 </style>
 <style>
@@ -1201,7 +1214,7 @@ body.figonly section h3{margin-top:34px}
 <text class="svgsm" x="16" y="591" fill="#174ea6" style="font-size:15px">混元 Hy4 的 <tspan font-weight="700">IndexCache</tspan> 和 GLM-5.2 的 <tspan font-weight="700">IndexShare</tspan> 是同一个想法：两家的 <tspan font-weight="700">indexer_types</tspan> 都是 <tspan font-weight="700">full, shared, shared, shared</tspan></text>
 <text class="svgsm" x="16" y="613" fill="#174ea6" style="font-size:15px">稳态四层一循环（前几层各家不同）——&#160;每 4 层只有 1 层自己算索引。</text>
 <text class="svgsm" x="16" y="635" fill="#174ea6" style="font-size:15px">⭐ 所以稀疏的<tspan font-weight="700">第二阶段</tspan>优化，已经不是「让每个 query 少看几块」，而是<tspan font-weight="700">「别每层都重新算一遍该看谁」</tspan>——&#160;<tspan font-weight="700">索引本身变成了新的开销。</tspan>这是 2026 年才冒出来的一层。</text>
-</svg><figcaption>⭐ <b>这是从 2014 年到今天真实发生过的事，四条支线各修各的毛病。</b><em>不用现在看懂 ——&nbsp;先看清一件事：<b>它有多乱。</b></em><br>⭐⭐ <em>这一讲要做的，就是把这团乱麻理成<b>一条能从头读到尾的线</b>；而读完之后你再回来看它，<b>会看见完全不同的东西。</b></em></figcaption></figure>
+</svg><figcaption>⭐ <b>这是从 2014 年到今天真实发生过的事，四条支线各修各的毛病。</b><em>不用现在看懂 ——&nbsp;先看清一件事：<b>它有多乱。</b></em><span class="capmore"><br>⭐⭐ <em>这一讲要做的，就是把这团乱麻理成<b>一条能从头读到尾的线</b>；而读完之后你再回来看它，<b>会看见完全不同的东西。</b></em></span></figcaption></figure>
 
 <!-- ⛔ 2026-09-14 R14：这一块原来有三句，**两句是图注的改写**
      （「看不懂是正常的」＝图注「不用现在看懂」；
@@ -1767,7 +1780,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1244" fill="#0d652d" style="font-size:15.0px">⭐ 在张量形状里找 <tspan font-weight="700">S</tspan>（KV 长度）——&#160;全图只有 K 和 V 两处带它，<tspan font-weight="700">那就是唯一要跨 token 留下来的东西</tspan>。</text>
 <text class="svgsm" x="20" y="1268" fill="#0d652d" style="font-size:15.0px">三个旋钮是它的三个面：<tspan fill="#1a73e8" font-weight="700">① 每份多大</tspan>　<tspan fill="#e8710a" font-weight="700">② 每步读多少</tspan>　<tspan fill="#9334e6" font-weight="700">③ 干脆别让它变长</tspan></text>
 <text class="svgsm" x="20" y="1292" fill="#0d652d" style="font-size:15.0px">⛔ 而 <tspan font-weight="700">FlashAttention 不在这三条里</tspan>——&#160;它已经是标配，在哪种注意力下都一样，<tspan font-weight="700">对这一讲没有区分度</tspan>。</text>
-</svg><figcaption>⭐ <b>这就是整本书的路线图。</b>六段，每段只问三件事：图啥、带来了什么、欠下了什么。<br><b>底下那两条数才是落点，而且缺一不可</b> ——&nbsp;<em>只把长度做上去、价钱降不下来，没人用得起；价钱降下来了、长度还是 2K，那它仍旧只是个接话的补全器。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>2K ＝ GPT-3 的 max_position_embeddings；1M 与 846 倍见本课模型表（128K、BF16、batch 1，两端都取 ≥100B 的模型）</p>
+</svg><figcaption>⭐ <b>这就是整本书的路线图。</b>六段，每段只问三件事：图啥、带来了什么、欠下了什么。<span class="capmore"><br><b>底下那两条数才是落点，而且缺一不可</b> ——&nbsp;<em>只把长度做上去、价钱降不下来，没人用得起；价钱降下来了、长度还是 2K，那它仍旧只是个接话的补全器。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>2K ＝ GPT-3 的 max_position_embeddings；1M 与 846 倍见本课模型表（128K、BF16、batch 1，两端都取 ≥100B 的模型）</p>
 <p>⚠️ 512 倍（2K→1M）与 846 倍（KV 降幅）是两个口径，本图刻意分两行给出 ——&#160;把它们相乘是把两把尺子当成一把</p>
 <p>两张趋势图的点全部由 topic03_models.ROWS 现算，没有手写常数；绿线是「跑到当月为止的最好成绩」，不是拟合曲线</p>
 <p>右图只收 ≥100B 的模型 ——&#160;跟「846 倍」同一个口径。不过滤的话包络线会被 Mistral 7B 的 512 MiB 拽到底，而那只是因为它本来就小</p>
@@ -1949,7 +1962,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="966" fill="#174ea6" style="font-size:15.0px">h<tspan baseline-shift="sub" font-size="10">t</tspan> ＝ f( W<tspan baseline-shift="sub" font-size="10">h</tspan> · h<tspan baseline-shift="sub" font-size="10">t−1</tspan> ＋ W<tspan baseline-shift="sub" font-size="10">x</tspan> · x<tspan baseline-shift="sub" font-size="10">t</tspan> ＋ b )　　　y<tspan baseline-shift="sub" font-size="10">t</tspan> ＝ W<tspan baseline-shift="sub" font-size="10">y</tspan> · h<tspan baseline-shift="sub" font-size="10">t</tspan>　　<tspan fill="#5f6368">形状：h 是 [d]，W<tspan baseline-shift="sub" font-size="10">h</tspan> 是 [d × d]</tspan></text>
 <text class="svgsm" x="20" y="990" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">d 就是它能记住的全部容量</tspan>——&#160;喂 10 个词还是 10 万个词，盒子一样大。</text>
 <text class="svgsm" x="20" y="1014" fill="#174ea6" style="font-size:15.0px">⭐ LSTM／GRU 没改这个形状，只是把 f 换成几个门（<tspan font-weight="700">LSTM 三个门＋一个候选值 ＝ 四块矩阵；GRU 两个门＋一个候选 ＝ 三块</tspan>）。<tspan font-weight="700">链还是那条链。</tspan></text>
-</svg><figcaption>⭐ 左边是 1990 年的原始画法，右边把它<b>沿时间摊开</b> ——&nbsp;<em>一条链的样子，得摊开才看得见。</em><br>看完只要记住一件事：<b>那条红线是横着走的。</b><em>这本书接下来所有的招，都是在想办法<b>别沿着它走</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Elman 1990《Finding Structure in Time》——&#160;context units「copied … on a one-for-one basis, with fixed weight of 1.0」；LSTM: Hochreiter &amp; Schmidhuber 1997；GRU: Cho et al. 2014</p></details></figure>
+</svg><figcaption>⭐ 左边是 1990 年的原始画法，右边把它<b>沿时间摊开</b> ——&nbsp;<em>一条链的样子，得摊开才看得见。</em><span class="capmore"><br>看完只要记住一件事：<b>那条红线是横着走的。</b><em>这本书接下来所有的招，都是在想办法<b>别沿着它走</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Elman 1990《Finding Structure in Time》——&#160;context units「copied … on a one-for-one basis, with fixed weight of 1.0」；LSTM: Hochreiter &amp; Schmidhuber 1997；GRU: Cho et al. 2014</p></details></figure>
 
 <p class="lead">⛔ 不过「搅一搅」是个<b>会骗人的比喻</b> ——&nbsp;
   <em>它容易让人想成<b>搅匀</b>，而搅匀是会把东西毁掉的。
@@ -2097,7 +2110,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1206" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">两端之间的全部空间。</tspan></text>
 <text class="svgsm" x="20" y="1230" fill="#0d652d" style="font-size:15.0px">⚠️ 顺带一句、完整版在下一小节：把序列连起来的其实有<tspan font-weight="700">两条</tspan>回线 ——&#160;<tspan font-weight="700">状态那条 2017 年被解开了（于是训练能并行）；自回归那条到今天也没人解开</tspan>（于是吐字仍然是一条链）</text>
 <text class="svgsm" x="20" y="1254" fill="#0d652d" style="font-size:15.0px">。</text>
-</svg><figcaption>⭐⭐ <b>Ⓑ 是这张图的重心</b> ——&nbsp;<em>「叠加为什么不毁掉信息」不是个说法，<b>是个能算的数</b>：2 维里两个随机方向只差 50 度，1024 维里差 88.6 度。<b>叠加能还原，是维度买来的。</b></em><br>⭐ <em>而 Ⓑ 真正的巧处，是它把<b>好处和坏处画在了同一格</b>：「为什么不糊」和「为什么会淡」，<b>是同一个「每步再乘一次」的两面。</b><br>⭐ 底下那条落点带回答「KV 是不是这时候发明的」——&nbsp;<b>不是，而且这个「不是」正是全书的骨架。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Ⓑ 那两个角度是<b>现场采样算的</b>（各 4000 次随机向量对）：d=2 时 E|cosθ| ≈ 0.63（夹角约 51°，精确值是 2/π）；d=1024 时 ≈ 0.0248（约 88.6°）。渐近式 sqrt(2/(π·d)) 与实测在 d≥64 时吻合到三位小数</p>
+</svg><figcaption>⭐⭐ <b>Ⓑ 是这张图的重心</b> ——&nbsp;<em>「叠加为什么不毁掉信息」不是个说法，<b>是个能算的数</b>：2 维里两个随机方向只差 50 度，1024 维里差 88.6 度。<b>叠加能还原，是维度买来的。</b></em><span class="capmore"><br>⭐ <em>而 Ⓑ 真正的巧处，是它把<b>好处和坏处画在了同一格</b>：「为什么不糊」和「为什么会淡」，<b>是同一个「每步再乘一次」的两面。</b><br>⭐ 底下那条落点带回答「KV 是不是这时候发明的」——&nbsp;<b>不是，而且这个「不是」正是全书的骨架。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Ⓑ 那两个角度是<b>现场采样算的</b>（各 4000 次随机向量对）：d=2 时 E|cosθ| ≈ 0.63（夹角约 51°，精确值是 2/π）；d=1024 时 ≈ 0.0248（约 88.6°）。渐近式 sqrt(2/(π·d)) 与实测在 d≥64 时吻合到三位小数</p>
 <p>⛔ Ⓐ <b>刻意不写出那个式子</b> ——&#160;本节面向还没见过它的人，公式会把该看见的画面挡住；⛔ Ⓑ 右半<b>不画具体衰减曲线</b> ——&#160;快慢取决于那个矩阵的谱，没有通用曲线，画出来就是编</p>
 <p>Ⓐ 那张尺寸表与「回线不训练」出自 Elman 1990 《Finding Structure in Time》原文：「Recurrent connections are fixed at 1.0 and are not subject to adjustment」；句子模拟「hidden and context layers contained <b>150 nodes</b> each」，输入输出 31 个节点。<b>参数量由 31/150 推算，非原文给出</b>；同一篇里最小的 XOR 模拟只有 2 个隐藏单元</p>
 <p>⛔ <b>精度那一栏本图故意空着</b> ——&#160;那个年代的论文不写精度，因为它当时还不是一个可以权衡的设计维度。本课不替它补一个数</p>
@@ -2556,7 +2569,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="524" fill="#174ea6" style="font-size:15.0px">Transformer 用「放弃状态」换来了并行度。<tspan font-weight="700">线性注意力和 Mamba 这一支，是想把状态请回来</tspan>——&#160;因为有状态，每步要搬的东西才不再变长。</text>
 <text class="svgsm" x="20" y="548" fill="#174ea6" style="font-size:15.0px">⛔ 但状态一回来，<tspan font-weight="700">串行也跟着回来</tspan>。于是又得把并行度找回来：<tspan font-weight="700">chunk 化、parallel scan</tspan>。</text>
 <text class="svgsm" x="20" y="572" fill="#174ea6" style="font-size:15.0px">⭐ 所以后面 DeltaNet / GDN / KDA 的公式为什么必须长成那样：<tspan font-weight="700">它们得线性到能被 scan，否则就退回 1990 年那条链。一个完整的圆。</tspan></text>
-</svg><figcaption>⭐ <b>下半截那三个盒子，就是这本书剩下八章的全部内容。</b><br><em>其中最右边那一条最先发生 ——&nbsp;早在 2017 年之前，注意力就已经出现了，当时它<b>只是挂在 RNN 身上的一个配件</b>，专治「装不下」。</em><br>⭐⭐ <b>下一章讲的，就是有人突然问了一句：既然这个配件这么好使，能不能把 RNN 整个扔掉，只留配件？</b></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Bengio, Simard, Frasconi 1994（梯度消失）；Hochreiter &amp; Schmidhuber 1997（LSTM）；Bahdanau et al. 2014 (arXiv <a href="https://arxiv.org/abs/1409.0473" target="_blank" rel="noopener">1409.0473</a>)「a fixed-length vector is a bottleneck」</p>
+</svg><figcaption>⭐ <b>下半截那三个盒子，就是这本书剩下八章的全部内容。</b><span class="capmore"><br><em>其中最右边那一条最先发生 ——&nbsp;早在 2017 年之前，注意力就已经出现了，当时它<b>只是挂在 RNN 身上的一个配件</b>，专治「装不下」。</em><br>⭐⭐ <b>下一章讲的，就是有人突然问了一句：既然这个配件这么好使，能不能把 RNN 整个扔掉，只留配件？</b></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Bengio, Simard, Frasconi 1994（梯度消失）；Hochreiter &amp; Schmidhuber 1997（LSTM）；Bahdanau et al. 2014 (arXiv <a href="https://arxiv.org/abs/1409.0473" target="_blank" rel="noopener">1409.0473</a>)「a fixed-length vector is a bottleneck」</p>
 <p>Vaswani et al. 2017 (arXiv <a href="https://arxiv.org/abs/1706.03762" target="_blank" rel="noopener">1706.03762</a>) 表 1；Martin &amp; Cundy 2018 (arXiv <a href="https://arxiv.org/abs/1709.04057" target="_blank" rel="noopener">1709.04057</a>)：非线性依赖挡住并行，只有线性依赖能用 parallel scan 扫</p></details></figure>
 
 <h3 id="s1-4">1.4　本章落点：这本书的主角，是那个盒子</h3>
@@ -2779,7 +2792,10 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   <a href="https://www.turingpost.com/p/attention" target="_blank" rel="noopener">Turing Post</a>
   整理并另行采访了 Bengio。<em>本讲的译文按原文意思重述，不是逐字直译。</em></p>
 
-<p class="landing">📌 <b>顺带交代一下这本书往后的读法</b>：每讲到一个新名词，
+<!-- ⛔ 这段原来挂着 class="landing"，于是折叠模式下也露着。
+     ⭐ 但它是**读法说明**，不是主线钩子 ——&#160;降级成普通段落，跟着折叠走。
+     判据：**landing / lead 是「一句话的钩子」，补充说明不该占这个位置。** -->
+<p>📌 <b>顺带交代一下这本书往后的读法</b>：每讲到一个新名词，
   我都会先说它<b>在修上一版的哪个具体毛病</b>。
   <em>——&nbsp;「某某灵光一闪」这件事你学不会；「上一版这个地方不对」，你下次能照着用。</em></p>
 
@@ -3061,7 +3077,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="688" fill="#174ea6" style="font-size:15.0px">⭐ 那 v 为什么还要跟 k 再分一次？<tspan font-weight="700">k 是书脊，v 是书里的内容</tspan>——&#160;「凭什么被选中」和「被选中之后交出什么」，本来就是两回事。</text>
 <text class="svgsm" x="20" y="712" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">为什么说「所有信息互相传递」，上面不是只画了 t6 吗？</tspan>因为<tspan font-weight="700">六个位置在同时做同样的事</tspan> ——&#160;一层过后，<tspan font-weight="700">每个位置的向量都变成了「全场的一个加权视角」</tspan>。</text>
 <text class="svgsm" x="20" y="736" fill="#174ea6" style="font-size:15.0px">⭐ 堆 L 层，就是把这件事<tspan font-weight="700">重复 L 次</tspan>，每一次都基于上一次的结果 ——&#160;<tspan font-weight="700">这就是「理解」在 Transformer 里的全部形式。</tspan></text>
-</svg><figcaption>⭐ 跟着最后那个字走一遍，你就懂了 ——&nbsp;<b>它不用等谁传话，直接一嗓子问全场，然后按各家报的价把货收回来。</b><br><em>⭐⭐ 而且这不是轮流来：<b>六个位置同时在做同一件事</b>。——&nbsp;上一章卡死人的那个「只能一步一步来」，到这里彻底没有了。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 论文 <a href="#s3-2">§3.2</a> 的原话，不是本课编的比喻；<b>图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</b></p>
+</svg><figcaption>⭐ 跟着最后那个字走一遍，你就懂了 ——&nbsp;<b>它不用等谁传话，直接一嗓子问全场，然后按各家报的价把货收回来。</b><span class="capmore"><br><em>⭐⭐ 而且这不是轮流来：<b>六个位置同时在做同一件事</b>。——&nbsp;上一章卡死人的那个「只能一步一步来」，到这里彻底没有了。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>「query / key / value」与「输出是 value 的加权和」是 Vaswani 2017 论文 <a href="#s3-2">§3.2</a> 的原话，不是本课编的比喻；<b>图中那组权重（5/30/8/45/7/5 ％）是示意值，不是实测</b></p>
 <p>⚠️ 本图<b>只画注意力</b> ——&#160;一层 Transformer 里还有 FFN、残差、归一化，它们不在本专题这条轴上（本专题的账本只有 KV cache）</p></details></figure>
 
 <h3 id="s2-4">2.4　拆开一层看：它在算什么</h3>
@@ -3183,7 +3199,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="828" fill="#174ea6" style="font-size:15.0px">假设 q、k 各维<tspan font-weight="700">独立、均值 0、方差 1</tspan>，那么 q·k ＝ Σ q<tspan baseline-shift="sub" font-size="10">i</tspan>k<tspan baseline-shift="sub" font-size="10">i</tspan> 的<tspan font-weight="700">均值是 0，方差是 d_k</tspan>——&#160;标准差就是 √d_k。</text>
 <text class="svgsm" x="20" y="852" fill="#174ea6" style="font-size:15.0px">⭐ 所以除以 √d_k 只做一件事：<tspan font-weight="700">把打分的方差拉回 1</tspan>。维度越高分数摊得越开，不拉回来 softmax 会被推到「几乎全是 0 和 1」的角落，<tspan font-weight="700">梯度就没了</tspan>。</text>
 <text class="svgsm" x="20" y="876" fill="#174ea6" style="font-size:15.0px">⛔ 别只说「防止 softmax 饱和」——&#160;那是结论不是理由。<tspan font-weight="700">理由是方差随维度线性长大，而 softmax 只认绝对数值。</tspan></text>
-</svg><figcaption>⭐⭐ <b>这里最容易听岔</b>：注意力<b>不是「挑出最像的那一个」</b>，<em>而是<b>按百分比把几家的货混成一碗</b>。</em><br>⛔ 而混完之后，<b>牌子和货（K 和 V）不能扔 ——&nbsp;下一个字还要用</b>。<em>留下来的这两份，就是这本书的反派：<b>KV cache</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 <a href="#s3-2">§3.2</a>：「a weighted sum of the values … compatibility function of the query with the corresponding key」</p>
+</svg><figcaption>⭐⭐ <b>这里最容易听岔</b>：注意力<b>不是「挑出最像的那一个」</b>，<em>而是<b>按百分比把几家的货混成一碗</b>。</em><span class="capmore"><br>⛔ 而混完之后，<b>牌子和货（K 和 V）不能扔 ——&nbsp;下一个字还要用</b>。<em>留下来的这两份，就是这本书的反派：<b>KV cache</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 <a href="#s3-2">§3.2</a>：「a weighted sum of the values … compatibility function of the query with the corresponding key」</p>
 <p>同一篇论文 <a href="#s3-2">§3.2</a>.1 与脚注 4：「the dot products grow large in magnitude, pushing the softmax function into regions where it has extremely small gradients」</p></details></figure>
 
 <div class="note info"><p>📌 那个 <code>√d_k</code> 看着吓人，<b>说白了就是一个标准差</b>。
@@ -3290,7 +3306,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="690" fill="#a50e0e" style="font-size:15.0px">Shazeer 2019（MQA 那篇）摘要原话：训练很快，因为序列方向可以并行；但 ——</text>
 <text class="svgsm" x="20" y="714" fill="#a50e0e" style="font-size:15.0px"><tspan font-style="italic">「incremental inference … is often slow, due to the <tspan font-weight="700">memory-bandwidth cost of repeatedly loading the large &quot;keys&quot; and &quot;values&quot; tensors</tspan>」</tspan></text>
 <text class="svgsm" x="20" y="738" fill="#a50e0e" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">这句话把「解码时又变回 RNN」那张图上 Ⓒ 那一行，从我们的推论变成了原文</tspan>——&#160;2017 年造出这个形状，<tspan font-weight="700">2019 年就有人把它命名成问题了</tspan>。</text>
-</svg><figcaption>⭐⭐ <b>这一格里藏着后面四章的全部导火索。</b><em>为了看得更清楚，一个头被切成了八个 ——&nbsp;而这一刀的代价，绿带里已经替你算完了。</em><br>⛔ <b>从下一章起，所有人都在跟这个代价讨价还价</b>：<em><a href="#s四">第四章</a>直接砍它、<a href="#s五">第五章</a>把它压成一份压缩件、<a href="#s六">第六章</a>照存但不全读、<a href="#s七">第七章</a>干脆不存。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 <a href="#s3-2">§3.2</a>.2：「jointly attend to information from different representation subspaces」、「With a single attention head, averaging inhibits this」；h = 8，d_k = d_v = d_model/h = 64</p>
+</svg><figcaption>⭐⭐ <b>这一格里藏着后面四章的全部导火索。</b><em>为了看得更清楚，一个头被切成了八个 ——&nbsp;而这一刀的代价，绿带里已经替你算完了。</em><span class="capmore"><br>⛔ <b>从下一章起，所有人都在跟这个代价讨价还价</b>：<em><a href="#s四">第四章</a>直接砍它、<a href="#s五">第五章</a>把它压成一份压缩件、<a href="#s六">第六章</a>照存但不全读、<a href="#s七">第七章</a>干脆不存。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>Vaswani et al. 2017 论文 <a href="#s3-2">§3.2</a>.2：「jointly attend to information from different representation subspaces」、「With a single attention head, averaging inhibits this」；h = 8，d_k = d_v = d_model/h = 64</p>
 <p>Shazeer 2019 (arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>)《Fast Transformer Decoding: One Write-Head is All You Need》摘要 ——&#160;本课模型表第二行 PaLM 用的就是它</p></details></figure>
 
 <h3 id="s2-6">2.6　本章落点：KV cache 就是在这里出生的</h3>
@@ -3438,7 +3454,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1297" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以这一章的落点就一句话</tspan></text>
 <text class="svgsm" x="20" y="1328" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">1990 年那个盒子，换成了一条会一直变长的格子。</tspan>⭐ 盒子的好处是<tspan font-weight="700">永远那么大</tspan>，坏处是<tspan font-weight="700">只能一个一个来</tspan>；格子正好反过来 ——&#160;<tspan font-weight="700">能一次算完，但会一直长。</tspan></text>
 <text class="svgsm" x="20" y="1352" fill="#0d652d" style="font-size:15.0px">⛔ <tspan font-weight="700">后面七章，全是在想办法拿这条格子开刀</tspan> ——&#160;有人让每一格变小，有人让每步少看几格，还有人干脆想把它换回那个盒子。</text>
-</svg><figcaption>⭐⭐ <b>Ⓑ 那三堆是这张图的全部</b> ——&nbsp;<em>权重本来就在那儿，中间量算完就扔 ——&nbsp;<b>三堆里只有一堆过不了这一关。</b></em><br>⭐ <em>而 Ⓒ 把「必须留」翻译成了画面：<b>每来一个字就多一格，一格都不能扔。</b>——&nbsp;<b>后面七章全在拿这条格子开刀。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⛔ <b>这张图刻意不画多头、不画残差与 MLP、不写任何张量形状</b> ——&#160;完整的那张（沿用 How to Scale Your Model 的记号）就在本节里折着，点开即可；后面几章还会把它重画并点亮被改动的那一处</p>
+</svg><figcaption>⭐⭐ <b>Ⓑ 那三堆是这张图的全部</b> ——&nbsp;<em>权重本来就在那儿，中间量算完就扔 ——&nbsp;<b>三堆里只有一堆过不了这一关。</b></em><span class="capmore"><br>⭐ <em>而 Ⓒ 把「必须留」翻译成了画面：<b>每来一个字就多一格，一格都不能扔。</b>——&nbsp;<b>后面七章全在拿这条格子开刀。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⛔ <b>这张图刻意不画多头、不画残差与 MLP、不写任何张量形状</b> ——&#160;完整的那张（沿用 How to Scale Your Model 的记号）就在本节里折着，点开即可；后面几章还会把它重画并点亮被改动的那一处</p>
 <p>⚠️ Ⓐ 里「问题 / 钥匙 / 内容」是 Q / K / V 的中文说法，本课从头到尾用这一套；⛔ <b>「拌到一起」指的是按权重加权求和</b>，不是把内容搅混 ——&#160;这一点跟第一章那个「叠上去不是搅匀」是同一件事</p>
 <p>⚠️ Ⓒ 里那六个字只是<b>画面</b>，真实的一格里装的是两条向量，不是两个汉字</p></details></figure>
 
@@ -3581,7 +3597,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="None" x="210" y="978" fill="#a50e0e" style="font-size:17px">⬆ 红底那两处就是它 ——　全图只有这两个输出要跨 token 留下来</text>
 <rect x="0" y="1330" width="1400" height="48" rx="8" fill="#e8f0fe" stroke="#1a73e8" stroke-width="1"/>
 <text class="svgsm" x="16" y="1360" fill="#174ea6" style="font-size:15px">📌 形状记号沿用 How to Scale Your Model（jax-ml.github.io/scaling-book），本图为重画。</text>
-</svg><figcaption>⭐ <b>别急着看懂整张 ——&nbsp;现在只做一件事</b>：<em>在这一堆字母里，把那个<b>会随对话越变越长</b>的找出来。</em><br>⭐⭐ 找到它，你就找到了后面<b>所有招数共同的靶子</b> ——&nbsp;<em>剩下七章，全是在想办法拿它开刀。</em></figcaption></figure>
+</svg><figcaption>⭐ <b>别急着看懂整张 ——&nbsp;现在只做一件事</b>：<em>在这一堆字母里，把那个<b>会随对话越变越长</b>的找出来。</em><span class="capmore"><br>⭐⭐ 找到它，你就找到了后面<b>所有招数共同的靶子</b> ——&nbsp;<em>剩下七章，全是在想办法拿它开刀。</em></span></figcaption></figure>
 
 </details>
 
@@ -3790,7 +3806,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="2" y="944" width="3" height="74" rx="0" fill="#fff" stroke="#fff" stroke-width="1"/>
 <text class="svglbl" x="20" y="971" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 整门课要拧的，就是上面那排紫条</tspan></text>
 <text class="svgsm" x="20" y="1002" fill="#174ea6" style="font-size:15.0px">后面三个旋钮拧的全是同一件事：<tspan font-weight="700">让 Ⓒ 那一排每步额外搬的东西变小</tspan>——&#160;存少点（①）、看少点（②），或者干脆<tspan font-weight="700">换回上面那排红的</tspan>（③，线性注意力）。</text>
-</svg><figcaption>⭐ <b>三行用的是同一把尺子，所以可以直接叠着看。</b><em>Ⓐ 是开篇那条老链，Ⓑ 是它当年赢下来的地方，Ⓒ 是你此刻正在用的那个东西。</em><br>⛔⛔ <b>赢下来的是 Ⓑ ——&nbsp;可你每天在用的是 Ⓒ。</b></figcaption></figure>
+</svg><figcaption>⭐ <b>三行用的是同一把尺子，所以可以直接叠着看。</b><em>Ⓐ 是开篇那条老链，Ⓑ 是它当年赢下来的地方，Ⓒ 是你此刻正在用的那个东西。</em><span class="capmore"><br>⛔⛔ <b>赢下来的是 Ⓑ ——&nbsp;可你每天在用的是 Ⓒ。</b></span></figcaption></figure>
 
 <div class="note danger"><p>⭐ 这不是打比方 ——&nbsp;<a href="#s一">第一章</a>那条链，
   <b>在这里原封不动地回来了一次</b>。</p>
@@ -3900,7 +3916,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1275" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 顺手给一条提问顺序，本讲后面一直在用</tspan></text>
 <text class="svgsm" x="20" y="1306" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">问「省了多少」之前，先问「省的是哪一样」。</tspan>权重是<tspan font-weight="700">所有人共享一份</tspan>，KV cache 是<tspan font-weight="700">每人一份</tspan> ——&#160;它们根本不是同一类开销。</text>
 <text class="svgsm" x="20" y="1330" fill="#0d652d" style="font-size:15.0px">⭐ 所以 KV cache 不是「显存里的一项」，它直接决定<tspan font-weight="700">你能同时服务多少人</tspan>。<tspan font-weight="700">这一条到专题六会变成 batch size 的硬上限。</tspan></text>
-</svg><figcaption>⭐⭐ <b>这张图最该带走的，是它什么都没证明「技术变差了」。</b><em>同一个模型、同一份权重，只是被拿去干了另一种活，瓶颈就自己换了个位置。</em><br>⛔ <b>所以这本书后面所有的招，修的都不是模型</b> ——&nbsp;<em>修的是「我们想怎么用它」和「机器给得起什么」之间的那道缝。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自知乎 姜富春《deepseek 技术解读(1)－彻底理解 MLA》（zhuanlan.zhihu.com/p/16730036197）——&#160;他用 Qwen-72B 做的这个对照，本图换成本讲一直在用的 V3 口径重算</p>
+</svg><figcaption>⭐⭐ <b>这张图最该带走的，是它什么都没证明「技术变差了」。</b><em>同一个模型、同一份权重，只是被拿去干了另一种活，瓶颈就自己换了个位置。</em><span class="capmore"><br>⛔ <b>所以这本书后面所有的招，修的都不是模型</b> ——&nbsp;<em>修的是「我们想怎么用它」和「机器给得起什么」之间的那道缝。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自知乎 姜富春《deepseek 技术解读(1)－彻底理解 MLA》（zhuanlan.zhihu.com/p/16730036197）——&#160;他用 Qwen-72B 做的这个对照，本图换成本讲一直在用的 V3 口径重算</p>
 <p>⚠️ 数全部来自本讲前面已核过的三个：权重 625 GiB（671B 原生 FP8）·MLA 的 KV 8.58 GiB（61 层 · 128K · bf16 · 一个用户）·反事实 MHA 488 GiB（同口径）。<b>488 ÷ 8.58 ＝ 56.9</b>，正好对上 MLA 那个 4.571 × 12.44 ——&#160;两条路算出同一个数，互为交叉验证</p>
 <p>📌 「要几张卡」按 <b>TPU v7 每 device 94.74 GiB</b> 算（这个数本课的 AOT 工具链里核过：编译器自己报的 95.38G − 94.74G ＝ 656.93M，只有按 1024 才成立）。⚠️ 换别的硬件只是这两根柱子的刻度变，<b>结论不变</b>；而且这笔账<b>只算了装得下装不下，没算带宽</b></p></details></figure>
 
@@ -4140,7 +4156,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="984" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">只有 B</tspan>（可以省）：你<tspan font-weight="700">没有动力</tspan>去付 kernel 那么难写的代价。</text>
 <text class="svgsm" x="20" y="1008" fill="#174ea6" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">两条合起来</tspan>，才解释了为什么这个方向三年里投了这么多人——&#160;它同时是一件<tspan font-weight="700">不得不做</tspan>和<tspan font-weight="700">做了不太亏</tspan>的事。</text>
 <text class="svgsm" x="20" y="1032" fill="#174ea6" style="font-size:15.0px">⭐ 所以判一个变体好不好，就看它在<tspan font-weight="700">「省了多少（A）」和「亏了多少（B）」</tspan>之间落在哪。</text>
-</svg><figcaption>⭐ <b>左右两半是各长各的，读的时候别把它们并成一句话。</b><em>一半是机器逼出来的，一半是数据自己露出来的破绽。</em><br>⭐⭐ <b>右下角那把尺子先记一下</b> ——&nbsp;<em>从下一章起，每出场一个新名词，我们都只拿它量两下。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📐 488 GiB 那条乘法链（原来画在图上，2026-09-15 折到这里）：每 token 每层 2 × 128 × 128 ＝ 32,768 个数 →&#160;× 61 层 ＝ 1,998,848 个数 →&#160;× 2 字节 ＝ 3.81 MiB/token →&#160;× 131,072 token ＝ <b>488 GiB</b></p>
+</svg><figcaption>⭐ <b>左右两半是各长各的，读的时候别把它们并成一句话。</b><em>一半是机器逼出来的，一半是数据自己露出来的破绽。</em><span class="capmore"><br>⭐⭐ <b>右下角那把尺子先记一下</b> ——&nbsp;<em>从下一章起，每出场一个新名词，我们都只拿它量两下。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📐 488 GiB 那条乘法链（原来画在图上，2026-09-15 折到这里）：每 token 每层 2 × 128 × 128 ＝ 32,768 个数 →&#160;× 61 层 ＝ 1,998,848 个数 →&#160;× 2 字节 ＝ 3.81 MiB/token →&#160;× 131,072 token ＝ <b>488 GiB</b></p>
 <p>四个对照值均按公式当场算出（脚本里带断言）；口径沿用 V3 论文比较表（K、V 都按 d_h=128）——&#160;<b>V3 真实的 K 每头是 128+64=192 维，严格算这个基线还会更大</b></p>
 <p>⚠️ 右栏三个观察是<b>现象</b>，不是本课实测；它们各自对应后面的一支方案（稀疏 →&#160;§六、分层 →&#160;§六、压缩 →&#160;§五）</p></details></figure>
 
@@ -4349,7 +4365,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="711" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 这张图故意不回答的两件事</tspan></text>
 <text class="svgsm" x="20" y="742" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">① 省多少。</tspan>看 <a href="#fig-knob1">下一张散点图</a> ——&#160;那里横轴是「一份占多少地方」，每个数本课都当场算过。⚠️ 那张图有个反直觉的题眼：<tspan font-weight="700">MQA 比 MLA 存得还少</tspan>。</text>
 <text class="svgsm" x="20" y="766" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">② 凭什么能这么省、以及谁掉点。</tspan>「共用」那一步到底是什么，看 <a href="#fig-copy-matrix">那张把复制矩阵一格一格画出来的图</a>；MLA 展开那一步为什么不白费力气，看 <a href="#fig-absorb">「吸收」那张图</a>。</text>
-</svg><figcaption>⭐ <b>零公式、零数字，只回答一件事：那个「一份」到底是什么。</b><br><em>四家该做的乘加几乎一样多 ——&nbsp;所以下面两章跟你算的每一笔，算的都不是算力。</em><br>⛔ <b>最右边那一格今天先不看</b>（它根本没在共用 K/V），<em>留到<a href="#s五">下一章</a>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 这张图<b>不含任何数</b>，所以也没有需要核的口径 ——&#160;它画的是四种做法的<b>接线关系</b>，四家各自的出处（MQA arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>、GQA arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>、MLA DeepSeek-V2 arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>）记在后面那几张有数的图上</p>
+</svg><figcaption>⭐ <b>零公式、零数字，只回答一件事：那个「一份」到底是什么。</b><span class="capmore"><br><em>四家该做的乘加几乎一样多 ——&nbsp;所以下面两章跟你算的每一笔，算的都不是算力。</em><br>⛔ <b>最右边那一格今天先不看</b>（它根本没在共用 K/V），<em>留到<a href="#s五">下一章</a>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>⭐ 这张图<b>不含任何数</b>，所以也没有需要核的口径 ——&#160;它画的是四种做法的<b>接线关系</b>，四家各自的出处（MQA arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>、GQA arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>、MLA DeepSeek-V2 arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>）记在后面那几张有数的图上</p>
 <p>⚠️ 头的个数画成 4 只是为了一眼能数完，<b>跟任何真实模型的头数都无关</b>；GQA 画成两组同理 ——&#160;真实分组数看讲四种存法的那张散点图</p>
 <p>⛔ 图里不区分 K 和 V 各自的份数（它们在这四家里都是同进同出），一个盒子代表「一个头位置上的 K 和 V 合起来的那一份」</p></details></figure>
 
@@ -4567,7 +4583,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1373" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 暗线第二次出现：事后压 vs 从头按压缩训</tspan></text>
 <text class="svgsm" x="20" y="1404" fill="#0d652d" style="font-size:15.0px">GQA 是<tspan font-weight="700">事后</tspan>的典范 ——&#160;把已有的那几本通讯录<tspan font-weight="700">平均</tspan>成一本，再用 5% 的原始预训练算力续一下就能用，<tspan font-weight="700">不用从头重训</tspan>。</text>
 <text class="svgsm" x="20" y="1428" fill="#0d652d" style="font-size:15.0px">MLA 是<tspan font-weight="700">从头</tspan>的典范 ——&#160;要重训，但换来的是 56.9× 而不是 16×。⭐ <tspan font-weight="700">这两条路一直并存到今天</tspan>，讲稀疏时还会再遇见两次。</text>
-</svg><figcaption>⭐⭐ <b>整章的证据都在中间那三行困惑度上，值得盯久一点。</b><br><em>它们回答的不是「MQA 掉了多少点」，而是一个更有用的问题：<b>同样只剩一份，为什么少了几个「问的人」就差这么多。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>①② 出自 MQA 原论文 Shazeer arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>（<a href="#s2-4">§2.4</a> 与表 3 ——&#160;⚠️ 这篇一共只有 3 张表，Billion-Word LM 基准的 dev 困惑度）；「正交」是原文用词</p>
+</svg><figcaption>⭐⭐ <b>整章的证据都在中间那三行困惑度上，值得盯久一点。</b><span class="capmore"><br><em>它们回答的不是「MQA 掉了多少点」，而是一个更有用的问题：<b>同样只剩一份，为什么少了几个「问的人」就差这么多。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>①② 出自 MQA 原论文 Shazeer arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>（<a href="#s2-4">§2.4</a> 与表 3 ——&#160;⚠️ 这篇一共只有 3 张表，Billion-Word LM 基准的 dev 困惑度）；「正交」是原文用词</p>
 <p>③ 出自 GQA 原论文 Ainslie 等 arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a> <a href="#s2-1">§2.1</a>–2.2：mean pooling、α=5% 续训、GQA-1=MQA / GQA-H=MHA</p>
 <p>⚠️ 「通讯录 / 查的人」是<b>本课的比喻</b></p></details></figure>
 
@@ -4968,7 +4984,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1151" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 一句话记住</tspan></text>
 <text class="svgsm" x="20" y="1182" fill="#174ea6" style="font-size:15.0px">GQA 的上投影是一个<tspan font-weight="700">写死的 0/1 复制矩阵</tspan>；MLA 把同一个位置、同一个形状的矩阵<tspan font-weight="700">松开让它学</tspan>。</text>
 <text class="svgsm" x="20" y="1206" fill="#174ea6" style="font-size:15.0px">两头也在这条轴上：<tspan font-weight="700">MHA ＝ 单位阵</tspan>（不复制也不压）、<tspan font-weight="700">MQA ＝ 一份抄满</tspan>。</text>
-</svg><figcaption>⭐⭐ <b>这四块矩阵，是这本书里信息密度最高的一张图。</b><em>四个名词第一次被摆在同一个位置上，比的只有一件事：<b>同一块矩阵里写了什么。</b></em><br>⭐ <em>看完就会明白，为什么<a href="#s五">下一章</a>不是「又一个新方法」，而只是<b>把其中一块的格子解开、交给模型去填</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 苏剑林《缓存与效果的极限拉扯：从MHA、MQA、GQA到MLA》kexue.fm/archives/10091 —— 「低秩投影这个角度并不贴近本质」「MLA的本质改进不是低秩投影，而是低秩投影之后的工作」「我们知道分割、复制都是简单的线性变换」三句均为原文逐字。</p>
+</svg><figcaption>⭐⭐ <b>这四块矩阵，是这本书里信息密度最高的一张图。</b><em>四个名词第一次被摆在同一个位置上，比的只有一件事：<b>同一块矩阵里写了什么。</b></em><span class="capmore"><br>⭐ <em>看完就会明白，为什么<a href="#s五">下一章</a>不是「又一个新方法」，而只是<b>把其中一块的格子解开、交给模型去填</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 苏剑林《缓存与效果的极限拉扯：从MHA、MQA、GQA到MLA》kexue.fm/archives/10091 —— 「低秩投影这个角度并不贴近本质」「MLA的本质改进不是低秩投影，而是低秩投影之后的工作」「我们知道分割、复制都是简单的线性变换」三句均为原文逐字。</p>
 <p>📌 图上那几个矩阵是本课按 h=4 / d_k=2 自己构造的，脚本用 numpy 断言过「c 乘这个矩阵」与「把 c 按组复制」<b>逐元素相等</b> —— 这不是类比，是恒等。</p>
 <p>📌 MLA 那一格<b>刻意不填数字</b>：本课没有 V3 的真权重，编几个小数放上去会被当成真的。</p></details></figure>
 
@@ -5069,7 +5085,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="16" y="500" width="1368" height="58" rx="8" fill="#fef7e0" stroke="#e8710a" stroke-width="1"/>
 <text class="svgsm" x="36" y="526" fill="#5f6368" style="font-size:15.5px">⚠️ <tspan font-weight="700">纵轴是定性的</tspan> ——　四家<tspan font-weight="700">没有同一份可比的实测</tspan>。唯一同基准的一对是 MQA 论文表 3：MHA 29.9 ／ MQA 30.2 ／ 真单头 31.2（困惑度，越低越好）。</text>
 <text class="svgsm" x="36" y="550" fill="#5f6368" style="font-size:15.5px">GQA 与 MLA 的论文只声称「接近／不弱于 MHA」，不是同一张表 ——　所以这里只画两档，不画连续刻度。</text>
-</svg><figcaption>⭐⭐ <b>横轴是「一份占多少地方」，越往左越省。</b><em>那为什么最左边那个不是赢家？</em><br>⛔ <b>因为这张图比的从来不是「谁存得最少」</b> ——&nbsp;<em>它比的是<a href="#s四">上一章</a>那个问题的答案：省下来的，是拿体积换的，还是拿自由度换的。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📐 横轴那几个数：61 层 · 128K · bf16 · batch 1，一个用户一份 ——&#160;MHA 488 GiB ／ GQA-8 30.50 ／ MLA 8.58 ／ MQA 3.81</p>
+</svg><figcaption>⭐⭐ <b>横轴是「一份占多少地方」，越往左越省。</b><em>那为什么最左边那个不是赢家？</em><span class="capmore"><br>⛔ <b>因为这张图比的从来不是「谁存得最少」</b> ——&nbsp;<em>它比的是<a href="#s四">上一章</a>那个问题的答案：省下来的，是拿体积换的，还是拿自由度换的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📐 横轴那几个数：61 层 · 128K · bf16 · batch 1，一个用户一份 ——&#160;MHA 488 GiB ／ GQA-8 30.50 ／ MLA 8.58 ／ MQA 3.81</p>
 <p>四个数由公式当场算出并断言（脚本内）；MLA 超参出自 V3 论文 <a href="#s4-2">§4.2</a>：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层</p>
 <p>MQA：Shazeer arXiv <a href="https://arxiv.org/abs/1911.02150" target="_blank" rel="noopener">1911.02150</a>　GQA：Ainslie 等 arXiv <a href="https://arxiv.org/abs/2305.13245" target="_blank" rel="noopener">2305.13245</a>　MLA：DeepSeek-V2/V3 arXiv <a href="https://arxiv.org/abs/2412.19437" target="_blank" rel="noopener">2412.19437</a></p>
 <p>⭐ 「MLA 那 576 里为什么有个 64」在 <a href="#s5-4">§5.4</a> 的 fig3-two-lanes 里 ——&#160;本图只到「四种存法各占多少地方」为止</p></details></figure>
@@ -5247,7 +5263,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1482" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">这一次 ——&#160;MLA 的吸收</tspan>（这张图）：把括号从 qᵀ(W_UK c) 挪成 (W_UKᵀ q)ᵀ c ——&#160;压缩包就不用拆了。</text>
 <text class="svgsm" x="20" y="1506" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">还有一次，在线性注意力那一章</tspan>：把括号从 (QKᵀ)V 挪成 Q(KᵀV) ——&#160;那个句长×句长的大方块就不用建了。<tspan font-weight="700">那一次更赚。</tspan></text>
 <text class="svgsm" x="20" y="1530" fill="#174ea6" style="font-size:15.0px">⭐ 两次都是<tspan font-weight="700">同一个数学恒等式</tspan>，也都被同一件事挡过：那边被因果 mask 挡住，这里被 RoPE 挡住。<tspan font-weight="700">⛔ 挡住结合律的，永远是「中间被塞了个东西」。</tspan></text>
-</svg><figcaption>⭐ <b>看①和②的区别就够了 ——&nbsp;算的是同一个东西，只是括号站的位置不同。</b><em>而括号换个位置，仓库里那一万个压缩包就一个都不用动。</em><br>⛔ <b>这一步要是不成立，MLA 整套设计当场作废</b> ——&nbsp;<em>所以它不是一个优化技巧，是这一章的地基。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>「吸收」与「RoPE 挡住它」两处原文均出自 DeepSeek-V2，arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>（<a href="#s2-1">§2.1</a>.2、<a href="#s2-1">§2.1</a>.3）；超参 d_c=512 / d_h=128 / n_h=128 是 DeepSeek-V3 的口径</p>
+</svg><figcaption>⭐ <b>看①和②的区别就够了 ——&nbsp;算的是同一个东西，只是括号站的位置不同。</b><em>而括号换个位置，仓库里那一万个压缩包就一个都不用动。</em><span class="capmore"><br>⛔ <b>这一步要是不成立，MLA 整套设计当场作废</b> ——&nbsp;<em>所以它不是一个优化技巧，是这一章的地基。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>「吸收」与「RoPE 挡住它」两处原文均出自 DeepSeek-V2，arXiv <a href="https://arxiv.org/abs/2405.04434" target="_blank" rel="noopener">2405.04434</a>（<a href="#s2-1">§2.1</a>.2、<a href="#s2-1">§2.1</a>.3）；超参 d_c=512 / d_h=128 / n_h=128 是 DeepSeek-V3 的口径</p>
 <p>⭐ ③ 那笔账是<b>本课自己算的</b>，脚本里带断言：天真 ＝ S×(d_h·d_c ＋ d_h)，吸收 ＝ d_h·d_c ＋ S·d_c；上限 (d_h·d_c＋d_h)/d_c ≈ d_h。⚠️ 只数乘加，<b>没算访存</b> ——&#160;真机上访存往往才是瓶颈，所以这是个下界不是实测</p>
 <p>⚠️ 吸收<b>只在 decode 用得上</b>：prefill 时一批里有很多个 q，「只变换一次」这个便宜就没了（这也是 §五 表里「压缩不生效」那一行的意思）</p></details></figure>
 
@@ -5583,7 +5599,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1008" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">「为了保住某个代数变换，把功能拆成两路」</tspan>——&#160;这个动作后面还会换面貌出现：<tspan font-weight="700">V4 的部分 RoPE、K3 的 NoPE</tspan>。</text>
 <text class="svgsm" x="20" y="1032" fill="#174ea6" style="font-size:15.0px">⛔ <tspan font-weight="700">MLA 的代价是用计算换显存</tspan>：多了一对降维／升维矩阵乘。而且<tspan font-weight="700">它省的是推理时的 KV cache，不是训练时的激活</tspan>——&#160;训练前向里 K/V 会被解压出来算。<tspan font-weight="700">这是个非常常见的误解。</tspan></text>
 <text class="svgsm" x="20" y="1056" fill="#174ea6" style="font-size:15.0px">⭐ <tspan font-weight="700">Gated MLA</tspan>（K3）在 MLA 输出端加一个全秩门控 —— ⛔ <tspan font-weight="700">它一个字节的 KV 都不省</tspan>，它让模型能学会「这一层这个位置，注意力的输出干脆不要」。</text>
-</svg><figcaption>⭐⭐ <b>三步，从上往下看就行 ——&nbsp;不用读那两行公式。</b><em>紫色的方块本来能从仓库那侧搬到提问那侧；RoPE 在中间立了一道闸，搬不过去；于是把一条轨劈成两条，让闸只站在窄的那条上。</em><br>⛔ <b>中间那个黄框别跳过，它是这张图真正的机关。</b><em>左右两边画的东西几乎一样，差的只有一个角标 ——&nbsp;<b>而 MLA 那个 512 ＋ 64 的怪形状，整个是被那个角标逼出来的。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>MLA 超参出自 DeepSeek-V3 论文 <a href="#s4-2">§4.2</a>：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层 ——&#160;512 ＋ 64 ＝ 576 由脚本断言</p>
+</svg><figcaption>⭐⭐ <b>三步，从上往下看就行 ——&nbsp;不用读那两行公式。</b><em>紫色的方块本来能从仓库那侧搬到提问那侧；RoPE 在中间立了一道闸，搬不过去；于是把一条轨劈成两条，让闸只站在窄的那条上。</em><span class="capmore"><br>⛔ <b>中间那个黄框别跳过，它是这张图真正的机关。</b><em>左右两边画的东西几乎一样，差的只有一个角标 ——&nbsp;<b>而 MLA 那个 512 ＋ 64 的怪形状，整个是被那个角标逼出来的。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>MLA 超参出自 DeepSeek-V3 论文 <a href="#s4-2">§4.2</a>：n_h=128, d_h=128, d_c=512, d_h^R=64, 61 层 ——&#160;512 ＋ 64 ＝ 576 由脚本断言</p>
 <p>⭐ 「中间那项跟位置差相关，所以合并不成一个固定矩阵」这个说法取自 苏剑林《缓存与效果的极限拉扯：从 MHA、MQA、GQA 到 MLA》（kexue.fm/archives/10091）——&#160;原话已核</p>
 <p>⛔ 论文原话「matrix multiplication does not obey a commutative law」<b>是结论不是原因</b> ——&#160;矩阵乘法本来就满足结合律，而「吸收」要的正是结合律。真正卡住的是 R 带着 (j−t)：<b>有多少种相对距离，就有多少个不同的中间矩阵</b></p>
 <p>Gated MLA（K3 在 MLA 输出端加全秩门控）：Kimi K3 技术报告 <a href="#s2-1">§2.1</a>.2</p></details></figure>
@@ -5761,7 +5777,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1259" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 带得走的那一条</tspan></text>
 <text class="svgsm" x="20" y="1290" fill="#0d652d" style="font-size:15.0px">压得少和学得好，是<tspan font-weight="700">两件事</tspan>。讲「白送 vs 赌」那笔 56.9× 的账管的是「存多少」，一个字都不用改；这一格管的是「同样存这么多，学得多好」。</text>
 <text class="svgsm" x="20" y="1314" fill="#0d652d" style="font-size:15.0px">⭐ 所以那条被 RoPE 逼出来的 64 维窄轨，<tspan font-weight="700">大概率不是妥协，是这个设计顺手做对的一件事</tspan> ——&#160;原文的说法是「看似无奈的设计，极有可能是它效果优异的关键原因」。</text>
-</svg><figcaption>⭐⭐ <b>这组实验最狠的一点：KV cache 全程钉死不动。</b><em>所以每一级台阶量的都不是「多花了多少」，而是<b>同样的代价，能换回多少</b>。</em><br>⭐ <em>这也是看任何一篇「我们又省了 N 倍」时该先问的一句：<b>你把代价那一头按住了吗？</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 全部数字一手核自　苏剑林《Transformer升级之路：20、MLA好在哪里?（上）》kexue.fm/archives/10907　——　Part I / II / VI 三张表。</p>
+</svg><figcaption>⭐⭐ <b>这组实验最狠的一点：KV cache 全程钉死不动。</b><em>所以每一级台阶量的都不是「多花了多少」，而是<b>同样的代价，能换回多少</b>。</em><span class="capmore"><br>⭐ <em>这也是看任何一篇「我们又省了 N 倍」时该先问的一句：<b>你把代价那一头按住了吗？</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 全部数字一手核自　苏剑林《Transformer升级之路：20、MLA好在哪里?（上）》kexue.fm/archives/10907　——　Part I / II / VI 三张表。</p>
 <p>📌 公共设置：类 LLAMA3 Dense，hidden 2048 / 12 层 / 16 头，优化器 Muon，训练长度 4096，总 16B tokens / 16k 步；除面板③ 外参数量不严格对齐（原文说明）。</p>
 <p>📌 「两级台阶 0.039 vs MLA 0.029」这个减法是本课做的，不是原文结论；原文结论为「增大 head_dims 收益最大，Partial RoPE 也有一定帮助」。</p></details></figure>
 
@@ -6585,7 +6601,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1356" fill="#0d652d" style="font-size:15.0px">⭐ 对照本讲开头那个 <tspan font-weight="700">MHA 的 488 GiB ——&#160;而那还只是 128K</tspan>。<tspan font-weight="700">这就是三年的进展。</tspan></text>
 <text class="svgsm" x="20" y="1380" fill="#0d652d" style="font-size:15.0px">⚠️ 这个 2% 的基线是<tspan font-weight="700">同形状的 GQA-8</tspan>；那张 CSA 图给的「10% 的 KV」比的是 <tspan font-weight="700">V3.2</tspan> ——&#160;<tspan font-weight="700">两个数都对，对的是各自的基线</tspan>，别并排比。</text>
 <text class="svgsm" x="20" y="1404" fill="#0d652d" style="font-size:15.0px">⚠️ 而且报总收益时要能<tspan font-weight="700">拆开</tspan>：V4 那一版还叠了一层<tspan font-weight="700">跟注意力机制无关</tspan>的优化 ——&#160;KV 混合精度（RoPE 那几维 BF16、其余 FP8），<tspan font-weight="700">光这一项就近乎减半</tspan>。</text>
-</svg><figcaption>⭐ <b>别一张一张看，要五张一起看</b> ——&nbsp;<em>这一支的骨架是从「五张摆在一起」里浮出来的，单看任何一张都看不见。</em><br>⭐⭐ <em>看完你会得到一把尺子：以后碰到一个没听过的稀疏方案，<b>先把它按到这五张里去比一比，比记住它叫什么名字有用得多。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>mask 图案为<b>示意</b>，用来表达各方案的读取形状，不是实测注意力分布；GQA-8 在 1M 下的 244 GiB 由公式当场算出（脚本带断言）</p>
+</svg><figcaption>⭐ <b>别一张一张看，要五张一起看</b> ——&nbsp;<em>这一支的骨架是从「五张摆在一起」里浮出来的，单看任何一张都看不见。</em><span class="capmore"><br>⭐⭐ <em>看完你会得到一把尺子：以后碰到一个没听过的稀疏方案，<b>先把它按到这五张里去比一比，比记住它叫什么名字有用得多。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>mask 图案为<b>示意</b>，用来表达各方案的读取形状，不是实测注意力分布；GQA-8 在 1M 下的 244 GiB 由公式当场算出（脚本带断言）</p>
 <p>SWA：Mistral 7B arXiv <a href="https://arxiv.org/abs/2310.06825" target="_blank" rel="noopener">2310.06825</a>　sink：StreamingLLM arXiv <a href="https://arxiv.org/abs/2309.17453" target="_blank" rel="noopener">2309.17453</a>　NSA：arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a>　DSA：DeepSeek-V3.2 arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a>　CSA/HCA：DeepSeek-V4 arXiv <a href="https://arxiv.org/abs/2606.19348" target="_blank" rel="noopener">2606.19348</a></p></details></figure>
 
 <div class="note ok"><p>⭐⭐ <b>五张图其实只是一句话 ——&nbsp;
@@ -6758,7 +6774,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="1024" y="868" fill="#5f6368" style="font-size:17.0px">毫无意义的换行符</text>
 <text class="svgsm" x="1024" y="906" fill="#174ea6" style="font-size:22.0px"><tspan font-weight="700">结果几乎一样</tspan></text>
 <text class="svgsm" x="1024" y="936" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">→　起作用的是位置，不是内容</tspan></text>
-</svg><figcaption>⛔⛔ <b>下面那三根柱子是按对数画的</b> ——&nbsp;<em>5158 和 5.40 之间差的是<b>三个数量级</b>，不是三倍。</em><br>⭐ <em>一个模型从「能用」到「彻底胡说」，中间只隔着<b>四个 token</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 有效射程那一格出自 guangxuanx.com/blog/stacking-swa.html（作者是 StreamingLLM 一作，⚠️ 个人博客非同行评议）：纯 SWA ≈ 0.58·W·√L；有残差时跟层数无关。⚠️ 其中 α≈0.95 是作者断言不是实测，所以本图只说「一到两个窗口宽」不写死倍数</p>
+</svg><figcaption>⛔⛔ <b>下面那三根柱子是按对数画的</b> ——&nbsp;<em>5158 和 5.40 之间差的是<b>三个数量级</b>，不是三倍。</em><span class="capmore"><br>⭐ <em>一个模型从「能用」到「彻底胡说」，中间只隔着<b>四个 token</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 有效射程那一格出自 guangxuanx.com/blog/stacking-swa.html（作者是 StreamingLLM 一作，⚠️ 个人博客非同行评议）：纯 SWA ≈ 0.58·W·√L；有残差时跟层数无关。⚠️ 其中 α≈0.95 是作者断言不是实测，所以本图只说「一到两个窗口宽」不写死倍数</p>
 <p>gpt-oss-20b 的 1:1 交替与 sliding_window=128 是本课直接读 huggingface.co/openai/gpt-oss-20b 的 config.json 得到的</p>
 <p>Mistral 7B arXiv <a href="https://arxiv.org/abs/2310.06825" target="_blank" rel="noopener">2310.06825</a> §2（k×W 射程、W=4096 / 32 层、rolling buffer cache）；131,072 由脚本当场乘出来并断言</p>
 <p>② 出自 StreamingLLM（Xiao 等 arXiv <a href="https://arxiv.org/abs/2309.17453" target="_blank" rel="noopener">2309.17453</a>, ICLR 2024）论文表 1 / 表 2 与 <a href="#s3-1">§3.1</a> / <a href="#s3-3">§3.3</a>：5158.07 → 5.40、换行符 5.60、留 1/2/4/8 个的对照</p>
@@ -6940,7 +6956,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1008" fill="#174ea6" style="font-size:15.0px">attention sink 不是 bug，也不是谁设计的特性，它是<tspan font-weight="700">「票必须投满」这条规矩逼出来的副产品</tspan>。</text>
 <text class="svgsm" x="20" y="1032" fill="#174ea6" style="font-size:15.0px">⭐ 判据：<tspan font-weight="700">看到模型里一个「毫无道理却极其稳定」的现象，先去找是不是某个守恒 / 归一化约束逼出来的。</tspan>量化里那批总也压不下去的 outlier，跟这是同一件事（见专题八）。</text>
 <text class="svgsm" x="20" y="1056" fill="#174ea6" style="font-size:15.0px">⛔ 还有一条：<tspan font-weight="700">这个 bug 从公式上完全看不出来</tspan> ——&#160;是把注意力矩阵<tspan font-weight="700">画出来</tspan>才发现的。这一讲所有的图，都是这个道理。</text>
-</svg><figcaption>⭐ <b>上一张停在「它崩了」，这一张回答「凭什么会崩」。</b><br>⛔⛔ <em>读 ② 那一格的时候请<b>先不要看数字，先看两个方框的形状</b> ——&nbsp;这一格的标题里「<b>看起来</b>」三个字，是要用眼睛验的。</em><br>⭐⭐ <em>验完再看数字，你会得到本讲最便宜也最贵的一条经验：<b>两个长得一样的方案，结果可以差一千倍。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 「value 模长极小」出自 Barbero 等 arXiv <a href="https://arxiv.org/abs/2504.02732" target="_blank" rel="noopener">2504.02732</a> 图 4；「第 0 列是因果掩码下唯一全满的一列」是由掩码定义直接得出的</p>
+</svg><figcaption>⭐ <b>上一张停在「它崩了」，这一张回答「凭什么会崩」。</b><span class="capmore"><br>⛔⛔ <em>读 ② 那一格的时候请<b>先不要看数字，先看两个方框的形状</b> ——&nbsp;这一格的标题里「<b>看起来</b>」三个字，是要用眼睛验的。</em><br>⭐⭐ <em>验完再看数字，你会得到本讲最便宜也最贵的一条经验：<b>两个长得一样的方案，结果可以差一千倍。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 「value 模长极小」出自 Barbero 等 arXiv <a href="https://arxiv.org/abs/2504.02732" target="_blank" rel="noopener">2504.02732</a> 图 4；「第 0 列是因果掩码下唯一全满的一列」是由掩码定义直接得出的</p>
 <p>② 18.01 与 29,214 出自 StreamingLLM（Xiao 等 arXiv <a href="https://arxiv.org/abs/2309.17453" target="_blank" rel="noopener">2309.17453</a>, ICLR 2024）表 3 / 表 10 的三个 160M 从头预训练对照 ——&#160;⛔ 两个数必须取自同一组，不许跨表拼</p>
 <p>⚠️ 加了桶之后每一行的票怎么分配，论文给的是困惑度不是注意力分布 ——&#160;所以 Ⓑ Ⓒ 两格只画「多了一格」这个结构，没有画任何柱高</p>
 <p>⛔ 「不许弃权的选票」<b>不是本课原创</b> ——&#160;Evan Miller 2023-07《Attention Is Off By One》原话就是 「a deafening democracy where abstention is disallowed」</p></details></figure>
@@ -7086,7 +7102,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="974" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">智谱的 IndexPool 压的只是索引器手里那份 key</tspan>：4 个池化成 1 个、挑出 Top-512 个 pool 之后<tspan font-weight="700">再展开回 2048 个原 token</tspan> ——&#160;主注意力吃到的<tspan font-weight="700">一个没少</tspan>。</text>
 <text class="svgsm" x="20" y="998" fill="#0d652d" style="font-size:15.0px">⭐ 所以 IndexPool 才是更纯的降维打击：<tspan font-weight="700">只把鸡缩小，蛋一点没动</tspan>。⭐⭐ 而两家独立收敛到「4 合 1」这一点本身就是证据 ——&#160;<tspan font-weight="700">它不是某一家的偶然发明，是这个死结自己逼出来的</tspan></text>
 <text class="svgsm" x="20" y="1022" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">解</tspan>。</text>
-</svg><figcaption>⭐ <b>左边那个圈绕不过去，只能破 ——&nbsp;而破法有三条，不是一条。</b><br><em>⭐⭐ 三条各自聪明在不同地方，值得一条一条读：<b>一条是找人替考，一条是废物利用，一条干脆把考场缩小了。</b></em><br>⭐⭐ <em>读到最下面那条带子 ——&nbsp;<b>第三条有两家不同的团队，各自摸到了同一个解。</b>一件事被独立做对两次，分量跟只有一家做过是不一样的。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① DSA 的师徒（两阶段训练、冻主模型 ＋ KL warmup）出自 DeepSeek-V3.2-Exp 技术报告 sec. 2；② NSA 的三支路出自 arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a> sec. 3</p>
+</svg><figcaption>⭐ <b>左边那个圈绕不过去，只能破 ——&nbsp;而破法有三条，不是一条。</b><span class="capmore"><br><em>⭐⭐ 三条各自聪明在不同地方，值得一条一条读：<b>一条是找人替考，一条是废物利用，一条干脆把考场缩小了。</b></em><br>⭐⭐ <em>读到最下面那条带子 ——&nbsp;<b>第三条有两家不同的团队，各自摸到了同一个解。</b>一件事被独立做对两次，分量跟只有一家做过是不一样的。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① DSA 的师徒（两阶段训练、冻主模型 ＋ KL warmup）出自 DeepSeek-V3.2-Exp 技术报告 sec. 2；② NSA 的三支路出自 arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a> sec. 3</p>
 <p>③ CSA 每 4 个 token 压成 1 个 entry、在压缩后的格上挑，出自 DeepSeek-V4 相关公开材料（见 CSA 那张图的出处）；IndexPool「把 4 个 indexer key 向量加权池化成 1 个」出自智谱 GLM-5.3-Flash 官方博客（z.ai/blog/glm-5.3-flash，2026-08，模型 MIT 许可开源）</p>
 <p>⚠️「相似度算出来再稀疏就没好处 →&#160;只能按块打分」这条链子的表述出自 zhouyifan.net 的 Log-linear Sparse Attention 一文；「师徒 / 一份算两用 / 降维打击」是<b>本课的命名</b></p></details></figure>
 
@@ -7271,7 +7287,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1334" fill="#0d652d" style="font-size:15.0px">⛔ 但注意<tspan font-weight="700">它仍然是加装上去的</tspan>，不是重新预训练 ——&#160;V3.2 是在 V3.1 那个已经训好的模型上接着训的。<tspan font-weight="700">⭐ 这是稀疏这一支最值钱的一条：千亿级模型上，它是目前唯一被公开证明可</tspan></text>
 <text class="svgsm" x="20" y="1358" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">以事后加装的旋钮。</tspan></text>
 <text class="svgsm" x="20" y="1382" fill="#0d652d" style="font-size:15.0px">⭐ 三次了：Eigen Attention 对 MLA、GQA 对 MLA、H2O 对 DSA。<tspan font-weight="700">同一条暗线，第三个分支。</tspan></text>
-</svg><figcaption>⭐ <b>看中间那一格就够了：它怎么知道徒弟学到位了没有。</b><br><em>⚠️ 至于 2048 这个数是怎么定下来的 ——&nbsp;图里说了老实话，<b>论文没给消融</b>。能查到的只有它占多大比例，而两个公开口径在这个比例上给出的答案<b>差着一倍多</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 出自 H2O：Zhang 等 arXiv <a href="https://arxiv.org/abs/2306.14048" target="_blank" rel="noopener">2306.14048</a>（「over 95% sparse」与累计注意力分数的幂律分布，均为原文表述）</p>
+</svg><figcaption>⭐ <b>看中间那一格就够了：它怎么知道徒弟学到位了没有。</b><span class="capmore"><br><em>⚠️ 至于 2048 这个数是怎么定下来的 ——&nbsp;图里说了老实话，<b>论文没给消融</b>。能查到的只有它占多大比例，而两个公开口径在这个比例上给出的答案<b>差着一倍多</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 出自 H2O：Zhang 等 arXiv <a href="https://arxiv.org/abs/2306.14048" target="_blank" rel="noopener">2306.14048</a>（「over 95% sparse」与累计注意力分数的幂律分布，均为原文表述）</p>
 <p>②③ 出自 DeepSeek-V3.2-Exp 技术报告 §1–<a href="#s2-1">§2.1</a>：KL 对齐、冻结主模型热身、跨头求和后 L1 归一、梯度断开、ReLU「for throughput consideration」、index_topk=2048、索引器 64 头且跑在 FP8 上</p>
 <p>⚠️ 「书墙 / 师徒」是<b>本课的比喻</b>；⛔ <b>k 的消融论文没有给</b> ——&#160;2048 这个数只能说它占多少、以及短序列下等于全选</p></details></figure>
 
@@ -7467,7 +7483,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1204" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">省了显存吗</tspan>：<tspan font-weight="700">没有，一个字节都没省。</tspan>省的是每一步真正读进来、算进去的那一部分。</text>
 <text class="svgsm" x="20" y="1228" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">trade-off 是什么</tspan>：拿「可能漏掉某个重要的」换「只读 1.56%」——　而漏不漏，是靠训练让打分器去对齐真注意力的分布。</text>
 <text class="svgsm" x="20" y="1252" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">多花了什么算力</tspan>：索引器的全程打分（轻，但随长度涨）＋ 挑中之后的<tspan font-weight="700">不连续访存</tspan>（这一笔更疼）。</text>
-</svg><figcaption>⭐⭐⭐ <b>这一张是为现场那四个问题专门画的，四问四块，一一对上。</b><br><em>要是只看一眼，就看第 ② 块那条按真比例画的带子 ——&nbsp;<b>橙色那一小条是这一步读进来的，灰色那一大片全都还在显存里躺着。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>索引器的式子 I[t,s] ＝ Σ w·ReLU(q·k) 与 top-k＝2048 出自 DeepSeek-V3.2 技术报告（arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a>）及其公开实现</p>
+</svg><figcaption>⭐⭐⭐ <b>这一张是为现场那四个问题专门画的，四问四块，一一对上。</b><span class="capmore"><br><em>要是只看一眼，就看第 ② 块那条按真比例画的带子 ——&nbsp;<b>橙色那一小条是这一步读进来的，灰色那一大片全都还在显存里躺着。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>索引器的式子 I[t,s] ＝ Σ w·ReLU(q·k) 与 top-k＝2048 出自 DeepSeek-V3.2 技术报告（arXiv <a href="https://arxiv.org/abs/2512.02556" target="_blank" rel="noopener">2512.02556</a>）及其公开实现</p>
 <p>「不连续访存用不上 FlashAttention」逐条出自 NSA 论文 （arXiv <a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a>）<a href="#s2-2">§2.2</a>：token 粒度的选择要从 KV cache 里加载大量单个 token，「this non-contiguous memory access prevents efficient adaptation of fast attention techniques like FlashAttention」</p>
 <p>⚠️ 1.56% ＝ 2048 ÷ 131072，是<b>算出来的</b>；上排 24 根柱子的高低与选中位置是<b>示意</b>，不对应任何一次真实打分</p></details></figure>
 
@@ -7614,7 +7630,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1733" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 把这四步连起来，是一条很干净的线</tspan></text>
 <text class="svgsm" x="20" y="1764" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">NSA 挑块</tspan>（整齐）→&#160;<tspan font-weight="700">DSA 挑单 token</tspan>（更准，但最碎）→&#160;<tspan font-weight="700">CSA 先压再挑</tspan>（把要挑的池子缩小）→&#160;<tspan font-weight="700">HCA 压到不用挑</tspan>（决策整个消失）。</text>
 <text class="svgsm" x="20" y="1788" fill="#0d652d" style="font-size:15.0px">⭐⭐ <tspan font-weight="700">每一步都在把「运行时要做的决策」往编译期推。</tspan>⛔ 这跟本讲反复出现的那条判据是同一个形状：<tspan font-weight="700">一个麻烦最好的结局不是被解决，是不再存在。</tspan></text>
-</svg><figcaption>⭐⭐ <b>Ⓑ 那两条轴是这张图的全部</b> ——&nbsp;<em>横着是「压多狠」，竖着是「要不要运行时挑」。四个名字一摆上去，<b>那条对角线自己就出来了</b>。</em><br>⭐ <em>Ⓐ 里记一条对照：<b>NSA 挑的是块，DSA 挑的是散落的单 token</b> ——&nbsp;这一条决定了它们在硬件上的命。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>NSA ＝ Native Sparse Attention，arXiv <b><a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a></b>（DeepSeek, 2025-02）：摘要原话是「coarse-grained token compression ＋ fine-grained token selection」，标题里写着 hardware-aligned 与 natively trainable</p>
+</svg><figcaption>⭐⭐ <b>Ⓑ 那两条轴是这张图的全部</b> ——&nbsp;<em>横着是「压多狠」，竖着是「要不要运行时挑」。四个名字一摆上去，<b>那条对角线自己就出来了</b>。</em><span class="capmore"><br>⭐ <em>Ⓐ 里记一条对照：<b>NSA 挑的是块，DSA 挑的是散落的单 token</b> ——&nbsp;这一条决定了它们在硬件上的命。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>NSA ＝ Native Sparse Attention，arXiv <b><a href="https://arxiv.org/abs/2502.11089" target="_blank" rel="noopener">2502.11089</a></b>（DeepSeek, 2025-02）：摘要原话是「coarse-grained token compression ＋ fine-grained token selection」，标题里写着 hardware-aligned 与 natively trainable</p>
 <p>CSA / HCA 的结构与默认参数取自 <b>MaxText 的公开实现</b>（Apache-2.0）：两者同属 AttentionType.COMPRESSED；<b>compress_ratio ＝ 4 走 CSA</b>（必须传 indexer_mask），<b>compress_ratio ＞ 4 走 HCA</b>（用编译期静态 mask，默认 compress_ratio=128、local_window=128）。HCA 的 docstring 自称 “DeepSeek-V4 Heavily Compressed Attention”</p>
 <p>⛔ <b>本图不含任何性能数字</b> ——&#160;本课没有这四者的对照实测，画柱子就是编。图上只画结构，以及「要不要运行时决策」</p>
 <p>⚠️ Ⓑ 的横轴<b>不是线性刻度</b>，1 / 4 / 128 等距摆，只表达先后不表达倍数</p></details></figure>
@@ -7912,7 +7928,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="3468" fill="#0d652d" style="font-size:15.0px">减掉大约一半。</text>
 <text class="svgsm" x="20" y="3492" fill="#0d652d" style="font-size:15.0px">⛔ <tspan font-weight="700">这两组都是别人的公开口径，本课没有 V4 的实测</tspan> ——&#160;而且论文自己也说了，这个对比是<tspan font-weight="700">整模型级</tspan>的：数据、优化器、残差通路、数值精度全都换了，<tspan font-weight="700">不能算到 CSA / HCA 一家</tspan></text>
 <text class="svgsm" x="20" y="3516" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">头上</tspan>。</text>
-</svg><figcaption>⭐ <b>Ⓐ 那两条色带是这张图的全部</b> ——&nbsp;<em>V3.2 的 64 挂在 512 <b>外面</b>，V4 的 64 长在 512 <b>里面</b>。一眼就看出「576 变 512」省在哪。</em><br>⭐⭐ <em>而 Ⓓ 那个 ④ 是最容易漏掉的一步：<b>K 和 V 共用一条，所以 V 也被转过了，得按负位置转回来。</b>——&nbsp;省下来的那一半，代价就写在这一步上。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>论文：<b>arXiv <a href="https://arxiv.org/abs/2606.19348" target="_blank" rel="noopener">2606.19348</a></b>《DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence》(DeepSeek-AI, 2026-04-26)。<a href="#s2-3">§2.3</a>.1 CSA：式 9–12 是压缩（<b>每条摘要由 2m 个 entry 加权求和而来，softmax 在这 2m 个上归一，相邻两条来源重叠，所以序列压到 1/m</b>），式 13–14 是 indexer 的低秩查询；<a href="#s2-3">§2.3</a>.2 HCA；<a href="#s2-3">§2.3</a>.3 Other Details 含 Partial RoPE、<b>式 26 的反向旋转</b>、式 27 的 attention sink</p>
+</svg><figcaption>⭐ <b>Ⓐ 那两条色带是这张图的全部</b> ——&nbsp;<em>V3.2 的 64 挂在 512 <b>外面</b>，V4 的 64 长在 512 <b>里面</b>。一眼就看出「576 变 512」省在哪。</em><span class="capmore"><br>⭐⭐ <em>而 Ⓓ 那个 ④ 是最容易漏掉的一步：<b>K 和 V 共用一条，所以 V 也被转过了，得按负位置转回来。</b>——&nbsp;省下来的那一半，代价就写在这一步上。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>论文：<b>arXiv <a href="https://arxiv.org/abs/2606.19348" target="_blank" rel="noopener">2606.19348</a></b>《DeepSeek-V4: Towards Highly Efficient Million-Token Context Intelligence》(DeepSeek-AI, 2026-04-26)。<a href="#s2-3">§2.3</a>.1 CSA：式 9–12 是压缩（<b>每条摘要由 2m 个 entry 加权求和而来，softmax 在这 2m 个上归一，相邻两条来源重叠，所以序列压到 1/m</b>），式 13–14 是 indexer 的低秩查询；<a href="#s2-3">§2.3</a>.2 HCA；<a href="#s2-3">§2.3</a>.3 Other Details 含 Partial RoPE、<b>式 26 的反向旋转</b>、式 27 的 attention sink</p>
 <p>配置：Hugging Face <b>deepseek-ai/DeepSeek-V4-Pro</b> 的 config.json ——　num_attention_heads 128、<b>num_key_value_heads 1</b>、head_dim 512、qk_rope_head_dim 64、q_lora_rank 1536、o_groups 16、o_lora_rank 1024、sliding_window 128、index_topk 1024、num_hidden_layers 61、rope_theta 10000 与 compress_rope_theta 160000</p>
 <p>架构说明：Hugging Face transformers 文档 model_doc/deepseek_v4 ——　其中「<b>Shared K=V Multi-Query Attention</b>」「Partial RoPE 落在每个头<b>末尾的 qk_rope_head_dim 个通道</b>」「压缩器的输出与滑窗分支的 KV <b>拼接</b>后再进核心注意力」</p>
 <p>实现口径：vLLM 博客《DeepSeek V4 in vLLM: Efficient Long-context Attention》(2026-04-24) ——　c4a ＝「8 个 token 的加权和，步长 4」，c128a ＝「128 个的加权和，步长 128」；1M 上下文 bf16 下 9.62 GiB，对照 61 层 V3.2 式估算 83.9 GiB</p>
@@ -8253,7 +8269,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <rect x="70" y="964" width="1260" height="66" rx="10" fill="#e6f4ea" stroke="#1e8e3e" stroke-width="1"/>
 <text class="svgsm" x="92" y="994" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 消失的那个 S，就是这个没被造出来的大方块。</tspan></text>
 <text class="svgsm" x="92" y="1020" fill="#5f6368" style="font-size:17.0px">这也正是为什么它的状态形状是 <tspan font-weight="700">BKHH</tspan> ——　里面根本没有句长这一维。</text>
-</svg><figcaption>⭐ <b>两块矩阵是按真实比例画的，所以这一张不用读，用看的。</b><br>⛔ <em>盯着右边那一格里的形状 ——&nbsp;<b>句长这一维整个不见了。</b>这就是这一支敢说「跟话有多长无关」的全部底气。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自 Google Research《Rethinking Attention with Performers》（2020-10）：括号画成彩色虚线框、矩阵按真实比例画</p>
+</svg><figcaption>⭐ <b>两块矩阵是按真实比例画的，所以这一张不用读，用看的。</b><span class="capmore"><br>⛔ <em>盯着右边那一格里的形状 ——&nbsp;<b>句长这一维整个不见了。</b>这就是这一支敢说「跟话有多长无关」的全部底气。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自 Google Research《Rethinking Attention with Performers》（2020-10）：括号画成彩色虚线框、矩阵按真实比例画</p>
 <p>「mask 才是挡住结合律的那个东西」出自 Hailey Schoelkopf 《Linear Attention Fundamentals》；「结合律是张量收缩顺序的特例」出自 Mamba-2 (SSD) 博客 Part II</p>
 <p>⚠️ 图里 8×3 的格数是<b>示意</b>；真实量级是句长 128K、头维 128</p></details></figure>
 
@@ -8612,7 +8628,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1495" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐⭐ 这个比喻好在哪：它把三代的差别缩到了一个动作上</tspan></text>
 <text class="svgsm" x="20" y="1526" fill="#174ea6" style="font-size:15.0px">三代<tspan font-weight="700">读的方式几乎没变</tspan>，全部差别都在「写之前擦不擦、擦多少」：<tspan font-weight="700">不擦 → 按固定方向擦 → 学着擦</tspan>。</text>
 <text class="svgsm" x="20" y="1550" fill="#174ea6" style="font-size:15.0px">⭐ 所以看到这一支的任何一个新名字，只要问一句：<tspan font-weight="700">它的「擦」是怎么决定的？</tspan>——&#160;剩下的部分，三代之间几乎没变。</text>
-</svg><figcaption>⭐⭐ <b>看这张图的时候，请把<a href="#s一">第一章</a>那个盒子放在旁边一起看。</b><br><em>它们是同一个东西 ——&nbsp;<b>只是这一块大得多，而且会擦。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>递推式、key collision（L &gt; d）、delta rule ＝ Widrow-Hoff、以及「等价于对 ½‖Sk−v‖² 做一步 SGD」，均出自 DeltaNet 论文 Yang 等 arXiv <a href="https://arxiv.org/abs/2406.06484" target="_blank" rel="noopener">2406.06484</a> <a href="#s2-1">§2.1</a>–2.2</p>
+</svg><figcaption>⭐⭐ <b>看这张图的时候，请把<a href="#s一">第一章</a>那个盒子放在旁边一起看。</b><span class="capmore"><br><em>它们是同一个东西 ——&nbsp;<b>只是这一块大得多，而且会擦。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>递推式、key collision（L &gt; d）、delta rule ＝ Widrow-Hoff、以及「等价于对 ½‖Sk−v‖² 做一步 SGD」，均出自 DeltaNet 论文 Yang 等 arXiv <a href="https://arxiv.org/abs/2406.06484" target="_blank" rel="noopener">2406.06484</a> <a href="#s2-1">§2.1</a>–2.2</p>
 <p>⚠️ 该文 §6 那句「表达力与并行度之间存在根本权衡」说的是 Recurrent DeltaNet / mesa-layer 那一批<b>比 delta 更强</b>的模型，不是 delta 对纯加法，而且原文是带引用的 suggests</p>
 <p>⚠️ 「记事板 / 擦」是<b>现场给的比喻</b>，不是论文措辞</p></details></figure>
 
@@ -8940,7 +8956,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1604" fill="#174ea6" style="font-size:15.0px">方向、L 条要记的对应关系，<tspan font-weight="700">L 一超过 d，就总有两条指到同一个方向上</tspan>。（把它放宽成「差不多不撞」之后还能装多少，在「主线 L300 · 完整版」。）</text>
 <text class="svgsm" x="20" y="1628" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">软的那句（会被记住）</tspan>：<tspan font-weight="700">「记忆的敌人不是时间，是别的记忆。」</tspan>——&#160;你忘掉一个电话号码，不是因为时间久，是因为你又记了新的。</text>
 <text class="svgsm" x="20" y="1652" fill="#174ea6" style="font-size:15.0px">⭐ 一软一硬配在一起，比任何一句单独说都有用：诗给画面，数给它一个可以验算的身体。</text>
-</svg><figcaption>⭐ <b>三代模型读的方式几乎没动过，全部差别都在「写之前怎么处理旧的」。</b><br><em>⭐⭐ 所以以后碰到这一支的任何一个新名字，你只要问一句：<b>它的「擦」是怎么决定的？</b>——&nbsp;剩下的部分，多半跟上一代一样。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>delta rule 的 (I − βkkᵀ) 与「β∈(0,1] 是部分擦除、不是完整反射」出自 DeltaNet（arXiv <a href="https://arxiv.org/abs/2406.06484" target="_blank" rel="noopener">2406.06484</a>）；逐通道遗忘门出自 Kimi Linear 的 KDA（arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a>）</p>
+</svg><figcaption>⭐ <b>三代模型读的方式几乎没动过，全部差别都在「写之前怎么处理旧的」。</b><span class="capmore"><br><em>⭐⭐ 所以以后碰到这一支的任何一个新名字，你只要问一句：<b>它的「擦」是怎么决定的？</b>——&nbsp;剩下的部分，多半跟上一代一样。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>delta rule 的 (I − βkkᵀ) 与「β∈(0,1] 是部分擦除、不是完整反射」出自 DeltaNet（arXiv <a href="https://arxiv.org/abs/2406.06484" target="_blank" rel="noopener">2406.06484</a>）；逐通道遗忘门出自 Kimi Linear 的 KDA（arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a>）</p>
 <p>⚠️ 图里的比喻<b>都不是本课原创</b>，逐条记明：「除旧迎新」——&#160;苏剑林 kexue.fm/archives/11033；「手术刀橡皮 ＋ 高压水枪」——&#160;Towards AI《Gated DeltaNet: The Surgical Eraser》；「整屋一个调光开关 vs 每个灯泡一个调光器」——&#160;Amit Kapoor《Inside Kimi K3》；「记忆的敌人不是时间，是别的记忆」——&#160;Eagleman《Livewired》，经 Songlin Yang 的 DeltaNet 博客引用</p>
 <p>⭐ 抽屉里的颜色深浅是<b>示意</b>，不对应任何模型的实测门控值</p></details></figure>
 
@@ -9426,7 +9442,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="2475" fill="#b06000" style="font-size:17.0px"><tspan font-weight="700">⚠️ 块大小这件事，专题一已经证过一次</tspan></text>
 <text class="svgsm" x="20" y="2506" fill="#b06000" style="font-size:15.0px">⚠️ <tspan font-weight="700">C 被片上内存顶死</tspan>，跟专题一 splash attention 的块大小是同一类问题 ——&#160;而那一讲已经证过：<tspan font-weight="700">块大小看的是比例，不是绝对值</tspan>，换一代硬件就得重调。</text>
 <text class="svgsm" x="20" y="2530" fill="#b06000" style="font-size:15.0px">⛔ 所以别去记「C 取多少」这个数 ——&#160;记<tspan font-weight="700">「它被什么夹住」</tspan>：下面是算力吃不满，上面是片上内存放不下。</text>
-</svg><figcaption>⭐⭐ <b>这一张最该带走的不是那个名词，是它证明了一件事：</b><em>「串行」有时候不是数学性质，<b>只是算的顺序没安排好</b>。</em><br>⭐ <em>同一个式子，一个字没改，并行度就从 1 变成了一批 ——&nbsp;<a href="#s一">第一章</a>那个卡死人的痛，在这里第二次被解开。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>chunkwise 的形式与并行度 / 串行步数的改变出自 DeltaNet 并行化那篇 Yang 等 arXiv <a href="https://arxiv.org/abs/2406.06484" target="_blank" rel="noopener">2406.06484</a>（WY 表示 ＋ 分块）</p>
+</svg><figcaption>⭐⭐ <b>这一张最该带走的不是那个名词，是它证明了一件事：</b><em>「串行」有时候不是数学性质，<b>只是算的顺序没安排好</b>。</em><span class="capmore"><br>⭐ <em>同一个式子，一个字没改，并行度就从 1 变成了一批 ——&nbsp;<a href="#s一">第一章</a>那个卡死人的痛，在这里第二次被解开。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>chunkwise 的形式与并行度 / 串行步数的改变出自 DeltaNet 并行化那篇 Yang 等 arXiv <a href="https://arxiv.org/abs/2406.06484" target="_blank" rel="noopener">2406.06484</a>（WY 表示 ＋ 分块）</p>
 <p>⚠️ 图里的 24 个 token / 每块 6 个是<b>示意</b>，真实实现的块长在几十到几百之间，随硬件变</p>
 <p>⚠️ 「排队办事 / 交接单」是<b>本课的比喻</b></p></details></figure>
 
@@ -9612,7 +9628,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1703" fill="#0d652d" style="font-size:17.0px"><tspan font-weight="700">⭐ 所以那个问法本身就不成立</tspan></text>
 <text class="svgsm" x="20" y="1734" fill="#0d652d" style="font-size:15.0px">很多人爱问「<tspan font-weight="700">谁的长上下文更强</tspan>」。⭐ 可以反问一句：<tspan font-weight="700">我自己的记忆，和我的研究笔记，哪个更好？</tspan></text>
 <text class="svgsm" x="20" y="1758" fill="#0d652d" style="font-size:15.0px">——&#160;<tspan font-weight="700">它们只是不一样。</tspan>一个记得牢、查得准但越攒越厚；一个大小固定、一直在线但会记混。⛔ <tspan font-weight="700">这正是下一章要「两个都要」的全部理由。</tspan></text>
-</svg><figcaption>⭐⭐ <b>Ⓑ 那两个圈值得多看两秒</b> ——&nbsp;<em>左右用的是<b>同样两个词</b>，只是<b>谁装着谁换了个位置</b>。这件事用嘴说，听的人要在脑子里自己转一次；<b>画出来是一眼的事。</b></em><br>⭐ <em>Ⓐ 那条轴是<b>全课的地图</b>：前面六章都在左半边挪，<b>只有这一章真的走到了右端</b>。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>三段引文均出自 Albert Gu《On the Tradeoffs of SSMs and Transformers》(goombalab.github.io/blog/2025/tradeoffs)：①「每个自回归模型都持有一个状态」②「KV cache 才是状态的一种，而且是最不压缩的那一种」③「数据库 vs 大脑」</p>
+</svg><figcaption>⭐⭐ <b>Ⓑ 那两个圈值得多看两秒</b> ——&nbsp;<em>左右用的是<b>同样两个词</b>，只是<b>谁装着谁换了个位置</b>。这件事用嘴说，听的人要在脑子里自己转一次；<b>画出来是一眼的事。</b></em><span class="capmore"><br>⭐ <em>Ⓐ 那条轴是<b>全课的地图</b>：前面六章都在左半边挪，<b>只有这一章真的走到了右端</b>。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>三段引文均出自 Albert Gu《On the Tradeoffs of SSMs and Transformers》(goombalab.github.io/blog/2025/tradeoffs)：①「每个自回归模型都持有一个状态」②「KV cache 才是状态的一种，而且是最不压缩的那一种」③「数据库 vs 大脑」</p>
 <p>⚠️ Ⓐ 那条轴<b>没有刻度，而且不该有</b> ——&#160;GQA 砍的是头数、MLA 压的是维度、线性换的是整个数据结构，三者之间没有一个可比的标量。四个点的横坐标只表达先后，不表达倍数</p>
 <p>⚠️「滑窗 / DSA 原地不动」指的是<b>这条轴（存多少）</b>——&#160;它们在另一条轴（每步读多少）上走得很远</p>
 <p>⛔ Ⓒ 刻意不放任何指标：数据库与大脑是<b>框架不是 benchmark</b>，原文的落点就是「这个比较不成立」</p></details></figure>
@@ -9851,7 +9867,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1474" fill="#b06000" style="font-size:15.0px">⚠️ 「纯线性一定兜不住」要说准：那条 L2M 条件要求的是<tspan font-weight="700">状态必须随长度变大</tspan> ——&#160;而「变大」的办法<tspan font-weight="700">不止混合一种</tspan>（论文自己给的另一条是按长度整个放大模型）。⭐ <tspan font-weight="700">混合是工程</tspan></text>
 <text class="svgsm" x="20" y="1498" fill="#b06000" style="font-size:15.0px"><tspan font-weight="700">上选的那条，不是定理逼出来的那条。</tspan></text>
 <text class="svgsm" x="20" y="1522" fill="#b06000" style="font-size:15.0px">⚠️ 而且它是<tspan font-weight="700">渐近</tspan>命题 ——&#160;同一张表里 Mistral 7B 就是<tspan font-weight="700">纯滑窗</tspan>、一层全注意力都没有，还真的上过生产用了两年。</text>
-</svg><figcaption>⭐⭐ <b>先看左边那一格 ——&nbsp;它是这一整章的地基。</b><em>如果掺便宜的层只是为了省钱，那一格的结果就不该长成那样。</em><br>⭐ <em>右边那把尺子上，每一个点都是一个真模型。<b>「大家都在哪」不用数，看那一摞堆在哪儿就行。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>配比与型号见本课那两张配比表（每一行都标了出处，多数可在公开 config 里核）；系统性消融的建议区间出自 arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a></p>
+</svg><figcaption>⭐⭐ <b>先看左边那一格 ——&nbsp;它是这一整章的地基。</b><em>如果掺便宜的层只是为了省钱，那一格的结果就不该长成那样。</em><span class="capmore"><br>⭐ <em>右边那把尺子上，每一个点都是一个真模型。<b>「大家都在哪」不用数，看那一摞堆在哪儿就行。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>配比与型号见本课那两张配比表（每一行都标了出处，多数可在公开 config 里核）；系统性消融的建议区间出自 arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a></p>
 <p>「0:1 反而表现不好」出自 Kimi Linear arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a> ——&#160;⚠️ 原文只有一句定性描述，<b>没有公开数值</b></p>
 <p>NoPE 见 <b>Kimi Linear</b> 同文（对所有全注意力层用 NoPE）——&#160;⚠️ <b>是它先做的，K3 是沿用</b></p>
 <p>⚠️ 「普通员工 / 资深」是<b>本课的比喻</b></p></details></figure>
@@ -10030,7 +10046,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1152" fill="#174ea6" style="font-size:15.0px">「远处可以少看」<tspan font-weight="700">不等于</tspan>「远处不重要」——&#160;两半之间的关联是<tspan font-weight="700">随长度增长</tspan>的，只是增长得慢。</text>
 <text class="svgsm" x="20" y="1176" fill="#174ea6" style="font-size:15.0px">⭐ 于是整件事很清楚：<tspan font-weight="700">Transformer 的 KV 线性增长是「供给过量」</tspan>，而这条规律是「实际需求」。前两个旋钮就是在<tspan font-weight="700">不掉到需求线以下的前提下，把那个过量的常数压小</tspan>。</text>
 <text class="svgsm" x="20" y="1200" fill="#174ea6" style="font-size:15.0px">⭐⭐ 这条分类有一个白捡的验证：44 行表里<tspan font-weight="700">滑窗混合落在 1:1～6:1，线性混合落在 3:1～7:1</tspan>，两族重叠在 3:1～6:1 ——&#160;同一条规律一口气解释了两类看起来毫不相干的混合。</text>
-</svg><figcaption>⚠️ <b>先看清纵横轴都是对数的 ——&nbsp;这张图不能当普通折线读。</b><br>⭐⭐ <em>它真正的价值在于：<b>它把「纯线性到底行不行」从一句嘴仗，变成了一条能被证伪的规律。</b>——&nbsp;能被证伪，才值得当理由用。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 出自 Lin ＆ Tegmark《Criticality in Formal Languages and Statistical Physics》（Entropy 2017, arXiv <a href="https://arxiv.org/abs/1606.06737" target="_blank" rel="noopener">1606.06737</a>）</p>
+</svg><figcaption>⚠️ <b>先看清纵横轴都是对数的 ——&nbsp;这张图不能当普通折线读。</b><span class="capmore"><br>⭐⭐ <em>它真正的价值在于：<b>它把「纯线性到底行不行」从一句嘴仗，变成了一条能被证伪的规律。</b>——&nbsp;能被证伪，才值得当理由用。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>① 出自 Lin ＆ Tegmark《Criticality in Formal Languages and Statistical Physics》（Entropy 2017, arXiv <a href="https://arxiv.org/abs/1606.06737" target="_blank" rel="noopener">1606.06737</a>）</p>
 <p>⚠️ arXiv v1 的旧题名是《Critical Behavior in Physics and Probabilistic Formal Languages》，两者是同一篇 ——&#160;标了正式出处就用正式题名</p>
 <p>原文口径：互信息在任何<b>概率正则文法</b>下指数衰减，而<b>上下文无关文法</b>下可以是幂律</p>
 <p>② 出自 L2M（arXiv <a href="https://arxiv.org/abs/2503.04725" target="_blank" rel="noopener">2503.04725</a>, ICML 2025）：双部互信息幂律 scaling、「状态维度必须至少同阶增长」的定理、以及 Transformer 自动满足的那段分析</p>
@@ -10286,7 +10302,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1362" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">能</tspan>：3:1 在这五个候选里最好，而且两头都比它差 —— 包括纯全注意力那一头。</text>
 <text class="svgsm" x="20" y="1386" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">不能</tspan>：为什么是 3 不是 4。4:1 在 16 层里摆不匀，从来没进过候选。</text>
 <text class="svgsm" x="20" y="1410" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">不能</tspan>：93 层该配几层全注意力。16 层里「3:1」和「4 层」是同一句话，93 层里不是。</text>
-</svg><figcaption>⭐ <b>数值全公开，两张图的纵轴跨度也特意做成一样 ——&nbsp;所以斜率可以直接比。</b><br><em>⛔ 而这张图最值钱的一句，是它<b>老老实实标出了自己问不出什么</b>。——&nbsp;一张敢写「这我答不了」的表，比一张全是箭头的表可信得多。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Kimi Linear，arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a>v2 <a href="#s5-2">§5.2</a> Table 1 与同段正文（「16 heads, 16 layers」「same FLOPs budget」）——&#160;五个配比的训练 / 验证 PPL 均逐字抄自该表。</p>
+</svg><figcaption>⭐ <b>数值全公开，两张图的纵轴跨度也特意做成一样 ——&nbsp;所以斜率可以直接比。</b><span class="capmore"><br><em>⛔ 而这张图最值钱的一句，是它<b>老老实实标出了自己问不出什么</b>。——&nbsp;一张敢写「这我答不了」的表，比一张全是箭头的表可信得多。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 Kimi Linear，arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a>v2 <a href="#s5-2">§5.2</a> Table 1 与同段正文（「16 heads, 16 layers」「same FLOPs budget」）——&#160;五个配比的训练 / 验证 PPL 均逐字抄自该表。</p>
 <p>📌 系统性消融，arXiv <a href="https://arxiv.org/abs/2507.06457" target="_blank" rel="noopener">2507.06457</a> <a href="#s4-2">§4.2</a> 正文与 Figure 3 描述 —— 语言建模「大体持平、各架构都在 0.55-0.57」、召回「从 0.1-0.35 涨向全注意力基线约 0.42」两句均为原文转述。⛔ 该文摘要里的「召回近乎翻倍」本图不引：只核到正文这段描述，没有逐格核过它的 Table 6 / 7。</p>
 <p>📌 Kimi K3 的 93 层 / 24 层全注意力见本课那张配比表（arXiv <a href="https://arxiv.org/abs/2607.24653" target="_blank" rel="noopener">2607.24653</a> 表 1 ＋ <a href="#s2-1">§2.1</a>）。「(r+1) 必须整除 16」是本课对该表做的算术观察，不是论文的说法。</p></details></figure>
 
@@ -10484,7 +10500,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1183" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ 所以「全局层不需要很多」该怎么说才准</tspan></text>
 <text class="svgsm" x="20" y="1214" fill="#174ea6" style="font-size:15.0px">准确的意思是<tspan font-weight="700">占比低</tspan>（各家落在 1/4 到 1/10 之间），<tspan font-weight="700">不是绝对条数少</tspan>。全体 14 个点里，绝对条数从 3 到 24 差 8 倍，而比值只差 3.4 倍 ——&#160;<tspan font-weight="700">散得开的那个不是超参</tspan>。</text>
 <text class="svgsm" x="20" y="1238" fill="#174ea6" style="font-size:15.0px">反过来说，<tspan font-weight="700">模型越深，你要付的全注意力层就越多</tspan> ——&#160;混合省下的是<tspan font-weight="700">一个固定比例</tspan>，不是「越深越划算」。</text>
-</svg><figcaption>⭐ <b>这一张的做法本身就是个示范：不猜，去数。</b><em>十四个模型的层类型逐个拉下来，一行一行摆出来。</em><br>⭐⭐ <em>而数完之后会发现，<b>两派都真实存在</b> ——&nbsp;所以「守恒的是比值」这句常见说法，只说对了一半。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 全部数据来自各模型 HuggingFace 仓库的 config.json 逐个字段：Kimi 两款读 linear_attn_config.full_attn_layers（27 层 7 个 / 93 层 24 个）；Qwen3.5 七档读 layer_types 数组；MiniMax-Text-01 读 attn_type_list 求和；Granite / Bamba 读 layer_types 与 attn_layer_indices。</p>
+</svg><figcaption>⭐ <b>这一张的做法本身就是个示范：不猜，去数。</b><em>十四个模型的层类型逐个拉下来，一行一行摆出来。</em><span class="capmore"><br>⭐⭐ <em>而数完之后会发现，<b>两派都真实存在</b> ——&nbsp;所以「守恒的是比值」这句常见说法，只说对了一半。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>📌 全部数据来自各模型 HuggingFace 仓库的 config.json 逐个字段：Kimi 两款读 linear_attn_config.full_attn_layers（27 层 7 个 / 93 层 24 个）；Qwen3.5 七档读 layer_types 数组；MiniMax-Text-01 读 attn_type_list 求和；Granite / Bamba 读 layer_types 与 attn_layer_indices。</p>
 <p>📌 Qwen3-Next（interval=4）、Jamba v0.1（period=8, offset=4）、Ring 两款（layer_group_size）是<b>按字段推算</b>的，推导链已写在图注与脚本头里。</p>
 <p>⛔ 两个相关系数是本脚本当场算的；「⌊每 4 层一个⌋ ＋ 末层补一个」这条排法由 assert 对着两份 config 的实际数组核过。⚠️ 只有两个点，把它当「观察到的排法」，不要当 Kimi 公布的规则。</p></details></figure>
 
@@ -10663,7 +10679,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1518" fill="#174ea6" style="font-size:15.0px">一个看起来<tspan font-weight="700">纯粹是效率考虑</tspan>的选择（层怎么配比），解开了一个看起来<tspan font-weight="700">完全无关</tspan>的约束（位置编码挡住吸收）。</text>
 <text class="svgsm" x="20" y="1542" fill="#174ea6" style="font-size:15.0px">⭐ 本讲这样的连接已经出现过好几次：MLA 那次是「为了保住一个代数变换，把功能拆成两路」；这里是它的反面 ——&#160;<tspan font-weight="700">为了不再需要那个变换，干脆换个人来提供它的前提</tspan>。</text>
 <text class="svgsm" x="20" y="1566" fill="#174ea6" style="font-size:15.0px">⭐⭐ 所以看到一个约束的时候，除了问「怎么绕过」，还要问一句：<tspan font-weight="700">它凭什么在那儿？有没有别人能把它那份活接走？</tspan></text>
-</svg><figcaption>⭐ <b>看①和②的对照就够了：同一件事，谁来负责。</b><br><em>⭐⭐ 这是这本书里很少见的一种好事 ——&nbsp;<b>一个麻烦不是被解决的，是因为换了结构而不再存在。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>四句原话均出自 Kimi Linear（arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a>）：「we apply NoPE to all full attention (MLA) layers」·「delegates the entire responsibility for encoding positional information and recency bias … to the KDA layers」·「KDA is thus established as the primary position-aware operator」·「NoPE enables their conversion to the highly-efficient pure Multi-Query Attention (MQA) during inference」</p>
+</svg><figcaption>⭐ <b>看①和②的对照就够了：同一件事，谁来负责。</b><span class="capmore"><br><em>⭐⭐ 这是这本书里很少见的一种好事 ——&nbsp;<b>一个麻烦不是被解决的，是因为换了结构而不再存在。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>四句原话均出自 Kimi Linear（arXiv <a href="https://arxiv.org/abs/2510.26692" target="_blank" rel="noopener">2510.26692</a>）：「we apply NoPE to all full attention (MLA) layers」·「delegates the entire responsibility for encoding positional information and recency bias … to the KDA layers」·「KDA is thus established as the primary position-aware operator」·「NoPE enables their conversion to the highly-efficient pure Multi-Query Attention (MQA) during inference」</p>
 <p>⚠️ 图里 576 ＝ 512 ＋ 64 用的是 <b>DeepSeek-V3 的形状</b>（当尺子用，机制一样）；Kimi Linear 自己那套 MLA 超参本课<b>没有核过</b>，别把这三个数安到它头上</p>
 <p>⭐ K3 是照搬 Kimi Linear 这套做法，不是它先做的 ——&#160;K3 自己写的是「follows the hybrid design of Kimi Linear」</p></details></figure>
 
@@ -10909,7 +10925,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1650" fill="#b06000" style="font-size:15.0px">权重那一段是<tspan font-weight="700">所有人分摊</tspan>的，KV 那一段<tspan font-weight="700">不摊</tspan>。所以人一多，灰段被摊薄、红段成倍长 ——&#160;<tspan font-weight="700">画面会翻回 KV 主导</tspan>。</text>
 <text class="svgsm" x="20" y="1674" fill="#b06000" style="font-size:15.0px">⭐ 这正是那张「长度一变，主角就换人」图的另一面：那里是<tspan font-weight="700">把人加上去</tspan>让 KV 变成主角，这里是<tspan font-weight="700">只留一个人</tspan>让权重变成主角。<tspan font-weight="700">同一个模型，问法不同，答案就不同</tspan> ——&#160;这本身就是本</text>
 <text class="svgsm" x="20" y="1698" fill="#b06000" style="font-size:15.0px">节的主题。</text>
-</svg><figcaption>⭐ <b>倍数是相对的，毫秒是绝对的 ——&nbsp;这一张把前八章全部换算成后者。</b><br><em>⭐⭐ 看第二格里灰色那一段：<b>五个方案完全一样</b>。差别全在红的那一段上 ——&nbsp;这才是「KV cache 是瓶颈」这句话真正的样子。</em><br>⛔ <b>先看清这张图量的是「搬多少字节」，不是「算多少」</b> ——&nbsp;<em>灰色是<b>权重</b>（所有人共享，每步整个搬一遍，所以五根一样高），红色是<b>你一个人的 KV</b>。⭐ 那根灰的就是<a href="#s一">第一章</a>那句「每走一步都要把全部权重从显存搬一遍」——&nbsp;<b>它一个字都没过期。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自 Epoch AI 那条「字节 →&#160;毫秒 →&#160;钱」的换算链 ——&#160;抽象的「省了多少」一路换算到有直觉的量，每一步都能自己验算。本图走到毫秒为止（再往下换成钱要报价，那个本课核不了）</p>
+</svg><figcaption>⭐ <b>倍数是相对的，毫秒是绝对的 ——&nbsp;这一张把前八章全部换算成后者。</b><span class="capmore"><br><em>⭐⭐ 看第二格里灰色那一段：<b>五个方案完全一样</b>。差别全在红的那一段上 ——&nbsp;这才是「KV cache 是瓶颈」这句话真正的样子。</em><br>⛔ <b>先看清这张图量的是「搬多少字节」，不是「算多少」</b> ——&nbsp;<em>灰色是<b>权重</b>（所有人共享，每步整个搬一遍，所以五根一样高），红色是<b>你一个人的 KV</b>。⭐ 那根灰的就是<a href="#s一">第一章</a>那句「每走一步都要把全部权重从显存搬一遍」——&nbsp;<b>它一个字都没过期。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>装置偷自 Epoch AI 那条「字节 →&#160;毫秒 →&#160;钱」的换算链 ——&#160;抽象的「省了多少」一路换算到有直觉的量，每一步都能自己验算。本图走到毫秒为止（再往下换成钱要报价，那个本课核不了）</p>
 <p>⚠️ 数全部来自本讲前面已核过的：KV 488 / 30.50 / 3.81 / 8.58 GiB（61 层 · 128K · bf16 · 一个用户）· 权重 625 GiB · 每 token 激活 <b>37B</b>（671B/37B，官方模型卡，见开篇那张年表）· v7 每 chip 7.37 TB/s、每 device 94.74 GiB</p>
 <p>📌 这张图<b>不引入任何新数</b>，全部是前面核过的数做除法 ——&#160;所以读者可以拿计算器逐格核，这也是它敢把那张「每一格都是箭头」的代价表替换掉的底气</p></details></figure>
 
@@ -11079,7 +11095,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svglbl" x="20" y="1233" fill="#174ea6" style="font-size:17.0px"><tspan font-weight="700">⭐⭐ ⭐ 一条能带走的判据：看一个机制默认了什么样的机器</tspan></text>
 <text class="svgsm" x="20" y="1264" fill="#174ea6" style="font-size:15.0px">临时改单、散落取货、开工才知道做什么 ——&#160;<tspan font-weight="700">这三样都默认「随手跑腿不太贵」</tspan>。在一家为「按批预制」优化的厨房里，这个假设<tspan font-weight="700">不成立</tspan>。</text>
 <text class="svgsm" x="20" y="1288" fill="#174ea6" style="font-size:15.0px">⭐ 所以移植的活儿不是「翻译代码」，是<tspan font-weight="700">把那个隐含的硬件假设找出来，再换一个等价但规整的做法</tspan>。下一张讲的就是这个「换法」。</text>
-</svg><figcaption>⭐ <b>整张图的题眼是那个厨房比喻，值得慢慢看完。</b><br><em>⛔ 特别注意中间那段引文的<b>日期</b> ——&nbsp;它不是五年前的旧话。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>三处疼与那句摘要出自 Ragged Paged Attention（Jiang 等，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a>，2026-04）§1 与 <a href="#s2-4">§2.4</a>；TPU 的三条约束亦见该文 §1</p>
+</svg><figcaption>⭐ <b>整张图的题眼是那个厨房比喻，值得慢慢看完。</b><span class="capmore"><br><em>⛔ 特别注意中间那段引文的<b>日期</b> ——&nbsp;它不是五年前的旧话。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>三处疼与那句摘要出自 Ragged Paged Attention（Jiang 等，arXiv <a href="https://arxiv.org/abs/2604.15464" target="_blank" rel="noopener">2604.15464</a>，2026-04）§1 与 <a href="#s2-4">§2.4</a>；TPU 的三条约束亦见该文 §1</p>
 <p>⚠️ 「中央厨房 / 点单现做 / 仓库取货」是<b>本课的比喻</b> ——&#160;论文那侧的说法是 static-first 编译、tiled 粗粒度布局、以及「从动态算出来的不连续地址 gather」</p></details></figure>
 
 <div class="note danger"><p>⛔⛔ <b>有人真的动手试过</b>，而他撞到的东西值得一字一句地看。</p>
@@ -11447,7 +11463,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1040" fill="#174ea6" style="font-size:15.0px"><tspan font-weight="700">显存</tspan>能算、<tspan font-weight="700">算力</tspan>能算 ——&#160;所以这两样先被搬完了；<tspan font-weight="700">访存规整度</tspan>算不出来，它只出现在 kernel 里、出现在 SM 空转的那几个微秒里。</text>
 <text class="svgsm" x="20" y="1064" fill="#174ea6" style="font-size:15.0px">⭐ 这也是为什么今天这一支的前沿工作看起来越来越像<tspan font-weight="700">「写 kernel」而不是「改模型」</tspan> ——&#160;FlashKDA、TileLang、专用的上下文并行，全是这一类。</text>
 <text class="svgsm" x="20" y="1088" fill="#174ea6" style="font-size:15.0px">⛔ 对应到评估：<tspan font-weight="700">别看 FLOPs 省了多少，看墙钟时间省了多少</tspan>；也别只看单算子，看端到端。</text>
-</svg><figcaption>⭐⭐ <b>先看最下面那一行小字，它解释了整个顺序为什么是这样。</b><br><em>能拿尺子量的先被搬走，量不出来的留到最后 ——&nbsp;<b>这不是研究者偷懒，这是任何一个领域都会有的走法。</b></em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>四个取舍与硬件假设表见 §九 / §十 正文（每条都可追到前面对应小节）</p>
+</svg><figcaption>⭐⭐ <b>先看最下面那一行小字，它解释了整个顺序为什么是这样。</b><span class="capmore"><br><em>能拿尺子量的先被搬走，量不出来的留到最后 ——&nbsp;<b>这不是研究者偷懒，这是任何一个领域都会有的走法。</b></em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>四个取舍与硬件假设表见 §九 / §十 正文（每条都可追到前面对应小节）</p>
 <p>③ 的三根条<b>由本脚本当场算并断言</b>，公式与常数同专题一那条曲线（V3：61 层 / 128 头 / MoE top-8＋1 共享，因果掩码按半算）</p>
 <p>⚠️ 它是 <b>FLOPs 口径，不是时间</b> ——&#160;同样 seq=4096，本讲实测（Hunyuan3-295B · v7 64 芯片 · XProf op stats 页）splash attention <b>占 23% 的时间</b>、效率只有 35.5%；<b>效率最低的算子，时间占比一定高于算力占比</b>⚠️ 这是<b>量级示意</b>，具体占比随模型结构、批大小、序列长度变</p></details></figure>
 
@@ -11550,7 +11566,7 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
 <text class="svgsm" x="20" y="1344" fill="#0d652d" style="font-size:15.0px">⭐⭐ 所以这一截<tspan font-weight="700">只能读成「剩下的」，不能读成「硬件的功劳」</tspan> ——&#160;真把那两样算进来，<tspan font-weight="700">硬件那一份还会更小。</tspan>⭐ 而这恰恰让本图的结论更硬，不是更软。</text>
 <text class="svgsm" x="20" y="1368" fill="#0d652d" style="font-size:15.0px"><tspan font-weight="700">也不是带宽变快了。</tspan>带宽这一笔，是干脆不读了 ——&#160;每步固定只看 2048 个，<tspan font-weight="700">上下文涨 512 倍，它一个都没多读。</tspan></text>
 <text class="svgsm" x="20" y="1392" fill="#0d652d" style="font-size:15.0px">⭐⭐ 一句话收：<tspan font-weight="700">这六年真正变的不是机器，是「一个 token 到底该花多少钱」这件事被重新定价了。</tspan></text>
-</svg><figcaption>⭐⭐⭐ <b>这是整本书的收据。</b><em>开场挂在墙上那把枪，在这里打响 ——&nbsp;而它打出来的答案，多半跟你开讲前猜的不一样。</em><br>⚠️ <em>两根条<b>不是一本账</b>，图里专门写了一句提醒 ——&nbsp;别加起来。</em></figcaption><details class="figsrc"><summary>出处与口径</summary><p>488 GiB / 8.58 GiB（61 层 · 128K · bf16 · 一个用户）· 3:1 配比 · k=2048 这四个数，本讲前面都已逐一核过并标了口径，这一张只做乘除</p>
+</svg><figcaption>⭐⭐⭐ <b>这是整本书的收据。</b><em>开场挂在墙上那把枪，在这里打响 ——&nbsp;而它打出来的答案，多半跟你开讲前猜的不一样。</em><span class="capmore"><br>⚠️ <em>两根条<b>不是一本账</b>，图里专门写了一句提醒 ——&nbsp;别加起来。</em></span></figcaption><details class="figsrc"><summary>出处与口径</summary><p>488 GiB / 8.58 GiB（61 层 · 128K · bf16 · 一个用户）· 3:1 配比 · k=2048 这四个数，本讲前面都已逐一核过并标了口径，这一张只做乘除</p>
 <p>⭐ 两个 512 为什么会相等，说破了很简单：<b>GPT-3 的上下文长度（2048）和 DSA 的 k（2048）恰好是同一个数</b> ——&#160;两条完全不相干的设定撞成了一个数，所以「今天 ÷ 当年」和「今天 ÷ k」才算出同样的 512。⚠️ 这是<b>巧合，不是什么规律</b>，但它让这笔账好记得多。脚本里两个等式都断言了</p></details></figure>
 
 <h3 id="s9-6">9.6　收尾：一个完整的圆</h3>
@@ -11647,7 +11663,8 @@ MHA 时代 KV 是跟着模型一起长的，这条链在 MLA 这里<b>被剪断�
   // ⭐ 折叠了多少段，是**数出来的**，不写死 ——&#160;正文一改它自动跟着变。
   var n = document.querySelectorAll(
       "section p:not(.lead):not(.landing), section ul, section ol, "
-    + "section pre, section .note").length;
+    + "section pre, section .note, section blockquote, "
+    + "figcaption .capmore").length;
   function set(on){
     document.body.classList.toggle("figonly", on);
     btn.textContent = on ? "展开讲解" : "折叠讲解";

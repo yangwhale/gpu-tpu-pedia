@@ -254,6 +254,28 @@ def lint_dup_body_vs_figs(html, n=14):
     return out
 
 
+_CAP_BR = re.compile(r'<br\s*/?>')
+
+
+def _split_cap(cap):
+    """图注切成「第一段 ＋ 其余」，其余包进 .capmore（折叠模式下藏起来）。
+
+    ⭐ 2026-09-16 现场：「留下图和主要的描述就行。」——&nbsp;图注是折叠模式下
+    最大的一块字（48 条共 4960 字，占露出来的六成四），但它又**不能整条藏**：
+    它是「这张图该看什么」的指路，藏了等于把图扔给读者自己猜。
+
+    ⛔ 所以按**第一个 `<br>`** 切 ——&nbsp;不是按字数。本课图注本来就是
+    「⭐ 一句落点 <br> ⭐⭐ 展开说」这个写法，`<br>` 就是作者自己标好的分界。
+    **按字数切会把一句话拦腰截断，按作者的分段切不会。**
+
+    ⚠️ 没有 `<br>` 的（48 条里 5 条）整条保留 ——&nbsp;它们本来就短。
+    """
+    parts = _CAP_BR.split(cap, 1)
+    if len(parts) == 1:
+        return cap
+    return '%s<span class="capmore"><br>%s</span>' % (parts[0], parts[1])
+
+
 def place_figs(html, FIGS, here=HERE):
     """把 `__FIG_X__` 占位符换成 <figure>，并把 .src.html 包成折叠的出处。"""
     for ph, (fid, fn, src, cap) in FIGS.items():
@@ -277,8 +299,8 @@ def place_figs(html, FIGS, here=HERE):
             DUP_WARNED.append((fid, h))
         html = html.replace(
             ph, '<figure class="fbox fwide" id="%s">%s%s%s</figure>'
-                % (fid, svg, '<figcaption>%s</figcaption>' % cap if cap else '',
-                   note))
+                % (fid, svg, '<figcaption>%s</figcaption>' % _split_cap(cap)
+                   if cap else '', note))
     assert "__FIG_" not in html, "还有图占位符没被替换掉"
     return html
 
@@ -549,6 +571,19 @@ body.figonly section figure p{display:revert}
    才存在：折叠规则是先写的，题是后搬的。
    判据：**加了新的内容类型，要回去看一遍既有的全局规则会不会误伤它。** */
 body.figonly .guess p{display:revert}
+/* ⛔⛔ 2026-09-16 现场截图抓到的：折叠模式下 <blockquote> 里的 <p> 被上面那条
+   规则藏掉，**外壳还在** ——&#160;于是页面上出现两条空的灰条，看着像坏了。
+   ⭐ 原设计说「原话引文保留」，但那从来没生效过（一生效就是空壳）。
+   ⛔ 这次顺势改判：**折叠模式下整块隐掉**。理由不是省地方 ——&#160;
+     引文是「故事」，不是「主线」，而折叠模式的定义就是只留主线。
+   ⭐ 判据（上一次是 .guess p，这次反过来）：**一条写得太宽的全局规则，
+     既会误伤该留的，也会留下该走的空壳 ——&#160;而空壳是静默的，更难发现。** */
+body.figonly section blockquote{display:none}
+/* ⭐⭐ 2026-09-16：图注是折叠模式下最大的一块字（48 条共 4960 字，占露出来
+   的六成四）。⛔ 但图注不能整条藏 ——&#160;它是「看图该看什么」的指路。
+   ⭐ 折中：**只留第一个 <br> 之前那一段**，后面的收起来。
+     实测 43/48 条带 <br>，切完省 53%。切法在 place_figs 里。 */
+body.figonly figcaption .capmore{display:none}
 body.figonly section h3{margin-top:34px}
 </style>
 """
@@ -566,7 +601,8 @@ FIGONLY_HTML = """
   // ⭐ 折叠了多少段，是**数出来的**，不写死 ——&#160;正文一改它自动跟着变。
   var n = document.querySelectorAll(
       "section p:not(.lead):not(.landing), section ul, section ol, "
-    + "section pre, section .note").length;
+    + "section pre, section .note, section blockquote, "
+    + "figcaption .capmore").length;
   function set(on){
     document.body.classList.toggle("figonly", on);
     btn.textContent = on ? "展开讲解" : "折叠讲解";

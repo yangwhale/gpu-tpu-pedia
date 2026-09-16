@@ -787,7 +787,10 @@ __FIG_ATTN_INVENTED__
   <a href="https://www.turingpost.com/p/attention" target="_blank" rel="noopener">Turing Post</a>
   整理并另行采访了 Bengio。<em>本讲的译文按原文意思重述，不是逐字直译。</em></p>
 
-<p class="landing">📌 <b>顺带交代一下这本书往后的读法</b>：每讲到一个新名词，
+<!-- ⛔ 这段原来挂着 class="landing"，于是折叠模式下也露着。
+     ⭐ 但它是**读法说明**，不是主线钩子 ——&#160;降级成普通段落，跟着折叠走。
+     判据：**landing / lead 是「一句话的钩子」，补充说明不该占这个位置。** -->
+<p>📌 <b>顺带交代一下这本书往后的读法</b>：每讲到一个新名词，
   我都会先说它<b>在修上一版的哪个具体毛病</b>。
   <em>——&nbsp;「某某灵光一闪」这件事你学不会；「上一版这个地方不对」，你下次能照着用。</em></p>
 
