@@ -37,6 +37,12 @@ W = 1400
 
 # ⭐ 这两个数是算出来的，不是查来的。改图先改这里，别在文字里手写。
 COS_2D, COS_1024 = 0.6333, 0.0248
+# ⭐ Elman 1990 句子模拟的三个维度（原文逐字）：输入 / 输出 31 个节点，
+#   隐藏 / 上下文各 150 个。参数量全部从这里推，⛔ 别在文字里手写。
+E_IN, E_H = 31, 150
+P_IH, P_CH, P_HO = E_IN * E_H, E_H * E_H, E_H * E_IN
+P_TOT = P_IH + P_CH + P_HO + E_H + E_IN
+assert P_TOT == 31981 and abs(P_CH / P_TOT - 0.704) < 0.002
 ANG_2D = math.degrees(math.acos(COS_2D))
 ANG_1024 = math.degrees(math.acos(COS_1024))
 assert 49 < ANG_2D < 53 and 88 < ANG_1024 < 89, (ANG_2D, ANG_1024)
@@ -57,7 +63,7 @@ def main():
         [(BL, "一步之内"), (GR, "为什么不糊"), (OR, "为什么会淡")])
 
     # ══════════ Ⓐ 一步之内的四个动作 ═══════════════════════════════
-    PH = 452
+    PH = 530
     py = f.panel(0, y0, W, PH,
                  "Ⓐ 一步之内，其实只有四个动作 ——　"
                  "<tspan font-weight=\"700\">转一下 · 映过来 · 叠上去 · 压一压</tspan>",
@@ -109,23 +115,57 @@ def main():
     f.t(430, ROW + 322, "⭐ 写回去 ——　下一个字来的时候，它就是「上一步的盒子」",
         BL, True, 15, "middle")
 
-    f.box(880, ROW - 24, 460, 250, "#f8f9fa", LINE, 8)
-    f.t(900, ROW + 4, "⭐ 这四步里，最要紧的是 ③", INK, True, 17)
+    f.box(880, ROW - 34, 460, 152, "#f8f9fa", LINE, 8)
+    f.t(900, ROW - 6, "⭐ 这四步里，最要紧的是 ③", INK, True, 17)
     for i, ln in enumerate((
-            "「搅」这个字是我们为了好懂用的比喻，",
-            "可它容易让人想成<tspan font-weight=\"700\">搅匀</tspan> ——　那是会毁东西的。",
-            "",
-            "真实动作是<tspan font-weight=\"700\">相加</tspan>：",
-            "新的<tspan font-weight=\"700\">叠</tspan>在老的上面，老的<tspan font-weight=\"700\">一点没被抹掉</tspan>。",
-            "",
-            "⛔ 那紧接着的问题就是 ——　",
-            "叠了一万次之后，还分得开吗？",
+            "「搅」是我们为了好懂用的比喻，可它容易",
+            "让人想成<tspan font-weight=\"700\">搅匀</tspan> ——　那是会毁东西的。",
+            "真实动作是<tspan font-weight=\"700\">相加</tspan>：新的<tspan font-weight=\"700\">叠</tspan>在老的上面，",
+            "老的<tspan font-weight=\"700\">一点没被抹掉</tspan>。",
     )):
-        if ln:
-            f.t(900, ROW + 38 + i * 26, ln, GY, size=14.5)
+        f.t(900, ROW + 26 + i * 24, ln, GY, size=14.5)
+
+    # ⭐ 现场追问补：那两个矩阵到底多大、谁在学。数全部从 E_IN / E_H 推。
+    f.box(880, ROW + 136, 460, 246, "#fff", BL, 8)
+    f.t(900, ROW + 166, "⭐ 那两个矩阵，真实尺寸长这样", BL, True, 17)
+    f.t(900, ROW + 190, "（Elman 1990 句子模拟：输入 %d，隐藏 %d）" % (E_IN, E_H),
+        GY2, size=12.5)
+    for i, (nm, shp, n, note) in enumerate((
+            ("② 映过来", "%d × %d" % (E_IN, E_H), P_IH, "学"),
+            ("① 转一下", "%d × %d" % (E_H, E_H), P_CH, "学 · 最大"),
+            ("读出来", "%d × %d" % (E_H, E_IN), P_HO, "学"),
+            ("那条回线", "原样抄一份", 0, "⛔ 不训练"),
+    )):
+        y = ROW + 218 + i * 30
+        f.t(900, y, nm, INK, True, 14.5)
+        f.t(1012, y, shp, GY, size=14, mono=True)
+        if n:
+            f.t(1132, y, "%s 个数" % format(n, ","), GY, size=13.5)
+        f.t(1244, y, note, GR if n else RD, True, 13)
+    f.t(900, ROW + 352,
+        "⭐⭐ 合起来 <tspan font-weight=\"700\">%s</tspan> 个参数"
+        % format(P_TOT, ","), BL, True, 15)
+    f.t(900, ROW + 374,
+        "——　其中<tspan font-weight=\"700\">七成</tspan>在「转一下」那一块",
+        BL, True, 15)
     f._pan = None
 
-    yy = f.band(py + PH + 22, "warn", "先把那个词换掉", [
+    yy = f.band(py + PH + 22, "info", "那时候的「词向量」是什么样 ——　原文写得很死", [
+        "⭐ Elman 给每个词分配一个 <tspan font-weight=\"700\">31 位的向量，"
+        "每个词占其中一个 bit</tspan>（另外留了 2 位给后续实验，"
+        "所以真实词表是 <tspan font-weight=\"700\">29 个词</tspan>）。"
+        "<tspan font-weight=\"700\">它是随机指定的，不参与训练。</tspan>",
+        "⛔⛔ 原文点明了这么编码的两个后果："
+        "<tspan font-weight=\"700\">① 每个词向量彼此完全正交；"
+        "② 它不携带任何词性或词义信息。</tspan>",
+        "⭐⭐⭐ <tspan font-weight=\"700\">而这正好说出了 embedding 后来是干什么的：</tspan>"
+        "当年是<tspan font-weight=\"700\">完全正交、但零信息</tspan>；"
+        "今天是学出来的稠密向量 ——&#160;"
+        "<tspan font-weight=\"700\">只做到「近似正交」，换来的是它开始携带意思</tspan>。"
+        "⭐ 而「近似正交」够不够用，正是下一格那个数在回答的问题。",
+    ])
+
+    yy = f.band(yy + 14, "warn", "先把那个词换掉", [
         "⛔ <tspan font-weight=\"700\">它不是「搅匀」，是「叠上去」。</tspan>"
         "搅匀之后你取不回任何一样东西；"
         "而<tspan font-weight=\"700\">叠加之后能不能取回，是个可以算的问题</tspan> ——&#160;"
@@ -301,6 +341,15 @@ def main():
                "⛔ Ⓒ <tspan font-weight=\"700\">不画具体的衰减曲线</tspan> ——&#160;"
                "衰减快慢取决于那个矩阵的谱，<tspan font-weight=\"700\">没有一条"
                "「通用曲线」</tspan>，画出来就是编。只画「反复相乘」这个结构",
+               "Ⓐ 那张尺寸表与 <tspan font-weight=\"700\">31 位词向量</tspan>均出自 "
+               "Elman 1990 原文：「Recurrent connections are fixed at 1.0 and are "
+               "not subject to adjustment」；「Each word was replaced by a randomly "
+               "assigned <tspan font-weight=\"700\">31-bit vector</tspan> in which each "
+               "word was represented by a different bit … Two extra bits were "
+               "reserved for later simulations … guaranteed that each vector was "
+               "<tspan font-weight=\"700\">orthogonal to every other vector</tspan> and "
+               "reflected <tspan font-weight=\"700\">nothing about the form class or "
+               "meaning</tspan> of the words」。参数量由 31/150 推算，非原文给出",
                "Ⓓ 里的 <tspan font-weight=\"700\">150</tspan> 出自 Elman 1990 "
                "《Finding Structure in Time》原文：句子预测那个模拟"
                "「hidden and context layers contained <tspan font-weight=\"700\">"
